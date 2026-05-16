@@ -425,6 +425,12 @@ app.get("/api/claims", async (req, res) => {
 const CLKN_RECEIVE_WALLET = "7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H";
 const CLKN_MINT_ADDR = "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
 
+// Project deployer wallet — buys from here are the team reinvesting earned
+// fees back into CLKN, flagged with a distinct alert instead of a plain buy.
+const DEV_WALLETS = new Set([
+  "3VELZ2avSUq79qstuR8a7C3euJ834WmQyrjt4uRnn4eb",
+]);
+
 // Tool → cost (CLKN, base before the unique decimal) + what gets granted.
 // The base must be unique per tool so a user can't pay 100 CLKN with a "score" amount
 // and reuse the verification to unlock a 500-CLKN tool. Math.floor(amount) checks this.
@@ -2284,6 +2290,7 @@ async function getWalletStats(wallet, HELIUS_KEY) {
 
 async function notifyClknBuy(buy, tx, pool, usdValue, HELIUS_KEY) {
   const buyerShort = `${buy.buyer.slice(0, 4)}…${buy.buyer.slice(-4)}`;
+  const isDevBuy = DEV_WALLETS.has(buy.buyer);
   const meta = QUOTE_TOKENS[buy.quote.mint];
   // Only show "($X.XX)" suffix when the quote isn't already a USD-denominated
   // stablecoin — for USDC/USDT the amount IS the dollar value.
@@ -2293,33 +2300,40 @@ async function notifyClknBuy(buy, tx, pool, usdValue, HELIUS_KEY) {
   const priceLine = priceStr ? `\nPrice: <b>${priceStr}</b>` : "";
 
   // Buyer rank + wallet — holdings now, the tier they sit in, whether this buy
-  // promoted them, and how much they grew their position.
+  // promoted them, and how much they grew their position. Skipped for dev buys
+  // (community reinvestment), which also skips the wallet-stats lookup.
   let rankBlock = "";
-  const stats = await getWalletStats(buy.buyer, HELIUS_KEY);
-  if (stats.clknBalance != null) {
-    const after = stats.clknBalance;
-    const before = Math.max(0, after - buy.clknAmount);
-    const tierAfter = clknTier(after), tierBefore = clknTier(before);
-    if (tierAfter.min > tierBefore.min) {
-      rankBlock += `\n🏆 <b>PROMOTED: ${tierBefore.name} → ${tierAfter.name}</b>`;
+  if (!isDevBuy) {
+    const stats = await getWalletStats(buy.buyer, HELIUS_KEY);
+    if (stats.clknBalance != null) {
+      const after = stats.clknBalance;
+      const before = Math.max(0, after - buy.clknAmount);
+      const tierAfter = clknTier(after), tierBefore = clknTier(before);
+      if (tierAfter.min > tierBefore.min) {
+        rankBlock += `\n🏆 <b>PROMOTED: ${tierBefore.name} → ${tierAfter.name}</b>`;
+      }
+      rankBlock += `\n${tierAfter.emoji} <b>${tierAfter.name}</b> · holds ${fmtClkn(after)} CLKN`;
+      if (before > 0) {
+        const pct = (buy.clknAmount / before) * 100;
+        rankBlock += `\n📈 grew position +${pct < 1000 ? pct.toFixed(1) : Math.round(pct).toLocaleString()}%`;
+      } else {
+        rankBlock += `\n🆕 first cluck — brand new holder`;
+      }
     }
-    rankBlock += `\n${tierAfter.emoji} <b>${tierAfter.name}</b> · holds ${fmtClkn(after)} CLKN`;
-    if (before > 0) {
-      const pct = (buy.clknAmount / before) * 100;
-      rankBlock += `\n📈 grew position +${pct < 1000 ? pct.toFixed(1) : Math.round(pct).toLocaleString()}%`;
-    } else {
-      rankBlock += `\n🆕 first cluck — brand new holder`;
+    if (stats.solBalance != null) {
+      rankBlock += `\n💰 ${stats.solBalance.toFixed(2)} SOL left in wallet`;
     }
-  }
-  if (stats.solBalance != null) {
-    rankBlock += `\n💰 ${stats.solBalance.toFixed(2)} SOL left in wallet`;
   }
 
+  const header = isDevBuy
+    ? `♻️ <b>COMMUNITY REINVESTMENT</b>\n<i>Project fees — bought straight back into CLKN</i>\n`
+    : `🐔 <b>NEW CLUCK ACQUIRED</b>\n`;
+  const buyerLabel = isDevBuy ? "Team wallet" : "Buyer";
   const caption =
-    `🐔 <b>NEW CLUCK ACQUIRED</b>\n` +
+    header +
     `${fmtQuote(buy.quote)}${usdSuffix} → <b>${fmtClkn(buy.clknAmount)} CLKN</b>\n` +
     `${routeLine}${priceLine}${rankBlock}\n` +
-    `Buyer: <code>${buyerShort}</code>\n` +
+    `${buyerLabel}: <code>${buyerShort}</code>\n` +
     `<a href="https://solscan.io/tx/${tx.signature}">↗ View on Solscan</a>\n` +
     `🐔 <a href="https://clucknorris.app">Tools & school: clucknorris.app</a>`;
   await notifyTelegramPhoto(BUY_GRAPHIC_URL, caption);
