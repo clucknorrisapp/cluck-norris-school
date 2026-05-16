@@ -2286,11 +2286,23 @@ async function notifyClknBuy(trade, tx, pool, usdValue, HELIUS_KEY) {
   const caption =
     header +
     `${fmtQuote(trade.quote)}${usdSuffix} → <b>${fmtClkn(trade.clknAmount)} CLKN</b>\n` +
+    (isDevBuy ? "" : `${buyPun(usdValue)}\n`) +
     `${routeLine}${priceLine}${rankBlock}\n` +
     `${buyerLabel}: <code>${buyerShort}</code>\n` +
     `<a href="https://solscan.io/tx/${tx.signature}">↗ View on Solscan</a>\n` +
     `🐔 <a href="https://clucknorris.app">Tools & school: clucknorris.app</a>`;
   await notifyTelegramPhoto(BUY_GRAPHIC_URL, caption);
+}
+
+// Size-scaled chicken-pun line for buy alerts — counterpart to sellPun, with
+// upbeat flavor. Tiered by USD value; a plain ladder, easy to tweak.
+function buyPun(usd) {
+  const v = usd || 0;
+  if (v >= 5000) return "🦅 <b>BIG BIRD INBOUND</b> — someone backed the feed truck up to the coop.";
+  if (v >= 1000) return "🐓 That's a rooster-sized order — strut earned.";
+  if (v >= 250)  return "🐔 Nice peck — the henhouse is filling up.";
+  if (v >= 50)   return "🐣 Fresh hatchling stacking feathers.";
+  return "🐤 Peck peck — every kernel counts.";
 }
 
 // Size-scaled chicken-pun line for sell alerts — the bigger the dump, the
