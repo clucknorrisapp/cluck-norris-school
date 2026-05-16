@@ -2307,10 +2307,14 @@ async function notifyClknBuy(trade, tx, pool, usdValue, HELIUS_KEY) {
 function buyPun(usd, holderState) {
   const v = usd || 0;
   if (holderState === "new") {
-    if (v >= 5000) return "🐣💰 <b>BIG-MONEY HATCHLING</b> — boldest first cluck we've seen.";
-    if (v >= 1000) return "🐣 New bird struts in — no timid first peck here.";
-    if (v >= 250)  return "🐣 Fresh face in the coop — welcome to the flock!";
-    return "🐣 A new chick wanders in and pecks its first kernels.";
+    if (v >= 1000) return "🐣💰 <b>BIG-MONEY HATCHLING</b> — boldest first cluck we've seen.";
+    if (v >= 750)  return "🐥 Big first cluck — this hatchling came to roost properly.";
+    if (v >= 500)  return "🐥 Bold debut — a new bird struts to the front of the coop.";
+    if (v >= 250)  return "🐣 No timid first peck — this newcomer means it.";
+    if (v >= 100)  return "🐣 New bird settles in — finding its perch.";
+    if (v >= 50)   return "🐣 A new face joins the coop — welcome to the flock!";
+    if (v >= 10)   return "🐣 Fresh out of the egg — a new bird tries the feed.";
+    return "🐣 A new chick wanders in and pecks its very first kernel.";
   }
   if (holderState === "existing") {
     if (v >= 1000) return "🐔💪 <b>BACKING THE TRUCK UP</b> — a holder just reloaded HARD.";
