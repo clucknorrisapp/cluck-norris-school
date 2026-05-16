@@ -4,6 +4,7 @@ const { join } = path;
 const fs = require("fs");
 const { createCanvas, GlobalFonts } = require("@napi-rs/canvas");
 const { createSign, createHash } = require("crypto");
+const hatchery = require("./hatchery");
 
 // Register Oswald (the site's display font) for the score card. Without this,
 // Railway's container has no usable fallback for "sans-serif" and text silently
@@ -112,6 +113,10 @@ app.use((req, res, next) => {
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   next();
 });
+
+// The Hatchery (token creator) — mounted before the global JSON parser so its
+// own larger body limit handles the base64 logo upload instead of the 100kb default.
+app.use("/api/hatchery", hatchery.router);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -1828,6 +1833,12 @@ app.get("/api/cluck-card", async (req, res) => {
 });
 
 // -- ROSE Buy Competition Analyzer --
+// The Hatchery — guided token creator. Unlisted: not linked from nav anywhere,
+// reachable only by direct URL while in private testing.
+app.get("/hatchery", (req, res) => {
+  res.sendFile(join(__dirname, "public", "hatchery.html"));
+});
+
 app.get("/rose", (req, res) => {
   res.sendFile(join(__dirname, "public", "rose.html"));
 });

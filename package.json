@@ -9,8 +9,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ardrive/turbo-sdk": "^1.41.2",
     "@fontsource/oswald": "^5.2.8",
     "@napi-rs/canvas": "^1.0.0",
+    "@solana/spl-token": "^0.4.14",
+    "@solana/web3.js": "^1.98.4",
     "express": "^4.18.2",
     "lucide-react": "^0.441.0",
     "react": "^18.3.1",
