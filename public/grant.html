@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Cluck Norris — Free Solana Education & Open Tooling · Grant Overview</title>
+<meta name="description" content="Cluck Norris is a free, open-source crypto school and public token-health toolkit on Solana. No signup, no wallet connect. Grant overview for the Solana Foundation."/>
+<meta name="robots" content="noindex"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0a0a0a;
+    --card: #111111;
+    --border: rgba(255,255,255,0.08);
+    --text: #F9FAFB;
+    --subtext: #9CA3AF;
+    --muted: #6B7280;
+    --accent: #FCD34D;
+    --orange: #D97706;
+    --green: #10B981;
+    --blue: #60A5FA;
+    --purple: #A78BFA;
+    --mono: 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    background-image: radial-gradient(ellipse at 15% 5%, rgba(217,119,6,0.10) 0%, transparent 55%),
+                      radial-gradient(ellipse at 85% 95%, rgba(16,185,129,0.06) 0%, transparent 55%);
+    color: var(--text);
+    font-family: system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 820px; margin: 0 auto; padding: 28px 18px 90px; }
+
+  .header { text-align: center; padding-bottom: 26px; border-bottom: 1px solid var(--border); margin-bottom: 28px; }
+  .header .icon { font-size: 52px; filter: drop-shadow(0 0 18px rgba(217,119,6,0.5)); }
+  .header h1 { font-family: 'Oswald', sans-serif; font-size: 34px; font-weight: 900; letter-spacing: 2px; margin-top: 8px;
+    background: linear-gradient(135deg, #FCD34D, #F97316, #EF4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  .header .tagline { font-family: 'Oswald', sans-serif; font-size: 13px; color: var(--subtext); letter-spacing: 2px; margin-top: 8px; }
+  .header .grant-tag { display: inline-block; margin-top: 14px; padding: 5px 16px; font-family: 'Oswald', sans-serif; font-size: 11px;
+    letter-spacing: 2px; color: var(--green); background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.35); border-radius: 20px; }
+
+  .lead {
+    font-size: 16px; color: var(--text); text-align: center; max-width: 640px; margin: 22px auto 0; line-height: 1.7;
+  }
+  .lead strong { color: var(--accent); }
+
+  .section-title {
+    font-family: 'Oswald', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 3px; color: var(--orange);
+    margin: 36px 0 14px; padding-bottom: 8px; border-bottom: 1px solid rgba(217,119,6,0.25);
+  }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; margin-bottom: 14px; }
+  .card h3 { font-family: 'Oswald', sans-serif; font-size: 15px; letter-spacing: 1px; color: var(--text); margin-bottom: 6px; }
+  .card p { font-size: 14px; color: var(--subtext); }
+  .card .free-badge { display: inline-block; font-family: var(--mono); font-size: 10px; color: var(--green);
+    background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); border-radius: 4px; padding: 2px 8px; margin-bottom: 8px; }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 16px 0; }
+  .stat { background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015));
+    border: 1px solid var(--border); border-radius: 10px; padding: 16px; text-align: center; }
+  .stat .stat-value { font-family: 'Oswald', sans-serif; font-size: 26px; font-weight: 900; color: var(--accent); }
+  .stat .stat-label { font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 2px; color: var(--muted); margin-top: 4px; }
+  .stat .stat-sub { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+  .prose { font-size: 14px; color: var(--subtext); }
+  .prose p { margin-bottom: 10px; }
+  .prose strong { color: var(--text); }
+  .prose ul { margin: 8px 0 12px 20px; }
+  .prose li { margin-bottom: 6px; }
+  .prose code { font-family: var(--mono); font-size: 12px; color: var(--accent); background: rgba(252,211,77,0.07);
+    padding: 1px 5px; border-radius: 3px; }
+  .prose a { color: var(--blue); text-decoration: none; }
+  .prose a:hover { text-decoration: underline; }
+
+  .budget { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 14px; }
+  .budget th { text-align: left; font-family: 'Oswald', sans-serif; font-size: 11px; letter-spacing: 1.5px;
+    color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  .budget td { padding: 10px; border-bottom: 1px solid var(--border); color: var(--subtext); vertical-align: top; }
+  .budget td:last-child { text-align: right; font-family: var(--mono); color: var(--accent); white-space: nowrap; }
+  .budget tr:last-child td { border-bottom: none; font-weight: 700; color: var(--text); }
+
+  .links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+  .link-btn { flex: 1; min-width: 200px; padding: 13px 16px; border-radius: 10px; text-decoration: none;
+    font-family: 'Oswald', sans-serif; font-size: 12px; letter-spacing: 1.5px; text-align: center; transition: opacity 0.15s; }
+  .link-btn:hover { opacity: 0.85; }
+  .link-primary { background: linear-gradient(135deg, var(--orange), #EF4444); color: #fff; }
+  .link-secondary { background: rgba(96,165,250,0.1); border: 1px solid rgba(96,165,250,0.35); color: var(--blue); }
+
+  .footer { text-align: center; margin-top: 36px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <div class="icon">🐔</div>
+    <h1>CLUCK NORRIS</h1>
+    <div class="tagline">FREE SOLANA EDUCATION · OPEN-SOURCE PUBLIC TOOLING</div>
+    <div class="grant-tag">SOLANA FOUNDATION · GRANT OVERVIEW</div>
+  </div>
+
+  <p class="lead">
+    A <strong>free, open-source crypto school</strong> and <strong>public token-health toolkit</strong> built on Solana —
+    teaching first-time users how to survive on-chain, and giving anyone a free way to vet any Solana token.
+    No signup. No wallet connect required to learn.
+  </p>
+
+  <div class="section-title">WHAT'S LIVE AND FREE TODAY</div>
+  <div class="prose" style="margin-bottom:14px">
+    <p>Everything below is deployed in production at <a href="https://clucknorris.app">clucknorris.app</a>, open source under the MIT license, and free to use by anyone — not gated behind the project's token.</p>
+  </div>
+
+  <div class="card">
+    <span class="free-badge">FREE PUBLIC GOOD</span>
+    <h3>🩺 Cluck Score — token health for any Solana mint</h3>
+    <p>Paste any Solana token mint, get a 0–100 health score in seconds: holder distribution, liquidity depth, mint/freeze authority status, and a top-holder concentration figure that filters out LP pools and lock contracts so the number reflects real human wallets. Served free at <code>/score</code> with a public JSON API and shareable card. Helps any user — not just ours — avoid bad tokens.</p>
+  </div>
+
+  <div class="card">
+    <span class="free-badge">FREE PUBLIC GOOD</span>
+    <h3>🎓 The School — crypto safety curriculum</h3>
+    <p>A structured, free curriculum for total beginners: wallets, tokens, DEXs, liquidity, market cap, and how not to get drained. Includes a Survival Simulator that walks new users through 50 real-world crypto scenarios with simulated capital — practice the dangerous decisions before making them with real money. No signup, no wallet, no paywall.</p>
+  </div>
+
+  <div class="card">
+    <span class="free-badge">FREE PUBLIC GOOD</span>
+    <h3>📸 Snapshot — holder snapshots for any token</h3>
+    <p>A free, token-agnostic holder snapshot tool at <code>/snapshot</code>. Paste any mint, get every wallet and balance, with LP pools and lock contracts filtered out by default — the #1 mistake new projects make when running airdrops. Education panel built in.</p>
+  </div>
+
+  <div class="card">
+    <span class="free-badge">REUSABLE PRIMITIVE</span>
+    <h3>🔓 No-wallet-connect micropayment pattern</h3>
+    <p>An open-source pattern that lets a web app verify an on-chain SPL payment <em>without</em> a wallet-connect, signature request, or custody — the app generates a unique decimal amount, the user sends it from any wallet, and the server matches the transaction on-chain. Any Solana builder can fork this approach from our MIT repo. It lowers the friction and the risk surface for paid features across the ecosystem.</p>
+  </div>
+
+  <div class="section-title">LIVE ECOSYSTEM FOOTPRINT</div>
+  <div class="stats">
+    <div class="stat"><div class="stat-value" id="statHolders">—</div><div class="stat-label">TOKEN HOLDERS</div></div>
+    <div class="stat"><div class="stat-value" id="statScore">—</div><div class="stat-label">OUR OWN CLUCK SCORE</div><div class="stat-sub" id="statScoreGrade"></div></div>
+    <div class="stat"><div class="stat-value" id="statFees">—</div><div class="stat-label">LIFETIME FEES REINVESTED</div></div>
+  </div>
+  <div class="prose">
+    <p>The project funds itself with optional CLKN micropayments on a few premium tools, and reinvests 100% of creator trading fees back into the ecosystem. The grant is <strong>not</strong> requested to fund the token — it's requested to expand the free, educational layer that benefits all Solana newcomers.</p>
+  </div>
+
+  <div class="section-title">WHAT THIS GRANT WOULD FUND</div>
+  <div class="prose">
+    <p>Requested: <strong>$8,000 USD</strong>. The project is already shipped and running — this grant accelerates the <em>free, public-good</em> layer specifically:</p>
+  </div>
+  <table class="budget">
+    <tr><th>ALLOCATION</th><th>AMOUNT</th></tr>
+    <tr>
+      <td><strong>Education content &amp; reach</strong><br/>
+      <span style="font-size:13px">Expand the free curriculum and Library deep-dives, add more Survival Simulator scenarios, and translate core lessons so non-English Solana newcomers can learn safely.</span></td>
+      <td>$3,500</td>
+    </tr>
+    <tr>
+      <td><strong>Hardened, more secure website</strong><br/>
+      <span style="font-size:13px">Rebuild the front-end on a more robust, secure foundation — independent security review, dependency hardening, and resilience work so the free tools stay reliably online for everyone.</span></td>
+      <td>$3,000</td>
+    </tr>
+    <tr>
+      <td><strong>Community building</strong><br/>
+      <span style="font-size:13px">Getting the free school in front of more first-time Solana users — onboarding materials, partnerships with other Solana communities, and outreach.</span></td>
+      <td>$1,500</td>
+    </tr>
+    <tr><td>TOTAL REQUESTED</td><td>$8,000</td></tr>
+  </table>
+
+  <div class="section-title">WHY THIS BENEFITS SOLANA</div>
+  <div class="prose">
+    <ul>
+      <li><strong>Reduces newcomer losses.</strong> Most new users on Solana lose money to rugs, drains, and bad tokens in their first weeks. Cluck Norris teaches them <em>before</em> they get hurt — and Cluck Score gives them a free way to vet a token before buying.</li>
+      <li><strong>Free and token-agnostic.</strong> Cluck Score, the school, and the snapshot tool work for <em>any</em> Solana token and any user. They're public goods, not funnels for one project.</li>
+      <li><strong>Open source.</strong> MIT-licensed. Other builders can fork the curriculum, the scoring engine, or the no-wallet-connect payment pattern.</li>
+      <li><strong>Already shipped.</strong> This is not a roadmap — it's a working product in production. The grant scales what's proven, with low execution risk.</li>
+    </ul>
+  </div>
+
+  <div class="section-title">WHO'S BEHIND IT</div>
+  <div class="prose">
+    <p>A solo builder (applying under real identity, KYC available privately to the Foundation). The project went from concept to a full shipped product — school, scoring engine, snapshot tool, and supporting infrastructure — built and deployed independently. Existing partner relationships in the Solana community, including supporting the Rose project.</p>
+  </div>
+
+  <div class="section-title">LINKS FOR REVIEW</div>
+  <div class="links">
+    <a class="link-btn link-primary" href="https://clucknorris.app">LIVE APP — clucknorris.app</a>
+    <a class="link-btn link-secondary" href="https://clucknorris.app/score">FREE CLUCK SCORE</a>
+  </div>
+  <div class="links">
+    <a class="link-btn link-secondary" href="https://clucknorris.app/snapshot">FREE SNAPSHOT TOOL</a>
+    <a class="link-btn link-secondary" href="https://github.com/FCKN007/cluck-norris-school">GITHUB — MIT, OPEN SOURCE</a>
+  </div>
+
+  <div class="footer">
+    CLUCK NORRIS · BUILT ON SOLANA · MIT LICENSED<br/>
+    This page is a grant overview. The live product is the demo.
+  </div>
+
+</div>
+
+<script>
+const CLKN_MINT = 'DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS';
+
+fetch('/api/holders?mint=' + CLKN_MINT)
+  .then(r => r.json())
+  .then(d => {
+    if (d && d.success && Number.isFinite(d.holderCount)) {
+      document.getElementById('statHolders').textContent = d.holderCount.toLocaleString();
+    }
+  })
+  .catch(function(){});
+
+fetch('/api/fees')
+  .then(r => r.json())
+  .then(d => {
+    const raw = (d && d.response != null) ? d.response : d;
+    const lamports = typeof raw === 'string' ? parseInt(raw) : ((raw && raw.totalLifetimeFees) != null ? raw.totalLifetimeFees : raw);
+    const n = parseInt(lamports);
+    if (Number.isFinite(n)) {
+      document.getElementById('statFees').textContent = (n / 1e9).toFixed(2) + ' SOL';
+    }
+  })
+  .catch(function(){});
+
+fetch('/api/cluck-score?mint=' + CLKN_MINT)
+  .then(r => r.json())
+  .then(d => {
+    if (!d || !d.success) return;
+    if (d.score != null) {
+      document.getElementById('statScore').textContent = d.score + '/100';
+      document.getElementById('statScoreGrade').textContent = 'grade ' + (d.grade || '—');
+    }
+  })
+  .catch(function(){});
+</script>
+</body>
+</html>

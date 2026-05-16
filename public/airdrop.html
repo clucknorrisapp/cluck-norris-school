@@ -1,0 +1,1512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>🐔 CLKN Airdrop Tool</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0a0a0a;
+    --card: #111111;
+    --border: rgba(255,255,255,0.08);
+    --text: #F9FAFB;
+    --subtext: #6B7280;
+    --accent: #FCD34D;
+    --green: #10B981;
+    --red: #EF4444;
+    --purple: #A78BFA;
+    --mono: 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); background-image: radial-gradient(ellipse at 20% 10%, rgba(217,119,6,0.10) 0%, transparent 50%), radial-gradient(ellipse at 80% 90%, rgba(239,68,68,0.07) 0%, transparent 50%); color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh; }
+  .wrap { max-width: 700px; margin: 0 auto; padding: 24px 16px 80px; }
+
+  /* Header */
+  .header { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+  .header-icon { font-size: 40px; filter: drop-shadow(0 0 16px rgba(217,119,6,0.5)); }
+  .header .brand-mini { font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 4px; color: #D97706; margin-bottom: 4px; font-weight: 700; }
+  .header h1 { font-family: 'Oswald', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg, #FCD34D, #F97316, #EF4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
+  .header p { font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
+  .footer-tag { text-align: center; margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
+  .footer-tag a { color: #D97706; text-decoration: none; }
+
+  /* Cards */
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+  .card-title { font-family: var(--mono); font-size: 10px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 14px; }
+
+  /* Wallet connect */
+  .connect-btn { background: linear-gradient(135deg, #9945FF, #6B21A8); border: none; border-radius: 10px; padding: 12px 20px; font-family: var(--mono); font-size: 13px; font-weight: 700; color: #fff; cursor: pointer; letter-spacing: 1px; width: 100%; transition: opacity 0.15s; }
+  .connect-btn:hover { opacity: 0.85; }
+  .connect-btn.connected { background: linear-gradient(135deg, #10B981, #065F46); }
+  /* Wallet picker — one button per supported wallet */
+  .wallet-picker { display: flex; gap: 8px; flex-wrap: wrap; }
+  .wallet-btn { flex: 1; min-width: 140px; display: flex; align-items: center; justify-content: center; gap: 8px; border: none; border-radius: 10px; padding: 12px 14px; font-family: var(--mono); font-size: 13px; font-weight: 700; color: #fff; letter-spacing: 1px; cursor: pointer; transition: transform 0.15s, opacity 0.15s; }
+  .wallet-btn:hover { transform: translateY(-1px); opacity: 0.95; }
+  .wallet-btn.phantom  { background: linear-gradient(135deg, #9945FF, #6B21A8); }
+  .wallet-btn.solflare { background: linear-gradient(135deg, #FC822B, #B85F1F); }
+  .wallet-btn.jupiter  { background: linear-gradient(135deg, #4D8FF7, #1E429F); }
+  .wallet-btn .wb-icon { font-size: 16px; }
+  .wallet-info { font-family: var(--mono); font-size: 12px; color: var(--green); margin-top: 10px; padding: 10px 12px; background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.25); border-radius: 8px; display: none; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .wallet-info.show { display: flex; }
+  .wallet-info-addr { word-break: break-all; flex: 1; min-width: 0; }
+  .wallet-info-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .wallet-disc-btn { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: #FCA5A5; font-family: 'Oswald', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; padding: 6px 12px; border-radius: 6px; cursor: pointer; transition: opacity 0.15s; }
+  .wallet-disc-btn:hover { opacity: 0.85; background: rgba(239,68,68,0.25); }
+
+  /* Token selector */
+  .token-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .token-preset { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-family: var(--mono); font-size: 11px; color: var(--subtext); cursor: pointer; transition: all 0.15s; }
+  .token-preset:hover { border-color: var(--accent); color: var(--accent); }
+  .token-preset.active { border-color: var(--accent); color: var(--accent); background: rgba(252,211,77,0.08); }
+  .token-input { width: 100%; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 8px; padding: 11px 14px; font-family: var(--mono); font-size: 14px; color: var(--text); margin-top: 8px; }
+  .token-input:focus { outline: none; border-color: var(--accent); }
+  .token-balance { font-family: var(--mono); font-size: 11px; color: var(--subtext); margin-top: 6px; }
+  .token-balance span { color: var(--green); }
+
+  /* Input mode tabs */
+  .mode-tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+  .mode-tab { flex: 1; padding: 9px; border: 1px solid var(--border); border-radius: 8px; font-family: var(--mono); font-size: 11px; color: var(--subtext); cursor: pointer; text-align: center; transition: all 0.15s; background: none; }
+  .mode-tab.active { border-color: var(--accent); color: var(--accent); background: rgba(252,211,77,0.06); }
+
+  /* Text area */
+  .drop-textarea { width: 100%; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-family: var(--mono); font-size: 11px; color: var(--text); resize: vertical; min-height: 160px; line-height: 1.7; }
+  .drop-textarea:focus { outline: none; border-color: rgba(252,211,77,0.4); }
+  .input-hint { font-size: 10px; color: var(--subtext); margin-top: 6px; line-height: 1.6; }
+
+  /* Equal drop amount */
+  .equal-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .equal-input { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-family: var(--mono); font-size: 13px; color: var(--text); width: 160px; }
+  .equal-input:focus { outline: none; border-color: var(--accent); }
+  .equal-label { font-size: 11px; color: var(--subtext); }
+
+  /* Minimum threshold */
+  .threshold-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+  .threshold-input { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-family: var(--mono); font-size: 12px; color: var(--text); width: 120px; }
+  .threshold-input:focus { outline: none; border-color: var(--accent); }
+
+  /* Parse button */
+  .parse-btn { width: 100%; margin-top: 12px; background: rgba(252,211,77,0.1); border: 1px solid rgba(252,211,77,0.3); border-radius: 8px; padding: 10px; font-family: var(--mono); font-size: 12px; color: var(--accent); cursor: pointer; transition: all 0.15s; }
+  .parse-btn:hover { background: rgba(252,211,77,0.15); }
+
+  /* Preview table */
+  .preview-card { display: none; }
+  .preview-card.show { display: block; }
+  .preview-stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .preview-stat { background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; flex: 1; min-width: 100px; }
+  .preview-stat-val { font-family: var(--mono); font-size: 18px; font-weight: 700; color: var(--accent); }
+  .preview-stat-label { font-size: 10px; color: var(--subtext); margin-top: 2px; letter-spacing: 1px; }
+  .preview-cost { background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; display: none; }
+  .preview-cost.show { display: block; }
+  .cost-title { font-family: var(--mono); font-size: 10px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 8px; }
+  .cost-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-family: var(--mono); font-size: 12px; }
+  .cost-row .cost-label { color: var(--subtext); }
+  .cost-row .cost-val { color: var(--text); font-weight: 600; }
+  .cost-row.cost-total { border-top: 1px dashed rgba(255,255,255,0.1); margin-top: 4px; padding-top: 8px; font-size: 13px; }
+  .cost-row.cost-total .cost-label { color: var(--accent); font-weight: 700; letter-spacing: 1px; }
+  .cost-row.cost-total .cost-val { color: var(--accent); font-weight: 700; }
+  .cost-warning { color: var(--red); font-size: 11px; font-family: var(--mono); margin-top: 8px; padding: 6px 8px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); border-radius: 6px; }
+  .cost-skip-row { margin-top: 12px; display: flex; align-items: center; gap: 8px; padding-top: 10px; border-top: 1px dashed rgba(255,255,255,0.1); }
+  .cost-skip-row input[type="checkbox"] { cursor: pointer; accent-color: var(--accent); }
+  .cost-skip-row label { font-family: var(--mono); font-size: 11px; color: var(--subtext); cursor: pointer; }
+  .new-ata-badge { display: inline-block; font-family: var(--mono); font-size: 8px; font-weight: 700; letter-spacing: 1px; color: #F59E0B; background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.35); border-radius: 4px; padding: 2px 5px; margin-left: 6px; }
+  .preview-tbl-wrap { overflow-x: auto; max-height: 320px; overflow-y: auto; margin-bottom: 12px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { font-family: var(--mono); font-size: 9px; color: var(--subtext); letter-spacing: 1px; padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--card); }
+  td { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 12px; }
+  .addr-cell { font-family: var(--mono); font-size: 11px; color: var(--subtext); }
+  .amt-cell { font-family: var(--mono); font-weight: 700; color: var(--text); }
+  .status-cell { font-family: var(--mono); font-size: 10px; }
+  .remove-btn { background: none; border: none; color: var(--red); cursor: pointer; font-size: 14px; padding: 0 4px; }
+  .warning-row td { background: rgba(239,68,68,0.05); }
+
+  /* Send button */
+  .send-btn { width: 100%; padding: 15px; background: linear-gradient(135deg, #D97706, #EF4444); border: none; border-radius: 10px; font-family: var(--mono); font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; letter-spacing: 2px; transition: opacity 0.15s; }
+  .send-btn:hover { opacity: 0.9; }
+  .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Progress */
+  .progress-card { display: none; }
+  .progress-card.show { display: block; }
+  .progress-bar-wrap { height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; margin: 10px 0; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, #D97706, #10B981); border-radius: 3px; transition: width 0.3s; }
+  .progress-text { font-family: var(--mono); font-size: 11px; color: var(--subtext); }
+
+  /* Results */
+  .result-item { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-family: var(--mono); font-size: 11px; }
+  .result-addr { color: var(--subtext); flex: 1; }
+  .result-amt { color: var(--text); min-width: 80px; }
+  .result-status { min-width: 70px; text-align: right; }
+  .status-sent { color: var(--green); }
+  .status-fail { color: var(--red); }
+  .status-skip { color: var(--subtext); }
+  .tx-link-small { color: var(--accent); text-decoration: none; font-size: 10px; }
+
+  /* Unlock gate (CLKN-paid tool access) */
+  .unlock-gate { background: linear-gradient(135deg, rgba(217,119,6,0.08), rgba(239,68,68,0.04)); border: 1px solid rgba(217,119,6,0.45); border-radius: 12px; padding: 24px 22px; margin-bottom: 16px; box-shadow: 0 0 30px rgba(217,119,6,0.12); }
+  .unlock-title { font-family: 'Oswald', sans-serif; font-size: 20px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg,#FCD34D,#F97316,#EF4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-align: center; margin-bottom: 4px; }
+  .unlock-sub { font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); text-align: center; letter-spacing: 3px; margin-bottom: 18px; }
+  .unlock-amount-card { background: rgba(0,0,0,0.4); border: 1px solid rgba(217,119,6,0.45); border-radius: 10px; padding: 16px; text-align: center; margin-bottom: 10px; cursor: pointer; transition: border-color 0.15s; }
+  .unlock-amount-card:hover { border-color: var(--accent); }
+  .unlock-amount-card .lbl { font-family: 'Oswald', sans-serif; font-size: 9px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 6px; }
+  .unlock-amount-card .val { font-family: var(--mono); font-size: 26px; font-weight: 700; color: #FCD34D; letter-spacing: 1px; }
+  .unlock-amount-card .hint { font-family: 'Oswald', sans-serif; font-size: 8px; letter-spacing: 1px; margin-top: 4px; color: var(--accent); }
+  .unlock-wallet-card { background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; cursor: pointer; transition: border-color 0.15s; }
+  .unlock-wallet-card:hover { border-color: var(--accent); }
+  .unlock-wallet-card .lbl { font-family: 'Oswald', sans-serif; font-size: 9px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 4px; }
+  .unlock-wallet-card .val { font-family: var(--mono); font-size: 15px; font-weight: 600; color: var(--text); word-break: break-all; line-height: 1.55; }
+  .unlock-wallet-card .hint { font-family: 'Oswald', sans-serif; font-size: 8px; letter-spacing: 1px; margin-top: 6px; text-align: right; color: var(--accent); }
+  .unlock-blurb { font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--subtext); text-align: center; line-height: 1.7; margin-bottom: 14px; letter-spacing: 1px; }
+  .unlock-blurb .price { color: var(--accent); font-weight: 700; }
+  .unlock-blurb .bonus { color: #6B7280; font-size: 10px; display: block; margin-top: 4px; }
+  .unlock-status { font-family: var(--mono); font-size: 11px; color: var(--subtext); text-align: center; padding: 12px 14px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; }
+  .unlock-status .pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 1s infinite; margin-right: 8px; vertical-align: middle; }
+  .unlock-status.success { background: rgba(16,185,129,0.1); border-color: rgba(16,185,129,0.4); color: var(--green); font-weight: 700; }
+  .unlock-status.success .pulse { background: var(--green); animation: none; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  /* Idle status (after polling auto-stops) + restart button */
+  .unlock-status.idle { color: var(--subtext); border-color: rgba(255,255,255,0.06); background: rgba(255,255,255,0.02); }
+  .unlock-status.idle .pulse { background: var(--subtext); animation: none; }
+  .unlock-restart-btn { width: 100%; margin-top: 10px; padding: 12px; background: linear-gradient(135deg,#D97706,#EF4444); border: none; border-radius: 8px; font-family: 'Oswald', sans-serif; font-size: 12px; font-weight: 700; color: #fff; letter-spacing: 2px; cursor: pointer; transition: opacity 0.15s; }
+  .unlock-restart-btn:hover { opacity: 0.9; }
+
+  /* Sticky unlocked banner — visible the whole time the tool is unlocked, live countdown */
+  .unlock-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; background: linear-gradient(135deg, rgba(16,185,129,0.14), rgba(16,185,129,0.04)); border: 1px solid rgba(16,185,129,0.4); border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; box-shadow: 0 0 18px rgba(16,185,129,0.1); }
+  .unlock-banner-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .banner-check { font-family: var(--mono); font-size: 16px; color: var(--green); background: rgba(16,185,129,0.18); border: 1px solid rgba(16,185,129,0.45); border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; }
+  .banner-title { font-family: 'Oswald', sans-serif; font-size: 12px; font-weight: 700; color: var(--green); letter-spacing: 2px; }
+  .banner-meta { font-family: var(--mono); font-size: 10px; color: var(--subtext); margin-top: 2px; word-break: break-all; }
+  .banner-bonus { display: inline-block; font-family: 'Oswald', sans-serif; font-size: 8px; font-weight: 700; letter-spacing: 1px; color: #FCD34D; background: rgba(252,211,77,0.12); border: 1px solid rgba(252,211,77,0.4); border-radius: 4px; padding: 2px 6px; margin-left: 6px; vertical-align: middle; }
+  .unlock-banner-right { text-align: right; flex-shrink: 0; }
+  .banner-countdown-label { font-family: 'Oswald', sans-serif; font-size: 9px; color: var(--subtext); letter-spacing: 2px; }
+  .banner-countdown { font-family: var(--mono); font-size: 18px; font-weight: 700; color: var(--accent); letter-spacing: 1px; margin-top: 2px; }
+  .banner-countdown.warning { color: #F59E0B; }
+  .banner-countdown.expiring { color: var(--red); animation: pulse 1s infinite; }
+  @media (max-width: 480px) {
+    .unlock-banner { flex-direction: column; align-items: stretch; gap: 8px; }
+    .unlock-banner-right { text-align: left; }
+  }
+
+  /* Error */
+  .error-box { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #FCA5A5; margin-bottom: 12px; display: none; }
+  .error-box.show { display: block; }
+
+  /* CSV upload */
+  .upload-area { border: 2px dashed rgba(255,255,255,0.12); border-radius: 10px; padding: 20px; text-align: center; cursor: pointer; transition: all 0.15s; margin-bottom: 10px; }
+  .upload-area:hover { border-color: rgba(252,211,77,0.4); }
+  .upload-area.dragover { border-color: var(--accent); background: rgba(252,211,77,0.04); }
+  .upload-icon { font-size: 24px; margin-bottom: 6px; }
+  .upload-text { font-size: 12px; color: var(--subtext); }
+  .upload-input { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <div class="header-icon">🐔</div>
+    <div>
+      <div class="brand-mini">SCHOOL OF CRYPTO HARD KNOCKS</div>
+      <h1>AIRDROP TOOL</h1>
+      <p>TOKEN DISTRIBUTION — SOLANA</p>
+    </div>
+  </div>
+
+  <!-- 🔒 CLKN Unlock Gate — visible until tool access is paid for -->
+  <div class="unlock-gate" id="unlockGate" style="display:none">
+    <div class="unlock-title">🔒 AIRDROP TOOL</div>
+    <div class="unlock-sub">CLKN MICROPAYMENT TO UNLOCK</div>
+
+    <!-- READ BEFORE PAYING. Make sure nobody unlocks a tool they can't use. -->
+    <div style="margin-bottom:14px;padding:12px 14px;background:rgba(245,158,11,0.1);border:1.5px solid rgba(245,158,11,0.45);border-radius:10px;font-family:var(--mono);font-size:12px;color:#FCD34D;line-height:1.7">
+      ⚠ <strong>BEFORE YOU SEND:</strong> the airdrop tool signs through
+      <strong>Phantom, Solflare, or Jupiter</strong>. Install one of those first if you
+      haven't — otherwise your 100 CLKN unlocks a tool you can't use.
+    </div>
+
+    <!-- Education + acknowledgment — must be checked before payment instructions appear -->
+    <button id="airdropLearnToggle" onclick="toggleAirdropLearn()" style="width:100%;display:flex;align-items:center;justify-content:space-between;background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.3);border-radius:10px;padding:11px 14px;font-family:'Oswald',sans-serif;font-size:13px;color:#60A5FA;letter-spacing:1.5px;font-weight:700;cursor:pointer;margin-bottom:10px">
+      <span>📖 HOW DOES AN AIRDROPPER WORK?</span>
+      <span id="airdropLearnChevron">▼</span>
+    </button>
+    <div id="airdropLearnPanel" style="display:none;background:rgba(96,165,250,0.04);border:1px solid rgba(96,165,250,0.25);border-radius:10px;padding:14px 16px;margin-bottom:12px;font-family:var(--mono);font-size:12px;color:#D1D5DB;line-height:1.7">
+      <div style="font-family:'Oswald',sans-serif;font-size:11px;color:#93C5FD;letter-spacing:2px;margin-bottom:10px;font-weight:700">🐔 CLUCK'S AIRDROPPER 101</div>
+
+      <div style="margin-bottom:10px"><span style="color:#FCD34D;font-weight:700">1. WHAT IT DOES.</span> You give it a list of Solana wallet addresses + amounts. It builds Solana transactions that transfer your tokens to all of them, batched ~10 wallets per transaction to stay under Solana's 1232-byte tx limit.</div>
+
+      <div style="margin-bottom:10px"><span style="color:#FCD34D;font-weight:700">2. YOU SIGN EVERY BATCH.</span> Your wallet pops up once per transaction. You see the exact instructions before approving. <strong>Reject if anything looks off.</strong></div>
+
+      <div style="margin-bottom:10px"><span style="color:#FCD34D;font-weight:700">3. RENT FOR NEW ACCOUNTS.</span> If a recipient doesn't already hold this token, Solana requires ~0.00204 SOL to open a new token account for them. <strong>You pay this</strong>, not the recipient. The tool shows you the total up-front in the preview.</div>
+
+      <div style="margin-bottom:10px"><span style="color:#FCD34D;font-weight:700">4. IRREVERSIBLE.</span> Solana transactions can't be undone. Wrong address = lost tokens. <strong>Verify your recipient list twice</strong> before clicking SEND.</div>
+
+      <div style="margin-bottom:10px"><span style="color:#FCD34D;font-weight:700">5. CLKN PAYS FOR ACCESS, NOT YOUR AIRDROP.</span> The 100 CLKN you send unlocks the tool for an hour. Your airdrop tokens are separate — they leave your wallet only when YOU sign the batches with Phantom/Solflare/Jupiter.</div>
+
+      <div style="margin-bottom:10px"><span style="color:#FCD34D;font-weight:700">6. THINGS THAT GO WRONG.</span> Not enough SOL for rent. Typo in a recipient address. Sending the wrong amount because you read the column wrong. <strong>Preview before you sign every time.</strong></div>
+
+      <div style="margin-top:14px;padding:10px 12px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.25);border-radius:8px;color:#6EE7B7;font-size:11px">
+        <strong>📚 Want more depth?</strong> The school has a full crypto safety + on‑chain research curriculum at <a href="/" style="color:#10B981;text-decoration:underline">clucknorris.app</a>.
+      </div>
+    </div>
+
+    <!-- Hard gate: payment cards stay hidden until this is checked -->
+    <label id="ackRow" style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px;background:rgba(16,185,129,0.05);border:1.5px solid rgba(16,185,129,0.35);border-radius:10px;margin-bottom:14px;cursor:pointer">
+      <input type="checkbox" id="ackBox" onchange="onAckChange()" style="margin-top:3px;width:18px;height:18px;accent-color:#10B981;cursor:pointer;flex-shrink:0"/>
+      <span style="font-family:var(--mono);font-size:12px;color:#D1FAE5;line-height:1.6">
+        <strong>I understand how an airdropper works</strong> (read the panel above) — irreversible transfers, I pay SOL rent for new recipients, and I'll verify every wallet popup before approving.
+      </span>
+    </label>
+
+    <div id="unlockPaymentArea" style="display:none">
+    <div class="unlock-amount-card" onclick="copyUnlockAmount()">
+      <div class="lbl">SEND EXACTLY</div>
+      <div class="val" id="unlockAmountVal">—</div>
+      <div class="hint" id="unlockAmountHint">TAP TO COPY</div>
+    </div>
+
+    <div class="unlock-wallet-card" onclick="copyUnlockWallet()">
+      <div class="lbl">TO THIS WALLET</div>
+      <div class="val">7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H</div>
+      <div class="hint" id="unlockWalletHint">TAP TO COPY</div>
+    </div>
+
+    <div class="unlock-blurb">
+      No memo. No wallet connect. The unique decimal IS your session key.<br>
+      <span class="price">100 CLKN ≈ $0.01</span> · 1 batch send · any size
+      <span class="bonus">Hold ≥ 2M CLKN after sending → 5× longer unlock</span>
+    </div>
+    </div><!-- /#unlockPaymentArea -->
+
+    <div class="unlock-status" id="unlockStatus">
+      <span class="pulse"></span>
+      <span id="unlockStatusText">Watching for your payment…</span>
+    </div>
+    <button class="unlock-restart-btn" id="unlockRestart" onclick="restartPolling()" style="display:none">
+      ↻ CHECK AGAIN
+    </button>
+
+    <!-- Stay-safe panel — small but persistent. Sets expectations about what we
+         do and don't do so users have a checklist for spotting clones / drainers. -->
+    <div style="margin-top:16px;padding:12px 14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:10px">
+      <div style="font-family:'Oswald',sans-serif;font-size:10px;color:#9CA3AF;letter-spacing:2px;margin-bottom:8px;font-weight:700">🛡 STAY SAFE</div>
+      <ul style="margin:0;padding-left:18px;list-style:none;font-family:var(--mono);font-size:11px;color:#9CA3AF;line-height:1.7">
+        <li style="position:relative"><span style="position:absolute;left:-16px;color:#10B981">✓</span> Always check the URL — should be <span style="color:#FCD34D">clucknorris.app/airdrop</span>. Phishing clones use lookalikes.</li>
+        <li style="position:relative"><span style="position:absolute;left:-16px;color:#10B981">✓</span> We <strong>never</strong> ask for your seed phrase. Anyone who does is a scammer.</li>
+        <li style="position:relative"><span style="position:absolute;left:-16px;color:#10B981">✓</span> Your wallet popup shows the exact instructions before signing. <strong>Read it.</strong></li>
+        <li style="position:relative"><span style="position:absolute;left:-16px;color:#10B981">✓</span> The school never holds your tokens — every tx is signed by your wallet, broadcast directly.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Tool body — hidden behind the unlock gate until verified -->
+  <div id="airdropTool" style="display:none">
+
+  <!-- Sticky banner shown while the tool is unlocked, with live countdown -->
+  <div class="unlock-banner" id="unlockBanner" style="display:none">
+    <div class="unlock-banner-left">
+      <span class="banner-check">✓</span>
+      <div>
+        <div class="banner-title">AIRDROP TOOL UNLOCKED</div>
+        <div class="banner-meta" id="bannerMeta">—</div>
+      </div>
+    </div>
+    <div class="unlock-banner-right">
+      <div class="banner-countdown-label">EXPIRES IN</div>
+      <div class="banner-countdown" id="bannerCountdown">—:—:—</div>
+    </div>
+  </div>
+
+  <div class="error-box" id="errorBox"></div>
+
+  <!-- Step 1: Connect Wallet -->
+  <div class="card">
+    <div class="card-title">STEP 1 — CONNECT WALLET</div>
+    <div class="wallet-picker" id="walletPicker">
+      <button class="wallet-btn phantom"  onclick="connectWallet('phantom')"><span class="wb-icon">🔮</span><span>PHANTOM</span></button>
+      <button class="wallet-btn solflare" onclick="connectWallet('solflare')"><span class="wb-icon">☀️</span><span>SOLFLARE</span></button>
+      <button class="wallet-btn jupiter"  onclick="connectWallet('jupiter')"><span class="wb-icon">🪐</span><span>JUPITER</span></button>
+    </div>
+    <div class="wallet-info" id="walletInfo">
+      <div>
+        <div style="font-family:'Oswald',sans-serif;font-size:9px;color:#6EE7B7;letter-spacing:2px;margin-bottom:2px;font-weight:700"><span id="walletInfoLabel">✓ CONNECTED</span></div>
+        <div class="wallet-info-addr" id="walletInfoAddr">—</div>
+      </div>
+      <div class="wallet-info-actions">
+        <button class="wallet-disc-btn" onclick="disconnectWallet()">🔌 DISCONNECT</button>
+      </div>
+    </div>
+    <div style="margin-top:10px;padding:8px 12px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.25);border-radius:8px;font-family:var(--mono);font-size:11px;color:#F59E0B;line-height:1.5">
+      ⚠ <strong>Phantom, Solflare, and Jupiter all supported.</strong> Pick whichever wallet actually holds the sending tokens — same flow for all three.
+    </div>
+  </div>
+
+  <!-- Step 2: Select Token -->
+  <div class="card">
+    <div class="card-title">STEP 2 — SELECT TOKEN</div>
+    <div class="token-row">
+      <button class="token-preset active" onclick="setToken('DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS', this)">🐔 CLKN</button>
+      <button class="token-preset" onclick="setToken('RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF', this)">🌹 ROSE</button>
+      <button class="token-preset" onclick="setToken('custom', this)">✏️ CUSTOM</button>
+    </div>
+    <input class="token-input" id="tokenMintInput" placeholder="Token mint address..." value="DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS" oninput="onMintInput()"/>
+    <div class="token-balance" id="tokenBalance">Connect wallet to see balance</div>
+  </div>
+
+  <!-- Step 3: Recipients -->
+  <div class="card">
+    <div class="card-title">STEP 3 — RECIPIENTS</div>
+    <div class="mode-tabs">
+      <button class="mode-tab active" id="tab-manual" onclick="setMode('manual')">✏️ MANUAL ENTRY</button>
+      <button class="mode-tab" id="tab-csv" onclick="setMode('csv')">📄 CSV UPLOAD</button>
+      <button class="mode-tab" id="tab-equal" onclick="setMode('equal')">⚖️ EQUAL DROP</button>
+    </div>
+
+    <!-- Manual mode -->
+    <div id="mode-manual">
+      <textarea class="drop-textarea" id="manualInput" placeholder="Paste wallets and amounts, one per line:&#10;&#10;WalletAddress1, 1000&#10;WalletAddress2, 2500&#10;WalletAddress3, 500"></textarea>
+      <div class="input-hint">Format: wallet address, amount — one per line. Comma or tab separated.</div>
+    </div>
+
+    <!-- CSV mode -->
+    <div id="mode-csv" style="display:none">
+      <div class="upload-area" id="uploadArea" onclick="document.getElementById('csvFile').click()" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+        <div class="upload-icon">📂</div>
+        <div class="upload-text">Click to upload CSV or drag and drop<br><span style="font-size:10px;opacity:0.6">Columns: address, amount</span></div>
+      </div>
+      <input type="file" id="csvFile" class="upload-input" accept=".csv,.txt" onchange="handleCSV(event)"/>
+      <textarea class="drop-textarea" id="csvPreviewText" placeholder="CSV contents will appear here after upload..." style="min-height:100px"></textarea>
+      <div class="input-hint">First column: wallet address. Second column: token amount. Header row optional.</div>
+    </div>
+
+    <!-- Equal mode -->
+    <div id="mode-equal" style="display:none">
+      <textarea class="drop-textarea" id="equalInput" placeholder="Paste wallet addresses, one per line:&#10;&#10;WalletAddress1&#10;WalletAddress2&#10;WalletAddress3" style="min-height:120px"></textarea>
+      <div class="equal-row">
+        <input class="equal-input" type="number" id="equalAmount" placeholder="Amount per wallet" min="1"/>
+        <span class="equal-label">tokens per wallet</span>
+      </div>
+      <div class="input-hint" style="margin-top:8px">Every wallet receives the same amount.</div>
+    </div>
+
+    <!-- Minimum threshold -->
+    <div class="threshold-row">
+      <span class="equal-label">Skip wallets below</span>
+      <input class="threshold-input" type="number" id="minThreshold" value="1" min="0" placeholder="Min tokens"/>
+      <span class="equal-label">tokens</span>
+    </div>
+
+    <button class="parse-btn" onclick="parseRecipients()">▶ PREVIEW AIRDROP</button>
+  </div>
+
+  <!-- Step 4: Preview & Send -->
+  <div class="card preview-card" id="previewCard">
+    <div class="card-title">STEP 4 — REVIEW & SEND</div>
+    <div class="preview-stats">
+      <div class="preview-stat">
+        <div class="preview-stat-val" id="statWallets">—</div>
+        <div class="preview-stat-label">WALLETS</div>
+      </div>
+      <div class="preview-stat">
+        <div class="preview-stat-val" id="statTotal">—</div>
+        <div class="preview-stat-label">TOTAL TOKENS</div>
+      </div>
+      <div class="preview-stat">
+        <div class="preview-stat-val" id="statTxns">—</div>
+        <div class="preview-stat-label">TRANSACTIONS</div>
+      </div>
+      <div class="preview-stat">
+        <div class="preview-stat-val" id="statSkipped">—</div>
+        <div class="preview-stat-label">SKIPPED</div>
+      </div>
+    </div>
+    <div class="preview-cost" id="previewCost">
+      <div class="cost-title">⚠ YOUR SOL COST (rent + network fees)</div>
+      <div class="cost-row"><span class="cost-label">🆕 New token accounts to create</span><span class="cost-val" id="costAtaCount">—</span></div>
+      <div class="cost-row"><span class="cost-label">Rent per new account</span><span class="cost-val">0.00204 SOL</span></div>
+      <div class="cost-row"><span class="cost-label">Total ATA rent</span><span class="cost-val" id="costAtaRent">— SOL</span></div>
+      <div class="cost-row"><span class="cost-label">Network tx fees</span><span class="cost-val" id="costTxFee">— SOL</span></div>
+      <div class="cost-row cost-total"><span class="cost-label">YOU PAY (sender)</span><span class="cost-val" id="costTotal">— SOL</span></div>
+      <div class="cost-row" id="solBalanceRow" style="display:none"><span class="cost-label">Your SOL balance</span><span class="cost-val" id="solBalance">—</span></div>
+      <div class="cost-warning" id="solWarning" style="display:none">⚠ Insufficient SOL for this airdrop. Top up or skip new-ATA recipients below.</div>
+      <div class="cost-skip-row" id="skipAtaRow" style="display:none">
+        <input type="checkbox" id="skipNewAtas" onchange="toggleSkipNewAtas()"/>
+        <label for="skipNewAtas">Skip wallets that need new token accounts <span id="atasSaveText" style="color:#10B981"></span></label>
+      </div>
+    </div>
+    <div class="preview-tbl-wrap">
+      <table>
+        <thead><tr>
+          <th>#</th>
+          <th>WALLET</th>
+          <th>AMOUNT</th>
+          <th>STATUS</th>
+          <th></th>
+        </tr></thead>
+        <tbody id="previewTbody"></tbody>
+      </table>
+    </div>
+    <!-- Sender's checklist — populated by renderPreview so the numbers match what
+         the wallet popup will actually ask them to approve. Last line of defense
+         against accidentally approving a malicious tx if our HTML ever got tampered. -->
+    <div style="padding:12px 14px;background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.3);border-radius:8px;font-family:var(--mono);font-size:12px;color:#93C5FD;line-height:1.6;margin-bottom:10px">
+      <div style="font-family:'Oswald',sans-serif;font-size:10px;color:#60A5FA;letter-spacing:2px;margin-bottom:6px;font-weight:700">🛡 YOUR WALLET POPUP WILL SHOW</div>
+      <div id="walletPopupSummary">— set up your recipients first —</div>
+      <div style="font-size:10px;color:#6B7280;margin-top:6px">If those numbers don't match what you see in the popup, hit reject.</div>
+    </div>
+    <div style="padding:12px 14px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.35);border-radius:8px;font-family:var(--mono);font-size:12px;color:#F59E0B;line-height:1.6;margin-bottom:10px">
+      ⚠ <strong>Phantom, Solflare, Jupiter all supported.</strong> This batch signs through the wallet you connected.<br>
+      ⚠ <strong>Tokens leave your wallet immediately</strong> when you confirm. Double-check the recipient list, amounts, and your remaining SOL for rent before continuing.
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+      <button id="sendAreaDisconnect" class="wallet-disc-btn" onclick="disconnectWallet()" style="display:none">🔌 DISCONNECT WALLET</button>
+    </div>
+    <button class="send-btn" id="sendBtn" onclick="sendAirdrop()">🚀 SEND AIRDROP</button>
+  </div>
+
+  <!-- Progress -->
+  <div class="card progress-card" id="progressCard">
+    <div class="card-title">SENDING...</div>
+    <div class="progress-text" id="progressText">Preparing transactions...</div>
+    <div class="progress-bar-wrap"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    <div id="resultList" style="margin-top:12px;max-height:300px;overflow-y:auto"></div>
+  </div>
+
+  </div><!-- /#airdropTool -->
+
+  <div class="footer-tag">🐔 POWERED BY <a href="https://clucknorris.app">CLKN</a></div>
+</div>
+
+<script>
+// ── Constants ────────────────────────────────────────────────────────────────
+const RPC_URL = '/api/helius-rpc';
+const PRESETS = {
+  'DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS': { name: 'CLKN', decimals: 9 },
+  'RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF': { name: 'ROSE', decimals: 9 },
+};
+const TX_BATCH_SIZE = 20; // legacy cap; planBatches() does the real sizing now
+// Minimum rent for an SPL token account (165 bytes) at current Solana rent rate.
+// Sender pays this every time the recipient doesn't already have a token account for the mint.
+const LAMPORTS_PER_ATA_RENT = 2039280; // 0.00203928 SOL
+const LAMPORTS_PER_TX_FEE = 5000;      // base fee per signed Solana tx
+// Per-recipient batch weight: a transfer slot is 1, an ATA-create+transfer slot is 2.
+// Solana's 1232-byte tx limit fits ~18 weighted slots before the tx serialization fails.
+const TX_WEIGHT_BUDGET = 18;
+
+// ── State ────────────────────────────────────────────────────────────────────
+let walletPubkey = null;
+let currentMint = 'DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS';
+let currentDecimals = 9;
+let currentMode = 'manual';
+let recipients = []; // [{addr, amount, skip, skipReason}]
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function showError(msg) {
+  const el = document.getElementById('errorBox');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 6000);
+}
+
+function fmtNum(n) {
+  if (n >= 1e9) return (n/1e9).toFixed(2) + 'B';
+  if (n >= 1e6) return (n/1e6).toFixed(2) + 'M';
+  if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
+  return n.toLocaleString();
+}
+
+function shortAddr(a) {
+  return a ? a.slice(0,6) + '...' + a.slice(-4) : '';
+}
+
+async function rpc(method, params) {
+  const r = await fetch(RPC_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params })
+  });
+  const d = await r.json();
+  if (d.error) throw new Error(d.error.message);
+  return d.result;
+}
+
+// ── Wallet Connect ───────────────────────────────────────────────────────────
+// Registry of supported wallets. Each entry knows how to detect its provider
+// in the browser and where to send users who don't have it yet. All providers
+// implement the same { connect, disconnect, signAndSendTransaction } interface
+// so the rest of the tool can treat them identically.
+const WALLETS = {
+  phantom: {
+    name: 'Phantom',
+    icon: '🔮',
+    download: 'https://phantom.app',
+    // Phantom injects either as window.phantom.solana or window.solana (with isPhantom flag)
+    detect: () => window.phantom?.solana || (window.solana?.isPhantom ? window.solana : null),
+  },
+  solflare: {
+    name: 'Solflare',
+    icon: '☀️',
+    download: 'https://solflare.com',
+    // Solflare injects as window.solflare; some builds also expose it on window.solana
+    detect: () => window.solflare || (window.solana?.isSolflare ? window.solana : null),
+  },
+  jupiter: {
+    name: 'Jupiter',
+    icon: '🪐',
+    download: 'https://jup.ag/wallet',
+    // Jupiter wallet's browser injection. Tries the documented names + the common
+    // isJupiter flag on window.solana. Tell us if your install puts it somewhere else.
+    detect: () => window.jupiterWallet || window.jupiter || (window.solana?.isJupiter ? window.solana : null),
+  },
+};
+
+let activeWallet = null; // { id, provider }
+
+function syncWalletUi() {
+  // Single source of truth — call after any state change so the picker, the
+  // connected pill, and the send-area disconnect button all stay in sync.
+  const picker = document.getElementById('walletPicker');
+  const info = document.getElementById('walletInfo');
+  const sendDisc = document.getElementById('sendAreaDisconnect');
+  if (walletPubkey && activeWallet) {
+    picker.style.display = 'none';
+    info.classList.add('show');
+    document.getElementById('walletInfoLabel').textContent = '✓ ' + (WALLETS[activeWallet.id]?.name?.toUpperCase() || 'CONNECTED');
+    document.getElementById('walletInfoAddr').textContent = walletPubkey;
+    if (sendDisc) sendDisc.style.display = 'inline-flex';
+  } else {
+    picker.style.display = 'flex';
+    info.classList.remove('show');
+    if (sendDisc) sendDisc.style.display = 'none';
+  }
+}
+
+async function connectWallet(walletId) {
+  const w = WALLETS[walletId];
+  if (!w) { showError('Unknown wallet'); return; }
+  const provider = w.detect();
+  if (!provider) {
+    showError(`${w.name} not detected. Install from ${w.download} and refresh.`);
+    return;
+  }
+  try {
+    const resp = await provider.connect();
+    // Both Phantom and Solflare return { publicKey: PublicKey }; toString() is the address.
+    const pubkey = resp?.publicKey?.toString?.() || provider.publicKey?.toString?.();
+    if (!pubkey) throw new Error(`${w.name} did not return a public key`);
+    walletPubkey = pubkey;
+    activeWallet = { id: walletId, provider };
+    syncWalletUi();
+    fetchTokenBalance();
+  } catch(e) {
+    showError(`${w.name} connection failed: ${e.message || e}`);
+  }
+}
+
+function disconnectWallet() {
+  try { activeWallet?.provider?.disconnect?.(); } catch(e) {}
+  walletPubkey = null;
+  activeWallet = null;
+  syncWalletUi();
+  document.getElementById('tokenBalance').innerHTML = 'Connect wallet to see balance';
+  document.getElementById('previewCard').classList.remove('show');
+  document.getElementById('progressCard').classList.remove('show');
+}
+
+async function fetchTokenBalance() {
+  if (!walletPubkey || !currentMint) return;
+  document.getElementById('tokenBalance').innerHTML = 'Loading balance...';
+  try {
+    const accounts = await rpc('getTokenAccountsByOwner', [
+      walletPubkey,
+      { mint: currentMint },
+      { encoding: 'jsonParsed' }
+    ]);
+    let bal = 0;
+    for (const acc of (accounts?.value || [])) {
+      bal += acc.account.data.parsed.info.tokenAmount.uiAmount || 0;
+    }
+    document.getElementById('tokenBalance').innerHTML =
+      `Your balance: <span>${fmtNum(bal)} ${PRESETS[currentMint]?.name || 'tokens'}</span>`;
+  } catch(e) {
+    document.getElementById('tokenBalance').innerHTML = 'Could not fetch balance';
+  }
+}
+
+// ── Token Selection ──────────────────────────────────────────────────────────
+function setToken(mint, btn) {
+  document.querySelectorAll('.token-preset').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (mint === 'custom') {
+    document.getElementById('tokenMintInput').value = '';
+    document.getElementById('tokenMintInput').focus();
+    currentMint = '';
+    currentDecimals = 9;
+  } else {
+    currentMint = mint;
+    currentDecimals = PRESETS[mint]?.decimals || 9;
+    document.getElementById('tokenMintInput').value = mint;
+    fetchTokenBalance();
+  }
+}
+
+function onMintInput() {
+  const val = document.getElementById('tokenMintInput').value.trim();
+  currentMint = val;
+  document.querySelectorAll('.token-preset').forEach(b => b.classList.remove('active'));
+  if (PRESETS[val]) {
+    currentDecimals = PRESETS[val].decimals;
+    fetchTokenBalance();
+  }
+}
+
+// ── Mode switching ───────────────────────────────────────────────────────────
+function setMode(mode) {
+  currentMode = mode;
+  ['manual','csv','equal'].forEach(m => {
+    document.getElementById(`mode-${m}`).style.display = m === mode ? 'block' : 'none';
+    document.getElementById(`tab-${m}`).classList.toggle('active', m === mode);
+  });
+}
+
+// ── CSV handling ─────────────────────────────────────────────────────────────
+function handleCSV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('csvPreviewText').value = e.target.result;
+  };
+  reader.readAsText(file);
+}
+
+function onDragOver(e) { e.preventDefault(); document.getElementById('uploadArea').classList.add('dragover'); }
+function onDragLeave(e) { document.getElementById('uploadArea').classList.remove('dragover'); }
+function onDrop(e) {
+  e.preventDefault();
+  document.getElementById('uploadArea').classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => { document.getElementById('csvPreviewText').value = ev.target.result; };
+  reader.readAsText(file);
+}
+
+// ── Parse Recipients ─────────────────────────────────────────────────────────
+async function parseRecipients() {
+  if (!currentMint) { showError('Please select a token first.'); return; }
+
+  const minThreshold = parseFloat(document.getElementById('minThreshold').value) || 0;
+  const parsed = [];
+  const seen = new Set();
+
+  try {
+    if (currentMode === 'manual' || currentMode === 'csv') {
+      const raw = currentMode === 'manual'
+        ? document.getElementById('manualInput').value
+        : document.getElementById('csvPreviewText').value;
+
+      const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+
+      for (const line of lines) {
+        // Skip header rows
+        if (line.toLowerCase().includes('address') || line.toLowerCase().includes('wallet')) continue;
+
+        // Split by comma, tab, or pipe
+        const parts = line.split(/[,\t|]/).map(p => p.trim()).filter(Boolean);
+        if (parts.length < 2) continue;
+
+        // Find which part is the address (44 chars base58)
+        let addr = '', amtStr = '';
+        if (parts[0].length > 30) {
+          addr = parts[0];
+          amtStr = parts[1];
+        } else {
+          addr = parts[1];
+          amtStr = parts[0];
+        }
+
+        const amount = parseFloat(amtStr.replace(/[^0-9.]/g, ''));
+        if (!addr || isNaN(amount)) continue;
+
+        const skip = amount < minThreshold;
+        const skipReason = skip ? `Below minimum (${minThreshold})` : '';
+
+        if (seen.has(addr)) {
+          // Duplicate — add to existing
+          const existing = parsed.find(p => p.addr === addr);
+          if (existing) existing.amount += amount;
+          continue;
+        }
+        seen.add(addr);
+        parsed.push({ addr, amount, skip, skipReason });
+      }
+    } else if (currentMode === 'equal') {
+      const raw = document.getElementById('equalInput').value;
+      const amount = parseFloat(document.getElementById('equalAmount').value);
+      if (!amount || amount <= 0) { showError('Please enter an amount per wallet.'); return; }
+
+      const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+      for (const addr of lines) {
+        if (addr.length < 30) continue;
+        if (seen.has(addr)) continue;
+        seen.add(addr);
+        const skip = amount < minThreshold;
+        parsed.push({ addr, amount, skip, skipReason: skip ? `Below minimum (${minThreshold})` : '' });
+      }
+    }
+
+    if (parsed.length === 0) { showError('No valid recipients found. Check your input format.'); return; }
+
+    recipients = parsed;
+    // Reset the skip-new-ATAs checkbox between parses — a new list shouldn't inherit old state
+    const skipCb = document.getElementById('skipNewAtas');
+    if (skipCb) skipCb.checked = false;
+    // First render so the user immediately sees their list, then refresh with rent info
+    renderPreview();
+    await checkRecipientAtas(recipients, currentMint);
+    renderPreview();
+
+  } catch(e) {
+    showError('Parse error: ' + e.message);
+  }
+}
+
+// ── Pre-flight: which recipients already have a token account for this mint? ──
+// One getMultipleAccounts call per 100 derived ATA addresses. Tells us the rent cost
+// upfront so the sender isn't surprised, and lets us split batches around tx-size limits.
+async function checkRecipientAtas(arr, mint) {
+  if (!arr.length || !mint) return;
+  // Use bare identifiers — the solana-web3.js IIFE attaches to globalThis, not always window
+  if (typeof solanaWeb3 === 'undefined' || typeof splToken === 'undefined') {
+    console.warn('[airdrop] pre-flight skipped — solanaWeb3 / splToken not loaded yet');
+    return;
+  }
+  let mintPk;
+  try { mintPk = new solanaWeb3.PublicKey(mint); }
+  catch(e) { console.warn('[airdrop] pre-flight skipped — invalid mint', mint, e); return; }
+  const entries = [];
+  for (const r of arr) {
+    try {
+      const ata = splToken.getAssociatedTokenAddressSync(mintPk, new solanaWeb3.PublicKey(r.addr)).toString();
+      r.ataAddress = ata;
+      r.invalidAddress = false;
+      entries.push(r);
+    } catch(e) {
+      r.invalidAddress = true;
+      r.needsAta = false;
+      if (!r.skip) { r.skip = true; r.skipReason = 'Invalid address'; }
+    }
+  }
+  console.log('[airdrop] pre-flight checking', entries.length, 'recipients for mint', mint.slice(0,8));
+  const BATCH = 100;
+  let needCount = 0;
+  for (let i = 0; i < entries.length; i += BATCH) {
+    const slice = entries.slice(i, i + BATCH);
+    try {
+      const res = await rpc('getMultipleAccounts', [slice.map(e => e.ataAddress), { encoding: 'base64' }]);
+      const accounts = res?.value || [];
+      slice.forEach((e, idx) => {
+        e.needsAta = !accounts[idx];
+        if (e.needsAta) needCount++;
+      });
+    } catch(e) {
+      console.warn('[airdrop] getMultipleAccounts failed, assuming all need ATA:', e);
+      // On RPC failure, assume worst case (rent needed) so the cost estimate doesn't lie low.
+      slice.forEach(e => {
+        if (e.needsAta === undefined) { e.needsAta = true; needCount++; }
+      });
+    }
+  }
+  console.log('[airdrop] pre-flight done —', needCount, 'of', entries.length, 'need a new ATA');
+}
+
+// Sender's SOL balance — needed to flag "you can't afford this airdrop" before they click send.
+async function fetchSolBalance() {
+  if (!walletPubkey) return null;
+  try {
+    const res = await rpc('getBalance', [walletPubkey]);
+    return typeof res === 'object' ? (res?.value ?? 0) : (res || 0);
+  } catch(e) { return null; }
+}
+
+// Pack recipients into batches under Solana's 1232-byte tx limit.
+// Each transfer counts as 1 weight unit; each ATA-create+transfer counts as 2.
+// Returns an array of recipient arrays (one per planned Phantom-signed tx).
+function planBatches(active) {
+  const batches = [];
+  let current = [];
+  let weight = 0;
+  for (const r of active) {
+    const cost = r.needsAta ? 2 : 1;
+    if (current.length && weight + cost > TX_WEIGHT_BUDGET) {
+      batches.push(current);
+      current = [];
+      weight = 0;
+    }
+    current.push(r);
+    weight += cost;
+  }
+  if (current.length) batches.push(current);
+  return batches;
+}
+
+// When user toggles "Skip wallets that need new token accounts", mark needsAta=true rows
+// as skipped, OR un-skip them if they were skipped only by this rule.
+function toggleSkipNewAtas() {
+  const skip = document.getElementById('skipNewAtas').checked;
+  const REASON = 'No token account — skip enabled';
+  for (const r of recipients) {
+    if (skip && r.needsAta && !r.skip) {
+      r.skip = true;
+      r.skipReason = REASON;
+    } else if (!skip && r.skipReason === REASON) {
+      r.skip = false;
+      r.skipReason = '';
+    }
+  }
+  renderPreview();
+}
+
+// ── Render Preview ───────────────────────────────────────────────────────────
+function renderPreview() {
+  const active = recipients.filter(r => !r.skip);
+  const skipped = recipients.filter(r => r.skip);
+  const totalTokens = active.reduce((s, r) => s + r.amount, 0);
+  const batches = planBatches(active);
+  const txCount = batches.length;
+
+  // Cost summary — only meaningful once pre-flight has run (some r.needsAta defined).
+  const ataResolved = recipients.some(r => r.needsAta !== undefined);
+  const newAtas = active.filter(r => r.needsAta === true).length;
+  const ataRentLamports = newAtas * LAMPORTS_PER_ATA_RENT;
+  const txFeeLamports = txCount * LAMPORTS_PER_TX_FEE;
+  const totalLamports = ataRentLamports + txFeeLamports;
+  const totalSol = totalLamports / 1e9;
+
+  document.getElementById('statWallets').textContent = active.length;
+  document.getElementById('statTotal').textContent = fmtNum(totalTokens);
+  document.getElementById('statTxns').textContent = txCount;
+  document.getElementById('statSkipped').textContent = skipped.length;
+
+  // Wallet-popup pre-flight summary — exact numbers a user should see in each
+  // signing prompt. If the popup shows different counts, they should reject.
+  const popupEl = document.getElementById('walletPopupSummary');
+  if (popupEl) {
+    if (active.length === 0) {
+      popupEl.textContent = '— add recipients to see what will be signed —';
+    } else {
+      const txnsWord = txCount === 1 ? 'transaction' : 'transactions';
+      const walletsWord = active.length === 1 ? 'wallet' : 'wallets';
+      popupEl.innerHTML =
+        '<strong>' + txCount + '</strong> wallet ' + txnsWord + ' to approve · ' +
+        '<strong>' + fmtNum(totalTokens) + '</strong> tokens going out to <strong>' + active.length + '</strong> ' + walletsWord +
+        (ataResolved ? ' · costing <strong>~' + totalSol.toFixed(4) + ' SOL</strong> in fees+rent' : '');
+    }
+  }
+
+  // Update the cost block (only shown once we know what's needed)
+  const costEl = document.getElementById('previewCost');
+  if (ataResolved) {
+    costEl.classList.add('show');
+    document.getElementById('costAtaCount').textContent = newAtas.toLocaleString();
+    document.getElementById('costAtaRent').textContent = (ataRentLamports / 1e9).toFixed(5) + ' SOL';
+    document.getElementById('costTxFee').textContent = (txFeeLamports / 1e9).toFixed(6) + ' SOL';
+    document.getElementById('costTotal').textContent = totalSol.toFixed(5) + ' SOL';
+
+    // Show the skip-new-ATAs row only if there are actually new ATAs to skip
+    const skipRow = document.getElementById('skipAtaRow');
+    if (newAtas > 0) {
+      skipRow.style.display = 'flex';
+      const wouldSave = (newAtas * LAMPORTS_PER_ATA_RENT) / 1e9;
+      document.getElementById('atasSaveText').textContent = `(saves ~${wouldSave.toFixed(5)} SOL)`;
+    } else {
+      skipRow.style.display = 'none';
+    }
+  } else {
+    costEl.classList.remove('show');
+  }
+
+  // SOL balance check (only when wallet connected)
+  if (walletPubkey && ataResolved) {
+    fetchSolBalance().then(lamports => {
+      const row = document.getElementById('solBalanceRow');
+      const warn = document.getElementById('solWarning');
+      if (lamports === null) { row.style.display = 'none'; warn.style.display = 'none'; return; }
+      row.style.display = 'flex';
+      document.getElementById('solBalance').textContent = (lamports / 1e9).toFixed(4) + ' SOL';
+      warn.style.display = (lamports < totalLamports) ? 'block' : 'none';
+    });
+  } else {
+    document.getElementById('solBalanceRow').style.display = 'none';
+    document.getElementById('solWarning').style.display = 'none';
+  }
+
+  const tbody = document.getElementById('previewTbody');
+  tbody.innerHTML = '';
+
+  recipients.forEach((r, i) => {
+    const tr = document.createElement('tr');
+    if (r.skip) tr.className = 'warning-row';
+    const newAtaBadge = (r.needsAta && !r.skip) ? '<span class="new-ata-badge">🆕 NEW ATA</span>' : '';
+    tr.innerHTML = `
+      <td style="color:var(--subtext);font-family:var(--mono);font-size:11px">${i+1}</td>
+      <td class="addr-cell">${r.addr}${newAtaBadge}</td>
+      <td class="amt-cell">${r.skip ? '<span style="color:var(--subtext)">—</span>' : fmtNum(r.amount)}</td>
+      <td class="status-cell">${r.skip
+        ? `<span style="color:var(--subtext)">SKIP — ${r.skipReason}</span>`
+        : `<span style="color:var(--green)">✓ READY</span>`}</td>
+      <td><button class="remove-btn" onclick="removeRecipient(${i})" title="Remove">✕</button></td>`;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('previewCard').classList.add('show');
+  document.getElementById('previewCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function removeRecipient(idx) {
+  recipients.splice(idx, 1);
+  renderPreview();
+}
+
+// ── Send Airdrop ─────────────────────────────────────────────────────────────
+async function sendAirdrop() {
+  if (!walletPubkey) { showError('Please connect your Phantom wallet first.'); return; }
+  if (!currentMint) { showError('Please select a token.'); return; }
+
+  const active = recipients.filter(r => !r.skip);
+  if (active.length === 0) { showError('No recipients to send to.'); return; }
+
+  document.getElementById('sendBtn').disabled = true;
+  document.getElementById('progressCard').classList.add('show');
+  document.getElementById('progressCard').scrollIntoView({ behavior: 'smooth' });
+
+  const resultList = document.getElementById('resultList');
+  resultList.innerHTML = '';
+
+  let sent = 0;
+  let failed = 0;
+
+  try {
+    const provider = activeWallet?.provider;
+    if (!provider) throw new Error('No wallet connected — connect Phantom or Solflare first');
+
+    // Get sender's token account
+    const senderAccounts = await rpc('getTokenAccountsByOwner', [
+      walletPubkey,
+      { mint: currentMint },
+      { encoding: 'jsonParsed' }
+    ]);
+
+    const senderTokenAccount = senderAccounts?.value?.[0]?.pubkey;
+    if (!senderTokenAccount) throw new Error(`No ${currentMint} token account found in your wallet`);
+
+    // Refresh ATA status right before sending — pre-flight may be a few minutes old.
+    // Also catches the case where the user changed token between preview and send.
+    setProgress('Re-checking recipient token accounts...', 1);
+    await checkRecipientAtas(active, currentMint);
+
+    // Pack recipients into size-safe batches (each createATA roughly doubles the byte cost)
+    const batches = planBatches(active);
+    const totalBatches = batches.length;
+    let processed = 0;
+
+    for (let bi = 0; bi < batches.length; bi++) {
+      const batch = batches[bi];
+      const batchNum = bi + 1;
+      const ataCount = batch.filter(r => r.needsAta).length;
+      const batchDesc = ataCount > 0 ? `${batch.length} wallets (+${ataCount} new ATAs)` : `${batch.length} wallets`;
+
+      setProgress(`Transaction ${batchNum} of ${totalBatches} — ${batchDesc}...`,
+        (processed / active.length) * 100);
+
+      try {
+        // Fetch recent blockhash per batch (older blockhashes expire).
+        // rpc() returns the JSON-RPC `result`; getLatestBlockhash nests its
+        // payload under `.value`, so the blockhash must be read from there —
+        // destructuring it off the top level leaves it undefined and the
+        // wallet rejects the tx with "recentBlockhash required".
+        const bhResult = await rpc('getLatestBlockhash', [{ commitment: 'confirmed' }]);
+        const { blockhash, lastValidBlockHeight } = bhResult?.value || {};
+        if (!blockhash) throw new Error('Could not fetch a recent blockhash from the RPC');
+
+        // Build instructions from the pre-flight cache — no per-recipient RPC needed.
+        const transferInstructions = [];
+        for (const recipient of batch) {
+          const amountRaw = Math.round(recipient.amount * Math.pow(10, currentDecimals));
+          const recipientTokenAccount = recipient.ataAddress
+            || await getAssociatedTokenAddress(currentMint, recipient.addr);
+
+          if (recipient.needsAta) {
+            transferInstructions.push({
+              type: 'createATA',
+              mint: currentMint,
+              owner: recipient.addr,
+              ata: recipientTokenAccount
+            });
+          }
+          transferInstructions.push({
+            type: 'transfer',
+            from: senderTokenAccount,
+            to: recipientTokenAccount,
+            amount: amountRaw,
+            recipient: recipient.addr
+          });
+        }
+
+        // Build and send transaction via Phantom signAndSendTransaction
+        const tx = await buildTransaction(transferInstructions, walletPubkey, blockhash, currentMint, currentDecimals);
+        const { signature } = await provider.signAndSendTransaction(tx);
+
+        // Wait for confirmation
+        await confirmTransaction(signature, lastValidBlockHeight);
+
+        // Mark batch as sent
+        for (const recipient of batch) {
+          sent++;
+          addResult(recipient.addr, recipient.amount, 'sent', signature);
+        }
+
+      } catch(batchErr) {
+        console.error('Batch error:', batchErr);
+        for (const recipient of batch) {
+          failed++;
+          addResult(recipient.addr, recipient.amount, 'failed', null, batchErr.message);
+        }
+      }
+
+      processed += batch.length;
+      setProgress(`Transaction ${batchNum} of ${totalBatches} complete`,
+        (processed / active.length) * 100);
+
+      await new Promise(r => setTimeout(r, 500));
+    }
+
+    setProgress(
+      `✅ Done — ${sent} sent, ${failed} failed`,
+      100
+    );
+
+  } catch(e) {
+    showError('Airdrop failed: ' + e.message);
+    setProgress('Error: ' + e.message, 0);
+  }
+
+  document.getElementById('sendBtn').disabled = false;
+}
+
+// ── Transaction Builder ──────────────────────────────────────────────────────
+// Uses Solana web3.js loaded from CDN
+async function buildTransaction(instructions, feePayer, blockhash, mint, decimals) {
+  const { Transaction, PublicKey, SystemProgram } = solanaWeb3;
+  const { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, createTransferInstruction, createAssociatedTokenAccountInstruction, getAssociatedTokenAddressSync } = splToken;
+
+  const tx = new Transaction();
+  tx.recentBlockhash = blockhash;
+  tx.feePayer = new PublicKey(feePayer);
+
+  for (const ix of instructions) {
+    if (ix.type === 'createATA') {
+      tx.add(createAssociatedTokenAccountInstruction(
+        new PublicKey(feePayer),
+        new PublicKey(ix.ata),
+        new PublicKey(ix.owner),
+        new PublicKey(ix.mint)
+      ));
+    } else if (ix.type === 'transfer') {
+      tx.add(createTransferInstruction(
+        new PublicKey(ix.from),
+        new PublicKey(ix.to),
+        new PublicKey(feePayer),
+        ix.amount
+      ));
+    }
+  }
+  return tx;
+}
+
+async function getAssociatedTokenAddress(mint, owner) {
+  const { PublicKey } = solanaWeb3;
+  const { getAssociatedTokenAddressSync } = splToken;
+  return getAssociatedTokenAddressSync(
+    new PublicKey(mint),
+    new PublicKey(owner)
+  ).toString();
+}
+
+async function confirmTransaction(signature, lastValidBlockHeight) {
+  let confirmed = false;
+  let attempts = 0;
+  while (!confirmed && attempts < 30) {
+    await new Promise(r => setTimeout(r, 1000));
+    const result = await rpc('getSignatureStatuses', [[signature]]);
+    const status = result?.value?.[0];
+    if (status?.confirmationStatus === 'confirmed' || status?.confirmationStatus === 'finalized') {
+      confirmed = true;
+    }
+    attempts++;
+  }
+  return confirmed;
+}
+
+// ── UI Helpers ───────────────────────────────────────────────────────────────
+function setProgress(text, pct) {
+  document.getElementById('progressText').textContent = text;
+  document.getElementById('progressFill').style.width = pct + '%';
+}
+
+function addResult(addr, amount, status, sig, errMsg) {
+  const div = document.createElement('div');
+  div.className = 'result-item';
+  let statusHtml = '';
+  if (status === 'sent') {
+    statusHtml = `<span class="status-sent result-status">✅ SENT</span>
+      ${sig ? `<a class="tx-link-small" href="https://solscan.io/tx/${sig}" target="_blank">↗ Solscan</a>` : ''}`;
+  } else if (status === 'failed') {
+    statusHtml = `<span class="status-fail result-status">❌ FAILED</span>
+      <span style="font-size:10px;color:var(--subtext)">${errMsg || ''}</span>`;
+  }
+  div.innerHTML = `
+    <span class="result-addr">${shortAddr(addr)}</span>
+    <span class="result-amt">${fmtNum(amount)}</span>
+    ${statusHtml}`;
+  document.getElementById('resultList').appendChild(div);
+}
+
+// ── 🔒 CLKN Unlock Gate ──────────────────────────────────────────────────────
+// Same payment model as the AI tutor unlock — generate a unique decimal,
+// poll /api/verify-clkn-payment with tool='airdrop', reveal the tool on success.
+// State lives in sessionStorage so a refresh keeps the unlock; closing the tab clears it.
+const UNLOCK_KEY = 'clkn_airdrop_unlock';
+const UNLOCK_PENDING_KEY = 'clkn_airdrop_pending_amount';
+const UNLOCK_DURATION_MS = 60 * 60 * 1000; // 1 hour base, 5× with holder bonus
+const AIRDROP_PRICE = 100;
+const RECEIVE_WALLET_FOR_UNLOCK = '7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H';
+// Match the AI flow: poll at 3s for 2 minutes, then stop. A "CHECK AGAIN" button
+// in the gate restarts the budget. Stops idle visitors from burning Helius quota.
+const POLL_INTERVAL_MS = 3000;
+const POLL_BUDGET_MS = 2 * 60 * 1000;
+
+let pendingUnlockAmount = null;
+let unlockPollInterval = null;
+let pollStartedAt = null;
+let countdownInterval = null;
+
+function getActiveUnlock() {
+  try {
+    const raw = sessionStorage.getItem(UNLOCK_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data || !data.expiresAt || data.expiresAt < Date.now()) {
+      sessionStorage.removeItem(UNLOCK_KEY);
+      return null;
+    }
+    return data;
+  } catch(e) { return null; }
+}
+
+function generateUnlockAmount(baseCost) {
+  const decimal = Math.floor(Math.random() * 1000);
+  return parseFloat(`${baseCost}.${String(decimal).padStart(3, '0')}`);
+}
+
+function showGate() {
+  document.getElementById('unlockGate').style.display = 'block';
+  document.getElementById('airdropTool').style.display = 'none';
+}
+
+function hideGate() {
+  document.getElementById('unlockGate').style.display = 'none';
+  document.getElementById('airdropTool').style.display = 'block';
+}
+
+function copyUnlockAmount() {
+  if (!pendingUnlockAmount) return;
+  navigator.clipboard.writeText(pendingUnlockAmount.toFixed(3));
+  const hint = document.getElementById('unlockAmountHint');
+  hint.textContent = '✓ COPIED';
+  hint.style.color = '#10B981';
+  setTimeout(() => { hint.textContent = 'TAP TO COPY'; hint.style.color = ''; }, 1500);
+}
+
+function copyUnlockWallet() {
+  navigator.clipboard.writeText(RECEIVE_WALLET_FOR_UNLOCK);
+  const hint = document.getElementById('unlockWalletHint');
+  hint.textContent = '✓ COPIED';
+  hint.style.color = '#10B981';
+  setTimeout(() => { hint.textContent = 'TAP TO COPY'; hint.style.color = ''; }, 1500);
+}
+
+function setGateStatus(state, text) {
+  const statusEl = document.getElementById('unlockStatus');
+  statusEl.classList.remove('success', 'idle');
+  if (state === 'success') statusEl.classList.add('success');
+  if (state === 'idle') statusEl.classList.add('idle');
+  document.getElementById('unlockStatusText').textContent = text;
+}
+
+function startPolling() {
+  pollStartedAt = Date.now();
+  document.getElementById('unlockRestart').style.display = 'none';
+  setGateStatus('watching', 'Watching for your payment…');
+  pollUnlock();
+  if (unlockPollInterval) clearInterval(unlockPollInterval);
+  unlockPollInterval = setInterval(() => {
+    if (Date.now() - pollStartedAt > POLL_BUDGET_MS) {
+      stopPolling();
+      return;
+    }
+    pollUnlock();
+  }, POLL_INTERVAL_MS);
+}
+
+function stopPolling() {
+  if (unlockPollInterval) {
+    clearInterval(unlockPollInterval);
+    unlockPollInterval = null;
+  }
+  pollStartedAt = null;
+  setGateStatus('idle', "Haven't seen your payment in 2 minutes — slow wallets are normal.");
+  document.getElementById('unlockRestart').style.display = 'block';
+}
+
+function restartPolling() {
+  startPolling();
+}
+
+async function pollUnlock() {
+  if (!pendingUnlockAmount) return;
+  try {
+    const res = await fetch('/api/verify-clkn-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ unlockAmount: pendingUnlockAmount, tool: 'airdrop' })
+    });
+    const data = await res.json();
+    if (data.success) {
+      const stretch = data.holderBonus ? 5 : 1;
+      const unlockData = {
+        unlockedAt: Date.now(),
+        expiresAt: Date.now() + UNLOCK_DURATION_MS * stretch,
+        senderWallet: data.senderWallet,
+        senderBalance: data.senderBalance,
+        holderBonus: data.holderBonus
+      };
+      sessionStorage.setItem(UNLOCK_KEY, JSON.stringify(unlockData));
+      sessionStorage.removeItem(UNLOCK_PENDING_KEY);
+      if (unlockPollInterval) { clearInterval(unlockPollInterval); unlockPollInterval = null; }
+      setGateStatus('success', data.holderBonus
+        ? '✓ PAYMENT VERIFIED · 5× HOLDER BONUS · 5 HOURS UNLOCKED'
+        : '✓ PAYMENT VERIFIED · 1 HOUR UNLOCKED');
+      setTimeout(() => { hideGate(); showUnlockBanner(unlockData); }, 1800);
+    }
+  } catch(e) {
+    // Network blip — let the next interval retry
+  }
+}
+
+// Sticky countdown banner shown the whole time the tool is unlocked.
+// When the timer hits zero, the unlock is cleared and the user is sent back to the gate.
+function showUnlockBanner(unlockData) {
+  const banner = document.getElementById('unlockBanner');
+  const senderShort = unlockData.senderWallet
+    ? `${unlockData.senderWallet.slice(0,6)}…${unlockData.senderWallet.slice(-4)}`
+    : 'verified on-chain';
+  const bonusBadge = unlockData.holderBonus ? '<span class="banner-bonus">5× HOLDER BONUS</span>' : '';
+  document.getElementById('bannerMeta').innerHTML = `Paid by ${senderShort}${bonusBadge}`;
+  banner.style.display = 'flex';
+
+  if (countdownInterval) clearInterval(countdownInterval);
+  function tick() {
+    const remainingMs = unlockData.expiresAt - Date.now();
+    if (remainingMs <= 0) {
+      clearInterval(countdownInterval);
+      countdownInterval = null;
+      banner.style.display = 'none';
+      sessionStorage.removeItem(UNLOCK_KEY);
+      sessionStorage.removeItem(UNLOCK_PENDING_KEY);
+      pendingUnlockAmount = null;
+      initUnlockGate();
+      return;
+    }
+    const totalSec = Math.floor(remainingMs / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    const cd = document.getElementById('bannerCountdown');
+    cd.textContent = h > 0
+      ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+      : `${m}:${String(s).padStart(2,'0')}`;
+    cd.classList.remove('warning', 'expiring');
+    if (totalSec < 60) cd.classList.add('expiring');
+    else if (totalSec < 300) cd.classList.add('warning');
+  }
+  tick();
+  countdownInterval = setInterval(tick, 1000);
+}
+
+function toggleAirdropLearn() {
+  const panel = document.getElementById('airdropLearnPanel');
+  const chevron = document.getElementById('airdropLearnChevron');
+  const open = panel.style.display === 'block';
+  panel.style.display = open ? 'none' : 'block';
+  chevron.textContent = open ? '▼' : '▲';
+}
+
+function onAckChange() {
+  const checked = document.getElementById('ackBox').checked;
+  document.getElementById('unlockPaymentArea').style.display = checked ? 'block' : 'none';
+  if (checked) {
+    // User opted in — make sure polling is running so payment is detected.
+    if (!unlockPollInterval) startPolling();
+  } else {
+    // Stop polling if they uncheck — no point burning RPC while they re-read.
+    if (unlockPollInterval) { clearInterval(unlockPollInterval); unlockPollInterval = null; }
+    setGateStatus('idle', 'Acknowledge the safety notes above to start watching for payment.');
+    document.getElementById('unlockRestart').style.display = 'none';
+  }
+}
+
+function initUnlockGate() {
+  const active = getActiveUnlock();
+  if (active) {
+    hideGate();
+    showUnlockBanner(active);
+    return;
+  }
+  // Either reuse a pending amount (so refresh doesn't generate a new one and
+  // orphan a payment in flight) or mint a fresh one.
+  const stored = sessionStorage.getItem(UNLOCK_PENDING_KEY);
+  if (stored) {
+    const n = parseFloat(stored);
+    if (Number.isFinite(n) && Math.floor(n) === AIRDROP_PRICE) pendingUnlockAmount = n;
+  }
+  if (!pendingUnlockAmount) {
+    pendingUnlockAmount = generateUnlockAmount(AIRDROP_PRICE);
+    sessionStorage.setItem(UNLOCK_PENDING_KEY, pendingUnlockAmount.toString());
+  }
+  document.getElementById('unlockAmountVal').textContent = pendingUnlockAmount.toFixed(3) + ' CLKN';
+  showGate();
+  // Don't start polling until the user has acknowledged. Status starts in idle.
+  setGateStatus('idle', 'Read the safety notes + check the box to begin watching for payment.');
+  document.getElementById('unlockRestart').style.display = 'none';
+}
+
+// Run as soon as this script parses — DOM elements are above this script in the doc.
+initUnlockGate();
+</script>
+
+<!-- Solana Web3.js + SPL Token -->
+<!-- Vendored from @solana/web3.js@1.87.6 — served same-origin so Edge / Brave tracking
+     prevention can't block it the way it does cdnjs in some configurations. -->
+<script src="/vendor/solana-web3.iife.min.js"></script>
+
+<script>
+// SPL Token program IDs and helpers (minimal implementation)
+// Using Helius RPC for ATA derivation instead of full SPL library
+const splToken = {
+  TOKEN_PROGRAM_ID: { toString: () => 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' },
+  ASSOCIATED_TOKEN_PROGRAM_ID: { toString: () => 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL' },
+
+  getAssociatedTokenAddressSync(mint, owner) {
+    // Derive ATA address deterministically
+    // This will be computed properly via the PublicKey.findProgramAddressSync
+    const { PublicKey } = solanaWeb3;
+    const [address] = PublicKey.findProgramAddressSync(
+      [
+        owner.toBuffer(),
+        new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA').toBuffer(),
+        mint.toBuffer(),
+      ],
+      new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL')
+    );
+    return address;
+  },
+
+  createTransferInstruction(source, dest, owner, amount) {
+    const { PublicKey, TransactionInstruction } = solanaWeb3;
+    const TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+    // Build the 9-byte instruction data with Uint8Array — the Node `Buffer`
+    // global does not exist in browsers (Safari/iOS throws "Can't find
+    // variable: Buffer"). Byte 0 = Transfer opcode (3), bytes 1-8 = amount u64 LE.
+    const data = new Uint8Array(9);
+    data[0] = 3;
+    new DataView(data.buffer).setBigUint64(1, BigInt(amount), true);
+    return new TransactionInstruction({
+      keys: [
+        { pubkey: source, isSigner: false, isWritable: true },
+        { pubkey: dest, isSigner: false, isWritable: true },
+        { pubkey: owner, isSigner: true, isWritable: false },
+      ],
+      programId: TOKEN_PROGRAM,
+      data,
+    });
+  },
+
+  createAssociatedTokenAccountInstruction(payer, ata, owner, mint) {
+    const { PublicKey, TransactionInstruction } = solanaWeb3;
+    const ATA_PROGRAM = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+    const TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+    const SYSVAR_RENT = new PublicKey('SysvarRent111111111111111111111111111111111');
+    return new TransactionInstruction({
+      keys: [
+        { pubkey: payer, isSigner: true, isWritable: true },
+        { pubkey: ata, isSigner: false, isWritable: true },
+        { pubkey: owner, isSigner: false, isWritable: false },
+        { pubkey: mint, isSigner: false, isWritable: false },
+        { pubkey: new PublicKey('11111111111111111111111111111111'), isSigner: false, isWritable: false },
+        { pubkey: TOKEN_PROGRAM, isSigner: false, isWritable: false },
+        { pubkey: SYSVAR_RENT, isSigner: false, isWritable: false },
+      ],
+      programId: ATA_PROGRAM,
+      data: new Uint8Array(0),
+    });
+  }
+};
+</script>
+
+<script>
+// Auto-populate from buy special tool
+(function() {
+  const payload = sessionStorage.getItem('airdropPayload');
+  if (!payload) return;
+  try {
+    const data = JSON.parse(payload);
+    sessionStorage.removeItem('airdropPayload');
+    // Set token
+    const mintInput = document.getElementById('tokenMintInput');
+    if (mintInput) {
+      mintInput.value = data.mint;
+      currentMint = data.mint;
+      // Try to match preset
+      if (data.mint === 'DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS') {
+        document.querySelectorAll('.token-preset').forEach(b => b.classList.remove('active'));
+        const btn = document.querySelector('[onclick*="DW6DF2"]');
+        if (btn) btn.classList.add('active');
+      } else if (data.mint === 'RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF') {
+        document.querySelectorAll('.token-preset').forEach(b => b.classList.remove('active'));
+        const btn = document.querySelector('[onclick*="RoSei"]');
+        if (btn) btn.classList.add('active');
+      }
+    }
+    // Set mode to manual and populate
+    setMode('manual');
+    const textarea = document.getElementById('manualInput');
+    if (textarea) textarea.value = data.recipients;
+    // Show a notice — insert into the tool wrapper so the unlock gate (above it) stays clean.
+    const notice = document.createElement('div');
+    notice.style.cssText = 'background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:10px 14px;font-family:var(--mono);font-size:11px;color:#10B981;margin-bottom:12px;';
+    notice.textContent = 'Auto-populated from Buy Special tool -- ' + data.recipients.split('\n').length + ' recipients loaded for ' + data.tokenName;
+    const tool = document.getElementById('airdropTool');
+    if (tool) tool.insertBefore(notice, tool.firstChild);
+    else document.querySelector('.wrap').insertBefore(notice, document.querySelector('.card'));
+    setTimeout(() => notice.remove(), 5000);
+  } catch(e) {}
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>🐔 Buy Special Analyzer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0a0a0a;
+    --card: #111111;
+    --border: rgba(255,255,255,0.08);
+    --text: #F9FAFB;
+    --subtext: #6B7280;
+    --accent: #FCD34D;
+    --green: #10B981;
+    --red: #EF4444;
+    --purple: #A78BFA;
+    --mono: 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); background-image: radial-gradient(ellipse at 20% 10%, rgba(217,119,6,0.10) 0%, transparent 50%), radial-gradient(ellipse at 80% 90%, rgba(239,68,68,0.07) 0%, transparent 50%); color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh; }
+  .wrap { max-width: 700px; margin: 0 auto; padding: 24px 16px 80px; }
+
+  .header { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+  .header-icon { font-size: 40px; filter: drop-shadow(0 0 16px rgba(217,119,6,0.5)); }
+  .header .brand-mini { font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 4px; color: #D97706; margin-bottom: 4px; font-weight: 700; }
+  .header h1 { font-family: 'Oswald', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg, #FCD34D, #F97316, #EF4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
+  .header p { font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
+  .footer-tag { text-align: center; margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
+  .footer-tag a { color: #D97706; text-decoration: none; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+  .card-title { font-family: var(--mono); font-size: 10px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 14px; }
+
+  .token-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .token-preset { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-family: var(--mono); font-size: 11px; color: var(--subtext); cursor: pointer; transition: all 0.15s; }
+  .token-preset:hover { border-color: var(--accent); color: var(--accent); }
+  .token-preset.active { border-color: var(--accent); color: var(--accent); background: rgba(252,211,77,0.08); }
+  .token-input { width: 100%; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 8px; padding: 11px 14px; font-family: var(--mono); font-size: 14px; color: var(--text); margin-top: 8px; }
+  .token-input:focus { outline: none; border-color: var(--accent); }
+
+  .config { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+  .config-title { font-family: var(--mono); font-size: 10px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 14px; }
+  .config-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .config-group { display: flex; flex-direction: column; gap: 4px; }
+  .config-label { font-family: var(--mono); font-size: 9px; color: var(--subtext); letter-spacing: 1px; }
+  .config-input { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; font-family: var(--mono); font-size: 12px; color: var(--text); }
+  .config-input:focus { outline: none; border-color: var(--accent); }
+
+  .presets { display: flex; gap: 6px; flex-wrap: wrap; }
+  .preset-btn { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-family: var(--mono); font-size: 10px; color: var(--subtext); cursor: pointer; transition: all 0.15s; }
+  .preset-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .preset-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(252,211,77,0.08); }
+
+  .run-btn { background: linear-gradient(135deg, #D97706, #EF4444); border: none; border-radius: 10px; padding: 13px 24px; font-family: var(--mono); font-size: 14px; font-weight: 900; color: #fff; cursor: pointer; letter-spacing: 2px; transition: opacity 0.15s; }
+  .run-btn:hover { opacity: 0.9; }
+  .run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .stop-btn { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 10px; padding: 13px 20px; font-family: var(--mono); font-size: 12px; color: var(--red); cursor: pointer; display: none; }
+  .stop-btn.show { display: block; }
+
+  .error-box { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #FCA5A5; margin-bottom: 12px; display: none; }
+  .error-box.show { display: block; }
+
+  .status-bar { background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; margin-bottom: 16px; display: none; }
+  .status-bar.show { display: flex; align-items: center; gap: 10px; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 1s infinite; flex-shrink: 0; }
+  .status-dot.done { background: var(--green); animation: none; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .progress-bar { flex: 1; height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, #D97706, #EF4444); border-radius: 2px; transition: width 0.3s; }
+
+  .window-info { background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-family: var(--mono); font-size: 11px; color: var(--subtext); margin-bottom: 16px; display: none; }
+  .window-info.show { display: block; }
+  .window-info span { color: var(--text); }
+
+  .summary { display: none; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+  .summary.show { display: flex; }
+  .stat-box { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; flex: 1; min-width: 100px; }
+  .stat-val { font-family: var(--mono); font-size: 22px; font-weight: 700; color: var(--accent); }
+  .stat-val.green { color: var(--green); }
+  .stat-val.red { color: var(--red); }
+  .stat-label { font-size: 9px; color: var(--subtext); letter-spacing: 1px; margin-top: 2px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { font-family: var(--mono); font-size: 9px; color: var(--subtext); letter-spacing: 1px; padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--card); }
+  td { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 12px; }
+  .tbl-wrap { overflow-x: auto; max-height: 400px; overflow-y: auto; margin-bottom: 12px; }
+
+  .rank-cell { font-family: var(--mono); font-weight: 700; width: 40px; }
+  .r1 { color: #FFD700; }
+  .r2 { color: #C0C0C0; }
+  .r3 { color: #CD7F32; }
+  .amt-cell { font-family: var(--mono); font-weight: 700; }
+  .bonus-cell { font-family: var(--mono); color: var(--green); font-weight: 700; }
+  .addr-cell { font-family: var(--mono); font-size: 11px; color: var(--subtext); cursor: pointer; }
+  .addr-cell:hover { color: var(--accent); }
+  .time-cell { font-family: var(--mono); font-size: 10px; color: var(--subtext); }
+
+  .addr-wrap { display: flex; align-items: center; gap: 6px; }
+  .copy-btn { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; padding: 3px 8px; font-family: var(--mono); font-size: 10px; color: var(--subtext); cursor: pointer; transition: all 0.15s; }
+  .copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .copy-btn.copied { border-color: var(--green); color: var(--green); }
+
+  .section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .section-header span { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--text); letter-spacing: 1px; }
+  .badge { font-family: var(--mono); font-size: 10px; padding: 3px 10px; border-radius: 20px; }
+  .badge-green { background: rgba(16,185,129,0.15); color: var(--green); border: 1px solid rgba(16,185,129,0.3); }
+  .badge-red { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
+
+  .hold-card { display: none; }
+  .hold-card.show { display: block; }
+
+  .hold-banner { background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.35); border-radius: 10px; padding: 12px 16px; margin-bottom: 12px; }
+  .hold-banner-title { font-family: var(--mono); font-size: 11px; color: var(--purple); font-weight: 700; letter-spacing: 1px; margin-bottom: 4px; }
+  .hold-banner-sub { font-size: 11px; color: var(--subtext); }
+
+  .hold-pass { color: var(--green); font-weight: 700; }
+  .hold-fail { color: var(--red); font-weight: 700; }
+  .badge-pass { background: rgba(16,185,129,0.15); color: var(--green); border: 1px solid rgba(16,185,129,0.3); font-family: var(--mono); font-size: 10px; padding: 2px 8px; border-radius: 10px; }
+  .badge-fail { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.3); font-family: var(--mono); font-size: 10px; padding: 2px 8px; border-radius: 10px; }
+
+  .tx-detail-row { display: none; }
+  .tx-detail-row.open { display: table-row; }
+  .tx-detail-row td { padding: 4px 12px 10px 52px; background: rgba(255,255,255,0.02); }
+  .tx-list { display: flex; flex-direction: column; gap: 5px; }
+  .tx-item { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: 11px; flex-wrap: wrap; }
+  .tx-amt { font-weight: 700; min-width: 80px; }
+  .tx-time { color: var(--subtext); min-width: 130px; }
+  .tx-link { color: var(--accent); text-decoration: none; border-bottom: 1px solid rgba(99,179,237,0.3); font-size: 10px; }
+  .tx-link:hover { border-bottom-color: var(--accent); }
+  .expand-btn { background: none; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; padding: 2px 8px; font-size: 10px; color: var(--subtext); cursor: pointer; font-family: var(--mono); margin-left: 6px; }
+  .expand-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .airdrop-btn { width: 100%; padding: 15px; background: linear-gradient(135deg, #10B981, #065F46); border: none; border-radius: 10px; font-family: var(--mono); font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; letter-spacing: 2px; margin-top: 16px; transition: opacity 0.15s; }
+  .airdrop-btn:hover { opacity: 0.9; }
+
+  .airdrop-section { display: none; margin-top: 8px; }
+  .airdrop-section.show { display: block; }
+
+  .final-box { background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.25); border-radius: 10px; padding: 14px 16px; margin-top: 12px; }
+  .final-box-title { font-family: var(--mono); font-size: 10px; color: var(--green); letter-spacing: 2px; margin-bottom: 10px; }
+  .final-item { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11px; margin: 5px 0; }
+  .final-rank { color: var(--accent); min-width: 20px; }
+
+  .empty { font-family: var(--mono); font-size: 11px; color: var(--subtext); padding: 16px 0; text-align: center; }
+  .disq-row td { opacity: 0.6; }
+
+  /* 🔒 CLKN Unlock Gate (same pattern as the airdrop tool) */
+  .unlock-gate { background: linear-gradient(135deg, rgba(217,119,6,0.08), rgba(239,68,68,0.04)); border: 1px solid rgba(217,119,6,0.45); border-radius: 12px; padding: 24px 22px; margin-bottom: 16px; box-shadow: 0 0 30px rgba(217,119,6,0.12); }
+  .unlock-title { font-family: 'Oswald', sans-serif; font-size: 20px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg,#FCD34D,#F97316,#EF4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-align: center; margin-bottom: 4px; }
+  .unlock-sub { font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); text-align: center; letter-spacing: 3px; margin-bottom: 18px; }
+  .quick-preset-btn { flex: 1; min-width: 140px; background: rgba(255,255,255,0.04); border: 1px solid rgba(252,211,77,0.3); border-radius: 8px; padding: 9px 12px; font-family: 'Oswald', sans-serif; font-size: 11px; font-weight: 700; color: #FCD34D; letter-spacing: 1px; cursor: pointer; transition: all 0.15s; }
+  .quick-preset-btn:hover { background: rgba(252,211,77,0.1); transform: translateY(-1px); }
+  .quick-preset-btn.applied { background: linear-gradient(135deg,#10B981,#065F46); color: #fff; border-color: rgba(16,185,129,0.5); }
+
+  .unlock-amount-card { background: rgba(0,0,0,0.4); border: 1px solid rgba(217,119,6,0.45); border-radius: 10px; padding: 16px; text-align: center; margin-bottom: 10px; cursor: pointer; transition: border-color 0.15s; }
+  .unlock-amount-card:hover { border-color: var(--accent); }
+  .unlock-amount-card .lbl { font-family: 'Oswald', sans-serif; font-size: 9px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 6px; }
+  .unlock-amount-card .val { font-family: var(--mono); font-size: 26px; font-weight: 700; color: #FCD34D; letter-spacing: 1px; }
+  .unlock-amount-card .hint { font-family: 'Oswald', sans-serif; font-size: 8px; letter-spacing: 1px; margin-top: 4px; color: var(--accent); }
+  .unlock-wallet-card { background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; cursor: pointer; transition: border-color 0.15s; }
+  .unlock-wallet-card:hover { border-color: var(--accent); }
+  .unlock-wallet-card .lbl { font-family: 'Oswald', sans-serif; font-size: 9px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 4px; }
+  .unlock-wallet-card .val { font-family: var(--mono); font-size: 15px; font-weight: 600; color: var(--text); word-break: break-all; line-height: 1.55; }
+  .unlock-wallet-card .hint { font-family: 'Oswald', sans-serif; font-size: 8px; letter-spacing: 1px; margin-top: 6px; text-align: right; color: var(--accent); }
+  .unlock-blurb { font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--subtext); text-align: center; line-height: 1.7; margin-bottom: 14px; letter-spacing: 1px; }
+  .unlock-blurb .price { color: var(--accent); font-weight: 700; }
+  .unlock-blurb .bonus { color: #6B7280; font-size: 10px; display: block; margin-top: 4px; }
+  .unlock-status { font-family: var(--mono); font-size: 11px; color: var(--subtext); text-align: center; padding: 12px 14px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; }
+  .unlock-status .pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 1s infinite; margin-right: 8px; vertical-align: middle; }
+  .unlock-status.success { background: rgba(16,185,129,0.1); border-color: rgba(16,185,129,0.4); color: var(--green); font-weight: 700; }
+  .unlock-status.success .pulse { background: var(--green); animation: none; }
+  .unlock-status.idle { color: var(--subtext); border-color: rgba(255,255,255,0.06); background: rgba(255,255,255,0.02); }
+  .unlock-status.idle .pulse { background: var(--subtext); animation: none; }
+  .unlock-restart-btn { width: 100%; margin-top: 10px; padding: 12px; background: linear-gradient(135deg,#D97706,#EF4444); border: none; border-radius: 8px; font-family: 'Oswald', sans-serif; font-size: 12px; font-weight: 700; color: #fff; letter-spacing: 2px; cursor: pointer; transition: opacity 0.15s; }
+  .unlock-restart-btn:hover { opacity: 0.9; }
+
+  /* Sticky unlocked banner */
+  .unlock-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; background: linear-gradient(135deg, rgba(16,185,129,0.14), rgba(16,185,129,0.04)); border: 1px solid rgba(16,185,129,0.4); border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; box-shadow: 0 0 18px rgba(16,185,129,0.1); }
+  .unlock-banner-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .banner-check { font-family: var(--mono); font-size: 16px; color: var(--green); background: rgba(16,185,129,0.18); border: 1px solid rgba(16,185,129,0.45); border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; }
+  .banner-title { font-family: 'Oswald', sans-serif; font-size: 12px; font-weight: 700; color: var(--green); letter-spacing: 2px; }
+  .banner-meta { font-family: var(--mono); font-size: 10px; color: var(--subtext); margin-top: 2px; word-break: break-all; }
+  .banner-bonus { display: inline-block; font-family: 'Oswald', sans-serif; font-size: 8px; font-weight: 700; letter-spacing: 1px; color: #FCD34D; background: rgba(252,211,77,0.12); border: 1px solid rgba(252,211,77,0.4); border-radius: 4px; padding: 2px 6px; margin-left: 6px; vertical-align: middle; }
+  .unlock-banner-right { text-align: right; flex-shrink: 0; }
+  .banner-countdown-label { font-family: 'Oswald', sans-serif; font-size: 9px; color: var(--subtext); letter-spacing: 2px; }
+  .banner-countdown { font-family: var(--mono); font-size: 18px; font-weight: 700; color: var(--accent); letter-spacing: 1px; margin-top: 2px; }
+  .banner-countdown.warning { color: #F59E0B; }
+  .banner-countdown.expiring { color: var(--red); animation: pulse 1s infinite; }
+  @media (max-width: 480px) {
+    .unlock-banner { flex-direction: column; align-items: stretch; gap: 8px; }
+    .unlock-banner-right { text-align: left; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <div class="header-icon">🐔</div>
+    <div>
+      <div class="brand-mini">SCHOOL OF CRYPTO HARD KNOCKS</div>
+      <h1>BUY SPECIAL</h1>
+      <p>RUN A BUY COMPETITION ON ANY SOLANA TOKEN</p>
+    </div>
+  </div>
+
+  <!-- 🔒 CLKN Unlock Gate -->
+  <div class="unlock-gate" id="unlockGate" style="display:none">
+    <div class="unlock-title">🔒 BUY CONTEST ANALYZER</div>
+    <div class="unlock-sub">CLKN MICROPAYMENT TO UNLOCK</div>
+
+    <div class="unlock-amount-card" onclick="copyUnlockAmount()">
+      <div class="lbl">SEND EXACTLY</div>
+      <div class="val" id="unlockAmountVal">—</div>
+      <div class="hint" id="unlockAmountHint">TAP TO COPY</div>
+    </div>
+
+    <div class="unlock-wallet-card" onclick="copyUnlockWallet()">
+      <div class="lbl">TO THIS WALLET</div>
+      <div class="val">7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H</div>
+      <div class="hint" id="unlockWalletHint">TAP TO COPY</div>
+    </div>
+
+    <div class="unlock-blurb">
+      Full contest workflow in one payment: initial scan, parameter tweaks, hold check, re-verification.<br>
+      <span class="price">500 CLKN ≈ $0.06</span> · 7 days unlimited runs · any token, any window
+      <span class="bonus">Hold ≥ 2M CLKN after sending → 5× longer unlock (35 days)</span>
+    </div>
+
+    <div class="unlock-status" id="unlockStatus">
+      <span class="pulse"></span>
+      <span id="unlockStatusText">Watching for your payment…</span>
+    </div>
+    <button class="unlock-restart-btn" id="unlockRestart" onclick="restartPolling()" style="display:none">
+      ↻ CHECK AGAIN
+    </button>
+  </div>
+
+  <!-- Tool body — hidden until paid -->
+  <div id="buyspecialTool" style="display:none">
+
+  <!-- Sticky banner shown while the tool is unlocked, with live countdown -->
+  <div class="unlock-banner" id="unlockBanner" style="display:none">
+    <div class="unlock-banner-left">
+      <span class="banner-check">✓</span>
+      <div>
+        <div class="banner-title">BUY CONTEST ANALYZER UNLOCKED</div>
+        <div class="banner-meta" id="bannerMeta">—</div>
+      </div>
+    </div>
+    <div class="unlock-banner-right">
+      <div class="banner-countdown-label">EXPIRES IN</div>
+      <div class="banner-countdown" id="bannerCountdown">—</div>
+    </div>
+  </div>
+
+  <div class="error-box" id="errorBox"></div>
+
+  <!-- Operator-facing intro — frames the tool as for ANY token, not just CLKN. -->
+  <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:14px">
+    <div style="font-family:'Oswald',sans-serif;font-size:11px;color:#FCD34D;letter-spacing:3px;font-weight:700;margin-bottom:8px">🏆 FOR TOKEN OPERATORS · ANY SOLANA MINT</div>
+    <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.65">
+      Run a buy competition on your community in two phases:
+      <strong style="color:#FCD34D">Phase 1</strong> scans every buy in your chosen window and filters out anyone who sold.
+      <strong style="color:#FCD34D">Phase 2</strong> verifies the survivors held through a post‑window cooldown.
+      <strong style="color:#FCD34D">Hand off</strong> the winner list straight to the airdrop tool with one click — or download the CSV for your records.
+      Works for any SPL mint, any window, any bonus percentage.
+    </div>
+  </div>
+
+  <!-- Quick presets — token-agnostic. Each one fills the timing/bonus/hold/min-reward
+       config; the operator picks their token separately above. -->
+  <div style="background:linear-gradient(135deg, rgba(252,211,77,0.06), rgba(217,119,6,0.03));border:1px solid rgba(252,211,77,0.3);border-radius:12px;padding:14px 16px;margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <div style="font-family:'Oswald',sans-serif;font-size:11px;color:#FCD34D;letter-spacing:2px;font-weight:700">⚡ QUICK CONTEST PRESETS</div>
+      <div style="font-family:var(--mono);font-size:10px;color:var(--subtext)">— fill the timing + bonus, your token stays as selected</div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button onclick="applyContestPreset({window:24,hold:6,bonus:10,minUsd:1},this)" class="quick-preset-btn">⚡ 24H · 6H HOLD · 10%</button>
+      <button onclick="applyContestPreset({window:48,hold:12,bonus:10,minUsd:1},this)" class="quick-preset-btn">📅 48H · 12H HOLD · 10%</button>
+      <button onclick="applyContestPreset({window:72,hold:24,bonus:15,minUsd:1},this)" class="quick-preset-btn">🗓 72H · 24H HOLD · 15%</button>
+      <button onclick="applyContestPreset({window:168,hold:48,bonus:20,minUsd:5},this)" class="quick-preset-btn">📆 7D · 48H HOLD · 20%</button>
+    </div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--subtext);margin-top:8px;line-height:1.5">
+      Tweak everything after — these are just sensible starting points based on common community-contest patterns.
+    </div>
+  </div>
+
+  <!-- Token Select -->
+  <div class="card">
+    <div class="card-title">TOKEN</div>
+    <div class="token-row">
+      <button class="token-preset active" id="preset-clkn" onclick="setToken('DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS','CLKN',this)">🐔 CLKN</button>
+      <button class="token-preset" id="preset-rose" onclick="setToken('RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF','ROSE',this)">🌹 ROSE</button>
+      <button class="token-preset" id="preset-custom" onclick="setToken('custom','CUSTOM',this)">✏️ CUSTOM</button>
+    </div>
+    <input class="token-input" id="tokenMintInput" placeholder="Token mint address..." value="DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS" oninput="onMintInput()"/>
+    <div style="font-family:var(--mono);font-size:12px;color:var(--subtext);margin-top:6px;word-break:break-all" id="tokenLabel">CLKN -- DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS</div>
+  </div>
+
+  <!-- Phase 1: Buy Window -->
+  <div class="config" id="phase1Config">
+    <div class="config-title">PHASE 1 -- BUY WINDOW</div>
+    <div class="config-row">
+      <div class="config-group">
+        <div class="config-label">Presets</div>
+        <div class="presets" id="presets">
+          <button class="preset-btn" onclick="setPreset(1,0,this)">1h</button>
+          <button class="preset-btn" onclick="setPreset(6,0,this)">6h</button>
+          <button class="preset-btn active" onclick="setPreset(24,0,this)">24h</button>
+          <button class="preset-btn" onclick="setPreset(48,0,this)">48h</button>
+          <button class="preset-btn" onclick="setPreset(72,0,this)">72h</button>
+        </div>
+      </div>
+    </div>
+    <div class="config-row">
+      <div class="config-group">
+        <div class="config-label">Hours</div>
+        <input class="config-input" type="number" id="inputHours" value="24" min="0" max="720" style="width:80px" oninput="clearPresets()"/>
+      </div>
+      <div class="config-group">
+        <div class="config-label">Minutes</div>
+        <input class="config-input" type="number" id="inputMins" value="0" min="0" max="59" style="width:80px" oninput="clearPresets()"/>
+      </div>
+      <div class="config-group">
+        <div class="config-label">Snapshot End Time (blank = now)</div>
+        <input class="config-input" type="datetime-local" id="snapshotTime"/>
+      </div>
+    </div>
+    <div class="config-row">
+      <div class="config-group">
+        <div class="config-label">Minimum Buy (tokens)</div>
+        <input class="config-input" type="number" id="minBuy" value="0" min="0" style="width:120px" placeholder="0 = no min"/>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="run-btn" id="runBtn" onclick="runAnalysis()">▶ RUN BUY ANALYSIS</button>
+      <button class="stop-btn" id="stopBtn" onclick="stopAnalysis()">■ STOP</button>
+    </div>
+  </div>
+
+  <div class="status-bar" id="statusBar">
+    <div class="status-dot" id="statusDot"></div>
+    <span id="statusText" style="font-family:var(--mono);font-size:11px;color:var(--subtext);flex:1">Initializing...</span>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    <span id="progressPct" style="font-family:var(--mono);font-size:10px;color:var(--subtext);min-width:34px;text-align:right">0%</span>
+  </div>
+
+  <div class="window-info" id="windowInfo"></div>
+
+  <div class="summary" id="summary">
+    <div class="stat-box"><div class="stat-val" id="statTxns">--</div><div class="stat-label">TXNS SCANNED</div></div>
+    <div class="stat-box"><div class="stat-val" id="statWallets">--</div><div class="stat-label">UNIQUE BUYERS</div></div>
+    <div class="stat-box"><div class="stat-val green" id="statEligible">--</div><div class="stat-label">ELIGIBLE</div></div>
+    <div class="stat-box"><div class="stat-val red" id="statDisq">--</div><div class="stat-label">SOLD DURING</div></div>
+    <div class="stat-box"><div class="stat-val" id="statVolume">--</div><div class="stat-label">TOTAL BOUGHT</div></div>
+  </div>
+
+  <div id="buyResults"></div>
+
+  <!-- Phase 2: Hold Check -->
+  <div class="hold-card" id="holdCard">
+    <div class="config">
+      <div class="config-title">PHASE 2 -- HOLD CHECK</div>
+      <div class="config-row">
+        <div class="config-group">
+          <div class="config-label">Hold Duration</div>
+          <div class="presets" id="holdPresets">
+            <button class="preset-btn" onclick="setHoldPreset(0,this)">0h</button>
+            <button class="preset-btn" onclick="setHoldPreset(12,this)">12h</button>
+            <button class="preset-btn active" onclick="setHoldPreset(24,this)">24h</button>
+            <button class="preset-btn" onclick="setHoldPreset(48,this)">48h</button>
+            <button class="preset-btn" onclick="setHoldPreset(72,this)">72h</button>
+          </div>
+        </div>
+        <div class="config-group">
+          <div class="config-label">Custom Hours</div>
+          <input class="config-input" type="number" id="holdHours" value="24" min="0" max="720" style="width:80px" oninput="clearHoldPresets()"/>
+        </div>
+      </div>
+      <div class="config-row">
+        <div class="config-group">
+          <div class="config-label">Bonus Percentage</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <input class="config-input" type="number" id="bonusPct" value="10" min="1" max="100" style="width:80px"/>
+            <span style="font-family:var(--mono);font-size:12px;color:var(--subtext)">%</span>
+          </div>
+        </div>
+        <div class="config-group">
+          <div class="config-label">Min Reward Value (USD)</div>
+          <input class="config-input" type="number" id="minRewardUsd" value="1" min="0" step="0.1" style="width:100px"/>
+        </div>
+        <div class="config-group">
+          <div class="config-label">Token Price (USD)</div>
+          <input class="config-input" type="number" id="tokenPrice" value="0" min="0" step="0.000001" style="width:120px" placeholder="e.g. 0.0001"/>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--subtext);font-family:var(--mono);margin-bottom:12px">
+        Token price is used to filter out bonus amounts below the minimum reward value. Leave 0 to skip filtering.
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button class="run-btn" id="holdBtn" onclick="runHoldCheck()" style="background:linear-gradient(135deg,#7C3AED,#4F46E5)">🔒 RUN HOLD CHECK</button>
+      </div>
+    </div>
+
+    <div class="status-bar" id="holdStatusBar">
+      <div class="status-dot" id="holdStatusDot"></div>
+      <span id="holdStatusText" style="font-family:var(--mono);font-size:11px;color:var(--subtext);flex:1">Checking holders...</span>
+      <div class="progress-bar"><div class="progress-fill" id="holdProgressFill" style="width:0%"></div></div>
+    </div>
+
+    <div id="holdResults"></div>
+
+    <div class="airdrop-section" id="airdropSection">
+      <button class="airdrop-btn" onclick="goToAirdrop()">🚀 OPEN AIRDROP TOOL WITH THESE WALLETS</button>
+      <button onclick="downloadAirdropCsv()" style="width:100%;margin-top:8px;padding:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.15);border-radius:8px;font-family:'Oswald',sans-serif;font-size:12px;font-weight:700;color:#D1D5DB;letter-spacing:2px;cursor:pointer">
+        📥 DOWNLOAD RECIPIENT CSV
+      </button>
+      <div style="font-family:var(--mono);font-size:10px;color:var(--subtext);margin-top:6px;text-align:center">
+        Save a copy for your community records before sending
+      </div>
+    </div>
+  </div>
+
+  </div><!-- /#buyspecialTool -->
+
+  <div class="footer-tag">🐔 POWERED BY <a href="https://clucknorris.app">CLKN</a></div>
+</div>
+
+<script>
+const RPC = '/api/helius-rpc';
+const HELIUS_TX = '/api/helius-tx';
+
+const TOKENS = {
+  'DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS': { name: 'CLKN', decimals: 9 },
+  'RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF': { name: 'ROSE', decimals: 9 },
+};
+
+const DEX_PROGRAMS = new Set([
+  'JUP4Fb2cqiRUcaTHdrPC8h2gNsA2ETXiPDD33WcGuJB',
+  'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4',
+  'JUP2jxvXaqu7NQY1GmNF4m1vodwdXNXW1RNxkJoMuYZ',
+  '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8',
+  'CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK',
+  'whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc',
+  'Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EkzXsdSu',
+  'LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo',
+  'Dooar9JkhdZ7J3LHN3A7YCuoGRUggXhQaG4kijfLGU2j',
+  '9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP',
+  'DjVE6JNiYqPL2QXyCUUh8rNjHrbz9hXHNYt99MQ59qw1',
+  'MERLuDFBMmsHnsBPZw2sDQZHvXFMwp8EdjudcU2HKky',
+  'EewxydAPCCVuNEyrVN68PuSYdQ7wKn27V9Gjeoi8dy3S',
+  'PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY',
+  'DEXYosS6oEGvk8uCDayvwEZz4qEyDJRf9nFgYCaqPMTm',
+  'obriQD1zbpyLz95G5n7nJe6a4DPjpFwa5XYPoNm113y',
+  '6MLxLqiXaaSUpkgMnWDTrmBB9tilS7XYFXS3Y7mCNGDM',
+  'RVKd61ztZW9GUwhRbbLoYVRE5Xf1B2tVscKqwZqXgEr',
+]);
+
+const EXCLUDED_WALLETS = new Set([
+  'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+  'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL',
+  '11111111111111111111111111111111',
+  'ComputeBudget111111111111111111111111111111',
+  'So11111111111111111111111111111111111111112',
+  // ROSE deployer wallets
+  'RosepN6TnevxxgnL9qFXqhRz6s8tELJDP6r953AMFvX',
+  'He6gfotTCt3mFqUXjCQPDp1tUR4sXr4hNbDeLJh5Rose',
+]);
+
+let stopFlag = false;
+let currentMint = 'DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS';
+let currentDecimals = 9;
+let currentTokenName = 'CLKN';
+let tokenDecimals = 9;
+let compEndTime = 0;
+let eligibleBuyers = []; // saved after phase 1
+
+function rpc(method, params) {
+  return fetch(RPC, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params })
+  }).then(r => r.json()).then(d => {
+    if (d.error) throw new Error(d.error.message);
+    return d.result;
+  });
+}
+
+function isExcluded(addr) {
+  return EXCLUDED_WALLETS.has(addr) || DEX_PROGRAMS.has(addr);
+}
+
+function fmtAmount(n) {
+  const v = n / Math.pow(10, tokenDecimals);
+  if (v >= 1e9) return (v/1e9).toFixed(2) + 'B';
+  if (v >= 1e6) return (v/1e6).toFixed(2) + 'M';
+  if (v >= 1e3) return (v/1e3).toFixed(1) + 'K';
+  return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+function fmtTime(ts) {
+  if (!ts) return '--';
+  const d = new Date(ts * 1000);
+  return d.toLocaleString('en-US', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Chicago' }) + ' CT';
+}
+
+function shortAddr(a) { return a ? a.slice(0,6) + '...' + a.slice(-4) : ''; }
+
+function showError(msg) {
+  const el = document.getElementById('errorBox');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+
+function hideError() { document.getElementById('errorBox').classList.remove('show'); }
+
+function setStatus(text, pct) {
+  document.getElementById('statusText').textContent = text;
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressPct').textContent = Math.round(pct) + '%';
+}
+
+function setHoldStatus(text, pct) {
+  document.getElementById('holdStatusText').textContent = text;
+  document.getElementById('holdProgressFill').style.width = pct + '%';
+}
+
+function setToken(mint, name, btn) {
+  document.querySelectorAll('.token-preset').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (mint === 'custom') {
+    document.getElementById('tokenMintInput').value = '';
+    document.getElementById('tokenMintInput').focus();
+    currentMint = '';
+    currentTokenName = 'CUSTOM';
+    document.getElementById('tokenLabel').textContent = 'Enter mint address above';
+  } else {
+    currentMint = mint;
+    currentTokenName = name;
+    currentDecimals = TOKENS[mint]?.decimals || 9;
+    tokenDecimals = currentDecimals;
+    document.getElementById('tokenMintInput').value = mint;
+    document.getElementById('tokenLabel').textContent = name + ' -- ' + mint;
+  }
+}
+
+function onMintInput() {
+  const val = document.getElementById('tokenMintInput').value.trim();
+  currentMint = val;
+  document.querySelectorAll('.token-preset').forEach(b => b.classList.remove('active'));
+  document.getElementById('preset-custom').classList.add('active');
+  if (TOKENS[val]) {
+    currentDecimals = TOKENS[val].decimals;
+    tokenDecimals = currentDecimals;
+    currentTokenName = TOKENS[val].name;
+    document.getElementById('tokenLabel').textContent = currentTokenName + ' -- ' + val;
+  } else {
+    document.getElementById('tokenLabel').textContent = 'Custom token -- ' + val;
+  }
+}
+
+function setPreset(h, m, btn) {
+  document.querySelectorAll('#presets .preset-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('inputHours').value = h;
+  document.getElementById('inputMins').value = m;
+}
+
+function clearPresets() {
+  document.querySelectorAll('#presets .preset-btn').forEach(b => b.classList.remove('active'));
+}
+
+function setHoldPreset(h, btn) {
+  document.querySelectorAll('#holdPresets .preset-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('holdHours').value = h;
+}
+
+function clearHoldPresets() {
+  document.querySelectorAll('#holdPresets .preset-btn').forEach(b => b.classList.remove('active'));
+}
+
+function stopAnalysis() { stopFlag = true; }
+
+function copyAddr(btn, addr) {
+  navigator.clipboard.writeText(addr).then(() => {
+    btn.textContent = 'COPIED';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'COPY'; btn.classList.remove('copied'); }, 1500);
+  });
+}
+
+function toggleTxDetail(id, btn) {
+  const row = document.getElementById(id);
+  if (!row) return;
+  const isOpen = row.classList.toggle('open');
+  btn.textContent = isOpen ? 'HIDE' : 'TXS';
+}
+
+// ── PHASE 1: BUY ANALYSIS ────────────────────────────────────────────────────
+async function runAnalysis() {
+  if (!currentMint) { showError('Please select a token first.'); return; }
+  stopFlag = false;
+  hideError();
+
+  const hours = parseInt(document.getElementById('inputHours').value) || 0;
+  const mins = parseInt(document.getElementById('inputMins').value) || 0;
+  const totalSecs = hours * 3600 + mins * 60;
+  if (totalSecs < 60) { showError('Please set a window of at least 1 minute.'); return; }
+
+  const snapEl = document.getElementById('snapshotTime').value;
+  compEndTime = snapEl ? Math.floor(new Date(snapEl).getTime() / 1000) : Math.floor(Date.now() / 1000);
+  const startTime = compEndTime - totalSecs;
+
+  document.getElementById('runBtn').disabled = true;
+  document.getElementById('stopBtn').classList.add('show');
+  document.getElementById('statusBar').classList.add('show');
+  document.getElementById('statusDot').classList.remove('done');
+  document.getElementById('summary').classList.remove('show');
+  document.getElementById('buyResults').innerHTML = '';
+  document.getElementById('holdCard').classList.remove('show');
+  document.getElementById('airdropSection').classList.remove('show');
+  document.getElementById('holdResults').innerHTML = '';
+
+  tokenDecimals = currentDecimals;
+  const minBuy = parseFloat(document.getElementById('minBuy').value) || 0;
+
+  try {
+    setStatus('Fetching signatures...', 5);
+
+    let allSigs = [];
+    let before = undefined;
+    let page = 0;
+
+    while (!stopFlag) {
+      const params = [currentMint, { limit: 1000, commitment: 'confirmed' }];
+      if (before) params[1].before = before;
+      const sigs = await rpc('getSignaturesForAddress', params);
+      if (!sigs || sigs.length === 0) break;
+
+      let hitBoundary = false;
+      for (const s of sigs) {
+        if (s.blockTime && s.blockTime < startTime) { hitBoundary = true; break; }
+        if (s.blockTime && s.blockTime <= compEndTime && !s.err) allSigs.push(s);
+      }
+      if (hitBoundary) break;
+      before = sigs[sigs.length - 1].signature;
+      page++;
+      setStatus('Fetching signatures... ' + allSigs.length + ' found', Math.min(25, 5 + page));
+      await new Promise(r => setTimeout(r, 150));
+    }
+
+    if (stopFlag) { resetUI(); return; }
+    if (allSigs.length === 0) {
+      showError('No transactions found in this window. Try a wider range.');
+      resetUI(); return;
+    }
+
+    setStatus('Found ' + allSigs.length + ' transactions. Analyzing...', 28);
+
+    // Fetch enhanced transactions from Helius
+    const wallets = {};
+    const BATCH = 100;
+
+    async function fetchBatch(sigs, attempt = 0) {
+      try {
+        const res = await fetch(HELIUS_TX, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ transactions: sigs, commitment: 'confirmed' })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) return data;
+        }
+      } catch(e) {}
+      if (attempt < 3) {
+        await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+        return fetchBatch(sigs, attempt + 1);
+      }
+      return [];
+    }
+
+    let processed = 0;
+    for (let i = 0; i < allSigs.length; i += BATCH) {
+      if (stopFlag) break;
+      const batch = allSigs.slice(i, i + BATCH);
+      const txns = await fetchBatch(batch.map(s => s.signature));
+
+      for (const tx of txns) {
+        if (!tx || tx.transactionError) continue;
+
+        // DEX check
+        const allAccounts = (tx.accountData || []).map(a => a.account);
+        const isDex = allAccounts.some(a => DEX_PROGRAMS.has(a)) ||
+          (tx.instructions || []).some(ix => DEX_PROGRAMS.has(ix.programId)) ||
+          (tx.innerInstructions || []).some(inner =>
+            (inner.instructions || []).some(ix => DEX_PROGRAMS.has(ix.programId))
+          );
+        if (!isDex) continue;
+
+        const transfers = tx.tokenTransfers || [];
+        const ts = tx.timestamp;
+        const sig = tx.signature;
+
+        for (const t of transfers) {
+          if (t.mint !== currentMint) continue;
+          if (!t.toUserAccount || !t.fromUserAccount) continue;
+          if (isExcluded(t.toUserAccount) && isExcluded(t.fromUserAccount)) continue;
+
+          const amt = BigInt(Math.round((t.tokenAmount || 0) * Math.pow(10, tokenDecimals)));
+          if (amt === 0n) continue;
+
+          // Buyer
+          if (!isExcluded(t.toUserAccount)) {
+            const owner = t.toUserAccount;
+            if (!wallets[owner]) wallets[owner] = { bought: 0n, sold: 0n, buyTxns: 0, sellTxns: 0, firstBuy: null, txSigs: [] };
+            wallets[owner].bought += amt;
+            wallets[owner].buyTxns++;
+            if (!wallets[owner].firstBuy || ts < wallets[owner].firstBuy) wallets[owner].firstBuy = ts;
+            if (sig && !wallets[owner].txSigs.find(x => x.sig === sig)) {
+              wallets[owner].txSigs.push({ sig, ts, amt: Number(amt) });
+            }
+          }
+
+          // Seller
+          if (!isExcluded(t.fromUserAccount)) {
+            const owner = t.fromUserAccount;
+            if (!wallets[owner]) wallets[owner] = { bought: 0n, sold: 0n, buyTxns: 0, sellTxns: 0, firstBuy: null, txSigs: [] };
+            wallets[owner].sold += amt;
+            wallets[owner].sellTxns++;
+          }
+        }
+      }
+
+      processed += batch.length;
+      setStatus('Analyzing... ' + processed + '/' + allSigs.length, 28 + (processed / allSigs.length) * 65);
+      await new Promise(r => setTimeout(r, 200));
+    }
+
+    // Build eligible / disqualified
+    const eligible = [];
+    const disqualified = [];
+    const minBuyRaw = BigInt(Math.round(minBuy * Math.pow(10, tokenDecimals)));
+
+    for (const [addr, data] of Object.entries(wallets)) {
+      if (data.bought === 0n) continue;
+      if (data.bought < minBuyRaw) continue;
+      const entry = { addr, bought: data.bought, sold: data.sold, buyTxns: data.buyTxns, sellTxns: data.sellTxns, firstBuy: data.firstBuy, txSigs: data.txSigs || [] };
+      if (data.sold > 0n) disqualified.push(entry);
+      else eligible.push(entry);
+    }
+
+    eligible.sort((a, b) => b.bought > a.bought ? 1 : -1);
+    disqualified.sort((a, b) => b.bought > a.bought ? 1 : -1);
+
+    eligibleBuyers = eligible;
+
+    const totalBought = eligible.reduce((s, e) => s + e.bought, 0n) + disqualified.reduce((s, e) => s + e.bought, 0n);
+
+    document.getElementById('statTxns').textContent = allSigs.length.toLocaleString();
+    document.getElementById('statWallets').textContent = (eligible.length + disqualified.length).toLocaleString();
+    document.getElementById('statEligible').textContent = eligible.length.toLocaleString();
+    document.getElementById('statDisq').textContent = disqualified.length.toLocaleString();
+    document.getElementById('statVolume').textContent = fmtAmount(Number(totalBought));
+    document.getElementById('summary').classList.add('show');
+
+    const startStr = fmtTime(startTime);
+    const endStr = fmtTime(compEndTime);
+    const wi = document.getElementById('windowInfo');
+    wi.innerHTML = '<strong>Window:</strong> <span>' + startStr + '</span> -- <span>' + endStr + '</span> &nbsp;|&nbsp; <strong>Duration:</strong> <span>' + hours + 'h ' + mins + 'm</span> &nbsp;|&nbsp; <strong>Transactions:</strong> <span>' + allSigs.length + '</span>';
+    wi.classList.add('show');
+
+    renderBuyResults(eligible, disqualified);
+
+    setStatus('Phase 1 complete -- ' + eligible.length + ' eligible buyers found', 100);
+    document.getElementById('statusDot').classList.add('done');
+    document.getElementById('holdCard').classList.add('show');
+
+  } catch(e) {
+    showError('Error: ' + e.message);
+    setStatus('Error.', 0);
+  }
+
+  document.getElementById('runBtn').disabled = false;
+  document.getElementById('stopBtn').classList.remove('show');
+}
+
+function resetUI() {
+  document.getElementById('runBtn').disabled = false;
+  document.getElementById('stopBtn').classList.remove('show');
+  setStatus('Stopped.', 0);
+}
+
+function renderBuyResults(eligible, disqualified) {
+  const container = document.getElementById('buyResults');
+  container.innerHTML = '';
+
+  // Eligible
+  const eligSec = document.createElement('div');
+  eligSec.style.marginBottom = '20px';
+  eligSec.innerHTML = '<div class="section-header"><span>ELIGIBLE BUYERS</span><span class="badge badge-green">' + eligible.length + ' wallets</span></div>';
+
+  if (eligible.length === 0) {
+    eligSec.innerHTML += '<div class="empty">NO ELIGIBLE BUYERS FOUND</div>';
+  } else {
+    const wrap = document.createElement('div');
+    wrap.className = 'tbl-wrap';
+    const tbl = document.createElement('table');
+    tbl.innerHTML = '<thead><tr><th>#</th><th>WALLET</th><th>TOKENS BOUGHT</th><th>BUY TXNS</th><th>FIRST BUY (CT)</th></tr></thead>';
+    const tbody = document.createElement('tbody');
+
+    eligible.forEach((e, i) => {
+      const rankClass = i === 0 ? 'r1' : i === 1 ? 'r2' : i === 2 ? 'r3' : '';
+      const tr = document.createElement('tr');
+      const detailId = 'buy-detail-' + i;
+      tr.innerHTML = '<td class="rank-cell ' + rankClass + '">' + (i+1) + '</td>' +
+        '<td><div class="addr-wrap"><span class="addr-cell">' + e.addr + '</span><button class="copy-btn" onclick="copyAddr(this,\'' + e.addr + '\')">COPY</button></div></td>' +
+        '<td class="amt-cell">' + fmtAmount(Number(e.bought)) + '</td>' +
+        '<td><span>' + e.buyTxns + ' buy' + (e.buyTxns !== 1 ? 's' : '') + '</span>' +
+        (e.txSigs.length > 0 ? '<button class="expand-btn" onclick="toggleTxDetail(\'' + detailId + '\',this)">TXS</button>' : '') + '</td>' +
+        '<td class="time-cell">' + fmtTime(e.firstBuy) + '</td>';
+      tbody.appendChild(tr);
+
+      if (e.txSigs.length > 0) {
+        const detailTr = document.createElement('tr');
+        detailTr.className = 'tx-detail-row';
+        detailTr.id = detailId;
+        const sorted = [...e.txSigs].sort((a,b) => (a.ts||0)-(b.ts||0));
+        const items = sorted.map(t =>
+          '<div class="tx-item"><span class="tx-amt" style="color:var(--green)">+' + fmtAmount(t.amt) + '</span>' +
+          '<span class="tx-time">' + fmtTime(t.ts) + '</span>' +
+          '<a class="tx-link" href="https://solscan.io/tx/' + t.sig + '" target="_blank">Solscan</a></div>'
+        ).join('');
+        detailTr.innerHTML = '<td colspan="5"><div class="tx-list">' + items + '</div></td>';
+        tbody.appendChild(detailTr);
+      }
+    });
+
+    tbl.appendChild(tbody);
+    wrap.appendChild(tbl);
+    eligSec.appendChild(wrap);
+  }
+  container.appendChild(eligSec);
+
+  // Disqualified
+  if (disqualified.length > 0) {
+    const disqSec = document.createElement('div');
+    disqSec.innerHTML = '<div class="section-header"><span>SOLD DURING WINDOW</span><span class="badge badge-red">' + disqualified.length + ' wallets</span></div>';
+    const wrap = document.createElement('div');
+    wrap.className = 'tbl-wrap';
+    const tbl = document.createElement('table');
+    tbl.innerHTML = '<thead><tr><th>#</th><th>WALLET</th><th>TOKENS BOUGHT</th><th>SELL TXNS</th><th>FIRST BUY (CT)</th></tr></thead>';
+    const tbody = document.createElement('tbody');
+    disqualified.forEach((e, i) => {
+      const tr = document.createElement('tr');
+      tr.className = 'disq-row';
+      tr.innerHTML = '<td class="rank-cell" style="color:var(--red)">' + (i+1) + '</td>' +
+        '<td><div class="addr-wrap"><span class="addr-cell">' + shortAddr(e.addr) + '</span><button class="copy-btn" onclick="copyAddr(this,\'' + e.addr + '\')">COPY</button></div></td>' +
+        '<td class="amt-cell">' + fmtAmount(Number(e.bought)) + '</td>' +
+        '<td style="color:var(--red);font-family:var(--mono)">' + e.sellTxns + ' sell' + (e.sellTxns !== 1 ? 's' : '') + '</td>' +
+        '<td class="time-cell">' + fmtTime(e.firstBuy) + '</td>';
+      tbody.appendChild(tr);
+    });
+    tbl.appendChild(tbody);
+    wrap.appendChild(tbl);
+    disqSec.appendChild(wrap);
+    container.appendChild(disqSec);
+  }
+}
+
+// ── PHASE 2: HOLD CHECK ──────────────────────────────────────────────────────
+async function runHoldCheck() {
+  if (eligibleBuyers.length === 0) { showError('Run Phase 1 first.'); return; }
+
+  const holdHrs = parseInt(document.getElementById('holdHours').value) || 0;
+  const bonusPct = parseFloat(document.getElementById('bonusPct').value) || 10;
+  const minRewardUsd = parseFloat(document.getElementById('minRewardUsd').value) || 1;
+  const tokenPrice = parseFloat(document.getElementById('tokenPrice').value) || 0;
+  const holdDeadline = compEndTime + (holdHrs * 3600);
+  const now = Math.floor(Date.now() / 1000);
+  const checkUntil = Math.min(holdDeadline, now);
+
+  document.getElementById('holdBtn').disabled = true;
+  document.getElementById('holdStatusBar').classList.add('show');
+  document.getElementById('holdStatusDot').classList.remove('done');
+  document.getElementById('holdResults').innerHTML = '';
+  document.getElementById('airdropSection').classList.remove('show');
+
+  const results = [];
+
+  for (let i = 0; i < eligibleBuyers.length; i++) {
+    const wallet = eligibleBuyers[i];
+    setHoldStatus('Checking wallet ' + (i+1) + ' of ' + eligibleBuyers.length + '...', (i / eligibleBuyers.length) * 100);
+
+    let soldAmt = 0n;
+    const sellTxs = [];
+
+    if (holdHrs > 0) {
+      try {
+        // Get sigs between compEndTime and checkUntil
+        let sigs = [];
+        let before = undefined;
+        while (true) {
+          const params = [currentMint, { limit: 100, commitment: 'confirmed' }];
+          if (before) params[1].before = before;
+          const sigPage = await rpc('getSignaturesForAddress', params);
+          if (!sigPage || sigPage.length === 0) break;
+          let hitBoundary = false;
+          for (const s of sigPage) {
+            if (s.blockTime && s.blockTime < compEndTime) { hitBoundary = true; break; }
+            if (s.blockTime && s.blockTime <= checkUntil && !s.err) sigs.push(s);
+          }
+          if (hitBoundary) break;
+          before = sigPage[sigPage.length - 1].signature;
+          await new Promise(r => setTimeout(r, 200));
+        }
+
+        if (sigs.length > 0) {
+          const res = await fetch(HELIUS_TX, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ transactions: sigs.map(s => s.signature), commitment: 'confirmed' })
+          });
+          if (res.ok) {
+            const txns = await res.json();
+            for (const tx of (txns || [])) {
+              if (!tx || tx.transactionError) continue;
+              for (const t of (tx.tokenTransfers || [])) {
+                if (t.mint !== currentMint) continue;
+                if (t.fromUserAccount === wallet.addr && !isExcluded(t.toUserAccount)) {
+                  const amt = BigInt(Math.round((t.tokenAmount || 0) * Math.pow(10, tokenDecimals)));
+                  soldAmt += amt;
+                  sellTxs.push({ sig: tx.signature, ts: tx.timestamp, amt: Number(amt) });
+                }
+              }
+            }
+          }
+        }
+      } catch(e) {}
+    }
+
+    // Calculate bonus
+    const bonusRaw = Number(wallet.bought) * (bonusPct / 100);
+    const bonusTokens = bonusRaw / Math.pow(10, tokenDecimals);
+    const bonusUsd = tokenPrice > 0 ? bonusTokens * tokenPrice : null;
+    const belowMin = bonusUsd !== null && bonusUsd < minRewardUsd;
+
+    results.push({
+      addr: wallet.addr,
+      bought: wallet.bought,
+      passed: soldAmt === 0n && !belowMin,
+      soldAmt,
+      sellTxs,
+      bonusRaw,
+      bonusTokens,
+      bonusUsd,
+      belowMin,
+      skipReason: soldAmt > 0n ? 'Sold during hold period' : belowMin ? 'Bonus below minimum ($' + bonusUsd.toFixed(4) + ')' : null
+    });
+
+    await new Promise(r => setTimeout(r, 300));
+  }
+
+  setHoldStatus('Hold check complete', 100);
+  document.getElementById('holdStatusDot').classList.add('done');
+  document.getElementById('holdBtn').disabled = false;
+
+  renderHoldResults(results, holdHrs, holdDeadline, bonusPct, now);
+}
+
+function renderHoldResults(results, holdHrs, holdDeadline, bonusPct, now) {
+  const container = document.getElementById('holdResults');
+  container.innerHTML = '';
+
+  const passed = results.filter(r => r.passed);
+  const failed = results.filter(r => !r.passed);
+  const deadlinePast = now >= holdDeadline;
+  const totalBonus = passed.reduce((s, r) => s + r.bonusTokens, 0);
+
+  // Banner
+  const banner = document.createElement('div');
+  banner.className = 'hold-banner';
+  banner.innerHTML = '<div class="hold-banner-title">HOLD CHECK -- ' + holdHrs + 'H -- ' + bonusPct + '% BONUS</div>' +
+    '<div class="hold-banner-sub">' +
+    'Hold deadline: ' + fmtTime(holdDeadline) + ' ' + (deadlinePast ? '-- passed' : '-- not yet reached') + '<br>' +
+    passed.length + ' of ' + results.length + ' wallets passed -- Total bonus to distribute: ' + totalBonus.toLocaleString(undefined, {maximumFractionDigits: 2}) + ' ' + currentTokenName +
+    '</div>';
+  container.appendChild(banner);
+
+  // Results table
+  const wrap = document.createElement('div');
+  wrap.className = 'tbl-wrap';
+  const tbl = document.createElement('table');
+  tbl.innerHTML = '<thead><tr><th>#</th><th>WALLET</th><th>BOUGHT</th><th>BONUS (' + bonusPct + '%)</th><th>STATUS</th></tr></thead>';
+  const tbody = document.createElement('tbody');
+
+  results.forEach((r, i) => {
+    const tr = document.createElement('tr');
+    if (!r.passed) tr.style.opacity = '0.6';
+    const statusBadge = r.passed
+      ? '<span class="badge-pass">HELD</span>'
+      : '<span class="badge-fail">SKIP</span>';
+    const detailId = 'hold-sell-' + i;
+    const sellBtn = r.sellTxs.length > 0
+      ? '<button class="expand-btn" onclick="toggleTxDetail(\'' + detailId + '\',this)">SELLS</button>'
+      : '';
+    tr.innerHTML = '<td class="rank-cell">' + (i+1) + '</td>' +
+      '<td><div class="addr-wrap"><span class="addr-cell">' + shortAddr(r.addr) + '</span><button class="copy-btn" onclick="copyAddr(this,\'' + r.addr + '\')">COPY</button></div>' +
+      (r.skipReason ? '<div style="font-size:10px;color:var(--red);font-family:var(--mono);margin-top:2px">' + r.skipReason + '</div>' : '') + '</td>' +
+      '<td class="amt-cell">' + fmtAmount(Number(r.bought)) + '</td>' +
+      '<td class="bonus-cell">' + (r.passed ? r.bonusTokens.toLocaleString(undefined, {maximumFractionDigits: 2}) + ' ' + currentTokenName : '--') + '</td>' +
+      '<td>' + statusBadge + sellBtn + '</td>';
+    tbody.appendChild(tr);
+
+    if (r.sellTxs.length > 0) {
+      const detailTr = document.createElement('tr');
+      detailTr.className = 'tx-detail-row';
+      detailTr.id = detailId;
+      const items = r.sellTxs.map(t =>
+        '<div class="tx-item"><span class="tx-amt" style="color:var(--red)">-' + fmtAmount(t.amt) + '</span>' +
+        '<span class="tx-time">' + fmtTime(t.ts) + '</span>' +
+        '<a class="tx-link" href="https://solscan.io/tx/' + t.sig + '" target="_blank">Solscan</a></div>'
+      ).join('');
+      detailTr.innerHTML = '<td colspan="5"><div class="tx-list">' + items + '</div></td>';
+      tbody.appendChild(detailTr);
+    }
+  });
+
+  tbl.appendChild(tbody);
+  wrap.appendChild(tbl);
+  container.appendChild(wrap);
+
+  // Final confirmed list
+  if (passed.length > 0) {
+    const finalBox = document.createElement('div');
+    finalBox.className = 'final-box';
+    finalBox.innerHTML = '<div class="final-box-title">CONFIRMED BONUS RECIPIENTS -- ' + passed.length + ' WALLETS</div>';
+    passed.forEach((r, i) => {
+      finalBox.innerHTML += '<div class="final-item">' +
+        '<span class="final-rank">' + (i+1) + '.</span>' +
+        '<span style="font-family:var(--mono);font-size:11px;color:var(--subtext);flex:1">' + shortAddr(r.addr) + '</span>' +
+        '<span style="font-family:var(--mono);font-size:11px;color:var(--green);margin-right:8px">' + r.bonusTokens.toLocaleString(undefined, {maximumFractionDigits:2}) + ' ' + currentTokenName + '</span>' +
+        '<button class="copy-btn" onclick="copyAddr(this,\'' + r.addr + '\')">COPY</button>' +
+        '</div>';
+    });
+    container.appendChild(finalBox);
+
+    // Store for airdrop
+    window._airdropData = passed.map(r => ({ addr: r.addr, amount: r.bonusTokens, mint: currentMint, tokenName: currentTokenName }));
+    const airdropBtn = document.querySelector('#airdropSection .airdrop-btn');
+    if (airdropBtn) airdropBtn.textContent = '🚀 OPEN AIRDROP TOOL (' + passed.length + ' ' + (passed.length === 1 ? 'WINNER' : 'WINNERS') + ')';
+    document.getElementById('airdropSection').classList.add('show');
+  }
+}
+
+function goToAirdrop() {
+  if (!window._airdropData || window._airdropData.length === 0) return;
+  const data = window._airdropData;
+  const lines = data.map(r => r.addr + ',' + r.amount.toFixed(2)).join('\n');
+  // Store in sessionStorage for airdrop tool to pick up
+  sessionStorage.setItem('airdropPayload', JSON.stringify({
+    mint: data[0].mint,
+    tokenName: data[0].tokenName,
+    recipients: lines
+  }));
+  window.open('/airdrop?from=buyspecial', '_blank');
+}
+
+// Save the recipient list as a CSV file for community records — same address+amount
+// format the airdropper consumes, plus a header row so it opens cleanly in Sheets/Excel.
+function downloadAirdropCsv() {
+  if (!window._airdropData || window._airdropData.length === 0) return;
+  const data = window._airdropData;
+  const header = 'wallet_address,bonus_amount\n';
+  const lines = data.map(r => r.addr + ',' + r.amount.toFixed(2)).join('\n');
+  const blob = new Blob([header + lines + '\n'], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const ts = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+  a.download = (data[0].tokenName || 'TOKEN') + '_buyspecial_winners_' + ts + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 500);
+}
+
+// Token-agnostic contest preset. Fills the timing + bonus inputs without touching the
+// selected token, so operators of any Solana mint can use the same quick-setup buttons.
+//   cfg = { window: hours, hold: hours, bonus: %, minUsd: $ }
+function applyContestPreset(cfg, btn) {
+  // Phase 1 window — try to match an existing preset chip; otherwise just set hours
+  document.querySelectorAll('#presets .preset-btn').forEach(b => b.classList.remove('active'));
+  const winChip = Array.from(document.querySelectorAll('#presets .preset-btn')).find(b => {
+    const t = b.textContent.trim();
+    // Matches "24h", "48h", "72h", "7d", etc.
+    if (cfg.window >= 168 && /7d/i.test(t)) return true;
+    return t === cfg.window + 'h';
+  });
+  if (winChip) winChip.classList.add('active');
+  document.getElementById('inputHours').value = cfg.window;
+  document.getElementById('inputMins').value = 0;
+  // Hold check
+  document.querySelectorAll('#holdPresets .preset-btn').forEach(b => b.classList.remove('active'));
+  const holdChip = Array.from(document.querySelectorAll('#holdPresets .preset-btn')).find(b => b.textContent.trim() === cfg.hold + 'h');
+  if (holdChip) holdChip.classList.add('active');
+  document.getElementById('holdHours').value = cfg.hold;
+  // Bonus + min reward
+  document.getElementById('bonusPct').value = cfg.bonus;
+  if (cfg.minUsd != null) document.getElementById('minRewardUsd').value = cfg.minUsd;
+  // Flash this button so the operator sees which preset they applied; clear other applied flags
+  document.querySelectorAll('.quick-preset-btn.applied').forEach(b => b.classList.remove('applied'));
+  if (btn) {
+    btn.classList.add('applied');
+    const original = btn.textContent;
+    btn.textContent = '✓ APPLIED — REVIEW & RUN';
+    setTimeout(() => { btn.textContent = original; }, 2200);
+  }
+}
+
+// ── 🔒 CLKN Unlock Gate ──────────────────────────────────────────────────────
+// Same pay-with-CLKN model as the airdrop / AI tutor unlocks. Generate a unique
+// 500.XXX amount, poll /api/verify-clkn-payment with tool='buyspecial', reveal
+// the tool on success. 7-day duration (5× = 35 days with the 2M-CLKN holder bonus)
+// so one payment covers the full contest workflow: initial scan + parameter tweaks
+// + hold check + re-verification.
+const UNLOCK_KEY = 'clkn_buyspecial_unlock';
+const UNLOCK_PENDING_KEY = 'clkn_buyspecial_pending_amount';
+const UNLOCK_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const BUYSPECIAL_PRICE = 500;
+const RECEIVE_WALLET_FOR_UNLOCK = '7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H';
+const POLL_INTERVAL_MS = 3000;
+const POLL_BUDGET_MS = 2 * 60 * 1000;
+
+let pendingUnlockAmount = null;
+let unlockPollInterval = null;
+let pollStartedAt = null;
+let countdownInterval = null;
+
+function getActiveUnlock() {
+  try {
+    const raw = sessionStorage.getItem(UNLOCK_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data || !data.expiresAt || data.expiresAt < Date.now()) {
+      sessionStorage.removeItem(UNLOCK_KEY);
+      return null;
+    }
+    return data;
+  } catch(e) { return null; }
+}
+
+function generateUnlockAmount(baseCost) {
+  const decimal = Math.floor(Math.random() * 1000);
+  return parseFloat(`${baseCost}.${String(decimal).padStart(3, '0')}`);
+}
+
+function showGate() {
+  document.getElementById('unlockGate').style.display = 'block';
+  document.getElementById('buyspecialTool').style.display = 'none';
+}
+
+function hideGate() {
+  document.getElementById('unlockGate').style.display = 'none';
+  document.getElementById('buyspecialTool').style.display = 'block';
+}
+
+function copyUnlockAmount() {
+  if (!pendingUnlockAmount) return;
+  navigator.clipboard.writeText(pendingUnlockAmount.toFixed(3));
+  const hint = document.getElementById('unlockAmountHint');
+  hint.textContent = '✓ COPIED';
+  hint.style.color = '#10B981';
+  setTimeout(() => { hint.textContent = 'TAP TO COPY'; hint.style.color = ''; }, 1500);
+}
+
+function copyUnlockWallet() {
+  navigator.clipboard.writeText(RECEIVE_WALLET_FOR_UNLOCK);
+  const hint = document.getElementById('unlockWalletHint');
+  hint.textContent = '✓ COPIED';
+  hint.style.color = '#10B981';
+  setTimeout(() => { hint.textContent = 'TAP TO COPY'; hint.style.color = ''; }, 1500);
+}
+
+function setGateStatus(state, text) {
+  const statusEl = document.getElementById('unlockStatus');
+  statusEl.classList.remove('success', 'idle');
+  if (state === 'success') statusEl.classList.add('success');
+  if (state === 'idle') statusEl.classList.add('idle');
+  document.getElementById('unlockStatusText').textContent = text;
+}
+
+function startPolling() {
+  pollStartedAt = Date.now();
+  document.getElementById('unlockRestart').style.display = 'none';
+  setGateStatus('watching', 'Watching for your payment…');
+  pollUnlock();
+  if (unlockPollInterval) clearInterval(unlockPollInterval);
+  unlockPollInterval = setInterval(() => {
+    if (Date.now() - pollStartedAt > POLL_BUDGET_MS) {
+      stopPolling();
+      return;
+    }
+    pollUnlock();
+  }, POLL_INTERVAL_MS);
+}
+
+function stopPolling() {
+  if (unlockPollInterval) {
+    clearInterval(unlockPollInterval);
+    unlockPollInterval = null;
+  }
+  pollStartedAt = null;
+  setGateStatus('idle', "Haven't seen your payment in 2 minutes — slow wallets are normal.");
+  document.getElementById('unlockRestart').style.display = 'block';
+}
+
+function restartPolling() {
+  startPolling();
+}
+
+async function pollUnlock() {
+  if (!pendingUnlockAmount) return;
+  try {
+    const res = await fetch('/api/verify-clkn-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ unlockAmount: pendingUnlockAmount, tool: 'buyspecial' })
+    });
+    const data = await res.json();
+    if (data.success) {
+      const stretch = data.holderBonus ? 5 : 1;
+      const unlockData = {
+        unlockedAt: Date.now(),
+        expiresAt: Date.now() + UNLOCK_DURATION_MS * stretch,
+        senderWallet: data.senderWallet,
+        senderBalance: data.senderBalance,
+        holderBonus: data.holderBonus
+      };
+      sessionStorage.setItem(UNLOCK_KEY, JSON.stringify(unlockData));
+      sessionStorage.removeItem(UNLOCK_PENDING_KEY);
+      if (unlockPollInterval) { clearInterval(unlockPollInterval); unlockPollInterval = null; }
+      setGateStatus('success', data.holderBonus
+        ? '✓ PAYMENT VERIFIED · 5× HOLDER BONUS · 35 DAYS UNLOCKED'
+        : '✓ PAYMENT VERIFIED · 7 DAYS UNLOCKED');
+      setTimeout(() => { hideGate(); showUnlockBanner(unlockData); }, 1800);
+    }
+  } catch(e) {
+    // Network blip — let the next interval retry
+  }
+}
+
+// Format remaining time for a 7-day-scale unlock. Days when >24h left, h:mm:ss otherwise.
+function fmtRemaining(ms) {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const d = Math.floor(totalSec / 86400);
+  const h = Math.floor((totalSec % 86400) / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  return `${m}:${String(s).padStart(2,'0')}`;
+}
+
+function showUnlockBanner(unlockData) {
+  const banner = document.getElementById('unlockBanner');
+  const senderShort = unlockData.senderWallet
+    ? `${unlockData.senderWallet.slice(0,6)}…${unlockData.senderWallet.slice(-4)}`
+    : 'verified on-chain';
+  const bonusBadge = unlockData.holderBonus ? '<span class="banner-bonus">5× HOLDER BONUS</span>' : '';
+  document.getElementById('bannerMeta').innerHTML = `Paid by ${senderShort}${bonusBadge}`;
+  banner.style.display = 'flex';
+
+  if (countdownInterval) clearInterval(countdownInterval);
+  function tick() {
+    const remainingMs = unlockData.expiresAt - Date.now();
+    if (remainingMs <= 0) {
+      clearInterval(countdownInterval);
+      countdownInterval = null;
+      banner.style.display = 'none';
+      sessionStorage.removeItem(UNLOCK_KEY);
+      sessionStorage.removeItem(UNLOCK_PENDING_KEY);
+      pendingUnlockAmount = null;
+      initUnlockGate();
+      return;
+    }
+    const cd = document.getElementById('bannerCountdown');
+    cd.textContent = fmtRemaining(remainingMs);
+    cd.classList.remove('warning', 'expiring');
+    // Warn under 1 hour, pulse under 5 minutes — relative to the 7-day duration
+    if (remainingMs < 5 * 60 * 1000) cd.classList.add('expiring');
+    else if (remainingMs < 60 * 60 * 1000) cd.classList.add('warning');
+  }
+  tick();
+  countdownInterval = setInterval(tick, 1000);
+}
+
+function initUnlockGate() {
+  const active = getActiveUnlock();
+  if (active) {
+    hideGate();
+    showUnlockBanner(active);
+    return;
+  }
+  const stored = sessionStorage.getItem(UNLOCK_PENDING_KEY);
+  if (stored) {
+    const n = parseFloat(stored);
+    if (Number.isFinite(n) && Math.floor(n) === BUYSPECIAL_PRICE) pendingUnlockAmount = n;
+  }
+  if (!pendingUnlockAmount) {
+    pendingUnlockAmount = generateUnlockAmount(BUYSPECIAL_PRICE);
+    sessionStorage.setItem(UNLOCK_PENDING_KEY, pendingUnlockAmount.toString());
+  }
+  document.getElementById('unlockAmountVal').textContent = pendingUnlockAmount.toFixed(3) + ' CLKN';
+  showGate();
+  startPolling();
+}
+
+initUnlockGate();
+</script>
+</body>
+</html>

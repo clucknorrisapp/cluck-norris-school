@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>🐔 Holders Analyzer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0a0a0a;
+    --card: #111111;
+    --border: rgba(255,255,255,0.08);
+    --text: #F9FAFB;
+    --subtext: #6B7280;
+    --accent: #FCD34D;
+    --green: #10B981;
+    --red: #EF4444;
+    --orange: #F97316;
+    --purple: #A78BFA;
+    --blue: #60A5FA;
+    --mono: 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); background-image: radial-gradient(ellipse at 20% 10%, rgba(217,119,6,0.10) 0%, transparent 50%), radial-gradient(ellipse at 80% 90%, rgba(239,68,68,0.07) 0%, transparent 50%); color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 24px 16px 80px; }
+
+  .header { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+  .header-icon { font-size: 40px; filter: drop-shadow(0 0 16px rgba(217,119,6,0.5)); }
+  .header .brand-mini { font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 4px; color: #D97706; margin-bottom: 4px; font-weight: 700; }
+  .header h1 { font-family: 'Oswald', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg, #FCD34D, #F97316, #EF4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
+  .header p { font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
+  .footer-tag { text-align: center; margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
+  .footer-tag a { color: #D97706; text-decoration: none; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+  .card-title { font-family: var(--mono); font-size: 10px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 14px; }
+
+  .token-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .token-preset { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font-family: var(--mono); font-size: 11px; color: var(--subtext); cursor: pointer; transition: all 0.15s; }
+  .token-preset:hover { border-color: var(--accent); color: var(--accent); }
+  .token-preset.active { border-color: var(--accent); color: var(--accent); background: rgba(252,211,77,0.08); }
+  .token-input { width: 100%; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-family: var(--mono); font-size: 12px; color: var(--text); margin-top: 8px; }
+  .token-input:focus { outline: none; border-color: var(--accent); }
+
+  .config-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .config-group { display: flex; flex-direction: column; gap: 4px; }
+  .config-label { font-family: var(--mono); font-size: 9px; color: var(--subtext); letter-spacing: 1px; }
+  .config-input { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; font-family: var(--mono); font-size: 12px; color: var(--text); }
+  .config-input:focus { outline: none; border-color: var(--accent); }
+
+  .run-btn { background: linear-gradient(135deg, #D97706, #EF4444); border: none; border-radius: 10px; padding: 13px 24px; font-family: var(--mono); font-size: 14px; font-weight: 900; color: #fff; cursor: pointer; letter-spacing: 2px; transition: opacity 0.15s; }
+  .run-btn:hover { opacity: 0.9; }
+  .run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .error-box { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #FCA5A5; margin-bottom: 12px; display: none; }
+  .error-box.show { display: block; }
+
+  .status-bar { background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; margin-bottom: 16px; display: none; }
+  .status-bar.show { display: flex; align-items: center; gap: 10px; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 1s infinite; flex-shrink: 0; }
+  .status-dot.done { background: var(--green); animation: none; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .progress-bar { flex: 1; height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, #D97706, #EF4444); border-radius: 2px; transition: width 0.3s; }
+
+  .summary { display: none; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+  .summary.show { display: flex; }
+  .stat-box { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; flex: 1; min-width: 110px; }
+  .stat-val { font-family: var(--mono); font-size: 22px; font-weight: 700; color: var(--accent); }
+  .stat-val.green { color: var(--green); }
+  .stat-val.red { color: var(--red); }
+  .stat-val.blue { color: var(--blue); }
+  .stat-val.purple { color: var(--purple); }
+  .stat-label { font-size: 9px; color: var(--subtext); letter-spacing: 1px; margin-top: 2px; }
+
+  .filter-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+  .filter-chip { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-family: var(--mono); font-size: 10px; color: var(--subtext); cursor: pointer; transition: all 0.15s; }
+  .filter-chip:hover { border-color: var(--accent); color: var(--accent); }
+  .filter-chip.active { border-color: var(--accent); color: var(--accent); background: rgba(252,211,77,0.08); }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { font-family: var(--mono); font-size: 9px; color: var(--subtext); letter-spacing: 1px; padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--card); }
+  td { padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 12px; }
+  .tbl-wrap { overflow-x: auto; max-height: 500px; overflow-y: auto; margin-bottom: 12px; border: 1px solid var(--border); border-radius: 8px; }
+  .rank-cell { font-family: var(--mono); font-weight: 700; width: 38px; color: var(--subtext); }
+  .amt-cell { font-family: var(--mono); font-weight: 700; }
+  .pct-cell { font-family: var(--mono); color: var(--subtext); font-size: 10px; }
+  .addr-cell { font-family: var(--mono); font-size: 11px; color: var(--subtext); }
+  .addr-cell:hover { color: var(--accent); cursor: pointer; }
+  .addr-wrap { display: flex; align-items: center; gap: 6px; }
+
+  .copy-btn { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; padding: 3px 8px; font-family: var(--mono); font-size: 10px; color: var(--subtext); cursor: pointer; transition: all 0.15s; }
+  .copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .copy-btn.copied { border-color: var(--green); color: var(--green); }
+
+  .tag { font-family: var(--mono); font-size: 9px; padding: 2px 8px; border-radius: 10px; letter-spacing: 0.5px; white-space: nowrap; }
+  .tag-human  { background: rgba(16,185,129,0.15); color: var(--green); border: 1px solid rgba(16,185,129,0.3); }
+  .tag-lp     { background: rgba(96,165,250,0.15); color: var(--blue); border: 1px solid rgba(96,165,250,0.3); }
+  .tag-locked { background: rgba(167,139,250,0.15); color: var(--purple); border: 1px solid rgba(167,139,250,0.3); }
+  .tag-burn   { background: rgba(249,115,22,0.15); color: var(--orange); border: 1px solid rgba(249,115,22,0.3); }
+  .tag-program{ background: rgba(239,68,68,0.10); color: var(--red); border: 1px solid rgba(239,68,68,0.3); }
+  .tag-dex    { background: rgba(252,211,77,0.10); color: var(--accent); border: 1px solid rgba(252,211,77,0.3); }
+  .tag-unknown{ background: rgba(156,163,175,0.15); color: #9CA3AF; border: 1px solid rgba(156,163,175,0.3); }
+  .tag-warn   { background: rgba(249,115,22,0.18); color: var(--orange); border: 1px solid rgba(249,115,22,0.4); margin-left: 4px; font-weight: 700; }
+
+  .tag-meta { font-size: 9px; color: var(--subtext); font-family: var(--mono); margin-top: 2px; word-break: break-all; }
+
+  .airdrop-section { display: none; margin-top: 16px; padding: 16px; background: rgba(252,211,77,0.06); border: 1px solid rgba(252,211,77,0.25); border-radius: 10px; }
+  .airdrop-section.show { display: block; }
+  .airdrop-title { font-family: var(--mono); font-size: 12px; color: var(--accent); letter-spacing: 1px; margin-bottom: 6px; font-weight: 700; }
+  .airdrop-hint { font-size: 11px; color: #D1D5DB; font-family: var(--mono); margin-bottom: 14px; line-height: 1.5; }
+  .airdrop-btn { width: 100%; margin-top: 14px; padding: 13px; background: linear-gradient(135deg, #10B981, #065F46); border: none; border-radius: 10px; font-family: var(--mono); font-size: 14px; font-weight: 900; color: #fff; cursor: not-allowed; letter-spacing: 2px; opacity: 0.4; transition: opacity 0.15s; }
+
+  .export-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .export-btn { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 6px; padding: 7px 14px; font-family: var(--mono); font-size: 11px; color: var(--subtext); cursor: pointer; transition: all 0.15s; }
+  .export-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .empty { font-family: var(--mono); font-size: 11px; color: var(--subtext); padding: 16px 0; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <div class="header-icon">🐔</div>
+    <div>
+      <div class="brand-mini">SCHOOL OF CRYPTO HARD KNOCKS</div>
+      <h1>HOLDERS ANALYZER</h1>
+      <p>FIND TRUE HOLDERS — FILTER LP, LOCKS, PROGRAMS</p>
+    </div>
+  </div>
+
+  <div class="error-box" id="errorBox"></div>
+
+  <!-- Token Select -->
+  <div class="card">
+    <div class="card-title">TOKEN</div>
+    <div class="token-row">
+      <button class="token-preset active" onclick="setToken('DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS','CLKN',this)">🐔 CLKN</button>
+      <button class="token-preset" onclick="setToken('RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF','ROSE',this)">🌹 ROSE</button>
+      <button class="token-preset" onclick="setToken('custom','CUSTOM',this)">✏️ CUSTOM</button>
+    </div>
+    <input class="token-input" id="tokenMintInput" placeholder="Token mint address..." value="DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS" oninput="onMintInput()"/>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--subtext);margin-top:6px" id="tokenLabel">CLKN — DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS</div>
+  </div>
+
+  <!-- Options -->
+  <div class="card">
+    <div class="card-title">OPTIONS</div>
+    <div class="config-row">
+      <div class="config-group">
+        <div class="config-label">Min Balance (tokens)</div>
+        <input class="config-input" type="number" id="minBalance" value="0" min="0" step="0.01" style="width:140px" placeholder="0 = include all"/>
+      </div>
+    </div>
+    <button class="run-btn" id="runBtn" onclick="runAnalysis()">▶ ANALYZE HOLDERS</button>
+  </div>
+
+  <div class="status-bar" id="statusBar">
+    <div class="status-dot" id="statusDot"></div>
+    <span id="statusText" style="font-family:var(--mono);font-size:11px;color:var(--subtext);flex:1">Initializing...</span>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+  </div>
+
+  <div class="summary" id="summary">
+    <div class="stat-box"><div class="stat-val" id="statAccounts">--</div><div class="stat-label">TOKEN ACCOUNTS</div></div>
+    <div class="stat-box"><div class="stat-val blue" id="statUnique">--</div><div class="stat-label">UNIQUE OWNERS</div></div>
+    <div class="stat-box"><div class="stat-val green" id="statHumans">--</div><div class="stat-label">TRUE HOLDERS</div></div>
+    <div class="stat-box"><div class="stat-val purple" id="statLocked">--</div><div class="stat-label">LOCKED + LP</div></div>
+    <div class="stat-box"><div class="stat-val" id="statHumanPct">--</div><div class="stat-label">% IN HUMANS</div></div>
+  </div>
+
+  <div id="resultsArea"></div>
+
+</div>
+
+<script>
+const RPC = '/api/helius-rpc';
+const SYSTEM_PROGRAM = '11111111111111111111111111111111';
+const INCINERATOR = '1nc1nerator11111111111111111111111111111111';
+
+const TOKENS = {
+  'DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS': { name: 'CLKN', decimals: 9 },
+  'RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF': { name: 'ROSE', decimals: 9 },
+};
+
+// Known specific addresses (token-account-owner level)
+const KNOWN_ADDRESSES = {
+  '64WXkHM4zyWUkYy32TfUeBV5wDAfdcUGDxe5ntM4xaTd': { type: 'LP', label: 'Meteora CLKN Pool' },
+  [INCINERATOR]: { type: 'BURN', label: 'Incinerator' },
+};
+
+// Known program IDs (when an owner is a PDA owned by one of these, classify accordingly)
+const KNOWN_PROGRAMS = {
+  // Jupiter
+  'LocpQgucEQHbqNABEYvBvwoxCPsSbG91A1QaQhQQqjn': { type: 'LOCKED', label: 'Jupiter Lock' },
+  'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4':  { type: 'DEX', label: 'Jupiter Router' },
+  // Meteora — multiple variants
+  'Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EkzXsdSu': { type: 'LP', label: 'Meteora DAMM v1' },
+  'cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG': { type: 'LP', label: 'Meteora DAMM v2' },
+  'LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo': { type: 'LP', label: 'Meteora DLMM' },
+  '24Uqj9JCLxUeoC3hGfh5W3s9FM9uCHDS2SG3LYwBpyTi': { type: 'LP', label: 'Meteora Vaults' },
+  'FarmuwXPWXvefWUeqFAa5w6vMeDzPPHX7yYqHYQuQLfu': { type: 'LP', label: 'Meteora Farms' },
+  // Raydium
+  '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8': { type: 'LP', label: 'Raydium AMM v4' },
+  'CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK': { type: 'LP', label: 'Raydium CLMM' },
+  '5quBtoiQqxF9Jv6KYKctB59NT3gtJD2Y65kdnB1Uev3h': { type: 'LP', label: 'Raydium Stable' },
+  // Orca
+  'whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc': { type: 'LP', label: 'Orca Whirlpool' },
+  '9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP': { type: 'LP', label: 'Orca v1' },
+  // Other DEXes
+  'PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY':  { type: 'DEX', label: 'Phoenix' },
+  'Dooar9JkhdZ7J3LHN3A7YCuoGRUggXhQaG4kijfLGU2j': { type: 'DEX', label: 'Dooar' },
+  'srmqPvymJeFKQ4zGQed1GFppgkRHL9kaELCbyksJtPX':  { type: 'DEX', label: 'OpenBook' },
+};
+
+let currentMint = 'DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS';
+let currentDecimals = 9;
+let currentTokenName = 'CLKN';
+let analyzedHolders = [];
+let currentFilter = 'human';
+
+// Manual override store — { [mint]: { [walletAddr]: { type, label } } } in localStorage
+function loadOverrides(mint) {
+  try {
+    const all = JSON.parse(localStorage.getItem('holdersOverrides') || '{}');
+    return all[mint] || {};
+  } catch(e) { return {}; }
+}
+function saveOverride(mint, addr, override) {
+  try {
+    const all = JSON.parse(localStorage.getItem('holdersOverrides') || '{}');
+    if (!all[mint]) all[mint] = {};
+    if (override === null) delete all[mint][addr];
+    else all[mint][addr] = override;
+    localStorage.setItem('holdersOverrides', JSON.stringify(all));
+  } catch(e) {}
+}
+function clearOverridesForMint(mint) {
+  try {
+    const all = JSON.parse(localStorage.getItem('holdersOverrides') || '{}');
+    delete all[mint];
+    localStorage.setItem('holdersOverrides', JSON.stringify(all));
+  } catch(e) {}
+}
+
+function rpc(method, params) {
+  return fetch(RPC, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params })
+  }).then(r => r.json()).then(d => {
+    if (d.error) throw new Error(d.error.message);
+    return d.result;
+  });
+}
+
+function fmtAmount(n, decimals) {
+  const v = Number(n) / Math.pow(10, decimals);
+  if (v >= 1e9) return (v/1e9).toFixed(2) + 'B';
+  if (v >= 1e6) return (v/1e6).toFixed(2) + 'M';
+  if (v >= 1e3) return (v/1e3).toFixed(1) + 'K';
+  return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+function shortAddr(a) { return a ? a.slice(0,6) + '...' + a.slice(-4) : ''; }
+
+function showError(msg) { const el = document.getElementById('errorBox'); el.textContent = msg; el.classList.add('show'); }
+function hideError() { document.getElementById('errorBox').classList.remove('show'); }
+function setStatus(text, pct) {
+  document.getElementById('statusText').textContent = text;
+  document.getElementById('progressFill').style.width = pct + '%';
+}
+
+function setToken(mint, name, btn) {
+  document.querySelectorAll('.token-preset').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (mint === 'custom') {
+    document.getElementById('tokenMintInput').value = '';
+    document.getElementById('tokenMintInput').focus();
+    currentMint = '';
+    currentTokenName = 'CUSTOM';
+    document.getElementById('tokenLabel').textContent = 'Enter mint address above';
+  } else {
+    currentMint = mint;
+    currentTokenName = name;
+    currentDecimals = TOKENS[mint]?.decimals || 9;
+    document.getElementById('tokenMintInput').value = mint;
+    document.getElementById('tokenLabel').textContent = name + ' — ' + mint;
+  }
+}
+
+function onMintInput() {
+  const val = document.getElementById('tokenMintInput').value.trim();
+  currentMint = val;
+  document.querySelectorAll('.token-preset').forEach(b => b.classList.remove('active'));
+  if (TOKENS[val]) {
+    currentDecimals = TOKENS[val].decimals;
+    currentTokenName = TOKENS[val].name;
+    document.getElementById('tokenLabel').textContent = currentTokenName + ' — ' + val;
+  } else {
+    currentDecimals = 9;
+    currentTokenName = 'CUSTOM';
+    document.getElementById('tokenLabel').textContent = 'Custom token — ' + val;
+  }
+}
+
+function copyAddr(btn, addr) {
+  navigator.clipboard.writeText(addr).then(() => {
+    btn.textContent = 'COPIED';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'COPY'; btn.classList.remove('copied'); }, 1500);
+  });
+}
+
+// Bubblemaps is what Jupiter's holders panel uses under the hood. Their map-data
+// endpoint returns every top holder with an `is_contract` flag (true = pool/program,
+// not a regular wallet) and frequently a human-readable `name` like "Meteora LP".
+// This is the most authoritative wallet-level classification source we can use without
+// an API key.
+async function fetchBubblemapsLabels(mint) {
+  const labels = {};
+  try {
+    const res = await fetch('/api/bubblemaps?token=' + mint + '&chain=sol');
+    if (!res.ok) {
+      console.warn('[holders] Bubblemaps responded', res.status);
+      return labels;
+    }
+    const data = await res.json();
+    const nodes = data?.nodes || [];
+    for (const node of nodes) {
+      if (!node.address) continue;
+      if (node.is_contract === true) {
+        // Try to pick a sensible type from the human name if Bubblemaps provides one
+        const name = (node.name || '').toLowerCase();
+        let type = 'LP';
+        if (name.includes('lock') || name.includes('vesting')) type = 'LOCKED';
+        else if (name.includes('burn') || name.includes('incinerator')) type = 'BURN';
+        else if (name.includes('treasury') || name.includes('multisig')) type = 'PROGRAM';
+        else if (name.includes('jup') || name.includes('phoenix') || name.includes('openbook')) type = 'DEX';
+        labels[node.address] = { type, label: (node.name || 'Bubblemaps contract') + ' (Bubblemaps)' };
+      } else if (node.name) {
+        // Human-named regular wallet (CEX, dev wallet, etc.) — keep tagged PROGRAM for safety
+        labels[node.address] = { type: 'PROGRAM', label: node.name + ' (Bubblemaps)' };
+      }
+    }
+    console.log('[holders] Bubblemaps tagged', Object.keys(labels).length, 'addresses');
+  } catch(e) {
+    console.warn('[holders] Bubblemaps fetch failed:', e);
+  }
+  return labels;
+}
+
+// DexScreener returns every known pair for a mint. Each pair has a pairAddress (pool config)
+// and the data sometimes includes liquidity/vault references we can correlate against our
+// holder list. For our purpose we just collect every address DexScreener associates with a pool.
+async function fetchDexScreenerPools(mint) {
+  const pools = [];
+  try {
+    const res = await fetch('https://api.dexscreener.com/latest/dex/tokens/' + mint);
+    if (!res.ok) return pools;
+    const data = await res.json();
+    const pairs = data?.pairs || [];
+    for (const p of pairs) {
+      if (p.chainId !== 'solana') continue;
+      const related = new Set();
+      if (p.pairAddress) related.add(p.pairAddress);
+      // Some DexScreener responses include `info.openSource` etc.; also try common nested fields
+      if (p.labels && Array.isArray(p.labels)) p.labels.forEach(l => related.add(l));
+      pools.push({
+        dex: (p.dexId || 'DEX').toUpperCase(),
+        pairAddress: p.pairAddress,
+        relatedAddresses: [...related]
+      });
+    }
+    console.log('[holders] DexScreener returned ' + pools.length + ' pool(s):', pools.map(p => p.dex + ' ' + p.pairAddress));
+  } catch(e) {
+    console.warn('[holders] DexScreener fetch failed:', e);
+  }
+  return pools;
+}
+
+async function fetchAllTokenAccounts(mint) {
+  let allAccounts = [];
+  let page = 1;
+  while (true) {
+    setStatus('Fetching token accounts (page ' + page + ')...', Math.min(40, 5 + page * 5));
+    const result = await rpc('getTokenAccounts', { page, limit: 1000, mint, displayOptions: { showZeroBalance: false } });
+    const accounts = result?.token_accounts || [];
+    if (accounts.length === 0) break;
+    allAccounts = allAccounts.concat(accounts);
+    if (accounts.length < 1000) break;
+    page++;
+    if (page > 30) break;
+    await new Promise(r => setTimeout(r, 200));
+  }
+  return allAccounts;
+}
+
+// Solana addresses are base58. Minimal encoder so we can decode raw pool account bytes
+// without pulling in solana-web3.js. Used to scan AMM pool configs for vault pubkeys.
+const B58_ALPHA = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+function bytesToBase58(bytes) {
+  let n = 0n;
+  for (const b of bytes) n = n * 256n + BigInt(b);
+  let result = '';
+  while (n > 0n) { result = B58_ALPHA[Number(n % 58n)] + result; n = n / 58n; }
+  for (const b of bytes) { if (b !== 0) break; result = '1' + result; }
+  return result || '1';
+}
+
+// Read an AMM pool's account data and find which holder addresses are embedded in it.
+// Every AMM (Meteora DAMM/DLMM, Raydium AMM/CLMM, Orca Whirlpool) stores its token-vault
+// pubkeys inside the pool config account. By scanning the raw bytes for any 32-byte chunk
+// that base58-encodes to an address we already know is a holder, we identify the vault
+// without needing AMM-specific parsing logic.
+async function scanPoolForVaults(poolAddress, holderSet) {
+  try {
+    const res = await rpc('getAccountInfo', [poolAddress, { encoding: 'base64' }]);
+    const acc = res?.value;
+    if (!acc || !acc.data) return [];
+    const base64 = Array.isArray(acc.data) ? acc.data[0] : acc.data;
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const matches = new Set();
+    // Scan every byte offset for a 32-byte slice that matches a known holder
+    for (let i = 0; i + 32 <= bytes.length; i++) {
+      const chunk = bytes.slice(i, i + 32);
+      const candidate = bytesToBase58(chunk);
+      if (holderSet.has(candidate)) matches.add(candidate);
+    }
+    return [...matches];
+  } catch(e) {
+    console.warn('[holders] Pool scan failed for', poolAddress, e);
+    return [];
+  }
+}
+
+// Transaction-activity heuristic. The Bags.fm DBC pool authority is a regular wallet
+// (System-Program-owned), so the on-chain owner check returns HUMAN. But a real LP has
+// thousands of AMM swap transactions, while a human wallet has dozens. Hammering
+// getSignaturesForAddress (1000-sig page) lets us spot pools by their hyperactive
+// transaction count. We only run this on the top N HUMAN-tagged holders to keep it cheap.
+async function detectActivePools(holdersToCheck) {
+  const flagged = {};
+  for (const h of holdersToCheck) {
+    try {
+      const sigs = await rpc('getSignaturesForAddress', [h.addr, { limit: 1000 }]);
+      if (!Array.isArray(sigs) || sigs.length < 100) continue;
+      const oldest = sigs[sigs.length - 1].blockTime || 0;
+      const newest = sigs[0].blockTime || 0;
+      const daysSpan = Math.max(1, (newest - oldest) / 86400);
+      const txPerDay = sigs.length / daysSpan;
+      // 1000 signatures + averaging > 50 txs/day = pool/bot territory. Even an active
+      // retail trader is typically below 10 tx/day on a single token.
+      if (sigs.length >= 800 && txPerDay > 50) {
+        flagged[h.addr] = {
+          type: 'LP',
+          label: 'Active pool (' + Math.round(txPerDay) + ' tx/day · ' + sigs.length + '+ recent txns)',
+        };
+      }
+    } catch(e) {
+      console.warn('[holders] Activity check failed for', h.addr, e);
+    }
+    await new Promise(r => setTimeout(r, 150));
+  }
+  return flagged;
+}
+
+async function classifyOwners(owners) {
+  const result = {};
+  const needsLookup = [];
+  for (const owner of owners) {
+    if (KNOWN_ADDRESSES[owner]) {
+      result[owner] = { ...KNOWN_ADDRESSES[owner] };
+    } else {
+      needsLookup.push(owner);
+    }
+  }
+
+  const BATCH = 100;
+  for (let i = 0; i < needsLookup.length; i += BATCH) {
+    setStatus('Classifying owners (' + Math.min(i + BATCH, needsLookup.length) + '/' + needsLookup.length + ')...', 50 + (i / needsLookup.length) * 45);
+    const batch = needsLookup.slice(i, i + BATCH);
+    let res = null;
+    try {
+      res = await rpc('getMultipleAccounts', [batch, { encoding: 'base64' }]);
+      if (i === 0) console.log('[holders] First getMultipleAccounts response shape:', res, 'first entry:', res?.value?.[0]);
+    } catch(e) {
+      console.error('[holders] Classify batch failed:', e);
+      batch.forEach(o => { if (!result[o]) result[o] = { type: 'UNKNOWN', label: 'RPC error: ' + e.message, programId: null }; });
+      await new Promise(r => setTimeout(r, 200));
+      continue;
+    }
+
+    const accounts = (res && Array.isArray(res.value)) ? res.value : null;
+    if (!accounts || accounts.length !== batch.length) {
+      console.warn('[holders] Unexpected RPC response shape — got', accounts?.length, 'entries for', batch.length, 'addresses. Marking batch UNKNOWN.');
+      batch.forEach(o => { if (!result[o]) result[o] = { type: 'UNKNOWN', label: 'Bad RPC response shape', programId: null }; });
+      await new Promise(r => setTimeout(r, 200));
+      continue;
+    }
+
+    accounts.forEach((acc, idx) => {
+      const owner = batch[idx];
+      if (!acc) {
+        // Account doesn't exist on-chain. Don't assume HUMAN — be safe.
+        result[owner] = { type: 'UNKNOWN', label: 'Account not found on-chain', programId: null };
+        return;
+      }
+      const accOwner = acc.owner;
+      if (!accOwner || typeof accOwner !== 'string') {
+        console.warn('[holders] Missing owner field for', owner, 'account:', acc);
+        result[owner] = { type: 'UNKNOWN', label: 'Owner field missing in response', programId: null };
+        return;
+      }
+      if (accOwner === SYSTEM_PROGRAM) {
+        result[owner] = { type: 'HUMAN', label: 'Wallet', programId: accOwner };
+      } else if (KNOWN_PROGRAMS[accOwner]) {
+        result[owner] = { ...KNOWN_PROGRAMS[accOwner], programId: accOwner };
+      } else {
+        result[owner] = { type: 'PROGRAM', label: 'Unknown program (see ID)', programId: accOwner };
+      }
+    });
+    await new Promise(r => setTimeout(r, 200));
+  }
+  return result;
+}
+
+async function runAnalysis() {
+  if (!currentMint) { showError('Please select a token first.'); return; }
+  hideError();
+  document.getElementById('runBtn').disabled = true;
+  document.getElementById('statusBar').classList.add('show');
+  document.getElementById('statusDot').classList.remove('done');
+  document.getElementById('summary').classList.remove('show');
+  document.getElementById('resultsArea').innerHTML = '';
+
+  try {
+    setStatus('Fetching token accounts...', 5);
+    const accounts = await fetchAllTokenAccounts(currentMint);
+    if (accounts.length === 0) { showError('No token accounts found for this mint.'); resetUI(); return; }
+
+    setStatus('Aggregating balances by owner...', 45);
+    const ownerBalances = {};
+    for (const a of accounts) {
+      const amt = BigInt(a.amount || 0);
+      if (amt === 0n) continue;
+      ownerBalances[a.owner] = (ownerBalances[a.owner] || 0n) + amt;
+    }
+
+    const owners = Object.keys(ownerBalances);
+    setStatus('Classifying ' + owners.length + ' unique owners...', 50);
+    const classifications = await classifyOwners(owners);
+
+    // Cross-reference with DexScreener: every pair returned for this mint is a confirmed LP.
+    setStatus('Cross-referencing DexScreener...', 88);
+    const dexPools = await fetchDexScreenerPools(currentMint);
+    let dexTagged = 0;
+    for (const pool of dexPools) {
+      for (const addr of pool.relatedAddresses) {
+        if (classifications[addr]) {
+          const cur = classifications[addr];
+          if (cur.type === 'HUMAN' || cur.type === 'UNKNOWN' || cur.type === 'PROGRAM') {
+            classifications[addr] = { type: 'LP', label: pool.dex + ' Pool (DexScreener)', programId: cur.programId };
+            dexTagged++;
+          }
+        }
+      }
+    }
+    if (dexTagged > 0) console.log('[holders] DexScreener auto-tagged ' + dexTagged + ' LP holder(s).');
+
+    // For each DexScreener pool, read the pool account on-chain and find vault addresses
+    // that match holders. This is the key step that catches LPs whose vault is a regular
+    // wallet (the Bags.fm DBC pattern) - we don't care what kind of account it is, only
+    // that the pool itself references it.
+    setStatus('Scanning pool accounts for vault wallets...', 91);
+    const holderSet = new Set(Object.keys(ownerBalances));
+    let vaultTagged = 0;
+    for (const pool of dexPools) {
+      if (!pool.pairAddress) continue;
+      const vaults = await scanPoolForVaults(pool.pairAddress, holderSet);
+      if (vaults.length > 0) {
+        console.log('[holders] Pool ' + pool.dex + ' ' + pool.pairAddress + ' references holders:', vaults);
+      }
+      for (const v of vaults) {
+        if (classifications[v]) {
+          const cur = classifications[v];
+          if (cur.type !== 'LP' && cur.type !== 'LOCKED') {
+            classifications[v] = { type: 'LP', label: pool.dex + ' vault (on-chain scan)', programId: cur.programId };
+            vaultTagged++;
+          }
+        }
+      }
+      await new Promise(r => setTimeout(r, 150));
+    }
+    if (vaultTagged > 0) console.log('[holders] Pool-scan re-tagged ' + vaultTagged + ' vault wallet(s) as LP.');
+
+    // Cross-reference with Bubblemaps (same data Jupiter's holders panel uses).
+    // Bubblemaps directly flags `is_contract: true` on pool / contract wallets and often
+    // ships a human-readable name. This catches LPs whose on-chain owner field looks
+    // System-Program-owned but which are actually pool authorities.
+    setStatus('Cross-referencing Bubblemaps...', 94);
+    const bmLabels = await fetchBubblemapsLabels(currentMint);
+    let bmTagged = 0;
+    for (const addr of Object.keys(bmLabels)) {
+      if (classifications[addr]) {
+        const cur = classifications[addr];
+        if (cur.type === 'HUMAN' || cur.type === 'UNKNOWN' || cur.type === 'PROGRAM') {
+          classifications[addr] = { ...bmLabels[addr], programId: cur.programId };
+          bmTagged++;
+        }
+      }
+    }
+    if (bmTagged > 0) console.log('[holders] Bubblemaps re-tagged ' + bmTagged + ' holder(s).');
+
+    // Last-resort detection: high-volume transaction activity catches pool authority
+    // wallets that look HUMAN by on-chain owner field but aren't (e.g., Bags.fm DBC).
+    // Sample only the top 10 HUMAN-tagged holders by balance to keep the cost bounded.
+    setStatus('Activity check on top HUMAN holders...', 96);
+    const minBalanceRawForCheck = BigInt(Math.round((parseFloat(document.getElementById('minBalance').value) || 0) * Math.pow(10, currentDecimals)));
+    const topHumanCandidates = owners
+      .filter(addr => (classifications[addr]?.type === 'HUMAN') && ownerBalances[addr] >= minBalanceRawForCheck)
+      .map(addr => ({ addr, balance: ownerBalances[addr] }))
+      .sort((a, b) => b.balance > a.balance ? 1 : -1)
+      .slice(0, 10);
+    const activeFlagged = await detectActivePools(topHumanCandidates);
+    let activeTagged = 0;
+    for (const addr of Object.keys(activeFlagged)) {
+      if (classifications[addr] && classifications[addr].type === 'HUMAN') {
+        classifications[addr] = { ...activeFlagged[addr], programId: classifications[addr].programId };
+        activeTagged++;
+      }
+    }
+    if (activeTagged > 0) console.log('[holders] Activity check re-tagged ' + activeTagged + ' wallet(s) as LP.');
+
+    // Apply manual overrides last so they win over everything else
+    const overrides = loadOverrides(currentMint);
+    let overrideCount = 0;
+    for (const addr of Object.keys(overrides)) {
+      if (classifications[addr]) {
+        classifications[addr] = { ...overrides[addr], programId: classifications[addr].programId, overridden: true };
+        overrideCount++;
+      }
+    }
+    if (overrideCount > 0) console.log('[holders] Applied ' + overrideCount + ' manual override(s) for ' + currentTokenName);
+
+    // Build holders list
+    const minBalanceRaw = BigInt(Math.round((parseFloat(document.getElementById('minBalance').value) || 0) * Math.pow(10, currentDecimals)));
+    const totalSupply = owners.reduce((s, o) => s + ownerBalances[o], 0n);
+    analyzedHolders = owners.map(addr => {
+      const c = classifications[addr] || { type: 'UNKNOWN', label: 'Not classified', programId: null };
+      return { addr, balance: ownerBalances[addr], type: c.type, label: c.label, programId: c.programId, overridden: !!c.overridden };
+    }).filter(h => h.balance >= minBalanceRaw).sort((a, b) => b.balance > a.balance ? 1 : -1);
+
+    // Compute supply % per holder — informational only, used for an ℹ badge on big positions.
+    // HUMAN-tagged wallets are trusted regardless of size: the on-chain owner field is the
+    // authoritative signal. Real OG / family / friend wallets can legitimately hold large %.
+    if (totalSupply > 0n) {
+      analyzedHolders.forEach(h => {
+        h.supplyPct = Number((h.balance * 10000n) / totalSupply) / 100;
+      });
+    }
+    console.log('[holders] Total holders:', analyzedHolders.length, '| breakdown:', analyzedHolders.reduce((acc, h) => { acc[h.type] = (acc[h.type]||0)+1; return acc; }, {}));
+
+    // Stats — TRUE HOLDERS = anything the on-chain owner field says is System-Program-owned
+    const totalAccounts = accounts.length;
+    const uniqueOwners = analyzedHolders.length;
+    const trueHumans = analyzedHolders.filter(h => h.type === 'HUMAN');
+    const lockedLP = analyzedHolders.filter(h => h.type === 'LOCKED' || h.type === 'LP');
+    const trueHumanSupply = trueHumans.reduce((s, h) => s + h.balance, 0n);
+    const humanPct = totalSupply > 0n ? Number((trueHumanSupply * 10000n) / totalSupply) / 100 : 0;
+
+    document.getElementById('statAccounts').textContent = totalAccounts.toLocaleString();
+    document.getElementById('statUnique').textContent = uniqueOwners.toLocaleString();
+    document.getElementById('statHumans').textContent = trueHumans.length.toLocaleString();
+    document.getElementById('statLocked').textContent = lockedLP.length.toLocaleString();
+    document.getElementById('statHumanPct').textContent = humanPct.toFixed(1) + '%';
+    document.getElementById('summary').classList.add('show');
+
+    setStatus('Done — ' + trueHumans.length + ' true holders found', 100);
+    document.getElementById('statusDot').classList.add('done');
+
+    window._lastTotalSupply = totalSupply;
+    renderResults(totalSupply);
+
+  } catch(e) {
+    showError('Error: ' + e.message);
+    setStatus('Error.', 0);
+  }
+  document.getElementById('runBtn').disabled = false;
+}
+
+function resetUI() {
+  document.getElementById('runBtn').disabled = false;
+  setStatus('Idle.', 0);
+}
+
+function renderResults(totalSupply) {
+  const container = document.getElementById('resultsArea');
+  container.innerHTML = '';
+
+  // Filter chips
+  const chipsDiv = document.createElement('div');
+  chipsDiv.className = 'filter-chips';
+  const filters = [
+    { id: 'human',   label: '🐔 HUMANS' },
+    { id: 'all',     label: 'ALL' },
+    { id: 'lp',      label: '💧 LP' },
+    { id: 'locked',  label: '🔒 LOCKED' },
+    { id: 'program', label: '🤖 PROGRAMS' },
+    { id: 'unknown', label: '❓ UNKNOWN' },
+    { id: 'burn',    label: '🔥 BURN' },
+  ];
+  filters.forEach(f => {
+    const btn = document.createElement('button');
+    btn.className = 'filter-chip' + (f.id === currentFilter ? ' active' : '');
+    btn.textContent = f.label;
+    btn.onclick = () => { currentFilter = f.id; renderResults(totalSupply); };
+    chipsDiv.appendChild(btn);
+  });
+  container.appendChild(chipsDiv);
+
+  // Export bar
+  const exportBar = document.createElement('div');
+  exportBar.className = 'export-bar';
+  exportBar.innerHTML =
+    '<button class="export-btn" onclick="exportFiltered()">📋 EXPORT CSV (current filter)</button>' +
+    '<button class="export-btn" onclick="copyAllAddresses()">📑 COPY ADDRESSES</button>';
+  container.appendChild(exportBar);
+
+  // Table
+  const filtered = filterHolders(currentFilter);
+  if (filtered.length === 0) {
+    container.appendChild(Object.assign(document.createElement('div'), { className: 'empty', textContent: 'NO HOLDERS IN THIS CATEGORY' }));
+  } else {
+    const wrap = document.createElement('div');
+    wrap.className = 'tbl-wrap';
+    const tbl = document.createElement('table');
+    tbl.innerHTML = '<thead><tr><th>#</th><th>WALLET</th><th>BALANCE</th><th>% SUPPLY</th><th>TAG</th></tr></thead>';
+    const tbody = document.createElement('tbody');
+    filtered.forEach((h, i) => {
+      const pct = totalSupply > 0n ? Number((h.balance * 100000n) / totalSupply) / 1000 : 0;
+      const tagClass = 'tag-' + h.type.toLowerCase();
+      const metaParts = [h.label];
+      if (h.programId && h.type !== 'HUMAN') metaParts.push('owner: ' + h.programId);
+      const overrideBadge = h.overridden ? ' <span class="tag tag-warn" style="font-size:8px">MANUAL</span>' : '';
+      const overrideBtn = h.overridden
+        ? '<button class="copy-btn" style="margin-left:6px" onclick="resetOverride(\'' + h.addr + '\')">RESET TAG</button>'
+        : '<button class="copy-btn" style="margin-left:6px;border-color:rgba(96,165,250,0.4);color:#60A5FA" onclick="tagAsLP(\'' + h.addr + '\')">🏷 TAG LP</button>';
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td class="rank-cell">' + (i + 1) + '</td>' +
+        '<td><div class="addr-wrap"><span class="addr-cell">' + shortAddr(h.addr) + '</span><button class="copy-btn" onclick="copyAddr(this,\'' + h.addr + '\')">COPY</button><a href="https://solscan.io/account/' + h.addr + '" target="_blank" style="font-family:var(--mono);font-size:10px;color:var(--accent);text-decoration:none;border:1px solid rgba(252,211,77,0.3);border-radius:4px;padding:3px 8px">SOLSCAN ↗</a>' + overrideBtn + '</div></td>' +
+        '<td class="amt-cell">' + fmtAmount(h.balance, currentDecimals) + '</td>' +
+        '<td class="pct-cell">' + pct.toFixed(3) + '%</td>' +
+        '<td><span class="tag ' + tagClass + '">' + h.type + '</span>' + overrideBadge + '<div class="tag-meta">' + metaParts.join(' · ') + '</div></td>';
+      tbody.appendChild(tr);
+    });
+    tbl.appendChild(tbody);
+    wrap.appendChild(tbl);
+    container.appendChild(wrap);
+  }
+
+  // Airdrop handoff section (always present, uses HUMANS only)
+  const humans = filterHolders('human');
+  if (humans.length > 0) {
+    const aSec = document.createElement('div');
+    aSec.className = 'airdrop-section show';
+    aSec.innerHTML =
+      '<div class="airdrop-title">🎯 AIRDROP TO TRUE HOLDERS</div>' +
+      '<div class="airdrop-hint">Send an equal amount to every HUMAN holder (' + humans.length + ' wallets). LP, locked, and program addresses are automatically excluded.</div>' +
+      '<div class="config-row">' +
+      '  <div class="config-group">' +
+      '    <div class="config-label">Tokens per holder</div>' +
+      '    <input class="config-input" type="number" id="airdropAmt" min="0" step="0.01" placeholder="0.00" style="width:160px;background:rgba(252,211,77,0.05);border:1.5px solid rgba(252,211,77,0.45);color:#FCD34D;font-weight:700;text-align:right"/>' +
+      '  </div>' +
+      '</div>' +
+      '<button class="airdrop-btn" id="airdropBtn" disabled onclick="goToAirdrop()">🔒 ENTER AMOUNT PER HOLDER</button>';
+    container.appendChild(aSec);
+
+    const amtInput = document.getElementById('airdropAmt');
+    const btn = document.getElementById('airdropBtn');
+    amtInput.addEventListener('input', () => {
+      const v = parseFloat(amtInput.value);
+      const ok = v > 0;
+      btn.disabled = !ok;
+      btn.style.opacity = ok ? '1' : '0.4';
+      btn.style.cursor = ok ? 'pointer' : 'not-allowed';
+      btn.textContent = ok
+        ? '🚀 OPEN AIRDROP TOOL (' + humans.length + ' HOLDERS · ' + v.toLocaleString() + ' ea)'
+        : '🔒 ENTER AMOUNT PER HOLDER';
+    });
+  }
+}
+
+function filterHolders(filter) {
+  if (filter === 'all')     return analyzedHolders;
+  if (filter === 'human')   return analyzedHolders.filter(h => h.type === 'HUMAN');
+  if (filter === 'lp')      return analyzedHolders.filter(h => h.type === 'LP');
+  if (filter === 'locked')  return analyzedHolders.filter(h => h.type === 'LOCKED');
+  if (filter === 'program') return analyzedHolders.filter(h => h.type === 'PROGRAM' || h.type === 'DEX');
+  if (filter === 'unknown') return analyzedHolders.filter(h => h.type === 'UNKNOWN');
+  if (filter === 'burn')    return analyzedHolders.filter(h => h.type === 'BURN');
+  return analyzedHolders;
+}
+
+function exportFiltered() {
+  const filtered = filterHolders(currentFilter);
+  if (filtered.length === 0) return;
+  const lines = ['address,balance,type,label'];
+  filtered.forEach(h => {
+    const bal = (Number(h.balance) / Math.pow(10, currentDecimals)).toString();
+    lines.push([h.addr, bal, h.type, '"' + h.label.replace(/"/g, '""') + '"'].join(','));
+  });
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = currentTokenName + '_holders_' + currentFilter + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function copyAllAddresses() {
+  const filtered = filterHolders(currentFilter);
+  if (filtered.length === 0) return;
+  navigator.clipboard.writeText(filtered.map(h => h.addr).join('\n'));
+}
+
+function tagAsLP(addr) {
+  saveOverride(currentMint, addr, { type: 'LP', label: 'Manually tagged as LP' });
+  const h = analyzedHolders.find(x => x.addr === addr);
+  if (h) { h.type = 'LP'; h.label = 'Manually tagged as LP'; h.overridden = true; }
+  renderResults(window._lastTotalSupply);
+}
+function resetOverride(addr) {
+  saveOverride(currentMint, addr, null);
+  // Best UX: ask for re-analysis since classification was overwritten. Just re-render with override removed.
+  const h = analyzedHolders.find(x => x.addr === addr);
+  if (h) { h.overridden = false; h.label = 'Override cleared — re-run ANALYZE to re-classify'; }
+  renderResults(window._lastTotalSupply);
+}
+
+function goToAirdrop() {
+  // Ship to every HUMAN wallet — the on-chain owner field is the authoritative signal.
+  // The airdrop tool itself has a per-row remove button if specific wallets need to be skipped.
+  const humans = analyzedHolders.filter(h => h.type === 'HUMAN');
+  const amt = parseFloat(document.getElementById('airdropAmt').value);
+  if (!humans.length || !(amt > 0)) return;
+  const lines = humans.map(h => h.addr + ',' + amt.toFixed(2)).join('\n');
+  sessionStorage.setItem('airdropPayload', JSON.stringify({
+    mint: currentMint,
+    tokenName: currentTokenName,
+    recipients: lines
+  }));
+  window.open('/airdrop?from=holders', '_blank');
+}
+</script>
+
+<div class="footer-tag">🐔 POWERED BY <a href="https://clucknorris.app">CLKN</a></div>
+
+</body>
+</html>

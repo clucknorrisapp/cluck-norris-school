@@ -1,0 +1,1246 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>🌹 ROSE — Buy Competition Analyzer</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@400;600;700;900&display=swap');
+
+:root {
+color-scheme: dark;
+--bg: #060608;
+--surface: #0e0e12;
+--border: rgba(220,80,80,0.18);
+--accent: #dc5050;
+--accent2: #ff8a65;
+--gold: #ffd54f;
+--green: #69f0ae;
+--red: #ef5350;
+--dim: #555566;
+--text: #e8e8f0;
+--subtext: #9090a8;
+--mono: 'Share Tech Mono', monospace;
+--head: 'Barlow Condensed', sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+background: var(--bg);
+color: var(--text);
+font-family: var(--mono);
+min-height: 100vh;
+overflow-x: hidden;
+}
+
+body::before {
+content: '';
+position: fixed;
+inset: 0;
+background-image:
+linear-gradient(rgba(220,80,80,0.03) 1px, transparent 1px),
+linear-gradient(90deg, rgba(220,80,80,0.03) 1px, transparent 1px);
+background-size: 40px 40px;
+pointer-events: none;
+z-index: 0;
+}
+
+.wrap { position: relative; z-index: 1; max-width: 960px; margin: 0 auto; padding: 28px 16px 80px; }
+
+/* Header */
+.header { display: flex; align-items: center; gap: 16px; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.rose-icon { font-size: 44px; animation: glow 3s ease-in-out infinite; flex-shrink: 0; }
+@keyframes glow { 0%,100%{filter:drop-shadow(0 0 10px rgba(220,80,80,0.5))} 50%{filter:drop-shadow(0 0 22px rgba(220,80,80,0.9))} }
+.header-text h1 { font-family: var(--head); font-size: 34px; font-weight: 900; letter-spacing: 4px; color: var(--accent); text-transform: uppercase; line-height: 1; }
+.header-text p { font-size: 10px; color: var(--subtext); letter-spacing: 2px; margin-top: 4px; }
+.mint-pill { margin-left: auto; background: rgba(220,80,80,0.07); border: 1px solid var(--border); border-radius: 6px; padding: 7px 12px; font-size: 9px; color: var(--subtext); letter-spacing: 1px; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+.mint-pill:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Config */
+.config { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+.config-title { font-family: var(--head); font-size: 11px; font-weight: 700; letter-spacing: 3px; color: var(--accent); margin-bottom: 16px; }
+.config-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; align-items: flex-end; }
+.config-group { display: flex; flex-direction: column; gap: 5px; }
+.config-label { font-size: 9px; color: var(--subtext); letter-spacing: 2px; text-transform: uppercase; }
+
+.presets { display: flex; gap: 6px; flex-wrap: wrap; }
+.preset-btn { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 5px; padding: 7px 13px; font-family: var(--mono); font-size: 11px; color: var(--subtext); cursor: pointer; transition: all 0.15s; }
+.preset-btn:hover { background: rgba(220,80,80,0.1); border-color: rgba(220,80,80,0.4); color: var(--text); }
+.preset-btn.active { background: rgba(220,80,80,0.18); border-color: var(--accent); color: var(--accent); }
+
+input[type=number], input[type=text], input[type=datetime-local] {
+background: rgba(0,0,0,0.5);
+border: 1px solid rgba(255,255,255,0.1);
+border-radius: 5px;
+padding: 8px 10px;
+font-family: var(--mono);
+font-size: 12px;
+color: var(--text);
+outline: none;
+transition: border-color 0.2s;
+color-scheme: dark;
+}
+input[type=number] { width: 80px; }
+input[type=datetime-local] { width: 230px; }
+input:focus { border-color: var(--accent); }
+
+.run-btn {
+background: linear-gradient(135deg, #dc5050, #b71c1c);
+border: none; border-radius: 7px;
+padding: 11px 32px;
+font-family: var(--head); font-size: 16px; font-weight: 700;
+color: #fff; letter-spacing: 3px; cursor: pointer; text-transform: uppercase;
+box-shadow: 0 0 20px rgba(220,80,80,0.35);
+transition: all 0.2s; margin-top: 4px;
+}
+.run-btn:hover:not(:disabled) { box-shadow: 0 0 30px rgba(220,80,80,0.6); transform: translateY(-1px); }
+.run-btn:disabled { opacity: 0.45; cursor: default; transform: none; box-shadow: none; }
+
+.stop-btn {
+background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15);
+border-radius: 7px; padding: 11px 20px;
+font-family: var(--head); font-size: 14px; font-weight: 700;
+color: var(--subtext); letter-spacing: 2px; cursor: pointer;
+transition: all 0.2s; margin-top: 4px; display: none;
+}
+.stop-btn.show { display: inline-block; }
+.stop-btn:hover { border-color: var(--red); color: var(--red); }
+
+/* Status */
+.status-bar { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; margin-bottom: 14px; font-size: 11px; color: var(--subtext); letter-spacing: 1px; display: none; align-items: center; gap: 10px; }
+.status-bar.show { display: flex; }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: blink 1s infinite; flex-shrink: 0; }
+.status-dot.done { background: var(--green); animation: none; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+.progress-bar { flex: 1; height: 3px; background: rgba(255,255,255,0.07); border-radius: 2px; overflow: hidden; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 2px; transition: width 0.4s; }
+#statusText { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Window info */
+.window-info { background: rgba(220,80,80,0.05); border: 1px solid rgba(220,80,80,0.15); border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 11px; color: var(--subtext); display: none; line-height: 1.8; }
+.window-info.show { display: block; }
+.window-info span { color: var(--text); }
+.window-info strong { color: var(--accent); }
+
+/* Summary */
+.summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 20px; display: none; }
+.summary.show { display: grid; }
+.stat-box { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 10px; text-align: center; }
+.stat-val { font-family: var(--head); font-size: 30px; font-weight: 900; color: var(--accent); line-height: 1; }
+.stat-val.green { color: var(--green); }
+.stat-val.red { color: var(--red); }
+.stat-val.gold { color: var(--gold); }
+.stat-label { font-size: 8px; color: var(--subtext); letter-spacing: 1.5px; margin-top: 5px; text-transform: uppercase; }
+
+/* Error */
+.error-box { background: rgba(239,83,80,0.08); border: 1px solid rgba(239,83,80,0.3); border-radius: 8px; padding: 14px 16px; margin-bottom: 14px; font-size: 12px; color: var(--red); display: none; line-height: 1.7; }
+.error-box.show { display: block; }
+
+/* Section */
+.section-header { display: flex; align-items: center; gap: 10px; font-family: var(--head); font-size: 13px; font-weight: 700; letter-spacing: 3px; padding: 10px 0; margin-bottom: 8px; border-bottom: 1px solid var(--border); text-transform: uppercase; }
+.badge { padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 700; }
+.badge-green { background: rgba(105,240,174,0.12); border: 1px solid rgba(105,240,174,0.25); color: var(--green); }
+.badge-red { background: rgba(239,83,80,0.12); border: 1px solid rgba(239,83,80,0.25); color: var(--red); }
+
+/* Table */
+.tbl-wrap { overflow-x: auto; margin-bottom: 30px; }
+table { width: 100%; border-collapse: collapse; }
+th { font-family: var(--head); font-size: 9px; font-weight: 700; letter-spacing: 2px; color: var(--dim); text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); text-transform: uppercase; white-space: nowrap; }
+td { padding: 10px 10px; font-size: 12px; border-bottom: 1px solid rgba(255,255,255,0.03); vertical-align: middle; }
+tr:hover td { background: rgba(255,255,255,0.015); }
+
+.rank-cell { font-family: var(--head); font-size: 18px; font-weight: 900; width: 40px; color: var(--dim); }
+.rank-cell.r1 { color: var(--gold); }
+.rank-cell.r2 { color: #c0c0c0; }
+.rank-cell.r3 { color: #cd7f32; }
+
+.addr-cell { font-size: 13px; cursor: pointer; color: var(--subtext); transition: color 0.15s; white-space: nowrap; }
+.addr-cell:hover { color: var(--accent); }
+.addr-cell.revealed { font-size: 11px; color: var(--text); white-space: normal; word-break: break-all; }
+
+.amt-cell { font-family: var(--head); font-size: 16px; font-weight: 700; color: var(--green); white-space: nowrap; }
+.amt-cell.neg { color: var(--red); }
+.buys-cell { color: var(--subtext); font-size: 11px; }
+.time-cell { color: var(--dim); font-size: 10px; white-space: nowrap; }
+.sells-cell { color: var(--red); font-size: 11px; }
+
+.disq-row td { opacity: 0.55; }
+.copy-btn { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; padding: 3px 8px; font-family: var(--mono); font-size: 10px; color: var(--subtext); cursor: pointer; transition: all 0.15s; white-space: nowrap; margin-left: 8px; }
+.copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+.copy-btn.copied { border-color: var(--green); color: var(--green); }
+.addr-wrap { display: flex; align-items: center; gap: 4px; }
+
+/* Export bar */
+.export-bar { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.export-btn { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 5px; padding: 7px 14px; font-family: var(--mono); font-size: 10px; color: var(--subtext); cursor: pointer; transition: all 0.15s; letter-spacing: 1px; }
+.export-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+.empty { text-align: center; padding: 40px; color: var(--dim); font-size: 12px; letter-spacing: 2px; }
+
+@media(max-width:600px) {
+th:nth-child(4), td:nth-child(4) { display: none; }
+.header-text h1 { font-size: 26px; }
+}
+
+/* Winners & transaction detail styles */
+.winners-banner { background: linear-gradient(135deg, rgba(255,215,0,0.12), rgba(255,165,0,0.08)); border: 1px solid rgba(255,215,0,0.4); border-radius: 10px; padding: 12px 16px; margin-bottom: 12px; display: flex; align-items: center; gap: 12px; }
+.winners-banner .trophy { font-size: 24px; }
+.winners-banner .winner-text { font-family: var(--mono); font-size: 13px; color: #FCD34D; font-weight: 700; letter-spacing: 1px; }
+.winners-banner .winner-sub { font-size: 11px; color: var(--subtext); margin-top: 2px; }
+.winner-row td { background: rgba(255,215,0,0.04) !important; }
+.expand-btn { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 3px 8px; font-size: 10px; color: var(--subtext); cursor: pointer; white-space: nowrap; font-family: var(--mono); }
+.expand-btn:hover { border-color: var(--accent); color: var(--accent); }
+.tx-detail-row { display: none; }
+.tx-detail-row.open { display: table-row; }
+.tx-detail-row td { padding: 4px 12px 12px 52px; background: rgba(255,255,255,0.02); border-bottom: 1px solid rgba(255,255,255,0.05); }
+.tx-list { display: flex; flex-direction: column; gap: 5px; }
+.tx-item { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: 11px; flex-wrap: wrap; }
+.tx-amt { color: #10B981; font-weight: 700; min-width: 80px; }
+.tx-time { color: var(--subtext); min-width: 130px; }
+.tx-link { color: var(--accent); text-decoration: none; border-bottom: 1px solid rgba(99,179,237,0.3); }
+.tx-link:hover { border-bottom-color: var(--accent); }
+.hold-section { margin-top: 20px; }
+.hold-banner { background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.35); border-radius: 10px; padding: 12px 16px; margin-bottom: 12px; }
+.hold-banner-title { font-family: var(--mono); font-size: 12px; color: #A78BFA; font-weight: 700; letter-spacing: 1px; margin-bottom: 4px; }
+.hold-banner-sub { font-size: 11px; color: var(--subtext); }
+.hold-pass { color: #10B981; font-weight: 700; }
+.hold-fail { color: #EF4444; font-weight: 700; }
+.hold-row-pass td { background: rgba(16,185,129,0.04) !important; }
+.hold-row-fail td { background: rgba(239,68,68,0.04) !important; opacity: 0.7; }
+.hold-badge { font-size: 10px; padding: 2px 7px; border-radius: 10px; font-family: var(--mono); margin-left: 8px; font-weight: 700; }
+.hold-badge-pass { background: rgba(16,185,129,0.15); color: #10B981; border: 1px solid rgba(16,185,129,0.3); }
+.hold-badge-fail { background: rgba(239,68,46,0.15); color: #EF4444; border: 1px solid rgba(239,68,68,0.3); }
+
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <div class="rose-icon">🌹</div>
+    <div class="header-text">
+      <h1>ROSE Analyzer</h1>
+      <p>BUY COMPETITION TRACKER — SOLANA</p>
+    </div>
+    <div class="mint-pill" onclick="copyMint()" id="mintPill">RoSei...dtdF &nbsp;📋</div>
+  </div>
+
+  <div class="config">
+    <div class="config-title">⚙ COMPETITION WINDOW</div>
+    <div class="config-row">
+      <div class="config-group">
+        <div class="config-label">Presets</div>
+        <div class="presets" id="presets">
+          <button class="preset-btn" onclick="setPreset(12,0,this)">12h</button>
+          <button class="preset-btn active" onclick="setPreset(24,30,this)">24h 30m</button>
+          <button class="preset-btn" onclick="setPreset(48,0,this)">48h</button>
+          <button class="preset-btn" onclick="setPreset(72,0,this)">72h</button>
+          <button class="preset-btn" onclick="setPreset(168,0,this)">7d</button>
+        </div>
+      </div>
+    </div>
+    <div class="config-row">
+      <div class="config-group">
+        <div class="config-label">Hours</div>
+        <input type="number" id="inputHours" value="24" min="0" max="720" oninput="clearPresets()"/>
+      </div>
+      <div class="config-group">
+        <div class="config-label">Minutes</div>
+        <input type="number" id="inputMins" value="30" min="0" max="59" oninput="clearPresets()"/>
+      </div>
+      <div class="config-group">
+        <div class="config-label">Snapshot end time (blank = now)</div>
+        <input type="datetime-local" id="snapshotTime"/>
+      </div>
+    </div>
+    <div class="config-row">
+      <div class="config-group">
+        <div class="config-label">Number of Winners</div>
+        <input type="number" id="inputWinners" value="3" min="1" max="50" style="width:80px"/>
+      </div>
+    </div>
+    <div class="config-row">
+      <div class="config-group">
+        <div class="config-label">Hold Double Check (hours) — optional</div>
+        <input type="number" id="inputHoldHours" value="" min="1" max="720" placeholder="e.g. 24" style="width:120px"/>
+      </div>
+      <div class="config-group" style="align-self:flex-end">
+        <div style="font-size:10px;color:var(--subtext);line-height:1.5;max-width:260px">If set, checks top winners + 2 backups for sells after competition ends. Leave blank to skip.</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="run-btn" id="runBtn" onclick="runAnalysis()">▶ RUN ANALYSIS</button>
+      <button class="stop-btn" id="stopBtn" onclick="stopAnalysis()">■ STOP</button>
+    </div>
+  </div>
+
+  <div class="error-box" id="errorBox"></div>
+
+  <div class="status-bar" id="statusBar">
+    <div class="status-dot" id="statusDot"></div>
+    <span id="statusText">Initializing...</span>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    <span id="progressPct" style="font-size:10px;color:var(--subtext);min-width:34px;text-align:right">0%</span>
+  </div>
+
+  <div class="window-info" id="windowInfo"></div>
+
+  <div class="summary" id="summary">
+    <div class="stat-box"><div class="stat-val" id="statTxns">—</div><div class="stat-label">Txns Scanned</div></div>
+    <div class="stat-box"><div class="stat-val" id="statWallets">—</div><div class="stat-label">Unique Wallets</div></div>
+    <div class="stat-box"><div class="stat-val green" id="statEligible">—</div><div class="stat-label">✅ Eligible</div></div>
+    <div class="stat-box"><div class="stat-val red" id="statDisq">—</div><div class="stat-label">❌ Disqualified</div></div>
+    <div class="stat-box"><div class="stat-val gold" id="statVolume">—</div><div class="stat-label">Total Bought</div></div>
+  </div>
+
+  <div id="results"></div>
+
+</div>
+
+<script>
+const MINT = 'RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGtdF'; // fixed below
+const MINT_ADDR = 'RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF';
+const DECIMALS = 9; // will be detected
+const RPC = '/api/helius-rpc';
+const HELIUS_TX = '/api/helius-tx';
+
+// Known DEX/swap programs — transactions must involve at least one of these to count as a buy/sell
+const DEX_PROGRAMS = new Set([
+  'JUP4Fb2cqiRUcaTHdrPC8h2gNsA2ETXiPDD33WcGuJB',  // Jupiter v4
+  'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4',  // Jupiter v6
+  'JUP2jxvXaqu7NQY1GmNF4m1vodwdXNXW1RNxkJoMuYZ',  // Jupiter v2
+  '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8',  // Raydium AMM
+  'CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK',  // Raydium CLMM
+  'whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc',   // Orca Whirlpools
+  'Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EkzXsdSu', // Orca v1
+  'LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo',  // Meteora DLMM
+  'Dooar9JkhdZ7J3LHN3A7YCuoGRUggXhQaG4kijfLGU2j', // Meteora stable
+  '9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP', // Orca v2
+  'DjVE6JNiYqPL2QXyCUUh8rNjHrbz9hXHNYt99MQ59qw1', // Saber
+  'MERLuDFBMmsHnsBPZw2sDQZHvXFMwp8EdjudcU2HKky',  // Mercurial
+  'RVKd61ztZW9GUwhRbbLoYVRE5Xf1B2tVscKqwZqXgEr',  // Raydium stable
+  'EewxydAPCCVuNEyrVN68PuSYdQ7wKn27V9Gjeoi8dy3S', // Meteora pools
+  'PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY',  // Phoenix DEX
+  'DEXYosS6oEGvk8uCDayvwEZz4qEyDJRf9nFgYCaqPMTm', // OKX DEX
+  'obriQD1zbpyLz95G5n7nJe6a4DPjpFwa5XYPoNm113y',  // OKX aggregator
+  '6MLxLqiXaaSUpkgMnWDTrmBB9tilS7XYFXS3Y7mCNGDM', // DFlow
+]);
+
+// Helper — check if a transaction involves a DEX swap
+function isDexTransaction(tx) {
+  const accounts = tx.transaction?.message?.accountKeys || [];
+  for (const acct of accounts) {
+    const key = typeof acct === 'string' ? acct : acct.pubkey;
+    if (DEX_PROGRAMS.has(key)) return true;
+  }
+  // Also check inner instructions program IDs
+  const innerIxs = tx.meta?.innerInstructions || [];
+  for (const inner of innerIxs) {
+    for (const ix of (inner.instructions || [])) {
+      if (ix.programId && DEX_PROGRAMS.has(ix.programId)) return true;
+    }
+  }
+  return false;
+}
+
+// Known program/DEX addresses to filter out (wallet owners to exclude)
+const PROGRAM_ADDRS = new Set([
+  'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+  'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL',
+  '11111111111111111111111111111111',
+  'ComputeBudget111111111111111111111111111111',
+  'JUP4Fb2cqiRUcaTHdrPC8h2gNsA2ETXiPDD33WcGuJB',
+  'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4',
+  'JUP2jxvXaqu7NQY1GmNF4m1vodwdXNXW1RNxkJoMuYZ',
+  'whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc',
+  '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8',
+  'CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK',
+  'Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EkzXsdSu',
+  '9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP',
+  'DecZY86MU5Gj7kppfUCEmd4LbXXuyZH1yHaP2NTqdiZB',
+  'srmqPvymJeFKQ4zGQed1GFppgkRHL9kaELCbyksJtPX',
+  'DjVE6JNiYqPL2QXyCUUh8rNjHrbz9hXHNYt99MQ59qw1',
+  'MERLuDFBMmsHnsBPZw2sDQZHvXFMwp8EdjudcU2HKky',
+  'RVKd61ztZW9GUwhRbbLoYVRE5Xf1B2tVscKqwZqXgEr',
+  'LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo',
+  'EewxydAPCCVuNEyrVN68PuSYdQ7wKn27V9Gjeoi8dy3S',
+  'PhoeNiXZ8ByJGLkxNfZRnkUfjvmuYqLR89jjFHGqdXY',
+  'Dooar9JkhdZ7J3LHN3A7YCuoGRUggXhQaG4kijfLGU2j',
+  'So11111111111111111111111111111111111111112',
+  // ROSE project/deployer wallets — excluded from competition results
+  'RosepN6TnevxxgnL9qFXqhRz6s8tELJDP6r953AMFvX',
+  'He6gfotTCt3mFqUXjCQPDp1tUR4sXr4hNbDeLJh5Rose',
+]);
+
+let stopFlag = false;
+let tokenDecimals = 9;
+
+function rpc(method, params) {
+  return fetch(RPC, {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({jsonrpc:'2.0',id:1,method,params})
+  }).then(r => r.json()).then(d => {
+    if (d.error) throw new Error(d.error.message);
+    return d.result;
+  });
+}
+
+function setPreset(h, m, btn) {
+  document.getElementById('inputHours').value = h;
+  document.getElementById('inputMins').value = m;
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+}
+
+function clearPresets() {
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+}
+
+function setStatus(text, pct) {
+  document.getElementById('statusText').textContent = text;
+  if (pct !== undefined) {
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progressPct').textContent = Math.round(pct) + '%';
+  }
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorBox');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+
+function hideError() {
+  document.getElementById('errorBox').classList.remove('show');
+}
+
+function copyMint() {
+  navigator.clipboard.writeText(MINT_ADDR).catch(()=>{});
+  const el = document.getElementById('mintPill');
+  el.textContent = '✓ COPIED!';
+  setTimeout(() => el.innerHTML = 'RoSei...dtdF &nbsp;📋', 1500);
+}
+
+function fmtAmount(raw) {
+  const val = raw / Math.pow(10, tokenDecimals);
+  if (val >= 1e9) return (val/1e9).toFixed(2) + 'B';
+  if (val >= 1e6) return (val/1e6).toFixed(2) + 'M';
+  if (val >= 1e3) return (val/1e3).toFixed(1) + 'K';
+  return val.toFixed(2);
+}
+
+function fmtTime(ts) {
+  if (!ts) return '—';
+  const d = new Date(ts * 1000);
+  return d.toLocaleString('en-US', {
+    timeZone: 'America/Chicago',
+    month: 'numeric', day: 'numeric',
+    hour: 'numeric', minute: '2-digit',
+    hour12: true
+  }) + ' CT';
+}
+
+function shortAddr(addr) {
+  return addr.slice(0,6) + '...' + addr.slice(-4);
+}
+
+function isProgram(addr) {
+  if (PROGRAM_ADDRS.has(addr)) return true;
+  // Heuristic: program addresses are often short or all same chars
+  return false;
+}
+
+function stopAnalysis() {
+  stopFlag = true;
+  document.getElementById('stopBtn').classList.remove('show');
+}
+
+async function getTokenDecimals() {
+  try {
+    const info = await rpc('getAccountInfo', [MINT_ADDR, {encoding:'jsonParsed'}]);
+    if (info?.value?.data?.parsed?.info?.decimals !== undefined) {
+      tokenDecimals = info.value.data.parsed.info.decimals;
+    }
+  } catch(e) {}
+}
+
+async function runAnalysis() {
+  stopFlag = false;
+  hideError();
+
+  const hours = parseInt(document.getElementById('inputHours').value) || 0;
+  const mins = parseInt(document.getElementById('inputMins').value) || 0;
+  const totalSecs = hours * 3600 + mins * 60;
+  if (totalSecs < 60) { showError('Please set a window of at least 1 minute.'); return; }
+
+  const snapEl = document.getElementById('snapshotTime').value;
+  const endTime = snapEl ? Math.floor(new Date(snapEl).getTime() / 1000) : Math.floor(Date.now() / 1000);
+  const startTime = endTime - totalSecs;
+
+  // UI setup
+  document.getElementById('runBtn').disabled = true;
+  document.getElementById('stopBtn').classList.add('show');
+  document.getElementById('statusBar').classList.add('show');
+  document.getElementById('statusDot').classList.remove('done');
+  document.getElementById('summary').classList.remove('show');
+  document.getElementById('results').innerHTML = '';
+  document.getElementById('windowInfo').classList.remove('show');
+
+  const startStr = fmtTime(startTime);
+  const endStr = fmtTime(endTime);
+
+  setStatus('Detecting token decimals...', 2);
+  await getTokenDecimals();
+
+  setStatus('Fetching signatures...', 5);
+
+  // Collect all signatures in window
+  let allSigs = [];
+  let before = undefined;
+  let fetching = true;
+  let page = 0;
+
+  try {
+    while (fetching && !stopFlag) {
+      const params = [MINT_ADDR, {limit:1000, commitment:'confirmed'}];
+      if (before) params[1].before = before;
+
+      const sigs = await rpc('getSignaturesForAddress', params);
+      if (!sigs || sigs.length === 0) break;
+
+      let hitBoundary = false;
+      for (const s of sigs) {
+        if (s.blockTime && s.blockTime < startTime) {
+          hitBoundary = true;
+          break;
+        }
+        if (s.blockTime && s.blockTime <= endTime) {
+          if (!s.err) allSigs.push(s);
+        }
+      }
+
+      if (hitBoundary) break;
+      before = sigs[sigs.length - 1].signature;
+      page++;
+      setStatus(`Fetching signatures... ${allSigs.length} found (page ${page})`, Math.min(25, 5 + page));
+
+      // Rate limit
+      await new Promise(r => setTimeout(r, 150));
+    }
+
+    if (stopFlag) {
+      setStatus('Stopped.', 0);
+      document.getElementById('runBtn').disabled = false;
+      document.getElementById('stopBtn').classList.remove('show');
+      return;
+    }
+
+    setStatus(`Found ${allSigs.length} transactions. Analyzing...`, 28);
+
+    if (allSigs.length === 0) {
+      showError(`No transactions found in the selected window (${startStr} → ${endStr}). Try a wider range.`);
+      document.getElementById('runBtn').disabled = false;
+      document.getElementById('stopBtn').classList.remove('show');
+      document.getElementById('statusBar').classList.remove('show');
+      return;
+    }
+
+    // ── THOROUGH MODE ────────────────────────────────────────────────────────
+    // Runs 3 full passes over all transactions.
+    // Each pass fetches independently — any tx missed in one pass gets caught
+    // in the next. Final results are merged. Takes longer but 100% accurate.
+    // ─────────────────────────────────────────────────────────────────────────
+    const PASSES = 3;
+    const HELIUS_BATCH = 25; // Small batches = less chance of partial failures
+    const PASS_DELAY = 2000; // 2 seconds between passes to let rate limits settle
+
+    // Master wallet map — gets merged across all passes
+    const wallets = {};
+
+    async function fetchEnhancedBatch(signatures, retries = 4) {
+      const url = HELIUS_TX;
+      for (let attempt = 0; attempt < retries; attempt++) {
+        try {
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ transactions: signatures, commitment: 'confirmed' })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data) && data.length > 0) return data;
+          }
+        } catch(e) {}
+        // Exponential backoff between retries
+        if (attempt < retries - 1) await new Promise(r => setTimeout(r, 600 * Math.pow(2, attempt)));
+      }
+      return [];
+    }
+
+    function processTx(tx, sigInfo, passWallets) {
+      if (!tx || tx.transactionError) return;
+
+      const transfers = tx.tokenTransfers || [];
+      const ts = tx.timestamp || sigInfo?.blockTime;
+
+      // Must involve a known DEX
+      const allAccounts = (tx.accountData || []).map(a => a.account);
+      const isDex = allAccounts.some(a => DEX_PROGRAMS.has(a)) ||
+        (tx.instructions || []).some(ix => DEX_PROGRAMS.has(ix.programId)) ||
+        (tx.innerInstructions || []).some(inner =>
+          (inner.instructions || []).some(ix => DEX_PROGRAMS.has(ix.programId))
+        );
+      if (!isDex) return;
+
+      for (const transfer of transfers) {
+        if (transfer.mint !== MINT_ADDR) continue;
+        if (!transfer.toUserAccount || !transfer.fromUserAccount) continue;
+        if (isProgram(transfer.toUserAccount) && isProgram(transfer.fromUserAccount)) continue;
+
+        const amt = BigInt(Math.round((transfer.tokenAmount || 0) * Math.pow(10, tokenDecimals)));
+        if (amt === 0n) continue;
+
+        if (!isProgram(transfer.toUserAccount)) {
+          const owner = transfer.toUserAccount;
+          if (!passWallets[owner]) passWallets[owner] = { bought: 0n, sold: 0n, buyTxns: 0, sellTxns: 0, firstBuy: null, txSigs: [] };
+          passWallets[owner].bought += amt;
+          passWallets[owner].buyTxns++;
+          if (!passWallets[owner].firstBuy || ts < passWallets[owner].firstBuy) passWallets[owner].firstBuy = ts;
+          if (tx.signature) {
+            const existing = passWallets[owner].txSigs.find(x => x.sig === tx.signature);
+            if (!existing) passWallets[owner].txSigs.push({ sig: tx.signature, ts, amt: Number(amt) });
+            else existing.amt += Number(amt);
+          }
+        }
+
+        if (!isProgram(transfer.fromUserAccount)) {
+          const owner = transfer.fromUserAccount;
+          if (!passWallets[owner]) passWallets[owner] = { bought: 0n, sold: 0n, buyTxns: 0, sellTxns: 0, firstBuy: null, txSigs: [] };
+          passWallets[owner].sold += amt;
+          passWallets[owner].sellTxns++;
+        }
+      }
+    }
+
+    // Run all passes
+    for (let pass = 0; pass < PASSES; pass++) {
+      if (stopFlag) break;
+
+      const passWallets = {};
+      setStatus(`Pass ${pass + 1} of ${PASSES} — fetching ${allSigs.length} transactions...`, 28 + (pass / PASSES) * 60);
+
+      // Wait between passes
+      if (pass > 0) {
+        setStatus(`Pass ${pass + 1} of ${PASSES} — waiting for rate limits to settle...`, 28 + (pass / PASSES) * 60);
+        await new Promise(r => setTimeout(r, PASS_DELAY));
+      }
+
+      for (let i = 0; i < allSigs.length; i += HELIUS_BATCH) {
+        if (stopFlag) break;
+
+        const batch = allSigs.slice(i, i + HELIUS_BATCH);
+        const signatures = batch.map(s => s.signature);
+
+        const pct = 28 + (pass / PASSES) * 60 + ((i / allSigs.length) / PASSES) * 60;
+        setStatus(`Pass ${pass + 1}/${PASSES} — transactions ${i + 1}–${Math.min(i + HELIUS_BATCH, allSigs.length)} of ${allSigs.length}`, pct);
+
+        const txns = await fetchEnhancedBatch(signatures);
+
+        for (const tx of txns) {
+          const sigInfo = allSigs.find(s => s.signature === tx.signature);
+          processTx(tx, sigInfo, passWallets);
+        }
+
+        // Polite delay between batches
+        await new Promise(r => setTimeout(r, 400));
+      }
+
+      // Merge this pass into master wallets
+      // Use the MAXIMUM bought/sold seen across passes for each wallet
+      // This ensures we never under-count due to a failed fetch
+      for (const [addr, data] of Object.entries(passWallets)) {
+        if (!wallets[addr]) {
+          wallets[addr] = { ...data };
+        } else {
+          // Take the higher value from either pass — more reliable
+          if (data.bought > wallets[addr].bought) {
+            wallets[addr].bought = data.bought;
+            wallets[addr].buyTxns = data.buyTxns;
+          }
+          if (data.sold > wallets[addr].sold) {
+            wallets[addr].sold = data.sold;
+            wallets[addr].sellTxns = data.sellTxns;
+          }
+          if (data.firstBuy && (!wallets[addr].firstBuy || data.firstBuy < wallets[addr].firstBuy)) {
+            wallets[addr].firstBuy = data.firstBuy;
+          }
+          // Merge txSigs — add any new signatures not already tracked
+          if (data.txSigs) {
+            if (!wallets[addr].txSigs) wallets[addr].txSigs = [];
+            for (const t of data.txSigs) {
+              if (!wallets[addr].txSigs.find(x => x.sig === t.sig)) {
+                wallets[addr].txSigs.push(t);
+              }
+            }
+          }
+        }
+      }
+
+      setStatus(`Pass ${pass + 1} complete — ${Object.keys(passWallets).length} wallets found so far`, 28 + ((pass + 1) / PASSES) * 60);
+    }
+
+    setStatus('All passes complete. Building results...', 92);
+    await new Promise(r => setTimeout(r, 300));
+
+    // Split into eligible and disqualified
+    const eligible = [];
+    const disqualified = [];
+
+    for (const [addr, data] of Object.entries(wallets)) {
+      if (data.bought === 0n) continue; // Never actually bought
+
+      const entry = {
+        addr,
+        bought: data.bought,
+        sold: data.sold,
+        buyTxns: data.buyTxns,
+        sellTxns: data.sellTxns,
+        firstBuy: data.firstBuy,
+        txSigs: data.txSigs || []
+      };
+
+      if (data.sold > 0n) {
+        disqualified.push(entry);
+      } else {
+        eligible.push(entry);
+      }
+    }
+
+    // Sort eligible by amount bought desc
+    eligible.sort((a, b) => (b.bought > a.bought ? 1 : b.bought < a.bought ? -1 : 0));
+    disqualified.sort((a, b) => (b.bought > a.bought ? 1 : b.bought < a.bought ? -1 : 0));
+
+    const totalBought = eligible.reduce((s, e) => s + e.bought, 0n)
+                      + disqualified.reduce((s, e) => s + e.bought, 0n);
+
+    // Update summary
+    document.getElementById('statTxns').textContent = allSigs.length.toLocaleString();
+    document.getElementById('statWallets').textContent = (eligible.length + disqualified.length).toLocaleString();
+    document.getElementById('statEligible').textContent = eligible.length.toLocaleString();
+    document.getElementById('statDisq').textContent = disqualified.length.toLocaleString();
+    document.getElementById('statVolume').textContent = fmtAmount(Number(totalBought));
+    document.getElementById('summary').classList.add('show');
+
+    // Window info
+    const wi = document.getElementById('windowInfo');
+    wi.innerHTML = `<strong>Window:</strong> <span>${startStr}</span> → <span>${endStr}</span> &nbsp;|&nbsp; <strong>Duration:</strong> <span>${hours}h ${mins}m</span> &nbsp;|&nbsp; <strong>Transactions:</strong> <span>${allSigs.length}</span>`;
+    wi.classList.add('show');
+
+    // Render results
+    const numWinners = parseInt(document.getElementById('inputWinners').value) || 3;
+    renderResults(eligible, disqualified, numWinners);
+
+    // Hold check — run if hold hours is filled in
+    const holdHours = parseInt(document.getElementById('inputHoldHours').value) || 0;
+    if (holdHours > 0 && eligible.length > 0) {
+      setStatus(`Running hold period check (${holdHours}h)...`, 95);
+      await new Promise(r => setTimeout(r, 300));
+      const holdDeadline = endTime + (holdHours * 3600);
+      const checkCount = Math.min(numWinners + 2, eligible.length);
+      await runHoldCheck(eligible, checkCount, endTime, holdDeadline, numWinners);
+    } else if (eligible.length > 0) {
+      // No hold check requested — show prize section immediately
+      appendPrizeSection(eligible.slice(0, numWinners), document.getElementById('results'));
+    }
+
+    // Done
+    setStatus(`Complete — ${eligible.length} eligible, ${disqualified.length} disqualified${holdHours > 0 ? ` · ${holdHours}h hold checked` : ''}`, 100);
+    document.getElementById('statusDot').classList.add('done');
+
+  } catch(e) {
+    showError('Error: ' + e.message + '\n\nThis may be a rate limit — try again in a few seconds, or the window may be too large.');
+    setStatus('Error.', 0);
+  }
+
+  document.getElementById('runBtn').disabled = false;
+  document.getElementById('stopBtn').classList.remove('show');
+}
+
+// ── HOLD PERIOD CHECK ────────────────────────────────────────────────────────
+async function runHoldCheck(eligible, checkCount, compEndTime, holdDeadline, numWinners) {
+  const now = Math.floor(Date.now() / 1000);
+
+  // If hold deadline is in the future, check up to now
+  const checkUntil = Math.min(holdDeadline, now);
+  const holdHours = Math.round((holdDeadline - compEndTime) / 3600);
+
+  const results = []; // { addr, passed, soldAmt, txSigs }
+
+  for (let i = 0; i < checkCount; i++) {
+    const wallet = eligible[i];
+    setStatus(`Hold check: scanning wallet ${i+1} of ${checkCount}...`, 95 + (i / checkCount) * 4);
+
+    // Get signatures for this wallet's token account between compEndTime and checkUntil
+    let sigs = [];
+    let before = undefined;
+    let fetching = true;
+
+    try {
+      while (fetching) {
+        const params = [MINT_ADDR, { limit: 100, commitment: 'confirmed' }];
+        if (before) params[1].before = before;
+
+        const sigPage = await rpc('getSignaturesForAddress', params);
+        if (!sigPage || sigPage.length === 0) break;
+
+        let hitBoundary = false;
+        for (const s of sigPage) {
+          if (s.blockTime && s.blockTime < compEndTime) { hitBoundary = true; break; }
+          if (s.blockTime && s.blockTime <= checkUntil && !s.err) sigs.push(s);
+        }
+        if (hitBoundary) break;
+        before = sigPage[sigPage.length - 1].signature;
+        await new Promise(r => setTimeout(r, 200));
+      }
+    } catch(e) {}
+
+    if (sigs.length === 0) {
+      results.push({ addr: wallet.addr, passed: true, soldAmt: 0n, txSigs: [] });
+      continue;
+    }
+
+    // Fetch enhanced transactions for these sigs
+    const sigStrs = sigs.map(s => s.signature);
+    let soldAmt = 0n;
+    const sellTxs = [];
+
+    try {
+      const url = HELIUS_TX;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactions: sigStrs, commitment: 'confirmed' })
+      });
+      if (res.ok) {
+        const txns = await res.json();
+        for (const tx of (txns || [])) {
+          if (!tx || tx.transactionError) continue;
+          const transfers = tx.tokenTransfers || [];
+          const ts = tx.timestamp;
+
+          // Check if wallet sold during hold period
+          for (const t of transfers) {
+            if (t.mint !== MINT_ADDR) continue;
+            if (t.fromUserAccount === wallet.addr && !isProgram(t.toUserAccount)) {
+              const amt = BigInt(Math.round((t.tokenAmount || 0) * Math.pow(10, tokenDecimals)));
+              soldAmt += amt;
+              sellTxs.push({ sig: tx.signature, ts, amt: Number(amt) });
+            }
+          }
+        }
+      }
+    } catch(e) {}
+
+    results.push({
+      addr: wallet.addr,
+      passed: soldAmt === 0n,
+      soldAmt,
+      txSigs: sellTxs,
+      bought: wallet.bought
+    });
+
+    await new Promise(r => setTimeout(r, 300));
+  }
+
+  // Render hold check results
+  renderHoldResults(results, eligible, numWinners, holdHours, holdDeadline, now);
+}
+
+function renderHoldResults(results, eligible, numWinners, holdHours, holdDeadline, now) {
+  const container = document.getElementById('results');
+  const holdSection = document.createElement('div');
+  holdSection.className = 'hold-section';
+
+  const deadlinePast = now >= holdDeadline;
+  const deadlineStr = fmtTime(holdDeadline);
+
+  // Build final winner list accounting for hold failures
+  const finalWinners = [];
+  const holdFailed = [];
+  let eligIdx = 0;
+
+  for (const r of results) {
+    if (r.passed) {
+      finalWinners.push(r);
+    } else {
+      holdFailed.push(r);
+    }
+  }
+
+  // If not enough winners passed, fill from remaining eligible
+  let backfillIdx = results.length;
+  while (finalWinners.length < numWinners && backfillIdx < eligible.length) {
+    finalWinners.push({ addr: eligible[backfillIdx].addr, passed: true, soldAmt: 0n, txSigs: [], unchecked: true });
+    backfillIdx++;
+  }
+
+  const passingCount = results.filter(r => r.passed).length;
+
+  holdSection.innerHTML = `
+    <div class="hold-banner">
+      <div class="hold-banner-title">🔒 HOLD PERIOD CHECK — ${holdHours}H</div>
+      <div class="hold-banner-sub">
+        Hold deadline: ${deadlineStr} ${deadlinePast ? '✅ passed' : '⏳ not yet reached'}<br>
+        ${passingCount} of ${results.length} checked wallets held their tokens · ${holdFailed.length} failed
+      </div>
+    </div>`;
+
+  // Table
+  const wrap = document.createElement('div');
+  wrap.className = 'tbl-wrap';
+  const tbl = document.createElement('table');
+  tbl.innerHTML = `<thead><tr>
+    <th>#</th><th>Wallet</th><th>Tokens Bought</th><th>Hold Status</th><th>Notes</th>
+  </tr></thead>`;
+  const tbody = document.createElement('tbody');
+
+  results.forEach((r, i) => {
+    const wallet = eligible[i];
+    const tr = document.createElement('tr');
+    tr.className = r.passed ? 'hold-row-pass' : 'hold-row-fail';
+    const rankClass = i === 0 ? 'r1' : i === 1 ? 'r2' : i === 2 ? 'r3' : '';
+    const statusBadge = r.passed
+      ? `<span class="hold-badge hold-badge-pass">✅ HELD</span>`
+      : `<span class="hold-badge hold-badge-fail">❌ SOLD</span>`;
+    const notes = r.passed
+      ? (i < numWinners ? '🏆 Winner confirmed' : 'Backup — held')
+      : `Sold ${fmtAmount(r.soldAmt)} during hold period`;
+
+    const detailId = `hold-detail-${i}`;
+    const txBtn = r.txSigs.length > 0
+      ? `<button class="expand-btn" onclick="toggleTxDetail('${detailId}', this)" style="margin-left:6px">▶ SELLS</button>`
+      : '';
+
+    tr.innerHTML = `
+      <td class="rank-cell ${rankClass}">${i < numWinners ? '🏆 ' : ''}${i+1}</td>
+      <td><div class="addr-wrap"><span class="addr-cell" onclick="toggleAddr(this,'${r.addr}')">${shortAddr(r.addr)}</span><button class="copy-btn" onclick="copyAddr(this,'${r.addr}')">COPY</button></div></td>
+      <td class="amt-cell">${fmtAmount(Number(wallet.bought))}</td>
+      <td>${statusBadge}${txBtn}</td>
+      <td style="font-size:11px;color:var(--subtext)">${notes}</td>`;
+    tbody.appendChild(tr);
+
+    // Sell transaction detail row
+    if (r.txSigs.length > 0) {
+      const detailTr = document.createElement('tr');
+      detailTr.className = 'tx-detail-row';
+      detailTr.id = detailId;
+      const txItems = r.txSigs.map(t => `
+        <div class="tx-item">
+          <span class="tx-amt" style="color:#EF4444">-${fmtAmount(t.amt)}</span>
+          <span class="tx-time">${fmtTime(t.ts)}</span>
+          <a class="tx-link" href="https://solscan.io/tx/${t.sig}" target="_blank">View on Solscan ↗</a>
+        </div>`).join('');
+      detailTr.innerHTML = `<td colspan="5"><div class="tx-list">${txItems}</div></td>`;
+      tbody.appendChild(detailTr);
+    }
+  });
+
+  tbl.appendChild(tbody);
+  wrap.appendChild(tbl);
+  holdSection.appendChild(wrap);
+
+  // Final confirmed winners list
+  if (finalWinners.length > 0) {
+    const finalDiv = document.createElement('div');
+    finalDiv.style.cssText = 'margin-top:12px;padding:12px 16px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.25);border-radius:10px;';
+    const winnerAddrs = finalWinners.slice(0, numWinners).map((w, i) =>
+      `<div style="font-family:var(--mono);font-size:11px;margin:4px 0;display:flex;align-items:center;gap:8px">
+        <span style="color:#FCD34D;min-width:20px">${i+1}.</span>
+        <span style="color:#D1D5DB">${w.addr}</span>
+        <button class="copy-btn" onclick="copyAddr(this,'${w.addr}')">COPY</button>
+        ${w.unchecked ? '<span style="font-size:10px;color:var(--subtext)">(backup — not checked)</span>' : ''}
+      </div>`
+    ).join('');
+    finalDiv.innerHTML = `
+      <div style="font-family:var(--mono);font-size:11px;color:#10B981;letter-spacing:1px;margin-bottom:8px">🏆 FINAL CONFIRMED WINNERS</div>
+      ${winnerAddrs}`;
+    holdSection.appendChild(finalDiv);
+  }
+
+  // Prize distribution + airdrop handoff — only after hold check (matches buyspecial flow)
+  if (finalWinners.length > 0) {
+    appendPrizeSection(finalWinners.slice(0, numWinners), holdSection);
+  }
+
+  container.appendChild(holdSection);
+}
+
+// ── PRIZE DISTRIBUTION + AIRDROP HANDOFF ─────────────────────────────────────
+function appendPrizeSection(winners, container) {
+  if (!winners || winners.length === 0) return;
+
+  const section = document.createElement('div');
+  section.style.cssText = 'margin-top:14px;padding:14px 16px;background:rgba(252,211,77,0.06);border:1px solid rgba(252,211,77,0.25);border-radius:10px;';
+
+  const rowsHtml = winners.map((w, i) => `
+    <div class="prize-row" style="display:flex;align-items:center;gap:10px;margin:6px 0;background:rgba(255,255,255,0.02);padding:8px 10px;border-radius:6px;flex-wrap:wrap">
+      <span style="font-family:var(--mono);color:#FCD34D;min-width:26px;font-weight:700;font-size:13px">${i+1}.</span>
+      <span style="font-family:var(--mono);color:#9CA3AF;flex:1;font-size:11px;min-width:120px">${shortAddr(w.addr)}</span>
+      <input type="number" class="prize-input" data-addr="${w.addr}" min="0" step="0.01" placeholder="0.00" style="background:rgba(252,211,77,0.05);border:1.5px solid rgba(252,211,77,0.45);border-radius:6px;padding:9px 12px;font-family:var(--mono);font-size:14px;font-weight:700;color:#FCD34D;width:140px;text-align:right;outline:none"/>
+      <span style="font-family:var(--mono);color:#9CA3AF;font-size:11px;min-width:40px">ROSE</span>
+    </div>`).join('');
+
+  section.innerHTML = `
+    <div style="font-family:var(--mono);font-size:12px;color:#FCD34D;letter-spacing:1px;margin-bottom:6px;font-weight:700">💰 PRIZE DISTRIBUTION</div>
+    <div style="font-size:11px;color:#D1D5DB;font-family:var(--mono);margin-bottom:14px;line-height:1.5">⬇️ Enter the ROSE token amount each winner will receive. Empty rows are skipped.</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;padding:0 10px">
+      <span style="min-width:26px;font-family:var(--mono);font-size:9px;color:#6B7280;letter-spacing:1px">#</span>
+      <span style="flex:1;font-family:var(--mono);font-size:9px;color:#6B7280;letter-spacing:1px;min-width:120px">WALLET</span>
+      <span style="width:140px;font-family:var(--mono);font-size:10px;color:#FCD34D;letter-spacing:1px;text-align:right;font-weight:700">AMOUNT ↓</span>
+      <span style="min-width:40px"></span>
+    </div>
+    ${rowsHtml}
+    <button class="airdrop-launch-btn" disabled style="width:100%;margin-top:14px;padding:13px;background:linear-gradient(135deg,#10B981,#065F46);border:none;border-radius:10px;font-family:var(--mono);font-size:14px;font-weight:900;color:#fff;cursor:not-allowed;letter-spacing:2px;opacity:0.4;transition:opacity 0.15s">🔒 ENTER AT LEAST ONE AMOUNT</button>`;
+
+  container.appendChild(section);
+
+  const launchBtn = section.querySelector('.airdrop-launch-btn');
+  const inputs = section.querySelectorAll('.prize-input');
+
+  function refreshBtn() {
+    const filledCount = Array.from(inputs).filter(inp => parseFloat(inp.value) > 0).length;
+    const anyValid = filledCount > 0;
+    launchBtn.disabled = !anyValid;
+    launchBtn.style.opacity = anyValid ? '1' : '0.4';
+    launchBtn.style.cursor = anyValid ? 'pointer' : 'not-allowed';
+    launchBtn.textContent = anyValid
+      ? `🚀 OPEN AIRDROP TOOL (${filledCount} ${filledCount === 1 ? 'WINNER' : 'WINNERS'})`
+      : '🔒 ENTER AT LEAST ONE AMOUNT';
+  }
+  inputs.forEach(inp => inp.addEventListener('input', refreshBtn));
+
+  launchBtn.addEventListener('click', () => {
+    const recipients = [];
+    inputs.forEach(inp => {
+      const amount = parseFloat(inp.value);
+      const addr = inp.dataset.addr;
+      if (amount > 0 && addr) recipients.push(`${addr},${amount}`);
+    });
+    if (recipients.length === 0) return;
+    sessionStorage.setItem('airdropPayload', JSON.stringify({
+      mint: MINT_ADDR,
+      tokenName: 'ROSE',
+      recipients: recipients.join('\n')
+    }));
+    window.open('/airdrop?from=rose', '_blank');
+  });
+}
+
+function renderResults(eligible, disqualified, numWinners) {
+  const container = document.getElementById('results');
+  container.innerHTML = '';
+
+  // ── ELIGIBLE ──
+  const eligSection = document.createElement('div');
+  eligSection.innerHTML = `
+    <div class="section-header">
+      <span>✅ ELIGIBLE BUYERS</span>
+      <span class="badge badge-green">${eligible.length} wallets</span>
+    </div>`;
+
+  if (eligible.length === 0) {
+    eligSection.innerHTML += '<div class="empty">NO ELIGIBLE BUYERS FOUND IN THIS WINDOW</div>';
+  } else {
+    // Winners banner
+    const actualWinners = Math.min(numWinners, eligible.length);
+    const banner = document.createElement('div');
+    banner.className = 'winners-banner';
+    banner.innerHTML = `
+      <div class="trophy">🏆</div>
+      <div>
+        <div class="winner-text">TOP ${actualWinners} WINNER${actualWinners !== 1 ? 'S' : ''}</div>
+        <div class="winner-sub">Positions 1–${actualWinners} qualify for prizes · ${eligible.length} total eligible wallets</div>
+      </div>`;
+    eligSection.appendChild(banner);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'tbl-wrap';
+    const tbl = document.createElement('table');
+    tbl.innerHTML = `<thead><tr>
+      <th>#</th>
+      <th>Wallet</th>
+      <th>Tokens Bought</th>
+      <th>Buy Txns</th>
+      <th>First Buy (CT)</th>
+    </tr></thead>`;
+    const tbody = document.createElement('tbody');
+
+    eligible.forEach((e, i) => {
+      const isWinner = i < numWinners;
+      const tr = document.createElement('tr');
+      if (isWinner) tr.className = 'winner-row';
+      const rankClass = i === 0 ? 'r1' : i === 1 ? 'r2' : i === 2 ? 'r3' : '';
+      const detailId = `tx-detail-${i}`;
+      tr.innerHTML = `
+        <td class="rank-cell ${rankClass}">${isWinner ? '🏆 ' : ''}${i+1}</td>
+        <td><div class="addr-wrap"><span class="addr-cell" onclick="toggleAddr(this,'${e.addr}')">${shortAddr(e.addr)}</span><button class="copy-btn" onclick="copyAddr(this,'${e.addr}')">COPY</button></div></td>
+        <td class="amt-cell">${fmtAmount(Number(e.bought))}</td>
+        <td class="buys-cell">
+          <span>${e.buyTxns} buy${e.buyTxns !== 1 ? 's' : ''}</span>
+          ${e.txSigs.length > 0 ? `<button class="expand-btn" onclick="toggleTxDetail('${detailId}', this)" style="margin-left:6px">▶ TXS</button>` : ''}
+        </td>
+        <td class="time-cell">${fmtTime(e.firstBuy)}</td>`;
+      tbody.appendChild(tr);
+
+      // Transaction detail row
+      if (e.txSigs.length > 0) {
+        const detailTr = document.createElement('tr');
+        detailTr.className = 'tx-detail-row';
+        detailTr.id = detailId;
+        const sortedTxs = [...e.txSigs].sort((a,b) => (a.ts||0) - (b.ts||0));
+        const txItems = sortedTxs.map(t => `
+          <div class="tx-item">
+            <span class="tx-amt">+${fmtAmount(t.amt)}</span>
+            <span class="tx-time">${fmtTime(t.ts)}</span>
+            <a class="tx-link" href="https://solscan.io/tx/${t.sig}" target="_blank">View on Solscan ↗</a>
+          </div>`).join('');
+        detailTr.innerHTML = `<td colspan="5"><div class="tx-list">${txItems}</div></td>`;
+        tbody.appendChild(detailTr);
+      }
+    });
+
+    tbl.appendChild(tbody);
+    wrap.appendChild(tbl);
+    eligSection.appendChild(wrap);
+
+    // Export bar
+    const expBar = document.createElement('div');
+    expBar.className = 'export-bar';
+    expBar.innerHTML = `
+      <button class="export-btn" onclick="exportCSV(true)">⬇ Export Eligible CSV</button>
+      <button class="export-btn" onclick="copyEligible()">📋 Copy Eligible Addresses</button>`;
+    eligSection.appendChild(expBar);
+  }
+  container.appendChild(eligSection);
+
+  // ── DISQUALIFIED ──
+  const disqSection = document.createElement('div');
+  disqSection.style.marginTop = '32px';
+  disqSection.innerHTML = `
+    <div class="section-header">
+      <span>❌ DISQUALIFIED</span>
+      <span class="badge badge-red">${disqualified.length} wallets sold</span>
+    </div>`;
+
+  if (disqualified.length === 0) {
+    disqSection.innerHTML += '<div class="empty">NO DISQUALIFIED WALLETS</div>';
+  } else {
+    const wrap = document.createElement('div');
+    wrap.className = 'tbl-wrap';
+    const tbl = document.createElement('table');
+    tbl.innerHTML = `<thead><tr>
+      <th>#</th>
+      <th>Wallet</th>
+      <th>Tokens Bought</th>
+      <th>Sell Txns</th>
+      <th>First Buy (CT)</th>
+    </tr></thead>`;
+    const tbody = document.createElement('tbody');
+
+    disqualified.forEach((e, i) => {
+      const tr = document.createElement('tr');
+      tr.className = 'disq-row';
+      tr.innerHTML = `
+        <td class="rank-cell">${i+1}</td>
+        <td><div class="addr-wrap"><span class="addr-cell" onclick="toggleAddr(this,'${e.addr}')">${shortAddr(e.addr)}</span><button class="copy-btn" onclick="copyAddr(this,'${e.addr}')">COPY</button></div></td>
+        <td class="amt-cell neg">${fmtAmount(Number(e.bought))}</td>
+        <td class="sells-cell">${e.sellTxns} sell${e.sellTxns !== 1 ? 's' : ''}</td>
+        <td class="time-cell">${fmtTime(e.firstBuy)}</td>`;
+      tbody.appendChild(tr);
+    });
+
+    tbl.appendChild(tbody);
+    wrap.appendChild(tbl);
+    disqSection.appendChild(wrap);
+
+    const expBar = document.createElement('div');
+    expBar.className = 'export-bar';
+    expBar.innerHTML = `<button class="export-btn" onclick="exportCSV(false)">⬇ Export Disqualified CSV</button>`;
+    disqSection.appendChild(expBar);
+  }
+  container.appendChild(disqSection);
+
+  // Store data for exports
+  window._eligibleData = eligible;
+  window._disqualifiedData = disqualified;
+}
+
+function toggleAddr(el, full) {
+  if (el.classList.contains('revealed')) {
+    el.classList.remove('revealed');
+    el.textContent = shortAddr(full);
+    el.onclick = () => toggleAddr(el, full);
+  } else {
+    el.classList.add('revealed');
+    el.textContent = full;
+    el.onclick = () => {
+      navigator.clipboard.writeText(full).catch(()=>{});
+      const orig = el.textContent;
+      el.textContent = '✓ Copied!';
+      setTimeout(() => { el.textContent = orig; el.onclick = () => toggleAddr(el, full); }, 1200);
+    };
+  }
+}
+
+function exportCSV(isEligible) {
+  const data = isEligible ? window._eligibleData : window._disqualifiedData;
+  if (!data) return;
+  const label = isEligible ? 'eligible' : 'disqualified';
+  const rows = [['Rank','Wallet','Tokens Bought','Buy Txns','Sell Txns','First Buy CT']];
+  data.forEach((e, i) => {
+    rows.push([
+      i+1, e.addr,
+      (Number(e.bought) / Math.pow(10, tokenDecimals)).toFixed(2),
+      e.buyTxns, e.sellTxns,
+      fmtTime(e.firstBuy)
+    ]);
+  });
+  const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `rose_${label}_${Date.now()}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+}
+
+function toggleTxDetail(id, btn) {
+  const row = document.getElementById(id);
+  if (!row) return;
+  const isOpen = row.classList.toggle('open');
+  btn.textContent = isOpen ? '▼ TXS' : '▶ TXS';
+}
+
+function copyAddr(btn, addr) {
+  navigator.clipboard.writeText(addr).then(() => {
+    btn.textContent = '✓';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'COPY'; btn.classList.remove('copied'); }, 1500);
+  }).catch(() => {});
+}
+
+function copyEligible() {
+  const data = window._eligibleData;
+  if (!data) return;
+  const addrs = data.map(e => e.addr).join('\n');
+  navigator.clipboard.writeText(addrs).then(() => {
+    const btn = document.querySelector('.export-btn:nth-child(2)');
+    if (btn) { const orig = btn.textContent; btn.textContent = '✓ Copied!'; setTimeout(() => btn.textContent = orig, 1500); }
+  }).catch(()=>{});
+}
+</script>
+
+</body>
+</html>

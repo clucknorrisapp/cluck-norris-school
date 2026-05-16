@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="robots" content="noindex"/>
+<title>🔍 Cluck Trace — Wallet × Token Forensic History</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0a0a0a; --card: #111111; --border: rgba(255,255,255,0.08);
+    --text: #F9FAFB; --subtext: #9CA3AF; --muted: #6B7280;
+    --accent: #FCD34D; --orange: #D97706; --green: #10B981; --red: #EF4444;
+    --amber: #F59E0B; --blue: #60A5FA; --purple: #A78BFA;
+    --mono: 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    background-image: radial-gradient(ellipse at 20% 10%, rgba(217,119,6,0.10) 0%, transparent 50%),
+                      radial-gradient(ellipse at 80% 90%, rgba(167,139,250,0.06) 0%, transparent 50%);
+    color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 24px 16px 80px; }
+
+  .header { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }
+  .header-icon { font-size: 38px; filter: drop-shadow(0 0 16px rgba(167,139,250,0.5)); }
+  .header .brand-mini { font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 4px; color: var(--orange); margin-bottom: 4px; font-weight: 700; }
+  .header h1 { font-family: 'Oswald', sans-serif; font-size: 27px; font-weight: 900; letter-spacing: 3px;
+    background: linear-gradient(135deg, #FCD34D, #A78BFA, #60A5FA); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
+  .header p { font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 2px; margin-top: 6px; }
+
+  .hero { background: linear-gradient(135deg, rgba(167,139,250,0.06), rgba(96,165,250,0.03)); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; }
+  .hero-tag { font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--accent); letter-spacing: 3px; margin-bottom: 6px; }
+  .hero-sub { font-family: 'Oswald', sans-serif; font-size: 12px; color: var(--subtext); line-height: 1.6; letter-spacing: 0.5px; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+  .card-title { font-family: 'Oswald', sans-serif; font-size: 19px; font-weight: 900; color: var(--accent);
+    letter-spacing: 1.5px; margin-bottom: 14px; text-transform: uppercase;
+    text-shadow: 0 0 18px rgba(252,211,77,0.25); }
+  .sec-toggle { display: flex; justify-content: space-between; align-items: center; cursor: pointer; margin-bottom: 0; gap: 10px; }
+  .sec-toggle .sec-icon { color: var(--blue); font-weight: 700; font-size: 13px; font-family: var(--mono); white-space: nowrap; }
+  .dig-divider { text-align: center; font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 3px;
+    color: var(--muted); margin: 6px 0 14px; }
+  #timelineBody, #cpList { margin-top: 12px; }
+  .field-label { font-family: 'Oswald', sans-serif; font-size: 13px; color: var(--blue); letter-spacing: 1.5px; margin: 14px 0 6px; font-weight: 700; }
+  .field-label:first-child { margin-top: 0; }
+  .token-input { width: 100%; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 8px; padding: 12px 13px; font-family: var(--mono); font-size: 15px; color: var(--accent); font-weight: 600; }
+  .token-input::placeholder { color: var(--muted); font-weight: 400; }
+  .token-input:focus { outline: none; border-color: var(--accent); }
+
+  .run-btn { width: 100%; margin-top: 14px; padding: 14px; background: linear-gradient(135deg, var(--purple), var(--blue)); border: none; border-radius: 10px; font-family: 'Oswald', sans-serif; font-size: 14px; font-weight: 900; color: #fff; letter-spacing: 3px; cursor: pointer; transition: opacity 0.15s; }
+  .run-btn:hover { opacity: 0.92; }
+  .run-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .err { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #FCA5A5; margin-bottom: 12px; display: none; }
+  .err.show { display: block; }
+
+  .loading { display: none; text-align: center; padding: 38px 20px 32px; background: linear-gradient(135deg, rgba(255,255,255,0.03), rgba(167,139,250,0.04)); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 16px; }
+  .loading.show { display: block; }
+  .loading-spinner { font-size: 42px; animation: bobble 1.4s ease-in-out infinite; margin-bottom: 14px; display: inline-block; }
+  .loading-title { font-family: 'Oswald', sans-serif; font-size: 14px; color: var(--accent); letter-spacing: 3px; margin-bottom: 14px; font-weight: 700; }
+  .loading-stage { font-family: var(--mono); font-size: 13px; color: var(--text); margin-bottom: 10px; min-height: 20px; }
+  .loading-timer { font-family: var(--mono); font-size: 11px; color: var(--subtext); }
+  .loading-note { font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--muted); letter-spacing: 1px; margin-top: 12px; }
+  @keyframes bobble { 0%,100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-6px) rotate(3deg); } }
+
+  .result { display: none; }
+  .result.show { display: block; }
+
+  /* Summary */
+  .sum-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
+  .sum-cell { background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .sum-cell .lbl { font-family: 'Oswald', sans-serif; font-size: 9px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 5px; font-weight: 700; }
+  .sum-cell .val { font-family: var(--mono); font-size: 17px; color: var(--text); font-weight: 700; line-height: 1.2; }
+  .sum-cell .sub { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 3px; }
+  .sum-cell.green .val { color: var(--green); } .sum-cell.red .val { color: var(--red); }
+  .sum-cell.blue .val { color: var(--blue); } .sum-cell.amber .val { color: var(--amber); }
+
+  .origin { background: rgba(252,211,77,0.05); border: 1px solid rgba(252,211,77,0.3); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
+  .origin .lbl { font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--accent); letter-spacing: 2px; font-weight: 700; margin-bottom: 6px; }
+  .origin .body { font-family: var(--mono); font-size: 12px; color: #E5E7EB; line-height: 1.6; word-break: break-all; }
+  .origin a { color: var(--blue); text-decoration: none; }
+
+  .truncated-banner { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 10px 14px; font-family: var(--mono); font-size: 12px; color: #FCA5A5; margin-bottom: 12px; }
+
+  /* Transaction rows */
+  .tx-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 10px; flex-wrap: wrap; }
+  .sort-btn { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 7px; padding: 7px 12px; font-family: var(--mono); font-size: 11px; color: var(--subtext); cursor: pointer; }
+  .sort-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .csv-btn { background: rgba(252,211,77,0.08); border: 1px solid rgba(252,211,77,0.35); border-radius: 7px; padding: 7px 12px; font-family: 'Oswald', sans-serif; font-size: 11px; letter-spacing: 1px; color: var(--accent); cursor: pointer; font-weight: 700; }
+
+  .tx { display: flex; gap: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; background: rgba(255,255,255,0.02); }
+  .tx-badge { flex-shrink: 0; width: 64px; text-align: center; }
+  .tx-badge .act { font-family: 'Oswald', sans-serif; font-size: 10px; font-weight: 900; letter-spacing: 1px; padding: 3px 0; border-radius: 5px; display: block; }
+  .act-buy { background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.4); color: var(--green); }
+  .act-sell { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: var(--red); }
+  .act-receive { background: rgba(96,165,250,0.15); border: 1px solid rgba(96,165,250,0.4); color: var(--blue); }
+  .act-send { background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.4); color: var(--amber); }
+  .act-add_lp { background: rgba(167,139,250,0.16); border: 1px solid rgba(167,139,250,0.4); color: var(--purple); }
+  .act-withdraw_lp { background: rgba(34,211,238,0.13); border: 1px solid rgba(34,211,238,0.4); color: #22D3EE; }
+
+  /* Counterparties panel */
+  .cp-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--border); }
+  .cp-row:first-of-type { border-top: none; }
+  .cp-row .rank { font-family: var(--mono); font-size: 10px; color: var(--muted); width: 22px; flex-shrink: 0; }
+  .cp-row .who { flex: 1; min-width: 0; }
+  .cp-row .who a { color: var(--blue); text-decoration: none; font-family: var(--mono); font-size: 13px; word-break: break-all; }
+  .cp-row .tag { font-size: 11px; padding: 3px 9px; }
+  .cp-row .who .mname { color: #D1D5DB; font-family: var(--mono); font-size: 13px; word-break: break-all; }
+  .cp-tx { font-family: var(--mono); font-size: 11px; margin-top: 5px; color: var(--muted); }
+  .cp-tx a { color: var(--blue); text-decoration: none; margin-right: 10px; }
+  .cp-tx a:hover { text-decoration: underline; }
+  .cp-row .flows { text-align: right; flex-shrink: 0; font-family: var(--mono); font-size: 13px; line-height: 1.5; }
+  .cp-row .in { color: var(--green); } .cp-row .out { color: var(--red); }
+  .cp-bar { height: 4px; border-radius: 2px; margin-top: 4px; display: flex; overflow: hidden; background: rgba(255,255,255,0.05); }
+  .cp-bar .bin { background: var(--green); } .cp-bar .bout { background: var(--red); }
+
+  /* Flow map */
+  .graph-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; font-family: var(--mono); font-size: 10px; color: var(--subtext); }
+  .graph-legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+  #graphHolder svg { width: 100%; max-width: 480px; height: auto; display: block; margin: 0 auto; }
+  .graph-more { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 8px; text-align: center; }
+  .gfilter { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+  .gchip { font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 1px; padding: 5px 11px; border-radius: 7px;
+    cursor: pointer; border: 1px solid var(--border); background: rgba(255,255,255,0.03); color: var(--muted); user-select: none; }
+  .gchip.off { opacity: 0.4; text-decoration: line-through; }
+  .gchip.f-wallet { border-color: rgba(96,165,250,0.5); background: rgba(96,165,250,0.12); color: var(--blue); }
+  .gchip.f-contract { border-color: rgba(245,158,11,0.5); background: rgba(245,158,11,0.12); color: var(--amber); }
+  .gchip.f-market { border-color: rgba(167,139,250,0.5); background: rgba(167,139,250,0.12); color: var(--purple); }
+  .gfilter-hint { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-bottom: 12px; }
+
+  /* Accounting card */
+  .acct-line { font-family: var(--mono); font-size: 14px; color: #D1D5DB; line-height: 2.0; }
+  .acct-line .pos { color: var(--green); } .acct-line .neg { color: var(--red); }
+  .acct-line .eq { color: var(--accent); font-weight: 700; }
+  .acct-lp { margin-top: 10px; padding: 10px 12px; background: rgba(167,139,250,0.06); border: 1px solid rgba(167,139,250,0.25); border-radius: 8px; font-family: var(--mono); font-size: 12px; color: #D1D5DB; line-height: 1.6; }
+  .acct-lp b { color: var(--purple); }
+  .acct-total { margin-top: 8px; font-family: var(--mono); font-size: 12px; color: var(--purple); font-weight: 700; }
+  .acct-note { margin-top: 8px; font-family: var(--mono); font-size: 11px; color: var(--amber); }
+  .acct-note.ok { color: var(--green); }
+  .tx-badge .num { font-family: var(--mono); font-size: 9px; color: var(--muted); margin-top: 4px; }
+  .tx-body { flex: 1; min-width: 0; }
+  .tx-line1 { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .tx-amt { font-family: var(--mono); font-size: 14px; font-weight: 700; }
+  .tx-amt.pos { color: var(--green); } .tx-amt.neg { color: var(--red); }
+  .tx-time { font-family: var(--mono); font-size: 10px; color: var(--muted); white-space: nowrap; }
+  .tx-meta { font-family: var(--mono); font-size: 11px; color: var(--subtext); margin-top: 5px; line-height: 1.6; word-break: break-all; }
+  .tag { display: inline-block; font-size: 9px; padding: 1px 6px; border-radius: 4px; font-family: 'Oswald', sans-serif; letter-spacing: 0.5px; }
+  .tag-wallet { background: rgba(96,165,250,0.12); color: var(--blue); border: 1px solid rgba(96,165,250,0.3); }
+  .tag-contract { background: rgba(245,158,11,0.12); color: var(--amber); border: 1px solid rgba(245,158,11,0.3); }
+  .tag-market { background: rgba(167,139,250,0.13); color: var(--purple); border: 1px solid rgba(167,139,250,0.35); }
+  .tx-meta .bal { color: var(--text); }
+  .tx-meta a { color: var(--blue); text-decoration: none; }
+  .cp-link { white-space: nowrap; }
+  .cp-link:hover { text-decoration: underline; }
+
+  .footer-link { display: block; text-align: center; margin-top: 24px; font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 2px; text-decoration: none; }
+  .footer-link:hover { color: var(--accent); }
+
+  /* Multi-hop */
+  .hop-intro { font-family: var(--mono); font-size: 12px; color: var(--subtext); margin: 12px 0; line-height: 1.6; }
+  .hop-card { border: 1px solid var(--border); border-radius: 8px; padding: 11px 12px; margin-bottom: 8px; background: rgba(255,255,255,0.02); }
+  .hop-w { font-family: var(--mono); font-size: 13px; margin-bottom: 5px; color: var(--text); }
+  .hop-w a { color: var(--blue); text-decoration: none; }
+  .hop-status { font-family: var(--mono); font-size: 12px; color: #9CA3AF; line-height: 1.7; word-break: break-all; }
+  .hop-status b { color: var(--text); }
+  .hop-status a { color: var(--accent); text-decoration: none; white-space: nowrap; }
+
+  /* Education panel */
+  .edu { background: rgba(96,165,250,0.05); border: 1px solid rgba(96,165,250,0.22); border-radius: 12px; margin-bottom: 16px; overflow: hidden; }
+  .edu-head { padding: 14px 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .edu-head .lbl { font-family: 'Oswald', sans-serif; font-size: 13px; letter-spacing: 1.5px; color: var(--blue); font-weight: 700; }
+  .edu-head .tg { font-family: var(--mono); font-size: 12px; color: var(--blue); white-space: nowrap; }
+  .edu-body { padding: 0 16px 16px; display: none; font-family: system-ui, sans-serif; font-size: 13px; line-height: 1.7; color: #D1D5DB; }
+  .edu.open .edu-body { display: block; }
+  .edu-body h4 { font-family: 'Oswald', sans-serif; font-size: 12px; color: var(--accent); letter-spacing: 1px; margin: 14px 0 5px; }
+  .edu-body p { margin-bottom: 8px; }
+  .edu-body strong { color: var(--text); }
+  .edu-body .ico { font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <div class="header-icon">🔍</div>
+    <div>
+      <div class="brand-mini">CLUCK NORRIS</div>
+      <h1>TRACE</h1>
+      <p>WALLET × TOKEN · FORENSIC HISTORY</p>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div class="hero-tag">INVESTIGATION TOOL</div>
+    <div class="hero-sub">Paste a wallet and a token mint. Get every transaction between the two — buys, sells, transfers in and out — in chronological order, with running balance and where the funds came from. No more hours digging on Solscan.</div>
+  </div>
+
+  <div class="edu" id="edu">
+    <div class="edu-head" onclick="toggleEdu()">
+      <div class="lbl">📘 HOW TO USE TRACE — WHAT IT SHOWS YOU</div>
+      <div class="tg" id="eduTg">read</div>
+    </div>
+    <div class="edu-body">
+      <h4>WHAT THIS TOOL DOES</h4>
+      <p>Paste any <strong>wallet</strong> and any <strong>token mint</strong>. Trace pulls the wallet's complete history with that token and lays out exactly what it did — so a project lead can vet a suspicious wallet in minutes instead of an hour lost in Solscan.</p>
+
+      <h4>YOU SEE THE HEADLINE FIRST</h4>
+      <p>The top of the results is built for a fast read: a <strong>summary</strong>, a <strong>full-accounting reconciliation</strong> (every token traced), and a <strong>visual flow map</strong> of where the tokens moved. That's the whole story at a glance — then you choose what to dig into.</p>
+
+      <h4>WHAT YOU CAN DIG INTO</h4>
+      <p><span class="ico">↔</span> <strong>Direct transfers</strong> — wallet-to-wallet sends. These are the forensically interesting movements: a wallet quietly shifting tokens to other wallets, separate from normal DEX trading. Use the flow-map filter to isolate them.</p>
+      <p><span class="ico">🔗</span> <strong>Multi-hop</strong> — follow the money one step further. When the investigated wallet sends tokens to another wallet, multi-hop traces what <em>that</em> wallet then did — sold, held, or forwarded again — so you can chase a trail across several wallets.</p>
+      <p><span class="ico">🌱</span> <strong>Fund origin</strong> — where the wallet's tokens (and the SOL / USDC / USDT it traded with) <em>first</em> came from. If a cluster of wallets all trace back to one funding source, that's a signal worth knowing.</p>
+
+      <h4>A NOTE ON SPEED</h4>
+      <p>A full history can take a few minutes, and multi-hop adds more — it's pulling and parsing every transaction on-chain. Worth the wait for a real investigation.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="field-label">WALLET ADDRESS — the one to investigate</div>
+    <input type="text" class="token-input" id="walletInput" placeholder="Paste the wallet address…" autocomplete="off"/>
+    <div class="field-label">TOKEN MINT — your contract / the token</div>
+    <input type="text" class="token-input" id="mintInput" placeholder="Paste the token mint address…" autocomplete="off"/>
+    <button class="run-btn" id="runBtn" onclick="runTrace()" disabled>🔍 RUN TRACE</button>
+  </div>
+
+  <div class="err" id="err"></div>
+
+  <div class="loading" id="loading">
+    <div class="loading-spinner">🐔</div>
+    <div class="loading-title">TRACING</div>
+    <div class="loading-stage" id="loadingStage">Resolving the wallet's token account…</div>
+    <div class="loading-timer" id="loadingTimer">0s</div>
+    <div class="loading-note">A full history can take a few minutes — worth the wait.</div>
+  </div>
+
+  <div class="result" id="result">
+    <div id="truncatedSlot"></div>
+    <div id="originSlot"></div>
+
+    <div class="card">
+      <div class="card-title">SUMMARY</div>
+      <div class="sum-grid" id="sumGrid"></div>
+    </div>
+
+    <div class="card" id="acctCard">
+      <div class="card-title">FULL ACCOUNTING — EVERY TOKEN TRACED</div>
+      <div id="acctBody"></div>
+    </div>
+
+    <div class="card" id="graphCard">
+      <div class="card-title">FLOW MAP — TOKEN MOVEMENT IN &amp; OUT</div>
+      <div class="graph-legend">
+        <span><i style="background:#10B981"></i>inflow</span>
+        <span><i style="background:#EF4444"></i>outflow</span>
+      </div>
+      <div class="gfilter">
+        <div class="gchip f-wallet" data-t="wallet" onclick="toggleFilter('wallet')">● WALLETS</div>
+        <div class="gchip f-contract" data-t="contract" onclick="toggleFilter('contract')">● CONTRACTS</div>
+        <div class="gchip f-market" data-t="market" onclick="toggleFilter('market')">● DEX / MARKET</div>
+      </div>
+      <div class="gfilter-hint">Tap to filter — turn off DEX &amp; Contracts to isolate wallet-to-wallet transfers.</div>
+      <div id="graphHolder"></div>
+      <div class="graph-more" id="graphMore"></div>
+    </div>
+
+    <div class="dig-divider">DIG DEEPER — TAP A SECTION TO OPEN</div>
+
+    <div class="card">
+      <div class="card-title sec-toggle" onclick="toggleSection('timelineBody','tlIcon')">
+        <span id="tlTitle">TRANSACTION TIMELINE</span>
+        <span class="sec-icon" id="tlIcon">▸ SHOW</span>
+      </div>
+      <div id="timelineBody" style="display:none">
+        <div class="tx-controls">
+          <button class="sort-btn" id="sortBtn" onclick="toggleSort()">↑ OLDEST FIRST</button>
+          <button class="csv-btn" onclick="downloadCsv()">⬇ EXPORT CSV</button>
+        </div>
+        <div id="txList"></div>
+      </div>
+    </div>
+
+    <div class="card" id="cpCard">
+      <div class="card-title sec-toggle" onclick="toggleSection('cpList','cpIcon')">
+        <span id="cpTitle">COUNTERPARTIES — FULL BREAKDOWN</span>
+        <span class="sec-icon" id="cpIcon">▸ SHOW</span>
+      </div>
+      <div id="cpList" style="display:none"></div>
+    </div>
+
+    <div class="card" id="hopCard">
+      <div class="card-title sec-toggle" onclick="toggleHop()">
+        <span>🔗 MULTI-HOP — FOLLOW THE MONEY</span>
+        <span class="sec-icon" id="hopIcon">▸ RUN</span>
+      </div>
+      <div id="hopBody" style="display:none"></div>
+    </div>
+  </div>
+
+  <a class="footer-link" href="/">← BACK TO CLUCKNORRIS.APP</a>
+</div>
+
+<script>
+let lastTrace = null;
+let sortNewest = false;
+const graphFilter = { wallet: true, contract: true, market: true };
+
+function toggleFilter(t) {
+  graphFilter[t] = !graphFilter[t];
+  document.querySelectorAll('.gchip').forEach(el => {
+    el.classList.toggle('off', !graphFilter[el.dataset.t]);
+  });
+  if (lastTrace) { renderGraph(); renderCounterparties(); }
+}
+
+function toggleSection(bodyId, iconId) {
+  const body = document.getElementById(bodyId);
+  const show = body.style.display === 'none';
+  body.style.display = show ? '' : 'none';
+  document.getElementById(iconId).textContent = show ? '▾ HIDE' : '▸ SHOW';
+}
+
+function toggleEdu() {
+  const e = document.getElementById('edu');
+  e.classList.toggle('open');
+  document.getElementById('eduTg').textContent = e.classList.contains('open') ? 'close' : 'read';
+}
+
+let hopRan = false;
+function toggleHop() {
+  const body = document.getElementById('hopBody');
+  const show = body.style.display === 'none';
+  body.style.display = show ? '' : 'none';
+  document.getElementById('hopIcon').textContent = show ? '▾ HIDE' : (hopRan ? '▾ SHOW' : '▸ RUN');
+  if (show && !hopRan) { hopRan = true; runMultiHop(); }
+}
+
+// Follow the token one hop past the wallets that received the most from the
+// investigated wallet — each is a fresh trace, run on demand.
+async function runMultiHop() {
+  const d = lastTrace;
+  const targets = (d.counterparties || [])
+    .filter(c => c.type === 'wallet' && c.outflow > 0 && c.address)
+    .sort((a, b) => b.outflow - a.outflow)
+    .slice(0, 3);
+  const body = document.getElementById('hopBody');
+  if (!targets.length) {
+    body.innerHTML = '<div class="hop-intro">No wallet-to-wallet transfers to follow — this wallet only interacted with DEXs and contracts.</div>';
+    return;
+  }
+  body.innerHTML = `<div class="hop-intro">Following the token one hop past the ${targets.length} wallet${targets.length>1?'s':''} that received the most from this wallet. Each is a fresh on-chain trace — give it a minute.</div><div id="hopResults"></div>`;
+  const results = document.getElementById('hopResults');
+  for (let i = 0; i < targets.length; i++) {
+    const t = targets[i];
+    const card = document.createElement('div');
+    card.className = 'hop-card';
+    card.innerHTML = `<div class="hop-w">↪ <a href="https://solscan.io/account/${t.address}" target="_blank">${t.address} ↗</a></div>`
+      + `<div class="hop-status" id="hop-${i}">received <b>${fmtNum(t.outflow, d.decimals)}</b> from this wallet · tracing… (${i+1}/${targets.length})</div>`;
+    results.appendChild(card);
+    try {
+      const res = await fetch(`/api/trace?wallet=${encodeURIComponent(t.address)}&mint=${encodeURIComponent(d.mint)}`);
+      const hop = await res.json();
+      const st = document.getElementById('hop-' + i);
+      if (!hop.success || !hop.summary) {
+        st.innerHTML = `received <b>${fmtNum(t.outflow, d.decimals)}</b> · trace unavailable`;
+        continue;
+      }
+      const s = hop.summary, hd = hop.decimals;
+      const parts = [];
+      if (s.totalSold > 0)    parts.push(`sold ${fmtNum(s.totalSold, hd)}`);
+      if (s.totalSent > 0)    parts.push(`forwarded ${fmtNum(s.totalSent, hd)} to ${s.sentToCount || 0} wallet${(s.sentToCount||0)===1?'':'s'}`);
+      if (s.totalAddedLp > 0) parts.push(`LP'd ${fmtNum(s.totalAddedLp, hd)}`);
+      parts.push(`holds ${fmtNum(s.currentBalance, hd)} now`);
+      st.innerHTML = `received <b>${fmtNum(t.outflow, d.decimals)}</b> from this wallet · then: <b>${parts.join(' · ')}</b><br/>`
+        + `<a href="/trace?wallet=${encodeURIComponent(t.address)}&mint=${encodeURIComponent(d.mint)}" target="_blank">↗ open full trace of this wallet</a>`;
+    } catch (e) {
+      document.getElementById('hop-' + i).innerHTML = `received <b>${fmtNum(t.outflow, d.decimals)}</b> · trace failed`;
+    }
+  }
+}
+
+const walletInput = document.getElementById('walletInput');
+const mintInput = document.getElementById('mintInput');
+const runBtn = document.getElementById('runBtn');
+[walletInput, mintInput].forEach(el => el.addEventListener('input', updateRunBtn));
+function updateRunBtn() {
+  runBtn.disabled = !(walletInput.value.trim().length >= 32 && mintInput.value.trim().length >= 32);
+}
+
+const urlParams = new URLSearchParams(location.search);
+if (urlParams.get('wallet')) walletInput.value = urlParams.get('wallet').trim();
+if (urlParams.get('mint')) mintInput.value = urlParams.get('mint').trim();
+updateRunBtn();
+
+function showErr(m) { const e = document.getElementById('err'); e.textContent = m; e.classList.add('show'); }
+function hideErr() { document.getElementById('err').classList.remove('show'); }
+
+const STAGES = [
+  "Resolving the wallet's token account…",
+  "Pulling the full signature history…",
+  "Parsing transactions — this can take a few minutes…",
+  "Matching counterparties and quote legs…",
+  "Reconstructing the timeline…",
+];
+let stageTimer = null, secTimer = null, startedAt = 0;
+function startLoading() {
+  let idx = 0;
+  startedAt = Date.now();
+  document.getElementById('loadingStage').textContent = STAGES[0];
+  document.getElementById('loadingTimer').textContent = "0s";
+  document.getElementById('loading').classList.add('show');
+  document.getElementById('result').classList.remove('show');
+  stageTimer = setInterval(() => {
+    idx = Math.min(idx + 1, STAGES.length - 1);
+    document.getElementById('loadingStage').textContent = STAGES[idx];
+  }, 6000);
+  secTimer = setInterval(() => {
+    document.getElementById('loadingTimer').textContent = Math.round((Date.now() - startedAt) / 1000) + "s";
+  }, 1000);
+}
+function stopLoading() {
+  document.getElementById('loading').classList.remove('show');
+  clearInterval(stageTimer); clearInterval(secTimer);
+}
+
+function fmtNum(n, dec) {
+  if (n == null || isNaN(n)) return "—";
+  const a = Math.abs(n);
+  if (a === 0) return "0";
+  if (a >= 1e9) return (n/1e9).toFixed(2) + "B";
+  if (a >= 1e6) return (n/1e6).toFixed(2) + "M";
+  if (a >= 1e3) return (n/1e3).toFixed(2) + "K";
+  if (a >= 1) return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  return n.toLocaleString(undefined, { maximumFractionDigits: Math.min(dec || 6, 9) });
+}
+function shortAddr(a) { return a ? a.slice(0,4) + "…" + a.slice(-4) : "—"; }
+function fmtDate(ts) {
+  if (!ts) return "—";
+  return new Date(ts * 1000).toLocaleString(undefined, { year:'2-digit', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+const ACT_LABEL = { buy: 'BUY', sell: 'SELL', receive: 'IN', send: 'OUT', add_lp: 'ADD LP', withdraw_lp: 'PULL LP' };
+const DEX_ACTIONS = ['buy', 'sell', 'add_lp', 'withdraw_lp'];
+
+async function runTrace() {
+  hideErr();
+  runBtn.disabled = true;
+  startLoading();
+  const wallet = walletInput.value.trim();
+  const mint = mintInput.value.trim();
+  try {
+    const res = await fetch(`/api/trace?wallet=${encodeURIComponent(wallet)}&mint=${encodeURIComponent(mint)}`);
+    const data = await res.json();
+    stopLoading();
+    runBtn.disabled = false; updateRunBtn();
+    if (!data.success) { showErr(data.error || "Trace failed"); return; }
+    if (data.error && (!data.transactions || !data.transactions.length)) { showErr(data.error); return; }
+    lastTrace = data;
+    render(data);
+  } catch (e) {
+    stopLoading();
+    runBtn.disabled = false; updateRunBtn();
+    showErr("Network error: " + e.message);
+  }
+}
+
+function render(d) {
+  const s = d.summary || {};
+  const dec = d.decimals;
+
+  // Reset the on-demand multi-hop section for this fresh trace
+  hopRan = false;
+  document.getElementById('hopBody').style.display = 'none';
+  document.getElementById('hopBody').innerHTML = '';
+  document.getElementById('hopIcon').textContent = '▸ RUN';
+
+  // Truncation
+  document.getElementById('truncatedSlot').innerHTML = d.truncated
+    ? `<div class="truncated-banner">⚠ History truncated at 5,000 transactions. Recent activity and balances are exact; the oldest history may be incomplete.</div>`
+    : '';
+
+  // Origin — where the token first reached this wallet
+  const o = s.origin;
+  if (o) {
+    let line;
+    if (o.action === 'buy') {
+      line = `First acquired by <b>buying</b> ${fmtNum(o.amount, dec)} tokens${o.source ? ' via ' + o.source : ''} on ${fmtDate(o.timestamp)}`;
+      if (o.counterparty) {
+        line += ` — pool/counterparty <a href="https://solscan.io/account/${o.counterparty}" target="_blank">${o.counterparty} ↗</a>`;
+      }
+      line += '.';
+    } else {
+      line = `First received ${fmtNum(o.amount, dec)} tokens on ${fmtDate(o.timestamp)} from `
+        + `<a href="https://solscan.io/account/${o.counterparty}" target="_blank">${o.counterparty || 'unknown'} ↗</a> `
+        + `(${o.counterpartyType === 'contract' ? 'a contract/pool' : 'a wallet'}).`;
+    }
+    document.getElementById('originSlot').innerHTML =
+      `<div class="origin"><div class="lbl">🌱 ORIGIN — WHERE IT STARTED</div><div class="body">${line}</div></div>`;
+  } else {
+    document.getElementById('originSlot').innerHTML = '';
+  }
+
+  // Summary grid
+  const cells = [
+    { lbl: 'TRANSACTIONS', val: fmtNum(s.txCount), sub: `${s.uniqueCounterparties||0} counterparties`, cls: '' },
+    { lbl: 'CURRENT BALANCE', val: fmtNum(s.currentBalance, dec), sub: 'held now', cls: 'blue' },
+    { lbl: 'BOUGHT', val: fmtNum(s.totalBought, dec), sub: `${s.buyCount||0} buys · ${fmtNum(s.totalSpent)} spent`, cls: 'green' },
+    { lbl: 'SOLD', val: fmtNum(s.totalSold, dec), sub: `${s.sellCount||0} sells · ${fmtNum(s.totalProceeds)} out`, cls: 'red' },
+    { lbl: 'RECEIVED IN', val: fmtNum(s.totalReceived, dec), sub: `${s.receiveCount||0} transfers in`, cls: 'blue' },
+    { lbl: 'SENT OUT', val: fmtNum(s.totalSent, dec), sub: `${s.sendCount||0} transfers out`, cls: 'amber' },
+  ];
+  if ((s.addLpCount||0) + (s.withdrawLpCount||0) > 0) {
+    cells.push({ lbl: 'ADDED TO LP', val: fmtNum(s.totalAddedLp, dec), sub: `${s.addLpCount||0} add-LP txns`, cls: '' });
+    cells.push({ lbl: 'PULLED FROM LP', val: fmtNum(s.totalWithdrawnLp, dec), sub: `${s.withdrawLpCount||0} pull-LP txns`, cls: '' });
+  }
+  cells.push({ lbl: 'FIRST SEEN', val: fmtDate(s.firstInteraction), sub: '', cls: '' });
+  cells.push({ lbl: 'LAST SEEN', val: fmtDate(s.lastInteraction), sub: '', cls: '' });
+  document.getElementById('sumGrid').innerHTML = cells.map(c =>
+    `<div class="sum-cell ${c.cls}"><div class="lbl">${c.lbl}</div><div class="val">${c.val}</div>${c.sub?`<div class="sub">${c.sub}</div>`:''}</div>`
+  ).join('');
+
+  renderAccounting();
+  renderGraph();
+  renderCounterparties();
+  renderTxList();
+
+  const resultEl = document.getElementById('result');
+  resultEl.classList.add('show');
+  resultEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderAccounting() {
+  const d = lastTrace, s = d.summary || {}, dec = d.decimals;
+  const card = document.getElementById('acctCard');
+  if (!s.txCount) { card.style.display = 'none'; return; }
+  card.style.display = '';
+
+  // Reconciliation: inflows − outflows should equal the current wallet balance.
+  const inflows  = (s.totalBought||0) + (s.totalReceived||0) + (s.totalWithdrawnLp||0);
+  const outflows = (s.totalSold||0) + (s.totalSent||0) + (s.totalAddedLp||0);
+  const starting = (s.currentBalance||0) - (inflows - outflows);
+  const startSignificant = Math.abs(starting) > (s.currentBalance||0) * 0.001 + 1;
+
+  const terms = [];
+  if (startSignificant) terms.push(`<span class="pos">+${fmtNum(starting,dec)} held before window</span>`);
+  if (s.totalBought>0)      terms.push(`<span class="pos">+${fmtNum(s.totalBought,dec)} bought</span>`);
+  if (s.totalReceived>0) {
+    const n = s.receivedFromCount || 0;
+    terms.push(`<span class="pos">+${fmtNum(s.totalReceived,dec)} received in${n?` from ${n} wallet${n>1?'s':''}`:''}</span>`);
+  }
+  if (s.totalWithdrawnLp>0) terms.push(`<span class="pos">+${fmtNum(s.totalWithdrawnLp,dec)} pulled from LP</span>`);
+  if (s.totalSold>0)        terms.push(`<span class="neg">−${fmtNum(s.totalSold,dec)} sold</span>`);
+  if (s.totalSent>0) {
+    const n = s.sentToCount || 0;
+    terms.push(`<span class="neg">−${fmtNum(s.totalSent,dec)} sent out${n?` to ${n} wallet${n>1?'s':''}`:''}</span>`);
+  }
+  if (s.totalAddedLp>0)     terms.push(`<span class="neg">−${fmtNum(s.totalAddedLp,dec)} added to LP</span>`);
+
+  let html = `<div class="acct-line">${terms.join('<br>')}<br>`
+    + `<span class="eq">= ${fmtNum(s.currentBalance,dec)} held in wallet now</span></div>`;
+
+  if ((s.addLpCount || 0) + (s.withdrawLpCount || 0) > 0) {
+    const pools = s.lpPools || [];
+    const poolLinks = pools.map(p =>
+      `<div style="margin-top:4px">• ${p.label} — <a href="https://solscan.io/account/${p.address}" target="_blank">${shortAddr(p.address)} ↗</a></div>`
+    ).join('') || '<div style="margin-top:4px;color:var(--muted)">pool address not resolved</div>';
+    html += `<div class="acct-lp">💧 <b>This wallet has a liquidity position.</b>`
+      + `<br>Historically — added to LP: ~${fmtNum(s.totalAddedLp,dec)} tokens / ~${fmtNum(s.lpSolIn)} SOL`
+      + ` &nbsp;·&nbsp; pulled back: ~${fmtNum(s.totalWithdrawnLp,dec)} tokens / ~${fmtNum(s.lpSolOut)} SOL.`
+      + `<br><span style="color:var(--amber)">⚠ We can't calculate what's in the pool right now from transaction history — an AMM rebalances the token/SOL ratio as the price moves, so what remains is not what was deposited. Check the pool directly:</span>`
+      + `<b style="color:var(--purple)"></b>${poolLinks}</div>`;
+  }
+  const startReason = d.truncated
+    ? ' — history was truncated at 5,000 transactions'
+    : ' (acquired before its visible history)';
+  html += startSignificant
+    ? `<div class="acct-note">⚠ This wallet already held ~${fmtNum(starting,dec)} tokens before the traced window${startReason}.</div>`
+    : `<div class="acct-note ok">✓ Fully accounted — every token traced from the wallet's first interaction.</div>`;
+  document.getElementById('acctBody').innerHTML = html;
+}
+
+function renderGraph() {
+  const d = lastTrace;
+  const dec = d.decimals;
+  const card = document.getElementById('graphCard');
+  const all = d.counterparties || [];
+  if (!all.length) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  const cps = all.filter(c => graphFilter[c.type]);
+  // A counterparty is a source if it net-sent the token to the wallet,
+  // a destination if it net-received from the wallet.
+  const allSrc = cps.filter(c => c.inflow > 0 && c.inflow >= c.outflow).sort((a,b) => b.inflow - a.inflow);
+  const allDst = cps.filter(c => c.outflow > 0 && c.outflow > c.inflow).sort((a,b) => b.outflow - a.outflow);
+  if (!allSrc.length && !allDst.length) {
+    document.getElementById('graphHolder').innerHTML = '<div style="text-align:center;color:var(--muted);font-family:var(--mono);font-size:12px;padding:24px 0">No counterparties match the current filter.</div>';
+    document.getElementById('graphMore').textContent = '';
+    return;
+  }
+
+  // Radial layout — sources fan around the left arc, destinations around the
+  // right arc, wrapping onto outer rings when crowded. Keeps the diagram a
+  // compact square instead of a tall stacked column.
+  const sources = allSrc;
+  const dests = allDst;
+  const maxFlow = Math.max(1, ...sources.map(c=>c.inflow), ...dests.map(c=>c.outflow));
+  const total = sources.length + dests.length;
+
+  let nodeW, nodeH;
+  if      (total <= 10) { nodeW = 96; nodeH = 38; }
+  else if (total <= 24) { nodeW = 84; nodeH = 30; }
+  else if (total <= 44) { nodeW = 74; nodeH = 25; }
+  else                  { nodeW = 64; nodeH = 20; }
+  const fs = Math.max(5.5, Math.min(9, nodeH * 0.30));
+  const sw = (v) => Math.max(1, Math.min(7, 1 + Math.sqrt(Math.max(0,v)/maxFlow) * 5));
+
+  const hubR = 62, ringStep = Math.max(nodeH + 32, 56);
+  const R0 = hubR + nodeH / 2 + 42;
+  // Outgoing transfers usually far outnumber incoming with this kind of
+  // tracing, so destinations get the lion's share of the circle — they fan
+  // around the right, top and bottom (up to ~290°); sources keep a slice on
+  // the left. Arc widths scale with each side's node count.
+  const DEG = Math.PI / 180;
+  const srcN = sources.length, dstN = dests.length;
+  const FULL = 344 * DEG; // total arc, leaving a 16° gap split between the two
+  let srcSpan, dstSpan;
+  if (!srcN)      { srcSpan = 0; dstSpan = FULL; }
+  else if (!dstN) { srcSpan = FULL; dstSpan = 0; }
+  else {
+    const raw = (FULL / DEG) * srcN / (srcN + dstN);
+    srcSpan = Math.min(135, Math.max(46, raw)) * DEG;
+    dstSpan = FULL - srcSpan;
+  }
+  function layoutSide(list, center, span) {
+    const placed = []; let idx = 0, ring = 0;
+    while (idx < list.length) {
+      const R = R0 + ring * ringStep;
+      const cap = Math.max(2, Math.floor((R * span * 0.95) / (nodeH + 12)));
+      const m = Math.min(cap, list.length - idx);
+      for (let j = 0; j < m; j++) {
+        const a = center - span/2 + (m === 1 ? span/2 : (j/(m-1)) * span);
+        placed.push({ c: list[idx+j], R, a });
+      }
+      idx += m; ring++;
+    }
+    return placed;
+  }
+  const placed = layoutSide(sources, Math.PI, srcSpan).concat(layoutSide(dests, 0, dstSpan));
+  const maxR = placed.reduce((m,p) => Math.max(m, p.R), R0);
+  const VB = Math.ceil((maxR + nodeW/2 + 14) * 2);
+  const cx = VB/2, cy = VB/2;
+
+  function node(p) {
+    const c = p.c, t = c.type;
+    const nx = cx + p.R * Math.cos(p.a), ny = cy + p.R * Math.sin(p.a);
+    const x = nx - nodeW/2, y = ny - nodeH/2;
+    const stroke = t === 'market' ? '#A78BFA' : t === 'contract' ? '#F59E0B' : '#60A5FA';
+    const fill = t === 'market' ? 'rgba(167,139,250,0.12)' : t === 'contract' ? 'rgba(245,158,11,0.12)' : 'rgba(96,165,250,0.12)';
+    const line1 = (t === 'wallet') ? shortAddr(c.address)
+      : (c.label || (t === 'market' ? 'DEX' : 'Contract')).slice(0,16).toUpperCase();
+    const amt = [];
+    if (c.inflow > 0)  amt.push(`<tspan fill="#10B981">+${fmtNum(c.inflow,dec)}</tspan>`);
+    if (c.outflow > 0) amt.push(`<tspan fill="#EF4444">-${fmtNum(c.outflow,dec)}</tspan>`);
+    const inner = `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${nodeW}" height="${nodeH}" rx="5" fill="${fill}" stroke="${stroke}" stroke-width="1"/>`
+      + `<text x="${nx.toFixed(1)}" y="${(y+nodeH*0.42).toFixed(1)}" text-anchor="middle" fill="${stroke}" font-size="${fs.toFixed(1)}" font-family="monospace" font-weight="700">${line1}</text>`
+      + `<text x="${nx.toFixed(1)}" y="${(y+nodeH*0.82).toFixed(1)}" text-anchor="middle" font-size="${fs.toFixed(1)}" font-family="monospace" font-weight="700">${amt.join('<tspan fill="#6B7280"> </tspan>')}</text>`;
+    return c.address
+      ? `<a href="https://solscan.io/account/${c.address}" target="_blank" style="cursor:pointer">${inner}</a>`
+      : `<g>${inner}</g>`;
+  }
+
+  let edges = '', nodes = '';
+  for (const p of placed) {
+    const nx = cx + p.R * Math.cos(p.a), ny = cy + p.R * Math.sin(p.a);
+    const hx = cx + hubR * Math.cos(p.a), hy = cy + hubR * Math.sin(p.a);
+    const ex = nx - (nodeH/2 + 3) * Math.cos(p.a), ey = ny - (nodeH/2 + 3) * Math.sin(p.a);
+    const bi = p.c.inflow > 0 && p.c.outflow > 0;
+    const ox = bi ? 3 * Math.cos(p.a + Math.PI/2) : 0, oy = bi ? 3 * Math.sin(p.a + Math.PI/2) : 0;
+    if (p.c.inflow > 0)
+      edges += `<line x1="${(ex+ox).toFixed(1)}" y1="${(ey+oy).toFixed(1)}" x2="${(hx+ox).toFixed(1)}" y2="${(hy+oy).toFixed(1)}" stroke="#10B981" stroke-width="${sw(p.c.inflow).toFixed(1)}" opacity="0.5" marker-end="url(#arrG)"/>`;
+    if (p.c.outflow > 0)
+      edges += `<line x1="${(hx-ox).toFixed(1)}" y1="${(hy-oy).toFixed(1)}" x2="${(ex-ox).toFixed(1)}" y2="${(ey-oy).toFixed(1)}" stroke="#EF4444" stroke-width="${sw(p.c.outflow).toFixed(1)}" opacity="0.5" marker-end="url(#arrR)"/>`;
+    nodes += node(p);
+  }
+  const hW = 112, hH = 54;
+  const wallet = `<a href="https://solscan.io/account/${d.wallet}" target="_blank" style="cursor:pointer">
+    <rect x="${cx-hW/2}" y="${cy-hH/2}" width="${hW}" height="${hH}" rx="9" fill="rgba(252,211,77,0.16)" stroke="#FCD34D" stroke-width="1.6"/>
+    <text x="${cx}" y="${cy-hH/2+15}" text-anchor="middle" fill="#FCD34D" font-size="8" font-family="Oswald,sans-serif" font-weight="700">INVESTIGATED</text>
+    <text x="${cx}" y="${cy-hH/2+31}" text-anchor="middle" fill="#F9FAFB" font-size="10" font-family="monospace">${shortAddr(d.wallet)}</text>
+    <text x="${cx}" y="${cy-hH/2+45}" text-anchor="middle" fill="#9CA3AF" font-size="7.5" font-family="monospace">holds ${fmtNum(d.summary.currentBalance, dec)}</text>
+  </a>`;
+
+  document.getElementById('graphHolder').innerHTML =
+    `<svg viewBox="0 0 ${VB} ${VB}" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#10B981"/></marker>
+        <marker id="arrR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#EF4444"/></marker>
+      </defs>
+      ${edges}${nodes}${wallet}
+    </svg>`;
+
+  document.getElementById('graphMore').textContent =
+    `${sources.length} source${sources.length===1?'':'s'} · ${dests.length} destination${dests.length===1?'':'s'} — tap any box to open it on Solscan`;
+}
+
+function renderCounterparties() {
+  const d = lastTrace;
+  const dec = d.decimals;
+  const all = d.counterparties || [];
+  const card = document.getElementById('cpCard');
+  if (!all.length) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  const cps = all.filter(c => graphFilter[c.type]);
+  document.getElementById('cpTitle').textContent = `COUNTERPARTIES (${cps.length})`;
+  if (!cps.length) {
+    document.getElementById('cpList').innerHTML = '<div style="text-align:center;color:var(--muted);font-family:var(--mono);font-size:12px;padding:16px 0">No counterparties match the current filter.</div>';
+    return;
+  }
+  document.getElementById('cpList').innerHTML = cps.map((c, i) => {
+    const total = c.inflow + c.outflow;
+    const inPct = total > 0 ? (c.inflow / total * 100) : 0;
+    const flow = [];
+    if (c.inflow > 0)  flow.push(`<span class="in">+${fmtNum(c.inflow, dec)}</span>`);
+    if (c.outflow > 0) flow.push(`<span class="out">-${fmtNum(c.outflow, dec)}</span>`);
+    let who;
+    if (c.type === 'market') {
+      who = `<span class="tag tag-market">MARKET</span> `
+        + `<span class="mname">${c.label || 'DEX'}</span>`;
+    } else {
+      const name = c.type === 'contract' ? (c.label || 'CONTRACT') : 'WALLET';
+      const tagCls = c.type === 'contract' ? 'tag-contract' : 'tag-wallet';
+      who = `<span class="tag ${tagCls}">${name.toUpperCase()}</span> `
+        + `<a href="https://solscan.io/account/${c.address}" target="_blank">${shortAddr(c.address)} ↗</a>`;
+    }
+    const sigs = c.sigs || [];
+    let txLinks = '';
+    if (sigs.length) {
+      const shown = sigs.slice(0, 3).map(sg =>
+        `<a href="https://solscan.io/tx/${sg}" target="_blank">↗ tx ${sg.slice(0,8)}…</a>`).join('');
+      const extra = c.txCount > 3 ? `+${c.txCount - 3} more` : '';
+      txLinks = `<div class="cp-tx">${shown}${extra}</div>`;
+    }
+    return `<div class="cp-row">
+      <span class="rank">#${i+1}</span>
+      <span class="who">
+        ${who}
+        <div class="cp-bar"><span class="bin" style="width:${inPct}%"></span><span class="bout" style="width:${100-inPct}%"></span></div>
+        ${txLinks}
+      </span>
+      <span class="flows">${flow.join('<br/>') || '—'}<br/><span style="color:var(--muted)">${c.txCount} tx</span></span>
+    </div>`;
+  }).join('');
+}
+
+function renderTxList() {
+  const d = lastTrace;
+  const dec = d.decimals;
+  const txs = sortNewest ? [...d.transactions].reverse() : d.transactions;
+  document.getElementById('txList').innerHTML = txs.map((t, i) => {
+    const n = sortNewest ? d.transactions.length - i : i + 1;
+    const pos = t.tokenDelta > 0;
+    const amtStr = (pos ? '+' : '') + fmtNum(t.tokenDelta, dec);
+    const quote = (t.quoteDelta != null)
+      ? ` · ${t.quoteDelta < 0 ? '-' : '+'}${fmtNum(Math.abs(t.quoteDelta))} ${t.quoteSymbol}` : '';
+    const cpName = t.counterpartyType === 'contract' ? (t.counterpartyLabel || 'CONTRACT') : 'WALLET';
+    const cp = t.counterparty
+      ? `<a class="cp-link" href="https://solscan.io/account/${t.counterparty}" target="_blank">`
+        + `<span class="tag tag-${t.counterpartyType === 'contract' ? 'contract' : 'wallet'}">${cpName.toUpperCase()}</span> `
+        + `${shortAddr(t.counterparty)} ↗</a>`
+      : '<span style="color:var(--muted)">counterparty n/a</span>';
+    const prefix = DEX_ACTIONS.includes(t.action)
+      ? `${t.source ? 'via ' + t.source : 'via DEX'} · ${cp}`
+      : `${pos ? 'from' : 'to'} ${cp}`;
+    return `<div class="tx">
+      <div class="tx-badge">
+        <span class="act act-${t.action}">${ACT_LABEL[t.action]}</span>
+        <span class="num">#${n}</span>
+      </div>
+      <div class="tx-body">
+        <div class="tx-line1">
+          <span class="tx-amt ${pos?'pos':'neg'}">${amtStr}${quote}</span>
+          <span class="tx-time">${fmtDate(t.timestamp)}</span>
+        </div>
+        <div class="tx-meta">
+          ${prefix} ·
+          <span class="bal">balance after: ${fmtNum(t.balanceAfter, dec)}</span> ·
+          <a href="https://solscan.io/tx/${t.signature}" target="_blank">↗ tx</a>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('tlTitle').textContent = `TRANSACTION TIMELINE (${d.transactions.length})`;
+}
+
+function toggleSort() {
+  sortNewest = !sortNewest;
+  document.getElementById('sortBtn').textContent = sortNewest ? '↓ NEWEST FIRST' : '↑ OLDEST FIRST';
+  renderTxList();
+}
+
+function downloadCsv() {
+  if (!lastTrace) return;
+  const lines = ["timestamp,datetime,action,token_delta,quote_delta,quote_symbol,balance_after,counterparty,counterparty_type,counterparty_label,source,signature"];
+  for (const t of lastTrace.transactions) {
+    lines.push([
+      t.timestamp,
+      new Date(t.timestamp * 1000).toISOString(),
+      t.action,
+      t.tokenDelta,
+      t.quoteDelta == null ? '' : t.quoteDelta,
+      t.quoteSymbol || '',
+      t.balanceAfter,
+      t.counterparty || '',
+      t.counterpartyType || '',
+      (t.counterpartyLabel || '').replace(/,/g, ' '),
+      t.source || '',
+      t.signature,
+    ].join(','));
+  }
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `trace_${lastTrace.wallet.slice(0,6)}_${lastTrace.mint.slice(0,6)}_${Date.now()}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
