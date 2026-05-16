@@ -2165,15 +2165,16 @@ function fmtQuote(q) {
 // fetches this URL each time it sends a photo message.
 const BUY_GRAPHIC_URL = "https://clucknorris.app/cluck-norris.png";
 
-// Cluck-themed holder ranks by CLKN balance. Anchored loosely to the 2M
-// holder-bonus threshold so the rungs feel meaningful.
+// Cluck-themed holder ranks by CLKN balance, keyed to share of the 1B total
+// supply: EGG <0.01%, CHICK 0.01–0.1%, SPRING CHICKEN 0.1–0.5%, HEN 0.5–1.5%,
+// ROOSTER 1.5–3%, HEAD ROOSTER 3%+. `min` is the lower token bound of each tier.
 const CLKN_TIERS = [
-  { min: 0,            emoji: "🥚", name: "EGG" },
-  { min: 250_000,      emoji: "🐣", name: "CHICK" },
-  { min: 2_000_000,    emoji: "🐤", name: "SPRING CHICKEN" },
-  { min: 10_000_000,   emoji: "🐔", name: "HEN" },
-  { min: 35_000_000,   emoji: "🐓", name: "ROOSTER" },
-  { min: 100_000_000,  emoji: "👑", name: "HEAD ROOSTER" },
+  { min: 0,           emoji: "🥚", name: "EGG" },
+  { min: 100_000,     emoji: "🐣", name: "CHICK" },
+  { min: 1_000_000,   emoji: "🐤", name: "SPRING CHICKEN" },
+  { min: 5_000_000,   emoji: "🐔", name: "HEN" },
+  { min: 15_000_000,  emoji: "🐓", name: "ROOSTER" },
+  { min: 30_000_000,  emoji: "👑", name: "HEAD ROOSTER" },
 ];
 function clknTier(amount) {
   let t = CLKN_TIERS[0];
