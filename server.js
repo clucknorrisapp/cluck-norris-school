@@ -764,6 +764,52 @@ app.get("/api/supply", async (req, res) => {
 //
 // v2 (later) plugs in the /holders.html six-signal classifier so "Holders" reflects
 // TRUE human wallets, not LP/locked/program addresses.
+// DexScreener stops indexing a pair ~24h after its last trade, which makes a
+// quiet-but-real token look like it has zero liquidity. GeckoTerminal indexes
+// pools straight from the chain and keeps quiet ones listed, so it's used as a
+// fallback to recover liquidity / price / FDV. Returns null on any failure.
+async function fetchGeckoTerminalFallback(mint) {
+  try {
+    const url = `https://api.geckoterminal.com/api/v2/networks/solana/tokens/${mint}/pools?include=base_token`;
+    const r = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const pools = Array.isArray(j?.data) ? j.data : [];
+    if (!pools.length) return null;
+
+    let totalLiqUsd = 0, totalVol24h = 0, best = null, bestLiq = -1;
+    const dexFamilies = new Set();
+    for (const p of pools) {
+      const a = p.attributes || {};
+      const liq = parseFloat(a.reserve_in_usd) || 0;
+      totalLiqUsd += liq;
+      totalVol24h += parseFloat(a.volume_usd?.h24) || 0;
+      const dex = (p.relationships?.dex?.data?.id || "").toLowerCase().split("-")[0];
+      if (dex) dexFamilies.add(dex);
+      if (liq > bestLiq) { bestLiq = liq; best = p; }
+    }
+    if (totalLiqUsd <= 0 || !best) return null;
+
+    // The queried mint may sit on either side of the top pool — price the right one.
+    const a = best.attributes || {};
+    const mintIsBase = (best.relationships?.base_token?.data?.id || "") === `solana_${mint}`;
+    const priceUsd = parseFloat(mintIsBase ? a.base_token_price_usd : a.quote_token_price_usd) || null;
+    const fdv = parseFloat(a.fdv_usd || a.market_cap_usd) || null;
+    const dexId = (best.relationships?.dex?.data?.id || "").toLowerCase();
+
+    // Symbol/name from the included base_token object, when present.
+    let symbol = null, name = null;
+    const tok = (Array.isArray(j.included) ? j.included : []).find(x => x.id === `solana_${mint}`);
+    if (tok) { symbol = tok.attributes?.symbol || null; name = tok.attributes?.name || null; }
+
+    return { totalLiqUsd, totalVol24h, dexFamilies, priceUsd, fdv, dexId,
+             poolCount: pools.length, pairAddress: a.address || null, symbol, name };
+  } catch (e) {
+    console.warn("[cluck-score] GeckoTerminal fallback failed:", e.message);
+    return null;
+  }
+}
+
 app.get("/api/cluck-score", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "public, max-age=300"); // 5-minute edge cache
@@ -815,18 +861,43 @@ app.get("/api/cluck-score", async (req, res) => {
     // Only count Solana pairs. Sum liquidity across all of them — a token with
     // $20K on Meteora + $20K on Raydium has $40K of real exit liquidity, not $20K.
     const solPairs = allDexPairs.filter(p => p.chainId === "solana" || !p.chainId);
-    const totalLiqUsd = solPairs.reduce((s, p) => s + (parseFloat(p.liquidity?.usd) || 0), 0);
-    const totalVol24h = solPairs.reduce((s, p) => s + (parseFloat(p.volume?.h24) || 0), 0);
+    let totalLiqUsd = solPairs.reduce((s, p) => s + (parseFloat(p.liquidity?.usd) || 0), 0);
+    let totalVol24h = solPairs.reduce((s, p) => s + (parseFloat(p.volume?.h24) || 0), 0);
     // Unique DEX *protocols* (collapsing "meteora-damm-v2" / "meteora-dlmm" → "meteora")
-    const dexFamilies = new Set();
+    let dexFamilies = new Set();
     for (const p of solPairs) {
       const id = (p.dexId || "").toLowerCase().split("-")[0];
       if (id) dexFamilies.add(id);
     }
     // Top pair still used as the source of truth for price + graduation detection.
-    const topPair = solPairs.length
+    let topPair = solPairs.length
       ? solPairs.slice().sort((a,b) => (parseFloat(b.liquidity?.usd) || 0) - (parseFloat(a.liquidity?.usd) || 0))[0]
       : null;
+    let poolCount = solPairs.length;
+
+    // No DexScreener liquidity usually means the pair went quiet and got
+    // dropped from its index — the pool still exists on-chain. Recover the
+    // numbers from GeckoTerminal so a quiet token isn't scored as dead.
+    let scoreSource = "dexscreener";
+    if (totalLiqUsd === 0) {
+      const gecko = await fetchGeckoTerminalFallback(mint);
+      if (gecko) {
+        scoreSource = "geckoterminal";
+        totalLiqUsd = gecko.totalLiqUsd;
+        totalVol24h = gecko.totalVol24h;
+        dexFamilies = gecko.dexFamilies;
+        poolCount = gecko.poolCount;
+        topPair = {
+          priceUsd: gecko.priceUsd,
+          fdv: gecko.fdv,
+          marketCap: gecko.fdv,
+          dexId: gecko.dexId,
+          labels: [],
+          pairAddress: gecko.pairAddress,
+          baseToken: { symbol: gecko.symbol, name: gecko.name },
+        };
+      }
+    }
     const rawSupply = supplyData.status === "fulfilled" ? supplyData.value?.result?.value?.amount : null;
     const decimals = supplyData.status === "fulfilled" ? (supplyData.value?.result?.value?.decimals || 9) : 9;
     const supplyTokens = rawSupply ? parseInt(rawSupply) / Math.pow(10, decimals) : null;
@@ -979,7 +1050,7 @@ app.get("/api/cluck-score", async (req, res) => {
       verdict,
       factors: {
         holders:          { score: f.holders          == null ? null : Math.round(f.holders),          weight: weights.holders,          value: holderCount },
-        liquidity:        { score: f.liquidity        == null ? null : Math.round(f.liquidity),        weight: weights.liquidity,        value: liqUsd, ratio: liqRatio, poolCount: solPairs.length, dexCount: dexFamilies.size, dexes: [...dexFamilies], multiDexBonus },
+        liquidity:        { score: f.liquidity        == null ? null : Math.round(f.liquidity),        weight: weights.liquidity,        value: liqUsd, ratio: liqRatio, poolCount, dexCount: dexFamilies.size, dexes: [...dexFamilies], multiDexBonus },
         mintAuthority:    { score: f.mintAuthority,    weight: weights.mintAuthority,    revoked: mintAuthority === null },
         freezeAuthority:  { score: f.freezeAuthority,  weight: weights.freezeAuthority,  revoked: freezeAuthority === null },
         concentration:    { score: f.concentration    == null ? null : Math.round(f.concentration),    weight: weights.concentration,    top10Share: top10Share, top10RawShare, top10HumanShare, lpFilteredFromTop20: lpInTop20 },
@@ -994,6 +1065,7 @@ app.get("/api/cluck-score", async (req, res) => {
         volume24h: vol24h,
         circulatingSupply: supplyTokens,
         pairAddress: topPair?.pairAddress || null,
+        source: scoreSource,
       },
       generatedAt: new Date().toISOString(),
     });
