@@ -17,12 +17,13 @@ const {
   createAssociatedTokenAccountInstruction, getAssociatedTokenAddressSync,
   createSetAuthorityInstruction, getMinimumBalanceForRentExemptMint,
 } = require("@solana/spl-token");
-const { TurboFactory } = require("@ardrive/turbo-sdk");
+const { Uploader } = require("@irys/upload");
+const { Solana } = require("@irys/upload-solana");
 
 // Metaplex Token Metadata program — same on devnet and mainnet.
 const TOKEN_METADATA_PROGRAM_ID = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
-// ArDrive Turbo uploads at or under 100 KiB are free — keeping logos under this
-// means every mint's metadata upload costs nothing.
+// Irys uploads at or under 100 KiB are free — keeping logos under this means
+// every mint's metadata upload costs nothing.
 const MAX_LOGO_BYTES = 100 * 1024;
 
 // RPC endpoint per cluster. Mainnet uses the project's Helius key; devnet uses
@@ -33,26 +34,26 @@ function rpcUrl(cluster) {
   return key ? `https://mainnet.helius-rpc.com/?api-key=${key}` : "https://api.mainnet-beta.solana.com";
 }
 
-// ── Arweave metadata upload (via ArDrive Turbo) ──────────────────────────────
-// Uploads the logo, then a Metaplex-standard metadata JSON pointing at it.
-// Returns the permanent metadata URI for the on-chain metadata account.
+// ── Permanent metadata upload (via Irys) ─────────────────────────────────────
+// Uploads the logo, then a Metaplex-standard metadata JSON pointing at it, to
+// Irys permanent storage. Returns the metadata URI for the on-chain account.
+// HATCHERY_TURBO_KEY is a base58 Solana secret key — the upload signer (the
+// env var name is legacy). Uploads at/under 100 KiB are free.
 async function uploadMetadata({ imageBuffer, imageMime, name, symbol, description }) {
   const key = process.env.HATCHERY_TURBO_KEY;
   if (!key) throw new Error("Metadata uploads are not configured (HATCHERY_TURBO_KEY missing)");
-  const turbo = TurboFactory.authenticated({ privateKey: key, token: "solana" });
+  const irys = await Uploader(Solana).withWallet(key);
 
-  const imgRes = await turbo.upload({
-    data: imageBuffer,
-    dataItemOpts: { tags: [{ name: "Content-Type", value: imageMime }] },
+  const imgRes = await irys.upload(imageBuffer, {
+    tags: [{ name: "Content-Type", value: imageMime }],
   });
-  const imageUri = `https://arweave.net/${imgRes.id}`;
+  const imageUri = `https://gateway.irys.xyz/${imgRes.id}`;
 
   const metadata = { name, symbol, description: description || "", image: imageUri };
-  const metaRes = await turbo.upload({
-    data: JSON.stringify(metadata),
-    dataItemOpts: { tags: [{ name: "Content-Type", value: "application/json" }] },
+  const metaRes = await irys.upload(JSON.stringify(metadata), {
+    tags: [{ name: "Content-Type", value: "application/json" }],
   });
-  return { metadataUri: `https://arweave.net/${metaRes.id}`, imageUri };
+  return { metadataUri: `https://gateway.irys.xyz/${metaRes.id}`, imageUri };
 }
 
 // ── Metaplex CreateMetadataAccountV3 instruction (hand-built) ────────────────
