@@ -2106,124 +2106,77 @@ function formatClknPrice(usd, clknAmount) {
   return `$${p.toExponential(2)}`;
 }
 
-function detectClknBuy(tx) {
+// Pool-centric CLKN trade detection.
+//
+// Wallet-tracing broke on Jupiter routes: the trader and the proceeds-receiver
+// are different accounts, and the CLKN only ever hops between off-curve route
+// PDAs — so no real wallet could be pinned and routed sells went undetected.
+// This version anchors on net token-balance changes (tx.accountData):
+//   • the LP pool    = the off-curve account whose CLKN balance moved the most
+//   • pool CLKN up   => SELL  (someone sold into the pool)
+//   • pool CLKN down => BUY   (someone bought out of the pool)
+//   • clknAmount     = magnitude of that pool-side CLKN change
+//   • quote leg      = the same pool owner's WSOL/USDC balance change
+//   • trader         = the on-curve wallet whose CLKN moved the opposite way
+// The pool's balance delta is unambiguous no matter how many hops a route
+// used. `trader` is null when a route never surfaces the trader as a plain
+// on-curve wallet — the trade is still reported, just without holder rank.
+function detectClknTrade(tx) {
   if (!tx || tx.transactionError) return null;
-  const transfers = tx.tokenTransfers || [];
-  const native = tx.nativeTransfers || [];
 
-  // SUM all CLKN coming INTO each potential buyer — pick the wallet that received
-  // the most. (Some swap routes split across multiple inner instructions.)
-  const clknByBuyer = new Map();
-  for (const t of transfers) {
-    if (t.mint !== CLKN_MINT_ADDR) continue;
-    if (!t.toUserAccount) continue;
-    const amt = parseFloat(t.tokenAmount);
-    if (!(amt > 0)) continue;
-    clknByBuyer.set(t.toUserAccount, (clknByBuyer.get(t.toUserAccount) || 0) + amt);
-  }
-  if (!clknByBuyer.size) return null;
-  // The buyer must be a real on-curve wallet — never the LP pool or a PDA. On a
-  // SELL the pool is the largest CLKN receiver, so without this filter a sell
-  // would be misreported as a buy by the pool. Drop off-curve addresses first.
-  const buyerEntries = [...clknByBuyer.entries()]
-    .filter(([addr]) => { try { return isOnCurve(addr); } catch { return false; } });
-  if (!buyerEntries.length) return null;
-  // Largest on-curve CLKN recipient is the buyer
-  const buyer = buyerEntries.sort((a, b) => b[1] - a[1])[0][0];
-  const clknAmount = clknByBuyer.get(buyer);
-
-  // Sum every quote-token transfer FROM the buyer for each known quote mint.
-  // Routes can split into multiple wSOL transfers (swap leg + close-account
-  // residual + fee) — using the sum gives the real cost, not just the first chunk.
-  const quoteSums = {};
-  for (const t of transfers) {
-    if (t.fromUserAccount !== buyer) continue;
-    if (!QUOTE_TOKENS[t.mint]) continue;
-    const amt = parseFloat(t.tokenAmount);
-    if (!(amt > 0)) continue;
-    quoteSums[t.mint] = (quoteSums[t.mint] || 0) + amt;
-  }
-  // Native SOL only counts when the swap settled in native lamports, not wSOL.
-  // If a wSOL token transfer from the buyer already exists, the native movement
-  // is just that wSOL wrapping — adding it would double the amount.
-  if (!quoteSums[WSOL_MINT]) {
-    let nativeSolOut = 0;
-    for (const n of native) {
-      if (n.fromUserAccount !== buyer) continue;
-      const lamports = Number(n.amount);
-      if (lamports > 0) nativeSolOut += lamports;
+  // Net balance change per owner wallet, summed from accountData.
+  const clknByOwner = new Map();              // owner -> net CLKN (UI units)
+  const quoteByOwner = new Map();             // owner -> { quoteMint -> net }
+  for (const ad of (tx.accountData || [])) {
+    for (const bc of (ad.tokenBalanceChanges || [])) {
+      const owner = bc.userAccount;
+      const raw = bc.rawTokenAmount;
+      if (!owner || !raw) continue;
+      const amt = Number(raw.tokenAmount) / Math.pow(10, raw.decimals || 0);
+      if (!Number.isFinite(amt) || amt === 0) continue;
+      if (bc.mint === CLKN_MINT_ADDR) {
+        clknByOwner.set(owner, (clknByOwner.get(owner) || 0) + amt);
+      } else if (QUOTE_TOKENS[bc.mint]) {
+        let q = quoteByOwner.get(owner);
+        if (!q) { q = {}; quoteByOwner.set(owner, q); }
+        q[bc.mint] = (q[bc.mint] || 0) + amt;
+      }
     }
-    if (nativeSolOut > 0) quoteSums[WSOL_MINT] = nativeSolOut / 1e9;
+  }
+  if (!clknByOwner.size) return null;
+
+  const onCurve = (addr) => { try { return isOnCurve(addr); } catch { return false; } };
+
+  // The CLKN pool = the off-curve account whose CLKN balance moved the most.
+  let pool = null, poolClkn = 0;
+  for (const [owner, delta] of clknByOwner) {
+    if (onCurve(owner)) continue;
+    if (Math.abs(delta) > Math.abs(poolClkn)) { pool = owner; poolClkn = delta; }
+  }
+  if (!pool || poolClkn === 0) return null;   // no pool leg => not a CLKN swap
+
+  const action = poolClkn > 0 ? "sell" : "buy";
+  const clknAmount = Math.abs(poolClkn);
+
+  // Trader = on-curve wallet whose CLKN moved opposite the pool (down on a
+  // sell, up on a buy). Largest such mover wins; null if none surfaced.
+  let trader = null, traderMag = 0;
+  for (const [owner, delta] of clknByOwner) {
+    if (!onCurve(owner)) continue;
+    const matches = action === "sell" ? delta < 0 : delta > 0;
+    if (matches && Math.abs(delta) > traderMag) { trader = owner; traderMag = Math.abs(delta); }
   }
 
-  // Pick whichever quote token has the largest total — that's the actual swap leg
-  const entries = Object.entries(quoteSums).filter(([, amt]) => amt > 0);
-  if (!entries.length) return null;
-  entries.sort((a, b) => b[1] - a[1]);
-  const [mint, amount] = entries[0];
-
-  return { buyer, clknAmount, quote: { mint, amount } };
-}
-
-// Mirror of detectClknBuy: a sell moves CLKN OUT of a user wallet and a quote
-// token (SOL/USDC/USDT) back IN. Only run this once a tx has been ruled out as
-// a buy — on a buy the pool is the CLKN source, so here the largest CLKN
-// sender is always the real seller.
-function detectClknSell(tx) {
-  if (!tx || tx.transactionError) return null;
-  const transfers = tx.tokenTransfers || [];
-  const native = tx.nativeTransfers || [];
-
-  // SUM all CLKN leaving each potential seller — pick the wallet that sent the
-  // most. (Some swap routes split across multiple inner instructions.)
-  const clknBySeller = new Map();
-  for (const t of transfers) {
-    if (t.mint !== CLKN_MINT_ADDR) continue;
-    if (!t.fromUserAccount) continue;
-    const amt = parseFloat(t.tokenAmount);
-    if (!(amt > 0)) continue;
-    clknBySeller.set(t.fromUserAccount, (clknBySeller.get(t.fromUserAccount) || 0) + amt);
+  // Quote leg = the pool owner's WSOL/USDC balance change — the other half of
+  // the swap. Magnitude only; direction is already known from `action`.
+  const poolQuotes = quoteByOwner.get(pool) || {};
+  let quoteMint = null, quoteAmount = 0;
+  for (const [mint, delta] of Object.entries(poolQuotes)) {
+    if (Math.abs(delta) > quoteAmount) { quoteMint = mint; quoteAmount = Math.abs(delta); }
   }
-  if (!clknBySeller.size) return null;
-  // The seller must be a real on-curve wallet — never the LP pool or a PDA.
-  // On a BUY the pool is the largest CLKN sender; filter it out before ranking.
-  const sellerEntries = [...clknBySeller.entries()]
-    .filter(([addr]) => { try { return isOnCurve(addr); } catch { return false; } });
-  if (!sellerEntries.length) return null;
-  // Largest on-curve CLKN sender is the seller
-  const seller = sellerEntries.sort((a, b) => b[1] - a[1])[0][0];
-  const clknAmount = clknBySeller.get(seller);
+  if (!quoteMint || quoteAmount <= 0) return null;
 
-  // Sum every quote-token transfer TO the seller for each known quote mint —
-  // that's the swap proceeds. Mirrors the buy path's split-route handling.
-  const quoteSums = {};
-  for (const t of transfers) {
-    if (t.toUserAccount !== seller) continue;
-    if (!QUOTE_TOKENS[t.mint]) continue;
-    const amt = parseFloat(t.tokenAmount);
-    if (!(amt > 0)) continue;
-    quoteSums[t.mint] = (quoteSums[t.mint] || 0) + amt;
-  }
-  // Native SOL only counts when the swap settled in native lamports, not wSOL.
-  // If a wSOL token transfer to the seller exists, the native movement is just
-  // that wSOL unwrapping — adding it would double the amount.
-  if (!quoteSums[WSOL_MINT]) {
-    let nativeSolIn = 0;
-    for (const n of native) {
-      if (n.toUserAccount !== seller) continue;
-      const lamports = Number(n.amount);
-      if (lamports > 0) nativeSolIn += lamports;
-    }
-    if (nativeSolIn > 0) quoteSums[WSOL_MINT] = nativeSolIn / 1e9;
-  }
-
-  // Pick whichever quote token has the largest total — that's the actual swap leg
-  const entries = Object.entries(quoteSums).filter(([, amt]) => amt > 0);
-  if (!entries.length) return null;
-  entries.sort((a, b) => b[1] - a[1]);
-  const [mint, amount] = entries[0];
-
-  return { seller, clknAmount, quote: { mint, amount } };
+  return { action, trader, clknAmount, quote: { mint: quoteMint, amount: quoteAmount } };
 }
 
 function fmtClkn(n) {
@@ -2288,33 +2241,34 @@ async function getWalletStats(wallet, HELIUS_KEY) {
   return { solBalance, clknBalance };
 }
 
-async function notifyClknBuy(buy, tx, pool, usdValue, HELIUS_KEY) {
-  const buyerShort = `${buy.buyer.slice(0, 4)}…${buy.buyer.slice(-4)}`;
-  const isDevBuy = DEV_WALLETS.has(buy.buyer);
-  const meta = QUOTE_TOKENS[buy.quote.mint];
+async function notifyClknBuy(trade, tx, pool, usdValue, HELIUS_KEY) {
+  const buyer = trade.trader;
+  const buyerShort = buyer ? `${buyer.slice(0, 4)}…${buyer.slice(-4)}` : "unknown";
+  const isDevBuy = buyer != null && DEV_WALLETS.has(buyer);
+  const meta = QUOTE_TOKENS[trade.quote.mint];
   // Only show "($X.XX)" suffix when the quote isn't already a USD-denominated
   // stablecoin — for USDC/USDT the amount IS the dollar value.
   const usdSuffix = (meta && !meta.isStable && usdValue) ? ` <i>($${usdValue.toFixed(2)})</i>` : "";
   const routeLine = formatRoute(tx, pool);
-  const priceStr = formatClknPrice(usdValue, buy.clknAmount);
+  const priceStr = formatClknPrice(usdValue, trade.clknAmount);
   const priceLine = priceStr ? `\nPrice: <b>${priceStr}</b>` : "";
 
   // Buyer rank + wallet — holdings now, the tier they sit in, whether this buy
   // promoted them, and how much they grew their position. Skipped for dev buys
-  // (community reinvestment), which also skips the wallet-stats lookup.
+  // (community reinvestment) and when a route never surfaced an on-curve buyer.
   let rankBlock = "";
-  if (!isDevBuy) {
-    const stats = await getWalletStats(buy.buyer, HELIUS_KEY);
+  if (!isDevBuy && buyer) {
+    const stats = await getWalletStats(buyer, HELIUS_KEY);
     if (stats.clknBalance != null) {
       const after = stats.clknBalance;
-      const before = Math.max(0, after - buy.clknAmount);
+      const before = Math.max(0, after - trade.clknAmount);
       const tierAfter = clknTier(after), tierBefore = clknTier(before);
       if (tierAfter.min > tierBefore.min) {
         rankBlock += `\n🏆 <b>PROMOTED: ${tierBefore.name} → ${tierAfter.name}</b>`;
       }
       rankBlock += `\n${tierAfter.emoji} <b>${tierAfter.name}</b> · holds ${fmtClkn(after)} CLKN`;
       if (before > 0) {
-        const pct = (buy.clknAmount / before) * 100;
+        const pct = (trade.clknAmount / before) * 100;
         rankBlock += `\n📈 grew position +${pct < 1000 ? pct.toFixed(1) : Math.round(pct).toLocaleString()}%`;
       } else {
         rankBlock += `\n🆕 first cluck — brand new holder`;
@@ -2331,7 +2285,7 @@ async function notifyClknBuy(buy, tx, pool, usdValue, HELIUS_KEY) {
   const buyerLabel = isDevBuy ? "Team wallet" : "Buyer";
   const caption =
     header +
-    `${fmtQuote(buy.quote)}${usdSuffix} → <b>${fmtClkn(buy.clknAmount)} CLKN</b>\n` +
+    `${fmtQuote(trade.quote)}${usdSuffix} → <b>${fmtClkn(trade.clknAmount)} CLKN</b>\n` +
     `${routeLine}${priceLine}${rankBlock}\n` +
     `${buyerLabel}: <code>${buyerShort}</code>\n` +
     `<a href="https://solscan.io/tx/${tx.signature}">↗ View on Solscan</a>\n` +
@@ -2339,45 +2293,62 @@ async function notifyClknBuy(buy, tx, pool, usdValue, HELIUS_KEY) {
   await notifyTelegramPhoto(BUY_GRAPHIC_URL, caption);
 }
 
+// Size-scaled chicken-pun line for sell alerts — the bigger the dump, the
+// bigger the cluck. Tiered by USD value of the sell; thresholds/lines are a
+// plain ladder, easy to tweak.
+function sellPun(usd) {
+  const v = usd || 0;
+  if (v >= 5000) return "🍗 <b>FOWL PLAY!</b> That's not a sell, that's a Sunday roast.";
+  if (v >= 1000) return "🪶 Big bird flapped off — feathers everywhere.";
+  if (v >= 250)  return "🐓 Squawk! Somebody flew the coop with a beakful.";
+  if (v >= 50)   return "🐔 A few feathers ruffled — the flock barely blinked.";
+  return "🐤 Chicken feed — barely a peck off the pile.";
+}
+
 // Sell alert — the mirror of notifyClknBuy. Showing both sides keeps the feed
 // honest: every dip a seller creates is a cheaper entry for the rest of the
 // flock, so the caption frames it as a top-up opportunity rather than FUD.
-async function notifyClknSell(sell, tx, pool, usdValue, HELIUS_KEY) {
-  const sellerShort = `${sell.seller.slice(0, 4)}…${sell.seller.slice(-4)}`;
-  const meta = QUOTE_TOKENS[sell.quote.mint];
+async function notifyClknSell(trade, tx, pool, usdValue, HELIUS_KEY) {
+  const seller = trade.trader;
+  const sellerShort = seller ? `${seller.slice(0, 4)}…${seller.slice(-4)}` : "unknown";
+  const meta = QUOTE_TOKENS[trade.quote.mint];
   // Only show "($X.XX)" suffix when the quote isn't already a USD stablecoin.
   const usdSuffix = (meta && !meta.isStable && usdValue) ? ` <i>($${usdValue.toFixed(2)})</i>` : "";
   const routeLine = formatRoute(tx, pool);
-  const priceStr = formatClknPrice(usdValue, sell.clknAmount);
+  const priceStr = formatClknPrice(usdValue, trade.clknAmount);
   const priceLine = priceStr ? `\nPrice: <b>${priceStr}</b>` : "";
 
   // Seller rank — holdings now, the tier they sit in, whether this sell knocked
-  // them down a rung, and how much of their bag they trimmed.
+  // them down a rung, and how much of their bag they trimmed. Skipped when a
+  // route never surfaced a plain on-curve seller wallet.
   let rankBlock = "";
-  const stats = await getWalletStats(sell.seller, HELIUS_KEY);
-  if (stats.clknBalance != null) {
-    const after = stats.clknBalance;
-    const before = after + sell.clknAmount; // they held more before selling
-    const tierAfter = clknTier(after), tierBefore = clknTier(before);
-    if (tierAfter.min < tierBefore.min) {
-      rankBlock += `\n📉 <b>SLIPPED: ${tierBefore.name} → ${tierAfter.name}</b>`;
+  if (seller) {
+    const stats = await getWalletStats(seller, HELIUS_KEY);
+    if (stats.clknBalance != null) {
+      const after = stats.clknBalance;
+      const before = after + trade.clknAmount; // they held more before selling
+      const tierAfter = clknTier(after), tierBefore = clknTier(before);
+      if (tierAfter.min < tierBefore.min) {
+        rankBlock += `\n📉 <b>SLIPPED: ${tierBefore.name} → ${tierAfter.name}</b>`;
+      }
+      if (after < 1) {
+        rankBlock += `\n🚪 closed out — fully exited their position`;
+      } else {
+        rankBlock += `\n${tierAfter.emoji} <b>${tierAfter.name}</b> · still holds ${fmtClkn(after)} CLKN`;
+        const pct = before > 0 ? (trade.clknAmount / before) * 100 : 0;
+        rankBlock += `\n✂️ trimmed position −${pct < 1000 ? pct.toFixed(1) : Math.round(pct).toLocaleString()}%`;
+      }
     }
-    if (after < 1) {
-      rankBlock += `\n🚪 closed out — fully exited their position`;
-    } else {
-      rankBlock += `\n${tierAfter.emoji} <b>${tierAfter.name}</b> · still holds ${fmtClkn(after)} CLKN`;
-      const pct = before > 0 ? (sell.clknAmount / before) * 100 : 0;
-      rankBlock += `\n✂️ trimmed position −${pct < 1000 ? pct.toFixed(1) : Math.round(pct).toLocaleString()}%`;
+    if (stats.solBalance != null) {
+      rankBlock += `\n💰 ${stats.solBalance.toFixed(2)} SOL in wallet`;
     }
-  }
-  if (stats.solBalance != null) {
-    rankBlock += `\n💰 ${stats.solBalance.toFixed(2)} SOL in wallet`;
   }
 
   const caption =
     `🔻 <b>CLUCK SOLD</b>\n` +
-    `<b>${fmtClkn(sell.clknAmount)} CLKN</b> → ${fmtQuote(sell.quote)}${usdSuffix}\n` +
+    `<b>${fmtClkn(trade.clknAmount)} CLKN</b> → ${fmtQuote(trade.quote)}${usdSuffix}\n` +
     `${routeLine}${priceLine}${rankBlock}\n` +
+    `${sellPun(usdValue)}\n` +
     `Seller: <code>${sellerShort}</code>\n` +
     `💧 <i>Every dip is a discount — a cheaper chance to stack CLKN</i>\n` +
     `<a href="https://solscan.io/tx/${tx.signature}">↗ View on Solscan</a>\n` +
@@ -2467,15 +2438,9 @@ async function pollSinglePool(pool, HELIUS_KEY) {
     for (const tx of txns) {
       if (recentlyNotifiedSigs.has(tx.signature)) continue;
 
-      // A tx is a buy or a sell, never both. Check buy first; only test for a
-      // sell when it's not a buy, so a buy can never be double-counted.
-      const buy  = detectClknBuy(tx);
-      const sell = buy ? null : detectClknSell(tx);
-      const trade = buy
-        ? { action: "buy",  clknAmount: buy.clknAmount,  quote: buy.quote,  who: buy.buyer }
-        : sell
-          ? { action: "sell", clknAmount: sell.clknAmount, quote: sell.quote, who: sell.seller }
-          : null;
+      // Pool-centric detection — classifies buy vs sell from the CLKN pool's
+      // own balance change, so Jupiter-routed trades are caught too.
+      const trade = detectClknTrade(tx);
       if (!trade) {
         console.log(`[TELEGRAM] No buy/sell in tx ${tx.signature?.slice(0,8)} (pool ${poolAddress.slice(0,6)})`);
         continue;
@@ -2485,14 +2450,14 @@ async function pollSinglePool(pool, HELIUS_KEY) {
       const quoteMeta = QUOTE_TOKENS[trade.quote.mint] || { symbol: '?' };
       const usdStr = usd == null ? "no USD" : "$" + usd.toFixed(4);
       const floor = trade.action === "sell" ? MIN_SELL_USD : MIN_BUY_USD;
-      console.log(`[TELEGRAM] ${trade.action === "sell" ? "Sell" : "Buy"} detected (pool ${poolAddress.slice(0,6)}/${pool.dexId}, source ${tx.source || "?"}): ${trade.clknAmount.toFixed(0)} CLKN for ${trade.quote.amount} ${quoteMeta.symbol} (${usdStr}) by ${trade.who?.slice(0,6)} · sig ${tx.signature.slice(0,8)}`);
+      console.log(`[TELEGRAM] ${trade.action === "sell" ? "Sell" : "Buy"} detected (pool ${poolAddress.slice(0,6)}/${pool.dexId}, source ${tx.source || "?"}): ${trade.clknAmount.toFixed(0)} CLKN for ${trade.quote.amount} ${quoteMeta.symbol} (${usdStr}) by ${trade.trader ? trade.trader.slice(0,6) : "unknown"} · sig ${tx.signature.slice(0,8)}`);
       if (usd == null || usd < floor) {
         console.log(`[TELEGRAM] Skipping (${usdStr} < $${floor})`);
         rememberSig(tx.signature); // remember so other pools don't re-process it
         continue;
       }
-      if (trade.action === "sell") await notifyClknSell(sell, tx, pool, usd, HELIUS_KEY);
-      else                         await notifyClknBuy(buy, tx, pool, usd, HELIUS_KEY);
+      if (trade.action === "sell") await notifyClknSell(trade, tx, pool, usd, HELIUS_KEY);
+      else                         await notifyClknBuy(trade, tx, pool, usd, HELIUS_KEY);
       rememberSig(tx.signature);
     }
 
