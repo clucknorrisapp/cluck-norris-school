@@ -888,6 +888,69 @@ function txIsDex(tx) {
       (inner.instructions || []).some(ix => DEX_PROGRAMS.has(ix.programId)));
 }
 
+// Scan a wallet's CLKN outflows over [sinceTs, untilTs] — DEX sells and plain
+// transfers kept separate. Used to verify tokens moved into a destination
+// wallet actually stayed there.
+async function scanWalletClknOutflows(addr, sinceTs, untilTs) {
+  let sigs = [], before = undefined;
+  while (true) {
+    const params = [addr, { limit: 100, commitment: 'confirmed' }];
+    if (before) params[1].before = before;
+    const page = await rpc('getSignaturesForAddress', params);
+    if (!page || page.length === 0) break;
+    let done = false;
+    for (const s of page) {
+      if (s.blockTime && s.blockTime < sinceTs) { done = true; break; }
+      if (s.blockTime && s.blockTime <= untilTs && !s.err) sigs.push(s);
+    }
+    if (done) break;
+    before = page[page.length - 1].signature;
+    await new Promise(r => setTimeout(r, 200));
+  }
+  const sells = [], transfers = [];
+  for (let i = 0; i < sigs.length; i += 100) {
+    const res = await fetch(HELIUS_TX, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transactions: sigs.slice(i, i + 100).map(s => s.signature), commitment: 'confirmed' })
+    });
+    if (!res.ok) continue;
+    const txns = await res.json();
+    for (const tx of (txns || [])) {
+      if (!tx || tx.transactionError) continue;
+      const isSell = txIsDex(tx);
+      for (const t of (tx.tokenTransfers || [])) {
+        if (t.mint !== currentMint) continue;
+        if (t.fromUserAccount === addr && !isExcluded(t.toUserAccount)) {
+          (isSell ? sells : transfers).push({ sig: tx.signature, ts: tx.timestamp, to: t.toUserAccount });
+        }
+      }
+    }
+    await new Promise(r => setTimeout(r, 150));
+  }
+  return { sells, transfers };
+}
+
+// Trace where a REVIEW wallet's transferred tokens went (one hop). If every
+// transfer landed in a single wallet that then made NO CLKN moves at all, the
+// tokens are provably still held — auto-pass, bonus paid to that wallet.
+// A downstream sell disqualifies; a further transfer or a split stays flagged.
+async function traceTransferDestinations(transferTxs, fromTs, untilTs) {
+  const dests = [...new Set(transferTxs.map(t => t.to))];
+  if (dests.length !== 1) {
+    return { resolved: 'unresolved', note: 'Split across ' + dests.length + ' wallets — trace manually' };
+  }
+  const dest = dests[0];
+  const flow = await scanWalletClknOutflows(dest, fromTs, untilTs);
+  if (flow.sells.length > 0) {
+    return { resolved: 'sold', note: 'Transferred, then sold downstream from ' + shortAddr(dest) };
+  }
+  if (flow.transfers.length > 0) {
+    return { resolved: 'unresolved', note: 'Tokens moved on again from ' + shortAddr(dest) + ' — trace manually' };
+  }
+  return { resolved: 'held', payoutAddr: dest, note: 'Held clean in ' + shortAddr(dest) + ' — bonus pays there' };
+}
+
 async function runHoldCheck() {
   if (eligibleBuyers.length === 0) { showError('Run Phase 1 first.'); return; }
 
@@ -997,6 +1060,33 @@ async function runHoldCheck() {
     await new Promise(r => setTimeout(r, 300));
   }
 
+  // Phase 2b — trace REVIEW wallets. Tokens that simply moved into a wallet
+  // which then held them untouched are auto-resolved to HELD, with the bonus
+  // redirected to that wallet. Sells downstream flip to SKIP; anything murkier
+  // stays in REVIEW for a manual call.
+  const toTrace = results.filter(r => r.status === 'review');
+  for (let i = 0; i < toTrace.length; i++) {
+    const r = toTrace[i];
+    setHoldStatus('Tracing transferred tokens ' + (i+1) + ' of ' + toTrace.length + '...', 100);
+    try {
+      const verdict = await traceTransferDestinations(r.transferTxs, compEndTime, checkUntil);
+      r.traceNote = verdict.note;
+      if (verdict.resolved === 'held') {
+        r.status = 'held';
+        r.payoutAddr = verdict.payoutAddr;
+        r.passed = !r.belowMin;
+        if (!r.belowMin) r.skipReason = null;
+      } else if (verdict.resolved === 'sold') {
+        r.status = 'sold';
+        r.passed = false;
+        r.skipReason = verdict.note;
+      } else {
+        r.skipReason = verdict.note;
+      }
+    } catch(e) {}
+    await new Promise(r2 => setTimeout(r2, 250));
+  }
+
   setHoldStatus('Hold check complete', 100);
   document.getElementById('holdStatusDot').classList.add('done');
   document.getElementById('holdBtn').disabled = false;
@@ -1047,11 +1137,12 @@ function renderHoldResults(results, holdHrs, holdDeadline, bonusPct, now) {
     const xferBtn = r.transferTxs.length > 0
       ? '<button class="expand-btn" onclick="toggleTxDetail(\'' + xferId + '\',this)">TRANSFERS</button>'
       : '';
-    const reasonColor = r.status === 'review' ? '#FCD34D' : 'var(--red)';
+    const noteText = r.skipReason || r.traceNote;
+    const noteColor = r.passed ? 'var(--subtext)' : (r.status === 'review' ? '#FCD34D' : 'var(--red)');
     const showBonus = r.passed || r.status === 'review';
     tr.innerHTML = '<td class="rank-cell">' + (i+1) + '</td>' +
       '<td><div class="addr-wrap"><span class="addr-cell">' + shortAddr(r.addr) + '</span><button class="copy-btn" onclick="copyAddr(this,\'' + r.addr + '\')">COPY</button></div>' +
-      (r.skipReason ? '<div style="font-size:10px;color:' + reasonColor + ';font-family:var(--mono);margin-top:2px">' + r.skipReason + '</div>' : '') + '</td>' +
+      (noteText ? '<div style="font-size:10px;color:' + noteColor + ';font-family:var(--mono);margin-top:2px">' + noteText + '</div>' : '') + '</td>' +
       '<td class="amt-cell">' + fmtAmount(Number(r.bought)) + '</td>' +
       '<td class="bonus-cell">' + (showBonus ? r.bonusTokens.toLocaleString(undefined, {maximumFractionDigits: 2}) + ' ' + currentTokenName : '--') + '</td>' +
       '<td>' + statusBadge + sellBtn + xferBtn + '</td>';
@@ -1095,17 +1186,19 @@ function renderHoldResults(results, holdHrs, holdDeadline, bonusPct, now) {
     finalBox.className = 'final-box';
     finalBox.innerHTML = '<div class="final-box-title">CONFIRMED BONUS RECIPIENTS -- ' + passed.length + ' WALLETS</div>';
     passed.forEach((r, i) => {
+      const payAddr = r.payoutAddr || r.addr;
       finalBox.innerHTML += '<div class="final-item">' +
         '<span class="final-rank">' + (i+1) + '.</span>' +
-        '<span style="font-family:var(--mono);font-size:11px;color:var(--subtext);flex:1">' + shortAddr(r.addr) + '</span>' +
+        '<span style="font-family:var(--mono);font-size:11px;color:var(--subtext);flex:1">' + shortAddr(payAddr) + (r.payoutAddr ? ' <span style="color:#FCD34D">(moved — paid here)</span>' : '') + '</span>' +
         '<span style="font-family:var(--mono);font-size:11px;color:var(--green);margin-right:8px">' + r.bonusTokens.toLocaleString(undefined, {maximumFractionDigits:2}) + ' ' + currentTokenName + '</span>' +
-        '<button class="copy-btn" onclick="copyAddr(this,\'' + r.addr + '\')">COPY</button>' +
+        '<button class="copy-btn" onclick="copyAddr(this,\'' + payAddr + '\')">COPY</button>' +
         '</div>';
     });
     container.appendChild(finalBox);
 
-    // Store for airdrop
-    window._airdropData = passed.map(r => ({ addr: r.addr, amount: r.bonusTokens, mint: currentMint, tokenName: currentTokenName }));
+    // Store for airdrop — payout follows the tokens when they were moved to a
+    // verified hold wallet.
+    window._airdropData = passed.map(r => ({ addr: r.payoutAddr || r.addr, amount: r.bonusTokens, mint: currentMint, tokenName: currentTokenName }));
     const airdropBtn = document.querySelector('#airdropSection .airdrop-btn');
     if (airdropBtn) airdropBtn.textContent = '🚀 OPEN AIRDROP TOOL (' + passed.length + ' ' + (passed.length === 1 ? 'WINNER' : 'WINNERS') + ')';
     document.getElementById('airdropSection').classList.add('show');
