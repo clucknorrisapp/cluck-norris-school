@@ -2320,7 +2320,8 @@ async function notifyClknBuy(buy, tx, pool, usdValue, HELIUS_KEY) {
     `${fmtQuote(buy.quote)}${usdSuffix} → <b>${fmtClkn(buy.clknAmount)} CLKN</b>\n` +
     `${routeLine}${priceLine}${rankBlock}\n` +
     `Buyer: <code>${buyerShort}</code>\n` +
-    `<a href="https://solscan.io/tx/${tx.signature}">↗ View on Solscan</a>`;
+    `<a href="https://solscan.io/tx/${tx.signature}">↗ View on Solscan</a>\n` +
+    `🐔 <a href="https://clucknorris.app">Tools & school: clucknorris.app</a>`;
   await notifyTelegramPhoto(BUY_GRAPHIC_URL, caption);
 }
 
@@ -2365,7 +2366,8 @@ async function notifyClknSell(sell, tx, pool, usdValue, HELIUS_KEY) {
     `${routeLine}${priceLine}${rankBlock}\n` +
     `Seller: <code>${sellerShort}</code>\n` +
     `💧 <i>Every dip is a discount — a cheaper chance to stack CLKN</i>\n` +
-    `<a href="https://solscan.io/tx/${tx.signature}">↗ View on Solscan</a>`;
+    `<a href="https://solscan.io/tx/${tx.signature}">↗ View on Solscan</a>\n` +
+    `🐔 <a href="https://clucknorris.app">Tools & school: clucknorris.app</a>`;
   await notifyTelegramPhoto(BUY_GRAPHIC_URL, caption);
 }
 
