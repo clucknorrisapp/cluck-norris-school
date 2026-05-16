@@ -2347,8 +2347,8 @@ async function notifyClknSell(trade, tx, pool, usdValue, HELIUS_KEY) {
   const caption =
     `🔻 <b>CLUCK SOLD</b>\n` +
     `<b>${fmtClkn(trade.clknAmount)} CLKN</b> → ${fmtQuote(trade.quote)}${usdSuffix}\n` +
-    `${routeLine}${priceLine}${rankBlock}\n` +
     `${sellPun(usdValue)}\n` +
+    `${routeLine}${priceLine}${rankBlock}\n` +
     `Seller: <code>${sellerShort}</code>\n` +
     `💧 <i>Every dip is a discount — a cheaper chance to stack CLKN</i>\n` +
     `<a href="https://solscan.io/tx/${tx.signature}">↗ View on Solscan</a>\n` +
