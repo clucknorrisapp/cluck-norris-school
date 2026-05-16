@@ -122,6 +122,7 @@
   .hold-fail { color: var(--red); font-weight: 700; }
   .badge-pass { background: rgba(16,185,129,0.15); color: var(--green); border: 1px solid rgba(16,185,129,0.3); font-family: var(--mono); font-size: 10px; padding: 2px 8px; border-radius: 10px; }
   .badge-fail { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.3); font-family: var(--mono); font-size: 10px; padding: 2px 8px; border-radius: 10px; }
+  .badge-review { background: rgba(252,211,77,0.15); color: #FCD34D; border: 1px solid rgba(252,211,77,0.35); font-family: var(--mono); font-size: 10px; padding: 2px 8px; border-radius: 10px; }
 
   .tx-detail-row { display: none; }
   .tx-detail-row.open { display: table-row; }
@@ -876,6 +877,17 @@ function renderBuyResults(eligible, disqualified) {
 }
 
 // ── PHASE 2: HOLD CHECK ──────────────────────────────────────────────────────
+// True if a transaction touched a known DEX program — used to tell a real
+// sell (swap routed through a DEX) from a plain wallet-to-wallet transfer.
+// Same detection Phase 1 uses inline; reused here for the hold check.
+function txIsDex(tx) {
+  const allAccounts = (tx.accountData || []).map(a => a.account);
+  return allAccounts.some(a => DEX_PROGRAMS.has(a)) ||
+    (tx.instructions || []).some(ix => DEX_PROGRAMS.has(ix.programId)) ||
+    (tx.innerInstructions || []).some(inner =>
+      (inner.instructions || []).some(ix => DEX_PROGRAMS.has(ix.programId)));
+}
+
 async function runHoldCheck() {
   if (eligibleBuyers.length === 0) { showError('Run Phase 1 first.'); return; }
 
@@ -900,7 +912,9 @@ async function runHoldCheck() {
     setHoldStatus('Checking wallet ' + (i+1) + ' of ' + eligibleBuyers.length + '...', (i / eligibleBuyers.length) * 100);
 
     let soldAmt = 0n;
+    let transferredAmt = 0n;
     const sellTxs = [];
+    const transferTxs = [];
 
     if (holdHrs > 0) {
       try {
@@ -932,12 +946,21 @@ async function runHoldCheck() {
             const txns = await res.json();
             for (const tx of (txns || [])) {
               if (!tx || tx.transactionError) continue;
+              // An outgoing transfer only counts as a SELL if the tx hit a DEX.
+              // A plain wallet-to-wallet move (e.g. into cold storage) is not a
+              // sale — it's flagged for manual review instead of disqualifying.
+              const isSell = txIsDex(tx);
               for (const t of (tx.tokenTransfers || [])) {
                 if (t.mint !== currentMint) continue;
                 if (t.fromUserAccount === wallet.addr && !isExcluded(t.toUserAccount)) {
                   const amt = BigInt(Math.round((t.tokenAmount || 0) * Math.pow(10, tokenDecimals)));
-                  soldAmt += amt;
-                  sellTxs.push({ sig: tx.signature, ts: tx.timestamp, amt: Number(amt) });
+                  if (isSell) {
+                    soldAmt += amt;
+                    sellTxs.push({ sig: tx.signature, ts: tx.timestamp, amt: Number(amt) });
+                  } else {
+                    transferredAmt += amt;
+                    transferTxs.push({ sig: tx.signature, ts: tx.timestamp, amt: Number(amt), to: t.toUserAccount });
+                  }
                 }
               }
             }
@@ -952,17 +975,23 @@ async function runHoldCheck() {
     const bonusUsd = tokenPrice > 0 ? bonusTokens * tokenPrice : null;
     const belowMin = bonusUsd !== null && bonusUsd < minRewardUsd;
 
+    const status = soldAmt > 0n ? 'sold' : transferredAmt > 0n ? 'review' : 'held';
     results.push({
       addr: wallet.addr,
       bought: wallet.bought,
-      passed: soldAmt === 0n && !belowMin,
+      passed: status === 'held' && !belowMin,
+      status,
       soldAmt,
+      transferredAmt,
       sellTxs,
+      transferTxs,
       bonusRaw,
       bonusTokens,
       bonusUsd,
       belowMin,
-      skipReason: soldAmt > 0n ? 'Sold during hold period' : belowMin ? 'Bonus below minimum ($' + bonusUsd.toFixed(4) + ')' : null
+      skipReason: status === 'sold' ? 'Sold during hold period'
+        : status === 'review' ? 'Transferred out — needs manual review'
+        : belowMin ? 'Bonus below minimum ($' + bonusUsd.toFixed(4) + ')' : null
     });
 
     await new Promise(r => setTimeout(r, 300));
@@ -981,6 +1010,7 @@ function renderHoldResults(results, holdHrs, holdDeadline, bonusPct, now) {
 
   const passed = results.filter(r => r.passed);
   const failed = results.filter(r => !r.passed);
+  const review = results.filter(r => r.status === 'review');
   const deadlinePast = now >= holdDeadline;
   const totalBonus = passed.reduce((s, r) => s + r.bonusTokens, 0);
 
@@ -990,7 +1020,7 @@ function renderHoldResults(results, holdHrs, holdDeadline, bonusPct, now) {
   banner.innerHTML = '<div class="hold-banner-title">HOLD CHECK -- ' + holdHrs + 'H -- ' + bonusPct + '% BONUS</div>' +
     '<div class="hold-banner-sub">' +
     'Hold deadline: ' + fmtTime(holdDeadline) + ' ' + (deadlinePast ? '-- passed' : '-- not yet reached') + '<br>' +
-    passed.length + ' of ' + results.length + ' wallets passed -- Total bonus to distribute: ' + totalBonus.toLocaleString(undefined, {maximumFractionDigits: 2}) + ' ' + currentTokenName +
+    passed.length + ' of ' + results.length + ' wallets passed' + (review.length > 0 ? ' -- ' + review.length + ' flagged for review' : '') + ' -- Total bonus to distribute: ' + totalBonus.toLocaleString(undefined, {maximumFractionDigits: 2}) + ' ' + currentTokenName +
     '</div>';
   container.appendChild(banner);
 
@@ -1003,29 +1033,51 @@ function renderHoldResults(results, holdHrs, holdDeadline, bonusPct, now) {
 
   results.forEach((r, i) => {
     const tr = document.createElement('tr');
-    if (!r.passed) tr.style.opacity = '0.6';
+    if (!r.passed) tr.style.opacity = r.status === 'review' ? '0.85' : '0.6';
     const statusBadge = r.passed
       ? '<span class="badge-pass">HELD</span>'
-      : '<span class="badge-fail">SKIP</span>';
-    const detailId = 'hold-sell-' + i;
+      : r.status === 'review'
+        ? '<span class="badge-review">REVIEW</span>'
+        : '<span class="badge-fail">SKIP</span>';
+    const sellId = 'hold-sell-' + i;
+    const xferId = 'hold-xfer-' + i;
     const sellBtn = r.sellTxs.length > 0
-      ? '<button class="expand-btn" onclick="toggleTxDetail(\'' + detailId + '\',this)">SELLS</button>'
+      ? '<button class="expand-btn" onclick="toggleTxDetail(\'' + sellId + '\',this)">SELLS</button>'
       : '';
+    const xferBtn = r.transferTxs.length > 0
+      ? '<button class="expand-btn" onclick="toggleTxDetail(\'' + xferId + '\',this)">TRANSFERS</button>'
+      : '';
+    const reasonColor = r.status === 'review' ? '#FCD34D' : 'var(--red)';
+    const showBonus = r.passed || r.status === 'review';
     tr.innerHTML = '<td class="rank-cell">' + (i+1) + '</td>' +
       '<td><div class="addr-wrap"><span class="addr-cell">' + shortAddr(r.addr) + '</span><button class="copy-btn" onclick="copyAddr(this,\'' + r.addr + '\')">COPY</button></div>' +
-      (r.skipReason ? '<div style="font-size:10px;color:var(--red);font-family:var(--mono);margin-top:2px">' + r.skipReason + '</div>' : '') + '</td>' +
+      (r.skipReason ? '<div style="font-size:10px;color:' + reasonColor + ';font-family:var(--mono);margin-top:2px">' + r.skipReason + '</div>' : '') + '</td>' +
       '<td class="amt-cell">' + fmtAmount(Number(r.bought)) + '</td>' +
-      '<td class="bonus-cell">' + (r.passed ? r.bonusTokens.toLocaleString(undefined, {maximumFractionDigits: 2}) + ' ' + currentTokenName : '--') + '</td>' +
-      '<td>' + statusBadge + sellBtn + '</td>';
+      '<td class="bonus-cell">' + (showBonus ? r.bonusTokens.toLocaleString(undefined, {maximumFractionDigits: 2}) + ' ' + currentTokenName : '--') + '</td>' +
+      '<td>' + statusBadge + sellBtn + xferBtn + '</td>';
     tbody.appendChild(tr);
 
     if (r.sellTxs.length > 0) {
       const detailTr = document.createElement('tr');
       detailTr.className = 'tx-detail-row';
-      detailTr.id = detailId;
+      detailTr.id = sellId;
       const items = r.sellTxs.map(t =>
         '<div class="tx-item"><span class="tx-amt" style="color:var(--red)">-' + fmtAmount(t.amt) + '</span>' +
         '<span class="tx-time">' + fmtTime(t.ts) + '</span>' +
+        '<a class="tx-link" href="https://solscan.io/tx/' + t.sig + '" target="_blank">Solscan</a></div>'
+      ).join('');
+      detailTr.innerHTML = '<td colspan="5"><div class="tx-list">' + items + '</div></td>';
+      tbody.appendChild(detailTr);
+    }
+
+    if (r.transferTxs.length > 0) {
+      const detailTr = document.createElement('tr');
+      detailTr.className = 'tx-detail-row';
+      detailTr.id = xferId;
+      const items = r.transferTxs.map(t =>
+        '<div class="tx-item"><span class="tx-amt" style="color:#FCD34D">&rarr; ' + fmtAmount(t.amt) + '</span>' +
+        '<span class="tx-time">' + fmtTime(t.ts) + '</span>' +
+        '<a class="tx-link" href="https://solscan.io/account/' + t.to + '" target="_blank">to ' + shortAddr(t.to) + '</a>' +
         '<a class="tx-link" href="https://solscan.io/tx/' + t.sig + '" target="_blank">Solscan</a></div>'
       ).join('');
       detailTr.innerHTML = '<td colspan="5"><div class="tx-list">' + items + '</div></td>';
