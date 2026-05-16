@@ -2065,15 +2065,17 @@ function detectClknBuy(tx) {
     if (!(amt > 0)) continue;
     quoteSums[t.mint] = (quoteSums[t.mint] || 0) + amt;
   }
-  // Native SOL (unwrapped) — sum any outgoing native lamports from buyer
-  let nativeSolOut = 0;
-  for (const n of native) {
-    if (n.fromUserAccount !== buyer) continue;
-    const lamports = Number(n.amount);
-    if (lamports > 0) nativeSolOut += lamports;
-  }
-  if (nativeSolOut > 0) {
-    quoteSums[WSOL_MINT] = (quoteSums[WSOL_MINT] || 0) + nativeSolOut / 1e9;
+  // Native SOL only counts when the swap settled in native lamports, not wSOL.
+  // If a wSOL token transfer from the buyer already exists, the native movement
+  // is just that wSOL wrapping — adding it would double the amount.
+  if (!quoteSums[WSOL_MINT]) {
+    let nativeSolOut = 0;
+    for (const n of native) {
+      if (n.fromUserAccount !== buyer) continue;
+      const lamports = Number(n.amount);
+      if (lamports > 0) nativeSolOut += lamports;
+    }
+    if (nativeSolOut > 0) quoteSums[WSOL_MINT] = nativeSolOut / 1e9;
   }
 
   // Pick whichever quote token has the largest total — that's the actual swap leg
@@ -2124,15 +2126,17 @@ function detectClknSell(tx) {
     if (!(amt > 0)) continue;
     quoteSums[t.mint] = (quoteSums[t.mint] || 0) + amt;
   }
-  // Native SOL (unwrapped) — sum any incoming native lamports to the seller
-  let nativeSolIn = 0;
-  for (const n of native) {
-    if (n.toUserAccount !== seller) continue;
-    const lamports = Number(n.amount);
-    if (lamports > 0) nativeSolIn += lamports;
-  }
-  if (nativeSolIn > 0) {
-    quoteSums[WSOL_MINT] = (quoteSums[WSOL_MINT] || 0) + nativeSolIn / 1e9;
+  // Native SOL only counts when the swap settled in native lamports, not wSOL.
+  // If a wSOL token transfer to the seller exists, the native movement is just
+  // that wSOL unwrapping — adding it would double the amount.
+  if (!quoteSums[WSOL_MINT]) {
+    let nativeSolIn = 0;
+    for (const n of native) {
+      if (n.toUserAccount !== seller) continue;
+      const lamports = Number(n.amount);
+      if (lamports > 0) nativeSolIn += lamports;
+    }
+    if (nativeSolIn > 0) quoteSums[WSOL_MINT] = nativeSolIn / 1e9;
   }
 
   // Pick whichever quote token has the largest total — that's the actual swap leg
