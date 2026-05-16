@@ -2336,14 +2336,17 @@ function buyPun(usd, holderState) {
 }
 
 // Size-scaled chicken-pun line for sell alerts — the bigger the dump, the
-// bigger the cluck. Tiered by USD value of the sell; thresholds/lines are a
-// plain ladder, easy to tweak.
+// bigger the cluck. 8-tier USD ladder matching the buy ladders' breakpoints
+// (10/50/100/250/500/750/1000); plain ladder, easy to tweak.
 function sellPun(usd) {
   const v = usd || 0;
-  if (v >= 5000) return "🍗 <b>FOWL PLAY!</b> That's not a sell, that's a Sunday roast.";
-  if (v >= 1000) return "🪶 Big bird flapped off — feathers everywhere.";
+  if (v >= 1000) return "🍗 <b>FOWL PLAY!</b> That's not a sell, that's a Sunday roast.";
+  if (v >= 750)  return "🪶 Big bird flapped off — feathers everywhere.";
+  if (v >= 500)  return "🪶 Feathers in the air — a real bird took flight.";
   if (v >= 250)  return "🐓 Squawk! Somebody flew the coop with a beakful.";
+  if (v >= 100)  return "🐔 A modest cluck cashed out.";
   if (v >= 50)   return "🐔 A few feathers ruffled — the flock barely blinked.";
+  if (v >= 10)   return "🐤 A couple feathers drift down — nobody flinched.";
   return "🐤 Chicken feed — barely a peck off the pile.";
 }
 
