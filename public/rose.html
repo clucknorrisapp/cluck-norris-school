@@ -221,8 +221,8 @@ th:nth-child(4), td:nth-child(4) { display: none; }
   <div class="header">
     <div class="rose-icon">🌹</div>
     <div class="header-text">
-      <h1>ROSE Analyzer</h1>
-      <p>BUY COMPETITION TRACKER — SOLANA</p>
+      <h1>ROSE</h1>
+      <p>BUY COMPETITION TRACKER · SHE WATCHES, AND REWARDS THOSE WHO BUY</p>
     </div>
   </div>
 
@@ -655,7 +655,7 @@ async function runAnalysis() {
         if (isProgram(owner) || !isRealWallet(owner)) continue;
         const net = tokNet[owner];
         if (Math.abs(net) < 1e-9) continue;     // netted out — a routing hop
-        if (!passWallets[owner]) passWallets[owner] = { bought: 0n, sold: 0n, buyTxns: 0, sellTxns: 0, firstBuy: null, txSigs: [] };
+        if (!passWallets[owner]) passWallets[owner] = { bought: 0n, sold: 0n, movedOut: 0n, buyTxns: 0, sellTxns: 0, moveTxns: 0, firstBuy: null, txSigs: [], moveTxs: [] };
         const w = passWallets[owner];
         const spent    = (solNet[owner] || 0) < -SOL_DUST || lostTok[owner];
         const received = (solNet[owner] || 0) >  SOL_DUST || gotTok[owner];
@@ -670,10 +670,15 @@ async function runAnalysis() {
             if (!ex) w.txSigs.push({ sig, ts, amt: Number(raw) });
             else ex.amt += Number(raw);
           }
-        } else {
-          if (!received) continue;              // sent tokens, got nothing = transfer OUT
-          w.sold += raw;
+        } else if (received) {
+          w.sold += raw;                        // sent tokens, got an asset back = a SELL
           w.sellTxns++;
+        } else {
+          // Sent tokens, got nothing back = a wallet-to-wallet transfer OUT.
+          w.movedOut += raw;
+          w.moveTxns++;
+          const dests = Object.keys(tokNet).filter(o => tokNet[o] > 1e-9);
+          w.moveTxs.push({ sig, ts, amt: Number(raw), to: dests.length === 1 ? dests[0] : null });
         }
       }
     }
@@ -727,6 +732,10 @@ async function runAnalysis() {
             wallets[addr].sold = data.sold;
             wallets[addr].sellTxns = data.sellTxns;
           }
+          if ((data.movedOut || 0n) > (wallets[addr].movedOut || 0n)) {
+            wallets[addr].movedOut = data.movedOut;
+            wallets[addr].moveTxns = data.moveTxns;
+          }
           if (data.firstBuy && (!wallets[addr].firstBuy || data.firstBuy < wallets[addr].firstBuy)) {
             wallets[addr].firstBuy = data.firstBuy;
           }
@@ -739,6 +748,14 @@ async function runAnalysis() {
               }
             }
           }
+          if (data.moveTxs) {
+            if (!wallets[addr].moveTxs) wallets[addr].moveTxs = [];
+            for (const t of data.moveTxs) {
+              if (!wallets[addr].moveTxs.find(x => x.sig === t.sig)) {
+                wallets[addr].moveTxs.push(t);
+              }
+            }
+          }
         }
       }
 
@@ -748,40 +765,39 @@ async function runAnalysis() {
     setStatus('All passes complete. Building results...', 92);
     await new Promise(r => setTimeout(r, 300));
 
-    // Split into eligible and disqualified
+    // Split into eligible / flagged (bought, then moved tokens out) / disqualified.
+    // The bonus follows the tokens: a wallet is credited for what it bought AND
+    // still holds (bought − movedOut); whatever it moved out is flagged so the
+    // new holder can be traced and credited that portion.
     const eligible = [];
     const disqualified = [];
+    const flagged = [];
+    let totalBought = 0n;
+    let uniqueWallets = 0;
 
     for (const [addr, data] of Object.entries(wallets)) {
       if (data.bought === 0n) continue; // Never actually bought
-
-      const entry = {
-        addr,
-        bought: data.bought,
-        sold: data.sold,
-        buyTxns: data.buyTxns,
-        sellTxns: data.sellTxns,
-        firstBuy: data.firstBuy,
-        txSigs: data.txSigs || []
+      uniqueWallets++;
+      totalBought += data.bought;
+      const moved = data.movedOut || 0n;
+      const base = {
+        addr, bought: data.bought, sold: data.sold, movedOut: moved,
+        buyTxns: data.buyTxns, sellTxns: data.sellTxns, moveTxns: data.moveTxns || 0,
+        firstBuy: data.firstBuy, txSigs: data.txSigs || [], moveTxs: data.moveTxs || []
       };
-
-      if (data.sold > 0n) {
-        disqualified.push(entry);
-      } else {
-        eligible.push(entry);
-      }
+      if (data.sold > 0n) { disqualified.push(base); continue; }
+      const held = data.bought - moved;   // bought and still held
+      if (held > 0n) eligible.push({ ...base, bought: held, grossBought: data.bought });
+      if (moved > 0n) flagged.push(base); // traceable — the new holder earns that part
     }
 
-    // Sort eligible by amount bought desc
     eligible.sort((a, b) => (b.bought > a.bought ? 1 : b.bought < a.bought ? -1 : 0));
     disqualified.sort((a, b) => (b.bought > a.bought ? 1 : b.bought < a.bought ? -1 : 0));
-
-    const totalBought = eligible.reduce((s, e) => s + e.bought, 0n)
-                      + disqualified.reduce((s, e) => s + e.bought, 0n);
+    flagged.sort((a, b) => (b.movedOut > a.movedOut ? 1 : b.movedOut < a.movedOut ? -1 : 0));
 
     // Update summary
     document.getElementById('statTxns').textContent = allSigs.length.toLocaleString();
-    document.getElementById('statWallets').textContent = (eligible.length + disqualified.length).toLocaleString();
+    document.getElementById('statWallets').textContent = uniqueWallets.toLocaleString();
     document.getElementById('statEligible').textContent = eligible.length.toLocaleString();
     document.getElementById('statDisq').textContent = disqualified.length.toLocaleString();
     document.getElementById('statVolume').textContent = fmtAmount(Number(totalBought));
@@ -794,7 +810,7 @@ async function runAnalysis() {
 
     // Render results
     const numWinners = parseInt(document.getElementById('inputWinners').value) || 3;
-    renderResults(eligible, disqualified, numWinners);
+    renderResults(eligible, disqualified, flagged, numWinners);
 
     // Hold check — run if hold hours is filled in
     const holdHours = parseInt(document.getElementById('inputHoldHours').value) || 0;
@@ -1092,7 +1108,7 @@ function appendPrizeSection(winners, container) {
   });
 }
 
-function renderResults(eligible, disqualified, numWinners) {
+function renderResults(eligible, disqualified, flagged, numWinners) {
   const container = document.getElementById('results');
   container.innerHTML = '';
 
@@ -1140,7 +1156,7 @@ function renderResults(eligible, disqualified, numWinners) {
       tr.innerHTML = `
         <td class="rank-cell ${rankClass}">${isWinner ? '🏆 ' : ''}${i+1}</td>
         <td><div class="addr-wrap"><span class="addr-cell" onclick="toggleAddr(this,'${e.addr}')">${shortAddr(e.addr)}</span><button class="copy-btn" onclick="copyAddr(this,'${e.addr}')">COPY</button></div></td>
-        <td class="amt-cell">${fmtAmount(Number(e.bought))}</td>
+        <td class="amt-cell">${fmtAmount(Number(e.bought))}${e.grossBought && e.grossBought > e.bought ? `<span style="color:#FCD34D;font-size:9px"> · moved ${fmtAmount(Number(e.grossBought - e.bought))} out</span>` : ''}</td>
         <td class="buys-cell">
           <span>${e.buyTxns} buy${e.buyTxns !== 1 ? 's' : ''}</span>
           ${e.txSigs.length > 0 ? `<button class="expand-btn" onclick="toggleTxDetail('${detailId}', this)" style="margin-left:6px">▶ TXS</button>` : ''}
@@ -1226,9 +1242,143 @@ function renderResults(eligible, disqualified, numWinners) {
   }
   container.appendChild(disqSection);
 
-  // Store data for exports
+  // ── BOUGHT & MOVED OUT (flagged) ──
+  if (flagged && flagged.length > 0) {
+    const flagSection = document.createElement('div');
+    flagSection.style.marginTop = '32px';
+    flagSection.innerHTML = `
+      <div class="section-header">
+        <span>⚠ BOUGHT &amp; MOVED OUT</span>
+        <span class="badge" style="background:rgba(245,158,11,0.15);color:#FCD34D;border:1px solid rgba(245,158,11,0.45)">${flagged.length} wallet${flagged.length !== 1 ? 's' : ''}</span>
+      </div>
+      <div style="font-size:11px;color:var(--subtext);margin:6px 0 10px;line-height:1.6">Bought, then transferred tokens to another wallet — not a sale, so not disqualified. Trace each: if the destination still holds the tokens, that wallet earns the bonus on the moved amount.</div>`;
+    const wrap = document.createElement('div');
+    wrap.className = 'tbl-wrap';
+    const tbl = document.createElement('table');
+    tbl.innerHTML = `<thead><tr><th>#</th><th>Wallet</th><th>Bought</th><th>Moved Out</th><th>Trace</th></tr></thead>`;
+    const tbody = document.createElement('tbody');
+    flagged.forEach((e, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="rank-cell" style="color:#FCD34D">${i+1}</td>
+        <td><div class="addr-wrap"><span class="addr-cell" onclick="toggleAddr(this,'${e.addr}')">${shortAddr(e.addr)}</span><button class="copy-btn" onclick="copyAddr(this,'${e.addr}')">COPY</button></div></td>
+        <td class="amt-cell">${fmtAmount(Number(e.bought))}</td>
+        <td class="amt-cell" style="color:#FCD34D">${fmtAmount(Number(e.movedOut))}</td>
+        <td><button class="expand-btn" id="traceBtn${i}" onclick="traceFlagged(${i})">🔍 TRACE</button></td>`;
+      tbody.appendChild(tr);
+      const resTr = document.createElement('tr');
+      resTr.className = 'tx-detail-row';
+      resTr.id = 'trace-result-' + i;
+      resTr.innerHTML = `<td colspan="5"><div style="padding:8px 4px" id="trace-body-${i}"></div></td>`;
+      tbody.appendChild(resTr);
+    });
+    tbl.appendChild(tbody);
+    wrap.appendChild(tbl);
+    flagSection.appendChild(wrap);
+    container.appendChild(flagSection);
+  }
+
+  // Store data for exports / tracing
   window._eligibleData = eligible;
   window._disqualifiedData = disqualified;
+  window._flaggedBuyers = flagged || [];
+}
+
+// ── Flagged-mover trace — follow transferred tokens one hop ───────────────────
+// True if a tx touched a known DEX program — tells a real sell from a transfer.
+function txIsDex(tx) {
+  const allAccounts = (tx.accountData || []).map(a => a.account);
+  const ixs = tx.instructions || [];
+  return allAccounts.some(a => DEX_PROGRAMS.has(a)) ||
+    ixs.some(ix => DEX_PROGRAMS.has(ix.programId)) ||
+    ixs.some(ix => (ix.innerInstructions || []).some(inner => DEX_PROGRAMS.has(inner.programId)));
+}
+
+// A wallet's token outflows over [sinceTs, untilTs] — DEX sells vs plain transfers.
+async function scanWalletClknOutflows(addr, sinceTs, untilTs) {
+  let sigs = [], before = undefined;
+  while (true) {
+    const params = [addr, { limit: 100, commitment: 'confirmed' }];
+    if (before) params[1].before = before;
+    const page = await rpc('getSignaturesForAddress', params);
+    if (!page || page.length === 0) break;
+    let done = false;
+    for (const s of page) {
+      if (s.blockTime && s.blockTime < sinceTs) { done = true; break; }
+      if (s.blockTime && s.blockTime <= untilTs && !s.err) sigs.push(s);
+    }
+    if (done) break;
+    before = page[page.length - 1].signature;
+    await new Promise(r => setTimeout(r, 200));
+  }
+  const sells = [], transfers = [];
+  for (let i = 0; i < sigs.length; i += 100) {
+    const res = await fetch(HELIUS_TX, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transactions: sigs.slice(i, i + 100).map(s => s.signature), commitment: 'confirmed' })
+    });
+    if (!res.ok) continue;
+    const txns = await res.json();
+    for (const tx of (txns || [])) {
+      if (!tx || tx.transactionError) continue;
+      const isSell = txIsDex(tx);
+      for (const t of (tx.tokenTransfers || [])) {
+        if (t.mint !== MINT_ADDR) continue;
+        if (t.fromUserAccount === addr && !isProgram(t.toUserAccount)) {
+          (isSell ? sells : transfers).push({ sig: tx.signature, ts: tx.timestamp, to: t.toUserAccount });
+        }
+      }
+    }
+    await new Promise(r => setTimeout(r, 150));
+  }
+  return { sells, transfers };
+}
+
+// Trace where a flagged wallet's transferred tokens went (one hop).
+async function traceTransferDestinations(transferTxs, fromTs, untilTs) {
+  const dests = [...new Set(transferTxs.map(t => t.to))];
+  if (dests.length !== 1) return { resolved: 'unresolved', note: 'Split across ' + dests.length + ' wallets — trace manually' };
+  const dest = dests[0];
+  const flow = await scanWalletClknOutflows(dest, fromTs, untilTs);
+  if (flow.sells.length > 0) return { resolved: 'sold', note: 'Transferred, then sold downstream from ' + shortAddr(dest) };
+  if (flow.transfers.length > 0) return { resolved: 'unresolved', note: 'Tokens moved on again from ' + shortAddr(dest) + ' — trace manually' };
+  return { resolved: 'held', payoutAddr: dest, note: 'Held clean in ' + shortAddr(dest) };
+}
+
+async function traceFlagged(i) {
+  const e = (window._flaggedBuyers || [])[i];
+  if (!e) return;
+  const btn = document.getElementById('traceBtn' + i);
+  const row = document.getElementById('trace-result-' + i);
+  const body = document.getElementById('trace-body-' + i);
+  if (btn) { btn.disabled = true; btn.textContent = 'TRACING…'; }
+  if (row) row.classList.add('open');   // .tx-detail-row is revealed via the 'open' class
+  if (body) body.innerHTML = '<span style="color:var(--subtext);font-size:11px">Following the tokens one hop…</span>';
+  try {
+    const moves = (e.moveTxs || []).filter(m => m.to);
+    let html;
+    if (moves.length === 0) {
+      html = '<span style="color:#FCD34D;font-size:12px">Destination couldn\'t be read automatically — check this wallet on Solscan manually.</span>';
+    } else {
+      const fromTs = Math.min.apply(null, moves.map(m => m.ts || 0));
+      const untilTs = Math.floor(Date.now() / 1000);
+      const res = await traceTransferDestinations(moves, fromTs, untilTs);
+      if (res.resolved === 'held') {
+        html = '<div style="color:#10B981;font-size:12px;line-height:1.9">✓ <b>Still held.</b> ' + res.note +
+          '<br>Holder → <span class="addr-cell" style="color:#10B981">' + res.payoutAddr + '</span>' +
+          ' <button class="copy-btn" onclick="copyAddr(this,\'' + res.payoutAddr + '\')">COPY</button>' +
+          '<br><span style="color:var(--subtext);font-size:11px">This wallet holds the moved tokens — credit it in your prize ranking.</span></div>';
+      } else if (res.resolved === 'sold') {
+        html = '<span style="color:#EF4444;font-size:12px">✗ <b>Sold downstream.</b> ' + res.note + ' — no payout.</span>';
+      } else {
+        html = '<span style="color:#FCD34D;font-size:12px">⚠ ' + res.note + '</span>';
+      }
+    }
+    if (body) body.innerHTML = html;
+  } catch (err) {
+    if (body) body.innerHTML = '<span style="color:#EF4444;font-size:12px">Trace failed: ' + (err.message || err) + '</span>';
+  }
+  if (btn) { btn.disabled = false; btn.textContent = '🔍 TRACE'; }
 }
 
 function toggleAddr(el, full) {
