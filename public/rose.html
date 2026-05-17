@@ -224,11 +224,20 @@ th:nth-child(4), td:nth-child(4) { display: none; }
       <h1>ROSE Analyzer</h1>
       <p>BUY COMPETITION TRACKER — SOLANA</p>
     </div>
-    <div class="mint-pill" onclick="copyMint()" id="mintPill">RoSei...dtdF &nbsp;📋</div>
   </div>
 
   <div class="config">
-    <div class="config-title">⚙ COMPETITION WINDOW</div>
+    <div class="config-title">⚙ COMPETITION SETUP</div>
+    <div class="config-row">
+      <div class="config-group" style="flex:1;min-width:260px">
+        <div class="config-label">Token to analyze</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button class="preset-btn token-btn active" id="tokCLKN" onclick="setToken('DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS','CLKN',this)">CLKN</button>
+          <button class="preset-btn token-btn" id="tokROSE" onclick="setToken('RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF','ROSE',this)">ROSE</button>
+          <input type="text" id="customMint" placeholder="…or paste any token mint address" oninput="onMintInput()" style="flex:1;min-width:200px;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:8px 10px;color:#e8e8e8;font-size:12px"/>
+        </div>
+      </div>
+    </div>
     <div class="config-row">
       <div class="config-group">
         <div class="config-label">Presets</div>
@@ -299,10 +308,11 @@ th:nth-child(4), td:nth-child(4) { display: none; }
 
 </div>
 
+<script src="/vendor/solana-web3.iife.min.js"></script>
 <script>
-const MINT = 'RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGtdF'; // fixed below
-const MINT_ADDR = 'RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF';
-const DECIMALS = 9; // will be detected
+// The token under analysis — defaults to CLKN, changeable via the token picker.
+let MINT_ADDR = 'DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS';
+let TOKEN_NAME = 'CLKN';
 const RPC = '/api/helius-rpc';
 const HELIUS_TX = '/api/helius-tx';
 
@@ -396,7 +406,26 @@ function setPreset(h, m, btn) {
 }
 
 function clearPresets() {
-  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.preset-btn:not(.token-btn)').forEach(b => b.classList.remove('active'));
+}
+
+// Token picker — sets the contract Rose analyzes. A preset button or a pasted
+// mint address; everything downstream reads MINT_ADDR / TOKEN_NAME.
+function setToken(mint, name, btn) {
+  MINT_ADDR = mint;
+  TOKEN_NAME = name;
+  const ci = document.getElementById('customMint');
+  if (ci) ci.value = '';
+  document.querySelectorAll('.token-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+}
+function onMintInput() {
+  const v = document.getElementById('customMint').value.trim();
+  document.querySelectorAll('.token-btn').forEach(b => b.classList.remove('active'));
+  if (v.length >= 32 && v.length <= 44) {
+    MINT_ADDR = v;
+    TOKEN_NAME = v.slice(0, 4) + '…' + v.slice(-4);
+  }
 }
 
 function setStatus(text, pct) {
@@ -451,6 +480,20 @@ function isProgram(addr) {
   if (PROGRAM_ADDRS.has(addr)) return true;
   // Heuristic: program addresses are often short or all same chars
   return false;
+}
+// A real competition entrant is a normal signing wallet — a point ON the
+// ed25519 curve. Pool vaults and AMM authorities are PDAs (off-curve), so this
+// keeps every pool out of the winners list and the prize CSV. Cached per addr.
+const _curveCache = {};
+function isRealWallet(addr) {
+  if (addr in _curveCache) return _curveCache[addr];
+  let ok = true;  // fail-safe: if the curve check can't run, never exclude a wallet
+  try {
+    if (window.solanaWeb3 && solanaWeb3.PublicKey) {
+      ok = solanaWeb3.PublicKey.isOnCurve(new solanaWeb3.PublicKey(addr).toBytes());
+    }
+  } catch (e) { ok = true; }
+  return (_curveCache[addr] = ok);
 }
 
 function stopAnalysis() {
@@ -582,45 +625,55 @@ async function runAnalysis() {
 
     function processTx(tx, sigInfo, passWallets) {
       if (!tx || tx.transactionError) return;
+      const ts = tx.timestamp || (sigInfo && sigInfo.blockTime);
+      const sig = tx.signature;
 
-      const transfers = tx.tokenTransfers || [];
-      const ts = tx.timestamp || sigInfo?.blockTime;
-
-      // Must involve a known DEX
-      const allAccounts = (tx.accountData || []).map(a => a.account);
-      const isDex = allAccounts.some(a => DEX_PROGRAMS.has(a)) ||
-        (tx.instructions || []).some(ix => DEX_PROGRAMS.has(ix.programId)) ||
-        (tx.innerInstructions || []).some(inner =>
-          (inner.instructions || []).some(ix => DEX_PROGRAMS.has(ix.programId))
-        );
-      if (!isDex) return;
-
-      for (const transfer of transfers) {
-        if (transfer.mint !== MINT_ADDR) continue;
-        if (!transfer.toUserAccount || !transfer.fromUserAccount) continue;
-        if (isProgram(transfer.toUserAccount) && isProgram(transfer.fromUserAccount)) continue;
-
-        const amt = BigInt(Math.round((transfer.tokenAmount || 0) * Math.pow(10, tokenDecimals)));
-        if (amt === 0n) continue;
-
-        if (!isProgram(transfer.toUserAccount)) {
-          const owner = transfer.toUserAccount;
-          if (!passWallets[owner]) passWallets[owner] = { bought: 0n, sold: 0n, buyTxns: 0, sellTxns: 0, firstBuy: null, txSigs: [] };
-          passWallets[owner].bought += amt;
-          passWallets[owner].buyTxns++;
-          if (!passWallets[owner].firstBuy || ts < passWallets[owner].firstBuy) passWallets[owner].firstBuy = ts;
-          if (tx.signature) {
-            const existing = passWallets[owner].txSigs.find(x => x.sig === tx.signature);
-            if (!existing) passWallets[owner].txSigs.push({ sig: tx.signature, ts, amt: Number(amt) });
-            else existing.amt += Number(amt);
-          }
+      // ── Value-flow classification (same engine as buyspecial) ──────────────
+      // A BUY = a wallet that nets the token IN and gives up another asset for
+      // it in the same transaction. A wallet that only RECEIVES the token with
+      // nothing leaving is a plain wallet-to-wallet transfer — NOT a buy. A
+      // liquidity add/remove moves both assets the same direction, so it counts
+      // as neither. Reads net balances straight off-chain: works for any pool,
+      // any aggregator (Jupiter, DFlow, …) and any pay currency — no allowlist.
+      const tokNet = {};                  // owner -> net token amount (ui units)
+      const lostTok = {}, gotTok = {};    // owner -> net-moved a non-subject asset?
+      const solNet = {};                  // account -> net lamports
+      for (const e of (tx.accountData || [])) {
+        if (e.nativeBalanceChange) solNet[e.account] = (solNet[e.account] || 0) + e.nativeBalanceChange;
+        for (const tb of (e.tokenBalanceChanges || [])) {
+          const o = tb.userAccount, ra = tb.rawTokenAmount || {};
+          const amt = Number(ra.tokenAmount || 0) / Math.pow(10, ra.decimals || 0);
+          if (!o || !amt) continue;
+          if (tb.mint === MINT_ADDR) tokNet[o] = (tokNet[o] || 0) + amt;
+          else if (amt < 0) lostTok[o] = true;
+          else gotTok[o] = true;
         }
-
-        if (!isProgram(transfer.fromUserAccount)) {
-          const owner = transfer.fromUserAccount;
-          if (!passWallets[owner]) passWallets[owner] = { bought: 0n, sold: 0n, buyTxns: 0, sellTxns: 0, firstBuy: null, txSigs: [] };
-          passWallets[owner].sold += amt;
-          passWallets[owner].sellTxns++;
+      }
+      const SOL_DUST = 3e6; // lamports (~0.003 SOL) — ignore tx-fee / rent noise
+      for (const owner of Object.keys(tokNet)) {
+        // Skip excluded addresses and any non-wallet (pool vault / PDA).
+        if (isProgram(owner) || !isRealWallet(owner)) continue;
+        const net = tokNet[owner];
+        if (Math.abs(net) < 1e-9) continue;     // netted out — a routing hop
+        if (!passWallets[owner]) passWallets[owner] = { bought: 0n, sold: 0n, buyTxns: 0, sellTxns: 0, firstBuy: null, txSigs: [] };
+        const w = passWallets[owner];
+        const spent    = (solNet[owner] || 0) < -SOL_DUST || lostTok[owner];
+        const received = (solNet[owner] || 0) >  SOL_DUST || gotTok[owner];
+        const raw = BigInt(Math.round(Math.abs(net) * Math.pow(10, tokenDecimals)));
+        if (net > 0) {
+          if (!spent) continue;                 // received tokens, gave nothing = transfer IN
+          w.bought += raw;
+          w.buyTxns++;
+          if (!w.firstBuy || (ts && ts < w.firstBuy)) w.firstBuy = ts;
+          if (sig) {
+            const ex = w.txSigs.find(x => x.sig === sig);
+            if (!ex) w.txSigs.push({ sig, ts, amt: Number(raw) });
+            else ex.amt += Number(raw);
+          }
+        } else {
+          if (!received) continue;              // sent tokens, got nothing = transfer OUT
+          w.sold += raw;
+          w.sellTxns++;
         }
       }
     }
@@ -1032,7 +1085,7 @@ function appendPrizeSection(winners, container) {
     if (recipients.length === 0) return;
     sessionStorage.setItem('airdropPayload', JSON.stringify({
       mint: MINT_ADDR,
-      tokenName: 'ROSE',
+      tokenName: TOKEN_NAME,
       recipients: recipients.join('\n')
     }));
     window.open('/airdrop?from=rose', '_blank');
