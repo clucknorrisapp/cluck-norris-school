@@ -473,6 +473,8 @@
     <div class="progress-text" id="progressText">Preparing transactions...</div>
     <div class="progress-bar-wrap"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
     <div id="resultList" style="margin-top:12px;max-height:300px;overflow-y:auto"></div>
+    <button id="exportRecordBtn" onclick="exportAirdropRecord()" style="display:none;width:100%;margin-top:10px;padding:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.15);border-radius:8px;font-family:'Oswald',sans-serif;font-size:12px;font-weight:700;color:#D1D5DB;letter-spacing:2px;cursor:pointer">📋 EXPORT AIRDROP RECORD</button>
+    <div id="recordPanel" style="display:none;margin-top:8px"></div>
   </div>
 
   </div><!-- /#airdropTool -->
@@ -986,6 +988,9 @@ async function sendAirdrop() {
 
   const resultList = document.getElementById('resultList');
   resultList.innerHTML = '';
+  window._airdropResults = [];
+  document.getElementById('exportRecordBtn').style.display = 'none';
+  document.getElementById('recordPanel').style.display = 'none';
 
   let sent = 0;
   let failed = 0;
@@ -1089,6 +1094,9 @@ async function sendAirdrop() {
       `✅ Done — ${sent} sent, ${failed} failed`,
       100
     );
+    if ((window._airdropResults || []).length > 0) {
+      document.getElementById('exportRecordBtn').style.display = 'block';
+    }
 
   } catch(e) {
     showError('Airdrop failed: ' + e.message);
@@ -1159,6 +1167,9 @@ function setProgress(text, pct) {
 }
 
 function addResult(addr, amount, status, sig, errMsg) {
+  // Keep a data copy of every result so the airdrop can be exported as a record.
+  (window._airdropResults || (window._airdropResults = [])).push(
+    { addr, amount, status, sig: sig || null, errMsg: errMsg || '' });
   const div = document.createElement('div');
   div.className = 'result-item';
   let statusHtml = '';
@@ -1174,6 +1185,48 @@ function addResult(addr, amount, status, sig, errMsg) {
     <span class="result-amt">${fmtNum(amount)}</span>
     ${statusHtml}`;
   document.getElementById('resultList').appendChild(div);
+}
+
+// Build a record of the airdrop — every recipient, the amount, the status and a
+// Solscan transaction link — shown as copyable text for record-keeping. (A file
+// download is unreliable in mobile in-app browsers, so it's copy-only.)
+function exportAirdropRecord() {
+  const rows = window._airdropResults || [];
+  if (rows.length === 0) return;
+  let txt = 'Cluck Norris airdrop record — ' + new Date().toLocaleString() + '\n';
+  txt += 'recipient,amount,status,transaction\n';
+  for (const r of rows) {
+    const link = r.sig ? 'https://solscan.io/tx/' + r.sig : (r.errMsg || '');
+    txt += r.addr + ',' + r.amount + ',' + (r.status || '') + ',' + link + '\n';
+  }
+  const sent = rows.filter(r => r.status === 'sent').length;
+  const failed = rows.filter(r => r.status === 'failed').length;
+  txt += '\n' + sent + ' sent, ' + failed + ' failed, ' + rows.length + ' total.\n';
+  const panel = document.getElementById('recordPanel');
+  panel.style.display = 'block';
+  panel.innerHTML =
+    '<textarea readonly id="recordText" onclick="this.select()" style="width:100%;height:170px;' +
+      'background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.15);border-radius:8px;' +
+      'padding:10px;font-family:var(--mono);font-size:11px;color:#D1D5DB;resize:vertical"></textarea>' +
+    '<button id="recordCopyBtn" onclick="copyRecordText()" style="width:100%;margin-top:6px;padding:10px;' +
+      'background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);border-radius:8px;' +
+      'font-family:\'Oswald\',sans-serif;font-size:12px;font-weight:700;color:#6EE7B7;' +
+      'letter-spacing:2px;cursor:pointer">📋 COPY RECORD</button>';
+  document.getElementById('recordText').value = txt;
+}
+
+function copyRecordText() {
+  const ta = document.getElementById('recordText');
+  const btn = document.getElementById('recordCopyBtn');
+  if (!ta) return;
+  ta.focus(); ta.select();
+  ta.setSelectionRange(0, ta.value.length);
+  const done = (t) => { if (btn) { btn.textContent = t; setTimeout(() => { btn.textContent = '📋 COPY RECORD'; }, 1800); } };
+  try {
+    navigator.clipboard.writeText(ta.value).then(() => done('✓ COPIED'), () => { document.execCommand('copy'); done('✓ COPIED'); });
+  } catch (e) {
+    try { document.execCommand('copy'); done('✓ COPIED'); } catch (e2) { done('SELECTED — TAP TO COPY'); }
+  }
 }
 
 // ── 🔒 CLKN Unlock Gate ──────────────────────────────────────────────────────
