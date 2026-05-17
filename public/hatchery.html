@@ -90,6 +90,16 @@
   .lp-details summary::-webkit-details-marker { display: none; }
   .lp-details[open] summary { border-radius: 12px 12px 0 0; border-bottom: none; }
   .lp-details .handoff { margin-top: 0; border-radius: 0 0 12px 12px; }
+  .calc { margin-top: 10px; background: rgba(0,0,0,0.25); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+  .calc-title { font-family: var(--mono); font-size: 10px; letter-spacing: 1.5px; color: var(--accent); margin-bottom: 10px; }
+  .calc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .calc-grid label { display: flex; flex-direction: column; gap: 4px; font-family: var(--mono); font-size: 10px; color: var(--subtext); }
+  .calc-grid .opt { color: #4B5563; }
+  .calc-grid input { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-family: var(--mono); font-size: 13px; color: var(--text); }
+  .calc-grid input:focus { outline: none; border-color: var(--accent); }
+  .calc-out { margin-top: 10px; padding: 10px 12px; background: rgba(252,211,77,0.06); border: 1px solid rgba(252,211,77,0.2); border-radius: 6px; font-family: var(--mono); font-size: 12px; color: var(--text); line-height: 1.7; }
+  .calc-out b { color: var(--accent); }
+  .calc-out .calc-note { color: var(--subtext); font-size: 11px; }
 
   .footer-tag { text-align: center; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
   .footer-tag a { color: #D97706; text-decoration: none; }
@@ -214,7 +224,17 @@
       against more SOL opens higher, more tokens against less SOL opens lower.
       It is the single most consequential number in a launch. Decide the
       opening price you intend first, then work the deposit amounts backward
-      from it.</div>
+      from it.
+      <div class="calc">
+        <div class="calc-title">⚖️ STARTING-PRICE CALCULATOR</div>
+        <div class="calc-grid">
+          <label>Tokens in the pool<input type="text" id="calcTokens" inputmode="decimal" placeholder="100000000" oninput="calcStartPrice()"/></label>
+          <label>SOL in the pool<input type="text" id="calcSol" inputmode="decimal" placeholder="10" oninput="calcStartPrice()"/></label>
+          <label>SOL price now, USD<input type="text" id="calcSolUsd" inputmode="decimal" placeholder="150" oninput="calcStartPrice()"/></label>
+          <label>Total supply <span class="opt">(optional)</span><input type="text" id="calcSupply" inputmode="decimal" placeholder="1000000000" oninput="calcStartPrice()"/></label>
+        </div>
+        <div class="calc-out" id="calcOut">Enter tokens, SOL, and the SOL price to see your token's opening price.</div>
+      </div></div>
 
       <div class="ho-sec"><b>2 · Standard pool vs. concentrated liquidity — the
       decision new creators get wrong most.</b><br>
@@ -337,6 +357,34 @@ async function rpc(method, params) {
   const d = await r.json();
   if (d.error) throw new Error(d.error.message);
   return d.result;
+}
+
+// ── Starting-price calculator ────────────────────────────────────────────────
+function fmtUsdBig(n) {
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
+  if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+function fmtPriceUsd(p) {
+  if (p >= 1) return '$' + p.toFixed(4);
+  if (p >= 0.0001) return '$' + p.toFixed(8);
+  if (p > 0) return '$' + p.toExponential(3);
+  return '$0';
+}
+function calcStartPrice() {
+  const num = (id) => parseFloat((document.getElementById(id).value || '').replace(/[, ]/g, ''));
+  const tokens = num('calcTokens'), sol = num('calcSol'), solUsd = num('calcSolUsd'), supply = num('calcSupply');
+  const out = document.getElementById('calcOut');
+  if (!(tokens > 0) || !(sol > 0) || !(solUsd > 0)) {
+    out.innerHTML = "Enter tokens, SOL, and the SOL price to see your token's opening price.";
+    return;
+  }
+  const priceUsd = (sol / tokens) * solUsd;
+  let html = "Opening price: <b>" + fmtPriceUsd(priceUsd) + "</b> per token";
+  if (supply > 0) html += "<br>Opening market cap (FDV): <b>$" + fmtUsdBig(priceUsd * supply) + "</b>";
+  html += "<br><span class='calc-note'>You'd deposit " + fmtUsdBig(sol) + " SOL (~$" + fmtUsdBig(sol * solUsd) + ") of liquidity.</span>";
+  out.innerHTML = html;
 }
 
 // ── Wallet connect (same pattern as the Airdrop tool) ────────────────────────
