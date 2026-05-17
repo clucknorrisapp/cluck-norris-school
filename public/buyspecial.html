@@ -1385,7 +1385,7 @@ function renderConfirmedBox() {
   box.innerHTML = html;
   window._airdropData = list.map(r => ({ addr: r.payAddr, amount: r.bonusTokens, mint: currentMint, tokenName: currentTokenName }));
   const airdropBtn = document.querySelector('#airdropSection .airdrop-btn');
-  if (airdropBtn) airdropBtn.textContent = '🚀 OPEN AIRDROP TOOL (' + list.length + ' ' + (list.length === 1 ? 'WINNER' : 'WINNERS') + ')';
+  if (airdropBtn) airdropBtn.textContent = '🚀 OPEN AIRDROP — FREE · ' + list.length + ' ' + (list.length === 1 ? 'WINNER' : 'WINNERS');
 }
 
 // Drop a wallet from the confirmed bonus recipients (e.g. the deployer wallet

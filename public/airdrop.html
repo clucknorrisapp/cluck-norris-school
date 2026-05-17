@@ -1389,6 +1389,20 @@ function onAckChange() {
 }
 
 function initUnlockGate() {
+  // Opened straight from the Buy Special tool — that paid workflow already
+  // covers the airdrop, so the unlock is waived (the fee is pennies anyway).
+  if (new URLSearchParams(location.search).get('from') === 'buyspecial') {
+    hideGate();
+    const banner = document.getElementById('unlockBanner');
+    if (banner) {
+      banner.innerHTML = '<div class="unlock-banner-left">' +
+        '<span style="font-size:22px">🎁</span>' +
+        '<div><div style="font-family:\'Oswald\',sans-serif;font-size:13px;font-weight:700;letter-spacing:1px;color:#10B981">FREE AIRDROP</div>' +
+        '<div style="font-size:11px;color:var(--subtext)">Unlocked free — you came from the Buy Special tool</div></div></div>';
+      banner.style.display = 'flex';
+    }
+    return;
+  }
   const active = getActiveUnlock();
   if (active) {
     hideGate();
