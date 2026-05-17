@@ -946,9 +946,8 @@ function renderBuyResults(eligible, disqualified, flagged) {
         '<td><button class="expand-btn" id="traceBtn' + i + '" onclick="traceFlagged(' + i + ')">🔍 TRACE</button></td>';
       tbody.appendChild(tr);
       const resTr = document.createElement('tr');
-      resTr.className = 'tx-detail-row';
+      resTr.className = 'tx-detail-row';   // CSS hides it by default; traceFlagged adds 'open' to reveal it
       resTr.id = 'trace-result-' + i;
-      resTr.style.display = 'none';
       resTr.innerHTML = '<td colspan="5"><div style="padding:8px 4px" id="trace-body-' + i + '"></div></td>';
       tbody.appendChild(resTr);
     });
