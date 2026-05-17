@@ -433,6 +433,7 @@
   <div class="footer-tag">🐔 POWERED BY <a href="https://clucknorris.app">CLKN</a></div>
 </div>
 
+<script src="/vendor/solana-web3.iife.min.js"></script>
 <script>
 const RPC = '/api/helius-rpc';
 const HELIUS_TX = '/api/helius-tx';
@@ -504,8 +505,12 @@ function isExcluded(addr) {
 const _curveCache = {};
 function isRealWallet(addr) {
   if (addr in _curveCache) return _curveCache[addr];
-  let ok = false;
-  try { ok = solanaWeb3.PublicKey.isOnCurve(new solanaWeb3.PublicKey(addr).toBytes()); } catch (e) { ok = false; }
+  let ok = true;  // fail-safe: if the curve check can't run, never exclude a wallet
+  try {
+    if (window.solanaWeb3 && solanaWeb3.PublicKey) {
+      ok = solanaWeb3.PublicKey.isOnCurve(new solanaWeb3.PublicKey(addr).toBytes());
+    }
+  } catch (e) { ok = true; }
   return (_curveCache[addr] = ok);
 }
 
