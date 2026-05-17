@@ -48,6 +48,24 @@ async function notifyTelegram(text) {
   }
 }
 
+// Every 12 hours the bot drops a reminder of the toolkit into the community
+// chat — keeps the tools in front of people and nudges a wallet-safety check.
+function notifyToolsReminder() {
+  notifyTelegram(
+    "🛠 <b>THE CLUCK NORRIS TOOLKIT</b>\n\n" +
+    "Beyond the school — real Solana tools, all live and free to try:\n\n" +
+    "🩺 <b>Cluck Score</b> — a 0–100 health check on any token\n" +
+    "🥚 <b>The Hatchery</b> — create a token, guided start to finish\n" +
+    "📈 <b>Buy Special</b> + 🌹 <b>Rose</b> — run buy competitions\n" +
+    "💰 <b>Airdrop</b> — batch-send to hundreds of wallets\n" +
+    "🔒 <b>Security Coop</b> — find &amp; revoke risky wallet approvals\n\n" +
+    "🚨 <b>Have you checked the permissions on your wallet lately?????</b>\n" +
+    "Every \"approve\" you've ever signed can still move your tokens — until you " +
+    "revoke it. Security Coop finds them all in seconds. Free, nothing at risk.\n\n" +
+    "🐔 Everything here → clucknorris.app/tools"
+  );
+}
+
 // Send an image with caption text. Telegram fetches the photo URL itself, so it
 // must be publicly accessible. Caption max is 1024 chars (vs 4096 for plain text)
 // — fine for our buy alerts which are short. Falls back to plain notify on error.
@@ -2588,6 +2606,8 @@ app.listen(PORT, () => {
       pollClknBuys();
       setInterval(pollClknBuys, 30000);
     }, 5000);
+    // Toolkit reminder — dropped into the community chat every 12 hours.
+    setInterval(notifyToolsReminder, 12 * 60 * 60 * 1000);
   } else {
     console.log(`[TELEGRAM] Bot env vars not set — notifications disabled`);
   }
