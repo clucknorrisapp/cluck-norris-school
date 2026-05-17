@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>🔒 Security Coop — Cluck Norris</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0a0a0a; --card: #111111; --border: rgba(255,255,255,0.08);
+    --text: #F9FAFB; --subtext: #6B7280; --accent: #FCD34D;
+    --green: #10B981; --red: #EF4444; --mono: 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); background-image: radial-gradient(ellipse at 20% 10%, rgba(16,185,129,0.10) 0%, transparent 50%), radial-gradient(ellipse at 80% 90%, rgba(239,68,68,0.07) 0%, transparent 50%); color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh; }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 24px 16px 80px; }
+
+  .header { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+  .header-icon { font-size: 40px; filter: drop-shadow(0 0 16px rgba(16,185,129,0.5)); }
+  .header .brand-mini { font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 4px; color: #D97706; margin-bottom: 4px; font-weight: 700; }
+  .header h1 { font-family: 'Oswald', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg, #FCD34D, #10B981, #34D399); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
+  .header p { font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+  .card-title { font-family: var(--mono); font-size: 10px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 14px; }
+
+  .intro { font-size: 13px; line-height: 1.7; color: #D1D5DB; }
+  .intro b { color: var(--accent); }
+  .intro .note-good { display: block; margin-top: 10px; padding: 10px 12px; background: rgba(16,185,129,0.07); border: 1px solid rgba(16,185,129,0.28); border-radius: 8px; font-size: 12px; color: #6EE7B7; }
+  .intro .note-good b { color: #6EE7B7; }
+
+  /* Wallet */
+  .wallet-picker { display: flex; gap: 8px; flex-wrap: wrap; }
+  .wallet-btn { flex: 1; min-width: 130px; display: flex; align-items: center; justify-content: center; gap: 8px; border: none; border-radius: 10px; padding: 12px 14px; font-family: var(--mono); font-size: 13px; font-weight: 700; color: #fff; letter-spacing: 1px; cursor: pointer; transition: transform 0.15s, opacity 0.15s; }
+  .wallet-btn:hover { transform: translateY(-1px); opacity: 0.95; }
+  .wallet-btn.phantom { background: linear-gradient(135deg, #9945FF, #6B21A8); }
+  .wallet-btn.solflare { background: linear-gradient(135deg, #FC822B, #B85F1F); }
+  .wallet-btn.jupiter { background: linear-gradient(135deg, #4D8FF7, #1E429F); }
+  .wallet-info { font-family: var(--mono); font-size: 12px; color: var(--green); margin-top: 10px; padding: 10px 12px; background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.25); border-radius: 8px; display: none; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .wallet-info.show { display: flex; }
+  .wallet-info-addr { word-break: break-all; flex: 1; min-width: 0; }
+  .wallet-disc-btn { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: #FCA5A5; font-family: 'Oswald', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+
+  .scan-btn { width: 100%; background: linear-gradient(135deg, #10B981, #059669); border: none; border-radius: 10px; padding: 14px; font-family: 'Oswald', sans-serif; font-size: 15px; font-weight: 900; letter-spacing: 2px; color: #04150F; cursor: pointer; transition: opacity 0.15s; }
+  .scan-btn:hover { opacity: 0.9; }
+  .scan-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .progress { display: none; margin-top: 12px; font-family: var(--mono); font-size: 12px; color: var(--accent); text-align: center; }
+  .progress.show { display: block; }
+
+  .error-box { display: none; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 12px 14px; font-family: var(--mono); font-size: 12px; color: #FCA5A5; margin-bottom: 16px; }
+  .error-box.show { display: block; }
+
+  /* Results */
+  .clear-box { margin-top: 14px; padding: 16px; text-align: center; background: rgba(16,185,129,0.07); border: 1px solid rgba(16,185,129,0.3); border-radius: 10px; }
+  .clear-box .ct { font-family: 'Oswald', sans-serif; font-size: 18px; font-weight: 900; letter-spacing: 2px; color: var(--green); margin-bottom: 6px; }
+  .clear-box .cd { font-size: 12px; line-height: 1.6; color: #D1D5DB; }
+
+  .found-head { margin-top: 14px; font-family: var(--mono); font-size: 12px; color: #FCA5A5; }
+  .approval { margin-top: 10px; padding: 12px 13px; background: rgba(239,68,68,0.06); border: 1px solid rgba(239,68,68,0.3); border-radius: 9px; }
+  .approval .ar { font-family: var(--mono); font-size: 12px; line-height: 1.7; word-break: break-all; }
+  .approval .ar .k { color: var(--subtext); }
+  .approval .ar a { color: #93C5FD; text-decoration: none; }
+  .approval .tag { display: inline-block; font-family: var(--mono); font-size: 9px; letter-spacing: 1px; color: var(--subtext); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
+  .revoke-btn { margin-top: 10px; width: 100%; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.5); color: #FCA5A5; font-family: 'Oswald', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1.5px; padding: 9px; border-radius: 7px; cursor: pointer; }
+  .revoke-btn:hover { background: rgba(239,68,68,0.25); }
+  .revoke-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .revoke-all { margin-top: 12px; width: 100%; background: linear-gradient(135deg, #EF4444, #B91C1C); border: none; color: #fff; font-family: 'Oswald', sans-serif; font-size: 13px; font-weight: 900; letter-spacing: 2px; padding: 12px; border-radius: 8px; cursor: pointer; }
+  .revoke-all:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .info-details { margin-bottom: 16px; }
+  .info-details summary { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; font-family: var(--mono); font-size: 11px; letter-spacing: 1px; color: var(--green); cursor: pointer; list-style: none; }
+  .info-details summary::-webkit-details-marker { display: none; }
+  .info-details[open] summary { border-radius: 12px 12px 0 0; border-bottom: none; }
+  .info-body { border: 1px solid var(--border); border-top: none; border-radius: 0 0 12px 12px; padding: 16px; font-size: 12px; line-height: 1.75; color: #D1D5DB; }
+  .info-body b { color: var(--accent); }
+  .info-body .sec { margin-top: 12px; }
+  .info-body .sec:first-child { margin-top: 0; }
+
+  .footer-tag { text-align: center; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
+  .footer-tag a { color: #D97706; text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <div class="header-icon">🔒</div>
+    <div>
+      <div class="brand-mini">CLUCK NORRIS</div>
+      <h1>SECURITY COOP</h1>
+      <p>WALLET PERMISSION CHECK</p>
+    </div>
+  </div>
+
+  <div id="errorBox" class="error-box"></div>
+
+  <div class="card">
+    <div class="intro">
+      <b>Connecting a wallet is safe.</b> It shares only your public address — no
+      spending power, no signature. The risk that can quietly <i>linger</i> is a
+      <b>token approval</b>: when you sign an "approve", you let another address
+      move some of a specific token out of your wallet, and that permission
+      <b>stays until you revoke it</b>. The Security Coop scans your wallet for
+      every active approval and lets you clear any you don't recognise — signed
+      in your own wallet, in one tap.
+      <span class="note-good">🔓 This checks <b>every</b> approval on your
+      wallet, from any app you've ever touched — not just Cluck Norris. Our own
+      tools never request an approval, so there's nothing of ours to find here.</span>
+    </div>
+  </div>
+
+  <!-- Wallet -->
+  <div class="card">
+    <div class="card-title">1 · CONNECT WALLET</div>
+    <div class="wallet-picker" id="walletPicker">
+      <button class="wallet-btn phantom" onclick="connectWallet('phantom')">🔮 Phantom</button>
+      <button class="wallet-btn solflare" onclick="connectWallet('solflare')">☀️ Solflare</button>
+      <button class="wallet-btn jupiter" onclick="connectWallet('jupiter')">🪐 Jupiter</button>
+    </div>
+    <div class="wallet-info" id="walletInfo">
+      <span class="wallet-info-addr" id="walletInfoAddr"></span>
+      <button class="wallet-disc-btn" onclick="disconnectWallet()">DISCONNECT</button>
+    </div>
+  </div>
+
+  <!-- Scan -->
+  <div class="card" id="scanCard" style="display:none">
+    <div class="card-title">2 · APPROVAL SCAN</div>
+    <button class="scan-btn" id="scanBtn" onclick="scan()">🔍 SCAN MY WALLET</button>
+    <div class="progress" id="progress"></div>
+    <div id="results"></div>
+  </div>
+
+  <!-- Teaching -->
+  <details class="info-details">
+    <summary>📖 WHAT IS A TOKEN APPROVAL — AND WHY THIS MATTERS</summary>
+    <div class="info-body">
+      <div class="sec"><b>Connecting ≠ signing.</b> Connecting your wallet to a
+      site grants nothing — it just lets the site see your address. Disconnecting
+      is cosmetic. Signing a <i>transaction</i> is the real action: that's when
+      you authorise something on-chain. The habit that keeps you safe is simple —
+      read what you're signing, on every site, every time.</div>
+
+      <div class="sec"><b>What an approval (delegate) is.</b> An SPL token
+      account can have a <i>delegate</i> — an address you've authorised to move
+      up to a set amount of that token out of your wallet. It's useful for things
+      like trading and staking. But a malicious or careless app can ask for one
+      and then pull the tokens later. The approval doesn't expire on its own — it
+      sits there until you revoke it.</div>
+
+      <div class="sec"><b>What this tool does.</b> It reads your token accounts —
+      both the Token and Token-2022 programs — and lists any with an active
+      delegate: which token, how much is approved, and to whom. Revoking builds a
+      standard SPL <code>Revoke</code> transaction that clears the delegate. You
+      sign it in your own wallet; nothing here ever touches your keys.</div>
+
+      <div class="sec"><b>What it does <i>not</i> cover.</b> Solana has no
+      open-ended "spend my SOL forever" allowance like some chains — the delegate
+      approval is the real lingering risk, and that's what this clears. A clean
+      scan means nothing is delegated; nothing can be moved by anyone but you.</div>
+    </div>
+  </details>
+
+  <div class="footer-tag">
+    🐔 <a href="https://clucknorris.app">clucknorris.app</a> — SECURITY COOP · CHECK BEFORE YOU TRUST
+  </div>
+
+</div>
+
+<script src="/vendor/solana-web3.iife.min.js"></script>
+<script>
+// ── Constants / state ────────────────────────────────────────────────────────
+const RPC_URL = '/api/helius-rpc';
+let walletPubkey = null;
+let activeWallet = null;       // { id, provider }
+let currentDelegates = [];     // last scan result
+let busy = false;
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function showError(msg) {
+  const el = document.getElementById('errorBox');
+  el.textContent = msg;
+  el.classList.add('show');
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  setTimeout(() => el.classList.remove('show'), 9000);
+}
+function setProgress(msg) {
+  const el = document.getElementById('progress');
+  if (msg) { el.textContent = msg; el.classList.add('show'); }
+  else el.classList.remove('show');
+}
+function shorten(s) { return s.slice(0, 4) + '…' + s.slice(-4); }
+async function rpc(method, params) {
+  const r = await fetch(RPC_URL, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+  });
+  const d = await r.json();
+  if (d.error) throw new Error(d.error.message);
+  return d.result;
+}
+async function confirmTx(signature) {
+  for (let i = 0; i < 40; i++) {
+    const st = await rpc('getSignatureStatuses', [[signature]]);
+    const s = st && st.value && st.value[0];
+    if (s) {
+      if (s.err) throw new Error('Transaction failed on-chain');
+      if (s.confirmationStatus === 'confirmed' || s.confirmationStatus === 'finalized') return;
+    }
+    await new Promise(r => setTimeout(r, 1500));
+  }
+  throw new Error('Timed out waiting for confirmation — check Solscan');
+}
+
+// ── Wallet connect ───────────────────────────────────────────────────────────
+const WALLETS = {
+  phantom:  { name: 'Phantom',  detect: () => window.phantom?.solana || (window.solana?.isPhantom ? window.solana : null) },
+  solflare: { name: 'Solflare', detect: () => window.solflare || (window.solana?.isSolflare ? window.solana : null) },
+  jupiter:  { name: 'Jupiter',  detect: () => window.jupiterWallet || window.jupiter || (window.solana?.isJupiter ? window.solana : null) },
+};
+function syncWalletUi() {
+  const picker = document.getElementById('walletPicker');
+  const info = document.getElementById('walletInfo');
+  const scanCard = document.getElementById('scanCard');
+  if (walletPubkey) {
+    picker.style.display = 'none';
+    info.classList.add('show');
+    document.getElementById('walletInfoAddr').textContent = '✓ ' + walletPubkey;
+    scanCard.style.display = 'block';
+  } else {
+    picker.style.display = 'flex';
+    info.classList.remove('show');
+    scanCard.style.display = 'none';
+    document.getElementById('results').innerHTML = '';
+  }
+}
+async function connectWallet(id) {
+  const w = WALLETS[id];
+  const provider = w && w.detect();
+  if (!provider) { showError(`${w ? w.name : 'Wallet'} not detected. Install it and refresh.`); return; }
+  try {
+    const resp = await provider.connect();
+    const pk = resp?.publicKey?.toString?.() || provider.publicKey?.toString?.();
+    if (!pk) throw new Error('no public key returned');
+    walletPubkey = pk;
+    activeWallet = { id, provider };
+    syncWalletUi();
+    scan();   // auto-run the check on connect
+  } catch (e) { showError(`${w.name} connection failed: ${e.message || e}`); }
+}
+function disconnectWallet() {
+  try { activeWallet?.provider?.disconnect?.(); } catch (e) {}
+  walletPubkey = null; activeWallet = null; currentDelegates = [];
+  syncWalletUi();
+}
+
+// ── Scan ─────────────────────────────────────────────────────────────────────
+async function scan() {
+  if (!walletPubkey || busy) return;
+  busy = true;
+  const btn = document.getElementById('scanBtn');
+  btn.disabled = true;
+  document.getElementById('results').innerHTML = '';
+  setProgress('Scanning your wallet for approvals…');
+  try {
+    const res = await fetch('/api/security-coop/scan?wallet=' + encodeURIComponent(walletPubkey));
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Scan failed');
+    currentDelegates = data.delegates || [];
+    renderResults();
+  } catch (e) {
+    showError('Scan failed: ' + (e.message || e));
+  } finally {
+    setProgress('');
+    btn.disabled = false;
+    btn.textContent = '🔍 SCAN AGAIN';
+    busy = false;
+  }
+}
+
+function renderResults() {
+  const box = document.getElementById('results');
+  if (currentDelegates.length === 0) {
+    box.innerHTML = '<div class="clear-box"><div class="ct">✓ ALL CLEAR</div>'
+      + '<div class="cd">No active token approvals on this wallet. Nothing is '
+      + 'delegated — nothing can be moved by anyone but you.</div></div>';
+    return;
+  }
+  let h = '<div class="found-head">⚠ ' + currentDelegates.length + ' active approval'
+        + (currentDelegates.length > 1 ? 's' : '') + ' found. Revoke any you don\'t recognise:</div>';
+  currentDelegates.forEach((d, i) => {
+    h += '<div class="approval">'
+      + '<div class="ar"><span class="k">Token:</span> '
+      +   '<a href="https://solscan.io/token/' + d.mint + '" target="_blank">' + shorten(d.mint) + ' ↗</a> '
+      +   '<span class="tag">' + (d.program === 'token-2022' ? 'TOKEN-2022' : 'TOKEN') + '</span><br>'
+      + '<span class="k">Approved:</span> ' + d.delegatedAmount + ' '
+      +   '<span class="k">to</span> '
+      +   '<a href="https://solscan.io/account/' + d.delegate + '" target="_blank">' + shorten(d.delegate) + ' ↗</a><br>'
+      + '<span class="k">Your balance:</span> ' + d.balance + '</div>'
+      + '<button class="revoke-btn" id="rb' + i + '" onclick="revokeOne(' + i + ')">REVOKE THIS APPROVAL</button>'
+      + '</div>';
+  });
+  if (currentDelegates.length > 1) {
+    h += '<button class="revoke-all" id="revokeAllBtn" onclick="revokeAll()">REVOKE ALL ' + currentDelegates.length + '</button>';
+  }
+  box.innerHTML = h;
+}
+
+// ── Revoke ───────────────────────────────────────────────────────────────────
+function revokeOne(i) {
+  const d = currentDelegates[i];
+  if (d) revoke([d]);
+}
+function revokeAll() { revoke(currentDelegates.slice()); }
+
+async function revoke(accounts) {
+  if (!walletPubkey || busy || !accounts.length) return;
+  busy = true;
+  document.querySelectorAll('.revoke-btn, .revoke-all, #scanBtn').forEach(b => b.disabled = true);
+  try {
+    setProgress('Building the revoke transaction…');
+    const res = await fetch('/api/security-coop/revoke', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        owner: walletPubkey,
+        accounts: accounts.map(a => ({ tokenAccount: a.tokenAccount, program: a.program })),
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Revoke build failed');
+
+    setProgress('Approve the transaction in your wallet…');
+    const txBytes = Uint8Array.from(atob(data.txBase64), c => c.charCodeAt(0));
+    const tx = solanaWeb3.Transaction.from(txBytes);
+    const { signature } = await activeWallet.provider.signAndSendTransaction(tx);
+
+    setProgress('Confirming on-chain…');
+    await confirmTx(signature);
+    setProgress('');
+    busy = false;
+    scan();   // re-scan to show the cleared state
+  } catch (e) {
+    setProgress('');
+    showError('Revoke failed: ' + (e.message || e));
+    document.querySelectorAll('.revoke-btn, .revoke-all, #scanBtn').forEach(b => b.disabled = false);
+    busy = false;
+  }
+}
+</script>
+</body>
+</html>
