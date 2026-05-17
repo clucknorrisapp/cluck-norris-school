@@ -958,21 +958,24 @@ async function traceFlagged(i) {
   const row = document.getElementById('trace-result-' + i);
   const body = document.getElementById('trace-body-' + i);
   if (btn) { btn.disabled = true; btn.textContent = 'TRACING…'; }
-  if (row) row.style.display = '';
+  if (row) row.classList.add('open');   // .tx-detail-row is shown via the 'open' class, not style.display
   if (body) body.innerHTML = '<span style="color:var(--subtext);font-family:var(--mono);font-size:11px">Following the tokens one hop…</span>';
   try {
     const moves = (e.moveTxs || []).filter(m => m.to);
     let html;
     if (moves.length === 0) {
-      html = '<span style="color:#FCD34D;font-size:12px">Destination couldn\'t be read from the transfer — check this wallet on Solscan manually.</span>';
+      html = '<span style="color:#FCD34D;font-size:12px">Destination couldn\'t be read automatically — check this wallet on Solscan manually.</span>';
     } else {
       const fromTs = Math.min.apply(null, moves.map(m => m.ts || 0));
       const untilTs = Math.floor(Date.now() / 1000);
       const res = await traceTransferDestinations(moves, fromTs, untilTs);
       if (res.resolved === 'held') {
-        html = '<div style="color:var(--green);font-size:12px;line-height:1.8">✓ <b>Still held.</b> ' + res.note +
-          '<br>Prize should pay → <span class="addr-cell" style="color:var(--green)">' + res.payoutAddr + '</span>' +
-          ' <button class="copy-btn" onclick="copyAddr(this,\'' + res.payoutAddr + '\')">COPY</button></div>';
+        html = '<div style="color:var(--green);font-size:12px;line-height:1.9">✓ <b>Still held.</b> ' + res.note +
+          '<br>Holder → <span class="addr-cell" style="color:var(--green)">' + res.payoutAddr + '</span>' +
+          ' <button class="copy-btn" onclick="copyAddr(this,\'' + res.payoutAddr + '\')">COPY</button>' +
+          '<br><button class="expand-btn" id="addBtn' + i + '" style="margin-top:6px" ' +
+          'onclick="addTracedToBonus(' + i + ',\'' + res.payoutAddr + '\')">➕ ADD TO BONUS LIST</button>' +
+          '<span id="addNote' + i + '" style="font-size:11px"></span></div>';
       } else if (res.resolved === 'sold') {
         html = '<span style="color:var(--red);font-size:12px">✗ <b>Sold downstream.</b> ' + res.note + ' — no payout.</span>';
       } else {
@@ -984,6 +987,29 @@ async function traceFlagged(i) {
     if (body) body.innerHTML = '<span style="color:var(--red);font-size:12px">Trace failed: ' + (err.message || err) + '</span>';
   }
   if (btn) { btn.disabled = false; btn.textContent = '🔍 TRACE'; }
+}
+
+// Add a traced-and-still-held destination wallet into the eligible list, so the
+// next hold check and the final bonus recipients include it. The buy amount
+// carries over from the flagged wallet that originally made the purchase.
+function addTracedToBonus(i, addr) {
+  const e = (window._flaggedBuyers || [])[i];
+  if (!e) return;
+  const btn = document.getElementById('addBtn' + i);
+  const note = document.getElementById('addNote' + i);
+  if (eligibleBuyers.some(w => w.addr === addr)) {
+    if (btn) { btn.disabled = true; btn.textContent = '✓ ADDED'; }
+    if (note) note.innerHTML = ' <span style="color:var(--subtext)">— already on the list</span>';
+    return;
+  }
+  eligibleBuyers.push({
+    addr, bought: e.bought, sold: 0n, movedOut: 0n,
+    buyTxns: e.buyTxns, sellTxns: 0, moveTxns: 0,
+    firstBuy: e.firstBuy, txSigs: [], moveTxs: [], creditedFrom: e.addr,
+  });
+  eligibleBuyers.sort((a, b) => (b.bought > a.bought ? 1 : -1));
+  if (btn) { btn.disabled = true; btn.textContent = '✓ ADDED'; }
+  if (note) note.innerHTML = ' <span style="color:var(--green)">— added; run the hold check to confirm it</span>';
 }
 
 // ── PHASE 2: HOLD CHECK ──────────────────────────────────────────────────────
