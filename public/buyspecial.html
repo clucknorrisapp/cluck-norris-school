@@ -776,34 +776,44 @@ async function runAnalysis() {
       await new Promise(r => setTimeout(r, 200));
     }
 
-    // Build eligible / flagged (bought, then moved tokens out) / disqualified
+    // Build the result groups. The bonus follows the tokens: a wallet is
+    // credited for what it bought AND still holds (eligible amount = bought −
+    // movedOut). Whatever it moved out is listed under "flagged" so the new
+    // holder can be traced and credited that portion. So a wallet that bought
+    // and moved some out shows in BOTH lists — eligible for the part it kept,
+    // flagged for the part it sent away.
     const eligible = [];
     const disqualified = [];
     const flagged = [];
     const minBuyRaw = BigInt(Math.round(minBuy * Math.pow(10, tokenDecimals)));
+    let totalBought = 0n;
+    let uniqueWallets = 0;
 
     for (const [addr, data] of Object.entries(wallets)) {
-      if (data.bought === 0n) continue;
-      if (data.bought < minBuyRaw) continue;
-      const entry = { addr, bought: data.bought, sold: data.sold, movedOut: data.movedOut || 0n,
+      if (data.bought === 0n || data.bought < minBuyRaw) continue;
+      uniqueWallets++;
+      totalBought += data.bought;
+      const moved = data.movedOut || 0n;
+      const base = { addr, bought: data.bought, sold: data.sold, movedOut: moved,
         buyTxns: data.buyTxns, sellTxns: data.sellTxns, moveTxns: data.moveTxns || 0,
         firstBuy: data.firstBuy, txSigs: data.txSigs || [], moveTxs: data.moveTxs || [] };
-      if (data.sold > 0n) disqualified.push(entry);
-      else if ((data.movedOut || 0n) > 0n) flagged.push(entry);
-      else eligible.push(entry);
+      if (data.sold > 0n) { disqualified.push(base); continue; }
+      // Eligible for what they bought and still hold.
+      const held = data.bought - moved;
+      if (held > 0n) eligible.push({ ...base, bought: held, grossBought: data.bought });
+      // Whatever they moved out is traceable — the new holder earns the bonus on it.
+      if (moved > 0n) flagged.push(base);
     }
 
     eligible.sort((a, b) => b.bought > a.bought ? 1 : -1);
     disqualified.sort((a, b) => b.bought > a.bought ? 1 : -1);
-    flagged.sort((a, b) => b.bought > a.bought ? 1 : -1);
+    flagged.sort((a, b) => b.movedOut > a.movedOut ? 1 : -1);
 
     eligibleBuyers = eligible;
     window._flaggedBuyers = flagged;
 
-    const totalBought = eligible.reduce((s, e) => s + e.bought, 0n) + flagged.reduce((s, e) => s + e.bought, 0n) + disqualified.reduce((s, e) => s + e.bought, 0n);
-
     document.getElementById('statTxns').textContent = allSigs.length.toLocaleString();
-    document.getElementById('statWallets').textContent = (eligible.length + flagged.length + disqualified.length).toLocaleString();
+    document.getElementById('statWallets').textContent = uniqueWallets.toLocaleString();
     document.getElementById('statEligible').textContent = eligible.length.toLocaleString();
     document.getElementById('statDisq').textContent = disqualified.length.toLocaleString();
     document.getElementById('statVolume').textContent = fmtAmount(Number(totalBought));
@@ -860,7 +870,8 @@ function renderBuyResults(eligible, disqualified, flagged) {
       const detailId = 'buy-detail-' + i;
       tr.innerHTML = '<td class="rank-cell ' + rankClass + '">' + (i+1) + '</td>' +
         '<td><div class="addr-wrap"><span class="addr-cell">' + e.addr + '</span><button class="copy-btn" onclick="copyAddr(this,\'' + e.addr + '\')">COPY</button></div></td>' +
-        '<td class="amt-cell">' + fmtAmount(Number(e.bought)) + '</td>' +
+        '<td class="amt-cell">' + fmtAmount(Number(e.bought)) +
+          (e.grossBought && e.grossBought > e.bought ? '<span style="color:#FCD34D;font-size:10px;font-weight:400"> · moved ' + fmtAmount(Number(e.grossBought - e.bought)) + ' out</span>' : '') + '</td>' +
         '<td><span>' + e.buyTxns + ' buy' + (e.buyTxns !== 1 ? 's' : '') + '</span>' +
         (e.txSigs.length > 0 ? '<button class="expand-btn" onclick="toggleTxDetail(\'' + detailId + '\',this)">TXS</button>' : '') + '</td>' +
         '<td class="time-cell">' + fmtTime(e.firstBuy) + '</td>';
@@ -1003,8 +1014,8 @@ function addTracedToBonus(i, addr) {
     return;
   }
   eligibleBuyers.push({
-    addr, bought: e.bought, sold: 0n, movedOut: 0n,
-    buyTxns: e.buyTxns, sellTxns: 0, moveTxns: 0,
+    addr, bought: e.movedOut, sold: 0n, movedOut: 0n,
+    buyTxns: 0, sellTxns: 0, moveTxns: 0,
     firstBuy: e.firstBuy, txSigs: [], moveTxs: [], creditedFrom: e.addr,
   });
   eligibleBuyers.sort((a, b) => (b.bought > a.bought ? 1 : -1));
