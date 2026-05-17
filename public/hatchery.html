@@ -528,6 +528,12 @@ async function hatch() {
     setProgress('Confirming on-chain…');
     await confirmTx(signature);
 
+    // Report the mint so it's announced in the community Telegram room (fire-and-forget).
+    fetch('/api/hatchery/minted', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ signature, mintAddress: built.mintAddress, name, symbol }),
+    }).catch(() => {});
+
     setProgress('');
     document.getElementById('rName').textContent = name + ' (' + symbol + ')';
     document.getElementById('rMint').textContent = built.mintAddress;

@@ -27,6 +27,15 @@ const MAX_LOGO_BYTES = 100 * 1024;
 // ArDrive Turbo bundler endpoint — accepts a signed ANS-104 data item and
 // settles it to Arweave proper (retrievable at arweave.net, many gateways).
 const ARWEAVE_UPLOAD_URL = "https://upload.ardrive.io/tx";
+// Flat-fee treasury — the project's CLKN-receive wallet (the same address the
+// token-gated tools collect CLKN at). Any mint fee is sent here.
+const HATCHERY_TREASURY = new PublicKey("7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H");
+// Per-mint flat fee in lamports, from the HATCHERY_FEE_LAMPORTS env var. Unset
+// or 0 means free (the current beta). 0.1 SOL = 100000000.
+function hatcheryFeeLamports() {
+  const n = parseInt(process.env.HATCHERY_FEE_LAMPORTS || "0", 10);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
 
 // RPC endpoint per cluster. Mainnet uses the project's Helius key; devnet uses
 // the public endpoint (only exercised by our own testing).
@@ -149,6 +158,12 @@ async function buildMintTransaction({
   if (revokeMint) {
     ixs.push(createSetAuthorityInstruction(mint, creatorPk, AuthorityType.MintTokens, null));
   }
+  // Optional flat SOL fee — collected into the treasury within the same tx, so
+  // the user signs one transaction that both mints and pays.
+  const fee = hatcheryFeeLamports();
+  if (fee > 0) {
+    ixs.push(SystemProgram.transfer({ fromPubkey: creatorPk, toPubkey: HATCHERY_TREASURY, lamports: fee }));
+  }
 
   const { blockhash } = await conn.getLatestBlockhash("confirmed");
   const tx = new Transaction();
@@ -162,6 +177,31 @@ async function buildMintTransaction({
     .toString("base64");
   return { txBase64, mintAddress: mint.toBase58() };
 }
+
+// ── Telegram hatch announcement ──────────────────────────────────────────────
+function escapeHtml(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+// Post a successful-hatch announcement to the project's Telegram room — same
+// bot and chat as the buy/sell alerts. Best-effort; never throws.
+async function announceHatch(text) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return;
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
+    });
+  } catch (e) {
+    console.warn("[hatchery] Telegram announce failed:", e.message);
+  }
+}
+// Mints the Hatchery has built this run. The /minted announcement is only
+// honoured for these, so the endpoint can't be used to spam the room.
+const hatcheryMints = new Set();
+const announcedMints = new Set();
 
 // ── HTTP routes ──────────────────────────────────────────────────────────────
 const router = express.Router();
@@ -201,10 +241,47 @@ router.post("/build", async (req, res) => {
       name, symbol, metadataUri, revokeMint: !!revokeMint, revokeFreeze: !!revokeFreeze,
     });
 
+    // Remember this mint so a later /minted report can be trusted + announced.
+    hatcheryMints.add(mintAddress);
+    if (hatcheryMints.size > 5000) hatcheryMints.delete(hatcheryMints.values().next().value);
+
     res.json({ txBase64, mintAddress, metadataUri, imageUri, cluster: useCluster });
   } catch (e) {
     console.error("[hatchery] build failed:", e);
     res.status(500).json({ error: e.message || "Mint build failed" });
+  }
+});
+
+// POST /api/hatchery/minted — the browser reports a confirmed mint. If it's a
+// mint the Hatchery actually built and the transaction is real, announce it to
+// the Telegram room. Best-effort: anything failing here never affects the user.
+router.post("/minted", async (req, res) => {
+  try {
+    const { signature, mintAddress, name, symbol } = req.body || {};
+    if (!signature || !mintAddress) return res.json({ ok: false });
+    // Only announce mints the Hatchery built, and only once each.
+    if (!hatcheryMints.has(mintAddress) || announcedMints.has(mintAddress)) return res.json({ ok: false });
+
+    // Confirm the transaction is real and succeeded before announcing.
+    const conn = new Connection(rpcUrl("mainnet-beta"), "confirmed");
+    const tx = await conn.getTransaction(signature, { maxSupportedTransactionVersion: 0 });
+    if (!tx || (tx.meta && tx.meta.err)) return res.json({ ok: false });
+
+    announcedMints.add(mintAddress);
+    const short = `${mintAddress.slice(0, 4)}…${mintAddress.slice(-4)}`;
+    const nm = escapeHtml(String(name || "A new token").slice(0, 48));
+    const sym = escapeHtml(String(symbol || "").slice(0, 16));
+    await announceHatch(
+      "🥚 <b>NEW TOKEN HATCHED</b>\n" +
+      `<b>${nm}</b>${sym ? ` ($${sym})` : ""} was just created with The Hatchery.\n` +
+      `Mint: <code>${short}</code>\n` +
+      `<a href="https://solscan.io/token/${mintAddress}">↗ View on Solscan</a>\n` +
+      "🐔 <a href=\"https://clucknorris.app/hatchery\">Hatch your own at clucknorris.app/hatchery</a>"
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[hatchery] minted announce failed:", e);
+    res.json({ ok: false });
   }
 });
 
