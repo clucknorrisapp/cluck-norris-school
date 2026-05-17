@@ -2124,6 +2124,42 @@ function formatClknPrice(usd, clknAmount) {
   return `$${p.toExponential(2)}`;
 }
 
+// CLKN total supply, cached — it only changes on the rare burn, so a long TTL
+// is fine. Used to turn a trade's price into a market-cap figure for alerts.
+let cachedClknSupply = 0;
+let cachedClknSupplyAt = 0;
+async function getClknSupply(HELIUS_KEY) {
+  const now = Date.now();
+  if (cachedClknSupply && now - cachedClknSupplyAt < 6 * 60 * 60 * 1000) return cachedClknSupply;
+  try {
+    const url = HELIUS_KEY
+      ? `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`
+      : "https://api.mainnet-beta.solana.com";
+    const r = await fetch(url, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getTokenSupply", params: [CLKN_MINT_ADDR] }),
+    });
+    const d = await r.json();
+    const ui = d && d.result && d.result.value && d.result.value.uiAmount;
+    if (ui && ui > 0) { cachedClknSupply = ui; cachedClknSupplyAt = now; }
+  } catch (e) { /* keep the last good value */ }
+  return cachedClknSupply || 1e9;   // ≈1B fallback if the lookup has never succeeded
+}
+
+// Market cap shown on a buy/sell alert: the trade's price (USD per CLKN) × the
+// total supply — i.e. the market cap implied right after that trade. Compact $.
+async function formatClknMarketCap(usd, clknAmount, HELIUS_KEY) {
+  if (!usd || !clknAmount) return null;
+  const price = usd / clknAmount;
+  if (!isFinite(price) || price <= 0) return null;
+  const mc = price * (await getClknSupply(HELIUS_KEY));
+  if (!isFinite(mc) || mc <= 0) return null;
+  if (mc >= 1e9) return `$${(mc / 1e9).toFixed(2)}B`;
+  if (mc >= 1e6) return `$${(mc / 1e6).toFixed(2)}M`;
+  if (mc >= 1e3) return `$${(mc / 1e3).toFixed(1)}K`;
+  return `$${mc.toFixed(0)}`;
+}
+
 // Pool-centric CLKN trade detection.
 //
 // Wallet-tracing broke on Jupiter routes: the trader and the proceeds-receiver
@@ -2269,7 +2305,10 @@ async function notifyClknBuy(trade, tx, pool, usdValue, HELIUS_KEY) {
   const usdSuffix = (meta && !meta.isStable && usdValue) ? ` <i>($${usdValue.toFixed(2)})</i>` : "";
   const routeLine = formatRoute(tx, pool);
   const priceStr = formatClknPrice(usdValue, trade.clknAmount);
-  const priceLine = priceStr ? `\nPrice: <b>${priceStr}</b>` : "";
+  const mcapStr = await formatClknMarketCap(usdValue, trade.clknAmount, HELIUS_KEY);
+  const priceLine =
+    (priceStr ? `\nPrice: <b>${priceStr}</b>` : "") +
+    (mcapStr ? `\nMarket cap: <b>${mcapStr}</b>` : "");
 
   // Buyer rank + wallet — holdings now, the tier they sit in, whether this buy
   // promoted them, and how much they grew their position. Skipped for dev buys
@@ -2379,7 +2418,10 @@ async function notifyClknSell(trade, tx, pool, usdValue, HELIUS_KEY) {
   const usdSuffix = (meta && !meta.isStable && usdValue) ? ` <i>($${usdValue.toFixed(2)})</i>` : "";
   const routeLine = formatRoute(tx, pool);
   const priceStr = formatClknPrice(usdValue, trade.clknAmount);
-  const priceLine = priceStr ? `\nPrice: <b>${priceStr}</b>` : "";
+  const mcapStr = await formatClknMarketCap(usdValue, trade.clknAmount, HELIUS_KEY);
+  const priceLine =
+    (priceStr ? `\nPrice: <b>${priceStr}</b>` : "") +
+    (mcapStr ? `\nMarket cap: <b>${mcapStr}</b>` : "");
 
   // Seller rank — holdings now, the tier they sit in, whether this sell knocked
   // them down a rung, and how much of their bag they trimmed. Skipped when a
