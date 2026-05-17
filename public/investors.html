@@ -196,7 +196,7 @@
     <div class="hero-tag">🐔 STRAIGHT TALK FROM CLUCK</div>
     <div class="hero-title">Cluck Norris is a brand, a product, and a token. In that order.</div>
     <div class="hero-sub">
-      We built a free crypto school for first‑timers, a free token‑health analyzer for any Solana mint, and a suite of premium research and airdrop tools paid for in CLKN micropayments with <strong style="color:#FCD34D">zero wallet connect</strong> — for the free tier and the paid tier. Everything is live, everything is open source. The token does real work. This page tells you what that means and, just as importantly, who CLKN is <strong style="color:#FCA5A5">not</strong> for.
+      We built a free crypto school for first‑timers, free token research for any Solana mint and any wallet, a suite of premium operator tools paid for in CLKN micropayments — <strong style="color:#FCD34D">no wallet connect to pay</strong> — and a guided token creator. Everything is live, everything is open source. The token does real work. This page tells you what that means and, just as importantly, who CLKN is <strong style="color:#FCA5A5">not</strong> for.
     </div>
   </div>
 
@@ -241,11 +241,12 @@
   <!-- What we built -->
   <div class="section">
     <div class="section-title">🛠 WHAT WE'VE ACTUALLY BUILT</div>
-    <p>Three integrated products under one token. All deployed, all working in production:</p>
+    <p>A whole product suite under one token. All deployed, all working in production:</p>
     <ul>
       <li><strong>The Schoolyard</strong> — 6 beginner lessons, 12 belted progressive lessons, a 50‑question Ultimate Challenge (94% to pass), a <strong>50‑scenario Survival Simulator</strong> where you walk through real‑world crypto decisions with a $1,000 simulated bankroll, an LP Lab with interactive calculators, a 50‑term glossary, deep dives across Survival / Research / Concepts, and a Claude‑powered AI tutor embedded everywhere (10 free questions/day).</li>
-      <li><strong>Cluck Score</strong> — a free 0–100 token‑health score for any Solana mint. Seven weighted factors including a top‑10 concentration that filters out LP / lock / program positions so it reflects actual humans, not the AMM holding the pool. Sharable PNG card that unfurls on Twitter.</li>
-      <li><strong>Premium tools paid in CLKN</strong> — AI extension, batch airdrop sender (Phantom + Solflare + Jupiter), buy‑competition analyzer, score card generator. Every paid action is a unique‑decimal CLKN micropayment verified on‑chain. <strong>No wallet connect, free or paid.</strong></li>
+      <li><strong>Free token research</strong> — <strong>Cluck Score</strong>, a free 0–100 health score for any Solana mint (weighted factors, a top‑10 concentration filter that excludes LP / lock / program positions so it reflects actual humans, a sharable PNG card); and <strong>Security Coop</strong>, a free wallet permission check that finds lingering token approvals and revokes the risky ones.</li>
+      <li><strong>Premium operator tools paid in CLKN</strong> — an AI tutor extension, a batch airdrop sender (Phantom · Solflare · Jupiter), two buy‑competition trackers (Buy Special and Rose), and a score‑card generator. Every paid action is a unique‑decimal CLKN micropayment verified on‑chain — <strong>no wallet connect to pay</strong>.</li>
+      <li><strong>The Hatchery</strong> — a guided SPL token creator. It teaches every mint‑time decision (supply, metadata, mint/freeze authority) and deploys a real token, with metadata stored permanently on Arweave. It deliberately <strong>stops at liquidity</strong> — minting is not launching. Flat fee in SOL or CLKN.</li>
     </ul>
   </div>
 
@@ -285,10 +286,10 @@
         <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
           • AI tutor extension (500)<br>
           • Batch airdrop sender (100)<br>
-          • Buy‑comp analyzer 7d (500)<br>
+          • Buy Special + Rose comp trackers<br>
           • Cluck Score card (100)<br>
           • Holder bonus 5× at 2M+ CLKN<br>
-          • Zero wallet connect for any tier
+          • No wallet connect to pay
         </div>
       </div>
       <div style="background:rgba(217,119,6,0.06);border:1px solid rgba(217,119,6,0.25);border-radius:10px;padding:12px 14px">
@@ -327,6 +328,17 @@
           • Auto‑hand‑off to airdropper
         </div>
       </div>
+      <div style="background:rgba(252,211,77,0.06);border:1px solid rgba(252,211,77,0.25);border-radius:10px;padding:12px 14px">
+        <div style="font-family:'Oswald',sans-serif;font-size:10px;color:#FCD34D;letter-spacing:2px;margin-bottom:6px;font-weight:700">🥚 CREATE &amp; PROTECT</div>
+        <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
+          • The Hatchery — token creator<br>
+          • Guided mint, every decision<br>
+          • Metadata permanent on Arweave<br>
+          • Stops at liquidity on purpose<br>
+          • Security Coop — approval revoker<br>
+          • Tools &amp; Utilities hub at /tools
+        </div>
+      </div>
     </div>
   </div>
 
@@ -343,7 +355,7 @@
       <li><strong>Security:</strong> HSTS, X‑Frame‑Options, X‑Content‑Type‑Options, Referrer‑Policy on every response. Vendored solana‑web3.js (same‑origin, tracking‑prevention‑proof)</li>
       <li><strong>No custody:</strong> Server never sees a private key. Every signing flow runs in the user's wallet extension.</li>
     </ul>
-    <p style="margin-top:10px"><strong>Public API surface:</strong> <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/cluck-score</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/cluck-card</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/verify-clkn-payment</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/ask-cluck</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/holders</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/fees</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/supply</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/locks</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/bubblemaps</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/bags-proxy</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/helius-rpc</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/helius-tx</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/claim</code></p>
+    <p style="margin-top:10px"><strong>Public API surface:</strong> <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/cluck-score</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/cluck-card</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/verify-clkn-payment</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/ask-cluck</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/holders</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/fees</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/supply</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/locks</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/bubblemaps</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/bags-proxy</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/helius-rpc</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/helius-tx</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/hatchery/*</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/security-coop/*</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/claim</code></p>
   </div>
 
   <!-- The community moat — answers "what makes you different from every other
@@ -409,6 +421,7 @@
       <li class="yes"><strong>Fees are denominated in CLKN, not USD.</strong> A 100‑CLKN airdrop unlock is $0.01 today. If the token doubles, that same unlock is $0.02 — same on‑chain mechanism, double the USD revenue per use. <strong>We don't have to do anything for fees to scale with price.</strong></li>
       <li class="yes"><strong>If usage outpaces price, we adjust the table.</strong> Pricing lives in a server‑side table (TOOL_GRANTS in server.js) — a one‑line change updates every tool. If 100 CLKN starts feeling free because adoption took off, we raise it. We're a knob, not a contract promise.</li>
       <li class="yes"><strong>This is the compound effect.</strong> Adoption → usage → on‑chain demand → price appreciation → automatic fee scaling → more revenue per use → reinvest in liquidity/locks/development → more credible product → more adoption.</li>
+      <li class="yes"><strong>The token creator is its own tier.</strong> The Hatchery isn't a penny micropayment — minting a real SPL token is a one‑time, higher‑value action, so it carries a flat fee (≈0.1 SOL, or the CLKN equivalent at a discount; free for 2M+ CLKN holders). Pennies for research and operator tools; a real but fair fee to create a token.</li>
     </ul>
     <p>Most token utilities denominate fees in USD and just become more expensive in token terms as price moves. Ours flow the other way — token holders get cheaper relative access as the token they hold appreciates. That's the alignment.</p>
     <p>We'd rather be aggressive now and adjust later than gatekeep early adopters out of the system. <strong>Brand recognition first. Margin later.</strong></p>
@@ -505,8 +518,9 @@
     <div class="section-title">🐔 EXPLORE THE PRODUCT</div>
     <div class="actions">
       <a class="action-btn" href="/">🏫 SCHOOL</a>
+      <a class="action-btn" href="/tools">🛠 TOOLS &amp; UTILITIES</a>
       <a class="action-btn" href="/score">🩺 CLUCK SCORE</a>
-      <a class="action-btn" href="/airdrop">💰 AIRDROP TOOL</a>
+      <a class="action-btn" href="/hatchery">🥚 THE HATCHERY</a>
       <a class="action-btn" href="https://github.com/FCKN007/cluck-norris-school" target="_blank" rel="noreferrer">📂 GITHUB</a>
     </div>
   </div>
