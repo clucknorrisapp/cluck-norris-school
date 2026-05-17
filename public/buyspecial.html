@@ -497,6 +497,17 @@ function rpc(method, params) {
 function isExcluded(addr) {
   return EXCLUDED_WALLETS.has(addr) || DEX_PROGRAMS.has(addr);
 }
+// A real competition entrant is a normal signing wallet — a point ON the
+// ed25519 curve. Pool vaults, AMM authorities and other program accounts are
+// PDAs, OFF the curve — so this keeps every pool (every CLKN pool, now or
+// future) out of the results entirely, and therefore out of the airdrop CSV.
+const _curveCache = {};
+function isRealWallet(addr) {
+  if (addr in _curveCache) return _curveCache[addr];
+  let ok = false;
+  try { ok = solanaWeb3.PublicKey.isOnCurve(new solanaWeb3.PublicKey(addr).toBytes()); } catch (e) { ok = false; }
+  return (_curveCache[addr] = ok);
+}
 
 function fmtAmount(n) {
   const v = n / Math.pow(10, tokenDecimals);
@@ -725,7 +736,8 @@ async function runAnalysis() {
 
         const SOL_DUST = 3e6; // lamports (~0.003 SOL) — ignore tx-fee / rent noise
         for (const owner of Object.keys(clknNet)) {
-          if (isExcluded(owner)) continue;
+          // Skip excluded addresses and any non-wallet (pool vault / PDA).
+          if (isExcluded(owner) || !isRealWallet(owner)) continue;
           const net = clknNet[owner];
           if (Math.abs(net) < 1e-9) continue;   // netted out — a routing hop
           const w = wallets[owner] || (wallets[owner] =
