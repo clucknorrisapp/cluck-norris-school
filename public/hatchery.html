@@ -82,6 +82,9 @@
   .result-row a { color: #93C5FD; text-decoration: none; }
   .handoff { margin-top: 14px; padding: 12px 14px; background: rgba(252,211,77,0.06); border: 1px solid rgba(252,211,77,0.25); border-radius: 8px; font-size: 12px; line-height: 1.7; color: #D1D5DB; }
   .handoff b { color: var(--accent); }
+  .handoff a { color: #93C5FD; text-decoration: none; }
+  .handoff .ho-warn { margin-top: 12px; padding: 10px 12px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3); border-radius: 7px; color: #FCA5A5; }
+  .handoff .ho-sec { margin-top: 12px; }
 
   .footer-tag { text-align: center; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
   .footer-tag a { color: #D97706; text-decoration: none; }
@@ -103,13 +106,16 @@
 
   <div class="card">
     <div class="intro">
-      The Hatchery <b>creates a token</b> on Solana — it puts a fixed-supply SPL
-      token on-chain, with a name, a logo, and the authority settings you choose.
-      It teaches each decision as you make it.
+      The Hatchery <b>creates a token</b> — it deploys a fixed-supply SPL token
+      on Solana with the name, logo, and authority settings you choose, and
+      explains each decision as you make it. That is all a token is at the
+      start: a contract with a name and a supply. It has <b>no price, no
+      market, and no value</b> until liquidity is added.
       <span class="mint-not-launch">🥚 Creating a token is <b>not</b> launching a
-      project. A token with no liquidity can't be traded — it's inert. The
-      Hatchery stops at the mint. Adding liquidity is a separate, deliberate
-      step you take yourself.</span>
+      project. A token with no liquidity is inert — it can't be bought or sold.
+      The Hatchery stops at the mint on purpose; adding liquidity is a separate,
+      higher-stakes step you take yourself, and the result screen below walks
+      you through exactly what that involves before you do it.</span>
     </div>
   </div>
 
@@ -207,11 +213,44 @@
     <div class="result-row"><span class="rk">Transaction:</span> <a id="rTx" target="_blank">view on Solscan ↗</a></div>
     <div class="handoff">
       🥚 <b>You've HATCHED a token — you have NOT launched a project.</b><br>
-      There's no liquidity yet, so it can't be bought or sold. Launching means
-      adding liquidity on a DEX (Meteora, Raydium, Orca…), choosing a pool type,
-      and deciding whether to lock it. That's a separate, deliberate step — learn
-      it in the <b>LP Lab</b> before you take it. The Hatchery stops here on
-      purpose.
+      A token with no liquidity is inert: it has no price and can't be bought or
+      sold. "Launching" means adding liquidity, and it's a separate, deliberate
+      step. The Hatchery does not do it for you — here's what it involves.
+
+      <div class="ho-warn">⚠️ <b>Make sure you understand liquidity before you
+      add it.</b> This is the riskiest step of a launch — it puts real money on
+      the line and it is not something to improvise. Do not add liquidity until
+      you understand the three decisions below.</div>
+
+      <div class="ho-sec"><b>1 · Starting ratio — this sets your opening price.</b>
+      To create a pool you deposit two things: your token and SOL (or USDC).
+      The <i>ratio</i> of those two amounts <b>is</b> the starting price — fewer
+      tokens against more SOL opens the price higher, more tokens against less
+      SOL opens it lower. It's the single most consequential number in a launch:
+      get it wrong and your token opens at a price you never intended.</div>
+
+      <div class="ho-sec"><b>2 · Pool type.</b> A standard constant-product pool
+      and a concentrated-liquidity pool behave very differently — in price
+      range, in fees, and in how your deposited liquidity actually gets used.
+      Choose deliberately, not by default.</div>
+
+      <div class="ho-sec"><b>3 · Locking the liquidity.</b> Whether you lock or
+      burn the LP tokens. Buyers check this — unlocked liquidity is a classic
+      rug vector, so locking is what signals you're not one.</div>
+
+      <div class="ho-sec"><b>🏊 Where to add liquidity.</b> Each DEX has its own
+      pool-creation flow and tradeoffs:<br>
+      • <a href="https://meteora.ag" target="_blank">Meteora ↗</a> — dynamic &amp; DLMM pools; popular for memecoin launches<br>
+      • <a href="https://raydium.io" target="_blank">Raydium ↗</a> — the established standard AMM; widely integrated across Solana<br>
+      • <a href="https://orca.so" target="_blank">Orca ↗</a> — concentrated-liquidity "Whirlpools"; clean, beginner-friendly UI</div>
+
+      <div class="ho-sec"><b>📚 Learn it properly first — the LP Lab.</b>
+      The <a href="https://clucknorris.app" target="_blank">LP Lab on
+      clucknorris.app ↗</a> has 8 lessons on exactly this: liquidity, how AMMs
+      work, impermanent loss, fee structures, concentrated liquidity, and the
+      math behind starting ratios. Work through it before you add a single
+      dollar. The Hatchery stops here on purpose — the next step is yours, and
+      it's worth doing slowly.</div>
     </div>
   </div>
 
