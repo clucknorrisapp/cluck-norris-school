@@ -1313,13 +1313,31 @@ let unlockPollInterval = null;
 let pollStartedAt = null;
 let countdownInterval = null;
 
+// The unlock is kept in localStorage, not sessionStorage, so it survives
+// closing the tab or the whole browser — a 7-day pass (35 days with the 5×
+// holder bonus) has to outlast the session, the same way the school remembers
+// where a student left off. get() also migrates any unlock still sitting in the
+// old sessionStorage slot, so nobody loses access time they already paid for.
+const unlockStore = {
+  get(k) {
+    let v = localStorage.getItem(k);
+    if (v == null) {
+      v = sessionStorage.getItem(k);
+      if (v != null) { localStorage.setItem(k, v); sessionStorage.removeItem(k); }
+    }
+    return v;
+  },
+  set(k, v) { localStorage.setItem(k, v); },
+  remove(k) { localStorage.removeItem(k); sessionStorage.removeItem(k); },
+};
+
 function getActiveUnlock() {
   try {
-    const raw = sessionStorage.getItem(UNLOCK_KEY);
+    const raw = unlockStore.get(UNLOCK_KEY);
     if (!raw) return null;
     const data = JSON.parse(raw);
     if (!data || !data.expiresAt || data.expiresAt < Date.now()) {
-      sessionStorage.removeItem(UNLOCK_KEY);
+      unlockStore.remove(UNLOCK_KEY);
       return null;
     }
     return data;
@@ -1413,8 +1431,8 @@ async function pollUnlock() {
         senderBalance: data.senderBalance,
         holderBonus: data.holderBonus
       };
-      sessionStorage.setItem(UNLOCK_KEY, JSON.stringify(unlockData));
-      sessionStorage.removeItem(UNLOCK_PENDING_KEY);
+      unlockStore.set(UNLOCK_KEY, JSON.stringify(unlockData));
+      unlockStore.remove(UNLOCK_PENDING_KEY);
       if (unlockPollInterval) { clearInterval(unlockPollInterval); unlockPollInterval = null; }
       setGateStatus('success', data.holderBonus
         ? '✓ PAYMENT VERIFIED · 5× HOLDER BONUS · 35 DAYS UNLOCKED'
@@ -1454,8 +1472,8 @@ function showUnlockBanner(unlockData) {
       clearInterval(countdownInterval);
       countdownInterval = null;
       banner.style.display = 'none';
-      sessionStorage.removeItem(UNLOCK_KEY);
-      sessionStorage.removeItem(UNLOCK_PENDING_KEY);
+      unlockStore.remove(UNLOCK_KEY);
+      unlockStore.remove(UNLOCK_PENDING_KEY);
       pendingUnlockAmount = null;
       initUnlockGate();
       return;
@@ -1478,14 +1496,14 @@ function initUnlockGate() {
     showUnlockBanner(active);
     return;
   }
-  const stored = sessionStorage.getItem(UNLOCK_PENDING_KEY);
+  const stored = unlockStore.get(UNLOCK_PENDING_KEY);
   if (stored) {
     const n = parseFloat(stored);
     if (Number.isFinite(n) && Math.floor(n) === BUYSPECIAL_PRICE) pendingUnlockAmount = n;
   }
   if (!pendingUnlockAmount) {
     pendingUnlockAmount = generateUnlockAmount(BUYSPECIAL_PRICE);
-    sessionStorage.setItem(UNLOCK_PENDING_KEY, pendingUnlockAmount.toString());
+    unlockStore.set(UNLOCK_PENDING_KEY, pendingUnlockAmount.toString());
   }
   document.getElementById('unlockAmountVal').textContent = pendingUnlockAmount.toFixed(3) + ' CLKN';
   showGate();
