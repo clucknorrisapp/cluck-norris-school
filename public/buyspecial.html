@@ -461,6 +461,7 @@ const DEX_PROGRAMS = new Set([
   'obriQD1zbpyLz95G5n7nJe6a4DPjpFwa5XYPoNm113y',
   '6MLxLqiXaaSUpkgMnWDTrmBB9tilS7XYFXS3Y7mCNGDM',
   'RVKd61ztZW9GUwhRbbLoYVRE5Xf1B2tVscKqwZqXgEr',
+  'cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG', // Meteora DAMM V2 (cp-amm) — the CLKN/SOL pool's own program
 ]);
 
 const EXCLUDED_WALLETS = new Set([
@@ -697,14 +698,9 @@ async function runAnalysis() {
       for (const tx of txns) {
         if (!tx || tx.transactionError) continue;
 
-        // DEX check
-        const allAccounts = (tx.accountData || []).map(a => a.account);
-        const isDex = allAccounts.some(a => DEX_PROGRAMS.has(a)) ||
-          (tx.instructions || []).some(ix => DEX_PROGRAMS.has(ix.programId)) ||
-          (tx.innerInstructions || []).some(inner =>
-            (inner.instructions || []).some(ix => DEX_PROGRAMS.has(ix.programId))
-          );
-        if (!isDex) continue;
+        // DEX check — skip plain transfers; keep anything that touched a
+        // recognised pool/aggregator program (walked into inner instructions).
+        if (!txIsDex(tx)) continue;
 
         const transfers = tx.tokenTransfers || [];
         const ts = tx.timestamp;
@@ -882,10 +878,15 @@ function renderBuyResults(eligible, disqualified) {
 // Same detection Phase 1 uses inline; reused here for the hold check.
 function txIsDex(tx) {
   const allAccounts = (tx.accountData || []).map(a => a.account);
+  const ixs = tx.instructions || [];
+  // Inner instructions are nested under each top-level instruction in Helius's
+  // enhanced format (tx.instructions[].innerInstructions[]) — there is NO
+  // top-level tx.innerInstructions. An aggregator (Jupiter, DFlow, …) puts the
+  // real pool program one level down, so we must walk the nesting or the trade
+  // is silently missed.
   return allAccounts.some(a => DEX_PROGRAMS.has(a)) ||
-    (tx.instructions || []).some(ix => DEX_PROGRAMS.has(ix.programId)) ||
-    (tx.innerInstructions || []).some(inner =>
-      (inner.instructions || []).some(ix => DEX_PROGRAMS.has(ix.programId)));
+    ixs.some(ix => DEX_PROGRAMS.has(ix.programId)) ||
+    ixs.some(ix => (ix.innerInstructions || []).some(inner => DEX_PROGRAMS.has(inner.programId)));
 }
 
 // Scan a wallet's CLKN outflows over [sinceTs, untilTs] — DEX sells and plain
