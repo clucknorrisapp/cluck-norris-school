@@ -698,40 +698,51 @@ async function runAnalysis() {
       for (const tx of txns) {
         if (!tx || tx.transactionError) continue;
 
-        // DEX check — skip plain transfers; keep anything that touched a
-        // recognised pool/aggregator program (walked into inner instructions).
-        if (!txIsDex(tx)) continue;
-
-        const transfers = tx.tokenTransfers || [];
         const ts = tx.timestamp;
         const sig = tx.signature;
 
-        for (const t of transfers) {
-          if (t.mint !== currentMint) continue;
-          if (!t.toUserAccount || !t.fromUserAccount) continue;
-          if (isExcluded(t.toUserAccount) && isExcluded(t.fromUserAccount)) continue;
-
-          const amt = BigInt(Math.round((t.tokenAmount || 0) * Math.pow(10, tokenDecimals)));
-          if (amt === 0n) continue;
-
-          // Buyer
-          if (!isExcluded(t.toUserAccount)) {
-            const owner = t.toUserAccount;
-            if (!wallets[owner]) wallets[owner] = { bought: 0n, sold: 0n, buyTxns: 0, sellTxns: 0, firstBuy: null, txSigs: [] };
-            wallets[owner].bought += amt;
-            wallets[owner].buyTxns++;
-            if (!wallets[owner].firstBuy || ts < wallets[owner].firstBuy) wallets[owner].firstBuy = ts;
-            if (sig && !wallets[owner].txSigs.find(x => x.sig === sig)) {
-              wallets[owner].txSigs.push({ sig, ts, amt: Number(amt) });
-            }
+        // ── Value-flow classification ──────────────────────────────────────
+        // A BUY = a wallet whose CLKN balance went UP because it gave something
+        // up for it (SOL, USDC, any token) in the same transaction. A wallet
+        // that just RECEIVES CLKN and gives up nothing is a plain wallet-to-
+        // wallet transfer — NOT a buy. Net balances come straight from the
+        // chain, so this works for any pool, any aggregator (Jupiter, DFlow, …)
+        // and any pay currency — no DEX program allowlist involved.
+        const clknNet = {};                  // owner -> net CLKN (ui units)
+        const lostTok = {}, gotTok = {};     // owner -> net-moved a non-CLKN token?
+        const solNet = {};                   // account -> net lamports
+        for (const e of (tx.accountData || [])) {
+          if (e.nativeBalanceChange) solNet[e.account] = (solNet[e.account] || 0) + e.nativeBalanceChange;
+          for (const tb of (e.tokenBalanceChanges || [])) {
+            const o = tb.userAccount, ra = tb.rawTokenAmount || {};
+            const amt = Number(ra.tokenAmount || 0) / Math.pow(10, ra.decimals || 0);
+            if (!o || !amt) continue;
+            if (tb.mint === currentMint) clknNet[o] = (clknNet[o] || 0) + amt;
+            else if (amt < 0) lostTok[o] = true;
+            else gotTok[o] = true;
           }
+        }
 
-          // Seller
-          if (!isExcluded(t.fromUserAccount)) {
-            const owner = t.fromUserAccount;
-            if (!wallets[owner]) wallets[owner] = { bought: 0n, sold: 0n, buyTxns: 0, sellTxns: 0, firstBuy: null, txSigs: [] };
-            wallets[owner].sold += amt;
-            wallets[owner].sellTxns++;
+        const SOL_DUST = 3e6; // lamports (~0.003 SOL) — ignore tx-fee / rent noise
+        for (const owner of Object.keys(clknNet)) {
+          if (isExcluded(owner)) continue;
+          const net = clknNet[owner];
+          if (Math.abs(net) < 1e-9) continue;   // netted out — a routing hop
+          const w = wallets[owner] || (wallets[owner] =
+            { bought: 0n, sold: 0n, buyTxns: 0, sellTxns: 0, firstBuy: null, txSigs: [] });
+          const spent    = (solNet[owner] || 0) < -SOL_DUST || lostTok[owner];
+          const received = (solNet[owner] || 0) >  SOL_DUST || gotTok[owner];
+          const raw = BigInt(Math.round(Math.abs(net) * Math.pow(10, tokenDecimals)));
+          if (net > 0) {
+            if (!spent) continue;               // received CLKN, gave nothing = transfer IN
+            w.bought += raw;
+            w.buyTxns++;
+            if (!w.firstBuy || ts < w.firstBuy) w.firstBuy = ts;
+            if (sig && !w.txSigs.find(x => x.sig === sig)) w.txSigs.push({ sig, ts, amt: Number(raw) });
+          } else {
+            if (!received) continue;            // sent CLKN, got nothing = transfer OUT
+            w.sold += raw;
+            w.sellTxns++;
           }
         }
       }
