@@ -100,6 +100,11 @@
   .calc-out { margin-top: 10px; padding: 10px 12px; background: rgba(252,211,77,0.06); border: 1px solid rgba(252,211,77,0.2); border-radius: 6px; font-family: var(--mono); font-size: 12px; color: var(--text); line-height: 1.7; }
   .calc-out b { color: var(--accent); }
   .calc-out .calc-note { color: var(--subtext); font-size: 11px; }
+  .calc-pair { font-family: var(--mono); font-size: 10px; color: var(--subtext); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+  .calc-pair-btn { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 6px; padding: 5px 14px; font-family: var(--mono); font-size: 11px; color: var(--subtext); cursor: pointer; }
+  .calc-pair-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(252,211,77,0.08); }
+  .calc-teach { margin-top: 10px; font-family: system-ui, sans-serif; font-size: 11px; line-height: 1.6; color: var(--subtext); }
+  .calc-teach b { color: #D1D5DB; }
 
   .footer-tag { text-align: center; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
   .footer-tag a { color: #D97706; text-decoration: none; }
@@ -227,13 +232,18 @@
       from it.
       <div class="calc">
         <div class="calc-title">⚖️ STARTING-PRICE CALCULATOR</div>
+        <div class="calc-pair">Pair with:
+          <button type="button" class="calc-pair-btn active" id="pairSol" onclick="setPair('sol')">SOL</button>
+          <button type="button" class="calc-pair-btn" id="pairUsdc" onclick="setPair('usdc')">USDC</button>
+        </div>
         <div class="calc-grid">
           <label>Tokens in the pool<input type="text" id="calcTokens" inputmode="decimal" placeholder="100000000" oninput="calcStartPrice()"/></label>
-          <label>SOL in the pool<input type="text" id="calcSol" inputmode="decimal" placeholder="10" oninput="calcStartPrice()"/></label>
-          <label>SOL price now, USD<input type="text" id="calcSolUsd" inputmode="decimal" placeholder="150" oninput="calcStartPrice()"/></label>
+          <label id="lblQuote">SOL in the pool<input type="text" id="calcQuote" inputmode="decimal" placeholder="10" oninput="calcStartPrice()"/></label>
+          <label id="lblQuotePrice">SOL price now, USD<input type="text" id="calcQuotePrice" inputmode="decimal" placeholder="150" oninput="calcStartPrice()"/></label>
           <label>Total supply <span class="opt">(optional)</span><input type="text" id="calcSupply" inputmode="decimal" placeholder="1000000000" oninput="calcStartPrice()"/></label>
         </div>
-        <div class="calc-out" id="calcOut">Enter tokens, SOL, and the SOL price to see your token's opening price.</div>
+        <div class="calc-out" id="calcOut">Enter the amounts to see your token's opening price.</div>
+        <div class="calc-teach">ⓘ <b>SOL vs. USDC pairing matters.</b> If you pair with SOL, your token's price is set <i>in SOL</i> — so its <b>dollar value rides SOL's</b>: SOL up 20% and your untraded token is worth 20% more in USD; SOL down 20% and so is your token, even though nothing about it changed. Pairing with USDC anchors the price to the dollar instead. Neither is wrong — just know a SOL pair ties your token's USD value to SOL's swings.</div>
       </div></div>
 
       <div class="ho-sec"><b>2 · Standard pool vs. concentrated liquidity — the
@@ -372,18 +382,33 @@ function fmtPriceUsd(p) {
   if (p > 0) return '$' + p.toExponential(3);
   return '$0';
 }
+let calcPair = 'sol';
+function setPair(p) {
+  calcPair = p;
+  document.getElementById('pairSol').classList.toggle('active', p === 'sol');
+  document.getElementById('pairUsdc').classList.toggle('active', p === 'usdc');
+  // relabel the "quote in pool" field; keep its <input> child intact
+  document.getElementById('lblQuote').childNodes[0].nodeValue =
+    (p === 'sol' ? 'SOL' : 'USDC') + ' in the pool';
+  // the quote-price field only matters for SOL — USDC is ~$1
+  document.getElementById('lblQuotePrice').style.display = p === 'sol' ? '' : 'none';
+  calcStartPrice();
+}
 function calcStartPrice() {
   const num = (id) => parseFloat((document.getElementById(id).value || '').replace(/[, ]/g, ''));
-  const tokens = num('calcTokens'), sol = num('calcSol'), solUsd = num('calcSolUsd'), supply = num('calcSupply');
+  const tokens = num('calcTokens'), quote = num('calcQuote'), supply = num('calcSupply');
+  const quotePrice = calcPair === 'usdc' ? 1 : num('calcQuotePrice'); // USDC ≈ $1
   const out = document.getElementById('calcOut');
-  if (!(tokens > 0) || !(sol > 0) || !(solUsd > 0)) {
-    out.innerHTML = "Enter tokens, SOL, and the SOL price to see your token's opening price.";
+  if (!(tokens > 0) || !(quote > 0) || !(quotePrice > 0)) {
+    out.innerHTML = "Enter the amounts to see your token's opening price.";
     return;
   }
-  const priceUsd = (sol / tokens) * solUsd;
+  const priceUsd = (quote / tokens) * quotePrice;
+  const pairName = calcPair === 'sol' ? 'SOL' : 'USDC';
   let html = "Opening price: <b>" + fmtPriceUsd(priceUsd) + "</b> per token";
   if (supply > 0) html += "<br>Opening market cap (FDV): <b>$" + fmtUsdBig(priceUsd * supply) + "</b>";
-  html += "<br><span class='calc-note'>You'd deposit " + fmtUsdBig(sol) + " SOL (~$" + fmtUsdBig(sol * solUsd) + ") of liquidity.</span>";
+  html += "<br><span class='calc-note'>You'd deposit " + fmtUsdBig(quote) + " " + pairName
+        + " (~$" + fmtUsdBig(quote * quotePrice) + ") of liquidity.</span>";
   out.innerHTML = html;
 }
 
