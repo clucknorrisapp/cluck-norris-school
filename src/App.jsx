@@ -4541,26 +4541,27 @@ function Landing({onStart,onChallenge,onIncubator,completed}){
         </button>
         <p style={{marginTop:-4,fontSize:11,color:"#4B5563",fontFamily:"'Oswald',sans-serif",letterSpacing:1}}>50 QUESTIONS • NO STUDY GUIDE • 94% TO PASS</p>
       </div>
-      {/* Cluck Score — free public utility for any Solana mint. Distinct from the
-          education paths above; this is the ecosystem moat. */}
+      {/* Tools & Utilities — the front door to the product beyond the school:
+          Cluck Score, the Hatchery, the competition trackers, the airdropper,
+          Security Coop. Full hub lives at /tools. */}
       <div style={{marginTop:22,paddingTop:18,borderTop:"1px solid rgba(255,255,255,0.06)"}}>
         <div style={{fontFamily:"'Oswald',sans-serif",fontSize:10,color:"#6B7280",letterSpacing:3,marginBottom:10}}>
-          🐔 FREE TOOL · NO WALLET CONNECT · ANY MINT
+          🐔 BEYOND THE SCHOOL — THE TOOLKIT
         </div>
-        <a href="/score" style={{
+        <a href="/tools" style={{
           display:"block",width:"100%",boxSizing:"border-box",
-          background:"linear-gradient(135deg,rgba(252,211,77,0.12),rgba(217,119,6,0.05))",
-          border:"2px solid rgba(252,211,77,0.45)",
-          borderRadius:10,padding:"14px",
-          fontFamily:"'Oswald',sans-serif",fontSize:16,fontWeight:700,
+          background:"linear-gradient(135deg,rgba(252,211,77,0.14),rgba(217,119,6,0.06))",
+          border:"2px solid rgba(252,211,77,0.5)",
+          borderRadius:10,padding:"16px",
+          fontFamily:"'Oswald',sans-serif",fontSize:17,fontWeight:700,
           color:"#FCD34D",letterSpacing:3,textDecoration:"none",
           textAlign:"center",
-          boxShadow:"0 0 20px rgba(252,211,77,0.18)"
+          boxShadow:"0 0 22px rgba(252,211,77,0.2)"
         }}>
-          🩺 RUN A CLUCK SCORE
+          🛠 TOOLS &amp; UTILITIES
         </a>
         <p style={{marginTop:6,fontSize:11,color:"#4B5563",fontFamily:"'Oswald',sans-serif",letterSpacing:1}}>
-          PASTE ANY SOLANA MINT · INSTANT 0–100 HEALTH SCORE
+          CLUCK SCORE · TOKEN CREATOR · COMPETITION TRACKERS · AIRDROPPER · WALLET SECURITY
         </p>
       </div>
       <a href={CLKN_TRADE_LINK} target="_blank" rel="noreferrer" style={{

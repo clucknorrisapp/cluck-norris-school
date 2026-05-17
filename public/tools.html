@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>🛠 Tools & Utilities — Cluck Norris</title>
+<meta name="description" content="The Cluck Norris toolkit — token health scoring, a guided token creator, buy-competition trackers, a batch airdropper, and a wallet security checker. The product beyond the school."/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0a0a0a; --card: #111111; --border: rgba(255,255,255,0.08);
+    --text: #F9FAFB; --subtext: #6B7280; --accent: #FCD34D; --orange: #D97706;
+    --mono: 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    background-image: radial-gradient(ellipse at 20% 8%, rgba(217,119,6,0.12) 0%, transparent 52%),
+                      radial-gradient(ellipse at 82% 92%, rgba(239,68,68,0.07) 0%, transparent 52%);
+    color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh;
+  }
+  .wrap { max-width: 680px; margin: 0 auto; padding: 28px 16px 70px; }
+
+  .header { text-align: center; margin-bottom: 8px; }
+  .header .icon { font-size: 44px; filter: drop-shadow(0 0 16px rgba(217,119,6,0.5)); }
+  .header .brand-mini { font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 4px; color: var(--orange); margin-top: 8px; font-weight: 700; }
+  .header h1 {
+    font-family: 'Oswald', sans-serif; font-size: 34px; font-weight: 900; letter-spacing: 3px;
+    background: linear-gradient(135deg, #FCD34D, #F97316, #EF4444);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    line-height: 1.05; margin: 2px 0;
+  }
+  .header p { font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; }
+  .intro { text-align: center; font-size: 13px; line-height: 1.7; color: #D1D5DB; max-width: 520px; margin: 16px auto 22px; }
+
+  .tool {
+    display: flex; align-items: flex-start; gap: 14px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 18px; margin-bottom: 12px; text-decoration: none; color: inherit;
+    transition: border-color 0.15s, transform 0.15s;
+  }
+  .tool:hover { border-color: rgba(252,211,77,0.5); transform: translateY(-1px); }
+  .tool .emoji { font-size: 30px; line-height: 1; flex-shrink: 0; }
+  .tool .body { flex: 1; min-width: 0; }
+  .tool .name { font-family: 'Oswald', sans-serif; font-size: 17px; font-weight: 700; letter-spacing: 1px; color: var(--text); }
+  .tool .name .tag {
+    font-size: 9px; letter-spacing: 1px; padding: 2px 6px; border-radius: 4px; margin-left: 8px;
+    vertical-align: middle; font-weight: 700;
+  }
+  .tag.free { background: rgba(16,185,129,0.15); color: #6EE7B7; border: 1px solid rgba(16,185,129,0.4); }
+  .tag.clkn { background: rgba(252,211,77,0.12); color: var(--accent); border: 1px solid rgba(252,211,77,0.4); }
+  .tool .desc { font-size: 12.5px; line-height: 1.6; color: #9CA3AF; margin-top: 5px; }
+  .tool .go { font-family: 'Oswald', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 2px; color: var(--accent); margin-top: 8px; }
+
+  .footer-tag { text-align: center; margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--border); font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
+  .footer-tag a { color: var(--orange); text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <div class="icon">🛠</div>
+    <div class="brand-mini">CLUCK NORRIS</div>
+    <h1>TOOLS &amp; UTILITIES</h1>
+    <p>THE TOOLKIT BEYOND THE SCHOOL</p>
+  </div>
+
+  <div class="intro">
+    The school teaches you. These tools are what you do with it — real, working Solana
+    utilities for analyzing tokens, running competitions, creating tokens, paying out
+    winners, and keeping your wallet safe.
+  </div>
+
+  <a class="tool" href="/score">
+    <div class="emoji">🩺</div>
+    <div class="body">
+      <div class="name">Cluck Score <span class="tag free">FREE</span></div>
+      <div class="desc">A 0–100 health score for any Solana token — holders, liquidity, concentration, mint &amp; freeze authority. Paste a mint, get an instant read and a shareable card.</div>
+      <div class="go">RUN A SCORE →</div>
+    </div>
+  </a>
+
+  <a class="tool" href="/security-coop">
+    <div class="emoji">🔒</div>
+    <div class="body">
+      <div class="name">Security Coop <span class="tag free">FREE</span></div>
+      <div class="desc">A wallet permission check. Connecting a wallet is safe — but token <em>approvals</em> you signed can linger. Security Coop finds them and lets you revoke any you don't recognise, in one tap.</div>
+      <div class="go">CHECK MY WALLET →</div>
+    </div>
+  </a>
+
+  <a class="tool" href="/hatchery">
+    <div class="emoji">🥚</div>
+    <div class="body">
+      <div class="name">The Hatchery <span class="tag clkn">SOL / CLKN</span></div>
+      <div class="desc">Create a real SPL token the right way — supply, metadata, authority revocation, every decision explained as you make it. Stops at the mint on purpose: minting is not launching.</div>
+      <div class="go">CREATE A TOKEN →</div>
+    </div>
+  </a>
+
+  <a class="tool" href="/buyspecial">
+    <div class="emoji">📈</div>
+    <div class="body">
+      <div class="name">Buy Special <span class="tag clkn">CLKN</span></div>
+      <div class="desc">Run a buy competition: scan a time window, find who bought, verify who held, reward every qualifying buyer. Catches every real buy across any pool or router — and hands the winners straight to the airdropper.</div>
+      <div class="go">RUN A COMPETITION →</div>
+    </div>
+  </a>
+
+  <a class="tool" href="/rose">
+    <div class="emoji">🌹</div>
+    <div class="body">
+      <div class="name">Rose <span class="tag clkn">OPEN</span></div>
+      <div class="desc">A buy-competition tracker with <em>ranked</em> prizes — top buyers placed 1st, 2nd, 3rd. Same value-flow engine as Buy Special; works on any token. She watches, and rewards those who buy.</div>
+      <div class="go">RANK THE BUYERS →</div>
+    </div>
+  </a>
+
+  <a class="tool" href="/airdrop">
+    <div class="emoji">💰</div>
+    <div class="body">
+      <div class="name">Airdrop <span class="tag clkn">CLKN</span></div>
+      <div class="desc">Batch-send tokens to hundreds of wallets — auto token-account creation, size-safe batching, an exportable record with Solscan links. Your keys never leave your wallet. Free when launched from Buy Special.</div>
+      <div class="go">SEND AN AIRDROP →</div>
+    </div>
+  </a>
+
+  <div class="footer-tag">
+    🐔 <a href="https://clucknorris.app">clucknorris.app</a> — SCHOOL OF CRYPTO HARD KNOCKS
+  </div>
+
+</div>
+</body>
+</html>

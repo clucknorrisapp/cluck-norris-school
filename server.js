@@ -1841,9 +1841,14 @@ app.get("/hatchery", (req, res) => {
   res.sendFile(join(__dirname, "public", "hatchery.html"));
 });
 
-// Security Coop — wallet permission check / approval revoker. Unlisted for now.
+// Security Coop — wallet permission check / approval revoker.
 app.get("/security-coop", (req, res) => {
   res.sendFile(join(__dirname, "public", "security-coop.html"));
+});
+
+// Tools & Utilities hub — the front door to the toolkit, linked from the landing.
+app.get("/tools", (req, res) => {
+  res.sendFile(join(__dirname, "public", "tools.html"));
 });
 
 app.get("/rose", (req, res) => {
