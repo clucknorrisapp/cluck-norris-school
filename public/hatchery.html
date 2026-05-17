@@ -85,6 +85,11 @@
   .handoff a { color: #93C5FD; text-decoration: none; }
   .handoff .ho-warn { margin-top: 12px; padding: 10px 12px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3); border-radius: 7px; color: #FCA5A5; }
   .handoff .ho-sec { margin-top: 12px; }
+  .lp-details { margin-bottom: 16px; }
+  .lp-details summary { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; font-family: var(--mono); font-size: 11px; letter-spacing: 1px; color: var(--accent); cursor: pointer; list-style: none; }
+  .lp-details summary::-webkit-details-marker { display: none; }
+  .lp-details[open] summary { border-radius: 12px 12px 0 0; border-bottom: none; }
+  .lp-details .handoff { margin-top: 0; border-radius: 0 0 12px 12px; }
 
   .footer-tag { text-align: center; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
   .footer-tag a { color: #D97706; text-decoration: none; }
@@ -114,8 +119,8 @@
       <span class="mint-not-launch">🥚 Creating a token is <b>not</b> launching a
       project. A token with no liquidity is inert — it can't be bought or sold.
       The Hatchery stops at the mint on purpose; adding liquidity is a separate,
-      higher-stakes step you take yourself, and the result screen below walks
-      you through exactly what that involves before you do it.</span>
+      higher-stakes step you take yourself — and there's a full Launch
+      Liquidity Guide on this page you can read before you mint, or after.</span>
     </div>
   </div>
 
@@ -190,6 +195,74 @@
     </div>
   </div>
 
+  <!-- Launch Liquidity Guide — collapsible, readable before or after minting -->
+  <details class="lp-details" id="lpGuide">
+    <summary>📖 WHAT HAPPENS AFTER YOU MINT — THE LAUNCH LIQUIDITY GUIDE (read anytime)</summary>
+    <div class="handoff">
+      A token is <b>inert until liquidity is added</b> — no price, no market,
+      nothing to trade. This is what that next step involves. Read it
+      <b>before</b> you do it: it's where real money is at stake, and it is not
+      something to improvise. <b>The Hatchery does not add liquidity for you</b>
+      — you do this yourself, on a DEX.
+
+      <div class="ho-warn">⚠️ Don't add a single dollar of liquidity until you
+      understand all four sections below. The LP Lab goes deeper still.</div>
+
+      <div class="ho-sec"><b>1 · Starting ratio — this sets your opening price.</b>
+      To open a pool you deposit two things: your token and SOL (or USDC). The
+      <i>ratio</i> of those amounts <b>is</b> the starting price — fewer tokens
+      against more SOL opens higher, more tokens against less SOL opens lower.
+      It is the single most consequential number in a launch. Decide the
+      opening price you intend first, then work the deposit amounts backward
+      from it.</div>
+
+      <div class="ho-sec"><b>2 · Standard pool vs. concentrated liquidity — the
+      decision new creators get wrong most.</b><br>
+      A <b>standard pool</b> (constant-product AMM) spreads your liquidity
+      across every price from zero to infinity. Simple and forgiving — there is
+      always liquidity at every price. Most tokens should launch this way.<br>
+      A <b>concentrated-liquidity pool</b> lets you place liquidity only inside
+      a chosen price <i>range</i>. Far more capital-efficient — but on a
+      brand-new token it is a sharp tool that cuts you if mishandled:<br>
+      • If price trades <b>outside your range</b>, your position becomes 100%
+      one asset and stops earning fees — a too-tight range can leave a fresh
+      token with effectively no liquidity within minutes of launch.<br>
+      • With <b>no price history</b>, you're guessing the range blind. Too
+      narrow and a normal early swing strands it; too wide and it behaves like
+      a standard pool anyway.<br>
+      • <b>For a first launch: use a standard pool, or a concentrated pool with
+      a very wide range.</b> Tight ranges are a tool for <i>managing</i> an
+      established token — not for <i>opening</i> a new one.<br>
+      • <b>Single-sided positions:</b> some concentrated pools let you deposit
+      only your token (no SOL) in a range above the current price — a staged
+      sell wall. A deliberate strategy, never a default. Understand it fully
+      first.</div>
+
+      <div class="ho-sec"><b>3 · Locking the liquidity.</b> Whether you lock or
+      burn the LP tokens you receive when the pool is created. Buyers check
+      this — unlocked liquidity is the classic rug vector (the creator can pull
+      it). Locking or burning is what signals you won't.</div>
+
+      <div class="ho-sec"><b>4 · Where to add it.</b> Each DEX has its own pool
+      creation flow — note which support concentrated liquidity:<br>
+      • <a href="https://meteora.ag" target="_blank">Meteora ↗</a> — DLMM pools
+      are concentrated-liquidity; also has simpler dynamic pools. Popular for
+      memecoin launches.<br>
+      • <a href="https://raydium.io" target="_blank">Raydium ↗</a> — standard
+      AMM pools plus concentrated (CLMM). The most widely integrated DEX on
+      Solana.<br>
+      • <a href="https://orca.so" target="_blank">Orca ↗</a> — Whirlpools are
+      concentrated-liquidity, with a clean, beginner-friendly interface.</div>
+
+      <div class="ho-sec"><b>📚 Learn the full math first — the LP Lab.</b>
+      The <a href="https://clucknorris.app" target="_blank">LP Lab on
+      clucknorris.app ↗</a> teaches liquidity, AMMs, impermanent loss, fee
+      structures, and concentrated liquidity in depth. Work through it before
+      you open a pool. The Hatchery stops at the mint on purpose — the launch
+      is yours, and it's worth doing slowly.</div>
+    </div>
+  </details>
+
   <!-- Hatch -->
   <div class="card">
     <div class="toggle-row">
@@ -221,45 +294,11 @@
     <div class="result-row"><span class="rk">Solscan:</span> <a id="rScan" target="_blank">view token ↗</a></div>
     <div class="result-row"><span class="rk">Transaction:</span> <a id="rTx" target="_blank">view on Solscan ↗</a></div>
     <div class="handoff">
-      🥚 <b>You've HATCHED a token — you have NOT launched a project.</b><br>
-      A token with no liquidity is inert: it has no price and can't be bought or
-      sold. "Launching" means adding liquidity, and it's a separate, deliberate
-      step. The Hatchery does not do it for you — here's what it involves.
-
-      <div class="ho-warn">⚠️ <b>Make sure you understand liquidity before you
-      add it.</b> This is the riskiest step of a launch — it puts real money on
-      the line and it is not something to improvise. Do not add liquidity until
-      you understand the three decisions below.</div>
-
-      <div class="ho-sec"><b>1 · Starting ratio — this sets your opening price.</b>
-      To create a pool you deposit two things: your token and SOL (or USDC).
-      The <i>ratio</i> of those two amounts <b>is</b> the starting price — fewer
-      tokens against more SOL opens the price higher, more tokens against less
-      SOL opens it lower. It's the single most consequential number in a launch:
-      get it wrong and your token opens at a price you never intended.</div>
-
-      <div class="ho-sec"><b>2 · Pool type.</b> A standard constant-product pool
-      and a concentrated-liquidity pool behave very differently — in price
-      range, in fees, and in how your deposited liquidity actually gets used.
-      Choose deliberately, not by default.</div>
-
-      <div class="ho-sec"><b>3 · Locking the liquidity.</b> Whether you lock or
-      burn the LP tokens. Buyers check this — unlocked liquidity is a classic
-      rug vector, so locking is what signals you're not one.</div>
-
-      <div class="ho-sec"><b>🏊 Where to add liquidity.</b> Each DEX has its own
-      pool-creation flow and tradeoffs:<br>
-      • <a href="https://meteora.ag" target="_blank">Meteora ↗</a> — dynamic &amp; DLMM pools; popular for memecoin launches<br>
-      • <a href="https://raydium.io" target="_blank">Raydium ↗</a> — the established standard AMM; widely integrated across Solana<br>
-      • <a href="https://orca.so" target="_blank">Orca ↗</a> — concentrated-liquidity "Whirlpools"; clean, beginner-friendly UI</div>
-
-      <div class="ho-sec"><b>📚 Learn it properly first — the LP Lab.</b>
-      The <a href="https://clucknorris.app" target="_blank">LP Lab on
-      clucknorris.app ↗</a> has 8 lessons on exactly this: liquidity, how AMMs
-      work, impermanent loss, fee structures, concentrated liquidity, and the
-      math behind starting ratios. Work through it before you add a single
-      dollar. The Hatchery stops here on purpose — the next step is yours, and
-      it's worth doing slowly.</div>
+      🥚 <b>You've HATCHED a token — you have NOT launched a project.</b>
+      It can't be traded until you add liquidity yourself — that's your next
+      step. The full <b>Launch Liquidity Guide</b> — starting ratio,
+      concentrated liquidity, where to add it — is on this page and now open
+      above. Read it before you add a single dollar.
     </div>
   </div>
 
@@ -422,6 +461,7 @@ async function hatch() {
     document.getElementById('rScan').href = 'https://solscan.io/token/' + built.mintAddress;
     document.getElementById('rTx').href = 'https://solscan.io/tx/' + signature;
     document.getElementById('resultCard').classList.add('show');
+    document.getElementById('lpGuide').open = true;
     document.getElementById('resultCard').scrollIntoView({ behavior: 'smooth' });
   } catch (e) {
     setProgress('');
