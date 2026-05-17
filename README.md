@@ -7,13 +7,14 @@
 
 > *"No participation trophies. No hand‑holding. Just hard knocks."*
 >
-> **A Bags.fm token where premium utility is paid for in CLKN micropayments — zero wallet connect — and where first‑timers are taught before they can hurt themselves.**
+> **A Bags.fm token where the school is free, token research is free, and premium tools are paid for in CLKN — wrapped in guardrails that teach first‑timers before they can hurt themselves.**
 
-Three things, in one product:
+Four things, in one product:
 
 1. 🆓 **A free crypto school** — disciplined, voice‑driven, no signup, no wallet
-2. 🩺 **Free token‑health analysis for any Solana mint** at [clucknorris.app/score](https://clucknorris.app/score)
-3. 🔒 **Premium research + airdrop tools** unlocked with on‑chain CLKN micropayments — no wallet connect, no custody, verified on‑chain
+2. 🩺 **Free token research** — a 0–100 health score for any Solana mint, plus a free wallet‑safety checker
+3. 🔒 **Premium operator tools** — buy‑competition trackers and a batch airdrop sender, unlocked with on‑chain CLKN micropayments
+4. 🥚 **A guided token creator** — mint a real SPL token, taught decision by decision
 
 The token does real work. The school keeps people alive long enough to use it.
 
@@ -67,6 +68,15 @@ Pennies to pay, accessible to anyone. The token does real work without becoming 
 
 ---
 
+## 🥚 Create & protect — connect‑wallet tools
+
+Two tools where you *do* connect a wallet — not to hand over anything, but to **sign your own transactions**. Keys never touch the server.
+
+- **🥚 The Hatchery** — a guided SPL token creator. It walks you through every mint‑time decision (supply, decimals, metadata, mint/freeze authority) and deploys the token, with metadata stored permanently on Arweave. It **deliberately stops at liquidity** — minting a token is not launching a project, and a token with no pool can't rug anyone. Flat fee: **0.1 SOL**, or the CLKN equivalent at a built‑in discount; **free for 2M+ CLKN holders**.
+- **🔒 Security Coop** — a free wallet permission check. Scans your SPL token accounts for lingering **delegate approvals** — the one permission that genuinely persists on Solana — and revokes any you don't recognise. Connecting a wallet grants nothing; signing an "approve" does, and this is how you take it back.
+
+---
+
 ## 🔐 How the no‑wallet‑connect payment works
 
 You hit a paid feature. The app generates a unique amount like `100.347 CLKN` (3‑decimal precision = 1000 unique values per tool — server matches the exact decimal to your session). You send exactly that amount from any wallet you control. The server polls Solana, finds the matching transaction, identifies your sending wallet from the tx metadata, and unlocks the feature.
@@ -76,7 +86,7 @@ You hit a paid feature. The app generates a unique amount like `100.347 CLKN` (3
 - **Sticky countdown banner** shows exactly how long the unlock has left (`5d 0h 0m`, `0:32:15`, etc.)
 - **Anti‑tampering**: floor of the paid amount must match the tool's declared price. Can't pay 100 CLKN to unlock a 500‑CLKN tool.
 
-The airdrop and buy‑comp tools sign through **Phantom, Solflare, or Jupiter Wallet** — wallet picker, no wallet locked in.
+The tools that *do* execute on‑chain — the airdrop sender, the Hatchery, and Security Coop — use a **Phantom · Solflare · Jupiter** wallet picker and you approve every transaction yourself. Connecting shares only your address; the server never sees a key.
 
 ---
 
@@ -110,7 +120,7 @@ Cards (`/api/cluck-card?mint=…`) unfurl on Twitter / Telegram / Discord automa
 
 | Most tokens | CLKN |
 |---|---|
-| Wallet connect for everything | Zero wallet UI for free OR paid actions (signing only inside the airdrop tool) |
+| Wallet connect for everything | Free school and research never connect; you connect only to *sign your own* transactions in the create / send / revoke tools |
 | "Governance rights" you'll never exercise | Real tools you actually use |
 | One‑time staking lock that ties up supply | Per‑use micropayments — token actually changes hands |
 | Roadmap promises | Already deployed, working, in production on Railway |
@@ -122,8 +132,10 @@ Cards (`/api/cluck-card?mint=…`) unfurl on Twitter / Telegram / Discord automa
 
 1. **🩺 Cluck Score** — public 0–100 health score for any Solana mint, with LP‑filtered concentration and a sharable PNG card. Free.
 2. **🐔 Holder Truth Engine** *(internal, powers Cluck Score)* — six‑signal classification (on‑chain owner field → known programs → DexScreener pairs → AMM pool vault bytecode scan → Bubblemaps → activity heuristic → manual overrides). Catches Bags.fm DBC pool authorities that look System‑Program‑owned but aren't. The LP‑filtered concentration logic in Cluck Score runs on this engine.
-3. **📈 Buy‑Competition Analyzer** — configurable time window, two‑phase: who bought, who held. Identifies hold‑through winners and computes bonus distributions. Sends results directly to the airdropper.
-4. **💰 Batch Airdrop Sender** — Phantom / Solflare / Jupiter‑signed SPL transfers, auto‑ATA creation, deduping, CSV / manual / equal‑split modes, dynamic batching for Solana's 1232‑byte tx limit, SOL rent pre‑flight estimate, optional "skip new‑ATA recipients" toggle. The user's keys, never the server's.
+3. **📈 Buy‑Competition Trackers** — two flavours on one engine: **buyspecial** (every qualifying buyer rewarded) and **Rose** (ranked prizes for the top buyers). A value‑flow engine reads net on‑chain balances, so it counts every real buy — any pool, any aggregator, any pay currency — never miscounts a wallet‑to‑wallet transfer as a buy, splits credit by who actually holds the tokens, and traces transfers one hop to the wallet that should be paid. Hands results straight to the airdropper.
+4. **💰 Batch Airdrop Sender** — Phantom / Solflare / Jupiter‑signed SPL transfers, auto‑ATA creation, deduping, CSV / manual / equal‑split modes, dynamic batching for Solana's 1232‑byte tx limit, SOL rent pre‑flight estimate, exportable send record with Solscan links. The user's keys, never the server's.
+5. **🥚 The Hatchery** — guided SPL token creator. Every mint‑time decision explained, metadata to Arweave, stops at liquidity on purpose. Flat SOL/CLKN fee.
+6. **🔒 Security Coop** — wallet permission check: scans for lingering token‑delegate approvals and revokes them. Free, non‑custodial.
 
 ---
 
@@ -147,6 +159,8 @@ Cards (`/api/cluck-card?mint=…`) unfurl on Twitter / Telegram / Discord automa
 - `/api/cluck-card?mint=…` — 1200×630 PNG card for sharing
 - `/api/verify-clkn-payment` — tool‑aware unlock verification with holder bonus
 - `/api/ask-cluck` — Claude‑powered tutor
+- `/api/hatchery/*` — token creator: Arweave metadata upload, unsigned mint‑tx build, live fee config
+- `/api/security-coop/*` — wallet delegate‑approval scan + unsigned revoke‑tx build
 - `/api/holders`, `/api/locks`, `/api/fees`, `/api/supply`, `/api/bubblemaps` — Solana token telemetry proxies
 - `/api/bags-proxy`, `/api/helius-rpc`, `/api/helius-tx` — Bags / Helius proxies with API keys hidden server‑side
 - `/api/claim` — trophy submissions to Google Sheets
