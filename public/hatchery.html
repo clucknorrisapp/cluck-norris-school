@@ -200,6 +200,15 @@
         revocations are permanent.</span>
       </div>
     </div>
+    <div class="toggle-row">
+      <input type="checkbox" id="ackBox2"/>
+      <div class="toggle-text">
+        <span>I understand the Hatchery <b>only mints the token</b>. It is
+        <b>not tradable</b> until <b>I add liquidity myself</b> on a DEX — a
+        separate step that Cluck Norris does not perform. Cluck Norris provides
+        education for that step (the LP Lab), but the launch is mine to do.</span>
+      </div>
+    </div>
     <button class="hatch-btn" id="hatchBtn" onclick="hatch()">🥚 HATCH TOKEN</button>
     <div class="progress" id="progress"></div>
   </div>
@@ -379,7 +388,9 @@ async function hatch() {
   if (!symbol) { showError('Token symbol is required.'); return; }
   if (!/^\d+$/.test(supply) || BigInt(supply) <= 0n) { showError('Total supply must be a whole number greater than 0.'); return; }
   if (!logoData) { showError('Choose a logo image.'); return; }
-  if (!document.getElementById('ackBox').checked) { showError('Please check the acknowledgement box before hatching.'); return; }
+  if (!document.getElementById('ackBox').checked || !document.getElementById('ackBox2').checked) {
+    showError('Please check both acknowledgement boxes before hatching.'); return;
+  }
 
   const btn = document.getElementById('hatchBtn');
   btn.disabled = true;
