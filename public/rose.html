@@ -279,6 +279,12 @@ th:nth-child(4), td:nth-child(4) { display: none; }
         <div style="font-size:10px;color:var(--subtext);line-height:1.5;max-width:260px">If set, checks top winners + 2 backups for sells after competition ends. Leave blank to skip.</div>
       </div>
     </div>
+    <div class="config-row">
+      <div class="config-group" style="flex:1;min-width:260px">
+        <div class="config-label">Exclude wallets — deployer, team, bots (one per line, optional)</div>
+        <textarea id="excludeWallets" rows="2" placeholder="Paste wallet addresses to keep out of the results entirely" style="width:100%;background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:#e8e8e8;font-family:var(--mono);font-size:11px;resize:vertical"></textarea>
+      </div>
+    </div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <button class="run-btn" id="runBtn" onclick="runAnalysis()">▶ RUN ANALYSIS</button>
       <button class="stop-btn" id="stopBtn" onclick="stopAnalysis()">■ STOP</button>
@@ -775,8 +781,13 @@ async function runAnalysis() {
     let totalBought = 0n;
     let uniqueWallets = 0;
 
+    const excludeSet = new Set(
+      (document.getElementById('excludeWallets').value || '')
+        .split(/[\s,]+/).map(s => s.trim()).filter(s => s.length >= 32 && s.length <= 44)
+    );
     for (const [addr, data] of Object.entries(wallets)) {
       if (data.bought === 0n) continue; // Never actually bought
+      if (excludeSet.has(addr)) continue;   // wallet on the operator's manual exclude list
       uniqueWallets++;
       totalBought += data.bought;
       const moved = data.movedOut || 0n;
@@ -1155,7 +1166,7 @@ function renderResults(eligible, disqualified, flagged, numWinners) {
       const detailId = `tx-detail-${i}`;
       tr.innerHTML = `
         <td class="rank-cell ${rankClass}">${isWinner ? '🏆 ' : ''}${i+1}</td>
-        <td><div class="addr-wrap"><span class="addr-cell" onclick="toggleAddr(this,'${e.addr}')">${shortAddr(e.addr)}</span><button class="copy-btn" onclick="copyAddr(this,'${e.addr}')">COPY</button></div></td>
+        <td><div class="addr-wrap"><span class="addr-cell" onclick="toggleAddr(this,'${e.addr}')">${shortAddr(e.addr)}</span><button class="copy-btn" onclick="copyAddr(this,'${e.addr}')">COPY</button><button class="copy-btn" style="border-color:rgba(239,68,68,0.45);color:#FCA5A5" onclick="excludeFromResults('${e.addr}')">EXCLUDE</button></div></td>
         <td class="amt-cell">${fmtAmount(Number(e.bought))}${e.grossBought && e.grossBought > e.bought ? `<span style="color:#FCD34D;font-size:9px"> · moved ${fmtAmount(Number(e.grossBought - e.bought))} out</span>` : ''}</td>
         <td class="buys-cell">
           <span>${e.buyTxns} buy${e.buyTxns !== 1 ? 's' : ''}</span>
@@ -1189,7 +1200,7 @@ function renderResults(eligible, disqualified, flagged, numWinners) {
     const expBar = document.createElement('div');
     expBar.className = 'export-bar';
     expBar.innerHTML = `
-      <button class="export-btn" onclick="exportCSV(true)">⬇ Export Eligible CSV</button>
+      <button class="export-btn" onclick="exportCSV(true)">📋 Eligible CSV</button>
       <button class="export-btn" onclick="copyEligible()">📋 Copy Eligible Addresses</button>`;
     eligSection.appendChild(expBar);
   }
@@ -1237,7 +1248,7 @@ function renderResults(eligible, disqualified, flagged, numWinners) {
 
     const expBar = document.createElement('div');
     expBar.className = 'export-bar';
-    expBar.innerHTML = `<button class="export-btn" onclick="exportCSV(false)">⬇ Export Disqualified CSV</button>`;
+    expBar.innerHTML = `<button class="export-btn" onclick="exportCSV(false)">📋 Disqualified CSV</button>`;
     disqSection.appendChild(expBar);
   }
   container.appendChild(disqSection);
@@ -1278,10 +1289,24 @@ function renderResults(eligible, disqualified, flagged, numWinners) {
     container.appendChild(flagSection);
   }
 
-  // Store data for exports / tracing
+  // Store data for exports / tracing / runtime exclude
   window._eligibleData = eligible;
   window._disqualifiedData = disqualified;
   window._flaggedBuyers = flagged || [];
+  window._numWinners = numWinners;
+}
+
+// Remove a wallet from the eligible list at runtime (e.g. the deployer wallet
+// running buybacks) and re-render so ranks and winners recompute. For wallets
+// you always want skipped, the setup "Exclude wallets" box is cleaner.
+function excludeFromResults(addr) {
+  if (!window._eligibleData) return;
+  window._eligibleData = window._eligibleData.filter(e => e.addr !== addr);
+  const nw = window._numWinners || 3;
+  renderResults(window._eligibleData, window._disqualifiedData || [], window._flaggedBuyers || [], nw);
+  if (window._eligibleData.length > 0) {
+    appendPrizeSection(window._eligibleData.slice(0, nw), document.getElementById('results'));
+  }
 }
 
 // ── Flagged-mover trace — follow transferred tokens one hop ───────────────────
@@ -1398,25 +1423,45 @@ function toggleAddr(el, full) {
   }
 }
 
+// Show the list as copyable CSV text. A blob file-download navigates to a blank
+// page in mobile in-app browsers (Phantom's webview), so the CSV is dropped into
+// a selectable textarea with a copy button instead — works everywhere.
 function exportCSV(isEligible) {
   const data = isEligible ? window._eligibleData : window._disqualifiedData;
-  if (!data) return;
-  const label = isEligible ? 'eligible' : 'disqualified';
-  const rows = [['Rank','Wallet','Tokens Bought','Buy Txns','Sell Txns','First Buy CT']];
+  if (!data || data.length === 0) return;
+  const label = isEligible ? 'ELIGIBLE' : 'DISQUALIFIED';
+  let csv = 'rank,wallet,tokens,buy_txns,sell_txns,first_buy_ct\n';
   data.forEach((e, i) => {
-    rows.push([
-      i+1, e.addr,
+    csv += [ i + 1, e.addr,
       (Number(e.bought) / Math.pow(10, tokenDecimals)).toFixed(2),
-      e.buyTxns, e.sellTxns,
-      fmtTime(e.firstBuy)
-    ]);
+      e.buyTxns, e.sellTxns, '"' + fmtTime(e.firstBuy) + '"' ].join(',') + '\n';
   });
-  const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\n');
-  const blob = new Blob([csv], {type:'text/csv'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = `rose_${label}_${Date.now()}.csv`;
-  a.click(); URL.revokeObjectURL(url);
+  let panel = document.getElementById('roseCsvPanel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'roseCsvPanel';
+    panel.style.marginTop = '14px';
+    document.getElementById('results').appendChild(panel);
+  }
+  panel.innerHTML =
+    '<div style="font-family:var(--mono);font-size:11px;color:var(--accent);margin-bottom:6px">' + label + ' CSV — copy for your records or any airdropper</div>' +
+    '<textarea readonly id="roseCsvText" onclick="this.select()" style="width:100%;height:150px;background:rgba(0,0,0,0.4);border:1px solid var(--border);border-radius:8px;padding:10px;font-family:var(--mono);font-size:11px;color:#D1D5DB;resize:vertical"></textarea>' +
+    '<button id="roseCsvCopyBtn" onclick="copyRoseCsv()" style="width:100%;margin-top:6px;padding:10px;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);border-radius:8px;font-family:var(--head);font-size:12px;font-weight:700;color:#6EE7B7;letter-spacing:2px;cursor:pointer">📋 COPY CSV</button>';
+  document.getElementById('roseCsvText').value = csv;
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function copyRoseCsv() {
+  const ta = document.getElementById('roseCsvText');
+  const btn = document.getElementById('roseCsvCopyBtn');
+  if (!ta) return;
+  ta.focus(); ta.select(); ta.setSelectionRange(0, ta.value.length);
+  const done = (t) => { if (btn) { btn.textContent = t; setTimeout(() => { btn.textContent = '📋 COPY CSV'; }, 1800); } };
+  try {
+    navigator.clipboard.writeText(ta.value).then(() => done('✓ COPIED'), () => { document.execCommand('copy'); done('✓ COPIED'); });
+  } catch (e) {
+    try { document.execCommand('copy'); done('✓ COPIED'); } catch (e2) { done('SELECTED — TAP TO COPY'); }
+  }
 }
 
 function toggleTxDetail(id, btn) {
