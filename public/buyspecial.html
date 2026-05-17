@@ -339,6 +339,12 @@
         <input class="config-input" type="number" id="minBuy" value="0" min="0" style="width:120px" placeholder="0 = no min"/>
       </div>
     </div>
+    <div class="config-row">
+      <div class="config-group" style="flex:1;min-width:260px">
+        <div class="config-label">Exclude wallets — deployer, team, bots (one per line, optional)</div>
+        <textarea class="config-input" id="excludeWallets" rows="2" placeholder="Paste wallet addresses to keep out of the results entirely" style="width:100%;font-family:var(--mono);font-size:11px;resize:vertical"></textarea>
+      </div>
+    </div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <button class="run-btn" id="runBtn" onclick="runAnalysis()">▶ RUN BUY ANALYSIS</button>
       <button class="stop-btn" id="stopBtn" onclick="stopAnalysis()">■ STOP</button>
@@ -648,6 +654,12 @@ async function runAnalysis() {
 
   tokenDecimals = currentDecimals;
   const minBuy = parseFloat(document.getElementById('minBuy').value) || 0;
+  // Operator's manual exclude list — wallets pasted into the setup box are kept
+  // out of the results entirely (e.g. the deployer wallet doing buybacks).
+  const excludeSet = new Set(
+    (document.getElementById('excludeWallets').value || '')
+      .split(/[\s,]+/).map(s => s.trim()).filter(s => s.length >= 32 && s.length <= 44)
+  );
 
   try {
     setStatus('Fetching signatures...', 5);
@@ -791,6 +803,7 @@ async function runAnalysis() {
 
     for (const [addr, data] of Object.entries(wallets)) {
       if (data.bought === 0n || data.bought < minBuyRaw) continue;
+      if (excludeSet.has(addr)) continue;   // wallet on the operator's manual exclude list
       uniqueWallets++;
       totalBought += data.bought;
       const moved = data.movedOut || 0n;
@@ -1331,29 +1344,55 @@ function renderHoldResults(results, holdHrs, holdDeadline, bonusPct, now) {
   wrap.appendChild(tbl);
   container.appendChild(wrap);
 
-  // Final confirmed list
+  // Final confirmed list — held in window._confirmedRecipients so the per-row
+  // EXCLUDE button can trim it and re-render.
   if (passed.length > 0) {
+    window._confirmedRecipients = passed.map(r => ({
+      payAddr: r.payoutAddr || r.addr,
+      moved: !!r.payoutAddr,
+      bonusTokens: r.bonusTokens,
+    }));
     const finalBox = document.createElement('div');
     finalBox.className = 'final-box';
-    finalBox.innerHTML = '<div class="final-box-title">CONFIRMED BONUS RECIPIENTS -- ' + passed.length + ' WALLETS</div>';
-    passed.forEach((r, i) => {
-      const payAddr = r.payoutAddr || r.addr;
-      finalBox.innerHTML += '<div class="final-item">' +
-        '<span class="final-rank">' + (i+1) + '.</span>' +
-        '<span style="font-family:var(--mono);font-size:11px;color:var(--subtext);flex:1">' + shortAddr(payAddr) + (r.payoutAddr ? ' <span style="color:#FCD34D">(moved — paid here)</span>' : '') + '</span>' +
-        '<span style="font-family:var(--mono);font-size:11px;color:var(--green);margin-right:8px">' + r.bonusTokens.toLocaleString(undefined, {maximumFractionDigits:2}) + ' ' + currentTokenName + '</span>' +
-        '<button class="copy-btn" onclick="copyAddr(this,\'' + payAddr + '\')">COPY</button>' +
-        '</div>';
-    });
+    finalBox.id = 'confirmedBox';
     container.appendChild(finalBox);
-
-    // Store for airdrop — payout follows the tokens when they were moved to a
-    // verified hold wallet.
-    window._airdropData = passed.map(r => ({ addr: r.payoutAddr || r.addr, amount: r.bonusTokens, mint: currentMint, tokenName: currentTokenName }));
-    const airdropBtn = document.querySelector('#airdropSection .airdrop-btn');
-    if (airdropBtn) airdropBtn.textContent = '🚀 OPEN AIRDROP TOOL (' + passed.length + ' ' + (passed.length === 1 ? 'WINNER' : 'WINNERS') + ')';
+    renderConfirmedBox();
     document.getElementById('airdropSection').classList.add('show');
   }
+}
+
+// Render the confirmed bonus recipients from window._confirmedRecipients, and
+// keep the airdrop payload (window._airdropData) in sync — so the EXCLUDE
+// button, the airdrop hand-off and the CSV download all use the same trimmed list.
+function renderConfirmedBox() {
+  const box = document.getElementById('confirmedBox');
+  if (!box) return;
+  const list = window._confirmedRecipients || [];
+  let html = '<div class="final-box-title">CONFIRMED BONUS RECIPIENTS -- ' + list.length + ' WALLET' + (list.length !== 1 ? 'S' : '') + '</div>';
+  if (list.length === 0) {
+    html += '<div style="font-family:var(--mono);font-size:11px;color:var(--subtext);padding:6px 2px">All recipients excluded.</div>';
+  }
+  list.forEach((r, i) => {
+    html += '<div class="final-item">' +
+      '<span class="final-rank">' + (i+1) + '.</span>' +
+      '<span style="font-family:var(--mono);font-size:11px;color:var(--subtext);flex:1">' + shortAddr(r.payAddr) + (r.moved ? ' <span style="color:#FCD34D">(moved — paid here)</span>' : '') + '</span>' +
+      '<span style="font-family:var(--mono);font-size:11px;color:var(--green);margin-right:8px">' + r.bonusTokens.toLocaleString(undefined, {maximumFractionDigits:2}) + ' ' + currentTokenName + '</span>' +
+      '<button class="copy-btn" title="Copies the wallet address" onclick="copyAddr(this,\'' + r.payAddr + '\')">COPY</button>' +
+      '<button class="copy-btn" style="margin-left:4px;border-color:rgba(239,68,68,0.45);color:#FCA5A5" onclick="excludeFromDrop(\'' + r.payAddr + '\')">EXCLUDE</button>' +
+      '</div>';
+  });
+  box.innerHTML = html;
+  window._airdropData = list.map(r => ({ addr: r.payAddr, amount: r.bonusTokens, mint: currentMint, tokenName: currentTokenName }));
+  const airdropBtn = document.querySelector('#airdropSection .airdrop-btn');
+  if (airdropBtn) airdropBtn.textContent = '🚀 OPEN AIRDROP TOOL (' + list.length + ' ' + (list.length === 1 ? 'WINNER' : 'WINNERS') + ')';
+}
+
+// Drop a wallet from the confirmed bonus recipients (e.g. the deployer wallet
+// running buybacks). The re-render updates the airdrop hand-off and CSV too.
+function excludeFromDrop(addr) {
+  if (!window._confirmedRecipients) return;
+  window._confirmedRecipients = window._confirmedRecipients.filter(r => r.payAddr !== addr);
+  renderConfirmedBox();
 }
 
 function goToAirdrop() {
