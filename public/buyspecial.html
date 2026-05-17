@@ -425,12 +425,13 @@
 
     <div class="airdrop-section" id="airdropSection">
       <button class="airdrop-btn" onclick="goToAirdrop()">🚀 OPEN AIRDROP TOOL WITH THESE WALLETS</button>
-      <button onclick="downloadAirdropCsv()" style="width:100%;margin-top:8px;padding:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.15);border-radius:8px;font-family:'Oswald',sans-serif;font-size:12px;font-weight:700;color:#D1D5DB;letter-spacing:2px;cursor:pointer">
-        📥 DOWNLOAD RECIPIENT CSV
+      <button onclick="showRecipientCsv()" style="width:100%;margin-top:8px;padding:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.15);border-radius:8px;font-family:'Oswald',sans-serif;font-size:12px;font-weight:700;color:#D1D5DB;letter-spacing:2px;cursor:pointer">
+        📋 SHOW / COPY RECIPIENT CSV
       </button>
       <div style="font-family:var(--mono);font-size:10px;color:var(--subtext);margin-top:6px;text-align:center">
-        Save a copy for your community records before sending
+        Copy this for your records, or to feed any airdropper
       </div>
+      <div id="csvPanel" style="display:none;margin-top:8px"></div>
     </div>
   </div>
 
@@ -1408,23 +1409,44 @@ function goToAirdrop() {
   window.open('/airdrop?from=buyspecial', '_blank');
 }
 
-// Save the recipient list as a CSV file for community records — same address+amount
-// format the airdropper consumes, plus a header row so it opens cleanly in Sheets/Excel.
-function downloadAirdropCsv() {
+// Show the recipient list as copyable CSV text. A blob file-download via
+// <a download> silently fails in mobile in-app browsers (Phantom's webview) —
+// it just navigates to the blob URL and shows a blank page — so instead the
+// CSV is dropped into a selectable textarea with a copy button. Works anywhere.
+function showRecipientCsv() {
   if (!window._airdropData || window._airdropData.length === 0) return;
   const data = window._airdropData;
-  const header = 'wallet_address,bonus_amount\n';
-  const lines = data.map(r => r.addr + ',' + r.amount.toFixed(2)).join('\n');
-  const blob = new Blob([header + lines + '\n'], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  const ts = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
-  a.download = (data[0].tokenName || 'TOKEN') + '_buyspecial_winners_' + ts + '.csv';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 500);
+  const csv = 'wallet_address,bonus_amount\n' +
+    data.map(r => r.addr + ',' + r.amount.toFixed(2)).join('\n') + '\n';
+  const panel = document.getElementById('csvPanel');
+  panel.style.display = 'block';
+  panel.innerHTML =
+    '<textarea readonly id="csvText" onclick="this.select()" style="width:100%;height:150px;' +
+      'background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.15);border-radius:8px;' +
+      'padding:10px;font-family:var(--mono);font-size:11px;color:#D1D5DB;resize:vertical"></textarea>' +
+    '<button id="csvCopyBtn" onclick="copyCsvText()" style="width:100%;margin-top:6px;padding:10px;' +
+      'background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);border-radius:8px;' +
+      'font-family:\'Oswald\',sans-serif;font-size:12px;font-weight:700;color:#6EE7B7;' +
+      'letter-spacing:2px;cursor:pointer">📋 COPY CSV</button>';
+  document.getElementById('csvText').value = csv;
+}
+
+function copyCsvText() {
+  const ta = document.getElementById('csvText');
+  const btn = document.getElementById('csvCopyBtn');
+  if (!ta) return;
+  ta.focus();
+  ta.select();
+  ta.setSelectionRange(0, ta.value.length);   // iOS needs an explicit selection range
+  const done = (txt) => { if (btn) { btn.textContent = txt; setTimeout(() => { btn.textContent = '📋 COPY CSV'; }, 1800); } };
+  try {
+    navigator.clipboard.writeText(ta.value).then(() => done('✓ COPIED'), () => {
+      document.execCommand('copy'); done('✓ COPIED');
+    });
+  } catch (e) {
+    try { document.execCommand('copy'); done('✓ COPIED'); }
+    catch (e2) { done('SELECTED — TAP TO COPY'); }
+  }
 }
 
 // Token-agnostic contest preset. Fills the timing + bonus inputs without touching the
