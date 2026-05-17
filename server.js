@@ -48,10 +48,16 @@ async function notifyTelegram(text) {
   }
 }
 
-// Every 12 hours the bot drops a reminder of the toolkit into the community
-// chat — keeps the tools in front of people and nudges a wallet-safety check.
-function notifyToolsReminder() {
-  notifyTelegram(
+// Toolkit reminder for the community chat. It posts SILENTLY and deletes its
+// own previous reminder first — so the chat is never flooded with repeats:
+// there is only ever ONE toolkit message present, and it quietly refreshes
+// to the bottom on each cycle.
+let lastToolsReminderMsgId = null;
+async function notifyToolsReminder() {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return;
+  const text =
     "🛠 <b>THE CLUCK NORRIS TOOLKIT</b>\n\n" +
     "Beyond the school — real Solana tools, all live and free to try:\n\n" +
     "🩺 <b>Cluck Score</b> — a 0–100 health check on any token\n" +
@@ -62,8 +68,41 @@ function notifyToolsReminder() {
     "🚨 <b>Have you checked the permissions on your wallet lately?????</b>\n" +
     "Every \"approve\" you've ever signed can still move your tokens — until you " +
     "revoke it. Security Coop finds them all in seconds. Free, nothing at risk.\n\n" +
-    "🐔 Everything here → clucknorris.app/tools"
-  );
+    "🐔 Everything here → clucknorris.app/tools";
+  try {
+    if (lastToolsReminderMsgId) {
+      // Drop the previous reminder so repeats never pile up in the chat.
+      await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, message_id: lastToolsReminderMsgId }),
+      }).catch(() => {});
+      lastToolsReminderMsgId = null;
+    }
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId, text, parse_mode: "HTML",
+        disable_web_page_preview: true, disable_notification: true,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (data && data.ok && data.result) lastToolsReminderMsgId = data.result.message_id;
+    else console.warn("[TELEGRAM] tools reminder not ok:", JSON.stringify(data).slice(0, 200));
+  } catch (e) {
+    console.warn("[TELEGRAM] tools reminder failed:", e.message);
+  }
+}
+
+// Fire the toolkit reminder at fixed wall-clock hours (every 4h: 00,04,08,12,
+// 16,20 UTC). A fixed schedule, not setInterval — so a server restart doesn't
+// drift or delay it; lastToolsReminderHour stops a double-post within the hour.
+let lastToolsReminderHour = -1;
+function toolsReminderTick() {
+  const h = new Date().getUTCHours();
+  if (h % 4 === 0 && h !== lastToolsReminderHour) {
+    lastToolsReminderHour = h;
+    notifyToolsReminder();
+  }
 }
 
 // Send an image with caption text. Telegram fetches the photo URL itself, so it
@@ -2606,8 +2645,8 @@ app.listen(PORT, () => {
       pollClknBuys();
       setInterval(pollClknBuys, 30000);
     }, 5000);
-    // Toolkit reminder — dropped into the community chat every 12 hours.
-    setInterval(notifyToolsReminder, 12 * 60 * 60 * 1000);
+    // Toolkit reminder — checked each minute, fires at fixed 4-hour marks.
+    setInterval(toolsReminderTick, 60 * 1000);
   } else {
     console.log(`[TELEGRAM] Bot env vars not set — notifications disabled`);
   }
