@@ -16,6 +16,7 @@ const {
   createInitializeMint2Instruction, createMintToInstruction,
   createAssociatedTokenAccountInstruction, getAssociatedTokenAddressSync,
   createSetAuthorityInstruction, getMinimumBalanceForRentExemptMint,
+  createTransferInstruction, createAssociatedTokenAccountIdempotentInstruction,
 } = require("@solana/spl-token");
 const { createData, SolanaSigner } = require("@dha-team/arbundles");
 
@@ -34,6 +35,14 @@ const HATCHERY_TREASURY = new PublicKey("7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4
 // or 0 means free (the current beta). 0.1 SOL = 100000000.
 function hatcheryFeeLamports() {
   const n = parseInt(process.env.HATCHERY_FEE_LAMPORTS || "0", 10);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+// The fee can also be paid in CLKN, the project token (9 decimals).
+// HATCHERY_FEE_CLKN is the whole-token amount; 0 means CLKN payment isn't offered.
+const CLKN_MINT = new PublicKey("DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS");
+const CLKN_DECIMALS = 9;
+function hatcheryFeeClkn() {
+  const n = parseInt(process.env.HATCHERY_FEE_CLKN || "0", 10);
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
@@ -128,7 +137,8 @@ function createMetadataV3Ix({ mint, authority, name, symbol, uri }) {
 // account, mint the full supply, attach metadata, and optionally revoke the
 // mint authority. The freeze authority is set (or omitted) at initialization.
 async function buildMintTransaction({
-  creator, cluster, rpcUrlOverride, decimals, supply, name, symbol, metadataUri, revokeMint, revokeFreeze,
+  creator, cluster, rpcUrlOverride, decimals, supply, name, symbol, metadataUri,
+  revokeMint, revokeFreeze, payWith,
 }) {
   // rpcUrlOverride lets tests point at a local validator; production passes only cluster.
   const conn = new Connection(rpcUrlOverride || rpcUrl(cluster), "confirmed");
@@ -158,11 +168,29 @@ async function buildMintTransaction({
   if (revokeMint) {
     ixs.push(createSetAuthorityInstruction(mint, creatorPk, AuthorityType.MintTokens, null));
   }
-  // Optional flat SOL fee — collected into the treasury within the same tx, so
-  // the user signs one transaction that both mints and pays.
-  const fee = hatcheryFeeLamports();
-  if (fee > 0) {
-    ixs.push(SystemProgram.transfer({ fromPubkey: creatorPk, toPubkey: HATCHERY_TREASURY, lamports: fee }));
+  // Optional mint fee — paid in SOL or CLKN, collected into the treasury within
+  // the same transaction, so the user signs one tx that both mints and pays.
+  if (payWith === "clkn") {
+    const feeClkn = hatcheryFeeClkn();
+    if (feeClkn > 0) {
+      const fromAta = getAssociatedTokenAddressSync(CLKN_MINT, creatorPk);
+      const toAta = getAssociatedTokenAddressSync(CLKN_MINT, HATCHERY_TREASURY);
+      // The creator must already hold enough CLKN — check before building.
+      let held = 0n;
+      try { held = BigInt((await conn.getTokenAccountBalance(fromAta)).value.amount); } catch { held = 0n; }
+      const need = BigInt(feeClkn) * (10n ** BigInt(CLKN_DECIMALS));
+      if (held < need) {
+        throw new Error(`Paying with CLKN needs ${feeClkn.toLocaleString()} CLKN in your wallet — you don't have enough. Pay with SOL instead, or get CLKN first.`);
+      }
+      // Idempotent: creates the treasury's CLKN account only if it doesn't exist.
+      ixs.push(createAssociatedTokenAccountIdempotentInstruction(creatorPk, toAta, HATCHERY_TREASURY, CLKN_MINT));
+      ixs.push(createTransferInstruction(fromAta, toAta, creatorPk, need));
+    }
+  } else {
+    const feeLamports = hatcheryFeeLamports();
+    if (feeLamports > 0) {
+      ixs.push(SystemProgram.transfer({ fromPubkey: creatorPk, toPubkey: HATCHERY_TREASURY, lamports: feeLamports }));
+    }
   }
 
   const { blockhash } = await conn.getLatestBlockhash("confirmed");
@@ -207,12 +235,25 @@ const announcedMints = new Set();
 const router = express.Router();
 router.use(express.json({ limit: "5mb" })); // a base64 logo exceeds express's default 100kb
 
+// GET /api/hatchery/config — current fee setup, so the page renders the right
+// fee UI (and payment choice) without hardcoding amounts.
+router.get("/config", (req, res) => {
+  const feeLamports = hatcheryFeeLamports();
+  const feeClkn = hatcheryFeeClkn();
+  res.json({
+    feeSol: feeLamports / 1e9,
+    feeClkn,
+    solEnabled: feeLamports > 0,
+    clknEnabled: feeClkn > 0,
+  });
+});
+
 // POST /api/hatchery/build — upload metadata + build the unsigned mint tx.
 router.post("/build", async (req, res) => {
   try {
     const {
       creator, name, symbol, description, decimals, supply,
-      imageBase64, imageMime, revokeMint, revokeFreeze, cluster,
+      imageBase64, imageMime, revokeMint, revokeFreeze, cluster, payWith,
     } = req.body || {};
 
     if (!creator) return res.status(400).json({ error: "Missing creator wallet address" });
@@ -239,6 +280,7 @@ router.post("/build", async (req, res) => {
     const { txBase64, mintAddress } = await buildMintTransaction({
       creator, cluster: useCluster, decimals: dec, supply: sup.toString(),
       name, symbol, metadataUri, revokeMint: !!revokeMint, revokeFreeze: !!revokeFreeze,
+      payWith: payWith === "clkn" ? "clkn" : "sol",
     });
 
     // Remember this mint so a later /minted report can be trusted + announced.

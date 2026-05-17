@@ -63,6 +63,14 @@
   .toggle-row .toggle-text { font-size: 12px; line-height: 1.6; }
   .toggle-row .toggle-text b { color: var(--text); font-family: var(--mono); font-size: 12px; }
   .toggle-row .toggle-text span { color: var(--subtext); }
+  .fee-box:empty { display: none; }
+  .fee-box { margin: 2px 0 16px; padding: 11px 13px; background: rgba(252,211,77,0.06); border: 1px solid rgba(252,211,77,0.28); border-radius: 8px; }
+  .fee-box .fee-title { font-family: var(--mono); font-size: 10px; letter-spacing: 1.5px; color: var(--accent); margin-bottom: 8px; }
+  .fee-box .fee-single { font-family: var(--mono); font-size: 12px; color: var(--text); }
+  .fee-box .fee-pick { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; font-family: var(--mono); font-size: 11px; color: var(--subtext); }
+  .fee-btn { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-family: var(--mono); font-size: 12px; color: var(--subtext); cursor: pointer; }
+  .fee-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(252,211,77,0.1); }
+  .fee-box .fee-note { margin-top: 8px; font-size: 11px; color: var(--subtext); line-height: 1.55; }
 
   .hatch-btn { width: 100%; background: linear-gradient(135deg, #FCD34D, #F97316); border: none; border-radius: 10px; padding: 15px; font-family: 'Oswald', sans-serif; font-size: 16px; font-weight: 900; letter-spacing: 2px; color: #1a1a1a; cursor: pointer; transition: opacity 0.15s; }
   .hatch-btn:hover { opacity: 0.9; }
@@ -295,6 +303,7 @@
 
   <!-- Hatch -->
   <div class="card">
+    <div id="feeBox" class="fee-box"></div>
     <div class="toggle-row">
       <input type="checkbox" id="ackBox"/>
       <div class="toggle-text">
@@ -486,6 +495,43 @@ async function confirmTx(signature) {
 }
 
 // ── Hatch ────────────────────────────────────────────────────────────────────
+// ── Mint fee + payment method ────────────────────────────────────────────────
+// The page asks the server what fee is configured and renders the right UI:
+// nothing during beta (free), a notice for a single method, or a SOL/CLKN
+// chooser when both are enabled. The chosen method rides along on the build.
+let payMethod = 'sol';
+function setPay(m) {
+  payMethod = m;
+  const s = document.getElementById('paySol'), c = document.getElementById('payClkn');
+  if (s) s.classList.toggle('active', m === 'sol');
+  if (c) c.classList.toggle('active', m === 'clkn');
+}
+async function loadHatcheryConfig() {
+  const box = document.getElementById('feeBox');
+  try {
+    const cfg = await (await fetch('/api/hatchery/config')).json();
+    if (!cfg || (!cfg.solEnabled && !cfg.clknEnabled)) { box.innerHTML = ''; return; }
+    if (cfg.solEnabled && cfg.clknEnabled) {
+      payMethod = 'sol';
+      box.innerHTML = '<div class="fee-title">MINT FEE — CHOOSE PAYMENT</div>'
+        + '<div class="fee-pick">Pay with:'
+        + '<button type="button" class="fee-btn active" id="paySol" onclick="setPay(\'sol\')">' + cfg.feeSol + ' SOL</button>'
+        + '<button type="button" class="fee-btn" id="payClkn" onclick="setPay(\'clkn\')">' + cfg.feeClkn.toLocaleString() + ' CLKN</button></div>'
+        + '<div class="fee-note">The fee is included in your single mint transaction. Paying in CLKN requires that much CLKN in your wallet; it goes to the Cluck Norris treasury — the same wallet the token-gated tools use.</div>';
+    } else if (cfg.solEnabled) {
+      payMethod = 'sol';
+      box.innerHTML = '<div class="fee-title">MINT FEE</div>'
+        + '<div class="fee-single">' + cfg.feeSol + ' SOL — included in your mint transaction.</div>';
+    } else {
+      payMethod = 'clkn';
+      box.innerHTML = '<div class="fee-title">MINT FEE</div>'
+        + '<div class="fee-single">' + cfg.feeClkn.toLocaleString() + ' CLKN — included in your mint transaction.</div>'
+        + '<div class="fee-note">You must hold at least this much CLKN to hatch.</div>';
+    }
+  } catch (e) { box.innerHTML = ''; }
+}
+loadHatcheryConfig();
+
 async function hatch() {
   if (!walletPubkey) { showError('Connect your wallet first.'); return; }
   const name = document.getElementById('tokenName').value.trim();
@@ -514,7 +560,7 @@ async function hatch() {
         creator: walletPubkey, name, symbol, description,
         decimals: Number(decimals), supply,
         imageBase64: logoData.base64, imageMime: logoData.mime,
-        revokeMint, revokeFreeze, cluster: 'mainnet-beta',
+        revokeMint, revokeFreeze, cluster: 'mainnet-beta', payWith: payMethod,
       }),
     });
     const built = await buildRes.json();
