@@ -17,14 +17,16 @@ const {
   createAssociatedTokenAccountInstruction, getAssociatedTokenAddressSync,
   createSetAuthorityInstruction, getMinimumBalanceForRentExemptMint,
 } = require("@solana/spl-token");
-const { Uploader } = require("@irys/upload");
-const { Solana } = require("@irys/upload-solana");
+const { createData, SolanaSigner } = require("@dha-team/arbundles");
 
 // Metaplex Token Metadata program — same on devnet and mainnet.
 const TOKEN_METADATA_PROGRAM_ID = new PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
-// Irys uploads at or under 100 KiB are free — keeping logos under this means
-// every mint's metadata upload costs nothing.
+// Bundler uploads at or under 100 KiB are free — keeping logos under this
+// means every mint's metadata upload costs nothing.
 const MAX_LOGO_BYTES = 100 * 1024;
+// ArDrive Turbo bundler endpoint — accepts a signed ANS-104 data item and
+// settles it to Arweave proper (retrievable at arweave.net, many gateways).
+const ARWEAVE_UPLOAD_URL = "https://upload.ardrive.io/tx";
 
 // RPC endpoint per cluster. Mainnet uses the project's Helius key; devnet uses
 // the public endpoint (only exercised by our own testing).
@@ -34,26 +36,39 @@ function rpcUrl(cluster) {
   return key ? `https://mainnet.helius-rpc.com/?api-key=${key}` : "https://api.mainnet-beta.solana.com";
 }
 
-// ── Permanent metadata upload (via Irys) ─────────────────────────────────────
+// Upload one item to Arweave: build a signed ANS-104 data item and POST it to
+// the Turbo bundler, which settles it to Arweave proper. Returns the permanent
+// arweave.net URL. Items <=100 KiB upload free.
+async function arweaveUpload(signer, data, contentType) {
+  const item = createData(data, signer, { tags: [{ name: "Content-Type", value: contentType }] });
+  await item.sign(signer);
+  const res = await fetch(ARWEAVE_UPLOAD_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/octet-stream" },
+    body: await item.getRaw(),
+  });
+  if (!res.ok) throw new Error(`Arweave upload failed (HTTP ${res.status})`);
+  const body = await res.json().catch(() => ({}));
+  if (!body.id) throw new Error("Arweave upload returned no transaction id");
+  return `https://arweave.net/${body.id}`;
+}
+
+// ── Permanent metadata upload (Arweave) ──────────────────────────────────────
 // Uploads the logo, then a Metaplex-standard metadata JSON pointing at it, to
-// Irys permanent storage. Returns the metadata URI for the on-chain account.
-// HATCHERY_TURBO_KEY is a base58 Solana secret key — the upload signer (the
-// env var name is legacy). Uploads at/under 100 KiB are free.
+// Arweave permanent storage. Returns the metadata URI for the on-chain account.
+// HATCHERY_TURBO_KEY is a base58 Solana secret key — the data-item signer (the
+// env var name is legacy).
 async function uploadMetadata({ imageBuffer, imageMime, name, symbol, description }) {
   const key = process.env.HATCHERY_TURBO_KEY;
   if (!key) throw new Error("Metadata uploads are not configured (HATCHERY_TURBO_KEY missing)");
-  const irys = await Uploader(Solana).withWallet(key);
+  const signer = new SolanaSigner(key);
 
-  const imgRes = await irys.upload(imageBuffer, {
-    tags: [{ name: "Content-Type", value: imageMime }],
-  });
-  const imageUri = `https://gateway.irys.xyz/${imgRes.id}`;
-
+  const imageUri = await arweaveUpload(signer, imageBuffer, imageMime);
   const metadata = { name, symbol, description: description || "", image: imageUri };
-  const metaRes = await irys.upload(JSON.stringify(metadata), {
-    tags: [{ name: "Content-Type", value: "application/json" }],
-  });
-  return { metadataUri: `https://gateway.irys.xyz/${metaRes.id}`, imageUri };
+  const metadataUri = await arweaveUpload(
+    signer, Buffer.from(JSON.stringify(metadata)), "application/json",
+  );
+  return { metadataUri, imageUri };
 }
 
 // ── Metaplex CreateMetadataAccountV3 instruction (hand-built) ────────────────
