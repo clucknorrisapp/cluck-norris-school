@@ -38,12 +38,67 @@ function hatcheryFeeLamports() {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 // The fee can also be paid in CLKN, the project token (9 decimals).
-// HATCHERY_FEE_CLKN is the whole-token amount; 0 means CLKN payment isn't offered.
 const CLKN_MINT = new PublicKey("DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS");
 const CLKN_DECIMALS = 9;
-function hatcheryFeeClkn() {
-  const n = parseInt(process.env.HATCHERY_FEE_CLKN || "0", 10);
+// HATCHERY_FEE_CLKN_SOL is the value, in SOL, the CLKN fee should be worth
+// (e.g. 0.07). The CLKN token amount is computed live so it stays at that value.
+function hatcheryFeeClknSol() {
+  const n = parseFloat(process.env.HATCHERY_FEE_CLKN_SOL || "0");
   return Number.isFinite(n) && n > 0 ? n : 0;
+}
+// Wallets holding at least HATCHERY_FREE_HOLDER_CLKN whole CLKN mint for free.
+// 0 (unset) disables the perk.
+function hatcheryFreeHolderClkn() {
+  const n = parseInt(process.env.HATCHERY_FREE_HOLDER_CLKN || "0", 10);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+// ── CLKN price (drives the dynamic CLKN fee) ─────────────────────────────────
+// The CLKN/SOL pool on GeckoTerminal reports CLKN's price in SOL directly.
+// Cached 10 minutes; if a refresh fails the last good value is reused.
+const CLKN_POOL = "64WXkHM4zyWUkYy32TfUeBV5wDAfdcUGDxe5ntM4xaTd";
+let clknPriceCache = { solPerClkn: 0, ts: 0 };
+async function clknPriceInSol() {
+  if (clknPriceCache.solPerClkn && Date.now() - clknPriceCache.ts < 10 * 60 * 1000) {
+    return clknPriceCache.solPerClkn;
+  }
+  try {
+    const res = await fetch(`https://api.geckoterminal.com/api/v2/networks/solana/pools/${CLKN_POOL}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const d = await res.json();
+    const a = d?.data?.attributes || {};
+    const baseId = d?.data?.relationships?.base_token?.data?.id || "";
+    // "native currency" on Solana is SOL — pick whichever side of the pool is CLKN.
+    const price = parseFloat(baseId.includes(CLKN_MINT.toBase58())
+      ? a.base_token_price_native_currency : a.quote_token_price_native_currency);
+    if (!Number.isFinite(price) || price <= 0) throw new Error("no usable price");
+    clknPriceCache = { solPerClkn: price, ts: Date.now() };
+    return price;
+  } catch (e) {
+    console.warn("[hatchery] CLKN price lookup failed:", e.message);
+    return clknPriceCache.solPerClkn || 0;   // stale fallback; 0 if never fetched
+  }
+}
+// The CLKN fee as a whole-token amount worth ~HATCHERY_FEE_CLKN_SOL of SOL,
+// rounded to 3 significant figures for a tidy number. 0 means unavailable.
+async function clknFeeWhole() {
+  const targetSol = hatcheryFeeClknSol();
+  if (targetSol <= 0) return 0;
+  const solPerClkn = await clknPriceInSol();
+  if (!solPerClkn) return 0;
+  const raw = targetSol / solPerClkn;
+  if (!Number.isFinite(raw) || raw <= 0) return 0;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)) - 2);
+  return Math.max(1, Math.round(raw / mag) * mag);
+}
+// Total CLKN a wallet holds, in raw units, summed across its token accounts.
+async function clknBalanceRaw(conn, ownerPk) {
+  const r = await conn.getParsedTokenAccountsByOwner(ownerPk, { mint: CLKN_MINT });
+  let total = 0n;
+  for (const { account } of r.value) {
+    total += BigInt(account.data.parsed.info.tokenAmount.amount || "0");
+  }
+  return total;
 }
 
 // RPC endpoint per cluster. Mainnet uses the project's Helius key; devnet uses
@@ -168,25 +223,32 @@ async function buildMintTransaction({
   if (revokeMint) {
     ixs.push(createSetAuthorityInstruction(mint, creatorPk, AuthorityType.MintTokens, null));
   }
-  // Optional mint fee — paid in SOL or CLKN, collected into the treasury within
-  // the same transaction, so the user signs one tx that both mints and pays.
-  if (payWith === "clkn") {
-    const feeClkn = hatcheryFeeClkn();
-    if (feeClkn > 0) {
-      const fromAta = getAssociatedTokenAddressSync(CLKN_MINT, creatorPk);
-      const toAta = getAssociatedTokenAddressSync(CLKN_MINT, HATCHERY_TREASURY);
-      // The creator must already hold enough CLKN — check before building.
-      let held = 0n;
-      try { held = BigInt((await conn.getTokenAccountBalance(fromAta)).value.amount); } catch { held = 0n; }
-      const need = BigInt(feeClkn) * (10n ** BigInt(CLKN_DECIMALS));
-      if (held < need) {
-        throw new Error(`Paying with CLKN needs ${feeClkn.toLocaleString()} CLKN in your wallet — you don't have enough. Pay with SOL instead, or get CLKN first.`);
-      }
-      // Idempotent: creates the treasury's CLKN account only if it doesn't exist.
-      ixs.push(createAssociatedTokenAccountIdempotentInstruction(creatorPk, toAta, HATCHERY_TREASURY, CLKN_MINT));
-      ixs.push(createTransferInstruction(fromAta, toAta, creatorPk, need));
+  // ── Mint fee ──
+  // Wallets holding enough CLKN mint for free. Otherwise the fee is paid in SOL
+  // or CLKN, collected into the treasury inside this same transaction.
+  const freeThreshold = hatcheryFreeHolderClkn();   // whole CLKN; 0 = perk off
+  const wantsClkn = payWith === "clkn";
+  let creatorClkn = null;
+  if (freeThreshold > 0 || wantsClkn) {
+    // An RPC failure leaves this null → no waiver granted, fee still charged.
+    try { creatorClkn = await clknBalanceRaw(conn, creatorPk); } catch { creatorClkn = null; }
+  }
+  const waived = freeThreshold > 0 && creatorClkn !== null
+    && creatorClkn >= BigInt(freeThreshold) * (10n ** BigInt(CLKN_DECIMALS));
+
+  if (!waived && wantsClkn) {
+    const feeClkn = await clknFeeWhole();
+    if (!feeClkn) throw new Error("CLKN pricing is temporarily unavailable — please pay the fee in SOL.");
+    const need = BigInt(feeClkn) * (10n ** BigInt(CLKN_DECIMALS));
+    if (creatorClkn === null || creatorClkn < need) {
+      throw new Error(`Paying with CLKN needs about ${feeClkn.toLocaleString()} CLKN in your wallet — you don't have enough. Pay with SOL instead, or get CLKN first.`);
     }
-  } else {
+    const fromAta = getAssociatedTokenAddressSync(CLKN_MINT, creatorPk);
+    const toAta = getAssociatedTokenAddressSync(CLKN_MINT, HATCHERY_TREASURY);
+    // Idempotent: creates the treasury's CLKN account only if it doesn't exist.
+    ixs.push(createAssociatedTokenAccountIdempotentInstruction(creatorPk, toAta, HATCHERY_TREASURY, CLKN_MINT));
+    ixs.push(createTransferInstruction(fromAta, toAta, creatorPk, need));
+  } else if (!waived) {
     const feeLamports = hatcheryFeeLamports();
     if (feeLamports > 0) {
       ixs.push(SystemProgram.transfer({ fromPubkey: creatorPk, toPubkey: HATCHERY_TREASURY, lamports: feeLamports }));
@@ -236,16 +298,36 @@ const router = express.Router();
 router.use(express.json({ limit: "5mb" })); // a base64 logo exceeds express's default 100kb
 
 // GET /api/hatchery/config — current fee setup, so the page renders the right
-// fee UI (and payment choice) without hardcoding amounts.
-router.get("/config", (req, res) => {
-  const feeLamports = hatcheryFeeLamports();
-  const feeClkn = hatcheryFeeClkn();
-  res.json({
-    feeSol: feeLamports / 1e9,
-    feeClkn,
-    solEnabled: feeLamports > 0,
-    clknEnabled: feeClkn > 0,
-  });
+// fee UI without hardcoding amounts. Pass ?wallet=<addr> to also learn whether
+// that wallet holds enough CLKN to mint for free.
+router.get("/config", async (req, res) => {
+  try {
+    const feeLamports = hatcheryFeeLamports();
+    const feeSol = feeLamports / 1e9;
+    const feeClknSol = hatcheryFeeClknSol();
+    const feeClkn = await clknFeeWhole();
+    const holderThreshold = hatcheryFreeHolderClkn();
+    // Percent saved by paying in CLKN instead of SOL (e.g. 0.1 → 0.07 = 30%).
+    const clknSavingPct = (feeSol > 0 && feeClknSol > 0 && feeClknSol < feeSol)
+      ? Math.round((1 - feeClknSol / feeSol) * 100) : 0;
+    const out = {
+      feeSol, feeClkn, feeClknSol, clknSavingPct, holderThreshold,
+      solEnabled: feeLamports > 0,
+      clknEnabled: feeClkn > 0,
+      feeWaived: false,
+    };
+    const wallet = req.query.wallet;
+    if (wallet && holderThreshold > 0) {
+      try {
+        const conn = new Connection(rpcUrl("mainnet-beta"), "confirmed");
+        const bal = await clknBalanceRaw(conn, new PublicKey(wallet));
+        out.feeWaived = bal >= BigInt(holderThreshold) * (10n ** BigInt(CLKN_DECIMALS));
+      } catch { /* leave feeWaived false */ }
+    }
+    res.json(out);
+  } catch (e) {
+    res.json({ solEnabled: false, clknEnabled: false });
+  }
 });
 
 // POST /api/hatchery/build — upload metadata + build the unsigned mint tx.
