@@ -240,10 +240,16 @@
 
   .small-link { font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 1px; }
   .small-link a { color: var(--accent); text-decoration: none; }
+
+  /* Desktop — wider container so the page fills a larger screen */
+  @media (min-width: 1040px) {
+    .wrap { max-width: 1040px; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
+  <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#D97706;text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid #D97706;"/>&larr; CLUCK NORRIS HOME</a>
 
   <div class="header">
     <div class="header-icon">🩺</div>
@@ -310,6 +316,14 @@
       </div>
       <div class="small-link" style="margin-top:10px;text-align:center">
         Generated <span id="generatedAt">—</span>
+      </div>
+    </div>
+
+    <div class="card" id="disclaimerCard" style="background:linear-gradient(135deg,rgba(107,114,128,0.06),rgba(107,114,128,0.01));border-color:rgba(107,114,128,0.30);">
+      <div class="card-title" style="color:#D1D5DB;">📜 HOW TO READ THIS SCORE</div>
+      <div style="font-family:var(--mono);font-size:12px;line-height:1.65;color:#B0B6BE;">
+        <p style="margin-bottom:10px;">A Cluck Score reports <strong style="color:var(--text);">measurable health signals from the chain — not a verdict on the team or token</strong>. Liquidity, holders, authorities, and concentration are <em style="color:var(--accent);font-style:normal;">facts</em>; what they mean for the future of the project depends on <em style="color:var(--accent);font-style:normal;">intent and execution we cannot see</em>.</p>
+        <p style="margin-bottom:0;">Use this as a <strong style="color:var(--text);">research guide, not a buy / sell signal</strong>. We label what we can verify (Bags/Pump-registered creators, Jupiter audit data, Solana Tracker identity tags on the autopsy page) and describe everything else neutrally. Tokens scoring high can still rug; tokens scoring low can still be early. Always do your own research.</p>
       </div>
     </div>
   </div>
@@ -499,6 +513,64 @@ function renderResult(data) {
     { key: 'volume', label: '24H VOLUME', fmt: f => {
         if (f.value == null) return '—';
         return '<span class="num">' + fmtUsd(f.value) + '</span> <span class="muted">in trades</span>';
+      } },
+    // New Bags-aware factors. Only render with useful content when there's
+    // actual verified data — otherwise the row stays informative ("not a
+    // platform-verified token") rather than confusingly empty.
+    { key: 'verifiedTeam', label: 'VERIFIED TEAM ACTIVITY', fmt: f => {
+        if (f.score == null) return '<span class="muted">No verified Bags/Pump creator data — score skipped.</span>';
+        const creators = f.officialCreators || [];
+        const creatorBits = creators.map(c => {
+          const handle = c.username ? '@' + c.username : (c.wallet ? c.wallet.slice(0,6) + '…' + c.wallet.slice(-4) : 'wallet');
+          const royalty = c.royaltyBps != null ? ' <span class="muted">(' + (c.royaltyBps/100).toFixed(0) + '% royalty)</span>' : '';
+          const adminTag = c.isAdmin ? ' <span style="font-size:9px;color:#FCD34D;letter-spacing:1px;">👑 ADMIN</span>' : '';
+          return '<span class="num">' + handle + '</span>' + adminTag + royalty;
+        }).join(', ');
+        let html = '';
+        if (f.isBagsToken) {
+          html += '<span class="good">✓ Bags-verified</span> creator: ' + (creatorBits || '<span class="muted">(unnamed)</span>');
+        } else if (f.isJupVerified) {
+          html += '<span class="good">✓ Jupiter-verified</span> token';
+        } else {
+          html += '<span class="muted">Not a Bags/Pump verified token</span>';
+        }
+        if (f.totalClaimedSol != null && f.totalClaimedSol > 0) {
+          const dayStr = f.daysSinceLastClaim == null ? '' :
+            (f.daysSinceLastClaim === 0 ? ' · last claim <span class="good">today</span>'
+             : f.daysSinceLastClaim === 1 ? ' · last claim <span class="good">1 day ago</span>'
+             : f.daysSinceLastClaim <= 14 ? ' · last claim <span class="good">' + f.daysSinceLastClaim + ' days ago</span>'
+             : ' · last claim <span class="warn">' + f.daysSinceLastClaim + ' days ago</span>');
+          html += '<br><span class="muted">Fees claimed: </span><span class="num">' + f.totalClaimedSol.toFixed(2) + ' SOL</span><span class="muted"> across ' + f.claimEventCount + ' events</span>' + dayStr;
+        }
+        const actLabel = f.teamActivity === 'active' ? '<span class="good">ACTIVE</span>'
+          : f.teamActivity === 'stale' ? '<span class="warn">STALE</span>'
+          : '<span class="muted">no recent activity</span>';
+        if (f.isBagsToken) html += '<br><span class="muted">Team activity: </span>' + actLabel;
+        return html;
+      } },
+    { key: 'independentVerification', label: 'JUPITER INDEPENDENT VERIFICATION', fmt: f => {
+        if (f.score == null) return '<span class="muted">Not listed on Jupiter — no cross-verification available.</span>';
+        let html = '';
+        if (f.jupiterListed) {
+          html += '<span class="good">✓ Listed on Jupiter</span>';
+          if (Array.isArray(f.jupiterTags) && f.jupiterTags.length) {
+            html += ' <span class="muted">tags:</span> <span class="num">' + f.jupiterTags.join(', ') + '</span>';
+          }
+        }
+        if (f.jupiterOrganicScore) {
+          const cls = f.jupiterOrganicScore === 'high' ? 'good' : f.jupiterOrganicScore === 'medium' ? 'warn' : 'muted';
+          html += '<br><span class="muted">Organic trade score: </span><span class="' + cls + '">' + f.jupiterOrganicScore.toUpperCase() + '</span>';
+        }
+        if (f.jupiterHolderCount != null) {
+          html += '<br><span class="muted">Jupiter holders: </span><span class="num">' + f.jupiterHolderCount.toLocaleString() + '</span>';
+        }
+        if (f.jupiterAudit) {
+          const a = f.jupiterAudit;
+          if (a.devMigrations != null && a.devMigrations > 50) {
+            html += '<br><span class="warn">⚠ Genesis "dev" wallet has done ' + a.devMigrations.toLocaleString() + ' migrations</span><br><span class="muted">— that\'s the launchpad\'s shared launcher, not the project team. The verified team wallet is the Bags-registered creator above.</span>';
+          }
+        }
+        return html || '<span class="muted">Jupiter has limited data on this token.</span>';
       } },
   ];
   const listEl = document.getElementById('factorList');

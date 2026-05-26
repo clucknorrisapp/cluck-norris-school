@@ -260,12 +260,18 @@ async function buildMintTransaction({
   tx.feePayer = creatorPk;
   tx.recentBlockhash = blockhash;
   tx.add(...ixs);
-  tx.partialSign(mintKp);   // mint keypair signs createAccount; the user signs the rest
-
+  // The mint keypair does NOT sign here. Phantom's Lighthouse flags a multi-signer
+  // transaction that already carries a signature when it reaches the wallet — the
+  // wallet has to sign FIRST. The client signs with the wallet, then partial-signs
+  // with this mint keypair (its secret is returned below). Per Phantom support.
   const txBase64 = tx
     .serialize({ requireAllSignatures: false, verifySignatures: false })
     .toString("base64");
-  return { txBase64, mintAddress: mint.toBase58() };
+  return {
+    txBase64,
+    mintAddress: mint.toBase58(),
+    mintSecret: Buffer.from(mintKp.secretKey).toString("base64"),
+  };
 }
 
 // ── Telegram hatch announcement ──────────────────────────────────────────────
@@ -359,7 +365,7 @@ router.post("/build", async (req, res) => {
     const useCluster = cluster === "devnet" ? "devnet" : "mainnet-beta";
 
     const { metadataUri, imageUri } = await uploadMetadata({ imageBuffer, imageMime, name, symbol, description });
-    const { txBase64, mintAddress } = await buildMintTransaction({
+    const { txBase64, mintAddress, mintSecret } = await buildMintTransaction({
       creator, cluster: useCluster, decimals: dec, supply: sup.toString(),
       name, symbol, metadataUri, revokeMint: !!revokeMint, revokeFreeze: !!revokeFreeze,
       payWith: payWith === "clkn" ? "clkn" : "sol",
@@ -369,7 +375,7 @@ router.post("/build", async (req, res) => {
     hatcheryMints.add(mintAddress);
     if (hatcheryMints.size > 5000) hatcheryMints.delete(hatcheryMints.values().next().value);
 
-    res.json({ txBase64, mintAddress, metadataUri, imageUri, cluster: useCluster });
+    res.json({ txBase64, mintAddress, mintSecret, metadataUri, imageUri, cluster: useCluster });
   } catch (e) {
     console.error("[hatchery] build failed:", e);
     res.status(500).json({ error: e.message || "Mint build failed" });

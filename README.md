@@ -12,7 +12,7 @@
 Four things, in one product:
 
 1. 🆓 **A free crypto school** — disciplined, voice‑driven, no signup, no wallet
-2. 🩺 **Free token research** — a 0–100 health score for any Solana mint, plus a free wallet‑safety checker
+2. 🩺 **Free token research** — a 0–100 health score, holder snapshots and transaction tracing for any Solana mint, plus a free wallet‑safety checker
 3. 🔒 **Premium operator tools** — buy‑competition trackers and a batch airdrop sender, unlocked with on‑chain CLKN micropayments
 4. 🥚 **A guided token creator** — mint a real SPL token, taught decision by decision
 
@@ -38,14 +38,14 @@ First‑timers are the target user. The guardrails are the differentiator.
 
 Disciplined learning, real value, zero gatekeeping. The flock learns or the flock gets rugged.
 
-- 🥚 **The Incubator** — 6 lessons for total beginners. Wallets, tokens, DEXs, liquidity, market cap, how not to get drained
+- 🥚 **The Incubator** — 7 lessons for total beginners. Wallets, tokens, on-ramps & off-ramps, DEXs, liquidity, market cap, how not to get drained
 - 🏫 **School of Hard Knocks** — 12 progressive lessons with a belt ranking from **Freshman → Emeritus**. Pass to promote
 - 🥊 **The Ultimate Challenge** — 50 questions. 94% to pass. No study guide. Most don't make it. That's the point
-- 🎮 **Survival Simulator** — start with $1,000 simulated capital and walk through 50 real‑world crypto scenarios (DM "alpha", dev wallet dumps, FOMO buys, 900% APR pools, phishing impersonators, vesting unlocks, lock expirations). Every choice has a multiplier; Cluck explains why each move worked or didn't. **Practice the decisions before you have to make them with real money.**
+- 🎮 **Survival Simulator** — start with $1,000 simulated capital. Each run draws 10 scenarios at random from a bank of **135** real‑world crypto situations (DM "alpha", dev wallet dumps, FOMO buys, 900% APR pools, phishing impersonators, wallet drainers, leverage liquidations, exchange freezes, vesting unlocks) — so no two playthroughs are alike. Every choice has a multiplier; Cluck explains why each move worked or didn't. **Practice the decisions before you have to make them with real money.**
 - ⚗️ **LP Lab** — interactive liquidity training. IL calculator, fee breakeven, capital efficiency, AMM price impact. Works on Meteora, Raydium, Orca, Uniswap — anywhere you LP
 - 📚 **The Library** — 50‑term glossary, deep‑dives across Survival / Research / Concepts (including 🪂 *How to Use an Airdropper Without Burning Yourself*), curated resources
 - 🤖 **Ask Cluck Norris** — Claude Haiku tough‑love crypto professor embedded in every lesson. 10 questions/day. No signup. No wallet
-- 🩺 **Cluck Score** — free 0–100 token‑health score for **any** Solana mint, served at [`/score`](https://clucknorris.app/score). Seven weighted factors, LP‑filtered top‑10 concentration, sharable PNG card. **Live now.**
+- 🩺 **Cluck Score** — free 0–100 token‑health score for **any** Solana mint, served at [`/score`](https://clucknorris.app/score). Six weighted factors, LP‑filtered top‑10 concentration, sharable PNG card. **Live now.**
 - ⚡ **Embedded Jupiter** — full DEX aggregator, CLKN preselected
 - 🎒 **Live Bags Feed** — every new launch, real‑time prices, direct trade links
 
@@ -60,7 +60,7 @@ Pay only when you use it. No subscriptions. No accounts. No wallet connect. Just
 | 🤖 More AI tutoring | **500 CLKN** | ~$0.06 | 20 extra questions |
 | 🪧 Cluck Score card (sharable PNG) | **100 CLKN** | ~$0.01 | 1 card |
 | 💰 Batch airdrop sender | **100 CLKN** | ~$0.01 | 1 unlock session, any batch size |
-| 📈 Buy‑competition analyzer | **500 CLKN** | ~$0.06 | **7 days unlimited runs** — full contest cycle (initial scan + tweaks + hold check + re‑verification) |
+| 📈 Buy‑competition trackers (Buy Special · Rose) | **500 CLKN** | ~$0.06 | **7 days unlimited runs** each — full contest cycle (initial scan + tweaks + hold check + re‑verification) |
 
 Pennies to pay, accessible to anyone. The token does real work without becoming a paywall.
 
@@ -136,6 +136,8 @@ Cards (`/api/cluck-card?mint=…`) unfurl on Twitter / Telegram / Discord automa
 4. **💰 Batch Airdrop Sender** — Phantom / Solflare / Jupiter‑signed SPL transfers, auto‑ATA creation, deduping, CSV / manual / equal‑split modes, dynamic batching for Solana's 1232‑byte tx limit, SOL rent pre‑flight estimate, exportable send record with Solscan links. The user's keys, never the server's.
 5. **🥚 The Hatchery** — guided SPL token creator. Every mint‑time decision explained, metadata to Arweave, stops at liquidity on purpose. Flat SOL/CLKN fee.
 6. **🔒 Security Coop** — wallet permission check: scans for lingering token‑delegate approvals and revokes them. Free, non‑custodial.
+7. **📸 Snapshot** — holder snapshot for any Solana mint: every wallet and balance, LP and locked liquidity filtered out by default, exported as an airdrop‑ready CSV. Free, no wallet connect.
+8. **🔍 Trace** — wallet × token forensic history: every transaction between a wallet and a mint in chronological order, with running balance and fund origin. Free.
 
 ---
 
@@ -150,7 +152,7 @@ Cards (`/api/cluck-card?mint=…`) unfurl on Twitter / Telegram / Discord automa
 | Token data | Bags.fm API + DexScreener + Bubblemaps + Jupiter |
 | Score card rendering | `@napi-rs/canvas` with bundled Oswald typeface |
 | Trophy log | Google Sheets (JWT auth) |
-| Wallet signing (airdrop only) | Phantom · Solflare · Jupiter Wallet |
+| Wallet signing | Phantom · Solflare · Jupiter Wallet |
 | Security | HSTS, X‑Frame‑Options, Content‑Type‑Options, Referrer‑Policy on every response |
 | License | MIT |
 
@@ -173,7 +175,7 @@ Cards (`/api/cluck-card?mint=…`) unfurl on Twitter / Telegram / Discord automa
 
 - **Contract:** `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 - **Trade:** [bags.fm](https://bags.fm/DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS?ref=firechicken007) · [Jupiter](https://jup.ag/tokens/DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS)
-- **Partner Ref:** `firechicken007` — 25% Bags platform fee share back to the ecosystem
+- **Project fee:** ~1% on every CLKN trade — real SOL revenue, 100% reinvested into buying CLKN on the chart
 - **Jupiter Ref:** `A4fSbCMAya9rLWY4incNYaVfhYA9mpCownbFEW3dUZAg` — 0.1% swap fee
 - **Liquidity:** Meteora DAMM V2 (`64WXkHM4zyWUkYy32TfUeBV5wDAfdcUGDxe5ntM4xaTd`)
 - **Live stats:** Holder count and lifetime trading fees are pulled fresh from on‑chain via `/api/holders` and `/api/fees`. See current numbers on the [TOKEN DATA tab](https://clucknorris.app) of the live app.

@@ -57,10 +57,18 @@
 
   .footer-tag { text-align: center; margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--border); font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
   .footer-tag a { color: var(--orange); text-decoration: none; }
+
+  /* Desktop — wider container + 2-column tool grid */
+  @media (min-width: 1040px) {
+    .wrap { max-width: 1040px; }
+    .tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .tool-grid .tool { margin-bottom: 0; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
+  <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#D97706;text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid #D97706;"/>&larr; CLUCK NORRIS HOME</a>
 
   <div class="header">
     <div class="icon">🛠</div>
@@ -75,6 +83,7 @@
     winners, and keeping your wallet safe.
   </div>
 
+  <div class="tool-grid">
   <a class="tool" href="/score">
     <div class="emoji">🩺</div>
     <div class="body">
@@ -114,9 +123,45 @@
   <a class="tool" href="/rose">
     <div class="emoji">🌹</div>
     <div class="body">
-      <div class="name">Rose <span class="tag clkn">OPEN</span></div>
+      <div class="name">Rose <span class="tag clkn">CLKN</span></div>
       <div class="desc">A buy-competition tracker with <em>ranked</em> prizes — top buyers placed 1st, 2nd, 3rd. Same value-flow engine as Buy Special; works on any token. She watches, and rewards those who buy.</div>
       <div class="go">RANK THE BUYERS →</div>
+    </div>
+  </a>
+
+  <a class="tool" href="/trace">
+    <div class="emoji">🔍</div>
+    <div class="body">
+      <div class="name">Trace <span class="tag free">FREE</span></div>
+      <div class="desc">Paste a wallet and a token mint — get every transaction between the two: buys, sells, transfers in and out, in chronological order with running balance and where the funds came from. The forensic history without the Solscan dig.</div>
+      <div class="go">TRACE A WALLET →</div>
+    </div>
+  </a>
+
+  <a class="tool" href="/snapshot">
+    <div class="emoji">📸</div>
+    <div class="body">
+      <div class="name">Snapshot <span class="tag free">FREE</span></div>
+      <div class="desc">Snapshot any Solana token in seconds — every wallet, every balance, LP and locked liquidity filtered out by default. CSV ready to hand straight to the airdropper. No wallet connect.</div>
+      <div class="go">TAKE A SNAPSHOT →</div>
+    </div>
+  </a>
+
+  <a class="tool" href="/holders">
+    <div class="emoji">👥</div>
+    <div class="body">
+      <div class="name">Holders <span class="tag free">FREE</span></div>
+      <div class="desc">Break down any token's holder base — true human holders versus LP, locks and program accounts, with supply concentration and an airdrop-ready true-holder list. Same on-curve engine as Snapshot.</div>
+      <div class="go">ANALYZE HOLDERS →</div>
+    </div>
+  </a>
+
+  <a class="tool" href="/autopsy">
+    <div class="emoji">🔬</div>
+    <div class="body">
+      <div class="name">Autopsy <span class="tag free">FREE</span></div>
+      <div class="desc">Paste any Solana mint — an AI forensic agent investigates the chain, classifies the death mode (LP rug, honeypot, quiet fade, mint-dilution risk, alive), and writes a teaching case study in Cluck's voice from the verified facts. Learn from the corpse.</div>
+      <div class="go">RUN AUTOPSY →</div>
     </div>
   </a>
 
@@ -128,6 +173,7 @@
       <div class="go">SEND AN AIRDROP →</div>
     </div>
   </a>
+  </div>
 
   <div class="footer-tag">
     🐔 <a href="https://clucknorris.app">clucknorris.app</a> — SCHOOL OF CRYPTO HARD KNOCKS

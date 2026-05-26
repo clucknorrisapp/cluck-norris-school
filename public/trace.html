@@ -102,6 +102,8 @@
   .act-send { background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.4); color: var(--amber); }
   .act-add_lp { background: rgba(167,139,250,0.16); border: 1px solid rgba(167,139,250,0.4); color: var(--purple); }
   .act-withdraw_lp { background: rgba(34,211,238,0.13); border: 1px solid rgba(34,211,238,0.4); color: #22D3EE; }
+  .act-lock { background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.45); color: var(--green); font-weight: 700; }
+  .act-unlock { background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.4); color: var(--amber); font-weight: 700; }
 
   /* Counterparties panel */
   .cp-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--border); }
@@ -181,10 +183,16 @@
   .edu-body p { margin-bottom: 8px; }
   .edu-body strong { color: var(--text); }
   .edu-body .ico { font-size: 14px; }
+
+  /* Desktop — wider container so the page fills a larger screen */
+  @media (min-width: 1040px) {
+    .wrap { max-width: 1040px; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
+  <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#D97706;text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid #D97706;"/>&larr; CLUCK NORRIS HOME</a>
 
   <div class="header">
     <div class="header-icon">🔍</div>
@@ -300,6 +308,14 @@
         <span class="sec-icon" id="hopIcon">▸ RUN</span>
       </div>
       <div id="hopBody" style="display:none"></div>
+    </div>
+
+    <div class="card" id="disclaimerCard" style="background:linear-gradient(135deg,rgba(107,114,128,0.06),rgba(107,114,128,0.01));border-color:rgba(107,114,128,0.30);">
+      <div class="card-title" style="color:#D1D5DB;">📜 HOW TO READ THIS REPORT</div>
+      <div style="font-family:var(--mono);font-size:12px;line-height:1.65;color:#B0B6BE;">
+        <p style="margin-bottom:10px;">This trace reports <strong style="color:var(--text);">what's on the chain — not why people do things</strong>. Transfers, swaps, locks, and counterparties describe <em style="color:var(--accent);font-style:normal;">what happened</em>, not <em style="color:var(--accent);font-style:normal;">intent</em>. The same pattern can come from a team migration, routine operations, or a coordinated dump.</p>
+        <p style="margin-bottom:0;">Use this as a <strong style="color:var(--text);">research guide, not a verdict</strong>. We label what we can verify (Bags-API creators, on-chain authorities, and on the autopsy page Solana Tracker's independent identity tags) and describe everything else in neutral language. Things that look bad on-chain sometimes turn out fine — and vice versa.</p>
+      </div>
     </div>
   </div>
 
@@ -444,7 +460,7 @@ function fmtDate(ts) {
   if (!ts) return "—";
   return new Date(ts * 1000).toLocaleString(undefined, { year:'2-digit', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
 }
-const ACT_LABEL = { buy: 'BUY', sell: 'SELL', receive: 'IN', send: 'OUT', add_lp: 'ADD LP', withdraw_lp: 'PULL LP' };
+const ACT_LABEL = { buy: 'BUY', sell: 'SELL', receive: 'IN', send: 'OUT', add_lp: 'ADD LP', withdraw_lp: 'PULL LP', lock: '🔒 LOCK', unlock: '🔓 UNLOCK' };
 const DEX_ACTIONS = ['buy', 'sell', 'add_lp', 'withdraw_lp'];
 
 async function runTrace() {
@@ -480,9 +496,21 @@ function render(d) {
   document.getElementById('hopIcon').textContent = '▸ RUN';
 
   // Truncation
-  document.getElementById('truncatedSlot').innerHTML = d.truncated
+  let truncatedHtml = d.truncated
     ? `<div class="truncated-banner">⚠ History truncated at 5,000 transactions. Recent activity and balances are exact; the oldest history may be incomplete.</div>`
     : '';
+  // Bags-verified creator banner — only when the API confirms (forensic-evidence-rule).
+  // Per the rule we don't infer team status from on-chain patterns; this only
+  // fires when the traced wallet appears in Bags's verified creator/v3 list.
+  if (d.bagsContext && d.bagsContext.walletIsBagsCreator) {
+    const m = d.bagsContext.walletCreatorMeta || {};
+    const handle = m.username ? (m.provider === 'twitter' ? '@' + m.username : m.username) : 'verified creator';
+    const admin = m.isAdmin ? ' 👑 ADMIN' : '';
+    const royalty = m.royaltyBps != null ? ` · ${(m.royaltyBps / 100).toFixed(0)}% fee royalty` : '';
+    truncatedHtml +=
+      `<div class="truncated-banner" style="background:rgba(217,119,6,0.08);border-color:rgba(217,119,6,0.4);color:#FCD34D;">💸 This wallet is a <b>Bags-verified creator</b> of ${d.bagsContext.tokenSymbol || 'this token'}: <b>${handle}</b>${admin}${royalty}.</div>`;
+  }
+  document.getElementById('truncatedSlot').innerHTML = truncatedHtml;
 
   // Origin — where the token first reached this wallet
   const o = s.origin;
@@ -517,6 +545,9 @@ function render(d) {
   if ((s.addLpCount||0) + (s.withdrawLpCount||0) > 0) {
     cells.push({ lbl: 'ADDED TO LP', val: fmtNum(s.totalAddedLp, dec), sub: `${s.addLpCount||0} add-LP txns`, cls: '' });
     cells.push({ lbl: 'PULLED FROM LP', val: fmtNum(s.totalWithdrawnLp, dec), sub: `${s.withdrawLpCount||0} pull-LP txns`, cls: '' });
+  }
+  if ((s.lockCount||0) + (s.unlockCount||0) > 0) {
+    cells.push({ lbl: '🔒 LOCKED', val: fmtNum(s.lockedTokensTotal, dec), sub: `${s.lockCount||0} lock deposits`, cls: 'green' });
   }
   cells.push({ lbl: 'FIRST SEEN', val: fmtDate(s.firstInteraction), sub: '', cls: '' });
   cells.push({ lbl: 'LAST SEEN', val: fmtDate(s.lastInteraction), sub: '', cls: '' });

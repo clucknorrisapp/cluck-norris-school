@@ -196,10 +196,28 @@
     .unlock-banner { flex-direction: column; align-items: stretch; gap: 8px; }
     .unlock-banner-right { text-align: left; }
   }
+
+  /* Locked-state sample preview */
+  .sample-preview { border: 1px dashed rgba(217,119,6,0.45); border-radius: 10px; padding: 16px; background: rgba(217,119,6,0.04); margin-bottom: 14px; }
+  .sample-tag { font-family: 'Oswald',sans-serif; font-size: 10px; letter-spacing: 2px; color: var(--subtext); margin-bottom: 12px; text-align: center; font-weight: 700; }
+  .sample-row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; margin-bottom: 6px; border-radius: 7px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); font-family: var(--mono); font-size: 12px; }
+  .sample-row .addr { color: var(--subtext); flex: 1; }
+  .sample-row .amt { color: var(--text); white-space: nowrap; }
+  .sample-row .status { font-size: 10px; min-width: 104px; text-align: right; font-weight: 700; }
+  .sample-row .status.ok { color: var(--green); }
+  .sample-row .status.no { color: #EF4444; }
+  .sample-row .status.moved { color: #FCD34D; }
+  .sample-foot { font-size: 11px; color: var(--subtext); text-align: center; margin-top: 10px; line-height: 1.6; }
+
+  /* Desktop — wider container so the page fills a larger screen */
+  @media (min-width: 1040px) {
+    .wrap { max-width: 1040px; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
+  <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#D97706;text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid #D97706;"/>&larr; CLUCK NORRIS HOME</a>
 
   <div class="header">
     <div class="header-icon">🐔</div>
@@ -367,6 +385,8 @@
     <div class="stat-box"><div class="stat-val red" id="statDisq">--</div><div class="stat-label">SOLD DURING</div></div>
     <div class="stat-box"><div class="stat-val" id="statVolume">--</div><div class="stat-label">TOTAL BOUGHT</div></div>
   </div>
+
+  <div id="stCrossCheck" style="display:none;margin:14px 0;padding:12px 16px;border-radius:10px;border:1px solid rgba(16,185,129,0.3);background:linear-gradient(135deg,rgba(16,185,129,0.06),rgba(16,185,129,0.01));font-family:'Courier New',monospace;font-size:12px;line-height:1.6;color:#D1D5DB;"></div>
 
   <div id="buyResults"></div>
 
@@ -630,6 +650,11 @@ function toggleTxDetail(id, btn) {
 
 // ── PHASE 1: BUY ANALYSIS ────────────────────────────────────────────────────
 async function runAnalysis() {
+  if (!getActiveUnlock()) {
+    showGate();
+    document.getElementById('unlockGate').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
   if (!currentMint) { showError('Please select a token first.'); return; }
   stopFlag = false;
   hideError();
@@ -845,6 +870,13 @@ async function runAnalysis() {
     document.getElementById('statusDot').classList.add('done');
     document.getElementById('holdCard').classList.add('show');
 
+    // Independent double-check via Solana Tracker — does NOT touch the scan
+    // above (which is the source of truth). It just asks ST for the buyers it
+    // saw in the same window and shows agreement. Best-effort: any failure
+    // silently leaves the panel hidden so it never disrupts the workflow.
+    const localBuyerSet = new Set([...eligible, ...disqualified, ...flagged].map(b => b.addr));
+    runStCrossCheck(startTime, compEndTime, localBuyerSet);
+
   } catch(e) {
     showError('Error: ' + e.message);
     setStatus('Error.', 0);
@@ -858,6 +890,44 @@ function resetUI() {
   document.getElementById('runBtn').disabled = false;
   document.getElementById('stopBtn').classList.remove('show');
   setStatus('Stopped.', 0);
+}
+
+// Solana Tracker independent double-check. Compares ST's buyer set for the
+// window against our scan's buyer set and reports agreement. Never throws into
+// the main flow — failures just hide the panel.
+async function runStCrossCheck(startTime, endTime, localBuyerSet) {
+  const box = document.getElementById('stCrossCheck');
+  try {
+    box.style.display = 'block';
+    box.innerHTML = '<span style="color:#6EE7B7;font-weight:700;">SOLANA TRACKER DOUBLE-CHECK</span> — cross-verifying buyers independently…';
+    const res = await fetch('/api/buyspecial-crosscheck?mint=' + encodeURIComponent(currentMint) + '&from=' + startTime + '&to=' + endTime);
+    const d = await res.json();
+    if (!d || !d.success || !Array.isArray(d.buyers)) {
+      box.style.display = 'none';
+      return;
+    }
+    const stSet = new Set(d.buyers.map(b => b.wallet));
+    let confirmed = 0, onlyLocal = 0, onlyST = 0;
+    for (const w of localBuyerSet) { if (stSet.has(w)) confirmed++; else onlyLocal++; }
+    for (const w of stSet) { if (!localBuyerSet.has(w)) onlyST++; }
+    const localTotal = localBuyerSet.size;
+    const agreePct = localTotal > 0 ? Math.round(confirmed / localTotal * 100) : 0;
+    const coverage = d.reachedWindowStart
+      ? ''
+      : ' <span style="color:#FCD34D;">(ST covered only the most recent part of this window — older buyers not compared)</span>';
+    let verdict, vcolor;
+    if (onlyLocal === 0 && onlyST === 0) { verdict = '✓ EXACT MATCH'; vcolor = '#6EE7B7'; }
+    else if (onlyLocal === 0) { verdict = '✓ ALL CONFIRMED'; vcolor = '#6EE7B7'; }
+    else { verdict = '⚠ REVIEW DIFFERENCES'; vcolor = '#FCD34D'; }
+    box.innerHTML =
+      '<div style="font-weight:700;color:' + vcolor + ';margin-bottom:6px;">SOLANA TRACKER DOUBLE-CHECK — ' + verdict + '</div>' +
+      '<div>' + confirmed + ' of your ' + localTotal + ' buyers (' + agreePct + '%) independently confirmed by Solana Tracker' + coverage + '.</div>' +
+      (onlyST > 0 ? '<div style="margin-top:4px;color:#FCD34D;">' + onlyST + ' buyer' + (onlyST===1?'':'s') + ' Solana Tracker saw that your scan didn’t flag — worth a look (could be a pool/router edge or a sub-min buy).</div>' : '') +
+      (onlyLocal > 0 ? '<div style="margin-top:4px;color:var(--subtext);">' + onlyLocal + ' of your buyers weren’t in ST’s trade feed — usually fine (your value-flow scan catches routes ST may index differently).</div>' : '') +
+      '<div style="margin-top:6px;font-size:10px;color:var(--subtext);font-style:italic;">Your scan is the source of truth — this is a second opinion from an independent indexer. High agreement = high confidence in your competition results.</div>';
+  } catch (e) {
+    box.style.display = 'none';
+  }
 }
 
 function renderBuyResults(eligible, disqualified, flagged) {
@@ -1537,14 +1607,37 @@ function generateUnlockAmount(baseCost) {
   return parseFloat(`${baseCost}.${String(decimal).padStart(3, '0')}`);
 }
 
+// Canned sample shown in #buyResults while locked — so visitors see what a scan
+// produces before paying. Static data only; it never performs a real scan.
+const SAMPLE_RESULT_HTML = `
+  <div class="sample-preview">
+    <div class="sample-tag">📋 EXAMPLE — WHAT BUY SPECIAL SHOWS AFTER A SCAN</div>
+    <div class="sample-row"><span class="addr">7xKp…9fQ2</span><span class="amt">5,762,400 CLKN</span><span class="status ok">✅ ELIGIBLE</span></div>
+    <div class="sample-row"><span class="addr">D3vN…k81A</span><span class="amt">3,104,900 CLKN</span><span class="status ok">✅ ELIGIBLE</span></div>
+    <div class="sample-row"><span class="addr">9aLm…2pR7</span><span class="amt">1,488,200 CLKN</span><span class="status moved">🚚 MOVED &amp; TRACED</span></div>
+    <div class="sample-row"><span class="addr">Fk2W…7dE1</span><span class="amt">902,000 CLKN</span><span class="status ok">✅ ELIGIBLE</span></div>
+    <div class="sample-row"><span class="addr">Bn6T…q4Xc</span><span class="amt">640,300 CLKN</span><span class="status no">❌ SOLD DURING</span></div>
+    <div class="sample-foot">Buy Special catches every real buy across any pool or router, filters out sells, traces wallets that moved their tokens, and hands the qualifying buyers straight to the airdropper. Unlock to run it on any token and window.</div>
+  </div>`;
+
+// Preview model: the tool stays visible and explorable while locked — only the
+// RUN button is gated, and a sample result is shown so visitors see the output.
 function showGate() {
   document.getElementById('unlockGate').style.display = 'block';
-  document.getElementById('buyspecialTool').style.display = 'none';
+  document.getElementById('buyspecialTool').style.display = 'block';
+  const runBtn = document.getElementById('runBtn');
+  if (runBtn) { runBtn.disabled = true; runBtn.textContent = '🔒 UNLOCK TO RUN'; }
+  const results = document.getElementById('buyResults');
+  if (results && !results.innerHTML.trim()) results.innerHTML = SAMPLE_RESULT_HTML;
 }
 
 function hideGate() {
   document.getElementById('unlockGate').style.display = 'none';
   document.getElementById('buyspecialTool').style.display = 'block';
+  const runBtn = document.getElementById('runBtn');
+  if (runBtn) { runBtn.disabled = false; runBtn.textContent = '▶ RUN BUY ANALYSIS'; }
+  const results = document.getElementById('buyResults');
+  if (results && results.querySelector('.sample-preview')) results.innerHTML = '';
 }
 
 function copyUnlockAmount() {

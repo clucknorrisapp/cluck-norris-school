@@ -201,10 +201,16 @@
 
   .footer-link { display: block; text-align: center; margin-top: 24px; font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 2px; text-decoration: none; }
   .footer-link:hover { color: var(--accent); }
+
+  /* Desktop — wider container so the page fills a larger screen */
+  @media (min-width: 1040px) {
+    .wrap { max-width: 1040px; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
+  <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#D97706;text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid #D97706;"/>&larr; CLUCK NORRIS HOME</a>
 
   <div class="header">
     <div class="header-icon">📸</div>
@@ -275,6 +281,13 @@
         <div class="toggle-row" onclick="toggleHumanOnly(event)">
           <input type="checkbox" id="excludeNonHuman" checked/>
           <span>Exclude LP pools, locks, programs <em style="color:var(--subtext)">(recommended)</em></span>
+        </div>
+      </div>
+      <div class="filter">
+        <label>FILTER VERIFIED TEAM WALLETS</label>
+        <div class="toggle-row" onclick="toggleTeamExclude(event)">
+          <input type="checkbox" id="excludeBagsTeam" checked/>
+          <span>Exclude Bags-verified creator wallets <em style="color:var(--subtext)">(team shouldn't airdrop to itself)</em></span>
         </div>
       </div>
       <div class="filter">
@@ -353,6 +366,11 @@ function toggleHumanOnly(e) {
   const cb = document.getElementById('excludeNonHuman');
   cb.checked = !cb.checked;
 }
+function toggleTeamExclude(e) {
+  if (e.target.tagName === 'INPUT') return;
+  const cb = document.getElementById('excludeBagsTeam');
+  cb.checked = !cb.checked;
+}
 
 // Pre-fill mint from ?mint= URL param if present
 const urlParams = new URLSearchParams(location.search);
@@ -412,6 +430,8 @@ function shortAddr(a) {
   if (!a) return "—";
   return a.slice(0, 6) + "…" + a.slice(-4);
 }
+// Escape attacker-set strings (Bags creator handles) before innerHTML.
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 async function runSnapshot() {
   hideErr();
@@ -420,10 +440,11 @@ async function runSnapshot() {
 
   const mint = mintInput.value.trim();
   const excludeNonHuman = document.getElementById('excludeNonHuman').checked ? "1" : "0";
+  const excludeBagsTeam = document.getElementById('excludeBagsTeam').checked ? "1" : "0";
   const minBalance = document.getElementById('minBalance').value || "0";
 
   try {
-    const url = `/api/snapshot?mint=${encodeURIComponent(mint)}&excludeNonHuman=${excludeNonHuman}&minBalance=${encodeURIComponent(minBalance)}`;
+    const url = `/api/snapshot?mint=${encodeURIComponent(mint)}&excludeNonHuman=${excludeNonHuman}&excludeBagsTeam=${excludeBagsTeam}&minBalance=${encodeURIComponent(minBalance)}`;
     const res = await fetch(url);
     const data = await res.json();
     stopLoading();
@@ -505,6 +526,36 @@ function renderResult(d) {
       </div>`;
   } else {
     excPanel.innerHTML = '';
+  }
+
+  // Bags-verified team wallets excluded from snapshot (when the filter ran).
+  // Honest separate panel — shows the wallets, why they were excluded, with
+  // direct Solscan links. Only renders when there's something to show.
+  const bagsPanel = document.getElementById('bagsTeamPanel') || (() => {
+    const p = document.createElement('div');
+    p.id = 'bagsTeamPanel';
+    excPanel.parentNode.insertBefore(p, excPanel.nextSibling);
+    return p;
+  })();
+  if (d.bagsTeam && Array.isArray(d.bagsTeam.excludedFromSnapshot) && d.bagsTeam.excludedFromSnapshot.length) {
+    const creators = d.bagsTeam.creators || [];
+    const crNames = creators.map(c => c.username ? '@' + esc(c.username) : (c.wallet ? c.wallet.slice(0,8) + '…' : '')).filter(Boolean).join(', ');
+    bagsPanel.innerHTML =
+      `<div class="excluded" style="background:rgba(217,119,6,0.06);border-color:rgba(217,119,6,0.3);">
+        <div class="excluded-head" style="color:#FCD34D;">💸 EXCLUDED — BAGS-VERIFIED TEAM WALLETS${crNames ? ` (${crNames})` : ''}</div>
+        <div class="excluded-breakdown">Filtered from the airdrop CSV — team wallets shouldn't airdrop to themselves. Uncheck the team-filter to include.</div>
+        ${d.bagsTeam.excludedFromSnapshot.map(h =>
+          `<div class="excluded-row">
+            <span class="left">
+              <span class="cat-badge" style="background:rgba(217,119,6,0.15);color:#FCD34D;">💸 BAGS CREATOR</span>
+              <span class="wallet"><a href="https://solscan.io/account/${h.wallet}" target="_blank" rel="noreferrer" style="color:var(--blue);text-decoration:underline;">${h.wallet}</a></span>
+            </span>
+            <span class="amt">${fmtNum(h.balance, d.decimals)}<br/>${fmtPct(h.pct)}</span>
+          </div>`
+        ).join('')}
+      </div>`;
+  } else {
+    bagsPanel.innerHTML = '';
   }
 
   // Top holders preview (first 25 rows)

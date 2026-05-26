@@ -48,6 +48,14 @@
   .wallet-btn:hover { transform: translateY(-1px); opacity: 0.95; }
   .wallet-btn.phantom  { background: linear-gradient(135deg, #9945FF, #6B21A8); }
   .wallet-btn.solflare { background: linear-gradient(135deg, #FC822B, #B85F1F); }
+  .wallet-btn.backpack { background: linear-gradient(135deg, #E33E3F, #991B1B); }
+  .wallet-btn.okx      { background: linear-gradient(135deg, #4B5563, #1F2937); }
+  .wallet-btn.coinbase { background: linear-gradient(135deg, #2563EB, #1E3A8A); }
+  .wallet-btn.trust    { background: linear-gradient(135deg, #3375BB, #1E4C82); }
+  .wallet-btn.glow     { background: linear-gradient(135deg, #8B5CF6, #5B21B6); }
+  .wallet-btn.exodus   { background: linear-gradient(135deg, #6366F1, #3730A3); }
+  .wallet-btn.bitget   { background: linear-gradient(135deg, #00C2C2, #0E7490); }
+  .wallet-btn.brave    { background: linear-gradient(135deg, #FB542B, #B7320F); }
   .wallet-btn.jupiter  { background: linear-gradient(135deg, #4D8FF7, #1E429F); }
   .wallet-btn .wb-icon { font-size: 16px; }
   .wallet-info { font-family: var(--mono); font-size: 12px; color: var(--green); margin-top: 10px; padding: 10px 12px; background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.25); border-radius: 8px; display: none; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
@@ -202,10 +210,16 @@
   .upload-icon { font-size: 24px; margin-bottom: 6px; }
   .upload-text { font-size: 12px; color: var(--subtext); }
   .upload-input { display: none; }
+
+  /* Desktop — wider container so the page fills a larger screen */
+  @media (min-width: 1040px) {
+    .wrap { max-width: 1040px; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
+  <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#D97706;text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid #D97706;"/>&larr; CLUCK NORRIS HOME</a>
 
   <div class="header">
     <div class="header-icon">🐔</div>
@@ -244,7 +258,7 @@
 
       <div style="margin-bottom:10px"><span style="color:#FCD34D;font-weight:700">4. IRREVERSIBLE.</span> Solana transactions can't be undone. Wrong address = lost tokens. <strong>Verify your recipient list twice</strong> before clicking SEND.</div>
 
-      <div style="margin-bottom:10px"><span style="color:#FCD34D;font-weight:700">5. CLKN PAYS FOR ACCESS, NOT YOUR AIRDROP.</span> The 100 CLKN you send unlocks the tool for an hour. Your airdrop tokens are separate — they leave your wallet only when YOU sign the batches with Phantom/Solflare/Jupiter.</div>
+      <div style="margin-bottom:10px"><span style="color:#FCD34D;font-weight:700">5. CLKN PAYS FOR ACCESS, NOT YOUR AIRDROP.</span> The 100 CLKN you send unlocks the tool for an hour. Your airdrop tokens are separate — they leave your wallet only when YOU sign the batches in your own wallet (11 supported).</div>
 
       <div style="margin-bottom:10px"><span style="color:#FCD34D;font-weight:700">6. THINGS THAT GO WRONG.</span> Not enough SOL for rent. Typo in a recipient address. Sending the wrong amount because you read the column wrong. <strong>Preview before you sign every time.</strong></div>
 
@@ -328,8 +342,17 @@
     <div class="wallet-picker" id="walletPicker">
       <button class="wallet-btn phantom"  onclick="connectWallet('phantom')"><span class="wb-icon">🔮</span><span>PHANTOM</span></button>
       <button class="wallet-btn solflare" onclick="connectWallet('solflare')"><span class="wb-icon">☀️</span><span>SOLFLARE</span></button>
+      <button class="wallet-btn backpack" onclick="connectWallet('backpack')"><span class="wb-icon">🎒</span><span>BACKPACK</span></button>
+      <button class="wallet-btn okx"      onclick="connectWallet('okx')"><span class="wb-icon">⭕</span><span>OKX</span></button>
+      <button class="wallet-btn coinbase" onclick="connectWallet('coinbase')"><span class="wb-icon">🔵</span><span>COINBASE</span></button>
+      <button class="wallet-btn trust"    onclick="connectWallet('trust')"><span class="wb-icon">🛡</span><span>TRUST</span></button>
+      <button class="wallet-btn glow"     onclick="connectWallet('glow')"><span class="wb-icon">🌐</span><span>GLOW</span></button>
+      <button class="wallet-btn exodus"   onclick="connectWallet('exodus')"><span class="wb-icon">🪐</span><span>EXODUS</span></button>
+      <button class="wallet-btn bitget"   onclick="connectWallet('bitget')"><span class="wb-icon">🌊</span><span>BITGET</span></button>
+      <button class="wallet-btn brave"    onclick="connectWallet('brave')"><span class="wb-icon">🦁</span><span>BRAVE</span></button>
       <button class="wallet-btn jupiter"  onclick="connectWallet('jupiter')"><span class="wb-icon">🪐</span><span>JUPITER</span></button>
     </div>
+    <div id="mobileConnect" style="display:none;margin-top:12px;flex-direction:column;gap:8px"></div>
     <div class="wallet-info" id="walletInfo">
       <div>
         <div style="font-family:'Oswald',sans-serif;font-size:9px;color:#6EE7B7;letter-spacing:2px;margin-bottom:2px;font-weight:700"><span id="walletInfoLabel">✓ CONNECTED</span></div>
@@ -340,7 +363,7 @@
       </div>
     </div>
     <div style="margin-top:10px;padding:8px 12px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.25);border-radius:8px;font-family:var(--mono);font-size:11px;color:#F59E0B;line-height:1.5">
-      ⚠ <strong>Phantom, Solflare, and Jupiter all supported.</strong> Pick whichever wallet actually holds the sending tokens — same flow for all three.
+      ⚠ <strong>11 wallets supported.</strong> Pick whichever wallet actually holds the sending tokens — same flow for all of them. On mobile with no wallet detected, tap "Open in Phantom / Solflare" to load this page inside your wallet's browser.
     </div>
   </div>
 
@@ -555,6 +578,14 @@ const WALLETS = {
     // Solflare injects as window.solflare; some builds also expose it on window.solana
     detect: () => window.solflare || (window.solana?.isSolflare ? window.solana : null),
   },
+  backpack: { name: 'Backpack', icon: '🎒', download: 'https://backpack.app', detect: () => (window.backpack?.isBackpack ? window.backpack : null) || (window.solana?.isBackpack ? window.solana : null) },
+  okx:      { name: 'OKX',      icon: '⭕', download: 'https://okx.com/web3', detect: () => window.okxwallet?.solana || window.okxwallet || null },
+  coinbase: { name: 'Coinbase', icon: '🔵', download: 'https://coinbase.com/wallet', detect: () => window.coinbaseSolana || window.coinbaseWalletSolana || null },
+  trust:    { name: 'Trust',    icon: '🛡', download: 'https://trustwallet.com', detect: () => window.trustwallet?.solana || (window.solana?.isTrust ? window.solana : null) },
+  glow:     { name: 'Glow',     icon: '🌐', download: 'https://glow.app', detect: () => window.glowSolana || window.glow?.solana || (window.solana?.isGlow ? window.solana : null) },
+  exodus:   { name: 'Exodus',   icon: '🪐', download: 'https://exodus.com', detect: () => window.exodus?.solana || null },
+  bitget:   { name: 'Bitget',   icon: '🌊', download: 'https://web3.bitget.com', detect: () => window.bitkeep?.solana || window.bitgetWallet?.solana || (window.solana?.isBitKeep ? window.solana : null) },
+  brave:    { name: 'Brave',    icon: '🦁', download: 'https://brave.com/wallet', detect: () => window.braveSolana || (window.solana?.isBraveWallet ? window.solana : null) },
   jupiter: {
     name: 'Jupiter',
     icon: '🪐',
@@ -564,6 +595,28 @@ const WALLETS = {
     detect: () => window.jupiterWallet || window.jupiter || (window.solana?.isJupiter ? window.solana : null),
   },
 };
+// Mobile on-ramp: on mobile with NO wallet injected, offer one-tap deep links
+// that OPEN this page inside the wallet's browser (pure navigation — nothing is
+// signed/shared by the link; the injected connect+sign flow runs once inside).
+function initMobileDeepLinks() {
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  if (!isMobile) return;
+  const injected = !!(window.solana || window.phantom?.solana || window.solflare || window.backpack
+    || window.okxwallet || window.glowSolana || window.exodus?.solana || window.coinbaseSolana || window.trustwallet?.solana);
+  if (injected) return;
+  const el = document.getElementById('mobileConnect'), picker = document.getElementById('walletPicker');
+  if (!el) return;
+  const url = encodeURIComponent(location.href), ref = encodeURIComponent(location.origin);
+  el.innerHTML =
+    '<div style="font-family:monospace;font-size:12px;color:#FCD34D;line-height:1.5">📱 On mobile? Open this page inside your wallet to connect:</div>'
+    + '<a class="wallet-btn phantom" style="text-decoration:none" href="https://phantom.app/ul/browse/' + url + '?ref=' + ref + '">🔮 Open in Phantom</a>'
+    + '<a class="wallet-btn solflare" style="text-decoration:none" href="https://solflare.com/ul/v1/browse/' + url + '?ref=' + ref + '">☀️ Open in Solflare</a>'
+    + '<div style="font-family:monospace;font-size:10px;color:#9CA3AF;line-height:1.5">Opens this page in the wallet’s built-in browser. Nothing is signed or shared by the link.</div>';
+  el.style.display = 'flex';
+  if (picker) picker.style.display = 'none';
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initMobileDeepLinks);
+else initMobileDeepLinks();
 
 let activeWallet = null; // { id, provider }
 

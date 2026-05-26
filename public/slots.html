@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="robots" content="noindex,nofollow"/>
+<title>The Coop Spinner · Cluck Norris</title>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+<style>
+:root{--bg:#0a0608;--panel:#150f12;--gold:#FFC53D;--orange:#F97316;--red:#EF4444;--green:#34D399;--blue:#60A5FA;--text:#FBE9D0;--sub:#9a8a7a;--border:rgba(249,115,22,0.28);--head:'Oswald',sans-serif;--mono:'Share Tech Mono',monospace}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(ellipse at top,#1c0f08 0%,var(--bg) 60%);color:var(--text);font-family:var(--mono);padding:0 14px 70px;-webkit-font-smoothing:antialiased;min-height:100vh}
+.wrap{max-width:560px;margin:0 auto}
+.hero{text-align:center;padding:22px 0 6px}
+.hero .kick{font-family:var(--head);font-size:11px;letter-spacing:5px;color:var(--orange);text-transform:uppercase;font-weight:700}
+.hero h1{font-family:var(--head);font-size:40px;font-weight:900;margin:2px 0;letter-spacing:1px;line-height:1;background:linear-gradient(135deg,#FFE08A,var(--gold),var(--orange),var(--red));-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-transform:uppercase}
+.badge{display:inline-block;border:1px solid var(--border);border-radius:6px;padding:3px 10px;font-size:10px;letter-spacing:3px;color:var(--gold);margin-top:6px}
+.sub{color:var(--sub);font-size:12px;line-height:1.6;margin:8px 0 0}
+.roads{display:flex;gap:8px;margin-top:14px}
+.road{flex:1;background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:10px 12px}
+.road .n{font-family:var(--head);font-size:10px;letter-spacing:2px;color:var(--orange)}.road .t{font-family:var(--head);font-weight:700;font-size:14px;margin:2px 0}.road .d{font-size:11px;color:var(--sub);line-height:1.5}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-top:14px}
+.card h3{font-family:var(--head);font-size:14px;letter-spacing:2px;color:var(--orange);margin:0 0 10px;text-transform:uppercase}
+input{width:100%;background:rgba(0,0,0,0.35);border:1px solid var(--border);border-radius:8px;padding:12px;color:var(--text);font-family:var(--mono);font-size:15px;margin-bottom:8px}
+.vm{background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:9px;padding:12px;margin-top:10px}
+.vm .t{font-family:var(--head);font-weight:700;font-size:14px;color:var(--gold)}.vm .d{font-size:12px;color:var(--sub);line-height:1.5;margin:4px 0 8px}
+.picker{display:flex;flex-wrap:wrap;gap:6px}
+.wbtn{flex:1 1 30%;min-width:88px;background:rgba(255,197,61,0.1);border:1px solid var(--border);border-radius:7px;padding:10px;color:var(--text);font-family:var(--mono);font-size:13px;cursor:pointer}
+.wbtn:hover{background:rgba(255,197,61,0.2)}
+.vbtn{width:100%;background:rgba(255,197,61,0.18);border:1px solid var(--border);border-radius:8px;padding:11px;color:#fff;font-family:var(--head);font-size:14px;font-weight:700;letter-spacing:1px;cursor:pointer;margin-top:4px}
+.copyf{display:flex;align-items:center;gap:10px;background:rgba(0,0,0,0.35);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:6px;cursor:pointer;font-size:17px;color:var(--gold);line-height:1.4}
+.copyf .cft{flex:1;word-break:break-all;min-width:0}.copyf .cb{flex-shrink:0;background:rgba(255,197,61,0.2);border:1px solid var(--border);border-radius:6px;padding:6px 11px;font-size:12px;color:var(--gold);white-space:nowrap}
+.vmsg{font-size:12px;color:var(--sub);line-height:1.5;margin-top:6px;min-height:16px}
+.verified{background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.35);color:var(--green);border-radius:8px;padding:10px;font-size:13px}
+.machine{margin:14px auto 0;background:linear-gradient(180deg,#23140c,#160d09);border:2px solid var(--gold);border-radius:20px;padding:18px;box-shadow:0 0 40px rgba(249,115,22,0.25),inset 0 0 30px rgba(0,0,0,0.6);position:relative}
+.machine::before{content:"🐔 CLUCK NORRIS 🐔";position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,var(--orange),var(--red));font-family:var(--head);font-weight:900;font-size:11px;letter-spacing:2px;color:#fff;padding:3px 14px;border-radius:20px;white-space:nowrap}
+.reels{display:flex;gap:8px;justify-content:center;background:#000;border-radius:14px;padding:10px;border:1px solid rgba(255,197,61,0.3);box-shadow:inset 0 0 24px rgba(0,0,0,0.9)}
+.reel{height:120px;width:104px;overflow:hidden;background:linear-gradient(180deg,#1a1a1f,#0c0c10);border-radius:10px;position:relative;border:1px solid rgba(255,255,255,0.06)}
+.reel::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,.55) 0%,transparent 22%,transparent 78%,rgba(0,0,0,.55) 100%)}
+.strip{display:flex;flex-direction:column;will-change:transform}.sym{height:120px;display:flex;align-items:center;justify-content:center;font-size:70px}
+.reel.win{box-shadow:0 0 0 2px var(--gold),0 0 22px var(--gold)}
+.result{text-align:center;min-height:48px;margin:12px 0 4px}.result .big{font-family:var(--head);font-weight:900;font-size:24px;line-height:1.1}.result .amt{font-family:var(--head);font-size:15px;font-weight:700;color:var(--gold);margin-top:2px}
+.win .big{color:var(--gold)}.jackpot .big{font-size:30px}.lose .big{color:var(--sub);font-size:17px}.err .big{color:#fca5a5;font-size:16px}
+.spinbtn{width:100%;background:linear-gradient(135deg,var(--orange),var(--red));border:none;border-radius:14px;padding:16px;font-family:var(--head);font-size:22px;font-weight:900;letter-spacing:3px;color:#fff;cursor:pointer;box-shadow:0 6px 0 #8a2d10;transition:transform .06s,box-shadow .06s}
+.spinbtn:active{transform:translateY(4px);box-shadow:0 2px 0 #8a2d10}.spinbtn:disabled{opacity:.55;cursor:not-allowed}
+.statbar{display:flex;gap:8px;margin-top:12px}.stat{flex:1;background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:10px;padding:8px;text-align:center}
+.stat .l{font-size:9px;letter-spacing:1px;color:var(--sub);text-transform:uppercase}.stat .v{font-family:var(--head);font-size:19px;font-weight:900;margin-top:2px;color:var(--gold)}.stat .v.on{color:var(--green)}.stat .v.dq{color:#fca5a5}
+.lb-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:13px}.lb-row:last-child{border-bottom:none}
+.lb-rank{font-family:var(--head);font-weight:700;width:24px;color:var(--sub)}.lb-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lb-pts{font-family:var(--head);font-weight:700;color:var(--gold)}
+.lb-row.me{background:rgba(255,197,61,0.08);border-radius:8px;padding:7px 8px;border-bottom:none}.lb-row.me .lb-name{color:var(--gold)}.lb-row.qual .lb-rank{color:var(--green)}
+.cutoff{text-align:center;font-size:10px;letter-spacing:2px;color:var(--green);border-top:1px dashed rgba(52,211,153,.4);margin:4px 0;padding-top:6px}
+.tag{font-size:9px;padding:1px 6px;border-radius:5px;font-family:var(--head);letter-spacing:1px}.tag.wheel{background:rgba(52,211,153,.15);border:1px solid rgba(52,211,153,.4);color:var(--green)}.tag.jp{background:rgba(255,197,61,.15);border:1px solid rgba(255,197,61,.4);color:var(--gold)}
+#wheelWrap{text-align:center;position:relative}canvas{max-width:100%}.pointer{position:absolute;top:-2px;left:50%;transform:translateX(-50%);font-size:30px;z-index:3}
+.winner{text-align:center;font-family:var(--head);font-weight:900;font-size:20px;margin-top:10px;min-height:24px}.winner .y{color:var(--green)}
+.note{font-size:11px;color:var(--sub);line-height:1.6;font-style:italic;border-left:2px solid var(--border);padding-left:10px;margin-top:10px}
+.demo-tag{display:inline-block;background:rgba(96,165,250,0.15);border:1px solid rgba(96,165,250,0.4);color:var(--blue);border-radius:6px;padding:2px 8px;font-size:10px;letter-spacing:1px}
+.sparkle{position:fixed;pointer-events:none;font-size:24px;z-index:90;animation:fall 1.4s linear forwards}@keyframes fall{0%{opacity:1;transform:translateY(-10px)}100%{opacity:0;transform:translateY(440px) rotate(360deg)}}
+a{color:var(--orange)} .hidden{display:none}
+.opbtn{flex:1;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;padding:9px;font-family:var(--head);font-size:12px;letter-spacing:1px;color:var(--sub);cursor:pointer}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <div class="kick">Cluck Norris · Holder Rewards</div>
+    <h1>The Coop Spinner</h1>
+    <div class="badge">🎰 OPEN BETA · NO PRIZES YET</div>
+    <p class="sub">Holding CLKN earns <b>free daily spins</b>. Spins bank <b>points</b>; points + jackpots get you onto the <b>weekly wheel</b>. <span class="demo-tag">beta test — no real prizes</span></p>
+    <div style="margin-top:12px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.4);border-radius:10px;padding:10px 14px;font-size:12px;color:#fca5a5;line-height:1.55">⚠ <b>BETA TEST ONLY.</b> We're still building &amp; testing the Coop Spinner. <b>No prizes are awarded</b> — spins, points, and wheel wins have <b>no value</b> right now. Play to help us test. Real rewards come later.</div>
+    <div class="roads">
+      <div class="road"><div class="n">ROAD 1</div><div class="t">📊 Points</div><div class="d">Most seats go to the week's <b>top point-earners</b>.</div></div>
+      <div class="road"><div class="n">ROAD 2</div><div class="t">🎲 Wild-card</div><div class="d"><b>Random draws</b> from everyone else who played — the little-guy lane.</div></div>
+      <div class="road"><div class="n">ROAD 3</div><div class="t">🐔 Jackpot</div><div class="d">Hit 🐔🐔🐔 → a <b>guaranteed</b> seat (jumps the line).</div></div>
+    </div>
+    <div style="margin-top:12px;background:linear-gradient(135deg,rgba(249,115,22,0.16),rgba(255,197,61,0.12));border:1px solid rgba(255,197,61,0.45);border-radius:12px;padding:12px 16px;line-height:1.55">
+      <div style="font-size:14px;font-weight:800;letter-spacing:.4px;color:var(--gold)">🩺🔥🐔 THE DOCTOR FIRE CHICKEN</div>
+      <div style="font-size:12px;color:var(--sub);margin-top:4px">Somewhere in the reels hides a secret combo — a tribute to the OG <b>Fire Chicken</b> roost that came before Cluck Norris. Land it and you get an <b>automatic prize</b> (no wheel needed). <b>Brutally rare.</b> Will you summon the Doctor? 👀</div>
+    </div>
+  </div>
+
+  <!-- VERIFY GATE -->
+  <div class="card" id="verifyGate">
+    <h3>🔑 Verify your wallet</h3>
+    <p style="font-size:12px;color:var(--sub);line-height:1.6;margin:0">Prove the wallet is yours so spins count for it. Open beta — anyone with the link can test; you just need <b>≥ 500,000 CLKN</b> (~$100) to play. Nothing here moves tokens or grants any spending approval, and <b>no prizes are awarded during testing</b>.</p>
+    <div class="vm">
+      <div class="t">Connect &amp; sign · no transaction</div>
+      <div class="d">Connect and sign a one-line message — proves ownership, <b>not</b> a transaction. No tokens move, no spending approval, nothing lingers. Pick your wallet:</div>
+      <div id="mobileConnect" class="hidden" style="margin-bottom:8px"></div>
+      <div class="picker" id="picker"></div>
+    </div>
+    <div class="vmsg" id="vmsg"></div>
+  </div>
+
+  <!-- GAME -->
+  <div id="game" class="hidden">
+    <div class="verified" id="vbanner"></div>
+    <div class="machine">
+      <div class="reels"><div class="reel" id="reel0"><div class="strip" id="strip0"></div></div><div class="reel" id="reel1"><div class="strip" id="strip1"></div></div><div class="reel" id="reel2"><div class="strip" id="strip2"></div></div></div>
+      <div class="result" id="result"><div class="big">PULL THE LEVER 🕹️</div></div>
+      <button class="spinbtn" id="spinBtn">🔥 SPIN 🔥</button>
+      <div class="statbar">
+        <div class="stat"><div class="l">Spins left today</div><div class="v" id="spinsLeft">—</div></div>
+        <div class="stat"><div class="l">Your points</div><div class="v" id="myPts">0</div></div>
+        <div class="stat"><div class="l">Wheel status</div><div class="v" id="wheelStat">—</div></div>
+      </div>
+    </div>
+
+    <div class="card"><h3>🏆 This week's leaderboard</h3><div id="leaderboard"></div></div>
+
+    <div class="card">
+      <h3>🎡 The weekly wheel</h3>
+      <p style="font-size:12px;color:var(--sub);line-height:1.6;margin:0 0 10px"><b>40 seats total</b> (three ways in — not added together). Jackpot hitters are locked in first; the rest fills ~⅔ from the top point-earners and ~⅓ from random wild-cards. Capped-weighted odds (more points = up to <b>5× the slices</b> — bigger holders rewarded, but everyone on the wheel has a real shot). <b>Sell or move your CLKN out and you're dropped at draw time.</b></p>
+      <div id="wheelWrap"><div class="pointer">🔻</div><canvas id="wheel" width="320" height="320"></canvas></div>
+      <div class="winner" id="winner"></div>
+      <div class="note"><b>Beta: no prizes yet.</b> In the live version the weekly winner gets a ~$20 CLKN reward drop, paid manually + announced in the Telegram coop (holder rewards drawing — no purchase to enter). Right now the draw is just for testing the mechanic.</div>
+    </div>
+  </div>
+
+  <div class="card"><h3>🪙 Spins by holdings</h3>
+    <div style="font-size:14px;line-height:2">500k–2M → <b>5</b> · 2M–5M → <b>10</b> · 5M–10M → <b>15</b> · 10M+ → <b>20</b></div>
+    <div class="note">Banded daily spins. Entry holders (500k, ~$100) still get a real game at 5/day. Buy more during the week and your tier bumps up within a minute. Floor to play: 500k.</div>
+  </div>
+
+  <details class="card"><summary style="cursor:pointer;font-family:var(--head);letter-spacing:2px;color:var(--orange)">⚙️ OPERATOR</summary>
+    <input id="adminKey" type="password" placeholder="Admin key" style="margin-top:10px"/>
+    <input id="adminWallet" placeholder="Wallet to allow/remove (for /allow)"/>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button class="opbtn" onclick="op('allow')">+ Allow wallet</button>
+      <button class="opbtn" onclick="op('remove')">– Remove</button>
+      <button class="opbtn" onclick="op('preview')">Preview draw</button>
+      <button class="opbtn" onclick="op('draw')">🎡 RUN DRAW</button>
+      <button class="opbtn" onclick="op('reset')">↻ Reset week</button>
+      <button class="opbtn" onclick="op('open')">🔓 Open beta</button>
+      <button class="opbtn" onclick="op('close')">🔒 Invite-only</button>
+    </div>
+    <div class="vmsg" id="opMsg"></div>
+  </details>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const RECEIVE='7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H';
+let SEND_AMT=null, PROOF=localStorage.getItem('clkn_premium_proof')||'';
+const SYMS=['🐔','🪙','7️⃣','💎','🔥','🥚','🍗','🩺'], SYMH=120, STRIP=42, TOP_X=27;
+const symHtml=e=>'<div class="sym">'+e+'</div>', rnd=()=>SYMS[Math.floor(Math.random()*SYMS.length)];
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function vmsg(t,err){ $('vmsg').innerHTML=err?'<span style="color:#fca5a5">'+t+'</span>':t; }
+function copyTxt(t,el){ const f=()=>{const b=el&&el.querySelector('.cb'); if(b){const o=b.innerHTML;b.innerHTML='✓ Copied';setTimeout(()=>b.innerHTML=o,1500);}};
+  try{ navigator.clipboard?navigator.clipboard.writeText(t).then(f,f):f(); }catch(_){ f(); } }
+function celebrate(n){ for(let i=0;i<n;i++) setTimeout(()=>{const s=document.createElement('div');s.className='sparkle';s.textContent=['🪙','✨','🐔','🔥','💎'][Math.floor(Math.random()*5)];s.style.left=(Math.random()*100)+'vw';s.style.top='8vh';document.body.appendChild(s);setTimeout(()=>s.remove(),1500);},i*28); }
+
+// ── wallet verify (connect+sign / send) — proof shared with /premium ──
+const WALLETS={phantom:{name:'Phantom',d:()=>window.phantom?.solana||(window.solana?.isPhantom?window.solana:null)},solflare:{name:'Solflare',d:()=>window.solflare||(window.solana?.isSolflare?window.solana:null)},backpack:{name:'Backpack',d:()=>(window.backpack?.isBackpack?window.backpack:null)||(window.solana?.isBackpack?window.solana:null)},okx:{name:'OKX',d:()=>window.okxwallet?.solana||window.okxwallet||null},coinbase:{name:'Coinbase',d:()=>window.coinbaseSolana||null},trust:{name:'Trust',d:()=>window.trustwallet?.solana||(window.solana?.isTrust?window.solana:null)},glow:{name:'Glow',d:()=>window.glowSolana||(window.solana?.isGlow?window.solana:null)},exodus:{name:'Exodus',d:()=>window.exodus?.solana||null},bitget:{name:'Bitget',d:()=>window.bitkeep?.solana||window.bitgetWallet?.solana||null},brave:{name:'Brave',d:()=>window.braveSolana||(window.solana?.isBraveWallet?window.solana:null)},jupiter:{name:'Jupiter',d:()=>window.jupiterWallet||window.jupiter||(window.solana?.isJupiter?window.solana:null)}};
+$('picker').innerHTML=Object.keys(WALLETS).map(id=>'<button class="wbtn" onclick="connectSign(\''+id+'\')">'+WALLETS[id].name+'</button>').join('');
+(function deepLinks(){ const ua=navigator.userAgent||''; const mob=/Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(ua)||(navigator.maxTouchPoints>1&&/Macintosh/.test(ua));
+  if(!mob) return; if(window.solana||window.phantom?.solana||window.solflare||window.backpack||window.okxwallet) return;
+  const el=$('mobileConnect'); const u=encodeURIComponent(location.origin+'/slots'),ref=encodeURIComponent(location.origin);
+  el.innerHTML='<div style="font-size:12px;color:#FCD34D;margin-bottom:6px">📱 No wallet here (iPad/phone browsers can\'t see wallet apps). Open this page inside your wallet to connect:</div>'
+   +'<a class="wbtn" style="text-decoration:none;display:block;text-align:center;margin-bottom:6px" href="https://phantom.app/ul/browse/'+u+'?ref='+ref+'">🔮 Open in Phantom</a>'
+   +'<a class="wbtn" style="text-decoration:none;display:block;text-align:center" href="https://solflare.com/ul/v1/browse/'+u+'?ref='+ref+'">☀️ Open in Solflare</a>'; el.classList.remove('hidden'); })();
+async function connectSign(id){ const w=WALLETS[id],p=w&&w.d(); if(!p){ vmsg(w.name+" not detected — install it, or open this page in your wallet's browser.",true); return; }
+  try{ vmsg('Connecting '+w.name+'…'); const r=await p.connect(); const wallet=(r&&r.publicKey&&r.publicKey.toString())||(p.publicKey&&p.publicKey.toString()); if(!wallet) throw new Error('no key');
+    const nonce=Date.now(); const message='Cluck Norris — verify wallet for The Coop Spinner\nwallet: '+wallet+'\nnonce: '+nonce+'\nThis only proves you own this wallet. NOT a transaction; no tokens move, no permissions granted.';
+    vmsg('Approve the <b>signature</b> in '+w.name+' (not a transaction)…'); const sig=await p.signMessage(new TextEncoder().encode(message),'utf8'); const sb=sig&&sig.signature?sig.signature:sig;
+    const sigB64=btoa(String.fromCharCode.apply(null,new Uint8Array(sb)));
+    const d=await fetch('/api/premium-verify-sig',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({wallet,signature:sigB64,message,minHold:500000})}).then(r=>r.json());
+    if(d.success&&d.proof){ PROOF=d.proof; localStorage.setItem('clkn_premium_proof',PROOF); localStorage.setItem('clkn_premium_proof_wallet',wallet); loadState(); return; }
+    vmsg(d.error==='insufficient_holdings'?('That wallet holds '+Math.round(d.balance||0).toLocaleString()+' CLKN — beta needs 500,000+.'):(d.error||'Verification failed.'),true);
+  }catch(e){ vmsg((e.message||e)+'',true); } }
+function startSend(){ SEND_AMT=(7+Math.floor(Math.random()*1000)/1000).toFixed(3); $('sendAmt').textContent=SEND_AMT; $('recvAddr').textContent=RECEIVE; $('sendRow').classList.remove('hidden'); $('startSendBtn').classList.add('hidden'); vmsg('Send exactly <b>'+SEND_AMT+' CLKN</b> to the address, then tap verify.'); }
+let polling=false;
+async function checkSend(){ if(!SEND_AMT||polling) return; polling=true; const btn=$('checkSendBtn'); const t0=Date.now();
+  const tick=()=>{ btn.disabled=true; btn.innerHTML='⏳ Waiting to validate… '+Math.floor((Date.now()-t0)/1000)+'s'; vmsg('Watching the chain for your <b>'+SEND_AMT+' CLKN</b>… no need to tap again.'); };
+  const stop=()=>{ polling=false; btn.disabled=false; btn.innerHTML="I've sent it — verify"; }; tick();
+  const poll=async()=>{ try{ const d=await fetch('/api/verify-clkn-payment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({unlockAmount:parseFloat(SEND_AMT),tool:'premium'})}).then(r=>r.json());
+    if(d.success&&d.premiumProof){ stop(); PROOF=d.premiumProof; localStorage.setItem('clkn_premium_proof',PROOF); localStorage.setItem('clkn_premium_proof_wallet',d.senderWallet); loadState(); return; }
+    if(d.success&&d.premiumNote&&d.premiumNote.insufficient){ stop(); vmsg('That wallet holds '+Math.round(d.premiumNote.balance||0).toLocaleString()+' CLKN — beta needs 500,000+.',true); return; } }catch(_){}
+    if(Date.now()-t0>120000){ stop(); vmsg("Couldn't find your "+SEND_AMT+" CLKN after 2 min. Check the exact amount + address, then retry.",true); return; } tick(); setTimeout(poll,5000); };
+  poll(); }
+
+// ── reels ──
+function buildStrip(el,fin){ let h=''; for(let i=0;i<STRIP-1;i++) h+=symHtml(rnd()); h+=symHtml(fin); el.innerHTML=h; el.style.transition='none'; el.style.transform='translateY(0)'; }
+function spinReel(el,fin,dur){ return new Promise(res=>{ buildStrip(el,fin); void el.offsetHeight; el.style.transition='transform '+dur+'ms cubic-bezier(.12,.78,.28,1)'; el.style.transform='translateY(-'+((STRIP-1)*SYMH)+'px)'; setTimeout(res,dur); }); }
+
+// ── state + spin (server) ──
+let spinning=false;
+async function loadState(){
+  const d=await fetch('/api/slots/state?proof='+encodeURIComponent(PROOF)).then(r=>r.json()).catch(()=>null);
+  if(!d){ return; }
+  if(d.me && d.me.wallet){ $('verifyGate').classList.add('hidden'); $('game').classList.remove('hidden'); renderMe(d.me); }
+  else { $('verifyGate').classList.remove('hidden'); $('game').classList.add('hidden'); }
+  renderBoard(d.leaderboard||[], d.me&&d.me.wallet);
+  buildWheel(d.leaderboard||[]);
+  if(d.drawn){ const w=d.drawn.winner; const mine=d.me&&d.me.wallet===w; $('winner').innerHTML=mine?'🎉 <span class="y">YOU won this week\'s drop!</span> 🎉':'🎉 Winner: <b>'+w.slice(0,4)+'…'+w.slice(-4)+'</b> — ~$20 CLKN 🎉'; }
+}
+function renderMe(me){
+  const short=me.wallet.slice(0,4)+'…'+me.wallet.slice(-4);
+  $('vbanner').innerHTML='✓ '+short+' · '+Math.round(me.balance).toLocaleString()+' CLKN'+(me.inBeta?'':' · <span style="color:#fca5a5">not in beta</span>')+(me.disqualified?' · <span style="color:#fca5a5">⚠ sold — DQ\'d this week</span>':'')+' &nbsp;<a href="#" onclick="resetVerify();return false">change</a>';
+  $('spinsLeft').textContent=me.inBeta?me.spinsLeft:'—'; $('myPts').textContent=(me.points||0).toLocaleString();
+  const ws=$('wheelStat'); const onWheel=me.jackpot||(me.points>0&&me._rank&&me._rank<=TOP_X);
+  ws.textContent=me.disqualified?'DQ':(me.jackpot?'IN ✓':(me.spinsLeft!=null?'#?':'—')); ws.className='v'+(me.disqualified?' dq':(me.jackpot?' on':''));
+  $('spinBtn').disabled=!me.inBeta||me.spinsLeft<=0;
+}
+function renderBoard(lb,meWallet){
+  let html=''; lb.forEach((p,i)=>{ const rank=p.rank||i+1; const qual=p.qualified; let tags=''; if(p.jackpot) tags+=' <span class="tag jp">🐔 AUTO</span>'; else if(qual) tags+=' <span class="tag wheel">WHEEL</span>';
+    html+='<div class="lb-row'+(p.isMe?' me':'')+(qual?' qual':'')+'"><span class="lb-rank">'+rank+'</span><span class="lb-name">'+esc(p.short)+(p.isMe?' (you)':'')+tags+'</span><span class="lb-pts">'+p.pts.toLocaleString()+'</span></div>';
+    if(rank===TOP_X) html+='<div class="cutoff">— TOP '+TOP_X+' QUALIFY BY POINTS · +13 WILD-CARD AT DRAW —</div>'; });
+  $('leaderboard').innerHTML=html||'<div style="color:var(--sub);font-size:12px">No spins yet this week. Be the first on the board.</div>';
+  const meRow=lb.find(p=>p.isMe); if(meRow) $('wheelStat').textContent=meRow.qualified?'IN ✓':('#'+meRow.rank);
+}
+async function spin(){
+  if(spinning) return; spinning=true; $('spinBtn').disabled=true;
+  [0,1,2].forEach(i=>$('reel'+i).classList.remove('win')); $('result').className='result'; $('result').innerHTML='<div class="big">🎰 spinning…</div>';
+  const res=await fetch('/api/slots/spin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({proof:PROOF})});
+  const d=await res.json().catch(()=>({}));
+  if(!res.ok){ // pre-roll: stop reels on random, show the error
+    await Promise.all([spinReel($('strip0'),rnd(),700),spinReel($('strip1'),rnd(),900),spinReel($('strip2'),rnd(),1100)]);
+    const msgs={verify_wallet:'Verify your wallet first.',not_in_beta:'This wallet isn\'t in the private beta yet.',need_floor:'Need ≥ 500,000 CLKN to play.',no_spins_left:'No spins left today — come back tomorrow.',week_closed:'This week\'s draw is done. New week soon!'};
+    $('result').className='result err'; $('result').innerHTML='<div class="big">'+(msgs[d.error]||d.error||'Spin failed')+'</div>';
+    if(d.error==='verify_wallet'){ resetVerify(); }
+    spinning=false; loadState(); return;
+  }
+  const o=d.outcome;
+  await Promise.all([spinReel($('strip0'),o[0],1300),spinReel($('strip1'),o[1],1700),spinReel($('strip2'),o[2],2150)]);
+  const r=$('result');
+  if(d.kind==='fireChicken'){ [0,1,2].forEach(i=>$('reel'+i).classList.add('win')); r.className='result win jackpot'; r.innerHTML='<div class="big">🩺🔥🐔 DR. FIRE CHICKEN!</div><div class="amt">7,777 CLKN AIRDROP · +'+d.gained+' pts · AUTO-ENTERED</div>'; celebrate(140); }
+  else if(d.kind==='jackpot'){ [0,1,2].forEach(i=>$('reel'+i).classList.add('win')); r.className='result win jackpot'; r.innerHTML='<div class="big">🐔 JACKPOT! 🐔</div><div class="amt">AUTO-ENTERED · +'+d.gained+' pts</div>'; celebrate(60); }
+  else if(d.kind==='threeKind'){ [0,1,2].forEach(i=>$('reel'+i).classList.add('win')); r.className='result win'; r.innerHTML='<div class="big">THREE '+o[0]+'!</div><div class="amt">+'+d.gained+' pts</div>'; celebrate(20); }
+  else if(d.kind==='twoCluck'){ r.className='result win'; r.innerHTML='<div class="big">TWO CLUCKS 🐔🐔</div><div class="amt">+'+d.gained+' pts</div>'; celebrate(8); }
+  else { r.className='result lose'; r.innerHTML='<div class="big">no win · +'+d.gained+' pts 🪶</div>'; }
+  $('myPts').textContent=(d.totalPoints||0).toLocaleString(); $('spinsLeft').textContent=d.spinsLeft;
+  renderBoard(d.leaderboard||[], true); buildWheel(d.leaderboard||[]);
+  $('spinBtn').disabled=d.spinsLeft<=0; spinning=false;
+}
+function resetVerify(){ PROOF=''; localStorage.removeItem('clkn_premium_proof'); localStorage.removeItem('clkn_premium_proof_wallet'); $('game').classList.add('hidden'); $('verifyGate').classList.remove('hidden'); }
+
+// ── wheel ──
+const PAL=['#F97316','#FFC53D','#EF4444','#34D399','#60A5FA','#A78BFA','#F472B6','#FB923C','#FBBF24','#22D3EE','#FB7185','#4ADE80'];
+let wheelRot=0, entrants=[];
+function buildWheel(lb){ const q=lb.filter(p=>p.qualified); entrants=q.map((p,i)=>({short:p.short,isMe:p.isMe,weight:Math.max(1,Math.min(5,Math.round(p.pts/120))),color:PAL[i%PAL.length]})); drawWheel(wheelRot); }
+function drawWheel(rot){ const c=$('wheel'),x=c.getContext('2d'),R=c.width/2; x.clearRect(0,0,c.width,c.height);
+  if(!entrants.length){ x.fillStyle='#160d09'; x.beginPath();x.arc(R,R,R-6,0,7);x.fill(); x.fillStyle='#9a8a7a'; x.font='700 13px Oswald';x.textAlign='center';x.fillText('wheel fills as people spin',R,R); return; }
+  const tot=entrants.reduce((a,e)=>a+e.weight,0); let a=rot;
+  entrants.forEach(e=>{ const ang=e.weight/tot*2*Math.PI; x.beginPath();x.moveTo(R,R);x.arc(R,R,R-6,a,a+ang);x.closePath();x.fillStyle=e.color;x.fill();x.strokeStyle='rgba(0,0,0,.35)';x.lineWidth=2;x.stroke();
+    x.save();x.translate(R,R);x.rotate(a+ang/2);x.textAlign='right';x.fillStyle=e.isMe?'#06241a':'#1a1209';x.font='700 12px Oswald';x.fillText((e.isMe?'YOU':e.short)+(e.weight>1?' ×'+e.weight:''),R-14,4);x.restore(); a+=ang; });
+  x.beginPath();x.arc(R,R,26,0,7);x.fillStyle='#160d09';x.fill();x.strokeStyle='#FFC53D';x.lineWidth=3;x.stroke();x.fillStyle='#FFC53D';x.font='900 20px Oswald';x.textAlign='center';x.fillText('🐔',R,R+7); }
+function spinWheelTo(winnerShort){ if(!entrants.length) return; let idx=entrants.findIndex(e=>e.short===winnerShort); if(idx<0) idx=0;
+  const tot=entrants.reduce((a,e)=>a+e.weight,0); let a=0; for(let i=0;i<idx;i++) a+=entrants[i].weight/tot*2*Math.PI; const mid=a+(entrants[idx].weight/tot*2*Math.PI)/2;
+  const target=(-Math.PI/2)-mid+2*Math.PI*6, start=wheelRot, t0=performance.now(), dur=4600;
+  (function an(t){ const k=Math.min(1,(t-t0)/dur),e=1-Math.pow(1-k,3); wheelRot=start+(target-start)*e; drawWheel(wheelRot); if(k<1) requestAnimationFrame(an); else celebrate(40); })(t0); }
+
+// ── operator ──
+async function op(action){
+  const key=$('adminKey').value.trim(); if(!key){ $('opMsg').textContent='Enter admin key.'; return; }
+  const w=$('adminWallet').value.trim();
+  let url,method='POST';
+  if(action==='allow') url='/api/slots/allow?key='+encodeURIComponent(key)+'&wallet='+encodeURIComponent(w);
+  else if(action==='remove') url='/api/slots/allow?key='+encodeURIComponent(key)+'&wallet='+encodeURIComponent(w)+'&remove=1';
+  else if(action==='preview') url='/api/slots/draw?key='+encodeURIComponent(key)+'&preview=1';
+  else if(action==='draw') url='/api/slots/draw?key='+encodeURIComponent(key);
+  else if(action==='reset') url='/api/slots/reset?key='+encodeURIComponent(key);
+  else if(action==='open') url='/api/slots/open?key='+encodeURIComponent(key)+'&on=1';
+  else if(action==='close') url='/api/slots/open?key='+encodeURIComponent(key)+'&on=0';
+  const d=await fetch(url,{method}).then(r=>r.json()).catch(e=>({error:e.message}));
+  $('opMsg').textContent=JSON.stringify(d).slice(0,300);
+  if(action==='draw'&&d.winner){
+    entrants=(d.entrants||[]).map((e,i)=>({short:e.short,weight:e.entries||1,isMe:false,color:PAL[i%PAL.length]}));
+    drawWheel(wheelRot); $('winner').innerHTML='Drawing…'; spinWheelTo(d.winnerShort);
+    setTimeout(()=>{ const fc=(d.fireChicken||[]); const fcLine=fc.length?'<br><span style="font-size:13px;color:var(--gold);font-weight:700">🩺🔥🐔 Dr. Fire Chicken: '+fc.map(f=>f.short).join(', ')+' → '+(fc[0]&&fc[0].airdrop||7777).toLocaleString()+' CLKN each</span>':''; $('winner').innerHTML='🎉 Winner: <b>'+d.winnerShort+'</b> — ~$20 CLKN 🎉<br><span style="font-size:12px;color:var(--sub)">'+d.wheel+' entrants · '+d.wildCardSlots+' wild-card · '+d.jackpotSlots+' jackpot</span>'+fcLine; },4700);
+  }
+  setTimeout(loadState,300);
+}
+
+$('spinBtn').addEventListener('click',spin);
+[0,1,2].forEach(i=>$('strip'+i).innerHTML=symHtml(rnd()));
+loadState();
+</script>
+</body>
+</html>

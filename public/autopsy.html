@@ -1,0 +1,1824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>🔬 Token Autopsy — Cluck's AI Forensic Agent</title>
+<meta name="description" content="Paste any Solana token mint. An AI forensic agent investigates on-chain state, classifies the death mode, and writes a teaching case study in Cluck Norris's voice. Free, non-custodial."/>
+<meta property="og:title" content="🔬 Token Autopsy — Cluck's AI Forensic Agent"/>
+<meta property="og:description" content="Paste any Solana token mint, learn from the corpse. Free AI forensic post-mortem."/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0a0a0a;
+    --card: #111111;
+    --border: rgba(255,255,255,0.08);
+    --text: #F9FAFB;
+    --subtext: #6B7280;
+    --accent: #FCD34D;
+    --orange: #D97706;
+    --green: #10B981;
+    --red: #EF4444;
+    --amber: #F59E0B;
+    --blue: #60A5FA;
+    --purple: #A78BFA;
+    --grey: #6B7280;
+    --mono: 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    background-image: radial-gradient(ellipse at 20% 10%, rgba(239,68,68,0.08) 0%, transparent 50%),
+                      radial-gradient(ellipse at 80% 90%, rgba(96,165,250,0.05) 0%, transparent 50%);
+    color: var(--text);
+    font-family: system-ui, sans-serif;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 24px 16px 80px; }
+  @media (min-width: 1040px) { .wrap { max-width: 880px; } }
+
+  .home { display: inline-block; font-family: 'Oswald', sans-serif; font-size: 11px; letter-spacing: 2px; color: var(--subtext); text-decoration: none; margin-bottom: 16px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; }
+  .home:hover { color: var(--accent); border-color: var(--accent); }
+
+  .header { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+  .header-icon { font-size: 40px; filter: drop-shadow(0 0 16px rgba(239,68,68,0.5)); }
+  .header .brand-mini { font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 4px; color: var(--red); margin-bottom: 4px; font-weight: 700; }
+  .header h1 { font-family: 'Oswald', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg, #EF4444, #F59E0B, #FCD34D); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
+  .header p { font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
+
+  .hero {
+    background: linear-gradient(135deg, rgba(239,68,68,0.05), rgba(96,165,250,0.03));
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 16px;
+  }
+  .hero-tag { font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--accent); letter-spacing: 3px; margin-bottom: 6px; }
+  .hero-title { font-family: 'Oswald', sans-serif; font-size: 17px; font-weight: 700; color: var(--text); letter-spacing: 1px; margin-bottom: 8px; }
+  .hero-sub { font-family: system-ui, sans-serif; font-size: 13px; color: #9CA3AF; line-height: 1.6; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+  .card-title { font-family: var(--mono); font-size: 10px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 14px; text-transform: uppercase; }
+
+  /* Education panel */
+  .edu { background: rgba(96,165,250,0.04); border: 1px solid rgba(96,165,250,0.18); border-radius: 12px; margin-bottom: 16px; }
+  .edu summary { padding: 14px 18px; cursor: pointer; font-family: 'Oswald', sans-serif; font-size: 12px; letter-spacing: 2px; color: var(--blue); font-weight: 700; list-style: none; }
+  .edu summary::-webkit-details-marker { display: none; }
+  .edu summary::after { content: '+ EXPAND'; font-family: var(--mono); font-size: 11px; color: var(--blue); float: right; }
+  .edu[open] summary::after { content: '− COLLAPSE'; }
+  .edu-body { padding: 0 18px 16px; font-family: system-ui, sans-serif; font-size: 13px; line-height: 1.65; color: #D1D5DB; }
+  .edu-body p { margin-bottom: 8px; }
+  .edu-body ul { margin: 4px 0 8px 18px; }
+  .edu-body li { margin-bottom: 4px; }
+  .edu-body strong { color: var(--text); }
+
+  .token-input { width: 100%; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-family: var(--mono); font-size: 13px; color: var(--text); }
+  .token-input:focus { outline: none; border-color: var(--red); }
+
+  .run-btn { width: 100%; margin-top: 14px; padding: 14px; background: linear-gradient(135deg, var(--red), var(--orange)); border: none; border-radius: 10px; font-family: 'Oswald', sans-serif; font-size: 14px; font-weight: 900; color: #fff; letter-spacing: 3px; cursor: pointer; transition: opacity 0.15s; }
+  .run-btn:hover { opacity: 0.92; }
+  .run-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .err { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #FCA5A5; margin-bottom: 12px; display: none; }
+  .err.show { display: block; }
+
+  .loading { display: none; text-align: center; padding: 40px 20px 36px; background: linear-gradient(135deg, rgba(255,255,255,0.03), rgba(239,68,68,0.04)); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 16px; }
+  .loading.show { display: block; }
+  .loading-spinner { font-size: 44px; animation: bobble 1.4s ease-in-out infinite; margin-bottom: 14px; display: inline-block; }
+  .loading-title { font-family: 'Oswald', sans-serif; font-size: 14px; color: var(--accent); letter-spacing: 3px; margin-bottom: 16px; font-weight: 700; }
+  .loading-stage { font-family: var(--mono); font-size: 13px; color: var(--text); min-height: 20px; transition: opacity 0.3s; }
+  @keyframes bobble { 0%,100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-6px) rotate(3deg); } }
+
+  .result { display: none; }
+  .result.show { display: block; }
+
+  /* Verdict banner — color-coded by severity */
+  .verdict {
+    border-radius: 14px;
+    padding: 22px 20px;
+    margin-bottom: 16px;
+    text-align: center;
+    border: 2px solid;
+  }
+  .verdict-icon { font-size: 56px; margin-bottom: 8px; line-height: 1; }
+  .verdict-label { font-family: 'Oswald', sans-serif; font-size: 22px; font-weight: 900; letter-spacing: 2.5px; line-height: 1.1; }
+  .verdict-token { font-family: var(--mono); font-size: 12px; color: #D1D5DB; margin-top: 10px; letter-spacing: 0.5px; }
+  .verdict-sub { font-family: 'Oswald', sans-serif; font-size: 13px; color: #D1D5DB; margin: 8px auto 0; max-width: 480px; line-height: 1.4; font-weight: 400; letter-spacing: 0.5px; text-align: center; }
+  .verdict.DEAD { background: linear-gradient(135deg, rgba(239,68,68,0.12), rgba(239,68,68,0.03)); border-color: rgba(239,68,68,0.5); }
+  .verdict.DEAD .verdict-label { color: #EF4444; }
+  .verdict.DYING { background: linear-gradient(135deg, rgba(245,158,11,0.12), rgba(245,158,11,0.03)); border-color: rgba(245,158,11,0.5); }
+  .verdict.DYING .verdict-label { color: #F59E0B; }
+  .verdict.AT_RISK { background: linear-gradient(135deg, rgba(245,158,11,0.10), rgba(245,158,11,0.03)); border-color: rgba(245,158,11,0.4); }
+  .verdict.AT_RISK .verdict-label { color: #F59E0B; }
+  .verdict.ALIVE { background: linear-gradient(135deg, rgba(16,185,129,0.10), rgba(16,185,129,0.03)); border-color: rgba(16,185,129,0.45); }
+  .verdict.ALIVE .verdict-label { color: #10B981; }
+  .verdict.UNCLEAR { background: linear-gradient(135deg, rgba(107,114,128,0.10), rgba(107,114,128,0.03)); border-color: rgba(107,114,128,0.4); }
+  .verdict.UNCLEAR .verdict-label { color: #9CA3AF; }
+
+  /* Facts grid */
+  .facts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+  .fact {
+    background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015));
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 11px 13px;
+  }
+  .fact-label { font-family: var(--mono); font-size: 9px; color: var(--subtext); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 4px; }
+  .fact-value { font-family: 'Oswald', sans-serif; font-size: 16px; color: var(--text); font-weight: 700; letter-spacing: 0.5px; }
+  .fact-value.good { color: var(--green); }
+  .fact-value.warn { color: var(--amber); }
+  .fact-value.bad { color: var(--red); }
+  .fact-value.muted { color: var(--subtext); font-size: 13px; font-weight: 400; }
+
+  /* Red flags */
+  .red-flags { list-style: none; padding: 0; margin: 0; }
+  .red-flags li { padding: 10px 12px 10px 32px; background: rgba(239,68,68,0.05); border: 1px solid rgba(239,68,68,0.15); border-radius: 8px; margin-bottom: 6px; font-size: 13px; color: #FCA5A5; position: relative; line-height: 1.5; }
+  .red-flags li::before { content: '⚠'; position: absolute; left: 12px; top: 9px; color: var(--red); font-size: 13px; }
+  .no-flags { font-style: italic; color: var(--subtext); font-size: 13px; padding: 6px 0; }
+
+  /* Cluck's narrative */
+  .narrative {
+    background: linear-gradient(135deg, rgba(252,211,77,0.05), rgba(255,255,255,0.02));
+    border: 1px solid rgba(252,211,77,0.25);
+    border-left: 4px solid var(--accent);
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+  }
+  .narrative-tag { font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--accent); letter-spacing: 3px; margin-bottom: 12px; font-weight: 700; }
+  .narrative-text { font-family: Georgia, serif; font-size: 15px; color: #E5E7EB; line-height: 1.75; white-space: pre-wrap; }
+  .narrative-text p { margin-bottom: 10px; }
+
+  /* Lessons */
+  .lessons-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .lesson-chip {
+    display: inline-block;
+    padding: 8px 14px;
+    background: rgba(96,165,250,0.08);
+    border: 1px solid rgba(96,165,250,0.3);
+    border-radius: 20px;
+    font-family: 'Oswald', sans-serif;
+    font-size: 12px;
+    color: var(--blue);
+    letter-spacing: 1px;
+    text-decoration: none;
+    transition: all 0.15s;
+  }
+  .lesson-chip:hover { background: rgba(96,165,250,0.16); border-color: rgba(96,165,250,0.5); }
+
+  /* Top Holders forensic panel */
+  .holders-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px dashed var(--border); }
+  .holders-stat { background: rgba(255,255,255,0.025); border-radius: 8px; padding: 8px 11px; }
+  .holders-stat-label { font-family: var(--mono); font-size: 9px; color: var(--subtext); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 3px; }
+  .holders-stat-value { font-family: 'Oswald', sans-serif; font-size: 15px; color: var(--text); font-weight: 700; }
+  .holders-list { display: flex; flex-direction: column; gap: 8px; }
+  .holder-row { display: flex; gap: 12px; padding: 10px 12px; background: rgba(255,255,255,0.025); border: 1px solid var(--border); border-radius: 10px; align-items: flex-start; }
+  .holder-rank { font-family: 'Oswald', sans-serif; font-size: 17px; font-weight: 900; color: var(--subtext); width: 28px; text-align: center; flex-shrink: 0; padding-top: 2px; }
+  .holder-main { flex: 1; min-width: 0; }
+  .holder-addr { font-family: var(--mono); font-size: 11px; color: #D1D5DB; margin-bottom: 4px; word-break: break-all; }
+  .holder-amount { font-family: 'Oswald', sans-serif; font-size: 13px; color: var(--accent); letter-spacing: 0.5px; margin-bottom: 6px; font-weight: 700; }
+  .holder-badges { display: flex; flex-wrap: wrap; gap: 4px; }
+  .badge { display: inline-block; padding: 3px 8px; border-radius: 10px; font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 1px; font-weight: 700; white-space: nowrap; }
+  .badge-wallet     { background: rgba(96,165,250,0.10); border: 1px solid rgba(96,165,250,0.3); color: var(--blue); }
+  .badge-lp         { background: rgba(168,85,247,0.10); border: 1px solid rgba(168,85,247,0.3); color: var(--purple); }
+  .badge-locker     { background: rgba(16,185,129,0.10); border: 1px solid rgba(16,185,129,0.35); color: var(--green); }
+  .badge-feewallet  { background: rgba(217,119,6,0.18); border: 1px solid rgba(217,119,6,0.55); color: #FCD34D; font-weight: 700; }
+  .badge-selflock   { background: rgba(16,185,129,0.10); border: 1px solid rgba(16,185,129,0.35); color: var(--green); }
+  .badge-program    { background: rgba(107,114,128,0.10); border: 1px solid rgba(107,114,128,0.3); color: #9CA3AF; }
+  .badge-unknown    { background: rgba(107,114,128,0.05); border: 1px solid rgba(107,114,128,0.2); color: #9CA3AF; }
+  .badge-sniper     { background: rgba(239,68,68,0.10); border: 1px solid rgba(239,68,68,0.3); color: var(--red); }
+  .badge-very_early { background: rgba(245,158,11,0.10); border: 1px solid rgba(245,158,11,0.3); color: var(--amber); }
+  .badge-early      { background: rgba(245,158,11,0.10); border: 1px solid rgba(245,158,11,0.3); color: var(--amber); }
+  .badge-first_week { background: rgba(252,211,77,0.10); border: 1px solid rgba(252,211,77,0.3); color: var(--accent); }
+  .badge-later      { background: rgba(107,114,128,0.10); border: 1px solid rgba(107,114,128,0.3); color: #9CA3AF; }
+  .badge-pre_pool   { background: rgba(167,139,250,0.10); border: 1px solid rgba(167,139,250,0.3); color: var(--purple); }
+  .badge-HELD          { background: rgba(96,165,250,0.10); border: 1px solid rgba(96,165,250,0.3); color: var(--blue); }
+  .badge-ACCUMULATED   { background: rgba(16,185,129,0.10); border: 1px solid rgba(16,185,129,0.3); color: var(--green); }
+  .badge-REDUCED       { background: rgba(245,158,11,0.10); border: 1px solid rgba(245,158,11,0.3); color: var(--amber); }
+  .badge-EXITED_MOSTLY { background: rgba(239,68,68,0.10); border: 1px solid rgba(239,68,68,0.3); color: var(--red); }
+  .badge-UNKNOWN       { background: rgba(107,114,128,0.05); border: 1px solid rgba(107,114,128,0.2); color: #9CA3AF; }
+  .badge-bonding_curve { background: rgba(16,185,129,0.10); border: 1px solid rgba(16,185,129,0.35); color: var(--green); }
+  .badge-creator { background: linear-gradient(135deg, rgba(252,211,77,0.18), rgba(217,119,6,0.10)); border: 1px solid rgba(252,211,77,0.5); color: var(--accent); font-weight: 900; }
+
+  /* Acquisition-method badges */
+  .badge-BOUGHT          { background: rgba(96,165,250,0.10); border: 1px solid rgba(96,165,250,0.3); color: var(--blue); }
+  .badge-TRANSFER        { background: rgba(167,139,250,0.10); border: 1px solid rgba(167,139,250,0.3); color: var(--purple); }
+  .badge-MINTED          { background: rgba(252,211,77,0.10); border: 1px solid rgba(252,211,77,0.3); color: var(--accent); }
+  .badge-CEX_WITHDRAWAL  { background: rgba(96,165,250,0.10); border: 1px solid rgba(96,165,250,0.3); color: var(--blue); }
+  .badge-LOCK_UNLOCK     { background: rgba(16,185,129,0.10); border: 1px solid rgba(16,185,129,0.3); color: var(--green); }
+  .badge-PROGRAM_ROUTE   { background: rgba(107,114,128,0.10); border: 1px solid rgba(107,114,128,0.2); color: #9CA3AF; }
+  .badge-OTHER           { background: rgba(107,114,128,0.10); border: 1px solid rgba(107,114,128,0.2); color: #9CA3AF; }
+
+  .holder-source { font-family: var(--mono); font-size: 10px; color: var(--purple); margin-top: 6px; word-break: break-all; }
+  .holder-source a { color: var(--purple); text-decoration: none; }
+  .holder-source a:hover { text-decoration: underline; }
+
+  /* Distribution Sources panel */
+  .distributors-list { display: flex; flex-direction: column; gap: 8px; }
+  .distributor-row { display: flex; gap: 12px; padding: 12px 14px; background: rgba(167,139,250,0.06); border: 1px solid rgba(167,139,250,0.25); border-radius: 10px; align-items: flex-start; }
+  .distributor-icon { font-size: 22px; flex-shrink: 0; padding-top: 2px; }
+  .distributor-main { flex: 1; min-width: 0; }
+  .distributor-addr { font-family: var(--mono); font-size: 11px; color: #D1D5DB; margin-bottom: 4px; word-break: break-all; }
+  .distributor-addr a { color: var(--purple); text-decoration: underline; text-decoration-color: rgba(167,139,250,0.5); text-underline-offset: 2px; }
+  .distributor-addr a:hover { text-decoration-color: var(--purple); color: #C4B5FD; }
+  .distributor-context { font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 1px; color: var(--accent); margin-top: 2px; }
+  .distributor-stat { font-family: 'Oswald', sans-serif; font-size: 12px; color: var(--purple); font-weight: 700; letter-spacing: 0.5px; }
+  .recipient-list { display: flex; flex-direction: column; gap: 5px; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(167,139,250,0.18); }
+  .recipient-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-family: var(--mono); font-size: 11px; color: #D1D5DB; }
+  .recipient-row a { color: var(--blue); text-decoration: underline; text-decoration-color: rgba(96,165,250,0.5); text-underline-offset: 2px; }
+  .recipient-row a:hover { color: #93C5FD; text-decoration-color: var(--blue); }
+  .recipient-rank { font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 1px; font-weight: 700; min-width: 28px; }
+  .recipient-share { color: var(--accent); font-weight: 700; }
+  .recipient-tag { padding: 2px 7px; border-radius: 4px; font-family: 'Oswald', sans-serif; font-size: 9px; font-weight: 700; letter-spacing: 1px; border: 1px solid; }
+  .recipient-tag.wallet { background: rgba(96,165,250,0.08); color: var(--blue); border-color: rgba(96,165,250,0.3); }
+  .recipient-tag.locker { background: rgba(16,185,129,0.10); color: var(--green); border-color: rgba(16,185,129,0.35); }
+  .recipient-tag.selflock { background: rgba(245,158,11,0.10); color: var(--amber); border-color: rgba(245,158,11,0.35); }
+
+  /* Bags Launchpad panel */
+  .bags-card { background: linear-gradient(135deg, rgba(217,119,6,0.10), rgba(217,119,6,0.02)); border-color: rgba(217,119,6,0.35); }
+  /* Bags About / Disclaimer card */
+  .bags-about-card { background: linear-gradient(135deg, rgba(217,119,6,0.06), rgba(217,119,6,0.01)); border-color: rgba(217,119,6,0.25); }
+  .bags-about-body p { font-family: var(--mono); font-size: 12px; line-height: 1.65; color: #D1D5DB; margin-bottom: 10px; }
+  .bags-about-body p strong { color: var(--orange); font-weight: 700; }
+  .bags-about-body em { color: var(--accent); font-style: normal; }
+  .bags-about-links { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  .bags-about-link { padding: 8px 14px; background: rgba(217,119,6,0.10); border: 1px solid rgba(217,119,6,0.35); border-radius: 8px; font-family: 'Oswald', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; color: var(--orange); text-decoration: none; }
+  .bags-about-link:hover { background: rgba(217,119,6,0.18); color: var(--accent); }
+  /* Pump.fun Launchpad panel */
+  .pump-card { background: linear-gradient(135deg, rgba(16,185,129,0.10), rgba(16,185,129,0.02)); border-color: rgba(16,185,129,0.35); }
+  .pump-status { font-family: 'Oswald', sans-serif; font-size: 13px; color: var(--green); letter-spacing: 2px; margin-bottom: 12px; font-weight: 700; }
+  .pump-socials { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .pump-social { padding: 6px 12px; background: rgba(96,165,250,0.10); border: 1px solid rgba(96,165,250,0.3); border-radius: 14px; font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--blue); letter-spacing: 1px; text-decoration: none; }
+  .pump-social:hover { background: rgba(96,165,250,0.18); }
+  /* Jupiter cross-verification panel */
+  .jupiter-card { background: linear-gradient(135deg, rgba(167,139,250,0.08), rgba(96,165,250,0.02)); border-color: rgba(167,139,250,0.30); }
+  .jupiter-tag { display: inline-block; padding: 3px 9px; font-family: 'Oswald', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; border-radius: 4px; margin-right: 6px; margin-bottom: 6px; border: 1px solid; }
+  .jupiter-tag.verified { background: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.4); color: var(--green); }
+  .jupiter-tag.community { background: rgba(96,165,250,0.10); border-color: rgba(96,165,250,0.35); color: var(--blue); }
+  .jupiter-tag.unknown { background: rgba(107,114,128,0.08); border-color: rgba(107,114,128,0.3); color: var(--subtext); }
+  .jupiter-tag.lst { background: rgba(252,211,77,0.12); border-color: rgba(252,211,77,0.4); color: var(--accent); }
+  .jupiter-platform-note { padding: 10px 14px; background: rgba(217,119,6,0.07); border: 1px solid rgba(217,119,6,0.3); border-radius: 8px; font-family: var(--mono); font-size: 11.5px; line-height: 1.55; color: #D1D5DB; margin-top: 12px; }
+  .jupiter-organic { font-family: 'Oswald', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1px; padding: 6px 12px; border-radius: 6px; display: inline-block; }
+  .jupiter-organic.high { background: rgba(16,185,129,0.12); color: var(--green); border: 1px solid rgba(16,185,129,0.4); }
+  .jupiter-organic.medium { background: rgba(245,158,11,0.10); color: var(--amber); border: 1px solid rgba(245,158,11,0.35); }
+  .jupiter-organic.low { background: rgba(239,68,68,0.10); color: var(--red); border: 1px solid rgba(239,68,68,0.35); }
+  /* P&L Ledger panel */
+  .pnl-card { background: linear-gradient(135deg, rgba(252,211,77,0.06), rgba(252,211,77,0.01)); border-color: rgba(252,211,77,0.25); }
+  .pnl-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 16px; }
+  .pnl-tab { padding: 6px 12px; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 14px; font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 1.5px; color: var(--subtext); cursor: pointer; font-weight: 700; transition: all 0.15s; }
+  .pnl-tab:hover { color: var(--text); border-color: rgba(252,211,77,0.4); }
+  .pnl-tab.active { background: rgba(252,211,77,0.12); border-color: rgba(252,211,77,0.5); color: var(--accent); }
+  .pnl-expand-btn { display: block; width: 100%; margin-top: 8px; padding: 9px 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 10px; font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 2px; font-weight: 700; color: var(--subtext); cursor: pointer; transition: all 0.15s; }
+  .pnl-expand-btn:hover { color: var(--accent); border-color: rgba(252,211,77,0.4); background: rgba(252,211,77,0.06); }
+  .pnl-meta { font-family: var(--mono); font-size: 10px; color: var(--subtext); margin-bottom: 10px; letter-spacing: 0.5px; }
+  .pnl-list { display: flex; flex-direction: column; gap: 6px; }
+  .pnl-row { display: grid; grid-template-columns: 24px 1fr auto; gap: 10px; align-items: center; padding: 10px 12px; background: rgba(0,0,0,0.25); border: 1px solid var(--border); border-radius: 10px; }
+  .pnl-rank { font-family: 'Oswald', sans-serif; font-size: 12px; font-weight: 700; color: var(--subtext); }
+  .pnl-wallet { font-family: var(--mono); font-size: 11px; color: var(--text); word-break: break-all; }
+  .pnl-wallet a { color: var(--blue); text-decoration: none; }
+  .pnl-wallet a:hover { text-decoration: underline; }
+  .pnl-stats { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 4px; }
+  .pnl-badge { font-family: 'Oswald', sans-serif; font-size: 9px; font-weight: 700; letter-spacing: 1px; padding: 2px 7px; border-radius: 4px; }
+  .pnl-badge.profit { background: rgba(16,185,129,0.15); color: #6EE7B7; border: 1px solid rgba(16,185,129,0.4); }
+  .pnl-badge.loss { background: rgba(239,68,68,0.15); color: #FCA5A5; border: 1px solid rgba(239,68,68,0.4); }
+  .pnl-badge.neutral { background: rgba(255,255,255,0.04); color: var(--subtext); border: 1px solid var(--border); }
+  .pnl-badge.cashout { background: rgba(252,211,77,0.18); color: var(--accent); border: 1px solid rgba(252,211,77,0.5); }
+  .pnl-amount { font-family: 'Oswald', sans-serif; font-size: 14px; font-weight: 700; text-align: right; min-width: 80px; }
+  .pnl-amount.profit { color: var(--green); }
+  .pnl-amount.loss { color: var(--red); }
+  .pnl-empty { font-family: var(--mono); font-size: 12px; color: var(--subtext); padding: 16px; text-align: center; }
+  /* Hidden Exit Patterns card */
+  .hidden-exit-card { background: linear-gradient(135deg, rgba(239,68,68,0.10), rgba(239,68,68,0.02)); border-color: rgba(239,68,68,0.45); }
+  .hidden-exit-blurb { font-family: var(--mono); font-size: 11.5px; color: #D1D5DB; line-height: 1.55; margin-bottom: 14px; }
+  .hidden-exit-list { display: flex; flex-direction: column; gap: 14px; }
+  .hidden-exit-row { padding: 14px 14px 12px; background: rgba(0,0,0,0.32); border: 1px solid rgba(239,68,68,0.35); border-radius: 10px; }
+  .hidden-exit-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+  .hidden-exit-source { font-family: var(--mono); font-size: 13px; color: var(--red); font-weight: 700; }
+  .hidden-exit-source a { color: var(--red); text-decoration: none; }
+  .hidden-exit-source a:hover { text-decoration: underline; }
+  .hidden-exit-stat { font-family: 'Oswald', sans-serif; font-size: 11px; letter-spacing: 1px; color: #D1D5DB; padding: 3px 8px; background: rgba(239,68,68,0.10); border: 1px solid rgba(239,68,68,0.3); border-radius: 5px; font-weight: 700; }
+  .hidden-exit-stat.bad { color: #FCA5A5; }
+  .hidden-exit-recip { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+  .hidden-exit-recip-row { font-family: var(--mono); font-size: 11px; color: var(--subtext); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .hidden-exit-recip-row a { color: var(--blue); text-decoration: none; }
+  .hidden-exit-recip-row a:hover { text-decoration: underline; }
+  .hidden-exit-recip-status { padding: 1px 6px; border-radius: 4px; font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 9px; letter-spacing: 1px; }
+  .hidden-exit-recip-status.EXITED, .hidden-exit-recip-status.DUMPED_MOST { background: rgba(239,68,68,0.15); color: #FCA5A5; border: 1px solid rgba(239,68,68,0.4); }
+  .hidden-exit-recip-status.TRIMMED { background: rgba(245,158,11,0.12); color: var(--amber); border: 1px solid rgba(245,158,11,0.35); }
+  .hidden-exit-recip-status.HELD { background: rgba(96,165,250,0.10); color: var(--blue); border: 1px solid rgba(96,165,250,0.3); }
+  .hidden-exit-recip-status.ACCUMULATED { background: rgba(16,185,129,0.10); color: var(--green); border: 1px solid rgba(16,185,129,0.3); }
+  /* Disclaimer card — same visual weight on every analytical tool */
+  .disclaimer-card { background: linear-gradient(135deg, rgba(107,114,128,0.06), rgba(107,114,128,0.01)); border-color: rgba(107,114,128,0.30); }
+  .disclaimer-card .card-title { color: #D1D5DB; }
+  .disclaimer-body p { font-family: var(--mono); font-size: 12px; line-height: 1.65; color: #B0B6BE; margin-bottom: 10px; }
+  .disclaimer-body p:last-child { margin-bottom: 0; }
+  .disclaimer-body p strong { color: var(--text); }
+  .disclaimer-body p em { color: var(--accent); font-style: normal; }
+  .bags-status { font-family: 'Oswald', sans-serif; font-size: 13px; color: var(--orange); letter-spacing: 2px; margin-bottom: 12px; font-weight: 700; }
+  .bags-creator { padding: 10px 14px; background: rgba(252,211,77,0.04); border: 1px solid rgba(252,211,77,0.2); border-radius: 10px; margin-bottom: 8px; }
+  .bags-creator a { color: var(--accent); text-decoration: none; font-weight: 700; }
+  .bags-creator a:hover { text-decoration: underline; }
+  .bags-creator-meta { font-family: var(--mono); font-size: 10px; color: var(--subtext); margin-top: 4px; word-break: break-all; }
+  .dbc-verified-marker { display: inline-block; padding: 2px 7px; background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.45); border-radius: 8px; font-family: 'Oswald', sans-serif; font-size: 9px; color: var(--green); letter-spacing: 1px; font-weight: 900; margin-left: 4px; }
+
+  /* Lifetime analysis panel */
+  .lifetime-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .lifetime-cell { background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)); border: 1px solid var(--border); border-radius: 10px; padding: 11px 13px; }
+  .lifetime-label { font-family: var(--mono); font-size: 9px; color: var(--subtext); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 4px; }
+  .lifetime-value { font-family: 'Oswald', sans-serif; font-size: 15px; color: var(--text); font-weight: 700; letter-spacing: 0.5px; }
+  .lifetime-value.bad { color: var(--red); }
+  .lifetime-value.warn { color: var(--amber); }
+  .lifetime-value.good { color: var(--green); }
+  .lifetime-value.muted { color: var(--subtext); font-size: 13px; font-weight: 400; }
+  .bonding-badge { display: inline-block; padding: 6px 12px; background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.35); border-radius: 14px; font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--green); letter-spacing: 1.5px; font-weight: 700; margin-top: 12px; margin-right: 8px; }
+  .creator-badge { display: block; padding: 10px 14px; border-radius: 10px; font-family: system-ui, sans-serif; font-size: 13px; letter-spacing: 0.3px; margin-top: 10px; line-height: 1.5; }
+  .creator-badge.creator-good { background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.3); color: #6EE7B7; }
+  .creator-badge.creator-warn { background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.3); color: #FCD34D; }
+  .creator-badge.creator-bad  { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3); color: #FCA5A5; }
+
+  /* Key events timeline */
+  .events-timeline { display: flex; flex-direction: column; position: relative; padding-left: 26px; }
+  .events-timeline::before { content: ''; position: absolute; left: 11px; top: 12px; bottom: 12px; width: 2px; background: linear-gradient(180deg, var(--accent), rgba(255,255,255,0.06)); }
+  .event-row { position: relative; padding: 11px 0; border-bottom: 1px dashed rgba(255,255,255,0.06); }
+  .event-row:last-child { border-bottom: none; }
+  .event-row::before { content: ''; position: absolute; left: -21px; top: 17px; width: 12px; height: 12px; border-radius: 50%; background: var(--card); border: 2px solid var(--accent); box-sizing: border-box; }
+  .event-row.event-GENESIS::before { background: var(--blue); border-color: var(--blue); }
+  .event-row.event-MINT_EVENT::before { background: var(--red); border-color: var(--red); }
+  .event-row.event-BURN_EVENT::before { background: var(--green); border-color: var(--green); }
+  .event-row.event-LARGE_TRANSFER::before { background: var(--amber); border-color: var(--amber); }
+  .event-time { font-family: var(--mono); font-size: 10px; color: var(--subtext); letter-spacing: 1px; margin-bottom: 4px; }
+  .event-type-label { font-family: 'Oswald', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; margin-bottom: 4px; }
+  .event-type-label.event-GENESIS { color: var(--blue); }
+  .event-type-label.event-MINT_EVENT { color: var(--red); }
+  .event-type-label.event-BURN_EVENT { color: var(--green); }
+  .event-type-label.event-LARGE_TRANSFER { color: var(--amber); }
+  .event-desc { font-size: 13px; color: #D1D5DB; line-height: 1.5; margin-bottom: 4px; word-break: break-word; }
+  .event-link { font-family: var(--mono); font-size: 10px; color: var(--blue); text-decoration: none; letter-spacing: 0.5px; }
+  .event-link:hover { text-decoration: underline; }
+
+  .mint-line { font-family: var(--mono); font-size: 11px; color: var(--subtext); margin-top: 4px; word-break: break-all; }
+  .pool-link { display: inline-block; margin-top: 8px; font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--blue); text-decoration: none; letter-spacing: 1px; }
+  .pool-link:hover { text-decoration: underline; }
+
+  .footer { text-align: center; margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--border); font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="home" href="/"><img src="/cluck-norris-logo.jpg" alt="" style="height:20px;width:20px;object-fit:cover;border-radius:50%;border:1px solid currentColor;vertical-align:middle;margin-right:6px;"/>← CLUCK NORRIS HOME</a>
+
+  <div class="header">
+    <div class="header-icon">🔬</div>
+    <div>
+      <div class="brand-mini">CLUCK NORRIS · FREE TOOL</div>
+      <h1>TOKEN AUTOPSY</h1>
+      <p>AI FORENSIC AGENT · LEARN FROM THE CORPSE</p>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div class="hero-tag">PASTE ANY SOLANA MINT</div>
+    <div class="hero-title">A forensic post-mortem from Cluck Norris.</div>
+    <div class="hero-sub">The AI agent investigates on-chain state and DexScreener history, classifies what happened — LP rug, honeypot, quiet fade, mint-dilution risk, or alive — and writes a teaching case study from the verified facts. Free, public, non-custodial. Works on any Solana token.</div>
+  </div>
+
+  <details class="edu">
+    <summary>HOW THIS WORKS</summary>
+    <div class="edu-body">
+      <p>Paste a Solana token mint. The autopsy then runs <strong>~10 forensic phases</strong> in parallel and weaves them into one report. The depth is unusual for a free tool — most of what you'll see below isn't on DexScreener or Solscan.</p>
+
+      <p><strong>What we pull from the public chain (via Helius):</strong></p>
+      <ul>
+        <li><strong>Current market state</strong> — price, liquidity, 24h volume, buy/sell counts, FDV, market cap (via DexScreener + GeckoTerminal fallback for thinly-traded pools).</li>
+        <li><strong>Authorities</strong> — is the mint authority revoked? Freeze authority revoked? These are the on-chain controls a creator could still pull.</li>
+        <li><strong>Top 100 holders</strong> — paginated holder walk, then for each: who owns the token account, are they on the ed25519 curve (human wallet) or off-curve (PDA — LP, lock, vesting, program)? We classify every single position.</li>
+        <li><strong>Locked-supply measurement</strong> — every holder whose token-account authority is owned by a known locker program (<em>Jupiter Lock</em>, <em>Streamflow</em>) or a self-owned permanent lock is summed into a real locked-supply total. This is the authoritative "how much is actually locked right now" number — it reads current balances in the locker PDAs, so it doesn't miss locks that happened outside our signature-walk window. (For CLKN it's 145M across a dozen Jupiter Lock accounts — the creator-wallet trace alone only caught 60M of direct deposits.)</li>
+        <li><strong>Lifetime signature walk</strong> — up to 5,000 signatures going back to the mint. We sample across launch, middle, and recent activity to surface key events (mint events, burns, large transfers, dust drops, airdrops, lock deposits).</li>
+        <li><strong>Historical price chart</strong> — GeckoTerminal daily candles to find peak price, peak market cap, drawdown from ATH, and price-trend direction. Used to honestly distinguish "in a drawdown" from "dead."</li>
+        <li><strong>Multi-window volume</strong> — we sum 24h / 48h / 7d / 30d volume from those same daily candles. A token can look dead on a quiet 24h but be clearly trading across the week — so a healthy 7d total can promote a verdict from UNCLEAR to ALIVE instead of mislabeling a slow day as a death.</li>
+        <li><strong>Per-wallet P&L ledger</strong> — for every wallet that ever traded the token (top 100 by USD-priced flow): how much they bought, sold, locked, transferred, who made money, who got rekt, who cashed out clean. Reconstructed from up to 2,500 enhanced transactions.</li>
+        <li><strong>Acquisition-source attribution</strong> — for every top holder, did they BUY (via DEX), receive a TRANSFER (from another wallet), or get tokens MINTED? If transfer, who sent them — and was that source a verified team wallet, a known DEX router, a CEX hot wallet, or a generic distributor?</li>
+        <li><strong>Hidden-exit detection</strong> — the deep-dive forensic check: a wallet that distributed tokens to many other wallets which then dumped them. Classic exit-obfuscation move; we surface these explicitly so they're not hidden by a clean top-seller scan.</li>
+      </ul>
+
+      <p><strong>What we pull from launchpad APIs (when applicable):</strong></p>
+      <ul>
+        <li><strong>Bags.fm</strong> — official creators (with Twitter handles), royalty share, lifetime fees claimed, claim event history, claim-stats per claimer, DBC bonding-curve pool address. We walk the DBC pool's transactions to identify <em>verified</em> bonding-curve buyers and tag them in the top-100. On Bags tokens the on-chain genesis-tx fee payer is a shared platform launcher, not the team — we always pull the real creator from the Bags API.</li>
+        <li><strong>Pump.fun</strong> — pre-graduation creator + BC buyers (same trick as Bags). Captures price history GeckoTerminal can't see (pre-graduation).</li>
+      </ul>
+
+      <p><strong>Independent cross-verification:</strong></p>
+      <ul>
+        <li><strong>Jupiter v2 search</strong> — independent holder count, market data, audit (mint/freeze status from Jupiter's POV, top-holder %), organic trade score, and <em>devMigrations</em> count. When the on-chain "dev" wallet shows 1,000+ migrations, that's definitive proof it's a platform launcher, not the project team.</li>
+        <li><strong>Solana Tracker</strong> — an independent indexer that computes the creator wallet's full position server-side: lifetime buy/sell counts, USD invested, cost basis, current value, realized/unrealized PnL and ROI. We show their numbers side-by-side with our own on-chain trace inside the buy-back card, with one of three badges:
+          <ul>
+            <li><strong>✓ AGREES</strong> — both sources match within tolerance. Strongest confidence.</li>
+            <li><strong>✓ ST SEES MORE</strong> — their indexer captured more buys than our (deliberately conservative, rate-limit-capped) signature walk, while both agree on zero sells. Not a red flag — just a completeness gap, and their fuller count is the better number.</li>
+            <li><strong>⚠ DIVERGES</strong> — the numbers conflict in a way worth a manual look (e.g. they caught sells we didn't). Only this case gets the warning color.</li>
+          </ul>
+          Solana Tracker also returns <em>identity tags</em> that independently classify the creator and every top holder as <em>developer / pool / arbitrage / exchange / bot / KOL</em> — a second source confirming who the real creator is, separate from the Bags/Pump API. When our raw trace gets rate-limited but Solana Tracker has the complete figures, the report says so plainly rather than crying "partial."</li>
+        <li><strong>Two sources beat one.</strong> The whole point of cross-verification is that we don't ask you to trust a single number. Locked supply is confirmed by holder-PDA balances <em>and</em> the creator's traced lock deposits; creator activity is confirmed by our Helius trace <em>and</em> Solana Tracker's indexer; creator identity is confirmed by the launchpad API <em>and</em> Solana Tracker's developer tag. Where sources agree, we say so. Where they don't, we show both and tell you which is more complete.</li>
+      </ul>
+
+      <p><strong>What we deliberately refuse to do:</strong></p>
+      <ul>
+        <li>Call any wallet a "team wallet" or "creator" without API confirmation. On-chain patterns alone are ambiguous — the same distribution pattern can be team migration, community airdrop, routine operations, or coordinated dump prep.</li>
+        <li>Trust the on-chain genesis-tx fee payer as "the dev" for Bags/Pump tokens. DexScreener and Solscan do; we don't.</li>
+        <li>Invent numbers, fabricate timeframes, or characterize intent. The AI narration only narrates the verified facts we hand it.</li>
+      </ul>
+
+      <p><strong>Reading the verdict:</strong></p>
+      <ul>
+        <li>🔬 <strong>TOKEN AUTOPSY</strong> — dead or dying tokens. "Cause of Death" framing.</li>
+        <li>📉 <strong>AUTOPSY ON STANDBY</strong> — alive but in a drawdown or showing warning signs. Health assessment framing.</li>
+        <li>🚫 <strong>AUTOPSY CANCELED</strong> — patient is alive and trading. Full health checkup framing instead.</li>
+      </ul>
+
+      <p>Total runtime is typically 20–45 seconds. The data is honest about its own limits — when a phase fails (Helius rate limit, Bags API timeout, missing GeckoTerminal coverage), the response includes a <em>scanQuality</em> block so you can see what was complete vs. partial.</p>
+
+      <p><strong>Honest caveats:</strong> the chain shows <strong>what</strong> happened, not <strong>why</strong>. Tokens that look bad on-chain sometimes turn out fine; tokens that look fine sometimes turn out bad. Use this as a detailed research guide, not a verdict — see the "How to read this report" card at the bottom of every result for the full framing.</p>
+    </div>
+  </details>
+
+  <div class="card">
+    <div class="card-title">TOKEN MINT</div>
+    <input class="token-input" id="mintInput" placeholder="Paste any Solana token mint address..." autocomplete="off" spellcheck="false"/>
+    <button class="run-btn" id="runBtn">🔬 RUN AUTOPSY</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">SEE IT IN ACTION</div>
+    <p style="font-size:12px;color:var(--subtext);line-height:1.6;margin:0 0 12px">No mint handy? Tap a well-known Solana token to watch a full autopsy run on real on-chain data. Neutral examples — each report's own verdict does the talking, not us.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      <button type="button" class="sample-btn" onclick="tryMint('DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263')">🐶 BONK</button>
+      <button type="button" class="sample-btn" onclick="tryMint('JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN')">🪐 JUP</button>
+      <button type="button" class="sample-btn" onclick="tryMint('EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm')">🧢 WIF</button>
+    </div>
+  </div>
+  <style>
+    .sample-btn { background: rgba(255,255,255,0.04); border: 1px solid var(--border); color: var(--text); font-family: 'Oswald', sans-serif; font-size: 13px; font-weight: 600; letter-spacing: 1px; padding: 9px 16px; border-radius: 8px; cursor: pointer; transition: all 0.15s; }
+    .sample-btn:hover { background: rgba(217,119,6,0.15); border-color: var(--orange); }
+  </style>
+
+  <div class="err" id="errBox"></div>
+
+  <div class="loading" id="loadingBox">
+    <div class="loading-spinner">🔬</div>
+    <div class="loading-title">CLUCK INVESTIGATING</div>
+    <div class="loading-stage" id="loadingStage">Pulling on-chain state…</div>
+  </div>
+
+  <div class="result" id="resultBox">
+    <div id="scanQualityBanner" style="display:none;"></div>
+    <div class="verdict" id="verdictBox">
+      <div class="verdict-icon" id="verdictIcon">💀</div>
+      <div class="verdict-label" id="verdictLabel">—</div>
+      <div class="verdict-sub" id="verdictSub"></div>
+      <div class="verdict-token" id="verdictToken">—</div>
+    </div>
+
+    <div id="reportActions" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:-2px 0 14px">
+      <button type="button" class="sample-btn" id="copySummaryBtn">📋 Copy summary</button>
+      <button type="button" class="sample-btn" id="exportJsonBtn">⬇ Export JSON</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">KEY FACTS</div>
+      <div class="facts-grid" id="factsGrid"></div>
+      <div id="volumeWindows" style="display:none;margin-top:14px;">
+        <div style="font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.5px;color:var(--subtext);margin-bottom:6px;">VOLUME — MULTI-WINDOW CONTEXT</div>
+        <div class="facts-grid" id="volumeWindowsGrid"></div>
+        <div id="volumeWindowsNote" style="margin-top:6px;font-size:10px;color:var(--subtext);font-style:italic;"></div>
+      </div>
+      <a class="pool-link" id="poolLink" target="_blank" rel="noreferrer" style="display:none">↗ VIEW TOP POOL ON DEXSCREENER</a>
+    </div>
+
+    <div class="card bags-card" id="bagsCard">
+      <div class="card-title">🟠 BAGS.FM LAUNCHPAD — VERIFIED DATA</div>
+      <div id="bagsContent"></div>
+    </div>
+
+    <div class="card bags-about-card" id="bagsAboutCard">
+      <div class="card-title">🟠 ABOUT BAGS.FM — READ BEFORE INTERPRETING THIS REPORT</div>
+      <div class="bags-about-body">
+        <p><strong>Bags.fm</strong> is a Solana-native token launch platform that runs new tokens through a bonding-curve mint before graduating them to a public liquidity pool (DAMM v2). The team behind a Bags token registers their wallet and social handle on-chain through Bags, which is how this autopsy can verify the project's official creator wallet, fee royalty share, and lifetime fee claims — all via Bags's public API rather than guesswork.</p>
+        <p><strong>The quirk you should know about:</strong> on Solana, the wallet that pays for the genesis transaction is what most tools (DexScreener, Solscan, etc.) call "the dev." For Bags tokens, that's the Bags platform's shared launcher wallet — the same address that has signed thousands of unrelated launches. We pull the actual team wallet from the Bags API instead, and Solana Tracker's indexer independently classifies the same wallet as the token's <em>creator</em> and <em>pool deployer</em>, so the verified-creator label here is backed by two sources, not one.</p>
+        <p><strong>Where Cluck Norris stands:</strong> CLKN launched on Bags. We're fond of the platform, we operate inside it, and we built this autopsy partly to bring honest education and recognition to Bags as the platform grows. The deeper the autopsy gets at correctly reading Bags tokens, the better the signal for everyone using them — buyers, creators, and the platform.</p>
+        <div class="bags-about-links">
+          <a class="bags-about-link" href="/bags" target="_blank" rel="noreferrer">🟠 LEARN MORE ABOUT BAGS</a>
+          <a class="bags-about-link" href="https://bags.fm" target="_blank" rel="noreferrer">↗ VISIT BAGS.FM</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="card pump-card" id="pumpCard">
+      <div class="card-title">🟢 PUMP.FUN LAUNCHPAD — VERIFIED DATA</div>
+      <div id="pumpContent"></div>
+    </div>
+
+    <!-- Jupiter Cross-Verification + Lifetime Analysis cards removed
+         2026-05-21: redundant with Key Facts + Solana Tracker cross-check
+         + buy-back card's creator summary. Jupiter data is still fetched
+         server-side and drives the Cluck Score's Jupiter factor; the
+         platform-launcher warning is no longer shown here because Bags/
+         Pump verification already covers the same ground. The creator
+         summary that used to live in the lifetime card is now rendered
+         inside the buy-back panel. -->
+
+    <div class="card" id="pumpFeesCard" style="display:none;border-color:rgba(16,185,129,0.3);">
+      <div class="card-title">🟢 PUMP.FUN CREATOR FEES</div>
+      <div id="pumpFeesContent"></div>
+    </div>
+
+    <div class="card" id="lockedSupplyCard" style="display:none;border-color:rgba(16,185,129,0.3);">
+      <div class="card-title">🔒 LOCKED SUPPLY — WHO LOCKED, VIA WHAT PLATFORM</div>
+      <div id="lockedSupplyContent"></div>
+    </div>
+
+    <div class="card" id="redFlagsCard">
+      <div class="card-title">RED FLAGS</div>
+      <ul class="red-flags" id="redFlags"></ul>
+    </div>
+
+    <div class="card" id="holdersCard">
+      <div class="card-title">TOP 100 HOLDERS — FORENSIC PANEL</div>
+      <div class="holders-summary" id="holdersSummary"></div>
+      <div class="holders-list" id="holdersList"></div>
+      <button class="expand-btn" id="holdersExpandBtn" style="display:none">SHOW ALL HOLDERS →</button>
+    </div>
+
+    <div class="card" id="distributorsCard">
+      <div class="card-title">DISTRIBUTION SOURCES — WALLETS THAT SENT TOKENS TO MULTIPLE TOP HOLDERS</div>
+      <div class="distributors-list" id="distributorsList"></div>
+    </div>
+
+    <div class="card hidden-exit-card" id="hiddenExitCard">
+      <div class="card-title">🚨 HIDDEN-EXIT PATTERNS — TRANSFERRED, THEN THE RECIPIENTS DUMPED</div>
+      <div class="hidden-exit-blurb">Wallets that distributed tokens to multiple other wallets which then sold most or all of what they received. The most common exit-obfuscation move — the source looks clean on a sell scan because the actual selling happens from the recipients.</div>
+      <div class="hidden-exit-list" id="hiddenExitList"></div>
+    </div>
+
+    <div class="card pnl-card" id="pnlCard">
+      <div class="card-title">💰 P&L LEDGER — WHO MADE IT, WHO GOT REKT</div>
+      <div class="pnl-meta" id="pnlMeta"></div>
+      <div class="pnl-tabs" id="pnlTabs">
+        <div class="pnl-tab active" data-tab="topSellers">TOP 25 SELLERS</div>
+        <div class="pnl-tab" data-tab="topBuyers">TOP 25 BUYERS</div>
+        <div class="pnl-tab" data-tab="madeMoney">MADE MONEY</div>
+        <div class="pnl-tab" data-tab="gotWrecked">GOT REKT</div>
+        <div class="pnl-tab" data-tab="tookTheMoney">TOOK THE MONEY 🏃</div>
+        <div class="pnl-tab" data-tab="projectWallets">💸 PROJECT WALLETS</div>
+      </div>
+      <div class="pnl-list" id="pnlList"></div>
+    </div>
+
+    <div class="card" id="eventsCard">
+      <div class="card-title">KEY EVENTS TIMELINE</div>
+      <div class="events-timeline" id="eventsTimeline"></div>
+    </div>
+
+    <div class="narrative" id="narrativeCard">
+      <div class="narrative-tag">PROFESSOR NORRIS · CASE STUDY</div>
+      <div class="narrative-text" id="narrativeText"></div>
+    </div>
+
+    <div class="card" id="lessonsCard">
+      <div class="card-title">ASSIGNED READING</div>
+      <div class="lessons-row" id="lessonsRow"></div>
+    </div>
+
+    <div class="card disclaimer-card" id="disclaimerCard">
+      <div class="card-title">📜 HOW TO READ THIS REPORT</div>
+      <div class="disclaimer-body">
+        <p>Cluck reports what's on the chain — <strong>not why people do things</strong>. Transfers, locks, trades, and concentration patterns describe <em>what happened</em>, not <em>intent</em>. The same on-chain shape can come from a team migration, a community airdrop, routine operations, or a coordinated dump — and on-chain data alone usually can't tell them apart.</p>
+        <p>Where we can prove something — Bags/Pump-verified creator, walked bonding-curve buyers, on-chain authority status, Solana Tracker identity tags, Jupiter cross-verification — we <strong>label it as verified</strong> and tell you which sources agree. Everywhere else we describe the behavior in neutral language and refuse to claim intent.</p>
+        <p>Use this as a <strong>detailed research guide, not a verdict</strong>. Things that look bad on-chain sometimes turn out fine, and things that look fine sometimes turn out bad. Always do your own research before treating any wallet as friend or villain.</p>
+      </div>
+    </div>
+
+    <!-- ── DIG DEEPER — Premium Layer 2, run on demand ─────────────────── -->
+    <div class="card" id="digDeeperCard" style="border-color:rgba(139,92,246,0.45);background:rgba(139,92,246,0.06)">
+      <div class="card-title">🔬 DIG DEEPER — PREMIUM DEEP TRACE</div>
+      <div style="font-family:'Oswald',sans-serif;font-size:13px;color:var(--subtext);line-height:1.65;margin-bottom:12px">
+        Got what you need from the free report above? Great — most cases end here. To follow the money and the people — prove downstream dumps, map <strong>net</strong> cash-out flow (fee-claim floats &amp; routing netted out), pull the creator's full launch track record, and rank every wallet's P&amp;L — run the premium deep trace. It's a heavy 20–70s scan, so it only runs when you ask. <strong style="color:var(--accent2,#a78bfa)">Beta access: hold 2,000,000+ CLKN.</strong>
+      </div>
+      <button class="run-btn" id="digDeeperBtn" style="background:linear-gradient(135deg,#8b5cf6,#6d28d9)">🔬 DIG DEEPER →</button>
+      <div id="digDeeperHost" style="margin-top:14px"></div>
+      <div style="margin-top:8px;font-size:11px;color:var(--subtext)">
+        <a id="digDeeperFull" href="/premium" target="_blank" rel="noreferrer" onclick="this.href='/premium?mint='+encodeURIComponent((document.getElementById('mintInput').value||'').trim())" style="color:var(--subtext)">Prefer a full page (or having trouble connecting in-frame)? Open the deep trace ↗</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">CLUCK NORRIS · TOKEN AUTOPSY · FREE PUBLIC TOOL</div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+// Loading messages cycle every ~1.8s. Keep them varied and reflective of
+// the real pipeline (holder classification, locker supply, Solana Tracker
+// cross-check) so a 30–45s run doesn't show the same 6 lines on repeat.
+const stages = [
+  "Pulling on-chain mint state…",
+  "Checking mint & freeze authority…",
+  "Walking the top 100 holders…",
+  "Sorting humans from LPs, lockers & program accounts…",
+  "Measuring locked supply across Jupiter Lock & Streamflow…",
+  "Scanning DexScreener pools for liquidity & price history…",
+  "Tallying multi-window volume — 24h / 7d / 30d…",
+  "Rebuilding the per-wallet P&L ledger…",
+  "Tracing the creator wallet's buys, sells & locks…",
+  "Cross-verifying the creator against Solana Tracker's indexer…",
+  "Checking Bags / Pump.fun for the verified creator…",
+  "Hunting for hidden-exit distribution patterns…",
+  "Tallying the red flags…",
+  "Handing the verified facts to Professor Norris…",
+  "Writing up the case study…",
+];
+let stageTimer = null;
+
+function shortMint(m) { return m.slice(0, 4) + "…" + m.slice(-4); }
+// Escape API-supplied strings (token symbol/name, social handles, server-built
+// flag/narrative text) before they enter innerHTML — token metadata is
+// attacker-controlled, so an unescaped "<img onerror=…>" symbol/handle would be
+// XSS. Escapes quotes too, so it's safe in attribute context.
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// Only allow http(s) URLs in href — blocks javascript:/data: schemes from a
+// token's attacker-set social links. Returns "#" for anything else.
+function safeUrl(u){ const s=String(u==null?"":u).trim(); return /^https?:\/\//i.test(s) ? esc(s) : "#"; }
+function fmtUsd(n) {
+  if (n === null || n === undefined || isNaN(n)) return "—";
+  if (n === 0) return "$0";
+  if (n < 0.01) return "<$0.01";
+  if (n < 1000) return "$" + n.toFixed(2);
+  if (n < 1_000_000) return "$" + (n / 1000).toFixed(1) + "K";
+  if (n < 1_000_000_000) return "$" + (n / 1_000_000).toFixed(2) + "M";
+  return "$" + (n / 1_000_000_000).toFixed(2) + "B";
+}
+function fmtPrice(n) {
+  if (n === null || n === undefined || isNaN(n)) return "—";
+  if (n === 0) return "$0";
+  if (n < 0.000001) return "$" + n.toExponential(2);
+  if (n < 0.01) return "$" + n.toFixed(6);
+  if (n < 1) return "$" + n.toFixed(4);
+  return "$" + n.toFixed(2);
+}
+function fmtSupply(n) {
+  if (n === null || n === undefined || isNaN(n)) return "—";
+  if (n < 1000) return n.toFixed(0);
+  if (n < 1_000_000) return (n / 1000).toFixed(1) + "K";
+  if (n < 1_000_000_000) return (n / 1_000_000).toFixed(2) + "M";
+  if (n < 1_000_000_000_000) return (n / 1_000_000_000).toFixed(2) + "B";
+  return (n / 1_000_000_000_000).toFixed(2) + "T";
+}
+
+function startLoadingStages() {
+  let i = 0;
+  $("loadingStage").textContent = stages[0];
+  stageTimer = setInterval(() => {
+    i = (i + 1) % stages.length;
+    const el = $("loadingStage");
+    el.style.opacity = 0;
+    setTimeout(() => { el.textContent = stages[i]; el.style.opacity = 1; }, 200);
+  }, 1800);
+}
+function stopLoadingStages() {
+  if (stageTimer) { clearInterval(stageTimer); stageTimer = null; }
+}
+
+function showErr(msg) {
+  $("errBox").textContent = "⚠ " + msg;
+  $("errBox").classList.add("show");
+}
+function clearErr() { $("errBox").classList.remove("show"); }
+
+async function runAutopsy() {
+  const mint = $("mintInput").value.trim();
+  if (!mint || mint.length < 32) {
+    showErr("That doesn't look like a valid Solana mint address.");
+    return;
+  }
+  clearErr();
+  $("resultBox").classList.remove("show");
+  $("loadingBox").classList.add("show");
+  $("runBtn").disabled = true;
+  startLoadingStages();
+
+  try {
+    const res = await fetch("/api/autopsy?mint=" + encodeURIComponent(mint));
+    const data = await res.json();
+    stopLoadingStages();
+    $("loadingBox").classList.remove("show");
+    $("runBtn").disabled = false;
+
+    if (!data.success) {
+      showErr(data.error || "Autopsy failed.");
+      return;
+    }
+    render(data);
+    $("resultBox").classList.add("show");
+    $("resultBox").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (e) {
+    stopLoadingStages();
+    $("loadingBox").classList.remove("show");
+    $("runBtn").disabled = false;
+    showErr("Network or server error: " + e.message);
+  }
+}
+
+let LAST_REPORT = null;
+function render(data) {
+  LAST_REPORT = data;
+  // Scan quality banner — honest "Cluck needs more time" signal when any
+  // phase came back partial / rate-limited. Best-observed cache fills the
+  // gaps in numbers, but the user should still know when a run was degraded
+  // so they can re-run for cleaner data.
+  const sq = data.scanQuality || {};
+  const sqBanner = $("scanQualityBanner");
+  if (sq.qualityLabel && sq.qualityLabel !== "FULL" && sq.qualityMessage) {
+    const isDegraded = sq.qualityLabel === "DEGRADED";
+    // BACKFILLED = raw trace was rate-limited but Solana Tracker supplied the
+    // complete headline numbers. That's reassuring, not cautionary — render
+    // it green/informational instead of the amber "partial" warning.
+    const isBackfilled = sq.qualityLabel === "BACKFILLED";
+    const bg = isDegraded ? "rgba(239,68,68,0.10)" : isBackfilled ? "rgba(16,185,129,0.08)" : "rgba(245,158,11,0.08)";
+    const border = isDegraded ? "rgba(239,68,68,0.5)" : isBackfilled ? "rgba(16,185,129,0.45)" : "rgba(245,158,11,0.45)";
+    const color = isDegraded ? "#FCA5A5" : isBackfilled ? "#6EE7B7" : "#FCD34D";
+    const icon = isDegraded ? "⚠" : isBackfilled ? "✓" : "⏳";
+    const title = isDegraded ? "CLUCK NEEDS MORE TIME — DEGRADED RUN"
+      : isBackfilled ? "HEADLINE NUMBERS BACKFILLED FROM SOLANA TRACKER"
+      : "PARTIAL CAPTURE — CLEAN ENOUGH";
+    sqBanner.style.display = "block";
+    sqBanner.innerHTML = `<div style="background:${bg};border:1px solid ${border};border-radius:10px;padding:12px 16px;margin-bottom:14px;">
+      <div style="font-family:'Oswald',sans-serif;font-size:12px;letter-spacing:2px;color:${color};font-weight:700;margin-bottom:6px;">${icon} ${title}</div>
+      <div style="font-family:var(--mono);font-size:12px;line-height:1.55;color:#D1D5DB;">${sq.qualityMessage}${(sq.usedBestObservedCache && !isBackfilled) ? ' <strong style="color:var(--accent);">Numbers shown are the highest values observed across runs (best-observed cache).</strong>' : ''}</div>
+      ${isDegraded ? '<button onclick="document.getElementById(\'runBtn\').click()" style="margin-top:10px;background:rgba(239,68,68,0.18);border:1px solid rgba(239,68,68,0.5);color:#FCA5A5;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;font-weight:700;padding:8px 16px;border-radius:6px;cursor:pointer;">↻ RE-RUN AUTOPSY</button>' : ''}
+    </div>`;
+  } else {
+    sqBanner.style.display = "none";
+    sqBanner.innerHTML = "";
+  }
+  // Verdict banner — reframes itself based on reportMode so we don't call a
+  // healthy token's report an "autopsy" with morbid framing. Same depth,
+  // honest tone.
+  const v = data.verdict;
+  const box = $("verdictBox");
+  box.className = "verdict " + (v.severity || "UNCLEAR");
+  // Server-driven headline + subhead override (AUTOPSY CANCELED, etc.) when
+  // present; otherwise fall back to the icon + verdict label.
+  if (data.reportHeadline && data.reportMode && data.reportMode !== "autopsy") {
+    // Big reframe — strip the icon up to a single emoji, push the headline
+    // into the label slot, and use verdict-sub for the explanation.
+    const m = data.reportHeadline.match(/^(\p{Emoji}+)\s*(.*)$/u);
+    $("verdictIcon").textContent = m ? m[1] : (v.icon || "✅");
+    $("verdictLabel").textContent = m ? m[2] : data.reportHeadline;
+    $("verdictSub").textContent = data.reportSubhead || v.label || "";
+  } else {
+    $("verdictIcon").textContent = v.icon || "❓";
+    $("verdictLabel").textContent = v.label || "—";
+    $("verdictSub").textContent = "";
+  }
+  $("verdictToken").textContent = `${data.symbol || "?"} · ${data.name || ""} · ${shortMint(data.mint)}`;
+  // Update the page hero copy too so the page title matches the framing.
+  const hero = document.querySelector(".hero-title");
+  if (hero) {
+    if (data.reportMode === "health-checkup") hero.textContent = "A full health checkup from Cluck Norris.";
+    else if (data.reportMode === "health-assessment") hero.textContent = "A health assessment from Cluck Norris.";
+    else hero.textContent = "A forensic post-mortem from Cluck Norris.";
+  }
+
+  // Facts grid
+  const f = data.facts || {};
+  const facts = [];
+  facts.push({ label: "Symbol", value: f.symbol || "—" });
+  facts.push({ label: "Age (days)", value: f.ageDays !== null && f.ageDays !== undefined ? String(f.ageDays) : "—" });
+  facts.push({ label: "Price", value: fmtPrice(f.priceUsd) });
+  facts.push({ label: "Market cap", value: fmtUsd(f.marketCap) });
+  facts.push({ label: "FDV", value: fmtUsd(f.fdv) });
+  facts.push({ label: "Total supply", value: fmtSupply(f.totalSupply) });
+  facts.push({ label: "Pool count", value: String(f.poolCount || 0) });
+  const liqCls = f.totalLiqUsd === 0 ? "bad" : (f.totalLiqUsd < 500 ? "bad" : (f.totalLiqUsd < 5000 ? "warn" : "good"));
+  facts.push({ label: "Total liquidity", value: fmtUsd(f.totalLiqUsd), cls: liqCls });
+  // LP lock/burn — can the pool be pulled? (classic rug vector)
+  if (data.lpStatus) {
+    const ls = data.lpStatus;
+    const lpVal = ls.status === "burned" ? "BURNED ✅"
+      : ls.status === "curve" ? "ON CURVE 🔒"
+      : ls.status === "distributed" ? `${ls.meaningfulPools || ls.poolCount}+ pools — DISTRIBUTED`
+      : ls.status === "na" ? "N/A — concentrated LP"
+      : ls.status === "unlocked" ? `${Math.round(ls.lpBurnPct)}% — UNLOCKED ⚠️`
+      : ls.status === "partial" ? `${Math.round(ls.lpBurnPct)}% locked`
+      : "Unknown";
+    const lpCls = (ls.status === "burned" || ls.status === "curve") ? "good"
+      : ls.status === "unlocked" ? "bad"
+      : ls.status === "partial" ? "warn" : "";   // distributed / na / unknown → neutral, never red
+    facts.push({ label: "LP locked", value: lpVal, cls: lpCls, hint: ls.label || "" });
+  }
+  // CEX presence — known exchange custody among the true top holders = a legitimacy signal.
+  if (data.cexPresence && Array.isArray(data.cexPresence.exchanges) && data.cexPresence.exchanges.length) {
+    const ex = data.cexPresence.exchanges;
+    const shown = ex.slice(0, 4).join(", ") + (ex.length > 4 ? ` +${ex.length - 4} more` : "");
+    const sharePct = data.cexPresence.top10Share ? Math.round(data.cexPresence.top10Share * 100) : 0;
+    facts.push({ label: "CEX presence", value: shown + " ✅", cls: "good",
+      hint: `Listed / custodied by ${ex.length} exchange${ex.length > 1 ? "s" : ""}: ${ex.join(", ")}. ${sharePct ? `~${sharePct}% of supply sits in exchange custody. ` : ""}Exchange listing clears CEX due diligence and adds off-chain order-book liquidity our on-chain view can't see. These holdings are custodial (many users), not single-entity concentration.` });
+  }
+  // Creator verification — Bags only shows a social identity for verified-linked wallets.
+  if (data.creatorVerification) {
+    const cv = data.creatorVerification;
+    if (cv.status === "verified" && Array.isArray(cv.handles) && cv.handles.length) {
+      facts.push({ label: "Creator", value: cv.handles.map(h => "@" + h.username).join(", ") + " ✅", cls: "good",
+        hint: `Creator identity is verified on Bags (${cv.handles[0].provider}). A named, verified human is linked to the fee wallet — Bags-confirmed, not an on-chain guess. An accountability signal.` });
+    } else if (cv.status === "anonymous") {
+      facts.push({ label: "Creator", value: "Anonymous", cls: "warn",
+        hint: "Bags token, but no verified social is linked to the creator wallet — an anonymous fee earner. Not inherently bad (many legit devs stay anon), but there's no verified identity to hold accountable." });
+    }
+  }
+  // Volume coloring scales with size: a flat dollar threshold can't compare a
+  // microcap to a multi-million-dollar token. When we know the market cap, color
+  // 24h volume by TURNOVER (vol/mcap); otherwise fall back to absolute dollars.
+  const volCls = f.turnover != null
+    ? (f.turnover >= 0.01 ? "good" : (f.turnover >= 0.001 ? "warn" : "bad"))
+    : (f.totalVol24h < 50 ? "bad" : (f.totalVol24h < 500 ? "warn" : "good"));
+  facts.push({ label: "24h volume", value: fmtUsd(f.totalVol24h), cls: volCls,
+    hint: f.turnover != null ? `${(f.turnover * 100).toFixed(2)}% of market cap traded in 24h (turnover). Judged relative to size — what's healthy for a microcap is near-dead for a large cap.` : "" });
+  if (f.turnover != null) {
+    const tCls = f.turnover >= 0.01 ? "good" : (f.turnover >= 0.001 ? "warn" : "bad");
+    facts.push({ label: "24h turnover", value: (f.turnover * 100).toFixed(2) + "%", cls: tCls,
+      hint: "24h volume ÷ market cap. ≥1% = actively traded; 0.1–1% = modest; <0.1% = thin for its size. The size-fair way to read volume." });
+  }
+  // Price-change cells — color-coded: green up >5%, red down >5%, muted in between/missing.
+  const pcCls = (p) => (p === null || p === undefined) ? "muted" : (p > 5 ? "good" : (p < -5 ? "bad" : ""));
+  const pcFmt = (p) => (p === null || p === undefined) ? "—" : (p >= 0 ? "+" : "") + Number(p).toFixed(1) + "%";
+  facts.push({ label: "1h change",  value: pcFmt(f.priceChangeH1),  cls: pcCls(f.priceChangeH1) });
+  facts.push({ label: "6h change",  value: pcFmt(f.priceChangeH6),  cls: pcCls(f.priceChangeH6) });
+  facts.push({ label: "24h change", value: pcFmt(f.priceChangeH24), cls: pcCls(f.priceChangeH24) });
+  facts.push({ label: "24h buys / sells", value: `${f.buys24h || 0} / ${f.sells24h || 0}` });
+  const mintCls = f.mintAuthorityRevoked ? "good" : "bad";
+  facts.push({ label: "Mint authority", value: f.mintAuthorityRevoked ? "REVOKED" : "ACTIVE", cls: mintCls });
+  const freezeCls = f.freezeAuthorityRevoked ? "good" : "warn";
+  facts.push({ label: "Freeze authority", value: f.freezeAuthorityRevoked ? "REVOKED" : "ACTIVE", cls: freezeCls });
+  // Metadata mutability — capability + who holds it, framed neutrally (mutable
+  // isn't inherently bad; platform-held is standard, only non-platform = risk).
+  if (data.metadataStatus) {
+    const ms = data.metadataStatus;
+    const mv = ms.status === "immutable" ? "IMMUTABLE 🔒"
+      : ms.status === "mutable-platform" ? "Mutable (platform)"
+      : "MUTABLE ⚠️";
+    const mc = ms.status === "immutable" ? "good" : ms.status === "mutable-risk" ? "warn" : "";
+    facts.push({ label: "Metadata", value: mv, cls: mc });
+  }
+  // Token-2022 surfacing — only present for Token-2022 mints. The detailed
+  // warnings flow through the red-flags list; here we flag the standard and
+  // the transfer fee at a glance so a Token-2022 honeypot is obvious up top.
+  if (f.token2022 && f.token2022.isToken2022) {
+    const t22 = f.token2022;
+    facts.push({ label: "Token standard", value: t22.hasHoneypotExtension ? "TOKEN-2022 ⚠ HONEYPOT" : (t22.risks && t22.risks.length ? "TOKEN-2022 ⚠" : "TOKEN-2022"), cls: t22.hasHoneypotExtension ? "bad" : (t22.risks && t22.risks.length ? "warn" : "") });
+    if (t22.transferFeePct !== null && t22.transferFeePct !== undefined) {
+      const feeCls = t22.transferFeePct >= 90 ? "bad" : (t22.transferFeePct >= 10 ? "warn" : "");
+      facts.push({ label: "Transfer fee", value: t22.transferFeePct + "%", cls: feeCls });
+    }
+  }
+  if (f.top10Concentration !== null && f.top10Concentration !== undefined) {
+    const pct = f.top10Concentration * 100;
+    const concCls = pct > 70 ? "bad" : (pct > 40 ? "warn" : "good");
+    facts.push({ label: "Top-10 hold", value: pct.toFixed(0) + "%", cls: concCls });
+  }
+  $("factsGrid").innerHTML = facts.map(x =>
+    `<div class="fact"${x.hint ? ` title="${esc(x.hint)}"` : ""}><div class="fact-label">${esc(x.label)}</div><div class="fact-value ${x.cls || ""}">${esc(x.value)}</div></div>`
+  ).join("");
+
+  // Multi-window volume — only render if GeckoTerminal candles were available.
+  // The verdict ladder uses 7d ≥ $700 to promote UNCLEAR → ALIVE, so this
+  // panel also explains *why* a verdict was upgraded above what 24h alone
+  // would justify.
+  const vw = data.priceHistory && data.priceHistory.volumeWindows;
+  if (vw) {
+    const fmtV = (n) => n >= 1000 ? `$${(n/1000).toFixed(1)}K` : `$${n.toFixed(2)}`;
+    const items = [
+      { label: "24h", value: fmtV(vw.vol24h || 0) },
+      { label: "48h", value: fmtV(vw.vol48h || 0) },
+      { label: "7d",  value: fmtV(vw.vol7d  || 0) },
+      { label: "30d", value: fmtV(vw.vol30d || 0) },
+    ];
+    $("volumeWindowsGrid").innerHTML = items.map(i =>
+      `<div class="fact"><div class="fact-label">${i.label}</div><div class="fact-value">${i.value}</div></div>`
+    ).join("");
+    // Explanatory note when the verdict was promoted on weekly volume alone.
+    const note = (vw.vol24h || 0) < 100 && (vw.vol7d || 0) >= 700
+      ? "Today is quiet but the weekly trade activity is healthy — token reads as ALIVE on multi-window context, not just 24h."
+      : "";
+    $("volumeWindowsNote").textContent = note;
+    $("volumeWindows").style.display = "block";
+  } else {
+    $("volumeWindows").style.display = "none";
+  }
+
+  // Pool link
+  if (f.topPair && f.topPair.url) {
+    const lnk = $("poolLink");
+    lnk.href = f.topPair.url;
+    lnk.style.display = "inline-block";
+  } else {
+    $("poolLink").style.display = "none";
+  }
+
+  // Red flags
+  const flags = data.redFlags || [];
+  if (flags.length === 0) {
+    $("redFlags").innerHTML = '<div class="no-flags">No structural red flags detected from the available data.</div>';
+  } else {
+    $("redFlags").innerHTML = flags.map(t => `<li>${esc(t)}</li>`).join("");
+  }
+
+  // Bags Launchpad panel — verified data when this is a Bags.fm token
+  const bi = data.bagsInfo;
+  if (bi && bi.isBagsToken) {
+    $("bagsCard").style.display = "block";
+    let bh = "";
+    bh += `<div class="bags-status">STATUS: ${esc((bi.status || "—").toUpperCase())}${bi.symbol ? " · " + esc(bi.symbol) : ""}</div>`;
+    if (Array.isArray(bi.officialCreators) && bi.officialCreators.length > 0) {
+      bh += `<div class="card-title" style="margin-bottom: 8px; margin-top: 4px;">VERIFIED CREATORS</div>`;
+      for (const c of bi.officialCreators) {
+        const social = c.provider === "twitter"
+          ? `<a href="https://twitter.com/${encodeURIComponent(c.username || "")}" target="_blank" rel="noreferrer">@${esc(c.username)}</a> on Twitter`
+          : `<a href="#">${esc(c.provider || "?")}: ${esc(c.username || "—")}</a>`;
+        const adminBadge = c.isAdmin ? ` <span class="badge badge-creator" style="font-size:9px;padding:2px 6px;">👑 ADMIN</span>` : "";
+        const royalty = c.royaltyBps ? ` · ${(c.royaltyBps / 100).toFixed(2)}% royalty` : "";
+        const walletShort = c.wallet ? c.wallet.slice(0,8) + "…" + c.wallet.slice(-6) : "—";
+        const walletLink = c.wallet ? `<a href="https://solscan.io/account/${c.wallet}" target="_blank" rel="noreferrer">${walletShort}</a>` : walletShort;
+        bh += `<div class="bags-creator">${social}${adminBadge}<div class="bags-creator-meta">${walletLink}${royalty}</div></div>`;
+      }
+    }
+    if (bi.dbcPoolKey) {
+      const dbcInTop = (data.topHolders || []).filter(h => h.dbcVerified).length;
+      bh += `<div class="lifetime-grid" style="margin-top: 12px;">`;
+      bh += `<div class="lifetime-cell"><div class="lifetime-label">DBC sigs walked</div><div class="lifetime-value">${(bi.dbcSignaturesScanned || 0).toLocaleString()}</div></div>`;
+      bh += `<div class="lifetime-cell"><div class="lifetime-label">DBC buyers found</div><div class="lifetime-value">${(bi.dbcBuyersIdentified || 0).toLocaleString()}</div></div>`;
+      bh += `<div class="lifetime-cell"><div class="lifetime-label">Verified in top 100</div><div class="lifetime-value good">${dbcInTop}</div></div>`;
+      bh += `</div>`;
+    }
+    // Buy-back activity panel — cross-references the verified creator's
+    // on-chain trade history (from walletPnl) to show whether they're
+    // actively recycling fees back into the token.
+    const cs = data.creatorStatus;
+    if (cs && cs.onChainActivity && (cs.onChainActivity.buyCount > 0 || cs.onChainActivity.sellCount > 0 || cs.onChainActivity.lockCount > 0 || cs.onChainActivity.transferOutCount > 0)) {
+      const oa = cs.onChainActivity;
+      const isBuyAndLock = cs.behaviorKind === "BUY_AND_LOCK";
+      const isActiveBB = cs.behaviorKind === "BUY_BACK_ACTIVE";
+      const headerLabel = isBuyAndLock
+        ? "🔄🔒 BUY-AND-LOCK ACTIVITY (VERIFIED)"
+        : isActiveBB
+        ? "🔄 BUY-BACK ACTIVITY (VERIFIED)"
+        : "CREATOR ON-CHAIN ACTIVITY";
+      bh += `<div class="card-title" style="margin-bottom: 8px; margin-top: 14px;">${headerLabel}</div>`;
+      // If multi-hop team network was detected, show NETWORK totals as the
+      // headline (creator + sub-distributors aggregated). Otherwise just
+      // show creator-only stats.
+      const tn = oa.teamNetwork;
+      const showBuys = tn ? tn.totalBuyCount : oa.buyCount;
+      const showSells = tn ? tn.totalSellCount : oa.sellCount;
+      const showLocks = tn ? tn.totalLockCount : oa.lockCount;
+      const showBoughtSol = tn ? tn.totalBoughtSol : (oa.boughtSol || 0);
+      // "Tokens locked" shows the authoritative total currently locked across
+      // all locker PDAs (holder classification) — falls back to traced
+      // deposits only if classification found nothing. "Lock deposits" below
+      // stays as the traced transaction count.
+      const tracedLocked = tn ? tn.totalLockedTokens : oa.lockedTokens;
+      const showLockedTokens = (oa.lockedTokensActual && oa.lockedTokensActual > 0)
+        ? Math.max(oa.lockedTokensActual, tracedLocked || 0)
+        : tracedLocked;
+      const showPctReinvested = tn ? tn.pctReinvestedNetwork : oa.pctReinvested;
+      const headlineLabel = tn && tn.walletCount > 1
+        ? `Team network (creator + ${tn.walletCount - 1} sub-wallet${tn.walletCount - 1 === 1 ? '' : 's'})`
+        : 'Creator wallet';
+      bh += `<div style="font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 1.5px; color: var(--subtext); margin-bottom: 6px;">SCOPE: ${headlineLabel.toUpperCase()}</div>`;
+      bh += `<div class="lifetime-grid">`;
+      bh += `<div class="lifetime-cell"><div class="lifetime-label">Market buys</div><div class="lifetime-value good">${showBuys.toLocaleString()}</div></div>`;
+      bh += `<div class="lifetime-cell"><div class="lifetime-label">Market sells</div><div class="lifetime-value ${showSells > 0 ? 'bad' : ''}">${showSells.toLocaleString()}</div></div>`;
+      if (showBoughtSol > 0) {
+        bh += `<div class="lifetime-cell"><div class="lifetime-label">SOL spent buying back</div><div class="lifetime-value good">${showBoughtSol.toFixed(3)} SOL</div></div>`;
+      }
+      if (showPctReinvested != null && oa.claimedSol > 0) {
+        bh += `<div class="lifetime-cell"><div class="lifetime-label">% of fees reinvested</div><div class="lifetime-value good">${showPctReinvested.toFixed(0)}%</div></div>`;
+      }
+      if (showLocks > 0) {
+        bh += `<div class="lifetime-cell"><div class="lifetime-label">Lock deposits</div><div class="lifetime-value good">${showLocks.toLocaleString()}</div></div>`;
+        bh += `<div class="lifetime-cell"><div class="lifetime-label">Tokens locked</div><div class="lifetime-value good">${Math.round(showLockedTokens).toLocaleString()}</div></div>`;
+      }
+      // Surface transfers separately — these are NOT sells. Distinguishes the
+      // "buy-and-lock" pattern from any false-positive "163 sells" issue.
+      if (oa.transferOutCount > 0) {
+        bh += `<div class="lifetime-cell"><div class="lifetime-label">Transfers out</div><div class="lifetime-value">${oa.transferOutCount.toLocaleString()}</div></div>`;
+      }
+      if (oa.transferInCount > 0) {
+        bh += `<div class="lifetime-cell"><div class="lifetime-label">Transfers in</div><div class="lifetime-value">${oa.transferInCount.toLocaleString()}</div></div>`;
+      }
+      if (oa.lastActivityTs) {
+        const daysAgo = Math.round((Date.now() - oa.lastActivityTs) / 86400000);
+        const ago = daysAgo === 0 ? "today" : daysAgo === 1 ? "1 day ago" : `${daysAgo} days ago`;
+        bh += `<div class="lifetime-cell"><div class="lifetime-label">Last trade</div><div class="lifetime-value">${ago}</div></div>`;
+      }
+      bh += `</div>`;
+      // Solana Tracker independent cross-verification panel — shows the
+      // same wallet's position computed by their indexer. Renders a green
+      // checkmark when their numbers agree with ours (high confidence) or
+      // a yellow caution when they diverge (worth a manual look). This is
+      // a factual report — both source numbers side-by-side, no narrative.
+      const stx = oa.solanaTrackerCrossCheck;
+      if (stx) {
+        // Three badge states. "st-sees-more" is NOT a warning — it means
+        // their indexer captured more buys than our conservative trace while
+        // both agree nobody sold. Only genuine conflicts get the red flag.
+        const kind = stx.divergenceKind || (stx.agrees ? "agree" : "concerning");
+        let verdict, verdictColor;
+        if (kind === "agree") {
+          verdict = "✓ AGREES"; verdictColor = "good";
+        } else if (kind === "st-sees-more") {
+          verdict = "✓ ST SEES MORE"; verdictColor = "good";
+        } else {
+          verdict = "⚠ DIVERGES"; verdictColor = "bad";
+        }
+        bh += `<div style="font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 1.5px; color: var(--subtext); margin: 14px 0 6px;">SOLANA TRACKER INDEPENDENT CROSS-CHECK <span class="lifetime-value ${verdictColor}" style="font-size: 10px;">${verdict}</span></div>`;
+        bh += `<div class="lifetime-grid">`;
+        bh += `<div class="lifetime-cell"><div class="lifetime-label">Their buy count</div><div class="lifetime-value">${stx.buys.toLocaleString()}</div></div>`;
+        bh += `<div class="lifetime-cell"><div class="lifetime-label">Their sell count</div><div class="lifetime-value ${stx.sells > 0 ? 'bad' : 'good'}">${stx.sells.toLocaleString()}</div></div>`;
+        if (stx.totalBoughtUsd > 0) {
+          bh += `<div class="lifetime-cell"><div class="lifetime-label">Total bought (USD)</div><div class="lifetime-value">$${stx.totalBoughtUsd.toFixed(2)}</div></div>`;
+        }
+        if (stx.invested > 0) {
+          bh += `<div class="lifetime-cell"><div class="lifetime-label">Personal capital in</div><div class="lifetime-value">$${stx.invested.toFixed(2)}</div></div>`;
+        }
+        if (stx.costBasisUsd > 0) {
+          bh += `<div class="lifetime-cell"><div class="lifetime-label">Cost basis (held)</div><div class="lifetime-value">$${stx.costBasisUsd.toFixed(2)}</div></div>`;
+        }
+        if (stx.valueUsd > 0) {
+          bh += `<div class="lifetime-cell"><div class="lifetime-label">Current value</div><div class="lifetime-value">$${stx.valueUsd.toFixed(2)}</div></div>`;
+        }
+        if (stx.realized || stx.unrealized) {
+          bh += `<div class="lifetime-cell"><div class="lifetime-label">Realized PnL</div><div class="lifetime-value ${stx.realized < 0 ? 'bad' : stx.realized > 0 ? 'good' : ''}">$${stx.realized.toFixed(2)}</div></div>`;
+          bh += `<div class="lifetime-cell"><div class="lifetime-label">Unrealized PnL</div><div class="lifetime-value ${stx.unrealized < 0 ? 'bad' : stx.unrealized > 0 ? 'good' : ''}">$${stx.unrealized.toFixed(2)}</div></div>`;
+        }
+        if (stx.roi) {
+          bh += `<div class="lifetime-cell"><div class="lifetime-label">ROI</div><div class="lifetime-value ${stx.roi < 0 ? 'bad' : 'good'}">${stx.roi.toFixed(1)}%</div></div>`;
+        }
+        bh += `</div>`;
+        // Identity tags — if Solana Tracker classifies this wallet as
+        // a verified token creator / pool deployer, surface it. Second
+        // source agreeing with our Bags/Pump check raises confidence.
+        if (stx.identity && stx.identity.developer) {
+          const via = (stx.identity.developer.via || []).join(', ') || 'on-chain';
+          bh += `<div style="margin-top: 6px; font-size: 11px; color: var(--subtext);">🔬 Solana Tracker confirms this wallet as the token's <strong style="color: var(--text);">${via}</strong>.</div>`;
+        }
+        const stNote = kind === "st-sees-more"
+          ? "Solana Tracker's indexer captured more buys than our on-chain trace — both agree on zero sells, so this is just our trace being conservative (we walk a capped signature window). Their fuller count is the better number here."
+          : kind === "concerning"
+          ? "These numbers are from Solana Tracker's indexer, not our trace. They diverge in a way worth a manual look — compare both and check the wallet on a block explorer before drawing conclusions."
+          : "Solana Tracker's indexer independently confirms our trace. Two sources agreeing is the strongest signal we can give.";
+        bh += `<div style="margin-top: 6px; font-size: 10px; color: var(--subtext); font-style: italic;">${stNote}</div>`;
+      }
+      // Honest SOL accounting: where every claimed SOL went. Built so the user
+      // can verify the math and see what's unaccounted (likely undercounted
+      // buys via routes we couldn't parse). Suppress the panel entirely if
+      // the math is obviously broken (e.g. unaccounted is wildly negative,
+      // meaning a tracker overcounted somewhere).
+      const acctSane = oa.unaccountedSol == null
+        || (oa.unaccountedSol > -2 && oa.unaccountedSol < (oa.claimedSol || 0) * 1.5);
+      if (oa.claimedSol != null && acctSane) {
+        bh += `<div style="font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 1.5px; color: var(--subtext); margin: 14px 0 6px;">SOL ACCOUNTING — WHERE EVERY CLAIMED SOL WENT</div>`;
+        bh += `<div class="lifetime-grid">`;
+        bh += `<div class="lifetime-cell"><div class="lifetime-label">Claimed in fees</div><div class="lifetime-value good">${oa.claimedSol.toFixed(3)} SOL</div></div>`;
+        bh += `<div class="lifetime-cell"><div class="lifetime-label">Spent on buy-backs (captured)</div><div class="lifetime-value good">${(oa.boughtSol || 0).toFixed(3)} SOL</div></div>`;
+        if (oa.knownSolSentToSubs > 0) {
+          bh += `<div class="lifetime-cell"><div class="lifetime-label">Sent to sub-wallets</div><div class="lifetime-value">${oa.knownSolSentToSubs.toFixed(3)} SOL</div></div>`;
+        }
+        if (oa.creatorSolBalanceNow != null) {
+          bh += `<div class="lifetime-cell"><div class="lifetime-label">Current SOL balance</div><div class="lifetime-value">${oa.creatorSolBalanceNow.toFixed(3)} SOL</div></div>`;
+        }
+        if (oa.unaccountedSol != null) {
+          const unaccountedCls = Math.abs(oa.unaccountedSol) < 0.1 ? 'good' : Math.abs(oa.unaccountedSol) < 1 ? '' : 'bad';
+          const tooltip = oa.unaccountedSol > 0.5
+            ? ` (likely additional buy-backs via Jupiter/Bags routes not fully captured)`
+            : '';
+          bh += `<div class="lifetime-cell"><div class="lifetime-label">Unaccounted</div><div class="lifetime-value ${unaccountedCls}">${oa.unaccountedSol.toFixed(3)} SOL${tooltip}</div></div>`;
+        }
+        bh += `</div>`;
+      }
+      // Show the sub-wallet breakdown if we have one.
+      if (tn && tn.subWallets && tn.subWallets.length > 0) {
+        bh += `<div style="font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 1.5px; color: var(--subtext); margin: 12px 0 6px;">SUB-DISTRIBUTOR WALLETS</div>`;
+        for (const sub of tn.subWallets) {
+          const subShort = sub.wallet.slice(0, 6) + "…" + sub.wallet.slice(-4);
+          bh += `<div style="padding: 8px 10px; background: rgba(0,0,0,0.25); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; font-family: var(--mono); font-size: 11px;">
+            <a href="https://solscan.io/account/${sub.wallet}" target="_blank" rel="noreferrer" style="color: var(--blue); text-decoration: none;">${subShort}</a>
+            <span style="color: var(--subtext);"> · ${sub.buyCount} buys${sub.lockCount > 0 ? ` · ${sub.lockCount} locks (${Math.round(sub.lockedTokens).toLocaleString()} CLKN)` : ''}${sub.boughtSol > 0 ? ` · ${sub.boughtSol.toFixed(2)} SOL spent` : ''}</span>
+          </div>`;
+        }
+      }
+      if (cs.summary) {
+        const calloutCls = (isBuyAndLock || isActiveBB) ? "lifetime-creator-badge good" : "lifetime-creator-badge";
+        bh += `<div class="${calloutCls}" style="margin-top: 10px;">${cs.summary}</div>`;
+      }
+      // Creator wallet profile — established operator vs fresh deployer + funder.
+      const cwp = data.creatorWalletProfile;
+      if (cwp) {
+        const dc = cwp.deployedTokenCount;
+        const dcStr = dc != null ? `${cwp.deployedTokenCountExact ? "" : "≥"}${dc.toLocaleString()}` : null;
+        if (cwp.isSerialDeployer) {
+          bh += `<div style="margin-top: 8px; font-size: 11px; color: #FCA5A5;">⚠️ Creator wallet is a <strong>serial deployer</strong> — has launched <strong>${dcStr} tokens</strong>. A long history here is a token-mill signal, not a committed operator.</div>`;
+        } else if (dc != null && dc > 1) {
+          bh += `<div style="margin-top: 8px; font-size: 11px; color: var(--subtext);">🧭 Creator wallet has launched <strong style="color: var(--text);">${dcStr} tokens</strong> and has a ${cwp.txCountAtLeast.toLocaleString()}+ tx history. Established, but it's launched others — judge accordingly.</div>`;
+        } else if (cwp.established) {
+          bh += `<div style="margin-top: 8px; font-size: 11px; color: var(--subtext);">🧭 Creator wallet has a long tx history (${cwp.txCountAtLeast.toLocaleString()}+ transactions) — not a fresh burner. A long history is a fact, not proof of legitimacy.</div>`;
+        } else {
+          const f = cwp.fundingSource;
+          const funderStr = f
+            ? ` It was funded by ${f.label ? `<strong style="color: var(--text);">${f.label}</strong>` : `<a href="https://solscan.io/account/${f.wallet}" target="_blank" rel="noreferrer" style="color: var(--blue); text-decoration: none;">${f.wallet.slice(0,6)}…${f.wallet.slice(-4)}</a>`}${f.solAmount ? ` (${f.solAmount.toFixed(2)} SOL)` : ''}.`
+            : '';
+          bh += `<div style="margin-top: 8px; font-size: 11px; color: var(--subtext);">🧭 Creator wallet is <strong style="color: var(--text);">fresh / low-activity</strong> (${cwp.txCountAtLeast} txs).${funderStr}</div>`;
+        }
+      }
+    }
+    // Creator-fee revenue summary — the cash side of the project.
+    const haveFeeData = bi.lifetimeFeesSol != null || bi.totalClaimedSol != null || bi.claimEventCount > 0;
+    if (haveFeeData) {
+      bh += `<div class="card-title" style="margin-bottom: 8px; margin-top: 14px;">CREATOR-FEE REVENUE</div>`;
+      bh += `<div class="lifetime-grid">`;
+      if (bi.lifetimeFeesSol != null) {
+        bh += `<div class="lifetime-cell"><div class="lifetime-label">Lifetime fees</div><div class="lifetime-value good">${bi.lifetimeFeesSol.toLocaleString(undefined, { maximumFractionDigits: 3 })} SOL</div></div>`;
+      }
+      if (bi.totalClaimedSol != null) {
+        bh += `<div class="lifetime-cell"><div class="lifetime-label">Total claimed (shown)</div><div class="lifetime-value good">${bi.totalClaimedSol.toLocaleString(undefined, { maximumFractionDigits: 3 })} SOL</div></div>`;
+      }
+      bh += `<div class="lifetime-cell"><div class="lifetime-label">Claim events</div><div class="lifetime-value">${(bi.claimEventCount || 0).toLocaleString()}</div></div>`;
+      if (bi.lastClaimTimestamp) {
+        const daysAgo = Math.round((Date.now() - bi.lastClaimTimestamp) / 86400000);
+        const ago = daysAgo === 0 ? "today" : daysAgo === 1 ? "1 day ago" : `${daysAgo} days ago`;
+        bh += `<div class="lifetime-cell"><div class="lifetime-label">Last claim</div><div class="lifetime-value">${ago}</div></div>`;
+      }
+      bh += `</div>`;
+    }
+    // Per-claimer breakdown — who actually collected which share of the fees.
+    if (Array.isArray(bi.claimers) && bi.claimers.length > 0) {
+      bh += `<div class="card-title" style="margin-bottom: 8px; margin-top: 14px;">FEE CLAIMERS — WHO COLLECTED WHAT</div>`;
+      // A claimer is often the verified creator but the claim-events feed
+      // doesn't always carry their handle — cross-reference the creators list
+      // by wallet so the dev shows as "@handle" instead of "(unnamed)".
+      const creatorByWallet = {};
+      (bi.officialCreators || []).forEach(cr => { if (cr.wallet) creatorByWallet[cr.wallet] = cr; });
+      for (const c of bi.claimers) {
+        const wShort = c.wallet ? c.wallet.slice(0, 6) + "…" + c.wallet.slice(-4) : "—";
+        const matchedCreator = c.wallet ? creatorByWallet[c.wallet] : null;
+        const uname = c.twitterUsername || c.username || matchedCreator?.username || null;
+        const prov = c.provider || matchedCreator?.provider || null;
+        const handleStr = uname ? `<strong>${prov === "twitter" || c.twitterUsername ? "@" + uname : uname}</strong>` : "(unnamed)";
+        const adminTag = (c.isAdmin || matchedCreator?.isAdmin) ? ` <span class="badge badge-creator" style="font-size:9px;padding:2px 6px;">👑 ADMIN</span>` : "";
+        const royaltyStr = (c.royaltyBps != null ? c.royaltyBps : matchedCreator?.royaltyBps) != null ? `${((c.royaltyBps != null ? c.royaltyBps : matchedCreator.royaltyBps) / 100).toFixed(0)}% share` : "";
+        const claimedStr = c.totalClaimedSol != null ? `${c.totalClaimedSol.toLocaleString(undefined, { maximumFractionDigits: 3 })} SOL claimed` : "";
+        const stats = [royaltyStr, claimedStr].filter(Boolean).join(" · ");
+        bh += `<div class="bags-creator" style="display:flex;align-items:flex-start;gap:10px;">
+          ${c.pfp ? `<img src="${c.pfp}" alt="" style="width:36px;height:36px;border-radius:50%;border:1px solid var(--border);flex-shrink:0;" onerror="this.style.display='none'"/>` : ''}
+          <div style="flex:1;min-width:0;">
+            <div>${handleStr}${adminTag}</div>
+            <div class="bags-creator-meta">
+              <a href="https://solscan.io/account/${c.wallet}" target="_blank" rel="noreferrer">${wShort} ↗</a>
+              ${stats ? ` · ${stats}` : ''}
+            </div>
+          </div>
+        </div>`;
+      }
+    }
+    $("bagsContent").innerHTML = bh;
+  } else {
+    $("bagsCard").style.display = "none";
+  }
+  // Bags About card shows whenever this IS a Bags token (so anyone reading
+  // a Bags autopsy gets the disclaimer about the platform-wallet quirk).
+  $("bagsAboutCard").style.display = (bi && bi.isBagsToken) ? "block" : "none";
+
+  // Pump.fun panel
+  const pi = data.pumpInfo;
+  if (pi && pi.isPumpToken) {
+    $("pumpCard").style.display = "block";
+    let ph2 = "";
+    const status = pi.complete === true ? "GRADUATED"
+      : pi.onBondingCurve ? "ON BONDING CURVE"
+      : pi.complete === false ? "ON BONDING CURVE"
+      : "PUMP.FUN TOKEN";
+    const curveStr = (pi.onBondingCurve && pi.curvePercentage != null)
+      ? ` · ${pi.curvePercentage.toFixed(1)}% to graduation` : "";
+    ph2 += `<div class="pump-status">STATUS: ${status}${curveStr}${pi.symbol ? " · " + esc(pi.symbol) : ""}</div>`;
+    if (pi.creator) {
+      const creatorShort = pi.creator.slice(0, 8) + "…" + pi.creator.slice(-6);
+      const srcNote = pi.synthesized ? ' <span style="color:var(--subtext);font-size:9px;">(via Solana Tracker)</span>' : '';
+      ph2 += `<div class="bags-creator"><span>VERIFIED CREATOR${srcNote}</span><div class="bags-creator-meta"><a href="https://solscan.io/account/${pi.creator}" target="_blank" rel="noreferrer">${creatorShort}</a></div></div>`;
+    }
+    if (pi.synthesized) {
+      const note = pi.complete === true
+        ? "Recognized as a Pump.fun token by its mint. It has graduated to a DEX pool, so Pump's live API no longer serves it — pre-graduation bonding-curve buyer stats aren't available. Creator confirmed independently via Solana Tracker; creator fees shown below."
+        : pi.onBondingCurve
+        ? `Recognized as a Pump.fun token — still on the bonding curve${pi.curvePercentage != null ? ` (${pi.curvePercentage.toFixed(1)}% of the way to graduation)` : ""}. It has no DEX liquidity pool yet — that's normal at this stage, not a rug; its liquidity is the bonding-curve reserve${pi.stLiquidityUsd ? ` (~$${Math.round(pi.stLiquidityUsd).toLocaleString()})` : ""}. Creator confirmed via Solana Tracker.`
+        : "Recognized as a Pump.fun token by its mint. Graduation status unavailable. Creator confirmed via Solana Tracker.";
+      ph2 += `<div style="margin-top:8px;font-size:11px;color:var(--subtext);font-style:italic;">${note}</div>`;
+    }
+    const socials = [];
+    if (pi.twitter) socials.push(`<a class="pump-social" href="${safeUrl(pi.twitter)}" target="_blank" rel="noreferrer">🐦 TWITTER</a>`);
+    if (pi.telegram) socials.push(`<a class="pump-social" href="${safeUrl(pi.telegram)}" target="_blank" rel="noreferrer">💬 TELEGRAM</a>`);
+    if (pi.website) socials.push(`<a class="pump-social" href="${safeUrl(pi.website)}" target="_blank" rel="noreferrer">🌐 WEBSITE</a>`);
+    if (socials.length) ph2 += `<div class="pump-socials">${socials.join("")}</div>`;
+    // BC walk stats + verified-in-top-100 count
+    if (pi.bondingCurve) {
+      const bcInTop = (data.topHolders || []).filter(h => h.dbcVerified).length;
+      ph2 += `<div class="lifetime-grid" style="margin-top: 12px;">`;
+      ph2 += `<div class="lifetime-cell"><div class="lifetime-label">BC sigs walked</div><div class="lifetime-value">${(pi.bcSignaturesScanned || 0).toLocaleString()}</div></div>`;
+      ph2 += `<div class="lifetime-cell"><div class="lifetime-label">BC buyers found</div><div class="lifetime-value">${(pi.bcBuyersIdentified || 0).toLocaleString()}</div></div>`;
+      ph2 += `<div class="lifetime-cell"><div class="lifetime-label">Verified in top 100</div><div class="lifetime-value good">${bcInTop}</div></div>`;
+      if (pi.priceHistory && pi.priceHistory.peakPrice) {
+        ph2 += `<div class="lifetime-cell"><div class="lifetime-label">Pump-era peak</div><div class="lifetime-value">${fmtPrice(pi.priceHistory.peakPrice)}</div></div>`;
+      }
+      ph2 += `</div>`;
+    }
+    $("pumpContent").innerHTML = ph2;
+  } else {
+    $("pumpCard").style.display = "none";
+  }
+
+  // Jupiter card + Lifetime card render code removed 2026-05-21.
+  // The data still flows from the server (data.jupiterInfo, data.lifetime,
+  // data.priceHistory) and is used by the Cluck Score's Jupiter factor +
+  // the verdict ladder's drawdown reclassification + the multi-window
+  // volume panel above. Just no longer rendered as standalone cards on
+  // the autopsy page since the unique signals were redundant with Bags
+  // verification, Solana Tracker cross-check, and the Key Facts grid.
+
+  // Pump.fun creator-fee panel — derived from the on-chain creator vault.
+  const pf = data.pumpCreatorFees;
+  if (pf) {
+    $("pumpFeesCard").style.display = "block";
+    let pfh = `<div class="lifetime-grid">`;
+    if (pf.lifetimeTotalSol != null) {
+      pfh += `<div class="lifetime-cell"><div class="lifetime-label">Total creator fees${pf.feeEventsCapped ? " (min)" : ""}</div><div class="lifetime-value good">${pf.lifetimeTotalSol.toFixed(3)} SOL</div></div>`;
+    }
+    if (pf.lifetimeClaimedSol != null) {
+      pfh += `<div class="lifetime-cell"><div class="lifetime-label">Claimed by creator${pf.feeEventsCapped ? " (min)" : ""}</div><div class="lifetime-value ${pf.lifetimeClaimedSol > 0 ? 'bad' : ''}">${pf.lifetimeClaimedSol.toFixed(3)} SOL</div></div>`;
+    }
+    pfh += `<div class="lifetime-cell"><div class="lifetime-label">Unclaimed in vault</div><div class="lifetime-value">${(pf.unclaimedSol || 0).toFixed(4)} SOL</div></div>`;
+    pfh += `<div class="lifetime-cell"><div class="lifetime-label">Fee events</div><div class="lifetime-value">${(pf.feeEventCount || 0).toLocaleString()}${pf.feeEventsCapped ? "+" : ""}</div></div>`;
+    pfh += `</div>`;
+    pfh += `<div style="margin-top:6px;font-size:10px;color:var(--subtext);font-style:italic;">Pump.fun creators earn a per-trade fee that accrues in an on-chain vault. "Claimed by creator" is how much the dev has pulled out over this token's life; "unclaimed" is what's still sitting there. Together they're the creator's total fee revenue from this token${pf.feeEventsCapped ? " — shown as a minimum, since the vault's history exceeded our 1,000-event scan window" : ""}. This is what the chain shows the creator earned, regardless of where the price went.</div>`;
+    $("pumpFeesContent").innerHTML = pfh;
+  } else {
+    $("pumpFeesCard").style.display = "none";
+  }
+
+  // Locked Supply panel — who locked, via what platform. Honest labeling:
+  // "team" only when the locker is the verified creator; everything else is
+  // shown neutrally (could be team or a conviction community holder).
+  const la = data.lockAttribution;
+  if (la && la.lockers && la.lockers.length > 0) {
+    $("lockedSupplyCard").style.display = "block";
+    const pct = (s) => (s * 100).toFixed(s * 100 < 1 ? 2 : 1) + "%";
+    let lh = "";
+    // Headline summary grid
+    lh += `<div class="lifetime-grid">`;
+    lh += `<div class="lifetime-cell"><div class="lifetime-label">Total locked</div><div class="lifetime-value good">${pct(la.totalLockedShare)}</div></div>`;
+    if (la.teamLockedShare > 0) {
+      lh += `<div class="lifetime-cell"><div class="lifetime-label">Verified team locked</div><div class="lifetime-value good">${pct(la.teamLockedShare)}</div></div>`;
+    }
+    if (la.unlabeledLockedShare > 0) {
+      lh += `<div class="lifetime-cell"><div class="lifetime-label">Locked by other wallets</div><div class="lifetime-value">${pct(la.unlabeledLockedShare)}</div></div>`;
+    }
+    lh += `<div class="lifetime-cell"><div class="lifetime-label">Locker wallets</div><div class="lifetime-value">${la.lockers.length}</div></div>`;
+    lh += `</div>`;
+    // Platform breakdown
+    const plats = Object.entries(la.platformTotals || {});
+    if (plats.length > 0) {
+      lh += `<div style="margin-top:8px;font-size:11px;color:var(--subtext);">Platforms: ` +
+        plats.map(([p, s]) => `<strong style="color:var(--text);">${p}</strong> (${pct(s)})`).join(" · ") + `</div>`;
+    }
+    // Per-lock rows
+    lh += `<div style="font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.5px;color:var(--subtext);margin:14px 0 6px;">EACH LOCK — TRACED TO ITS FUNDING TRANSACTION</div>`;
+    for (const lk of la.lockers) {
+      const wShort = lk.lockerWallet ? lk.lockerWallet.slice(0, 6) + "…" + lk.lockerWallet.slice(-4) : "unknown";
+      const teamBadge = lk.isTeam
+        ? `<span class="pnl-badge cashout" style="margin-left:6px;">✓ VERIFIED TEAM</span>`
+        : `<span class="pnl-badge neutral" style="margin-left:6px;">UNLABELED</span>`;
+      const platBadge = `<span class="pnl-badge profit" style="margin-left:6px;">🔒 ${lk.platform}</span>`;
+      lh += `<div style="padding:8px 10px;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;font-family:var(--mono);font-size:11px;">
+        <span class="good" style="font-weight:700;">${pct(lk.share)}</span> ·
+        locked by <a href="https://solscan.io/account/${lk.lockerWallet || ''}" target="_blank" rel="noreferrer" style="color:var(--blue);text-decoration:none;">${wShort}</a>${teamBadge}${platBadge}
+        ${lk.fundingSig ? `<a href="https://solscan.io/tx/${lk.fundingSig}" target="_blank" rel="noreferrer" style="color:var(--subtext);text-decoration:none;margin-left:6px;">↗ lock tx</a>` : ''}
+      </div>`;
+    }
+    lh += `<div style="margin-top:6px;font-size:10px;color:var(--subtext);font-style:italic;">Locked supply is removed from circulation — a commitment signal. "Unlabeled" means we couldn't verify the locker as the team; it could be the team or a conviction community holder. We trace each lock to its on-chain funding transaction and refuse to guess who's who.</div>`;
+    $("lockedSupplyContent").innerHTML = lh;
+  } else {
+    $("lockedSupplyCard").style.display = "none";
+  }
+
+  // Top Holders forensic panel
+  const th = data.topHolders || [];
+  const lbd = data.holderBreakdown || {};
+  const bbd = data.behaviorBreakdown || {};
+  if (th.length === 0) {
+    $("holdersCard").style.display = "none";
+  } else {
+    $("holdersCard").style.display = "block";
+    // Summary stats
+    const sumStats = [];
+    sumStats.push({ label: "Locked supply (top 20)", value: ((data.lockedSupplyShare || 0) * 100).toFixed(1) + "%" });
+    sumStats.push({ label: "Human-held (top 20)", value: ((data.humanSupplyShare || 0) * 100).toFixed(1) + "%" });
+    sumStats.push({ label: "Snipers in top 20", value: String(lbd.sniper || 0) });
+    if (lbd.bonding_curve) sumStats.push({ label: "Bonding-curve buyers", value: String(lbd.bonding_curve) });
+    sumStats.push({ label: "Holders that exited", value: String(bbd.EXITED_MOSTLY || 0) });
+    sumStats.push({ label: "Accumulators", value: String(bbd.ACCUMULATED || 0) });
+    $("holdersSummary").innerHTML = sumStats.map(s =>
+      `<div class="holders-stat"><div class="holders-stat-label">${s.label}</div><div class="holders-stat-value">${s.value}</div></div>`
+    ).join("");
+    // Row labels
+    const timingLabel = {
+      sniper: "🎯 SNIPER", very_early: "⚡ VERY EARLY", early: "🌱 EARLY",
+      first_week: "📅 FIRST WEEK", later: "🐢 LATER", pre_pool: "🪙 PRE-POOL",
+      bonding_curve: "🚀 BONDING CURVE"
+    };
+    const behaviorLabel = {
+      HELD: "💎 HELD", ACCUMULATED: "📈 ACCUMULATED", REDUCED: "📉 REDUCED",
+      EXITED_MOSTLY: "🏃 EXITED MOSTLY", UNKNOWN: "❓ UNKNOWN"
+    };
+    const categoryIcon = { wallet: "👤", lp: "🏊", locker: "🔒", selflock: "🔥", program: "⚙", unknown: "❓" };
+    // Collapse to top 20 by default; rest hidden behind the expand button so
+    // a 100-row forensic panel doesn't eat the entire screen.
+    const COLLAPSED_LIMIT = 20;
+    const renderHolder = (h) => {
+      const badges = [];
+      if (h.isCreator) {
+        badges.push(`<span class="badge badge-creator">👑 CREATOR</span>`);
+      }
+      // Bags / Pump fee-receiver badge — the project's verified operational
+      // wallet (the one entitled to creator-fee royalties). Generic across
+      // all Bags/Pump tokens.
+      if (h.projectFeeWallet) {
+        const m = h.projectFeeWallet;
+        if (m.source === "bags") {
+          const pctStr = h.projectFeeRoyaltyPct != null ? ` ${h.projectFeeRoyaltyPct.toFixed(0)}%` : "";
+          const adminTag = m.isAdmin ? " ADMIN" : "";
+          const handle = m.username ? ` @${m.username}` : "";
+          badges.push(`<span class="badge badge-feewallet">💸 BAGS FEE WALLET${pctStr}${adminTag}${handle}</span>`);
+        } else if (m.source === "pump") {
+          badges.push(`<span class="badge badge-feewallet">💸 PUMP CREATOR WALLET</span>`);
+        }
+      }
+      const catLabel = `${categoryIcon[h.category] || "?"} ${(h.label || h.category || "?").toUpperCase()}`;
+      badges.push(`<span class="badge badge-${h.category}">${catLabel}</span>`);
+      if (h.category === "wallet") {
+        if (h.acquisitionTiming && timingLabel[h.acquisitionTiming]) {
+          badges.push(`<span class="badge badge-${h.acquisitionTiming}">${timingLabel[h.acquisitionTiming]}</span>`);
+        }
+        if (h.dbcVerified) {
+          badges.push(`<span class="dbc-verified-marker">✓ BAGS VERIFIED</span>`);
+        }
+        // Solscan label (e.g. "Coinbase 1", "Wintermute MM", "Binance hot")
+      // — independent of our hardcoded CEX list. Only shown when present.
+      if (h.solscanLabel) {
+        badges.push(`<span class="badge" style="background:rgba(34,211,238,0.10);border:1px solid rgba(34,211,238,0.4);color:#22D3EE;">🏷 ${h.solscanLabel.toUpperCase()}</span>`);
+      }
+      if (h.behavior && behaviorLabel[h.behavior]) {
+          // When the behavior was overridden because of locks (e.g. creator
+          // who locked supply was being mis-labeled REDUCED), append a small
+          // "via locks" annotation so it's clear WHY the badge changed.
+          const overrideNote = h.behaviorOverride
+            ? ` <span style="font-size:8px;color:var(--subtext);font-weight:400;">(was ${h.behaviorOverride.from}, corrected via lock data)</span>`
+            : "";
+          badges.push(`<span class="badge badge-${h.behavior}" title="${h.behaviorOverride ? h.behaviorOverride.reason.replace(/"/g, '\'') : ''}">${behaviorLabel[h.behavior]}${overrideNote}</span>`);
+        }
+        if (h.acquisitionType) {
+          const acqLabel = {
+            BOUGHT: "💱 BOUGHT",
+            TRANSFER: "📨 WALLET TRANSFER",
+            MINTED: "⚒ MINTED",
+            CEX_WITHDRAWAL: "🏦 CEX WITHDRAWAL" + (h.acquisitionSourceLabel ? " · " + esc(h.acquisitionSourceLabel.toUpperCase()) : ""),
+            LOCK_UNLOCK: "🔓 LOCK UNLOCK",
+            PROGRAM_ROUTE: "⚙ ROUTED",
+            OTHER: "❓ OTHER",
+          };
+          if (acqLabel[h.acquisitionType]) {
+            badges.push(`<span class="badge badge-${h.acquisitionType}">${acqLabel[h.acquisitionType]}</span>`);
+          }
+        }
+      }
+      const addr = h.authority || h.tokenAccount;
+      const shortAddr = addr ? addr.slice(0, 6) + "…" + addr.slice(-4) : "—";
+      const pct = ((h.share || 0) * 100).toFixed(2);
+      // Source line: show actual source link for genuine wallet-to-wallet
+      // transfers; for CEX withdrawals / pool routing / lock unlocks just show
+      // the human-readable source label (badge says CEX·COINBASE etc.)
+      let sourceLine = "";
+      if (h.acquisitionType === "TRANSFER" && h.acquisitionSource) {
+        const srcShort = h.acquisitionSource.slice(0, 6) + "…" + h.acquisitionSource.slice(-4);
+        const srcLink = `<a href="https://solscan.io/account/${h.acquisitionSource}" target="_blank" rel="noreferrer">${srcShort}</a>`;
+        // Three info layers, ordered most-trusted first:
+        //  1. Bags/Pump-verified label (h.acquisitionSourceContext) — gold
+        //  2. Solscan-maintained label (h.acquisitionSourceSolscanLabel) — cyan
+        //  3. Plain short hash — fallback
+        const ctxBits = [];
+        if (h.acquisitionSourceContext) ctxBits.push(`<span style="color:var(--accent);">${esc(h.acquisitionSourceContext)}</span>`);
+        if (h.acquisitionSourceSolscanLabel) ctxBits.push(`<span style="color:#22D3EE;">🏷 ${esc(h.acquisitionSourceSolscanLabel)}</span>`);
+        const suffix = ctxBits.length ? ` · ${ctxBits.join(' · ')}` : '';
+        sourceLine = `<div class="holder-source">↘ from ${srcLink}${suffix}</div>`;
+      } else if ((h.acquisitionType === "BOUGHT" || h.acquisitionType === "LOCK_UNLOCK" || h.acquisitionType === "PROGRAM_ROUTE") && h.acquisitionSourceLabel) {
+        sourceLine = `<div class="holder-source">↘ via ${esc(h.acquisitionSourceLabel)}</div>`;
+      }
+      return `
+        <div class="holder-row">
+          <div class="holder-rank">#${h.rank}</div>
+          <div class="holder-main">
+            <div class="holder-addr">${shortAddr}</div>
+            <div class="holder-amount">${pct}% of supply</div>
+            <div class="holder-badges">${badges.join("")}</div>
+            ${sourceLine}
+          </div>
+        </div>
+      `;
+    };
+    const initialRows = th.slice(0, COLLAPSED_LIMIT).map(renderHolder).join("");
+    const overflowRows = th.length > COLLAPSED_LIMIT
+      ? `<div id="holdersOverflow" style="display:none;">${th.slice(COLLAPSED_LIMIT).map(renderHolder).join("")}</div>`
+      : "";
+    $("holdersList").innerHTML = initialRows + overflowRows;
+    const btn = $("holdersExpandBtn");
+    if (th.length > COLLAPSED_LIMIT && btn) {
+      btn.style.display = "block";
+      btn.textContent = `SHOW ALL ${th.length} HOLDERS →`;
+      btn.onclick = () => {
+        const ov = $("holdersOverflow");
+        if (ov && ov.style.display === "none") {
+          ov.style.display = "block";
+          btn.textContent = `← HIDE ${th.length - COLLAPSED_LIMIT} EXTRA HOLDERS`;
+        } else if (ov) {
+          ov.style.display = "none";
+          btn.textContent = `SHOW ALL ${th.length} HOLDERS →`;
+        }
+      };
+    } else if (btn) {
+      btn.style.display = "none";
+    }
+  }
+
+  // Distribution Sources panel
+  const dists = data.distributors || [];
+  if (dists.length === 0) {
+    $("distributorsCard").style.display = "none";
+  } else {
+    $("distributorsCard").style.display = "block";
+    // Build a wallet → context label map from topHolders so we can attach
+    // an identity hint to each distributor row (Bags creator / known sub /
+    // BC buyer). Same data the holder rows use; just surfaced here too.
+    const distContextByWallet = new Map();
+    for (const h of (data.topHolders || [])) {
+      if (h.acquisitionSourceContext && h.acquisitionSource) {
+        distContextByWallet.set(h.acquisitionSource, h.acquisitionSourceContext);
+      }
+      // If a top holder IS a project fee wallet, that's also a known label.
+      if (h.projectFeeWallet && (h.authority || h.wallet)) {
+        const w = h.authority || h.wallet;
+        if (h.projectFeeWallet.source === "bags") {
+          distContextByWallet.set(w, `Bags-verified creator wallet${h.projectFeeWallet.username ? " @" + esc(h.projectFeeWallet.username) : ""}`);
+        } else if (h.projectFeeWallet.source === "pump") {
+          distContextByWallet.set(w, "Pump-verified creator wallet");
+        }
+      }
+    }
+    $("distributorsList").innerHTML = dists.map(d => {
+      const sa = d.sourceWallet;
+      const shortSa = sa.slice(0, 8) + "…" + sa.slice(-6);
+      const sharePct = ((d.totalShareDistributed || 0) * 100).toFixed(2);
+      const ctx = distContextByWallet.get(sa);
+      const ctxLine = ctx ? `<div class="distributor-context">↘ ${ctx}</div>` : "";
+      // Headline: split wallet recipients vs lock recipients honestly.
+      const wcnt = d.walletRecipientsInTop20 || 0;
+      const lcnt = d.lockedRecipientsInTop20 || 0;
+      const parts = [];
+      if (wcnt > 0) parts.push(`${wcnt} top-20 wallet${wcnt === 1 ? "" : "s"}`);
+      if (lcnt > 0) parts.push(`<span style="color:var(--green);">${lcnt} lock contract${lcnt === 1 ? "" : "s"}</span>`);
+      const headlineStat = `Sent tokens to ${parts.join(" + ")} · ${sharePct}% of supply combined`;
+      // Per-recipient list with link + category badge
+      const recipientHtml = (d.recipients || []).map(r => {
+        const ra = r.authority;
+        const raShort = ra ? ra.slice(0, 6) + "…" + ra.slice(-4) : "—";
+        const rSharePct = ((r.share || 0) * 100).toFixed(2);
+        const cat = r.category || "wallet";
+        let tagLabel = "👤 WALLET";
+        if (cat === "locker") tagLabel = `🔒 LOCKED (${esc((r.label || "lock").toUpperCase())})`;
+        else if (cat === "selflock") tagLabel = "🔥 SELF-LOCK";
+        return `
+          <div class="recipient-row">
+            <span class="recipient-rank">#${r.rank}</span>
+            <a href="https://solscan.io/account/${ra}" target="_blank" rel="noreferrer">${raShort} ↗</a>
+            <span class="recipient-share">${rSharePct}%</span>
+            <span class="recipient-tag ${cat}">${tagLabel}</span>
+          </div>
+        `;
+      }).join("");
+      return `
+        <div class="distributor-row">
+          <div class="distributor-icon">📨</div>
+          <div class="distributor-main" style="flex:1;min-width:0;">
+            <div class="distributor-addr"><a href="https://solscan.io/account/${sa}" target="_blank" rel="noreferrer">${shortSa} ↗</a></div>
+            ${ctxLine}
+            <div class="distributor-stat">${headlineStat}</div>
+            ${recipientHtml ? `<div class="recipient-list">${recipientHtml}</div>` : ""}
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  // Hidden Exit Distributors panel — the deep-dive forensic detection.
+  const heds = data.hiddenExitDistributors || [];
+  if (heds.length === 0) {
+    $("hiddenExitCard").style.display = "none";
+  } else {
+    $("hiddenExitCard").style.display = "block";
+    $("hiddenExitList").innerHTML = heds.map(ex => {
+      const src = ex.sourceWallet;
+      const srcShort = src.slice(0, 8) + "…" + src.slice(-6);
+      const dumpedPct = (ex.dumpedMostPct * 100).toFixed(0);
+      const stats = [];
+      stats.push(`<span class="hidden-exit-stat bad">${ex.dumpedMostCount}/${ex.totalRecipients} RECIPIENTS DUMPED &gt;70%</span>`);
+      if (ex.exitedCount > 0) stats.push(`<span class="hidden-exit-stat bad">${ex.exitedCount} FULLY EXITED</span>`);
+      if (ex.sourceAlsoSold) {
+        stats.push(`<span class="hidden-exit-stat bad">SOURCE ALSO SOLD ${fmtUsd(ex.sourceAlsoSold.soldUsd)}</span>`);
+      }
+      const recipRows = ex.recipientStats.map(r => {
+        const ra = r.authority;
+        const raShort = ra.slice(0, 6) + "…" + ra.slice(-4);
+        const drPct = (r.dumpRatio * 100).toFixed(0);
+        return `
+          <div class="hidden-exit-recip-row">
+            <span>#${r.rank}</span>
+            <a href="https://solscan.io/account/${ra}" target="_blank" rel="noreferrer">${raShort}</a>
+            <span class="hidden-exit-recip-status ${r.status}">${r.status.replace("_", " ")}</span>
+            <span>received ${Math.round(r.receivedAmount).toLocaleString()} · now holds ${Math.round(r.currentBalance).toLocaleString()} (${drPct}% gone)</span>
+          </div>
+        `;
+      }).join("");
+      return `
+        <div class="hidden-exit-row">
+          <div class="hidden-exit-head">
+            <div class="hidden-exit-source"><a href="https://solscan.io/account/${src}" target="_blank" rel="noreferrer">${srcShort}</a></div>
+            ${stats.join("")}
+          </div>
+          <div class="hidden-exit-recip">${recipRows}</div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  // P&L Ledger panel
+  const pnl = data.walletPnl;
+  if (!pnl || pnl.walletsAnalyzed === 0) {
+    $("pnlCard").style.display = "none";
+  } else {
+    $("pnlCard").style.display = "block";
+    const modeLabel = pnl.coverageMode === "full" ? "FULL LIFETIME" : "NEWEST 1500 + OLDEST 1000 (sampled)";
+    const pricingLabel = pnl.haveUsdPricing ? "USD-priced (daily close)" : "TOKEN-amount only (no price history)";
+    $("pnlMeta").textContent = `${pnl.walletsAnalyzed.toLocaleString()} wallets analyzed · ${pnl.signaturesScanned.toLocaleString()} of ${(pnl.totalLifetimeSignatures || 0).toLocaleString()} signatures · ${modeLabel} · ${pricingLabel}`;
+
+    const renderRow = (entry, rank, mode) => {
+      const w = entry.wallet;
+      const short = w.slice(0, 6) + "…" + w.slice(-5);
+      let amountStr, amountCls;
+      const badges = [];
+      // Project fee-wallet chip — always first so it's the most prominent
+      // signal on any row regardless of which tab it appears in.
+      if (entry.projectFeeWallet) {
+        const m = entry.projectFeeWallet;
+        if (m.source === "bags") {
+          const pctStr = entry.projectFeeRoyaltyPct != null ? ` ${entry.projectFeeRoyaltyPct.toFixed(0)}%` : "";
+          const adminTag = m.isAdmin ? " ADMIN" : "";
+          badges.push(`<span class="pnl-badge cashout">💸 BAGS FEE${pctStr}${adminTag}</span>`);
+        } else if (m.source === "pump") {
+          badges.push(`<span class="pnl-badge cashout">💸 PUMP CREATOR</span>`);
+        }
+      }
+      if (mode === "topSellers") {
+        amountStr = pnl.haveUsdPricing && entry.soldUsd > 0 ? fmtUsd(entry.soldUsd) : `${Math.round(entry.soldTokens).toLocaleString()} tok`;
+        amountCls = "loss"; // red because tokens flowing OUT of the asset
+        if (entry.realizedPnlUsd > 0) badges.push(`<span class="pnl-badge profit">+${fmtUsd(entry.realizedPnlUsd)} REALIZED</span>`);
+        else if (entry.realizedPnlUsd < 0) badges.push(`<span class="pnl-badge loss">${fmtUsd(entry.realizedPnlUsd)} REALIZED</span>`);
+        badges.push(`<span class="pnl-badge neutral">${entry.sellCount} sell${entry.sellCount === 1 ? "" : "s"}</span>`);
+        if (entry.status === "TOOK_MONEY") badges.push(`<span class="pnl-badge cashout">CASHED OUT</span>`);
+      } else if (mode === "topBuyers") {
+        amountStr = pnl.haveUsdPricing && entry.boughtUsd > 0 ? fmtUsd(entry.boughtUsd) : `${Math.round(entry.boughtTokens).toLocaleString()} tok`;
+        amountCls = "profit"; // green because tokens flowing IN
+        badges.push(`<span class="pnl-badge neutral">${entry.buyCount} buy${entry.buyCount === 1 ? "" : "s"}</span>`);
+        if (entry.inTop100) badges.push(`<span class="pnl-badge neutral">STILL TOP 100</span>`);
+        else if (entry.soldTokens > 0) badges.push(`<span class="pnl-badge neutral">EXITED</span>`);
+      } else if (mode === "madeMoney" || mode === "tookTheMoney") {
+        amountStr = `+${fmtUsd(entry.realizedPnlUsd)}`;
+        amountCls = "profit";
+        badges.push(`<span class="pnl-badge neutral">bought ${fmtUsd(entry.boughtUsd)}</span>`);
+        badges.push(`<span class="pnl-badge profit">sold ${fmtUsd(entry.soldUsd)}</span>`);
+        if (entry.status === "TOOK_MONEY") badges.push(`<span class="pnl-badge cashout">EXITED CLEAN</span>`);
+        else if (entry.inTop100) badges.push(`<span class="pnl-badge neutral">STILL HOLDING</span>`);
+      } else if (mode === "gotWrecked") {
+        amountStr = fmtUsd(entry.realizedPnlUsd);
+        amountCls = "loss";
+        badges.push(`<span class="pnl-badge neutral">bought ${fmtUsd(entry.boughtUsd)}</span>`);
+        badges.push(`<span class="pnl-badge loss">sold ${fmtUsd(entry.soldUsd)}</span>`);
+        if (entry.inTop100) badges.push(`<span class="pnl-badge neutral">STILL HOLDING (bagging)</span>`);
+        else badges.push(`<span class="pnl-badge loss">EXITED AT LOSS</span>`);
+      } else if (mode === "projectWallets") {
+        // The project's own operational wallets — show buy/sell totals + net.
+        const netUsd = entry.boughtUsd - entry.soldUsd; // positive = net accumulating, negative = net distributing
+        amountStr = (netUsd >= 0 ? "+" : "") + fmtUsd(netUsd) + " net";
+        amountCls = netUsd >= 0 ? "profit" : "loss";
+        badges.push(`<span class="pnl-badge profit">bought ${fmtUsd(entry.boughtUsd)} (${entry.buyCount})</span>`);
+        badges.push(`<span class="pnl-badge loss">sold ${fmtUsd(entry.soldUsd)} (${entry.sellCount})</span>`);
+        if (entry.inTop100) badges.push(`<span class="pnl-badge neutral">HOLDS ${Math.round(entry.currentBalance).toLocaleString()} tok</span>`);
+        else badges.push(`<span class="pnl-badge neutral">NOT IN TOP 100</span>`);
+      }
+      return `
+        <div class="pnl-row">
+          <div class="pnl-rank">${rank}</div>
+          <div>
+            <div class="pnl-wallet"><a href="https://solscan.io/account/${w}" target="_blank" rel="noreferrer">${short}</a></div>
+            <div class="pnl-stats">${badges.join("")}</div>
+          </div>
+          <div class="pnl-amount ${amountCls}">${amountStr}</div>
+        </div>
+      `;
+    };
+
+    // Collapse each tab to its top 10 by default with a Show all / Show less
+    // toggle — the full lists run to 25+ rows and dominate the page.
+    const PNL_COLLAPSE_AT = 10;
+    const renderTab = (tab, expanded = false) => {
+      const list = pnl[tab] || [];
+      if (list.length === 0) {
+        $("pnlList").innerHTML = `<div class="pnl-empty">No wallets in this category for this token.</div>`;
+        return;
+      }
+      const shown = expanded ? list : list.slice(0, PNL_COLLAPSE_AT);
+      let html = shown.map((e, i) => renderRow(e, i + 1, tab)).join("");
+      if (list.length > PNL_COLLAPSE_AT) {
+        html += expanded
+          ? `<button class="pnl-expand-btn" data-action="collapse">▴ SHOW TOP ${PNL_COLLAPSE_AT}</button>`
+          : `<button class="pnl-expand-btn" data-action="expand">▾ SHOW ALL ${list.length}</button>`;
+      }
+      $("pnlList").innerHTML = html;
+      const btn = $("pnlList").querySelector(".pnl-expand-btn");
+      if (btn) btn.addEventListener("click", () => renderTab(tab, btn.dataset.action === "expand"));
+    };
+
+    // Default tab = topSellers (the "who dumped" question is usually first)
+    renderTab("topSellers");
+    document.querySelectorAll("#pnlTabs .pnl-tab").forEach(el => {
+      el.addEventListener("click", () => {
+        document.querySelectorAll("#pnlTabs .pnl-tab").forEach(x => x.classList.remove("active"));
+        el.classList.add("active");
+        renderTab(el.dataset.tab);
+      });
+    });
+  }
+
+  // Key Events Timeline — `lt` was previously declared inside the Lifetime
+  // card render block; that block was removed 2026-05-21 but this section
+  // still reads `data.lifetime.keyEvents`. Declare locally so it doesn't
+  // throw "Can't find variable: lt" on Safari.
+  const lt = data.lifetime;
+  const events = (lt && lt.keyEvents) || [];
+  if (events.length === 0) {
+    $("eventsCard").style.display = "none";
+  } else {
+    $("eventsCard").style.display = "block";
+    const fmtTime = (ts) => {
+      if (!ts) return "—";
+      const d = new Date(ts);
+      const isoDate = d.toISOString().slice(0, 10);
+      const isoTime = d.toISOString().slice(11, 16);
+      return isoDate + " · " + isoTime + " UTC";
+    };
+    const typeLabel = {
+      GENESIS: "🚀 GENESIS",
+      MINT_EVENT: "🖨 MINT EVENT",
+      BURN_EVENT: "🔥 BURN",
+      LARGE_TRANSFER: "💸 LARGE TRANSFER",
+    };
+    $("eventsTimeline").innerHTML = events.map(e => `
+      <div class="event-row event-${e.type}">
+        <div class="event-time">${fmtTime(e.timestamp)}</div>
+        <div class="event-type-label event-${e.type}">${typeLabel[e.type] || e.type}</div>
+        <div class="event-desc">${(e.description || "").replace(/</g, "&lt;")}</div>
+        <a class="event-link" href="https://solscan.io/tx/${e.signature}" target="_blank" rel="noreferrer">↗ ${e.signature ? e.signature.slice(0, 12) + "…" + e.signature.slice(-6) : "view"}</a>
+      </div>
+    `).join("");
+  }
+
+  // Narrative
+  if (data.narrative) {
+    const paragraphs = data.narrative.split(/\n\n+/).map(p => `<p>${esc(p.trim())}</p>`).join("");
+    $("narrativeText").innerHTML = paragraphs;
+    $("narrativeCard").style.display = "block";
+  } else {
+    $("narrativeCard").style.display = "none";
+  }
+
+  // Lessons
+  const lessons = data.lessons || [];
+  if (lessons.length === 0) {
+    $("lessonsCard").style.display = "none";
+  } else {
+    $("lessonsRow").innerHTML = lessons.map(l =>
+      `<a class="lesson-chip" href="/" >${esc(l.title)}</a>`
+    ).join("");
+    $("lessonsCard").style.display = "block";
+  }
+}
+
+$("runBtn").addEventListener("click", runAutopsy);
+
+// Sample gallery — prefill the input and run a real autopsy on a well-known token.
+window.tryMint = (m) => {
+  $("mintInput").value = m;
+  $("mintInput").scrollIntoView({ behavior: "smooth", block: "center" });
+  runAutopsy();
+};
+
+// ── Copy / export the report ──────────────────────────────────────────────
+function buildSummary(d) {
+  const f = d.facts || {}, L = [];
+  L.push(`🔬 Cluck Norris Autopsy — ${d.symbol || ""}${d.name ? " (" + d.name + ")" : ""}`.trim());
+  L.push(`Mint: ${d.mint}`);
+  if (d.verdict) L.push(`Verdict: ${d.verdict.label || d.verdict.type}`);
+  L.push("");
+  if (f.totalLiqUsd != null) L.push(`Liquidity: ${fmtUsd(f.totalLiqUsd)}`);
+  if (f.totalVol24h != null) L.push(`24h volume: ${fmtUsd(f.totalVol24h)}`);
+  L.push(`Mint authority: ${f.mintAuthorityRevoked ? "revoked" : "ACTIVE"}`);
+  L.push(`Freeze authority: ${f.freezeAuthorityRevoked ? "revoked" : "ACTIVE"}`);
+  if (d.lpStatus) L.push(`LP: ${d.lpStatus.status}${d.lpStatus.lpBurnPct != null ? ` (${Math.round(d.lpStatus.lpBurnPct)}% burned)` : ""}`);
+  if (d.cexPresence && d.cexPresence.exchanges && d.cexPresence.exchanges.length) L.push(`CEX presence: ${d.cexPresence.exchanges.join(", ")}`);
+  const flags = d.redFlags || [];
+  L.push("");
+  L.push(flags.length ? `Red flags (${flags.length}):` : "Red flags: none detected from available data");
+  flags.forEach(fl => L.push(`• ${fl}`));
+  L.push("");
+  L.push(`Full report: clucknorris.app/autopsy?mint=${d.mint}`);
+  L.push(`NFA — the chain shows what, not why. Cross-verified, never falsely accusing or reassuring.`);
+  return L.join("\n");
+}
+$("copySummaryBtn").addEventListener("click", async () => {
+  if (!LAST_REPORT) return;
+  const btn = $("copySummaryBtn"), orig = btn.textContent;
+  try { await navigator.clipboard.writeText(buildSummary(LAST_REPORT)); btn.textContent = "✓ Copied"; }
+  catch (_) { btn.textContent = "Copy failed — select & copy manually"; }
+  setTimeout(() => { btn.textContent = orig; }, 1800);
+});
+$("exportJsonBtn").addEventListener("click", () => {
+  if (!LAST_REPORT) return;
+  const blob = new Blob([JSON.stringify(LAST_REPORT, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `autopsy-${(LAST_REPORT.symbol || LAST_REPORT.mint.slice(0, 8)).replace(/[^\w.-]/g, "")}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+
+// ── Dig Deeper: load the premium deep-trace inline, on demand ──────────────
+// Lives inside #resultBox, so it only appears after a free autopsy renders.
+// Clicking embeds /premium (mint pre-filled) below the report; the embedded
+// page reports its height back so the iframe sizes seamlessly.
+$("digDeeperBtn").addEventListener("click", () => {
+  const mint = ($("mintInput").value || "").trim();
+  if (!mint) return;
+  const host = $("digDeeperHost");
+  if (host.querySelector("iframe")) return;
+  const f = document.createElement("iframe");
+  f.src = "/premium?embed=1&mint=" + encodeURIComponent(mint);
+  f.setAttribute("allow", "clipboard-write");
+  f.style.cssText = "width:100%;border:0;border-radius:12px;background:transparent;min-height:440px";
+  host.appendChild(f);
+  $("digDeeperBtn").style.display = "none";
+});
+window.addEventListener("message", (e) => {
+  if (e.data && e.data.type === "clkn-premium-height") {
+    const host = $("digDeeperHost");
+    const f = host && host.querySelector("iframe");
+    if (f && e.data.height > 0) f.style.height = (e.data.height + 24) + "px";
+  }
+});
+$("mintInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") runAutopsy();
+});
+
+// Allow ?mint= deep-linking
+const urlMint = new URLSearchParams(location.search).get("mint");
+if (urlMint && urlMint.length >= 32) {
+  $("mintInput").value = urlMint;
+  setTimeout(runAutopsy, 100);
+}
+</script>
+</body>
+</html>

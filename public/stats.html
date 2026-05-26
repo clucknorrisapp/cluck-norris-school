@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex,nofollow" />
+<title>Cluck Norris — Traffic</title>
+<style>
+  :root{--bg:#0a0a0a;--card:#111;--border:rgba(255,255,255,0.08);--text:#F9FAFB;--sub:#6B7280;--accent:#FCD34D;--orange:#D97706;--green:#10B981;--blue:#60A5FA;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:20px;max-width:920px;margin:0 auto}
+  h1{font-size:22px;font-weight:800;letter-spacing:.5px;margin-bottom:2px}
+  .muted{color:var(--sub);font-size:13px}
+  .row{display:flex;flex-wrap:wrap;gap:12px;margin:16px 0}
+  .stat{flex:1;min-width:140px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px}
+  .stat .n{font-size:30px;font-weight:800;line-height:1}
+  .stat .l{font-size:11px;color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;margin-top:8px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin:14px 0}
+  .card h3{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:12px}
+  .bars{display:flex;align-items:flex-end;gap:3px;height:120px;border-bottom:1px solid var(--border);padding-bottom:0}
+  .bar{flex:1;background:linear-gradient(180deg,var(--orange),rgba(217,119,6,.25));border-radius:3px 3px 0 0;min-height:2px;position:relative}
+  .bar:hover{background:var(--accent)}
+  .bar span{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);font-size:10px;color:var(--text);background:#000;border:1px solid var(--border);border-radius:4px;padding:2px 5px;white-space:nowrap;opacity:0;pointer-events:none;margin-bottom:4px}
+  .bar:hover span{opacity:1}
+  .axis{display:flex;justify-content:space-between;font-size:10px;color:var(--sub);margin-top:6px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  td{padding:6px 4px;border-bottom:1px solid var(--border)}
+  td:last-child{text-align:right;color:var(--accent);font-variant-numeric:tabular-nums;font-weight:700}
+  .ctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0}
+  .ctl button{background:rgba(255,255,255,.04);border:1px solid var(--border);color:var(--text);padding:7px 14px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600}
+  .ctl button.on{background:rgba(217,119,6,.2);border-color:var(--orange)}
+  input{background:#000;border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:8px;font-size:14px;width:260px;max-width:100%}
+  .err{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);color:#FCA5A5;border-radius:8px;padding:12px;font-size:13px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:640px){.grid2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+  <h1>🐔 Traffic</h1>
+  <div class="muted">First-party, privacy-respecting analytics — no cookies, no third parties. <span id="range">last 30 days</span>.</div>
+
+  <div id="gate" style="display:none">
+    <div class="card"><h3>Enter access key</h3>
+      <div class="ctl"><input id="keyInput" type="password" placeholder="PREMIUM_ACCESS_KEY" /><button onclick="setKey()">View</button></div>
+      <div class="muted">Tip: open <code>/stats?key=YOURKEY</code> to skip this.</div>
+    </div>
+  </div>
+
+  <div id="dash" style="display:none">
+    <div class="ctl">
+      <button data-d="7">7d</button><button data-d="30" class="on">30d</button><button data-d="90">90d</button>
+    </div>
+    <div class="row">
+      <div class="stat"><div class="n" id="tVis">—</div><div class="l">Visitors today</div></div>
+      <div class="stat"><div class="n" id="tView">—</div><div class="l">Views today</div></div>
+      <div class="stat"><div class="n" id="rView">—</div><div class="l">Views (range)</div></div>
+      <div class="stat"><div class="n" id="rVis">—</div><div class="l">Visitor-days (range)</div></div>
+    </div>
+    <div class="card"><h3>Daily visitors</h3><div class="bars" id="bars"></div><div class="axis"><span id="axStart"></span><span id="axEnd"></span></div></div>
+    <div class="grid2">
+      <div class="card"><h3>Top pages</h3><table id="pages"></table></div>
+      <div class="card"><h3>Top referrers</h3><table id="refs"></table></div>
+    </div>
+    <div class="card"><h3>Tool runs</h3><table id="tools"></table></div>
+  </div>
+  <div id="errBox"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+let KEY = new URLSearchParams(location.search).get("key") || localStorage.getItem("clkn_stats_key") || "";
+let DAYS = 30;
+function setKey(){ KEY = $("keyInput").value.trim(); if(KEY){ localStorage.setItem("clkn_stats_key",KEY); load(); } }
+function fmt(n){ return (n||0).toLocaleString(); }
+function rows(el, arr){ el.innerHTML = (arr&&arr.length) ? arr.map(x=>`<tr><td>${esc(x.k)}</td><td>${fmt(x.v)}</td></tr>`).join("") : '<tr><td class="muted">none yet</td><td></td></tr>'; }
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+async function load(){
+  $("errBox").innerHTML = "";
+  if(!KEY){ $("gate").style.display="block"; $("dash").style.display="none"; return; }
+  try{
+    const r = await fetch(`/api/stats?key=${encodeURIComponent(KEY)}&days=${DAYS}`);
+    if(r.status===404){ $("gate").style.display="block"; $("dash").style.display="none"; $("errBox").innerHTML='<div class="err">Invalid key.</div>'; return; }
+    const d = await r.json();
+    if(!d.success) throw new Error(d.error||"failed");
+    $("gate").style.display="none"; $("dash").style.display="block";
+    $("range").textContent = `last ${d.rangeDays} days`;
+    $("tVis").textContent = fmt(d.today.visitors);
+    $("tView").textContent = fmt(d.today.views);
+    $("rView").textContent = fmt(d.totals.views);
+    $("rVis").textContent = fmt(d.totals.visitorDays);
+    // bars
+    const s = d.series||[]; const max = Math.max(1,...s.map(x=>x.visitors));
+    $("bars").innerHTML = s.map(x=>`<div class="bar" style="height:${Math.round(x.visitors/max*100)}%"><span>${x.date}: ${fmt(x.visitors)} visitors · ${fmt(x.views)} views</span></div>`).join("") || '<span class="muted">no data yet</span>';
+    $("axStart").textContent = s[0]?.date || "";
+    $("axEnd").textContent = s[s.length-1]?.date || "";
+    rows($("pages"), d.topPaths);
+    rows($("refs"), d.topReferrers);
+    rows($("tools"), d.topTools);
+  }catch(e){ $("errBox").innerHTML=`<div class="err">${esc(e.message)}</div>`; }
+}
+document.querySelectorAll('[data-d]').forEach(b=>b.addEventListener('click',()=>{
+  DAYS = +b.dataset.d; document.querySelectorAll('[data-d]').forEach(x=>x.classList.toggle('on',x===b)); load();
+}));
+load();
+</script>
+</body>
+</html>

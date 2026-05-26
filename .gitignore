@@ -13,6 +13,9 @@ npm-debug.log*
 .env.local
 .env.*.local
 
+# Internal docs — keep strategy/brainstorm notes out of the public repo
+STRATEGY.md
+
 # Editor / OS
 .DS_Store
 .vscode/

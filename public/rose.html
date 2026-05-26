@@ -213,16 +213,127 @@ th:nth-child(4), td:nth-child(4) { display: none; }
 .hold-badge-pass { background: rgba(16,185,129,0.15); color: #10B981; border: 1px solid rgba(16,185,129,0.3); }
 .hold-badge-fail { background: rgba(239,68,46,0.15); color: #EF4444; border: 1px solid rgba(239,68,68,0.3); }
 
+
+  /* 🔒 CLKN Unlock Gate (preview model — tool stays visible, RUN is gated) */
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+  .unlock-gate { background: linear-gradient(135deg, rgba(217,119,6,0.08), rgba(220,80,80,0.05)); border: 1px solid rgba(217,119,6,0.45); border-radius: 12px; padding: 24px 22px; margin-bottom: 16px; box-shadow: 0 0 30px rgba(217,119,6,0.12); }
+  .unlock-title { font-family: var(--head); font-size: 18px; font-weight: 900; letter-spacing: 2px; background: linear-gradient(135deg,#FCD34D,#F97316,#EF4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-align: center; margin-bottom: 4px; }
+  .unlock-sub { font-family: var(--head); font-size: 10px; color: var(--subtext); text-align: center; letter-spacing: 3px; margin-bottom: 18px; }
+  .unlock-amount-card { background: rgba(0,0,0,0.4); border: 1px solid rgba(217,119,6,0.45); border-radius: 10px; padding: 16px; text-align: center; margin-bottom: 10px; cursor: pointer; transition: border-color 0.15s; }
+  .unlock-amount-card:hover { border-color: var(--accent); }
+  .unlock-amount-card .lbl { font-family: var(--head); font-size: 9px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 6px; }
+  .unlock-amount-card .val { font-family: var(--mono); font-size: 26px; font-weight: 700; color: #FCD34D; letter-spacing: 1px; }
+  .unlock-amount-card .hint { font-family: var(--head); font-size: 8px; letter-spacing: 1px; margin-top: 4px; color: var(--accent); }
+  .unlock-wallet-card { background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; cursor: pointer; transition: border-color 0.15s; }
+  .unlock-wallet-card:hover { border-color: var(--accent); }
+  .unlock-wallet-card .lbl { font-family: var(--head); font-size: 9px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 4px; }
+  .unlock-wallet-card .val { font-family: var(--mono); font-size: 15px; font-weight: 600; color: #e8e8e8; word-break: break-all; line-height: 1.55; }
+  .unlock-wallet-card .hint { font-family: var(--head); font-size: 8px; letter-spacing: 1px; margin-top: 6px; text-align: right; color: var(--accent); }
+  .unlock-blurb { font-family: var(--head); font-size: 11px; color: var(--subtext); text-align: center; line-height: 1.7; margin-bottom: 14px; letter-spacing: 1px; }
+  .unlock-blurb .price { color: var(--accent); font-weight: 700; }
+  .unlock-blurb .bonus { color: #6B7280; font-size: 10px; display: block; margin-top: 4px; }
+  .unlock-status { font-family: var(--mono); font-size: 11px; color: var(--subtext); text-align: center; padding: 12px 14px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; }
+  .unlock-status .pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 1s infinite; margin-right: 8px; vertical-align: middle; }
+  .unlock-status.success { background: rgba(105,240,174,0.1); border-color: rgba(105,240,174,0.4); color: var(--green); font-weight: 700; }
+  .unlock-status.success .pulse { background: var(--green); animation: none; }
+  .unlock-status.idle { color: var(--subtext); border-color: rgba(255,255,255,0.06); background: rgba(255,255,255,0.02); }
+  .unlock-status.idle .pulse { background: var(--subtext); animation: none; }
+  .unlock-restart-btn { width: 100%; margin-top: 10px; padding: 12px; background: linear-gradient(135deg,#D97706,#EF4444); border: none; border-radius: 8px; font-family: var(--head); font-size: 12px; font-weight: 700; color: #fff; letter-spacing: 2px; cursor: pointer; }
+  .unlock-restart-btn:hover { opacity: 0.9; }
+  .unlock-preview-note { font-family: var(--mono); font-size: 10px; color: var(--subtext); text-align: center; margin-top: 12px; line-height: 1.6; }
+  .unlock-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; background: linear-gradient(135deg, rgba(105,240,174,0.14), rgba(105,240,174,0.04)); border: 1px solid rgba(105,240,174,0.4); border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; }
+  .unlock-banner-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .banner-check { font-family: var(--mono); font-size: 16px; color: var(--green); background: rgba(105,240,174,0.18); border: 1px solid rgba(105,240,174,0.45); border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; }
+  .banner-title { font-family: var(--head); font-size: 12px; font-weight: 700; color: var(--green); letter-spacing: 2px; }
+  .banner-meta { font-family: var(--mono); font-size: 10px; color: var(--subtext); margin-top: 2px; word-break: break-all; }
+  .banner-bonus { display: inline-block; font-family: var(--head); font-size: 8px; font-weight: 700; letter-spacing: 1px; color: #FCD34D; background: rgba(252,211,77,0.12); border: 1px solid rgba(252,211,77,0.4); border-radius: 4px; padding: 2px 6px; margin-left: 6px; vertical-align: middle; }
+  .unlock-banner-right { text-align: right; flex-shrink: 0; }
+  .banner-countdown-label { font-family: var(--head); font-size: 9px; color: var(--subtext); letter-spacing: 2px; }
+  .banner-countdown { font-family: var(--mono); font-size: 18px; font-weight: 700; color: var(--accent); letter-spacing: 1px; margin-top: 2px; }
+  .banner-countdown.warning { color: #F59E0B; }
+  .banner-countdown.expiring { color: var(--red); animation: pulse 1s infinite; }
+  .sample-preview { border: 1px dashed rgba(220,80,80,0.4); border-radius: 10px; padding: 16px; background: rgba(220,80,80,0.03); }
+  .sample-tag { font-family: var(--head); font-size: 10px; letter-spacing: 2px; color: var(--subtext); margin-bottom: 12px; text-align: center; }
+  .sample-row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; margin-bottom: 6px; border-radius: 7px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); font-family: var(--mono); font-size: 12px; }
+  .sample-row .rank { font-weight: 700; min-width: 58px; }
+  .sample-row .addr { color: var(--subtext); flex: 1; }
+  .sample-row .amt { color: #e8e8e8; white-space: nowrap; }
+  .sample-row .prize { font-size: 10px; color: var(--accent); min-width: 60px; text-align: right; }
+  .sample-row.gold { border-color: rgba(252,211,77,0.45); background: rgba(252,211,77,0.07); }
+  .sample-row.gold .rank { color: #FCD34D; }
+  .sample-row.silver { border-color: rgba(203,213,225,0.4); }
+  .sample-row.silver .rank { color: #CBD5E1; }
+  .sample-row.bronze { border-color: rgba(217,119,6,0.4); }
+  .sample-row.bronze .rank { color: #D97706; }
+  .sample-foot { font-size: 11px; color: var(--subtext); text-align: center; margin-top: 10px; line-height: 1.6; }
+  @media (max-width: 480px) {
+    .unlock-banner { flex-direction: column; align-items: stretch; gap: 8px; }
+    .unlock-banner-right { text-align: left; }
+  }
+
+  /* Desktop — wider container so the page fills a larger screen */
+  @media (min-width: 1040px) {
+    .wrap { max-width: 1040px; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
+  <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#D97706;text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid #D97706;"/>&larr; CLUCK NORRIS HOME</a>
 
   <div class="header">
     <div class="rose-icon">🌹</div>
     <div class="header-text">
       <h1>ROSE</h1>
       <p>BUY COMPETITION TRACKER · SHE WATCHES, AND REWARDS THOSE WHO BUY</p>
+    </div>
+  </div>
+
+  <!-- 🔒 CLKN Unlock Gate -->
+  <div class="unlock-gate" id="unlockGate" style="display:none">
+    <div class="unlock-title">🔒 ROSE · BUY COMPETITION TRACKER</div>
+    <div class="unlock-sub">CLKN MICROPAYMENT TO UNLOCK</div>
+
+    <div class="unlock-amount-card" onclick="copyUnlockAmount()">
+      <div class="lbl">SEND EXACTLY</div>
+      <div class="val" id="unlockAmountVal">—</div>
+      <div class="hint" id="unlockAmountHint">TAP TO COPY</div>
+    </div>
+
+    <div class="unlock-wallet-card" onclick="copyUnlockWallet()">
+      <div class="lbl">TO THIS WALLET</div>
+      <div class="val">7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H</div>
+      <div class="hint" id="unlockWalletHint">TAP TO COPY</div>
+    </div>
+
+    <div class="unlock-blurb">
+      Rank every real buyer in any window, verify who held, hand the winners straight to the airdropper.<br>
+      <span class="price">500 CLKN ≈ $0.06</span> · 7 days unlimited runs · any token, any window
+      <span class="bonus">Hold ≥ 2M CLKN after sending → 5× longer unlock (35 days)</span>
+    </div>
+
+    <div class="unlock-status" id="unlockStatus">
+      <span class="pulse"></span>
+      <span id="unlockStatusText">Watching for your payment…</span>
+    </div>
+    <button class="unlock-restart-btn" id="unlockRestart" onclick="restartPolling()" style="display:none">
+      ↻ CHECK AGAIN
+    </button>
+    <div class="unlock-preview-note">👇 The full tool is below — explore the setup freely. Unlocking enables a real scan.</div>
+  </div>
+
+  <!-- Unlocked banner -->
+  <div class="unlock-banner" id="unlockBanner" style="display:none">
+    <div class="unlock-banner-left">
+      <span class="banner-check">✓</span>
+      <div>
+        <div class="banner-title">ROSE UNLOCKED</div>
+        <div class="banner-meta" id="bannerMeta">—</div>
+      </div>
+    </div>
+    <div class="unlock-banner-right">
+      <div class="banner-countdown-label">EXPIRES IN</div>
+      <div class="banner-countdown" id="bannerCountdown">—</div>
     </div>
   </div>
 
@@ -269,6 +380,32 @@ th:nth-child(4), td:nth-child(4) { display: none; }
         <div class="config-label">Number of Winners</div>
         <input type="number" id="inputWinners" value="3" min="1" max="50" style="width:80px"/>
       </div>
+      <div class="config-group">
+        <div class="config-label">Award by</div>
+        <select id="awardMode" style="background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:#e8e8e8;font-family:var(--mono);font-size:12px">
+          <option value="cumulative">💰 Cumulative SOL spent (total over window)</option>
+          <option value="single">🎯 Single largest buy (biggest one buy)</option>
+        </select>
+      </div>
+    </div>
+    <div class="config-row">
+      <div class="config-group">
+        <div class="config-label">Prize mode</div>
+        <select id="prizeMode" style="background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:#e8e8e8;font-family:var(--mono);font-size:12px">
+          <option value="fixed">🏅 Fixed places (enter each prize)</option>
+          <option value="prorata">🥧 Pro-rata pool (split by SOL spent)</option>
+          <option value="quadratic">📐 Quadratic pool (√SOL — dampens whales)</option>
+          <option value="raffle">🎲 Raffle (weighted by SOL, random)</option>
+        </select>
+      </div>
+      <div class="config-group">
+        <div class="config-label">Prize pool — pool modes only</div>
+        <input type="number" id="prizePool" value="" min="0" step="0.01" placeholder="total reward tokens" style="width:160px"/>
+      </div>
+      <div class="config-group">
+        <div class="config-label">Min buy (SOL) — optional floor</div>
+        <input type="number" id="minBuySol" value="" min="0" step="0.01" placeholder="e.g. 0.1" style="width:130px"/>
+      </div>
     </div>
     <div class="config-row">
       <div class="config-group">
@@ -307,7 +444,7 @@ th:nth-child(4), td:nth-child(4) { display: none; }
     <div class="stat-box"><div class="stat-val" id="statWallets">—</div><div class="stat-label">Unique Wallets</div></div>
     <div class="stat-box"><div class="stat-val green" id="statEligible">—</div><div class="stat-label">✅ Eligible</div></div>
     <div class="stat-box"><div class="stat-val red" id="statDisq">—</div><div class="stat-label">❌ Disqualified</div></div>
-    <div class="stat-box"><div class="stat-val gold" id="statVolume">—</div><div class="stat-label">Total Bought</div></div>
+    <div class="stat-box"><div class="stat-val gold" id="statVolume">—</div><div class="stat-label">Total SOL In</div></div>
   </div>
 
   <div id="results"></div>
@@ -466,6 +603,54 @@ function fmtAmount(raw) {
   if (val >= 1e3) return (val/1e3).toFixed(1) + 'K';
   return val.toFixed(2);
 }
+// SOL ranking helpers — the competition awards by SOL spent. Mode comes from
+// the "Award by" selector: cumulative total vs single largest buy.
+function getAwardMode() { const el = document.getElementById('awardMode'); return el && el.value === 'single' ? 'single' : 'cumulative'; }
+function fmtSol(lamports) { return (Number(lamports || 0n) / 1e9).toFixed(2) + ' SOL'; }
+function rankSolVal(x) { return getAwardMode() === 'single' ? (x.maxSingleBuySol || 0n) : (x.solSpent || 0n); }
+function awardLabel() { return getAwardMode() === 'single' ? 'Largest Buy (SOL)' : 'SOL Spent'; }
+// ── Prize models ─────────────────────────────────────────────────────────
+function getPrizeMode() { const el = document.getElementById('prizeMode'); return el ? el.value : 'fixed'; }
+function getPrizePool() { const v = parseFloat((document.getElementById('prizePool') || {}).value); return isFinite(v) && v > 0 ? v : 0; }
+function getMinBuyLamports() { const v = parseFloat((document.getElementById('minBuySol') || {}).value); return isFinite(v) && v > 0 ? BigInt(Math.round(v * 1e9)) : 0n; }
+function fmtPrizeAmt(x) { if (!isFinite(x) || x <= 0) return '0'; return x >= 100 ? String(Math.round(x)) : x.toFixed(2); }
+// Weighted random draw (without replacement), weight = SOL ranking value.
+function weightedDraw(list, n) {
+  const pool = list.map(x => ({ x, w: Math.max(0, Number(rankSolVal(x))) }));
+  const out = [];
+  while (out.length < n && pool.length) {
+    const total = pool.reduce((s, p) => s + p.w, 0);
+    let idx;
+    if (total <= 0) { idx = Math.floor(Math.random() * pool.length); }
+    else { let r = Math.random() * total; for (idx = 0; idx < pool.length; idx++) { r -= pool[idx].w; if (r <= 0) break; } if (idx >= pool.length) idx = pool.length - 1; }
+    out.push(pool[idx].x); pool.splice(idx, 1);
+  }
+  return out;
+}
+// Given the ranked candidate list, return { winners, prefill } per prize mode.
+// prefill = array of reward-token amounts aligned to winners (null = manual).
+function computePrizeWinners(candidates, n) {
+  const floor = getMinBuyLamports();
+  const elig = floor > 0n ? candidates.filter(c => rankSolVal(c) >= floor) : candidates.slice();
+  const mode = getPrizeMode();
+  const pool = getPrizePool();
+  if (mode === 'raffle') {
+    const winners = weightedDraw(elig, n);
+    const each = pool > 0 ? pool / winners.length : 0;
+    return { winners, prefill: pool > 0 ? winners.map(() => each) : null };
+  }
+  const winners = elig.slice(0, n);
+  if ((mode === 'prorata' || mode === 'quadratic') && pool > 0 && winners.length) {
+    const weights = winners.map(w => {
+      const sol = Number(rankSolVal(w)) / 1e9;
+      return mode === 'quadratic' ? Math.sqrt(Math.max(0, sol)) : Math.max(0, sol);
+    });
+    const sum = weights.reduce((a, b) => a + b, 0);
+    const prefill = sum > 0 ? weights.map(w => pool * w / sum) : winners.map(() => pool / winners.length);
+    return { winners, prefill };
+  }
+  return { winners, prefill: null }; // fixed places (manual entry)
+}
 
 function fmtTime(ts) {
   if (!ts) return '—';
@@ -517,6 +702,11 @@ async function getTokenDecimals() {
 }
 
 async function runAnalysis() {
+  if (!getActiveUnlock()) {
+    applyLockState();
+    document.getElementById('unlockGate').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
   stopFlag = false;
   hideError();
 
@@ -661,7 +851,7 @@ async function runAnalysis() {
         if (isProgram(owner) || !isRealWallet(owner)) continue;
         const net = tokNet[owner];
         if (Math.abs(net) < 1e-9) continue;     // netted out — a routing hop
-        if (!passWallets[owner]) passWallets[owner] = { bought: 0n, sold: 0n, movedOut: 0n, buyTxns: 0, sellTxns: 0, moveTxns: 0, firstBuy: null, txSigs: [], moveTxs: [] };
+        if (!passWallets[owner]) passWallets[owner] = { bought: 0n, sold: 0n, movedOut: 0n, solSpent: 0n, maxSingleBuySol: 0n, buyTxns: 0, sellTxns: 0, moveTxns: 0, firstBuy: null, txSigs: [], moveTxs: [] };
         const w = passWallets[owner];
         const spent    = (solNet[owner] || 0) < -SOL_DUST || lostTok[owner];
         const received = (solNet[owner] || 0) >  SOL_DUST || gotTok[owner];
@@ -669,6 +859,17 @@ async function runAnalysis() {
         if (net > 0) {
           if (!spent) continue;                 // received tokens, gave nothing = transfer IN
           w.bought += raw;
+          // SOL the buyer actually spent this tx = the SOL that left the wallet
+          // (lamports). We track BOTH ranking bases the competition can use:
+          //   solSpent        = cumulative total SOL across all buys in window
+          //   maxSingleBuySol = the largest single buy (one tx)
+          // SOL-paid buys only; a buy paid in another token won't add SOL here.
+          const solOut = solNet[owner] || 0;
+          if (solOut < 0) {
+            const oneBuy = BigInt(Math.round(-solOut));
+            w.solSpent += oneBuy;
+            if (oneBuy > w.maxSingleBuySol) w.maxSingleBuySol = oneBuy;
+          }
           w.buyTxns++;
           if (!w.firstBuy || (ts && ts < w.firstBuy)) w.firstBuy = ts;
           if (sig) {
@@ -742,6 +943,9 @@ async function runAnalysis() {
             wallets[addr].movedOut = data.movedOut;
             wallets[addr].moveTxns = data.moveTxns;
           }
+          // Recover the most-complete SOL totals across passes (same max logic).
+          if ((data.solSpent || 0n) > (wallets[addr].solSpent || 0n)) wallets[addr].solSpent = data.solSpent;
+          if ((data.maxSingleBuySol || 0n) > (wallets[addr].maxSingleBuySol || 0n)) wallets[addr].maxSingleBuySol = data.maxSingleBuySol;
           if (data.firstBuy && (!wallets[addr].firstBuy || data.firstBuy < wallets[addr].firstBuy)) {
             wallets[addr].firstBuy = data.firstBuy;
           }
@@ -779,6 +983,7 @@ async function runAnalysis() {
     const disqualified = [];
     const flagged = [];
     let totalBought = 0n;
+    let totalSolSpent = 0n;
     let uniqueWallets = 0;
 
     const excludeSet = new Set(
@@ -790,9 +995,11 @@ async function runAnalysis() {
       if (excludeSet.has(addr)) continue;   // wallet on the operator's manual exclude list
       uniqueWallets++;
       totalBought += data.bought;
+      totalSolSpent += (data.solSpent || 0n);
       const moved = data.movedOut || 0n;
       const base = {
         addr, bought: data.bought, sold: data.sold, movedOut: moved,
+        solSpent: data.solSpent || 0n, maxSingleBuySol: data.maxSingleBuySol || 0n,
         buyTxns: data.buyTxns, sellTxns: data.sellTxns, moveTxns: data.moveTxns || 0,
         firstBuy: data.firstBuy, txSigs: data.txSigs || [], moveTxs: data.moveTxs || []
       };
@@ -802,8 +1009,14 @@ async function runAnalysis() {
       if (moved > 0n) flagged.push(base); // traceable — the new holder earns that part
     }
 
-    eligible.sort((a, b) => (b.bought > a.bought ? 1 : b.bought < a.bought ? -1 : 0));
-    disqualified.sort((a, b) => (b.bought > a.bought ? 1 : b.bought < a.bought ? -1 : 0));
+    // Ranking metric (the competition's award basis) is SOL spent. The operator
+    // picks the mode: cumulative total SOL across the window, or the single
+    // largest buy. Winners come from `eligible`, so its order is what matters.
+    const awardMode = (document.getElementById('awardMode') && document.getElementById('awardMode').value) || 'cumulative';
+    const rankVal = (x) => awardMode === 'single' ? (x.maxSingleBuySol || 0n) : (x.solSpent || 0n);
+    const byRank = (a, b) => (rankVal(b) > rankVal(a) ? 1 : rankVal(b) < rankVal(a) ? -1 : 0);
+    eligible.sort(byRank);
+    disqualified.sort(byRank);
     flagged.sort((a, b) => (b.movedOut > a.movedOut ? 1 : b.movedOut < a.movedOut ? -1 : 0));
 
     // Update summary
@@ -811,7 +1024,7 @@ async function runAnalysis() {
     document.getElementById('statWallets').textContent = uniqueWallets.toLocaleString();
     document.getElementById('statEligible').textContent = eligible.length.toLocaleString();
     document.getElementById('statDisq').textContent = disqualified.length.toLocaleString();
-    document.getElementById('statVolume').textContent = fmtAmount(Number(totalBought));
+    document.getElementById('statVolume').textContent = fmtSol(totalSolSpent);
     document.getElementById('summary').classList.add('show');
 
     // Window info
@@ -823,6 +1036,15 @@ async function runAnalysis() {
     const numWinners = parseInt(document.getElementById('inputWinners').value) || 3;
     renderResults(eligible, disqualified, flagged, numWinners);
 
+    // Solana Tracker double-check — independently confirm the detected buyer set
+    // against ST's trade feed (same non-invasive layer Buy Special uses). Our
+    // value-flow scan stays the source of truth; this is a confidence check on
+    // the competition results and never blocks or alters the scan.
+    try {
+      const localBuyerSet = new Set([...eligible, ...disqualified, ...flagged].map(b => b.addr));
+      runStCrossCheck(MINT_ADDR, startTime, endTime, localBuyerSet);
+    } catch (e) { /* non-invasive — ignore */ }
+
     // Hold check — run if hold hours is filled in
     const holdHours = parseInt(document.getElementById('inputHoldHours').value) || 0;
     if (holdHours > 0 && eligible.length > 0) {
@@ -833,7 +1055,7 @@ async function runAnalysis() {
       await runHoldCheck(eligible, checkCount, endTime, holdDeadline, numWinners);
     } else if (eligible.length > 0) {
       // No hold check requested — show prize section immediately
-      appendPrizeSection(eligible.slice(0, numWinners), document.getElementById('results'));
+      { const pw = computePrizeWinners(eligible, numWinners); appendPrizeSection(pw.winners, document.getElementById('results'), pw.prefill); }
     }
 
     // Done
@@ -983,7 +1205,7 @@ function renderHoldResults(results, eligible, numWinners, holdHours, holdDeadlin
   wrap.className = 'tbl-wrap';
   const tbl = document.createElement('table');
   tbl.innerHTML = `<thead><tr>
-    <th>#</th><th>Wallet</th><th>Tokens Bought</th><th>Hold Status</th><th>Notes</th>
+    <th>#</th><th>Wallet</th><th>${awardLabel()}</th><th>Hold Status</th><th>Notes</th>
   </tr></thead>`;
   const tbody = document.createElement('tbody');
 
@@ -1007,7 +1229,7 @@ function renderHoldResults(results, eligible, numWinners, holdHours, holdDeadlin
     tr.innerHTML = `
       <td class="rank-cell ${rankClass}">${i < numWinners ? '🏆 ' : ''}${i+1}</td>
       <td><div class="addr-wrap"><span class="addr-cell" onclick="toggleAddr(this,'${r.addr}')">${shortAddr(r.addr)}</span><button class="copy-btn" onclick="copyAddr(this,'${r.addr}')">COPY</button></div></td>
-      <td class="amt-cell">${fmtAmount(Number(wallet.bought))}</td>
+      <td class="amt-cell">${fmtSol(rankSolVal(wallet))}<span style="color:var(--subtext);font-size:9px;font-weight:400"> · ${fmtAmount(Number(wallet.bought))} tokens</span></td>
       <td>${statusBadge}${txBtn}</td>
       <td style="font-size:11px;color:var(--subtext)">${notes}</td>`;
     tbody.appendChild(tr);
@@ -1052,14 +1274,14 @@ function renderHoldResults(results, eligible, numWinners, holdHours, holdDeadlin
 
   // Prize distribution + airdrop handoff — only after hold check (matches buyspecial flow)
   if (finalWinners.length > 0) {
-    appendPrizeSection(finalWinners.slice(0, numWinners), holdSection);
+    { const pw = computePrizeWinners(finalWinners, numWinners); appendPrizeSection(pw.winners, holdSection, pw.prefill); }
   }
 
   container.appendChild(holdSection);
 }
 
 // ── PRIZE DISTRIBUTION + AIRDROP HANDOFF ─────────────────────────────────────
-function appendPrizeSection(winners, container) {
+function appendPrizeSection(winners, container, prefill) {
   if (!winners || winners.length === 0) return;
 
   const section = document.createElement('div');
@@ -1069,13 +1291,13 @@ function appendPrizeSection(winners, container) {
     <div class="prize-row" style="display:flex;align-items:center;gap:10px;margin:6px 0;background:rgba(255,255,255,0.02);padding:8px 10px;border-radius:6px;flex-wrap:wrap">
       <span style="font-family:var(--mono);color:#FCD34D;min-width:26px;font-weight:700;font-size:13px">${i+1}.</span>
       <span style="font-family:var(--mono);color:#9CA3AF;flex:1;font-size:11px;min-width:120px">${shortAddr(w.addr)}</span>
-      <input type="number" class="prize-input" data-addr="${w.addr}" min="0" step="0.01" placeholder="0.00" style="background:rgba(252,211,77,0.05);border:1.5px solid rgba(252,211,77,0.45);border-radius:6px;padding:9px 12px;font-family:var(--mono);font-size:14px;font-weight:700;color:#FCD34D;width:140px;text-align:right;outline:none"/>
+      <input type="number" class="prize-input" data-addr="${w.addr}" min="0" step="0.01" placeholder="0.00" value="${prefill && prefill[i] != null ? fmtPrizeAmt(prefill[i]) : ''}" style="background:rgba(252,211,77,0.05);border:1.5px solid rgba(252,211,77,0.45);border-radius:6px;padding:9px 12px;font-family:var(--mono);font-size:14px;font-weight:700;color:#FCD34D;width:140px;text-align:right;outline:none"/>
       <span style="font-family:var(--mono);color:#9CA3AF;font-size:11px;min-width:40px">ROSE</span>
     </div>`).join('');
 
   section.innerHTML = `
     <div style="font-family:var(--mono);font-size:12px;color:#FCD34D;letter-spacing:1px;margin-bottom:6px;font-weight:700">💰 PRIZE DISTRIBUTION</div>
-    <div style="font-size:11px;color:#D1D5DB;font-family:var(--mono);margin-bottom:14px;line-height:1.5">⬇️ Enter the ROSE token amount each winner will receive. Empty rows are skipped.</div>
+    <div style="font-size:11px;color:#D1D5DB;font-family:var(--mono);margin-bottom:14px;line-height:1.5">${prefill ? '✨ Amounts pre-filled from your prize pool — tweak any before sending.' : '⬇️ Enter the ROSE token amount each winner will receive.'} Empty rows are skipped.</div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;padding:0 10px">
       <span style="min-width:26px;font-family:var(--mono);font-size:9px;color:#6B7280;letter-spacing:1px">#</span>
       <span style="flex:1;font-family:var(--mono);font-size:9px;color:#6B7280;letter-spacing:1px;min-width:120px">WALLET</span>
@@ -1101,6 +1323,7 @@ function appendPrizeSection(winners, container) {
       : '🔒 ENTER AT LEAST ONE AMOUNT';
   }
   inputs.forEach(inp => inp.addEventListener('input', refreshBtn));
+  refreshBtn(); // enable immediately if amounts were pre-filled by a pool/raffle mode
 
   launchBtn.addEventListener('click', () => {
     const recipients = [];
@@ -1117,6 +1340,49 @@ function appendPrizeSection(winners, container) {
     }));
     window.open('/airdrop?from=rose', '_blank');
   });
+}
+
+// Solana Tracker double-check (non-invasive). Cross-verifies the detected
+// buyer set against ST's independent trade feed. Builds its own panel at the
+// top of #results and silently removes itself on any error or no-data, so it
+// can never affect the competition results. Mirrors Buy Special's layer.
+async function runStCrossCheck(mint, startTime, endTime, localBuyerSet) {
+  const results = document.getElementById('results');
+  if (!results) return;
+  let box = document.getElementById('stCrossCheck');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'stCrossCheck';
+    box.style.cssText = 'margin:0 0 14px;padding:12px 16px;border-radius:10px;border:1px solid rgba(16,185,129,0.3);background:linear-gradient(135deg,rgba(16,185,129,0.06),rgba(16,185,129,0.01));font-family:var(--mono);font-size:12px;line-height:1.6;color:#D1D5DB;';
+    results.insertAdjacentElement('afterbegin', box);
+  }
+  try {
+    box.innerHTML = '<span style="color:#6EE7B7;font-weight:700;">SOLANA TRACKER DOUBLE-CHECK</span> — cross-verifying buyers independently…';
+    const res = await fetch('/api/buyspecial-crosscheck?mint=' + encodeURIComponent(mint) + '&from=' + startTime + '&to=' + endTime);
+    const d = await res.json();
+    if (!d || !d.success || !Array.isArray(d.buyers)) { box.remove(); return; }
+    const stSet = new Set(d.buyers.map(b => b.wallet));
+    let confirmed = 0, onlyLocal = 0, onlyST = 0;
+    for (const w of localBuyerSet) { if (stSet.has(w)) confirmed++; else onlyLocal++; }
+    for (const w of stSet) { if (!localBuyerSet.has(w)) onlyST++; }
+    const localTotal = localBuyerSet.size;
+    const agreePct = localTotal > 0 ? Math.round(confirmed / localTotal * 100) : 0;
+    const coverage = d.reachedWindowStart
+      ? ''
+      : ' <span style="color:#FCD34D;">(ST covered only the most recent part of this window — older buyers not compared)</span>';
+    let verdict, vcolor;
+    if (onlyLocal === 0 && onlyST === 0) { verdict = '✓ EXACT MATCH'; vcolor = '#6EE7B7'; }
+    else if (onlyLocal === 0) { verdict = '✓ ALL CONFIRMED'; vcolor = '#6EE7B7'; }
+    else { verdict = '⚠ REVIEW DIFFERENCES'; vcolor = '#FCD34D'; }
+    box.innerHTML =
+      '<div style="font-weight:700;color:' + vcolor + ';margin-bottom:6px;">SOLANA TRACKER DOUBLE-CHECK — ' + verdict + '</div>' +
+      '<div>' + confirmed + ' of your ' + localTotal + ' buyers (' + agreePct + '%) independently confirmed by Solana Tracker' + coverage + '.</div>' +
+      (onlyST > 0 ? '<div style="margin-top:4px;color:#FCD34D;">' + onlyST + ' buyer' + (onlyST===1?'':'s') + ' Solana Tracker saw that your scan didn’t flag — worth a look (could be a pool/router edge or a sub-min buy).</div>' : '') +
+      (onlyLocal > 0 ? '<div style="margin-top:4px;color:var(--subtext);">' + onlyLocal + ' of your buyers weren’t in ST’s trade feed — usually fine (your value-flow scan catches routes ST may index differently).</div>' : '') +
+      '<div style="margin-top:6px;font-size:10px;color:var(--subtext);font-style:italic;">Your scan is the source of truth — this is a second opinion from an independent indexer. High agreement = high confidence in your competition results.</div>';
+  } catch (e) {
+    box.remove();
+  }
 }
 
 function renderResults(eligible, disqualified, flagged, numWinners) {
@@ -1152,7 +1418,7 @@ function renderResults(eligible, disqualified, flagged, numWinners) {
     tbl.innerHTML = `<thead><tr>
       <th>#</th>
       <th>Wallet</th>
-      <th>Tokens Bought</th>
+      <th>${awardLabel()}</th>
       <th>Buy Txns</th>
       <th>First Buy (CT)</th>
     </tr></thead>`;
@@ -1167,7 +1433,7 @@ function renderResults(eligible, disqualified, flagged, numWinners) {
       tr.innerHTML = `
         <td class="rank-cell ${rankClass}">${isWinner ? '🏆 ' : ''}${i+1}</td>
         <td><div class="addr-wrap"><span class="addr-cell" onclick="toggleAddr(this,'${e.addr}')">${shortAddr(e.addr)}</span><button class="copy-btn" onclick="copyAddr(this,'${e.addr}')">COPY</button><button class="copy-btn" style="border-color:rgba(239,68,68,0.45);color:#FCA5A5" onclick="excludeFromResults('${e.addr}')">EXCLUDE</button></div></td>
-        <td class="amt-cell">${fmtAmount(Number(e.bought))}${e.grossBought && e.grossBought > e.bought ? `<span style="color:#FCD34D;font-size:9px"> · moved ${fmtAmount(Number(e.grossBought - e.bought))} out</span>` : ''}</td>
+        <td class="amt-cell">${fmtSol(rankSolVal(e))}<span style="color:var(--subtext);font-size:9px;font-weight:400"> · ${fmtAmount(Number(e.bought))} tokens held${e.grossBought && e.grossBought > e.bought ? ` · moved ${fmtAmount(Number(e.grossBought - e.bought))} out` : ''}</span></td>
         <td class="buys-cell">
           <span>${e.buyTxns} buy${e.buyTxns !== 1 ? 's' : ''}</span>
           ${e.txSigs.length > 0 ? `<button class="expand-btn" onclick="toggleTxDetail('${detailId}', this)" style="margin-left:6px">▶ TXS</button>` : ''}
@@ -1224,7 +1490,7 @@ function renderResults(eligible, disqualified, flagged, numWinners) {
     tbl.innerHTML = `<thead><tr>
       <th>#</th>
       <th>Wallet</th>
-      <th>Tokens Bought</th>
+      <th>${awardLabel()}</th>
       <th>Sell Txns</th>
       <th>First Buy (CT)</th>
     </tr></thead>`;
@@ -1236,7 +1502,7 @@ function renderResults(eligible, disqualified, flagged, numWinners) {
       tr.innerHTML = `
         <td class="rank-cell">${i+1}</td>
         <td><div class="addr-wrap"><span class="addr-cell" onclick="toggleAddr(this,'${e.addr}')">${shortAddr(e.addr)}</span><button class="copy-btn" onclick="copyAddr(this,'${e.addr}')">COPY</button></div></td>
-        <td class="amt-cell neg">${fmtAmount(Number(e.bought))}</td>
+        <td class="amt-cell neg">${fmtSol(rankSolVal(e))}<span style="color:var(--subtext);font-size:9px;font-weight:400"> · ${fmtAmount(Number(e.bought))} tokens</span></td>
         <td class="sells-cell">${e.sellTxns} sell${e.sellTxns !== 1 ? 's' : ''}</td>
         <td class="time-cell">${fmtTime(e.firstBuy)}</td>`;
       tbody.appendChild(tr);
@@ -1305,7 +1571,7 @@ function excludeFromResults(addr) {
   const nw = window._numWinners || 3;
   renderResults(window._eligibleData, window._disqualifiedData || [], window._flaggedBuyers || [], nw);
   if (window._eligibleData.length > 0) {
-    appendPrizeSection(window._eligibleData.slice(0, nw), document.getElementById('results'));
+    { const pw = computePrizeWinners(window._eligibleData, nw); appendPrizeSection(pw.winners, document.getElementById('results'), pw.prefill); }
   }
 }
 
@@ -1430,9 +1696,11 @@ function exportCSV(isEligible) {
   const data = isEligible ? window._eligibleData : window._disqualifiedData;
   if (!data || data.length === 0) return;
   const label = isEligible ? 'ELIGIBLE' : 'DISQUALIFIED';
-  let csv = 'rank,wallet,tokens,buy_txns,sell_txns,first_buy_ct\n';
+  let csv = 'rank,wallet,sol_spent,largest_buy_sol,tokens,buy_txns,sell_txns,first_buy_ct\n';
   data.forEach((e, i) => {
     csv += [ i + 1, e.addr,
+      (Number(e.solSpent || 0n) / 1e9).toFixed(4),
+      (Number(e.maxSingleBuySol || 0n) / 1e9).toFixed(4),
       (Number(e.bought) / Math.pow(10, tokenDecimals)).toFixed(2),
       e.buyTxns, e.sellTxns, '"' + fmtTime(e.firstBuy) + '"' ].join(',') + '\n';
   });
@@ -1488,6 +1756,222 @@ function copyEligible() {
     if (btn) { const orig = btn.textContent; btn.textContent = '✓ Copied!'; setTimeout(() => btn.textContent = orig, 1500); }
   }).catch(()=>{});
 }
+
+// ── 🔒 CLKN Unlock Gate ──────────────────────────────────────────────────────
+// Preview model: the tool stays visible and explorable while locked — only RUN
+// is gated. Pay a unique 500.XXX CLKN amount, /api/verify-clkn-payment confirms
+// it on-chain. 7-day pass (35 days with the 2M-CLKN holder bonus).
+const UNLOCK_KEY = 'clkn_rose_unlock';
+const UNLOCK_PENDING_KEY = 'clkn_rose_pending_amount';
+const UNLOCK_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
+const ROSE_PRICE = 500;
+const RECEIVE_WALLET_FOR_UNLOCK = '7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H';
+const POLL_INTERVAL_MS = 3000;
+const POLL_BUDGET_MS = 2 * 60 * 1000;
+
+let pendingUnlockAmount = null;
+let unlockPollInterval = null;
+let pollStartedAt = null;
+let countdownInterval = null;
+
+// localStorage (not sessionStorage) so the pass survives closing the browser;
+// get() also migrates any unlock left in the old sessionStorage slot.
+const unlockStore = {
+  get(k) {
+    let v = localStorage.getItem(k);
+    if (v == null) {
+      v = sessionStorage.getItem(k);
+      if (v != null) { localStorage.setItem(k, v); sessionStorage.removeItem(k); }
+    }
+    return v;
+  },
+  set(k, v) { localStorage.setItem(k, v); },
+  remove(k) { localStorage.removeItem(k); sessionStorage.removeItem(k); },
+};
+
+function getActiveUnlock() {
+  try {
+    const raw = unlockStore.get(UNLOCK_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data || !data.expiresAt || data.expiresAt < Date.now()) {
+      unlockStore.remove(UNLOCK_KEY);
+      return null;
+    }
+    return data;
+  } catch(e) { return null; }
+}
+
+function generateUnlockAmount(baseCost) {
+  const decimal = Math.floor(Math.random() * 1000);
+  return parseFloat(`${baseCost}.${String(decimal).padStart(3, '0')}`);
+}
+
+// Canned sample shown in #results while locked — so visitors see what Rose
+// produces before paying. Static data only; it never performs a real scan.
+const SAMPLE_RESULT_HTML = `
+  <div class="sample-preview">
+    <div class="sample-tag">📋 EXAMPLE — THIS IS WHAT ROSE SHOWS AFTER A SCAN</div>
+    <div class="sample-row gold"><span class="rank">🥇 1ST</span><span class="addr">7xKp…9fQ2</span><span class="amt">5,762,400</span><span class="prize">PRIZE</span></div>
+    <div class="sample-row silver"><span class="rank">🥈 2ND</span><span class="addr">D3vN…k81A</span><span class="amt">3,104,900</span><span class="prize">PRIZE</span></div>
+    <div class="sample-row bronze"><span class="rank">🥉 3RD</span><span class="addr">9aLm…2pR7</span><span class="amt">1,488,200</span><span class="prize">PRIZE</span></div>
+    <div class="sample-row"><span class="rank">4TH</span><span class="addr">Fk2W…7dE1</span><span class="amt">902,000</span><span class="prize">held ✓</span></div>
+    <div class="sample-row"><span class="rank">5TH</span><span class="addr">Bn6T…q4Xc</span><span class="amt">540,300</span><span class="prize">held ✓</span></div>
+    <div class="sample-foot">Rose ranks every real buyer in your window, verifies who held, and hands the winners straight to the airdropper. Unlock to run this on any token.</div>
+  </div>`;
+
+// The single source of truth for locked vs unlocked UI state.
+function applyLockState() {
+  const active = getActiveUnlock();
+  const runBtn = document.getElementById('runBtn');
+  const gate = document.getElementById('unlockGate');
+  const banner = document.getElementById('unlockBanner');
+  const results = document.getElementById('results');
+  if (active) {
+    gate.style.display = 'none';
+    if (runBtn) { runBtn.disabled = false; runBtn.textContent = '▶ RUN ANALYSIS'; }
+    if (results && results.querySelector('.sample-preview')) results.innerHTML = '';
+    showUnlockBanner(active);
+  } else {
+    gate.style.display = 'block';
+    banner.style.display = 'none';
+    if (runBtn) { runBtn.disabled = true; runBtn.textContent = '🔒 UNLOCK TO RUN'; }
+    if (results && !results.innerHTML.trim()) results.innerHTML = SAMPLE_RESULT_HTML;
+  }
+}
+
+function copyUnlockAmount() {
+  if (!pendingUnlockAmount) return;
+  navigator.clipboard.writeText(pendingUnlockAmount.toFixed(3));
+  const hint = document.getElementById('unlockAmountHint');
+  hint.textContent = '✓ COPIED'; hint.style.color = '#69f0ae';
+  setTimeout(() => { hint.textContent = 'TAP TO COPY'; hint.style.color = ''; }, 1500);
+}
+
+function copyUnlockWallet() {
+  navigator.clipboard.writeText(RECEIVE_WALLET_FOR_UNLOCK);
+  const hint = document.getElementById('unlockWalletHint');
+  hint.textContent = '✓ COPIED'; hint.style.color = '#69f0ae';
+  setTimeout(() => { hint.textContent = 'TAP TO COPY'; hint.style.color = ''; }, 1500);
+}
+
+function setGateStatus(state, text) {
+  const statusEl = document.getElementById('unlockStatus');
+  statusEl.classList.remove('success', 'idle');
+  if (state === 'success') statusEl.classList.add('success');
+  if (state === 'idle') statusEl.classList.add('idle');
+  document.getElementById('unlockStatusText').textContent = text;
+}
+
+function startPolling() {
+  pollStartedAt = Date.now();
+  document.getElementById('unlockRestart').style.display = 'none';
+  setGateStatus('watching', 'Watching for your payment…');
+  pollUnlock();
+  if (unlockPollInterval) clearInterval(unlockPollInterval);
+  unlockPollInterval = setInterval(() => {
+    if (Date.now() - pollStartedAt > POLL_BUDGET_MS) { stopPolling(); return; }
+    pollUnlock();
+  }, POLL_INTERVAL_MS);
+}
+
+function stopPolling() {
+  if (unlockPollInterval) { clearInterval(unlockPollInterval); unlockPollInterval = null; }
+  pollStartedAt = null;
+  setGateStatus('idle', "Haven't seen your payment in 2 minutes — slow wallets are normal.");
+  document.getElementById('unlockRestart').style.display = 'block';
+}
+
+function restartPolling() { startPolling(); }
+
+async function pollUnlock() {
+  if (!pendingUnlockAmount) return;
+  try {
+    const res = await fetch('/api/verify-clkn-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ unlockAmount: pendingUnlockAmount, tool: 'rose' })
+    });
+    const data = await res.json();
+    if (data.success) {
+      const stretch = data.holderBonus ? 5 : 1;
+      const unlockData = {
+        unlockedAt: Date.now(),
+        expiresAt: Date.now() + UNLOCK_DURATION_MS * stretch,
+        senderWallet: data.senderWallet,
+        senderBalance: data.senderBalance,
+        holderBonus: data.holderBonus
+      };
+      unlockStore.set(UNLOCK_KEY, JSON.stringify(unlockData));
+      unlockStore.remove(UNLOCK_PENDING_KEY);
+      if (unlockPollInterval) { clearInterval(unlockPollInterval); unlockPollInterval = null; }
+      setGateStatus('success', data.holderBonus
+        ? '✓ PAYMENT VERIFIED · 5× HOLDER BONUS · 35 DAYS UNLOCKED'
+        : '✓ PAYMENT VERIFIED · 7 DAYS UNLOCKED');
+      setTimeout(() => { applyLockState(); }, 1800);
+    }
+  } catch(e) { /* network blip — the next interval retries */ }
+}
+
+function fmtRemaining(ms) {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const d = Math.floor(totalSec / 86400);
+  const h = Math.floor((totalSec % 86400) / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  return `${m}:${String(s).padStart(2,'0')}`;
+}
+
+function showUnlockBanner(unlockData) {
+  const banner = document.getElementById('unlockBanner');
+  const senderShort = unlockData.senderWallet
+    ? `${unlockData.senderWallet.slice(0,6)}…${unlockData.senderWallet.slice(-4)}`
+    : 'verified on-chain';
+  const bonusBadge = unlockData.holderBonus ? '<span class="banner-bonus">5× HOLDER BONUS</span>' : '';
+  document.getElementById('bannerMeta').innerHTML = `Paid by ${senderShort}${bonusBadge}`;
+  banner.style.display = 'flex';
+  if (countdownInterval) clearInterval(countdownInterval);
+  function tick() {
+    const remainingMs = unlockData.expiresAt - Date.now();
+    if (remainingMs <= 0) {
+      clearInterval(countdownInterval); countdownInterval = null;
+      banner.style.display = 'none';
+      unlockStore.remove(UNLOCK_KEY);
+      unlockStore.remove(UNLOCK_PENDING_KEY);
+      pendingUnlockAmount = null;
+      initUnlockGate();
+      return;
+    }
+    const cd = document.getElementById('bannerCountdown');
+    cd.textContent = fmtRemaining(remainingMs);
+    cd.classList.remove('warning', 'expiring');
+    if (remainingMs < 5 * 60 * 1000) cd.classList.add('expiring');
+    else if (remainingMs < 60 * 60 * 1000) cd.classList.add('warning');
+  }
+  tick();
+  countdownInterval = setInterval(tick, 1000);
+}
+
+function initUnlockGate() {
+  const active = getActiveUnlock();
+  if (active) { applyLockState(); return; }
+  const stored = unlockStore.get(UNLOCK_PENDING_KEY);
+  if (stored) {
+    const n = parseFloat(stored);
+    if (Number.isFinite(n) && Math.floor(n) === ROSE_PRICE) pendingUnlockAmount = n;
+  }
+  if (!pendingUnlockAmount) {
+    pendingUnlockAmount = generateUnlockAmount(ROSE_PRICE);
+    unlockStore.set(UNLOCK_PENDING_KEY, pendingUnlockAmount.toString());
+  }
+  document.getElementById('unlockAmountVal').textContent = pendingUnlockAmount.toFixed(3) + ' CLKN';
+  applyLockState();
+  startPolling();
+}
+
+initUnlockGate();
 </script>
 
 </body>

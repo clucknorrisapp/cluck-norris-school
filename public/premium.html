@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="robots" content="noindex,nofollow"/>
+<title>Premium Forensics · Cluck Norris</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#070710; --surface:#0f0f1a; --border:rgba(139,92,246,0.20);
+  --accent:#8b5cf6; --accent2:#a78bfa; --gold:#ffd54f; --green:#69f0ae;
+  --red:#ef5350; --amber:#f59e0b; --dim:#55556a; --text:#e8e8f4; --subtext:#9090b0;
+  --mono:'Share Tech Mono',monospace; --head:'Barlow Condensed',sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--mono);padding:0 16px 60px;-webkit-font-smoothing:antialiased}
+.wrap{max-width:780px;margin:0 auto}
+.hero{text-align:center;padding:28px 0 18px}
+.hero .kick{font-family:var(--head);font-size:11px;letter-spacing:5px;color:var(--accent2);text-transform:uppercase}
+.hero h1{font-family:var(--head);font-size:34px;font-weight:900;margin:6px 0 6px;letter-spacing:1px}
+.hero p{color:var(--subtext);font-size:15px;line-height:1.6;margin:0}
+.badge-beta{display:inline-block;border:1px solid var(--border);border-radius:6px;padding:3px 11px;font-size:12px;letter-spacing:2px;color:var(--accent2);margin-top:8px}
+html.embed .hero{display:none}
+html.embed body{padding:6px 12px 24px}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px}
+.cfg-label{font-size:11px;letter-spacing:2px;color:var(--subtext);text-transform:uppercase;margin-bottom:6px}
+input{width:100%;background:rgba(0,0,0,0.35);border:1px solid var(--border);border-radius:7px;padding:13px 14px;color:var(--text);font-family:var(--mono);font-size:15px;margin-bottom:10px}
+.runbtn{width:100%;background:linear-gradient(135deg,#8b5cf6,#6d28d9);border:none;border-radius:9px;padding:15px;font-family:var(--head);font-size:18px;font-weight:900;letter-spacing:2px;color:#fff;cursor:pointer}
+.runbtn:disabled{opacity:0.5;cursor:not-allowed}
+.feat{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px}
+.feat h2{font-family:var(--head);font-size:20px;font-weight:900;letter-spacing:1px;margin:0 0 4px;display:flex;align-items:center;gap:8px}
+.feat .sub{font-size:13px;color:var(--subtext);margin-bottom:12px;line-height:1.5}
+.vbadge{display:inline-block;border-radius:6px;padding:4px 11px;font-size:13px;font-weight:700;letter-spacing:1px;margin-bottom:10px}
+.v-bad{background:rgba(239,83,80,0.14);border:1px solid rgba(239,83,80,0.4);color:#fca5a5}
+.v-warn{background:rgba(245,158,11,0.14);border:1px solid rgba(245,158,11,0.4);color:#fcd34d}
+.v-ok{background:rgba(105,240,174,0.12);border:1px solid rgba(105,240,174,0.35);color:#86efac}
+.v-neutral{background:rgba(139,92,246,0.12);border:1px solid var(--border);color:var(--accent2)}
+.kv{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.kv .box{background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:8px;padding:9px 13px;min-width:96px}
+.kv .box .l{font-size:11px;letter-spacing:1px;color:var(--subtext);text-transform:uppercase}
+.kv .box .v{font-family:var(--head);font-size:21px;font-weight:900;margin-top:2px}
+.summary{font-size:15px;line-height:1.65;color:var(--text);margin-bottom:10px}
+.note{font-size:13px;line-height:1.6;color:var(--subtext);font-style:italic;border-left:2px solid var(--border);padding-left:10px;margin-top:10px}
+table{width:100%;border-collapse:collapse;font-size:14px;margin-top:6px}
+th{text-align:left;font-size:11px;letter-spacing:1px;color:var(--subtext);text-transform:uppercase;padding:7px 8px;border-bottom:1px solid var(--border)}
+td{padding:8px;border-bottom:1px solid rgba(255,255,255,0.04);vertical-align:top}
+.mono-sm{font-size:13px;color:var(--subtext)}
+.exited{color:#fca5a5}.held{color:#86efac}.partial{color:#fcd34d}
+.status{padding:18px;text-align:center;color:var(--subtext);font-size:13px;letter-spacing:1px}
+.err{color:#fca5a5;text-align:center;padding:14px;font-size:14px}
+a{color:var(--accent2)}
+.skip{font-size:13px;color:var(--dim);font-style:italic;padding:6px 0;line-height:1.5}
+.vmethod{background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:9px;padding:13px;margin-top:10px}
+.vm-title{font-family:var(--head);font-size:16px;font-weight:700;letter-spacing:1px;color:var(--accent2);margin-bottom:4px}
+.vm-sub{font-size:13px;color:var(--subtext);line-height:1.55;margin-bottom:8px}
+.wallet-picker{display:flex;flex-wrap:wrap;gap:6px}
+.wbtn{flex:1 1 30%;min-width:90px;background:rgba(139,92,246,0.12);border:1px solid var(--border);border-radius:7px;padding:11px;color:var(--text);font-family:var(--mono);font-size:14px;cursor:pointer}
+.wbtn:hover{background:rgba(139,92,246,0.22)}
+.vbtn{width:100%;background:rgba(139,92,246,0.2);border:1px solid var(--border);border-radius:7px;padding:12px;color:#fff;font-family:var(--head);font-size:15px;font-weight:700;letter-spacing:1px;cursor:pointer;margin-top:4px}
+.copyfield{display:flex;align-items:center;gap:10px;background:rgba(0,0,0,0.35);border:1px solid var(--border);border-radius:7px;padding:12px;margin-bottom:6px;cursor:pointer;font-size:18px;color:var(--gold);line-height:1.4}
+.copyfield:hover{border-color:var(--accent)}
+.copyfield .cf-text{flex:1;word-break:break-all;min-width:0}
+.copyfield .copybtn{flex-shrink:0;background:rgba(139,92,246,0.25);border:1px solid var(--border);border-radius:6px;padding:7px 13px;font-size:13px;color:var(--accent2);font-family:var(--mono);white-space:nowrap}
+.copyfield .hint{font-size:11px;color:var(--dim);margin-left:6px}
+.vok{background:rgba(105,240,174,0.1);border:1px solid rgba(105,240,174,0.35);color:#86efac;border-radius:8px;padding:12px;margin-bottom:10px;font-size:15px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <div class="kick">Cluck Norris · Private</div>
+    <h1>🔬 PREMIUM FORENSICS</h1>
+    <p>Deep-trace add-ons that follow the money and the people: prove downstream dumps, map cash-out flow, pull a creator's full track record, and rank every wallet's P&amp;L.</p>
+    <div class="badge-beta">HOLDER BETA · 2,000,000+ CLKN</div>
+  </div>
+
+  <div class="panel">
+    <div class="cfg-label">Token mint</div>
+    <input id="mint" placeholder="Paste any Solana token mint address" spellcheck="false"/>
+
+    <div id="verifyBox">
+      <div class="cfg-label" style="margin-top:6px">Access — prove you hold 2,000,000+ CLKN</div>
+      <div id="verifyStatus" class="skip">Two ways to verify — both just <strong>prove the wallet is yours</strong>. Neither authorizes a transaction, moves tokens, or grants any spending permission.</div>
+
+      <div class="vmethod">
+        <div class="vm-title">① Send a few CLKN <span style="color:var(--dim);font-weight:400">· no connect</span></div>
+        <div class="vm-sub">Send the exact amount below from the wallet you want to verify. Only its owner can send it, so the transfer proves it's yours — then we read its CLKN balance. The small amount is just the proof, not a fee for the data.</div>
+        <div id="sendRow" style="display:none">
+          <div class="copyfield" onclick="copyTxt(SEND_AMT,this)"><span class="cf-text"><span id="sendAmt">—</span> CLKN</span><span class="copybtn">📋 Copy</span></div>
+          <div class="copyfield" onclick="copyTxt(RECEIVE,this)"><span class="cf-text" id="recvAddr">—</span><span class="copybtn">📋 Copy</span></div>
+          <button class="vbtn" id="checkSendBtn" onclick="checkSend()">I've sent it — verify</button>
+        </div>
+        <button class="vbtn" id="startSendBtn" onclick="startSend()">Set up the send</button>
+      </div>
+
+      <div class="vmethod">
+        <div class="vm-title">② Connect &amp; sign <span style="color:var(--dim);font-weight:400">· no transaction</span></div>
+        <div class="vm-sub">Connect your wallet and approve a <strong>signature</strong> on a one-line message. This is <strong>not</strong> a transaction: it moves no tokens, grants no spending approval, and leaves no lingering permission. It only proves you hold the key.</div>
+        <div id="mobileConnect" style="display:none;margin-bottom:8px"></div>
+        <div class="wallet-picker" id="walletPicker"></div>
+      </div>
+    </div>
+
+    <div id="verified" class="vok" style="display:none"></div>
+    <button class="runbtn" id="runBtn" onclick="run()">RUN DEEP TRACE</button>
+    <div class="skip">Heavy trace — typically 20–70s: it scans the creator's full history, every funnel recipient, and the top holders' funding.</div>
+    <details style="margin-top:10px"><summary class="cfg-label" style="cursor:pointer">Admin access key</summary>
+      <input id="key" type="password" placeholder="Premium access key (admin only)" spellcheck="false" style="margin-top:8px"/>
+    </details>
+  </div>
+
+  <div id="status"></div>
+  <div id="results"></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const RECEIVE = '7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H'; // CLKN proof-send wallet
+let SEND_AMT = null;
+// A proof token (from either verify path) = our key. localStorage survives close.
+let PROOF = localStorage.getItem('clkn_premium_proof') || '';
+let PROOF_WALLET = localStorage.getItem('clkn_premium_proof_wallet') || '';
+
+$('mint').value = new URLSearchParams(location.search).get('mint') || '';
+$('key').value = localStorage.getItem('clkn_premium_key') || '';
+
+function shortA(a){ return a ? a.slice(0,4)+'…'+a.slice(-4) : '—'; }
+function copyTxt(t, el){
+  const flash=()=>{ const b=el&&el.querySelector(".copybtn"); if(b){ const o=b.innerHTML; b.innerHTML="✓ Copied"; setTimeout(()=>{ b.innerHTML=o; },1500); } };
+  const fallback=()=>{ try{ const ta=document.createElement("textarea"); ta.value=t; ta.style.position="fixed"; ta.style.opacity="0"; document.body.appendChild(ta); ta.focus(); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); flash(); }catch(_){} };
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(t).then(flash, fallback); }
+    else fallback();
+  }catch(_){ fallback(); }
+}
+function setVMsg(html, err){ $('verifyStatus').innerHTML = err ? '<span style="color:#fca5a5">'+html+'</span>' : html; }
+
+// Same 11 injected wallets as the airdropper / hatchery.
+const WALLETS = {
+  phantom:{name:'Phantom',detect:()=>window.phantom?.solana||(window.solana?.isPhantom?window.solana:null)},
+  solflare:{name:'Solflare',detect:()=>window.solflare||(window.solana?.isSolflare?window.solana:null)},
+  backpack:{name:'Backpack',detect:()=>(window.backpack?.isBackpack?window.backpack:null)||(window.solana?.isBackpack?window.solana:null)},
+  okx:{name:'OKX',detect:()=>window.okxwallet?.solana||window.okxwallet||null},
+  coinbase:{name:'Coinbase',detect:()=>window.coinbaseSolana||window.coinbaseWalletSolana||null},
+  trust:{name:'Trust',detect:()=>window.trustwallet?.solana||(window.solana?.isTrust?window.solana:null)},
+  glow:{name:'Glow',detect:()=>window.glowSolana||window.glow?.solana||(window.solana?.isGlow?window.solana:null)},
+  exodus:{name:'Exodus',detect:()=>window.exodus?.solana||null},
+  bitget:{name:'Bitget',detect:()=>window.bitkeep?.solana||window.bitgetWallet?.solana||null},
+  brave:{name:'Brave',detect:()=>window.braveSolana||(window.solana?.isBraveWallet?window.solana:null)},
+  jupiter:{name:'Jupiter',detect:()=>window.jupiterWallet||window.jupiter||(window.solana?.isJupiter?window.solana:null)},
+};
+$('walletPicker').innerHTML = Object.keys(WALLETS).map(id=>'<button class="wbtn" onclick="connectAndSign(\''+id+'\')">'+WALLETS[id].name+'</button>').join('');
+
+// Mobile/iPad on-ramp: phone & iPad browsers can't see a wallet APP (only the
+// desktop extension or the wallet's in-app browser injects window.solana). When
+// no wallet is detected on such a device, offer one-tap deep links to open THIS
+// page inside the wallet's browser (pure navigation — nothing signed/shared).
+// NOTE: iPadOS Safari reports as "Macintosh", so we also detect touch + Mac.
+function initPremiumDeepLinks(){
+  const ua = navigator.userAgent || '';
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(ua));
+  if(!isMobile) return;
+  const injected = !!(window.solana||window.phantom?.solana||window.solflare||window.backpack||window.okxwallet||window.glowSolana||window.exodus?.solana||window.coinbaseSolana||window.trustwallet?.solana);
+  if(injected) return;                       // a wallet IS present (in-app browser / extension) — picker works
+  const el = $('mobileConnect'); if(!el) return;
+  const mint = (($('mint')&&$('mint').value)||'').trim();
+  const target = location.origin + '/premium' + (mint ? ('?mint=' + encodeURIComponent(mint)) : '');
+  const enc = encodeURIComponent(target), ref = encodeURIComponent(location.origin);
+  el.innerHTML =
+    '<div style="font-size:12px;color:#FCD34D;line-height:1.5;margin-bottom:6px">📱 No wallet detected here — iPad/phone browsers can\'t see wallet apps. Use the <b>Send</b> method above (works anywhere), or open this page inside your wallet:</div>'
+    + '<a class="wbtn" style="text-decoration:none;display:block;text-align:center;margin-bottom:6px" href="https://phantom.app/ul/browse/' + enc + '?ref=' + ref + '">🔮 Open in Phantom</a>'
+    + '<a class="wbtn" style="text-decoration:none;display:block;text-align:center" href="https://solflare.com/ul/v1/browse/' + enc + '?ref=' + ref + '">☀️ Open in Solflare</a>'
+    + '<div style="font-size:10px;color:#9CA3AF;margin-top:6px">Opens this page in the wallet\'s built-in browser, where Connect works. Nothing is signed or shared by the link.</div>';
+  el.style.display = 'block';
+}
+initPremiumDeepLinks();
+
+function markVerified(wallet, balance, proof){
+  PROOF = proof; PROOF_WALLET = wallet;
+  localStorage.setItem('clkn_premium_proof', proof);
+  localStorage.setItem('clkn_premium_proof_wallet', wallet);
+  $('verifyBox').style.display = 'none';
+  $('verified').style.display = 'block';
+  $('verified').innerHTML = '✓ Verified — '+shortA(wallet)+(balance!=null?(' · '+Math.round(balance).toLocaleString()+' CLKN'):'')+' &nbsp;·&nbsp; <a href="#" onclick="resetVerify();return false">change wallet</a>';
+}
+function resetVerify(){
+  PROOF=''; PROOF_WALLET='';
+  localStorage.removeItem('clkn_premium_proof'); localStorage.removeItem('clkn_premium_proof_wallet');
+  $('verified').style.display='none'; $('verifyBox').style.display='block';
+}
+if(PROOF && PROOF_WALLET){
+  markVerified(PROOF_WALLET, null, PROOF); // restore prior verification
+  // Already verified → show current holdings (no re-verify needed).
+  fetch('/api/clkn-balance?wallet='+encodeURIComponent(PROOF_WALLET)).then(r=>r.json()).then(d=>{ if(d&&d.success) markVerified(PROOF_WALLET, d.balance, PROOF); }).catch(()=>{});
+}
+// Embedded inside the autopsy page ("Dig Deeper"): hide our hero + report height
+// to the parent so it can size the iframe seamlessly as the content changes.
+if(new URLSearchParams(location.search).get('embed')==='1'){
+  document.documentElement.classList.add('embed');
+  const postH=()=>{ try{ parent.postMessage({type:'clkn-premium-height',height:document.body.scrollHeight},'*'); }catch(_){} };
+  if(window.ResizeObserver) new ResizeObserver(postH).observe(document.body);
+  window.addEventListener('load',postH); setTimeout(postH,400); setTimeout(postH,1200);
+}
+
+// ── Method ①: send a few CLKN (no connect) ──
+function startSend(){
+  SEND_AMT = (7 + Math.floor(Math.random()*1000)/1000).toFixed(3); // 7.xyz — unique, matchable
+  $('sendAmt').textContent = SEND_AMT;
+  $('recvAddr').textContent = RECEIVE;
+  $('sendRow').style.display='block';
+  $('startSendBtn').style.display='none';
+  setVMsg('Send exactly <b>'+SEND_AMT+' CLKN</b> to the address shown, then tap “I’ve sent it”.');
+}
+// Auto-polls the chain for up to 2 min after the user taps verify — no need to
+// re-click while the transfer confirms/indexes (mirrors the other gated tools).
+let sendPolling = false;
+async function checkSend(){
+  if(!SEND_AMT || sendPolling) return;
+  sendPolling = true;
+  const btn = $('checkSendBtn');
+  const start = Date.now(), MAX_MS = 120000, INTERVAL = 5000;
+  const reset = () => { sendPolling = false; btn.disabled = false; btn.innerHTML = "I've sent it — verify"; };
+  const waiting = () => {
+    const s = Math.floor((Date.now() - start) / 1000);
+    btn.disabled = true; btn.innerHTML = '⏳ Waiting to validate… ' + s + 's';
+    setVMsg('Watching the chain for your <b>' + SEND_AMT + ' CLKN</b> payment — this can take a few seconds to confirm. No need to tap again.');
+  };
+  waiting();
+  const poll = async () => {
+    try{
+      const r = await fetch('/api/verify-clkn-payment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({unlockAmount:parseFloat(SEND_AMT),tool:'premium'})});
+      const d = await r.json();
+      if(d.success && d.premiumProof){ reset(); markVerified(d.senderWallet, d.senderBalance, d.premiumProof); return; }
+      if(d.success && d.premiumNote && d.premiumNote.insufficient){ reset(); setVMsg('That wallet holds ' + Math.round(d.premiumNote.balance||0).toLocaleString() + ' CLKN — beta needs 2,000,000+.', true); return; }
+      // anything else = "not found yet" → keep waiting
+    }catch(_){}
+    if(Date.now() - start > MAX_MS){ reset(); setVMsg("Couldn't find your " + SEND_AMT + " CLKN after 2 minutes. Make sure you sent the EXACT amount to the address above, then tap verify again.", true); return; }
+    waiting();
+    setTimeout(poll, INTERVAL);
+  };
+  poll();
+}
+
+// ── Method ②: connect + sign (no transaction) ──
+async function connectAndSign(id){
+  const w = WALLETS[id]; const provider = w && w.detect();
+  if(!provider){ setVMsg(w.name+' not detected — install it, or use the send method above.', true); return; }
+  try{
+    setVMsg('Connecting '+w.name+'…');
+    const resp = await provider.connect();
+    const wallet = (resp&&resp.publicKey&&resp.publicKey.toString())||(provider.publicKey&&provider.publicKey.toString());
+    if(!wallet) throw new Error('no public key returned');
+    const nonce = Date.now();
+    const message = 'Cluck Norris — verify wallet for premium access\nwallet: '+wallet+'\nnonce: '+nonce+'\nThis only proves you own this wallet. It is NOT a transaction, moves no tokens, and grants no permissions.';
+    setVMsg('Approve the <b>signature</b> in '+w.name+' — this is not a transaction.');
+    const enc = new TextEncoder().encode(message);
+    const sigRes = await provider.signMessage(enc, 'utf8');
+    const sigBytes = (sigRes && sigRes.signature) ? sigRes.signature : sigRes;
+    const sigB64 = btoa(String.fromCharCode.apply(null, new Uint8Array(sigBytes)));
+    setVMsg('Verifying signature…');
+    const r = await fetch('/api/premium-verify-sig',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({wallet, signature:sigB64, message})});
+    const d = await r.json();
+    if(d.success && d.proof){ markVerified(wallet, d.balance, d.proof); return; }
+    if(d.error==='insufficient_holdings'){ setVMsg('That wallet holds '+Math.round(d.balance||0).toLocaleString()+' CLKN — beta needs 2,000,000+.', true); }
+    else { setVMsg(d.error||'Verification failed.', true); }
+  }catch(e){ setVMsg((e.message||e)+'', true); }
+}
+// Escape API/token-supplied strings (symbol + server prose that embeds it)
+// before innerHTML — token metadata is attacker-controlled.
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function usd(n){ return '$'+(Math.round(Number(n)||0)).toLocaleString(); }
+function vbadgeClass(v){
+  if(!v) return 'v-neutral';
+  if(/PROVEN|RUGGED|SERIAL|EXTRACT|HONEYPOT/.test(v)) return 'v-bad';
+  if(/REVIEW|FADING|PLATFORM|DOWNSTREAM/.test(v)) return 'v-warn';
+  if(/NO_|ALIVE|MATCH|CONFIRMED/.test(v)) return 'v-ok';
+  return 'v-neutral';
+}
+
+async function run(){
+  const mint = $('mint').value.trim();
+  const key = $('key').value.trim();
+  if(!mint){ $('status').innerHTML='<div class="err">Enter a token mint.</div>'; return; }
+  if(!PROOF && !key){ $('status').innerHTML='<div class="err">Verify your wallet above first (or enter an admin key).</div>'; return; }
+  if(key) localStorage.setItem('clkn_premium_key', key);
+  $('runBtn').disabled = true;
+  $('results').innerHTML = '';
+  let dots=0; const t0=Date.now();
+  const tick = setInterval(()=>{ dots=(dots+1)%4; const secs=((Date.now()-t0)/1000).toFixed(0);
+    $('status').innerHTML='<div class="status">RUNNING DEEP TRACE'+'.'.repeat(dots)+' &nbsp;·&nbsp; '+secs+'s &nbsp;·&nbsp; scanning creator history, funnel recipients, holder funding…</div>'; },500);
+  try{
+    let qs = 'mint='+encodeURIComponent(mint);
+    if(PROOF) qs += '&proof='+encodeURIComponent(PROOF);
+    if(key) qs += '&key='+encodeURIComponent(key);
+    const res = await fetch('/api/autopsy-premium?'+qs);
+    clearInterval(tick);
+    if(res.status===404){ $('status').innerHTML='<div class="err">Premium endpoint is disabled on the server.</div>'; $('runBtn').disabled=false; return; }
+    if(res.status===403){
+      let j={}; try{ j=await res.json(); }catch(_){}
+      if(j.error==='insufficient_holdings'){
+        const bal=Math.round(j.balance||0).toLocaleString(), need=Math.round(j.threshold||2000000).toLocaleString();
+        $('status').innerHTML='<div class="err">🔒 That wallet now holds '+bal+' CLKN — beta needs '+need+'+.</div>';
+      } else {
+        $('status').innerHTML='<div class="err">Access expired or invalid — verify your wallet again.</div>'; resetVerify();
+      }
+      $('runBtn').disabled=false; return;
+    }
+    const d = await res.json();
+    if(!d.success){ $('status').innerHTML='<div class="err">'+(d.error||'Trace failed')+'</div>'; $('runBtn').disabled=false; return; }
+    const access = d.accessVia==='holder' ? ('✓ holder · '+Math.round(d.holderBalance||0).toLocaleString()+' CLKN') : (d.accessVia==='admin-key'?'✓ admin':'');
+    $('status').innerHTML='<div class="status">✓ complete in '+((Date.now()-t0)/1000).toFixed(1)+'s · '+access+' · creator '+shortA(d.creatorWallet)+' ('+(d.creatorSource||'?')+')</div>';
+    render(d);
+  }catch(e){ clearInterval(tick); $('status').innerHTML='<div class="err">'+e.message+'</div>'; }
+  $('runBtn').disabled=false;
+}
+
+function render(d){
+  const f = d.features||{}; let html='';
+  html += renderRecipient(f.recipientDump);
+  html += renderMoneyFlow(f.moneyFlow);
+  html += renderRapSheet(f.creatorRapSheet);
+  html += renderPnl(f.pnlExpress);
+  html += renderClusters(f.walletClusters);
+  $('results').innerHTML = html;
+}
+
+function skipped(title, icon, x){
+  return '<div class="feat"><h2>'+icon+' '+title+'</h2><div class="skip">'+(x&&x.status==='error'?('error: '+x.reason):('not available'+(x&&x.reason?' — '+x.reason:'')))+'</div></div>';
+}
+
+function renderRecipient(r){
+  if(!r||r.status!=='computed') return skipped('Recipient-Dump Trace','🩸',r);
+  let rows = (r.rows||[]).map(w=>{
+    const type = w.accountType||'wallet';
+    const isPerson = type==='wallet'||type==='airdrop';
+    const cls = !isPerson ? 'held' : (w.status==='FULLY EXITED'?'exited':w.status==='partially sold'?'partial':'held');
+    const typeTag = type==='wallet' ? '<span style="color:var(--subtext)">wallet</span>'
+      : type==='airdrop' ? '<span style="color:#fcd34d">🪂 batch send</span>'
+      : '<span style="color:var(--accent2)">'+esc(w.accountLabel||'contract')+'</span>';
+    return '<tr><td class="mono-sm">'+shortA(w.wallet)+'</td><td class="mono-sm">'+typeTag+'</td><td>'+Number(w.tokensReceived).toLocaleString()+'</td><td class="'+cls+'">'+esc(w.status)+'</td><td>'+(isPerson?(w.sells??'—'):'—')+'</td><td>'+(w.proceedsUsd!=null?usd(w.proceedsUsd):'—')+'</td></tr>';
+  }).join('');
+  const soldDenom = (r.walletRecipientCount!=null?r.walletRecipientCount:r.recipientCount);
+  return '<div class="feat"><h2>🩸 Recipient-Dump Trace</h2><div class="sub">Where the creator sent tokens — cross-referenced with the autopsy + batch-send detection. LP/locks/programs are excluded; equal-amount batch sends are flagged as a distribution to EXAMINE (legit airdrop OR coordination — chain shows the pattern, not the intent).</div>'
+    +'<span class="vbadge '+vbadgeClass(r.verdict)+'">'+r.verdict.replace(/_/g,' ')+'</span>'
+    +'<div class="summary">'+esc(r.summary)+'</div>'
+    +'<div class="kv">'
+    +'<div class="box"><div class="l">To wallets</div><div class="v">'+Number(r.tokensToWallets||0).toLocaleString()+'</div></div>'
+    +((r.tokensAirdropped||0)>0?'<div class="box"><div class="l">🪂 Batch sent</div><div class="v">'+Number(r.tokensAirdropped).toLocaleString()+'</div></div>':'')
+    +'<div class="box"><div class="l">To LP/locks</div><div class="v">'+Number(r.tokensToContracts||0).toLocaleString()+'</div></div>'
+    +'<div class="box"><div class="l">Wallets sold</div><div class="v">'+r.recipientsWhoSold+'/'+soldDenom+'</div></div>'
+    +'<div class="box"><div class="l">Extracted</div><div class="v">'+usd(r.totalProceedsUsd)+'</div></div></div>'
+    +(rows?'<table><thead><tr><th>Address</th><th>Type</th><th>Received</th><th>Status</th><th>Sells</th><th>Proceeds</th></tr></thead><tbody>'+rows+'</tbody></table>':'')
+    +'<div class="note">'+esc(r.note)+'</div></div>';
+}
+
+function renderMoneyFlow(m){
+  if(!m||m.status!=='computed') return skipped('Money-Flow / Cash-Out','💸',m);
+  let rows=(m.rows||[]).map(r=>{
+    const tag = (r.accountLabel && r.accountLabel!=='Wallet') ? ' <span style="color:var(--accent2)">['+esc(r.accountLabel)+']</span>' : (r.cex?(' <span style="color:#fcd34d">['+esc(r.cex)+']</span>'):'');
+    const gross = (r.grossSol!=null && r.grossSol>r.sol) ? ' <span style="color:var(--dim)">(gross '+r.grossSol+')</span>' : '';
+    return '<tr><td class="mono-sm">'+shortA(r.wallet)+tag+'</td><td>'+r.sol+' SOL'+gross+'</td></tr>';
+  }).join('');
+  const badge = m.verdict==='NET_CEX_CASH_OUT'?['v-bad','NET CEX CASH-OUT']:m.verdict==='NET_SOL_OUT'?['v-warn','NET SOL OUT']:['v-ok','NO NET SOL LEFT'];
+  return '<div class="feat"><h2>💸 Money-Flow / Cash-Out</h2><div class="sub">NET SOL that actually left the creator wallet — round-trips (Bags fee-claim 1-SOL floats, swap/LP routing) are netted out so they aren\'t mistaken for a cash-out.</div>'
+    +'<span class="vbadge '+badge[0]+'">'+badge[1]+'</span>'
+    +'<div class="summary">'+esc(m.summary)+'</div>'
+    +'<div class="kv">'+(m.claimedFeesSol!=null?'<div class="box"><div class="l">Fees claimed</div><div class="v">'+m.claimedFeesSol+'</div></div>':'')
+    +'<div class="box"><div class="l">Net out</div><div class="v">'+m.netSolOut+'</div></div>'
+    +'<div class="box"><div class="l">Round-tripped</div><div class="v">'+(m.roundTrippedSol||0)+'</div></div>'
+    +'<div class="box"><div class="l">Net to CEX</div><div class="v">'+m.solToCex+'</div></div>'
+    +'<div class="box"><div class="l">Net to wallets</div><div class="v">'+m.solToWallets+'</div></div></div>'
+    +(rows?'<table><thead><tr><th>Destination</th><th>Net SOL out</th></tr></thead><tbody>'+rows+'</tbody></table>':'<div class="skip">No net outflows — all gross transfers round-tripped back.</div>')
+    +'<div class="note">'+esc(m.note)+'</div></div>';
+}
+
+function renderRapSheet(c){
+  if(!c||c.status!=='computed') return skipped('Creator Rap Sheet','📋',c);
+  let rows=(c.rows||[]).slice(0,12).map(t=>'<tr><td>'+esc(t.symbol||'?')+'</td><td class="'+(/DEAD|DIED/.test(t.outcome)?'exited':/ALIVE/.test(t.outcome)?'held':'partial')+'">'+esc(t.outcome.replace(/_/g,' '))+'</td><td>'+usd(t.liquidityUsd)+'</td><td>'+usd(t.marketCapUsd)+'</td></tr>').join('');
+  return '<div class="feat"><h2>📋 Creator Rap Sheet</h2><div class="sub">Every token this deployer launched — and how each ended.</div>'
+    +'<span class="vbadge '+vbadgeClass(c.verdict)+'">'+c.verdict.replace(/_/g,' ')+'</span>'
+    +'<div class="summary">'+esc(c.summary)+'</div>'
+    +(c.isPlatformLauncher?'':'<div class="kv"><div class="box"><div class="l">Launched</div><div class="v">'+(c.totalLaunched||0)+'</div></div>'
+    +'<div class="box"><div class="l">Alive</div><div class="v">'+c.aliveCount+'</div></div>'
+    +'<div class="box"><div class="l">Dead/Rug</div><div class="v">'+c.deadOrRuggedCount+'</div></div>'
+    +'<div class="box"><div class="l">Died %</div><div class="v">'+(c.diedRatePct!=null?c.diedRatePct+'%':'—')+'</div></div></div>'
+    +(rows?'<table><thead><tr><th>Token</th><th>Outcome</th><th>Liq</th><th>MC</th></tr></thead><tbody>'+rows+'</tbody></table>':''))
+    +'<div class="note">'+esc(c.note)+'</div></div>';
+}
+
+function renderPnl(p){
+  if(!p||p.status!=='computed') return skipped('Wallet P&L Express','📊',p);
+  const tbl=(arr,label)=>{ if(!arr||!arr.length) return ''; return '<div class="cfg-label" style="margin-top:10px">'+label+'</div><table><thead><tr><th>Wallet</th><th>Realized</th><th>Bought</th><th>Sold</th></tr></thead><tbody>'+
+    arr.slice(0,5).map(w=>'<tr><td class="mono-sm">'+shortA(w.wallet)+'</td><td class="'+(w.realizedUsd>=0?'held':'exited')+'">'+usd(w.realizedUsd)+'</td><td>'+usd(w.investedUsd)+'</td><td>'+usd(w.soldUsd)+'</td></tr>').join('')+'</tbody></table>'; };
+  return '<div class="feat"><h2>📊 Wallet P&L Express</h2><div class="sub">Lifetime realized P&L per wallet — winners, losers, cash-out wallets.</div>'
+    +'<div class="kv"><div class="box"><div class="l">Wallets</div><div class="v">'+p.walletsAnalyzed+'</div></div>'
+    +'<div class="box"><div class="l">Cashed out</div><div class="v">'+(p.cashOutCount||0)+'</div></div></div>'
+    +tbl(p.biggestWinners,'🏆 Biggest winners')+tbl(p.cashOutWallets,'💰 Cash-out wallets (sold all, walked profitable)')+tbl(p.biggestLosers,'💀 Biggest losers')
+    +'<div class="note">'+esc(p.note)+'</div></div>';
+}
+
+function renderClusters(c){
+  if(!c||c.status!=='computed') return skipped('Wallet Clusters (funding map)','🕸️',c);
+  let rows=(c.clusters||[]).map(cl=>'<tr><td class="mono-sm">'+shortA(cl.funder)+(cl.cexFunder?(' <span style="color:#fcd34d">['+cl.cexName+']</span>'):'')+'</td><td>'+cl.walletCount+' wallets</td></tr>').join('');
+  return '<div class="feat"><h2>🕸️ Wallet Clusters <span style="font-size:10px;color:var(--subtext)">· funding map</span></h2><div class="sub">Top holders that trace to a common funder. A PATTERN, never a verdict.</div>'
+    +'<span class="vbadge v-neutral">'+(c.clusterCount?c.clusterCount+' CLUSTER(S) · INVESTIGATE':'NO CLUSTERS FOUND')+'</span>'
+    +'<div class="summary">'+esc(c.summary)+'</div>'
+    +'<div class="kv"><div class="box"><div class="l">Holders</div><div class="v">'+c.holdersAnalyzed+'</div></div>'
+    +'<div class="box"><div class="l">Resolved</div><div class="v">'+c.fundingResolved+'</div></div>'
+    +'<div class="box"><div class="l">Untraceable</div><div class="v">'+(c.fundingUnreachable||0)+'</div></div></div>'
+    +(rows?'<table><thead><tr><th>Common funder</th><th>Shared by</th></tr></thead><tbody>'+rows+'</tbody></table>':'')
+    +'<div class="note">'+esc(c.note)+'</div></div>';
+}
+
+if($('mint').value && $('key').value) run();
+</script>
+</body>
+</html>

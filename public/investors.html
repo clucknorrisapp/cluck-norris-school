@@ -178,10 +178,57 @@
   .ca-row .lbl { font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 6px; }
   .ca-row .val { font-family: var(--mono); font-size: 15px; font-weight: 600; color: #FCD34D; word-break: break-all; line-height: 1.5; }
   .ca-row .hint { font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--accent); text-align: right; margin-top: 6px; letter-spacing: 1px; }
+
+  html { scroll-behavior: smooth; }
+  .section { scroll-margin-top: 140px; }
+  .quicklinks {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    background: rgba(17,17,17,0.93); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px 12px; margin-bottom: 24px;
+    position: sticky; top: 0; z-index: 50;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.6);
+  }
+  .quicklinks .ql-label {
+    width: 100%; font-family: 'Oswald', sans-serif; font-size: 10px;
+    letter-spacing: 3px; color: var(--orange); font-weight: 700; margin-bottom: 4px;
+  }
+  .quicklinks a {
+    font-family: 'Oswald', sans-serif; font-size: 11px; font-weight: 700;
+    letter-spacing: 1px; text-decoration: none;
+    padding: 7px 12px; border-radius: 8px;
+    transition: border-color .15s, color .15s, background .15s;
+    color: #FCD34D; border: 1px solid rgba(252,211,77,0.28);
+    background: rgba(252,211,77,0.07);
+  }
+  .quicklinks a:hover { border-color: #FCD34D; background: rgba(252,211,77,0.17); }
+  .quicklinks a[href="#notfor"] {
+    color: #FCA5A5; border-color: rgba(239,68,68,0.32); background: rgba(239,68,68,0.08);
+  }
+  .quicklinks a[href="#notfor"]:hover { border-color: #EF4444; background: rgba(239,68,68,0.18); }
+  .quicklinks a[href="#simulator"], .quicklinks a[href="#hood"] {
+    color: #93C5FD; border-color: rgba(96,165,250,0.32); background: rgba(96,165,250,0.08);
+  }
+  .quicklinks a[href="#simulator"]:hover, .quicklinks a[href="#hood"]:hover { border-color: #60A5FA; background: rgba(96,165,250,0.18); }
+  .quicklinks a[href="#reinvestment"], .quicklinks a[href="#pricing"], .quicklinks a[href="#audience"] {
+    color: #6EE7B7; border-color: rgba(16,185,129,0.32); background: rgba(16,185,129,0.08);
+  }
+  .quicklinks a[href="#reinvestment"]:hover, .quicklinks a[href="#pricing"]:hover, .quicklinks a[href="#audience"]:hover { border-color: #10B981; background: rgba(16,185,129,0.18); }
+  .quicklinks a[href="#flock"] {
+    color: #C4B5FD; border-color: rgba(167,139,250,0.32); background: rgba(167,139,250,0.08);
+  }
+  .quicklinks a[href="#flock"]:hover { border-color: #A78BFA; background: rgba(167,139,250,0.18); }
+  .xref { color: #FCD34D; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+  .xref:hover { color: #FDE68A; }
+  /* Desktop — wider column so the page fills a larger screen */
+  @media (min-width: 1040px) {
+    .wrap { max-width: 1040px; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
+  <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#D97706;text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid #D97706;"/>&larr; CLUCK NORRIS HOME</a>
 
   <div class="header">
     <div class="header-icon">📜</div>
@@ -201,9 +248,25 @@
   </div>
 
   <!-- Live stats — pulled fresh on every page load -->
+  <!-- Quick links — jump to any section -->
+  <nav class="quicklinks">
+    <div class="ql-label">JUMP TO &darr;</div>
+    <a href="#built">What We Built</a>
+    <a href="#momentum">Momentum</a>
+    <a href="#hood">Under the Hood</a>
+    <a href="#flock">The Flock</a>
+    <a href="#value">Why It Has Value</a>
+    <a href="#simulator">Survival Simulator</a>
+    <a href="#pricing">Pricing Strategy</a>
+    <a href="#reinvestment">Fee Reinvestment</a>
+    <a href="#audience">Who It's For</a>
+    <a href="#notfor">Who It's NOT For</a>
+    <a href="#contract">Contract &amp; Links</a>
+  </nav>
+
   <div class="section">
     <div class="section-title">📊 LIVE ON-CHAIN STATS</div>
-    <p style="font-size:12px;color:var(--subtext);font-family:var(--mono);margin-bottom:14px">Pulled fresh from Helius and DexScreener every time this page loads. We don't hard‑code numbers in the README.</p>
+    <p style="font-size:12px;color:var(--text);font-family:var(--mono);margin-bottom:14px">Pulled fresh from Helius and DexScreener every time this page loads. We don't hard‑code numbers in the README.</p>
     <div class="stat-grid">
       <div class="stat gold">
         <div class="stat-label">👥 HOLDERS</div>
@@ -230,39 +293,58 @@
         <div class="stat-value" id="statVol">—</div>
         <div class="stat-sub">trading activity</div>
       </div>
-      <div class="stat gold">
+      <a class="stat gold" href="#cluckscore" style="display:block;text-decoration:none;color:inherit;cursor:pointer">
         <div class="stat-label">🩺 CLUCK SCORE</div>
         <div class="stat-value" id="statScore">—</div>
         <div class="stat-sub" id="statScoreGrade">our own grading</div>
-      </div>
+        <div style="font-family:'Oswald',sans-serif;font-size:9px;letter-spacing:1px;color:var(--accent);margin-top:5px">ⓘ WHAT IS THIS? →</div>
+      </a>
     </div>
   </div>
 
+  <!-- What is a Cluck Score -->
+  <div class="section" id="cluckscore">
+    <div class="section-title">🩺 WHAT IS A CLUCK SCORE?</div>
+    <p>The <strong>Cluck Score</strong> in the panel above is our own 0–100 health rating for a Solana token — and we run it on <strong>CLKN itself</strong> and publish the result. Most projects won't show you a number they didn't get to pick.</p>
+    <p>It's a free tool — <a href="/score" style="color:#FCD34D;text-decoration:none">clucknorris.app/score</a> — that scores <em>any</em> mint, not just ours. Six weighted factors roll into the final number and a letter grade:</p>
+    <ul>
+      <li><strong>Liquidity (25%)</strong> — real exit liquidity, summed across every Solana pool, with a small bonus for being live on more than one DEX</li>
+      <li><strong>Holders (20%)</strong> — how many unique wallets actually hold it, anchored to industry bars (500 holders is Jupiter's verification minimum)</li>
+      <li><strong>Concentration (20%)</strong> — what the top 10 wallets control, judged honestly: LP, locks and program wallets routinely sit up there and aren't whale risk</li>
+      <li><strong>Mint authority (15%)</strong> — whether the creator can still print new supply (revoked = full marks)</li>
+      <li><strong>Freeze authority (10%)</strong> — whether the creator can still freeze your wallet (revoked = full marks)</li>
+      <li><strong>24h volume (10%)</strong> — recent trading as a sign of a live market</li>
+    </ul>
+    <p>Those roll up into a weighted score on a standard grading scale — A+ at 95, down to F below 60. A mid-range grade is normal and honest for a small-cap; what matters is the number is <strong>live, on-chain, and produced by the exact tool anyone can run on any token</strong>. We don't hide it, and we don't grade on a curve.</p>
+  </div>
+
   <!-- What we built -->
-  <div class="section">
+  <div class="section" id="built">
     <div class="section-title">🛠 WHAT WE'VE ACTUALLY BUILT</div>
     <p>A whole product suite under one token. All deployed, all working in production:</p>
     <ul>
-      <li><strong>The Schoolyard</strong> — 6 beginner lessons, 12 belted progressive lessons, a 50‑question Ultimate Challenge (94% to pass), a <strong>50‑scenario Survival Simulator</strong> where you walk through real‑world crypto decisions with a $1,000 simulated bankroll, an LP Lab with interactive calculators, a 50‑term glossary, deep dives across Survival / Research / Concepts, and a Claude‑powered AI tutor embedded everywhere (10 free questions/day).</li>
-      <li><strong>Free token research</strong> — <strong>Cluck Score</strong>, a free 0–100 health score for any Solana mint (weighted factors, a top‑10 concentration filter that excludes LP / lock / program positions so it reflects actual humans, a sharable PNG card); and <strong>Security Coop</strong>, a free wallet permission check that finds lingering token approvals and revokes the risky ones.</li>
-      <li><strong>Premium operator tools paid in CLKN</strong> — an AI tutor extension, a batch airdrop sender (Phantom · Solflare · Jupiter), two buy‑competition trackers (Buy Special and Rose), and a score‑card generator. Every paid action is a unique‑decimal CLKN micropayment verified on‑chain — <strong>no wallet connect to pay</strong>.</li>
-      <li><strong>The Hatchery</strong> — a guided SPL token creator. It teaches every mint‑time decision (supply, metadata, mint/freeze authority) and deploys a real token, with metadata stored permanently on Arweave. It deliberately <strong>stops at liquidity</strong> — minting is not launching. Flat fee in SOL or CLKN.</li>
+      <li><a class="xref" href="/">The Schoolyard</a> — 7 beginner lessons, 12 belted progressive lessons, a 50‑question Ultimate Challenge (94% to pass), a <a class="xref" href="#simulator">135‑scenario Survival Simulator</a> where you walk through real‑world crypto decisions with a $1,000 simulated bankroll, an LP Lab with interactive calculators, a 50‑term glossary, deep dives across Survival / Research / Concepts, and a Claude‑powered AI tutor embedded everywhere (10 free questions/day).</li>
+      <li><strong>Free token research &amp; forensics</strong> — <a class="xref" href="#cluckscore">Cluck Score</a>, a free 0–100 health score for any Solana mint (weighted factors, a top‑10 concentration filter that excludes LP / lock / program positions so it reflects actual humans, a sharable PNG card); <a class="xref" href="/autopsy">Token Autopsy</a>, a deep forensic post‑mortem on any token — LP lock/burn status, Token‑2022 honeypot‑extension scan, real‑creator detection, creator buy‑back tracing, hidden‑exit (transfer‑then‑dump) detection, and an honest cause‑of‑death verdict; <a class="xref" href="/security-coop">Security Coop</a>, a free wallet permission check that finds lingering token approvals and revokes the risky ones; <a class="xref" href="/snapshot">Snapshot</a>, every holder and balance for any mint with an airdrop-ready CSV; <a class="xref" href="/trace">Trace</a>, every transaction between a wallet and a token in chronological order; and <a class="xref" href="/holders">Holders</a>, a token's true-holder breakdown — real wallets versus LP, locks and program accounts.</li>
+      <li><strong>Premium operator tools paid in CLKN</strong> — an AI tutor extension, a <a class="xref" href="/airdrop">batch airdrop sender</a> (11 wallets — Phantom, Solflare, Backpack, OKX &amp; more), two buy‑competition trackers (<a class="xref" href="/buyspecial">Buy Special</a> and <a class="xref" href="/rose">Rose</a>) with multiple prize models, a score‑card generator, and a <a class="xref" href="/premium">premium forensics tier</a> (downstream‑dump tracing, wallet P&amp;L, creator rap sheet, money‑flow). Every paid action is a unique‑decimal CLKN micropayment verified on‑chain — <strong>no wallet connect to pay</strong>.</li>
+      <li><a class="xref" href="/hatchery">The Hatchery</a> — a guided SPL token creator. It teaches every mint‑time decision (supply, metadata, mint/freeze authority) and deploys a real token, with metadata stored permanently on Arweave. It deliberately <strong>stops at liquidity</strong> — minting is not launching. Flat fee in SOL or CLKN.</li>
+      <li><a class="xref" href="/bags">The Bags Hub</a> + live community automation — a dedicated Bags.fm showcase with a live launches feed (newest · closest‑to‑bonding · recently graduated), plus an interactive Telegram bot (12 slash commands, including an in‑chat token score), automated "close to bonding" and "graduated" alerts on Bags tokens, and "Cluck's Lesson" — short educational lessons auto‑posted to Telegram <strong>and</strong> X several times a day.</li>
+      <li><strong>Ask Cluck — AI tutor, in the group chat</strong> — members reply to any "Cluck's Lesson" post in Telegram and our Claude‑powered bot answers the question right in‑chat, with threaded follow‑ups so it's a real back‑and‑forth. Open to everyone, 20 questions/user/day, and <strong>strictly educational</strong>: it declines buy/sell/price and off‑topic asks and ends every reply with a not‑financial‑advice line. It turns the passive lesson feed into a two‑way classroom without anyone leaving Telegram.</li>
     </ul>
   </div>
 
   <!-- Everything we built — inventory of features so investors can see the work -->
-  <div class="section">
+  <div class="section" id="shipped">
     <div class="section-title">📦 EVERYTHING SHIPPED · ONE GLANCE</div>
-    <p style="font-size:13px;color:var(--subtext);font-family:var(--mono);margin-bottom:14px">Not a roadmap. Not "coming soon." This is what's deployed and working as of this page load.</p>
+    <p style="font-size:13px;color:var(--text);font-family:var(--mono);margin-bottom:14px">Not a roadmap. Not "coming soon." This is what's deployed and working as of this page load.</p>
 
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:14px">
       <div style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.25);border-radius:10px;padding:12px 14px">
         <div style="font-family:'Oswald',sans-serif;font-size:10px;color:#60A5FA;letter-spacing:2px;margin-bottom:6px;font-weight:700">🆓 FREE EDUCATION</div>
         <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
-          • 6‑lesson Incubator<br>
+          • 7‑lesson Incubator<br>
           • 12 belted lessons (Freshman→Emeritus)<br>
           • 50‑question Ultimate Challenge<br>
-          • <strong style="color:#FCD34D">50‑scenario Survival Sim</strong> ($1K bankroll)<br>
+          • <strong style="color:#FCD34D">135‑scenario Survival Sim</strong> ($1K bankroll)<br>
           • LP Lab w/ 5 calculators<br>
           • 50‑term glossary<br>
           • 11 deep‑dive lessons<br>
@@ -272,22 +354,25 @@
       <div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.25);border-radius:10px;padding:12px 14px">
         <div style="font-family:'Oswald',sans-serif;font-size:10px;color:#10B981;letter-spacing:2px;margin-bottom:6px;font-weight:700">🩺 FREE RESEARCH</div>
         <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
-          • Cluck Score for any mint<br>
-          • 7‑factor weighted scoring<br>
+          • <a class="xref" href="/score">Cluck Score</a> for any mint<br>
+          • 6‑factor weighted scoring<br>
           • LP / lock / program filter<br>
           • PNG card generator<br>
-          • Holder Truth Engine (6 signals)<br>
-          • DexScreener + Bubblemaps cross‑ref<br>
-          • On‑chain pool vault detection
+          • <a class="xref" href="/autopsy">Token Autopsy</a> — forensic post‑mortem<br>
+          • LP lock/burn + honeypot scan<br>
+          • Holder Truth Engine + pool vault detection<br>
+          • <a class="xref" href="/snapshot">Snapshot</a> — holders + airdrop CSV<br>
+          • <a class="xref" href="/trace">Trace</a> — wallet × token history<br>
+          • <a class="xref" href="/holders">Holders</a> — true holders vs LP &amp; locks
         </div>
       </div>
       <div style="background:rgba(252,211,77,0.06);border:1px solid rgba(252,211,77,0.25);border-radius:10px;padding:12px 14px">
         <div style="font-family:'Oswald',sans-serif;font-size:10px;color:#FCD34D;letter-spacing:2px;margin-bottom:6px;font-weight:700">🔒 CLKN‑PAID TOOLS</div>
         <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
           • AI tutor extension (500)<br>
-          • Batch airdrop sender (100)<br>
-          • Buy Special + Rose comp trackers<br>
-          • Cluck Score card (100)<br>
+          • <a class="xref" href="/airdrop">Batch airdrop sender</a> (100)<br>
+          • <a class="xref" href="/buyspecial">Buy Special</a> + <a class="xref" href="/rose">Rose</a> comp trackers<br>
+          • <a class="xref" href="/score">Cluck Score card</a> (100)<br>
           • Holder bonus 5× at 2M+ CLKN<br>
           • No wallet connect to pay
         </div>
@@ -296,12 +381,12 @@
         <div style="font-family:'Oswald',sans-serif;font-size:10px;color:#D97706;letter-spacing:2px;margin-bottom:6px;font-weight:700">🛡 SAFETY + UX</div>
         <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
           • Mandatory acknowledgment gate<br>
-          • Inline airdropper education<br>
-          • Stay‑safe checklist<br>
-          • Wallet popup pre‑flight<br>
-          • HSTS + security headers<br>
-          • Sticky countdown banners<br>
-          • Multi‑wallet (Phantom/Solflare/Jupiter)
+          • Per‑IP rate limiting on all APIs<br>
+          • Replay‑proof on‑chain payments<br>
+          • Persistent storage (no resets on deploy)<br>
+          • HSTS + security headers + XSS hardening<br>
+          • Locked‑down admin/debug endpoints<br>
+          • No custody · 11 wallets + mobile deep links
         </div>
       </div>
       <div style="background:rgba(167,139,250,0.06);border:1px solid rgba(167,139,250,0.25);border-radius:10px;padding:12px 14px">
@@ -309,11 +394,23 @@
         <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
           • Embedded Jupiter swap<br>
           • Live Bags.fm launch feed<br>
+          • Solana Tracker cross‑verification<br>
           • Live token data dashboard<br>
           • Multi‑tf price + volume + buy/sell<br>
-          • Liquidity health badging<br>
-          • Real circulating MC<br>
-          • Trophy log to Google Sheets
+          • Auto‑posts to Telegram <strong>+ X</strong><br>
+          • Real circulating MC · trophy log to Sheets
+        </div>
+      </div>
+      <div style="background:rgba(56,189,248,0.06);border:1px solid rgba(56,189,248,0.25);border-radius:10px;padding:12px 14px">
+        <div style="font-family:'Oswald',sans-serif;font-size:10px;color:#38BDF8;letter-spacing:2px;margin-bottom:6px;font-weight:700">🤖 COMMUNITY · TELEGRAM</div>
+        <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
+          • Daily "Cluck's Lesson" posts (TG + X)<br>
+          • <strong style="color:#FCD34D">Ask Cluck</strong> — reply to a lesson, AI answers<br>
+          • Threaded follow‑ups · 20/user/day<br>
+          • Educational only · NFA on every reply<br>
+          • 12 interactive slash commands<br>
+          • In‑chat live token score<br>
+          • Bonding + graduation alerts
         </div>
       </div>
       <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.25);border-radius:10px;padding:12px 14px">
@@ -331,37 +428,76 @@
       <div style="background:rgba(252,211,77,0.06);border:1px solid rgba(252,211,77,0.25);border-radius:10px;padding:12px 14px">
         <div style="font-family:'Oswald',sans-serif;font-size:10px;color:#FCD34D;letter-spacing:2px;margin-bottom:6px;font-weight:700">🥚 CREATE &amp; PROTECT</div>
         <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
-          • The Hatchery — token creator<br>
+          • <a class="xref" href="/hatchery">The Hatchery</a> — token creator<br>
           • Guided mint, every decision<br>
           • Metadata permanent on Arweave<br>
           • Stops at liquidity on purpose<br>
-          • Security Coop — approval revoker<br>
+          • <a class="xref" href="/security-coop">Security Coop</a> — approval revoker<br>
           • Tools &amp; Utilities hub at /tools
+        </div>
+      </div>
+      <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.25);border-radius:10px;padding:12px 14px">
+        <div style="font-family:'Oswald',sans-serif;font-size:10px;color:#EF4444;letter-spacing:2px;margin-bottom:6px;font-weight:700">🔬 TOKEN AUTOPSY</div>
+        <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
+          • <a class="xref" href="/autopsy">Forensic post‑mortem</a> on any mint<br>
+          • LP lock/burn status (rug check)<br>
+          • Token‑2022 honeypot‑extension scan<br>
+          • Real‑creator detection (not the genesis payer)<br>
+          • Creator buy‑back &amp; fee‑reinvestment trace<br>
+          • Hidden‑exit (transfer‑then‑dump) detection<br>
+          • Solana Tracker independent cross‑check<br>
+          • Honest "cause of death" verdict
+        </div>
+      </div>
+      <div style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.25);border-radius:10px;padding:12px 14px">
+        <div style="font-family:'Oswald',sans-serif;font-size:10px;color:#60A5FA;letter-spacing:2px;margin-bottom:6px;font-weight:700">🤖 TELEGRAM + X BOT</div>
+        <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
+          • 12 interactive slash commands<br>
+          • <strong style="color:#FCD34D">In‑chat token score</strong> (just type /score &lt;mint&gt;)<br>
+          • "Close to bonding" + "graduated" Bags alerts<br>
+          • Bags Launch Radar + hourly Market Check<br>
+          • <a class="xref" href="/bags">Bags Hub</a> — live launches feed<br>
+          • Educational lessons auto‑posted to TG <strong>+ X</strong><br>
+          • Buy alerts · self‑cleaning posts
         </div>
       </div>
     </div>
   </div>
 
+  <!-- Momentum / traction / what's next — forward-looking, honest, no promises -->
+  <div class="section" id="momentum" style="background:linear-gradient(135deg, rgba(252,211,77,0.07), rgba(217,119,6,0.02));border-color:rgba(252,211,77,0.3)">
+    <div class="section-title" style="color:#FCD34D;border-color:rgba(252,211,77,0.25)">🚀 MOMENTUM · WHERE WE'RE HEADED</div>
+    <p>The product is built and shipping daily. Right now we're pointing that momentum at growth:</p>
+    <ul>
+      <li><strong>A real push on Bags.fm.</strong> Cluck Norris launched on Bags, and we're leaning into it hard — a dedicated <a class="xref" href="/bags">Bags Hub</a>, a live launches feed, "close to bonding" and "graduated" alerts, and tools that read Bags natively (verified creators, royalty splits, bonding‑curve status). We also deliberately <strong>spotlight and support other strong Bags projects</strong>, not just our own — being a useful citizen of the ecosystem brings new eyes to Bags and to us at the same time.</li>
+      <li><strong>The Bags Hackathon.</strong> We're competing for one of the Bags hackathon spots. The deep Bags integration, the daily ship cadence, and a genuinely useful free tool suite are all aimed squarely at earning that recognition.</li>
+      <li><strong>Solana Foundation grant.</strong> We've submitted an application to the Solana Foundation for funding to support the project and accelerate the app's growth. Non‑dilutive support that goes straight into building, not into anyone's pocket.</li>
+      <li><strong>More CLKN‑gated utility on the way.</strong> The <a class="xref" href="/premium">premium forensics tier</a> is the first of several token‑gated tools in the pipeline. The pattern is intentional: every new utility gives CLKN another real reason to be held and used — utility first, speculation second. <span style="color:var(--subtext)">(We don't pre‑announce dates and this isn't a roadmap promise — it's the direction the daily builds keep pointing.)</span></li>
+    </ul>
+  </div>
+
   <!-- Tech under the hood -->
-  <div class="section">
-    <div class="section-title">⚙️ UNDER THE HOOD</div>
+  <div class="section" id="hood" style="background:linear-gradient(135deg, rgba(96,165,250,0.06), rgba(96,165,250,0.02));border-color:rgba(96,165,250,0.3)">
+    <div class="section-title" style="color:#93C5FD;border-color:rgba(96,165,250,0.25)">⚙️ UNDER THE HOOD</div>
     <p>Real engineering, not vibes:</p>
     <ul>
       <li><strong>Frontend:</strong> React + Vite for the school; vanilla HTML + JS for the operator tool pages (faster iteration, smaller surface)</li>
-      <li><strong>Backend:</strong> Node.js + Express on Railway, MIT open source on GitHub</li>
+      <li><strong>Backend:</strong> Node.js + Express on Railway, MIT-licensed and open source</li>
       <li><strong>AI:</strong> Anthropic Claude Haiku 4.5 — fast and cheap enough to embed for free at 10 questions/day per user</li>
-      <li><strong>Solana data:</strong> Helius (DAS + enhanced txns), DexScreener, Bubblemaps, Bags.fm API, Jupiter — all proxied server‑side so keys are never exposed</li>
+      <li><strong>Solana data:</strong> Helius (DAS + enhanced txns), Solana Tracker (independent trade/holder/risk cross‑verification), DexScreener, Bubblemaps, Bags.fm API, Jupiter — all proxied server‑side so keys are never exposed</li>
+      <li><strong>Persistence:</strong> a Railway volume backs durable state (consumed‑payment signatures, the Bags graduation tracker, post schedulers) so nothing resets on a redeploy</li>
       <li><strong>Image generation:</strong> @napi-rs/canvas with bundled Oswald typeface for the Cluck Score card</li>
-      <li><strong>Security:</strong> HSTS, X‑Frame‑Options, X‑Content‑Type‑Options, Referrer‑Policy on every response. Vendored solana‑web3.js (same‑origin, tracking‑prevention‑proof)</li>
+      <li><strong>Security:</strong> full hardening pass — per‑IP rate limiting on every API, RPC method allow‑listing, locked‑down admin/debug endpoints, replay‑proof on‑chain payment verification, output escaping (XSS) across all tool pages, plus HSTS / X‑Frame‑Options / X‑Content‑Type‑Options / Referrer‑Policy and vendored solana‑web3.js (same‑origin)</li>
       <li><strong>No custody:</strong> Server never sees a private key. Every signing flow runs in the user's wallet extension.</li>
     </ul>
     <p style="margin-top:10px"><strong>Public API surface:</strong> <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/cluck-score</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/cluck-card</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/verify-clkn-payment</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/ask-cluck</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/holders</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/fees</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/supply</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/locks</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/bubblemaps</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/bags-proxy</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/helius-rpc</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/helius-tx</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/hatchery/*</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/security-coop/*</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/claim</code></p>
+    <p style="margin-top:12px;background:rgba(217,119,6,0.08);border:1px solid rgba(217,119,6,0.3);border-radius:8px;padding:12px 14px;font-size:13px;line-height:1.65"><strong style="color:#FCD34D">📂 A note on the repo — straight talk:</strong> our GitHub was flagged and restricted by an automated system for an unusually high commit volume (we ship daily, sometimes many pushes an hour). We've tried to resolve it directly — multiple support tickets and a fair amount of back‑and‑forth, including one ticket that was closed with no explanation and another still open. On <strong>May 24</strong> we sent GitHub a fresh message asking plainly why we're restricted and whether we're eligible to be reinstated. We're still waiting on a clear answer. What we <em>haven't</em> done is stop: we've built <strong>roughly half of this entire product since the restriction</strong>, deploying every single day through a separate pipeline. The code is MIT‑licensed and open source no matter how this resolves — if GitHub reinstates us we'll relink it here; if not, we already have a permanent new home ready to go. Want the code today? Ask in <a href="https://t.me/FireChicken007" target="_blank" rel="noreferrer" style="color:#FCD34D;text-decoration:underline">Telegram</a> and we'll send it directly.</p>
   </div>
 
   <!-- The community moat — answers "what makes you different from every other
        education + utility project on Solana?" -->
-  <div class="section">
-    <div class="section-title">👥 THE FLOCK · WHY WE'RE NOT JUST ANOTHER EDUCATION PROJECT</div>
+  <div class="section" id="flock" style="background:linear-gradient(135deg, rgba(167,139,250,0.07), rgba(167,139,250,0.02));border-color:rgba(167,139,250,0.3)">
+    <div class="section-title" style="color:#C4B5FD;border-color:rgba(167,139,250,0.25)">👥 THE FLOCK · WHY WE'RE NOT JUST ANOTHER EDUCATION PROJECT</div>
     <div style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.3);border-radius:10px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
       <div style="font-family:var(--mono);font-size:12px;color:#93C5FD;line-height:1.5">
         <strong>The Cluck Norris Telegram is open and active.</strong><br>
@@ -377,51 +513,51 @@
       <li><strong>First‑timers get answered.</strong> Stuck on the airdrop tool? Confused by a Phantom popup? Don't understand what a token account is? Ask. The bird is tough but the flock is patient. That's where most projects fail — they have docs but nobody's home to read them with you.</li>
       <li><strong>This is the compound effect.</strong> Every person we help becomes someone who can help the next person. The school grows. The flock grows. The token grows. None of those happen at a rate a competitor can copy by reading the README.</li>
     </ul>
-    <p>An AI tutor without humans behind it is a manual. A token with a Discord nobody mods is just a chart. We started with the community and we're not bolting one on after the fact.</p>
+    <p>An AI tutor without humans behind it is a manual. A token with a Discord nobody mods is just a chart. The community was part of this from day one — shaping it, supporting it, and growing with it.</p>
   </div>
 
   <!-- Why we think it's a good value -->
-  <div class="section">
+  <div class="section" id="value">
     <div class="section-title">💡 WHY WE THINK CLKN HAS REAL VALUE</div>
     <p>Most token utilities are theater — governance you never use, staking that locks supply and forgets. CLKN works differently:</p>
     <ul>
       <li class="yes"><strong>The token is a key, not a vote.</strong> Every premium action is a CLKN micropayment that actually moves on‑chain. Continuous demand tied to product usage, not speculation.</li>
       <li class="yes"><strong>The free tier is a real funnel.</strong> Free education brings users in. Free token research keeps them coming back. The free tier is the marketing.</li>
-      <li class="yes"><strong>The premium tier is real software.</strong> Batch airdropper, buy‑comp analyzer, holder classifier — tools that operators pay for elsewhere. We charge ~$0.01 to $0.06 per use in CLKN.</li>
-      <li class="yes"><strong>The holder bonus is unforgeable.</strong> Keep 2M+ CLKN after paying for any tool and every unlock is multiplied 5×. The send proves custody, the post‑send balance proves holding. No wallet connect required.</li>
+      <li class="yes"><strong>The premium tier is real software.</strong> A <a class="xref" href="/airdrop">batch airdropper</a>, <a class="xref" href="/buyspecial">buy‑competition trackers</a>, and a <a class="xref" href="/score">score‑card generator</a> — tools that operators pay for elsewhere. We charge ~$0.01 to $0.06 per use in CLKN.</li>
+      <li class="yes"><strong>The holder bonus is unforgeable.</strong> Rewarding real holders normally means a wallet‑connect — which is trivially faked. We do it from the payment instead. When you pay for any tool, we read your wallet's CLKN balance straight from that transaction, on‑chain. If you still hold 2M+ CLKN <em>after</em> paying, every unlock is stretched <strong>5×</strong> — a 7‑day Buy Special pass becomes 35 days, one airdrop session becomes five, 20 AI‑tutor questions become 100. The payment proves you control the wallet; the post‑send balance proves you're genuinely holding, not just passing tokens through. Nothing to connect, nothing to spoof.</li>
       <li class="yes"><strong>The guardrails are the brand.</strong> First‑timers can't pay for a tool until they understand it. That's rare in crypto and judges/investors notice.</li>
-      <li class="yes"><strong>The roadmap is short on words and long on commits.</strong> Open source, MIT, on GitHub. Every claim above is verifiable by reading the repo.</li>
+      <li class="yes"><strong>The roadmap is short on words and long on commits.</strong> Open source and MIT-licensed — every claim on this page lives in the code. (Our GitHub is briefly suspended; see the repo note under "Under the Hood" — we'll share the code directly in the meantime.)</li>
     </ul>
   </div>
 
   <!-- Survival Simulator deserves its own callout — it's the bridge between "learn"
        and "do" and most projects don't have anything like it. -->
-  <div class="section" style="background:linear-gradient(135deg, rgba(96,165,250,0.06), rgba(167,139,250,0.04));border-color:rgba(96,165,250,0.3)">
+  <div class="section" id="simulator" style="background:linear-gradient(135deg, rgba(96,165,250,0.06), rgba(167,139,250,0.04));border-color:rgba(96,165,250,0.3)">
     <div class="section-title" style="color:#93C5FD;border-color:rgba(96,165,250,0.25)">🎮 SURVIVAL SIMULATOR · WHERE THEORY HITS REALITY</div>
     <p>Most crypto education is quizzes. Quizzes test recognition. They don't test the <strong>decision</strong> — the part where you have $1,000, a DM in your inbox, a green candle, and three seconds to react.</p>
-    <p><strong>The Survival Simulator gives you that decision.</strong> Fifty hand‑written scenarios across four categories:</p>
+    <p><strong>The Survival Simulator gives you that decision.</strong> 135 hand‑written scenarios across four categories — each run draws 10 at random, so no two playthroughs are alike:</p>
     <ul>
-      <li class="warn"><strong>DANGER</strong> (21) — friendly devs in DMs, dev wallet dumps, 900% APR honey‑pots, phishing impersonators, vesting unlock cliffs, sudden liquidity removals</li>
-      <li class="warn"><strong>EMOTIONAL</strong> (17) — FOMO buys at the top, panic sells at the bottom, revenge trades, the urge to average down on a clear rug, watching a coin you sold 5× without you</li>
-      <li class="yes"><strong>KNOWLEDGE</strong> (16) — reading Solscan correctly, interpreting tokenomics, evaluating LP locks, distinguishing real airdrops from drainer sites</li>
-      <li class="yes"><strong>OPPORTUNITY</strong> (13) — real alpha when you see it, sizing into conviction, taking profit on the way up, knowing when to LP</li>
+      <li class="warn"><strong>DANGER</strong> (47) — friendly devs in DMs, dev wallet dumps, 900% APR honey‑pots, phishing impersonators, wallet drainers, address poisoning, lookalike domains, frozen exchanges, vesting unlock cliffs</li>
+      <li class="warn"><strong>EMOTIONAL</strong> (27) — FOMO buys at the top, panic sells at the bottom, revenge trades, boredom trades, chasing a parabola, the urge to average down on a clear rug</li>
+      <li class="yes"><strong>KNOWLEDGE</strong> (37) — reading Solscan correctly, interpreting tokenomics and FDV, leverage and liquidation, gas and priority fees, distinguishing real airdrops from drainer sites</li>
+      <li class="yes"><strong>OPPORTUNITY</strong> (24) — real alpha when you see it, sizing into conviction, DCA plans, taking profit on the way up, knowing when to LP</li>
     </ul>
-    <p>You start with $1,000 simulated. Each choice has a real multiplier — the bad ones cost you 80‑95% of the stake. Cluck explains every outcome in plain English. <strong>You lose money in the simulator so you don't lose it in real life.</strong></p>
+    <p>You start with $1,000 simulated. Each choice has a real multiplier — disciplined, well‑researched calls grow your stake; reckless ones can wipe the round to near zero. Cluck explains every outcome in plain English. <strong>You lose money in the simulator so you don't lose it in real life.</strong></p>
     <p>This is the feature that separates the school from a glossary. The lessons teach you what a rug looks like. The simulator teaches you what it <em>feels</em> like to almost click the button, and then choose not to.</p>
   </div>
 
   <!-- Pricing strategy — answers "but the fees are like a penny right now, how
        does that even matter?" with the compound-growth story. -->
-  <div class="section">
-    <div class="section-title">💰 PRICING STRATEGY · WHY IT'S 1¢ TODAY (AND WHAT THAT MEANS LATER)</div>
+  <div class="section" id="pricing" style="background:linear-gradient(135deg, rgba(16,185,129,0.07), rgba(110,231,183,0.03));border-color:rgba(16,185,129,0.3)">
+    <div class="section-title" style="color:#6EE7B7;border-color:rgba(16,185,129,0.25)">💰 PRICING STRATEGY · WHY IT'S 1¢ TODAY (AND WHAT THAT MEANS LATER)</div>
     <p>Look at our pricing table — most tools are 1–6¢ in USD terms. Some investors see that and ask "how is this ever real revenue?" Fair question. Here's the play:</p>
     <ul>
       <li class="yes"><strong>Aggressive pricing now is a growth choice.</strong> The cheaper the unlock, the lower the friction for first‑time users. We'd rather a stranger try the airdropper for $0.01 and tell their friends than charge $1 and never see them. Adoption beats early margin every time.</li>
       <li class="yes"><strong>Every tool use sends CLKN on‑chain.</strong> Not a "click to use" abstract — actual on‑chain volume tied to actual product activity. The more people use the tools, the more buy pressure on CLKN to refill their wallets.</li>
-      <li class="yes"><strong>Fees are denominated in CLKN, not USD.</strong> A 100‑CLKN airdrop unlock is $0.01 today. If the token doubles, that same unlock is $0.02 — same on‑chain mechanism, double the USD revenue per use. <strong>We don't have to do anything for fees to scale with price.</strong></li>
-      <li class="yes"><strong>If usage outpaces price, we adjust the table.</strong> Pricing lives in a server‑side table (TOOL_GRANTS in server.js) — a one‑line change updates every tool. If 100 CLKN starts feeling free because adoption took off, we raise it. We're a knob, not a contract promise.</li>
+      <li class="yes"><strong>Fees are denominated in CLKN, not USD.</strong> Every tool has a fixed price set in <em>CLKN tokens</em>, not dollars — the <a class="xref" href="/airdrop">airdropper</a>, for example, unlocks for a flat <strong>100 CLKN</strong>. That number lives in a small server‑side pricing table; it isn't pegged to a dollar amount and doesn't move when the market does. At today's price, 100 CLKN happens to be about $0.01. If the token doubles, that same 100‑CLKN unlock is worth $0.02 to the project — the buyer still pays the same 100 CLKN, the same on‑chain mechanism, but each use brings in double the USD. Fees scale with the token's price automatically; <strong>we don't have to change anything.</strong></li>
+      <li class="yes"><strong>If usage outpaces price, we adjust the table.</strong> Pricing lives in a server‑side table (TOOL_GRANTS in server.js) — a one‑line change updates every tool. If 100 CLKN starts feeling free because adoption took off, we raise it. Pricing is a dial we can turn — not a number frozen into a contract.</li>
       <li class="yes"><strong>This is the compound effect.</strong> Adoption → usage → on‑chain demand → price appreciation → automatic fee scaling → more revenue per use → reinvest in liquidity/locks/development → more credible product → more adoption.</li>
-      <li class="yes"><strong>The token creator is its own tier.</strong> The Hatchery isn't a penny micropayment — minting a real SPL token is a one‑time, higher‑value action, so it carries a flat fee (≈0.1 SOL, or the CLKN equivalent at a discount; free for 2M+ CLKN holders). Pennies for research and operator tools; a real but fair fee to create a token.</li>
+      <li class="yes"><strong>The token creator is its own tier.</strong> <a class="xref" href="/hatchery">The Hatchery</a> isn't a penny micropayment. It guides you through minting a real <strong>SPL token</strong> — the standard token format on Solana, the same kind every project on the network is built on — and getting the irreversible decisions right: supply, metadata, and revoking mint and freeze authority. It's a guided creator, <em>not</em> a launchpad: it deliberately stops at the mint and won't add liquidity or open trading for you. That's the point — minting and launching are two separate decisions, and rushing them together in one sitting is exactly how beginners get hurt. The Hatchery makes sure the token is created correctly; when and how to launch stays a deliberate choice you make later. Minting one token is a one-time, higher-value action, so it carries a flat fee (about 0.1 SOL, or the CLKN equivalent at a discount; free for 2M+ CLKN holders) — a real but fair price to create a token properly.</li>
     </ul>
     <p>Most token utilities denominate fees in USD and just become more expensive in token terms as price moves. Ours flow the other way — token holders get cheaper relative access as the token they hold appreciates. That's the alignment.</p>
     <p>We'd rather be aggressive now and adjust later than gatekeep early adopters out of the system. <strong>Brand recognition first. Margin later.</strong></p>
@@ -429,10 +565,16 @@
 
   <!-- 100% fee reinvestment story — verifiable on-chain, structurally aligned.
        This is the kind of commitment that doesn't fit in a tokenomics graphic. -->
-  <div class="section" style="background:linear-gradient(135deg, rgba(16,185,129,0.07), rgba(110,231,183,0.03));border-color:rgba(16,185,129,0.3)">
+  <div class="section" id="reinvestment" style="background:linear-gradient(135deg, rgba(16,185,129,0.07), rgba(110,231,183,0.03));border-color:rgba(16,185,129,0.3)">
     <div class="section-title" style="color:#6EE7B7;border-color:rgba(16,185,129,0.25)">🔁 100% FEE REINVESTMENT · WHERE EVERY SOL OF CREATOR REVENUE GOES</div>
-    <p>Every cent of SOL the project receives — from the Bags.fm partner‑fee share, from LP fees on the Meteora pool, from every platform reward — goes <strong style="color:#6EE7B7">directly back into buying CLKN on the chart</strong>.</p>
+    <p>The project earns a <strong style="color:#6EE7B7">1% fee on every CLKN trade</strong> — and every cent of that SOL goes <strong style="color:#6EE7B7">directly back into buying CLKN on the chart</strong>.</p>
     <p>Not "we'll reinvest later." Not "we'll consider buybacks at $X market cap." Already happening, every day.</p>
+    <!-- Live fee-claim record — collapsible; pulled from the Bags API; hidden until data loads -->
+    <details id="reinvestFeed" style="display:none;background:rgba(0,0,0,0.25);border:1px solid rgba(16,185,129,0.3);border-radius:10px;padding:12px 16px;margin:14px 0">
+      <summary style="cursor:pointer;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:2px;color:#6EE7B7;font-weight:700">📊 LIVE · CREATOR FEES CLAIMED<span id="reinvestSummary" style="color:#9CA3AF;font-weight:400;letter-spacing:1px"></span></summary>
+      <div style="font-family:system-ui,sans-serif;font-size:12px;color:#9CA3AF;line-height:1.6;margin:10px 0 8px">Every row below is the project pulling its 1% creator fee off Bags — the exact SOL that funds the CLKN buybacks. Real on-chain transactions; tap any one to verify it yourself.</div>
+      <div id="reinvestFeedBody" style="max-height:260px;overflow-y:auto"></div>
+    </details>
     <ul>
       <li class="yes"><strong>The creator wallet is on‑chain and verifiable.</strong> <a href="https://solscan.io/account/3VELZ2avSUq79qstuR8a7C3euJ834WmQyrjt4uRnn4eb" target="_blank" rel="noreferrer" style="color:#6EE7B7;text-decoration:underline;font-family:var(--mono);font-size:13px;word-break:break-all">3VELZ2avSUq79qstuR8a7C3euJ834WmQyrjt4uRnn4eb</a> — pull it up on Solscan and count the buys yourself. Multiple per day during active periods. Buys after green candles. Buys after red candles. Buys on quiet weekends.</li>
       <li class="yes"><strong>No bag dumps. No surprise unlocks. No "team allocation rotated to a fresh wallet" patterns.</strong> The wallet has one direction: in.</li>
@@ -448,11 +590,11 @@
   </div>
 
   <!-- Who it's for / not for -->
-  <div class="section">
-    <div class="section-title">🎯 WHO CLKN IS FOR</div>
+  <div class="section" id="audience" style="background:linear-gradient(135deg, rgba(16,185,129,0.07), rgba(110,231,183,0.03));border-color:rgba(16,185,129,0.3)">
+    <div class="section-title" style="color:#6EE7B7;border-color:rgba(16,185,129,0.25)">🎯 WHO CLKN IS FOR</div>
     <ul>
       <li class="yes">Crypto educators and content creators who want a real product behind their teaching</li>
-      <li class="yes">Community operators running giveaways, buy‑competitions, contests — our buyspecial + airdropper handles the full flow</li>
+      <li class="yes">Community operators running giveaways, buy‑competitions, contests — our <a class="xref" href="/buyspecial">buyspecial</a> + <a class="xref" href="/airdrop">airdropper</a> handles the full flow</li>
       <li class="yes">Solana traders who want a single 0–100 score for any token and a real LP filter on concentration</li>
       <li class="yes">First‑time crypto users who want guardrails before they touch anything irreversible</li>
       <li class="yes">Investors who want a token whose volume is tied to actual product use, not speculation cycles</li>
@@ -460,8 +602,8 @@
     </ul>
   </div>
 
-  <div class="section">
-    <div class="section-title">🚫 WHO CLKN IS NOT THE BEST FIT FOR</div>
+  <div class="section" id="notfor" style="background:linear-gradient(135deg, rgba(239,68,68,0.06), rgba(239,68,68,0.02));border-color:rgba(239,68,68,0.3)">
+    <div class="section-title" style="color:#FCA5A5;border-color:rgba(239,68,68,0.25)">🚫 WHO CLKN IS NOT THE BEST FIT FOR</div>
     <p style="color:#FCA5A5">We're not for everyone. If any of these describe you, just be honest with yourself before you size in:</p>
     <ul>
       <li class="no">Pure meme speculators chasing the next 100× moonshot — we are not a meme, we are a product, and we won't pump like one</li>
@@ -481,7 +623,7 @@
     <p><strong style="color:#FEE2E2">The structural positives we've actually built in:</strong></p>
     <p>· A meaningful portion of supply is <strong>locked</strong>, and we plan to keep locking tokens for years — that's an on‑chain commitment, not a marketing claim.</p>
     <p>· Liquidity is solid for a small cap. The team has a track record of <strong>adding single‑sided liquidity</strong> to deepen the pool when price action warrants it. We've done it before; we'll do it again.</p>
-    <p>· Every CLKN trade on Bags.fm sends a <strong>25% platform fee share</strong> back to the project via the <code style="font-family:var(--mono);color:#FCD34D">firechicken007</code> partner ref. Real revenue tied to actual trading volume.</p>
+    <p>· Every CLKN trade carries a <strong>1% fee that goes straight to the project</strong> — real SOL revenue tied directly to trading volume, reinvested into the token.</p>
     <p>· The token has measurable utility — every premium feature is paid in CLKN on‑chain. Demand is tied to product usage, not just sentiment.</p>
 
     <p style="margin-top:14px"><strong style="color:#FEE2E2">The honest realities you should still know:</strong></p>
@@ -492,14 +634,14 @@
 
     <p style="margin-top:14px"><strong style="color:#FEE2E2">What this is not:</strong></p>
     <p>· Not financial advice.</p>
-    <p>· Not a guaranteed yield product — the partner ref fee share is a real revenue stream, but it's not promised income.</p>
+    <p>· Not a guaranteed yield product — the 1% trade fee is a real revenue stream, but it rises and falls with volume and isn't promised income.</p>
     <p>· Not a get‑rich‑quick story. We're building the long way, in public, with a small community.</p>
 
     <p style="margin-top:14px">Do your own research. Size positions you can defend to yourself a year from now. If you read all this and still want in, welcome to the schoolyard.</p>
   </div>
 
   <!-- Contract + links -->
-  <div class="section">
+  <div class="section" id="contract">
     <div class="section-title">🪙 CONTRACT &amp; LINKS</div>
     <div class="ca-row" onclick="copyCa()">
       <div class="lbl">CLKN CONTRACT ADDRESS</div>
@@ -521,7 +663,6 @@
       <a class="action-btn" href="/tools">🛠 TOOLS &amp; UTILITIES</a>
       <a class="action-btn" href="/score">🩺 CLUCK SCORE</a>
       <a class="action-btn" href="/hatchery">🥚 THE HATCHERY</a>
-      <a class="action-btn" href="https://github.com/FCKN007/cluck-norris-school" target="_blank" rel="noreferrer">📂 GITHUB</a>
     </div>
   </div>
 
@@ -603,6 +744,29 @@ fetch('/api/cluck-score?mint=' + CLKN_MINT)
     }
   })
   .catch(() => {});
+
+// Live reinvestment tracker — itemized creator-fee claims from the Bags API.
+fetch('/api/reinvestment')
+  .then(r => r.json())
+  .then(d => {
+    const box = document.getElementById('reinvestFeed');
+    if (!box) return;
+    if (!d || !d.success || !Array.isArray(d.claims) || d.claims.length === 0) { box.style.display = 'none'; return; }
+    const rows = d.claims.map(c => {
+      let date = c.timestamp;
+      try { date = new Date(c.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); } catch (e) {}
+      return '<a href="https://solscan.io/tx/' + c.signature + '" target="_blank" rel="noreferrer" '
+        + 'style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.07);color:inherit;text-decoration:none">'
+        + '<span style="font-family:var(--mono);font-size:12px;color:#9CA3AF">' + date + '</span>'
+        + '<span style="font-family:var(--mono);font-size:13px;color:#6EE7B7;font-weight:700">' + c.sol.toFixed(4) + ' SOL</span>'
+        + '<span style="font-family:\'Oswald\',sans-serif;font-size:9px;letter-spacing:1px;color:#FCD34D">VERIFY ↗</span>'
+        + '</a>';
+    }).join('');
+    document.getElementById('reinvestFeedBody').innerHTML = rows;
+    document.getElementById('reinvestSummary').textContent = ' · ' + d.claimCount + ' claims (tap to expand)';
+    box.style.display = 'block';
+  })
+  .catch(() => { const box = document.getElementById('reinvestFeed'); if (box) box.style.display = 'none'; });
 </script>
 </body>
 </html>

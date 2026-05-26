@@ -3,9 +3,35 @@ const path = require("path");
 const { join } = path;
 const fs = require("fs");
 const { createCanvas, GlobalFonts } = require("@napi-rs/canvas");
-const { createSign, createHash } = require("crypto");
+const { createSign, createHash, createHmac, randomBytes, createPublicKey, verify: ed25519Verify } = require("crypto");
 const hatchery = require("./hatchery");
 const securityCoop = require("./securitycoop");
+const { fetchBagsContext, classifyTeamActivity } = require("./lib/bags-context");
+const analytics = require("./lib/analytics");
+const solscan = require("./lib/solscan");
+const solanaTracker = require("./lib/solana-tracker");
+const premiumForensics = require("./lib/premium-forensics");
+const sigStore = require("./lib/sigstore");
+const kv = require("./lib/kvstore");
+const recap = require("./lib/recap");
+const gradTracker = require("./lib/grad-tracker");
+const { PublicKey } = require("@solana/web3.js");
+
+// Pump.fun program — used to derive the per-creator "creator vault" PDA where
+// Pump creator fees accrue. Seeds ["creator-vault", creator] per the Pump IDL.
+// This is the cheap, deterministic way to surface a Pump creator's fee
+// earnings without a paid indexer: derive the vault, read its balance
+// (unclaimed) + activity. See memory: build-decision-principle.
+const PUMP_PROGRAM_ID = new PublicKey("6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P");
+function derivePumpCreatorVault(creatorWallet) {
+  try {
+    const [pda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("creator-vault"), new PublicKey(creatorWallet).toBuffer()],
+      PUMP_PROGRAM_ID
+    );
+    return pda.toBase58();
+  } catch (_) { return null; }
+}
 
 // Register Oswald (the site's display font) for the score card. Without this,
 // Railway's container has no usable fallback for "sans-serif" and text silently
@@ -52,19 +78,23 @@ async function notifyTelegram(text) {
 // own previous reminder first — so the chat is never flooded with repeats:
 // there is only ever ONE toolkit message present, and it quietly refreshes
 // to the bottom on each cycle.
-let lastToolsReminderMsgId = null;
+let lastToolsReminderMsgId = kv.get("toolsReminderMsgId", null);
 async function notifyToolsReminder() {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
   if (!token || !chatId) return;
   const text =
     "🛠 <b>THE CLUCK NORRIS TOOLKIT</b>\n\n" +
-    "Beyond the school — real Solana tools, all live and free to try:\n\n" +
-    "🩺 <b>Cluck Score</b> — a 0–100 health check on any token\n" +
-    "🥚 <b>The Hatchery</b> — create a token, guided start to finish\n" +
-    "📈 <b>Buy Special</b> + 🌹 <b>Rose</b> — run buy competitions\n" +
-    "💰 <b>Airdrop</b> — batch-send to hundreds of wallets\n" +
-    "🔒 <b>Security Coop</b> — find &amp; revoke risky wallet approvals\n\n" +
+    "Beyond the school — real, live Solana tools. Five are 100% free; the operator " +
+    "tools let you preview everything, then unlock with a small CLKN payment:\n\n" +
+    "🩺 <b>Cluck Score</b> — 0–100 health check on any token · <b>FREE</b>\n" +
+    "🔒 <b>Security Coop</b> — find &amp; revoke risky wallet approvals · <b>FREE</b>\n" +
+    "📸 <b>Snapshot</b> — every holder + airdrop CSV for any token · <b>FREE</b>\n" +
+    "🔍 <b>Trace</b> — full wallet × token transaction history · <b>FREE</b>\n" +
+    "👥 <b>Holders</b> — true holders vs LP, locks &amp; programs · <b>FREE</b>\n" +
+    "🥚 <b>The Hatchery</b> — create a token, guided start to finish · SOL/CLKN\n" +
+    "📈 <b>Buy Special</b> + 🌹 <b>Rose</b> — run buy competitions · CLKN\n" +
+    "💰 <b>Airdrop</b> — batch-send to hundreds of wallets · CLKN\n\n" +
     "🚨 <b>Have you checked the permissions on your wallet lately?????</b>\n" +
     "Every \"approve\" you've ever signed can still move your tokens — until you " +
     "revoke it. Security Coop finds them all in seconds. Free, nothing at risk.\n\n" +
@@ -76,7 +106,7 @@ async function notifyToolsReminder() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ chat_id: chatId, message_id: lastToolsReminderMsgId }),
       }).catch(() => {});
-      lastToolsReminderMsgId = null;
+      lastToolsReminderMsgId = null; kv.set("toolsReminderMsgId", null);
     }
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -86,23 +116,746 @@ async function notifyToolsReminder() {
       }),
     });
     const data = await res.json().catch(() => ({}));
-    if (data && data.ok && data.result) lastToolsReminderMsgId = data.result.message_id;
+    if (data && data.ok && data.result) { lastToolsReminderMsgId = data.result.message_id; kv.set("toolsReminderMsgId", lastToolsReminderMsgId); }
     else console.warn("[TELEGRAM] tools reminder not ok:", JSON.stringify(data).slice(0, 200));
   } catch (e) {
     console.warn("[TELEGRAM] tools reminder failed:", e.message);
   }
 }
 
-// Fire the toolkit reminder at fixed wall-clock hours (every 4h: 00,04,08,12,
-// 16,20 UTC). A fixed schedule, not setInterval — so a server restart doesn't
-// drift or delay it; lastToolsReminderHour stops a double-post within the hour.
-let lastToolsReminderHour = -1;
+// Fire the toolkit reminder at fixed wall-clock hours (every 6h: 00,06,12,18
+// UTC). A fixed schedule, not setInterval — so a server restart doesn't drift or
+// delay it; lastToolsReminderHour (persisted on the volume) stops a double-post
+// within the hour even across a deploy. NOTE: this is the periodic TOOL-PROMO
+// post only; the buy-notification bot is separate and unaffected.
+const TOOLS_REMINDER_ENABLED = true;
+let lastToolsReminderHour = kv.get("toolsReminderHour", -1);
 function toolsReminderTick() {
+  if (!TOOLS_REMINDER_ENABLED) return;
   const h = new Date().getUTCHours();
-  if (h % 4 === 0 && h !== lastToolsReminderHour) {
-    lastToolsReminderHour = h;
+  if (h % 6 === 0 && h !== lastToolsReminderHour) {
+    lastToolsReminderHour = h; kv.set("toolsReminderHour", h);
     notifyToolsReminder();
   }
+}
+
+// ── Bags Launch Radar — every 4h: recent Bags launches + the 2 closest to
+// bonding (with SOL-to-graduate). Content post that drives traffic to /bags.
+// buildBagsRadarText() composes the message (also used by the test endpoint
+// for dry-run verification); notifyBagsLaunches() posts it.
+const BAGS_RADAR_ENABLED = true;
+let lastBagsRadarMsgId = kv.get("bagsRadarMsgId", null); // delete-previous, persisted across deploys
+async function buildBagsRadarText() {
+  let recentLines = [];
+  try {
+    const fr = await fetch(`${BAGS_BASE}token-launch/feed`, { headers: { "x-api-key": process.env.BAGS_API_KEY } });
+    const fd = await fr.json();
+    const feed = (fd && fd.response) || [];
+    // Enrich the most recent launches, drop obvious test/blank tokens, then
+    // surface the 4 with the highest market cap (the notable ones, not dust).
+    const enriched = [];
+    for (const t of feed.slice(0, 12)) {
+      const nm = String(t.symbol || t.name || "").trim().toLowerCase();
+      if (!t.tokenMint || nm === "test" || nm === "") continue;
+      let mc = 0;
+      try { const snap = await getBagsTokenSnapshot(t.tokenMint); if (snap && snap.marketCap) mc = snap.marketCap; } catch (_) {}
+      enriched.push({ name: t.name, symbol: t.symbol, mc });
+    }
+    enriched.sort((a, b) => b.mc - a.mc);
+    for (const t of enriched.slice(0, 4)) {
+      recentLines.push(`• <b>${t.name || "?"}</b> (${t.symbol || "?"})${t.mc ? ` — MC $${Math.round(t.mc).toLocaleString()}` : ""}`);
+    }
+  } catch (_) {}
+  let gradLines = [];
+  try {
+    const ng = await getBagsNearGrad();
+    for (const t of (ng.tokens || []).slice(0, 2)) {
+      const toGrad = (85 * (1 - (t.curvePct || 0) / 100)).toFixed(1);
+      gradLines.push(`• <b>${t.name || "?"}</b> (${t.symbol || "?"}) — ${(t.curvePct || 0).toFixed(0)}% · ~${toGrad} SOL to graduate`);
+    }
+  } catch (_) {}
+  if (!recentLines.length && !gradLines.length) return null;
+  return "🎒 <b>BAGS.FM LAUNCH RADAR</b>\n\n" +
+    (recentLines.length ? "🆕 <b>Recent launches</b>\n" + recentLines.join("\n") + "\n\n" : "") +
+    (gradLines.length ? "🎓 <b>Closest to graduating</b>\n" + gradLines.join("\n") + "\n\n" : "") +
+    "📡 Live tracker — sort by newest / top MC / near-grad → clucknorris.app/bags";
+}
+async function notifyBagsLaunches() {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return;
+  try {
+    const text = await buildBagsRadarText();
+    if (!text) return;
+    // Delete the previous Radar first so only the latest stays (no pile-up).
+    if (lastBagsRadarMsgId) {
+      await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, message_id: lastBagsRadarMsgId }),
+      }).catch(() => {});
+      lastBagsRadarMsgId = null; kv.set("bagsRadarMsgId", null);
+    }
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (data && data.ok && data.result) { lastBagsRadarMsgId = data.result.message_id; kv.set("bagsRadarMsgId", lastBagsRadarMsgId); }
+  } catch (e) { console.warn("[TELEGRAM] bags radar failed:", e.message); }
+}
+let lastBagsRadarHour = kv.get("bagsRadarHour", -1);
+function bagsLaunchesTick() {
+  if (!BAGS_RADAR_ENABLED) return;
+  const h = new Date().getUTCHours();
+  if (h % 4 === 0 && h !== lastBagsRadarHour) {
+    lastBagsRadarHour = h; kv.set("bagsRadarHour", h);
+    notifyBagsLaunches();
+  }
+}
+
+// ── Market Check — every 2h: CLKN / SOL / BTC price with 1h + 24h change.
+// CLKN from Solana Tracker (price + events), SOL+BTC from CoinGecko markets.
+const MARKET_CHECK_ENABLED = true;
+let lastMarketCheckMsgId = kv.get("marketCheckMsgId", null); // delete-previous, persisted across deploys
+function mcFmtPrice(p) {
+  if (p == null || isNaN(p)) return "—";
+  const v = Number(p);
+  if (v >= 1000) return "$" + Math.round(v).toLocaleString();
+  if (v >= 1) return "$" + v.toFixed(2);
+  if (v >= 0.01) return "$" + v.toFixed(4);
+  return "$" + v.toPrecision(3);
+}
+function mcFmtChg(pct) {
+  if (pct == null || isNaN(pct)) return "—";
+  const v = Number(pct);
+  return (v >= 0 ? "+" : "") + v.toFixed(1) + "%";
+}
+// SOL + BTC from CoinGecko. The free public endpoint hard-rate-limits shared
+// cloud IPs (Railway), so scheduled posts were intermittently getting a 429 and
+// silently dropping the SOL/BTC lines (leaving only CLKN). Retry a few times,
+// optionally authenticate with COINGECKO_API_KEY (a free demo key lifts the
+// limit), and fall back to the last good values cached on the volume so the
+// lines never just vanish.
+async function fetchSolBtc() {
+  const KEY = process.env.COINGECKO_API_KEY;
+  const url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=solana,bitcoin&price_change_percentage=1h,24h"
+    + (KEY ? `&x_cg_demo_api_key=${encodeURIComponent(KEY)}` : "");
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const cg = await fetch(url, { headers: KEY ? { "x-cg-demo-api-key": KEY } : {}, signal: AbortSignal.timeout(8000) });
+      if (cg.ok) {
+        const arr = await cg.json();
+        if (Array.isArray(arr) && arr.length) {
+          const by = {}; for (const c of arr) by[c.id] = c;
+          const sol = by.solana, btc = by.bitcoin;
+          if (sol && btc) {
+            const data = {
+              ts: Date.now(),
+              sol: { price: sol.current_price, h1: sol.price_change_percentage_1h_in_currency, h24: sol.price_change_percentage_24h_in_currency },
+              btc: { price: btc.current_price, h1: btc.price_change_percentage_1h_in_currency, h24: btc.price_change_percentage_24h_in_currency },
+            };
+            kv.set("marketSolBtc", data); // remember last good for the fallback
+            return data;
+          }
+        }
+      }
+    } catch (_) {}
+    if (attempt < 3) await new Promise(r => setTimeout(r, 1500 * attempt));
+  }
+  // Live fetch failed (almost always a 429). Serve the last good values if not
+  // older than 6h — a slightly stale price beats dropping the line entirely.
+  const cached = kv.get("marketSolBtc", null);
+  if (cached && Date.now() - cached.ts < 6 * 3600 * 1000) return cached;
+  return null;
+}
+// CLKN price + 1h/24h change from Solana Tracker. ST's free tier 429s often, so
+// the CLKN line was sometimes dropping the same way SOL/BTC did. Retry a few
+// times and fall back to the last good values cached on the volume.
+async function fetchClkn() {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const r = await solanaTracker.probe("/tokens/DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS");
+      if (r.ok && r.data) {
+        const b = r.data, pools = b.pools || [];
+        const primary = pools.reduce((best, p) => ((p.liquidity || {}).usd || 0) > ((best.liquidity || {}).usd || 0) ? p : best, pools[0] || {});
+        const price = primary.price?.usd;
+        if (price != null) {
+          const data = { ts: Date.now(), price, h1: b.events?.["1h"]?.priceChangePercentage, h24: b.events?.["24h"]?.priceChangePercentage };
+          kv.set("marketClkn", data); // remember last good for the fallback
+          return data;
+        }
+      }
+    } catch (_) {}
+    if (attempt < 3) await new Promise(r => setTimeout(r, 1500 * attempt));
+  }
+  const cached = kv.get("marketClkn", null);
+  if (cached && Date.now() - cached.ts < 6 * 3600 * 1000) return cached;
+  return null;
+}
+async function buildMarketCheckText() {
+  const lines = [];
+  try {
+    const c = await fetchClkn();
+    if (c) lines.push(`🐔 <b>CLKN</b> ${mcFmtPrice(c.price)}  ${mcFmtChg(c.h1)} / ${mcFmtChg(c.h24)}`);
+  } catch (_) {}
+  try {
+    const m = await fetchSolBtc();
+    if (m && m.sol) lines.push(`◎ <b>SOL</b> ${mcFmtPrice(m.sol.price)}  ${mcFmtChg(m.sol.h1)} / ${mcFmtChg(m.sol.h24)}`);
+    if (m && m.btc) lines.push(`₿ <b>BTC</b> ${mcFmtPrice(m.btc.price)}  ${mcFmtChg(m.btc.h1)} / ${mcFmtChg(m.btc.h24)}`);
+  } catch (_) {}
+  if (!lines.length) return null;
+  return "📊 <b>MARKET CHECK</b>  ·  1h / 24h\n\n" + lines.join("\n") + "\n\n🐔 clucknorris.app";
+}
+async function notifyMarketCheck() {
+  const token = process.env.TELEGRAM_BOT_TOKEN, chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return;
+  try {
+    const text = await buildMarketCheckText();
+    if (!text) return;
+    // Delete the previous Market Check first so the chat only ever shows the
+    // latest one (no hourly pile-up). Bots can delete their own msgs <48h old.
+    if (lastMarketCheckMsgId) {
+      await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, message_id: lastMarketCheckMsgId }),
+      }).catch(() => {});
+      lastMarketCheckMsgId = null; kv.set("marketCheckMsgId", null);
+    }
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (data && data.ok && data.result) { lastMarketCheckMsgId = data.result.message_id; kv.set("marketCheckMsgId", lastMarketCheckMsgId); }
+  } catch (e) { console.warn("[TELEGRAM] market check failed:", e.message); }
+}
+// Fires every 2h near the top of an even hour (UTC). Minute-gated so it does NOT
+// post on every deploy/restart; lastMarketCheckHour persisted on the volume so a
+// deploy in the firing window doesn't double-post.
+let lastMarketCheckHour = kv.get("marketCheckHour", -1);
+function marketCheckTick() {
+  if (!MARKET_CHECK_ENABLED) return;
+  const now = new Date();
+  const h = now.getUTCHours();
+  if (now.getUTCMinutes() < 2 && h % 2 === 0 && h !== lastMarketCheckHour) {
+    lastMarketCheckHour = h; kv.set("marketCheckHour", h);
+    notifyMarketCheck();
+  }
+}
+
+// ── Daily Flow Recap — once per day (00:00 UTC) the bot posts a summary of the
+// CLKN buy/sell flow over the window: buys/sells count + USD, net flow, unique
+// buyers, biggest buy. Data comes from lib/recap.js, which accumulates every
+// real swap the trade poller sees and PERSISTS on the volume — so a deploy
+// mid-day doesn't reset the numbers (the reason this was shelved before).
+// Self-cleaning: deletes the previous day's recap so only the latest shows.
+// PAUSED until trade volume picks up (2026-05-23) — a daily recap of 0–1 trades
+// isn't worth posting. Flip back to true when volume justifies it; the recap
+// accumulator keeps running in the background so no data is lost while paused.
+const RECAP_ENABLED = false;
+let lastRecapMsgId = kv.get("recapMsgId", null); // delete-previous, persisted
+function recapFmtUsd(n) { return "$" + Math.round(Number(n) || 0).toLocaleString(); }
+function buildRecapText() {
+  const s = recap.snapshot();
+  const hours = Math.max(1, Math.round((Date.now() - s.windowStart) / 3600000));
+  if (s.buyCount === 0 && s.sellCount === 0) {
+    return `📊 <b>CLKN — LAST ${hours}H FLOW</b>\n\nQuiet window — no tracked buys or sells.\n\n🐔 clucknorris.app · trade on Bags`;
+  }
+  const net = s.netUsd;
+  const netStr = (net >= 0 ? "+" : "−") + "$" + Math.round(Math.abs(net)).toLocaleString();
+  const lines = [
+    `🟢 <b>Buys</b>   ${s.buyCount}  ·  ${recapFmtUsd(s.buyUsd)}`,
+    `🔴 <b>Sells</b>  ${s.sellCount}  ·  ${recapFmtUsd(s.sellUsd)}`,
+    `⚖️ <b>Net flow</b>  ${netStr}`,
+    `👥 <b>Unique buyers</b>  ${s.uniqueBuyers}`,
+  ];
+  if (s.topBuy && s.topBuy.usd) lines.push(`🐳 <b>Biggest buy</b>  ${recapFmtUsd(s.topBuy.usd)}`);
+  return `📊 <b>CLKN — LAST ${hours}H FLOW</b>\n\n` + lines.join("\n") + `\n\n🐔 clucknorris.app · trade on Bags`;
+}
+async function notifyRecap() {
+  const token = process.env.TELEGRAM_BOT_TOKEN, chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return;
+  try {
+    const text = buildRecapText();
+    if (lastRecapMsgId) {
+      await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, message_id: lastRecapMsgId }),
+      }).catch(() => {});
+      lastRecapMsgId = null; kv.set("recapMsgId", null);
+    }
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (data && data.ok && data.result) {
+      lastRecapMsgId = data.result.message_id; kv.set("recapMsgId", lastRecapMsgId);
+      recap.reset(); // start a fresh window only after a successful post
+    } else {
+      console.warn("[TELEGRAM] recap not ok:", JSON.stringify(data).slice(0, 200));
+    }
+  } catch (e) { console.warn("[TELEGRAM] recap failed:", e.message); }
+}
+// Daily at 00:00 UTC, minute-gated; lastRecapDay (persisted) prevents a repeat
+// or a double-post if a deploy lands in the 00:00 window.
+let lastRecapDay = kv.get("recapDay", -1);
+function recapTick() {
+  if (!RECAP_ENABLED) return;
+  const now = new Date();
+  const day = now.getUTCFullYear() * 1000 + (now.getUTCMonth() * 31 + now.getUTCDate());
+  if (now.getUTCHours() === 0 && now.getUTCMinutes() < 2 && day !== lastRecapDay) {
+    lastRecapDay = day; kv.set("recapDay", day);
+    notifyRecap();
+  }
+}
+
+// ── Daily educational posts ("Cluck's Lesson") ────────────────────────────
+// Hybrid: we own the topic list (drawn from the real curriculum — Incubator,
+// School of Hard Knocks, LP Lab, security); Claude writes each short lesson in
+// Cluck's voice. Fires 4×/day on ODD UTC hours so it never collides with the
+// other scheduled posts (which all land on even hours). Topic rotates in order
+// (index persisted on the volume) so it never repeats until the set is used up.
+// Posts STAY (no self-clean) — they're a learning record.
+const EDU_POST_ENABLED = true;
+const EDU_HOURS_UTC = [1, 5, 9, 13, 17, 21]; // 6×/day, every 4h, all ODD UTC so they never collide with the even-hour posts (8pm/12am/4am/8am/12pm/4pm CT)
+// X-only @mentions appended to each cross-posted tweet (NOT added to Telegram).
+// Easy to trim/remove here if it starts reading as spam.
+const X_MENTION_TAGS = "@BagsApp @BagsHackathon";
+// Standard footer on lesson X posts: site, Telegram, CLKN contract, mention tags.
+// (Telegram posts get their own footer — this is X-only.)
+const CLKN_MINT = "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
+// NOTE: a RAW contract address in an X post → 403 "Crypto addresses are
+// prohibited for the first 7 days after authentication" (killed every lesson
+// cross-post). A DexScreener URL containing the mint PASSES the filter (tested
+// 2026-05-25), and gives the X audience a chart/trade link — so we use that
+// instead of the bare CA. The bare CA stays on Telegram only.
+// CLKN's verified DexScreener pair (CLKN/SOL on Meteora) — the canonical chart link.
+const CLKN_DEXSCREENER = "dexscreener.com/solana/64wxkhm4zywukyy32tfuebv5wdafdcugdxe5ntm4xatd";
+const X_LESSON_TAIL = "\n\n🐔 clucknorris.app\n💬 t.me/FireChicken007\n📊 " + CLKN_DEXSCREENER + "\n" + X_MENTION_TAGS;
+const EDU_TOPICS = [
+  "What a self-custody wallet is, and why \"not your keys, not your coins\"",
+  "How a decentralized exchange (DEX) differs from a centralized one",
+  "What slippage is and how to set it sensibly",
+  "What market cap really tells you about a token — and what it doesn't",
+  "How to spot a honeypot token before you buy",
+  "What token approvals are and why you should revoke unused ones",
+  "What a liquidity pool actually is, in plain terms",
+  "How automated market makers (AMMs) set prices with the x*y=k formula",
+  "Impermanent loss: what it is and when it actually costs you",
+  "How liquidity providers earn fees and what drives the yield",
+  "Concentrated liquidity: tighter ranges, bigger fees, more risk",
+  "Price bins and ticks: how modern LP ranges work",
+  "Active vs passive LP strategies and who each suits",
+  "How to read a pool's liquidity, volume, and fee numbers",
+  "What a bonding curve is and how token graduation works",
+  "Tokenomics basics: supply, distribution, and unlock schedules",
+  "What MEV is and how it quietly affects your trades",
+  "Sandwich attacks and how loose slippage exposes you to them",
+  "How to do basic on-chain research on a token in 2 minutes",
+  "Rug pulls: the common patterns and the red flags to catch early",
+  "The difference between locked liquidity and locked supply",
+  "Why holder concentration matters and how to check it",
+  "What renounced or burned mint authority means for a token",
+  "Token metadata mutability and update authority — who can change a token's name, image and socials after launch, the bait-and-switch risk vs the legitimate need to rebrand, and why locking it builds buyer trust",
+  "How creator fees work on launchpads like Bags.fm",
+  "Reading a DexScreener chart without getting faked out by phantom pools",
+  "Why dollar-cost averaging beats trying to time the exact bottom",
+  "What a stablecoin is and the real risks behind the word \"stable\"",
+  "Priority fees on Solana and why transactions sometimes fail",
+  "What an RPC is and why your wallet balance sometimes lags",
+  "What wrapped SOL (WSOL) is and when you'll run into it",
+  "How to verify a token's real contract address before buying",
+  "Why low-liquidity tokens are so easy to manipulate",
+  "Setting a personal risk budget you can actually afford to lose",
+  "What graduation to a DEX pool means for a launchpad token",
+  "The danger of unlimited token approvals to unknown contracts",
+  "How to tell organic volume from wash trading",
+];
+async function generateEduLesson(topic) {
+  const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+  if (!ANTHROPIC_KEY) return null;
+  const system = "You are Cluck Norris, the toughest crypto professor at the School of Crypto Hard Knocks (clucknorris.app), powered by the CLKN token on Solana. Write ONE educational micro-lesson on the given topic for a crypto-curious audience. RULES: 4-7 sentences, roughly 120-180 words (200 max). Plain text only — NO markdown, NO asterisks, NO headings, NO emojis. Be accurate and practical; if a point is nuanced, note it honestly rather than oversimplifying. At most ONE light chicken/rooster pun, and only if it fits. NEVER give financial advice, price predictions, or shill any token. End with a short one-line takeaway. Output ONLY the lesson text.";
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 360, system, messages: [{ role: "user", content: "Topic: " + topic }] }),
+    });
+    const data = await res.json();
+    if (data && data.content && data.content[0]) {
+      return data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/#{1,3}\s/g, "").trim();
+    }
+  } catch (e) { console.warn("[EDU] generation failed:", e.message); }
+  return null;
+}
+
+// ── X / Twitter auto-post (dormant until 4 keys are set in Railway) ─────────
+// We only CREATE posts on our own account (Content: Create, ~$0.01/post). Posting
+// to X API v2 (POST /2/tweets) with OAuth 1.0a user-context signing — no external
+// dep, signed with crypto HMAC-SHA1. If any key is missing it's a silent no-op,
+// so this ships safely before the dev account exists.
+function xConfigured() {
+  return !!(process.env.X_API_KEY && process.env.X_API_SECRET && process.env.X_ACCESS_TOKEN && process.env.X_ACCESS_SECRET);
+}
+function xPercentEncode(s) {
+  return encodeURIComponent(String(s)).replace(/[!*'()]/g, c => "%" + c.charCodeAt(0).toString(16).toUpperCase());
+}
+async function postToX(text) {
+  if (!xConfigured()) return { ok: false, skipped: true };
+  const ck = process.env.X_API_KEY, cs = process.env.X_API_SECRET, at = process.env.X_ACCESS_TOKEN, ats = process.env.X_ACCESS_SECRET;
+  const url = "https://api.x.com/2/tweets";
+  const oauth = {
+    oauth_consumer_key: ck,
+    oauth_nonce: randomBytes(16).toString("hex"),
+    oauth_signature_method: "HMAC-SHA1",
+    oauth_timestamp: Math.floor(Date.now() / 1000).toString(),
+    oauth_token: at,
+    oauth_version: "1.0",
+  };
+  // v2 + JSON body: only the oauth_* params are signed (JSON body is not).
+  const paramStr = Object.keys(oauth).sort().map(k => `${xPercentEncode(k)}=${xPercentEncode(oauth[k])}`).join("&");
+  const base = `POST&${xPercentEncode(url)}&${xPercentEncode(paramStr)}`;
+  const signingKey = `${xPercentEncode(cs)}&${xPercentEncode(ats)}`;
+  oauth.oauth_signature = createHmac("sha1", signingKey).update(base).digest("base64");
+  const authHeader = "OAuth " + Object.keys(oauth).sort().map(k => `${xPercentEncode(k)}="${xPercentEncode(oauth[k])}"`).join(", ");
+  try {
+    const r = await fetch(url, { method: "POST", headers: { Authorization: authHeader, "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
+    const j = await r.json().catch(() => ({}));
+    if (r.ok) return { ok: true, id: j?.data?.id };
+    console.warn("[X] post failed", r.status, JSON.stringify(j).slice(0, 200));
+    return { ok: false, status: r.status, body: j };
+  } catch (e) { console.warn("[X] post error", e.message); return { ok: false, error: e.message }; }
+}
+// Tweet-length (≤280) version of a lesson on the given topic, for X.
+async function generateEduTweet(topic) {
+  const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+  if (!ANTHROPIC_KEY) return null;
+  const system = "You are Cluck Norris, a crypto-education project on Solana (clucknorris.app). Write ONE tweet teaching a single crisp insight about the given topic. HARD LIMIT: 185 characters MAX (a link and two @mentions are appended after). Plain text, accurate, beginner-friendly, no markdown, no hashtags, at most one emoji, no financial advice. Output ONLY the tweet text.";
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 160, system, messages: [{ role: "user", content: "Topic: " + topic }] }),
+    });
+    const data = await res.json();
+    if (data && data.content && data.content[0]) {
+      let t = data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/#{1,3}\s/g, "").trim();
+      if (t.length > 185) t = t.slice(0, 184).trim() + "…";
+      return t + X_LESSON_TAIL;
+    }
+  } catch (e) { console.warn("[X] tweet generation failed:", e.message); }
+  return null;
+}
+async function notifyEduPost() {
+  const token = process.env.TELEGRAM_BOT_TOKEN, chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return;
+  const idx = kv.get("eduTopicIdx", 0);
+  const topic = EDU_TOPICS[idx % EDU_TOPICS.length];
+  kv.set("eduTopicIdx", (idx + 1) % EDU_TOPICS.length); // advance rotation
+  const body = await generateEduLesson(topic);
+  if (!body) { console.warn("[EDU] no body, skipping post for topic:", topic); return; }
+  const text = `🎓 <b>CLUCK'S LESSON</b>\n\n${tgEsc(body)}\n\n💬 <i>Reply to this lesson with a question and Cluck will answer.</i>\n📚 The full course is in session → clucknorris.app`;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true, disable_notification: true }),
+    });
+    const data = await res.json().catch(() => null);
+    // Remember this post is a LESSON so the reply-bot only answers lesson replies.
+    if (data && data.ok && data.result) registerLessonMessage(data.result.message_id, body);
+  } catch (e) { console.warn("[EDU] post failed:", e.message); }
+  // Cross-post the FULL lesson to X (the account has Premium → long posts), so
+  // it's never truncated. Trimmed fallback only if a long post is ever rejected.
+  if (xConfigured()) {
+    const tail = X_LESSON_TAIL;
+    try {
+      let r = await postToX(body + tail);
+      if (!r || !r.ok) {
+        const short = (body.length > 180 ? body.slice(0, 179).trim() + "…" : body) + tail;
+        r = await postToX(short);
+      }
+      if (r && r.ok) console.log(`[X] lesson tweeted (id ${r.id})`);
+      else console.warn("[X] lesson tweet failed:", JSON.stringify(r).slice(0, 200));
+    } catch (e) { console.warn("[EDU] X cross-post failed:", e.message); }
+  }
+}
+let lastEduStamp = kv.get("eduStamp", "");
+function eduPostTick() {
+  if (!EDU_POST_ENABLED) return;
+  const now = new Date();
+  const h = now.getUTCHours();
+  if (now.getUTCMinutes() < 2 && EDU_HOURS_UTC.includes(h)) {
+    const stamp = `${now.getUTCFullYear()}-${now.getUTCMonth()}-${now.getUTCDate()}-${h}`;
+    if (stamp !== lastEduStamp) { lastEduStamp = stamp; kv.set("eduStamp", stamp); notifyEduPost(); }
+  }
+}
+
+// ── Interactive slash commands ─────────────────────────────────────────────
+// The bot is otherwise send-only; this lets group members run /score, /trace,
+// /autopsy, /bags, /hatchery, etc. and get back a deep link (pre-filled with the
+// mint/wallet they pass, where the tool page supports it). Delivered via a
+// Telegram webhook (the server is public) — a secret_token validates that
+// updates really come from Telegram. Slash commands are delivered to bots in
+// groups even with privacy mode on, so this works in the Cluck Norris group.
+const TG_PUBLIC_BASE = "https://clucknorris.app";
+const TG_WEBHOOK_SECRET = process.env.TELEGRAM_BOT_TOKEN
+  ? createHash("sha256").update("tg-webhook:" + process.env.TELEGRAM_BOT_TOKEN).digest("hex").slice(0, 40)
+  : "";
+const SOL_ADDR_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/; // base58 mint/wallet shape
+
+async function tgSend(chatId, text, replyTo) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token || !chatId) return null;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true,
+        // Still send even if the user's command message was deleted meanwhile.
+        ...(replyTo ? { reply_to_message_id: replyTo, allow_sending_without_reply: true } : {}),
+      }),
+    });
+    const data = await res.json().catch(() => null);
+    return data && data.ok && data.result ? data.result.message_id : null; // for thread tracking
+  } catch (_) { return null; }
+}
+
+// Compose the reply for a command. `arg` is the raw argument (validated to a
+// base58 address before it's used to pre-fill a tool URL).
+function tgCommandReply(cmd, arg) {
+  const addr = arg && SOL_ADDR_RE.test(arg) ? arg : null;
+  const link = (path, qp) => `${TG_PUBLIC_BASE}${path}${addr && qp ? `?${qp}=${addr}` : ""}`;
+  switch (cmd) {
+    case "score":
+      return `🩺 <b>Cluck Score</b> — 0–100 health check on any token\n${link("/score", "mint")}` + (addr ? "" : "\n\nTip: <code>/score &lt;mint&gt;</code> pre-fills a token.");
+    case "autopsy":
+      return `🪦 <b>Token Autopsy</b> — deep forensic breakdown\n${link("/autopsy", "mint")}` + (addr ? "" : "\n\nTip: <code>/autopsy &lt;mint&gt;</code>.");
+    case "trace":
+      return `🔍 <b>Trace</b> — full wallet × token transaction history\n${link("/trace", "wallet")}` + (addr ? "" : "\n\nTip: <code>/trace &lt;wallet or mint&gt;</code>.");
+    case "snapshot":
+      return `📸 <b>Snapshot</b> — every holder + airdrop CSV\n${link("/snapshot", "mint")}` + (addr ? "" : "\n\nTip: <code>/snapshot &lt;mint&gt;</code>.");
+    case "holders":
+      return `👥 <b>Holders</b> — true holders vs LP, locks &amp; programs\n${link("/holders")}`;
+    case "securitycoop":
+      return `🔒 <b>Security Coop</b> — find &amp; revoke risky wallet approvals\n${link("/security-coop")}`;
+    case "buyspecial":
+      return `📈 <b>Buy Special</b> — run a buy competition\n${link("/buyspecial")}`;
+    case "rose":
+      return `🌹 <b>Rose</b> — buy-competition analyzer with prize models\n${link("/rose")}`;
+    case "hatchery":
+      return `🥚 <b>The Hatchery</b> — create a token, guided start to finish\n${link("/hatchery")}`;
+    case "bags":
+      return `🎒 <b>Bags.fm</b> — live launches, near-grad &amp; recently graduated\n${link("/bags")}`;
+    case "tools":
+      return `🛠 <b>The Cluck Norris Toolkit</b> — every live Solana tool\n${link("/tools")}`;
+    default: // start / help / commands
+      return "🐔 <b>CLUCK NORRIS BOT — COMMANDS</b>\n" +
+        "<i>Each opens the tool on clucknorris.app, with your mint/wallet pre-filled where supported.</i>\n\n" +
+        "🩺 /score <code>&lt;mint&gt;</code> — token health 0–100\n" +
+        "🪦 /autopsy <code>&lt;mint&gt;</code> — full forensic breakdown\n" +
+        "🔍 /trace <code>&lt;wallet&gt;</code> — wallet × token history\n" +
+        "📸 /snapshot <code>&lt;mint&gt;</code> — holders + airdrop CSV\n" +
+        "👥 /holders — true holders vs LP &amp; locks\n" +
+        "🔒 /securitycoop — find &amp; revoke risky wallet approvals\n" +
+        "📈 /buyspecial — run a buy competition\n" +
+        "🌹 /rose — buy-competition analyzer + prizes\n" +
+        "🥚 /hatchery — create a token, guided\n" +
+        "🎒 /bags — live Bags.fm launches\n" +
+        "🛠 /tools — every tool in one place\n" +
+        "📋 /commands — show this list\n\n" +
+        `🐔 ${TG_PUBLIC_BASE}`;
+  }
+}
+
+const TG_KNOWN_CMDS = ["score","autopsy","trace","snapshot","holders","securitycoop","buyspecial","rose","hatchery","bags","tools","commands","start","help"];
+
+// /score <mint> → compute the real Cluck Score and reply IN-CHAT (number, grade,
+// verdict, key stats). Calls our own /api/cluck-score (same as the card gen).
+const scoreCooldown = new Map(); // chatId -> last /score ts (light anti-spam)
+async function scoreAndReply(chatId, mint, replyTo) {
+  try {
+    const r = await fetch(`http://localhost:${PORT}/api/cluck-score?mint=${encodeURIComponent(mint)}`);
+    const d = await r.json().catch(() => null);
+    if (!d || !d.success || d.score == null) {
+      tgSend(chatId, `🩺 Couldn't score that one — not enough on-chain data (double-check it's a valid Solana mint).\n\nclucknorris.app/score?mint=${mint}`, replyTo);
+      return;
+    }
+    const f = d.factors || {};
+    const fmtUsd = (n) => n == null ? "—" : (n >= 1e6 ? "$" + (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? "$" + (n / 1e3).toFixed(0) + "K" : "$" + Math.round(n));
+    const t10 = f.concentration?.top10Share;
+    const t10pct = t10 == null ? null : (t10 <= 1 ? t10 * 100 : t10);
+    const lines = [
+      `🩺 <b>CLUCK SCORE — ${tgEsc(d.name || d.ticker || "Token")}${d.ticker ? " ($" + tgEsc(d.ticker) + ")" : ""}</b>`,
+      `<b>${d.score}/100</b>  ·  Grade ${tgEsc(d.grade)}`,
+      ``,
+      tgEsc(d.verdict),
+      ``,
+      `💧 Liquidity ${fmtUsd(f.liquidity?.value)}    👥 ${f.holders?.value ?? "—"} holders`,
+      `🔒 Mint ${f.mintAuthority?.revoked ? "revoked ✅" : "active ⚠️"}    ❄️ Freeze ${f.freezeAuthority?.revoked ? "revoked ✅" : "active ⚠️"}`,
+      (t10pct != null ? `📊 Top-10 hold ${t10pct.toFixed(0)}%` : ""),
+      ``,
+      `📋 Full breakdown → clucknorris.app/score?mint=${mint}`,
+    ];
+    tgSend(chatId, lines.join("\n").replace(/\n{3,}/g, "\n\n"), replyTo);
+  } catch (e) {
+    console.warn("[TELEGRAM] score reply failed:", e.message);
+    tgSend(chatId, `🩺 Score hiccup — try again in a moment.\nclucknorris.app/score?mint=${mint}`, replyTo);
+  }
+}
+
+// ── Reply-bot: educational Q&A on lesson replies (threaded) ────────────────
+// Replying to one of Cluck's 🎓 lesson posts starts a conversation; replying to
+// Cluck's ANSWER continues it (we track recent answers + carry the prior Q&A as
+// context). Lessons only as entry points; open to everyone; 20 answers/user/day;
+// educational only (declines buy/sell/price, refuses war/politics/govt, always
+// appends a not-financial-advice line). Replies to a bot's own messages are
+// delivered even under group privacy mode, so no privacy change is needed.
+const LESSON_RING = 30;            // recent lesson posts that stay reply-able
+const ANSWER_RING = 60;            // recent Cluck answers that stay reply-able (follow-ups)
+const THREAD_MAX_TURNS = 6;        // Q&A pairs carried forward as conversation context
+const REPLY_BOT_DAILY_MAX = 20;    // answers per user per UTC day
+const replyBotCooldown = new Map(); // userId -> last answer ts (burst guard)
+
+function registerLessonMessage(messageId, body) {
+  if (!messageId) return;
+  const ids = kv.get("eduLessonMsgIds", []);
+  const texts = kv.get("eduLessonText", {});
+  ids.push(messageId);
+  texts[messageId] = String(body || "").slice(0, 1200); // context for the AI
+  while (ids.length > LESSON_RING) { const drop = ids.shift(); delete texts[drop]; }
+  kv.set("eduLessonMsgIds", ids);
+  kv.set("eduLessonText", texts);
+}
+function isLessonMessage(messageId) {
+  return !!messageId && kv.get("eduLessonMsgIds", []).includes(messageId);
+}
+function lessonTextFor(messageId) {
+  return kv.get("eduLessonText", {})[messageId] || "";
+}
+// Track Cluck's OWN answers so a reply to one continues the conversation. Each
+// stores its thread = { lesson, history:[{q,a}] }. Bounded ring like lessons.
+function registerCluckAnswer(messageId, thread) {
+  if (!messageId) return;
+  const ids = kv.get("cluckAnswerMsgIds", []);
+  const threads = kv.get("cluckThreads", {});
+  ids.push(messageId);
+  threads[messageId] = thread;
+  while (ids.length > ANSWER_RING) { const drop = ids.shift(); delete threads[drop]; }
+  kv.set("cluckAnswerMsgIds", ids);
+  kv.set("cluckThreads", threads);
+}
+function isCluckAnswer(messageId) {
+  return !!messageId && kv.get("cluckAnswerMsgIds", []).includes(messageId);
+}
+function threadFor(messageId) {
+  return kv.get("cluckThreads", {})[messageId] || null;
+}
+// Returns true (and increments) if the user is under their daily cap, else false.
+function replyBotConsume(userId) {
+  if (!userId) return false;
+  const today = new Date().toISOString().slice(0, 10); // UTC day
+  let usage = kv.get("replyBotUsage", { date: today, counts: {} });
+  if (usage.date !== today) usage = { date: today, counts: {} };
+  const n = usage.counts[userId] || 0;
+  if (n >= REPLY_BOT_DAILY_MAX) { kv.set("replyBotUsage", usage); return false; }
+  usage.counts[userId] = n + 1;
+  kv.set("replyBotUsage", usage);
+  return true;
+}
+const REPLYBOT_NFA = "Not financial advice — just the coop's classroom. 🐔";
+
+async function answerLessonReply(msg) {
+  const chatId = msg.chat.id;
+  const userId = msg.from && msg.from.id;
+  const question = String(msg.text || "").trim().slice(0, 1000);
+  if (!userId || question.length < 2) return;
+  // light burst guard so one user can't rapid-fire
+  const now = Date.now(), last = replyBotCooldown.get(userId) || 0;
+  if (now - last < 4000) return;
+  replyBotCooldown.set(userId, now);
+  // daily cap (counts only real answer attempts)
+  if (!replyBotConsume(userId)) {
+    tgSend(chatId, "🐔 That's 20 questions for today, friend — even Cluck needs to roost. Catch the next lesson tomorrow.\n📚 Full course any time → clucknorris.app", msg.message_id);
+    return;
+  }
+  const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+  if (!ANTHROPIC_KEY) { tgSend(chatId, "🐔 Cluck's voice is hoarse right now — try again shortly.", msg.message_id); return; }
+  // Reply to a LESSON → fresh thread; reply to a Cluck ANSWER → continue that
+  // thread (carry its lesson + prior Q&A). targetId is whatever was replied to.
+  const targetId = msg.reply_to_message && msg.reply_to_message.message_id;
+  const existing = threadFor(targetId);
+  const lesson = existing ? existing.lesson : lessonTextFor(targetId);
+  const history = existing && Array.isArray(existing.history) ? existing.history : [];
+  const system = [
+    "You are Cluck Norris, a Solana crypto EDUCATOR holding a short conversation in a Telegram group. It started when someone replied to one of your lessons; they may ask follow-ups.",
+    "RULES:",
+    "- Educational ONLY. Explain how things work: Solana, tokens, LPs/liquidity, wallets, approvals/security, on-chain forensics, launchpads, etc.",
+    "- If asked for financial advice, price predictions, 'should I buy/sell/hold X', whether a specific token is a good investment, or anything that isn't a teachable concept: politely DECLINE and redirect to the underlying concept they could learn instead. Never tell anyone what to buy, sell, or hold, and never predict a price.",
+    "- HARD NO: never discuss war, armed conflict, the military, foreign affairs/geopolitics, elections, politicians, or government/policy — not even in passing. If a question touches any of these, do NOT engage with the topic at all; reply with one short friendly line that you only cover Solana/crypto education and invite a crypto question instead. Do not take sides or give any opinion on these subjects.",
+    "- A FEW light chicken puns are welcome, but teach first, joke second. Stay clear and genuinely useful.",
+    "- Be concise: 2-5 short sentences — this is a group chat. Use the conversation so far so follow-ups make sense.",
+    "- Plain text only (no markdown headers/bullets/asterisks).",
+    "- Always end with this exact line on its own: " + REPLYBOT_NFA,
+    lesson ? "For context, the lesson this thread started from said:\n" + lesson : "",
+  ].filter(Boolean).join("\n");
+  // Replay prior turns as the conversation, then the new question.
+  const messages = [];
+  for (const turn of history.slice(-THREAD_MAX_TURNS)) {
+    if (turn && turn.q) messages.push({ role: "user", content: String(turn.q) });
+    if (turn && turn.a) messages.push({ role: "assistant", content: String(turn.a) });
+  }
+  messages.push({ role: "user", content: question });
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 320, system, messages }),
+    });
+    const data = await res.json().catch(() => null);
+    let answer = data && data.content && data.content[0] && data.content[0].text;
+    if (!answer) { tgSend(chatId, "🐔 Couldn't crack that egg — mind rephrasing?", msg.message_id); return; }
+    answer = answer.trim();
+    if (!/not financial advice/i.test(answer)) answer += "\n\n" + REPLYBOT_NFA; // safety net
+    const sentId = await tgSend(chatId, tgEsc(answer), msg.message_id);
+    // Register this answer so a reply to IT continues the conversation.
+    const newHistory = [...history, { q: question, a: answer }].slice(-THREAD_MAX_TURNS);
+    registerCluckAnswer(sentId, { lesson, history: newHistory });
+  } catch (e) {
+    console.warn("[REPLYBOT] answer failed:", e.message);
+    tgSend(chatId, "🐔 Cluck hit a snag — try again in a moment.", msg.message_id);
+  }
+}
+
+function handleTelegramUpdate(update) {
+  try {
+    const msg = update && (update.message || update.edited_message);
+    if (!msg || !msg.text || !msg.chat) return;
+    const text = msg.text.trim();
+    // Reply to a LESSON post (new thread) or to one of Cluck's own ANSWERS
+    // (follow-up) → educational answer. Other bot posts (market check, etc.) and
+    // slash commands are not triggers.
+    const rt = msg.reply_to_message;
+    if (text[0] !== "/" && rt && rt.from && rt.from.is_bot
+        && (isLessonMessage(rt.message_id) || isCluckAnswer(rt.message_id))) {
+      answerLessonReply(msg);
+      return;
+    }
+    if (text[0] !== "/") return;
+    const parts = text.slice(1).split(/\s+/);
+    const cmd = parts[0].split("@")[0].toLowerCase(); // strip /cmd@BotName
+    if (!TG_KNOWN_CMDS.includes(cmd)) return;          // ignore unknown commands
+    const arg = parts[1] || null;
+    // /score with a real mint → live in-chat score (light per-chat cooldown).
+    if (cmd === "score" && arg && SOL_ADDR_RE.test(arg)) {
+      const now = Date.now(), last = scoreCooldown.get(msg.chat.id) || 0;
+      if (now - last < 6000) { tgSend(msg.chat.id, "🐔 Already scoring one — give it a few seconds.", msg.message_id); return; }
+      scoreCooldown.set(msg.chat.id, now);
+      scoreAndReply(msg.chat.id, arg, msg.message_id);
+      return;
+    }
+    tgSend(msg.chat.id, tgCommandReply(cmd, arg), msg.message_id);
+  } catch (e) { console.warn("[TELEGRAM] update handler error:", e.message); }
 }
 
 // Send an image with caption text. Telegram fetches the photo URL itself, so it
@@ -138,21 +891,32 @@ async function notifyTelegramPhoto(photoUrl, caption) {
 // Format and post a "tool unlocked" notification — fired after every successful
 // CLKN micropayment verification so the community sees real product usage.
 function notifyToolUnlock(tool, paidAmount, senderWallet, isHolderBonus, signature) {
-  const map = {
-    ai:         { emoji: "🤖", name: "AI TUTOR EXTENDED",        detail: "+20 questions" },
-    airdrop:    { emoji: "💰", name: "AIRDROP TOOL UNLOCKED",    detail: "1 batch session" },
-    buyspecial: { emoji: "📈", name: "BUY-COMP UNLOCKED",        detail: "7 days unlimited" },
-    score:      { emoji: "🪧", name: "CLUCK SCORE CARD",         detail: "PNG generated" },
-  };
-  const m = map[tool] || { emoji: "⚡", name: `${tool.toUpperCase()} UNLOCKED`, detail: "" };
-  const bonusBadge = isHolderBonus ? " · 5× HOLDER BONUS 🏆" : "";
   const senderShort = senderWallet ? `${senderWallet.slice(0, 4)}…${senderWallet.slice(-4)}` : "verified on-chain";
   const sigLink = signature ? `\n<a href="https://solscan.io/tx/${signature}">↗ View on Solscan</a>` : "";
-  const caption =
-    `${m.emoji} <b>${m.name}</b>${bonusBadge}\n` +
-    `<b>${paidAmount}</b> CLKN paid · ${m.detail}\n` +
-    `Sender: <code>${senderShort}</code>` +
-    sigLink;
+  let caption;
+  if (tool === "premium") {
+    // The send is an OWNERSHIP PROOF, not a purchase — full access still depends
+    // on the 2M+ CLKN holder check, so say that rather than "unlocked / paid".
+    caption =
+      `🔬 <b>PREMIUM UNLOCKED</b>\n` +
+      `Verifying holder status for full access…\n` +
+      `Proof: <b>${paidAmount}</b> CLKN · Sender: <code>${senderShort}</code>` +
+      sigLink;
+  } else {
+    const map = {
+      ai:         { emoji: "🤖", name: "AI TUTOR EXTENDED",        detail: "+20 questions" },
+      airdrop:    { emoji: "💰", name: "AIRDROP TOOL UNLOCKED",    detail: "1 batch session" },
+      buyspecial: { emoji: "📈", name: "BUY-COMP UNLOCKED",        detail: "7 days unlimited" },
+      score:      { emoji: "🪧", name: "CLUCK SCORE CARD",         detail: "PNG generated" },
+    };
+    const m = map[tool] || { emoji: "⚡", name: `${tool.toUpperCase()} UNLOCKED`, detail: "" };
+    const bonusBadge = isHolderBonus ? " · 5× HOLDER BONUS 🏆" : "";
+    caption =
+      `${m.emoji} <b>${m.name}</b>${bonusBadge}\n` +
+      `<b>${paidAmount}</b> CLKN paid · ${m.detail}\n` +
+      `Sender: <code>${senderShort}</code>` +
+      sigLink;
+  }
   // Use the same Cluck graphic as the buy alerts so every CLKN-spending action
   // feels like a moment in the group. Fire-and-forget so the API response isn't blocked.
   notifyTelegramPhoto(BUY_GRAPHIC_URL, caption).catch(() => {});
@@ -171,6 +935,68 @@ app.use((req, res, next) => {
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   next();
 });
+
+// ── Lightweight in-memory rate limiting ───────────────────────────────────
+// The /api proxies forward to PAID upstreams (Helius credits, Anthropic,
+// Bags/Solana-Tracker quota) with no per-user auth, so without a cap anyone
+// can script them to drain the budget. No external dep (deploys are
+// `railway up` only); per-IP sliding window, resets on restart (same tradeoff
+// as the in-memory Telegram trackers). Railway sits behind a proxy, so trust
+// X-Forwarded-For for the real client IP rather than the proxy's.
+app.set("trust proxy", true);
+
+// ── First-party page-view analytics ───────────────────────────────────────
+// Counts human page loads (privacy-respecting; see lib/analytics.js). Mounted
+// early so it sees every request, but only records GETs to real pages — never
+// API calls, vendored libs, or static assets. Wrapped so a tracking hiccup can
+// never break a page load.
+app.use((req, res, next) => {
+  try {
+    if (req.method === "GET") {
+      const p = req.path || "/";
+      const isAsset = /\.(js|css|png|jpe?g|gif|svg|ico|webp|avif|woff2?|ttf|map|json|txt|xml|webmanifest)$/i.test(p);
+      if (!p.startsWith("/api") && !p.startsWith("/vendor") && !isAsset) analytics.trackView(req);
+    }
+  } catch (_) {}
+  next();
+});
+
+const RL_BUCKETS = new Map(); // "bucket:ip" -> number[] request timestamps (ms)
+function rateLimit(bucket, { windowMs, max }) {
+  return (req, res, next) => {
+    const ip = req.ip || (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || "unknown";
+    const now = Date.now();
+    // Namespace per limiter so the global /api cap and the tighter per-route
+    // caps count independently (a request counts against both its own bucket
+    // and the global one, but they don't pollute each other).
+    const key = bucket + ":" + ip;
+    let arr = RL_BUCKETS.get(key);
+    if (!arr) { arr = []; RL_BUCKETS.set(key, arr); }
+    while (arr.length && now - arr[0] > windowMs) arr.shift();
+    if (arr.length >= max) {
+      res.setHeader("Retry-After", Math.ceil(windowMs / 1000));
+      return res.status(429).json({ success: false, error: "Rate limit exceeded — slow down." });
+    }
+    arr.push(now);
+    next();
+  };
+}
+// Keep the bucket map from growing unbounded.
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, arr] of RL_BUCKETS) {
+    while (arr.length && now - arr[0] > 60000) arr.shift();
+    if (arr.length === 0) RL_BUCKETS.delete(k);
+  }
+}, 120000).unref();
+
+// Generous global cap on the whole API surface — a real user's tool makes only
+// a handful of calls per action, so 150/min/IP never bites legitimately but
+// stops a scripted hammer. A tighter cap guards the AI endpoint (most costly
+// per call); the on-chain payment check is also throttled to deter brute force.
+app.use("/api/", rateLimit("api", { windowMs: 60000, max: 150 }));
+app.use("/api/ask-cluck", rateLimit("ai", { windowMs: 60000, max: 15 }));
+app.use("/api/verify-clkn-payment", rateLimit("pay", { windowMs: 60000, max: 20 }));
 
 // The Hatchery (token creator) — mounted before the global JSON parser so its
 // own larger body limit handles the base64 logo upload instead of the 100kb default.
@@ -207,6 +1033,963 @@ app.get("/api/bags-proxy", async (req, res) => {
 });
 
 // -- Helius -- Holder Count --
+// -- Shared token-context endpoint --
+// Returns the Bags + Jupiter cross-verification data for a mint so any
+// client-side tool (holders, snapshot UI, trace UI, score UI) can render
+// verified-creator badges, fee-claim history, and Jupiter audit cross-checks
+// without each tool re-implementing the integration. Result is cached per
+// mint for 5 minutes (matches the bags-context module's internal cache).
+// Solscan auth diagnostic — probes multiple URL/header combos with the
+// currently-configured SOLSCAN_API_KEY against a known-good wallet so we
+// can see which combo (if any) Solscan accepts. Visit /api/solscan-debug
+// after setting / rotating the key.
+app.get("/api/solscan-debug", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  // Gated: this exposes key metadata + makes upstream calls on our key. Hidden
+  // (404) unless the admin passes the premium key, so it's not a public probe.
+  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) {
+    return res.status(404).json({ error: "not_found" });
+  }
+  const KEY = process.env.SOLSCAN_API_KEY;
+  if (!KEY) return res.status(200).json({ configured: false, message: "SOLSCAN_API_KEY env var is missing on this container" });
+  const keyMeta = {
+    configured: true,
+    length: KEY.length,
+    prefix: KEY.slice(0, 6) + "…",
+    suffix: "…" + KEY.slice(-4),
+    hasWhitespace: /\s/.test(KEY),
+    looksLikeJwt: KEY.split(".").length === 3,
+  };
+  // Probe target — DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS (CLKN mint, a known address)
+  const ADDR = req.query.address || "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
+  const probes = [
+    // Suspected free-tier endpoints
+    { name: "v2 chain info",                        url: `https://pro-api.solscan.io/v2.0/chaininfo`,                       headers: { token: KEY } },
+    { name: "v2 chain info /chain/info",            url: `https://pro-api.solscan.io/v2.0/chain/info`,                      headers: { token: KEY } },
+    { name: "v2 token holders",                     url: `https://pro-api.solscan.io/v2.0/token/holders?address=DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS&page=1&page_size=10`, headers: { token: KEY } },
+    { name: "v2 token transfer",                    url: `https://pro-api.solscan.io/v2.0/token/transfer?address=DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS&page=1&page_size=5`, headers: { token: KEY } },
+    { name: "v2 token markets",                     url: `https://pro-api.solscan.io/v2.0/token/markets?address=DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS&page=1&page_size=5`,  headers: { token: KEY } },
+    { name: "v2 token price",                       url: `https://pro-api.solscan.io/v2.0/token/price?address=DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`,                       headers: { token: KEY } },
+    { name: "v2 token list (no params)",            url: `https://pro-api.solscan.io/v2.0/token/list?page=1&page_size=5`,                                                          headers: { token: KEY } },
+    // Paid tier (known 401 — for reference)
+    { name: "v2 account detail (paid tier)",        url: `https://pro-api.solscan.io/v2.0/account/detail?address=${ADDR}`,  headers: { token: KEY } },
+    { name: "v2 token meta (paid tier)",            url: `https://pro-api.solscan.io/v2.0/token/meta?address=DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`,                         headers: { token: KEY } },
+  ];
+  const results = [];
+  for (const p of probes) {
+    try {
+      const r = await fetch(p.url, { headers: { ...p.headers, accept: "application/json" }, signal: AbortSignal.timeout(8000) });
+      const body = await r.text();
+      results.push({
+        probe: p.name,
+        url: p.url.replace(KEY, "[KEY]"),
+        status: r.status,
+        ok: r.ok,
+        bodyHead: body.slice(0, 200),
+      });
+    } catch (e) {
+      results.push({ probe: p.name, url: p.url.replace(KEY, "[KEY]"), error: e.message });
+    }
+  }
+  return res.status(200).json({ keyMeta, probes: results });
+});
+
+// Solana Tracker free-tier diagnostic — probes the endpoints we actually
+// want to use (creator buy-back, traders list, enriched holders, first
+// buyers) against the configured SOLANA_TRACKER_API_KEY so we can see
+// which ones the free plan exposes before wiring them into the autopsy.
+// Visit /api/solana-tracker-debug after deploying the key.
+app.get("/api/solana-tracker-debug", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  // Gated: leaks key metadata AND (via ?probe=) is an arbitrary-path proxy to
+  // the ST API on our key. Hidden (404) unless the admin passes the premium key.
+  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) {
+    return res.status(404).json({ error: "not_found" });
+  }
+  const KEY = process.env.SOLANA_TRACKER_API_KEY;
+  if (!KEY) return res.status(200).json({ configured: false, message: "SOLANA_TRACKER_API_KEY env var is missing on this container" });
+  const keyMeta = {
+    configured: true,
+    length: KEY.length,
+    prefix: KEY.slice(0, 6) + "…",
+    suffix: "…" + KEY.slice(-4),
+    hasWhitespace: /\s/.test(KEY),
+  };
+  // Arbitrary-path probe — ?probe=/tokens/multi/graduating etc. Lets us
+  // explore ST endpoints (find fresh pump tokens to test, inspect shapes)
+  // without redeploying a new hardcoded probe each time. Read-only.
+  if (req.query.probe) {
+    const r = await solanaTracker.probe(String(req.query.probe));
+    return res.status(200).json({
+      keyMeta, probePath: req.query.probe, status: r.status, ok: r.ok,
+      reason: r.reason,
+      body: r.data != null ? r.data : (r.bodyHead || null),
+    });
+  }
+  // Probe targets — CLKN mint + the CLKN dev/creator fee wallet so we get
+  // real data, not just an empty 200. Override with ?mint=...&wallet=... .
+  const MINT   = req.query.mint   || "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
+  const WALLET = req.query.wallet || "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS"; // user can pass actual dev wallet
+  const probes = [
+    // The headline endpoint — single wallet's position on a single token.
+    // This is the one we plan to wire into Phase 2G first.
+    { name: "wallet→token position (Phase 2G cross-verify)",  path: `/v2/pnl/wallets/${WALLET}/tokens/${MINT}` },
+    // Top traders on the mint — replacement for Phase 2F P&L ledger.
+    { name: "token traders (top 10 by pnl)",                  path: `/v2/pnl/tokens/${MINT}/traders?sort=pnl&direction=desc&limit=10` },
+    // Earliest buyers — sniper detection.
+    { name: "token first-buyers (limit 10)",                  path: `/v2/pnl/tokens/${MINT}/first-buyers?limit=10` },
+    // Recent trades — shape check for the Buy Special double-check (need
+    // per-trade time, type buy/sell, wallet).
+    { name: "token trades (recent)",                          path: `/trades/${MINT}` },
+    // Holders with identity tags only (lightest enrichment).
+    { name: "holders enriched with identity",                 path: `/tokens/${MINT}/holders?enrich=identity` },
+    // Holders with PnL too — most useful but possibly higher credit cost.
+    { name: "holders enriched with all",                      path: `/tokens/${MINT}/holders?enrich=all` },
+    // Wallet-level lifetime summary.
+    { name: "wallet lifetime summary",                        path: `/v2/pnl/wallets/${WALLET}` },
+    // Cheap baseline calls — should work even on the tightest tier.
+    { name: "token info (baseline)",                          path: `/tokens/${MINT}` },
+    { name: "token price (baseline)",                         path: `/price?token=${MINT}` },
+  ];
+  const results = [];
+  for (const p of probes) {
+    const r = await solanaTracker.probe(p.path);
+    results.push({
+      probe: p.name,
+      path: p.path,
+      status: r.status,
+      ok: r.ok,
+      reason: r.reason,
+      // Show a head of the response so you can see whether free tier returns
+      // real data or just a quota error. Trim to keep the JSON readable.
+      bodyHead: r.bodyHead ? r.bodyHead : (r.data ? JSON.stringify(r.data).slice(0, 5000) : null),
+    });
+  }
+  return res.status(200).json({ keyMeta, mint: MINT, wallet: WALLET, probes: results });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// PRIVATE PREMIUM FORENSICS — /api/autopsy-premium?key=...&mint=...
+//
+// Gated behind PREMIUM_ACCESS_KEY. Returns 404 when that env var is unset, so
+// the endpoint is fully invisible until we choose to enable it, and 403 on a
+// bad key. NOT linked anywhere in the free UI. The gate can later become
+// token-gating / payment without changing any forensic logic. Report builders
+// live in lib/premium-forensics.js. Heavy traces (the reason these are paid):
+//   #1 recipient-dump trace — IMPLEMENTED (follow the creator's funnel wallets,
+//      prove downstream sells via Solana Tracker per-wallet P&L)
+//   #2 P&L Express          — IMPLEMENTED (full wallet ledger via ST traders)
+//   #3 creator rap sheet / #4 wallet clusters / #5 money-flow — planned
+// ───────────────────────────────────────────────────────────────────────────
+// Premium beta access = hold this many CLKN. Easy to lower later, or to add a
+// per-use payment path alongside it (the forensic logic doesn't change).
+const PREMIUM_HOLDER_THRESHOLD = 2_000_000;
+
+// ── Premium ownership proof ────────────────────────────────────────────────
+// Access requires PROVING you own a wallet (not just pasting an address, which
+// anyone could copy off the holders list). Two proof paths, both convert into a
+// short-lived signed token bound to the proven wallet:
+//   • send-7 path  → the on-chain send proves ownership (verify-clkn-payment)
+//   • connect path → signMessage signature, verified here (no tx, no approval)
+// The token is an HMAC over {wallet, exp} keyed by PREMIUM_ACCESS_KEY, so it
+// can't be forged. The heavy run RE-checks the live CLKN balance every time, so
+// access always reflects current holdings.
+function issuePremiumProof(wallet, ttlMs = 24 * 3600 * 1000) {
+  const secret = process.env.PREMIUM_ACCESS_KEY;
+  if (!secret || !wallet) return null;
+  const body = Buffer.from(JSON.stringify({ w: wallet, exp: Date.now() + ttlMs })).toString("base64url");
+  const sig = createHmac("sha256", secret).update(body).digest("base64url");
+  return body + "." + sig;
+}
+function verifyPremiumProof(token) {
+  const secret = process.env.PREMIUM_ACCESS_KEY;
+  if (!secret || !token) return null;
+  const [body, sig] = String(token).split(".");
+  if (!body || !sig) return null;
+  const expect = createHmac("sha256", secret).update(body).digest("base64url");
+  if (sig !== expect) return null;            // forged / tampered
+  let p; try { p = JSON.parse(Buffer.from(body, "base64url").toString("utf8")); } catch (_) { return null; }
+  if (!p || !p.w || !p.exp || Date.now() > p.exp) return null; // missing/expired
+  return p.w;                                  // the proven wallet
+}
+// Verify an ed25519 signMessage signature (base64) over `message` for a base58
+// Solana wallet, using Node's built-in crypto (no extra dep). Returns bool.
+function verifySolanaSignature(message, signatureB64, walletB58) {
+  try {
+    const pub = new PublicKey(walletB58).toBytes();                 // 32-byte ed25519 key
+    const der = Buffer.concat([Buffer.from("302a300506032b6570032100", "hex"), Buffer.from(pub)]);
+    const keyObj = createPublicKey({ key: der, format: "der", type: "spki" });
+    return ed25519Verify(null, Buffer.from(message, "utf8"), keyObj, Buffer.from(signatureB64, "base64"));
+  } catch (_) { return false; }
+}
+app.get("/api/autopsy-premium", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  const GATE = process.env.PREMIUM_ACCESS_KEY;
+  if (!GATE) return res.status(404).json({ error: "not_found" });          // private until enabled
+
+  // Access via EITHER the admin key (our own testing) OR a PROOF TOKEN issued
+  // after the holder proved wallet ownership (send-7 or connect+sign). A pasted
+  // address alone is NOT accepted — the token binds a proven wallet. We re-check
+  // the live CLKN balance every run, so access always tracks current holdings.
+  const provided = req.query.key || req.headers["x-premium-key"];
+  const proof = req.query.proof || req.headers["x-premium-proof"];
+  let accessVia = null, holderBalance = null, gateWallet = null;
+  if (provided && provided === GATE) {
+    accessVia = "admin-key";
+  } else if (proof) {
+    gateWallet = verifyPremiumProof(proof);           // proven wallet, or null if forged/expired
+    if (gateWallet) {
+      try { const h = await checkCLKNHolder(gateWallet); holderBalance = h.balance; } catch (_) {}
+      if (holderBalance != null && holderBalance >= PREMIUM_HOLDER_THRESHOLD) accessVia = "holder";
+    }
+  }
+  if (!accessVia) {
+    if (gateWallet) return res.status(403).json({ error: "insufficient_holdings", balance: holderBalance, threshold: PREMIUM_HOLDER_THRESHOLD });
+    return res.status(403).json({ error: "forbidden" });
+  }
+
+  const mint = String(req.query.mint || "").trim();
+  if (!mint) return res.status(400).json({ error: "mint_required" });
+
+  const HELIUS_KEY = process.env.HELIUS_API_KEY;
+  const rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
+  const rpcCall = (id, method, params) => fetch(rpcUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id, method, params }),
+  }).then(r => r.json());
+  const heliusTxCache = new Map();
+  const scanQuality = { phases: {}, degraded: false };
+  const t0 = Date.now();
+
+  try {
+    // Resolve the creator the SAME way the autopsy does — the Bags/Pump
+    // VERIFIED creator (the dev's operating wallet) first, then ST. ST's
+    // token.creator can be a platform/creation wallet that did no funneling,
+    // so using it alone made the recipient-dump trace the wrong wallet on Bags
+    // tokens (it missed @glittercowboy's 42.7M funnel on GSD entirely).
+    let creatorWallet = null, creatorSource = null, claimedFeesSol = null;
+    try {
+      const bctx = await fetchBagsContext(mint);
+      const oc = bctx && bctx.bagsInfo && bctx.bagsInfo.officialCreators && bctx.bagsInfo.officialCreators[0];
+      if (oc && oc.wallet) { creatorWallet = oc.wallet; creatorSource = "bags-official"; }
+      if (bctx && bctx.bagsInfo && bctx.bagsInfo.totalClaimedSol != null) claimedFeesSol = bctx.bagsInfo.totalClaimedSol;
+    } catch (_) {}
+    if (!creatorWallet) {
+      try {
+        const c = await solanaTracker.getTokenCreator(mint);
+        if (c && c.wallet) { creatorWallet = c.wallet; creatorSource = "solana-tracker"; }
+      } catch (_) {}
+    }
+
+    // Supply + decimals for share-of-supply math.
+    let supplyTokens = null, tokenDecimals = 9;
+    try {
+      const sup = await rpcCall("premium-supply", "getTokenSupply", [mint]);
+      const v = sup?.result?.value;
+      if (v) { tokenDecimals = v.decimals ?? 9; supplyTokens = parseInt(v.amount) / Math.pow(10, tokenDecimals); }
+    } catch (_) {}
+
+    // ── FEATURE #1: Recipient-dump trace + FEATURE #5: Money-flow ─────────
+    let recipientDump = { feature: "recipient-dump-trace", status: "skipped", reason: !creatorWallet ? "no creator wallet resolved" : "no Helius key" };
+    let moneyFlow = { feature: "money-flow-cashout", status: "skipped", reason: !creatorWallet ? "no creator wallet resolved" : "no Helius key" };
+    if (creatorWallet && HELIUS_KEY) {
+      // Focused scan of the creator's own signatures, collecting transfers of
+      // THIS mint OUT of the creator wallet → recipient → tokens. Same parse
+      // the free autopsy's Phase 2G uses, scoped to transfers-out only.
+      const allSigs = [];
+      let before;
+      for (let p = 0; p < 4; p++) {
+        const params = before ? [creatorWallet, { limit: 1000, before }] : [creatorWallet, { limit: 1000 }];
+        const r = await rpcCall(`premium-creator-sigs-${p}`, "getSignaturesForAddress", params);
+        const pg = r?.result || [];
+        if (pg.length === 0) break;
+        allSigs.push(...pg);
+        if (pg.length < 1000) break;
+        before = pg[pg.length - 1].signature;
+      }
+      const sigList = allSigs.map(s => s.signature);
+      const walk = await heliusEnhancedBatched(sigList, HELIUS_KEY, "premium-recipient", heliusTxCache, scanQuality);
+      const outByDest = new Map();
+      const airdropRecipients = new Set();   // received via a BATCH send (many recipients in one tx)
+      const AIRDROP_BATCH_MIN = 5;
+      for (const tx of walk.txs) {
+        if (!tx || tx.transactionError) continue;
+        const txRecips = [];
+        for (const tt of (tx.tokenTransfers || [])) {
+          if (tt.mint !== mint) continue;
+          if (tt.fromUserAccount === creatorWallet && tt.toUserAccount && tt.toUserAccount !== creatorWallet) {
+            const amt = Number(tt.tokenAmount) || 0;
+            if (amt > 0) { outByDest.set(tt.toUserAccount, (outByDest.get(tt.toUserAccount) || 0) + amt); txRecips.push(tt.toUserAccount); }
+          }
+        }
+        // One tx paying out to many recipients = a batch airdrop/distribution,
+        // not a covert funnel to a few wallets. Tag those recipients.
+        if (new Set(txRecips).size >= AIRDROP_BATCH_MIN) txRecips.forEach(w => airdropRecipients.add(w));
+      }
+      // Cap the per-recipient ST trace to the 25 largest recipients to bound
+      // the credit/rate cost; the long tail is rarely the dump vector.
+      const sorted = [...outByDest.entries()].sort((a, b) => b[1] - a[1]).slice(0, 25);
+      const recipients = [];
+      for (const [wallet, tokensReceived] of sorted) {
+        let position = null;
+        try { position = premiumForensics.parseStPosition(await solanaTracker.getWalletTokenPosition(wallet, mint)); } catch (_) {}
+        recipients.push({ wallet, tokensReceived, position });
+      }
+      // Cross-reference recipients against the autopsy's account classifier so
+      // LP pools / token locks / programs are LABELED — not mislabeled as a
+      // suspicious "funnel" to people. This is the autopsy context the trace was
+      // missing (the whole point of pairing premium with the free report).
+      const recipientTypes = await classifyAddressTypes(recipients.map(r => r.wallet), rpcCall);
+      for (const r of recipients) {
+        const c = recipientTypes.get(r.wallet); if (c) { r.accountType = c.category; r.accountLabel = c.label; }
+        // A person who received via a batch send = airdrop recipient, not a covert funnel target.
+        if (airdropRecipients.has(r.wallet) && (!r.accountType || r.accountType === "wallet")) { r.accountType = "airdrop"; r.accountLabel = "Batch send"; }
+      }
+      recipientDump = premiumForensics.buildRecipientDumpReport({ creatorWallet, mint, recipients, supplyTokens, priceCrashTs: null });
+      recipientDump.sigsScanned = sigList.length;
+
+      // FEATURE #5: reuse the SAME creator-tx scan to trace SOL out the door —
+      // how much went to a CEX (cash-out) vs other wallets.
+      // Track SOL out PER destination AND in PER source, so round-trips (the Bags
+      // fee-claim 1-SOL float, swap/LP routing) can be NETTED out per counterparty.
+      const solOutByDest = new Map();
+      const solInBySource = new Map();
+      let solInLamports = 0;
+      for (const tx of walk.txs) {
+        if (!tx || tx.transactionError) continue;
+        for (const nt of (tx.nativeTransfers || [])) {
+          const amt = Number(nt.amount) || 0;
+          if (amt <= 0) continue;
+          if (nt.fromUserAccount === creatorWallet && nt.toUserAccount && nt.toUserAccount !== creatorWallet) {
+            solOutByDest.set(nt.toUserAccount, (solOutByDest.get(nt.toUserAccount) || 0) + amt);
+          } else if (nt.toUserAccount === creatorWallet && nt.fromUserAccount !== creatorWallet) {
+            solInLamports += amt;
+            solInBySource.set(nt.fromUserAccount, (solInBySource.get(nt.fromUserAccount) || 0) + amt);
+          }
+        }
+      }
+      const outEntries = [...solOutByDest.entries()];
+      const inEntries = [...solInBySource.entries()];
+      const allDests = [...new Set([...solOutByDest.keys(), ...solInBySource.keys()])];
+      const destTypes = await classifyAddressTypes(allDests, rpcCall);
+      moneyFlow = premiumForensics.buildMoneyFlow({ creatorWallet, solOutByDest: outEntries, solInByDest: inEntries, solInLamports, claimedFeesSol, destTypes });
+    }
+
+    // ── FEATURE #2: P&L Express ──────────────────────────────────────────
+    let pnlExpress = { feature: "pnl-express", status: "skipped" };
+    try {
+      const traders = await solanaTracker.getTokenTraders(mint, { sort: "pnl", direction: "desc", limit: 100 });
+      pnlExpress = premiumForensics.buildPnlExpress(traders);
+    } catch (e) { pnlExpress = { feature: "pnl-express", status: "error", reason: e.message }; }
+
+    // ── FEATURE #3: Creator Rap Sheet ────────────────────────────────────
+    // ST keys deploy history off the on-chain DEPLOYER wallet (pool.deployer),
+    // not the verified creator — so resolve the deployer from token info, then
+    // pull its full launch history with per-token outcomes.
+    let creatorRapSheet = { feature: "creator-rap-sheet", status: "skipped", reason: "no deployer wallet resolved" };
+    try {
+      const info = await solanaTracker.getTokenInfo(mint);
+      const pools = info && Array.isArray(info.pools) ? info.pools : [];
+      const deployerWallet = pools.length
+        ? pools.reduce((best, p) => ((p.liquidity || {}).usd || 0) > ((best.liquidity || {}).usd || 0) ? p : best, pools[0]).deployer
+        : null;
+      if (deployerWallet) {
+        const dep = await solanaTracker.getDeployerTokens(deployerWallet, { maxPages: 3 });
+        if (dep) {
+          creatorRapSheet = premiumForensics.buildCreatorRapSheet({
+            deployerWallet,
+            total: dep.total,
+            totalUniqueTokens: dep.totalUniqueTokens,
+            tokens: dep.tokens,
+          });
+        }
+      }
+    } catch (e) { creatorRapSheet = { feature: "creator-rap-sheet", status: "error", reason: e.message }; }
+
+    // ── FEATURE #4: Wallet clusters (NEUTRAL funding-source map) ──────────
+    // The heaviest trace: for the top holders, find each one's first funder and
+    // group wallets that share one. Stated as a neutral pattern (presale /
+    // airdrop / team / CEX batch / maybe coordination) — never a "ring".
+    // Bounded: top 20 holders, ≤2 sig-pages each to reach their oldest tx.
+    let walletClusters = { feature: "wallet-clusters", status: "skipped", reason: "no Helius key" };
+    if (HELIUS_KEY) {
+      try {
+        const taRes = await rpcCall("premium-clusters-holders", "getTokenAccounts", { page: 1, limit: 1000, mint, displayOptions: { showZeroBalance: false } });
+        const accs = (taRes && taRes.result && taRes.result.token_accounts) || [];
+        const top = accs
+          .map(a => ({ owner: a.owner, amt: parseInt(a.amount || "0") }))
+          .filter(a => a.owner && a.owner !== creatorWallet)
+          .sort((x, y) => y.amt - x.amt)
+          .slice(0, 20);
+        const holders = [];
+        for (const h of top) {
+          let funder = null, fundingTooDeep = false;
+          try {
+            // Walk to the wallet's oldest reachable signature (cap 2 pages).
+            let before, oldestSig = null, reachedEnd = false;
+            for (let p = 0; p < 2; p++) {
+              const r = await rpcCall(`pc-sigs-${p}`, "getSignaturesForAddress", before ? [h.owner, { limit: 1000, before }] : [h.owner, { limit: 1000 }]);
+              const pg = r && r.result ? r.result : [];
+              if (pg.length === 0) { reachedEnd = true; break; }
+              oldestSig = pg[pg.length - 1].signature;
+              before = oldestSig;
+              if (pg.length < 1000) { reachedEnd = true; break; }
+            }
+            if (!reachedEnd) fundingTooDeep = true;
+            if (oldestSig) {
+              // The first tx is usually the funding tx — read who sent SOL in.
+              const w = await heliusEnhancedBatched([oldestSig], HELIUS_KEY, "premium-cluster-fund", heliusTxCache, scanQuality);
+              const tx = (w.txs && w.txs[0]) || null;
+              if (tx && Array.isArray(tx.nativeTransfers)) {
+                let best = null;
+                for (const nt of tx.nativeTransfers) {
+                  if (nt.toUserAccount === h.owner && nt.fromUserAccount && nt.fromUserAccount !== h.owner) {
+                    if (!best || (Number(nt.amount) || 0) > (Number(best.amount) || 0)) best = nt;
+                  }
+                }
+                if (best) funder = best.fromUserAccount;
+              }
+            }
+          } catch (_) {}
+          holders.push({ wallet: h.owner, tokensHeld: h.amt / Math.pow(10, tokenDecimals), funder, fundingTooDeep });
+        }
+        walletClusters = premiumForensics.buildWalletClusters({ holders });
+      } catch (e) { walletClusters = { feature: "wallet-clusters", status: "error", reason: e.message }; }
+    }
+
+    return res.status(200).json({
+      success: true,
+      accessVia, holderBalance,
+      mint, creatorWallet, creatorSource,
+      supplyTokens: supplyTokens != null ? Math.round(supplyTokens) : null,
+      tookMs: Date.now() - t0,
+      features: {
+        recipientDump,
+        pnlExpress,
+        creatorRapSheet,
+        moneyFlow,
+        walletClusters,
+      },
+    });
+  } catch (e) {
+    console.error("[PREMIUM] error:", e.message);
+    return res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Bags "Recent Launches" feed price enrichment via Solana Tracker.
+// DexScreener's latest/dex/tokens lags and picks a stale pool for fresh Bags
+// bonding-curve tokens — it fed the feed Bounties at $12.6K / -30% when the
+// live curve was $7K / -65%. ST reads the curve reserve directly, so MC /
+// price / 24h change are accurate for on-curve AND graduated tokens. A short
+// SHARED cache keeps ST usage bounded (~N calls per TTL total, regardless of
+// how many users are watching the auto-refreshing feed).
+const BAGS_FEED_PRICE_CACHE = new Map(); // mint → { data, ts }
+const BAGS_FEED_PRICE_TTL = 45000;       // 45s — fresher than the 60s feed refresh
+const BAGS_SNAPSHOT_STALE_CAP = 900000;  // 15 min stale-while-error cap
+
+// Shared per-mint Bags/Solana-Tracker snapshot (cached). Reads the curve
+// reserve directly so on-curve MC/price/curve% are accurate. Used by BOTH the
+// launches feed and the near-graduation board, so a mint fetched for one is
+// free for the other within the cache window. Returns null only if ST has
+// never returned data for this mint; serves the last good value (stale flag)
+// through ST rate-limit blips.
+async function getBagsTokenSnapshot(mint) {
+  const now = Date.now();
+  const cached = BAGS_FEED_PRICE_CACHE.get(mint);
+  if (cached && now - cached.ts < BAGS_FEED_PRICE_TTL) return cached.data;
+  try {
+    const r = await solanaTracker.probe(`/tokens/${mint}`);
+    if (!r.ok || !r.data) throw new Error("no-data");
+    const b = r.data;
+    const pools = Array.isArray(b.pools) ? b.pools : [];
+    if (pools.length === 0) throw new Error("no-pools");
+    const primary = pools.reduce((best, p) =>
+      ((p.liquidity || {}).usd || 0) > ((best.liquidity || {}).usd || 0) ? p : best, pools[0]);
+    const market = primary.market || null;
+    const onCurve = solanaTracker.isLaunchpadCurveMarket(market);
+    const data = {
+      name: b.token?.name || null,
+      symbol: b.token?.symbol || null,
+      priceUsd: primary.price?.usd ?? null,
+      marketCap: primary.marketCap?.usd ?? null,
+      liquidityUsd: primary.liquidity?.usd ?? null,
+      change24h: b.events?.["24h"]?.priceChangePercentage ?? null,
+      volume24h: primary.txns?.volume24h ?? primary.txns?.volume ?? null,
+      market,
+      onBondingCurve: onCurve,
+      curvePct: primary.curvePercentage != null ? Number(primary.curvePercentage) : null,
+      createdAt: primary.createdAt || null,
+      image: b.token?.image || null,
+      twitter: b.token?.twitter || null,
+      website: b.token?.website || null,
+      source: "solana-tracker",
+    };
+    BAGS_FEED_PRICE_CACHE.set(mint, { data, ts: now });
+    return data;
+  } catch (_) {
+    if (cached && now - cached.ts < BAGS_SNAPSHOT_STALE_CAP) return { ...cached.data, stale: true };
+    return null;
+  }
+}
+
+app.get("/api/bags-feed-prices", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  const mints = String(req.query.mints || "").split(",").map(s => s.trim()).filter(Boolean).slice(0, 20);
+  if (mints.length === 0) return res.status(200).json({ success: true, prices: {} });
+  const out = {};
+  await Promise.all(mints.map(async (mint) => { const d = await getBagsTokenSnapshot(mint); if (d) out[mint] = d; }));
+  return res.status(200).json({ success: true, prices: out });
+});
+
+// Near-graduation board — scans the recent Bags feed and surfaces the tokens
+// CLOSEST to graduating off the bonding curve (highest curve %), regardless of
+// launch recency (slow bonders are rare, so "close" = real momentum worth
+// showcasing). Result cached ~2.5 min; per-mint snapshots reuse the same cache
+// the feed uses, and the scan runs in small batches to respect ST rate limits.
+const NEAR_GRAD_CACHE = { list: null, ts: 0 };
+const NEAR_GRAD_TTL = 600000;   // 10 min — ≥ watcher tick so the public board + watcher share ONE ST fetch (was 2.5min < 180s tick → cache never caught, every tick burned a fresh ST call)
+const NEAR_GRAD_SCAN = 45;      // recent launches to scan for curve progress
+const BAGS_BONDING_SOL = 85;    // SOL raised to complete a Bags bonding curve
+// Bags tokens closest to graduating — platform-wide via ST's "graduating"
+// list (one call), filtered to Bags (meteora-curve), sorted by curve % desc.
+// Result-cached; reused by the /bags page AND the Telegram launch pulse.
+async function getBagsNearGrad() {
+  const now = Date.now();
+  if (NEAR_GRAD_CACHE.list && now - NEAR_GRAD_CACHE.ts < NEAR_GRAD_TTL) {
+    return { tokens: NEAR_GRAD_CACHE.list, cached: true };
+  }
+  const r = await solanaTracker.probe("/tokens/multi/graduating");
+  const arr = Array.isArray(r.data) ? r.data : [];
+  const out = [];
+  for (const item of arr) {
+    const tok = item.token || {};
+    const pools = Array.isArray(item.pools) ? item.pools : [];
+    if (pools.length === 0 || !tok.mint) continue;
+    const primary = pools.reduce((best, p) => ((p.liquidity || {}).usd || 0) > ((best.liquidity || {}).usd || 0) ? p : best, pools[0]);
+    // ONLY real Bags tokens — the mint's "bags" vanity suffix is authoritative.
+    // market === "meteora-curve" alone leaked non-Bags curve tokens.
+    const isBags = String(tok.mint).toLowerCase().endsWith("bags");
+    if (!isBags || primary.curvePercentage == null) continue;
+    const curvePct = Number(primary.curvePercentage);
+    // A full curve (>=100%) has already bonded — it belongs on Recently
+    // Graduated, not "near grad". Drop it.
+    if (curvePct >= 100) continue;
+    out.push({
+      tokenMint: tok.mint,
+      name: tok.name, symbol: tok.symbol, image: tok.image, twitter: tok.twitter,
+      priceUsd: primary.price?.usd ?? null,
+      marketCap: primary.marketCap?.usd ?? null,
+      change24h: item.events?.["24h"]?.priceChangePercentage ?? null,
+      volume24h: primary.txns?.volume24h ?? primary.txns?.volume ?? null,
+      curvePct,
+      solRaised: +(BAGS_BONDING_SOL * curvePct / 100).toFixed(2),       // of 85 SOL
+      solToGrad: +(BAGS_BONDING_SOL * (1 - curvePct / 100)).toFixed(2), // SOL left to bond
+      createdAt: primary.createdAt || null,
+    });
+  }
+  out.sort((a, b) => (b.curvePct || 0) - (a.curvePct || 0));
+  let top = out.slice(0, 15);
+  // Authoritative double-check on the highest-% candidates: ST's "graduating"
+  // feed can lag and still list a token that has actually bonded (the case that
+  // made a $92k/99.3% token look already-graduated). getBagsTokenSnapshot reads
+  // the curve reserve directly, so onBondingCurve===false (now on an AMM) =
+  // graduated → drop it. Only the most-at-risk (>=90%) are checked, reusing the
+  // shared snapshot cache, so ST usage stays bounded.
+  const atRisk = top.filter(t => t.curvePct >= 90).map(t => t.tokenMint).slice(0, 6);   // bound per-candidate ST snapshot rechecks
+  if (atRisk.length) {
+    const bonded = new Set();
+    await Promise.all(atRisk.map(async (mint) => {
+      const snap = await getBagsTokenSnapshot(mint);
+      if (snap && (snap.onBondingCurve === false || (snap.curvePct != null && snap.curvePct >= 100))) bonded.add(mint);
+    }));
+    if (bonded.size) top = top.filter(t => !bonded.has(t.tokenMint));
+  }
+  NEAR_GRAD_CACHE.list = top; NEAR_GRAD_CACHE.ts = now;
+  return { tokens: top, cached: false, scanned: arr.length };
+}
+
+app.get("/api/bags-near-grad", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    const r = await getBagsNearGrad();
+    return res.status(200).json({ success: true, cached: r.cached, scanned: r.scanned, tokens: r.tokens });
+  } catch (e) {
+    if (NEAR_GRAD_CACHE.list) return res.status(200).json({ success: true, cached: true, stale: true, tokens: NEAR_GRAD_CACHE.list });
+    return res.status(200).json({ success: false, tokens: [], error: e.message });
+  }
+});
+
+// Recently-graduated Bags tokens — ST's platform-wide "graduated" list,
+// filtered to Bags (Bags graduates to Meteora DAMM v2 = market meteora-dyn-v2;
+// other launchpads graduate to pumpfun-amm / raydium-*). Order preserved =
+// most recently graduated first. Result-cached. Each carries a DexScreener
+// link for the migrated LP.
+const GRADUATED_CACHE = { list: null, ts: 0 };
+const GRADUATED_TTL = 600000; // 10 min — graduated board changes slowly; share one ST fetch across loads
+async function getBagsGraduated() {
+  const now = Date.now();
+  if (GRADUATED_CACHE.list && now - GRADUATED_CACHE.ts < GRADUATED_TTL) return { tokens: GRADUATED_CACHE.list, cached: true };
+  const r = await solanaTracker.probe("/tokens/multi/graduated");
+  const arr = Array.isArray(r.data) ? r.data : [];
+  const out = [];
+  for (const item of arr) {
+    const tok = item.token || {};
+    const pools = Array.isArray(item.pools) ? item.pools : [];
+    if (pools.length === 0 || !tok.mint) continue;
+    const primary = pools.reduce((best, p) => ((p.liquidity || {}).usd || 0) > ((best.liquidity || {}).usd || 0) ? p : best, pools[0]);
+    // ONLY real Bags tokens — the mint's "bags" vanity suffix is the
+    // authoritative signal. Market === meteora-dyn-v2 is too loose: other
+    // launchpads also graduate to Meteora DAMM v2, so it leaked non-Bags tokens.
+    const isBags = String(tok.mint).toLowerCase().endsWith("bags");
+    if (!isBags) continue;
+    out.push({
+      tokenMint: tok.mint, name: tok.name, symbol: tok.symbol, image: tok.image, twitter: tok.twitter,
+      priceUsd: primary.price?.usd ?? null,
+      marketCap: primary.marketCap?.usd ?? null,
+      change24h: item.events?.["24h"]?.priceChangePercentage ?? null,
+      volume24h: primary.txns?.volume24h ?? primary.txns?.volume ?? null,
+      liquidityUsd: primary.liquidity?.usd ?? null,
+      createdAt: primary.createdAt || null,
+    });
+  }
+  const top = out.slice(0, 15);
+  GRADUATED_CACHE.list = top; GRADUATED_CACHE.ts = now;
+  return { tokens: top, cached: false, scanned: arr.length };
+}
+
+// Escape API/token strings for Telegram HTML messages — a token named "<b>" or
+// "&" would otherwise make Telegram reject the whole message (can't parse
+// entities). Escaping & < > is enough for HTML text context.
+function tgEsc(s) { return String(s == null ? "" : s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
+
+// The Recently-Graduated BOARD = our own tracked 48h record (reliable for Bags,
+// unaffected by pump.fun flooding ST's global feed) merged with any Bags-suffix
+// graduates ST happens to still show (dedup, additive). Our records are enriched
+// with a live snapshot so MC/price reflect now, not graduation time; createdAt =
+// graduatedAt so each card shows "graduated Xh ago". Cached separately (150s).
+const GRAD_BOARD_CACHE = { list: null, ts: 0 };
+async function getBagsGraduatedBoard() {
+  const now = Date.now();
+  if (GRAD_BOARD_CACHE.list && now - GRAD_BOARD_CACHE.ts < GRADUATED_TTL) return { tokens: GRAD_BOARD_CACHE.list, cached: true };
+  const seen = new Set();
+  const tokens = [];
+  for (const g of gradTracker.listGraduated()) {       // newest-first, last 48h
+    if (seen.has(g.mint)) continue; seen.add(g.mint);
+    let snap = null; try { snap = await getBagsTokenSnapshot(g.mint); } catch (_) {}
+    tokens.push({
+      tokenMint: g.mint, name: g.name, symbol: g.symbol, image: g.image, twitter: g.twitter,
+      priceUsd: snap?.priceUsd ?? g.priceUsd ?? null,
+      marketCap: snap?.marketCap ?? g.marketCap ?? null,
+      change24h: snap?.change24h ?? null,
+      volume24h: snap?.volume24h ?? null,
+      createdAt: g.graduatedAt,
+      source: "tracked",
+    });
+  }
+  try {                                                 // additive supplement from ST
+    const st = await getBagsGraduated();
+    for (const t of (st.tokens || [])) { if (!seen.has(t.tokenMint)) { seen.add(t.tokenMint); tokens.push(t); } }
+  } catch (_) {}
+  tokens.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)); // most recently graduated first
+  const top = tokens.slice(0, 15);
+  GRAD_BOARD_CACHE.list = top; GRAD_BOARD_CACHE.ts = now;
+  return { tokens: top, cached: false };
+}
+
+app.get("/api/bags-graduated", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    const r = await getBagsGraduatedBoard();
+    return res.status(200).json({ success: true, cached: r.cached, tokens: r.tokens });
+  } catch (e) {
+    if (GRAD_BOARD_CACHE.list) return res.status(200).json({ success: true, cached: true, stale: true, tokens: GRAD_BOARD_CACHE.list });
+    return res.status(200).json({ success: false, tokens: [], error: e.message });
+  }
+});
+
+// ── Bags graduation watcher ────────────────────────────────────────────────
+// Every few minutes: scan the Bags near-bonding list, alert once when a token
+// crosses 85% to graduation, and when a watched token leaves the near-grad list
+// having actually graduated (off the curve = has a DEX pool), record it to our
+// 48h tracker and post a "graduated!" alert. Both alerts stay in the chat.
+const GRAD_WATCH_ENABLED = true;
+const NEAR_BONDING_ALERT_PCT = 85;
+// Extract a valid @handle from a token's twitter field (URL or raw handle) so
+// project-specific X posts can tag the project. Validates against Twitter's
+// handle rules; returns "" if the value isn't a plausible handle.
+function xHandle(twitter) {
+  if (!twitter) return "";
+  const h = String(twitter).trim()
+    .replace(/^https?:\/\/(www\.)?(x\.com|twitter\.com)\//i, "")
+    .replace(/^@/, "")
+    .split(/[\/?#]/)[0];
+  return /^[A-Za-z0-9_]{1,15}$/.test(h) ? "@" + h : "";
+}
+async function notifyNearBonding(t) {
+  const token = process.env.TELEGRAM_BOT_TOKEN, chatId = process.env.TELEGRAM_CHAT_ID;
+  const cp = t.curvePct || 0;
+  const toGrad = (85 * (1 - cp / 100)).toFixed(1);
+  if (token && chatId) {
+    const text = `⚡ <b>CLOSE TO BONDING</b>\n\n🎒 <b>${tgEsc(t.name || "?")}</b> (${tgEsc(t.symbol || "?")})\n${cp.toFixed(0)}% to graduation · ~${toGrad} SOL to go\n\n📡 Watch it live → clucknorris.app/bags`;
+    try {
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
+      });
+    } catch (e) { console.warn("[TELEGRAM] near-bonding alert failed:", e.message); }
+  }
+  if (xConfigured()) {
+    const h = xHandle(t.twitter);
+    const label = String(t.symbol || t.name || "A Bags token").slice(0, 24);
+    const tw = `⚡ ${label} is ${cp.toFixed(0)}% to graduation on Bags — ~${toGrad} SOL to bond.${h ? " " + h : ""}\n\n📡 clucknorris.app/bags ${X_MENTION_TAGS}`;
+    try { await postToX(tw); } catch (_) {}
+  }
+}
+async function notifyGraduated(rec) {
+  const token = process.env.TELEGRAM_BOT_TOKEN, chatId = process.env.TELEGRAM_CHAT_ID;
+  if (token && chatId) {
+    const text = `🎓 <b>GRADUATED!</b>\n\n🎒 <b>${tgEsc(rec.name || "?")}</b> (${tgEsc(rec.symbol || "?")}) just bonded off the Bags curve onto its Meteora pool.\n\n📊 Chart → https://dexscreener.com/solana/${rec.mint}`;
+    try {
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
+      });
+    } catch (e) { console.warn("[TELEGRAM] graduated alert failed:", e.message); }
+  }
+  if (xConfigured()) {
+    const h = xHandle(rec.twitter);
+    const label = String(rec.symbol || rec.name || "A Bags token").slice(0, 24);
+    const tw = `🎓 ${label} just graduated off the Bags curve onto its Meteora pool!${h ? " " + h : ""}\n\n📊 dexscreener.com/solana/${rec.mint}\n${X_MENTION_TAGS}`;
+    try { await postToX(tw); } catch (_) {}
+  }
+}
+async function gradWatcherTick() {
+  if (!GRAD_WATCH_ENABLED) return;
+  let near;
+  try { near = (await getBagsNearGrad()).tokens || []; } catch (_) { return; }
+  const nearByMint = new Map(near.map(t => [t.tokenMint, t]));
+  // 1) Track every near-grad Bags token; alert once when it crosses 85%.
+  for (const t of near) {
+    const w = gradTracker.getWatch(t.tokenMint) || { firstSeenTs: Date.now(), alerted: false };
+    const cp = t.curvePct || 0;
+    if (!w.alerted && cp >= NEAR_BONDING_ALERT_PCT) { await notifyNearBonding(t); w.alerted = true; }
+    gradTracker.setWatch(t.tokenMint, {
+      symbol: t.symbol, name: t.name, image: t.image, twitter: t.twitter,
+      lastCurvePct: cp, lastSeenTs: Date.now(), firstSeenTs: w.firstSeenTs, alerted: w.alerted,
+    });
+  }
+  // 2) For watched tokens that dropped off near-grad: did they graduate?
+  for (const mint of gradTracker.watchedMints()) {
+    if (nearByMint.has(mint)) continue;
+    const w = gradTracker.getWatch(mint) || {};
+    let snap = null; try { snap = await getBagsTokenSnapshot(mint); } catch (_) {}
+    if (snap && snap.onBondingCurve === false) {
+      const rec = { mint, name: snap.name || w.name, symbol: snap.symbol || w.symbol, image: snap.image || w.image, twitter: snap.twitter || w.twitter, graduatedAt: Date.now(), marketCap: snap.marketCap, priceUsd: snap.priceUsd };
+      if (gradTracker.addGraduated(rec)) { await notifyGraduated(rec); console.log(`[GRAD-WATCH] ${rec.symbol || mint.slice(0,6)} graduated — recorded + alerted`); }
+      gradTracker.removeWatch(mint);
+    } else if (snap && snap.onBondingCurve === true) {
+      // Still on curve, just not in the top-15 near-grad slice. Age out if it's
+      // been stalled (not seen near-grad) for 12h so the watchlist stays small.
+      if (w.lastSeenTs && Date.now() - w.lastSeenTs > 12 * 3600 * 1000) gradTracker.removeWatch(mint);
+    } else {
+      // No data this cycle; retry next time, but drop very stale entries (24h).
+      if (w.firstSeenTs && Date.now() - w.firstSeenTs > 24 * 3600 * 1000) gradTracker.removeWatch(mint);
+    }
+  }
+}
+
+// X / Twitter status + live test (gated). Returns whether the 4 X keys are set;
+// &post=1 posts a tweet (uses &text=... or a default) so you can verify posting
+// works the moment the keys are added in Railway.
+app.get("/api/x-post-test", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) return res.status(404).json({ error: "not_found" });
+  if (!xConfigured()) return res.status(200).json({ configured: false, message: "Set X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET in Railway." });
+  if (req.query.post === "1") {
+    const text = req.query.text ? String(req.query.text) : "🐔 Cluck Norris is online. Crypto lessons incoming. clucknorris.app";
+    const r = await postToX(text);
+    return res.status(200).json({ configured: true, posted: r.ok, result: r });
+  }
+  return res.status(200).json({ configured: true, posted: false, hint: "add &post=1 to send a test tweet" });
+});
+
+// Cluck's Lesson — dry-run/preview (gated). Returns a freshly generated lesson
+// for the NEXT topic in rotation without advancing it; &post=1 advances the
+// rotation and actually posts to the group. &topic=<text> overrides the topic.
+app.get("/api/edu-post-test", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) return res.status(404).json({ error: "not_found" });
+  try {
+    if (req.query.post === "1") { await notifyEduPost(); return res.status(200).json({ success: true, posted: true }); }
+    const idx = kv.get("eduTopicIdx", 0);
+    const topic = req.query.topic ? String(req.query.topic) : EDU_TOPICS[idx % EDU_TOPICS.length];
+    const body = await generateEduLesson(topic);
+    return res.status(200).json({ success: true, posted: false, nextTopicIdx: idx, topic, preview: body });
+  } catch (e) { return res.status(500).json({ success: false, error: e.message }); }
+});
+
+// Graduation-watcher status (gated). Shows the current watchlist + our 48h
+// graduated record; ?run=1 triggers one watcher cycle now (alerts fire if a
+// token actually crosses 85% / graduates).
+app.get("/api/grad-watch-status", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) return res.status(404).json({ error: "not_found" });
+  if (req.query.run === "1") { try { await gradWatcherTick(); } catch (_) {} }
+  const watched = {}; for (const m of gradTracker.watchedMints()) watched[m] = gradTracker.getWatch(m);
+  return res.status(200).json({
+    persistent: gradTracker.isPersistent(), enabled: GRAD_WATCH_ENABLED, alertThresholdPct: NEAR_BONDING_ALERT_PCT,
+    watchedCount: Object.keys(watched).length, watched,
+    graduatedCount: gradTracker.listGraduated().length, graduated: gradTracker.listGraduated(),
+  });
+});
+
+// Manually add a known graduated Bags token to our 48h tracker (gated). Useful
+// for seeding the Recently-Graduated board with a real graduate the watcher
+// didn't catch live. Validates the bags suffix + pulls live snapshot for the
+// display fields. Stamps graduatedAt = now so it shows + persists the full 48h.
+app.get("/api/grad-watch-add", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) return res.status(404).json({ error: "not_found" });
+  const mint = String(req.query.mint || "").trim();
+  if (!mint.toLowerCase().endsWith("bags")) return res.status(400).json({ error: "not_a_bags_mint" });
+  let snap = null; try { snap = await getBagsTokenSnapshot(mint); } catch (_) {}
+  if (!snap) return res.status(200).json({ added: false, error: "no_snapshot_data" });
+  // Use the token's REAL graduation time (its Meteora pool createdAt) so the age
+  // is honest, not "just now". Normalize sec/ms/ISO; fall back to now if absent.
+  const toMs = (v) => { if (v == null) return null; if (typeof v === "number") return v > 1e12 ? v : v * 1000; const t = Date.parse(v); return isNaN(t) ? null : t; };
+  const at = toMs(snap.createdAt);
+  const graduatedAt = (at && at > 0 && at <= Date.now()) ? at : Date.now();
+  // Pinned: manually-seeded real graduates persist past the 48h window.
+  const rec = { mint, name: snap.name, symbol: snap.symbol, image: snap.image, twitter: snap.twitter, graduatedAt, pinned: true, marketCap: snap.marketCap, priceUsd: snap.priceUsd };
+  const added = gradTracker.addGraduated(rec);
+  // bust the board cache so it shows immediately
+  GRAD_BOARD_CACHE.list = null; GRAD_BOARD_CACHE.ts = 0;
+  return res.status(200).json({ added, onBondingCurve: snap.onBondingCurve, rec });
+});
+
+// Bags Launch Radar — manual/dry-run trigger for the 2-hourly Telegram post.
+// Gated by PREMIUM_ACCESS_KEY. Without ?post=1 it just RETURNS the composed
+// text (verify the format, no spam); ?post=1 actually fires the Telegram post.
+app.get("/api/bags-radar-test", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const KEY = process.env.PREMIUM_ACCESS_KEY;
+  const provided = req.query.key || req.headers["x-premium-key"];
+  if (!KEY || provided !== KEY) return res.status(403).json({ error: "forbidden" });
+  try {
+    const text = await buildBagsRadarText();
+    if (req.query.post === "1") await notifyBagsLaunches();
+    return res.status(200).json({ success: true, posted: req.query.post === "1", text });
+  } catch (e) { return res.status(500).json({ success: false, error: e.message }); }
+});
+
+// Market Check — manual/dry-run trigger (gated). ?post=1 fires the Telegram post.
+app.get("/api/market-check-test", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const KEY = process.env.PREMIUM_ACCESS_KEY;
+  const provided = req.query.key || req.headers["x-premium-key"];
+  if (!KEY || provided !== KEY) return res.status(403).json({ error: "forbidden" });
+  try {
+    const text = await buildMarketCheckText();
+    if (req.query.post === "1") await notifyMarketCheck();
+    return res.status(200).json({ success: true, posted: req.query.post === "1", text });
+  } catch (e) { return res.status(500).json({ success: false, error: e.message }); }
+});
+
+// Daily Flow Recap dry-run. ?key=PREMIUM_ACCESS_KEY returns the composed text +
+// the current accumulated window; add &post=1 to actually post it (which also
+// resets the window, like the real daily fire). Persistent (volume) flag shown.
+app.get("/api/recap-test", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const KEY = process.env.PREMIUM_ACCESS_KEY;
+  const provided = req.query.key || req.headers["x-premium-key"];
+  if (!KEY || provided !== KEY) return res.status(404).json({ error: "not_found" });
+  try {
+    const snapshot = recap.snapshot();
+    const text = buildRecapText();
+    if (req.query.post === "1") await notifyRecap();
+    return res.status(200).json({ success: true, posted: req.query.post === "1", persistent: recap.isPersistent(), snapshot, text });
+  } catch (e) { return res.status(500).json({ success: false, error: e.message }); }
+});
+
+// Telegram webhook — receives slash-command updates. Both the path secret and
+// the X-Telegram-Bot-Api-Secret-Token header must match (derived from the bot
+// token) so randoms can't inject fake updates. Ack immediately, handle async.
+// (Handlers tgSend / handleTelegramUpdate are defined up in the Telegram block;
+// this route must live below `const app = express()`.)
+app.post("/api/tg/:secret", (req, res) => {
+  if (!TG_WEBHOOK_SECRET
+      || req.params.secret !== TG_WEBHOOK_SECRET
+      || req.headers["x-telegram-bot-api-secret-token"] !== TG_WEBHOOK_SECRET) {
+    return res.status(404).json({ error: "not_found" });
+  }
+  res.status(200).json({ ok: true });
+  handleTelegramUpdate(req.body);
+});
+
+// Buy Special double-check — independent buyer list from Solana Tracker for a
+// time window, so the tool can cross-verify its own Helius value-flow scan.
+// Returns the unique BUY wallets ST saw in [from, to] (unix seconds). The
+// client diffs this against its own results. Degrades gracefully (success
+// false) if ST is unavailable so the main scan never depends on it.
+app.get("/api/buyspecial-crosscheck", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  const mint = (req.query.mint || "").trim();
+  const from = parseInt(req.query.from, 10);
+  const to = parseInt(req.query.to, 10);
+  if (!mint || mint.length < 32 || !from || !to || to <= from) {
+    return res.status(400).json({ success: false, error: "Need mint, from, to (unix seconds, to>from)" });
+  }
+  if (!solanaTracker.isConfigured()) {
+    return res.status(200).json({ success: false, error: "Solana Tracker not configured" });
+  }
+  try {
+    const result = await solanaTracker.getTokenBuyersInWindow(mint, from, to);
+    if (!result) return res.status(200).json({ success: false, error: "No data from Solana Tracker" });
+    return res.status(200).json({
+      success: true,
+      source: "solana-tracker /trades",
+      buyers: result.buyers,                 // [{wallet, buyCount, volumeSol}]
+      buyerCount: result.buyers.length,
+      tradesScanned: result.tradesScanned,
+      reachedWindowStart: result.reachedWindowStart, // false = ST only covered the recent part of the window
+    });
+  } catch (err) {
+    console.error("[buyspecial-crosscheck] error:", err.message);
+    return res.status(200).json({ success: false, error: err.message });
+  }
+});
+
+app.get("/api/token-context", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "public, max-age=300");
+  const mint = (req.query.mint || "").trim();
+  if (!mint || mint.length < 32) {
+    return res.status(400).json({ success: false, error: "Invalid mint" });
+  }
+  try {
+    const ctx = await fetchBagsContext(mint);
+    return res.status(200).json({
+      success: true,
+      mint,
+      bagsInfo: ctx.bagsInfo,
+      jupiterInfo: ctx.jupiterInfo,
+      projectFeeWallets: ctx.projectFeeWallets || [],
+    });
+  } catch (err) {
+    console.error("[token-context] error:", err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.get("/api/holders", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
@@ -254,6 +2037,20 @@ app.post("/api/helius-rpc", async (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   const HELIUS_KEY = process.env.HELIUS_API_KEY;
   if (!HELIUS_KEY) return res.status(500).json({ error: "Missing HELIUS_API_KEY" });
+  // Block the heavy / never-used-over-HTTP methods so this open proxy can't be
+  // turned into an expensive credit drain. The app only uses lightweight read
+  // methods (getTokenAccounts(ByOwner), getSignaturesForAddress, getTransaction,
+  // getTokenSupply); getProgramAccounts scans entire program state, and the
+  // *Subscribe methods are WebSocket-only (they don't work over HTTP anyway).
+  const BLOCKED_RPC = new Set([
+    "getProgramAccounts", "getProgramAccountsV2",
+    "programSubscribe", "accountSubscribe", "logsSubscribe",
+    "signatureSubscribe", "slotSubscribe", "rootSubscribe", "slotsUpdatesSubscribe",
+  ]);
+  const reqMethod = req.body && req.body.method;
+  if (typeof reqMethod === "string" && BLOCKED_RPC.has(reqMethod)) {
+    return res.status(403).json({ error: "method_not_allowed" });
+  }
   try {
     const response = await fetch(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`, {
       method: "POST",
@@ -333,6 +2130,149 @@ async function bagsFetch(endpoint, API_KEY) {
   return { status: response.status, text };
 }
 
+// "Best observed" creator-trace cache. Forensic counters (buyCount, lockCount,
+// boughtSol, claimedSol, lockedTokens) are MONOTONICALLY INCREASING by
+// definition — a wallet can't un-buy or un-lock something. If a later run
+// shows fewer buys than an earlier one, that's always a capture failure
+// (Helius rate-limited, batch retry exhausted, GeckoTerminal down, etc.),
+// never reality. So we keep the max() of each counter across all runs for a
+// given (creatorWallet, mint) pair. The user sees stable numbers that only
+// improve, never silently regress.
+const CREATOR_TRACE_CACHE = new Map();
+const CREATOR_TRACE_TTL_MS = 60 * 60 * 1000; // 1 hour
+function bestObservedTrace(wallet, mint, fresh) {
+  const key = `${wallet}:${mint}`;
+  const cached = CREATOR_TRACE_CACHE.get(key);
+  // If no cache, store fresh and return as-is.
+  if (!cached || Date.now() - cached.savedAt > CREATOR_TRACE_TTL_MS) {
+    CREATOR_TRACE_CACHE.set(key, { trace: fresh, savedAt: Date.now() });
+    return { trace: fresh, usedCache: false };
+  }
+  // Merge — keep the max of each monotonic field, plus newest timestamps.
+  const c = cached.trace;
+  const merged = { ...fresh };
+  const monotonic = ["buyCount", "sellCount", "lockCount", "transferInCount", "transferOutCount",
+    "boughtTokens", "soldTokens", "lockedTokens", "transferInTokens", "transferOutTokens",
+    "boughtUsd", "soldUsd", "boughtSol", "soldSol", "sigsScanned"];
+  let regressedAny = false;
+  for (const k of monotonic) {
+    const newVal = Number(fresh[k]) || 0;
+    const cachedVal = Number(c[k]) || 0;
+    if (cachedVal > newVal) {
+      merged[k] = cachedVal;
+      regressedAny = true;
+    } else {
+      merged[k] = newVal;
+    }
+  }
+  // Recompute derived fields after merging
+  merged.netUsd = merged.boughtUsd - merged.soldUsd;
+  merged.netSol = merged.boughtSol - merged.soldSol;
+  if (merged.claimedSol && merged.claimedSol > 0) {
+    merged.pctReinvested = Math.min(100, (merged.boughtSol / merged.claimedSol) * 100);
+  }
+  // Timestamps — keep newest lastTs, oldest firstTs
+  if (c.lastTs && (!merged.lastTs || c.lastTs > merged.lastTs)) merged.lastTs = c.lastTs;
+  if (c.firstTs && (!merged.firstTs || c.firstTs < merged.firstTs)) merged.firstTs = c.firstTs;
+  // teamNetwork: keep the one with more wallets / activity
+  if (c.teamNetwork && (!merged.teamNetwork
+    || (c.teamNetwork.totalBuyCount || 0) > (merged.teamNetwork.totalBuyCount || 0))) {
+    merged.teamNetwork = c.teamNetwork;
+  }
+  // Store merged back (only if we actually improved or kept stable)
+  CREATOR_TRACE_CACHE.set(key, { trace: merged, savedAt: Date.now() });
+  if (regressedAny) {
+    console.log(`[CREATOR-TRACE-CACHE] ${wallet.slice(0,8)}…:${mint.slice(0,6)} — fresh run regressed; using cached best (buys: ${c.buyCount} vs fresh ${fresh.buyCount}, locks: ${c.lockCount} vs fresh ${fresh.lockCount}, boughtSol: ${c.boughtSol?.toFixed(2)} vs fresh ${fresh.boughtSol?.toFixed(2)})`);
+  }
+  return { trace: merged, usedCache: regressedAny };
+}
+
+// Helius Enhanced API batch fetch with retry-on-429 + in-memory dedup cache.
+// One canonical helper that all autopsy phases use, so a single rate-limit
+// event during Phase 2F doesn't cascade into Phase 2G returning empty.
+// Returns { txs, attempted, succeeded, cached, rateLimited } for diagnostics.
+async function heliusEnhancedBatched(sigs, HELIUS_KEY, label, txCache, scanQuality) {
+  if (!sigs || sigs.length === 0) return { txs: [], attempted: 0, succeeded: 0, cached: 0, rateLimited: 0 };
+  const result = { txs: [], attempted: 0, succeeded: 0, cached: 0, rateLimited: 0 };
+  // De-dupe vs cache up front so we never re-fetch a sig we already have.
+  const uncached = [];
+  for (const s of sigs) {
+    if (txCache && txCache.has(s)) {
+      const cachedTx = txCache.get(s);
+      if (cachedTx) result.txs.push(cachedTx);
+      result.cached++;
+    } else {
+      uncached.push(s);
+    }
+  }
+  // Fetch the uncached sigs in 100-batches with retry-on-429.
+  // PROACTIVE THROTTLE: pace batches with a small inter-batch delay so we
+  // never trip the rate limit in the first place. Reactive backoff (waiting
+  // until a 429 lands) was dropping batches on busy wallets — the creator
+  // trace fires 30+ batches and slamming them back-to-back exhausted the
+  // 3-retry budget on some. ~140ms between batches keeps us under ~7 req/s,
+  // comfortably below the Helius limit, at the cost of a few seconds per
+  // scan. Skipped before the first batch and when there's only one.
+  const INTER_BATCH_MS = 140;
+  let batchIndex = 0;
+  for (let i = 0; i < uncached.length; i += 100) {
+    if (batchIndex > 0) await new Promise(res => setTimeout(res, INTER_BATCH_MS));
+    batchIndex++;
+    const batch = uncached.slice(i, i + 100);
+    result.attempted++;
+    let attempt = 0;
+    let success = false;
+    while (attempt < 4 && !success) {
+      try {
+        const r = await fetch(`https://api.helius.xyz/v0/transactions?api-key=${HELIUS_KEY}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ transactions: batch }),
+          signal: AbortSignal.timeout(20000),
+        });
+        if (r.status === 429) {
+          attempt++;
+          result.rateLimited++;
+          const waitMs = Math.min(4000, 600 * Math.pow(2, attempt - 1)); // 600, 1200, 2400
+          console.warn(`[AUTOPSY] Helius ${label} 429 rate-limited, backing off ${waitMs}ms (attempt ${attempt}/4)`);
+          await new Promise(res => setTimeout(res, waitMs));
+          continue;
+        }
+        if (r.status >= 500 && r.status < 600) {
+          attempt++;
+          const waitMs = 500 * attempt;
+          console.warn(`[AUTOPSY] Helius ${label} status=${r.status}, retrying after ${waitMs}ms (attempt ${attempt}/4)`);
+          await new Promise(res => setTimeout(res, waitMs));
+          continue;
+        }
+        if (!r.ok) {
+          console.warn(`[AUTOPSY] Helius ${label} non-OK status=${r.status} — giving up on this batch`);
+          break;
+        }
+        const data = await r.json();
+        if (Array.isArray(data)) {
+          for (const tx of data) {
+            if (tx && tx.signature && txCache) txCache.set(tx.signature, tx);
+            if (tx) result.txs.push(tx);
+          }
+        }
+        result.succeeded++;
+        success = true;
+      } catch (e) {
+        attempt++;
+        console.warn(`[AUTOPSY] Helius ${label} batch ${i} attempt ${attempt} threw:`, e.message);
+        if (attempt < 3) await new Promise(res => setTimeout(res, 500 * attempt));
+      }
+    }
+  }
+  if (scanQuality) {
+    scanQuality.heliusBatches += result.attempted;
+    scanQuality.heliusBatchesSucceeded += result.succeeded;
+    scanQuality.heliusRateLimited += result.rateLimited;
+  }
+  return result;
+}
+
 app.get("/api/fees", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
@@ -346,6 +2286,70 @@ app.get("/api/fees", async (req, res) => {
     } catch(e) {
       return res.status(500).json({ success: false, error: "Invalid JSON", raw: text.slice(0,200) });
     }
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// -- Live reinvestment tracker — Bags creator-fee claim events for CLKN --
+// Each claim event is the project pulling its 1% creator fee off Bags. The
+// investors page renders these as a verifiable, itemized fee-claim record.
+let REINVEST_CACHE = { data: null, ts: 0 };   // 5-min server cache (pagination is several Bags calls)
+app.get("/api/reinvestment", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "public, max-age=300"); // 5 min — claims are infrequent
+  const API_KEY = process.env.BAGS_API_KEY;
+  if (!API_KEY) return res.status(500).json({ success: false, error: "Missing BAGS_API_KEY" });
+  if (REINVEST_CACHE.data && Date.now() - REINVEST_CACHE.ts < 300000) {
+    return res.status(200).json(REINVEST_CACHE.data);
+  }
+  // Bags returns the claim timestamp as a Unix value in SECONDS (its docs claim
+  // ISO 8601 — they're wrong). Normalize so the clients' new Date() doesn't read
+  // seconds as milliseconds (→ Jan 1970).
+  const toIso = (ts) => {
+    if (ts == null) return null;
+    let d;
+    if (typeof ts === "number" || /^\d+$/.test(String(ts))) {
+      let n = Number(ts);
+      if (n < 1e12) n *= 1000; // seconds → milliseconds
+      d = new Date(n);
+    } else { d = new Date(ts); }
+    return isNaN(d.getTime()) ? null : d.toISOString();
+  };
+  try {
+    // Bags returns claim events OLDEST-first and there are well over 50, so we
+    // MUST paginate the full history — otherwise offset 0 freezes the list at
+    // the 50 oldest claims (the bug this fixes). Walk pages of 100 until a
+    // short/empty page (safety cap 2000 claims).
+    let events = [];
+    for (let page = 0; page < 20; page++) {
+      const { text } = await bagsFetch(
+        `fee-share/token/claim-events?tokenMint=${CLKN_MINT_CONST}&mode=offset&limit=100&offset=${page * 100}`, API_KEY);
+      let batch = [];
+      try {
+        const d = JSON.parse(text);
+        if (d && d.success && d.response && Array.isArray(d.response.events)) batch = d.response.events;
+      } catch (e) {
+        if (page === 0) return res.status(502).json({ success: false, error: "Invalid Bags response" });
+        break; // partial history beats failing
+      }
+      events.push(...batch);
+      if (batch.length < 100) break;
+    }
+    const claims = events
+      .map(e => ({
+        sol: Number(e.amount) / 1e9,
+        timestamp: toIso(e.timestamp),
+        signature: e.signature,
+        isCreator: !!e.isCreator,
+      }))
+      .filter(c => Number.isFinite(c.sol) && c.signature);
+    // Newest claim first — Bags returns oldest-first and doesn't guarantee order.
+    claims.sort((a, b) => (Date.parse(b.timestamp) || 0) - (Date.parse(a.timestamp) || 0));
+    const totalShownSol = claims.reduce((s, c) => s + c.sol, 0);
+    const payload = { success: true, claimCount: claims.length, totalShownSol, claims };
+    REINVEST_CACHE = { data: payload, ts: Date.now() };
+    return res.status(200).json(payload);
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
   }
@@ -506,7 +2510,12 @@ const TOOL_GRANTS = {
   ai:         { cost: 500, grants: { questions: 20 } },
   airdrop:    { cost: 100, grants: { sessions: 1 } },
   buyspecial: { cost: 500, grants: { hoursOfAccess: 168 } },
+  rose:       { cost: 500, grants: { hoursOfAccess: 168 } },
   score:      { cost: 100, grants: { cards: 1 } },
+  // Premium forensics: the 7-CLKN send is an OWNERSHIP PROOF, not a purchase —
+  // it proves the sender controls the wallet so we can gate on its balance. On
+  // a match we hand back a proof token (see verify-clkn-payment response).
+  premium:    { cost: 7,   grants: {} },
 };
 
 // Holders who keep ≥ this many CLKN after the send get a stretched unlock — the only
@@ -604,6 +2613,13 @@ app.post("/api/verify-clkn-payment", async (req, res) => {
       console.log(`[CHECK] TX ${sig.signature.slice(0,8)} diff:${diff}`);
 
       if (diff > 0 && Math.abs(diff - expectedAmount) <= tolerance) {
+        // Replay guard: each on-chain transfer unlocks exactly once. Grants are
+        // applied client-side, so without this anyone who sees a valid amount
+        // on-chain could replay it to unlock for free. The real payer redeems
+        // first; a later replay of the same signature is rejected here.
+        if (sigStore.has(sig.signature)) {
+          return res.status(200).json({ success: false, error: "This payment was already redeemed — each transfer unlocks once." });
+        }
         // Find the sender: the CLKN-mint balance row whose owner isn't us and whose
         // post amount is lower than pre. Gives us both the sender wallet and what they
         // have left — the only on-chain proof of holding we can use without a wallet connect.
@@ -631,11 +2647,27 @@ app.post("/api/verify-clkn-payment", async (req, res) => {
           grants[k] = isHolderBonus ? baseGrants[k] * HOLDER_BONUS_MULTIPLIER : baseGrants[k];
         }
 
-        console.log(`[OK] tool=${tool} verified ${diff} CLKN · sender=${senderWallet?.slice(0,8) || "?"} remaining=${senderBalance} bonus=${isHolderBonus}`);
+        // Mark this transfer consumed BEFORE returning so it can't be replayed.
+        sigStore.add(sig.signature);
+        console.log(`[OK] tool=${tool} verified ${diff} CLKN · sender=${senderWallet?.slice(0,8) || "?"} remaining=${senderBalance} bonus=${isHolderBonus} · consumed=${sigStore.size()}`);
 
         // Fire Telegram notification — every paid unlock pings the Cluck Norris group
         // so the community sees real on-chain product usage in real time.
         notifyToolUnlock(tool, diff, senderWallet, isHolderBonus, sig.signature);
+
+        // Premium: the send proves the sender owns this wallet. Issue a proof
+        // token only if the wallet clears the threshold (use the PRE-send balance
+        // so the tiny proof-send can't drop a borderline holder under). The
+        // premium run also re-checks the live balance.
+        let premiumProof, premiumNote;
+        if (tool === "premium") {
+          const preSendBalance = senderBalance != null ? senderBalance + diff : null;
+          if (preSendBalance != null && preSendBalance >= PREMIUM_HOLDER_THRESHOLD) {
+            premiumProof = issuePremiumProof(senderWallet);
+          } else {
+            premiumNote = { insufficient: true, balance: preSendBalance, threshold: PREMIUM_HOLDER_THRESHOLD };
+          }
+        }
 
         return res.status(200).json({
           success: true,
@@ -646,6 +2678,8 @@ app.post("/api/verify-clkn-payment", async (req, res) => {
           senderBalance,
           holderBonus: isHolderBonus,
           grants,
+          premiumProof,
+          premiumNote,
           // Legacy back-compat for the existing AI client which reads questionsGranted directly.
           questionsGranted: grants.questions || undefined,
         });
@@ -659,6 +2693,245 @@ app.post("/api/verify-clkn-payment", async (req, res) => {
   }
 });
 
+// Premium "connect + sign" ownership proof. The client connects via the normal
+// injected provider and signs a plain text message (signMessage) — NOT a
+// transaction, no token movement, no spending approval. We verify the ed25519
+// signature here, confirm it binds this wallet + a fresh nonce, then issue a
+// proof token. The premium run re-checks the live CLKN balance ≥ threshold.
+app.post("/api/premium-verify-sig", rateLimit("pay", { windowMs: 60000, max: 30 }), async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  const { wallet, signature, message } = req.body || {};
+  if (!wallet || !signature || !message) return res.status(400).json({ success: false, error: "Missing wallet, signature, or message" });
+  if (!SOL_ADDR_RE.test(String(wallet))) return res.status(400).json({ success: false, error: "Invalid wallet address" });
+  // The message must bind THIS wallet and a recent nonce (anti-replay).
+  if (!String(message).includes("wallet: " + wallet)) return res.status(400).json({ success: false, error: "Message does not match wallet" });
+  const m = /nonce:\s*(\d{10,16})/.exec(String(message));
+  const ts = m ? parseInt(m[1], 10) : 0;
+  if (!ts || Math.abs(Date.now() - ts) > 10 * 60 * 1000) return res.status(400).json({ success: false, error: "Stale or missing nonce — try again" });
+  if (!verifySolanaSignature(String(message), String(signature), String(wallet))) {
+    return res.status(401).json({ success: false, error: "Signature did not verify" });
+  }
+  // Ownership proven. The proof token only proves OWNERSHIP — every consumer
+  // re-checks its OWN live balance gate downstream (premium re-checks 2M at run;
+  // the slot re-checks its 500k floor on every spin). So a caller may request a
+  // lower issuance floor (e.g. the Coop Spinner needs 500k, not 2M) WITHOUT
+  // weakening premium: a sub-2M wallet that gets a proof here still can't run
+  // premium forensics. Floor is clamped to ≤ 2M so this can never raise the bar.
+  const reqFloor = Number((req.body || {}).minHold);
+  const floor = Number.isFinite(reqFloor) && reqFloor > 0 ? Math.min(reqFloor, PREMIUM_HOLDER_THRESHOLD) : PREMIUM_HOLDER_THRESHOLD;
+  let balance = null;
+  try { balance = (await checkCLKNHolder(wallet)).balance; } catch (_) {}
+  if (balance != null && balance < floor) {
+    return res.status(200).json({ success: false, error: "insufficient_holdings", balance, threshold: floor });
+  }
+  return res.status(200).json({ success: true, wallet, balance, proof: issuePremiumProof(wallet) });
+});
+
+// Lightweight public CLKN balance read (balances are public on-chain data). Lets
+// the premium UI show "you hold X CLKN" for an ALREADY-verified wallet without
+// making them re-verify. Bounded by the global /api/ rate limiter.
+app.get("/api/clkn-balance", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  const wallet = String(req.query.wallet || "").trim();
+  if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ success: false, error: "invalid wallet" });
+  try {
+    const h = await checkCLKNHolder(wallet);
+    return res.status(200).json({ success: true, wallet, balance: h.balance, threshold: PREMIUM_HOLDER_THRESHOLD, holder: h.balance >= PREMIUM_HOLDER_THRESHOLD });
+  } catch (e) { return res.status(200).json({ success: false, error: e.message }); }
+});
+
+// ── THE COOP SPINNER — private-beta backend ────────────────────────────────
+// Server-authoritative slot: outcomes, points, daily spin limits and the weekly
+// draw all live on the server (volume-backed kv) so nothing can be faked client
+// side. Access = a wallet ALLOWLIST (admin adds the demo wallets); a spin is
+// authenticated by the SAME ownership proof token used for premium. Spins/day =
+// floor(balance / 1,000,000). Two roads to the weekly wheel: jackpot (🐔🐔🐔)
+// auto-entry, or top-N by points. Draw is capped-weighted. Payout is manual.
+const SLOT_SYMS = ["🐔", "🪙", "7️⃣", "💎", "🔥", "🥚", "🍗", "🩺"];   // 🩺 = rare "Doctor" symbol
+const SLOT_WEIGHTS = [15, 14, 14, 14, 14, 14, 15, 3];   // per-reel frequency; 🐔🐔🐔 ≈ 1/324, 🩺🔥🐔 ≈ 1/1700
+const SLOT_PTS = { spin: 5, threeKind: 40, twoCluck: 25, jackpot: 75, fireChicken: 100 };
+const SLOT_FIRE_CHICKEN_AIRDROP = 7777;   // 🩺🔥🐔 Dr. Fire Chicken easter egg → CLKN airdrop (OG community honor)
+const SLOT_PTS_PER_ENTRY = 120, SLOT_ENTRY_CAP = 5;
+const SLOT_WHEEL = 40, SLOT_WILD = 13;   // 40-entrant wheel = up to (40-13)=27 by points + 13 wild-card; jackpots guaranteed
+const SLOT_SPIN_PER = 500_000;   // eligibility floor (≈$100) + the no-sell baseline unit
+const SLOT_HOLD_TOL = 0.99;      // must hold ≥99% of week-entry balance — any sell/move-out disqualifies
+// Banded daily spins (user-chosen): 500k–2M→5, 2–5M→10, 5–10M→15, 10M+→20. Flatter ladder = entry holders get a real game.
+function slotAllot(bal){ return bal < 500000 ? 0 : bal < 2000000 ? 5 : bal < 5000000 ? 10 : bal < 10000000 ? 15 : 20; }
+function slotWeekId() {
+  const d = new Date(); const jan1 = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const wk = Math.ceil(((d - jan1) / 86400000 + jan1.getUTCDay() + 1) / 7);
+  return d.getUTCFullYear() + "-W" + String(wk).padStart(2, "0");
+}
+const slotDayId = () => new Date().toISOString().slice(0, 10);
+function slotState() {
+  let s = kv.get("slotsState", null);
+  const wk = slotWeekId();
+  if (!s || s.weekId !== wk) {                          // new week → reset points/spins, KEEP allowlist + past draws
+    s = { weekId: wk, players: {}, spins: {}, bal: {}, allow: (s && s.allow) || [], draws: (s && s.draws) || {} };
+    kv.set("slotsState", s);
+  }
+  return s;
+}
+// Wallet CLKN balance with a short TTL cache → daily spins (min(20, floor(bal/500k)))
+// are recomputed LIVE from this, so buying more mid-week bumps your spins within
+// ~60s. A burst of spins reuses one check, and the 20-cap bounds it all.
+const SLOT_BAL_TTL = 60_000;
+async function slotBalance(s, wallet) {
+  s.bal = s.bal || {}; const c = s.bal[wallet];
+  if (c && Date.now() - c.ts < SLOT_BAL_TTL) return c.bal;
+  let bal; try { bal = (await checkCLKNHolder(wallet)).balance; } catch (_) { bal = c ? c.bal : 0; }
+  s.bal[wallet] = { bal, ts: Date.now() }; kv.set("slotsState", s); return bal;
+}
+function slotPick() {
+  const tot = SLOT_WEIGHTS.reduce((a, w) => a + w, 0);
+  const pick = () => { let r = Math.random() * tot; for (let i = 0; i < SLOT_WEIGHTS.length; i++) { r -= SLOT_WEIGHTS[i]; if (r <= 0) return SLOT_SYMS[i]; } return SLOT_SYMS[6]; };
+  return [pick(), pick(), pick()];
+}
+function slotScore(o) {
+  let pts = SLOT_PTS.spin, jackpot = false, fireChicken = false, kind = "spin";
+  if (o[0] === "🩺" && o[1] === "🔥" && o[2] === "🐔") {           // 🩺🔥🐔 = DR. FIRE CHICKEN (ordered, rare)
+    pts += SLOT_PTS.fireChicken; fireChicken = true; jackpot = true; kind = "fireChicken"; // also guarantees a wheel seat
+  } else if (o[0] === o[1] && o[1] === o[2]) {
+    if (o[0] === "🐔") { pts += SLOT_PTS.jackpot; jackpot = true; kind = "jackpot"; } else { pts += SLOT_PTS.threeKind; kind = "threeKind"; }
+  } else if (o.filter(x => x === "🐔").length === 2) { pts += SLOT_PTS.twoCluck; kind = "twoCluck"; }
+  return { pts, jackpot, fireChicken, kind };
+}
+function slotLeaderboard(s, me) {
+  const arr = Object.entries(s.players).map(([w, p]) => ({ wallet: w, pts: p.pts, jackpot: !!p.jackpot }))
+    .sort((a, b) => b.pts - a.pts);
+  return arr.slice(0, 20).map((p, i) => ({
+    short: p.wallet.slice(0, 4) + "…" + p.wallet.slice(-4), pts: p.pts, jackpot: p.jackpot,
+    qualified: i < (SLOT_WHEEL - SLOT_WILD) || p.jackpot, isMe: p.wallet === me, rank: i + 1,
+  }));
+}
+const slotAdminOK = (req) => process.env.PREMIUM_ACCESS_KEY && (req.query.key === process.env.PREMIUM_ACCESS_KEY || req.headers["x-premium-key"] === process.env.PREMIUM_ACCESS_KEY);
+
+// Spin — authenticated by the premium ownership proof. Enforces allowlist + daily limit.
+app.post("/api/slots/spin", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const wallet = verifyPremiumProof((req.body || {}).proof);
+  if (!wallet) return res.status(401).json({ error: "verify_wallet" });
+  const s = slotState();
+  // Open beta (default): anyone with the link who holds the floor can play.
+  // Operator can close it back to invite-only (s.openBeta=false) for launch.
+  if (s.openBeta === false && !s.allow.includes(wallet)) return res.status(403).json({ error: "not_in_beta" });
+  if (s.draws[s.weekId]) return res.status(409).json({ error: "week_closed" });
+  const bal = await slotBalance(s, wallet);
+  const allot = slotAllot(bal);                                               // banded; live — reflects buys within ~60s
+  if (allot < 1) return res.status(403).json({ error: "need_floor", balance: bal, floor: SLOT_SPIN_PER });
+  const day = slotDayId(); s.spins[day] = s.spins[day] || {}; const used = s.spins[day][wallet] || 0;
+  if (used >= allot) return res.status(429).json({ error: "no_spins_left", spinsLeft: 0, dailyAllot: allot });
+  const outcome = slotPick(), sc = slotScore(outcome);
+  s.spins[day][wallet] = used + 1;
+  const p = s.players[wallet] || { pts: 0, jackpot: false, entryBal: bal };
+  if (p.entryBal == null) p.entryBal = bal;                     // week-entry balance, recorded ONCE (first spin)
+  p.pts += sc.pts; if (sc.jackpot) p.jackpot = true; if (sc.fireChicken) p.fireChicken = true; s.players[wallet] = p;
+  kv.set("slotsState", s);
+  if (sc.fireChicken) {                                          // 🩺🔥🐔 easter egg → shout it to the group
+    const wShort = wallet.slice(0, 4) + "…" + wallet.slice(-4);
+    notifyTelegram(
+      `🩺🔥🐔 <b>DR. FIRE CHICKEN!</b> 🐔🔥🩺\n\n` +
+      `<code>${wShort}</code> just landed the legendary combo on The Coop Spinner — an honor to the OG Fire Chicken roost. 🔥\n\n` +
+      `🎁 That's an <b>automatic ${SLOT_FIRE_CHICKEN_AIRDROP.toLocaleString()} CLKN</b> airdrop at week's end (hold through the draw to claim it).\n\n` +
+      `One of the rarest pulls in the coop. Think you can find the Doctor? 🎰\n🐔 clucknorris.app/slots\n\n<i>Beta — prizes are owner-funded, not project/fee funds. NFA.</i>`
+    );
+  }
+  try { analytics.trackTool("slot_spin"); } catch (_) {}
+  return res.status(200).json({ outcome, gained: sc.pts, kind: sc.kind, jackpot: p.jackpot, fireChicken: !!p.fireChicken, hitFireChicken: !!sc.fireChicken, airdrop: sc.fireChicken ? SLOT_FIRE_CHICKEN_AIRDROP : 0, totalPoints: p.pts, spinsLeft: allot - (used + 1), dailyAllot: allot, weekId: s.weekId, leaderboard: slotLeaderboard(s, wallet) });
+});
+
+// Player + board state (proof optional — board is visible to the beta group).
+app.get("/api/slots/state", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const s = slotState();
+  const wallet = verifyPremiumProof(req.query.proof);
+  let me = null;
+  if (wallet) {
+    const inBeta = s.openBeta !== false || s.allow.includes(wallet);
+    const bal = await slotBalance(s, wallet);
+    const allot = slotAllot(bal);
+    const used = (s.spins[slotDayId()] || {})[wallet] || 0;
+    const p = s.players[wallet] || { pts: 0, jackpot: false };
+    const sold = p.entryBal != null && bal < p.entryBal * SLOT_HOLD_TOL;       // matters only at draw
+    me = { wallet, inBeta, balance: bal, dailyAllot: allot, spinsLeft: Math.max(0, allot - used), points: p.pts, jackpot: !!p.jackpot, fireChicken: !!p.fireChicken, floor: SLOT_SPIN_PER, disqualified: sold };
+  }
+  return res.status(200).json({ weekId: s.weekId, openBeta: s.openBeta !== false, drawn: s.draws[s.weekId] || null, me, leaderboard: slotLeaderboard(s, wallet) });
+});
+
+// Admin: manage the demo allowlist.
+app.post("/api/slots/allow", (req, res) => {
+  if (!slotAdminOK(req)) return res.status(404).json({ error: "not_found" });
+  const s = slotState(); const w = String(req.query.wallet || "").trim();
+  if (req.query.remove === "1") { s.allow = s.allow.filter(x => x !== w); }
+  else { if (!SOL_ADDR_RE.test(w)) return res.status(400).json({ error: "invalid wallet" }); if (!s.allow.includes(w)) s.allow.push(w); }
+  kv.set("slotsState", s);
+  return res.status(200).json({ allow: s.allow });
+});
+
+// Admin: run the weekly draw. Builds a 40-entrant wheel: jackpot hitters are
+// GUARANTEED a slot, then top point-earners fill up to (40-13)=27, then 13
+// WILD-CARD slots are drawn at random from everyone else who played — that's
+// how smaller/casual holders get a shot. Skin-in-the-game: every finalist must
+// STILL hold ≥ floor at draw AND not have sold (balance ≥99% of week-entry).
+// The spin itself is capped-weighted (more points = up to 5× the slices).
+app.post("/api/slots/draw", async (req, res) => {
+  if (!slotAdminOK(req)) return res.status(404).json({ error: "not_found" });
+  const s = slotState();
+  const ranked = Object.entries(s.players).map(([w, p]) => ({ wallet: w, pts: p.pts, jackpot: !!p.jackpot, fireChicken: !!p.fireChicken, entryBal: p.entryBal }))
+    .sort((a, b) => b.pts - a.pts);
+  // Live re-check ALL players: must hold ≥ floor now AND not have sold/moved out.
+  const checked = await Promise.all(ranked.map(async x => {
+    let bal = 0; try { bal = (await checkCLKNHolder(x.wallet)).balance; } catch (_) {}
+    const sold = x.entryBal != null && bal < x.entryBal * SLOT_HOLD_TOL;
+    return { ...x, bal, sold, eligible: bal >= SLOT_SPIN_PER && !sold };
+  }));
+  const dropped = checked.filter(x => !x.eligible).map(x => ({ wallet: x.wallet.slice(0, 4) + "…" + x.wallet.slice(-4), reason: x.sold ? "sold/moved CLKN" : "below floor" }));
+  const finalists = checked.filter(x => x.eligible);                  // sorted by pts (Promise.all preserves order)
+  // 🩺🔥🐔 Dr. Fire Chicken winners — anyone who landed the easter egg AND still holds → guaranteed 7,777 CLKN airdrop.
+  const fireChicken = checked.filter(x => x.fireChicken && x.eligible)
+    .map(x => ({ wallet: x.wallet, short: x.wallet.slice(0, 4) + "…" + x.wallet.slice(-4), airdrop: SLOT_FIRE_CHICKEN_AIRDROP }));
+  // Build the wheel: jackpots guaranteed → top points to 27 → wild-card to 40.
+  const POINTS = SLOT_WHEEL - SLOT_WILD;
+  const set = new Set();
+  finalists.filter(x => x.jackpot).forEach(x => set.add(x.wallet));   // jackpot = guaranteed slot
+  for (const x of finalists) { if (set.size >= POINTS) break; set.add(x.wallet); }   // top point-earners
+  const rest = finalists.filter(x => !set.has(x.wallet));
+  for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [rest[i], rest[j]] = [rest[j], rest[i]]; }
+  let wild = 0;
+  for (const x of rest) { if (set.size >= SLOT_WHEEL) break; set.add(x.wallet); x._wild = true; wild++; }   // wild-card fill
+  const entrants = finalists.filter(x => set.has(x.wallet)).map(x => ({
+    wallet: x.wallet, pts: x.pts, jackpot: x.jackpot, wild: !!x._wild,
+    entries: Math.max(1, Math.min(SLOT_ENTRY_CAP, Math.round(x.pts / SLOT_PTS_PER_ENTRY))),
+  }));
+  if (!entrants.length) return res.status(400).json({ error: "no_eligible_entrants", dropped });
+  const pool = entrants.reduce((a, e) => a + e.entries, 0);
+  const summary = { wheel: entrants.length, jackpotSlots: entrants.filter(e => e.jackpot).length, wildCardSlots: wild, pool, dropped: dropped.length, fireChickenWinners: fireChicken.length };
+  const shorts = entrants.map(e => ({ short: e.wallet.slice(0, 4) + "…" + e.wallet.slice(-4), entries: e.entries, jackpot: e.jackpot, wild: e.wild }));
+  const fcShorts = fireChicken.map(f => ({ short: f.short, airdrop: f.airdrop }));
+  if (req.query.preview === "1") return res.status(200).json({ preview: true, ...summary, entrants: shorts, dropped, fireChicken });
+  let r = Math.random() * pool, winner = entrants[0];
+  for (const e of entrants) { r -= e.entries; if (r <= 0) { winner = e; break; } }
+  s.draws[s.weekId] = { winner: winner.wallet, at: Date.now(), ...summary, entrants: shorts, fireChicken: fcShorts };
+  kv.set("slotsState", s);
+  return res.status(200).json({ winner: winner.wallet, winnerShort: winner.wallet.slice(0, 4) + "…" + winner.wallet.slice(-4), ...summary, entrants: shorts, fireChicken, weekId: s.weekId });
+});
+
+// Admin: reset the CURRENT week (clears points/spins/draw, keeps the allowlist).
+app.post("/api/slots/reset", (req, res) => {
+  if (!slotAdminOK(req)) return res.status(404).json({ error: "not_found" });
+  const s = slotState(); s.players = {}; s.spins = {}; s.bal = {}; delete s.draws[s.weekId]; kv.set("slotsState", s);
+  return res.status(200).json({ ok: true, weekId: s.weekId, allow: s.allow });
+});
+
+// Admin: open beta (anyone with the link + ≥floor can play) vs invite-only (allowlist).
+app.post("/api/slots/open", (req, res) => {
+  if (!slotAdminOK(req)) return res.status(404).json({ error: "not_found" });
+  const s = slotState(); s.openBeta = req.query.on !== "0"; kv.set("slotsState", s);
+  return res.status(200).json({ ok: true, openBeta: s.openBeta });
+});
+
 // -- Ask Cluck Norris (Claude AI) --
 app.post("/api/ask-cluck", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -666,6 +2939,11 @@ app.post("/api/ask-cluck", async (req, res) => {
   if (!question || question.trim().length < 3) {
     return res.status(400).json({ success: false, error: "Question too short" });
   }
+  // Cap input length so a single call can't be inflated to run up token cost.
+  if (typeof question !== "string" || question.length > 2000) {
+    return res.status(400).json({ success: false, error: "Question too long" });
+  }
+  const safeContext = typeof context === "string" ? context.slice(0, 200) : "";
 
   const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
   if (!ANTHROPIC_KEY) {
@@ -754,7 +3032,7 @@ Your personality:
 - If someone asks something off-topic or inappropriate, shut it down with humor.
 - Always end with something memorable or a challenge.
 - You are educational first, entertaining second.
-${context ? `\nThe student is currently studying: ${context}` : ''}`;
+${safeContext ? `\nThe student is currently studying: ${safeContext}` : ''}`;
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -887,6 +3165,7 @@ app.get("/api/cluck-score", async (req, res) => {
   if (!mint || mint.length < 32) {
     return res.status(400).json({ success: false, error: "Invalid mint" });
   }
+  try { analytics.trackTool("cluck_score"); } catch (_) {}
   const HELIUS_KEY = process.env.HELIUS_API_KEY;
   if (!HELIUS_KEY) {
     return res.status(500).json({ success: false, error: "Server not configured" });
@@ -902,7 +3181,7 @@ app.get("/api/cluck-score", async (req, res) => {
   }
 
   try {
-    const [holdersData, dexData, supplyData, mintInfoData, largestData] = await Promise.allSettled([
+    const [holdersData, dexData, supplyData, mintInfoData, largestData, bagsCtxData] = await Promise.allSettled([
       // Holder count — same paginated walk as /api/holders, capped at 5 pages for speed
       (async () => {
         const owners = new Set();
@@ -923,6 +3202,9 @@ app.get("/api/cluck-score", async (req, res) => {
       rpcCall("score-supply", "getTokenSupply", [mint]),
       rpcCall("score-mint-info", "getAccountInfo", [mint, { encoding: "jsonParsed" }]),
       rpcCall("score-largest", "getTokenLargestAccounts", [mint]),
+      // Shared Bags + Jupiter context — cached per-mint so multiple endpoints
+      // hitting the same mint share the result.
+      fetchBagsContext(mint),
     ]);
 
     // Extract data with safe defaults
@@ -968,6 +3250,26 @@ app.get("/api/cluck-score", async (req, res) => {
         };
       }
     }
+    // Solana Tracker correction for launchpad bonding-curve tokens. DexScreener
+    // reports a phantom near-zero pool for on-curve Bags/pump tokens (a tiny
+    // non-zero value that BYPASSES the $0 GeckoTerminal fallback above), which
+    // would unfairly tank the liquidity component of the score. ST reads the
+    // curve reserve directly — use it when it's materially larger, the same fix
+    // applied to the autopsy and the launches feed.
+    let onBondingCurve = false, curvePctToGrad = null;
+    try {
+      const stm = await solanaTracker.getTokenMarketStatus(mint);
+      if (stm) {
+        onBondingCurve = stm.onBondingCurve === true;
+        curvePctToGrad = stm.curvePercentage;
+        if (stm.liquidityUsd != null && stm.liquidityUsd > totalLiqUsd) {
+          totalLiqUsd = stm.liquidityUsd;
+          scoreSource = scoreSource === "dexscreener" ? "solana-tracker" : scoreSource + "+st";
+          if (poolCount === 0) poolCount = 1;
+        }
+      }
+    } catch (_) { /* degrade — keep DexScreener/Gecko numbers */ }
+
     const rawSupply = supplyData.status === "fulfilled" ? supplyData.value?.result?.value?.amount : null;
     const decimals = supplyData.status === "fulfilled" ? (supplyData.value?.result?.value?.decimals || 9) : 9;
     const supplyTokens = rawSupply ? parseInt(rawSupply) / Math.pow(10, decimals) : null;
@@ -1073,14 +3375,74 @@ app.get("/api/cluck-score", async (req, res) => {
     //   65% → 20   75%+ → 0   (real whale risk — one cluster controls the float)
     f.concentration = top10Share == null ? null : Math.max(0, Math.min(100, 100 - Math.max(0, top10Share - 0.25) * 200));
     f.volume = vol24h == null ? null : Math.min(100, Math.log10(Math.max(1, vol24h)) * 25); // ~$10k = 100
+
+    // --- Bags-aware verification factors (new) ---
+    // The Cluck Score used to be blind to Bags context: it didn't know a token
+    // had a verified team, didn't credit active fee-claim revenue, didn't
+    // recognize "buy-and-lock" patterns, and could mis-flag the Bags platform
+    // launcher wallet as a "dev with 1956 launches." These factors fix that.
+    const bagsCtx = bagsCtxData.status === "fulfilled" ? bagsCtxData.value : { bagsInfo: null, jupiterInfo: null, projectFeeWallets: [] };
+    const teamActivity = classifyTeamActivity(bagsCtx.bagsInfo);
+    const isBagsToken = !!(bagsCtx.bagsInfo && bagsCtx.bagsInfo.isBagsToken);
+    const isJupVerified = !!(bagsCtx.jupiterInfo && bagsCtx.jupiterInfo.listed && Array.isArray(bagsCtx.jupiterInfo.tags) && bagsCtx.jupiterInfo.tags.some(t => t === "verified"));
+    const jupOrganic = bagsCtx.jupiterInfo?.organicScoreLabel || null;
+    // verifiedTeam (0..100): Bags-verified creator with active fee claims = 100;
+    // verified but stale = 60; verified but never claimed = 40; unverified = 0.
+    let verifiedTeamScore = null;
+    if (isBagsToken && bagsCtx.bagsInfo.officialCreators.length > 0) {
+      if (teamActivity === "active") verifiedTeamScore = 100;
+      else if (teamActivity === "stale") verifiedTeamScore = 60;
+      else if ((bagsCtx.bagsInfo.totalClaimedSol || 0) > 0) verifiedTeamScore = 70;
+      else verifiedTeamScore = 40;
+    } else if (isJupVerified) {
+      verifiedTeamScore = 80;
+    }
+    f.verifiedTeam = verifiedTeamScore;
+
+    // independentVerification (0..100): cross-checks against Jupiter's audit.
+    // A token gets full credit when our reading of mint/freeze auth and
+    // top-holder concentration MATCHES Jupiter's independent audit. This
+    // catches our own errors and confirms reality.
+    let indVerifyScore = null;
+    const jupAudit = bagsCtx.jupiterInfo?.audit;
+    if (jupAudit) {
+      let matches = 0, checked = 0;
+      checked++; if (jupAudit.mintAuthorityDisabled === (mintAuthority === null)) matches++;
+      checked++; if (jupAudit.freezeAuthorityDisabled === (freezeAuthority === null)) matches++;
+      if (top10Share != null && jupAudit.topHoldersPercentage != null) {
+        checked++;
+        if (Math.abs((top10Share * 100) - jupAudit.topHoldersPercentage) < 10) matches++;
+      }
+      indVerifyScore = checked > 0 ? (matches / checked) * 100 : null;
+    } else if (bagsCtx.jupiterInfo?.listed) {
+      // On Jupiter but no audit → small positive signal anyway
+      indVerifyScore = 60;
+    }
+    f.independentVerification = indVerifyScore;
+
+    // Platform-wallet guard: when Jupiter's audit shows the genesis "dev"
+    // wallet has done >50 migrations, that's the platform launcher, NOT the
+    // project team. Used downstream to soften any other "dev concentration"
+    // signal (the concentration factor above is already top-10 humans, but
+    // we record the platform-wallet status so the UI can show it).
+    const isPlatformLauncherDev = !!(jupAudit && jupAudit.devMigrations != null && jupAudit.devMigrations > 50);
     // Pool type / graduation factor removed — wasn't discriminating well and we can't
     // properly distinguish "on bonding curve" from "LP-only AMM pool" without the
     // full holders classifier. isGraduated info still exposed in the response for
     // reference but doesn't count toward the score.
 
-    // Weighted average (skip null factors, redistribute weight)
-    // Dropped graduation (10%); redistributed 5/5 to holders and liquidity.
-    const weights = { holders: 20, liquidity: 25, mintAuthority: 15, freezeAuthority: 10, concentration: 20, volume: 10 };
+    // Weighted average (skip null factors, redistribute weight).
+    // New (Bags-aware) weights:
+    //   holders 18, liquidity 20, mintAuth 12, freezeAuth 8, concentration 18,
+    //   volume 8, verifiedTeam 10, independentVerification 6.
+    // The verifiedTeam + indVerify factors are NEW and only count when data
+    // is present; for non-Bags / non-Jupiter tokens they're null and the
+    // remaining factors get full weight as before.
+    const weights = {
+      holders: 18, liquidity: 20, mintAuthority: 12, freezeAuthority: 8,
+      concentration: 18, volume: 8,
+      verifiedTeam: 10, independentVerification: 6,
+    };
     let totalWeight = 0;
     let weightedSum = 0;
     for (const k of Object.keys(weights)) {
@@ -1123,8 +3485,41 @@ app.get("/api/cluck-score", async (req, res) => {
         liquidity:        { score: f.liquidity        == null ? null : Math.round(f.liquidity),        weight: weights.liquidity,        value: liqUsd, ratio: liqRatio, poolCount, dexCount: dexFamilies.size, dexes: [...dexFamilies], multiDexBonus },
         mintAuthority:    { score: f.mintAuthority,    weight: weights.mintAuthority,    revoked: mintAuthority === null },
         freezeAuthority:  { score: f.freezeAuthority,  weight: weights.freezeAuthority,  revoked: freezeAuthority === null },
-        concentration:    { score: f.concentration    == null ? null : Math.round(f.concentration),    weight: weights.concentration,    top10Share: top10Share, top10RawShare, top10HumanShare, lpFilteredFromTop20: lpInTop20 },
+        concentration:    { score: f.concentration    == null ? null : Math.round(f.concentration),    weight: weights.concentration,    top10Share: top10Share, top10RawShare, top10HumanShare, lpFilteredFromTop20: lpInTop20, isPlatformLauncherDev },
         volume:           { score: f.volume           == null ? null : Math.round(f.volume),           weight: weights.volume,           value: vol24h },
+        verifiedTeam: {
+          score: f.verifiedTeam == null ? null : Math.round(f.verifiedTeam),
+          weight: weights.verifiedTeam,
+          isBagsToken,
+          isJupVerified,
+          teamActivity,
+          officialCreators: bagsCtx.bagsInfo?.officialCreators?.map(c => ({
+            wallet: c.wallet,
+            username: c.username,
+            provider: c.provider,
+            isAdmin: c.isAdmin,
+            royaltyBps: c.royaltyBps,
+          })) || [],
+          totalClaimedSol: bagsCtx.bagsInfo?.totalClaimedSol || null,
+          claimEventCount: bagsCtx.bagsInfo?.claimEventCount || 0,
+          daysSinceLastClaim: bagsCtx.bagsInfo?.lastClaimTimestamp
+            ? Math.round((Date.now() - bagsCtx.bagsInfo.lastClaimTimestamp) / 86400000)
+            : null,
+        },
+        independentVerification: {
+          score: f.independentVerification == null ? null : Math.round(f.independentVerification),
+          weight: weights.independentVerification,
+          jupiterListed: !!bagsCtx.jupiterInfo?.listed,
+          jupiterTags: bagsCtx.jupiterInfo?.tags || [],
+          jupiterHolderCount: bagsCtx.jupiterInfo?.holderCount || null,
+          jupiterOrganicScore: jupOrganic,
+          jupiterAudit: jupAudit ? {
+            mintAuthorityDisabled: jupAudit.mintAuthorityDisabled,
+            freezeAuthorityDisabled: jupAudit.freezeAuthorityDisabled,
+            topHoldersPercentage: jupAudit.topHoldersPercentage,
+            devMigrations: jupAudit.devMigrations,
+          } : null,
+        },
         // graduation/pool-type removed from scoring; isGraduated still exposed as a hint
         // for the UI to display informationally if it wants.
       },
@@ -1136,6 +3531,8 @@ app.get("/api/cluck-score", async (req, res) => {
         circulatingSupply: supplyTokens,
         pairAddress: topPair?.pairAddress || null,
         source: scoreSource,
+        onBondingCurve,
+        curvePctToGrad: curvePctToGrad != null ? Number(curvePctToGrad.toFixed(1)) : null,
       },
       generatedAt: new Date().toISOString(),
     });
@@ -1265,6 +3662,13 @@ const LOCKER_PROGRAMS = new Set([
   "strmRqUCoQUgGUan5YhzUZa6KqdzwX5L6FpUxfmKg5m", // Streamflow
   "LocpQgucEQHbqNABEYvBvwoxCPsSbG91A1QaQhQQqjn", // Jupiter Lock
 ]);
+// SPL Token + Token-2022. A *holder* address owned by one of these programs is
+// itself a token account — which only happens when that account is self-owned
+// (its authority = its own address): an immovable, permanent lock.
+const TOKEN_PROGRAMS = new Set([
+  "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", // SPL Token
+  "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb", // Token-2022
+]);
 // Program ID → human label, used by /api/trace to name contract counterparties.
 const PROGRAM_LABELS = {
   "675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8": "Raydium",
@@ -1279,7 +3683,71 @@ const PROGRAM_LABELS = {
   "strmRqUCoQUgGUan5YhzUZa6KqdzwX5L6FpUxfmKg5m":  "Streamflow Lock",
   "LocpQgucEQHbqNABEYvBvwoxCPsSbG91A1QaQhQQqjn":  "Jupiter Lock",
   "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4":  "Jupiter",
+  "FEE2tBhCKAt7shrod19QttSVREUYPiyMzoku1mL1gqVK": "Bags Fee Shares", // creator fee-claim program
 };
+// Known SERVICE wallets (on-curve, so not caught by the PDA classifier) that are
+// platform infrastructure, NOT people. Labeling them keeps the forensic tools
+// honest — e.g. the Bags fee relayer fronts a 1-SOL float on every creator fee
+// claim (paid back in the same tx); naive tools mis-read that as a cash-out.
+const KNOWN_SERVICE_WALLETS = {
+  "BGASPyexYFLvAUEJVGcfvh9bymeCB1Xh34dLTRv5CKyL": "Bags fee relayer",
+  "BAGSB9TpGrZxQbEsrEznv5jXXdwyP6AXerN8aVRiAmcv": "Bags platform launcher",
+};
+
+// Known CEX hot/custodial wallets on Solana. A token held in one of these among
+// its top holders is exchange-CUSTODIED (many users' tokens) — NOT single-entity
+// whale concentration — and a token an exchange actually lists/supports is a
+// strong legitimacy signal (it cleared the exchange's due diligence and carries
+// off-chain order-book liquidity our on-chain view can't see). Module-level so
+// both the free autopsy concentration calc and the premium acquisition trace use it.
+const KNOWN_CEX_WALLETS = {
+  "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM": "Coinbase",
+  "H8sMJSCQxfKiFTCfDR3DUMLPwcRbM61LGFJ8N4dK3WjS": "Coinbase",
+  "2ojv9BAiHUrvsm9gxDe7fJSzbNZSJcxZvf8dqmWGHG8S": "Binance",
+  "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9": "Binance",
+  "FWznbcNXWQuHTawe9RxvQ2LdCENssh12dsznf4RiouN5": "Kraken",
+  "ASTyfSima4LLAdDgoFGkgqoKowG1LZFDr9fAQrg7iaJZ": "OKX",
+  "AC5RDfQFmDS1deWZos921JfqscXdByf8BKHs5ACWjtW2": "Bybit",
+};
+
+// Classify a batch of addresses the SAME way the free autopsy / holders view
+// does, so the premium deep-trace shares that context instead of presenting raw
+// transfers. on-curve = a real wallet (a person); off-curve PDA = LP pool /
+// token lock / program account. Without this, LP locks & pools get mislabeled as
+// a suspicious "funnel" or "cash-out". Returns Map: addr → { category, label }.
+// category ∈ {wallet, lp, locker, contract}. rpcCall is the caller's Helius RPC.
+async function classifyAddressTypes(addresses, rpcCall) {
+  const out = new Map();
+  const list = [...new Set((addresses || []).filter(Boolean))];
+  const pdas = [];
+  for (const a of list) {
+    if (KNOWN_SERVICE_WALLETS[a]) { out.set(a, { category: "service", label: KNOWN_SERVICE_WALLETS[a] }); continue; } // platform infra, not a person
+    let onCurve = false;
+    try { onCurve = PublicKey.isOnCurve(new PublicKey(a).toBytes()); } catch (_) {}
+    if (onCurve) out.set(a, { category: "wallet", label: "Wallet" });  // a person
+    else pdas.push(a);                                                  // a PDA — read its owner
+  }
+  for (let i = 0; i < pdas.length; i += 100) {
+    const batch = pdas.slice(i, i + 100);
+    let values = [];
+    try {
+      const info = await rpcCall(`premium-classify-${i}`, "getMultipleAccounts", [batch, { encoding: "base64", dataSlice: { offset: 0, length: 0 } }]);
+      values = (info && info.result && info.result.value) || [];
+    } catch (_) { values = []; }
+    batch.forEach((a, j) => {
+      const acc = values[j];
+      // off-curve + null/System-owned = an AMM pool authority PDA
+      if (!acc || acc.owner === "11111111111111111111111111111111") { out.set(a, { category: "lp", label: "Liquidity pool" }); return; }
+      const prog = acc.owner;
+      if (DEX_PROGRAMS.has(prog)) out.set(a, { category: "lp", label: PROGRAM_LABELS[prog] || "Liquidity pool" });
+      else if (LOCKER_PROGRAMS.has(prog)) out.set(a, { category: "locker", label: PROGRAM_LABELS[prog] || "Token lock" });
+      else if (TOKEN_PROGRAMS.has(prog)) out.set(a, { category: "locker", label: "Self-owned lock" });
+      else out.set(a, { category: "contract", label: PROGRAM_LABELS[prog] || "Program account" });
+    });
+  }
+  for (const a of list) if (!out.has(a)) out.set(a, { category: "wallet", label: "Wallet" });
+  return out;
+}
 
 // -- Snapshot — token-agnostic, free, no wallet connect --
 // Walks every token account for a mint, deduplicates by owner (one wallet can
@@ -1292,6 +3760,7 @@ app.get("/api/snapshot", async (req, res) => {
 
   const mint = (req.query.mint || "").trim();
   const excludeNonHuman = req.query.excludeNonHuman !== "0"; // default ON — that's the airdrop-safe default
+  const excludeBagsTeam = req.query.excludeBagsTeam !== "0"; // default ON — team shouldn't airdrop to itself
   const minBalance = Math.max(0, parseFloat(req.query.minBalance) || 0);
 
   if (!mint || mint.length < 32) {
@@ -1312,8 +3781,11 @@ app.get("/api/snapshot", async (req, res) => {
 
   try {
     // Supply + decimals first — we need decimals to convert raw amounts.
-    const [supplyData] = await Promise.all([
+    // Bags context fetched in parallel so the team-exclusion filter doesn't
+    // serialize against the supply lookup.
+    const [supplyData, bagsCtx] = await Promise.all([
       rpcCall("snap-supply", "getTokenSupply", [mint]),
+      fetchBagsContext(mint).catch(() => ({ bagsInfo: null, jupiterInfo: null, projectFeeWallets: [] })),
     ]);
     const decimals = supplyData?.result?.value?.decimals;
     if (decimals == null) {
@@ -1327,6 +3799,8 @@ app.get("/api/snapshot", async (req, res) => {
     const ownerBalances = new Map();
     let pagesFetched = 0;
     let truncated = false;
+    let tokenAccountCount = 0;
+    const tokenAccountAddrs = new Set();
     for (let page = 1; page <= MAX_PAGES; page++) {
       const d = await rpcCall(`snap-page-${page}`, "getTokenAccounts", {
         page, limit: 1000, mint, displayOptions: { showZeroBalance: false }
@@ -1337,6 +3811,8 @@ app.get("/api/snapshot", async (req, res) => {
       for (const a of accounts) {
         const amount = parseInt(a.amount);
         if (!(amount > 0)) continue;
+        tokenAccountCount++;
+        if (a.address) tokenAccountAddrs.add(a.address);
         const tokens = amount / Math.pow(10, decimals);
         ownerBalances.set(a.owner, (ownerBalances.get(a.owner) || 0) + tokens);
       }
@@ -1353,10 +3829,21 @@ app.get("/api/snapshot", async (req, res) => {
     // lock/vesting escrow, program PDA) by ed25519 curve position. Deterministic,
     // no RPC, and correct regardless of whether the wallet holds any SOL.
     holders.forEach(h => { h.type = isOnCurve(h.wallet) ? "human" : "contract"; });
+    // A holder address that is itself a token account of this mint can only be a
+    // self-owned token account (authority = its own address) — a permanent lock.
+    // Force it out of the "human" bucket even if the address sits on the curve.
+    holders.forEach(h => { if (tokenAccountAddrs.has(h.wallet)) h.type = "contract"; });
 
-    // Filter
+    // Filter — humans, balance, and (optionally) Bags-verified team wallets.
+    // The team-exclusion is opt-out by default: a team shouldn't airdrop to
+    // their own creator-fee wallet. We attach a `bagsTeam` marker to each
+    // holder regardless of whether they're being filtered, so the UI can
+    // show them as excluded with a clear reason.
+    const bagsTeamSet = new Set((bagsCtx?.projectFeeWallets || []));
+    holders.forEach(h => { if (bagsTeamSet.has(h.wallet)) h.bagsTeam = true; });
     let filtered = holders;
     if (excludeNonHuman) filtered = filtered.filter(h => h.type === "human");
+    if (excludeBagsTeam) filtered = filtered.filter(h => !h.bagsTeam);
     if (minBalance > 0) filtered = filtered.filter(h => h.balance >= minBalance);
 
     // Stats over filtered set
@@ -1393,14 +3880,19 @@ app.get("/api/snapshot", async (req, res) => {
       } catch { values = []; }
       batch.forEach((h, j) => {
         const acc = values[j];
-        if (!acc) { h.category = "lp"; return; } // pure authority PDA → AMM pool
+        // No account at all, OR a System-Program account (which by definition holds
+        // no data): both are off-curve authority PDAs — i.e. an AMM pool authority.
+        if (!acc || acc.owner === "11111111111111111111111111111111") {
+          h.category = "lp"; h.label = "Liquidity pool"; return;
+        }
         const prog = acc.owner;
-        if (DEX_PROGRAMS.has(prog)) h.category = "lp";
-        else if (LOCKER_PROGRAMS.has(prog)) h.category = "locker";
-        else h.category = "contract";
+        if (DEX_PROGRAMS.has(prog)) { h.category = "lp"; h.label = PROGRAM_LABELS[prog] || "Liquidity pool"; }
+        else if (LOCKER_PROGRAMS.has(prog)) { h.category = "locker"; h.label = PROGRAM_LABELS[prog] || "Token lock"; }
+        else if (TOKEN_PROGRAMS.has(prog)) { h.category = "locker"; h.label = "Self-owned lock"; }
+        else { h.category = "contract"; h.label = PROGRAM_LABELS[prog] || "Program account"; }
       });
     }
-    excluded.forEach(h => { if (!h.category) h.category = "contract"; });
+    excluded.forEach(h => { if (!h.category) { h.category = "contract"; h.label = "Program account"; } });
     const excludedBreakdown = { lp: 0, locker: 0, contract: 0 };
     excluded.forEach(h => { excludedBreakdown[h.category] = (excludedBreakdown[h.category] || 0) + 1; });
 
@@ -1416,9 +3908,24 @@ app.get("/api/snapshot", async (req, res) => {
       generatedAt: new Date().toISOString(),
       truncated,
       pagesFetched,
-      filters: { excludeNonHuman, minBalance },
+      filters: { excludeNonHuman, excludeBagsTeam, minBalance },
+      bagsTeam: bagsCtx?.bagsInfo ? {
+        isBagsToken: !!bagsCtx.bagsInfo.isBagsToken,
+        creators: (bagsCtx.bagsInfo.officialCreators || []).map(c => ({
+          wallet: c.wallet,
+          username: c.username,
+          provider: c.provider,
+          isAdmin: c.isAdmin,
+        })),
+        excludedFromSnapshot: holders.filter(h => h.bagsTeam).map(h => ({
+          wallet: h.wallet,
+          balance: h.balance,
+          pct: totalSupply ? h.balance / totalSupply : null,
+        })),
+      } : null,
       stats: {
         rawHolderCount,
+        tokenAccountCount,
         humanHolderCount: holders.filter(h => h.type === "human").length,
         contractHolderCount: excluded.length,
         filteredCount: filtered.length,
@@ -1476,6 +3983,12 @@ app.get("/api/trace", async (req, res) => {
     // 1. Resolve the wallet's token account(s) for this mint. getTokenAccountsByOwner
     //    covers currently-open accounts; the derived ATA also covers a CLOSED
     //    account so a wallet that fully exited still shows its full history.
+    // Kick off Bags context fetch in parallel — we need to know if the
+    // traced wallet is a verified Bags creator and what the lock-PDA set
+    // looks like for this mint, so the trace UI can show "this is the
+    // verified team wallet" or "this send went to a lock contract".
+    const bagsCtxPromise = fetchBagsContext(mint).catch(() => ({ bagsInfo: null, jupiterInfo: null, projectFeeWallets: [] }));
+
     const tokenAccounts = new Set();
     let currentBalance = 0;
     let decimals = null;
@@ -1605,6 +4118,20 @@ app.get("/api/trace", async (req, res) => {
       else if (liqHint)                                      action = tokenDelta > 0 ? "withdraw_lp" : "add_lp";
       else                                                   action = tokenDelta > 0 ? "receive" : "send";
 
+      // Lock detection: a send to a known-locker counterparty is a lock
+      // deposit, not just a plain transfer. Helius tags locker-program txs
+      // via type/source (Streamflow, Jupiter Lock, etc.); we also re-classify
+      // when counterparty's program-owner is in LOCKER_PROGRAMS (computed
+      // below in the batch lookup).
+      const helLockHint = /LOCK|STREAM|VEST|TIMELOCK/i.test(tx.type || "") || /streamflow|jupiter-?lock|lock/i.test(tx.source || "");
+      if (action === "send" && (helLockHint || cpContract)) {
+        // Provisional — final reclass after counterparty owner lookup below.
+        action = helLockHint ? "lock" : "send";
+      }
+      if (action === "receive" && /LOCK|STREAM|VEST|TIMELOCK/i.test(tx.type || "")) {
+        action = "unlock";
+      }
+
       rows.push({
         signature: tx.signature,
         timestamp: tx.timestamp || sigTimes.get(tx.signature) || 0,
@@ -1641,6 +4168,7 @@ app.get("/api/trace", async (req, res) => {
     if (needLookup.size) {
       const addrs = [...needLookup].slice(0, 200);
       const labelByAddr = new Map();
+      const lockerByAddr = new Set(); // counterparties whose program owner is a known locker
       for (let i = 0; i < addrs.length; i += 100) {
         const batch = addrs.slice(i, i + 100);
         try {
@@ -1650,13 +4178,25 @@ app.get("/api/trace", async (req, res) => {
           const vals = info?.result?.value || [];
           batch.forEach((a, j) => {
             const acc = vals[j];
-            if (acc && PROGRAM_LABELS[acc.owner]) labelByAddr.set(a, PROGRAM_LABELS[acc.owner]);
+            if (!acc) return;
+            if (PROGRAM_LABELS[acc.owner]) labelByAddr.set(a, PROGRAM_LABELS[acc.owner]);
+            if (LOCKER_PROGRAMS.has(acc.owner) || TOKEN_PROGRAMS.has(acc.owner)) {
+              lockerByAddr.add(a);
+            }
           });
         } catch {}
       }
+      // Final classification pass — promote sends-to-lockers to "lock",
+      // receives-from-lockers to "unlock". This is the authoritative source
+      // for the lock signal, not the earlier heuristic.
       for (const r of rows) {
         if (r.counterpartyType === "contract" && !r.counterpartyLabel) {
           r.counterpartyLabel = labelByAddr.get(r.counterparty) || "Contract";
+        }
+        if (r.counterparty && lockerByAddr.has(r.counterparty)) {
+          if (r.action === "send" || r.action === "add_lp") r.action = "lock";
+          else if (r.action === "receive" || r.action === "withdraw_lp") r.action = "unlock";
+          r.isLockerCounterparty = true;
         }
       }
     }
@@ -1743,10 +4283,36 @@ app.get("/api/trace", async (req, res) => {
       } : null,
     };
 
+    // Resolve bags context now — by this point all the heavy on-chain work
+    // is done, so even if Bags is slow we only wait on it at the end.
+    const bagsCtx = await bagsCtxPromise;
+    const walletIsBagsCreator = !!(bagsCtx?.projectFeeWallets && bagsCtx.projectFeeWallets.includes(wallet));
+    let walletCreatorMeta = null;
+    if (walletIsBagsCreator && bagsCtx.bagsInfo) {
+      const match = (bagsCtx.bagsInfo.officialCreators || []).find(c => c.wallet === wallet);
+      if (match) walletCreatorMeta = {
+        username: match.username,
+        provider: match.provider,
+        isAdmin: match.isAdmin,
+        royaltyBps: match.royaltyBps,
+      };
+    }
+
+    // Add lock/unlock counts to summary so the UI doesn't need to recompute.
+    summary.lockCount = rows.filter(r => r.action === "lock").length;
+    summary.unlockCount = rows.filter(r => r.action === "unlock").length;
+    summary.lockedTokensTotal = rows.filter(r => r.action === "lock").reduce((s, r) => s + Math.abs(r.tokenDelta), 0);
+
     return res.status(200).json({
       success: true, wallet, mint, decimals, truncated,
       generatedAt: new Date().toISOString(),
       summary, counterparties, transactions: rows,
+      bagsContext: bagsCtx?.bagsInfo ? {
+        isBagsToken: !!bagsCtx.bagsInfo.isBagsToken,
+        walletIsBagsCreator,
+        walletCreatorMeta,
+        tokenSymbol: bagsCtx.bagsInfo.symbol,
+      } : null,
     });
   } catch (err) {
     console.error("[trace] error:", err.message);
@@ -1912,6 +4478,22 @@ app.get("/rose", (req, res) => {
   res.sendFile(join(__dirname, "public", "rose.html"));
 });
 
+// -- Premium Forensics (private, unlinked; gated by access key in the page) --
+app.get("/premium", (req, res) => {
+  res.sendFile(join(__dirname, "public", "premium.html"));
+});
+
+// -- The Coop Spinner (slot game) — demo/prototype --
+app.get("/slots", (req, res) => {
+  res.sendFile(join(__dirname, "public", "slots.html"));
+});
+
+// -- /launches + /bags-launches are aliases of the canonical Bags page (/bags),
+//    which is the full Bags showcase + live launches feed. One page, one source. --
+app.get(["/launches", "/bags-launches"], (req, res) => {
+  res.sendFile(join(__dirname, "public", "bags.html"));
+});
+
 // -- Airdrop Tool --
 app.get("/airdrop", (req, res) => {
   res.sendFile(join(__dirname, "public", "airdrop.html"));
@@ -1949,6 +4531,28 @@ app.get("/grant", (req, res) => {
 // -- Trace — wallet × token forensic history (private tool, not linked) --
 app.get("/trace", (req, res) => {
   res.sendFile(join(__dirname, "public", "trace.html"));
+});
+
+// -- Token Autopsy — AI forensic agent for any Solana token (paste mint, learn from the corpse) --
+app.get("/autopsy", (req, res) => {
+  res.sendFile(join(__dirname, "public", "autopsy.html"));
+});
+
+// -- Traffic dashboard (private). The HTML is harmless without a key; the data
+// endpoint is gated by PREMIUM_ACCESS_KEY. Open /stats?key=<key>. --
+app.get("/stats", (req, res) => {
+  res.sendFile(join(__dirname, "public", "stats.html"));
+});
+app.get("/api/stats", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) {
+    return res.status(404).json({ error: "not_found" });
+  }
+  const n = Math.max(1, Math.min(90, parseInt(req.query.days, 10) || 30));
+  return res.status(200).json({ success: true, ...analytics.summary(n) });
+});
+app.get("/bags", (req, res) => {
+  res.sendFile(join(__dirname, "public", "bags.html"));
 });
 
 // -- Cluck Score public page (paste any mint, see the score rendered) --
@@ -2000,6 +4604,3941 @@ app.get("/api/bubblemaps", async (req, res) => {
   }
 });
 
+// ── Token Autopsy — AI Forensic Agent ───────────────────────────────────────
+// Paste any Solana token mint, the agent investigates on-chain + DexScreener
+// state, classifies the death mode (LP rug, honeypot, soft rug, mint-dilution
+// risk, alive), aggregates verified red flags, and feeds the structured facts
+// to Claude Haiku for a Cluck-voice case study. Heuristic v1 — won't catch
+// every pattern but won't invent numbers either. Free and public.
+// Server-side report cache. A full autopsy runs ~10 phases hitting Helius +
+// Solana Tracker + DexScreener; when a hot mint gets scanned repeatedly (e.g.
+// a token making the rounds in chats) every run re-burns those credits. We
+// cache the assembled report by mint for a short TTL so repeat scans return
+// instantly and cost nothing. In-memory is fine — a 3-min hot cache doesn't
+// need to survive restarts. ?nocache=1 forces a fresh run.
+const AUTOPSY_CACHE = new Map();          // mint → { body, ts }
+const AUTOPSY_TTL_MS = 180000;            // 3 min
+
+app.get("/api/autopsy", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "public, max-age=300");
+  const mint = (req.query.mint || "").trim();
+  if (!mint || mint.length < 32) return res.status(400).json({ success: false, error: "Invalid mint" });
+  try { analytics.trackTool("autopsy"); } catch (_) {}
+
+  if (req.query.nocache !== "1") {
+    const hit = AUTOPSY_CACHE.get(mint);
+    if (hit && Date.now() - hit.ts < AUTOPSY_TTL_MS) {
+      res.setHeader("X-Autopsy-Cache", "hit");
+      return res.json({ ...hit.body, cached: true, cachedAgeSec: Math.round((Date.now() - hit.ts) / 1000) });
+    }
+  }
+  res.setHeader("X-Autopsy-Cache", "miss");
+  // Capture the assembled report on the way out so the next caller rides the
+  // cache. Only successful reports are stored (errors should re-try fresh).
+  const _resJson = res.json.bind(res);
+  res.json = (body) => {
+    try {
+      if (body && body.success) {
+        AUTOPSY_CACHE.set(mint, { body, ts: Date.now() });
+        if (AUTOPSY_CACHE.size > 300) { const cut = Date.now() - AUTOPSY_TTL_MS; for (const [k, v] of AUTOPSY_CACHE) if (v.ts < cut) AUTOPSY_CACHE.delete(k); }
+      }
+    } catch (_) {}
+    return _resJson(body);
+  };
+
+  const HELIUS_KEY = process.env.HELIUS_API_KEY;
+  if (!HELIUS_KEY) return res.status(500).json({ success: false, error: "Server not configured" });
+  const rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
+  // Per-request Helius enhanced-tx cache + scan-quality tracker. Stops us
+  // re-fetching the same sig across phases and gives the UI a way to flag
+  // when Helius was throttling us mid-run.
+  const heliusTxCache = new Map();
+  const scanQuality = {
+    heliusBatches: 0,
+    heliusBatchesSucceeded: 0,
+    heliusRateLimited: 0,
+    phasesCompleted: [],
+    phasesFailed: [],
+  };
+  function rpcCall(id, method, params) {
+    return fetch(rpcUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id, method, params })
+    }).then(r => r.json());
+  }
+
+  try {
+    const [dexData, supplyData, mintInfoData] = await Promise.allSettled([
+      fetch(`https://api.dexscreener.com/token-pairs/v1/solana/${mint}`).then(r => r.json()),
+      rpcCall("autopsy-supply", "getTokenSupply", [mint]),
+      rpcCall("autopsy-mint", "getAccountInfo", [mint, { encoding: "jsonParsed" }]),
+    ]);
+
+    const allPairs = dexData.status === "fulfilled" && Array.isArray(dexData.value) ? dexData.value : [];
+    const solPairs = allPairs.filter(p => p.chainId === "solana" || !p.chainId);
+    const totalLiqUsd = solPairs.reduce((s, p) => s + (parseFloat(p.liquidity?.usd) || 0), 0);
+    const totalVol24h = solPairs.reduce((s, p) => s + (parseFloat(p.volume?.h24) || 0), 0);
+    const buys24h = solPairs.reduce((s, p) => s + (p.txns?.h24?.buys || 0), 0);
+    const sells24h = solPairs.reduce((s, p) => s + (p.txns?.h24?.sells || 0), 0);
+    const txns24h = buys24h + sells24h;
+    const topPair = solPairs.length
+      ? solPairs.slice().sort((a, b) => (parseFloat(b.liquidity?.usd) || 0) - (parseFloat(a.liquidity?.usd) || 0))[0]
+      : null;
+    const pairCreatedMs = topPair?.pairCreatedAt ? Number(topPair.pairCreatedAt) : null;
+    const ageDays = pairCreatedMs ? (Date.now() - pairCreatedMs) / 86400000 : null;
+    // Price trend — without this the AI thinks every low-volume token is fading.
+    // DexScreener's priceChange is a % number (e.g. 12.5 means +12.5%).
+    const priceChangeH1  = topPair?.priceChange?.h1  ?? null;
+    const priceChangeH6  = topPair?.priceChange?.h6  ?? null;
+    const priceChangeH24 = topPair?.priceChange?.h24 ?? null;
+
+    const rawSupply = supplyData.status === "fulfilled" ? supplyData.value?.result?.value?.amount : null;
+    const decimals = supplyData.status === "fulfilled" ? (supplyData.value?.result?.value?.decimals || 9) : 9;
+    const supplyTokens = rawSupply ? parseInt(rawSupply) / Math.pow(10, decimals) : null;
+
+    const mintParsed = mintInfoData.status === "fulfilled" ? mintInfoData.value?.result?.value?.data?.parsed?.info : null;
+    const mintAuthority = mintParsed?.mintAuthority || null;
+    const freezeAuthority = mintParsed?.freezeAuthority || null;
+
+    // --- Token-2022 extension scan (modern honeypot / rug vectors) ---
+    // The classic mint/freeze authority check is blind to Token-2022
+    // extensions, which are how today's honeypots actually trap buyers: a
+    // transfer hook routes every trade through a custom program that can
+    // reject sells; a 100% transfer fee is an unsellable sell tax; a
+    // permanent delegate can seize anyone's tokens; a non-transferable or
+    // default-frozen mint blocks selling outright. The jsonParsed
+    // getAccountInfo already returns these under info.extensions and the
+    // owning program under value.owner — we just read them. This only fires
+    // for Token-2022 mints, so standard SPL pump/Bags tokens are untouched.
+    const TOKEN_2022_PROGRAM = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
+    const SYS_PROGRAM = "11111111111111111111111111111111";
+    const tokenProgramOwner = mintInfoData.status === "fulfilled" ? mintInfoData.value?.result?.value?.owner : null;
+    const isToken2022 = tokenProgramOwner === TOKEN_2022_PROGRAM;
+    const mintExtensions = Array.isArray(mintParsed?.extensions) ? mintParsed.extensions : [];
+    const extByType = {};
+    for (const e of mintExtensions) { if (e && e.extension) extByType[e.extension] = e.state || e; }
+
+    const token2022Risks = [];
+    let transferFeeBps = null;
+    if (extByType.transferFeeConfig) {
+      const cfg = extByType.transferFeeConfig;
+      // Read the *newer* (currently-effective) fee. jsonParsed nests it under
+      // newerTransferFee.transferFeeBasisPoints (camelCase).
+      transferFeeBps = cfg?.newerTransferFee?.transferFeeBasisPoints
+        ?? cfg?.newerTransferFee?.transfer_fee_basis_points
+        ?? null;
+      if (transferFeeBps != null) {
+        const pct = (transferFeeBps / 100).toFixed(transferFeeBps % 100 === 0 ? 0 : 1);
+        if (transferFeeBps >= 9000) token2022Risks.push({ kind: "transfer-fee", severity: "honeypot", bps: transferFeeBps, label: `${pct}% transfer fee`, msg: `Token-2022 transfer fee is ${pct}% — every sell is taxed into oblivion. Effectively unsellable (honeypot-grade sell tax).` });
+        else if (transferFeeBps >= 1000) token2022Risks.push({ kind: "transfer-fee", severity: "severe", bps: transferFeeBps, label: `${pct}% transfer fee`, msg: `Token-2022 transfer fee is ${pct}% — a heavy sell tax skims every trade.` });
+        else if (transferFeeBps > 0) token2022Risks.push({ kind: "transfer-fee", severity: "caution", bps: transferFeeBps, label: `${pct}% transfer fee`, msg: `Token-2022 transfer fee of ${pct}% applies to every transfer.` });
+      }
+    }
+    if (extByType.transferHook) {
+      const hookProg = extByType.transferHook?.programId || extByType.transferHook?.program_id || null;
+      if (hookProg && hookProg !== SYS_PROGRAM) token2022Risks.push({ kind: "transfer-hook", severity: "honeypot", program: hookProg, label: "active transfer hook", msg: `A Token-2022 transfer hook routes every trade through a custom program (${hookProg.slice(0, 4)}…${hookProg.slice(-4)}) that can block sells at will — a common honeypot mechanism.` });
+    }
+    if (extByType.permanentDelegate) {
+      const del = extByType.permanentDelegate?.delegate || null;
+      if (del && del !== SYS_PROGRAM) token2022Risks.push({ kind: "permanent-delegate", severity: "severe", delegate: del, label: "permanent delegate", msg: `A permanent delegate (${del.slice(0, 4)}…${del.slice(-4)}) can move or burn tokens from ANY wallet, forever — your holdings are seizable.` });
+    }
+    if (extByType.defaultAccountState) {
+      const st = extByType.defaultAccountState?.accountState || extByType.defaultAccountState?.state || extByType.defaultAccountState;
+      if (typeof st === "string" && st.toLowerCase() === "frozen") token2022Risks.push({ kind: "default-frozen", severity: "honeypot", label: "accounts frozen by default", msg: "New token accounts are FROZEN by default — buyers can't sell until the team manually thaws each wallet. Classic restricted-sell honeypot." });
+    }
+    if (extByType.nonTransferable || extByType.nonTransferableAccount) {
+      token2022Risks.push({ kind: "non-transferable", severity: "honeypot", label: "non-transferable", msg: "Token is NON-TRANSFERABLE — it can never be sold or moved. Hard honeypot (or a soul-bound token, but never tradeable)." });
+    }
+    const hasHoneypotExtension = token2022Risks.some(r => r.severity === "honeypot");
+    const hasSevereExtension = token2022Risks.some(r => r.severity === "severe" || r.severity === "honeypot");
+
+    // --- Top 100 holders via paginated getTokenAccounts (DAS) ---
+    // getTokenLargestAccounts caps at 20. The DAS getTokenAccounts gives us
+    // pagination (up to 1000 per page) and the owner field directly, so we
+    // can both walk deeper AND skip a batched RPC call later.
+    const MAX_HOLDER_PAGES = 5;
+    const allTokenAccounts = [];
+    for (let p = 1; p <= MAX_HOLDER_PAGES; p++) {
+      try {
+        const r = await rpcCall(`autopsy-tas-${p}`, "getTokenAccounts", {
+          page: p, limit: 1000, mint, displayOptions: { showZeroBalance: false }
+        });
+        const accs = r?.result?.token_accounts || [];
+        if (accs.length === 0) break;
+        allTokenAccounts.push(...accs);
+        if (accs.length < 1000) break;
+      } catch (e) {
+        console.warn(`[AUTOPSY] token accounts page ${p} failed:`, e.message);
+        break;
+      }
+    }
+    const largestRaw = allTokenAccounts
+      .map(a => ({
+        address: a.address,                                              // token account address
+        amount: a.amount,
+        uiAmount: parseInt(a.amount || "0") / Math.pow(10, decimals),
+        owner: a.owner,                                                   // wallet authority — directly available
+      }))
+      .filter(a => a.uiAmount > 0)
+      .sort((a, b) => b.uiAmount - a.uiAmount)
+      .slice(0, 100);
+    const top10Sum = largestRaw.slice(0, 10).reduce((s, a) => s + (parseFloat(a.uiAmount) || 0), 0);
+    const top10Share = supplyTokens > 0 ? top10Sum / supplyTokens : null;
+
+    // CEX custody recognition. A known exchange wallet among the top holders is
+    // custodial (many users' tokens), NOT single-entity whale concentration — so
+    // we net it out of the concentration risk. And a token an exchange actually
+    // lists is a real legitimacy signal, surfaced separately. Labels come from
+    // Solana Tracker holder identity enrichment (authoritative — covers the many
+    // rotating per-token exchange wallets a static list can't), merged with our
+    // static fallback. Cached 10min; degrades to no-CEX on failure/quota.
+    // Normalize "Binance 3" / "Binance Cold Wallet" / "OKX: Hot Wallet" → brand.
+    const cexBrand = (n) => { if (!n) return n; const s = String(n).replace(/:.*/, "").replace(/\s*(hot|cold)\s+wallet.*$/i, "").replace(/\s+wallet.*$/i, "").replace(/\s*#?\d+\s*$/, "").trim(); return s || n; };
+    // Derive CEX presence from ST's TRUE top-holder list (Helius getTokenAccounts
+    // only returns an arbitrary first-5000 slice — for a million-holder token the
+    // real whales, exchanges included, aren't in it). ST gives sorted holders with
+    // percentage + identity tags. Cached 10min; degrades to no-CEX on failure.
+    const cexWalletNames = new Map();   // owner → exchange name (for Helius-side netting)
+    const cexBrands = new Set();        // brands among the true top holders
+    let cexTop10Share = 0;              // CEX share within ST's true top-10 (fraction of supply)
+    try {
+      const eh = await solanaTracker.getEnrichedHolders(mint, { enrich: "identity" });
+      const accts = (eh && Array.isArray(eh.accounts) ? eh.accounts : []);
+      accts.forEach((h, rank) => {
+        const id = h.identity || {};
+        const isExch = id.type === "exchange" || (Array.isArray(id.tags) && id.tags.includes("exchange"));
+        if (!isExch) return;
+        const name = (id.exchange && id.exchange.name) || id.name || "Exchange";
+        if (h.wallet) cexWalletNames.set(h.wallet, name);
+        const pct = Number(h.percentage) || 0;            // ST returns % of supply
+        if (pct >= 0.1) cexBrands.add(cexBrand(name));     // ignore dust deposit wallets
+        if (rank < 10) cexTop10Share += pct / 100;
+      });
+    } catch (_) {}
+    const cexExchanges = [...cexBrands];
+    // Net CEX custody out of the Helius-basis concentration too (covers the case
+    // where a CEX wallet IS in the visible slice). Use whichever share is larger.
+    const cexNameOf = (owner) => cexWalletNames.get(owner) || KNOWN_CEX_WALLETS[owner] || null;
+    const cexTop10ShareHelius = supplyTokens > 0
+      ? largestRaw.slice(0, 10).filter(a => cexNameOf(a.owner)).reduce((s, a) => s + (parseFloat(a.uiAmount) || 0), 0) / supplyTokens
+      : 0;
+    const concentrationExCex = top10Share != null ? Math.max(0, top10Share - cexTop10ShareHelius) : null;
+    const cexPresence = cexExchanges.length ? { exchanges: cexExchanges, top10Share: cexTop10Share } : null;
+
+    const symbol = topPair?.baseToken?.symbol || "UNKNOWN";
+    const name = topPair?.baseToken?.name || symbol;
+    const priceUsd = topPair ? parseFloat(topPair.priceUsd) : null;
+    const fdv = topPair?.fdv || null;
+    const marketCap = topPair?.marketCap || null;
+    // Turnover = 24h volume ÷ market cap. The honest "is it trading?" signal:
+    // $1K/day is healthy for a $100K token (1%) but near-dead for a $40M one
+    // (0.0025%). Absolute volume thresholds can't compare across sizes — turnover
+    // can. Falls back to FDV when MC is missing; null when neither is known.
+    const mcapForTurnover = marketCap || fdv || null;
+    const turnover = (mcapForTurnover && mcapForTurnover > 0) ? totalVol24h / mcapForTurnover : null;
+
+    // --- LP burn/lock status (classic rug vector) ---
+    // Solana Tracker reports per-pool `lpBurn` = % of the pool's LP tokens that
+    // are burned/locked. 100 = liquidity permanently locked (cannot be pulled);
+    // low = the LP is still dev-controlled and the pool can be rugged. For
+    // bonding-curve pools, liquidity is program-custodied until graduation, so
+    // the classic LP-rug doesn't apply yet.
+    let lpStatus = null;
+    try {
+      const stInfo = await solanaTracker.getTokenInfo(mint); // cached (1h)
+      const liqOf = p => ((p.liquidity || {}).usd) || 0;
+      const stPools = (Array.isArray(stInfo?.pools) ? stInfo.pools : []).filter(p => liqOf(p) > 0);
+      if (stPools.length) {
+        const totalLiq = stPools.reduce((s, p) => s + liqOf(p), 0);
+        const primary = stPools.reduce((b, p) => (liqOf(p) > liqOf(b) ? p : b), stPools[0]);
+        const primaryShare = totalLiq > 0 ? liqOf(primary) / totalLiq : 1;
+        const meaningfulPools = stPools.filter(p => totalLiq > 0 && liqOf(p) / totalLiq >= 0.05).length; // pools holding ≥5% of liq
+        const lpBurnPct = primary.lpBurn != null ? Number(primary.lpBurn) : null;
+        const lpMarket = primary.market || null;
+        const onCurveMkt = solanaTracker.isLaunchpadCurveMarket(lpMarket);
+        // Concentrated-liquidity AMMs (Raydium CLMM, Meteora DLMM, Orca Whirlpool)
+        // hold liquidity as NFT positions, not fungible LP tokens — there is
+        // nothing to "burn", so a 0% lpBurn there is a NON-signal, not a rug flag.
+        const concentratedMkt = /clmm|dlmm|whirlpool/i.test(String(lpMarket || ""));
+        // Liquidity-weighted burn across every pool that reports a burn %.
+        let wNum = 0, wDen = 0;
+        for (const p of stPools) { const liq = liqOf(p); if (p.lpBurn != null && liq > 0) { wNum += Number(p.lpBurn) * liq; wDen += liq; } }
+        const weightedBurn = wDen > 0 ? wNum / wDen : null;
+        // "Distributed" = an established multi-pool token where no SINGLE pool's
+        // lock % is a ruggability verdict (the BONK case: liquidity across ~40 pools).
+        const distributed = meaningfulPools >= 3 || primaryShare < 0.6;
+        let status, label;
+        if (onCurveMkt) {
+          status = "curve";
+          label = "Liquidity is custodied in the launchpad bonding curve — program-locked until graduation, not dev-withdrawable. Classic LP-rug doesn't apply at this stage.";
+        } else if (distributed) {
+          status = "distributed";
+          const wb = weightedBurn != null ? ` (~${weightedBurn.toFixed(0)}% liquidity-weighted LP burned across pools)` : "";
+          label = `Liquidity is spread across ${meaningfulPools} significant pools of ${stPools.length} total${wb}. LP-lock analysis is most meaningful for single-pool launch tokens; for an established multi-pool token, no single pool's lock status determines ruggability — review each major pool on its own.`;
+        } else if (concentratedMkt && (lpBurnPct == null || lpBurnPct < 50)) {
+          status = "na";
+          label = `The main pool is a concentrated-liquidity market (${lpMarket}), which holds liquidity as NFT positions rather than burnable LP tokens — the LP-burn metric doesn't apply, so a low value here is not a rug signal.`;
+        } else if (lpBurnPct == null) {
+          status = "unknown";
+          label = "LP lock/burn status couldn't be determined for this pool type.";
+        } else if (lpBurnPct >= 99) {
+          status = "burned";
+          label = "LP tokens are ~100% burned — pool liquidity is permanently locked and cannot be pulled. Strongest liquidity-safety signal.";
+        } else if (lpBurnPct >= 50) {
+          status = "partial";
+          label = `~${lpBurnPct.toFixed(0)}% of LP is burned/locked — the remainder is still dev-withdrawable.`;
+        } else {
+          status = "unlocked";
+          label = `Only ~${lpBurnPct.toFixed(0)}% of the main pool's LP is burned — that pool's liquidity is largely withdrawable by whoever holds the LP tokens. A pull risk unless it's locked elsewhere; weigh it against the token's age and how liquidity is spread across pools.`;
+        }
+        lpStatus = { lpBurnPct, weightedBurn, market: lpMarket, status, label, poolCount: stPools.length, meaningfulPools, primaryShare: Math.round(primaryShare * 100) };
+      }
+    } catch (e) { console.warn("[AUTOPSY] LP-lock check failed:", e.message); }
+
+    // --- Metadata mutability + update authority (bait-and-switch rug vector) ---
+    // A mutable token lets whoever holds the update authority change the name,
+    // symbol, image and socials AFTER launch. On launchpad tokens (Bags/Pump/etc.)
+    // the PLATFORM holds that authority by design — normal, not a dev risk. On a
+    // hand-rolled mint, a still-active non-platform authority is the real
+    // bait-and-switch vector. Helius DAS getAsset gives mutability + authority.
+    let metadataStatus = null;
+    try {
+      const ga = await rpcCall("autopsy-getasset", "getAsset", { id: mint });
+      const asset = ga?.result || null;
+      if (asset && typeof asset.mutable === "boolean") {
+        const fullAuth = (asset.authorities || []).find(a => Array.isArray(a.scopes) && a.scopes.includes("full")) || (asset.authorities || [])[0] || null;
+        const updateAuthority = fullAuth?.address || null;
+        const mintLc = mint.toLowerCase();
+        const launchpadMint = mintLc.endsWith("pump") || mintLc.endsWith("bags") || mintLc.endsWith("bonk") || mintLc.endsWith("moon");
+        const platformHeld = (updateAuthority || "").startsWith("BAGS") || launchpadMint;
+        let status, label;
+        if (!asset.mutable) {
+          status = "immutable";
+          label = "Metadata is immutable — name, symbol, image and links are permanently locked and can't be changed.";
+        } else if (platformHeld) {
+          status = "mutable-platform";
+          label = "Metadata is mutable, but the update authority is held by the launchpad platform (standard for Bags/Pump launches) — the team can't unilaterally rebrand the token.";
+        } else {
+          status = "mutable-risk";
+          label = `Metadata is mutable and the update authority${updateAuthority ? ` (${updateAuthority.slice(0, 4)}…${updateAuthority.slice(-4)})` : ""} is not a launchpad platform — the name, image and links can be changed after launch (bait-and-switch vector). Verify who controls it before trusting the branding.`;
+        }
+        metadataStatus = { mutable: asset.mutable, updateAuthority, platformHeld, status, label };
+      }
+    } catch (e) { console.warn("[AUTOPSY] metadata mutability check failed:", e.message); }
+
+    // --- Red flags (factual, not invented) ---
+    const redFlags = [];
+    if (mintAuthority) redFlags.push("Mint authority is still active — the creator can print more supply at any time.");
+    if (freezeAuthority) redFlags.push("Freeze authority is still active — individual wallets can be frozen.");
+    for (const r of token2022Risks) redFlags.push(r.msg);
+    if (concentrationExCex !== null && concentrationExCex > 0.5) redFlags.push(`Top 10 wallets hold roughly ${(concentrationExCex * 100).toFixed(0)}% of supply${cexPresence ? " (excluding exchange-custodied holdings)" : ""} — heavy concentration.`);
+    // Low turnover for a sizable token — thin trading relative to its market cap.
+    if (turnover !== null && (marketCap || 0) >= 1000000 && turnover < 0.0005 && totalVol24h < 25000) redFlags.push(`24h volume is only ${(turnover * 100).toFixed(3)}% of market cap — very low turnover for a $${(marketCap / 1e6).toFixed(1)}M token; trading interest is thin relative to its size (exit at size may be hard).`);
+    if (totalLiqUsd > 0 && totalLiqUsd < 500) redFlags.push(`Pool liquidity is only $${totalLiqUsd.toFixed(0)} — there is effectively no exit at size.`);
+    if (totalLiqUsd === 0 && solPairs.length > 0) redFlags.push("DexScreener shows pools but zero current liquidity — the LP has been pulled or migrated.");
+    if (lpStatus && lpStatus.status === "unlocked") redFlags.push(`Liquidity is NOT locked — only ~${lpStatus.lpBurnPct.toFixed(0)}% of LP tokens are burned, so whoever holds the LP can withdraw the pool (classic rug vector). Verify it's locked elsewhere before trusting the depth.`);
+    else if (lpStatus && lpStatus.status === "partial" && lpStatus.lpBurnPct < 80) redFlags.push(`Only ~${lpStatus.lpBurnPct.toFixed(0)}% of LP is burned/locked — the rest is dev-withdrawable.`);
+    if (metadataStatus && metadataStatus.status === "mutable-risk") redFlags.push(metadataStatus.label);
+    if (solPairs.length === 0) redFlags.push("No DexScreener pool found at all — the token never launched a tradeable market, or it has been delisted.");
+    if (buys24h > 20 && sells24h === 0) redFlags.push(`${buys24h} buys today and zero sells — classic restricted-sell / honeypot pattern.`);
+    if (buys24h > 0 && sells24h > 0 && buys24h / sells24h > 10) redFlags.push(`Buys outpace sells ${buys24h}-to-${sells24h} — sells may be partially restricted.`);
+    if (ageDays !== null && ageDays > 7 && txns24h < 5 && totalLiqUsd > 0) redFlags.push("Activity has gone near-silent but the pool still technically exists — quiet-fade pattern.");
+
+    // --- Verdict classification (heuristic, ordered) ---
+    // Honesty rule: "Cause of Death" framing is reserved for tokens that are
+    // genuinely dead — no pool, honeypot, drained LP, or true quiet-fade
+    // (silent AND collapsed AND tiny). A still-trading token with a real
+    // market cap in a drawdown is RETRACED, not dead. The earlier verdict
+    // would mislabel a $68K-MC token as "QUIET FADE" off a single slow-volume
+    // day — that's wrong, and we said it wouldn't happen.
+    let verdict;
+    if (solPairs.length === 0) {
+      verdict = { type: "GHOST", label: "Cause of Death: NEVER LAUNCHED", severity: "DEAD", color: "#6B7280", icon: "👻" };
+    } else if (hasHoneypotExtension) {
+      // Proactive: a non-transferable / default-frozen / active-transfer-hook /
+      // ~100% transfer-fee Token-2022 mint is a honeypot by construction — flag
+      // it before it has to trap 20 buyers behaviorally.
+      verdict = { type: "HONEYPOT", label: "Cause of Death: HONEYPOT (Token-2022)", severity: "DEAD", color: "#EF4444", icon: "🪤" };
+    } else if (buys24h >= 20 && sells24h === 0 && totalLiqUsd > 0) {
+      verdict = { type: "HONEYPOT", label: "Cause of Death: HONEYPOT", severity: "DEAD", color: "#EF4444", icon: "🪤" };
+    } else if (totalLiqUsd < 500 && ageDays !== null && ageDays > 1) {
+      verdict = { type: "LP_RUG", label: "Cause of Death: LP RUG", severity: "DEAD", color: "#EF4444", icon: "💀" };
+    } else if (
+      // True QUIET FADE: all of: older than 7 days, near-zero 24h volume AND
+      // near-zero 24h transactions AND tiny market cap (≤ $25K). A slow day
+      // alone is not death.
+      ageDays !== null && ageDays > 7 &&
+      totalVol24h < 50 && txns24h < 5 &&
+      totalLiqUsd >= 500 &&
+      (marketCap === null || marketCap <= 25000)
+    ) {
+      verdict = { type: "SOFT_RUG", label: "Cause of Death: QUIET FADE", severity: "DYING", color: "#F59E0B", icon: "🐌" };
+    } else if (mintAuthority || freezeAuthority || hasSevereExtension || (concentrationExCex !== null && concentrationExCex > 0.5)) {
+      verdict = { type: "AT_RISK", label: "Status: ALIVE BUT AT RISK", severity: "AT_RISK", color: "#F59E0B", icon: "⚠️" };
+    } else if (totalLiqUsd >= 5000 && totalVol24h >= 100 && (turnover === null || turnover >= 0.001 || totalVol24h >= 25000)) {
+      // Needs healthy liquidity + real volume, AND — when we know the market cap —
+      // at least 0.1% daily turnover. Keeps a healthy microcap ALIVE (vol ≥ $100
+      // on a ≤$100K token already clears 0.1%) while a bloated-MC token doing
+      // pocket-change volume drops to UNCLEAR instead of a false "ALIVE". The
+      // ≥$25K absolute-volume escape protects obviously-trading tokens when the
+      // market cap is unreliable (e.g. DexScreener phantom-pool / decimals quirks).
+      verdict = { type: "ALIVE", label: "Status: ALIVE & TRADING", severity: "ALIVE", color: "#10B981", icon: "🐔" };
+    } else {
+      verdict = { type: "UNCLEAR", label: "Status: UNCLEAR", severity: "UNCLEAR", color: "#6B7280", icon: "❓" };
+    }
+
+    // --- Report mode: autopsy framing only fits dead/dying tokens ---
+    // For an alive token, calling the page a "Token Autopsy" is wrong. Cluck
+    // came with a scalpel — but the patient is breathing. Swap the framing
+    // to a Full Health Checkup. Same forensic depth, honest framing.
+    let reportMode;
+    let reportHeadline;
+    let reportSubhead;
+    if (verdict.severity === "ALIVE") {
+      reportMode = "health-checkup";
+      reportHeadline = "🚫 AUTOPSY CANCELED";
+      reportSubhead = "Patient is alive and trading. Pulled out the scalpel, didn't need it. This is a Full Health Checkup instead.";
+    } else if (verdict.severity === "AT_RISK") {
+      reportMode = "health-assessment";
+      reportHeadline = "⚠️ AUTOPSY ON STANDBY";
+      reportSubhead = "Patient is alive but showing warning signs. Health Assessment with concerns.";
+    } else if (verdict.type === "RETRACED") {
+      reportMode = "health-assessment";
+      reportHeadline = "📉 AUTOPSY ON STANDBY";
+      reportSubhead = "Patient is alive but heavily bruised. Health Assessment of a token in a drawdown.";
+    } else if (verdict.severity === "UNCLEAR") {
+      reportMode = "autopsy";
+      reportHeadline = "🔬 TOKEN AUTOPSY";
+      reportSubhead = verdict.label;
+    } else {
+      // DEAD or DYING — true autopsy framing.
+      reportMode = "autopsy";
+      reportHeadline = "🔬 TOKEN AUTOPSY";
+      reportSubhead = verdict.label;
+    }
+
+    // --- Linked lessons from the school ---
+    const lessonMap = {
+      GHOST:     [{ id: "rugs", title: "Lesson 2 — Rugs & Scams" }, { id: "onchain", title: "Lesson 9 — On-Chain Analysis" }],
+      HONEYPOT:  [{ id: "rugs", title: "Lesson 2 — Rugs & Scams" }, { id: "tokenomics", title: "Lesson 6 — Tokenomics" }],
+      LP_RUG:    [{ id: "rugs", title: "Lesson 2 — Rugs & Scams" }, { id: "onchain", title: "Lesson 9 — On-Chain Analysis" }],
+      SOFT_RUG:  [{ id: "onchain", title: "Lesson 9 — On-Chain Analysis" }, { id: "volatility", title: "Lesson 3 — Volatility & Weak Hands" }],
+      RETRACED:  [{ id: "volatility", title: "Lesson 3 — Volatility & Weak Hands" }, { id: "marketcap", title: "Lesson 7 — Market Cap vs Price" }],
+      AT_RISK:   [{ id: "tokenomics", title: "Lesson 6 — Tokenomics" }, { id: "rugs", title: "Lesson 2 — Rugs & Scams" }],
+      CREATOR_EXTRACTED: [{ id: "rugs", title: "Lesson 2 — Rugs & Scams" }, { id: "tokenomics", title: "Lesson 6 — Tokenomics" }],
+      ALIVE:     [{ id: "marketcap", title: "Lesson 7 — Market Cap vs Price" }],
+      UNCLEAR:   [],
+    };
+    const lessons = lessonMap[verdict.type] || [];
+
+    // --- Phase 2B: Lifetime Analysis ---
+    // Walk the mint's signature history back to genesis, sample parsed
+    // transactions across the lifetime, classify event types (mints / burns /
+    // large transfers), and surface a chronological timeline of the
+    // highest-impact moments. This is the part that makes the autopsy feel
+    // like an agent that actually investigated the chain over time.
+    let lifetime = null;
+    let priceHistory = null;
+    // Hoisted out so Phase 2F (P&L ledger) can reuse the lifetime walk + price candles.
+    let lifetimeAllSigs = [];
+    const priceCandlesByDay = new Map(); // dayKey (floor ts/86400000) → close price USD
+    try {
+      const MAX_SIG_PAGES = 5;
+      const allSigs = [];
+      let before = undefined;
+      for (let page = 0; page < MAX_SIG_PAGES; page++) {
+        const params = before ? [mint, { limit: 1000, before }] : [mint, { limit: 1000 }];
+        const sigsRes = await rpcCall(`autopsy-mint-sigs-${page}`, "getSignaturesForAddress", params);
+        const sigs = sigsRes?.result || [];
+        if (sigs.length === 0) break;
+        allSigs.push(...sigs);
+        if (sigs.length < 1000) break;
+        before = sigs[sigs.length - 1].signature;
+      }
+      const truncated = allSigs.length >= MAX_SIG_PAGES * 1000;
+      // Hoist for Phase 2F (P&L engine).
+      lifetimeAllSigs = allSigs;
+
+      let genesisTimestamp = null;
+      let genesisSig = null;
+      if (allSigs.length > 0) {
+        const oldest = allSigs[allSigs.length - 1];
+        genesisTimestamp = oldest.blockTime ? oldest.blockTime * 1000 : null;
+        genesisSig = oldest.signature;
+      }
+
+      // Sample signatures across the lifetime to fetch parsed details for.
+      // Sampling instead of fetching all 5000 keeps response time reasonable
+      // while still surfacing major events across the token's history.
+      const sample = new Set();
+      if (allSigs.length > 0) {
+        // Oldest 10 (around launch — where mint events and initial LP add live)
+        for (let i = Math.max(0, allSigs.length - 10); i < allSigs.length; i++) {
+          sample.add(allSigs[i].signature);
+        }
+        // Most recent 10 (current activity)
+        for (let i = 0; i < Math.min(10, allSigs.length); i++) {
+          sample.add(allSigs[i].signature);
+        }
+        // 20 evenly-spaced middle samples
+        if (allSigs.length > 40) {
+          const step = Math.floor(allSigs.length / 22);
+          for (let i = 1; i < 21; i++) {
+            const idx = step * i;
+            if (idx < allSigs.length) sample.add(allSigs[idx].signature);
+          }
+        }
+      }
+      const sampleArr = [...sample];
+
+      // Batch-fetch parsed transactions via Helius Enhanced API (one call, up
+      // to 100 sigs at a time — way faster than getTransaction one-by-one).
+      let parsedTxs = [];
+      if (sampleArr.length > 0) {
+        try {
+          const heliusUrl = `https://api.helius.xyz/v0/transactions?api-key=${HELIUS_KEY}`;
+          const parsedRes = await fetch(heliusUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ transactions: sampleArr.slice(0, 100) })
+          });
+          const data = await parsedRes.json();
+          if (Array.isArray(data)) parsedTxs = data;
+        } catch (e) {
+          console.warn("[AUTOPSY] Helius enhanced parse failed:", e.message);
+        }
+      }
+
+      // Classify each parsed tx — mint events, burns, large transfers
+      const events = [];
+      for (const tx of parsedTxs) {
+        if (!tx || tx.transactionError) continue;
+        const ts = tx.timestamp ? tx.timestamp * 1000 : null;
+        // Token mint events targeting OUR mint = potential dilution
+        if (tx.type === "TOKEN_MINT" && Array.isArray(tx.tokenTransfers)) {
+          for (const tt of tx.tokenTransfers) {
+            if (tt.mint === mint) {
+              events.push({
+                type: "MINT_EVENT",
+                timestamp: ts,
+                signature: tx.signature,
+                amount: tt.tokenAmount,
+                to: tt.toUserAccount,
+                description: `${Number(tt.tokenAmount || 0).toLocaleString()} ${symbol} minted${tt.toUserAccount ? ` to ${tt.toUserAccount.slice(0, 6)}…` : ""}`
+              });
+            }
+          }
+        }
+        // Burn events
+        if (tx.type === "BURN" || tx.type === "TOKEN_BURN") {
+          if (Array.isArray(tx.tokenTransfers)) {
+            for (const tt of tx.tokenTransfers) {
+              if (tt.mint === mint) {
+                events.push({
+                  type: "BURN_EVENT",
+                  timestamp: ts,
+                  signature: tx.signature,
+                  amount: tt.tokenAmount,
+                  description: `${Number(tt.tokenAmount || 0).toLocaleString()} ${symbol} burned`
+                });
+              }
+            }
+          }
+        }
+        // Large transfers — >1% of supply moved in a single tx
+        if (supplyTokens > 0 && Array.isArray(tx.tokenTransfers)) {
+          for (const tt of tx.tokenTransfers) {
+            if (tt.mint === mint && tt.tokenAmount > supplyTokens * 0.01) {
+              events.push({
+                type: "LARGE_TRANSFER",
+                timestamp: ts,
+                signature: tx.signature,
+                amount: tt.tokenAmount,
+                from: tt.fromUserAccount,
+                to: tt.toUserAccount,
+                description: `${((tt.tokenAmount / supplyTokens) * 100).toFixed(2)}% of supply moved${tt.fromUserAccount ? ` from ${tt.fromUserAccount.slice(0, 6)}…` : ""}${tt.toUserAccount ? ` to ${tt.toUserAccount.slice(0, 6)}…` : ""}`
+              });
+            }
+          }
+        }
+      }
+
+      // Always include the genesis as the bottom event
+      if (genesisTimestamp) {
+        events.push({
+          type: "GENESIS",
+          timestamp: genesisTimestamp,
+          signature: genesisSig,
+          description: `${symbol} mint created on Solana`
+        });
+      }
+
+      // Dedupe by signature, sort newest-first, cap at 15
+      const seenSigs = new Set();
+      const keyEvents = events
+        .filter(e => e.timestamp && e.signature && !seenSigs.has(e.signature) && seenSigs.add(e.signature))
+        .sort((a, b) => b.timestamp - a.timestamp)
+        .slice(0, 15);
+
+      const postGenesisMints = keyEvents.filter(e => e.type === "MINT_EVENT");
+      if (postGenesisMints.length > 0) {
+        redFlags.push(`${postGenesisMints.length} post-launch mint event(s) detected — the mint authority was actively used to print supply after launch.`);
+      }
+
+      // Detect whether the token went through a bonding-curve phase before
+      // its DEX pool existed. Bags.fm tokens graduate from Meteora DBC; Pump.fun
+      // tokens graduate from their own bonding curve program. Critically, we
+      // restrict detection to the OLDEST sampled txs — checking all sampled txs
+      // produces false positives because Jupiter aggregator sometimes routes
+      // post-graduation trades through PumpSwap's AMM, which is NOT the same as
+      // the token having had a Pump.fun bonding curve.
+      const BAGS_DBC = "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN";       // Meteora DBC (Bags bonding curve)
+      const PUMP_FUN_BC = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";    // Pump.fun bonding curve program
+      // Sort sampled parsed txs by timestamp ascending, only check the oldest
+      // 15 (genesis era) for bonding-curve program activity.
+      const earlyTxs = parsedTxs
+        .filter(t => t && t.timestamp)
+        .sort((a, b) => a.timestamp - b.timestamp)
+        .slice(0, 15);
+      let bondingCurveDetected = false;
+      let bondingCurveSource = null;
+      for (const tx of earlyTxs) {
+        const accounts = tx?.accountData || [];
+        const instructions = tx?.instructions || [];
+        const checkSet = new Set();
+        accounts.forEach(a => a?.account && checkSet.add(a.account));
+        instructions.forEach(ix => ix?.programId && checkSet.add(ix.programId));
+        if (checkSet.has(BAGS_DBC)) { bondingCurveDetected = true; bondingCurveSource = "Bags.fm (Meteora DBC)"; break; }
+        if (checkSet.has(PUMP_FUN_BC)) { bondingCurveDetected = true; bondingCurveSource = "Pump.fun"; break; }
+      }
+
+      // --- Total burned aggregation (cumulative, from sampled events) ---
+      const burnedFromEvents = keyEvents
+        .filter(e => e.type === "BURN_EVENT")
+        .reduce((s, e) => s + (Number(e.amount) || 0), 0);
+
+      // --- Airdrop / dust-drop detection ---
+      // A single tx with many tokenTransfers from the SAME source = a bulk
+      // distribution event. We classify each by recipient count and per-recipient
+      // amount: dust drops (tiny amounts, designed to inflate holder count) vs
+      // real airdrops (meaningful amounts to many wallets).
+      const airdropEvents = [];
+      for (const tx of parsedTxs) {
+        if (!tx || !Array.isArray(tx.tokenTransfers)) continue;
+        const mineForMint = tx.tokenTransfers.filter(tt => tt && tt.mint === mint);
+        if (mineForMint.length < 5) continue; // need at least 5 transfers to call it bulk
+        const bySource = {};
+        for (const tt of mineForMint) {
+          if (!tt.fromUserAccount) continue;
+          (bySource[tt.fromUserAccount] = bySource[tt.fromUserAccount] || []).push(tt);
+        }
+        for (const [src, transfers] of Object.entries(bySource)) {
+          if (transfers.length < 5) continue;
+          const totalAmount = transfers.reduce((s, tt) => s + (Number(tt.tokenAmount) || 0), 0);
+          const avgPerRecipient = totalAmount / transfers.length;
+          const sharePerRecipient = supplyTokens > 0 ? avgPerRecipient / supplyTokens : 0;
+          // Dust drop: each recipient gets less than 0.0001% of supply
+          const kind = sharePerRecipient < 0.000001 ? "dust" : "airdrop";
+          airdropEvents.push({
+            timestamp: tx.timestamp ? tx.timestamp * 1000 : null,
+            signature: tx.signature,
+            source: src,
+            recipients: transfers.length,
+            totalAmount,
+            avgPerRecipient,
+            kind,
+          });
+        }
+      }
+      const dustDropCount = airdropEvents.filter(a => a.kind === "dust").length;
+      if (dustDropCount > 0) {
+        const totalDustRecipients = airdropEvents.filter(a => a.kind === "dust").reduce((s, a) => s + a.recipients, 0);
+        redFlags.push(`${dustDropCount} dust-drop event(s) detected (~${totalDustRecipients} dust recipients) — pattern often used to inflate holder count artificially.`);
+      }
+
+      // --- Creator wallet detection ---
+      // Use the fee payer of the genesis transaction as the creator wallet
+      // proxy. Helius enhanced parsed txs include the feePayer field.
+      let creatorWallet = null;
+      if (genesisSig) {
+        const genesisTx = parsedTxs.find(t => t?.signature === genesisSig);
+        if (genesisTx?.feePayer) creatorWallet = genesisTx.feePayer;
+      }
+
+      lifetime = {
+        genesisTimestamp,
+        genesisSignature: genesisSig,
+        totalKnownSignatures: allSigs.length,
+        signatureHistoryTruncated: truncated,
+        keyEvents,
+        bondingCurveDetected,
+        bondingCurveSource,
+        totalBurnedObserved: burnedFromEvents,
+        airdropEvents,
+        creatorWallet,
+      };
+    } catch (e) {
+      console.warn("[AUTOPSY] lifetime analysis failed:", e.message);
+    }
+
+    // --- Phase 2B: Historical price + market cap via GeckoTerminal OHLCV ---
+    // DexScreener gives us current snapshot. GeckoTerminal lets us pull daily
+    // candles across the lifetime — we use that to find the peak price/MC and
+    // the drawdown to "now," which is the missing context that turns a number
+    // into a story.
+    if (topPair && topPair.pairAddress) {
+      try {
+        const gtUrl = `https://api.geckoterminal.com/api/v2/networks/solana/pools/${topPair.pairAddress}/ohlcv/day?aggregate=1&limit=365`;
+        const gtRes = await fetch(gtUrl);
+        const gtData = await gtRes.json();
+        const candles = gtData?.data?.attributes?.ohlcv_list || [];
+        if (candles.length > 0) {
+          // Each candle = [timestamp_seconds, open, high, low, close, volume]
+          // Use the daily CLOSE (where price actually settled) not the daily HIGH
+          // (which can be a single-tick spike during a thin candle). The close
+          // is what the token genuinely traded at by end of that day — the
+          // honest forensic answer to "what was the peak."
+          let peakPrice = 0, peakTs = 0;
+          for (const c of candles) {
+            const close = Number(c[4]) || 0;
+            const tsSec = Number(c[0]) || 0;
+            if (close > peakPrice) { peakPrice = close; peakTs = tsSec * 1000; }
+            // Stash for Phase 2F P&L valuation — index by UTC day key.
+            if (tsSec > 0 && close > 0) {
+              const dayKey = Math.floor((tsSec * 1000) / 86400000);
+              priceCandlesByDay.set(dayKey, close);
+            }
+          }
+          const currentPrice = priceUsd || (candles[0] && Number(candles[0][4])) || 0;
+          const drawdownPct = peakPrice > 0 ? ((currentPrice - peakPrice) / peakPrice) * 100 : null;
+          const peakMarketCap = supplyTokens > 0 && peakPrice > 0 ? peakPrice * supplyTokens : null;
+          // Multi-window volume sums from the same daily candles we already
+          // walked above — no extra API call. This gives an honest "is this
+          // token actually being traded over a longer window" signal so a
+          // single quiet 24h doesn't make a healthy token look UNCLEAR. We
+          // bucket by candle age in ms rather than array index because
+          // GeckoTerminal's return order isn't documented and can drift.
+          const nowMs = Date.now();
+          let vol24h = 0, vol48h = 0, vol7d = 0, vol30d = 0;
+          for (const c of candles) {
+            const tsMs = (Number(c[0]) || 0) * 1000;
+            const volUsd = Number(c[5]) || 0;
+            const ageMs = nowMs - tsMs;
+            if (ageMs < 0) continue;
+            if (ageMs <= 1 * 86400000)  vol24h += volUsd;
+            if (ageMs <= 2 * 86400000)  vol48h += volUsd;
+            if (ageMs <= 7 * 86400000)  vol7d  += volUsd;
+            if (ageMs <= 30 * 86400000) vol30d += volUsd;
+          }
+          priceHistory = {
+            peakPrice,
+            peakTimestamp: peakTs,
+            peakMarketCap,
+            currentPrice,
+            drawdownFromPeakPct: drawdownPct,
+            candleCount: candles.length,
+            // Multi-window volume context. Use these to spot tokens that
+            // look quiet today but are clearly trading over the week or
+            // month. Verdict ladder uses vol7d to promote UNCLEAR → ALIVE
+            // when there's real cumulative activity.
+            volumeWindows: { vol24h, vol48h, vol7d, vol30d },
+          };
+          if (drawdownPct !== null && drawdownPct < -90 && peakPrice > 0) {
+            redFlags.push(`Down ${drawdownPct.toFixed(0)}% from all-time high — price has effectively collapsed from peak.`);
+          } else if (drawdownPct !== null && drawdownPct < -70 && peakPrice > 0) {
+            redFlags.push(`Down ${drawdownPct.toFixed(0)}% from all-time high — significant retracement.`);
+          }
+        }
+      } catch (e) {
+        console.warn("[AUTOPSY] GeckoTerminal OHLCV failed:", e.message);
+      }
+    }
+
+    // --- Verdict re-classification with priceHistory in hand ---
+    // The first-pass verdict couldn't see drawdown-from-peak. Now we can.
+    // Upgrade a generic UNCLEAR / SOFT_RUG to RETRACED when the token is
+    // still trading at a real market cap but is heavily off its highs — the
+    // honest framing for "I know it went really high but is it really that bad?"
+    if (
+      priceHistory && priceHistory.drawdownFromPeakPct !== null &&
+      priceHistory.drawdownFromPeakPct < -70 &&
+      totalLiqUsd >= 500 &&
+      (marketCap === null || marketCap > 25000) &&
+      (verdict.type === "UNCLEAR" || verdict.type === "SOFT_RUG" || verdict.type === "AT_RISK")
+    ) {
+      verdict = { type: "RETRACED", label: "Status: HEAVILY RETRACED — STILL TRADING", severity: "AT_RISK", color: "#F59E0B", icon: "📉" };
+      // Refresh report mode for the upgraded verdict.
+      reportMode = "health-assessment";
+      reportHeadline = "📉 AUTOPSY ON STANDBY";
+      reportSubhead = "Patient is alive but heavily bruised. Health Assessment of a token in a drawdown.";
+    }
+
+    // --- Verdict promotion: low 24h volume but healthy weekly trading ---
+    // The first-pass ALIVE rule requires DexScreener 24h volume ≥ $100, which
+    // mislabels two kinds of token as UNCLEAR:
+    //  1. A healthy token after a single quiet day (7d volume is fine).
+    //  2. A FRESH graduating pump.fun token DexScreener hasn't indexed yet —
+    //     it shows $0 DexScreener liquidity/volume even while trading heavily
+    //     on its new pool (we see the real volume via GeckoTerminal candles).
+    // Promote UNCLEAR → ALIVE when EITHER:
+    //  • vol7d is substantial (≥ $5k) — that volume PROVES liquidity exists
+    //    (you can't trade $5k+/wk against nothing), so missing DexScreener
+    //    liquidity data doesn't mean the token is dead; OR
+    //  • vol7d ≥ $700 AND DexScreener confirms liquidity ≥ $5k (the original
+    //    quiet-day case).
+    const vw = priceHistory && priceHistory.volumeWindows;
+    if (
+      vw && verdict.type === "UNCLEAR" && (
+        vw.vol7d >= 5000 ||
+        (vw.vol7d >= 700 && totalLiqUsd >= 5000)
+      )
+    ) {
+      verdict = { type: "ALIVE", label: "Status: ALIVE & TRADING", severity: "ALIVE", color: "#10B981", icon: "🐔" };
+      reportMode = "health-checkup";
+      reportHeadline = "🚫 AUTOPSY CANCELED";
+      reportSubhead = "Patient is alive and trading. Full Health Checkup of a token doing fine.";
+    }
+    // Refresh lessons after potential verdict upgrade.
+    const lessonsFinal = lessonMap[verdict.type] || lessons;
+
+    // --- Phase 2A: Top Holders Forensic Panel ---
+    // Take the top 10 token accounts and:
+    //   1) Look up each token account's "authority" (.data.parsed.info.owner)
+    //   2) Look up that authority's program-owner — System Program = human wallet;
+    //      a DEX program = LP; a known locker program = locked; the SPL Token
+    //      program itself = self-owned lock (permanent).
+    //   3) For human-wallet holders, walk their token account's signature history,
+    //      grab the OLDEST signature (their first interaction with this token),
+    //      and fetch that transaction to find how much they first received.
+    //   4) Classify acquisition timing (sniper / very_early / early / first_week
+    //      / later) vs the token's pool-creation timestamp, and behavior
+    //      (HELD / ACCUMULATED / REDUCED / EXITED_MOSTLY) by comparing the
+    //      first-received amount to their current balance.
+    const AUTOPSY_SYS_PROGRAM = "11111111111111111111111111111111";
+    let topHolders = [];
+    const holderBreakdown = { sniper: 0, very_early: 0, early: 0, first_week: 0, later: 0, pre_pool: 0, bonding_curve: 0, locker: 0, lp: 0, selflock: 0, program: 0 };
+    // Hoisted: bagsInfo / pumpInfo are populated later (Phase 2D / 2E) but
+    // bondingCurveActive needs the references here. Avoid TDZ by declaring early.
+    let bagsInfo = null;
+    let creatorVerification = null;   // Bags creator social-verification signal (set once bagsInfo resolves)
+    let pumpInfo = null;
+    const dbcBuyerSet = new Set();
+    // Bags/Pump-verified bonding curve gets priority over the on-chain heuristic.
+    // Read as a function so it picks up bagsInfo/pumpInfo once they're populated.
+    // Did this token launch through a bonding curve (Bags DBC / Pump.fun)?
+    // If so, holders who acquired "before the DEX pool" bought ON THE CURVE
+    // before graduation — a legitimate early-buyer path, NOT pre-launch
+    // insiders. lifetime.bondingCurveDetected is unreliable (only fires if the
+    // sampled sig-walk happened to catch the DBC program), so we also trust
+    // the mint-suffix vanity conventions: Pump.fun mints end "pump", Bags
+    // mints commonly end "BAGS". Either is definitive enough to treat
+    // pre-pool acquisition as bonding-curve buying, not insider allocation.
+    const MINT_LOWER = (mint || "").toLowerCase();
+    const isLaunchpadMint = MINT_LOWER.endsWith("pump") || MINT_LOWER.endsWith("bags") || MINT_LOWER.endsWith("bonk") || MINT_LOWER.endsWith("moon");
+    const bondingCurveActive = () => !!(lifetime && lifetime.bondingCurveDetected)
+      || !!(bagsInfo && bagsInfo.dbcBuyersIdentified > 0)
+      || !!(pumpInfo && pumpInfo.bcBuyersIdentified > 0)
+      || isLaunchpadMint;
+    const behaviorBreakdown = { HELD: 0, ACCUMULATED: 0, REDUCED: 0, EXITED_MOSTLY: 0, UNKNOWN: 0 };
+    let lockedSupplyShare = 0;
+    // Authoritative locked-token COUNT from holder classification. This is
+    // the reliable source — it sums actual current balances held in locker
+    // PDAs (Jupiter Lock / Streamflow / self-owned locks), unlike the Phase
+    // 2G creator-trace which only catches lock DEPOSITS the creator wallet
+    // made inside our signature scan window (and badly under-counts: 60M
+    // traced vs 145M actually locked for CLKN). The /api/locks endpoint
+    // can't be used here — it queries by owner=JUPITER_LOCK_PROGRAM which
+    // returns 0 because Jupiter Lock holds tokens in PDAs, not under the
+    // program ID directly.
+    let lockedSupplyTokens = 0;
+    let humanSupplyShare = 0;
+    try {
+      const TOP_N = 100;
+      const targets = largestRaw.slice(0, TOP_N);
+      if (targets.length > 0) {
+        // Step 1: Authority is already on each largestRaw entry (a.owner) —
+        // skipped the per-token-account RPC because getTokenAccounts gave us
+        // the wallet directly.
+        const authorities = targets.map(a => a.owner);
+
+        // Step 2: Authority → program owner (so we can classify). For 100
+        // wallets that's potentially many getMultipleAccounts batches —
+        // chunked into 100s as the RPC accepts.
+        const uniqueAuths = [...new Set(authorities.filter(Boolean))];
+        const authOwnerMap = new Map();
+        for (let i = 0; i < uniqueAuths.length; i += 100) {
+          const chunk = uniqueAuths.slice(i, i + 100);
+          try {
+            const authRes = await rpcCall(`autopsy-auths-${i}`, "getMultipleAccounts", [
+              chunk, { encoding: "base64", dataSlice: { offset: 0, length: 0 } }
+            ]);
+            const authInfos = authRes?.result?.value || [];
+            chunk.forEach((a, j) => authOwnerMap.set(a, authInfos[j]?.owner || null));
+          } catch (e) {
+            console.warn(`[AUTOPSY] auth batch ${i} failed:`, e.message);
+          }
+        }
+
+        // Helper: determine if a pubkey is on the ed25519 curve (real wallet)
+        // vs off-curve (a program-derived address / PDA). Matches the engine
+        // the Holders tool uses to distinguish AMM pool-authority PDAs from
+        // human wallets when both look "System Program owned" to a naive read.
+        const isOnCurveSafe = (pk) => { try { return isOnCurve(pk); } catch { return false; } };
+
+        topHolders = targets.map((acc, i) => {
+          const auth = authorities[i];
+          const authOwner = auth ? authOwnerMap.get(auth) : null;
+          const uiAmount = parseFloat(acc.uiAmount) || 0;
+          const share = supplyTokens > 0 ? uiAmount / supplyTokens : 0;
+          let category, label;
+          if (!auth) { category = "unknown"; label = "Unknown"; }
+          // The full LP-vs-wallet logic, matching what the Holders engine does:
+          //   on-curve = real ed25519 keypair → human wallet
+          //   off-curve + (no account OR System-Program owned) → pool-authority PDA / LP
+          //   off-curve + program owned → that program (locker / DEX / other)
+          // An on-curve wallet with no account info just means it has never paid
+          // for a SOL transaction (received tokens but no SOL itself) — still
+          // a human wallet, NOT an LP.
+          else if (!authOwner &&  isOnCurveSafe(auth)) { category = "wallet"; label = "Human wallet"; }
+          else if (!authOwner && !isOnCurveSafe(auth)) { category = "lp";     label = "Liquidity pool"; }
+          else if (authOwner === AUTOPSY_SYS_PROGRAM && !isOnCurveSafe(auth)) { category = "lp";     label = "Liquidity pool"; }
+          else if (authOwner === AUTOPSY_SYS_PROGRAM) { category = "wallet"; label = "Human wallet"; }
+          else if (DEX_PROGRAMS.has(authOwner)) { category = "lp"; label = PROGRAM_LABELS[authOwner] || "Liquidity pool"; }
+          else if (LOCKER_PROGRAMS.has(authOwner)) { category = "locker"; label = PROGRAM_LABELS[authOwner] || "Token lock"; }
+          else if (TOKEN_PROGRAMS.has(authOwner)) { category = "selflock"; label = "Self-owned lock (permanent)"; }
+          else { category = "program"; label = PROGRAM_LABELS[authOwner] || "Program account"; }
+          if (category === "locker" || category === "selflock") { lockedSupplyShare += share; lockedSupplyTokens += uiAmount; }
+          if (category === "wallet") humanSupplyShare += share;
+          return {
+            rank: i + 1,
+            tokenAccount: acc.address,
+            authority: auth,
+            uiAmount,
+            share,
+            category, label,
+            firstAcquiredAt: null,
+            firstAcquiredAmount: null,
+            behavior: null,
+            acquisitionTiming: null,
+            sigCount: null,
+          };
+        });
+
+        // Step 3: For each wallet holder, walk their token-account history (parallel)
+        const walletHolders = topHolders.filter(h => h.category === "wallet");
+        await Promise.allSettled(walletHolders.map(async (h, idx) => {
+          try {
+            const sigsRes = await rpcCall(`autopsy-sigs-${idx}`, "getSignaturesForAddress", [
+              h.tokenAccount, { limit: 1000 }
+            ]);
+            const sigs = sigsRes?.result || [];
+            h.sigCount = sigs.length;
+            if (sigs.length === 0) return;
+            const oldestSig = sigs[sigs.length - 1];
+            h.firstAcquiredAt = oldestSig.blockTime ? oldestSig.blockTime * 1000 : null;
+            h.firstAcquiredSignature = oldestSig.signature; // for acquisition-source attribution below
+            // Acquisition timing vs pool launch
+            if (h.firstAcquiredAt && pairCreatedMs) {
+              const dms = h.firstAcquiredAt - pairCreatedMs;
+              if (dms < -60_000) {
+                // Had tokens before the current DEX pool existed. If the token
+                // had a Bags/Pump bonding-curve phase, this means they bought
+                // through the bonding curve (a legitimate early-supporter path,
+                // not necessarily an insider pre-allocation).
+                h.acquisitionTiming = bondingCurveActive() ? "bonding_curve" : "pre_pool";
+              }
+              else if (dms < 60_000) h.acquisitionTiming = "sniper";
+              else if (dms < 3_600_000) h.acquisitionTiming = "very_early";
+              else if (dms < 86_400_000) h.acquisitionTiming = "early";
+              else if (dms < 7 * 86_400_000) h.acquisitionTiming = "first_week";
+              else h.acquisitionTiming = "later";
+            }
+            // BAGS-VERIFIED OVERRIDE: if this wallet appears in the DBC pool's
+            // buyer set (a fact, not an inference), upgrade their label from
+            // "pre_pool"/"later" to "bonding_curve" with a verified flag.
+            if (dbcBuyerSet.has(h.authority)) {
+              h.dbcVerified = true;
+              h.acquisitionTiming = "bonding_curve";
+            }
+            // Fetch first tx to read first-received amount
+            const txRes = await rpcCall(`autopsy-tx-${idx}`, "getTransaction", [
+              oldestSig.signature,
+              { encoding: "jsonParsed", maxSupportedTransactionVersion: 0 }
+            ]);
+            const tx = txRes?.result;
+            if (tx?.meta?.postTokenBalances) {
+              const accountKeys = tx.transaction?.message?.accountKeys || [];
+              const post = tx.meta.postTokenBalances.find(b => {
+                const k = accountKeys[b.accountIndex];
+                const kStr = typeof k === "string" ? k : k?.pubkey;
+                return kStr === h.tokenAccount;
+              });
+              if (post?.uiTokenAmount) h.firstAcquiredAmount = parseFloat(post.uiTokenAmount.uiAmount) || 0;
+            }
+            if (h.firstAcquiredAmount !== null && h.firstAcquiredAmount > 0) {
+              const ratio = h.uiAmount / h.firstAcquiredAmount;
+              if (ratio >= 1.10) h.behavior = "ACCUMULATED";
+              else if (ratio >= 0.90) h.behavior = "HELD";
+              else if (ratio >= 0.10) h.behavior = "REDUCED";
+              else h.behavior = "EXITED_MOSTLY";
+            } else {
+              h.behavior = "UNKNOWN";
+            }
+          } catch (e) {
+            console.warn(`[AUTOPSY] holder rank ${h.rank} walk failed:`, e.message);
+          }
+        }));
+
+        // Aggregate breakdowns + extra red flags
+        topHolders.forEach(h => {
+          if (h.acquisitionTiming && holderBreakdown[h.acquisitionTiming] !== undefined) holderBreakdown[h.acquisitionTiming]++;
+          if (h.category === "locker") holderBreakdown.locker++;
+          if (h.category === "lp") holderBreakdown.lp++;
+          if (h.category === "selflock") holderBreakdown.selflock++;
+          if (h.category === "program") holderBreakdown.program++;
+          if (h.behavior && behaviorBreakdown[h.behavior] !== undefined) behaviorBreakdown[h.behavior]++;
+        });
+        if (behaviorBreakdown.EXITED_MOSTLY >= 3) redFlags.push(`${behaviorBreakdown.EXITED_MOSTLY} of the top 10 holders have sold most of their original position — distribution pattern.`);
+        if (holderBreakdown.sniper >= 4) {
+          // Honesty: "insider entry" asserts team coordination we can't prove
+          // from timing alone (snipers are usually bots/public). And on a
+          // launchpad token, buying within a minute of the pool is often just
+          // early bonding-curve buying, not graduation-sniping. Word it for
+          // what it is — concentrated early entry — and name the launchpad case.
+          const launchpad = bondingCurveActive() || isLaunchpadMint;
+          const lp = MINT_LOWER.endsWith("pump") ? "Pump.fun" : "launchpad";
+          redFlags.push(launchpad
+            ? `${holderBreakdown.sniper} of the top 10 bought within the first minute — concentrated early entry. On a ${lp} token this is typically early bonding-curve buyers or snipers/bots, NOT proof of team or insider coordination.`
+            : `${holderBreakdown.sniper} of the top 10 bought within the first minute — heavy early concentration (snipers/bots or coordinated entry; on-chain timing alone can't tell which).`);
+        }
+        if (holderBreakdown.locker + holderBreakdown.selflock === 0 && verdict.type !== "ALIVE" && verdict.type !== "AT_RISK") redFlags.push("None of the top 10 holdings are in a recognized lock — no enforced supply restrictions.");
+      }
+    } catch (err) {
+      console.warn("[AUTOPSY] top-holder analysis failed:", err.message);
+    }
+
+    // --- Phase 2D: Bags.fm API deep integration ---
+    // For Bags.fm tokens we can pull official metadata + creators + the DBC
+    // (bonding-curve) pool key. Walking the DBC pool's signatures gives us
+    // VERIFIED bonding-curve buyer wallets — replacing the "had tokens before
+    // the DEX pool = bonding curve buyer" inference with hard fact.
+    // bagsInfo + dbcBuyerSet hoisted above for TDZ; reuse them here.
+    const BAGS_API_KEY = process.env.BAGS_API_KEY;
+    if (BAGS_API_KEY) {
+      // Initialize an empty bagsInfo upfront. Any single Bags endpoint
+      // returning real data is enough to confirm this is a Bags token —
+      // do NOT gate the integration on a single endpoint (token-launch/info
+      // currently 404s for some mints, including CLKN, and was blocking
+      // everything downstream).
+      const bagsCandidate = {
+        isBagsToken: false,
+        name: null,
+        symbol: null,
+        status: null,
+        launchSignature: null,
+        officialCreators: [],
+        dbcPoolKey: null,
+        dammV2PoolKey: null,
+        dbcSignaturesScanned: 0,
+        dbcBuyersIdentified: 0,
+      };
+
+      // 1) Official creators — the most important call. If this returns
+      // creators, we know it's a Bags token AND we have the operational
+      // wallets.
+      try {
+        const r = await bagsFetch(`token-launch/creator/v3?tokenMint=${mint}`, BAGS_API_KEY);
+        console.log(`[AUTOPSY] Bags creator/v3 status=${r.status} bodyHead=${(r.text || "").slice(0, 300)}`);
+        if (r.status === 200) {
+          const parsed = JSON.parse(r.text);
+          const creators = (Array.isArray(parsed) && parsed)
+            || (Array.isArray(parsed?.response) && parsed.response)
+            || (Array.isArray(parsed?.response?.creators) && parsed.response.creators)
+            || (Array.isArray(parsed?.creators) && parsed.creators)
+            || (Array.isArray(parsed?.data) && parsed.data)
+            || null;
+          if (creators && creators.length > 0) {
+            bagsCandidate.officialCreators = creators.map(c => {
+              const provider = c.provider || c.socialProvider || null;
+              const username = c.providerUsername || c.username || c.handle || c.twitterUsername || null;
+              return {
+                wallet: c.wallet || c.walletAddress || c.walletPubkey || c.creatorWallet || null,
+                provider,
+                username,
+                twitterUsername: c.twitterUsername || (provider === "twitter" ? username : null),
+                // Bags only surfaces a social identity for wallets with a VERIFIED
+                // linked profile — so a provider+handle present here = verified.
+                verified: !!(provider && username),
+                isAdmin: !!c.isAdmin,
+                royaltyBps: c.royaltyBps ?? c.royaltyBasisPoints ?? null,
+              };
+            }).filter(c => c.wallet);
+            if (bagsCandidate.officialCreators.length > 0) {
+              bagsCandidate.isBagsToken = true;
+              console.log(`[AUTOPSY] Bags creator/v3 parsed ${bagsCandidate.officialCreators.length} creators: ${bagsCandidate.officialCreators.map(c => c.wallet.slice(0,8) + "…").join(", ")}`);
+            }
+          } else {
+            console.warn(`[AUTOPSY] Bags creator/v3 returned 200 but no creators array found.`);
+          }
+        }
+      } catch (e) { console.warn("[AUTOPSY] Bags creator/v3 failed:", e.message); }
+
+      // 2) Token launch info — best-effort. May 404 for some mints; if it
+      // works, it gives us name/symbol/status/launchSignature.
+      try {
+        const r = await bagsFetch(`token-launch/info?tokenMint=${mint}`, BAGS_API_KEY);
+        console.log(`[AUTOPSY] Bags info status=${r.status}`);
+        if (r.status === 200) {
+          const parsed = JSON.parse(r.text);
+          const info = parsed?.response?.token || parsed?.response || parsed;
+          if (info && (info.tokenMint || info.status || info.launchSignature || info.symbol || info.name)) {
+            bagsCandidate.isBagsToken = true;
+            bagsCandidate.name = info.name || bagsCandidate.name;
+            bagsCandidate.symbol = info.symbol || bagsCandidate.symbol;
+            bagsCandidate.status = info.status || bagsCandidate.status;
+            bagsCandidate.launchSignature = info.launchSignature || bagsCandidate.launchSignature;
+            if (info.dbcPoolKey) bagsCandidate.dbcPoolKey = info.dbcPoolKey;
+            if (info.dammV2PoolKey) bagsCandidate.dammV2PoolKey = info.dammV2PoolKey;
+          }
+        }
+      } catch (e) { console.warn("[AUTOPSY] Bags token-launch/info failed:", e.message); }
+
+      // Adopt the candidate if any signal confirms it's a Bags token.
+      if (bagsCandidate.isBagsToken) {
+        bagsInfo = bagsCandidate;
+      }
+
+      if (bagsInfo) {
+
+        // Creator social-verification signal. Bags only surfaces a social
+        // identity for fee wallets with a VERIFIED linked profile, so an
+        // official creator carrying a provider+handle = verified/accountable;
+        // a Bags token whose creators are all wallet-only = anonymous fee
+        // earners. Bags-confirmed identity → we can assert it (forensic rule).
+        const ocs = bagsInfo.officialCreators || [];
+        if (ocs.length) {
+          const verified = ocs.filter(c => c.verified && c.username);
+          creatorVerification = {
+            status: verified.length ? "verified" : "anonymous",
+            verifiedCount: verified.length,
+            totalCreators: ocs.length,
+            handles: verified.map(c => ({ provider: c.provider, username: c.username })),
+          };
+        }
+
+        // 3) Pool info — DBC + DAMM V2 pool keys
+        try {
+          const r = await bagsFetch(`token-launch/pool-info?tokenMint=${mint}`, BAGS_API_KEY);
+          console.log(`[AUTOPSY] Bags pool-info status=${r.status}`);
+          if (r.status === 200) {
+            const parsed = JSON.parse(r.text);
+            const info = parsed?.response || parsed;
+            if (info) {
+              // Only overwrite when the call returns a real value — don't
+              // clobber a key we already learned from token-launch/info.
+              if (info.dbcPoolKey) bagsInfo.dbcPoolKey = info.dbcPoolKey;
+              if (info.dammV2PoolKey) bagsInfo.dammV2PoolKey = info.dammV2PoolKey;
+            }
+          }
+        } catch (e) { console.warn("[AUTOPSY] Bags pool-info failed:", e.message); }
+
+        // 3b) Lifetime fees — total project revenue claimed to date.
+        // Forensic signal: how much have the registered creator wallets
+        // actually extracted? A high number + recent activity = active project
+        // operating off creator-fee revenue; zero or stale = abandoned launch.
+        bagsInfo.lifetimeFeesSol = null;
+        try {
+          const r = await bagsFetch(`token-launch/lifetime-fees?tokenMint=${mint}`, BAGS_API_KEY);
+          if (r.status === 200) {
+            const parsed = JSON.parse(r.text);
+            const data = parsed?.success ? parsed.response : parsed;
+            // Bags returns lifetime fees in lamports under various field names
+            // depending on the response shape — be tolerant.
+            const lamports = data?.lifetimeFees ?? data?.totalFees ?? data?.amount ?? null;
+            if (lamports !== null && Number.isFinite(Number(lamports))) {
+              bagsInfo.lifetimeFeesSol = Number(lamports) / 1e9;
+            }
+          }
+        } catch (e) { console.warn("[AUTOPSY] Bags lifetime-fees failed:", e.message); }
+
+        // 3c) Claim events — itemized history of fee claims. Used to compute
+        // claim count + last-claim timestamp ("when did the team last touch
+        // their revenue?") which separates active from abandoned projects.
+        // Bags returns events in chronological order (oldest first) so a
+        // single page of 100 can hide recent claims for active wallets that
+        // have claimed >100 times. Paginate up to 5 pages = 500 events to
+        // catch the actual most-recent claim.
+        bagsInfo.claimEventCount = 0;
+        bagsInfo.lastClaimTimestamp = null;
+        bagsInfo.totalClaimedSol = null;
+        try {
+          let allEvents = [];
+          for (let page = 0; page < 5; page++) {
+            const offset = page * 100;
+            const r = await bagsFetch(`fee-share/token/claim-events?tokenMint=${mint}&mode=offset&limit=100&offset=${offset}`, BAGS_API_KEY);
+            if (r.status !== 200) break;
+            const parsed = JSON.parse(r.text);
+            const events = parsed?.success && parsed.response && Array.isArray(parsed.response.events)
+              ? parsed.response.events : [];
+            if (events.length === 0) break;
+            allEvents.push(...events);
+            if (events.length < 100) break;
+          }
+          bagsInfo.claimEventCount = allEvents.length;
+          let totalLamports = 0;
+          let latestTs = 0;
+          for (const ev of allEvents) {
+            const amt = Number(ev.amount);
+            if (Number.isFinite(amt)) totalLamports += amt;
+            let ts = ev.timestamp;
+            if (typeof ts === "number" || /^\d+$/.test(String(ts))) {
+              let n = Number(ts);
+              if (n < 1e12) n *= 1000;
+              if (n > latestTs) latestTs = n;
+            }
+          }
+          if (totalLamports > 0) bagsInfo.totalClaimedSol = totalLamports / 1e9;
+          if (latestTs > 0) bagsInfo.lastClaimTimestamp = latestTs;
+          console.log(`[AUTOPSY] Bags claim-events: count=${allEvents.length} totalClaimedSol=${totalLamports / 1e9} latestTs=${latestTs ? new Date(latestTs).toISOString() : "—"}`);
+        } catch (e) { console.warn("[AUTOPSY] Bags claim-events failed:", e.message); }
+
+        // 3d) Claim STATS — per-claimer breakdown. Tells us EXACTLY which
+        // wallet claimed how much SOL across the lifetime, along with their
+        // username/social handle. More precise than creator/v3 (which only
+        // shows registered shares; this shows actual collected amounts).
+        bagsInfo.claimers = [];
+        try {
+          const r = await bagsFetch(`token-launch/claim-stats?tokenMint=${mint}`, BAGS_API_KEY);
+          if (r.status === 200) {
+            const parsed = JSON.parse(r.text);
+            const claimers = (Array.isArray(parsed?.response) && parsed.response)
+              || (Array.isArray(parsed) && parsed)
+              || null;
+            if (claimers) {
+              bagsInfo.claimers = claimers.map(c => ({
+                wallet: c.wallet || null,
+                username: c.username || c.bagsUsername || c.providerUsername || null,
+                provider: c.provider || null,
+                twitterUsername: c.twitterUsername || null,
+                pfp: c.pfp || null,
+                totalClaimedSol: c.totalClaimed != null ? Number(c.totalClaimed) / 1e9 : null,
+                royaltyBps: c.royaltyBps ?? null,
+                isCreator: !!c.isCreator,
+                isAdmin: !!c.isAdmin,
+              })).filter(c => c.wallet);
+              console.log(`[AUTOPSY] Bags claim-stats: ${bagsInfo.claimers.length} claimers — ${bagsInfo.claimers.map(c => `${c.username || c.wallet.slice(0,6)}=${(c.totalClaimedSol || 0).toFixed(2)}SOL`).join(", ")}`);
+            }
+          }
+        } catch (e) { console.warn("[AUTOPSY] Bags claim-stats failed:", e.message); }
+
+        // 4) Walk the DBC pool's signatures via Helius RPC, batch-parse via
+        // Helius Enhanced to identify verified bonding-curve buyer wallets.
+        // For each parsed tx, any tokenTransfer FROM dbcPoolKey of OUR mint
+        // identifies a real DBC buyer.
+        if (bagsInfo.dbcPoolKey) {
+          try {
+            const dbcSigs = [];
+            let dbcBefore = undefined;
+            for (let p = 0; p < 2; p++) {
+              const params = dbcBefore ? [bagsInfo.dbcPoolKey, { limit: 1000, before: dbcBefore }] : [bagsInfo.dbcPoolKey, { limit: 1000 }];
+              const r = await rpcCall(`autopsy-dbc-sigs-${p}`, "getSignaturesForAddress", params);
+              const ss = r?.result || [];
+              if (ss.length === 0) break;
+              dbcSigs.push(...ss);
+              if (ss.length < 1000) break;
+              dbcBefore = ss[ss.length - 1].signature;
+            }
+            bagsInfo.dbcSignaturesScanned = dbcSigs.length;
+            if (dbcSigs.length > 0) {
+              // Sample up to 100 sigs evenly across the lifetime
+              const sampled = [];
+              const SAMPLE_SIZE = 100;
+              const step = Math.max(1, Math.floor(dbcSigs.length / SAMPLE_SIZE));
+              for (let i = 0; i < dbcSigs.length; i += step) {
+                sampled.push(dbcSigs[i].signature);
+                if (sampled.length >= SAMPLE_SIZE) break;
+              }
+              try {
+                const dRes = await fetch(`https://api.helius.xyz/v0/transactions?api-key=${HELIUS_KEY}`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ transactions: sampled })
+                });
+                const dData = await dRes.json();
+                if (Array.isArray(dData)) {
+                  for (const tx of dData) {
+                    if (!tx || !Array.isArray(tx.tokenTransfers)) continue;
+                    for (const tt of tx.tokenTransfers) {
+                      if (tt && tt.mint === mint && tt.fromUserAccount === bagsInfo.dbcPoolKey && tt.toUserAccount) {
+                        dbcBuyerSet.add(tt.toUserAccount);
+                      }
+                    }
+                  }
+                }
+                bagsInfo.dbcBuyersIdentified = dbcBuyerSet.size;
+              } catch (e) { console.warn("[AUTOPSY] DBC pool parse failed:", e.message); }
+            }
+          } catch (e) { console.warn("[AUTOPSY] DBC sig walk failed:", e.message); }
+        }
+      }
+    }
+    console.log(`[AUTOPSY] Bags integration: ${bagsInfo ? `isBagsToken=true creators=${bagsInfo.officialCreators.length} dbcSigs=${bagsInfo.dbcSignaturesScanned} dbcBuyers=${bagsInfo.dbcBuyersIdentified}` : "not a Bags token"}`);
+
+    // --- Phase 2H: Jupiter independent cross-verification ---
+    // Jupiter's v2 token search endpoint returns far more than "is listed".
+    // It gives us independent holder count, market data, audit data
+    // (mint/freeze authority status from Jupiter's POV), launchpad
+    // confirmation, organic-trade score, and devMigrations/devMints —
+    // the LATTER is the definitive proof that the on-chain genesis-fee-payer
+    // wallet is a platform launcher (a wallet with 1956 migrations is not
+    // a project dev). Cross-references all this against our own measurements
+    // so the user sees agreement / disagreement.
+    let jupiterInfo = null;
+    try {
+      const r = await fetch(`https://lite-api.jup.ag/tokens/v2/search?query=${mint}`, {
+        signal: AbortSignal.timeout(8000),
+      });
+      if (r.ok) {
+        const data = await r.json();
+        if (Array.isArray(data) && data.length > 0) {
+          const t = data.find(d => d.id === mint) || data[0];
+          jupiterInfo = {
+            listed: true,
+            name: t.name || null,
+            symbol: t.symbol || null,
+            icon: t.icon || null,
+            tags: Array.isArray(t.tags) ? t.tags : [],
+            launchpad: t.launchpad || null,
+            metaLaunchpad: t.metaLaunchpad || null,
+            graduatedAt: t.graduatedAt || null,
+            graduatedPool: t.graduatedPool || null,
+            holderCount: t.holderCount ?? null,
+            fdv: t.fdv ?? null,
+            mcap: t.mcap ?? null,
+            usdPrice: t.usdPrice ?? null,
+            liquidity: t.liquidity ?? null,
+            twitter: t.twitter || null,
+            telegram: t.telegram || null,
+            website: t.website || null,
+            stats24h: t.stats24h || null,
+            stats6h: t.stats6h || null,
+            // Audit block — Jupiter's independent reading of mint/freeze
+            // authority status + top-holder concentration + dev-wallet stats.
+            audit: t.audit ? {
+              mintAuthorityDisabled: !!t.audit.mintAuthorityDisabled,
+              freezeAuthorityDisabled: !!t.audit.freezeAuthorityDisabled,
+              topHoldersPercentage: t.audit.topHoldersPercentage ?? null,
+              devMigrations: t.audit.devMigrations ?? null,
+              devMints: t.audit.devMints ?? null,
+            } : null,
+            organicScore: t.organicScore ?? null,
+            organicScoreLabel: t.organicScoreLabel || null,
+            // The on-chain "dev" wallet per Jupiter = genesis-tx fee payer.
+            // For platform launches (Bags / Pump) this is the PLATFORM wallet,
+            // and audit.devMigrations is the smoking gun (thousands of migrations).
+            onChainDevPerJupiter: t.dev || null,
+          };
+        }
+      } else if (r.status === 404) {
+        jupiterInfo = { listed: false };
+      }
+    } catch (e) {
+      console.warn("[AUTOPSY] Jupiter v2 search failed:", e.message);
+    }
+    console.log(`[AUTOPSY] Jupiter cross-verify: ${jupiterInfo ? (jupiterInfo.listed ? `holderCount=${jupiterInfo.holderCount} mcap=${jupiterInfo.mcap} tags=${jupiterInfo.tags.join(",")} devMigrations=${jupiterInfo.audit?.devMigrations}` : "not listed") : "no response"}`);
+
+    // --- Phase 2E: Pump.fun frontend API integration ---
+    // Symmetric to Bags: pull official metadata + creator + full pre-graduation
+    // price history from Pump.fun's unauthenticated frontend API. Then walk
+    // the bonding-curve account's signatures for verified buyers (same trick
+    // as Bags DBC). Unlike GeckoTerminal which only sees post-graduation data,
+    // Pump.fun's chart goes all the way back to mint.
+    // pumpInfo hoisted above for TDZ; reuse it here.
+    if (!bagsInfo) {
+      try {
+        const r = await fetch(`https://frontend-api.pump.fun/coins/${mint}`, {
+          headers: { "User-Agent": "Mozilla/5.0 (compatible; CluckNorrisAutopsy/1.0)" },
+          signal: AbortSignal.timeout(10000),
+        });
+        if (r.ok) {
+          const data = await r.json();
+          if (data && data.mint === mint) {
+            pumpInfo = {
+              isPumpToken: true,
+              name: data.name || null,
+              symbol: data.symbol || null,
+              createdTimestamp: data.created_timestamp || null,
+              creator: data.creator || null,
+              complete: !!data.complete, // graduated?
+              marketCapUsd: data.usd_market_cap || null,
+              raydiumPool: data.raydium_pool || null,
+              twitter: data.twitter || null,
+              telegram: data.telegram || null,
+              website: data.website || null,
+              imageUri: data.image_uri || null,
+              bondingCurve: data.bonding_curve || null,
+              associatedBondingCurve: data.associated_bonding_curve || null,
+              bcSignaturesScanned: 0,
+              bcBuyersIdentified: 0,
+              priceHistory: null,
+            };
+          }
+        }
+      } catch (e) { console.warn("[AUTOPSY] Pump.fun coins fetch failed:", e.message); }
+    }
+
+    // Synthesized recognition for graduated Pump tokens. Pump's frontend API
+    // only serves tokens still on the bonding curve — once a token graduates
+    // it 404s, so pumpInfo stays null and the launchpad card never shows even
+    // though the mint suffix proves it's a Pump.fun token. Synthesize minimal
+    // recognition (it's a Pump token, and graduated since a DEX pool exists)
+    // so the card shows its launchpad provenance. Creator is filled in after
+    // creator detection from the ST-resolved creator; bonding-curve buyer
+    // stats stay 0 (the API that would provide them is gone for graduated
+    // tokens — we're honest about that rather than faking it).
+    if (!pumpInfo && !bagsInfo && MINT_LOWER.endsWith("pump")) {
+      // Graduation status MUST come from a reliable source — NOT from whether
+      // GeckoTerminal has candles (it indexes on-curve pump pools too, so
+      // price history is NOT proof of graduation). Ask Solana Tracker: a pool
+      // with market "pumpfun" is still on the bonding curve. This getTokenInfo
+      // call is cached and reused by the creator lookup below — no double fetch.
+      let stMarket = null;
+      try { stMarket = await solanaTracker.getTokenMarketStatus(mint); } catch (e) { /* degrade */ }
+      pumpInfo = {
+        isPumpToken: true,
+        synthesized: true,
+        symbol: symbol || null,
+        // graduated only when ST confirms a non-curve market; if ST is
+        // unavailable, leave null (unknown) rather than guessing wrong.
+        complete: stMarket ? stMarket.graduated : null,
+        onBondingCurve: stMarket ? stMarket.onBondingCurve : null,
+        curvePercentage: stMarket ? stMarket.curvePercentage : null,
+        market: stMarket ? stMarket.market : null,
+        stLiquidityUsd: stMarket ? stMarket.liquidityUsd : null,
+        creator: null,            // filled post-creator-detection
+        bondingCurve: null,
+        bcSignaturesScanned: 0,
+        bcBuyersIdentified: 0,
+        priceHistory: null,
+      };
+      console.log(`[AUTOPSY] Pump.fun: synthesized recognition — market=${stMarket?.market || "?"} graduated=${stMarket?.graduated} curve=${stMarket?.curvePercentage}% stLiq=$${stMarket?.liquidityUsd}`);
+    }
+
+    // Pump.fun candlestick history — full chart back to mint (the OHLCV gap
+    // fix). Skip for synthesized (graduated) tokens — the API won't have them.
+    if (pumpInfo && !pumpInfo.synthesized) {
+      try {
+        const r = await fetch(`https://frontend-api.pump.fun/candlesticks/${mint}?offset=0&limit=1000&timeframe=5`, {
+          headers: { "User-Agent": "Mozilla/5.0 (compatible; CluckNorrisAutopsy/1.0)" },
+          signal: AbortSignal.timeout(15000),
+        });
+        if (r.ok) {
+          const data = await r.json();
+          if (Array.isArray(data) && data.length > 0) {
+            let peakPrice = 0, peakTs = 0;
+            for (const c of data) {
+              const close = Number(c.close) || 0;
+              if (close > peakPrice) { peakPrice = close; peakTs = (c.timestamp || 0) * 1000; }
+            }
+            const latest = data[data.length - 1];
+            const pumpCurrentPrice = priceUsd || Number(latest?.close) || 0;
+            const drawdown = peakPrice > 0 ? ((pumpCurrentPrice - peakPrice) / peakPrice) * 100 : null;
+            pumpInfo.priceHistory = {
+              peakPrice,
+              peakTimestamp: peakTs,
+              peakMarketCap: supplyTokens > 0 && peakPrice > 0 ? peakPrice * supplyTokens : null,
+              currentPrice: pumpCurrentPrice,
+              drawdownFromPeakPct: drawdown,
+              candleCount: data.length,
+              source: "Pump.fun",
+            };
+            // Override GeckoTerminal-derived priceHistory if Pump's is fuller
+            // (Pump.fun includes pre-graduation candles GeckoTerminal can't see)
+            if (!priceHistory || data.length > (priceHistory.candleCount || 0)) {
+              priceHistory = pumpInfo.priceHistory;
+            }
+          }
+        }
+      } catch (e) { console.warn("[AUTOPSY] Pump.fun candlesticks failed:", e.message); }
+    }
+
+    // Walk Pump.fun bonding-curve account for verified buyers (same as Bags DBC)
+    if (pumpInfo && pumpInfo.bondingCurve) {
+      try {
+        const bcSigs = [];
+        let bcBefore = undefined;
+        for (let p = 0; p < 2; p++) {
+          const params = bcBefore ? [pumpInfo.bondingCurve, { limit: 1000, before: bcBefore }] : [pumpInfo.bondingCurve, { limit: 1000 }];
+          const sigRes = await rpcCall(`autopsy-pump-sigs-${p}`, "getSignaturesForAddress", params);
+          const ss = sigRes?.result || [];
+          if (ss.length === 0) break;
+          bcSigs.push(...ss);
+          if (ss.length < 1000) break;
+          bcBefore = ss[ss.length - 1].signature;
+        }
+        pumpInfo.bcSignaturesScanned = bcSigs.length;
+        if (bcSigs.length > 0) {
+          const sampled = [];
+          const SAMPLE_SIZE = 100;
+          const step = Math.max(1, Math.floor(bcSigs.length / SAMPLE_SIZE));
+          for (let i = 0; i < bcSigs.length; i += step) {
+            sampled.push(bcSigs[i].signature);
+            if (sampled.length >= SAMPLE_SIZE) break;
+          }
+          const dRes = await fetch(`https://api.helius.xyz/v0/transactions?api-key=${HELIUS_KEY}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ transactions: sampled })
+          });
+          const dData = await dRes.json();
+          if (Array.isArray(dData)) {
+            for (const tx of dData) {
+              if (!tx || !Array.isArray(tx.tokenTransfers)) continue;
+              for (const tt of tx.tokenTransfers) {
+                if (tt && tt.mint === mint && tt.fromUserAccount === pumpInfo.bondingCurve && tt.toUserAccount) {
+                  dbcBuyerSet.add(tt.toUserAccount); // unified set — Bags + Pump both feed into here
+                }
+              }
+            }
+          }
+          pumpInfo.bcBuyersIdentified = dbcBuyerSet.size - (bagsInfo?.dbcBuyersIdentified || 0);
+        }
+      } catch (e) { console.warn("[AUTOPSY] Pump bonding curve walk failed:", e.message); }
+    }
+    console.log(`[AUTOPSY] Pump.fun integration: ${pumpInfo ? `isPumpToken=true complete=${pumpInfo.complete} bcSigs=${pumpInfo.bcSignaturesScanned} bcBuyers=${pumpInfo.bcBuyersIdentified}` : "not a Pump token"}`);
+
+    // (KNOWN_CEX_WALLETS is now a module-level constant — shared with the free
+    // autopsy concentration calc. Used below to refine acquisition labels.)
+
+    // --- Phase 2D/2E post-pass: tag fee-receiver wallets on the holder rows ---
+    // For Bags tokens, the creator/v3 endpoint returns every wallet entitled
+    // to creator-fee royalties (with royaltyBps). For Pump.fun tokens, the
+    // coins endpoint returns the launch creator. These ARE the project's
+    // operational wallets — they receive the cash. We tag any top-100 holder
+    // whose authority matches as a `bagsFeeWallet` / `pumpCreator` so the UI
+    // can surface a prominent badge and the AI prompt can use it. Generic fix
+    // for ANY Bags token, not CLKN-specific.
+    const projectFeeWalletMap = new Map(); // wallet → { source, royaltyBps?, username?, provider? }
+    if (bagsInfo && Array.isArray(bagsInfo.officialCreators)) {
+      for (const c of bagsInfo.officialCreators) {
+        if (c.wallet) {
+          projectFeeWalletMap.set(c.wallet, {
+            source: "bags",
+            royaltyBps: c.royaltyBps,
+            username: c.username,
+            provider: c.provider,
+            isAdmin: c.isAdmin,
+          });
+        }
+      }
+    }
+    if (pumpInfo && pumpInfo.creator) {
+      // Pump creator gets a separate badge; if it ALSO matches a Bags receiver
+      // (rare cross-launch case), the Bags entry wins for label clarity.
+      if (!projectFeeWalletMap.has(pumpInfo.creator)) {
+        projectFeeWalletMap.set(pumpInfo.creator, { source: "pump" });
+      }
+    }
+    if (projectFeeWalletMap.size > 0 && Array.isArray(topHolders)) {
+      for (const h of topHolders) {
+        const w = h.authority || h.wallet;
+        const meta = w ? projectFeeWalletMap.get(w) : null;
+        if (meta) {
+          h.projectFeeWallet = meta;
+          // Royalty share string for badge display.
+          if (meta.royaltyBps != null) {
+            h.projectFeeRoyaltyPct = Number(meta.royaltyBps) / 100;
+          }
+        }
+      }
+    }
+
+    // --- Phase 2C: Acquisition-source attribution + distributors ---
+    // For each wallet holder, fetch their first-tx via the Helius Enhanced API
+    // and classify HOW they acquired their tokens:
+    //   BOUGHT   — via a DEX swap
+    //   TRANSFER — sent directly from another wallet (airdrop / gift / OTC)
+    //   MINTED   — direct mint instruction (initial allocation from creator)
+    // For TRANSFER cases we capture the source wallet, then aggregate to find
+    // "distributors": wallets that sent tokens to multiple top holders (the
+    // signal that says "this is an airdrop / bulk distribution event").
+    let distributors = [];
+    try {
+      // Include wallets + lockers + selflocks. A team-distribution wallet may
+      // have sent tokens both to human holders AND to lock contracts; we want
+      // to show ALL of those recipients with the right label, not just the
+      // wallet-side ones. Excludes LP and generic program accounts (those
+      // aren't normal distribution targets).
+      const walletHoldersAll = topHolders.filter(h =>
+        h.category === "wallet" || h.category === "locker" || h.category === "selflock"
+      );
+      const firstSigsToFetch = walletHoldersAll
+        .filter(h => h.firstAcquiredSignature)
+        .map(h => h.firstAcquiredSignature);
+      if (firstSigsToFetch.length > 0) {
+        const acqUrl = `https://api.helius.xyz/v0/transactions?api-key=${HELIUS_KEY}`;
+        const acqRes = await fetch(acqUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ transactions: firstSigsToFetch.slice(0, 100) })
+        });
+        const acqData = await acqRes.json();
+        const acqMap = new Map();
+        if (Array.isArray(acqData)) for (const tx of acqData) { if (tx?.signature) acqMap.set(tx.signature, tx); }
+        for (const h of walletHoldersAll) {
+          const tx = acqMap.get(h.firstAcquiredSignature);
+          if (!tx) { h.acquisitionType = "UNKNOWN"; continue; }
+          const tts = Array.isArray(tx.tokenTransfers) ? tx.tokenTransfers : [];
+          // Find the transfer where THIS wallet received OUR mint
+          const ours = tts.find(tt => tt && tt.mint === mint && tt.toUserAccount === h.authority);
+          if (ours) {
+            if (!ours.fromUserAccount) {
+              h.acquisitionType = "MINTED"; h.acquisitionSource = null;
+            } else if (tx.type === "SWAP") {
+              h.acquisitionType = "BOUGHT"; h.acquisitionSource = ours.fromUserAccount;
+            } else {
+              h.acquisitionType = "TRANSFER"; h.acquisitionSource = ours.fromUserAccount;
+            }
+          } else {
+            if (tx.type === "SWAP") h.acquisitionType = "BOUGHT";
+            else if (tx.type === "TOKEN_MINT") h.acquisitionType = "MINTED";
+            else h.acquisitionType = "OTHER";
+          }
+        }
+
+        // --- Refine acquisition sources: distinguish CEX withdrawals and pool
+        // routing from genuine wallet-to-wallet transfers. Currently anything
+        // not classified as SWAP is "TRANSFER" — but most of those are actually
+        // Coinbase/Binance withdrawals (which are real users withdrawing from
+        // an exchange, not airdrop recipients) or Jupiter routing through pool
+        // authorities (which is really a BUY). We look up each source's owner
+        // program to refine the label.
+        const allSourceAddrs = new Set();
+        for (const h of walletHoldersAll) { if (h.acquisitionSource) allSourceAddrs.add(h.acquisitionSource); }
+        const sourceArr = [...allSourceAddrs];
+        const sourceOwnerMap = new Map();
+        for (let i = 0; i < sourceArr.length; i += 100) {
+          try {
+            const so = await rpcCall(`autopsy-src-${i}`, "getMultipleAccounts", [
+              sourceArr.slice(i, i + 100),
+              { encoding: "base64", dataSlice: { offset: 0, length: 0 } }
+            ]);
+            const sInfos = so?.result?.value || [];
+            sourceArr.slice(i, i + 100).forEach((a, j) => sourceOwnerMap.set(a, sInfos[j]?.owner || null));
+          } catch (e) { console.warn(`[AUTOPSY] source batch ${i} failed:`, e.message); }
+        }
+        for (const h of walletHoldersAll) {
+          if (!h.acquisitionSource) continue;
+          const src = h.acquisitionSource;
+          const sOwner = sourceOwnerMap.get(src);
+          if (KNOWN_CEX_WALLETS[src]) {
+            h.acquisitionType = "CEX_WITHDRAWAL";
+            h.acquisitionSourceLabel = KNOWN_CEX_WALLETS[src];
+          } else if (sOwner && DEX_PROGRAMS.has(sOwner)) {
+            // Source is owned by a DEX program — this was actually a swap routed
+            // through that pool, not a wallet-to-wallet transfer.
+            h.acquisitionType = "BOUGHT";
+            h.acquisitionSourceLabel = PROGRAM_LABELS[sOwner] || "DEX pool";
+          } else if (sOwner && LOCKER_PROGRAMS.has(sOwner)) {
+            h.acquisitionType = "LOCK_UNLOCK";
+            h.acquisitionSourceLabel = PROGRAM_LABELS[sOwner] || "Token lock";
+          } else if (sOwner && sOwner !== "11111111111111111111111111111111") {
+            // Source is owned by SOME program (not the System Program), which
+            // means it isn't a human wallet — it's a PDA / program-controlled
+            // account. Even if we don't have a friendly label for the owning
+            // program, we know this wasn't a wallet-to-wallet transfer.
+            // Falling back to the program-id short hash is honest and stops
+            // it from being misread as an insider airdrop.
+            h.acquisitionType = "PROGRAM_ROUTE";
+            h.acquisitionSourceLabel = PROGRAM_LABELS[sOwner] || `Program ${sOwner.slice(0, 6)}…${sOwner.slice(-4)}`;
+            h.acquisitionProgramId = sOwner;
+          }
+          // else: source IS owned by the System Program → genuine human-wallet
+          // sender → keep as TRANSFER.
+        }
+
+        // Aggregate distributors: source wallets that sent tokens to 2+ top holders.
+        // Crucially, ONLY count genuine wallet-to-wallet TRANSFERs after the
+        // refinement above — CEX withdrawals and pool routing don't count.
+        const distMap = new Map();
+        for (const h of walletHoldersAll) {
+          if (h.acquisitionType === "TRANSFER" && h.acquisitionSource) {
+            const cur = distMap.get(h.acquisitionSource) || {
+              recipients: [], totalShare: 0,
+              lockedRecipients: 0, walletRecipients: 0, lockedShare: 0, walletShare: 0,
+            };
+            const isLocker = h.category === "locker" || h.category === "selflock";
+            cur.recipients.push({
+              rank: h.rank,
+              authority: h.authority,
+              share: h.share,
+              category: h.category,
+              label: h.label,
+              isLocker,
+              firstAcquiredAmount: h.firstAcquiredAmount || null,
+              currentBalance: h.uiAmount || 0,
+            });
+            cur.totalShare += h.share || 0;
+            if (isLocker) {
+              cur.lockedRecipients++;
+              cur.lockedShare += h.share || 0;
+            } else {
+              cur.walletRecipients++;
+              cur.walletShare += h.share || 0;
+            }
+            distMap.set(h.acquisitionSource, cur);
+          }
+        }
+        // Threshold lowered to 1 — even a single-recipient distributor is
+        // worth surfacing now that each row shows the actual recipient list
+        // with categories. Sort by total recipient count desc.
+        distributors = [...distMap.entries()]
+          .filter(([_, info]) => info.recipients.length >= 1)
+          .map(([source, info]) => ({
+            sourceWallet: source,
+            recipientsInTop20: info.recipients.length,
+            walletRecipientsInTop20: info.walletRecipients,
+            lockedRecipientsInTop20: info.lockedRecipients,
+            totalShareDistributed: info.totalShare,
+            walletShareDistributed: info.walletShare,
+            lockedShareDistributed: info.lockedShare,
+            recipients: info.recipients,
+            // Filled in by the distributor-attribution pass below
+            firstAcquiredAt: null,
+            firstAcquiredSignature: null,
+            acquisitionType: null,
+            acquisitionTiming: null,
+          }))
+          .sort((a, b) => b.recipientsInTop20 - a.recipientsInTop20);
+        // Tag each distributor with whether they're a VERIFIED team wallet
+        // (Bags/Pump official creator). A verified team wallet doing
+        // distribution is normal migration / airdrop / team allocation — not
+        // an insider rug. The forensic interpretation is completely different.
+        for (const d of distributors) {
+          d.isVerifiedTeamWallet = projectFeeWalletMap && projectFeeWalletMap.has(d.sourceWallet);
+        }
+        // Red flag only when distributor is NOT a verified team wallet AND
+        // they're sending to actual human WALLETS (not locks). Sending to
+        // locks is a positive supply-removal signal, the opposite of an
+        // airdrop / insider distribution.
+        const topDist = distributors[0];
+        if (topDist && topDist.walletRecipientsInTop20 >= 5 && !topDist.isVerifiedTeamWallet) {
+          redFlags.push(`One wallet (${topDist.sourceWallet.slice(0, 8)}…) distributed tokens to ${topDist.walletRecipientsInTop20} of the top 20 human-holder wallets — bulk-distribution / airdrop source (NOT a verified team wallet — investigate whether this is insider distribution).`);
+        } else if (topDist && topDist.walletRecipientsInTop20 >= 3 && !topDist.isVerifiedTeamWallet) {
+          redFlags.push(`One wallet sent tokens to ${topDist.walletRecipientsInTop20} top-20 human holders — concentrated distribution source.`);
+        } else if (topDist && topDist.isVerifiedTeamWallet) {
+          console.log(`[AUTOPSY] Verified team-wallet distribution suppressed from red flags: source=${topDist.sourceWallet.slice(0,8)}… recipients=${topDist.recipientsInTop20} (wallets=${topDist.walletRecipientsInTop20}, locks=${topDist.lockedRecipientsInTop20})`);
+        }
+
+        // --- Distributor acquisition attribution ---
+        // For each identified distributor, figure out HOW they got the tokens
+        // they later distributed. The classic "bought big at launch then
+        // airdropped to past supporters" pattern shows up as
+        // acquisitionType=BOUGHT + acquisitionTiming=sniper/bonding_curve.
+        const DIST_CAP = Math.min(distributors.length, 5);
+        await Promise.allSettled(distributors.slice(0, DIST_CAP).map(async (dist, di) => {
+          try {
+            const tacRes = await rpcCall(`autopsy-dist-tac-${di}`, "getTokenAccountsByOwner", [
+              dist.sourceWallet, { mint }, { encoding: "jsonParsed" }
+            ]);
+            const accs = tacRes?.result?.value || [];
+            if (accs.length === 0) return;
+            const tac = accs[0].pubkey;
+            const distSigsRes = await rpcCall(`autopsy-dist-sigs-${di}`, "getSignaturesForAddress", [
+              tac, { limit: 1000 }
+            ]);
+            const distSigs = distSigsRes?.result || [];
+            if (distSigs.length === 0) return;
+            const oldest = distSigs[distSigs.length - 1];
+            dist.firstAcquiredAt = oldest.blockTime ? oldest.blockTime * 1000 : null;
+            dist.firstAcquiredSignature = oldest.signature;
+            // Timing classification (matches the same buckets as top holders)
+            if (dist.firstAcquiredAt && pairCreatedMs) {
+              const dms = dist.firstAcquiredAt - pairCreatedMs;
+              if (dms < -60_000) dist.acquisitionTiming = bondingCurveActive() ? "bonding_curve" : "pre_pool";
+              else if (dms < 60_000) dist.acquisitionTiming = "sniper";
+              else if (dms < 3_600_000) dist.acquisitionTiming = "very_early";
+              else if (dms < 86_400_000) dist.acquisitionTiming = "early";
+              else if (dms < 7 * 86_400_000) dist.acquisitionTiming = "first_week";
+              else dist.acquisitionTiming = "later";
+            }
+          } catch (e) {
+            console.warn(`[AUTOPSY] distributor ${di} history failed:`, e.message);
+          }
+        }));
+
+        // Batch-fetch parsed first-txs for distributors via Helius Enhanced
+        const distSigsToFetch = distributors.slice(0, DIST_CAP).filter(d => d.firstAcquiredSignature).map(d => d.firstAcquiredSignature);
+        if (distSigsToFetch.length > 0) {
+          try {
+            const dUrl = `https://api.helius.xyz/v0/transactions?api-key=${HELIUS_KEY}`;
+            const dRes = await fetch(dUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ transactions: distSigsToFetch })
+            });
+            const dData = await dRes.json();
+            const dMap = new Map();
+            if (Array.isArray(dData)) for (const t of dData) { if (t?.signature) dMap.set(t.signature, t); }
+            for (const dist of distributors.slice(0, DIST_CAP)) {
+              const tx = dMap.get(dist.firstAcquiredSignature);
+              if (!tx) { dist.acquisitionType = "UNKNOWN"; continue; }
+              const tts = Array.isArray(tx.tokenTransfers) ? tx.tokenTransfers : [];
+              const ours = tts.find(tt => tt && tt.mint === mint && tt.toUserAccount === dist.sourceWallet);
+              if (ours) {
+                if (!ours.fromUserAccount) dist.acquisitionType = "MINTED";
+                else if (tx.type === "SWAP") dist.acquisitionType = "BOUGHT";
+                else dist.acquisitionType = "TRANSFER";
+              } else {
+                if (tx.type === "SWAP") dist.acquisitionType = "BOUGHT";
+                else if (tx.type === "TOKEN_MINT") dist.acquisitionType = "MINTED";
+                else dist.acquisitionType = "OTHER";
+              }
+            }
+          } catch (e) {
+            console.warn("[AUTOPSY] distributor enhanced fetch failed:", e.message);
+          }
+        }
+
+        // Promote one final red flag if a distributor bought-then-distributed
+        const buyerDistributor = distributors.find(d =>
+          d.acquisitionType === "BOUGHT" &&
+          (d.acquisitionTiming === "sniper" || d.acquisitionTiming === "very_early" || d.acquisitionTiming === "bonding_curve") &&
+          d.recipientsInTop20 >= 3
+        );
+        if (buyerDistributor) {
+          redFlags.push(`A wallet bought a large position at launch (${buyerDistributor.acquisitionTiming}) and then distributed it to ${buyerDistributor.recipientsInTop20} top-20 holders — classic "buy big then airdrop" pattern.`);
+        }
+      }
+    } catch (e) {
+      console.warn("[AUTOPSY] acquisition attribution failed:", e.message);
+    }
+
+    // --- Creator status: did the creator wallet keep or sell their stake? ---
+    // Cross-reference the creator wallet against the top holders. For Bags
+    // tokens we use the OFFICIAL creator wallet from /token-launch/creator/v3
+    // (which often includes a Twitter handle) — far more accurate than the
+    // "genesis tx fee payer" heuristic (which catches the Bags platform).
+    let creatorStatus = null;
+    let effectiveCreatorWallet = lifetime?.creatorWallet || null;
+    let effectiveCreatorSource = "genesis-tx-fee-payer";
+    let bagsCreatorMeta = null;
+    if (bagsInfo && bagsInfo.officialCreators && bagsInfo.officialCreators.length > 0) {
+      // Prefer the first admin creator; fall back to the first creator listed.
+      const admin = bagsInfo.officialCreators.find(c => c.isAdmin) || bagsInfo.officialCreators[0];
+      effectiveCreatorWallet = admin.wallet;
+      effectiveCreatorSource = "bags-official";
+      bagsCreatorMeta = admin;
+    } else if (pumpInfo && pumpInfo.creator) {
+      effectiveCreatorWallet = pumpInfo.creator;
+      effectiveCreatorSource = "pump-official";
+    } else {
+      // Bags/Pump platform APIs didn't return a creator. Before trusting the
+      // genesis-tx fee payer (which on launchpad tokens is the PLATFORM wallet
+      // — the shared Bags/Pump address that paid for thousands of launches,
+      // NOT the project team), ask Solana Tracker. Its indexer returns the
+      // real token creator even for graduated Pump.fun tokens where Pump's own
+      // API no longer serves pre-graduation data. This is what stops us
+      // fingering the platform wallet as "the dev" and falsely narrating
+      // "creator exited." Pump mints (…pump suffix) are flagged so we never
+      // fall back to the genesis payer for them.
+      const isPumpMint = typeof mint === "string" && mint.toLowerCase().endsWith("pump");
+      let stCreator = null;
+      try { stCreator = await solanaTracker.getTokenCreator(mint); } catch (e) { /* degrade */ }
+      if (stCreator && stCreator.wallet) {
+        effectiveCreatorWallet = stCreator.wallet;
+        effectiveCreatorSource = "solana-tracker";
+      } else if (bagsInfo || pumpInfo || isPumpMint) {
+        // Known launchpad token but NO source could give us the real creator.
+        // Refuse to show the genesis fee payer (platform wallet) as the dev.
+        effectiveCreatorWallet = null;
+        effectiveCreatorSource = "unverified-platform-launch";
+        redFlags.push(
+          bagsInfo
+            ? "Bags-platform-launched token, but no registered creator was returned by the Bags API — the on-chain genesis tx was paid by the Bags platform wallet, not by the project team. Treat any 'dev wallet' label from other tools (DexScreener, etc.) as misleading for this token."
+            : "Pump.fun token, but neither Pump nor Solana Tracker returned a verified creator — the on-chain genesis tx was paid by the Pump platform wallet, not by the project team. Don't trust any 'dev wallet' label here."
+        );
+      }
+      // else: not a launchpad token and ST had nothing — keep the genesis-tx
+      // fee payer default (for a plain SPL token, the genesis payer usually
+      // IS the creator).
+    }
+    if (effectiveCreatorWallet) {
+      const creatorInTop = topHolders.find(h => h.authority === effectiveCreatorWallet);
+      if (creatorInTop) {
+        creatorInTop.isCreator = true;
+        creatorInTop.creatorMeta = bagsCreatorMeta;
+        const creatorLabel = bagsCreatorMeta?.username ? `Creator (@${bagsCreatorMeta.username})` : "Creator wallet";
+        creatorStatus = {
+          wallet: effectiveCreatorWallet,
+          source: effectiveCreatorSource,
+          bagsCreatorMeta,
+          inTopHolders: true,
+          rank: creatorInTop.rank,
+          currentShare: creatorInTop.share,
+          behavior: creatorInTop.behavior,
+          summary: creatorInTop.behavior === "EXITED_MOSTLY"
+            ? `${creatorLabel} is in the top 100 but has sold most of their original position.`
+            : creatorInTop.behavior === "REDUCED"
+            ? `${creatorLabel} is in the top 100 and has trimmed their position.`
+            : creatorInTop.behavior === "HELD"
+            ? `${creatorLabel} is in the top 100 and is still holding their original position.`
+            : creatorInTop.behavior === "ACCUMULATED"
+            ? `${creatorLabel} is in the top 100 and has accumulated more since launch.`
+            : `${creatorLabel} is in the top 100 at rank ${creatorInTop.rank}.`,
+        };
+      } else {
+        // Creator not in top 100. For Bags-verified creators this is OFTEN
+        // normal — the fee-receiving wallet receives SOL royalties and may
+        // never hold tokens (buy-backs typically route to LP or burn, not
+        // back to the operational wallet). We'll enrich this status with
+        // actual on-chain activity from walletPnl below, after that's built.
+        // Don't pre-emptively red-flag it.
+        // On a bonding curve (ANY launchpad) the supply lives in the curve
+        // contract, so the creator not being a top holder is NORMAL — it is
+        // NOT an exit or distribution. Resolve curve status here (ST call is
+        // cached) so we don't mis-fire "creator exited" on a fresh launchpad
+        // token (this mis-fired on LetsBonk/Raydium on-curve tokens).
+        let creatorOnCurve = false;
+        try {
+          if (pumpInfo) creatorOnCurve = pumpInfo.onBondingCurve === true;
+          else { const stm = await solanaTracker.getTokenMarketStatus(mint); creatorOnCurve = !!(stm && stm.onBondingCurve); }
+        } catch (_) {}
+        creatorStatus = {
+          wallet: effectiveCreatorWallet,
+          source: effectiveCreatorSource,
+          bagsCreatorMeta,
+          inTopHolders: false,
+          summary: effectiveCreatorSource === "bags-official"
+            ? `Bags-verified creator${bagsCreatorMeta?.username ? ` (@${bagsCreatorMeta.username})` : ""} does not currently hold tokens in the top 100 — common for fee-receiving operational wallets. See the P&L Ledger PROJECT WALLETS tab for their on-chain activity.`
+            : effectiveCreatorSource === "pump-official"
+            ? "Pump-verified creator does not currently hold tokens in the top 100 — common for fee-receiving operational wallets."
+            : creatorOnCurve
+            ? "Creator isn't a top holder, but the token is still on the bonding curve — the supply is held by the curve contract, not distributed out. That's normal pre-graduation, NOT an exit signal."
+            : "Creator wallet is NOT in the top 100 holders — they've either fully exited their initial position or distributed it out.",
+        };
+        // Red-flag the genesis-fee-payer case ONLY when the token has a real
+        // DEX pool (graduated / non-launchpad). On a curve it's a false signal.
+        if (effectiveCreatorSource === "genesis-tx-fee-payer" && !creatorOnCurve) {
+          redFlags.push("Creator wallet (genesis-tx fee payer) does not appear in the top 100 — they have either exited or distributed their initial stake.");
+        }
+      }
+    }
+
+    // Backfill the synthesized Pump card's creator from the ST-resolved one.
+    if (pumpInfo && pumpInfo.synthesized && !pumpInfo.creator && effectiveCreatorWallet) {
+      pumpInfo.creator = effectiveCreatorWallet;
+    }
+
+    // ── On-bonding-curve detection + verdict correction (Pump.fun OR Bags) ──
+    // A token still on its launchpad bonding curve has NO DEX pool yet, so
+    // DexScreener shows ~$0 (or a phantom near-zero-liquidity pool) — which
+    // falsely trips LP_RUG / GHOST / UNCLEAR / SOFT_RUG, or lands AT_RISK off
+    // early-stage concentration + "no exit". It isn't rugged; its liquidity is
+    // the curve reserve. Pump on-curve is detected during synthesis
+    // (pumpInfo.onBondingCurve); Bags tokens carry no market status, so resolve
+    // it from Solana Tracker here (market "meteora-curve" / "…curve" = still on
+    // the Bags DBC curve). Same root cause we fixed for the launches feed.
+    let lpOnCurve = pumpInfo ? (pumpInfo.onBondingCurve === true) : false;
+    let lpCurvePct = pumpInfo ? pumpInfo.curvePercentage : null;
+    let lpCurveLiqUsd = pumpInfo ? (pumpInfo.stLiquidityUsd || 0) : 0;
+    let lpName = pumpInfo ? "Pump.fun" : (bagsInfo ? "Bags" : "the launchpad");
+    // For ANY non-Pump token, resolve curve status from Solana Tracker — this
+    // covers Bags (meteora-curve), Raydium LaunchLab / LetsBonk
+    // (raydium-launchpad) and any other launchpad curve, not just Bags. ST's
+    // getTokenInfo is already cached from creator detection, so this is ~free.
+    if (!pumpInfo) {
+      try {
+        const stm = await solanaTracker.getTokenMarketStatus(mint);
+        if (stm) {
+          if (bagsInfo) {
+            bagsInfo.onBondingCurve = stm.onBondingCurve;
+            bagsInfo.graduated = stm.graduated;
+            bagsInfo.curvePercentage = stm.curvePercentage;
+            bagsInfo.market = stm.market;
+            bagsInfo.stLiquidityUsd = stm.liquidityUsd;
+          }
+          lpOnCurve = stm.onBondingCurve === true;
+          lpCurvePct = stm.curvePercentage;
+          lpCurveLiqUsd = stm.liquidityUsd || 0;
+          if (!bagsInfo && lpOnCurve) {
+            const m = (stm.market || "").toLowerCase();
+            lpName = m === "meteora-curve" ? "Bags"
+              : m.includes("launchpad") ? (MINT_LOWER.endsWith("bonk") ? "LetsBonk" : "Raydium LaunchLab")
+              : m === "moonshot" ? "Moonshot"
+              : m === "pumpfun" ? "Pump.fun"
+              : "the launchpad";
+          }
+          console.log(`[AUTOPSY] market status: market=${stm.market} onCurve=${stm.onBondingCurve} curve=${stm.curvePercentage}% stLiq=$${stm.liquidityUsd}`);
+        }
+      } catch (e) { /* degrade — leave as graduated/unknown */ }
+    }
+
+    if (lpOnCurve && lpCurveLiqUsd >= 500
+      && ["LP_RUG", "GHOST", "UNCLEAR", "SOFT_RUG", "AT_RISK"].includes(verdict.type)) {
+      const curveStr = lpCurvePct != null ? ` (${lpCurvePct.toFixed(1)}% to graduation)` : "";
+      verdict = { type: "ON_CURVE", label: "Status: ON THE BONDING CURVE — PRE-GRADUATION", severity: "AT_RISK", color: "#F59E0B", icon: "🌱" };
+      reportMode = "health-assessment";
+      reportHeadline = "🌱 ON THE BONDING CURVE";
+      reportSubhead = `Still on the ${lpName} bonding curve${curveStr} — it hasn't graduated to a DEX pool yet. No DEX pool is normal at this stage (liquidity is the curve reserve, ~$${Math.round(lpCurveLiqUsd).toLocaleString()}), not a rug. Early and speculative by definition.`;
+      // Strip the misleading DexScreener-liquidity red flags (meaningless
+      // pre-graduation) and replace with the honest curve-reserve fact.
+      const drop = ["effectively no exit", "zero current liquidity", "No DexScreener pool", "never launched a tradeable"];
+      for (let i = redFlags.length - 1; i >= 0; i--) {
+        if (drop.some(d => redFlags[i].includes(d))) redFlags.splice(i, 1);
+      }
+      redFlags.push(`Still on the ${lpName} bonding curve${curveStr} with ~$${Math.round(lpCurveLiqUsd).toLocaleString()} in curve-reserve liquidity — early and speculative, but the curve is intact (the DEX pool comes at graduation, not a rug).`);
+      // At low curve %, the bonding-curve contract itself is the biggest "holder",
+      // so a raw top-10 % reads as false whale concentration. Reframe it.
+      if (lpCurvePct != null && lpCurvePct < 60) {
+        for (let i = 0; i < redFlags.length; i++) {
+          if (redFlags[i].includes("heavy concentration")) {
+            redFlags[i] = `Top-10 holder share looks high, but the token is only ${lpCurvePct.toFixed(0)}% through its bonding curve — most of that supply still sits in the curve contract (unbought), not in whale wallets. Re-check holder concentration after it graduates.`;
+          }
+        }
+      }
+    }
+
+    // --- Phase 2J: Pump.fun creator-fee tracking ---
+    // Pump.fun creators earn a per-trade creator fee that accrues in a
+    // "creator vault" PDA (seeds ["creator-vault", creator] on the Pump
+    // program). This is the cheap, deterministic Pump-fee source — derive the
+    // vault, read its current balance (unclaimed fees) + signature activity
+    // (every accrual/claim leaves a tx). No paid indexer needed. Only runs for
+    // pump-suffixed mints with an identified creator.
+    let pumpCreatorFees = null;
+    try {
+      const isPumpMint = typeof mint === "string" && mint.toLowerCase().endsWith("pump");
+      if (isPumpMint && effectiveCreatorWallet) {
+        const vault = derivePumpCreatorVault(effectiveCreatorWallet);
+        if (vault) {
+          const [balRes, sigRes] = await Promise.all([
+            rpcCall("autopsy-pump-vault-bal", "getBalance", [vault]),
+            rpcCall("autopsy-pump-vault-sigs", "getSignaturesForAddress", [vault, { limit: 1000 }]),
+          ]);
+          // Distinguish a genuine empty/new vault from a FAILED lookup. A
+          // failed RPC has no `result` field at all — showing "0 fees" in that
+          // case would falsely tell an upset holder "the dev took nothing"
+          // when we simply didn't get an answer. If the signatures lookup
+          // didn't return an array, treat the whole thing as a miss and skip
+          // (panel hides) rather than reporting a misleading zero.
+          const sigsOk = Array.isArray(sigRes?.result);
+          if (!sigsOk) {
+            console.warn(`[AUTOPSY] Phase 2J vault lookup failed (no result) for ${vault.slice(0,8)} — skipping to avoid false zero`);
+            throw new Error("vault-lookup-failed");
+          }
+          const unclaimedLamports = balRes?.result?.value || 0;
+          const sigs = sigRes.result;
+          const oldestTs = sigs.length ? sigs[sigs.length - 1].blockTime : null;
+          // Lifetime CLAIMED — walk the vault history and sum SOL that left
+          // the vault to the creator (the claim outflows). This is the honest
+          // "how much did the dev extract in creator fees" number — the one an
+          // upset holder of a failed token actually wants. We use this vault's
+          // own outflows (nativeTransfers from vault → creator) so a claim that
+          // batched multiple tokens' vaults is attributed correctly to THIS
+          // token only. Walks up to the 1000-sig cap; flagged as a lower bound
+          // if capped. Cheap now that Phase 2F is gone.
+          let lifetimeClaimedSol = null;
+          try {
+            const sigList = sigs.map(s => s.signature).filter(Boolean);
+            if (sigList.length > 0) {
+              const walk = await heliusEnhancedBatched(sigList, HELIUS_KEY, "phase-2J-vault", heliusTxCache, scanQuality);
+              let claimedLamports = 0;
+              for (const tx of (walk.txs || [])) {
+                for (const nt of (tx.nativeTransfers || [])) {
+                  if (nt && nt.fromUserAccount === vault && nt.toUserAccount === effectiveCreatorWallet) {
+                    claimedLamports += Number(nt.amount) || 0;
+                  }
+                }
+              }
+              lifetimeClaimedSol = claimedLamports / 1e9;
+            }
+          } catch (e) {
+            console.warn("[AUTOPSY] Phase 2J claimed-fee walk failed:", e.message);
+          }
+          pumpCreatorFees = {
+            vault,
+            unclaimedSol: unclaimedLamports / 1e9,
+            // Lifetime SOL the creator pulled out of this token's fee vault.
+            lifetimeClaimedSol,
+            // Total fees the creator has realized from this token = claimed +
+            // what's still sitting unclaimed in the vault.
+            lifetimeTotalSol: lifetimeClaimedSol != null ? lifetimeClaimedSol + unclaimedLamports / 1e9 : null,
+            // Number of on-chain fee events touching the vault (accruals +
+            // claims). A proxy for how actively the token generated creator
+            // fees. Capped at 1000 by the signature page; show "1000+" then.
+            feeEventCount: sigs.length,
+            feeEventsCapped: sigs.length >= 1000,
+            firstFeeEventTs: oldestTs ? oldestTs * 1000 : null,
+          };
+          console.log(`[AUTOPSY] Phase 2J pump creator fees: vault=${vault.slice(0,8)}… unclaimed=${pumpCreatorFees.unclaimedSol.toFixed(4)} claimed=${lifetimeClaimedSol != null ? lifetimeClaimedSol.toFixed(3) : "?"} SOL events=${sigs.length}${pumpCreatorFees.feeEventsCapped ? "+" : ""}`);
+        }
+      }
+    } catch (e) {
+      console.warn("[AUTOPSY] Phase 2J pump creator-fee tracking failed:", e.message);
+    }
+
+    // --- Phase 2K: Creator wallet profile + funding source ---
+    // Is the creator wallet an established operator wallet or a fresh throwaway
+    // deployer? One signatures page answers it cheaply: 1000+ txs = established
+    // (NOT a burner). For a FRESH wallet (genesis reachable in one page) we
+    // trace one hop back — who funded it — because "creator funds a brand-new
+    // deployer from a single source right before launch" is the obfuscation
+    // pattern the funding-source check (from the research note) is meant to
+    // catch. We don't deep-paginate active wallets — that would violate the
+    // cheap-first rule and the activity level already tells the story.
+    let creatorWalletProfile = null;
+    try {
+      if (effectiveCreatorWallet) {
+        const profRes = await rpcCall("autopsy-creator-profile", "getSignaturesForAddress", [effectiveCreatorWallet, { limit: 1000 }]);
+        const psigs = profRes?.result;
+        if (Array.isArray(psigs) && psigs.length > 0) {
+          const isEstablished = psigs.length >= 1000;
+          const oldestSeen = psigs[psigs.length - 1].blockTime;
+          let fundingSource = null;
+          if (!isEstablished) {
+            // Genesis reachable in one page — the oldest tx is the wallet's
+            // first. Parse it (enhanced) and read who sent the creator its
+            // first SOL. That sender is the funding source.
+            try {
+              const gSig = psigs[psigs.length - 1].signature;
+              const gWalk = await heliusEnhancedBatched([gSig], HELIUS_KEY, "phase-2K-genesis", heliusTxCache, scanQuality);
+              const gtx = (gWalk.txs || [])[0];
+              if (gtx && Array.isArray(gtx.nativeTransfers)) {
+                let best = null;
+                for (const nt of gtx.nativeTransfers) {
+                  if (nt && nt.toUserAccount === effectiveCreatorWallet && nt.fromUserAccount && nt.fromUserAccount !== effectiveCreatorWallet) {
+                    if (!best || (Number(nt.amount) || 0) > (Number(best.amount) || 0)) best = nt;
+                  }
+                }
+                if (best) {
+                  fundingSource = {
+                    wallet: best.fromUserAccount,
+                    solAmount: (Number(best.amount) || 0) / 1e9,
+                    label: KNOWN_CEX_WALLETS[best.fromUserAccount] || null,
+                  };
+                }
+              }
+            } catch (e) { /* funding trace best-effort */ }
+          }
+          // Serial-deployer signal — how many tokens this wallet has launched.
+          // A high count flips "established wallet" from reassuring to a
+          // token-mill risk flag. Best-effort via Solana Tracker.
+          let deployedTokens = null;
+          try { deployedTokens = await solanaTracker.getDeployerTokenCount(effectiveCreatorWallet); } catch (e) { /* degrade */ }
+          const deployCount = deployedTokens ? deployedTokens.count : null;
+          const deployExact = deployedTokens ? deployedTokens.exact : false;
+          // Tiered: 25+ = serial launcher (token mill), 5-24 = multiple tokens.
+          const isSerialDeployer = deployCount != null && deployCount >= 25;
+          creatorWalletProfile = {
+            txCountAtLeast: psigs.length,
+            isEstablished,
+            oldestSeenTs: oldestSeen ? oldestSeen * 1000 : null,
+            fundingSource,
+            deployedTokenCount: deployCount,
+            deployedTokenCountExact: deployExact,
+            isSerialDeployer,
+          };
+          if (isSerialDeployer) {
+            redFlags.push(`Creator wallet has deployed ${deployExact ? "" : "at least "}${deployCount} tokens — a serial-launcher pattern. A long wallet history here is a token-mill signal, not a sign of a committed operator.`);
+          }
+          console.log(`[AUTOPSY] Phase 2K creator profile: ${effectiveCreatorWallet.slice(0,8)}… established=${isEstablished} txs>=${psigs.length} deployed=${deployCount != null ? (deployExact ? "" : ">=") + deployCount : "?"} serial=${isSerialDeployer} funder=${fundingSource ? (fundingSource.label || fundingSource.wallet.slice(0,8)) : "n/a"}`);
+        }
+      }
+    } catch (e) {
+      console.warn("[AUTOPSY] Phase 2K creator profile failed:", e.message);
+    }
+
+    // --- Phase 2F: Per-Wallet P&L Ledger ---
+    // For every swap in the token's lifetime, identify the human side (vs LP /
+    // router / CEX / locker / bonding curve), value the leg at that day's USD
+    // close from the GeckoTerminal candles, and accumulate per-wallet totals.
+    // Outputs: top 25 buyers (most spent), top 25 sellers (most extracted),
+    // who made money (realized PnL desc), who got wrecked (realized PnL asc),
+    // and the "took the money" list — wallets that sold their entire position
+    // for a profit and walked away. The forensic answer to "who actually made
+    // it and who actually got rekt" instead of "the price went down."
+    // FEATURE FLAG — the full per-wallet P&L ledger is pulled from the free
+    // autopsy (2026-05-21). It's the heaviest Helius consumer (the phase-2F
+    // signature walk rate-limited 46 batches on busy tokens and caused the
+    // DEGRADED runs). Disabling it makes the free autopsy fast and reliable.
+    // ALL the code below is kept intact: the planned reintroduction is a
+    // token-gated "Express" version powered by Solana Tracker's /traders
+    // endpoint (see memory: gated-pnl-express-idea). Flip this to true to
+    // re-enable the Helius-based ledger. Everything downstream already
+    // null-guards walletPnl (creator activity falls back to Phase 2G,
+    // hidden-exit returns null, pnlLedger serializes to null).
+    const ENABLE_PNL_LEDGER = false;
+    let walletPnl = null;
+    try {
+      if (ENABLE_PNL_LEDGER && lifetimeAllSigs.length > 0) {
+        // Build exclusion set: addresses that are NOT human counterparties.
+        // Token-side transfers to/from these = a trade, not a wallet-to-wallet move.
+        const excludeSet = new Set();
+        // Locker / self-lock addresses get their OWN set so we can distinguish
+        // "wallet → locker" (locking supply, GOOD signal) from "wallet → pool"
+        // (selling, neutral-to-bad signal). Both end up in excludeSet so the
+        // counterparty isn't treated as another wallet, but the locker set
+        // lets us route the event to lockedTokens not soldTokens.
+        const lockerAddressSet = new Set();
+        for (const p of DEX_PROGRAMS) excludeSet.add(p);
+        for (const p of LOCKER_PROGRAMS) { excludeSet.add(p); lockerAddressSet.add(p); }
+        for (const p of TOKEN_PROGRAMS) excludeSet.add(p);
+        for (const w of Object.keys(KNOWN_CEX_WALLETS)) excludeSet.add(w);
+        // Top-100 holder authorities: LP / locker / selflock / program. Tag
+        // locker + selflock as locker destinations specifically.
+        for (const h of topHolders) {
+          if (h.category === "lp" || h.category === "locker" || h.category === "selflock" || h.category === "program") {
+            // Use h.authority (the wallet/PDA that controls the token account)
+            // — h.wallet doesn't exist on autopsy holder records.
+            const addr = h.authority || h.wallet;
+            if (addr) {
+              excludeSet.add(addr);
+              if (h.category === "locker" || h.category === "selflock") {
+                lockerAddressSet.add(addr);
+              }
+            }
+          }
+        }
+        // Bonding curve + paired pool addresses from Bags / Pump integrations
+        if (bagsInfo) {
+          if (bagsInfo.dbcPoolKey) excludeSet.add(bagsInfo.dbcPoolKey);
+          if (bagsInfo.dammV2PoolKey) excludeSet.add(bagsInfo.dammV2PoolKey);
+        }
+        if (pumpInfo) {
+          if (pumpInfo.bondingCurve) excludeSet.add(pumpInfo.bondingCurve);
+          if (pumpInfo.associatedBondingCurve) excludeSet.add(pumpInfo.associatedBondingCurve);
+          if (pumpInfo.raydiumPool) excludeSet.add(pumpInfo.raydiumPool);
+        }
+
+        // Sig selection — cap at 2500 to keep cost bounded. If we exceed cap,
+        // take the newest 1500 (recent distribution) + oldest 1000 (launch
+        // dynamics) and skip the middle. This is the recent-vs-launch
+        // bookends most rugs reveal themselves in.
+        const PNL_SIG_CAP = 2500;
+        let pnlSigArr;
+        let coverageMode;
+        if (lifetimeAllSigs.length <= PNL_SIG_CAP) {
+          pnlSigArr = lifetimeAllSigs.map(s => s.signature);
+          coverageMode = "full";
+        } else {
+          // lifetimeAllSigs is newest-first.
+          const newest = lifetimeAllSigs.slice(0, 1500).map(s => s.signature);
+          const oldest = lifetimeAllSigs.slice(-1000).map(s => s.signature);
+          pnlSigArr = [...newest, ...oldest];
+          coverageMode = "newest1500+oldest1000";
+        }
+
+        const walletStats = new Map();
+        const upsert = (wallet) => {
+          let s = walletStats.get(wallet);
+          if (!s) {
+            s = {
+              wallet,
+              boughtTokens: 0, soldTokens: 0, lockedTokens: 0,
+              lockCount: 0,
+              boughtUsd: 0, soldUsd: 0,
+              buyCount: 0, sellCount: 0,
+              firstTs: null, lastTs: null,
+            };
+            walletStats.set(wallet, s);
+          }
+          return s;
+        };
+
+        // Single helper call handles batching + retry-on-429 + cache.
+        // If Helius throttles mid-walk, we retry and recover instead of
+        // silently dropping the rest of the data.
+        const pnlFetchResult = await heliusEnhancedBatched(
+          pnlSigArr, HELIUS_KEY, "phase-2F", heliusTxCache, scanQuality
+        );
+        const processed = pnlFetchResult.txs.length;
+        {
+          const data = pnlFetchResult.txs;
+          if (false) {} // structural noop so the for-of below stays indented identically
+          {
+            for (const tx of data) {
+              if (!tx || tx.transactionError) continue;
+              const ts = tx.timestamp ? tx.timestamp * 1000 : null;
+              const dayKey = ts ? Math.floor(ts / 86400000) : null;
+              // Look up USD price for that day; fall back to nearest neighbor
+              // if exact day isn't in the candle map (gecko gaps for thin days).
+              let dayUsd = dayKey !== null ? priceCandlesByDay.get(dayKey) : null;
+              if (!dayUsd && dayKey !== null) {
+                for (let off = 1; off <= 3 && !dayUsd; off++) {
+                  dayUsd = priceCandlesByDay.get(dayKey - off) || priceCandlesByDay.get(dayKey + off) || null;
+                }
+              }
+              const tts = Array.isArray(tx.tokenTransfers) ? tx.tokenTransfers : [];
+              for (const tt of tts) {
+                if (!tt || tt.mint !== mint) continue;
+                const amt = Number(tt.tokenAmount) || 0;
+                if (amt <= 0) continue;
+                const from = tt.fromUserAccount;
+                const to = tt.toUserAccount;
+                const fromExcluded = !!from && excludeSet.has(from);
+                const toExcluded = !!to && excludeSet.has(to);
+                // Pool/router/etc → user = BUY (user received tokens from a venue)
+                if (fromExcluded && !toExcluded && to) {
+                  const s = upsert(to);
+                  s.boughtTokens += amt;
+                  if (dayUsd) s.boughtUsd += amt * dayUsd;
+                  s.buyCount += 1;
+                  if (ts) {
+                    if (!s.firstTs || ts < s.firstTs) s.firstTs = ts;
+                    if (!s.lastTs || ts > s.lastTs) s.lastTs = ts;
+                  }
+                }
+                // user → pool/router/locker/etc.
+                // Split locks from sells: sending to a LOCKER is removing
+                // supply (good), not extracting value (sell).
+                else if (toExcluded && !fromExcluded && from) {
+                  const s = upsert(from);
+                  if (lockerAddressSet.has(to)) {
+                    // Lock deposit — supply removed from circulation, no USD
+                    // extracted. Distinct from a sell.
+                    s.lockedTokens += amt;
+                    s.lockCount += 1;
+                    if (ts) {
+                      if (!s.firstTs || ts < s.firstTs) s.firstTs = ts;
+                      if (!s.lastTs || ts > s.lastTs) s.lastTs = ts;
+                    }
+                    continue;
+                  }
+                  s.soldTokens += amt;
+                  if (dayUsd) s.soldUsd += amt * dayUsd;
+                  s.sellCount += 1;
+                  if (ts) {
+                    if (!s.firstTs || ts < s.firstTs) s.firstTs = ts;
+                    if (!s.lastTs || ts > s.lastTs) s.lastTs = ts;
+                  }
+                }
+                // wallet→wallet or excluded→excluded: not a P&L event.
+              }
+            }
+          }
+        }
+        if (pnlFetchResult.rateLimited > 0) scanQuality.phasesFailed.push("phase-2F-partial");
+        else scanQuality.phasesCompleted.push("phase-2F");
+
+        // Map current balances from the top-100 holder forensics.
+        const currentBalanceMap = new Map();
+        for (const h of topHolders) {
+          // Use authority (the wallet that controls the token account).
+          const cbAddr = h.authority || h.wallet;
+          if (cbAddr) currentBalanceMap.set(cbAddr, h.uiAmount || h.amountTokens || 0);
+        }
+
+        // Per-wallet derived metrics: avg cost basis, realized PnL, status.
+        // Realized PnL uses average cost basis (simpler than strict FIFO and
+        // honest enough at this aggregation level).
+        const allStats = [...walletStats.values()].map(s => {
+          const currentBalance = currentBalanceMap.get(s.wallet) ?? 0;
+          const inTop100 = currentBalanceMap.has(s.wallet);
+          const avgBuyPrice = s.boughtTokens > 0 ? s.boughtUsd / s.boughtTokens : 0;
+          const avgSellPrice = s.soldTokens > 0 ? s.soldUsd / s.soldTokens : 0;
+          const costBasisOfSold = avgBuyPrice * s.soldTokens;
+          const realizedPnlUsd = s.soldUsd - costBasisOfSold;
+          // "Sold out" heuristic: sold ≥ 95% of what they bought AND not in top 100.
+          // Conservative — only call it a clean exit when we have evidence on both sides.
+          const soldOut = s.boughtTokens > 0 && s.soldTokens >= s.boughtTokens * 0.95 && !inTop100;
+          let status;
+          if (soldOut && realizedPnlUsd > 0) status = "TOOK_MONEY";
+          else if (soldOut && realizedPnlUsd <= 0) status = "EXITED_LOSS";
+          else if (inTop100 && realizedPnlUsd > 0) status = "ACTIVE_PROFIT";
+          else if (inTop100 && realizedPnlUsd < 0) status = "ACTIVE_LOSS";
+          else status = "PARTIAL";
+          // Cross-reference fee-receiver map so a project's own buy-back /
+          // operations wallet is visible in the ledger no matter where it ranks.
+          const feeMeta = projectFeeWalletMap.get(s.wallet) || null;
+          return {
+            wallet: s.wallet,
+            boughtTokens: s.boughtTokens, soldTokens: s.soldTokens,
+            lockedTokens: s.lockedTokens || 0, lockCount: s.lockCount || 0,
+            boughtUsd: s.boughtUsd, soldUsd: s.soldUsd,
+            buyCount: s.buyCount, sellCount: s.sellCount,
+            firstTs: s.firstTs, lastTs: s.lastTs,
+            currentBalance, inTop100,
+            avgBuyPriceUsd: avgBuyPrice, avgSellPriceUsd: avgSellPrice,
+            realizedPnlUsd, status,
+            projectFeeWallet: feeMeta,
+            projectFeeRoyaltyPct: feeMeta && feeMeta.royaltyBps != null ? Number(feeMeta.royaltyBps) / 100 : null,
+          };
+        });
+
+        // Always-surface list of project fee/operator wallets — even when they
+        // don't rank in the top 25 by raw USD (a buy-back wallet that only
+        // buys won't appear in topSellers, etc). Guarantees the team's
+        // operational wallets are visible no matter their activity profile.
+        const projectWallets = allStats
+          .filter(s => s.projectFeeWallet)
+          .sort((a, b) => (b.boughtUsd + b.soldUsd) - (a.boughtUsd + a.soldUsd));
+
+        walletPnl = {
+          walletsAnalyzed: allStats.length,
+          signaturesScanned: processed,
+          totalLifetimeSignatures: lifetimeAllSigs.length,
+          coverageMode,
+          haveUsdPricing: priceCandlesByDay.size > 0,
+          topBuyers: [...allStats].sort((a, b) => b.boughtUsd - a.boughtUsd || b.boughtTokens - a.boughtTokens).slice(0, 25),
+          topSellers: [...allStats].sort((a, b) => b.soldUsd - a.soldUsd || b.soldTokens - a.soldTokens).slice(0, 25),
+          madeMoney: [...allStats].filter(s => s.realizedPnlUsd > 0).sort((a, b) => b.realizedPnlUsd - a.realizedPnlUsd).slice(0, 15),
+          gotWrecked: [...allStats].filter(s => s.realizedPnlUsd < 0).sort((a, b) => a.realizedPnlUsd - b.realizedPnlUsd).slice(0, 15),
+          tookTheMoney: allStats.filter(s => s.status === "TOOK_MONEY").sort((a, b) => b.realizedPnlUsd - a.realizedPnlUsd).slice(0, 15),
+          projectWallets,
+        };
+        console.log(`[AUTOPSY] Phase 2F P&L: walletsAnalyzed=${allStats.length} sigsScanned=${processed} mode=${coverageMode} pricing=${priceCandlesByDay.size > 0 ? "usd" : "tokens-only"}`);
+      }
+    } catch (e) {
+      console.warn("[AUTOPSY] Phase 2F P&L engine failed:", e.message);
+    }
+
+    // --- Creator-status enrichment from walletPnl ---
+    // Now that we know what every wallet actually did on-chain, replace the
+    // "creator not in top 100 → must have exited" inference with the actual
+    // truth: did they buy? sell? do buy-backs? sit dormant? This is the
+    // honest answer for fee-receiving operational wallets that legitimately
+    // don't hold tokens at any given snapshot.
+    // --- Phase 2G: Direct creator-wallet trace ---
+    // The Phase 2F lifetime walk can miss daily creator buy-backs when they
+    // route through Jupiter (multi-hop token transfers don't fit the clean
+    // pool→wallet pattern). Walk the creator wallet's OWN signatures directly
+    // and count CLKN buys/sells/locks. Targeted and accurate — independent of
+    // how the swap was routed.
+    let creatorTrace = null;
+    if (creatorStatus && creatorStatus.wallet) {
+      try {
+        // Rebuild a small lockerAddressSet here so we can detect lock deposits
+        // independently of Phase 2F's scope.
+        const traceLockerSet = new Set();
+        for (const p of LOCKER_PROGRAMS) traceLockerSet.add(p);
+        for (const h of topHolders) {
+          const addr = h.authority || h.wallet;
+          if ((h.category === "locker" || h.category === "selflock") && addr) {
+            traceLockerSet.add(addr);
+          }
+        }
+        // Paginate aggressively — heavy buy-back wallets accumulate thousands
+        // of sigs (every claim, every buy, every lock, every transfer). Cap
+        // at 5000 sigs (5 pages × 1000) to give honest coverage.
+        const allCreatorSigs = [];
+        let beforeSig = undefined;
+        for (let p = 0; p < 5; p++) {
+          const params = beforeSig
+            ? [creatorStatus.wallet, { limit: 1000, before: beforeSig }]
+            : [creatorStatus.wallet, { limit: 1000 }];
+          const sigsRes = await rpcCall(`autopsy-creator-direct-sigs-${p}`, "getSignaturesForAddress", params);
+          const pageSigs = sigsRes?.result || [];
+          if (pageSigs.length === 0) break;
+          allCreatorSigs.push(...pageSigs);
+          if (pageSigs.length < 1000) break;
+          beforeSig = pageSigs[pageSigs.length - 1].signature;
+        }
+        const sigs = allCreatorSigs.map(s => s.signature);
+        // Critical: only SWAP-type transactions count as buys/sells. A
+        // non-SWAP outflow is a transfer or a lock deposit, NOT a sell.
+        // Earlier version conflated all outflows as sells which produced the
+        // wrong "163 sells" result for wallets that only buy-and-lock.
+        let buyCount = 0, sellCount = 0, lockCount = 0;
+        let transferInCount = 0, transferOutCount = 0;
+        let boughtTokens = 0, soldTokens = 0, lockedTokens = 0;
+        let transferInTokens = 0, transferOutTokens = 0;
+        // Per-destination CLKN flow out — used to identify sub-distributor
+        // wallets for the multi-hop team-network trace below.
+        const transferOutByDest = new Map(); // wallet → tokens transferred out
+        // Per-source CLKN flow in (in case sub-wallets sent CLKN back).
+        const transferInBySource = new Map();
+        // Per-destination SOL flow out (non-swap). Critical for buy-and-lock
+        // teams: creator claims SOL fees and sends SOL (not CLKN) to a
+        // sub-wallet that does the buys + locks. Without this, multi-hop
+        // misses the whole "fees → SOL → sub-wallet buys" path.
+        const solOutByDest = new Map(); // wallet → lamports
+        let boughtUsd = 0, soldUsd = 0;
+        // SOL actually spent on buys. This is the most honest "$ into the
+        // token" signal because it tracks what the user paid in SOL terms,
+        // independent of when CLKN's daily-close price was for USD valuation.
+        let boughtSolLamports = 0, soldSolLamports = 0;
+        let firstTs = null, lastTs = null;
+        // Phase 2G creator-trace through the same retry-aware helper.
+        const creatorFetchResult = await heliusEnhancedBatched(
+          sigs, HELIUS_KEY, "phase-2G-creator", heliusTxCache, scanQuality
+        );
+        {
+          const dataR = creatorFetchResult.txs;
+          {
+            for (const tx of dataR) {
+              if (!tx || tx.transactionError) continue;
+              const ts = tx.timestamp ? tx.timestamp * 1000 : null;
+              const dayKey = ts ? Math.floor(ts / 86400000) : null;
+              let dayUsd = dayKey !== null ? priceCandlesByDay.get(dayKey) : null;
+              if (!dayUsd && dayKey !== null) {
+                for (let off = 1; off <= 3 && !dayUsd; off++) {
+                  dayUsd = priceCandlesByDay.get(dayKey - off) || priceCandlesByDay.get(dayKey + off) || null;
+                }
+              }
+              const isSwap = tx.type === "SWAP";
+              // SOL cost flows through BOTH nativeTransfers (raw SOL) and WSOL
+              // tokenTransfers (the common Jupiter path). Sum both for EVERY tx
+              // — not just type==="SWAP" — because Helius mislabels many real
+              // swaps (Jupiter/aggregator/newer launchpad routes) as UNKNOWN or
+              // TRANSFER. We reclassify by value flow below.
+              const WSOL_MINT = "So11111111111111111111111111111111111111112";
+              let netSolForCreatorLamports = 0;
+              if (Array.isArray(tx.nativeTransfers)) {
+                for (const nt of tx.nativeTransfers) {
+                  if (!nt) continue;
+                  if (nt.fromUserAccount === creatorStatus.wallet) {
+                    netSolForCreatorLamports -= Number(nt.amount) || 0;
+                  } else if (nt.toUserAccount === creatorStatus.wallet) {
+                    netSolForCreatorLamports += Number(nt.amount) || 0;
+                  }
+                }
+              }
+              if (Array.isArray(tx.tokenTransfers)) {
+                for (const tt of tx.tokenTransfers) {
+                  if (!tt || tt.mint !== WSOL_MINT) continue;
+                  // WSOL has 9 decimals — tokenAmount IS the SOL-equivalent.
+                  const lamports = Math.round((Number(tt.tokenAmount) || 0) * 1e9);
+                  if (tt.fromUserAccount === creatorStatus.wallet) {
+                    netSolForCreatorLamports -= lamports;
+                  } else if (tt.toUserAccount === creatorStatus.wallet) {
+                    netSolForCreatorLamports += lamports;
+                  }
+                }
+              }
+              // ── Value-flow trade detection (the 2G under-count fix) ──
+              // A BUY = creator RECEIVED CLKN and PAID SOL (net SOL out); a SELL
+              // = creator SENT CLKN and RECEIVED SOL. True regardless of the
+              // Helius `type` label, so it captures the buys/sells previously
+              // dropped into the transfer bucket (e.g. 71 of 128 → full count).
+              const SOL_TRADE_LAMPORTS = 1_000_000; // 0.001 SOL — ignore dust/fees
+              let clknIn = false, clknOut = false;
+              for (const tt of (Array.isArray(tx.tokenTransfers) ? tx.tokenTransfers : [])) {
+                if (!tt || tt.mint !== mint) continue;
+                if (tt.toUserAccount === creatorStatus.wallet) clknIn = true;
+                else if (tt.fromUserAccount === creatorStatus.wallet) clknOut = true;
+              }
+              const buyByFlow  = clknIn  && (isSwap || netSolForCreatorLamports <= -SOL_TRADE_LAMPORTS);
+              const sellByFlow = clknOut && (isSwap || netSolForCreatorLamports >=  SOL_TRADE_LAMPORTS);
+              const isCreatorTrade = buyByFlow || sellByFlow;
+              // NON-swap SOL outflows to genuine human-wallet destinations.
+              // CRITICAL: Helius sometimes classifies multi-hop swaps as
+              // type !== "SWAP" — we must defensively exclude any destination
+              // that's a DEX program, locker, LP authority, CEX, token
+              // program, or system program. Otherwise we count routing SOL
+              // as if it were a transfer to a sub-distributor (the bug that
+              // produced "193 SOL sent to sub-wallets" on CLKN).
+              if (!isCreatorTrade && Array.isArray(tx.nativeTransfers)) {
+                for (const nt of tx.nativeTransfers) {
+                  if (!nt) continue;
+                  if (nt.fromUserAccount === creatorStatus.wallet
+                    && nt.toUserAccount
+                    && nt.toUserAccount !== creatorStatus.wallet) {
+                    const dest = nt.toUserAccount;
+                    // Reject any program/system destination — only true
+                    // wallet-to-wallet SOL transfers count.
+                    if (DEX_PROGRAMS.has(dest) || LOCKER_PROGRAMS.has(dest)
+                      || TOKEN_PROGRAMS.has(dest) || traceLockerSet.has(dest)
+                      || KNOWN_CEX_WALLETS[dest]
+                      || dest === "11111111111111111111111111111111") continue;
+                    const lamports = Number(nt.amount) || 0;
+                    if (lamports >= 10_000_000) { // ≥ 0.01 SOL → meaningful
+                      solOutByDest.set(
+                        dest,
+                        (solOutByDest.get(dest) || 0) + lamports
+                      );
+                    }
+                  }
+                }
+              }
+              const tts = Array.isArray(tx.tokenTransfers) ? tx.tokenTransfers : [];
+              // To avoid double-counting SOL across multiple tokenTransfers in
+              // the same swap (Jupiter routes), record one SOL leg per swap.
+              let solRecordedForThisSwap = false;
+              for (const tt of tts) {
+                if (!tt || tt.mint !== mint) continue;
+                const amt = Number(tt.tokenAmount) || 0;
+                if (amt <= 0) continue;
+                const touched = ts;
+                // Creator received CLKN
+                if (tt.toUserAccount === creatorStatus.wallet) {
+                  if (buyByFlow) {
+                    // Market buy — received CLKN and paid SOL (or Helius typed
+                    // it SWAP). Counts routed/aggregator buys, not just SWAPs.
+                    buyCount++;
+                    boughtTokens += amt;
+                    if (dayUsd) boughtUsd += amt * dayUsd;
+                    // SOL spent on this buy = negative netSol. Record once per tx.
+                    if (!solRecordedForThisSwap && netSolForCreatorLamports < 0) {
+                      boughtSolLamports += Math.abs(netSolForCreatorLamports);
+                      solRecordedForThisSwap = true;
+                    }
+                  } else {
+                    // Received CLKN with no SOL paid — a genuine transfer-in
+                    // (gift/airdrop/sub-wallet return), not a market buy.
+                    transferInCount++;
+                    transferInTokens += amt;
+                    if (tt.fromUserAccount) {
+                      transferInBySource.set(
+                        tt.fromUserAccount,
+                        (transferInBySource.get(tt.fromUserAccount) || 0) + amt
+                      );
+                    }
+                  }
+                  if (touched) {
+                    if (!firstTs || touched < firstTs) firstTs = touched;
+                    if (!lastTs || touched > lastTs) lastTs = touched;
+                  }
+                }
+                // Creator sent CLKN
+                else if (tt.fromUserAccount === creatorStatus.wallet) {
+                  if (traceLockerSet.has(tt.toUserAccount)) {
+                    // Lock deposit — supply removed (never a sell, even if SOL moved).
+                    lockCount++;
+                    lockedTokens += amt;
+                  } else if (sellByFlow) {
+                    // Market sell — sent CLKN and received SOL (or Helius typed
+                    // it SWAP). Locks/transfers are NOT sells.
+                    sellCount++;
+                    soldTokens += amt;
+                    if (dayUsd) soldUsd += amt * dayUsd;
+                    // SOL received from this sell = positive netSol for creator.
+                    if (!solRecordedForThisSwap && netSolForCreatorLamports > 0) {
+                      soldSolLamports += netSolForCreatorLamports;
+                      solRecordedForThisSwap = true;
+                    }
+                  } else {
+                    // Sent to another wallet — transfer-out, NOT a sell. Could
+                    // be a sub-distributor wallet, a team operational move, or
+                    // a gift; the hidden-exit detection (Phase 2C-bis) will
+                    // surface if those recipients subsequently dump.
+                    transferOutCount++;
+                    transferOutTokens += amt;
+                    if (tt.toUserAccount) {
+                      transferOutByDest.set(
+                        tt.toUserAccount,
+                        (transferOutByDest.get(tt.toUserAccount) || 0) + amt
+                      );
+                    }
+                  }
+                  if (touched) {
+                    if (!firstTs || touched < firstTs) firstTs = touched;
+                    if (!lastTs || touched > lastTs) lastTs = touched;
+                  }
+                }
+              }
+            }
+          }
+        }
+        if (creatorFetchResult.rateLimited > 0) scanQuality.phasesFailed.push("phase-2G-partial");
+        else scanQuality.phasesCompleted.push("phase-2G");
+        const boughtSol = boughtSolLamports / 1e9;
+        const soldSol = soldSolLamports / 1e9;
+        // VERIFICATION — fetch the creator wallet's current SOL balance and
+        // compute: claimed - bought - currentBalance - knownSent ≈ 0 if we
+        // captured everything. Surfaces undercounting honestly.
+        let creatorSolBalanceNow = null;
+        let unaccountedSol = null;
+        try {
+          const balRes = await rpcCall("autopsy-creator-bal", "getBalance", [creatorStatus.wallet]);
+          if (balRes && balRes.result && balRes.result.value != null) {
+            creatorSolBalanceNow = Number(balRes.result.value) / 1e9;
+          }
+        } catch (e) { console.warn("[AUTOPSY] Creator wallet balance fetch failed:", e.message); }
+        const claimedSolNow = bagsInfo?.totalClaimedSol || bagsInfo?.lifetimeFeesSol || null;
+        const knownSolSentToSubs = [...solOutByDest.values()].reduce((a, b) => a + b, 0) / 1e9;
+        if (claimedSolNow != null && creatorSolBalanceNow != null) {
+          unaccountedSol = claimedSolNow - boughtSol - creatorSolBalanceNow - knownSolSentToSubs;
+          console.log(`[AUTOPSY] SOL verification — claimed=${claimedSolNow.toFixed(3)}  buys=${boughtSol.toFixed(3)}  currentBal=${creatorSolBalanceNow.toFixed(3)}  sentToSubs=${knownSolSentToSubs.toFixed(3)}  unaccounted=${unaccountedSol.toFixed(3)}`);
+        }
+        // Cross-reference against the Bags lifetime fees: how much of the SOL
+        // claimed in creator fees is the wallet actually putting back into
+        // buy-backs? > 80% = "reinvesting everything". Strongest project signal.
+        const claimedSol = bagsInfo?.totalClaimedSol || bagsInfo?.lifetimeFeesSol || null;
+        const pctReinvested = claimedSol && claimedSol > 0
+          ? Math.min(100, (boughtSol / claimedSol) * 100)
+          : null;
+        creatorTrace = {
+          sigsScanned: sigs.length,
+          buyCount, sellCount, lockCount,
+          transferInCount, transferOutCount,
+          // Distinct recipient wallets of the creator's token transfers-out.
+          // The COUNT is free (we already have the dest map); the per-wallet
+          // sell-trace (did each recipient dump?) is the premium feature.
+          transferOutDistinctRecipients: transferOutByDest.size,
+          boughtTokens, soldTokens, lockedTokens,
+          transferInTokens, transferOutTokens,
+          boughtUsd, soldUsd,
+          boughtSol, soldSol,
+          netUsd: boughtUsd - soldUsd,
+          netSol: boughtSol - soldSol,
+          claimedSol,
+          pctReinvested,
+          firstTs, lastTs,
+          // Verification balance — lets the UI flag if numbers don't add up.
+          creatorSolBalanceNow,
+          knownSolSentToSubs,
+          unaccountedSol,
+        };
+        console.log(`[AUTOPSY] Phase 2G creator trace for ${creatorStatus.wallet.slice(0,8)}…: sigs=${sigs.length} buys=${buyCount}(${boughtSol.toFixed(3)} SOL) sells=${sellCount} locks=${lockCount} claimed=${claimedSol || "?"} SOL pctReinvested=${pctReinvested !== null ? pctReinvested.toFixed(0) + "%" : "—"}`);
+
+        // Merge with best-observed cache — forensic counters can only grow,
+        // so a lower fresh observation than cached is always capture failure.
+        const merged = bestObservedTrace(creatorStatus.wallet, mint, creatorTrace);
+        creatorTrace = merged.trace;
+        creatorTrace.usedBestObservedCache = merged.usedCache;
+
+        // ── Solana Tracker independent cross-verification ───────────────
+        // Same wallet, same mint, computed server-side from their indexer
+        // rather than our Helius signature scan. This is the "second
+        // opinion" that lets the UI show a ✓ badge when numbers agree
+        // (high confidence) or surface the discrepancy when they don't.
+        // Free tier — gracefully no-op if key is missing or quota is hit.
+        try {
+          const stPos = await solanaTracker.getWalletTokenPosition(creatorStatus.wallet, mint);
+          if (stPos) {
+            // Actual response shape (verified from production debug 2026-05-21):
+            //   { wallet, identity, pnlMode, token,
+            //     pnl:     { realized, realizedRaw, unrealized, total },
+            //     invested, proceeds, roi,
+            //     current: { balance, costBasis, value, price, avgCost },
+            //     volume:  { tokensBought, tokensSold, buyUsd, sellUsd },
+            //     averages:{ buy, sell },
+            //     counts:  { buys, sells, total },
+            //     timing:  { firstBuy, lastBuy, firstTrade, lastTrade, holdTimeSecs },
+            //     meta:    { symbol, name, decimals, price, marketCap, liquidity, primaryMarket } }
+            // Read defensively in case a future schema tweak nests fields
+            // differently — fall back to the flat shape if the namespaced
+            // one isn't present.
+            const pnlNs   = stPos.pnl     || {};
+            const curNs   = stPos.current || {};
+            const volNs   = stPos.volume  || {};
+            const cntNs   = stPos.counts  || {};
+            const timeNs  = stPos.timing  || {};
+            const stRealized   = Number(pnlNs.realized   != null ? pnlNs.realized   : stPos.realized   || 0);
+            const stUnrealized = Number(pnlNs.unrealized != null ? pnlNs.unrealized : stPos.unrealized || 0);
+            const stTotal      = Number(pnlNs.total      != null ? pnlNs.total      : (stRealized + stUnrealized));
+            const stBuys       = Number(cntNs.buys       != null ? cntNs.buys       : stPos.buys       || 0);
+            const stSells      = Number(cntNs.sells      != null ? cntNs.sells      : stPos.sells      || 0);
+            const stBalance    = Number(curNs.balance    != null ? curNs.balance    : stPos.balance    || 0);
+            const stCostUsd    = Number(curNs.costBasis  != null ? curNs.costBasis  : stPos.costBasis  || 0);
+            const stValueUsd   = Number(curNs.value      != null ? curNs.value      : stPos.value      || 0);
+            const stBoughtUsd  = Number(volNs.buyUsd     != null ? volNs.buyUsd     : stPos.totalBought || 0);
+            const stSoldUsd    = Number(volNs.sellUsd    != null ? volNs.sellUsd    : stPos.totalSold  || 0);
+            const stInvested   = Number(stPos.invested   != null ? stPos.invested   : 0);
+            const stProceeds   = Number(stPos.proceeds   != null ? stPos.proceeds   : 0);
+            const stRoi        = Number(stPos.roi        != null ? stPos.roi        : 0);
+            const stFirstBuy   = timeNs.firstBuy || null;
+            const stLastBuy    = timeNs.lastBuy  || null;
+            // Compare with our own counters. We treat <=20% absolute drift
+            // on bought-USD or buy count as "in agreement" since the two
+            // sources price slightly differently (theirs uses their own
+            // OHLCV at fill time; ours uses GeckoTerminal closes).
+            const ourBuys      = creatorTrace.buyCount || 0;
+            const ourBoughtUsd = creatorTrace.boughtUsd || 0;
+            const buysAgree    = stBuys === 0 ? ourBuys === 0
+              : Math.abs(stBuys - ourBuys) / Math.max(stBuys, ourBuys, 1) <= 0.2;
+            const usdAgree     = stBoughtUsd === 0 ? ourBoughtUsd === 0
+              : Math.abs(stBoughtUsd - ourBoughtUsd) / Math.max(stBoughtUsd, ourBoughtUsd, 1) <= 0.2;
+            // Divergence classification — not all mismatches are alarming.
+            // Three states:
+            //   "agree"        → numbers match within tolerance (green ✓)
+            //   "st-sees-more" → ST captured MORE buys than us but both agree
+            //                    on zero sells. That's just our trace being
+            //                    conservative (signature-walk gaps), NOT a
+            //                    red flag. Neutral/blue badge.
+            //   "concerning"   → ST caught sells we missed, or the numbers
+            //                    conflict in a way worth a manual look. Red.
+            const ourSells = creatorTrace.sellCount || 0;
+            const sellsMatch = stSells === ourSells || (stSells === 0 && ourSells === 0);
+            let divergenceKind;
+            if (buysAgree && usdAgree) {
+              divergenceKind = "agree";
+            } else if (stBuys >= ourBuys && stSells === 0 && ourSells === 0) {
+              // ST sees same-or-more buys, nobody sold — pure capture gap.
+              divergenceKind = "st-sees-more";
+            } else {
+              divergenceKind = "concerning";
+            }
+            // Identity tags (developer / pool / arbitrage etc.) — surface
+            // them for UI labeling even if the position numbers don't agree.
+            const stIdentity = stPos.identity || null;
+            creatorTrace.solanaTrackerCrossCheck = {
+              source: "solana-tracker /v2/pnl/wallets/{wallet}/tokens/{token}",
+              pnlMode: stPos.pnlMode || "strict",
+              identity: stIdentity,
+              realized: stRealized,
+              unrealized: stUnrealized,
+              total: stTotal,
+              buys: stBuys,
+              sells: stSells,
+              balance: stBalance,
+              costBasisUsd: stCostUsd,
+              valueUsd: stValueUsd,
+              totalBoughtUsd: stBoughtUsd,
+              totalSoldUsd: stSoldUsd,
+              // Per-token "invested" (personal USD into this mint) and
+              // proceeds (USD pulled out via sells). Together with ROI
+              // these answer "did the dev actually put their own money in".
+              invested: stInvested,
+              proceeds: stProceeds,
+              roi: stRoi,
+              firstBuyTs: stFirstBuy,
+              lastBuyTs: stLastBuy,
+              // Tells the UI whether to show a green ✓ or an amber !
+              agrees: buysAgree && usdAgree,
+              buysAgree, usdAgree,
+              // "agree" | "st-sees-more" | "concerning" — drives the badge.
+              divergenceKind,
+              // Useful headline fact: dev has never sold this token.
+              neverSold: stSells === 0 && stSoldUsd === 0,
+            };
+            console.log(`[AUTOPSY] Phase 2G Solana Tracker cross-check: stBuys=${stBuys} stBoughtUsd=$${stBoughtUsd.toFixed(2)} stSells=${stSells} ourBuys=${ourBuys} ourBoughtUsd=$${ourBoughtUsd.toFixed(2)} agrees=${buysAgree && usdAgree}`);
+          } else {
+            console.log("[AUTOPSY] Phase 2G Solana Tracker cross-check skipped (no data — key missing or quota hit)");
+          }
+        } catch (e) {
+          console.warn("[AUTOPSY] Phase 2G Solana Tracker cross-check failed:", e.message);
+        }
+
+        // --- Phase 2G-bis: Multi-hop sub-distributor trace ---
+        // The creator often routes through sub-distributor wallets that do
+        // the actual lock deposits or additional buys. To get the FULL team
+        // picture, identify the top sub-distributors the creator transferred
+        // CLKN to, trace their CLKN activity, and aggregate everything into
+        // a "team network" total. This is what closes the gap between
+        // "creator wallet buys" and "every fee went into the token".
+        try {
+          // Sub-distributor candidates = wallets that received either
+          // significant CLKN OR significant SOL from the creator. This
+          // covers BOTH paths: (a) creator buys CLKN + transfers to sub,
+          // and (b) creator transfers SOL → sub buys CLKN itself. Without
+          // path (b) we miss most buy-and-lock teams.
+          const candidateMap = new Map();
+          for (const [w, tokens] of transferOutByDest) {
+            candidateMap.set(w, { wallet: w, clknTokens: tokens, solLamports: 0 });
+          }
+          for (const [w, lamports] of solOutByDest) {
+            const existing = candidateMap.get(w) || { wallet: w, clknTokens: 0, solLamports: 0 };
+            existing.solLamports = lamports;
+            candidateMap.set(w, existing);
+          }
+          // Rank by combined "value flowed" — treat 1 SOL ≈ 1e6 CLKN units
+          // for ranking purposes (rough; just needs to be in the same
+          // ballpark). Then keep top 3 candidates not already in the
+          // locker / LP / CEX exclusion sets.
+          const subDistCandidates = [...candidateMap.values()]
+            .filter(c => !traceLockerSet.has(c.wallet) && !excludeSet.has(c.wallet))
+            .map(c => ({
+              ...c,
+              tokensReceived: c.clknTokens,
+              solReceived: c.solLamports / 1e9,
+              rankScore: c.clknTokens + (c.solLamports / 1e9) * 1_000_000,
+            }))
+            .filter(c => c.solReceived >= 0.1 || c.clknTokens > 0)
+            .sort((a, b) => b.rankScore - a.rankScore)
+            .slice(0, 3);
+          console.log(`[AUTOPSY] Phase 2G-bis sub-distributor candidates: ${subDistCandidates.map(c => `${c.wallet.slice(0,8)}…(clkn=${Math.round(c.clknTokens)}, sol=${c.solReceived.toFixed(2)})`).join(", ") || "(none)"}`);
+
+          const teamSubTraces = [];
+          for (const cand of subDistCandidates) {
+            try {
+              // Walk the sub-distributor wallet's sigs (smaller cap — these
+              // are secondary in the chain).
+              const subSigs = [];
+              let subBefore = undefined;
+              for (let p = 0; p < 3; p++) {
+                const params = subBefore
+                  ? [cand.wallet, { limit: 1000, before: subBefore }]
+                  : [cand.wallet, { limit: 1000 }];
+                const r = await rpcCall(`autopsy-subdist-${cand.wallet.slice(0,8)}-${p}`, "getSignaturesForAddress", params);
+                const pageSigs = r?.result || [];
+                if (pageSigs.length === 0) break;
+                subSigs.push(...pageSigs);
+                if (pageSigs.length < 1000) break;
+                subBefore = pageSigs[pageSigs.length - 1].signature;
+              }
+              const subSigList = subSigs.map(s => s.signature);
+              let sBuy = 0, sSell = 0, sLock = 0, sTransOut = 0;
+              let sBoughtTokens = 0, sSoldTokens = 0, sLockedTokens = 0;
+              let sBoughtSolLamports = 0, sSoldSolLamports = 0;
+              let sBoughtUsd = 0, sSoldUsd = 0;
+              const subFetchResult = await heliusEnhancedBatched(
+                subSigList, HELIUS_KEY, `phase-2G-sub-${cand.wallet.slice(0,6)}`, heliusTxCache, scanQuality
+              );
+              {
+                {
+                  const dataR = subFetchResult.txs;
+                  for (const tx of dataR) {
+                    if (!tx || tx.transactionError) continue;
+                    const ts = tx.timestamp ? tx.timestamp * 1000 : null;
+                    const dayKey = ts ? Math.floor(ts / 86400000) : null;
+                    let dayUsd = dayKey !== null ? priceCandlesByDay.get(dayKey) : null;
+                    if (!dayUsd && dayKey !== null) {
+                      for (let off = 1; off <= 3 && !dayUsd; off++) {
+                        dayUsd = priceCandlesByDay.get(dayKey - off) || priceCandlesByDay.get(dayKey + off) || null;
+                      }
+                    }
+                    const isSwap = tx.type === "SWAP";
+                    let netSolLamports = 0;
+                    if (isSwap && Array.isArray(tx.nativeTransfers)) {
+                      for (const nt of tx.nativeTransfers) {
+                        if (!nt) continue;
+                        if (nt.fromUserAccount === cand.wallet) netSolLamports -= Number(nt.amount) || 0;
+                        else if (nt.toUserAccount === cand.wallet) netSolLamports += Number(nt.amount) || 0;
+                      }
+                    }
+                    // Same WSOL fix as creator trace — Jupiter/Bags routes
+                    // move SOL via WSOL token transfers, not native transfers.
+                    const WSOL_MINT_SUB = "So11111111111111111111111111111111111111112";
+                    if (isSwap && Array.isArray(tx.tokenTransfers)) {
+                      for (const tt of tx.tokenTransfers) {
+                        if (!tt || tt.mint !== WSOL_MINT_SUB) continue;
+                        const solEquiv = Number(tt.tokenAmount) || 0;
+                        const lamports = Math.round(solEquiv * 1e9);
+                        if (tt.fromUserAccount === cand.wallet) netSolLamports -= lamports;
+                        else if (tt.toUserAccount === cand.wallet) netSolLamports += lamports;
+                      }
+                    }
+                    let solRecorded = false;
+                    const tts = Array.isArray(tx.tokenTransfers) ? tx.tokenTransfers : [];
+                    for (const tt of tts) {
+                      if (!tt || tt.mint !== mint) continue;
+                      const amt = Number(tt.tokenAmount) || 0;
+                      if (amt <= 0) continue;
+                      if (tt.toUserAccount === cand.wallet) {
+                        if (isSwap) {
+                          sBuy++;
+                          sBoughtTokens += amt;
+                          if (dayUsd) sBoughtUsd += amt * dayUsd;
+                          if (!solRecorded && netSolLamports < 0) {
+                            sBoughtSolLamports += Math.abs(netSolLamports);
+                            solRecorded = true;
+                          }
+                        }
+                      } else if (tt.fromUserAccount === cand.wallet) {
+                        if (isSwap) {
+                          sSell++;
+                          sSoldTokens += amt;
+                          if (dayUsd) sSoldUsd += amt * dayUsd;
+                          if (!solRecorded && netSolLamports > 0) {
+                            sSoldSolLamports += netSolLamports;
+                            solRecorded = true;
+                          }
+                        } else if (traceLockerSet.has(tt.toUserAccount)) {
+                          sLock++;
+                          sLockedTokens += amt;
+                        } else {
+                          sTransOut++;
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              const subBoughtSol = sBoughtSolLamports / 1e9;
+              const subSoldSol = sSoldSolLamports / 1e9;
+              // Only include this sub-wallet if it shows TEAM-like behavior:
+              // either it locked tokens (clear team signal), or it
+              // accumulated more than it sold (buy-and-hold for the team).
+              // Excludes wallets that received some CLKN from the creator
+              // but then traded against the team (unrelated personal trading).
+              const subAccumulating = sBuy > sSell && sBoughtTokens > sSoldTokens;
+              const isTeamLike = sLock > 0 || (sBuy >= 3 && subAccumulating);
+              if (isTeamLike) {
+                teamSubTraces.push({
+                  wallet: cand.wallet,
+                  tokensReceivedFromCreator: cand.tokensReceived,
+                  sigsScanned: subSigList.length,
+                  buyCount: sBuy, sellCount: sSell, lockCount: sLock, transferOutCount: sTransOut,
+                  boughtTokens: sBoughtTokens, soldTokens: sSoldTokens, lockedTokens: sLockedTokens,
+                  boughtUsd: sBoughtUsd, soldUsd: sSoldUsd,
+                  boughtSol: subBoughtSol, soldSol: subSoldSol,
+                });
+                console.log(`[AUTOPSY] Phase 2G-bis sub-trace ${cand.wallet.slice(0,8)}…: buys=${sBuy} locks=${sLock} solSpent=${subBoughtSol.toFixed(3)}`);
+              }
+            } catch (e) {
+              console.warn(`[AUTOPSY] Phase 2G-bis sub-distributor walk failed for ${cand.wallet.slice(0,8)}:`, e.message);
+            }
+          }
+
+          // Aggregate into a teamNetwork total (creator + sub-distributors).
+          if (teamSubTraces.length > 0) {
+            let netBuy = buyCount, netSell = sellCount, netLock = lockCount;
+            let netBoughtSol = boughtSol, netSoldSol = soldSol;
+            let netBoughtUsd = boughtUsd, netSoldUsd = soldUsd;
+            let netLockedTokens = lockedTokens;
+            for (const sub of teamSubTraces) {
+              netBuy += sub.buyCount;
+              netSell += sub.sellCount;
+              netLock += sub.lockCount;
+              netBoughtSol += sub.boughtSol;
+              netSoldSol += sub.soldSol;
+              netBoughtUsd += sub.boughtUsd;
+              netSoldUsd += sub.soldUsd;
+              netLockedTokens += sub.lockedTokens;
+            }
+            const netPctReinvested = claimedSol && claimedSol > 0
+              ? Math.min(100, (netBoughtSol / claimedSol) * 100)
+              : null;
+            creatorTrace.teamNetwork = {
+              walletCount: 1 + teamSubTraces.length,
+              subWallets: teamSubTraces.map(s => ({
+                wallet: s.wallet,
+                buyCount: s.buyCount,
+                lockCount: s.lockCount,
+                boughtSol: s.boughtSol,
+                lockedTokens: s.lockedTokens,
+                tokensReceivedFromCreator: s.tokensReceivedFromCreator,
+              })),
+              totalBuyCount: netBuy,
+              totalSellCount: netSell,
+              totalLockCount: netLock,
+              totalBoughtSol: netBoughtSol,
+              totalLockedTokens: netLockedTokens,
+              totalBoughtUsd: netBoughtUsd,
+              totalSoldUsd: netSoldUsd,
+              netUsd: netBoughtUsd - netSoldUsd,
+              pctReinvestedNetwork: netPctReinvested,
+            };
+            console.log(`[AUTOPSY] Phase 2G-bis team network: wallets=${1 + teamSubTraces.length} totalBuys=${netBuy} totalLocks=${netLock} totalSolSpent=${netBoughtSol.toFixed(3)} pctReinvestedNetwork=${netPctReinvested !== null ? netPctReinvested.toFixed(0) + "%" : "—"}`);
+          }
+        } catch (e) {
+          console.warn("[AUTOPSY] Phase 2G-bis multi-hop trace failed:", e.message);
+        }
+      } catch (e) {
+        console.warn("[AUTOPSY] Phase 2G creator-trace failed:", e.message);
+      }
+    }
+
+    // This enrichment now runs whether or not the creator sits in top 100 —
+    // a creator who's "in the top 100 at rank 12" doing daily buy-backs is a
+    // completely different story than one sitting dormant at rank 12. The
+    // direct creator trace (Phase 2G) is authoritative when present; otherwise
+    // fall back to projectWallets from the mint-side walk.
+    if (creatorStatus && (creatorTrace || (walletPnl && walletPnl.projectWallets && walletPnl.projectWallets.length > 0))) {
+      const creatorActivity = creatorTrace || (walletPnl && walletPnl.projectWallets.find(p => p.wallet === creatorStatus.wallet));
+      if (creatorActivity) {
+        const handle = bagsCreatorMeta?.username ? `@${bagsCreatorMeta.username}` : "Verified creator";
+        const netUsd = creatorActivity.boughtUsd - creatorActivity.soldUsd;
+        // Buy frequency: if firstTs available and they have many buys, compute
+        // buys-per-active-day for the "buys every day" claim verification.
+        let buyFreqStr = "";
+        if (creatorActivity.firstTs && creatorActivity.buyCount > 0) {
+          const daysActive = Math.max(1, (Date.now() - creatorActivity.firstTs) / 86400000);
+          const buysPerDay = creatorActivity.buyCount / daysActive;
+          if (buysPerDay >= 0.7) {
+            buyFreqStr = ` (~${buysPerDay.toFixed(1)} buys/day on average over ${Math.round(daysActive)} days)`;
+          } else if (buysPerDay >= 0.1) {
+            buyFreqStr = ` (~${(buysPerDay * 7).toFixed(1)} buys/week)`;
+          }
+        }
+        creatorStatus.onChainActivity = {
+          buyCount: creatorActivity.buyCount,
+          sellCount: creatorActivity.sellCount,
+          lockCount: creatorActivity.lockCount || 0,
+          transferInCount: creatorActivity.transferInCount || 0,
+          transferOutCount: creatorActivity.transferOutCount || 0,
+          boughtTokens: creatorActivity.boughtTokens,
+          soldTokens: creatorActivity.soldTokens,
+          // Traced lock deposits from the creator wallet (signature-walk
+          // subset). Kept for the "N lock deposits" count.
+          lockedTokens: creatorActivity.lockedTokens || 0,
+          // Authoritative total currently locked across ALL locker PDAs,
+          // from holder classification. This is what "X CLKN permanently
+          // locked" should display — 145M for CLKN, not the 60M we traced.
+          lockedTokensActual: lockedSupplyTokens > 0
+            ? Math.max(lockedSupplyTokens, creatorActivity.lockedTokens || 0)
+            : (creatorActivity.lockedTokens || 0),
+          transferOutTokens: creatorActivity.transferOutTokens || 0,
+          transferOutDistinctRecipients: creatorActivity.transferOutDistinctRecipients || 0,
+          boughtUsd: creatorActivity.boughtUsd,
+          soldUsd: creatorActivity.soldUsd,
+          // SOL flow — what the user actually paid in SOL for buy-backs.
+          boughtSol: creatorActivity.boughtSol || 0,
+          soldSol: creatorActivity.soldSol || 0,
+          netSol: creatorActivity.netSol || 0,
+          claimedSol: creatorActivity.claimedSol || null,
+          pctReinvested: creatorActivity.pctReinvested != null ? creatorActivity.pctReinvested : null,
+          creatorSolBalanceNow: creatorActivity.creatorSolBalanceNow != null ? creatorActivity.creatorSolBalanceNow : null,
+          knownSolSentToSubs: creatorActivity.knownSolSentToSubs || 0,
+          unaccountedSol: creatorActivity.unaccountedSol != null ? creatorActivity.unaccountedSol : null,
+          netUsd,
+          lastActivityTs: creatorActivity.lastTs,
+          firstActivityTs: creatorActivity.firstTs,
+          buyFrequencyStr: buyFreqStr,
+          // Multi-hop team network — sub-distributor wallets aggregated.
+          teamNetwork: creatorActivity.teamNetwork || null,
+          // Solana Tracker independent cross-verification of the above
+          // numbers. Null if the key is missing, quota is hit, or the
+          // wallet has no indexed PnL position yet.
+          solanaTrackerCrossCheck: creatorActivity.solanaTrackerCrossCheck || null,
+        };
+        const isLocking = (creatorActivity.lockedTokens || 0) > 0 && (creatorActivity.lockCount || 0) >= 1;
+        // Behavior correction: the Phase 2A behavior tag compared "first
+        // received vs current balance" — which mislabels a buy-and-lock
+        // wallet as REDUCED because locked tokens left the wallet the same
+        // way a sell would. If we have proof the creator did 0 market sells
+        // AND has lock deposits accounting for the gap, override the holder
+        // row's behavior to "ACCUMULATED" (they put more in than they took
+        // out — the locks are removal-from-circulation, not a sell).
+        if (creatorStatus.inTopHolders && creatorActivity.sellCount === 0
+          && (creatorActivity.lockedTokens || 0) > 0) {
+          const creatorHolder = topHolders.find(h => (h.authority || h.wallet) === creatorStatus.wallet);
+          if (creatorHolder && (creatorHolder.behavior === "REDUCED" || creatorHolder.behavior === "EXITED_MOSTLY")) {
+            const oldBehavior = creatorHolder.behavior;
+            creatorHolder.behavior = "ACCUMULATED";
+            creatorHolder.behaviorOverride = {
+              from: oldBehavior,
+              reason: `Wallet did 0 market sells. Apparent reduction (${(creatorHolder.firstAcquiredAmount - creatorHolder.uiAmount).toLocaleString()} tokens) is explained by ${creatorActivity.lockCount} lock deposit${creatorActivity.lockCount === 1 ? "" : "s"} totaling ${Math.round(creatorActivity.lockedTokens).toLocaleString()} CLKN sent to lock contracts.`,
+            };
+            // Rebuild breakdown counts so summary stays consistent.
+            if (behaviorBreakdown && behaviorBreakdown[oldBehavior] > 0) {
+              behaviorBreakdown[oldBehavior]--;
+              behaviorBreakdown.ACCUMULATED = (behaviorBreakdown.ACCUMULATED || 0) + 1;
+            }
+            console.log(`[AUTOPSY] Behavior override for creator ${creatorStatus.wallet.slice(0,8)}…: ${oldBehavior} → ACCUMULATED (locks=${creatorActivity.lockCount}, sells=0)`);
+          }
+        }
+        // Override summary based on actual behavior — this REPLACES the
+        // generic "is in the top 100 at rank X" with the story that matters.
+        // Buy-and-lock is the strongest project signal: buy supply from market,
+        // then permanently remove it via the locker. Highlight that explicitly.
+        const sellsAreNegligible = creatorActivity.sellCount === 0
+          || (creatorActivity.buyCount > creatorActivity.sellCount * 1.5 && creatorActivity.boughtUsd > creatorActivity.soldUsd);
+        // Prefer team-network totals when sub-distributors were detected —
+        // that's the honest "every fee went into the token" picture.
+        const tn = creatorActivity.teamNetwork;
+        const effectiveBuys = tn ? tn.totalBuyCount : creatorActivity.buyCount;
+        const effectiveSells = tn ? tn.totalSellCount : creatorActivity.sellCount;
+        const effectiveLocks = tn ? tn.totalLockCount : creatorActivity.lockCount;
+        const effectiveBoughtSol = tn ? tn.totalBoughtSol : (creatorActivity.boughtSol || 0);
+        // "Permanently locked" should reflect what's ACTUALLY locked right
+        // now (holder-classification total across all locker PDAs), not just
+        // the deposits we traced from the creator wallet. Phase 2G traced 60M
+        // of direct deposits for CLKN; holder classification sees the real
+        // 145M. Use the larger/authoritative holder total when we have it,
+        // falling back to the traced number if classification found nothing.
+        const tracedLockedTokens = tn ? tn.totalLockedTokens : creatorActivity.lockedTokens;
+        const effectiveLockedTokens = lockedSupplyTokens > 0
+          ? Math.max(lockedSupplyTokens, tracedLockedTokens || 0)
+          : tracedLockedTokens;
+        const effectivePctReinvested = tn ? tn.pctReinvestedNetwork : creatorActivity.pctReinvested;
+        const effectiveNetUsd = tn ? tn.netUsd : netUsd;
+        const networkSuffix = tn && tn.walletCount > 1
+          ? ` across creator + ${tn.walletCount - 1} sub-distributor wallet${tn.walletCount - 1 === 1 ? '' : 's'}`
+          : '';
+        if ((isLocking || (tn && tn.totalLockCount > 0)) && effectiveBuys >= 3 && sellsAreNegligible) {
+          const rankSuffix = creatorStatus.inTopHolders && creatorStatus.rank ? ` (rank ${creatorStatus.rank})` : "";
+          const solStr = effectiveBoughtSol > 0
+            ? ` ${effectiveBoughtSol.toFixed(2)} SOL spent on buy-backs${networkSuffix}`
+            : "";
+          const reinvestedStr = effectivePctReinvested != null && creatorActivity.claimedSol
+            ? ` (~${effectivePctReinvested.toFixed(0)}% of the ${creatorActivity.claimedSol.toFixed(2)} SOL claimed in lifetime creator fees recycled back into buys)`
+            : "";
+          // Dual-funding-source insert — when Solana Tracker's independent
+          // indexer captures meaningfully more buys than our trace AND the
+          // extra capital is real (>$50) AND zero sells, surface BOTH
+          // funding paths rather than letting "100% of fees recycled"
+          // imply our trace tells the whole story. Two stacking signals:
+          // fee recycling (our Phase 2G) + personal capital on top (theirs).
+          const stx = creatorActivity.solanaTrackerCrossCheck;
+          let dualFundingStr = "";
+          if (stx && stx.sells === 0 && stx.buys > effectiveBuys && stx.invested > 50) {
+            const extraBuys = stx.buys - effectiveBuys;
+            const extraUsd = Math.max(0, (stx.totalBoughtUsd || 0) - (creatorActivity.boughtUsd || 0));
+            const roiStr = stx.roi ? `, ${stx.roi.toFixed(0)}% ROI` : "";
+            const unrealStr = stx.unrealized > 0 ? `, $${Math.round(stx.unrealized).toLocaleString()} unrealized gain` : "";
+            dualFundingStr = ` Solana Tracker (independent indexer) sees ${extraBuys} additional buys funded by personal capital — ~$${Math.round(extraUsd).toLocaleString()} added on top, bringing lifetime totals to ${stx.buys} buys, $${Math.round(stx.invested).toLocaleString()} personal investment${unrealStr}${roiStr}.`;
+          }
+          creatorStatus.summary = `🔄🔒 ${handle}${rankSuffix} is running a buy-and-lock — ${effectiveBuys} market buys + ${effectiveLocks} lock deposits, ${effectiveSells} actual market sells lifetime${buyFreqStr}.${solStr}${reinvestedStr}.${dualFundingStr} ${Math.round(effectiveLockedTokens).toLocaleString()} CLKN permanently locked.`;
+          creatorStatus.behaviorKind = "BUY_AND_LOCK";
+        } else if (effectiveBuys >= 3 && effectiveBuys > effectiveSells * 1.5 && (tn ? tn.totalBoughtUsd : creatorActivity.boughtUsd) > (tn ? tn.totalSoldUsd : creatorActivity.soldUsd)) {
+          const rankSuffix = creatorStatus.inTopHolders && creatorStatus.rank ? ` and sits at rank ${creatorStatus.rank}` : "";
+          creatorStatus.summary = `🔄 ${handle} is actively buying back${rankSuffix} — ${creatorActivity.buyCount} buys vs ${creatorActivity.sellCount} sells lifetime${buyFreqStr}, net +$${netUsd.toFixed(2)} into the token.`;
+          creatorStatus.behaviorKind = "BUY_BACK_ACTIVE";
+        } else if (creatorActivity.sellCount >= 3 && creatorActivity.sellCount > creatorActivity.buyCount * 2 && creatorActivity.soldUsd > creatorActivity.boughtUsd * 1.5) {
+          creatorStatus.summary = `${handle} has been net-selling — ${creatorActivity.sellCount} sells vs ${creatorActivity.buyCount} buys, net −$${Math.abs(netUsd).toFixed(2)} out. This is distribution, not buy-back behavior.`;
+          creatorStatus.behaviorKind = "NET_SELLING";
+          redFlags.push(`${handle} has been net-selling: ${creatorActivity.sellCount} sells vs ${creatorActivity.buyCount} buys lifetime. The fee-receiving wallet is taking tokens OUT, not putting them back.`);
+        } else if (creatorActivity.buyCount > 0 || creatorActivity.sellCount > 0) {
+          const rankSuffix = creatorStatus.inTopHolders && creatorStatus.rank ? ` (rank ${creatorStatus.rank})` : "";
+          creatorStatus.summary = `${handle}${rankSuffix} has on-chain activity: ${creatorActivity.buyCount} buys, ${creatorActivity.sellCount} sells, net ${netUsd >= 0 ? "+" : "−"}$${Math.abs(netUsd).toFixed(2)}.`;
+          creatorStatus.behaviorKind = "MIXED";
+        }
+
+        // --- Extraction overlay (hidden-dump detection) ---------------------
+        // A "buy-back" / "buy-and-lock" can still be a NET EXTRACTION when the
+        // creator claimed far more in fees than they recycled, or funneled a
+        // large multiple of their on-market buys out to other wallets. The
+        // creator's own wallet showing 0 market sells is exactly what makes a
+        // dev dump hard to see — the value leaves via FEE CLAIMS and TOKEN
+        // TRANSFERS, not swaps. These two factual signals catch that without
+        // asserting intent (we state the chain; we don't claim the recipients
+        // dumped unless a downstream trace proves it). GSD case: claimed
+        // 1,135 SOL, reinvested 11%, funneled 42.7M tokens out, token -99%.
+        const _claimed = creatorActivity.claimedSol || 0;
+        const _reinv = effectivePctReinvested;
+        const _boughtSol = creatorActivity.boughtSol || 0;
+        const _outTok = creatorActivity.transferOutTokens || 0;
+        const _boughtTok = creatorActivity.boughtTokens || 0;
+        const _outShare = supplyTokens > 0 ? _outTok / supplyTokens : 0;
+        // Fee extraction dominates when meaningful fees were claimed but only a
+        // small fraction was recycled into buys.
+        if (_claimed >= 10 && _reinv != null && _reinv < 50) {
+          const _net = Math.max(0, _claimed - _boughtSol);
+          creatorStatus.onChainActivity.feeExtractionDominant = true;
+          creatorStatus.onChainActivity.netFeeExtractionSol = Number(_net.toFixed(2));
+          redFlags.push(`${handle} claimed ~${_claimed.toFixed(0)} SOL in creator fees but recycled only ${_reinv.toFixed(0)}% (~${_boughtSol.toFixed(0)} SOL) back into buys — roughly ${_net.toFixed(0)} SOL kept. The buy-back is real but a minority of the money flow; fee extraction dominates.`);
+        }
+        // Funnel-heavy when the creator moved far more tokens OUT to other
+        // wallets than they bought on-market, and it's a real share of supply.
+        if (_outTok > 0 && _boughtTok > 0 && _outTok > _boughtTok * 3 && _outShare > 0.03) {
+          creatorStatus.onChainActivity.funnelHeavy = true;
+          creatorStatus.onChainActivity.transferOutShareOfSupply = Number((_outShare * 100).toFixed(1));
+          const _recip = creatorActivity.transferOutDistinctRecipients || 0;
+          const _recipStr = _recip > 0 ? ` across ${_recip} distinct wallet${_recip === 1 ? "" : "s"}` : "";
+          redFlags.push(`${handle} transferred ${Math.round(_outTok).toLocaleString()} tokens (~${(_outShare * 100).toFixed(0)}% of supply) out${_recipStr} — far more than the ${Math.round(_boughtTok).toLocaleString()} bought on-market. The creator wallet shows 0 market sells, but a funnel this large is a potential hidden-exit vector: the selling may have happened from the recipient wallets.`);
+        }
+      }
+    }
+
+    // --- Hidden Exit Distributors: transfer-then-dump pattern ---
+    // The forensic signal users care about most: a wallet that distributes
+    // tokens to multiple other wallets which THEN dump them. Classic exit
+    // obfuscation — the source wallet looks innocent ("just transferred to
+    // friends") while the actual selling happens from the recipient wallets,
+    // so they evade simple top-seller scans. Detect by walking each
+    // distributor's recipient list and measuring how many recipients have
+    // dumped most of what they received.
+    // --- Phase 2I: Lock Attribution ---
+    // For each detected lock holder account (locker / selflock category),
+    // trace its single funding transaction to find WHO locked (the fee-payer
+    // signer) and via WHAT platform (the program in the create instruction).
+    // Every lock account has exactly one tx — created+funded, then immovable —
+    // so this is cheap: one getSignaturesForAddress + one getTransaction each.
+    //
+    // Why account-state classification isn't enough: a Streamflow / Jupiter
+    // lock leaves tokens in a self-owned escrow that, by current on-chain
+    // state, is indistinguishable from a generic self-lock. The platform and
+    // the locker's identity live ONLY in the funding tx. So we read it there.
+    //
+    // Per the forensic-evidence-rule, we label a locker "team" ONLY when its
+    // wallet matches the verified creator. Otherwise it's shown neutrally —
+    // it could be the team, or a conviction community holder, and we can't
+    // prove which from the chain alone. Unknown locker programs are surfaced
+    // by their program ID so the tool learns new lockers organically.
+    const LOCK_PLATFORM_BY_PROGRAM = {
+      "strmRqUCoQUgGUan5YhzUZa6KqdzwX5L6FpUxfmKg5m": "Streamflow",
+      "LocpQgucEQHbqNABEYvBvwoxCPsSbG91A1QaQhQQqjn": "Jupiter Lock",
+    };
+    const LOCK_INFRA_PROGRAMS = new Set([
+      "11111111111111111111111111111111",
+      "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+      "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
+      "ComputeBudget111111111111111111111111111111",
+      "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
+    ]);
+    let lockAttribution = null;
+    try {
+      const lockHolders = topHolders.filter(h =>
+        (h.category === "locker" || h.category === "selflock") && h.tokenAccount);
+      if (lockHolders.length > 0) {
+        // Verified team wallets — only the proven creator. We do NOT guess.
+        const teamWallets = new Set();
+        if (creatorStatus && creatorStatus.wallet && creatorStatus.verified !== false
+          && creatorStatus.source !== "genesis-tx-fee-payer") {
+          teamWallets.add(creatorStatus.wallet);
+        }
+        const lockers = [];
+        const platformTotals = {};
+        for (const lh of lockHolders.slice(0, 15)) {
+          try {
+            const sigRes = await rpcCall(`autopsy-lock-sigs-${lh.rank}`, "getSignaturesForAddress", [lh.tokenAccount, { limit: 1000 }]);
+            const sigs = sigRes?.result || [];
+            if (!sigs.length) continue;
+            const fundingSig = sigs[sigs.length - 1].signature; // oldest = creation/funding
+            const txRes = await rpcCall(`autopsy-lock-tx-${lh.rank}`, "getTransaction", [fundingSig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0 }]);
+            const txr = txRes?.result;
+            if (!txr) continue;
+            const msg = (txr.transaction || {}).message || {};
+            const keys = msg.accountKeys || [];
+            const lockerWallet = (keys.find(k => k && k.signer) || {}).pubkey || null;
+            // Collect every program touched (top-level + inner instructions).
+            const progIds = new Set();
+            (msg.instructions || []).forEach(ix => { if (ix && ix.programId) progIds.add(ix.programId); });
+            ((txr.meta || {}).innerInstructions || []).forEach(inner =>
+              (inner.instructions || []).forEach(ix => { if (ix && ix.programId) progIds.add(ix.programId); }));
+            let platform = null, platformProgram = null;
+            for (const pid of progIds) {
+              if (LOCK_PLATFORM_BY_PROGRAM[pid]) { platform = LOCK_PLATFORM_BY_PROGRAM[pid]; platformProgram = pid; break; }
+            }
+            if (!platform) {
+              // No recognized locker — surface the non-infrastructure program
+              // so we can identify and name it later. If there's only infra,
+              // it's a plain self-owned lock (authority set to self / burned).
+              platformProgram = [...progIds].find(p => !LOCK_INFRA_PROGRAMS.has(p)) || null;
+              platform = platformProgram ? "Unrecognized locker" : "Self-owned lock";
+            }
+            const isTeam = !!(lockerWallet && teamWallets.has(lockerWallet));
+            lockers.push({
+              lockAccount: lh.tokenAccount,
+              lockerWallet,
+              amount: lh.uiAmount,
+              share: lh.share,
+              platform,
+              platformProgram,
+              isTeam,
+              fundingSig,
+            });
+            platformTotals[platform] = (platformTotals[platform] || 0) + (lh.share || 0);
+          } catch (e) {
+            console.warn(`[AUTOPSY] Phase 2I lock trace failed for ${lh.tokenAccount.slice(0,8)}:`, e.message);
+          }
+        }
+        if (lockers.length > 0) {
+          const totalShare = lockers.reduce((s, l) => s + (l.share || 0), 0);
+          const teamShare = lockers.filter(l => l.isTeam).reduce((s, l) => s + (l.share || 0), 0);
+          lockAttribution = {
+            lockers: lockers.sort((a, b) => (b.share || 0) - (a.share || 0)),
+            totalLockedShare: totalShare,
+            teamLockedShare: teamShare,
+            // "Unlabeled" = locked by wallets we can't verify as team. Could be
+            // team or conviction community holders — we don't assert which.
+            unlabeledLockedShare: totalShare - teamShare,
+            platformTotals,
+          };
+          console.log(`[AUTOPSY] Phase 2I lock attribution: ${lockers.length} locks, ${(totalShare * 100).toFixed(1)}% total (${(teamShare * 100).toFixed(1)}% verified-team, rest unlabeled), platforms: ${Object.keys(platformTotals).join(", ")}`);
+        }
+      }
+    } catch (e) {
+      console.warn("[AUTOPSY] Phase 2I lock attribution failed:", e.message);
+    }
+
+    let hiddenExitDistributors = [];
+    try {
+      if (distributors && distributors.length > 0 && topHolders && topHolders.length > 0) {
+        // Build a set of "legitimate" source wallets to exclude — verified
+        // Bags / Pump creator wallets and recognized lockers. Their transfers
+        // are normal team distribution, not hidden exits.
+        const legitSourceSet = new Set();
+        if (projectFeeWalletMap && projectFeeWalletMap.size > 0) {
+          for (const w of projectFeeWalletMap.keys()) legitSourceSet.add(w);
+        }
+        for (const h of topHolders) {
+          const addr = h.authority || h.wallet;
+          if ((h.category === "locker" || h.category === "selflock" || h.category === "lp") && addr) {
+            legitSourceSet.add(addr);
+          }
+        }
+
+        for (const d of distributors) {
+          if (legitSourceSet.has(d.sourceWallet)) continue;
+          const recipientStats = (d.recipients || []).map(r => {
+            const h = topHolders.find(th => (th.authority || th.wallet) === r.authority);
+            if (!h || !h.firstAcquiredAmount || h.firstAcquiredAmount <= 0) return null;
+            const cur = Number(h.uiAmount) || 0;
+            const first = Number(h.firstAcquiredAmount) || 0;
+            const dumpRatio = first > 0 ? Math.max(0, (first - cur) / first) : 0;
+            return {
+              rank: r.rank,
+              authority: r.authority,
+              receivedAmount: first,
+              currentBalance: cur,
+              dumpRatio,
+              dumpedMost: dumpRatio > 0.7,
+              dumpedHalf: dumpRatio > 0.5,
+              status: dumpRatio > 0.95 ? "EXITED"
+                : dumpRatio > 0.7 ? "DUMPED_MOST"
+                : dumpRatio > 0.3 ? "TRIMMED"
+                : dumpRatio < -0.2 ? "ACCUMULATED"
+                : "HELD",
+            };
+          }).filter(Boolean);
+          if (recipientStats.length < 2) continue;
+          const dumpedMostCount = recipientStats.filter(r => r.dumpedMost).length;
+          const dumpedHalfCount = recipientStats.filter(r => r.dumpedHalf).length;
+          const exitedCount = recipientStats.filter(r => r.status === "EXITED").length;
+          const dumpedMostPct = dumpedMostCount / recipientStats.length;
+          // Threshold: 50%+ of recipients dumped > 70% of what they received.
+          // For 2-recipient distributors require both; for 3+ require majority.
+          const isCoordinatedExit = recipientStats.length >= 2 && dumpedMostPct >= 0.5;
+          if (isCoordinatedExit) {
+            hiddenExitDistributors.push({
+              sourceWallet: d.sourceWallet,
+              totalRecipients: recipientStats.length,
+              dumpedMostCount,
+              dumpedHalfCount,
+              exitedCount,
+              dumpedMostPct,
+              // Was the source wallet ITSELF a seller? Cross-reference walletPnl
+              // to flag the strongest "transfer-out + sell-the-rest" combo.
+              sourceAlsoSold: (() => {
+                if (!walletPnl) return null;
+                const sp = (walletPnl.topSellers || []).find(s => s.wallet === d.sourceWallet);
+                if (sp) return { soldUsd: sp.soldUsd, sellCount: sp.sellCount };
+                return null;
+              })(),
+              recipientStats,
+            });
+          }
+        }
+
+        // Red flags for any coordinated-exit patterns we found.
+        for (const ex of hiddenExitDistributors) {
+          const srcShort = ex.sourceWallet.slice(0, 8) + "…";
+          const alsoSold = ex.sourceAlsoSold
+            ? ` AND the source wallet itself sold $${ex.sourceAlsoSold.soldUsd.toFixed(0)} across ${ex.sourceAlsoSold.sellCount} swaps`
+            : "";
+          redFlags.push(`🚨 HIDDEN-EXIT PATTERN: Wallet ${srcShort} transferred to ${ex.totalRecipients} top holders and ${ex.dumpedMostCount} of them have dumped > 70% of what they received${alsoSold}. Coordinated transfer-then-dump signature — the source wallet looks clean on a simple sell scan, but the recipients are the ones doing the selling.`);
+        }
+      }
+    } catch (e) {
+      console.warn("[AUTOPSY] Hidden-exit distributor detection failed:", e.message);
+    }
+
+    // --- Soften bulk-distribution red flag for bonding-curve tokens ---
+    // For Bags/Pump tokens it's common for one bonding-curve buyer to be the
+    // team's distribution wallet — they bought in size during the BC then
+    // distributed to a holder list. That's a legitimate launch pattern, not
+    // an insider rug. We don't suppress the signal entirely (it's still
+    // useful information), but we add context so it's not read as fraud.
+    if (bondingCurveActive() && distributors && distributors.length > 0) {
+      // Find any bulk-distribution flag we added earlier and reframe it.
+      for (let i = 0; i < redFlags.length; i++) {
+        if (redFlags[i].includes("distributed tokens to") && redFlags[i].includes("top 20 holders")) {
+          redFlags[i] += " (Context: this token launched via a bonding-curve platform — a single wallet distributing to many top holders is consistent with the team buying through the BC and then distributing to a known holder list, which is a legitimate launch pattern. Verify the distributor wallet's history before treating this as insider activity.)";
+        }
+      }
+    }
+
+    // --- TRANSFER source enrichment ---
+    // A holder labeled "WALLET TRANSFER from <opaque hash>" looks suspicious
+    // even when the source is a known team-distribution wallet (a wallet that
+    // bought big on the bonding curve then airdropped to a holder list — a
+    // legitimate pattern for Bags/Pump launches with a previous-project list).
+    // Enrich each TRANSFER holder with what the source wallet actually IS, so
+    // the UI can show "from team distribution wallet" instead of a raw hash.
+    // FORENSIC PRINCIPLE: we only label a wallet "team" / "creator" when we
+    // have VERIFIED evidence — i.e., it's registered with Bags or Pump as an
+    // official creator. Everything else gets a factual, neutral label that
+    // describes what the wallet DID without assuming intent. A wallet that
+    // received from a verified creator could be a legitimate sub-distributor
+    // OR a coordinated dump-prep wallet — on-chain data alone can't tell
+    // them apart, so we don't pretend it can.
+    try {
+      const distSourceSet = new Set((distributors || []).map(d => d.sourceWallet));
+      const bagsCreatorWallets = new Set(
+        (bagsInfo?.officialCreators || []).map(c => c.wallet).filter(Boolean)
+      );
+
+      for (const h of topHolders) {
+        if (h.acquisitionType === "TRANSFER" && h.acquisitionSource) {
+          const src = h.acquisitionSource;
+          if (bagsCreatorWallets.has(src)) {
+            // PROVEN — Bags creator/v3 explicitly lists this wallet.
+            h.acquisitionSourceKind = "bags-creator";
+            h.acquisitionSourceContext = "Bags-verified creator wallet";
+          } else if (distSourceSet.has(src)) {
+            // Distributor — neutral fact only. Does NOT claim team status.
+            // Could be team operations, could be coordinated insider
+            // distribution, could be a public airdrop. The data shows what
+            // happened, not WHY.
+            const dist = (distributors || []).find(d => d.sourceWallet === src);
+            const cnt = dist ? (dist.walletRecipientsInTop20 || dist.recipientsInTop20 || 0) : 0;
+            h.acquisitionSourceKind = "distributor";
+            h.acquisitionSourceContext = cnt >= 2
+              ? `Distributor wallet (sent to ${cnt} top-20 holders — origin not verified)`
+              : null;
+          } else if (dbcBuyerSet && dbcBuyerSet.has(src)) {
+            // PROVEN — we walked the DBC pool and saw this wallet buy.
+            h.acquisitionSourceKind = "bc-buyer";
+            h.acquisitionSourceContext = bagsInfo ? "Bags bonding-curve buyer (verified)" : "Pump bonding-curve buyer (verified)";
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[AUTOPSY] TRANSFER source enrichment failed:", e.message);
+    }
+
+    // --- Solscan enrichment pass ---
+    // Independent wallet labels (CEX hot wallets, market makers, known team
+    // wallets, etc.) for any counterparty we don't already recognize. Pulls
+    // labels from Solscan in batch with a small concurrency cap to be polite
+    // to the free-tier quota. Degrades to no-op if the API key is missing.
+    let solscanHolderCount = null;
+    if (solscan.isConfigured()) {
+      try {
+        // Independent holder count — third source alongside Helius (our walk)
+        // and Jupiter (their indexer). When all three agree, high confidence.
+        solscanHolderCount = await solscan.getTokenHolderCount(mint);
+        // Collect addresses that need a label: top-100 holders that aren't
+        // already classified as LP/locker/program, plus distinct distributor
+        // sources, plus distinct TRANSFER acquisition-sources. Cap total
+        // batch at 60 addresses per autopsy to stay quota-friendly.
+        const needLabels = new Set();
+        for (const h of topHolders) {
+          if (h.category !== "wallet") continue;
+          const addr = h.authority || h.wallet;
+          if (addr) needLabels.add(addr);
+          if (h.acquisitionSource) needLabels.add(h.acquisitionSource);
+        }
+        for (const d of (distributors || [])) {
+          if (d.sourceWallet) needLabels.add(d.sourceWallet);
+        }
+        const addrs = [...needLabels].slice(0, 60);
+        const labelMap = await solscan.batchAccountLabels(addrs);
+        // Apply labels to topHolders + distributors
+        for (const h of topHolders) {
+          const addr = h.authority || h.wallet;
+          if (addr && labelMap.get(addr)) h.solscanLabel = labelMap.get(addr);
+          if (h.acquisitionSource && labelMap.get(h.acquisitionSource)) {
+            h.acquisitionSourceSolscanLabel = labelMap.get(h.acquisitionSource);
+          }
+        }
+        for (const d of (distributors || [])) {
+          if (d.sourceWallet && labelMap.get(d.sourceWallet)) {
+            d.solscanLabel = labelMap.get(d.sourceWallet);
+          }
+        }
+        const labelHitCount = [...labelMap.values()].filter(Boolean).length;
+        console.log(`[AUTOPSY] Solscan: labels requested for ${addrs.length} wallets, ${labelHitCount} returned non-null. holderCount=${solscanHolderCount}`);
+      } catch (e) {
+        console.warn("[AUTOPSY] Solscan enrichment failed:", e.message);
+      }
+    }
+
+    // --- Extraction verdict correction (hidden dev-dump guard) -------------
+    // The base verdict ladder runs before the creator trace, so a token that
+    // is technically still trading (real liquidity + volume) lands on ALIVE /
+    // "AUTOPSY CANCELED" even when the creator quietly extracted heavily via
+    // FEES and TOKEN TRANSFERS rather than market sells. That cheerful frame
+    // is the exact false-reassurance failure mode this tool exists to avoid.
+    // Once the creator analysis has run, downgrade an ALIVE verdict to AT_RISK
+    // when the extraction overlay fired AND the price has genuinely collapsed
+    // (so we don't ding a healthy token whose creator merely claimed fees).
+    {
+      const oa = creatorStatus && creatorStatus.onChainActivity;
+      const extractionFlag = oa && (oa.feeExtractionDominant || oa.funnelHeavy);
+      const drawdown = priceHistory && priceHistory.drawdownFromPeakPct != null ? priceHistory.drawdownFromPeakPct : null;
+      const collapsed = (drawdown != null && drawdown <= -80) || (priceChangeH24 != null && priceChangeH24 <= -50);
+      if (verdict.severity === "ALIVE" && extractionFlag && collapsed) {
+        verdict = { type: "CREATOR_EXTRACTED", label: "Status: TRADING — BUT CREATOR EXTRACTED", severity: "AT_RISK", color: "#F59E0B", icon: "🩸" };
+        reportMode = "health-assessment";
+        reportHeadline = "🩸 AUTOPSY ON STANDBY";
+        reportSubhead = oa.funnelHeavy && oa.feeExtractionDominant
+          ? "Still trading, but the creator extracted value via fees and funneled a large share of supply out to other wallets while the price collapsed. Their own wallet shows no market sells — the dump hid in fee claims and transfers."
+          : oa.feeExtractionDominant
+          ? "Still trading, but the creator claimed far more in fees than they recycled while the price collapsed. The buy-back is real but a minority of the money flow."
+          : "Still trading, but the creator funneled a large share of supply out to other wallets while the price collapsed — a potential hidden-exit vector.";
+      }
+    }
+
+    // --- AI Narration (Claude Haiku, Cluck's voice, deterministic facts only) ---
+    const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+    let narrative = null;
+    if (ANTHROPIC_KEY) {
+      const facts = {
+        symbol, name,
+        verdict: verdict.type,
+        ageDays: ageDays !== null ? Math.round(ageDays) : null,
+        totalLiquidityUsd: Number(totalLiqUsd.toFixed(2)),
+        volume24hUsd: Number(totalVol24h.toFixed(2)),
+        priceChange1h:  priceChangeH1  !== null ? `${priceChangeH1  >= 0 ? "+" : ""}${priceChangeH1.toFixed(1)}%`  : null,
+        priceChange6h:  priceChangeH6  !== null ? `${priceChangeH6  >= 0 ? "+" : ""}${priceChangeH6.toFixed(1)}%`  : null,
+        priceChange24h: priceChangeH24 !== null ? `${priceChangeH24 >= 0 ? "+" : ""}${priceChangeH24.toFixed(1)}%` : null,
+        buys24h, sells24h,
+        mintAuthorityActive: !!mintAuthority,
+        freezeAuthorityActive: !!freezeAuthority,
+        // Token-2022 extension risks (modern honeypot vectors). Only present
+        // for Token-2022 mints; null/empty for standard SPL tokens. When a
+        // honeypot-grade extension is present this is the headline finding.
+        token2022: isToken2022 ? {
+          isToken2022: true,
+          transferFeePct: transferFeeBps != null ? `${(transferFeeBps / 100).toFixed(2)}%` : null,
+          risks: token2022Risks.map(r => ({ kind: r.kind, severity: r.severity, label: r.label })),
+          hasHoneypotExtension,
+          note: hasHoneypotExtension
+            ? "HONEYPOT-GRADE Token-2022 extension present (non-transferable, default-frozen, active transfer hook, or ~100% transfer fee). This is the headline — buyers cannot reliably sell. Lead with it and name the exact mechanism from risks[]."
+            : token2022Risks.length > 0
+            ? "Token-2022 extensions present that affect trading (transfer fee and/or permanent delegate). Name them plainly as costs/risks; a permanent delegate means holdings are seizable, a transfer fee taxes every trade."
+            : "Token-2022 mint with no dangerous extensions detected — note the program but no extension-based red flag.",
+        } : null,
+        top10Concentration: top10Share !== null ? `${(top10Share * 100).toFixed(0)}%` : null,
+        priceUsd, fdv, marketCap,
+        poolCount: solPairs.length,
+        topHolderForensics: {
+          lockedSupplyShare: `${(lockedSupplyShare * 100).toFixed(1)}%`,
+          humanSupplyShare: `${(humanSupplyShare * 100).toFixed(1)}%`,
+          snipersInTop20: holderBreakdown.sniper,
+          earlyBuyersInTop20: holderBreakdown.very_early + holderBreakdown.early,
+          bondingCurveBuyersInTop20: holderBreakdown.bonding_curve,
+          prePoolHoldersInTop20: holderBreakdown.pre_pool,
+          lockedPositionsInTop20: holderBreakdown.locker + holderBreakdown.selflock,
+          lpPositionsInTop20: holderBreakdown.lp,
+          holding: behaviorBreakdown.HELD,
+          accumulated: behaviorBreakdown.ACCUMULATED,
+          reduced: behaviorBreakdown.REDUCED,
+          exitedMostly: behaviorBreakdown.EXITED_MOSTLY,
+        },
+        // Lock attribution — who locked supply, via what platform. Feed this
+        // so the narrator credits locked supply as conviction and NEVER reads
+        // "creator not a top holder" as "abandoned" when supply is locked.
+        // teamLocked = verified-creator locks; unlabeledLocked = locks by
+        // wallets we can't prove are team (could be team OR community holders
+        // — do NOT assert which).
+        lockAttribution: lockAttribution ? {
+          totalLockedPctOfSupply: `${(lockAttribution.totalLockedShare * 100).toFixed(1)}%`,
+          teamVerifiedLockedPct: `${(lockAttribution.teamLockedShare * 100).toFixed(1)}%`,
+          unlabeledLockedPct: `${(lockAttribution.unlabeledLockedShare * 100).toFixed(1)}%`,
+          lockerWalletCount: lockAttribution.lockers.length,
+          platforms: Object.keys(lockAttribution.platformTotals),
+          note: "Unlabeled locks are by wallets not verified as team — they may be team OR conviction community holders. Do not claim which. Locked supply is removed from circulation; treat it as a commitment signal, not 'abandoned'.",
+        } : null,
+        // Creator wallet profile — established operator wallet vs fresh
+        // throwaway deployer, plus funding source for fresh wallets.
+        creatorWalletProfile: creatorWalletProfile ? {
+          established: creatorWalletProfile.isEstablished,
+          txCountAtLeast: creatorWalletProfile.txCountAtLeast,
+          deployedTokenCount: creatorWalletProfile.deployedTokenCount,
+          deployedTokenCountExact: creatorWalletProfile.deployedTokenCountExact,
+          isSerialDeployer: creatorWalletProfile.isSerialDeployer,
+          fundedBy: creatorWalletProfile.fundingSource
+            ? (creatorWalletProfile.fundingSource.label || creatorWalletProfile.fundingSource.wallet)
+            : null,
+          note: creatorWalletProfile.isSerialDeployer
+            ? "SERIAL DEPLOYER — this wallet has launched many tokens. A long tx history here is a token-mill signal, NOT a committed operator. Do NOT describe it as 'established/verified operator' in a reassuring way; name the serial-launch pattern."
+            : creatorWalletProfile.deployedTokenCount != null && creatorWalletProfile.deployedTokenCount > 1
+            ? `Creator wallet has deployed ${creatorWalletProfile.deployedTokenCount} tokens — has launched others before. Mention neutrally; established history is a fact, not a safety guarantee.`
+            : creatorWalletProfile.isEstablished
+            ? "Active wallet with a long tx history. State neutrally — a long history is a fact, NOT proof of legitimacy (serial ruggers also have long histories). Don't call it 'verified operator' as if it's reassuring."
+            : "Fresh/low-activity wallet. If fundedBy is set, that's who sent it its first SOL — a fresh deployer funded from a single source right before launch is an obfuscation pattern worth naming neutrally.",
+        } : null,
+        // Pump.fun creator-fee signal (when present). unclaimedSol is what's
+        // sitting in the creator's fee vault right now; feeEventCount is how
+        // many on-chain fee events the vault has seen (activity proxy).
+        pumpCreatorFees: pumpCreatorFees ? {
+          unclaimedSol: pumpCreatorFees.unclaimedSol,
+          lifetimeClaimedSol: pumpCreatorFees.lifetimeClaimedSol,
+          lifetimeTotalSol: pumpCreatorFees.lifetimeTotalSol,
+          feeEventCount: pumpCreatorFees.feeEventCount,
+          feeEventsCapped: pumpCreatorFees.feeEventsCapped,
+          note: "Pump.fun creator fees accrue in an on-chain vault. lifetimeClaimedSol is how much the creator has pulled OUT of this token's fee vault over its life; unclaimedSol is what's still sitting there. lifetimeTotalSol = claimed + unclaimed = total creator-fee revenue realized from this token. If feeEventsCapped is true, claimed is a lower bound (vault history exceeded 1000 events).",
+        } : null,
+        lifetimeAnalysis: lifetime ? {
+          mintedDaysAgo: lifetime.genesisTimestamp ? Math.round((Date.now() - lifetime.genesisTimestamp) / 86400000) : null,
+          totalKnownSignatures: lifetime.totalKnownSignatures,
+          signatureHistoryTruncated: lifetime.signatureHistoryTruncated,
+          bondingCurveDetected: lifetime.bondingCurveDetected,
+          bondingCurveSource: lifetime.bondingCurveSource,
+          postLaunchMintEvents: lifetime.keyEvents.filter(e => e.type === "MINT_EVENT").length,
+          burnEventsObserved: lifetime.keyEvents.filter(e => e.type === "BURN_EVENT").length,
+          totalBurnedObserved: lifetime.totalBurnedObserved,
+          burnedAsShareOfSupply: supplyTokens > 0 && lifetime.totalBurnedObserved > 0 ? `${(lifetime.totalBurnedObserved / supplyTokens * 100).toFixed(2)}%` : null,
+          largeTransfersObserved: lifetime.keyEvents.filter(e => e.type === "LARGE_TRANSFER").length,
+          airdropEventsObserved: lifetime.airdropEvents.length,
+          dustDropEventsObserved: lifetime.airdropEvents.filter(a => a.kind === "dust").length,
+          totalAirdropRecipients: lifetime.airdropEvents.reduce((s, a) => s + a.recipients, 0),
+          keyEventCount: lifetime.keyEvents.length,
+        } : null,
+        creatorStatus: creatorStatus ? {
+          inTopHolders: creatorStatus.inTopHolders,
+          rank: creatorStatus.rank || null,
+          behavior: creatorStatus.behavior || null,
+          behaviorKind: creatorStatus.behaviorKind || null,
+          summary: creatorStatus.summary,
+          onChainActivity: creatorStatus.onChainActivity || null,
+        } : null,
+        // Explicit count clarity — these are over the TOP 100 holders, NOT
+        // top 20. Stops the AI from writing "of the top 20, 22 are pre-pool"
+        // which is mathematically impossible.
+        topHoldersScannedCount: topHolders.length,
+        acquisitionBreakdown: (() => {
+          const counts = { BOUGHT: 0, TRANSFER: 0, MINTED: 0, OTHER: 0, UNKNOWN: 0 };
+          topHolders.filter(h => h.category === "wallet").forEach(h => {
+            counts[h.acquisitionType || "UNKNOWN"] = (counts[h.acquisitionType || "UNKNOWN"] || 0) + 1;
+          });
+          return counts;
+        })(),
+        distributorCount: distributors.length,
+        topDistributorRecipients: distributors[0]?.recipientsInTop20 || 0,
+        // Critical: is the top distributor the VERIFIED creator wallet? If
+        // yes, this is team distribution (migration / airdrop to past
+        // supporters / community allocation), NOT insider rugging.
+        topDistributorIsVerifiedCreator: !!(distributors[0] && distributors[0].isVerifiedTeamWallet),
+        bagsLaunch: bagsInfo ? {
+          isBagsToken: true,
+          status: bagsInfo.status,
+          symbol: bagsInfo.symbol,
+          // Bags graduation status from Solana Tracker (market "meteora-curve"
+          // = still on the Bags DBC curve; graduated = migrated to Meteora
+          // DAMM). onBondingCurve true means NO DEX pool yet — that's normal,
+          // not a rug; the real liquidity is the curve reserve (stLiquidityUsd).
+          graduated: bagsInfo.graduated != null ? bagsInfo.graduated : null,
+          onBondingCurve: bagsInfo.onBondingCurve === true,
+          curvePercentage: bagsInfo.curvePercentage != null ? bagsInfo.curvePercentage : null,
+          stLiquidityUsd: bagsInfo.stLiquidityUsd != null ? bagsInfo.stLiquidityUsd : null,
+          market: bagsInfo.market || null,
+          officialCreators: bagsInfo.officialCreators.map(c => `${c.provider}:${c.username}`),
+          dbcSignaturesScanned: bagsInfo.dbcSignaturesScanned,
+          dbcBuyersIdentified: bagsInfo.dbcBuyersIdentified,
+          dbcBuyersInTop100: topHolders.filter(h => h.dbcVerified).length,
+          lifetimeFeesSol: bagsInfo.lifetimeFeesSol,
+          totalClaimedSol: bagsInfo.totalClaimedSol,
+          claimEventCount: bagsInfo.claimEventCount,
+          daysSinceLastClaim: bagsInfo.lastClaimTimestamp ? Math.round((Date.now() - bagsInfo.lastClaimTimestamp) / 86400000) : null,
+          feeWalletsInTop100: topHolders.filter(h => h.projectFeeWallet && h.projectFeeWallet.source === "bags").length,
+        } : null,
+        creatorVerification: {
+          source: effectiveCreatorSource,
+          isPlatformUnverified: effectiveCreatorSource === "unverified-platform-launch",
+        },
+        pumpLaunch: pumpInfo ? {
+          isPumpToken: true,
+          // Graduation is authoritative from Solana Tracker's pool market:
+          // "pumpfun" = STILL on the bonding curve; PumpSwap/Raydium/Meteora
+          // = graduated. null = unknown (don't assert either way).
+          graduated: pumpInfo.complete,
+          onBondingCurve: pumpInfo.onBondingCurve === true,
+          curvePercentage: pumpInfo.curvePercentage != null ? pumpInfo.curvePercentage : null,
+          market: pumpInfo.market || null,
+          // Real liquidity from ST (the bonding-curve reserve pre-graduation,
+          // or the DEX pool post-graduation) — present even when DexScreener
+          // shows $0 because it dropped/never-indexed the pair.
+          stLiquidityUsd: pumpInfo.stLiquidityUsd != null ? pumpInfo.stLiquidityUsd : null,
+          symbol: pumpInfo.symbol,
+          creator: pumpInfo.creator,
+          hasSocials: !!(pumpInfo.twitter || pumpInfo.telegram || pumpInfo.website),
+          bcSignaturesScanned: pumpInfo.bcSignaturesScanned || 0,
+          bcBuyersIdentified: pumpInfo.bcBuyersIdentified || 0,
+          bcBuyersInTop100: topHolders.filter(h => h.dbcVerified).length,
+          pumpEraPeakPriceUsd: pumpInfo.priceHistory?.peakPrice || null,
+        } : null,
+        hiddenExitPatterns: hiddenExitDistributors && hiddenExitDistributors.length > 0 ? {
+          count: hiddenExitDistributors.length,
+          topPattern: hiddenExitDistributors[0] ? {
+            sourceShort: hiddenExitDistributors[0].sourceWallet.slice(0, 8) + "…",
+            totalRecipients: hiddenExitDistributors[0].totalRecipients,
+            dumpedMostCount: hiddenExitDistributors[0].dumpedMostCount,
+            exitedCount: hiddenExitDistributors[0].exitedCount,
+            sourceAlsoSold: !!hiddenExitDistributors[0].sourceAlsoSold,
+          } : null,
+        } : null,
+        pnlLedger: walletPnl ? {
+          walletsAnalyzed: walletPnl.walletsAnalyzed,
+          signaturesScanned: walletPnl.signaturesScanned,
+          coverageMode: walletPnl.coverageMode,
+          topSellerSoldUsd: walletPnl.topSellers[0]?.soldUsd || 0,
+          topSellerSoldTokens: walletPnl.topSellers[0]?.soldTokens || 0,
+          topBuyerBoughtUsd: walletPnl.topBuyers[0]?.boughtUsd || 0,
+          biggestWinnerRealizedUsd: walletPnl.madeMoney[0]?.realizedPnlUsd || 0,
+          biggestLoserRealizedUsd: walletPnl.gotWrecked[0]?.realizedPnlUsd || 0,
+          tookTheMoneyCount: walletPnl.tookTheMoney.length,
+          tookTheMoneyTopProfitUsd: walletPnl.tookTheMoney[0]?.realizedPnlUsd || 0,
+        } : null,
+        priceHistory: priceHistory ? {
+          peakPriceUsd: priceHistory.peakPrice,
+          peakMarketCapUsd: priceHistory.peakMarketCap,
+          peakDaysAgo: priceHistory.peakTimestamp ? Math.round((Date.now() - priceHistory.peakTimestamp) / 86400000) : null,
+          currentPriceUsd: priceHistory.currentPrice,
+          drawdownFromPeakPct: priceHistory.drawdownFromPeakPct !== null ? `${priceHistory.drawdownFromPeakPct.toFixed(1)}%` : null,
+          historyDays: priceHistory.candleCount,
+          // Multi-window volume context — surfaces 7d / 30d sums so a
+          // single quiet day doesn't make a healthy token look UNCLEAR.
+          volumeWindows: priceHistory.volumeWindows || null,
+        } : null,
+        redFlags,
+        lpLock: lpStatus ? { status: lpStatus.status, lpBurnPct: lpStatus.lpBurnPct, note: lpStatus.label } : null,
+        cexPresence: cexPresence ? { exchanges: cexPresence.exchanges, note: `Listed/custodied by ${cexPresence.exchanges.length} exchange(s) (${cexPresence.exchanges.slice(0, 5).join(", ")}${cexPresence.exchanges.length > 5 ? `, +${cexPresence.exchanges.length - 5} more` : ""}) among the true top holders — a legitimacy signal (cleared CEX due diligence; adds off-chain order-book liquidity not visible on-chain). ~${Math.round((cexPresence.top10Share || 0) * 100)}% of supply is exchange-custodied — custodial, not single-entity concentration.` } : null,
+        creatorVerification: creatorVerification ? { status: creatorVerification.status, note: creatorVerification.status === "verified" ? `Creator identity is verified on Bags: ${creatorVerification.handles.map(h => "@" + h.username).join(", ")} (${creatorVerification.handles[0].provider}). A named, verified human is attached to the fee wallet — an accountability signal.` : `Bags token but no verified social is linked to the creator wallet(s) — an anonymous fee earner. Not inherently bad (many legit devs stay anon), but there's no verified identity to hold accountable.` } : null,
+        metadata: metadataStatus ? { status: metadataStatus.status, mutable: metadataStatus.mutable, updateAuthority: metadataStatus.updateAuthority, note: metadataStatus.label } : null,
+      };
+      const modeIntro = reportMode === "health-checkup"
+        ? "You are Cluck Norris, a wry, blunt, no-hype crypto sensei. The user paste a token expecting an autopsy — but this patient is alive and trading. AUTOPSY CANCELED. Open by acknowledging you came with the scalpel and didn't need it, then deliver a Full Health Checkup using the verified on-chain facts. Same forensic depth, but framed as a physical, not a post-mortem. Do NOT use death language (corpse, post-mortem, cause of death, dying, fade). Use checkup/health/vital-signs language instead."
+        : reportMode === "health-assessment"
+        ? "You are Cluck Norris, a wry, blunt, no-hype crypto sensei. The user paste a token expecting an autopsy — but this patient is alive, just bruised. AUTOPSY ON STANDBY. Open by acknowledging the patient is alive but showing warning signs / heavy retracement, then deliver a Health Assessment using the verified on-chain facts. Honest about concerns, but not a death certificate. Avoid 'corpse' / 'post-mortem' language; use 'health' / 'patient' / 'recovery' / 'warning signs' framing."
+        : "You are Cluck Norris, a wry, blunt, no-hype crypto sensei narrating a forensic post-mortem on a Solana token. You receive verified on-chain facts and must explain what happened — or what state the token is in — as a teaching case study.";
+      const sysPrompt = `${modeIntro}
+
+STRICT RULES:
+- ONLY use the facts you are given. Never invent numbers, dates, wallet addresses, or events that are not in the data.
+- Voice: blunt, dry, slightly wry. For dead/dying tokens, treat the token as a teachable corpse. For alive tokens, treat them as a live patient — describe vital signs and overall health, not death. No hype, no shilling, no price predictions.
+- Length: 2 to 3 short paragraphs. Mobile reading.
+- Reference the specific red flags by what they are. Be specific about the verdict.
+- End with one sentence naming the lesson the reader should take. Something like: "The tell was X — exactly the kind of pattern the Rugs lesson teaches you to spot."
+- If the verdict is ALIVE or UNCLEAR, narrate that honestly. Do not invent a death.
+- READ THE PRICE TREND. A token can have low 24h volume and still be appreciating (quiet accumulation, not a fade), or be moving down (active distribution). If priceChange24h is positive, do not call it a "slow fade" or "quiet death" — it is trending up on thin volume, which is a different story.
+- READ THE TOP-HOLDER FORENSICS. The topHolderForensics block tells you how the top 20 broke down: how many are in locks vs LP vs human wallets; how many were launch snipers vs early buyers vs later; how many bought through a bonding curve vs received tokens pre-pool; how many of the humans are still holding vs sold vs accumulated more. Reference this when it tells a story.
+  CRITICAL on "pre-pool" / "bonding curve": for a Bags.fm or Pump.fun token (bondingCurveDetected true, or the mint ends in "pump"/"BAGS"), holders who acquired BEFORE the DEX pool existed bought ON THE BONDING CURVE before the token graduated to its public pool (e.g. Meteora). This is the NORMAL early-buyer path — they are NOT pre-launch insiders and did NOT "receive an allocation before launch." NEVER describe bonding-curve / pre-graduation buyers as insider distribution or pre-launch allocations. The "possible insider distribution" read ONLY applies to a NON-launchpad token where wallets received tokens before any pool with no bonding-curve mechanism at all. When in doubt on a launchpad token, call them "early bonding-curve buyers," not insiders.
+- READ THE LIFETIME ANALYSIS. lifetimeAnalysis.mintedDaysAgo tells you when the token was created. postLaunchMintEvents > 0 means the mint authority was actually USED to print supply after launch — name that explicitly as proven dilution, not just theoretical risk. bondingCurveDetected being true means this is a Bags.fm or Pump.fun graduated token; reflect that in how you describe early holders.
+- READ THE PRICE HISTORY EXACTLY. priceHistory.drawdownFromPeakPct tells you the drop from the daily-close peak in the DEX-pool's history. priceHistory.peakDaysAgo gives the EXACT number of days since that peak. CRITICAL: use peakDaysAgo verbatim — NEVER invent timeframes like "first week" or "seven weeks" unless they match peakDaysAgo. If peakDaysAgo is 54, say "peaked 54 days ago," not "in the first week" or any other fabricated phrase. Also remember: for graduated Bags.fm or Pump.fun tokens, the price history starts at GRADUATION, not at token mint — so the "peak" may be the post-graduation settled price, not the bonding-curve high. Be honest about which window you're reading.
+- READ THE CREATOR STATUS. creatorStatus tells you what the wallet that paid for the genesis tx has done with their position. CRITICAL: "not in the top 20/100 holders" does NOT automatically mean the creator exited or distributed — their tokens may be LOCKED (see lockAttribution), or the creator wallet may be misidentified (on Pump.fun/Bags graduated tokens we sometimes only have the genesis-tx fee payer, which is a platform wallet, not the team). NEVER assert "the creator dumped / exited / distributed" off "not a current holder" alone. Only say it if creatorStatus shows actual sells. If they HELD or ACCUMULATED, say so honestly.
+- READ THE LOCK ATTRIBUTION. lockAttribution (when present) tells you how much supply is LOCKED and via what platform (Streamflow, Jupiter Lock, etc.). Locked supply is removed from circulation — a commitment signal, NOT abandonment. teamVerifiedLockedPct is locks by the proven creator; unlabeledLockedPct is locks by wallets we could NOT verify as team (could be team OR conviction community holders — do NOT claim which). If a meaningful % of supply is locked, name it as a positive and NEVER pair it with an "everyone abandoned ship" narrative — those contradict each other.
+- READ THE CREATOR FEES (both platforms). State plainly how much the creator extracted in fees over the token's life — this is a key honest fact a reader of a FAILED or collapsed token wants. The number comes from whichever applies: for Pump.fun tokens, pumpCreatorFees.lifetimeTotalSol (claimed + unclaimed); for Bags tokens, creatorStatus.onChainActivity.claimedSol (SOL claimed in creator fees). Treat both the same way: "the creator pulled ~X SOL in creator fees over the token's life." Do NOT moralize or accuse — earning creator fees is normal; just report the number and let the reader judge. If the fee total is meaningful relative to the token's collapse, naming it is exactly the kind of fact this tool exists to surface. The "fees recycled back into buys = positive story" framing ONLY applies when pctReinvested is genuinely high (e.g. 70%+) AND feeExtractionDominant is not set; a creator who claimed a lot but recycled only a small fraction (low pctReinvested / feeExtractionDominant true) is EXTRACTING, not recycling — say that plainly even if there is a token-flow tag like buy-back.
+- READ THE CREATOR WALLET PROFILE. creatorWalletProfile.established=true means the creator wallet is an active operator wallet with a long history — NOT a fresh throwaway deployer; never imply it's a burner. If established=false and fundedBy is set, that's who funded the wallet; a fresh deployer funded from a single source right before launch is worth naming neutrally as a setup pattern (not proof of bad intent).
+- READ THE BURN AND AIRDROP DATA. lifetimeAnalysis.totalBurnedObserved + burnedAsShareOfSupply tells you if real burning happened. dustDropEventsObserved > 0 means the token did inorganic dust drops to inflate holder count (a red flag). airdropEventsObserved counts bulk distribution events — that's neutral by itself but worth naming if substantial.
+- READ THE ACQUISITION BREAKDOWN AND DISTRIBUTOR DATA. acquisitionBreakdown tells you HOW the top wallets got their tokens: BOUGHT (via DEX, organic), TRANSFER (sent directly from another wallet — could be airdrop, team allocation, insider coordination, or coordinated dump-prep), or MINTED (direct from mint authority). If most are TRANSFER and distributorCount > 0, the holders weren't organic buyers — they were distributed to. CRITICAL EVIDENCE RULES: only call a distributor a "team wallet" when topDistributorIsVerifiedCreator is TRUE (meaning the wallet is in Bags creator/v3 registration — VERIFIED). For any OTHER distributor — even one that distributed to many wallets — DO NOT claim or imply team affiliation. On-chain transfer patterns can equally indicate team distribution, insider coordination, coordinated dump-prep, or community airdrop, and we cannot tell them apart from blockchain data alone. Use strictly neutral language: "a wallet distributed tokens to N top holders" — and explicitly flag the uncertainty ("origin not verified — could be team operations, insider coordination, or public airdrop"). The only time you can confidently call something team activity is when the source wallet is in the Bags/Pump verified-creator API response.
+- ALL HOLDER COUNTS (holderBreakdown, acquisitionBreakdown, behaviorBreakdown) are computed across the TOP 100 HOLDERS (topHoldersScannedCount), not the top 20. Do NOT write phrases like "of the top 20, 22 are pre-pool" — that is mathematically impossible. The badges-card in the UI shows the top 20 visually, but every COUNT you receive in facts spans the full top 100. Use phrasing like "across the top holders we analyzed" or cite the breakdown directly without making top-20 claims.
+- CREATOR BEHAVIOR KIND IS AUTHORITATIVE — BUT CHECK THE EXTRACTION OVERLAY FIRST. If creatorStatus.behaviorKind is "BUY_AND_LOCK" or "BUY_BACK_ACTIVE", the creator wallet is buying and removing supply, NOT selling via swaps. NORMALLY you lead with the buy-back: describe it with the specific numbers from creatorStatus.onChainActivity (buyCount, lockCount, lockedTokens, boughtSol, pctReinvested, teamNetwork totals). Do NOT say "zero buy history" / "P&L came back blank" / anything implying absence when onChainActivity shows numerical activity.
+  CRITICAL EXCEPTION — extraction overlay: if creatorStatus.onChainActivity.feeExtractionDominant is TRUE or creatorStatus.onChainActivity.funnelHeavy is TRUE, the buy-back is NOT the headline — EXTRACTION IS. You MUST lead with the extraction and present the buy-back as the smaller, secondary flow. feeExtractionDominant means the creator claimed far more in creator fees than they recycled into buys (see netFeeExtractionSol = SOL kept, and pctReinvested = the small % put back) — lead with "claimed ~X SOL in fees, recycled only Y% — roughly Z SOL kept." funnelHeavy means the creator moved a large share of supply (transferOutShareOfSupply %) out to OTHER wallets, far more than they bought on-market — lead with that token funnel. The whole point: a creator wallet showing 0 market sells does NOT mean nothing was extracted — fee claims and token transfers-out are the extraction vectors a naive "did the dev sell?" check misses entirely. When either flag is set, NEVER frame the creator as pure conviction / diamond hands; name the extraction as the dominant story, then note the buy-back as the minority counter-flow. Stay factual — state the fee/transfer chain; do not assert the recipient wallets dumped unless other facts prove it.
+  The creatorStatus.onChainActivity.sellCount is ONLY market sells (SWAP-type, creator's tokens flowing out). transferOutCount is NOT a market sell — those are wallet-to-wallet moves. But a LARGE transferOutTokens (funnelHeavy) is still a hidden-exit vector to name as a fact, not dismiss. When sellCount is 0, NEVER say "the creator has been selling on the market," but DO say "the creator extracted value via fees / token transfers" when the overlay flags are set.
+- READ THE BAGS LAUNCH DATA IF PRESENT. bagsLaunch.isBagsToken being true means this token launched on Bags.fm. bagsLaunch.officialCreators is the verified creator list (with Twitter handles when present) — use these names directly when narrating who the creator is. bagsLaunch.dbcBuyersInTop100 is the count of top-100 holders we verified bought through the actual Bags bonding curve (not inferred — confirmed by parsing the DBC pool's transactions). When this number is high, the top-holder structure is dominated by genuine early-supporter bonding-curve buyers, NOT pre-allocated insiders — narrate that distinction honestly. bagsLaunch.totalClaimedSol + claimEventCount + daysSinceLastClaim tell you whether the project is ACTIVELY claiming its creator fees (recent claims = active operations, no claims or stale = abandoned). bagsLaunch.feeWalletsInTop100 tells you whether the fee-receiving wallets ALSO hold tokens directly — a fee wallet that holds zero tokens but receives fees is the team's separate operational wallet (normal); a fee wallet that ALSO sits in the top 100 means the team holds AND extracts (more concentrated power).
+  BAGS GRADUATION (critical — same rules as Pump): bagsLaunch.graduated / bagsLaunch.onBondingCurve are authoritative from Solana Tracker. onBondingCurve true (market "meteora-curve") = the token is STILL ON THE BAGS BONDING CURVE and has NOT graduated to its Meteora DEX pool yet. A token still on the curve has NO DEX pool — that is NORMAL and BY DESIGN, not a rug. DexScreener showing ~$0 (or a tiny phantom pool) for an on-curve Bags token does NOT mean "LP pulled" / "no exit" / "never launched". Its real liquidity is the curve reserve — see bagsLaunch.stLiquidityUsd for the actual figure, and bagsLaunch.curvePercentage for progress to graduation. NEVER say "LP pulled" / "rug" / "no exit at size" for a Bags token that simply hasn't graduated. Describe it as "still on the Bags bonding curve (X% to graduation) with ~$Y in curve liquidity — early and speculative." Only describe a graduated Meteora pool when graduated is true.
+- READ THE CREATOR VERIFICATION BLOCK. creatorVerification.source tells you where the creator wallet came from: "bags-official" (verified by Bags API) and "pump-official" (verified by Pump API) are HIGH-CONFIDENCE — name the wallet/handle directly. "genesis-tx-fee-payer" is the on-chain fallback. "unverified-platform-launch" is CRITICAL — it means this is a Bags/Pump token where the platform API returned no registered creator, and the on-chain genesis tx fee payer is the PLATFORM wallet (Bags/Pump's shared launcher that has launched thousands of tokens), NOT the project team. Do NOT call out a "dev wallet" or attribute on-chain creator behavior to that wallet in this case — explicitly say the project's true creator is not verifiable from on-chain data alone, and warn that tools like DexScreener may show the platform wallet labeled as "dev" for many unrelated tokens because they don't make this distinction.
+- READ THE PUMP LAUNCH DATA IF PRESENT. pumpLaunch.isPumpToken being true means this token launched on Pump.fun.
+  GRADUATION (critical — get this right): pumpLaunch.graduated is authoritative. true = the token has migrated to a DEX pool (PumpSwap/Raydium/Meteora). false / onBondingCurve=true = the token is STILL ON THE BONDING CURVE at Pump.fun and has NOT graduated. NEVER say a token "graduated off the bonding curve" unless graduated is true. If onBondingCurve is true, describe it as "still on the Pump.fun bonding curve" (optionally with curvePercentage to graduation).
+  LIQUIDITY ON A BONDING-CURVE TOKEN: a token still on the curve has NO DEX liquidity pool yet — that is NORMAL and BY DESIGN, not a rug. DexScreener showing $0 liquidity for an on-curve token does NOT mean "the LP was pulled" or "wasn't seeded." Its real liquidity is the bonding-curve reserve — see pumpLaunch.stLiquidityUsd (from Solana Tracker) for the actual figure. NEVER say "LP pulled" / "LP not seeded" for a token that simply hasn't graduated yet.
+  pumpLaunch.bcBuyersInTop100 is the count of top-100 holders verified as bonding-curve buyers. A high number means most top holders bought organically through the curve, not via insider allocation. pumpLaunch.pumpEraPeakPriceUsd captures the peak during the bonding-curve era. For graduated tokens, GeckoTerminal price history starts at graduation.
+- READ THE HIDDEN-EXIT PATTERNS IF PRESENT. hiddenExitPatterns flags wallets that transferred tokens to multiple OTHER wallets which THEN dumped — a classic obfuscation move (the source wallet doesn't show up in a simple top-seller scan because the actual selling happens from the recipient wallets). When hiddenExitPatterns.count > 0, this is the SHARPEST forensic signal on the page: lead with it. Use the exact wording "transfer-then-dump pattern" or "hidden exit". When sourceAlsoSold is true, escalate further — the source wallet was distributing tokens to obfuscate AND extracting value directly. These detections specifically exclude verified Bags/Pump creator wallets and known LP/locker addresses, so they're not false-flagged on legitimate team distribution.
+- READ THE PNL LEDGER IF PRESENT. pnlLedger reconstructs every wallet's lifetime buy/sell history priced at that day's USD close. tookTheMoneyCount is the number of wallets that sold their entire position FOR A PROFIT and walked — call those out as "cash-out wallets" when material. biggestWinnerRealizedUsd / biggestLoserRealizedUsd give you the polar extremes: who made bank vs who got rekt. topSellerSoldUsd is the most-extracted single wallet — if that's a large fraction of total volume, the distribution was lopsided (one wallet drained the pool). If the top seller exit dwarfs the top buyer entry, distribution was concentrated on the way out — name it.
+- READ THE CREATOR ON-CHAIN ACTIVITY when present (creatorStatus.onChainActivity). The fields distinguish three different on-chain actions for the creator wallet: buyCount/boughtUsd = buying on the open market, sellCount/soldUsd = extracting value via swaps, and lockCount/lockedTokens = sending tokens to a locker contract (permanently removing supply, NOT a sell). creatorStatus.behaviorKind being "BUY_AND_LOCK" is the strongest possible signal — the team is buying CLKN with their fees and immediately locking what they buy, taking supply OUT of circulation. Lead with this when present: "@handle is running a buy-and-lock — X buys, Y lock deposits, Z tokens removed from circulation." It is NOT a sell pattern; do not characterize it as distribution.
+- READ THE TOKEN-2022 EXTENSIONS IF PRESENT. The token2022 block only appears for Token-2022 mints. token2022.hasHoneypotExtension being true is the SHARPEST red flag on the entire page — it means the mint is built to trap buyers: a non-transferable token (can never be sold), accounts frozen by default (can't sell until manually thawed), an active transfer hook (a custom program can reject sells at will), or a ~100% transfer fee (sells taxed into nothing). When true, LEAD THE NARRATIVE WITH IT and name the exact mechanism from token2022.risks[] — this is a honeypot regardless of liquidity or buy/sell counts. A permanent delegate (severity "severe") means every holder's tokens are seizable/burnable by the delegate at any time — name it as a control risk even if not a hard honeypot. A transfer fee under 10% is a cost to disclose, not a honeypot. Standard SPL tokens have no token2022 block — do NOT mention Token-2022 at all for them.
+- No markdown asterisks, no headers. Plain prose paragraphs.`;
+      const userMsg = `Token: ${symbol} (${name})\nReport mode: ${reportMode}\nVerdict: ${verdict.type} — ${verdict.label}\nVerified facts:\n${JSON.stringify(facts, null, 2)}\n\n${reportMode === "health-checkup" ? "Write the Full Health Checkup now." : reportMode === "health-assessment" ? "Write the Health Assessment now." : "Write the forensic case study now."}`;
+      try {
+        const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": ANTHROPIC_KEY,
+            "anthropic-version": "2023-06-01"
+          },
+          body: JSON.stringify({
+            model: "claude-haiku-4-5-20251001",
+            max_tokens: 600,
+            system: sysPrompt,
+            messages: [{ role: "user", content: userMsg }]
+          })
+        });
+        const aiData = await aiRes.json();
+        if (aiData.content && aiData.content[0]) {
+          narrative = aiData.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/#{1,3}\s/g, "").trim();
+        }
+      } catch (e) {
+        console.warn("[AUTOPSY] AI narration failed:", e.message);
+      }
+    }
+
+    console.log(`[AUTOPSY] ${symbol} -> ${verdict.type} (${redFlags.length} red flags, narration=${narrative ? "yes" : "no"})`);
+
+    return res.status(200).json({
+      success: true,
+      mint,
+      symbol, name,
+      verdict,
+      reportMode, reportHeadline, reportSubhead,
+      facts: {
+        symbol, name, decimals,
+        totalSupply: supplyTokens,
+        mintAuthorityRevoked: !mintAuthority,
+        freezeAuthorityRevoked: !freezeAuthority,
+        token2022: isToken2022 ? {
+          isToken2022: true,
+          transferFeePct: transferFeeBps != null ? Number((transferFeeBps / 100).toFixed(2)) : null,
+          hasHoneypotExtension,
+          risks: token2022Risks.map(r => ({ kind: r.kind, severity: r.severity, label: r.label, msg: r.msg })),
+        } : null,
+        totalLiqUsd: Number(totalLiqUsd.toFixed(2)),
+        totalVol24h: Number(totalVol24h.toFixed(2)),
+        priceChangeH1, priceChangeH6, priceChangeH24,
+        buys24h, sells24h, txns24h,
+        poolCount: solPairs.length,
+        priceUsd, fdv, marketCap, turnover,
+        ageDays: ageDays !== null ? Math.round(ageDays) : null,
+        pairCreatedAt: pairCreatedMs ? new Date(pairCreatedMs).toISOString() : null,
+        top10Concentration: top10Share,
+        topPair: topPair ? {
+          dexId: topPair.dexId,
+          pairAddress: topPair.pairAddress,
+          url: topPair.url || null,
+        } : null,
+      },
+      redFlags,
+      lpStatus,
+      cexPresence,
+      creatorVerification,
+      metadataStatus,
+      narrative,
+      lessons: lessonMap[verdict.type] || lessonsFinal,
+      topHolders,
+      holderBreakdown,
+      behaviorBreakdown,
+      lockedSupplyShare,
+      humanSupplyShare,
+      lifetime,
+      priceHistory,
+      creatorStatus,
+      distributors,
+      bagsInfo,
+      pumpInfo,
+      walletPnl,
+      lockAttribution,
+      pumpCreatorFees,
+      creatorWalletProfile,
+      hiddenExitDistributors,
+      jupiterInfo,
+      solscan: solscan.isConfigured() ? {
+        configured: true,
+        holderCount: solscanHolderCount,
+      } : { configured: false },
+      scanQuality: (() => {
+        // Annotate scanQuality with a human-readable summary so the UI can
+        // render an honest "Cluck needs more time" banner when something
+        // didn't finish cleanly. Quality buckets:
+        //   FULL — every phase completed without rate-limiting
+        //   PARTIAL — minor degradation (a couple of 429s, retried OK)
+        //   DEGRADED — multiple phases failed or rate-limited heavily
+        const failedPhases = (scanQuality.phasesFailed || []);
+        const limitedCount = scanQuality.heliusRateLimited || 0;
+        const batchSuccessRate = scanQuality.heliusBatches > 0
+          ? scanQuality.heliusBatchesSucceeded / scanQuality.heliusBatches
+          : 1;
+        // Solana-Tracker-aware: if the ONLY degraded phases are the Phase 2G
+        // creator-trace family AND Solana Tracker provided a complete
+        // cross-check for the creator wallet, the headline creator numbers
+        // (buys, sells, invested, ROI) are NOT missing — they're sourced
+        // from ST's complete indexer, not our rate-limited signature walk.
+        // In that case the banner shouldn't alarm; it should explain the
+        // numbers are backfilled from an independent complete source.
+        const stBackfilled = !!(creatorStatus && creatorStatus.onChainActivity
+          && creatorStatus.onChainActivity.solanaTrackerCrossCheck);
+        const onlyCreatorDegraded = failedPhases.length > 0
+          && failedPhases.every(p => typeof p === "string" && p.startsWith("phase-2G"));
+        let qualityLabel = "FULL";
+        let qualityMessage = null;
+        if (stBackfilled && onlyCreatorDegraded && batchSuccessRate >= 0.85 && limitedCount < 5) {
+          // Phase 2G's raw trace was throttled, but ST has the real numbers.
+          qualityLabel = "BACKFILLED";
+          qualityMessage = `Our raw signature trace got rate-limited by Helius, but the creator's buy / sell / lock / ROI figures shown here are sourced from Solana Tracker's complete indexer — these headline numbers are not missing data. The on-chain trace below ("our trace") stays conservative; trust the Solana Tracker cross-check for the fuller picture.`;
+        } else if (failedPhases.length >= 2 || batchSuccessRate < 0.85 || limitedCount >= 5) {
+          qualityLabel = "DEGRADED";
+          qualityMessage = `Cluck didn't get a clean read this run. ${failedPhases.length > 0 ? failedPhases.join(", ") + " came back partial. " : ""}${limitedCount > 0 ? `Helius rate-limited ${limitedCount} batch${limitedCount === 1 ? "" : "es"}. ` : ""}Some numbers may be lower than reality. Re-run in 30 seconds for cleaner data — counters only grow across runs (we cache the best observation per wallet).`;
+        } else if (failedPhases.length === 1 || limitedCount >= 1 || batchSuccessRate < 0.98) {
+          qualityLabel = "PARTIAL";
+          qualityMessage = `Cluck got most of the data. ${failedPhases.length > 0 ? failedPhases[0] + " was slightly degraded. " : ""}${limitedCount > 0 ? `${limitedCount} batch retry on rate limit. ` : ""}Best-observed cache filled the gaps.`;
+        }
+        // Also flag when GeckoTerminal didn't load (boughtUsd math goes to 0)
+        if (!priceHistory) {
+          if (qualityLabel === "FULL") qualityLabel = "PARTIAL";
+          if (!qualityMessage) qualityMessage = "";
+          qualityMessage = (qualityMessage || "") + " (Price history from GeckoTerminal didn't load — USD-valued P&L will be approximate.)";
+        }
+        return {
+          ...scanQuality,
+          qualityLabel,
+          qualityMessage,
+          usedBestObservedCache: !!(creatorStatus && creatorStatus.onChainActivity && creatorTrace && creatorTrace.usedBestObservedCache),
+        };
+      })(),
+    });
+  } catch (err) {
+    console.error("Autopsy error:", err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // -- www redirect --
 app.use((req, res, next) => {
   if (req.headers.host && req.headers.host.startsWith("www.")) {
@@ -2038,10 +8577,14 @@ const QUOTE_TOKENS = {
 // Buys below this USD value don't fire a Telegram notification. Default $0.50
 // catches split-routing halves of $1 buys via Jupiter aggregator while still
 // filtering bot dust. Override via env var.
-const MIN_BUY_USD = parseFloat(process.env.MIN_BUY_USD || "0.5");
+const MIN_BUY_USD = parseFloat(process.env.MIN_BUY_USD || "5");
 // Sells use the same floor by default, so both sides are reported on equal
 // terms. Set MIN_SELL_USD to give the sell side its own threshold.
 const MIN_SELL_USD = parseFloat(process.env.MIN_SELL_USD || String(MIN_BUY_USD));
+// Community-reinvestment buys (from a DEV_WALLETS address) get their own, lower
+// floor — the project buying its own fees back is worth showing even in small
+// size, so these post down to $1 while ordinary buys are held to MIN_BUY_USD.
+const MIN_REINVEST_USD = parseFloat(process.env.MIN_REINVEST_USD || "1");
 
 // Cached SOL/USD price for converting non-stable quote amounts into USD.
 // Refreshed every 5 minutes from CoinGecko (with DexScreener fallback). The
@@ -2286,11 +8829,17 @@ function detectClknTrade(tx) {
   // Quote leg = the pool owner's WSOL/USDC balance change — the other half of
   // the swap. Magnitude only; direction is already known from `action`.
   const poolQuotes = quoteByOwner.get(pool) || {};
-  let quoteMint = null, quoteAmount = 0;
+  let quoteMint = null, quoteAmount = 0, quoteDelta = 0;
   for (const [mint, delta] of Object.entries(poolQuotes)) {
-    if (Math.abs(delta) > quoteAmount) { quoteMint = mint; quoteAmount = Math.abs(delta); }
+    if (Math.abs(delta) > quoteAmount) { quoteMint = mint; quoteAmount = Math.abs(delta); quoteDelta = delta; }
   }
   if (!quoteMint || quoteAmount <= 0) return null;
+
+  // A real swap moves the pool's CLKN and its quote token in OPPOSITE directions
+  // (CLKN in / quote out on a sell, CLKN out / quote in on a buy). Adding or
+  // removing liquidity moves BOTH the same way — both into the pool, or both out.
+  // Same direction => liquidity add/remove, not a trade — don't fire an alert.
+  if (Math.sign(poolClkn) === Math.sign(quoteDelta)) return null;
 
   return { action, trader, clknAmount, quote: { mint: quoteMint, amount: quoteAmount } };
 }
@@ -2616,8 +9165,14 @@ async function pollSinglePool(pool, HELIUS_KEY) {
       const usd = quoteUsdValue(trade);
       const quoteMeta = QUOTE_TOKENS[trade.quote.mint] || { symbol: '?' };
       const usdStr = usd == null ? "no USD" : "$" + usd.toFixed(4);
-      const floor = trade.action === "sell" ? MIN_SELL_USD : MIN_BUY_USD;
+      const isReinvestBuy = trade.action !== "sell" && trade.trader != null && DEV_WALLETS.has(trade.trader);
+      const floor = trade.action === "sell" ? MIN_SELL_USD
+                  : isReinvestBuy ? MIN_REINVEST_USD
+                  : MIN_BUY_USD;
       console.log(`[TELEGRAM] ${trade.action === "sell" ? "Sell" : "Buy"} detected (pool ${poolAddress.slice(0,6)}/${pool.dexId}, source ${tx.source || "?"}): ${trade.clknAmount.toFixed(0)} CLKN for ${trade.quote.amount} ${quoteMeta.symbol} (${usdStr}) by ${trade.trader ? trade.trader.slice(0,6) : "unknown"} · sig ${tx.signature.slice(0,8)}`);
+      // Feed the rolling daily recap (all real swaps, not just alert-worthy ones
+      // — the recap is about total flow, so it records below the alert floor).
+      recap.record({ action: trade.action, usd, trader: trade.trader, sig: tx.signature });
       if (usd == null || usd < floor) {
         console.log(`[TELEGRAM] Skipping (${usdStr} < $${floor})`);
         rememberSig(tx.signature); // remember so other pools don't re-process it
@@ -2647,6 +9202,51 @@ app.listen(PORT, () => {
     }, 5000);
     // Toolkit reminder — checked each minute, fires at fixed 4-hour marks.
     setInterval(toolsReminderTick, 60 * 1000);
+    // Bags Launch Radar — checked each minute, fires at fixed 2-hour marks.
+    setInterval(bagsLaunchesTick, 60 * 1000);
+    // Market Check — checked each minute, fires every 2h near :00 UTC.
+    setInterval(marketCheckTick, 60 * 1000);
+    // Daily Flow Recap — checked each minute, fires once per day at 00:00 UTC.
+    setInterval(recapTick, 60 * 1000);
+    // Bags graduation watcher — every 3 min: alert near-bonding (85%) + capture
+    // graduations into our own 48h record (independent of pump.fun flooding ST).
+    setTimeout(gradWatcherTick, 12000);
+    setInterval(gradWatcherTick, 600 * 1000);   // 10 min — a 48h grad tracker doesn't need 3-min resolution; cuts the dominant ST drain ~3-4× (480→144 calls/day)
+    // Cluck's Lesson — educational post 4×/day on odd UTC hours (13/17/21/01).
+    setInterval(eduPostTick, 60 * 1000);
+    // Interactive slash commands — register the webhook + the "/" command menu.
+    (async () => {
+      const token = process.env.TELEGRAM_BOT_TOKEN;
+      if (!token || !TG_WEBHOOK_SECRET) return;
+      try {
+        await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: `${TG_PUBLIC_BASE}/api/tg/${TG_WEBHOOK_SECRET}`,
+            secret_token: TG_WEBHOOK_SECRET,
+            allowed_updates: ["message"],
+          }),
+        });
+        await fetch(`https://api.telegram.org/bot${token}/setMyCommands`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ commands: [
+            { command: "score", description: "Token health 0–100 (/score <mint>)" },
+            { command: "autopsy", description: "Forensic breakdown (/autopsy <mint>)" },
+            { command: "trace", description: "Wallet × token history (/trace <wallet>)" },
+            { command: "snapshot", description: "Holders + airdrop CSV (/snapshot <mint>)" },
+            { command: "holders", description: "True holders vs LP & locks" },
+            { command: "securitycoop", description: "Find & revoke risky wallet approvals" },
+            { command: "buyspecial", description: "Run a buy competition" },
+            { command: "rose", description: "Buy-competition analyzer + prizes" },
+            { command: "hatchery", description: "Create a token, guided" },
+            { command: "bags", description: "Live Bags.fm launches" },
+            { command: "tools", description: "All the Cluck Norris tools" },
+            { command: "commands", description: "List every command + what it does" },
+          ] }),
+        });
+        console.log("[TELEGRAM] webhook + command menu registered");
+      } catch (e) { console.warn("[TELEGRAM] webhook setup failed:", e.message); }
+    })();
   } else {
     console.log(`[TELEGRAM] Bot env vars not set — notifications disabled`);
   }

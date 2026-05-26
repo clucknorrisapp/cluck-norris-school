@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Bags.fm — Live Launches + About · Cluck Norris</title>
+<meta name="description" content="Live Bags.fm launches with accurate market cap & graduation progress (verified via Solana Tracker), plus what Bags is and the quirks of Bags tokens. By Cluck Norris."/>
+<meta property="og:title" content="Bags.fm — Live Launches Tracker"/>
+<meta property="og:description" content="Recent Bags.fm launches with accurate market cap, graduation progress, and price — verified against Solana Tracker, auto-refreshing. By Cluck Norris."/>
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://clucknorris.app/bags"/>
+<meta property="og:site_name" content="Cluck Norris"/>
+<meta property="og:image" content="https://clucknorris.app/cluck-norris.png"/>
+<meta property="og:image:alt" content="Cluck Norris — live Bags.fm launches tracker"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="Bags.fm — Live Launches Tracker"/>
+<meta name="twitter:description" content="Recent Bags.fm launches with accurate market cap, graduation progress, and price. By Cluck Norris."/>
+<meta name="twitter:image" content="https://clucknorris.app/cluck-norris.png"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="/icon.svg"/>
+<link rel="apple-touch-icon" href="/cluck-norris.png"/>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0a0a0a; --card: #111111; --border: rgba(255,255,255,0.08);
+    --text: #F9FAFB; --subtext: #6B7280; --accent: #FCD34D; --orange: #D97706;
+    --green: #10B981; --red: #EF4444; --blue: #60A5FA;
+    --mono: 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    background-image: radial-gradient(ellipse at 18% 8%, rgba(217,119,6,0.14) 0%, transparent 55%),
+                      radial-gradient(ellipse at 82% 92%, rgba(252,211,77,0.06) 0%, transparent 55%);
+    color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 28px 18px 80px; }
+  .back { display: inline-flex; align-items: center; gap: 6px; font-family: 'Oswald', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 2px; color: var(--orange); text-decoration: none; margin-bottom: 14px; }
+  .header { text-align: center; margin-bottom: 18px; }
+  .header .logos { display: inline-flex; align-items: center; justify-content: center; gap: 16px; flex-wrap: wrap; }
+  .header .ck-logo { height: 76px; width: auto; display: inline-block; }
+  .header .logo-x { font-family: 'Oswald', sans-serif; font-size: 22px; font-weight: 700; color: var(--subtext); }
+  .header .bags-logo { width: 58px; height: 58px; }
+  .header .brand-mini { font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 4px; color: var(--orange); margin-top: 6px; font-weight: 700; }
+  .header h1 {
+    font-family: 'Oswald', sans-serif; font-size: 32px; font-weight: 900; letter-spacing: 2.5px;
+    background: linear-gradient(135deg, #FCD34D, #F97316, #D97706);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    line-height: 1.1; margin: 4px 0;
+  }
+  .header p { font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; }
+  .lede { text-align: center; font-size: 14px; line-height: 1.7; color: #D1D5DB; max-width: 580px; margin: 18px auto 26px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 22px 22px; margin-bottom: 16px; }
+  .card-title { font-family: 'Oswald', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 2.5px; color: var(--orange); margin-bottom: 12px; }
+  .card p { font-family: var(--mono); font-size: 13px; line-height: 1.7; color: #D1D5DB; margin-bottom: 12px; }
+  .card p:last-child { margin-bottom: 0; }
+  .card p strong { color: var(--accent); font-weight: 700; }
+  .card p em { font-style: normal; color: var(--orange); }
+  .quirk { background: rgba(217,119,6,0.06); border: 1px solid rgba(217,119,6,0.25); border-radius: 10px; padding: 14px 16px; margin: 10px 0; }
+  .quirk .label { font-family: 'Oswald', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; color: var(--orange); margin-bottom: 6px; }
+  .quirk .body { font-family: var(--mono); font-size: 12px; line-height: 1.65; color: #D1D5DB; }
+  .pill-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+  .pill { padding: 9px 16px; background: rgba(217,119,6,0.10); border: 1px solid rgba(217,119,6,0.35); border-radius: 22px; font-family: 'Oswald', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; color: var(--orange); text-decoration: none; }
+  .pill:hover { background: rgba(217,119,6,0.18); color: var(--accent); }
+  .pill.green { background: rgba(16,185,129,0.10); border-color: rgba(16,185,129,0.35); color: var(--green); }
+  .pill.green:hover { background: rgba(16,185,129,0.18); }
+  .footer-tag { text-align: center; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
+  .footer-tag a { color: var(--orange); text-decoration: none; }
+  /* Live launches feed */
+  .lf-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .lf-meta { font-family:'Oswald',sans-serif; font-size:9px; color:#4B5563; letter-spacing:1px; }
+  .lf-refresh { background:rgba(217,119,6,0.15); border:1px solid rgba(217,119,6,0.35); border-radius:8px; color:var(--orange); font-size:16px; line-height:1; cursor:pointer; padding:4px 11px; }
+  .lf-refresh:hover { background:rgba(217,119,6,0.25); }
+  .lf-refresh:disabled { opacity:0.5; cursor:default; }
+  .lf-toggles { display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap; }
+  .lf-caption { font-family:'Oswald',sans-serif; font-size:10px; color:var(--subtext); letter-spacing:0.5px; margin-bottom:12px; }
+  .lf-tg { background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:7px; color:var(--subtext); font-family:'Oswald',sans-serif; font-size:11px; font-weight:700; letter-spacing:1px; padding:5px 11px; cursor:pointer; }
+  .lf-tg.on { background:rgba(217,119,6,0.2); border-color:rgba(217,119,6,0.5); color:var(--orange); }
+  .lf-card { display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:11px; padding:13px 15px; text-decoration:none; color:inherit; margin-bottom:7px; }
+  .lf-card.new { background:rgba(16,185,129,0.06); border-color:rgba(16,185,129,0.45); box-shadow:0 0 16px rgba(16,185,129,0.16); }
+  .lf-ic { width:42px; height:42px; border-radius:50%; flex-shrink:0; background:#1a1a1a; display:flex; align-items:center; justify-content:center; font-family:'Oswald',sans-serif; font-weight:900; font-size:17px; color:var(--orange); overflow:hidden; }
+  .lf-ic img { width:100%; height:100%; object-fit:cover; }
+  .lf-name { font-family:'Oswald',sans-serif; font-size:20px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .lf-name .sym { color:var(--subtext); font-size:15px; }
+  .lf-new { font-family:'Oswald',sans-serif; font-size:10px; font-weight:700; letter-spacing:1px; color:var(--green); background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.4); border-radius:5px; padding:1px 6px; margin-right:6px; vertical-align:middle; }
+  .lf-metrics { display:flex; gap:10px; align-items:center; margin-top:5px; flex-wrap:wrap; font-family:'Oswald',sans-serif; font-size:13px; }
+  .lf-metrics .price { font-family:var(--mono); color:var(--accent); }
+  .lf-metrics .mc { font-weight:700; color:#8B5CF6; }
+  .lf-bar { margin-top:7px; height:5px; background:rgba(255,255,255,0.08); border-radius:3px; overflow:hidden; }
+  .lf-bar > div { height:100%; border-radius:3px; }
+  .lf-handle { font-family:'Oswald',sans-serif; font-size:12px; color:var(--blue); margin-top:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .lf-ca { display:inline-block; margin-top:6px; font-family:var(--mono); font-size:11px; color:var(--subtext); background:rgba(255,255,255,0.05); border:1px solid var(--border); border-radius:6px; padding:2px 8px; cursor:pointer; }
+  .lf-ca:hover { color:var(--orange); border-color:rgba(217,119,6,0.4); }
+  .lf-trade { font-family:'Oswald',sans-serif; font-size:12px; color:var(--orange); letter-spacing:1px; flex-shrink:0; margin-left:10px; }
+  .lf-status { text-align:center; color:var(--subtext); font-size:11px; letter-spacing:2px; padding:24px 0; font-family:'Oswald',sans-serif; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="/" class="back">&larr; CLUCK NORRIS HOME</a>
+
+  <div class="header">
+    <div class="logos">
+      <img class="ck-logo" src="/cluck-norris-logo.jpg" alt="Cluck Norris"/>
+      <span class="logo-x">×</span>
+      <img class="bags-logo" src="/bags-logo.svg" alt="Bags.fm"/>
+    </div>
+    <div class="brand-mini">BUILT ON BAGS.FM</div>
+    <h1>ABOUT BAGS.FM</h1>
+    <p>WHAT IT IS · WHY WE LAUNCHED ON IT · WHY IT MATTERS</p>
+  </div>
+
+  <div class="lede">
+    Cluck Norris is proud to build on <strong>Bags.fm</strong>. We launched
+    <strong>CLKN</strong> here and built a full crypto school and a suite of
+    Solana tools — free <em>and</em> premium — around it. Here's why Bags is one
+    of the best places to launch on Solana — and the launches happening on it right now.
+  </div>
+
+  <!-- LIVE LAUNCHES FEED -->
+  <div class="card">
+    <div class="lf-head">
+      <div class="card-title" style="margin:0">📡 LIVE BAGS.FM LAUNCHES</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="lf-meta" id="lfMeta">⟳ 60s</div>
+        <button class="lf-refresh" id="lfRefresh" onclick="lfManualRefresh()" title="Refresh now">↻</button>
+      </div>
+    </div>
+    <div class="lf-toggles">
+      <button class="lf-tg on" id="lf-newest" onclick="lfSetSort('newest')">🆕 NEWEST</button>
+      <button class="lf-tg" id="lf-bonding" onclick="lfSetSort('bonding')">🎓 NEAR GRAD</button>
+      <button class="lf-tg" id="lf-graduated" onclick="lfSetSort('graduated')">✅ GRADUATED</button>
+    </div>
+    <div class="lf-caption" id="lfCaption">The 12 most recent Bags.fm launches.</div>
+    <div id="lfFeed"><div class="lf-status">LOADING LAUNCHES…</div></div>
+    <div style="text-align:center;margin-top:10px"><a class="pill green" href="https://bags.fm?ref=firechicken007" target="_blank" rel="noreferrer">↗ VIEW ALL ON BAGS.FM</a></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">WHAT IS BAGS.FM?</div>
+    <p>
+      <strong>Bags.fm</strong> is a Solana-native token launch platform.
+      New tokens mint into a <em>bonding curve</em> (DBC) where early
+      supporters buy directly from the curve at algorithmically-priced
+      points. Once the curve hits its graduation threshold, the token
+      migrates to a public liquidity pool (DAMM v2) and trades like any
+      other Solana token from that point forward.
+    </p>
+    <p>
+      What sets Bags apart from older launchers: project teams register their
+      wallet and social handles <em>on-chain through Bags</em>, with explicit
+      royalty shares for each verified creator. That's real, public
+      accountability baked right into the launch — and creators keep earning
+      from their token's success for as long as it trades.
+    </p>
+  </div>
+
+  <div class="card">
+    <div class="card-title">WHAT MAKES BAGS.FM DIFFERENT</div>
+
+    <div class="quirk">
+      <div class="label">💎 VERIFIED, ON-CHAIN CREATORS</div>
+      <div class="body">
+        Teams register their wallet and socials on-chain through Bags, with
+        explicit royalty shares. You can see who's behind a token and how the
+        fees are split — transparency most launchpads simply don't offer.
+      </div>
+    </div>
+
+    <div class="quirk">
+      <div class="label">💸 CREATORS EARN FOREVER</div>
+      <div class="body">
+        Every trade routes a small creator royalty — paid in SOL — to the
+        registered team, even after graduation. It aligns creators with the
+        long-term success of their token instead of a one-time launch payday.
+      </div>
+    </div>
+
+    <div class="quirk">
+      <div class="label">🔄 SUSTAINABLE BUY-AND-LOCK</div>
+      <div class="body">
+        Bags's fee structure lets healthy teams — CLKN included — recycle their
+        SOL royalties into buying back their own token and locking the supply,
+        permanently removing it from circulation. A genuinely sustainable model
+        for a community token.
+      </div>
+    </div>
+
+    <div class="quirk">
+      <div class="label">🎓 REAL GRADUATION</div>
+      <div class="body">
+        When a token clears its bonding curve it graduates to a live Meteora
+        DAMM pool and trades like any other Solana token — real liquidity, not
+        a fake "fair launch" narrative.
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">WHY CLUCK NORRIS BUILDS ON BAGS</div>
+    <p>
+      We built the <strong>Cluck Norris</strong> school of crypto hard knocks
+      and a whole stack of Solana tools — free <em>and</em> premium: token
+      research, holder scans, wallet security, a guided token creator,
+      competition trackers, deep-trace forensics and more — and the
+      <strong>CLKN</strong> token that funds them launched on Bags. We
+      picked Bags because the verified-creator system, the bonding-curve
+      launch, and the on-chain royalty structure give an honest project a real
+      way to build, fund, and earn trust.
+    </p>
+    <p>
+      We're proud supporters of the platform, and we're building to help the
+      whole Bags ecosystem grow — better tools and education raise the floor
+      for every creator and community launching here.
+    </p>
+    <div class="pill-row">
+      <a class="pill" href="https://clucknorris.app">🐔 EXPLORE CLUCK NORRIS</a>
+      <a class="pill green" href="https://bags.fm?ref=firechicken007" target="_blank" rel="noreferrer">↗ BAGS.FM</a>
+      <a class="pill" href="https://bags.fm/DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS?ref=firechicken007" target="_blank" rel="noreferrer">🐔 CLKN ON BAGS</a>
+    </div>
+  </div>
+
+  <div class="footer-tag">
+    🐔 <a href="https://clucknorris.app">clucknorris.app</a> — SCHOOL OF CRYPTO HARD KNOCKS
+  </div>
+</div>
+
+<script>
+// Live Bags.fm launches feed — ST-enriched (accurate on-curve MC/price), with
+// DexScreener fallback. Same backend as the in-app feed.
+const lfREF='?ref=firechicken007';
+const GRAD_SOL=85; // Bags MIGRATION_QUOTE_THRESHOLD = 85 SOL accumulated in the curve = graduation
+let lfFeed=[], lfPrices={}, lfAges={}, lfSort='newest', lfLast=0, lfNearGrad=null, lfGraduated=null;
+// Recently graduated Bags tokens — server-scanned from ST's graduated list.
+async function lfLoadGraduated(){
+  try{
+    const r=await fetch('/api/bags-graduated'); const d=await r.json();
+    if(d&&d.success&&Array.isArray(d.tokens)){
+      lfGraduated=d.tokens.map(t=>{
+        lfPrices[t.tokenMint]={priceUsd:t.priceUsd,marketCap:t.marketCap,change24h:t.change24h,volume24h:t.volume24h,onBondingCurve:false,image:t.image,twitter:t.twitter};
+        if(t.createdAt) lfAges[t.tokenMint]=Math.floor(t.createdAt/1000);
+        return {tokenMint:t.tokenMint,name:t.name,symbol:t.symbol,image:t.image,twitter:t.twitter,status:'MIGRATED'};
+      });
+    } else if(!lfGraduated){ lfGraduated=[]; }
+  }catch(e){ if(!lfGraduated) lfGraduated=[]; }
+}
+// Near-graduation board — server-scanned across recent launches (not just the
+// loaded 20), so genuinely-close-to-bonding tokens show even if not brand new.
+async function lfLoadNearGrad(){
+  try{
+    const r=await fetch('/api/bags-near-grad'); const d=await r.json();
+    if(d&&d.success&&Array.isArray(d.tokens)){
+      lfNearGrad=d.tokens.map(t=>{
+        lfPrices[t.tokenMint]={priceUsd:t.priceUsd,marketCap:t.marketCap,change24h:t.change24h,volume24h:t.volume24h,curvePct:t.curvePct,onBondingCurve:true,image:t.image,twitter:t.twitter};
+        if(t.createdAt) lfAges[t.tokenMint]=Math.floor(t.createdAt/1000);
+        return {tokenMint:t.tokenMint,name:t.name,symbol:t.symbol,image:t.image,twitter:t.twitter,status:'PRE_GRAD'};
+      });
+    } else if(!lfNearGrad){ lfNearGrad=[]; }
+  }catch(e){ if(!lfNearGrad) lfNearGrad=[]; }
+}
+async function lfSetSort(s){ lfSort=s;
+  document.getElementById('lf-newest').classList.toggle('on',s==='newest');
+  document.getElementById('lf-bonding').classList.toggle('on',s==='bonding');
+  document.getElementById('lf-graduated').classList.toggle('on',s==='graduated');
+  if(s==='bonding' && !lfNearGrad){ const el=document.getElementById('lfFeed'); if(el) el.innerHTML='<div class="lf-status">SCANNING FOR NEAR-GRADUATION TOKENS…</div>'; await lfLoadNearGrad(); }
+  if(s==='graduated' && !lfGraduated){ const el=document.getElementById('lfFeed'); if(el) el.innerHTML='<div class="lf-status">LOADING RECENTLY GRADUATED…</div>'; await lfLoadGraduated(); }
+  lfPaint(); }
+async function lfManualRefresh(){ const b=document.getElementById('lfRefresh'); if(b){ b.textContent='…'; b.disabled=true; } await lfLoad(); if(b){ b.textContent='↻'; b.disabled=false; } }
+function lfAbbrev(n){ const v=parseFloat(n); if(!isFinite(v)||v<=0) return null; if(v>=1e9) return '$'+(v/1e9).toFixed(2)+'B'; if(v>=1e6) return '$'+(v/1e6).toFixed(2)+'M'; if(v>=1e3) return '$'+(v/1e3).toFixed(1)+'K'; return '$'+v.toFixed(0); }
+function lfAge(ts){ if(!ts) return null; const s=Math.floor(Date.now()/1000-ts); if(s<60) return s+'s'; if(s<3600) return Math.floor(s/60)+'m'; if(s<86400) return Math.floor(s/3600)+'h'; return Math.floor(s/86400)+'d'; }
+function lfHandle(tw){ return tw ? String(tw).replace(/^https?:\/\/(x\.com|twitter\.com)\//i,'').replace(/^@/,'').split(/[\/?]/)[0] : null; }
+// Escape API-supplied strings (token name/symbol/handle/image URL) before they
+// go into innerHTML — token names are attacker-controlled, so an unescaped
+// "<img onerror=…>" name would be stored XSS on this page. Escapes quotes too,
+// so it's safe in both text and attribute contexts.
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// Copy a token's contract address. preventDefault/stopPropagation so tapping
+// the CA chip copies instead of opening the card's trade link.
+function lfCopyCA(e, mint, el){
+  e.preventDefault(); e.stopPropagation();
+  const restore = el.textContent;
+  const done = () => { el.textContent = '✅ copied'; setTimeout(()=>{ el.textContent = restore; }, 1200); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(mint).then(done).catch(()=>{});
+  else { try { const ta=document.createElement('textarea'); ta.value=mint; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); done(); } catch(_){} }
+}
+async function lfLoad(){
+  try{
+    const r=await fetch('/api/bags-proxy?endpoint=token-launch/feed'); const d=await r.json();
+    if(!d.success||!d.response) return;
+    const toks=d.response.slice(0,20); lfFeed=toks;
+    const mints=toks.map(t=>t.tokenMint).filter(Boolean).join(',');
+    if(mints){
+      try{ const sr=await fetch('/api/bags-feed-prices?mints='+mints); const sd=await sr.json();
+        if(sd.success&&sd.prices){ for(const [m,p] of Object.entries(sd.prices)) lfPrices[m]={...p,_liq:p.liquidityUsd||0}; } }catch(e){}
+      const miss=toks.map(t=>t.tokenMint).filter(m=>m&&!lfPrices[m]);
+      if(miss.length){ try{ const dr=await fetch('https://api.dexscreener.com/latest/dex/tokens/'+miss.join(',')); const dd=await dr.json();
+        for(const pr of (dd.pairs||[])){ const m=pr.baseToken?.address; if(!m) continue; const liq=pr.liquidity?.usd||0;
+          if(!lfPrices[m]||(lfPrices[m]._liq||0)<liq) lfPrices[m]={priceUsd:pr.priceUsd,marketCap:pr.marketCap,change24h:pr.priceChange?.h24,volume24h:pr.volume?.h24,image:pr.info?.imageUrl||null,_liq:liq}; } }catch(e){} }
+    }
+    const sigs=toks.map(t=>t.launchSignature).filter(Boolean);
+    if(sigs.length){ try{ const tr=await fetch('/api/helius-tx',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({transactions:sigs,commitment:'confirmed'})});
+      if(tr.ok){ const tx=await tr.json(); const by={}; if(Array.isArray(tx)) for(const t of tx){ if(t?.signature&&t?.timestamp) by[t.signature]=t.timestamp; }
+        for(const t of toks){ const ts=by[t.launchSignature]; if(ts) lfAges[t.tokenMint]=ts; } } }catch(e){} }
+    if(lfSort==='bonding') await lfLoadNearGrad();
+    if(lfSort==='graduated') await lfLoadGraduated();
+    lfLast=Date.now(); lfPaint();
+  }catch(e){}
+}
+function lfPaint(){
+  const el=document.getElementById('lfFeed'); if(!el) return;
+  if(!lfFeed.length){ el.innerHTML='<div class="lf-status">NO LAUNCHES RIGHT NOW</div>'; return; }
+  let list, cap;
+  if(lfSort==='bonding'){
+    list=(lfNearGrad||[]).slice(0,15);
+    cap='Closest to graduating — scanned across recent Bags.fm launches, highest curve % first.';
+  } else if(lfSort==='graduated'){
+    list=(lfGraduated||[]).slice(0,15);
+    cap='Recently graduated off the bonding curve — tap a card for the live DexScreener chart.';
+  } else {
+    list=[...lfFeed].sort((a,b)=>(lfAges[b.tokenMint]||0)-(lfAges[a.tokenMint]||0)).slice(0,12);
+    cap='The 12 most recent Bags.fm launches.';
+  }
+  const capEl=document.getElementById('lfCaption'); if(capEl) capEl.textContent=cap;
+  if(!list.length){
+    el.innerHTML='<div class="lf-status">'+(lfSort==='bonding'?'NO BAGS TOKENS NEAR GRADUATION RIGHT NOW':lfSort==='graduated'?'NO RECENTLY GRADUATED BAGS TOKENS RIGHT NOW':'NO LAUNCHES RIGHT NOW')+'</div>';
+    const mm=document.getElementById('lfMeta'); if(mm) mm.textContent='⟳ 60s · '+new Date(lfLast).toLocaleTimeString();
+    return;
+  }
+  el.innerHTML=list.map(t=>{
+    const p=lfPrices[t.tokenMint]||{}; const ts=lfAges[t.tokenMint]; const isNew=ts&&(Date.now()/1000-ts)<7200;
+    const onCurve=p.onBondingCurve, cp=p.curvePct, mc=p.marketCap||0; let lab,col;
+    if(t.status==='MIGRATED'||onCurve===false){ lab='🎓 GRADUATED'; col='#10B981'; }
+    else if(t.status==='MIGRATING'){ lab='⏳ MIGRATING'; col='#F59E0B'; }
+    else if(onCurve===true&&cp!=null){ if(cp>=80){ lab='⚡ '+cp.toFixed(0)+'% TO GRAD'; col='#D97706'; } else { lab='🌱 ON CURVE · '+cp.toFixed(0)+'%'; col='#F97316'; } }
+    else if(mc>=30000){ lab='⚡ NEAR GRAD'; col='#D97706'; }
+    else if(mc>=5000){ lab='🔥 GAINING'; col='#F97316'; }
+    else { lab='📈 EARLY'; col='#6B7280'; }
+    const handle=lfHandle(p.twitter||t.twitter); const img=p.image||t.image; const vol=lfAbbrev(p.volume24h); const ag=lfAge(ts);
+    const bar=(onCurve===true&&cp!=null)?'<div class="lf-bar"><div style="width:'+Math.min(100,Math.max(2,cp))+'%;background:'+(cp>=80?'linear-gradient(90deg,#D97706,#10B981)':'linear-gradient(90deg,#F97316,#D97706)')+'"></div></div>':'';
+    const grad=(lfSort==='graduated');
+    const cardHref=grad?('https://dexscreener.com/solana/'+t.tokenMint):('https://bags.fm/'+t.tokenMint+lfREF);
+    const cardLabel=grad?'📊 CHART →':'TRADE →';
+    return '<a class="lf-card'+(isNew?' new':'')+'" href="'+cardHref+'" target="_blank" rel="noreferrer">'
+      +'<div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0">'
+      +'<div class="lf-ic">'+(img?'<img src="'+esc(img)+'" onerror="this.style.display=\'none\'"/>':esc((t.symbol||'?')[0]))+'</div>'
+      +'<div style="flex:1;min-width:0">'
+      +'<div class="lf-name">'+(isNew?'<span class="lf-new">🆕 NEW</span>':'')+esc(t.name||'?')+' <span class="sym">('+esc(t.symbol||'?')+')</span></div>'
+      +'<div class="lf-metrics"><span style="font-weight:700;color:'+col+'">'+lab+'</span>'
+      +((onCurve===true&&cp!=null)?'<span style="color:#34D399;font-weight:700">~'+(GRAD_SOL*(1-cp/100)).toFixed(1)+' SOL to grad</span>':'')
+      +(p.priceUsd?'<span class="price">$'+parseFloat(p.priceUsd).toFixed(6)+'</span>':'')
+      +(p.marketCap?'<span class="mc">MC $'+parseInt(p.marketCap).toLocaleString()+'</span>':'')
+      +(p.change24h!=null?'<span style="font-weight:700;color:'+(p.change24h>0?'#10B981':'#EF4444')+'">'+(p.change24h>0?'+':'')+parseFloat(p.change24h).toFixed(1)+'%</span>':'')
+      +(vol?'<span style="color:#94A3B8">V '+vol+'</span>':'')
+      +(ag?'<span style="color:var(--subtext)">🕒 '+ag+'</span>':'')+'</div>'
+      +bar+(handle?'<div class="lf-handle">𝕏 @'+esc(handle)+'</div>':'')
+      +'<div class="lf-ca" onclick="lfCopyCA(event,\''+t.tokenMint+'\',this)" title="Copy contract address">📋 '+t.tokenMint.slice(0,4)+'…'+t.tokenMint.slice(-4)+'</div>'
+      +'</div></div><div class="lf-trade">'+cardLabel+'</div></a>';
+  }).join('');
+  const m=document.getElementById('lfMeta'); if(m) m.textContent='⟳ 60s · '+new Date(lfLast).toLocaleTimeString();
+}
+lfLoad(); setInterval(lfLoad,60000);
+</script>
+</body>
+</html>

@@ -37,6 +37,14 @@
   .wallet-btn:hover { transform: translateY(-1px); opacity: 0.95; }
   .wallet-btn.phantom { background: linear-gradient(135deg, #9945FF, #6B21A8); }
   .wallet-btn.solflare { background: linear-gradient(135deg, #FC822B, #B85F1F); }
+  .wallet-btn.backpack { background: linear-gradient(135deg, #E33E3F, #8B1E1E); }
+  .wallet-btn.okx { background: linear-gradient(135deg, #2B2B2B, #000000); }
+  .wallet-btn.coinbase { background: linear-gradient(135deg, #1652F0, #0A2A8C); }
+  .wallet-btn.trust { background: linear-gradient(135deg, #3375BB, #1C4A7E); }
+  .wallet-btn.glow { background: linear-gradient(135deg, #00D18C, #00785A); }
+  .wallet-btn.exodus { background: linear-gradient(135deg, #6E55C9, #3F3173); }
+  .wallet-btn.bitget { background: linear-gradient(135deg, #00F0FF, #0096A6); color: #06283D; }
+  .wallet-btn.brave { background: linear-gradient(135deg, #FB542B, #9E2D12); }
   .wallet-btn.jupiter { background: linear-gradient(135deg, #4D8FF7, #1E429F); }
   .wallet-info { font-family: var(--mono); font-size: 12px; color: var(--green); margin-top: 10px; padding: 10px 12px; background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.25); border-radius: 8px; display: none; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
   .wallet-info.show { display: flex; }
@@ -121,10 +129,16 @@
 
   .footer-tag { text-align: center; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
   .footer-tag a { color: #D97706; text-decoration: none; }
+
+  /* Desktop — wider container so the page fills a larger screen */
+  @media (min-width: 1040px) {
+    .wrap { max-width: 1040px; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
+  <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#D97706;text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid #D97706;"/>&larr; CLUCK NORRIS HOME</a>
 
   <div class="header">
     <div class="header-icon">🥚</div>
@@ -158,8 +172,17 @@
     <div class="wallet-picker" id="walletPicker">
       <button class="wallet-btn phantom" onclick="connectWallet('phantom')">🔮 Phantom</button>
       <button class="wallet-btn solflare" onclick="connectWallet('solflare')">☀️ Solflare</button>
+      <button class="wallet-btn backpack" onclick="connectWallet('backpack')">🎒 Backpack</button>
+      <button class="wallet-btn okx" onclick="connectWallet('okx')">⭕ OKX</button>
+      <button class="wallet-btn coinbase" onclick="connectWallet('coinbase')">🔵 Coinbase</button>
+      <button class="wallet-btn trust" onclick="connectWallet('trust')">🛡 Trust</button>
+      <button class="wallet-btn glow" onclick="connectWallet('glow')">🌐 Glow</button>
+      <button class="wallet-btn exodus" onclick="connectWallet('exodus')">🪐 Exodus</button>
+      <button class="wallet-btn bitget" onclick="connectWallet('bitget')">🌊 Bitget</button>
+      <button class="wallet-btn brave" onclick="connectWallet('brave')">🦁 Brave</button>
       <button class="wallet-btn jupiter" onclick="connectWallet('jupiter')">🪐 Jupiter</button>
     </div>
+    <div id="mobileConnect" style="display:none;margin-top:12px;flex-direction:column;gap:8px"></div>
     <div class="wallet-info" id="walletInfo">
       <span class="wallet-info-addr" id="walletInfoAddr"></span>
       <button class="wallet-disc-btn" onclick="disconnectWallet()">DISCONNECT</button>
@@ -220,6 +243,10 @@
         <span>No one can ever freeze a holder's tokens. Leaving freeze authority
         active is a common rug vector — revoking it removes that power entirely.</span>
       </div>
+    </div>
+    <div style="margin-top:10px;background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.22);border-radius:8px;padding:11px 13px;font-size:12.5px;line-height:1.6;color:#9CA3AF">
+      <b style="color:#93C5FD">A third authority worth knowing — metadata (update authority).</b><br>
+      Beyond mint and freeze there's the <b>update authority</b>: it controls whether your token's <b>name, logo, and socials</b> can be changed after launch. This minter leaves your metadata <b>mutable</b> on purpose — so you can fix a broken image or legitimately rebrand later. The tradeoff is real: a <b>mutable</b> token asks buyers to trust you won't bait-and-switch, while an <b>immutable</b> one locks the branding forever. Rug-checkers — including our own <a href="/autopsy" style="color:#FCD34D">Token Autopsy</a> — surface which one it is. If you'd rather lock yours permanently, you can set the metadata immutable or renounce the update authority after minting with a Metaplex tool (e.g. the Metaboss CLI). Neither choice is "right" — just know who can change what, because your holders will check.
     </div>
   </div>
 
@@ -430,8 +457,38 @@ function calcStartPrice() {
 const WALLETS = {
   phantom:  { name: 'Phantom',  download: 'https://phantom.app',   detect: () => window.phantom?.solana || (window.solana?.isPhantom ? window.solana : null) },
   solflare: { name: 'Solflare', download: 'https://solflare.com',  detect: () => window.solflare || (window.solana?.isSolflare ? window.solana : null) },
+  backpack: { name: 'Backpack', download: 'https://backpack.app',  detect: () => (window.backpack?.isBackpack ? window.backpack : null) || (window.solana?.isBackpack ? window.solana : null) },
+  okx:      { name: 'OKX',      download: 'https://okx.com/web3',  detect: () => window.okxwallet?.solana || window.okxwallet || null },
+  coinbase: { name: 'Coinbase', download: 'https://coinbase.com/wallet', detect: () => window.coinbaseSolana || window.coinbaseWalletSolana || null },
+  trust:    { name: 'Trust',    download: 'https://trustwallet.com', detect: () => window.trustwallet?.solana || (window.solana?.isTrust ? window.solana : null) },
+  glow:     { name: 'Glow',     download: 'https://glow.app',      detect: () => window.glowSolana || window.glow?.solana || (window.solana?.isGlow ? window.solana : null) },
+  exodus:   { name: 'Exodus',   download: 'https://exodus.com',    detect: () => window.exodus?.solana || null },
+  bitget:   { name: 'Bitget',   download: 'https://web3.bitget.com', detect: () => window.bitkeep?.solana || window.bitgetWallet?.solana || (window.solana?.isBitKeep ? window.solana : null) },
+  brave:    { name: 'Brave',    download: 'https://brave.com/wallet', detect: () => window.braveSolana || (window.solana?.isBraveWallet ? window.solana : null) },
   jupiter:  { name: 'Jupiter',  download: 'https://jup.ag/wallet', detect: () => window.jupiterWallet || window.jupiter || (window.solana?.isJupiter ? window.solana : null) },
 };
+// Mobile on-ramp: on mobile with NO wallet injected, offer one-tap deep links
+// that OPEN this page inside the wallet's browser (pure navigation — nothing is
+// signed/shared by the link; the injected connect+sign flow runs once inside).
+function initMobileDeepLinks() {
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  if (!isMobile) return;
+  const injected = !!(window.solana || window.phantom?.solana || window.solflare || window.backpack
+    || window.okxwallet || window.glowSolana || window.exodus?.solana || window.coinbaseSolana || window.trustwallet?.solana);
+  if (injected) return;
+  const el = document.getElementById('mobileConnect'), picker = document.getElementById('walletPicker');
+  if (!el) return;
+  const url = encodeURIComponent(location.href), ref = encodeURIComponent(location.origin);
+  el.innerHTML =
+    '<div style="font-family:monospace;font-size:12px;color:#FCD34D;line-height:1.5">📱 On mobile? Open this page inside your wallet to connect:</div>'
+    + '<a class="wallet-btn phantom" style="text-decoration:none" href="https://phantom.app/ul/browse/' + url + '?ref=' + ref + '">🔮 Open in Phantom</a>'
+    + '<a class="wallet-btn solflare" style="text-decoration:none" href="https://solflare.com/ul/v1/browse/' + url + '?ref=' + ref + '">☀️ Open in Solflare</a>'
+    + '<div style="font-family:monospace;font-size:10px;color:#9CA3AF;line-height:1.5">Opens this page in the wallet’s built-in browser. Nothing is signed or shared by the link.</div>';
+  el.style.display = 'flex';
+  if (picker) picker.style.display = 'none';
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initMobileDeepLinks);
+else initMobileDeepLinks();
 function syncWalletUi() {
   const picker = document.getElementById('walletPicker');
   const info = document.getElementById('walletInfo');
@@ -602,7 +659,18 @@ async function hatch() {
     setProgress('Approve the transaction in your wallet…');
     const txBytes = Uint8Array.from(atob(built.txBase64), c => c.charCodeAt(0));
     const tx = solanaWeb3.Transaction.from(txBytes);
-    const { signature } = await activeWallet.provider.signAndSendTransaction(tx);
+    const mintKp = solanaWeb3.Keypair.fromSecretKey(
+      Uint8Array.from(atob(built.mintSecret), c => c.charCodeAt(0))
+    );
+    // Phantom's Lighthouse flags multi-signer transactions unless the wallet signs
+    // FIRST — so the wallet signs, THEN the mint keypair partial-signs (per Phantom
+    // support), and we submit the fully-signed transaction ourselves.
+    const signedTx = await activeWallet.provider.signTransaction(tx);
+    signedTx.partialSign(mintKp);
+    const signature = await rpc('sendTransaction', [
+      btoa(String.fromCharCode(...signedTx.serialize())),
+      { encoding: 'base64', preflightCommitment: 'confirmed', maxRetries: 3 },
+    ]);
 
     setProgress('Confirming on-chain…');
     await confirmTx(signature);
