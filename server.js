@@ -4116,7 +4116,7 @@ app.get("/api/trace", async (req, res) => {
 
   const wallet = (req.query.wallet || "").trim();
   const mint = (req.query.mint || "").trim();
-  if (wallet.length < 32 || wallet.length > 44 || mint.length < 32 || mint.length > 44) {
+  if (!SOL_ADDR_RE.test(wallet) || !SOL_ADDR_RE.test(mint)) {
     return res.status(400).json({ success: false, error: "Provide a valid wallet and token mint address" });
   }
   const HELIUS_KEY = process.env.HELIUS_API_KEY;
