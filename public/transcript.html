@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>🐔 Cluck Norris — Official Transcript</title>
+<meta name="description" content="A permanent Cluck Norris transcript — proof of crypto-safety education from the School of Crypto Hard Knocks."/>
+<meta property="og:title" content="🐔 Cluck Norris — Official Transcript"/>
+<meta property="og:description" content="Proof of crypto-safety education from the School of Crypto Hard Knocks."/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0C0C0C;
+    background-image: radial-gradient(ellipse at 20% 10%, rgba(217,119,6,.08) 0%, transparent 50%),
+                      radial-gradient(ellipse at 80% 90%, rgba(239,68,68,.06) 0%, transparent 50%);
+    color: #F9FAFB; font-family: 'Oswald', sans-serif; min-height: 100vh;
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+  }
+  .card {
+    width: 100%; max-width: 540px; background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 28px 24px;
+  }
+  .head { text-align: center; margin-bottom: 22px; }
+  .head img { width: 84px; height: 84px; border-radius: 50%; border: 3px solid #D97706; object-fit: cover; }
+  .head h1 { font-size: 22px; font-weight: 900; letter-spacing: 2px; color: #D97706; margin-top: 12px; }
+  .head .sub { font-size: 10px; letter-spacing: 3px; color: #6B7280; margin-top: 2px; }
+  .wallet { text-align: center; font-family: 'Courier New', monospace; font-size: 12px;
+            color: #9CA3AF; word-break: break-all; margin-bottom: 20px; }
+  .badge { border-radius: 12px; padding: 16px 18px; margin-bottom: 14px; border: 1px solid; }
+  .badge .label { font-size: 12px; font-weight: 700; letter-spacing: 2px; }
+  .badge .detail { font-size: 12px; color: #D1D5DB; margin-top: 6px; line-height: 1.6; }
+  .verified { color: #10B981; }
+  .self { color: #9CA3AF; }
+  .diploma { background: rgba(212,175,55,0.08); border-color: rgba(212,175,55,0.35); }
+  .diploma .label { color: #D4AF37; }
+  .grad { background: rgba(16,185,129,0.07); border-color: rgba(16,185,129,0.3); }
+  .grad .label { color: #10B981; }
+  .holder { background: rgba(217,119,6,0.07); border-color: rgba(217,119,6,0.3); }
+  .holder .label { color: #D97706; }
+  .actions { display: flex; gap: 10px; margin-top: 20px; }
+  .actions a, .actions button {
+    flex: 1; text-align: center; text-decoration: none; cursor: pointer;
+    font-family: 'Oswald', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1px;
+    border-radius: 10px; padding: 12px; border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.05); color: #D1D5DB;
+  }
+  .actions .primary { background: linear-gradient(135deg, #D97706, #EF4444); color: #fff; border: none; }
+  .meta { text-align: center; font-size: 10px; color: #4B5563; letter-spacing: 1px; margin-top: 16px; }
+  .loading, .error { text-align: center; color: #6B7280; padding: 40px 0; font-size: 14px; letter-spacing: 1px; }
+</style>
+</head>
+<body>
+  <div class="card" id="card">
+    <div class="loading">Loading transcript…</div>
+  </div>
+<script>
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, c =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+  function fmtDate(iso) {
+    try { return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }); }
+    catch (e) { return ""; }
+  }
+  async function load() {
+    const card = document.getElementById("card");
+    const slug = decodeURIComponent((location.pathname.split("/transcript/")[1] || "").replace(/\/+$/, ""));
+    if (!slug) { card.innerHTML = '<div class="error">No transcript specified.</div>'; return; }
+    let t;
+    try {
+      const r = await fetch("/api/credential/" + encodeURIComponent(slug));
+      const j = await r.json();
+      if (!j.success) throw new Error(j.error || "not found");
+      t = j.transcript;
+    } catch (e) {
+      card.innerHTML = '<div class="error">No transcript found for this link.</div>';
+      return;
+    }
+
+    const parts = [];
+    parts.push(
+      '<div class="head">' +
+        '<img src="/cluck-norris-logo.jpg" alt="Cluck Norris"/>' +
+        '<h1>OFFICIAL TRANSCRIPT</h1>' +
+        '<div class="sub">SCHOOL OF CRYPTO HARD KNOCKS</div>' +
+      '</div>' +
+      '<div class="wallet">' + esc(t.wallet) + '</div>'
+    );
+
+    if (t.diploma && t.diploma.passed) {
+      const v = t.diploma.verified === "server-scored";
+      parts.push(
+        '<div class="badge diploma">' +
+          '<div class="label">🎓 DIPLOMA — ULTIMATE CHALLENGE</div>' +
+          '<div class="detail">Passed at <b>' + esc(t.diploma.pct) + '%</b> (' +
+            esc(t.diploma.score) + '/' + esc(t.diploma.total) + ') · ' +
+            '<span class="' + (v ? 'verified' : 'self') + '">' +
+              (v ? '✅ verified on-chain' : 'self-reported') + '</span>' +
+            (t.diploma.at ? ' · ' + esc(fmtDate(t.diploma.at)) : '') +
+          '</div>' +
+        '</div>'
+      );
+    }
+
+    if (t.graduation && t.graduation.completed) {
+      parts.push(
+        '<div class="badge grad">' +
+          '<div class="label">🥋 GRADUATE — FULL CURRICULUM</div>' +
+          '<div class="detail">Completed all 12 belt lessons · <span class="self">coursework (self-reported)</span>' +
+            (t.graduation.at ? ' · ' + esc(fmtDate(t.graduation.at)) : '') +
+          '</div>' +
+        '</div>'
+      );
+    }
+
+    if (t.holder && t.holder.isHolder) {
+      parts.push(
+        '<div class="badge holder">' +
+          '<div class="label">🐔 CLKN HOLDER</div>' +
+          '<div class="detail">Held ' + esc(Math.round(t.holder.balance).toLocaleString()) +
+            ' CLKN at claim time</div>' +
+        '</div>'
+      );
+    }
+
+    if (!(t.diploma && t.diploma.passed) && !(t.graduation && t.graduation.completed)) {
+      parts.push('<div class="error">This transcript has no recorded achievements yet.</div>');
+    }
+
+    const shareUrl = location.origin + "/transcript/" + esc(t.slug);
+    parts.push(
+      '<div class="actions">' +
+        '<button class="primary" id="share">📋 COPY SHARE LINK</button>' +
+        '<a href="/">🏫 THE SCHOOL</a>' +
+      '</div>' +
+      '<div class="meta">clucknorris.app · permanent transcript</div>'
+    );
+
+    card.innerHTML = parts.join("");
+    const btn = document.getElementById("share");
+    if (btn) btn.onclick = () => {
+      navigator.clipboard && navigator.clipboard.writeText(shareUrl);
+      btn.textContent = "✓ COPIED!";
+      setTimeout(() => { btn.textContent = "📋 COPY SHARE LINK"; }, 1800);
+    };
+  }
+  load();
+</script>
+</body>
+</html>

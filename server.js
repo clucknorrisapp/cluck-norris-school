@@ -15,6 +15,7 @@ const sigStore = require("./lib/sigstore");
 const kv = require("./lib/kvstore");
 const recap = require("./lib/recap");
 const gradTracker = require("./lib/grad-tracker");
+const credentials = require("./lib/credentials");
 const { PublicKey } = require("@solana/web3.js");
 
 // Pump.fun program — used to derive the per-creator "creator vault" PDA where
@@ -2491,23 +2492,49 @@ async function checkCLKNHolder(wallet) {
 app.post("/api/claim", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   const { wallet, score, total, pct, source } = req.body;
-  if (!wallet || wallet.length < 32) return res.status(400).json({ success: false, error: "Invalid wallet" });
+  if (!SOL_ADDR_RE.test(String(wallet || ""))) return res.status(400).json({ success: false, error: "Invalid wallet" });
   try {
-    // Check for duplicates
-    const rows = await getSheetRows();
-    const exists = rows.some(row => row[0] === wallet);
-    if (exists) return res.status(200).json({ success: true, message: "Already claimed" });
-    // Check if CLKN holder
+    // Check if CLKN holder (snapshot stored on the transcript too).
     const { isHolder, balance } = await checkCLKNHolder(wallet);
     const holderStatus = isHolder ? "[OK] YES" : "[ERR] NO";
-    const date = new Date().toISOString();
-    await appendToSheet([wallet, score, total, pct, date, holderStatus, balance, source || "CHALLENGE"]);
-    console.log(`[WIN] New claim: ${wallet} -- ${score}/${total} (${pct}%) -- CLKN Holder: ${holderStatus} (${balance})`);
-    return res.status(200).json({ success: true, isHolder, balance });
+
+    // Google Sheet stays the airdrop list — one row per wallet.
+    const rows = await getSheetRows();
+    const exists = rows.some(row => row[0] === wallet);
+    if (!exists) {
+      const date = new Date().toISOString();
+      await appendToSheet([wallet, score, total, pct, date, holderStatus, balance, source || "CHALLENGE"]);
+      console.log(`[WIN] New claim: ${wallet} -- ${score}/${total} (${pct}%) -- CLKN Holder: ${holderStatus} (${balance})`);
+    }
+
+    // Always update the permanent transcript store (merges challenge + graduation
+    // badges), even on a repeat claim — that's how a second door adds to an
+    // existing record. Returns the slug so the client can link the transcript.
+    const kind = source === "GRADUATION" ? "graduation" : "challenge";
+    const rec = credentials.record(wallet, { kind, score, total, pct, isHolder, balance });
+    return res.status(200).json({
+      success: true, isHolder, balance,
+      slug: rec.slug, transcript: `/transcript/${rec.slug}`, alreadyOnList: exists,
+    });
   } catch(err) {
-    console.error("Sheets error:", err.message);
+    console.error("Claim error:", err.message);
     return res.status(500).json({ success: false, error: err.message });
   }
+});
+
+// -- Public credential transcript: JSON by slug or raw wallet (hybrid lookup) --
+app.get("/api/credential/:id", (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  const rec = credentials.resolve(String(req.params.id || "").trim());
+  if (!rec) return res.status(404).json({ success: false, error: "No transcript found" });
+  return res.status(200).json({ success: true, transcript: rec });
+});
+
+// -- Aggregate, judge-facing school metrics (verified graduates, etc.) --
+app.get("/api/school-stats", (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  return res.status(200).json({ success: true, ...credentials.stats() });
 });
 
 app.get("/api/claims", async (req, res) => {
@@ -4622,6 +4649,18 @@ app.get("/score", (req, res) => {
   }
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.send(html);
+});
+
+// -- Permanent transcript page (reads the slug from the path, fetches the JSON) --
+let _transcriptHtmlCache = null;
+function getTranscriptHtml() {
+  if (_transcriptHtmlCache) return _transcriptHtmlCache;
+  _transcriptHtmlCache = fs.readFileSync(join(__dirname, "public", "transcript.html"), "utf8");
+  return _transcriptHtmlCache;
+}
+app.get("/transcript/:slug", (req, res) => {
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(getTranscriptHtml());
 });
 
 // -- Bubblemaps Proxy -- Bubblemaps blocks browser CORS, so we proxy server-side.

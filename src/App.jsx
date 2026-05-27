@@ -756,6 +756,7 @@ function UltimateChallenge({ onBack }) {
   const [claiming, setClaiming] = useState(false);
   const [isHolder, setIsHolder] = useState(false);
   const [holderBalance, setHolderBalance] = useState(0);
+  const [slug, setSlug] = useState("");
 
   function startChallenge() {
     // Pull all questions from lessons + challenge bank, shuffle, take 50
@@ -808,6 +809,7 @@ function UltimateChallenge({ onBack }) {
       setClaimed(true);
       setIsHolder(data.isHolder || false);
       setHolderBalance(data.balance || 0);
+      setSlug(data.slug || "");
     } catch(e) {
       setClaimed(true);
     }
@@ -924,6 +926,11 @@ function UltimateChallenge({ onBack }) {
               </div>
             )}
           </div>
+        )}
+        {claimed && slug && (
+          <a href={`/transcript/${slug}`} target="_blank" rel="noreferrer" style={{display:"block",textDecoration:"none",background:"rgba(212,175,55,0.1)",border:"1px solid rgba(212,175,55,0.4)",borderRadius:10,padding:"12px",marginBottom:12,textAlign:"center",fontFamily:"'Oswald',sans-serif",fontSize:12,fontWeight:700,color:"#D4AF37",letterSpacing:2}}>
+            🎓 VIEW YOUR PERMANENT TRANSCRIPT →
+          </a>
         )}
         <div style={{display:"flex",flexDirection:"column",gap:10}}>
           <button onClick={()=>{setStarted(false);setFinished(false);setQi(0);setAnswers([]);setSel(null);setShowExp(false);setWallet("");setClaimed(false);}} style={{background:"linear-gradient(135deg,#EF4444,#DC2626)",border:"none",borderRadius:10,padding:"14px",fontFamily:"'Oswald',sans-serif",fontSize:14,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer"}}>
@@ -5898,6 +5905,7 @@ function Complete({onRestart}){
   const [claiming, setClaiming] = useState(false);
   const [isHolder, setIsHolder] = useState(false);
   const [holderBalance, setHolderBalance] = useState(0);
+  const [slug, setSlug] = useState("");
 
   async function claimSpot() {
     if (!wallet || wallet.length < 32) return;
@@ -5912,6 +5920,7 @@ function Complete({onRestart}){
       setClaimed(true);
       setIsHolder(data.isHolder || false);
       setHolderBalance(data.balance || 0);
+      setSlug(data.slug || "");
     } catch(e) {
       setClaimed(true);
     }
@@ -5986,6 +5995,12 @@ function Complete({onRestart}){
           </div>
         )}
       </div>
+
+      {claimed && slug && (
+        <a href={`/transcript/${slug}`} target="_blank" rel="noreferrer" style={{display:"block",textDecoration:"none",background:"rgba(212,175,55,0.1)",border:"1px solid rgba(212,175,55,0.4)",borderRadius:10,padding:"12px",marginBottom:16,textAlign:"center",fontFamily:"'Oswald',sans-serif",fontSize:12,fontWeight:700,color:"#D4AF37",letterSpacing:2}}>
+          🎓 VIEW YOUR PERMANENT TRANSCRIPT →
+        </a>
+      )}
 
       <div style={{display:"flex",gap:10,marginBottom:16}}>
         <a href={CLKN_TRADE_LINK} target="_blank" rel="noreferrer" style={{flex:1,background:"linear-gradient(135deg,#D97706,#EF4444)",borderRadius:10,padding:"13px",fontFamily:"'Oswald',sans-serif",fontSize:13,fontWeight:700,color:"#fff",letterSpacing:2,textDecoration:"none",textAlign:"center",boxShadow:"0 0 20px rgba(217,119,6,0.4)"}}>
