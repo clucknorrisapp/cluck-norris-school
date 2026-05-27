@@ -2475,11 +2475,13 @@ async function checkCLKNHolder(wallet) {
     });
     const data = await response.json();
     const accounts = data?.result?.value || [];
-    if (accounts.length > 0) {
-      const balance = accounts[0]?.account?.data?.parsed?.info?.tokenAmount?.uiAmount || 0;
-      return { isHolder: balance > 0, balance };
-    }
-    return { isHolder: false, balance: 0 };
+    // A wallet can hold the same mint across several token accounts; sum them all
+    // so a holder with split accounts isn't undercounted (and doesn't lose their tier).
+    const balance = accounts.reduce(
+      (sum, a) => sum + (a?.account?.data?.parsed?.info?.tokenAmount?.uiAmount || 0),
+      0
+    );
+    return { isHolder: balance > 0, balance };
   } catch(e) {
     console.error("Holder check error:", e.message);
     return { isHolder: false, balance: 0 };
@@ -8623,10 +8625,14 @@ const MIN_SELL_USD = parseFloat(process.env.MIN_SELL_USD || String(MIN_BUY_USD))
 const MIN_REINVEST_USD = parseFloat(process.env.MIN_REINVEST_USD || "1");
 
 // Cached SOL/USD price for converting non-stable quote amounts into USD.
-// Refreshed every 5 minutes from CoinGecko (with DexScreener fallback). The
-// hardcoded value is only used if BOTH price sources fail — it'll be wrong
-// the moment SOL moves, but better than skipping all buy alerts.
-let cachedSolUsd = 100;
+// Refreshed every 5 minutes from CoinGecko (with DexScreener fallback). We start
+// with NO price rather than a hardcoded guess — a fabricated rate would post a
+// silently-wrong dollar value on a SOL-quoted buy. Until a real price is fetched
+// (or both sources are down), getSolUsd returns null and the SOL-quoted alert is
+// skipped rather than mis-valued; stable-quoted (USDC/USDT) trades are unaffected.
+// An operator can seed an approximate rate via SOL_USD_FALLBACK if they'd rather
+// post an estimate than skip during a total price-source outage.
+let cachedSolUsd = parseFloat(process.env.SOL_USD_FALLBACK) || null;
 let cachedSolUsdAt = 0;
 async function getSolUsd() {
   const now = Date.now();
@@ -8656,7 +8662,7 @@ async function getSolUsd() {
       cachedSolUsdAt = now;
     }
   } catch (e) {
-    console.warn("[TELEGRAM] DexScreener SOL fallback failed, using cached/hardcoded:", e.message);
+    console.warn("[TELEGRAM] DexScreener SOL fallback failed, using last-known price:", e.message);
   }
   return cachedSolUsd;
 }
@@ -8667,6 +8673,7 @@ function quoteUsdValue(trade) {
   const meta = QUOTE_TOKENS[trade.quote.mint];
   if (!meta) return null;
   if (meta.isStable) return trade.quote.amount;
+  if (!cachedSolUsd) return null; // no real SOL price yet — skip rather than fabricate a USD value
   return trade.quote.amount * cachedSolUsd; // SOL/wSOL × cached USD price
 }
 
