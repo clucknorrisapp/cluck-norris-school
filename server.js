@@ -3086,19 +3086,23 @@ app.post("/api/slots/spin", async (req, res) => {
   s.spins[day][wallet] = used + 1;
   const p = s.players[wallet] || { pts: 0, jackpot: false, entryBal: bal };
   if (p.entryBal == null) p.entryBal = bal;                     // week-entry balance, recorded ONCE (first spin)
+  // The 7,777 CLKN Fire Chicken airdrop is capped at ONCE per wallet per week.
+  // The first 🩺🔥🐔 of the week locks it (and shouts to the group); later hits
+  // still score points and show the combo, but don't re-award or re-announce.
+  const fcFirst = sc.fireChicken && !p.fireChicken;
   p.pts += sc.pts; if (sc.jackpot) p.jackpot = true; if (sc.fireChicken) p.fireChicken = true; s.players[wallet] = p;
   kv.set("slotsState", s);
-  if (sc.fireChicken) {                                          // 🩺🔥🐔 easter egg → shout it to the group
+  if (fcFirst) {                                                 // 🩺🔥🐔 easter egg → shout it to the group (first of the week only)
     const wShort = wallet.slice(0, 4) + "…" + wallet.slice(-4);
     notifyTelegram(
       `🩺🔥🐔 <b>DR. FIRE CHICKEN!</b> 🐔🔥🩺\n\n` +
       `<code>${wShort}</code> just landed the legendary combo on The Coop Spinner — an honor to the OG Fire Chicken roost. 🔥\n\n` +
-      `🎁 That's an <b>automatic ${SLOT_FIRE_CHICKEN_AIRDROP.toLocaleString()} CLKN</b> airdrop at week's end (hold through the draw to claim it).\n\n` +
+      `🎁 That's an <b>automatic ${SLOT_FIRE_CHICKEN_AIRDROP.toLocaleString()} CLKN</b> airdrop at week's end (hold through the draw to claim it). One per wallet per week.\n\n` +
       `One of the rarest pulls in the coop. Think you can find the Doctor? 🎰\n🐔 clucknorris.app/slots\n\n<i>Beta — prizes are owner-funded, not project/fee funds. NFA.</i>`
     );
   }
   try { analytics.trackTool("slot_spin"); } catch (_) {}
-  return res.status(200).json({ outcome, gained: sc.pts, kind: sc.kind, jackpot: p.jackpot, fireChicken: !!p.fireChicken, hitFireChicken: !!sc.fireChicken, airdrop: sc.fireChicken ? SLOT_FIRE_CHICKEN_AIRDROP : 0, totalPoints: p.pts, spinsLeft: allot - (used + 1), dailyAllot: allot, weekId: s.weekId, leaderboard: slotLeaderboard(s, wallet) });
+  return res.status(200).json({ outcome, gained: sc.pts, kind: sc.kind, jackpot: p.jackpot, fireChicken: !!p.fireChicken, hitFireChicken: !!sc.fireChicken, airdrop: fcFirst ? SLOT_FIRE_CHICKEN_AIRDROP : 0, fireChickenAlreadyWon: sc.fireChicken && !fcFirst, totalPoints: p.pts, spinsLeft: allot - (used + 1), dailyAllot: allot, weekId: s.weekId, leaderboard: slotLeaderboard(s, wallet) });
 });
 
 // Player + board state (proof optional — board is visible to the beta group).
