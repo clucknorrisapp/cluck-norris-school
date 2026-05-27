@@ -4902,7 +4902,7 @@ app.get("/api/autopsy", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "public, max-age=300");
   const mint = (req.query.mint || "").trim();
-  if (!mint || mint.length < 32) return res.status(400).json({ success: false, error: "Invalid mint" });
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ success: false, error: "Invalid mint" });
   try { analytics.trackTool("autopsy"); } catch (_) {}
 
   if (req.query.nocache !== "1") {

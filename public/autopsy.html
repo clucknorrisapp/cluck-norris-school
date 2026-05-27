@@ -1173,13 +1173,13 @@ function render(data) {
         const matchedCreator = c.wallet ? creatorByWallet[c.wallet] : null;
         const uname = c.twitterUsername || c.username || matchedCreator?.username || null;
         const prov = c.provider || matchedCreator?.provider || null;
-        const handleStr = uname ? `<strong>${prov === "twitter" || c.twitterUsername ? "@" + uname : uname}</strong>` : "(unnamed)";
+        const handleStr = uname ? `<strong>${prov === "twitter" || c.twitterUsername ? "@" + esc(uname) : esc(uname)}</strong>` : "(unnamed)";
         const adminTag = (c.isAdmin || matchedCreator?.isAdmin) ? ` <span class="badge badge-creator" style="font-size:9px;padding:2px 6px;">👑 ADMIN</span>` : "";
         const royaltyStr = (c.royaltyBps != null ? c.royaltyBps : matchedCreator?.royaltyBps) != null ? `${((c.royaltyBps != null ? c.royaltyBps : matchedCreator.royaltyBps) / 100).toFixed(0)}% share` : "";
         const claimedStr = c.totalClaimedSol != null ? `${c.totalClaimedSol.toLocaleString(undefined, { maximumFractionDigits: 3 })} SOL claimed` : "";
         const stats = [royaltyStr, claimedStr].filter(Boolean).join(" · ");
         bh += `<div class="bags-creator" style="display:flex;align-items:flex-start;gap:10px;">
-          ${c.pfp ? `<img src="${c.pfp}" alt="" style="width:36px;height:36px;border-radius:50%;border:1px solid var(--border);flex-shrink:0;" onerror="this.style.display='none'"/>` : ''}
+          ${c.pfp ? `<img src="${safeUrl(c.pfp)}" alt="" style="width:36px;height:36px;border-radius:50%;border:1px solid var(--border);flex-shrink:0;" onerror="this.style.display='none'"/>` : ''}
           <div style="flex:1;min-width:0;">
             <div>${handleStr}${adminTag}</div>
             <div class="bags-creator-meta">
@@ -1364,7 +1364,7 @@ function render(data) {
         if (m.source === "bags") {
           const pctStr = h.projectFeeRoyaltyPct != null ? ` ${h.projectFeeRoyaltyPct.toFixed(0)}%` : "";
           const adminTag = m.isAdmin ? " ADMIN" : "";
-          const handle = m.username ? ` @${m.username}` : "";
+          const handle = m.username ? ` @${esc(m.username)}` : "";
           badges.push(`<span class="badge badge-feewallet">💸 BAGS FEE WALLET${pctStr}${adminTag}${handle}</span>`);
         } else if (m.source === "pump") {
           badges.push(`<span class="badge badge-feewallet">💸 PUMP CREATOR WALLET</span>`);
