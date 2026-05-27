@@ -6018,7 +6018,10 @@ function Complete({onRestart}){
 }
 
 export default function App(){
-  const [screen,setScreen]=useState("landing");
+  const [screen,setScreen]=useState(()=>{
+    try { const h=(window.location.hash||"").replace(/^#/,""); return ["library","incubator","lplab","survive","clkn","challenge","select"].includes(h)?h:"landing"; }
+    catch(e){ return "landing"; }
+  });
   const [lessonId,setLessonId]=useState(null);
   const [completed,setCompleted]=useState(()=>{
     try {
