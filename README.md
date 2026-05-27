@@ -4,6 +4,7 @@
 [![Built on Solana](https://img.shields.io/badge/Built%20on-Solana-9945FF)](https://solana.com)
 [![Powered by Bags.fm](https://img.shields.io/badge/Powered%20by-Bags.fm-orange)](https://bags.fm?ref=firechicken007)
 [![Live App](https://img.shields.io/badge/Live-clucknorris.app-green)](https://clucknorris.app)
+[![Auto-deployed on Railway](https://img.shields.io/badge/Deploy-Railway-blueviolet)](https://railway.app)
 
 > *"No participation trophies. No hand‑holding. Just hard knocks."*
 >
