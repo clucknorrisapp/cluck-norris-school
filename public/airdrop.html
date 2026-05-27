@@ -543,6 +543,20 @@ function fmtNum(n) {
   return n.toLocaleString();
 }
 
+// Escape any displayed string before innerHTML (recipient rows show pasted input).
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// Convert a (possibly fractional) token amount to base units as a BigInt via a
+// fixed-point STRING — never amount * 10**decimals, whose float multiply loses
+// precision above ~9M tokens at 9 decimals (Number.MAX_SAFE_INTEGER).
+function toBaseUnits(amount, decimals) {
+  const n = Number(amount);
+  if (!isFinite(n) || n <= 0) return 0n;
+  const fixed = n.toFixed(decimals);
+  const [intPart, fracPart = ''] = fixed.split('.');
+  return BigInt(intPart) * (10n ** BigInt(decimals)) + BigInt((fracPart.padEnd(decimals, '0').slice(0, decimals)) || '0');
+}
+
 function shortAddr(a) {
   return a ? a.slice(0,6) + '...' + a.slice(-4) : '';
 }
@@ -1009,7 +1023,7 @@ function renderPreview() {
     const newAtaBadge = (r.needsAta && !r.skip) ? '<span class="new-ata-badge">🆕 NEW ATA</span>' : '';
     tr.innerHTML = `
       <td style="color:var(--subtext);font-family:var(--mono);font-size:11px">${i+1}</td>
-      <td class="addr-cell">${r.addr}${newAtaBadge}</td>
+      <td class="addr-cell">${esc(r.addr)}${newAtaBadge}</td>
       <td class="amt-cell">${r.skip ? '<span style="color:var(--subtext)">—</span>' : fmtNum(r.amount)}</td>
       <td class="status-cell">${r.skip
         ? `<span style="color:var(--subtext)">SKIP — ${r.skipReason}</span>`
@@ -1094,7 +1108,7 @@ async function sendAirdrop() {
         // Build instructions from the pre-flight cache — no per-recipient RPC needed.
         const transferInstructions = [];
         for (const recipient of batch) {
-          const amountRaw = Math.round(recipient.amount * Math.pow(10, currentDecimals));
+          const amountRaw = toBaseUnits(recipient.amount, currentDecimals);
           const recipientTokenAccount = recipient.ataAddress
             || await getAssociatedTokenAddress(currentMint, recipient.addr);
 
