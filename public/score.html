@@ -478,12 +478,23 @@ function renderResult(data) {
   gradeEl.textContent = data.grade || '—';
   gradeEl.className = 'score-grade grade-' + (data.grade ? data.grade[0] : 'NA');
   document.getElementById('resVerdict').textContent = data.verdict || '';
+  // Honesty: flag a thin read so a sparse-data score isn't taken as authoritative.
+  const vEl = document.getElementById('resVerdict');
+  const existingNote = document.getElementById('confNote');
+  if (existingNote) existingNote.remove();
+  if (data.dataConfidence === 'low') {
+    const note = document.createElement('div');
+    note.id = 'confNote';
+    note.style.cssText = 'margin-top:8px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;color:#F59E0B;';
+    note.textContent = '⚠ LIMITED DATA — scored on ' + (data.factorsUsed || 'few') + ' signals; treat as a rough read.';
+    vEl.parentNode.insertBefore(note, vEl.nextSibling);
+  }
 
   // Factor breakdown
   const factorOrder = [
     { key: 'holders', label: 'HOLDERS', fmt: f => {
         if (f.value == null) return '—';
-        return '<span class="num">' + f.value.toLocaleString() + '</span> <span class="muted">wallets</span>';
+        return '<span class="num">' + f.value.toLocaleString() + (f.capped ? '+' : '') + '</span> <span class="muted">wallets' + (f.capped ? ' (counted up to 10k)' : '') + '</span>';
       } },
     { key: 'liquidity', label: 'LIQUIDITY HEALTH', fmt: f => {
         if (f.value == null) return '—';

@@ -3352,20 +3352,34 @@ app.get("/api/cluck-score", async (req, res) => {
   }
   const rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
 
-  function rpcCall(id, method, params) {
-    return fetch(rpcUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id, method, params })
-    }).then(r => r.json());
+  // One retry with backoff on a transient failure (429 / 5xx / network) so a
+  // single rate-limited call doesn't silently drop a whole scoring factor. The
+  // score is edge-cached 5 min, so the extra calls are bounded.
+  async function rpcCall(id, method, params, _retry = 0) {
+    try {
+      const r = await fetch(rpcUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id, method, params })
+      });
+      if (r.status === 429 || r.status >= 500) throw new Error("rpc " + r.status);
+      return await r.json();
+    } catch (e) {
+      if (_retry < 1) { await new Promise(res => setTimeout(res, 350)); return rpcCall(id, method, params, _retry + 1); }
+      throw e;
+    }
   }
 
   try {
     const [holdersData, dexData, supplyData, mintInfoData, largestData, bagsCtxData] = await Promise.allSettled([
-      // Holder count — same paginated walk as /api/holders, capped at 5 pages for speed
+      // Holder count — same paginated walk as /api/holders. Walk up to 10 pages
+      // (10k accounts); if we hit the limit on a full page, more holders exist —
+      // flag it as capped so the count is shown as "10,000+" instead of a wrong exact.
       (async () => {
         const owners = new Set();
-        for (let page = 1; page <= 5; page++) {
+        let capped = false;
+        const MAX_PAGES = 10;
+        for (let page = 1; page <= MAX_PAGES; page++) {
           const d = await rpcCall(`score-holders-${page}`, "getTokenAccounts", {
             page, limit: 1000, mint, displayOptions: { showZeroBalance: false }
           });
@@ -3375,8 +3389,9 @@ app.get("/api/cluck-score", async (req, res) => {
             if (parseInt(a.amount) > 0) owners.add(a.owner);
           }
           if (accounts.length < 1000) break;
+          if (page === MAX_PAGES) capped = true;
         }
-        return owners.size;
+        return { count: owners.size, capped };
       })(),
       fetch(`https://api.dexscreener.com/token-pairs/v1/solana/${mint}`).then(r => r.json()),
       rpcCall("score-supply", "getTokenSupply", [mint]),
@@ -3388,7 +3403,9 @@ app.get("/api/cluck-score", async (req, res) => {
     ]);
 
     // Extract data with safe defaults
-    const holderCount = holdersData.status === "fulfilled" ? holdersData.value : null;
+    const holderInfo = holdersData.status === "fulfilled" ? holdersData.value : null;
+    const holderCount = holderInfo ? holderInfo.count : null;
+    const holderCountCapped = !!(holderInfo && holderInfo.capped);
     const allDexPairs = dexData.status === "fulfilled" && Array.isArray(dexData.value) ? dexData.value : [];
     // Only count Solana pairs. Sum liquidity across all of them — a token with
     // $20K on Meteora + $20K on Raydium has $40K of real exit liquidity, not $20K.
@@ -3546,14 +3563,16 @@ app.get("/api/cluck-score", async (req, res) => {
     f.liquidity = liqBase == null ? null : Math.min(100, liqBase + multiDexBonus);
     f.mintAuthority = mintAuthority === null ? 100 : (mintAuthority === undefined ? null : 0);
     f.freezeAuthority = (freezeAuthority === null) ? 100 : (freezeAuthority === undefined ? null : 0);
-    // Concentration: softened to acknowledge that legitimate LP, team locks, vesting
-    // contracts, and the AMM pool itself routinely sit in the top-10 and aren't actual
-    // rug risk. Until we port the full LP/lock classifier (v2), 25% is the practical
-    // "excellent" floor.
-    //   25% → 100 (excellent — likely LP + tiny human concentration)
-    //   35% → 80   45% → 60   55% → 40
-    //   65% → 20   75%+ → 0   (real whale risk — one cluster controls the float)
-    f.concentration = top10Share == null ? null : Math.max(0, Math.min(100, 100 - Math.max(0, top10Share - 0.25) * 200));
+    // Concentration: top10Share is the LP/lock/program-FILTERED human share
+    // (top10HumanShare) whenever owner classification succeeds — so the "excellent"
+    // floor is a true human floor (10%), not the lenient 25% that only made sense
+    // when LP/contracts were still counted in the number. If classification fails we
+    // fall back to the RAW share (LP included) and keep the 25% floor so a token isn't
+    // unfairly penalized for its own pool sitting in the top 10.
+    //   human-filtered: 10% → 100, 20% → 80, 30% → 60, 40% → 40, 50% → 20, 60%+ → 0
+    //   raw fallback:   25% → 100 … 75%+ → 0
+    const concFloor = top10HumanShare != null ? 0.10 : 0.25;
+    f.concentration = top10Share == null ? null : Math.max(0, Math.min(100, 100 - Math.max(0, top10Share - concFloor) * 200));
     f.volume = vol24h == null ? null : Math.min(100, Math.log10(Math.max(1, vol24h)) * 25); // ~$10k = 100
 
     // --- Bags-aware verification factors (new) ---
@@ -3632,6 +3651,11 @@ app.get("/api/cluck-score", async (req, res) => {
       }
     }
     const score = totalWeight > 0 ? Math.round(weightedSum / totalWeight) : null;
+    // Confidence: flag a score built from sparse data (missing the two biggest
+    // factors — liquidity 20 + holders 18 — drops totalWeight below 40), so the
+    // UI can label it rather than present a thin read as authoritative.
+    const factorsUsed = Object.keys(weights).filter(k => f[k] != null).length;
+    const lowConfidence = totalWeight < 40;
 
     // Standard academic grading scale — what every reader expects.
     //   95+ → A+   90+ → A   80+ → B   70+ → C   60+ → D   <60 → F
@@ -3660,12 +3684,14 @@ app.get("/api/cluck-score", async (req, res) => {
       score,
       grade,
       verdict,
+      dataConfidence: lowConfidence ? "low" : "ok",
+      factorsUsed,
       factors: {
-        holders:          { score: f.holders          == null ? null : Math.round(f.holders),          weight: weights.holders,          value: holderCount },
+        holders:          { score: f.holders          == null ? null : Math.round(f.holders),          weight: weights.holders,          value: holderCount, capped: holderCountCapped },
         liquidity:        { score: f.liquidity        == null ? null : Math.round(f.liquidity),        weight: weights.liquidity,        value: liqUsd, ratio: liqRatio, poolCount, dexCount: dexFamilies.size, dexes: [...dexFamilies], multiDexBonus },
         mintAuthority:    { score: f.mintAuthority,    weight: weights.mintAuthority,    revoked: mintAuthority === null },
         freezeAuthority:  { score: f.freezeAuthority,  weight: weights.freezeAuthority,  revoked: freezeAuthority === null },
-        concentration:    { score: f.concentration    == null ? null : Math.round(f.concentration),    weight: weights.concentration,    top10Share: top10Share, top10RawShare, top10HumanShare, lpFilteredFromTop20: lpInTop20, isPlatformLauncherDev },
+        concentration:    { score: f.concentration    == null ? null : Math.round(f.concentration),    weight: weights.concentration,    top10Share: top10Share, top10RawShare, top10HumanShare, humanFiltered: top10HumanShare != null, lpFilteredFromTop20: lpInTop20, isPlatformLauncherDev },
         volume:           { score: f.volume           == null ? null : Math.round(f.volume),           weight: weights.volume,           value: vol24h },
         verifiedTeam: {
           score: f.verifiedTeam == null ? null : Math.round(f.verifiedTeam),
