@@ -99,3 +99,12 @@ Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.
 - Run: `npm start` (= `node server.js`). React dev/build: `npm run dev` / `npm run build`.
 - After editing backend JS, sanity-check syntax: `node --check server.js`.
 - No automated test suite.
+
+## Deferred / check later
+- **`/api/helius-rpc` is a deny-list, not an allow-list** (the README says
+  "allow-listing"). It blocks `getProgramAccounts`/subscribes and is rate-limited,
+  so the risk is low (quota abuse, no key leak). Convert to a true allow-list of
+  the methods the client tools actually call — but enumerate every method first
+  (rose/airdrop/buyspecial route real RPC, incl. possibly `sendTransaction` /
+  `getLatestBlockhash`), and don't do it mid-event since an incomplete list breaks
+  those tools. Then make the README wording match.
