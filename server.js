@@ -4397,7 +4397,9 @@ app.get("/api/trace", async (req, res) => {
         if (!r.counterparty) continue;
         key = r.counterparty;
         type = r.counterpartyType === "contract" ? "contract" : "wallet";
-        label = r.counterpartyLabel || null;
+        // Surface known CEX deposit wallets by name — a wallet cashing out to an
+        // exchange is a key forensic signal, not just another anonymous address.
+        label = r.counterpartyLabel || KNOWN_CEX_WALLETS[r.counterparty] || null;
         address = r.counterparty;
       }
       let e = nodeMap.get(key);

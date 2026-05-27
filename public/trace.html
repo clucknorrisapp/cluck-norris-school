@@ -155,6 +155,11 @@
   .tag-wallet { background: rgba(96,165,250,0.12); color: var(--blue); border: 1px solid rgba(96,165,250,0.3); }
   .tag-contract { background: rgba(245,158,11,0.12); color: var(--amber); border: 1px solid rgba(245,158,11,0.3); }
   .tag-market { background: rgba(167,139,250,0.13); color: var(--purple); border: 1px solid rgba(167,139,250,0.35); }
+  .tag-cex { background: rgba(252,211,77,0.14); color: var(--accent); border: 1px solid rgba(252,211,77,0.4); }
+  .graph-legend { display: flex; flex-wrap: wrap; gap: 10px 16px; justify-content: center; margin: 4px 0 2px; font-family: var(--mono); font-size: 10px; color: var(--muted); }
+  .graph-legend span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+  .graph-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .graph-legend .ln { width: 14px; height: 0; border-top: 2px solid; }
   .tx-meta .bal { color: var(--text); }
   .tx-meta a { color: var(--blue); text-decoration: none; }
   .cp-link { white-space: nowrap; }
@@ -275,6 +280,14 @@
       </div>
       <div class="gfilter-hint">Tap to filter — turn off DEX &amp; Contracts to isolate wallet-to-wallet transfers.</div>
       <div id="graphHolder"></div>
+      <div class="graph-legend">
+        <span><i class="ln" style="border-color:#10B981"></i> received in</span>
+        <span><i class="ln" style="border-color:#EF4444"></i> sent out</span>
+        <span><i style="background:#60A5FA"></i> wallet</span>
+        <span><i style="background:#FCD34D"></i> exchange (CEX)</span>
+        <span><i style="background:#A78BFA"></i> DEX</span>
+        <span><i style="background:#F59E0B"></i> contract</span>
+      </div>
       <div class="graph-more" id="graphMore"></div>
     </div>
 
@@ -689,9 +702,11 @@ function renderGraph() {
     const c = p.c, t = c.type;
     const nx = cx + p.R * Math.cos(p.a), ny = cy + p.R * Math.sin(p.a);
     const x = nx - nodeW/2, y = ny - nodeH/2;
-    const stroke = t === 'market' ? '#A78BFA' : t === 'contract' ? '#F59E0B' : '#60A5FA';
-    const fill = t === 'market' ? 'rgba(167,139,250,0.12)' : t === 'contract' ? 'rgba(245,158,11,0.12)' : 'rgba(96,165,250,0.12)';
-    const line1 = (t === 'wallet') ? shortAddr(c.address)
+    const isCex = t === 'wallet' && c.label; // a labeled wallet = known CEX deposit address
+    const stroke = t === 'market' ? '#A78BFA' : t === 'contract' ? '#F59E0B' : isCex ? '#FCD34D' : '#60A5FA';
+    const fill = t === 'market' ? 'rgba(167,139,250,0.12)' : t === 'contract' ? 'rgba(245,158,11,0.12)' : isCex ? 'rgba(252,211,77,0.14)' : 'rgba(96,165,250,0.12)';
+    const line1 = isCex ? c.label.slice(0,16).toUpperCase()
+      : (t === 'wallet') ? shortAddr(c.address)
       : (c.label || (t === 'market' ? 'DEX' : 'Contract')).slice(0,16).toUpperCase();
     const amt = [];
     if (c.inflow > 0)  amt.push(`<tspan fill="#10B981">+${fmtNum(c.inflow,dec)}</tspan>`);
@@ -761,6 +776,10 @@ function renderCounterparties() {
     if (c.type === 'market') {
       who = `<span class="tag tag-market">MARKET</span> `
         + `<span class="mname">${c.label || 'DEX'}</span>`;
+    } else if (c.type === 'wallet' && c.label) {
+      // Known CEX deposit wallet — name it (forensic cash-out signal).
+      who = `<span class="tag tag-cex">🏦 ${c.label.toUpperCase()}</span> `
+        + `<a href="https://solscan.io/account/${c.address}" target="_blank">${shortAddr(c.address)} ↗</a>`;
     } else {
       const name = c.type === 'contract' ? (c.label || 'CONTRACT') : 'WALLET';
       const tagCls = c.type === 'contract' ? 'tag-contract' : 'tag-wallet';
