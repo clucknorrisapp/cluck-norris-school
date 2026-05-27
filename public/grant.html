@@ -157,6 +157,7 @@
     <div class="stat"><div class="stat-value" id="statHolders">—</div><div class="stat-label">TOKEN HOLDERS</div></div>
     <div class="stat"><div class="stat-value" id="statScore">—</div><div class="stat-label">OUR OWN CLUCK SCORE</div><div class="stat-sub" id="statScoreGrade"></div></div>
     <div class="stat"><div class="stat-value" id="statFees">—</div><div class="stat-label">LIFETIME FEES REINVESTED</div></div>
+    <div class="stat"><div class="stat-value" id="statGrads">—</div><div class="stat-label">VERIFIED GRADUATES</div><div class="stat-sub" id="statGradsSub">server-scored diplomas</div></div>
   </div>
   <div class="prose">
     <p>The project funds itself with optional CLKN micropayments on a few premium tools, and reinvests 100% of creator trading fees back into the ecosystem. The grant is <strong>not</strong> requested to fund the token — it's requested to expand the free, educational layer that benefits all Solana newcomers.</p>
@@ -253,6 +254,16 @@ fetch('/api/cluck-score?mint=' + CLKN_MINT)
       document.getElementById('statScore').textContent = d.score + '/100';
       document.getElementById('statScoreGrade').textContent = 'grade ' + (d.grade || '—');
     }
+  })
+  .catch(function(){});
+
+fetch('/api/school-stats')
+  .then(r => r.json())
+  .then(d => {
+    if (!d || !d.success) return;
+    document.getElementById('statGrads').textContent = Number(d.verifiedDiplomas || 0).toLocaleString();
+    const total = Number(d.totalTranscripts || 0);
+    if (total) document.getElementById('statGradsSub').textContent = total.toLocaleString() + ' transcripts issued';
   })
   .catch(function(){});
 </script>

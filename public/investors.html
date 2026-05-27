@@ -299,6 +299,11 @@
         <div class="stat-sub" id="statScoreGrade">our own grading</div>
         <div style="font-family:'Oswald',sans-serif;font-size:9px;letter-spacing:1px;color:var(--accent);margin-top:5px">ⓘ WHAT IS THIS? →</div>
       </a>
+      <div class="stat green">
+        <div class="stat-label">🎓 VERIFIED GRADUATES</div>
+        <div class="stat-value" id="statGrads">—</div>
+        <div class="stat-sub" id="statGradsSub">server-scored diplomas</div>
+      </div>
     </div>
   </div>
 
@@ -745,6 +750,17 @@ fetch('/api/cluck-score?mint=' + CLKN_MINT)
     if (r.volume24h != null) {
       document.getElementById('statVol').textContent = fmtUsd(r.volume24h);
     }
+  })
+  .catch(() => {});
+
+// Verified graduates — server-scored diplomas issued by the school.
+fetch('/api/school-stats')
+  .then(r => r.json())
+  .then(d => {
+    if (!d?.success) return;
+    document.getElementById('statGrads').textContent = Number(d.verifiedDiplomas || 0).toLocaleString();
+    const total = Number(d.totalTranscripts || 0);
+    if (total) document.getElementById('statGradsSub').textContent = total.toLocaleString() + ' transcripts issued';
   })
   .catch(() => {});
 
