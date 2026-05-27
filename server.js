@@ -1019,6 +1019,12 @@ app.get("/api/bags-proxy", async (req, res) => {
   const API_KEY = process.env.BAGS_API_KEY;
   if (!API_KEY) return res.status(500).json({ success: false, error: "Missing BAGS_API_KEY" });
   if (!endpoint) return res.status(400).json({ success: false, error: "Missing endpoint" });
+  // Constrain endpoint to a safe relative path so it can never alter the host
+  // (the BAGS_BASE path suffix already blocks the userinfo trick, but this keeps
+  // the proxy + its API key pinned to bags.fm even if BAGS_BASE ever changes).
+  if (!/^[A-Za-z0-9._\-/]+$/.test(String(endpoint)) || String(endpoint).includes("..")) {
+    return res.status(400).json({ success: false, error: "Invalid endpoint" });
+  }
   try {
     const queryString = new URLSearchParams(params).toString();
     const url = `${BAGS_BASE}${endpoint}${queryString ? `?${queryString}` : ""}`;
