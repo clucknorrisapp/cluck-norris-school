@@ -364,7 +364,10 @@ router.post("/build", async (req, res) => {
     }
     const useCluster = cluster === "devnet" ? "devnet" : "mainnet-beta";
 
-    const { metadataUri, imageUri } = await uploadMetadata({ imageBuffer, imageMime, name, symbol, description });
+    // Bound the description — it's uploaded to Arweave on the project's Turbo
+    // key, so an unbounded field is a credit-drain vector.
+    const desc = String(description || "").slice(0, 1000);
+    const { metadataUri, imageUri } = await uploadMetadata({ imageBuffer, imageMime, name, symbol, description: desc });
     const { txBase64, mintAddress, mintSecret } = await buildMintTransaction({
       creator, cluster: useCluster, decimals: dec, supply: sup.toString(),
       name, symbol, metadataUri, revokeMint: !!revokeMint, revokeFreeze: !!revokeFreeze,
