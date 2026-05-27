@@ -119,7 +119,7 @@
   <div class="card">
     <span class="free-badge">FREE PUBLIC GOOD</span>
     <h3>🩺 Cluck Score — token health for any Solana mint</h3>
-    <p>Paste any Solana token mint, get a 0–100 health score in seconds: holder distribution, liquidity depth, mint/freeze authority status, and a top-holder concentration figure that filters out LP pools and lock contracts so the number reflects real human wallets. Served free at <code>/score</code> with a public JSON API and shareable card. Helps any user — not just ours — avoid bad tokens.</p>
+    <p>Paste any Solana token mint, get a 0–100 health score in seconds: holder distribution, liquidity depth, mint/freeze authority status, and a top-holder concentration figure that filters out LP pools and lock contracts so the number reflects real human wallets. It also scans <strong>Token‑2022 honeypot mechanics</strong> (sell‑blocks, permanent‑delegate seize, transfer‑tax) and caps the score on anything a holder couldn't safely sell. Served free at <code>/score</code> with a public JSON API and shareable card. Helps any user — not just ours — avoid bad tokens.</p>
   </div>
 
   <div class="card">
@@ -131,7 +131,13 @@
   <div class="card">
     <span class="free-badge">FREE PUBLIC GOOD</span>
     <h3>🎓 The School — crypto safety curriculum</h3>
-    <p>A structured, free curriculum for total beginners: wallets, tokens, DEXs, liquidity, market cap, and how not to get drained. Includes a Survival Simulator that walks new users through real-world crypto scenarios — a bank of 135, with 10 drawn at random per run — using simulated capital, so they practice the dangerous decisions before making them with real money. No signup, no wallet, no paywall.</p>
+    <p>A structured, free curriculum for total beginners: wallets, tokens, DEXs, liquidity, market cap, and how not to get drained. Includes a Survival Simulator that walks new users through real-world crypto scenarios — a bank of 135, with 10 drawn at random per run — using simulated capital, so they practice the dangerous decisions before making them with real money. No signup, no wallet, no paywall. Passing the <strong>server-scored</strong> Ultimate Challenge (the answer key never reaches the browser) — or finishing the full curriculum — mints a <strong>permanent, verifiable transcript</strong> keyed to the learner's wallet, so the achievement is real proof, not a clearable browser badge.</p>
+  </div>
+
+  <div class="card">
+    <span class="free-badge">FREE PUBLIC GOOD</span>
+    <h3>🛡 Wallet Safety Checkup — catch what actually drains people</h3>
+    <p>A free, read-only scan at <code>/wallet-checkup</code> — paste any address, no wallet connect. One report on the real first-weeks killers: <strong>lingering token approvals</strong> (the one permission that persists on Solana), <strong>honeypot / can't-sell holdings</strong>, and tokens whose dev can still <strong>freeze or mint</strong>. It routes each finding to revoke it or research it. Most newcomer losses aren't bad token picks — they're forgotten approvals and drainer bait; this targets exactly that.</p>
   </div>
 
   <div class="card">
