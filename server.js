@@ -2555,7 +2555,7 @@ app.post("/api/exam/submit", (req, res) => {
 
 app.post("/api/claim", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  const { wallet, score, total, pct, source, passToken } = req.body;
+  const { wallet, score, total, pct, source, passToken, coursework } = req.body;
   if (!SOL_ADDR_RE.test(String(wallet || ""))) return res.status(400).json({ success: false, error: "Invalid wallet" });
   try {
     // A diploma is "verified" only when it rides a one-time, server-issued pass
@@ -2588,7 +2588,7 @@ app.post("/api/claim", async (req, res) => {
     // badges), even on a repeat claim — that's how a second door adds to an
     // existing record. Returns the slug so the client can link the transcript.
     const kind = source === "GRADUATION" ? "graduation" : "challenge";
-    const rec = credentials.record(wallet, { kind, score: effScore, total: effTotal, pct: effPct, verified, isHolder, balance });
+    const rec = credentials.record(wallet, { kind, score: effScore, total: effTotal, pct: effPct, verified, isHolder, balance, coursework });
     return res.status(200).json({
       success: true, isHolder, balance, verified,
       slug: rec.slug, transcript: `/transcript/${rec.slug}`, alreadyOnList: exists,

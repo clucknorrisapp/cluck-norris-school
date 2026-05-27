@@ -678,6 +678,20 @@ function Incubator({ onComplete, onBack }) {
   );
 }
 
+// Snapshot the learner's local progress so it can ride along on a claim and
+// show up as "coursework" on their permanent transcript. All browser-local;
+// counts only, no answers.
+function readCoursework() {
+  const arr = (k) => { try { const v = JSON.parse(localStorage.getItem(k) || "null"); return Array.isArray(v) ? v : []; } catch(e) { return []; } };
+  let incubator = 0;
+  try { const v = JSON.parse(localStorage.getItem("incubator_progress") || "{}"); incubator = Array.isArray(v.completed) ? v.completed.length : 0; } catch(e) {}
+  return {
+    belts: arr("clkn_completed").length, beltsTotal: LESSONS.length,
+    incubator, incubatorTotal: INCUBATOR_LESSONS.length,
+    lpLab: arr("lplab_completed").length, lpLabTotal: LP_LESSONS.length,
+  };
+}
+
 // ── ULTIMATE CHALLENGE COMPONENT ──
 function UltimateChallenge({ onBack }) {
   const [started, setStarted] = useState(false);
@@ -769,7 +783,7 @@ function UltimateChallenge({ onBack }) {
       const res = await fetch("/api/claim", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet, score, total: result ? result.total : questions.length, pct, passToken: result && result.passToken })
+        body: JSON.stringify({ wallet, score, total: result ? result.total : questions.length, pct, passToken: result && result.passToken, coursework: readCoursework() })
       });
       const data = await res.json();
       setClaimed(true);
@@ -5876,7 +5890,7 @@ function Complete({onRestart}){
       const res = await fetch("/api/claim", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet, score: 12, total: 12, pct: 100, source: "GRADUATION" })
+        body: JSON.stringify({ wallet, score: 12, total: 12, pct: 100, source: "GRADUATION", coursework: readCoursework() })
       });
       const data = await res.json();
       setClaimed(true);
