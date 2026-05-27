@@ -3023,6 +3023,13 @@ function slotWeekId() {
   const wk = Math.ceil(((d - jan1) / 86400000 + jan1.getUTCDay() + 1) / 7);
   return d.getUTCFullYear() + "-W" + String(wk).padStart(2, "0");
 }
+// When the current points-week rolls over (board resets) — for the UI countdown.
+function slotWeekEndsAt() {
+  const d = new Date(); const jan1 = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const offset = (d - jan1) / 86400000 + jan1.getUTCDay() + 1; // matches slotWeekId
+  const daysLeft = Math.ceil(offset / 7) * 7 - offset;
+  return Date.now() + Math.max(0, daysLeft) * 86400000;
+}
 const slotDayId = () => new Date().toISOString().slice(0, 10);
 function slotState() {
   let s = kv.get("slotsState", null);
@@ -3120,7 +3127,7 @@ app.get("/api/slots/state", async (req, res) => {
     const sold = p.entryBal != null && bal < p.entryBal * SLOT_HOLD_TOL;       // matters only at draw
     me = { wallet, inBeta, balance: bal, dailyAllot: allot, spinsLeft: Math.max(0, allot - used), points: p.pts, jackpot: !!p.jackpot, fireChicken: !!p.fireChicken, floor: SLOT_SPIN_PER, disqualified: sold };
   }
-  return res.status(200).json({ weekId: s.weekId, openBeta: s.openBeta !== false, drawn: s.draws[s.weekId] || null, me, leaderboard: slotLeaderboard(s, wallet) });
+  return res.status(200).json({ weekId: s.weekId, weekEndsAt: slotWeekEndsAt(), openBeta: s.openBeta !== false, drawn: s.draws[s.weekId] || null, me, leaderboard: slotLeaderboard(s, wallet) });
 });
 
 // Admin: manage the demo allowlist.

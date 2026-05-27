@@ -105,7 +105,7 @@ a{color:var(--orange)} .hidden{display:none}
       </div>
     </div>
 
-    <div class="card"><h3>🏆 This week's leaderboard</h3><div id="leaderboard"></div></div>
+    <div class="card"><h3>🏆 This week's leaderboard <span id="weekCountdown" style="float:right;font-size:11px;color:var(--sub);font-weight:400;letter-spacing:0"></span></h3><div id="leaderboard"></div></div>
 
     <div class="card">
       <h3>🎡 The weekly wheel</h3>
@@ -184,9 +184,14 @@ function spinReel(el,fin,dur){ return new Promise(res=>{ buildStrip(el,fin); voi
 
 // ── state + spin (server) ──
 let spinning=false;
+let WEEK_ENDS=0;
+function fmtCountdown(ms){ if(ms<=0) return 'resetting…'; const d=Math.floor(ms/86400000), h=Math.floor(ms%86400000/3600000), m=Math.floor(ms%3600000/60000); return d>0?('resets in '+d+'d '+h+'h'):h>0?('resets in '+h+'h '+m+'m'):('resets in '+m+'m'); }
+function tickCountdown(){ const el=$('weekCountdown'); if(el&&WEEK_ENDS) el.textContent='⏳ '+fmtCountdown(WEEK_ENDS-Date.now()); }
+setInterval(tickCountdown, 30000);
 async function loadState(){
   const d=await fetch('/api/slots/state?proof='+encodeURIComponent(PROOF)).then(r=>r.json()).catch(()=>null);
   if(!d){ return; }
+  if(d.weekEndsAt){ WEEK_ENDS=d.weekEndsAt; tickCountdown(); }
   if(d.me && d.me.wallet){ $('verifyGate').classList.add('hidden'); $('game').classList.remove('hidden'); renderMe(d.me); }
   else { $('verifyGate').classList.remove('hidden'); $('game').classList.add('hidden'); }
   renderBoard(d.leaderboard||[], d.me&&d.me.wallet);
@@ -195,7 +200,7 @@ async function loadState(){
 }
 function renderMe(me){
   const short=me.wallet.slice(0,4)+'…'+me.wallet.slice(-4);
-  $('vbanner').innerHTML='✓ '+short+' · '+Math.round(me.balance).toLocaleString()+' CLKN'+(me.inBeta?'':' · <span style="color:#fca5a5">not in beta</span>')+(me.disqualified?' · <span style="color:#fca5a5">⚠ sold — DQ\'d this week</span>':'')+' &nbsp;<a href="#" onclick="resetVerify();return false">change</a>';
+  $('vbanner').innerHTML='✓ '+short+' · '+Math.round(me.balance).toLocaleString()+' CLKN'+(me.inBeta?'':' · <span style="color:#fca5a5">not in beta</span>')+(me.fireChicken?' · <span style="color:#FCD34D">🩺🔥🐔 7,777 LOCKED THIS WEEK</span>':'')+(me.disqualified?' · <span style="color:#fca5a5">⚠ sold — DQ\'d this week</span>':'')+' &nbsp;<a href="#" onclick="resetVerify();return false">change</a>';
   $('spinsLeft').textContent=me.inBeta?me.spinsLeft:'—'; $('myPts').textContent=(me.points||0).toLocaleString();
   const ws=$('wheelStat'); const onWheel=me.jackpot||(me.points>0&&me._rank&&me._rank<=TOP_X);
   ws.textContent=me.disqualified?'DQ':(me.jackpot?'IN ✓':(me.spinsLeft!=null?'#?':'—')); ws.className='v'+(me.disqualified?' dq':(me.jackpot?' on':''));
@@ -206,7 +211,17 @@ function renderBoard(lb,meWallet){
     html+='<div class="lb-row'+(p.isMe?' me':'')+(qual?' qual':'')+'"><span class="lb-rank">'+rank+'</span><span class="lb-name">'+esc(p.short)+(p.isMe?' (you)':'')+tags+'</span><span class="lb-pts">'+p.pts.toLocaleString()+'</span></div>';
     if(rank===TOP_X) html+='<div class="cutoff">— TOP '+TOP_X+' QUALIFY BY POINTS · +13 WILD-CARD AT DRAW —</div>'; });
   $('leaderboard').innerHTML=html||'<div style="color:var(--sub);font-size:12px">No spins yet this week. Be the first on the board.</div>';
-  const meRow=lb.find(p=>p.isMe); if(meRow) $('wheelStat').textContent=meRow.qualified?'IN ✓':('#'+meRow.rank);
+  const meRow=lb.find(p=>p.isMe);
+  if(meRow){
+    const ws=$('wheelStat');
+    if(meRow.qualified){ ws.textContent='IN ✓'; ws.className='v on'; }
+    else {
+      // How many points to reach the points-cutoff (the player sitting at rank TOP_X).
+      const cut=lb[TOP_X-1]; const need=cut?Math.max(1,(cut.pts-meRow.pts)+1):null;
+      ws.textContent='#'+meRow.rank+(need!=null?(' · +'+need.toLocaleString()+' pts'):'');
+      ws.className='v';
+    }
+  }
 }
 async function spin(){
   if(spinning) return; spinning=true; $('spinBtn').disabled=true;
@@ -223,7 +238,7 @@ async function spin(){
   const o=d.outcome;
   await Promise.all([spinReel($('strip0'),o[0],1300),spinReel($('strip1'),o[1],1700),spinReel($('strip2'),o[2],2150)]);
   const r=$('result');
-  if(d.kind==='fireChicken'){ [0,1,2].forEach(i=>$('reel'+i).classList.add('win')); r.className='result win jackpot'; r.innerHTML='<div class="big">🩺🔥🐔 DR. FIRE CHICKEN!</div><div class="amt">7,777 CLKN AIRDROP · +'+d.gained+' pts · AUTO-ENTERED</div>'; celebrate(140); }
+  if(d.kind==='fireChicken'){ [0,1,2].forEach(i=>$('reel'+i).classList.add('win')); r.className='result win jackpot'; r.innerHTML=d.fireChickenAlreadyWon?('<div class="big">🩺🔥🐔 DR. FIRE CHICKEN!</div><div class="amt">+'+d.gained+' pts · your 7,777 is already locked this week 🔒</div>'):('<div class="big">🩺🔥🐔 DR. FIRE CHICKEN!</div><div class="amt">7,777 CLKN AIRDROP · +'+d.gained+' pts · AUTO-ENTERED</div>'); celebrate(140); }
   else if(d.kind==='jackpot'){ [0,1,2].forEach(i=>$('reel'+i).classList.add('win')); r.className='result win jackpot'; r.innerHTML='<div class="big">🐔 JACKPOT! 🐔</div><div class="amt">AUTO-ENTERED · +'+d.gained+' pts</div>'; celebrate(60); }
   else if(d.kind==='threeKind'){ [0,1,2].forEach(i=>$('reel'+i).classList.add('win')); r.className='result win'; r.innerHTML='<div class="big">THREE '+o[0]+'!</div><div class="amt">+'+d.gained+' pts</div>'; celebrate(20); }
   else if(d.kind==='twoCluck'){ r.className='result win'; r.innerHTML='<div class="big">TWO CLUCKS 🐔🐔</div><div class="amt">+'+d.gained+' pts</div>'; celebrate(8); }
