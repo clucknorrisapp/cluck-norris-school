@@ -14,8 +14,8 @@
 Four things, in one product:
 
 1. 🆓 **A free crypto school** — disciplined, voice‑driven, no signup, no wallet
-2. 🩺 **Free token research** — a 0–100 health score, holder snapshots and transaction tracing for any Solana mint, plus a free wallet‑safety checker
-3. 🔒 **Premium operator tools** — buy‑competition trackers and a batch airdrop sender, unlocked with on‑chain CLKN micropayments
+2. 🩺 **Free token research & forensics** — a 0–100 health score, a deep AI token *autopsy*, holder snapshots and transaction tracing for any Solana mint, plus a free wallet‑safety checker
+3. 🔒 **Premium operator tools** — buy‑competition trackers, a batch airdrop sender, and a holder‑gated deep‑forensics tier, unlocked with on‑chain CLKN micropayments
 4. 🥚 **A guided token creator** — mint a real SPL token, taught decision by decision
 
 The token does real work. The school keeps people alive long enough to use it.
@@ -47,7 +47,8 @@ Disciplined learning, real value, zero gatekeeping. The flock learns or the floc
 - ⚗️ **LP Lab** — interactive liquidity training. IL calculator, fee breakeven, capital efficiency, AMM price impact. Works on Meteora, Raydium, Orca, Uniswap — anywhere you LP
 - 📚 **The Library** — 50‑term glossary, deep‑dives across Survival / Research / Concepts (including 🪂 *How to Use an Airdropper Without Burning Yourself*), curated resources
 - 🤖 **Ask Cluck Norris** — Claude Haiku tough‑love crypto professor embedded in every lesson. 10 questions/day. No signup. No wallet
-- 🩺 **Cluck Score** — free 0–100 token‑health score for **any** Solana mint, served at [`/score`](https://clucknorris.app/score). Six weighted factors, LP‑filtered top‑10 concentration, sharable PNG card. **Live now.**
+- 🩺 **Cluck Score** — free 0–100 token‑health score for **any** Solana mint, served at [`/score`](https://clucknorris.app/score). Eight weighted, Bags‑aware factors, LP‑filtered top‑10 concentration, sharable PNG card. **Live now.**
+- 🔬 **Token Autopsy** — a free AI forensic post‑mortem on any Solana mint at [`/autopsy`](https://clucknorris.app/autopsy): ~10 on‑chain phases (LP lock/burn, Token‑2022 honeypot‑extension scan, real‑creator detection, creator buy‑back & fee‑reinvestment trace, hidden‑exit / transfer‑then‑dump detection, holder forensics), cross‑verified against Bags, Jupiter and Solana Tracker, then narrated by Cluck. Honest "cause of death" verdict
 - ⚡ **Embedded Jupiter** — full DEX aggregator, CLKN preselected
 - 🎒 **Live Bags Feed** — every new launch, real‑time prices, direct trade links
 
@@ -67,6 +68,8 @@ Pay only when you use it. No subscriptions. No accounts. No wallet connect. Just
 Pennies to pay, accessible to anyone. The token does real work without becoming a paywall.
 
 **Holder bonus, on‑chain, unforgeable.** When the server verifies your payment, it also reads how much CLKN you have *left* in the same transaction. Keep **≥ 2M CLKN** (~$240) after the send and every unlock is multiplied **5×**. The send proves custody. The post‑send balance proves holding. Neither requires a wallet connect. A serious holder paying 500 CLKN for the buy‑comp analyzer gets a full **35 days** unlimited.
+
+**🔬 Premium Forensics — holder‑gated deep traces** ([`/premium`](https://clucknorris.app/premium)). The forensic add‑ons that follow the money and the people: recipient‑dump tracing (prove the wallets a creator funneled tokens to actually sold), money‑flow / cash‑out mapping (net SOL out, CEX deposits, with fee‑claim round‑trips netted out), a creator "rap sheet" (every token the deployer launched and how each ended), full wallet P&L, and a neutral shared‑funding cluster map. Access proves wallet ownership two ways — a tiny CLKN send **or** a `signMessage` connect — then re‑checks a live **2M CLKN** balance on every run. No content is faked when a source is unavailable; every report says what it could and couldn't compute.
 
 ---
 
@@ -96,16 +99,20 @@ The tools that *do* execute on‑chain — the airdrop sender, the Hatchery, and
 
 [clucknorris.app/score](https://clucknorris.app/score) — paste any Solana mint, get a 0–100 health score in seconds.
 
-**Six weighted factors:**
+**Eight weighted, Bags‑aware factors:**
 
 | Factor | Weight | What it measures |
 |---|---|---|
-| Holders | 20% | Anchored to Jupiter's verification minimum (500 holders = 50 score, 5000 = 100) |
-| Liquidity health | 25% | Liq÷FDV summed across all Solana pools. +5 bonus for multi‑DEX presence |
-| Top‑10 concentration | 20% | **LP / lock / program filtered** — only counts actual human wallets |
-| Mint authority | 15% | Revoked = 100, still active = 0 |
-| Freeze authority | 10% | Revoked = 100, still active = 0 |
-| 24h volume | 10% | Log scale — $10k+ = 100 |
+| Liquidity health | 20% | Liq÷FDV summed across all Solana pools. +5 bonus for multi‑DEX presence |
+| Holders | 18% | Anchored to Jupiter's verification minimum (500 holders = 50 score, 5000 = 100) |
+| Top‑10 concentration | 18% | **LP / lock / program filtered** — only counts actual human wallets |
+| Mint authority | 12% | Revoked = 100, still active = 0 |
+| Freeze authority | 8% | Revoked = 100, still active = 0 |
+| 24h volume | 8% | Log scale — $10k+ = 100 |
+| Verified team activity | 10% | Bags/Pump‑verified creator with active fee claims = full marks |
+| Independent verification | 6% | Cross‑checks our reading against Jupiter's audit (mint/freeze/top‑holder) |
+
+The last two factors only count when the data exists — for a non‑Bags / non‑Jupiter token they're skipped and the remaining weight redistributes, so a plain SPL token still scores fairly.
 
 The concentration filter is the differentiator: we fetch the owner of each top‑20 token account and exclude positions held by AMM pool authorities, Streamflow/Jupiter Lock contracts, and program PDAs. The "top 10 wallets" number reflects **actual humans**, not the AMM holding the LP.
 
@@ -139,7 +146,23 @@ Cards (`/api/cluck-card?mint=…`) unfurl on Twitter / Telegram / Discord automa
 5. **🥚 The Hatchery** — guided SPL token creator. Every mint‑time decision explained, metadata to Arweave, stops at liquidity on purpose. Flat SOL/CLKN fee.
 6. **🔒 Security Coop** — wallet permission check: scans for lingering token‑delegate approvals and revokes them. Free, non‑custodial.
 7. **📸 Snapshot** — holder snapshot for any Solana mint: every wallet and balance, LP and locked liquidity filtered out by default, exported as an airdrop‑ready CSV. Free, no wallet connect.
-8. **🔍 Trace** — wallet × token forensic history: every transaction between a wallet and a mint in chronological order, with running balance and fund origin. Free.
+8. **🔍 Trace** — wallet × token forensic history: every transaction between a wallet and a mint in chronological order, with running balance, counterparty flow map, and one‑hop follow‑the‑money. Free.
+9. **🔬 Token Autopsy** — the deep one. A ~10‑phase forensic post‑mortem on any mint: market state, authorities, top‑100 holder classification, locked‑supply measurement, lifetime signature walk, GeckoTerminal price history + multi‑window volume, Token‑2022 honeypot‑extension scan, LP lock/burn, real‑creator detection (never the platform genesis payer), creator buy‑back & fee‑reinvestment trace, hidden‑exit detection, plus Bags / Pump / Jupiter / Solana Tracker / Solscan cross‑verification — narrated by Claude from the verified facts. Free.
+10. **🔬 Premium Forensics** *(holder‑gated)* — recipient‑dump tracing, money‑flow / cash‑out mapping, creator rap sheet, wallet P&L Express, and a neutral shared‑funding cluster map. Gated on a live 2M CLKN balance, proven by send or signature.
+
+---
+
+## 📣 Community & automation
+
+The product reaches into the community Telegram (and X), not just the website:
+
+- **Cluck's Lesson** — short, accurate crypto‑safety micro‑lessons written by Claude Haiku, auto‑posted to Telegram **and** cross‑posted to X several times a day on a fixed UTC schedule. Topics rotate through the real curriculum and never repeat until the set is exhausted.
+- **Ask Cluck, in‑chat** — reply to any lesson and the bot answers right there, with threaded follow‑ups. Open to everyone, 20 answers/user/day, strictly educational (declines buy/sell/price and off‑topic, ends every reply with a not‑financial‑advice line).
+- **Interactive slash commands** — `/score <mint>` (returns a live in‑chat Cluck Score), `/autopsy`, `/trace`, `/snapshot`, `/holders`, `/securitycoop`, `/buyspecial`, `/rose`, `/hatchery`, `/bags`, `/tools` — delivered via a secret‑validated Telegram webhook.
+- **Buy / sell alerts** — a 30s pool poller posts every real CLKN trade (buy and sell) with USD value, price, market cap, route, and a holder‑tier rank for the trader. Project buy‑backs get their own "community reinvestment" framing.
+- **Bags Hub** ([`/bags`](https://clucknorris.app/bags)) — live launches feed (newest · near‑graduation · recently graduated), plus a watcher that fires "close to bonding" (85%) and "graduated!" alerts, backed by our own 48h graduation tracker (independent of pump.fun flooding the shared indexer).
+- **Scheduled posts** — Bags Launch Radar, hourly‑ish Market Check (CLKN / SOL / BTC), and a daily flow recap — all self‑cleaning (delete‑previous) and minute‑gated so a redeploy never double‑posts.
+- **🎰 The Coop Spinner** ([`/slots`](https://clucknorris.app/slots), beta) — a holder‑rewards slot game: holding CLKN earns free daily spins, points + jackpots feed a weekly wheel. Server‑authoritative, ownership‑proof gated. Beta — no prizes yet.
 
 ---
 
@@ -149,25 +172,33 @@ Cards (`/api/cluck-card?mint=…`) unfurl on Twitter / Telegram / Discord automa
 |---|---|
 | Frontend | React + Vite + vanilla HTML for tool pages |
 | Backend | Node.js + Express on Railway |
-| AI tutor | Anthropic Claude Haiku 4.5 |
+| AI tutor + lessons + autopsy narration | Anthropic Claude Haiku 4.5 |
 | Solana RPC | Helius (DAS + enhanced txns) |
-| Token data | Bags.fm API + DexScreener + Bubblemaps + Jupiter |
+| Token data & forensics | Bags.fm API · DexScreener · GeckoTerminal · Bubblemaps · Jupiter · Solana Tracker · Solscan |
 | Score card rendering | `@napi-rs/canvas` with bundled Oswald typeface |
+| Persistence | Railway volume at `/data` (consumed‑payment sigs, graduation tracker, schedulers, analytics) — survives redeploys |
+| Community | Telegram bot (webhook + scheduled posts + buy alerts) · X / Twitter (OAuth 1.0a, no SDK) |
 | Trophy log | Google Sheets (JWT auth) |
-| Wallet signing | Phantom · Solflare · Jupiter Wallet |
-| Security | HSTS, X‑Frame‑Options, Content‑Type‑Options, Referrer‑Policy on every response |
+| Wallet signing | Phantom · Solflare · Backpack · OKX · Jupiter + 6 more (non‑custodial) |
+| Security | per‑IP rate limiting · RPC method allow‑listing · gated admin/debug · replay‑proof payments · XSS output‑escaping · HSTS / X‑Frame‑Options / X‑Content‑Type‑Options / Referrer‑Policy |
 | License | MIT |
 
 **Public API:**
 - `/api/cluck-score?mint=…` — 0–100 score with full factor breakdown (JSON)
 - `/api/cluck-card?mint=…` — 1200×630 PNG card for sharing
-- `/api/verify-clkn-payment` — tool‑aware unlock verification with holder bonus
+- `/api/autopsy?mint=…` — full forensic report (cached ~3 min)
+- `/api/snapshot?mint=…` — classified, LP/lock‑filtered holder list + stats (airdrop CSV source)
+- `/api/trace?wallet=…&mint=…` — wallet × token transaction history + counterparty flow
+- `/api/token-context?mint=…` — shared Bags + Jupiter cross‑verification context
+- `/api/verify-clkn-payment` — tool‑aware unlock verification with holder bonus + replay guard
 - `/api/ask-cluck` — Claude‑powered tutor
 - `/api/hatchery/*` — token creator: Arweave metadata upload, unsigned mint‑tx build, live fee config
 - `/api/security-coop/*` — wallet delegate‑approval scan + unsigned revoke‑tx build
-- `/api/holders`, `/api/locks`, `/api/fees`, `/api/supply`, `/api/bubblemaps` — Solana token telemetry proxies
-- `/api/bags-proxy`, `/api/helius-rpc`, `/api/helius-tx` — Bags / Helius proxies with API keys hidden server‑side
+- `/api/holders`, `/api/locks`, `/api/fees`, `/api/supply`, `/api/reinvestment`, `/api/bubblemaps` — Solana token telemetry proxies
+- `/api/bags-proxy`, `/api/bags-feed-prices`, `/api/bags-near-grad`, `/api/bags-graduated` — Bags launch data
+- `/api/helius-rpc`, `/api/helius-tx` — Helius proxies with API keys hidden server‑side
 - `/api/claim` — trophy submissions to Google Sheets
+- *Gated (admin / holder):* `/api/autopsy-premium`, `/api/premium-verify-sig`, `/api/clkn-balance`, `/api/slots/*`, `/api/stats`, `/api/tg-test`, plus the `/api/tg/:secret` Telegram webhook
 
 ---
 
