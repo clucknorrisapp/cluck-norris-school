@@ -385,6 +385,13 @@ function fmtPct(n) {
 }
 function shortAddr(a) { return a ? a.slice(0,6) + '…' + a.slice(-4) : '—'; }
 
+// Escape any API/token-supplied string before it goes into innerHTML — token
+// names, creator handles, tags, dex names are all attacker-controlled.
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+    ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+
 function fillClassForScore(s) {
   if (s == null) return 'fill-grey';
   if (s >= 80) return 'fill-green';
@@ -482,7 +489,7 @@ function renderResult(data) {
         if (f.value == null) return '—';
         const base = '<span class="num">' + fmtUsd(f.value) + '</span> <span class="muted">(' + fmtPct(f.ratio) + ' of FDV)</span>';
         const pools = f.poolCount > 1 ? ' <span class="muted">·</span> <span class="num">' + f.poolCount + '</span> <span class="muted">pools</span>' : '';
-        const dexes = f.dexCount > 1 ? ' <span class="muted">on</span> <span class="num">' + f.dexCount + '</span> <span class="muted">DEXes (' + (f.dexes || []).join(', ') + ')</span>' : '';
+        const dexes = f.dexCount > 1 ? ' <span class="muted">on</span> <span class="num">' + f.dexCount + '</span> <span class="muted">DEXes (' + (f.dexes || []).map(esc).join(', ') + ')</span>' : '';
         const bonus = f.multiDexBonus > 0 ? ' <span class="muted">·</span> <span class="good">+' + f.multiDexBonus + ' multi-DEX bonus</span>' : '';
         return base + pools + dexes + bonus;
       } },
@@ -521,7 +528,7 @@ function renderResult(data) {
         if (f.score == null) return '<span class="muted">No verified Bags/Pump creator data — score skipped.</span>';
         const creators = f.officialCreators || [];
         const creatorBits = creators.map(c => {
-          const handle = c.username ? '@' + c.username : (c.wallet ? c.wallet.slice(0,6) + '…' + c.wallet.slice(-4) : 'wallet');
+          const handle = c.username ? '@' + esc(c.username) : (c.wallet ? c.wallet.slice(0,6) + '…' + c.wallet.slice(-4) : 'wallet');
           const royalty = c.royaltyBps != null ? ' <span class="muted">(' + (c.royaltyBps/100).toFixed(0) + '% royalty)</span>' : '';
           const adminTag = c.isAdmin ? ' <span style="font-size:9px;color:#FCD34D;letter-spacing:1px;">👑 ADMIN</span>' : '';
           return '<span class="num">' + handle + '</span>' + adminTag + royalty;
@@ -554,7 +561,7 @@ function renderResult(data) {
         if (f.jupiterListed) {
           html += '<span class="good">✓ Listed on Jupiter</span>';
           if (Array.isArray(f.jupiterTags) && f.jupiterTags.length) {
-            html += ' <span class="muted">tags:</span> <span class="num">' + f.jupiterTags.join(', ') + '</span>';
+            html += ' <span class="muted">tags:</span> <span class="num">' + f.jupiterTags.map(esc).join(', ') + '</span>';
           }
         }
         if (f.jupiterOrganicScore) {
