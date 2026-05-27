@@ -5573,6 +5573,8 @@ function Landing({onStart,onChallenge,onIncubator,completed}){
   // Live on-chain stats pulled fresh — no hardcoded numbers that go stale.
   const [holderCount, setHolderCount] = useState(null);
   const [feesSol, setFeesSol] = useState(null);
+  const [gradStats, setGradStats] = useState(null); // { verifiedDiplomas, graduates, totalTranscripts }
+  const [lookupAddr, setLookupAddr] = useState("");
   useEffect(() => {
     let cancelled = false;
     fetch(`/api/holders?mint=${CLKN_MINT}`).then(r => r.json()).then(d => {
@@ -5583,6 +5585,9 @@ function Landing({onStart,onChallenge,onIncubator,completed}){
       const raw = d?.response ?? d;
       const lamports = typeof raw === "string" ? parseInt(raw) : (raw?.totalLifetimeFees ?? raw);
       if (Number.isFinite(parseInt(lamports))) setFeesSol(parseInt(lamports) / 1e9);
+    }).catch(() => {});
+    fetch(`/api/school-stats`).then(r => r.json()).then(d => {
+      if (!cancelled && d?.success) setGradStats(d);
     }).catch(() => {});
     return () => { cancelled = true; };
   }, []);
@@ -5625,6 +5630,27 @@ function Landing({onStart,onChallenge,onIncubator,completed}){
             {feesSol == null ? "—" : feesSol.toFixed(2) + " SOL"}
           </div>
         </div>
+        <div style={{flex:1,maxWidth:180,background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.28)",borderRadius:10,padding:"10px 14px"}}>
+          <div style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#10B981",letterSpacing:2,marginBottom:2}}>🎓 VERIFIED GRADS</div>
+          <div style={{fontFamily:"'Oswald',sans-serif",fontSize:22,fontWeight:900,color:"#6EE7B7"}}>
+            {gradStats == null ? "—" : Number(gradStats.verifiedDiplomas || 0).toLocaleString()}
+          </div>
+        </div>
+      </div>
+      {/* Transcript lookup — anyone can pull up a permanent transcript by wallet */}
+      <div style={{maxWidth:440,margin:"0 auto 18px",display:"flex",gap:6}}>
+        <input
+          value={lookupAddr}
+          onChange={e=>setLookupAddr(e.target.value)}
+          onKeyDown={e=>{ if(e.key==="Enter" && lookupAddr.trim().length>=32) window.open("/transcript/"+encodeURIComponent(lookupAddr.trim()),"_blank","noopener"); }}
+          placeholder="🎓 Look up a transcript by wallet address…"
+          style={{flex:1,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:8,padding:"9px 12px",color:"#F9FAFB",fontFamily:"monospace",fontSize:11,outline:"none"}}
+        />
+        <button
+          onClick={()=>{ if(lookupAddr.trim().length>=32) window.open("/transcript/"+encodeURIComponent(lookupAddr.trim()),"_blank","noopener"); }}
+          disabled={lookupAddr.trim().length<32}
+          style={{background:lookupAddr.trim().length>=32?"rgba(16,185,129,0.18)":"rgba(255,255,255,0.05)",border:"1px solid rgba(16,185,129,0.4)",borderRadius:8,padding:"9px 14px",fontFamily:"'Oswald',sans-serif",fontSize:11,fontWeight:700,color:lookupAddr.trim().length>=32?"#6EE7B7":"#4B5563",letterSpacing:1,cursor:lookupAddr.trim().length>=32?"pointer":"default"}}
+        >VIEW</button>
       </div>
       <p style={{color:"#9CA3AF",fontSize:16,lineHeight:1.7,marginBottom:24,fontStyle:"italic"}}>"No participation trophies. No hand-holding. Just hard knocks."</p>
       {/* Rank banner */}
