@@ -1919,6 +1919,41 @@ app.get("/api/recap-test", async (req, res) => {
   } catch (e) { return res.status(500).json({ success: false, error: e.message }); }
 });
 
+// Telegram test message — fire a one-off custom post to the community chat,
+// gated by PREMIUM_ACCESS_KEY. Lets an operator send an arbitrary note (e.g.
+// "we're running a test") without shipping new content or a code change. The
+// bot token + chat id are read from the live env (Railway), so this only works
+// on the DEPLOYED server — never from a local/cloud clone that has no secrets.
+// ?text=... overrides the default; posts silently unless &loud=1. Plain text is
+// safest — raw < & > can trip Telegram's HTML parser (the JSON response below
+// surfaces any such error so you can see exactly what Telegram said).
+app.get("/api/tg-test", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const KEY = process.env.PREMIUM_ACCESS_KEY;
+  const provided = req.query.key || req.headers["x-premium-key"];
+  if (!KEY || provided !== KEY) return res.status(404).json({ error: "not_found" });
+  if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHAT_ID) {
+    return res.status(200).json({ success: false, error: "Telegram not configured (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID unset on this server)" });
+  }
+  const text = req.query.text
+    ? String(req.query.text).slice(0, 3500)
+    : "🐔 Heads up, flock — running a quick test on the bot. Ignore any test posts; back to normal shortly.";
+  const silent = req.query.loud !== "1"; // silent by default so a test doesn't ping everyone
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: process.env.TELEGRAM_CHAT_ID, text,
+        parse_mode: "HTML", disable_web_page_preview: true, disable_notification: silent,
+      }),
+    });
+    const data = await r.json().catch(() => ({}));
+    return res.status(200).json({ success: !!(data && data.ok), messageId: data?.result?.message_id || null, telegram: data });
+  } catch (e) {
+    return res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 // Telegram webhook — receives slash-command updates. Both the path secret and
 // the X-Telegram-Bot-Api-Secret-Token header must match (derived from the bot
 // token) so randoms can't inject fake updates. Ack immediately, handle async.
