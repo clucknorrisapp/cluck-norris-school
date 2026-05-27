@@ -5,6 +5,7 @@
 [![Powered by Bags.fm](https://img.shields.io/badge/Powered%20by-Bags.fm-orange)](https://bags.fm?ref=firechicken007)
 [![Live App](https://img.shields.io/badge/Live-clucknorris.app-green)](https://clucknorris.app)
 [![Auto-deployed on Railway](https://img.shields.io/badge/Deploy-Railway-blueviolet)](https://railway.app)
+[![Source on GitHub](https://img.shields.io/badge/Source-GitHub-181717?logo=github)](https://github.com/clucknorrisapp/cluck-norris-school)
 
 > *"No participation trophies. No hand‑holding. Just hard knocks."*
 >
