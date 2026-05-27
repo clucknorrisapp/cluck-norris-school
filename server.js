@@ -2639,6 +2639,85 @@ app.post("/api/credential/verify-ownership", (req, res) => {
   return res.status(200).json({ success: true, ownership: updated.ownership });
 });
 
+// -- Wallet Safety Checkup -- read-only (paste an address, no connect). Scans a
+// wallet for the things that actually drain people: lingering delegate approvals
+// (the one permission that persists), honeypot/Token-2022-trap holdings, and
+// tokens whose mint/freeze authority is still live. Reuses Security Coop's
+// delegate scanner + the same honeypot logic the Cluck Score uses.
+app.get("/api/wallet-checkup", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  const wallet = String(req.query.wallet || "").trim();
+  if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ success: false, error: "Invalid wallet address" });
+  const HELIUS_KEY = process.env.HELIUS_API_KEY;
+  if (!HELIUS_KEY) return res.status(500).json({ success: false, error: "Server not configured" });
+  const rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
+  const rpc = async (method, params) => {
+    const r = await fetch(rpcUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: method, method, params }) });
+    return r.json();
+  };
+  const TOKEN_PROG = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+  const TOKEN_2022_PROG = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
+  const SYS = "11111111111111111111111111111111";
+  try {
+    // 1. Held tokens (classic Token + Token-2022), summed per mint.
+    const byMint = new Map();
+    for (const prog of [TOKEN_PROG, TOKEN_2022_PROG]) {
+      const d = await rpc("getTokenAccountsByOwner", [wallet, { programId: prog }, { encoding: "jsonParsed" }]);
+      for (const acc of (d?.result?.value || [])) {
+        const info = acc.account?.data?.parsed?.info;
+        const amt = info?.tokenAmount?.uiAmount || 0;
+        if (info?.mint && amt > 0) {
+          const e = byMint.get(info.mint) || { mint: info.mint, amount: 0 };
+          e.amount += amt; byMint.set(info.mint, e);
+        }
+      }
+    }
+    const mints = [...byMint.keys()].slice(0, 100); // cap the per-checkup work
+
+    // 2. Inspect each held mint for honeypot extensions + live authorities.
+    const riskyHoldings = [];
+    if (mints.length) {
+      const mi = await rpc("getMultipleAccounts", [mints, { encoding: "jsonParsed" }]);
+      const vals = mi?.result?.value || [];
+      mints.forEach((mint, i) => {
+        const acc = vals[i];
+        if (!acc) return;
+        const info = acc.data?.parsed?.info || {};
+        const issues = []; let severity = 0;
+        if (acc.owner === TOKEN_2022_PROG) {
+          const exts = Array.isArray(info.extensions) ? info.extensions : [];
+          const st = (n) => { const e = exts.find(x => x && x.extension === n); return e ? (e.state || {}) : null; };
+          const pd = st("permanentDelegate"); if (pd && pd.delegate && pd.delegate !== SYS) { issues.push("Permanent delegate — an authority can move or burn your tokens"); severity = 3; }
+          const th = st("transferHook"); if (th && th.programId && th.programId !== SYS) { issues.push("Transfer hook — a program runs on every transfer and can block sells"); severity = 3; }
+          const das = st("defaultAccountState"); if (das && das.accountState === "frozen") { issues.push("Accounts default to frozen — can't transfer until thawed"); severity = 3; }
+          const tf = st("transferFeeConfig"); if (tf) { const bps = Math.max(Number(tf.newerTransferFee?.transferFeeBasisPoints) || 0, Number(tf.olderTransferFee?.transferFeeBasisPoints) || 0); if (bps > 0) { issues.push("Transfer fee " + (bps / 100).toFixed(bps % 100 ? 2 : 0) + "% taxed on every transfer"); severity = Math.max(severity, bps >= 1000 ? 3 : 2); } }
+        }
+        if (info.freezeAuthority) { issues.push("Freeze authority still active — these tokens can be frozen"); severity = Math.max(severity, 1); }
+        if (info.mintAuthority) { issues.push("Mint authority still active — supply can be inflated"); severity = Math.max(severity, 1); }
+        if (issues.length) riskyHoldings.push({ mint, amount: byMint.get(mint).amount, issues, severity });
+      });
+      riskyHoldings.sort((a, b) => b.severity - a.severity);
+    }
+
+    // 3. Lingering delegate approvals — the persistent drain risk (Security Coop engine).
+    let approvals = [];
+    try { approvals = await securityCoop.scanDelegates(wallet); } catch (_) {}
+
+    return res.status(200).json({
+      success: true, wallet,
+      tokensHeld: byMint.size,
+      scanned: mints.length,
+      capped: byMint.size > mints.length,
+      approvals,
+      riskyHoldings,
+    });
+  } catch (e) {
+    console.error("[wallet-checkup]", e.message);
+    return res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 app.get("/api/claims", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
@@ -4813,6 +4892,11 @@ app.get("/hatchery", (req, res) => {
 // Security Coop — wallet permission check / approval revoker.
 app.get("/security-coop", (req, res) => {
   res.sendFile(join(__dirname, "public", "security-coop.html"));
+});
+
+// Wallet Safety Checkup — read-only scan (approvals + risky holdings).
+app.get("/wallet-checkup", (req, res) => {
+  res.sendFile(join(__dirname, "public", "wallet-checkup.html"));
 });
 
 // Tools & Utilities hub — the front door to the toolkit, linked from the landing.
