@@ -3064,6 +3064,28 @@ function slotScore(o) {
   } else if (o.filter(x => x === "🐔").length === 2) { pts += SLOT_PTS.twoCluck; kind = "twoCluck"; }
   return { pts, jackpot, fireChicken, kind };
 }
+// Exact per-spin odds, derived straight from SLOT_WEIGHTS + the scoring rules —
+// published to the page so players can see the real math (and it can never drift
+// from the code). Returns each combo's probability + "1 in N".
+function slotOdds() {
+  const tot = SLOT_WEIGHTS.reduce((a, w) => a + w, 0);
+  const w = (sym) => SLOT_WEIGHTS[SLOT_SYMS.indexOf(sym)] / tot;
+  const cluck = w("🐔");
+  const fireChicken = w("🩺") * w("🔥") * w("🐔");           // ordered 🩺🔥🐔
+  const jackpot = cluck ** 3;                                 // 🐔🐔🐔
+  let threeKind = 0;                                          // any non-🐔 three-of-a-kind
+  for (let i = 0; i < SLOT_SYMS.length; i++) if (SLOT_SYMS[i] !== "🐔") threeKind += (SLOT_WEIGHTS[i] / tot) ** 3;
+  const twoCluck = 3 * cluck * cluck * (1 - cluck);          // exactly two 🐔
+  const anyWin = fireChicken + jackpot + threeKind + twoCluck;
+  const oneIn = (x) => x > 0 ? Math.round(1 / x) : null;
+  return {
+    fireChicken: { pct: +(fireChicken * 100).toFixed(4), oneIn: oneIn(fireChicken) },
+    jackpot:     { pct: +(jackpot * 100).toFixed(3),     oneIn: oneIn(jackpot) },
+    threeKind:   { pct: +(threeKind * 100).toFixed(2),   oneIn: oneIn(threeKind) },
+    twoCluck:    { pct: +(twoCluck * 100).toFixed(2),    oneIn: oneIn(twoCluck) },
+    anyWin:      { pct: +(anyWin * 100).toFixed(2),      oneIn: oneIn(anyWin) },
+  };
+}
 function slotLeaderboard(s, me) {
   const arr = Object.entries(s.players).map(([w, p]) => ({ wallet: w, pts: p.pts, jackpot: !!p.jackpot }))
     .sort((a, b) => b.pts - a.pts);
@@ -3127,7 +3149,7 @@ app.get("/api/slots/state", async (req, res) => {
     const sold = p.entryBal != null && bal < p.entryBal * SLOT_HOLD_TOL;       // matters only at draw
     me = { wallet, inBeta, balance: bal, dailyAllot: allot, spinsLeft: Math.max(0, allot - used), points: p.pts, jackpot: !!p.jackpot, fireChicken: !!p.fireChicken, floor: SLOT_SPIN_PER, disqualified: sold };
   }
-  return res.status(200).json({ weekId: s.weekId, weekEndsAt: slotWeekEndsAt(), openBeta: s.openBeta !== false, drawn: s.draws[s.weekId] || null, me, leaderboard: slotLeaderboard(s, wallet) });
+  return res.status(200).json({ weekId: s.weekId, weekEndsAt: slotWeekEndsAt(), openBeta: s.openBeta !== false, drawn: s.draws[s.weekId] || null, me, leaderboard: slotLeaderboard(s, wallet), odds: slotOdds() });
 });
 
 // Admin: manage the demo allowlist.

@@ -108,6 +108,13 @@ Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.
   (rose/airdrop/buyspecial route real RPC, incl. possibly `sendTransaction` /
   `getLatestBlockhash`), and don't do it mid-event since an incomplete list breaks
   those tools. Then make the README wording match.
+- **Slots: provably-fair before real prizes.** `/api/slots/spin` outcomes use
+  `Math.random()` server-side — fine while it's a no-stakes beta, but before any
+  real CLKN payout goes live, add commit‑reveal (publish a hashed server seed, mix
+  in a client seed, reveal after) so spins are independently verifiable and you
+  can defend against "rigged" accusations. The real odds are already published on
+  the page (`slotOdds()`), and outcomes are server‑authoritative (players can't
+  cheat); commit‑reveal is specifically about proving the *server* isn't.
 - **Autopsy premium styling — design decision (not yet made).** The premium
   forensic sections render in a different color scheme that doesn't match the
   site's dark/orange theme. Open question: leave it visually distinct so the

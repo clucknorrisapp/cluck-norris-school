@@ -107,6 +107,8 @@ a{color:var(--orange)} .hidden{display:none}
 
     <div class="card"><h3>🏆 This week's leaderboard <span id="weekCountdown" style="float:right;font-size:11px;color:var(--sub);font-weight:400;letter-spacing:0"></span></h3><div id="leaderboard"></div></div>
 
+    <div class="card"><h3>🎲 The odds <span style="font-size:11px;color:var(--sub);font-weight:400">— per spin, straight from the reels</span></h3><div id="oddsBox" style="font-size:13px;color:#D1D5DB;line-height:1.9">—</div></div>
+
     <div class="card">
       <h3>🎡 The weekly wheel</h3>
       <p style="font-size:12px;color:var(--sub);line-height:1.6;margin:0 0 10px"><b>40 seats total</b> (three ways in — not added together). Jackpot hitters are locked in first; the rest fills ~⅔ from the top point-earners and ~⅓ from random wild-cards. Capped-weighted odds (more points = up to <b>5× the slices</b> — bigger holders rewarded, but everyone on the wheel has a real shot). <b>Sell or move your CLKN out and you're dropped at draw time.</b></p>
@@ -187,11 +189,16 @@ let spinning=false;
 let WEEK_ENDS=0;
 function fmtCountdown(ms){ if(ms<=0) return 'resetting…'; const d=Math.floor(ms/86400000), h=Math.floor(ms%86400000/3600000), m=Math.floor(ms%3600000/60000); return d>0?('resets in '+d+'d '+h+'h'):h>0?('resets in '+h+'h '+m+'m'):('resets in '+m+'m'); }
 function tickCountdown(){ const el=$('weekCountdown'); if(el&&WEEK_ENDS) el.textContent='⏳ '+fmtCountdown(WEEK_ENDS-Date.now()); }
+function renderOdds(o){
+  const row=(label,v,hi)=>'<div style="display:flex;justify-content:space-between;gap:10px"><span>'+label+'</span><span style="font-family:var(--head);color:'+(hi||'#FCD34D')+'">'+(v&&v.oneIn?('1 in '+v.oneIn.toLocaleString()):'—')+' <span style="color:var(--sub);font-size:11px;font-family:inherit">('+(v?v.pct:0)+'%)</span></span></div>';
+  $('oddsBox').innerHTML=row('🩺🔥🐔 Dr. Fire Chicken',o.fireChicken,'#FB923C')+row('🐔🐔🐔 Jackpot',o.jackpot)+row('Three of a kind',o.threeKind)+row('Two 🐔',o.twoCluck)+'<div style="border-top:1px solid var(--border);margin:6px 0 0;padding-top:6px"></div>'+row('Any win',o.anyWin,'#34D399');
+}
 setInterval(tickCountdown, 30000);
 async function loadState(){
   const d=await fetch('/api/slots/state?proof='+encodeURIComponent(PROOF)).then(r=>r.json()).catch(()=>null);
   if(!d){ return; }
   if(d.weekEndsAt){ WEEK_ENDS=d.weekEndsAt; tickCountdown(); }
+  if(d.odds){ renderOdds(d.odds); }
   if(d.me && d.me.wallet){ $('verifyGate').classList.add('hidden'); $('game').classList.remove('hidden'); renderMe(d.me); }
   else { $('verifyGate').classList.remove('hidden'); $('game').classList.add('hidden'); }
   renderBoard(d.leaderboard||[], d.me&&d.me.wallet);
