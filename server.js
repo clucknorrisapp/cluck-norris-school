@@ -3914,7 +3914,7 @@ app.get("/api/snapshot", async (req, res) => {
   const excludeBagsTeam = req.query.excludeBagsTeam !== "0"; // default ON — team shouldn't airdrop to itself
   const minBalance = Math.max(0, parseFloat(req.query.minBalance) || 0);
 
-  if (!mint || mint.length < 32) {
+  if (!SOL_ADDR_RE.test(mint)) {
     return res.status(400).json({ success: false, error: "Invalid mint address" });
   }
   const HELIUS_KEY = process.env.HELIUS_API_KEY;
