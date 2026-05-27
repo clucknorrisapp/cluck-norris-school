@@ -103,6 +103,8 @@
   .addr-wrap { display: flex; align-items: center; gap: 6px; }
   .copy-btn { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; padding: 3px 8px; font-family: var(--mono); font-size: 10px; color: var(--subtext); cursor: pointer; transition: all 0.15s; }
   .copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .trace-link { display:inline-block; margin-left:6px; background: rgba(167,139,250,0.1); border: 1px solid rgba(167,139,250,0.35); border-radius: 4px; padding: 3px 8px; font-family: var(--mono); font-size: 10px; color: #C4B5FD; text-decoration: none; }
+  .trace-link:hover { background: rgba(167,139,250,0.2); }
   .copy-btn.copied { border-color: var(--green); color: var(--green); }
 
   .section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
@@ -953,7 +955,7 @@ function renderBuyResults(eligible, disqualified, flagged) {
       const tr = document.createElement('tr');
       const detailId = 'buy-detail-' + i;
       tr.innerHTML = '<td class="rank-cell ' + rankClass + '">' + (i+1) + '</td>' +
-        '<td><div class="addr-wrap"><span class="addr-cell">' + e.addr + '</span><button class="copy-btn" onclick="copyAddr(this,\'' + e.addr + '\')">COPY</button></div></td>' +
+        '<td><div class="addr-wrap"><span class="addr-cell">' + e.addr + '</span><button class="copy-btn" onclick="copyAddr(this,\'' + e.addr + '\')">COPY</button><a class="trace-link" href="/trace?wallet=' + e.addr + '&mint=' + currentMint + '" target="_blank" rel="noreferrer" title="Vet this buyer — trace their history with the token">🔍 TRACE</a></div></td>' +
         '<td class="amt-cell">' + fmtAmount(Number(e.bought)) +
           (e.grossBought && e.grossBought > e.bought ? '<span style="color:#FCD34D;font-size:10px;font-weight:400"> · moved ' + fmtAmount(Number(e.grossBought - e.bought)) + ' out</span>' : '') + '</td>' +
         '<td><span>' + e.buyTxns + ' buy' + (e.buyTxns !== 1 ? 's' : '') + '</span>' +
@@ -995,7 +997,7 @@ function renderBuyResults(eligible, disqualified, flagged) {
       const tr = document.createElement('tr');
       tr.className = 'disq-row';
       tr.innerHTML = '<td class="rank-cell" style="color:var(--red)">' + (i+1) + '</td>' +
-        '<td><div class="addr-wrap"><span class="addr-cell">' + shortAddr(e.addr) + '</span><button class="copy-btn" onclick="copyAddr(this,\'' + e.addr + '\')">COPY</button></div></td>' +
+        '<td><div class="addr-wrap"><span class="addr-cell">' + shortAddr(e.addr) + '</span><button class="copy-btn" onclick="copyAddr(this,\'' + e.addr + '\')">COPY</button><a class="trace-link" href="/trace?wallet=' + e.addr + '&mint=' + currentMint + '" target="_blank" rel="noreferrer" title="Trace this wallet\'s history with the token">🔍 TRACE</a></div></td>' +
         '<td class="amt-cell">' + fmtAmount(Number(e.bought)) + '</td>' +
         '<td style="color:var(--red);font-family:var(--mono)">' + e.sellTxns + ' sell' + (e.sellTxns !== 1 ? 's' : '') + '</td>' +
         '<td class="time-cell">' + fmtTime(e.firstBuy) + '</td>';

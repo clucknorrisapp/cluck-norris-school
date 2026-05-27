@@ -170,7 +170,9 @@ tr:hover td { background: rgba(255,255,255,0.015); }
 .copy-btn { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 4px; padding: 3px 8px; font-family: var(--mono); font-size: 10px; color: var(--subtext); cursor: pointer; transition: all 0.15s; white-space: nowrap; margin-left: 8px; }
 .copy-btn:hover { border-color: var(--accent); color: var(--accent); }
 .copy-btn.copied { border-color: var(--green); color: var(--green); }
-.addr-wrap { display: flex; align-items: center; gap: 4px; }
+.trace-link { display:inline-block; background: rgba(167,139,250,0.1); border: 1px solid rgba(167,139,250,0.35); border-radius: 4px; padding: 3px 8px; font-family: var(--mono); font-size: 10px; color: #C4B5FD; text-decoration: none; white-space: nowrap; margin-left: 4px; }
+.trace-link:hover { background: rgba(167,139,250,0.2); }
+.addr-wrap { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 
 /* Export bar */
 .export-bar { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
@@ -1228,7 +1230,7 @@ function renderHoldResults(results, eligible, numWinners, holdHours, holdDeadlin
 
     tr.innerHTML = `
       <td class="rank-cell ${rankClass}">${i < numWinners ? '🏆 ' : ''}${i+1}</td>
-      <td><div class="addr-wrap"><span class="addr-cell" onclick="toggleAddr(this,'${r.addr}')">${shortAddr(r.addr)}</span><button class="copy-btn" onclick="copyAddr(this,'${r.addr}')">COPY</button></div></td>
+      <td><div class="addr-wrap"><span class="addr-cell" onclick="toggleAddr(this,'${r.addr}')">${shortAddr(r.addr)}</span><button class="copy-btn" onclick="copyAddr(this,'${r.addr}')">COPY</button><a class="trace-link" href="/trace?wallet=${r.addr}&mint=${MINT_ADDR}" target="_blank" rel="noreferrer" title="Vet this buyer — trace their history with the token">🔍 TRACE</a></div></td>
       <td class="amt-cell">${fmtSol(rankSolVal(wallet))}<span style="color:var(--subtext);font-size:9px;font-weight:400"> · ${fmtAmount(Number(wallet.bought))} tokens</span></td>
       <td>${statusBadge}${txBtn}</td>
       <td style="font-size:11px;color:var(--subtext)">${notes}</td>`;
@@ -1501,7 +1503,7 @@ function renderResults(eligible, disqualified, flagged, numWinners) {
       tr.className = 'disq-row';
       tr.innerHTML = `
         <td class="rank-cell">${i+1}</td>
-        <td><div class="addr-wrap"><span class="addr-cell" onclick="toggleAddr(this,'${e.addr}')">${shortAddr(e.addr)}</span><button class="copy-btn" onclick="copyAddr(this,'${e.addr}')">COPY</button></div></td>
+        <td><div class="addr-wrap"><span class="addr-cell" onclick="toggleAddr(this,'${e.addr}')">${shortAddr(e.addr)}</span><button class="copy-btn" onclick="copyAddr(this,'${e.addr}')">COPY</button><a class="trace-link" href="/trace?wallet=${e.addr}&mint=${MINT_ADDR}" target="_blank" rel="noreferrer" title="Trace this wallet with the token">🔍 TRACE</a></div></td>
         <td class="amt-cell neg">${fmtSol(rankSolVal(e))}<span style="color:var(--subtext);font-size:9px;font-weight:400"> · ${fmtAmount(Number(e.bought))} tokens</span></td>
         <td class="sells-cell">${e.sellTxns} sell${e.sellTxns !== 1 ? 's' : ''}</td>
         <td class="time-cell">${fmtTime(e.firstBuy)}</td>`;
@@ -1538,7 +1540,7 @@ function renderResults(eligible, disqualified, flagged, numWinners) {
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td class="rank-cell" style="color:#FCD34D">${i+1}</td>
-        <td><div class="addr-wrap"><span class="addr-cell" onclick="toggleAddr(this,'${e.addr}')">${shortAddr(e.addr)}</span><button class="copy-btn" onclick="copyAddr(this,'${e.addr}')">COPY</button></div></td>
+        <td><div class="addr-wrap"><span class="addr-cell" onclick="toggleAddr(this,'${e.addr}')">${shortAddr(e.addr)}</span><button class="copy-btn" onclick="copyAddr(this,'${e.addr}')">COPY</button><a class="trace-link" href="/trace?wallet=${e.addr}&mint=${MINT_ADDR}" target="_blank" rel="noreferrer" title="Trace this wallet with the token">🔍 TRACE</a></div></td>
         <td class="amt-cell">${fmtAmount(Number(e.bought))}</td>
         <td class="amt-cell" style="color:#FCD34D">${fmtAmount(Number(e.movedOut))}</td>
         <td><button class="expand-btn" id="traceBtn${i}" onclick="traceFlagged(${i})">🔍 TRACE</button></td>`;
