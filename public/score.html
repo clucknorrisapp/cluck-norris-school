@@ -489,6 +489,17 @@ function renderResult(data) {
     note.textContent = '⚠ LIMITED DATA — scored on ' + (data.factorsUsed || 'few') + ' signals; treat as a rough read.';
     vEl.parentNode.insertBefore(note, vEl.nextSibling);
   }
+  // Honeypot / dangerous-mechanics warnings (Token-2022 extensions) — prominent.
+  const oldWarn = document.getElementById('sellWarn');
+  if (oldWarn) oldWarn.remove();
+  if (Array.isArray(data.warnings) && data.warnings.length) {
+    const box = document.createElement('div');
+    box.id = 'sellWarn';
+    box.style.cssText = 'margin-top:12px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.45);border-radius:10px;padding:12px 14px;';
+    box.innerHTML = '<div style="font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;color:#FCA5A5;margin-bottom:6px">🛑 DANGEROUS TOKEN MECHANICS</div>'
+      + data.warnings.map(w => '<div style="font-size:12px;color:#FECACA;line-height:1.6">• ' + esc(w) + '</div>').join('');
+    vEl.parentNode.insertBefore(box, vEl.nextSibling);
+  }
 
   // Factor breakdown
   const factorOrder = [

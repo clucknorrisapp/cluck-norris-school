@@ -3473,6 +3473,37 @@ app.get("/api/cluck-score", async (req, res) => {
     const mintParsed = mintInfoData.status === "fulfilled" ? mintInfoData.value?.result?.value?.data?.parsed?.info : null;
     const mintAuthority = mintParsed ? mintParsed.mintAuthority : undefined; // null = revoked, string = not revoked
     const freezeAuthority = mintParsed ? mintParsed.freezeAuthority : undefined;
+
+    // Token-2022 honeypot scan — read straight off the mint account we already
+    // fetched (no extra RPC). Dangerous extensions let a token block sells, seize
+    // holders' tokens, or tax every transfer — so a token can otherwise score well
+    // and still be a trap. Hard-danger extensions cap the score.
+    const TOKEN_2022_PROGRAM = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
+    const SYS_PROG = "11111111111111111111111111111111";
+    const mintProgram = mintInfoData.status === "fulfilled" ? mintInfoData.value?.result?.value?.owner : null;
+    const isToken2022 = mintProgram === TOKEN_2022_PROGRAM;
+    const exts = Array.isArray(mintParsed?.extensions) ? mintParsed.extensions : [];
+    const extState = (name) => { const e = exts.find(x => x && x.extension === name); return e ? (e.state || {}) : null; };
+    const sellWarnings = [];
+    let honeypotHardDanger = false;
+    let transferFeeBps = null;
+    if (isToken2022) {
+      const pd = extState("permanentDelegate");
+      if (pd && pd.delegate && pd.delegate !== SYS_PROG) { sellWarnings.push("Permanent delegate set — an authority can move or burn your tokens at will."); honeypotHardDanger = true; }
+      const th = extState("transferHook");
+      if (th && th.programId && th.programId !== SYS_PROG) { sellWarnings.push("Transfer hook active — a custom program runs on every transfer and can block sells."); honeypotHardDanger = true; }
+      const das = extState("defaultAccountState");
+      if (das && das.accountState === "frozen") { sellWarnings.push("Accounts default to FROZEN — new holders can't transfer until the authority thaws them."); honeypotHardDanger = true; }
+      const tf = extState("transferFeeConfig");
+      if (tf) {
+        transferFeeBps = Math.max(Number(tf.newerTransferFee?.transferFeeBasisPoints) || 0, Number(tf.olderTransferFee?.transferFeeBasisPoints) || 0);
+        if (transferFeeBps > 0) {
+          sellWarnings.push("Transfer fee of " + (transferFeeBps / 100).toFixed(transferFeeBps % 100 ? 2 : 0) + "% taxed on every buy and sell.");
+          if (transferFeeBps >= 1000) honeypotHardDanger = true; // ≥10% = honeypot-grade tax
+        }
+      }
+    }
+
     const largestRaw = largestData.status === "fulfilled" ? (largestData.value?.result?.value || []) : [];
 
     // Filter top-20 token accounts to ACTUAL HUMAN HOLDERS only.
@@ -3650,7 +3681,11 @@ app.get("/api/cluck-score", async (req, res) => {
         totalWeight += weights[k];
       }
     }
-    const score = totalWeight > 0 ? Math.round(weightedSum / totalWeight) : null;
+    let score = totalWeight > 0 ? Math.round(weightedSum / totalWeight) : null;
+    // Hard-danger Token-2022 extensions (sell-block / seize / honeypot-tax) cap the
+    // score — no amount of liquidity or holders makes a token you can't safely sell
+    // a healthy one.
+    if (honeypotHardDanger && score != null) score = Math.min(score, 35);
     // Confidence: flag a score built from sparse data (missing the two biggest
     // factors — liquidity 20 + holders 18 — drops totalWeight below 40), so the
     // UI can label it rather than present a thin read as authoritative.
@@ -3667,7 +3702,7 @@ app.get("/api/cluck-score", async (req, res) => {
       : score >= 60 ? "D"
       : "F";
 
-    const verdict = score == null
+    let verdict = score == null
       ? "Couldn't pull enough data to score this one. Cluck shrugs."
       : score >= 90 ? "Cluck Norris approves. Distribution, liquidity, authorities — all check out. No red flags."
       : score >= 80 ? "Healthy bird. Solid reads across the board. Normal caution applies."
@@ -3675,6 +3710,7 @@ app.get("/api/cluck-score", async (req, res) => {
       : score >= 60 ? "Watch the eggs. A couple yellow flags here — research before getting big."
       : score >= 45 ? "Cluck raises an eyebrow. Real concerns in the breakdown below — tread carefully."
       : "Don't bring this back to the schoolyard. Multiple red flags. Cluck's not impressed.";
+    if (honeypotHardDanger) verdict = "Dangerous token mechanics detected — it can block sells, seize tokens, or tax every transfer. Cluck says stay away, no matter how the rest looks.";
 
     return res.status(200).json({
       success: true,
@@ -3686,6 +3722,9 @@ app.get("/api/cluck-score", async (req, res) => {
       verdict,
       dataConfidence: lowConfidence ? "low" : "ok",
       factorsUsed,
+      warnings: sellWarnings,
+      token2022: isToken2022,
+      transferFeeBps,
       factors: {
         holders:          { score: f.holders          == null ? null : Math.round(f.holders),          weight: weights.holders,          value: holderCount, capped: holderCountCapped },
         liquidity:        { score: f.liquidity        == null ? null : Math.round(f.liquidity),        weight: weights.liquidity,        value: liqUsd, ratio: liqRatio, poolCount, dexCount: dexFamilies.size, dexes: [...dexFamilies], multiDexBonus },
