@@ -249,6 +249,8 @@ function fmtAmount(n, decimals) {
 }
 
 function shortAddr(a) { return a ? a.slice(0,6) + '...' + a.slice(-4) : ''; }
+// Escape API/token-supplied strings (e.g. Bags creator handles) before innerHTML.
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 function showError(msg) { const el = document.getElementById('errorBox'); el.textContent = msg; el.classList.add('show'); }
 function hideError() { document.getElementById('errorBox').classList.remove('show'); }
@@ -437,14 +439,14 @@ function renderResults(totalSupply) {
     filtered.forEach((h, i) => {
       const pct = totalSupply > 0n ? Number((h.balance * 100000n) / totalSupply) / 1000 : 0;
       const tagClass = 'tag-' + h.type.toLowerCase();
-      const metaParts = [h.label];
-      if (h.programId && h.type !== 'HUMAN') metaParts.push('owner: ' + h.programId);
+      const metaParts = [esc(h.label)];
+      if (h.programId && h.type !== 'HUMAN') metaParts.push('owner: ' + esc(h.programId));
       const overrideBadge = h.overridden ? ' <span class="tag tag-warn" style="font-size:8px">MANUAL</span>' : '';
       // Bags-verified creator badge — only when API confirms (forensic-evidence-rule).
       let creatorBadge = '';
       if (h.bagsCreator) {
         const c = h.bagsCreator;
-        const handle = c.username ? (c.provider === 'twitter' ? '@' + c.username : c.username) : 'creator';
+        const handle = c.username ? (c.provider === 'twitter' ? '@' + esc(c.username) : esc(c.username)) : 'creator';
         const admin = c.isAdmin ? ' 👑' : '';
         creatorBadge = ' <span class="tag" style="background:rgba(217,119,6,0.18);border:1px solid rgba(217,119,6,0.55);color:#FCD34D;font-size:9px">💸 BAGS CREATOR ' + handle + admin + '</span>';
       }

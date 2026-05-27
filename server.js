@@ -2034,7 +2034,7 @@ app.get("/api/holders", async (req, res) => {
   const HELIUS_KEY = process.env.HELIUS_API_KEY;
   console.log("-> Holders request for mint:", mint);
   console.log("-> Helius key present:", !!HELIUS_KEY);
-  if (!mint) return res.status(400).json({ success: false, error: "Missing mint" });
+  if (!SOL_ADDR_RE.test(String(mint || ""))) return res.status(400).json({ success: false, error: "Invalid mint" });
   if (!HELIUS_KEY) return res.status(500).json({ success: false, error: "Missing HELIUS_API_KEY" });
   const HELIUS_URL = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
   try {
