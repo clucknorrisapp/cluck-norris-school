@@ -166,6 +166,17 @@
     </div>
   </div>
 
+  <!-- Ask Cluck — contextual help for beginners; any term, any question -->
+  <div class="card" style="border-color:rgba(56,189,248,0.3);background:rgba(56,189,248,0.04)">
+    <div class="card-title" style="color:#38BDF8">🐔 NEW TO ANY OF THIS? ASK CLUCK</div>
+    <div style="font-size:12.5px;color:#9CA3AF;line-height:1.6;margin-bottom:10px">Stuck on a term anywhere on this page — <i>decimals, mint authority, liquidity, concentrated pool</i>? Ask in plain English. Cluck answers free.</div>
+    <div style="display:flex;gap:6px">
+      <input id="askInput" type="text" autocomplete="off" placeholder="e.g. what does revoking mint authority do?" style="flex:1;min-width:0;background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:#F9FAFB;font-size:13px;outline:none" onkeydown="if(event.key==='Enter')askCluck()"/>
+      <button id="askBtn" onclick="askCluck()" style="flex-shrink:0;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.4);border-radius:8px;padding:9px 16px;font-family:'Oswald',sans-serif;font-size:12px;font-weight:700;color:#38BDF8;letter-spacing:1px;cursor:pointer">ASK</button>
+    </div>
+    <div id="askAnswer" style="display:none;margin-top:10px;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:8px;padding:11px 13px;font-size:13px;color:#D1D5DB;line-height:1.65;white-space:pre-wrap"></div>
+  </div>
+
   <!-- Wallet -->
   <div class="card">
     <div class="card-title">1 · CONNECT WALLET</div>
@@ -695,6 +706,35 @@ async function hatch() {
   } finally {
     btn.disabled = false;
   }
+}
+
+// Ask Cluck — contextual help so a beginner can clarify any term in place.
+// Reuses /api/ask-cluck (server rate-limited). Answer rendered as plain text.
+async function askCluck() {
+  const inp = document.getElementById('askInput');
+  const btn = document.getElementById('askBtn');
+  const out = document.getElementById('askAnswer');
+  if (!inp || !btn || !out) return;
+  const q = (inp.value || '').trim();
+  if (q.length < 3) return;
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '…';
+  out.style.display = 'block'; out.textContent = 'Cluck is thinking…';
+  try {
+    const r = await fetch('/api/ask-cluck', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        question: q,
+        context: 'The Hatchery — a guided SPL token creator. Mint-time decisions: name, symbol, supply, decimals, mint/freeze authority. It stops before liquidity on purpose.'
+      })
+    });
+    const d = await r.json();
+    const ans = (d && d.success && d.answer) ? d.answer : (d && d.error) ? d.error : 'Cluck couldn’t answer that one — try the school or Telegram.';
+    out.textContent = String(ans).replace(/\*\*/g, '').replace(/^\s*[-*]\s/gm, '• ');
+  } catch (e) {
+    out.textContent = 'Network hiccup — try again in a moment.';
+  }
+  btn.disabled = false; btn.textContent = orig;
 }
 </script>
 </body>
