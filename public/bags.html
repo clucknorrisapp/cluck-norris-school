@@ -343,6 +343,12 @@ function lfPaint(){
     else if(mc>=30000){ lab='⚡ NEAR GRAD'; col='#D97706'; }
     else if(mc>=5000){ lab='🔥 GAINING'; col='#F97316'; }
     else { lab='📈 EARLY'; col='#6B7280'; }
+    // Score/Autopsy need real on-chain history — only meaningful once a token is
+    // near graduation or graduated. Brand-new bonding-curve tokens have too
+    // little data, so the research chips are hidden for them.
+    const graduated = (t.status==='MIGRATED'||onCurve===false);
+    const nearGrad = (t.status==='PRE_GRAD')||(onCurve===true&&cp!=null&&cp>=80)||(cp==null&&mc>=30000);
+    const showResearch = graduated||nearGrad;
     const handle=lfHandle(p.twitter||t.twitter); const img=p.image||t.image; const vol=lfAbbrev(p.volume24h); const ag=lfAge(ts);
     const bar=(onCurve===true&&cp!=null)?'<div class="lf-bar"><div style="width:'+Math.min(100,Math.max(2,cp))+'%;background:'+(cp>=80?'linear-gradient(90deg,#D97706,#10B981)':'linear-gradient(90deg,#F97316,#D97706)')+'"></div></div>':'';
     const grad=(lfSort==='graduated');
@@ -362,10 +368,12 @@ function lfPaint(){
       +(ag?'<span style="color:var(--subtext)">🕒 '+ag+'</span>':'')+'</div>'
       +bar+(handle?'<div class="lf-handle">𝕏 @'+esc(handle)+'</div>':'')
       +'<div class="lf-ca" onclick="lfCopyCA(event,\''+t.tokenMint+'\',this)" title="Copy contract address">📋 '+t.tokenMint.slice(0,4)+'…'+t.tokenMint.slice(-4)+'</div>'
-      +'<span class="lf-research">'
-        +'<span class="lf-tool" onclick="lfOpenTool(event,\'/score?mint='+t.tokenMint+'\')" title="Run a free Cluck Score">🩺 SCORE</span>'
-        +'<span class="lf-tool" onclick="lfOpenTool(event,\'/autopsy?mint='+t.tokenMint+'\')" title="Run a free Token Autopsy">🔬 AUTOPSY</span>'
-      +'</span>'
+      +(showResearch
+        ? '<span class="lf-research">'
+            +'<span class="lf-tool" onclick="lfOpenTool(event,\'/score?mint='+t.tokenMint+'\')" title="Run a free Cluck Score">🩺 SCORE</span>'
+            +'<span class="lf-tool" onclick="lfOpenTool(event,\'/autopsy?mint='+t.tokenMint+'\')" title="Run a free Token Autopsy">🔬 AUTOPSY</span>'
+          +'</span>'
+        : '')
       +'</div></div><div class="lf-trade">'+cardLabel+'</div></a>';
   }).join('');
   const m=document.getElementById('lfMeta'); if(m) m.textContent='⟳ 60s · '+new Date(lfLast).toLocaleTimeString();
