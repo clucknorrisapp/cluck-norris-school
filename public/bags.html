@@ -78,6 +78,10 @@
   .lf-caption { font-family:'Oswald',sans-serif; font-size:10px; color:var(--subtext); letter-spacing:0.5px; margin-bottom:12px; }
   .lf-tg { background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:7px; color:var(--subtext); font-family:'Oswald',sans-serif; font-size:11px; font-weight:700; letter-spacing:1px; padding:5px 11px; cursor:pointer; }
   .lf-tg.on { background:rgba(217,119,6,0.2); border-color:rgba(217,119,6,0.5); color:var(--orange); }
+  .lf-controls { display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+  .lf-search { flex:1; min-width:160px; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:7px; color:var(--text); font-family:'Oswald',sans-serif; font-size:12px; padding:7px 11px; outline:none; }
+  .lf-search:focus { border-color:rgba(217,119,6,0.5); }
+  .lf-sort { background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:7px; color:var(--text); font-family:'Oswald',sans-serif; font-size:11px; font-weight:700; letter-spacing:0.5px; padding:7px 9px; cursor:pointer; outline:none; }
   .lf-card { display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:11px; padding:13px 15px; text-decoration:none; color:inherit; margin-bottom:7px; }
   .lf-card.new { background:rgba(16,185,129,0.06); border-color:rgba(16,185,129,0.45); box-shadow:0 0 16px rgba(16,185,129,0.16); }
   .lf-ic { width:42px; height:42px; border-radius:50%; flex-shrink:0; background:#1a1a1a; display:flex; align-items:center; justify-content:center; font-family:'Oswald',sans-serif; font-weight:900; font-size:17px; color:var(--orange); overflow:hidden; }
@@ -135,6 +139,17 @@
       <button class="lf-tg on" id="lf-newest" onclick="lfSetSort('newest')">🆕 NEWEST</button>
       <button class="lf-tg" id="lf-bonding" onclick="lfSetSort('bonding')">🎓 NEAR GRAD</button>
       <button class="lf-tg" id="lf-graduated" onclick="lfSetSort('graduated')">✅ GRADUATED</button>
+    </div>
+    <div class="lf-controls">
+      <input id="lfSearch" class="lf-search" type="text" placeholder="🔎 Search name, symbol, or address…" oninput="lfSetSearch(this.value)" autocomplete="off" spellcheck="false"/>
+      <select id="lfSortSel" class="lf-sort" onchange="lfSetSortBy(this.value)">
+        <option value="default">Sort: default</option>
+        <option value="mcap">Market cap ↓</option>
+        <option value="volume">24h volume ↓</option>
+        <option value="change">24h change ↓</option>
+        <option value="grad">% to graduation ↓</option>
+        <option value="age">Newest ↓</option>
+      </select>
     </div>
     <div class="lf-caption" id="lfCaption">The 12 most recent Bags.fm launches.</div>
     <div id="lfFeed"><div class="lf-status">LOADING LAUNCHES…</div></div>
@@ -236,6 +251,9 @@
 const lfREF='?ref=firechicken007';
 const GRAD_SOL=85; // Bags MIGRATION_QUOTE_THRESHOLD = 85 SOL accumulated in the curve = graduation
 let lfFeed=[], lfPrices={}, lfAges={}, lfSort='newest', lfLast=0, lfNearGrad=null, lfGraduated=null;
+let lfSearch='', lfSortBy='default';
+function lfSetSearch(v){ lfSearch=(v||'').trim().toLowerCase(); lfPaint(); }
+function lfSetSortBy(v){ lfSortBy=v; lfPaint(); }
 // Recently graduated Bags tokens — server-scanned from ST's graduated list.
 async function lfLoadGraduated(){
   try{
@@ -314,23 +332,41 @@ async function lfLoad(){
     lfLast=Date.now(); lfPaint();
   }catch(e){}
 }
+// Sortable value for a token by key — pulls from the enriched price map.
+function lfSortVal(t, k){
+  const p=lfPrices[t.tokenMint]||{};
+  if(k==='mcap') return p.marketCap||0;
+  if(k==='volume') return p.volume24h||0;
+  if(k==='change') return (p.change24h==null?-Infinity:p.change24h);
+  if(k==='grad') return (p.curvePct==null?-Infinity:p.curvePct);
+  if(k==='age') return lfAges[t.tokenMint]||0;
+  return 0;
+}
 function lfPaint(){
   const el=document.getElementById('lfFeed'); if(!el) return;
-  if(!lfFeed.length){ el.innerHTML='<div class="lf-status">NO LAUNCHES RIGHT NOW</div>'; return; }
-  let list, cap;
+  // Base list + default ordering per tab (near-grad/graduated arrive pre-ordered
+  // from the server; newest is ordered by launch time).
+  let base, cap;
   if(lfSort==='bonding'){
-    list=(lfNearGrad||[]).slice(0,15);
+    base=(lfNearGrad||[]);
     cap='Closest to graduating — scanned across recent Bags.fm launches, highest curve % first.';
   } else if(lfSort==='graduated'){
-    list=(lfGraduated||[]).slice(0,15);
+    base=(lfGraduated||[]);
     cap='Recently graduated off the bonding curve — tap a card for the live DexScreener chart.';
   } else {
-    list=[...lfFeed].sort((a,b)=>(lfAges[b.tokenMint]||0)-(lfAges[a.tokenMint]||0)).slice(0,12);
-    cap='The 12 most recent Bags.fm launches.';
+    base=[...lfFeed].sort((a,b)=>(lfAges[b.tokenMint]||0)-(lfAges[a.tokenMint]||0));
+    cap='The most recent Bags.fm launches.';
   }
+  // Search filter (name / symbol / mint).
+  let list=base;
+  if(lfSearch){ list=list.filter(t=>((t.name||'')+' '+(t.symbol||'')+' '+(t.tokenMint||'')).toLowerCase().includes(lfSearch)); }
+  // Optional explicit sort overrides the tab default.
+  if(lfSortBy!=='default'){ list=[...list].sort((a,b)=>lfSortVal(b,lfSortBy)-lfSortVal(a,lfSortBy)); }
+  list=list.slice(0,20);
+  if(lfSearch) cap=list.length+' match'+(list.length===1?'':'es')+' for "'+lfSearch+'"';
   const capEl=document.getElementById('lfCaption'); if(capEl) capEl.textContent=cap;
   if(!list.length){
-    el.innerHTML='<div class="lf-status">'+(lfSort==='bonding'?'NO BAGS TOKENS NEAR GRADUATION RIGHT NOW':lfSort==='graduated'?'NO RECENTLY GRADUATED BAGS TOKENS RIGHT NOW':'NO LAUNCHES RIGHT NOW')+'</div>';
+    el.innerHTML='<div class="lf-status">'+(lfSearch?'NO LAUNCHES MATCH YOUR SEARCH':lfSort==='bonding'?'NO BAGS TOKENS NEAR GRADUATION RIGHT NOW':lfSort==='graduated'?'NO RECENTLY GRADUATED BAGS TOKENS RIGHT NOW':'NO LAUNCHES RIGHT NOW')+'</div>';
     const mm=document.getElementById('lfMeta'); if(mm) mm.textContent='⟳ 60s · '+new Date(lfLast).toLocaleTimeString();
     return;
   }
