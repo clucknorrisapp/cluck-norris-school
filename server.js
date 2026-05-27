@@ -2675,7 +2675,8 @@ app.post("/api/verify-clkn-payment", async (req, res) => {
 
         // Holder bonus: if the sender kept ≥ HOLDER_BONUS_THRESHOLD CLKN after sending,
         // stretch every numeric grant by HOLDER_BONUS_MULTIPLIER. Proven on-chain, no spoofing.
-        const isHolderBonus = senderBalance !== null && senderBalance >= HOLDER_BONUS_THRESHOLD;
+        // The AI tutor unlock is deliberately flat — send tokens, get questions, holdings don't matter.
+        const isHolderBonus = tool !== "ai" && senderBalance !== null && senderBalance >= HOLDER_BONUS_THRESHOLD;
         const baseGrants = TOOL_GRANTS[tool].grants;
         const grants = {};
         for (const k of Object.keys(baseGrants)) {
