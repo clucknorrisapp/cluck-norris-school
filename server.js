@@ -4600,6 +4600,86 @@ app.get("/api/cluck-card", async (req, res) => {
   }
 });
 
+// -- Transcript share card (1200x630 PNG) — same canvas rig as the score card --
+// No emoji in canvas (the bundled Oswald has none); text labels only.
+function renderCredentialCard(rec) {
+  const W = 1200, H = 630;
+  const canvas = createCanvas(W, H);
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#0a0a0a"; ctx.fillRect(0, 0, W, H);
+  let g = ctx.createRadialGradient(220, 120, 0, 220, 120, 560);
+  g.addColorStop(0, "rgba(217, 119, 6, 0.18)"); g.addColorStop(1, "rgba(217, 119, 6, 0)");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  g = ctx.createRadialGradient(1000, 580, 0, 1000, 580, 460);
+  g.addColorStop(0, "rgba(212, 175, 55, 0.12)"); g.addColorStop(1, "rgba(212, 175, 55, 0)");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+  ctx.textBaseline = "top";
+  ctx.fillStyle = "#D97706"; ctx.font = "900 24px Oswald, sans-serif";
+  ctx.fillText("CLUCK NORRIS", 60, 48);
+  ctx.fillStyle = "#6B7280"; ctx.font = "900 15px Oswald, sans-serif";
+  ctx.fillText("OFFICIAL TRANSCRIPT · SCHOOL OF CRYPTO HARD KNOCKS", 60, 82);
+
+  const diploma = rec.diploma && rec.diploma.passed ? rec.diploma : null;
+  const grad = !!(rec.graduation && rec.graduation.completed);
+  const verified = !!(diploma && diploma.verified === "server-scored");
+
+  let headline = "TRANSCRIPT", hcolor = "#F9FAFB";
+  if (verified) { headline = "CERTIFIED GRADUATE"; hcolor = "#D4AF37"; }
+  else if (diploma) { headline = "CHALLENGE PASSED"; hcolor = "#D4AF37"; }
+  else if (grad) { headline = "SCHOOL GRADUATE"; hcolor = "#10B981"; }
+  ctx.fillStyle = hcolor; ctx.font = "900 70px Oswald, sans-serif";
+  ctx.fillText(headline, 60, 134);
+
+  const w = rec.wallet || "";
+  const shortW = w.length > 12 ? w.slice(0, 6) + "…" + w.slice(-6) : w;
+  ctx.fillStyle = "#9CA3AF"; ctx.font = "26px Oswald, sans-serif";
+  ctx.fillText(shortW, 60, 220);
+
+  let y = 300;
+  function row(label, value, vcolor, tag, tagColor) {
+    ctx.strokeStyle = "rgba(255,255,255,0.08)"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(60, y - 12); ctx.lineTo(W - 60, y - 12); ctx.stroke();
+    ctx.fillStyle = "#9CA3AF"; ctx.font = "900 22px Oswald, sans-serif";
+    ctx.fillText(label, 60, y + 14);
+    ctx.fillStyle = vcolor; ctx.font = "900 46px Oswald, sans-serif";
+    const vw = ctx.measureText(value).width;
+    ctx.fillText(value, W - 60 - vw, y);
+    if (tag) {
+      ctx.fillStyle = tagColor || "#6B7280"; ctx.font = "900 14px Oswald, sans-serif";
+      const tw = ctx.measureText(tag).width;
+      ctx.fillText(tag, W - 60 - tw, y + 50);
+    }
+    y += 96;
+  }
+  if (diploma) row("ULTIMATE CHALLENGE", diploma.pct + "%", "#D4AF37", verified ? "VERIFIED ON-CHAIN" : "SELF-REPORTED", verified ? "#10B981" : "#6B7280");
+  if (grad) row("FULL CURRICULUM", "12 / 12", "#10B981", "ALL LESSONS COMPLETE", "#6B7280");
+  if (rec.holder && rec.holder.isHolder) row("CLKN HELD", Math.round(rec.holder.balance).toLocaleString(), "#D97706", null);
+
+  ctx.fillStyle = "#D97706"; ctx.font = "900 18px Oswald, sans-serif";
+  ctx.fillText("clucknorris.app/transcript", 60, 580);
+  ctx.fillStyle = "#6B7280"; ctx.font = "14px Oswald, sans-serif";
+  ctx.fillText("permanent · verifiable · yours", 60, 604);
+
+  return canvas.toBuffer("image/png");
+}
+
+app.get("/api/credential-card", (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "public, max-age=120");
+  const rec = credentials.resolve(String(req.query.slug || req.query.id || "").trim());
+  if (!rec) return res.status(404).json({ success: false, error: "No transcript found" });
+  try {
+    const png = renderCredentialCard(rec);
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Content-Length", png.length);
+    return res.end(png);
+  } catch (err) {
+    console.error("Credential card error:", err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // -- ROSE Buy Competition Analyzer --
 // The Hatchery — guided token creator. Unlisted: not linked from nav anywhere,
 // reachable only by direct URL while in private testing.
@@ -4737,8 +4817,25 @@ function getTranscriptHtml() {
   return _transcriptHtmlCache;
 }
 app.get("/transcript/:slug", (req, res) => {
+  let html = getTranscriptHtml();
+  const rec = credentials.resolve(String(req.params.slug || "").trim());
+  if (rec) {
+    const host = req.get("host") || "clucknorris.app";
+    const proto = req.get("x-forwarded-proto") || (host.includes("localhost") ? "http" : "https");
+    const cardUrl = `${proto}://${host}/api/credential-card?slug=${encodeURIComponent(rec.slug)}`;
+    const pageUrl = `${proto}://${host}/transcript/${encodeURIComponent(rec.slug)}`;
+    const meta = [
+      `<meta property="og:image" content="${cardUrl}"/>`,
+      `<meta property="og:image:width" content="1200"/>`,
+      `<meta property="og:image:height" content="630"/>`,
+      `<meta property="og:url" content="${pageUrl}"/>`,
+      `<meta name="twitter:card" content="summary_large_image"/>`,
+      `<meta name="twitter:image" content="${cardUrl}"/>`,
+    ].join("\n");
+    html = html.replace("</head>", meta + "\n</head>");
+  }
   res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.send(getTranscriptHtml());
+  res.send(html);
 });
 
 // -- Bubblemaps Proxy -- Bubblemaps blocks browser CORS, so we proxy server-side.
