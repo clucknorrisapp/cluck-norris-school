@@ -2,7 +2,7 @@ const express = require("express");
 const path = require("path");
 const { join } = path;
 const fs = require("fs");
-const { createCanvas, GlobalFonts } = require("@napi-rs/canvas");
+const { createCanvas, GlobalFonts, loadImage } = require("@napi-rs/canvas");
 const { createSign, createHash, createHmac, randomBytes, createPublicKey, verify: ed25519Verify } = require("crypto");
 const hatchery = require("./hatchery");
 const securityCoop = require("./securitycoop");
@@ -2606,7 +2606,10 @@ app.get("/api/credential/:id", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const rec = credentials.resolve(String(req.params.id || "").trim());
   if (!rec) return res.status(404).json({ success: false, error: "No transcript found" });
-  return res.status(200).json({ success: true, transcript: rec });
+  // Public view: expose holder STATUS but never the balance (the owner may not
+  // want their bag size on a shareable page).
+  const pub = { ...rec, holder: rec.holder ? { isHolder: rec.holder.isHolder } : null };
+  return res.status(200).json({ success: true, transcript: pub });
 });
 
 // -- Aggregate, judge-facing school metrics (verified graduates, etc.) --
@@ -4600,9 +4603,16 @@ app.get("/api/cluck-card", async (req, res) => {
   }
 });
 
+// Cluck Norris round logo, loaded once and reused across card renders.
+let _logoPromise = null;
+function getLogo() {
+  if (!_logoPromise) _logoPromise = loadImage(join(__dirname, "public", "cluck-norris-logo.jpg")).catch(() => null);
+  return _logoPromise;
+}
+
 // -- Transcript share card (1200x630 PNG) — same canvas rig as the score card --
 // No emoji in canvas (the bundled Oswald has none); text labels only.
-function renderCredentialCard(rec) {
+async function renderCredentialCard(rec) {
   const W = 1200, H = 630;
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext("2d");
@@ -4613,6 +4623,18 @@ function renderCredentialCard(rec) {
   g = ctx.createRadialGradient(1000, 580, 0, 1000, 580, 460);
   g.addColorStop(0, "rgba(212, 175, 55, 0.12)"); g.addColorStop(1, "rgba(212, 175, 55, 0)");
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+  // Round logo, top-right.
+  const logo = await getLogo();
+  if (logo) {
+    const LS = 124, lx = W - 60 - LS, ly = 44, cx = lx + LS / 2, cy = ly + LS / 2, r = LS / 2;
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.closePath(); ctx.clip();
+    ctx.drawImage(logo, lx, ly, LS, LS);
+    ctx.restore();
+    ctx.strokeStyle = "#D97706"; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+  }
 
   ctx.textBaseline = "top";
   ctx.fillStyle = "#D97706"; ctx.font = "900 24px Oswald, sans-serif";
@@ -4654,7 +4676,7 @@ function renderCredentialCard(rec) {
   }
   if (diploma) row("ULTIMATE CHALLENGE", diploma.pct + "%", "#D4AF37", verified ? "VERIFIED ON-CHAIN" : "SELF-REPORTED", verified ? "#10B981" : "#6B7280");
   if (grad) row("FULL CURRICULUM", "12 / 12", "#10B981", "ALL LESSONS COMPLETE", "#6B7280");
-  if (rec.holder && rec.holder.isHolder) row("CLKN HELD", Math.round(rec.holder.balance).toLocaleString(), "#D97706", null);
+  if (rec.holder && rec.holder.isHolder) row("STATUS", "CLKN HOLDER", "#D97706", null); // status only — never the balance (privacy)
 
   ctx.fillStyle = "#D97706"; ctx.font = "900 18px Oswald, sans-serif";
   ctx.fillText("clucknorris.app/transcript", 60, 580);
@@ -4664,13 +4686,13 @@ function renderCredentialCard(rec) {
   return canvas.toBuffer("image/png");
 }
 
-app.get("/api/credential-card", (req, res) => {
+app.get("/api/credential-card", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "public, max-age=120");
   const rec = credentials.resolve(String(req.query.slug || req.query.id || "").trim());
   if (!rec) return res.status(404).json({ success: false, error: "No transcript found" });
   try {
-    const png = renderCredentialCard(rec);
+    const png = await renderCredentialCard(rec);
     res.setHeader("Content-Type", "image/png");
     res.setHeader("Content-Length", png.length);
     return res.end(png);
