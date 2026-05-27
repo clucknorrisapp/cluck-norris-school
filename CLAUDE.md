@@ -25,13 +25,32 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   Token Autopsy engine, CLKN payment verification, Telegram/X automation, the trade
   poller, all schedulers, and static file serving.
 - `lib/` — `bags-context`, `solana-tracker`, `solscan`, `premium-forensics`, `analytics`,
-  plus volume-backed stores: `kvstore`, `sigstore`, `recap`, `grad-tracker`.
+  plus volume-backed stores: `kvstore`, `sigstore`, `recap`, `grad-tracker`, `credentials`.
+- `data/question-bank.json` — the Ultimate Challenge question pool (server-owned; the
+  client never ships the answer key). See the credentials note below.
 - `hatchery.js` (guided token creator) and `securitycoop.js` (approval revoker) — Express
   routers mounted by `server.js`.
 - `public/*.html` — standalone vanilla-HTML tool pages: score, autopsy, trace, snapshot,
   holders, airdrop, buyspecial, rose, hatchery, security-coop, premium, slots, bags,
-  tools, investors, grant, stats.
+  tools, investors, grant, stats, transcript.
 - `src/` — the React/Vite school (landing app).
+
+## Credentials / transcripts (the school's permanent output)
+- A learner earns a permanent, shareable transcript by **passing the Ultimate Challenge**
+  (a *verified* diploma) **or** finishing the full curriculum (graduation). Both doors
+  collect a Solana address via `/api/claim`, which still appends the airdrop list to the
+  Google Sheet AND writes a per-wallet record to `lib/credentials.js` (`/data/credentials.json`).
+- **The exam is scored server-side.** `/api/exam/questions` draws 50 from `data/question-bank.json`,
+  shuffles each question's options, and returns them WITHOUT the correct index. `/api/exam/submit`
+  scores the choices; a pass (≥94%) mints a one-time token that `/api/claim` requires to record a
+  diploma as `verified: "server-scored"` (otherwise `self-reported`). Don't reintroduce client-side
+  scoring or ship the answer key to the browser.
+- ⚠️ **Question-bank drift:** the curriculum questions live in BOTH `src/App.jsx` (`LESSONS[].questions`,
+  for the per-lesson quizzes) and `data/question-bank.json` (for the exam). They are NOT auto-synced —
+  if you materially edit a lesson's quiz, update the exam bank too (it has no live regenerator anymore).
+- Public surfaces: `/transcript/:slug` (page, with OG card), `/api/credential/:slug` (JSON — exposes
+  holder *status* only, never balance), `/api/credential-card?slug=` (PNG), `/api/school-stats`
+  (aggregate verified-graduate metrics, shown on the grant + investor pages).
 
 ## Secrets live on Railway, NOT in the repo
 The repo ships zero secrets; a fresh clone (every cloud session) has none. Runtime secrets
@@ -55,7 +74,7 @@ Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.
 - X cross-post needs all four `X_*` keys, else silent no-op. A raw contract address in a
   tweet 403s for ~7 days after auth, so lesson tweets link a DexScreener URL instead.
 - Persistence: Railway volume at `/data` (consumed payment signatures, graduation tracker,
-  scheduler timestamps, analytics) — survives redeploys.
+  scheduler timestamps, analytics, transcripts/credentials) — survives redeploys.
 
 ## Gated admin / test endpoints (require `?key=PREMIUM_ACCESS_KEY`)
 - `/api/tg-test?text=…[&loud=1]` — post a custom one-off message to the Telegram chat
@@ -64,6 +83,8 @@ Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.
   `/api/x-post-test` — dry-run the scheduled posts; add `&post=1` to actually fire.
 - `/api/grad-watch-status[&run=1]` — graduation watchlist + the 48h graduated record.
 - `/api/stats` — traffic dashboard data. `/api/autopsy-premium` — gated deep forensics.
+- `/api/claims` — the full airdrop list (wallets + balances) from the Google Sheet.
+  Gated on `PREMIUM_ACCESS_KEY`; returns 404 (not 401) when the key is wrong/absent.
 
 ## Conventions
 - Tool pages are vanilla HTML + inline JS; the school is React. **Escape any API/token-
