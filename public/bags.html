@@ -93,6 +93,9 @@
   .lf-handle { font-family:'Oswald',sans-serif; font-size:12px; color:var(--blue); margin-top:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .lf-ca { display:inline-block; margin-top:6px; font-family:var(--mono); font-size:11px; color:var(--subtext); background:rgba(255,255,255,0.05); border:1px solid var(--border); border-radius:6px; padding:2px 8px; cursor:pointer; }
   .lf-ca:hover { color:var(--orange); border-color:rgba(217,119,6,0.4); }
+  .lf-research { display:inline-flex; gap:6px; margin-top:6px; margin-left:6px; }
+  .lf-tool { font-family:'Oswald',sans-serif; font-size:10px; letter-spacing:1px; color:#6EE7B7; background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.3); border-radius:6px; padding:2px 8px; cursor:pointer; white-space:nowrap; }
+  .lf-tool:hover { background:rgba(16,185,129,0.18); }
   .lf-trade { font-family:'Oswald',sans-serif; font-size:12px; color:var(--orange); letter-spacing:1px; flex-shrink:0; margin-left:10px; }
   .lf-status { text-align:center; color:var(--subtext); font-size:11px; letter-spacing:2px; padding:24px 0; font-family:'Oswald',sans-serif; }
 </style>
@@ -285,6 +288,9 @@ function lfCopyCA(e, mint, el){
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(mint).then(done).catch(()=>{});
   else { try { const ta=document.createElement('textarea'); ta.value=mint; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); done(); } catch(_){} }
 }
+// Research a launch with our own free tools — discovery → "is this safe?" in one
+// tap. stopPropagation so it doesn't trigger the card's trade link.
+function lfOpenTool(e, url){ e.preventDefault(); e.stopPropagation(); window.open(url, '_blank', 'noopener'); }
 async function lfLoad(){
   try{
     const r=await fetch('/api/bags-proxy?endpoint=token-launch/feed'); const d=await r.json();
@@ -356,6 +362,10 @@ function lfPaint(){
       +(ag?'<span style="color:var(--subtext)">🕒 '+ag+'</span>':'')+'</div>'
       +bar+(handle?'<div class="lf-handle">𝕏 @'+esc(handle)+'</div>':'')
       +'<div class="lf-ca" onclick="lfCopyCA(event,\''+t.tokenMint+'\',this)" title="Copy contract address">📋 '+t.tokenMint.slice(0,4)+'…'+t.tokenMint.slice(-4)+'</div>'
+      +'<span class="lf-research">'
+        +'<span class="lf-tool" onclick="lfOpenTool(event,\'/score?mint='+t.tokenMint+'\')" title="Run a free Cluck Score">🩺 SCORE</span>'
+        +'<span class="lf-tool" onclick="lfOpenTool(event,\'/autopsy?mint='+t.tokenMint+'\')" title="Run a free Token Autopsy">🔬 AUTOPSY</span>'
+      +'</span>'
       +'</div></div><div class="lf-trade">'+cardLabel+'</div></a>';
   }).join('');
   const m=document.getElementById('lfMeta'); if(m) m.textContent='⟳ 60s · '+new Date(lfLast).toLocaleTimeString();
