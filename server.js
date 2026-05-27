@@ -8852,7 +8852,10 @@ function detectClknTrade(tx) {
       } else if (QUOTE_TOKENS[bc.mint]) {
         let q = quoteByOwner.get(owner);
         if (!q) { q = {}; quoteByOwner.set(owner, q); }
-        q[bc.mint] = (q[bc.mint] || 0) + amt;
+        const cur = q[bc.mint] || { net: 0, gross: 0 };
+        cur.net += amt;
+        cur.gross = Math.max(cur.gross, Math.abs(amt)); // biggest single leg
+        q[bc.mint] = cur;
       }
     }
   }
@@ -8884,8 +8887,13 @@ function detectClknTrade(tx) {
   // the swap. Magnitude only; direction is already known from `action`.
   const poolQuotes = quoteByOwner.get(pool) || {};
   let quoteMint = null, quoteAmount = 0, quoteDelta = 0;
-  for (const [mint, delta] of Object.entries(poolQuotes)) {
-    if (Math.abs(delta) > quoteAmount) { quoteMint = mint; quoteAmount = Math.abs(delta); quoteDelta = delta; }
+  for (const [mint, v] of Object.entries(poolQuotes)) {
+    // Jupiter routes the quote token IN and OUT of the pool/route account, so its
+    // NET can be ~0 even though real SOL moved (this silently dropped big routed
+    // trades). Use the larger of |net| and the biggest single leg for magnitude;
+    // direction still comes from the CLKN side below.
+    const mag = Math.max(Math.abs(v.net), v.gross);
+    if (mag > quoteAmount) { quoteMint = mint; quoteAmount = mag; quoteDelta = v.net; }
   }
   if (!quoteMint || quoteAmount <= 0) return null;
 
