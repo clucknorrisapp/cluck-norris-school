@@ -2619,8 +2619,13 @@ app.get("/api/school-stats", (req, res) => {
 
 app.get("/api/claims", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  const auth = req.query.key;
-  if (auth !== "firechicken007") return res.status(401).json({ success: false, error: "Unauthorized" });
+  res.setHeader("Cache-Control", "no-store");
+  // Admin-only: exposes the full airdrop list (wallets + balances). Gated on the
+  // PREMIUM_ACCESS_KEY secret (Railway only) like the other admin endpoints —
+  // never a hardcoded password in this public repo.
+  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) {
+    return res.status(404).json({ error: "not_found" });
+  }
   try {
     const rows = await getSheetRows();
     const headers = rows[0] || [];
