@@ -306,15 +306,18 @@
   <div class="section" id="cluckscore">
     <div class="section-title">🩺 WHAT IS A CLUCK SCORE?</div>
     <p>The <strong>Cluck Score</strong> in the panel above is our own 0–100 health rating for a Solana token — and we run it on <strong>CLKN itself</strong> and publish the result. Most projects won't show you a number they didn't get to pick.</p>
-    <p>It's a free tool — <a href="/score" style="color:#FCD34D;text-decoration:none">clucknorris.app/score</a> — that scores <em>any</em> mint, not just ours. Six weighted factors roll into the final number and a letter grade:</p>
+    <p>It's a free tool — <a href="/score" style="color:#FCD34D;text-decoration:none">clucknorris.app/score</a> — that scores <em>any</em> mint, not just ours. Eight weighted, Bags‑aware factors roll into the final number and a letter grade:</p>
     <ul>
-      <li><strong>Liquidity (25%)</strong> — real exit liquidity, summed across every Solana pool, with a small bonus for being live on more than one DEX</li>
-      <li><strong>Holders (20%)</strong> — how many unique wallets actually hold it, anchored to industry bars (500 holders is Jupiter's verification minimum)</li>
-      <li><strong>Concentration (20%)</strong> — what the top 10 wallets control, judged honestly: LP, locks and program wallets routinely sit up there and aren't whale risk</li>
-      <li><strong>Mint authority (15%)</strong> — whether the creator can still print new supply (revoked = full marks)</li>
-      <li><strong>Freeze authority (10%)</strong> — whether the creator can still freeze your wallet (revoked = full marks)</li>
-      <li><strong>24h volume (10%)</strong> — recent trading as a sign of a live market</li>
+      <li><strong>Liquidity (20%)</strong> — real exit liquidity, summed across every Solana pool, with a small bonus for being live on more than one DEX</li>
+      <li><strong>Holders (18%)</strong> — how many unique wallets actually hold it, anchored to industry bars (500 holders is Jupiter's verification minimum)</li>
+      <li><strong>Concentration (18%)</strong> — what the top 10 wallets control, judged honestly: LP, locks and program wallets routinely sit up there and aren't whale risk</li>
+      <li><strong>Mint authority (12%)</strong> — whether the creator can still print new supply (revoked = full marks)</li>
+      <li><strong>Freeze authority (8%)</strong> — whether the creator can still freeze your wallet (revoked = full marks)</li>
+      <li><strong>24h volume (8%)</strong> — recent trading as a sign of a live market</li>
+      <li><strong>Verified team activity (10%)</strong> — Bags/Pump‑verified creator with active, recent fee claims</li>
+      <li><strong>Independent verification (6%)</strong> — cross‑checks our reading against Jupiter's own audit data</li>
     </ul>
+    <p style="font-size:13px;color:#9CA3AF">The last two only count when a token is Bags/Pump or Jupiter‑listed; for a plain SPL token they're skipped and the weight redistributes, so it's still scored fairly.</p>
     <p>Those roll up into a weighted score on a standard grading scale — A+ at 95, down to F below 60. A mid-range grade is normal and honest for a small-cap; what matters is the number is <strong>live, on-chain, and produced by the exact tool anyone can run on any token</strong>. We don't hide it, and we don't grade on a curve.</p>
   </div>
 
