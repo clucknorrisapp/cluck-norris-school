@@ -2623,6 +2623,22 @@ app.get("/api/school-stats", (req, res) => {
   return res.status(200).json({ success: true, ...credentials.stats() });
 });
 
+// -- Credential Tier-2: prove the transcript's wallet is yours (no WalletConnect) --
+// Client sends a tiny CLKN amount (tool=ownership) → verify-clkn-payment hands
+// back a proof token encoding the sender wallet → posted here. We mark ownership
+// verified only when the proven wallet matches the transcript's wallet.
+app.post("/api/credential/verify-ownership", (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  const { id, proof } = req.body || {};
+  const rec = credentials.resolve(String(id || "").trim());
+  if (!rec) return res.status(404).json({ success: false, error: "No transcript found" });
+  const provenWallet = verifyPremiumProof(proof);
+  if (!provenWallet) return res.status(400).json({ success: false, error: "Invalid or expired ownership proof" });
+  if (provenWallet !== rec.wallet) return res.status(403).json({ success: false, error: "That wallet doesn't match this transcript" });
+  const updated = credentials.setOwnership(rec.wallet, "payment");
+  return res.status(200).json({ success: true, ownership: updated.ownership });
+});
+
 app.get("/api/claims", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
@@ -2672,6 +2688,10 @@ const TOOL_GRANTS = {
   // it proves the sender controls the wallet so we can gate on its balance. On
   // a match we hand back a proof token (see verify-clkn-payment response).
   premium:    { cost: 7,   grants: {} },
+  // Credential Tier-2: a tiny send that proves the sender owns the wallet on
+  // their transcript. No holder gate — issues a plain ownership proof. Safe
+  // because autopsy-premium still re-checks the live 2M balance at runtime.
+  ownership:  { cost: 1,   grants: {} },
 };
 
 // Holders who keep ≥ this many CLKN after the send get a stretched unlock — the only
@@ -2824,6 +2844,9 @@ app.post("/api/verify-clkn-payment", async (req, res) => {
           } else {
             premiumNote = { insufficient: true, balance: preSendBalance, threshold: PREMIUM_HOLDER_THRESHOLD };
           }
+        } else if (tool === "ownership") {
+          // Credential Tier-2: plain wallet-ownership proof, no holder gate.
+          premiumProof = issuePremiumProof(senderWallet);
         }
 
         return res.status(200).json({

@@ -48,6 +48,14 @@
   .cw-bar { flex:1; height:6px; background: rgba(255,255,255,0.08); border-radius:4px; overflow:hidden; }
   .cw-fill { display:block; height:100%; background:#60A5FA; border-radius:4px; }
   .cw-count { flex: 0 0 auto; font-family:'Courier New',monospace; font-size:11px; color:#9CA3AF; }
+  .ownline { text-align:center; font-size:11px; letter-spacing:1px; margin: -10px 0 18px; }
+  .ownline a { color:#FCD34D; text-decoration:underline; cursor:pointer; }
+  .own-panel { background: rgba(217,119,6,0.06); border:1px solid rgba(217,119,6,0.3); border-radius:12px; padding:16px; margin-bottom:14px; }
+  .own-panel .lbl { font-size:9px; letter-spacing:2px; color:#6B7280; margin-bottom:4px; }
+  .own-panel .amt { font-family:'Courier New',monospace; font-size:22px; color:#FCD34D; font-weight:700; }
+  .own-panel .addr { font-family:'Courier New',monospace; font-size:11px; color:#F9FAFB; word-break:break-all; }
+  .own-panel button { width:100%; margin-top:12px; background:linear-gradient(135deg,#D97706,#EF4444); border:none; border-radius:8px; padding:11px; color:#fff; font-family:'Oswald',sans-serif; font-size:12px; font-weight:700; letter-spacing:2px; cursor:pointer; }
+  .own-panel .st { font-size:11px; color:#9CA3AF; margin-top:10px; text-align:center; }
   .actions { display: flex; gap: 10px; margin-top: 20px; }
   .actions a, .actions button {
     flex: 1; text-align: center; text-decoration: none; cursor: pointer;
@@ -95,7 +103,13 @@
         '<h1>OFFICIAL TRANSCRIPT</h1>' +
         '<div class="sub">SCHOOL OF CRYPTO HARD KNOCKS</div>' +
       '</div>' +
-      '<div class="wallet">' + esc(t.wallet) + '</div>'
+      '<div class="wallet">' + esc(t.wallet) + '</div>' +
+      '<div class="ownline" id="ownLine">' +
+        (t.ownership && t.ownership.verified
+          ? '<span class="verified">✅ ownership verified on-chain</span>'
+          : '<span class="self">ownership unverified (pasted address)</span> · <a id="ownStart">verify you own this wallet</a>') +
+      '</div>' +
+      '<div id="ownPanel"></div>'
     );
 
     if (t.diploma && t.diploma.passed) {
@@ -170,6 +184,49 @@
       btn.textContent = "✓ COPIED!";
       setTimeout(() => { btn.textContent = "📋 COPY SHARE LINK"; }, 1800);
     };
+
+    // Tier-2: prove you own this wallet via a tiny CLKN send (no WalletConnect).
+    const CLKN_RECEIVE = "7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H";
+    const ownStartLink = document.getElementById("ownStart");
+    if (ownStartLink) ownStartLink.onclick = (e) => {
+      e.preventDefault();
+      const amount = (1 + Math.floor(Math.random() * 1000) / 1000).toFixed(3); // 1.XXX — unique key
+      const panel = document.getElementById("ownPanel");
+      panel.innerHTML =
+        '<div class="own-panel">' +
+          '<div class="lbl">SEND EXACTLY (FROM THE WALLET ON THIS TRANSCRIPT)</div>' +
+          '<div class="amt">' + amount + ' CLKN</div>' +
+          '<div class="lbl" style="margin-top:10px">TO</div>' +
+          '<div class="addr">' + CLKN_RECEIVE + '</div>' +
+          '<button id="ownSent">I’ve sent it — verify</button>' +
+          '<div class="st" id="ownStatus">The exact amount is your key. Send it, then tap verify.</div>' +
+        '</div>';
+      document.getElementById("ownSent").onclick = () => pollOwn(amount, 0);
+    };
+
+    async function pollOwn(amount, attempts) {
+      const st = document.getElementById("ownStatus");
+      if (!st) return;
+      if (attempts >= 40) { st.innerHTML = '<span class="self">Couldn’t find that payment after 2 min — double-check the exact amount and wallet, then try again.</span>'; return; }
+      st.textContent = "Watching the chain… " + (attempts * 3) + "s";
+      try {
+        const r = await fetch("/api/verify-clkn-payment", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ unlockAmount: parseFloat(amount), tool: "ownership" }) });
+        const d = await r.json();
+        if (d.success && d.premiumProof) return bindOwn(d.premiumProof);
+      } catch (e) {}
+      setTimeout(() => pollOwn(amount, attempts + 1), 3000);
+    }
+
+    async function bindOwn(proof) {
+      const st = document.getElementById("ownStatus");
+      if (st) st.textContent = "Payment found — recording ownership…";
+      try {
+        const r = await fetch("/api/credential/verify-ownership", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: slug, proof }) });
+        const d = await r.json();
+        if (d.success) return load(); // re-render with the verified badge
+        if (st) st.innerHTML = '<span class="self">' + esc(d.error || "Could not verify ownership.") + '</span>';
+      } catch (e) { if (st) st.innerHTML = '<span class="self">Network error — try again.</span>'; }
+    }
   }
   load();
 </script>
