@@ -61,7 +61,6 @@ Pay only when you use it. No subscriptions. No accounts. No wallet connect. Just
 | Tool | Cost | ≈ USD | What unlocks |
 |---|---|---|---|
 | 🤖 More AI tutoring | **500 CLKN** | ~$0.06 | 20 extra questions |
-| 🪧 Cluck Score card (sharable PNG) | **100 CLKN** | ~$0.01 | 1 card |
 | 💰 Batch airdrop sender | **100 CLKN** | ~$0.01 | 1 unlock session, any batch size |
 | 📈 Buy‑competition trackers (Buy Special · Rose) | **500 CLKN** | ~$0.06 | **7 days unlimited runs** each — full contest cycle (initial scan + tweaks + hold check + re‑verification) |
 

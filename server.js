@@ -909,7 +909,6 @@ function notifyToolUnlock(tool, paidAmount, senderWallet, isHolderBonus, signatu
       ai:         { emoji: "🤖", name: "AI TUTOR EXTENDED",        detail: "+20 questions" },
       airdrop:    { emoji: "💰", name: "AIRDROP TOOL UNLOCKED",    detail: "1 batch session" },
       buyspecial: { emoji: "📈", name: "BUY-COMP UNLOCKED",        detail: "7 days unlimited" },
-      score:      { emoji: "🪧", name: "CLUCK SCORE CARD",         detail: "PNG generated" },
     };
     const m = map[tool] || { emoji: "⚡", name: `${tool.toUpperCase()} UNLOCKED`, detail: "" };
     const bonusBadge = isHolderBonus ? " · 5× HOLDER BONUS 🏆" : "";
@@ -2645,7 +2644,7 @@ const DEV_WALLETS = new Set([
 ]);
 
 // Tool → cost (CLKN, base before the unique decimal) + what gets granted.
-// The base must be unique per tool so a user can't pay 100 CLKN with a "score" amount
+// The base must be unique per tool so a user can't pay a 100-CLKN "airdrop" amount
 // and reuse the verification to unlock a 500-CLKN tool. Math.floor(amount) checks this.
 // Note: `holders` is intentionally NOT in this table — the /holders deep-view tool
 // is kept internal (URL accessible but unadvertised) for the project team's own use.
@@ -2656,7 +2655,8 @@ const TOOL_GRANTS = {
   airdrop:    { cost: 100, grants: { sessions: 1 } },
   buyspecial: { cost: 500, grants: { hoursOfAccess: 168 } },
   rose:       { cost: 500, grants: { hoursOfAccess: 168 } },
-  score:      { cost: 100, grants: { cards: 1 } },
+  // The Cluck Score card is free — generated for any mint at /api/cluck-card,
+  // no payment gate. (It was never enforced; this keeps the config honest.)
   // Premium forensics: the 7-CLKN send is an OWNERSHIP PROOF, not a purchase —
   // it proves the sender controls the wallet so we can gate on its balance. On
   // a match we hand back a proof token (see verify-clkn-payment response).
