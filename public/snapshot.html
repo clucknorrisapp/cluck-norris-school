@@ -323,7 +323,7 @@
 
       <div class="actions">
         <button class="action-btn primary" id="downloadCsvBtn" onclick="downloadCsv()">⬇ DOWNLOAD CSV</button>
-        <a class="action-btn secondary" id="airdropLinkBtn" href="/airdrop">→ OPEN AIRDROPPER</a>
+        <a class="action-btn secondary" id="airdropLinkBtn" href="/airdrop" onclick="sendToAirdrop()">→ AIRDROP TO THESE HOLDERS</a>
         <button class="action-btn" onclick="downloadJson()">⬇ FULL JSON</button>
       </div>
       <div class="meta-line" id="metaLine"></div>
@@ -591,6 +591,24 @@ function downloadCsv() {
   a.download = `snapshot_${lastSnapshot.mint.slice(0,8)}_${Date.now()}.csv`;
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
+}
+
+// Hand the filtered holder list straight to the airdropper (equal-split mode).
+// Sets the same sessionStorage payload the buy-comp tools use; the href="/airdrop"
+// carries the navigation. The LP/lock/team filtering already happened, so this
+// is the airdrop-ready list.
+function sendToAirdrop() {
+  if (!lastSnapshot || !Array.isArray(lastSnapshot.holders)) return;
+  try {
+    const wallets = lastSnapshot.holders.map(h => h.wallet).filter(Boolean).join("\n");
+    sessionStorage.setItem("airdropPayload", JSON.stringify({
+      mint: lastSnapshot.mint,
+      source: "Cluck Snapshot",
+      tokenName: lastSnapshot.name || lastSnapshot.symbol || "your token",
+      wallets,
+      mode: "equal",
+    }));
+  } catch (e) {}
 }
 
 function downloadJson() {

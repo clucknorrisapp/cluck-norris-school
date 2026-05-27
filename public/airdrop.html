@@ -1644,14 +1644,25 @@ const splToken = {
         if (btn) btn.classList.add('active');
       }
     }
-    // Set mode to manual and populate
-    setMode('manual');
-    const textarea = document.getElementById('manualInput');
-    if (textarea) textarea.value = data.recipients;
+    // Equal-split handoff (e.g. Cluck Snapshot → "airdrop to these holders"):
+    // a wallet list with no per-wallet amount; user sets one amount for all.
+    // Otherwise the manual "wallet, amount" handoff (Buy Special / Rose).
+    let count;
+    if (data.mode === 'equal' && data.wallets) {
+      setMode('equal');
+      const eq = document.getElementById('equalInput');
+      if (eq) eq.value = data.wallets;
+      count = data.wallets.split('\n').filter(Boolean).length;
+    } else {
+      setMode('manual');
+      const textarea = document.getElementById('manualInput');
+      if (textarea) textarea.value = data.recipients;
+      count = data.recipients ? data.recipients.split('\n').filter(Boolean).length : 0;
+    }
     // Show a notice — insert into the tool wrapper so the unlock gate (above it) stays clean.
     const notice = document.createElement('div');
     notice.style.cssText = 'background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:10px 14px;font-family:var(--mono);font-size:11px;color:#10B981;margin-bottom:12px;';
-    notice.textContent = 'Auto-populated from Buy Special tool -- ' + data.recipients.split('\n').length + ' recipients loaded for ' + data.tokenName;
+    notice.textContent = 'Loaded ' + count + ' recipients from ' + (data.source || 'Buy Special tool') + (data.tokenName ? ' for ' + data.tokenName : '') + (data.mode === 'equal' ? ' — set the amount per wallet below.' : '');
     const tool = document.getElementById('airdropTool');
     if (tool) tool.insertBefore(notice, tool.firstChild);
     else document.querySelector('.wrap').insertBefore(notice, document.querySelector('.card'));
