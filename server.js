@@ -1981,7 +1981,7 @@ app.get("/api/buyspecial-crosscheck", async (req, res) => {
   const mint = (req.query.mint || "").trim();
   const from = parseInt(req.query.from, 10);
   const to = parseInt(req.query.to, 10);
-  if (!mint || mint.length < 32 || !from || !to || to <= from) {
+  if (!SOL_ADDR_RE.test(mint) || !from || !to || to <= from) {
     return res.status(400).json({ success: false, error: "Need mint, from, to (unix seconds, to>from)" });
   }
   if (!solanaTracker.isConfigured()) {
