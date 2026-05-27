@@ -16,6 +16,7 @@ const kv = require("./lib/kvstore");
 const recap = require("./lib/recap");
 const gradTracker = require("./lib/grad-tracker");
 const credentials = require("./lib/credentials");
+const QUESTION_BANK = require("./data/question-bank.json");
 const { PublicKey } = require("@solana/web3.js");
 
 // Pump.fun program — used to derive the per-creator "creator vault" PDA where
@@ -2489,11 +2490,88 @@ async function checkCLKNHolder(wallet) {
   }
 }
 
+// ── Ultimate Challenge — server-authoritative scoring ──────────────────────
+// The exam is the one event a diploma is gated on, so it can't be faked. The
+// answer key lives ONLY on the server: /api/exam/questions draws a set and
+// shuffles each question's options server-side (so the correct index is not in
+// the payload), and /api/exam/submit scores the submitted choices. A pass mints
+// a one-time token the claim must present to record a "verified" diploma — that
+// keeps the airdrop list and the graduate count honest. Sessions/tokens live in
+// memory with a short TTL; a redeploy just means re-taking, which is fine.
+const EXAM_SIZE = 50;
+const EXAM_PASS_PCT = 94;
+const EXAM_TTL_MS = 30 * 60 * 1000;
+const examSessions = new Map();    // sessionId -> { key: [correctIdx...], createdAt }
+const examPassTokens = new Map();  // token     -> { pct, score, total, createdAt, used }
+
+function shuffleInPlace(a) {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+function pruneExam() {
+  const now = Date.now();
+  for (const [k, v] of examSessions) if (now - v.createdAt > EXAM_TTL_MS) examSessions.delete(k);
+  for (const [k, v] of examPassTokens) if (now - v.createdAt > EXAM_TTL_MS) examPassTokens.delete(k);
+}
+
+app.get("/api/exam/questions", (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  pruneExam();
+  const drawn = shuffleInPlace(QUESTION_BANK.slice()).slice(0, Math.min(EXAM_SIZE, QUESTION_BANK.length));
+  const key = [];
+  const questions = drawn.map((q, idx) => {
+    const order = shuffleInPlace(q.options.map((_, i) => i));     // shuffle option positions
+    key[idx] = order.indexOf(q.correct);                          // where the right answer landed
+    return { n: idx, q: q.q, options: order.map(i => q.options[i]) };
+  });
+  const sessionId = randomBytes(18).toString("hex");
+  examSessions.set(sessionId, { key, createdAt: Date.now() });
+  return res.status(200).json({ success: true, sessionId, total: questions.length, passPct: EXAM_PASS_PCT, questions });
+});
+
+app.post("/api/exam/submit", (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  pruneExam();
+  const { sessionId, answers } = req.body || {};
+  const sess = examSessions.get(String(sessionId || ""));
+  if (!sess) return res.status(400).json({ success: false, error: "Exam session expired — restart the challenge." });
+  examSessions.delete(String(sessionId)); // one-shot — a session can't be re-scored
+  const a = Array.isArray(answers) ? answers : [];
+  let score = 0;
+  for (let i = 0; i < sess.key.length; i++) if (a[i] === sess.key[i]) score++;
+  const total = sess.key.length;
+  const pct = total ? Math.round((score / total) * 100) : 0;
+  const passed = pct >= EXAM_PASS_PCT;
+  let passToken = null;
+  if (passed) {
+    passToken = randomBytes(18).toString("hex");
+    examPassTokens.set(passToken, { pct, score, total, createdAt: Date.now(), used: false });
+  }
+  return res.status(200).json({ success: true, passed, score, total, pct, passToken });
+});
+
 app.post("/api/claim", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  const { wallet, score, total, pct, source } = req.body;
+  const { wallet, score, total, pct, source, passToken } = req.body;
   if (!SOL_ADDR_RE.test(String(wallet || ""))) return res.status(400).json({ success: false, error: "Invalid wallet" });
   try {
+    // A diploma is "verified" only when it rides a one-time, server-issued pass
+    // token from /api/exam/submit. Without one (the graduation door, or an old
+    // client) it's recorded but labelled self-reported.
+    let verified = "self-reported", effScore = score, effTotal = total, effPct = pct;
+    if (source !== "GRADUATION" && passToken) {
+      const tok = examPassTokens.get(String(passToken));
+      if (tok && !tok.used && tok.pct >= EXAM_PASS_PCT) {
+        tok.used = true;
+        verified = "server-scored";
+        effScore = tok.score; effTotal = tok.total; effPct = tok.pct; // trust the server's numbers
+      }
+    }
+
     // Check if CLKN holder (snapshot stored on the transcript too).
     const { isHolder, balance } = await checkCLKNHolder(wallet);
     const holderStatus = isHolder ? "[OK] YES" : "[ERR] NO";
@@ -2503,17 +2581,17 @@ app.post("/api/claim", async (req, res) => {
     const exists = rows.some(row => row[0] === wallet);
     if (!exists) {
       const date = new Date().toISOString();
-      await appendToSheet([wallet, score, total, pct, date, holderStatus, balance, source || "CHALLENGE"]);
-      console.log(`[WIN] New claim: ${wallet} -- ${score}/${total} (${pct}%) -- CLKN Holder: ${holderStatus} (${balance})`);
+      await appendToSheet([wallet, effScore, effTotal, effPct, date, holderStatus, balance, source || "CHALLENGE"]);
+      console.log(`[WIN] New claim: ${wallet} -- ${effScore}/${effTotal} (${effPct}%) [${verified}] -- CLKN Holder: ${holderStatus} (${balance})`);
     }
 
     // Always update the permanent transcript store (merges challenge + graduation
     // badges), even on a repeat claim — that's how a second door adds to an
     // existing record. Returns the slug so the client can link the transcript.
     const kind = source === "GRADUATION" ? "graduation" : "challenge";
-    const rec = credentials.record(wallet, { kind, score, total, pct, isHolder, balance });
+    const rec = credentials.record(wallet, { kind, score: effScore, total: effTotal, pct: effPct, verified, isHolder, balance });
     return res.status(200).json({
-      success: true, isHolder, balance,
+      success: true, isHolder, balance, verified,
       slug: rec.slug, transcript: `/transcript/${rec.slug}`, alreadyOnList: exists,
     });
   } catch(err) {

@@ -678,79 +678,19 @@ function Incubator({ onComplete, onBack }) {
   );
 }
 
-// ── ULTIMATE CHALLENGE QUESTIONS (never seen in lessons) ──
-const CHALLENGE_QUESTIONS = [
-  { q: "What is a flash loan?", options: ["A loan that charges high interest over a short term", "An uncollateralized loan borrowed and repaid in a single transaction block", "A fast bank wire transfer settled in under a minute", "A short-term margin loan offered on regulated CEXs"], correct: 1, explanation: "Flash loans are unique to DeFi — you borrow any amount with zero collateral as long as you repay it within the same transaction. Used for arbitrage, liquidations, and collateral swaps." },
-  { q: "What does TVL stand for in DeFi?", options: ["Total Value Locked", "Token Velocity Limit", "Timed Vesting Ledger", "Total Volume Listed"], correct: 0, explanation: "TVL (Total Value Locked) measures the total value of crypto assets deposited in a DeFi protocol. It's the primary metric for gauging a protocol's size and adoption." },
-  { q: "What is a reentrancy attack?", options: ["A bot that front-runs your transactions for profit", "A contract gets called back repeatedly before its state updates", "A phishing attack targeting wallet seed phrases", "A sandwich attack targeting large DEX swaps"], correct: 1, explanation: "Reentrancy attacks drained The DAO in 2016. A malicious contract calls back into the target before the balance is updated, allowing repeated withdrawals. The fix is to update state before external calls." },
-  { q: "What is the difference between APR and APY?", options: ["APR includes compound interest, APY does not", "APY includes compound interest, APR does not", "They are identical metrics", "APR is for lending, APY is for staking only"], correct: 1, explanation: "APR (Annual Percentage Rate) is simple interest. APY (Annual Percentage Yield) accounts for compounding. A 100% APR compounded daily works out to roughly 171% APY — your balance grows ~2.7×, but the yield itself is ~171%. Always compare APY to APY." },
-  { q: "What is a multisig wallet?", options: ["A wallet that holds multiple tokens across chains", "A wallet requiring multiple private key signatures to authorize a transaction", "A wallet with multiple recovery phrases for redundancy", "A shared exchange account managed by multiple users"], correct: 1, explanation: "Multisig wallets require M-of-N signatures to execute transactions. A 2-of-3 multisig needs 2 out of 3 keyholders to sign. Used by DAOs and projects to prevent single points of failure." },
-  { q: "What happens during a short squeeze in crypto?", options: ["Short sellers profit as the price drops below their entry", "Forced buying by short sellers drives prices rapidly higher", "Liquidity dries up and bid-ask spreads widen sharply", "A token's supply is permanently reduced by a forced burn"], correct: 1, explanation: "When a shorted asset rises, short sellers face losses and must buy to cover positions. This buying pressure drives prices even higher, forcing more shorts to close — a self-reinforcing squeeze." },
-  { q: "What is a Merkle tree in blockchain?", options: ["A data structure that allows efficient verification of large data sets", "A type of consensus algorithm used by L2 networks", "A governance voting mechanism for snapshot-based DAOs", "A cross-chain bridge protocol for asset transfers"], correct: 0, explanation: "Merkle trees hash pairs of data recursively until a single root hash represents all the data. Blockchains use them to efficiently verify transaction inclusion without downloading the entire chain." },
-  { q: "What is the purpose of a nonce in Ethereum/Solana transactions?", options: ["To encrypt the transaction data before broadcast", "To ensure each transaction is unique and prevent replay attacks", "To calculate gas fees based on network congestion", "To identify the receiving wallet in a transfer"], correct: 1, explanation: "A nonce is a sequential number assigned to each transaction from a wallet. It prevents the same transaction from being submitted twice and ensures transactions are processed in order." },
-  { q: "What is delta-neutral in DeFi?", options: ["Equal long and short exposure to a token", "A token with zero price movement", "A pool with perfectly balanced reserves", "A zero-fee trading pair"], correct: 0, explanation: "Delta-neutral strategies eliminate directional price exposure. A trader might hold a token while shorting it on a perp exchange, earning yield without caring if price goes up or down." },
-  { q: "What is EIP-1559 and why does it matter?", options: ["An Ethereum upgrade that introduced burning of base fees, reducing ETH supply", "An Ethereum upgrade that increased block size", "A proposal to merge Ethereum with Bitcoin", "An Ethereum upgrade that reduced validator rewards"], correct: 0, explanation: "EIP-1559 introduced a base fee that gets burned with every transaction plus an optional priority tip. This made ETH deflationary during high usage periods and improved fee predictability." },
-  { q: "What is the Oracle problem in DeFi?", options: ["Smart contracts can't natively access off-chain data", "Oracles are too slow to update real-time DeFi prices", "DeFi protocols cannot verify oracle identities", "Oracles charge per-call fees that erode protocol yields"], correct: 0, explanation: "Smart contracts are deterministic and isolated — they can't call external APIs. Oracles feed in external data (prices, events), but a manipulated oracle can drain an entire protocol." },
-  { q: "What is a vampire attack in DeFi?", options: ["A protocol that offers better incentives to migrate liquidity from a competitor", "A rug pull disguised as a legitimate project", "A flash loan exploit specifically targeting AMM pools", "A bot that drains unclaimed airdrops from inactive wallets"], correct: 0, explanation: "Vampire attacks lure liquidity providers away from established protocols with higher rewards. SushiSwap famously drained $1B+ from Uniswap v2 in 2020 by offering SUSHI rewards to migrating LPs." },
-  { q: "What is the significance of a token's fully diluted valuation (FDV)?", options: ["It shows current market cap based on circulating supply", "It shows market cap if all tokens including unlocked future supply were in circulation", "It measures total liquidity in all pools", "It calculates the token's all-time-high valuation"], correct: 1, explanation: "FDV = current price × max supply. If FDV is 100x market cap, most tokens haven't entered circulation yet. Large FDV-to-mcap ratios signal heavy future sell pressure from unlocks." },
-  { q: "What is concentrated liquidity in AMMs?", options: ["All liquidity concentrated in one wallet", "LPs set a price range for their liquidity", "A pool with only one token", "Liquidity locked permanently in a protocol"], correct: 1, explanation: "Uniswap v3 introduced concentrated liquidity. LPs choose a price range — their capital only earns fees when the token trades within that range, but it's more capital-efficient than full-range LPs." },
-  { q: "What is a bonding curve used for beyond token launches?", options: ["Only for memecoins", "DAO treasuries, NFT pricing, and AMM design", "Calculating staking yields", "Determining validator rewards"], correct: 1, explanation: "Bonding curves automate price discovery in many contexts — DAOs use them for continuous token issuance, NFT projects use them for dynamic pricing, and AMMs are essentially bonding curves." },
-  { q: "What is a governance attack?", options: ["Hacking a DAO's frontend to redirect governance votes", "Accumulating enough governance tokens to pass malicious proposals", "Spamming a DAO's governance forum with fake proposals", "Forking a protocol's code to steal its branding and users"], correct: 1, explanation: "In 2022, Beanstalk lost $182M to a governance attack. The attacker took a flash loan to get 67% of voting power, passed a malicious proposal in the same transaction, and drained the treasury." },
-  { q: "What does it mean when a token has mint authority revoked?", options: ["The token can no longer be traded on permissioned DEXs", "No new tokens can ever be created — supply is permanently fixed", "The token creator lost access to their wallet", "The token's metadata cannot be updated after deployment"], correct: 1, explanation: "Revoking mint authority means nobody — including the creator — can ever mint new tokens. It's a major trust signal. Without it, devs could inflate supply at will and dump on holders." },
-  { q: "What is the role of a sequencer in Layer 2 networks?", options: ["It validates blocks on the L1 chain in parallel with L2", "It orders and batches L2 transactions before posting them to L1", "It bridges tokens between L1 and L2 chains permissionlessly", "It generates zero-knowledge proofs to compress transaction data"], correct: 1, explanation: "Sequencers order transactions and batch them efficiently before submitting to L1. Most L2s today use centralized sequencers — a trust assumption that's a known decentralization risk." },
-  { q: "What is the difference between a hot wallet and a cold wallet?", options: ["Hot wallets hold more tokens", "Hot wallets are online; cold wallets are offline", "Cold wallets are faster for transactions", "Hot wallets require KYC"], correct: 1, explanation: "Hot wallets (Phantom, MetaMask) are online and convenient but exposed to attacks. Cold wallets (Ledger, Trezor) store keys offline — to sign a transaction, you physically approve it on the device." },
-  { q: "What is a liquidity bootstrapping pool (LBP)?", options: ["A pool that borrows liquidity from other protocols", "A launch using dynamic weights so price starts high and drops", "A pool that rewards LPs with governance tokens", "A fixed-price token sale mechanism for governance launches"], correct: 1, explanation: "LBPs start with a high token weight (e.g., 96% token / 4% USDC) that shifts over time. Price starts high and drops unless buyers push it up — naturally discouraging front-running bots and whale snipers." },
-  { q: "What is a crypto airdrop?", options: ["A hack where tokens are stolen from your wallet", "Free tokens distributed to wallet addresses", "A pump and dump scheme", "A type of staking reward"], correct: 1, explanation: "Airdrops distribute free tokens to wallets — usually to bootstrap a community, reward early users, or distribute governance tokens. Always verify legitimacy before claiming as fake airdrop sites steal wallets." },
-  { q: "What does DEGEN mean in crypto culture?", options: ["A developer working on blockchain infrastructure", "Someone who makes high-risk speculative trades, often in low-cap tokens", "A decentralized governance entity managing protocol upgrades", "A type of NFT collection minted on a bonding curve"], correct: 1, explanation: "Degen (degenerate) is a self-aware term for traders who chase high-risk, high-reward plays — often in new tokens with little due diligence. Worn as a badge of honor in DeFi culture." },
-  { q: "What is a dead cat bounce?", options: ["A token that has permanently failed and gone to zero", "A temporary price recovery after a large drop, before continuing lower", "A whale manipulation tactic to bait small buyers", "A type of flash loan attack targeting illiquid pools"], correct: 1, explanation: "A dead cat bounce is a brief price recovery after a steep decline — the name implies even a dead cat bounces if dropped from high enough. Traders watch for these to avoid buying false recoveries." },
-  { q: "What does NGMI stand for?", options: ["Not Going to Make It — used for poor decisions or bearish outlooks", "New Governance Market Initiative for L2 token holders", "No Gas Money Included — an Ethereum trading slang", "Next Generation Market Index for crypto benchmarks"], correct: 0, explanation: "NGMI (Not Gonna Make It) is crypto slang for someone making bad decisions — selling too early, panic selling, falling for scams. Its opposite is WAGMI (We're All Gonna Make It)." },
-  { q: "What is token vesting?", options: ["A security audit process for smart contracts", "A schedule that gradually releases locked tokens", "A mechanism for burning tokens", "A type of liquidity mining"], correct: 1, explanation: "Vesting locks team, investor, and advisor tokens and releases them gradually over months or years. It aligns long-term incentives and prevents insiders from dumping immediately after launch." },
-  { q: "What is a honeypot token?", options: ["A token with unusually high APY relative to its category", "A malicious token you can buy but not sell — designed to trap buyers", "A token backed by physical gold stored in audited vaults", "A decentralized savings account paying fixed yield in stables"], correct: 1, explanation: "Honeypot tokens look attractive to buy but the smart contract prevents selling. Buyers are trapped while the creator drains liquidity. Always test with a small amount and check the contract on rugcheck.xyz." },
-  { q: "What is the difference between a market order and a limit order?", options: ["Market orders fill instantly; limit orders fill only at a set price", "Limit orders are faster than market orders", "Market orders only work on CEXs with order book liquidity", "They are identical on DEXs that use AMM pricing"], correct: 0, explanation: "Market orders buy/sell immediately at whatever price is available. Limit orders only execute when the price hits your target. DEXs typically use market orders against pool liquidity, which is why slippage matters." },
-  { q: "What does diamond hands mean?", options: ["Owning NFTs with the rarest diamond-tier rarity traits", "Holding an asset through extreme volatility without selling", "A wallet with over $1M in crypto across many positions", "A multi-sig wallet requiring 3 signatures"], correct: 1, explanation: "Diamond hands means holding your position no matter how bad the dip gets. The opposite is paper hands — selling at the first sign of trouble. Neither is always right — context matters." },
-  { q: "What is a 51% attack?", options: ["A hack targeting 51% of a protocol's liquidity", "When one entity controls 50%+ of consensus power", "A governance attack requiring 51% of votes", "A smart contract exploit affecting majority holders"], correct: 1, explanation: "If one entity controls 51%+ of a blockchain's consensus power, they can double-spend transactions and reorganize the chain. This is why decentralization of validators matters — Solana has thousands of validators." },
-  { q: "What does paper hands mean?", options: ["A trader who uses leverage on every short-term position", "Selling an asset quickly at the first sign of loss or volatility", "A crypto paper wallet holding only printed seed phrases", "A whale who pretends to be a small holder"], correct: 1, explanation: "Paper hands describes someone who panics and sells too early — usually at a loss. While sometimes the right call, it's often driven by emotion rather than analysis." },
-  { q: "What is yield farming?", options: ["Mining Bitcoin using renewable energy to maximize margin", "Moving crypto between DeFi protocols to maximize returns from fees and rewards", "Staking SOL to secure the network and earn validator rewards", "Creating new tokens on a bonding curve to harvest launch fees"], correct: 1, explanation: "Yield farmers move liquidity between protocols chasing the highest APY — combining LP fees, governance token rewards, and other incentives. High yields often come with high risks including smart contract bugs and IL." },
-  { q: "What does TVL tell you about a DeFi protocol?", options: ["The total number of users", "Total dollar value of assets deposited", "The token's market cap", "The protocol's annual revenue"], correct: 1, explanation: "TVL (Total Value Locked) measures how much crypto users have deposited. High TVL signals user trust and liquidity depth. Falling TVL can signal users losing confidence or finding better yields elsewhere." },
-  { q: "What is a whale in crypto?", options: ["A protocol with over $1B TVL across all its pools", "A wallet holding a large enough position to move market prices", "An NFT collection with over 10000 items and active trading", "A validator with the maximum stake allowed by the protocol"], correct: 1, explanation: "Whales hold enough of a token that their buys and sells significantly impact price. Watching whale wallets on-chain can provide signals — though whales also set traps by faking moves to trigger retail reactions." },
-  { q: "What is the purpose of token burning?", options: ["To increase liquidity in pools", "To permanently remove tokens from circulation", "To migrate tokens to a new contract", "To distribute tokens to holders"], correct: 1, explanation: "Burning sends tokens to an address no one controls. It permanently reduces supply. Some protocols burn a portion of fees — Ethereum burns base fees via EIP-1559 making ETH deflationary at high usage." },
-  { q: "What is a genesis block?", options: ["The first block ever mined on a blockchain", "The block containing the largest transaction ever", "A special governance block", "The block where a token was first launched"], correct: 0, explanation: "The genesis block is block #0 — the very first block on any blockchain. Bitcoin's genesis block was mined by Satoshi Nakamoto on January 3, 2009. It cannot be modified or deleted." },
-  { q: "What does FOMO mean and why is it dangerous in crypto?", options: ["Fear Of Missing Out — leads to buying tops impulsively without research", "First On Market Opportunity — a launch strategy", "Full On Market Order — slang for max-size market orders", "Federal On-chain Market Observer — a regulatory body"], correct: 0, explanation: "FOMO (Fear Of Missing Out) drives impulsive buying after big price moves — usually near the top. Buying purely because something is up 500% is how retail gets wrecked. Always research before buying." },
-  { q: "What is a smart contract audit?", options: ["A tax review of crypto transactions", "A security review of smart contract code", "A governance vote on protocol changes", "An on-chain transaction verification"], correct: 1, explanation: "Audits have professional security firms review smart contract code for bugs, exploits, and logic errors. They're a critical trust signal — but not a guarantee. Many audited protocols have still been exploited." },
-  { q: "What is the mempool?", options: ["A pool of dedicated liquidity reserved for new memecoins", "Where unconfirmed transactions wait before block inclusion", "A type of memory storage used by validators for state caching", "A cross-chain bridge buffer holding pending bridge transactions"], correct: 1, explanation: "The mempool holds pending transactions waiting to be confirmed. MEV bots monitor the mempool in real time, looking for profitable opportunities like sandwich attacks on large pending swaps." },
-  { q: "What does gwei refer to?", options: ["A Solana transaction fee unit equal to one lamport", "A small denomination of ETH used to measure gas prices", "A governance weight index used by Ethereum DAOs", "A cross-chain bridge fee charged per outbound transfer"], correct: 1, explanation: "Gwei is a denomination of ETH — 1 ETH = 1,000,000,000 gwei. Gas prices on Ethereum are quoted in gwei. Higher gwei = faster confirmation. On Solana fees are in lamports (1 SOL = 1B lamports)." },
-  { q: "What is a bag holder?", options: ["A large holder of a token with concentrated supply", "Someone stuck holding a token that has crashed significantly in value", "A cold storage hardware wallet holding diversified positions", "A multi-token portfolio manager balancing many positions"], correct: 1, explanation: "A bag holder bought at a higher price and is now stuck holding a token deep in the red. The term implies they're waiting for a recovery. The best prevention is position sizing and stop losses." },
-  { q: "What is cross-chain bridging?", options: ["Moving tokens from one blockchain to another using a bridge protocol", "Connecting two liquidity pools on the same chain", "A governance mechanism for multi-chain DAOs", "A type of yield farming across protocols"], correct: 0, explanation: "Bridges lock tokens on one chain and mint equivalent tokens on another. They're one of crypto's biggest security risks — billions have been lost to bridge exploits including Ronin ($625M) and Wormhole ($320M)." },
-  { q: "What is a soft rug?", options: ["A partial liquidity removal that slowly drains a project", "A rug pull executed slowly on a decentralized protocol", "A team gradually abandoning a project without formally closing it", "A price decline of less than 50% over a short timeframe"], correct: 2, explanation: "A soft rug is when a team quietly abandons a project — stops developing, goes silent, and eventually disappears without officially pulling liquidity. Slower and sneakier than a hard rug but equally damaging." },
-  { q: "What is an NFT?", options: ["A type of fungible token on Ethereum", "A unique digital asset verified on-chain", "A governance token for DeFi protocols", "A stablecoin backed by digital art"], correct: 1, explanation: "NFT (Non-Fungible Token) means each token is unique — unlike CLKN where every token is identical. NFTs represent ownership of unique items: art, gaming items, domain names, event tickets, and more." },
-  { q: "What does on-chain mean?", options: ["Data stored in a centralized database", "Transactions recorded directly on the blockchain", "A type of cross-chain communication", "Private transactions hidden from validators"], correct: 1, explanation: "On-chain means it happened on the actual blockchain — recorded, transparent, and permanent. Anyone can verify on-chain data using a block explorer. Off-chain means outside the blockchain like a company database." },
-  { q: "What is a governance token?", options: ["A token that automatically earns yield from protocol fees", "A token giving holders voting rights on protocol decisions", "A stablecoin used for DAO treasury management", "A token backed by audited real-world asset reserves"], correct: 1, explanation: "Governance tokens let holders vote on protocol changes — fee structures, treasury spending, new features, partnerships. Examples: UNI (Uniswap), AAVE, MKR (MakerDAO). Voting power is usually proportional to tokens held." },
-  { q: "What is a stablecoin?", options: ["A token pegged to a stable asset like USD designed to minimize price volatility", "Any token that has not moved in price for 30 days", "A low-volatility index token tracking a basket of coins", "A token backed only by physical gold held in vaults"], correct: 0, explanation: "Stablecoins maintain a peg to a reference asset (usually USD). Types: fiat-backed (USDC, USDT), crypto-backed (DAI), and algorithmic (UST — which famously collapsed in 2022 wiping out billions)." },
-  { q: "What is alpha in crypto?", options: ["The first token launched on a new blockchain", "Exclusive or early information that gives a trading edge", "A measure of a portfolio's volatility relative to the market", "The genesis phase of a token launch before public trading"], correct: 1, explanation: "Alpha means insider edge — information or insights that most of the market does not have yet. Sharing alpha means giving valuable tips. Finding alpha is the constant search for an edge in an information-rich market." },
-  { q: "What is a pump and dump?", options: ["A legitimate marketing strategy for token launches", "Coordinated buying to inflate price, then dumping at the top", "A high APY liquidity mining program with rotating rewards", "A bonding curve that increases then decreases price"], correct: 1, explanation: "Pump and dumps involve coordinated buying to drive price up while promoting the token, then insiders sell at the top leaving retail holding worthless bags. Illegal in traditional markets, rampant in crypto." },
-  { q: "What is dollar cost averaging?", options: ["Converting all crypto to stablecoins during bear markets", "Investing fixed amounts at regular intervals regardless of price", "Calculating the average cost of a token across multiple purchases", "A strategy for timing the exact market bottom"], correct: 1, explanation: "DCA involves buying a fixed dollar amount regularly — weekly, monthly — regardless of price. It removes the pressure of timing the market perfectly and averages out entry price over time. Widely recommended for long-term investors." },
-  { q: "What is alt season?", options: ["The time of year crypto markets are most active", "A period when altcoins outperform Bitcoin significantly", "The launch window for new token projects", "A quarterly governance voting period across major DAOs"], correct: 1, explanation: "Alt season is when capital flows from Bitcoin into altcoins, causing broad altcoin outperformance. Typically follows Bitcoin price discovery as investors seek higher returns in smaller caps. Not guaranteed to happen every cycle." },
-  { q: "What does rekt mean in crypto?", options: ["A term for an extremely successful trade with big returns", "Suffering significant financial losses on a trade or investment", "A fully audited smart contract with zero vulnerabilities", "A token that has been delisted from all major exchanges"], correct: 1, explanation: "Rekt (wrecked) means taking a serious financial loss — getting liquidated, buying a rug, or holding through a 90% crash. Used as both a warning and a post-mortem." },
-  { q: "What is the difference between proof of work and proof of stake?", options: ["PoW uses miners solving puzzles; PoS uses validators staking tokens", "PoW is significantly faster than PoS at finalizing blocks", "PoS requires more energy than PoW to validate transactions", "They are different names for the same consensus mechanism"], correct: 0, explanation: "PoW (Bitcoin) uses miners competing with computing power — energy intensive. PoS (Ethereum, Solana) uses validators who stake tokens as collateral — much more energy efficient. Solana uses Proof of History plus PoS." },
-  { q: "What is a whitelist in crypto launches?", options: ["A list of verified smart contracts", "A pre-approved list of wallets with early access", "A list of tokens approved for a DEX", "A security list of trusted validators"], correct: 1, explanation: "Whitelists give early or exclusive access to token launches, NFT mints, or presales. Getting whitelisted often requires community engagement, holding specific tokens, or winning competitions." },
-  { q: "What does KYC mean and why do CEXs require it?", options: ["Know Your Crypto — a trading certification", "Know Your Customer — identity verification required by law", "Keep Your Coins — a self-custody principle", "Key Your Credentials — a security protocol"], correct: 1, explanation: "KYC (Know Your Customer) is legally required for regulated financial services to prevent money laundering and fraud. CEXs require government ID. DEXs are permissionless — no KYC ever required." },
-  { q: "What is a token unlock event?", options: ["When a token is listed on a new exchange", "When previously locked tokens become tradeable", "When a protocol releases a new token version", "When liquidity is added to a new pool"], correct: 1, explanation: "Unlock events release previously locked supply — from team, investors, or advisors. If they sell, supply increases against demand causing price pressure. Track unlock schedules via tokenomics docs and platforms like Token Unlocks." },
-  { q: "What is a crypto index fund?", options: ["A fund tracking the top 10 tokens by market cap", "A diversified basket of crypto assets designed to track overall market performance", "A basket of stablecoins designed to minimize volatility", "A DeFi protocol for automated portfolio rebalancing"], correct: 1, explanation: "Crypto index funds hold a diversified basket of tokens — similar to S&P 500 index funds in traditional finance. They reduce single-asset risk and provide broad market exposure. Examples: DPI (DeFi Pulse Index)." },
-  { q: "What is a paper wallet?", options: ["A wallet with very low token balances used for testing", "A physical printout of a public and private key pair stored completely offline", "A temporary wallet used for one transaction", "A wallet controlled by a third party on behalf of users"], correct: 1, explanation: "A paper wallet is a physical document with your public and private keys printed on it — completely offline. No device can hack it. The risk is physical: fire, water, loss, or someone seeing it." },
-  { q: "What is max pain in crypto options?", options: ["The point of maximum loss for a leveraged trader", "The price at which the largest number of options contracts expire worthless", "A market crash of over 80% across major crypto assets", "The maximum slippage allowed on a large trade before failure"], correct: 1, explanation: "Max pain is the options price level where the most contracts expire worthless — causing maximum financial pain to options buyers. Market makers may move price toward max pain near expiry." },
-  { q: "What is a cold wallet best used for?", options: ["Day trading and frequent transactions across multiple DEXs", "Long-term storage of large amounts kept offline and away from internet threats", "Storing stablecoins for DeFi use in lending protocols", "Connecting to multiple DEX protocols simultaneously"], correct: 1, explanation: "Cold wallets like Ledger and Trezor are for HODLing — storing large amounts you do not need to access frequently. Keep bulk holdings cold and trading funds in a hot wallet for convenience." },
-  { q: "What does GM mean in crypto culture?", options: ["General Market — a reference to overall conditions", "Good Morning — a community greeting signaling optimism and engagement", "Governance Meeting — a DAO voting session", "Gas Minimum — the lowest possible transaction fee"], correct: 1, explanation: "GM (Good Morning) became a crypto Twitter ritual — a simple greeting that builds community and signals you are active in the space. Saying GM is a cultural signal of belonging. GN means Good Night." },
-];
-
 // ── ULTIMATE CHALLENGE COMPONENT ──
 function UltimateChallenge({ onBack }) {
   const [started, setStarted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [loadErr, setLoadErr] = useState("");
+  const [sessionId, setSessionId] = useState("");
   const [questions, setQuestions] = useState([]);
   const [qi, setQi] = useState(0);
-  const [answers, setAnswers] = useState([]);
+  const [answers, setAnswers] = useState([]); // chosen option index per question
   const [sel, setSel] = useState(null);
-  const [showExp, setShowExp] = useState(false);
   const [finished, setFinished] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState(null);  // { score, total, pct, passed, passToken } from the server
   const [wallet, setWallet] = useState("");
   const [claimed, setClaimed] = useState(false);
   const [claiming, setClaiming] = useState(false);
@@ -758,35 +698,61 @@ function UltimateChallenge({ onBack }) {
   const [holderBalance, setHolderBalance] = useState(0);
   const [slug, setSlug] = useState("");
 
-  function startChallenge() {
-    // Pull all questions from lessons + challenge bank, shuffle, take 50
-    const allLessonQs = LESSONS.flatMap(l => l.questions.map(q => ({...q, source: l.title})));
-    const allQs = [...allLessonQs, ...CHALLENGE_QUESTIONS.map(q => ({...q, source: "ULTIMATE"}))];
-    const shuffled = shuffleArray(allQs).slice(0, 50).map(shuffleOptions);
-    setQuestions(shuffled);
-    setStarted(true);
+  // Questions come from the server WITHOUT the answer key — the exam is scored
+  // server-side so a pass can't be faked. No per-question reveal during the run
+  // (it's a no-second-chances final); the verdict comes back on submit.
+  async function startChallenge() {
+    setLoading(true); setLoadErr("");
+    try {
+      const res = await fetch("/api/exam/questions");
+      const data = await res.json();
+      if (!data.success || !Array.isArray(data.questions) || !data.questions.length) throw new Error("no questions");
+      setQuestions(data.questions);
+      setSessionId(data.sessionId);
+      setQi(0); setAnswers([]); setSel(null); setFinished(false); setResult(null);
+      setStarted(true);
+    } catch(e) {
+      setLoadErr("Couldn't load the exam — try again in a moment.");
+    }
+    setLoading(false);
   }
 
   function pick(i) {
     if (sel !== null) return;
     setSel(i);
-    setShowExp(true);
-    setAnswers(prev => [...prev, i === questions[qi].correct]);
+    setAnswers(prev => [...prev, i]);
+  }
+
+  async function submitExam(allAnswers) {
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/exam/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, answers: allAnswers })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || "submit failed");
+      setResult(data);
+    } catch(e) {
+      setResult({ score: 0, total: questions.length, pct: 0, passed: false, error: true });
+    }
+    setSubmitting(false);
+    setFinished(true);
   }
 
   function next() {
     if (qi + 1 >= questions.length) {
-      setFinished(true);
+      submitExam(answers);
     } else {
       setQi(qi + 1);
       setSel(null);
-      setShowExp(false);
     }
   }
 
-  const score = answers.filter(Boolean).length;
-  const pct = questions.length > 0 ? Math.round((score / questions.length) * 100) : 0;
-  const rawPct = questions.length > 0 ? (score / questions.length) * 100 : 0;
+  const score = result ? result.score : 0;
+  const pct = result ? result.pct : 0;
+  const rawPct = pct;
 
   function getTier() {
     if (rawPct >= 95) return { label: "YOU ARE CLUCK NORRIS", sub: "LEGENDARY STATUS", color: "#D4AF37", icon: "👑", pass: true };
@@ -803,7 +769,7 @@ function UltimateChallenge({ onBack }) {
       const res = await fetch("/api/claim", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet, score, total: questions.length, pct })
+        body: JSON.stringify({ wallet, score, total: result ? result.total : questions.length, pct, passToken: result && result.passToken })
       });
       const data = await res.json();
       setClaimed(true);
@@ -841,9 +807,10 @@ function UltimateChallenge({ onBack }) {
           </div>
         ))}
       </div>
-      <button onClick={startChallenge} style={{width:"100%",background:"linear-gradient(135deg,#EF4444,#DC2626)",border:"none",borderRadius:10,padding:"16px",fontFamily:"'Oswald',sans-serif",fontSize:16,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer",boxShadow:"0 0 30px rgba(239,68,68,0.5)",marginBottom:12}}>
-        🥊 STEP INTO THE DOJO
+      <button onClick={startChallenge} disabled={loading} style={{width:"100%",background:"linear-gradient(135deg,#EF4444,#DC2626)",border:"none",borderRadius:10,padding:"16px",fontFamily:"'Oswald',sans-serif",fontSize:16,fontWeight:700,color:"#fff",letterSpacing:3,cursor:loading?"default":"pointer",opacity:loading?0.7:1,boxShadow:"0 0 30px rgba(239,68,68,0.5)",marginBottom:12}}>
+        {loading ? "ENTERING THE DOJO..." : "🥊 STEP INTO THE DOJO"}
       </button>
+      {loadErr && <div style={{fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#EF4444",letterSpacing:1,marginBottom:12}}>{loadErr}</div>}
       <button onClick={onBack} style={{background:"none",border:"none",color:"#6B7280",fontFamily:"'Oswald',sans-serif",fontSize:11,letterSpacing:2,cursor:"pointer"}}>
         ← BACK TO SCHOOL
       </button>
@@ -933,7 +900,7 @@ function UltimateChallenge({ onBack }) {
           </a>
         )}
         <div style={{display:"flex",flexDirection:"column",gap:10}}>
-          <button onClick={()=>{setStarted(false);setFinished(false);setQi(0);setAnswers([]);setSel(null);setShowExp(false);setWallet("");setClaimed(false);}} style={{background:"linear-gradient(135deg,#EF4444,#DC2626)",border:"none",borderRadius:10,padding:"14px",fontFamily:"'Oswald',sans-serif",fontSize:14,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer"}}>
+          <button onClick={()=>{setStarted(false);setFinished(false);setQi(0);setAnswers([]);setSel(null);setResult(null);setSessionId("");setWallet("");setClaimed(false);setSlug("");}} style={{background:"linear-gradient(135deg,#EF4444,#DC2626)",border:"none",borderRadius:10,padding:"14px",fontFamily:"'Oswald',sans-serif",fontSize:14,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer"}}>
             🥊 FIGHT AGAIN
           </button>
           <button onClick={onBack} style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,padding:"12px",fontFamily:"'Oswald',sans-serif",fontSize:12,color:"#9CA3AF",letterSpacing:2,cursor:"pointer"}}>
@@ -952,7 +919,7 @@ function UltimateChallenge({ onBack }) {
       <div style={{marginBottom:16}}>
         <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:"#6B7280",fontFamily:"'Oswald',sans-serif",letterSpacing:1,marginBottom:5}}>
           <span style={{color:"#EF4444",fontWeight:700}}>🥊 ULTIMATE CHALLENGE</span>
-          <span>Q {qi+1} OF {questions.length} • {answers.filter(Boolean).length} CORRECT</span>
+          <span>Q {qi+1} OF {questions.length}</span>
         </div>
         <div style={{height:6,background:"rgba(255,255,255,0.08)",borderRadius:3,overflow:"hidden"}}>
           <div style={{height:"100%",width:`${((qi)/questions.length)*100}%`,background:"linear-gradient(90deg,#EF4444,#D4AF37)",borderRadius:3}}/>
@@ -969,25 +936,20 @@ function UltimateChallenge({ onBack }) {
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
         {q.options.map((opt,i)=>{
+          // No right/wrong reveal — the Ultimate Challenge tells you nothing. You
+          // either know it or you go take the courses. Selection just locks in.
           let bg="rgba(255,255,255,0.03)",border="1px solid rgba(255,255,255,0.08)",color="#D1D5DB";
-          if(sel!==null){
-            if(i===q.correct){bg="rgba(16,185,129,0.15)";border="1px solid #10B981";color="#10B981";}
-            else if(i===sel){bg="rgba(239,68,68,0.15)";border="1px solid #EF4444";color="#EF4444";}
-          }
-          return(<button key={i} onClick={()=>pick(i)} style={{background:bg,border,borderRadius:10,padding:"12px 14px",color,cursor:sel!==null?"default":"pointer",textAlign:"left",fontSize:14,display:"flex",gap:10,alignItems:"center"}}>
+          if(sel===i){bg="rgba(212,175,55,0.15)";border="1px solid #D4AF37";color="#FCD34D";}
+          return(<button key={i} onClick={()=>pick(i)} disabled={sel!==null} style={{background:bg,border,borderRadius:10,padding:"12px 14px",color,cursor:sel!==null?"default":"pointer",textAlign:"left",fontSize:14,display:"flex",gap:10,alignItems:"center"}}>
             <span style={{fontFamily:"'Oswald',sans-serif",fontSize:11,opacity:0.6,minWidth:18}}>{String.fromCharCode(65+i)}</span>{opt}
           </button>);
         })}
       </div>
-      {showExp&&(<>
-        <div style={{background:sel===q.correct?"rgba(16,185,129,0.08)":"rgba(239,68,68,0.08)",border:`1px solid ${sel===q.correct?"#10B981":"#EF4444"}`,borderRadius:10,padding:14,marginBottom:12}}>
-          <div style={{fontFamily:"'Oswald',sans-serif",fontSize:10,letterSpacing:1,color:sel===q.correct?"#10B981":"#EF4444",marginBottom:5}}>{sel===q.correct?"✓ CORRECT — CLUCK NORRIS NODS":"✗ WRONG — CLUCK NORRIS SIGHS"}</div>
-          <p style={{margin:0,color:"#D1D5DB",fontSize:13,lineHeight:1.6}}>{q.explanation}</p>
-        </div>
-        <button onClick={next} style={{width:"100%",background:"linear-gradient(135deg,#EF4444,#DC2626)",border:"none",borderRadius:10,padding:"13px",fontFamily:"'Oswald',sans-serif",fontSize:14,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer"}}>
-          {qi+1<questions.length?"NEXT QUESTION →":"SEE FINAL VERDICT →"}
+      {sel!==null&&(
+        <button onClick={next} disabled={submitting} style={{width:"100%",background:"linear-gradient(135deg,#EF4444,#DC2626)",border:"none",borderRadius:10,padding:"13px",fontFamily:"'Oswald',sans-serif",fontSize:14,fontWeight:700,color:"#fff",letterSpacing:2,cursor:submitting?"default":"pointer",opacity:submitting?0.7:1}}>
+          {submitting?"SCORING...":(qi+1<questions.length?"NEXT QUESTION →":"SEE FINAL VERDICT →")}
         </button>
-      </>)}
+      )}
     </div>
   );
 }
