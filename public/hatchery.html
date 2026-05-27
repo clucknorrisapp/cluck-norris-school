@@ -250,6 +250,16 @@
     </div>
   </div>
 
+  <!-- Mint-time safety preview — the design-and-grade loop: see how your
+       choices read on the same factors the free Cluck Score grades. -->
+  <div class="card">
+    <div class="card-title">🩺 MINT-TIME SAFETY PREVIEW <span style="color:#4B5563">— how these choices will read</span></div>
+    <div style="font-size:12px;color:#9CA3AF;line-height:1.6;margin-bottom:10px">These are the only health signals you control <b>at mint</b>. Liquidity, holder count and distribution are earned <b>after</b> launch — once your token is live, run it through the free <a href="/score" style="color:#FCD34D">Cluck Score</a> to see the full 0–100 read.</div>
+    <div id="previewMint" style="font-size:12.5px;line-height:1.55;color:#D1D5DB;border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:9px 12px;margin-bottom:8px"></div>
+    <div id="previewFreeze" style="font-size:12.5px;line-height:1.55;color:#D1D5DB;border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:9px 12px;margin-bottom:8px"></div>
+    <div style="font-size:12.5px;line-height:1.55;color:#D1D5DB;border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:9px 12px"><span style="color:#6EE7B7">✓ Classic SPL token</span> — the Hatchery mints a plain SPL token with no Token-2022 transfer-fee, sell-block, or seize extensions. Cluck Score &amp; <a href="/autopsy" style="color:#FCD34D">Autopsy</a> reward a clean, sellable token; honeypot mechanics are designed out.</div>
+  </div>
+
   <!-- Launch Liquidity Guide — collapsible, readable before or after minting -->
   <details class="lp-details" id="lpGuide">
     <summary>📖 WHAT HAPPENS AFTER YOU MINT — THE LAUNCH LIQUIDITY GUIDE (read anytime)</summary>
@@ -696,6 +706,28 @@ async function hatch() {
     btn.disabled = false;
   }
 }
+
+// Mint-time safety preview — reacts live to the authority choices, in the same
+// language the Cluck Score grades them. The "design-and-grade loop."
+function updateMintPreview() {
+  const m = document.getElementById('revokeMint'), f = document.getElementById('revokeFreeze');
+  const mp = document.getElementById('previewMint'), fp = document.getElementById('previewFreeze');
+  if (!m || !f || !mp || !fp) return;
+  mp.innerHTML = m.checked
+    ? '<span style="color:#6EE7B7">✓ Mint authority revoked</span> — supply is locked forever. Full marks on Cluck Score’s <b>Mint Authority</b> factor (12% of the score).'
+    : '<span style="color:#FCA5A5">✗ Mint authority kept</span> — you could mint more tokens later. Scores <b>0</b> on the Mint Authority factor, and rug-checkers flag it.';
+  fp.innerHTML = f.checked
+    ? '<span style="color:#6EE7B7">✓ Freeze authority revoked</span> — holders can never be frozen. Full marks on the <b>Freeze Authority</b> factor (8%).'
+    : '<span style="color:#FCA5A5">✗ Freeze authority kept</span> — a known rug vector (you could freeze holders’ wallets). Scores <b>0</b> on the Freeze Authority factor.';
+  mp.style.borderColor = m.checked ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.4)';
+  fp.style.borderColor = f.checked ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.4)';
+}
+(function wireMintPreview(){
+  const m = document.getElementById('revokeMint'), f = document.getElementById('revokeFreeze');
+  if (m) m.addEventListener('change', updateMintPreview);
+  if (f) f.addEventListener('change', updateMintPreview);
+  updateMintPreview();
+})();
 </script>
 </body>
 </html>
