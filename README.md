@@ -42,12 +42,14 @@ Disciplined learning, real value, zero gatekeeping. The flock learns or the floc
 
 - 🥚 **The Incubator** — 7 lessons for total beginners. Wallets, tokens, on-ramps & off-ramps, DEXs, liquidity, market cap, how not to get drained
 - 🏫 **School of Hard Knocks** — 12 progressive lessons with a belt ranking from **Freshman → Emeritus**. Pass to promote
-- 🥊 **The Ultimate Challenge** — 50 questions. 94% to pass. No study guide. Most don't make it. That's the point
+- 🥊 **The Ultimate Challenge** — 50 questions, **scored server‑side** (the answer key never touches the browser, so a pass can't be faked). 94% to pass. No study guide. Most don't make it. That's the point
+- 🎓 **Permanent transcripts** — beat the Challenge (a *verified*, server‑scored diploma) **or** finish the whole curriculum, drop a Solana address, and get a permanent, shareable [`/transcript`](https://clucknorris.app) page + share card — the school's first ownable output. Optional on‑chain ownership proof via a tiny CLKN send (no wallet‑connect). Learning stays free and walletless; the address is only for the airdrop list and the transcript
 - 🎮 **Survival Simulator** — start with $1,000 simulated capital. Each run draws 10 scenarios at random from a bank of **135** real‑world crypto situations (DM "alpha", dev wallet dumps, FOMO buys, 900% APR pools, phishing impersonators, wallet drainers, leverage liquidations, exchange freezes, vesting unlocks) — so no two playthroughs are alike. Every choice has a multiplier; Cluck explains why each move worked or didn't. **Practice the decisions before you have to make them with real money.**
 - ⚗️ **LP Lab** — interactive liquidity training. IL calculator, fee breakeven, capital efficiency, AMM price impact. Works on Meteora, Raydium, Orca, Uniswap — anywhere you LP
 - 📚 **The Library** — 50‑term glossary, deep‑dives across Survival / Research / Concepts (including 🪂 *How to Use an Airdropper Without Burning Yourself*), curated resources
 - 🤖 **Ask Cluck Norris** — Claude Haiku tough‑love crypto professor embedded in every lesson. 10 questions/day. No signup. No wallet
-- 🩺 **Cluck Score** — free 0–100 token‑health score for **any** Solana mint, served at [`/score`](https://clucknorris.app/score). Eight weighted, Bags‑aware factors, LP‑filtered top‑10 concentration, sharable PNG card. **Live now.**
+- 🩺 **Cluck Score** — free 0–100 token‑health score for **any** Solana mint, served at [`/score`](https://clucknorris.app/score). Eight weighted, Bags‑aware factors, LP‑filtered human‑only top‑10 concentration, sharable PNG card. **Scans Token‑2022 honeypot mechanics** (sell‑blocks, permanent‑delegate seize, transfer‑tax) and caps the score on anything you couldn't safely sell. **Live now.**
+- 🛡 **Wallet Safety Checkup** — free read‑only scan at [`/wallet-checkup`](https://clucknorris.app/wallet-checkup): paste any address (no wallet‑connect) for the things that actually drain people — lingering token approvals, honeypot/can't‑sell holdings, and tokens whose dev can still freeze or mint. Routes each finding to revoke (Security Coop) or research (Score/Autopsy/Trace)
 - 🔬 **Token Autopsy** — a free AI forensic post‑mortem on any Solana mint at [`/autopsy`](https://clucknorris.app/autopsy): ~10 on‑chain phases (LP lock/burn, Token‑2022 honeypot‑extension scan, real‑creator detection, creator buy‑back & fee‑reinvestment trace, hidden‑exit / transfer‑then‑dump detection, holder forensics), cross‑verified against Bags, Jupiter and Solana Tracker, then narrated by Cluck. Honest "cause of death" verdict
 - ⚡ **Embedded Jupiter** — full DEX aggregator, CLKN preselected
 - 🎒 **Live Bags Feed** — every new launch, real‑time prices, direct trade links
@@ -144,6 +146,7 @@ Cards (`/api/cluck-card?mint=…`) unfurl on Twitter / Telegram / Discord automa
 4. **💰 Batch Airdrop Sender** — Phantom / Solflare / Jupiter‑signed SPL transfers, auto‑ATA creation, deduping, CSV / manual / equal‑split modes, dynamic batching for Solana's 1232‑byte tx limit, SOL rent pre‑flight estimate, exportable send record with Solscan links. The user's keys, never the server's.
 5. **🥚 The Hatchery** — guided SPL token creator. Every mint‑time decision explained, metadata to Arweave, stops at liquidity on purpose. Flat SOL/CLKN fee.
 6. **🔒 Security Coop** — wallet permission check: scans for lingering token‑delegate approvals and revokes them. Free, non‑custodial.
+7. **🛡 Wallet Safety Checkup** — read‑only scan (paste any address, no connect) for the things that actually drain people: lingering delegate approvals (Security Coop engine), honeypot / Token‑2022‑trap holdings, and tokens with live mint/freeze authority. Routes each finding to revoke or research. Free.
 7. **📸 Snapshot** — holder snapshot for any Solana mint: every wallet and balance, LP and locked liquidity filtered out by default, exported as an airdrop‑ready CSV. Free, no wallet connect.
 8. **🔍 Trace** — wallet × token forensic history: every transaction between a wallet and a mint in chronological order, with running balance, counterparty flow map, and one‑hop follow‑the‑money. Free.
 9. **🔬 Token Autopsy** — the deep one. A ~10‑phase forensic post‑mortem on any mint: market state, authorities, top‑100 holder classification, locked‑supply measurement, lifetime signature walk, GeckoTerminal price history + multi‑window volume, Token‑2022 honeypot‑extension scan, LP lock/burn, real‑creator detection (never the platform genesis payer), creator buy‑back & fee‑reinvestment trace, hidden‑exit detection, plus Bags / Pump / Jupiter / Solana Tracker / Solscan cross‑verification — narrated by Claude from the verified facts. Free.
@@ -191,6 +194,9 @@ The product reaches into the community Telegram (and X), not just the website:
 - `/api/token-context?mint=…` — shared Bags + Jupiter cross‑verification context
 - `/api/verify-clkn-payment` — tool‑aware unlock verification with holder bonus + replay guard
 - `/api/ask-cluck` — Claude‑powered tutor
+- `/api/wallet-checkup?wallet=…` — read‑only wallet safety scan (approvals + honeypot/authority‑risk holdings)
+- `/api/exam/questions` + `/api/exam/submit` — server‑scored Ultimate Challenge (answer key never leaves the server; a pass mints a one‑time token)
+- `/api/credential/:slug` — public transcript JSON · `/api/credential-card?slug=…` — transcript share PNG · `/api/school-stats` — verified‑graduate metrics
 - `/api/hatchery/*` — token creator: Arweave metadata upload, unsigned mint‑tx build, live fee config
 - `/api/security-coop/*` — wallet delegate‑approval scan + unsigned revoke‑tx build
 - `/api/holders`, `/api/locks`, `/api/fees`, `/api/supply`, `/api/reinvestment`, `/api/bubblemaps` — Solana token telemetry proxies
