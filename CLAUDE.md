@@ -108,3 +108,8 @@ Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.
   (rose/airdrop/buyspecial route real RPC, incl. possibly `sendTransaction` /
   `getLatestBlockhash`), and don't do it mid-event since an incomplete list breaks
   those tools. Then make the README wording match.
+- **Autopsy premium styling — design decision (not yet made).** The premium
+  forensic sections render in a different color scheme that doesn't match the
+  site's dark/orange theme. Open question: leave it visually distinct so the
+  premium tier *stands out*, or restyle it on-brand for consistency? Decide
+  intentionally before touching it.
