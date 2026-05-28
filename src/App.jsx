@@ -8490,6 +8490,161 @@ function AMMCalculator() {
   );
 }
 
+// Lesson 9 — Position Sizer: size to your downside
+function PositionSizer() {
+  const [capital, setCapital] = useState(5000);
+  const [pct, setPct] = useState(10);
+  const [drawdown, setDrawdown] = useState(80);
+  const positionUSD = capital * pct / 100;
+  const stressLoss = positionUSD * drawdown / 100;
+  const lossPctOfCapital = capital > 0 ? (stressLoss / capital * 100) : 0;
+  let verdict, vcolor;
+  if (pct <= 5) { verdict = "Sized for survival — one bad position can't sink your LP capital."; vcolor = "#10B981"; }
+  else if (pct <= 15) { verdict = "Moderate size. Reasonable for a pair you understand and actively manage."; vcolor = "#60A5FA"; }
+  else if (pct <= 30) { verdict = "Large. Be certain about this pair — it's a meaningful chunk of your LP capital."; vcolor = "#F59E0B"; }
+  else { verdict = "Oversized. This single position dominates your LP capital — a bad outcome here wrecks the whole book."; vcolor = "#EF4444"; }
+  const lab = {fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#9CA3AF",letterSpacing:1,display:"block",marginBottom:6};
+  const box = {borderRadius:8,padding:"12px",textAlign:"center"};
+  const cap = {fontFamily:"'Oswald',sans-serif",fontSize:10,color:"#9CA3AF",letterSpacing:1,marginBottom:4};
+  const num = {fontFamily:"'Oswald',sans-serif",fontSize:19,fontWeight:900};
+  return (
+    <div style={{background:"rgba(16,185,129,0.05)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:12,padding:"18px 16px",marginTop:20}}>
+      <div style={{fontFamily:"'Oswald',sans-serif",fontSize:14,fontWeight:700,color:"#10B981",letterSpacing:1,marginBottom:14,textAlign:"center"}}>🛡️ POSITION SIZER</div>
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        <div><label style={lab}>LP CAPITAL: ${capital.toLocaleString()}</label><input type="range" min="100" max="50000" step="100" value={capital} onChange={e=>setCapital(Number(e.target.value))} style={{width:"100%",accentColor:"#10B981"}}/></div>
+        <div><label style={lab}>THIS POSITION: {pct}% of LP capital</label><input type="range" min="1" max="100" step="1" value={pct} onChange={e=>setPct(Number(e.target.value))} style={{width:"100%",accentColor:"#10B981"}}/></div>
+        <div><label style={lab}>STRESS TEST: riskier token drops {drawdown}%</label><input type="range" min="10" max="100" step="5" value={drawdown} onChange={e=>setDrawdown(Number(e.target.value))} style={{width:"100%",accentColor:"#10B981"}}/></div>
+      </div>
+      <div style={{marginTop:16,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+        <div style={{...box,background:"rgba(255,255,255,0.05)"}}><div style={cap}>POSITION</div><div style={{...num,color:"#F9FAFB"}}>${Math.round(positionUSD).toLocaleString()}</div></div>
+        <div style={{...box,background:"rgba(239,68,68,0.08)"}}><div style={cap}>STRESS LOSS</div><div style={{...num,color:"#EF4444"}}>${Math.round(stressLoss).toLocaleString()}</div></div>
+        <div style={{...box,background:"rgba(16,185,129,0.08)"}}><div style={cap}>OF CAPITAL</div><div style={{...num,color:vcolor}}>{lossPctOfCapital.toFixed(0)}%</div></div>
+      </div>
+      <div style={{marginTop:12,fontFamily:"'Oswald',sans-serif",fontSize:11,color:vcolor,textAlign:"center",letterSpacing:0.5,lineHeight:1.5}}>{verdict}</div>
+    </div>
+  );
+}
+
+// Lesson 10 — Pool Health Check: volume-to-TVL tells the story
+function PoolHealthCalc() {
+  const [tvl, setTvl] = useState(250000);
+  const [volume, setVolume] = useState(150000);
+  const [feeTier, setFeeTier] = useState(0.003);
+  const ratio = tvl > 0 ? volume / tvl : 0;
+  const feesPer1k = tvl > 0 ? (volume * feeTier) / tvl * 1000 : 0;
+  const apr = ratio * feeTier * 365 * 100;
+  let verdict, vcolor;
+  if (ratio < 0.1) { verdict = "Capital-heavy — lots of TVL, little volume. Fee yield will be thin no matter the advertised APR."; vcolor = "#F59E0B"; }
+  else if (ratio <= 2) { verdict = "Healthy working liquidity — volume is doing real work for the TVL."; vcolor = "#10B981"; }
+  else if (ratio <= 10) { verdict = "Very active — high fees, but confirm the volume is organic before you trust it."; vcolor = "#60A5FA"; }
+  else { verdict = "Implausibly high volume-to-TVL — strong wash-trading risk. Verify with Cluck Score / Autopsy."; vcolor = "#EF4444"; }
+  const lab = {fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#9CA3AF",letterSpacing:1,display:"block",marginBottom:6};
+  const box = {borderRadius:8,padding:"12px",textAlign:"center"};
+  const cap = {fontFamily:"'Oswald',sans-serif",fontSize:10,color:"#9CA3AF",letterSpacing:1,marginBottom:4};
+  const num = {fontFamily:"'Oswald',sans-serif",fontSize:19,fontWeight:900};
+  return (
+    <div style={{background:"rgba(16,185,129,0.05)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:12,padding:"18px 16px",marginTop:20}}>
+      <div style={{fontFamily:"'Oswald',sans-serif",fontSize:14,fontWeight:700,color:"#10B981",letterSpacing:1,marginBottom:14,textAlign:"center"}}>🔍 POOL HEALTH CHECK</div>
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        <div><label style={lab}>TVL: ${tvl.toLocaleString()}</label><input type="range" min="5000" max="2000000" step="5000" value={tvl} onChange={e=>setTvl(Number(e.target.value))} style={{width:"100%",accentColor:"#10B981"}}/></div>
+        <div><label style={lab}>24H VOLUME: ${volume.toLocaleString()}</label><input type="range" min="0" max="5000000" step="5000" value={volume} onChange={e=>setVolume(Number(e.target.value))} style={{width:"100%",accentColor:"#10B981"}}/></div>
+        <div>
+          <label style={lab}>FEE TIER</label>
+          <div style={{display:"flex",gap:6}}>
+            {[{v:0.0001,l:"0.01%"},{v:0.0005,l:"0.05%"},{v:0.003,l:"0.30%"},{v:0.01,l:"1%"}].map(f=>(
+              <button key={f.v} onClick={()=>setFeeTier(f.v)} style={{flex:1,padding:"8px 0",borderRadius:7,border:`1px solid ${feeTier===f.v?"rgba(16,185,129,0.6)":"rgba(255,255,255,0.1)"}`,background:feeTier===f.v?"rgba(16,185,129,0.2)":"rgba(255,255,255,0.03)",color:feeTier===f.v?"#10B981":"#9CA3AF",fontFamily:"'Oswald',sans-serif",fontSize:11,fontWeight:700,letterSpacing:0.5,cursor:"pointer"}}>{f.l}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div style={{marginTop:16,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+        <div style={{...box,background:"rgba(16,185,129,0.08)"}}><div style={cap}>VOL / TVL</div><div style={{...num,color:vcolor}}>{ratio.toFixed(2)}x</div></div>
+        <div style={{...box,background:"rgba(255,255,255,0.05)"}}><div style={cap}>FEES / $1K·DAY</div><div style={{...num,color:"#F9FAFB"}}>${feesPer1k.toFixed(2)}</div></div>
+        <div style={{...box,background:"rgba(255,255,255,0.05)"}}><div style={cap}>IMPLIED APR</div><div style={{...num,color:"#FCD34D"}}>{apr>9999?"9999+":apr.toFixed(0)}%</div></div>
+      </div>
+      <div style={{marginTop:12,fontFamily:"'Oswald',sans-serif",fontSize:11,color:vcolor,textAlign:"center",letterSpacing:0.5,lineHeight:1.5}}>{verdict}</div>
+    </div>
+  );
+}
+
+// Lesson 11 — Launch LP Go/No-Go gate
+function LaunchRiskGate() {
+  const checks = [
+    { key:"grad", label:"Graduated to a real DEX pool (not still on the curve)", critical:true },
+    { key:"mint", label:"Mint authority revoked", critical:true },
+    { key:"freeze", label:"Freeze authority revoked", critical:true },
+    { key:"liq", label:"Liquidity locked or burned", critical:true },
+    { key:"conc", label:"No single wallet dominates the supply", critical:false },
+    { key:"size", label:"Sized as total-loss money", critical:false },
+    { key:"exit", label:"Active management + written exit plan", critical:false },
+  ];
+  const [state, setState] = useState({});
+  const toggle = k => setState(s => ({ ...s, [k]: !s[k] }));
+  const criticalFail = checks.some(c => c.critical && !state[c.key]);
+  const allGood = checks.every(c => state[c.key]);
+  let gauge, verdict, vcolor;
+  if (allGood) { gauge="GO"; verdict="Cleared for a disciplined, tiny launch LP — now manage it like a hawk."; vcolor="#10B981"; }
+  else if (criticalFail) { gauge="NO-GO"; verdict="A critical safety check failed. Do not provide liquidity until every critical box is true."; vcolor="#EF4444"; }
+  else { gauge="CAUTION"; verdict="Critical safety checks pass, but discipline checks are missing. Proceed only with extreme care."; vcolor="#F59E0B"; }
+  return (
+    <div style={{background:"rgba(16,185,129,0.05)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:12,padding:"18px 16px",marginTop:20}}>
+      <div style={{fontFamily:"'Oswald',sans-serif",fontSize:14,fontWeight:700,color:"#10B981",letterSpacing:1,marginBottom:6,textAlign:"center"}}>🚀 LAUNCH LP GO / NO-GO</div>
+      <div style={{fontFamily:"'Oswald',sans-serif",fontSize:10,color:"#6B7280",letterSpacing:0.5,textAlign:"center",marginBottom:14,lineHeight:1.5}}>Run Cluck Score / Autopsy / Security Coop to fill these in. Critical checks marked •</div>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {checks.map(c=>{
+          const on = !!state[c.key];
+          return (
+            <button key={c.key} onClick={()=>toggle(c.key)} style={{display:"flex",alignItems:"center",gap:10,textAlign:"left",padding:"10px 12px",borderRadius:8,cursor:"pointer",border:`1px solid ${on?"rgba(16,185,129,0.5)":(c.critical?"rgba(239,68,68,0.3)":"rgba(255,255,255,0.1)")}`,background:on?"rgba(16,185,129,0.12)":"rgba(255,255,255,0.03)"}}>
+              <span style={{flexShrink:0,width:18,height:18,borderRadius:5,border:`1px solid ${on?"#10B981":"#4B5563"}`,background:on?"#10B981":"transparent",color:"#0a0a0a",fontSize:12,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>{on?"✓":""}</span>
+              <span style={{fontFamily:"'Oswald',sans-serif",fontSize:12,color:on?"#F9FAFB":"#9CA3AF",letterSpacing:0.3}}>{c.critical?"• ":""}{c.label}</span>
+            </button>
+          );
+        })}
+      </div>
+      <div style={{marginTop:16,textAlign:"center"}}>
+        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:30,fontWeight:900,color:vcolor,letterSpacing:2}}>{gauge}</div>
+        <div style={{marginTop:6,fontFamily:"'Oswald',sans-serif",fontSize:11,color:vcolor,letterSpacing:0.5,lineHeight:1.5}}>{verdict}</div>
+      </div>
+    </div>
+  );
+}
+
+// Lesson 12 — Three-Tier Allocation Builder
+function TierAllocationBuilder() {
+  const [capital, setCapital] = useState(5000);
+  const [core, setCore] = useState(60);
+  const [degen, setDegen] = useState(10);
+  const over = core + degen > 100;
+  const growth = Math.max(0, 100 - core - degen);
+  const coreUSD = capital*core/100, growthUSD = capital*growth/100, degenUSD = capital*degen/100;
+  let verdict, vcolor;
+  if (over) { verdict = "Core + Degen exceeds 100% — pull the sliders down so the tiers fit."; vcolor = "#EF4444"; }
+  else if (degen > core || degen > growth) { verdict = "Upside-down pyramid — too much in the riskiest tier. That's a gamble, not a strategy."; vcolor = "#EF4444"; }
+  else if (core >= growth && growth >= degen) { verdict = "Pyramid is right-side up — safe core largest, degen smallest. This is a strategy."; vcolor = "#10B981"; }
+  else { verdict = "Workable, but your core (safe) tier should be your largest slice."; vcolor = "#F59E0B"; }
+  const lab = {fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#9CA3AF",letterSpacing:1,display:"block",marginBottom:6};
+  const box = {borderRadius:8,padding:"12px",textAlign:"center"};
+  const cap = {fontFamily:"'Oswald',sans-serif",fontSize:10,color:"#9CA3AF",letterSpacing:1,marginBottom:4};
+  const num = {fontFamily:"'Oswald',sans-serif",fontSize:18,fontWeight:900};
+  return (
+    <div style={{background:"rgba(16,185,129,0.05)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:12,padding:"18px 16px",marginTop:20}}>
+      <div style={{fontFamily:"'Oswald',sans-serif",fontSize:14,fontWeight:700,color:"#10B981",letterSpacing:1,marginBottom:14,textAlign:"center"}}>♟️ THREE-TIER PORTFOLIO BUILDER</div>
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        <div><label style={lab}>LP CAPITAL: ${capital.toLocaleString()}</label><input type="range" min="500" max="50000" step="500" value={capital} onChange={e=>setCapital(Number(e.target.value))} style={{width:"100%",accentColor:"#10B981"}}/></div>
+        <div><label style={lab}>CORE (safe): {core}%</label><input type="range" min="0" max="100" step="5" value={core} onChange={e=>setCore(Number(e.target.value))} style={{width:"100%",accentColor:"#10B981"}}/></div>
+        <div><label style={lab}>DEGEN (risky): {degen}%</label><input type="range" min="0" max="100" step="5" value={degen} onChange={e=>setDegen(Number(e.target.value))} style={{width:"100%",accentColor:"#EF4444"}}/></div>
+        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#6B7280",letterSpacing:0.5,textAlign:"center"}}>Growth (middle) auto-fills the rest: {growth}%</div>
+      </div>
+      <div style={{marginTop:16,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+        <div style={{...box,background:"rgba(16,185,129,0.08)"}}><div style={cap}>CORE {core}%</div><div style={{...num,color:"#10B981"}}>${Math.round(coreUSD).toLocaleString()}</div></div>
+        <div style={{...box,background:"rgba(96,165,250,0.08)"}}><div style={cap}>GROWTH {growth}%</div><div style={{...num,color:"#60A5FA"}}>${Math.round(growthUSD).toLocaleString()}</div></div>
+        <div style={{...box,background:"rgba(239,68,68,0.08)"}}><div style={cap}>DEGEN {degen}%</div><div style={{...num,color:"#EF4444"}}>${Math.round(degenUSD).toLocaleString()}</div></div>
+      </div>
+      <div style={{marginTop:12,fontFamily:"'Oswald',sans-serif",fontSize:11,color:vcolor,textAlign:"center",letterSpacing:0.5,lineHeight:1.5}}>{verdict}</div>
+    </div>
+  );
+}
+
 function LPLessonView({ lesson, onBack, onComplete }) {
   const [phase, setPhase] = useState("content"); // content | quiz | result
   const [openSection, setOpenSection] = useState(0);
@@ -8680,6 +8835,18 @@ function LPLessonView({ lesson, onBack, onComplete }) {
 
       {/* Interactive: Capital Efficiency — Lesson 5 */}
       {lesson.id === 5 && (<CalcErrorBoundary><CapitalEfficiencyCalc /></CalcErrorBoundary>)}
+
+      {/* Interactive: Position Sizer — Lesson 9 */}
+      {lesson.id === 9 && (<CalcErrorBoundary><PositionSizer /></CalcErrorBoundary>)}
+
+      {/* Interactive: Pool Health Check — Lesson 10 */}
+      {lesson.id === 10 && (<CalcErrorBoundary><PoolHealthCalc /></CalcErrorBoundary>)}
+
+      {/* Interactive: Launch LP Go/No-Go — Lesson 11 */}
+      {lesson.id === 11 && (<CalcErrorBoundary><LaunchRiskGate /></CalcErrorBoundary>)}
+
+      {/* Interactive: Three-Tier Allocation Builder — Lesson 12 */}
+      {lesson.id === 12 && (<CalcErrorBoundary><TierAllocationBuilder /></CalcErrorBoundary>)}
 
       {/* Interactive: AMM Calculator — Lesson 2 */}
       {lesson.id === 2 && (
