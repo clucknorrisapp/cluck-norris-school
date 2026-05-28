@@ -5018,6 +5018,11 @@ app.get("/bags", (req, res) => {
   res.sendFile(join(__dirname, "public", "bags.html"));
 });
 
+// Canonical public origin for social/share/og URLs — always clucknorris.app, so
+// links never carry the raw Railway host even if the server is reached that way.
+// Env-overridable for a future domain change or local testing.
+const CANONICAL_ORIGIN = process.env.CANONICAL_ORIGIN || "https://clucknorris.app";
+
 // -- Cluck Score public page (paste any mint, see the score rendered) --
 // When a ?mint= param is present, inject mint-specific og:image and twitter:card
 // meta tags so the card image unfurls on social platforms automatically.
@@ -5031,10 +5036,8 @@ app.get("/score", (req, res) => {
   const mint = (req.query.mint || "").trim();
   let html = getScoreHtml();
   if (mint && mint.length >= 32) {
-    const host = req.get("host") || "clucknorris.app";
-    const proto = req.get("x-forwarded-proto") || (host.includes("localhost") ? "http" : "https");
-    const cardUrl = `${proto}://${host}/api/cluck-card?mint=${encodeURIComponent(mint)}`;
-    const pageUrl = `${proto}://${host}/score?mint=${encodeURIComponent(mint)}`;
+    const cardUrl = `${CANONICAL_ORIGIN}/api/cluck-card?mint=${encodeURIComponent(mint)}`;
+    const pageUrl = `${CANONICAL_ORIGIN}/score?mint=${encodeURIComponent(mint)}`;
     const meta = [
       `<meta property="og:image" content="${cardUrl}"/>`,
       `<meta property="og:image:width" content="1200"/>`,
@@ -5060,10 +5063,8 @@ app.get("/transcript/:slug", (req, res) => {
   let html = getTranscriptHtml();
   const rec = credentials.resolve(String(req.params.slug || "").trim());
   if (rec) {
-    const host = req.get("host") || "clucknorris.app";
-    const proto = req.get("x-forwarded-proto") || (host.includes("localhost") ? "http" : "https");
-    const cardUrl = `${proto}://${host}/api/credential-card?slug=${encodeURIComponent(rec.slug)}`;
-    const pageUrl = `${proto}://${host}/transcript/${encodeURIComponent(rec.slug)}`;
+    const cardUrl = `${CANONICAL_ORIGIN}/api/credential-card?slug=${encodeURIComponent(rec.slug)}`;
+    const pageUrl = `${CANONICAL_ORIGIN}/transcript/${encodeURIComponent(rec.slug)}`;
     const meta = [
       `<meta property="og:image" content="${cardUrl}"/>`,
       `<meta property="og:image:width" content="1200"/>`,
