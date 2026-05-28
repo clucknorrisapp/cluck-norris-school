@@ -98,6 +98,7 @@ a{color:var(--orange)} .hidden{display:none}
       <div class="reels"><div class="reel" id="reel0"><div class="strip" id="strip0"></div></div><div class="reel" id="reel1"><div class="strip" id="strip1"></div></div><div class="reel" id="reel2"><div class="strip" id="strip2"></div></div></div>
       <div class="result" id="result"><div class="big">PULL THE LEVER 🕹️</div></div>
       <button class="spinbtn" id="spinBtn">🔥 SPIN 🔥</button>
+      <div id="spinReset" style="display:none;font-size:12px;color:var(--orange);margin-top:8px;text-align:center;font-family:var(--head);letter-spacing:1px"></div>
       <div class="statbar">
         <div class="stat"><div class="l">Spins left today</div><div class="v" id="spinsLeft">—</div></div>
         <div class="stat"><div class="l">Your points</div><div class="v" id="myPts">0</div></div>
@@ -187,8 +188,13 @@ function spinReel(el,fin,dur){ return new Promise(res=>{ buildStrip(el,fin); voi
 // ── state + spin (server) ──
 let spinning=false;
 let WEEK_ENDS=0;
+let SPINS_RESET=0, SPIN_OUT=false;   // daily-spin refresh time (next UTC midnight) + whether this wallet is tapped out
 function fmtCountdown(ms){ if(ms<=0) return 'resetting…'; const d=Math.floor(ms/86400000), h=Math.floor(ms%86400000/3600000), m=Math.floor(ms%3600000/60000); return d>0?('resets in '+d+'d '+h+'h'):h>0?('resets in '+h+'h '+m+'m'):('resets in '+m+'m'); }
 function tickCountdown(){ const el=$('weekCountdown'); if(el&&WEEK_ENDS) el.textContent='⏳ '+fmtCountdown(WEEK_ENDS-Date.now()); }
+// Live countdown to when free spins refresh — shown only once a wallet is out of spins.
+function fmtSpinReset(ms){ if(ms<=0) return 'any moment now'; const h=Math.floor(ms/3600000), m=Math.floor(ms%3600000/60000), s=Math.floor(ms%60000/1000); return h>0?(h+'h '+m+'m'):m>0?(m+'m '+s+'s'):(s+'s'); }
+function tickSpinReset(){ const el=$('spinReset'); if(!el) return; if(SPIN_OUT&&SPINS_RESET){ el.style.display='block'; el.textContent='⏳ Out of spins — next free spins in '+fmtSpinReset(SPINS_RESET-Date.now()); } else { el.style.display='none'; } }
+setInterval(tickSpinReset, 1000);
 function renderOdds(o){
   const row=(label,v,hi)=>'<div style="display:flex;justify-content:space-between;gap:10px"><span>'+label+'</span><span style="font-family:var(--head);color:'+(hi||'#FCD34D')+'">'+(v&&v.oneIn?('1 in '+v.oneIn.toLocaleString()):'—')+' <span style="color:var(--sub);font-size:11px;font-family:inherit">('+(v?v.pct:0)+'%)</span></span></div>';
   $('oddsBox').innerHTML=row('🩺🔥🐔 Dr. Fire Chicken',o.fireChicken,'#FB923C')+row('🐔🐔🐔 Jackpot',o.jackpot)+row('Three of a kind',o.threeKind)+row('Two 🐔',o.twoCluck)+'<div style="border-top:1px solid var(--border);margin:6px 0 0;padding-top:6px"></div>'+row('Any win',o.anyWin,'#34D399');
@@ -198,6 +204,7 @@ async function loadState(){
   const d=await fetch('/api/slots/state?proof='+encodeURIComponent(PROOF)).then(r=>r.json()).catch(()=>null);
   if(!d){ return; }
   if(d.weekEndsAt){ WEEK_ENDS=d.weekEndsAt; tickCountdown(); }
+  if(d.spinsResetAt){ SPINS_RESET=d.spinsResetAt; }
   if(d.odds){ renderOdds(d.odds); }
   if(d.me && d.me.wallet){ $('verifyGate').classList.add('hidden'); $('game').classList.remove('hidden'); renderMe(d.me); }
   else { $('verifyGate').classList.remove('hidden'); $('game').classList.add('hidden'); }
@@ -212,6 +219,7 @@ function renderMe(me){
   const ws=$('wheelStat'); const onWheel=me.jackpot||(me.points>0&&me._rank&&me._rank<=TOP_X);
   ws.textContent=me.disqualified?'DQ':(me.jackpot?'IN ✓':(me.spinsLeft!=null?'#?':'—')); ws.className='v'+(me.disqualified?' dq':(me.jackpot?' on':''));
   $('spinBtn').disabled=!me.inBeta||me.spinsLeft<=0;
+  SPIN_OUT=!!me.inBeta&&me.spinsLeft<=0; tickSpinReset();
 }
 function renderBoard(lb,meWallet){
   let html=''; lb.forEach((p,i)=>{ const rank=p.rank||i+1; const qual=p.qualified; let tags=''; if(p.jackpot) tags+=' <span class="tag jp">🐔 AUTO</span>'; else if(qual) tags+=' <span class="tag wheel">WHEEL</span>';
@@ -237,8 +245,10 @@ async function spin(){
   const d=await res.json().catch(()=>({}));
   if(!res.ok){ // pre-roll: stop reels on random, show the error
     await Promise.all([spinReel($('strip0'),rnd(),700),spinReel($('strip1'),rnd(),900),spinReel($('strip2'),rnd(),1100)]);
-    const msgs={verify_wallet:'Verify your wallet first.',not_in_beta:'This wallet isn\'t in the private beta yet.',need_floor:'Need ≥ 500,000 CLKN to play.',no_spins_left:'No spins left today — come back tomorrow.',week_closed:'This week\'s draw is done. New week soon!'};
+    if(d.spinsResetAt){ SPINS_RESET=d.spinsResetAt; }
+    const msgs={verify_wallet:'Verify your wallet first.',not_in_beta:'This wallet isn\'t in the private beta yet.',need_floor:'Need ≥ 500,000 CLKN to play.',no_spins_left:(SPINS_RESET?('No spins left — back in '+fmtSpinReset(SPINS_RESET-Date.now())):'No spins left today — come back tomorrow.'),week_closed:'This week\'s draw is done. New week soon!'};
     $('result').className='result err'; $('result').innerHTML='<div class="big">'+(msgs[d.error]||d.error||'Spin failed')+'</div>';
+    if(d.error==='no_spins_left'){ SPIN_OUT=true; tickSpinReset(); }
     if(d.error==='verify_wallet'){ resetVerify(); }
     spinning=false; loadState(); return;
   }
@@ -252,7 +262,8 @@ async function spin(){
   else { r.className='result lose'; r.innerHTML='<div class="big">no win · +'+d.gained+' pts 🪶</div>'; }
   $('myPts').textContent=(d.totalPoints||0).toLocaleString(); $('spinsLeft').textContent=d.spinsLeft;
   renderBoard(d.leaderboard||[], true); buildWheel(d.leaderboard||[]);
-  $('spinBtn').disabled=d.spinsLeft<=0; spinning=false;
+  if(d.spinsResetAt){ SPINS_RESET=d.spinsResetAt; }
+  $('spinBtn').disabled=d.spinsLeft<=0; SPIN_OUT=d.spinsLeft<=0; tickSpinReset(); spinning=false;
 }
 function resetVerify(){ PROOF=''; localStorage.removeItem('clkn_premium_proof'); localStorage.removeItem('clkn_premium_proof_wallet'); $('game').classList.add('hidden'); $('verifyGate').classList.remove('hidden'); }
 

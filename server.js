@@ -3031,6 +3031,12 @@ function slotWeekEndsAt() {
   return Date.now() + Math.max(0, daysLeft) * 86400000;
 }
 const slotDayId = () => new Date().toISOString().slice(0, 10);
+// When a wallet's daily spins refresh — next UTC midnight, matching slotDayId().
+// Used by the page to count down "next free spins in …" once a wallet taps out.
+function slotDayEndsAt() {
+  const d = new Date();
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1, 0, 0, 0, 0);
+}
 function slotState() {
   let s = kv.get("slotsState", null);
   const wk = slotWeekId();
@@ -3110,7 +3116,7 @@ app.post("/api/slots/spin", async (req, res) => {
   const allot = slotAllot(bal);                                               // banded; live — reflects buys within ~60s
   if (allot < 1) return res.status(403).json({ error: "need_floor", balance: bal, floor: SLOT_SPIN_PER });
   const day = slotDayId(); s.spins[day] = s.spins[day] || {}; const used = s.spins[day][wallet] || 0;
-  if (used >= allot) return res.status(429).json({ error: "no_spins_left", spinsLeft: 0, dailyAllot: allot });
+  if (used >= allot) return res.status(429).json({ error: "no_spins_left", spinsLeft: 0, dailyAllot: allot, spinsResetAt: slotDayEndsAt() });
   const outcome = slotPick(), sc = slotScore(outcome);
   s.spins[day][wallet] = used + 1;
   const p = s.players[wallet] || { pts: 0, jackpot: false, entryBal: bal };
@@ -3131,7 +3137,7 @@ app.post("/api/slots/spin", async (req, res) => {
     );
   }
   try { analytics.trackTool("slot_spin"); } catch (_) {}
-  return res.status(200).json({ outcome, gained: sc.pts, kind: sc.kind, jackpot: p.jackpot, fireChicken: !!p.fireChicken, hitFireChicken: !!sc.fireChicken, airdrop: fcFirst ? SLOT_FIRE_CHICKEN_AIRDROP : 0, fireChickenAlreadyWon: sc.fireChicken && !fcFirst, totalPoints: p.pts, spinsLeft: allot - (used + 1), dailyAllot: allot, weekId: s.weekId, leaderboard: slotLeaderboard(s, wallet) });
+  return res.status(200).json({ outcome, gained: sc.pts, kind: sc.kind, jackpot: p.jackpot, fireChicken: !!p.fireChicken, hitFireChicken: !!sc.fireChicken, airdrop: fcFirst ? SLOT_FIRE_CHICKEN_AIRDROP : 0, fireChickenAlreadyWon: sc.fireChicken && !fcFirst, totalPoints: p.pts, spinsLeft: allot - (used + 1), dailyAllot: allot, spinsResetAt: slotDayEndsAt(), weekId: s.weekId, leaderboard: slotLeaderboard(s, wallet) });
 });
 
 // Player + board state (proof optional — board is visible to the beta group).
@@ -3149,7 +3155,7 @@ app.get("/api/slots/state", async (req, res) => {
     const sold = p.entryBal != null && bal < p.entryBal * SLOT_HOLD_TOL;       // matters only at draw
     me = { wallet, inBeta, balance: bal, dailyAllot: allot, spinsLeft: Math.max(0, allot - used), points: p.pts, jackpot: !!p.jackpot, fireChicken: !!p.fireChicken, floor: SLOT_SPIN_PER, disqualified: sold };
   }
-  return res.status(200).json({ weekId: s.weekId, weekEndsAt: slotWeekEndsAt(), openBeta: s.openBeta !== false, drawn: s.draws[s.weekId] || null, me, leaderboard: slotLeaderboard(s, wallet), odds: slotOdds() });
+  return res.status(200).json({ weekId: s.weekId, weekEndsAt: slotWeekEndsAt(), spinsResetAt: slotDayEndsAt(), openBeta: s.openBeta !== false, drawn: s.draws[s.weekId] || null, me, leaderboard: slotLeaderboard(s, wallet), odds: slotOdds() });
 });
 
 // Admin: manage the demo allowlist.
