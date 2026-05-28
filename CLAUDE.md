@@ -45,9 +45,13 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   scores the choices; a pass (≥94%) mints a one-time token that `/api/claim` requires to record a
   diploma as `verified: "server-scored"` (otherwise `self-reported`). Don't reintroduce client-side
   scoring or ship the answer key to the browser.
-- ⚠️ **Question-bank drift:** the curriculum questions live in BOTH `src/App.jsx` (`LESSONS[].questions`,
-  for the per-lesson quizzes) and `data/question-bank.json` (for the exam). They are NOT auto-synced —
-  if you materially edit a lesson's quiz, update the exam bank too (it has no live regenerator anymore).
+- ⚠️ **Question-bank drift:** the quiz questions live in BOTH `src/App.jsx` and `data/question-bank.json`
+  (the exam pool), and they are NOT auto-synced — edit a quiz in one place, mirror it in the other (the
+  bank has no live regenerator anymore). The bank's `source` field tags origin: `CURRICULUM` (70, from
+  `LESSONS[].questions`) + `ULTIMATE` (59, exam-only) + `LPLAB` (81, ported from `LP_LESSONS[].sections[].quiz`)
+  = 210 total. So both `LESSONS[].questions` AND `LP_LESSONS` quizzes feed the exam — if you materially edit
+  either, re-port into the bank (match the `source` tag). Note: the exam draws 50 at random with no per-source
+  cap, so the pool is LP-heavy by count; balance the draw in `/api/exam/questions` if that becomes a problem.
 - Public surfaces: `/transcript/:slug` (page, with OG card), `/api/credential/:slug` (JSON — exposes
   holder *status* only, never balance), `/api/credential-card?slug=` (PNG), `/api/school-stats`
   (aggregate verified-graduate metrics, shown on the grant + investor pages).
@@ -115,6 +119,10 @@ Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.
   can defend against "rigged" accusations. The real odds are already published on
   the page (`slotOdds()`), and outcomes are server‑authoritative (players can't
   cheat); commit‑reveal is specifically about proving the *server* isn't.
+  Daily spins (banded 5/10/15/20 by balance) refresh at the next UTC midnight via
+  `slotDayEndsAt()`; the page shows a live "next free spins in …" countdown
+  (`spinsResetAt` is returned from `/api/slots/state`, the spin response, and the
+  `no_spins_left` 429). The points-week board reset is the separate `weekEndsAt`.
 - **Autopsy premium styling — design decision (not yet made).** The premium
   forensic sections render in a different color scheme that doesn't match the
   site's dark/orange theme. Open question: leave it visually distinct so the
