@@ -1675,5 +1675,1058 @@
     "correct": 1,
     "explanation": "GM (Good Morning) became a crypto Twitter ritual — a simple greeting that builds community and signals you are active in the space. Saying GM is a cultural signal of belonging. GN means Good Night.",
     "source": "ULTIMATE"
+  },
+  {
+    "id": "q130",
+    "q": "What is slippage?",
+    "options": [
+      "The fee paid to the DEX",
+      "Price gap between expected and actual execution",
+      "The time for a transaction to confirm",
+      "The spread between buy and sell price"
+    ],
+    "correct": 1,
+    "explanation": "Slippage is the difference between the price you saw when you submitted a trade and the price you actually got when it executed. It's caused by low liquidity and other trades happening at the same time.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q131",
+    "q": "What happens when you make a large trade in a pool with very low liquidity?",
+    "options": [
+      "The trade fails automatically",
+      "Your trade moves the price significantly — you pay more than expected",
+      "You get a better price because there's less competition",
+      "Nothing — DEXs guarantee fixed prices"
+    ],
+    "correct": 1,
+    "explanation": "Low liquidity means your trade represents a large portion of the pool. The AMM formula pushes the price against you with every token you take out. This is called price impact — and it comes directly out of your pocket.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q132",
+    "q": "Who provides liquidity in DeFi pools?",
+    "options": [
+      "Only the token creators",
+      "Centralized exchanges",
+      "Anyone who deposits tokens earns fees",
+      "Only large institutions"
+    ],
+    "correct": 2,
+    "explanation": "In DeFi, anyone can be a liquidity provider. You deposit two tokens into a pool, earn a share of every trading fee generated, and can withdraw at any time. This is one of the most powerful concepts in all of DeFi.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q133",
+    "q": "A pool has $500,000 in TVL. Another pool has $5,000 in TVL. Which gives better trade execution?",
+    "options": [
+      "The $5,000 pool — less competition means better execution for you",
+      "The $500,000 pool",
+      "Identical — DEXs normalize all prices across pools automatically",
+      "Depends entirely on the token price not the liquidity"
+    ],
+    "correct": 1,
+    "explanation": "More liquidity always means less price impact for the same trade size. The $500,000 pool has 100x more depth so the same trade moves the price 100x less. Always trade in the deepest pool available.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q134",
+    "q": "What is TVL?",
+    "options": [
+      "Total Volume Locked — the amount traded in 24 hours",
+      "Total Value Locked — the combined dollar value of tokens in a pool",
+      "Token Volatility Level — a measure of price swings",
+      "Trade Validation Limit — maximum trade size allowed"
+    ],
+    "correct": 1,
+    "explanation": "TVL stands for Total Value Locked. It represents the combined dollar value of all tokens currently sitting in a liquidity pool. Higher TVL generally means deeper liquidity and less slippage for traders.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q135",
+    "q": "You set your slippage tolerance to 25% before a trade. What risk does this create?",
+    "options": [
+      "Your transaction will fail",
+      "MEV bots can sandwich your trade and extract value from your high tolerance",
+      "The DEX will reject the trade",
+      "Nothing — higher tolerance is always better"
+    ],
+    "correct": 1,
+    "explanation": "High slippage tolerance is an invitation for sandwich attacks. MEV bots see your pending transaction, buy ahead of you to push the price up, let your trade execute at the worse price you accepted, then sell immediately after. Set slippage as low as practically possible.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q136",
+    "q": "Which of these is a protocol-specific feature rather than a universal DeFi liquidity concept?",
+    "options": [
+      "Impermanent loss",
+      "Price impact",
+      "Slippage",
+      "Orca Whirlpools tick spacing"
+    ],
+    "correct": 3,
+    "explanation": "Impermanent loss, price impact, and slippage are universal concepts that apply to every AMM on every chain. Orca Whirlpools tick spacing is a specific implementation detail of Orca's concentrated liquidity system. Understanding the universal concepts first lets you navigate any protocol.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q137",
+    "q": "In the AMM formula x*y=k, what does k represent?",
+    "options": [
+      "The current token price",
+      "A constant that never changes",
+      "Total dollar value of the pool",
+      "Number of liquidity providers"
+    ],
+    "correct": 1,
+    "explanation": "k is the constant product — the result of multiplying the two token reserves together. Every trade changes x and y but the product must remain k. This is what forces the price to move as trades happen.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q138",
+    "q": "A pool has 500 SOL and 50,000,000 CLKN. You want to make a very large buy of SOL. What happens to the price of SOL?",
+    "options": [
+      "Price stays fixed — AMMs guarantee stable prices regardless of trade size",
+      "Price drops because higher demand always lowers price in DeFi pools",
+      "Price goes up",
+      "Price spikes then automatically resets to the original level"
+    ],
+    "correct": 2,
+    "explanation": "When you buy SOL you remove it from the pool and add CLKN. Less SOL relative to more CLKN means each SOL is worth more CLKN. The price of SOL goes up with every unit you buy. This is price impact — and the larger your trade relative to the pool, the more you pay above the starting price.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q139",
+    "q": "What is the difference between price impact and slippage?",
+    "options": [
+      "Same thing — just two names for the same concept used by different protocols",
+      "Price impact is your trade's effect on price. Slippage is from other trades while yours is pending.",
+      "Slippage is your trade's price effect and price impact is the fee charged by the protocol",
+      "Price impact only affects trades over $10,000 while slippage only applies to small retail trades"
+    ],
+    "correct": 1,
+    "explanation": "Price impact is deterministic — you can calculate it before trading based on your size vs pool size. Slippage is unpredictable — it depends on what other transactions execute before yours. Both cost you money but they come from different sources.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q140",
+    "q": "Why do arbitrageurs keep AMM prices accurate?",
+    "options": [
+      "The protocol pays them a salary to sit and monitor prices around the clock",
+      "They profit by trading the price difference — which brings prices back together",
+      "They submit governance votes every hour to manually adjust the price in the smart contract",
+      "AMMs use oracles to stay accurate automatically so no arbitrage is ever necessary"
+    ],
+    "correct": 1,
+    "explanation": "When an AMM's price drifts from the real market price, arbitrageurs buy the cheaper asset in the AMM and sell it elsewhere (or vice versa) until the prices converge. They profit from the difference, and their activity is what keeps AMM prices aligned with the broader market.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q141",
+    "q": "You want to swap $500 of SOL for CLKN. The pool has $50,000 TVL. Your friend wants to swap $50,000 of SOL in the same pool. Who experiences more price impact and why?",
+    "options": [
+      "You do — smaller wallets always suffer more price impact due to routing inefficiencies",
+      "Your friend does — 100% of TVL in one trade vs your 1%",
+      "Both experience identical impact — AMMs are designed to treat every trade size exactly the same",
+      "Neither — AMMs use an internal price guarantee mechanism that protects all trade sizes equally"
+    ],
+    "correct": 1,
+    "explanation": "Price impact scales with trade size relative to pool size. Your $500 trade is 1% of the $50,000 pool — minimal impact. Your friend's $50,000 trade equals the entire pool TVL — the x*y=k formula means they would drain so much of one token that the price moves dramatically against them. This is why large traders split trades or use pools with higher liquidity.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q142",
+    "q": "Why is impermanent loss called 'impermanent'?",
+    "options": [
+      "It only happens during volatile markets",
+      "Loss disappears if prices return to entry — permanent only when you withdraw",
+      "The protocol reimburses you after 30 days",
+      "It only affects small positions"
+    ],
+    "correct": 1,
+    "explanation": "IL is impermanent because the AMM rebalancing is reversible. If the price ratio between the two tokens returns to exactly where it was when you deposited, your position value equals what you would have had by just holding. The loss only locks in permanently when you withdraw at a different ratio than you entered.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q143",
+    "q": "SOL triples in price while USDC stays at $1. You are an LP in a SOL/USDC pool. What happened to your position?",
+    "options": [
+      "You tripled your money because SOL tripled and the AMM captured all the upside for LPs",
+      "You ended up with more SOL and less USDC because the pool bought more SOL automatically",
+      "The AMM rebalanced — you hold less SOL and more USDC, worth less than holding",
+      "Nothing changed — AMMs have built-in protection mechanisms that shield LPs from all price movements"
+    ],
+    "correct": 2,
+    "explanation": "When SOL tripled, arbitrageurs bought SOL from your pool until the pool ratio reflected the new price. You sold SOL on the way up through the rebalancing mechanism. You now hold less of the appreciating asset (SOL) and more of the stable asset (USDC). This is IL — you underperformed a simple hold by approximately 13.4%.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q144",
+    "q": "Which pair would have the LOWEST impermanent loss risk?",
+    "options": [
+      "SOL/BONK — a major Solana asset paired with a volatile community meme coin that can move independently",
+      "BTC/ETH — two major assets but they can diverge significantly during different market cycles",
+      "USDC/USDT",
+      "SOL/DOGE — cross-chain pair where two completely different ecosystems move independently"
+    ],
+    "correct": 2,
+    "explanation": "USDC and USDT are both pegged to $1. Their price ratio almost never changes. IL requires price divergence between the two assets — if both assets always trade at the same price, IL is essentially zero. Stablecoin pairs are the safest from an IL perspective.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q145",
+    "q": "You enter an LP position with $10,000. The pool earns 120% APR in fees over a year. But the token pair experienced a 4x price divergence causing 20% IL. What is your approximate net return?",
+    "options": [
+      "120% — fees always cover IL so you keep the entire headline APR number",
+      "100% — fee APR minus IL rate",
+      "20% IL means you definitely lost money regardless of what fees were earned",
+      "This calculation is impossible without knowing the exact token prices and volumes"
+    ],
+    "correct": 1,
+    "explanation": "Net return = Fee APR minus IL rate. 120% fee APR minus 20% IL = approximately 100% net return. You still made excellent money but significantly less than the headline APR suggested. Always run this calculation before entering any LP position.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q146",
+    "q": "You provided liquidity to a SOL/USDC pool 6 months ago. SOL has since moved from $100 to $200 then back to $100. You are considering withdrawing. What is your IL situation?",
+    "options": [
+      "You have significant permanent IL from all the price movement that happened during those 6 months",
+      "Zero IL — price returned to entry so the loss disappeared",
+      "You have exactly 5.7% IL locked in permanently because SOL hit 2x at its peak price",
+      "IL locks in permanently the moment price moves even slightly from your entry regardless of whether it returns"
+    ],
+    "correct": 1,
+    "explanation": "This is why IL is called impermanent. The loss only materializes when you withdraw at a different price ratio than you entered. If SOL returns exactly to your entry price of $100, the pool ratio is identical to when you deposited — no IL. The 5.7% loss existed temporarily at the $200 peak but reversed as price fell back. Timing your withdrawal matters.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q147",
+    "q": "Which LP pair would you expect to have the HIGHEST impermanent loss over a 6-month period?",
+    "options": [
+      "USDC/USDT — two stablecoins pegged to $1, near-zero IL at all times",
+      "SOL/jitoSOL — liquid staking token that tracks SOL price very closely minimizing divergence",
+      "SOL/BONK",
+      "BTC/ETH — major assets that can diverge 30-50% during different market phases creating moderate IL"
+    ],
+    "correct": 2,
+    "explanation": "SOL/BONK has the highest IL risk because the two assets are essentially uncorrelated. BONK can 10x or lose 90% of its value independently of SOL's price movement. That divergence is exactly what creates IL. USDC/USDT and SOL/jitoSOL are highly correlated pairs — prices move together minimizing IL. BTC/ETH are correlated but can diverge — moderate IL risk.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q148",
+    "q": "A pool has $200,000 TVL and generates $400 in fees today. What is the approximate annualized fee APR?",
+    "options": [
+      "0.2% — a very modest return appropriate for stablecoin pools only",
+      "7.3% — reasonable for a blue chip pool but below average for active pairs",
+      "73%",
+      "730% — an extraordinary return that would only be possible during extreme volume events"
+    ],
+    "correct": 2,
+    "explanation": "Fee APR = (Daily Fees / TVL) × 365 × 100. ($400 / $200,000) × 365 × 100 = 73% APR. This is an excellent fee APR — it means the pool turns over 73% of its TVL in fees annually. Always calculate this yourself rather than trusting protocol dashboards.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q149",
+    "q": "Why do protocols offer multiple fee tiers for the same token pair?",
+    "options": [
+      "Higher fee tiers always earn more so LPs should always choose them",
+      "Different tiers serve different use cases — lower fees suit high-volume stable pairs, higher fees compensate LPs for IL risk on volatile pairs where less volume is expected",
+      "To confuse liquidity providers into picking the wrong pool",
+      "Fee tiers are set by the protocol and LPs have no choice"
+    ],
+    "correct": 1,
+    "explanation": "Fee tiers exist because different pairs have different risk profiles. Stable pairs like USDC/USDT attract huge volume at 0.01% — traders want best execution and aggregators like Jupiter always route to the cheapest pool. Volatile pairs have less volume and higher IL risk — LPs need higher fee compensation. A 1% pool for a stable pair would sit empty because aggregators route around it.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q150",
+    "q": "What does the Volume/TVL ratio tell you?",
+    "options": [
+      "How much the token price has moved over the last 24 hours relative to the market",
+      "Capital efficiency — how much fee income per dollar deployed",
+      "The total count of individual liquidity provider wallets currently active in the pool",
+      "A safety score indicating whether the pool has been audited and is safe to enter"
+    ],
+    "correct": 1,
+    "explanation": "Volume/TVL ratio measures capital efficiency. A pool with $100K TVL generating $50K daily volume (0.5 ratio) is far more productive than a pool with $1M TVL generating $10K daily volume (0.01 ratio). The first pool generates much more fee income per dollar of liquidity deployed. Always check this ratio before entering a pool.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q151",
+    "q": "Which scenario most likely results in fees beating impermanent loss?",
+    "options": [
+      "A meme coin pair showing 500% APR where 480% comes from inflationary token emission rewards that dilute holders",
+      "USDC/USDT with consistent high volume",
+      "A brand new token launch pool offering 10x price potential but with unknown volume and no fee history",
+      "Any pool regardless of volume or pair type as long as TVL exceeds one million dollars"
+    ],
+    "correct": 1,
+    "explanation": "USDC/USDT has near-zero IL because both tokens are always worth $1. Every dollar of fees earned is almost pure profit. High-volume stablecoin pools with real fee income (not emission rewards) are among the most consistently profitable LP positions in DeFi. The combination of minimal IL and genuine fee income is powerful.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q152",
+    "q": "Why is full-range liquidity considered capital inefficient?",
+    "options": [
+      "Because the fee percentage is too low to generate meaningful returns for liquidity providers",
+      "Most capital sits at extremes never traded — tiny fraction earns fees",
+      "Because full-range positions require daily monitoring and constant rebalancing to remain effective",
+      "Because full-range pools charge higher protocol fees that eat into LP returns significantly"
+    ],
+    "correct": 1,
+    "explanation": "In a full-range pool, your capital is spread from price zero to infinity. But trading activity concentrates in a narrow range around the current price. The vast majority of your deployed capital sits at prices that are never traded — earning nothing. Concentrated liquidity solves this by letting you focus capital where the actual trading happens.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q153",
+    "q": "Your SOL/USDC concentrated LP position goes out of range. What happens?",
+    "options": [
+      "The position is automatically liquidated",
+      "You earn reduced fees proportional to how far out of range price moved",
+      "Your position earns zero fees and you hold 100% of one token until price returns to your range",
+      "Nothing changes — concentrated positions always earn fees"
+    ],
+    "correct": 2,
+    "explanation": "When price exits your range, your position stops earning fees entirely. You also end up holding 100% of one token — if price moved up through your range you hold all USDC, if it moved down you hold all SOL. The position behaves like a limit order that has been fully executed. You must reset your range to start earning fees again.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q154",
+    "q": "What is the main difference between tick-based (Raydium CLMM, Orca) and bin-based (Meteora DLMM) concentrated liquidity?",
+    "options": [
+      "Tick-based always earns significantly more fees than bin-based systems across all market conditions",
+      "Bins divide range into discrete buckets — only active bin earns. Ticks apply liquidity uniformly.",
+      "There is no meaningful operational difference between the two approaches for practical LP purposes",
+      "Bin-based systems require substantially more capital to achieve equivalent liquidity depth in a given range"
+    ],
+    "correct": 1,
+    "explanation": "Tick-based systems apply your liquidity uniformly across your chosen price range. Bin-based systems like Meteora DLMM divide the range into discrete bins where only the active bin (current price) earns fees. Bin-based gives more granular control and can concentrate fee capture even further, but requires more active management.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q155",
+    "q": "For a new LP using concentrated liquidity for the first time with SOL/USDC, what range approach makes the most sense?",
+    "options": [
+      "Aggressive narrow range (5-10%) for maximum APR",
+      "Conservative wide range (50-200%) to stay in range while learning the mechanics",
+      "Full range — same as traditional AMM",
+      "Random range based on gut feeling"
+    ],
+    "correct": 1,
+    "explanation": "A conservative wide range for beginners makes sense for several reasons: SOL is volatile and a narrow range will go out of range constantly, the learning curve for rebalancing is steep, and a wide range still outperforms full-range in fee efficiency. Master the mechanics with a wide range before moving to aggressive concentrated positions.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q156",
+    "q": "You set a concentrated LP position for SOL/USDC with a range of $140-$160. SOL pumps to $185. What happens to your position and what should you consider doing?",
+    "options": [
+      "Your position earns extra fees because price moved above your range",
+      "Your position is out of range — earning zero fees and holding 100% USDC. You need to decide whether to reset your range around the new price or wait for SOL to return",
+      "Your position automatically rebalances to follow the price",
+      "You should immediately withdraw — out of range positions lose value rapidly"
+    ],
+    "correct": 1,
+    "explanation": "When price exits your upper range you end up holding 100% USDC — you effectively sold all your SOL on the way up through the rebalancing mechanism. Your position earns zero fees. You have two choices: reset your range around $185 to start earning again (but you have no SOL to provide — you need to buy some first), or wait hoping SOL returns to your range. Neither option is free — this is the active management cost of concentrated liquidity.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q157",
+    "q": "What is the main advantage of Meteora's DLMM bin system compared to traditional tick-based concentrated liquidity?",
+    "options": [
+      "DLMM always earns more fees than tick-based systems",
+      "Bins allow more granular fee control and the active bin captures 100% of fees at the current price — making fee capture more precise than uniform liquidity across a tick range",
+      "DLMM requires less monitoring than tick-based systems",
+      "DLMM has lower IL than tick-based concentrated liquidity"
+    ],
+    "correct": 1,
+    "explanation": "In tick-based systems, liquidity is spread uniformly across your entire range — all ticks earn proportionally. In DLMM, liquidity is concentrated in discrete bins where only the active bin (current price) earns fees. This means fee capture is extremely precise — all your liquidity in the active bin is working. The tradeoff is more complexity and the need to understand bin positioning. When managed well, DLMM can be more capital efficient than tick-based systems.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q158",
+    "q": "A trader is comparing two LP strategies for the same SOL/USDC pool: Strategy A deploys $5,000 in a ±10% concentrated range. Strategy B deploys $100,000 in full range. Under normal market conditions with SOL trading within the ±10% range, which strategy earns more fees?",
+    "options": [
+      "Strategy B — more capital always means more fees",
+      "Strategy A — the concentrated position provides equivalent or greater depth in the active range earning comparable fees with 20x less capital",
+      "They earn exactly the same fees",
+      "Cannot be determined without knowing daily volume"
+    ],
+    "correct": 1,
+    "explanation": "This is the core power of concentrated liquidity. $5,000 concentrated in a ±10% range can provide the same liquidity depth as $100,000 in full range within that band. The AMM routing algorithm sees equivalent depth — so the $5,000 position captures the same share of fees as the $100,000 position when price is within range. The concentrated LP earns 20x better capital efficiency. This is why serious LPs use concentrated liquidity.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q159",
+    "q": "In a tick-based system, what does each tick represent?",
+    "options": [
+      "A fixed dollar price like $100 or $150",
+      "A 0.01% price increment — price multiplied by 1.0001",
+      "The number of LPs in the range",
+      "A 24-hour time period"
+    ],
+    "correct": 1,
+    "explanation": "Each tick is a logarithmic step of 0.01% (multiplier 1.0001). This keeps tick spacing consistent in percentage terms across all price levels — useful whether a token trades at $0.01 or $100,000.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q160",
+    "q": "In Meteora DLMM, how many bins are earning fees at any given moment?",
+    "options": [
+      "All bins within your selected range earn proportional fees based on their distance from center",
+      "All bins within 10% of the current price share fees based on proximity to the active price level",
+      "Only the active bin",
+      "Fees split equally across every bin regardless of whether price has ever touched them"
+    ],
+    "correct": 2,
+    "explanation": "Only the active bin earns fees in DLMM. This is the core difference from tick-based systems. All fee income concentrates at one precise price point — powerful when price is stable, zero earnings the moment price moves to the next bin.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q161",
+    "q": "A 0.25% fee pool has tick spacing 50. A 0.01% fee pool has tick spacing 1. What does this mean?",
+    "options": [
+      "0.25% always earns more",
+      "0.25% forces wider minimum ranges — positions cannot be narrower than 50 ticks. 0.01% allows much finer positioning",
+      "Tick spacing has no effect on range width",
+      "Low fee tiers cannot be used for volatile tokens"
+    ],
+    "correct": 1,
+    "explanation": "Tick spacing defines minimum range granularity. With spacing 50, your bounds must be multiples of 50 — you cannot set very tight ranges. This is why stable pairs use 0.01% fee tiers — they need tight ranges requiring fine tick spacing.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q162",
+    "q": "Price has been in your DLMM active bin for 3 hours. Volume spikes and price moves 3 bins above you. What happens to your fees?",
+    "options": [
+      "Your fees triple automatically because the volume spike generates extra rewards for all positions in the vicinity",
+      "Fees continue accumulating proportionally to volume even though price has moved to a different bin",
+      "Fees stop immediately",
+      "Fees accumulate in a pending state and are automatically paid out the moment price returns to your bin"
+    ],
+    "correct": 2,
+    "explanation": "The moment price exits your active DLMM bin, fee earnings stop completely. Those 3 bins above you are earning from the volume spike — not you. DLMM is binary: in the active bin = earning, out of range = zero.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q163",
+    "q": "What does the CURVE distribution shape in Meteora DLMM do?",
+    "options": [
+      "Spreads liquidity evenly across all bins",
+      "Concentrates more liquidity near current price for higher fee capture when price stays close",
+      "Places liquidity only at range extremes",
+      "Auto-rebalances when price moves"
+    ],
+    "correct": 1,
+    "explanation": "Curve concentrates more capital in bins closest to current price. Optimal when you expect price to stay near center — you capture more fees per dollar at the most active price point. Trade-off: outer bins have less liquidity.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q164",
+    "q": "For a USDC/USDT pair that rarely moves more than 0.1%, which is likely better — Orca Whirlpools or Meteora DLMM?",
+    "options": [
+      "Orca Whirlpools — tick-based concentrated liquidity is universally superior for all stablecoin and pegged asset pairs",
+      "Meteora DLMM — active bin captures 100% of fees at the stable price point",
+      "Performance is completely identical for stable pairs — protocol choice makes zero difference",
+      "Neither protocol — stablecoins should only ever use traditional full-range AMMs like Curve for safety reasons"
+    ],
+    "correct": 1,
+    "explanation": "DLMM excels for stable pairs. With USDC/USDT barely moving, your active bin stays active — earning maximum concentration with minimal rebalancing. Tick-based systems spread liquidity across a range even when price barely moves.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q165",
+    "q": "Rebalancing costs $0.01 on Solana vs $50 on Ethereum. How does this change LP strategy?",
+    "options": [
+      "Same strategies work on both chains",
+      "Solana enables tight ranges with frequent rebalancing. Ethereum forces wide ranges and rare rebalancing or fees destroy returns",
+      "Always use full range on Ethereum",
+      "Transaction costs are irrelevant vs fee income"
+    ],
+    "correct": 1,
+    "explanation": "On Solana at $0.01 you can rebalance daily — negligible cost. On Ethereum at $50 you need to earn more than $50/day just to break even on rebalancing. This forces wider ranges and less frequent management. Solana's low fees are a real competitive advantage for active LP.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q166",
+    "q": "A 0.01% fee pool with tick spacing 1 vs a 0.25% pool with tick spacing 50 — why is direct APR comparison misleading?",
+    "options": [
+      "Higher fee tiers always have better spacing",
+      "Fine tick spacing lets you concentrate capital more tightly — potentially earning more total fees than a wider pool despite the lower fee percentage",
+      "All fee tiers have the same tick spacing on Solana",
+      "Tick spacing only matters for DLMM"
+    ],
+    "correct": 1,
+    "explanation": "Tick spacing affects how tightly you can deploy capital. Fine spacing lets you position extremely close to current price — potentially outearning a higher fee pool where minimum range forces wider deployment. Fee tier percentage is only one variable.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q167",
+    "q": "SOL is at $150. You deposit only USDC into a range of $160-$180. What is your position doing?",
+    "options": [
+      "Earning maximum fees as it is close to the active price",
+      "Idle — activates only when price rises into $160-$180 and starts converting USDC to SOL",
+      "Converting USDC to SOL immediately at the current $150 price",
+      "Earning fees on all swaps below $160 while it waits"
+    ],
+    "correct": 1,
+    "explanation": "A range set entirely above current price holds 100% USDC and earns nothing until price enters the range. Only when price rises through $160-$180 does your USDC begin converting to SOL. Below your range the position is completely idle.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q168",
+    "q": "You set a USDC range at $100-$120. Price falls to $90. What do you hold?",
+    "options": [
+      "100% USDC — position stopped converting at the $100 floor",
+      "A 50/50 mix since only half the range filled",
+      "100% SOL — USDC fully converted through the range",
+      "Nothing — positions close automatically when out of range"
+    ],
+    "correct": 2,
+    "explanation": "Once price moves below your entire range the conversion is complete — you hold 100% SOL. Your entire USDC was spent accumulating SOL across the $100-$120 range plus whatever fees were earned during the process.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q169",
+    "q": "How is LP-based DCA better than a single limit order at $100?",
+    "options": [
+      "LP orders always guarantee a fill unlike limit orders which can expire",
+      "You earn fees while waiting AND accumulate gradually — getting a better average price than all-at-once at $100",
+      "LP positions need less capital to achieve the same token exposure",
+      "Limit orders are better — predictable single-price execution with no IL risk"
+    ],
+    "correct": 1,
+    "explanation": "A limit order at $100 earns nothing while waiting and fills entirely at one price. An LP position across $90-$110 earns fees from every swap through the range AND accumulates gradually — buying more at $90 than $110. Fee income further reduces the effective cost basis.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q170",
+    "q": "Why do early buyers on a Bags.fm bonding curve pay less?",
+    "options": [
+      "Bags.fm rewards early supporters with a discount on their purchases",
+      "Every purchase moves price higher on the curve — early buyers enter before accumulated buys push price up",
+      "Early buyers access a private pool with a price ceiling",
+      "Bags.fm uses a Dutch auction starting at a high price that falls over time"
+    ],
+    "correct": 1,
+    "explanation": "Bonding curves price tokens based on supply — each purchase increases price along a mathematical curve. Early buyers pay before many purchases have moved price higher. Late buyers pay more because all the accumulated purchases before them already pushed the curve up.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q171",
+    "q": "You want to sell your SOL gradually between $200-$300 as price rises. Price never reaches $200. What happened to your position?",
+    "options": [
+      "You sold SOL automatically at current market price instead",
+      "Your position sat idle earning zero fees — capital was tied up with no return until you close it",
+      "The protocol auto-sold your SOL at the closest available price",
+      "Your position converted to USDC slowly over time regardless of price"
+    ],
+    "correct": 1,
+    "explanation": "A sell range set above current price earns nothing until price enters the range. If price never reaches $200, your SOL sits in a concentrated position earning zero fees indefinitely. This is the opportunity cost risk of single-sided positions — always weigh the probability of price reaching your range against the cost of idle capital.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q172",
+    "q": "Biggest risk of setting an accumulation range far below current price?",
+    "options": [
+      "Excessive fees complicate tax reporting significantly",
+      "Capital sits idle earning nothing for potentially months — a real opportunity cost",
+      "Protocol charges extra fees for positions far out of range",
+      "Out-of-range positions expire automatically after 30 days"
+    ],
+    "correct": 1,
+    "explanation": "Opportunity cost matters. A position earning zero fees could be deployed elsewhere generating returns. If your buy range is at $50-$70 when price is $150, you might wait months with zero earnings. Weigh the benefit of accumulating at lower prices against the cost of idle capital.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q173",
+    "q": "How did CLKN launch?",
+    "options": [
+      "Directly on Meteora with two-sided liquidity and a fixed launch price",
+      "On Bags.fm bonding curve with single-sided token liquidity, accumulated SOL, then graduated to Meteora DAMM V2",
+      "Traditional ICO with fixed price sales before DEX listing",
+      "On Raydium with a permissioned whitelist pool"
+    ],
+    "correct": 1,
+    "explanation": "CLKN used the Bags.fm bonding curve — single-sided launch where only CLKN existed initially. As the community bought in SOL accumulated. At graduation threshold the curve closed and liquidity migrated automatically to Meteora DAMM V2. Standard Bags.fm launch path.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q174",
+    "q": "A project graduated from Pump.fun and now wants to add their own token to a Meteora pool. They only have the project token — no USDC. Can they provide liquidity?",
+    "options": [
+      "No — you always need both tokens to create a liquidity position",
+      "Yes — they can set a single-sided position with only their token, placing it in a range above current price to sell gradually as price rises",
+      "Only if they borrow USDC from a lending protocol first",
+      "Only founders with over 1000 holders can seed liquidity on Meteora"
+    ],
+    "correct": 1,
+    "explanation": "Single-sided deposits let projects seed liquidity with only their own token. By setting a range above current price with just the project token, they create a sell-side liquidity position. As buyers push price up through the range, tokens gradually convert to the paired asset. This is how many projects bootstrap liquidity after graduation without needing to acquire the paired asset first.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q175",
+    "q": "You have a full-time job and can check your LP positions for 30 minutes on Sunday mornings. Which strategy fits your life?",
+    "options": [
+      "Tight DLMM single-bin positions requiring daily rebalancing for maximum APR",
+      "Wide concentrated range on SOL/USDC checked weekly — in range most of the time with manageable rebalancing needs",
+      "Full active management across 10 different pools simultaneously",
+      "Never LP — it always requires daily attention to be profitable"
+    ],
+    "correct": 1,
+    "explanation": "Strategy must match your actual availability. A tight DLMM position that goes out of range on Monday and sits idle until Sunday loses 6 days of fee income — likely worse than a wide passive range that stays active all week. Match the position type to the time you can genuinely commit.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q176",
+    "q": "What is the correct benchmark for measuring LP performance?",
+    "options": [
+      "Whether your fee APR exceeds 50% annually",
+      "Whether you outperformed simply holding both tokens in your wallet — position value plus fees vs hold value",
+      "Whether you made more money than a savings account",
+      "Whether your position value increased in USD terms"
+    ],
+    "correct": 1,
+    "explanation": "The only relevant question is whether LP outperformed holding. You could earn 100% fee APR but if IL cost you 120% you underperformed a simple hold. Always compare (current position value + fees earned) against (what those same tokens would be worth held in a wallet). A positive difference means LP is working.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q177",
+    "q": "Price spiked 15% outside your range on extremely high volume then returned to your range within 2 hours. Should you have rebalanced during the spike?",
+    "options": [
+      "Yes — any time price exits range you should immediately rebalance",
+      "No — spike on high volume that quickly returns often does not justify the rebalancing cost and friction",
+      "Yes — but only if fees during the spike would have covered the cost",
+      "Always close the position and re-enter — spikes indicate instability"
+    ],
+    "correct": 1,
+    "explanation": "Not every out-of-range event requires rebalancing. A brief spike that quickly returns means your position was only idle for hours — the rebalancing cost (even on Solana) plus the hassle of resetting likely exceeds the benefit. Wait for confirmed price movement before rebalancing. Systematic triggers beat reactive decisions.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q178",
+    "q": "What does ACTIVE LP actually require on a daily basis?",
+    "options": [
+      "Checking positions constantly every few minutes to catch every price move",
+      "Checking positions are in range, reviewing fee earnings, monitoring price action, and executing rebalances if thresholds are triggered",
+      "Just opening new positions whenever you see high APR pools",
+      "Withdrawing and redepositing every day to compound fees manually"
+    ],
+    "correct": 1,
+    "explanation": "Active LP is systematic not frantic. Daily management means a structured check: are positions in range, are fees accumulating normally, has price action changed the outlook, do any rebalancing triggers apply. 30-60 focused minutes beats 8 hours of anxious monitoring.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q179",
+    "q": "Your rebalancing cost on Solana is approximately $0.05. Your position earns about $3 per day in fees. Price moved just outside your range. What should you consider?",
+    "options": [
+      "Never rebalance — the cost is too high relative to earnings",
+      "Rebalance makes sense — your daily earnings exceed the cost meaningfully and staying in range maximizes fee income",
+      "Only rebalance if fees are over $100 per day",
+      "Rebalancing cost is irrelevant — always rebalance immediately when out of range"
+    ],
+    "correct": 1,
+    "explanation": "A $0.05 rebalancing cost vs $3 daily earnings is a clear case where rebalancing is profitable. The cost is recovered in under 30 minutes of being back in range. On Solana the low transaction costs make active management economically viable in ways that are impossible on Ethereum where the same rebalance might cost $30-50.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q180",
+    "q": "What is TREND-FOLLOWING range positioning in active LP management?",
+    "options": [
+      "Moving your range in the direction of a strong trend rather than re-centering on current price — capturing more fees from trending price action",
+      "Following social media trends to find the best pools to LP",
+      "Automatically copying the range settings of top LP wallets on-chain",
+      "Setting ranges based on the previous week's price action only"
+    ],
+    "correct": 0,
+    "explanation": "In a strong uptrend, instead of resetting your range centered on current price, you skew it higher — positioning where price is likely to go rather than where it has been. This keeps you in range as the trend continues and earns fees from the directional movement. It requires a view on direction but can significantly outperform mechanical re-centering.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q181",
+    "q": "You have been LPing SOL/USDC for 60 days. You earned $800 in fees. But your current position value plus fees is $200 less than if you had just held SOL and USDC in your wallet. What does this mean?",
+    "options": [
+      "You made $800 profit — the fees are pure income",
+      "LP underperformed holding — IL cost more than the fees earned over 60 days",
+      "You need to LP for longer before measuring performance accurately",
+      "The result proves LP is never worth it for SOL/USDC pairs"
+    ],
+    "correct": 1,
+    "explanation": "Fees earned do not equal profit. If IL cost you $1,000 in position value while you earned $800 in fees, your net LP result is negative $200 compared to holding. The benchmark is always the hold value. This does not mean LP is bad — it means this specific position in this specific period underperformed. Measure, learn, adjust.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q182",
+    "q": "Which position type is most suited for someone who wants passive income with minimal management on Solana?",
+    "options": [
+      "Tight 2% range on SOL/BONK checked every 3 days",
+      "USDC/USDT on Meteora DLMM with a 3-bin range requiring daily monitoring",
+      "Wide SOL/USDC range or stablecoin pair with weekly checks and monthly fee compounding",
+      "Full active management on 15 different volatile pairs for maximum fee diversification"
+    ],
+    "correct": 2,
+    "explanation": "Passive LP success requires choosing positions that tolerate infrequent attention. Wide SOL/USDC stays in range through normal market moves. Stablecoin pairs have near-zero IL and steady fee income. Both need minimal intervention. Tight ranges on volatile pairs and DLMM bins are built for active management — using them passively leads to long periods out of range earning nothing.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q183",
+    "q": "What is the single biggest factor separating LPs who survive from LPs who blow up?",
+    "options": [
+      "Picking the pool with the highest advertised APR",
+      "Position size relative to their capital",
+      "Always using the tightest possible range",
+      "Checking positions as many times per day as possible"
+    ],
+    "correct": 1,
+    "explanation": "Position sizing is the difference. A correctly sized position lets you hold through normal volatility and actually earn fees. An oversized one turns ordinary drawdowns into panic exits at the worst time. Size to the downside you can survive, not the upside you imagine.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q184",
+    "q": "You are considering a SOL/new-token pool. What is the honest test for how big the position should be?",
+    "options": [
+      "The higher the APR, the bigger the position should be",
+      "Imagine the riskier token drops 80% overnight — if that dollar loss makes your stomach drop, the position is too big",
+      "Match the position to whatever the top wallets in the pool are doing",
+      "Always put in exactly half your LP capital"
+    ],
+    "correct": 1,
+    "explanation": "Size to the downside. Picture the riskier leg dropping 80% and look at the real dollar loss. If that number scares you, cut the position until it does not. APR is the advertisement; the 80% drawdown is the risk you are actually underwriting.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q185",
+    "q": "What does choosing a TIGHTER concentrated range actually do to your risk profile?",
+    "options": [
+      "It lowers risk because you earn more fees",
+      "It raises fee capture while in range but increases out-of-range risk, amplifies IL, and demands active management",
+      "It has no effect on risk, only on convenience",
+      "It guarantees higher total returns in every market"
+    ],
+    "correct": 1,
+    "explanation": "Range width is a risk dial. Tight ranges capture more fees per dollar but exit range faster, amplify IL when price moves through them, and require babysitting. A tight range you cannot manage just sits out of range earning nothing. Width must match your conviction and your available time.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q186",
+    "q": "Why is correlation between the two tokens in a pair so important for risk?",
+    "options": [
+      "It determines the trading fee tier",
+      "It largely decides your impermanent-loss exposure — correlated pairs have low IL, independently volatile pairs have high IL",
+      "It changes how often the DEX pays out fees",
+      "Correlation only matters for stablecoins and nothing else"
+    ],
+    "correct": 1,
+    "explanation": "Your IL risk is mostly set the moment you pick the pair. Identical-peg and correlated pairs move together, so IL stays small. Pairs where both legs move independently produce the largest IL. You are exposed to the RELATIONSHIP between the two assets, not just one of them.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q187",
+    "q": "When is the right time to decide your exit conditions for an LP position?",
+    "options": [
+      "While the position is actively moving against you",
+      "Before you enter — max acceptable IL, invalidation conditions, and profit-taking written down in advance",
+      "Only after you have already taken a loss",
+      "Exits should never be planned — stay flexible and decide emotionally"
+    ],
+    "correct": 1,
+    "explanation": "Decide exits before you deposit, while you are calm and objective. A written plan — max IL, what invalidates your thesis, when you take profit — removes the in-the-moment emotional debate. When the trigger hits, you execute the decision you already made instead of negotiating with yourself.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q188",
+    "q": "You pair a brand-new token against SOL and the new token dumps hard against SOL. What happens to your position?",
+    "options": [
+      "Nothing — pairing against SOL protects you from the new token's moves",
+      "Impermanent loss rebalances your position heavily into the token that just crashed",
+      "Your position automatically converts to stablecoins for safety",
+      "You earn extra fees that fully offset any loss"
+    ],
+    "correct": 1,
+    "explanation": "An AMM rebalances toward the falling asset — you end up holding more of the token that just dumped. Pairing against SOL does not shield you; it means you are exposed to both the new token AND its relationship to SOL. This is exactly why new-token pools warrant the smallest position sizes.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q189",
+    "q": "What belongs in LP capital?",
+    "options": [
+      "Your emergency fund, since it is just sitting there",
+      "Money you can fully lose without affecting how you live",
+      "Borrowed money, as long as the APR beats the interest",
+      "Next month's rent while you wait for fees to accumulate"
+    ],
+    "correct": 1,
+    "explanation": "LP capital is risk capital — exposed to IL, smart-contract risk, and the price risk of both tokens. Only money you can fully lose belongs there. Money with a deadline or a job to do (rent, emergency fund, borrowed funds) forces bad decisions under pressure and turns a survivable drawdown into a catastrophe.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q190",
+    "q": "Why is the volume-to-TVL ratio considered the LP's most important pool metric?",
+    "options": [
+      "It tells you the token's market cap",
+      "It shows how much real fee-generating volume flows through each dollar of liquidity",
+      "It is the only number DEXs cannot display incorrectly",
+      "It predicts the token's future price"
+    ],
+    "correct": 1,
+    "explanation": "Fees come from volume; that revenue is shared across TVL. Volume-to-TVL tells you how hard each LP dollar is actually working. A high APR on tiny TVL can come from one lucky trade, but a healthy volume-to-TVL ratio sustained over several days shows the pool genuinely generates fees for its liquidity.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q191",
+    "q": "A pool advertises 800% APR. What is the right way to treat that number?",
+    "options": [
+      "Deposit immediately before the opportunity disappears",
+      "Treat it as a question to investigate — it is backward-looking, ignores IL, and assumes volume never changes",
+      "Assume you will earn exactly 800% over the next year",
+      "Multiply it by your deposit to calculate guaranteed annual income"
+    ],
+    "correct": 1,
+    "explanation": "Headline APR is usually annualized from a short, volatile window, is gross of impermanent loss, and assumes volume stays constant forever. A huge APR is a prompt to ask 'why is this so high and is it sustainable?' — never a promise. The real benchmark remains position value plus fees versus holding.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q192",
+    "q": "Which of these is a classic sign of fake (wash-traded) volume?",
+    "options": [
+      "Many different wallets trading different sizes at different times",
+      "Enormous volume with almost no price movement, driven by a few wallets recycling the same trades",
+      "Volume that grows steadily as a project gains real users",
+      "A volume-to-TVL ratio that is modest and stable"
+    ],
+    "correct": 1,
+    "explanation": "Wash trading produces huge volume with little price discovery, repeated trade sizes, and a tiny set of wallets passing the same money back and forth. Real volume is messy — many wallets, varied sizes, varied timing. Cluck Score and Token Autopsy exist to confirm whether the trading is organic.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q193",
+    "q": "Two pools hold the same TVL. Pool A spreads its liquidity full-range; Pool B concentrates it tightly at the current price. For trades happening right at the current price, which gives better execution?",
+    "options": [
+      "Pool A — full range is always deeper",
+      "Pool B — concentrated liquidity provides more depth right where trading happens",
+      "They are identical because TVL is equal",
+      "Neither — distribution has no effect on execution"
+    ],
+    "correct": 1,
+    "explanation": "Where liquidity sits matters as much as how much there is. Concentrated liquidity at the current price provides more depth exactly where trades occur, giving better execution and earning those LPs outsized fees. The tradeoff: outside the concentration, depth drops off sharply.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q194",
+    "q": "A pool shows $50,000 TVL and $40,000,000 in 24h volume, but the price chart is almost perfectly flat. What should this combination make you suspect?",
+    "options": [
+      "A fantastic, safe, high-fee opportunity",
+      "Likely wash trading — implausible volume-to-TVL with no price discovery",
+      "That the DEX is miscalculating TVL",
+      "Nothing unusual — flat price with huge volume is normal and healthy"
+    ],
+    "correct": 1,
+    "explanation": "An 800x daily volume-to-TVL ratio with a flat price is a screaming fake-volume signal. Genuine trading of that magnitude would move price and show diverse wallets. Confirm with the Cluck tools before letting your capital near it — manufactured volume evaporates and leaves you in a thin, illiquid position.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q195",
+    "q": "Why should you look at several days of volume rather than the single best day?",
+    "options": [
+      "Older data is always more accurate",
+      "A single busy day can inflate the annualized APR into a number that is not sustainable",
+      "DEXs only update volume once per week",
+      "One day of volume tells you the token's whole history"
+    ],
+    "correct": 1,
+    "explanation": "Quoted APR is often extrapolated from a short window, so one spike day produces a giant, misleading annual figure. Looking at multiple days shows whether fee income is consistent or a one-off. Consistency over time is what you are actually underwriting as an LP.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q196",
+    "q": "What is the smartest habit when reading pool data across sources?",
+    "options": [
+      "Trust whichever source shows the highest APR",
+      "Cross-reference multiple sources and confirm volume is organic before depositing",
+      "Only ever use one tool to keep it simple",
+      "Rely on trending lists since the crowd is usually right"
+    ],
+    "correct": 1,
+    "explanation": "No single source is complete, and trending lists can be gamed. Cross-reference DexScreener, GeckoTerminal, the native protocol dashboard, and verification tools like Solana Tracker and Cluck Score. The goal is to confirm the volume and depth are real before your capital relies on them.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q197",
+    "q": "On a bonding-curve launch, where does the 'liquidity' come from before graduation?",
+    "options": [
+      "From traditional LPs depositing two tokens into a pool",
+      "From the bonding-curve contract itself, which sells tokens on a formula and accumulates the base asset as people buy",
+      "From the DEX automatically seeding the pool",
+      "There is no liquidity at all until the token is listed on an exchange"
+    ],
+    "correct": 1,
+    "explanation": "A bonding curve IS the market before graduation. The contract sells tokens according to a formula, price rises as people buy, and the base asset (often SOL) accumulates in the curve. There is no traditional two-sided LP position yet — early buyers transact against the curve directly.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q198",
+    "q": "What happens when a bonding-curve token 'graduates'?",
+    "options": [
+      "The token is delisted and trading stops",
+      "Accumulated liquidity migrates from the curve into a real DEX pool (often Meteora on Solana), and standard LPing becomes possible",
+      "The creator automatically receives all the tokens",
+      "Nothing changes except the name"
+    ],
+    "correct": 1,
+    "explanation": "At the graduation threshold, liquidity migrates out of the bonding curve into a real DEX pool, and the token begins trading like any AMM pair. This is when traditional LP positions become possible — and it is a moment of extreme volatility, which is exactly what the Cluck Norris graduation tracker watches for.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q199",
+    "q": "Before a Bags.fm token graduates, what is your role if you buy in?",
+    "options": [
+      "You are a liquidity provider earning LP fees",
+      "You are buying on the bonding curve, not providing liquidity",
+      "You automatically own a share of the future DEX pool",
+      "You are lending tokens to other traders"
+    ],
+    "correct": 1,
+    "explanation": "Pre-graduation, you transact against the dynamic bonding curve — you are a buyer, not an LP. Conventional LPing only becomes possible after graduation migrates liquidity into a Meteora pool, at which point the normal lab rules (depth, volume-to-TVL, authorities, sizing) apply.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q200",
+    "q": "Why is providing liquidity to a freshly graduated token the highest-risk LP there is?",
+    "options": [
+      "Because fees are always zero on new tokens",
+      "Because extreme volatility maximizes impermanent loss, you absorb violent price discovery, and authority/liquidity risks are concentrated at the riskiest moment",
+      "Because new pools never generate any trading volume",
+      "Because graduated tokens cannot be sold"
+    ],
+    "correct": 1,
+    "explanation": "A fresh launch stacks every risk at once: violent price swings that maximize IL, no established fair value so you absorb price discovery, and potential unlocked liquidity or live mint/freeze authority. The asymmetry — capped fee upside versus go-to-zero downside with maximized exposure — usually favors the market, not the LP.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q201",
+    "q": "If you deliberately choose to LP a fresh launch to farm volatility, which approach is disciplined rather than reckless?",
+    "options": [
+      "Deposit a large position and hold passively for months",
+      "Verify authorities and liquidity first, size tiny, manage actively, and pre-set your exit and invalidation",
+      "Skip the research since launches move too fast to analyze",
+      "Put in money you need soon, to force yourself to pay attention"
+    ],
+    "correct": 1,
+    "explanation": "Launch LP is volatility farming: verify the token with Cluck Score, Autopsy, and Security Coop; confirm a real graduated pool; size it as money you have written off; manage it actively; and decide your exit before depositing. It is a high-skill, small-size game — never a place to park capital you need.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q202",
+    "q": "A freshly graduated token's top wallets hold an enormous share of supply. Why does this matter to an LP in its pool?",
+    "options": [
+      "It does not matter once a token graduates",
+      "Extreme holder concentration means a few wallets can dump and crash the pool at will, maximizing your IL",
+      "Concentration guarantees the price will rise",
+      "It only affects the token creator, not LPs"
+    ],
+    "correct": 1,
+    "explanation": "Concentration is a pool-level risk for LPs. If a handful of wallets hold most of the supply, they can sell into your liquidity and crash the price, rebalancing your position into the collapsing token. Reading holder structure — exactly what Cluck Score surfaces — is part of vetting any launch pool.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q203",
+    "q": "Applying the forensic rule to a launch, when is it fair to call a wallet the 'creator' or 'team'?",
+    "options": [
+      "Whenever a wallet bought early",
+      "Only when a launchpad API like Bags or Pump confirms it — the chain shows what happened, not why",
+      "Any wallet that holds a large amount",
+      "Whenever a block explorer labels it as 'dev'"
+    ],
+    "correct": 1,
+    "explanation": "State what is on-chain, never assert intent. Only call a wallet creator or team when a launchpad API verifies it. Block explorers may label a shared platform launcher as 'dev' across thousands of unrelated tokens, so on-chain motion alone is not enough — confirmation comes from the launchpad data.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q204",
+    "q": "What should be the FIRST decision when building an LP strategy?",
+    "options": [
+      "Find the single highest-APR pool available right now",
+      "Decide your total risk capital and weekly time budget, then allocate before picking pools",
+      "Copy the positions of the largest wallets on-chain",
+      "Put everything into one pair to keep it simple"
+    ],
+    "correct": 1,
+    "explanation": "Professionals decide capital allocation and time budget first, then find pools that fit each slot. Starting with the highest-APR pool means perpetually chasing. Your time budget is as important as your money budget — it determines how much of your capital can realistically be active versus passive.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q205",
+    "q": "In the three-tier LP portfolio, how should capital generally be distributed?",
+    "options": [
+      "Most in the degen tier for maximum upside",
+      "Evenly split across all three tiers at all times",
+      "Most in the safe core tier, least in the speculative degen tier",
+      "All in the growth tier since it balances risk and reward"
+    ],
+    "correct": 2,
+    "explanation": "The pyramid shape is the point: the safe core tier (stable/correlated pairs) holds the most capital, growth sits in the middle, and the speculative degen tier is the smallest slice. If the pyramid is upside down — most capital in the riskiest tier — you have a gamble, not a strategy.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q206",
+    "q": "What is the role of the DEGEN tier in a well-built LP strategy?",
+    "options": [
+      "To hold the majority of your capital for maximum growth",
+      "A small, fully-written-off, actively managed slice where wins are a bonus, not the plan",
+      "A passive set-and-forget allocation",
+      "The safest part of the portfolio"
+    ],
+    "correct": 1,
+    "explanation": "The degen tier is new tokens and launch pools — high risk, active management, tiny size, every dollar already written off. Its job is to provide upside without threatening the whole. A good month is a bonus; a bad month is survivable because the slice is small.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q207",
+    "q": "Before adding any new token to your degen tier, what should you do?",
+    "options": [
+      "Deposit quickly before the opportunity passes",
+      "Run it through Cluck Score, Token Autopsy, and Security Coop, and confirm authorities and liquidity status",
+      "Check only the advertised APR",
+      "Trust the trending list that surfaced it"
+    ],
+    "correct": 1,
+    "explanation": "Every degen-tier token gets vetted first: Cluck Score for distribution and risk, Token Autopsy for a forensic read, Security Coop and authority checks for mint/freeze/liquidity status. Only LP graduated pools you understand, and size each as total-loss money. Research is the price of admission to the riskiest tier.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q208",
+    "q": "Why is writing down your personal LP rules while calm so important?",
+    "options": [
+      "Rules are legally required by DEXs",
+      "The rules matter most when emotion is screaming to break them — pre-committing while calm is what lets you follow them under pressure",
+      "It guarantees you will never lose money",
+      "Written rules increase your fee APR"
+    ],
+    "correct": 1,
+    "explanation": "The market tests every rule precisely when you least want to follow it. LPs who survive are not fearless — they wrote their rules while calm and honored them when fear or greed hit. Pre-commitment is the mechanism that turns good intentions into disciplined action.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q209",
+    "q": "In the full LP workflow, when do you write your exit conditions?",
+    "options": [
+      "After the position has already moved against you",
+      "Before you deposit — max IL, invalidation, and profit-take decided in advance",
+      "Only if the position starts losing money",
+      "Exit conditions should never be written; stay flexible"
+    ],
+    "correct": 1,
+    "explanation": "Exits are step five of the workflow — written before you enter, while you are objective. Deciding max acceptable IL, what invalidates your thesis, and your profit-take in advance removes the emotional debate later. When a trigger hits, you execute the decision you already made.",
+    "source": "LPLAB"
+  },
+  {
+    "id": "q210",
+    "q": "What is the correct benchmark in the MEASURE step of the workflow?",
+    "options": [
+      "Whether the position's APR is above 100%",
+      "Position value plus fees earned, compared against simply holding the two tokens",
+      "Whether the position made any money at all in USD",
+      "Whether you beat the single best LP in the pool"
+    ],
+    "correct": 1,
+    "explanation": "The only honest benchmark, carried through the whole lab, is whether LP outperformed holding: (current position value + fees earned) versus (what those tokens would be worth held in your wallet). Fees alone are not profit if impermanent loss cost you more than you earned.",
+    "source": "LPLAB"
   }
 ]
