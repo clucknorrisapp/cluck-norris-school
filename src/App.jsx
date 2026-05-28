@@ -7345,6 +7345,611 @@ IL is a cost you can model. A rug is a loss you cannot recover. Before any LP po
     ],
     cluckVerdict: "Passive is not lazy. Active is not always better. The right strategy is the one you will actually execute consistently. Know yourself before you know the market."
   }
+  ,
+  {
+    id: 9,
+    title: "LP Risk Management",
+    icon: "🛡️",
+    tagline: "Know your risk or the market will teach you.",
+    cluckHook: "Lesson 8 taught you to spot the pools that rug. This lesson is about the risk you take on in the pools that don't. Every LP position is a bet with a downside — your job is to know the size of that downside before you place it, not after. Amateurs size positions by how excited they are. Professionals size them by how much they can afford to lose. Sit down.",
+    sections: [
+      {
+        heading: "Risk Capital — What You Can Actually Afford To Lose",
+        body: `Before any position, answer one question honestly: if this entire position went to zero, would it change how you live? If the answer is yes, the position is too big — or you should not be in it at all.
+
+LP capital is RISK capital. It is exposed to impermanent loss, smart-contract risk, and the price risk of both tokens at once. Money you need for rent, food, or your emergency fund has no business in a liquidity pool.
+
+THE RULE:
+• Only LP money you can fully lose without it affecting your life
+• Keep an emergency fund completely separate and untouched
+• Never LP borrowed money or money with a deadline attached to it
+
+People who break this rule do not make better decisions under pressure — they make worse ones. They pull positions at the bottom, chase losses into riskier pools, and turn a manageable drawdown into a disaster. Risk capital is not just a financial rule, it is a psychological one.`
+      },
+      {
+        heading: "Position Sizing — The Number Most LPs Get Wrong",
+        body: `The single biggest difference between LPs who survive and LPs who blow up is position size. Not pair selection. Not timing. Size.
+
+A position that is too large turns normal volatility into panic. A position sized correctly lets you hold through the noise and actually earn the fees you came for.
+
+A SANE FRAMEWORK:
+• Stablecoin / correlated pairs (USDC/USDT, SOL/jitoSOL): can be a large share of your LP capital — IL risk is near zero
+• Major volatile pairs (SOL/USDC): moderate size — real IL risk but a known, liquid asset
+• Speculative / new-token pairs: small — treat each as money you might not see again
+• A single brand-new launch pool: tiny — position-of-last-resort sizing
+
+NEVER let one volatile position dominate your LP capital. If a single pool going to zero would wreck your whole LP portfolio, that pool is too big regardless of the APR it advertises.
+
+THE TEST:
+Imagine the riskier token in your pair drops 80% overnight. Look at the dollar amount you would lose. If that number makes your stomach drop, cut the position until it does not. Size to the downside, not the dream.`
+      },
+      {
+        heading: "The Range-Width Risk Tradeoff",
+        body: `In concentrated liquidity, the width of your range IS a risk dial. Most people only see the reward side of it.
+
+TIGHT RANGE:
+• Higher fee capture per dollar while in range
+• Goes out of range faster — earns nothing when it does
+• Amplified impermanent loss when price moves through it
+• Demands active management
+
+WIDE RANGE:
+• Lower fee capture per dollar
+• Stays in range through more market movement
+• Gentler IL
+• Tolerates passive management
+
+There is no free lunch. A tight range is not "better" — it is a higher-risk, higher-maintenance bet that price stays where you think it will. A wide range is a lower-risk, lower-yield bet that you would rather stay in range than maximize every fee.
+
+Match the width to two things: your conviction about where price is going, and the time you can actually commit to managing it. A tight range you cannot babysit is just a fast way to sit out of range earning zero while IL eats your position.`
+      },
+      {
+        heading: "Correlation Risk — The Pair Defines Your Downside",
+        body: `Your IL risk is decided the moment you choose the pair. Everything after that is management.
+
+THE CORRELATION SPECTRUM:
+• Identical-peg pairs (USDC/USDT): the two assets are designed to track each other — IL is minimal, the main risk is one of them de-pegging
+• Correlated pairs (SOL/jitoSOL, BTC/cbBTC): move together most of the time — low IL, occasional divergence
+• Major-vs-stable (SOL/USDC): one volatile leg — IL is real and scales with how far SOL moves from your entry
+• Volatile-vs-volatile or new-token pairs: both legs move independently and violently — maximum IL, maximum risk
+
+THE TRAP:
+A pool pairs a new token against SOL. People focus on the new token and forget they are also exposed to SOL's price. You are long BOTH assets' relationship to each other. When the new token dumps against SOL, IL converts your position into a bag of the thing that just crashed.
+
+Pick the pair like you are picking your downside — because you are.`
+      },
+      {
+        heading: "Exit Planning — Decide Before You Enter",
+        body: `The worst time to decide when to exit a position is while it is moving against you. Emotion makes that decision, and emotion is a terrible LP.
+
+SET YOUR EXITS IN ADVANCE:
+• Maximum acceptable IL: a number where you close and reassess, decided before you deposit
+• Invalidation: a price or on-chain event (volume dies, liquidity status changes, project news) that means your thesis is broken
+• Profit-taking: a point where you withdraw earned fees or scale the position down
+• Time horizon: how long you intend to hold before re-evaluating from scratch
+
+WRITE IT DOWN. A position with a written exit plan is a managed risk. A position without one is a hope.
+
+WHEN THE TRIGGER HITS, ACT:
+The whole point of pre-setting exits is to remove the in-the-moment debate. If your invalidation hits, you close — you do not negotiate with yourself about whether this time is different. Discipline is doing the thing you already decided was right when it stops feeling good.`,
+        table: {
+          headers: ["Pair Type", "IL Risk", "Management", "Sane Allocation"],
+          rows: [
+            ["Stable / identical peg", "Minimal", "Passive", "Can be large"],
+            ["Correlated (SOL/jitoSOL)", "Low", "Passive", "Large"],
+            ["Major / stable (SOL/USDC)", "Moderate", "Weekly", "Moderate"],
+            ["New token / volatile", "High", "Active", "Small"],
+            ["Fresh launch pool", "Extreme", "Intensive", "Tiny"],
+          ]
+        }
+      },
+      {
+        heading: "The Hard Knocks Risk Checklist",
+        body: `Run this before every position. If you cannot answer all of them, you are not ready to deposit.
+
+✓ Is this money I can fully lose without it changing my life?
+✓ If the riskier token dropped 80%, is the dollar loss one I can stomach?
+✓ Is this position small enough that it alone cannot wreck my LP capital?
+✓ Does the range width match the time I can actually commit?
+✓ Do I understand which leg of the pair carries the IL risk?
+✓ Have I written down my exit conditions — max IL, invalidation, profit-take?
+✓ Did I run the token through Cluck Score / Autopsy / Security Coop first?
+
+Risk management is not the exciting part. It is the part that keeps you in the game long enough for the exciting parts to matter.`
+      }
+    ],
+    quiz: [
+      {
+        q: "What is the single biggest factor separating LPs who survive from LPs who blow up?",
+        options: ["Picking the pool with the highest advertised APR", "Position size relative to their capital", "Always using the tightest possible range", "Checking positions as many times per day as possible"],
+        correct: 1,
+        explanation: "Position sizing is the difference. A correctly sized position lets you hold through normal volatility and actually earn fees. An oversized one turns ordinary drawdowns into panic exits at the worst time. Size to the downside you can survive, not the upside you imagine."
+      },
+      {
+        q: "You are considering a SOL/new-token pool. What is the honest test for how big the position should be?",
+        options: ["The higher the APR, the bigger the position should be", "Imagine the riskier token drops 80% overnight — if that dollar loss makes your stomach drop, the position is too big", "Match the position to whatever the top wallets in the pool are doing", "Always put in exactly half your LP capital"],
+        correct: 1,
+        explanation: "Size to the downside. Picture the riskier leg dropping 80% and look at the real dollar loss. If that number scares you, cut the position until it does not. APR is the advertisement; the 80% drawdown is the risk you are actually underwriting."
+      },
+      {
+        q: "What does choosing a TIGHTER concentrated range actually do to your risk profile?",
+        options: ["It lowers risk because you earn more fees", "It raises fee capture while in range but increases out-of-range risk, amplifies IL, and demands active management", "It has no effect on risk, only on convenience", "It guarantees higher total returns in every market"],
+        correct: 1,
+        explanation: "Range width is a risk dial. Tight ranges capture more fees per dollar but exit range faster, amplify IL when price moves through them, and require babysitting. A tight range you cannot manage just sits out of range earning nothing. Width must match your conviction and your available time."
+      },
+      {
+        q: "Why is correlation between the two tokens in a pair so important for risk?",
+        options: ["It determines the trading fee tier", "It largely decides your impermanent-loss exposure — correlated pairs have low IL, independently volatile pairs have high IL", "It changes how often the DEX pays out fees", "Correlation only matters for stablecoins and nothing else"],
+        correct: 1,
+        explanation: "Your IL risk is mostly set the moment you pick the pair. Identical-peg and correlated pairs move together, so IL stays small. Pairs where both legs move independently produce the largest IL. You are exposed to the RELATIONSHIP between the two assets, not just one of them."
+      },
+      {
+        q: "When is the right time to decide your exit conditions for an LP position?",
+        options: ["While the position is actively moving against you", "Before you enter — max acceptable IL, invalidation conditions, and profit-taking written down in advance", "Only after you have already taken a loss", "Exits should never be planned — stay flexible and decide emotionally"],
+        correct: 1,
+        explanation: "Decide exits before you deposit, while you are calm and objective. A written plan — max IL, what invalidates your thesis, when you take profit — removes the in-the-moment emotional debate. When the trigger hits, you execute the decision you already made instead of negotiating with yourself."
+      },
+      {
+        q: "You pair a brand-new token against SOL and the new token dumps hard against SOL. What happens to your position?",
+        options: ["Nothing — pairing against SOL protects you from the new token's moves", "Impermanent loss rebalances your position heavily into the token that just crashed", "Your position automatically converts to stablecoins for safety", "You earn extra fees that fully offset any loss"],
+        correct: 1,
+        explanation: "An AMM rebalances toward the falling asset — you end up holding more of the token that just dumped. Pairing against SOL does not shield you; it means you are exposed to both the new token AND its relationship to SOL. This is exactly why new-token pools warrant the smallest position sizes."
+      },
+      {
+        q: "What belongs in LP capital?",
+        options: ["Your emergency fund, since it is just sitting there", "Money you can fully lose without affecting how you live", "Borrowed money, as long as the APR beats the interest", "Next month's rent while you wait for fees to accumulate"],
+        correct: 1,
+        explanation: "LP capital is risk capital — exposed to IL, smart-contract risk, and the price risk of both tokens. Only money you can fully lose belongs there. Money with a deadline or a job to do (rent, emergency fund, borrowed funds) forces bad decisions under pressure and turns a survivable drawdown into a catastrophe."
+      }
+    ],
+    cluckVerdict: "Risk management is the boring discipline that keeps you alive long enough to win. Size to your downside, choose your pair like you are choosing your loss, and write your exit before you enter. The market does not care how confident you feel — it only respects how well you prepared."
+  }
+  ,
+  {
+    id: 10,
+    title: "Reading Pool Data",
+    icon: "🔍",
+    tagline: "Volume, TVL, APR — what it all actually means.",
+    cluckHook: "Every pool shows you a wall of numbers. Most LPs glance at the APR, see a big number, and ape in. Then they wonder why the real yield was a fraction of what was advertised. The numbers are not lying to you — you just have not learned to read them. By the end of this lesson, a pool page will tell you a story, and you will know whether it is a story worth your capital.",
+    sections: [
+      {
+        heading: "The Numbers That Actually Matter",
+        body: `A pool page throws a dozen metrics at you. Four of them decide whether you should be there.
+
+TVL (Total Value Locked):
+The combined dollar value of both tokens in the pool. Higher TVL means deeper liquidity and less price impact per trade — but it also means your share of the fees is split among more capital.
+
+24H VOLUME:
+How much was actually traded through the pool in the last day. Volume is what GENERATES fees. No volume, no fees — no matter how high the advertised APR.
+
+FEE APR:
+The annualized fee return, usually extrapolated from recent volume. This is the most over-trusted and most misleading number on the page. Treat it as a starting question, not an answer.
+
+VOLUME-TO-TVL RATIO:
+Daily volume divided by TVL. This is the LP's most important number, and the next section is entirely about it.`
+      },
+      {
+        heading: "Volume-to-TVL — The LP's Most Important Ratio",
+        body: `Fees come from volume. The capital that has to share those fees is TVL. So the real question for any LP is: how much volume is each dollar of liquidity actually working?
+
+That is the volume-to-TVL ratio. Daily volume divided by TVL.
+
+WHY IT BEATS RAW APR:
+A pool can show a huge APR simply because it has very little TVL and one big trade went through. That APR will evaporate the moment normal conditions return. The volume-to-TVL ratio tells you how hard the pool is actually working its liquidity, day in and day out.
+
+READING IT:
+• High ratio (lots of volume per dollar of TVL): the pool is efficient — each LP dollar is capturing meaningful fee flow
+• Low ratio (TVL dwarfs volume): a lot of capital chasing very little fee income — yield will be thin no matter what the APR banner says
+• Absurdly high ratio with no price movement: a red flag for fake volume (next section)
+
+When you compare two pools, do not compare their APRs. Compare how much real volume flows through each dollar of liquidity, and whether that flow is consistent over multiple days rather than one lucky spike.`
+      },
+      {
+        heading: "Fee APR vs Reality",
+        body: `The headline APR is the number most likely to cost you money, because it is almost always backward-looking and volatile.
+
+WHY THE QUOTED APR LIES:
+• It is usually annualized from a short recent window — one busy day gets multiplied into a giant yearly number
+• It does not subtract impermanent loss — APR is gross fee yield, not your net result
+• It assumes volume stays constant forever, which it never does
+• On concentrated pools, it often assumes your liquidity is in range 100% of the time
+
+WHAT TO DO INSTEAD:
+• Look at volume over several days, not the single best day
+• Mentally haircut the advertised APR hard, then ask if the position still makes sense
+• Remember the only real benchmark from Lesson 8: position value plus fees versus simply holding the tokens
+• Treat any APR over a few hundred percent as a question ("why is this so high, and is it sustainable?"), never as a promise`
+      },
+      {
+        heading: "Spotting Fake Volume",
+        body: `Some pools manufacture volume to inflate their APR and climb trending lists. As an LP, fake volume is poison — it lures your capital in, then the "volume" disappears and you are left holding a thin, illiquid position.
+
+SIGNS OF WASH-TRADED VOLUME:
+• Enormous volume with almost no price discovery — the price barely moves despite "millions" traded
+• The same trade sizes repeating over and over
+• Volume concentrated among a tiny number of wallets recycling the same liquidity
+• Volume-to-TVL ratio that is wildly, implausibly high with no organic chart action
+• A trending token whose holder count and unique-trader count do not match its volume
+
+HOW TO CONFIRM:
+This is exactly what the Cluck Norris tools exist for. Run the token through Cluck Score for a distribution and risk read, and Token Autopsy for a forensic look at who is actually trading. Real volume comes from many different wallets, different sizes, different timing. Manufactured volume comes from a handful of wallets passing the same money back and forth.
+
+Forensic rule, same as everywhere: the chain shows you WHAT happened, not WHY. State what the data shows — clustered wallets, repeated sizes, flat price — and let that evidence decide whether the volume is real.`
+      },
+      {
+        heading: "Liquidity Distribution & Depth",
+        body: `TVL is a single number, but WHERE that liquidity sits matters as much as how much there is.
+
+FULL-RANGE / SPREAD LIQUIDITY:
+Liquidity is spread across a wide price range. Trades have low price impact across the board, but fee capture per dollar is diluted.
+
+CONCENTRATED LIQUIDITY:
+Liquidity is bunched near the current price. Trades near that price get excellent execution and LPs there earn outsized fees — but move outside the concentration and depth falls off a cliff.
+
+WHAT TO READ ON A DLMM / CONCENTRATED POOL:
+• How is liquidity distributed across the bins or ticks?
+• Is most of it clustered right at the current price, or spread out?
+• If you add liquidity, where does YOUR position sit relative to where the volume is trading?
+
+A pool with $1M TVL spread thin can give worse execution near price than a $200K pool concentrated tightly at price. As an LP, you want your liquidity where the trades actually happen — that is where the fees are.`
+      },
+      {
+        heading: "Where To Read This Data",
+        body: `Knowing the metrics is useless if you do not know where to find honest versions of them. Cross-reference — never trust a single source.`,
+        table: {
+          headers: ["Source", "Best For", "Watch Out For"],
+          rows: [
+            ["DexScreener", "Quick volume, TVL, price, pair list", "Trending lists can be gamed by fake volume"],
+            ["GeckoTerminal", "Cross-DEX pool comparison", "APR figures are extrapolated"],
+            ["Meteora / Orca / Raydium", "Real bin/tick distribution, true fee APR", "Each shows its own pools only"],
+            ["Solana Tracker", "Holder and trade-level verification", "Read it to confirm volume is organic"],
+            ["Cluck Score / Autopsy", "Distribution + forensic read on the token", "Use before LPing any new token"],
+          ]
+        }
+      }
+    ],
+    quiz: [
+      {
+        q: "Why is the volume-to-TVL ratio considered the LP's most important pool metric?",
+        options: ["It tells you the token's market cap", "It shows how much real fee-generating volume flows through each dollar of liquidity", "It is the only number DEXs cannot display incorrectly", "It predicts the token's future price"],
+        correct: 1,
+        explanation: "Fees come from volume; that revenue is shared across TVL. Volume-to-TVL tells you how hard each LP dollar is actually working. A high APR on tiny TVL can come from one lucky trade, but a healthy volume-to-TVL ratio sustained over several days shows the pool genuinely generates fees for its liquidity."
+      },
+      {
+        q: "A pool advertises 800% APR. What is the right way to treat that number?",
+        options: ["Deposit immediately before the opportunity disappears", "Treat it as a question to investigate — it is backward-looking, ignores IL, and assumes volume never changes", "Assume you will earn exactly 800% over the next year", "Multiply it by your deposit to calculate guaranteed annual income"],
+        correct: 1,
+        explanation: "Headline APR is usually annualized from a short, volatile window, is gross of impermanent loss, and assumes volume stays constant forever. A huge APR is a prompt to ask 'why is this so high and is it sustainable?' — never a promise. The real benchmark remains position value plus fees versus holding."
+      },
+      {
+        q: "Which of these is a classic sign of fake (wash-traded) volume?",
+        options: ["Many different wallets trading different sizes at different times", "Enormous volume with almost no price movement, driven by a few wallets recycling the same trades", "Volume that grows steadily as a project gains real users", "A volume-to-TVL ratio that is modest and stable"],
+        correct: 1,
+        explanation: "Wash trading produces huge volume with little price discovery, repeated trade sizes, and a tiny set of wallets passing the same money back and forth. Real volume is messy — many wallets, varied sizes, varied timing. Cluck Score and Token Autopsy exist to confirm whether the trading is organic."
+      },
+      {
+        q: "Two pools hold the same TVL. Pool A spreads its liquidity full-range; Pool B concentrates it tightly at the current price. For trades happening right at the current price, which gives better execution?",
+        options: ["Pool A — full range is always deeper", "Pool B — concentrated liquidity provides more depth right where trading happens", "They are identical because TVL is equal", "Neither — distribution has no effect on execution"],
+        correct: 1,
+        explanation: "Where liquidity sits matters as much as how much there is. Concentrated liquidity at the current price provides more depth exactly where trades occur, giving better execution and earning those LPs outsized fees. The tradeoff: outside the concentration, depth drops off sharply."
+      },
+      {
+        q: "A pool shows $50,000 TVL and $40,000,000 in 24h volume, but the price chart is almost perfectly flat. What should this combination make you suspect?",
+        options: ["A fantastic, safe, high-fee opportunity", "Likely wash trading — implausible volume-to-TVL with no price discovery", "That the DEX is miscalculating TVL", "Nothing unusual — flat price with huge volume is normal and healthy"],
+        correct: 1,
+        explanation: "An 800x daily volume-to-TVL ratio with a flat price is a screaming fake-volume signal. Genuine trading of that magnitude would move price and show diverse wallets. Confirm with the Cluck tools before letting your capital near it — manufactured volume evaporates and leaves you in a thin, illiquid position."
+      },
+      {
+        q: "Why should you look at several days of volume rather than the single best day?",
+        options: ["Older data is always more accurate", "A single busy day can inflate the annualized APR into a number that is not sustainable", "DEXs only update volume once per week", "One day of volume tells you the token's whole history"],
+        correct: 1,
+        explanation: "Quoted APR is often extrapolated from a short window, so one spike day produces a giant, misleading annual figure. Looking at multiple days shows whether fee income is consistent or a one-off. Consistency over time is what you are actually underwriting as an LP."
+      },
+      {
+        q: "What is the smartest habit when reading pool data across sources?",
+        options: ["Trust whichever source shows the highest APR", "Cross-reference multiple sources and confirm volume is organic before depositing", "Only ever use one tool to keep it simple", "Rely on trending lists since the crowd is usually right"],
+        correct: 1,
+        explanation: "No single source is complete, and trending lists can be gamed. Cross-reference DexScreener, GeckoTerminal, the native protocol dashboard, and verification tools like Solana Tracker and Cluck Score. The goal is to confirm the volume and depth are real before your capital relies on them."
+      }
+    ],
+    cluckVerdict: "A pool page is a story told in numbers. TVL and volume set the scene, the volume-to-TVL ratio is the plot, APR is the marketing tagline, and fake volume is the villain. Learn to read all of it — and verify with the tools — before your capital becomes a character in someone else's story."
+  }
+  ,
+  {
+    id: 11,
+    title: "Token Launch Liquidity",
+    icon: "🚀",
+    tagline: "Bonding curves, graduation, and the riskiest LP there is.",
+    cluckHook: "This is where the Cluck Norris world lives — fresh tokens, bonding curves, Bags.fm, graduations. It is also where LPs get destroyed the fastest. A token launch creates liquidity in a way that breaks most of the rules you just learned, and the people who LP into a fresh launch without understanding the mechanics are not investing — they are donating. Let's make sure you are not one of them.",
+    sections: [
+      {
+        heading: "How a Launch Creates Liquidity — The Bonding Curve",
+        body: `Most launches today do not start with a traditional two-sided liquidity pool. They start with a BONDING CURVE.
+
+A bonding curve is a smart contract that sells tokens according to a formula. As people buy, the price rises along the curve automatically. There is no separate LP depositing two tokens — the curve itself is the market.
+
+KEY POINTS:
+• The curve holds the token and accepts SOL (or another base asset) as people buy in
+• Price increases as more is bought and decreases as people sell back
+• There is no traditional LP position to provide yet — the curve is doing the market-making
+• Early buyers are buying directly from the curve, not from other liquidity providers
+
+This is why the earliest phase of a launch is pure price discovery. The "liquidity" is the SOL accumulating in the curve contract, and it grows as buying continues. Understanding this matters because it tells you exactly when a real LP opportunity does — and does not — exist.`
+      },
+      {
+        heading: "Graduation — When the Curve Becomes a Pool",
+        body: `A bonding-curve token does not stay on the curve forever. When it accumulates enough buying to hit a threshold, it GRADUATES.
+
+WHAT GRADUATION MEANS:
+At the threshold (often expressed as a market-cap or raised-SOL target), the accumulated liquidity migrates out of the bonding curve and into a real DEX pool — on Solana that is frequently a Meteora pool. From that point on, the token trades like any other AMM pair, and traditional LP positions become possible.
+
+THE GRADUATION EVENT IS A MOMENT OF RISK AND OPPORTUNITY:
+• The migration creates the first real two-sided pool for the token
+• Volatility around graduation is extreme — price can spike and dump violently
+• Early curve buyers may take profit the moment a liquid market exists
+• The structure of who holds the supply at graduation tells you a lot about what comes next
+
+This is precisely what the Cluck Norris near-graduation tracker and graduation alerts watch for — the transition from curve to pool is one of the most important events in a token's life, for traders and LPs alike.`
+      },
+      {
+        heading: "Bags.fm and the Dynamic Bonding Curve",
+        body: `Bags.fm is a Solana launchpad, and CLKN itself launched on it — so this is worth knowing precisely.
+
+HOW IT WORKS:
+• Tokens launch on a bonding curve (a dynamic bonding curve, or DBC) rather than an immediate open pool
+• Buyers transact against the curve during the pre-graduation phase
+• Creators can earn fees from the activity their token generates
+• On graduation, liquidity migrates into a Meteora pool where standard LPing applies
+
+WHY THIS MATTERS FOR AN LP:
+Before graduation, there is no conventional LP position to take — you are buying on the curve, not providing liquidity. After graduation, a real pool exists and the normal LP rules from this entire lab apply: check depth, check the volume-to-TVL ratio, check the token's authorities, size to your downside.
+
+THE FORENSIC RULE STILL HOLDS:
+A launchpad API like Bags can confirm the verified creator and whether buyers came through the actual bonding curve. Use that. But the chain shows WHAT happened, not WHY — only call a wallet "creator" or "team" when the launchpad data confirms it. Never assume intent from on-chain motion alone.`
+      },
+      {
+        heading: "Why LPing a Fresh Launch Is the Highest-Risk LP There Is",
+        body: `Everything that makes a launch exciting also makes it the most dangerous place to provide liquidity. Stack the risks honestly:
+
+EXTREME IMPERMANENT LOSS:
+A freshly graduated token can move 50%, 80%, in either direction within hours. IL is brutal when one leg is that volatile — the AMM rebalances you straight into whichever side is crashing.
+
+YOU ARE PRICE DISCOVERY:
+Early on, there is no established fair value. As an LP you are absorbing the violence of the market figuring out what the token is worth.
+
+LIQUIDITY AND AUTHORITY RISK:
+A brand-new token may have unlocked liquidity, live mint authority, or live freeze authority — every danger from Lesson 8, concentrated into the riskiest moment of the token's life.
+
+THE ASYMMETRY:
+Your upside as an LP is fees plus whatever the volatile token does. Your downside is the token going to zero while IL maximizes your exposure to it on the way down. For most fresh launches, that asymmetry is not in your favor.`
+      },
+      {
+        heading: "If You Do It Anyway — Rules of Engagement",
+        body: `Some LPs deliberately farm launch volatility because fee income is highest when markets move most. If you choose to, do it with discipline, not hope.
+
+THE LAUNCH-LP RULES:
+• Verify first: run Cluck Score and Token Autopsy; confirm mint and freeze authority are revoked and liquidity status with Security Coop
+• Confirm graduation: only LP a real graduated pool, not a curve you do not understand
+• Size tiny: this is position-of-last-resort sizing — money you have fully written off
+• Manage actively: launch LP is never passive; you are watching it closely or you should not be in it
+• Pre-set your exit: decide your invalidation and max loss before you deposit, because price will move faster than your decision-making
+• Watch the holder structure: extreme concentration means a few wallets can crash the pool at will
+
+Launch LP can pay well during high-volume windows — that is real. But it is an active, high-skill, small-size game. Treat it like volatility farming with a strict risk budget, not like a place to park capital.`,
+        table: {
+          headers: ["Launch Phase", "What Liquidity Looks Like", "LP Risk"],
+          rows: [
+            ["On bonding curve", "Curve is the market — no two-sided pool", "No standard LP yet — you are buying, not providing"],
+            ["Near graduation", "Approaching migration threshold", "Extreme volatility incoming"],
+            ["Graduation event", "Liquidity migrates to a DEX pool", "Highest — violent price discovery"],
+            ["Freshly graduated", "Real but thin, volatile pool", "Very high — extreme IL, manage actively"],
+            ["Matured pool", "Deeper, steadier liquidity", "Normal LP rules apply"],
+          ]
+        }
+      }
+    ],
+    quiz: [
+      {
+        q: "On a bonding-curve launch, where does the 'liquidity' come from before graduation?",
+        options: ["From traditional LPs depositing two tokens into a pool", "From the bonding-curve contract itself, which sells tokens on a formula and accumulates the base asset as people buy", "From the DEX automatically seeding the pool", "There is no liquidity at all until the token is listed on an exchange"],
+        correct: 1,
+        explanation: "A bonding curve IS the market before graduation. The contract sells tokens according to a formula, price rises as people buy, and the base asset (often SOL) accumulates in the curve. There is no traditional two-sided LP position yet — early buyers transact against the curve directly."
+      },
+      {
+        q: "What happens when a bonding-curve token 'graduates'?",
+        options: ["The token is delisted and trading stops", "Accumulated liquidity migrates from the curve into a real DEX pool (often Meteora on Solana), and standard LPing becomes possible", "The creator automatically receives all the tokens", "Nothing changes except the name"],
+        correct: 1,
+        explanation: "At the graduation threshold, liquidity migrates out of the bonding curve into a real DEX pool, and the token begins trading like any AMM pair. This is when traditional LP positions become possible — and it is a moment of extreme volatility, which is exactly what the Cluck Norris graduation tracker watches for."
+      },
+      {
+        q: "Before a Bags.fm token graduates, what is your role if you buy in?",
+        options: ["You are a liquidity provider earning LP fees", "You are buying on the bonding curve, not providing liquidity", "You automatically own a share of the future DEX pool", "You are lending tokens to other traders"],
+        correct: 1,
+        explanation: "Pre-graduation, you transact against the dynamic bonding curve — you are a buyer, not an LP. Conventional LPing only becomes possible after graduation migrates liquidity into a Meteora pool, at which point the normal lab rules (depth, volume-to-TVL, authorities, sizing) apply."
+      },
+      {
+        q: "Why is providing liquidity to a freshly graduated token the highest-risk LP there is?",
+        options: ["Because fees are always zero on new tokens", "Because extreme volatility maximizes impermanent loss, you absorb violent price discovery, and authority/liquidity risks are concentrated at the riskiest moment", "Because new pools never generate any trading volume", "Because graduated tokens cannot be sold"],
+        correct: 1,
+        explanation: "A fresh launch stacks every risk at once: violent price swings that maximize IL, no established fair value so you absorb price discovery, and potential unlocked liquidity or live mint/freeze authority. The asymmetry — capped fee upside versus go-to-zero downside with maximized exposure — usually favors the market, not the LP."
+      },
+      {
+        q: "If you deliberately choose to LP a fresh launch to farm volatility, which approach is disciplined rather than reckless?",
+        options: ["Deposit a large position and hold passively for months", "Verify authorities and liquidity first, size tiny, manage actively, and pre-set your exit and invalidation", "Skip the research since launches move too fast to analyze", "Put in money you need soon, to force yourself to pay attention"],
+        correct: 1,
+        explanation: "Launch LP is volatility farming: verify the token with Cluck Score, Autopsy, and Security Coop; confirm a real graduated pool; size it as money you have written off; manage it actively; and decide your exit before depositing. It is a high-skill, small-size game — never a place to park capital you need."
+      },
+      {
+        q: "A freshly graduated token's top wallets hold an enormous share of supply. Why does this matter to an LP in its pool?",
+        options: ["It does not matter once a token graduates", "Extreme holder concentration means a few wallets can dump and crash the pool at will, maximizing your IL", "Concentration guarantees the price will rise", "It only affects the token creator, not LPs"],
+        correct: 1,
+        explanation: "Concentration is a pool-level risk for LPs. If a handful of wallets hold most of the supply, they can sell into your liquidity and crash the price, rebalancing your position into the collapsing token. Reading holder structure — exactly what Cluck Score surfaces — is part of vetting any launch pool."
+      },
+      {
+        q: "Applying the forensic rule to a launch, when is it fair to call a wallet the 'creator' or 'team'?",
+        options: ["Whenever a wallet bought early", "Only when a launchpad API like Bags or Pump confirms it — the chain shows what happened, not why", "Any wallet that holds a large amount", "Whenever a block explorer labels it as 'dev'", ],
+        correct: 1,
+        explanation: "State what is on-chain, never assert intent. Only call a wallet creator or team when a launchpad API verifies it. Block explorers may label a shared platform launcher as 'dev' across thousands of unrelated tokens, so on-chain motion alone is not enough — confirmation comes from the launchpad data."
+      }
+    ],
+    cluckVerdict: "Token launches are the beating heart of this whole ecosystem — and the fastest place to get wrecked as an LP. The curve is the market until graduation; after graduation the real pool and the real risk arrive together. Verify everything, size for total loss, manage like a hawk, and never confuse buying on a curve with providing liquidity."
+  }
+  ,
+  {
+    id: 12,
+    title: "Building a Real LP Strategy",
+    icon: "♟️",
+    tagline: "Put it all together — capital, tiers, discipline.",
+    cluckHook: "You now know what liquidity is, how AMMs work, what IL really costs, how fees offset it, how concentration and bins work, how to read a pool, how to manage risk, and how launches create the riskiest LP there is. This final lesson turns all of that knowledge into a SYSTEM — a real strategy you can actually run. Knowledge without a system is trivia. Let's build the system.",
+    sections: [
+      {
+        heading: "Start With Capital Allocation, Not Pools",
+        body: `Amateurs start by hunting for the highest-APR pool. Professionals start by deciding how their capital is allocated, then find pools that fit each slot. Reverse the order and you will always be chasing.
+
+THE FIRST DECISIONS, IN ORDER:
+1. How much total capital is genuinely risk capital for LPing? (Lesson 9)
+2. How much time can you realistically commit each week? (Lesson 8)
+3. Given that time, how much of your capital should be passive vs active?
+4. Only THEN: which specific pools fit each slot?
+
+Your time budget is as important as your money budget. An honest "30 minutes a week" points you toward a mostly passive allocation. Pretending you will manage active positions you do not have time for is the single most common way LPs underperform.`
+      },
+      {
+        heading: "The Three-Tier LP Portfolio",
+        body: `A durable LP strategy is layered, like a pyramid. The base is boring and safe. The top is small and spicy. Most of your capital lives at the bottom.
+
+THE THREE TIERS:
+
+CORE (the base — most of your capital):
+Stablecoin pairs and correlated pairs. Near-zero IL, steady fees, near-zero management. This tier is your foundation — it should be hard to lose money here.
+
+GROWTH (the middle):
+Major volatile pairs like SOL/USDC with wide-to-moderate concentrated ranges. Real fee income, manageable IL, weekly check-ins. This is where you actively earn above the baseline.
+
+DEGEN (the top — small):
+New tokens, freshly graduated pools, launch volatility farming. High risk, active management, tiny size. Every dollar here is money you have already written off. Wins here are a bonus, not the plan.
+
+The exact percentages are yours to set based on your risk tolerance and time — but the SHAPE should hold: the safe tier is the largest, the speculative tier is the smallest. If your pyramid is upside down, you do not have a strategy, you have a gamble.`,
+        table: {
+          headers: ["Tier", "Pairs", "Management", "Role"],
+          rows: [
+            ["Core", "Stable / correlated", "Passive, monthly", "Foundation — largest slice"],
+            ["Growth", "SOL/USDC, majors", "Weekly", "Earns above baseline"],
+            ["Degen", "New / launch pools", "Active, intensive", "Bonus — smallest slice"],
+          ]
+        }
+      },
+      {
+        heading: "Choosing Your Pairs Deliberately",
+        body: `Within each tier, pick pairs on purpose, not on hype.
+
+FOR THE CORE TIER:
+Choose the deepest, most boring pairs you can find — USDC/USDT, SOL/jitoSOL. You want maximum reliability and minimum attention. Verify the protocol is established and the pool has real, sustained volume-to-TVL.
+
+FOR THE GROWTH TIER:
+Pick majors you understand and are comfortable holding either side of. Set range width to match how often you will actually check in. Weekly check-in means a wider range that stays in range between visits.
+
+FOR THE DEGEN TIER:
+Run every token through Cluck Score, Token Autopsy, and Security Coop first. Confirm authorities revoked and liquidity status. Only LP graduated pools you understand. Size each as total-loss money.
+
+The pair makes the bet. Tier sets the size and the management. Get those two right and you are already ahead of most LPs.`
+      },
+      {
+        heading: "A Worked Example — A $5,000 LP Plan",
+        body: `Numbers make it concrete. This is an illustration of the SHAPE, not financial advice — your own split depends on your risk tolerance and time.
+
+SOMEONE WITH $5,000 RISK CAPITAL AND ~1 HOUR PER WEEK:
+
+CORE — the largest slice:
+A meaningful majority in a stablecoin pair and a SOL/jitoSOL position. Checked monthly. This is the foundation that should quietly compound.
+
+GROWTH — the middle slice:
+A SOL/USDC concentrated position with a wide range. Checked weekly, rebalanced only when price genuinely breaks out of range.
+
+DEGEN — the smallest slice:
+A small amount reserved for an occasional graduated-launch position, fully written off, actively managed when used and left in stables when not.
+
+WHY IT WORKS:
+Most of the capital cannot easily be lost. The middle earns real yield with light management that fits the one-hour-per-week budget. The small speculative slice provides upside without threatening the whole. A bad month in the degen tier is survivable; a good one is a bonus. That asymmetry — protected downside, open upside — is the entire point of a tiered strategy.`
+      },
+      {
+        heading: "Your Personal LP Rules",
+        body: `Every disciplined LP has a written set of rules they follow when emotion is screaming at them to do otherwise. Cluck Norris is built on discipline — this is where you apply it to your own capital.
+
+WRITE DOWN YOUR RULES. EXAMPLES:
+• I only LP money I can fully lose
+• No single position exceeds my set share of LP capital
+• Every new token gets run through Cluck Score, Autopsy, and Security Coop before I deposit
+• I write my exit conditions before I enter, and I honor them
+• I measure performance against holding, not against zero
+• I do not chase the highest-APR pool of the week
+• My pyramid stays right-side up — safe tier largest, degen tier smallest
+
+The rules matter most precisely when you least want to follow them. The market will test every one of them. The LPs who survive are not the ones who never feel fear or greed — they are the ones who wrote the rules down while calm and followed them when it counted.`
+      },
+      {
+        heading: "The Full Workflow — Research to Review",
+        body: `Here is the whole lab, distilled into a repeatable loop you run for every position.
+
+1. RESEARCH: Vet the token and pool — Cluck Score, Token Autopsy, Security Coop, and the pool data from Lesson 10 (TVL, volume, volume-to-TVL, distribution).
+2. DECIDE THE TIER: Core, growth, or degen — this sets your size and management style.
+3. SIZE: Apply Lesson 9 — size to your downside, never let one position threaten the whole.
+4. SET RANGE: Match range width to your tier and the time you will commit.
+5. WRITE THE EXIT: Max IL, invalidation, profit-take — before you deposit.
+6. ENTER: Deposit deliberately, not on impulse.
+7. MONITOR: At the cadence your tier demands — monthly, weekly, or daily.
+8. MEASURE: Position value plus fees versus holding. Honestly.
+9. ADJUST: Rebalance on your triggers, not on emotion. Cut what is broken, compound what works.
+
+Run that loop with discipline and you are no longer gambling on liquidity — you are operating a strategy. That is the difference this entire lab was built to make.`
+      }
+    ],
+    quiz: [
+      {
+        q: "What should be the FIRST decision when building an LP strategy?",
+        options: ["Find the single highest-APR pool available right now", "Decide your total risk capital and weekly time budget, then allocate before picking pools", "Copy the positions of the largest wallets on-chain", "Put everything into one pair to keep it simple"],
+        correct: 1,
+        explanation: "Professionals decide capital allocation and time budget first, then find pools that fit each slot. Starting with the highest-APR pool means perpetually chasing. Your time budget is as important as your money budget — it determines how much of your capital can realistically be active versus passive."
+      },
+      {
+        q: "In the three-tier LP portfolio, how should capital generally be distributed?",
+        options: ["Most in the degen tier for maximum upside", "Evenly split across all three tiers at all times", "Most in the safe core tier, least in the speculative degen tier", "All in the growth tier since it balances risk and reward"],
+        correct: 2,
+        explanation: "The pyramid shape is the point: the safe core tier (stable/correlated pairs) holds the most capital, growth sits in the middle, and the speculative degen tier is the smallest slice. If the pyramid is upside down — most capital in the riskiest tier — you have a gamble, not a strategy."
+      },
+      {
+        q: "What is the role of the DEGEN tier in a well-built LP strategy?",
+        options: ["To hold the majority of your capital for maximum growth", "A small, fully-written-off, actively managed slice where wins are a bonus, not the plan", "A passive set-and-forget allocation", "The safest part of the portfolio"],
+        correct: 1,
+        explanation: "The degen tier is new tokens and launch pools — high risk, active management, tiny size, every dollar already written off. Its job is to provide upside without threatening the whole. A good month is a bonus; a bad month is survivable because the slice is small."
+      },
+      {
+        q: "Before adding any new token to your degen tier, what should you do?",
+        options: ["Deposit quickly before the opportunity passes", "Run it through Cluck Score, Token Autopsy, and Security Coop, and confirm authorities and liquidity status", "Check only the advertised APR", "Trust the trending list that surfaced it"],
+        correct: 1,
+        explanation: "Every degen-tier token gets vetted first: Cluck Score for distribution and risk, Token Autopsy for a forensic read, Security Coop and authority checks for mint/freeze/liquidity status. Only LP graduated pools you understand, and size each as total-loss money. Research is the price of admission to the riskiest tier."
+      },
+      {
+        q: "Why is writing down your personal LP rules while calm so important?",
+        options: ["Rules are legally required by DEXs", "The rules matter most when emotion is screaming to break them — pre-committing while calm is what lets you follow them under pressure", "It guarantees you will never lose money", "Written rules increase your fee APR"],
+        correct: 1,
+        explanation: "The market tests every rule precisely when you least want to follow it. LPs who survive are not fearless — they wrote their rules while calm and honored them when fear or greed hit. Pre-commitment is the mechanism that turns good intentions into disciplined action."
+      },
+      {
+        q: "In the full LP workflow, when do you write your exit conditions?",
+        options: ["After the position has already moved against you", "Before you deposit — max IL, invalidation, and profit-take decided in advance", "Only if the position starts losing money", "Exit conditions should never be written; stay flexible"],
+        correct: 1,
+        explanation: "Exits are step five of the workflow — written before you enter, while you are objective. Deciding max acceptable IL, what invalidates your thesis, and your profit-take in advance removes the emotional debate later. When a trigger hits, you execute the decision you already made."
+      },
+      {
+        q: "What is the correct benchmark in the MEASURE step of the workflow?",
+        options: ["Whether the position's APR is above 100%", "Position value plus fees earned, compared against simply holding the two tokens", "Whether the position made any money at all in USD", "Whether you beat the single best LP in the pool"],
+        correct: 1,
+        explanation: "The only honest benchmark, carried through the whole lab, is whether LP outperformed holding: (current position value + fees earned) versus (what those tokens would be worth held in your wallet). Fees alone are not profit if impermanent loss cost you more than you earned."
+      }
+    ],
+    cluckVerdict: "This is graduation. You started not knowing what liquidity was; you finish with a tiered, rule-based system and a workflow you can run on any protocol. Knowledge was never the goal — discipline applied to capital is. Build your pyramid, write your rules, run the loop, and provide liquidity like a professional. Class dismissed."
+  }
 ];
 
 // ── STRATEGY MATCHER ──
@@ -8205,24 +8810,6 @@ function LPLab() {
             </button>
           );
         })}
-
-        {/* Coming soon lessons */}
-        {[
-          {n:9, title:"LP Risk Management", icon:"🛡️", tag:"Know your risk or the market will teach you"},
-          {n:10, title:"Reading Pool Data", icon:"🔍", tag:"Volume, TVL, APR — what it all means"},
-          {n:11, title:"Token Launch Liquidity", icon:"🚀", tag:"Bonding curves, graduation, Bags.fm"},
-          {n:12, title:"Building a Real LP Strategy", icon:"♟️", tag:"Put it all together"},
-        ].map((l,i)=>(
-          <div key={i} style={{background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.05)",borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",gap:14,opacity:0.5}}>
-            <div style={{fontSize:28,flexShrink:0}}>{l.icon}</div>
-            <div style={{flex:1}}>
-              <div style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:2,marginBottom:3}}>LESSON {l.n}</div>
-              <div style={{fontFamily:"'Oswald',sans-serif",fontSize:15,fontWeight:700,color:"#9CA3AF",marginBottom:2,letterSpacing:1}}>{l.title}</div>
-              <div style={{fontFamily:"'Oswald',sans-serif",fontSize:10,color:"#4B5563",letterSpacing:0.5}}>{l.tag}</div>
-            </div>
-            <span style={{fontFamily:"'Oswald',sans-serif",fontSize:8,color:"#4B5563",letterSpacing:1}}>COMING SOON</span>
-          </div>
-        ))}
       </div>
     </div>
   );
