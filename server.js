@@ -8840,7 +8840,7 @@ const QUOTE_TOKENS = {
 // Buys below this USD value don't fire a Telegram notification. Default $0.50
 // catches split-routing halves of $1 buys via Jupiter aggregator while still
 // filtering bot dust. Override via env var.
-const MIN_BUY_USD = parseFloat(process.env.MIN_BUY_USD || "5");
+const MIN_BUY_USD = parseFloat(process.env.MIN_BUY_USD || "10");
 // Sells use the same floor by default, so both sides are reported on equal
 // terms. Set MIN_SELL_USD to give the sell side its own threshold.
 const MIN_SELL_USD = parseFloat(process.env.MIN_SELL_USD || String(MIN_BUY_USD));
