@@ -623,7 +623,36 @@ async function tgSend(chatId, text, replyTo) {
   } catch (_) { return null; }
 }
 
-// Compose the reply for a command. `arg` is the raw argument (validated to a
+// Like tgSend, but with an optional inline keyboard (array of button rows).
+async function tgSendKb(chatId, text, keyboard, replyTo) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token || !chatId) return null;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true,
+        ...(replyTo ? { reply_to_message_id: replyTo, allow_sending_without_reply: true } : {}),
+        ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}),
+      }),
+    });
+    const data = await res.json().catch(() => null);
+    return data && data.ok && data.result ? data.result.message_id : null;
+  } catch (_) { return null; }
+}
+
+// Acknowledge a button tap so Telegram stops the loading spinner.
+async function tgAnswerCallback(id, text) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token || !id) return;
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ callback_query_id: id, ...(text ? { text } : {}) }),
+    });
+  } catch (_) {}
+}
+
 // base58 address before it's used to pre-fill a tool URL).
 function tgCommandReply(cmd, arg) {
   const addr = arg && SOL_ADDR_RE.test(arg) ? arg : null;
@@ -670,7 +699,102 @@ function tgCommandReply(cmd, arg) {
   }
 }
 
-const TG_KNOWN_CMDS = ["score","autopsy","trace","snapshot","holders","securitycoop","buyspecial","rose","hatchery","bags","tools","commands","start","help"];
+const TG_KNOWN_CMDS = ["score","autopsy","trace","snapshot","holders","securitycoop","buyspecial","rose","hatchery","bags","tools","commands","start","help","guide"];
+
+// ── "Where do I start?" concierge ──────────────────────────────────────────
+// New members get a tagged welcome; /start and /guide open the same menu. Each
+// journey button routes to a curated next step; replying to any concierge
+// message hands the question to the app-aware guide AI (see answerLessonReply).
+const GUIDE_BODY =
+  "The coop is a <b>free crypto school</b> + real <b>token-research tools</b> — a lot to take in, so let's get you pointed the right way.\n\n" +
+  "<b>Where are you on your crypto journey?</b> Tap one below — or just reply to this message with a question and I'll help. 🐔";
+const GUIDE_KEYBOARD = [
+  [{ text: "🐣 Brand new to crypto", callback_data: "g:new" }],
+  [{ text: "📚 I know the basics", callback_data: "g:basics" }],
+  [{ text: "🔍 I trade — want to vet tokens", callback_data: "g:research" }],
+  [{ text: "🚀 I want to launch a token", callback_data: "g:launch" }],
+  [{ text: "🧭 Just exploring", callback_data: "g:explore" }],
+];
+function guideRoute(key) {
+  const B = TG_PUBLIC_BASE;
+  switch (key) {
+    case "new":
+      return "🐣 <b>Brand new? Perfect — start at the very beginning.</b>\n\n" +
+        "Begin with the <b>Incubator</b>: tiny, plain-English lessons — what a wallet is, what a token is, how to stay safe. Then walk the <b>12-lesson course</b> (belts Freshman → Emeritus) at your own pace.\n\n" +
+        `📚 Start here → ${B}\n\n` +
+        "No wallet, no money, no sign-up needed to learn. Reply here any time with a question — that's what I'm for.";
+    case "basics":
+      return "📚 <b>Got the basics? Time to level up.</b>\n\n" +
+        `Finish the <b>12-lesson course</b>, then take the <b>Ultimate Challenge</b> — pass it and you earn a verified, shareable diploma. Want to go deep on liquidity? The <b>LP Lab</b> has 12 advanced lessons.\n\n` +
+        `🎓 ${B}\n\nReply with whatever you're stuck on and I'll aim you at the right lesson.`;
+    case "research":
+      return "🔍 <b>You trade — here's the kit to vet a token before you ape.</b>\n\n" +
+        `🩺 <b>Cluck Score</b> — 0–100 health check → ${B}/score\n` +
+        `🪦 <b>Token Autopsy</b> — deep forensic breakdown → ${B}/autopsy\n` +
+        `🔍 <b>Trace</b> — wallet × token history → ${B}/trace\n` +
+        `🔒 <b>Wallet Checkup</b> — find &amp; revoke risky approvals → ${B}/security-coop\n\n` +
+        "Tip: right here in chat you can run <code>/score &lt;mint&gt;</code>. The chain shows <i>what</i>, never <i>why</i> — always DYOR.";
+    case "launch":
+      return "🚀 <b>Launching a token? Do it without footguns.</b>\n\n" +
+        `🥚 <b>The Hatchery</b> walks you through it start-to-finish, with a safety preview → ${B}/hatchery\n` +
+        `🎒 Watch live launches &amp; graduations on the <b>Bags</b> feed → ${B}/bags\n\n` +
+        "Learn the mechanics first — liquidity, LPs — so you don't accidentally rug yourself. Ask me anything.";
+    case "explore":
+      return "🧭 <b>Just exploring? Here's the lay of the land.</b>\n\n" +
+        `🛠 Every tool in one place → ${B}/tools\n` +
+        `📚 The free school (lessons + Ultimate Challenge) → ${B}\n` +
+        `🎰 The Coop Spinner (free daily spins) → ${B}/slots\n\n` +
+        "Or just reply with what you're curious about and I'll point you to the right spot. 🐔";
+    default:
+      return GUIDE_BODY;
+  }
+}
+// App-aware guide persona (used when a reply continues a concierge thread).
+function guideSystemPrompt() {
+  return [
+    "You are Cluck Norris, the friendly guide for the Cluck Norris app (clucknorris.app) — a FREE crypto school ('School of Crypto Hard Knocks') plus a Solana token-research toolkit. You're helping someone in a Telegram group find their way around and answering their crypto/app questions.",
+    "WHAT THE APP HAS — route people to the right part:",
+    "- The School (free, no wallet or sign-up to learn): the INCUBATOR (tiny beginner lessons: wallets, tokens, staying safe), the 12-LESSON COURSE (belts Freshman→Emeritus), the ULTIMATE CHALLENGE (pass for a verified, shareable diploma), and the LP LAB (12 advanced liquidity lessons).",
+    "- Free tools: CLUCK SCORE (clucknorris.app/score — 0-100 token health), TOKEN AUTOPSY (/autopsy — deep forensics), TRACE (/trace — wallet×token history), SNAPSHOT (/snapshot — holders + airdrop CSV), WALLET CHECKUP (/security-coop — find & revoke risky approvals), BAGS feed (/bags — live launches & graduations), and the toolkit index (/tools).",
+    "- THE HATCHERY (/hatchery): guided token creation with a safety preview.",
+    "- CLKN token: unlocks premium operator tools via a small on-chain payment (no wallet-connect needed); holding it earns airdrop eligibility. The school itself is always free.",
+    "HOW TO HELP:",
+    "- Work out where the person is (brand new / knows basics / trades & vets tokens / wants to launch / just exploring) and point them to the SINGLE best next step, with a clucknorris.app link.",
+    "- Concrete and short: 2-5 sentences — it's a group chat. Plain text only (no markdown, asterisks, or headers).",
+    "- Warmly encourage beginners; never make anyone feel dumb.",
+    "- Educational ONLY. Never give financial advice, price predictions, or 'should I buy/sell/hold X' — decline and redirect to the concept or the tool that lets them decide for themselves.",
+    "- HARD NO: never discuss war, military, geopolitics, elections, politicians, or government policy. If asked, give one short friendly line that you only cover Solana/crypto and the app, and invite a relevant question.",
+    "- A light chicken pun is welcome; help first.",
+    "- Always end with this exact line on its own: " + REPLYBOT_NFA,
+  ].join("\n");
+}
+// Welcome new chat members (tagged), once per chat per cooldown to survive join waves.
+const WELCOME_COOLDOWN_MS = 60000;
+const welcomeCooldown = new Map();
+async function welcomeNewMembers(msg) {
+  const chatId = msg.chat && msg.chat.id;
+  const members = (msg.new_chat_members || []).filter(m => m && !m.is_bot);
+  if (!chatId || !members.length) return;
+  const now = Date.now(), last = welcomeCooldown.get(chatId) || 0;
+  if (now - last < WELCOME_COOLDOWN_MS) return;            // anti-spam on join waves
+  welcomeCooldown.set(chatId, now);
+  const tags = members.slice(0, 8).map(m =>
+    `<a href="tg://user?id=${m.id}">${tgEsc(m.first_name || m.username || "friend")}</a>`).join(", ");
+  const mid = await tgSendKb(chatId, `🐔 Welcome to the coop, ${tags}!\n\n${GUIDE_BODY}`, GUIDE_KEYBOARD);
+  if (mid) registerCluckAnswer(mid, { guide: true, history: [] });
+}
+// Handle a journey button tap: reply with the curated route, keep it reply-able.
+async function handleGuideCallback(cq) {
+  try {
+    tgAnswerCallback(cq.id);                               // stop the button spinner
+    const data = String(cq.data || "");
+    const chatId = cq.message && cq.message.chat && cq.message.chat.id;
+    const replyTo = cq.message && cq.message.message_id;
+    if (!chatId || !data.startsWith("g:")) return;
+    const mid = await tgSendKb(chatId, guideRoute(data.slice(2)), null, replyTo);
+    if (mid) registerCluckAnswer(mid, { guide: true, history: [] });
+  } catch (e) { console.warn("[GUIDE] callback failed:", e.message); }
+}
 
 // /score <mint> → compute the real Cluck Score and reply IN-CHAT (number, grade,
 // verdict, key stats). Calls our own /api/cluck-score (same as the card gen).
@@ -787,9 +911,10 @@ async function answerLessonReply(msg) {
   // thread (carry its lesson + prior Q&A). targetId is whatever was replied to.
   const targetId = msg.reply_to_message && msg.reply_to_message.message_id;
   const existing = threadFor(targetId);
+  const isGuide = !!(existing && existing.guide);
   const lesson = existing ? existing.lesson : lessonTextFor(targetId);
   const history = existing && Array.isArray(existing.history) ? existing.history : [];
-  const system = [
+  const system = isGuide ? guideSystemPrompt() : [
     "You are Cluck Norris, a Solana crypto EDUCATOR holding a short conversation in a Telegram group. It started when someone replied to one of your lessons; they may ask follow-ups.",
     "RULES:",
     "- Educational ONLY. Explain how things work: Solana, tokens, LPs/liquidity, wallets, approvals/security, on-chain forensics, launchpads, etc.",
@@ -822,7 +947,7 @@ async function answerLessonReply(msg) {
     const sentId = await tgSend(chatId, tgEsc(answer), msg.message_id);
     // Register this answer so a reply to IT continues the conversation.
     const newHistory = [...history, { q: question, a: answer }].slice(-THREAD_MAX_TURNS);
-    registerCluckAnswer(sentId, { lesson, history: newHistory });
+    registerCluckAnswer(sentId, { lesson, history: newHistory, guide: isGuide });
   } catch (e) {
     console.warn("[REPLYBOT] answer failed:", e.message);
     tgSend(chatId, "🐔 Cluck hit a snag — try again in a moment.", msg.message_id);
@@ -831,6 +956,12 @@ async function answerLessonReply(msg) {
 
 function handleTelegramUpdate(update) {
   try {
+    // Journey button taps arrive as callback queries.
+    if (update && update.callback_query) { handleGuideCallback(update.callback_query); return; }
+    // New members → tagged welcome + concierge (a join is a service message, no .text).
+    if (update && update.message && Array.isArray(update.message.new_chat_members) && update.message.new_chat_members.length) {
+      welcomeNewMembers(update.message); return;
+    }
     const msg = update && (update.message || update.edited_message);
     if (!msg || !msg.text || !msg.chat) return;
     const text = msg.text.trim();
@@ -848,6 +979,12 @@ function handleTelegramUpdate(update) {
     const cmd = parts[0].split("@")[0].toLowerCase(); // strip /cmd@BotName
     if (!TG_KNOWN_CMDS.includes(cmd)) return;          // ignore unknown commands
     const arg = parts[1] || null;
+    // /start or /guide → open the "Where do I start?" concierge with buttons.
+    if (cmd === "start" || cmd === "guide") {
+      tgSendKb(msg.chat.id, `🐔 <b>Welcome to the School of Crypto Hard Knocks.</b>\n\n${GUIDE_BODY}`, GUIDE_KEYBOARD, msg.message_id)
+        .then(mid => { if (mid) registerCluckAnswer(mid, { guide: true, history: [] }); });
+      return;
+    }
     // /score with a real mint → live in-chat score (light per-chat cooldown).
     if (cmd === "score" && arg && SOL_ADDR_RE.test(arg)) {
       const now = Date.now(), last = scoreCooldown.get(msg.chat.id) || 0;
@@ -9510,12 +9647,13 @@ app.listen(PORT, () => {
           body: JSON.stringify({
             url: `${TG_PUBLIC_BASE}/api/tg/${TG_WEBHOOK_SECRET}`,
             secret_token: TG_WEBHOOK_SECRET,
-            allowed_updates: ["message"],
+            allowed_updates: ["message", "callback_query"],
           }),
         });
         await fetch(`https://api.telegram.org/bot${token}/setMyCommands`, {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ commands: [
+            { command: "guide", description: "Where do I start? Get pointed the right way" },
             { command: "score", description: "Token health 0–100 (/score <mint>)" },
             { command: "autopsy", description: "Forensic breakdown (/autopsy <mint>)" },
             { command: "trace", description: "Wallet × token history (/trace <wallet>)" },
