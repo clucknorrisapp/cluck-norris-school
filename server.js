@@ -711,8 +711,9 @@ const GUIDE_BODY =
 const GUIDE_KEYBOARD = [
   [{ text: "🐣 Brand new to crypto", callback_data: "g:new" }],
   [{ text: "📚 I know the basics", callback_data: "g:basics" }],
-  [{ text: "🔍 I trade — want to vet tokens", callback_data: "g:research" }],
-  [{ text: "🚀 I want to launch a token", callback_data: "g:launch" }],
+  [{ text: "💧 Liquidity pools & LP investing", callback_data: "g:lp" }],
+  [{ text: "🔬 Token research & CLKN tools", callback_data: "g:research" }],
+  [{ text: "🐔 About Cluck Norris & CLKN", callback_data: "g:about" }],
   [{ text: "🧭 Just exploring", callback_data: "g:explore" }],
 ];
 function guideRoute(key) {
@@ -727,18 +728,26 @@ function guideRoute(key) {
       return "📚 <b>Got the basics? Time to level up.</b>\n\n" +
         `Finish the <b>12-lesson course</b>, then take the <b>Ultimate Challenge</b> — pass it and you earn a verified, shareable diploma. Want to go deep on liquidity? The <b>LP Lab</b> has 12 advanced lessons.\n\n` +
         `🎓 ${B}\n\nReply with whatever you're stuck on and I'll aim you at the right lesson.`;
+    case "lp":
+      return "💧 <b>Liquidity pools &amp; LP investing — earn fees, know the risks.</b>\n\n" +
+        "The <b>LP Lab</b> is a 12-lesson deep dive: how AMMs work, impermanent loss, concentrated liquidity, fees &amp; earnings, reading a pool, and building a real LP strategy — protocol-agnostic (Meteora, Raydium, Orca, Uniswap).\n\n" +
+        `📚 Start the LP Lab → ${B}\n\n` +
+        "New to it? Walk Lesson 1 (What Is Liquidity?) first. Reply here with any LP question and I'll break it down.";
     case "research":
-      return "🔍 <b>You trade — here's the kit to vet a token before you ape.</b>\n\n" +
+      return "🔬 <b>Token research — vet anything on-chain before you trust it.</b>\n\n" +
         `🩺 <b>Cluck Score</b> — 0–100 health check → ${B}/score\n` +
         `🪦 <b>Token Autopsy</b> — deep forensic breakdown → ${B}/autopsy\n` +
         `🔍 <b>Trace</b> — wallet × token history → ${B}/trace\n` +
-        `🔒 <b>Wallet Checkup</b> — find &amp; revoke risky approvals → ${B}/security-coop\n\n` +
+        `📸 <b>Snapshot</b> — every holder + airdrop CSV → ${B}/snapshot\n` +
+        `🔒 <b>Wallet Checkup</b> — find &amp; revoke risky approvals → ${B}/security-coop\n` +
+        `🎒 <b>Bags feed</b> — live launches &amp; graduations → ${B}/bags\n\n` +
         "Tip: right here in chat you can run <code>/score &lt;mint&gt;</code>. The chain shows <i>what</i>, never <i>why</i> — always DYOR.";
-    case "launch":
-      return "🚀 <b>Launching a token? Do it without footguns.</b>\n\n" +
-        `🥚 <b>The Hatchery</b> walks you through it start-to-finish, with a safety preview → ${B}/hatchery\n` +
-        `🎒 Watch live launches &amp; graduations on the <b>Bags</b> feed → ${B}/bags\n\n` +
-        "Learn the mechanics first — liquidity, LPs — so you don't accidentally rug yourself. Ask me anything.";
+    case "about":
+      return "🐔 <b>About Cluck Norris &amp; CLKN.</b>\n\n" +
+        "Cluck Norris is the free <b>School of Crypto Hard Knocks</b> + a Solana token-safety toolkit — born from the FireChicken (FCKN) community, now with real utility.\n\n" +
+        "<b>CLKN</b> is the token: it unlocks premium operator tools via a small on-chain payment (no wallet-connect needed), and holding it earns airdrop eligibility and perks. The school itself is always free.\n\n" +
+        `🐔 ${B}   ·   the story &amp; grant info → ${B}/investors\n\n` +
+        "Ask me anything about how it all works.";
     case "explore":
       return "🧭 <b>Just exploring? Here's the lay of the land.</b>\n\n" +
         `🛠 Every tool in one place → ${B}/tools\n` +
