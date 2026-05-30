@@ -5570,27 +5570,7 @@ function Landing({onStart,onChallenge,onIncubator,onStartHere,completed}){
   const nextLesson = consecutive<LESSONS.length ? LESSONS[consecutive] : null;
   const allDone = !nextLesson;
 
-  // Live on-chain stats pulled fresh — no hardcoded numbers that go stale.
-  const [holderCount, setHolderCount] = useState(null);
-  const [feesSol, setFeesSol] = useState(null);
-  const [gradStats, setGradStats] = useState(null); // { verifiedDiplomas, graduates, totalTranscripts }
   const [lookupAddr, setLookupAddr] = useState("");
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`/api/holders?mint=${CLKN_MINT}`).then(r => r.json()).then(d => {
-      if (!cancelled && d?.success && Number.isFinite(d.holderCount)) setHolderCount(d.holderCount);
-    }).catch(() => {});
-    fetch(`/api/fees`).then(r => r.json()).then(d => {
-      if (cancelled) return;
-      const raw = d?.response ?? d;
-      const lamports = typeof raw === "string" ? parseInt(raw) : (raw?.totalLifetimeFees ?? raw);
-      if (Number.isFinite(parseInt(lamports))) setFeesSol(parseInt(lamports) / 1e9);
-    }).catch(() => {});
-    fetch(`/api/school-stats`).then(r => r.json()).then(d => {
-      if (!cancelled && d?.success) setGradStats(d);
-    }).catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
   return(
     <div style={{textAlign:"center",padding:"0 20px 40px",maxWidth:COL,margin:"0 auto"}}>
       {/* logo */}
@@ -5623,33 +5603,6 @@ function Landing({onStart,onChallenge,onIncubator,onStartHere,completed}){
           </div>
         </button>
       )}
-      {/* New community feature teaser — Cluck's Lessons + Ask Cluck reply-bot */}
-      <a href={TELEGRAM_LINK} target="_blank" rel="noreferrer" style={{display:"block",textDecoration:"none",maxWidth:440,margin:"0 auto 20px",background:"rgba(56,189,248,0.06)",border:"1px solid rgba(56,189,248,0.25)",borderRadius:10,padding:"10px 14px"}}>
-        <div style={{fontFamily:"system-ui,sans-serif",fontSize:13,color:"#D1D5DB",lineHeight:1.6}}>
-          💬 <strong style={{color:"#38BDF8"}}>New — Ask Cluck in Telegram.</strong> Short <strong>Cluck's Lessons</strong> drop in the group daily. Reply to one and Cluck answers your question right in chat — free, educational, with follow-ups. 🐔
-        </div>
-      </a>
-      {/* Live on-chain stats — pulled fresh from Helius + Bags so we never lie about numbers */}
-      <div style={{display:"flex",gap:8,marginBottom:18,justifyContent:"center"}}>
-        <div style={{flex:1,maxWidth:180,background:"rgba(252,211,77,0.06)",border:"1px solid rgba(252,211,77,0.25)",borderRadius:10,padding:"10px 14px"}}>
-          <div style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#D97706",letterSpacing:2,marginBottom:2}}>👥 HOLDERS</div>
-          <div style={{fontFamily:"'Oswald',sans-serif",fontSize:22,fontWeight:900,color:"#FCD34D"}}>
-            {holderCount == null ? "—" : holderCount.toLocaleString()}
-          </div>
-        </div>
-        <div style={{flex:1,maxWidth:180,background:"rgba(252,211,77,0.06)",border:"1px solid rgba(252,211,77,0.25)",borderRadius:10,padding:"10px 14px"}}>
-          <div style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#D97706",letterSpacing:2,marginBottom:2}}>💰 LIFETIME FEES</div>
-          <div style={{fontFamily:"'Oswald',sans-serif",fontSize:22,fontWeight:900,color:"#FCD34D"}}>
-            {feesSol == null ? "—" : feesSol.toFixed(2) + " SOL"}
-          </div>
-        </div>
-        <div style={{flex:1,maxWidth:180,background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.28)",borderRadius:10,padding:"10px 14px"}}>
-          <div style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#10B981",letterSpacing:2,marginBottom:2}}>🎓 VERIFIED GRADS</div>
-          <div style={{fontFamily:"'Oswald',sans-serif",fontSize:22,fontWeight:900,color:"#6EE7B7"}}>
-            {gradStats == null ? "—" : Number(gradStats.verifiedDiplomas || 0).toLocaleString()}
-          </div>
-        </div>
-      </div>
       {/* Transcript lookup — anyone can pull up a permanent transcript by wallet */}
       <div style={{maxWidth:440,margin:"0 auto 18px",display:"flex",gap:6}}>
         <input
@@ -5705,10 +5658,6 @@ function Landing({onStart,onChallenge,onIncubator,onStartHere,completed}){
           🥚 CLKN INCUBATOR
         </button>
         <p style={{marginTop:-4,fontSize:11,color:"#4B5563",fontFamily:"'Oswald',sans-serif",letterSpacing:1}}>CRYPTO NEWBIE? START HERE — 6 BEGINNER LESSONS</p>
-        <button onClick={onChallenge} style={{width:"100%",background:"rgba(239,68,68,0.12)",border:"2px solid rgba(239,68,68,0.5)",borderRadius:10,padding:"14px",fontFamily:"'Oswald',sans-serif",fontSize:16,fontWeight:700,color:"#EF4444",letterSpacing:3,cursor:"pointer",boxShadow:"0 0 20px rgba(239,68,68,0.3)"}}>
-          🥊 ULTIMATE CHALLENGE
-        </button>
-        <p style={{marginTop:-4,fontSize:11,color:"#4B5563",fontFamily:"'Oswald',sans-serif",letterSpacing:1}}>50 QUESTIONS • NO STUDY GUIDE • 94% TO PASS</p>
       </div>
       {/* Tools & Utilities — the front door to the product beyond the school:
           Cluck Score, the Hatchery, the competition trackers, the airdropper,
