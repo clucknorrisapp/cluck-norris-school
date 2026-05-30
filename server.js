@@ -4943,6 +4943,16 @@ app.get("/tools", (req, res) => {
   res.sendFile(join(__dirname, "public", "tools.html"));
 });
 
+// Privacy policy + Terms — required live at /privacy and /terms for the Solana
+// dApp Store submission's Compliance section.
+app.get("/privacy", (req, res) => {
+  res.sendFile(join(__dirname, "public", "privacy.html"));
+});
+
+app.get("/terms", (req, res) => {
+  res.sendFile(join(__dirname, "public", "terms.html"));
+});
+
 app.get("/rose", (req, res) => {
   res.sendFile(join(__dirname, "public", "rose.html"));
 });
