@@ -645,7 +645,7 @@ function buyCompRender(c, standings) {
     });
   }
   lines.push("");
-  lines.push(`<i>metric: cumulative bought · refreshes ~${c.updateMins}m</i>`);
+  lines.push(`<i>metric: cumulative bought · refreshes ~${c.updateMins}m · type /buyleaders anytime</i>`);
   lines.push(ended
     ? `⚠️ PROVISIONAL. Winners must hold ${c.holdHours}h (no sells/transfers); official results come from the Rose scan after the hold.`
     : "⚠️ Live &amp; provisional — official winners are confirmed after the hold period via the Rose scan (wash-trade &amp; hold checked).");
@@ -831,8 +831,8 @@ function tgCommandReply(cmd, arg) {
   }
 }
 
-const TG_KNOWN_CMDS = ["score","autopsy","trace","snapshot","holders","securitycoop","buyspecial","rose","hatchery","bags","tools","commands","start","help","guide","leaderboard","chatid"];
-const lbCooldown = new Map(); // chatId -> last /leaderboard ts (anti-spam)
+const TG_KNOWN_CMDS = ["score","autopsy","trace","snapshot","holders","securitycoop","buyspecial","rose","hatchery","bags","tools","commands","start","help","guide","buyleaders","chatid"];
+const lbCooldown = new Map(); // chatId -> last /buyleaders ts (anti-spam)
 
 // ── "Where do I start?" concierge ──────────────────────────────────────────
 // New members get a tagged welcome; /start and /guide open the same menu. Each
@@ -1134,8 +1134,8 @@ function handleTelegramUpdate(update) {
       tgSend(msg.chat.id, `Chat ID: <code>${msg.chat.id}</code>`, msg.message_id);
       return;
     }
-    // /leaderboard → current standings for this group's active buy competition.
-    if (cmd === "leaderboard") {
+    // /buyleaders → current standings for this group's active buy competition.
+    if (cmd === "buyleaders") {
       const c = buyCompByChat(msg.chat.id);
       if (!c) { tgSend(msg.chat.id, "🌹 No active buy competition in this group right now.", msg.message_id); return; }
       const now = Date.now(), last = lbCooldown.get(msg.chat.id) || 0;
