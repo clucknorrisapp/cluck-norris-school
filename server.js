@@ -434,7 +434,10 @@ const CLKN_MINT = "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
 // instead of the bare CA. The bare CA stays on Telegram only.
 // CLKN's verified DexScreener pair (CLKN/SOL on Meteora) — the canonical chart link.
 const CLKN_DEXSCREENER = "dexscreener.com/solana/64wxkhm4zywukyy32tfuebv5wdafdcugdxe5ntm4xatd";
-const X_LESSON_TAIL = "\n\n🐔 clucknorris.app\n💬 t.me/FireChicken007\n📊 " + CLKN_DEXSCREENER + "\n" + X_MENTION_TAGS;
+// Links live in a SELF-REPLY, never the post body — X demotes the reach of posts
+// that carry external links, so the lesson itself stays clean and link-free.
+// No @-mentions on generic education; @Bags tags are reserved for project/app posts.
+const X_LESSON_REPLY = "📚 Full school + free token tools → clucknorris.app\n📊 CLKN chart: " + CLKN_DEXSCREENER + "\n💬 t.me/FireChicken007";
 const EDU_TOPICS = [
   "What a self-custody wallet is, and why \"not your keys, not your coins\"",
   "How a decentralized exchange (DEX) differs from a centralized one",
@@ -503,7 +506,7 @@ function xConfigured() {
 function xPercentEncode(s) {
   return encodeURIComponent(String(s)).replace(/[!*'()]/g, c => "%" + c.charCodeAt(0).toString(16).toUpperCase());
 }
-async function postToX(text) {
+async function postToX(text, opts = {}) {
   if (!xConfigured()) return { ok: false, skipped: true };
   const ck = process.env.X_API_KEY, cs = process.env.X_API_SECRET, at = process.env.X_ACCESS_TOKEN, ats = process.env.X_ACCESS_SECRET;
   const url = "https://api.x.com/2/tweets";
@@ -522,7 +525,9 @@ async function postToX(text) {
   oauth.oauth_signature = createHmac("sha1", signingKey).update(base).digest("base64");
   const authHeader = "OAuth " + Object.keys(oauth).sort().map(k => `${xPercentEncode(k)}="${xPercentEncode(oauth[k])}"`).join(", ");
   try {
-    const r = await fetch(url, { method: "POST", headers: { Authorization: authHeader, "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
+    const payload = { text };
+    if (opts.replyToId) payload.reply = { in_reply_to_tweet_id: String(opts.replyToId) };  // threaded self-reply (links go here, not the post body)
+    const r = await fetch(url, { method: "POST", headers: { Authorization: authHeader, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     const j = await r.json().catch(() => ({}));
     if (r.ok) return { ok: true, id: j?.data?.id };
     console.warn("[X] post failed", r.status, JSON.stringify(j).slice(0, 200));
@@ -533,7 +538,7 @@ async function postToX(text) {
 async function generateEduTweet(topic) {
   const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
   if (!ANTHROPIC_KEY) return null;
-  const system = "You are Cluck Norris, a crypto-education project on Solana (clucknorris.app). Write ONE tweet teaching a single crisp insight about the given topic. HARD LIMIT: 185 characters MAX (a link and two @mentions are appended after). Plain text, accurate, beginner-friendly, no markdown, no hashtags, at most one emoji, no financial advice. Output ONLY the tweet text.";
+  const system = "You are Cluck Norris, a crypto-education project on Solana (clucknorris.app). Write ONE tweet teaching a single crisp insight about the given topic. HARD LIMIT: 270 characters MAX. Plain text, accurate, beginner-friendly, no links, no markdown, no hashtags, at most one emoji, no financial advice. Output ONLY the tweet text.";
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -543,8 +548,8 @@ async function generateEduTweet(topic) {
     const data = await res.json();
     if (data && data.content && data.content[0]) {
       let t = data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/#{1,3}\s/g, "").trim();
-      if (t.length > 185) t = t.slice(0, 184).trim() + "…";
-      return t + X_LESSON_TAIL;
+      if (t.length > 270) t = t.slice(0, 269).trim() + "…";
+      return t;  // clean, link-free; any links go in a self-reply at post time
     }
   } catch (e) { console.warn("[X] tweet generation failed:", e.message); }
   return null;
@@ -570,15 +575,18 @@ async function notifyEduPost() {
   // Cross-post the FULL lesson to X (the account has Premium → long posts), so
   // it's never truncated. Trimmed fallback only if a long post is ever rejected.
   if (xConfigured()) {
-    const tail = X_LESSON_TAIL;
     try {
-      let r = await postToX(body + tail);
+      // Clean, link-free lesson in the post body (max algorithmic reach)…
+      let r = await postToX(body);
       if (!r || !r.ok) {
-        const short = (body.length > 180 ? body.slice(0, 179).trim() + "…" : body) + tail;
+        const short = body.length > 270 ? body.slice(0, 269).trim() + "…" : body;
         r = await postToX(short);
       }
-      if (r && r.ok) console.log(`[X] lesson tweeted (id ${r.id})`);
-      else console.warn("[X] lesson tweet failed:", JSON.stringify(r).slice(0, 200));
+      if (r && r.ok) {
+        console.log(`[X] lesson tweeted (id ${r.id})`);
+        // …links follow as a self-reply so they never throttle the lesson's reach.
+        try { await postToX(X_LESSON_REPLY, { replyToId: r.id }); } catch (_) {}
+      } else console.warn("[X] lesson tweet failed:", JSON.stringify(r).slice(0, 200));
     } catch (e) { console.warn("[EDU] X cross-post failed:", e.message); }
   }
 }
