@@ -5603,23 +5603,23 @@ function Landing({onStart,onChallenge,onIncubator,onStartHere,completed}){
           </div>
         </button>
       )}
-      {/* Transcript lookup — anyone can pull up a permanent transcript by wallet */}
-      <div style={{maxWidth:440,margin:"0 auto 18px",display:"flex",gap:6}}>
-        <input
-          value={lookupAddr}
-          onChange={e=>setLookupAddr(e.target.value)}
-          onKeyDown={e=>{ if(e.key==="Enter" && lookupAddr.trim().length>=32) window.open("/transcript/"+encodeURIComponent(lookupAddr.trim()),"_blank","noopener"); }}
-          placeholder="🎓 Look up a transcript by wallet address…"
-          style={{flex:1,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:8,padding:"9px 12px",color:"#F9FAFB",fontFamily:"monospace",fontSize:11,outline:"none"}}
-        />
-        <button
-          onClick={()=>{ if(lookupAddr.trim().length>=32) window.open("/transcript/"+encodeURIComponent(lookupAddr.trim()),"_blank","noopener"); }}
-          disabled={lookupAddr.trim().length<32}
-          style={{background:lookupAddr.trim().length>=32?"rgba(16,185,129,0.18)":"rgba(255,255,255,0.05)",border:"1px solid rgba(16,185,129,0.4)",borderRadius:8,padding:"9px 14px",fontFamily:"'Oswald',sans-serif",fontSize:11,fontWeight:700,color:lookupAddr.trim().length>=32?"#6EE7B7":"#4B5563",letterSpacing:1,cursor:lookupAddr.trim().length>=32?"pointer":"default"}}
-        >VIEW</button>
-      </div>
-      <p style={{color:"#9CA3AF",fontSize:16,lineHeight:1.7,marginBottom:24,fontStyle:"italic"}}>"No participation trophies. No hand-holding. Just hard knocks."</p>
-      {/* Rank banner */}
+      {/* Primary CTA — directly under the concierge */}
+      <button onClick={onStart} style={{marginTop:4,background:"linear-gradient(135deg,#D97706,#EF4444)",border:"none",borderRadius:10,padding:"14px 44px",fontFamily:"'Oswald',sans-serif",fontSize:16,fontWeight:700,color:"#fff",letterSpacing:3,textTransform:"uppercase",cursor:"pointer",boxShadow:"0 0 28px rgba(217,119,6,0.5)"}}>
+        {completed.length===0?"🏫 Start School":"📚 Back to Class"}
+      </button>
+      <p style={{marginTop:14,fontSize:13,color:"#6B7280",fontFamily:"'Oswald',sans-serif",letterSpacing:2}}>12 CLASSES • 72 EXAMS • NO EXTRA CREDIT</p>
+      <p style={{color:"#9CA3AF",fontSize:16,lineHeight:1.7,marginTop:20,marginBottom:24,fontStyle:"italic"}}>"No participation trophies. No hand-holding. Just hard knocks."</p>
+      {/* Transcript progress (swapped above the rank banner) */}
+      {completed.length>0&&(
+        <div style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"12px 16px",marginBottom:12}}>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#9CA3AF",fontFamily:"'Oswald',sans-serif",letterSpacing:1,marginBottom:6}}><span>TRANSCRIPT</span><span>{completed.length}/{LESSONS.length} CLASSES PASSED</span></div>
+          <div style={{height:5,background:"rgba(255,255,255,0.08)",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:`${pct}%`,background:"linear-gradient(90deg,#F97316,#FCD34D)",borderRadius:3}}/></div>
+          <div style={{marginTop:8,display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap"}}>
+            {LESSONS.map(l=><span key={l.id} style={{fontSize:10,color:completed.includes(l.id)?"#FCD34D":"#4B5563",fontFamily:"'Oswald',sans-serif"}}>{completed.includes(l.id)?"✓":"○"} {l.title.split(" ")[0]}</span>)}
+          </div>
+        </div>
+      )}
+      {/* Rank banner (swapped below the transcript progress) */}
       <div style={{background:"rgba(217,119,6,0.08)",border:"1px solid rgba(217,119,6,0.3)",borderRadius:10,padding:"12px 16px",marginBottom:12}}>
         <div style={{fontFamily:"'Oswald',sans-serif",fontSize:10,letterSpacing:3,color:"#D97706",marginBottom:8}}>CURRENT RANK</div>
         {allDone ? (
@@ -5640,24 +5640,29 @@ function Landing({onStart,onChallenge,onIncubator,onStartHere,completed}){
           </div>
         )}
       </div>
-      {completed.length>0&&(
-        <div style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"12px 16px",marginBottom:20}}>
-          <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#9CA3AF",fontFamily:"'Oswald',sans-serif",letterSpacing:1,marginBottom:6}}><span>TRANSCRIPT</span><span>{completed.length}/{LESSONS.length} CLASSES PASSED</span></div>
-          <div style={{height:5,background:"rgba(255,255,255,0.08)",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:`${pct}%`,background:"linear-gradient(90deg,#F97316,#FCD34D)",borderRadius:3}}/></div>
-          <div style={{marginTop:8,display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap"}}>
-            {LESSONS.map(l=><span key={l.id} style={{fontSize:10,color:completed.includes(l.id)?"#FCD34D":"#4B5563",fontFamily:"'Oswald',sans-serif"}}>{completed.includes(l.id)?"✓":"○"} {l.title.split(" ")[0]}</span>)}
-          </div>
-        </div>
-      )}
-      <button onClick={onStart} style={{background:"linear-gradient(135deg,#D97706,#EF4444)",border:"none",borderRadius:10,padding:"14px 44px",fontFamily:"'Oswald',sans-serif",fontSize:16,fontWeight:700,color:"#fff",letterSpacing:3,textTransform:"uppercase",cursor:"pointer",boxShadow:"0 0 28px rgba(217,119,6,0.5)"}}>
-        {completed.length===0?"🏫 Start School":"📚 Back to Class"}
-      </button>
-      <p style={{marginTop:14,fontSize:13,color:"#6B7280",fontFamily:"'Oswald',sans-serif",letterSpacing:2}}>12 CLASSES • 72 EXAMS • NO EXTRA CREDIT</p>
       <div style={{marginTop:16,borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:16,display:"flex",flexDirection:"column",gap:10}}>
         <button onClick={onIncubator} style={{width:"100%",background:"rgba(96,165,250,0.1)",border:"2px solid rgba(96,165,250,0.4)",borderRadius:10,padding:"14px",fontFamily:"'Oswald',sans-serif",fontSize:16,fontWeight:700,color:"#60A5FA",letterSpacing:3,cursor:"pointer",boxShadow:"0 0 20px rgba(96,165,250,0.2)"}}>
           🥚 CLKN INCUBATOR
         </button>
         <p style={{marginTop:-4,fontSize:11,color:"#4B5563",fontFamily:"'Oswald',sans-serif",letterSpacing:1}}>CRYPTO NEWBIE? START HERE — 6 BEGINNER LESSONS</p>
+      </div>
+      {/* Transcript lookup — moved out of the hero flow into a quiet utility row */}
+      <div style={{marginTop:22,paddingTop:18,borderTop:"1px solid rgba(255,255,255,0.06)"}}>
+        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:10,color:"#6B7280",letterSpacing:3,marginBottom:10}}>🎓 LOOK UP ANY TRANSCRIPT</div>
+        <div style={{maxWidth:440,margin:"0 auto",display:"flex",gap:6}}>
+          <input
+            value={lookupAddr}
+            onChange={e=>setLookupAddr(e.target.value)}
+            onKeyDown={e=>{ if(e.key==="Enter" && lookupAddr.trim().length>=32) window.open("/transcript/"+encodeURIComponent(lookupAddr.trim()),"_blank","noopener"); }}
+            placeholder="🎓 Look up a transcript by wallet address…"
+            style={{flex:1,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:8,padding:"9px 12px",color:"#F9FAFB",fontFamily:"monospace",fontSize:11,outline:"none"}}
+          />
+          <button
+            onClick={()=>{ if(lookupAddr.trim().length>=32) window.open("/transcript/"+encodeURIComponent(lookupAddr.trim()),"_blank","noopener"); }}
+            disabled={lookupAddr.trim().length<32}
+            style={{background:lookupAddr.trim().length>=32?"rgba(16,185,129,0.18)":"rgba(255,255,255,0.05)",border:"1px solid rgba(16,185,129,0.4)",borderRadius:8,padding:"9px 14px",fontFamily:"'Oswald',sans-serif",fontSize:11,fontWeight:700,color:lookupAddr.trim().length>=32?"#6EE7B7":"#4B5563",letterSpacing:1,cursor:lookupAddr.trim().length>=32?"pointer":"default"}}
+          >VIEW</button>
+        </div>
       </div>
       {/* Tools & Utilities — the front door to the product beyond the school:
           Cluck Score, the Hatchery, the competition trackers, the airdropper,
