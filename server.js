@@ -610,6 +610,89 @@ function eduPostTick() {
   }
 }
 
+// ── Live Buy-Competition Leaderboard ("The Siren") ───────────────────────────
+// A cumulative-metric live board, posted self-editing into a community's Telegram
+// for the run of a token buy competition. The board is explicitly PROVISIONAL —
+// it can't fully filter wash-trading in real time; official winners come from the
+// retroactive Rose scan after the hold period. State is volume-backed (survives redeploys).
+const BUYCOMP_KEY = "buyComps";
+let buyCompRunning = false;
+function buyCompsAll() { return kv.get(BUYCOMP_KEY, {}); }
+function buyCompSave(c) { const all = buyCompsAll(); all[c.id] = c; kv.set(BUYCOMP_KEY, all); }
+function buyCompByChat(chatId) {
+  return Object.values(buyCompsAll())
+    .filter(c => String(c.chatId) === String(chatId) && (c.status === "live" || c.status === "closed"))
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0] || null;
+}
+function buyCompRender(c, standings) {
+  const now = Date.now(), ended = now >= c.endTs;
+  const medals = ["🥇", "🥈", "🥉"];
+  const lines = [
+    `🌹 <b>LIVE BUY COMP — $${tgEsc(c.ticker)}</b>`,
+    ended ? "⏳ <b>WINDOW CLOSED</b>" : `⏳ ${bcFmtDur(c.endTs - now)} left`,
+  ];
+  if (c.prizeSummary) lines.push(c.prizeSummary);
+  lines.push("");
+  const rows = (standings || []).slice(0, Math.max(c.places.length, 10));
+  if (!rows.length) {
+    lines.push("<i>No qualifying buys yet — be the first. 🌹</i>");
+  } else {
+    rows.forEach((s, i) => {
+      const tag = i < 3 ? medals[i] : `${i + 1}.`;
+      const short = s.wallet.slice(0, 4) + "…" + s.wallet.slice(-4);
+      const prize = (i < c.places.length) ? ` — <b>${c.places[i].amount.toLocaleString()} ${tgEsc(c.ticker)}</b>` : "";
+      lines.push(`${tag} <code>${short}</code> · ${(s.volumeSol || 0).toFixed(2)} SOL${prize}`);
+    });
+  }
+  lines.push("");
+  lines.push(`<i>metric: cumulative bought · refreshes ~${c.updateMins}m</i>`);
+  lines.push(ended
+    ? `⚠️ PROVISIONAL. Winners must hold ${c.holdHours}h (no sells/transfers); official results come from the Rose scan after the hold.`
+    : "⚠️ Live &amp; provisional — official winners are confirmed after the hold period via the Rose scan (wash-trade &amp; hold checked).");
+  return lines.join("\n");
+}
+async function buyCompStandings(c) {
+  const fromSec = Math.floor(c.startTs / 1000);
+  const toSec = Math.floor(Math.min(Date.now(), c.endTs) / 1000);
+  const r = await solanaTracker.getTokenBuyersInWindow(c.mint, fromSec, toSec, { maxPages: 60 });
+  return ((r && r.buyers) || []).sort((a, b) => (b.volumeSol || 0) - (a.volumeSol || 0));
+}
+async function buyCompUpdate(c) {
+  let standings;
+  try { standings = await buyCompStandings(c); }
+  catch (e) { console.warn("[BUYCOMP] standings fetch failed:", e.message); return; }
+  c.provisional = standings.slice(0, 20).map(s => ({ wallet: s.wallet, volumeSol: s.volumeSol, buyCount: s.buyCount }));
+  const text = buyCompRender(c, standings);
+  if (c.boardMsgId) {
+    const ok = await tgEdit(c.chatId, c.boardMsgId, text);
+    if (!ok) { const mid = await tgSend(c.chatId, text); if (mid) c.boardMsgId = mid; }
+  } else {
+    const mid = await tgSend(c.chatId, text); if (mid) c.boardMsgId = mid;
+  }
+  c.lastUpdateTs = Date.now();
+  buyCompSave(c);
+}
+async function buyCompTick() {
+  if (buyCompRunning) return;
+  buyCompRunning = true;
+  try {
+    const now = Date.now();
+    for (const c of Object.values(buyCompsAll())) {
+      if (c.status !== "live") continue;
+      if (now >= c.endTs) {
+        await buyCompUpdate(c);                 // final provisional board
+        c.status = "closed"; buyCompSave(c);
+        await tgSend(c.chatId, `🏁 <b>$${tgEsc(c.ticker)} buy comp — window closed!</b>\n\nThe board above is the PROVISIONAL standing. Winners must hold their buys for <b>${c.holdHours}h</b> (no sells, no transfers) — official winners are confirmed by the Rose scan after the hold. 🌹`);
+        continue;
+      }
+      if (now >= c.startTs && (!c.lastUpdateTs || now - c.lastUpdateTs >= c.updateMins * 60000)) {
+        await buyCompUpdate(c);
+      }
+    }
+  } catch (e) { console.warn("[BUYCOMP] tick error:", e.message); }
+  finally { buyCompRunning = false; }
+}
+
 // ── Interactive slash commands ─────────────────────────────────────────────
 // The bot is otherwise send-only; this lets group members run /score, /trace,
 // /autopsy, /bags, /hatchery, etc. and get back a deep link (pre-filled with the
@@ -670,6 +753,26 @@ async function tgAnswerCallback(id, text) {
   } catch (_) {}
 }
 
+// Edit an existing message in place (for self-refreshing boards). Returns ok bool.
+async function tgEdit(chatId, messageId, text) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token || !chatId || !messageId) return false;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/editMessageText`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, message_id: messageId, text, parse_mode: "HTML", disable_web_page_preview: true }),
+    });
+    const data = await res.json().catch(() => null);
+    return !!(data && data.ok);
+  } catch (_) { return false; }
+}
+// ms → "2d 3h" / "3h 12m" / "12m"
+function bcFmtDur(ms) {
+  if (ms <= 0) return "0m";
+  const d = Math.floor(ms / 86400000), h = Math.floor(ms % 86400000 / 3600000), m = Math.floor(ms % 3600000 / 60000);
+  return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
 // base58 address before it's used to pre-fill a tool URL).
 function tgCommandReply(cmd, arg) {
   const addr = arg && SOL_ADDR_RE.test(arg) ? arg : null;
@@ -716,7 +819,8 @@ function tgCommandReply(cmd, arg) {
   }
 }
 
-const TG_KNOWN_CMDS = ["score","autopsy","trace","snapshot","holders","securitycoop","buyspecial","rose","hatchery","bags","tools","commands","start","help","guide"];
+const TG_KNOWN_CMDS = ["score","autopsy","trace","snapshot","holders","securitycoop","buyspecial","rose","hatchery","bags","tools","commands","start","help","guide","leaderboard","chatid"];
+const lbCooldown = new Map(); // chatId -> last /leaderboard ts (anti-spam)
 
 // ── "Where do I start?" concierge ──────────────────────────────────────────
 // New members get a tagged welcome; /start and /guide open the same menu. Each
@@ -1011,6 +1115,21 @@ function handleTelegramUpdate(update) {
     if (cmd === "start" || cmd === "guide") {
       tgSendKb(msg.chat.id, `🐔 <b>Welcome to the School of Crypto Hard Knocks.</b>\n\n${GUIDE_BODY}`, GUIDE_KEYBOARD, msg.message_id)
         .then(mid => { if (mid) registerCluckAnswer(mid, { guide: true, history: [] }); });
+      return;
+    }
+    // /chatid → return this chat's numeric id (for wiring a buy-comp in the portal).
+    if (cmd === "chatid") {
+      tgSend(msg.chat.id, `Chat ID: <code>${msg.chat.id}</code>`, msg.message_id);
+      return;
+    }
+    // /leaderboard → current standings for this group's active buy competition.
+    if (cmd === "leaderboard") {
+      const c = buyCompByChat(msg.chat.id);
+      if (!c) { tgSend(msg.chat.id, "🌹 No active buy competition in this group right now.", msg.message_id); return; }
+      const now = Date.now(), last = lbCooldown.get(msg.chat.id) || 0;
+      if (now - last < 15000) return;            // light anti-spam
+      lbCooldown.set(msg.chat.id, now);
+      tgSend(msg.chat.id, buyCompRender(c, c.provisional || []), msg.message_id);
       return;
     }
     // /score with a real mint → live in-chat score (light per-chat cooldown).
@@ -2139,6 +2258,46 @@ app.post("/api/tg/:secret", (req, res) => {
   }
   res.status(200).json({ ok: true });
   handleTelegramUpdate(req.body);
+});
+
+// ── Buy-Competition admin (gated by PREMIUM_ACCESS_KEY) ──────────────────────
+// Start/stop/list live buy-comp leaderboards. start params (query or body):
+//   mint, chat (telegram chat id, negative), ticker, start, end (ISO or unix),
+//   places (comma amounts e.g. 500000,350000,150000), hold (hours), update (mins).
+const buyCompAdminOK = (req) => { const k = process.env.PREMIUM_ACCESS_KEY; if (!k) return false; const supplied = req.query.key || (req.body && req.body.key) || req.headers["x-premium-key"]; return supplied === k; };
+app.post("/api/buycomp/start", (req, res) => {
+  if (!buyCompAdminOK(req)) return res.status(404).json({ error: "not_found" });
+  const q = Object.assign({}, req.query, req.body || {});
+  const mint = String(q.mint || "").trim();
+  const chatId = String(q.chat || q.chatId || "").trim();
+  const ticker = String(q.ticker || "TOKEN").trim().slice(0, 12);
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ error: "bad mint" });
+  if (!/^-?\d+$/.test(chatId)) return res.status(400).json({ error: "bad chat id" });
+  const parseTs = (v) => (v == null || v === "") ? null : (isNaN(+v) ? Date.parse(v) : (+v < 1e12 ? +v * 1000 : +v));
+  const startTs = parseTs(q.start) || Date.now();
+  const endTs = parseTs(q.end);
+  if (!endTs || endTs <= startTs) return res.status(400).json({ error: "bad window (need end > start)" });
+  const places = String(q.places || "").split(",").map(s => parseInt(String(s).replace(/[^0-9]/g, ""))).filter(n => n > 0).map((amount, i) => ({ rank: i + 1, amount }));
+  if (!places.length) return res.status(400).json({ error: "no prize places" });
+  const holdHours = parseInt(q.hold) || 48;
+  const updateMins = Math.max(5, parseInt(q.update) || 60);
+  const id = "bc_" + randomBytes(5).toString("hex");
+  const prizeSummary = `🏆 ${places.map(p => p.amount.toLocaleString()).join(" / ")} ${ticker}`;
+  const c = { id, label: String(q.label || ticker).slice(0, 60), mint, ticker, chatId, metric: "cumulative", startTs, endTs, holdHours, places, prizeToken: { kind: String(q.prizeToken || "native") }, updateMins, prizeSummary, status: "live", boardMsgId: null, provisional: [], lastUpdateTs: 0, createdAt: Date.now() };
+  buyCompSave(c);
+  buyCompUpdate(c).catch(() => {});    // post the initial board now (if the window has started)
+  return res.status(200).json({ ok: true, id, competition: c });
+});
+app.post("/api/buycomp/stop", (req, res) => {
+  if (!buyCompAdminOK(req)) return res.status(404).json({ error: "not_found" });
+  const all = buyCompsAll(); const c = all[String(req.query.id || "")];
+  if (!c) return res.status(404).json({ error: "no such competition" });
+  c.status = req.query.cancel === "1" ? "cancelled" : "closed"; buyCompSave(c);
+  return res.status(200).json({ ok: true, competition: c });
+});
+app.get("/api/buycomp/list", (req, res) => {
+  if (!buyCompAdminOK(req)) return res.status(404).json({ error: "not_found" });
+  return res.status(200).json({ ok: true, competitions: Object.values(buyCompsAll()) });
 });
 
 // Buy Special double-check — independent buyer list from Solana Tracker for a
@@ -9665,6 +9824,8 @@ app.listen(PORT, () => {
     setInterval(gradWatcherTick, 600 * 1000);   // 10 min — a 48h grad tracker doesn't need 3-min resolution; cuts the dominant ST drain ~3-4× (480→144 calls/day)
     // Cluck's Lesson — educational post 4×/day on odd UTC hours (13/17/21/01).
     setInterval(eduPostTick, 60 * 1000);
+    // Live buy-competition leaderboards — refresh active boards, close on window end.
+    setInterval(buyCompTick, 60 * 1000);
     // Interactive slash commands — register the webhook + the "/" command menu.
     (async () => {
       const token = process.env.TELEGRAM_BOT_TOKEN;
