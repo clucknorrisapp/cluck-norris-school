@@ -141,7 +141,7 @@ function toolsReminderTick() {
   }
 }
 
-// ── Bags Launch Radar — every 4h: recent Bags launches + the 2 closest to
+// ── Bags Launch Radar — 2×/day: recent Bags launches + the 2 closest to
 // bonding (with SOL-to-graduate). Content post that drives traffic to /bags.
 // buildBagsRadarText() composes the message (also used by the test endpoint
 // for dry-run verification); notifyBagsLaunches() posts it.
@@ -205,17 +205,20 @@ async function notifyBagsLaunches() {
     if (data && data.ok && data.result) { lastBagsRadarMsgId = data.result.message_id; kv.set("bagsRadarMsgId", lastBagsRadarMsgId); }
   } catch (e) { console.warn("[TELEGRAM] bags radar failed:", e.message); }
 }
+// 2×/day (14 & 22 UTC = 10am & 6pm ET), staggered onto hours no other scheduled
+// post uses, so the radar never lands stacked on a Market Check / lesson.
+const BAGS_RADAR_HOURS_UTC = [14, 22];
 let lastBagsRadarHour = kv.get("bagsRadarHour", -1);
 function bagsLaunchesTick() {
   if (!BAGS_RADAR_ENABLED) return;
-  const h = new Date().getUTCHours();
-  if (h % 4 === 0 && h !== lastBagsRadarHour) {
+  const now = new Date(), h = now.getUTCHours();
+  if (now.getUTCMinutes() < 2 && BAGS_RADAR_HOURS_UTC.includes(h) && h !== lastBagsRadarHour) {
     lastBagsRadarHour = h; kv.set("bagsRadarHour", h);
     notifyBagsLaunches();
   }
 }
 
-// ── Market Check — every 2h: CLKN / SOL / BTC price with 1h + 24h change.
+// ── Market Check — 3×/day: CLKN / SOL / BTC price with 1h + 24h change.
 // CLKN from Solana Tracker (price + events), SOL+BTC from CoinGecko markets.
 const MARKET_CHECK_ENABLED = true;
 let lastMarketCheckMsgId = kv.get("marketCheckMsgId", null); // delete-previous, persisted across deploys
@@ -334,12 +337,15 @@ async function notifyMarketCheck() {
 // Fires every 2h near the top of an even hour (UTC). Minute-gated so it does NOT
 // post on every deploy/restart; lastMarketCheckHour persisted on the volume so a
 // deploy in the firing window doesn't double-post.
+// 3×/day (15, 19, 23 UTC = 11am · 3pm · 7pm ET), interleaved with the lessons
+// (13/17/21/01) for a clean ~2-hourly pulse — no two scheduled posts share an hour.
+const MARKET_CHECK_HOURS_UTC = [15, 19, 23];
 let lastMarketCheckHour = kv.get("marketCheckHour", -1);
 function marketCheckTick() {
   if (!MARKET_CHECK_ENABLED) return;
   const now = new Date();
   const h = now.getUTCHours();
-  if (now.getUTCMinutes() < 2 && h % 2 === 0 && h !== lastMarketCheckHour) {
+  if (now.getUTCMinutes() < 2 && MARKET_CHECK_HOURS_UTC.includes(h) && h !== lastMarketCheckHour) {
     lastMarketCheckHour = h; kv.set("marketCheckHour", h);
     notifyMarketCheck();
   }
