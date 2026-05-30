@@ -663,12 +663,12 @@ async function buyCompUpdate(c) {
   catch (e) { console.warn("[BUYCOMP] standings fetch failed:", e.message); return; }
   c.provisional = standings.slice(0, 20).map(s => ({ wallet: s.wallet, volumeSol: s.volumeSol, buyCount: s.buyCount }));
   const text = buyCompRender(c, standings);
-  if (c.boardMsgId) {
-    const ok = await tgEdit(c.chatId, c.boardMsgId, text);
-    if (!ok) { const mid = await tgSend(c.chatId, text); if (mid) c.boardMsgId = mid; }
-  } else {
-    const mid = await tgSend(c.chatId, text); if (mid) c.boardMsgId = mid;
-  }
+  // Self-cleaning hourly repost: post a fresh board (so it resurfaces in the feed
+  // as a "comp is live" reminder), then delete the previous one — one board at a
+  // time, no clutter. Silent so it bumps the feed without an hourly ping.
+  const prev = c.boardMsgId;
+  const mid = await tgSend(c.chatId, text, null, { silent: true });
+  if (mid) { c.boardMsgId = mid; if (prev && prev !== mid) tgDelete(c.chatId, prev); }
   c.lastUpdateTs = Date.now();
   buyCompSave(c);
 }
@@ -706,7 +706,7 @@ const TG_WEBHOOK_SECRET = process.env.TELEGRAM_BOT_TOKEN
   : "";
 const SOL_ADDR_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/; // base58 mint/wallet shape
 
-async function tgSend(chatId, text, replyTo) {
+async function tgSend(chatId, text, replyTo, opts = {}) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token || !chatId) return null;
   try {
@@ -714,6 +714,7 @@ async function tgSend(chatId, text, replyTo) {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true,
+        ...(opts.silent ? { disable_notification: true } : {}),
         // Still send even if the user's command message was deleted meanwhile.
         ...(replyTo ? { reply_to_message_id: replyTo, allow_sending_without_reply: true } : {}),
       }),
@@ -766,11 +767,22 @@ async function tgEdit(chatId, messageId, text) {
     return !!(data && data.ok);
   } catch (_) { return false; }
 }
-// ms → "2d 3h" / "3h 12m" / "12m"
+// Delete a message (for self-cleaning reposts).
+async function tgDelete(chatId, messageId) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token || !chatId || !messageId) return;
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, message_id: messageId }),
+    });
+  } catch (_) {}
+}
+// ms → "2d 3h 14m" / "3h 14m" / "14m"
 function bcFmtDur(ms) {
   if (ms <= 0) return "0m";
   const d = Math.floor(ms / 86400000), h = Math.floor(ms % 86400000 / 3600000), m = Math.floor(ms % 3600000 / 60000);
-  return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}m` : `${m}m`;
+  return d > 0 ? `${d}d ${h}h ${m}m` : h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
 // base58 address before it's used to pre-fill a tool URL).
@@ -2298,6 +2310,13 @@ app.post("/api/buycomp/stop", (req, res) => {
 app.get("/api/buycomp/list", (req, res) => {
   if (!buyCompAdminOK(req)) return res.status(404).json({ error: "not_found" });
   return res.status(200).json({ ok: true, competitions: Object.values(buyCompsAll()) });
+});
+app.post("/api/buycomp/refresh", (req, res) => {
+  if (!buyCompAdminOK(req)) return res.status(404).json({ error: "not_found" });
+  const c = buyCompsAll()[String(req.query.id || "")];
+  if (!c) return res.status(404).json({ error: "no such competition" });
+  buyCompUpdate(c).catch(() => {});       // force an immediate repost
+  return res.status(200).json({ ok: true });
 });
 
 // Buy Special double-check — independent buyer list from Solana Tracker for a
