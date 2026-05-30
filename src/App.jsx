@@ -5561,7 +5561,7 @@ function AppIcon({size=64}){
   );
 }
 
-function Landing({onStart,onChallenge,onIncubator,completed}){
+function Landing({onStart,onChallenge,onIncubator,onStartHere,completed}){
   const pct=Math.round((completed.length/LESSONS.length)*100);
   // Belts earn consecutively from FRESHMAN. Skipping a lesson doesn't promote you past the gap.
   let consecutive=0;
@@ -5610,6 +5610,19 @@ function Landing({onStart,onChallenge,onIncubator,completed}){
           ✈️ TELEGRAM
         </a>
       </div>
+      {/* Newcomer concierge — the antidote to "this app has so much, where do I start?" */}
+      {onStartHere&&(
+        <button onClick={onStartHere} style={{display:"block",width:"100%",maxWidth:440,margin:"0 auto 14px",background:"linear-gradient(135deg,rgba(217,119,6,0.18),rgba(239,68,68,0.12))",border:"1px solid rgba(217,119,6,0.5)",borderRadius:12,padding:"13px 16px",cursor:"pointer",textAlign:"left",boxShadow:"0 0 22px rgba(217,119,6,0.18)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <span style={{fontSize:26,flexShrink:0}}>🐥</span>
+            <span style={{flex:1}}>
+              <span style={{display:"block",fontFamily:"'Oswald',sans-serif",fontSize:15,fontWeight:700,color:"#FCD34D",letterSpacing:0.5}}>New here? Where do I start?</span>
+              <span style={{display:"block",fontFamily:"system-ui,sans-serif",fontSize:12,color:"#D1D5DB"}}>Tell Cluck where you're at — he'll point you the right way.</span>
+            </span>
+            <span style={{color:"#D97706",fontSize:18}}>›</span>
+          </div>
+        </button>
+      )}
       {/* New community feature teaser — Cluck's Lessons + Ask Cluck reply-bot */}
       <a href={TELEGRAM_LINK} target="_blank" rel="noreferrer" style={{display:"block",textDecoration:"none",maxWidth:440,margin:"0 auto 20px",background:"rgba(56,189,248,0.06)",border:"1px solid rgba(56,189,248,0.25)",borderRadius:10,padding:"10px 14px"}}>
         <div style={{fontFamily:"system-ui,sans-serif",fontSize:13,color:"#D1D5DB",lineHeight:1.6}}>
@@ -6017,9 +6030,92 @@ function Complete({onRestart}){
   );
 }
 
+// ── "Where do I start?" concierge — mirrors the Telegram one: journey cards
+// that route into the right part of the app, plus the app-aware Ask Cluck box.
+function StartHere({ onGo }){
+  const [open,setOpen]=useState("new");
+  const goIn=(url)=>()=>{ window.location.href=url; };            // same-site tool pages
+  const goExt=(url)=>()=>{ window.open(url,"_blank","noopener"); }; // external (Jupiter)
+  const txt={color:"#D1D5DB",fontSize:13.5,lineHeight:1.7,margin:"0 0 10px"};
+  const Act=({label,onClick,color="#FCD34D",bg="rgba(252,211,77,0.08)",bd="rgba(252,211,77,0.3)"})=>(
+    <button onClick={onClick} style={{background:bg,border:`1px solid ${bd}`,borderRadius:8,padding:"9px 14px",fontFamily:"'Oswald',sans-serif",fontSize:12,fontWeight:700,color,letterSpacing:0.5,cursor:"pointer",margin:"0 6px 6px 0"}}>{label}</button>
+  );
+  const PATHS=[
+    { key:"new", icon:"🐣", title:"Brand new to crypto", tag:"Start at the very beginning", body:()=>(<>
+        <p style={txt}>Tiny, plain-English lessons first — what a wallet is, what a token is, how to stay safe. No wallet, no money, no sign-up needed to learn.</p>
+        <Act label="🥚 Open the Incubator" onClick={()=>onGo("incubator")} color="#60A5FA" bg="rgba(96,165,250,0.1)" bd="rgba(96,165,250,0.4)"/>
+        <Act label="📚 The 12-lesson course" onClick={()=>onGo("select")}/>
+      </>)},
+    { key:"basics", icon:"📚", title:"I know the basics", tag:"Level up", body:()=>(<>
+        <p style={txt}>Finish the 12-lesson course, then prove it on the Ultimate Challenge for a verified, shareable diploma. Want depth on liquidity? The LP Lab has 12 advanced lessons.</p>
+        <Act label="🎓 Ultimate Challenge" onClick={()=>onGo("challenge")}/>
+        <Act label="📚 12-lesson course" onClick={()=>onGo("select")}/>
+        <Act label="⚗️ LP Lab" onClick={()=>onGo("lplab")} color="#6EE7B7" bg="rgba(16,185,129,0.1)" bd="rgba(16,185,129,0.4)"/>
+      </>)},
+    { key:"lp", icon:"💧", title:"Liquidity pools & LP investing", tag:"Earn fees, know the risks", body:()=>(<>
+        <p style={txt}>The LP Lab is a 12-lesson deep dive: AMMs, impermanent loss, concentrated liquidity, fees &amp; earnings, reading a pool, and building a real LP strategy — protocol-agnostic (Meteora, Raydium, Orca, Uniswap).</p>
+        <Act label="⚗️ Open the LP Lab" onClick={()=>onGo("lplab")} color="#6EE7B7" bg="rgba(16,185,129,0.1)" bd="rgba(16,185,129,0.4)"/>
+      </>)},
+    { key:"research", icon:"🔬", title:"Token research & CLKN tools", tag:"Vet anything on-chain", body:()=>(<>
+        <p style={txt}>Free tools to check a token before you trust it. The chain shows <em>what</em>, never <em>why</em> — always DYOR.</p>
+        <Act label="🩺 Cluck Score" onClick={goIn("/score")}/>
+        <Act label="🪦 Token Autopsy" onClick={goIn("/autopsy")}/>
+        <Act label="🔍 Trace" onClick={goIn("/trace")}/>
+        <Act label="🔒 Wallet Checkup" onClick={goIn("/security-coop")}/>
+        <Act label="🎒 Bags feed" onClick={goIn("/bags")}/>
+        <Act label="🛠 All tools" onClick={goIn("/tools")}/>
+      </>)},
+    { key:"about", icon:"🐔", title:"About Cluck Norris & CLKN", tag:"The story + where to buy", body:()=>(<>
+        <p style={txt}>Cluck Norris is the free School of Crypto Hard Knocks + a Solana token-safety toolkit — born from the FireChicken (FCKN) community, now with real utility. CLKN unlocks premium tools via a small on-chain payment (no wallet-connect needed), and holding it earns airdrop eligibility. The school itself is always free.</p>
+        <Act label="💸 Buy CLKN on Jupiter" onClick={goExt(JUPITER_TRADE_LINK)} color="#34D399" bg="rgba(16,185,129,0.14)" bd="rgba(16,185,129,0.5)"/>
+        <Act label="📊 Token data & chart" onClick={()=>onGo("clkn")}/>
+        <Act label="📜 The story & grant" onClick={goIn("/investors")}/>
+      </>)},
+    { key:"explore", icon:"🧭", title:"Just exploring", tag:"The lay of the land", body:()=>(<>
+        <p style={txt}>Poke around — here's everything in one place.</p>
+        <Act label="🛠 All tools" onClick={goIn("/tools")}/>
+        <Act label="📖 The Library" onClick={()=>onGo("library")}/>
+        <Act label="🎰 Slots" onClick={goIn("/slots")}/>
+        <Act label="🏫 The school" onClick={()=>onGo("landing")}/>
+      </>)},
+  ];
+  return(
+    <div style={{maxWidth:COL,margin:"0 auto",padding:"0 18px 48px"}}>
+      <div style={{textAlign:"center",marginBottom:18}}>
+        <div style={{fontSize:38,marginBottom:4}}>🐥</div>
+        <h2 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:900,letterSpacing:1,margin:"0 0 4px",background:"linear-gradient(135deg,#FCD34D,#F97316,#EF4444)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>WHERE DO I START?</h2>
+        <p style={{color:"#9CA3AF",fontSize:14,lineHeight:1.6,margin:0}}>The coop is a free crypto school + real token-research tools. Tell me where you're at and I'll point you the right way.</p>
+      </div>
+      <div style={{fontFamily:"'Oswald',sans-serif",fontSize:11,letterSpacing:2,color:"#D97706",textAlign:"center",marginBottom:10}}>WHERE ARE YOU ON YOUR CRYPTO JOURNEY?</div>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {PATHS.map(p=>{
+          const isOpen=open===p.key;
+          return(
+            <div key={p.key} style={{background:isOpen?"rgba(255,255,255,0.05)":"rgba(255,255,255,0.03)",border:`1px solid ${isOpen?"rgba(217,119,6,0.45)":"rgba(255,255,255,0.08)"}`,borderRadius:12,overflow:"hidden"}}>
+              <button onClick={()=>setOpen(isOpen?null:p.key)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,background:"none",border:"none",padding:"14px 16px",cursor:"pointer",textAlign:"left"}}>
+                <span style={{fontSize:24,flexShrink:0}}>{p.icon}</span>
+                <span style={{flex:1}}>
+                  <span style={{display:"block",fontFamily:"'Oswald',sans-serif",fontSize:15,fontWeight:700,color:"#F9FAFB",letterSpacing:0.5}}>{p.title}</span>
+                  <span style={{display:"block",fontFamily:"'Oswald',sans-serif",fontSize:10.5,color:"#6B7280",letterSpacing:0.5}}>{p.tag}</span>
+                </span>
+                <span style={{color:"#D97706",fontSize:14,transform:isOpen?"rotate(90deg)":"none",transition:"transform .15s"}}>›</span>
+              </button>
+              {isOpen&&<div style={{padding:"0 16px 16px"}}>{p.body()}</div>}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{marginTop:22,borderTop:"1px solid rgba(255,255,255,0.07)",paddingTop:16}}>
+        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:11,letterSpacing:2,color:"#D97706",textAlign:"center",marginBottom:8}}>🐔 STILL NOT SURE? ASK CLUCK ANYTHING</div>
+        <AskCluck context="Where do I start — app navigation and crypto basics" compact={true}/>
+      </div>
+    </div>
+  );
+}
+
 export default function App(){
   const [screen,setScreen]=useState(()=>{
-    try { const h=(window.location.hash||"").replace(/^#/,""); return ["library","incubator","lplab","survive","clkn","challenge","select"].includes(h)?h:"landing"; }
+    try { const h=(window.location.hash||"").replace(/^#/,""); return ["library","incubator","lplab","survive","clkn","challenge","select","start"].includes(h)?h:"landing"; }
     catch(e){ return "landing"; }
   });
   const [lessonId,setLessonId]=useState(null);
@@ -6108,7 +6204,8 @@ export default function App(){
         </div>
       </div>
       <div style={{paddingTop:28}}>
-        {screen==="landing"&&<Landing onStart={()=>setScreen("select")} onChallenge={()=>setScreen("challenge")} onIncubator={()=>setScreen("incubator")} completed={completed}/>}
+        {screen==="landing"&&<Landing onStart={()=>setScreen("select")} onChallenge={()=>setScreen("challenge")} onIncubator={()=>setScreen("incubator")} onStartHere={()=>setScreen("start")} completed={completed}/>}
+        {screen==="start"&&<StartHere onGo={(s)=>setScreen(s)}/>}
         {screen==="challenge"&&<UltimateChallenge onBack={()=>setScreen("landing")}/>}
         {screen==="incubator"&&<Incubator onComplete={()=>setScreen("select")} onBack={()=>setScreen("landing")}/>}
         {screen==="clkn"&&<CLKNWidget/>}
