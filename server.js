@@ -747,6 +747,7 @@ function guideRoute(key) {
         "Cluck Norris is the free <b>School of Crypto Hard Knocks</b> + a Solana token-safety toolkit — born from the FireChicken (FCKN) community, now with real utility.\n\n" +
         "<b>CLKN</b> is the token: it unlocks premium operator tools via a small on-chain payment (no wallet-connect needed), and holding it earns airdrop eligibility and perks. The school itself is always free.\n\n" +
         `🐔 ${B}   ·   the story &amp; grant info → ${B}/investors\n\n` +
+        `💸 <b>Get CLKN</b> — it's a Solana DEX swap (no wallet-connect needed for the app): <a href="https://jup.ag/swap/SOL-${CLKN_MINT}">Buy on Jupiter</a>  ·  <a href="https://${CLKN_DEXSCREENER}">Chart</a>\n\n` +
         "Ask me anything about how it all works.";
     case "explore":
       return "🧭 <b>Just exploring? Here's the lay of the land.</b>\n\n" +
@@ -767,6 +768,7 @@ function guideSystemPrompt() {
     "- Free tools: CLUCK SCORE (clucknorris.app/score — 0-100 token health), TOKEN AUTOPSY (/autopsy — deep forensics), TRACE (/trace — wallet×token history), SNAPSHOT (/snapshot — holders + airdrop CSV), WALLET CHECKUP (/security-coop — find & revoke risky approvals), BAGS feed (/bags — live launches & graduations), and the toolkit index (/tools).",
     "- THE HATCHERY (/hatchery): guided token creation with a safety preview.",
     "- CLKN token: unlocks premium operator tools via a small on-chain payment (no wallet-connect needed); holding it earns airdrop eligibility. The school itself is always free.",
+    "- WHERE TO BUY CLKN: it's a normal swap on a Solana DEX — Jupiter is easiest. When asked where to buy, share this exact link: https://jup.ag/swap/SOL-" + CLKN_MINT + " (chart: https://" + CLKN_DEXSCREENER + "). Buying needs a Solana wallet with some SOL; the app itself needs no wallet-connect. This is just logistics, NOT financial advice — never say whether or how much to buy.",
     "HOW TO HELP:",
     "- Work out where the person is (brand new / knows basics / trades & vets tokens / wants to launch / just exploring) and point them to the SINGLE best next step, with a clucknorris.app link.",
     "- Concrete and short: 2-5 sentences — it's a group chat. Plain text only (no markdown, asterisks, or headers).",
