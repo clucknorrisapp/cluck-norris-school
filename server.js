@@ -420,7 +420,10 @@ function recapTick() {
 // (index persisted on the volume) so it never repeats until the set is used up.
 // Posts STAY (no self-clean) — they're a learning record.
 const EDU_POST_ENABLED = true;
-const EDU_HOURS_UTC = [1, 5, 9, 13, 17, 21]; // 6×/day, every 4h, all ODD UTC so they never collide with the even-hour posts (8pm/12am/4am/8am/12pm/4pm CT)
+// 4×/day, timed to the busiest crypto-Twitter window (US-dominated): 13/17/21/01
+// UTC = 9am · 1pm · 5pm · 9pm ET — full US active day, evening-inclusive. Kept on
+// ODD UTC hours so they never collide with the even-hour posts (Market Check / recap).
+const EDU_HOURS_UTC = [13, 17, 21, 1];
 // X-only @mentions appended to each cross-posted tweet (NOT added to Telegram).
 // Easy to trim/remove here if it starts reading as spam.
 const X_MENTION_TAGS = "@BagsApp @BagsHackathon";
