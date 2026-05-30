@@ -692,6 +692,26 @@ async function buyCompTick() {
   } catch (e) { console.warn("[BUYCOMP] tick error:", e.message); }
   finally { buyCompRunning = false; }
 }
+// /buyleaders → live on-demand standings, quota-guarded: pulls fresh at most once
+// per LB_LIVE_COOLDOWN (else serves the cached snapshot), and won't re-post within
+// LB_REPLY_COOLDOWN (so rapid repeats don't spam the chat). Falls back to cache on error.
+const LB_REPLY_COOLDOWN = 8000;
+const LB_LIVE_COOLDOWN = 45000;
+async function buyLeadersReply(c, chatId, replyTo) {
+  const now = Date.now();
+  if (now - (lbReplyCooldown.get(chatId) || 0) < LB_REPLY_COOLDOWN) return; // ignore rapid repeats
+  lbReplyCooldown.set(chatId, now);
+  let standings = c.provisional || [];
+  if (c.status === "live" && now - (lbCooldown.get(chatId) || 0) >= LB_LIVE_COOLDOWN) {
+    lbCooldown.set(chatId, now);
+    try {
+      standings = await buyCompStandings(c);                 // fresh on-chain pull
+      c.provisional = standings.slice(0, 20).map(s => ({ wallet: s.wallet, volumeSol: s.volumeSol, buyCount: s.buyCount }));
+      buyCompSave(c);
+    } catch (e) { standings = c.provisional || []; }          // fall back to cache
+  }
+  tgSend(chatId, buyCompRender(c, standings), replyTo);
+}
 
 // ── Interactive slash commands ─────────────────────────────────────────────
 // The bot is otherwise send-only; this lets group members run /score, /trace,
@@ -832,7 +852,8 @@ function tgCommandReply(cmd, arg) {
 }
 
 const TG_KNOWN_CMDS = ["score","autopsy","trace","snapshot","holders","securitycoop","buyspecial","rose","hatchery","bags","tools","commands","start","help","guide","buyleaders","chatid"];
-const lbCooldown = new Map(); // chatId -> last /buyleaders ts (anti-spam)
+const lbCooldown = new Map();      // chatId -> last LIVE pull ts (quota guard)
+const lbReplyCooldown = new Map(); // chatId -> last reply ts (chat anti-spam)
 
 // ── "Where do I start?" concierge ──────────────────────────────────────────
 // New members get a tagged welcome; /start and /guide open the same menu. Each
@@ -1134,14 +1155,11 @@ function handleTelegramUpdate(update) {
       tgSend(msg.chat.id, `Chat ID: <code>${msg.chat.id}</code>`, msg.message_id);
       return;
     }
-    // /buyleaders → current standings for this group's active buy competition.
+    // /buyleaders → live on-demand standings for this group's active buy competition.
     if (cmd === "buyleaders") {
       const c = buyCompByChat(msg.chat.id);
       if (!c) { tgSend(msg.chat.id, "🌹 No active buy competition in this group right now.", msg.message_id); return; }
-      const now = Date.now(), last = lbCooldown.get(msg.chat.id) || 0;
-      if (now - last < 15000) return;            // light anti-spam
-      lbCooldown.set(msg.chat.id, now);
-      tgSend(msg.chat.id, buyCompRender(c, c.provisional || []), msg.message_id);
+      buyLeadersReply(c, msg.chat.id, msg.message_id);
       return;
     }
     // /score with a real mint → live in-chat score (light per-chat cooldown).
