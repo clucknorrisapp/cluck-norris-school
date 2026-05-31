@@ -34,6 +34,7 @@
   .pill.live{background:rgba(52,211,153,0.15);color:var(--green);border:1px solid rgba(52,211,153,0.4)}
   .pill.closed{background:rgba(252,211,77,0.12);color:var(--gold);border:1px solid rgba(252,211,77,0.4)}
   .pill.cancelled{background:rgba(239,68,68,0.12);color:#fca5a5;border:1px solid rgba(239,68,68,0.4)}
+  .pill.verified{background:rgba(52,211,153,0.18);color:var(--green);border:1px solid rgba(52,211,153,0.5)}
   .acts{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
   code{color:var(--sub);word-break:break-all}
   .note{font-size:11px;color:var(--sub);font-style:italic;border-left:2px solid var(--border);padding-left:10px;margin-top:8px;line-height:1.6}
@@ -152,29 +153,77 @@
     const reason = prompt("Optional reason to include in the alert (leave blank for none):", "") || "";
     act("/api/buycomp/stop", id, {cancel:1, reason});
   }
+  function prizeMintOf(c){
+    const k=c.prizeToken&&c.prizeToken.kind;
+    if(k==="usdc") return "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+    if(k==="sol") return "So11111111111111111111111111111111111111112";
+    if(k==="spl"&&c.prizeToken.mint) return c.prizeToken.mint;
+    return c.mint;
+  }
+  async function verifyComp(id){
+    let d = await api("/api/buycomp/verify", {id});
+    if(!d.ok && /hold period/i.test(d.error||"")){
+      const ends = d.holdEndsAt ? new Date(d.holdEndsAt).toLocaleString() : "later";
+      if(!confirm("Hold period isn't over (ends "+ends+"). Force-verify now anyway?")) return;
+      d = await api("/api/buycomp/verify", {id, force:1});
+    }
+    if(!d.ok){ alert("Verify: "+(d.error||"failed")); return; }
+    loadComps();
+  }
+  function openPayout(id){
+    const c = COMPS[id]; if(!c||!c.verified||!c.verified.length){ alert("Run verify first."); return; }
+    const recipients = c.verified.map(v=>v.wallet+", "+v.amount).join("\n");
+    try{ sessionStorage.setItem("airdropPayload", JSON.stringify({ mint:prizeMintOf(c), source:"Cluck Norris Buy Comp", tokenName:c.ticker, recipients, mode:"manual" })); }catch(e){}
+    window.open("/airdrop","_blank");
+  }
+  function copyPayoutLink(id){
+    const c = COMPS[id]; if(!c||!c.payoutToken){ alert("Run verify first."); return; }
+    const url = location.origin+"/airdrop?payout="+id+"&t="+c.payoutToken;
+    if(navigator.clipboard) navigator.clipboard.writeText(url);
+    alert("Client payout link copied:\n\n"+url+"\n\nThey open it, review the winners, and send from their own wallet.");
+  }
+  let COMPS={};
   async function loadComps(){
     if(!key()){ $("comps").innerHTML='<div class="note">Enter your key first.</div>'; return; }
     $("comps").innerHTML='<div class="note">Loading…</div>';
     const d = await api("/api/buycomp/list", {}, "GET");
     if(!d.ok){ $("comps").innerHTML='<div class="note">'+esc(d.error||"failed — check key")+'</div>'; return; }
     const comps = (d.competitions||[]).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+    COMPS={}; comps.forEach(c=>COMPS[c.id]=c);
     if(!comps.length){ $("comps").innerHTML='<div class="note">No competitions yet.</div>'; return; }
     $("comps").innerHTML = comps.map(c=>{
       const win = new Date(c.startTs).toLocaleString()+" → "+new Date(c.endTs).toLocaleString();
       const prizes = (c.places||[]).map(p=>p.amount.toLocaleString()).join(" / ");
       const led = (c.provisional||[])[0];
-      const key = c.metric==="single"?"maxBuySol":"volumeSol";
-      const leader = led ? (led.wallet.slice(0,4)+"…"+led.wallet.slice(-4)+" · "+(led[key]||0).toFixed(2)+" SOL") : "—";
+      const mk = c.metric==="single"?"maxBuySol":"volumeSol";
+      const leader = led ? (led.wallet.slice(0,4)+"…"+led.wallet.slice(-4)+" · "+(led[mk]||0).toFixed(2)+" SOL") : "—";
+      const canVerify = c.status!=="live" && c.status!=="cancelled";
+      let vHtml="";
+      if(c.verified && c.verified.length){
+        vHtml = '<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">'
+          + '<div style="font-family:var(--head);font-size:11px;color:var(--gold);letter-spacing:1px;margin-bottom:4px">VERIFIED WINNERS</div>'
+          + c.verified.map(v=>{
+              const ic = v.status==="qualified"?"✅":(v.status==="manual"?"⚠️":"🛑");
+              return '<div>'+ic+' #'+v.rank+' <code>'+esc(v.wallet.slice(0,4)+"…"+v.wallet.slice(-4))+'</code> · '+v.amount.toLocaleString()+' '+esc(c.ticker)
+                + ' · <span style="color:var(--sub)">'+esc(v.note||"")+'</span> · <a href="/trace?wallet='+encodeURIComponent(v.wallet)+'" target="_blank" style="color:var(--orange)">trace</a></div>';
+            }).join("")
+          + '<div class="acts"><button class="mini" onclick="openPayout(\''+c.id+'\')">💸 open payout in airdropper</button>'
+          + '<button class="mini" onclick="copyPayoutLink(\''+c.id+'\')">🔗 client payout link</button></div>'
+          + '<div class="note">⚠️ = transferred out — trace to the runner wallet and edit that recipient before sending. Payout uses the verified list only.</div>'
+          + '</div>';
+      }
       return `<div class="comp">
         <div class="t">$${esc(c.ticker)} <span class="pill ${esc(c.status)}">${esc((c.status||"").toUpperCase())}</span></div>
         <div>${esc(c.metric)} · 🏆 ${esc(prizes)} ${esc(c.ticker)} · hold ${c.holdHours}h</div>
         <div>${esc(win)}</div>
-        <div>chat <code>${esc(c.chatId)}</code> · buyers ${ (c.provisional||[]).length } · leader ${esc(leader)}</div>
+        <div>chat <code>${esc(c.chatId)}</code> · buyers ${(c.provisional||[]).length} · leader ${esc(leader)}</div>
         <div class="acts">
           <button class="mini" onclick="act('/api/buycomp/refresh','${c.id}')">↻ refresh board</button>
           ${c.status==="live"?`<button class="mini" onclick="if(confirm('End early now? Posts the final provisional board + hold notice to the group.'))act('/api/buycomp/stop','${c.id}')">■ end early</button>`:""}
           ${c.status==="live"?`<button class="mini red" onclick="stopComp('${c.id}')">🛑 STOP &amp; alert</button>`:""}
+          ${canVerify?`<button class="mini" onclick="verifyComp('${c.id}')">✅ verify winners</button>`:""}
         </div>
+        ${vHtml}
       </div>`;
     }).join("");
   }

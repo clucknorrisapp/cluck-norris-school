@@ -661,6 +661,46 @@ async function buyCompStandings(c) {
   const key = buyCompMetricKey(c);
   return ((r && r.buyers) || []).sort((a, b) => (b[key] || 0) - (a[key] || 0));
 }
+// Resolve the prize token's mint from the configured kind.
+const BC_USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+const BC_SOL_MINT = "So11111111111111111111111111111111111111112";
+function buyCompPrizeMint(c) {
+  const k = c.prizeToken && c.prizeToken.kind;
+  if (k === "usdc") return BC_USDC_MINT;
+  if (k === "sol") return BC_SOL_MINT;
+  if (k === "spl" && c.prizeToken.mint) return c.prizeToken.mint;
+  return c.mint; // native (the competition token)
+}
+// VERIFY (after the hold period): for the top candidates, check each still holds
+// what they bought. Any market sell → DQ. Holds 0 with no sell → transferred out →
+// FLAG_MANUAL (operator traces to the runner wallet). Otherwise qualified. DQs
+// promote the next eligible wallet up. Uses the ST position (sells + balance).
+async function buyCompVerify(c) {
+  const standings = await buyCompStandings(c);
+  const key = buyCompMetricKey(c);
+  const candidates = standings.slice(0, c.places.length + 6);   // buffer for DQs
+  const results = [];
+  for (const s of candidates) {
+    let status = "qualified", note = "still holding";
+    try {
+      const pos = premiumForensics.parseStPosition(await solanaTracker.getWalletTokenPosition(s.wallet, c.mint));
+      if (!pos) { status = "manual"; note = "no position data — verify by hand (Trace)"; }
+      else if ((pos.sells || 0) > 0) { status = "dq"; note = `sold on-chain (${pos.sells} sell${pos.sells > 1 ? "s" : ""})`; }
+      else if ((pos.balance || 0) <= 0) { status = "manual"; note = "no sells but holds 0 — transferred out; trace to runner wallet"; }
+      else { status = "qualified"; note = `holds ${Math.round(pos.balance).toLocaleString()}, no sells`; }
+    } catch (e) { status = "manual"; note = "lookup failed — verify by hand"; }
+    results.push({ wallet: s.wallet, value: s[key] || 0, status, note });
+  }
+  // Fill the prize places with non-DQ candidates, in rank order (DQs promote the rest up).
+  const eligible = results.filter(r => r.status !== "dq");
+  c.verified = eligible.slice(0, c.places.length).map((r, i) => ({ rank: i + 1, wallet: r.wallet, amount: c.places[i].amount, status: r.status, note: r.note }));
+  c.verifyResults = results;
+  c.verifiedAt = Date.now();
+  if (!c.payoutToken) c.payoutToken = randomBytes(8).toString("hex");
+  c.status = "verified";
+  buyCompSave(c);
+  return c;
+}
 async function buyCompUpdate(c) {
   let standings;
   try { standings = await buyCompStandings(c); }
@@ -2321,7 +2361,7 @@ app.post("/api/buycomp/start", (req, res) => {
   if (!endTs || endTs <= startTs) return res.status(400).json({ error: "bad window (need end > start)" });
   const places = String(q.places || "").split(",").map(s => parseInt(String(s).replace(/[^0-9]/g, ""))).filter(n => n > 0).map((amount, i) => ({ rank: i + 1, amount }));
   if (!places.length) return res.status(400).json({ error: "no prize places" });
-  const holdHours = parseInt(q.hold) || 48;
+  const holdHours = (q.hold !== undefined && q.hold !== null && q.hold !== "") ? Math.max(0, parseInt(q.hold) || 0) : 48;
   const updateMins = Math.max(5, parseInt(q.update) || 60);
   const metric = String(q.metric || "cumulative") === "single" ? "single" : "cumulative";
   const prizeTokenKind = ["native", "usdc", "sol", "spl"].includes(String(q.prizeToken)) ? String(q.prizeToken) : "native";
@@ -2362,6 +2402,29 @@ app.post("/api/buycomp/refresh", (req, res) => {
   if (!c) return res.status(404).json({ error: "no such competition" });
   buyCompUpdate(c).catch(() => {});       // force an immediate repost
   return res.status(200).json({ ok: true });
+});
+// Run the hold-period verification (sell/transfer DQ + promotion) and build the
+// payout list. Gated; refuses until the hold is over unless force=1.
+app.post("/api/buycomp/verify", async (req, res) => {
+  if (!buyCompAdminOK(req)) return res.status(404).json({ error: "not_found" });
+  const c = buyCompsAll()[String(req.query.id || "")];
+  if (!c) return res.status(404).json({ error: "no such competition" });
+  const holdEndsAt = c.endTs + (c.holdHours || 0) * 3600000;
+  if (Date.now() < holdEndsAt && req.query.force !== "1") {
+    return res.status(400).json({ error: "hold period not over", holdEndsAt });
+  }
+  try { await buyCompVerify(c); }
+  catch (e) { return res.status(500).json({ error: "verify failed: " + e.message }); }
+  return res.status(200).json({ ok: true, verified: c.verified, verifyResults: c.verifyResults, payoutToken: c.payoutToken, prizeMint: buyCompPrizeMint(c) });
+});
+// Payout list for the airdropper. Gated by the per-comp payoutToken (NOT the admin
+// key) so it can be shared with the client as a self-distribution link.
+app.get("/api/buycomp/payout", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const c = buyCompsAll()[String(req.query.id || "")];
+  if (!c || !c.payoutToken || req.query.t !== c.payoutToken) return res.status(404).json({ error: "not_found" });
+  const recipients = (c.verified || []).map(v => `${v.wallet}, ${v.amount}`).join("\n");
+  return res.status(200).json({ ok: true, mint: buyCompPrizeMint(c), tokenName: c.ticker, source: "Cluck Norris Buy Comp", recipients });
 });
 
 // Buy Special double-check — independent buyer list from Solana Tracker for a
