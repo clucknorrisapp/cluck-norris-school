@@ -52,6 +52,59 @@
   </div>
 
   <div class="card">
+    <details>
+      <summary style="cursor:pointer;font-family:var(--head);font-size:14px;letter-spacing:2px;color:var(--orange);text-transform:uppercase">📖 How to run a competition</summary>
+      <div style="font-size:13px;line-height:1.7;color:var(--text);margin-top:12px">
+
+        <div style="font-family:var(--head);color:var(--gold);letter-spacing:1px;margin:4px 0 4px">BEFORE YOU START</div>
+        <ul style="margin:0 0 4px 18px;padding:0">
+          <li>A group admin adds the <b>Cluck Norris bot</b> to the competition's Telegram group (with permission to post).</li>
+          <li>In that group, type <b>/chatid</b> — the bot replies with the group's numeric ID. Copy it.</li>
+          <li>Enter your operator password above.</li>
+        </ul>
+
+        <div style="font-family:var(--head);color:var(--gold);letter-spacing:1px;margin:14px 0 4px">1 · CREATE IT</div>
+        Fill the <b>New competition</b> form:
+        <ul style="margin:4px 0 4px 18px;padding:0">
+          <li><b>Token mint + ticker</b> — the token being bought.</li>
+          <li><b>Chat ID</b> — paste from <b>/chatid</b>.</li>
+          <li><b>Metric</b> — <b>Cumulative</b> (most bought in total) or <b>Biggest single buy</b>.</li>
+          <li><b>Start / End</b> — your local time (leave start blank/now to begin immediately).</li>
+          <li><b>Hold period</b> — hours winners must keep their buys after the end (0 = no hold).</li>
+          <li><b>Board refresh</b> — how often the live board reposts (e.g. 60 min).</li>
+          <li><b>Prize places</b> — one row per place, the amount each wins (add/remove rows).</li>
+          <li><b>Prize token</b> — what winners get paid in: the comp token, USDC, SOL, or another SPL token.</li>
+        </ul>
+        Hit <b>Create &amp; Start</b> → the live board posts to the group immediately.
+
+        <div style="font-family:var(--head);color:var(--gold);letter-spacing:1px;margin:14px 0 4px">2 · WHILE IT'S LIVE</div>
+        <ul style="margin:4px 0 4px 18px;padding:0">
+          <li>The board self-reposts on your refresh interval (a fresh "comp is live" nudge) with a <b>days/hours/minutes</b> countdown.</li>
+          <li>Anyone in the group can type <b>/buyleaders</b> for instant live standings.</li>
+          <li><b>↻ refresh board</b> — force an immediate update · <b>■ end early</b> — close before the end time · <b>🛑 STOP &amp; alert</b> — emergency cancel (alerts the group, no winners).</li>
+        </ul>
+
+        <div style="font-family:var(--head);color:var(--gold);letter-spacing:1px;margin:14px 0 4px">3 · AFTER IT ENDS → VERIFY</div>
+        Once the <b>hold period</b> is over, hit <b>✅ verify winners</b>. For each top wallet it checks on-chain:
+        <ul style="margin:4px 0 4px 18px;padding:0">
+          <li>✅ <b>held</b> — qualified</li>
+          <li>🛑 <b>sold</b> — disqualified (the next wallet promotes up)</li>
+          <li>⚠️ <b>transferred out</b> — click <b>trace</b> to find the wallet that still holds the tokens (the "runner wallet") and use that one for payout</li>
+        </ul>
+        The verified list fills your prize places automatically.
+
+        <div style="font-family:var(--head);color:var(--gold);letter-spacing:1px;margin:14px 0 4px">4 · PAY OUT</div>
+        <ul style="margin:4px 0 4px 18px;padding:0">
+          <li><b>💸 open payout in airdropper</b> — loads winners + amounts into the airdropper (in your prize token); review every recipient, then send from your wallet.</li>
+          <li><b>🔗 client payout link</b> — copies a link the project opens to pay winners <b>from their own wallet</b> (they keep custody — no tokens sent to you).</li>
+        </ul>
+
+        <div class="note" style="margin-top:12px">Payout pays the <b>verified</b> list only — never the raw live board (which is provisional and can't filter wash-trading in real time). Always trace ⚠️ transferred winners before paying. USDC / native / other-SPL pay cleanly; double-check the SOL path the first time.</div>
+      </div>
+    </details>
+  </div>
+
+  <div class="card">
     <h2>➕ New competition</h2>
     <label>Label</label>
     <input id="label" placeholder="e.g. $ROSE biggest-buy — June"/>
