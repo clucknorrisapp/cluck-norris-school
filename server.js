@@ -2325,11 +2325,23 @@ app.post("/api/buycomp/start", (req, res) => {
   buyCompUpdate(c).catch(() => {});    // post the initial board now (if the window has started)
   return res.status(200).json({ ok: true, id, competition: c });
 });
-app.post("/api/buycomp/stop", (req, res) => {
+app.post("/api/buycomp/stop", async (req, res) => {
   if (!buyCompAdminOK(req)) return res.status(404).json({ error: "not_found" });
   const all = buyCompsAll(); const c = all[String(req.query.id || "")];
   if (!c) return res.status(404).json({ error: "no such competition" });
-  c.status = req.query.cancel === "1" ? "cancelled" : "closed"; buyCompSave(c);
+  const cancel = req.query.cancel === "1";
+  const reason = String(req.query.reason || "").trim().slice(0, 240);
+  c.status = cancel ? "cancelled" : "closed";
+  buyCompSave(c);
+  // Alert the group either way (emergency stop should never be silent).
+  try {
+    if (cancel) {
+      await tgSend(c.chatId, `🛑 <b>$${tgEsc(c.ticker)} BUY COMPETITION — STOPPED</b>\n\nThis competition has been cancelled by the organizers${reason ? `:\n<i>${tgEsc(reason)}</i>` : "."}\n\nNo winners will be drawn from this round. Questions? Reach the team. 🌹`);
+    } else {
+      await buyCompUpdate(c).catch(() => {});   // post the final provisional board (status now closed → won't re-tick)
+      await tgSend(c.chatId, `🏁 <b>$${tgEsc(c.ticker)} buy comp — closed early.</b>\n\nThe board above is the PROVISIONAL standing. Winners must hold their buys for <b>${c.holdHours}h</b> (no sells, no transfers) — official winners are confirmed by the Rose scan after the hold. 🌹`);
+    }
+  } catch (_) {}
   return res.status(200).json({ ok: true, competition: c });
 });
 app.get("/api/buycomp/list", (req, res) => {

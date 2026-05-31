@@ -146,6 +146,12 @@
     if(!d.ok && d.error) alert(d.error);
     loadComps();
   }
+  // Emergency stop — cancels the comp and ALERTS the group (optional reason in the message).
+  function stopComp(id){
+    if(!confirm("STOP this competition and alert the group? No winners will be drawn.")) return;
+    const reason = prompt("Optional reason to include in the alert (leave blank for none):", "") || "";
+    act("/api/buycomp/stop", id, {cancel:1, reason});
+  }
   async function loadComps(){
     if(!key()){ $("comps").innerHTML='<div class="note">Enter your key first.</div>'; return; }
     $("comps").innerHTML='<div class="note">Loading…</div>';
@@ -166,8 +172,8 @@
         <div>chat <code>${esc(c.chatId)}</code> · buyers ${ (c.provisional||[]).length } · leader ${esc(leader)}</div>
         <div class="acts">
           <button class="mini" onclick="act('/api/buycomp/refresh','${c.id}')">↻ refresh board</button>
-          ${c.status==="live"?`<button class="mini red" onclick="act('/api/buycomp/stop','${c.id}')">■ close now</button>`:""}
-          <button class="mini red" onclick="if(confirm('Cancel this competition?'))act('/api/buycomp/stop','${c.id}',{cancel:1})">✕ cancel</button>
+          ${c.status==="live"?`<button class="mini" onclick="if(confirm('End early now? Posts the final provisional board + hold notice to the group.'))act('/api/buycomp/stop','${c.id}')">■ end early</button>`:""}
+          ${c.status==="live"?`<button class="mini red" onclick="stopComp('${c.id}')">🛑 STOP &amp; alert</button>`:""}
         </div>
       </div>`;
     }).join("");
