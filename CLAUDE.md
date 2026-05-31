@@ -61,7 +61,7 @@ The repo ships zero secrets; a fresh clone (every cloud session) has none. Runti
 live in **Railway** (the app) and the **Claude-web environment** config (so sessions can
 run things). Var names: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `HELIUS_API_KEY`,
 `BAGS_API_KEY`, `ANTHROPIC_API_KEY`, `SOLANA_TRACKER_API_KEY`, `SOLSCAN_API_KEY`,
-`PREMIUM_ACCESS_KEY`, `X_API_KEY/X_API_SECRET/X_ACCESS_TOKEN/X_ACCESS_SECRET`,
+`PREMIUM_ACCESS_KEY`, `BUYCOMP_KEY` (scoped password for the buy-comp portal `/buycomp-admin` + `/api/buycomp/*`; master key also works), `X_API_KEY/X_API_SECRET/X_ACCESS_TOKEN/X_ACCESS_SECRET`,
 `GOOGLE_SHEET_ID/GOOGLE_CLIENT_EMAIL/GOOGLE_PRIVATE_KEY`, `HATCHERY_TURBO_KEY`,
 `COINGECKO_API_KEY`, `DATA_DIR`.
 Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.claude/`,

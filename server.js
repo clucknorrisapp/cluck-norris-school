@@ -2298,7 +2298,15 @@ app.post("/api/tg/:secret", (req, res) => {
 // Start/stop/list live buy-comp leaderboards. start params (query or body):
 //   mint, chat (telegram chat id, negative), ticker, start, end (ISO or unix),
 //   places (comma amounts e.g. 500000,350000,150000), hold (hours), update (mins).
-const buyCompAdminOK = (req) => { const k = process.env.PREMIUM_ACCESS_KEY; if (!k) return false; const supplied = req.query.key || (req.body && req.body.key) || req.headers["x-premium-key"]; return supplied === k; };
+// Gated by a DEDICATED password (BUYCOMP_KEY) — scoped to buy-comp only, so it can
+// be used in the browser portal without exposing the master PREMIUM_ACCESS_KEY.
+// The master key also works as an owner fallback.
+const buyCompAdminOK = (req) => {
+  const supplied = req.query.key || (req.body && req.body.key) || req.headers["x-premium-key"];
+  if (!supplied) return false;
+  const scoped = process.env.BUYCOMP_KEY, master = process.env.PREMIUM_ACCESS_KEY;
+  return (!!scoped && supplied === scoped) || (!!master && supplied === master);
+};
 app.post("/api/buycomp/start", (req, res) => {
   if (!buyCompAdminOK(req)) return res.status(404).json({ error: "not_found" });
   const q = Object.assign({}, req.query, req.body || {});
