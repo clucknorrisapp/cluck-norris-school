@@ -130,7 +130,7 @@ async function notifyToolsReminder() {
 // delay it; lastToolsReminderHour (persisted on the volume) stops a double-post
 // within the hour even across a deploy. NOTE: this is the periodic TOOL-PROMO
 // post only; the buy-notification bot is separate and unaffected.
-const TOOLS_REMINDER_ENABLED = true;
+const TOOLS_REMINDER_ENABLED = false; // PAUSED (2026-05-30) — taking a break from the toolkit reminder. Flip to true to resume.
 let lastToolsReminderHour = kv.get("toolsReminderHour", -1);
 function toolsReminderTick() {
   if (!TOOLS_REMINDER_ENABLED) return;
