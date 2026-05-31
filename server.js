@@ -633,6 +633,7 @@ function buyCompRender(c, standings) {
   ];
   if (c.prizeSummary) lines.push(c.prizeSummary);
   lines.push("");
+  const key = buyCompMetricKey(c);
   const rows = (standings || []).slice(0, Math.max(c.places.length, 10));
   if (!rows.length) {
     lines.push("<i>No qualifying buys yet — be the first. 🌹</i>");
@@ -641,27 +642,30 @@ function buyCompRender(c, standings) {
       const tag = i < 3 ? medals[i] : `${i + 1}.`;
       const short = s.wallet.slice(0, 4) + "…" + s.wallet.slice(-4);
       const prize = (i < c.places.length) ? ` — <b>${c.places[i].amount.toLocaleString()} ${tgEsc(c.ticker)}</b>` : "";
-      lines.push(`${tag} <code>${short}</code> · ${(s.volumeSol || 0).toFixed(2)} SOL${prize}`);
+      lines.push(`${tag} <code>${short}</code> · ${(s[key] || 0).toFixed(2)} SOL${prize}`);
     });
   }
   lines.push("");
-  lines.push(`<i>metric: cumulative bought · refreshes ~${c.updateMins}m · type /buyleaders anytime</i>`);
+  const metricLabel = c.metric === "single" ? "biggest single buy" : "cumulative bought";
+  lines.push(`<i>metric: ${metricLabel} · refreshes ~${c.updateMins}m · type /buyleaders anytime</i>`);
   lines.push(ended
     ? `⚠️ PROVISIONAL. Winners must hold ${c.holdHours}h (no sells/transfers); official results come from the Rose scan after the hold.`
     : "⚠️ Live &amp; provisional — official winners are confirmed after the hold period via the Rose scan (wash-trade &amp; hold checked).");
   return lines.join("\n");
 }
+function buyCompMetricKey(c) { return c.metric === "single" ? "maxBuySol" : "volumeSol"; }
 async function buyCompStandings(c) {
   const fromSec = Math.floor(c.startTs / 1000);
   const toSec = Math.floor(Math.min(Date.now(), c.endTs) / 1000);
   const r = await solanaTracker.getTokenBuyersInWindow(c.mint, fromSec, toSec, { maxPages: 60 });
-  return ((r && r.buyers) || []).sort((a, b) => (b.volumeSol || 0) - (a.volumeSol || 0));
+  const key = buyCompMetricKey(c);
+  return ((r && r.buyers) || []).sort((a, b) => (b[key] || 0) - (a[key] || 0));
 }
 async function buyCompUpdate(c) {
   let standings;
   try { standings = await buyCompStandings(c); }
   catch (e) { console.warn("[BUYCOMP] standings fetch failed:", e.message); return; }
-  c.provisional = standings.slice(0, 20).map(s => ({ wallet: s.wallet, volumeSol: s.volumeSol, buyCount: s.buyCount }));
+  c.provisional = standings.slice(0, 20).map(s => ({ wallet: s.wallet, volumeSol: s.volumeSol, maxBuySol: s.maxBuySol, buyCount: s.buyCount }));
   const text = buyCompRender(c, standings);
   // Self-cleaning hourly repost: post a fresh board (so it resurfaces in the feed
   // as a "comp is live" reminder), then delete the previous one — one board at a
@@ -706,7 +710,7 @@ async function buyLeadersReply(c, chatId, replyTo) {
     lbCooldown.set(chatId, now);
     try {
       standings = await buyCompStandings(c);                 // fresh on-chain pull
-      c.provisional = standings.slice(0, 20).map(s => ({ wallet: s.wallet, volumeSol: s.volumeSol, buyCount: s.buyCount }));
+      c.provisional = standings.slice(0, 20).map(s => ({ wallet: s.wallet, volumeSol: s.volumeSol, maxBuySol: s.maxBuySol, buyCount: s.buyCount }));
       buyCompSave(c);
     } catch (e) { standings = c.provisional || []; }          // fall back to cache
   }
@@ -2311,9 +2315,12 @@ app.post("/api/buycomp/start", (req, res) => {
   if (!places.length) return res.status(400).json({ error: "no prize places" });
   const holdHours = parseInt(q.hold) || 48;
   const updateMins = Math.max(5, parseInt(q.update) || 60);
+  const metric = String(q.metric || "cumulative") === "single" ? "single" : "cumulative";
+  const prizeTokenKind = ["native", "usdc", "sol", "spl"].includes(String(q.prizeToken)) ? String(q.prizeToken) : "native";
+  const prizeTokenMint = prizeTokenKind === "spl" && SOL_ADDR_RE.test(String(q.prizeMint || "")) ? String(q.prizeMint) : null;
   const id = "bc_" + randomBytes(5).toString("hex");
   const prizeSummary = `🏆 ${places.map(p => p.amount.toLocaleString()).join(" / ")} ${ticker}`;
-  const c = { id, label: String(q.label || ticker).slice(0, 60), mint, ticker, chatId, metric: "cumulative", startTs, endTs, holdHours, places, prizeToken: { kind: String(q.prizeToken || "native") }, updateMins, prizeSummary, status: "live", boardMsgId: null, provisional: [], lastUpdateTs: 0, createdAt: Date.now() };
+  const c = { id, label: String(q.label || ticker).slice(0, 60), mint, ticker, chatId, metric, startTs, endTs, holdHours, places, prizeToken: { kind: prizeTokenKind, mint: prizeTokenMint }, updateMins, prizeSummary, status: "live", boardMsgId: null, provisional: [], lastUpdateTs: 0, createdAt: Date.now() };
   buyCompSave(c);
   buyCompUpdate(c).catch(() => {});    // post the initial board now (if the window has started)
   return res.status(200).json({ ok: true, id, competition: c });
@@ -5312,6 +5319,11 @@ app.get("/privacy", (req, res) => {
 
 app.get("/terms", (req, res) => {
   res.sendFile(join(__dirname, "public", "terms.html"));
+});
+
+// Buy-Competition operator portal (hidden, unadvertised; actions are key-gated server-side).
+app.get("/buycomp-admin", (req, res) => {
+  res.sendFile(join(__dirname, "public", "buycomp-admin.html"));
 });
 
 app.get("/rose", (req, res) => {

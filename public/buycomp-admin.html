@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="robots" content="noindex,nofollow"/>
+<title>Buy-Comp Portal · Cluck Norris</title>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+<style>
+  :root{--bg:#0a0608;--panel:#150f12;--gold:#FFC53D;--orange:#F97316;--red:#EF4444;--green:#34D399;--text:#FBE9D0;--sub:#9a8a7a;--border:rgba(249,115,22,0.28);--head:'Oswald',sans-serif;--mono:'Share Tech Mono',monospace}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(ellipse at top,#1c0f08 0%,var(--bg) 60%);color:var(--text);font-family:var(--mono);padding:0 14px 80px;min-height:100vh}
+  .wrap{max-width:680px;margin:0 auto;padding-top:22px}
+  h1{font-family:var(--head);font-size:30px;font-weight:900;letter-spacing:1px;margin:0 0 2px;background:linear-gradient(135deg,#FFE08A,var(--gold),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .sub{color:var(--sub);font-size:12px;margin:0 0 18px;line-height:1.6}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px}
+  .card h2{font-family:var(--head);font-size:14px;letter-spacing:2px;color:var(--orange);margin:0 0 12px;text-transform:uppercase}
+  label{display:block;font-family:var(--head);font-size:11px;letter-spacing:1px;color:var(--sub);margin:10px 0 4px;text-transform:uppercase}
+  input,select{width:100%;background:rgba(0,0,0,0.35);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text);font-family:var(--mono);font-size:14px}
+  .row{display:flex;gap:10px}.row>div{flex:1}
+  .metric{display:flex;gap:8px;margin-top:4px}
+  .metric button{flex:1;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--sub);font-family:var(--head);font-size:12px;letter-spacing:1px;cursor:pointer}
+  .metric button.on{background:rgba(255,197,61,0.16);color:var(--gold);border-color:var(--gold)}
+  .prizes .prow{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .prizes .plabel{font-family:var(--head);font-size:13px;color:var(--gold);width:60px;flex-shrink:0}
+  .btn{width:100%;background:linear-gradient(135deg,var(--orange),var(--red));border:none;border-radius:10px;padding:13px;font-family:var(--head);font-size:15px;font-weight:700;letter-spacing:2px;color:#fff;cursor:pointer;margin-top:14px}
+  .mini{background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:7px;padding:6px 10px;font-family:var(--head);font-size:11px;letter-spacing:1px;color:var(--gold);cursor:pointer}
+  .mini.red{color:#fca5a5;border-color:rgba(239,68,68,0.4)}
+  .msg{font-size:12px;margin-top:10px;min-height:16px;line-height:1.5}
+  .msg.ok{color:var(--green)}.msg.err{color:#fca5a5}
+  .comp{border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px;font-size:12px;line-height:1.6}
+  .comp .t{font-family:var(--head);font-size:14px;color:var(--gold);letter-spacing:1px}
+  .pill{display:inline-block;font-family:var(--head);font-size:9px;letter-spacing:1px;padding:1px 7px;border-radius:8px;margin-left:6px}
+  .pill.live{background:rgba(52,211,153,0.15);color:var(--green);border:1px solid rgba(52,211,153,0.4)}
+  .pill.closed{background:rgba(252,211,77,0.12);color:var(--gold);border:1px solid rgba(252,211,77,0.4)}
+  .pill.cancelled{background:rgba(239,68,68,0.12);color:#fca5a5;border:1px solid rgba(239,68,68,0.4)}
+  .acts{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+  code{color:var(--sub);word-break:break-all}
+  .note{font-size:11px;color:var(--sub);font-style:italic;border-left:2px solid var(--border);padding-left:10px;margin-top:8px;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🌹 BUY-COMP PORTAL</h1>
+  <p class="sub">Set up & run live buy-competition leaderboards in a community's Telegram. The board posts hourly + answers <code>/buyleaders</code>; standings are provisional — official winners come from the Rose scan after the hold period.</p>
+
+  <div class="card">
+    <h2>🔑 Operator key</h2>
+    <input id="key" type="password" placeholder="PREMIUM_ACCESS_KEY"/>
+    <div class="note">Stored locally in this browser only. Needed for every action.</div>
+  </div>
+
+  <div class="card">
+    <h2>➕ New competition</h2>
+    <label>Label</label>
+    <input id="label" placeholder="e.g. $ROSE biggest-buy — June"/>
+    <div class="row">
+      <div><label>Token mint</label><input id="mint" placeholder="token mint address"/></div>
+      <div><label>Ticker</label><input id="ticker" placeholder="ROSE"/></div>
+    </div>
+    <label>Telegram chat ID <span style="color:var(--sub)">(run /chatid in the group)</span></label>
+    <input id="chat" placeholder="-1002625127458"/>
+    <label>Metric</label>
+    <div class="metric">
+      <button type="button" data-m="cumulative" class="on" onclick="setMetric('cumulative')">CUMULATIVE BOUGHT</button>
+      <button type="button" data-m="single" onclick="setMetric('single')">BIGGEST SINGLE BUY</button>
+    </div>
+    <div class="row">
+      <div><label>Start</label><input id="start" type="datetime-local"/></div>
+      <div><label>End</label><input id="end" type="datetime-local"/></div>
+    </div>
+    <div class="note">Times use <b>your device's local timezone</b>.</div>
+    <div class="row">
+      <div><label>Hold period (hours)</label><input id="hold" type="number" value="48" min="0"/></div>
+      <div><label>Board refresh (minutes)</label><input id="update" type="number" value="60" min="5"/></div>
+    </div>
+    <label>Prize places (amount per place)</label>
+    <div class="prizes" id="prizes"></div>
+    <button type="button" class="mini" onclick="addPlace()">+ add place</button>
+    <label>Prize token</label>
+    <select id="prizeToken" onchange="togglePrizeMint()">
+      <option value="native">Native (the competition token)</option>
+      <option value="usdc">USDC</option>
+      <option value="sol">SOL</option>
+      <option value="spl">Other SPL token…</option>
+    </select>
+    <input id="prizeMint" placeholder="prize token mint" style="display:none;margin-top:8px"/>
+    <button class="btn" onclick="createComp()">🌹 CREATE &amp; START</button>
+    <div class="msg" id="createMsg"></div>
+    <div class="note">Add the Cluck Norris bot to the group first (with permission to post). Payout/verification is run separately after the hold period (Rose scan → airdropper).</div>
+  </div>
+
+  <div class="card">
+    <h2>📋 Competitions <button type="button" class="mini" style="float:right" onclick="loadComps()">↻ refresh</button></h2>
+    <div id="comps"><div class="note">Enter your key and hit refresh.</div></div>
+  </div>
+</div>
+<script>
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  let metric = "cumulative";
+  function setMetric(m){ metric=m; document.querySelectorAll(".metric button").forEach(b=>b.classList.toggle("on", b.dataset.m===m)); }
+  function togglePrizeMint(){ $("prizeMint").style.display = $("prizeToken").value==="spl" ? "block" : "none"; }
+  // key persistence
+  try { $("key").value = localStorage.getItem("bc_admin_key")||""; } catch(e){}
+  $("key").addEventListener("change", ()=>{ try{ localStorage.setItem("bc_admin_key",$("key").value.trim()); }catch(e){} });
+  // prize rows
+  let placeCount=0;
+  function addPlace(amount){
+    placeCount++;
+    const div=document.createElement("div"); div.className="prow";
+    div.innerHTML=`<span class="plabel"></span><input class="pamt" type="number" min="0" placeholder="amount" value="${amount!=null?amount:""}"/><button type="button" class="mini red" onclick="this.parentNode.remove();relabel()">✕</button>`;
+    $("prizes").appendChild(div); relabel();
+  }
+  function relabel(){ document.querySelectorAll("#prizes .prow .plabel").forEach((el,i)=>{ el.textContent = (i+1)+(["st","nd","rd"][i]||"th"); }); }
+  addPlace(); addPlace(); addPlace(); // default 3 places
+
+  function key(){ return $("key").value.trim(); }
+  async function api(path, params, method){
+    const qs = new URLSearchParams(Object.assign({key:key()}, params||{})).toString();
+    const r = await fetch(path+"?"+qs, { method: method||"POST" });
+    return r.json().catch(()=>({error:"bad response ("+r.status+")"}));
+  }
+  function toMs(v){ if(!v) return ""; const t=new Date(v).getTime(); return isNaN(t)?"":t; }
+
+  async function createComp(){
+    const m=$("createMsg"); m.className="msg"; m.textContent="Creating…";
+    const places = [...document.querySelectorAll("#prizes .pamt")].map(i=>parseInt(i.value)).filter(n=>n>0).join(",");
+    const params = {
+      mint:$("mint").value.trim(), chat:$("chat").value.trim(), ticker:$("ticker").value.trim()||"TOKEN",
+      label:$("label").value.trim(), metric,
+      start:toMs($("start").value), end:toMs($("end").value),
+      hold:$("hold").value||"48", update:$("update").value||"60",
+      places, prizeToken:$("prizeToken").value, prizeMint:$("prizeMint").value.trim()
+    };
+    if(!params.mint){ m.className="msg err"; m.textContent="Token mint required."; return; }
+    if(!params.chat){ m.className="msg err"; m.textContent="Telegram chat ID required."; return; }
+    if(!params.end){ m.className="msg err"; m.textContent="End time required."; return; }
+    if(!places){ m.className="msg err"; m.textContent="At least one prize place required."; return; }
+    const d = await api("/api/buycomp/start", params);
+    if(d.ok){ m.className="msg ok"; m.textContent="✓ Started: "+d.id+" — board posting to the group now."; loadComps(); }
+    else { m.className="msg err"; m.textContent="✗ "+(d.error||"failed"); }
+  }
+  async function act(path, id, extra){
+    const d = await api(path, Object.assign({id}, extra||{}));
+    if(!d.ok && d.error) alert(d.error);
+    loadComps();
+  }
+  async function loadComps(){
+    if(!key()){ $("comps").innerHTML='<div class="note">Enter your key first.</div>'; return; }
+    $("comps").innerHTML='<div class="note">Loading…</div>';
+    const d = await api("/api/buycomp/list", {}, "GET");
+    if(!d.ok){ $("comps").innerHTML='<div class="note">'+esc(d.error||"failed — check key")+'</div>'; return; }
+    const comps = (d.competitions||[]).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+    if(!comps.length){ $("comps").innerHTML='<div class="note">No competitions yet.</div>'; return; }
+    $("comps").innerHTML = comps.map(c=>{
+      const win = new Date(c.startTs).toLocaleString()+" → "+new Date(c.endTs).toLocaleString();
+      const prizes = (c.places||[]).map(p=>p.amount.toLocaleString()).join(" / ");
+      const led = (c.provisional||[])[0];
+      const key = c.metric==="single"?"maxBuySol":"volumeSol";
+      const leader = led ? (led.wallet.slice(0,4)+"…"+led.wallet.slice(-4)+" · "+(led[key]||0).toFixed(2)+" SOL") : "—";
+      return `<div class="comp">
+        <div class="t">$${esc(c.ticker)} <span class="pill ${esc(c.status)}">${esc((c.status||"").toUpperCase())}</span></div>
+        <div>${esc(c.metric)} · 🏆 ${esc(prizes)} ${esc(c.ticker)} · hold ${c.holdHours}h</div>
+        <div>${esc(win)}</div>
+        <div>chat <code>${esc(c.chatId)}</code> · buyers ${ (c.provisional||[]).length } · leader ${esc(leader)}</div>
+        <div class="acts">
+          <button class="mini" onclick="act('/api/buycomp/refresh','${c.id}')">↻ refresh board</button>
+          ${c.status==="live"?`<button class="mini red" onclick="act('/api/buycomp/stop','${c.id}')">■ close now</button>`:""}
+          <button class="mini red" onclick="if(confirm('Cancel this competition?'))act('/api/buycomp/stop','${c.id}',{cancel:1})">✕ cancel</button>
+        </div>
+      </div>`;
+    }).join("");
+  }
+  if(key()) loadComps();
+</script>
+</body>
+</html>
