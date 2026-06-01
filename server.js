@@ -486,19 +486,24 @@ const EDU_TOPICS = [
   "The danger of unlimited token approvals to unknown contracts",
   "How to tell organic volume from wash trading",
 ];
-async function generateEduLesson(topic) {
+async function generateEduLesson(topic, style = "full") {
   const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
   if (!ANTHROPIC_KEY) return null;
-  const system = "You are Cluck Norris, the toughest crypto professor at the School of Crypto Hard Knocks (clucknorris.app), powered by the CLKN token on Solana. Write ONE educational micro-lesson on the given topic for a crypto-curious audience. RULES: 4-7 sentences, roughly 120-180 words (200 max). Plain text only — NO markdown, NO asterisks, NO headings, NO emojis. Be accurate and practical; if a point is nuanced, note it honestly rather than oversimplifying. At most ONE light chicken/rooster pun, and only if it fits. NEVER give financial advice, price predictions, or shill any token. End with a short one-line takeaway. Output ONLY the lesson text.";
+  const shape = style === "short"
+    ? "Keep it SHORT and punchy: 2-3 sentences (~40-75 words). One crisp insight, then a one-line takeaway. Put the takeaway on its own line after a blank line."
+    : "Length: 4-7 sentences (~120-180 words, 200 max). Break it into 2-3 SHORT paragraphs separated by a blank line — never one solid block — and put a one-line takeaway on its own line at the end.";
+  const system = "You are Cluck Norris, the toughest crypto professor at the School of Crypto Hard Knocks (clucknorris.app), powered by the CLKN token on Solana. Write ONE educational micro-lesson on the given topic for a crypto-curious audience. "
+    + shape
+    + " Plain text only — use blank lines to separate paragraphs, but NO markdown, NO asterisks, NO headings, NO bullet characters, NO emojis. Be accurate and practical; if a point is nuanced, note it honestly rather than oversimplifying. At most ONE light chicken/rooster pun, and only if it fits. NEVER give financial advice, price predictions, or shill any token. Output ONLY the lesson text.";
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 360, system, messages: [{ role: "user", content: "Topic: " + topic }] }),
+      body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: style === "short" ? 220 : 360, system, messages: [{ role: "user", content: "Topic: " + topic }] }),
     });
     const data = await res.json();
     if (data && data.content && data.content[0]) {
-      return data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/#{1,3}\s/g, "").trim();
+      return data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/#{1,3}\s/g, "").replace(/\n{3,}/g, "\n\n").trim();
     }
   } catch (e) { console.warn("[EDU] generation failed:", e.message); }
   return null;
@@ -569,7 +574,8 @@ async function notifyEduPost() {
   const idx = kv.get("eduTopicIdx", 0);
   const topic = EDU_TOPICS[idx % EDU_TOPICS.length];
   kv.set("eduTopicIdx", (idx + 1) % EDU_TOPICS.length); // advance rotation
-  const body = await generateEduLesson(topic);
+  const style = (idx % 3 === 2) ? "short" : "full";     // mix a punchy short one in every ~3rd lesson
+  const body = await generateEduLesson(topic, style);
   if (!body) { console.warn("[EDU] no body, skipping post for topic:", topic); return; }
   const text = `🎓 <b>CLUCK'S LESSON</b>\n\n${tgEsc(body)}\n\n💬 <i>Reply to this lesson with a question and Cluck will answer.</i>\n📚 The full course is in session → clucknorris.app`;
   try {
@@ -2224,8 +2230,9 @@ app.get("/api/edu-post-test", async (req, res) => {
     if (req.query.post === "1") { await notifyEduPost(); return res.status(200).json({ success: true, posted: true }); }
     const idx = kv.get("eduTopicIdx", 0);
     const topic = req.query.topic ? String(req.query.topic) : EDU_TOPICS[idx % EDU_TOPICS.length];
-    const body = await generateEduLesson(topic);
-    return res.status(200).json({ success: true, posted: false, nextTopicIdx: idx, topic, preview: body });
+    const style = req.query.style === "short" ? "short" : (req.query.style === "full" ? "full" : ((idx % 3 === 2) ? "short" : "full"));
+    const body = await generateEduLesson(topic, style);
+    return res.status(200).json({ success: true, posted: false, nextTopicIdx: idx, topic, style, preview: body });
   } catch (e) { return res.status(500).json({ success: false, error: e.message }); }
 });
 
