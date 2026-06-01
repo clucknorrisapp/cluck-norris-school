@@ -1918,7 +1918,7 @@ app.get("/api/bags-feed-prices", async (req, res) => {
 // showcasing). Result cached ~2.5 min; per-mint snapshots reuse the same cache
 // the feed uses, and the scan runs in small batches to respect ST rate limits.
 const NEAR_GRAD_CACHE = { list: null, ts: 0 };
-const NEAR_GRAD_TTL = 600000;   // 10 min — ≥ watcher tick so the public board + watcher share ONE ST fetch (was 2.5min < 180s tick → cache never caught, every tick burned a fresh ST call)
+const NEAR_GRAD_TTL = 300000;   // 5 min — matches the broad watcher tick so the public board + watcher share ONE ST fetch (faster discovery into the hot-watch set; hot tokens are then polled every ~1 min by gradHotTick)
 const NEAR_GRAD_SCAN = 45;      // recent launches to scan for curve progress
 const BAGS_BONDING_SOL = 85;    // SOL raised to complete a Bags bonding curve
 // Bags tokens closest to graduating — platform-wide via ST's "graduating"
@@ -2086,7 +2086,7 @@ app.get("/api/bags-graduated", async (req, res) => {
 // having actually graduated (off the curve = has a DEX pool), record it to our
 // 48h tracker and post a "graduated!" alert. Both alerts stay in the chat.
 const GRAD_WATCH_ENABLED = true;
-const NEAR_BONDING_ALERT_PCT = 85;
+const NEAR_BONDING_ALERT_PCT = 70;
 // Extract a valid @handle from a token's twitter field (URL or raw handle) so
 // project-specific X posts can tag the project. Validates against Twitter's
 // handle rules; returns "" if the value isn't a plausible handle.
@@ -2141,7 +2141,7 @@ async function gradWatcherTick() {
   let near;
   try { near = (await getBagsNearGrad()).tokens || []; } catch (_) { return; }
   const nearByMint = new Map(near.map(t => [t.tokenMint, t]));
-  // 1) Track every near-grad Bags token; alert once when it crosses 85%.
+  // 1) Track every near-grad Bags token; alert once when it crosses the near-grad threshold.
   for (const t of near) {
     const w = gradTracker.getWatch(t.tokenMint) || { firstSeenTs: Date.now(), alerted: false };
     const cp = t.curvePct || 0;
@@ -2169,6 +2169,34 @@ async function gradWatcherTick() {
       if (w.firstSeenTs && Date.now() - w.firstSeenTs > 24 * 3600 * 1000) gradTracker.removeWatch(mint);
     }
   }
+}
+// HOT WATCH — once a token has tripped "close to bonding" (alerted), poll IT every
+// minute (snapshot cache is 45s, so always fresh) so we catch & post the actual
+// graduation within ~1 min instead of waiting for the next slow broad tick. Bounded
+// to the few hottest tokens, so ST cost stays tiny (zero when nothing's near grad).
+let gradHotRunning = false;
+async function gradHotTick() {
+  if (!GRAD_WATCH_ENABLED || gradHotRunning) return;
+  gradHotRunning = true;
+  try {
+    const hot = gradTracker.watchedMints()
+      .map(m => ({ mint: m, w: gradTracker.getWatch(m) || {} }))
+      .filter(x => x.w.alerted)                                  // only the "close to bonding" ones
+      .sort((a, b) => (b.w.lastCurvePct || 0) - (a.w.lastCurvePct || 0))
+      .slice(0, 10);                                             // cap the fast-poll set
+    for (const { mint, w } of hot) {
+      let snap = null; try { snap = await getBagsTokenSnapshot(mint); } catch (_) {}
+      if (!snap) continue;
+      if (snap.onBondingCurve === false) {
+        const rec = { mint, name: snap.name || w.name, symbol: snap.symbol || w.symbol, image: snap.image || w.image, twitter: snap.twitter || w.twitter, graduatedAt: Date.now(), marketCap: snap.marketCap, priceUsd: snap.priceUsd };
+        if (gradTracker.addGraduated(rec)) { await notifyGraduated(rec); console.log(`[GRAD-HOT] ${rec.symbol || mint.slice(0, 6)} graduated — caught within ~1m`); }
+        gradTracker.removeWatch(mint);
+      } else if (snap.curvePct != null) {
+        gradTracker.setWatch(mint, { lastCurvePct: snap.curvePct, lastSeenTs: Date.now() });  // keep ordering fresh
+      }
+    }
+  } catch (e) { console.warn("[GRAD-HOT] error:", e.message); }
+  finally { gradHotRunning = false; }
 }
 
 // X / Twitter status + live test (gated). Returns whether the 4 X keys are set;
@@ -9966,7 +9994,8 @@ app.listen(PORT, () => {
     // Bags graduation watcher — every 3 min: alert near-bonding (85%) + capture
     // graduations into our own 48h record (independent of pump.fun flooding ST).
     setTimeout(gradWatcherTick, 12000);
-    setInterval(gradWatcherTick, 600 * 1000);   // 10 min — a 48h grad tracker doesn't need 3-min resolution; cuts the dominant ST drain ~3-4× (480→144 calls/day)
+    setInterval(gradWatcherTick, 300 * 1000);   // 5 min — broad discovery: find tokens entering "close to bonding" + fire near-grad alerts
+    setInterval(gradHotTick, 60 * 1000);        // 1 min — fast-watch ONLY the alerted ("close to bonding") tokens so graduations post within ~1 min (cost scales with the tiny hot set)
     // Cluck's Lesson — educational post 4×/day on odd UTC hours (13/17/21/01).
     setInterval(eduPostTick, 60 * 1000);
     // Live buy-competition leaderboards — refresh active boards, close on window end.
