@@ -105,13 +105,12 @@ Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.
 - No automated test suite.
 
 ## Deferred / check later
-- **`/api/helius-rpc` is a deny-list, not an allow-list** (the README says
-  "allow-listing"). It blocks `getProgramAccounts`/subscribes and is rate-limited,
-  so the risk is low (quota abuse, no key leak). Convert to a true allow-list of
-  the methods the client tools actually call — but enumerate every method first
-  (rose/airdrop/buyspecial route real RPC, incl. possibly `sendTransaction` /
-  `getLatestBlockhash`), and don't do it mid-event since an incomplete list breaks
-  those tools. Then make the README wording match.
+- **`/api/helius-rpc` is now a true allow-list** (default-deny). It permits only the
+  lightweight read + tx-build/send methods the client tools use (see `ALLOWED_RPC`
+  in the handler) and handles JSON-RPC batch bodies; everything else
+  (`getProgramAccounts*`, all `*Subscribe`, block/supply/cluster scans, etc.) is
+  rejected. Matches the README's "allow-listing" claim. If a tool ever needs a new
+  RPC method, add it to `ALLOWED_RPC` — a missing method returns 403.
 - **Slots: provably-fair before real prizes.** `/api/slots/spin` outcomes use
   `Math.random()` server-side — fine while it's a no-stakes beta, but before any
   real CLKN payout goes live, add commit‑reveal (publish a hashed server seed, mix

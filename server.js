@@ -2528,22 +2528,35 @@ app.get("/api/holders", async (req, res) => {
 app.post("/api/helius-rpc", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-  const HELIUS_KEY = process.env.HELIUS_API_KEY;
-  if (!HELIUS_KEY) return res.status(500).json({ error: "Missing HELIUS_API_KEY" });
-  // Block the heavy / never-used-over-HTTP methods so this open proxy can't be
-  // turned into an expensive credit drain. The app only uses lightweight read
-  // methods (getTokenAccounts(ByOwner), getSignaturesForAddress, getTransaction,
-  // getTokenSupply); getProgramAccounts scans entire program state, and the
-  // *Subscribe methods are WebSocket-only (they don't work over HTTP anyway).
-  const BLOCKED_RPC = new Set([
-    "getProgramAccounts", "getProgramAccountsV2",
-    "programSubscribe", "accountSubscribe", "logsSubscribe",
-    "signatureSubscribe", "slotSubscribe", "rootSubscribe", "slotsUpdatesSubscribe",
+  // ALLOW-LIST (default-deny): only the lightweight read + transaction-build/send
+  // methods the client tools actually use — score/holders/snapshot/trace, rose/
+  // buyspecial, the airdropper, the hatchery, and security-coop. Everything else
+  // (getProgramAccounts*, every *Subscribe — WS-only anyway, block/supply/cluster
+  // scans, requestAirdrop, …) is rejected, so this open proxy can't be turned into
+  // a credit drain. Handles JSON-RPC batch bodies (arrays) too.
+  const ALLOWED_RPC = new Set([
+    // account / token reads
+    "getAccountInfo", "getMultipleAccounts", "getBalance",
+    "getTokenAccountsByOwner", "getParsedTokenAccountsByOwner", "getTokenAccountBalance",
+    "getTokenSupply", "getTokenLargestAccounts", "getTokenAccounts",
+    // DAS reads (Helius)
+    "getAsset", "getAssetsByOwner", "searchAssets", "getAssetsByGroup",
+    // signature / transaction history
+    "getSignaturesForAddress", "getTransaction", "getParsedTransaction", "getParsedTransactions",
+    // transaction build + send (web3.js Connection drives these for the tx tools)
+    "getLatestBlockhash", "getRecentBlockhash", "isBlockhashValid",
+    "getFeeForMessage", "getFeeCalculatorForBlockhash", "getMinimumBalanceForRentExemption",
+    "getRecentPrioritizationFees", "simulateTransaction", "sendTransaction",
+    "getSignatureStatuses", "getSignatureStatus",
+    // chain info web3.js touches during init / confirmation
+    "getSlot", "getBlockHeight", "getEpochInfo", "getGenesisHash", "getVersion", "getHealth",
   ]);
-  const reqMethod = req.body && req.body.method;
-  if (typeof reqMethod === "string" && BLOCKED_RPC.has(reqMethod)) {
+  const calls = Array.isArray(req.body) ? req.body : [req.body];
+  if (!calls.length || calls.some(c => !c || typeof c.method !== "string" || !ALLOWED_RPC.has(c.method))) {
     return res.status(403).json({ error: "method_not_allowed" });
   }
+  const HELIUS_KEY = process.env.HELIUS_API_KEY;
+  if (!HELIUS_KEY) return res.status(500).json({ error: "Missing HELIUS_API_KEY" });
   try {
     const response = await fetch(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`, {
       method: "POST",
