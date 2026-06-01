@@ -490,8 +490,8 @@ async function generateEduLesson(topic, style = "full") {
   const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
   if (!ANTHROPIC_KEY) return null;
   const shape = style === "short"
-    ? "Keep it SHORT and punchy: 2-3 sentences (~40-75 words). One crisp insight, then a one-line takeaway. Put the takeaway on its own line after a blank line."
-    : "Length: 4-7 sentences (~120-180 words, 200 max). Break it into 2-3 SHORT paragraphs separated by a blank line — never one solid block — and put a one-line takeaway on its own line at the end.";
+    ? "HARD LIMIT: 3 sentences MAXIMUM, ~45-65 words total — punchy, no preamble. Then a blank line and a single one-line takeaway."
+    : "FORMAT IS REQUIRED: write 2-3 short paragraphs of 1-2 sentences EACH, with a BLANK LINE between every paragraph. Do NOT write one solid block — if it's one paragraph you've done it wrong. After the last paragraph, add a blank line and a single one-line takeaway. Total ~110-170 words.";
   const system = "You are Cluck Norris, the toughest crypto professor at the School of Crypto Hard Knocks (clucknorris.app), powered by the CLKN token on Solana. Write ONE educational micro-lesson on the given topic for a crypto-curious audience. "
     + shape
     + " Plain text only — use blank lines to separate paragraphs, but NO markdown, NO asterisks, NO headings, NO bullet characters, NO emojis. Be accurate and practical; if a point is nuanced, note it honestly rather than oversimplifying. At most ONE light chicken/rooster pun, and only if it fits. NEVER give financial advice, price predictions, or shill any token. Output ONLY the lesson text.";
@@ -499,7 +499,7 @@ async function generateEduLesson(topic, style = "full") {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: style === "short" ? 220 : 360, system, messages: [{ role: "user", content: "Topic: " + topic }] }),
+      body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: style === "short" ? 140 : 360, system, messages: [{ role: "user", content: "Topic: " + topic }] }),
     });
     const data = await res.json();
     if (data && data.content && data.content[0]) {
