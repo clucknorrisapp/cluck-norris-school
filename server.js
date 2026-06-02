@@ -9882,6 +9882,66 @@ function rememberSig(sig) {
   }
 }
 
+// Does an enhanced-API tx actually carry the token-balance deltas detectClknTrade
+// needs? A freshly-landed sig is often returned by the enhanced API with EMPTY
+// accountData (not enriched yet) — that's indistinguishable from a non-trade and
+// was a silent source of missed buys. When this is false we fall back to raw RPC.
+function hasTokenBalanceData(tx) {
+  return Array.isArray(tx?.accountData) &&
+    tx.accountData.some(ad => Array.isArray(ad.tokenBalanceChanges) && ad.tokenBalanceChanges.length);
+}
+
+// Per-sig parse-attempt counter (in-memory). Lets us retry a sig the enhanced API
+// hasn't indexed yet across poll cycles WITHOUT advancing lastSeen past it, while
+// capping retries so a genuinely-unparseable sig can't wedge the poller forever.
+const pollParseAttempts = new Map();
+const MAX_PARSE_ATTEMPTS = 40; // ~20 min at the 30s poll cadence
+
+// Raw getTransaction → enhanced-like shape. The enhanced (parsed) API lags by
+// minutes on Jupiter-routed swaps; raw RPC has the tx almost immediately. We
+// reconstruct accountData[].tokenBalanceChanges from meta.pre/postTokenBalances
+// so detectClknTrade works identically on either source.
+async function fetchRawTradeTx(sig, HELIUS_KEY) {
+  let raw;
+  try {
+    const r = await fetch(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0", id: 1, method: "getTransaction",
+        params: [sig, { maxSupportedTransactionVersion: 0, encoding: "jsonParsed", commitment: "confirmed" }],
+      }),
+    });
+    const d = await r.json();
+    raw = d?.result || null;
+  } catch (_) { return null; }
+  if (!raw) return null; // not indexed yet on the RPC node either
+  if (raw.meta?.err) return { signature: sig, transactionError: raw.meta.err, accountData: [] };
+
+  // Net raw-unit balance change per token account (keyed by accountIndex), then
+  // emitted as one change per account with its owner + mint, matching the
+  // enhanced API's rawTokenAmount shape.
+  const byIdx = new Map();
+  const seed = (b, isPost) => {
+    const e = byIdx.get(b.accountIndex) || { owner: b.owner, mint: b.mint, pre: 0, post: 0, decimals: b.uiTokenAmount?.decimals || 0 };
+    const amt = Number(b.uiTokenAmount?.amount || 0);
+    if (isPost) e.post = amt; else e.pre = amt;
+    e.owner = b.owner; e.mint = b.mint; e.decimals = b.uiTokenAmount?.decimals ?? e.decimals;
+    byIdx.set(b.accountIndex, e);
+  };
+  for (const b of (raw.meta?.preTokenBalances || [])) seed(b, false);
+  for (const b of (raw.meta?.postTokenBalances || [])) seed(b, true);
+
+  const changes = [];
+  for (const e of byIdx.values()) {
+    const delta = e.post - e.pre; // raw integer units
+    if (!delta || !e.owner) continue;
+    changes.push({ userAccount: e.owner, mint: e.mint, rawTokenAmount: { tokenAmount: String(delta), decimals: e.decimals } });
+  }
+  if (!changes.length) return null;
+  return { signature: sig, transactionError: null, source: "RAW", accountData: [{ tokenBalanceChanges: changes }] };
+}
+
 async function pollClknBuys() {
   const HELIUS_KEY = process.env.HELIUS_API_KEY;
   if (!HELIUS_KEY || !process.env.TELEGRAM_BOT_TOKEN) return;
@@ -9941,22 +10001,60 @@ async function pollSinglePool(pool, HELIUS_KEY) {
     }
     newSigs.reverse();
 
-    const enhancedRes = await fetch(`https://api.helius.xyz/v0/transactions?api-key=${HELIUS_KEY}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ transactions: newSigs }),
-    });
-    const txns = await enhancedRes.json();
-    if (!Array.isArray(txns)) return;
+    // Pull the enhanced (parsed) form for the batch — fast path. This API LAGS by
+    // minutes on freshly-landed Jupiter-routed swaps, so we map it by signature and
+    // fall back to raw getTransaction per-sig below for anything it hasn't enriched.
+    let enhancedById = new Map();
+    try {
+      const enhancedRes = await fetch(`https://api.helius.xyz/v0/transactions?api-key=${HELIUS_KEY}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transactions: newSigs }),
+      });
+      const txns = await enhancedRes.json();
+      if (Array.isArray(txns)) for (const t of txns) if (t?.signature) enhancedById.set(t.signature, t);
+    } catch (e) {
+      console.warn(`[TELEGRAM] Enhanced batch fetch failed (pool ${poolAddress.slice(0,6)}):`, e.message);
+    }
 
-    for (const tx of txns) {
-      if (recentlyNotifiedSigs.has(tx.signature)) continue;
+    // Walk oldest→newest. Advance lastSeen only across CONTIGUOUS resolved sigs:
+    // the moment we hit one we can't parse yet, stop advancing so it's retried
+    // next cycle instead of being skipped forever (the root cause of missed buys).
+    let advanceTo = lastSeen;
+    let blocked = false;
+    for (const sig of newSigs) {
+      if (recentlyNotifiedSigs.has(sig)) { if (!blocked) advanceTo = sig; continue; }
+
+      let tx = enhancedById.get(sig);
+      // Enhanced API returned nothing usable (missing, or not enriched yet) → raw RPC.
+      if (!hasTokenBalanceData(tx)) {
+        const rawTx = await fetchRawTradeTx(sig, HELIUS_KEY);
+        if (rawTx) tx = rawTx;
+      }
+
+      // Still no balance data anywhere → not indexed yet. Hold the pointer and retry,
+      // up to a cap (so a permanently-unparseable sig eventually gets stepped over).
+      if (!hasTokenBalanceData(tx) && !tx?.transactionError) {
+        const n = (pollParseAttempts.get(sig) || 0) + 1;
+        if (n < MAX_PARSE_ATTEMPTS) {
+          pollParseAttempts.set(sig, n);
+          console.log(`[TELEGRAM] Sig ${sig.slice(0,8)} not indexed yet (attempt ${n}/${MAX_PARSE_ATTEMPTS}, pool ${poolAddress.slice(0,6)}) — holding lastSeen`);
+          blocked = true;
+          continue;
+        }
+        console.warn(`[TELEGRAM] Giving up on sig ${sig.slice(0,8)} after ${n} attempts (pool ${poolAddress.slice(0,6)})`);
+        pollParseAttempts.delete(sig);
+        if (!blocked) advanceTo = sig;
+        continue;
+      }
+      pollParseAttempts.delete(sig); // resolved (parsed or errored) — clear retry state
 
       // Pool-centric detection — classifies buy vs sell from the CLKN pool's
       // own balance change, so Jupiter-routed trades are caught too.
       const trade = detectClknTrade(tx);
       if (!trade) {
-        console.log(`[TELEGRAM] No buy/sell in tx ${tx.signature?.slice(0,8)} (pool ${poolAddress.slice(0,6)})`);
+        console.log(`[TELEGRAM] No buy/sell in tx ${sig.slice(0,8)} (pool ${poolAddress.slice(0,6)})`);
+        if (!blocked) advanceTo = sig;
         continue;
       }
 
@@ -9967,21 +10065,23 @@ async function pollSinglePool(pool, HELIUS_KEY) {
       const floor = trade.action === "sell" ? MIN_SELL_USD
                   : isReinvestBuy ? MIN_REINVEST_USD
                   : MIN_BUY_USD;
-      console.log(`[TELEGRAM] ${trade.action === "sell" ? "Sell" : "Buy"} detected (pool ${poolAddress.slice(0,6)}/${pool.dexId}, source ${tx.source || "?"}): ${trade.clknAmount.toFixed(0)} CLKN for ${trade.quote.amount} ${quoteMeta.symbol} (${usdStr}) by ${trade.trader ? trade.trader.slice(0,6) : "unknown"} · sig ${tx.signature.slice(0,8)}`);
+      console.log(`[TELEGRAM] ${trade.action === "sell" ? "Sell" : "Buy"} detected (pool ${poolAddress.slice(0,6)}/${pool.dexId}, source ${tx.source || "?"}): ${trade.clknAmount.toFixed(0)} CLKN for ${trade.quote.amount} ${quoteMeta.symbol} (${usdStr}) by ${trade.trader ? trade.trader.slice(0,6) : "unknown"} · sig ${sig.slice(0,8)}`);
       // Feed the rolling daily recap (all real swaps, not just alert-worthy ones
       // — the recap is about total flow, so it records below the alert floor).
-      recap.record({ action: trade.action, usd, trader: trade.trader, sig: tx.signature });
+      recap.record({ action: trade.action, usd, trader: trade.trader, sig });
       if (usd == null || usd < floor) {
         console.log(`[TELEGRAM] Skipping (${usdStr} < $${floor})`);
-        rememberSig(tx.signature); // remember so other pools don't re-process it
+        rememberSig(sig); // remember so other pools don't re-process it
+        if (!blocked) advanceTo = sig;
         continue;
       }
       if (trade.action === "sell") await notifyClknSell(trade, tx, pool, usd, HELIUS_KEY);
       else                         await notifyClknBuy(trade, tx, pool, usd, HELIUS_KEY);
-      rememberSig(tx.signature);
+      rememberSig(sig);
+      if (!blocked) advanceTo = sig;
     }
 
-    rememberLastSeen(poolAddress, sigs[0].signature);
+    if (advanceTo) rememberLastSeen(poolAddress, advanceTo);
   } catch (e) {
     console.warn(`[TELEGRAM] Pool ${pool?.address?.slice(0,6) || "?"} poll error:`, e.message);
   }
