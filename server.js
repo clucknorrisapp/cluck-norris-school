@@ -9418,7 +9418,15 @@ function quoteUsdValue(trade) {
 
 // Per-pool last-seen signature. Refreshed each poll cycle. Map of pool address → last sig.
 // New pools (discovered via DexScreener refresh) start with null = first-run-skip-history.
-const lastSeenByPool = new Map();
+// Persisted across restarts so a redeploy doesn't reset the poller to "head" and
+// silently skip every trade in the deploy window (the #1 cause of missed buys).
+// On restart it resumes from the last-processed sig and backfills the gap (bounded
+// by the per-pool signature fetch limit below).
+const lastSeenByPool = new Map(Object.entries(kv.get("buyPollLastSeen", {})));
+function rememberLastSeen(poolAddress, sig) {
+  lastSeenByPool.set(poolAddress, sig);
+  try { kv.set("buyPollLastSeen", Object.fromEntries(lastSeenByPool)); } catch (_) {}
+}
 let cachedPools = []; // [{ address, dexId, labels }, ...]
 let cachedPoolsAt = 0;
 
@@ -9904,7 +9912,7 @@ async function pollSinglePool(pool, HELIUS_KEY) {
       body: JSON.stringify({
         jsonrpc: "2.0", id: "buy-poll",
         method: "getSignaturesForAddress",
-        params: [poolAddress, { limit: 15 }],
+        params: [poolAddress, { limit: 100 }],
       }),
     });
     const sigsData = await sigsRes.json();
@@ -9914,7 +9922,7 @@ async function pollSinglePool(pool, HELIUS_KEY) {
     // First-run for this pool — record the head and skip history
     const lastSeen = lastSeenByPool.get(poolAddress);
     if (lastSeen === undefined || lastSeen === null) {
-      lastSeenByPool.set(poolAddress, sigs[0].signature);
+      rememberLastSeen(poolAddress, sigs[0].signature);
       console.log(`[TELEGRAM] Pool ${poolAddress.slice(0,6)}… initialized at sig ${sigs[0].signature.slice(0,8)}`);
       return;
     }
@@ -9928,7 +9936,7 @@ async function pollSinglePool(pool, HELIUS_KEY) {
       newSigs.push(s.signature);
     }
     if (!newSigs.length) {
-      lastSeenByPool.set(poolAddress, sigs[0].signature);
+      rememberLastSeen(poolAddress, sigs[0].signature);
       return;
     }
     newSigs.reverse();
@@ -9973,7 +9981,7 @@ async function pollSinglePool(pool, HELIUS_KEY) {
       rememberSig(tx.signature);
     }
 
-    lastSeenByPool.set(poolAddress, sigs[0].signature);
+    rememberLastSeen(poolAddress, sigs[0].signature);
   } catch (e) {
     console.warn(`[TELEGRAM] Pool ${pool?.address?.slice(0,6) || "?"} poll error:`, e.message);
   }
