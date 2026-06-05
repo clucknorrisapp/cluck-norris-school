@@ -10306,4 +10306,22 @@ app.listen(PORT, () => {
   } else {
     console.log(`[TELEGRAM] Bot env vars not set — notifications disabled`);
   }
+
+  // Liquidity vault — autonomous Orca Whirlpool position manager. INDEPENDENT of
+  // Telegram: it starts only when MM_OPERATOR_SECRET (the dedicated hot wallet)
+  // is set, so deploying without that key is a safe no-op and can never move
+  // funds. Ticks every 3 minutes; re-centers the position as price moves.
+  if (whirlpoolMM.vault.isEnabled()) {
+    console.log("[VAULT] Liquidity vault enabled — autonomous position management every 3m");
+    const vaultTick = async () => {
+      try {
+        const r = await whirlpoolMM.vault.tick({});
+        if (r && !["none", "hold", "deferred"].includes(r.action)) console.log("[VAULT]", r.action, "·", r.reason || "");
+      } catch (e) { console.error("[VAULT] tick error:", e.message); }
+    };
+    setTimeout(vaultTick, 15000);
+    setInterval(vaultTick, 180 * 1000);
+  } else {
+    console.log("[VAULT] MM_OPERATOR_SECRET not set — autonomous vault disabled");
+  }
 });

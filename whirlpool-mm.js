@@ -9,9 +9,17 @@
 const express = require("express");
 const { PublicKey } = require("@solana/web3.js");
 const wp = require("./lib/orca-whirlpools");
+const vault = require("./lib/whirlpool-vault");
 
 function isPubkey(s) {
   try { new PublicKey(s); return true; } catch { return false; }
+}
+
+// Admin gate for the autonomous-vault endpoints. Same convention as /api/claims:
+// a wrong/absent key returns 404 (not 401), so the endpoints are invisible without it.
+function adminOK(req) {
+  const k = process.env.PREMIUM_ACCESS_KEY;
+  return !!k && req.query.key === k;
 }
 
 const router = express.Router();
@@ -113,4 +121,37 @@ router.post("/close", async (req, res) => {
   }
 });
 
-module.exports = { router };
+// ── Autonomous vault admin (gated on PREMIUM_ACCESS_KEY) ─────────────────────
+// GET /api/whirlpool/vault/status?key=… — operator wallet, float, config, position.
+router.get("/vault/status", async (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  try { res.json(await vault.status()); }
+  catch (e) { res.status(500).json({ error: e.message || "status failed" }); }
+});
+
+// GET /api/whirlpool/vault/tick?key=…[&run=1] — run one cycle. Without run=1 it's
+// a DRY RUN (plans, signs nothing). With run=1 it may actually roll the position.
+router.get("/vault/tick", async (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  try { res.json(await vault.tick({ dryRun: req.query.run !== "1" })); }
+  catch (e) { res.status(500).json({ error: e.message || "tick failed" }); }
+});
+
+// POST /api/whirlpool/vault/pause?key=… and /resume?key=… — kill switch.
+router.post("/vault/pause", (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  res.json(vault.pause());
+});
+router.post("/vault/resume", (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  res.json(vault.resume());
+});
+
+// POST /api/whirlpool/vault/config?key=… — patch config (body = partial config).
+router.post("/vault/config", (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  try { res.json({ config: vault.setConfig(req.body || {}) }); }
+  catch (e) { res.status(400).json({ error: e.message || "config failed" }); }
+});
+
+module.exports = { router, vault };
