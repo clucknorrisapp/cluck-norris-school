@@ -26,13 +26,16 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   poller, all schedulers, and static file serving.
 - `lib/` — `bags-context`, `solana-tracker`, `solscan`, `premium-forensics`, `analytics`,
   plus volume-backed stores: `kvstore`, `sigstore`, `recap`, `grad-tracker`, `credentials`.
+  Liquidity Engine: `orca-whirlpools` (Orca Whirlpools concentrated-LP market maker —
+  non-custodial tx builders) + `whirlpool-vault` (the autonomous LP manager).
 - `data/question-bank.json` — the Ultimate Challenge question pool (server-owned; the
   client never ships the answer key). See the credentials note below.
-- `hatchery.js` (guided token creator) and `securitycoop.js` (approval revoker) — Express
-  routers mounted by `server.js`.
+- `hatchery.js` (guided token creator), `securitycoop.js` (approval revoker), and
+  `whirlpool-mm.js` (Liquidity Engine — Orca Whirlpools market maker + autonomous vault) —
+  Express routers mounted by `server.js`.
 - `public/*.html` — standalone vanilla-HTML tool pages: score, autopsy, trace, snapshot,
-  holders, airdrop, buyspecial, rose, hatchery, security-coop, premium, slots, bags,
-  tools, investors, grant, stats, transcript.
+  holders, airdrop, buyspecial, rose, hatchery, security-coop, liquidity, premium, slots,
+  bags, tools, investors, grant, stats, transcript.
 - `src/` — the React/Vite school (landing app).
 
 ## Credentials / transcripts (the school's permanent output)
@@ -63,7 +66,9 @@ run things). Var names: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `HELIUS_API_KE
 `BAGS_API_KEY`, `ANTHROPIC_API_KEY`, `SOLANA_TRACKER_API_KEY`, `SOLSCAN_API_KEY`,
 `PREMIUM_ACCESS_KEY`, `BUYCOMP_KEY` (scoped password for the buy-comp portal `/buycomp-admin` + `/api/buycomp/*`; master key also works), `X_API_KEY/X_API_SECRET/X_ACCESS_TOKEN/X_ACCESS_SECRET`,
 `GOOGLE_SHEET_ID/GOOGLE_CLIENT_EMAIL/GOOGLE_PRIVATE_KEY`, `HATCHERY_TURBO_KEY`,
-`COINGECKO_API_KEY`, `DATA_DIR`.
+`COINGECKO_API_KEY`, `DATA_DIR`, `MM_OPERATOR_SECRET` (the Liquidity Vault's dedicated
+hot wallet — base58 or JSON secret key; UNSET = the autonomous vault is fully off, a safe
+no-op. Use a wallet holding ONLY the MM float, never the treasury or any mint authority).
 Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.claude/`,
 `STRATEGY.md`.
 
@@ -89,6 +94,10 @@ Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.
 - `/api/stats` — traffic dashboard data. `/api/autopsy-premium` — gated deep forensics.
 - `/api/claims` — the full airdrop list (wallets + balances) from the Google Sheet.
   Gated on `PREMIUM_ACCESS_KEY`; returns 404 (not 401) when the key is wrong/absent.
+- `/api/whirlpool/vault/status|tick|pause|resume|config` — the autonomous Liquidity Vault
+  (Orca Whirlpool LP manager). 404 without the key. `tick` is a DRY RUN unless `&run=1`;
+  it only acts when `MM_OPERATOR_SECRET` is set. The public `/liquidity` tool and the
+  `/api/whirlpool/*` read/quote/build endpoints are non-custodial and ungated.
 
 ## Conventions
 - Tool pages are vanilla HTML + inline JS; the school is React. **Escape any API/token-

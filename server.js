@@ -6,6 +6,7 @@ const { createCanvas, GlobalFonts, loadImage } = require("@napi-rs/canvas");
 const { createSign, createHash, createHmac, randomBytes, createPublicKey, verify: ed25519Verify } = require("crypto");
 const hatchery = require("./hatchery");
 const securityCoop = require("./securitycoop");
+const whirlpoolMM = require("./whirlpool-mm");
 const { fetchBagsContext, classifyTeamActivity } = require("./lib/bags-context");
 const analytics = require("./lib/analytics");
 const solscan = require("./lib/solscan");
@@ -1367,6 +1368,8 @@ app.use("/api/verify-clkn-payment", rateLimit("pay", { windowMs: 60000, max: 20 
 // own larger body limit handles the base64 logo upload instead of the 100kb default.
 app.use("/api/hatchery", hatchery.router);
 app.use("/api/security-coop", securityCoop.router);
+// Liquidity Engine — Orca Whirlpools market maker (non-custodial; builds unsigned txs).
+app.use("/api/whirlpool", whirlpoolMM.router);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -5566,6 +5569,11 @@ app.get("/api/credential-card", async (req, res) => {
 // reachable only by direct URL while in private testing.
 app.get("/hatchery", (req, res) => {
   res.sendFile(join(__dirname, "public", "hatchery.html"));
+});
+
+// Liquidity Engine — Orca Whirlpools concentrated-liquidity market maker.
+app.get("/liquidity", (req, res) => {
+  res.sendFile(join(__dirname, "public", "liquidity.html"));
 });
 
 // Security Coop — wallet permission check / approval revoker.
@@ -10297,5 +10305,23 @@ app.listen(PORT, () => {
     })();
   } else {
     console.log(`[TELEGRAM] Bot env vars not set — notifications disabled`);
+  }
+
+  // Liquidity vault — autonomous Orca Whirlpool position manager. INDEPENDENT of
+  // Telegram: it starts only when MM_OPERATOR_SECRET (the dedicated hot wallet)
+  // is set, so deploying without that key is a safe no-op and can never move
+  // funds. Ticks every 3 minutes; re-centers the position as price moves.
+  if (whirlpoolMM.vault.isEnabled()) {
+    console.log("[VAULT] Liquidity vault enabled — autonomous position management every 3m");
+    const vaultTick = async () => {
+      try {
+        const r = await whirlpoolMM.vault.tick({});
+        if (r && !["none", "hold", "deferred"].includes(r.action)) console.log("[VAULT]", r.action, "·", r.reason || "");
+      } catch (e) { console.error("[VAULT] tick error:", e.message); }
+    };
+    setTimeout(vaultTick, 15000);
+    setInterval(vaultTick, 180 * 1000);
+  } else {
+    console.log("[VAULT] MM_OPERATOR_SECRET not set — autonomous vault disabled");
   }
 });

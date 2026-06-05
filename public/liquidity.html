@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>📊 Liquidity Engine — Cluck Norris</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0a0a0a; --card: #111111; --border: rgba(255,255,255,0.08);
+    --text: #F9FAFB; --subtext: #6B7280; --accent: #FCD34D; --orange: #D97706;
+    --green: #10B981; --red: #EF4444; --blue: #60A5FA; --mono: 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); background-image: radial-gradient(ellipse at 20% 10%, rgba(217,119,6,0.10) 0%, transparent 50%), radial-gradient(ellipse at 80% 90%, rgba(16,185,129,0.06) 0%, transparent 50%); color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh; }
+  .wrap { max-width: 680px; margin: 0 auto; padding: 24px 16px 80px; }
+  a.back-home { display:inline-flex; align-items:center; gap:6px; font-family:Oswald,sans-serif; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin:0 0 12px; }
+  .back-home img { height:22px; width:22px; object-fit:cover; border-radius:50%; border:1px solid var(--orange); }
+
+  .header { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+  .header-icon { font-size: 40px; filter: drop-shadow(0 0 16px rgba(217,119,6,0.5)); }
+  .header .brand-mini { font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 4px; color: var(--orange); margin-bottom: 4px; font-weight: 700; }
+  .header h1 { font-family: 'Oswald', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg, #FCD34D, #D97706, #F59E0B); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
+  .header p { font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+  .card-title { font-family: var(--mono); font-size: 10px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 14px; }
+
+  .intro { font-size: 13px; line-height: 1.7; color: #D1D5DB; }
+  .intro b { color: var(--accent); }
+  .intro .note-good { display: block; margin-top: 10px; padding: 10px 12px; background: rgba(16,185,129,0.07); border: 1px solid rgba(16,185,129,0.28); border-radius: 8px; font-size: 12px; color: #6EE7B7; }
+  .intro .note-good b { color: #6EE7B7; }
+
+  /* Wallet */
+  .wallet-picker { display: flex; gap: 8px; flex-wrap: wrap; }
+  .wallet-btn { flex: 1; min-width: 130px; display: flex; align-items: center; justify-content: center; gap: 8px; border: none; border-radius: 10px; padding: 12px 14px; font-family: var(--mono); font-size: 13px; font-weight: 700; color: #fff; letter-spacing: 1px; cursor: pointer; transition: transform 0.15s, opacity 0.15s; }
+  .wallet-btn:hover { transform: translateY(-1px); opacity: 0.95; }
+  .wallet-btn.phantom { background: linear-gradient(135deg, #9945FF, #6B21A8); }
+  .wallet-btn.solflare { background: linear-gradient(135deg, #FC822B, #B85F1F); }
+  .wallet-btn.backpack { background: linear-gradient(135deg, #E33E3F, #8B1E1E); }
+  .wallet-btn.okx { background: linear-gradient(135deg, #2B2B2B, #000000); }
+  .wallet-btn.glow { background: linear-gradient(135deg, #00D18C, #00785A); }
+  .wallet-info { font-family: var(--mono); font-size: 12px; color: var(--green); margin-top: 10px; padding: 10px 12px; background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.25); border-radius: 8px; display: none; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .wallet-info.show { display: flex; }
+  .wallet-info-addr { word-break: break-all; flex: 1; min-width: 0; }
+  .wallet-disc-btn { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: #FCA5A5; font-family: 'Oswald', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+
+  /* Pool picker */
+  .tabs { display:flex; gap:8px; margin-bottom:14px; }
+  .tab { flex:1; padding:10px; border:1px solid var(--border); border-radius:9px; background:transparent; color:var(--subtext); font-family:'Oswald',sans-serif; font-weight:700; letter-spacing:1.5px; font-size:13px; cursor:pointer; }
+  .tab.active { border-color:var(--orange); color:var(--accent); background:rgba(217,119,6,0.08); }
+  .tier-row { display:flex; gap:8px; flex-wrap:wrap; }
+  .tier { flex:1; min-width:90px; padding:10px 8px; border:1px solid var(--border); border-radius:9px; background:transparent; cursor:pointer; text-align:center; }
+  .tier.active { border-color:var(--orange); background:rgba(217,119,6,0.08); }
+  .tier .t-pct { font-family:'Oswald',sans-serif; font-weight:900; font-size:16px; color:var(--text); }
+  .tier.active .t-pct { color:var(--accent); }
+  .tier .t-meta { font-family:var(--mono); font-size:9px; color:var(--subtext); margin-top:3px; letter-spacing:0.5px; }
+  .tier .t-empty { color:#FCA5A5; }
+  .tier .t-depth { color:#6EE7B7; }
+
+  .stat-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; }
+  .stat { background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:9px; padding:10px 12px; }
+  .stat .k { font-family:var(--mono); font-size:9px; color:var(--subtext); letter-spacing:1px; }
+  .stat .v { font-family:'Oswald',sans-serif; font-size:18px; font-weight:700; margin-top:3px; }
+
+  /* Strategy */
+  .strat-row { display:flex; flex-direction:column; gap:8px; }
+  .strat { text-align:left; padding:12px 14px; border:1px solid var(--border); border-radius:10px; background:transparent; cursor:pointer; }
+  .strat.active { border-color:var(--orange); background:rgba(217,119,6,0.08); }
+  .strat .s-t { font-family:'Oswald',sans-serif; font-weight:700; letter-spacing:1px; font-size:14px; color:var(--text); }
+  .strat.active .s-t { color:var(--accent); }
+  .strat .s-d { font-size:11px; color:var(--subtext); margin-top:4px; line-height:1.5; }
+  .strat .s-d b { color:#6EE7B7; }
+
+  label.fld { display:block; font-family:var(--mono); font-size:10px; color:var(--subtext); letter-spacing:1px; margin:14px 0 6px; }
+  input[type=number], select { width:100%; background:#0d0d0d; border:1px solid var(--border); border-radius:9px; padding:12px; color:var(--text); font-family:var(--mono); font-size:15px; }
+  input[type=range] { width:100%; accent-color: var(--orange); }
+  .range-val { font-family:'Oswald',sans-serif; font-weight:700; color:var(--accent); }
+  .seg { display:flex; gap:8px; margin-top:6px; }
+  .seg button { flex:1; padding:9px; border:1px solid var(--border); border-radius:8px; background:transparent; color:var(--subtext); font-family:var(--mono); font-size:12px; cursor:pointer; }
+  .seg button.active { border-color:var(--orange); color:var(--accent); background:rgba(217,119,6,0.08); }
+
+  .preview { margin-top:14px; padding:14px; background:rgba(96,165,250,0.06); border:1px solid rgba(96,165,250,0.3); border-radius:10px; display:none; }
+  .preview.show { display:block; }
+  .preview .pr { font-family:var(--mono); font-size:12px; line-height:1.9; color:#BFDBFE; }
+  .preview .pr b { color:#fff; }
+
+  .btn { width:100%; border:none; border-radius:10px; padding:14px; font-family:'Oswald',sans-serif; font-size:15px; font-weight:900; letter-spacing:2px; cursor:pointer; transition:opacity 0.15s; margin-top:14px; }
+  .btn-primary { background:linear-gradient(135deg,#FCD34D,#D97706); color:#1a1205; }
+  .btn-ghost { background:transparent; border:1px solid var(--border); color:var(--subtext); }
+  .btn:hover { opacity:0.9; } .btn:disabled { opacity:0.4; cursor:not-allowed; }
+
+  .progress { display:none; margin-top:12px; font-family:var(--mono); font-size:12px; color:var(--accent); text-align:center; }
+  .progress.show { display:block; }
+  .error-box { display:none; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:12px 14px; font-family:var(--mono); font-size:12px; color:#FCA5A5; margin-bottom:16px; }
+  .error-box.show { display:block; }
+  .ok-box { display:none; background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.35); border-radius:8px; padding:12px 14px; font-family:var(--mono); font-size:12px; color:#6EE7B7; margin-top:12px; word-break:break-all; }
+  .ok-box.show { display:block; }
+  .ok-box a { color:#93C5FD; }
+
+  /* Positions */
+  .pos { margin-top:10px; padding:12px 13px; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:9px; }
+  .pos .p-head { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .pos .p-pair { font-family:'Oswald',sans-serif; font-weight:700; letter-spacing:1px; }
+  .pos .p-tag { font-family:var(--mono); font-size:9px; padding:2px 7px; border-radius:5px; letter-spacing:1px; }
+  .p-tag.inr { color:#6EE7B7; border:1px solid rgba(16,185,129,0.4); }
+  .p-tag.out { color:#FCA5A5; border:1px solid rgba(239,68,68,0.4); }
+  .pos .p-meta { font-family:var(--mono); font-size:11px; color:var(--subtext); line-height:1.7; margin-top:8px; }
+  .pos .p-meta b { color:var(--text); }
+  .close-btn { margin-top:10px; width:100%; background:rgba(239,68,68,0.13); border:1px solid rgba(239,68,68,0.45); color:#FCA5A5; font-family:'Oswald',sans-serif; font-size:11px; font-weight:700; letter-spacing:1.5px; padding:9px; border-radius:7px; cursor:pointer; }
+  .close-btn:disabled { opacity:0.4; cursor:not-allowed; }
+
+  .info-details { margin-bottom: 16px; }
+  .info-details summary { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; font-family: var(--mono); font-size: 11px; letter-spacing: 1px; color: var(--orange); cursor: pointer; list-style: none; }
+  .info-details summary::-webkit-details-marker { display: none; }
+  .info-details[open] summary { border-radius: 12px 12px 0 0; border-bottom: none; }
+  .info-body { border: 1px solid var(--border); border-top: none; border-radius: 0 0 12px 12px; padding: 16px; font-size: 12px; line-height: 1.75; color: #D1D5DB; }
+  .info-body b { color: var(--accent); }
+  .info-body .sec { margin-top: 12px; } .info-body .sec:first-child { margin-top: 0; }
+
+  .footer-tag { text-align: center; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
+  .footer-tag a { color: var(--orange); text-decoration: none; }
+  .muted { color: var(--subtext); }
+  @media (min-width: 1040px) { .wrap { max-width: 1040px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="/" class="back-home"><img src="/cluck-norris-logo.jpg" alt=""/>&larr; CLUCK NORRIS HOME</a>
+
+  <div class="header">
+    <div class="header-icon">📊</div>
+    <div>
+      <div class="brand-mini">CLUCK NORRIS</div>
+      <h1>LIQUIDITY ENGINE</h1>
+      <p>ORCA WHIRLPOOLS · CONCENTRATED MARKET MAKER</p>
+    </div>
+  </div>
+
+  <div id="errorBox" class="error-box"></div>
+
+  <div class="card">
+    <div class="intro">
+      Put <b>real depth</b> into your Orca pools. This is a concentrated-liquidity
+      market maker: you place liquidity in a price range, it <b>fills real traders</b>,
+      tightens the spread, cuts slippage, and earns the pool fee on every swap that
+      trades through your range. Pick a fee tier, choose a <b>single-sided</b> wall
+      (CLKN-only asks above price, or quote-only bids below) or a <b>balanced</b>
+      range, and sign in your own wallet.
+      <span class="note-good">🔒 <b>Non-custodial.</b> The server only builds the
+      transaction — your wallet signs and submits it. No keys ever leave your device.
+      This provides genuine depth that fills real orders; it is not a self-trading
+      volume bot.</span>
+    </div>
+  </div>
+
+  <!-- Wallet -->
+  <div class="card">
+    <div class="card-title">1 · CONNECT WALLET</div>
+    <div class="wallet-picker" id="walletPicker">
+      <button class="wallet-btn phantom" onclick="connectWallet('phantom')">🔮 Phantom</button>
+      <button class="wallet-btn solflare" onclick="connectWallet('solflare')">☀️ Solflare</button>
+      <button class="wallet-btn backpack" onclick="connectWallet('backpack')">🎒 Backpack</button>
+      <button class="wallet-btn okx" onclick="connectWallet('okx')">⭕ OKX</button>
+      <button class="wallet-btn glow" onclick="connectWallet('glow')">🌐 Glow</button>
+    </div>
+    <div id="mobileConnect" style="display:none;margin-top:12px;flex-direction:column;gap:8px"></div>
+    <div class="wallet-info" id="walletInfo">
+      <span class="wallet-info-addr" id="walletInfoAddr"></span>
+      <button class="wallet-disc-btn" onclick="disconnectWallet()">DISCONNECT</button>
+    </div>
+  </div>
+
+  <!-- Pool -->
+  <div class="card" id="poolCard" style="display:none">
+    <div class="card-title">2 · CHOOSE POOL &amp; FEE TIER</div>
+    <div class="tabs" id="pairTabs"></div>
+    <div class="tier-row" id="tierRow"></div>
+    <div id="poolStats"></div>
+  </div>
+
+  <!-- Strategy -->
+  <div class="card" id="stratCard" style="display:none">
+    <div class="card-title">3 · STRATEGY &amp; RANGE</div>
+    <div class="strat-row" id="stratRow"></div>
+
+    <label class="fld">RANGE WIDTH — <span class="range-val" id="widthVal">15%</span> around price</label>
+    <input type="range" id="widthSlider" min="1" max="80" value="15" oninput="onWidth()"/>
+
+    <div id="balancedInputWrap" style="display:none">
+      <label class="fld">DENOMINATE DEPOSIT IN</label>
+      <div class="seg" id="balSeg"></div>
+    </div>
+
+    <label class="fld" id="depLabel">DEPOSIT AMOUNT</label>
+    <input type="number" id="depAmount" placeholder="0.0" min="0" step="any" oninput="schedulePreview()"/>
+
+    <label class="fld">MAX SLIPPAGE</label>
+    <div class="seg" id="slipSeg">
+      <button data-bps="50" onclick="setSlip(50)">0.5%</button>
+      <button data-bps="100" class="active" onclick="setSlip(100)">1%</button>
+      <button data-bps="300" onclick="setSlip(300)">3%</button>
+    </div>
+
+    <div class="preview" id="preview"><div class="pr" id="previewBody"></div></div>
+    <div class="progress" id="progress"></div>
+    <button class="btn btn-primary" id="openBtn" onclick="openPosition()" disabled>➕ ADD LIQUIDITY (SIGN IN WALLET)</button>
+    <div class="ok-box" id="okBox"></div>
+  </div>
+
+  <!-- Positions -->
+  <div class="card" id="posCard" style="display:none">
+    <div class="card-title">4 · YOUR POSITIONS</div>
+    <button class="btn btn-ghost" id="refreshPos" onclick="loadPositions()" style="margin-top:0">🔄 REFRESH POSITIONS</button>
+    <div id="posList"></div>
+  </div>
+
+  <details class="info-details">
+    <summary>📖 HOW CONCENTRATED LIQUIDITY WORKS — AND WHY THIS IS REAL MARKET MAKING</summary>
+    <div class="info-body">
+      <div class="sec"><b>Concentrated liquidity.</b> Instead of spreading capital
+      across every price (0→∞), you place it in a chosen price <i>range</i>. Inside
+      that range your liquidity is far deeper, so trades get a tighter price and the
+      pool routes more flow to you — and you earn the fee tier on every swap that
+      passes through.</div>
+      <div class="sec"><b>Single-sided = a wall.</b> A range entirely <i>above</i> the
+      current price holds only CLKN — a stack of <b>asks</b> (a sell wall) that fills
+      buyers as price rises. A range entirely <i>below</i> price holds only the quote
+      token — <b>bids</b> (buy support) that fill sellers as price falls. You choose
+      which side to back, and with how much.</div>
+      <div class="sec"><b>Balanced = both sides.</b> A range straddling the current
+      price holds both tokens and quotes a two-sided market — the classic market-maker
+      posture. It earns the most fees while price stays in range; if price leaves the
+      range the position goes fully to one token and stops earning until you re-center.</div>
+      <div class="sec"><b>Real, not fake.</b> Every fill here is a real counterparty
+      trading against your depth — that's honest volume and real fee income. This tool
+      will never trade against itself to manufacture a number; that's wash trading, and
+      it's exactly what the <a href="/autopsy" style="color:#93C5FD">Token Autopsy</a>
+      is built to catch.</div>
+      <div class="sec"><b>You stay in control.</b> Opening or closing a position is a
+      transaction <i>you</i> sign. Closing withdraws all liquidity, collects earned
+      fees, and burns the position — back to your wallet in one signature.</div>
+    </div>
+  </details>
+
+  <div class="footer-tag">
+    🐔 <a href="https://clucknorris.app">clucknorris.app</a> — LIQUIDITY ENGINE · REAL DEPTH, REAL FILLS
+  </div>
+</div>
+
+<script src="/vendor/solana-web3.iife.min.js"></script>
+<script>
+// ── Constants / state ────────────────────────────────────────────────────────
+const RPC_URL = '/api/helius-rpc';
+const CLKN_MINT = 'DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS';
+let walletPubkey = null, activeWallet = null, busy = false;
+let allPools = [], curPair = null, curPool = null, curRanges = null;
+let strategy = 'clkn', slippageBps = 100, balanceInputMint = CLKN_MINT;
+let lastQuote = null, previewTimer = null;
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function showError(msg){ const el=document.getElementById('errorBox'); el.textContent=msg; el.classList.add('show'); el.scrollIntoView({behavior:'smooth',block:'center'}); setTimeout(()=>el.classList.remove('show'),10000); }
+function setProgress(msg){ const el=document.getElementById('progress'); if(msg){el.textContent=msg;el.classList.add('show');} else el.classList.remove('show'); }
+function shorten(s){ return s.slice(0,4)+'…'+s.slice(-4); }
+function fmtNum(n){ n=Number(n); if(!isFinite(n)) return '?'; if(n===0) return '0'; if(Math.abs(n)<0.000001) return n.toExponential(3); if(Math.abs(n)<1) return n.toPrecision(5); return n.toLocaleString(undefined,{maximumFractionDigits:6}); }
+async function rpc(method,params){ const r=await fetch(RPC_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})}); const d=await r.json(); if(d.error) throw new Error(d.error.message); return d.result; }
+async function confirmTx(sig){ for(let i=0;i<40;i++){ const st=await rpc('getSignatureStatuses',[[sig]]); const s=st&&st.value&&st.value[0]; if(s){ if(s.err) throw new Error('Transaction failed on-chain'); if(s.confirmationStatus==='confirmed'||s.confirmationStatus==='finalized') return; } await new Promise(r=>setTimeout(r,1500)); } throw new Error('Timed out waiting for confirmation — check Solscan'); }
+async function jget(url){ const r=await fetch(url); const d=await r.json(); if(!r.ok) throw new Error(d.error||'Request failed'); return d; }
+async function jpost(url,body){ const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); const d=await r.json(); if(!r.ok) throw new Error(d.error||'Request failed'); return d; }
+
+// ── Wallet connect (same proven flow as Security Coop) ───────────────────────
+const WALLETS = {
+  phantom:  { name: 'Phantom',  detect: () => window.phantom?.solana || (window.solana?.isPhantom ? window.solana : null) },
+  solflare: { name: 'Solflare', detect: () => window.solflare || (window.solana?.isSolflare ? window.solana : null) },
+  backpack: { name: 'Backpack', detect: () => (window.backpack?.isBackpack ? window.backpack : null) || (window.solana?.isBackpack ? window.solana : null) },
+  okx:      { name: 'OKX',      detect: () => window.okxwallet?.solana || window.okxwallet || null },
+  glow:     { name: 'Glow',     detect: () => window.glowSolana || window.glow?.solana || (window.solana?.isGlow ? window.solana : null) },
+};
+function initMobileDeepLinks(){
+  const isMobile=/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  if(!isMobile) return;
+  const injected=!!(window.solana||window.phantom?.solana||window.solflare||window.backpack||window.okxwallet||window.glowSolana);
+  if(injected) return;
+  const el=document.getElementById('mobileConnect'), picker=document.getElementById('walletPicker');
+  if(!el) return;
+  const url=encodeURIComponent(location.href), ref=encodeURIComponent(location.origin);
+  el.innerHTML='<div style="font-family:var(--mono);font-size:12px;color:var(--accent);line-height:1.5">📱 On mobile? Open this page inside your wallet to connect:</div>'
+    +'<a class="wallet-btn phantom" style="text-decoration:none" href="https://phantom.app/ul/browse/'+url+'?ref='+ref+'">🔮 Open in Phantom</a>'
+    +'<a class="wallet-btn solflare" style="text-decoration:none" href="https://solflare.com/ul/v1/browse/'+url+'?ref='+ref+'">☀️ Open in Solflare</a>';
+  el.style.display='flex'; if(picker) picker.style.display='none';
+}
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',initMobileDeepLinks); else initMobileDeepLinks();
+
+let connecting=false;
+async function connectWallet(id){
+  if(connecting) return;
+  const w=WALLETS[id], provider=w&&w.detect();
+  if(!provider){ showError(`${w?w.name:'Wallet'} not detected. Open this page in ${w?w.name:'the wallet'}'s in-app browser, or install the extension.`); return; }
+  connecting=true;
+  try{
+    const resp=await provider.connect();
+    const pk=resp?.publicKey?.toString?.()||provider.publicKey?.toString?.();
+    if(!pk) throw new Error('no public key returned');
+    walletPubkey=pk; activeWallet={id,provider};
+    syncWalletUi(); loadPools(); loadPositions();
+  }catch(e){
+    const code=e&&e.code;
+    if(code===4001||/rejected|not been authorized/i.test((e&&e.message)||'')) showError(`${w.name} didn't authorize the connection.`);
+    else showError(`${w.name} connection failed: ${e.message||e}`);
+  }finally{ connecting=false; }
+}
+function disconnectWallet(){ try{activeWallet?.provider?.disconnect?.();}catch(e){} walletPubkey=null; activeWallet=null; syncWalletUi(); }
+function syncWalletUi(){
+  const picker=document.getElementById('walletPicker'), info=document.getElementById('walletInfo');
+  const show=id=>document.getElementById(id).style.display='block', hide=id=>document.getElementById(id).style.display='none';
+  if(walletPubkey){ picker.style.display='none'; info.classList.add('show'); document.getElementById('walletInfoAddr').textContent='✓ '+walletPubkey; show('poolCard'); }
+  else { picker.style.display='flex'; info.classList.remove('show'); ['poolCard','stratCard','posCard'].forEach(hide); }
+}
+
+// ── Pool picker ──────────────────────────────────────────────────────────────
+async function loadPools(){
+  try{
+    const { pools }=await jget('/api/whirlpool/pools');
+    allPools=pools;
+    const pairs=[...new Set(pools.map(p=>p.pair))];
+    const tabs=document.getElementById('pairTabs');
+    tabs.innerHTML=pairs.map(p=>`<button class="tab" data-pair="${esc(p)}" onclick="selectPair('${esc(p)}')">${esc(p)}</button>`).join('');
+    if(pairs.length) selectPair(curPair&&pairs.includes(curPair)?curPair:pairs[0]);
+  }catch(e){ showError('Could not load pools: '+(e.message||e)); }
+}
+function selectPair(pair){
+  curPair=pair;
+  document.querySelectorAll('#pairTabs .tab').forEach(t=>t.classList.toggle('active',t.dataset.pair===pair));
+  const tiers=allPools.filter(p=>p.pair===pair).sort((a,b)=>a.feeTierPct-b.feeTierPct);
+  document.getElementById('tierRow').innerHTML=tiers.map(p=>
+    `<button class="tier" data-addr="${esc(p.address)}" onclick="selectPool('${esc(p.address)}')">
+       <div class="t-pct">${p.feeTierPct}%</div>
+       <div class="t-meta ${p.empty?'t-empty':'t-depth'}">${p.empty?'NO DEPTH':'HAS DEPTH'}</div>
+     </button>`).join('');
+  if(tiers.length) selectPool(tiers[0].address);
+}
+async function selectPool(addr){
+  document.querySelectorAll('#tierRow .tier').forEach(t=>t.classList.toggle('active',t.dataset.addr===addr));
+  const meta=allPools.find(p=>p.address===addr);
+  curPool=meta; lastQuote=null; document.getElementById('preview').classList.remove('show');
+  document.getElementById('poolStats').innerHTML='<div class="muted" style="font-family:var(--mono);font-size:12px;margin-top:12px">Loading pool…</div>';
+  try{
+    const { ranges, state }=await jget('/api/whirlpool/ranges/'+addr+'?widthPct='+document.getElementById('widthSlider').value);
+    curRanges=ranges; curPool.state=state;
+    document.getElementById('poolStats').innerHTML=
+      `<div class="stat-grid">
+         <div class="stat"><div class="k">CLKN PRICE</div><div class="v">${fmtNum(state.clknPriceInQuote)} <span class="muted" style="font-size:12px">${esc(state.quoteSymbol)}</span></div></div>
+         <div class="stat"><div class="k">FEE TIER</div><div class="v">${state.feeTierPct}%</div></div>
+         <div class="stat"><div class="k">ACTIVE DEPTH</div><div class="v" style="color:${meta.empty?'#FCA5A5':'#6EE7B7'}">${meta.empty?'EMPTY':'LIVE'}</div></div>
+         <div class="stat"><div class="k">TICK SPACING</div><div class="v">${state.tickSpacing}</div></div>
+       </div>`;
+    document.getElementById('stratCard').style.display='block';
+    renderStrategies();
+  }catch(e){ document.getElementById('poolStats').innerHTML=''; showError('Could not read pool: '+(e.message||e)); }
+}
+
+// ── Strategy & range ─────────────────────────────────────────────────────────
+function renderStrategies(){
+  if(!curRanges) return;
+  const opts=curRanges.options;
+  document.getElementById('stratRow').innerHTML=opts.map(o=>{
+    const sub = o.id==='balanced'
+      ? `Two-sided market, <b>±${curRanges.widthPct.toFixed(0)}%</b> around ${fmtNum(curRanges.currentPriceClkn)} ${esc(curRanges.quoteSymbol)}. Earns most fees in range.`
+      : `Range ${fmtNum(o.lowerPriceClkn)} → ${fmtNum(o.upperPriceClkn)} ${esc(curRanges.quoteSymbol)}. Deposit <b>${esc(o.depositSymbol)}</b> only.`;
+    const title = o.id==='clkn' ? '⬆ Sell-side wall (CLKN asks)' : o.id==='quote' ? '⬇ Buy-side support ('+esc(curRanges.quoteSymbol)+' bids)' : '⚖ Balanced (both sides)';
+    return `<button class="strat ${o.id===strategy?'active':''}" data-id="${o.id}" onclick="selectStrategy('${o.id}')">
+              <div class="s-t">${title}</div><div class="s-d">${sub}</div></button>`;
+  }).join('');
+  // balanced denomination segment
+  const bs=document.getElementById('balSeg');
+  bs.innerHTML=`<button data-mint="${CLKN_MINT}" class="${balanceInputMint===CLKN_MINT?'active':''}" onclick="setBalMint('${CLKN_MINT}')">CLKN</button>`+
+               `<button data-mint="${esc(curPool.quoteMint)}" class="${balanceInputMint!==CLKN_MINT?'active':''}" onclick="setBalMint('${esc(curPool.quoteMint)}')">${esc(curPool.quoteSymbol)}</button>`;
+  updateDepLabel();
+}
+function selectStrategy(id){ strategy=id; document.querySelectorAll('.strat').forEach(s=>s.classList.toggle('active',s.dataset.id===id)); document.getElementById('balancedInputWrap').style.display=id==='balanced'?'block':'none'; updateDepLabel(); schedulePreview(); }
+function setBalMint(m){ balanceInputMint=m; document.querySelectorAll('#balSeg button').forEach(b=>b.classList.toggle('active',b.dataset.mint===m)); updateDepLabel(); schedulePreview(); }
+function currentDepositMint(){
+  if(strategy==='clkn') return CLKN_MINT;
+  if(strategy==='quote') return curPool.quoteMint;
+  return balanceInputMint; // balanced
+}
+function currentDepositSymbol(){ const m=currentDepositMint(); return m===CLKN_MINT?'CLKN':curPool.quoteSymbol; }
+function updateDepLabel(){ document.getElementById('depLabel').textContent='DEPOSIT AMOUNT — '+currentDepositSymbol(); }
+function onWidth(){ document.getElementById('widthVal').textContent=document.getElementById('widthSlider').value+'%'; if(curPool) selectPool(curPool.address); }
+function setSlip(bps){ slippageBps=bps; document.querySelectorAll('#slipSeg button').forEach(b=>b.classList.toggle('active',Number(b.dataset.bps)===bps)); schedulePreview(); }
+
+function activeOption(){ return curRanges.options.find(o=>o.id===strategy); }
+function schedulePreview(){ clearTimeout(previewTimer); previewTimer=setTimeout(preview,400); }
+async function preview(){
+  const amt=Number(document.getElementById('depAmount').value);
+  const openBtn=document.getElementById('openBtn');
+  lastQuote=null; openBtn.disabled=true;
+  if(!curRanges||!(amt>0)){ document.getElementById('preview').classList.remove('show'); return; }
+  const opt=activeOption();
+  try{
+    const { quote }=await jpost('/api/whirlpool/quote',{ address:curPool.address, inputMint:currentDepositMint(), inputAmount:String(amt), lowerTick:opt.lowerTick, upperTick:opt.upperTick, slippageBps });
+    lastQuote=quote;
+    const clknAmt = curPool.state.clknIsA ? quote.maxA : quote.maxB;
+    const quoteAmt = curPool.state.clknIsA ? quote.maxB : quote.maxA;
+    document.getElementById('previewBody').innerHTML=
+      `This position will use up to:<br>`+
+      `&nbsp;&nbsp;<b>${fmtNum(clknAmt)} CLKN</b><br>`+
+      `&nbsp;&nbsp;<b>${fmtNum(quoteAmt)} ${esc(curPool.quoteSymbol)}</b><br>`+
+      `Range: <b>${fmtNum(opt.lowerPriceClkn)} → ${fmtNum(opt.upperPriceClkn)} ${esc(curPool.quoteSymbol)}</b> per CLKN<br>`+
+      `<span class="muted">+ ~0.002 SOL rent for the position NFT (returned on close). Max-slippage padded.</span>`;
+    document.getElementById('preview').classList.add('show');
+    openBtn.disabled=false;
+  }catch(e){ document.getElementById('preview').classList.remove('show'); showError('Quote failed: '+(e.message||e)); }
+}
+
+// ── Open position ────────────────────────────────────────────────────────────
+async function openPosition(){
+  if(!walletPubkey||busy||!lastQuote) return;
+  const amt=Number(document.getElementById('depAmount').value);
+  if(!(amt>0)) return;
+  busy=true; document.getElementById('openBtn').disabled=true; document.getElementById('okBox').classList.remove('show');
+  const opt=activeOption();
+  try{
+    setProgress('Building the add-liquidity transaction…');
+    const built=await jpost('/api/whirlpool/open',{ owner:walletPubkey, address:curPool.address, lowerTick:opt.lowerTick, upperTick:opt.upperTick, inputMint:currentDepositMint(), inputAmount:String(amt), slippageBps });
+    const sig=await signSubmit(built.txBase64);
+    setProgress('');
+    const ok=document.getElementById('okBox');
+    ok.innerHTML='✓ Liquidity added. Position mint <b>'+shorten(built.positionMint)+'</b><br><a href="https://solscan.io/tx/'+sig+'" target="_blank">View on Solscan ↗</a>';
+    ok.classList.add('show');
+    document.getElementById('depAmount').value=''; document.getElementById('preview').classList.remove('show'); lastQuote=null;
+    setTimeout(loadPositions,2500); selectPool(curPool.address);
+  }catch(e){ setProgress(''); showError('Add liquidity failed: '+(e.message||e)); document.getElementById('openBtn').disabled=false; }
+  finally{ busy=false; }
+}
+
+// Sign + submit one base64 legacy transaction (same path as Security Coop).
+async function signSubmit(txBase64){
+  setProgress('Approve the transaction in your wallet…');
+  const txBytes=Uint8Array.from(atob(txBase64),c=>c.charCodeAt(0));
+  const tx=solanaWeb3.Transaction.from(txBytes);
+  const prov=activeWallet.provider;
+  let signature;
+  if(typeof prov.signAndSendTransaction==='function'){
+    const r=await prov.signAndSendTransaction(tx); signature=r?.signature||r;
+  } else if(typeof prov.signTransaction==='function'){
+    const signed=await prov.signTransaction(tx);
+    const raw=new Uint8Array(signed.serialize()); let bin=''; for(let i=0;i<raw.length;i++) bin+=String.fromCharCode(raw[i]);
+    const sj=await (await fetch('/api/helius-rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:'wp-send',method:'sendTransaction',params:[btoa(bin),{encoding:'base64'}]})})).json();
+    if(sj.error) throw new Error(sj.error.message||'Transaction send failed'); signature=sj.result;
+  } else throw new Error('This wallet can\'t sign here — try its in-app browser, or Phantom/Solflare.');
+  setProgress('Confirming on-chain…'); await confirmTx(signature); return signature;
+}
+
+// ── Positions ────────────────────────────────────────────────────────────────
+async function loadPositions(){
+  if(!walletPubkey) return;
+  document.getElementById('posCard').style.display='block';
+  const list=document.getElementById('posList');
+  list.innerHTML='<div class="muted" style="font-family:var(--mono);font-size:12px;margin-top:12px">Scanning for positions…</div>';
+  try{
+    const { positions }=await jget('/api/whirlpool/positions?owner='+encodeURIComponent(walletPubkey));
+    if(!positions.length){ list.innerHTML='<div class="muted" style="font-family:var(--mono);font-size:12px;margin-top:12px">No open CLKN positions on this wallet yet.</div>'; return; }
+    list.innerHTML=positions.map((p,i)=>
+      `<div class="pos">
+         <div class="p-head"><span class="p-pair">${esc(p.pair)}</span>
+           <span class="p-tag ${p.inRange?'inr':'out'}">${p.inRange?'IN RANGE':'OUT OF RANGE'}</span></div>
+         <div class="p-meta">
+           Range: <b>${fmtNum(p.lowerPriceClkn)} → ${fmtNum(p.upperPriceClkn)}</b> (now ${fmtNum(p.currentPriceClkn)})<br>
+           Liquidity: <b>${esc(p.liquidity)}</b><br>
+           Fees owed: <b>${fmtNum(p.feeOwedA)}</b> / <b>${fmtNum(p.feeOwedB)}</b><br>
+           Mint: ${shorten(p.positionMint)}
+         </div>
+         <button class="close-btn" id="cb${i}" onclick="closePosition('${esc(p.positionMint)}',${i})">CLOSE · WITHDRAW + COLLECT FEES</button>
+       </div>`).join('');
+  }catch(e){ list.innerHTML=''; showError('Could not load positions: '+(e.message||e)); }
+}
+async function closePosition(mint,i){
+  if(!walletPubkey||busy) return;
+  busy=true; const btn=document.getElementById('cb'+i); if(btn) btn.disabled=true;
+  try{
+    setProgress('Building the close transaction…');
+    const { txs }=await jpost('/api/whirlpool/close',{ owner:walletPubkey, positionMint:mint, slippageBps });
+    for(const t of txs){ await signSubmit(t); }
+    setProgress(''); busy=false; loadPositions(); if(curPool) selectPool(curPool.address);
+  }catch(e){ setProgress(''); showError('Close failed: '+(e.message||e)); if(btn) btn.disabled=false; busy=false; }
+}
+</script>
+</body>
+</html>
