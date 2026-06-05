@@ -9497,10 +9497,10 @@ const QUOTE_TOKENS = {
   [USDC_MINT]: { symbol: "USDC", emoji: "$", isStable: true },
   [USDT_MINT]: { symbol: "USDT", emoji: "$", isStable: true },
 };
-// Buys below this USD value don't fire a Telegram notification. Default $0.50
-// catches split-routing halves of $1 buys via Jupiter aggregator while still
-// filtering bot dust. Override via env var.
-const MIN_BUY_USD = parseFloat(process.env.MIN_BUY_USD || "20");
+// Buys below this USD value don't fire a Telegram notification. Default $5 so
+// the channel shows the steady stream of smaller buys (good for hype during a
+// Buy Special) while still filtering bot dust. Override via env var.
+const MIN_BUY_USD = parseFloat(process.env.MIN_BUY_USD || "5");
 // Sells use the same floor by default, so both sides are reported on equal
 // terms. Set MIN_SELL_USD to give the sell side its own threshold.
 const MIN_SELL_USD = parseFloat(process.env.MIN_SELL_USD || String(MIN_BUY_USD));
