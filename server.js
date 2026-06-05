@@ -6,6 +6,7 @@ const { createCanvas, GlobalFonts, loadImage } = require("@napi-rs/canvas");
 const { createSign, createHash, createHmac, randomBytes, createPublicKey, verify: ed25519Verify } = require("crypto");
 const hatchery = require("./hatchery");
 const securityCoop = require("./securitycoop");
+const whirlpoolMM = require("./whirlpool-mm");
 const { fetchBagsContext, classifyTeamActivity } = require("./lib/bags-context");
 const analytics = require("./lib/analytics");
 const solscan = require("./lib/solscan");
@@ -1367,6 +1368,8 @@ app.use("/api/verify-clkn-payment", rateLimit("pay", { windowMs: 60000, max: 20 
 // own larger body limit handles the base64 logo upload instead of the 100kb default.
 app.use("/api/hatchery", hatchery.router);
 app.use("/api/security-coop", securityCoop.router);
+// Liquidity Engine — Orca Whirlpools market maker (non-custodial; builds unsigned txs).
+app.use("/api/whirlpool", whirlpoolMM.router);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -5566,6 +5569,11 @@ app.get("/api/credential-card", async (req, res) => {
 // reachable only by direct URL while in private testing.
 app.get("/hatchery", (req, res) => {
   res.sendFile(join(__dirname, "public", "hatchery.html"));
+});
+
+// Liquidity Engine — Orca Whirlpools concentrated-liquidity market maker.
+app.get("/liquidity", (req, res) => {
+  res.sendFile(join(__dirname, "public", "liquidity.html"));
 });
 
 // Security Coop — wallet permission check / approval revoker.
