@@ -1693,6 +1693,28 @@ const splToken = {
     const tool=document.getElementById('airdropTool'); const host=tool||document.querySelector('.wrap'); if(host) host.insertBefore(notice, host.firstChild);
   } catch(e){}
 })();
+
+// Buy-Special random-draw payout handoff: /airdrop?draw=<id>&t=<token>.
+// Same shape as the buy-comp handoff — loads the drawn winners (wallet, prize).
+(async function(){
+  const p = new URLSearchParams(location.search);
+  const id = p.get('draw'), t = p.get('t');
+  if(!id || !t) return;
+  try {
+    const r = await fetch('/api/buyspecial/draw/payout?id='+encodeURIComponent(id)+'&t='+encodeURIComponent(t));
+    const j = await r.json();
+    if(!j || !j.ok || !j.recipients) return;
+    const mintInput = document.getElementById('tokenMintInput');
+    if(mintInput){ mintInput.value = j.mint; if(typeof currentMint !== 'undefined') currentMint = j.mint; }
+    if(typeof setMode === 'function') setMode('manual');
+    const ta = document.getElementById('manualInput'); if(ta) ta.value = j.recipients;
+    const count = j.recipients.split('\n').filter(Boolean).length;
+    const notice = document.createElement('div');
+    notice.style.cssText='background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:10px 14px;font-family:var(--mono);font-size:11px;color:#10B981;margin-bottom:12px;';
+    notice.textContent='Loaded '+count+' draw winner'+(count===1?'':'s')+' from '+(j.source||'Buy Special draw')+(j.tokenName?' ('+j.tokenName+')':'')+' — review each, then send from your own wallet.';
+    const tool=document.getElementById('airdropTool'); const host=tool||document.querySelector('.wrap'); if(host) host.insertBefore(notice, host.firstChild);
+  } catch(e){}
+})();
 </script>
 
 </body>

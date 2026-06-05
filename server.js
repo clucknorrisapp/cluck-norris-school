@@ -2462,6 +2462,147 @@ app.get("/api/buycomp/payout", (req, res) => {
   return res.status(200).json({ ok: true, mint: buyCompPrizeMint(c), tokenName: c.ticker, source: "Cluck Norris Buy Comp", recipients });
 });
 
+// ── Buy Special RANDOM DRAW (the "N random buys win X CLKN" raffle) ───────────
+// Distinct from the ranked buy COMPETITION above. Here every qualifying BUY is a
+// raffle entry — more buys = more chances — and N DISTINCT wallets win. Eligibility
+// = bought in [from,to] AND still holding at the snapshot (no on-chain sells,
+// balance > 0), i.e. survived the hold. The draw is REPRODUCIBLE: we publish the
+// seed + the eligible entry list, and the winners are a pure function of
+// (seed, entries) — anyone can re-run the same SHA256 steps and confirm.
+const BUYSPECIAL_DRAWS_KEY = "buySpecialDraws";
+function bsDrawsAll() { return kv.get(BUYSPECIAL_DRAWS_KEY, {}); }
+function bsDrawSave(d) { const all = bsDrawsAll(); all[d.id] = d; kv.set(BUYSPECIAL_DRAWS_KEY, all); }
+const bsParseTs = (v) => (v == null || v === "") ? null : (isNaN(+v) ? Date.parse(v) : (+v < 1e12 ? +v * 1000 : +v));
+
+// Deterministic weighted raffle. `entries` = [{wallet, chances}] in canonical
+// (address-sorted) order; each wallet occupies `chances` slots. Winner of round
+// k = the wallet at slot ( SHA256("seed:k") mod remainingSlots ); that wallet's
+// whole block is then removed so no one wins twice. Pure + reproducible.
+function bsDraw(entries, winners, seed) {
+  let pool = [];
+  for (const e of entries) for (let i = 0; i < e.chances; i++) pool.push(e.wallet);
+  const picks = [];
+  let k = 0, guard = 0;
+  while (picks.length < winners && pool.length > 0 && guard++ < 100000) {
+    const h = createHash("sha256").update(`${seed}:${k}`).digest("hex");
+    const idx = Number(BigInt("0x" + h) % BigInt(pool.length));
+    const w = pool[idx];
+    k++;
+    if (picks.includes(w)) continue;        // guard (we prune, so shouldn't hit)
+    picks.push(w);
+    pool = pool.filter(x => x !== w);        // remove the winner's whole block
+  }
+  return picks;
+}
+
+// POST /api/buyspecial/draw — run (or re-run with ?id=) the raffle. Admin-gated.
+// Refuses before the hold snapshot time (to + holdHours) unless force=1.
+app.post("/api/buyspecial/draw", async (req, res) => {
+  if (!buyCompAdminOK(req)) return res.status(404).json({ error: "not_found" });
+  const q = Object.assign({}, req.query, req.body || {});
+  const mint = String(q.mint || CLKN_MINT_ADDR).trim();
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ error: "bad mint" });
+  const fromTs = bsParseTs(q.from), toTs = bsParseTs(q.to);
+  if (!fromTs || !toTs || toTs <= fromTs) return res.status(400).json({ error: "bad window (need to>from)" });
+  const winners = Math.max(1, Math.min(50, parseInt(q.winners) || 5));
+  const prize = Math.max(1, parseInt(String(q.prize || "100000").replace(/[^0-9]/g, "")) || 100000);
+  const holdHours = (q.hold !== undefined && q.hold !== null && q.hold !== "") ? Math.max(0, parseInt(q.hold) || 0) : 24;
+  const requireHold = String(q.requireHold == null ? "1" : q.requireHold) !== "0";
+  const snapshotAt = toTs + holdHours * 3600000;
+  if (requireHold && Date.now() < snapshotAt && q.force !== "1") {
+    return res.status(400).json({ error: "hold snapshot time not reached — pass force=1 to override", snapshotAt });
+  }
+  if (!solanaTracker.isConfigured()) return res.status(503).json({ error: "Solana Tracker not configured" });
+
+  // 1) Every buyer in the window.
+  let scan;
+  try { scan = await solanaTracker.getTokenBuyersInWindow(mint, Math.floor(fromTs / 1000), Math.floor(toTs / 1000), { maxPages: 80 }); }
+  catch (e) { return res.status(500).json({ error: "buyer scan failed: " + e.message }); }
+  const buyers = (scan && scan.buyers) || [];
+  if (!buyers.length) return res.status(200).json({ ok: true, note: "no buyers in window", buyersTotal: 0, reachedWindowStart: scan && scan.reachedWindowStart });
+
+  // 2) Hold snapshot — keep only wallets still holding (no sells, balance > 0).
+  const reviewed = [];
+  for (const b of buyers) {
+    let status = "eligible", note = `${b.buyCount} buy${b.buyCount > 1 ? "s" : ""}`;
+    if (requireHold) {
+      try {
+        const pos = premiumForensics.parseStPosition(await solanaTracker.getWalletTokenPosition(b.wallet, mint));
+        if (!pos) { status = "manual"; note = "no position data — verify by hand"; }
+        else if ((pos.sells || 0) > 0) { status = "dq"; note = `sold (${pos.sells} sell${pos.sells > 1 ? "s" : ""}) — did not hold`; }
+        else if ((pos.balance || 0) <= 0) { status = "manual"; note = "holds 0, no sells — transferred out; verify by hand"; }
+        else { status = "eligible"; note = `holds ${Math.round(pos.balance).toLocaleString()}, ${b.buyCount} buy${b.buyCount > 1 ? "s" : ""}, no sells`; }
+      } catch (e) { status = "manual"; note = "lookup failed — verify by hand"; }
+      await new Promise(r => setTimeout(r, 120));   // pace ST so we don't trip the quota
+    }
+    reviewed.push({ wallet: b.wallet, buyCount: b.buyCount, volumeSol: b.volumeSol, status, note });
+  }
+
+  // 3) Eligible entry list — canonical order (address asc), chances = buyCount.
+  const eligible = reviewed.filter(r => r.status === "eligible")
+    .map(r => ({ wallet: r.wallet, chances: r.buyCount }))
+    .sort((a, b) => a.wallet < b.wallet ? -1 : a.wallet > b.wallet ? 1 : 0);
+  const totalEntries = eligible.reduce((s, e) => s + e.chances, 0);
+
+  // 4) Published seed + the draw.
+  const seed = (q.seed && String(q.seed).trim()) || randomBytes(16).toString("hex");
+  const winnerWallets = bsDraw(eligible, winners, seed);
+  const recipients = winnerWallets.map(w => `${w}, ${prize}`).join("\n");
+
+  const id = (q.id && bsDrawsAll()[String(q.id)]) ? String(q.id) : ("bsd_" + randomBytes(5).toString("hex"));
+  const existing = bsDrawsAll()[id];
+  const d = {
+    id, mint, from: fromTs, to: toTs, holdHours, requireHold,
+    winnersCount: winners, prize, seed,
+    method: "CLKN Buy Special Draw v1 — entries = buyCount per wallet, wallets sorted by address; round k winner = wallet at slot SHA256(\"seed:k\") mod remainingSlots, winner's block removed each round.",
+    buyersTotal: buyers.length, reachedWindowStart: scan && scan.reachedWindowStart,
+    eligible, totalEntries, reviewed,
+    winners: winnerWallets.map((w, i) => ({ rank: i + 1, wallet: w, prize, chances: (eligible.find(e => e.wallet === w) || {}).chances || 0 })),
+    drawnAt: Date.now(),
+    payoutToken: (existing && existing.payoutToken) || randomBytes(8).toString("hex"),
+  };
+  bsDrawSave(d);
+  return res.status(200).json({
+    ok: true, id: d.id, seed, mint, winners: d.winners, recipients,
+    buyersTotal: buyers.length, eligibleCount: eligible.length, totalEntries,
+    dq: reviewed.filter(r => r.status === "dq").length,
+    manual: reviewed.filter(r => r.status === "manual").length,
+    reachedWindowStart: scan && scan.reachedWindowStart, payoutToken: d.payoutToken,
+  });
+});
+
+// GET /api/buyspecial/draw — admin re-fetch a stored draw (full detail incl. reviewed list).
+app.get("/api/buyspecial/draw", (req, res) => {
+  if (!buyCompAdminOK(req)) return res.status(404).json({ error: "not_found" });
+  const d = bsDrawsAll()[String(req.query.id || "")];
+  if (!d) return res.status(404).json({ error: "not_found" });
+  return res.status(200).json({ ok: true, draw: d });
+});
+
+// GET /api/buyspecial/draw/public — PUBLIC transparency view (no key): seed,
+// method, full eligible entry list + winners, so anyone can reproduce the draw.
+app.get("/api/buyspecial/draw/public", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const d = bsDrawsAll()[String(req.query.id || "")];
+  if (!d) return res.status(404).json({ error: "not_found" });
+  return res.status(200).json({
+    ok: true, id: d.id, mint: d.mint, window: { from: d.from, to: d.to }, holdHours: d.holdHours,
+    method: d.method, seed: d.seed, winnersCount: d.winnersCount, prize: d.prize,
+    buyersTotal: d.buyersTotal, eligibleCount: d.eligible.length, totalEntries: d.totalEntries,
+    eligible: d.eligible, winners: d.winners, drawnAt: d.drawnAt,
+  });
+});
+
+// GET /api/buyspecial/draw/payout — token-gated payout list for the airdropper
+// (same shape as /api/buycomp/payout, so the /airdrop handoff reuses it).
+app.get("/api/buyspecial/draw/payout", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const d = bsDrawsAll()[String(req.query.id || "")];
+  if (!d || !d.payoutToken || req.query.t !== d.payoutToken) return res.status(404).json({ error: "not_found" });
+  const recipients = d.winners.map(w => `${w.wallet}, ${w.prize}`).join("\n");
+  return res.status(200).json({ ok: true, mint: d.mint, tokenName: "CLKN", source: "Cluck Norris Buy Special draw", recipients });
+});
+
 // Buy Special double-check — independent buyer list from Solana Tracker for a
 // time window, so the tool can cross-verify its own Helius value-flow scan.
 // Returns the unique BUY wallets ST saw in [from, to] (unix seconds). The
@@ -5455,6 +5596,11 @@ app.get("/terms", (req, res) => {
 // Buy-Competition operator portal (hidden, unadvertised; actions are key-gated server-side).
 app.get("/buycomp-admin", (req, res) => {
   res.sendFile(join(__dirname, "public", "buycomp-admin.html"));
+});
+
+// Buy Special random-draw runner + public results/verification view (?id=<drawId>).
+app.get("/buyspecial-draw", (req, res) => {
+  res.sendFile(join(__dirname, "public", "buyspecial-draw.html"));
 });
 
 app.get("/rose", (req, res) => {

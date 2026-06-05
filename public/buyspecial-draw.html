@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="robots" content="noindex,nofollow"/>
+<title>Buy Special Draw · Cluck Norris</title>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
+<style>
+  :root{--bg:#0a0608;--panel:#150f12;--gold:#FFC53D;--orange:#F97316;--red:#EF4444;--green:#34D399;--text:#FBE9D0;--sub:#9a8a7a;--border:rgba(249,115,22,0.28);--head:'Oswald',sans-serif;--mono:'Share Tech Mono',monospace}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(ellipse at top,#1c0f08 0%,var(--bg) 60%);color:var(--text);font-family:var(--mono);padding:0 14px 80px;min-height:100vh}
+  .wrap{max-width:680px;margin:0 auto;padding-top:22px}
+  h1{font-family:var(--head);font-size:30px;font-weight:900;letter-spacing:1px;margin:0 0 2px;background:linear-gradient(135deg,#FFE08A,var(--gold),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .sub{color:var(--sub);font-size:12px;margin:0 0 18px;line-height:1.6}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:16px}
+  .card h2{font-family:var(--head);font-size:14px;letter-spacing:2px;color:var(--orange);margin:0 0 12px;text-transform:uppercase}
+  label{display:block;font-family:var(--head);font-size:11px;letter-spacing:1px;color:var(--sub);margin:10px 0 4px;text-transform:uppercase}
+  input{width:100%;background:rgba(0,0,0,0.35);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text);font-family:var(--mono);font-size:14px}
+  .row{display:flex;gap:10px}.row>div{flex:1}
+  .chk{display:flex;align-items:center;gap:8px;margin-top:10px}.chk input{width:auto}
+  .btn{width:100%;background:linear-gradient(135deg,var(--orange),var(--red));border:none;border-radius:10px;padding:13px;font-family:var(--head);font-size:15px;font-weight:700;letter-spacing:2px;color:#fff;cursor:pointer;margin-top:14px}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .msg{font-size:12px;margin-top:10px;min-height:16px;line-height:1.5}
+  .msg.ok{color:var(--green)}.msg.err{color:#fca5a5}
+  code{color:var(--sub);word-break:break-all}
+  .note{font-size:11px;color:var(--sub);font-style:italic;border-left:2px solid var(--border);padding-left:10px;margin-top:8px;line-height:1.6}
+  .stats{display:flex;gap:10px;flex-wrap:wrap;margin:4px 0 12px}
+  .stat{flex:1;min-width:90px;background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center}
+  .stat b{display:block;font-family:var(--head);font-size:22px;color:var(--gold)}
+  .stat span{font-size:10px;letter-spacing:1px;color:var(--sub);text-transform:uppercase}
+  .winner{display:flex;align-items:center;gap:10px;border:1px solid rgba(52,211,153,0.4);background:rgba(52,211,153,0.08);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+  .winner .rk{font-family:var(--head);font-size:18px;color:var(--green);width:34px;flex-shrink:0}
+  .winner .w{flex:1;font-size:12px;word-break:break-all}
+  .winner .ch{font-family:var(--head);font-size:11px;color:var(--gold);letter-spacing:1px;flex-shrink:0}
+  .elig{font-size:11px;line-height:1.7;max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:10px;margin-top:8px}
+  .elig .er{display:flex;justify-content:space-between;gap:10px;border-bottom:1px dashed rgba(255,255,255,0.06);padding:2px 0}
+  textarea{width:100%;min-height:90px;background:rgba(0,0,0,0.35);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text);font-family:var(--mono);font-size:12px;resize:vertical}
+  .mini{display:inline-block;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:7px;padding:7px 12px;font-family:var(--head);font-size:11px;letter-spacing:1px;color:var(--gold);cursor:pointer;text-decoration:none;margin:8px 8px 0 0}
+  .seed{font-size:11px;background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-top:8px;word-break:break-all}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎲 BUY SPECIAL DRAW</h1>
+  <p class="sub">Random raffle for the CLKN Buy Special. Every qualifying <b>buy</b> is one entry — more buys, more chances — and 5 distinct wallets win <b>100,000 CLKN</b> each. Only wallets that bought in the window <b>and still hold</b> at the snapshot (no sells) are eligible. The draw is reproducible: the seed + full entry list are published below so anyone can re-run it.</p>
+
+  <!-- Public results (shown when ?id= is in the URL) -->
+  <div class="card" id="resultsCard" style="display:none">
+    <h2 id="resultsTitle">🏆 Draw results</h2>
+    <div class="stats" id="resultsStats"></div>
+    <div id="resultsWinners"></div>
+    <div class="seed" id="resultsSeed"></div>
+    <p class="note" id="resultsMethod"></p>
+    <details style="margin-top:10px"><summary style="cursor:pointer;font-family:var(--head);font-size:12px;letter-spacing:1px;color:var(--orange)">SHOW FULL ELIGIBLE ENTRY LIST</summary><div class="elig" id="resultsElig"></div></details>
+  </div>
+
+  <!-- Admin run panel -->
+  <div class="card" id="adminCard">
+    <h2>🔑 Operator</h2>
+    <input id="key" type="password" placeholder="BUYCOMP_KEY (or master admin key)"/>
+    <div class="note">Stored locally in this browser only.</div>
+
+    <h2 style="margin-top:18px">Window &amp; prize</h2>
+    <div class="row">
+      <div><label>Window start</label><input id="from" value="2026-06-05T14:00:00-05:00"/></div>
+      <div><label>Window end</label><input id="to" value="2026-06-07T20:00:00-05:00"/></div>
+    </div>
+    <div class="note">ISO with offset. Defaults = Fri Jun 5 2:00 PM → Sun Jun 7 8:00 PM Central (CDT, −05:00).</div>
+    <div class="row" style="margin-top:8px">
+      <div><label># Winners</label><input id="winners" value="5"/></div>
+      <div><label>Prize each (CLKN)</label><input id="prize" value="100000"/></div>
+      <div><label>Hold hours</label><input id="hold" value="24"/></div>
+    </div>
+    <label>Seed (optional)</label>
+    <input id="seed" placeholder="leave blank to generate + publish a random seed"/>
+    <div class="note">For extra credibility you can paste a public, not-yet-known value (e.g. a future Solana block hash) as the seed.</div>
+    <div class="chk"><input type="checkbox" id="requireHold" checked/><label style="margin:0">Require 24h hold (snapshot now — no sells, still holding)</label></div>
+    <div class="chk"><input type="checkbox" id="force"/><label style="margin:0">Force (override the "snapshot time not reached" guard)</label></div>
+    <button class="btn" id="runBtn">RUN THE DRAW</button>
+    <div class="msg" id="msg"></div>
+    <p class="note">The draw pulls every buyer in the window, checks holds (paced ST lookups — can take a moment for big lists), then draws the winners. Re-running with the same seed reproduces the same winners.</p>
+  </div>
+
+  <!-- Admin run output -->
+  <div class="card" id="outCard" style="display:none">
+    <h2>🎯 Draw complete</h2>
+    <div class="stats" id="outStats"></div>
+    <div id="outWinners"></div>
+    <div class="seed" id="outSeed"></div>
+    <label>Payout list (wallet, amount)</label>
+    <textarea id="outRecipients" readonly></textarea>
+    <a class="mini" id="outAirdrop" href="#" target="_blank">↗ SEND TO AIRDROPPER</a>
+    <a class="mini" id="outPublic" href="#" target="_blank">🔗 PUBLIC RESULTS LINK (share this)</a>
+    <span class="mini" id="outCopy" style="cursor:pointer">⧉ COPY PAYOUT LIST</span>
+    <p class="note">The public results link shows the winners, the seed and the full entry list so anyone can verify the draw was fair. The airdropper link loads the 5 winners for you to send 100,000 CLKN each from your own wallet.</p>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const short = w => w ? w.slice(0,4)+'…'+w.slice(-4) : '';
+const fmtTs = ms => new Date(ms).toLocaleString();
+
+// Persist the operator key locally.
+$('key').value = localStorage.getItem('clkn_buycomp_key') || '';
+$('key').addEventListener('input', e => localStorage.setItem('clkn_buycomp_key', e.target.value));
+
+function statBlock(items){ return items.map(([n,l])=>`<div class="stat"><b>${n}</b><span>${l}</span></div>`).join(''); }
+function winnerRows(winners, prize){
+  return winners.map(w=>`<div class="winner"><div class="rk">#${w.rank}</div><div class="w">${w.wallet}</div><div class="ch">${(w.prize||prize).toLocaleString()} CLKN · ${w.chances} ${w.chances===1?'entry':'entries'}</div></div>`).join('');
+}
+
+// ── Public results view (no key needed) ──────────────────────────────────────
+async function loadPublic(id){
+  try {
+    const r = await fetch('/api/buyspecial/draw/public?id='+encodeURIComponent(id));
+    const j = await r.json();
+    if(!j || !j.ok){ return; }
+    $('resultsCard').style.display='block';
+    $('resultsTitle').textContent = '🏆 Draw results · '+j.winnersCount+' × '+j.prize.toLocaleString()+' CLKN';
+    $('resultsStats').innerHTML = statBlock([
+      [j.buyersTotal, 'buyers'], [j.eligibleCount, 'eligible'], [j.totalEntries, 'entries'], [j.winnersCount, 'winners']
+    ]);
+    $('resultsWinners').innerHTML = winnerRows(j.winners, j.prize);
+    $('resultsSeed').innerHTML = '<b>Seed:</b> <code>'+j.seed+'</code><br><b>Drawn:</b> '+fmtTs(j.drawnAt);
+    $('resultsMethod').textContent = j.method;
+    $('resultsElig').innerHTML = j.eligible.map(e=>`<div class="er"><code>${e.wallet}</code><span>${e.chances} ${e.chances===1?'entry':'entries'}</span></div>`).join('') || '<i>no eligible wallets</i>';
+  } catch(e){}
+}
+
+// ── Admin: run the draw ──────────────────────────────────────────────────────
+$('runBtn').addEventListener('click', async ()=>{
+  const key = $('key').value.trim();
+  if(!key){ $('msg').className='msg err'; $('msg').textContent='Enter the operator password.'; return; }
+  $('runBtn').disabled = true;
+  $('msg').className='msg'; $('msg').textContent='Pulling buyers + checking holds… this can take a moment.';
+  const body = {
+    key,
+    from: $('from').value.trim(),
+    to: $('to').value.trim(),
+    winners: $('winners').value.trim(),
+    prize: $('prize').value.trim(),
+    hold: $('hold').value.trim(),
+    requireHold: $('requireHold').checked ? '1':'0',
+    force: $('force').checked ? '1':'',
+    seed: $('seed').value.trim(),
+  };
+  try {
+    const r = await fetch('/api/buyspecial/draw', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const j = await r.json();
+    if(!r.ok || !j.ok){
+      $('msg').className='msg err';
+      $('msg').textContent = (j && j.error ? j.error : 'Draw failed.') + (j && j.snapshotAt ? ' (snapshot at '+fmtTs(j.snapshotAt)+')' : '');
+      $('runBtn').disabled=false; return;
+    }
+    $('msg').className='msg ok'; $('msg').textContent='Draw complete — '+j.winners.length+' winner(s).';
+    $('outCard').style.display='block';
+    $('outStats').innerHTML = statBlock([
+      [j.buyersTotal,'buyers'], [j.eligibleCount,'eligible'], [j.totalEntries,'entries'],
+      [j.dq,'sold (DQ)'], [j.manual,'review']
+    ]);
+    $('outWinners').innerHTML = winnerRows(j.winners, j.prize || +body.prize);
+    $('outSeed').innerHTML = '<b>Seed:</b> <code>'+j.seed+'</code> &nbsp;·&nbsp; <b>Draw id:</b> <code>'+j.id+'</code>';
+    $('outRecipients').value = j.recipients;
+    $('outAirdrop').href = '/airdrop?draw='+encodeURIComponent(j.id)+'&t='+encodeURIComponent(j.payoutToken);
+    $('outPublic').href = '/buyspecial-draw?id='+encodeURIComponent(j.id);
+    $('outCopy').onclick = ()=>{ navigator.clipboard.writeText(j.recipients); $('outCopy').textContent='⧉ COPIED'; setTimeout(()=>$('outCopy').textContent='⧉ COPY PAYOUT LIST',1500); };
+    if(j.reachedWindowStart === false){ $('msg').textContent += ' ⚠ Note: the buyer scan may not have reached the full window start — widen maxPages if the window is very busy.'; }
+    $('outCard').scrollIntoView({behavior:'smooth'});
+  } catch(e){
+    $('msg').className='msg err'; $('msg').textContent='Network error: '+e.message;
+  }
+  $('runBtn').disabled=false;
+});
+
+// On load: if ?id= present, show the public results (and keep the admin panel for re-runs).
+(function(){
+  const id = new URLSearchParams(location.search).get('id');
+  if(id) loadPublic(id);
+})();
+</script>
+</body>
+</html>
