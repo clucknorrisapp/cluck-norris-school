@@ -9495,6 +9495,7 @@ app.get("*", (req, res) => {
 // wallet back to the pool), with SOL/wSOL moving the other way to confirm it's
 // a swap and not a P2P transfer.
 const CLKN_POOL_ADDRESS = "64WXkHM4zyWUkYy32TfUeBV5wDAfdcUGDxe5ntM4xaTd"; // Meteora DAMM V2
+const CLKN_ORCA_POOL = "Ci72SukKdYtRrbcQKdCrCVk8XCyQ1vPFxWu9ehgBCtZc"; // Orca Whirlpool CLKN/USDC 0.30% — our Liquidity Engine pool
 const WSOL_MINT = "So11111111111111111111111111111111111111112";
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const USDT_MINT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
@@ -9612,6 +9613,11 @@ async function getClknPools() {
   // Always include the main Meteora pool as a hard fallback even if DexScreener fails
   if (!cachedPools.find(p => p.address === CLKN_POOL_ADDRESS)) {
     cachedPools.push({ address: CLKN_POOL_ADDRESS, dexId: "meteora", labels: ["DAMM v2"] });
+  }
+  // And our own Orca Whirlpool (the Liquidity Engine pool) so buys that fill against
+  // our market-maker depth get announced too — DexScreener can lag on a fresh pool.
+  if (!cachedPools.find(p => p.address === CLKN_ORCA_POOL)) {
+    cachedPools.push({ address: CLKN_ORCA_POOL, dexId: "orca", labels: ["Whirlpool"] });
   }
   return cachedPools;
 }
