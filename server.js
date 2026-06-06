@@ -10320,6 +10320,11 @@ app.listen(PORT, () => {
   if (whirlpoolMM.vault.isEnabled()) {
     console.log("[VAULT] Liquidity vault enabled — autonomous position management every 3m");
     const vaultTick = async () => {
+      // Ask-wall first so it reserves its CLKN before the balanced base sizes.
+      try {
+        const w = await whirlpoolMM.vault.tickAskWall({});
+        if (w && !["none", "hold", "deferred"].includes(w.action)) console.log("[VAULT][ask-wall]", w.action, "·", w.reason || "");
+      } catch (e) { console.error("[VAULT] ask-wall tick error:", e.message); }
       try {
         const r = await whirlpoolMM.vault.tick({});
         if (r && !["none", "hold", "deferred"].includes(r.action)) console.log("[VAULT]", r.action, "·", r.reason || "");
