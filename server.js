@@ -919,7 +919,9 @@ async function liquidityReply(chatId, replyTo) {
                   : "two-sided";
       m += `• <b>${p.pair}</b> · ${shape}\n   ${fmtP(p.lower)} → ${fmtP(p.upper)} ${quote} (now ${fmtP(p.current)}) ${p.inRange ? "🟢 in range" : "⚪ standing by"}\n`;
     }
-    m += `\n${r.positions.length} active position${r.positions.length > 1 ? "s" : ""} providing real depth — real fills, no fake volume. 🐔\n${TG_PUBLIC_BASE}/liquidity`;
+    const vol24 = fmtUsdShort(await getClkn24hVolume());
+    if (vol24) m += `\n📈 24h volume: <b>${vol24}</b>`;
+    m += `\n\n${r.positions.length} active position${r.positions.length > 1 ? "s" : ""} providing real depth — real fills, no fake volume. 🐔\n${TG_PUBLIC_BASE}/liquidity`;
     tgSend(chatId, m, replyTo);
   } catch (e) {
     tgSend(chatId, "📊 Couldn't load liquidity positions right now — try again shortly.", replyTo);
@@ -9893,6 +9895,31 @@ async function getWalletStats(wallet, HELIUS_KEY) {
   return { solBalance, clknBalance };
 }
 
+// Total CLKN 24h volume across all Solana pairs (DexScreener), cached 5 min.
+let cached24hVol = null, cached24hVolAt = 0;
+async function getClkn24hVolume() {
+  const now = Date.now();
+  if (cached24hVol !== null && now - cached24hVolAt < 5 * 60 * 1000) return cached24hVol;
+  try {
+    const res = await fetch(`https://api.dexscreener.com/token-pairs/v1/solana/${CLKN_MINT_ADDR}`);
+    const data = await res.json();
+    if (Array.isArray(data)) {
+      let v = 0;
+      for (const p of data) { const h = Number(p?.volume?.h24); if (Number.isFinite(h)) v += h; }
+      cached24hVol = v; cached24hVolAt = now;
+    }
+  } catch (e) { console.warn("[TELEGRAM] 24h volume fetch failed:", e.message); }
+  return cached24hVol;
+}
+// Compact USD: $123 / $4.5K / $1.2M. Returns null for non-finite input.
+function fmtUsdShort(n) {
+  if (n == null || !Number.isFinite(Number(n))) return null;
+  n = Number(n);
+  if (n >= 1e6) return "$" + (n / 1e6).toFixed(2) + "M";
+  if (n >= 1e3) return "$" + (n / 1e3).toFixed(1) + "K";
+  return "$" + Math.round(n);
+}
+
 async function notifyClknBuy(trade, tx, pool, usdValue, HELIUS_KEY) {
   const buyer = trade.trader;
   const buyerShort = buyer ? `${buyer.slice(0, 4)}…${buyer.slice(-4)}` : "unknown";
@@ -9904,9 +9931,11 @@ async function notifyClknBuy(trade, tx, pool, usdValue, HELIUS_KEY) {
   const routeLine = formatRoute(tx, pool);
   const priceStr = formatClknPrice(usdValue, trade.clknAmount);
   const mcapStr = await formatClknMarketCap(usdValue, trade.clknAmount, HELIUS_KEY);
+  const vol24Str = fmtUsdShort(await getClkn24hVolume());
   const priceLine =
     (priceStr ? `\nPrice: <b>${priceStr}</b>` : "") +
-    (mcapStr ? `\nMarket cap: <b>${mcapStr}</b>` : "");
+    (mcapStr ? `\nMarket cap: <b>${mcapStr}</b>` : "") +
+    (vol24Str ? `\n24h Vol: <b>${vol24Str}</b>` : "");
 
   // Buyer rank + wallet — holdings now, the tier they sit in, whether this buy
   // promoted them, and how much they grew their position. Skipped for dev buys
@@ -10017,9 +10046,11 @@ async function notifyClknSell(trade, tx, pool, usdValue, HELIUS_KEY) {
   const routeLine = formatRoute(tx, pool);
   const priceStr = formatClknPrice(usdValue, trade.clknAmount);
   const mcapStr = await formatClknMarketCap(usdValue, trade.clknAmount, HELIUS_KEY);
+  const vol24Str = fmtUsdShort(await getClkn24hVolume());
   const priceLine =
     (priceStr ? `\nPrice: <b>${priceStr}</b>` : "") +
-    (mcapStr ? `\nMarket cap: <b>${mcapStr}</b>` : "");
+    (mcapStr ? `\nMarket cap: <b>${mcapStr}</b>` : "") +
+    (vol24Str ? `\n24h Vol: <b>${vol24Str}</b>` : "");
 
   // Seller rank — holdings now, the tier they sit in, whether this sell knocked
   // them down a rung, and how much of their bag they trimmed. Skipped when a
