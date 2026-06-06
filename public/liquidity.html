@@ -427,7 +427,9 @@ async function openPosition(){
   try{
     setProgress('Building the add-liquidity transaction…');
     const built=await jpost('/api/whirlpool/open',{ owner:walletPubkey, address:curPool.address, lowerTick:opt.lowerTick, upperTick:opt.upperTick, inputMint:currentDepositMint(), inputAmount:String(amt), slippageBps });
-    const sig=await signSubmit(built.txBase64);
+    // txs is ordered [initTickArray?, open] — sign/submit in sequence (init first on a pristine pool).
+    const txList=(built.txs&&built.txs.length)?built.txs:[built.txBase64];
+    let sig; for(const t of txList) sig=await signSubmit(t);
     setProgress('');
     const ok=document.getElementById('okBox');
     ok.innerHTML='✓ Liquidity added. Position mint <b>'+shorten(built.positionMint)+'</b><br><a href="https://solscan.io/tx/'+sig+'" target="_blank">View on Solscan ↗</a>';
