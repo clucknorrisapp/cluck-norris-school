@@ -9538,10 +9538,10 @@ const QUOTE_TOKENS = {
 // Buys below this USD value don't fire a Telegram notification. Default $5 so
 // the channel shows the steady stream of smaller buys (good for hype during a
 // Buy Special) while still filtering bot dust. Override via env var.
-const MIN_BUY_USD = parseFloat(process.env.MIN_BUY_USD || "17");
-// Sells use the same floor by default, so both sides are reported on equal
-// terms. Set MIN_SELL_USD to give the sell side its own threshold.
-const MIN_SELL_USD = parseFloat(process.env.MIN_SELL_USD || String(MIN_BUY_USD));
+const MIN_BUY_USD = parseFloat(process.env.MIN_BUY_USD || "20");
+// Sells have a higher floor than buys by default — only larger sells are worth
+// surfacing. Override either side via MIN_BUY_USD / MIN_SELL_USD.
+const MIN_SELL_USD = parseFloat(process.env.MIN_SELL_USD || "50");
 // Community-reinvestment buys (from a DEV_WALLETS address) get their own, lower
 // floor — the project buying its own fees back is worth showing even in small
 // size, so these post down to $1 while ordinary buys are held to MIN_BUY_USD.
