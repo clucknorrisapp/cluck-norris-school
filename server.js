@@ -897,12 +897,36 @@ function tgCommandReply(cmd, arg) {
         "🥚 /hatchery — create a token, guided\n" +
         "🎒 /bags — live Bags.fm launches\n" +
         "🛠 /tools — every tool in one place\n" +
+        "📊 /liquidity — live AMM depth &amp; positions\n" +
         "📋 /commands — show this list\n\n" +
         `🐔 ${TG_PUBLIC_BASE}`;
   }
 }
 
-const TG_KNOWN_CMDS = ["score","autopsy","trace","snapshot","holders","securitycoop","buyspecial","rose","hatchery","bags","tools","commands","start","help","guide","buyleaders","chatid"];
+// /liquidity — public, sanitized snapshot of the Liquidity Engine's positions.
+// Shows only pairs / ranges / in-range — never the wallet, balances, or sizes.
+async function liquidityReply(chatId, replyTo) {
+  const fmtP = (n) => (!isFinite(n) || n === 0) ? "?" : (Math.abs(n) < 0.001 ? n.toExponential(3) : n.toPrecision(5));
+  try {
+    const r = await whirlpoolMM.vault.publicPositions();
+    if (!r.enabled) { tgSend(chatId, "📊 The Liquidity Engine isn't running right now.", replyTo); return; }
+    if (!r.positions.length) { tgSend(chatId, "📊 No active liquidity positions at the moment.", replyTo); return; }
+    let m = "📊 <b>Cluck Norris Liquidity Engine — live depth</b>\n\n";
+    for (const p of r.positions) {
+      const quote = p.pair.split("/")[1] || "";
+      const shape = p.lower >= p.current * 0.999 ? "upside asks"
+                  : p.upper <= p.current * 1.001 ? "buy support"
+                  : "two-sided";
+      m += `• <b>${p.pair}</b> · ${shape}\n   ${fmtP(p.lower)} → ${fmtP(p.upper)} ${quote} (now ${fmtP(p.current)}) ${p.inRange ? "🟢 in range" : "⚪ standing by"}\n`;
+    }
+    m += `\n${r.positions.length} active position${r.positions.length > 1 ? "s" : ""} providing real depth — real fills, no fake volume. 🐔\n${TG_PUBLIC_BASE}/liquidity`;
+    tgSend(chatId, m, replyTo);
+  } catch (e) {
+    tgSend(chatId, "📊 Couldn't load liquidity positions right now — try again shortly.", replyTo);
+  }
+}
+
+const TG_KNOWN_CMDS = ["score","autopsy","trace","snapshot","holders","securitycoop","buyspecial","rose","hatchery","bags","tools","liquidity","commands","start","help","guide","buyleaders","chatid"];
 const lbCooldown = new Map();      // chatId -> last LIVE pull ts (quota guard)
 const lbReplyCooldown = new Map(); // chatId -> last reply ts (chat anti-spam)
 
@@ -1219,6 +1243,11 @@ function handleTelegramUpdate(update) {
       if (now - last < 6000) { tgSend(msg.chat.id, "🐔 Already scoring one — give it a few seconds.", msg.message_id); return; }
       scoreCooldown.set(msg.chat.id, now);
       scoreAndReply(msg.chat.id, arg, msg.message_id);
+      return;
+    }
+    // /liquidity → live, sanitized snapshot of the Liquidity Engine's positions.
+    if (cmd === "liquidity") {
+      liquidityReply(msg.chat.id, msg.message_id);
       return;
     }
     tgSend(msg.chat.id, tgCommandReply(cmd, arg), msg.message_id);
@@ -10303,6 +10332,7 @@ app.listen(PORT, () => {
             { command: "hatchery", description: "Create a token, guided" },
             { command: "bags", description: "Live Bags.fm launches" },
             { command: "tools", description: "All the Cluck Norris tools" },
+            { command: "liquidity", description: "Live AMM depth & positions" },
             { command: "commands", description: "List every command + what it does" },
           ] }),
         });
