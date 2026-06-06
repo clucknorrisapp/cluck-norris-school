@@ -10329,6 +10329,11 @@ app.listen(PORT, () => {
         const r = await whirlpoolMM.vault.tick({});
         if (r && !["none", "hold", "deferred"].includes(r.action)) console.log("[VAULT]", r.action, "·", r.reason || "");
       } catch (e) { console.error("[VAULT] tick error:", e.message); }
+      // CLKN/SOL vault (optional; off unless solEnabled) — captures SOL-driven arbitrage.
+      try {
+        const s = await whirlpoolMM.vault.tickSol({});
+        if (s && !["none", "hold", "deferred"].includes(s.action)) console.log("[VAULT][CLKN/SOL]", s.action, "·", s.reason || "");
+      } catch (e) { console.error("[VAULT] CLKN/SOL tick error:", e.message); }
     };
     setTimeout(vaultTick, 15000);
     setInterval(vaultTick, 180 * 1000);
