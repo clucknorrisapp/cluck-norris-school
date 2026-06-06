@@ -145,6 +145,14 @@ router.get("/vault/wall-tick", async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message || "wall tick failed" }); }
 });
 
+// GET /api/whirlpool/vault/sol-tick?key=…[&run=1] — run one CLKN/SOL cycle.
+// DRY RUN unless run=1.
+router.get("/vault/sol-tick", async (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  try { res.json(await vault.tickSol({ dryRun: req.query.run !== "1" })); }
+  catch (e) { res.status(500).json({ error: e.message || "sol tick failed" }); }
+});
+
 // POST /api/whirlpool/vault/pause?key=… and /resume?key=… — kill switch.
 router.post("/vault/pause", (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
