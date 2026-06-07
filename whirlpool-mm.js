@@ -204,6 +204,21 @@ router.get("/vault/swap", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message || "swap failed" }); }
 });
 
+// GET /api/whirlpool/vault/create-pool?key=&project=rose&quote=SOL&feeTier=0.05[&run=1]
+// Onboarding: create a NEW Orca pool for the project's token at the live market price.
+// DRY RUN unless run=1. Costs ~0.03 SOL (rent) from the project's operator wallet.
+router.get("/vault/create-pool", async (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  try {
+    res.json(await vault.createPool({
+      projectId: proj(req),
+      quoteSym: String(req.query.quote || "SOL").toUpperCase(),
+      feeTierPct: Number(req.query.feeTier ?? req.query.fee ?? 0.05),
+      dryRun: req.query.run !== "1",
+    }));
+  } catch (e) { res.status(500).json({ error: e.message || "create-pool failed" }); }
+});
+
 // POST /api/whirlpool/vault/pause?key=… and /resume?key=… — kill switch.
 router.post("/vault/pause", (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
