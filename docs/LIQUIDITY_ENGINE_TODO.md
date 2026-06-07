@@ -213,6 +213,31 @@ Status: user marinating — wants more thought before we build. Don't implement 
   crash-catching is reactive reserve, NOT a deep pre-placed bid wall. "Keep it light" = applies
   to the DOWNSIDE, not the upside ask wall.
 
+### 🧠 WHY reactive > ladder — community morale (user-confirmed 2026‑06)
+
+The decisive reason to prefer reactive buyback over a dormant catch ladder is PSYCHOLOGICAL,
+and it's sound:
+- **A ladder absorbs the sell, it doesn't answer it.** USDC parked low fills INTO the dump —
+  same downward move, one shallower red candle, no visible response. Community sees red, feels
+  red; the cushion is invisible.
+- **A reactive buyback is a separate, visible event.** Let the dump express (red), then step in
+  with buys (green) → a V/recovery pattern that reads as "we got hit and buyers stepped back in."
+  Far more reassuring, and honest (it really is two distinct events).
+- **Letting price drop GIVES the community the dip.** A ladder steals their entry by buying the
+  bottom first. Letting it fall hands a loyal, low-FOMO base a real chance to average down
+  themselves — worth more than shaving a few % off drawdown depth. Turns a scare into a shared win.
+- **Bonus:** sell-then-buyback = two real fills = more genuine two-way volume + better organic score.
+
+**Design implications for the (future, optional) auto crash-response:**
+- [ ] Make it **delayed + staged**, NOT instant/atomic — instant just mimics the ladder. Let the
+      red land, a floor form, give the community a window, THEN print green in a few visible steps.
+- [ ] Timing is the one real risk (the art): too fast suppresses the dip window + recovery story;
+      too slow sags morale into "death spiral." Tune the delay/threshold deliberately.
+- [ ] **Visibility:** chart shows green from ANY wallet (chart-morale always works). Telegram buy
+      alerts SKIP the MM operator wallet — so buy back from a NON-operator wallet to also show as
+      community green in chat; OR if automated from the engine, give it its OWN intentional
+      "🟢 Liquidity Engine bought the dip" announcement (not the suppressed-operator path).
+
 ---
 
 ## ❓ Open decisions for review
