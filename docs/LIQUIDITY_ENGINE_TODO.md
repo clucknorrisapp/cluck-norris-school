@@ -58,11 +58,21 @@
         pool PDA (no Orca-API indexing wait). notify() routes to each project's telegramChatId.
   - [x] **🌹 ROSE LAUNCHED ON ENGINE (live).** First non-CLKN project running end-to-end on Orca.
         Created ROSE/USDC @0.02% (7QY4CbWq…) + ROSE/SOL @0.08% (13Vz9h4me…) at market; seeded both
-        (positions 83hWFJTP… + 9QFHtWX2…, both in range). Operator 7W3tYEoo…. Ask wall stays on
-        the existing Raydium CLMM pool (manual). Note: Orca's ts-8 fee is now 0.08% (legacy 0.05%).
-  - [ ] **ROSE follow-ups:** set ROSE-room telegramChatId (per-project alerts); consider enabling
-        swapEnabled for cross-pool rebalancing once quote builds; optionally build Raydium tx-layer
-        later to manage the ask wall autonomously.
+        (base 83hWFJTP… + SOL 9QFHtWX2…, in range) PLUS an engine-managed ask wall on ROSE/USDC
+        0.02% (Emgx5vr4…, single-sided ROSE above price). Operator 7W3tYEoo…. Note: Orca's ts-8 fee
+        is now 0.08% (legacy 0.05%). Hardened: self-healing wall adoption (no duplicate walls from
+        manual/scheduler races) + gated `/vault/close-position` cleanup tool.
+  - [x] **Per-project Telegram room routing (DONE, live).** Each project record carries a
+        `telegramChatId`; `notify()` posts to it (ROSE alerts → ROSE room, CLKN → CLKN). ROSE room
+        id wired from buy-comp data. `tg-test` takes `&project=`/`&chat=`.
+  - [x] **ROSE room CLKN-leakage cleanup (DONE, live).** `/liquidity` is room-aware (shows the
+        project whose room it's in — symbol, depth, that token's 24h vol + organic score; ask wall
+        labeled distinctly; "N positions across M pools"). CLKN welcome suppressed in non-CLKN
+        rooms. Non-CLKN rooms gated to `PROJECT_ROOM_CMDS` (liquidity, buyleaders, chatid) — all
+        other commands ignored. Apology posted to the ROSE room.
+  - [ ] **ROSE follow-ups:** consider enabling `swapEnabled` for cross-pool rebalancing once the
+        quote side builds; per-project Engine Mode; (optional) Raydium tx-layer to also manage a
+        Raydium ROSE pool. Watch the first autonomous re-center to confirm live ops.
   - [ ] **Stage 5b — key management**: encrypted keystore for fully-managed clients (vs the
         per-project env var used now). DECISION FORK.
   - [~] **Stage 7 — MULTI-VENUE (Raydium CLMM) — IN PROGRESS.** Many tokens live on Raydium CLMM,
