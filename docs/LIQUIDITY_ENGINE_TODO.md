@@ -87,6 +87,51 @@ this turns supply into depth, distributes into strength (not weakness), and comp
 
 ---
 
+## 🎛️ ENGINE MODES — headline product feature *(captured 2026‑06; design below)*
+
+**Core idea:** the engine is ONE machine with a dial. "Modes" are named presets over
+config knobs we ALREADY have (`widthPct`, `edgeTriggerFrac`, `minRebalanceIntervalSec`,
+`maxActionsPerDay`, `askWall*`, `solEnabled`, `swapEnabled`, `poolBalanceTolPct`). Not a
+rebuild — a preset table + an apply path. The marketed product sells the *mode*, not the knobs.
+
+### Taxonomy: 3 intensities × a tilt, + a bootstrap lifecycle
+
+**Intensity (how tight/active):**
+- ⚡ **Active (Tight & Busy)** — quick volume + arbitrage, lively chart. Tight range (±3–5%),
+  aggressive re-center (~10–15 min), high daily cap (~24), SOL pool + rebalancer ON.
+  Most fees BUT most IL/LVR + gas; wants monitoring. Targets the ~20–50k/day ceiling at size.
+- 🌿 **Steady (Balanced)** — *current CLKN setup.* Healthy depth, slow-steady drift. Medium
+  range (±10%) wide base + tight ask wall, 30-min cadence, ~12/day. Low-touch default.
+- 🪨 **Foundation (Wide & Passive)** — deep, stable floor; set-and-forget. Wide range
+  (±25–50%), rare re-center (6–24h), low cap (~2), ask wall optional/off, swap OFF. Lowest
+  fees/volume BUT lowest IL, lowest gas, max stability, near-zero maintenance. For treasuries /
+  long-term liquidity that just needs to exist and be deep.
+
+**Tilt overlay (orthogonal — layers on any intensity):**
+- **Balanced** (default) / **Distribution** (ask-heavy — sell into strength; what CLKN runs) /
+  **Accumulation** (bid-heavy — support + accumulate).
+
+**Bootstrap (lifecycle mode):** start single-sided CLKN asks from token only (zero quote),
+accumulate quote from organic buys, AUTO-GRADUATE into Steady as the quote base grows.
+(See the bootstrap idea section above — this is its mode form.)
+
+### UX (on-brand by construction)
+- **Beginner:** pick by GOAL in plain English — "Lively & active / Steady & healthy /
+  Deep & hands-off / Just starting out." No knobs.
+- **Advanced:** see + tune every lever = "Custom" mode.
+
+### Build plan (non-destructive — current live config must stay untouched)
+- [ ] `MODES` preset table in `lib/whirlpool-vault.js` (each = a partial config + a tilt).
+- [ ] `applyMode(name, tilt?)` that patches config; add a `mode`/`tilt` field to state so we
+      can show the active mode. **Default = "custom" (current config); applying nothing changes
+      nothing** — never auto-apply a mode to the live CLKN vault.
+- [ ] Endpoint `POST /api/whirlpool/vault/mode?key=…` (gated) + dry-run preview of the diff.
+- [ ] Surface active mode in `/vault/status`, the `/liquidity` post, and the product page.
+- [ ] Per-mode Beginner + Advanced guide copy on `/liquidity-engine` (brand standard).
+- [ ] (Later, multi-tenant) mode is a per-project setting.
+
+---
+
 ## ❓ Open decisions for review
 - [ ] Custody: confirm the tiered model (Self‑Serve → Managed dedicated‑float → Trustless delegate). Comfortable holding the float key for managed, or lead with self‑hosted?
 - [ ] Pricing specifics (setup / monthly / holder‑gate threshold / perf‑fee %).
