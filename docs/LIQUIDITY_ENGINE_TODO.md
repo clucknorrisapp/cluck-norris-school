@@ -165,6 +165,36 @@ the big-sell disclaimer). A project that isn't bullish should run the tighter ne
 curve) + the **Distribution → Accumulation tilt cycle** (distribute up, accumulate down).
 Status: user marinating — wants more thought before we build. Don't implement yet.
 
+### Refinement from user's hands-on experience *(captured 2026‑06)*
+
+**Two concrete techniques the user has run before, to build in:**
+
+1. **Single-bin round-trip (+ half-skim).** A tight single-sided band IS a limit order: token-
+   only above price → fills to USDC on the way up (a sell); leave it (or HALF of it) in that
+   same bin and it flips to a resting buy (USDC→token) when price falls back through. Round-
+   trips the same level — sell high / buy low repeatedly, earning spread + fees each cycle.
+   User's rule: on fill, **pull half (bank the gain = profit-skim, mechanism A), leave half
+   (keep the level armed).** Net-distributes tokens slowly at that level = healthy distribution.
+   Ideal for a calm, low-FOMO, oscillating community. *Note:* a narrow Orca tick-range ≈ a
+   Meteora DLMM bin (likely the source of the user's experience); reproduce with tight ranges.
+   - [ ] Implement an "on-fill: pull X% / leave (1−X)%" round-trip rule for tight single-sided bins.
+
+2. **Deep dormant catch ladder = THE use case for single-sided USDC.** Single-sided USDC
+   positions placed FAR below price in the SAME CLKN/USDC pool (no separate pool needed). Key
+   property: **out-of-range positions cost nothing** — parked deep they're 100% USDC, zero IL,
+   zero earnings, just waiting. On a big sell, price falls into them and they **buy CLKN cheap,
+   atomically with the dump** — cushioning the crash AND handing back cheap inventory (→ ask-wall
+   ammo on recovery). **This resolves the user's earlier open question** ("don't want a single-
+   sided USDC pool *right now*, but it should be an option"): the option's killer use is dormant
+   downside crash-insurance, not USDC sitting at price.
+   - [ ] Build it as a **LADDER** (e.g. −15% / −30% / −50%), not one band → DCA-into-a-dump.
+   - [ ] **Hybrid sizing:** modest pre-placed ladder (always armed, fills instantly, no reaction
+         lag) + free dry-powder reserve (flexible). Pre-placed guarantees the catch; free gives
+         optionality.
+   - Tradeoffs to respect: committed USDC earns nothing while waiting (opportunity cost vs free
+     reserve); if the crash never comes that capital sat idle — so size as INSURANCE, not bulk;
+     and it's a conviction/bullish posture (opt-in Accumulation tilt for the sold product).
+
 ---
 
 ## ❓ Open decisions for review
