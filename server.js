@@ -985,6 +985,11 @@ async function liquidityReply(chatId, replyTo) {
     m += `\n💧 <b>Total depth: ${money(r.totalUsd)}</b>`;
     if (vol) m += `  ·  📈 24h vol: <b>${vol}</b>`;
     if (organic) m += `\n🪐 <b>Jupiter organic score: ${organic}</b> <i>(Jupiter's own measure of real, non-faked trading)</i>`;
+    // Active engine mode (only when a named mode is applied — "custom" stays hidden).
+    try {
+      const cm = whirlpoolMM.vault.listModes().current;
+      if (cm && cm.mode && cm.mode !== "custom") m += `\n🎛️ Mode: <b>${cm.mode}${cm.tilt ? " · " + cm.tilt : ""}</b>`;
+    } catch (_) { /* mode line is best-effort */ }
     m += `\n\n${r.positions.length} active position${r.positions.length > 1 ? "s" : ""} — real depth, real fills, no fake volume. 🐔\n${TG_PUBLIC_BASE}/liquidity`;
     tgSend(chatId, m, replyTo);
   } catch (e) {

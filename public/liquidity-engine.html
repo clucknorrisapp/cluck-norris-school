@@ -143,6 +143,7 @@
     <a href="#problem">THE PROBLEM</a>
     <a href="#difference">THE DIFFERENCE</a>
     <a href="#how">HOW IT WORKS</a>
+    <a href="#modes">MODES</a>
     <a href="#honest">REAL vs WASH</a>
     <a href="#run">HOW IT'S RUN</a>
     <a href="#pricing">PRICING</a>
@@ -250,6 +251,68 @@
 
     <h3>Guardrails, always on</h3>
     <p class="muted">Anti-thrash interval (no churning), daily action caps, a price-gap anomaly guard (sits out flash moves), slippage caps on every swap, per-fee-tier pools, and a one-flag kill switch. It's autonomous, not reckless.</p>
+  </div>
+
+  <!-- ENGINE MODES -->
+  <div class="section" id="modes">
+    <div class="section-title">🎛️ ENGINE MODES · ONE DIAL, YOUR STRATEGY</div>
+    <p>Same engine, different settings. A <strong>mode</strong> is a ready-made preset that tunes how the engine behaves for <em>your</em> goal — so you don't have to learn a dozen knobs to get a healthy result. Pick by what you want; tune later if you like.</p>
+
+    <div class="tiers">
+      <div class="tier">
+        <div class="t-name">⚡ Active</div>
+        <div class="t-tag">TIGHT &amp; BUSY</div>
+        <div class="t-price">Max volume + fees</div>
+        <ul>
+          <li>Tight ranges, frequent re-centering</li>
+          <li>Most real volume, fee capture &amp; arbitrage</li>
+          <li>Lively chart — but more IL/gas; likes monitoring</li>
+          <li><em>For projects that want visible activity</em></li>
+        </ul>
+      </div>
+      <div class="tier feature">
+        <div class="t-name">🌿 Steady</div>
+        <div class="t-tag">BALANCED · WHAT CLKN RUNS</div>
+        <div class="t-price">Healthy, low-touch</div>
+        <ul>
+          <li>Medium ranges, moderate cadence</li>
+          <li>Real two-sided depth, slow-steady drift</li>
+          <li>The sensible default for most tokens</li>
+          <li><em>Set it, watch it, get on with your day</em></li>
+        </ul>
+      </div>
+      <div class="tier">
+        <div class="t-name">🪨 Foundation</div>
+        <div class="t-tag">WIDE &amp; PASSIVE</div>
+        <div class="t-price">Deep, set-and-forget</div>
+        <ul>
+          <li>Wide ranges, rare re-centering</li>
+          <li>A deep, stable floor of liquidity</li>
+          <li>Lowest fees/volume — but lowest IL, gas &amp; upkeep</li>
+          <li><em>For treasuries &amp; long-term liquidity</em></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout info" style="margin-top:14px"><b>Lean it your way — the tilt.</b> On top of any mode, choose where your depth leans: <b>Balanced</b> (even both sides), <b>Distribution</b> (heavier asks — sell into strength as buyers push up), or <b>Accumulation</b> (lighter asks — let price find buyers, accumulate the dips). CLKN runs <b>Steady · Distribution</b>.</div>
+
+    <details style="border:1px solid rgba(96,165,250,0.32); border-radius:10px; margin:12px 0; background:rgba(96,165,250,0.04)">
+      <summary style="cursor:pointer; list-style:none; padding:14px 16px; font-family:'Oswald',sans-serif; font-weight:700; letter-spacing:1px; color:#93C5FD; font-size:14px">🎓 ADVANCED — what each mode actually sets</summary>
+      <div style="padding:0 16px 16px; font-size:13.5px; color:#D1D5DB; line-height:1.75">
+        <p style="margin:8px 0">A mode is a preset over the engine's shape knobs. It deliberately <b>does not touch</b> your risk reserves, fee tier, or trading pair — so switching a mode changes <em>strategy shape</em>, never custody, risk policy, or routing.</p>
+        <table class="compare" style="margin-top:4px">
+          <tr><th>Knob</th><th>⚡ Active</th><th>🌿 Steady</th><th>🪨 Foundation</th></tr>
+          <tr><td>Range width</td><td>±4%</td><td>±10%</td><td>±35%</td></tr>
+          <tr><td>Re-center cadence</td><td>~15 min</td><td>~30 min</td><td>~6 h</td></tr>
+          <tr><td>Max actions/day</td><td>24</td><td>12</td><td>3</td></tr>
+          <tr><td>Sell-side ask wall</td><td>on (+8%)</td><td>on (+12%)</td><td>off</td></tr>
+          <tr><td>token/SOL pool</td><td>on (±6%)</td><td>on (±15%)</td><td>on (±40%)</td></tr>
+          <tr><td>Auto-rebalance swaps</td><td>on</td><td>on</td><td>off</td></tr>
+        </table>
+        <p style="margin:10px 0 4px"><b style="color:#93C5FD">Tilt</b> sets the ask-wall weighting on top: Balanced ≈ half your free token, Distribution ≈ most of it (heavier asks), Accumulation ≈ a light wall (let buyers set price).</p>
+        <p style="margin:8px 0"><b style="color:#93C5FD">Safe to experiment.</b> Changing a mode is preview-first — you see the exact before/after of every knob before anything applies — and your prior settings are saved, so it's a one-step revert. Tighter modes earn more fees but take more IL/gas; wider modes are calmer but thinner. Match the mode to the market you're in.</p>
+      </div>
+    </details>
   </div>
 
   <!-- REAL vs WASH (education) -->

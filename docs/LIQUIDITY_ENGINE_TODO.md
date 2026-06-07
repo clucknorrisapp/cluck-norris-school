@@ -137,8 +137,14 @@ accumulate quote from organic buys, AUTO-GRADUATE into Steady as the quote base 
 - [x] Endpoint `GET /vault/mode` (list + current) + `POST /vault/mode` (gated): DRY-RUN preview
       of the exact diff by default; `&run=1` to apply.
 - [x] Surface active mode in `/vault/status` (`mode`/`tilt`).
-- [ ] Surface active mode on the `/liquidity` post + the product page.
-- [ ] Per-mode Beginner + Advanced guide copy on `/liquidity-engine` (brand standard).
+- [x] Surface active mode on the `/liquidity` post (only when a NAMED mode is applied —
+      "custom" stays hidden so CLKN's post isn't cluttered until a mode is chosen).
+- [x] Mode education on `/liquidity-engine` — an "🎛️ Engine Modes" section: beginner
+      pick-by-goal cards (Active/Steady/Foundation) + tilt callout + an Advanced `<details>`
+      knob table. Brand standard (beginner + advanced) satisfied.
+- [ ] OPTIONAL: apply Steady·Distribution to CLKN (zero-diff — only labels the state) so the
+      `/liquidity` post shows the mode. Pending user OK (non-destructive principle = don't
+      auto-apply).
 - [ ] (Later, multi-tenant) mode is a per-project setting.
 
 ---
