@@ -39,8 +39,11 @@
         others get `wpVaultConfig:<id>`/`wpVaultState:<id>` + own operator env). `getConfig/
         setConfig/getState/setState/operator` take optional `projectId` (default clkn).
         `operatorPubkeys()` + poller skips ALL managed wallets. Gated `/vault/projects` CRUD.
-  - [ ] **Stage 2 — generalize the engine** (`orca-whirlpools.js`): take token + quote mints per
-        call instead of hardcoded CLKN (CLKN stays the default); rename internal `clkn*` → `token*`.
+  - [x] **Stage 2 — generalize the engine (DONE, live).** `orca-whirlpools.js` works against a
+        token context `{ mint, symbol, quoteMints }` defaulting to CLKN. `discoverPools/
+        getPoolState/listPositions/suggestRanges` take the context; `quote/open/close` were
+        already token-agnostic. Results keep `clkn*` aliases + add `token*` names → no consumer
+        changes. Verified: CLKN identical; BONK discovers 9 Orca pools generically.
   - [ ] **Stage 3 — scheduler loops over active projects** (staggered for RPC limits).
   - [ ] **Stage 4 — per‑project admin**: `?project=` on status/config/mode/costs/earnings; onboarding.
   - [ ] **Stage 5 — key management**: per‑project operator env (self‑hosted) vs encrypted keystore
