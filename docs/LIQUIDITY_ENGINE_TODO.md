@@ -28,11 +28,18 @@
 
 ## 🔨 Build backlog (next, in rough priority)
 
-- [ ] **Equal‑pools rebalancer + buyback** *(headline feature; build SUPERVISED, off by default, dry‑run first)*
-  - [ ] Build `positionValue()` primitive (token amounts from liquidity + range + price → USD).
-  - [ ] Target equal value across managed pools (configurable split).
-  - [ ] Bidirectional SOL↔USDC + **buy CLKN back** with accumulated quote; never sell CLKN unless explicitly enabled.
-  - [ ] Fold the existing "deploy staged USDC" / "deploy available SOL" triggers into one value‑targeting allocator.
+- [~] **Equal‑pools rebalancer + buyback** *(headline feature; SUPERVISED, off by default)*
+  - [x] `positionValue()` — effectively done: `publicPositions` returns per‑position `valueUsd`
+        (token amount × price + quote); `rebalancePools` uses vBase/vSol value targeting.
+  - [x] Equal‑value rebalancer LIVE: `rebalancePools` balances base(USDC) vs SOL pool by moving
+        half the gap via SOL↔USDC, capped, converging over cycles (`poolBalanceTolPct`).
+  - [x] **BUYBACK LIVE (the flywheel):** `vault.buyback` spends accumulated USDC (above
+        usdcFloor + buybackReserveUsd) to buy the token back — never sells it; per‑cycle + daily
+        caps + 1h anti‑thrash; visible "🟢 bought back" post. Gated `/vault/buyback` (dry unless
+        run=1); in the scheduler (no‑op until `buybackEnabled`). **Enabled on ROSE (caps $15/cycle,
+        4/day) — executed a real $15→509k ROSE buyback on first run; flywheel proven end‑to‑end.**
+  - [ ] Fold "deploy staged USDC"/"deploy available SOL" into one allocator (rebalancer covers most).
+  - [ ] Add a deploy‑idle‑token trigger so bought‑back token auto‑grows the ask wall between rolls.
 - [ ] **Multi‑tenant refactor** (makes it sellable) — staged; CLKN stays live & untouched throughout.
   - [x] **Stage 1 — project context layer (DONE, live, zero behavior change).** Project registry
         (built‑in `clkn` uses LEGACY kv keys + `MM_OPERATOR_SECRET` = byte‑for‑byte unchanged;
@@ -80,10 +87,14 @@
         - [x] `@raydium-io/raydium-sdk-v2` added (verified installs + live app healthy after deploy).
         - [x] `lib/raydium-clmm.js` read-side: `discoverPools(tok)` via Raydium API v3, normalized to
               the Orca shape (clkn*/token* aliases). VERIFIED live on ROSE.
-        - [ ] Raydium SDK tx layer: getPoolState (getRpcClmmPoolInfo), suggestRanges (tick math),
-              quote (PoolUtils.getLiquidityAmountOutFromAmountIn), listPositions (getOwnerPositionInfo),
-              buildOpenPosition (openPositionFromBase → unsigned), buildClosePosition (closePosition).
-        - [ ] Venue wiring in the vault: `project.venue` (orca|raydium) → `eng()` via ALS scope.
+        - [x] **Raydium SDK tx layer DONE** (`lib/raydium-clmm.js`): getPoolState, suggestRanges,
+              quote, listPositions, buildOpenPosition, buildClosePosition — via raydium-sdk-v2,
+              drop-in compatible with the Orca engine (same signatures/shapes). Live read-tested on
+              ROSE's Raydium CLMM pool (ROSE/SOL 0.25% ts60); unsigned tx build verified. NOT yet
+              imported anywhere. (Caveats: buildClosePosition not run end-to-end; pending-fee readout
+              uses the stale on-chain checkpoint.)
+        - [ ] **Venue wiring in the vault: `project.venue` (orca|raydium) → `eng()` via ALS scope.**
+              ← NEXT to actually use the Raydium layer. Then validate with a SMALL live ROSE position.
         - [ ] VALIDATE with a SMALL live ROSE position before autonomous use.
         - [ ] (Later) Stage 6 pool BOOTSTRAP also applies per venue (Raydium createPool exists too).
         - NEEDED FROM OPERATOR: a dedicated ROSE hot wallet (a little ROSE + SOL), key set as
@@ -96,7 +107,9 @@
         pool can stand one up from token + SOL/USDC. Until then, a project's pool must be created
         manually (on Orca) before the vault can manage it. Most Bags tokens graduate to METEORA,
         not Orca — so a brand-new Orca pool will usually be needed.
-- [ ] **Client dashboard** — per‑project depth / fees / balance / controls; wallet‑signature auth.
+- [~] **Client dashboard** — `/engine-dashboard` LIVE (key-gated): multi-project cards (status,
+      positions w/ role+$depth via new `/vault/positions`, costs, earnings/PnL, float; beginner
+      default + Advanced details). NEXT: wallet-signature auth for client (vs admin key) + controls.
 - [ ] **Guided onboarding flow** — create dedicated wallet → fund float → set token + targets → choose tier → go (Hatchery‑style UX).
 - [ ] **Pricing / billing** — CLKN setup + monthly, holder‑gate, optional perf fee.
 - [ ] **Self‑hosted agent package** — deployable agent + client config (we touch nothing).
