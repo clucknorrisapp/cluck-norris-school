@@ -219,6 +219,17 @@ router.get("/vault/create-pool", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message || "create-pool failed" }); }
 });
 
+// GET /api/whirlpool/vault/close-position?key=&project=&mint=…[&run=1]
+// Close a specific position (orphan cleanup / wind-down). DRY unless run=1.
+router.get("/vault/close-position", async (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  const mint = String(req.query.mint || "");
+  if (!mint) return res.status(400).json({ error: "mint required" });
+  if (req.query.run !== "1") return res.json({ action: "would-close", mint, note: "add &run=1 to execute" });
+  try { res.json(await vault.closePosition({ projectId: proj(req), mint })); }
+  catch (e) { res.status(500).json({ error: e.message || "close failed" }); }
+});
+
 // POST /api/whirlpool/vault/pause?key=… and /resume?key=… — kill switch.
 router.post("/vault/pause", (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
