@@ -132,6 +132,41 @@ accumulate quote from organic buys, AUTO-GRADUATE into Steady as the quote base 
 
 ---
 
+## 📈 PROFIT-TAKING & COUNTER-CYCLICAL RESERVE *(captured 2026‑06; design — revisit)*
+
+**The risk being solved (user's instinct, and it's correct):** as price rises — especially
+after big/fast moves — downswings get more likely. A naive MM that re-centers TIGHT at each
+new high and reinvests 100% of its gains into that tight band concentrates all its quote
+exactly where mean-reversion runs it over (textbook **LVR**), and leaves nothing below to
+catch the dip. So: as price climbs, THROTTLE deployment / BROADEN ranges / HOLD some gains
+back — turn "USDC made on the way up" into a catch-fund below, not more top-of-book risk.
+
+**Mechanisms (all are dials on existing knobs; extend the static reserve → dynamic):**
+- [ ] **A. Profit-skim reinvestment ratio.** Ask-wall/upside proceeds split: X% back into
+      depth, (1−X)% banked to reserve. Catch-fund grows automatically as we climb; auto-raise
+      the skim after big/fast moves. *(Biggest lever for this concern.)*
+- [ ] **B. Asymmetric "catch ladder."** After an up-move, place the USDC bid side LOWER than
+      price (a ladder of bids below) instead of a symmetric band at the new high. Sell high →
+      buy low; accumulated cheap CLKN becomes ask-wall ammo on the next rise. Flywheel.
+- [ ] **C. Volatility-scaled width.** Calm chop → tight (max fees). Right after a big/fast move
+      → broaden ranges (dump takes less per level; depth spread down to catch the fall).
+- [ ] **D. Counter-cyclical deploy fraction.** Deploy a smaller share of float as price rises
+      (reserve more at the top); release it as bids as price falls toward the catch zone.
+- [ ] **E. Drawdown-aware reserve floor.** The dry-powder floor scales up with realized gains /
+      price, so the cushion below always grows with the move.
+
+**Honest caveat (product vs our own use):** catching dips = accumulating inventory INTO
+weakness = a CONVICTION posture. Great for a project's own token (CLKN — long-term bullish,
+*want* to accumulate cheap), so a fine default for project-owned liquidity. As a SOLD service
+it's the opt-in **Accumulation tilt**, with falling-knife / IL risk stated honestly (ties to
+the big-sell disclaimer). A project that isn't bullish should run the tighter neutral profile.
+
+**Folds into MODES:** a "Profit & Reserve policy" overlay (skim ratio + dynamic floor + deploy
+curve) + the **Distribution → Accumulation tilt cycle** (distribute up, accumulate down).
+Status: user marinating — wants more thought before we build. Don't implement yet.
+
+---
+
 ## ❓ Open decisions for review
 - [ ] Custody: confirm the tiered model (Self‑Serve → Managed dedicated‑float → Trustless delegate). Comfortable holding the float key for managed, or lead with self‑hosted?
 - [ ] Pricing specifics (setup / monthly / holder‑gate threshold / perf‑fee %).
