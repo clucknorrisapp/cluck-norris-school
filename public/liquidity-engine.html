@@ -174,7 +174,7 @@
         <p style="margin:8px 0"><b style="color:#6EE7B7">What's a liquidity pool?</b> Picture a shared pot holding two things — your token and USDC (or SOL). Every buy and sell trades against that pot. A <b>deep</b> pot = smooth, fair prices. A <b>thin</b> pot = every little trade yanks the price around. That yank is called <b>slippage</b>.</p>
         <p style="margin:8px 0"><b style="color:#6EE7B7">Why does it matter?</b> Thin liquidity means a small buy spikes the price and a small sell tanks it. Buyers get scared off, the chart looks broken, and apps like Jupiter rank you last. Deep liquidity fixes all of that — <b>and you earn a small fee on every trade</b> that goes through your pot.</p>
         <p style="margin:8px 0"><b style="color:#6EE7B7">What about "volume bots"?</b> They fake activity by trading with themselves — buying and selling to no one. It lies to your community, gets flagged by the apps, and does <b>nothing</b> for your actual pool. We don't do that. We add <b>real depth</b> that fills <b>real people</b>.</p>
-        <p style="margin:8px 0"><b style="color:#6EE7B7">"I only have a little."</b> Perfect place to start. Put a small slice of <em>your own token</em> in as a "sell wall" just above the price — that costs you <b>no</b> USDC or SOL. As people buy it, you collect USDC, and you use that to grow real two-sided liquidity. Your token turns into <b>permanent liquidity</b> instead of a one-time dump. That's the healthy way to bootstrap.</p>
+        <p style="margin:8px 0"><b style="color:#6EE7B7">"I only have a little."</b> Perfect place to start — there's a path for wherever you are. A few examples: if you're <em>token-rich</em>, a single-sided sell wall above price costs <b>no</b> USDC/SOL, and as people buy it you collect quote currency to grow real two-sided liquidity. If you'd rather <em>defend a floor</em>, single-sided buy support below price does that. If you have a bit of both, a balanced range gives smooth buys and sells. The point: your token can become <b>permanent liquidity</b> instead of a one-time dump — we'll match the approach to your project.</p>
         <p style="margin:8px 0"><b style="color:#6EE7B7">How do I actually start?</b> Open the <a class="xref" style="color:#FCD34D" href="/liquidity">tool</a>, connect your wallet, pick your token + USDC, choose <b>Balanced</b>, enter a small amount, preview the exact tokens it'll use, and sign. <b>You hold your keys the whole time.</b> Or let our managed vault run it for you.</p>
         <div class="callout good" style="margin-top:10px">First rule: there's real risk (impermanent loss, market moves). We teach it honestly before you put a dollar in — start small, learn the feel, scale when it makes sense.</div>
       </div>
@@ -230,11 +230,12 @@
     <div class="section-title">⚙️ HOW IT WORKS · CONCENTRATED LIQUIDITY, AUTOMATED</div>
     <p>Built on <strong>Orca Whirlpools</strong> (Solana concentrated liquidity). Instead of spreading capital thin across every possible price, it places deep liquidity in a focused range around the current price — so trades fill tight and you earn the fee on every swap that passes through.</p>
 
-    <h3>The three shapes of depth</h3>
+    <h3>The shapes of depth — you choose</h3>
+    <p>Single-sided just means you provide <em>one</em> side — asks, bids, or both — <strong>whichever fits your goal</strong>: distribute into demand, defend a floor, accumulate on dips, or bootstrap from a token-heavy treasury. It's a flexible tool, not a fixed playbook.</p>
     <ul>
-      <li class="yes"><strong>Balanced base</strong> — two-sided depth straddling the price: bids below, asks above. The everyday market — smooth buys <em>and</em> sells.</li>
-      <li class="yes"><strong>Sell-side wall (single-sided)</strong> — your token's asks stacked above price, in a premium fee tier. You sell into strength at a fat fee when buyers pump in.</li>
-      <li class="yes"><strong>Buy-side support (single-sided)</strong> — bids below price that catch dips and let you accumulate.</li>
+      <li class="yes"><strong>Balanced</strong> — two-sided depth straddling the price: bids below, asks above. The everyday market — smooth buys <em>and</em> sells.</li>
+      <li class="yes"><strong>Sell-side wall (single-sided)</strong> — your token's asks above price. As buyers push price up, it sells into that strength (and can sit in a higher fee tier to capture more on pumps). Great when you're token-rich and want to grow liquidity without spending quote currency.</li>
+      <li class="yes"><strong>Buy-side support (single-sided)</strong> — quote-currency bids below price that catch dips, defend a floor, and let you accumulate.</li>
     </ul>
 
     <h3>It runs itself</h3>
