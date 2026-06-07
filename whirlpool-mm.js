@@ -204,6 +204,30 @@ router.post("/vault/resume", (req, res) => {
   res.json(vault.resume());
 });
 
+// GET /api/whirlpool/vault/mode?key=… — list available modes + tilts + the current
+// active mode. Non-destructive read.
+router.get("/vault/mode", (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  try { res.json(vault.listModes()); }
+  catch (e) { res.status(500).json({ error: e.message || "mode list failed" }); }
+});
+
+// POST /api/whirlpool/vault/mode?key=&name=steady[&tilt=distribution][&run=1]
+// DRY RUN by default — returns the exact config diff WITHOUT applying. With run=1 it
+// applies the preset (snapshotting the prior config so name=custom can restore it).
+// name=custom restores that snapshot. Reserves / fee tier / pair are never touched.
+router.post("/vault/mode", (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  const name = String(req.query.name || (req.body && req.body.name) || "").toLowerCase();
+  const tiltRaw = req.query.tilt || (req.body && req.body.tilt);
+  const tilt = tiltRaw ? String(tiltRaw).toLowerCase() : null;
+  if (!name) return res.status(400).json({ error: "name required (active|steady|foundation|custom)" });
+  try {
+    if (req.query.run === "1") return res.json({ applied: true, ...vault.applyMode(name, tilt) });
+    return res.json({ applied: false, preview: vault.previewMode(name, tilt) });
+  } catch (e) { res.status(400).json({ error: e.message || "mode failed" }); }
+});
+
 // POST /api/whirlpool/vault/config?key=… — patch config (body = partial config).
 router.post("/vault/config", (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
