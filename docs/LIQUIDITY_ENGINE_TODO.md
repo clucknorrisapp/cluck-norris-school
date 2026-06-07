@@ -52,8 +52,19 @@
   - [x] **Stage 4 — per-project admin (DONE, live).** `?project=` on status/costs/earnings/tick/
         wall-tick/sol-tick/rebalance/swap/pause/resume/config/mode. Public `/pools?token=` for a
         feasibility check (`hasOrcaPools`).
-  - [ ] **Stage 5 — key management**: per‑project operator env (self‑hosted) vs encrypted keystore
-        in /data (managed). DECISION FORK — settle when we reach it.
+  - [x] **Stage 5/6 — POOL BOOTSTRAP + per-project Telegram + PDA resolve (DONE, live).**
+        engine.buildCreatePool + vault.createPool (gated /vault/create-pool) create a new Orca
+        pool at live market price. engine.poolAddressFor + vault.resolvePoolAddress derive the
+        pool PDA (no Orca-API indexing wait). notify() routes to each project's telegramChatId.
+  - [x] **🌹 ROSE LAUNCHED ON ENGINE (live).** First non-CLKN project running end-to-end on Orca.
+        Created ROSE/USDC @0.02% (7QY4CbWq…) + ROSE/SOL @0.08% (13Vz9h4me…) at market; seeded both
+        (positions 83hWFJTP… + 9QFHtWX2…, both in range). Operator 7W3tYEoo…. Ask wall stays on
+        the existing Raydium CLMM pool (manual). Note: Orca's ts-8 fee is now 0.08% (legacy 0.05%).
+  - [ ] **ROSE follow-ups:** set ROSE-room telegramChatId (per-project alerts); consider enabling
+        swapEnabled for cross-pool rebalancing once quote builds; optionally build Raydium tx-layer
+        later to manage the ask wall autonomously.
+  - [ ] **Stage 5b — key management**: encrypted keystore for fully-managed clients (vs the
+        per-project env var used now). DECISION FORK.
   - [~] **Stage 7 — MULTI-VENUE (Raydium CLMM) — IN PROGRESS.** Many tokens live on Raydium CLMM,
         not Orca (e.g. ROSE/OnlyRose = one Raydium CLMM ROSE/SOL pool, 0.25%, tickSpacing 60).
         - [x] `@raydium-io/raydium-sdk-v2` added (verified installs + live app healthy after deploy).
