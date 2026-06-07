@@ -10570,33 +10570,29 @@ app.listen(PORT, () => {
   // Telegram: it starts only when MM_OPERATOR_SECRET (the dedicated hot wallet)
   // is set, so deploying without that key is a safe no-op and can never move
   // funds. Ticks every 3 minutes; re-centers the position as price moves.
-  if (whirlpoolMM.vault.isEnabled()) {
-    console.log("[VAULT] Liquidity vault enabled — autonomous position management every 3m");
-    const vaultTick = async () => {
-      // Equal-pools rebalancer first — swap free SOL↔USDC toward the underweight pool
-      // so the deploy triggers below can grow it. Keeps CLKN/USDC ≈ CLKN/SOL in value.
-      try {
-        const rb = await whirlpoolMM.vault.rebalancePools({});
-        if (rb && !["none", "balanced", "capped"].includes(rb.action)) console.log("[VAULT][rebalance]", rb.action, "·", rb.reason || "");
-      } catch (e) { console.error("[VAULT] rebalance error:", e.message); }
-      // Ask-wall first so it reserves its CLKN before the balanced base sizes.
-      try {
-        const w = await whirlpoolMM.vault.tickAskWall({});
-        if (w && !["none", "hold", "deferred"].includes(w.action)) console.log("[VAULT][ask-wall]", w.action, "·", w.reason || "");
-      } catch (e) { console.error("[VAULT] ask-wall tick error:", e.message); }
-      try {
-        const r = await whirlpoolMM.vault.tick({});
-        if (r && !["none", "hold", "deferred"].includes(r.action)) console.log("[VAULT]", r.action, "·", r.reason || "");
-      } catch (e) { console.error("[VAULT] tick error:", e.message); }
-      // CLKN/SOL vault (optional; off unless solEnabled) — captures SOL-driven arbitrage.
-      try {
-        const s = await whirlpoolMM.vault.tickSol({});
-        if (s && !["none", "hold", "deferred"].includes(s.action)) console.log("[VAULT][CLKN/SOL]", s.action, "·", s.reason || "");
-      } catch (e) { console.error("[VAULT] CLKN/SOL tick error:", e.message); }
-    };
-    setTimeout(vaultTick, 15000);
-    setInterval(vaultTick, 180 * 1000);
-  } else {
-    console.log("[VAULT] MM_OPERATOR_SECRET not set — autonomous vault disabled");
-  }
+  // Multi-tenant: the scheduler loops over every ACTIVE project that has its operator
+  // key loaded (CLKN via MM_OPERATOR_SECRET; others via their own env var). Sequential
+  // per project = naturally staggered for RPC limits. A project with no key is skipped,
+  // so registering one is safe until its wallet/key is funded & set.
+  const vaultEnabledIds = () => Object.keys(whirlpoolMM.vault.listProjects()).filter((id) => {
+    const p = whirlpoolMM.vault.getProject(id);
+    return p && p.active !== false && whirlpoolMM.vault.isEnabled(id);
+  });
+  const startIds = vaultEnabledIds();
+  if (startIds.length) console.log(`[VAULT] enabled — autonomous management every 3m · projects: ${startIds.join(", ")}`);
+  else console.log("[VAULT] no project operator key set — idle (will service projects once a key is present)");
+
+  const runProject = async (id) => {
+    const tag = `[VAULT:${id}]`;
+    // Equal-pools rebalancer first, then ask-wall (reserves its token), base, SOL pool.
+    try { const rb = await whirlpoolMM.vault.rebalancePools({ projectId: id }); if (rb && !["none", "balanced", "capped"].includes(rb.action)) console.log(`${tag}[rebalance]`, rb.action, "·", rb.reason || ""); } catch (e) { console.error(`${tag} rebalance error:`, e.message); }
+    try { const w = await whirlpoolMM.vault.tickAskWall({ projectId: id }); if (w && !["none", "hold", "deferred"].includes(w.action)) console.log(`${tag}[ask-wall]`, w.action, "·", w.reason || ""); } catch (e) { console.error(`${tag} ask-wall error:`, e.message); }
+    try { const r = await whirlpoolMM.vault.tick({ projectId: id }); if (r && !["none", "hold", "deferred"].includes(r.action)) console.log(tag, r.action, "·", r.reason || ""); } catch (e) { console.error(`${tag} tick error:`, e.message); }
+    try { const s = await whirlpoolMM.vault.tickSol({ projectId: id }); if (s && !["none", "hold", "deferred"].includes(s.action)) console.log(`${tag}[token/SOL]`, s.action, "·", s.reason || ""); } catch (e) { console.error(`${tag} token/SOL error:`, e.message); }
+  };
+  const vaultTick = async () => {
+    for (const id of vaultEnabledIds()) await runProject(id);
+  };
+  setTimeout(vaultTick, 15000);
+  setInterval(vaultTick, 180 * 1000);
 });

@@ -22,6 +22,9 @@ function adminOK(req) {
   return !!k && req.query.key === k;
 }
 
+// Which project an admin request targets (default the built-in CLKN project).
+function proj(req) { return (req.query.project || (req.body && req.body.project) || "clkn"); }
+
 const router = express.Router();
 router.use(express.json());
 
@@ -125,7 +128,7 @@ router.post("/close", async (req, res) => {
 // GET /api/whirlpool/vault/status?key=… — operator wallet, float, config, position.
 router.get("/vault/status", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
-  try { res.json(await vault.status()); }
+  try { res.json(await vault.status(proj(req))); }
   catch (e) { res.status(500).json({ error: e.message || "status failed" }); }
 });
 
@@ -134,7 +137,7 @@ router.get("/vault/status", async (req, res) => {
 // Gated like the rest of the vault admin (404 without the key); never public.
 router.get("/vault/costs", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
-  try { res.json(await vault.costs()); }
+  try { res.json(await vault.costs(proj(req))); }
   catch (e) { res.status(500).json({ error: e.message || "costs failed" }); }
 });
 
@@ -143,7 +146,7 @@ router.get("/vault/costs", async (req, res) => {
 // past rolls), valued in USD. Gated; never public. Pair with /costs for net P&L.
 router.get("/vault/earnings", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
-  try { res.json(await vault.earnings()); }
+  try { res.json(await vault.earnings(proj(req))); }
   catch (e) { res.status(500).json({ error: e.message || "earnings failed" }); }
 });
 
@@ -151,7 +154,7 @@ router.get("/vault/earnings", async (req, res) => {
 // a DRY RUN (plans, signs nothing). With run=1 it may actually roll the position.
 router.get("/vault/tick", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
-  try { res.json(await vault.tick({ dryRun: req.query.run !== "1" })); }
+  try { res.json(await vault.tick({ dryRun: req.query.run !== "1", projectId: proj(req) })); }
   catch (e) { res.status(500).json({ error: e.message || "tick failed" }); }
 });
 
@@ -159,7 +162,7 @@ router.get("/vault/tick", async (req, res) => {
 // DRY RUN unless run=1.
 router.get("/vault/wall-tick", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
-  try { res.json(await vault.tickAskWall({ dryRun: req.query.run !== "1" })); }
+  try { res.json(await vault.tickAskWall({ dryRun: req.query.run !== "1", projectId: proj(req) })); }
   catch (e) { res.status(500).json({ error: e.message || "wall tick failed" }); }
 });
 
@@ -167,7 +170,7 @@ router.get("/vault/wall-tick", async (req, res) => {
 // DRY RUN unless run=1.
 router.get("/vault/sol-tick", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
-  try { res.json(await vault.tickSol({ dryRun: req.query.run !== "1" })); }
+  try { res.json(await vault.tickSol({ dryRun: req.query.run !== "1", projectId: proj(req) })); }
   catch (e) { res.status(500).json({ error: e.message || "sol tick failed" }); }
 });
 
@@ -175,7 +178,7 @@ router.get("/vault/sol-tick", async (req, res) => {
 // (swap SOL→USDC toward target). DRY RUN unless run=1.
 router.get("/vault/rebalance", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
-  try { res.json(await vault.rebalancePools({ dryRun: req.query.run !== "1" })); }
+  try { res.json(await vault.rebalancePools({ dryRun: req.query.run !== "1", projectId: proj(req) })); }
   catch (e) { res.status(500).json({ error: e.message || "rebalance failed" }); }
 });
 
@@ -190,6 +193,7 @@ router.get("/vault/swap", async (req, res) => {
       amountUi: req.query.amount,
       slippageBps: Number(req.query.slippage) || 100,
       dryRun: req.query.run !== "1",
+      projectId: proj(req),
     }));
   } catch (e) { res.status(500).json({ error: e.message || "swap failed" }); }
 });
@@ -197,18 +201,18 @@ router.get("/vault/swap", async (req, res) => {
 // POST /api/whirlpool/vault/pause?key=… and /resume?key=… — kill switch.
 router.post("/vault/pause", (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
-  res.json(vault.pause());
+  res.json(vault.pause(proj(req)));
 });
 router.post("/vault/resume", (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
-  res.json(vault.resume());
+  res.json(vault.resume(proj(req)));
 });
 
 // GET /api/whirlpool/vault/mode?key=… — list available modes + tilts + the current
 // active mode. Non-destructive read.
 router.get("/vault/mode", (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
-  try { res.json(vault.listModes()); }
+  try { res.json(vault.listModes(proj(req))); }
   catch (e) { res.status(500).json({ error: e.message || "mode list failed" }); }
 });
 
@@ -223,8 +227,8 @@ router.post("/vault/mode", (req, res) => {
   const tilt = tiltRaw ? String(tiltRaw).toLowerCase() : null;
   if (!name) return res.status(400).json({ error: "name required (active|steady|foundation|custom)" });
   try {
-    if (req.query.run === "1") return res.json({ applied: true, ...vault.applyMode(name, tilt) });
-    return res.json({ applied: false, preview: vault.previewMode(name, tilt) });
+    if (req.query.run === "1") return res.json({ applied: true, ...vault.applyMode(name, tilt, proj(req)) });
+    return res.json({ applied: false, preview: vault.previewMode(name, tilt, proj(req)) });
   } catch (e) { res.status(400).json({ error: e.message || "mode failed" }); }
 });
 
@@ -260,7 +264,7 @@ router.delete("/vault/projects/:id", (req, res) => {
 // POST /api/whirlpool/vault/config?key=… — patch config (body = partial config).
 router.post("/vault/config", (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
-  try { res.json({ config: vault.setConfig(req.body || {}) }); }
+  try { res.json({ config: vault.setConfig(req.body || {}, proj(req)) }); }
   catch (e) { res.status(400).json({ error: e.message || "config failed" }); }
 });
 
