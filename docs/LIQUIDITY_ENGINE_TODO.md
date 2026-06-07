@@ -127,12 +127,17 @@ accumulate quote from organic buys, AUTO-GRADUATE into Steady as the quote base 
 - **Advanced:** see + tune every lever = "Custom" mode.
 
 ### Build plan (non-destructive — current live config must stay untouched)
-- [ ] `MODES` preset table in `lib/whirlpool-vault.js` (each = a partial config + a tilt).
-- [ ] `applyMode(name, tilt?)` that patches config; add a `mode`/`tilt` field to state so we
-      can show the active mode. **Default = "custom" (current config); applying nothing changes
-      nothing** — never auto-apply a mode to the live CLKN vault.
-- [ ] Endpoint `POST /api/whirlpool/vault/mode?key=…` (gated) + dry-run preview of the diff.
-- [ ] Surface active mode in `/vault/status`, the `/liquidity` post, and the product page.
+- [x] `MODES` preset table in `lib/whirlpool-vault.js` (each = a partial config) + `TILTS`
+      overlay (balanced/distribution/accumulation). Shape knobs only — reserves, fee tier, pair
+      untouched.
+- [x] `applyMode(name, tilt?)` patches config; `mode`/`tilt` recorded in state; snapshots prior
+      config so `name=custom` restores it. **Default = "custom" (current config); nothing
+      auto-applies.** Verified live: Steady+Distribution diff vs the live CLKN config = [] (the
+      presets match the hand-tuned setup).
+- [x] Endpoint `GET /vault/mode` (list + current) + `POST /vault/mode` (gated): DRY-RUN preview
+      of the exact diff by default; `&run=1` to apply.
+- [x] Surface active mode in `/vault/status` (`mode`/`tilt`).
+- [ ] Surface active mode on the `/liquidity` post + the product page.
 - [ ] Per-mode Beginner + Advanced guide copy on `/liquidity-engine` (brand standard).
 - [ ] (Later, multi-tenant) mode is a per-project setting.
 
