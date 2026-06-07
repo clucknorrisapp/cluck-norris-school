@@ -7,6 +7,9 @@
 // Honest-by-design: this provides real two-sided depth that fills real traders.
 // It is not a self-trading volume bot. See lib/orca-whirlpools.js for the why.
 const express = require("express");
+const crypto = require("crypto");
+const nacl = require("tweetnacl");
+const bs58 = require("bs58");
 const { PublicKey } = require("@solana/web3.js");
 const wp = require("./lib/orca-whirlpools");
 const vault = require("./lib/whirlpool-vault");
@@ -24,6 +27,50 @@ function adminOK(req) {
 
 // Which project an admin request targets (default the built-in CLKN project).
 function proj(req) { return (req.query.project || (req.body && req.body.project) || "clkn"); }
+
+// ── Client portal auth (wallet-signature) ────────────────────────────────────
+// A project owner proves control of their wallet by signing a fresh message; we then
+// issue a short-lived HMAC session token that scopes them to THEIR project only. No
+// admin key needed. The HMAC key is the server secret (PREMIUM_ACCESS_KEY).
+function clientMsg(wallet, ts) {
+  return `Cluck Norris Liquidity Engine\nSign in to manage your project's liquidity.\n\nWallet: ${wallet}\nTime: ${ts}`;
+}
+function verifyWalletSig(message, signatureB64, walletB58) {
+  try {
+    const msg = new TextEncoder().encode(message);
+    const sig = Uint8Array.from(Buffer.from(String(signatureB64), "base64"));
+    const pub = bs58.decode(walletB58);
+    return sig.length === 64 && nacl.sign.detached.verify(msg, sig, pub);
+  } catch { return false; }
+}
+const TOKEN_SECRET = () => process.env.PREMIUM_ACCESS_KEY || "dev-secret";
+function issueClientToken(pid, wallet, ttlMs = 12 * 3600 * 1000) {
+  const payload = Buffer.from(JSON.stringify({ pid, w: wallet, exp: Date.now() + ttlMs })).toString("base64url");
+  const mac = crypto.createHmac("sha256", TOKEN_SECRET()).update(payload).digest("hex").slice(0, 32);
+  return `${payload}.${mac}`;
+}
+function clientAuth(req) {
+  try {
+    const h = req.headers.authorization || "";
+    const token = h.startsWith("Bearer ") ? h.slice(7) : (req.query.token || (req.body && req.body.token) || "");
+    const [payload, mac] = String(token).split(".");
+    if (!payload || !mac) return null;
+    const expect = crypto.createHmac("sha256", TOKEN_SECRET()).update(payload).digest("hex").slice(0, 32);
+    const a = Buffer.from(mac), b = Buffer.from(expect);
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+    const p = JSON.parse(Buffer.from(payload, "base64url").toString());
+    if (!p.exp || Date.now() > p.exp) return null;
+    return p; // { pid, w, exp }
+  } catch { return null; }
+}
+// Find the project a wallet owns (ownerWallet may be a comma-separated list).
+function projectOwnedBy(wallet) {
+  const projs = vault.listProjects();
+  return Object.keys(projs).find((id) => {
+    const ow = projs[id] && projs[id].ownerWallet;
+    return ow && String(ow).split(",").map((s) => s.trim()).includes(wallet);
+  }) || null;
+}
 
 const router = express.Router();
 router.use(express.json());
@@ -219,6 +266,40 @@ router.get("/vault/buyback", async (req, res) => {
   try { res.json(await vault.buyback({ projectId: proj(req), dryRun: req.query.run !== "1" })); }
   catch (e) { res.status(500).json({ error: e.message || "buyback failed" }); }
 });
+
+// ── Client portal (wallet-auth; no admin key) ────────────────────────────────
+// POST /vault/client/login  { wallet, signature(base64), ts } → { token, project }
+router.post("/vault/client/login", (req, res) => {
+  const { wallet, signature, ts } = req.body || {};
+  if (!wallet || !signature || !ts) return res.status(400).json({ error: "wallet, signature, ts required" });
+  if (!isPubkey(wallet)) return res.status(400).json({ error: "invalid wallet" });
+  if (Math.abs(Date.now() - Number(ts)) > 5 * 60 * 1000) return res.status(400).json({ error: "stale timestamp — please retry" });
+  if (!verifyWalletSig(clientMsg(wallet, ts), signature, wallet)) return res.status(401).json({ error: "signature did not verify" });
+  const pid = projectOwnedBy(wallet);
+  if (!pid) return res.status(403).json({ error: "this wallet isn't registered as a project owner" });
+  const p = vault.listProjects()[pid];
+  res.json({ token: issueClientToken(pid, wallet), project: { id: pid, symbol: p.symbol, label: p.label }, expiresInSec: 12 * 3600 });
+});
+// The signing message the client must produce (handy for the frontend / debugging).
+router.get("/vault/client/message", (req, res) => {
+  const wallet = String(req.query.wallet || ""), ts = Date.now();
+  if (!isPubkey(wallet)) return res.status(400).json({ error: "invalid wallet" });
+  res.json({ ts, message: clientMsg(wallet, ts) });
+});
+// Authenticated, project-scoped (read + safe controls). Token in Authorization: Bearer.
+function clientRoute(handler) {
+  return async (req, res) => {
+    const a = clientAuth(req);
+    if (!a) return res.status(401).json({ error: "not authenticated" });
+    try { res.json(await handler(a.pid, req)); } catch (e) { res.status(500).json({ error: e.message || "error" }); }
+  };
+}
+router.get("/vault/client/status", clientRoute((pid) => vault.status(pid)));
+router.get("/vault/client/positions", clientRoute((pid) => vault.publicPositions(pid)));
+router.get("/vault/client/costs", clientRoute((pid) => vault.costs(pid)));
+router.get("/vault/client/earnings", clientRoute((pid) => vault.earnings(pid)));
+router.post("/vault/client/pause", clientRoute((pid) => vault.pause(pid)));
+router.post("/vault/client/resume", clientRoute((pid) => vault.resume(pid)));
 
 // GET /api/whirlpool/vault/create-pool?key=&project=rose&quote=SOL&feeTier=0.05[&run=1]
 // Onboarding: create a NEW Orca pool for the project's token at the live market price.

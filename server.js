@@ -5784,6 +5784,11 @@ app.get("/engine-dashboard", (req, res) => {
   res.sendFile(join(__dirname, "public", "engine-dashboard.html"));
 });
 
+// Liquidity Engine — client portal (wallet-signature login; per-project, for owners).
+app.get("/portal", (req, res) => {
+  res.sendFile(join(__dirname, "public", "client-portal.html"));
+});
+
 // Security Coop — wallet permission check / approval revoker.
 app.get("/security-coop", (req, res) => {
   res.sendFile(join(__dirname, "public", "security-coop.html"));
