@@ -923,8 +923,10 @@ async function liquidityReply(chatId, replyTo) {
       m += `   <b>${money(p.valueUsd)}</b> depth — ${tok(p.clknAmount)} CLKN + ${quoteStr}\n`;
     }
     const vol = fmtUsdShort(await getClkn24hVolume());
+    const organic = fmtOrganicScore(await getClknOrganicScore());
     m += `\n💧 <b>Total depth: ${money(r.totalUsd)}</b>`;
     if (vol) m += `  ·  📈 24h vol: <b>${vol}</b>`;
+    if (organic) m += `\n🪐 <b>Jupiter organic score: ${organic}</b> <i>(Jupiter's own measure of real, non-faked trading)</i>`;
     m += `\n\n${r.positions.length} active position${r.positions.length > 1 ? "s" : ""} — real depth, real fills, no fake volume. 🐔\n${TG_PUBLIC_BASE}/liquidity`;
     tgSend(chatId, m, replyTo);
   } catch (e) {
@@ -9929,6 +9931,39 @@ function fmtUsdShort(n) {
   return "$" + Math.round(n);
 }
 
+// Jupiter's organic score for CLKN (0–100 + a high/medium/low label). It's
+// Jupiter's own measure of REAL, non-manipulated trading — the metric our
+// Liquidity Engine is built to earn honestly (and the one wash-volume bots can't
+// fake). Cached 5 min. Returns { score, label } or null. Same v2 endpoint the
+// Token Autopsy uses for cross-verification.
+let cachedOrganic = null, cachedOrganicAt = 0;
+async function getClknOrganicScore() {
+  const now = Date.now();
+  if (cachedOrganic !== null && now - cachedOrganicAt < 5 * 60 * 1000) return cachedOrganic;
+  try {
+    const res = await fetch(`https://lite-api.jup.ag/tokens/v2/search?query=${CLKN_MINT_ADDR}`, {
+      signal: AbortSignal.timeout(8000),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length) {
+        const t = data.find((d) => d.id === CLKN_MINT_ADDR) || data[0];
+        if (t && t.organicScore != null) {
+          cachedOrganic = { score: Number(t.organicScore), label: t.organicScoreLabel || null };
+          cachedOrganicAt = now;
+        }
+      }
+    }
+  } catch (e) { console.warn("[TELEGRAM] organic score fetch failed:", e.message); }
+  return cachedOrganic;
+}
+// "26.6 🟢 high" — colored by Jupiter's label. Returns null if unavailable.
+function fmtOrganicScore(o) {
+  if (!o || !Number.isFinite(Number(o.score))) return null;
+  const dot = o.label === "high" ? "🟢" : o.label === "medium" ? "🟡" : "🟠";
+  return `${o.score.toFixed(1)} ${dot}${o.label ? " " + o.label : ""}`;
+}
+
 async function notifyClknBuy(trade, tx, pool, usdValue, HELIUS_KEY) {
   const buyer = trade.trader;
   const buyerShort = buyer ? `${buyer.slice(0, 4)}…${buyer.slice(-4)}` : "unknown";
@@ -9941,10 +9976,12 @@ async function notifyClknBuy(trade, tx, pool, usdValue, HELIUS_KEY) {
   const priceStr = formatClknPrice(usdValue, trade.clknAmount);
   const mcapStr = await formatClknMarketCap(usdValue, trade.clknAmount, HELIUS_KEY);
   const vol24Str = fmtUsdShort(await getClkn24hVolume());
+  const organicStr = fmtOrganicScore(await getClknOrganicScore());
   const priceLine =
     (priceStr ? `\nPrice: <b>${priceStr}</b>` : "") +
     (mcapStr ? `\nMarket cap: <b>${mcapStr}</b>` : "") +
-    (vol24Str ? `\n24h Vol: <b>${vol24Str}</b>` : "");
+    (vol24Str ? `\n24h Vol: <b>${vol24Str}</b>` : "") +
+    (organicStr ? `\nJupiter organic score: <b>${organicStr}</b>` : "");
 
   // Buyer rank + wallet — holdings now, the tier they sit in, whether this buy
   // promoted them, and how much they grew their position. Skipped for dev buys
@@ -10056,10 +10093,12 @@ async function notifyClknSell(trade, tx, pool, usdValue, HELIUS_KEY) {
   const priceStr = formatClknPrice(usdValue, trade.clknAmount);
   const mcapStr = await formatClknMarketCap(usdValue, trade.clknAmount, HELIUS_KEY);
   const vol24Str = fmtUsdShort(await getClkn24hVolume());
+  const organicStr = fmtOrganicScore(await getClknOrganicScore());
   const priceLine =
     (priceStr ? `\nPrice: <b>${priceStr}</b>` : "") +
     (mcapStr ? `\nMarket cap: <b>${mcapStr}</b>` : "") +
-    (vol24Str ? `\n24h Vol: <b>${vol24Str}</b>` : "");
+    (vol24Str ? `\n24h Vol: <b>${vol24Str}</b>` : "") +
+    (organicStr ? `\nJupiter organic score: <b>${organicStr}</b>` : "");
 
   // Seller rank — holdings now, the tier they sit in, whether this sell knocked
   // them down a rung, and how much of their bag they trimmed. Skipped when a
