@@ -138,6 +138,15 @@ router.get("/vault/costs", async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message || "costs failed" }); }
 });
 
+// GET /api/whirlpool/vault/earnings?key=… — PRIVATE earnings readout: LP fees the
+// engine has EARNED — pending (uncollected, real-time) + realized (collected on
+// past rolls), valued in USD. Gated; never public. Pair with /costs for net P&L.
+router.get("/vault/earnings", async (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  try { res.json(await vault.earnings()); }
+  catch (e) { res.status(500).json({ error: e.message || "earnings failed" }); }
+});
+
 // GET /api/whirlpool/vault/tick?key=…[&run=1] — run one cycle. Without run=1 it's
 // a DRY RUN (plans, signs nothing). With run=1 it may actually roll the position.
 router.get("/vault/tick", async (req, res) => {
