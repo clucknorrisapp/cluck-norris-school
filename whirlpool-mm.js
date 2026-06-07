@@ -204,6 +204,22 @@ router.get("/vault/swap", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message || "swap failed" }); }
 });
 
+// GET /api/whirlpool/vault/positions?key=&project=<id> — per-position depth (the same
+// sanitized shape the /liquidity command uses: pair, role, $depth, amounts, in-range).
+router.get("/vault/positions", async (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  try { res.json(await vault.publicPositions(proj(req))); }
+  catch (e) { res.status(500).json({ error: e.message || "positions failed" }); }
+});
+
+// GET /api/whirlpool/vault/buyback?key=&project=<id>[&run=1] — flywheel buyback.
+// DRY RUN unless run=1. Spends only USDC above floor+reserve; needs buybackEnabled.
+router.get("/vault/buyback", async (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  try { res.json(await vault.buyback({ projectId: proj(req), dryRun: req.query.run !== "1" })); }
+  catch (e) { res.status(500).json({ error: e.message || "buyback failed" }); }
+});
+
 // GET /api/whirlpool/vault/create-pool?key=&project=rose&quote=SOL&feeTier=0.05[&run=1]
 // Onboarding: create a NEW Orca pool for the project's token at the live market price.
 // DRY RUN unless run=1. Costs ~0.03 SOL (rent) from the project's operator wallet.

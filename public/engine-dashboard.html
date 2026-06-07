@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>🛰️ Engine Dashboard — Cluck Norris</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0a0a0a; --card: #111111; --border: rgba(255,255,255,0.08);
+    --text: #F9FAFB; --subtext: #6B7280; --accent: #FCD34D; --orange: #D97706;
+    --green: #10B981; --red: #EF4444; --blue: #60A5FA; --mono: 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); background-image: radial-gradient(ellipse at 20% 10%, rgba(217,119,6,0.10) 0%, transparent 50%), radial-gradient(ellipse at 80% 90%, rgba(16,185,129,0.06) 0%, transparent 50%); color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px 80px; }
+  a.back-home { display:inline-flex; align-items:center; gap:6px; font-family:Oswald,sans-serif; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin:0 0 12px; }
+  .back-home img { height:22px; width:22px; object-fit:cover; border-radius:50%; border:1px solid var(--orange); }
+
+  .header { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+  .header-icon { font-size: 40px; filter: drop-shadow(0 0 16px rgba(217,119,6,0.5)); }
+  .header .brand-mini { font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 4px; color: var(--orange); margin-bottom: 4px; font-weight: 700; }
+  .header h1 { font-family: 'Oswald', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg, #FCD34D, #D97706, #F59E0B); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
+  .header p { font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+  .card-title { font-family: var(--mono); font-size: 10px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 14px; }
+
+  .intro { font-size: 13px; line-height: 1.7; color: #D1D5DB; }
+  .intro b { color: var(--accent); }
+
+  /* Key bar */
+  .keybar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .keybar input { flex:1; min-width:200px; background:#0d0d0d; border:1px solid var(--border); border-radius:9px; padding:12px; color:var(--text); font-family:var(--mono); font-size:14px; }
+  .keybar .toolbar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .btn { border:none; border-radius:10px; padding:12px 18px; font-family:'Oswald',sans-serif; font-size:13px; font-weight:900; letter-spacing:1.5px; cursor:pointer; transition:opacity 0.15s; }
+  .btn-primary { background:linear-gradient(135deg,#FCD34D,#D97706); color:#1a1205; }
+  .btn-ghost { background:transparent; border:1px solid var(--border); color:var(--subtext); }
+  .btn:hover { opacity:0.9; } .btn:disabled { opacity:0.4; cursor:not-allowed; }
+  .auto-toggle { display:inline-flex; align-items:center; gap:6px; font-family:var(--mono); font-size:11px; color:var(--subtext); letter-spacing:1px; cursor:pointer; user-select:none; }
+  .auto-toggle input { accent-color: var(--orange); width:15px; height:15px; }
+  .updated { font-family:var(--mono); font-size:11px; color:var(--subtext); margin-top:10px; }
+
+  .error-box { display:none; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:12px 14px; font-family:var(--mono); font-size:12px; color:#FCA5A5; margin-bottom:16px; }
+  .error-box.show { display:block; }
+
+  /* Project grid */
+  .grid { display:grid; grid-template-columns:1fr; gap:16px; }
+  @media (min-width: 760px) { .grid { grid-template-columns:1fr 1fr; } }
+
+  .proj { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; }
+  .proj .p-top { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:6px; }
+  .proj .p-sym { font-family:'Oswald',sans-serif; font-weight:900; font-size:22px; letter-spacing:1px; color:var(--accent); }
+  .proj .p-label { font-family:var(--mono); font-size:11px; color:var(--subtext); margin-top:2px; }
+  .badges { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+  .badge { font-family:'Oswald',sans-serif; font-size:9px; font-weight:700; letter-spacing:1.5px; padding:4px 9px; border-radius:6px; white-space:nowrap; }
+  .b-live { color:#6EE7B7; border:1px solid rgba(16,185,129,0.45); background:rgba(16,185,129,0.08); }
+  .b-paused { color:#FCD34D; border:1px solid rgba(252,211,77,0.45); background:rgba(252,211,77,0.08); }
+  .b-off { color:#9CA3AF; border:1px solid rgba(156,163,175,0.4); background:rgba(156,163,175,0.06); }
+  .b-mode { color:#93C5FD; border:1px solid rgba(96,165,250,0.4); background:rgba(96,165,250,0.06); }
+
+  .depth-head { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin:14px 0; }
+  .depth-head .cell { background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:9px; padding:10px 12px; text-align:center; }
+  .depth-head .k { font-family:var(--mono); font-size:9px; color:var(--subtext); letter-spacing:1px; }
+  .depth-head .v { font-family:'Oswald',sans-serif; font-size:18px; font-weight:700; margin-top:4px; }
+  .v.pos { color:var(--green); } .v.neg { color:var(--red); }
+
+  .sec-title { font-family:var(--mono); font-size:10px; color:var(--subtext); letter-spacing:1.5px; margin:16px 0 8px; }
+
+  .pos { margin-top:8px; padding:11px 13px; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:9px; }
+  .pos .ph { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .pos .pair { font-family:'Oswald',sans-serif; font-weight:700; letter-spacing:1px; font-size:14px; }
+  .pos .role { font-family:var(--mono); font-size:10px; color:#93C5FD; }
+  .pos .meta { font-family:var(--mono); font-size:11px; color:var(--subtext); line-height:1.7; margin-top:6px; }
+  .pos .meta b { color:var(--text); }
+  .pos .depth { font-family:'Oswald',sans-serif; font-weight:700; color:var(--accent); }
+
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:6px; }
+  .mini { background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:9px; padding:10px 12px; }
+  .mini .k { font-family:var(--mono); font-size:9px; color:var(--subtext); letter-spacing:1px; }
+  .mini .v { font-family:'Oswald',sans-serif; font-size:15px; font-weight:700; margin-top:3px; }
+  .mini .sub { font-family:var(--mono); font-size:10px; color:var(--subtext); margin-top:2px; }
+
+  .note { font-family:var(--mono); font-size:11px; color:var(--subtext); margin-top:8px; line-height:1.6; }
+  .note.warn { color:#FCA5A5; }
+
+  details.adv { margin-top:14px; }
+  details.adv summary { font-family:var(--mono); font-size:10px; letter-spacing:1.5px; color:var(--orange); cursor:pointer; list-style:none; padding:8px 0; }
+  details.adv summary::-webkit-details-marker { display:none; }
+  details.adv .adv-body { font-family:var(--mono); font-size:11px; color:#D1D5DB; line-height:1.8; border-top:1px solid var(--border); padding-top:10px; margin-top:4px; word-break:break-all; }
+  details.adv .adv-body b { color:var(--text); }
+  details.adv .adv-body .lbl { color:var(--subtext); }
+
+  .footer-tag { text-align: center; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
+  .footer-tag a { color: var(--orange); text-decoration: none; }
+  .muted { color: var(--subtext); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="/" class="back-home"><img src="/cluck-norris-logo.jpg" alt=""/>&larr; CLUCK NORRIS HOME</a>
+
+  <div class="header">
+    <div class="header-icon">🛰️</div>
+    <div>
+      <div class="brand-mini">CLUCK NORRIS</div>
+      <h1>ENGINE DASHBOARD</h1>
+      <p>MULTI-PROJECT LIQUIDITY OPERATIONS · LIVE STATUS</p>
+    </div>
+  </div>
+
+  <div id="errorBox" class="error-box"></div>
+
+  <div class="card">
+    <div class="intro">
+      One screen for the whole <b>multi-tenant Liquidity Engine</b>. Paste your operator
+      key once and see, for <b>every project</b>, the engine's live status, on-chain depth,
+      running costs, and net earnings. Plain-English by default — flip <b>Advanced</b> on any
+      card for raw ticks, mints, and config knobs.
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">OPERATOR KEY</div>
+    <div class="keybar">
+      <input id="keyInput" type="password" placeholder="Paste admin key (PREMIUM_ACCESS_KEY)" autocomplete="off"/>
+      <div class="toolbar">
+        <button class="btn btn-primary" id="loadBtn" onclick="saveKeyAndLoad()">LOAD</button>
+        <button class="btn btn-ghost" id="refreshBtn" onclick="loadAll()">🔄 REFRESH</button>
+        <label class="auto-toggle"><input type="checkbox" id="autoChk" onchange="toggleAuto()"/> auto-refresh 30s</label>
+      </div>
+    </div>
+    <div class="updated" id="updated"></div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <div class="footer-tag">
+    🐔 <a href="https://clucknorris.app">clucknorris.app</a> — ENGINE DASHBOARD · REAL DEPTH, REAL FILLS
+  </div>
+</div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+let adminKey = '';
+let autoTimer = null;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function showError(msg){ const el=document.getElementById('errorBox'); el.textContent=msg; el.classList.add('show'); }
+function clearError(){ const el=document.getElementById('errorBox'); el.classList.remove('show'); el.textContent=''; }
+function shorten(s){ s=String(s||''); return s.length>10 ? s.slice(0,4)+'…'+s.slice(-4) : s; }
+
+// Readable USD — no scientific notation, beginner-friendly.
+function money(n){ n=Number(n); if(!isFinite(n)) return '—'; const neg=n<0; n=Math.abs(n);
+  let s; if(n>=1000) s='$'+Math.round(n).toLocaleString();
+  else if(n>=1) s='$'+n.toFixed(2);
+  else if(n>=0.01) s='$'+n.toFixed(4);
+  else if(n===0) s='$0';
+  else s='$'+n.toFixed(6);
+  return (neg?'-':'')+s; }
+// Readable token amounts.
+function tok(n){ n=Number(n); if(!isFinite(n)) return '—'; if(n>=1e6) return (n/1e6).toFixed(2)+'M'; if(n>=1e3) return (n/1e3).toFixed(1)+'K'; if(n===0) return '0'; return n.toLocaleString(undefined,{maximumFractionDigits: n<1?6:2}); }
+// Readable price (no exponential) — used for range bounds in the Advanced view.
+function price(n){ n=Number(n); if(!isFinite(n)) return '—'; if(n===0) return '0'; if(n>=1) return n.toLocaleString(undefined,{maximumFractionDigits:4}); return n.toFixed(8).replace(/0+$/,'').replace(/\.$/,''); }
+function sol(n){ n=Number(n); if(!isFinite(n)) return '—'; return n.toLocaleString(undefined,{maximumFractionDigits:6})+' SOL'; }
+function ts(t){ if(!t) return '—'; const d=new Date(t); if(isNaN(d)) return esc(String(t)); return d.toLocaleString(); }
+
+async function jget(url){
+  const r = await fetch(url, { headers:{ 'Accept':'application/json' } });
+  let d=null; try { d = await r.json(); } catch(_){}
+  return { ok:r.ok, status:r.status, data:d };
+}
+
+// ── Key handling (sessionStorage, never URL) ────────────────────────────────
+function saveKeyAndLoad(){
+  const k = document.getElementById('keyInput').value.trim();
+  if(!k){ showError('Enter the admin key first.'); return; }
+  adminKey = k;
+  try { sessionStorage.setItem('engineDashKey', k); } catch(_){}
+  loadAll();
+}
+function loadStoredKey(){
+  let k=''; try { k = sessionStorage.getItem('engineDashKey') || ''; } catch(_){}
+  if(k){ adminKey=k; document.getElementById('keyInput').value=k; loadAll(); }
+}
+function toggleAuto(){
+  const on = document.getElementById('autoChk').checked;
+  if(autoTimer){ clearInterval(autoTimer); autoTimer=null; }
+  if(on) autoTimer = setInterval(()=>{ if(adminKey) loadAll(); }, 30000);
+}
+
+// ── Load all projects then per-project detail ──────────────────────────────
+async function loadAll(){
+  if(!adminKey){ showError('Enter a valid admin key to load the dashboard.'); return; }
+  clearError();
+  const grid = document.getElementById('grid');
+  const loadBtn=document.getElementById('loadBtn'), refBtn=document.getElementById('refreshBtn');
+  loadBtn.disabled=true; refBtn.disabled=true;
+  try {
+    const res = await jget('/api/whirlpool/vault/projects?key='+encodeURIComponent(adminKey));
+    if(res.status===404){ showError('Bad or missing admin key — enter a valid admin key.'); grid.innerHTML=''; return; }
+    if(!res.ok || !res.data || !res.data.projects){ showError('Could not load projects'+(res.data&&res.data.error?': '+res.data.error:'')); return; }
+    const projects = res.data.projects; // { id: {id,label,symbol,tokenMint,active,operatorEnv,operatorLoaded,operator,telegramChatId,...} }
+    const ids = Object.keys(projects);
+    if(!ids.length){ grid.innerHTML='<div class="card muted" style="font-family:var(--mono);font-size:12px">No projects registered.</div>'; }
+    else {
+      // Render skeleton cards immediately, then fill each independently.
+      grid.innerHTML = ids.map(id => `<div class="proj" id="proj-${esc(id)}"><div class="muted" style="font-family:var(--mono);font-size:12px">Loading ${esc(projects[id].symbol||id)}…</div></div>`).join('');
+      // Each project fetched independently — one failure never breaks the page.
+      ids.forEach(id => loadProject(id, projects[id]));
+    }
+    document.getElementById('updated').textContent = 'Last updated '+new Date().toLocaleTimeString();
+  } catch(e){
+    showError('Dashboard load failed: '+(e.message||e));
+  } finally {
+    loadBtn.disabled=false; refBtn.disabled=false;
+  }
+}
+
+async function loadProject(id, meta){
+  const el = document.getElementById('proj-'+id);
+  if(!el) return;
+  const k = encodeURIComponent(adminKey), pid = encodeURIComponent(id);
+  try {
+    const sres = await jget('/api/whirlpool/vault/status?key='+k+'&project='+pid);
+    if(sres.status===404){ el.innerHTML = card404(meta); return; }
+    if(!sres.ok || !sres.data){ el.innerHTML = cardError(meta, (sres.data&&sres.data.error)||'status failed'); return; }
+    let status = sres.data;
+    // status folds in costs/earnings only when enabled; otherwise fetch them
+    // separately (best-effort, never blocks the card).
+    let costs = status.costs, earnings = status.earnings;
+    if(!costs || costs.error){ const c=await jget('/api/whirlpool/vault/costs?key='+k+'&project='+pid); if(c.ok&&c.data&&!c.data.error) costs=c.data; }
+    if(!earnings || earnings.error){ const e=await jget('/api/whirlpool/vault/earnings?key='+k+'&project='+pid); if(e.ok&&e.data&&!e.data.error) earnings=e.data; }
+    el.innerHTML = renderProject(id, meta, status, costs, earnings);
+  } catch(e){
+    el.innerHTML = cardError(meta, e.message||String(e));
+  }
+}
+
+// ── Card variants ──────────────────────────────────────────────────────────
+function header(meta, badges){
+  return `<div class="p-top">
+    <div>
+      <div class="p-sym">${esc(meta.symbol||meta.id)}</div>
+      <div class="p-label">${esc(meta.label||meta.id)}</div>
+    </div>
+    <div class="badges">${badges}</div>
+  </div>`;
+}
+function card404(meta){
+  return header(meta, '<span class="badge b-off">NO ACCESS</span>')
+    + '<div class="note warn">This project returned 404 — the admin key may be wrong or this project is gated off.</div>';
+}
+function cardError(meta, msg){
+  return header(meta, '<span class="badge b-off">ERROR</span>')
+    + '<div class="note warn">'+esc(msg)+'</div>';
+}
+
+function roleLabel(p){
+  // Mirror liquidityReply's plain-English shaping.
+  if(p.role==='askwall') return 'ask wall · upside';
+  if(p.lower!=null && p.current!=null && p.lower >= p.current*0.999) return 'upside asks';
+  if(p.upper!=null && p.current!=null && p.upper <= p.current*1.001) return 'buy support';
+  return 'two-sided';
+}
+
+function renderProject(id, meta, status, costs, earnings){
+  const enabled = !!status.enabled;
+  const paused = !!status.paused;
+  let badges = '';
+  if(!enabled) badges += '<span class="badge b-off">OFF · NO OPERATOR</span>';
+  else if(paused) badges += '<span class="badge b-paused">⏸ PAUSED</span>';
+  else badges += '<span class="badge b-live">🟢 LIVE</span>';
+  const modeName = status.mode && status.mode!=='custom' ? status.mode + (status.tilt? ' · '+status.tilt : '') : null;
+  if(modeName) badges += '<span class="badge b-mode">'+esc(modeName)+'</span>';
+
+  let html = header(meta, badges);
+
+  if(!enabled){
+    html += '<div class="note">The autonomous engine is <b>off</b> for this project — its operator wallet (<span class="muted">'+esc(meta.operatorEnv||'operator env')+'</span>) is not loaded. It is a safe no-op until configured.</div>';
+    html += advanced(id, meta, status, costs, earnings);
+    return html;
+  }
+
+  // Earnings / costs / net P&L
+  const earnedUsd = earnings && typeof earnings.totalEarnedUsd==='number' ? earnings.totalEarnedUsd : null;
+  const spentUsd = costs && costs.lifetime && typeof costs.lifetime.usd==='number' ? costs.lifetime.usd : null;
+  let netUsd = (typeof status.netPnlUsd==='number') ? status.netPnlUsd
+             : (earnedUsd!=null && spentUsd!=null) ? earnedUsd - spentUsd : null;
+
+  html += `<div class="depth-head">
+    <div class="cell"><div class="k">FEES EARNED</div><div class="v ${earnedUsd>0?'pos':''}">${earnedUsd!=null?money(earnedUsd):'—'}</div></div>
+    <div class="cell"><div class="k">RUN COST (LIFE)</div><div class="v">${spentUsd!=null?money(spentUsd):'—'}</div></div>
+    <div class="cell"><div class="k">NET P&L</div><div class="v ${netUsd!=null?(netUsd>=0?'pos':'neg'):''}">${netUsd!=null?money(netUsd):'—'}</div></div>
+  </div>`;
+
+  // Positions — plain-English. Built from status.state (positionMint/askWall/solVault).
+  // status doesn't carry per-position $depth/amounts, so present what status exposes:
+  // role, range, and in/out of range. (The sanitized $ depth view lives in the public
+  // /liquidity command; status is the operator's structural view.)
+  html += '<div class="sec-title">POSITIONS</div>';
+  const st = status.state || {};
+  const positions = [];
+  if(st.positionMint) positions.push({ kind:'base', label:'Base range', mint:st.positionMint, range:st.range });
+  if(st.askWall && typeof st.askWall==='object' && st.askWall.mint) positions.push({ kind:'askwall', label:'Ask wall · upside', mint:st.askWall.mint, range:{lower:st.askWall.lower, upper:st.askWall.upper} });
+  if(st.solVault && typeof st.solVault==='object' && st.solVault.mint) positions.push({ kind:'sol', label:'CLKN/SOL range', mint:st.solVault.mint, range:{lower:st.solVault.lower, upper:st.solVault.upper} });
+
+  if(!positions.length){
+    html += '<div class="note">No open positions right now. The engine opens depth on its next tick.</div>';
+  } else {
+    const cur = st.lastPrice;
+    for(const p of positions){
+      const r = p.range || {};
+      const inRange = (cur!=null && r.lower!=null && r.upper!=null) ? (cur>=r.lower && cur<=r.upper) : null;
+      const dot = inRange===null ? '⚪' : (inRange?'🟢':'⚪');
+      const rangeStr = (r.lower!=null && r.upper!=null) ? (price(r.lower)+' → '+price(r.upper)) : '—';
+      html += `<div class="pos">
+        <div class="ph"><span class="pair">${esc(p.label)}</span><span>${dot} <span class="role">${inRange===null?'range n/a':(inRange?'in range':'out of range')}</span></span></div>
+        <div class="meta">Range: <b>${esc(rangeStr)}</b>${cur!=null?' · now <b>'+esc(price(cur))+'</b>':''}<br>Position: <b>${esc(shorten(p.mint))}</b></div>
+      </div>`;
+    }
+  }
+
+  // Earnings + cost breakdown (friendly)
+  html += '<div class="sec-title">EARNINGS &amp; COSTS</div>';
+  html += '<div class="row2">';
+  if(earnings && !earnings.error){
+    const pend = earnings.pending && typeof earnings.pending.usd==='number' ? earnings.pending.usd : null;
+    const real = earnings.realized && typeof earnings.realized.usd==='number' ? earnings.realized.usd : null;
+    html += `<div class="mini"><div class="k">PENDING FEES</div><div class="v pos">${pend!=null?money(pend):'—'}</div><div class="sub">uncollected, real-time</div></div>`;
+    html += `<div class="mini"><div class="k">REALIZED FEES</div><div class="v pos">${real!=null?money(real):'—'}</div><div class="sub">collected on past rolls</div></div>`;
+  } else {
+    html += '<div class="mini"><div class="k">FEES</div><div class="v">—</div><div class="sub">unavailable</div></div>';
+    html += '<div class="mini"><div class="k">&nbsp;</div><div class="v">&nbsp;</div></div>';
+  }
+  if(costs && !costs.error){
+    const today = costs.today || {}, life = costs.lifetime || {};
+    html += `<div class="mini"><div class="k">COST TODAY</div><div class="v">${today.usd!=null?money(today.usd):'—'}</div><div class="sub">${tok(today.txCount||0)} tx · ${sol(today.sol||0)}</div></div>`;
+    html += `<div class="mini"><div class="k">COST LIFETIME</div><div class="v">${life.usd!=null?money(life.usd):'—'}</div><div class="sub">${tok(life.txCount||0)} tx · ${sol(life.sol||0)}</div></div>`;
+  } else {
+    html += '<div class="mini"><div class="k">RUN COST</div><div class="v">—</div><div class="sub">unavailable</div></div>';
+    html += '<div class="mini"><div class="k">&nbsp;</div><div class="v">&nbsp;</div></div>';
+  }
+  html += '</div>';
+
+  // Wallet float
+  if(status.float && !status.float.error){
+    const f = status.float;
+    html += '<div class="sec-title">OPERATOR FLOAT</div>';
+    html += '<div class="row2">';
+    html += `<div class="mini"><div class="k">SOL</div><div class="v">${tok(f.sol)}</div></div>`;
+    html += `<div class="mini"><div class="k">${esc(meta.symbol||'TOKEN')} / USDC</div><div class="v">${tok(f.clkn)}</div><div class="sub">${money(f.usdc)} USDC</div></div>`;
+    html += '</div>';
+  }
+
+  html += advanced(id, meta, status, costs, earnings);
+  return html;
+}
+
+// ── Advanced (raw) panel per card ──────────────────────────────────────────
+function advanced(id, meta, status, costs, earnings){
+  const st = status.state || {};
+  const cfg = status.config || {};
+  const rows = [];
+  rows.push(['Project id', esc(id)]);
+  rows.push(['Token mint', esc(meta.tokenMint||'—')]);
+  rows.push(['Operator env', esc(meta.operatorEnv||'—')]);
+  rows.push(['Operator wallet', esc(status.operator || meta.operator || '—')]);
+  rows.push(['Operator loaded', meta.operatorLoaded ? 'yes' : 'no']);
+  rows.push(['Telegram chat', esc(meta.telegramChatId||'(main chat)')]);
+  rows.push(['Active', String(meta.active!==false)]);
+  rows.push(['Mode / tilt', esc((status.mode||'custom')+(status.tilt?' / '+status.tilt:''))]);
+  rows.push(['Last price', st.lastPrice!=null?esc(price(st.lastPrice)):'—']);
+  rows.push(['Last tick', ts(st.lastTickTs)]);
+  rows.push(['Last rebalance', ts(st.lastRebalanceTs)]);
+  rows.push(['Rebalance count', String(st.rebalanceCount||0)]);
+  rows.push(['Actions today', String(st.dayActions||0)]);
+  if(st.autoSwap && typeof st.autoSwap==='object') rows.push(['Auto-swap', 'target '+money(st.autoSwap.targetUsdc)+' · '+(st.autoSwap.swapsToday||0)+' today']);
+  else rows.push(['Auto-swap', esc(String(st.autoSwap))]);
+  rows.push(['Base position mint', esc(st.positionMint||'—')]);
+  if(st.askWall && typeof st.askWall==='object') rows.push(['Ask-wall mint', esc(st.askWall.mint||'—')]);
+  else rows.push(['Ask wall', esc(String(st.askWall))]);
+  if(st.solVault && typeof st.solVault==='object') rows.push(['SOL-vault mint', esc(st.solVault.mint||'—')]);
+  else rows.push(['SOL vault', esc(String(st.solVault))]);
+  if(costs && !costs.error){ rows.push(['SOL price (cost calc)', costs.solPriceUsd!=null?money(costs.solPriceUsd):'—']); rows.push(['Avg cost / tx', costs.avgPerTxUsd!=null?money(costs.avgPerTxUsd):'—']); rows.push(['Cost tracking since', ts(costs.trackingSince)]); }
+  if(earnings && !earnings.error && earnings.prices){ rows.push(['CLKN price (USD)', earnings.prices.clknUsd!=null?money(earnings.prices.clknUsd):'—']); rows.push(['SOL price (USD)', earnings.prices.solUsd!=null?money(earnings.prices.solUsd):'—']); rows.push(['Earning since', ts(earnings.since)]); }
+
+  let cfgRows = '';
+  try { cfgRows = '<div style="margin-top:10px"><span class="lbl">raw config:</span><br>'+esc(JSON.stringify(cfg, null, 1))+'</div>'; } catch(_){}
+
+  const body = rows.map(([k,v])=>`<div><span class="lbl">${k}:</span> <b>${v}</b></div>`).join('') + cfgRows;
+  return '<details class="adv"><summary>⚙ ADVANCED · raw status / ticks / config</summary><div class="adv-body">'+body+'</div></details>';
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+document.getElementById('keyInput').addEventListener('keydown', e=>{ if(e.key==='Enter') saveKeyAndLoad(); });
+loadStoredKey();
+</script>
+</body>
+</html>
