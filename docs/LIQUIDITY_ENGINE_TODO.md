@@ -92,3 +92,27 @@ this turns supply into depth, distributes into strength (not weakness), and comp
 - [ ] Pricing specifics (setup / monthly / holder‑gate threshold / perf‑fee %).
 - [ ] Which to build first: equal‑pools rebalancer, multi‑tenant, or the Bootstrap tier?
 - [ ] Should the CLKN auto‑swap stay paused, or re‑enable with a higher SOL floor so both pools and the SOL arb stay funded?
+
+---
+
+## 🎯 BRAND STANDARD — applies to EVERY product (not just this one)
+
+> "Everything needs to be easy to understand. Every product we build we need a beginner's
+> guide and an advanced guide. We have to meet people where they are and help them. This is
+> our brand." — the directive, captured.
+
+- [ ] **Every product ships with a Beginner's Guide AND an Advanced Guide.** Plain‑English
+      beginner track + a depth track for operators. (Consider adding this to `CLAUDE.md` so
+      every future session enforces it.)
+- [ ] **Default to readable.** No scientific notation, no jargon without explanation; show
+      dollars + token amounts, not raw units. (Fixed for `/liquidity`.)
+- [ ] **Meet people where they are** — low/tiny‑budget on‑ramps, no gatekeeping to learn,
+      education built into every tool.
+- [ ] **Audit / sweep existing products** to make sure each has both guide tracks and is
+      genuinely easy to understand.
+
+### Done for the Liquidity Engine (this brand standard, applied)
+- [x] `/liquidity` Telegram post rewritten: **dollar depth + token amounts**, no e‑notation.
+- [x] `/liquidity-engine` page now has a **🐣 Beginner's Guide** and a **🎓 Advanced Guide**
+      (expandable tracks on the page).
+- [x] X + Telegram **teaser** posted (what we're building with liquidity management).
