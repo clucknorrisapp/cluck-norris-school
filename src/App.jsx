@@ -2409,6 +2409,8 @@ const LIBRARY_GLOSSARY = [
   { term: "AMM", def: "Automated Market Maker. A smart contract that automatically prices tokens using a mathematical formula instead of an order book." },
   { term: "APR", def: "Annual Percentage Rate. Simple interest rate over a year, not accounting for compounding." },
   { term: "APY", def: "Annual Percentage Yield. The return on an investment accounting for compounding. Higher than APR whenever interest compounds more than once a year — equal to APR if it doesn't compound." },
+  { term: "Ask", def: "A SELL order placed ABOVE the current price. As price rises into it, it sells the token to buyers. In a liquidity pool, a range set above the current price holds the token as asks — a single-sided 'ask wall' (or 'sell wall') that sells into rallies and turns buy pressure into healthy distribution." },
+  { term: "Bid", def: "A BUY order placed BELOW the current price. As price falls into it, it buys the token from sellers. In a liquidity pool, a range set below the current price holds the quote currency (e.g. USDC) as bids — single-sided 'buy support' that catches dips." },
   { term: "Bonding Curve", def: "A mathematical price mechanism where buying increases price and selling decreases price automatically." },
   { term: "CEX", def: "Centralized Exchange. A company-run trading platform (Coinbase, Binance) that holds your funds and requires KYC." },
   { term: "Cold Wallet", def: "A hardware wallet that stores private keys offline. Much more secure than hot wallets for large amounts." },
