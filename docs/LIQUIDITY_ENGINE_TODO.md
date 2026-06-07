@@ -107,9 +107,14 @@
         pool can stand one up from token + SOL/USDC. Until then, a project's pool must be created
         manually (on Orca) before the vault can manage it. Most Bags tokens graduate to METEORA,
         not Orca — so a brand-new Orca pool will usually be needed.
-- [~] **Client dashboard** — `/engine-dashboard` LIVE (key-gated): multi-project cards (status,
-      positions w/ role+$depth via new `/vault/positions`, costs, earnings/PnL, float; beginner
-      default + Advanced details). NEXT: wallet-signature auth for client (vs admin key) + controls.
+- [x] **Operator dashboard** — `/engine-dashboard` LIVE (admin-key): all-projects cards (status,
+      positions w/ role+$depth via `/vault/positions`, costs, earnings/PnL, float; beginner default
+      + Advanced details).
+- [x] **Client portal** — `/portal` LIVE: wallet-signature login (ed25519 sig → 12h HMAC token, no
+      admin key), per-project owner view + pause/resume. Backend (`/vault/client/*`) security-tested
+      (no-token 401, non-owner 403, bad-sig 401). Each project gets an `ownerWallet`. NEXT: more
+      client controls (mode/config), multi-wallet support beyond Phantom. NEEDS: register each
+      owner's wallet (ROSE owner wallet still to be set by operator).
 - [ ] **Guided onboarding flow** — create dedicated wallet → fund float → set token + targets → choose tier → go (Hatchery‑style UX).
 - [ ] **Pricing / billing** — CLKN setup + monthly, holder‑gate, optional perf fee.
 - [ ] **Self‑hosted agent package** — deployable agent + client config (we touch nothing).
