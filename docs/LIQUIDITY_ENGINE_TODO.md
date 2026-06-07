@@ -116,3 +116,21 @@ this turns supply into depth, distributes into strength (not weakness), and comp
 - [x] `/liquidity-engine` page now has a **🐣 Beginner's Guide** and a **🎓 Advanced Guide**
       (expandable tracks on the page).
 - [x] X + Telegram **teaser** posted (what we're building with liquidity management).
+
+### Late-session fixes & state (latest)
+- [x] **Reinvestment-alert spam fixed** — the buy poller now skips the MM operator wallet's
+      own ops (they were posting as "community reinvestment"). Watch to confirm it's fully quiet.
+- [x] **Ask wall strengthened & relocated** — moved from the thin 0.65% pool (stale price,
+      mis-behaving) into the deep 0.02% pool (real price, where Jupiter routes buyers); set
+      `askWallClknFraction:0.9`; rebuilt as ~2.16M CLKN single-sided asks above price. Funded
+      by CLKN only (no USDC), as intended. (Terminology: ASK = sell above price = sells as
+      buyers push price up = the engine; BID = buy below price = buy support.)
+- [x] **Ask vs Bid added to lessons** — glossary entries + a recurring Cluck's Lesson topic.
+- [ ] **Buy support still needs USDC to deepen** — only ~$7 free USDC; it deepens naturally as
+      the ask wall sells into buys (accumulates USDC), or add USDC / convert a little SOL.
+- [ ] **Add a deploy-idle-CLKN trigger to the ask wall** so it auto-grows as CLKN is added
+      (today it only re-centers on price moves / migration). Mirror of the SOL deploy trigger.
+- [ ] **Full LP Lab lesson on Ask vs Bid** (supervised — needs quiz mirroring into
+      `data/question-bank.json` per the question-bank note).
+- [ ] Revisit premium-fee ask wall (0.65%) once pools are deeper — for now 0.02% is correct
+      (real price + actually gets routed/filled).
