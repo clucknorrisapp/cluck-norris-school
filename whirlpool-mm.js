@@ -157,7 +157,7 @@ router.get("/vault/sol-tick", async (req, res) => {
 // (swap SOL→USDC toward target). DRY RUN unless run=1.
 router.get("/vault/rebalance", async (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
-  try { res.json(await vault.rebalanceInventory({ dryRun: req.query.run !== "1" })); }
+  try { res.json(await vault.rebalancePools({ dryRun: req.query.run !== "1" })); }
   catch (e) { res.status(500).json({ error: e.message || "rebalance failed" }); }
 });
 
