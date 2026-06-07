@@ -987,7 +987,8 @@ async function liquidityReply(chatId, replyTo) {
     if (!r.positions.length) { tgSend(chatId, `📊 No active ${sym} liquidity positions at the moment.`, replyTo); return; }
     let m = `📊 <b>${sym} Liquidity Engine — live depth</b>\n<i>powered by Cluck Norris</i>\n\n`;
     for (const p of r.positions) {
-      const shape = p.lower >= p.current * 0.999 ? `upside asks (${sym})`
+      const shape = p.role === "askwall" ? `ask wall · upside ${sym}`
+                  : p.lower >= p.current * 0.999 ? `upside asks (${sym})`
                   : p.upper <= p.current * 1.001 ? "buy support"
                   : "two-sided";
       const quoteStr = p.quoteSymbol === "USDC" ? money(p.quoteAmount) : (tok(p.quoteAmount) + " SOL");
@@ -1004,7 +1005,8 @@ async function liquidityReply(chatId, replyTo) {
       const cm = whirlpoolMM.vault.listModes(projectId).current;
       if (cm && cm.mode && cm.mode !== "custom") m += `\n🎛️ Mode: <b>${cm.mode}${cm.tilt ? " · " + cm.tilt : ""}</b>`;
     } catch (_) { /* mode line is best-effort */ }
-    m += `\n\n${r.positions.length} active position${r.positions.length > 1 ? "s" : ""} — real depth, real fills, no fake volume. 🐔\n${TG_PUBLIC_BASE}/liquidity`;
+    const poolCount = new Set(r.positions.map((p) => p.pair)).size;
+    m += `\n\n${r.positions.length} position${r.positions.length > 1 ? "s" : ""} across ${poolCount} pool${poolCount > 1 ? "s" : ""} — real depth, real fills, no fake volume. 🐔\n${TG_PUBLIC_BASE}/liquidity`;
     tgSend(chatId, m, replyTo);
   } catch (e) {
     tgSend(chatId, "📊 Couldn't load liquidity positions right now — try again shortly.", replyTo);
