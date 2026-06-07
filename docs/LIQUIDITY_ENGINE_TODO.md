@@ -33,11 +33,18 @@
   - [ ] Target equal value across managed pools (configurable split).
   - [ ] Bidirectional SOL↔USDC + **buy CLKN back** with accumulated quote; never sell CLKN unless explicitly enabled.
   - [ ] Fold the existing "deploy staged USDC" / "deploy available SOL" triggers into one value‑targeting allocator.
-- [ ] **Multi‑tenant refactor** (makes it sellable)
-  - [ ] Per‑project config object (token, quotes, pools, operator, strategy, guardrails).
-  - [ ] Per‑project state namespace (generalize the `sol_` prefix pattern; preserve live CLKN state on migration).
-  - [ ] Scheduler loops over active projects (staggered for RPC limits).
-  - [ ] Per‑project key management (encrypted keystore for managed; self‑hosted option for trust).
+- [ ] **Multi‑tenant refactor** (makes it sellable) — staged; CLKN stays live & untouched throughout.
+  - [x] **Stage 1 — project context layer (DONE, live, zero behavior change).** Project registry
+        (built‑in `clkn` uses LEGACY kv keys + `MM_OPERATOR_SECRET` = byte‑for‑byte unchanged;
+        others get `wpVaultConfig:<id>`/`wpVaultState:<id>` + own operator env). `getConfig/
+        setConfig/getState/setState/operator` take optional `projectId` (default clkn).
+        `operatorPubkeys()` + poller skips ALL managed wallets. Gated `/vault/projects` CRUD.
+  - [ ] **Stage 2 — generalize the engine** (`orca-whirlpools.js`): take token + quote mints per
+        call instead of hardcoded CLKN (CLKN stays the default); rename internal `clkn*` → `token*`.
+  - [ ] **Stage 3 — scheduler loops over active projects** (staggered for RPC limits).
+  - [ ] **Stage 4 — per‑project admin**: `?project=` on status/config/mode/costs/earnings; onboarding.
+  - [ ] **Stage 5 — key management**: per‑project operator env (self‑hosted) vs encrypted keystore
+        in /data (managed). DECISION FORK — settle when we reach it.
 - [ ] **Client dashboard** — per‑project depth / fees / balance / controls; wallet‑signature auth.
 - [ ] **Guided onboarding flow** — create dedicated wallet → fund float → set token + targets → choose tier → go (Hatchery‑style UX).
 - [ ] **Pricing / billing** — CLKN setup + monthly, holder‑gate, optional perf fee.
