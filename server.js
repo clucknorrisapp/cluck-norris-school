@@ -5607,6 +5607,11 @@ app.get("/liquidity", (req, res) => {
   res.sendFile(join(__dirname, "public", "liquidity.html"));
 });
 
+// Liquidity Engine — product / education / platform page (the flagship pitch).
+app.get("/liquidity-engine", (req, res) => {
+  res.sendFile(join(__dirname, "public", "liquidity-engine.html"));
+});
+
 // Security Coop — wallet permission check / approval revoker.
 app.get("/security-coop", (req, res) => {
   res.sendFile(join(__dirname, "public", "security-coop.html"));
