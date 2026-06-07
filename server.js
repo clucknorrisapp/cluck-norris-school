@@ -906,22 +906,25 @@ function tgCommandReply(cmd, arg) {
 // /liquidity — public, sanitized snapshot of the Liquidity Engine's positions.
 // Shows only pairs / ranges / in-range — never the wallet, balances, or sizes.
 async function liquidityReply(chatId, replyTo) {
-  const fmtP = (n) => (!isFinite(n) || n === 0) ? "?" : (Math.abs(n) < 0.001 ? n.toExponential(3) : n.toPrecision(5));
+  const money = (n) => { n = Number(n) || 0; if (n >= 100) return "$" + Math.round(n).toLocaleString(); if (n >= 1) return "$" + n.toFixed(2); return "$" + n.toFixed(4); };
+  const tok = (n) => { n = Number(n) || 0; if (n >= 1e6) return (n / 1e6).toFixed(2) + "M"; if (n >= 1e3) return (n / 1e3).toFixed(1) + "K"; return n.toLocaleString(undefined, { maximumFractionDigits: n < 1 ? 4 : 2 }); };
   try {
     const r = await whirlpoolMM.vault.publicPositions();
     if (!r.enabled) { tgSend(chatId, "📊 The Liquidity Engine isn't running right now.", replyTo); return; }
     if (!r.positions.length) { tgSend(chatId, "📊 No active liquidity positions at the moment.", replyTo); return; }
     let m = "📊 <b>Cluck Norris Liquidity Engine — live depth</b>\n\n";
     for (const p of r.positions) {
-      const quote = p.pair.split("/")[1] || "";
-      const shape = p.lower >= p.current * 0.999 ? "upside asks"
+      const shape = p.lower >= p.current * 0.999 ? "upside asks (CLKN)"
                   : p.upper <= p.current * 1.001 ? "buy support"
                   : "two-sided";
-      m += `• <b>${p.pair}</b> · ${shape}\n   ${fmtP(p.lower)} → ${fmtP(p.upper)} ${quote} (now ${fmtP(p.current)}) ${p.inRange ? "🟢 in range" : "⚪ standing by"}\n`;
+      const quoteStr = p.quoteSymbol === "USDC" ? money(p.quoteAmount) : (tok(p.quoteAmount) + " SOL");
+      m += `• <b>${p.pair}</b> · ${shape} ${p.inRange ? "🟢" : "⚪"}\n`;
+      m += `   <b>${money(p.valueUsd)}</b> depth — ${tok(p.clknAmount)} CLKN + ${quoteStr}\n`;
     }
-    const vol24 = fmtUsdShort(await getClkn24hVolume());
-    if (vol24) m += `\n📈 24h volume: <b>${vol24}</b>`;
-    m += `\n\n${r.positions.length} active position${r.positions.length > 1 ? "s" : ""} providing real depth — real fills, no fake volume. 🐔\n${TG_PUBLIC_BASE}/liquidity`;
+    const vol = fmtUsdShort(await getClkn24hVolume());
+    m += `\n💧 <b>Total depth: ${money(r.totalUsd)}</b>`;
+    if (vol) m += `  ·  📈 24h vol: <b>${vol}</b>`;
+    m += `\n\n${r.positions.length} active position${r.positions.length > 1 ? "s" : ""} — real depth, real fills, no fake volume. 🐔\n${TG_PUBLIC_BASE}/liquidity`;
     tgSend(chatId, m, replyTo);
   } catch (e) {
     tgSend(chatId, "📊 Couldn't load liquidity positions right now — try again shortly.", replyTo);
