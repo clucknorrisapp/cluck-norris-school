@@ -2455,11 +2455,17 @@ app.get("/api/tg-test", async (req, res) => {
     ? String(req.query.text).slice(0, 3500)
     : "🐔 Heads up, flock — running a quick test on the bot. Ignore any test posts; back to normal shortly.";
   const silent = req.query.loud !== "1"; // silent by default so a test doesn't ping everyone
+  // Target chat: explicit &chat=, or &project= (resolve that project's room), else default.
+  let chatId = process.env.TELEGRAM_CHAT_ID;
+  if (req.query.chat) chatId = String(req.query.chat);
+  else if (req.query.project) {
+    try { const p = whirlpoolMM.vault.getProject(String(req.query.project)); if (p && p.telegramChatId) chatId = p.telegramChatId; } catch (_) {}
+  }
   try {
     const r = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        chat_id: process.env.TELEGRAM_CHAT_ID, text,
+        chat_id: chatId, text,
         parse_mode: "HTML", disable_web_page_preview: true, disable_notification: silent,
       }),
     });
