@@ -1100,6 +1100,9 @@ async function welcomeNewMembers(msg) {
   const chatId = msg.chat && msg.chat.id;
   const members = (msg.new_chat_members || []).filter(m => m && !m.is_bot);
   if (!chatId || !members.length) return;
+  // Don't push the Cluck Norris guide into another project's room (e.g. ROSE). The CLKN
+  // welcome only fires in the CLKN room + general groups, never a registered non-CLKN room.
+  if (vaultProjectForChat(chatId) !== "clkn") return;
   const now = Date.now(), last = welcomeCooldown.get(chatId) || 0;
   if (now - last < WELCOME_COOLDOWN_MS) return;            // anti-spam on join waves
   welcomeCooldown.set(chatId, now);
