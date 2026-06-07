@@ -28,11 +28,17 @@ function proj(req) { return (req.query.project || (req.body && req.body.project)
 const router = express.Router();
 router.use(express.json());
 
-// GET /api/whirlpool/pools — every CLKN/USDC + CLKN/SOL Whirlpool, with fee tier,
-// tick spacing, current CLKN price, and whether the pool is empty (no depth).
+// GET /api/whirlpool/pools[?token=MINT&symbol=SYM] — every USDC/SOL Whirlpool for the
+// token (defaults to CLKN), with fee tier, tick spacing, current price, and whether the
+// pool is empty. Also a feasibility check for onboarding: an empty list means the token
+// has NO Orca pool yet (it must be created before the engine can manage it).
 router.get("/pools", async (req, res) => {
   try {
-    res.json({ pools: await wp.discoverPools() });
+    const tok = req.query.token && isPubkey(req.query.token)
+      ? { mint: String(req.query.token), symbol: String(req.query.symbol || "TOKEN").toUpperCase().slice(0, 10), quoteMints: [wp.USDC_MINT, wp.WSOL_MINT] }
+      : undefined;
+    const pools = await wp.discoverPools(tok);
+    res.json({ token: tok ? tok.mint : wp.CLKN_MINT, hasOrcaPools: pools.length > 0, pools });
   } catch (e) {
     console.error("[whirlpool] pools failed:", e);
     res.status(502).json({ error: e.message || "Could not load pools" });
