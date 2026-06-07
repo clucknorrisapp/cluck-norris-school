@@ -195,6 +195,24 @@ Status: user marinating — wants more thought before we build. Don't implement 
      reserve); if the crash never comes that capital sat idle — so size as INSURANCE, not bulk;
      and it's a conviction/bullish posture (opt-in Accumulation tilt for the sold product).
 
+### ✅ AUTHORITATIVE LIVE POSTURE FOR CLKN *(user-confirmed 2026‑06 — don't second-guess)*
+
+**Asymmetric by design: thick up / thin down / reactive crash buyback.**
+- **Upside ask wall = THICK** (`askWallClknFraction: 0.9`, intentionally). A big BUY walks
+  through more CLKN asks → less price impact / smoother fills, distributes token into real
+  demand, accumulates quote. **Keep it thick.**
+- **Downside bid = LIGHT, on purpose.** Don't pre-commit much USDC to the opposite (bid) side.
+  A big SELL hits thinner liquidity → dumpers eat more slippage/fees, and no USDC is locked
+  down there.
+- **Crashes handled REACTIVELY** — keep reserve (free dry powder) and buy back on the dip with
+  own/set-aside funds, on the operator's terms. The autonomous equivalent = a crash-response
+  trigger ("fast drop >X% → deploy a slice of reserve as bids / buy back"). The deep dormant
+  catch ladder (above) is the OPTIONAL hands-off version, NOT the default.
+- **This refines/supersedes the earlier "buy support should be deeper" note:** buy support
+  should exist and be reasonable, but the engine is deliberately upside-weighted and the bulk of
+  crash-catching is reactive reserve, NOT a deep pre-placed bid wall. "Keep it light" = applies
+  to the DOWNSIDE, not the upside ask wall.
+
 ---
 
 ## ❓ Open decisions for review
