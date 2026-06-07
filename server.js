@@ -461,6 +461,7 @@ const EDU_TOPICS = [
   "How liquidity providers earn fees and what drives the yield",
   "Concentrated liquidity: tighter ranges, bigger fees, more risk",
   "Price bins and ticks: how modern LP ranges work",
+  "Asks vs bids — the two sides of a market: an ASK is a sell order ABOVE the current price (it sells as price rises); a BID is a buy order BELOW the price (it buys as price falls). In an LP, a range above price holds the token (asks), a range below holds the quote (bids). Single-sided liquidity lets you provide just one side — e.g. a token 'ask wall' that sells into rallies and turns buy pressure into healthy distribution, no fake volume needed.",
   "Active vs passive LP strategies and who each suits",
   "How to read a pool's liquidity, volume, and fee numbers",
   "What a bonding curve is and how token graduation works",
