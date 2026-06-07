@@ -146,6 +146,7 @@
     <a href="#honest">REAL vs WASH</a>
     <a href="#run">HOW IT'S RUN</a>
     <a href="#pricing">PRICING</a>
+    <a href="#risk">RISK</a>
     <a href="#proof">LIVE PROOF</a>
     <a href="#access">EARLY ACCESS</a>
   </div>
@@ -335,6 +336,34 @@
       <li class="yes"><strong>Operators who want it hands-off</strong> — fund a float, set guardrails, let it run, watch the dashboard.</li>
       <li class="no"><strong>Anyone wanting fake volume.</strong> We don't sell that, and we'll tell you why it'll hurt you. Wrong shop.</li>
     </ul>
+  </div>
+
+  <!-- RISK / THE BIG-SELL SCENARIO -->
+  <div class="section" id="risk" style="border-color:rgba(239,68,68,0.35)">
+    <div class="section-title" style="color:#FCA5A5; border-color:rgba(239,68,68,0.25)">⚠️ RISK — AND THE BIG-SELL SCENARIO (READ THIS)</div>
+    <p>Real liquidity means <b>you are a real counterparty.</b> That's the honest version of this business — and it carries honest risk. We'd rather you understand it up front than learn it the hard way.</p>
+
+    <div class="callout warn" style="margin-top:6px">
+      <b>🐣 Beginner's version:</b> When you provide liquidity, your money sits in the pool ready to trade. If someone makes a <b>huge sell</b>, the engine buys their tokens (that's your buy-support doing its job — it cushions the price). After a big sell you'll be holding <b>more of the token and less cash</b>, at a lower price. The chart didn't crash as hard <i>because of you</i> — but now you have to <b>rebuild</b>. That's why we keep a cash reserve on the side and start small.
+    </div>
+
+    <p style="margin-top:14px"><b>🎓 The full picture.</b> Concentrated liquidity is powerful precisely because it's <i>tight</i> — most of your depth sits right around the current price, so normal trades fill with low slippage. The trade-off:</p>
+    <ul>
+      <li><strong>A large sell can buy through your quote side.</strong> The bid depth (USDC/SOL) gets consumed converting into token. You end up <strong>token-heavy with depleted quote</strong> — you bought the dip, on purpose, as the market maker.</li>
+      <li><strong>You defended the price, but the book is now lopsided.</strong> The price didn't free-fall (that's the point of depth), but your two-sided machine is temporarily one-sided and needs to be <strong>rebuilt</strong>.</li>
+      <li><strong>This is impermanent loss / LVR in its sharpest form</strong> — plus ordinary market risk if the token keeps falling while you hold the inventory.</li>
+    </ul>
+
+    <div class="callout info" style="margin-top:6px">
+      <b>How we manage it (and how you should too):</b>
+      <ul style="margin:8px 0 0">
+        <li><b>Dry-powder reserve.</b> We deliberately keep a cash reserve (SOL + USDC) <i>out</i> of the pools at all times. A big sell can't drain everything — there's always a float held back to rebuild with.</li>
+        <li><b>Recovery mode — sell tokens back into strength, never dump.</b> After a big sell you're holding extra token. The recovery play is to <b>raise single-sided CLKN asks above the price</b> at higher utilization, so as buyers return you <b>convert that inventory back into quote at rising prices</b> — rebuilding the cash side without ever market-dumping. The same supply that absorbed the sell becomes the supply that rebuilds the book.</li>
+        <li><b>Start small, scale with understanding.</b> Tighter ranges = more fees but more big-sell exposure; wider ranges = safer but thinner fees. We tune this with you, not for a brochure number.</li>
+      </ul>
+    </div>
+
+    <p class="muted" style="margin-top:14px">None of this is financial advice. Providing liquidity can lose money — through impermanent loss, a sustained downtrend while you hold inventory, or a large sell that leaves you token-heavy and needing to rebuild. We teach every bit of it honestly in the <a class="xref" style="color:#FCD34D" href="/">LP Lab</a> before you put a dollar to work. We provide genuine market-making depth; we do not and will not manufacture fake volume.</p>
   </div>
 
   <!-- EARLY ACCESS CTA -->
