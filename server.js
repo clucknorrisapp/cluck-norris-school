@@ -10101,7 +10101,11 @@ async function notifyClknSell(trade, tx, pool, usdValue, HELIUS_KEY) {
 
 // In-memory dedupe: same signature can appear under multiple pools (Jupiter route
 // touching all of them). Don't post the same buy twice. TTL'd by tx-count cap.
-const recentlyNotifiedSigs = new Set();
+// Already-announced signatures. PERSISTED across restarts — otherwise every deploy
+// (which restarts the server) wipes this in-memory set and the poller re-announces
+// the most recent buy/sell it had already posted (the "same reinvestment every update"
+// bug). Loaded from the volume on boot, rewritten as new sigs are recorded.
+const recentlyNotifiedSigs = new Set(kv.get("buyNotifiedSigs", []));
 function rememberSig(sig) {
   recentlyNotifiedSigs.add(sig);
   // Keep set bounded — drop oldest if it grows past 1000 entries
@@ -10109,6 +10113,7 @@ function rememberSig(sig) {
     const first = recentlyNotifiedSigs.values().next().value;
     recentlyNotifiedSigs.delete(first);
   }
+  try { kv.set("buyNotifiedSigs", [...recentlyNotifiedSigs]); } catch (_) {}
 }
 
 // Does an enhanced-API tx actually carry the token-balance deltas detectClknTrade
