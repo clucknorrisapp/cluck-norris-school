@@ -129,6 +129,15 @@ router.get("/vault/status", async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message || "status failed" }); }
 });
 
+// GET /api/whirlpool/vault/costs?key=… — PRIVATE operational-cost readout: tx
+// fees the engine has paid moving its own positions (today + lifetime, SOL + USD).
+// Gated like the rest of the vault admin (404 without the key); never public.
+router.get("/vault/costs", async (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  try { res.json(await vault.costs()); }
+  catch (e) { res.status(500).json({ error: e.message || "costs failed" }); }
+});
+
 // GET /api/whirlpool/vault/tick?key=…[&run=1] — run one cycle. Without run=1 it's
 // a DRY RUN (plans, signs nothing). With run=1 it may actually roll the position.
 router.get("/vault/tick", async (req, res) => {
