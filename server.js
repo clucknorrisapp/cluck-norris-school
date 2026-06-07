@@ -419,6 +419,64 @@ function recapTick() {
   }
 }
 
+// ── Daily locked-supply report ───────────────────────────────────────────────
+// PUBLIC community trust signal: how much CLKN is locked (removed from circulation),
+// updated daily with the change since the last report. Reads the real on-chain total
+// (Jupiter Lock + Streamflow + self-owned), not the broken owner=program query.
+const LOCK_REPORT_ENABLED = true;
+function fmtTokensShort(n) {
+  n = Number(n) || 0;
+  if (n >= 1e6) return (n / 1e6).toFixed(2) + "M";
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + "K";
+  return Math.round(n).toLocaleString();
+}
+// Build the locked-supply report message (+ data). Reads on-chain; does not post.
+async function buildLockReport() {
+  const HELIUS_KEY = process.env.HELIUS_API_KEY;
+  if (!HELIUS_KEY) return { ok: false, error: "no HELIUS_API_KEY" };
+  const rpcCall = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`);
+  const data = await getLockedSupply(CLKN_MINT, rpcCall);
+  if (!data || !data.success) return { ok: false, error: "lock read failed" };
+  const prev = kv.get("lockSnapshot", null);
+  const pct = data.pctOfSupply != null ? (data.pctOfSupply * 100).toFixed(2) + "%" : "—";
+  let deltaLine = "";
+  if (prev && typeof prev.tokens === "number") {
+    const d = data.totalLocked - prev.tokens;
+    deltaLine = Math.abs(d) >= 1
+      ? `\n${d > 0 ? "📈 +" : "📉 −"}${fmtTokensShort(Math.abs(d))} CLKN since last report`
+      : `\n• No change since last report`;
+  }
+  const bd = (data.breakdown || []).map(b => `   • ${b.label}: ${fmtTokensShort(b.tokens)} CLKN`).join("\n");
+  const msg =
+    `🔒 <b>CLKN Locked Supply</b>\n\n` +
+    `<b>${fmtTokensShort(data.totalLocked)} CLKN</b> locked — <b>${pct}</b> of supply\n` +
+    `Across <b>${data.lockCount}</b> lock account${data.lockCount === 1 ? "" : "s"}` +
+    (bd ? `\n${bd}` : "") +
+    deltaLine +
+    `\n\n🔒 Locked = removed from circulation — a long-term commitment to the project. Verify it yourself on Jupiter Lock:\nhttps://lock.jup.ag/token/${CLKN_MINT}`;
+  return { ok: true, data, msg };
+}
+async function notifyLockReport({ dryRun = false } = {}) {
+  const built = await buildLockReport();
+  if (!built.ok) return built;
+  if (!dryRun) {
+    await tgSend(process.env.TELEGRAM_CHAT_ID, built.msg);
+    kv.set("lockSnapshot", { tokens: built.data.totalLocked, ts: Date.now() });
+  }
+  return { ok: true, posted: !dryRun, ...built };
+}
+// Daily at 16:00 UTC (noon ET), minute-gated; persisted day-guard prevents repeats.
+let lastLockReportDay = kv.get("lockReportDay", -1);
+function lockReportTick() {
+  if (!LOCK_REPORT_ENABLED) return;
+  const now = new Date();
+  const day = now.getUTCFullYear() * 1000 + (now.getUTCMonth() * 31 + now.getUTCDate());
+  if (now.getUTCHours() === 16 && now.getUTCMinutes() < 2 && day !== lastLockReportDay) {
+    lastLockReportDay = day; kv.set("lockReportDay", day);
+    notifyLockReport().catch(e => console.warn("[LOCKS] daily report failed:", e.message));
+  }
+}
+
 // ── Daily educational posts ("Cluck's Lesson") ────────────────────────────
 // Hybrid: we own the topic list (drawn from the real curriculum — Incubator,
 // School of Hard Knocks, LP Lab, security); Claude writes each short lesson in
@@ -2359,6 +2417,19 @@ app.get("/api/recap-test", async (req, res) => {
   } catch (e) { return res.status(500).json({ success: false, error: e.message }); }
 });
 
+// Locked-supply report — dry-run the daily post (returns the computed report +
+// message); add &post=1 to actually fire it to the community chat. Gated.
+app.get("/api/lock-report-test", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const KEY = process.env.PREMIUM_ACCESS_KEY;
+  const provided = req.query.key || req.headers["x-premium-key"];
+  if (!KEY || provided !== KEY) return res.status(404).json({ error: "not_found" });
+  try {
+    const r = await notifyLockReport({ dryRun: req.query.post !== "1" });
+    return res.status(200).json(r);
+  } catch (e) { return res.status(500).json({ success: false, error: e.message }); }
+});
+
 // Telegram test message — fire a one-off custom post to the community chat,
 // gated by PREMIUM_ACCESS_KEY. Lets an operator send an arbitrary note (e.g.
 // "we're running a test") without shipping new content or a code change. The
@@ -2809,7 +2880,71 @@ app.post("/api/helius-tx", async (req, res) => {
   }
 });
 
-// -- Jupiter Lock -- hardcoded from lock.jup.ag --
+// A Helius JSON-RPC caller: rpcCall(id, method, params) — forwards params as given
+// (object for getTokenAccounts, array for getMultipleAccounts/getTokenSupply), so it
+// works with classifyAddressTypes and the DAS endpoints alike.
+function heliusRpcCall(HELIUS_URL) {
+  return async (id, method, params) => {
+    const r = await fetch(HELIUS_URL, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id, method, params }),
+    });
+    return r.json();
+  };
+}
+
+// Authoritative locked-supply reader for ANY mint. The naive approach (getTokenAccounts
+// by owner=lock program) returns 0 — Jupiter Lock holds tokens in escrow PDAs, not under
+// the program ID directly. Correct method (same as the Autopsy's 145M figure): list the
+// mint's token accounts, then classify each account's AUTHORITY by the program that owns
+// it; sum balances held under locker programs (Jupiter Lock / Streamflow) + self-owned
+// permanent locks. Returns total + % of supply + per-program breakdown + the biggest locks.
+async function getLockedSupply(mint, rpcCall) {
+  let decimals = 9, supplyUi = 0;
+  try {
+    const s = await rpcCall("locks-supply", "getTokenSupply", [mint]);
+    decimals = s?.result?.value?.decimals ?? 9;
+    supplyUi = parseFloat(s?.result?.value?.uiAmountString || s?.result?.value?.uiAmount || 0) || 0;
+  } catch (_) { /* fall back to defaults */ }
+
+  const accts = [];
+  for (let p = 1; p <= 5; p++) {
+    let r;
+    try { r = await rpcCall(`locks-tas-${p}`, "getTokenAccounts", { page: p, limit: 1000, mint, displayOptions: { showZeroBalance: false } }); }
+    catch (_) { break; }
+    const a = r?.result?.token_accounts || [];
+    if (!a.length) break;
+    accts.push(...a);
+    if (a.length < 1000) break;
+  }
+  const holders = accts
+    .map(a => ({ tokenAccount: a.address, authority: a.owner, tokens: (parseInt(a.amount || "0") || 0) / Math.pow(10, decimals) }))
+    .filter(h => h.tokens > 0);
+
+  const cls = await classifyAddressTypes(holders.map(h => h.authority), rpcCall);
+  let totalLocked = 0;
+  const byLabel = new Map();
+  const locks = [];
+  for (const h of holders) {
+    const c = cls.get(h.authority);
+    if (c && c.category === "locker") { // classifyAddressTypes maps Jupiter Lock / Streamflow / self-owned → "locker"
+      totalLocked += h.tokens;
+      byLabel.set(c.label, (byLabel.get(c.label) || 0) + h.tokens);
+      locks.push({ authority: h.authority, tokens: h.tokens, label: c.label });
+    }
+  }
+  locks.sort((a, b) => b.tokens - a.tokens);
+  return {
+    success: true, mint, decimals, supply: supplyUi,
+    totalLocked,
+    pctOfSupply: supplyUi > 0 ? totalLocked / supplyUi : null,
+    lockCount: locks.length,
+    breakdown: [...byLabel.entries()].map(([label, tokens]) => ({ label, tokens })).sort((a, b) => b.tokens - a.tokens),
+    topLocks: locks.slice(0, 10),
+  };
+}
+
+// -- Locked supply (Jupiter Lock + Streamflow + self-owned), read on-chain --
 app.get("/api/locks", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
@@ -2818,22 +2953,10 @@ app.get("/api/locks", async (req, res) => {
   const HELIUS_KEY = process.env.HELIUS_API_KEY;
   if (!mint) return res.status(400).json({ success: false, error: "Missing mint" });
   if (!HELIUS_KEY) return res.status(500).json({ success: false, error: "Missing HELIUS_API_KEY" });
-  const HELIUS_URL = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
   try {
-    const response = await fetch(HELIUS_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0", id: "locks",
-        method: "getTokenAccounts",
-        params: { page: 1, limit: 1000, mint, owner: JUPITER_LOCK_PROGRAM, displayOptions: { showZeroBalance: false } }
-      })
-    });
-    const data = await response.json();
-    console.log("<- Helius locks status:", response.status, JSON.stringify(data).slice(0, 300));
-    const accounts = data.result?.token_accounts || [];
-    const totalLocked = accounts.reduce((sum, a) => sum + (parseInt(a.amount) || 0), 0);
-    return res.status(200).json({ success: true, lockCount: accounts.length, totalLocked, locks: accounts.slice(0, 10) });
+    const rpcCall = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`);
+    const data = await getLockedSupply(mint, rpcCall);
+    return res.status(200).json(data);
   } catch (err) {
     console.error("Locks error:", err.message);
     return res.status(500).json({ success: false, error: err.message });
@@ -10389,6 +10512,7 @@ app.listen(PORT, () => {
     setInterval(marketCheckTick, 60 * 1000);
     // Daily Flow Recap — checked each minute, fires once per day at 00:00 UTC.
     setInterval(recapTick, 60 * 1000);
+    setInterval(lockReportTick, 60 * 1000);
     // Bags graduation watcher — every 3 min: alert near-bonding (85%) + capture
     // graduations into our own 48h record (independent of pump.fun flooding ST).
     setTimeout(gradWatcherTick, 12000);
