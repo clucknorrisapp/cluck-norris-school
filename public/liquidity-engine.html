@@ -139,6 +139,7 @@
   </div>
 
   <div class="quicklinks">
+    <a href="#guides">📚 GUIDES</a>
     <a href="#problem">THE PROBLEM</a>
     <a href="#difference">THE DIFFERENCE</a>
     <a href="#how">HOW IT WORKS</a>
@@ -160,6 +161,37 @@
       <div class="stat"><div class="stat-label">WASH TRADES</div><div class="stat-value" style="color:#6EE7B7">0</div><div class="stat-sub">by design</div></div>
     </div>
     <p class="muted" style="margin-top:12px">Verify independently: open the CLKN pools on <a class="xref" style="color:#93C5FD" href="https://dexscreener.com/solana/DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS" target="_blank">DexScreener</a>, or run <code>/liquidity</code> in the <a class="xref" style="color:#93C5FD" href="https://t.me/FireChicken007" target="_blank">Telegram</a> for a live depth snapshot. Better yet — run our own <a class="xref" style="color:#93C5FD" href="/autopsy">Token Autopsy</a> on CLKN: a wash bot would light it up. It won't.</p>
+  </div>
+
+  <!-- GUIDES: beginner + advanced (meet people where they are) -->
+  <div class="section" id="guides">
+    <div class="section-title">📚 GUIDES · START WHERE YOU ARE</div>
+    <p>Brand new to liquidity, or a seasoned operator? There's a track for each — because the Cluck Norris way is to <strong>meet you where you are and teach you up.</strong> Tap a guide to open it.</p>
+
+    <details style="border:1px solid rgba(16,185,129,0.32); border-radius:10px; margin:12px 0; background:rgba(16,185,129,0.04)">
+      <summary style="cursor:pointer; list-style:none; padding:14px 16px; font-family:'Oswald',sans-serif; font-weight:700; letter-spacing:1px; color:#6EE7B7; font-size:14px">🐣 BEGINNER'S GUIDE — "I'm new to liquidity"</summary>
+      <div style="padding:0 16px 16px; font-size:13.5px; color:#D1D5DB; line-height:1.75">
+        <p style="margin:8px 0"><b style="color:#6EE7B7">What's a liquidity pool?</b> Picture a shared pot holding two things — your token and USDC (or SOL). Every buy and sell trades against that pot. A <b>deep</b> pot = smooth, fair prices. A <b>thin</b> pot = every little trade yanks the price around. That yank is called <b>slippage</b>.</p>
+        <p style="margin:8px 0"><b style="color:#6EE7B7">Why does it matter?</b> Thin liquidity means a small buy spikes the price and a small sell tanks it. Buyers get scared off, the chart looks broken, and apps like Jupiter rank you last. Deep liquidity fixes all of that — <b>and you earn a small fee on every trade</b> that goes through your pot.</p>
+        <p style="margin:8px 0"><b style="color:#6EE7B7">What about "volume bots"?</b> They fake activity by trading with themselves — buying and selling to no one. It lies to your community, gets flagged by the apps, and does <b>nothing</b> for your actual pool. We don't do that. We add <b>real depth</b> that fills <b>real people</b>.</p>
+        <p style="margin:8px 0"><b style="color:#6EE7B7">"I only have a little."</b> Perfect place to start. Put a small slice of <em>your own token</em> in as a "sell wall" just above the price — that costs you <b>no</b> USDC or SOL. As people buy it, you collect USDC, and you use that to grow real two-sided liquidity. Your token turns into <b>permanent liquidity</b> instead of a one-time dump. That's the healthy way to bootstrap.</p>
+        <p style="margin:8px 0"><b style="color:#6EE7B7">How do I actually start?</b> Open the <a class="xref" style="color:#FCD34D" href="/liquidity">tool</a>, connect your wallet, pick your token + USDC, choose <b>Balanced</b>, enter a small amount, preview the exact tokens it'll use, and sign. <b>You hold your keys the whole time.</b> Or let our managed vault run it for you.</p>
+        <div class="callout good" style="margin-top:10px">First rule: there's real risk (impermanent loss, market moves). We teach it honestly before you put a dollar in — start small, learn the feel, scale when it makes sense.</div>
+      </div>
+    </details>
+
+    <details style="border:1px solid rgba(96,165,250,0.32); border-radius:10px; margin:12px 0; background:rgba(96,165,250,0.04)">
+      <summary style="cursor:pointer; list-style:none; padding:14px 16px; font-family:'Oswald',sans-serif; font-weight:700; letter-spacing:1px; color:#93C5FD; font-size:14px">🎓 ADVANCED GUIDE — "I run liquidity already"</summary>
+      <div style="padding:0 16px 16px; font-size:13.5px; color:#D1D5DB; line-height:1.75">
+        <p style="margin:8px 0"><b style="color:#93C5FD">Concentrated liquidity (Orca Whirlpools).</b> Place capital in a tight range around price for far deeper effective liquidity and higher fee capture than full-range. Pick fee tiers deliberately: a <b>tight tier (0.02%)</b> wins Jupiter routing and pulls real volume; a <b>wider tier (0.65–1%)</b> works as a premium ask-wall for selling into pumps.</p>
+        <p style="margin:8px 0"><b style="color:#93C5FD">Single-sided vs balanced.</b> A range entirely <em>above</em> price holds only your token (asks); entirely <em>below</em> holds only the quote (bids); straddling holds both. Orientation matters — your token can be tokenA or tokenB depending on the pair, and the range math flips accordingly.</p>
+        <p style="margin:8px 0"><b style="color:#93C5FD">The dual-pool arbitrage.</b> Run <b>token/USDC</b> and <b>token/SOL</b> at roughly equal value. SOL's own volatility constantly nudges them out of line; arbitrageurs trade them back together — real volume you earn fees on, generated by the market for free. Keep them balanced and the flywheel runs itself.</p>
+        <p style="margin:8px 0"><b style="color:#93C5FD">Inventory management.</b> Positions go stale as price moves, so <b>auto re-center</b> keeps depth on price. When a side runs low, <b>rebalance</b> (swap SOL↔USDC) to keep both pools funded; use accumulated quote to <b>buy the token back</b> and reload the walls. Don't sell the token to raise cash unless you're intentionally distributing.</p>
+        <p style="margin:8px 0"><b style="color:#93C5FD">The honest cost — IL / LVR.</b> Providing liquidity means you're picked off a little when price moves (loss-versus-rebalancing); <b>fees are what compensate you.</b> Tune range width and fee tier to balance fee income vs that bleed — tighter = deeper + more fees but more re-centering; wider = less maintenance but thinner. In choppy markets fees win; in hard trends you bleed a bit. Know which you're in.</p>
+        <p style="margin:8px 0"><b style="color:#93C5FD">Guardrails.</b> Anti-thrash interval, daily action caps, a price-gap anomaly guard, slippage caps per swap, per-fee-tier pools, and a one-flag kill switch. Autonomous, not reckless.</p>
+        <div class="callout info" style="margin-top:10px">Want the full course? The free <a class="xref" style="color:#93C5FD" href="/">LP Lab</a> — 12 lessons + 7 interactive tools (price impact, IL, fee breakeven, capital efficiency, bin visualizer, DCA, strategy matcher).</div>
+      </div>
+    </details>
   </div>
 
   <!-- THE PROBLEM -->
