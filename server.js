@@ -964,30 +964,44 @@ function tgCommandReply(cmd, arg) {
 
 // /liquidity — public, sanitized snapshot of the Liquidity Engine's positions.
 // Shows only pairs / ranges / in-range — never the wallet, balances, or sizes.
+// Which vault project a Telegram chat maps to (by registered telegramChatId) — so
+// /liquidity in the ROSE room shows ROSE, in the CLKN room shows CLKN. Default: clkn.
+function vaultProjectForChat(chatId) {
+  try {
+    const projs = whirlpoolMM.vault.listProjects();
+    for (const id of Object.keys(projs)) {
+      if (projs[id] && String(projs[id].telegramChatId || "") === String(chatId)) return id;
+    }
+  } catch (_) { /* fall through to default */ }
+  return "clkn";
+}
 async function liquidityReply(chatId, replyTo) {
   const money = (n) => { n = Number(n) || 0; if (n >= 100) return "$" + Math.round(n).toLocaleString(); if (n >= 1) return "$" + n.toFixed(2); return "$" + n.toFixed(4); };
   const tok = (n) => { n = Number(n) || 0; if (n >= 1e6) return (n / 1e6).toFixed(2) + "M"; if (n >= 1e3) return (n / 1e3).toFixed(1) + "K"; return n.toLocaleString(undefined, { maximumFractionDigits: n < 1 ? 4 : 2 }); };
   try {
-    const r = await whirlpoolMM.vault.publicPositions();
-    if (!r.enabled) { tgSend(chatId, "📊 The Liquidity Engine isn't running right now.", replyTo); return; }
-    if (!r.positions.length) { tgSend(chatId, "📊 No active liquidity positions at the moment.", replyTo); return; }
-    let m = "📊 <b>Cluck Norris Liquidity Engine — live depth</b>\n\n";
+    const projectId = vaultProjectForChat(chatId);
+    const proj = (whirlpoolMM.vault.listProjects() || {})[projectId] || {};
+    const sym = proj.symbol || "CLKN";
+    const r = await whirlpoolMM.vault.publicPositions(projectId);
+    if (!r.enabled) { tgSend(chatId, `📊 The ${sym} Liquidity Engine isn't running right now.`, replyTo); return; }
+    if (!r.positions.length) { tgSend(chatId, `📊 No active ${sym} liquidity positions at the moment.`, replyTo); return; }
+    let m = `📊 <b>${sym} Liquidity Engine — live depth</b>\n<i>powered by Cluck Norris</i>\n\n`;
     for (const p of r.positions) {
-      const shape = p.lower >= p.current * 0.999 ? "upside asks (CLKN)"
+      const shape = p.lower >= p.current * 0.999 ? `upside asks (${sym})`
                   : p.upper <= p.current * 1.001 ? "buy support"
                   : "two-sided";
       const quoteStr = p.quoteSymbol === "USDC" ? money(p.quoteAmount) : (tok(p.quoteAmount) + " SOL");
       m += `• <b>${p.pair}</b> · ${shape} ${p.inRange ? "🟢" : "⚪"}\n`;
-      m += `   <b>${money(p.valueUsd)}</b> depth — ${tok(p.clknAmount)} CLKN + ${quoteStr}\n`;
+      m += `   <b>${money(p.valueUsd)}</b> depth — ${tok(p.clknAmount)} ${sym} + ${quoteStr}\n`;
     }
-    const vol = fmtUsdShort(await getClkn24hVolume());
-    const organic = fmtOrganicScore(await getClknOrganicScore());
+    const vol = fmtUsdShort(await getClkn24hVolume(proj.tokenMint || CLKN_MINT_ADDR));
+    const organic = fmtOrganicScore(await getClknOrganicScore(proj.tokenMint || CLKN_MINT_ADDR));
     m += `\n💧 <b>Total depth: ${money(r.totalUsd)}</b>`;
     if (vol) m += `  ·  📈 24h vol: <b>${vol}</b>`;
     if (organic) m += `\n🪐 <b>Jupiter organic score: ${organic}</b> <i>(Jupiter's own measure of real, non-faked trading)</i>`;
     // Active engine mode (only when a named mode is applied — "custom" stays hidden).
     try {
-      const cm = whirlpoolMM.vault.listModes().current;
+      const cm = whirlpoolMM.vault.listModes(projectId).current;
       if (cm && cm.mode && cm.mode !== "custom") m += `\n🎛️ Mode: <b>${cm.mode}${cm.tilt ? " · " + cm.tilt : ""}</b>`;
     } catch (_) { /* mode line is best-effort */ }
     m += `\n\n${r.positions.length} active position${r.positions.length > 1 ? "s" : ""} — real depth, real fills, no fake volume. 🐔\n${TG_PUBLIC_BASE}/liquidity`;
@@ -10041,20 +10055,24 @@ async function getWalletStats(wallet, HELIUS_KEY) {
 }
 
 // Total CLKN 24h volume across all Solana pairs (DexScreener), cached 5 min.
-let cached24hVol = null, cached24hVolAt = 0;
-async function getClkn24hVolume() {
+let cached24hVol = null, cached24hVolAt = 0; // CLKN fast-path (back-compat)
+const vol24hByMint = new Map(); // mint -> { v, at } for other projects
+async function getClkn24hVolume(mint = CLKN_MINT_ADDR) {
   const now = Date.now();
-  if (cached24hVol !== null && now - cached24hVolAt < 5 * 60 * 1000) return cached24hVol;
+  const isClkn = mint === CLKN_MINT_ADDR;
+  if (isClkn && cached24hVol !== null && now - cached24hVolAt < 5 * 60 * 1000) return cached24hVol;
+  if (!isClkn) { const c = vol24hByMint.get(mint); if (c && now - c.at < 5 * 60 * 1000) return c.v; }
   try {
-    const res = await fetch(`https://api.dexscreener.com/token-pairs/v1/solana/${CLKN_MINT_ADDR}`);
+    const res = await fetch(`https://api.dexscreener.com/token-pairs/v1/solana/${mint}`);
     const data = await res.json();
     if (Array.isArray(data)) {
       let v = 0;
       for (const p of data) { const h = Number(p?.volume?.h24); if (Number.isFinite(h)) v += h; }
-      cached24hVol = v; cached24hVolAt = now;
+      if (isClkn) { cached24hVol = v; cached24hVolAt = now; } else { vol24hByMint.set(mint, { v, at: now }); }
+      return v;
     }
   } catch (e) { console.warn("[TELEGRAM] 24h volume fetch failed:", e.message); }
-  return cached24hVol;
+  return isClkn ? cached24hVol : ((vol24hByMint.get(mint) || {}).v ?? null);
 }
 // Compact USD: $123 / $4.5K / $1.2M. Returns null for non-finite input.
 function fmtUsdShort(n) {
@@ -10070,26 +10088,30 @@ function fmtUsdShort(n) {
 // Liquidity Engine is built to earn honestly (and the one wash-volume bots can't
 // fake). Cached 5 min. Returns { score, label } or null. Same v2 endpoint the
 // Token Autopsy uses for cross-verification.
-let cachedOrganic = null, cachedOrganicAt = 0;
-async function getClknOrganicScore() {
+let cachedOrganic = null, cachedOrganicAt = 0; // CLKN fast-path (back-compat)
+const organicByMint = new Map(); // mint -> { o, at }
+async function getClknOrganicScore(mint = CLKN_MINT_ADDR) {
   const now = Date.now();
-  if (cachedOrganic !== null && now - cachedOrganicAt < 5 * 60 * 1000) return cachedOrganic;
+  const isClkn = mint === CLKN_MINT_ADDR;
+  if (isClkn && cachedOrganic !== null && now - cachedOrganicAt < 5 * 60 * 1000) return cachedOrganic;
+  if (!isClkn) { const c = organicByMint.get(mint); if (c && now - c.at < 5 * 60 * 1000) return c.o; }
   try {
-    const res = await fetch(`https://lite-api.jup.ag/tokens/v2/search?query=${CLKN_MINT_ADDR}`, {
+    const res = await fetch(`https://lite-api.jup.ag/tokens/v2/search?query=${mint}`, {
       signal: AbortSignal.timeout(8000),
     });
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data) && data.length) {
-        const t = data.find((d) => d.id === CLKN_MINT_ADDR) || data[0];
+        const t = data.find((d) => d.id === mint) || data[0];
         if (t && t.organicScore != null) {
-          cachedOrganic = { score: Number(t.organicScore), label: t.organicScoreLabel || null };
-          cachedOrganicAt = now;
+          const o = { score: Number(t.organicScore), label: t.organicScoreLabel || null };
+          if (isClkn) { cachedOrganic = o; cachedOrganicAt = now; } else { organicByMint.set(mint, { o, at: now }); }
+          return o;
         }
       }
     }
   } catch (e) { console.warn("[TELEGRAM] organic score fetch failed:", e.message); }
-  return cachedOrganic;
+  return isClkn ? cachedOrganic : ((organicByMint.get(mint) || {}).o ?? null);
 }
 // "26.6 🟢 high" — colored by Jupiter's label. Returns null if unavailable.
 function fmtOrganicScore(o) {
