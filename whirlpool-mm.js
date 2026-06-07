@@ -161,6 +161,21 @@ router.get("/vault/rebalance", async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message || "rebalance failed" }); }
 });
 
+// GET /api/whirlpool/vault/swap?key=…&from=SOL&to=USDC&amount=315[&slippage=100][&run=1]
+// Ad-hoc swap between SOL/USDC/CLKN via Jupiter. DRY RUN unless run=1.
+router.get("/vault/swap", async (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  try {
+    res.json(await vault.manualSwap({
+      fromSym: String(req.query.from || "").toUpperCase(),
+      toSym: String(req.query.to || "").toUpperCase(),
+      amountUi: req.query.amount,
+      slippageBps: Number(req.query.slippage) || 100,
+      dryRun: req.query.run !== "1",
+    }));
+  } catch (e) { res.status(500).json({ error: e.message || "swap failed" }); }
+});
+
 // POST /api/whirlpool/vault/pause?key=… and /resume?key=… — kill switch.
 router.post("/vault/pause", (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
