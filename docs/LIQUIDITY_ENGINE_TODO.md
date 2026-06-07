@@ -44,10 +44,24 @@
         getPoolState/listPositions/suggestRanges` take the context; `quote/open/close` were
         already token-agnostic. Results keep `clkn*` aliases + add `token*` names → no consumer
         changes. Verified: CLKN identical; BONK discovers 9 Orca pools generically.
-  - [ ] **Stage 3 — scheduler loops over active projects** (staggered for RPC limits).
-  - [ ] **Stage 4 — per‑project admin**: `?project=` on status/config/mode/costs/earnings; onboarding.
+  - [x] **Stage 3 — project-scoped execution (DONE, live).** AsyncLocalStorage carries the
+        active `{ projectId, tok }` through each call tree, so the bare resolver calls scope to
+        the project (concurrency-safe; defaults clkn). All engine/mint sites use `tok()`. Exports
+        wrapped in `withProject`. Scheduler loops over every ACTIVE project whose operator key is
+        loaded (sequential = staggered). Verified: CLKN identical post-deploy.
+  - [x] **Stage 4 — per-project admin (DONE, live).** `?project=` on status/costs/earnings/tick/
+        wall-tick/sol-tick/rebalance/swap/pause/resume/config/mode. Public `/pools?token=` for a
+        feasibility check (`hasOrcaPools`).
   - [ ] **Stage 5 — key management**: per‑project operator env (self‑hosted) vs encrypted keystore
         in /data (managed). DECISION FORK — settle when we reach it.
+  - [ ] **Stage 6 — POOL BOOTSTRAP (needed for onboarding):** the engine currently REQUIRES an
+        existing Orca pool (it opens positions, and inits tick arrays on pristine pools, but does
+        NOT create the Whirlpool itself). Orca SDK supports pool creation (createPool /
+        createSplashPool / createConcentratedPool). Add: (a) non-custodial create-pool tx builder
+        for the `/liquidity` tool, and (b) an operator/auto path so onboarding a token with no
+        pool can stand one up from token + SOL/USDC. Until then, a project's pool must be created
+        manually (on Orca) before the vault can manage it. Most Bags tokens graduate to METEORA,
+        not Orca — so a brand-new Orca pool will usually be needed.
 - [ ] **Client dashboard** — per‑project depth / fees / balance / controls; wallet‑signature auth.
 - [ ] **Guided onboarding flow** — create dedicated wallet → fund float → set token + targets → choose tier → go (Hatchery‑style UX).
 - [ ] **Pricing / billing** — CLKN setup + monthly, holder‑gate, optional perf fee.
