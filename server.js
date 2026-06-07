@@ -10286,6 +10286,16 @@ async function pollSinglePool(pool, HELIUS_KEY) {
         continue;
       }
 
+      // Skip the MM vault's own operator wallet — its liquidity deploys/swaps are
+      // market-making, not community buys, and shouldn't post as "reinvestment".
+      const mmWallet = whirlpoolMM.vault.operatorPubkey && whirlpoolMM.vault.operatorPubkey();
+      if (trade.trader && mmWallet && trade.trader === mmWallet) {
+        console.log(`[TELEGRAM] Skipping MM vault op (liquidity management) · sig ${sig.slice(0,8)}`);
+        rememberSig(sig);
+        if (!blocked) advanceTo = sig;
+        continue;
+      }
+
       const usd = quoteUsdValue(trade);
       const quoteMeta = QUOTE_TOKENS[trade.quote.mint] || { symbol: '?' };
       const usdStr = usd == null ? "no USD" : "$" + usd.toFixed(4);
