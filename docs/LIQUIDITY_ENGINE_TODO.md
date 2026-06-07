@@ -43,7 +43,13 @@
 - [ ] **Pricing / billing** — CLKN setup + monthly, holder‑gate, optional perf fee.
 - [ ] **Self‑hosted agent package** — deployable agent + client config (we touch nothing).
 - [ ] **Trustless Mode** — on‑chain LP‑only delegate program (audited). The trust endgame.
-- [ ] **Pending‑fee readout** — show accrued (uncollected) fees so earnings are visible live.
+- [x] **Pending‑fee readout** — DONE. Real‑time uncollected fees per position via
+      `collectFeesQuote` (the on‑chain feeOwed checkpoint reads ~0 while still earning), plus
+      realized fees banked on each roll. Gated `/vault/earnings` + folded into `/vault/status`
+      with a `netPnlUsd` (fees earned − tx‑fee cost). PRIVATE.
+- [x] **Operational cost tracker** — DONE. Per‑tx fees accumulated (today + lifetime, SOL + USD)
+      in `/vault/costs` + `/vault/status`. PRIVATE. Good "true ongoing cost" proof for pitching
+      other groups; would flag a pricier venue (Meteora/Raydium).
 - [ ] **grant.html** — mirror the Liquidity Engine into the grant page for consistency.
 - [ ] **Make init+open atomic** — remove the tick‑array init/open RPC propagation race (self‑heals today, but cleaner atomic build later).
 
