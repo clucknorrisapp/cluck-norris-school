@@ -10459,10 +10459,10 @@ async function pollSinglePool(pool, HELIUS_KEY) {
         continue;
       }
 
-      // Skip the MM vault's own operator wallet — its liquidity deploys/swaps are
+      // Skip ANY managed vault's operator wallet — their liquidity deploys/swaps are
       // market-making, not community buys, and shouldn't post as "reinvestment".
-      const mmWallet = whirlpoolMM.vault.operatorPubkey && whirlpoolMM.vault.operatorPubkey();
-      if (trade.trader && mmWallet && trade.trader === mmWallet) {
+      const mmWallets = whirlpoolMM.vault.operatorPubkeys ? whirlpoolMM.vault.operatorPubkeys() : [whirlpoolMM.vault.operatorPubkey && whirlpoolMM.vault.operatorPubkey()].filter(Boolean);
+      if (trade.trader && mmWallets.includes(trade.trader)) {
         console.log(`[TELEGRAM] Skipping MM vault op (liquidity management) · sig ${sig.slice(0,8)}`);
         rememberSig(sig);
         if (!blocked) advanceTo = sig;

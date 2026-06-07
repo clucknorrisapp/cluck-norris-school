@@ -228,6 +228,35 @@ router.post("/vault/mode", (req, res) => {
   } catch (e) { res.status(400).json({ error: e.message || "mode failed" }); }
 });
 
+// GET /api/whirlpool/vault/projects?key=… — list registered projects (multi-tenant).
+// "clkn" is the built-in default (legacy keys + MM_OPERATOR_SECRET); others are added.
+router.get("/vault/projects", (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  try {
+    const projects = vault.listProjects();
+    // Annotate each with whether its operator key is loaded (never expose the key).
+    const out = {};
+    for (const [id, p] of Object.entries(projects)) out[id] = { ...p, operatorLoaded: !!vault.operatorPubkey(id), operator: vault.operatorPubkey(id) };
+    res.json({ projects: out });
+  } catch (e) { res.status(500).json({ error: e.message || "projects failed" }); }
+});
+
+// POST /api/whirlpool/vault/projects?key=… — register/update a project (body: {id,
+// label, tokenMint, quoteMints?, operatorEnv?, active?}). The operator SECRET lives
+// in the named env var (operatorEnv), never in this request or the registry.
+router.post("/vault/projects", (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  try { res.json({ project: vault.registerProject(req.body || {}) }); }
+  catch (e) { res.status(400).json({ error: e.message || "register failed" }); }
+});
+
+// DELETE /api/whirlpool/vault/projects/:id?key=… — remove a project (not "clkn").
+router.delete("/vault/projects/:id", (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  try { res.json({ removed: vault.removeProject(req.params.id) }); }
+  catch (e) { res.status(400).json({ error: e.message || "remove failed" }); }
+});
+
 // POST /api/whirlpool/vault/config?key=… — patch config (body = partial config).
 router.post("/vault/config", (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
