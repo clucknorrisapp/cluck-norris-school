@@ -1308,7 +1308,21 @@ function handleTelegramUpdate(update) {
     if (!TG_KNOWN_CMDS.includes(cmd)) return;          // ignore unknown commands
     const arg = parts[1] || null;
     // /start or /guide → open the "Where do I start?" concierge with buttons.
+    // In a non-CLKN project room (e.g. ROSE), don't promote the CLKN school — give a
+    // neutral pointer to that project's liquidity + the free, token-agnostic tools.
     if (cmd === "start" || cmd === "guide") {
+      const pid = vaultProjectForChat(msg.chat.id);
+      if (pid !== "clkn") {
+        const sym = ((whirlpoolMM.vault.listProjects() || {})[pid] || {}).symbol || pid.toUpperCase();
+        tgSend(msg.chat.id,
+          `🌊 <b>${sym} Liquidity — powered by Cluck Norris</b>\n\n` +
+          `This bot runs the Liquidity Engine for ${sym}: real, two-sided on-chain depth.\n` +
+          `• /liquidity — live ${sym} depth &amp; positions\n\n` +
+          `Free token tools (work for any token):\n` +
+          `/score · /autopsy · /holders · /trace · /snapshot · /securitycoop`,
+          msg.message_id);
+        return;
+      }
       tgSendKb(msg.chat.id, `🐔 <b>Welcome to the School of Crypto Hard Knocks.</b>\n\n${GUIDE_BODY}`, GUIDE_KEYBOARD, msg.message_id)
         .then(mid => { if (mid) registerCluckAnswer(mid, { guide: true, history: [] }); });
       return;
