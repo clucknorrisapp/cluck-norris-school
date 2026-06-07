@@ -2903,8 +2903,8 @@ async function getLockedSupply(mint, rpcCall) {
   let decimals = 9, supplyUi = 0;
   try {
     const s = await rpcCall("locks-supply", "getTokenSupply", [mint]);
-    decimals = s?.result?.value?.decimals ?? 9;
-    supplyUi = parseFloat(s?.result?.value?.uiAmountString || s?.result?.value?.uiAmount || 0) || 0;
+    const v = s?.result?.value;
+    if (v) { decimals = v.decimals ?? 9; supplyUi = parseInt(v.amount) / Math.pow(10, decimals); }
   } catch (_) { /* fall back to defaults */ }
 
   const accts = [];
