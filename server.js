@@ -10381,6 +10381,12 @@ app.listen(PORT, () => {
   if (whirlpoolMM.vault.isEnabled()) {
     console.log("[VAULT] Liquidity vault enabled — autonomous position management every 3m");
     const vaultTick = async () => {
+      // Rebalance inventory first (swap SOL→USDC if the base is short on USDC) so the
+      // positions can fund themselves before they size.
+      try {
+        const rb = await whirlpoolMM.vault.rebalanceInventory({});
+        if (rb && !["none", "capped"].includes(rb.action)) console.log("[VAULT][swap]", rb.action, "·", rb.reason || "");
+      } catch (e) { console.error("[VAULT] rebalance error:", e.message); }
       // Ask-wall first so it reserves its CLKN before the balanced base sizes.
       try {
         const w = await whirlpoolMM.vault.tickAskWall({});

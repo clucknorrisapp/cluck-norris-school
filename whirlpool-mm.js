@@ -153,6 +153,14 @@ router.get("/vault/sol-tick", async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message || "sol tick failed" }); }
 });
 
+// GET /api/whirlpool/vault/rebalance?key=…[&run=1] — run one inventory rebalance
+// (swap SOL→USDC toward target). DRY RUN unless run=1.
+router.get("/vault/rebalance", async (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  try { res.json(await vault.rebalanceInventory({ dryRun: req.query.run !== "1" })); }
+  catch (e) { res.status(500).json({ error: e.message || "rebalance failed" }); }
+});
+
 // POST /api/whirlpool/vault/pause?key=… and /resume?key=… — kill switch.
 router.post("/vault/pause", (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
