@@ -986,9 +986,10 @@ async function liquidityReply(chatId, replyTo) {
     if (!r.enabled) { tgSend(chatId, `📊 The ${sym} Liquidity Engine isn't running right now.`, replyTo); return; }
     if (!r.positions.length) { tgSend(chatId, `📊 No active ${sym} liquidity positions at the moment.`, replyTo); return; }
     let m = `📊 <b>${sym} Liquidity Engine — live depth</b>\n<i>powered by Cluck Norris</i>\n\n`;
+    const plain = projectId !== "clkn"; // CLKN/school keeps trading terms (it teaches them); other rooms get plain English
     for (const p of r.positions) {
-      const shape = p.role === "askwall" ? `ask wall · upside ${sym}`
-                  : p.lower >= p.current * 0.999 ? `upside asks (${sym})`
+      const shape = p.role === "askwall" ? (plain ? "upside liquidity" : `ask wall · upside ${sym}`)
+                  : p.lower >= p.current * 0.999 ? (plain ? "upside liquidity" : `upside asks (${sym})`)
                   : p.upper <= p.current * 1.001 ? "buy support"
                   : "two-sided";
       const quoteStr = p.quoteSymbol === "USDC" ? money(p.quoteAmount) : (tok(p.quoteAmount) + " SOL");
