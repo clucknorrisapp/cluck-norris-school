@@ -54,6 +54,19 @@
         feasibility check (`hasOrcaPools`).
   - [ ] **Stage 5 — key management**: per‑project operator env (self‑hosted) vs encrypted keystore
         in /data (managed). DECISION FORK — settle when we reach it.
+  - [~] **Stage 7 — MULTI-VENUE (Raydium CLMM) — IN PROGRESS.** Many tokens live on Raydium CLMM,
+        not Orca (e.g. ROSE/OnlyRose = one Raydium CLMM ROSE/SOL pool, 0.25%, tickSpacing 60).
+        - [x] `@raydium-io/raydium-sdk-v2` added (verified installs + live app healthy after deploy).
+        - [x] `lib/raydium-clmm.js` read-side: `discoverPools(tok)` via Raydium API v3, normalized to
+              the Orca shape (clkn*/token* aliases). VERIFIED live on ROSE.
+        - [ ] Raydium SDK tx layer: getPoolState (getRpcClmmPoolInfo), suggestRanges (tick math),
+              quote (PoolUtils.getLiquidityAmountOutFromAmountIn), listPositions (getOwnerPositionInfo),
+              buildOpenPosition (openPositionFromBase → unsigned), buildClosePosition (closePosition).
+        - [ ] Venue wiring in the vault: `project.venue` (orca|raydium) → `eng()` via ALS scope.
+        - [ ] VALIDATE with a SMALL live ROSE position before autonomous use.
+        - [ ] (Later) Stage 6 pool BOOTSTRAP also applies per venue (Raydium createPool exists too).
+        - NEEDED FROM OPERATOR: a dedicated ROSE hot wallet (a little ROSE + SOL), key set as
+          `MM_OPERATOR_SECRET_ROSE` on Railway; then register {id:"rose", venue:"raydium", tokenMint, symbol}.
   - [ ] **Stage 6 — POOL BOOTSTRAP (needed for onboarding):** the engine currently REQUIRES an
         existing Orca pool (it opens positions, and inits tick arrays on pristine pools, but does
         NOT create the Whirlpool itself). Orca SDK supports pool creation (createPool /
