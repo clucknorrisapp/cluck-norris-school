@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>💧 The Liquidity Engine — Honest Automated Market Making · Cluck Norris</title>
+<meta name="description" content="Real on-chain depth, automated. The honest alternative to wash-trading 'volume bots' — concentrated liquidity market making on Orca, auto re-centering, inventory rebalancing, and a live CLKN reference you can audit yourself."/>
+<meta property="og:title" content="💧 The Liquidity Engine — Honest Automated Market Making"/>
+<meta property="og:description" content="Real depth, real fills, real volume — auditable. The market-maker product that passes its own forensic audit. Live on CLKN; opening to projects."/>
+<meta property="og:type" content="website"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0a0a0a; --card: #111111; --border: rgba(255,255,255,0.08);
+    --text: #F9FAFB; --subtext: #6B7280; --accent: #FCD34D; --orange: #D97706;
+    --green: #10B981; --red: #EF4444; --amber: #F59E0B; --blue: #60A5FA; --purple: #A78BFA;
+    --mono: 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    background-image: radial-gradient(ellipse at 20% 8%, rgba(217,119,6,0.12) 0%, transparent 50%),
+                      radial-gradient(ellipse at 80% 92%, rgba(16,185,129,0.07) 0%, transparent 50%);
+    color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh;
+  }
+  .wrap { max-width: 820px; margin: 0 auto; padding: 24px 16px 80px; }
+  a.back-home { display:inline-flex; align-items:center; gap:6px; font-family:Oswald,sans-serif; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin:0 0 12px; }
+  a.back-home img { height:22px; width:22px; object-fit:cover; border-radius:50%; border:1px solid var(--orange); }
+
+  .header { display:flex; align-items:center; gap:14px; margin-bottom:20px; padding-bottom:18px; border-bottom:1px solid var(--border); }
+  .header-icon { font-size:40px; filter:drop-shadow(0 0 16px rgba(16,185,129,0.5)); }
+  .header .brand-mini { font-family:'Oswald',sans-serif; font-size:10px; letter-spacing:4px; color:var(--orange); margin-bottom:4px; font-weight:700; }
+  .header h1 { font-family:'Oswald',sans-serif; font-size:26px; font-weight:900; letter-spacing:2px; background:linear-gradient(135deg,#FCD34D,#10B981,#34D399); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; line-height:1; }
+  .header p { font-family:'Oswald',sans-serif; font-size:11px; color:var(--subtext); letter-spacing:3px; margin-top:6px; }
+
+  .hero { background:linear-gradient(135deg, rgba(16,185,129,0.09), rgba(217,119,6,0.05)); border:1px solid rgba(16,185,129,0.3); border-radius:14px; padding:24px; margin-bottom:16px; }
+  .hero-tag { font-family:'Oswald',sans-serif; font-size:11px; color:var(--accent); letter-spacing:3px; margin-bottom:10px; font-weight:700; }
+  .hero-title { font-family:'Oswald',sans-serif; font-size:27px; font-weight:900; color:var(--text); letter-spacing:0.5px; line-height:1.25; margin-bottom:12px; }
+  .hero-title .hl { background:linear-gradient(135deg,#FCD34D,#34D399); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  .hero-sub { font-size:15px; color:#D1D5DB; line-height:1.7; margin-bottom:8px; }
+  .hero-sub b { color:var(--accent); }
+
+  .section { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:20px 22px; margin-bottom:16px; scroll-margin-top:90px; }
+  .section-title { font-family:'Oswald',sans-serif; font-size:13px; color:var(--accent); letter-spacing:3px; font-weight:700; margin-bottom:14px; padding-bottom:10px; border-bottom:1px solid var(--border); }
+  .section p { font-size:14px; color:#D1D5DB; line-height:1.75; margin-bottom:10px; }
+  .section ul { margin:10px 0 14px 0; padding-left:22px; list-style:none; }
+  .section li { font-size:14px; color:#D1D5DB; line-height:1.7; padding:5px 0; position:relative; }
+  .section li::before { content:'🐔'; position:absolute; left:-22px; font-size:12px; }
+  .section li.yes::before { content:'✅'; } .section li.no::before { content:'🚫'; } .section li.warn::before { content:'⚠️'; }
+  .section strong { color:var(--accent); font-weight:700; }
+  .section h3 { font-family:'Oswald',sans-serif; font-size:15px; color:var(--text); letter-spacing:1px; margin:16px 0 8px; }
+
+  .stat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
+  .stat { background:linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)); border:1px solid var(--border); border-radius:10px; padding:14px 16px; }
+  .stat-label { font-family:'Oswald',sans-serif; font-size:10px; color:var(--subtext); letter-spacing:2px; margin-bottom:6px; font-weight:700; }
+  .stat-value { font-family:'Oswald',sans-serif; font-size:22px; color:var(--text); font-weight:900; line-height:1.1; }
+  .stat-sub { font-family:var(--mono); font-size:10px; color:var(--subtext); margin-top:4px; }
+  .stat.green { border-color:rgba(16,185,129,0.3); } .stat.green .stat-value { color:#6EE7B7; }
+  .stat.gold { border-color:rgba(252,211,77,0.3); } .stat.gold .stat-value { color:#FCD34D; }
+  .stat.blue { border-color:rgba(96,165,250,0.3); } .stat.blue .stat-value { color:#93C5FD; }
+
+  .pull-quote { font-family:'Oswald',sans-serif; font-size:18px; color:var(--accent); text-align:center; font-style:italic; letter-spacing:0.5px; margin:20px 0; padding:0 16px; line-height:1.5; }
+
+  /* compare table */
+  .compare { width:100%; border-collapse:collapse; margin:8px 0 6px; font-size:13.5px; }
+  .compare th, .compare td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); vertical-align:top; line-height:1.55; }
+  .compare th { font-family:'Oswald',sans-serif; letter-spacing:1px; font-size:11px; color:var(--subtext); }
+  .compare td.bad { color:#FCA5A5; } .compare td.good { color:#6EE7B7; }
+  .compare tr td:first-child { color:var(--subtext); font-family:var(--mono); font-size:12px; }
+
+  /* flywheel steps */
+  .flow { display:grid; grid-template-columns:1fr; gap:8px; margin:10px 0; }
+  .flow-step { background:rgba(16,185,129,0.05); border:1px solid rgba(16,185,129,0.22); border-radius:9px; padding:11px 14px; font-size:13.5px; color:#D1D5DB; line-height:1.55; }
+  .flow-step b { color:#6EE7B7; }
+  .flow-step .n { font-family:'Oswald',sans-serif; font-weight:900; color:#34D399; margin-right:8px; }
+
+  /* tier cards */
+  .tiers { display:grid; grid-template-columns:1fr; gap:12px; margin-top:6px; }
+  @media (min-width:680px) { .tiers { grid-template-columns:1fr 1fr; } }
+  .tier { border:1px solid var(--border); border-radius:12px; padding:16px 18px; background:rgba(255,255,255,0.02); }
+  .tier.feature { border-color:rgba(16,185,129,0.4); background:linear-gradient(135deg, rgba(16,185,129,0.07), rgba(16,185,129,0.02)); }
+  .tier .t-name { font-family:'Oswald',sans-serif; font-size:16px; font-weight:900; letter-spacing:1px; color:var(--text); }
+  .tier.feature .t-name { color:#6EE7B7; }
+  .tier .t-tag { font-family:'Oswald',sans-serif; font-size:9px; letter-spacing:2px; color:var(--subtext); margin-top:2px; }
+  .tier .t-price { font-family:'Oswald',sans-serif; font-size:14px; color:var(--accent); margin:10px 0; font-weight:700; }
+  .tier ul { margin:0; padding-left:18px; list-style:none; }
+  .tier li { font-size:12.5px; color:#D1D5DB; line-height:1.6; padding:3px 0; position:relative; }
+  .tier li::before { content:'•'; position:absolute; left:-14px; color:var(--green); }
+
+  .callout { border-radius:10px; padding:14px 16px; margin:12px 0; font-size:13.5px; line-height:1.7; }
+  .callout.good { background:rgba(16,185,129,0.07); border:1px solid rgba(16,185,129,0.3); color:#A7F3D0; }
+  .callout.good b { color:#6EE7B7; }
+  .callout.warn { background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.3); color:#FCA5A5; }
+  .callout.warn b { color:#FEE2E2; }
+  .callout.info { background:rgba(96,165,250,0.06); border:1px solid rgba(96,165,250,0.3); color:#BFDBFE; }
+  .callout.info b { color:#DBEAFE; }
+
+  .actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; }
+  .action-btn { flex:1; min-width:150px; padding:14px; border-radius:10px; font-family:'Oswald',sans-serif; font-size:13px; font-weight:700; letter-spacing:2px; cursor:pointer; transition:all 0.15s; text-decoration:none; text-align:center; background:rgba(255,255,255,0.04); border:1px solid var(--border); color:var(--text); }
+  .action-btn:hover { border-color:var(--accent); color:var(--accent); transform:translateY(-1px); }
+  .action-btn.primary { background:linear-gradient(135deg,#FCD34D,#10B981); color:#04150F; border:none; }
+
+  .quicklinks { display:flex; flex-wrap:wrap; gap:8px; background:rgba(17,17,17,0.93); backdrop-filter:blur(8px); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:18px; position:sticky; top:0; z-index:50; box-shadow:0 6px 24px rgba(0,0,0,0.6); }
+  .quicklinks a { font-family:'Oswald',sans-serif; font-size:11px; font-weight:700; letter-spacing:1px; text-decoration:none; padding:7px 11px; border-radius:8px; color:#6EE7B7; border:1px solid rgba(16,185,129,0.28); background:rgba(16,185,129,0.07); }
+  .quicklinks a:hover { border-color:#10B981; background:rgba(16,185,129,0.17); }
+  html { scroll-behavior:smooth; }
+
+  .footer-tag { text-align:center; margin-top:30px; padding-top:20px; border-top:1px solid var(--border); font-family:'Oswald',sans-serif; font-size:10px; color:var(--subtext); letter-spacing:3px; }
+  .footer-tag a { color:var(--orange); text-decoration:none; }
+  .muted { color:var(--subtext); font-size:12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="/" class="back-home"><img src="/cluck-norris-logo.jpg" alt=""/>&larr; CLUCK NORRIS HOME</a>
+
+  <div class="header">
+    <div class="header-icon">💧</div>
+    <div>
+      <div class="brand-mini">CLUCK NORRIS · OPERATOR TOOLS</div>
+      <h1>THE LIQUIDITY ENGINE</h1>
+      <p>HONEST · AUTOMATED · AUDITABLE MARKET MAKING</p>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div class="hero-tag">REAL DEPTH — NOT A VOLUME BOT</div>
+    <div class="hero-title">Your token's order book, run like a <span class="hl">professional market maker</span> — automatically, and without faking a single trade.</div>
+    <div class="hero-sub">Thin liquidity is why most tokens feel dead: every buy slips, the chart whipsaws, and aggregators rank you last. The usual "fix" is a <b>wash-trading volume bot</b> — fake trades that lie to your community and get flagged. We built the opposite: an autonomous market maker that places <b>real two-sided depth</b>, fills <b>real traders</b>, and earns fees on <b>real volume</b> — and you can prove every bit of it on-chain.</div>
+    <div class="hero-sub" style="margin-top:10px">It's the thing a seasoned operator does by hand, every day, for years — now automated, guardrailed, and live. <b>This is what we run on CLKN ourselves.</b></div>
+    <div class="actions">
+      <a class="action-btn primary" href="#access">REQUEST EARLY ACCESS</a>
+      <a class="action-btn" href="/liquidity">TRY THE TOOL (NON-CUSTODIAL)</a>
+      <a class="action-btn" href="#how">HOW IT WORKS</a>
+    </div>
+  </div>
+
+  <div class="quicklinks">
+    <a href="#problem">THE PROBLEM</a>
+    <a href="#difference">THE DIFFERENCE</a>
+    <a href="#how">HOW IT WORKS</a>
+    <a href="#honest">REAL vs WASH</a>
+    <a href="#run">HOW IT'S RUN</a>
+    <a href="#pricing">PRICING</a>
+    <a href="#proof">LIVE PROOF</a>
+    <a href="#access">EARLY ACCESS</a>
+  </div>
+
+  <!-- LIVE PROOF widget -->
+  <div class="section" id="proof">
+    <div class="section-title">📡 LIVE RIGHT NOW · CLKN — AUDIT IT YOURSELF</div>
+    <p>This isn't a mockup. The engine is running on Cluck Norris's own token across Orca pools this second. These numbers are pulled live from DexScreener as this page loads:</p>
+    <div class="stat-grid" id="liveStats">
+      <div class="stat green"><div class="stat-label">CLKN LIQUIDITY</div><div class="stat-value" id="lvLiq">…</div><div class="stat-sub">across all pools</div></div>
+      <div class="stat gold"><div class="stat-label">24H VOLUME</div><div class="stat-value" id="lvVol">…</div><div class="stat-sub">real trades</div></div>
+      <div class="stat blue"><div class="stat-label">ACTIVE POOLS</div><div class="stat-value" id="lvPools">…</div><div class="stat-sub">Orca + Meteora</div></div>
+      <div class="stat"><div class="stat-label">WASH TRADES</div><div class="stat-value" style="color:#6EE7B7">0</div><div class="stat-sub">by design</div></div>
+    </div>
+    <p class="muted" style="margin-top:12px">Verify independently: open the CLKN pools on <a class="xref" style="color:#93C5FD" href="https://dexscreener.com/solana/DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS" target="_blank">DexScreener</a>, or run <code>/liquidity</code> in the <a class="xref" style="color:#93C5FD" href="https://t.me/FireChicken007" target="_blank">Telegram</a> for a live depth snapshot. Better yet — run our own <a class="xref" style="color:#93C5FD" href="/autopsy">Token Autopsy</a> on CLKN: a wash bot would light it up. It won't.</p>
+  </div>
+
+  <!-- THE PROBLEM -->
+  <div class="section" id="problem">
+    <div class="section-title">🩸 THE PROBLEM EVERY SMALL TOKEN HAS</div>
+    <p>A token launches, the initial pool is thin, and it quietly dies of <strong>liquidity starvation</strong>:</p>
+    <ul>
+      <li class="no"><strong>Brutal price impact</strong> — a $50 buy moves the price 10%+, so nobody wants to be the one who buys.</li>
+      <li class="no"><strong>An erratic chart</strong> — every small trade whipsaws the price; it looks unhealthy and untradeable.</li>
+      <li class="no"><strong>Aggregators rank you last</strong> — Jupiter, DexScreener and listings reward depth and real volume. Thin pools fall off the radar.</li>
+      <li class="no"><strong>Holders can't exit cleanly</strong> — and they can feel it, so trust erodes.</li>
+    </ul>
+    <p>So projects reach for the only thing they've heard of: a <strong>"volume bot."</strong> And almost every one of them is a <strong>wash-trading scam wearing a suit</strong> — it buys and sells the token against itself to fake activity. It's market manipulation, aggregators filter it, regulators prosecute it, and your own community gets lied to. Worse: <strong>it does nothing for actual liquidity</strong> — the spread is still garbage; you've just paid to fake a number.</p>
+    <div class="callout warn"><b>The trap:</b> fake volume makes the chart look busy while the order book stays empty. The moment a real buyer arrives, they still get wrecked on slippage — and now there's an on-chain trail of self-dealing anyone can find.</div>
+  </div>
+
+  <!-- THE DIFFERENCE -->
+  <div class="section" id="difference">
+    <div class="section-title">🐔 THE CLUCK DIFFERENCE · DEPTH, NOT DECEPTION</div>
+    <p>The Liquidity Engine fixes the <em>actual</em> problem — the empty order book — instead of papering over it:</p>
+    <table class="compare">
+      <tr><th>&nbsp;</th><th>Typical "volume bot"</th><th>Cluck Liquidity Engine</th></tr>
+      <tr><td>What it does</td><td class="bad">Trades against itself to fake volume</td><td class="good">Places real two-sided depth that fills real traders</td></tr>
+      <tr><td>The volume is</td><td class="bad">Fake (wash trading / self-dealing)</td><td class="good">Real — every fill is an independent counterparty</td></tr>
+      <tr><td>Your spread / slippage</td><td class="bad">Unchanged — still thin</td><td class="good">Tighter — genuinely better buys &amp; sells</td></tr>
+      <tr><td>Aggregator treatment</td><td class="bad">Filtered / flagged / delisted risk</td><td class="good">Rewarded — real depth wins routing</td></tr>
+      <tr><td>If audited</td><td class="bad">Self-dealing trail, reputational bomb</td><td class="good">Passes — it's real liquidity provision</td></tr>
+      <tr><td>You earn</td><td class="bad">Nothing — you pay to fake it</td><td class="good">Trading fees on every real swap</td></tr>
+    </table>
+    <div class="pull-quote">"The only liquidity service that passes its own forensic audit."</div>
+    <p>We can say that because we also built the audit. Our free <a class="xref" style="color:#FCD34D" href="/autopsy">Token Autopsy</a> exists to <em>catch</em> wash trading and fake volume. Running a wash bot would flag our own token — so we don't, and we built the honest version instead. <strong>Trust is the entire product.</strong></p>
+  </div>
+
+  <!-- HOW IT WORKS -->
+  <div class="section" id="how">
+    <div class="section-title">⚙️ HOW IT WORKS · CONCENTRATED LIQUIDITY, AUTOMATED</div>
+    <p>Built on <strong>Orca Whirlpools</strong> (Solana concentrated liquidity). Instead of spreading capital thin across every possible price, it places deep liquidity in a focused range around the current price — so trades fill tight and you earn the fee on every swap that passes through.</p>
+
+    <h3>The three shapes of depth</h3>
+    <ul>
+      <li class="yes"><strong>Balanced base</strong> — two-sided depth straddling the price: bids below, asks above. The everyday market — smooth buys <em>and</em> sells.</li>
+      <li class="yes"><strong>Sell-side wall (single-sided)</strong> — your token's asks stacked above price, in a premium fee tier. You sell into strength at a fat fee when buyers pump in.</li>
+      <li class="yes"><strong>Buy-side support (single-sided)</strong> — bids below price that catch dips and let you accumulate.</li>
+    </ul>
+
+    <h3>It runs itself</h3>
+    <div class="flow">
+      <div class="flow-step"><span class="n">1</span><b>Re-centers automatically.</b> As price moves, the position rolls to stay centered — your depth follows the market instead of going stale.</div>
+      <div class="flow-step"><span class="n">2</span><b>Rebalances its own inventory.</b> When one side runs low, it swaps (via Jupiter) to refund the pools — so it never goes one-sided and stops working. <i>It never sells your token to do this.</i></div>
+      <div class="flow-step"><span class="n">3</span><b>Buys back to replenish.</b> As buyers take your token through the asks, USDC accumulates — and it can use that to buy the token back and reload the walls.</div>
+      <div class="flow-step"><span class="n">4</span><b>Harvests the natural arbitrage.</b> Run a pool in both <b>token/USDC</b> and <b>token/SOL</b>, and every move in SOL's price nudges them out of line — arbitrageurs trade them back together, paying <em>you</em> fees on volume the market generates for free.</div>
+    </div>
+    <div class="callout info"><b>The flywheel:</b> real depth → real fills + real arb → fees + accumulated quote currency → rebalance &amp; buy back → deeper depth. A self-sustaining loop powered by genuine market activity, not by you faking trades.</div>
+
+    <h3>Guardrails, always on</h3>
+    <p class="muted">Anti-thrash interval (no churning), daily action caps, a price-gap anomaly guard (sits out flash moves), slippage caps on every swap, per-fee-tier pools, and a one-flag kill switch. It's autonomous, not reckless.</p>
+  </div>
+
+  <!-- REAL vs WASH (education) -->
+  <div class="section" id="honest">
+    <div class="section-title">🎓 REAL VOLUME vs WASH TRADING · KNOW THE DIFFERENCE</div>
+    <p>This is the part most projects get dangerously wrong, so we teach it plainly. <strong>It is not about how many wallets you use.</strong> It's about <strong>beneficial ownership and intent.</strong></p>
+    <ul>
+      <li class="no"><strong>Wash trading</strong> = you (or wallets you control) buy and sell to <em>yourself</em> to create the appearance of activity. No real change of ownership. It's manipulation — illegal in most jurisdictions, filtered by aggregators, and a reputation killer. Splitting it across "different wallets" is exactly the structuring enforcement looks for; it doesn't make it legal.</li>
+      <li class="yes"><strong>Market making / liquidity provision</strong> = you post real depth and <em>other people</em> trade against it. You take genuine inventory risk and earn the spread/fees. Real counterparties, real ownership changes — real, honest volume.</li>
+      <li class="yes"><strong>Arbitrage</strong> = independent traders correct price differences across your pools (often driven by SOL's own moves). You don't manufacture the trades; the market does — you just provide the depth they fill.</li>
+    </ul>
+    <div class="callout good"><b>The honest test:</b> is there a real counterparty on the other side of each fill, taking the opposite risk? If yes, it's real liquidity. If the only party is you, it's wash trading. The Liquidity Engine is built so the answer is always <b>yes</b> — and you can prove it.</div>
+    <p>Want the full course? The free <a class="xref" style="color:#FCD34D" href="/">Cluck Norris LP Lab</a> teaches concentrated liquidity, impermanent loss, fee math, and pool strategy with interactive tools — so you understand exactly what your engine is doing.</p>
+  </div>
+
+  <!-- HOW IT'S RUN / CUSTODY -->
+  <div class="section" id="run">
+    <div class="section-title">🔐 HOW IT'S RUN · YOUR FUNDS, YOUR CONTROL</div>
+    <p>The number-one question for any liquidity service is <strong>"who holds the money?"</strong> Our answer, in every mode: <strong>never your treasury, never your mint authority, and you can withdraw anytime.</strong> Pick the model that fits you:</p>
+    <div class="tiers">
+      <div class="tier feature">
+        <div class="t-name">🛠 SELF-SERVE</div>
+        <div class="t-tag">NON-CUSTODIAL · YOU SIGN</div>
+        <div class="t-price">Live today</div>
+        <ul>
+          <li>Use the <a class="xref" style="color:#FCD34D" href="/liquidity">/liquidity tool</a> from your own wallet</li>
+          <li>You approve every transaction — keys never leave your device</li>
+          <li>Pick pools, ranges, single-sided or balanced; preview exact amounts</li>
+          <li>We never touch anything</li>
+          <li>Best for hands-on operators</li>
+        </ul>
+      </div>
+      <div class="tier">
+        <div class="t-name">🤖 MANAGED VAULT</div>
+        <div class="t-tag">AUTONOMOUS · DEDICATED FLOAT</div>
+        <div class="t-price">Early access</div>
+        <ul>
+          <li>You create a <strong>fresh, dedicated wallet</strong> and fund it with <em>only</em> your market-making float</li>
+          <li>The engine runs the strategy hands-off — re-center, rebalance, buy back</li>
+          <li><strong>Never your treasury or mint authority</strong> — worst case is bounded to the float</li>
+          <li>Everything is on-chain and auditable; <strong>withdraw the float anytime</strong></li>
+          <li>One-flag kill switch + a live dashboard</li>
+        </ul>
+      </div>
+    </div>
+    <div class="callout info" style="margin-top:14px"><b>Where we're headed — trustless mode.</b> The endgame is an on-chain delegate that can <em>only</em> perform liquidity operations and <em>cannot</em> withdraw to any outside address — so the strategy runs autonomously while you keep full custody and we never can touch the funds. That's the roadmap; the Managed Vault (dedicated float wallet) is the pragmatic version available now.</div>
+    <div class="callout warn"><b>Honest scope:</b> the autonomous Managed Vault runs live on CLKN today and is opening to a small number of projects in early access. The fully self-serve, multi-project dashboard and trustless delegate are in active development — we'll never pretend a feature is shipped before it is. That honesty is the brand.</div>
+  </div>
+
+  <!-- PRICING -->
+  <div class="section" id="pricing">
+    <div class="section-title">💰 PRICING · ALIGNED, IN CLKN</div>
+    <p>Pricing is paid in <strong>CLKN</strong> — the same on-chain micropayment model as the rest of our tools — so the product that helps your liquidity also gives CLKN real, recurring utility. <span class="muted">(Indicative — finalised as early access opens.)</span></p>
+    <div class="tiers">
+      <div class="tier">
+        <div class="t-name">SELF-SERVE</div>
+        <div class="t-price">Free / tiny CLKN unlock</div>
+        <ul>
+          <li>The non-custodial tool, open to everyone</li>
+          <li>Pay-per-session in CLKN, or free for CLKN holders</li>
+          <li>You run your own strategy</li>
+        </ul>
+      </div>
+      <div class="tier feature">
+        <div class="t-name">MANAGED VAULT</div>
+        <div class="t-price">Setup + monthly, in CLKN</div>
+        <ul>
+          <li>We run the autonomous engine on your dedicated float</li>
+          <li>Holder-gated: hold a CLKN threshold to qualify</li>
+          <li>Dashboard, alerts, kill switch, support</li>
+          <li>Optional performance component on real fees earned</li>
+        </ul>
+      </div>
+    </div>
+    <p class="muted" style="margin-top:12px">Every tier deepens CLKN utility: access and payment run through the token, so a growing liquidity-service business directly grows demand to hold and use CLKN. Utility first, speculation second — same as everything we build.</p>
+  </div>
+
+  <!-- WHO IT'S FOR -->
+  <div class="section" id="for">
+    <div class="section-title">🎯 WHO IT'S FOR</div>
+    <ul>
+      <li class="yes"><strong>Small / mid-cap Solana projects</strong> tired of a dead-looking chart and brutal slippage, who want real depth without the wash-trading risk.</li>
+      <li class="yes"><strong>Founders who care about reputation</strong> — who want liquidity they can defend publicly and show to investors and listings.</li>
+      <li class="yes"><strong>Operators who want it hands-off</strong> — fund a float, set guardrails, let it run, watch the dashboard.</li>
+      <li class="no"><strong>Anyone wanting fake volume.</strong> We don't sell that, and we'll tell you why it'll hurt you. Wrong shop.</li>
+    </ul>
+  </div>
+
+  <!-- EARLY ACCESS CTA -->
+  <div class="section" id="access" style="border-color:rgba(16,185,129,0.4); background:linear-gradient(135deg, rgba(16,185,129,0.07), rgba(217,119,6,0.03))">
+    <div class="section-title" style="color:#6EE7B7; border-color:rgba(16,185,129,0.25)">🚀 EARLY ACCESS</div>
+    <p>We're opening the Managed Vault to a small number of projects who want real, honest liquidity — and want to learn how it works, not just rent a black box. If that's you:</p>
+    <div class="actions">
+      <a class="action-btn primary" href="https://t.me/FireChicken007" target="_blank">TALK TO US ON TELEGRAM</a>
+      <a class="action-btn" href="/liquidity">TRY THE SELF-SERVE TOOL</a>
+      <a class="action-btn" href="/">EXPLORE CLUCK NORRIS</a>
+    </div>
+    <p class="muted" style="margin-top:14px">Not financial advice. Providing liquidity carries real risks — impermanent loss and market risk are real, and we teach them honestly in the <a class="xref" style="color:#FCD34D" href="/">LP Lab</a> before you put a dollar to work. The Liquidity Engine provides genuine market-making depth; it does not and will not manufacture fake volume.</p>
+  </div>
+
+  <div class="footer-tag">
+    🐔 <a href="https://clucknorris.app">clucknorris.app</a> — THE LIQUIDITY ENGINE · REAL DEPTH, REAL FILLS, NO FAKES
+  </div>
+</div>
+
+<script>
+// Live proof — pull CLKN liquidity + 24h volume from DexScreener (graceful fallback).
+(function(){
+  var CLKN='DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS';
+  function fmt(n){ n=Number(n)||0; if(n>=1e6) return '$'+(n/1e6).toFixed(2)+'M'; if(n>=1e3) return '$'+(n/1e3).toFixed(1)+'K'; return '$'+Math.round(n); }
+  fetch('https://api.dexscreener.com/token-pairs/v1/solana/'+CLKN)
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if(!Array.isArray(data)){ throw new Error('no data'); }
+      var liq=0, vol=0, pools=0;
+      data.forEach(function(p){
+        var l=Number(p&&p.liquidity&&p.liquidity.usd)||0;
+        var v=Number(p&&p.volume&&p.volume.h24)||0;
+        liq+=l; vol+=v; if(l>0) pools++;
+      });
+      document.getElementById('lvLiq').textContent=fmt(liq);
+      document.getElementById('lvVol').textContent=fmt(vol);
+      document.getElementById('lvPools').textContent=String(pools);
+    })
+    .catch(function(){
+      document.getElementById('lvLiq').textContent='—';
+      document.getElementById('lvVol').textContent='—';
+      document.getElementById('lvPools').textContent='—';
+    });
+})();
+</script>
+</body>
+</html>
