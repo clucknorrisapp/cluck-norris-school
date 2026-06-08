@@ -88,14 +88,14 @@ Two tools where you *do* connect a wallet — not to hand over anything, but to 
 
 Most "volume bots" wash‑trade: the same operator buys and sells their own token through wallets they control to fake activity. We built the **opposite** — and you can audit it with our own Token Autopsy.
 
-The Liquidity Engine is a concentrated‑liquidity market maker on **Orca Whirlpools** that puts **real two‑sided depth** into a token's pools — tighter spreads, less price impact for real buyers and sellers, and fees earned on genuine trades. Two layers:
+The Liquidity Engine is a concentrated‑liquidity market maker on **Orca Whirlpools** — with **Raydium CLMM** support built to the same interface, so a project can run on either venue — that puts **real two‑sided depth** into a token's pools — tighter spreads, less price impact for real buyers and sellers, and fees earned on genuine trades. Two layers:
 
 - **🛠 Non‑custodial tool** ([`/liquidity`](https://clucknorris.app/liquidity)) — connect a wallet, pick a pool + fee tier, choose a **single‑sided wall** (CLKN‑only asks above price, or quote‑only bids below) or a **balanced range**, preview the exact token amounts, and **sign your own transactions**. The server builds the unsigned position txs (open / close / collect fees) and initializes pool tick‑arrays automatically so it works even on a brand‑new pool; keys never touch it — same pattern as the Hatchery and Security Coop.
 - **🤖 Autonomous Liquidity Vault** *(operator‑gated)* — funded from a **dedicated hot wallet** whose key lives only in the Railway environment (unset = the vault is fully off, a safe no‑op). It runs hands‑off: a **balanced CLKN/USDC base** for everyday two‑sided depth, an **upside ask‑wall** in a higher fee tier (premium capture selling into strength), and a **CLKN/SOL position** that sits on the natural SOL‑driven arbitrage between pools. It **re‑centers automatically** as price moves and **auto‑rebalances inventory** (swapping SOL↔USDC via Jupiter, never selling CLKN) so the pools keep themselves funded — fund the wallet and it deploys itself. Guardrails throughout: per‑fee‑tier pools, anti‑thrash interval, daily action caps, price‑gap anomaly guard, slippage caps, and a one‑flag kill switch.
 
 **Honest by design.** Every fill is a real counterparty trading against real depth — that's real volume because the trades are real. It never trades against itself. (Our [Token Autopsy](https://clucknorris.app/autopsy) exists to catch the fake kind — running a wash bot would flag our own token.)
 
-Live now on CLKN (CLKN/USDC + CLKN/SOL on Orca). Check current depth in Telegram with **`/liquidity`**, or on the [`/liquidity`](https://clucknorris.app/liquidity) page. It's the foundation of an operator‑grade, *auditable* liquidity‑management capability — the same work experienced operators do by hand, automated.
+Live now on CLKN (CLKN/USDC + CLKN/SOL on Orca); **Raydium CLMM** is supported as a venue for projects that live there. Check current depth in Telegram with **`/liquidity`**, or on the [`/liquidity`](https://clucknorris.app/liquidity) page. It's the foundation of an operator‑grade, *auditable* liquidity‑management capability — the same work experienced operators do by hand, automated.
 
 ---
 
@@ -193,7 +193,7 @@ The product reaches into the community Telegram (and X), not just the website:
 | Frontend | React + Vite + vanilla HTML for tool pages |
 | Backend | Node.js + Express on Railway |
 | AI tutor + lessons + autopsy narration | Anthropic Claude Haiku 4.5 |
-| Solana RPC | Helius (DAS + enhanced txns) |
+| Solana RPC | Helius (DAS + enhanced txns) — automatic failover to a public node (and optional backup RPC keys) on rate‑limit / outage |
 | Token data & forensics | Bags.fm API · DexScreener · GeckoTerminal · Bubblemaps · Jupiter · Solana Tracker · Solscan |
 | Score card rendering | `@napi-rs/canvas` with bundled Oswald typeface |
 | Persistence | Railway volume at `/data` (consumed‑payment sigs, graduation tracker, schedulers, analytics) — survives redeploys |
@@ -217,10 +217,10 @@ The product reaches into the community Telegram (and X), not just the website:
 - `/api/credential/:slug` — public transcript JSON · `/api/credential-card?slug=…` — transcript share PNG · `/api/school-stats` — verified‑graduate metrics
 - `/api/hatchery/*` — token creator: Arweave metadata upload, unsigned mint‑tx build, live fee config
 - `/api/security-coop/*` — wallet delegate‑approval scan + unsigned revoke‑tx build
-- `/api/whirlpool/*` — Liquidity Engine: Orca pool discovery, suggested ranges, liquidity quotes, and non‑custodial open/close position‑tx builds (public); the autonomous vault's `/vault/*` (status / tick / rebalance / swap / pause) is gated on `PREMIUM_ACCESS_KEY`
+- `/api/whirlpool/*` — Liquidity Engine: Orca pool discovery, suggested ranges, liquidity quotes, and non‑custodial open/close position‑tx builds (public); the autonomous vault's `/vault/*` (status / tick / rebalance / swap / pause) is gated on `PREMIUM_ACCESS_KEY` and runs per‑project on **Orca or Raydium**
 - `/api/holders`, `/api/locks`, `/api/fees`, `/api/supply`, `/api/reinvestment`, `/api/bubblemaps` — Solana token telemetry proxies
 - `/api/bags-proxy`, `/api/bags-feed-prices`, `/api/bags-near-grad`, `/api/bags-graduated` — Bags launch data
-- `/api/helius-rpc`, `/api/helius-tx` — Helius proxies with API keys hidden server‑side
+- `/api/helius-rpc`, `/api/helius-tx` — Helius proxies with API keys hidden server‑side, with automatic failover on rate‑limit / outage
 - `/api/claim` — trophy submissions to Google Sheets
 - *Gated (admin / holder):* `/api/autopsy-premium`, `/api/premium-verify-sig`, `/api/clkn-balance`, `/api/slots/*`, `/api/stats`, `/api/tg-test`, plus the `/api/tg/:secret` Telegram webhook
 
