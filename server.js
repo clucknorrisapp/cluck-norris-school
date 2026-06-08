@@ -2503,8 +2503,52 @@ app.get("/api/tg-test", async (req, res) => {
   }
 });
 
-// Telegram webhook — receives slash-command updates. Both the path secret and
-// the X-Telegram-Bot-Api-Secret-Token header must match (derived from the bot
+// Telegram webhook diagnostics (gated). getWebhookInfo + getMe — shows whether the
+// webhook URL is registered, how many updates are queued, and Telegram's last delivery
+// error (why commands like /liquidity might go unanswered). Add &reset=1 to re-register
+// the webhook (the same setWebhook the boot block runs); &drop=1 also clears the backlog.
+app.get("/api/tg-webhook-info", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const KEY = process.env.PREMIUM_ACCESS_KEY;
+  const provided = req.query.key || req.headers["x-premium-key"];
+  if (!KEY || provided !== KEY) return res.status(404).json({ error: "not_found" });
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token || !TG_WEBHOOK_SECRET) return res.status(200).json({ ok: false, error: "Telegram not configured (TELEGRAM_BOT_TOKEN unset)" });
+  const expectedUrl = `${TG_PUBLIC_BASE}/api/tg/${TG_WEBHOOK_SECRET}`;
+  let resetResult = null;
+  try {
+    if (req.query.reset === "1") {
+      const sr = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: expectedUrl, secret_token: TG_WEBHOOK_SECRET, allowed_updates: ["message", "callback_query"], drop_pending_updates: req.query.drop === "1" }),
+      });
+      resetResult = await sr.json().catch(() => ({}));
+    }
+    const wi = await (await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`)).json().catch(() => ({}));
+    const me = await (await fetch(`https://api.telegram.org/bot${token}/getMe`)).json().catch(() => ({}));
+    const info = wi.result || {};
+    return res.status(200).json({
+      ok: true,
+      bot: me.result ? { username: me.result.username, id: me.result.id, canReadAllGroupMessages: me.result.can_read_all_group_messages } : me,
+      expectedUrl,
+      urlMatches: info.url === expectedUrl,
+      webhook: {
+        url: info.url,
+        pending_update_count: info.pending_update_count,
+        last_error_date: info.last_error_date ? new Date(info.last_error_date * 1000).toISOString() : null,
+        last_error_message: info.last_error_message || null,
+        ip_address: info.ip_address || null,
+        max_connections: info.max_connections,
+        allowed_updates: info.allowed_updates,
+      },
+      ...(resetResult ? { reset: resetResult } : {}),
+    });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+
 // token) so randoms can't inject fake updates. Ack immediately, handle async.
 // (Handlers tgSend / handleTelegramUpdate are defined up in the Telegram block;
 // this route must live below `const app = express()`.)
