@@ -220,98 +220,34 @@ function bagsLaunchesTick() {
   }
 }
 
-// ── Market Check — 3×/day: CLKN / SOL / BTC price with 1h + 24h change.
-// CLKN from Solana Tracker (price + events), SOL+BTC from CoinGecko markets.
+// ── Daily market snapshot — 2×/day: CLKN price, market cap, change, volume &
+// Jupiter organic score. Repurposed from the old CLKN/SOL/BTC "Market Check";
+// shares one builder with the /price command (see buildMarketSnapshotText).
 const MARKET_CHECK_ENABLED = true;
 let lastMarketCheckMsgId = kv.get("marketCheckMsgId", null); // delete-previous, persisted across deploys
-function mcFmtPrice(p) {
-  if (p == null || isNaN(p)) return "—";
-  const v = Number(p);
-  if (v >= 1000) return "$" + Math.round(v).toLocaleString();
-  if (v >= 1) return "$" + v.toFixed(2);
-  if (v >= 0.01) return "$" + v.toFixed(4);
-  return "$" + v.toPrecision(3);
+// Shared market-snapshot builder — used by /price (on demand) and the 2×/day auto-post.
+// Price + market cap from the deepest pool, 24h change/volume, liquidity, and the Jupiter
+// organic score. Returns the HTML message string, or null if no live price is available.
+async function buildMarketSnapshotText(mint = CLKN_MINT_ADDR, sym = "CLKN") {
+  const [mkt, organic] = await Promise.all([getTokenMarket(mint), getClknOrganicScore(mint)]);
+  if (!mkt || !mkt.priceUsd) return null;
+  const fmtPrice = (p) => p >= 0.01 ? "$" + p.toFixed(4) : "$" + p.toPrecision(3);
+  const chg = (v) => v == null ? null : (v >= 0 ? "+" : "") + Number(v).toFixed(1) + "%";
+  const c = mkt.change || {};
+  let m = `📈 <b>${sym} — market</b>\n\n`;
+  m += `💵 Price: <b>${fmtPrice(mkt.priceUsd)}</b>\n`;
+  if (mkt.mc) m += `🏦 Market cap: <b>${fmtUsdShort(mkt.mc)}</b>\n`;
+  const parts = [c.h1 != null ? `1h ${chg(c.h1)}` : null, c.h6 != null ? `6h ${chg(c.h6)}` : null, c.h24 != null ? `24h ${chg(c.h24)}` : null].filter(Boolean);
+  if (parts.length) m += `📊 ${parts.join(" · ")}\n`;
+  const vol = fmtUsdShort(mkt.vol24h); if (vol) m += `🔁 24h volume: <b>${vol}</b>\n`;
+  if (mkt.liqUsd) m += `💧 Liquidity: <b>${fmtUsdShort(mkt.liqUsd)}</b>\n`;
+  const org = fmtOrganicScore(organic); if (org) m += `🪐 Jupiter organic score: <b>${org}</b>\n`;
+  m += `\n🐔 ${TG_PUBLIC_BASE}`;
+  return m;
 }
-function mcFmtChg(pct) {
-  if (pct == null || isNaN(pct)) return "—";
-  const v = Number(pct);
-  return (v >= 0 ? "+" : "") + v.toFixed(1) + "%";
-}
-// SOL + BTC from CoinGecko. The free public endpoint hard-rate-limits shared
-// cloud IPs (Railway), so scheduled posts were intermittently getting a 429 and
-// silently dropping the SOL/BTC lines (leaving only CLKN). Retry a few times,
-// optionally authenticate with COINGECKO_API_KEY (a free demo key lifts the
-// limit), and fall back to the last good values cached on the volume so the
-// lines never just vanish.
-async function fetchSolBtc() {
-  const KEY = process.env.COINGECKO_API_KEY;
-  const url = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=solana,bitcoin&price_change_percentage=1h,24h"
-    + (KEY ? `&x_cg_demo_api_key=${encodeURIComponent(KEY)}` : "");
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      const cg = await fetch(url, { headers: KEY ? { "x-cg-demo-api-key": KEY } : {}, signal: AbortSignal.timeout(8000) });
-      if (cg.ok) {
-        const arr = await cg.json();
-        if (Array.isArray(arr) && arr.length) {
-          const by = {}; for (const c of arr) by[c.id] = c;
-          const sol = by.solana, btc = by.bitcoin;
-          if (sol && btc) {
-            const data = {
-              ts: Date.now(),
-              sol: { price: sol.current_price, h1: sol.price_change_percentage_1h_in_currency, h24: sol.price_change_percentage_24h_in_currency },
-              btc: { price: btc.current_price, h1: btc.price_change_percentage_1h_in_currency, h24: btc.price_change_percentage_24h_in_currency },
-            };
-            kv.set("marketSolBtc", data); // remember last good for the fallback
-            return data;
-          }
-        }
-      }
-    } catch (_) {}
-    if (attempt < 3) await new Promise(r => setTimeout(r, 1500 * attempt));
-  }
-  // Live fetch failed (almost always a 429). Serve the last good values if not
-  // older than 6h — a slightly stale price beats dropping the line entirely.
-  const cached = kv.get("marketSolBtc", null);
-  if (cached && Date.now() - cached.ts < 6 * 3600 * 1000) return cached;
-  return null;
-}
-// CLKN price + 1h/24h change from Solana Tracker. ST's free tier 429s often, so
-// the CLKN line was sometimes dropping the same way SOL/BTC did. Retry a few
-// times and fall back to the last good values cached on the volume.
-async function fetchClkn() {
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      const r = await solanaTracker.probe("/tokens/DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS");
-      if (r.ok && r.data) {
-        const b = r.data, pools = b.pools || [];
-        const primary = pools.reduce((best, p) => ((p.liquidity || {}).usd || 0) > ((best.liquidity || {}).usd || 0) ? p : best, pools[0] || {});
-        const price = primary.price?.usd;
-        if (price != null) {
-          const data = { ts: Date.now(), price, h1: b.events?.["1h"]?.priceChangePercentage, h24: b.events?.["24h"]?.priceChangePercentage };
-          kv.set("marketClkn", data); // remember last good for the fallback
-          return data;
-        }
-      }
-    } catch (_) {}
-    if (attempt < 3) await new Promise(r => setTimeout(r, 1500 * attempt));
-  }
-  const cached = kv.get("marketClkn", null);
-  if (cached && Date.now() - cached.ts < 6 * 3600 * 1000) return cached;
-  return null;
-}
+// The 2×/day auto-post (repurposed Market Check) — the same CLKN snapshot as /price.
 async function buildMarketCheckText() {
-  const lines = [];
-  try {
-    const c = await fetchClkn();
-    if (c) lines.push(`🐔 <b>CLKN</b> ${mcFmtPrice(c.price)}  ${mcFmtChg(c.h1)} / ${mcFmtChg(c.h24)}`);
-  } catch (_) {}
-  try {
-    const m = await fetchSolBtc();
-    if (m && m.sol) lines.push(`◎ <b>SOL</b> ${mcFmtPrice(m.sol.price)}  ${mcFmtChg(m.sol.h1)} / ${mcFmtChg(m.sol.h24)}`);
-    if (m && m.btc) lines.push(`₿ <b>BTC</b> ${mcFmtPrice(m.btc.price)}  ${mcFmtChg(m.btc.h1)} / ${mcFmtChg(m.btc.h24)}`);
-  } catch (_) {}
-  if (!lines.length) return null;
-  return "📊 <b>MARKET CHECK</b>  ·  1h / 24h\n\n" + lines.join("\n") + "\n\n🐔 clucknorris.app";
+  return await buildMarketSnapshotText(CLKN_MINT_ADDR, "CLKN");
 }
 async function notifyMarketCheck() {
   const token = process.env.TELEGRAM_BOT_TOKEN, chatId = process.env.TELEGRAM_CHAT_ID;
@@ -339,9 +275,9 @@ async function notifyMarketCheck() {
 // Fires every 2h near the top of an even hour (UTC). Minute-gated so it does NOT
 // post on every deploy/restart; lastMarketCheckHour persisted on the volume so a
 // deploy in the firing window doesn't double-post.
-// 3×/day (15, 19, 23 UTC = 11am · 3pm · 7pm ET), interleaved with the lessons
-// (13/17/21/01) for a clean ~2-hourly pulse — no two scheduled posts share an hour.
-const MARKET_CHECK_HOURS_UTC = [15, 19, 23];
+// 2×/day (15, 23 UTC = 10am · 6pm CT), interleaved with the lessons
+// (13/17/21/01) so no two scheduled posts share an hour.
+const MARKET_CHECK_HOURS_UTC = [15, 23];
 let lastMarketCheckHour = kv.get("marketCheckHour", -1);
 function marketCheckTick() {
   if (!MARKET_CHECK_ENABLED) return;
@@ -1028,21 +964,9 @@ async function priceReply(chatId, replyTo) {
   const sym = proj.symbol || "CLKN";
   const mint = proj.tokenMint || CLKN_MINT_ADDR;
   try {
-    const [mkt, organic] = await Promise.all([getTokenMarket(mint), getClknOrganicScore(mint)]);
-    if (!mkt || !mkt.priceUsd) { tgSend(chatId, `📈 Couldn't read ${sym} price right now — try again shortly.`, replyTo); return; }
-    const fmtPrice = (p) => p >= 0.01 ? "$" + p.toFixed(4) : "$" + p.toPrecision(3);
-    const chg = (v) => v == null ? null : (v >= 0 ? "+" : "") + Number(v).toFixed(1) + "%";
-    const c = mkt.change || {};
-    let m = `📈 <b>${sym} — market</b>\n\n`;
-    m += `💵 Price: <b>${fmtPrice(mkt.priceUsd)}</b>\n`;
-    if (mkt.mc) m += `🏦 Market cap: <b>${fmtUsdShort(mkt.mc)}</b>\n`;
-    const parts = [c.h1 != null ? `1h ${chg(c.h1)}` : null, c.h6 != null ? `6h ${chg(c.h6)}` : null, c.h24 != null ? `24h ${chg(c.h24)}` : null].filter(Boolean);
-    if (parts.length) m += `📊 ${parts.join(" · ")}\n`;
-    const vol = fmtUsdShort(mkt.vol24h); if (vol) m += `🔁 24h volume: <b>${vol}</b>\n`;
-    if (mkt.liqUsd) m += `💧 Liquidity: <b>${fmtUsdShort(mkt.liqUsd)}</b>\n`;
-    const org = fmtOrganicScore(organic); if (org) m += `🪐 Jupiter organic score: <b>${org}</b>\n`;
-    m += `\n🐔 ${TG_PUBLIC_BASE}`;
-    tgSend(chatId, m, replyTo);
+    const text = await buildMarketSnapshotText(mint, sym);
+    if (!text) { tgSend(chatId, `📈 Couldn't read ${sym} price right now — try again shortly.`, replyTo); return; }
+    tgSend(chatId, text, replyTo);
   } catch (e) {
     tgSend(chatId, `📈 Couldn't load ${sym} price right now — try again shortly.`, replyTo);
   }
