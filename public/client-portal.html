@@ -373,9 +373,18 @@ async function signIn(){
     const wallet = (resp && resp.publicKey ? resp.publicKey : provider.publicKey).toString();
     if(!wallet) throw new Error('no public key returned');
 
-    // Build the exact message the server verifies (byte-for-byte).
-    const ts = Date.now();
-    const message = `Cluck Norris Liquidity Engine\nSign in to manage your project's liquidity.\n\nWallet: ${wallet}\nTime: ${ts}`;
+    // Use the SERVER's timestamp + message (not the device clock) so a phone whose clock is
+    // off can't trigger a "stale timestamp" rejection. Falls back to local time if offline.
+    let ts, message;
+    try {
+      const mr = await fetch(API + '/message?wallet=' + encodeURIComponent(wallet));
+      const md = await mr.json();
+      if (md && md.ts && md.message) { ts = md.ts; message = md.message; }
+    } catch (_) { /* fall back below */ }
+    if (!ts) {
+      ts = Date.now();
+      message = `Cluck Norris Liquidity Engine\nSign in to manage your project's liquidity.\n\nWallet: ${wallet}\nTime: ${ts}`;
+    }
 
     setLoginInfo('Approve the signature in your wallet…');
     const enc = new TextEncoder().encode(message);
