@@ -13,5 +13,6 @@ Stay under these and we're within the 10M monthly plan.
 | Time (CT) | Cumulative | Δ credits | Δ min | rate (cr/min) | projected/day | notes |
 |-----------|-----------:|----------:|------:|--------------:|--------------:|-------|
 | 09:19 | 8,982 | — | — | — | — | baseline anchor (optimizations live; Claude testing stopped) |
+| 09:30 | 10,561 | +1,579 | 11 | ~144 | ~207k | **62% of budget — under.** Window included Claude git pushes → redeploys (cold-cache boot ticks), so true steady-state is likely lower. |
 
 _Each new reading: Δcredits ÷ Δmin = current background rate. Compare to the 231/min line._
