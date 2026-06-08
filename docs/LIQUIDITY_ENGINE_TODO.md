@@ -95,9 +95,15 @@
               ROSE's Raydium CLMM pool (ROSE/SOL 0.25% ts60); unsigned tx build verified. NOT yet
               imported anywhere. (Caveats: buildClosePosition not run end-to-end; pending-fee readout
               uses the stale on-chain checkpoint.)
-        - [ ] **Venue wiring in the vault: `project.venue` (orca|raydium) → `eng()` via ALS scope.**
-              ← NEXT to actually use the Raydium layer. Then validate with a SMALL live ROSE position.
-        - [ ] VALIDATE with a SMALL live ROSE position before autonomous use.
+        - [x] **Venue wiring in the vault: `project.venue` (orca|raydium) → `eng()` via ALS scope. DONE.**
+              `ENGINES = {orca, raydium}`; `venue()` reads the ALS store; `eng()` picks the adapter;
+              every venue-specific call (`getPoolState/discoverPools/suggestRanges/quote/listPositions/
+              buildOpenPosition/buildClosePosition/poolAddressFor/invalidatePositions`) routes through
+              `eng()`. Mints/`DEFAULT_TOKEN` stay venue-independent. `registerProject` accepts+validates
+              `venue` (default orca); `withProject` threads it; `status()` reports it. CLKN unchanged
+              (defaults orca). `buildCreatePool` guarded with a clear "create the pool manually" error on
+              venues without bootstrap. Verified: clkn=orca, a raydium project routes + rejects bad venues.
+        - [ ] VALIDATE with a SMALL live ROSE position before autonomous use (build/dry-run first).
         - [ ] (Later) Stage 6 pool BOOTSTRAP also applies per venue (Raydium createPool exists too).
         - NEEDED FROM OPERATOR: a dedicated ROSE hot wallet (a little ROSE + SOL), key set as
           `MM_OPERATOR_SECRET_ROSE` on Railway; then register {id:"rose", venue:"raydium", tokenMint, symbol}.
