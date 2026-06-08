@@ -2950,21 +2950,36 @@ app.post("/api/helius-rpc", async (req, res) => {
 app.post("/api/helius-tx", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-  const HELIUS_KEY = process.env.HELIUS_API_KEY;
-  if (!HELIUS_KEY) return res.status(500).json({ error: "Missing HELIUS_API_KEY" });
-  try {
-    const response = await fetch(`https://api.helius.xyz/v0/transactions?api-key=${HELIUS_KEY}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(req.body || {})
-    });
-    const text = await response.text();
-    res.status(response.status);
-    try { return res.json(JSON.parse(text)); }
-    catch (e) { return res.send(text); }
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
+  // This is the Helius Enhanced Transactions REST API (api.helius.xyz/v0), NOT JSON-RPC —
+  // a generic backup / public node can't serve it, so rpc.rpcFetch's node failover doesn't
+  // apply. Instead fail over across Helius KEYS (primary → HELIUS_API_KEY_2) on a 429/5xx,
+  // so a credit cap on one key rolls to the other instead of going blind.
+  const keys = rpc.heliusKeys();
+  if (!keys.length) return res.status(500).json({ error: "Missing HELIUS_API_KEY" });
+  let lastErr;
+  for (let i = 0; i < keys.length; i++) {
+    const isLast = i === keys.length - 1;
+    try {
+      const response = await fetch(`https://api.helius.xyz/v0/transactions?api-key=${keys[i]}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(req.body || {})
+      });
+      if (rpc.isRetriableStatus(response.status) && !isLast) {
+        try { await response.body?.cancel?.(); } catch {}
+        continue;
+      }
+      const text = await response.text();
+      res.status(response.status);
+      try { return res.json(JSON.parse(text)); }
+      catch (e) { return res.send(text); }
+    } catch (err) {
+      lastErr = err;
+      if (!isLast) continue;
+      return res.status(500).json({ error: err.message });
+    }
   }
+  return res.status(500).json({ error: (lastErr && lastErr.message) || "helius-tx failed" });
 });
 
 // A Helius JSON-RPC caller: rpcCall(id, method, params) — forwards params as given
