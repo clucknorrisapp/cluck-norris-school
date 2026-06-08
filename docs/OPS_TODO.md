@@ -1,6 +1,15 @@
 # Ops / decisions — to-do
 
-## CLKN liquidity — pulled for a holder sell (2026-06-08)
+## CLKN liquidity — RELAUNCHED 2026-06-08 ✅
+- Staged redeploy complete after the holder sell. Final live positions:
+  - base CLKN/USDC ~\$848 (in-range) · SOL vault CLKN/SOL ~\$952 (in-range) · ask wall ~\$450 (asks above price).
+  - Two-sided pools quote-balanced (~\$446 USDC ≈ ~\$442 SOL); totals ~12% apart by choice (SOL keeps wider width 15) — user accepted as-is.
+  - Engine ticks ~+2% off the Meteora main LP (arb-proof floor for this quiet token). Market ~\$0.0001492, MC ~\$149K.
+  - Dry powder reserve in wallet: ~\$204 USDC + ~2.18 SOL + ~296K CLKN.
+  - Config now: maxUsd 440, solMaxSol 6.5, widthPct 10, solWidthPct 15, swapSolFloor 2, minRebalanceIntervalSec 1800, askWallClknFraction 0.9, maxActionsPerDay 40. Vault RUNNING (unpaused). Raise maxUsd/solMaxSol to grow later.
+  - Lesson: the autonomous scheduler (10-min) races manual multi-step staging — set final config in ONE shot then tick immediately, or expect mid-stage rolls.
+
+## CLKN liquidity — pulled for a holder sell (2026-06-08)  [HISTORY]
 - **State:** CLKN vault is **PAUSED** and **all 3 positions are CLOSED** (base CLKN/USDC,
   ask wall, SOL vault) — liquidity sitting in the operator wallet `4Ws6jX…`. Pulled so the
   vault isn't the counterparty while a large holder sells. Stays pulled until "redeploy CLKN".
