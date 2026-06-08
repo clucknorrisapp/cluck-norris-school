@@ -946,6 +946,7 @@ function tgCommandReply(cmd, arg) {
     default: // start / help / commands
       return "🐔 <b>CLUCK NORRIS BOT — COMMANDS</b>\n" +
         "<i>Each opens the tool on clucknorris.app, with your mint/wallet pre-filled where supported.</i>\n\n" +
+        "🐥 /guide — new here? get pointed the right way\n" +
         "🩺 /score <code>&lt;mint&gt;</code> — token health 0–100\n" +
         "🪦 /autopsy <code>&lt;mint&gt;</code> — full forensic breakdown\n" +
         "🔍 /trace <code>&lt;wallet&gt;</code> — wallet × token history\n" +
@@ -954,6 +955,7 @@ function tgCommandReply(cmd, arg) {
         "🔒 /securitycoop — find &amp; revoke risky wallet approvals\n" +
         "📈 /buyspecial — run a buy competition\n" +
         "🌹 /rose — buy-competition analyzer + prizes\n" +
+        "🏆 /buyleaders — live buy-competition standings\n" +
         "🥚 /hatchery — create a token, guided\n" +
         "🎒 /bags — live Bags.fm launches\n" +
         "🛠 /tools — every tool in one place\n" +
@@ -10670,6 +10672,7 @@ app.listen(PORT, () => {
             { command: "securitycoop", description: "Find & revoke risky wallet approvals" },
             { command: "buyspecial", description: "Run a buy competition" },
             { command: "rose", description: "Buy-competition analyzer + prizes" },
+            { command: "buyleaders", description: "Live buy-competition standings" },
             { command: "hatchery", description: "Create a token, guided" },
             { command: "bags", description: "Live Bags.fm launches" },
             { command: "tools", description: "All the Cluck Norris tools" },
