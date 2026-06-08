@@ -1,5 +1,21 @@
 # Ops / decisions — to-do
 
+## CLKN liquidity — pulled for a holder sell (2026-06-08)
+- **State:** CLKN vault is **PAUSED** and **all 3 positions are CLOSED** (base CLKN/USDC,
+  ask wall, SOL vault) — liquidity sitting in the operator wallet `4Ws6jX…`. Pulled so the
+  vault isn't the counterparty while a large holder sells. Stays pulled until "redeploy CLKN".
+- **Diagnostic:** `node scripts/clkn-pool-spread.js` — shows each Orca CLKN pool's on-chain
+  price vs the Jupiter market ref + a convergence verdict on FUNDED pools. Use it to watch
+  the pools realign after the sell. (Note: with liquidity pulled, all tiers read "stale".)
+- **Redeploy plan (staged — price will be ~7-8% off after the sell):**
+  1. **Stage 1 — small seed.** Dial caps down (`maxUsd`≈80, `askWallClknFraction`≈0.05,
+     `solMaxSol`≈0.1), resume, tick → small position in each pool so arbs realign the tiers.
+  2. **Wait ~10 min**, re-run the spread script; want FUNDED pools <1% off market.
+  3. **Stage 2 — full.** Restore caps to normal (`maxUsd` 1000, `solMaxSol` 1.0, etc.),
+     force a roll → scale up to full size at the corrected price.
+  - Price-gap guard is 25%; a 7-8% move won't trip it. If the sell is bigger and the gap
+    exceeds 25%, widen `priceGapGuardPct` for the redeploy or the vault sits out.
+
 ## RPC / infra
 - [x] **Upgrade the Helius plan.** ✅ Done 2026-06-08 (≈10× usage). On-chain reads verified
       working again (CLKN 3 positions/$2.4k, ROSE 3 positions/$140; fresh, no 429). Was
