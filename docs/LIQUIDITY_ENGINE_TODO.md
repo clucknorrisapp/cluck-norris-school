@@ -14,7 +14,9 @@
 - [ ] **`/liquidity` Telegram command** — public, sanitized depth view (no wallet/balances).
 - [ ] **24h volume** shown on buy/sell alerts + the `/liquidity` post.
 - [ ] **Buy‑alert floors** — $20 buys / $50 sells (env‑overridable).
-- [ ] **Product + education page** (`/liquidity-engine`) — intro, live CLKN proof, real‑vs‑wash education, custody model, pricing, early‑access CTA.
+- [x] **Product + education page** (`/liquidity-engine`) — LIVE: hero, live CLKN proof (DexScreener),
+      real‑vs‑wash education, modes, custody tiers, pricing, risk/big‑sell, early‑access CTA. Now
+      surfaces the wallet‑login owner portal (`/portal`) across custody/pricing/CTA/nav.
 - [ ] **Strategy deep‑dive** (`docs/LIQUIDITY_ENGINE.md`).
 - [ ] **Docs updated** — README "Liquidity Engine" section; investors page card + momentum item.
 - [ ] **Discovery links** — `/tools` flagship card + link from `/liquidity` tool page.
