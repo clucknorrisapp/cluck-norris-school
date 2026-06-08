@@ -10691,6 +10691,20 @@ app.listen(PORT, () => {
   const vaultTick = async () => {
     for (const id of vaultEnabledIds()) await runProject(id);
   };
-  setTimeout(vaultTick, 15000);
+  // Boot tick — but SKIP any project that ticked within the last 8 min (persisted across
+  // redeploys). At 2-40 deploys/day this stops each redeploy firing a redundant cold cycle;
+  // it still fires when genuinely due, so the ~10-min cadence holds no matter the deploy rate.
+  const BOOT_TICK_MIN_GAP_MS = 8 * 60 * 1000;
+  const vaultBootTick = async () => {
+    for (const id of vaultEnabledIds()) {
+      const last = whirlpoolMM.vault.lastTickTs(id);
+      if (last && Date.now() - last < BOOT_TICK_MIN_GAP_MS) {
+        console.log(`[VAULT:${id}] boot tick skipped — last tick ${Math.round((Date.now() - last) / 1000)}s ago (redeploy guard)`);
+        continue;
+      }
+      await runProject(id);
+    }
+  };
+  setTimeout(vaultBootTick, 15000);
   setInterval(vaultTick, 600 * 1000); // 10 min — low burn; positions are almost always "hold" between ticks
 });
