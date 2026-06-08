@@ -22,5 +22,6 @@ Stay under these and we're within the 10M monthly plan.
 | 09:30 | 10,561 | +1,579 | 11 | ~144 | ~207k | **62% of budget — under.** Window included Claude git pushes → redeploys (cold-cache boot ticks), so true steady-state is likely lower. |
 | 11:23 | 22,827 | +12,266 | 113 | ~109 | ~157k | **47% of budget — under.** Nearly 2h window, cold-boot noise washed out → steady-state settling lower than the 09:30 reading, as expected. |
 | 12:53 | 27,770 | +4,943 | 90 | ~55 | ~79k | **~24% of budget — well under.** Steady-state still dropping as boot/test noise fully clears; clean background burn ~55/min. |
+| 14:18 | 39,824 | +12,054 | 85 | ~142 | ~204k | **~61% of budget — NOT steady-state.** Window dominated by Claude-session ops: rose-ray Raydium dry-run, repeated CLKN status/position polls, and the 3 position closes for the CLKN liquidity pull. CLKN vault now PAUSED (ticks early-return, no RPC), so background should drop from here. |
 
 _Each new reading: Δcredits ÷ Δmin = current background rate. Compare to the 231/min line._
