@@ -1,7 +1,13 @@
 # Helius credit usage — daily tracking
 
-**Plan:** 10,000,000 credits / month.
-**Break-even budget:** ~333,000 / day · ~13,900 / hour · **~231 / min** sustained.
+**Plan:** 10,000,000 credits / month (Helius **Developer** tier).
+**Upgraded Free (500k/mo) → Developer (10M/mo) on 2026-06-08.** The readings below were
+captured earlier the SAME day while still on the FREE tier — whose ~500k/mo (~16.7k/day,
+**~11.6/min**) budget the burn was well over, which is what tripped the credit cap that took
+on-chain reads offline and motivated the failover layer (`lib/rpc.js`). From the upgrade
+forward the 10M budget applies; the %-of-budget figures in the table are what each measured
+rate means against the new 10M plan.
+**Break-even budget (10M plan):** ~333,000 / day · ~13,900 / hour · **~231 / min** sustained.
 Stay under these and we're within the 10M monthly plan.
 
 > NOTE: the burn optimizations — vault tick **3m → 10m** + **shared per-tick position read**
