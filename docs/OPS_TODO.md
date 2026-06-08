@@ -10,9 +10,13 @@
         snapshot on a 429** (so `/liquidity` shows real depth through blips instead of a false
         "no positions"); `/liquidity` now says "rate-limited, try again" instead of "no positions".
       - Diagnostic added: `GET /api/tg-webhook-info?key=…` (Telegram webhook health; `&reset=1`).
-- [ ] _(Optional, complements the upgrade)_ **Fallback RPC** — switch reads to a backup when
-      Helius 429s. Needs a 2nd RPC URL/key (another Helius key, or QuickNode/Triton). Resilient
-      to future caps.
+- [x] _(complements the upgrade)_ **Fallback RPC** ✅ Done 2026-06-08. `lib/rpc.js`: one ordered
+      endpoint list (primary Helius → `FALLBACK_RPC_URL` backups → `HELIUS_API_KEY_2` → public node)
+      + a failover `fetch`/`connection()` that rolls to the next endpoint on 429/5xx/network error.
+      Wired through the engine (orca/raydium/vault/securitycoop via custom-fetch Connections) +
+      server.js `heliusRpcCall` + the `/api/helius-rpc` client proxy. All endpoints unset =
+      primary-only (safe no-op). **To activate: set `FALLBACK_RPC_URL` (QuickNode/Triton/Alchemy)
+      or `HELIUS_API_KEY_2` on Railway; `RPC_DEBUG=1` logs failover events.**
 - [ ] _(Optional)_ **Reduce RPC burn** — lengthen dashboard/portal poll intervals + the trade
       poller cadence if normal usage keeps outrunning the plan.
 
