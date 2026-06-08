@@ -10666,7 +10666,7 @@ app.listen(PORT, () => {
   // Liquidity vault — autonomous Orca Whirlpool position manager. INDEPENDENT of
   // Telegram: it starts only when MM_OPERATOR_SECRET (the dedicated hot wallet)
   // is set, so deploying without that key is a safe no-op and can never move
-  // funds. Ticks every 3 minutes; re-centers the position as price moves.
+  // funds. Ticks every 10 minutes; re-centers the position as price moves.
   // Multi-tenant: the scheduler loops over every ACTIVE project that has its operator
   // key loaded (CLKN via MM_OPERATOR_SECRET; others via their own env var). Sequential
   // per project = naturally staggered for RPC limits. A project with no key is skipped,
@@ -10676,7 +10676,7 @@ app.listen(PORT, () => {
     return p && p.active !== false && whirlpoolMM.vault.isEnabled(id);
   });
   const startIds = vaultEnabledIds();
-  if (startIds.length) console.log(`[VAULT] enabled — autonomous management every 3m · projects: ${startIds.join(", ")}`);
+  if (startIds.length) console.log(`[VAULT] enabled — autonomous management every 10m · projects: ${startIds.join(", ")}`);
   else console.log("[VAULT] no project operator key set — idle (will service projects once a key is present)");
 
   const runProject = async (id) => {
@@ -10692,5 +10692,5 @@ app.listen(PORT, () => {
     for (const id of vaultEnabledIds()) await runProject(id);
   };
   setTimeout(vaultTick, 15000);
-  setInterval(vaultTick, 180 * 1000);
+  setInterval(vaultTick, 600 * 1000); // 10 min — low burn; positions are almost always "hold" between ticks
 });
