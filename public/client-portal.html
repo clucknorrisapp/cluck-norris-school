@@ -98,6 +98,34 @@
   .note { font-family:var(--mono); font-size:11px; color:var(--subtext); margin-top:8px; line-height:1.6; }
   .note.warn { color:#FCA5A5; }
 
+  /* Strategy card */
+  .strat-now { font-family:var(--mono); font-size:12px; color:#D1D5DB; line-height:1.6; padding:10px 12px; background:rgba(96,165,250,0.06); border:1px solid rgba(96,165,250,0.3); border-radius:8px; }
+  .strat-now b { color:var(--accent); }
+  .strat-group { margin-top:14px; }
+  .strat-opts { display:flex; flex-direction:column; gap:8px; }
+  .strat-opt { text-align:left; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:9px; padding:10px 12px; cursor:pointer; transition:border-color 0.15s, background 0.15s; }
+  .strat-opt:hover { border-color:rgba(252,211,77,0.4); }
+  .strat-opt.sel { border-color:var(--orange); background:rgba(217,119,6,0.08); }
+  .strat-opt .o-name { font-family:'Oswald',sans-serif; font-weight:700; font-size:14px; letter-spacing:0.5px; color:var(--text); }
+  .strat-opt.sel .o-name { color:var(--accent); }
+  .strat-opt .o-desc { font-family:var(--mono); font-size:11px; color:var(--subtext); line-height:1.55; margin-top:4px; }
+  .strat-opt .o-cur { font-family:var(--mono); font-size:9px; letter-spacing:1px; color:#6EE7B7; margin-top:5px; }
+  .strat-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
+  .strat-actions .btn { flex:1; min-width:140px; }
+  .strat-preview { margin-top:12px; padding:12px 13px; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:9px; font-family:var(--mono); font-size:12px; color:#D1D5DB; line-height:1.7; }
+  .strat-preview .pv-title { font-family:'Oswald',sans-serif; font-weight:700; letter-spacing:0.5px; color:var(--accent); font-size:14px; margin-bottom:6px; }
+  .strat-preview .pv-blurb { color:var(--subtext); margin-bottom:8px; line-height:1.55; }
+  .strat-preview .pv-row { display:flex; justify-content:space-between; gap:10px; padding:3px 0; border-top:1px solid var(--border); }
+  .strat-preview .pv-row .pv-k { color:var(--subtext); }
+  .strat-preview .pv-row .pv-v { text-align:right; }
+  .strat-preview .pv-row .pv-v b { color:var(--text); }
+  .strat-preview .pv-row .pv-v .arr { color:var(--orange); }
+  .strat-preview .pv-none { color:var(--subtext); }
+  .strat-preview .pv-foot { color:var(--subtext); margin-top:8px; line-height:1.55; }
+  .strat-msg { font-family:var(--mono); font-size:11px; line-height:1.6; margin-top:10px; }
+  .strat-msg.ok { color:#6EE7B7; }
+  .strat-msg.err { color:#FCA5A5; }
+
   details.adv { margin-top:10px; }
   details.adv summary { font-family:var(--mono); font-size:10px; letter-spacing:1.5px; color:var(--orange); cursor:pointer; list-style:none; padding:8px 0; }
   details.adv summary::-webkit-details-marker { display:none; }
@@ -187,6 +215,32 @@
       <div class="note" id="controlNote">When paused, the engine stops opening or moving your liquidity. Existing positions stay on-chain.</div>
     </div>
 
+    <!-- Strategy -->
+    <div class="card" id="strategyCard">
+      <div class="card-title">STRATEGY</div>
+      <div class="strat-now" id="stratNow">Loading…</div>
+
+      <div class="strat-group">
+        <div class="sec-title">MODE — HOW BUSY YOUR ENGINE IS</div>
+        <div class="strat-opts" id="modeOpts"></div>
+      </div>
+
+      <div class="strat-group">
+        <div class="sec-title">TILT — WHERE YOUR DEPTH LEANS</div>
+        <div class="strat-opts" id="tiltOpts"></div>
+      </div>
+
+      <div class="strat-actions">
+        <button class="btn btn-ghost" id="stratPreviewBtn" onclick="previewStrategy()" disabled>👁 PREVIEW CHANGE</button>
+        <button class="btn btn-go hidden" id="stratApplyBtn" onclick="applyStrategy()">✓ APPLY</button>
+      </div>
+
+      <div class="strat-preview hidden" id="stratPreview"></div>
+      <div class="strat-msg" id="stratMsg"></div>
+
+      <div class="note">Switching a mode only changes the <b>shape</b> of your liquidity — range width, cadence, caps, and the upside wall. It <b>never</b> touches your reserves, fee tier, or trading pair. It's reversible: pick <b>Custom</b> any time to restore your previous settings.</div>
+    </div>
+
     <!-- Positions -->
     <div class="card">
       <div class="card-title">YOUR LIQUIDITY</div>
@@ -228,6 +282,24 @@ let project = null;          // { id, symbol, label }
 let autoTimer = null;
 let busy = false;
 let lastStatus = null, lastPositions = null, lastCosts = null, lastEarnings = null;
+let lastModes = null;        // /modes catalog ({ current, hasCustomSnapshot, modes, tilts })
+let pickMode = null, pickTilt = null;  // owner's current selection (not yet applied)
+let stratBusy = false;
+
+// Plain-English, beginner descriptions per mode/tilt (mirrors /liquidity-engine.html).
+const MODE_HELP = {
+  active:     'Tight & busy — narrow ranges, re-centers often. Most volume + fee capture, but most IL/gas; wants monitoring.',
+  steady:     'Balanced & low-touch — medium ranges, moderate cadence. Healthy two-sided depth, slow-steady drift. The everyday default.',
+  foundation: 'Wide & passive — broad ranges, rarely re-centers. A deep stable floor, set-and-forget. Lowest fees, lowest IL/gas/upkeep.',
+  custom:     'Restore your previous (pre-mode) settings — exactly what you had tuned before switching. Your one-step revert.',
+};
+const TILT_HELP = {
+  balanced:     'Even both sides — roughly half your free token on the upside wall. The smooth everyday book.',
+  distribution: 'Sell into strength — heavier asks above price, so buyers fill your wall as price pushes up.',
+  accumulation: 'Lighter sell-side — a thin upside wall, letting buyers set the price (lean toward accumulating).',
+};
+const MODE_ORDER = ['active','steady','foundation','custom'];
+const TILT_ORDER = ['balanced','distribution','accumulation'];
 
 // ── Escaping (token names/symbols are attacker-controlled) ──────────────────────
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -257,8 +329,8 @@ async function authGet(path){
   if(r.status===401){ handleAuthExpired(); }
   return { ok:r.ok, status:r.status, data:d };
 }
-async function authPost(path){
-  const r = await fetch(API+path, { method:'POST', headers:{ 'Accept':'application/json', 'Content-Type':'application/json', 'Authorization':'Bearer '+token }, body:'{}' });
+async function authPost(path, body){
+  const r = await fetch(API+path, { method:'POST', headers:{ 'Accept':'application/json', 'Content-Type':'application/json', 'Authorization':'Bearer '+token }, body: JSON.stringify(body||{}) });
   let d=null; try { d = await r.json(); } catch(_){}
   if(r.status===401){ handleAuthExpired(); }
   return { ok:r.ok, status:r.status, data:d };
@@ -381,21 +453,24 @@ async function refreshAll(){
   refBtn.disabled=true;
   try {
     // Fetch independently so one failure never blanks the whole page.
-    const [s, p, c, e] = await Promise.all([
+    const [s, p, c, e, m] = await Promise.all([
       authGet('/status'),
       authGet('/positions'),
       authGet('/costs'),
       authGet('/earnings'),
+      authGet('/modes'),
     ]);
     if(!token) return; // a 401 mid-flight cleared us
     lastStatus    = (s.ok && s.data && !s.data.error) ? s.data : null;
     lastPositions = (p.ok && p.data && !p.data.error) ? p.data : null;
     lastCosts     = (c.ok && c.data && !c.data.error) ? c.data : null;
     lastEarnings  = (e.ok && e.data && !e.data.error) ? e.data : null;
+    lastModes     = (m.ok && m.data && !m.data.error) ? m.data : null;
 
     renderHead();
     renderHeadline();
     renderControl();
+    renderStrategy();
     renderPositions();
     renderEarningsCosts();
     renderFloat();
@@ -486,6 +561,206 @@ async function toggleEngine(){
   } finally {
     busy = false;
     await refreshAll();
+  }
+}
+
+// ── Strategy (mode + tilt) ───────────────────────────────────────────────────────
+// Reads /modes ({ current:{mode,tilt}, hasCustomSnapshot, modes:{name:{label,blurb,config}},
+// tilts:{name:{label,config}} }); falls back to status.mode / status.tilt for "current".
+function currentMode(){
+  if(lastModes && lastModes.current && lastModes.current.mode) return lastModes.current.mode;
+  return (lastStatus && lastStatus.mode) || 'custom';
+}
+function currentTilt(){
+  if(lastModes && lastModes.current && 'tilt' in lastModes.current) return lastModes.current.tilt;
+  return (lastStatus && lastStatus.tilt) || null;
+}
+
+// Friendly knob names + value formatting for the preview diff.
+const KNOB_LABEL = {
+  widthPct: 'Range width', edgeTriggerFrac: 'Re-center sensitivity',
+  minRebalanceIntervalSec: 'Min time between moves', maxActionsPerDay: 'Max moves / day',
+  askWallEnabled: 'Upside wall', askWallUpPct: 'Upside wall distance',
+  askWallClknFraction: 'Token on upside wall', solEnabled: 'SOL pool', solWidthPct: 'SOL pool width',
+  swapEnabled: 'Auto-balance swaps', poolBalanceTolPct: 'Pool balance tolerance',
+};
+function knobLabel(k){ return KNOB_LABEL[k] || k; }
+function knobVal(k, v){
+  if(v===true) return 'on'; if(v===false) return 'off';
+  if(v==null) return '—';
+  if(k==='minRebalanceIntervalSec'){ const n=Number(v); if(isFinite(n)){ if(n>=3600) return (n/3600)+'h'; if(n>=60) return (n/60)+'m'; return n+'s'; } }
+  if(k==='edgeTriggerFrac' || k==='askWallClknFraction'){ const n=Number(v); if(isFinite(n)) return Math.round(n*100)+'%'; }
+  if(/Pct$/.test(k)){ const n=Number(v); if(isFinite(n)) return n+'%'; }
+  return esc(String(v));
+}
+
+function renderStrategy(){
+  const card = document.getElementById('strategyCard');
+  const now = document.getElementById('stratNow');
+  const modeBox = document.getElementById('modeOpts');
+  const tiltBox = document.getElementById('tiltOpts');
+  const previewBtn = document.getElementById('stratPreviewBtn');
+
+  // Status entirely unavailable → keep the card but show a soft note.
+  if(!lastStatus && !lastModes){
+    now.innerHTML = 'Strategy controls are unavailable right now — try refreshing.';
+    modeBox.innerHTML = ''; tiltBox.innerHTML = '';
+    previewBtn.disabled = true;
+    return;
+  }
+
+  const curMode = currentMode();
+  const curTilt = currentTilt();
+
+  // Show the current active mode + tilt prominently.
+  const modeLbl = (lastModes && lastModes.modes && lastModes.modes[curMode] && lastModes.modes[curMode].label) || (curMode.charAt(0).toUpperCase()+curMode.slice(1));
+  const tiltLbl = curTilt ? ((lastModes && lastModes.tilts && lastModes.tilts[curTilt] && lastModes.tilts[curTilt].label) || curTilt) : null;
+  now.innerHTML = 'Current strategy: <b>'+esc(modeLbl)+'</b>'+(tiltLbl?' · <b>'+esc(tiltLbl)+'</b>':'')+'.';
+
+  // Default the picker to the active mode/tilt on first paint (don't stomp an in-progress choice).
+  if(pickMode===null) pickMode = curMode;
+  if(pickTilt===null) pickTilt = curTilt || 'balanced';
+
+  // If the engine is off, controls are read-only (nothing to apply to).
+  const off = lastStatus && !lastStatus.enabled;
+
+  // Build mode options from the catalog (fall back to the known set).
+  const modeNames = (lastModes && lastModes.modes) ? MODE_ORDER.filter(n => n==='custom' || lastModes.modes[n]) : MODE_ORDER;
+  modeBox.innerHTML = modeNames.map(n => {
+    const cat = lastModes && lastModes.modes && lastModes.modes[n];
+    const label = n==='custom' ? 'Custom (restore previous)' : ((cat && cat.label) || (n.charAt(0).toUpperCase()+n.slice(1)));
+    const desc = MODE_HELP[n] || (cat && cat.blurb) || '';
+    const isCur = n===curMode;
+    const isSel = n===pickMode && !off;
+    const dim = (n==='custom' && lastModes && !lastModes.hasCustomSnapshot);
+    return `<div class="strat-opt${isSel?' sel':''}" ${off?'':`onclick="selectMode('${esc(n)}')"`} style="${off?'opacity:0.5;cursor:default':''}">
+      <div class="o-name">${esc(label)}</div>
+      <div class="o-desc">${esc(desc)}${dim?' (no saved snapshot yet)':''}</div>
+      ${isCur?'<div class="o-cur">● CURRENTLY ACTIVE</div>':''}
+    </div>`;
+  }).join('');
+
+  // Tilt options.
+  const tiltNames = (lastModes && lastModes.tilts) ? TILT_ORDER.filter(n => lastModes.tilts[n]) : TILT_ORDER;
+  const tiltApplies = pickMode !== 'custom'; // custom restores a snapshot; tilt is mode-driven
+  tiltBox.innerHTML = tiltNames.map(n => {
+    const cat = lastModes && lastModes.tilts && lastModes.tilts[n];
+    const label = (cat && cat.label) || (n.charAt(0).toUpperCase()+n.slice(1));
+    const desc = TILT_HELP[n] || '';
+    const isCur = n===curTilt;
+    const isSel = n===pickTilt && tiltApplies && !off;
+    const disabled = off || !tiltApplies;
+    return `<div class="strat-opt${isSel?' sel':''}" ${disabled?'':`onclick="selectTilt('${esc(n)}')"`} style="${disabled?'opacity:0.5;cursor:default':''}">
+      <div class="o-name">${esc(label)}</div>
+      <div class="o-desc">${esc(desc)}</div>
+      ${isCur?'<div class="o-cur">● CURRENTLY ACTIVE</div>':''}
+    </div>`;
+  }).join('');
+
+  // Preview only makes sense when the engine is on.
+  previewBtn.disabled = !!off || stratBusy;
+  if(off){
+    setStratMsg('The engine is off for your project, so there is no strategy to change yet.', '');
+  }
+}
+
+function selectMode(n){
+  pickMode = n;
+  resetStratPreview();
+  renderStrategy();
+}
+function selectTilt(n){
+  pickTilt = n;
+  resetStratPreview();
+  renderStrategy();
+}
+function resetStratPreview(){
+  document.getElementById('stratPreview').classList.add('hidden');
+  document.getElementById('stratApplyBtn').classList.add('hidden');
+  setStratMsg('', '');
+}
+function setStratMsg(msg, cls){
+  const el = document.getElementById('stratMsg');
+  el.className = 'strat-msg'+(cls?' '+cls:'');
+  el.textContent = msg || '';
+}
+
+async function previewStrategy(){
+  if(!token || stratBusy || !pickMode) return;
+  if(lastStatus && !lastStatus.enabled){ setStratMsg('The engine is off — nothing to preview.', 'err'); return; }
+  stratBusy = true;
+  const btn = document.getElementById('stratPreviewBtn');
+  btn.disabled = true; const prevTxt = btn.textContent; btn.textContent = 'Previewing…';
+  setStratMsg('', '');
+  try {
+    const body = { name: pickMode };
+    if(pickMode !== 'custom') body.tilt = pickTilt;   // tilt is meaningless for a custom restore
+    const r = await authPost('/mode', body);          // no run → PREVIEW only
+    if(!token) return; // 401 cleared us
+    if(r.status===400){ setStratMsg((r.data&&r.data.error)||'Could not preview that change.', 'err'); return; }
+    if(!r.ok || !r.data){ setStratMsg('Could not preview the change'+(r.data&&r.data.error?': '+r.data.error:'')+'.', 'err'); return; }
+    renderPreview(r.data.preview || r.data);
+  } catch(e){
+    setStratMsg('Could not preview the change: '+((e&&e.message)||e), 'err');
+  } finally {
+    stratBusy = false; btn.disabled = (lastStatus && !lastStatus.enabled); btn.textContent = prevTxt;
+  }
+}
+
+function renderPreview(pv){
+  const box = document.getElementById('stratPreview');
+  if(!pv || typeof pv!=='object'){ setStratMsg('Preview returned no data.', 'err'); return; }
+  const changes = Array.isArray(pv.changes) ? pv.changes : [];
+  let html = '<div class="pv-title">'+esc(pv.label || ((pv.mode||pickMode)+(pv.tilt?' · '+pv.tilt:'')))+'</div>';
+  if(pv.blurb) html += '<div class="pv-blurb">'+esc(pv.blurb)+'</div>';
+  if(!changes.length){
+    html += '<div class="pv-none">No changes — that\'s already your current shape.'+(pv.note?'':'')+'</div>';
+  } else {
+    html += '<div class="pv-blurb">What changes (before → after):</div>';
+    for(const c of changes){
+      html += '<div class="pv-row"><span class="pv-k">'+esc(knobLabel(c.key))+'</span>'+
+              '<span class="pv-v"><b>'+knobVal(c.key,c.from)+'</b> <span class="arr">→</span> <b>'+knobVal(c.key,c.to)+'</b></span></div>';
+    }
+  }
+  if(pv.willRecenter) html += '<div class="pv-foot">↻ The engine will re-center to this shape on its next cycle.</div>';
+  if(pv.note) html += '<div class="pv-foot">'+esc(pv.note)+'</div>';
+  box.innerHTML = html;
+  box.classList.remove('hidden');
+
+  // Only offer Apply when there's something to apply (or a custom restore).
+  const applyBtn = document.getElementById('stratApplyBtn');
+  if(changes.length || pickMode==='custom') applyBtn.classList.remove('hidden');
+  else applyBtn.classList.add('hidden');
+  setStratMsg('Reviewed the preview? Press Apply to switch — or change your pick to preview again.', '');
+}
+
+async function applyStrategy(){
+  if(!token || stratBusy || !pickMode) return;
+  if(lastStatus && !lastStatus.enabled){ setStratMsg('The engine is off — nothing to apply.', 'err'); return; }
+  const lbl = (lastModes && lastModes.modes && lastModes.modes[pickMode] && lastModes.modes[pickMode].label) || pickMode;
+  const tiltPart = (pickMode!=='custom' && pickTilt) ? ' · '+pickTilt : '';
+  if(!confirm('Switch '+symbol()+' to "'+lbl+tiltPart+'"?\n\nThis only changes the strategy shape — your reserves, fee tier, and pair are untouched, and it\'s reversible (pick Custom to restore).')) return;
+  stratBusy = true;
+  const btn = document.getElementById('stratApplyBtn');
+  btn.disabled = true; btn.textContent = 'Applying…';
+  setStratMsg('', '');
+  try {
+    const body = { name: pickMode, run: '1' };
+    if(pickMode !== 'custom') body.tilt = pickTilt;
+    const r = await authPost('/mode', body);          // run:"1" → APPLIES
+    if(!token) return; // 401 cleared us
+    if(r.status===400){ setStratMsg((r.data&&r.data.error)||'Could not apply that change.', 'err'); btn.disabled=false; btn.textContent='✓ APPLY'; return; }
+    if(!r.ok || !r.data || r.data.applied!==true){ setStratMsg('Could not apply the change'+(r.data&&r.data.error?': '+r.data.error:'')+'.', 'err'); btn.disabled=false; btn.textContent='✓ APPLY'; return; }
+    // Success: reset the picker so the card reflects the new active mode after refresh.
+    resetStratPreview();
+    pickMode = null; pickTilt = null;
+    await refreshAll();
+    setStratMsg('Strategy updated — the engine re-centers to the new shape on its next cycle. Pick Custom any time to revert.', 'ok');
+  } catch(e){
+    setStratMsg('Could not apply the change: '+((e&&e.message)||e), 'err');
+  } finally {
+    stratBusy = false;
+    if(btn.textContent==='Applying…'){ btn.textContent='✓ APPLY'; }
   }
 }
 
