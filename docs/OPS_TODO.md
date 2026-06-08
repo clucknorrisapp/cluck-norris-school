@@ -18,15 +18,22 @@
   pool = nothing to swap against); adding straddling liquidity + letting it trade is the only
   way the tick walks down.
 - **Redeploy plan (staged — engine pools ~13% stale-HIGH vs market):**
-  1. **Stage 1 — small seed, WIDE range.** Dial caps down (`maxUsd`≈80,
-     `askWallClknFraction`≈0.05, `solMaxSol`≈0.1) AND widen `widthPct`≈13-15% (so the range
-     runs upper ≥ stale tick $0.0001671 → lower ≤ market $0.0001476, covering the whole
-     correction zone). Resume + tick → seed straddles the stale tick, arbs sell CLKN in and
-     walk the tick down to market. Bounded cost: base seed goes in as USDC, converts to CLKN
-     bought avg ~$0.000157 (~6% above final market) — keep it small.
-  2. **Wait ~10 min**, re-run the spread script; want the engine pools <1% off the main LP.
-  3. **Stage 2 — full, normal width.** Restore caps (`maxUsd` 1000, `solMaxSol` 1.0) and
-     `widthPct` back to 10, force a roll → re-center tight at the corrected ~$0.0001476.
+  1. ✅ **Stage 1 — small seed, WIDE range. DONE.** Set `maxUsd` 80, `widthPct` 15,
+     `solMaxSol` 0.3, `askWallEnabled` false, `maxActionsPerDay` 40 (daily cap was hit by the
+     close ops). Seeded base CLKN/USDC (pos `8EAUnnNs…`) + SOL CLKN/SOL (pos `HRATM6iy…`),
+     both straddling the stale $0.0001671 tick and reaching down to market — ~$200 total,
+     so arbs walk the ticks to ~$0.0001476.
+  2. **Wait ~10 min**, `node scripts/clkn-pool-spread.js`; want the engine ticks <1% off the
+     main LP before Stage 2. (Quiet token ~1 trade/hr — if the tick hasn't moved, the arb
+     hasn't fired yet; don't force Stage 2 onto a still-dislocated pool.)
+  3. **Stage 2 — full, balanced, tight.** "Balanced" = the two TWO-SIDED pools equal in
+     value (base CLKN/USDC ≈ SOL CLKN/SOL); the ask wall is SEPARATE and NOT counted.
+     - Equalize: deployable ~$700 USDC vs ~$473 SOL → swap ~$113 USDC→SOL so each side ≈ $586
+       (or cap base down to ~$473 to match SOL, no swap). Set `maxUsd` + `solMaxSol` so base
+       and SOL deploy equal value.
+     - Deploy base + SOL FIRST (`widthPct` 10, tight, re-centered on the corrected price) so
+       they claim their CLKN before the wall does.
+     - THEN re-enable the ask wall at the original `askWallClknFraction` 0.9 separately.
   - Price-gap guard is 25%; the ~13% gap won't trip it. If a bigger gap appears, widen
     `priceGapGuardPct` for the redeploy or the vault sits out.
 
