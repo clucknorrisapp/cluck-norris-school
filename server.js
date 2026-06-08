@@ -17,6 +17,7 @@ const kv = require("./lib/kvstore");
 const recap = require("./lib/recap");
 const gradTracker = require("./lib/grad-tracker");
 const credentials = require("./lib/credentials");
+const rpc = require("./lib/rpc"); // resilient RPC: primary Helius + automatic failover
 const QUESTION_BANK = require("./data/question-bank.json");
 const { PublicKey } = require("@solana/web3.js");
 
@@ -2929,7 +2930,9 @@ app.post("/api/helius-rpc", async (req, res) => {
   const HELIUS_KEY = process.env.HELIUS_API_KEY;
   if (!HELIUS_KEY) return res.status(500).json({ error: "Missing HELIUS_API_KEY" });
   try {
-    const response = await fetch(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`, {
+    // rpc.rpcFetch fails over to any backup RPC on a primary 429/outage, so the
+    // client tools (rose, airdrop, buyspecial) keep reading the chain.
+    const response = await rpc.rpcFetch(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(req.body || {})
@@ -2967,9 +2970,12 @@ app.post("/api/helius-tx", async (req, res) => {
 // A Helius JSON-RPC caller: rpcCall(id, method, params) — forwards params as given
 // (object for getTokenAccounts, array for getMultipleAccounts/getTokenSupply), so it
 // works with classifyAddressTypes and the DAS endpoints alike.
+// Routes through rpc.rpcFetch so a primary 429 / outage fails over to any backup
+// RPC (and the public node) instead of failing the call. The passed HELIUS_URL is
+// honored as the first attempt; rpc.rpcFetch then rolls through the rest.
 function heliusRpcCall(HELIUS_URL) {
   return async (id, method, params) => {
-    const r = await fetch(HELIUS_URL, {
+    const r = await rpc.rpcFetch(HELIUS_URL, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ jsonrpc: "2.0", id, method, params }),
     });

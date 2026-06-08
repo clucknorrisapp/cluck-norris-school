@@ -9,11 +9,10 @@ const {
   TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, createRevokeInstruction,
 } = require("@solana/spl-token");
 
-// Mainnet RPC — the project's Helius key, with a public fallback.
-function rpcUrl() {
-  const key = process.env.HELIUS_API_KEY;
-  return key ? `https://mainnet.helius-rpc.com/?api-key=${key}` : "https://api.mainnet-beta.solana.com";
-}
+// Mainnet RPC — resilient with automatic failover (lib/rpc.js): a primary 429 /
+// outage rolls to a backup RPC and the public node instead of failing the call.
+const { connection: rpcConnection, primaryRpcUrl } = require("./lib/rpc");
+function rpcUrl() { return primaryRpcUrl(); }
 
 // One Revoke instruction per token account stays small; this many comfortably
 // fit inside Solana's single-transaction size limit.
@@ -26,7 +25,7 @@ const PROGRAMS = [
 
 // ── Scan: find token accounts that have an active delegate ───────────────────
 async function scanDelegates(owner) {
-  const conn = new Connection(rpcUrl(), "confirmed");
+  const conn = rpcConnection("confirmed");
   const ownerPk = new PublicKey(owner);
   const found = [];
   for (const { label, id } of PROGRAMS) {
@@ -58,7 +57,7 @@ async function scanDelegates(owner) {
 // One Revoke instruction per token account; clearing the delegate. The owner
 // is the only signer — they sign and submit it in their wallet.
 async function buildRevokeTransaction(owner, accounts) {
-  const conn = new Connection(rpcUrl(), "confirmed");
+  const conn = rpcConnection("confirmed");
   const ownerPk = new PublicKey(owner);
   const tx = new Transaction();
   for (const a of accounts) {

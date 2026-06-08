@@ -26,6 +26,9 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   poller, all schedulers, and static file serving.
 - `lib/` — `bags-context`, `solana-tracker`, `solscan`, `premium-forensics`, `analytics`,
   plus volume-backed stores: `kvstore`, `sigstore`, `recap`, `grad-tracker`, `credentials`.
+  `rpc` — resilient RPC: one endpoint list (primary Helius + optional backups + public
+  node) and a failover `fetch`/`connection()`; the engine libs + server RPC proxies route
+  through it, so a primary 429/outage rolls to a backup instead of going blind.
   Liquidity Engine: `orca-whirlpools` (Orca Whirlpools concentrated-LP market maker —
   non-custodial tx builders) + `whirlpool-vault` (the autonomous LP manager).
 - `data/question-bank.json` — the Ultimate Challenge question pool (server-owned; the
@@ -69,6 +72,9 @@ run things). Var names: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `HELIUS_API_KE
 `COINGECKO_API_KEY`, `DATA_DIR`, `MM_OPERATOR_SECRET` (the Liquidity Vault's dedicated
 hot wallet — base58 or JSON secret key; UNSET = the autonomous vault is fully off, a safe
 no-op. Use a wallet holding ONLY the MM float, never the treasury or any mint authority).
+Optional RPC resilience (all unset = primary-only, fine): `FALLBACK_RPC_URL` (one or more
+full backup RPC URLs, comma-separated — e.g. a QuickNode/Triton/Alchemy endpoint),
+`HELIUS_API_KEY_2` (a second Helius key on a separate quota), `RPC_DEBUG` (=1 logs failover).
 Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.claude/`,
 `STRATEGY.md`.
 
