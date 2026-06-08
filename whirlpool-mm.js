@@ -300,6 +300,22 @@ router.get("/vault/client/costs", clientRoute((pid) => vault.costs(pid)));
 router.get("/vault/client/earnings", clientRoute((pid) => vault.earnings(pid)));
 router.post("/vault/client/pause", clientRoute((pid) => vault.pause(pid)));
 router.post("/vault/client/resume", clientRoute((pid) => vault.resume(pid)));
+// Strategy controls (owner self-serve). Mode switch is preview-first + reversible; it never
+// touches reserves / fee tier / trading pair (same guarantees as the admin mode endpoint).
+router.get("/vault/client/modes", clientRoute((pid) => vault.listModes(pid)));
+router.post("/vault/client/mode", (req, res) => {
+  const a = clientAuth(req);
+  if (!a) return res.status(401).json({ error: "not authenticated" });
+  const name = String((req.body && req.body.name) || req.query.name || "").toLowerCase();
+  const tiltRaw = (req.body && req.body.tilt) || req.query.tilt;
+  const tilt = tiltRaw ? String(tiltRaw).toLowerCase() : null;
+  const run = (req.body && req.body.run) || req.query.run;
+  if (!name) return res.status(400).json({ error: "name required (active|steady|foundation|custom)" });
+  try {
+    if (String(run) === "1") return res.json({ applied: true, ...vault.applyMode(name, tilt, a.pid) });
+    return res.json({ applied: false, preview: vault.previewMode(name, tilt, a.pid) });
+  } catch (e) { res.status(400).json({ error: e.message || "mode failed" }); }
+});
 
 // GET /api/whirlpool/vault/create-pool?key=&project=rose&quote=SOL&feeTier=0.05[&run=1]
 // Onboarding: create a NEW Orca pool for the project's token at the live market price.
