@@ -984,6 +984,7 @@ async function liquidityReply(chatId, replyTo) {
     const sym = proj.symbol || "CLKN";
     const r = await whirlpoolMM.vault.publicPositions(projectId);
     if (!r.enabled) { tgSend(chatId, `📊 The ${sym} Liquidity Engine isn't running right now.`, replyTo); return; }
+    if (r.error && !r.positions.length) { tgSend(chatId, `📊 Can't read ${sym} on-chain depth this moment — the data provider is rate-limiting. The positions are still live; try again in a few minutes.`, replyTo); return; }
     if (!r.positions.length) { tgSend(chatId, `📊 No active ${sym} liquidity positions at the moment.`, replyTo); return; }
     let m = `📊 <b>${sym} Liquidity Engine — live depth</b>\n<i>powered by Cluck Norris</i>\n\n`;
     const plain = projectId !== "clkn"; // CLKN/school keeps trading terms (it teaches them); other rooms get plain English
@@ -999,6 +1000,7 @@ async function liquidityReply(chatId, replyTo) {
     const vol = fmtUsdShort(await getClkn24hVolume(proj.tokenMint || CLKN_MINT_ADDR));
     const organic = fmtOrganicScore(await getClknOrganicScore(proj.tokenMint || CLKN_MINT_ADDR));
     m += `\n💧 <b>Total depth: ${money(r.totalUsd)}</b>`;
+    if (r.stale) m += `  <i>(snapshot ~${r.staleSeconds}s old — live read is rate-limited)</i>`;
     if (vol) m += `  ·  📈 24h vol: <b>${vol}</b>`;
     if (organic) m += `\n🪐 <b>Jupiter organic score: ${organic}</b> <i>(Jupiter's own measure of real, non-faked trading)</i>`;
     // Active engine mode (only when a named mode is applied — "custom" stays hidden).
