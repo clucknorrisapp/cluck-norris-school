@@ -22,6 +22,7 @@
       - NOTE: this runs on **Solana Tracker** (`gradWatcherTick` ~5min + `gradHotTick` ~1min +
         `bagsLaunchesTick`), **not Helius** — so cutting it frees Solana-Tracker quota and
         simplifies the scheduler block, but does **not** fix the Helius quota above.
-      - Decision pending (user debating removal). **Do not remove without explicit go-ahead** —
-        it touches the boot scheduler block and several endpoints (`/api/bags-near-grad`,
-        `/api/grad-watch-status`, the public `/bags` board).
+      - **DECISION (2026-06-08): KEEP all BAGS features as-is until the hackathon outcome is
+        known**, then revisit keep/cut. Do not remove without explicit go-ahead — it touches the
+        boot scheduler block and several endpoints (`/api/bags-near-grad`, `/api/grad-watch-status`,
+        the public `/bags` board).
