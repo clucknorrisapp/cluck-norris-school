@@ -194,6 +194,15 @@ router.get("/vault/costs", async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message || "costs failed" }); }
 });
 
+// GET /api/whirlpool/vault/dislocation?key=&project=… — how far each engine pool's
+// on-chain tick sits from the true market (the deepest "main LP", e.g. Meteora), with
+// a convergence verdict. The redeploy gate + a quick post-trade dislocation check.
+router.get("/vault/dislocation", async (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  try { res.json(await vault.dislocation(proj(req))); }
+  catch (e) { res.status(500).json({ error: e.message || "dislocation failed" }); }
+});
+
 // GET /api/whirlpool/vault/earnings?key=… — PRIVATE earnings readout: LP fees the
 // engine has EARNED — pending (uncollected, real-time) + realized (collected on
 // past rolls), valued in USD. Gated; never public. Pair with /costs for net P&L.
