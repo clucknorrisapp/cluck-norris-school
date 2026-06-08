@@ -1,11 +1,11 @@
 # Ops / decisions — to-do
 
 ## RPC / infra
-- [ ] **Upgrade the Helius plan.** On 2026-06-08 the Helius RPC returned `-32429 "max usage
-      reached"` (quota exhausted). This degrades **all on-chain reads sitewide** — `/liquidity`,
-      the engine dashboard, the client portal, the vault's rebalance tick, plus
-      autopsy/score/trace/holders. Same `HELIUS_API_KEY`, just more credits; until then it
-      recovers only at the plan's cycle reset.
+- [x] **Upgrade the Helius plan.** ✅ Done 2026-06-08 (≈10× usage). On-chain reads verified
+      working again (CLKN 3 positions/$2.4k, ROSE 3 positions/$140; fresh, no 429). Was
+      exhausted earlier same day (`-32429 "max usage reached"`), which had degraded **all
+      on-chain reads sitewide** — `/liquidity`, the engine dashboard, the client portal, the
+      vault's rebalance tick, plus autopsy/score/trace/holders.
       - Mitigation already shipped: `publicPositions` caches 30s and **serves the last good
         snapshot on a 429** (so `/liquidity` shows real depth through blips instead of a false
         "no positions"); `/liquidity` now says "rate-limited, try again" instead of "no positions".
