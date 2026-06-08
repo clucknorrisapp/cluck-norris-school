@@ -947,6 +947,7 @@ function tgCommandReply(cmd, arg) {
       return "🐔 <b>CLUCK NORRIS BOT — COMMANDS</b>\n" +
         "<i>Each opens the tool on clucknorris.app, with your mint/wallet pre-filled where supported.</i>\n\n" +
         "🐥 /guide — new here? get pointed the right way\n" +
+        "💵 /price — CLKN price, market cap, volume &amp; organic score\n" +
         "🩺 /score <code>&lt;mint&gt;</code> — token health 0–100\n" +
         "🪦 /autopsy <code>&lt;mint&gt;</code> — full forensic breakdown\n" +
         "🔍 /trace <code>&lt;wallet&gt;</code> — wallet × token history\n" +
@@ -1019,10 +1020,38 @@ async function liquidityReply(chatId, replyTo) {
   }
 }
 
-const TG_KNOWN_CMDS = ["score","autopsy","trace","snapshot","holders","securitycoop","buyspecial","rose","hatchery","bags","tools","liquidity","commands","start","help","guide","buyleaders","chatid"];
+// /price — quick market snapshot: price, market cap, 24h change/volume, liquidity, and
+// the Jupiter organic score. Project-aware (ROSE room shows ROSE), reuses cached helpers.
+async function priceReply(chatId, replyTo) {
+  const projectId = vaultProjectForChat(chatId);
+  const proj = (whirlpoolMM.vault.listProjects() || {})[projectId] || {};
+  const sym = proj.symbol || "CLKN";
+  const mint = proj.tokenMint || CLKN_MINT_ADDR;
+  try {
+    const [mkt, organic] = await Promise.all([getTokenMarket(mint), getClknOrganicScore(mint)]);
+    if (!mkt || !mkt.priceUsd) { tgSend(chatId, `📈 Couldn't read ${sym} price right now — try again shortly.`, replyTo); return; }
+    const fmtPrice = (p) => p >= 0.01 ? "$" + p.toFixed(4) : "$" + p.toPrecision(3);
+    const chg = (v) => v == null ? null : (v >= 0 ? "+" : "") + Number(v).toFixed(1) + "%";
+    const c = mkt.change || {};
+    let m = `📈 <b>${sym} — market</b>\n\n`;
+    m += `💵 Price: <b>${fmtPrice(mkt.priceUsd)}</b>\n`;
+    if (mkt.mc) m += `🏦 Market cap: <b>${fmtUsdShort(mkt.mc)}</b>\n`;
+    const parts = [c.h1 != null ? `1h ${chg(c.h1)}` : null, c.h6 != null ? `6h ${chg(c.h6)}` : null, c.h24 != null ? `24h ${chg(c.h24)}` : null].filter(Boolean);
+    if (parts.length) m += `📊 ${parts.join(" · ")}\n`;
+    const vol = fmtUsdShort(mkt.vol24h); if (vol) m += `🔁 24h volume: <b>${vol}</b>\n`;
+    if (mkt.liqUsd) m += `💧 Liquidity: <b>${fmtUsdShort(mkt.liqUsd)}</b>\n`;
+    const org = fmtOrganicScore(organic); if (org) m += `🪐 Jupiter organic score: <b>${org}</b>\n`;
+    m += `\n🐔 ${TG_PUBLIC_BASE}`;
+    tgSend(chatId, m, replyTo);
+  } catch (e) {
+    tgSend(chatId, `📈 Couldn't load ${sym} price right now — try again shortly.`, replyTo);
+  }
+}
+
+const TG_KNOWN_CMDS = ["score","autopsy","trace","snapshot","holders","securitycoop","buyspecial","rose","hatchery","bags","tools","liquidity","price","commands","start","help","guide","buyleaders","chatid"];
 // In a non-CLKN project room (e.g. ROSE) the bot only serves that project's liquidity +
 // buy competitions; chatid stays so an operator can wire a buy comp. Everything else off.
-const PROJECT_ROOM_CMDS = ["liquidity","buyleaders","chatid"];
+const PROJECT_ROOM_CMDS = ["liquidity","price","buyleaders","chatid"];
 const lbCooldown = new Map();      // chatId -> last LIVE pull ts (quota guard)
 const lbReplyCooldown = new Map(); // chatId -> last reply ts (chat anti-spam)
 
@@ -1351,6 +1380,11 @@ function handleTelegramUpdate(update) {
     // /liquidity → live, sanitized snapshot of the Liquidity Engine's positions.
     if (cmd === "liquidity") {
       liquidityReply(msg.chat.id, msg.message_id);
+      return;
+    }
+    // /price → quick market snapshot (price, MC, change, volume, organic score).
+    if (cmd === "price") {
+      priceReply(msg.chat.id, msg.message_id);
       return;
     }
     tgSend(msg.chat.id, tgCommandReply(cmd, arg), msg.message_id);
@@ -10175,6 +10209,27 @@ function fmtUsdShort(n) {
   return "$" + Math.round(n);
 }
 
+// Live market snapshot for any Solana mint from DexScreener: price + market cap from
+// the DEEPEST pool (real price discovery), 24h volume summed across pools, and the
+// price-change deltas. Same endpoint getClkn24hVolume() uses. Returns null on failure.
+async function getTokenMarket(mint = CLKN_MINT_ADDR) {
+  try {
+    const res = await fetch(`https://api.dexscreener.com/token-pairs/v1/solana/${mint}`, { signal: AbortSignal.timeout(8000) });
+    const data = await res.json();
+    if (!Array.isArray(data) || !data.length) return null;
+    let vol24h = 0;
+    for (const p of data) { const h = Number(p?.volume?.h24); if (Number.isFinite(h)) vol24h += h; }
+    const deepest = data.slice().sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+    return {
+      priceUsd: Number(deepest.priceUsd) || null,
+      mc: Number(deepest.marketCap || deepest.fdv) || null,
+      liqUsd: Math.round(deepest.liquidity?.usd || 0),
+      vol24h,
+      change: deepest.priceChange || {},
+    };
+  } catch (e) { console.warn("[TELEGRAM] market fetch failed:", e.message); return null; }
+}
+
 // Jupiter's organic score for CLKN (0–100 + a high/medium/low label). It's
 // Jupiter's own measure of REAL, non-manipulated trading — the metric our
 // Liquidity Engine is built to earn honestly (and the one wash-volume bots can't
@@ -10664,6 +10719,7 @@ app.listen(PORT, () => {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ commands: [
             { command: "guide", description: "Where do I start? Get pointed the right way" },
+            { command: "price", description: "CLKN price, market cap, volume & organic score" },
             { command: "score", description: "Token health 0–100 (/score <mint>)" },
             { command: "autopsy", description: "Forensic breakdown (/autopsy <mint>)" },
             { command: "trace", description: "Wallet × token history (/trace <wallet>)" },
