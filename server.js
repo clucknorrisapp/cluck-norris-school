@@ -2379,11 +2379,24 @@ async function sendTreasuryRecap({ send = true } = {}) {
   const sleeves = ((pos && pos.positions) || []).filter((p) => (p.valueUsd || 0) >= 1);
   let posSol = 0, posBase = 0, deployedUsd = 0;
   for (const p of sleeves) { posBase += p.clknAmount || 0; posSol += p.quoteAmount || 0; deployedUsd += p.valueUsd || 0; }
+  // Fold in Meteora DLMM positions — same treasury wallet, different venue (the Orca
+  // engine is blind to them), so count them explicitly or the recap misses the bulk of the stack.
+  let metFeesUsd = 0; const metPositions = [];
+  try {
+    const m = await meteora.status({ solUsd, btcUsd: baseUsd });
+    for (const p of (m.positions || [])) {
+      const xIsBtc = p.symX === "cbBTC";
+      posBase += xIsBtc ? (p.amountX || 0) : (p.amountY || 0);
+      posSol += xIsBtc ? (p.amountY || 0) : (p.amountX || 0);
+      deployedUsd += p.valueUsd || 0; metFeesUsd += p.pendingFeeUsd || 0;
+      metPositions.push({ valueUsd: p.valueUsd || 0, inRange: p.inRange, lowerPrice: p.lowerPrice, upperPrice: p.upperPrice });
+    }
+  } catch (_) { /* meteora read best-effort — don't break the recap if it's down */ }
   const totalSol = posSol + (f.sol || 0);
   const totalBase = posBase + (f.clkn || 0);
   const valueUsd = deployedUsd + (f.sol || 0) * solUsd + (f.clkn || 0) * baseUsd + (f.usdc || 0);
   const valueBtc = valueUsd / baseUsd;
-  const feesUsd = earn.totalEarnedUsd != null ? earn.totalEarnedUsd : 0;
+  const feesUsd = (earn.totalEarnedUsd != null ? earn.totalEarnedUsd : 0) + metFeesUsd;
   const snap = {
     ts: Date.now(), solUsd, baseUsd, valueUsd, valueBtc, totalSol, totalBase, feesUsd,
     positions: sleeves.map((p) => ({ role: p.role, valueUsd: p.valueUsd || 0, valueBtc: (p.valueUsd || 0) / baseUsd })),
@@ -2408,6 +2421,10 @@ async function sendTreasuryRecap({ send = true } = {}) {
     const was = prev && prev.positions.find((x) => x.role === p.role);
     const d = was ? ` · ${sg(pct((p.valueUsd || 0) / baseUsd, was.valueBtc))}%` : "";
     L.push(`• ${roleName[p.role] || p.role}: ${btc((p.valueUsd || 0) / baseUsd)} (${usd(p.valueUsd || 0)})${d}`);
+  }
+  for (const mp of metPositions) {
+    const rng = (mp.lowerPrice && mp.upperPrice) ? ` ${mp.lowerPrice.toFixed(0)}–${mp.upperPrice.toFixed(0)}` : "";
+    L.push(`• Meteora${rng}: ${btc(mp.valueUsd / baseUsd)} (${usd(mp.valueUsd)}) ${mp.inRange ? "✓ in range" : "⚠️ OUT of range"}`);
   }
   L.push(``);
   L.push(`<b>Assets held</b>`);
@@ -10868,6 +10885,39 @@ app.listen(PORT, () => {
     }
     setInterval(treasuryRecapTick, 5 * 60 * 1000);
     setTimeout(treasuryRecapTick, 30000); // first recap shortly after boot captures the baseline; then daily
+    // Meteora OOR monitor — DM when a Meteora position drifts OUT of range (needs a re-center).
+    // Edge-triggered + debounced (one alert per OOR episode), so it nudges without spamming.
+    let _metOorState = kv.get("meteoraOorState", {});
+    async function meteoraOorTick() {
+      const tg = process.env.TELEGRAM_BOT_TOKEN; const proj = whirlpoolMM.vault.getProject("treasury");
+      if (!tg || !proj || !proj.telegramChatId) return;
+      try {
+        if (!meteora.isEnabled()) return;
+        let solUsd = 0, btcUsd = 0;
+        try { const st = await whirlpoolMM.vault.status("treasury"); const px = (st.earnings || {}).prices || {}; solUsd = px.solUsd || 0; btcUsd = px.clknUsd || 0; } catch (_) {}
+        const m = await meteora.status({ solUsd, btcUsd });
+        for (const p of (m.positions || [])) {
+          const key = p.position;
+          const wasOor = !!_metOorState[key];
+          if (!p.inRange && !wasOor) {
+            _metOorState[key] = Date.now(); kv.set("meteoraOorState", _metOorState);
+            await fetch(`https://api.telegram.org/bot${tg}/sendMessage`, {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ chat_id: proj.telegramChatId, parse_mode: "HTML", disable_web_page_preview: true,
+                text: `⚠️ <b>Meteora position OUT of range</b>\n${p.pair} · earning $0 until re-centered\nrange ${p.lowerPrice ? p.lowerPrice.toFixed(0) + "–" + p.upperPrice.toFixed(0) : "?"} · value ${"$" + Math.round(p.valueUsd)}\nPull → reopen centered to resume fees.` }),
+            });
+          } else if (p.inRange && wasOor) {
+            delete _metOorState[key]; kv.set("meteoraOorState", _metOorState);
+            await fetch(`https://api.telegram.org/bot${tg}/sendMessage`, {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ chat_id: proj.telegramChatId, parse_mode: "HTML", text: `✅ <b>Meteora back in range</b>\n${p.pair} · earning fees again.` }),
+            });
+          }
+        }
+      } catch (e) { console.warn("[meteora-oor] failed:", e.message); }
+    }
+    setInterval(meteoraOorTick, 5 * 60 * 1000);
+    setTimeout(meteoraOorTick, 45000);
     // Live buy-competition leaderboards — refresh active boards, close on window end.
     setInterval(buyCompTick, 60 * 1000);
     // Interactive slash commands — register the webhook + the "/" command menu.
