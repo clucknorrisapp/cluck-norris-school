@@ -2489,7 +2489,7 @@ app.get("/api/meteora/remove-liquidity", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) return res.status(404).json({ error: "not_found" });
   try {
-    return res.status(200).json(await meteora.removeLiquidity({ positionPubkey: req.query.position || null, pct: req.query.pct, dryRun: req.query.run !== "1" }));
+    return res.status(200).json(await meteora.removeLiquidity({ positionPubkey: req.query.position || null, pct: req.query.pct, close: req.query.close === "1", dryRun: req.query.run !== "1" }));
   } catch (e) { return res.status(500).json({ error: e.message }); }
 });
 
