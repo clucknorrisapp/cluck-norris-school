@@ -251,6 +251,14 @@ router.get("/vault/btc-tick", async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message || "btc tick failed" }); }
 });
 
+// GET /api/whirlpool/vault/treasury-tick?key=…[&run=1] — run one dual-sleeve cycle
+// (wide + tight, cbBTC/SOL). DRY RUN unless run=1. Needs dualSleeveEnabled on the project.
+router.get("/vault/treasury-tick", async (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  try { res.json(await vault.tickTreasury({ dryRun: req.query.run !== "1", projectId: proj(req) })); }
+  catch (e) { res.status(500).json({ error: e.message || "treasury tick failed" }); }
+});
+
 // GET /api/whirlpool/vault/rebalance?key=…[&run=1] — run one inventory rebalance
 // (swap SOL→USDC toward target). DRY RUN unless run=1.
 router.get("/vault/rebalance", async (req, res) => {

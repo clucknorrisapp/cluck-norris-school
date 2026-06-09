@@ -10765,6 +10765,7 @@ app.listen(PORT, () => {
     try { const r = await whirlpoolMM.vault.tick({ projectId: id }); if (r && !["none", "hold", "deferred"].includes(r.action)) console.log(tag, r.action, "·", r.reason || ""); } catch (e) { console.error(`${tag} tick error:`, e.message); }
     try { const s = await whirlpoolMM.vault.tickSol({ projectId: id }); if (s && !["none", "hold", "deferred"].includes(s.action)) console.log(`${tag}[token/SOL]`, s.action, "·", s.reason || ""); } catch (e) { console.error(`${tag} token/SOL error:`, e.message); }
     try { const b = await whirlpoolMM.vault.tickBtc({ projectId: id }); if (b && !["none", "hold", "deferred"].includes(b.action)) console.log(`${tag}[token/cbBTC]`, b.action, "·", b.reason || ""); } catch (e) { console.error(`${tag} token/cbBTC error:`, e.message); }
+    try { const tr = await whirlpoolMM.vault.tickTreasury({ projectId: id }); if (tr && !["none", "hold", "deferred"].includes(tr.action)) console.log(`${tag}[dual-sleeve]`, tr.action, "·", tr.reason || ""); } catch (e) { console.error(`${tag} dual-sleeve error:`, e.message); }
     try { const bb = await whirlpoolMM.vault.buyback({ projectId: id }); if (bb && !["none", "disabled", "deferred", "capped"].includes(bb.action)) console.log(`${tag}[buyback]`, bb.action, "·", bb.reason || ""); } catch (e) { console.error(`${tag} buyback error:`, e.message); }
   };
   const vaultTick = async () => {
