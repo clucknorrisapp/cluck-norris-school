@@ -15,6 +15,7 @@ npm-debug.log*
 
 # Internal docs — keep strategy/brainstorm notes out of the public repo
 STRATEGY.md
+SECURITY-BACKLOG.md
 
 # Local Claude Code config (machine-specific, keep private)
 .claude/
