@@ -7,6 +7,7 @@ const { createSign, createHash, createHmac, randomBytes, createPublicKey, verify
 const hatchery = require("./hatchery");
 const securityCoop = require("./securitycoop");
 const whirlpoolMM = require("./whirlpool-mm");
+const meteora = require("./lib/meteora-dlmm"); // Meteora DLMM read layer (SDK lazy-loaded inside)
 const { fetchBagsContext, classifyTeamActivity } = require("./lib/bags-context");
 const analytics = require("./lib/analytics");
 const solscan = require("./lib/solscan");
@@ -2447,6 +2448,20 @@ app.get("/api/treasury-recap-test", async (req, res) => {
   if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) return res.status(404).json({ error: "not_found" });
   try { return res.status(200).json(await sendTreasuryRecap({ send: req.query.send === "1" })); }
   catch (e) { return res.status(500).json({ error: e.message }); }
+});
+
+// Meteora DLMM positions — read-only status (gated). Lists the treasury wallet's
+// Meteora positions (range, amounts, pending fees, in-range) so the cbBTC/SOL
+// position on Meteora can be tracked alongside the Orca vault. Values use the
+// treasury vault's current SOL/cbBTC prices.
+app.get("/api/meteora/status", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) return res.status(404).json({ error: "not_found" });
+  try {
+    let solUsd = 0, btcUsd = 0;
+    try { const st = await whirlpoolMM.vault.status("treasury"); const px = (st.earnings || {}).prices || {}; solUsd = px.solUsd || 0; btcUsd = px.clknUsd || 0; } catch (_) {}
+    return res.status(200).json(await meteora.status({ solUsd, btcUsd }));
+  } catch (e) { return res.status(500).json({ error: e.message }); }
 });
 
 // Graduation-watcher status (gated). Shows the current watchlist + our 48h

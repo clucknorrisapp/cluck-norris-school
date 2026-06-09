@@ -12,6 +12,7 @@
     "@coral-xyz/anchor": "^0.32.1",
     "@dha-team/arbundles": "^1.0.4",
     "@fontsource/oswald": "^5.2.8",
+    "@meteora-ag/dlmm": "^1.9.10",
     "@napi-rs/canvas": "^1.0.0",
     "@orca-so/whirlpools-sdk": "^0.20.0",
     "@raydium-io/raydium-sdk-v2": "^0.2.50-alpha",
