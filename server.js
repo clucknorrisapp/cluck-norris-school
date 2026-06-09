@@ -416,16 +416,18 @@ function lockReportTick() {
 
 // ── Daily educational posts ("Cluck's Lesson") ────────────────────────────
 // Hybrid: we own the topic list (drawn from the real curriculum — Incubator,
-// School of Hard Knocks, LP Lab, security); Claude writes each short lesson in
-// Cluck's voice. Fires 4×/day on ODD UTC hours so it never collides with the
-// other scheduled posts (which all land on even hours). Topic rotates in order
-// (index persisted on the volume) so it never repeats until the set is used up.
+// School of Hard Knocks, LP Lab, security); Claude writes each lesson in Cluck's
+// voice. Fires 3×/day on ODD UTC hours so it never collides with the other
+// scheduled posts (which land on even hours). Topics come from a SHUFFLED deck
+// (persisted) — every topic airs once before any repeat, but the order reshuffles
+// each pass so it never reads like the same predictable loop.
 // Posts STAY (no self-clean) — they're a learning record.
 const EDU_POST_ENABLED = true;
-// 4×/day, timed to the busiest crypto-Twitter window (US-dominated): 13/17/21/01
-// UTC = 9am · 1pm · 5pm · 9pm ET — full US active day, evening-inclusive. Kept on
-// ODD UTC hours so they never collide with the even-hour posts (Market Check / recap).
-const EDU_HOURS_UTC = [13, 17, 21, 1];
+// 3×/day on the US-active window: 13/19/01 UTC = 9am · 3pm · 9pm ET. Kept on ODD
+// UTC hours so they never collide with the even-hour posts (Market Check / recap).
+// The 13:00 (morning) slot is the LONG lesson; 19:00 and 01:00 are punchy shorts.
+const EDU_HOURS_UTC = [13, 19, 1];
+const EDU_LONG_HOUR = 13; // one full lesson per day (morning); the other two slots are short
 // X-only @mentions appended to each cross-posted tweet (NOT added to Telegram).
 // Easy to trim/remove here if it starts reading as spam.
 const X_MENTION_TAGS = "@BagsApp @BagsHackathon";
@@ -449,7 +451,7 @@ const EDU_TOPICS = [
   "What slippage is and how to set it sensibly",
   "What market cap really tells you about a token — and what it doesn't",
   "How to spot a honeypot token before you buy",
-  "What token approvals are and why you should revoke unused ones",
+  "Token approvals: what you grant when you trade, why unlimited approvals to unknown contracts are dangerous, and how to revoke the ones you no longer use",
   "What a liquidity pool actually is, in plain terms",
   "How automated market makers (AMMs) set prices with the x*y=k formula",
   "Impermanent loss: what it is and when it actually costs you",
@@ -467,8 +469,7 @@ const EDU_TOPICS = [
   "Rug pulls: the common patterns and the red flags to catch early",
   "The difference between locked liquidity and locked supply",
   "Why holder concentration matters and how to check it",
-  "What renounced or burned mint authority means for a token",
-  "Token metadata mutability and update authority — who can change a token's name, image and socials after launch, the bait-and-switch risk vs the legitimate need to rebrand, and why locking it builds buyer trust",
+  "Token authorities explained: mint authority (can they print more supply?) vs update/metadata authority (can they change the name, image, or socials after launch?), and why renouncing or burning them builds buyer trust",
   "How creator fees work on launchpads like Bags.fm",
   "Reading a DexScreener chart without getting faked out by phantom pools",
   "Why dollar-cost averaging beats trying to time the exact bottom",
@@ -480,8 +481,15 @@ const EDU_TOPICS = [
   "Why low-liquidity tokens are so easy to manipulate",
   "Setting a personal risk budget you can actually afford to lose",
   "What graduation to a DEX pool means for a launchpad token",
-  "The danger of unlimited token approvals to unknown contracts",
   "How to tell organic volume from wash trading",
+  "Limit orders vs market orders, and when each one saves you money",
+  "Cross-chain bridges and the real risks of wrapped assets (like wrapped BTC on Solana)",
+  "Why deep liquidity matters more than a token's headline 24h volume number",
+  "How to verify a token's liquidity is actually locked — and for how long",
+  "Position sizing and stop-losses: how to survive long enough to win",
+  "How to read a block explorer to confirm what a transaction actually did",
+  "Arbitrage: how it keeps prices aligned across pools, and why arb volume isn't the same as real (organic) demand",
+  "Volume vs demand: why a high trade count can still mean only a handful of real buyers",
 ];
 async function generateEduLesson(topic, style = "full") {
   const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
@@ -565,13 +573,29 @@ async function generateEduTweet(topic) {
   } catch (e) { console.warn("[X] tweet generation failed:", e.message); }
   return null;
 }
+// Shuffled-deck topic rotation: deal through a shuffled copy of the whole topic
+// list (every topic airs once before any repeat), then reshuffle on exhaustion —
+// so the order changes each pass and it never reads like the same loop. Reshuffles
+// automatically if the topic list length changes (e.g. topics added/removed).
+function nextEduTopic() {
+  let deck = kv.get("eduDeckV2", []);
+  let pos = kv.get("eduDeckPosV2", 0);
+  if (!Array.isArray(deck) || deck.length !== EDU_TOPICS.length || pos >= deck.length) {
+    deck = [...Array(EDU_TOPICS.length).keys()];
+    for (let i = deck.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [deck[i], deck[j]] = [deck[j], deck[i]]; }
+    pos = 0;
+    kv.set("eduDeckV2", deck);
+  }
+  const topic = EDU_TOPICS[deck[pos]];
+  kv.set("eduDeckPosV2", pos + 1);
+  return topic;
+}
 async function notifyEduPost() {
   const token = process.env.TELEGRAM_BOT_TOKEN, chatId = process.env.TELEGRAM_CHAT_ID;
   if (!token || !chatId) return;
-  const idx = kv.get("eduTopicIdx", 0);
-  const topic = EDU_TOPICS[idx % EDU_TOPICS.length];
-  kv.set("eduTopicIdx", (idx + 1) % EDU_TOPICS.length); // advance rotation
-  const style = (idx % 3 === 2) ? "short" : "full";     // mix a punchy short one in every ~3rd lesson
+  const topic = nextEduTopic();
+  // 1 long + 2 short per day: the morning (EDU_LONG_HOUR) slot is the full lesson; the others are short.
+  const style = (new Date().getUTCHours() === EDU_LONG_HOUR) ? "full" : "short";
   const body = await generateEduLesson(topic, style);
   if (!body) { console.warn("[EDU] no body, skipping post for topic:", topic); return; }
   const text = `🎓 <b>CLUCK'S LESSON</b>\n\n${tgEsc(body)}\n\n💬 <i>Reply to this lesson with a question and Cluck will answer.</i>\n📚 The full course is in session → clucknorris.app`;
@@ -2325,11 +2349,13 @@ app.get("/api/edu-post-test", async (req, res) => {
   if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) return res.status(404).json({ error: "not_found" });
   try {
     if (req.query.post === "1") { await notifyEduPost(); return res.status(200).json({ success: true, posted: true }); }
-    const idx = kv.get("eduTopicIdx", 0);
-    const topic = req.query.topic ? String(req.query.topic) : EDU_TOPICS[idx % EDU_TOPICS.length];
-    const style = req.query.style === "short" ? "short" : (req.query.style === "full" ? "full" : ((idx % 3 === 2) ? "short" : "full"));
+    const deck = kv.get("eduDeckV2", []); const pos = kv.get("eduDeckPosV2", 0);
+    const peekIdx = (Array.isArray(deck) && deck.length === EDU_TOPICS.length && pos < deck.length) ? deck[pos] : 0;
+    const topic = req.query.topic ? String(req.query.topic) : EDU_TOPICS[peekIdx];
+    const slotStyle = (new Date().getUTCHours() === EDU_LONG_HOUR) ? "full" : "short";
+    const style = req.query.style === "short" ? "short" : (req.query.style === "full" ? "full" : slotStyle);
     const body = await generateEduLesson(topic, style);
-    return res.status(200).json({ success: true, posted: false, nextTopicIdx: idx, topic, style, preview: body });
+    return res.status(200).json({ success: true, posted: false, topic, style, preview: body });
   } catch (e) { return res.status(500).json({ success: false, error: e.message }); }
 });
 
@@ -9748,15 +9774,18 @@ app.get("*", (req, res) => {
 // a swap and not a P2P transfer.
 const CLKN_POOL_ADDRESS = "64WXkHM4zyWUkYy32TfUeBV5wDAfdcUGDxe5ntM4xaTd"; // Meteora DAMM V2
 const CLKN_ORCA_POOL = "H1r9ut25xAU1B1AbZRhvSJjShd4Q3mtmysYHBisFES7H"; // Orca Whirlpool CLKN/USDC 0.02% — our primary Liquidity Engine base pool
+const CLKN_ORCA_BTC_POOL = "5T9kVXHWpJiiK1SUTKm4tCd7kUMa78AtgGcD71raYkoQ"; // Orca Whirlpool CLKN/cbBTC 0.02% — the new BTC-quote Liquidity Engine pool
 const WSOL_MINT = "So11111111111111111111111111111111111111112";
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const USDT_MINT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
+const CBBTC_MINT = "cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij"; // Coinbase wrapped BTC (8 decimals)
 // Quote tokens we recognize as "the buyer paid with this." Helius returns
 // tokenAmount already in UI units, so we just need symbol + emoji per quote.
 const QUOTE_TOKENS = {
   [WSOL_MINT]: { symbol: "SOL",  emoji: "◎", isStable: false },
   [USDC_MINT]: { symbol: "USDC", emoji: "$", isStable: true },
   [USDT_MINT]: { symbol: "USDT", emoji: "$", isStable: true },
+  [CBBTC_MINT]: { symbol: "cbBTC", emoji: "₿", isStable: false },
 };
 // Buys below this USD value don't fire a Telegram notification. Default $5 so
 // the channel shows the steady stream of smaller buys (good for hype during a
@@ -9813,12 +9842,39 @@ async function getSolUsd() {
   return cachedSolUsd;
 }
 
-// Convert a trade's quote leg (SOL/USDC/USDT) into USD. Works for buys and
+// Cached BTC/USD price for valuing cbBTC-quoted trades on the new CLKN/cbBTC pool.
+// Same pattern as getSolUsd: CoinGecko first, DexScreener cbBTC fallback, null until
+// a real price loads (so we skip rather than post a fabricated USD value).
+let cachedBtcUsd = parseFloat(process.env.BTC_USD_FALLBACK) || null;
+let cachedBtcUsdAt = 0;
+async function getBtcUsd() {
+  const now = Date.now();
+  if (now - cachedBtcUsdAt < 5 * 60 * 1000 && cachedBtcUsdAt > 0) return cachedBtcUsd;
+  try {
+    const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd");
+    const data = await res.json();
+    const price = parseFloat(data?.bitcoin?.usd);
+    if (Number.isFinite(price) && price > 0) { cachedBtcUsd = price; cachedBtcUsdAt = now; return cachedBtcUsd; }
+  } catch (e) { console.warn("[TELEGRAM] CoinGecko BTC fetch failed:", e.message); }
+  try {
+    const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${CBBTC_MINT}`);
+    const data = await res.json();
+    const price = parseFloat(data?.pairs?.[0]?.priceUsd);
+    if (Number.isFinite(price) && price > 0) { cachedBtcUsd = price; cachedBtcUsdAt = now; }
+  } catch (e) { console.warn("[TELEGRAM] DexScreener cbBTC fallback failed:", e.message); }
+  return cachedBtcUsd;
+}
+
+// Convert a trade's quote leg (SOL/USDC/USDT/cbBTC) into USD. Works for buys and
 // sells alike — both carry the same { quote: { mint, amount } } shape.
 function quoteUsdValue(trade) {
   const meta = QUOTE_TOKENS[trade.quote.mint];
   if (!meta) return null;
   if (meta.isStable) return trade.quote.amount;
+  if (trade.quote.mint === CBBTC_MINT) {
+    if (!cachedBtcUsd) return null; // no real BTC price yet — skip rather than fabricate
+    return trade.quote.amount * cachedBtcUsd; // cbBTC × cached USD price
+  }
   if (!cachedSolUsd) return null; // no real SOL price yet — skip rather than fabricate a USD value
   return trade.quote.amount * cachedSolUsd; // SOL/wSOL × cached USD price
 }
@@ -9870,6 +9926,11 @@ async function getClknPools() {
   // our market-maker depth get announced too — DexScreener can lag on a fresh pool.
   if (!cachedPools.find(p => p.address === CLKN_ORCA_POOL)) {
     cachedPools.push({ address: CLKN_ORCA_POOL, dexId: "orca", labels: ["Whirlpool"] });
+  }
+  // And the new CLKN/cbBTC Orca pool, so BTC-quoted buys/sells are watched immediately
+  // (DexScreener lags on a fresh pool, but we want it covered from the first block).
+  if (!cachedPools.find(p => p.address === CLKN_ORCA_BTC_POOL)) {
+    cachedPools.push({ address: CLKN_ORCA_BTC_POOL, dexId: "orca", labels: ["Whirlpool"] });
   }
   return cachedPools;
 }
@@ -10458,8 +10519,9 @@ async function pollClknBuys() {
   const HELIUS_KEY = process.env.HELIUS_API_KEY;
   if (!HELIUS_KEY || !process.env.TELEGRAM_BOT_TOKEN) return;
   try {
-    // Refresh SOL price once per cycle (cached internally for 5 min)
+    // Refresh SOL + BTC prices once per cycle (each cached internally for 5 min)
     await getSolUsd();
+    await getBtcUsd();
     // Get current pool list (cached internally for 10 min)
     const pools = await getClknPools();
     if (!pools.length) return;
@@ -10634,7 +10696,7 @@ app.listen(PORT, () => {
     setTimeout(gradWatcherTick, 12000);
     setInterval(gradWatcherTick, 300 * 1000);   // 5 min — broad discovery: find tokens entering "close to bonding" + fire near-grad alerts
     setInterval(gradHotTick, 60 * 1000);        // 1 min — fast-watch ONLY the alerted ("close to bonding") tokens so graduations post within ~1 min (cost scales with the tiny hot set)
-    // Cluck's Lesson — educational post 4×/day on odd UTC hours (13/17/21/01).
+    // Cluck's Lesson — educational post 3×/day on odd UTC hours (13/19/01): 1 long + 2 short.
     setInterval(eduPostTick, 60 * 1000);
     // Live buy-competition leaderboards — refresh active boards, close on window end.
     setInterval(buyCompTick, 60 * 1000);
