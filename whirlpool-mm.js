@@ -393,6 +393,20 @@ router.get("/vault/add-liquidity", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message || "add-liquidity failed" }); }
 });
 
+// GET /api/whirlpool/vault/remove-liquidity?key=&project=&mint=&pct=0.5[&run=1]
+// Withdraw pct (0..1) of a position's liquidity back to the wallet (no close). DRY unless run=1.
+router.get("/vault/remove-liquidity", async (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  try {
+    res.json(await vault.removeLiquidity({
+      projectId: proj(req),
+      mint: String(req.query.mint || ""),
+      pct: req.query.pct,
+      dryRun: req.query.run !== "1",
+    }));
+  } catch (e) { res.status(500).json({ error: e.message || "remove-liquidity failed" }); }
+});
+
 // POST /api/whirlpool/vault/pause?key=… and /resume?key=… — kill switch.
 router.post("/vault/pause", (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
