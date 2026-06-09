@@ -377,6 +377,22 @@ router.get("/vault/close-position", async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message || "close failed" }); }
 });
 
+// GET /api/whirlpool/vault/add-liquidity?key=&project=&mint=&from=SOL&amount=…[&run=1]
+// Top up an EXISTING position (no close/reopen) — deposit `amount` of `from` into its
+// range; the SDK pulls the matching other side. DRY RUN unless run=1.
+router.get("/vault/add-liquidity", async (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  try {
+    res.json(await vault.addLiquidity({
+      projectId: proj(req),
+      mint: String(req.query.mint || ""),
+      fromSym: String(req.query.from || "").toUpperCase(),
+      amountUi: req.query.amount,
+      dryRun: req.query.run !== "1",
+    }));
+  } catch (e) { res.status(500).json({ error: e.message || "add-liquidity failed" }); }
+});
+
 // POST /api/whirlpool/vault/pause?key=… and /resume?key=… — kill switch.
 router.post("/vault/pause", (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
