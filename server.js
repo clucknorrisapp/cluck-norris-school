@@ -10698,6 +10698,43 @@ app.listen(PORT, () => {
     setInterval(gradHotTick, 60 * 1000);        // 1 min — fast-watch ONLY the alerted ("close to bonding") tokens so graduations post within ~1 min (cost scales with the tiny hot set)
     // Cluck's Lesson — educational post 3×/day on odd UTC hours (13/19/01): 1 long + 2 short.
     setInterval(eduPostTick, 60 * 1000);
+    // Treasury report — private DM (the treasury project's chat) of balances + fees every
+    // 6h. Persisted stamp so redeploys don't re-fire; no-op unless the treasury is funded.
+    let lastTreasuryReportAt = kv.get("treasuryReportAt", 0);
+    async function sendTreasuryReport() {
+      const tok = process.env.TELEGRAM_BOT_TOKEN; if (!tok) return;
+      try {
+        const proj = whirlpoolMM.vault.getProject("treasury"); if (!proj || !proj.telegramChatId) return;
+        const st = await whirlpoolMM.vault.status("treasury"); if (!st || !st.enabled) return;
+        const pos = await whirlpoolMM.vault.publicPositions("treasury").catch(() => null);
+        const f = st.float || {}, earn = st.earnings || {}, cost = st.costs || {}, px = earn.prices || {};
+        const dep = pos && typeof pos.totalUsd === "number" ? pos.totalUsd : 0;
+        const sleeves = ((pos && pos.positions) || []).filter((p) => p.role === "wide" || p.role === "tight")
+          .map((p) => `  • ${p.role}: $${(p.valueUsd || 0).toFixed(2)} (${p.inRange ? "in range" : "OUT of range"})`).join("\n");
+        const floatUsd = (f.sol || 0) * (px.solUsd || 0) + (f.clkn || 0) * (px.clknUsd || 0) + (f.usdc || 0);
+        const earned = earn.totalEarnedUsd != null ? earn.totalEarnedUsd : 0;
+        const spent = cost.lifetime && typeof cost.lifetime.usd === "number" ? cost.lifetime.usd : 0;
+        const net = st.netPnlUsd != null ? st.netPnlUsd : earned - spent;
+        const msg =
+          `🏦 <b>Treasury report</b> — cbBTC/SOL dual-sleeve\n\n` +
+          `<b>Total value:</b> $${(dep + floatUsd).toFixed(2)}\n` +
+          `<b>Deployed:</b> $${dep.toFixed(2)}\n${sleeves ? sleeves + "\n" : ""}` +
+          `<b>Wallet float:</b> ${(f.sol || 0).toFixed(3)} SOL · ${(f.clkn || 0).toFixed(6)} cbBTC · $${(f.usdc || 0).toFixed(2)} USDC (≈$${floatUsd.toFixed(2)})\n\n` +
+          `<b>Fees earned:</b> $${earned.toFixed(4)} <i>(pending $${((earn.pending && earn.pending.usd) || 0).toFixed(4)} + realized $${((earn.realized && earn.realized.usd) || 0).toFixed(4)})</i>\n` +
+          `<b>Fees spent (moves):</b> $${spent.toFixed(4)} <i>(${(cost.lifetime && cost.lifetime.txCount) || 0} txs)</i>\n` +
+          `<b>Net:</b> $${net.toFixed(4)}`;
+        await fetch(`https://api.telegram.org/bot${tok}/sendMessage`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: proj.telegramChatId, text: msg, parse_mode: "HTML", disable_web_page_preview: true }),
+        });
+      } catch (e) { console.warn("[treasury-report] failed:", e.message); }
+    }
+    function treasuryReportTick() {
+      const now = Date.now();
+      if (now - lastTreasuryReportAt >= 6 * 3600 * 1000) { lastTreasuryReportAt = now; kv.set("treasuryReportAt", now); sendTreasuryReport(); }
+    }
+    setInterval(treasuryReportTick, 60 * 1000);
+    setTimeout(treasuryReportTick, 20000); // first report shortly after boot (then every 6h; stamp persists across redeploys)
     // Live buy-competition leaderboards — refresh active boards, close on window end.
     setInterval(buyCompTick, 60 * 1000);
     // Interactive slash commands — register the webhook + the "/" command menu.
