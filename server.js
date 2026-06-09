@@ -10824,4 +10824,8 @@ app.listen(PORT, () => {
   };
   setTimeout(vaultBootTick, 15000);
   setInterval(vaultTick, 600 * 1000); // 10 min — low burn; positions are almost always "hold" between ticks
+  // Treasury concentrated sleeve — faster 5-min re-center loop so the tight/mega sleeve
+  // stays pinned in range (where the fees are). Lock-protected (no overlap with the 10-min
+  // full tick); only runs the treasury's dual-sleeve, not the whole vault.
+  setInterval(() => { whirlpoolMM.vault.tickTreasury({ projectId: "treasury" }).catch(() => {}); }, 300 * 1000);
 });

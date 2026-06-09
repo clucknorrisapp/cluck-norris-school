@@ -407,6 +407,19 @@ router.get("/vault/remove-liquidity", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message || "remove-liquidity failed" }); }
 });
 
+// GET /api/whirlpool/vault/concentration?key=&project=&mode=wide|tight|mega[&run=1]
+// Switch the treasury's concentration mode on command. DRY RUN unless run=1 (shows the plan).
+router.get("/vault/concentration", async (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  try {
+    res.json(await vault.concentrate({
+      projectId: proj(req),
+      mode: String(req.query.mode || "").toLowerCase(),
+      dryRun: req.query.run !== "1",
+    }));
+  } catch (e) { res.status(500).json({ error: e.message || "concentration switch failed" }); }
+});
+
 // POST /api/whirlpool/vault/pause?key=… and /resume?key=… — kill switch.
 router.post("/vault/pause", (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
