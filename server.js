@@ -2359,6 +2359,96 @@ app.get("/api/edu-post-test", async (req, res) => {
   } catch (e) { return res.status(500).json({ success: false, error: e.message }); }
 });
 
+// Treasury DAILY RECAP — token-denominated growth (assets, not dollars). Tracks how much
+// each sleeve + the overall stack grew in SOL/cbBTC terms vs the prior day and vs an inception
+// baseline, with an LP-vs-HODL edge (so it scores accumulation, not USD price). Private DM.
+// Snapshots persist on the volume so deltas survive deploys. send=false → preview only (no DM,
+// no snapshot write), so a dry-run can't disturb the baseline.
+async function sendTreasuryRecap({ send = true } = {}) {
+  const tgtok = process.env.TELEGRAM_BOT_TOKEN;
+  const proj = whirlpoolMM.vault.getProject("treasury");
+  if (!proj || !proj.telegramChatId) return { skipped: "no treasury chat" };
+  const st = await whirlpoolMM.vault.status("treasury");
+  if (!st || !st.enabled) return { skipped: "treasury not enabled" };
+  const pos = await whirlpoolMM.vault.publicPositions("treasury").catch(() => null);
+  const f = st.float || {}, earn = st.earnings || {}, px = earn.prices || {};
+  const solUsd = px.solUsd || (pos && pos.solUsd) || 0;
+  const baseUsd = px.clknUsd || (pos && (pos.clknUsd || pos.btcUsd)) || 0;
+  if (!(baseUsd > 0)) return { skipped: "no price" };
+  const sleeves = ((pos && pos.positions) || []).filter((p) => (p.valueUsd || 0) >= 1);
+  let posSol = 0, posBase = 0, deployedUsd = 0;
+  for (const p of sleeves) { posBase += p.clknAmount || 0; posSol += p.quoteAmount || 0; deployedUsd += p.valueUsd || 0; }
+  const totalSol = posSol + (f.sol || 0);
+  const totalBase = posBase + (f.clkn || 0);
+  const valueUsd = deployedUsd + (f.sol || 0) * solUsd + (f.clkn || 0) * baseUsd + (f.usdc || 0);
+  const valueBtc = valueUsd / baseUsd;
+  const feesUsd = earn.totalEarnedUsd != null ? earn.totalEarnedUsd : 0;
+  const snap = {
+    ts: Date.now(), solUsd, baseUsd, valueUsd, valueBtc, totalSol, totalBase, feesUsd,
+    positions: sleeves.map((p) => ({ role: p.role, valueUsd: p.valueUsd || 0, valueBtc: (p.valueUsd || 0) / baseUsd })),
+  };
+  const storeKey = "treasuryRecapSnaps";
+  const store = kv.get(storeKey, {}) || {};
+  const prev = store.prev || null;
+  const baseline = store.baseline || snap;
+
+  const pct = (now, was) => (was > 0 ? (now - was) / was * 100 : 0);
+  const sg = (x, d = 2) => (x >= 0 ? "+" : "") + x.toFixed(d);
+  const btc = (v) => "Ƀ" + v.toFixed(6);
+  const usd = (v) => "$" + Math.round(v).toLocaleString("en-US");
+  const roleName = { tight: "Concentrated", wide: "Wide backbone", base: "Idle range" };
+
+  const L = [];
+  L.push(`📈 <b>Treasury Daily Recap</b> — cbBTC/SOL`);
+  L.push(`<i>asset growth (BTC + SOL), not USD</i>`);
+  L.push(``);
+  L.push(`<b>Positions</b>${prev ? " (24h)" : ""}`);
+  for (const p of sleeves) {
+    const was = prev && prev.positions.find((x) => x.role === p.role);
+    const d = was ? ` · ${sg(pct((p.valueUsd || 0) / baseUsd, was.valueBtc))}%` : "";
+    L.push(`• ${roleName[p.role] || p.role}: ${btc((p.valueUsd || 0) / baseUsd)} (${usd(p.valueUsd || 0)})${d}`);
+  }
+  L.push(``);
+  L.push(`<b>Assets held</b>`);
+  L.push(`SOL    ${totalSol.toFixed(3)}${prev ? `  (${sg(totalSol - prev.totalSol, 3)} · ${sg(pct(totalSol, prev.totalSol))}%)` : ""}`);
+  L.push(`cbBTC  ${totalBase.toFixed(6)}${prev ? `  (${sg(totalBase - prev.totalBase, 6)} · ${sg(pct(totalBase, prev.totalBase))}%)` : ""}`);
+  L.push(`Stack  ${btc(valueBtc)} (${usd(valueUsd)})${prev ? `  ${sg(pct(valueBtc, prev.valueBtc))}% / 24h` : ""}`);
+  L.push(``);
+  const feeDelta = prev ? feesUsd - prev.feesUsd : feesUsd;
+  L.push(`<b>Fees</b> ${prev ? `${sg(feeDelta)} (24h)` : `${usd(feesUsd)} to date`} · compounding in-kind`);
+  if (baseline && baseline.ts !== snap.ts) {
+    const days = Math.max(1 / 24, (snap.ts - baseline.ts) / 86400000);
+    const lpPct = pct(valueBtc, baseline.valueBtc);
+    const hodlNowBtc = baseline.totalBase + baseline.totalSol * (solUsd / baseUsd);
+    const hodlPct = pct(hodlNowBtc, baseline.valueBtc);
+    L.push(`<b>Since start</b> (${days.toFixed(1)}d): ${sg(lpPct)}% in BTC (${sg(lpPct / days)}%/day)`);
+    L.push(`vs holding the basket ${sg(hodlPct)}% → <b>LP edge ${sg(lpPct - hodlPct)}%</b>`);
+  } else {
+    L.push(`<i>Baseline set — daily growth deltas begin next recap.</i>`);
+  }
+  L.push(`<i>Goal: +0.50%/day in assets</i>`);
+  const text = L.join("\n");
+
+  if (!send) return { sent: false, preview: text, valueBtc, valueUsd };
+  if (tgtok) {
+    await fetch(`https://api.telegram.org/bot${tgtok}/sendMessage`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: proj.telegramChatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
+    });
+  }
+  kv.set(storeKey, { baseline, prev: snap, history: [...((store.history) || []).slice(-29), { ts: snap.ts, valueBtc, totalSol, totalBase, feesUsd }] });
+  return { sent: !!tgtok, text, valueBtc, valueUsd };
+}
+
+// Treasury daily recap — preview (gated). Default returns the composed recap WITHOUT sending
+// or writing a snapshot; &send=1 actually DMs it (and records the snapshot/baseline).
+app.get("/api/treasury-recap-test", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) return res.status(404).json({ error: "not_found" });
+  try { return res.status(200).json(await sendTreasuryRecap({ send: req.query.send === "1" })); }
+  catch (e) { return res.status(500).json({ error: e.message }); }
+});
+
 // Graduation-watcher status (gated). Shows the current watchlist + our 48h
 // graduated record; ?run=1 triggers one watcher cycle now (alerts fire if a
 // token actually crosses 85% / graduates).
@@ -10735,6 +10825,15 @@ app.listen(PORT, () => {
     }
     setInterval(treasuryReportTick, 60 * 1000);
     setTimeout(treasuryReportTick, 20000); // first report shortly after boot (then every 6h; stamp persists across redeploys)
+    // Treasury DAILY RECAP — token-denominated growth tracking (separate from the 6h balances
+    // report). Once/24h: how much each sleeve + the stack grew in SOL/cbBTC terms, vs HODL.
+    let lastTreasuryRecapAt = kv.get("treasuryRecapAt", 0);
+    function treasuryRecapTick() {
+      const now = Date.now();
+      if (now - lastTreasuryRecapAt >= 24 * 3600 * 1000) { lastTreasuryRecapAt = now; kv.set("treasuryRecapAt", now); sendTreasuryRecap().catch((e) => console.warn("[treasury-recap] failed:", e.message)); }
+    }
+    setInterval(treasuryRecapTick, 5 * 60 * 1000);
+    setTimeout(treasuryRecapTick, 30000); // first recap shortly after boot captures the baseline; then daily
     // Live buy-competition leaderboards — refresh active boards, close on window end.
     setInterval(buyCompTick, 60 * 1000);
     // Interactive slash commands — register the webhook + the "/" command menu.
