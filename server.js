@@ -2502,6 +2502,20 @@ app.get("/api/meteora/add-liquidity", async (req, res) => {
   } catch (e) { return res.status(500).json({ error: e.message }); }
 });
 
+// Meteora DLMM — open a fresh centered position (gated). ?cbbtc=&sol=&half=0.6&dist=spot|curve|bidask
+// Centers on current price, ±half%. DRY RUN unless &run=1 (dry shows bin math + #positions).
+app.get("/api/meteora/open-position", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) return res.status(404).json({ error: "not_found" });
+  try {
+    return res.status(200).json(await meteora.openPosition({
+      cbbtcUi: req.query.cbbtc, solUi: req.query.sol,
+      halfWidthPct: req.query.half != null ? Number(req.query.half) : 0.6,
+      distribution: req.query.dist || "spot", dryRun: req.query.run !== "1",
+    }));
+  } catch (e) { return res.status(500).json({ error: e.message }); }
+});
+
 // Graduation-watcher status (gated). Shows the current watchlist + our 48h
 // graduated record; ?run=1 triggers one watcher cycle now (alerts fire if a
 // token actually crosses 85% / graduates).
