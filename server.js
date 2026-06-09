@@ -2365,7 +2365,7 @@ app.get("/api/edu-post-test", async (req, res) => {
 // baseline, with an LP-vs-HODL edge (so it scores accumulation, not USD price). Private DM.
 // Snapshots persist on the volume so deltas survive deploys. send=false → preview only (no DM,
 // no snapshot write), so a dry-run can't disturb the baseline.
-async function sendTreasuryRecap({ send = true } = {}) {
+async function sendTreasuryRecap({ send = true, reset = false } = {}) {
   const tgtok = process.env.TELEGRAM_BOT_TOKEN;
   const proj = whirlpoolMM.vault.getProject("treasury");
   if (!proj || !proj.telegramChatId) return { skipped: "no treasury chat" };
@@ -2402,7 +2402,9 @@ async function sendTreasuryRecap({ send = true } = {}) {
     positions: sleeves.map((p) => ({ role: p.role, valueUsd: p.valueUsd || 0, valueBtc: (p.valueUsd || 0) / baseUsd })),
   };
   const storeKey = "treasuryRecapSnaps";
-  const store = kv.get(storeKey, {}) || {};
+  // reset=true wipes the prior baseline/prev so a fresh starting line is set here — used after
+  // a migration/restructuring (e.g. moving to Meteora) so deltas track fees, not the churn.
+  const store = reset ? {} : (kv.get(storeKey, {}) || {});
   const prev = store.prev || null;
   const baseline = store.baseline || snap;
 
@@ -2463,7 +2465,7 @@ async function sendTreasuryRecap({ send = true } = {}) {
 app.get("/api/treasury-recap-test", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) return res.status(404).json({ error: "not_found" });
-  try { return res.status(200).json(await sendTreasuryRecap({ send: req.query.send === "1" })); }
+  try { return res.status(200).json(await sendTreasuryRecap({ send: req.query.send === "1", reset: req.query.reset === "1" })); }
   catch (e) { return res.status(500).json({ error: e.message }); }
 });
 
