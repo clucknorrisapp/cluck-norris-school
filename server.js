@@ -1717,6 +1717,10 @@ app.get("/api/autopsy-premium", async (req, res) => {
 
   const mint = String(req.query.mint || "").trim();
   if (!mint) return res.status(400).json({ error: "mint_required" });
+  // Validate the address shape before it flows into upstream API paths/queries
+  // (Jupiter, Solana Tracker, Bags) — matches the guard every other forensic
+  // endpoint uses; blocks path/query injection via a malformed mint.
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ error: "invalid_mint" });
 
   const HELIUS_KEY = process.env.HELIUS_API_KEY;
   const rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
@@ -3704,7 +3708,7 @@ app.post("/api/verify-clkn-payment", async (req, res) => {
       body: JSON.stringify({
         jsonrpc: "2.0", id: "get-sigs",
         method: "getSignaturesForAddress",
-        params: [tokenAccount, { limit: 10 }]
+        params: [tokenAccount, { limit: 10, commitment: "finalized" }]
       })
     });
     const sigsData = await sigsRes.json();
@@ -3719,12 +3723,16 @@ app.post("/api/verify-clkn-payment", async (req, res) => {
         body: JSON.stringify({
           jsonrpc: "2.0", id: "get-tx",
           method: "getTransaction",
-          params: [sig.signature, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0 }]
+          params: [sig.signature, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "finalized" }]
         })
       });
       const txData = await txRes.json();
       const tx = txData?.result;
       if (!tx) continue;
+      // Only count a finalized transfer that actually SUCCEEDED. A failed tx rolls
+      // its balances back (so diff would be 0), but assert it explicitly rather
+      // than relying on that side effect — don't honor a transfer the chain rejected.
+      if (tx.meta?.err) continue;
 
       const pre = (tx?.meta?.preTokenBalances || []).find(b => b.mint === CLKN_MINT_ADDR && b.owner === CLKN_RECEIVE_WALLET);
       const post = (tx?.meta?.postTokenBalances || []).find(b => b.mint === CLKN_MINT_ADDR && b.owner === CLKN_RECEIVE_WALLET);
@@ -3772,7 +3780,11 @@ app.post("/api/verify-clkn-payment", async (req, res) => {
         }
 
         // Mark this transfer consumed BEFORE returning so it can't be replayed.
-        sigStore.add(sig.signature);
+        // add() is an atomic test-and-set: if a concurrent request already claimed
+        // this signature it returns false, and we reject rather than double-grant.
+        if (!sigStore.add(sig.signature)) {
+          return res.status(200).json({ success: false, error: "This payment was already redeemed — each transfer unlocks once." });
+        }
         console.log(`[OK] tool=${tool} verified ${diff} CLKN · sender=${senderWallet?.slice(0,8) || "?"} remaining=${senderBalance} bonus=${isHolderBonus} · consumed=${sigStore.size()}`);
 
         // Fire Telegram notification — every paid unlock pings the Cluck Norris group

@@ -43,19 +43,26 @@ function verifyWalletSig(message, signatureB64, walletB58) {
     return sig.length === 64 && nacl.sign.detached.verify(msg, sig, pub);
   } catch { return false; }
 }
-const TOKEN_SECRET = () => process.env.PREMIUM_ACCESS_KEY || "dev-secret";
+// HMAC secret for the operator-portal client tokens. NO fallback constant: if the
+// admin key isn't configured we refuse to issue OR verify tokens (fail closed),
+// rather than signing with a guessable value that would let anyone forge a session.
+const TOKEN_SECRET = () => process.env.PREMIUM_ACCESS_KEY || null;
 function issueClientToken(pid, wallet, ttlMs = 12 * 3600 * 1000) {
+  const secret = TOKEN_SECRET();
+  if (!secret) return null;
   const payload = Buffer.from(JSON.stringify({ pid, w: wallet, exp: Date.now() + ttlMs })).toString("base64url");
-  const mac = crypto.createHmac("sha256", TOKEN_SECRET()).update(payload).digest("hex").slice(0, 32);
+  const mac = crypto.createHmac("sha256", secret).update(payload).digest("hex").slice(0, 32);
   return `${payload}.${mac}`;
 }
 function clientAuth(req) {
   try {
+    const secret = TOKEN_SECRET();
+    if (!secret) return null;
     const h = req.headers.authorization || "";
     const token = h.startsWith("Bearer ") ? h.slice(7) : (req.query.token || (req.body && req.body.token) || "");
     const [payload, mac] = String(token).split(".");
     if (!payload || !mac) return null;
-    const expect = crypto.createHmac("sha256", TOKEN_SECRET()).update(payload).digest("hex").slice(0, 32);
+    const expect = crypto.createHmac("sha256", secret).update(payload).digest("hex").slice(0, 32);
     const a = Buffer.from(mac), b = Buffer.from(expect);
     if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
     const p = JSON.parse(Buffer.from(payload, "base64url").toString());
@@ -287,7 +294,9 @@ router.post("/vault/client/login", (req, res) => {
   const pid = projectOwnedBy(wallet);
   if (!pid) return res.status(403).json({ error: "this wallet isn't registered as a project owner" });
   const p = vault.listProjects()[pid];
-  res.json({ token: issueClientToken(pid, wallet), project: { id: pid, symbol: p.symbol, label: p.label }, expiresInSec: 12 * 3600 });
+  const token = issueClientToken(pid, wallet);
+  if (!token) return res.status(503).json({ error: "operator portal unavailable — server admin key not configured" });
+  res.json({ token, project: { id: pid, symbol: p.symbol, label: p.label }, expiresInSec: 12 * 3600 });
 });
 // The signing message the client must produce (handy for the frontend / debugging).
 router.get("/vault/client/message", (req, res) => {
