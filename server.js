@@ -2464,6 +2464,25 @@ app.get("/api/meteora/status", async (req, res) => {
   } catch (e) { return res.status(500).json({ error: e.message }); }
 });
 
+// Meteora DLMM — pull liquidity (gated). ?pct=0.05 withdraws 5% to the wallet (no
+// close). DRY RUN unless &run=1. Optional &position=<pubkey> (defaults to the only one).
+app.get("/api/meteora/remove-liquidity", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) return res.status(404).json({ error: "not_found" });
+  try {
+    return res.status(200).json(await meteora.removeLiquidity({ positionPubkey: req.query.position || null, pct: req.query.pct, dryRun: req.query.run !== "1" }));
+  } catch (e) { return res.status(500).json({ error: e.message }); }
+});
+
+// Meteora DLMM — add liquidity back (gated). ?cbbtc=&sol= amounts. DRY RUN unless &run=1.
+app.get("/api/meteora/add-liquidity", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) return res.status(404).json({ error: "not_found" });
+  try {
+    return res.status(200).json(await meteora.addLiquidity({ positionPubkey: req.query.position || null, cbbtcUi: req.query.cbbtc, solUi: req.query.sol, dryRun: req.query.run !== "1" }));
+  } catch (e) { return res.status(500).json({ error: e.message }); }
+});
+
 // Graduation-watcher status (gated). Shows the current watchlist + our 48h
 // graduated record; ?run=1 triggers one watcher cycle now (alerts fire if a
 // token actually crosses 85% / graduates).
