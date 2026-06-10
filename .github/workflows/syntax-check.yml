@@ -1,0 +1,25 @@
+# Cheap insurance for a single-branch auto-deploy: Railway ships main directly,
+# so a syntax error in server.js takes the whole live app down (payments, vault,
+# Telegram, every tool). This gate catches that class of failure on every push.
+# It is NOT a test suite — just "does Node parse every backend file".
+name: syntax-check
+on:
+  push:
+    branches: ["main", "claude/**"]
+  pull_request:
+
+jobs:
+  node-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: node --check every backend entrypoint and lib
+        run: |
+          set -e
+          for f in server.js hatchery.js securitycoop.js whirlpool-mm.js lib/*.js; do
+            echo "checking $f"
+            node --check "$f"
+          done
