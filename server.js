@@ -2522,68 +2522,101 @@ app.get("/api/meteora/open-position", async (req, res) => {
 // reopens fresh & centered at the configured width/distribution. Triggers when the
 // position is OOR or past edgeFrac, with anti-thrash. Orchestrated here because it needs
 // both the Meteora primitives and the treasury vault's Jupiter swap.
+function meteoraDM(text) {
+  try {
+    const tg = process.env.TELEGRAM_BOT_TOKEN, proj = whirlpoolMM.vault.getProject("treasury");
+    if (tg && proj && proj.telegramChatId) fetch(`https://api.telegram.org/bot${tg}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: proj.telegramChatId, parse_mode: "HTML", text }) }).catch(() => {});
+  } catch (_) {}
+}
 async function meteoraRecenter({ dryRun = false, force = false } = {}) {
   if (!meteora.isEnabled()) return { action: "none", reason: "operator not set" };
   const cfg = meteora.getCfg();
   let solUsd = 0, btcUsd = 0;
   try { const st = await whirlpoolMM.vault.status("treasury"); const px = (st.earnings || {}).prices || {}; solUsd = px.solUsd || 0; btcUsd = px.clknUsd || 0; } catch (_) {}
+
+  // A1 — recover a stranded chaser FIRST: a prior re-center may have closed but failed to
+  // reopen (funds sit in the wallet). Reopen exactly the recorded freed amounts, then stop.
+  const pending = kv.get("meteoraReopenPending", null);
+  if (pending && pending.cbbtc != null) {
+    if (dryRun) return { action: "would-retry-reopen", pending };
+    const f = ((await whirlpoolMM.vault.status("treasury")) || {}).float || {};
+    const o = await meteora.openPosition({ cbbtcUi: Math.min(pending.cbbtc, f.clkn || 0), solUi: Math.min(pending.sol, Math.max(0, (f.sol || 0) - 0.25)), halfWidthPct: pending.halfWidthPct || cfg.halfWidthPct, distribution: pending.distribution || cfg.distribution });
+    if (o.positions && o.positions[0]) kv.set("meteoraManagedPubkey", o.positions[0]);
+    kv.set("meteoraReopenPending", null);
+    meteoraDM(`✅ <b>Meteora re-center recovered</b> — chaser reopened (±${pending.halfWidthPct || cfg.halfWidthPct}%).`);
+    return { action: "reopened-recovered", positions: o.positions };
+  }
+
   const m = await meteora.status({ solUsd, btcUsd });
-  // MANAGED-position selection: the wallet may hold several positions on this pool (the
-  // narrow auto-chaser + a wide backbone + experiments). The loop must only ever touch the
-  // chaser — picked BY WIDTH: closest to cfg.halfWidthPct and within 1.8x of it. A ±2.5–3%
-  // backbone can never match while cfg is ~0.6%, so it's structurally untouchable here.
+  // MANAGED-position selection. Prefer the pinned pubkey (B3) from the last open; fall back to
+  // width-match (closest to cfg.halfWidthPct, within 1.8x) only to (re)bootstrap. The loop must
+  // only ever touch the chaser — a ±2.5–3% backbone or experiment is structurally untouchable.
   const hwOf = (p) => (p.lowerPrice && p.upperPrice && p.upperPrice > p.lowerPrice)
     ? ((p.upperPrice - p.lowerPrice) / 2) / ((p.upperPrice + p.lowerPrice) / 2) * 100 : null;
-  const candidates = (m.positions || [])
-    .map((p) => ({ p, hw: hwOf(p) }))
-    .filter((c) => c.hw != null && c.p.positionPubkey && c.hw <= cfg.halfWidthPct * 1.8)
-    .sort((a, b) => Math.abs(a.hw - cfg.halfWidthPct) - Math.abs(b.hw - cfg.halfWidthPct));
-  if (!candidates.length) return { action: "none", reason: `no position near the managed width (±${cfg.halfWidthPct}%) — backbone/experiments are left alone` };
-  const pos = candidates[0].p;
+  const pinned = kv.get("meteoraManagedPubkey", null);
+  let pos = pinned ? (m.positions || []).find((p) => p.positionPubkey === pinned) : null;
+  if (!pos) {
+    const candidates = (m.positions || [])
+      .map((p) => ({ p, hw: hwOf(p) }))
+      .filter((c) => c.hw != null && c.p.positionPubkey && c.hw <= cfg.halfWidthPct * 1.8)
+      .sort((a, b) => Math.abs(a.hw - cfg.halfWidthPct) - Math.abs(b.hw - cfg.halfWidthPct));
+    if (!candidates.length) return { action: "none", reason: `no position near the managed width (±${cfg.halfWidthPct}%) — backbone/experiments are left alone` };
+    pos = candidates[0].p;
+    if (!dryRun) kv.set("meteoraManagedPubkey", pos.positionPubkey); // pin going forward
+  }
   const span = pos.upperBinId - pos.lowerBinId;
   const frac = span > 0 ? (pos.activeBinId - pos.lowerBinId) / span : 0.5;
   const needs = force || !pos.inRange || frac < cfg.edgeFrac || frac > 1 - cfg.edgeFrac;
-  const base = { pool: "meteora", managed: pos.position, widthPct: Number(candidates[0].hw.toFixed(2)), frac: Number(frac.toFixed(3)), inRange: pos.inRange, valueUsd: pos.valueUsd, otherPositions: (m.positions || []).length - 1 };
+  const base = { pool: "meteora", managed: pos.position, widthPct: Number((hwOf(pos) || 0).toFixed(2)), frac: Number(frac.toFixed(3)), inRange: pos.inRange, valueUsd: pos.valueUsd, otherPositions: (m.positions || []).length - 1 };
   if (!needs) return { ...base, action: "hold", reason: `centered ${(frac * 100).toFixed(0)}%` };
   const sinceLast = (Date.now() - kv.get("meteoraLastRecenterTs", 0)) / 1000;
   if (!force && sinceLast < cfg.minRecenterSec) return { ...base, action: "deferred", reason: `anti-thrash (${Math.round(sinceLast)}s < ${cfg.minRecenterSec}s)` };
   if (dryRun) return { ...base, action: "would-recenter", reason: pos.inRange ? `near edge ${(frac * 100).toFixed(0)}%` : "out of range" };
 
+  // A1 — stamp anti-thrash UP FRONT (so a crash can't allow instant re-entry) and wrap the
+  // whole close→swap→reopen so a failed reopen flags a retry + alerts instead of stranding funds.
+  kv.set("meteoraLastRecenterTs", Date.now());
   const steps = [];
-  // What the close will free up (position + its pending fees) — the reopen deposits ONLY
-  // this much, so backbone-destined funds parked in the wallet are never swept in.
   const freedX = (pos.amountX || 0) + (pos.pendingFeeX || 0); // cbBTC
   const freedY = (pos.amountY || 0) + (pos.pendingFeeY || 0); // SOL
-  const r = await meteora.removeLiquidity({ positionPubkey: pos.positionPubkey, pct: 1, close: true });
-  steps.push({ closed: pos.position, sigs: (r.sigs || []).length });
-  await new Promise((res) => setTimeout(res, 2500));
-  // Rebalance ONLY the freed amounts to ~50/50 (not the whole wallet).
-  let depX = freedX, depY = freedY;
-  if (solUsd > 0 && btcUsd > 0) {
-    const vX = freedX * btcUsd, vY = freedY * solUsd, target = (vX + vY) / 2;
-    const diff = vX - target; // >0: cbBTC heavy
-    if (Math.abs(diff) > 1) {
-      try {
+  let closeSucceeded = false, depX = freedX, depY = freedY;
+  try {
+    const r = await meteora.removeLiquidity({ positionPubkey: pos.positionPubkey, pct: 1, close: true });
+    closeSucceeded = true;
+    kv.set("meteoraManagedPubkey", null); // old chaser is gone
+    steps.push({ closed: pos.position, sigs: (r.sigs || []).length });
+    await new Promise((res) => setTimeout(res, 2500));
+    // Rebalance ONLY the freed amounts to ~50/50 (never the whole wallet → backbone funds safe).
+    if (solUsd > 0 && btcUsd > 0) {
+      const vX = freedX * btcUsd, vY = freedY * solUsd, target = (vX + vY) / 2;
+      const diff = vX - target;
+      if (Math.abs(diff) > 1) {
         if (diff > 0) { await whirlpoolMM.vault.manualSwap({ projectId: "treasury", fromSym: "BTC", toSym: "SOL", amountUi: diff / btcUsd, silent: true }); depX = target / btcUsd; depY = freedY + (diff / solUsd) * 0.998; }
         else { await whirlpoolMM.vault.manualSwap({ projectId: "treasury", fromSym: "SOL", toSym: "BTC", amountUi: -diff / solUsd, silent: true }); depY = target / solUsd; depX = freedX + (-diff / btcUsd) * 0.998; }
         steps.push({ rebalancedUsd: Number(Math.abs(diff).toFixed(2)) });
         await new Promise((res) => setTimeout(res, 2500));
-      } catch (e) { steps.push({ rebalanceError: e.message }); }
+      }
     }
+    const f = ((await whirlpoolMM.vault.status("treasury")) || {}).float || {};
+    const o = await meteora.openPosition({
+      cbbtcUi: Math.min(depX, f.clkn || 0),
+      solUi: Math.min(depY, Math.max(0, (f.sol || 0) - 0.25)),
+      halfWidthPct: cfg.halfWidthPct, distribution: cfg.distribution,
+    });
+    steps.push({ opened: o.positions, sigs: (o.sigs || []).length });
+    if (o.positions && o.positions[0]) kv.set("meteoraManagedPubkey", o.positions[0]); // B3: pin new chaser
+    meteoraDM(`🔄 <b>Meteora re-centered</b> (chaser only)\n±${cfg.halfWidthPct}% ${cfg.distribution} · was ${pos.inRange ? `near edge ${(frac * 100).toFixed(0)}%` : "OUT of range"}${base.otherPositions > 0 ? ` · ${base.otherPositions} other position(s) untouched` : ""}`);
+  } catch (e) {
+    if (closeSucceeded) {
+      // Close landed but reopen failed → freed funds sit in the wallet. Flag for auto-retry
+      // (next tick reopens exactly these amounts) and alert — never silently stranded.
+      kv.set("meteoraReopenPending", { cbbtc: depX, sol: depY, halfWidthPct: cfg.halfWidthPct, distribution: cfg.distribution, ts: Date.now() });
+      meteoraDM(`⚠️ <b>Meteora re-center: reopen FAILED</b>\nClose landed; ~$${(depX * btcUsd + depY * solUsd).toFixed(0)} freed in wallet. Auto-retry on next tick.\n<code>${(e.message || "").slice(0, 120)}</code>`);
+    } else {
+      meteoraDM(`⚠️ <b>Meteora re-center: close failed</b> — position intact, will retry.\n<code>${(e.message || "").slice(0, 120)}</code>`);
+    }
+    return { ...base, action: "error", closeSucceeded, error: e.message, steps };
   }
-  // Deposit bounded by what's actually in the wallet (gas reserve respected).
-  const f = ((await whirlpoolMM.vault.status("treasury")) || {}).float || {};
-  const o = await meteora.openPosition({
-    cbbtcUi: Math.min(depX, f.clkn || 0),
-    solUi: Math.min(depY, Math.max(0, (f.sol || 0) - 0.25)),
-    halfWidthPct: cfg.halfWidthPct, distribution: cfg.distribution,
-  });
-  steps.push({ opened: o.positions, sigs: (o.sigs || []).length });
-  kv.set("meteoraLastRecenterTs", Date.now());
-  try {
-    const tg = process.env.TELEGRAM_BOT_TOKEN, proj = whirlpoolMM.vault.getProject("treasury");
-    if (tg && proj && proj.telegramChatId) await fetch(`https://api.telegram.org/bot${tg}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: proj.telegramChatId, parse_mode: "HTML", text: `🔄 <b>Meteora re-centered</b> (chaser only)\n±${cfg.halfWidthPct}% ${cfg.distribution} · was ${pos.inRange ? `near edge ${(frac * 100).toFixed(0)}%` : "OUT of range"}${base.otherPositions > 0 ? ` · ${base.otherPositions} other position(s) untouched` : ""}` }) });
-  } catch (_) {}
   return { ...base, action: "recentered", steps };
 }
 
