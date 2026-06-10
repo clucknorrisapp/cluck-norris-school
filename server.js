@@ -2381,10 +2381,11 @@ async function sendTreasuryRecap({ send = true, reset = false } = {}) {
   for (const p of sleeves) { posBase += p.clknAmount || 0; posSol += p.quoteAmount || 0; deployedUsd += p.valueUsd || 0; }
   // Fold in Meteora DLMM positions — same treasury wallet, different venue (the Orca
   // engine is blind to them), so count them explicitly or the recap misses the bulk of the stack.
-  let metFeesUsd = 0; const metPositions = [];
+  let metFeesUsd = 0, metFeeTok = { cbbtc: 0, sol: 0 }; const metPositions = [];
   try {
     const m = await meteora.status({ solUsd, btcUsd: baseUsd });
     metFeesUsd = m.lifetimeFeeUsd || 0; // pending + claimed + closed-position ledger
+    metFeeTok = m.lifetimeFeeTokens || metFeeTok; // token-denominated, for a price-immune 24h delta
     for (const p of (m.positions || [])) {
       const xIsBtc = p.symX === "cbBTC";
       posBase += xIsBtc ? (p.amountX || 0) : (p.amountY || 0);
@@ -2399,7 +2400,7 @@ async function sendTreasuryRecap({ send = true, reset = false } = {}) {
   const valueBtc = valueUsd / baseUsd;
   const feesUsd = (earn.totalEarnedUsd != null ? earn.totalEarnedUsd : 0) + metFeesUsd;
   const snap = {
-    ts: Date.now(), solUsd, baseUsd, valueUsd, valueBtc, totalSol, totalBase, feesUsd,
+    ts: Date.now(), solUsd, baseUsd, valueUsd, valueBtc, totalSol, totalBase, feesUsd, feeTok: metFeeTok,
     positions: sleeves.map((p) => ({ role: p.role, valueUsd: p.valueUsd || 0, valueBtc: (p.valueUsd || 0) / baseUsd })),
   };
   const storeKey = "treasuryRecapSnaps";
@@ -2435,8 +2436,11 @@ async function sendTreasuryRecap({ send = true, reset = false } = {}) {
   L.push(`cbBTC  ${totalBase.toFixed(6)}${prev ? `  (${sg(totalBase - prev.totalBase, 6)} · ${sg(pct(totalBase, prev.totalBase))}%)` : ""}`);
   L.push(`Stack  ${btc(valueBtc)} (${usd(valueUsd)})${prev ? `  ${sg(pct(valueBtc, prev.valueBtc))}% / 24h` : ""}`);
   L.push(``);
-  const feeDelta = prev ? feesUsd - prev.feesUsd : feesUsd;
-  L.push(`<b>Fees</b> ${prev ? `${sg(feeDelta)} (24h)` : `${usd(feesUsd)} to date`} · compounding in-kind`);
+  // 24h fee delta from TOKEN amounts (price-immune): diff fee tokens, value at today's price.
+  const feeDelta = (prev && prev.feeTok)
+    ? (metFeeTok.cbbtc - prev.feeTok.cbbtc) * baseUsd + (metFeeTok.sol - prev.feeTok.sol) * solUsd
+    : feesUsd;
+  L.push(`<b>Fees</b> ${prev ? `${sg(feeDelta)} (24h, in-kind)` : `${usd(feesUsd)} to date`} · compounding`);
   if (baseline && baseline.ts !== snap.ts) {
     const days = Math.max(1 / 24, (snap.ts - baseline.ts) / 86400000);
     const lpPct = pct(valueBtc, baseline.valueBtc);
