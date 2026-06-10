@@ -182,8 +182,12 @@ buyback. All session-built liquidity findings were FIXED & shipped: re-center ne
 (meteoraFeePendingBank + reconcile), confirmSig tolerates RPC blips, in-process mutex on
 meteora fund-moving calls, blitz revert work-then-clear + double-start guard, pinned managed
 chaser pubkey (meteoraManagedPubkey), token-denominated 24h fee delta, Raydium range guard,
-trace.html/autopsy.html XSS escaped. Remaining = LOW hygiene backlog only (range-label honesty,
-`source` whitelist, header-vs-`?key=` admin auth, generic RPC error passthrough) — not vulns.
+trace.html/autopsy.html XSS escaped. The LOW hygiene backlog is now CLEARED except one item:
+`source` whitelist DONE (prettySource only renders Helius-enum-shaped strings, else generic
+"DEX"), header-vs-`?key=` admin auth DONE (adminAuthOK prefers x-premium-key header; `?key=`
+is a deprecated fallback), generic RPC error passthrough DONE (publicErrMsg strips
+credential-bearing URLs + bounds length on every 500). Remaining: range-label honesty on the
+public endpoint — still open, still not a vuln.
 
 ## Conventions
 - Tool pages are vanilla HTML + inline JS; the school is React. **Escape any API/token-
