@@ -3833,6 +3833,8 @@ async function checkCLKNHolder(wallet) {
 // memory with a short TTL; a redeploy just means re-taking, which is fine.
 const EXAM_SIZE = 50;
 const EXAM_PASS_PCT = 94;
+// Per-source quotas for the exam draw (must sum to EXAM_SIZE; tune here).
+const EXAM_SOURCE_MIX = { CURRICULUM: 20, ULTIMATE: 20, LPLAB: 10 };
 const EXAM_TTL_MS = 30 * 60 * 1000;
 const examSessions = new Map();    // sessionId -> { key: [correctIdx...], createdAt }
 const examPassTokens = new Map();  // token     -> { pct, score, total, createdAt, used }
@@ -3854,7 +3856,21 @@ app.get("/api/exam/questions", (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
   pruneExam();
-  const drawn = shuffleInPlace(QUESTION_BANK.slice()).slice(0, Math.min(EXAM_SIZE, QUESTION_BANK.length));
+  // Stratified draw by question source — a flat random draw over the 210-question bank
+  // (CURRICULUM 70 / ULTIMATE 59 / LPLAB 81) makes the exam LP-heavy by count. Pin the
+  // mix so the core curriculum stays the backbone; backfill from the leftover pool if a
+  // source ever runs short, so the exam is always EXAM_SIZE questions.
+  const want = Math.min(EXAM_SIZE, QUESTION_BANK.length);
+  const drawn = [];
+  const leftover = [];
+  for (const [src, quota] of Object.entries(EXAM_SOURCE_MIX)) {
+    const pool = shuffleInPlace(QUESTION_BANK.filter((q) => q.source === src));
+    drawn.push(...pool.slice(0, quota));
+    leftover.push(...pool.slice(quota));
+  }
+  leftover.push(...QUESTION_BANK.filter((q) => !(q.source in EXAM_SOURCE_MIX)));
+  if (drawn.length < want) drawn.push(...shuffleInPlace(leftover).slice(0, want - drawn.length));
+  shuffleInPlace(drawn).splice(want);
   const key = [];
   const questions = drawn.map((q, idx) => {
     const order = shuffleInPlace(q.options.map((_, i) => i));     // shuffle option positions
