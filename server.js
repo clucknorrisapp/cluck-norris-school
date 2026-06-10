@@ -2528,41 +2528,61 @@ async function meteoraRecenter({ dryRun = false, force = false } = {}) {
   let solUsd = 0, btcUsd = 0;
   try { const st = await whirlpoolMM.vault.status("treasury"); const px = (st.earnings || {}).prices || {}; solUsd = px.solUsd || 0; btcUsd = px.clknUsd || 0; } catch (_) {}
   const m = await meteora.status({ solUsd, btcUsd });
-  const pos = (m.positions || [])[0];
-  if (!pos) return { action: "none", reason: "no Meteora position" };
+  // MANAGED-position selection: the wallet may hold several positions on this pool (the
+  // narrow auto-chaser + a wide backbone + experiments). The loop must only ever touch the
+  // chaser — picked BY WIDTH: closest to cfg.halfWidthPct and within 1.8x of it. A ±2.5–3%
+  // backbone can never match while cfg is ~0.6%, so it's structurally untouchable here.
+  const hwOf = (p) => (p.lowerPrice && p.upperPrice && p.upperPrice > p.lowerPrice)
+    ? ((p.upperPrice - p.lowerPrice) / 2) / ((p.upperPrice + p.lowerPrice) / 2) * 100 : null;
+  const candidates = (m.positions || [])
+    .map((p) => ({ p, hw: hwOf(p) }))
+    .filter((c) => c.hw != null && c.p.positionPubkey && c.hw <= cfg.halfWidthPct * 1.8)
+    .sort((a, b) => Math.abs(a.hw - cfg.halfWidthPct) - Math.abs(b.hw - cfg.halfWidthPct));
+  if (!candidates.length) return { action: "none", reason: `no position near the managed width (±${cfg.halfWidthPct}%) — backbone/experiments are left alone` };
+  const pos = candidates[0].p;
   const span = pos.upperBinId - pos.lowerBinId;
   const frac = span > 0 ? (pos.activeBinId - pos.lowerBinId) / span : 0.5;
   const needs = force || !pos.inRange || frac < cfg.edgeFrac || frac > 1 - cfg.edgeFrac;
-  const base = { pool: "meteora", frac: Number(frac.toFixed(3)), inRange: pos.inRange, valueUsd: pos.valueUsd };
+  const base = { pool: "meteora", managed: pos.position, widthPct: Number(candidates[0].hw.toFixed(2)), frac: Number(frac.toFixed(3)), inRange: pos.inRange, valueUsd: pos.valueUsd, otherPositions: (m.positions || []).length - 1 };
   if (!needs) return { ...base, action: "hold", reason: `centered ${(frac * 100).toFixed(0)}%` };
   const sinceLast = (Date.now() - kv.get("meteoraLastRecenterTs", 0)) / 1000;
   if (!force && sinceLast < cfg.minRecenterSec) return { ...base, action: "deferred", reason: `anti-thrash (${Math.round(sinceLast)}s < ${cfg.minRecenterSec}s)` };
   if (dryRun) return { ...base, action: "would-recenter", reason: pos.inRange ? `near edge ${(frac * 100).toFixed(0)}%` : "out of range" };
 
   const steps = [];
-  const r = await meteora.removeLiquidity({ pct: 1, close: true });
-  steps.push({ closed: (r.sigs || []).length });
+  // What the close will free up (position + its pending fees) — the reopen deposits ONLY
+  // this much, so backbone-destined funds parked in the wallet are never swept in.
+  const freedX = (pos.amountX || 0) + (pos.pendingFeeX || 0); // cbBTC
+  const freedY = (pos.amountY || 0) + (pos.pendingFeeY || 0); // SOL
+  const r = await meteora.removeLiquidity({ positionPubkey: pos.positionPubkey, pct: 1, close: true });
+  steps.push({ closed: pos.position, sigs: (r.sigs || []).length });
   await new Promise((res) => setTimeout(res, 2500));
-  let f = ((await whirlpoolMM.vault.status("treasury")) || {}).float || {};
+  // Rebalance ONLY the freed amounts to ~50/50 (not the whole wallet).
+  let depX = freedX, depY = freedY;
   if (solUsd > 0 && btcUsd > 0) {
-    const deplSol = Math.max(0, (f.sol || 0) - 0.25) * solUsd, cbUsd = (f.clkn || 0) * btcUsd;
-    const diff = cbUsd - deplSol, swapUsd = Math.abs(diff) / 2;
-    if (swapUsd > 1) {
+    const vX = freedX * btcUsd, vY = freedY * solUsd, target = (vX + vY) / 2;
+    const diff = vX - target; // >0: cbBTC heavy
+    if (Math.abs(diff) > 1) {
       try {
-        if (diff > 0) await whirlpoolMM.vault.manualSwap({ projectId: "treasury", fromSym: "BTC", toSym: "SOL", amountUi: swapUsd / btcUsd, silent: true });
-        else await whirlpoolMM.vault.manualSwap({ projectId: "treasury", fromSym: "SOL", toSym: "BTC", amountUi: swapUsd / solUsd, silent: true });
-        steps.push({ rebalancedUsd: Number(swapUsd.toFixed(2)) });
+        if (diff > 0) { await whirlpoolMM.vault.manualSwap({ projectId: "treasury", fromSym: "BTC", toSym: "SOL", amountUi: diff / btcUsd, silent: true }); depX = target / btcUsd; depY = freedY + (diff / solUsd) * 0.998; }
+        else { await whirlpoolMM.vault.manualSwap({ projectId: "treasury", fromSym: "SOL", toSym: "BTC", amountUi: -diff / solUsd, silent: true }); depY = target / solUsd; depX = freedX + (-diff / btcUsd) * 0.998; }
+        steps.push({ rebalancedUsd: Number(Math.abs(diff).toFixed(2)) });
         await new Promise((res) => setTimeout(res, 2500));
       } catch (e) { steps.push({ rebalanceError: e.message }); }
     }
   }
-  f = ((await whirlpoolMM.vault.status("treasury")) || {}).float || {};
-  const o = await meteora.openPosition({ cbbtcUi: f.clkn || 0, solUi: Math.max(0, (f.sol || 0) - 0.25), halfWidthPct: cfg.halfWidthPct, distribution: cfg.distribution });
+  // Deposit bounded by what's actually in the wallet (gas reserve respected).
+  const f = ((await whirlpoolMM.vault.status("treasury")) || {}).float || {};
+  const o = await meteora.openPosition({
+    cbbtcUi: Math.min(depX, f.clkn || 0),
+    solUi: Math.min(depY, Math.max(0, (f.sol || 0) - 0.25)),
+    halfWidthPct: cfg.halfWidthPct, distribution: cfg.distribution,
+  });
   steps.push({ opened: o.positions, sigs: (o.sigs || []).length });
   kv.set("meteoraLastRecenterTs", Date.now());
   try {
     const tg = process.env.TELEGRAM_BOT_TOKEN, proj = whirlpoolMM.vault.getProject("treasury");
-    if (tg && proj && proj.telegramChatId) await fetch(`https://api.telegram.org/bot${tg}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: proj.telegramChatId, parse_mode: "HTML", text: `🔄 <b>Meteora re-centered</b>\n±${cfg.halfWidthPct}% ${cfg.distribution} · was ${pos.inRange ? `near edge ${(frac * 100).toFixed(0)}%` : "OUT of range"}` }) });
+    if (tg && proj && proj.telegramChatId) await fetch(`https://api.telegram.org/bot${tg}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: proj.telegramChatId, parse_mode: "HTML", text: `🔄 <b>Meteora re-centered</b> (chaser only)\n±${cfg.halfWidthPct}% ${cfg.distribution} · was ${pos.inRange ? `near edge ${(frac * 100).toFixed(0)}%` : "OUT of range"}${base.otherPositions > 0 ? ` · ${base.otherPositions} other position(s) untouched` : ""}` }) });
   } catch (_) {}
   return { ...base, action: "recentered", steps };
 }
