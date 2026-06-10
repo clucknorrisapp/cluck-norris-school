@@ -2881,7 +2881,19 @@ app.get("/api/tg-test", async (req, res) => {
       }),
     });
     const data = await r.json().catch(() => ({}));
-    return res.status(200).json({ success: !!(data && data.ok), messageId: data?.result?.message_id || null, telegram: data });
+    // &pin=1 — pin the message we just sent (silently, matching the send's notification mode).
+    let pinned = null;
+    if (req.query.pin === "1" && data?.result?.message_id) {
+      try {
+        const pr = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/pinChatMessage`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: chatId, message_id: data.result.message_id, disable_notification: silent }),
+        });
+        const pd = await pr.json().catch(() => ({}));
+        pinned = !!(pd && pd.ok);
+      } catch (_) { pinned = false; }
+    }
+    return res.status(200).json({ success: !!(data && data.ok), messageId: data?.result?.message_id || null, pinned, telegram: data });
   } catch (e) {
     return res.status(500).json({ success: false, error: e.message });
   }
