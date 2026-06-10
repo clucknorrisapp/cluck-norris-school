@@ -2583,7 +2583,11 @@ app.get("/api/meteora/config", (req, res) => {
     const patch = {};
     for (const k of ["halfWidthPct", "distribution", "edgeFrac", "minRecenterSec", "autoRecenter"]) if (req.query[k] != null) patch[k] = req.query[k];
     const cfg = Object.keys(patch).length ? meteora.setCfg(patch) : meteora.getCfg();
-    return res.status(200).json({ config: cfg });
+    // Fee-ledger seeding (absolute token amounts) — align lifetime fees with Meteora's
+    // app-shown "Fees Claimed" for history that predates the ledger.
+    let ledger = meteora.getLedger();
+    if (req.query.ledgerCbbtc != null || req.query.ledgerSol != null) ledger = meteora.setLedger({ cbbtc: req.query.ledgerCbbtc, sol: req.query.ledgerSol });
+    return res.status(200).json({ config: cfg, feeLedger: ledger });
   } catch (e) { return res.status(500).json({ error: e.message }); }
 });
 
