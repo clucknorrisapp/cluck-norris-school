@@ -26,6 +26,26 @@ const {
 } = require("./lib/solana-addr");
 const { runAutopsy, bagsFetch, heliusEnhancedBatched, BAGS_BASE } = require("./lib/autopsy");
 const QUESTION_BANK = require("./data/question-bank.json");
+
+// Admin/test-endpoint auth — prefer the x-premium-key HEADER over ?key= (query
+// strings persist in access logs, proxies and browser history, so a secret in
+// the URL leaks; a header doesn't). ?key= still works as a deprecated fallback
+// for existing bookmarks/scripts. 404 (not 401) on failure, as everywhere else.
+function adminAuthOK(req) {
+  const KEY = process.env.PREMIUM_ACCESS_KEY;
+  const provided = req.headers["x-premium-key"] || req.query.key;
+  return !!KEY && provided === KEY;
+}
+
+// Public-facing error text — internal errors (RPC/Helius/fetch) can carry URLs
+// that embed credentials (e.g. ?api-key=...). Strip anything secret-shaped and
+// bound the length before it leaves the server; the raw error still reaches the
+// server log wherever the catch site logs it.
+function publicErrMsg(err, fallback = "internal error") {
+  let m = String((err && err.message) || fallback);
+  m = m.replace(/api[-_]key=[^&\s"']+/gi, "api-key=***").replace(/https?:\/\/[^\s"']+/gi, "[url]");
+  return m.length > 200 ? m.slice(0, 200) + "…" : m;
+}
 const { PublicKey } = require("@solana/web3.js");
 
 // Register Oswald (the site's display font) for the score card. Without this,
@@ -1505,7 +1525,7 @@ app.get("/api/bags-proxy", async (req, res) => {
     try { return res.status(200).json(JSON.parse(text)); }
     catch (e) { return res.status(500).json({ success: false, error: "Invalid JSON" }); }
   } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, error: publicErrMsg(err) });
   }
 });
 
@@ -1525,7 +1545,7 @@ app.get("/api/solscan-debug", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   // Gated: this exposes key metadata + makes upstream calls on our key. Hidden
   // (404) unless the admin passes the premium key, so it's not a public probe.
-  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) {
+  if (!adminAuthOK(req)) {
     return res.status(404).json({ error: "not_found" });
   }
   const KEY = process.env.SOLSCAN_API_KEY;
@@ -1582,7 +1602,7 @@ app.get("/api/solana-tracker-debug", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   // Gated: leaks key metadata AND (via ?probe=) is an arbitrary-path proxy to
   // the ST API on our key. Hidden (404) unless the admin passes the premium key.
-  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) {
+  if (!adminAuthOK(req)) {
     return res.status(404).json({ error: "not_found" });
   }
   const KEY = process.env.SOLANA_TRACKER_API_KEY;
@@ -1958,7 +1978,7 @@ app.get("/api/autopsy-premium", async (req, res) => {
     });
   } catch (e) {
     console.error("[PREMIUM] error:", e.message);
-    return res.status(500).json({ success: false, error: e.message });
+    return res.status(500).json({ success: false, error: publicErrMsg(e) });
   }
 });
 
@@ -2320,7 +2340,7 @@ async function gradHotTick() {
 // works the moment the keys are added in Railway.
 app.get("/api/x-post-test", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) return res.status(404).json({ error: "not_found" });
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
   if (!xConfigured()) return res.status(200).json({ configured: false, message: "Set X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_SECRET in Railway." });
   if (req.query.post === "1") {
     const text = req.query.text ? String(req.query.text) : "🐔 Cluck Norris is online. Crypto lessons incoming. clucknorris.app";
@@ -2335,7 +2355,7 @@ app.get("/api/x-post-test", async (req, res) => {
 // rotation and actually posts to the group. &topic=<text> overrides the topic.
 app.get("/api/edu-post-test", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) return res.status(404).json({ error: "not_found" });
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
   try {
     if (req.query.post === "1") { await notifyEduPost(); return res.status(200).json({ success: true, posted: true }); }
     const deck = kv.get("eduDeckV2", []); const pos = kv.get("eduDeckPosV2", 0);
@@ -2345,7 +2365,7 @@ app.get("/api/edu-post-test", async (req, res) => {
     const style = req.query.style === "short" ? "short" : (req.query.style === "full" ? "full" : slotStyle);
     const body = await generateEduLesson(topic, style);
     return res.status(200).json({ success: true, posted: false, topic, style, preview: body });
-  } catch (e) { return res.status(500).json({ success: false, error: e.message }); }
+  } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
 });
 
 // Treasury DAILY RECAP — token-denominated growth (assets, not dollars). Tracks how much
@@ -2457,9 +2477,9 @@ async function sendTreasuryRecap({ send = true, reset = false } = {}) {
 // or writing a snapshot; &send=1 actually DMs it (and records the snapshot/baseline).
 app.get("/api/treasury-recap-test", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) return res.status(404).json({ error: "not_found" });
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
   try { return res.status(200).json(await sendTreasuryRecap({ send: req.query.send === "1", reset: req.query.reset === "1" })); }
-  catch (e) { return res.status(500).json({ error: e.message }); }
+  catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
 
 // Meteora DLMM positions — read-only status (gated). Lists the treasury wallet's
@@ -2468,45 +2488,45 @@ app.get("/api/treasury-recap-test", async (req, res) => {
 // treasury vault's current SOL/cbBTC prices.
 app.get("/api/meteora/status", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) return res.status(404).json({ error: "not_found" });
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
   try {
     let solUsd = 0, btcUsd = 0;
     try { const st = await whirlpoolMM.vault.status("treasury"); const px = (st.earnings || {}).prices || {}; solUsd = px.solUsd || 0; btcUsd = px.clknUsd || 0; } catch (_) {}
     return res.status(200).json(await meteora.status({ solUsd, btcUsd }));
-  } catch (e) { return res.status(500).json({ error: e.message }); }
+  } catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
 
 // Meteora DLMM — pull liquidity (gated). ?pct=0.05 withdraws 5% to the wallet (no
 // close). DRY RUN unless &run=1. Optional &position=<pubkey> (defaults to the only one).
 app.get("/api/meteora/remove-liquidity", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) return res.status(404).json({ error: "not_found" });
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
   try {
     return res.status(200).json(await meteora.removeLiquidity({ positionPubkey: req.query.position || null, pct: req.query.pct, close: req.query.close === "1", dryRun: req.query.run !== "1" }));
-  } catch (e) { return res.status(500).json({ error: e.message }); }
+  } catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
 
 // Meteora DLMM — add liquidity back (gated). ?cbbtc=&sol= amounts. DRY RUN unless &run=1.
 app.get("/api/meteora/add-liquidity", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) return res.status(404).json({ error: "not_found" });
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
   try {
     return res.status(200).json(await meteora.addLiquidity({ positionPubkey: req.query.position || null, cbbtcUi: req.query.cbbtc, solUi: req.query.sol, dryRun: req.query.run !== "1" }));
-  } catch (e) { return res.status(500).json({ error: e.message }); }
+  } catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
 
 // Meteora DLMM — open a fresh centered position (gated). ?cbbtc=&sol=&half=0.6&dist=spot|curve|bidask
 // Centers on current price, ±half%. DRY RUN unless &run=1 (dry shows bin math + #positions).
 app.get("/api/meteora/open-position", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) return res.status(404).json({ error: "not_found" });
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
   try {
     return res.status(200).json(await meteora.openPosition({
       cbbtcUi: req.query.cbbtc, solUi: req.query.sol,
       halfWidthPct: req.query.half != null ? Number(req.query.half) : 0.6,
       distribution: req.query.dist || "spot", dryRun: req.query.run !== "1",
     }));
-  } catch (e) { return res.status(500).json({ error: e.message }); }
+  } catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
 
 // ── Meteora autonomous re-center ─────────────────────────────────────────────
@@ -2615,15 +2635,15 @@ async function meteoraRecenter({ dryRun = false, force = false } = {}) {
 // Meteora re-center (gated). DRY RUN unless &run=1. &force=1 ignores edge/anti-thrash checks.
 app.get("/api/meteora/recenter", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) return res.status(404).json({ error: "not_found" });
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
   try { return res.status(200).json(await meteoraRecenter({ dryRun: req.query.run !== "1", force: req.query.force === "1" })); }
-  catch (e) { return res.status(500).json({ error: e.message }); }
+  catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
 
 // Meteora config (gated). GET returns config; query params set it (e.g. ?autoRecenter=1&half=0.6&dist=curve).
 app.get("/api/meteora/config", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) return res.status(404).json({ error: "not_found" });
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
   try {
     const patch = {};
     for (const k of ["halfWidthPct", "distribution", "edgeFrac", "minRecenterSec", "autoRecenter"]) if (req.query[k] != null) patch[k] = req.query[k];
@@ -2633,7 +2653,7 @@ app.get("/api/meteora/config", (req, res) => {
     let ledger = meteora.getLedger();
     if (req.query.ledgerCbbtc != null || req.query.ledgerSol != null) ledger = meteora.setLedger({ cbbtc: req.query.ledgerCbbtc, sol: req.query.ledgerSol });
     return res.status(200).json({ config: cfg, feeLedger: ledger });
-  } catch (e) { return res.status(500).json({ error: e.message }); }
+  } catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
 
 // ── CLKN Blitz ───────────────────────────────────────────────────────────────
@@ -2702,7 +2722,7 @@ function clknBlitzCheck() {
 // CLKN Blitz control (gated). &run=1 starts; &abort=1 reverts now; no flag = status/plan.
 app.get("/api/clkn-blitz", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) return res.status(404).json({ error: "not_found" });
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
   try {
     if (req.query.abort === "1") return res.status(200).json(await clknBlitzRevert("manual abort"));
     const width = req.query.width != null ? Number(req.query.width) : 0.77;
@@ -2710,13 +2730,13 @@ app.get("/api/clkn-blitz", async (req, res) => {
     const r = await clknBlitzStart({ widthPct: width, minutes, dryRun: req.query.run !== "1" });
     const until = kv.get("clknBlitzUntil", 0);
     return res.status(200).json({ ...r, active: until > 0, until, minutesLeft: until ? Math.max(0, Math.round((until - Date.now()) / 60000)) : 0 });
-  } catch (e) { return res.status(500).json({ error: e.message }); }
+  } catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
 
 // Organic-score log + Blitz-effect summary (gated). &snap=1 records a snapshot now.
 app.get("/api/clkn-organic-log", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) return res.status(404).json({ error: "not_found" });
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
   try {
     if (req.query.snap === "1") await recordOrganicSnapshot();
     const log = kv.get("clknOrganicLog", []) || [];
@@ -2735,7 +2755,7 @@ app.get("/api/clkn-organic-log", async (req, res) => {
       },
       recent: log.slice(-72),
     });
-  } catch (e) { return res.status(500).json({ error: e.message }); }
+  } catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
 
 // PUBLIC engine proof — the live Jupiter organic score + a safe history subset for the
@@ -2770,7 +2790,7 @@ app.get("/api/engine-proof", async (req, res) => {
 // token actually crosses 85% / graduates).
 app.get("/api/grad-watch-status", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) return res.status(404).json({ error: "not_found" });
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
   if (req.query.run === "1") { try { await gradWatcherTick(); } catch (_) {} }
   const watched = {}; for (const m of gradTracker.watchedMints()) watched[m] = gradTracker.getWatch(m);
   return res.status(200).json({
@@ -2786,7 +2806,7 @@ app.get("/api/grad-watch-status", async (req, res) => {
 // display fields. Stamps graduatedAt = now so it shows + persists the full 48h.
 app.get("/api/grad-watch-add", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) return res.status(404).json({ error: "not_found" });
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
   const mint = String(req.query.mint || "").trim();
   if (!mint.toLowerCase().endsWith("bags")) return res.status(400).json({ error: "not_a_bags_mint" });
   let snap = null; try { snap = await getBagsTokenSnapshot(mint); } catch (_) {}
@@ -2816,7 +2836,7 @@ app.get("/api/bags-radar-test", async (req, res) => {
     const text = await buildBagsRadarText();
     if (req.query.post === "1") await notifyBagsLaunches();
     return res.status(200).json({ success: true, posted: req.query.post === "1", text });
-  } catch (e) { return res.status(500).json({ success: false, error: e.message }); }
+  } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
 });
 
 // Market Check — manual/dry-run trigger (gated). ?post=1 fires the Telegram post.
@@ -2829,7 +2849,7 @@ app.get("/api/market-check-test", async (req, res) => {
     const text = await buildMarketCheckText();
     if (req.query.post === "1") await notifyMarketCheck();
     return res.status(200).json({ success: true, posted: req.query.post === "1", text });
-  } catch (e) { return res.status(500).json({ success: false, error: e.message }); }
+  } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
 });
 
 // Daily Flow Recap dry-run. ?key=PREMIUM_ACCESS_KEY returns the composed text +
@@ -2845,7 +2865,7 @@ app.get("/api/recap-test", async (req, res) => {
     const text = buildRecapText();
     if (req.query.post === "1") await notifyRecap();
     return res.status(200).json({ success: true, posted: req.query.post === "1", persistent: recap.isPersistent(), snapshot, text });
-  } catch (e) { return res.status(500).json({ success: false, error: e.message }); }
+  } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
 });
 
 // Locked-supply report — dry-run the daily post (returns the computed report +
@@ -2858,7 +2878,7 @@ app.get("/api/lock-report-test", async (req, res) => {
   try {
     const r = await notifyLockReport({ dryRun: req.query.post !== "1" });
     return res.status(200).json(r);
-  } catch (e) { return res.status(500).json({ success: false, error: e.message }); }
+  } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
 });
 
 // Telegram test message — fire a one-off custom post to the community chat,
@@ -2910,7 +2930,7 @@ app.get("/api/tg-test", async (req, res) => {
     }
     return res.status(200).json({ success: !!(data && data.ok), messageId: data?.result?.message_id || null, pinned, telegram: data });
   } catch (e) {
-    return res.status(500).json({ success: false, error: e.message });
+    return res.status(500).json({ success: false, error: publicErrMsg(e) });
   }
 });
 
@@ -2955,7 +2975,7 @@ app.get("/api/tg-webhook-info", async (req, res) => {
       ...(resetResult ? { reset: resetResult } : {}),
     });
   } catch (e) {
-    return res.status(500).json({ ok: false, error: e.message });
+    return res.status(500).json({ ok: false, error: publicErrMsg(e) });
   }
 });
 
@@ -3053,7 +3073,7 @@ app.post("/api/buycomp/verify", async (req, res) => {
     return res.status(400).json({ error: "hold period not over", holdEndsAt });
   }
   try { await buyCompVerify(c); }
-  catch (e) { return res.status(500).json({ error: "verify failed: " + e.message }); }
+  catch (e) { return res.status(500).json({ error: "verify failed: " + publicErrMsg(e) }); }
   return res.status(200).json({ ok: true, verified: c.verified, verifyResults: c.verifyResults, payoutToken: c.payoutToken, prizeMint: buyCompPrizeMint(c) });
 });
 // Payout list for the airdropper. Gated by the per-comp payoutToken (NOT the admin
@@ -3121,7 +3141,7 @@ app.post("/api/buyspecial/draw", async (req, res) => {
   // 1) Every buyer in the window.
   let scan;
   try { scan = await solanaTracker.getTokenBuyersInWindow(mint, Math.floor(fromTs / 1000), Math.floor(toTs / 1000), { maxPages: 80 }); }
-  catch (e) { return res.status(500).json({ error: "buyer scan failed: " + e.message }); }
+  catch (e) { return res.status(500).json({ error: "buyer scan failed: " + publicErrMsg(e) }); }
   const buyers = (scan && scan.buyers) || [];
   if (!buyers.length) return res.status(200).json({ ok: true, note: "no buyers in window", buyersTotal: 0, reachedWindowStart: scan && scan.reachedWindowStart });
 
@@ -3259,7 +3279,7 @@ app.get("/api/token-context", async (req, res) => {
     });
   } catch (err) {
     console.error("[token-context] error:", err.message);
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, error: publicErrMsg(err) });
   }
 });
 
@@ -3300,7 +3320,7 @@ app.get("/api/holders", async (req, res) => {
     return res.status(200).json({ success: true, holderCount: owners.size });
   } catch (err) {
     console.error("Holders error:", err.message);
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, error: publicErrMsg(err) });
   }
 });
 
@@ -3350,7 +3370,7 @@ app.post("/api/helius-rpc", async (req, res) => {
     try { return res.json(JSON.parse(text)); }
     catch (e) { return res.send(text); }
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: publicErrMsg(err) });
   }
 });
 
@@ -3384,10 +3404,10 @@ app.post("/api/helius-tx", async (req, res) => {
     } catch (err) {
       lastErr = err;
       if (!isLast) continue;
-      return res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: publicErrMsg(err) });
     }
   }
-  return res.status(500).json({ error: (lastErr && lastErr.message) || "helius-tx failed" });
+  return res.status(500).json({ error: publicErrMsg(lastErr, "helius-tx failed") });
 });
 
 // A Helius JSON-RPC caller: rpcCall(id, method, params) — forwards params as given
@@ -3472,7 +3492,7 @@ app.get("/api/locks", async (req, res) => {
     return res.status(200).json(data);
   } catch (err) {
     console.error("Locks error:", err.message);
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, error: publicErrMsg(err) });
   }
 });
 
@@ -3493,7 +3513,7 @@ app.get("/api/fees", async (req, res) => {
       return res.status(500).json({ success: false, error: "Invalid JSON", raw: text.slice(0,200) });
     }
   } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, error: publicErrMsg(err) });
   }
 });
 
@@ -3557,7 +3577,7 @@ app.get("/api/reinvestment", async (req, res) => {
     REINVEST_CACHE = { data: payload, ts: Date.now() };
     return res.status(200).json(payload);
   } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, error: publicErrMsg(err) });
   }
 });
 
@@ -3781,7 +3801,7 @@ app.post("/api/claim", async (req, res) => {
     });
   } catch(err) {
     console.error("Claim error:", err.message);
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, error: publicErrMsg(err) });
   }
 });
 
@@ -3894,7 +3914,7 @@ app.get("/api/wallet-checkup", async (req, res) => {
     });
   } catch (e) {
     console.error("[wallet-checkup]", e.message);
-    return res.status(500).json({ success: false, error: e.message });
+    return res.status(500).json({ success: false, error: publicErrMsg(e) });
   }
 });
 
@@ -3904,7 +3924,7 @@ app.get("/api/claims", async (req, res) => {
   // Admin-only: exposes the full airdrop list (wallets + balances). Gated on the
   // PREMIUM_ACCESS_KEY secret (Railway only) like the other admin endpoints —
   // never a hardcoded password in this public repo.
-  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) {
+  if (!adminAuthOK(req)) {
     return res.status(404).json({ error: "not_found" });
   }
   try {
@@ -3915,7 +3935,7 @@ app.get("/api/claims", async (req, res) => {
     }));
     return res.status(200).json({ success: true, count: data.length, claims: data });
   } catch(err) {
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, error: publicErrMsg(err) });
   }
 });
 
@@ -4136,7 +4156,7 @@ app.post("/api/verify-clkn-payment", async (req, res) => {
     return res.status(200).json({ success: false, error: "Payment not found yet." });
   } catch(err) {
     console.error("Verify payment error:", err.message);
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, error: publicErrMsg(err) });
   }
 });
 
@@ -4601,7 +4621,7 @@ ${safeContext ? `\nThe student is currently studying: ${safeContext}` : ''}`;
     return res.status(500).json({ success: false, error: "No response from AI" });
   } catch(err) {
     console.error("Ask Cluck error:", err.message);
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, error: publicErrMsg(err) });
   }
 });
 
@@ -5145,7 +5165,7 @@ app.get("/api/cluck-score", async (req, res) => {
     });
   } catch (err) {
     console.error("Cluck Score error:", err.message);
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, error: publicErrMsg(err) });
   }
 });
 
@@ -5392,7 +5412,7 @@ app.get("/api/snapshot", async (req, res) => {
     });
   } catch (err) {
     console.error("[snapshot] error:", err.message);
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, error: publicErrMsg(err) });
   }
 });
 
@@ -5760,7 +5780,7 @@ app.get("/api/trace", async (req, res) => {
     });
   } catch (err) {
     console.error("[trace] error:", err.message);
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, error: publicErrMsg(err) });
   }
 });
 
@@ -5897,7 +5917,7 @@ app.get("/api/cluck-card", async (req, res) => {
     return res.end(png);
   } catch (err) {
     console.error("Card render error:", err.message);
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, error: publicErrMsg(err) });
   }
 });
 
@@ -5996,7 +6016,7 @@ app.get("/api/credential-card", async (req, res) => {
     return res.end(png);
   } catch (err) {
     console.error("Credential card error:", err.message);
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, error: publicErrMsg(err) });
   }
 });
 
@@ -6133,7 +6153,7 @@ app.get("/stats", (req, res) => {
 });
 app.get("/api/stats", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) {
+  if (!adminAuthOK(req)) {
     return res.status(404).json({ error: "not_found" });
   }
   const n = Math.max(1, Math.min(90, parseInt(req.query.days, 10) || 30));
@@ -6218,7 +6238,7 @@ app.get("/api/bubblemaps", async (req, res) => {
     try { return res.json(JSON.parse(text)); }
     catch (e) { return res.send(text); }
   } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: publicErrMsg(err) });
   }
 });
 
@@ -6260,6 +6280,7 @@ app.get("/api/autopsy", async (req, res) => {
     AUTOPSY_CACHE.set(mint, { body, ts: Date.now() });
     if (AUTOPSY_CACHE.size > 300) { const cut = Date.now() - AUTOPSY_TTL_MS; for (const [k, v] of AUTOPSY_CACHE) if (v.ts < cut) AUTOPSY_CACHE.delete(k); }
   }
+  if (status >= 500 && body && body.error) body.error = publicErrMsg({ message: body.error });
   return res.status(status).json(body);
 });
 
@@ -6485,7 +6506,10 @@ function prettySource(source) {
   if (!source) return "";
   if (source === "UNKNOWN" || source === "SYSTEM_PROGRAM") return "";
   if (SOURCE_LABELS[source]) return SOURCE_LABELS[source];
-  // Fallback: turn METEORA_DAMM_V2 → "Meteora Damm V2"
+  // Fallback: `source` is third-party (Helius) data that ends up inside Telegram
+  // HTML — only accept Helius's enum shape (A-Z/0-9/_, bounded) and title-case it
+  // (METEORA_DAMM_V2 → "Meteora Damm V2"); anything else gets a safe generic label.
+  if (!/^[A-Z0-9_]{2,32}$/.test(source)) return "DEX";
   return source.toLowerCase().replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
 }
 function formatRoute(tx, pool) {
@@ -7216,8 +7240,23 @@ async function pollSinglePool(pool, HELIUS_KEY) {
 
 app.listen(PORT, () => {
   console.log(`[CLUCK] Cluck Norris server running on port ${PORT}`);
-  console.log(`BAGS_API_KEY present: ${!!process.env.BAGS_API_KEY}`);
-  console.log(`HELIUS_API_KEY present: ${!!process.env.HELIUS_API_KEY}`);
+  // Boot env audit — one line saying exactly which expected vars are absent, so
+  // "the bot isn't doing X" is diagnosable from the first lines of the deploy log.
+  {
+    const expected = [
+      "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "HELIUS_API_KEY", "BAGS_API_KEY",
+      "ANTHROPIC_API_KEY", "SOLANA_TRACKER_API_KEY", "SOLSCAN_API_KEY",
+      "PREMIUM_ACCESS_KEY", "BUYCOMP_KEY", "X_API_KEY", "X_API_SECRET",
+      "X_ACCESS_TOKEN", "X_ACCESS_SECRET", "GOOGLE_SHEET_ID", "GOOGLE_CLIENT_EMAIL",
+      "GOOGLE_PRIVATE_KEY", "HATCHERY_TURBO_KEY", "COINGECKO_API_KEY", "DATA_DIR",
+      "MM_OPERATOR_SECRET",
+    ];
+    const missing = expected.filter((k) => !process.env[k]);
+    console.log(`[boot] env audit: ${expected.length - missing.length}/${expected.length} expected vars present${missing.length ? " — MISSING: " + missing.join(", ") : ""}`);
+    if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHAT_ID) {
+      console.warn("[boot] TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID unset → the ENTIRE scheduler block (alerts, lessons, radar, recap, grad watcher, webhook) is OFF");
+    }
+  }
   if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
     console.log(`[TELEGRAM] Bot configured · chat ${process.env.TELEGRAM_CHAT_ID} · trade poller starting in 5s`);
     // Brief delay before first poll so server is fully ready
