@@ -134,6 +134,19 @@ Live money is managed across two systems. Facts here survive container resets/co
   `git fetch origin --prune && git checkout claude/<branch> && git reset --hard origin/claude/<branch> && npm install`.
   GitHub is always the truth; nothing committed is ever lost. `MIN_BUY_USD` default is 15.
 
+## Audit status (full-app review done — don't re-litigate the clean parts)
+A whole-codebase security review (2026-06-10) found **zero critical/theft-class bugs**. Sound &
+reviewed: payment/replay path (sigstore is atomic test-and-set + now fails CLOSED on a durability
+fault), RPC proxy (default-deny allow-list, no SSRF), exam/credentials (server-scored, single-use
+tokens), secrets/PII, auth (every fund/secret route key-gated, fail-closed, 404-not-401), slots,
+buyback. All session-built liquidity findings were FIXED & shipped: re-center never strands funds
+(try/catch → meteoraReopenPending retry + DM), fee-bank durable across confirm-timeouts
+(meteoraFeePendingBank + reconcile), confirmSig tolerates RPC blips, in-process mutex on
+meteora fund-moving calls, blitz revert work-then-clear + double-start guard, pinned managed
+chaser pubkey (meteoraManagedPubkey), token-denominated 24h fee delta, Raydium range guard,
+trace.html/autopsy.html XSS escaped. Remaining = LOW hygiene backlog only (range-label honesty,
+`source` whitelist, header-vs-`?key=` admin auth, generic RPC error passthrough) — not vulns.
+
 ## Conventions
 - Tool pages are vanilla HTML + inline JS; the school is React. **Escape any API/token-
   supplied string before `innerHTML`** — token names/symbols are attacker-controlled.
