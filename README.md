@@ -11,12 +11,13 @@
 >
 > **A Bags.fm token where the school is free, token research is free, and premium tools are paid for in CLKN — wrapped in guardrails that teach first‑timers before they can hurt themselves.**
 
-Four things, in one product:
+Five things, in one product:
 
 1. 🆓 **A free crypto school** — disciplined, voice‑driven, no signup, no wallet
 2. 🩺 **Free token research & forensics** — a 0–100 health score, a deep AI token *autopsy*, holder snapshots and transaction tracing for any Solana mint, plus a free wallet‑safety checker
 3. 🔒 **Premium operator tools** — buy‑competition trackers, a batch airdrop sender, and a holder‑gated deep‑forensics tier, unlocked with on‑chain CLKN micropayments
 4. 🥚 **A guided token creator** — mint a real SPL token, taught decision by decision
+5. 💧 **The Liquidity Engine** — an honest, automated market maker (real depth, zero wash trades) running live on CLKN, with its results published on a wash‑proof public metric
 
 The token does real work. The school keeps people alive long enough to use it.
 
@@ -97,7 +98,9 @@ The Liquidity Engine is a concentrated‑liquidity market maker on **Orca Whirlp
 
 **Provable by metric.** Jupiter scores every token 0–100 on how *organic* its flow is — their models filter out wash trading, so the score can't be bought or botted. CLKN's organic score has climbed from **0 to 32+** since the engine went live. The server logs it hourly (tagged against the engine's tight‑range "Blitz" windows, so the effect of each is measurable, not anecdotal) and publishes the history at a public endpoint (`/api/engine-proof`) charted live on the [`/liquidity-engine`](https://clucknorris.app/liquidity-engine) page — anyone can watch the wash‑proof metric move.
 
-Live now on CLKN (CLKN/USDC + CLKN/SOL on Orca); **Raydium CLMM** is supported as a venue for projects that live there. Check current depth in Telegram with **`/liquidity`**, or on the [`/liquidity`](https://clucknorris.app/liquidity) page. It's the foundation of an operator‑grade, *auditable* liquidity‑management capability — the same work experienced operators do by hand, automated.
+**Productized.** The engine is **multi‑tenant** — each project runs on its own dedicated operator wallet with its own guardrails and Telegram alert room — and it manages more than one project's liquidity today. The service has a public product page ([`/liquidity-engine`](https://clucknorris.app/liquidity-engine)) with honest risk education built in (including the big‑sell scenario most MM services won't explain), an **owner portal** ([`/portal`](https://clucknorris.app/portal)) where a project signs in with its wallet to watch its own vault, and pricing in CLKN — so a growing liquidity‑service business directly deepens the token's utility. A **Meteora DLMM** adapter runs the project treasury's cbBTC/SOL liquidity on the same codebase, alongside Orca Whirlpools and Raydium CLMM.
+
+Live now on CLKN (CLKN/USDC + CLKN/SOL on Orca); **Raydium CLMM** is supported as a venue for projects that live there. Check current depth in Telegram with **`/liquidity`**, or on the [`/liquidity`](https://clucknorris.app/liquidity) page. It's an operator‑grade, *auditable* liquidity‑management capability — the same work experienced operators do by hand, automated.
 
 ---
 
@@ -202,7 +205,8 @@ The product reaches into the community Telegram (and X), not just the website:
 | Community | Telegram bot (webhook + scheduled posts + buy alerts) · X / Twitter (OAuth 1.0a, no SDK) |
 | Trophy log | Google Sheets (JWT auth) |
 | Wallet signing | Phantom · Solflare · Backpack · OKX · Jupiter + 6 more (non‑custodial) |
-| Security | per‑IP rate limiting · RPC method allow‑listing · gated admin/debug · replay‑proof payments · XSS output‑escaping · HSTS / X‑Frame‑Options / X‑Content‑Type‑Options / Referrer‑Policy |
+| Security | per‑IP rate limiting · RPC method allow‑listing · gated admin/debug · replay‑proof payments · XSS output‑escaping · HSTS / X‑Frame‑Options / X‑Content‑Type‑Options / Referrer‑Policy · full‑codebase security review (June 2026) — zero critical findings, all fixes shipped |
+| Liquidity venues | Orca Whirlpools · Raydium CLMM · Meteora DLMM (one engine, per‑venue adapters) |
 | License | MIT |
 
 **Public API:**
@@ -220,6 +224,7 @@ The product reaches into the community Telegram (and X), not just the website:
 - `/api/hatchery/*` — token creator: Arweave metadata upload, unsigned mint‑tx build, live fee config
 - `/api/security-coop/*` — wallet delegate‑approval scan + unsigned revoke‑tx build
 - `/api/whirlpool/*` — Liquidity Engine: Orca pool discovery, suggested ranges, liquidity quotes, and non‑custodial open/close position‑tx builds (public); the autonomous vault's `/vault/*` (status / tick / rebalance / swap / pause) is gated on `PREMIUM_ACCESS_KEY` and runs per‑project on **Orca or Raydium**
+- `/api/engine-proof` — public Liquidity Engine proof: live Jupiter organic score + hourly history (charted on [`/liquidity-engine`](https://clucknorris.app/liquidity-engine))
 - `/api/holders`, `/api/locks`, `/api/fees`, `/api/supply`, `/api/reinvestment`, `/api/bubblemaps` — Solana token telemetry proxies
 - `/api/bags-proxy`, `/api/bags-feed-prices`, `/api/bags-near-grad`, `/api/bags-graduated` — Bags launch data
 - `/api/helius-rpc`, `/api/helius-tx` — Helius proxies with API keys hidden server‑side, with automatic failover on rate‑limit / outage

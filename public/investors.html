@@ -395,6 +395,7 @@
           • Persistent storage (no resets on deploy)<br>
           • HSTS + security headers + XSS hardening<br>
           • Locked‑down admin/debug endpoints<br>
+          • <strong style="color:#FCD34D">Full‑codebase security review (June 2026)</strong> — zero critical findings, all fixes shipped<br>
           • No custody · 11 wallets + mobile deep links
         </div>
       </div>
@@ -477,9 +478,11 @@
         <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
           • <a class="xref" href="/liquidity">Non‑custodial LP tool</a> on Orca Whirlpools<br>
           • Single‑sided walls + balanced ranges<br>
-          • Autonomous vault (operator‑gated) · Orca + Raydium CLMM<br>
+          • Autonomous multi‑project vault · Orca + Raydium + Meteora<br>
           • Auto re‑center + inventory rebalance (Jupiter)<br>
           • <strong style="color:#FCD34D">Real depth — not a wash‑trade bot</strong><br>
+          • <strong style="color:#FCD34D">Proof: Jupiter organic score 0 → 32+</strong> — <a class="xref" href="/liquidity-engine#proof">live chart</a><br>
+          • <a class="xref" href="/liquidity-engine">Product page</a> + <a class="xref" href="/portal">owner portal</a> (wallet sign‑in)<br>
           • Guardrails + one‑flag kill switch<br>
           • /liquidity live depth view in Telegram
         </div>
@@ -496,7 +499,7 @@
       <li><strong>A real push on Bags.fm.</strong> Cluck Norris launched on Bags, and we're leaning into it hard — a dedicated <a class="xref" href="/bags">Bags Hub</a>, a live launches feed, "close to bonding" and "graduated" alerts, and tools that read Bags natively (verified creators, royalty splits, bonding‑curve status). We also deliberately <strong>spotlight and support other strong Bags projects</strong>, not just our own — being a useful citizen of the ecosystem brings new eyes to Bags and to us at the same time.</li>
       <li><strong>The Bags Hackathon.</strong> We're competing for one of the Bags hackathon spots. The deep Bags integration, the daily ship cadence, and a genuinely useful free tool suite are all aimed squarely at earning that recognition.</li>
       <li><strong>Solana Foundation grant.</strong> We've submitted an application to the Solana Foundation for funding to support the project and accelerate the app's growth. Non‑dilutive support that goes straight into building, not into anyone's pocket.</li>
-      <li><strong>💧 Liquidity‑management as a service.</strong> We built an <a class="xref" href="/liquidity">automated, honest market maker</a> on Orca Whirlpools (with a Raydium CLMM adapter on the same interface) — real two‑sided depth, automatic re‑centering, and inventory rebalancing via Jupiter, with a non‑custodial tool and an operator‑run autonomous vault (guardrails + kill switch). It's <strong>live on CLKN</strong> now. The differentiator is trust: every other "volume" service on the market wash‑trades; ours provides <em>real</em> depth that you can audit with our own <a class="xref" href="/autopsy">Token Autopsy</a>. The direction is to productize it for other projects — the same liquidity work seasoned operators do by hand, automated and auditable. <span style="color:var(--subtext)">(Honest scope: it runs live on CLKN today; the multi‑project, sellable version is the direction we're building toward, not a shipped product yet.)</span></li>
+      <li><strong>💧 Liquidity‑management as a service — productized and proving itself.</strong> We built an <a class="xref" href="/liquidity">automated, honest market maker</a> spanning Orca Whirlpools, Raydium CLMM and Meteora DLMM on one engine — real two‑sided depth, automatic re‑centering, and inventory rebalancing via Jupiter, with a non‑custodial tool and a <strong>multi‑tenant</strong> autonomous vault (per‑project operator wallets, guardrails, kill switch). It runs <strong>live on CLKN and on other projects' liquidity today</strong>, with a <a class="xref" href="/liquidity-engine">public product page</a> (including the honest big‑sell risk education most MM services won't give you), an <a class="xref" href="/portal">owner portal</a> with wallet sign‑in, and pricing in CLKN. The differentiator is trust, and now it's <em>measurable</em>: every other "volume" service wash‑trades; ours moves <strong>Jupiter's organic score — the wash‑proof metric — from 0 to 32+ on CLKN</strong>, logged hourly and <a class="xref" href="/liquidity-engine#proof">charted live</a> for anyone to verify. <span style="color:var(--subtext)">(Honest scope: early‑access stage — onboarding is hands‑on by design while we scale it carefully.)</span></li>
       <li><strong>More CLKN‑gated utility on the way.</strong> The <a class="xref" href="/premium">premium forensics tier</a> is the first of several token‑gated tools in the pipeline. The pattern is intentional: every new utility gives CLKN another real reason to be held and used — utility first, speculation second. <span style="color:var(--subtext)">(We don't pre‑announce dates and this isn't a roadmap promise — it's the direction the daily builds keep pointing.)</span></li>
     </ul>
   </div>
