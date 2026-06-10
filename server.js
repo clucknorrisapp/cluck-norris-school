@@ -2586,6 +2586,69 @@ app.get("/api/meteora/config", (req, res) => {
   } catch (e) { return res.status(500).json({ error: e.message }); }
 });
 
+// ── CLKN Blitz ───────────────────────────────────────────────────────────────
+// Temporarily slams the main CLKN engine's CLKN/USDC + CLKN/SOL into a super-tight
+// range at reduced deployFrac to pull routed volume, then auto-reverts after `minutes`.
+// Reset-proof: the expiry is persisted (clknBlitzUntil) and checked every minute AND on
+// boot, so a redeploy mid-blitz still reverts on time. Restores the captured widths.
+function blitzDM(text) {
+  try {
+    const tg = process.env.TELEGRAM_BOT_TOKEN, proj = whirlpoolMM.vault.getProject("treasury");
+    if (tg && proj && proj.telegramChatId) fetch(`https://api.telegram.org/bot${tg}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: proj.telegramChatId, parse_mode: "HTML", text }) }).catch(() => {});
+  } catch (_) {}
+}
+async function clknForceRedeploy() {
+  const cur = await whirlpoolMM.vault.status("clkn"); const s = (cur && cur.state) || {};
+  const baseMint = s.positionMint || null, solMint = (s.solVault && s.solVault.mint) || null;
+  if (baseMint) { try { await whirlpoolMM.vault.closePosition({ projectId: "clkn", mint: baseMint }); } catch (_) {} }
+  if (solMint) { try { await whirlpoolMM.vault.closePosition({ projectId: "clkn", mint: solMint }); } catch (_) {} }
+  try { await whirlpoolMM.vault.tick({ projectId: "clkn" }); } catch (e) { console.warn("[blitz] base tick:", e.message); }
+  try { await whirlpoolMM.vault.tickSol({ projectId: "clkn" }); } catch (e) { console.warn("[blitz] sol tick:", e.message); }
+}
+async function clknBlitzStart({ widthPct = 0.77, minutes = 60, dryRun = false } = {}) {
+  const cur = await whirlpoolMM.vault.status("clkn");
+  if (!cur || !cur.enabled) return { error: "clkn engine not enabled" };
+  const c = cur.config || {};
+  const restore = { widthPct: c.widthPct, solWidthPct: c.solWidthPct, deployFrac: c.deployFrac };
+  const out = { action: dryRun ? "would-blitz" : "blitz", widthPct, minutes, restore };
+  if (dryRun) return out;
+  kv.set("clknBlitzRestore", restore);
+  kv.set("clknBlitzUntil", Date.now() + minutes * 60000);
+  whirlpoolMM.vault.setConfig({ widthPct, solWidthPct: widthPct, deployFrac: 0.75 }, "clkn");
+  await clknForceRedeploy();
+  blitzDM(`⚡ <b>CLKN Blitz ON</b>\n±${widthPct}% on CLKN/USDC + CLKN/SOL · ~75% deploy · auto-reverts in ${minutes}m`);
+  return { ...out, until: kv.get("clknBlitzUntil", 0) };
+}
+async function clknBlitzRevert(reason = "timer") {
+  const restore = kv.get("clknBlitzRestore", null);
+  kv.set("clknBlitzUntil", 0); // clear first so the check can't double-fire
+  if (!restore) return { reverted: false, reason: "no restore stored" };
+  whirlpoolMM.vault.setConfig({ widthPct: restore.widthPct, solWidthPct: restore.solWidthPct, deployFrac: restore.deployFrac }, "clkn");
+  await clknForceRedeploy();
+  kv.set("clknBlitzRestore", null);
+  blitzDM(`✅ <b>CLKN Blitz over</b> — restored ±${restore.widthPct}% / ±${restore.solWidthPct}% (${reason})`);
+  return { reverted: true, restore };
+}
+function clknBlitzActive() { return kv.get("clknBlitzUntil", 0) > 0; }
+function clknBlitzCheck() {
+  const until = kv.get("clknBlitzUntil", 0);
+  if (until && Date.now() > until) clknBlitzRevert("timer").catch((e) => console.warn("[clkn-blitz] revert failed:", e.message));
+}
+
+// CLKN Blitz control (gated). &run=1 starts; &abort=1 reverts now; no flag = status/plan.
+app.get("/api/clkn-blitz", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) return res.status(404).json({ error: "not_found" });
+  try {
+    if (req.query.abort === "1") return res.status(200).json(await clknBlitzRevert("manual abort"));
+    const width = req.query.width != null ? Number(req.query.width) : 0.77;
+    const minutes = req.query.minutes != null ? Number(req.query.minutes) : 60;
+    const r = await clknBlitzStart({ widthPct: width, minutes, dryRun: req.query.run !== "1" });
+    const until = kv.get("clknBlitzUntil", 0);
+    return res.status(200).json({ ...r, active: until > 0, until, minutesLeft: until ? Math.max(0, Math.round((until - Date.now()) / 60000)) : 0 });
+  } catch (e) { return res.status(500).json({ error: e.message }); }
+});
+
 // Graduation-watcher status (gated). Shows the current watchlist + our 48h
 // graduated record; ?run=1 triggers one watcher cycle now (alerts fire if a
 // token actually crosses 85% / graduates).
@@ -11014,6 +11077,10 @@ app.listen(PORT, () => {
       } catch (e) { console.warn("[meteora-recenter] failed:", e.message); }
     }
     setInterval(meteoraRecenterTick, 5 * 60 * 1000);
+    // CLKN Blitz auto-revert — reset-proof: checks the persisted expiry every minute and
+    // once shortly after boot, so a redeploy mid-blitz still reverts on time.
+    setInterval(clknBlitzCheck, 60 * 1000);
+    setTimeout(clknBlitzCheck, 12000);
     // Live buy-competition leaderboards — refresh active boards, close on window end.
     setInterval(buyCompTick, 60 * 1000);
     // Interactive slash commands — register the webhook + the "/" command menu.
