@@ -4408,11 +4408,6 @@ async function slotBalance(s, wallet) {
   let bal; try { bal = (await checkCLKNHolder(wallet)).balance; } catch (_) { bal = c ? c.bal : 0; }
   s.bal[wallet] = { bal, ts: Date.now() }; kv.set("slotsState", s); return bal;
 }
-function slotPick() {
-  const tot = SLOT_WEIGHTS.reduce((a, w) => a + w, 0);
-  const pick = () => { let r = Math.random() * tot; for (let i = 0; i < SLOT_WEIGHTS.length; i++) { r -= SLOT_WEIGHTS[i]; if (r <= 0) return SLOT_SYMS[i]; } return SLOT_SYMS[6]; };
-  return [pick(), pick(), pick()];
-}
 function slotScore(o) {
   let pts = SLOT_PTS.spin, jackpot = false, fireChicken = false, kind = "spin";
   if (o[0] === "🩺" && o[1] === "🔥" && o[2] === "🐔") {           // 🩺🔥🐔 = DR. FIRE CHICKEN (ordered, rare)
@@ -4444,6 +4439,36 @@ function slotOdds() {
     anyWin:      { pct: +(anyWin * 100).toFixed(2),      oneIn: oneIn(anyWin) },
   };
 }
+// ── Provably-fair RNG (commit-reveal) — CLAUDE.md "slots: provably-fair before real prizes" ──
+// Per-spin: the server commits to sha256(serverSeed) BEFORE the spin (returned by /state and
+// as nextCommit on every spin), derives the outcome from sha256(serverSeed:clientSeed:nonce),
+// then reveals serverSeed so the player can recompute both the commit and the outcome. The
+// seed rotates EVERY spin — a revealed seed can never predict a future spin (otherwise a
+// player could precompute the next outcome and skip bad spins).
+const sha256hex = (v) => createHash("sha256").update(String(v)).digest("hex");
+function slotFair(s, wallet) {
+  s.fair = s.fair || {};
+  if (!s.fair[wallet] || !s.fair[wallet].seed) s.fair[wallet] = { seed: randomBytes(32).toString("hex"), nonce: 0 };
+  return s.fair[wallet];
+}
+// Per-week seed for the wheel draw — committed all week in /state, revealed by the draw.
+function slotWeekFair(s) {
+  s.weekFair = s.weekFair || {};
+  if (!s.weekFair[s.weekId]) s.weekFair[s.weekId] = randomBytes(32).toString("hex");
+  return s.weekFair[s.weekId];
+}
+// hex hash → n floats in [0,1) (8 hex chars = uint32 each; sha256 yields up to 8)
+function rollFloats(hex, n) {
+  const out = [];
+  for (let i = 0; i < n; i++) out.push(parseInt(hex.slice(i * 8, i * 8 + 8), 16) / 0x100000000);
+  return out;
+}
+// Same weighted pick as the original slotPick, but driven by supplied floats.
+function slotPickFair(rs) {
+  const tot = SLOT_WEIGHTS.reduce((a, w) => a + w, 0);
+  const pick = (r0) => { let r = r0 * tot; for (let i = 0; i < SLOT_WEIGHTS.length; i++) { r -= SLOT_WEIGHTS[i]; if (r <= 0) return SLOT_SYMS[i]; } return SLOT_SYMS[SLOT_SYMS.length - 1]; };
+  return [pick(rs[0]), pick(rs[1]), pick(rs[2])];
+}
 function slotLeaderboard(s, me) {
   const arr = Object.entries(s.players).map(([w, p]) => ({ wallet: w, pts: p.pts, jackpot: !!p.jackpot }))
     .sort((a, b) => b.pts - a.pts);
@@ -4469,7 +4494,16 @@ app.post("/api/slots/spin", async (req, res) => {
   if (allot < 1) return res.status(403).json({ error: "need_floor", balance: bal, floor: SLOT_SPIN_PER });
   const day = slotDayId(); s.spins[day] = s.spins[day] || {}; const used = s.spins[day][wallet] || 0;
   if (used >= allot) return res.status(429).json({ error: "no_spins_left", spinsLeft: 0, dailyAllot: allot, spinsResetAt: slotDayEndsAt() });
-  const outcome = slotPick(), sc = slotScore(outcome);
+  // Provably-fair outcome: committed seed (published before this spin) + player's
+  // clientSeed + nonce → deterministic roll. Seed is revealed below and rotated.
+  const fair = slotFair(s, wallet);
+  const clientSeed = String((req.body || {}).clientSeed || "").slice(0, 64);
+  const commit = sha256hex(fair.seed);
+  const roll = sha256hex(`${fair.seed}:${clientSeed}:${fair.nonce}`);
+  const outcome = slotPickFair(rollFloats(roll, 3)), sc = slotScore(outcome);
+  const revealedSeed = fair.seed, revealedNonce = fair.nonce;
+  s.fair[wallet] = { seed: randomBytes(32).toString("hex"), nonce: 0 };       // rotate — commit chain continues
+  const nextCommit = sha256hex(s.fair[wallet].seed);
   s.spins[day][wallet] = used + 1;
   const p = s.players[wallet] || { pts: 0, jackpot: false, entryBal: bal };
   if (p.entryBal == null) p.entryBal = bal;                     // week-entry balance, recorded ONCE (first spin)
@@ -4489,7 +4523,12 @@ app.post("/api/slots/spin", async (req, res) => {
     );
   }
   try { analytics.trackTool("slot_spin"); } catch (_) {}
-  return res.status(200).json({ outcome, gained: sc.pts, kind: sc.kind, jackpot: p.jackpot, fireChicken: !!p.fireChicken, hitFireChicken: !!sc.fireChicken, airdrop: fcFirst ? SLOT_FIRE_CHICKEN_AIRDROP : 0, fireChickenAlreadyWon: sc.fireChicken && !fcFirst, totalPoints: p.pts, spinsLeft: allot - (used + 1), dailyAllot: allot, spinsResetAt: slotDayEndsAt(), weekId: s.weekId, leaderboard: slotLeaderboard(s, wallet) });
+  return res.status(200).json({
+    outcome, gained: sc.pts, kind: sc.kind, jackpot: p.jackpot, fireChicken: !!p.fireChicken, hitFireChicken: !!sc.fireChicken, airdrop: fcFirst ? SLOT_FIRE_CHICKEN_AIRDROP : 0, fireChickenAlreadyWon: sc.fireChicken && !fcFirst, totalPoints: p.pts, spinsLeft: allot - (used + 1), dailyAllot: allot, spinsResetAt: slotDayEndsAt(), weekId: s.weekId, leaderboard: slotLeaderboard(s, wallet),
+    // commit-reveal proof: sha256(serverSeed) === commit (published before this spin), and
+    // sha256(`${serverSeed}:${clientSeed}:${nonce}`) → first 3×8 hex chars as uint32/2^32 → weighted symbols.
+    fair: { commit, serverSeed: revealedSeed, clientSeed, nonce: revealedNonce, roll, nextCommit, algo: "sha256(serverSeed:clientSeed:nonce) -> 3 x uint32/2^32 -> weighted pick over published odds" },
+  });
 });
 
 // Player + board state (proof optional — board is visible to the beta group).
@@ -4505,9 +4544,11 @@ app.get("/api/slots/state", async (req, res) => {
     const used = (s.spins[slotDayId()] || {})[wallet] || 0;
     const p = s.players[wallet] || { pts: 0, jackpot: false };
     const sold = p.entryBal != null && bal < p.entryBal * SLOT_HOLD_TOL;       // matters only at draw
-    me = { wallet, inBeta, balance: bal, dailyAllot: allot, spinsLeft: Math.max(0, allot - used), points: p.pts, jackpot: !!p.jackpot, fireChicken: !!p.fireChicken, floor: SLOT_SPIN_PER, disqualified: sold };
+    me = { wallet, inBeta, balance: bal, dailyAllot: allot, spinsLeft: Math.max(0, allot - used), points: p.pts, jackpot: !!p.jackpot, fireChicken: !!p.fireChicken, floor: SLOT_SPIN_PER, disqualified: sold, fairCommit: sha256hex(slotFair(s, wallet).seed) };
   }
-  return res.status(200).json({ weekId: s.weekId, weekEndsAt: slotWeekEndsAt(), spinsResetAt: slotDayEndsAt(), openBeta: s.openBeta !== false, drawn: s.draws[s.weekId] || null, me, leaderboard: slotLeaderboard(s, wallet), odds: slotOdds() });
+  const weekFairCommit = sha256hex(slotWeekFair(s));   // wheel-draw seed commit, public all week
+  kv.set("slotsState", s);                             // persist any seeds created above
+  return res.status(200).json({ weekId: s.weekId, weekEndsAt: slotWeekEndsAt(), spinsResetAt: slotDayEndsAt(), openBeta: s.openBeta !== false, drawn: s.draws[s.weekId] || null, me, leaderboard: slotLeaderboard(s, wallet), odds: slotOdds(), weekFairCommit });
 });
 
 // Admin: manage the demo allowlist.
@@ -4547,8 +4588,15 @@ app.post("/api/slots/draw", async (req, res) => {
   const set = new Set();
   finalists.filter(x => x.jackpot).forEach(x => set.add(x.wallet));   // jackpot = guaranteed slot
   for (const x of finalists) { if (set.size >= POINTS) break; set.add(x.wallet); }   // top point-earners
+  // Both random steps below (wild-card shuffle + winner pick) derive from the week's
+  // committed seed (weekFairCommit in /state all week) so the whole draw is verifiable
+  // from the published entrant list once the seed is revealed.
+  const weekSeed = slotWeekFair(s);
   const rest = finalists.filter(x => !set.has(x.wallet));
-  for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [rest[i], rest[j]] = [rest[j], rest[i]]; }
+  for (let i = rest.length - 1; i > 0; i--) {
+    const j = Math.floor(rollFloats(sha256hex(`${weekSeed}:${s.weekId}:wild:${i}`), 1)[0] * (i + 1));
+    [rest[i], rest[j]] = [rest[j], rest[i]];
+  }
   let wild = 0;
   for (const x of rest) { if (set.size >= SLOT_WHEEL) break; set.add(x.wallet); x._wild = true; wild++; }   // wild-card fill
   const entrants = finalists.filter(x => set.has(x.wallet)).map(x => ({
@@ -4561,11 +4609,19 @@ app.post("/api/slots/draw", async (req, res) => {
   const shorts = entrants.map(e => ({ short: e.wallet.slice(0, 4) + "…" + e.wallet.slice(-4), entries: e.entries, jackpot: e.jackpot, wild: e.wild }));
   const fcShorts = fireChicken.map(f => ({ short: f.short, airdrop: f.airdrop }));
   if (req.query.preview === "1") return res.status(200).json({ preview: true, ...summary, entrants: shorts, dropped, fireChicken });
-  let r = Math.random() * pool, winner = entrants[0];
+  // Winner from the committed week seed + the published entrant composition (wallet:entries,
+  // sorted) — anyone can recompute this from the draw record once the seed is revealed.
+  const compo = entrants.map(e => `${e.wallet}:${e.entries}`).sort().join(",");
+  const winnerRoll = sha256hex(`${weekSeed}:${s.weekId}:winner:${sha256hex(compo)}`);
+  let r = rollFloats(winnerRoll, 1)[0] * pool, winner = entrants[0];
   for (const e of entrants) { r -= e.entries; if (r <= 0) { winner = e; break; } }
-  s.draws[s.weekId] = { winner: winner.wallet, at: Date.now(), ...summary, entrants: shorts, fireChicken: fcShorts };
+  const fairProof = {
+    weekId: s.weekId, commit: sha256hex(weekSeed), serverSeed: weekSeed, compoHash: sha256hex(compo),
+    algo: "winner = sha256(seed:weekId:winner:compoHash) -> uint32/2^32 * pool over entries; wild shuffle = sha256(seed:weekId:wild:i)",
+  };
+  s.draws[s.weekId] = { winner: winner.wallet, at: Date.now(), ...summary, entrants: shorts, fireChicken: fcShorts, fair: fairProof };
   kv.set("slotsState", s);
-  return res.status(200).json({ winner: winner.wallet, winnerShort: winner.wallet.slice(0, 4) + "…" + winner.wallet.slice(-4), ...summary, entrants: shorts, fireChicken, weekId: s.weekId });
+  return res.status(200).json({ winner: winner.wallet, winnerShort: winner.wallet.slice(0, 4) + "…" + winner.wallet.slice(-4), ...summary, entrants: shorts, fireChicken, weekId: s.weekId, fair: fairProof });
 });
 
 // Admin: reset the CURRENT week (clears points/spins/draw, keeps the allowlist).
