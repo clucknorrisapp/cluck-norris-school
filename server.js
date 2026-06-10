@@ -2516,6 +2516,76 @@ app.get("/api/meteora/open-position", async (req, res) => {
   } catch (e) { return res.status(500).json({ error: e.message }); }
 });
 
+// ── Meteora autonomous re-center ─────────────────────────────────────────────
+// Closes the managed position (claim fees + rent), rebalances the freed float ~50/50,
+// reopens fresh & centered at the configured width/distribution. Triggers when the
+// position is OOR or past edgeFrac, with anti-thrash. Orchestrated here because it needs
+// both the Meteora primitives and the treasury vault's Jupiter swap.
+async function meteoraRecenter({ dryRun = false, force = false } = {}) {
+  if (!meteora.isEnabled()) return { action: "none", reason: "operator not set" };
+  const cfg = meteora.getCfg();
+  let solUsd = 0, btcUsd = 0;
+  try { const st = await whirlpoolMM.vault.status("treasury"); const px = (st.earnings || {}).prices || {}; solUsd = px.solUsd || 0; btcUsd = px.clknUsd || 0; } catch (_) {}
+  const m = await meteora.status({ solUsd, btcUsd });
+  const pos = (m.positions || [])[0];
+  if (!pos) return { action: "none", reason: "no Meteora position" };
+  const span = pos.upperBinId - pos.lowerBinId;
+  const frac = span > 0 ? (pos.activeBinId - pos.lowerBinId) / span : 0.5;
+  const needs = force || !pos.inRange || frac < cfg.edgeFrac || frac > 1 - cfg.edgeFrac;
+  const base = { pool: "meteora", frac: Number(frac.toFixed(3)), inRange: pos.inRange, valueUsd: pos.valueUsd };
+  if (!needs) return { ...base, action: "hold", reason: `centered ${(frac * 100).toFixed(0)}%` };
+  const sinceLast = (Date.now() - kv.get("meteoraLastRecenterTs", 0)) / 1000;
+  if (!force && sinceLast < cfg.minRecenterSec) return { ...base, action: "deferred", reason: `anti-thrash (${Math.round(sinceLast)}s < ${cfg.minRecenterSec}s)` };
+  if (dryRun) return { ...base, action: "would-recenter", reason: pos.inRange ? `near edge ${(frac * 100).toFixed(0)}%` : "out of range" };
+
+  const steps = [];
+  const r = await meteora.removeLiquidity({ pct: 1, close: true });
+  steps.push({ closed: (r.sigs || []).length });
+  await new Promise((res) => setTimeout(res, 2500));
+  let f = ((await whirlpoolMM.vault.status("treasury")) || {}).float || {};
+  if (solUsd > 0 && btcUsd > 0) {
+    const deplSol = Math.max(0, (f.sol || 0) - 0.25) * solUsd, cbUsd = (f.clkn || 0) * btcUsd;
+    const diff = cbUsd - deplSol, swapUsd = Math.abs(diff) / 2;
+    if (swapUsd > 1) {
+      try {
+        if (diff > 0) await whirlpoolMM.vault.manualSwap({ projectId: "treasury", fromSym: "BTC", toSym: "SOL", amountUi: swapUsd / btcUsd, silent: true });
+        else await whirlpoolMM.vault.manualSwap({ projectId: "treasury", fromSym: "SOL", toSym: "BTC", amountUi: swapUsd / solUsd, silent: true });
+        steps.push({ rebalancedUsd: Number(swapUsd.toFixed(2)) });
+        await new Promise((res) => setTimeout(res, 2500));
+      } catch (e) { steps.push({ rebalanceError: e.message }); }
+    }
+  }
+  f = ((await whirlpoolMM.vault.status("treasury")) || {}).float || {};
+  const o = await meteora.openPosition({ cbbtcUi: f.clkn || 0, solUi: Math.max(0, (f.sol || 0) - 0.25), halfWidthPct: cfg.halfWidthPct, distribution: cfg.distribution });
+  steps.push({ opened: o.positions, sigs: (o.sigs || []).length });
+  kv.set("meteoraLastRecenterTs", Date.now());
+  try {
+    const tg = process.env.TELEGRAM_BOT_TOKEN, proj = whirlpoolMM.vault.getProject("treasury");
+    if (tg && proj && proj.telegramChatId) await fetch(`https://api.telegram.org/bot${tg}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: proj.telegramChatId, parse_mode: "HTML", text: `🔄 <b>Meteora re-centered</b>\n±${cfg.halfWidthPct}% ${cfg.distribution} · was ${pos.inRange ? `near edge ${(frac * 100).toFixed(0)}%` : "OUT of range"}` }) });
+  } catch (_) {}
+  return { ...base, action: "recentered", steps };
+}
+
+// Meteora re-center (gated). DRY RUN unless &run=1. &force=1 ignores edge/anti-thrash checks.
+app.get("/api/meteora/recenter", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) return res.status(404).json({ error: "not_found" });
+  try { return res.status(200).json(await meteoraRecenter({ dryRun: req.query.run !== "1", force: req.query.force === "1" })); }
+  catch (e) { return res.status(500).json({ error: e.message }); }
+});
+
+// Meteora config (gated). GET returns config; query params set it (e.g. ?autoRecenter=1&half=0.6&dist=curve).
+app.get("/api/meteora/config", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) return res.status(404).json({ error: "not_found" });
+  try {
+    const patch = {};
+    for (const k of ["halfWidthPct", "distribution", "edgeFrac", "minRecenterSec", "autoRecenter"]) if (req.query[k] != null) patch[k] = req.query[k];
+    const cfg = Object.keys(patch).length ? meteora.setCfg(patch) : meteora.getCfg();
+    return res.status(200).json({ config: cfg });
+  } catch (e) { return res.status(500).json({ error: e.message }); }
+});
+
 // Graduation-watcher status (gated). Shows the current watchlist + our 48h
 // graduated record; ?run=1 triggers one watcher cycle now (alerts fire if a
 // token actually crosses 85% / graduates).
@@ -10934,6 +11004,16 @@ app.listen(PORT, () => {
     }
     setInterval(meteoraOorTick, 5 * 60 * 1000);
     setTimeout(meteoraOorTick, 45000);
+    // Meteora autonomous re-center — only acts when meteoraCfg.autoRecenter is ON (ships OFF).
+    // Edge/anti-thrash checks live in meteoraRecenter; this just invokes it on the cadence.
+    async function meteoraRecenterTick() {
+      try {
+        if (!meteora.isEnabled() || !meteora.getCfg().autoRecenter) return;
+        const r = await meteoraRecenter({});
+        if (r && !["none", "hold", "deferred"].includes(r.action)) console.log("[meteora-recenter]", r.action, "·", r.reason || "");
+      } catch (e) { console.warn("[meteora-recenter] failed:", e.message); }
+    }
+    setInterval(meteoraRecenterTick, 5 * 60 * 1000);
     // Live buy-competition leaderboards — refresh active boards, close on window end.
     setInterval(buyCompTick, 60 * 1000);
     // Interactive slash commands — register the webhook + the "/" command menu.
