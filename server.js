@@ -2531,6 +2531,18 @@ app.get("/api/meteora/open-position", async (req, res) => {
   } catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
 
+// Meteora DLMM — unwrap stranded wSOL back to native lamports (gated). Closes/swaps can
+// leave the operator's SOL wrapped, which starves position-rent payments even when the
+// float looks funded. open/add now auto-unwrap, this is the manual lever. DRY unless &run=1.
+app.get("/api/meteora/unwrap", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  try {
+    const { connection } = require("./lib/rpc");
+    return res.status(200).json(await meteora.unwrapWsol(connection(), { dryRun: req.query.run !== "1" }));
+  } catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
+});
+
 // ── Meteora autonomous re-center ─────────────────────────────────────────────
 // Closes the managed position (claim fees + rent), rebalances the freed float ~50/50,
 // reopens fresh & centered at the configured width/distribution. Triggers when the
