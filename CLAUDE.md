@@ -134,6 +134,24 @@ Live money is managed across two systems. Facts here survive container resets/co
   `git fetch origin --prune && git checkout claude/<branch> && git reset --hard origin/claude/<branch> && npm install`.
   GitHub is always the truth; nothing committed is ever lost. `MIN_BUY_USD` default is 15.
 
+## Meteora ops learnings (hard-won; don't repeat the mistakes)
+- **Wide opens = MANY txs.** This pool's bin step is ~1 (0.01%/bin), so width→bins is huge:
+  ±0.6%≈121 bins (~5 txs), ±1.5%≈300 (~12), ±2.75%≈540 (~21). The narrow chaser re-center is
+  reliable; very wide opens are slow and can partially land. `signSendTx` now REBROADCASTS the
+  signed tx every 3s until confirmed (≤150s) instead of a single 90s wait that aborted whole
+  opens (the txs were landing — the confirm just timed out → orphan partials). `_openPosition`
+  attaches `err.partial = {positions,sigs}` so a mid-sequence failure surfaces the orphan.
+- **±2.75% is too wide/thin/expensive here** (540 bins, far-bin init rent ~$25-30, thin
+  density). Sweet-spot backbone on this fine-tick pool is **±1% to ±1.5%**.
+- **Layout intent:** ONE narrow chaser (±0.6% curve, auto-managed, pinned via
+  meteoraManagedPubkey — autoRecenter only ever touches THIS) + a wider backbone (±1-1.5%) that
+  rarely rebalances. The chaser straddles price for fees; the backbone is the wide safety/accum.
+- **TODO (after a volume window):** the manual loads left overlapping ad-hoc positions
+  (a ±0.34% cbBTC + a ±0.69% SOL single-sided). Consolidate into ONE clean ±1-1.5% backbone
+  (now that wide opens land reliably). Leave the chaser running.
+- **autoRecenter** = on for the narrow chaser; pause it (`/api/meteora/config?autoRecenter=0`)
+  before any manual multi-position surgery so the loop can't contend for the wallet.
+
 ## Audit status (full-app review done — don't re-litigate the clean parts)
 A whole-codebase security review (2026-06-10) found **zero critical/theft-class bugs**. Sound &
 reviewed: payment/replay path (sigstore is atomic test-and-set + now fails CLOSED on a durability
