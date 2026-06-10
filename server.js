@@ -44,7 +44,9 @@ function adminAuthOK(req) {
 function publicErrMsg(err, fallback = "internal error") {
   let m = String((err && err.message) || fallback);
   m = m.replace(/api[-_]key=[^&\s"']+/gi, "api-key=***").replace(/https?:\/\/[^\s"']+/gi, "[url]");
-  return m.length > 200 ? m.slice(0, 200) + "…" : m;
+  // 1500 keeps full on-chain simulation logs readable for ops debugging while
+  // still bounding pathological blobs; secrets are already stripped above.
+  return m.length > 1500 ? m.slice(0, 1500) + "…" : m;
 }
 const { PublicKey } = require("@solana/web3.js");
 
