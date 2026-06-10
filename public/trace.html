@@ -458,6 +458,11 @@ function stopLoading() {
   clearInterval(stageTimer); clearInterval(secTimer);
 }
 
+// Escape attacker-controlled strings (token symbols, creator handles from Bags metadata)
+// before they touch innerHTML. Token names/symbols are fully attacker-set on-chain.
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
 function fmtNum(n, dec) {
   if (n == null || isNaN(n)) return "—";
   const a = Math.abs(n);
@@ -517,11 +522,11 @@ function render(d) {
   // fires when the traced wallet appears in Bags's verified creator/v3 list.
   if (d.bagsContext && d.bagsContext.walletIsBagsCreator) {
     const m = d.bagsContext.walletCreatorMeta || {};
-    const handle = m.username ? (m.provider === 'twitter' ? '@' + m.username : m.username) : 'verified creator';
+    const handle = m.username ? (m.provider === 'twitter' ? '@' + esc(m.username) : esc(m.username)) : 'verified creator';
     const admin = m.isAdmin ? ' 👑 ADMIN' : '';
     const royalty = m.royaltyBps != null ? ` · ${(m.royaltyBps / 100).toFixed(0)}% fee royalty` : '';
     truncatedHtml +=
-      `<div class="truncated-banner" style="background:rgba(217,119,6,0.08);border-color:rgba(217,119,6,0.4);color:#FCD34D;">💸 This wallet is a <b>Bags-verified creator</b> of ${d.bagsContext.tokenSymbol || 'this token'}: <b>${handle}</b>${admin}${royalty}.</div>`;
+      `<div class="truncated-banner" style="background:rgba(217,119,6,0.08);border-color:rgba(217,119,6,0.4);color:#FCD34D;">💸 This wallet is a <b>Bags-verified creator</b> of ${d.bagsContext.tokenSymbol ? esc(d.bagsContext.tokenSymbol) : 'this token'}: <b>${handle}</b>${admin}${royalty}.</div>`;
   }
   document.getElementById('truncatedSlot').innerHTML = truncatedHtml;
 

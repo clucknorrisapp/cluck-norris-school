@@ -2667,30 +2667,43 @@ async function clknBlitzStart({ widthPct = 0.77, minutes = 60, dryRun = false } 
   const cur = await whirlpoolMM.vault.status("clkn");
   if (!cur || !cur.enabled) return { error: "clkn engine not enabled" };
   const c = cur.config || {};
-  const restore = { widthPct: c.widthPct, solWidthPct: c.solWidthPct, deployFrac: c.deployFrac };
-  const out = { action: dryRun ? "would-blitz" : "blitz", widthPct, minutes, restore };
+  // A5: if a blitz is ALREADY active, never re-capture restore (that would bank the blitz's
+  // tight config as "normal" and lose the real pre-blitz widths). Just extend the timer.
+  const alreadyActive = clknBlitzActive() && kv.get("clknBlitzRestore", null);
+  const restore = alreadyActive ? kv.get("clknBlitzRestore", null) : { widthPct: c.widthPct, solWidthPct: c.solWidthPct, deployFrac: c.deployFrac };
+  const out = { action: dryRun ? "would-blitz" : "blitz", widthPct, minutes, restore, extendedExisting: !!alreadyActive };
   if (dryRun) return out;
   kv.set("clknBlitzRestore", restore);
   kv.set("clknBlitzUntil", Date.now() + minutes * 60000);
   whirlpoolMM.vault.setConfig({ widthPct, solWidthPct: widthPct, deployFrac: 0.75 }, "clkn");
   await clknForceRedeploy();
-  blitzDM(`⚡ <b>CLKN Blitz ON</b>\n±${widthPct}% on CLKN/USDC + CLKN/SOL · ~75% deploy · auto-reverts in ${minutes}m`);
+  blitzDM(`⚡ <b>CLKN Blitz ${alreadyActive ? "RE-TUNED" : "ON"}</b>\n±${widthPct}% on CLKN/USDC + CLKN/SOL · ~75% deploy · auto-reverts in ${minutes}m`);
   return { ...out, until: kv.get("clknBlitzUntil", 0) };
 }
+let _blitzReverting = false;
 async function clknBlitzRevert(reason = "timer") {
   const restore = kv.get("clknBlitzRestore", null);
-  kv.set("clknBlitzUntil", 0); // clear first so the check can't double-fire
-  if (!restore) return { reverted: false, reason: "no restore stored" };
-  whirlpoolMM.vault.setConfig({ widthPct: restore.widthPct, solWidthPct: restore.solWidthPct, deployFrac: restore.deployFrac }, "clkn");
-  await clknForceRedeploy();
-  kv.set("clknBlitzRestore", null);
-  blitzDM(`✅ <b>CLKN Blitz over</b> — restored ±${restore.widthPct}% / ±${restore.solWidthPct}% (${reason})`);
-  return { reverted: true, restore };
+  if (!restore) { kv.set("clknBlitzUntil", 0); return { reverted: false, reason: "no restore stored" }; }
+  if (_blitzReverting) return { reverted: false, reason: "revert already in flight" };
+  _blitzReverting = true;
+  try {
+    // A4: do the work FIRST; clear the timer/restore only after success. If this throws or the
+    // process dies, clknBlitzUntil stays set so clknBlitzCheck retries — the blitz can't get
+    // stuck tight forever. (setConfig is in-memory+persisted and effectively idempotent.)
+    whirlpoolMM.vault.setConfig({ widthPct: restore.widthPct, solWidthPct: restore.solWidthPct, deployFrac: restore.deployFrac }, "clkn");
+    await clknForceRedeploy();
+    kv.set("clknBlitzUntil", 0);
+    kv.set("clknBlitzRestore", null);
+    blitzDM(`✅ <b>CLKN Blitz over</b> — restored ±${restore.widthPct}% / ±${restore.solWidthPct}% (${reason})`);
+    return { reverted: true, restore };
+  } finally { _blitzReverting = false; }
 }
 function clknBlitzActive() { return kv.get("clknBlitzUntil", 0) > 0; }
 function clknBlitzCheck() {
   const until = kv.get("clknBlitzUntil", 0);
-  if (until && Date.now() > until) clknBlitzRevert("timer").catch((e) => console.warn("[clkn-blitz] revert failed:", e.message));
+  // Retry whenever an expired timer OR a leftover restore (from a crashed revert) is present.
+  if ((until && Date.now() > until) || (!until && kv.get("clknBlitzRestore", null)))
+    clknBlitzRevert("timer").catch((e) => console.warn("[clkn-blitz] revert failed (will retry):", e.message));
 }
 
 // CLKN Blitz control (gated). &run=1 starts; &abort=1 reverts now; no flag = status/plan.

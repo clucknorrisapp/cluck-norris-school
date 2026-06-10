@@ -1382,7 +1382,7 @@ function render(data) {
         // Solscan label (e.g. "Coinbase 1", "Wintermute MM", "Binance hot")
       // — independent of our hardcoded CEX list. Only shown when present.
       if (h.solscanLabel) {
-        badges.push(`<span class="badge" style="background:rgba(34,211,238,0.10);border:1px solid rgba(34,211,238,0.4);color:#22D3EE;">🏷 ${h.solscanLabel.toUpperCase()}</span>`);
+        badges.push(`<span class="badge" style="background:rgba(34,211,238,0.10);border:1px solid rgba(34,211,238,0.4);color:#22D3EE;">🏷 ${esc(h.solscanLabel).toUpperCase()}</span>`);
       }
       if (h.behavior && behaviorLabel[h.behavior]) {
           // When the behavior was overridden because of locks (e.g. creator
