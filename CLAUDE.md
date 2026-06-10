@@ -163,14 +163,22 @@ Live money is managed across two systems. Facts here survive container resets/co
   attaches `err.partial = {positions,sigs}` so a mid-sequence failure surfaces the orphan.
 - **±2.75% is too wide/thin/expensive here** (540 bins, far-bin init rent ~$25-30, thin
   density). Sweet-spot backbone on this fine-tick pool is **±1% to ±1.5%**.
-- **Layout intent:** ONE narrow chaser (±0.6% curve, auto-managed, pinned via
-  meteoraManagedPubkey — autoRecenter only ever touches THIS) + a wider backbone (±1-1.5%) that
-  rarely rebalances. The chaser straddles price for fees; the backbone is the wide safety/accum.
-- **TODO (after a volume window):** the manual loads left overlapping ad-hoc positions
-  (a ±0.34% cbBTC + a ±0.69% SOL single-sided). Consolidate into ONE clean ±1-1.5% backbone
-  (now that wide opens land reliably). Leave the chaser running.
-- **autoRecenter** = on for the narrow chaser; pause it (`/api/meteora/config?autoRecenter=0`)
-  before any manual multi-position surgery so the loop can't contend for the wallet.
+- **Layout NOW (settled 2026-06-10, owner's call): ONE wide "always-on" position.** ~±2%
+  CURVE (center-weighted density, wings keep it in range), full stack, autoRecenter OFF —
+  alerts only; any re-center is a deliberate manual decision. The owner explicitly prefers
+  "always earning at a lower rate" over tight chasers that whip out (tight ±0.34-0.6% chasers
+  died in hours on volatile days; every churn event crystallizes IL). Don't re-introduce a
+  chaser without an explicit ask. cfg pinned: halfWidthPct=2, distribution=curve.
+- **⚠️ "another fund-moving op is in flight" = the FIRST call is probably EXECUTING. CHECK
+  `/api/meteora/status` BEFORE retrying.** Twice now an open "failed" with lock-busy or
+  insufficient-funds errors while the original call had actually LANDED the position — the
+  retries were trying to deploy already-deployed funds. Status first, always.
+- **Rent is paid in NATIVE lamports.** open/add now auto-unwrap stranded wSOL
+  (`/api/meteora/unwrap` is the manual lever) — but "insufficient lamports" right after ops
+  usually means the funds are already IN a position (see the rule above), not missing.
+- **autoRecenter:** keep OFF under the wide-position layout; if ever re-enabled, pause it
+  (`/api/meteora/config?autoRecenter=0`) before any manual position surgery so the loop
+  can't contend for the wallet.
 
 ## Audit status (full-app review done — don't re-litigate the clean parts)
 A whole-codebase security review (2026-06-10) found **zero critical/theft-class bugs**. Sound &

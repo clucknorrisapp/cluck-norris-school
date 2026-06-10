@@ -504,6 +504,24 @@ const EDU_TOPICS = [
   "Arbitrage: how it keeps prices aligned across pools, and why arb volume isn't the same as real (organic) demand",
   "Volume vs demand: why a high trade count can still mean only a handful of real buyers",
 ];
+// Lesson topic → the live tool that lets the reader DO the lesson right now.
+// Keyword-matched against the topic text so new topics degrade gracefully —
+// no match = no tool line, never a wrong link. First match wins (order matters:
+// specific tools before the broad autopsy/score patterns).
+const EDU_TOOL_ROUTES = [
+  { match: /approval|revoke/i, label: "Check & revoke YOUR wallet's approvals (free)", url: "clucknorris.app/security-coop" },
+  { match: /self-custody|not your keys/i, label: "Free wallet safety checkup — paste any address", url: "clucknorris.app/wallet-checkup" },
+  { match: /block explorer|transaction actually did/i, label: "Trace any wallet × token history yourself (free)", url: "clucknorris.app/trace" },
+  { match: /holder concentration|volume vs demand|handful of real buyers/i, label: "See any token's REAL holders vs LP & locks (free)", url: "clucknorris.app/holders" },
+  { match: /wash trading|organic volume|arbitrage/i, label: "See honest liquidity proven live (organic score 0→32+)", url: "clucknorris.app/liquidity-engine" },
+  { match: /bonding curve|graduation|graduated|creator fees/i, label: "Watch live Bags launches & graduations", url: "clucknorris.app/bags" },
+  { match: /honeypot|rug pull|red flags|on-chain research|contract address|authorities|locked liquidity|faked out|phantom pool/i, label: "Run a free Token Autopsy on any mint", url: "clucknorris.app/autopsy" },
+  { match: /market cap|low-liquidity|deep liquidity|manipulate/i, label: "Get any token's free 0–100 health score", url: "clucknorris.app/score" },
+  { match: /liquidity pool|AMM|x\*y=k|impermanent|providers earn|concentrated liquidity|bins and ticks|price bins|asks vs bids|ask is a sell|active vs passive|pool's liquidity/i, label: "Practice in the free interactive LP Lab", url: "clucknorris.app" },
+  { match: /dollar-cost|risk budget|position sizing|stop-loss|survive/i, label: "Practice with $1K fake money in the Survival Simulator", url: "clucknorris.app" },
+];
+function eduToolRoute(topic) { for (const r of EDU_TOOL_ROUTES) if (r.match.test(topic)) return r; return null; }
+
 async function generateEduLesson(topic, style = "full") {
   const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
   if (!ANTHROPIC_KEY) return null;
@@ -611,7 +629,11 @@ async function notifyEduPost() {
   const style = (new Date().getUTCHours() === EDU_LONG_HOUR) ? "full" : "short";
   const body = await generateEduLesson(topic, style);
   if (!body) { console.warn("[EDU] no body, skipping post for topic:", topic); return; }
-  const text = `🎓 <b>CLUCK'S LESSON</b>\n\n${tgEsc(body)}\n\n💬 <i>Reply to this lesson with a question and Cluck will answer.</i>\n📚 The full course is in session → clucknorris.app`;
+  // Pair the lesson with the live tool that practices it (e.g. the block-explorer
+  // lesson links the Trace tool) — the lesson teaches, the link converts.
+  const route = eduToolRoute(topic);
+  const toolLine = route ? `🛠 <b>${route.label}</b> → ${route.url}\n` : "";
+  const text = `🎓 <b>CLUCK'S LESSON</b>\n\n${tgEsc(body)}\n\n${toolLine}💬 <i>Reply to this lesson with a question and Cluck will answer.</i>\n📚 The full course is in session → clucknorris.app`;
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -634,7 +656,7 @@ async function notifyEduPost() {
       if (r && r.ok) {
         console.log(`[X] lesson tweeted (id ${r.id})`);
         // …links follow as a self-reply so they never throttle the lesson's reach.
-        try { await postToX(X_LESSON_REPLY, { replyToId: r.id }); } catch (_) {}
+        try { await postToX(route ? `🛠 ${route.label} → ${route.url}\n\n${X_LESSON_REPLY}` : X_LESSON_REPLY, { replyToId: r.id }); } catch (_) {}
       } else console.warn("[X] lesson tweet failed:", JSON.stringify(r).slice(0, 200));
     } catch (e) { console.warn("[EDU] X cross-post failed:", e.message); }
   }
