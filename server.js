@@ -2750,6 +2750,33 @@ app.get("/api/clkn-organic-log", async (req, res) => {
   } catch (e) { return res.status(500).json({ error: e.message }); }
 });
 
+// PUBLIC engine proof — the live Jupiter organic score + a safe history subset for the
+// /liquidity-engine page's proof chart. Organic score / volume / price are all public
+// market data; this exposes no wallet, position, or strategy detail. Cached 2 min.
+let _engineProofCache = null, _engineProofAt = 0;
+app.get("/api/engine-proof", async (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=120");
+  try {
+    const now = Date.now();
+    if (_engineProofCache && now - _engineProofAt < 2 * 60 * 1000) return res.status(200).json(_engineProofCache);
+    const org = await getClknOrganicScore(CLKN_MINT_ADDR).catch(() => null);
+    const log = kv.get("clknOrganicLog", []) || [];
+    // last 14 days of hourly samples, slimmed to ts/score/vol + blitz-active flag
+    const history = log.slice(-336).filter((e) => e.score != null).map((e) => ({
+      t: e.ts, s: e.score, v: e.vol24h ?? null, b: !!e.blitzActive,
+    }));
+    const out = {
+      organic: org && Number.isFinite(org.score)
+        ? { score: Number(org.score.toFixed(1)), label: ["high", "medium", "low"].includes(org.label) ? org.label : null }
+        : null,
+      history,
+      updatedAt: now,
+    };
+    _engineProofCache = out; _engineProofAt = now;
+    return res.status(200).json(out);
+  } catch (e) { return res.status(500).json({ error: "unavailable" }); }
+});
+
 // Graduation-watcher status (gated). Shows the current watchlist + our 48h
 // graduated record; ?run=1 triggers one watcher cycle now (alerts fire if a
 // token actually crosses 85% / graduates).
