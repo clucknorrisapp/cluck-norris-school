@@ -95,6 +95,8 @@ The Liquidity Engine is a concentrated‑liquidity market maker on **Orca Whirlp
 
 **Honest by design.** Every fill is a real counterparty trading against real depth — that's real volume because the trades are real. It never trades against itself. (Our [Token Autopsy](https://clucknorris.app/autopsy) exists to catch the fake kind — running a wash bot would flag our own token.)
 
+**Provable by metric.** Jupiter scores every token 0–100 on how *organic* its flow is — their models filter out wash trading, so the score can't be bought or botted. CLKN's organic score has climbed from **0 to 32+** since the engine went live. The server logs it hourly (tagged against the engine's tight‑range "Blitz" windows, so the effect of each is measurable, not anecdotal) and publishes the history at a public endpoint (`/api/engine-proof`) charted live on the [`/liquidity-engine`](https://clucknorris.app/liquidity-engine) page — anyone can watch the wash‑proof metric move.
+
 Live now on CLKN (CLKN/USDC + CLKN/SOL on Orca); **Raydium CLMM** is supported as a venue for projects that live there. Check current depth in Telegram with **`/liquidity`**, or on the [`/liquidity`](https://clucknorris.app/liquidity) page. It's the foundation of an operator‑grade, *auditable* liquidity‑management capability — the same work experienced operators do by hand, automated.
 
 ---
