@@ -105,6 +105,35 @@ Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.
   it only acts when `MM_OPERATOR_SECRET` is set. The public `/liquidity` tool and the
   `/api/whirlpool/*` read/quote/build endpoints are non-custodial and ungated.
 
+## Liquidity ops — durable session memory (read this; don't rediscover it)
+Live money is managed across two systems. Facts here survive container resets/compaction.
+- **Treasury** (wallet env `MM_OPERATOR_SECRET_TREASURY`, pubkey `2zMCU…`): lives on
+  **Meteora DLMM cbBTC/SOL** pool `Hz1EtXTGaFEtAWRgRNpDMFV6vnSZtQUY9UqmdM6vfKSS` (picked for
+  ~10–19x vol/TVL turnover vs Orca's crowded $5M pool, where our ~$1.2k was ~0.02% of depth).
+  One position, **±0.6% Curve** (center-weighted), **autoRecenter ON** (kv `meteoraCfg`:
+  edgeFrac 0.12, minRecenterSec 1800; 5-min loop closes→rebalances 50/50→reopens centered and
+  DMs). OOR monitor DMs on out-of-range/back-in-range. The **Orca treasury dual-sleeve is
+  EMPTY/paused** — don't resume or "re-seed" it; funds are on Meteora deliberately.
+- **Goal:** grow the **BTC+SOL stack >0.5%/day in ASSET terms, not USD** (LP-vs-HODL edge).
+  Daily recap DM is token-denominated (kv `treasuryRecapSnaps`; `&reset=1` re-baselines after
+  restructuring). 6h treasury report folds Meteora value+fees in.
+- **CLKN engine** (env `MM_OPERATOR_SECRET`): normal = `widthPct 10 / solWidthPct 15 /
+  deployFrac 0.95`; both pools on the fine **0.02% tier** (spacing 2) and we ARE ~100% of
+  their depth. **CLKN Blitz** = timed tight-range burst tool, reset-proof auto-revert
+  (kv `clknBlitzUntil`/`clknBlitzRestore`).
+- **Hard conventions:** "auto-balance" = swap **SOL↔USDC only — NEVER sell CLKN** (the brand
+  bag is never sold). Gas floor `swapSolFloor 0.2` on treasury + clkn. `suggestRanges` min
+  width is 0.05% (was 0.5% — that floor once silently clamped ±0.2% asks to ±0.5%).
+  Meteora rent is ~fully refunded on close (bins pre-initialized) — re-centers cost ≈ tx fees.
+- **Gated endpoints** (all `?key=PREMIUM_ACCESS_KEY`, dry-run unless `&run=1`):
+  `/api/meteora/status|remove-liquidity|add-liquidity|open-position|recenter|config`,
+  `/api/clkn-blitz` (`&abort=1` reverts now), `/api/treasury-recap-test` (`&send=1`).
+  Meteora SDK `@meteora-ag/dlmm` is lazy-loaded; `removeLiquidity` takes `close=1` to
+  claim+close; `open-position` takes `half=` + `dist=spot|curve|bidask`.
+- **Cloud session recovery:** containers reset mid-session. If files look stale:
+  `git fetch origin --prune && git checkout claude/<branch> && git reset --hard origin/claude/<branch> && npm install`.
+  GitHub is always the truth; nothing committed is ever lost. `MIN_BUY_USD` default is 15.
+
 ## Conventions
 - Tool pages are vanilla HTML + inline JS; the school is React. **Escape any API/token-
   supplied string before `innerHTML`** — token names/symbols are attacker-controlled.
