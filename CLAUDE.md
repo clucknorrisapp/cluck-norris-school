@@ -205,6 +205,14 @@ public endpoint — still open, still not a vuln.
   (Bags/Pump) confirms it.
 - Payment model: a unique-decimal CLKN transfer, verified on-chain and replay-guarded;
   holders of ≥2M CLKN get a 5× unlock bonus read straight from the payment tx.
+- **Telegram posts are SILENT by default — NEVER `&loud=1` unless the owner explicitly
+  says so in that moment.** (Owner rule, set 2026-06-10 after an unwanted ping.)
+- **Community-post accuracy:** the engine/Blitz trades happen on the TWO Orca pools —
+  CLKN/USDC `H1r9ut25xAU1B1AbZRhvSJjShd4Q3mtmysYHBisFES7H` and CLKN/SOL
+  `EL1ZDnuTE4J4LZJLP76VapFSDiM7Xt18ZsnzVeqNvaPr` — NOT the main Meteora pool
+  (`64WXkH…`, the canonical chart). Link the Orca pair pages when posting about
+  engine/Blitz activity. And don't claim superlatives ("tightest ever") without
+  checking history — ±0.2 Blitzes have been run.
 
 ## Build / check
 - Run: `npm start` (= `node server.js`). React dev/build: `npm run dev` / `npm run build`.
