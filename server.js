@@ -11001,16 +11001,26 @@ app.listen(PORT, () => {
         const dep = pos && typeof pos.totalUsd === "number" ? pos.totalUsd : 0;
         const sleeves = ((pos && pos.positions) || []).filter((p) => p.role === "wide" || p.role === "tight")
           .map((p) => `  • ${p.role}: $${(p.valueUsd || 0).toFixed(2)} (${p.inRange ? "in range" : "OUT of range"})`).join("\n");
+        // Fold in Meteora (the treasury now lives there; the Orca vault is empty).
+        let metValue = 0, metFees = 0, metLines = "";
+        try {
+          const m = await meteora.status({ solUsd: px.solUsd || 0, btcUsd: px.clknUsd || 0 });
+          for (const p of (m.positions || [])) {
+            metValue += p.valueUsd || 0; metFees += p.pendingFeeUsd || 0;
+            const rng = (p.lowerPrice && p.upperPrice) ? ` ${p.lowerPrice.toFixed(0)}–${p.upperPrice.toFixed(0)}` : "";
+            metLines += `  • Meteora${rng}: $${(p.valueUsd || 0).toFixed(2)} (${p.inRange ? "in range" : "OUT"}) · fees $${(p.pendingFeeUsd || 0).toFixed(4)}\n`;
+          }
+        } catch (_) {}
         const floatUsd = (f.sol || 0) * (px.solUsd || 0) + (f.clkn || 0) * (px.clknUsd || 0) + (f.usdc || 0);
-        const earned = earn.totalEarnedUsd != null ? earn.totalEarnedUsd : 0;
+        const earned = (earn.totalEarnedUsd != null ? earn.totalEarnedUsd : 0) + metFees;
         const spent = cost.lifetime && typeof cost.lifetime.usd === "number" ? cost.lifetime.usd : 0;
-        const net = st.netPnlUsd != null ? st.netPnlUsd : earned - spent;
+        const net = earned - spent;
         const msg =
-          `🏦 <b>Treasury report</b> — cbBTC/SOL dual-sleeve\n\n` +
-          `<b>Total value:</b> $${(dep + floatUsd).toFixed(2)}\n` +
-          `<b>Deployed:</b> $${dep.toFixed(2)}\n${sleeves ? sleeves + "\n" : ""}` +
+          `🏦 <b>Treasury report</b> — cbBTC/SOL\n\n` +
+          `<b>Total value:</b> $${(dep + metValue + floatUsd).toFixed(2)}\n` +
+          `<b>Deployed:</b> $${(dep + metValue).toFixed(2)}\n${sleeves ? sleeves + "\n" : ""}${metLines}` +
           `<b>Wallet float:</b> ${(f.sol || 0).toFixed(3)} SOL · ${(f.clkn || 0).toFixed(6)} cbBTC · $${(f.usdc || 0).toFixed(2)} USDC (≈$${floatUsd.toFixed(2)})\n\n` +
-          `<b>Fees earned:</b> $${earned.toFixed(4)} <i>(pending $${((earn.pending && earn.pending.usd) || 0).toFixed(4)} + realized $${((earn.realized && earn.realized.usd) || 0).toFixed(4)})</i>\n` +
+          `<b>Fees earned:</b> $${earned.toFixed(4)} <i>(incl. Meteora pending $${metFees.toFixed(4)})</i>\n` +
           `<b>Fees spent (moves):</b> $${spent.toFixed(4)} <i>(${(cost.lifetime && cost.lifetime.txCount) || 0} txs)</i>\n` +
           `<b>Net:</b> $${net.toFixed(4)}`;
         await fetch(`https://api.telegram.org/bot${tok}/sendMessage`, {
