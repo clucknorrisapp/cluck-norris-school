@@ -2679,6 +2679,7 @@ async function clknBlitzStart({ widthPct = 0.77, minutes = 60, dryRun = false } 
   if (dryRun) return out;
   kv.set("clknBlitzRestore", restore);
   kv.set("clknBlitzUntil", Date.now() + minutes * 60000);
+  kv.set("clknBlitzLastStart", Date.now()); // for the organic-score logger's blitz-window tagging
   whirlpoolMM.vault.setConfig({ widthPct, solWidthPct: widthPct, deployFrac: 0.75 }, "clkn");
   await clknForceRedeploy();
   blitzDM(`⚡ <b>CLKN Blitz ${alreadyActive ? "RE-TUNED" : "ON"}</b>\n±${widthPct}% on CLKN/USDC + CLKN/SOL · ~75% deploy · auto-reverts in ${minutes}m`);
@@ -2721,6 +2722,31 @@ app.get("/api/clkn-blitz", async (req, res) => {
     const r = await clknBlitzStart({ widthPct: width, minutes, dryRun: req.query.run !== "1" });
     const until = kv.get("clknBlitzUntil", 0);
     return res.status(200).json({ ...r, active: until > 0, until, minutesLeft: until ? Math.max(0, Math.round((until - Date.now()) / 60000)) : 0 });
+  } catch (e) { return res.status(500).json({ error: e.message }); }
+});
+
+// Organic-score log + Blitz-effect summary (gated). &snap=1 records a snapshot now.
+app.get("/api/clkn-organic-log", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!process.env.PREMIUM_ACCESS_KEY || req.query.key !== process.env.PREMIUM_ACCESS_KEY) return res.status(404).json({ error: "not_found" });
+  try {
+    if (req.query.snap === "1") await recordOrganicSnapshot();
+    const log = kv.get("clknOrganicLog", []) || [];
+    const scored = log.filter((e) => e.score != null);
+    // "Blitz window" = snapshot taken during a Blitz or within 6h after one started.
+    const inWindow = (e) => e.blitzActive || (e.minsSinceBlitz != null && e.minsSinceBlitz <= 360);
+    const blitzWin = scored.filter(inWindow), baseline = scored.filter((e) => !inWindow(e));
+    const avg = (a) => a.length ? Number((a.reduce((s, e) => s + e.score, 0) / a.length).toFixed(2)) : null;
+    return res.status(200).json({
+      count: log.length,
+      summary: {
+        avgScore_blitzWindow: avg(blitzWin), samples_blitz: blitzWin.length,
+        avgScore_baseline: avg(baseline), samples_baseline: baseline.length,
+        latest: scored.length ? scored[scored.length - 1] : null,
+        note: "blitzWindow = during a Blitz or ≤6h after one started; needs a few Blitzes for signal",
+      },
+      recent: log.slice(-72),
+    });
   } catch (e) { return res.status(500).json({ error: e.message }); }
 });
 
@@ -10629,6 +10655,34 @@ function fmtOrganicScore(o) {
   return `${o.score.toFixed(1)} ${dot}${o.label ? " " + o.label : ""}`;
 }
 
+// Organic-score logger — hourly snapshot of CLKN's Jupiter organic score + price/volume,
+// tagged with whether a Blitz is active / how recent. Lets us PROVE or disprove the
+// Blitz→organic-score effect with data (tight Blitz liquidity → best price → real routed
+// flow → organic score up). Persisted ring buffer in kv (~33 days hourly).
+async function recordOrganicSnapshot() {
+  try {
+    const [org, mkt] = await Promise.all([
+      getClknOrganicScore(CLKN_MINT_ADDR).catch(() => null),
+      getTokenMarket(CLKN_MINT_ADDR).catch(() => null),
+    ]);
+    if (!org && !mkt) return;
+    const now = Date.now();
+    const lastBlitz = kv.get("clknBlitzLastStart", 0);
+    const entry = {
+      ts: now,
+      score: org && Number.isFinite(org.score) ? Number(org.score.toFixed(2)) : null,
+      label: org ? org.label : null,
+      priceUsd: mkt ? mkt.priceUsd : null,
+      vol24h: mkt && mkt.vol24h != null ? Math.round(mkt.vol24h) : null,
+      blitzActive: kv.get("clknBlitzUntil", 0) > now,
+      minsSinceBlitz: lastBlitz ? Math.round((now - lastBlitz) / 60000) : null,
+    };
+    const log = kv.get("clknOrganicLog", []) || [];
+    log.push(entry);
+    kv.set("clknOrganicLog", log.slice(-800));
+  } catch (e) { console.warn("[organic-log] failed:", e.message); }
+}
+
 async function notifyClknBuy(trade, tx, pool, usdValue, HELIUS_KEY) {
   const buyer = trade.trader;
   const buyerShort = buyer ? `${buyer.slice(0, 4)}…${buyer.slice(-4)}` : "unknown";
@@ -11152,6 +11206,10 @@ app.listen(PORT, () => {
         }
       } catch (e) { console.warn("[meteora-oor] failed:", e.message); }
     }
+    // Organic-score logger — hourly CLKN snapshot tagged with Blitz activity (proves the
+    // Blitz→organic-score effect over time). Cheap; just two cached API reads + a kv write.
+    setInterval(recordOrganicSnapshot, 60 * 60 * 1000);
+    setTimeout(recordOrganicSnapshot, 25000);
     setInterval(meteoraOorTick, 5 * 60 * 1000);
     setTimeout(meteoraOorTick, 45000);
     // Meteora autonomous re-center — only acts when meteoraCfg.autoRecenter is ON (ships OFF).
