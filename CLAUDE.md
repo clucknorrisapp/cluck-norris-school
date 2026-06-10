@@ -134,6 +134,17 @@ Live money is managed across two systems. Facts here survive container resets/co
   `git fetch origin --prune && git checkout claude/<branch> && git reset --hard origin/claude/<branch> && npm install`.
   GitHub is always the truth; nothing committed is ever lost. `MIN_BUY_USD` default is 15.
 
+## Venue decision (settled — don't re-debate)
+**CLKN stays on Orca; treasury stays on Meteora.** Different reasons per asset:
+- **CLKN/USDC + CLKN/SOL = Orca ADAPTIVE-fee pools** (dynamic fees that rise with volatility —
+  captures memecoin pump/dump upside) + cheap rent (~0.006 SOL/position, vs Meteora's
+  width-scaled bin-array rent) + **we own ~100% of the liquidity** (so we already capture ~all
+  fees — no crowding to escape) + organic-score-safe + the full engine (Blitz/ask-wall/sol-vault).
+  No benefit to moving CLKN to Meteora; do NOT.
+- **Treasury cbBTC/SOL = Meteora** specifically because the Orca cbBTC pool was a crowded $5M
+  pool where our ~$1k was ~0.1% of depth; Meteora is thin + high-turnover so our size is a real
+  fee share. (That crowding rationale is unique to the treasury — it does NOT generalize to CLKN.)
+
 ## Meteora ops learnings (hard-won; don't repeat the mistakes)
 - **Wide opens = MANY txs.** This pool's bin step is ~1 (0.01%/bin), so width→bins is huge:
   ±0.6%≈121 bins (~5 txs), ±1.5%≈300 (~12), ±2.75%≈540 (~21). The narrow chaser re-center is
