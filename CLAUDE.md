@@ -21,11 +21,18 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 - **Never commit secrets.** Don't put a model identifier in committed files.
 
 ## Repo layout
-- `server.js` — the monolith (~9.3k lines): every API endpoint, the Cluck Score, the
-  Token Autopsy engine, CLKN payment verification, Telegram/X automation, the trade
-  poller, all schedulers, and static file serving.
+- `server.js` — the monolith (~7.4k lines): every API endpoint, the Cluck Score, CLKN
+  payment verification, Telegram/X automation, the trade poller, all schedulers, and
+  static file serving. (The Token Autopsy engine was extracted to `lib/autopsy.js`.)
 - `lib/` — `bags-context`, `solana-tracker`, `solscan`, `premium-forensics`, `analytics`,
   plus volume-backed stores: `kvstore`, `sigstore`, `recap`, `grad-tracker`, `credentials`.
+  `solana-addr` — pure address primitives (base58 codec, ed25519 on-curve check, ATA
+  derivation) + the DEX/locker/token-program, program-label, service-wallet and CEX-wallet
+  tables; one source of truth for trace/snapshot/score/autopsy classification.
+  `autopsy` — the Token Autopsy engine: `runAutopsy(mint, {nocache}) → {status, body}`;
+  the `/api/autopsy` route in server.js is a thin wrapper (validation + 3-min cache +
+  headers). It also exports `bagsFetch`/`heliusEnhancedBatched`/`BAGS_BASE`, which
+  server.js re-imports (shared with /api/fees, /api/reinvestment, premium forensics).
   `rpc` — resilient RPC: one endpoint list (primary Helius + optional backups + public
   node) and a failover `fetch`/`connection()`; the engine libs + server RPC proxies route
   through it, so a primary 429/outage rolls to a backup instead of going blind.
@@ -56,8 +63,10 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   bank has no live regenerator anymore). The bank's `source` field tags origin: `CURRICULUM` (70, from
   `LESSONS[].questions`) + `ULTIMATE` (59, exam-only) + `LPLAB` (81, ported from `LP_LESSONS[].sections[].quiz`)
   = 210 total. So both `LESSONS[].questions` AND `LP_LESSONS` quizzes feed the exam — if you materially edit
-  either, re-port into the bank (match the `source` tag). Note: the exam draws 50 at random with no per-source
-  cap, so the pool is LP-heavy by count; balance the draw in `/api/exam/questions` if that becomes a problem.
+  either, re-port into the bank (match the `source` tag). The exam draw is STRATIFIED by source —
+  `EXAM_SOURCE_MIX` in server.js pins 20 CURRICULUM / 20 ULTIMATE / 10 LPLAB per exam (backfills from
+  the leftover pool if a source runs short), so adding questions to one source no longer skews the exam.
+  Remaining structural gap: the App.jsx↔bank sync is still manual (no CI drift check yet).
 - Public surfaces: `/transcript/:slug` (page, with OG card), `/api/credential/:slug` (JSON — exposes
   holder *status* only, never balance), `/api/credential-card?slug=` (PNG), `/api/school-stats`
   (aggregate verified-graduate metrics, shown on the grant + investor pages).
@@ -187,8 +196,10 @@ trace.html/autopsy.html XSS escaped. Remaining = LOW hygiene backlog only (range
 
 ## Build / check
 - Run: `npm start` (= `node server.js`). React dev/build: `npm run dev` / `npm run build`.
-- After editing backend JS, sanity-check syntax: `node --check server.js`.
-- No automated test suite.
+- After editing backend JS, sanity-check syntax: `node --check server.js` (and any lib you touched).
+- CI: `.github/workflows/syntax-check.yml` runs `node --check` on every backend entrypoint +
+  `lib/*.js` on each push — the minimal tripwire for the no-staging auto-deploy.
+- No automated test suite beyond that.
 
 ## Deferred / check later
 - **`/api/helius-rpc` is now a true allow-list** (default-deny). It permits only the
@@ -197,17 +208,28 @@ trace.html/autopsy.html XSS escaped. Remaining = LOW hygiene backlog only (range
   (`getProgramAccounts*`, all `*Subscribe`, block/supply/cluster scans, etc.) is
   rejected. Matches the README's "allow-listing" claim. If a tool ever needs a new
   RPC method, add it to `ALLOWED_RPC` — a missing method returns 403.
-- **Slots: provably-fair before real prizes.** `/api/slots/spin` outcomes use
-  `Math.random()` server-side — fine while it's a no-stakes beta, but before any
-  real CLKN payout goes live, add commit‑reveal (publish a hashed server seed, mix
-  in a client seed, reveal after) so spins are independently verifiable and you
-  can defend against "rigged" accusations. The real odds are already published on
-  the page (`slotOdds()`), and outcomes are server‑authoritative (players can't
-  cheat); commit‑reveal is specifically about proving the *server* isn't.
+- **Slots: provably-fair — DONE (both RNG paths).** Spins use commit‑reveal: the
+  server commits `sha256(serverSeed)` before each spin (`fairCommit` in `/state`,
+  `nextCommit` on every spin), derives the outcome from
+  `sha256(serverSeed:clientSeed:nonce)`, reveals the seed after, and rotates it
+  EVERY spin (a revealed seed must never predict a future spin). The weekly wheel
+  draw uses a per‑week committed seed (`weekFairCommit`, public in `/state` all
+  week) — wild‑card shuffle and winner pick both derive from it + the published
+  entrant composition, so the whole draw is recomputable from the draw record.
+  `Math.random()` is gone from every slots outcome path; real prizes are no
+  longer blocked on this. Odds remain published via `slotOdds()`.
   Daily spins (banded 5/10/15/20 by balance) refresh at the next UTC midnight via
   `slotDayEndsAt()`; the page shows a live "next free spins in …" countdown
   (`spinsResetAt` is returned from `/api/slots/state`, the spin response, and the
   `no_spins_left` 429). The points-week board reset is the separate `weekEndsAt`.
+- **Autopsy: latent `excludeSet` bug (pre-existing, NOT yet fixed — needs a decision).**
+  In `lib/autopsy.js`, the Phase 2G‑bis sub‑distributor filter references `excludeSet`,
+  which is defined NOWHERE (entered dangling in the Wallet‑Safety‑Checkup commit). Any
+  time sub‑distributor candidates exist it throws inside the phase's try/catch, silently
+  disabling the team‑network multi‑hop trace — so that path has never run in production.
+  Fixing it (e.g. `const excludeSet = new Set(Object.keys(KNOWN_CEX_WALLETS))` per the
+  neighboring exclusion‑set comment) would ENABLE a never‑exercised code path — do it
+  deliberately and verify the report output on a few mints, don't drive‑by it.
 - **Autopsy premium styling — design decision (not yet made).** The premium
   forensic sections render in a different color scheme that doesn't match the
   site's dark/orange theme. Open question: leave it visually distinct so the
