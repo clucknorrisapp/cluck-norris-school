@@ -716,6 +716,17 @@ function buyCompRender(c, standings) {
   return lines.join("\n");
 }
 function buyCompMetricKey(c) { return c.metric === "single" ? "maxBuySol" : "volumeSol"; }
+// Wallets that must never count in a buy comp: every managed-vault operator wallet
+// (the liquidity engines — their buys are market-making, not community buys, exactly
+// like the trade poller skips them for buy alerts) PLUS the comp's manual exclude list
+// (third-party volume-bot wallets the operator identifies). Same principle as the CLKN
+// buy-alert poller's MM-wallet skip.
+function buyCompExcludeSet(c) {
+  const ex = new Set();
+  try { (whirlpoolMM.vault.operatorPubkeys ? whirlpoolMM.vault.operatorPubkeys() : []).forEach((w) => w && ex.add(w)); } catch (_) {}
+  (Array.isArray(c.exclude) ? c.exclude : []).forEach((w) => w && ex.add(w));
+  return ex;
+}
 async function buyCompStandings(c) {
   const fromSec = Math.floor(c.startTs / 1000);
   const toSec = Math.floor(Math.min(Date.now(), c.endTs) / 1000);
@@ -733,6 +744,10 @@ async function buyCompStandings(c) {
       if (g.length) { buyers = g; console.log(`[BUYCOMP] ${c.id} using GeckoTerminal fallback (${g.length} buyers)`); }
     } catch (e) { console.warn("[BUYCOMP] gecko fallback failed:", e.message); }
   }
+  // Drop MM/engine wallets + manual excludes, then any sub-floor cumulative (dust/bot filter).
+  const ex = buyCompExcludeSet(c);
+  const minVol = Number(c.minVolSol) || 0;
+  buyers = buyers.filter((b) => !ex.has(b.wallet) && (minVol <= 0 || (b.volumeSol || 0) >= minVol));
   return buyers.sort((a, b) => (b[key] || 0) - (a[key] || 0));
 }
 // GeckoTerminal pool-trades fallback for buy standings (no API key, no quota). Discovers
@@ -3127,10 +3142,30 @@ app.post("/api/buycomp/start", (req, res) => {
   const prizeSummary = q.prize ? "🏆 " + String(q.prize).slice(0, 140)
     : pctPrize ? `🏆 Top ${places.length}: ${places.map(p => p.amount + "%").join(" / ")} of your cumulative buys`
     : `🏆 ${places.map(p => p.amount.toLocaleString()).join(" / ")} ${ticker}`;
-  const c = { id, label: String(q.label || ticker).slice(0, 60), mint, ticker, chatId, metric, startTs, endTs, holdHours, places, pctPrize, prizeToken: { kind: prizeTokenKind, mint: prizeTokenMint }, updateMins, prizeSummary, status: "live", boardMsgId: null, provisional: [], lastUpdateTs: 0, createdAt: Date.now() };
+  const exclude = String(q.exclude || "").split(",").map((s) => s.trim()).filter((w) => SOL_ADDR_RE.test(w));
+  const minVolSol = Math.max(0, Number(q.minVolSol) || 0);
+  const c = { id, label: String(q.label || ticker).slice(0, 60), mint, ticker, chatId, metric, startTs, endTs, holdHours, places, pctPrize, exclude, minVolSol, prizeToken: { kind: prizeTokenKind, mint: prizeTokenMint }, updateMins, prizeSummary, status: "live", boardMsgId: null, provisional: [], lastUpdateTs: 0, createdAt: Date.now() };
   buyCompSave(c);
   buyCompUpdate(c).catch(() => {});    // post the initial board now (if the window has started)
   return res.status(200).json({ ok: true, id, competition: c });
+});
+// Manage a LIVE comp's bot/volume-bot exclusions (gated). ?id=&add=w1,w2 appends,
+// &remove=w1 drops, &set=w1,w2 replaces, &minVolSol=0.05 sets the dust floor. Re-renders
+// the board immediately. The MM/engine wallets are auto-excluded regardless of this list.
+app.post("/api/buycomp/exclude", async (req, res) => {
+  if (!buyCompAdminOK(req)) return res.status(404).json({ error: "not_found" });
+  const q = Object.assign({}, req.query, req.body || {});
+  const c = buyCompsAll()[String(q.id || "")];
+  if (!c) return res.status(404).json({ error: "no such competition" });
+  const parse = (v) => String(v || "").split(",").map((s) => s.trim()).filter((w) => SOL_ADDR_RE.test(w));
+  c.exclude = Array.isArray(c.exclude) ? c.exclude : [];
+  if (q.set != null) c.exclude = parse(q.set);
+  if (q.add) c.exclude = [...new Set([...c.exclude, ...parse(q.add)])];
+  if (q.remove) { const rm = new Set(parse(q.remove)); c.exclude = c.exclude.filter((w) => !rm.has(w)); }
+  if (q.minVolSol != null) c.minVolSol = Math.max(0, Number(q.minVolSol) || 0);
+  buyCompSave(c);
+  try { await buyCompUpdate(c); } catch (_) {}
+  return res.status(200).json({ ok: true, id: c.id, exclude: c.exclude, minVolSol: c.minVolSol || 0, autoExcludedEngineWallets: [...buyCompExcludeSet({ exclude: [] })] });
 });
 app.post("/api/buycomp/stop", async (req, res) => {
   if (!buyCompAdminOK(req)) return res.status(404).json({ error: "not_found" });
