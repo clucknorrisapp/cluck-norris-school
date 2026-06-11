@@ -703,7 +703,7 @@ function buyCompRender(c, standings) {
     rows.forEach((s, i) => {
       const tag = i < 3 ? medals[i] : `${i + 1}.`;
       const short = s.wallet.slice(0, 4) + "…" + s.wallet.slice(-4);
-      const prize = (i < c.places.length) ? ` — <b>${c.places[i].amount.toLocaleString()} ${tgEsc(c.ticker)}</b>` : "";
+      const prize = (i < c.places.length) ? (c.pctPrize ? ` — <b>${c.places[i].amount}% bonus</b>` : ` — <b>${c.places[i].amount.toLocaleString()} ${tgEsc(c.ticker)}</b>`) : "";
       lines.push(`${tag} <code>${short}</code> · ${(s[key] || 0).toFixed(2)} SOL${prize}`);
     });
   }
@@ -755,7 +755,7 @@ async function buyCompVerify(c) {
   }
   // Fill the prize places with non-DQ candidates, in rank order (DQs promote the rest up).
   const eligible = results.filter(r => r.status !== "dq");
-  c.verified = eligible.slice(0, c.places.length).map((r, i) => ({ rank: i + 1, wallet: r.wallet, amount: c.places[i].amount, status: r.status, note: r.note }));
+  c.verified = eligible.slice(0, c.places.length).map((r, i) => ({ rank: i + 1, wallet: r.wallet, amount: c.pctPrize ? +((r.value || 0) * c.places[i].amount / 100).toFixed(4) : c.places[i].amount, ...(c.pctPrize ? { amountNote: `${c.places[i].amount}% of ${(r.value || 0).toFixed(2)} SOL bought (SOL terms — operator converts/pays manually)` } : {}), status: r.status, note: r.note }));
   c.verifyResults = results;
   c.verifiedAt = Date.now();
   if (!c.payoutToken) c.payoutToken = randomBytes(8).toString("hex");
@@ -3072,8 +3072,13 @@ app.post("/api/buycomp/start", (req, res) => {
   const prizeTokenKind = ["native", "usdc", "sol", "spl"].includes(String(q.prizeToken)) ? String(q.prizeToken) : "native";
   const prizeTokenMint = prizeTokenKind === "spl" && SOL_ADDR_RE.test(String(q.prizeMint || "")) ? String(q.prizeMint) : null;
   const id = "bc_" + randomBytes(5).toString("hex");
-  const prizeSummary = `🏆 ${places.map(p => p.amount.toLocaleString()).join(" / ")} ${ticker}`;
-  const c = { id, label: String(q.label || ticker).slice(0, 60), mint, ticker, chatId, metric, startTs, endTs, holdHours, places, prizeToken: { kind: prizeTokenKind, mint: prizeTokenMint }, updateMins, prizeSummary, status: "live", boardMsgId: null, provisional: [], lastUpdateTs: 0, createdAt: Date.now() };
+  // pct=1 → places are PERCENTAGES of each winner's own cumulative buys (e.g. 15,15,15),
+  // not fixed token amounts; q.prize overrides the board's prize line with free text.
+  const pctPrize = q.pct === "1" || q.pct === 1;
+  const prizeSummary = q.prize ? "🏆 " + String(q.prize).slice(0, 140)
+    : pctPrize ? `🏆 Top ${places.length}: ${places.map(p => p.amount + "%").join(" / ")} of your cumulative buys`
+    : `🏆 ${places.map(p => p.amount.toLocaleString()).join(" / ")} ${ticker}`;
+  const c = { id, label: String(q.label || ticker).slice(0, 60), mint, ticker, chatId, metric, startTs, endTs, holdHours, places, pctPrize, prizeToken: { kind: prizeTokenKind, mint: prizeTokenMint }, updateMins, prizeSummary, status: "live", boardMsgId: null, provisional: [], lastUpdateTs: 0, createdAt: Date.now() };
   buyCompSave(c);
   buyCompUpdate(c).catch(() => {});    // post the initial board now (if the window has started)
   return res.status(200).json({ ok: true, id, competition: c });
