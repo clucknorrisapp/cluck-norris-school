@@ -222,6 +222,19 @@ public endpoint — still open, still not a vuln.
 - No automated test suite beyond that.
 
 ## Deferred / check later
+- **CoinGecko listing — REAPPLIED 2026-06-11 (awaiting decision).** Request ID
+  `CL1106260002`, submitted via partner.coingecko.com; CoinGecko said ~5 business days.
+  Public verification post is LIVE on X (@firechicken007):
+  `https://x.com/firechicken007/status/2064885046708683046` (contains the request ID +
+  GeckoTerminal URL — the anti-fraud step they require; no email reply needed, their team
+  finds the post). The confirmation email is no-reply. Already on GeckoTerminal as "Cluck
+  Norris (CLKN)". Application facts used (all verified on-chain): total supply 999,998,515,
+  circulating 808,589,941, ~191,408,574 (~19.14%) locked across 28 Jupiter Lock escrows,
+  mint+freeze renounced, ~2.5mo trading, 3 pools (Meteora 64WXkH… + Orca H1r9ut… USDC +
+  Orca EL1ZDnu… SOL). If CoinGecko replies with questions, answer from these. Prior
+  rejection reason was "need real volume + time in market" — both now satisfied.
+- **Stale link in `src/App.jsx`:** the "GET HELP" button points at `t.me/clucknorris`
+  (NOT ours). The real community Telegram is `t.me/FireChicken007`. Fix when convenient.
 - **`/api/helius-rpc` is now a true allow-list** (default-deny). It permits only the
   lightweight read + tx-build/send methods the client tools use (see `ALLOWED_RPC`
   in the handler) and handles JSON-RPC batch bodies; everything else
