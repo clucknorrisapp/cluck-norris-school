@@ -719,9 +719,58 @@ function buyCompMetricKey(c) { return c.metric === "single" ? "maxBuySol" : "vol
 async function buyCompStandings(c) {
   const fromSec = Math.floor(c.startTs / 1000);
   const toSec = Math.floor(Math.min(Date.now(), c.endTs) / 1000);
-  const r = await solanaTracker.getTokenBuyersInWindow(c.mint, fromSec, toSec, { maxPages: 60 });
   const key = buyCompMetricKey(c);
-  return ((r && r.buyers) || []).sort((a, b) => (b[key] || 0) - (a[key] || 0));
+  let buyers = [];
+  // Primary: Solana Tracker. If it errors or returns nothing (quota/outage), fall
+  // back to GeckoTerminal pool-trades (free, no key) so the comp never goes dark.
+  try {
+    const r = await solanaTracker.getTokenBuyersInWindow(c.mint, fromSec, toSec, { maxPages: 60 });
+    buyers = (r && r.buyers) || [];
+  } catch (e) { console.warn("[BUYCOMP] ST standings failed:", e.message); }
+  if (!buyers.length) {
+    try {
+      const g = await geckoBuyersInWindow(c.mint, c.startTs, Math.min(Date.now(), c.endTs));
+      if (g.length) { buyers = g; console.log(`[BUYCOMP] ${c.id} using GeckoTerminal fallback (${g.length} buyers)`); }
+    } catch (e) { console.warn("[BUYCOMP] gecko fallback failed:", e.message); }
+  }
+  return buyers.sort((a, b) => (b[key] || 0) - (a[key] || 0));
+}
+// GeckoTerminal pool-trades fallback for buy standings (no API key, no quota). Discovers
+// the token's pools via DexScreener, pulls each pool's recent trades, keeps buys in the
+// window, and aggregates per wallet. volumeSol is USD/SOL-price (single recent price — fine
+// for a short comp). Limit: GT returns the last ~300 trades/pool, so it fully covers a
+// low/medium-volume token's window but could miss the oldest buys on a very busy token.
+async function geckoBuyersInWindow(mint, fromMs, toMs) {
+  let pools = [];
+  try {
+    const dx = await (await fetch(`https://api.dexscreener.com/token-pairs/v1/solana/${mint}`, { signal: AbortSignal.timeout(8000) })).json();
+    if (Array.isArray(dx)) pools = dx.map((p) => p.pairAddress).filter(Boolean);
+  } catch (_) {}
+  if (!pools.length) return [];
+  const solUsd = (await getSolUsd().catch(() => 0)) || 0;
+  const buyers = new Map();
+  for (const pool of pools.slice(0, 6)) {
+    try {
+      const res = await fetch(`https://api.geckoterminal.com/api/v2/networks/solana/pools/${pool}/trades`, { signal: AbortSignal.timeout(10000) });
+      if (!res.ok) continue;
+      const data = (await res.json()).data || [];
+      for (const t of data) {
+        const a = t.attributes || {};
+        if (a.kind !== "buy") continue;
+        const tMs = Date.parse(a.block_timestamp);
+        if (!(tMs >= fromMs && tMs <= toMs)) continue;
+        const wallet = a.tx_from_address;
+        if (!wallet) continue;
+        const usd = Number(a.volume_in_usd) || 0;
+        const sol = solUsd > 0 ? usd / solUsd : 0;
+        const cur = buyers.get(wallet) || { wallet, buyCount: 0, volumeSol: 0, maxBuySol: 0, volumeUsd: 0 };
+        cur.buyCount++; cur.volumeSol += sol; cur.volumeUsd += usd;
+        if (sol > cur.maxBuySol) cur.maxBuySol = sol;
+        buyers.set(wallet, cur);
+      }
+    } catch (e) { console.warn(`[BUYCOMP] gecko pool ${pool.slice(0, 6)} failed:`, e.message); }
+  }
+  return [...buyers.values()];
 }
 // Resolve the prize token's mint from the configured kind.
 const BC_USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
