@@ -13,14 +13,21 @@ matters, and claims should match the code.
 
 CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 
-> ⏰ **ACTIVE WATCH (set 2026-06-11 ~02:00 UTC): organic-score recovery.** The Jupiter
-> organic score collapsed to **0** during the ±0.15%/±0.25% CLKN Blitzes + self-buybacks
-> (heavy operator activity dilutes the organic-volume fraction → score drops; it recovers
-> when the activity stops — owner has seen this exact cycle before, e.g. when the BTC pool
-> spun up). Blitz is OFF, baseline marked at 0. **Check ~12h later (≈2026-06-11 14:00 UTC):**
-> `GET /api/clkn-organic-log?key=PREMIUM_ACCESS_KEY` — expect it back toward ~30. If recovered,
-> the "0→32+" public claims hold and the lesson is "run steady/deep, NOT spiky Blitzes."
-> If NOT recovered, make the public organic-score copy honest. Remove this note once resolved.
+> ⏰ **ACTIVE WATCH (updated 2026-06-11 ~20:00 UTC): organic-score recovery, take 2.** The
+> 12h-recovery thesis FAILED in its first form: score stayed 0 for 19h+ after Blitz stop.
+> Root cause found: pulling the CLKN engine removed ~100% of both Orca pools' depth →
+> `orcaRoutable:false` (Jupiter couldn't route CLKN through Orca at all) → organic flow had
+> nothing to trade against; 24h vol bled ~$4.6k→$3.9k. The earlier recoveries happened with
+> depth still deployed. So the real test = **deep + passive + zero operator churn**, now
+> running: engine redeployed 2026-06-11 via staged seed (small ±15% positions absorb the
+> ~8% stale-tick arb correction; restore settled config ±10%/±15% @ deployFrac 0.95 once
+> dislocation converges <1% — check `/api/whirlpool/vault/dislocation`). Buyback/ask-wall/
+> Blitz all OFF. **No operator CLKN trades until the score recovers** (owner's manual
+> sell→rebuy idea was rejected for exactly this reason — wash-shaped self-volume).
+> Watch `GET /api/clkn-organic-log?key=…`: expect `orcaRoutable:true` within hours of full
+> deploy, score recovery over ~1-3 days. If the score is still 0 after ~72h of confirmed
+> routability + recovering volume, the bottleneck is organic TRADER COUNT (a marketing
+> problem, not LP posture) — then make the public "0→32+" copy honest. Remove when resolved.
 
 ## Working agreement
 - **Always commit AND push to the active working branch** — hackathon pace, standing
