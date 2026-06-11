@@ -6982,6 +6982,14 @@ async function recordOrganicSnapshot() {
       blitzActive: kv.get("clknBlitzUntil", 0) > now,
       minsSinceBlitz: lastBlitz ? Math.round((now - lastBlitz) / 60000) : null,
     };
+    // Routability probe: can Jupiter route a small CLKN buy through OUR Orca pools?
+    // (Thin pools aren't in Jupiter's index — flips true once depth crosses their
+    // threshold; that's the unlock for organic flow filling on engine pools.)
+    try {
+      const q = await fetch(`https://lite-api.jup.ag/swap/v1/quote?inputMint=EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v&outputMint=${CLKN_MINT_ADDR}&amount=10000000&swapMode=ExactIn&slippageBps=300&dexes=Orca`, { signal: AbortSignal.timeout(8000) });
+      const qd = await q.json();
+      entry.orcaRoutable = !(qd && qd.error);
+    } catch (_) { entry.orcaRoutable = null; }
     const log = kv.get("clknOrganicLog", []) || [];
     log.push(entry);
     kv.set("clknOrganicLog", log.slice(-800));
