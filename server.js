@@ -962,14 +962,11 @@ async function buyLeadersReply(c, chatId, replyTo) {
       buyCompSave(c);
     } catch (e) { standings = c.provisional || []; }          // fall back to cache
   }
-  // Self-clean like the scheduled board: post the fresh standings, then delete the
-  // previous board (whether the scheduler or an earlier /buyleaders posted it) — the
-  // chat holds ONE live board, not a new one per query. Tracks the shared c.boardMsgId
-  // so the next refresh (scheduled or on-demand) cleans this one up too. Silent: a
-  // /buyleaders bump shouldn't ping the room.
-  const prev = c.boardMsgId;
-  const mid = await tgSend(chatId, buyCompRender(c, standings), replyTo, { silent: true });
-  if (mid) { c.boardMsgId = mid; if (prev && prev !== mid) tgDelete(chatId, prev); buyCompSave(c); }
+  // A member asked for this board, so leave it — extras a member triggered are fine.
+  // Deliberately NOT tracked as c.boardMsgId and never deletes prior posts: only the
+  // BOT's OWN scheduled reposts self-clean (see buyCompUpdate), so "ours" never stacks
+  // while member-requested boards stay put. Silent so the bump doesn't ping the room.
+  tgSend(chatId, buyCompRender(c, standings), replyTo, { silent: true });
 }
 
 // ── Interactive slash commands ─────────────────────────────────────────────
@@ -1501,11 +1498,7 @@ function handleTelegramUpdate(update) {
     if (cmd === "buyleaders") {
       const c = buyCompByChat(msg.chat.id);
       if (!c) { tgSend(msg.chat.id, "🌹 No active buy competition in this group right now.", msg.message_id); return; }
-      // Tidy the triggering command after the reply lands — only works where the
-      // bot has admin delete rights (silently no-ops otherwise); one board, no clutter.
-      buyLeadersReply(c, msg.chat.id, msg.message_id)
-        .then(() => tgDelete(msg.chat.id, msg.message_id))
-        .catch(() => {});
+      buyLeadersReply(c, msg.chat.id, msg.message_id);
       return;
     }
     // /score with a real mint → live in-chat score (light per-chat cooldown).
@@ -3293,54 +3286,6 @@ app.post("/api/buycomp/refresh", (req, res) => {
   if (!c) return res.status(404).json({ error: "no such competition" });
   buyCompUpdate(c).catch(() => {});       // force an immediate repost
   return res.status(200).json({ ok: true });
-});
-// Chat janitor: sweep the bot's OWN stale messages (old boards / replies posted
-// before self-clean tracking) out of a comp chat. Bots can't list history, but
-// message ids are sequential — so we try deleteMessage on a range of ids below
-// the current board anchor. SAFETY: a NON-admin bot can only delete its own
-// messages (<48h) — others fail server-side at Telegram, so the blind sweep
-// can't touch members' messages. If the bot HAS admin can_delete_messages in
-// the chat, the same sweep WOULD nuke members' chat — refuse and say so.
-// DRY RUN unless &run=1. &back=N (default 200, cap 500) ids below the anchor.
-app.get("/api/buycomp/sweep", async (req, res) => {
-  if (!buyCompAdminOK(req)) return res.status(404).json({ error: "not_found" });
-  const c = buyCompsAll()[String(req.query.id || "")];
-  if (!c) return res.status(404).json({ error: "no such competition" });
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (!token) return res.status(500).json({ error: "no bot token" });
-  const back = Math.min(500, Math.max(1, parseInt(req.query.back) || 200));
-  const tg = async (method, body) => {
-    try {
-      const r = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-      });
-      return await r.json();
-    } catch (_) { return null; }
-  };
-  const me = await tg("getMe", {});
-  const botId = me && me.result && me.result.id;
-  const mem = botId ? await tg("getChatMember", { chat_id: c.chatId, user_id: botId }) : null;
-  const status = (mem && mem.result && mem.result.status) || "unknown";
-  const canDeleteOthers = status === "administrator" && !!(mem.result && mem.result.can_delete_messages);
-  if (canDeleteOthers) {
-    return res.status(409).json({
-      error: "bot is an admin with can_delete_messages in this chat — a blind id sweep would delete MEMBERS' messages too, refusing. Revoke the bot's delete-messages admin right, re-run the sweep, then re-grant if wanted.",
-      botStatus: status,
-    });
-  }
-  const anchor = Number(c.boardMsgId) || 0;
-  if (!anchor) return res.status(400).json({ error: "no boardMsgId anchor yet — refresh the board first (/api/buycomp/refresh)" });
-  if (req.query.run !== "1") {
-    return res.status(200).json({ ok: true, dryRun: true, botStatus: status, anchor, wouldTry: back, note: "non-admin bot: only its own messages (<48h old) can be deleted — members' messages are untouchable. Add &run=1 to sweep." });
-  }
-  let tried = 0, deleted = 0;
-  for (let mid = anchor - 1; mid > anchor - 1 - back && mid > 0; mid--) {
-    tried++;
-    const r = await tg("deleteMessage", { chat_id: c.chatId, message_id: mid });
-    if (r && r.ok) deleted++;
-    await new Promise((s) => setTimeout(s, 45));   // ~22 req/s — under Telegram's limiter
-  }
-  return res.status(200).json({ ok: true, botStatus: status, anchor, tried, deleted, note: "deleted = bot's own messages in range (<48h). Older ones are beyond Telegram's bot-delete window." });
 });
 // Run the hold-period verification (sell/transfer DQ + promotion) and build the
 // payout list. Gated; refuses until the hold is over unless force=1.
