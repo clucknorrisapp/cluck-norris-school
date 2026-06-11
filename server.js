@@ -25,7 +25,7 @@ const {
   KNOWN_SERVICE_WALLETS, KNOWN_CEX_WALLETS,
 } = require("./lib/solana-addr");
 const { runAutopsy, bagsFetch, heliusEnhancedBatched, BAGS_BASE } = require("./lib/autopsy");
-const { getTokenBuyersInWindowHelius } = require("./lib/helius-trades");
+const { getTokenBuyersInWindowHelius, getWalletTokenPositionHelius } = require("./lib/helius-trades");
 const QUESTION_BANK = require("./data/question-bank.json");
 
 // Admin/test-endpoint auth — prefer the x-premium-key HEADER over ?key= (query
@@ -729,40 +729,51 @@ function buyCompExcludeSet(c) {
   return ex;
 }
 const BC_TX_CACHE = new Map();  // enhanced-tx cache shared across comp refreshes
-async function buyCompStandings(c) {
+// ── Multi-source buy data (Helius primary → GeckoTerminal → Solana Tracker) ──
+// One source chain shared by the buy COMPETITION and the buy-SPECIAL raffle, so
+// both prefer Helius (paid plan) and only touch ST as a last resort.
+async function buyersInWindowMulti(mint, fromMs, toMs, { maxPages = 60 } = {}) {
   if (BC_TX_CACHE.size > 8000) BC_TX_CACHE.clear();
-  const fromSec = Math.floor(c.startTs / 1000);
-  const toSec = Math.floor(Math.min(Date.now(), c.endTs) / 1000);
-  const key = buyCompMetricKey(c);
-  let buyers = [];
-  // Source chain: Helius (paid plan, full window coverage) -> GeckoTerminal (free,
-  // last ~300 trades/pool) -> Solana Tracker (quota-billed, last resort). Each tier
-  // only runs if the previous returned nothing.
   try {
-    const toMs = Math.min(Date.now(), c.endTs);
-    const h = await getTokenBuyersInWindowHelius(c.mint, c.startTs, toMs, {
+    const h = await getTokenBuyersInWindowHelius(mint, fromMs, toMs, {
       heliusKey: process.env.HELIUS_API_KEY, heliusEnhancedBatched,
       solUsd: (await getSolUsd().catch(() => 0)) || 0, txCache: BC_TX_CACHE,
     });
-    buyers = (h && h.buyers) || [];
-    if (buyers.length) console.log(`[BUYCOMP] ${c.id} standings via Helius (${buyers.length} buyers, ${h.txsScanned} txs)`);
-  } catch (e) { console.warn("[BUYCOMP] helius standings failed:", e.message); }
-  if (!buyers.length) {
-    try {
-      const g = await geckoBuyersInWindow(c.mint, c.startTs, Math.min(Date.now(), c.endTs));
-      if (g.length) { buyers = g; console.log(`[BUYCOMP] ${c.id} using GeckoTerminal fallback (${g.length} buyers)`); }
-    } catch (e) { console.warn("[BUYCOMP] gecko fallback failed:", e.message); }
-  }
-  if (!buyers.length) {
-    try {
-      const r = await solanaTracker.getTokenBuyersInWindow(c.mint, fromSec, toSec, { maxPages: 60 });
-      buyers = (r && r.buyers) || [];
-    } catch (e) { console.warn("[BUYCOMP] ST standings failed:", e.message); }
-  }
+    if (h && h.buyers && h.buyers.length) return { buyers: h.buyers, source: "helius", reachedWindowStart: true };
+  } catch (e) { console.warn("[BUY] helius buyers failed:", e.message); }
+  try {
+    const g = await geckoBuyersInWindow(mint, fromMs, toMs);
+    if (g.length) return { buyers: g, source: "geckoterminal", reachedWindowStart: true };
+  } catch (e) { console.warn("[BUY] gecko buyers failed:", e.message); }
+  try {
+    const r = await solanaTracker.getTokenBuyersInWindow(mint, Math.floor(fromMs / 1000), Math.floor(toMs / 1000), { maxPages });
+    if (r) return { buyers: r.buyers || [], source: "solana-tracker", reachedWindowStart: r.reachedWindowStart };
+  } catch (e) { console.warn("[BUY] ST buyers failed:", e.message); }
+  return { buyers: [], source: "none", reachedWindowStart: false };
+}
+// Wallet's hold position (balance + sells) — Helius first, ST fallback. Returns
+// { sells, balance } in the shape the verify logic expects.
+async function walletPositionMulti(wallet, mint) {
+  try {
+    const h = await getWalletTokenPositionHelius(wallet, mint, {
+      heliusKey: process.env.HELIUS_API_KEY, heliusEnhancedBatched, txCache: BC_TX_CACHE,
+    });
+    if (h) return { sells: h.sells, balance: h.balance, transfersOut: h.transfersOut, source: "helius" };
+  } catch (e) { console.warn("[BUY] helius position failed:", e.message); }
+  try {
+    const pos = premiumForensics.parseStPosition(await solanaTracker.getWalletTokenPosition(wallet, mint));
+    if (pos) return { ...pos, source: "solana-tracker" };
+  } catch (e) { console.warn("[BUY] ST position failed:", e.message); }
+  return null;
+}
+async function buyCompStandings(c) {
+  const toMs = Math.min(Date.now(), c.endTs);
+  const { buyers: raw } = await buyersInWindowMulti(c.mint, c.startTs, toMs);
+  const key = buyCompMetricKey(c);
   // Drop MM/engine wallets + manual excludes, then any sub-floor cumulative (dust/bot filter).
   const ex = buyCompExcludeSet(c);
   const minVol = Number(c.minVolSol) || 0;
-  buyers = buyers.filter((b) => !ex.has(b.wallet) && (minVol <= 0 || (b.volumeSol || 0) >= minVol));
+  let buyers = (raw || []).filter((b) => !ex.has(b.wallet) && (minVol <= 0 || (b.volumeSol || 0) >= minVol));
   return buyers.sort((a, b) => (b[key] || 0) - (a[key] || 0));
 }
 // GeckoTerminal pool-trades fallback for buy standings (no API key, no quota). Discovers
@@ -824,7 +835,7 @@ async function buyCompVerify(c) {
   for (const s of candidates) {
     let status = "qualified", note = "still holding";
     try {
-      const pos = premiumForensics.parseStPosition(await solanaTracker.getWalletTokenPosition(s.wallet, c.mint));
+      const pos = await walletPositionMulti(s.wallet, c.mint);
       if (!pos) { status = "manual"; note = "no position data — verify by hand (Trace)"; }
       else if ((pos.sells || 0) > 0) { status = "dq"; note = `sold on-chain (${pos.sells} sell${pos.sells > 1 ? "s" : ""})`; }
       else if ((pos.balance || 0) <= 0) { status = "manual"; note = "no sells but holds 0 — transferred out; trace to runner wallet"; }
@@ -1940,7 +1951,7 @@ app.get("/api/autopsy-premium", async (req, res) => {
       const recipients = [];
       for (const [wallet, tokensReceived] of sorted) {
         let position = null;
-        try { position = premiumForensics.parseStPosition(await solanaTracker.getWalletTokenPosition(wallet, mint)); } catch (_) {}
+        try { position = await walletPositionMulti(wallet, mint); } catch (_) {}
         recipients.push({ wallet, tokensReceived, position });
       }
       // Cross-reference recipients against the autopsy's account classifier so
@@ -3286,11 +3297,10 @@ app.post("/api/buyspecial/draw", async (req, res) => {
   if (requireHold && Date.now() < snapshotAt && q.force !== "1") {
     return res.status(400).json({ error: "hold snapshot time not reached — pass force=1 to override", snapshotAt });
   }
-  if (!solanaTracker.isConfigured()) return res.status(503).json({ error: "Solana Tracker not configured" });
 
   // 1) Every buyer in the window.
   let scan;
-  try { scan = await solanaTracker.getTokenBuyersInWindow(mint, Math.floor(fromTs / 1000), Math.floor(toTs / 1000), { maxPages: 80 }); }
+  try { scan = await buyersInWindowMulti(mint, fromTs, toTs, { maxPages: 80 }); }
   catch (e) { return res.status(500).json({ error: "buyer scan failed: " + publicErrMsg(e) }); }
   const buyers = (scan && scan.buyers) || [];
   if (!buyers.length) return res.status(200).json({ ok: true, note: "no buyers in window", buyersTotal: 0, reachedWindowStart: scan && scan.reachedWindowStart });
@@ -3301,7 +3311,7 @@ app.post("/api/buyspecial/draw", async (req, res) => {
     let status = "eligible", note = `${b.buyCount} buy${b.buyCount > 1 ? "s" : ""}`;
     if (requireHold) {
       try {
-        const pos = premiumForensics.parseStPosition(await solanaTracker.getWalletTokenPosition(b.wallet, mint));
+        const pos = await walletPositionMulti(b.wallet, mint);
         if (!pos) { status = "manual"; note = "no position data — verify by hand"; }
         else if ((pos.sells || 0) > 0) { status = "dq"; note = `sold (${pos.sells} sell${pos.sells > 1 ? "s" : ""}) — did not hold`; }
         else if ((pos.balance || 0) <= 0) { status = "manual"; note = "holds 0, no sells — transferred out; verify by hand"; }
@@ -3391,15 +3401,12 @@ app.get("/api/buyspecial-crosscheck", async (req, res) => {
   if (!SOL_ADDR_RE.test(mint) || !from || !to || to <= from) {
     return res.status(400).json({ success: false, error: "Need mint, from, to (unix seconds, to>from)" });
   }
-  if (!solanaTracker.isConfigured()) {
-    return res.status(200).json({ success: false, error: "Solana Tracker not configured" });
-  }
   try {
-    const result = await solanaTracker.getTokenBuyersInWindow(mint, from, to);
-    if (!result) return res.status(200).json({ success: false, error: "No data from Solana Tracker" });
+    const result = await buyersInWindowMulti(mint, from * 1000, to * 1000);
+    if (!result) return res.status(200).json({ success: false, error: "No buyer data from any source" });
     return res.status(200).json({
       success: true,
-      source: "solana-tracker /trades",
+      source: result.source || "multi-source",
       buyers: result.buyers,                 // [{wallet, buyCount, volumeSol}]
       buyerCount: result.buyers.length,
       tradesScanned: result.tradesScanned,
