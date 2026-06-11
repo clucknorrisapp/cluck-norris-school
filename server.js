@@ -1501,10 +1501,11 @@ function handleTelegramUpdate(update) {
     if (cmd === "buyleaders") {
       const c = buyCompByChat(msg.chat.id);
       if (!c) { tgSend(msg.chat.id, "🌹 No active buy competition in this group right now.", msg.message_id); return; }
-      await buyLeadersReply(c, msg.chat.id, msg.message_id);
-      // Tidy the triggering command too — only works where the bot has admin
-      // delete rights (silently no-ops otherwise), keeps the comp chat to one board.
-      tgDelete(msg.chat.id, msg.message_id);
+      // Tidy the triggering command after the reply lands — only works where the
+      // bot has admin delete rights (silently no-ops otherwise); one board, no clutter.
+      buyLeadersReply(c, msg.chat.id, msg.message_id)
+        .then(() => tgDelete(msg.chat.id, msg.message_id))
+        .catch(() => {});
       return;
     }
     // /score with a real mint → live in-chat score (light per-chat cooldown).
