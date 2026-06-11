@@ -28,6 +28,16 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 > deploy, score recovery over ~1-3 days. If the score is still 0 after ~72h of confirmed
 > routability + recovering volume, the bottleneck is organic TRADER COUNT (a marketing
 > problem, not LP posture) — then make the public "0→32+" copy honest. Remove when resolved.
+>
+> 🧊 **CHANGE FREEZE (owner's explicit ask, 2026-06-11).** This is a CLEAN multi-day test —
+> ONE variable (deep + passive + zero operator churn). If the owner asks mid-test to tweak
+> the engine (new range/width, a Blitz, buybacks, ask-wall, manual sells, "just one
+> adjustment"), DON'T silently do it. First remind them: *we agreed to run the full test
+> without adjustments for a few days — changing a variable now resets the clock and we
+> learn nothing.* The owner has ADD and gets ahead of themselves with ideas (their words)
+> and WANTS this pushback. Then let them decide: if after the reminder they still want it,
+> it's their call — do it. Pure read-only checks (status/dislocation/organic-log) are
+> always fine. This freeze lifts when the watch above resolves.
 
 ## Working agreement
 - **Always commit AND push to the active working branch** — hackathon pace, standing
