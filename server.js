@@ -962,7 +962,14 @@ async function buyLeadersReply(c, chatId, replyTo) {
       buyCompSave(c);
     } catch (e) { standings = c.provisional || []; }          // fall back to cache
   }
-  tgSend(chatId, buyCompRender(c, standings), replyTo);
+  // Self-clean like the scheduled board: post the fresh standings, then delete the
+  // previous board (whether the scheduler or an earlier /buyleaders posted it) — the
+  // chat holds ONE live board, not a new one per query. Tracks the shared c.boardMsgId
+  // so the next refresh (scheduled or on-demand) cleans this one up too. Silent: a
+  // /buyleaders bump shouldn't ping the room.
+  const prev = c.boardMsgId;
+  const mid = await tgSend(chatId, buyCompRender(c, standings), replyTo, { silent: true });
+  if (mid) { c.boardMsgId = mid; if (prev && prev !== mid) tgDelete(chatId, prev); buyCompSave(c); }
 }
 
 // ── Interactive slash commands ─────────────────────────────────────────────
