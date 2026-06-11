@@ -901,13 +901,14 @@ async function runStCrossCheck(startTime, endTime, localBuyerSet) {
   const box = document.getElementById('stCrossCheck');
   try {
     box.style.display = 'block';
-    box.innerHTML = '<span style="color:#6EE7B7;font-weight:700;">SOLANA TRACKER DOUBLE-CHECK</span> — cross-verifying buyers independently…';
+    box.innerHTML = '<span style="color:#6EE7B7;font-weight:700;">INDEPENDENT DOUBLE-CHECK</span> — cross-verifying buyers…';
     const res = await fetch('/api/buyspecial-crosscheck?mint=' + encodeURIComponent(currentMint) + '&from=' + startTime + '&to=' + endTime);
     const d = await res.json();
     if (!d || !d.success || !Array.isArray(d.buyers)) {
       box.style.display = 'none';
       return;
     }
+        const srcName = ({helius:'Helius', geckoterminal:'GeckoTerminal', 'solana-tracker':'Solana Tracker'})[d.source] || 'independent indexer';
     const stSet = new Set(d.buyers.map(b => b.wallet));
     let confirmed = 0, onlyLocal = 0, onlyST = 0;
     for (const w of localBuyerSet) { if (stSet.has(w)) confirmed++; else onlyLocal++; }
@@ -916,16 +917,16 @@ async function runStCrossCheck(startTime, endTime, localBuyerSet) {
     const agreePct = localTotal > 0 ? Math.round(confirmed / localTotal * 100) : 0;
     const coverage = d.reachedWindowStart
       ? ''
-      : ' <span style="color:#FCD34D;">(ST covered only the most recent part of this window — older buyers not compared)</span>';
+      : ' <span style="color:#FCD34D;">(the feed covered only the most recent part of this window — older buyers not compared)</span>';
     let verdict, vcolor;
     if (onlyLocal === 0 && onlyST === 0) { verdict = '✓ EXACT MATCH'; vcolor = '#6EE7B7'; }
     else if (onlyLocal === 0) { verdict = '✓ ALL CONFIRMED'; vcolor = '#6EE7B7'; }
     else { verdict = '⚠ REVIEW DIFFERENCES'; vcolor = '#FCD34D'; }
     box.innerHTML =
-      '<div style="font-weight:700;color:' + vcolor + ';margin-bottom:6px;">SOLANA TRACKER DOUBLE-CHECK — ' + verdict + '</div>' +
-      '<div>' + confirmed + ' of your ' + localTotal + ' buyers (' + agreePct + '%) independently confirmed by Solana Tracker' + coverage + '.</div>' +
-      (onlyST > 0 ? '<div style="margin-top:4px;color:#FCD34D;">' + onlyST + ' buyer' + (onlyST===1?'':'s') + ' Solana Tracker saw that your scan didn’t flag — worth a look (could be a pool/router edge or a sub-min buy).</div>' : '') +
-      (onlyLocal > 0 ? '<div style="margin-top:4px;color:var(--subtext);">' + onlyLocal + ' of your buyers weren’t in ST’s trade feed — usually fine (your value-flow scan catches routes ST may index differently).</div>' : '') +
+      '<div style="font-weight:700;color:' + vcolor + ';margin-bottom:6px;">INDEPENDENT DOUBLE-CHECK (' + srcName + ') — ' + verdict + '</div>' +
+      '<div>' + confirmed + ' of your ' + localTotal + ' buyers (' + agreePct + '%) independently confirmed by ' + srcName + coverage + '.</div>' +
+      (onlyST > 0 ? '<div style="margin-top:4px;color:#FCD34D;">' + onlyST + ' buyer' + (onlyST===1?'':'s') + ' the ' + srcName + ' feed saw that your scan didn’t flag — worth a look (could be a pool/router edge or a sub-min buy).</div>' : '') +
+      (onlyLocal > 0 ? '<div style="margin-top:4px;color:var(--subtext);">' + onlyLocal + ' of your buyers weren’t in the ' + srcName + ' feed — usually fine (your value-flow scan catches routes ST may index differently).</div>' : '') +
       '<div style="margin-top:6px;font-size:10px;color:var(--subtext);font-style:italic;">Your scan is the source of truth — this is a second opinion from an independent indexer. High agreement = high confidence in your competition results.</div>';
   } catch (e) {
     box.style.display = 'none';

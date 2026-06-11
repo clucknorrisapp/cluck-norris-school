@@ -35,6 +35,12 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   static file serving. (The Token Autopsy engine was extracted to `lib/autopsy.js`.)
 - `lib/` — `bags-context`, `solana-tracker`, `solscan`, `premium-forensics`, `analytics`,
   plus volume-backed stores: `kvstore`, `sigstore`, `recap`, `grad-tracker`, `credentials`.
+  `helius-trades` — Helius-based buy tracking: `getTokenBuyersInWindowHelius` (who bought
+  token X in a window — pool sigs + batched enhanced-tx parse) and
+  `getWalletTokenPositionHelius` (balance + sells/transfers, the 48h hold check). The
+  buy comp + Buy Special route through server.js's `buyersInWindowMulti` /
+  `walletPositionMulti` helpers: **Helius primary → GeckoTerminal (free) → Solana
+  Tracker (quota-billed, last resort)**. Don't re-point buy tracking at ST directly.
   `solana-addr` — pure address primitives (base58 codec, ed25519 on-curve check, ATA
   derivation) + the DEX/locker/token-program, program-label, service-wallet and CEX-wallet
   tables; one source of truth for trace/snapshot/score/autopsy classification.
@@ -101,6 +107,10 @@ Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.
   Check, daily recap, graduation watcher, the webhook setup) **only starts if
   `TELEGRAM_BOT_TOKEN` AND `TELEGRAM_CHAT_ID` are set at boot.** Missing either → none of
   it runs. This is the #1 thing to check when "the bot isn't doing X."
+- **Buy-comp/Buy-Special data is multi-source:** Helius primary → GeckoTerminal → ST last
+  resort (see `lib/helius-trades`). ST quota exhaustion no longer darkens a live comp.
+  ST remains REQUIRED for launchpad-specialty reads only: token creator, bonding-curve %,
+  deployer history — i.e. the Bags monitoring below + parts of autopsy/premium forensics.
 - **Bags monitoring (near-grad + graduation alerts) depends on `SOLANA_TRACKER_API_KEY`.**
   Fast health check (no key needed): `GET /api/bags-near-grad` — returns `tokens:[…]` =
   pipeline alive; empty/`success:false` = ST key or quota.
