@@ -710,7 +710,8 @@ function buyCompRender(c, standings) {
   }
   lines.push("");
   const metricLabel = c.metric === "single" ? "biggest single buy" : "cumulative bought";
-  lines.push(`<i>metric: ${metricLabel} · refreshes ~${c.updateMins}m · type /buyleaders anytime</i>`);
+  const filterNote = c.liveHoldFilter !== false ? " · 🤖 in-window sellers auto-removed" : "";
+  lines.push(`<i>metric: ${metricLabel} · refreshes ~${c.updateMins}m${filterNote} · type /buyleaders anytime</i>`);
   lines.push(ended
     ? `⚠️ PROVISIONAL. Winners must hold ${c.holdHours}h (no sells/transfers); official results come from the Rose scan after the hold.`
     : "⚠️ Live &amp; provisional — official winners are confirmed after the hold period via the Rose scan (wash-trade &amp; hold checked).");
@@ -757,10 +758,10 @@ async function buyersInWindowMulti(mint, fromMs, toMs, { maxPages = 60 } = {}) {
 }
 // Wallet's hold position (balance + sells) — Helius first, ST fallback. Returns
 // { sells, balance } in the shape the verify logic expects.
-async function walletPositionMulti(wallet, mint) {
+async function walletPositionMulti(wallet, mint, { fromMs = null, toMs = null } = {}) {
   try {
     const h = await getWalletTokenPositionHelius(wallet, mint, {
-      heliusKey: process.env.HELIUS_API_KEY, heliusEnhancedBatched, txCache: BC_TX_CACHE,
+      heliusKey: process.env.HELIUS_API_KEY, heliusEnhancedBatched, txCache: BC_TX_CACHE, fromMs, toMs,
     });
     if (h) return { sells: h.sells, balance: h.balance, transfersOut: h.transfersOut, source: "helius" };
   } catch (e) { console.warn("[BUY] helius position failed:", e.message); }
@@ -770,6 +771,39 @@ async function walletPositionMulti(wallet, mint) {
   } catch (e) { console.warn("[BUY] ST position failed:", e.message); }
   return null;
 }
+// Live round-trip bot filter: which of these wallets have SOLD within the contest
+// window. A buy-and-dump bot sells the bag it just bought — the same disqualifier the
+// post-hold Rose scan enforces, brought forward so dumpers never sit on the live board.
+// Cost-guarded: results are cached and a wallet once flagged sold is never re-checked
+// (a past in-window sell can't be undone); clean wallets are re-checked on a short TTL
+// (they might sell later). Only a Helius window-scoped read is authoritative for a drop —
+// if we had to fall back to an unscoped source, we don't risk a false disqualification.
+const BC_SOLD_CACHE = new Map();   // `${compId}:${wallet}` -> { sold, ts }
+const BC_SOLD_TTL = 120000;        // re-check not-yet-sold wallets at most this often
+async function buyCompSoldSet(c, wallets, toMs) {
+  if (BC_SOLD_CACHE.size > 20000) BC_SOLD_CACHE.clear();
+  const out = new Set();
+  const now = Date.now();
+  const toCheck = [];
+  for (const w of wallets) {
+    const hit = BC_SOLD_CACHE.get(`${c.id}:${w}`);
+    if (hit && hit.sold) { out.add(w); continue; }        // sticky once sold-in-window
+    if (hit && now - hit.ts < BC_SOLD_TTL) continue;      // recently confirmed clean
+    toCheck.push(w);
+  }
+  const CONC = 4;                                          // bounded concurrency (quota guard)
+  for (let i = 0; i < toCheck.length; i += CONC) {
+    await Promise.all(toCheck.slice(i, i + CONC).map(async (w) => {
+      try {
+        const pos = await walletPositionMulti(w, c.mint, { fromMs: c.startTs, toMs });
+        const soldInWindow = !!pos && pos.source === "helius" && (pos.sells || 0) > 0;
+        if (pos) BC_SOLD_CACHE.set(`${c.id}:${w}`, { sold: soldInWindow, ts: Date.now() });
+        if (soldInWindow) out.add(w);
+      } catch (_) { /* lookup failed — innocent until proven; don't drop */ }
+    }));
+  }
+  return out;
+}
 async function buyCompStandings(c) {
   const toMs = Math.min(Date.now(), c.endTs);
   const { buyers: raw } = await buyersInWindowMulti(c.mint, c.startTs, toMs);
@@ -778,7 +812,16 @@ async function buyCompStandings(c) {
   const ex = buyCompExcludeSet(c);
   const minVol = Number(c.minVolSol) || 0;
   let buyers = (raw || []).filter((b) => !ex.has(b.wallet) && (minVol <= 0 || (b.volumeSol || 0) >= minVol));
-  return buyers.sort((a, b) => (b[key] || 0) - (a[key] || 0));
+  buyers.sort((a, b) => (b[key] || 0) - (a[key] || 0));
+  // Then drop buy-and-dump bots: any wallet that already sold within the window. Default
+  // ON; per-comp opt-out via liveHoldFilter:false. Only the top candidates are checked
+  // (enough to fill the displayed board after drops) to bound the per-refresh cost.
+  if (c.liveHoldFilter !== false && buyers.length) {
+    const need = Math.max((c.places ? c.places.length : 3) + 6, 26);
+    const sold = await buyCompSoldSet(c, buyers.slice(0, need).map((b) => b.wallet), toMs);
+    if (sold.size) buyers = buyers.filter((b) => !sold.has(b.wallet));
+  }
+  return buyers;
 }
 // GeckoTerminal pool-trades fallback for buy standings (no API key, no quota). Discovers
 // the token's pools via DexScreener, pulls each pool's recent trades, keeps buys in the
@@ -3174,7 +3217,10 @@ app.post("/api/buycomp/start", (req, res) => {
     : `🏆 ${places.map(p => p.amount.toLocaleString()).join(" / ")} ${ticker}`;
   const exclude = String(q.exclude || "").split(",").map((s) => s.trim()).filter((w) => SOL_ADDR_RE.test(w));
   const minVolSol = Math.max(0, Number(q.minVolSol) || 0);
-  const c = { id, label: String(q.label || ticker).slice(0, 60), mint, ticker, chatId, metric, startTs, endTs, holdHours, places, pctPrize, exclude, minVolSol, prizeToken: { kind: prizeTokenKind, mint: prizeTokenMint }, updateMins, prizeSummary, status: "live", boardMsgId: null, provisional: [], lastUpdateTs: 0, createdAt: Date.now() };
+  // Auto-remove buy-and-dump bots (wallets that sold within the window) from the live
+  // board. Default ON; pass liveHoldFilter=0/false to leave the raw board unfiltered.
+  const liveHoldFilter = !["0", "false", "no", "off"].includes(String(q.liveHoldFilter ?? "").toLowerCase());
+  const c = { id, label: String(q.label || ticker).slice(0, 60), mint, ticker, chatId, metric, startTs, endTs, holdHours, places, pctPrize, exclude, minVolSol, liveHoldFilter, prizeToken: { kind: prizeTokenKind, mint: prizeTokenMint }, updateMins, prizeSummary, status: "live", boardMsgId: null, provisional: [], lastUpdateTs: 0, createdAt: Date.now() };
   buyCompSave(c);
   buyCompUpdate(c).catch(() => {});    // post the initial board now (if the window has started)
   return res.status(200).json({ ok: true, id, competition: c });
@@ -3193,9 +3239,10 @@ app.post("/api/buycomp/exclude", async (req, res) => {
   if (q.add) c.exclude = [...new Set([...c.exclude, ...parse(q.add)])];
   if (q.remove) { const rm = new Set(parse(q.remove)); c.exclude = c.exclude.filter((w) => !rm.has(w)); }
   if (q.minVolSol != null) c.minVolSol = Math.max(0, Number(q.minVolSol) || 0);
+  if (q.liveHoldFilter != null) c.liveHoldFilter = !["0", "false", "no", "off"].includes(String(q.liveHoldFilter).toLowerCase());
   buyCompSave(c);
   try { await buyCompUpdate(c); } catch (_) {}
-  return res.status(200).json({ ok: true, id: c.id, exclude: c.exclude, minVolSol: c.minVolSol || 0, autoExcludedEngineWallets: [...buyCompExcludeSet({ exclude: [] })] });
+  return res.status(200).json({ ok: true, id: c.id, exclude: c.exclude, minVolSol: c.minVolSol || 0, liveHoldFilter: c.liveHoldFilter !== false, autoExcludedEngineWallets: [...buyCompExcludeSet({ exclude: [] })] });
 });
 app.post("/api/buycomp/stop", async (req, res) => {
   if (!buyCompAdminOK(req)) return res.status(404).json({ error: "not_found" });
