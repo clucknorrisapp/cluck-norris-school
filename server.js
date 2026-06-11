@@ -687,6 +687,22 @@ function buyCompByChat(chatId) {
     .filter(c => String(c.chatId) === String(chatId) && (c.status === "live" || c.status === "closed"))
     .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0] || null;
 }
+// Live eligibility check: flag top candidates that already SOLD or transferred out
+// their buys during the comp (so the board reflects who'd survive the hold scan now).
+// Bounded to the top (places + buffer) wallets — only those can win — to cap Helius cost.
+async function buyCompAnnotateSold(c, standings) {
+  const n = Math.min(standings.length, c.places.length + 10);
+  for (let i = 0; i < n; i++) {
+    const s = standings[i];
+    try {
+      const pos = await walletPositionMulti(s.wallet, c.mint);
+      if (!pos) { s.elig = "unknown"; continue; }
+      if ((pos.sells || 0) > 0) { s.elig = "sold"; s.eligNote = `sold ${pos.sells}x`; }
+      else if ((pos.balance || 0) <= 0) { s.elig = "moved"; s.eligNote = "holds 0 — moved out"; }
+      else { s.elig = "ok"; }
+    } catch (_) { s.elig = "unknown"; }
+  }
+}
 function buyCompRender(c, standings) {
   const now = Date.now(), ended = now >= c.endTs;
   const medals = ["🥇", "🥈", "🥉"];
@@ -701,11 +717,20 @@ function buyCompRender(c, standings) {
   if (!rows.length) {
     lines.push("<i>No qualifying buys yet — be the first. 🌹</i>");
   } else {
-    rows.forEach((s, i) => {
-      const tag = i < 3 ? medals[i] : `${i + 1}.`;
+    let eligRank = 0;   // prize ranks count only ELIGIBLE (still-holding) wallets
+    rows.forEach((s) => {
       const short = s.wallet.slice(0, 4) + "…" + s.wallet.slice(-4);
-      const prize = (i < c.places.length) ? (c.pctPrize ? ` — <b>${c.places[i].amount}% bonus</b>` : ` — <b>${c.places[i].amount.toLocaleString()} ${tgEsc(c.ticker)}</b>`) : "";
-      lines.push(`${tag} <code>${short}</code> · ${(s[key] || 0).toFixed(2)} SOL${prize}`);
+      const vol = (s[key] || 0).toFixed(2);
+      const ineligible = s.elig === "sold" || s.elig === "moved";
+      if (ineligible) {
+        const why = s.elig === "sold" ? "SOLD" : "MOVED OUT";
+        lines.push(`❌ <code>${short}</code> · <s>${vol} SOL</s> · <b>${why} — ineligible</b>`);
+        return;
+      }
+      const tag = eligRank < 3 ? medals[eligRank] : `${eligRank + 1}.`;
+      const prize = (eligRank < c.places.length) ? (c.pctPrize ? ` — <b>${c.places[eligRank].amount}% bonus</b>` : ` — <b>${c.places[eligRank].amount.toLocaleString()} ${tgEsc(c.ticker)}</b>`) : "";
+      lines.push(`${tag} <code>${short}</code> · ${vol} SOL${prize}`);
+      eligRank++;
     });
   }
   lines.push("");
@@ -861,7 +886,8 @@ async function buyCompUpdate(c) {
   let standings;
   try { standings = await buyCompStandings(c); }
   catch (e) { console.warn("[BUYCOMP] standings fetch failed:", e.message); return; }
-  c.provisional = standings.slice(0, 20).map(s => ({ wallet: s.wallet, volumeSol: s.volumeSol, maxBuySol: s.maxBuySol, buyCount: s.buyCount }));
+  if (c.liveSoldCheck) { try { await buyCompAnnotateSold(c, standings); } catch (e) { console.warn("[BUYCOMP] live sold-check failed:", e.message); } }
+  c.provisional = standings.slice(0, 20).map(s => ({ wallet: s.wallet, volumeSol: s.volumeSol, maxBuySol: s.maxBuySol, buyCount: s.buyCount, elig: s.elig || null }));
   const text = buyCompRender(c, standings);
   // Self-cleaning hourly repost: post a fresh board (so it resurfaces in the feed
   // as a "comp is live" reminder), then delete the previous one — one board at a
@@ -3193,6 +3219,7 @@ app.post("/api/buycomp/exclude", async (req, res) => {
   if (q.add) c.exclude = [...new Set([...c.exclude, ...parse(q.add)])];
   if (q.remove) { const rm = new Set(parse(q.remove)); c.exclude = c.exclude.filter((w) => !rm.has(w)); }
   if (q.minVolSol != null) c.minVolSol = Math.max(0, Number(q.minVolSol) || 0);
+  if (q.liveSold != null) c.liveSoldCheck = q.liveSold === "1" || q.liveSold === 1 || q.liveSold === "true";
   buyCompSave(c);
   try { await buyCompUpdate(c); } catch (_) {}
   return res.status(200).json({ ok: true, id: c.id, exclude: c.exclude, minVolSol: c.minVolSol || 0, autoExcludedEngineWallets: [...buyCompExcludeSet({ exclude: [] })] });
