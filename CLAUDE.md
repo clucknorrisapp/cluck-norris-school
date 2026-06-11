@@ -13,6 +13,15 @@ matters, and claims should match the code.
 
 CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 
+> ⏰ **ACTIVE WATCH (set 2026-06-11 ~02:00 UTC): organic-score recovery.** The Jupiter
+> organic score collapsed to **0** during the ±0.15%/±0.25% CLKN Blitzes + self-buybacks
+> (heavy operator activity dilutes the organic-volume fraction → score drops; it recovers
+> when the activity stops — owner has seen this exact cycle before, e.g. when the BTC pool
+> spun up). Blitz is OFF, baseline marked at 0. **Check ~12h later (≈2026-06-11 14:00 UTC):**
+> `GET /api/clkn-organic-log?key=PREMIUM_ACCESS_KEY` — expect it back toward ~30. If recovered,
+> the "0→32+" public claims hold and the lesson is "run steady/deep, NOT spiky Blitzes."
+> If NOT recovered, make the public organic-score copy honest. Remove this note once resolved.
+
 ## Working agreement
 - **Always commit AND push to the active working branch** — hackathon pace, standing
   permission to push. Give a heads-up before anything touching `main` (merge/PR) or
