@@ -267,6 +267,21 @@ router.get("/vault/rebalance", async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message || "rebalance failed" }); }
 });
 
+// GET /api/whirlpool/vault/transfer?key=…&project=<from>&toProject=<to>&sym=SOL|USDC|CLKN&amount=<n|all>[&run=1]
+// Moves funds between OUR OWN project operator wallets (allow-listed destinations only).
+router.get("/vault/transfer", async (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  try {
+    res.json(await vault.transferToProject({
+      projectId: proj(req),
+      toProjectId: String(req.query.toProject || ""),
+      sym: String(req.query.sym || "SOL"),
+      amountUi: req.query.amount === "all" ? "all" : Number(req.query.amount),
+      dryRun: req.query.run !== "1",
+    }));
+  } catch (e) { res.status(500).json({ error: e.message || "transfer failed" }); }
+});
+
 // GET /api/whirlpool/vault/swap?key=…&from=SOL&to=USDC&amount=315[&slippage=100][&run=1]
 // Ad-hoc swap between SOL/USDC/CLKN via Jupiter. DRY RUN unless run=1.
 router.get("/vault/swap", async (req, res) => {
