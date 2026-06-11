@@ -735,9 +735,13 @@ const BC_TX_CACHE = new Map();  // enhanced-tx cache shared across comp refreshe
 async function buyersInWindowMulti(mint, fromMs, toMs, { maxPages = 60 } = {}) {
   if (BC_TX_CACHE.size > 8000) BC_TX_CACHE.clear();
   try {
+    const [solUsd, mkt] = await Promise.all([
+      getSolUsd().catch(() => 0),
+      getTokenMarket(mint).catch(() => null),
+    ]);
     const h = await getTokenBuyersInWindowHelius(mint, fromMs, toMs, {
       heliusKey: process.env.HELIUS_API_KEY, heliusEnhancedBatched,
-      solUsd: (await getSolUsd().catch(() => 0)) || 0, txCache: BC_TX_CACHE,
+      solUsd: solUsd || 0, tokenPriceUsd: (mkt && mkt.priceUsd) || 0, txCache: BC_TX_CACHE,
     });
     if (h && h.buyers && h.buyers.length) return { buyers: h.buyers, source: "helius", reachedWindowStart: true };
   } catch (e) { console.warn("[BUY] helius buyers failed:", e.message); }
