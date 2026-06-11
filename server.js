@@ -4168,6 +4168,22 @@ const DEV_WALLETS = new Set([
   "3VELZ2avSUq79qstuR8a7C3euJ834WmQyrjt4uRnn4eb",
 ]);
 
+// Managed-vault engine operator wallets (CLKN liquidity engine + any other project
+// operators). Their CLKN BUYS now render as community reinvestment — the engine
+// buying CLKN back is real buy pressure — while their SELLS stay suppressed (MM noise).
+function mmOperatorWallets() {
+  try {
+    return whirlpoolMM.vault.operatorPubkeys
+      ? whirlpoolMM.vault.operatorPubkeys()
+      : [whirlpoolMM.vault.operatorPubkey && whirlpoolMM.vault.operatorPubkey()].filter(Boolean);
+  } catch (_) { return []; }
+}
+// A buy that should post as "♻️ COMMUNITY REINVESTMENT": the team deployer OR an
+// engine operator wallet. Single source of truth for the poller + the buy alert.
+function isReinvestWallet(addr) {
+  return addr != null && (DEV_WALLETS.has(addr) || mmOperatorWallets().includes(addr));
+}
+
 // Tool → cost (CLKN, base before the unique decimal) + what gets granted.
 // The base must be unique per tool so a user can't pay a 100-CLKN "airdrop" amount
 // and reuse the verification to unlock a 500-CLKN tool. Math.floor(amount) checks this.
@@ -7087,7 +7103,7 @@ async function maybeFireOrganicReminder(entry) {
 async function notifyClknBuy(trade, tx, pool, usdValue, HELIUS_KEY) {
   const buyer = trade.trader;
   const buyerShort = buyer ? `${buyer.slice(0, 4)}…${buyer.slice(-4)}` : "unknown";
-  const isDevBuy = buyer != null && DEV_WALLETS.has(buyer);
+  const isDevBuy = isReinvestWallet(buyer);   // team deployer OR an engine operator wallet
   const meta = QUOTE_TOKENS[trade.quote.mint];
   // Only show "($X.XX)" suffix when the quote isn't already a USD-denominated
   // stablecoin — for USDC/USDT the amount IS the dollar value.
@@ -7452,11 +7468,11 @@ async function pollSinglePool(pool, HELIUS_KEY) {
         continue;
       }
 
-      // Skip ANY managed vault's operator wallet — their liquidity deploys/swaps are
-      // market-making, not community buys, and shouldn't post as "reinvestment".
-      const mmWallets = whirlpoolMM.vault.operatorPubkeys ? whirlpoolMM.vault.operatorPubkeys() : [whirlpoolMM.vault.operatorPubkey && whirlpoolMM.vault.operatorPubkey()].filter(Boolean);
-      if (trade.trader && mmWallets.includes(trade.trader)) {
-        console.log(`[TELEGRAM] Skipping MM vault op (liquidity management) · sig ${sig.slice(0,8)}`);
+      // Skip a managed vault operator's SELLS — liquidity-management sells aren't
+      // community flow. Its BUYS now pass through and post as community reinvestment
+      // (engine buying CLKN back = real buy pressure the owner wants surfaced).
+      if (trade.trader && trade.action === "sell" && mmOperatorWallets().includes(trade.trader)) {
+        console.log(`[TELEGRAM] Skipping MM vault op SELL (liquidity management) · sig ${sig.slice(0,8)}`);
         rememberSig(sig);
         if (!blocked) advanceTo = sig;
         continue;
@@ -7465,7 +7481,7 @@ async function pollSinglePool(pool, HELIUS_KEY) {
       const usd = quoteUsdValue(trade);
       const quoteMeta = QUOTE_TOKENS[trade.quote.mint] || { symbol: '?' };
       const usdStr = usd == null ? "no USD" : "$" + usd.toFixed(4);
-      const isReinvestBuy = trade.action !== "sell" && trade.trader != null && DEV_WALLETS.has(trade.trader);
+      const isReinvestBuy = trade.action !== "sell" && isReinvestWallet(trade.trader);
       const floor = trade.action === "sell" ? MIN_SELL_USD
                   : isReinvestBuy ? MIN_REINVEST_USD
                   : MIN_BUY_USD;
