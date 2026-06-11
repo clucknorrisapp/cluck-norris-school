@@ -7112,12 +7112,10 @@ async function notifyClknBuy(trade, tx, pool, usdValue, HELIUS_KEY) {
   const priceStr = formatClknPrice(usdValue, trade.clknAmount);
   const mcapStr = await formatClknMarketCap(usdValue, trade.clknAmount, HELIUS_KEY);
   const vol24Str = fmtUsdShort(await getClkn24hVolume());
-  const organicStr = fmtOrganicScore(await getClknOrganicScore());
   const priceLine =
     (priceStr ? `\nPrice: <b>${priceStr}</b>` : "") +
     (mcapStr ? `\nMarket cap: <b>${mcapStr}</b>` : "") +
-    (vol24Str ? `\n24h Vol: <b>${vol24Str}</b>` : "") +
-    (organicStr ? `\nJupiter organic score: <b>${organicStr}</b>` : "");
+    (vol24Str ? `\n24h Vol: <b>${vol24Str}</b>` : "");
 
   // Buyer rank + wallet — holdings now, the tier they sit in, whether this buy
   // promoted them, and how much they grew their position. Skipped for dev buys
@@ -7229,12 +7227,10 @@ async function notifyClknSell(trade, tx, pool, usdValue, HELIUS_KEY) {
   const priceStr = formatClknPrice(usdValue, trade.clknAmount);
   const mcapStr = await formatClknMarketCap(usdValue, trade.clknAmount, HELIUS_KEY);
   const vol24Str = fmtUsdShort(await getClkn24hVolume());
-  const organicStr = fmtOrganicScore(await getClknOrganicScore());
   const priceLine =
     (priceStr ? `\nPrice: <b>${priceStr}</b>` : "") +
     (mcapStr ? `\nMarket cap: <b>${mcapStr}</b>` : "") +
-    (vol24Str ? `\n24h Vol: <b>${vol24Str}</b>` : "") +
-    (organicStr ? `\nJupiter organic score: <b>${organicStr}</b>` : "");
+    (vol24Str ? `\n24h Vol: <b>${vol24Str}</b>` : "");
 
   // Seller rank — holdings now, the tier they sit in, whether this sell knocked
   // them down a rung, and how much of their bag they trimmed. Skipped when a
