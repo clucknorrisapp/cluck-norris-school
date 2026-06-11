@@ -2774,6 +2774,16 @@ app.get("/api/clkn-organic-log", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
   try {
+    // Arm the one-shot recovery reminder: &remindIn=<hours>[&remindChat=<id>]. Fires
+    // from the hourly logger on Railway, DMs the operator bot room. &remindIn=0 disarms.
+    if (req.query.remindIn != null) {
+      const hrs = Number(req.query.remindIn);
+      if (Number.isFinite(hrs) && hrs > 0) {
+        kv.set("organicReminderAt", Date.now() + hrs * 3600 * 1000);
+        kv.set("organicReminderArmedAt", Date.now());
+        if (req.query.remindChat) kv.set("organicReminderChat", String(req.query.remindChat));
+      } else { kv.set("organicReminderAt", 0); }
+    }
     if (req.query.snap === "1") await recordOrganicSnapshot();
     const log = kv.get("clknOrganicLog", []) || [];
     const scored = log.filter((e) => e.score != null);
@@ -6864,7 +6874,33 @@ async function recordOrganicSnapshot() {
     const log = kv.get("clknOrganicLog", []) || [];
     log.push(entry);
     kv.set("clknOrganicLog", log.slice(-800));
+    try { await maybeFireOrganicReminder(entry); } catch (_) {}
   } catch (e) { console.warn("[organic-log] failed:", e.message); }
+}
+
+// One-shot reminder: armed via /api/clkn-organic-log?remindIn=<hours>. The hourly
+// logger checks it; once we're past the target time it DMs the operator room (loud,
+// the private bot chat — NOT the community group) with the current organic score, then
+// disarms. Runs on Railway so it survives ephemeral cloud-session containers.
+async function maybeFireOrganicReminder(entry) {
+  const at = kv.get("organicReminderAt", 0);
+  if (!at || Date.now() < at) return;
+  const chat = kv.get("organicReminderChat", "") || "1846034838"; // operator/treasury DM
+  kv.set("organicReminderAt", 0); // disarm first so it can't double-fire
+  const tok = process.env.TELEGRAM_BOT_TOKEN;
+  if (!tok) return;
+  const log = kv.get("clknOrganicLog", []) || [];
+  const armedAt = kv.get("organicReminderArmedAt", 0);
+  const base = log.find((e) => e.ts >= armedAt && e.score != null);
+  const score = entry && entry.score != null ? entry.score : "?";
+  const baseTxt = base ? ` (was ${base.score} at arm time)` : "";
+  const text = `⏰🐔 <b>Organic-score recovery check</b>\n\nCLKN Jupiter organic score is now <b>${score}</b>${baseTxt}.\nBlitz has been off ~12h. If it climbed back toward ~30, the recovery thesis held — run steady/deep, not spiky.\n\nReply in your session: "pull the organic recovery" for the full curve.`;
+  try {
+    await fetch(`https://api.telegram.org/bot${tok}/sendMessage`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chat, text, parse_mode: "HTML", disable_web_page_preview: true, disable_notification: false }),
+    });
+  } catch (e) { console.warn("[organic-reminder] send failed:", e.message); }
 }
 
 async function notifyClknBuy(trade, tx, pool, usdValue, HELIUS_KEY) {
