@@ -744,7 +744,12 @@ async function buyersInWindowMulti(mint, fromMs, toMs, { maxPages = 60 } = {}) {
       heliusKey: process.env.HELIUS_API_KEY, heliusEnhancedBatched,
       solUsd: solUsd || 0, tokenPriceUsd: (mkt && mkt.priceUsd) || 0, txCache: BC_TX_CACHE,
     });
-    if (h && h.buyers && h.buyers.length) return { buyers: h.buyers, source: "helius", reachedWindowStart: true };
+    // A successful Helius scan is authoritative even with ZERO buyers — but only when it
+    // covered the whole window. An empty result from a truncated scan (or a non-empty one)
+    // reports its real coverage; empty + truncated falls through to the backup sources.
+    if (h && h.buyers && (h.buyers.length || h.reachedWindowStart)) {
+      return { buyers: h.buyers, source: "helius", reachedWindowStart: h.reachedWindowStart !== false };
+    }
   } catch (e) { console.warn("[BUY] helius buyers failed:", e.message); }
   try {
     const g = await geckoBuyersInWindow(mint, fromMs, toMs);
@@ -882,7 +887,11 @@ async function buyCompVerify(c) {
   for (const s of candidates) {
     let status = "qualified", note = "still holding";
     try {
-      const pos = await walletPositionMulti(s.wallet, c.mint);
+      // Sells are scoped to comp-start onward (through the hold period — no toMs):
+      // dumping pre-comp bags doesn't DQ, selling the comp buys does. Matches the
+      // live board's in-window filter so a wallet shown live can't be DQ'd for
+      // ancient history at payout.
+      const pos = await walletPositionMulti(s.wallet, c.mint, { fromMs: c.startTs });
       if (!pos) { status = "manual"; note = "no position data — verify by hand (Trace)"; }
       else if ((pos.sells || 0) > 0) { status = "dq"; note = `sold on-chain (${pos.sells} sell${pos.sells > 1 ? "s" : ""})`; }
       else if ((pos.balance || 0) <= 0) { status = "manual"; note = "no sells but holds 0 — transferred out; trace to runner wallet"; }
@@ -3362,7 +3371,9 @@ app.post("/api/buyspecial/draw", async (req, res) => {
     let status = "eligible", note = `${b.buyCount} buy${b.buyCount > 1 ? "s" : ""}`;
     if (requireHold) {
       try {
-        const pos = await walletPositionMulti(b.wallet, mint);
+        // Window-start onward (through the hold — no toMs): selling pre-window bags
+        // doesn't DQ a raffle entry; selling the window buys does.
+        const pos = await walletPositionMulti(b.wallet, mint, { fromMs: fromTs });
         if (!pos) { status = "manual"; note = "no position data — verify by hand"; }
         else if ((pos.sells || 0) > 0) { status = "dq"; note = `sold (${pos.sells} sell${pos.sells > 1 ? "s" : ""}) — did not hold`; }
         else if ((pos.balance || 0) <= 0) { status = "manual"; note = "holds 0, no sells — transferred out; verify by hand"; }
