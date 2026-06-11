@@ -25,6 +25,7 @@ const {
   KNOWN_SERVICE_WALLETS, KNOWN_CEX_WALLETS,
 } = require("./lib/solana-addr");
 const { runAutopsy, bagsFetch, heliusEnhancedBatched, BAGS_BASE } = require("./lib/autopsy");
+const { getTokenBuyersInWindowHelius } = require("./lib/helius-trades");
 const QUESTION_BANK = require("./data/question-bank.json");
 
 // Admin/test-endpoint auth — prefer the x-premium-key HEADER over ?key= (query
@@ -727,22 +728,36 @@ function buyCompExcludeSet(c) {
   (Array.isArray(c.exclude) ? c.exclude : []).forEach((w) => w && ex.add(w));
   return ex;
 }
+const BC_TX_CACHE = new Map();  // enhanced-tx cache shared across comp refreshes
 async function buyCompStandings(c) {
+  if (BC_TX_CACHE.size > 8000) BC_TX_CACHE.clear();
   const fromSec = Math.floor(c.startTs / 1000);
   const toSec = Math.floor(Math.min(Date.now(), c.endTs) / 1000);
   const key = buyCompMetricKey(c);
   let buyers = [];
-  // Primary: Solana Tracker. If it errors or returns nothing (quota/outage), fall
-  // back to GeckoTerminal pool-trades (free, no key) so the comp never goes dark.
+  // Source chain: Helius (paid plan, full window coverage) -> GeckoTerminal (free,
+  // last ~300 trades/pool) -> Solana Tracker (quota-billed, last resort). Each tier
+  // only runs if the previous returned nothing.
   try {
-    const r = await solanaTracker.getTokenBuyersInWindow(c.mint, fromSec, toSec, { maxPages: 60 });
-    buyers = (r && r.buyers) || [];
-  } catch (e) { console.warn("[BUYCOMP] ST standings failed:", e.message); }
+    const toMs = Math.min(Date.now(), c.endTs);
+    const h = await getTokenBuyersInWindowHelius(c.mint, c.startTs, toMs, {
+      heliusKey: process.env.HELIUS_API_KEY, heliusEnhancedBatched,
+      solUsd: (await getSolUsd().catch(() => 0)) || 0, txCache: BC_TX_CACHE,
+    });
+    buyers = (h && h.buyers) || [];
+    if (buyers.length) console.log(`[BUYCOMP] ${c.id} standings via Helius (${buyers.length} buyers, ${h.txsScanned} txs)`);
+  } catch (e) { console.warn("[BUYCOMP] helius standings failed:", e.message); }
   if (!buyers.length) {
     try {
       const g = await geckoBuyersInWindow(c.mint, c.startTs, Math.min(Date.now(), c.endTs));
       if (g.length) { buyers = g; console.log(`[BUYCOMP] ${c.id} using GeckoTerminal fallback (${g.length} buyers)`); }
     } catch (e) { console.warn("[BUYCOMP] gecko fallback failed:", e.message); }
+  }
+  if (!buyers.length) {
+    try {
+      const r = await solanaTracker.getTokenBuyersInWindow(c.mint, fromSec, toSec, { maxPages: 60 });
+      buyers = (r && r.buyers) || [];
+    } catch (e) { console.warn("[BUYCOMP] ST standings failed:", e.message); }
   }
   // Drop MM/engine wallets + manual excludes, then any sub-floor cumulative (dust/bot filter).
   const ex = buyCompExcludeSet(c);
