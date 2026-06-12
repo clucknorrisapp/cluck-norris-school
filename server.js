@@ -2664,9 +2664,10 @@ app.get("/api/meteora/status", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
   try {
-    let solUsd = 0, btcUsd = 0;
+    let solUsd = 0, btcUsd = 0, jupUsd = 0;
     try { const st = await whirlpoolMM.vault.status("treasury"); const px = (st.earnings || {}).prices || {}; solUsd = px.solUsd || 0; btcUsd = px.clknUsd || 0; } catch (_) {}
-    return res.status(200).json(await meteora.status({ solUsd, btcUsd }));
+    try { jupUsd = (await getJupUsd()) || 0; } catch (_) {}
+    return res.status(200).json(await meteora.status({ solUsd, btcUsd, jupUsd }));
   } catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
 
@@ -2697,6 +2698,11 @@ app.get("/api/meteora/open-position", async (req, res) => {
   try {
     return res.status(200).json(await meteora.openPosition({
       cbbtcUi: req.query.cbbtc, solUi: req.query.sol,
+      // Non-cbBTC/SOL pools: &pool=<address> + &x=/&y= per-side amounts in the
+      // pool's own tokenX/tokenY order (x/y take precedence over cbbtc/sol).
+      ...(req.query.pool ? { poolAddress: String(req.query.pool) } : {}),
+      ...(req.query.x != null ? { xUi: Number(req.query.x) } : {}),
+      ...(req.query.y != null ? { yUi: Number(req.query.y) } : {}),
       halfWidthPct: req.query.half != null ? Number(req.query.half) : 0.6,
       distribution: req.query.dist || "spot", dryRun: req.query.run !== "1",
     }));
