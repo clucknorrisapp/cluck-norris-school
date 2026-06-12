@@ -1268,6 +1268,8 @@ function guideSystemPrompt() {
 // Welcome new chat members (tagged), once per chat per cooldown to survive join waves.
 const WELCOME_COOLDOWN_MS = 60000;
 const welcomeCooldown = new Map();
+const welcomeLastMsg = new Map();  // chatId -> last welcome msg id; deleted when the next
+                                   // welcome posts, so the chat holds ONE welcome, not a pile.
 async function welcomeNewMembers(msg) {
   const chatId = msg.chat && msg.chat.id;
   const members = (msg.new_chat_members || []).filter(m => m && !m.is_bot);
@@ -1281,7 +1283,12 @@ async function welcomeNewMembers(msg) {
   const tags = members.slice(0, 8).map(m =>
     `<a href="tg://user?id=${m.id}">${tgEsc(m.first_name || m.username || "friend")}</a>`).join(", ");
   const mid = await tgSendKb(chatId, `🐔 Welcome to the coop, ${tags}!\n\n${GUIDE_BODY}`, GUIDE_KEYBOARD);
-  if (mid) registerCluckAnswer(mid, { guide: true, history: [] });
+  if (mid) {
+    registerCluckAnswer(mid, { guide: true, history: [] });
+    const prev = welcomeLastMsg.get(chatId);
+    if (prev && prev !== mid) tgDelete(chatId, prev);      // self-clean: newest welcome only
+    welcomeLastMsg.set(chatId, mid);
+  }
 }
 // Handle a journey button tap: reply with the curated route, keep it reply-able.
 async function handleGuideCallback(cq) {
