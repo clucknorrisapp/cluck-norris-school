@@ -2662,6 +2662,13 @@ app.get("/api/treasury-recap-test", async (req, res) => {
   try { return res.status(200).json(await sendTreasuryRecap({ send: req.query.send === "1", reset: req.query.reset === "1" })); }
   catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
+// JUP/USDC private recap — preview by default; &send=1 DMs it; &reset=1 rebaselines the delta.
+app.get("/api/jup-recap-test", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  try { return res.status(200).json(await sendJupUsdcRecap({ send: req.query.send === "1", reset: req.query.reset === "1" })); }
+  catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
+});
 
 // Meteora DLMM positions — read-only status (gated). Lists the treasury wallet's
 // Meteora positions (range, amounts, pending fees, in-range) so the cbBTC/SOL
@@ -2739,6 +2746,47 @@ function meteoraDM(text) {
     if (tg && proj && proj.telegramChatId) fetch(`https://api.telegram.org/bot${tg}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: proj.telegramChatId, parse_mode: "HTML", text }) }).catch(() => {});
   } catch (_) {}
 }
+// ── JUP/USDC earner recap → PRIVATE treasury DM (operator only, NOT community) ──
+// The one recap we want right now: this pool's liquidity + fees, with a since-last
+// delta. Snapshot in kv jupUsdcRecapSnap. lifetimeFeeUsd = pending + claimed on the
+// live position; a recenter/close claims fees (resets the position's claimed count),
+// so the fee delta is honest BETWEEN recenters and the value delta carries the rest.
+async function sendJupUsdcRecap({ send = true, reset = false } = {}) {
+  if (!meteora.isEnabled()) return { skipped: "meteora not enabled" };
+  let jupUsd = 0; try { jupUsd = (await getJupUsd()) || 0; } catch (_) {}
+  const m = await meteora.status({ jupUsd });
+  const pos = (m.positions || []).find((p) => p.pair === "JUP/USDC" && (p.valueUsd || 0) >= 1);
+  if (!pos) return { skipped: "no JUP/USDC position" };
+  const valueUsd = pos.valueUsd || 0;
+  const claimableUsd = pos.pendingFeeUsd || 0;
+  const claimedUsd = pos.claimedFeeUsd || 0;
+  const lifetimeFeeUsd = claimableUsd + claimedUsd;
+  const snap = { ts: Date.now(), valueUsd, lifetimeFeeUsd, claimedUsd };
+  const prev = reset ? null : kv.get("jupUsdcRecapSnap", null);
+  if (send) kv.set("jupUsdcRecapSnap", snap);
+  const fmtUsd = (n) => "$" + (Number(n) || 0).toFixed(2);
+  const signed = (n) => (n >= 0 ? "+" : "") + fmtUsd(n);
+  let deltaLine = "";
+  if (prev) {
+    const hrs = Math.max(0.1, (snap.ts - prev.ts) / 3600000);
+    const feeDelta = lifetimeFeeUsd - (prev.lifetimeFeeUsd || 0);
+    const valDelta = valueUsd - (prev.valueUsd || 0);
+    // feeDelta < 0 means a claim/recenter happened in the window (claimed reset) — say so.
+    deltaLine = feeDelta >= 0
+      ? `\n📈 <b>${signed(feeDelta)}</b> fees in ${hrs.toFixed(0)}h (~${fmtUsd(feeDelta / hrs * 24)}/day) · value ${signed(valDelta)}`
+      : `\n📈 value ${signed(valDelta)} since last · <i>(fees were claimed/recentered in window)</i>`;
+  }
+  const rangeStr = (pos.lowerPrice && pos.upperPrice) ? ` (${pos.lowerPrice.toPrecision(5)}–${pos.upperPrice.toPrecision(5)})` : "";
+  const text =
+    `💰 <b>JUP/USDC earner</b> — private recap\n` +
+    `💧 Liquidity: <b>${fmtUsd(valueUsd)}</b> · ${pos.inRange ? "✅ in range" : "⚠️ OUT of range"}${rangeStr}\n` +
+    `🪙 Claimable: <b>${fmtUsd(claimableUsd)}</b> · claimed lifetime: ${fmtUsd(claimedUsd)}` +
+    deltaLine +
+    `\n<i>operator-only · not posted to the community</i>`;
+  if (send) meteoraDM(text);
+  return { sent: send, valueUsd, claimableUsd, claimedUsd, lifetimeFeeUsd, preview: text };
+}
+
 async function meteoraRecenter({ dryRun = false, force = false } = {}) {
   if (!meteora.isEnabled()) return { action: "none", reason: "operator not set" };
   const cfg = meteora.getCfg();
@@ -7806,14 +7854,15 @@ app.listen(PORT, () => {
       const now = Date.now();
       if (now - lastTreasuryReportAt >= 6 * 3600 * 1000) { lastTreasuryReportAt = now; kv.set("treasuryReportAt", now); sendTreasuryReport(); }
     }
-    setInterval(treasuryReportTick, 60 * 1000);
-    setTimeout(treasuryReportTick, 20000); // first report shortly after boot (then every 6h; stamp persists across redeploys)
-    // Treasury DAILY RECAP — token-denominated growth tracking (separate from the 6h balances
-    // report). Once/24h: how much each sleeve + the stack grew in SOL/cbBTC terms, vs HODL.
+    // 6h cbBTC/SOL treasury report DISABLED (owner 2026-06-12): the treasury now holds only
+    // the JUP/USDC earner; the single daily JUP/USDC recap below is the only one we want.
+    // (sendTreasuryReport retained for when a cbBTC/SOL backbone returns.)
+    void treasuryReportTick;
+    // DAILY recap → PRIVATE DM: the JUP/USDC earner only (owner's call). Once/24h.
     let lastTreasuryRecapAt = kv.get("treasuryRecapAt", 0);
     function treasuryRecapTick() {
       const now = Date.now();
-      if (now - lastTreasuryRecapAt >= 24 * 3600 * 1000) { lastTreasuryRecapAt = now; kv.set("treasuryRecapAt", now); sendTreasuryRecap().catch((e) => console.warn("[treasury-recap] failed:", e.message)); }
+      if (now - lastTreasuryRecapAt >= 24 * 3600 * 1000) { lastTreasuryRecapAt = now; kv.set("treasuryRecapAt", now); sendJupUsdcRecap({}).catch((e) => console.warn("[jup-recap] failed:", e.message)); }
     }
     setInterval(treasuryRecapTick, 5 * 60 * 1000);
     setTimeout(treasuryRecapTick, 30000); // first recap shortly after boot captures the baseline; then daily
