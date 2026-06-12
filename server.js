@@ -2923,6 +2923,7 @@ async function jupUsdcRebalanceInPlace({ dryRun = false } = {}) {
   if (!pos) pos = (m.positions || []).find((p) => p.pair === "JUP/USDC" && p.positionPubkey);
   if (!pos) return { action: "none", reason: "no JUP/USDC position found" };
   const cfg = jupUsdcCfg();
+  if (arguments[0] && arguments[0].debug) return await meteora.rebalanceQuote({ positionPubkey: pos.positionPubkey, strategy: cfg.distribution, debug: true });
   const q = await meteora.rebalanceQuote({ positionPubkey: pos.positionPubkey, strategy: cfg.distribution });
   // Autofill token is what we're SHORT; we acquire it by swapping the other token.
   // X=JUP, Y=USDC for this pool. Buffer the swap 1% so rounding doesn't underfill.
@@ -2950,7 +2951,7 @@ async function jupUsdcRebalanceInPlace({ dryRun = false } = {}) {
 app.get("/api/meteora/rebalance-inplace", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
-  try { return res.status(200).json(await jupUsdcRebalanceInPlace({ dryRun: req.query.run !== "1" })); }
+  try { return res.status(200).json(await jupUsdcRebalanceInPlace({ dryRun: req.query.run !== "1", debug: req.query.debug === "1" })); }
   catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
 
