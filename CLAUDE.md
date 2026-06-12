@@ -13,31 +13,21 @@ matters, and claims should match the code.
 
 CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 
-> ⏰ **ACTIVE WATCH (updated 2026-06-11 ~20:00 UTC): organic-score recovery, take 2.** The
-> 12h-recovery thesis FAILED in its first form: score stayed 0 for 19h+ after Blitz stop.
-> Root cause found: pulling the CLKN engine removed ~100% of both Orca pools' depth →
-> `orcaRoutable:false` (Jupiter couldn't route CLKN through Orca at all) → organic flow had
-> nothing to trade against; 24h vol bled ~$4.6k→$3.9k. The earlier recoveries happened with
-> depth still deployed. So the real test = **deep + passive + zero operator churn**, now
-> running: engine redeployed 2026-06-11 via staged seed (small ±15% positions absorb the
-> ~8% stale-tick arb correction; restore settled config ±10%/±15% @ deployFrac 0.95 once
-> dislocation converges <1% — check `/api/whirlpool/vault/dislocation`). Buyback/ask-wall/
-> Blitz all OFF. **No operator CLKN trades until the score recovers** (owner's manual
-> sell→rebuy idea was rejected for exactly this reason — wash-shaped self-volume).
-> Watch `GET /api/clkn-organic-log?key=…`: expect `orcaRoutable:true` within hours of full
-> deploy, score recovery over ~1-3 days. If the score is still 0 after ~72h of confirmed
-> routability + recovering volume, the bottleneck is organic TRADER COUNT (a marketing
-> problem, not LP posture) — then make the public "0→32+" copy honest. Remove when resolved.
->
-> 🧊 **CHANGE FREEZE (owner's explicit ask, 2026-06-11).** This is a CLEAN multi-day test —
-> ONE variable (deep + passive + zero operator churn). If the owner asks mid-test to tweak
-> the engine (new range/width, a Blitz, buybacks, ask-wall, manual sells, "just one
-> adjustment"), DON'T silently do it. First remind them: *we agreed to run the full test
-> without adjustments for a few days — changing a variable now resets the clock and we
-> learn nothing.* The owner has ADD and gets ahead of themselves with ideas (their words)
-> and WANTS this pushback. Then let them decide: if after the reminder they still want it,
-> it's their call — do it. Pure read-only checks (status/dislocation/organic-log) are
-> always fine. This freeze lifts when the watch above resolves.
+> ⏰ **ACTIVE WATCH (re-aimed 2026-06-12): VOLUME + MARKET DIVERSITY for the CoinGecko
+> application** (req `CL1106260002`, decision expected ~5 business days from 06-11; prior
+> rejection was "need real volume + time in market"). Owner's explicit call 2026-06-12:
+> the organic-score recovery test is DEPRIORITIZED (the 2026-06-11 change freeze is
+> LIFTED) — optimize 24h volume and number/diversity of live markets instead. Context
+> kept for later: the score sat at 0 because pulling the engine killed Orca routability
+> (`orcaRoutable:false`); engine was redeployed 06-11 via staged seed, both Orca pools
+> live at settled config, dislocation pinned at the ~2% Meteora-fee arb floor. If/when
+> the score matters again, the untested thesis is deep+passive+zero-operator-churn over
+> ~72h. VOLUME levers ranked (real third-party volume only — CoinGecko actively detects
+> wash/self volume, so NO operator wash, NO self-buyback pumping for numbers): tighter
+> engine ranges → more tax-floor arb flow; more markets (cbBTC sleeve is code-ready,
+> `btcEnabled` — a JUP sleeve would be NEW code); a CLKN buy comp (real wallets, real
+> volume — infra ready). Public "0→32+" organic copy still unverified — keep it off new
+> material until retested. Remove this note when CoinGecko decides.
 
 ## Working agreement
 - **Always commit AND push to the active working branch** — hackathon pace, standing
