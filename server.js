@@ -2747,10 +2747,22 @@ function meteoraDM(text) {
   } catch (_) {}
 }
 // ── JUP/USDC earner recap → PRIVATE treasury DM (operator only, NOT community) ──
-// The one recap we want right now: this pool's liquidity + fees, with a since-last
-// delta. Snapshot in kv jupUsdcRecapSnap. lifetimeFeeUsd = pending + claimed on the
-// live position; a recenter/close claims fees (resets the position's claimed count),
-// so the fee delta is honest BETWEEN recenters and the value delta carries the rest.
+// Tracks fees made vs rebalancing spent via a persistent ledger (kv jupUsdcLedger):
+//   lifetimeFeesUsd  = bankedClaimed (from past positions) + live claimed + live claimable
+//   recenters / rebalanceCostUsd = position-changing recenters (close→reopen, detected
+//     here by the position pubkey changing) + swaps logged by the in-place tool.
+// Honest limit: a MANUAL in-place rebalance in the Meteora UI keeps the same pubkey and
+// its swap cost isn't visible to us — so the cost figure is a floor + estimate, labelled.
+function jupUsdcLedger() { return kv.get("jupUsdcLedger", { bankedClaimedUsd: 0, lastPubkey: null, lastClaimedUsd: 0, recenters: 0, rebalanceCostUsd: 0, baselineTs: Date.now() }); }
+const EST_RECENTER_COST_USD = 1.0;   // close→reopen recenter: cheap Jupiter swap + tx (estimate)
+// Called by the in-place rebalance tool with the ACTUAL swapped USD (its swap keeps the
+// same pubkey, so the recap's pubkey-change detector won't see it — log it here instead).
+function jupUsdcLogRebalance(swapUsd) {
+  const L = jupUsdcLedger();
+  L.recenters = (L.recenters || 0) + 1;
+  L.rebalanceCostUsd = (L.rebalanceCostUsd || 0) + Math.max(0.02, (Number(swapUsd) || 0) * 0.0015 + 0.02); // ~15bps swap + tx
+  kv.set("jupUsdcLedger", L);
+}
 async function sendJupUsdcRecap({ send = true, reset = false } = {}) {
   if (!meteora.isEnabled()) return { skipped: "meteora not enabled" };
   let jupUsd = 0; try { jupUsd = (await getJupUsd()) || 0; } catch (_) {}
@@ -2760,31 +2772,45 @@ async function sendJupUsdcRecap({ send = true, reset = false } = {}) {
   const valueUsd = pos.valueUsd || 0;
   const claimableUsd = pos.pendingFeeUsd || 0;
   const claimedUsd = pos.claimedFeeUsd || 0;
-  const lifetimeFeeUsd = claimableUsd + claimedUsd;
-  const snap = { ts: Date.now(), valueUsd, lifetimeFeeUsd, claimedUsd };
+  const pubkey = pos.positionPubkey || null;
+  // Ledger update (skipped on a read-only preview so previews never mutate accounting).
+  let L = reset ? { bankedClaimedUsd: 0, lastPubkey: pubkey, lastClaimedUsd: claimedUsd, recenters: 0, rebalanceCostUsd: 0, baselineTs: Date.now() } : jupUsdcLedger();
+  if (!reset && L.lastPubkey && pubkey && pubkey !== L.lastPubkey) {
+    // Position changed → a close→reopen recenter happened: bank the old position's final
+    // claimed fees (they vanish from the live read) and count/estimate the recenter cost.
+    L.bankedClaimedUsd = (L.bankedClaimedUsd || 0) + (L.lastClaimedUsd || 0);
+    L.recenters = (L.recenters || 0) + 1;
+    L.rebalanceCostUsd = (L.rebalanceCostUsd || 0) + EST_RECENTER_COST_USD;
+  }
+  if (!reset) { L.lastPubkey = pubkey; L.lastClaimedUsd = claimedUsd; }
+  const lifetimeFeesUsd = (L.bankedClaimedUsd || 0) + claimedUsd + claimableUsd;
+  const netUsd = lifetimeFeesUsd - (L.rebalanceCostUsd || 0);
+  const snap = { ts: Date.now(), valueUsd, lifetimeFeesUsd };
   const prev = reset ? null : kv.get("jupUsdcRecapSnap", null);
-  if (send) kv.set("jupUsdcRecapSnap", snap);
+  if (send) { kv.set("jupUsdcLedger", L); kv.set("jupUsdcRecapSnap", snap); }
   const fmtUsd = (n) => "$" + (Number(n) || 0).toFixed(2);
   const signed = (n) => (n >= 0 ? "+" : "") + fmtUsd(n);
   let deltaLine = "";
   if (prev) {
     const hrs = Math.max(0.1, (snap.ts - prev.ts) / 3600000);
-    const feeDelta = lifetimeFeeUsd - (prev.lifetimeFeeUsd || 0);
-    const valDelta = valueUsd - (prev.valueUsd || 0);
-    // feeDelta < 0 means a claim/recenter happened in the window (claimed reset) — say so.
-    deltaLine = feeDelta >= 0
-      ? `\n📈 <b>${signed(feeDelta)}</b> fees in ${hrs.toFixed(0)}h (~${fmtUsd(feeDelta / hrs * 24)}/day) · value ${signed(valDelta)}`
-      : `\n📈 value ${signed(valDelta)} since last · <i>(fees were claimed/recentered in window)</i>`;
+    const feeDelta = lifetimeFeesUsd - (prev.lifetimeFeesUsd != null ? prev.lifetimeFeesUsd : (prev.lifetimeFeeUsd || 0));
+    deltaLine = `\n📈 <b>${signed(feeDelta)}</b> fees in ${hrs.toFixed(0)}h (~${fmtUsd(feeDelta / hrs * 24)}/day)`;
   }
   const rangeStr = (pos.lowerPrice && pos.upperPrice) ? ` (${pos.lowerPrice.toPrecision(5)}–${pos.upperPrice.toPrecision(5)})` : "";
+  const costLine = (L.recenters || 0) > 0
+    ? `\n🔄 Rebalances: <b>${L.recenters}</b> · est. cost ${fmtUsd(L.rebalanceCostUsd)} <i>(close→reopen seen; manual UI in-place swaps not counted)</i>`
+    : `\n🔄 Rebalances: 0`;
   const text =
     `💰 <b>JUP/USDC earner</b> — private recap\n` +
     `💧 Liquidity: <b>${fmtUsd(valueUsd)}</b> · ${pos.inRange ? "✅ in range" : "⚠️ OUT of range"}${rangeStr}\n` +
-    `🪙 Claimable: <b>${fmtUsd(claimableUsd)}</b> · claimed lifetime: ${fmtUsd(claimedUsd)}` +
+    `🪙 Claimable now: <b>${fmtUsd(claimableUsd)}</b>\n` +
+    `💵 Fees lifetime: <b>${fmtUsd(lifetimeFeesUsd)}</b>` +
     deltaLine +
+    costLine +
+    `\n🧮 Net (fees − est. cost): <b>${signed(netUsd)}</b>` +
     `\n<i>operator-only · not posted to the community</i>`;
   if (send) meteoraDM(text);
-  return { sent: send, valueUsd, claimableUsd, claimedUsd, lifetimeFeeUsd, preview: text };
+  return { sent: send, valueUsd, claimableUsd, lifetimeFeesUsd, recenters: L.recenters || 0, rebalanceCostUsd: L.rebalanceCostUsd || 0, netUsd, preview: text };
 }
 
 async function meteoraRecenter({ dryRun = false, force = false } = {}) {
@@ -3015,6 +3041,7 @@ async function jupUsdcRebalanceInPlace({ dryRun = false } = {}) {
       topUpX: xHeavy ? 0 : gotJup, topUpY: xHeavy ? gotUsdc : 0,
     });
     steps.push({ rebalanceTopUp: (r2.sigs || []).length });
+    try { jupUsdcLogRebalance(Math.abs(excessUsd)); } catch (_) {}   // feed the recap's fees-vs-cost ledger
     meteoraDM(`🔧 <b>JUP/USDC rebalanced in place</b> · ~$${Math.abs(excessUsd).toFixed(0)} ${swapPlan.from}→${swapPlan.to} re-evened, same position.`);
     return { ...base, action: "rebalanced-inplace", excessUsd: Number(excessUsd.toFixed(2)), steps };
   } catch (e) {
@@ -7858,14 +7885,14 @@ app.listen(PORT, () => {
     // the JUP/USDC earner; the single daily JUP/USDC recap below is the only one we want.
     // (sendTreasuryReport retained for when a cbBTC/SOL backbone returns.)
     void treasuryReportTick;
-    // DAILY recap → PRIVATE DM: the JUP/USDC earner only (owner's call). Once/24h.
+    // 6-HOURLY recap → PRIVATE DM: the JUP/USDC earner only (owner's call, 2026-06-12).
     let lastTreasuryRecapAt = kv.get("treasuryRecapAt", 0);
     function treasuryRecapTick() {
       const now = Date.now();
-      if (now - lastTreasuryRecapAt >= 24 * 3600 * 1000) { lastTreasuryRecapAt = now; kv.set("treasuryRecapAt", now); sendJupUsdcRecap({}).catch((e) => console.warn("[jup-recap] failed:", e.message)); }
+      if (now - lastTreasuryRecapAt >= 6 * 3600 * 1000) { lastTreasuryRecapAt = now; kv.set("treasuryRecapAt", now); sendJupUsdcRecap({}).catch((e) => console.warn("[jup-recap] failed:", e.message)); }
     }
     setInterval(treasuryRecapTick, 5 * 60 * 1000);
-    setTimeout(treasuryRecapTick, 30000); // first recap shortly after boot captures the baseline; then daily
+    setTimeout(treasuryRecapTick, 30000); // first recap shortly after boot captures the baseline; then every 6h
     // Meteora OOR monitor — DM when a Meteora position drifts OUT of range (needs a re-center).
     // Edge-triggered + debounced (one alert per OOR episode), so it nudges without spamming.
     let _metOorState = kv.get("meteoraOorState", {});
