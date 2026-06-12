@@ -13,6 +13,13 @@ matters, and claims should match the code.
 
 CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 
+> 🛑 **ENGINE STATUS (2026-06-12, owner's order): the CLKN liquidity engine is OFF —
+> paused, ALL positions closed (base/SOL/JUP), funds idle in the operator wallet
+> (~17 SOL / ~$1.7k USDC / ~10M CLKN brand bag / ~663 JUP). Do NOT redeploy without
+> the owner asking.** The owner pulled it after a Telegram message flood (root cause —
+> unpaired-quote roll loop — is FIXED on main via the pairing gate, commit 4515192).
+> The CLKN/JUP Orca pool exists on-chain (5AvtoSvf…, 0.02%) but is empty.
+>
 > ⏰ **ACTIVE WATCH (updated 2026-06-12): CoinGecko REJECTED the reapplication**
 > (req `CL1106260002`; owner reported the rejection 2026-06-12 — stated reason not yet
 > in the session, ask for the email text). Strategy: build a visibly better tape and
