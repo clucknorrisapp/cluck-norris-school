@@ -2824,11 +2824,92 @@ async function meteoraRecenter({ dryRun = false, force = false } = {}) {
   return { ...base, action: "recentered", steps };
 }
 
+// ── JUP/USDC Meteora earner — autonomous re-center (owner-authorized 2026-06-12:
+// "you can recenter JUP/USDC as needed"). Same battle-tested skeleton as
+// meteoraRecenter (pin → edge check → stamp anti-thrash UP FRONT → close → 50/50
+// the freed amounts → reopen → re-pin, with reopen-failure recovery), but generic
+// X/Y in the pool's own token order (X=JUP, Y=USDC) via the module's xUi/yUi open.
+const JUPUSDC_POOL = "HfgjZDmexhFVD28Vkb1NbQwWeXP3uDcVTLPjSGHmRHhL";
+function jupUsdcCfg() { return { enabled: true, halfWidthPct: 5, distribution: "curve", edgeFrac: 0.12, minRecenterSec: 3600, ...kv.get("jupUsdcCfg", {}) }; }
+async function jupUsdcRecenter({ dryRun = false, force = false } = {}) {
+  if (!meteora.isEnabled()) return { action: "none", reason: "operator not set" };
+  const cfg = jupUsdcCfg();
+  let jupUsd = 0; try { jupUsd = (await getJupUsd()) || 0; } catch (_) {}
+  // Recover a stranded close-without-reopen FIRST (funds sitting in the wallet).
+  const pending = kv.get("jupUsdcReopenPending", null);
+  if (pending && pending.x != null) {
+    if (dryRun) return { action: "would-retry-reopen", pending };
+    const f = ((await whirlpoolMM.vault.status("treasury")) || {}).float || {};
+    const o = await meteora.openPosition({ poolAddress: JUPUSDC_POOL, xUi: Math.min(pending.x, f.jup || 0), yUi: Math.min(pending.y, f.usdc || 0), halfWidthPct: pending.halfWidthPct || cfg.halfWidthPct, distribution: pending.distribution || cfg.distribution });
+    if (o.positions && o.positions[0]) kv.set("jupUsdcManagedPubkey", o.positions[0]);
+    kv.set("jupUsdcReopenPending", null);
+    meteoraDM(`✅ <b>JUP/USDC re-center recovered</b> — reopened (±${pending.halfWidthPct || cfg.halfWidthPct}%).`);
+    return { action: "reopened-recovered", positions: o.positions };
+  }
+  const m = await meteora.status({ jupUsd });
+  const pinned = kv.get("jupUsdcManagedPubkey", null);
+  let pos = pinned ? (m.positions || []).find((p) => p.positionPubkey === pinned) : null;
+  if (!pos) {
+    pos = (m.positions || []).find((p) => p.pair === "JUP/USDC" && p.positionPubkey);
+    if (!pos) return { action: "none", reason: "no JUP/USDC position found" };
+    if (!dryRun) kv.set("jupUsdcManagedPubkey", pos.positionPubkey);  // pin going forward
+  }
+  const span = pos.upperBinId - pos.lowerBinId;
+  const frac = span > 0 ? (pos.activeBinId - pos.lowerBinId) / span : 0.5;
+  const needs = force || !pos.inRange || frac < cfg.edgeFrac || frac > 1 - cfg.edgeFrac;
+  const base = { pool: "jup-usdc", managed: pos.position, frac: Number(frac.toFixed(3)), inRange: pos.inRange, valueUsd: pos.valueUsd };
+  if (!needs) return { ...base, action: "hold", reason: `centered ${(frac * 100).toFixed(0)}%` };
+  const sinceLast = (Date.now() - kv.get("jupUsdcLastRecenterTs", 0)) / 1000;
+  if (!force && sinceLast < cfg.minRecenterSec) return { ...base, action: "deferred", reason: `anti-thrash (${Math.round(sinceLast)}s < ${cfg.minRecenterSec}s)` };
+  if (dryRun) return { ...base, action: "would-recenter", reason: pos.inRange ? `near edge ${(frac * 100).toFixed(0)}%` : "out of range" };
+  kv.set("jupUsdcLastRecenterTs", Date.now());   // stamp up front — a crash can't allow instant re-entry
+  const steps = [];
+  const freedX = (pos.amountX || 0) + (pos.pendingFeeX || 0); // JUP
+  const freedY = (pos.amountY || 0) + (pos.pendingFeeY || 0); // USDC
+  let closeSucceeded = false, depX = freedX, depY = freedY;
+  try {
+    const r = await meteora.removeLiquidity({ positionPubkey: pos.positionPubkey, pct: 1, close: true });
+    closeSucceeded = true;
+    kv.set("jupUsdcManagedPubkey", null);
+    steps.push({ closed: pos.position, sigs: (r.sigs || []).length });
+    await new Promise((res) => setTimeout(res, 2500));
+    // Rebalance ONLY the freed amounts to ~50/50 (never the whole wallet).
+    if (jupUsd > 0) {
+      const vX = freedX * jupUsd, vY = freedY, target = (vX + vY) / 2;
+      const diff = vX - target;
+      if (Math.abs(diff) > 1) {
+        if (diff > 0) { await whirlpoolMM.vault.manualSwap({ projectId: "treasury", fromSym: "JUP", toSym: "USDC", amountUi: diff / jupUsd, silent: true }); depX = target / jupUsd; depY = freedY + diff * 0.998; }
+        else { await whirlpoolMM.vault.manualSwap({ projectId: "treasury", fromSym: "USDC", toSym: "JUP", amountUi: -diff, silent: true }); depY = target; depX = freedX + (-diff / jupUsd) * 0.998; }
+        steps.push({ rebalancedUsd: Number(Math.abs(diff).toFixed(2)) });
+        await new Promise((res) => setTimeout(res, 2500));
+      }
+    }
+    const f = ((await whirlpoolMM.vault.status("treasury")) || {}).float || {};
+    const o = await meteora.openPosition({ poolAddress: JUPUSDC_POOL, xUi: Math.min(depX, f.jup || 0), yUi: Math.min(depY, f.usdc || 0), halfWidthPct: cfg.halfWidthPct, distribution: cfg.distribution });
+    steps.push({ opened: o.positions, sigs: (o.sigs || []).length });
+    if (o.positions && o.positions[0]) kv.set("jupUsdcManagedPubkey", o.positions[0]);
+    meteoraDM(`🔄 <b>JUP/USDC re-centered</b> ±${cfg.halfWidthPct}% ${cfg.distribution} · was ${pos.inRange ? `near edge ${(frac * 100).toFixed(0)}%` : "OUT of range"}`);
+  } catch (e) {
+    if (closeSucceeded) {
+      kv.set("jupUsdcReopenPending", { x: depX, y: depY, halfWidthPct: cfg.halfWidthPct, distribution: cfg.distribution, ts: Date.now() });
+      meteoraDM(`⚠️ <b>JUP/USDC re-center: reopen FAILED</b>\nClose landed; ~$${(depX * jupUsd + depY).toFixed(0)} freed in wallet. Auto-retry on next tick.\n<code>${(e.message || "").slice(0, 120)}</code>`);
+    } else {
+      meteoraDM(`⚠️ <b>JUP/USDC re-center: close failed</b> — position intact, will retry.\n<code>${(e.message || "").slice(0, 120)}</code>`);
+    }
+    return { ...base, action: "error", closeSucceeded, error: e.message, steps };
+  }
+  return { ...base, action: "recentered", steps };
+}
+
 // Meteora re-center (gated). DRY RUN unless &run=1. &force=1 ignores edge/anti-thrash checks.
+// &which=jup targets the JUP/USDC earner instead of the cbBTC/SOL chaser.
 app.get("/api/meteora/recenter", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
-  try { return res.status(200).json(await meteoraRecenter({ dryRun: req.query.run !== "1", force: req.query.force === "1" })); }
+  try {
+    const fn = req.query.which === "jup" ? jupUsdcRecenter : meteoraRecenter;
+    return res.status(200).json(await fn({ dryRun: req.query.run !== "1", force: req.query.force === "1" }));
+  }
   catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
 
@@ -7690,6 +7771,17 @@ app.listen(PORT, () => {
       } catch (e) { console.warn("[meteora-recenter] failed:", e.message); }
     }
     setInterval(meteoraRecenterTick, 5 * 60 * 1000);
+    // JUP/USDC earner auto-recenter — ON by default (owner-authorized 2026-06-12);
+    // disable via kv jupUsdcCfg {enabled:false}. Edge/anti-thrash live in jupUsdcRecenter.
+    async function jupUsdcRecenterTick() {
+      try {
+        if (!meteora.isEnabled() || !jupUsdcCfg().enabled) return;
+        const r = await jupUsdcRecenter({});
+        if (r && !["none", "hold", "deferred"].includes(r.action)) console.log("[jup-usdc-recenter]", r.action, "·", r.reason || "");
+      } catch (e) { console.warn("[jup-usdc-recenter] failed:", e.message); }
+    }
+    setInterval(jupUsdcRecenterTick, 5 * 60 * 1000);
+    setTimeout(jupUsdcRecenterTick, 75000);
     // CLKN Blitz auto-revert — reset-proof: checks the persisted expiry every minute and
     // once shortly after boot, so a redeploy mid-blitz still reverts on time.
     setInterval(clknBlitzCheck, 60 * 1000);
