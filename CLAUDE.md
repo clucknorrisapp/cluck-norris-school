@@ -163,7 +163,9 @@ Live money is managed across two systems. Facts here survive container resets/co
   their depth. **CLKN Blitz** = timed tight-range burst tool, reset-proof auto-revert
   (kv `clknBlitzUntil`/`clknBlitzRestore`).
 - **Hard conventions:** "auto-balance" = swap **SOL↔USDC only — NEVER sell CLKN** (the brand
-  bag is never sold). Gas floor `swapSolFloor 0.2` on treasury + clkn. `suggestRanges` min
+  bag is never sold). **And NEVER BUY CLKN with operator funds without asking the owner in
+  that moment either** (owner rule, set 2026-06-12 after unwanted inventory buys — the owner
+  holds plenty of CLKN; fix inventory imbalances with thresholds/holding quote idle, not buys). Gas floor `swapSolFloor 0.2` on treasury + clkn. `suggestRanges` min
   width is 0.05% (was 0.5% — that floor once silently clamped ±0.2% asks to ±0.5%).
   Meteora rent is ~fully refunded on close (bins pre-initialized) — re-centers cost ≈ tx fees.
 - **Gated endpoints** (all `?key=PREMIUM_ACCESS_KEY`, dry-run unless `&run=1`):
