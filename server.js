@@ -2870,17 +2870,6 @@ async function jupUsdcRecenter({ dryRun = false, force = false } = {}) {
   if (!force && sinceLast < cfg.minRecenterSec) return { ...base, action: "deferred", reason: `anti-thrash (${Math.round(sinceLast)}s < ${cfg.minRecenterSec}s)` };
   if (dryRun) return { ...base, action: "would-recenter", reason: pos.inRange ? `near edge ${(frac * 100).toFixed(0)}%` : "out of range" };
   kv.set("jupUsdcLastRecenterTs", Date.now());   // stamp up front — a crash can't allow instant re-entry
-  // NATIVE in-place rebalance first (the Meteora UI's Rebalance tool, SDK 1.9): same
-  // position pubkey, fees claimed in-op, no swap leg, 1-2 txs. The rebalance tx is
-  // atomic (withdraw+redeposit together), so on ANY failure falling back to the proven
-  // close→50/50→reopen path below is safe — close acts on whatever state exists.
-  try {
-    const r = await meteora.rebalanceInPlace({ positionPubkey: pos.positionPubkey, strategy: cfg.distribution });
-    meteoraDM(`🔄 <b>JUP/USDC re-centered in place</b> (native rebalance) · was ${pos.inRange ? `near edge ${(frac * 100).toFixed(0)}%` : "OUT of range"}`);
-    return { ...base, action: "recentered", method: "native-rebalance", steps: [{ rebalanced: pos.position, sigs: (r.sigs || []).length }] };
-  } catch (e) {
-    console.warn("[jup-usdc-recenter] native rebalance failed — falling back to close+reopen:", e.message);
-  }
   const steps = [];
   const freedX = (pos.amountX || 0) + (pos.pendingFeeX || 0); // JUP
   const freedY = (pos.amountY || 0) + (pos.pendingFeeY || 0); // USDC
