@@ -6554,6 +6554,7 @@ const WSOL_MINT = "So11111111111111111111111111111111111111112";
 const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const USDT_MINT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
 const CBBTC_MINT = "cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij"; // Coinbase wrapped BTC (8 decimals)
+const JUP_MINT = "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN"; // Jupiter governance token (6 decimals)
 // Quote tokens we recognize as "the buyer paid with this." Helius returns
 // tokenAmount already in UI units, so we just need symbol + emoji per quote.
 const QUOTE_TOKENS = {
@@ -6561,6 +6562,7 @@ const QUOTE_TOKENS = {
   [USDC_MINT]: { symbol: "USDC", emoji: "$", isStable: true },
   [USDT_MINT]: { symbol: "USDT", emoji: "$", isStable: true },
   [CBBTC_MINT]: { symbol: "cbBTC", emoji: "₿", isStable: false },
+  [JUP_MINT]: { symbol: "JUP", emoji: "🪐", isStable: false },
 };
 // Buys below this USD value don't fire a Telegram notification. Default $5 so
 // the channel shows the steady stream of smaller buys (good for hype during a
@@ -6640,7 +6642,30 @@ async function getBtcUsd() {
   return cachedBtcUsd;
 }
 
-// Convert a trade's quote leg (SOL/USDC/USDT/cbBTC) into USD. Works for buys and
+// Cached JUP/USD price for valuing JUP-quoted trades on the new CLKN/JUP pool.
+// Same pattern as getSolUsd: CoinGecko first, DexScreener JUP fallback, null until
+// a real price loads (so we skip rather than post a fabricated USD value).
+let cachedJupUsd = parseFloat(process.env.JUP_USD_FALLBACK) || null;
+let cachedJupUsdAt = 0;
+async function getJupUsd() {
+  const now = Date.now();
+  if (now - cachedJupUsdAt < 5 * 60 * 1000 && cachedJupUsdAt > 0) return cachedJupUsd;
+  try {
+    const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=jupiter-exchange-solana&vs_currencies=usd");
+    const data = await res.json();
+    const price = parseFloat(data?.["jupiter-exchange-solana"]?.usd);
+    if (Number.isFinite(price) && price > 0) { cachedJupUsd = price; cachedJupUsdAt = now; return cachedJupUsd; }
+  } catch (e) { console.warn("[TELEGRAM] CoinGecko JUP fetch failed:", e.message); }
+  try {
+    const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${JUP_MINT}`);
+    const data = await res.json();
+    const price = parseFloat(data?.pairs?.[0]?.priceUsd);
+    if (Number.isFinite(price) && price > 0) { cachedJupUsd = price; cachedJupUsdAt = now; }
+  } catch (e) { console.warn("[TELEGRAM] DexScreener JUP fallback failed:", e.message); }
+  return cachedJupUsd;
+}
+
+// Convert a trade's quote leg (SOL/USDC/USDT/cbBTC/JUP) into USD. Works for buys and
 // sells alike — both carry the same { quote: { mint, amount } } shape.
 function quoteUsdValue(trade) {
   const meta = QUOTE_TOKENS[trade.quote.mint];
@@ -6649,6 +6674,10 @@ function quoteUsdValue(trade) {
   if (trade.quote.mint === CBBTC_MINT) {
     if (!cachedBtcUsd) return null; // no real BTC price yet — skip rather than fabricate
     return trade.quote.amount * cachedBtcUsd; // cbBTC × cached USD price
+  }
+  if (trade.quote.mint === JUP_MINT) {
+    if (!cachedJupUsd) return null; // no real JUP price yet — skip rather than fabricate
+    return trade.quote.amount * cachedJupUsd; // JUP × cached USD price
   }
   if (!cachedSolUsd) return null; // no real SOL price yet — skip rather than fabricate a USD value
   return trade.quote.amount * cachedSolUsd; // SOL/wSOL × cached USD price
@@ -7355,9 +7384,10 @@ async function pollClknBuys() {
   const HELIUS_KEY = process.env.HELIUS_API_KEY;
   if (!HELIUS_KEY || !process.env.TELEGRAM_BOT_TOKEN) return;
   try {
-    // Refresh SOL + BTC prices once per cycle (each cached internally for 5 min)
+    // Refresh SOL + BTC + JUP prices once per cycle (each cached internally for 5 min)
     await getSolUsd();
     await getBtcUsd();
+    await getJupUsd();
     // Get current pool list (cached internally for 10 min)
     const pools = await getClknPools();
     if (!pools.length) return;
@@ -7725,6 +7755,7 @@ app.listen(PORT, () => {
     try { const r = await whirlpoolMM.vault.tick({ projectId: id }); if (r && !["none", "hold", "deferred"].includes(r.action)) console.log(tag, r.action, "·", r.reason || ""); } catch (e) { console.error(`${tag} tick error:`, e.message); }
     try { const s = await whirlpoolMM.vault.tickSol({ projectId: id }); if (s && !["none", "hold", "deferred"].includes(s.action)) console.log(`${tag}[token/SOL]`, s.action, "·", s.reason || ""); } catch (e) { console.error(`${tag} token/SOL error:`, e.message); }
     try { const b = await whirlpoolMM.vault.tickBtc({ projectId: id }); if (b && !["none", "hold", "deferred"].includes(b.action)) console.log(`${tag}[token/cbBTC]`, b.action, "·", b.reason || ""); } catch (e) { console.error(`${tag} token/cbBTC error:`, e.message); }
+    try { const j = await whirlpoolMM.vault.tickJup({ projectId: id }); if (j && !["none", "hold", "deferred"].includes(j.action)) console.log(`${tag}[token/JUP]`, j.action, "·", j.reason || ""); } catch (e) { console.error(`${tag} token/JUP error:`, e.message); }
     try { const tr = await whirlpoolMM.vault.tickTreasury({ projectId: id }); if (tr && !["none", "hold", "deferred"].includes(tr.action)) console.log(`${tag}[dual-sleeve]`, tr.action, "·", tr.reason || ""); } catch (e) { console.error(`${tag} dual-sleeve error:`, e.message); }
     try { const bb = await whirlpoolMM.vault.buyback({ projectId: id }); if (bb && !["none", "disabled", "deferred", "capped"].includes(bb.action)) console.log(`${tag}[buyback]`, bb.action, "·", bb.reason || ""); } catch (e) { console.error(`${tag} buyback error:`, e.message); }
   };

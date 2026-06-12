@@ -251,6 +251,14 @@ router.get("/vault/btc-tick", async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message || "btc tick failed" }); }
 });
 
+// GET /api/whirlpool/vault/jup-tick?key=…[&run=1] — run one CLKN/JUP cycle.
+// DRY RUN unless run=1.
+router.get("/vault/jup-tick", async (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  try { res.json(await vault.tickJup({ dryRun: req.query.run !== "1", projectId: proj(req) })); }
+  catch (e) { res.status(500).json({ error: e.message || "jup tick failed" }); }
+});
+
 // GET /api/whirlpool/vault/treasury-tick?key=…[&run=1] — run one dual-sleeve cycle
 // (wide + tight, cbBTC/SOL). DRY RUN unless run=1. Needs dualSleeveEnabled on the project.
 router.get("/vault/treasury-tick", async (req, res) => {
