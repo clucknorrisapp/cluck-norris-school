@@ -13,12 +13,20 @@ matters, and claims should match the code.
 
 CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 
-> 🛑 **ENGINE STATUS (2026-06-12, owner's order): the CLKN liquidity engine is OFF —
-> paused, ALL positions closed (base/SOL/JUP), funds idle in the operator wallet
-> (~17 SOL / ~$1.7k USDC / ~10M CLKN brand bag / ~663 JUP). Do NOT redeploy without
-> the owner asking.** The owner pulled it after a Telegram message flood (root cause —
-> unpaired-quote roll loop — is FIXED on main via the pairing gate, commit 4515192).
-> The CLKN/JUP Orca pool exists on-chain (5AvtoSvf…, 0.02%) but is empty.
+> 🛑 **ENGINE STATUS (2026-06-12, owner's call): NO CLKN pools at all — full-earner
+> strategy.** The clkn Orca vault is PAUSED with zero positions; CLKN trades only on the
+> community Meteora pool (64WXkH…, 2% fee). The operator wallet holds ~10.6M CLKN (brand
+> bag — NEVER sold) + ~1.1 SOL gas + ~$30 USDC. The 1%-tier CLKN/USDC Orca pool
+> (EnTZxY…) and the CLKN/JUP pool (5AvtoSvf…) exist on-chain but are EMPTY — harmless
+> shells. Do NOT redeploy CLKN liquidity or buy/sell CLKN without the owner asking.
+>
+> 💰 **THE EARNER (live): JUP/USDC Meteora DLMM** pool `HfgjZDmexhFVD28Vkb1NbQwWeXP3uDcVTLPjSGHmRHhL`
+> (~6x/day turnover) under the TREASURY wallet — ~$2,780, ±5% curve, AUTO-RECENTERED by
+> the jupUsdcRecenter 5-min loop (edge 12%, 1h anti-thrash, crash-safe reopen-pending,
+> pinned via kv jupUsdcManagedPubkey; off-switch kv jupUsdcCfg {enabled:false}; manual:
+> /api/meteora/recenter?which=jup). Strategy: fees COMPOUND in-position; CLKN buybacks are
+> MANUAL-ONLY on the owner's explicit ask (no standing cadence). First hours: ~$7.3 fees
+> on $1.86k. Judge on fees/day + LP-vs-HODL after ~a week.
 >
 > ⏰ **ACTIVE WATCH (updated 2026-06-12): CoinGecko REJECTED the reapplication**
 > (req `CL1106260002`; owner reported the rejection 2026-06-12 — stated reason not yet
