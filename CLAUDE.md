@@ -13,9 +13,15 @@ matters, and claims should match the code.
 
 CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 
-> ⏰ **ACTIVE WATCH (re-aimed 2026-06-12): VOLUME + MARKET DIVERSITY for the CoinGecko
-> application** (req `CL1106260002`, decision expected ~5 business days from 06-11; prior
-> rejection was "need real volume + time in market"). Owner's explicit call 2026-06-12:
+> ⏰ **ACTIVE WATCH (updated 2026-06-12): CoinGecko REJECTED the reapplication**
+> (req `CL1106260002`; owner reported the rejection 2026-06-12 — stated reason not yet
+> in the session, ask for the email text). Strategy: build a visibly better tape and
+> REAPPLY in ~2-4 weeks. Levers: volume mode is LIVE (±5%/±8% engine widths since
+> 06-12); JUP sleeve code SHIPPED (jupEnabled, default off) — plan is ADD CLKN/JUP as a
+> 4th market, do NOT close CLKN/SOL for it (SOL is the routing artery; JUP vol is 1.75x
+> SOL daily but an extra arb hop widens the no-arb band — replacing loses routed flow);
+> a CLKN buy comp is the strongest real-volume lever (owner decides prizes). Original
+> owner's call 2026-06-12 still stands:
 > the organic-score recovery test is DEPRIORITIZED (the 2026-06-11 change freeze is
 > LIFTED) — optimize 24h volume and number/diversity of live markets instead. Context
 > kept for later: the score sat at 0 because pulling the engine killed Orca routability
