@@ -2908,6 +2908,52 @@ async function jupUsdcRecenter({ dryRun = false, force = false } = {}) {
   return { ...base, action: "recentered", steps };
 }
 
+// ── In-place rebalance for JUP/USDC (the Meteora UI "Rebalance" flow) — BACKGROUND
+// TOOL, NOT auto-wired. Manual lever only: the 5-min loop still uses close→swap→reopen.
+// Flow: quote the balanced rebalance → its AUTOFILL says how much of which token we're
+// short → Jupiter-swap the OTHER token to cover it → execute the native in-place
+// rebalance with that token topped up (same position pubkey, fees claimed in-op).
+// DRY RUN unless &run=1 — dry-run shows the full plan and moves nothing.
+async function jupUsdcRebalanceInPlace({ dryRun = false } = {}) {
+  if (!meteora.isEnabled()) return { action: "none", reason: "operator not set" };
+  let jupUsd = 0; try { jupUsd = (await getJupUsd()) || 0; } catch (_) {}
+  const m = await meteora.status({ jupUsd });
+  const pinned = kv.get("jupUsdcManagedPubkey", null);
+  let pos = pinned ? (m.positions || []).find((p) => p.positionPubkey === pinned) : null;
+  if (!pos) pos = (m.positions || []).find((p) => p.pair === "JUP/USDC" && p.positionPubkey);
+  if (!pos) return { action: "none", reason: "no JUP/USDC position found" };
+  const cfg = jupUsdcCfg();
+  const q = await meteora.rebalanceQuote({ positionPubkey: pos.positionPubkey, strategy: cfg.distribution });
+  // Autofill token is what we're SHORT; we acquire it by swapping the other token.
+  // X=JUP, Y=USDC for this pool. Buffer the swap 1% so rounding doesn't underfill.
+  const needSym = q.autofillToken, amount = q.autofillAmount || 0;
+  const plan = needSym === "USDC"
+    ? { from: "JUP", to: "USDC", outAmount: amount, inAmount: jupUsd > 0 ? (amount / jupUsd) * 1.01 : null }
+    : { from: "USDC", to: "JUP", outAmount: amount, inAmount: jupUsd > 0 ? amount * jupUsd * 1.01 : null };
+  const base = { pool: "jup-usdc", position: q.position, quote: q, plannedSwap: plan, jupUsd };
+  if (amount <= 0) return { ...base, action: "no-swap-needed", note: "already balanced — would rebalance directly" };
+  if (dryRun) return { ...base, action: "would-rebalance-inplace" };
+  if (!(plan.inAmount > 0)) return { ...base, action: "error", reason: "no JUP price to size the swap" };
+  // Execute: swap to cover the autofill, then rebalance topping up the acquired token.
+  const before = ((await whirlpoolMM.vault.status("treasury")) || {}).float || {};
+  await whirlpoolMM.vault.manualSwap({ projectId: "treasury", fromSym: plan.from, toSym: plan.to, amountUi: plan.inAmount, silent: true });
+  const after = ((await whirlpoolMM.vault.status("treasury")) || {}).float || {};
+  const gotJup = Math.max(0, (after.jup || 0) - (before.jup || 0));
+  const gotUsdc = Math.max(0, (after.usdc || 0) - (before.usdc || 0));
+  const topUpX = plan.to === "JUP" ? gotJup : 0;   // X=JUP
+  const topUpY = plan.to === "USDC" ? gotUsdc : 0;  // Y=USDC
+  const r = await meteora.rebalanceInPlace({ positionPubkey: pos.positionPubkey, strategy: cfg.distribution, topUpX, topUpY });
+  meteoraDM(`🔧 <b>JUP/USDC rebalanced in place</b> · swapped ${plan.inAmount.toFixed(2)} ${plan.from}→${plan.to}, topped up & redeposited (same position).`);
+  return { ...base, action: "rebalanced-inplace", swapped: { from: plan.from, to: plan.to, in: plan.inAmount, gotJup, gotUsdc }, sigs: r.sigs };
+}
+// In-place rebalance endpoint (gated, BACKGROUND tool). DRY RUN unless &run=1.
+app.get("/api/meteora/rebalance-inplace", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  try { return res.status(200).json(await jupUsdcRebalanceInPlace({ dryRun: req.query.run !== "1" })); }
+  catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
+});
+
 // Meteora re-center (gated). DRY RUN unless &run=1. &force=1 ignores edge/anti-thrash checks.
 // &which=jup targets the JUP/USDC earner instead of the cbBTC/SOL chaser.
 app.get("/api/meteora/recenter", async (req, res) => {
