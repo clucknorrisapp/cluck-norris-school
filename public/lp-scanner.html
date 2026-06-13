@@ -108,23 +108,24 @@
 
   <div class="card">
     <div class="intro">
-      Picking a pair to provide liquidity for? <b>Scan every open pool across every Solana DEX</b> — Meteora, Orca, Raydium &amp; more — ranked by real <b>fee yield</b>, not just volume. Then ask Cluck about it.
+      Picking where to provide liquidity? <b>Scan every open pool across every Solana DEX</b> — Meteora, Orca, Raydium &amp; more — ranked by real <b>fee yield</b>, not just volume. Enter <b>one token</b> to see <b>every pair it trades in</b>, or <b>two</b> for a head-to-head. Then ask Cluck.
     </div>
   </div>
 
   <div class="card">
     <div class="pair-row">
-      <div class="f"><label class="fld">TOKEN A (type a name/symbol)</label><input type="text" id="tokenA" placeholder="JUP" autocomplete="off"/><div class="ac-drop" id="acA"></div></div>
+      <div class="f"><label class="fld">TOKEN A (name/symbol or contract)</label><input type="text" id="tokenA" placeholder="PEPE" autocomplete="off"/><div class="ac-drop" id="acA"></div></div>
       <div class="vs">/</div>
-      <div class="f"><label class="fld">TOKEN B (type a name/symbol)</label><input type="text" id="tokenB" placeholder="USDC" autocomplete="off"/><div class="ac-drop" id="acB"></div></div>
+      <div class="f"><label class="fld">TOKEN B <span style="color:#4B5563">(optional — blank = all pairs)</span></label><input type="text" id="tokenB" placeholder="leave blank" autocomplete="off"/><div class="ac-drop" id="acB"></div></div>
     </div>
     <label class="fld" style="margin-top:14px;">YOUR DEPOSIT (USD, optional — for $/day estimate)</label>
     <input type="number" id="amount" placeholder="5000" min="0"/>
     <div class="quick">
+      <button onclick="quickToken('BONK')">BONK · all pairs</button>
+      <button onclick="quickToken('JUP')">JUP · all pairs</button>
       <button onclick="quick('JUP','USDC')">JUP / USDC</button>
       <button onclick="quick('SOL','USDC')">SOL / USDC</button>
       <button onclick="quick('cbBTC','SOL')">cbBTC / SOL</button>
-      <button onclick="quick('JLP','SOL')">JLP / SOL</button>
     </div>
     <button class="scan-btn" id="scanBtn" onclick="runScan()">SCAN POOLS</button>
     <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px;">
@@ -147,7 +148,7 @@
       <div id="ilNote" class="note-line"></div>
       <div style="overflow-x:auto;margin-top:8px;">
         <table>
-          <thead><tr><th>DEX</th><th>Fee</th><th>TVL</th><th>24h Vol</th><th>Yield/d<br><span style="font-weight:400;color:#4B5563">7d-avg</span></th><th id="estHead">Est $/day</th></tr></thead>
+          <thead><tr><th id="col1Head">DEX</th><th>Fee</th><th>TVL</th><th>24h Vol</th><th>Yield/d<br><span style="font-weight:400;color:#4B5563">7d-avg</span></th><th id="estHead">Est $/day</th></tr></thead>
           <tbody id="poolRows"></tbody>
         </table>
       </div>
@@ -158,7 +159,7 @@
 
     <div class="card hidden" id="deepdive"></div>
 
-    <div class="card">
+    <div class="card" id="askCard">
       <div style="font-family:'Oswald',sans-serif;font-weight:700;letter-spacing:1px;color:var(--accent);font-size:14px;margin-bottom:4px;">🐔 ASK CLUCK ABOUT THESE POOLS</div>
       <div class="note-line" style="margin:0 0 10px;">Cluck reads the live numbers above and answers — grounded, not generic.</div>
       <textarea class="ask-q" id="askQ" placeholder="Which pool is best for my size, and what should I watch out for?"></textarea>
@@ -181,7 +182,9 @@
   var fmt = function(n){ n=Number(n)||0; return n>=1e6?("$"+(n/1e6).toFixed(2)+"M"):n>=1e3?("$"+(n/1e3).toFixed(1)+"K"):("$"+Math.round(n)); };
   var lastScan = null;
 
+  var lastMode='pair';
   function quick(a,b){ var iA=document.getElementById('tokenA'),iB=document.getElementById('tokenB'); iA.value=a;iA.dataset.mint='';iB.value=b;iB.dataset.mint=''; runScan(); }
+  function quickToken(a){ var iA=document.getElementById('tokenA'),iB=document.getElementById('tokenB'); iA.value=a;iA.dataset.mint='';iB.value='';iB.dataset.mint=''; runScan(); }
   function showErr(m){ var e=document.getElementById('err'); e.textContent=m; e.classList.add('show'); }
   function clearErr(){ document.getElementById('err').classList.remove('show'); }
 
@@ -189,21 +192,32 @@
     clearErr();
     var iA=document.getElementById('tokenA'), iB=document.getElementById('tokenB');
     var a=(iA.dataset.mint||iA.value.trim())||'JUP';  // exact mint if picked from search, else typed
-    var b=(iB.dataset.mint||iB.value.trim())||'USDC';
+    var b=(iB.dataset.mint||iB.value.trim());          // blank ⇒ single-token mode (all pairs)
     var amt=document.getElementById('amount').value.trim();
     var btn=document.getElementById('scanBtn');
     btn.disabled=true; btn.innerHTML='<span class="spin"></span> SCANNING...';
     try{
-      var url='/api/lp-scan?a='+encodeURIComponent(a)+'&b='+encodeURIComponent(b)+(amt?('&amount='+encodeURIComponent(amt)):'');
-      var r=await fetch(url); var d=await r.json();
-      if(!d.success){ showErr(d.error||'Scan failed'); return; }
-      lastScan=d; renderScan(d);
+      if(!b){
+        // SINGLE-TOKEN MODE — every pair this token trades in, across all DEXs
+        var r=await fetch('/api/lp-token?token='+encodeURIComponent(a)+(amt?('&amount='+encodeURIComponent(amt)):''));
+        var d=await r.json();
+        if(!d.success){ showErr(d.error||'Scan failed'); return; }
+        lastMode='token'; lastScan=d; renderTokenScan(d);
+      } else {
+        var url='/api/lp-scan?a='+encodeURIComponent(a)+'&b='+encodeURIComponent(b)+(amt?('&amount='+encodeURIComponent(amt)):'');
+        var r2=await fetch(url); var d2=await r2.json();
+        if(!d2.success){ showErr(d2.error||'Scan failed'); return; }
+        lastMode='pair'; lastScan=d2; renderScan(d2);
+      }
     }catch(e){ showErr('Network error — try again.'); }
     finally{ btn.disabled=false; btn.textContent='SCAN POOLS'; }
   }
 
   function renderScan(d){
     document.getElementById('results').classList.remove('hidden');
+    document.getElementById('col1Head').textContent='DEX';
+    document.getElementById('askCard').classList.remove('hidden');     // pair mode: Ask Cluck on
+    document.getElementById('shareBtn').style.display='';
     document.getElementById('pairTitle').textContent=d.pair;
     var il=d.ilRisk||{level:'',note:''};
     var badge=document.getElementById('ilBadge');
@@ -230,6 +244,49 @@
         +'</tr>';
     });
     if(!rows) rows='<tr><td colspan="6" class="muted" style="text-align:center;padding:20px;">No pools found for this pair.</td></tr>';
+    document.getElementById('poolRows').innerHTML=rows;
+    document.getElementById('rankNote').textContent=d.note||'';
+    document.getElementById('answer').classList.remove('show');
+    document.getElementById('deepdive').classList.add('hidden');
+    Array.prototype.forEach.call(document.querySelectorAll('#poolRows tr.clk'), function(tr){
+      tr.addEventListener('click', function(){ openDeepDive(tr.getAttribute('data-pool'), tr.getAttribute('data-dex')); });
+    });
+  }
+
+  // SINGLE-TOKEN MODE — every pair this token trades in, across all DEXs. First column shows
+  // the pair (with a per-pair IL dot) + the DEX; Ask Cluck/Share are pair-mode only, so hidden.
+  function renderTokenScan(d){
+    document.getElementById('results').classList.remove('hidden');
+    document.getElementById('col1Head').textContent='PAIR · DEX';
+    document.getElementById('askCard').classList.add('hidden');        // token mode: pair-grounded AI off
+    document.getElementById('shareBtn').style.display='none';
+    document.getElementById('pairTitle').textContent='$'+esc(d.token);
+    var badge=document.getElementById('ilBadge');
+    badge.className='badge il-low';
+    badge.textContent=(d.activeCount||0)+' / '+(d.count||0)+' POOLS ACTIVE';
+    document.getElementById('ilNote').textContent='Every pool $'+esc(d.token)+' trades in. Tap any row for the range & earnings simulator. IL dot is per-pair (the counter asset varies).';
+    document.getElementById('estHead').textContent = d.amountUsd ? ('Est $/day ($'+Number(d.amountUsd).toLocaleString()+')') : 'Est $/day';
+
+    var ilColor={minimal:'#6EE7B7',low:'#93C5FD',moderate:'#FCD34D',high:'#FCA5A5'};
+    var rows='', bestSet=false;
+    (d.pools||[]).forEach(function(p){
+      var hasFee=p.feeTier!=null;
+      var isBest=hasFee && !bestSet; if(isBest) bestSet=true;
+      var yv = p.feeYield7dPctDay!=null ? p.feeYield7dPctDay : p.feeYieldPctDay;
+      var trendColor = p.volTrend==='spiking'?'#FCD34D':p.volTrend==='cooling'?'#9CA3AF':'#6EE7B7';
+      var trendCell = p.volTrend ? '<div style="font-size:9px;color:'+trendColor+';letter-spacing:0.5px;">'+esc(p.volTrend)+'</div>' : '';
+      var ilDot = p.ilRisk ? '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+(ilColor[p.ilRisk.level]||'#6B7280')+';margin-right:6px;" title="IL: '+esc(p.ilRisk.level)+'"></span>' : '';
+      var dead = (p.volume&&p.volume.h24>0)?'':' <span style="font-size:8px;color:#6B7280;">idle</span>';
+      rows+='<tr class="clk '+(isBest?'best':'')+'" data-pool="'+esc(p.address)+'" data-dex="'+esc(p.dex)+'">'
+        +'<td>'+ilDot+'<span class="dex">'+(isBest?'<span class="crown">★ </span>':'')+esc(p.pair||'?')+'</span>'+dead+'<div style="font-size:9px;color:#6B7280;text-transform:capitalize;">'+esc(p.dex)+'</div></td>'
+        +'<td>'+(hasFee?esc(p.feeTier)+'%':'<span class="muted">—</span>')+'</td>'
+        +'<td>'+fmt(p.tvlUsd)+'</td>'
+        +'<td>'+fmt(p.volume&&p.volume.h24)+'</td>'
+        +'<td>'+(yv!=null?('<span class="yield-v">'+yv+'%</span>'+trendCell):'<span class="muted">—</span>')+'</td>'
+        +'<td>'+(p.estDailyUsd!=null?('<span class="yield-v">$'+p.estDailyUsd+'</span>'):'<span class="muted">—</span>')+'</td>'
+        +'</tr>';
+    });
+    if(!rows) rows='<tr><td colspan="6" class="muted" style="text-align:center;padding:20px;">No pools found for this token.</td></tr>';
     document.getElementById('poolRows').innerHTML=rows;
     document.getElementById('rankNote').textContent=d.note||'';
     document.getElementById('answer').classList.remove('show');

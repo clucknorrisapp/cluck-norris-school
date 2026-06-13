@@ -2354,6 +2354,18 @@ app.get("/api/lp-token-search", async (req, res) => {
   catch (e) { return res.status(200).json({ success: false, error: e.message, tokens: [] }); }
 });
 
+// LP Scanner single-token mode — ?token=<symbol|mint>, optional &amount=<usd>. Returns EVERY
+// pair/pool this token trades in across all Solana DEXs with volume + real fee yield. Public.
+app.get("/api/lp-token", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  const T = req.query.token || req.query.t;
+  if (!T) return res.status(400).json({ success: false, error: "pass ?token=<symbol|mint>, optional &amount=<usd>" });
+  const amountUsd = Number(req.query.amount) || 0;
+  try { return res.status(200).json({ success: true, ...(await lpScanner.scanToken(String(T), { amountUsd })) }); }
+  catch (e) { return res.status(200).json({ success: false, error: e.message }); }
+});
+
 // LP Scanner pool deep-dive + range/earnings simulator — ?pool=<address>, optional
 // &amount=<usd>&width=<halfWidthPct>. Models the concentrated-liquidity tradeoff against
 // the pool's real 7d volatility. Public read. Informational only, NOT financial advice.
