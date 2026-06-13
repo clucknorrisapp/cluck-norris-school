@@ -27,27 +27,30 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 > ~1% in fees inside a day; PnL beating LP-vs-HODL so far. Strategy: fees COMPOUND
 > in-position; CLKN buybacks MANUAL-ONLY on the owner's explicit ask.
 >
-> 🚨 **REBALANCING = OWNER MANUAL-ONLY. DO NOT auto-rebalance or touch this position
-> without explicit, in-the-moment instruction (hard rule, set 2026-06-13 after I leaked
-> funds twice trying).** The owner rebalances himself in the Meteora UI (Rebalance tab →
-> Curve → Submit → approve) in ~10 sec, with ZERO issues. WHY MY CODE CAN'T MATCH IT (so
-> the next session doesn't burn money rediscovering this): the UI "Rebalance" button is
-> NOT one SDK call — the Meteora **front-end bundles a Jupiter swap** (sells the heavy
-> side down to ~50/50, e.g. "Swaps Required: 5.62K JUP → 948.91 USDC via Jupiter") **+**
-> the DLMM redeposit. The bare SDK `rebalancePosition` (what `meteora.rebalanceInPlace`
-> calls) does the recenter+redeposit but **NOT the swap**, so it redeposits the imbalanced
-> funds and leaves the unfittable side in the wallet ($181–$478 leaked in tests). Hand-
-> rolling the swap (keep-out, autofill, plain) ALL left residue; `getAutoFillAmountBy
-> RebalancedPosition` returns a DIFFERENT quantity (USDC to ADD to match all the JUP, not
-> the 50/50 swap) and misled me. The auto-recenter loop (`jupUsdcRecenter`,
-> `/api/meteora/recenter?which=jup`) and the in-place tool (`/api/meteora/rebalance-inplace`)
-> EXIST but are **OFF / leak — do not enable.** `jupUsdcCfg {enabled:false}` is pinned off.
-> **What the owner DOES want from me: a server-side monitor that DMs (private treasury
-> chat) when the position is near the edge of range or out of range, so HE can do the UI
-> rebalance** — `meteoraOorTick` (server.js ~7877, 5-min, DMs on OOR transition) is the
-> base; it needs a NEAR-EDGE trigger added (alert at e.g. >88% across, not just fully OOR)
-> for the JUP/USDC position. That monitor was requested but NOT yet built when this session
-> ended — BUILD IT (read-only + DM, safe), don't rebuild the rebalancer.
+> ✅ **AUTONOMOUS REBALANCING = ON (owner "Chuck" authorized 2026-06-13, reversing the
+> earlier manual-only rule). It is the `jupUsdcRecenter` close→swap→reopen loop ("Option
+> B"), VERIFIED LIVE** (recentered 58%→50% across, rebalanced to 50/50, **$0 wallet
+> residue**, value intact). DON'T rip it out or re-pin it off without the owner's say-so.
+> WHAT FINALLY WORKED, and WHY earlier attempts failed (so the next session doesn't undo it):
+> the UI "Rebalance" = a Jupiter swap (heavy side → ~50/50, e.g. "Swaps Required: 6.93K
+> JUP → 1.17K USDC via Jupiter") **+** a DLMM redeposit, fired as a Jito bundle. The bare
+> SDK `rebalancePosition`/in-place tool does the recenter but **NOT the swap**, so it
+> strands the unfittable side ($145–$478 left in wallet) — that's the in-place path, still
+> NOT what we use. `getAutoFillAmountByRebalancedPosition` mislead​s (returns "USDC to ADD",
+> not the 50/50 swap) — do NOT trust it. The WORKING recipe (`jupUsdcRecenter`): close (rent
+> ~fully refunded) → swap the freed funds to **50/50 by value at the current price** (simple
+> value math, NOT the autofill — validated against the owner's UI numbers) → **reopen a
+> FRESH position via `openPosition`** (deposits everything → $0 residue, unlike the in-place
+> redeposit). New NFT each time (cosmetic; owner OK'd it). Safety rails: **0.2% Jupiter
+> price-impact ceiling** (`cfg.maxImpactPct`; a costlier route SKIPS the swap and reopens
+> centered-but-unbalanced, funds intact — never eats >a sliver, since ~1% would wipe a day's
+> fees), **±3% width** (`cfg.halfWidthPct`), **1h anti-thrash** (`minRecenterSec`), edge
+> trigger `edgeFrac 0.12`. Loop: `jupUsdcRecenterTick` (server.js, 5-min) gated on
+> `jupUsdcCfg().enabled`; turn off via `kv jupUsdcCfg {enabled:false}` or
+> `/api/meteora/config?which=jup&enabled=0`. DMs the treasury chat on each rebalance (owner
+> wants these notifications ON). Manual lever: `/api/meteora/recenter?which=jup&run=1&force=1`.
+> **Also built (complementary, read-only):** `meteoraOorTick` (server.js ~7877, 5-min) now
+> DMs on NEAR-EDGE (>88% across) and OUT-of-range transitions.
 >
 > 📊 **Private recap (DONE):** `sendJupUsdcRecap` DMs the TREASURY chat (operator-only, NOT
 > community) every 6h with liquidity + claimable/claimed fees + a fees-vs-cost delta;
