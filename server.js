@@ -3005,8 +3005,17 @@ async function jupUsdcRebalanceInPlace({ dryRun = false } = {}) {
   // residue is measured before→after (must be ~$0; anything more means the SDK redeposit
   // left funds and we DON'T automate yet).
   if (dryRun) {
+    // Show the EXACT "Swaps Required" + "Rebalanced Position" the Meteora UI shows,
+    // so we can validate against a UI screenshot before any live run.
+    const q = await meteora.rebalanceQuote({ positionPubkey: pos.positionPubkey, strategy: cfg.distribution });
+    const amt = q.autofillAmount || 0;
+    const amtUsd = q.isBidSide ? amt : amt * (jupUsd || 0);
+    const swap = amtUsd < 1 ? null : (q.isBidSide
+      ? { sell: Number((amt / (jupUsd || 1)).toFixed(2)), sellSym: "JUP", get: Number(amt.toFixed(2)), getSym: "USDC" }   // short USDC → sell JUP
+      : { sell: Number((amt * (jupUsd || 0)).toFixed(2)), sellSym: "USDC", get: Number(amt.toFixed(2)), getSym: "JUP" });  // short JUP → sell USDC
     return { ...base, action: "would-rebalance", strategy: cfg.distribution,
-      note: "one in-place rebalance · same NFT · no swap · curve recenter on current price" };
+      currentPosition: { jup: Number((pos.amountX || 0).toFixed(2)), usdc: Number((pos.amountY || 0).toFixed(2)) },
+      swapRequired: swap, balancedTarget: { jup: Number((q.targetX || 0).toFixed(2)), usdc: Number((q.targetY || 0).toFixed(2)) } };
   }
   const before = ((await whirlpoolMM.vault.status("treasury")) || {}).float || {};
   const r = await meteora.rebalanceInPlace({ positionPubkey: pos.positionPubkey, strategy: cfg.distribution });
