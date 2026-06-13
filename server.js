@@ -2911,7 +2911,11 @@ async function meteoraRecenter({ dryRun = false, force = false } = {}) {
 // the freed amounts → reopen → re-pin, with reopen-failure recovery), but generic
 // X/Y in the pool's own token order (X=JUP, Y=USDC) via the module's xUi/yUi open.
 const JUPUSDC_POOL = "HfgjZDmexhFVD28Vkb1NbQwWeXP3uDcVTLPjSGHmRHhL";
-function jupUsdcCfg() { return { enabled: true, halfWidthPct: 5, distribution: "curve", edgeFrac: 0.12, minRecenterSec: 3600, ...kv.get("jupUsdcCfg", {}) }; }
+// enabled DEFAULTS OFF (owner hard rule 2026-06-13): the close→swap→reopen auto-recenter
+// leaks funds (the SDK can't reproduce Meteora's UI swap+recenter bundle) — the owner
+// rebalances by hand in the UI. A kv {enabled:true} can opt back in, but a kv reset must
+// never silently re-arm the leak, so the code default is false. We MONITOR, the owner taps.
+function jupUsdcCfg() { return { enabled: false, halfWidthPct: 5, distribution: "curve", edgeFrac: 0.12, minRecenterSec: 3600, ...kv.get("jupUsdcCfg", {}) }; }
 async function jupUsdcRecenter({ dryRun = false, force = false } = {}) {
   if (!meteora.isEnabled()) return { action: "none", reason: "operator not set" };
   const cfg = jupUsdcCfg();
@@ -7871,33 +7875,71 @@ app.listen(PORT, () => {
     }
     setInterval(treasuryRecapTick, 5 * 60 * 1000);
     setTimeout(treasuryRecapTick, 30000); // first recap shortly after boot captures the baseline; then every 6h
-    // Meteora OOR monitor — DM when a Meteora position drifts OUT of range (needs a re-center).
-    // Edge-triggered + debounced (one alert per OOR episode), so it nudges without spamming.
+    // Meteora range monitor — DM the treasury chat when a position drifts NEAR an edge
+    // (early nudge) or goes fully OUT of range, so the OWNER can do the 10-sec UI rebalance
+    // (Rebalance tab → Curve → Rebalance → approve). Read-only + DM: this never moves funds.
+    // Two edge-triggered, debounced state machines (one alert per episode, no spam):
+    //   _metEdgeState — "near edge": fires once when frac crosses past NEAR_EDGE_FRAC of either
+    //     end while still in range; re-arms only after price returns to the center band.
+    //   _metOorState  — "out of range": fires once on the OOR transition; clears on return.
+    const NEAR_EDGE_FRAC = 0.12;       // alert when <12% from either end (i.e. >88% across)
+    const EDGE_REARM_LO = 0.30, EDGE_REARM_HI = 0.70; // must re-center toward middle to re-arm
     let _metOorState = kv.get("meteoraOorState", {});
+    let _metEdgeState = kv.get("meteoraEdgeState", {});
+    let tg, proj; // set each tick; metDM closes over them
+    const meteoraPoolLink = (pair) => pair === "JUP/USDC" ? `https://app.meteora.ag/dlmm/${JUPUSDC_POOL}` : null;
+    const rebalanceSteps = (pair) => {
+      const link = meteoraPoolLink(pair);
+      return `Open Meteora → <b>Rebalance</b> tab → <b>Curve</b> → <b>Rebalance</b> → approve.${link ? `\n${link}` : ""}`;
+    };
+    async function metDM(text) {
+      await fetch(`https://api.telegram.org/bot${tg}/sendMessage`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: proj.telegramChatId, parse_mode: "HTML", disable_web_page_preview: true, text }),
+      });
+    }
     async function meteoraOorTick() {
-      const tg = process.env.TELEGRAM_BOT_TOKEN; const proj = whirlpoolMM.vault.getProject("treasury");
+      tg = process.env.TELEGRAM_BOT_TOKEN; proj = whirlpoolMM.vault.getProject("treasury");
       if (!tg || !proj || !proj.telegramChatId) return;
       try {
         if (!meteora.isEnabled()) return;
-        let solUsd = 0, btcUsd = 0;
+        let solUsd = 0, btcUsd = 0, jupUsd = 0;
         try { const st = await whirlpoolMM.vault.status("treasury"); const px = (st.earnings || {}).prices || {}; solUsd = px.solUsd || 0; btcUsd = px.clknUsd || 0; } catch (_) {}
-        const m = await meteora.status({ solUsd, btcUsd });
+        try { jupUsd = (await getJupUsd()) || 0; } catch (_) {}
+        const m = await meteora.status({ solUsd, btcUsd, jupUsd });
         for (const p of (m.positions || [])) {
           const key = p.position;
+          const rangeStr = p.lowerPrice ? `${p.lowerPrice.toPrecision(4)}–${p.upperPrice.toPrecision(4)}` : "?";
+          const valStr = "$" + Math.round(p.valueUsd || 0);
+          // Where the active bin sits across the position: 0 = bottom edge, 1 = top edge.
+          const span = (p.upperBinId != null && p.lowerBinId != null) ? p.upperBinId - p.lowerBinId : 0;
+          const frac = span > 0 && p.activeBinId != null ? (p.activeBinId - p.lowerBinId) / span : 0.5;
+          const acrossPct = Math.round(frac * 100);
+          const nearEdge = p.inRange && (frac <= NEAR_EDGE_FRAC || frac >= 1 - NEAR_EDGE_FRAC);
           const wasOor = !!_metOorState[key];
+          const wasEdge = !!_metEdgeState[key];
+
+          // OUT OF RANGE — fires once on the transition.
           if (!p.inRange && !wasOor) {
             _metOorState[key] = Date.now(); kv.set("meteoraOorState", _metOorState);
-            await fetch(`https://api.telegram.org/bot${tg}/sendMessage`, {
-              method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ chat_id: proj.telegramChatId, parse_mode: "HTML", disable_web_page_preview: true,
-                text: `⚠️ <b>Meteora position OUT of range</b>\n${p.pair} · earning $0 until re-centered\nrange ${p.lowerPrice ? p.lowerPrice.toFixed(0) + "–" + p.upperPrice.toFixed(0) : "?"} · value ${"$" + Math.round(p.valueUsd)}\nPull → reopen centered to resume fees.` }),
-            });
-          } else if (p.inRange && wasOor) {
+            if (wasEdge) { delete _metEdgeState[key]; kv.set("meteoraEdgeState", _metEdgeState); } // OOR supersedes the edge warning
+            await metDM(`🚨 <b>Meteora position OUT of range</b>\n${p.pair} · earning $0 until re-centered\nrange ${rangeStr} · value ${valStr}\n${rebalanceSteps(p.pair)}`);
+            continue;
+          }
+          if (p.inRange && wasOor) {
             delete _metOorState[key]; kv.set("meteoraOorState", _metOorState);
-            await fetch(`https://api.telegram.org/bot${tg}/sendMessage`, {
-              method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ chat_id: proj.telegramChatId, parse_mode: "HTML", text: `✅ <b>Meteora back in range</b>\n${p.pair} · earning fees again.` }),
-            });
+            await metDM(`✅ <b>Meteora back in range</b>\n${p.pair} · earning fees again.`);
+            // fall through so the edge state can re-arm/clear from the fresh frac below
+          }
+
+          // NEAR EDGE (still in range) — early nudge, fires once per approach.
+          if (nearEdge && !wasEdge) {
+            _metEdgeState[key] = Date.now(); kv.set("meteoraEdgeState", _metEdgeState);
+            const side = frac >= 0.5 ? "top" : "bottom";
+            await metDM(`⚠️ <b>Meteora position NEAR EDGE</b>\n${p.pair} · ${acrossPct}% across range (price near the ${side}, about to drift out)\nrange ${rangeStr} · value ${valStr}\nRebalance now to re-center & keep earning:\n${rebalanceSteps(p.pair)}`);
+          } else if (wasEdge && frac >= EDGE_REARM_LO && frac <= EDGE_REARM_HI) {
+            // Re-centered back toward the middle — clear silently so the next approach can alert again.
+            delete _metEdgeState[key]; kv.set("meteoraEdgeState", _metEdgeState);
           }
         }
       } catch (e) { console.warn("[meteora-oor] failed:", e.message); }
