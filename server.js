@@ -2918,7 +2918,10 @@ const JUPUSDC_POOL = "HfgjZDmexhFVD28Vkb1NbQwWeXP3uDcVTLPjSGHmRHhL";
 // halfWidthPct 3 ≈ the owner's tight ~±3% range; maxImpactPct 0.2 caps the rebalance swap's
 // Jupiter price impact (a costlier route is skipped — see jupUsdcRecenter). enabled gates the
 // autonomous close→swap→reopen loop ("Option B": recenter + 50/50 swap + redeposit, $0 residue).
-function jupUsdcCfg() { return { enabled: false, halfWidthPct: 3, distribution: "curve", edgeFrac: 0.12, minRecenterSec: 3600, maxImpactPct: 0.2, ...kv.get("jupUsdcCfg", {}) }; }
+// Split anti-thrash: minRecenterSecOor (120s) = OUT of range → earning $0, react on the
+// next check; minRecenterSec (1800s) = near-edge but still earning → wait so we don't churn
+// (each rebalance crystallizes IL — the "tight chasers died on choppy days" lesson).
+function jupUsdcCfg() { return { enabled: false, halfWidthPct: 3, distribution: "curve", edgeFrac: 0.12, minRecenterSec: 1800, minRecenterSecOor: 120, maxImpactPct: 0.2, ...kv.get("jupUsdcCfg", {}) }; }
 async function jupUsdcRecenter({ dryRun = false, force = false } = {}) {
   if (!meteora.isEnabled()) return { action: "none", reason: "operator not set" };
   const cfg = jupUsdcCfg();
@@ -2948,7 +2951,9 @@ async function jupUsdcRecenter({ dryRun = false, force = false } = {}) {
   const base = { pool: "jup-usdc", managed: pos.position, frac: Number(frac.toFixed(3)), inRange: pos.inRange, valueUsd: pos.valueUsd };
   if (!needs) return { ...base, action: "hold", reason: `centered ${(frac * 100).toFixed(0)}%` };
   const sinceLast = (Date.now() - kv.get("jupUsdcLastRecenterTs", 0)) / 1000;
-  if (!force && sinceLast < cfg.minRecenterSec) return { ...base, action: "deferred", reason: `anti-thrash (${Math.round(sinceLast)}s < ${cfg.minRecenterSec}s)` };
+  // OOR = earning $0 → short cooldown (react fast); near-edge but still earning → long cooldown (don't churn).
+  const cooldown = pos.inRange ? cfg.minRecenterSec : (cfg.minRecenterSecOor != null ? cfg.minRecenterSecOor : 120);
+  if (!force && sinceLast < cooldown) return { ...base, action: "deferred", reason: `anti-thrash (${Math.round(sinceLast)}s < ${cooldown}s, ${pos.inRange ? "near-edge" : "OOR"})` };
   if (dryRun) return { ...base, action: "would-recenter", reason: pos.inRange ? `near edge ${(frac * 100).toFixed(0)}%` : "out of range" };
   kv.set("jupUsdcLastRecenterTs", Date.now());   // stamp up front — a crash can't allow instant re-entry
   const steps = [];
@@ -3081,7 +3086,8 @@ app.get("/api/meteora/config", (req, res) => {
       if (req.query.halfWidthPct != null) patch.halfWidthPct = Math.max(0.5, Math.min(30, Number(req.query.halfWidthPct) || cur.halfWidthPct));
       if (req.query.distribution != null) patch.distribution = ["spot", "curve", "bidask"].includes(String(req.query.distribution)) ? String(req.query.distribution) : cur.distribution;
       if (req.query.edgeFrac != null) patch.edgeFrac = Math.max(0.02, Math.min(0.45, Number(req.query.edgeFrac) || cur.edgeFrac));
-      if (req.query.minRecenterSec != null) patch.minRecenterSec = Math.max(300, Math.min(86400, parseInt(req.query.minRecenterSec) || cur.minRecenterSec));
+      if (req.query.minRecenterSec != null) patch.minRecenterSec = Math.max(60, Math.min(86400, parseInt(req.query.minRecenterSec) || cur.minRecenterSec));
+      if (req.query.minRecenterSecOor != null) patch.minRecenterSecOor = Math.max(30, Math.min(86400, parseInt(req.query.minRecenterSecOor) || cur.minRecenterSecOor));
       if (req.query.maxImpactPct != null) patch.maxImpactPct = Math.max(0.01, Math.min(5, Number(req.query.maxImpactPct) || cur.maxImpactPct));
       if (req.query.enabled != null) patch.enabled = !["0", "false", "off"].includes(String(req.query.enabled).toLowerCase());
       if (Object.keys(patch).length) kv.set("jupUsdcCfg", { ...kv.get("jupUsdcCfg", {}), ...patch });

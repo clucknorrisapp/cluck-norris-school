@@ -44,8 +44,10 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 > redeposit). New NFT each time (cosmetic; owner OK'd it). Safety rails: **0.2% Jupiter
 > price-impact ceiling** (`cfg.maxImpactPct`; a costlier route SKIPS the swap and reopens
 > centered-but-unbalanced, funds intact — never eats >a sliver, since ~1% would wipe a day's
-> fees), **±3% width** (`cfg.halfWidthPct`), **1h anti-thrash** (`minRecenterSec`), edge
-> trigger `edgeFrac 0.12`. Loop: `jupUsdcRecenterTick` (server.js, 5-min) gated on
+> fees), **±3% width** (`cfg.halfWidthPct`), **SPLIT anti-thrash** — OOR (earning $0) reacts
+> on the next check (`minRecenterSecOor` 120s), near-edge-but-earning waits (`minRecenterSec`
+> 1800s) so it can't churn IL on chop — edge trigger `edgeFrac 0.12`. Loop:
+> `jupUsdcRecenterTick` (server.js, 5-min) gated on
 > `jupUsdcCfg().enabled`; turn off via `kv jupUsdcCfg {enabled:false}` or
 > `/api/meteora/config?which=jup&enabled=0`. DMs the treasury chat on each rebalance (owner
 > wants these notifications ON). Manual lever: `/api/meteora/recenter?which=jup&run=1&force=1`.
