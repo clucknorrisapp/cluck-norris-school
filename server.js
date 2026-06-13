@@ -2388,6 +2388,56 @@ function warmTopPools() {
 setTimeout(warmTopPools, 12000);
 setInterval(warmTopPools, 60 * 60 * 1000);
 
+// Token market overview — a compact, tool-agnostic market snapshot for any mint. Fuses the
+// AGGREGATED CoinGecko data (authoritative rank/ATH/24h-change/mcap) for LISTED coins with the
+// GeckoTerminal onchain data (liquidity, # live markets, DEXs) for everything. Powers the live
+// market header on the holder tools (Snapshot/Holders/Trace). Public read; 2-min cache.
+app.get("/api/token-overview", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "public, max-age=120");
+  const mint = String(req.query.mint || "").trim();
+  if (!mint || mint.length < 32) return res.status(400).json({ success: false, error: "pass ?mint=<mint>" });
+  try {
+    const onchain = await fetchGeckoTerminalFallback(mint).catch(() => null);
+    let cg = null;
+    const id = await lpScanner.coingeckoIdForMint(mint).catch(() => null);
+    if (id) {
+      try {
+        const c = await lpScanner.cgPro(`/coins/${id}?localization=false&tickers=false&community_data=false&developer_data=false&sparkline=false`);
+        const m = c.market_data || {};
+        cg = {
+          coinId: id, symbol: (c.symbol || "").toUpperCase() || null, name: c.name || null,
+          rank: c.market_cap_rank ?? null,
+          priceUsd: m.current_price?.usd ?? null, marketCapUsd: m.market_cap?.usd ?? null,
+          volume24hUsd: m.total_volume?.usd ?? null, change24hPct: m.price_change_percentage_24h ?? null,
+          athUsd: m.ath?.usd ?? null, athChangePct: m.ath_change_percentage?.usd ?? null, athDate: m.ath_date?.usd ?? null,
+          image: c.image?.small || c.image?.thumb || null,
+        };
+      } catch (_) { /* listed but detail fetch failed → onchain only */ }
+    }
+    if (!onchain && !cg) return res.status(200).json({ success: false, error: "no market data for this token yet" });
+    const listed = !!cg;
+    return res.status(200).json({
+      success: true, mint, listed,
+      symbol: (cg && cg.symbol) || onchain?.symbol || null,
+      name: (cg && cg.name) || onchain?.name || null,
+      image: cg?.image || null,
+      // Prefer aggregated price/volume where listed (authoritative), else onchain.
+      priceUsd: (cg && cg.priceUsd != null ? cg.priceUsd : onchain?.priceUsd) ?? null,
+      change24hPct: cg?.change24hPct ?? null,
+      volume24hUsd: (cg && cg.volume24hUsd != null ? cg.volume24hUsd : onchain?.totalVol24h) ?? null,
+      liquidityUsd: onchain?.totalLiqUsd ?? null,           // liquidity is onchain-only
+      fdvUsd: onchain?.fdv ?? null,
+      marketCapUsd: cg?.marketCapUsd ?? null,
+      marketCapRank: cg?.rank ?? null,
+      athUsd: cg?.athUsd ?? null, athChangePct: cg?.athChangePct ?? null,
+      marketCount: onchain?.poolCount ?? null,
+      dexes: onchain ? [...onchain.dexFamilies] : [],
+      source: listed ? "coingecko+onchain" : "onchain",
+    });
+  } catch (e) { return res.status(200).json({ success: false, error: publicErrMsg(e) }); }
+});
+
 // LP Scanner single-token mode — ?token=<symbol|mint>, optional &amount=<usd>. Returns EVERY
 // pair/pool this token trades in across all Solana DEXs with volume + real fee yield. Public.
 app.get("/api/lp-token", async (req, res) => {
