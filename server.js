@@ -5364,18 +5364,25 @@ app.get("/api/cluck-score", async (req, res) => {
     // curve reserve directly — use it when it's materially larger, the same fix
     // applied to the autopsy and the launches feed.
     let onBondingCurve = false, curvePctToGrad = null;
-    try {
-      const stm = await solanaTracker.getTokenMarketStatus(mint);
-      if (stm) {
-        onBondingCurve = stm.onBondingCurve === true;
-        curvePctToGrad = stm.curvePercentage;
-        if (stm.liquidityUsd != null && stm.liquidityUsd > totalLiqUsd) {
-          totalLiqUsd = stm.liquidityUsd;
-          scoreSource = scoreSource === "dexscreener" ? "solana-tracker" : scoreSource + "+st";
-          if (poolCount === 0) poolCount = 1;
+    // ST reads the bonding-curve reserve to correct phantom near-zero DEX liquidity on
+    // on-curve tokens. Only call it when liquidity looks phantom/thin — a token with real
+    // DEX liquidity is graduated and needs no correction. This keeps the public Score OFF
+    // ST for the common case (ST credits are reserved for the Bags radar and renew monthly),
+    // while preserving the correction for the on-curve tokens that actually need it.
+    if (totalLiqUsd < 5000) {
+      try {
+        const stm = await solanaTracker.getTokenMarketStatus(mint);
+        if (stm) {
+          onBondingCurve = stm.onBondingCurve === true;
+          curvePctToGrad = stm.curvePercentage;
+          if (stm.liquidityUsd != null && stm.liquidityUsd > totalLiqUsd) {
+            totalLiqUsd = stm.liquidityUsd;
+            scoreSource = scoreSource === "dexscreener" ? "solana-tracker" : scoreSource + "+st";
+            if (poolCount === 0) poolCount = 1;
+          }
         }
-      }
-    } catch (_) { /* degrade — keep DexScreener/Gecko numbers */ }
+      } catch (_) { /* degrade — keep DexScreener/Gecko numbers */ }
+    }
 
     const rawSupply = supplyData.status === "fulfilled" ? supplyData.value?.result?.value?.amount : null;
     const decimals = supplyData.status === "fulfilled" ? (supplyData.value?.result?.value?.decimals || 9) : 9;
