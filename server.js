@@ -5341,10 +5341,9 @@ app.get("/api/supply", async (req, res) => {
 // fallback to recover liquidity / price / FDV. Returns null on any failure.
 async function fetchGeckoTerminalFallback(mint) {
   try {
-    const url = `https://api.geckoterminal.com/api/v2/networks/solana/tokens/${mint}/pools?include=base_token`;
-    const r = await fetch(url, { headers: { Accept: "application/json" } });
-    if (!r.ok) return null;
-    const j = await r.json();
+    // Routes through the CoinGecko Pro onchain API when COINGECKO_API_KEY is set (fuller multi-
+    // DEX coverage, accurate aggregated volume, no rate-limit throttling), else free GeckoTerminal.
+    const j = await lpScanner.cgFetch(`/networks/solana/tokens/${mint}/pools?include=base_token`);
     const pools = Array.isArray(j?.data) ? j.data : [];
     if (!pools.length) return null;
 
