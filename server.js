@@ -2332,8 +2332,9 @@ app.get("/api/lp-scan", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
   const A = req.query.a || req.query.tokenA, B = req.query.b || req.query.tokenB;
-  if (!A || !B) return res.status(400).json({ success: false, error: "pass ?a=<token>&b=<token> (symbol or mint)" });
-  try { return res.status(200).json({ success: true, ...(await lpScanner.scanPair(String(A), String(B), {})) }); }
+  if (!A || !B) return res.status(400).json({ success: false, error: "pass ?a=<token>&b=<token> (symbol or mint), optional &amount=<usd>" });
+  const amountUsd = Number(req.query.amount) || 0;
+  try { return res.status(200).json({ success: true, ...(await lpScanner.scanPair(String(A), String(B), { amountUsd })) }); }
   catch (e) { return res.status(200).json({ success: false, error: e.message }); }
 });
 
