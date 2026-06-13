@@ -2184,6 +2184,33 @@ async function getBagsTokenSnapshot(mint) {
   const now = Date.now();
   const cached = BAGS_FEED_PRICE_CACHE.get(mint);
   if (cached && now - cached.ts < BAGS_FEED_PRICE_TTL) return cached.data;
+  // PRIMARY: GeckoTerminal (free) — price/MC/liquidity/volume with NO ST credits.
+  // GT indexes pools straight from chain (curve + DEX), so it covers pre- and
+  // post-graduation tokens. ST is now a LAST-RESORT backup only (see below).
+  try {
+    const gt = await fetchGeckoTerminalFallback(mint);
+    if (gt && (gt.priceUsd != null || gt.fdv != null)) {
+      const dexId = (gt.dexId || "").toLowerCase();
+      const data = {
+        name: gt.name || null,
+        symbol: gt.symbol || null,
+        priceUsd: gt.priceUsd ?? null,
+        marketCap: gt.fdv ?? null,
+        liquidityUsd: gt.totalLiqUsd ?? null,
+        change24h: null,
+        volume24h: gt.totalVol24h ?? null,
+        market: dexId || null,
+        onBondingCurve: dexId ? solanaTracker.isLaunchpadCurveMarket(dexId) : null,
+        curvePct: null, // GT doesn't expose bonding-curve %; the ST backup fills it when reachable
+        createdAt: null,
+        image: null, twitter: null, website: null,
+        source: "geckoterminal",
+      };
+      BAGS_FEED_PRICE_CACHE.set(mint, { data, ts: now });
+      return data;
+    }
+  } catch (_) { /* GT miss → fall through to the ST backup */ }
+  // LAST-RESORT BACKUP: Solana Tracker (quota-billed; only when GT returns nothing).
   try {
     const r = await solanaTracker.probe(`/tokens/${mint}`);
     if (!r.ok || !r.data) throw new Error("no-data");
