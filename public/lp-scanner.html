@@ -117,7 +117,7 @@
       <div id="ilNote" class="note-line"></div>
       <div style="overflow-x:auto;margin-top:8px;">
         <table>
-          <thead><tr><th>DEX</th><th>Fee</th><th>TVL</th><th>24h Vol</th><th>Turn</th><th>Yield/day</th><th id="estHead">Est $/day</th></tr></thead>
+          <thead><tr><th>DEX</th><th>Fee</th><th>TVL</th><th>24h Vol</th><th>Yield/d<br><span style="font-weight:400;color:#4B5563">7d-avg</span></th><th id="estHead">Est $/day</th></tr></thead>
           <tbody id="poolRows"></tbody>
         </table>
       </div>
@@ -182,17 +182,19 @@
     (d.pools||[]).forEach(function(p){
       var hasFee=p.feeTier!=null;
       var isBest=hasFee && !bestSet; if(isBest) bestSet=true;
+      var yv = p.feeYield7dPctDay!=null ? p.feeYield7dPctDay : p.feeYieldPctDay;
+      var trendColor = p.volTrend==='spiking'?'#FCD34D':p.volTrend==='cooling'?'#9CA3AF':'#6EE7B7';
+      var trendCell = p.volTrend ? '<div style="font-size:9px;color:'+trendColor+';letter-spacing:0.5px;">'+esc(p.volTrend)+'</div>' : '';
       rows+='<tr class="'+(isBest?'best':'')+'">'
         +'<td><span class="dex">'+(isBest?'<span class="crown">★ </span>':'')+esc(p.dex)+'</span></td>'
         +'<td>'+(hasFee?esc(p.feeTier)+'%':'<span class="muted">—</span>')+'</td>'
         +'<td>'+fmt(p.tvlUsd)+'</td>'
         +'<td>'+fmt(p.volume&&p.volume.h24)+'</td>'
-        +'<td>'+(p.turnover24h||0)+'x</td>'
-        +'<td>'+(p.feeYieldPctDay!=null?('<span class="yield-v">'+p.feeYieldPctDay+'%</span>'):'<span class="muted">—</span>')+'</td>'
+        +'<td>'+(yv!=null?('<span class="yield-v">'+yv+'%</span>'+trendCell):'<span class="muted">—</span>')+'</td>'
         +'<td>'+(p.estDailyUsd!=null?('<span class="yield-v">$'+p.estDailyUsd+'</span>'):'<span class="muted">—</span>')+'</td>'
         +'</tr>';
     });
-    if(!rows) rows='<tr><td colspan="7" class="muted" style="text-align:center;padding:20px;">No pools found for this pair.</td></tr>';
+    if(!rows) rows='<tr><td colspan="6" class="muted" style="text-align:center;padding:20px;">No pools found for this pair.</td></tr>';
     document.getElementById('poolRows').innerHTML=rows;
     document.getElementById('rankNote').textContent=d.note||'';
     document.getElementById('answer').classList.remove('show');

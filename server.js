@@ -2361,13 +2361,17 @@ app.post("/api/lp-ask", async (req, res) => {
     const ctx = (scan.pools || []).map((p) => {
       const base = `${p.dex} — TVL $${p.tvlUsd.toLocaleString()}, 24h vol $${Math.round(p.volume.h24).toLocaleString()}, turnover ${p.turnover24h}x`;
       if (p.feeTier == null) return `${base}, fee tier NOT YET READ (don't estimate its yield)`;
-      return `${base}, fee ${p.feeTier}%, fee-yield ${p.feeYieldPctDay}%/day` + (p.estDailyUsd != null ? `, est $${p.estDailyUsd}/day on $${scan.amountUsd}` : "");
+      return `${base}, fee ${p.feeTier}%, 24h-yield ${p.feeYieldPctDay}%/day`
+        + (p.feeYield7dPctDay != null ? `, 7d-avg-yield ${p.feeYield7dPctDay}%/day` : "")
+        + (p.volTrend ? `, volume ${p.volTrend} vs 7d-avg` : "")
+        + (p.estDailyUsd != null ? `, est $${p.estDailyUsd}/day on $${scan.amountUsd}` : "");
     }).join("\n");
     const system = `You are Cluck Norris — the toughest LP professor on Solana — analyzing REAL pool data so a user can compare where to LP ${scan.pair}.
 HARD RULES:
 - INFORMATIONAL ONLY. NEVER tell them where to put money, never predict prices. Explain tradeoffs; THEY decide.
 - Ground every claim in the DATA below. If a pool's fee tier isn't read yet, say so — never invent a yield.
 - Turnover (vol/TVL) is NOT yield. A high-turnover pool with a tiny fee earns little. Fee-yield (fees/TVL) is the money metric — teach that.
+- Lead with the 7d-avg yield (the truer rate), not the 1-day number. If a pool's volume is "spiking", warn its 24h yield probably won't hold; if "cooling", flag that it's slowing down.
 - Impermanent loss: a stable quote (USDC/USDT) = lower IL; two volatile assets = higher IL. Flag it.
 - Earnings estimates use a TVL-share model calibrated to a real autonomous LP we operate — call them estimates, not guarantees.
 - Tough, punchy, a chicken pun or two. 4–7 sentences. Always end with: not financial advice.
