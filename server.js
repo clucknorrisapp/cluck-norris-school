@@ -8,6 +8,7 @@ const hatchery = require("./hatchery");
 const securityCoop = require("./securitycoop");
 const whirlpoolMM = require("./whirlpool-mm");
 const meteora = require("./lib/meteora-dlmm"); // Meteora DLMM read layer (SDK lazy-loaded inside)
+const lpScanner = require("./lib/lp-scanner"); // LP Pair Scanner (Liquidity Lab flagship) — see docs/LP_SCANNER.md
 const { fetchBagsContext, classifyTeamActivity } = require("./lib/bags-context");
 const analytics = require("./lib/analytics");
 const solscan = require("./lib/solscan");
@@ -2322,6 +2323,19 @@ async function getBagsNearGrad() {
   NEAR_GRAD_CACHE.list = top; NEAR_GRAD_CACHE.ts = now;
   return { tokens: top, cached: false, scanned: arr.length };
 }
+
+// ── LP Pair Scanner (Liquidity Lab flagship) — see docs/LP_SCANNER.md ──────────
+// Given a PAIR (?a=<symbol|mint>&b=<symbol|mint>), find every open pool for it across
+// every Solana DEX (GeckoTerminal), ranked by turnover. Public read — it's a tool.
+// Informational only, NOT financial advice. No Solana Tracker dependency.
+app.get("/api/lp-scan", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  const A = req.query.a || req.query.tokenA, B = req.query.b || req.query.tokenB;
+  if (!A || !B) return res.status(400).json({ success: false, error: "pass ?a=<token>&b=<token> (symbol or mint)" });
+  try { return res.status(200).json({ success: true, ...(await lpScanner.scanPair(String(A), String(B), {})) }); }
+  catch (e) { return res.status(200).json({ success: false, error: e.message }); }
+});
 
 app.get("/api/bags-near-grad", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
