@@ -6633,6 +6633,11 @@ app.get("/liquidity", (req, res) => {
   res.sendFile(join(__dirname, "public", "liquidity.html"));
 });
 
+// LP Pair Scanner — standalone flagship: every pool for a pair across every DEX + Ask Cluck.
+app.get("/lp-scanner", (req, res) => {
+  res.sendFile(join(__dirname, "public", "lp-scanner.html"));
+});
+
 // Liquidity Engine — product / education / platform page (the flagship pitch).
 app.get("/liquidity-engine", (req, res) => {
   res.sendFile(join(__dirname, "public", "liquidity-engine.html"));

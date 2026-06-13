@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>🔬 LP Pair Scanner — Cluck Norris</title>
+<meta name="description" content="Compare every liquidity pool for any pair across every Solana DEX — TVL, volume, fees, yield, and your estimated earnings. Then ask Cluck."/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0a0a0a; --card: #111111; --border: rgba(255,255,255,0.08);
+    --text: #F9FAFB; --subtext: #6B7280; --accent: #FCD34D; --orange: #D97706;
+    --green: #10B981; --red: #EF4444; --blue: #60A5FA; --mono: 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); background-image: radial-gradient(ellipse at 20% 10%, rgba(217,119,6,0.10) 0%, transparent 50%), radial-gradient(ellipse at 80% 90%, rgba(16,185,129,0.06) 0%, transparent 50%); color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 24px 16px 80px; }
+  a.back-home { display:inline-flex; align-items:center; gap:6px; font-family:Oswald,sans-serif; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin:0 0 12px; }
+  .back-home img { height:22px; width:22px; object-fit:cover; border-radius:50%; border:1px solid var(--orange); }
+  .header { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+  .header-icon { font-size: 40px; filter: drop-shadow(0 0 16px rgba(217,119,6,0.5)); }
+  .header .brand-mini { font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 4px; color: var(--orange); margin-bottom: 4px; font-weight: 700; }
+  .header h1 { font-family: 'Oswald', sans-serif; font-size: 27px; font-weight: 900; letter-spacing: 2px; background: linear-gradient(135deg, #FCD34D, #D97706, #F59E0B); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
+  .header p { font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+  .intro { font-size: 13px; line-height: 1.7; color: #D1D5DB; }
+  .intro b { color: var(--accent); }
+  label.fld { display:block; font-family:var(--mono); font-size:10px; color:var(--subtext); letter-spacing:1px; margin:0 0 6px; }
+  .pair-row { display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; }
+  .pair-row .f { flex:1; min-width:120px; }
+  .pair-row .vs { font-family:'Oswald',sans-serif; font-weight:900; color:var(--subtext); padding-bottom:12px; }
+  input[type=text], input[type=number] { width:100%; background:#0d0d0d; border:1px solid var(--border); border-radius:9px; padding:12px; color:var(--text); font-family:var(--mono); font-size:15px; }
+  input::placeholder { color:#4B5563; }
+  .scan-btn { width:100%; margin-top:14px; padding:14px; border:none; border-radius:10px; background:linear-gradient(135deg,#D97706,#F59E0B); color:#1a1a1a; font-family:'Oswald',sans-serif; font-weight:900; letter-spacing:2px; font-size:15px; cursor:pointer; }
+  .scan-btn:disabled { opacity:0.5; cursor:wait; }
+  .quick { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
+  .quick button { background:transparent; border:1px solid var(--border); border-radius:20px; padding:6px 12px; color:var(--subtext); font-family:var(--mono); font-size:11px; cursor:pointer; }
+  .quick button:hover { border-color:var(--orange); color:var(--accent); }
+  .badge { display:inline-block; font-family:'Oswald',sans-serif; font-weight:700; font-size:11px; letter-spacing:1px; padding:4px 10px; border-radius:20px; }
+  .il-minimal { background:rgba(16,185,129,0.12); color:#6EE7B7; border:1px solid rgba(16,185,129,0.4); }
+  .il-low { background:rgba(96,165,250,0.12); color:#93C5FD; border:1px solid rgba(96,165,250,0.4); }
+  .il-moderate { background:rgba(217,119,6,0.12); color:var(--accent); border:1px solid rgba(217,119,6,0.4); }
+  .il-high { background:rgba(239,68,68,0.12); color:#FCA5A5; border:1px solid rgba(239,68,68,0.4); }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th { font-family:var(--mono); font-size:9px; color:var(--subtext); letter-spacing:1px; text-align:right; padding:8px 6px; border-bottom:1px solid var(--border); }
+  th:first-child { text-align:left; }
+  td { padding:10px 6px; text-align:right; border-bottom:1px solid rgba(255,255,255,0.04); font-family:var(--mono); }
+  td:first-child { text-align:left; }
+  tr.best td { background:rgba(217,119,6,0.07); }
+  .dex { font-family:'Oswald',sans-serif; font-weight:700; letter-spacing:0.5px; color:var(--text); text-transform:capitalize; }
+  .yield-v { color:#6EE7B7; font-weight:700; }
+  .muted { color:var(--subtext); }
+  .crown { color:var(--orange); }
+  .ask-q { width:100%; background:#0d0d0d; border:1px solid var(--border); border-radius:9px; padding:12px; color:var(--text); font-family:system-ui; font-size:14px; resize:vertical; min-height:54px; }
+  .ask-btn { margin-top:10px; padding:12px 18px; border:none; border-radius:10px; background:rgba(217,119,6,0.15); border:1px solid rgba(217,119,6,0.4); color:var(--accent); font-family:'Oswald',sans-serif; font-weight:700; letter-spacing:1.5px; font-size:13px; cursor:pointer; }
+  .ask-btn:disabled { opacity:0.5; cursor:wait; }
+  .answer { margin-top:14px; padding:14px; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-left:3px solid var(--orange); border-radius:8px; font-family:system-ui; font-size:13.5px; line-height:1.65; color:#E5E7EB; white-space:pre-wrap; display:none; }
+  .answer.show { display:block; }
+  .disclaimer { font-size:11px; color:var(--subtext); line-height:1.6; margin-top:8px; }
+  .disclaimer b { color:#FCA5A5; }
+  .crosslink { display:block; text-align:center; margin-top:16px; padding:14px; border:1px dashed rgba(16,185,129,0.4); border-radius:10px; background:rgba(16,185,129,0.05); color:#6EE7B7; text-decoration:none; font-family:'Oswald',sans-serif; font-weight:700; letter-spacing:1px; font-size:13px; }
+  .err { display:none; margin-bottom:14px; padding:12px; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.4); border-radius:9px; color:#FCA5A5; font-family:var(--mono); font-size:12px; }
+  .err.show { display:block; }
+  .spin { display:inline-block; width:14px; height:14px; border:2px solid rgba(255,255,255,0.2); border-top-color:var(--accent); border-radius:50%; animation:spin 0.7s linear infinite; vertical-align:middle; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .hidden { display:none; }
+  .note-line { font-family:var(--mono); font-size:10px; color:var(--subtext); margin-top:10px; line-height:1.5; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="/" class="back-home"><img src="/cluck-norris-logo.jpg" alt=""/>&larr; CLUCK NORRIS HOME</a>
+
+  <div class="header">
+    <div class="header-icon">🔬</div>
+    <div>
+      <div class="brand-mini">CLUCK NORRIS</div>
+      <h1>LP PAIR SCANNER</h1>
+      <p>EVERY POOL · EVERY DEX · REAL YIELD</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="intro">
+      Picking a pair to provide liquidity for? <b>Scan every open pool across every Solana DEX</b> — Meteora, Orca, Raydium &amp; more — ranked by real <b>fee yield</b>, not just volume. Then ask Cluck about it.
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="pair-row">
+      <div class="f"><label class="fld">TOKEN A (symbol or mint)</label><input type="text" id="tokenA" placeholder="JUP" autocomplete="off"/></div>
+      <div class="vs">/</div>
+      <div class="f"><label class="fld">TOKEN B (symbol or mint)</label><input type="text" id="tokenB" placeholder="USDC" autocomplete="off"/></div>
+    </div>
+    <label class="fld" style="margin-top:14px;">YOUR DEPOSIT (USD, optional — for $/day estimate)</label>
+    <input type="number" id="amount" placeholder="5000" min="0"/>
+    <div class="quick">
+      <button onclick="quick('JUP','USDC')">JUP / USDC</button>
+      <button onclick="quick('SOL','USDC')">SOL / USDC</button>
+      <button onclick="quick('cbBTC','SOL')">cbBTC / SOL</button>
+      <button onclick="quick('JLP','SOL')">JLP / SOL</button>
+    </div>
+    <button class="scan-btn" id="scanBtn" onclick="runScan()">SCAN POOLS</button>
+  </div>
+
+  <div class="err" id="err"></div>
+
+  <div id="results" class="hidden">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+        <div style="font-family:'Oswald',sans-serif;font-weight:900;letter-spacing:1px;font-size:18px;" id="pairTitle"></div>
+        <span id="ilBadge" class="badge"></span>
+      </div>
+      <div id="ilNote" class="note-line"></div>
+      <div style="overflow-x:auto;margin-top:8px;">
+        <table>
+          <thead><tr><th>DEX</th><th>Fee</th><th>TVL</th><th>24h Vol</th><th>Turn</th><th>Yield/day</th><th id="estHead">Est $/day</th></tr></thead>
+          <tbody id="poolRows"></tbody>
+        </table>
+      </div>
+      <div class="note-line" id="rankNote"></div>
+    </div>
+
+    <div class="card">
+      <div style="font-family:'Oswald',sans-serif;font-weight:700;letter-spacing:1px;color:var(--accent);font-size:14px;margin-bottom:4px;">🐔 ASK CLUCK ABOUT THESE POOLS</div>
+      <div class="note-line" style="margin:0 0 10px;">Cluck reads the live numbers above and answers — grounded, not generic.</div>
+      <textarea class="ask-q" id="askQ" placeholder="Which pool is best for my size, and what should I watch out for?"></textarea>
+      <button class="ask-btn" id="askBtn" onclick="askCluck()">ASK CLUCK</button>
+      <div class="answer" id="answer"></div>
+    </div>
+  </div>
+
+  <a href="/" class="crosslink">⚗️ New to this? Learn it in the LP Lab → 12 lessons on pools, fees &amp; IL</a>
+
+  <div class="card" style="margin-top:16px;">
+    <div class="disclaimer">
+      <b>Informational only — NOT financial advice.</b> Providing liquidity carries impermanent-loss and smart-contract risk. Earnings estimates use a calibrated model and are not guarantees. Always do your own research. Fee tiers read on-chain (Meteora / Orca / Raydium); some newer DEXs aren't indexed yet and show "—".
+    </div>
+  </div>
+</div>
+
+<script>
+  var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
+  var fmt = function(n){ n=Number(n)||0; return n>=1e6?("$"+(n/1e6).toFixed(2)+"M"):n>=1e3?("$"+(n/1e3).toFixed(1)+"K"):("$"+Math.round(n)); };
+  var lastScan = null;
+
+  function quick(a,b){ document.getElementById('tokenA').value=a; document.getElementById('tokenB').value=b; runScan(); }
+  function showErr(m){ var e=document.getElementById('err'); e.textContent=m; e.classList.add('show'); }
+  function clearErr(){ document.getElementById('err').classList.remove('show'); }
+
+  async function runScan(){
+    clearErr();
+    var a=document.getElementById('tokenA').value.trim()||'JUP';
+    var b=document.getElementById('tokenB').value.trim()||'USDC';
+    var amt=document.getElementById('amount').value.trim();
+    var btn=document.getElementById('scanBtn');
+    btn.disabled=true; btn.innerHTML='<span class="spin"></span> SCANNING...';
+    try{
+      var url='/api/lp-scan?a='+encodeURIComponent(a)+'&b='+encodeURIComponent(b)+(amt?('&amount='+encodeURIComponent(amt)):'');
+      var r=await fetch(url); var d=await r.json();
+      if(!d.success){ showErr(d.error||'Scan failed'); return; }
+      lastScan=d; renderScan(d);
+    }catch(e){ showErr('Network error — try again.'); }
+    finally{ btn.disabled=false; btn.textContent='SCAN POOLS'; }
+  }
+
+  function renderScan(d){
+    document.getElementById('results').classList.remove('hidden');
+    document.getElementById('pairTitle').textContent=d.pair;
+    var il=d.ilRisk||{level:'',note:''};
+    var badge=document.getElementById('ilBadge');
+    badge.className='badge il-'+esc(il.level);
+    badge.textContent='IL RISK: '+(il.level||'?').toUpperCase();
+    document.getElementById('ilNote').textContent=il.note||'';
+    document.getElementById('estHead').textContent = d.amountUsd ? ('Est $/day ($'+Number(d.amountUsd).toLocaleString()+')') : 'Est $/day';
+
+    var rows='';
+    var bestSet=false;
+    (d.pools||[]).forEach(function(p){
+      var hasFee=p.feeTier!=null;
+      var isBest=hasFee && !bestSet; if(isBest) bestSet=true;
+      rows+='<tr class="'+(isBest?'best':'')+'">'
+        +'<td><span class="dex">'+(isBest?'<span class="crown">★ </span>':'')+esc(p.dex)+'</span></td>'
+        +'<td>'+(hasFee?esc(p.feeTier)+'%':'<span class="muted">—</span>')+'</td>'
+        +'<td>'+fmt(p.tvlUsd)+'</td>'
+        +'<td>'+fmt(p.volume&&p.volume.h24)+'</td>'
+        +'<td>'+(p.turnover24h||0)+'x</td>'
+        +'<td>'+(p.feeYieldPctDay!=null?('<span class="yield-v">'+p.feeYieldPctDay+'%</span>'):'<span class="muted">—</span>')+'</td>'
+        +'<td>'+(p.estDailyUsd!=null?('<span class="yield-v">$'+p.estDailyUsd+'</span>'):'<span class="muted">—</span>')+'</td>'
+        +'</tr>';
+    });
+    if(!rows) rows='<tr><td colspan="7" class="muted" style="text-align:center;padding:20px;">No pools found for this pair.</td></tr>';
+    document.getElementById('poolRows').innerHTML=rows;
+    document.getElementById('rankNote').textContent=d.note||'';
+    document.getElementById('answer').classList.remove('show');
+  }
+
+  async function askCluck(){
+    if(!lastScan){ showErr('Scan a pair first.'); return; }
+    var q=document.getElementById('askQ').value.trim();
+    if(q.length<3){ q='Which pool is best for my size, and what should I watch out for?'; }
+    var btn=document.getElementById('askBtn'), ans=document.getElementById('answer');
+    btn.disabled=true; btn.innerHTML='<span class="spin"></span> CLUCK IS THINKING...';
+    ans.classList.remove('show');
+    try{
+      var r=await fetch('/api/lp-ask',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({question:q, a:lastScan.mintA, b:lastScan.mintB, amount:lastScan.amountUsd||0})});
+      var d=await r.json();
+      ans.textContent = d.success ? d.answer : ('🐔 '+(d.error||'Cluck is hoarse — try again.'));
+      ans.classList.add('show');
+    }catch(e){ ans.textContent='🐔 Network error — try again.'; ans.classList.add('show'); }
+    finally{ btn.disabled=false; btn.textContent='ASK CLUCK'; }
+  }
+
+  // Allow Enter in token fields to scan
+  ['tokenA','tokenB','amount'].forEach(function(id){
+    document.getElementById(id).addEventListener('keydown',function(e){ if(e.key==='Enter') runScan(); });
+  });
+</script>
+</body>
+</html>
