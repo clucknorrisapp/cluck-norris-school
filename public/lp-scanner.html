@@ -146,6 +146,7 @@
       </div>
       <div class="note-line" id="rankNote"></div>
       <div class="note-line" style="color:var(--accent);">👆 Tap any pool to open the range &amp; earnings simulator.</div>
+      <button class="ask-btn" id="shareBtn" onclick="shareCard()" style="margin-top:12px;">📸 SHARE THIS SCAN (PNG CARD)</button>
     </div>
 
     <div class="card hidden" id="deepdive"></div>
@@ -310,6 +311,19 @@
       +(amt?'':'<div class="note-line" style="color:var(--accent);">💡 Enter a deposit amount above &amp; tap the pool again for $/day + APR estimates.</div>')
       +'<div class="note-line">'+esc(d.model||'')+'</div>'
       +'<div class="note-line" style="color:#FCA5A5;">IL risk: '+esc(il.level)+' — '+esc(il.note)+'</div>';
+  }
+
+  function shareCard(){
+    if(!lastScan){ showErr('Scan a pair first.'); return; }
+    var a=lastScan.mintA, b=lastScan.mintB, amt=lastScan.amountUsd||0;
+    var url=location.origin+'/api/lp-card?a='+encodeURIComponent(a)+'&b='+encodeURIComponent(b)+(amt?('&amount='+amt):'');
+    window.open(url,'_blank');
+    var best=(lastScan.pools||[]).filter(function(p){return p.feeTier!=null;})[0];
+    var yld=best?(best.feeYield7dPctDay!=null?best.feeYield7dPctDay:best.feeYieldPctDay):null;
+    var tweet='LP Scanner: '+lastScan.pair+(best?(' — best fee yield '+yld+'%/day on '+String(best.dex).toUpperCase()):'')+' 🔬\n\nScan every pool on every Solana DEX → '+location.origin+'/lp-scanner';
+    if(navigator.clipboard){ navigator.clipboard.writeText(tweet).then(function(){
+      var btn=document.getElementById('shareBtn'); var old=btn.textContent; btn.textContent='✓ CARD OPENED · CAPTION COPIED'; setTimeout(function(){btn.textContent=old;},2200);
+    }).catch(function(){}); }
   }
 
   async function askCluck(){

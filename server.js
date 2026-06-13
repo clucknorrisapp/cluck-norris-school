@@ -6532,6 +6532,126 @@ function renderScoreCard(scoreData) {
   return canvas.toBuffer("image/png");
 }
 
+// Shareable LP Pair Scanner card — the top pool for a pair, its real fee yield, and (if a
+// deposit was given) the estimated $/day. Built for X/Telegram virality + brand reach.
+async function renderLpCard(scan) {
+  const W = 1200, H = 630;
+  const canvas = createCanvas(W, H);
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#0a0a0a"; ctx.fillRect(0, 0, W, H);
+  const a1 = ctx.createRadialGradient(220, 120, 0, 220, 120, 600);
+  a1.addColorStop(0, "rgba(217,119,6,0.20)"); a1.addColorStop(1, "rgba(217,119,6,0)");
+  ctx.fillStyle = a1; ctx.fillRect(0, 0, W, H);
+  const a2 = ctx.createRadialGradient(1000, 580, 0, 1000, 580, 480);
+  a2.addColorStop(0, "rgba(16,185,129,0.12)"); a2.addColorStop(1, "rgba(16,185,129,0)");
+  ctx.fillStyle = a2; ctx.fillRect(0, 0, W, H);
+
+  ctx.textBaseline = "top";
+  ctx.fillStyle = "#D97706"; ctx.font = "900 22px Oswald, sans-serif";
+  ctx.fillText("🔬 LP PAIR SCANNER", 60, 50);
+  ctx.fillStyle = "#6B7280"; ctx.font = "16px Oswald, sans-serif";
+  ctx.fillText("School of Crypto Hard Knocks", 60, 82);
+
+  // Round logo, top-right
+  const logo = await getLogo();
+  if (logo) {
+    const r = 46, lx = W - 60 - r * 2, ly = 46;
+    ctx.save(); ctx.beginPath(); ctx.arc(lx + r, ly + r, r, 0, Math.PI * 2); ctx.closePath(); ctx.clip();
+    ctx.drawImage(logo, lx, ly, r * 2, r * 2); ctx.restore();
+    ctx.strokeStyle = "#D97706"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(lx + r, ly + r, r, 0, Math.PI * 2); ctx.stroke();
+  }
+
+  // Pair title
+  ctx.fillStyle = "#F9FAFB"; ctx.font = "900 64px Oswald, sans-serif";
+  ctx.fillText(String(scan.pair || ""), 60, 150);
+
+  const pools = (scan.pools || []).filter((p) => p.feeTier != null);
+  const best = pools[0];
+  if (best) {
+    // Headline: best fee yield
+    const yld = best.feeYield7dPctDay != null ? best.feeYield7dPctDay : best.feeYieldPctDay;
+    ctx.fillStyle = "#6B7280"; ctx.font = "900 18px Oswald, sans-serif";
+    ctx.fillText("TOP FEE YIELD — " + String(best.dex || "").toUpperCase() + " · " + best.feeTier + "% FEE", 60, 248);
+    ctx.font = "900 130px Oswald, sans-serif";
+    const g = ctx.createLinearGradient(60, 280, 520, 420);
+    g.addColorStop(0, "#6EE7B7"); g.addColorStop(1, "#10B981");
+    ctx.fillStyle = g;
+    const yText = (yld != null ? yld : "—") + "%";
+    ctx.fillText(yText, 60, 278);
+    const yw = ctx.measureText(yText).width;
+    ctx.fillStyle = "#6B7280"; ctx.font = "300 30px Oswald, sans-serif";
+    ctx.fillText("/ day", 60 + yw + 18, 372);
+
+    // Est $/day chip (if a deposit was given)
+    if (best.estDailyUsd != null && scan.amountUsd) {
+      const cx = 720, cy = 270, cw = 420, ch = 150;
+      ctx.fillStyle = "rgba(217,119,6,0.10)"; ctx.fillRect(cx, cy, cw, ch);
+      ctx.strokeStyle = "rgba(217,119,6,0.5)"; ctx.lineWidth = 2; ctx.strokeRect(cx, cy, cw, ch);
+      ctx.fillStyle = "#9CA3AF"; ctx.font = "900 16px Oswald, sans-serif";
+      ctx.fillText("EST. ON $" + Number(scan.amountUsd).toLocaleString(), cx + 24, cy + 22);
+      ctx.fillStyle = "#FCD34D"; ctx.font = "900 72px Oswald, sans-serif";
+      ctx.fillText("$" + best.estDailyUsd, cx + 24, cy + 50);
+      ctx.fillStyle = "#6B7280"; ctx.font = "300 22px Oswald, sans-serif";
+      const dw = ctx.measureText("$" + best.estDailyUsd).width;
+      ctx.fillText("/ day", cx + 24 + dw + 12, cy + 96);
+    }
+
+    // Mini ranking of the next pools
+    let ry = 452;
+    ctx.font = "900 15px Oswald, sans-serif"; ctx.fillStyle = "#6B7280";
+    ctx.fillText(pools.length + " POOLS WITH READ FEES · RANKED BY YIELD", 60, ry); ry += 26;
+    ctx.font = "18px Oswald, sans-serif";
+    for (const p of pools.slice(0, 3)) {
+      const py = p.feeYield7dPctDay != null ? p.feeYield7dPctDay : p.feeYieldPctDay;
+      ctx.fillStyle = "#D1D5DB";
+      ctx.fillText("• " + String(p.dex || "").toUpperCase(), 60, ry);
+      ctx.fillStyle = "#6EE7B7";
+      ctx.fillText((py != null ? py + "%/day" : "—"), 300, ry);
+      ctx.fillStyle = "#6B7280";
+      ctx.fillText("TVL $" + Math.round((p.tvlUsd || 0) / 1000) + "K", 470, ry);
+      ry += 26;
+    }
+  } else {
+    ctx.fillStyle = "#9CA3AF"; ctx.font = "30px Oswald, sans-serif";
+    ctx.fillText("No pools with on-chain fee data yet for this pair.", 60, 300);
+  }
+
+  // IL risk badge (bottom-right)
+  const il = scan.ilRisk || {};
+  const ilColors = { minimal: "#6EE7B7", low: "#93C5FD", moderate: "#FCD34D", high: "#FCA5A5" };
+  if (il.level) {
+    ctx.fillStyle = ilColors[il.level] || "#6B7280";
+    ctx.font = "900 18px Oswald, sans-serif";
+    const t = "IL RISK: " + il.level.toUpperCase();
+    const tw = ctx.measureText(t).width;
+    ctx.fillText(t, W - 60 - tw, 560);
+  }
+
+  ctx.fillStyle = "#D97706"; ctx.font = "900 18px Oswald, sans-serif";
+  ctx.fillText("clucknorris.app/lp-scanner", 60, 580);
+  ctx.fillStyle = "#6B7280"; ctx.font = "14px Oswald, sans-serif";
+  ctx.fillText("every pool · every dex · real yield · not financial advice", 60, 604);
+
+  return canvas.toBuffer("image/png");
+}
+
+app.get("/api/lp-card", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "public, max-age=300");
+  const A = req.query.a || req.query.tokenA, B = req.query.b || req.query.tokenB;
+  if (!A || !B) return res.status(400).json({ success: false, error: "pass ?a=<token>&b=<token>, optional &amount=<usd>" });
+  try {
+    const scan = await lpScanner.scanPair(String(A), String(B), { amountUsd: Number(req.query.amount) || 0 });
+    const png = await renderLpCard(scan);
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Content-Length", png.length);
+    return res.end(png);
+  } catch (err) {
+    console.error("LP card render error:", err.message);
+    return res.status(500).json({ success: false, error: publicErrMsg(err) });
+  }
+});
+
 app.get("/api/cluck-card", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "public, max-age=300");
