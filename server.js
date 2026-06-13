@@ -1668,6 +1668,7 @@ setInterval(() => {
 // per call); the on-chain payment check is also throttled to deter brute force.
 app.use("/api/", rateLimit("api", { windowMs: 60000, max: 150 }));
 app.use("/api/ask-cluck", rateLimit("ai", { windowMs: 60000, max: 15 }));
+app.use("/api/lp-ask", rateLimit("ai", { windowMs: 60000, max: 12 }));
 app.use("/api/verify-clkn-payment", rateLimit("pay", { windowMs: 60000, max: 20 }));
 
 // The Hatchery (token creator) — mounted before the global JSON parser so its
@@ -2341,6 +2342,48 @@ app.get("/api/lp-scan", async (req, res) => {
   const amountUsd = Number(req.query.amount) || 0;
   try { return res.status(200).json({ success: true, ...(await lpScanner.scanPair(String(A), String(B), { amountUsd })) }); }
   catch (e) { return res.status(200).json({ success: false, error: e.message }); }
+});
+
+// Ask Cluck about pools — pool-aware AI. Scans the pair LIVE, then has Cluck analyze the
+// REAL numbers (grounded, not generic). Informational only; turnover≠yield; IL flagged.
+app.post("/api/lp-ask", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  const { question, a, b, amount } = req.body || {};
+  if (!question || String(question).trim().length < 3) return res.status(400).json({ success: false, error: "Question too short" });
+  if (String(question).length > 1000) return res.status(400).json({ success: false, error: "Question too long" });
+  if (!a || !b) return res.status(400).json({ success: false, error: "Provide the pair (a and b)" });
+  const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+  if (!ANTHROPIC_KEY) return res.status(500).json({ success: false, error: "AI not configured" });
+  try {
+    const scan = await lpScanner.scanPair(String(a), String(b), { amountUsd: Number(amount) || 0 });
+    const ctx = (scan.pools || []).map((p) => {
+      const base = `${p.dex} — TVL $${p.tvlUsd.toLocaleString()}, 24h vol $${Math.round(p.volume.h24).toLocaleString()}, turnover ${p.turnover24h}x`;
+      if (p.feeTier == null) return `${base}, fee tier NOT YET READ (don't estimate its yield)`;
+      return `${base}, fee ${p.feeTier}%, fee-yield ${p.feeYieldPctDay}%/day` + (p.estDailyUsd != null ? `, est $${p.estDailyUsd}/day on $${scan.amountUsd}` : "");
+    }).join("\n");
+    const system = `You are Cluck Norris — the toughest LP professor on Solana — analyzing REAL pool data so a user can compare where to LP ${scan.pair}.
+HARD RULES:
+- INFORMATIONAL ONLY. NEVER tell them where to put money, never predict prices. Explain tradeoffs; THEY decide.
+- Ground every claim in the DATA below. If a pool's fee tier isn't read yet, say so — never invent a yield.
+- Turnover (vol/TVL) is NOT yield. A high-turnover pool with a tiny fee earns little. Fee-yield (fees/TVL) is the money metric — teach that.
+- Impermanent loss: a stable quote (USDC/USDT) = lower IL; two volatile assets = higher IL. Flag it.
+- Earnings estimates use a TVL-share model calibrated to a real autonomous LP we operate — call them estimates, not guarantees.
+- Tough, punchy, a chicken pun or two. 4–7 sentences. Always end with: not financial advice.
+
+LIVE POOL DATA — ${scan.pair}${scan.amountUsd ? ` (user deposit $${scan.amountUsd.toLocaleString()})` : ""}:
+${ctx || "(no pools found for this pair)"}`;
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 600, system, messages: [{ role: "user", content: String(question) }] }),
+    });
+    const data = await r.json();
+    if (data && data.content && data.content[0]) {
+      const answer = data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/#{1,3}\s/g, "").trim();
+      return res.status(200).json({ success: true, pair: scan.pair, answer, pools: scan.pools });
+    }
+    return res.status(500).json({ success: false, error: (data && data.error && data.error.message) || "No response from AI" });
+  } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
 });
 
 app.get("/api/bags-near-grad", async (req, res) => {
