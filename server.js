@@ -846,9 +846,9 @@ async function geckoBuyersInWindow(mint, fromMs, toMs) {
   const buyers = new Map();
   for (const pool of pools.slice(0, 6)) {
     try {
-      const res = await fetch(`https://api.geckoterminal.com/api/v2/networks/solana/pools/${pool}/trades`, { signal: AbortSignal.timeout(10000) });
-      if (!res.ok) continue;
-      const data = (await res.json()).data || [];
+      // Via the shared Pro→free onchain helper: CoinGecko Pro gives higher trade-history
+      // limits/coverage when COINGECKO_API_KEY is set, else free GeckoTerminal.
+      const data = (await lpScanner.cgFetch(`/networks/solana/pools/${pool}/trades`)).data || [];
       for (const t of data) {
         const a = t.attributes || {};
         if (a.kind !== "buy") continue;
