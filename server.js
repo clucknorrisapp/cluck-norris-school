@@ -6531,6 +6531,17 @@ function getLogo() {
 
 // -- Transcript share card (1200x630 PNG) — same canvas rig as the score card --
 // No emoji in canvas (the bundled Oswald has none); text labels only.
+// Cluck's diploma line — uplifting, but with the schoolyard edge. Tier-based off the record.
+function cluckDiplomaMessage(rec) {
+  const d = rec.diploma && rec.diploma.passed ? rec.diploma : null;
+  const grad = !!(rec.graduation && rec.graduation.completed);
+  const pct = d ? (d.pct || 0) : 0;
+  if (d && pct >= 95) return "Sharp work. Don't get cocky — the market humbles everyone.";
+  if (d) return "You made it through. Barely impressive. Now go prove it.";
+  if (grad) return "You finished what most quit. Respect — now stay hungry.";
+  return "You showed up. That's a start. The schoolyard's still waiting.";
+}
+
 async function renderCredentialCard(rec) {
   const W = 1200, H = 630;
   const canvas = createCanvas(W, H);
@@ -6576,6 +6587,10 @@ async function renderCredentialCard(rec) {
   const shortW = w.length > 12 ? w.slice(0, 6) + "…" + w.slice(-6) : w;
   ctx.fillStyle = "#9CA3AF"; ctx.font = "26px Oswald, sans-serif";
   ctx.fillText(shortW, 60, 220);
+
+  // Cluck's line — uplifting with a bite (sits between the wallet and the score rows).
+  ctx.fillStyle = "#D4AF37"; ctx.font = "22px Oswald, sans-serif";
+  ctx.fillText('"' + cluckDiplomaMessage(rec) + '" - Cluck', 60, 256);
 
   let y = 300;
   function row(label, value, vcolor, tag, tagColor) {
