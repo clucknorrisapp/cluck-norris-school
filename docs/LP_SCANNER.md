@@ -48,6 +48,13 @@ open." Every output carries an explicit not-advice + IL-risk disclaimer.
 5. **Polish + brand:** "calibrated by a real autonomous LP" badge, multi-protocol coverage.
 
 ## What's SHIPPED (endpoints in server.js, engine in lib/lp-scanner.js)
+- **`/api/lp-token?token=&amount=`** — SINGLE-TOKEN MODE (`scanToken`): paste one token →
+  EVERY pair/pool it trades in across all DEXs, each row labeled with its pair + per-pair IL +
+  active/idle flag. UI: leave Token B blank. "PEPE → boom."
+- **`/api/lp-top`** — TOP POOLS (`topPools`): the busiest Solana pools across every DEX by 24h
+  volume, enriched + ranked by real fee yield (which of the busiest actually pay). Warmed 12s
+  after boot then refreshed hourly by a background timer in server.js (independent of the
+  Telegram scheduler block); 55-min internal cache. UI: "🔥 Top Pools Right Now" loads on open.
 - **`/api/lp-scan?a=&b=&amount=`** — pair → every pool across DEXs (GeckoTerminal), enriched
   with on-chain fee tier → 24h fees, fee/TVL yield, 7d-avg yield + volTrend (spiking/cooling/
   steady), calibrated per-deposit `estDailyUsd`. `scanPair()`. Fee reads run SEQUENTIAL (RPC
