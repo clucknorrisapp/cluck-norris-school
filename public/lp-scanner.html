@@ -253,10 +253,14 @@
   function renderDeepDive(d){
     var p=d.pool||{}, v=d.volatility||{};
     var amt=d.amountUsd;
-    // pick the "best blended" width (highest blended $/day, else highest in-range) to star
+    // Star the "sweet spot": the WIDEST range whose blended $/day is within ~5% of the best
+    // (blended is flat once you're tighter than the daily swing, so wider = fewer rebalances
+    // & less IL for ~the same income). Falls back to in-range $/day if no deposit was given.
     var sweep=d.sweep||[];
-    var bestI=-1, bestVal=-1;
-    sweep.forEach(function(s,i){ var val=(s.blendedDailyUsd!=null?s.blendedDailyUsd:(s.inRangeDailyUsd||0)); if(val>bestVal){bestVal=val;bestI=i;} });
+    var valOf=function(s){ return s.blendedDailyUsd!=null?s.blendedDailyUsd:(s.inRangeDailyUsd||0); };
+    var maxVal=-1; sweep.forEach(function(s){ var v=valOf(s); if(v>maxVal)maxVal=v; });
+    var bestI=-1;
+    sweep.forEach(function(s,i){ if(valOf(s)>=maxVal*0.95) bestI=i; }); // last (widest) qualifier wins
     var curW = (ddState&&ddState.width) ? Number(ddState.width) : null;
 
     var stat=function(k,val,green){ return '<div class="stat"><div class="k">'+esc(k)+'</div><div class="v'+(green?' g':'')+'">'+val+'</div></div>'; };
