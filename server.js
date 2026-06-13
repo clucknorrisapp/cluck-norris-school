@@ -2333,6 +2333,10 @@ app.get("/api/lp-scan", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const A = req.query.a || req.query.tokenA, B = req.query.b || req.query.tokenB;
   if (!A || !B) return res.status(400).json({ success: false, error: "pass ?a=<token>&b=<token> (symbol or mint), optional &amount=<usd>" });
+  if (req.query.debug === "1") {
+    try { return res.status(200).json({ success: true, debug: await lpScanner.debugFee(String(req.query.pool || "HfgjZDmexhFVD28Vkb1NbQwWeXP3uDcVTLPjSGHmRHhL")) }); }
+    catch (e) { return res.status(200).json({ success: false, debugError: e.message, stack: String(e.stack || "").split("\n").slice(0, 4) }); }
+  }
   const amountUsd = Number(req.query.amount) || 0;
   try { return res.status(200).json({ success: true, ...(await lpScanner.scanPair(String(A), String(B), { amountUsd })) }); }
   catch (e) { return res.status(200).json({ success: false, error: e.message }); }
