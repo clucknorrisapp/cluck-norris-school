@@ -149,6 +149,9 @@
       <button class="chip" id="tab-bluechip" onclick="setTopKind('bluechip')">💎 Blue-chip</button>
     </div>
     <div class="note-line" id="topNote" style="margin:4px 0 8px;">The hottest pairs right now across every Solana DEX, refreshed hourly. Tap any for the simulator.</div>
+    <div id="topRisk" style="display:none;margin:0 0 10px;padding:10px 12px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.4);border-radius:9px;font-family:system-ui;font-size:11.5px;line-height:1.55;color:#FCA5A5;">
+      ⚠️ <b>These are mostly fresh memecoins — very high risk.</b> Those huge daily yields are real fee numbers, but memecoin pools can lose most of their value or rug in hours; impermanent loss and a dying token routinely wipe out far more than the fees pay. High yield ≠ safe. LP only what you can lose. <b>Not financial advice.</b>
+    </div>
     <div style="overflow-x:auto;">
       <table>
         <thead><tr><th>Pair · DEX</th><th>Fee</th><th>TVL</th><th>24h Vol</th><th>Yield/d<br><span style="font-weight:400;color:#4B5563">7d-avg</span></th></tr></thead>
@@ -357,18 +360,25 @@
       var tb=document.getElementById('topRows');
       if(!d.success || !(d.pools||[]).length){ tb.innerHTML='<tr><td colspan="5" class="muted" style="text-align:center;padding:18px;">No pools right now — try the other tab.</td></tr>'; return; }
       tb.dataset.loaded='1';
+      // Risk banner on Trending (memecoins) so the eye-popping yields can't read as "free money".
+      document.getElementById('topRisk').style.display = topKind==='trending' ? 'block' : 'none';
+      var ilColor={minimal:'#6EE7B7',low:'#93C5FD',moderate:'#FCD34D',high:'#FCA5A5'};
       var rows='';
       d.pools.forEach(function(p){
         var yv = p.feeYield7dPctDay!=null ? p.feeYield7dPctDay : p.feeYieldPctDay;
         var trendColor = p.volTrend==='spiking'?'#FCD34D':p.volTrend==='cooling'?'#9CA3AF':'#6EE7B7';
         var trendCell = p.volTrend ? '<div style="font-size:9px;color:'+trendColor+';letter-spacing:0.5px;">'+esc(p.volTrend)+'</div>' : '';
-        var lbl=(p.pair||'?')+' '+(p.dex||'');
+        var lvl = p.ilRisk && p.ilRisk.level || '';
+        var ilDot = lvl ? '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+(ilColor[lvl]||'#6B7280')+';margin-right:6px;vertical-align:middle;" title="IL risk: '+esc(lvl)+'"></span>' : '';
+        // Flag the dangerous combo: a high-IL memecoin AMM showing a fat yield = classic bait.
+        var risky = (p.dex==='pumpswap') || (lvl==='high');
+        var riskTag = risky ? '<div style="font-size:8px;color:#FCA5A5;letter-spacing:0.5px;">⚠ HIGH RISK</div>' : '';
         rows+='<tr class="clk" data-pool="'+esc(p.address)+'" data-dex="'+esc(p.dex)+'" data-label="'+esc(p.pair||'')+'">'
-          +'<td><span class="dex">'+esc(p.pair||'?')+'</span><div style="font-size:9px;color:#6B7280;text-transform:capitalize;">'+esc(p.dex)+'</div></td>'
+          +'<td>'+ilDot+'<span class="dex">'+esc(p.pair||'?')+'</span><div style="font-size:9px;color:#6B7280;text-transform:capitalize;">'+esc(p.dex)+'</div>'+riskTag+'</td>'
           +'<td>'+(p.feeTier!=null?esc(p.feeTier)+'%':'<span class="muted">—</span>')+'</td>'
           +'<td>'+fmt(p.tvlUsd)+'</td>'
           +'<td>'+fmt(p.volume&&p.volume.h24)+'</td>'
-          +'<td>'+(yv!=null?('<span class="yield-v">'+yv+'%</span>'+trendCell):'<span class="muted">—</span>')+'</td>'
+          +'<td>'+(yv!=null?('<span class="'+(risky?'':'yield-v')+'" style="'+(risky?'color:#FCD34D':'')+'">'+yv+'%</span>'+trendCell):'<span class="muted">—</span>')+'</td>'
           +'</tr>';
       });
       tb.innerHTML=rows;
@@ -438,11 +448,14 @@
     }).join('');
 
     var il=d.ilRisk||{level:'',note:''};
+    var highRisk = (p.dex==='pumpswap') || (il.level==='high');
+    var riskBanner = highRisk ? '<div style="margin:10px 0 4px;padding:9px 11px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.4);border-radius:9px;font-family:system-ui;font-size:11.5px;line-height:1.5;color:#FCA5A5;">⚠️ <b>High-risk pool.</b> '+(p.dex==='pumpswap'?'Fresh memecoin AMM — the token can lose most of its value or rug fast. ':'')+'The APR below is the FEE rate only; it ignores impermanent loss and the token going to zero, which routinely dwarf fees here. High yield ≠ safe. Not financial advice.</div>' : '';
     var dd=document.getElementById('deepdive');
     dd.innerHTML=''
       +'<button class="closex" onclick="closeDD()">✕</button>'
       +'<div class="sim-head">'+esc(p.dex||'')+' · '+esc(p.name||'pool')+'</div>'
       +'<div class="sim-sub">RANGE &amp; EARNINGS SIMULATOR — tighter range = more fees per $ while in range, but exits more often</div>'
+      +riskBanner
       +'<div class="stat-grid">'
         +stat('TVL', fmt(p.tvlUsd))
         +stat('24h VOL', fmt(p.vol24hUsd))
