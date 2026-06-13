@@ -9,6 +9,7 @@ const securityCoop = require("./securitycoop");
 const whirlpoolMM = require("./whirlpool-mm");
 const meteora = require("./lib/meteora-dlmm"); // Meteora DLMM read layer (SDK lazy-loaded inside)
 const lpScanner = require("./lib/lp-scanner"); // LP Pair Scanner (Liquidity Lab flagship) — see docs/LP_SCANNER.md
+const diplomaNft = require("./lib/diploma-nft"); // Graduation diploma cNFT minter (Bubblegum, treasury payer)
 const { fetchBagsContext, classifyTeamActivity } = require("./lib/bags-context");
 const analytics = require("./lib/analytics");
 const solscan = require("./lib/solscan");
@@ -4373,9 +4374,16 @@ app.post("/api/claim", async (req, res) => {
     // existing record. Returns the slug so the client can link the transcript.
     const kind = source === "GRADUATION" ? "graduation" : "challenge";
     const rec = credentials.record(wallet, { kind, score: effScore, total: effTotal, pct: effPct, verified, isHolder, balance, coursework });
+    // Graduating the FULL curriculum earns the on-chain diploma NFT (not the Ultimate
+    // Challenge). Best-effort: a mint hiccup never fails the claim — the record is saved.
+    let nft = null;
+    if (kind === "graduation") {
+      try { nft = await diplomaNft.mintDiploma(wallet, rec.slug); }
+      catch (e) { nft = { ok: false, error: publicErrMsg(e) }; }
+    }
     return res.status(200).json({
       success: true, isHolder, balance, verified,
-      slug: rec.slug, transcript: `/transcript/${rec.slug}`, alreadyOnList: exists,
+      slug: rec.slug, transcript: `/transcript/${rec.slug}`, alreadyOnList: exists, nft,
     });
   } catch(err) {
     console.error("Claim error:", err.message);
@@ -6619,6 +6627,67 @@ async function renderCredentialCard(rec) {
 
   return canvas.toBuffer("image/png");
 }
+
+// Diploma NFT metadata (Metaplex JSON standard) — served as each diploma cNFT's URI.
+// Art = the personalized credential card; only graduates get minted, so it's graduation-framed.
+app.get("/api/diploma-metadata/:slug", (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "public, max-age=300");
+  const rec = credentials.getBySlug(String(req.params.slug || ""));
+  if (!rec) return res.status(404).json({ error: "not_found" });
+  const origin = CANONICAL_ORIGIN;
+  const img = `${origin}/api/credential-card?slug=${encodeURIComponent(rec.slug)}`;
+  const dip = rec.diploma && rec.diploma.passed ? rec.diploma : null;
+  const attrs = [
+    { trait_type: "Credential", value: "School Graduate" },
+    { trait_type: "Curriculum", value: "12 / 12 lessons" },
+  ];
+  if (dip) attrs.push({ trait_type: "Ultimate Challenge", value: (dip.pct || 0) + "%" });
+  if (rec.holder) attrs.push({ trait_type: "CLKN Holder", value: rec.holder.isHolder ? "Yes" : "No" });
+  attrs.push({ trait_type: "Graduated", value: ((rec.graduation && rec.graduation.at) || rec.createdAt || "").slice(0, 10) });
+  return res.status(200).json({
+    name: "Cluck Norris Diploma",
+    symbol: "CLKNDIP",
+    description: "Proof of graduation from the School of Crypto Hard Knocks (clucknorris.app) — a free Solana crypto school. Earned by completing the full 12-lesson curriculum. Earned, not bought. 🐔",
+    image: img,
+    external_url: `${origin}/transcript/${encodeURIComponent(rec.slug)}`,
+    attributes: attrs,
+    properties: { category: "image", files: [{ uri: img, type: "image/png" }] },
+  });
+});
+
+// Diploma NFT admin (gated, 404 without key). ?action=status | create-tree | test | backfill.
+// Mutating actions need &run=1. create-tree is one-time (~0.3 SOL); backfill mints to every
+// graduate who left a wallet (idempotent — won't double-mint).
+app.get("/api/diploma-mint", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  const action = String(req.query.action || "status");
+  try {
+    if (action === "status") return res.status(200).json({ success: true, ...diplomaNft.status() });
+    if (action === "create-tree") {
+      if (req.query.run !== "1") return res.status(200).json({ success: true, dryRun: true, hint: "add &run=1 to create the shared tree (~0.3 SOL, one-time)" });
+      return res.status(200).json({ success: true, tree: await diplomaNft.ensureTree() });
+    }
+    if (action === "test") {
+      const wallet = String(req.query.wallet || "");
+      if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ success: false, error: "valid &wallet= required" });
+      if (req.query.run !== "1") return res.status(200).json({ success: true, dryRun: true, wallet });
+      return res.status(200).json(await diplomaNft.mintDiploma(wallet, String(req.query.slug || "test"), { force: req.query.force === "1" }));
+    }
+    if (action === "backfill") {
+      const eligible = credentials.all().filter(r => r.graduation && r.graduation.completed && SOL_ADDR_RE.test(r.wallet || ""));
+      if (req.query.run !== "1") return res.status(200).json({ success: true, dryRun: true, eligible: eligible.length });
+      const results = [];
+      for (const rec of eligible) {
+        try { const r = await diplomaNft.mintDiploma(rec.wallet, rec.slug); results.push({ wallet: rec.wallet.slice(0, 6) + "…", ok: r.ok, already: !!r.already, sig: r.sig || null, reason: r.reason || null }); }
+        catch (e) { results.push({ wallet: rec.wallet.slice(0, 6) + "…", ok: false, error: e.message }); }
+      }
+      return res.status(200).json({ success: true, eligible: eligible.length, minted: results.filter(r => r.ok && !r.already).length, results });
+    }
+    return res.status(400).json({ success: false, error: "unknown action (status|create-tree|test|backfill)" });
+  } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
+});
 
 app.get("/api/credential-card", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
