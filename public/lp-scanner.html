@@ -127,6 +127,13 @@
       <button onclick="quick('JLP','SOL')">JLP / SOL</button>
     </div>
     <button class="scan-btn" id="scanBtn" onclick="runScan()">SCAN POOLS</button>
+    <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px;">
+      <label class="fld">⚡ POWER USER — paste a pool address to jump straight to the simulator</label>
+      <div style="display:flex;gap:8px;">
+        <input type="text" id="poolAddr" placeholder="pool address" autocomplete="off" style="flex:1;"/>
+        <button class="ask-btn" id="poolBtn" onclick="directPool()" style="margin:0;white-space:nowrap;">SIMULATE →</button>
+      </div>
+    </div>
   </div>
 
   <div class="err" id="err"></div>
@@ -230,6 +237,21 @@
     Array.prototype.forEach.call(document.querySelectorAll('#poolRows tr.clk'), function(tr){
       tr.addEventListener('click', function(){ openDeepDive(tr.getAttribute('data-pool'), tr.getAttribute('data-dex')); });
     });
+  }
+
+  // Power-user: jump straight to a pool's simulator from its address (skip the pair scan).
+  function directPool(){
+    clearErr();
+    var addr=document.getElementById('poolAddr').value.trim();
+    if(!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr)){ showErr('Paste a valid Solana pool address.'); return; }
+    document.getElementById('results').classList.remove('hidden');
+    // collapse the pair table — we came straight from an address
+    document.getElementById('pairTitle').textContent='POOL DEEP-DIVE';
+    document.getElementById('ilBadge').className='badge'; document.getElementById('ilBadge').textContent='';
+    document.getElementById('ilNote').textContent='';
+    document.getElementById('poolRows').innerHTML='<tr><td colspan="6" class="muted" style="text-align:center;padding:14px;">Direct pool lookup — see the simulator below.</td></tr>';
+    document.getElementById('rankNote').textContent='';
+    openDeepDive(addr, '');
   }
 
   // ── Pool deep-dive + range/earnings simulator ──────────────────────────────
@@ -347,6 +369,7 @@
   ['tokenA','tokenB','amount'].forEach(function(id){
     document.getElementById(id).addEventListener('keydown',function(e){ if(e.key==='Enter') runScan(); });
   });
+  document.getElementById('poolAddr').addEventListener('keydown',function(e){ if(e.key==='Enter') directPool(); });
 
   // Token search-as-you-type. Picking a result stores the exact mint (dataset.mint) so the
   // scan uses that token precisely; typing again clears it (falls back to symbol resolution).
