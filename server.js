@@ -2335,6 +2335,7 @@ app.get("/api/lp-scan", async (req, res) => {
   const A = req.query.a || req.query.tokenA, B = req.query.b || req.query.tokenB;
   if (!A || !B) return res.status(400).json({ success: false, error: "pass ?a=<token>&b=<token> (symbol or mint), optional &amount=<usd>" });
   if (req.query.debug === "cg") return res.status(200).json({ success: true, cg: await lpScanner.debugCg() });
+  if (req.query.debug === "readers") return res.status(200).json({ success: true, readers: await lpScanner.debugReaders() });
   if (req.query.debug === "1") {
     try { return res.status(200).json({ success: true, debug: await lpScanner.debugFee(String(req.query.pool || "HfgjZDmexhFVD28Vkb1NbQwWeXP3uDcVTLPjSGHmRHhL")) }); }
     catch (e) { return res.status(200).json({ success: false, debugError: e.message, stack: String(e.stack || "").split("\n").slice(0, 4) }); }
