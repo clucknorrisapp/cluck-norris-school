@@ -2987,7 +2987,11 @@ async function jupUsdcRecenter({ dryRun = false, force = false } = {}) {
     const o = await meteora.openPosition({ poolAddress: JUPUSDC_POOL, xUi: Math.min(depX, f.jup || 0), yUi: Math.min(depY, f.usdc || 0), halfWidthPct: cfg.halfWidthPct, distribution: cfg.distribution });
     steps.push({ opened: o.positions, sigs: (o.sigs || []).length });
     if (o.positions && o.positions[0]) kv.set("jupUsdcManagedPubkey", o.positions[0]);
-    meteoraDM(`🔄 <b>JUP/USDC re-centered</b> ±${cfg.halfWidthPct}% ${cfg.distribution} · was ${pos.inRange ? `near edge ${(frac * 100).toFixed(0)}%` : "OUT of range"}`);
+    const swStep = steps.find((s) => s.rebalancedUsd != null) || steps.find((s) => s.swapSkipped);
+    const swTxt = !swStep ? " · already balanced"
+      : swStep.swapSkipped ? ` · ⚠️ swap skipped (${swStep.swapSkipped}) — centered, not fully balanced`
+      : ` · swapped $${swStep.rebalancedUsd} to 50/50 (impact ${swStep.impactPct != null ? swStep.impactPct + "%" : "?"})`;
+    meteoraDM(`🔄 <b>JUP/USDC re-centered</b> ±${cfg.halfWidthPct}% ${cfg.distribution} · was ${pos.inRange ? `near edge ${(frac * 100).toFixed(0)}%` : "OUT of range"}${swTxt} · ~$${Math.round(pos.valueUsd)}`);
   } catch (e) {
     if (closeSucceeded) {
       kv.set("jupUsdcReopenPending", { x: depX, y: depY, halfWidthPct: cfg.halfWidthPct, distribution: cfg.distribution, ts: Date.now() });
