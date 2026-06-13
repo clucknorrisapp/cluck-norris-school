@@ -75,6 +75,22 @@
   @keyframes spin { to { transform:rotate(360deg); } }
   .hidden { display:none; }
   .note-line { font-family:var(--mono); font-size:10px; color:var(--subtext); margin-top:10px; line-height:1.5; }
+  tr.clk { cursor:pointer; transition:background 0.12s; }
+  tr.clk:hover td { background:rgba(217,119,6,0.10); }
+  .sim-head { font-family:'Oswald',sans-serif; font-weight:900; letter-spacing:1px; font-size:17px; color:var(--text); }
+  .sim-sub { font-family:var(--mono); font-size:10px; color:var(--subtext); letter-spacing:0.5px; margin-top:2px; }
+  .stat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(96px,1fr)); gap:8px; margin:12px 0; }
+  .stat { background:#0d0d0d; border:1px solid var(--border); border-radius:9px; padding:9px 10px; }
+  .stat .k { font-family:var(--mono); font-size:9px; color:var(--subtext); letter-spacing:0.5px; }
+  .stat .v { font-family:'Oswald',sans-serif; font-weight:700; font-size:16px; color:var(--text); margin-top:3px; }
+  .stat .v.g { color:#6EE7B7; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin:6px 0 12px; }
+  .chip { background:transparent; border:1px solid var(--border); border-radius:18px; padding:6px 12px; color:var(--subtext); font-family:var(--mono); font-size:11px; cursor:pointer; }
+  .chip:hover { border-color:var(--orange); color:var(--accent); }
+  .chip.on { background:rgba(217,119,6,0.18); border-color:var(--orange); color:var(--accent); font-weight:700; }
+  tr.simbest td { background:rgba(16,185,129,0.10); }
+  .ti-bar { display:inline-block; height:5px; border-radius:3px; background:linear-gradient(90deg,#10B981,#FCD34D); vertical-align:middle; }
+  .closex { float:right; background:none; border:none; color:var(--subtext); font-size:18px; cursor:pointer; line-height:1; }
 </style>
 </head>
 <body>
@@ -129,7 +145,10 @@
         </table>
       </div>
       <div class="note-line" id="rankNote"></div>
+      <div class="note-line" style="color:var(--accent);">👆 Tap any pool to open the range &amp; earnings simulator.</div>
     </div>
+
+    <div class="card hidden" id="deepdive"></div>
 
     <div class="card">
       <div style="font-family:'Oswald',sans-serif;font-weight:700;letter-spacing:1px;color:var(--accent);font-size:14px;margin-bottom:4px;">🐔 ASK CLUCK ABOUT THESE POOLS</div>
@@ -193,7 +212,7 @@
       var yv = p.feeYield7dPctDay!=null ? p.feeYield7dPctDay : p.feeYieldPctDay;
       var trendColor = p.volTrend==='spiking'?'#FCD34D':p.volTrend==='cooling'?'#9CA3AF':'#6EE7B7';
       var trendCell = p.volTrend ? '<div style="font-size:9px;color:'+trendColor+';letter-spacing:0.5px;">'+esc(p.volTrend)+'</div>' : '';
-      rows+='<tr class="'+(isBest?'best':'')+'">'
+      rows+='<tr class="clk '+(isBest?'best':'')+'" data-pool="'+esc(p.address)+'" data-dex="'+esc(p.dex)+'">'
         +'<td><span class="dex">'+(isBest?'<span class="crown">★ </span>':'')+esc(p.dex)+'</span></td>'
         +'<td>'+(hasFee?esc(p.feeTier)+'%':'<span class="muted">—</span>')+'</td>'
         +'<td>'+fmt(p.tvlUsd)+'</td>'
@@ -206,6 +225,87 @@
     document.getElementById('poolRows').innerHTML=rows;
     document.getElementById('rankNote').textContent=d.note||'';
     document.getElementById('answer').classList.remove('show');
+    document.getElementById('deepdive').classList.add('hidden');
+    Array.prototype.forEach.call(document.querySelectorAll('#poolRows tr.clk'), function(tr){
+      tr.addEventListener('click', function(){ openDeepDive(tr.getAttribute('data-pool'), tr.getAttribute('data-dex')); });
+    });
+  }
+
+  // ── Pool deep-dive + range/earnings simulator ──────────────────────────────
+  var ddState = null; // { pool, dex, width }
+  async function openDeepDive(pool, dex, width){
+    if(!pool) return;
+    ddState={ pool:pool, dex:dex, width:width||null };
+    var dd=document.getElementById('deepdive');
+    dd.classList.remove('hidden');
+    dd.innerHTML='<button class="closex" onclick="closeDD()">✕</button><div class="sim-head">'+esc(dex||'Pool')+' deep-dive</div><div class="sim-sub" style="margin-top:10px;"><span class="spin"></span> running the simulator…</div>';
+    dd.scrollIntoView({behavior:'smooth', block:'start'});
+    var amt=document.getElementById('amount').value.trim();
+    try{
+      var url='/api/lp-pool?pool='+encodeURIComponent(pool)+(amt?('&amount='+encodeURIComponent(amt)):'')+(width?('&width='+encodeURIComponent(width)):'');
+      var r=await fetch(url); var d=await r.json();
+      if(!d.success){ dd.innerHTML='<button class="closex" onclick="closeDD()">✕</button><div class="sim-sub" style="color:#FCA5A5;">'+esc(d.error||'Could not load this pool.')+'</div>'; return; }
+      renderDeepDive(d);
+    }catch(e){ dd.innerHTML='<button class="closex" onclick="closeDD()">✕</button><div class="sim-sub" style="color:#FCA5A5;">Network error — try again.</div>'; }
+  }
+  function closeDD(){ document.getElementById('deepdive').classList.add('hidden'); }
+
+  function renderDeepDive(d){
+    var p=d.pool||{}, v=d.volatility||{};
+    var amt=d.amountUsd;
+    // pick the "best blended" width (highest blended $/day, else highest in-range) to star
+    var sweep=d.sweep||[];
+    var bestI=-1, bestVal=-1;
+    sweep.forEach(function(s,i){ var val=(s.blendedDailyUsd!=null?s.blendedDailyUsd:(s.inRangeDailyUsd||0)); if(val>bestVal){bestVal=val;bestI=i;} });
+    var curW = (ddState&&ddState.width) ? Number(ddState.width) : null;
+
+    var stat=function(k,val,green){ return '<div class="stat"><div class="k">'+esc(k)+'</div><div class="v'+(green?' g':'')+'">'+val+'</div></div>'; };
+    var feeStr = p.feeTier!=null ? p.feeTier+'%' : '—';
+    var volStr = v.dailyRangePct!=null ? v.dailyRangePct+'%' : 'n/a';
+
+    var chips = [0.25,0.5,1,2,3,5,10].map(function(w){
+      var on = curW===w ? ' on' : '';
+      return '<button class="chip'+on+'" onclick="openDeepDive(ddState.pool,ddState.dex,'+w+')">±'+w+'%</button>';
+    }).join('');
+
+    var rows = sweep.map(function(s,i){
+      var star = i===bestI ? '<span style="color:#6EE7B7">★ </span>' : '';
+      var sel = (curW!=null && Math.abs(s.halfWidthPct-curW)<0.001);
+      var tir = s.timeInRange!=null ? Math.round(s.timeInRange*100)+'%' : '—';
+      var tirBar = s.timeInRange!=null ? '<span class="ti-bar" style="width:'+Math.round(s.timeInRange*46)+'px;"></span> ' : '';
+      return '<tr class="'+(i===bestI?'simbest':'')+(sel?' best':'')+'">'
+        +'<td>'+star+'±'+s.halfWidthPct+'%</td>'
+        +'<td>'+s.concMult+'x</td>'
+        +'<td>'+(s.inRangeDailyUsd!=null?('<span class="yield-v">$'+s.inRangeDailyUsd+'</span>'):'<span class="muted">—</span>')+'</td>'
+        +'<td>'+tirBar+tir+'</td>'
+        +'<td>'+(s.blendedDailyUsd!=null?('<span class="yield-v">$'+s.blendedDailyUsd+'</span>'):'<span class="muted">—</span>')+'</td>'
+        +'<td>'+(s.blendedApr!=null?(s.blendedApr+'%'):'<span class="muted">—</span>')+'</td>'
+        +'<td>'+(s.exitsPerDay!=null?s.exitsPerDay:'—')+'</td>'
+        +'</tr>';
+    }).join('');
+
+    var il=d.ilRisk||{level:'',note:''};
+    var dd=document.getElementById('deepdive');
+    dd.innerHTML=''
+      +'<button class="closex" onclick="closeDD()">✕</button>'
+      +'<div class="sim-head">'+esc(p.dex||'')+' · '+esc(p.name||'pool')+'</div>'
+      +'<div class="sim-sub">RANGE &amp; EARNINGS SIMULATOR — tighter range = more fees per $ while in range, but exits more often</div>'
+      +'<div class="stat-grid">'
+        +stat('TVL', fmt(p.tvlUsd))
+        +stat('24h VOL', fmt(p.vol24hUsd))
+        +stat('7d AVG VOL', fmt(p.vol7dAvgUsd))
+        +stat('FEE TIER', feeStr)
+        +stat('DAILY SWING', volStr)
+        +(amt?stat('YOUR SIZE', fmt(amt)):'')
+      +'</div>'
+      +'<div class="sim-sub" style="margin:0 0 4px;">Pick a range half-width to highlight it (or just compare the whole table):</div>'
+      +'<div class="chips">'+chips+'</div>'
+      +'<div style="overflow-x:auto;"><table>'
+        +'<thead><tr><th>Range</th><th>Conc.</th><th>In-range $/d</th><th>Time in range</th><th>Blended $/d</th><th>APR</th><th>Exits/d</th></tr></thead>'
+        +'<tbody>'+rows+'</tbody></table></div>'
+      +(amt?'':'<div class="note-line" style="color:var(--accent);">💡 Enter a deposit amount above &amp; tap the pool again for $/day + APR estimates.</div>')
+      +'<div class="note-line">'+esc(d.model||'')+'</div>'
+      +'<div class="note-line" style="color:#FCA5A5;">IL risk: '+esc(il.level)+' — '+esc(il.note)+'</div>';
   }
 
   async function askCluck(){

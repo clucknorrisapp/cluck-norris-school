@@ -2354,6 +2354,20 @@ app.get("/api/lp-token-search", async (req, res) => {
   catch (e) { return res.status(200).json({ success: false, error: e.message, tokens: [] }); }
 });
 
+// LP Scanner pool deep-dive + range/earnings simulator — ?pool=<address>, optional
+// &amount=<usd>&width=<halfWidthPct>. Models the concentrated-liquidity tradeoff against
+// the pool's real 7d volatility. Public read. Informational only, NOT financial advice.
+app.get("/api/lp-pool", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  const pool = req.query.pool || req.query.address;
+  if (!pool) return res.status(400).json({ success: false, error: "pass ?pool=<address>, optional &amount=<usd>&width=<halfWidthPct>" });
+  const amountUsd = Number(req.query.amount) || 0;
+  const halfWidthPct = req.query.width != null ? Number(req.query.width) : null;
+  try { return res.status(200).json({ success: true, ...(await lpScanner.poolDeepDive(String(pool), { amountUsd, halfWidthPct })) }); }
+  catch (e) { return res.status(200).json({ success: false, error: e.message }); }
+});
+
 // Ask Cluck about pools — pool-aware AI. Scans the pair LIVE, then has Cluck analyze the
 // REAL numbers (grounded, not generic). Informational only; turnover≠yield; IL flagged.
 app.post("/api/lp-ask", async (req, res) => {
