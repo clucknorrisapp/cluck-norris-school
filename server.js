@@ -2915,7 +2915,10 @@ const JUPUSDC_POOL = "HfgjZDmexhFVD28Vkb1NbQwWeXP3uDcVTLPjSGHmRHhL";
 // leaks funds (the SDK can't reproduce Meteora's UI swap+recenter bundle) — the owner
 // rebalances by hand in the UI. A kv {enabled:true} can opt back in, but a kv reset must
 // never silently re-arm the leak, so the code default is false. We MONITOR, the owner taps.
-function jupUsdcCfg() { return { enabled: false, halfWidthPct: 5, distribution: "curve", edgeFrac: 0.12, minRecenterSec: 3600, ...kv.get("jupUsdcCfg", {}) }; }
+// halfWidthPct 3 ≈ the owner's tight ~±3% range; maxImpactPct 0.2 caps the rebalance swap's
+// Jupiter price impact (a costlier route is skipped — see jupUsdcRecenter). enabled gates the
+// autonomous close→swap→reopen loop ("Option B": recenter + 50/50 swap + redeposit, $0 residue).
+function jupUsdcCfg() { return { enabled: false, halfWidthPct: 3, distribution: "curve", edgeFrac: 0.12, minRecenterSec: 3600, maxImpactPct: 0.2, ...kv.get("jupUsdcCfg", {}) }; }
 async function jupUsdcRecenter({ dryRun = false, force = false } = {}) {
   if (!meteora.isEnabled()) return { action: "none", reason: "operator not set" };
   const cfg = jupUsdcCfg();
@@ -2958,15 +2961,26 @@ async function jupUsdcRecenter({ dryRun = false, force = false } = {}) {
     kv.set("jupUsdcManagedPubkey", null);
     steps.push({ closed: pos.position, sigs: (r.sigs || []).length });
     await new Promise((res) => setTimeout(res, 2500));
-    // Rebalance ONLY the freed amounts to ~50/50 (never the whole wallet).
+    // Rebalance ONLY the freed amounts to ~50/50 (never the whole wallet). The swap is
+    // price-impact-guarded (cfg.maxImpactPct): if a clean route isn't available we SKIP the
+    // swap and reopen with the freed amounts as-is — centered but not perfectly balanced,
+    // funds fully intact (owner tops up later) — rather than eat a costly swap that would
+    // burn the day's fees. On skip, depX/depY stay = the freed amounts (their init values).
     if (jupUsd > 0) {
       const vX = freedX * jupUsd, vY = freedY, target = (vX + vY) / 2;
       const diff = vX - target;
       if (Math.abs(diff) > 1) {
-        if (diff > 0) { await whirlpoolMM.vault.manualSwap({ projectId: "treasury", fromSym: "JUP", toSym: "USDC", amountUi: diff / jupUsd, silent: true }); depX = target / jupUsd; depY = freedY + diff * 0.998; }
-        else { await whirlpoolMM.vault.manualSwap({ projectId: "treasury", fromSym: "USDC", toSym: "JUP", amountUi: -diff, silent: true }); depY = target; depX = freedX + (-diff / jupUsd) * 0.998; }
-        steps.push({ rebalancedUsd: Number(Math.abs(diff).toFixed(2)) });
-        await new Promise((res) => setTimeout(res, 2500));
+        const sw = diff > 0
+          ? await whirlpoolMM.vault.manualSwap({ projectId: "treasury", fromSym: "JUP", toSym: "USDC", amountUi: diff / jupUsd, maxImpactPct: cfg.maxImpactPct, silent: true })
+          : await whirlpoolMM.vault.manualSwap({ projectId: "treasury", fromSym: "USDC", toSym: "JUP", amountUi: -diff, maxImpactPct: cfg.maxImpactPct, silent: true });
+        if (sw && sw.action === "swap") {
+          if (diff > 0) { depX = target / jupUsd; depY = freedY + diff * 0.998; }
+          else { depY = target; depX = freedX + (-diff / jupUsd) * 0.998; }
+          steps.push({ rebalancedUsd: Number(Math.abs(diff).toFixed(2)), impactPct: sw.impactPct });
+          await new Promise((res) => setTimeout(res, 2500));
+        } else {
+          steps.push({ swapSkipped: (sw && sw.reason) || "no route" });
+        }
       }
     }
     const f = ((await whirlpoolMM.vault.status("treasury")) || {}).float || {};
@@ -3064,6 +3078,7 @@ app.get("/api/meteora/config", (req, res) => {
       if (req.query.distribution != null) patch.distribution = ["spot", "curve", "bidask"].includes(String(req.query.distribution)) ? String(req.query.distribution) : cur.distribution;
       if (req.query.edgeFrac != null) patch.edgeFrac = Math.max(0.02, Math.min(0.45, Number(req.query.edgeFrac) || cur.edgeFrac));
       if (req.query.minRecenterSec != null) patch.minRecenterSec = Math.max(300, Math.min(86400, parseInt(req.query.minRecenterSec) || cur.minRecenterSec));
+      if (req.query.maxImpactPct != null) patch.maxImpactPct = Math.max(0.01, Math.min(5, Number(req.query.maxImpactPct) || cur.maxImpactPct));
       if (req.query.enabled != null) patch.enabled = !["0", "false", "off"].includes(String(req.query.enabled).toLowerCase());
       if (Object.keys(patch).length) kv.set("jupUsdcCfg", { ...kv.get("jupUsdcCfg", {}), ...patch });
       return res.status(200).json({ which: "jup", config: jupUsdcCfg() });
