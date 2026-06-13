@@ -6565,7 +6565,7 @@ async function renderCredentialCard(rec) {
   // Round logo, top-right.
   const logo = await getLogo();
   if (logo) {
-    const LS = 124, lx = W - 60 - LS, ly = 44, cx = lx + LS / 2, cy = ly + LS / 2, r = LS / 2;
+    const LS = 168, lx = W - 60 - LS, ly = 40, cx = lx + LS / 2, cy = ly + LS / 2, r = LS / 2;
     ctx.save();
     ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.closePath(); ctx.clip();
     ctx.drawImage(logo, lx, ly, LS, LS);
