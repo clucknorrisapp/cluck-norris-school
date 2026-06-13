@@ -2354,6 +2354,20 @@ app.get("/api/lp-token-search", async (req, res) => {
   catch (e) { return res.status(200).json({ success: false, error: e.message, tokens: [] }); }
 });
 
+// LP Scanner TOP POOLS — busiest Solana pools across all DEXs, refreshed hourly (warmed by
+// a background timer below; this returns the cached set, computing it on the first cold call).
+app.get("/api/lp-top", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "public, max-age=600");
+  try { return res.status(200).json({ success: true, ...(await lpScanner.topPools({ force: req.query.refresh === "1" })) }); }
+  catch (e) { return res.status(200).json({ success: false, error: e.message }); }
+});
+
+// Warm the Top Pools cache shortly after boot, then refresh it every hour, so /api/lp-top is
+// always instant. Runs regardless of the Telegram scheduler block (this is a public read).
+setTimeout(() => { lpScanner.topPools({ force: true }).then(t => console.log(`[lp-top] warmed ${t.count} pools`)).catch(e => console.warn("[lp-top] warm failed:", e.message)); }, 12000);
+setInterval(() => { lpScanner.topPools({ force: true }).catch(e => console.warn("[lp-top] hourly refresh failed:", e.message)); }, 60 * 60 * 1000);
+
 // LP Scanner single-token mode — ?token=<symbol|mint>, optional &amount=<usd>. Returns EVERY
 // pair/pool this token trades in across all Solana DEXs with volume + real fee yield. Public.
 app.get("/api/lp-token", async (req, res) => {
