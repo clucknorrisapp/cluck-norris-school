@@ -91,6 +91,15 @@
   tr.simbest td { background:rgba(16,185,129,0.10); }
   .ti-bar { display:inline-block; height:5px; border-radius:3px; background:linear-gradient(90deg,#10B981,#FCD34D); vertical-align:middle; }
   .closex { float:right; background:none; border:none; color:var(--subtext); font-size:18px; cursor:pointer; line-height:1; }
+  .top-strip { display:flex; gap:8px; overflow-x:auto; padding:8px 2px 6px; -webkit-overflow-scrolling:touch; scrollbar-width:thin; }
+  .top-chip { flex:0 0 auto; min-width:124px; background:#0d0d0d; border:1px solid var(--border); border-radius:10px; padding:8px 10px; cursor:pointer; transition:border-color 0.12s; }
+  .top-chip:hover { border-color:var(--orange); }
+  .top-chip.risk { border-color:rgba(239,68,68,0.45); }
+  .top-chip .p { font-family:'Oswald',sans-serif; font-weight:700; font-size:13px; color:var(--text); white-space:nowrap; }
+  .top-chip .d { font-size:8px; color:var(--subtext); text-transform:capitalize; letter-spacing:0.5px; }
+  .top-chip .y { font-family:'Oswald',sans-serif; font-weight:700; font-size:15px; margin-top:4px; }
+  .top-tab { background:transparent; border:1px solid var(--border); border-radius:16px; padding:4px 11px; color:var(--subtext); font-family:var(--mono); font-size:11px; cursor:pointer; }
+  .top-tab.on { background:rgba(217,119,6,0.18); border-color:var(--orange); color:var(--accent); font-weight:700; }
 </style>
 </head>
 <body>
@@ -103,6 +112,23 @@
       <div class="brand-mini">CLUCK NORRIS</div>
       <h1>LP PAIR SCANNER</h1>
       <p>EVERY POOL · EVERY DEX · REAL YIELD</p>
+    </div>
+  </div>
+
+  <!-- Top Pools — compact horizontal scroller at the top; expand/collapse; doesn't push results down -->
+  <div class="card" id="topCard" style="padding:11px 13px;">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <button id="topToggle" onclick="toggleTop()" style="background:none;border:none;color:var(--accent);font-family:'Oswald',sans-serif;font-weight:900;letter-spacing:1px;font-size:14px;cursor:pointer;padding:0;">🔥 TOP POOLS <span id="topCaret">▾</span></button>
+      <button class="top-tab on" id="tab-trending" onclick="setTopKind('trending')">Trending</button>
+      <button class="top-tab" id="tab-bluechip" onclick="setTopKind('bluechip')">Blue-chip</button>
+      <span class="note-line" id="topUpdated" style="margin:0 0 0 auto;"></span>
+    </div>
+    <div id="topBody">
+      <div id="topRisk" style="display:none;margin:8px 0 0;padding:9px 11px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.4);border-radius:9px;font-family:system-ui;font-size:11px;line-height:1.5;color:#FCA5A5;">
+        ⚠️ <b>Mostly fresh memecoins — very high risk.</b> Those huge yields are real fee numbers, but these pools can lose most of their value or rug in hours; IL + a dying token routinely wipe out far more than the fees pay. High yield ≠ safe. <b>Not financial advice.</b>
+      </div>
+      <div class="top-strip" id="topStrip"><span class="muted" style="padding:8px;"><span class="spin"></span> loading…</span></div>
+      <div class="note-line" id="topNote" style="margin:0;">Hottest pairs right now across every Solana DEX, refreshed hourly. Swipe ➜ &nbsp;·&nbsp; tap any for the simulator.</div>
     </div>
   </div>
 
@@ -138,27 +164,6 @@
   </div>
 
   <div class="err" id="err"></div>
-
-  <div class="card" id="topCard">
-    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-      <div style="font-family:'Oswald',sans-serif;font-weight:900;letter-spacing:1px;font-size:16px;color:var(--accent);">TOP POOLS RIGHT NOW</div>
-      <span class="note-line" id="topUpdated" style="margin:0;"></span>
-    </div>
-    <div class="chips" style="margin:8px 0 4px;">
-      <button class="chip on" id="tab-trending" onclick="setTopKind('trending')">🔥 Trending</button>
-      <button class="chip" id="tab-bluechip" onclick="setTopKind('bluechip')">💎 Blue-chip</button>
-    </div>
-    <div class="note-line" id="topNote" style="margin:4px 0 8px;">The hottest pairs right now across every Solana DEX, refreshed hourly. Tap any for the simulator.</div>
-    <div id="topRisk" style="display:none;margin:0 0 10px;padding:10px 12px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.4);border-radius:9px;font-family:system-ui;font-size:11.5px;line-height:1.55;color:#FCA5A5;">
-      ⚠️ <b>These are mostly fresh memecoins — very high risk.</b> Those huge daily yields are real fee numbers, but memecoin pools can lose most of their value or rug in hours; impermanent loss and a dying token routinely wipe out far more than the fees pay. High yield ≠ safe. LP only what you can lose. <b>Not financial advice.</b>
-    </div>
-    <div style="overflow-x:auto;">
-      <table>
-        <thead><tr><th>Pair · DEX</th><th>Fee</th><th>TVL</th><th>24h Vol</th><th>Yield/d<br><span style="font-weight:400;color:#4B5563">7d-avg</span></th></tr></thead>
-        <tbody id="topRows"><tr><td colspan="5" class="muted" style="text-align:center;padding:18px;"><span class="spin"></span> loading top pools…</td></tr></tbody>
-      </table>
-    </div>
-  </div>
 
   <div id="results" class="hidden">
     <div class="card">
@@ -340,50 +345,49 @@
     jumpToSim(addr, '', 'POOL DEEP-DIVE');
   }
 
-  // Top Pools — Trending (hot, memes included) + Blue-chip (durable projects); both refreshed
-  // server-side hourly. Tap a row → simulator.
-  var topKind='trending';
+  // Top Pools — compact horizontal scroller at the top. Trending (hot, memes) + Blue-chip
+  // (durable). Refreshed server-side hourly. Tap a chip → simulator. Collapsible.
+  var topKind='trending', topLoaded={};
+  function toggleTop(){
+    var b=document.getElementById('topBody'); var open=b.style.display!=='none';
+    b.style.display=open?'none':''; document.getElementById('topCaret').textContent=open?'▸':'▾';
+  }
   function setTopKind(k){
-    if(k===topKind && document.getElementById('topRows').dataset.loaded) return;
+    if(k===topKind && topLoaded[k]) return;
     topKind=k;
-    document.getElementById('tab-trending').className='chip'+(k==='trending'?' on':'');
-    document.getElementById('tab-bluechip').className='chip'+(k==='bluechip'?' on':'');
-    document.getElementById('topNote').textContent = k==='trending'
-      ? 'The hottest pairs right now across every Solana DEX, refreshed hourly. Memecoins included. Real yield where we can price the DEX, else “—”. Tap any for the simulator.'
-      : 'Durable, won’t-disappear projects — majors, stables, LSTs, BTC/ETH — on priceable DEXs, ranked by 7-day-avg fee yield. The long-term LP board. Tap any for the simulator.';
-    document.getElementById('topRows').innerHTML='<tr><td colspan="5" class="muted" style="text-align:center;padding:18px;"><span class="spin"></span> loading…</td></tr>';
+    document.getElementById('tab-trending').className='top-tab'+(k==='trending'?' on':'');
+    document.getElementById('tab-bluechip').className='top-tab'+(k==='bluechip'?' on':'');
+    document.getElementById('topNote').innerHTML = k==='trending'
+      ? 'Hottest pairs right now across every Solana DEX, hourly. Memecoins included — real yield where priceable, else “—”. Swipe ➜ · tap for the simulator.'
+      : 'Durable, won’t-disappear projects — majors, stables, LSTs, BTC/ETH — ranked by 7-day-avg fee yield. The long-term board. Swipe ➜ · tap for the simulator.';
+    document.getElementById('topStrip').innerHTML='<span class="muted" style="padding:8px;"><span class="spin"></span> loading…</span>';
     loadTopPools();
   }
   async function loadTopPools(){
     try{
       var r=await fetch('/api/lp-top?kind='+encodeURIComponent(topKind)); var d=await r.json();
-      var tb=document.getElementById('topRows');
-      if(!d.success || !(d.pools||[]).length){ tb.innerHTML='<tr><td colspan="5" class="muted" style="text-align:center;padding:18px;">No pools right now — try the other tab.</td></tr>'; return; }
-      tb.dataset.loaded='1';
-      // Risk banner on Trending (memecoins) so the eye-popping yields can't read as "free money".
+      var strip=document.getElementById('topStrip');
+      if(!d.success || !(d.pools||[]).length){ strip.innerHTML='<span class="muted" style="padding:8px;">No pools right now — try the other tab.</span>'; return; }
+      topLoaded[topKind]=1;
       document.getElementById('topRisk').style.display = topKind==='trending' ? 'block' : 'none';
       var ilColor={minimal:'#6EE7B7',low:'#93C5FD',moderate:'#FCD34D',high:'#FCA5A5'};
-      var rows='';
+      var html='';
       d.pools.forEach(function(p){
         var yv = p.feeYield7dPctDay!=null ? p.feeYield7dPctDay : p.feeYieldPctDay;
-        var trendColor = p.volTrend==='spiking'?'#FCD34D':p.volTrend==='cooling'?'#9CA3AF':'#6EE7B7';
-        var trendCell = p.volTrend ? '<div style="font-size:9px;color:'+trendColor+';letter-spacing:0.5px;">'+esc(p.volTrend)+'</div>' : '';
-        var lvl = p.ilRisk && p.ilRisk.level || '';
-        var ilDot = lvl ? '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+(ilColor[lvl]||'#6B7280')+';margin-right:6px;vertical-align:middle;" title="IL risk: '+esc(lvl)+'"></span>' : '';
-        // Flag the dangerous combo: a high-IL memecoin AMM showing a fat yield = classic bait.
+        var lvl = (p.ilRisk && p.ilRisk.level) || '';
         var risky = (p.dex==='pumpswap') || (lvl==='high');
-        var riskTag = risky ? '<div style="font-size:8px;color:#FCA5A5;letter-spacing:0.5px;">⚠ HIGH RISK</div>' : '';
-        rows+='<tr class="clk" data-pool="'+esc(p.address)+'" data-dex="'+esc(p.dex)+'" data-label="'+esc(p.pair||'')+'">'
-          +'<td>'+ilDot+'<span class="dex">'+esc(p.pair||'?')+'</span><div style="font-size:9px;color:#6B7280;text-transform:capitalize;">'+esc(p.dex)+'</div>'+riskTag+'</td>'
-          +'<td>'+(p.feeTier!=null?esc(p.feeTier)+'%':'<span class="muted">—</span>')+'</td>'
-          +'<td>'+fmt(p.tvlUsd)+'</td>'
-          +'<td>'+fmt(p.volume&&p.volume.h24)+'</td>'
-          +'<td>'+(yv!=null?('<span class="'+(risky?'':'yield-v')+'" style="'+(risky?'color:#FCD34D':'')+'">'+yv+'%</span>'+trendCell):'<span class="muted">—</span>')+'</td>'
-          +'</tr>';
+        var dot = lvl ? '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:'+(ilColor[lvl]||'#6B7280')+';margin-right:5px;vertical-align:middle;"></span>' : '';
+        var yColor = risky ? '#FCD34D' : '#6EE7B7';
+        var yStr = yv!=null ? (yv+'%/d') : '—';
+        html+='<div class="top-chip'+(risky?' risk':'')+'" data-pool="'+esc(p.address)+'" data-dex="'+esc(p.dex)+'" data-label="'+esc(p.pair||'')+'">'
+          +'<div class="p">'+dot+esc(p.pair||'?')+'</div>'
+          +'<div class="d">'+esc(p.dex)+(risky?' · ⚠ risk':'')+'</div>'
+          +'<div class="y" style="color:'+yColor+'">'+yStr+'</div>'
+          +'</div>';
       });
-      tb.innerHTML=rows;
-      Array.prototype.forEach.call(document.querySelectorAll('#topRows tr.clk'), function(tr){
-        tr.addEventListener('click', function(){ jumpToSim(tr.getAttribute('data-pool'), tr.getAttribute('data-dex'), tr.getAttribute('data-label')); });
+      strip.innerHTML=html;
+      Array.prototype.forEach.call(strip.querySelectorAll('.top-chip'), function(el){
+        el.addEventListener('click', function(){ jumpToSim(el.getAttribute('data-pool'), el.getAttribute('data-dex'), el.getAttribute('data-label')); });
       });
       if(d.updatedAt){ var mins=Math.round((Date.now()-d.updatedAt)/60000); document.getElementById('topUpdated').textContent='updated '+(mins<1?'just now':mins+'m ago'); }
     }catch(e){ document.getElementById('topCard').style.display='none'; }
