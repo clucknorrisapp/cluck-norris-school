@@ -20,13 +20,39 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 > (EnTZxY…) and the CLKN/JUP pool (5AvtoSvf…) exist on-chain but are EMPTY — harmless
 > shells. Do NOT redeploy CLKN liquidity or buy/sell CLKN without the owner asking.
 >
-> 💰 **THE EARNER (live): JUP/USDC Meteora DLMM** pool `HfgjZDmexhFVD28Vkb1NbQwWeXP3uDcVTLPjSGHmRHhL`
-> (~6x/day turnover) under the TREASURY wallet — ~$2,780, ±5% curve, AUTO-RECENTERED by
-> the jupUsdcRecenter 5-min loop (edge 12%, 1h anti-thrash, crash-safe reopen-pending,
-> pinned via kv jupUsdcManagedPubkey; off-switch kv jupUsdcCfg {enabled:false}; manual:
-> /api/meteora/recenter?which=jup). Strategy: fees COMPOUND in-position; CLKN buybacks are
-> MANUAL-ONLY on the owner's explicit ask (no standing cadence). First hours: ~$7.3 fees
-> on $1.86k. Judge on fees/day + LP-vs-HODL after ~a week.
+> 💰 **THE EARNER (live, the main money-maker now): JUP/USDC Meteora DLMM** pool
+> `HfgjZDmexhFVD28Vkb1NbQwWeXP3uDcVTLPjSGHmRHhL` (~6x/day turnover) under the TREASURY
+> wallet (`MM_OPERATOR_SECRET_TREASURY`, pubkey 2zMCU…). **~$4K, ±2.56% TIGHT curve**
+> (owner runs it narrow + actively, growing toward ~$5K with manual adds). Earning well:
+> ~1% in fees inside a day; PnL beating LP-vs-HODL so far. Strategy: fees COMPOUND
+> in-position; CLKN buybacks MANUAL-ONLY on the owner's explicit ask.
+>
+> 🚨 **REBALANCING = OWNER MANUAL-ONLY. DO NOT auto-rebalance or touch this position
+> without explicit, in-the-moment instruction (hard rule, set 2026-06-13 after I leaked
+> funds twice trying).** The owner rebalances himself in the Meteora UI (Rebalance tab →
+> Curve → Submit → approve) in ~10 sec, with ZERO issues. WHY MY CODE CAN'T MATCH IT (so
+> the next session doesn't burn money rediscovering this): the UI "Rebalance" button is
+> NOT one SDK call — the Meteora **front-end bundles a Jupiter swap** (sells the heavy
+> side down to ~50/50, e.g. "Swaps Required: 5.62K JUP → 948.91 USDC via Jupiter") **+**
+> the DLMM redeposit. The bare SDK `rebalancePosition` (what `meteora.rebalanceInPlace`
+> calls) does the recenter+redeposit but **NOT the swap**, so it redeposits the imbalanced
+> funds and leaves the unfittable side in the wallet ($181–$478 leaked in tests). Hand-
+> rolling the swap (keep-out, autofill, plain) ALL left residue; `getAutoFillAmountBy
+> RebalancedPosition` returns a DIFFERENT quantity (USDC to ADD to match all the JUP, not
+> the 50/50 swap) and misled me. The auto-recenter loop (`jupUsdcRecenter`,
+> `/api/meteora/recenter?which=jup`) and the in-place tool (`/api/meteora/rebalance-inplace`)
+> EXIST but are **OFF / leak — do not enable.** `jupUsdcCfg {enabled:false}` is pinned off.
+> **What the owner DOES want from me: a server-side monitor that DMs (private treasury
+> chat) when the position is near the edge of range or out of range, so HE can do the UI
+> rebalance** — `meteoraOorTick` (server.js ~7877, 5-min, DMs on OOR transition) is the
+> base; it needs a NEAR-EDGE trigger added (alert at e.g. >88% across, not just fully OOR)
+> for the JUP/USDC position. That monitor was requested but NOT yet built when this session
+> ended — BUILD IT (read-only + DM, safe), don't rebuild the rebalancer.
+>
+> 📊 **Private recap (DONE):** `sendJupUsdcRecap` DMs the TREASURY chat (operator-only, NOT
+> community) every 6h with liquidity + claimable/claimed fees + a fees-vs-cost delta;
+> `/api/jup-recap-test` (&send=1/&reset=1). The old cbBTC/SOL 6h treasury report is DISABLED.
+> NOTE: the treasury wallet now holds ONLY the JUP/USDC position — no cbBTC/SOL backbone.
 >
 > ⏰ **ACTIVE WATCH (updated 2026-06-12): CoinGecko REJECTED the reapplication**
 > (req `CL1106260002`; owner reported the rejection 2026-06-12 — stated reason not yet
