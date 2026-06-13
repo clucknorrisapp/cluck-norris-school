@@ -141,10 +141,14 @@
 
   <div class="card" id="topCard">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
-      <div style="font-family:'Oswald',sans-serif;font-weight:900;letter-spacing:1px;font-size:16px;color:var(--accent);">🔥 TOP POOLS RIGHT NOW</div>
+      <div style="font-family:'Oswald',sans-serif;font-weight:900;letter-spacing:1px;font-size:16px;color:var(--accent);">TOP POOLS RIGHT NOW</div>
       <span class="note-line" id="topUpdated" style="margin:0;"></span>
     </div>
-    <div class="note-line" style="margin:4px 0 8px;">The busiest Solana pools across every DEX (by 24h volume), refreshed hourly — ranked so you see which of the busiest actually <b style="color:#6EE7B7">pay</b>. Tap any for the simulator.</div>
+    <div class="chips" style="margin:8px 0 4px;">
+      <button class="chip on" id="tab-trending" onclick="setTopKind('trending')">🔥 Trending</button>
+      <button class="chip" id="tab-bluechip" onclick="setTopKind('bluechip')">💎 Blue-chip</button>
+    </div>
+    <div class="note-line" id="topNote" style="margin:4px 0 8px;">The hottest pairs right now across every Solana DEX, refreshed hourly. Tap any for the simulator.</div>
     <div style="overflow-x:auto;">
       <table>
         <thead><tr><th>Pair · DEX</th><th>Fee</th><th>TVL</th><th>24h Vol</th><th>Yield/d<br><span style="font-weight:400;color:#4B5563">7d-avg</span></th></tr></thead>
@@ -333,12 +337,26 @@
     jumpToSim(addr, '', 'POOL DEEP-DIVE');
   }
 
-  // Top Pools — loads on page open, refreshed server-side hourly.
+  // Top Pools — Trending (hot, memes included) + Blue-chip (durable projects); both refreshed
+  // server-side hourly. Tap a row → simulator.
+  var topKind='trending';
+  function setTopKind(k){
+    if(k===topKind && document.getElementById('topRows').dataset.loaded) return;
+    topKind=k;
+    document.getElementById('tab-trending').className='chip'+(k==='trending'?' on':'');
+    document.getElementById('tab-bluechip').className='chip'+(k==='bluechip'?' on':'');
+    document.getElementById('topNote').textContent = k==='trending'
+      ? 'The hottest pairs right now across every Solana DEX, refreshed hourly. Memecoins included. Real yield where we can price the DEX, else “—”. Tap any for the simulator.'
+      : 'Durable, won’t-disappear projects — majors, stables, LSTs, BTC/ETH — on priceable DEXs, ranked by 7-day-avg fee yield. The long-term LP board. Tap any for the simulator.';
+    document.getElementById('topRows').innerHTML='<tr><td colspan="5" class="muted" style="text-align:center;padding:18px;"><span class="spin"></span> loading…</td></tr>';
+    loadTopPools();
+  }
   async function loadTopPools(){
     try{
-      var r=await fetch('/api/lp-top'); var d=await r.json();
+      var r=await fetch('/api/lp-top?kind='+encodeURIComponent(topKind)); var d=await r.json();
       var tb=document.getElementById('topRows');
-      if(!d.success || !(d.pools||[]).length){ document.getElementById('topCard').style.display='none'; return; }
+      if(!d.success || !(d.pools||[]).length){ tb.innerHTML='<tr><td colspan="5" class="muted" style="text-align:center;padding:18px;">No pools right now — try the other tab.</td></tr>'; return; }
+      tb.dataset.loaded='1';
       var rows='';
       d.pools.forEach(function(p){
         var yv = p.feeYield7dPctDay!=null ? p.feeYield7dPctDay : p.feeYieldPctDay;
