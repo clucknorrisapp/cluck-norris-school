@@ -6656,7 +6656,23 @@ app.get("/api/diploma-metadata/:slug", (req, res) => {
   });
 });
 
-// Diploma NFT admin (gated, 404 without key). ?action=status | create-tree | test | backfill.
+// Collection-level metadata for the "Cluck Norris Diplomas" set (the collection NFT's URI).
+// Logo as the collection art (per owner: logo = collection, personalized card = each diploma).
+app.get("/api/diploma-collection", (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  const img = `${CANONICAL_ORIGIN}/cluck-norris-logo.jpg`;
+  return res.status(200).json({
+    name: "Cluck Norris Diplomas",
+    symbol: "CLKNDIP",
+    description: "On-chain graduation diplomas from the School of Crypto Hard Knocks (clucknorris.app) — a free Solana crypto school. Earned by completing the full 12-lesson curriculum. Free to learn, yours to own. 🐔",
+    image: img,
+    external_url: "https://clucknorris.app",
+    properties: { category: "image", files: [{ uri: img, type: "image/jpeg" }] },
+  });
+});
+
+// Diploma NFT admin (gated, 404 without key). ?action=status | create-tree | create-collection | test | backfill.
 // Mutating actions need &run=1. create-tree is one-time (~0.3 SOL); backfill mints to every
 // graduate who left a wallet (idempotent — won't double-mint).
 app.get("/api/diploma-mint", async (req, res) => {
@@ -6668,6 +6684,10 @@ app.get("/api/diploma-mint", async (req, res) => {
     if (action === "create-tree") {
       if (req.query.run !== "1") return res.status(200).json({ success: true, dryRun: true, hint: "add &run=1 to create the shared tree (~0.3 SOL, one-time)" });
       return res.status(200).json({ success: true, tree: await diplomaNft.ensureTree() });
+    }
+    if (action === "create-collection") {
+      if (req.query.run !== "1") return res.status(200).json({ success: true, dryRun: true, hint: "add &run=1 to create the verified collection NFT (~0.01 SOL, one-time)" });
+      return res.status(200).json({ success: true, collection: await diplomaNft.ensureCollection() });
     }
     if (action === "test") {
       const wallet = String(req.query.wallet || "");

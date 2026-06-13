@@ -5877,6 +5877,7 @@ function Complete({onRestart}){
   const [isHolder, setIsHolder] = useState(false);
   const [holderBalance, setHolderBalance] = useState(0);
   const [slug, setSlug] = useState("");
+  const [nft, setNft] = useState(null);
 
   async function claimSpot() {
     if (!wallet || wallet.length < 32) return;
@@ -5892,6 +5893,7 @@ function Complete({onRestart}){
       setIsHolder(data.isHolder || false);
       setHolderBalance(data.balance || 0);
       setSlug(data.slug || "");
+      setNft(data.nft || null);
     } catch(e) {
       setClaimed(true);
     }
@@ -5966,6 +5968,14 @@ function Complete({onRestart}){
           </div>
         )}
       </div>
+
+      {claimed && nft && nft.ok && (
+        <div style={{background:"rgba(16,185,129,0.08)",border:"1px solid rgba(16,185,129,0.45)",borderRadius:10,padding:"14px",marginBottom:12,textAlign:"center",boxShadow:"0 0 24px rgba(16,185,129,0.18)"}}>
+          <div style={{fontSize:26,marginBottom:4}}>🎓⛓️</div>
+          <div style={{fontFamily:"'Oswald',sans-serif",fontSize:13,fontWeight:900,color:"#6EE7B7",letterSpacing:1,marginBottom:5}}>DIPLOMA MINTED TO YOUR WALLET</div>
+          <p style={{fontSize:11.5,color:"#9CA3AF",lineHeight:1.65,margin:0}}>Your graduation diploma is now an on-chain NFT in your Solana wallet — permanent, verifiable, yours. Open Phantom or Solflare to see it. Earned, not bought. 🐔</p>
+        </div>
+      )}
 
       {claimed && slug && (
         <a href={`/transcript/${slug}`} target="_blank" rel="noreferrer" style={{display:"block",textDecoration:"none",background:"rgba(212,175,55,0.1)",border:"1px solid rgba(212,175,55,0.4)",borderRadius:10,padding:"12px",marginBottom:16,textAlign:"center",fontFamily:"'Oswald',sans-serif",fontSize:12,fontWeight:700,color:"#D4AF37",letterSpacing:2}}>
