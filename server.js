@@ -2354,6 +2354,19 @@ app.get("/api/lp-token-search", async (req, res) => {
   catch (e) { return res.status(200).json({ success: false, error: e.message, tokens: [] }); }
 });
 
+// Probe what the CoinGecko Analyst key unlocks on the AGGREGATED (non-onchain) API — so we
+// know which endpoints to build on. Gated (admin); 404 when the key is wrong/absent.
+app.get("/api/cg-agg-test", async (req, res) => {
+  if (!adminAuthOK(req)) return res.status(404).json({ success: false, error: "not found" });
+  const out = { keySet: !!process.env.COINGECKO_API_KEY };
+  try { out.key = await lpScanner.cgPro("/key"); } catch (e) { out.keyErr = e.message; }
+  try { out.price = await lpScanner.cgPro("/simple/price?ids=solana,bitcoin&vs_currencies=usd&include_24hr_change=true&include_market_cap=true"); } catch (e) { out.priceErr = e.message; }
+  try { out.trending = ((await lpScanner.cgPro("/search/trending")).coins || []).slice(0, 5).map((c) => c.item && c.item.symbol); } catch (e) { out.trendingErr = e.message; }
+  try { out.gainers = ((await lpScanner.cgPro("/coins/top_gainers_losers?vs_currency=usd&duration=24h")).top_gainers || []).slice(0, 5).map((c) => c.symbol); } catch (e) { out.gainersErr = e.message; }
+  try { out.clknCoinId = await lpScanner.coingeckoIdForMint("DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS"); } catch (e) { out.bridgeErr = e.message; }
+  return res.status(200).json({ success: true, ...out });
+});
+
 // LP Scanner TOP POOLS — busiest Solana pools across all DEXs, refreshed hourly (warmed by
 // a background timer below; this returns the cached set, computing it on the first cold call).
 app.get("/api/lp-top", async (req, res) => {
