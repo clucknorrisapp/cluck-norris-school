@@ -2371,6 +2371,8 @@ HARD RULES:
 - Earnings estimates use a TVL-share model calibrated to a real autonomous LP we operate — call them estimates, not guarantees.
 - Tough, punchy, a chicken pun or two. 4–7 sentences. Always end with: not financial advice.
 
+IL RISK (${scan.pair}): ${scan.ilRisk.level} — ${scan.ilRisk.note}
+
 LIVE POOL DATA — ${scan.pair}${scan.amountUsd ? ` (user deposit $${scan.amountUsd.toLocaleString()})` : ""}:
 ${ctx || "(no pools found for this pair)"}`;
     const r = await fetch("https://api.anthropic.com/v1/messages", {
