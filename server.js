@@ -2346,6 +2346,14 @@ app.get("/api/lp-scan", async (req, res) => {
   catch (e) { return res.status(200).json({ success: false, error: e.message }); }
 });
 
+// LP Scanner token search (autocomplete) — ?q=. Public read.
+app.get("/api/lp-token-search", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "public, max-age=300");
+  try { return res.status(200).json({ success: true, tokens: await lpScanner.searchTokens(String(req.query.q || "")) }); }
+  catch (e) { return res.status(200).json({ success: false, error: e.message, tokens: [] }); }
+});
+
 // Ask Cluck about pools — pool-aware AI. Scans the pair LIVE, then has Cluck analyze the
 // REAL numbers (grounded, not generic). Informational only; turnover≠yield; IL flagged.
 app.post("/api/lp-ask", async (req, res) => {

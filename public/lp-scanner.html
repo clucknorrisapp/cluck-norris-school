@@ -30,8 +30,15 @@
   .intro b { color: var(--accent); }
   label.fld { display:block; font-family:var(--mono); font-size:10px; color:var(--subtext); letter-spacing:1px; margin:0 0 6px; }
   .pair-row { display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; }
-  .pair-row .f { flex:1; min-width:120px; }
+  .pair-row .f { flex:1; min-width:120px; position:relative; }
   .pair-row .vs { font-family:'Oswald',sans-serif; font-weight:900; color:var(--subtext); padding-bottom:12px; }
+  .ac-drop { position:absolute; top:100%; left:0; right:0; z-index:30; background:#0d0d0d; border:1px solid var(--border); border-radius:9px; margin-top:4px; max-height:260px; overflow-y:auto; display:none; box-shadow:0 10px 28px rgba(0,0,0,0.6); }
+  .ac-drop.show { display:block; }
+  .ac-item { display:flex; align-items:center; gap:8px; padding:9px 10px; cursor:pointer; border-bottom:1px solid rgba(255,255,255,0.04); }
+  .ac-item:hover { background:rgba(217,119,6,0.12); }
+  .ac-item img { width:22px; height:22px; border-radius:50%; object-fit:cover; background:#222; flex-shrink:0; }
+  .ac-item .s { font-family:'Oswald',sans-serif; font-weight:700; color:var(--text); font-size:13px; }
+  .ac-item .n { font-size:10px; color:var(--subtext); margin-left:auto; max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   input[type=text], input[type=number] { width:100%; background:#0d0d0d; border:1px solid var(--border); border-radius:9px; padding:12px; color:var(--text); font-family:var(--mono); font-size:15px; }
   input::placeholder { color:#4B5563; }
   .scan-btn { width:100%; margin-top:14px; padding:14px; border:none; border-radius:10px; background:linear-gradient(135deg,#D97706,#F59E0B); color:#1a1a1a; font-family:'Oswald',sans-serif; font-weight:900; letter-spacing:2px; font-size:15px; cursor:pointer; }
@@ -91,9 +98,9 @@
 
   <div class="card">
     <div class="pair-row">
-      <div class="f"><label class="fld">TOKEN A (symbol or mint)</label><input type="text" id="tokenA" placeholder="JUP" autocomplete="off"/></div>
+      <div class="f"><label class="fld">TOKEN A (type a name/symbol)</label><input type="text" id="tokenA" placeholder="JUP" autocomplete="off"/><div class="ac-drop" id="acA"></div></div>
       <div class="vs">/</div>
-      <div class="f"><label class="fld">TOKEN B (symbol or mint)</label><input type="text" id="tokenB" placeholder="USDC" autocomplete="off"/></div>
+      <div class="f"><label class="fld">TOKEN B (type a name/symbol)</label><input type="text" id="tokenB" placeholder="USDC" autocomplete="off"/><div class="ac-drop" id="acB"></div></div>
     </div>
     <label class="fld" style="margin-top:14px;">YOUR DEPOSIT (USD, optional — for $/day estimate)</label>
     <input type="number" id="amount" placeholder="5000" min="0"/>
@@ -147,14 +154,15 @@
   var fmt = function(n){ n=Number(n)||0; return n>=1e6?("$"+(n/1e6).toFixed(2)+"M"):n>=1e3?("$"+(n/1e3).toFixed(1)+"K"):("$"+Math.round(n)); };
   var lastScan = null;
 
-  function quick(a,b){ document.getElementById('tokenA').value=a; document.getElementById('tokenB').value=b; runScan(); }
+  function quick(a,b){ var iA=document.getElementById('tokenA'),iB=document.getElementById('tokenB'); iA.value=a;iA.dataset.mint='';iB.value=b;iB.dataset.mint=''; runScan(); }
   function showErr(m){ var e=document.getElementById('err'); e.textContent=m; e.classList.add('show'); }
   function clearErr(){ document.getElementById('err').classList.remove('show'); }
 
   async function runScan(){
     clearErr();
-    var a=document.getElementById('tokenA').value.trim()||'JUP';
-    var b=document.getElementById('tokenB').value.trim()||'USDC';
+    var iA=document.getElementById('tokenA'), iB=document.getElementById('tokenB');
+    var a=(iA.dataset.mint||iA.value.trim())||'JUP';  // exact mint if picked from search, else typed
+    var b=(iB.dataset.mint||iB.value.trim())||'USDC';
     var amt=document.getElementById('amount').value.trim();
     var btn=document.getElementById('scanBtn');
     btn.disabled=true; btn.innerHTML='<span class="spin"></span> SCANNING...';
@@ -221,6 +229,39 @@
   ['tokenA','tokenB','amount'].forEach(function(id){
     document.getElementById(id).addEventListener('keydown',function(e){ if(e.key==='Enter') runScan(); });
   });
+
+  // Token search-as-you-type. Picking a result stores the exact mint (dataset.mint) so the
+  // scan uses that token precisely; typing again clears it (falls back to symbol resolution).
+  function attachAutocomplete(inputId, dropId){
+    var input=document.getElementById(inputId), drop=document.getElementById(dropId), t;
+    input.addEventListener('input', function(){
+      input.dataset.mint='';                       // typing invalidates a prior pick
+      clearTimeout(t);
+      var q=input.value.trim();
+      if(q.length<1 || /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(q)){ drop.classList.remove('show'); return; } // pasted a mint? skip search
+      t=setTimeout(async function(){
+        try{
+          var r=await fetch('/api/lp-token-search?q='+encodeURIComponent(q)); var d=await r.json();
+          var toks=d.tokens||[];
+          if(!toks.length){ drop.classList.remove('show'); return; }
+          drop.innerHTML=toks.map(function(tk){
+            return '<div class="ac-item" data-sym="'+esc(tk.symbol)+'" data-mint="'+esc(tk.mint)+'">'
+              +(tk.logo?'<img src="'+esc(tk.logo)+'" onerror="this.style.visibility=\'hidden\'"/>':'<img/>')
+              +'<span class="s">'+esc(tk.symbol)+'</span><span class="n">'+esc(tk.name||'')+'</span></div>';
+          }).join('');
+          drop.classList.add('show');
+          Array.prototype.forEach.call(drop.querySelectorAll('.ac-item'), function(el){
+            el.addEventListener('mousedown', function(e){ e.preventDefault();
+              input.value=el.getAttribute('data-sym'); input.dataset.mint=el.getAttribute('data-mint'); drop.classList.remove('show');
+            });
+          });
+        }catch(e){ drop.classList.remove('show'); }
+      }, 250);
+    });
+    input.addEventListener('blur', function(){ setTimeout(function(){ drop.classList.remove('show'); }, 160); });
+  }
+  attachAutocomplete('tokenA','acA');
+  attachAutocomplete('tokenB','acB');
 </script>
 </body>
 </html>
