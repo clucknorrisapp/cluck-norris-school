@@ -253,6 +253,8 @@
     <div class="loading-note">A full history can take a few minutes — worth the wait.</div>
   </div>
 
+  <div id="marketHeader"></div>
+
   <div class="result" id="result">
     <div id="truncatedSlot"></div>
     <div id="originSlot"></div>
@@ -335,6 +337,7 @@
   <a class="footer-link" href="/">← BACK TO CLUCKNORRIS.APP</a>
 </div>
 
+<script src="/market-header.js"></script>
 <script>
 let lastTrace = null;
 let sortNewest = false;
@@ -487,6 +490,7 @@ async function runTrace() {
   startLoading();
   const wallet = walletInput.value.trim();
   const mint = mintInput.value.trim();
+  if (window.renderMarketHeader) renderMarketHeader(mint, 'marketHeader'); // live market strip (parallel)
   try {
     const res = await fetch(`/api/trace?wallet=${encodeURIComponent(wallet)}&mint=${encodeURIComponent(mint)}`);
     const data = await res.json();

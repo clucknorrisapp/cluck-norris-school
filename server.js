@@ -6983,6 +6983,13 @@ app.get("/lp-scanner", (req, res) => {
   res.sendFile(join(__dirname, "public", "lp-scanner.html"));
 });
 
+// Shared market-header script for the token tools (repo public/ isn't statically mounted).
+app.get("/market-header.js", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  res.type("application/javascript");
+  res.sendFile(join(__dirname, "public", "market-header.js"));
+});
+
 // Liquidity Engine — product / education / platform page (the flagship pitch).
 app.get("/liquidity-engine", (req, res) => {
   res.sendFile(join(__dirname, "public", "liquidity-engine.html"));

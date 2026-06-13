@@ -179,6 +179,8 @@
     <div class="stat-box"><div class="stat-val" id="statHumanPct">--</div><div class="stat-label">% IN HUMANS</div></div>
   </div>
 
+  <div id="marketHeader"></div>
+
   <div id="resultsArea"></div>
 
   <div id="holdersDisclaimer" style="display:none;margin-top:18px;padding:14px 16px;background:linear-gradient(135deg,rgba(107,114,128,0.06),rgba(107,114,128,0.01));border:1px solid rgba(107,114,128,0.30);border-radius:10px;font-family:'Courier New',monospace;font-size:12px;line-height:1.65;color:#B0B6BE;">
@@ -189,6 +191,7 @@
 
 </div>
 
+<script src="/market-header.js"></script>
 <script>
 const RPC = '/api/helius-rpc';
 const SYSTEM_PROGRAM = '11111111111111111111111111111111';
@@ -312,6 +315,7 @@ async function runAnalysis() {
   if (mint.length < 32) { showError('Please enter a valid token mint address.'); return; }
   currentMint = mint;
   hideError();
+  if (window.renderMarketHeader) renderMarketHeader(mint, 'marketHeader'); // live market strip (parallel)
   document.getElementById('runBtn').disabled = true;
   document.getElementById('statusBar').classList.add('show');
   document.getElementById('statusDot').classList.remove('done');

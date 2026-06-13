@@ -307,6 +307,8 @@
     <div class="loading-stage" id="loadingStage">Calling the flock to attention…</div>
   </div>
 
+  <div id="marketHeader"></div>
+
   <div class="result" id="result">
     <div class="card" id="truncatedCard" style="display:none">
       <div class="truncated-banner" id="truncatedMsg"></div>
@@ -338,6 +340,7 @@
   <a class="footer-link" href="/">← BACK TO CLUCKNORRIS.APP</a>
 </div>
 
+<script src="/market-header.js"></script>
 <script>
 let lastSnapshot = null;
 
@@ -439,6 +442,7 @@ async function runSnapshot() {
   startLoading();
 
   const mint = mintInput.value.trim();
+  if (window.renderMarketHeader) renderMarketHeader(mint, 'marketHeader'); // live market strip (parallel)
   const excludeNonHuman = document.getElementById('excludeNonHuman').checked ? "1" : "0";
   const excludeBagsTeam = document.getElementById('excludeBagsTeam').checked ? "1" : "0";
   const minBalance = document.getElementById('minBalance').value || "0";
