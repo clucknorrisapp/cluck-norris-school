@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-14T18:55:34.942Z",
+  "generatedAt": "2026-06-14T20:26:35.199Z",
   "courses": [
     {
       "id": "fundamentals",
@@ -1044,7 +1044,7 @@
       "blurb": "AMMs, impermanent loss, concentrated liquidity, fees & LP earnings — the real money mechanics.",
       "lessons": [
         {
-          "id": 1,
+          "id": "1",
           "title": "What Is Liquidity?",
           "icon": "💧",
           "tagline": "The foundation. Everything else builds on this.",
@@ -1079,7 +1079,7 @@
           "cluckVerdict": "Liquidity is the foundation. Every single lesson in this lab builds on what you just learned. If you skipped something, go back. The LP Lab has no shortcuts and no sympathy for lazy students."
         },
         {
-          "id": 2,
+          "id": "2",
           "title": "How AMMs Work",
           "icon": "⚙️",
           "tagline": "Every swap you have ever made went through one of these.",
@@ -1114,7 +1114,7 @@
           "cluckVerdict": "x times y equals k. Four characters. The foundation of hundreds of billions of dollars of DeFi volume. Now you know what actually happens when you hit swap."
         },
         {
-          "id": 3,
+          "id": "3",
           "title": "Impermanent Loss",
           "icon": "📉",
           "tagline": "The #1 risk every LP must understand before deploying capital.",
@@ -1149,7 +1149,7 @@
           "cluckVerdict": "IL is not a bug. It is the cost of being a market maker. Know the cost before you accept the job. Run the numbers every single time."
         },
         {
-          "id": 4,
+          "id": "4",
           "title": "LP Fees & Earnings",
           "icon": "💰",
           "tagline": "The upside of being an LP. How fees work, what they are worth, and when they win.",
@@ -1184,7 +1184,7 @@
           "cluckVerdict": "Fees are your income. IL is your expense. Run the business properly — know both numbers before you deploy a single dollar."
         },
         {
-          "id": 5,
+          "id": "5",
           "title": "Concentrated Liquidity",
           "icon": "🎯",
           "tagline": "More fees, less capital, more work. Welcome to the advanced class.",
@@ -1224,7 +1224,7 @@
           "cluckVerdict": "Concentrated liquidity is not for everyone. But if you understand it and manage it properly it is the most powerful tool available to retail LPs. You now understand it. Whether you manage it properly is up to you."
         },
         {
-          "id": 6,
+          "id": "6",
           "title": "Price Bins & Ticks",
           "icon": "📊",
           "tagline": "The mechanics underneath concentrated liquidity. Know what is actually happening inside your range.",
@@ -1259,7 +1259,7 @@
           "cluckVerdict": "The interface makes it look simple. The math underneath is not. Now you know both. Set ranges with data, understand what is happening inside them, and manage the cost of rebalancing. That is how serious LPs operate."
         },
         {
-          "id": 7,
+          "id": "7",
           "title": "Single-Sided Deposits",
           "icon": "↕️",
           "tagline": "One token. Smarter positioning. More control over how you enter and exit.",
@@ -1294,7 +1294,7 @@
           "cluckVerdict": "Single-sided deposits are a tool. Like every tool in DeFi they work brilliantly when used correctly and punish you when you do not understand them. Now you understand them. Use them deliberately."
         },
         {
-          "id": 8,
+          "id": "8",
           "title": "Active vs Passive LP",
           "icon": "⚖️",
           "tagline": "Know which type of LP you are — and make that choice deliberately.",
@@ -1334,7 +1334,7 @@
           "cluckVerdict": "Passive is not lazy. Active is not always better. The right strategy is the one you will actually execute consistently. Know yourself before you know the market."
         },
         {
-          "id": 9,
+          "id": "9",
           "title": "LP Risk Management",
           "icon": "🛡️",
           "tagline": "Know your risk or the market will teach you.",
@@ -1374,7 +1374,7 @@
           "cluckVerdict": "Risk management is the boring discipline that keeps you alive long enough to win. Size to your downside, choose your pair like you are choosing your loss, and write your exit before you enter. The market does not care how confident you feel — it only respects how well you prepared."
         },
         {
-          "id": 10,
+          "id": "10",
           "title": "Reading Pool Data",
           "icon": "🔍",
           "tagline": "Volume, TVL, APR — what it all actually means.",
@@ -1414,7 +1414,7 @@
           "cluckVerdict": "A pool page is a story told in numbers. TVL and volume set the scene, the volume-to-TVL ratio is the plot, APR is the marketing tagline, and fake volume is the villain. Learn to read all of it — and verify with the tools — before your capital becomes a character in someone else's story."
         },
         {
-          "id": 11,
+          "id": "11",
           "title": "Token Launch Liquidity",
           "icon": "🚀",
           "tagline": "Bonding curves, graduation, and the riskiest LP there is.",
@@ -1449,7 +1449,7 @@
           "cluckVerdict": "Token launches are the beating heart of this whole ecosystem — and the fastest place to get wrecked as an LP. The curve is the market until graduation; after graduation the real pool and the real risk arrive together. Verify everything, size for total loss, manage like a hawk, and never confuse buying on a curve with providing liquidity."
         },
         {
-          "id": 12,
+          "id": "12",
           "title": "Building a Real LP Strategy",
           "icon": "♟️",
           "tagline": "Put it all together — capital, tiers, discipline.",

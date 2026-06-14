@@ -114,6 +114,7 @@
       <div class="room-head"><span class="room-title" id="lessonTitle"></span></div>
       <div class="chat" id="chat"></div>
       <div class="quickrow" id="quickRow">
+        <button onclick="quickAsk('I&#39;m not sure how to answer that. Teach me the answer first, then ask me again.')">🤔 I'm not sure</button>
         <button onclick="quickAsk('Can you explain that a different way? I&#39;m a bit lost.')">🙋 Explain differently</button>
         <button onclick="quickAsk('Give me another real-world example.')">Another example</button>
         <button onclick="quickAsk('Why does this actually matter for me?')">Why it matters</button>
@@ -215,7 +216,7 @@
   function goSyllabus(){ renderSyllabus(); show('vSyllabus'); }
 
   async function openLesson(lid){
-    curLesson=curCourse.lessons.find(function(l){return l.id===lid;});
+    curLesson=curCourse.lessons.find(function(l){return String(l.id)===String(lid);});
     if(!curLesson) return;
     saveLast(curCourse.id, lid);
     chatHist=[];

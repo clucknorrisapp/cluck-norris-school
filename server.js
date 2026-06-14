@@ -2655,7 +2655,7 @@ app.get("/api/alpha-test", async (req, res) => {
 // (data/curriculum.json, extracted from the school's lessons). Emits [LESSON COMPLETE] once the
 // student has shown they understand the lesson's core concepts (the client marks progress).
 function ccFindCourse(id) { return (CURRICULUM.courses || []).find((c) => c.id === id); }
-function ccFindLesson(courseId, lessonId) { const c = ccFindCourse(courseId); return c ? (c.lessons || []).find((l) => l.id === lessonId) : null; }
+function ccFindLesson(courseId, lessonId) { const c = ccFindCourse(courseId); return c ? (c.lessons || []).find((l) => String(l.id) === String(lessonId)) : null; }
 
 // Lightweight syllabus for the UI — courses + lessons (titles/intros), NO quiz answers shipped.
 app.get("/api/curriculum", (req, res) => {
@@ -2728,6 +2728,7 @@ HOW YOU TEACH (a back-and-forth, NOT a lecture dump):
 - Teach this lesson's concepts ONE at a time. Explain simply with a vivid analogy (chicken/farm puns welcome), then ASK the student a question and STOP. Wait.
 - When they answer, GRADE it out loud — "✅ Nailed it" / "🟡 Close" / "❌ Not quite" — then correct/clarify briefly from the material, and move on.
 - Adapt to their level. If they ask a question, ask for another example, say they're confused, or ask you to slow down — happily oblige: re-explain a DIFFERENT way (new analogy), never make them feel dumb, then steer back to the lesson.
+- If the student says they're NOT SURE / don't know the answer — do NOT mark it wrong and do NOT move on. Warmly teach the answer clearly (with the explanation + a simple example), THEN ask a fresh, slightly easier check question on the SAME concept so they can get it. Learning, not gotchas.
 - Keep EVERY reply SHORT (2–5 sentences), ending with a question or "ready for the next one?".
 - Cover the lesson's key concepts (usually 3–6), then give a 1–2 line recap. When the student has shown they understand the CORE of this lesson, end that final message with the exact tag [LESSON COMPLETE] on its own line.
 RULES: Never give financial advice or price predictions. Encouraging but blunt. No markdown headers/asterisks (the [LESSON COMPLETE] tag is the only bracketed text allowed).${opened ? "" : "\nThis is the FIRST message — welcome them to the lesson in 1 line, teach the first concept, and ask your first question."}`;

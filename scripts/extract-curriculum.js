@@ -39,7 +39,7 @@ out.courses.push({
   id: "fundamentals", title: "Crypto Fundamentals", icon: "📚",
   blurb: "Wallets, tokens, DEXs, rugs, market cap, on-chain basics — the bedrock every survivor needs.",
   lessons: LESSONS.map((l) => ({
-    id: l.id, title: l.title, icon: l.icon || "📘", belt: l.belt || null,
+    id: String(l.id), title: l.title, icon: l.icon || "📘", belt: l.belt || null,
     intro: l.intro || "",
     concepts: (l.concepts || []).map((c) => ({ term: c.term, def: c.def })),
     questions: (l.questions || []).map((q) => ({ q: q.q, answer: (q.options || [])[q.correct], why: q.explanation || "" })),
@@ -52,7 +52,7 @@ if (INCUBATOR.length) out.courses.push({
   id: "basics", title: "Crypto 101 (Absolute Basics)", icon: "🐣",
   blurb: "Brand new? Start here — wallets, tokens, on-ramps, what a DEX even is, staying safe.",
   lessons: INCUBATOR.map((l) => ({
-    id: l.id || (l.title || "").toLowerCase().replace(/[^a-z0-9]+/g, "-"), title: l.title, icon: l.icon || "🐣",
+    id: String(l.id || (l.title || "").toLowerCase().replace(/[^a-z0-9]+/g, "-")), title: l.title, icon: l.icon || "🐣",
     intro: l.summary || l.intro || "",
     concepts: (l.concepts || []).map((c) => ({ term: c.term, def: c.def })),
     content: l.content || "",
@@ -66,7 +66,7 @@ if (LP_LESSONS.length) out.courses.push({
   id: "lp", title: "Liquidity & LP Mastery", icon: "💧",
   blurb: "AMMs, impermanent loss, concentrated liquidity, fees & LP earnings — the real money mechanics.",
   lessons: LP_LESSONS.map((l) => ({
-    id: l.id, title: l.title, icon: l.icon || "💧", tagline: l.tagline || "",
+    id: String(l.id), title: l.title, icon: l.icon || "💧", tagline: l.tagline || "",
     intro: l.tagline || "",
     sections: (l.sections || []).map((s) => ({
       heading: s.heading || s.title || "",
@@ -90,7 +90,7 @@ if (LIB_TOPICS.length) out.courses.push({
   id: "deepdive", title: "Deep Dives", icon: "🔍",
   blurb: "How to research a token, read Solscan, trading psychology, tax basics, finding alpha, and more.",
   lessons: LIB_TOPICS.map((t) => ({
-    id: t.id || (t.title || "").toLowerCase().replace(/[^a-z0-9]+/g, "-"), title: t.title, icon: t.icon || "🔍",
+    id: String(t.id || (t.title || "").toLowerCase().replace(/[^a-z0-9]+/g, "-")), title: t.title, icon: t.icon || "🔍",
     intro: t.summary || "",
     content: t.content || "",
     sections: (t.sections || []).map((s) => ({ heading: s.heading || s.title || "", body: s.body || s.content || "" })),
