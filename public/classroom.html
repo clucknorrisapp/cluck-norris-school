@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>🎓 Cluck's Live Classroom — Learn Crypto with Professor Cluck</title>
+<meta name="description" content="Take a live class with Professor Cluck — an interactive AI crypto teacher. He explains, asks you questions, grades your answers, and adapts. Crypto fundamentals, LP mastery, and exam prep. Free."/>
+<meta property="og:title" content="🎓 Cluck's Live Classroom"/>
+<meta property="og:description" content="Class is in session. Professor Cluck teaches you crypto live — and quizzes you as you go."/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{color-scheme:dark;--bg:#0a0a0a;--card:#111;--border:rgba(255,255,255,0.08);--text:#F9FAFB;--sub:#6B7280;--accent:#FCD34D;--orange:#D97706;--green:#6EE7B7;--mono:'Courier New',monospace;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);background-image:radial-gradient(ellipse at 20% 8%,rgba(217,119,6,0.12),transparent 50%),radial-gradient(ellipse at 85% 92%,rgba(16,185,129,0.06),transparent 50%);color:var(--text);font-family:system-ui,sans-serif;min-height:100vh;}
+  .wrap{max-width:760px;margin:0 auto;padding:24px 16px 60px;}
+  a.back-home{display:inline-flex;align-items:center;gap:6px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:var(--orange);text-decoration:none;margin:0 0 12px;}
+  .back-home img{height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid var(--orange);}
+  .header{display:flex;align-items:center;gap:14px;margin-bottom:8px;}
+  .header-icon{font-size:42px;filter:drop-shadow(0 0 16px rgba(217,119,6,0.5));}
+  .brand-mini{font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:4px;color:var(--orange);font-weight:700;}
+  h1{font-family:'Oswald',sans-serif;font-size:30px;font-weight:900;letter-spacing:2px;background:linear-gradient(135deg,#FCD34D,#D97706,#F59E0B);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1;}
+  .sub-h{font-family:var(--mono);font-size:11px;color:var(--sub);letter-spacing:1px;margin:6px 0 18px;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:16px;}
+  .classes{display:grid;grid-template-columns:1fr;gap:12px;}
+  .class-pick{text-align:left;background:#0d0d0d;border:1px solid var(--border);border-radius:12px;padding:16px;cursor:pointer;transition:border-color .12s,transform .12s;}
+  .class-pick:hover{border-color:var(--orange);transform:translateY(-1px);}
+  .class-pick .t{font-family:'Oswald',sans-serif;font-weight:900;font-size:17px;color:var(--text);letter-spacing:0.5px;}
+  .class-pick .b{font-size:12.5px;color:#D1D5DB;line-height:1.55;margin-top:5px;}
+  .class-pick .go{font-family:'Oswald',sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;color:var(--orange);margin-top:10px;}
+  #room{display:none;}
+  .room-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
+  .room-title{font-family:'Oswald',sans-serif;font-weight:900;font-size:18px;color:var(--accent);letter-spacing:0.5px;}
+  .leave{margin-left:auto;background:none;border:1px solid var(--border);border-radius:18px;color:var(--sub);font-family:var(--mono);font-size:11px;padding:5px 12px;cursor:pointer;}
+  .chat{display:flex;flex-direction:column;gap:12px;min-height:200px;}
+  .msg{max-width:88%;padding:12px 14px;border-radius:12px;font-size:14.5px;line-height:1.6;white-space:pre-wrap;}
+  .msg.cluck{align-self:flex-start;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-left:3px solid var(--orange);}
+  .msg.me{align-self:flex-end;background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.35);}
+  .msg .who{font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.5px;margin-bottom:4px;}
+  .msg.cluck .who{color:var(--orange);} .msg.me .who{color:var(--green);}
+  .answer-row{display:flex;gap:8px;margin-top:14px;}
+  .answer-row textarea{flex:1;background:#0d0d0d;border:1px solid var(--border);border-radius:10px;padding:12px;color:var(--text);font-family:system-ui;font-size:14px;resize:vertical;min-height:50px;}
+  .send{padding:0 18px;border:none;border-radius:10px;background:linear-gradient(135deg,#D97706,#F59E0B);color:#1a1a1a;font-family:'Oswald',sans-serif;font-weight:900;letter-spacing:1px;font-size:14px;cursor:pointer;}
+  .send:disabled{opacity:0.5;cursor:wait;}
+  .spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .hint{font-family:var(--mono);font-size:10px;color:var(--sub);margin-top:8px;text-align:center;}
+  .crosslink{display:block;text-align:center;margin-top:8px;padding:13px;border:1px dashed rgba(16,185,129,0.4);border-radius:10px;background:rgba(16,185,129,0.05);color:var(--green);text-decoration:none;font-family:'Oswald',sans-serif;font-weight:700;letter-spacing:1px;font-size:13px;}
+  .err{display:none;margin:10px 0;padding:11px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);border-radius:9px;color:#FCA5A5;font-family:var(--mono);font-size:12px;}
+  .err.show{display:block;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="/" class="back-home"><img src="/cluck-norris-logo.jpg" alt=""/>&larr; CLUCK NORRIS HOME</a>
+  <div class="header">
+    <div class="header-icon">🎓</div>
+    <div>
+      <div class="brand-mini">CLUCK NORRIS · SCHOOL OF CRYPTO HARD KNOCKS</div>
+      <h1>LIVE CLASSROOM</h1>
+    </div>
+  </div>
+  <div class="sub-h">CLASS WITH PROFESSOR CLUCK — HE TEACHES, HE ASKS, YOU ANSWER, HE GRADES YOU.</div>
+
+  <div id="picker" class="card">
+    <div style="font-size:13px;color:#D1D5DB;line-height:1.6;margin-bottom:14px;">Pick a class. Professor Cluck teaches it live — one concept at a time — and he <b style="color:var(--accent)">will</b> call on you. Answer in your own words; he grades it and corrects you. Free, no wallet connect.</div>
+    <div class="classes" id="classes"></div>
+  </div>
+
+  <div id="room" class="card">
+    <div class="room-head">
+      <span class="room-title" id="roomTitle"></span>
+      <button class="leave" onclick="leaveClass()">✕ leave class</button>
+    </div>
+    <div class="err" id="err"></div>
+    <div class="chat" id="chat"></div>
+    <div class="answer-row">
+      <textarea id="answer" placeholder="Type your answer (or ask the professor a question)…" disabled></textarea>
+      <button class="send" id="sendBtn" onclick="sendAnswer()" disabled>SEND</button>
+    </div>
+    <div class="hint">Tip: answer in plain English — there are no multiple-choice crutches here. Press Enter to send (Shift+Enter for a new line).</div>
+  </div>
+
+  <a class="crosslink" href="/transcript">🎓 Ready to prove it? Take the Ultimate Challenge for a verified diploma →</a>
+</div>
+
+<script>
+  var esc=function(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});};
+  var CLASSES=[
+    {id:"fundamentals",icon:"📚",t:"Crypto Fundamentals",b:"Wallets, tokens, DEXs, rugs, market cap, on-chain basics — the bedrock every crypto survivor needs."},
+    {id:"liquidity",icon:"💧",t:"Liquidity & LP Mastery",b:"AMMs, impermanent loss, concentrated liquidity, fees & LP earnings — the real money mechanics."},
+    {id:"pro",icon:"⚔️",t:"Pro / Exam Prep",b:"The tough stuff. Sharpen up for the Ultimate Challenge and a verified, shareable diploma."}
+  ];
+  var classId=null, history=[], busy=false;
+
+  document.getElementById('classes').innerHTML=CLASSES.map(function(c){
+    return '<div class="class-pick" onclick="startClass(\''+c.id+'\')">'
+      +'<div class="t">'+c.icon+' '+esc(c.t)+'</div>'
+      +'<div class="b">'+esc(c.b)+'</div>'
+      +'<div class="go">ENTER CLASS →</div></div>';
+  }).join('');
+
+  function showErr(m){var e=document.getElementById('err');e.textContent=m;e.classList.add('show');}
+  function clearErr(){document.getElementById('err').classList.remove('show');}
+
+  function addMsg(role,text){
+    var chat=document.getElementById('chat');
+    var d=document.createElement('div');
+    d.className='msg '+(role==='assistant'?'cluck':'me');
+    d.innerHTML='<div class="who">'+(role==='assistant'?'🐔 PROFESSOR CLUCK':'YOU')+'</div>'+esc(text);
+    chat.appendChild(d);
+    d.scrollIntoView({behavior:'smooth',block:'end'});
+  }
+  function thinking(on){
+    var chat=document.getElementById('chat');
+    var ex=document.getElementById('thinkMsg');
+    if(on){ if(ex)return; var d=document.createElement('div'); d.id='thinkMsg'; d.className='msg cluck'; d.innerHTML='<div class="who">🐔 PROFESSOR CLUCK</div><span class="spin"></span> thinking…'; chat.appendChild(d); d.scrollIntoView({behavior:'smooth',block:'end'}); }
+    else if(ex){ ex.remove(); }
+  }
+
+  async function startClass(id){
+    classId=id; history=[];
+    var c=CLASSES.find(function(x){return x.id===id;});
+    document.getElementById('picker').style.display='none';
+    document.getElementById('room').style.display='block';
+    document.getElementById('roomTitle').textContent=c.icon+' '+c.t;
+    document.getElementById('chat').innerHTML='';
+    document.getElementById('answer').disabled=false;
+    document.getElementById('sendBtn').disabled=false;
+    await turn('');  // open the class
+    document.getElementById('answer').focus();
+  }
+  function leaveClass(){
+    classId=null;history=[];
+    document.getElementById('room').style.display='none';
+    document.getElementById('picker').style.display='block';
+  }
+
+  async function turn(message){
+    if(busy) return; busy=true; clearErr();
+    document.getElementById('sendBtn').disabled=true;
+    thinking(true);
+    try{
+      var r=await fetch('/api/classroom',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({classId:classId, message:message, history:history})});
+      var d=await r.json();
+      thinking(false);
+      if(!d.success){ showErr(d.error||'Professor Cluck stepped out — try again.'); return; }
+      if(message) history.push({role:'user',content:message});
+      history.push({role:'assistant',content:d.reply});
+      addMsg('assistant', d.reply);
+    }catch(e){ thinking(false); showErr('Network hiccup — try again.'); }
+    finally{ busy=false; document.getElementById('sendBtn').disabled=false; }
+  }
+
+  async function sendAnswer(){
+    var ta=document.getElementById('answer');
+    var v=ta.value.trim();
+    if(!v || busy) return;
+    addMsg('user', v);
+    ta.value='';
+    await turn(v);
+    ta.focus();
+  }
+  document.getElementById('answer').addEventListener('keydown',function(e){
+    if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendAnswer(); }
+  });
+</script>
+</body>
+</html>

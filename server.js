@@ -2646,9 +2646,62 @@ app.get("/api/alpha-test", async (req, res) => {
   } catch (e) { return res.status(200).json({ success: false, error: e.message }); }
 });
 
-// Build the Telegram + X post text for a brief (no sending). X ALWAYS tags the ecosystem
-// partners (@JupiterExchange = routing artery + our earner's venue; @BagsApp = the launchpad/
-// hackathon host), then tags trending tokens by their X handle (engagement — tagged projects
+// ── CLUCK'S LIVE CLASSROOM — interactive AI-taught lessons ─────────────────────────────
+// Professor Cluck teaches a class conversationally (Socratic: explain → ask → grade the
+// student's free-text answer → correct → continue), grounded in our real question bank so the
+// teaching is accurate and aligned with the diploma/exam. Three tracks by question source.
+const CLASSROOM_CLASSES = {
+  fundamentals: { title: "Crypto Fundamentals", source: "CURRICULUM", blurb: "Wallets, tokens, DEXs, rugs, market cap, on-chain basics — the bedrock." },
+  liquidity: { title: "Liquidity & LP Mastery", source: "LPLAB", blurb: "AMMs, impermanent loss, concentrated liquidity, fees & LP earnings — the real money mechanics." },
+  pro: { title: "Pro / Exam Prep", source: "ULTIMATE", blurb: "The tough stuff — sharpen up for the Ultimate Challenge and a verified diploma." },
+};
+function classroomSyllabus(source, n = 16) {
+  const pool = QUESTION_BANK.filter((q) => q.source === source);
+  for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  return pool.slice(0, n).map((q, i) =>
+    `${i + 1}. ${q.q}\n   ✓ ${q.options && q.options[q.correct] != null ? q.options[q.correct] : "?"}\n   why: ${q.explanation || ""}`).join("\n");
+}
+app.post("/api/classroom", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  const { classId, message, history } = req.body || {};
+  const cls = CLASSROOM_CLASSES[classId];
+  if (!cls) return res.status(400).json({ success: false, error: "pick a class" });
+  const KEY = process.env.ANTHROPIC_API_KEY;
+  if (!KEY) return res.status(500).json({ success: false, error: "Classroom is offline (AI not configured)" });
+  const msg = String(message || "").slice(0, 800);
+  // Trim client history to the last ~10 turns to bound tokens.
+  const hist = Array.isArray(history) ? history.filter((m) => m && (m.role === "user" || m.role === "assistant") && m.content).slice(-10).map((m) => ({ role: m.role, content: String(m.content).slice(0, 1500) })) : [];
+  const opened = hist.length > 0;
+  const system = `You are Professor Cluck Norris — the toughest, funniest crypto professor on Solana — teaching a LIVE class: "${cls.title}".
+Your SYLLABUS (your source of truth — these are the real concepts, correct answers, and explanations; teach ONLY accurate crypto, lean on these):
+${classroomSyllabus(cls.source)}
+
+HOW YOU TEACH (this is a back-and-forth conversation, NOT a lecture dump):
+- Cover ONE concept at a time. Explain it simply with a vivid analogy (chicken/farm puns welcome), then ASK the student a question about it and STOP. Wait for their answer.
+- When the student answers, JUDGE it out loud: "✅ Nailed it" / "🟡 Close" / "❌ Not quite" — then correct/clarify using the syllabus explanation, briefly. Then move to the next concept.
+- Adapt: if they clearly get it, go faster/harder; if they're lost, slow down and re-explain differently.
+- If the student asks a question, answer it, then steer back to the lesson.
+- Keep EVERY reply SHORT — 2 to 5 sentences — and end with a question or a "ready for the next one?" prompt.
+- After ~6-8 concepts, wrap with a quick recap + tell them they're ready to test it on the Ultimate Challenge for a verified diploma.
+RULES: Never give financial advice or price predictions. Encouraging but blunt. No markdown headers/asterisks.${opened ? "" : "\nThis is the FIRST message — welcome the student to class, set the vibe in 1-2 lines, teach the first concept, and ask your first question."}`;
+  try {
+    const messages = [...hist];
+    messages.push({ role: "user", content: opened ? (msg || "(continue)") : "Start class, professor." });
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 700, system, messages }),
+    });
+    const data = await r.json();
+    if (data && data.content && data.content[0]) {
+      const reply = data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
+      return res.status(200).json({ success: true, reply });
+    }
+    return res.status(500).json({ success: false, error: (data && data.error && data.error.message) || "Professor Cluck is hoarse — try again." });
+  } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
+});
+
+
 // often re-engage). Packs trending tags to fit 280.
 function buildAlphaPosts(a) {
   const body = (a.brief || "").trim();
@@ -7211,6 +7264,10 @@ app.get("/lp-scanner", (req, res) => {
 
 app.get("/alpha", (req, res) => {
   res.sendFile(join(__dirname, "public", "alpha.html"));
+});
+
+app.get("/classroom", (req, res) => {
+  res.sendFile(join(__dirname, "public", "classroom.html"));
 });
 
 // Shared market-header script for the token tools (repo public/ isn't statically mounted).
