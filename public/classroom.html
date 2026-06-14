@@ -40,8 +40,16 @@
   .lrow .li{font-size:11px;color:var(--sub);line-height:1.45;margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
   .lrow .chk{flex-shrink:0;font-size:16px;color:var(--green);}
   .lrow .ref{font-family:var(--mono);font-size:8px;color:var(--sub);border:1px solid var(--border);border-radius:8px;padding:1px 5px;}
-  .room-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;}
-  .room-title{font-family:'Oswald',sans-serif;font-weight:900;font-size:19px;color:var(--accent);letter-spacing:0.5px;}
+  .room-head{display:flex;align-items:center;gap:11px;flex-wrap:wrap;margin-bottom:6px;}
+  .room-title{font-family:'Oswald',sans-serif;font-weight:900;font-size:19px;color:var(--accent);letter-spacing:0.5px;flex:1;min-width:0;}
+  .cluck-av{width:48px;height:48px;flex-shrink:0;}
+  .cluck-av img{width:100%;height:100%;border-radius:50%;object-fit:cover;border:2px solid var(--orange);box-shadow:0 0 0 0 rgba(217,119,6,0.55);display:block;}
+  .cluck-av.thinking img{animation:cluckPulse 1.15s ease-in-out infinite;}
+  .cluck-av.talking img{animation:cluckTalk 0.46s ease-in-out infinite;}
+  @keyframes cluckPulse{0%,100%{box-shadow:0 0 0 0 rgba(217,119,6,0.55);}50%{box-shadow:0 0 0 8px rgba(217,119,6,0);}}
+  @keyframes cluckTalk{0%,100%{transform:translateY(0) scale(1);}50%{transform:translateY(-2px) scale(1.05);}}
+  .voicebtn{flex-shrink:0;background:rgba(217,119,6,0.12);border:1px solid var(--border);border-radius:20px;padding:6px 10px;font-size:14px;cursor:pointer;line-height:1;}
+  .voicebtn.on{border-color:var(--orange);background:rgba(217,119,6,0.25);}
   .chat{display:flex;flex-direction:column;gap:12px;min-height:180px;margin-top:8px;}
   .msg{max-width:90%;padding:12px 14px;border-radius:12px;font-size:14.5px;line-height:1.6;white-space:pre-wrap;}
   .msg.cluck{align-self:flex-start;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-left:3px solid var(--orange);}
@@ -113,7 +121,11 @@
   <div id="vLesson" style="display:none;">
     <div class="crumbs"><a onclick="goCourses()">All courses</a> &nbsp;›&nbsp; <a id="crumbCourse" onclick="goSyllabus()"></a> &nbsp;›&nbsp; <span id="crumbLesson" class="muted"></span></div>
     <div class="card">
-      <div class="room-head"><span class="room-title" id="lessonTitle"></span></div>
+      <div class="room-head">
+        <div class="cluck-av idle" id="cluckAv"><img src="/cluck-norris-logo.jpg" alt="Professor Cluck"/></div>
+        <span class="room-title" id="lessonTitle"></span>
+        <button class="voicebtn" id="voiceBtn" onclick="toggleVoice()" title="Have Professor Cluck read lessons aloud">🔇</button>
+      </div>
       <div class="chat" id="chat"></div>
       <div class="quickrow" id="quickRow">
         <span class="qrlabel">🆘 Stuck or want more? Tap a button — Professor Cluck will help:</span>
@@ -143,6 +155,50 @@
   var courses=[], curCourse=null, curLesson=null, chatHist=[], busy=false; // NOTE: not 'history' — window.history is a read-only global and would shadow it
   function loadLast(){ try{ return JSON.parse(localStorage.getItem(LAST_KEY))||null; }catch(e){ return null; } }
   function saveLast(cid,lid){ try{ localStorage.setItem(LAST_KEY,JSON.stringify({courseId:cid,lessonId:lid})); }catch(e){} }
+
+  // ── Professor Cluck voice (free browser TTS) + animated avatar ──────────────
+  var VOICE_KEY='clkn_classroom_voice_v1';
+  var voiceOn=(function(){ try{ return localStorage.getItem(VOICE_KEY)==='1'; }catch(e){ return false; } })();
+  var _voices=[];
+  function loadVoices(){ try{ _voices=(window.speechSynthesis&&speechSynthesis.getVoices())||[]; }catch(e){ _voices=[]; } }
+  if('speechSynthesis' in window){ loadVoices(); try{ window.speechSynthesis.onvoiceschanged=loadVoices; }catch(e){} }
+  function pickVoice(){
+    if(!_voices.length) loadVoices();
+    // Prefer the best higher-quality male English voices available on the device.
+    var prefer=['Google UK English Male','Daniel','Google US English','Microsoft Guy Online (Natural) - English (United States)','Microsoft Guy','Microsoft David Desktop - English (United States)','Microsoft David','Arthur','Aaron','Fred','Rishi'];
+    for(var i=0;i<prefer.length;i++){ var v=_voices.find(function(x){return x.name===prefer[i];}); if(v) return v; }
+    return _voices.find(function(x){return /^en/i.test(x.lang)&&/(male|david|guy|daniel|fred|aaron|arthur|james|george|rishi)/i.test(x.name);})
+        || _voices.find(function(x){return /^en/i.test(x.lang);}) || _voices[0] || null;
+  }
+  function setAvatar(state){ var a=document.getElementById('cluckAv'); if(a) a.className='cluck-av '+state; }
+  var _talkTimer=null;
+  function flashTalk(){ setAvatar('talking'); if(_talkTimer)clearTimeout(_talkTimer); _talkTimer=setTimeout(function(){setAvatar('idle');},1300); }
+  function speak(text){
+    if(!voiceOn || !('speechSynthesis' in window)){ flashTalk(); return; }
+    try{
+      speechSynthesis.cancel();
+      var clean=String(text).replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2705}\u{274C}\u{2B50}\u{1F3C6}\u{1F914}\u{1F64B}]/gu,'').replace(/\s+/g,' ').trim();
+      if(!clean){ flashTalk(); return; }
+      var u=new SpeechSynthesisUtterance(clean);
+      var v=pickVoice(); if(v) u.voice=v;
+      u.rate=0.97; u.pitch=0.88; // a touch slow + gruff
+      u.onstart=function(){ setAvatar('talking'); };
+      u.onend=function(){ setAvatar('idle'); };
+      u.onerror=function(){ setAvatar('idle'); };
+      speechSynthesis.speak(u);
+    }catch(e){ flashTalk(); }
+  }
+  function stopSpeak(){ try{ if('speechSynthesis' in window) speechSynthesis.cancel(); }catch(e){} setAvatar('idle'); }
+  function syncVoiceBtn(){ var b=document.getElementById('voiceBtn'); if(b){ b.textContent=voiceOn?'🔊':'🔇'; b.className='voicebtn'+(voiceOn?' on':''); } }
+  function toggleVoice(){
+    voiceOn=!voiceOn;
+    try{ localStorage.setItem(VOICE_KEY, voiceOn?'1':'0'); }catch(e){}
+    syncVoiceBtn();
+    if(voiceOn){ // read the latest reply now — gives feedback + satisfies the tap-to-allow-audio rule
+      var last=null; for(var i=chatHist.length-1;i>=0;i--){ if(chatHist[i].role==='assistant'){ last=chatHist[i].content; break; } }
+      if(last) speak(last); else flashTalk();
+    } else { stopSpeak(); }
+  }
 
   function loadDone(){ try{ return JSON.parse(localStorage.getItem(DONE_KEY))||{}; }catch(e){ return {}; } }
   function isDone(cid,lid){ var d=loadDone(); return !!(d[cid]&&d[cid][lid]); }
@@ -215,8 +271,8 @@
         +'<div class="chk">'+(done?'✓':'')+'</div></div>';
     }).join('');
   }
-  function goCourses(){ renderCourses(); show('vCourses'); }
-  function goSyllabus(){ renderSyllabus(); show('vSyllabus'); }
+  function goCourses(){ stopSpeak(); renderCourses(); show('vCourses'); }
+  function goSyllabus(){ stopSpeak(); renderSyllabus(); show('vSyllabus'); }
 
   async function openLesson(lid){
     curLesson=curCourse.lessons.find(function(l){return String(l.id)===String(lid);});
@@ -230,6 +286,7 @@
     document.getElementById('completeBanner').classList.remove('show');
     document.getElementById('answer').disabled=false;
     document.getElementById('sendBtn').disabled=false;
+    stopSpeak(); syncVoiceBtn(); setAvatar('idle');
     show('vLesson');
     await turn('', true);  // open with one auto-retry on a transient blip
     document.getElementById('answer').focus();
@@ -251,7 +308,7 @@
   async function turn(message, retry){
     if(busy) return; busy=true;
     document.getElementById('sendBtn').disabled=true;
-    thinking(true);
+    thinking(true); setAvatar('thinking');
     var detail='';
     try{
       var ctrl = ('AbortController' in window) ? new AbortController() : null;
@@ -267,14 +324,15 @@
       if(!d){ detail='bad response'; throw new Error(detail); }
       if(!d.success){
         if(retry){ busy=false; await new Promise(function(x){setTimeout(x,1800);}); return turn(message,false); }
-        showErr(d.error||'Professor Cluck stepped out — try again.'); return;
+        setAvatar('idle'); showErr(d.error||'Professor Cluck stepped out — try again.'); return;
       }
       if(message) chatHist.push({role:'user',content:message});
       chatHist.push({role:'assistant',content:d.reply});
       addMsg('assistant', d.reply);
+      speak(d.reply); // reads it aloud if voice is on; otherwise a brief talking animation
       if(d.complete){ markDone(curCourse.id,curLesson.id); onComplete(); }
     }catch(e){
-      thinking(false);
+      thinking(false); setAvatar('idle');
       var why = (e && e.name==='AbortError') ? 'timed out' : (detail || (e&&e.message) || 'network');
       if(retry){ busy=false; await new Promise(function(x){setTimeout(x,1800);}); return turn(message,false); }
       showOpenError(why);
