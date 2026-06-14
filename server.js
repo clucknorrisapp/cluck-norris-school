@@ -7319,6 +7319,7 @@ app.get("/alpha", (req, res) => {
 });
 
 app.get("/classroom", (req, res) => {
+  res.setHeader("Cache-Control", "no-store, must-revalidate"); // it changes often — never serve a stale copy
   res.sendFile(join(__dirname, "public", "classroom.html"));
 });
 
