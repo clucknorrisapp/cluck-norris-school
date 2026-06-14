@@ -2590,7 +2590,7 @@ STYLE: punchy, confident, funny, a chicken pun or two, but genuinely informative
 🌶️ FRESH OFF THE GRILL — the brand-new Solana pools; remind them new pools are high rug risk.
 💧 WHERE THE FEES ARE — the hottest Solana pools and our blue-chip LP yield picks (fee yield = the real LP money metric, not volume).
 🎓 CLUCK'S LESSON — one sharp educational takeaway tied to today's data.
-RULES: Never tell anyone to buy/sell or predict prices. Flag risk honestly (memecoins/new pools can go to zero). No markdown asterisks or headers (#). Keep the whole thing under ~320 words. End with: "Not financial advice — now go do your homework. 🐔"`;
+RULES: Never tell anyone to buy/sell or predict prices. Flag risk honestly (memecoins/new pools can go to zero). No markdown asterisks or headers (#). Write tickers plain (BONK, not $BONK) — never put a $ before a ticker. Keep the whole thing under ~320 words. End with: "Not financial advice — now go do your homework. 🐔"`;
   try {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -2632,7 +2632,7 @@ app.get("/api/alpha-test", async (req, res) => {
     const a = await buildDailyAlpha({ force: true });
     const preview = buildAlphaPosts(a); // the exact TG + X text (tags included), no sending
     let posted = null;
-    if (req.query.post === "1") posted = await postDailyAlpha(a);
+    if (req.query.post === "1" || req.query.xonly === "1") posted = await postDailyAlpha(a, { xOnly: req.query.xonly === "1" });
     return res.status(200).json({ success: true, preview, posted, ...a });
   } catch (e) { return res.status(200).json({ success: false, error: e.message }); }
 });
@@ -2649,16 +2649,19 @@ function buildAlphaPosts(a) {
   // our earner's venue; @BagsApp = launchpad/hackathon host) + trending tokens by their handle.
   const trendTags = tr.map((t) => `$${t.sym}${t.handle ? " @" + t.handle : ""}`).join("  ");
   const tagLine = `🔥 Trending: ${trendTags}\n\nvia @JupiterExchange @BagsApp · clucknorris.app/alpha · not financial advice`;
-  // X is PREMIUM here → post the FULL brief (no 280 truncation). Cap well under the ~25k limit.
-  const tweet = `🐔 Cluck's Daily Alpha — Solana\n\n${body}\n\n${tagLine}`.slice(0, 9000);
+  // X is PREMIUM here → post the FULL brief (no 280 truncation). But X allows at most ONE
+  // cashtag ($SYMBOL) per post, so strip "$" before LETTERS (cashtags) while keeping "$" before
+  // digits (dollar amounts like $64,327). Engagement comes from the @handles, not cashtags.
+  const tweet = `🐔 Cluck's Daily Alpha — Solana\n\n${body}\n\n${tagLine}`.replace(/\$([A-Za-z])/g, "$1").slice(0, 9000);
   const taggedHandles = ["@JupiterExchange", "@BagsApp", ...tr.filter((t) => t.handle).map((t) => "@" + t.handle)];
   return { telegram, tweet, taggedHandles };
 }
-// Post the brief to the community Telegram (SILENT per house rule) + X.
-async function postDailyAlpha(a) {
+// Post the brief to the community Telegram (SILENT per house rule) + X. opts.xOnly re-posts
+// only X (e.g. after fixing an X-specific rejection without duplicating the Telegram post).
+async function postDailyAlpha(a, opts = {}) {
   const p = buildAlphaPosts(a);
   const out = { tweet: p.tweet, taggedHandles: p.taggedHandles };
-  try { out.telegram = await tgSend(process.env.TELEGRAM_CHAT_ID, p.telegram, null, { silent: true }); } catch (e) { out.telegramErr = e.message; }
+  if (!opts.xOnly) { try { out.telegram = await tgSend(process.env.TELEGRAM_CHAT_ID, p.telegram, null, { silent: true }); } catch (e) { out.telegramErr = e.message; } }
   try { out.x = await postToX(p.tweet); } catch (e) { out.xErr = e.message; }
   return out;
 }
