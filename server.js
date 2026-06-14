@@ -239,7 +239,9 @@ function bagsLaunchesTick() {
 // ── Daily market snapshot — 2×/day: CLKN price, market cap, change, volume &
 // Jupiter organic score. Repurposed from the old CLKN/SOL/BTC "Market Check";
 // shares one builder with the /price command (see buildMarketSnapshotText).
-const MARKET_CHECK_ENABLED = true;
+// Market Check auto-post is OWNER-TOGGLEABLE via kv (default OFF as of 2026-06-14 — owner
+// asked to stop the recurring market updates in the community room). Re-enable any time:
+// kv marketCheckEnabled true. The manual /api/market-check-test still works regardless.
 let lastMarketCheckMsgId = kv.get("marketCheckMsgId", null); // delete-previous, persisted across deploys
 // Shared market-snapshot builder — used by /price (on demand) and the 2×/day auto-post.
 // Price + market cap from the deepest pool, 24h change/volume, liquidity, and the Jupiter
@@ -296,7 +298,7 @@ async function notifyMarketCheck() {
 const MARKET_CHECK_HOURS_UTC = [15, 23];
 let lastMarketCheckHour = kv.get("marketCheckHour", -1);
 function marketCheckTick() {
-  if (!MARKET_CHECK_ENABLED) return;
+  if (kv.get("marketCheckEnabled", false) !== true) return; // owner turned it off (2026-06-14)
   const now = new Date();
   const h = now.getUTCHours();
   if (now.getUTCMinutes() < 2 && MARKET_CHECK_HOURS_UTC.includes(h) && h !== lastMarketCheckHour) {
