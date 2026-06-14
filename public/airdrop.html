@@ -436,6 +436,7 @@
       <div class="preview-stat">
         <div class="preview-stat-val" id="statTotal">—</div>
         <div class="preview-stat-label">TOTAL TOKENS</div>
+        <div class="preview-stat-label" id="statTotalUsd" style="color:#6EE7B7;margin-top:2px"></div>
       </div>
       <div class="preview-stat">
         <div class="preview-stat-val" id="statTxns">—</div>
@@ -764,6 +765,14 @@ function onDrop(e) {
   reader.readAsText(file);
 }
 
+// A recipient address must be a real Solana pubkey — base58, 32 bytes. A typo that slips
+// through sends real tokens to the wrong wallet (irreversible), so we validate hard here and
+// reject anything that isn't a valid address (using web3's PublicKey when loaded, else base58).
+function isValidSolAddress(a) {
+  if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a)) return false;
+  try { if (typeof solanaWeb3 !== 'undefined') new solanaWeb3.PublicKey(a); return true; } catch (e) { return false; }
+}
+
 // ── Parse Recipients ─────────────────────────────────────────────────────────
 async function parseRecipients() {
   if (!currentMint) { showError('Please select a token first.'); return; }
@@ -771,6 +780,7 @@ async function parseRecipients() {
   const minThreshold = parseFloat(document.getElementById('minThreshold').value) || 0;
   const parsed = [];
   const seen = new Set();
+  const invalid = []; // addresses that failed validation — rejected, never sent
 
   try {
     if (currentMode === 'manual' || currentMode === 'csv') {
@@ -800,6 +810,7 @@ async function parseRecipients() {
 
         const amount = parseFloat(amtStr.replace(/[^0-9.]/g, ''));
         if (!addr || isNaN(amount)) continue;
+        if (!isValidSolAddress(addr)) { invalid.push(addr); continue; } // reject typo'd/invalid addresses
 
         const skip = amount < minThreshold;
         const skipReason = skip ? `Below minimum (${minThreshold})` : '';
@@ -821,6 +832,7 @@ async function parseRecipients() {
       const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
       for (const addr of lines) {
         if (addr.length < 30) continue;
+        if (!isValidSolAddress(addr)) { invalid.push(addr); continue; } // reject typo'd/invalid addresses
         if (seen.has(addr)) continue;
         seen.add(addr);
         const skip = amount < minThreshold;
@@ -828,9 +840,13 @@ async function parseRecipients() {
       }
     }
 
-    if (parsed.length === 0) { showError('No valid recipients found. Check your input format.'); return; }
+    if (parsed.length === 0) { showError(invalid.length ? `No valid recipients — ${invalid.length} address(es) were invalid. Check the format.` : 'No valid recipients found. Check your input format.'); return; }
 
     recipients = parsed;
+    window.__airdropInvalid = invalid; // surfaced as a warning in the preview
+    // Live token price → show the airdrop's total USD value (uses the market-data API).
+    try { const tr = await fetch('/api/token-overview?mint=' + encodeURIComponent(currentMint)); const td = await tr.json(); window.__mintPriceUsd = (td && td.success && td.priceUsd) ? td.priceUsd : 0; } catch (_) { window.__mintPriceUsd = 0; }
+    if (invalid.length) showError(`⚠ Skipped ${invalid.length} INVALID address(es) — they were NOT added. Sending ${parsed.length} valid recipient(s). Fix and re-parse if that's wrong.`);
     // Reset the skip-new-ATAs checkbox between parses — a new list shouldn't inherit old state
     const skipCb = document.getElementById('skipNewAtas');
     if (skipCb) skipCb.checked = false;
@@ -960,6 +976,10 @@ function renderPreview() {
   document.getElementById('statTotal').textContent = fmtNum(totalTokens);
   document.getElementById('statTxns').textContent = txCount;
   document.getElementById('statSkipped').textContent = skipped.length;
+  // Total USD value of the airdrop (price × tokens), when we have a market price.
+  const px = window.__mintPriceUsd || 0;
+  const usdEl = document.getElementById('statTotalUsd');
+  if (usdEl) { const v = totalTokens * px; usdEl.textContent = px > 0 ? ('≈ $' + (v >= 1e6 ? (v/1e6).toFixed(2)+'M' : v >= 1e3 ? (v/1e3).toFixed(1)+'K' : v.toFixed(2))) : ''; }
 
   // Wallet-popup pre-flight summary — exact numbers a user should see in each
   // signing prompt. If the popup shows different counts, they should reject.
