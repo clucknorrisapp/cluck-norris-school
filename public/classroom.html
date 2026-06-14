@@ -48,7 +48,11 @@
   .msg.me{align-self:flex-end;background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.35);}
   .msg .who{font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.5px;margin-bottom:4px;}
   .msg.cluck .who{color:var(--orange);} .msg.me .who{color:var(--green);}
-  .answer-row{display:flex;gap:8px;margin-top:14px;}
+  .quickrow{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px;}
+  .quickrow button{background:rgba(217,119,6,0.10);border:1px solid rgba(217,119,6,0.35);color:var(--accent);border-radius:16px;padding:6px 11px;font-family:var(--mono);font-size:11px;cursor:pointer;}
+  .quickrow button:hover{background:rgba(217,119,6,0.2);}
+  .quickrow button:disabled{opacity:0.4;cursor:wait;}
+  .answer-row{display:flex;gap:8px;margin-top:12px;}
   .answer-row textarea{flex:1;background:#0d0d0d;border:1px solid var(--border);border-radius:10px;padding:12px;color:var(--text);font-family:system-ui;font-size:14px;resize:vertical;min-height:50px;}
   .send{padding:0 18px;border:none;border-radius:10px;background:linear-gradient(135deg,#D97706,#F59E0B);color:#1a1a1a;font-family:'Oswald',sans-serif;font-weight:900;letter-spacing:1px;font-size:14px;cursor:pointer;}
   .send:disabled{opacity:0.5;cursor:wait;}
@@ -104,6 +108,12 @@
     <div class="card">
       <div class="room-head"><span class="room-title" id="lessonTitle"></span></div>
       <div class="chat" id="chat"></div>
+      <div class="quickrow" id="quickRow">
+        <button onclick="quickAsk('Can you explain that a different way? I&#39;m a bit lost.')">🙋 Explain differently</button>
+        <button onclick="quickAsk('Give me another real-world example.')">Another example</button>
+        <button onclick="quickAsk('Why does this actually matter for me?')">Why it matters</button>
+        <button onclick="quickAsk('Slow down and break that into simpler steps.')">Go slower</button>
+      </div>
       <div class="answer-row">
         <textarea id="answer" placeholder="Type your answer (or ask the professor a question)…"></textarea>
         <button class="send" id="sendBtn" onclick="sendAnswer()">SEND</button>
@@ -249,6 +259,12 @@
     if(!v || busy) return;
     addMsg('user', v); ta.value='';
     await turn(v); ta.focus();
+  }
+  // One-tap "raise your hand" — students may not realize they can ask Cluck anything.
+  async function quickAsk(text){
+    if(busy) return;
+    addMsg('user', text);
+    await turn(text);
   }
   document.getElementById('answer').addEventListener('keydown',function(e){
     if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendAnswer(); }
