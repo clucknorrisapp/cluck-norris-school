@@ -128,7 +128,7 @@
         ⚠️ <b>Mostly fresh memecoins — very high risk.</b> Those huge yields are real fee numbers, but these pools can lose most of their value or rug in hours; IL + a dying token routinely wipe out far more than the fees pay. High yield ≠ safe. <b>Not financial advice.</b>
       </div>
       <div class="top-strip" id="topStrip"><span class="muted" style="padding:8px;"><span class="spin"></span> loading…</span></div>
-      <div class="note-line" id="topNote" style="margin:0;">Hottest pairs right now across every Solana DEX, refreshed hourly. Swipe ➜ &nbsp;·&nbsp; tap any for the simulator.</div>
+      <div class="note-line" id="topNote" style="margin:0;">Hottest pairs right now across every Solana DEX, refreshed hourly. Swipe ➜ &nbsp;·&nbsp; tap any for the details.</div>
     </div>
   </div>
 
@@ -155,7 +155,7 @@
     </div>
     <button class="scan-btn" id="scanBtn" onclick="runScan()">SCAN POOLS</button>
     <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px;">
-      <label class="fld">⚡ POWER USER — paste a pool address to jump straight to the simulator</label>
+      <label class="fld">⚡ POWER USER — paste a pool address to jump straight to a pool's details</label>
       <div style="display:flex;gap:8px;">
         <input type="text" id="poolAddr" placeholder="pool address" autocomplete="off" style="flex:1;"/>
         <button class="ask-btn" id="poolBtn" onclick="directPool()" style="margin:0;white-space:nowrap;">SIMULATE →</button>
@@ -179,7 +179,7 @@
         </table>
       </div>
       <div class="note-line" id="rankNote"></div>
-      <div class="note-line" style="color:var(--accent);">👆 Tap any pool to open the range &amp; earnings simulator.</div>
+      <div class="note-line" style="color:var(--accent);">👆 Tap any pool for its full detail — fees, depth &amp; volatility.</div>
       <button class="ask-btn" id="shareBtn" onclick="shareCard()" style="margin-top:12px;">📸 SHARE THIS SCAN (PNG CARD)</button>
     </div>
 
@@ -290,7 +290,7 @@
     var badge=document.getElementById('ilBadge');
     badge.className='badge il-low';
     badge.textContent=(d.activeCount||0)+' / '+(d.count||0)+' POOLS ACTIVE';
-    document.getElementById('ilNote').textContent='Every pool $'+esc(d.token)+' trades in. Tap any row for the range & earnings simulator. IL dot is per-pair (the counter asset varies).';
+    document.getElementById('ilNote').textContent='Every pool $'+esc(d.token)+' trades in. Tap any row for the pool detail. IL dot is per-pair (the counter asset varies).';
     document.getElementById('estHead').textContent = d.amountUsd ? ('Est $/day ($'+Number(d.amountUsd).toLocaleString()+')') : 'Est $/day';
 
     var ilColor={minimal:'#6EE7B7',low:'#93C5FD',moderate:'#FCD34D',high:'#FCA5A5'};
@@ -332,7 +332,7 @@
     document.getElementById('pairTitle').textContent=label||'POOL DEEP-DIVE';
     document.getElementById('ilBadge').className='badge'; document.getElementById('ilBadge').textContent='';
     document.getElementById('ilNote').textContent='';
-    document.getElementById('poolRows').innerHTML='<tr><td colspan="6" class="muted" style="text-align:center;padding:14px;">Direct pool lookup — see the simulator below.</td></tr>';
+    document.getElementById('poolRows').innerHTML='<tr><td colspan="6" class="muted" style="text-align:center;padding:14px;">Direct pool lookup — see the pool detail below.</td></tr>';
     document.getElementById('rankNote').textContent='';
     openDeepDive(addr, dex||'');
   }
@@ -358,8 +358,8 @@
     document.getElementById('tab-trending').className='top-tab'+(k==='trending'?' on':'');
     document.getElementById('tab-bluechip').className='top-tab'+(k==='bluechip'?' on':'');
     document.getElementById('topNote').innerHTML = k==='trending'
-      ? 'Hottest pairs right now across every Solana DEX, hourly. Memecoins included — real yield where priceable, else “—”. Swipe ➜ · tap for the simulator.'
-      : 'Durable, won’t-disappear projects — majors, stables, LSTs, BTC/ETH — ranked by 7-day-avg fee yield. The long-term board. Swipe ➜ · tap for the simulator.';
+      ? 'Hottest pairs right now across every Solana DEX, hourly. Memecoins included — real yield where priceable, else “—”. Swipe ➜ · tap for the details.'
+      : 'Durable, won’t-disappear projects — majors, stables, LSTs, BTC/ETH — ranked by 7-day-avg fee yield. The long-term board. Swipe ➜ · tap for the details.';
     document.getElementById('topStrip').innerHTML='<span class="muted" style="padding:8px;"><span class="spin"></span> loading…</span>';
     loadTopPools();
   }
@@ -401,7 +401,7 @@
     ddState={ pool:pool, dex:dex, width:width||null };
     var dd=document.getElementById('deepdive');
     dd.classList.remove('hidden');
-    dd.innerHTML='<button class="closex" onclick="closeDD()">✕</button><div class="sim-head">'+esc(dex||'Pool')+' deep-dive</div><div class="sim-sub" style="margin-top:10px;"><span class="spin"></span> running the simulator…</div>';
+    dd.innerHTML='<button class="closex" onclick="closeDD()">✕</button><div class="sim-head">'+esc(dex||'Pool')+' deep-dive</div><div class="sim-sub" style="margin-top:10px;"><span class="spin"></span> loading pool detail…</div>';
     dd.scrollIntoView({behavior:'smooth', block:'start'});
     var amt=document.getElementById('amount').value.trim();
     try{
@@ -416,49 +416,31 @@
   function renderDeepDive(d){
     var p=d.pool||{}, v=d.volatility||{};
     var amt=d.amountUsd;
-    // Star the "sweet spot": the WIDEST range whose blended $/day is within ~5% of the best
-    // (blended is flat once you're tighter than the daily swing, so wider = fewer rebalances
-    // & less IL for ~the same income). Falls back to in-range $/day if no deposit was given.
-    var sweep=d.sweep||[];
-    var valOf=function(s){ return s.blendedDailyUsd!=null?s.blendedDailyUsd:(s.inRangeDailyUsd||0); };
-    var maxVal=-1; sweep.forEach(function(s){ var v=valOf(s); if(v>maxVal)maxVal=v; });
-    var bestI=-1;
-    sweep.forEach(function(s,i){ if(valOf(s)>=maxVal*0.95) bestI=i; }); // last (widest) qualifier wins
-    var curW = (ddState&&ddState.width) ? Number(ddState.width) : null;
-
     var stat=function(k,val,green){ return '<div class="stat"><div class="k">'+esc(k)+'</div><div class="v'+(green?' g':'')+'">'+val+'</div></div>'; };
     var feeStr = p.feeTier!=null ? p.feeTier+'%' : '—';
     var volStr = v.dailyRangePct!=null ? v.dailyRangePct+'%' : 'n/a';
 
-    var chips = [0.25,0.5,1,2,3,5,10].map(function(w){
-      var on = curW===w ? ' on' : '';
-      return '<button class="chip'+on+'" onclick="openDeepDive(ddState.pool,ddState.dex,'+w+')">±'+w+'%</button>';
-    }).join('');
-
-    var rows = sweep.map(function(s,i){
-      var star = i===bestI ? '<span style="color:#6EE7B7">★ </span>' : '';
-      var sel = (curW!=null && Math.abs(s.halfWidthPct-curW)<0.001);
-      var tir = s.timeInRange!=null ? Math.round(s.timeInRange*100)+'%' : '—';
-      var tirBar = s.timeInRange!=null ? '<span class="ti-bar" style="width:'+Math.round(s.timeInRange*46)+'px;"></span> ' : '';
-      return '<tr class="'+(i===bestI?'simbest':'')+(sel?' best':'')+'">'
-        +'<td>'+star+'±'+s.halfWidthPct+'%</td>'
-        +'<td>'+s.concMult+'x</td>'
-        +'<td>'+(s.inRangeDailyUsd!=null?('<span class="yield-v">$'+s.inRangeDailyUsd+'</span>'):'<span class="muted">—</span>')+'</td>'
-        +'<td>'+tirBar+tir+'</td>'
-        +'<td>'+(s.blendedDailyUsd!=null?('<span class="yield-v">$'+s.blendedDailyUsd+'</span>'):'<span class="muted">—</span>')+'</td>'
-        +'<td>'+(s.blendedApr!=null?(s.blendedApr+'%'):'<span class="muted">—</span>')+'</td>'
-        +'<td>'+(s.exitsPerDay!=null?s.exitsPerDay:'—')+'</td>'
-        +'</tr>';
-    }).join('');
+    // PASSIVE estimate only — a buy-and-hold LP's proportional share of the pool's fees.
+    // (We deliberately DON'T show tight-range, rebalance-several-times-a-day yields here —
+    // that's advanced active management, not what a typical LP does.)
+    var volUsed = p.vol7dAvgUsd || p.vol24hUsd || 0;
+    var estLine = '';
+    if (amt && p.feeTier!=null && p.tvlUsd>0) {
+      var estDaily = volUsed * (p.feeTier/100) * (amt/(p.tvlUsd+amt));
+      var aprYr = estDaily/amt*365*100;
+      estLine = '<div class="stat" style="grid-column:1/-1;background:rgba(16,185,129,0.06);border-color:rgba(16,185,129,0.3);">'
+        +'<div class="k">EST. PASSIVE EARNINGS ON '+fmt(amt)+' (buy &amp; hold, your share of fees)</div>'
+        +'<div class="v g">~$'+estDaily.toFixed(2)+'/day  ·  ~'+aprYr.toFixed(0)+'% / yr</div></div>';
+    }
 
     var il=d.ilRisk||{level:'',note:''};
     var highRisk = (p.dex==='pumpswap') || (il.level==='high');
-    var riskBanner = highRisk ? '<div style="margin:10px 0 4px;padding:9px 11px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.4);border-radius:9px;font-family:system-ui;font-size:11.5px;line-height:1.5;color:#FCA5A5;">⚠️ <b>High-risk pool.</b> '+(p.dex==='pumpswap'?'Fresh memecoin AMM — the token can lose most of its value or rug fast. ':'')+'The APR below is the FEE rate only; it ignores impermanent loss and the token going to zero, which routinely dwarf fees here. High yield ≠ safe. Not financial advice.</div>' : '';
+    var riskBanner = highRisk ? '<div style="margin:10px 0 4px;padding:9px 11px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.4);border-radius:9px;font-family:system-ui;font-size:11.5px;line-height:1.5;color:#FCA5A5;">⚠️ <b>High-risk pool.</b> '+(p.dex==='pumpswap'?'Fresh memecoin AMM — the token can lose most of its value or rug fast. ':'')+'Any fee estimate ignores impermanent loss and the token going to zero, which routinely dwarf fees here. High yield ≠ safe. Not financial advice.</div>' : '';
     var dd=document.getElementById('deepdive');
     dd.innerHTML=''
       +'<button class="closex" onclick="closeDD()">✕</button>'
       +'<div class="sim-head">'+esc(p.dex||'')+' · '+esc(p.name||'pool')+'</div>'
-      +'<div class="sim-sub">RANGE &amp; EARNINGS SIMULATOR — tighter range = more fees per $ while in range, but exits more often</div>'
+      +'<div class="sim-sub">POOL DETAIL — fees, depth &amp; volatility for a buy-and-hold LP position</div>'
       +riskBanner
       +'<div class="stat-grid">'
         +stat('TVL', fmt(p.tvlUsd))
@@ -467,14 +449,10 @@
         +stat('FEE TIER', feeStr)
         +stat('DAILY SWING', volStr)
         +(amt?stat('YOUR SIZE', fmt(amt)):'')
+        +estLine
       +'</div>'
-      +'<div class="sim-sub" style="margin:0 0 4px;">Pick a range half-width to highlight it (or just compare the whole table):</div>'
-      +'<div class="chips">'+chips+'</div>'
-      +'<div style="overflow-x:auto;"><table>'
-        +'<thead><tr><th>Range</th><th>Conc.</th><th>In-range $/d</th><th>Time in range</th><th>Blended $/d</th><th>APR</th><th>Exits/d</th></tr></thead>'
-        +'<tbody>'+rows+'</tbody></table></div>'
-      +(amt?'':'<div class="note-line" style="color:var(--accent);">💡 Enter a deposit amount above &amp; tap the pool again for $/day + APR estimates.</div>')
-      +'<div class="note-line">'+esc(d.model||'')+'</div>'
+      +(amt?'':'<div class="note-line" style="color:var(--accent);">💡 Enter a deposit amount above &amp; tap the pool again for a passive $/day estimate.</div>')
+      +'<div class="note-line">Estimate = your proportional share of the pool’s fees as a passive, buy-and-hold LP (no rebalancing). “Daily swing” is how far the price typically moves in a day — the wider you set your range, the more of that swing you stay in range for. Tighter ranges can earn more but require active management; that’s an advanced strategy, not assumed here.</div>'
       +'<div class="note-line" style="color:#FCA5A5;">IL risk: '+esc(il.level)+' — '+esc(il.note)+'</div>';
   }
 
