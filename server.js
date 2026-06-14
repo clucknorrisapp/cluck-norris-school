@@ -2882,7 +2882,7 @@ app.get("/api/treasury-recap-test", async (req, res) => {
 app.get("/api/jup-recap-test", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
-  try { return res.status(200).json(await sendJupUsdcRecap({ send: req.query.send === "1", reset: req.query.reset === "1" })); }
+  try { return res.status(200).json(await sendJupUsdcRecap({ send: req.query.send === "1", reset: req.query.reset === "1", rebaselineClaimedUsd: req.query.rebaselineClaimed != null ? Number(req.query.rebaselineClaimed) : null })); }
   catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
 
@@ -2979,7 +2979,24 @@ function jupUsdcLogRebalance(swapUsd) {
   L.rebalanceCostUsd = (L.rebalanceCostUsd || 0) + Math.max(0.02, (Number(swapUsd) || 0) * 0.0015 + 0.02); // ~15bps swap + tx
   kv.set("jupUsdcLedger", L);
 }
-async function sendJupUsdcRecap({ send = true, reset = false } = {}) {
+// Bank a CLOSED position's realized fees (claimed over its life + pending claimed at close)
+// at the moment of close — durably, immediately — so fees are never lost when a recenter
+// (autonomous loop OR a manual /api/meteora/recenter) destroys a position between recap runs.
+// Sets lastPubkey=null so the recap's pubkey-change fallback won't ALSO bank this close (no
+// double-count); the recap re-adopts the next live position cleanly. This is the real fix for
+// the lifetime-fees undercount: banking used to happen only inside the 6h recap, on stale data.
+function jupUsdcBankClose(closedPos) {
+  const L = jupUsdcLedger();
+  const realized = (Number(closedPos && closedPos.claimedFeeUsd) || 0) + (Number(closedPos && closedPos.pendingFeeUsd) || 0);
+  L.bankedClaimedUsd = (L.bankedClaimedUsd || 0) + realized;
+  L.recenters = (L.recenters || 0) + 1;
+  L.rebalanceCostUsd = (L.rebalanceCostUsd || 0) + EST_RECENTER_COST_USD;
+  L.lastPubkey = null;        // closed; recap re-adopts the next live position without re-banking
+  L.lastClaimedUsd = 0;
+  kv.set("jupUsdcLedger", L);
+  return realized;
+}
+async function sendJupUsdcRecap({ send = true, reset = false, rebaselineClaimedUsd = null } = {}) {
   if (!meteora.isEnabled()) return { skipped: "meteora not enabled" };
   let jupUsd = 0; try { jupUsd = (await getJupUsd()) || 0; } catch (_) {}
   const m = await meteora.status({ jupUsd });
@@ -2999,6 +3016,13 @@ async function sendJupUsdcRecap({ send = true, reset = false } = {}) {
     L.rebalanceCostUsd = (L.rebalanceCostUsd || 0) + EST_RECENTER_COST_USD;
   }
   if (!reset) { L.lastPubkey = pubkey; L.lastClaimedUsd = claimedUsd; }
+  // One-time re-baseline: sync banked fees to Meteora's authoritative "Fees Claimed" figure
+  // (the UI number) so the lifetime counter is correct now; close-time banking keeps it
+  // accurate from here. bankedClaimed + live-claimed must equal that total.
+  if (rebaselineClaimedUsd != null && Number.isFinite(Number(rebaselineClaimedUsd))) {
+    L.bankedClaimedUsd = Math.max(0, Number(rebaselineClaimedUsd) - claimedUsd);
+    kv.set("jupUsdcLedger", L); // persist immediately, independent of send
+  }
   const lifetimeFeesUsd = (L.bankedClaimedUsd || 0) + claimedUsd + claimableUsd;
   const netUsd = lifetimeFeesUsd - (L.rebalanceCostUsd || 0);
   const snap = { ts: Date.now(), valueUsd, lifetimeFeesUsd };
@@ -3180,6 +3204,9 @@ async function jupUsdcRecenter({ dryRun = false, force = false } = {}) {
     const r = await meteora.removeLiquidity({ positionPubkey: pos.positionPubkey, pct: 1, close: true });
     closeSucceeded = true;
     kv.set("jupUsdcManagedPubkey", null);
+    // Bank this position's realized fees NOW (claimed + pending) — before the reopen, so even a
+    // failed reopen + later retry can't lose them from the lifetime count.
+    try { jupUsdcBankClose(pos); } catch (_) {}
     steps.push({ closed: pos.position, sigs: (r.sigs || []).length });
     await new Promise((res) => setTimeout(res, 2500));
     // Rebalance ONLY the freed amounts to ~50/50 (never the whole wallet). The swap is
