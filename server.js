@@ -2630,32 +2630,37 @@ app.get("/api/alpha-test", async (req, res) => {
   if (!adminAuthOK(req)) return res.status(404).json({ success: false, error: "not found" });
   try {
     const a = await buildDailyAlpha({ force: true });
+    const preview = buildAlphaPosts(a); // the exact TG + X text (tags included), no sending
     let posted = null;
     if (req.query.post === "1") posted = await postDailyAlpha(a);
-    return res.status(200).json({ success: true, posted, ...a });
+    return res.status(200).json({ success: true, preview, posted, ...a });
   } catch (e) { return res.status(200).json({ success: false, error: e.message }); }
 });
 
-// Post the brief to the community Telegram (SILENT per house rule) + X (trimmed to fit).
-async function postDailyAlpha(a) {
-  const out = {};
+// Build the Telegram + X post text for a brief (no sending). X ALWAYS tags the ecosystem
+// partners (@JupiterExchange = routing artery + our earner's venue; @BagsApp = the launchpad/
+// hackathon host), then tags trending tokens by their X handle (engagement — tagged projects
+// often re-engage). Packs trending tags to fit 280.
+function buildAlphaPosts(a) {
   const body = (a.brief || "").trim();
-  try { out.telegram = await tgSend(process.env.TELEGRAM_CHAT_ID, body + `\n\n🔬 Full picture + tools: clucknorris.app/alpha`, null, { silent: true }); } catch (e) { out.telegramErr = e.message; }
-  try {
-    // X: lead with the mood + tag trending tokens by their X handle (engagement). Tag the ones
-    // we resolved a handle for first ($SYM @handle), fall back to bare $SYM, keep under the limit.
-    const mood = (a.data.majors || []).map((m) => `${m.sym} ${(m.chg >= 0 ? "+" : "") + Number(m.chg || 0).toFixed(1)}%`).join("  ");
-    const tr = (a.data.trending || []).slice(0, 5);
-    const tagged = tr.map((t) => `$${t.sym}${t.handle ? " @" + t.handle : ""}`);
-    // Fit as many tagged tokens as the tweet allows.
-    const head = `🐔 Cluck's Daily Alpha\n\n📊 ${mood}\n🔥 Trending: `;
-    const tail = `\n\nFull Solana brief — fresh pools, real LP yields → clucknorris.app/alpha\n\nNot financial advice.`;
-    let hot = "", used = 0;
-    for (const tok of tagged) { const next = hot ? hot + " " + tok : tok; if ((head + next + tail).length <= 280) { hot = next; used++; } else break; }
-    const tw = head + (hot || tr.slice(0, 3).map((t) => "$" + t.sym).join(" ")) + tail;
-    out.taggedHandles = tr.filter((t) => t.handle).map((t) => "@" + t.handle);
-    out.x = await postToX(tw.slice(0, 280));
-  } catch (e) { out.xErr = e.message; }
+  const telegram = body + `\n\n🔬 Full picture + tools: clucknorris.app/alpha`;
+  const mood = (a.data.majors || []).map((m) => `${m.sym} ${(m.chg >= 0 ? "+" : "") + Number(m.chg || 0).toFixed(1)}%`).join("  ");
+  const tr = (a.data.trending || []).slice(0, 5);
+  const tagged = tr.map((t) => `$${t.sym}${t.handle ? " @" + t.handle : ""}`);
+  const head = `🐔 Cluck's Daily Alpha — Solana\n\n📊 ${mood}\n🔥 Trending: `;
+  const tail = `\n\nFull brief — fresh pools + real LP yields 👉 clucknorris.app/alpha\n\nvia @JupiterExchange @BagsApp · not financial advice`;
+  let hot = "";
+  for (const tok of tagged) { const next = hot ? hot + " " + tok : tok; if ((head + next + tail).length <= 280) hot = next; else break; }
+  const tweet = (head + (hot || tr.slice(0, 3).map((t) => "$" + t.sym).join(" ")) + tail).slice(0, 280);
+  const taggedHandles = ["@JupiterExchange", "@BagsApp", ...tr.filter((t) => t.handle).map((t) => "@" + t.handle)];
+  return { telegram, tweet, taggedHandles };
+}
+// Post the brief to the community Telegram (SILENT per house rule) + X.
+async function postDailyAlpha(a) {
+  const p = buildAlphaPosts(a);
+  const out = { tweet: p.tweet, taggedHandles: p.taggedHandles };
+  try { out.telegram = await tgSend(process.env.TELEGRAM_CHAT_ID, p.telegram, null, { silent: true }); } catch (e) { out.telegramErr = e.message; }
+  try { out.x = await postToX(p.tweet); } catch (e) { out.xErr = e.message; }
   return out;
 }
 
