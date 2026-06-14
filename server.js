@@ -3468,14 +3468,15 @@ async function jupUsdcRecenter({ dryRun = false, force = false } = {}) {
   const steps = [];
   const freedX = (pos.amountX || 0) + (pos.pendingFeeX || 0); // JUP
   const freedY = (pos.amountY || 0) + (pos.pendingFeeY || 0); // USDC
-  let closeSucceeded = false, depX = freedX, depY = freedY;
+  let closeSucceeded = false, depX = freedX, depY = freedY, posEarnedUsd = 0;
   try {
     const r = await meteora.removeLiquidity({ positionPubkey: pos.positionPubkey, pct: 1, close: true });
     closeSucceeded = true;
     kv.set("jupUsdcManagedPubkey", null);
     // Bank this position's realized fees NOW (claimed + pending) — before the reopen, so even a
-    // failed reopen + later retry can't lose them from the lifetime count.
-    try { jupUsdcBankClose(pos); } catch (_) {}
+    // failed reopen + later retry can't lose them from the lifetime count. Capture the total this
+    // position earned over its life so we can report it in the rebalance DM.
+    try { posEarnedUsd = jupUsdcBankClose(pos) || 0; } catch (_) {}
     steps.push({ closed: pos.position, sigs: (r.sigs || []).length });
     await new Promise((res) => setTimeout(res, 2500));
     // Rebalance ONLY the freed amounts to ~50/50 (never the whole wallet). The swap is
@@ -3508,7 +3509,7 @@ async function jupUsdcRecenter({ dryRun = false, force = false } = {}) {
     const swTxt = !swStep ? " · already balanced"
       : swStep.swapSkipped ? ` · ⚠️ swap skipped (${swStep.swapSkipped}) — centered, not fully balanced`
       : ` · swapped $${swStep.rebalancedUsd} to 50/50 (impact ${swStep.impactPct != null ? swStep.impactPct + "%" : "?"})`;
-    meteoraDM(`🔄 <b>JUP/USDC re-centered</b> ±${cfg.halfWidthPct}% ${cfg.distribution} · was ${pos.inRange ? `near edge ${(frac * 100).toFixed(0)}%` : "OUT of range"}${swTxt} · ~$${Math.round(pos.valueUsd)}`);
+    meteoraDM(`🔄 <b>JUP/USDC re-centered</b> ±${cfg.halfWidthPct}% ${cfg.distribution} · was ${pos.inRange ? `near edge ${(frac * 100).toFixed(0)}%` : "OUT of range"}${swTxt} · ~$${Math.round(pos.valueUsd)}\n💰 That position earned <b>$${posEarnedUsd.toFixed(2)}</b> in fees over its life.`);
   } catch (e) {
     if (closeSucceeded) {
       kv.set("jupUsdcReopenPending", { x: depX, y: depY, halfWidthPct: cfg.halfWidthPct, distribution: cfg.distribution, ts: Date.now() });
