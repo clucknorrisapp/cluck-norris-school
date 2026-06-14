@@ -175,6 +175,12 @@ Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.
   pipeline alive; empty/`success:false` = ST key or quota.
 - X cross-post needs all four `X_*` keys, else silent no-op. A raw contract address in a
   tweet 403s for ~7 days after auth, so lesson tweets link a DexScreener URL instead.
+- **The X account is PREMIUM — long-form posts are allowed (up to ~25k chars). DO NOT truncate
+  tweets to 280; that limit does not apply to us.** Post the full content (e.g. the whole Daily
+  Alpha brief) rather than a teaser. (Owner correction, set 2026-06-14.)
+- **Always tag `@JupiterExchange` (routing artery + our JUP/USDC earner's venue) and `@BagsApp`
+  (launchpad + hackathon host) in X posts**, plus the relevant projects' own handles
+  (CoinGecko `links.twitter_screen_name`) for engagement. (Owner ask, 2026-06-14.)
 - Persistence: Railway volume at `/data` (consumed payment signatures, graduation tracker,
   scheduler timestamps, analytics, transcripts/credentials) — survives redeploys.
 

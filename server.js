@@ -2644,14 +2644,13 @@ app.get("/api/alpha-test", async (req, res) => {
 function buildAlphaPosts(a) {
   const body = (a.brief || "").trim();
   const telegram = body + `\n\n🔬 Full picture + tools: clucknorris.app/alpha`;
-  const mood = (a.data.majors || []).map((m) => `${m.sym} ${(m.chg >= 0 ? "+" : "") + Number(m.chg || 0).toFixed(1)}%`).join("  ");
-  const tr = (a.data.trending || []).slice(0, 5);
-  const tagged = tr.map((t) => `$${t.sym}${t.handle ? " @" + t.handle : ""}`);
-  const head = `🐔 Cluck's Daily Alpha — Solana\n\n📊 ${mood}\n🔥 Trending: `;
-  const tail = `\n\nFull brief — fresh pools + real LP yields 👉 clucknorris.app/alpha\n\nvia @JupiterExchange @BagsApp · not financial advice`;
-  let hot = "";
-  for (const tok of tagged) { const next = hot ? hot + " " + tok : tok; if ((head + next + tail).length <= 280) hot = next; else break; }
-  const tweet = (head + (hot || tr.slice(0, 3).map((t) => "$" + t.sym).join(" ")) + tail).slice(0, 280);
+  const tr = (a.data.trending || []).slice(0, 6);
+  // Engagement tag line: ALWAYS tag the ecosystem partners (@JupiterExchange = routing artery +
+  // our earner's venue; @BagsApp = launchpad/hackathon host) + trending tokens by their handle.
+  const trendTags = tr.map((t) => `$${t.sym}${t.handle ? " @" + t.handle : ""}`).join("  ");
+  const tagLine = `🔥 Trending: ${trendTags}\n\nvia @JupiterExchange @BagsApp · clucknorris.app/alpha · not financial advice`;
+  // X is PREMIUM here → post the FULL brief (no 280 truncation). Cap well under the ~25k limit.
+  const tweet = `🐔 Cluck's Daily Alpha — Solana\n\n${body}\n\n${tagLine}`.slice(0, 9000);
   const taggedHandles = ["@JupiterExchange", "@BagsApp", ...tr.filter((t) => t.handle).map((t) => "@" + t.handle)];
   return { telegram, tweet, taggedHandles };
 }
