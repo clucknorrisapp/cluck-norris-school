@@ -22,6 +22,8 @@
       var r = await fetch('/api/token-overview?mint=' + encodeURIComponent(mint));
       var d = await r.json();
       if (!d || !d.success) { el.innerHTML = ''; return; }
+      // Expose the live price so any tool can value balances (per-holder / concentration USD).
+      try { window.__tokenOverview = d; window.__tokenPriceUsd = Number(d.priceUsd) || 0; document.dispatchEvent(new CustomEvent('tokenprice', { detail: d })); } catch (_) {}
 
       var up = d.change24hPct != null && d.change24hPct >= 0;
       var chg = d.change24hPct != null ? '<span style="color:' + (up ? '#6EE7B7' : '#FCA5A5') + ';font-size:12px;font-weight:700;"> ' + (up ? '▲' : '▼') + ' ' + Math.abs(d.change24hPct).toFixed(1) + '%</span>' : '';

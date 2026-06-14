@@ -468,6 +468,17 @@ async function runSnapshot() {
   }
 }
 
+// Distribution pills, optionally with USD concentration (share × supply × live price). The
+// price arrives async from the market header, so we repaint on the 'tokenprice' event too.
+function paintDistRow() {
+  const x = window.__snapDist; const el = document.getElementById('distRow'); if (!x || !el) return;
+  const px = window.__tokenPriceUsd || 0;
+  const usd = (share) => { if (!(px > 0)) return ''; const v = share / 100 * x.uiSupply * px; const f = v >= 1e6 ? '$' + (v/1e6).toFixed(1) + 'M' : v >= 1e3 ? '$' + (v/1e3).toFixed(0) + 'K' : '$' + v.toFixed(0); return `<div class="sub" style="font-size:10px;color:#6EE7B7;margin-top:2px">≈ ${f}</div>`; };
+  const dist = [{ lbl: "TOP 10", v: x.top10 }, { lbl: "TOP 50", v: x.top50 }, { lbl: "TOP 100", v: x.top100 }];
+  el.innerHTML = dist.map(p => `<div class="dist-pill"><div class="lbl">${p.lbl}</div><div class="val">${fmtPct(p.v)}</div>${usd(p.v)}</div>`).join('');
+}
+document.addEventListener('tokenprice', paintDistRow);
+
 function renderResult(d) {
   const s = d.stats;
 
@@ -495,15 +506,9 @@ function renderResult(d) {
     `<div class="stat-cell ${c.cls}"><div class="lbl">${c.lbl}</div><div class="val">${c.val}</div><div class="sub">${c.sub}</div></div>`
   ).join('');
 
-  // Distribution row
-  const dist = [
-    { lbl: "TOP 10", val: fmtPct(s.top10Share) },
-    { lbl: "TOP 50", val: fmtPct(s.top50Share) },
-    { lbl: "TOP 100", val: fmtPct(s.top100Share) },
-  ];
-  document.getElementById('distRow').innerHTML = dist.map(p =>
-    `<div class="dist-pill"><div class="lbl">${p.lbl}</div><div class="val">${p.val}</div></div>`
-  ).join('');
+  // Distribution row — with USD concentration ("top 10 control ~$X") once a live price lands.
+  window.__snapDist = { top10: s.top10Share, top50: s.top50Share, top100: s.top100Share, uiSupply: (Number(d.totalSupply) || 0) / Math.pow(10, d.decimals || 0) };
+  paintDistRow();
 
   // Excluded holders panel — only show if there were any
   const excPanel = document.getElementById('excludedPanel');
