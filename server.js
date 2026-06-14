@@ -2713,7 +2713,12 @@ app.post("/api/classroom", async (req, res) => {
   const msg = String(message || "").slice(0, 800);
   const hist = Array.isArray(history) ? history.filter((m) => m && (m.role === "user" || m.role === "assistant") && m.content).slice(-12).map((m) => ({ role: m.role, content: String(m.content).slice(0, 1500) })) : [];
   const opened = hist.length > 0;
-  const live = await classroomLiveExample(course, lesson).catch(() => "");
+  // Live data is a nice-to-have — NEVER let it block the lesson open. If it's not ready fast
+  // (e.g. a cold topPools cache doing on-chain reads), skip it; the lesson still teaches.
+  const live = await Promise.race([
+    classroomLiveExample(course, lesson).catch(() => ""),
+    new Promise((r) => setTimeout(() => r(""), 3500)),
+  ]);
   const system = `You are Professor Cluck Norris — the toughest, funniest crypto professor on Solana — teaching ONE live lesson in the "${course.title}" course.
 
 THE LESSON MATERIAL (your source of truth — teach ONLY this, accurately):
