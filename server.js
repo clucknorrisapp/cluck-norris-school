@@ -2518,6 +2518,21 @@ ${ctx || "(no pools found for this pair)"}`;
 // synthesize a punchy, educational daily brief. Cached ~daily; posted to TG + X by the
 // scheduler. Informational only — NOT financial advice.
 const ALPHA_TTL = 20 * 3600 * 1000;
+// A coin's X/Twitter handle from CoinGecko (links.twitter_screen_name), cached. Used to TAG
+// trending tokens in the X post for engagement. Returns "handle" (no @) or null.
+const _twHandleCache = new Map();
+async function coinTwitter(coinId) {
+  if (!coinId) return null;
+  if (_twHandleCache.has(coinId)) return _twHandleCache.get(coinId);
+  let h = null;
+  try {
+    const c = await lpScanner.cgPro(`/coins/${coinId}?localization=false&tickers=false&market_data=false&community_data=false&developer_data=false&sparkline=false`);
+    const t = c && c.links && c.links.twitter_screen_name;
+    if (t && /^[A-Za-z0-9_]{1,15}$/.test(t)) h = t; // valid X handle shape only
+  } catch (_) {}
+  _twHandleCache.set(coinId, h);
+  return h;
+}
 async function gatherAlphaData() {
   const d = { majors: [], trending: [], gainers: [], losers: [], hotPools: [], newPools: [], lpPicks: [] };
   try {
@@ -2527,7 +2542,10 @@ async function gatherAlphaData() {
   } catch (_) {}
   try {
     const t = await lpScanner.cgPro("/search/trending");
-    d.trending = (t.coins || []).slice(0, 7).map((c) => ({ sym: (c.item.symbol || "").toUpperCase(), name: c.item.name, rank: c.item.market_cap_rank, chg: c.item.data && c.item.data.price_change_percentage_24h && c.item.data.price_change_percentage_24h.usd }));
+    d.trending = (t.coins || []).slice(0, 7).map((c) => ({ id: c.item.id, sym: (c.item.symbol || "").toUpperCase(), name: c.item.name, rank: c.item.market_cap_rank, chg: c.item.data && c.item.data.price_change_percentage_24h && c.item.data.price_change_percentage_24h.usd }));
+    // Pull X handles for the top trending coins so the X post can TAG them (engagement bait —
+    // the projects often see the mention and engage). One light /coins/{id} call each, cached.
+    await Promise.all(d.trending.slice(0, 5).map(async (c) => { c.handle = await coinTwitter(c.id); }));
   } catch (_) {}
   try {
     const g = await lpScanner.cgPro("/coins/top_gainers_losers?vs_currency=usd&duration=24h");
@@ -2624,11 +2642,19 @@ async function postDailyAlpha(a) {
   const body = (a.brief || "").trim();
   try { out.telegram = await tgSend(process.env.TELEGRAM_CHAT_ID, body + `\n\n🔬 Full picture + tools: clucknorris.app/alpha`, null, { silent: true }); } catch (e) { out.telegramErr = e.message; }
   try {
-    // X: lead with the mood + a couple of standouts, link the page (keep under the limit).
+    // X: lead with the mood + tag trending tokens by their X handle (engagement). Tag the ones
+    // we resolved a handle for first ($SYM @handle), fall back to bare $SYM, keep under the limit.
     const mood = (a.data.majors || []).map((m) => `${m.sym} ${(m.chg >= 0 ? "+" : "") + Number(m.chg || 0).toFixed(1)}%`).join("  ");
-    const hot = (a.data.trending || []).slice(0, 3).map((t) => t.sym).join(", ");
-    const tw = `🐔 Cluck's Daily Alpha\n\n📊 ${mood}\n🔥 Trending: ${hot}\n\nFull Solana brief — trending, fresh pools, real LP yields → clucknorris.app/alpha\n\nNot financial advice.`;
-    out.x = await postToX(tw.slice(0, 279));
+    const tr = (a.data.trending || []).slice(0, 5);
+    const tagged = tr.map((t) => `$${t.sym}${t.handle ? " @" + t.handle : ""}`);
+    // Fit as many tagged tokens as the tweet allows.
+    const head = `🐔 Cluck's Daily Alpha\n\n📊 ${mood}\n🔥 Trending: `;
+    const tail = `\n\nFull Solana brief — fresh pools, real LP yields → clucknorris.app/alpha\n\nNot financial advice.`;
+    let hot = "", used = 0;
+    for (const tok of tagged) { const next = hot ? hot + " " + tok : tok; if ((head + next + tail).length <= 280) { hot = next; used++; } else break; }
+    const tw = head + (hot || tr.slice(0, 3).map((t) => "$" + t.sym).join(" ")) + tail;
+    out.taggedHandles = tr.filter((t) => t.handle).map((t) => "@" + t.handle);
+    out.x = await postToX(tw.slice(0, 280));
   } catch (e) { out.xErr = e.message; }
   return out;
 }
@@ -7130,6 +7156,10 @@ app.get("/liquidity", (req, res) => {
 // LP Pair Scanner — standalone flagship: every pool for a pair across every DEX + Ask Cluck.
 app.get("/lp-scanner", (req, res) => {
   res.sendFile(join(__dirname, "public", "lp-scanner.html"));
+});
+
+app.get("/alpha", (req, res) => {
+  res.sendFile(join(__dirname, "public", "alpha.html"));
 });
 
 // Shared market-header script for the token tools (repo public/ isn't statically mounted).

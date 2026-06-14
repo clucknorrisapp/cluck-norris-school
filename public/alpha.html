@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>🐔 Cluck's Daily Alpha — Solana Market Brief</title>
+<meta name="description" content="Cluck Norris's daily Solana market brief — majors, trending coins, fresh pools, and real LP fee yields. Powered by live on-chain + CoinGecko data. Not financial advice."/>
+<meta property="og:title" content="🐔 Cluck's Daily Alpha — Solana Market Brief"/>
+<meta property="og:description" content="The flock's daily read on Solana: the mood, what's hot, fresh pools, and where the real LP fees are."/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{color-scheme:dark;--bg:#0a0a0a;--card:#111;--border:rgba(255,255,255,0.08);--text:#F9FAFB;--sub:#6B7280;--accent:#FCD34D;--orange:#D97706;--green:#6EE7B7;--red:#FCA5A5;--mono:'Courier New',monospace;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);background-image:radial-gradient(ellipse at 20% 8%,rgba(217,119,6,0.12),transparent 50%),radial-gradient(ellipse at 85% 92%,rgba(16,185,129,0.06),transparent 50%);color:var(--text);font-family:system-ui,sans-serif;min-height:100vh;}
+  .wrap{max-width:760px;margin:0 auto;padding:24px 16px 80px;}
+  a.back-home{display:inline-flex;align-items:center;gap:6px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:var(--orange);text-decoration:none;margin:0 0 12px;}
+  .back-home img{height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid var(--orange);}
+  .header{display:flex;align-items:center;gap:14px;margin-bottom:8px;}
+  .header-icon{font-size:42px;filter:drop-shadow(0 0 16px rgba(217,119,6,0.5));}
+  .brand-mini{font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:4px;color:var(--orange);font-weight:700;}
+  h1{font-family:'Oswald',sans-serif;font-size:30px;font-weight:900;letter-spacing:2px;background:linear-gradient(135deg,#FCD34D,#D97706,#F59E0B);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1;}
+  .meta{font-family:var(--mono);font-size:11px;color:var(--sub);letter-spacing:1px;margin:0 0 18px;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:16px;}
+  .brief{white-space:pre-wrap;font-family:system-ui;font-size:15px;line-height:1.7;color:#E5E7EB;}
+  .sec-title{font-family:'Oswald',sans-serif;font-weight:700;letter-spacing:1px;color:var(--accent);font-size:13px;margin:0 0 12px;}
+  .ticker{display:flex;gap:8px;flex-wrap:wrap;}
+  .tk{background:#0d0d0d;border:1px solid var(--border);border-radius:9px;padding:8px 12px;flex:1;min-width:90px;}
+  .tk .s{font-family:'Oswald',sans-serif;font-weight:700;font-size:13px;}
+  .tk .p{font-family:var(--mono);font-size:12px;color:#D1D5DB;margin-top:2px;}
+  .up{color:var(--green);} .dn{color:var(--red);}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;}
+  .chip{background:#0d0d0d;border:1px solid var(--border);border-radius:16px;padding:5px 11px;font-family:var(--mono);font-size:12px;color:#D1D5DB;}
+  table{width:100%;border-collapse:collapse;font-size:12px;}
+  th{font-family:var(--mono);font-size:9px;color:var(--sub);letter-spacing:1px;text-align:right;padding:7px 6px;border-bottom:1px solid var(--border);}
+  th:first-child{text-align:left;}
+  td{padding:9px 6px;text-align:right;border-bottom:1px solid rgba(255,255,255,0.04);font-family:var(--mono);}
+  td:first-child{text-align:left;}
+  .pair{font-family:'Oswald',sans-serif;font-weight:700;}
+  .dex{font-size:9px;color:var(--sub);text-transform:capitalize;}
+  .yv{color:var(--green);font-weight:700;}
+  .risk{font-size:8px;color:var(--red);letter-spacing:0.5px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  @media(max-width:560px){.grid2{grid-template-columns:1fr;}}
+  .crosslink{display:block;text-align:center;margin-top:8px;padding:13px;border:1px dashed rgba(16,185,129,0.4);border-radius:10px;background:rgba(16,185,129,0.05);color:var(--green);text-decoration:none;font-family:'Oswald',sans-serif;font-weight:700;letter-spacing:1px;font-size:13px;}
+  .disclaimer{font-size:11px;color:var(--sub);line-height:1.6;margin-top:8px;}
+  .disclaimer b{color:var(--red);}
+  .powered{font-family:var(--mono);font-size:10px;color:var(--sub);text-align:center;margin-top:14px;letter-spacing:0.5px;}
+  .spin{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .muted{color:var(--sub);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="/" class="back-home"><img src="/cluck-norris-logo.jpg" alt=""/>&larr; CLUCK NORRIS HOME</a>
+  <div class="header">
+    <div class="header-icon">🐔</div>
+    <div>
+      <div class="brand-mini">CLUCK NORRIS</div>
+      <h1>DAILY ALPHA</h1>
+    </div>
+  </div>
+  <div class="meta" id="meta">The flock's daily read on Solana — loading today's brief…</div>
+
+  <div class="card"><div class="brief" id="brief"><span class="spin"></span> Cluck is reading the tape…</div></div>
+
+  <div id="cards"></div>
+
+  <a class="crosslink" href="/lp-scanner">🔬 Dig into any pool yourself → LP Pair Scanner</a>
+
+  <div class="card" style="margin-top:16px;">
+    <div class="disclaimer"><b>Informational only — NOT financial advice.</b> Trending coins and brand-new pools are high-risk and can lose most of their value fast. Cluck reports the data; you do your own research.</div>
+  </div>
+  <div class="powered" id="powered"></div>
+</div>
+
+<script>
+  var esc=function(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});};
+  var pct=function(n){if(n==null)return"";var v=Number(n);return '<span class="'+(v>=0?'up':'dn')+'">'+(v>=0?'+':'')+v.toFixed(1)+'%</span>';};
+  var fmt=function(n){n=Number(n)||0;return n>=1e6?'$'+(n/1e6).toFixed(2)+'M':n>=1e3?'$'+(n/1e3).toFixed(0)+'K':'$'+Math.round(n);};
+  function card(title,inner){return '<div class="card"><div class="sec-title">'+title+'</div>'+inner+'</div>';}
+
+  (async function(){
+    try{
+      var r=await fetch('/api/alpha'); var d=await r.json();
+      if(!d.success){ document.getElementById('brief').textContent='🐔 Cluck is still cooking today\'s brief — check back in a minute.'; return; }
+      document.getElementById('brief').textContent=d.brief||'';
+      var when=d.generatedAt?new Date(d.generatedAt):null;
+      var mins=when?Math.round((Date.now()-when.getTime())/60000):null;
+      document.getElementById('meta').textContent='The flock\'s daily read on Solana · '+(d.date||'')+(mins!=null?(' · updated '+(mins<60?mins+'m':(Math.round(mins/60)+'h'))+' ago'):'');
+
+      var data=d.data||{}, html='';
+      if((data.majors||[]).length){
+        html+=card('🌡️ THE MAJORS','<div class="ticker">'+data.majors.map(function(m){return '<div class="tk"><div class="s">'+esc(m.sym)+'</div><div class="p">$'+Number(m.price).toLocaleString()+' '+pct(m.chg)+'</div></div>';}).join('')+'</div>');
+      }
+      if((data.trending||[]).length){
+        html+=card('🔥 TRENDING (CoinGecko)','<div class="chips">'+data.trending.map(function(t){return '<span class="chip">'+esc(t.sym)+(t.chg!=null?' '+pct(t.chg):'')+'</span>';}).join('')+'</div>');
+      }
+      if((data.gainers||[]).length||(data.losers||[]).length){
+        var col=function(t,arr,cls){return '<div><div class="sec-title" style="font-size:11px;">'+t+'</div><div class="chips" style="flex-direction:column;align-items:flex-start;">'+arr.map(function(g){return '<span class="chip"><b>'+esc(g.sym)+'</b> '+pct(g.chg)+'</span>';}).join('')+'</div></div>';};
+        html+=card('📊 24H MOVERS','<div class="grid2">'+col('Gainers',data.gainers||[])+col('Losers',data.losers||[])+'</div>');
+      }
+      if((data.hotPools||[]).length){
+        var rows=data.hotPools.map(function(p){return '<tr><td><span class="pair">'+esc(p.pair||'?')+'</span><div class="dex">'+esc(p.dex||'')+(p.risk==='high'?' · <span class="risk">⚠ HIGH RISK</span>':'')+'</div></td><td>'+fmt(p.vol)+'</td><td>'+(p.yieldPct!=null?'<span class="yv">'+p.yieldPct+'%/d</span>':'<span class="muted">—</span>')+'</td></tr>';}).join('');
+        html+=card('💧 HOTTEST SOLANA POOLS','<table><thead><tr><th>Pair · DEX</th><th>24h Vol</th><th>Fee Yield</th></tr></thead><tbody>'+rows+'</tbody></table>');
+      }
+      if((data.lpPicks||[]).length){
+        var lp=data.lpPicks.map(function(p){return '<tr><td><span class="pair">'+esc(p.pair||'?')+'</span><div class="dex">'+esc(p.dex||'')+'</div></td><td>'+(p.yieldPct!=null?'<span class="yv">'+p.yieldPct+'%/d</span>':'—')+'</td></tr>';}).join('');
+        html+=card('💎 BLUE-CHIP LP YIELD <span style="font-weight:400;color:#6B7280;font-size:10px;">(our scanner · fees/TVL)</span>','<table><thead><tr><th>Pair · DEX</th><th>Fee Yield</th></tr></thead><tbody>'+lp+'</tbody></table>');
+      }
+      if((data.newPools||[]).length){
+        var np=data.newPools.map(function(p){return '<tr><td class="pair">'+esc(p.name||'?')+'</td><td>'+fmt(p.vol)+'</td><td>'+fmt(p.liq)+'</td><td>'+(p.ageH!=null?p.ageH+'h':'—')+'</td></tr>';}).join('');
+        html+=card('🌶️ FRESH OFF THE GRILL <span style="font-weight:400;color:#FCA5A5;font-size:10px;">(new pools — high risk)</span>','<table><thead><tr><th>Pool</th><th>24h Vol</th><th>Liq</th><th>Age</th></tr></thead><tbody>'+np+'</tbody></table>');
+      }
+      document.getElementById('cards').innerHTML=html;
+      document.getElementById('powered').textContent='● powered by CoinGecko + Helius + on-chain DEX data · synthesized by Cluck AI';
+    }catch(e){ document.getElementById('brief').textContent='🐔 Network hiccup — refresh in a moment.'; }
+  })();
+</script>
+</body>
+</html>
