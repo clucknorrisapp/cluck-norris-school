@@ -87,6 +87,7 @@
     <div class="card">
       <div style="font-size:13px;color:#D1D5DB;line-height:1.6;margin-bottom:6px;">Pick a course. Each one is a series of <b style="color:var(--accent)">live lessons</b> — Professor Cluck teaches one concept at a time and <b style="color:var(--accent)">calls on you</b>. Answer in your own words; he grades it, corrects you, and moves on. Your progress saves on this device.</div>
     </div>
+    <div id="overall"></div>
     <div id="courseList"><div class="card muted" style="text-align:center"><span class="spin"></span> loading the catalog…</div></div>
   </div>
 
@@ -134,8 +135,10 @@
 
 <script>
   var esc=function(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});};
-  var DONE_KEY='clkn_classroom_done_v1';
+  var DONE_KEY='clkn_classroom_done_v1', LAST_KEY='clkn_classroom_last_v1';
   var courses=[], curCourse=null, curLesson=null, history=[], busy=false;
+  function loadLast(){ try{ return JSON.parse(localStorage.getItem(LAST_KEY))||null; }catch(e){ return null; } }
+  function saveLast(cid,lid){ try{ localStorage.setItem(LAST_KEY,JSON.stringify({courseId:cid,lessonId:lid})); }catch(e){} }
 
   function loadDone(){ try{ return JSON.parse(localStorage.getItem(DONE_KEY))||{}; }catch(e){ return {}; } }
   function isDone(cid,lid){ var d=loadDone(); return !!(d[cid]&&d[cid][lid]); }
@@ -154,7 +157,26 @@
     }catch(e){ document.getElementById('courseList').innerHTML='<div class="card muted">Network hiccup — refresh.</div>'; }
   }
 
+  function renderOverall(){
+    var totDone=0, tot=0;
+    courses.forEach(function(c){ var p=courseProgress(c); totDone+=p.done; tot+=p.total; });
+    var pct=tot?Math.round(totDone/tot*100):0;
+    var last=loadLast(); var resumeHtml='';
+    if(last){
+      var lc=courses.find(function(c){return c.id===last.courseId;});
+      var ll=lc&&lc.lessons.find(function(l){return l.id===last.lessonId;});
+      if(lc&&ll) resumeHtml='<button class="nextbtn" style="margin-top:10px" onclick="resumeLast()">▶ RESUME: '+esc(ll.title)+'</button>';
+    }
+    document.getElementById('overall').innerHTML='<div class="card">'
+      +'<div style="font-family:\'Oswald\',sans-serif;font-weight:900;letter-spacing:1px;font-size:14px;color:var(--accent)">YOUR PROGRESS</div>'
+      +'<div class="pbar" style="margin-top:8px"><i style="width:'+pct+'%"></i></div>'
+      +'<div class="pmeta">'+totDone+' / '+tot+' lessons complete across all courses</div>'
+      +resumeHtml+'</div>';
+  }
+  function resumeLast(){ var last=loadLast(); if(!last)return; var lc=courses.find(function(c){return c.id===last.courseId;}); if(!lc)return; curCourse=lc; openLesson(last.lessonId); }
+
   function renderCourses(){
+    renderOverall();
     document.getElementById('courseList').innerHTML=courses.map(function(c){
       var p=courseProgress(c);
       var pct=p.total?Math.round(p.done/p.total*100):0;
@@ -195,6 +217,7 @@
   async function openLesson(lid){
     curLesson=curCourse.lessons.find(function(l){return l.id===lid;});
     if(!curLesson) return;
+    saveLast(curCourse.id, lid);
     history=[];
     document.getElementById('crumbCourse').textContent=curCourse.title;
     document.getElementById('crumbLesson').textContent=curLesson.title;
