@@ -48,9 +48,11 @@
   .msg.me{align-self:flex-end;background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.35);}
   .msg .who{font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.5px;margin-bottom:4px;}
   .msg.cluck .who{color:var(--orange);} .msg.me .who{color:var(--green);}
-  .quickrow{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px;}
-  .quickrow button{background:rgba(217,119,6,0.10);border:1px solid rgba(217,119,6,0.35);color:var(--accent);border-radius:16px;padding:6px 11px;font-family:var(--mono);font-size:11px;cursor:pointer;}
-  .quickrow button:hover{background:rgba(217,119,6,0.2);}
+  .quickrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px;padding-top:12px;border-top:1px dashed var(--border);}
+  .qrlabel{font-family:var(--mono);font-size:10px;color:var(--sub);letter-spacing:0.5px;width:100%;margin-bottom:2px;}
+  .quickrow button{background:rgba(217,119,6,0.18);border:1px solid var(--orange);color:var(--accent);border-radius:10px;padding:8px 13px;font-family:'Oswald',sans-serif;font-weight:700;font-size:12px;letter-spacing:0.3px;cursor:pointer;box-shadow:0 1px 0 rgba(0,0,0,0.3);transition:background .12s,transform .06s;}
+  .quickrow button:hover{background:rgba(217,119,6,0.32);}
+  .quickrow button:active{transform:translateY(1px);}
   .quickrow button:disabled{opacity:0.4;cursor:wait;}
   .answer-row{display:flex;gap:8px;margin-top:12px;}
   .answer-row textarea{flex:1;background:#0d0d0d;border:1px solid var(--border);border-radius:10px;padding:12px;color:var(--text);font-family:system-ui;font-size:14px;resize:vertical;min-height:50px;}
@@ -114,6 +116,7 @@
       <div class="room-head"><span class="room-title" id="lessonTitle"></span></div>
       <div class="chat" id="chat"></div>
       <div class="quickrow" id="quickRow">
+        <span class="qrlabel">🆘 Stuck or want more? Tap a button — Professor Cluck will help:</span>
         <button data-msg="I am not sure how to answer that — teach me the answer first, then ask me again.">🤔 I'm not sure</button>
         <button data-msg="Can you explain that a different way? I am a bit lost.">🙋 Explain differently</button>
         <button data-msg="Give me another real-world example.">Another example</button>
