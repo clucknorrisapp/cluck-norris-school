@@ -114,11 +114,11 @@
       <div class="room-head"><span class="room-title" id="lessonTitle"></span></div>
       <div class="chat" id="chat"></div>
       <div class="quickrow" id="quickRow">
-        <button onclick="quickAsk('I&#39;m not sure how to answer that. Teach me the answer first, then ask me again.')">🤔 I'm not sure</button>
-        <button onclick="quickAsk('Can you explain that a different way? I&#39;m a bit lost.')">🙋 Explain differently</button>
-        <button onclick="quickAsk('Give me another real-world example.')">Another example</button>
-        <button onclick="quickAsk('Why does this actually matter for me?')">Why it matters</button>
-        <button onclick="quickAsk('Slow down and break that into simpler steps.')">Go slower</button>
+        <button data-msg="I am not sure how to answer that — teach me the answer first, then ask me again.">🤔 I'm not sure</button>
+        <button data-msg="Can you explain that a different way? I am a bit lost.">🙋 Explain differently</button>
+        <button data-msg="Give me another real-world example.">Another example</button>
+        <button data-msg="Why does this actually matter for me?">Why it matters</button>
+        <button data-msg="Slow down and break that into simpler steps.">Go slower</button>
       </div>
       <div class="answer-row">
         <textarea id="answer" placeholder="Type your answer (or ask the professor a question)…"></textarea>
@@ -330,6 +330,10 @@
   }
   document.getElementById('answer').addEventListener('keydown',function(e){
     if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendAnswer(); }
+  });
+  // Quick-ask buttons via data-msg + listeners (avoids inline-onclick quote breakage on apostrophes).
+  Array.prototype.forEach.call(document.querySelectorAll('#quickRow button'), function(b){
+    b.addEventListener('click', function(){ quickAsk(b.getAttribute('data-msg')); });
   });
   init();
 </script>
