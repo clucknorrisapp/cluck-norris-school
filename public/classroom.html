@@ -248,13 +248,21 @@
     if(busy) return; busy=true;
     document.getElementById('sendBtn').disabled=true;
     thinking(true);
+    var detail='';
     try{
+      var ctrl = ('AbortController' in window) ? new AbortController() : null;
+      var to = ctrl ? setTimeout(function(){ try{ctrl.abort();}catch(e){} }, 45000) : null;
       var r=await fetch('/api/classroom',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({courseId:curCourse.id, lessonId:curLesson.id, message:message, history:history})});
-      var d=await r.json();
+        body:JSON.stringify({courseId:curCourse.id, lessonId:curLesson.id, message:message, history:history}),
+        signal: ctrl?ctrl.signal:undefined, cache:'no-store'});
+      if(to) clearTimeout(to);
+      var text=await r.text();
+      var d=null; try{ d=JSON.parse(text); }catch(pe){ d=null; }
       thinking(false);
+      if(!r.ok){ detail='server '+r.status; throw new Error(detail); }
+      if(!d){ detail='bad response'; throw new Error(detail); }
       if(!d.success){
-        if(retry){ busy=false; await new Promise(function(x){setTimeout(x,1500);}); return turn(message,false); } // one auto-retry (deploy blip / cold call)
+        if(retry){ busy=false; await new Promise(function(x){setTimeout(x,1800);}); return turn(message,false); }
         showErr(d.error||'Professor Cluck stepped out — try again.'); return;
       }
       if(message) history.push({role:'user',content:message});
@@ -263,10 +271,23 @@
       if(d.complete){ markDone(curCourse.id,curLesson.id); onComplete(); }
     }catch(e){
       thinking(false);
-      if(retry){ busy=false; await new Promise(function(x){setTimeout(x,1500);}); return turn(message,false); }
-      showErr('Network hiccup — try again. (Tip: type anything and hit send to wake the professor.)');
+      var why = (e && e.name==='AbortError') ? 'timed out' : (detail || (e&&e.message) || 'network');
+      if(retry){ busy=false; await new Promise(function(x){setTimeout(x,1800);}); return turn(message,false); }
+      showOpenError(why);
     }
     finally{ busy=false; document.getElementById('sendBtn').disabled=false; }
+  }
+  // Visible, recoverable failure — shows the actual reason + a retry button right in the chat.
+  function showOpenError(why){
+    showErr('Couldn’t reach Professor Cluck ('+esc(why)+'). Tap retry.');
+    var chat=document.getElementById('chat');
+    var d=document.createElement('div'); d.className='msg cluck';
+    d.innerHTML='<div class="who">🐔 PROFESSOR CLUCK</div>I didn’t get through just now (<b>'+esc(why)+'</b>) — the server may be redeploying. Give it a few seconds. <button class="nextbtn" style="margin-top:8px" onclick="retryTurn(this)">↻ RETRY</button>';
+    chat.appendChild(d); d.scrollIntoView({behavior:'smooth',block:'end'});
+  }
+  function retryTurn(btn){
+    try{ if(btn&&btn.parentElement) btn.parentElement.remove(); }catch(e){}
+    turn(history.length?'(continue)':'', true);
   }
 
   function onComplete(){
