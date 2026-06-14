@@ -2512,6 +2512,127 @@ ${ctx || "(no pools found for this pair)"}`;
   } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
 });
 
+// ── CLUCK'S DAILY ALPHA — a Solana market brief in Cluck's voice, full-stack ───────────
+// Fuses CoinGecko aggregated (majors, trending, gainers/losers) + GeckoTerminal onchain
+// (hottest + newest Solana pools) + our own LP engine (real fee-yield picks), then has Cluck
+// synthesize a punchy, educational daily brief. Cached ~daily; posted to TG + X by the
+// scheduler. Informational only — NOT financial advice.
+const ALPHA_TTL = 20 * 3600 * 1000;
+async function gatherAlphaData() {
+  const d = { majors: [], trending: [], gainers: [], losers: [], hotPools: [], newPools: [], lpPicks: [] };
+  try {
+    const p = await lpScanner.cgPro("/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd&include_24hr_change=true");
+    d.majors = [["BTC", "bitcoin"], ["ETH", "ethereum"], ["SOL", "solana"]]
+      .map(([sym, id]) => ({ sym, price: p[id] && p[id].usd, chg: p[id] && p[id].usd_24h_change })).filter((m) => m.price != null);
+  } catch (_) {}
+  try {
+    const t = await lpScanner.cgPro("/search/trending");
+    d.trending = (t.coins || []).slice(0, 7).map((c) => ({ sym: (c.item.symbol || "").toUpperCase(), name: c.item.name, rank: c.item.market_cap_rank, chg: c.item.data && c.item.data.price_change_percentage_24h && c.item.data.price_change_percentage_24h.usd }));
+  } catch (_) {}
+  try {
+    const g = await lpScanner.cgPro("/coins/top_gainers_losers?vs_currency=usd&duration=24h");
+    d.gainers = (g.top_gainers || []).slice(0, 5).map((c) => ({ sym: (c.symbol || "").toUpperCase(), chg: c.usd_24h_change, price: c.usd }));
+    d.losers = (g.top_losers || []).slice(0, 5).map((c) => ({ sym: (c.symbol || "").toUpperCase(), chg: c.usd_24h_change, price: c.usd }));
+  } catch (_) {}
+  try {
+    const tp = await lpScanner.topPools({ kind: "trending" });
+    d.hotPools = (tp.pools || []).slice(0, 6).map((p) => ({ pair: p.pair, dex: p.dex, vol: (p.volume && p.volume.h24) || 0, yieldPct: p.feeYield7dPctDay != null ? p.feeYield7dPctDay : p.feeYieldPctDay, risk: p.ilRisk && p.ilRisk.level }));
+  } catch (_) {}
+  try {
+    const np = await lpScanner.cgFetch("/networks/solana/new_pools");
+    d.newPools = (np.data || []).map((p) => { const a = p.attributes || {}; return { name: a.name, vol: Number((a.volume_usd || {}).h24) || 0, liq: Number(a.reserve_in_usd) || 0, ageH: a.pool_created_at ? Math.round((Date.now() - new Date(a.pool_created_at).getTime()) / 3600000) : null }; })
+      .filter((p) => p.vol > 5000).sort((a, b) => b.vol - a.vol).slice(0, 5);
+  } catch (_) {}
+  try {
+    const bc = await lpScanner.topPools({ kind: "bluechip" });
+    d.lpPicks = (bc.pools || []).slice(0, 4).map((p) => ({ pair: p.pair, dex: p.dex, yieldPct: p.feeYield7dPctDay != null ? p.feeYield7dPctDay : p.feeYieldPctDay }));
+  } catch (_) {}
+  return d;
+}
+function alphaDataSummary(d) {
+  const pct = (n) => n == null ? "?" : (n >= 0 ? "+" : "") + Number(n).toFixed(1) + "%";
+  const lines = [];
+  if (d.majors.length) lines.push("MAJORS: " + d.majors.map((m) => `${m.sym} $${Number(m.price).toLocaleString()} (${pct(m.chg)})`).join(", "));
+  if (d.trending.length) lines.push("TRENDING (CoinGecko): " + d.trending.map((t) => `${t.sym}${t.chg != null ? " " + pct(t.chg) : ""}`).join(", "));
+  if (d.gainers.length) lines.push("TOP 24h GAINERS: " + d.gainers.map((g) => `${g.sym} ${pct(g.chg)}`).join(", "));
+  if (d.losers.length) lines.push("TOP 24h LOSERS: " + d.losers.map((g) => `${g.sym} ${pct(g.chg)}`).join(", "));
+  if (d.hotPools.length) lines.push("HOTTEST SOLANA POOLS (by volume): " + d.hotPools.map((p) => `${p.pair} on ${p.dex} ($${Math.round(p.vol / 1000)}K 24h vol${p.yieldPct != null ? ", " + p.yieldPct + "%/day fee yield" : ""}${p.risk === "high" ? ", HIGH IL risk" : ""})`).join("; "));
+  if (d.newPools.length) lines.push("BRAND-NEW SOLANA POOLS: " + d.newPools.map((p) => `${p.name} ($${Math.round(p.vol / 1000)}K vol, $${Math.round(p.liq / 1000)}K liq, ${p.ageH}h old)`).join("; "));
+  if (d.lpPicks.length) lines.push("BLUE-CHIP LP YIELD (our scanner, fees/TVL): " + d.lpPicks.map((p) => `${p.pair} on ${p.dex} ${p.yieldPct}%/day`).join(", "));
+  return lines.join("\n");
+}
+async function cluckBrief(d) {
+  const summary = alphaDataSummary(d);
+  const KEY = process.env.ANTHROPIC_API_KEY;
+  if (!KEY) return `🐔 CLUCK'S DAILY ALPHA\n\n${summary}\n\nNot financial advice. Do your own research.`;
+  const system = `You are Cluck Norris — the toughest crypto professor on Solana — writing your DAILY ALPHA brief for the flock. Use ONLY the real market data below (it's live from CoinGecko + on-chain DEX data + our own LP scanner).
+STYLE: punchy, confident, funny, a chicken pun or two, but genuinely informative. Teach while you report. 5 short sections with emoji headers, in this order:
+🌡️ THE MOOD — read the majors (BTC/ETH/SOL) in one or two lines.
+🔥 WHAT'S HOT — trending coins + the standout 24h gainers; note if a gainer looks like a pump.
+🌶️ FRESH OFF THE GRILL — the brand-new Solana pools; remind them new pools are high rug risk.
+💧 WHERE THE FEES ARE — the hottest Solana pools and our blue-chip LP yield picks (fee yield = the real LP money metric, not volume).
+🎓 CLUCK'S LESSON — one sharp educational takeaway tied to today's data.
+RULES: Never tell anyone to buy/sell or predict prices. Flag risk honestly (memecoins/new pools can go to zero). No markdown asterisks or headers (#). Keep the whole thing under ~320 words. End with: "Not financial advice — now go do your homework. 🐔"`;
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1100, system, messages: [{ role: "user", content: `Here's today's live Solana market data:\n\n${summary}\n\nWrite today's Daily Alpha.` }] }),
+    });
+    const data = await r.json();
+    if (data && data.content && data.content[0]) return data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
+  } catch (_) {}
+  return `🐔 CLUCK'S DAILY ALPHA\n\n${summary}\n\nNot financial advice — now go do your homework. 🐔`;
+}
+let _alphaInFlight = null;
+async function buildDailyAlpha({ force = false } = {}) {
+  const cached = kv.get("dailyAlpha", null);
+  if (!force && cached && Date.now() - (cached.generatedAt || 0) < ALPHA_TTL) return cached;
+  if (_alphaInFlight) return _alphaInFlight; // de-dupe concurrent builds
+  _alphaInFlight = (async () => {
+    const data = await gatherAlphaData();
+    const brief = await cluckBrief(data);
+    const result = { generatedAt: Date.now(), date: new Date().toISOString().slice(0, 10), data, brief };
+    kv.set("dailyAlpha", result);
+    return result;
+  })();
+  try { return await _alphaInFlight; } finally { _alphaInFlight = null; }
+}
+
+// Public read — the latest Daily Alpha (cached; builds on first cold call).
+app.get("/api/alpha", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "public, max-age=600");
+  try { return res.status(200).json({ success: true, ...(await buildDailyAlpha({ force: req.query.refresh === "1" })) }); }
+  catch (e) { return res.status(200).json({ success: false, error: e.message }); }
+});
+
+// Admin — force-build the brief; &post=1 also fires it to Telegram (silent) + X.
+app.get("/api/alpha-test", async (req, res) => {
+  if (!adminAuthOK(req)) return res.status(404).json({ success: false, error: "not found" });
+  try {
+    const a = await buildDailyAlpha({ force: true });
+    let posted = null;
+    if (req.query.post === "1") posted = await postDailyAlpha(a);
+    return res.status(200).json({ success: true, posted, ...a });
+  } catch (e) { return res.status(200).json({ success: false, error: e.message }); }
+});
+
+// Post the brief to the community Telegram (SILENT per house rule) + X (trimmed to fit).
+async function postDailyAlpha(a) {
+  const out = {};
+  const body = (a.brief || "").trim();
+  try { out.telegram = await tgSend(process.env.TELEGRAM_CHAT_ID, body + `\n\n🔬 Full picture + tools: clucknorris.app/alpha`, null, { silent: true }); } catch (e) { out.telegramErr = e.message; }
+  try {
+    // X: lead with the mood + a couple of standouts, link the page (keep under the limit).
+    const mood = (a.data.majors || []).map((m) => `${m.sym} ${(m.chg >= 0 ? "+" : "") + Number(m.chg || 0).toFixed(1)}%`).join("  ");
+    const hot = (a.data.trending || []).slice(0, 3).map((t) => t.sym).join(", ");
+    const tw = `🐔 Cluck's Daily Alpha\n\n📊 ${mood}\n🔥 Trending: ${hot}\n\nFull Solana brief — trending, fresh pools, real LP yields → clucknorris.app/alpha\n\nNot financial advice.`;
+    out.x = await postToX(tw.slice(0, 279));
+  } catch (e) { out.xErr = e.message; }
+  return out;
+}
+
 app.get("/api/bags-near-grad", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
