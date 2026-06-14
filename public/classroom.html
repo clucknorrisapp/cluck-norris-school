@@ -98,6 +98,10 @@
       <div class="b" id="sylBlurb" style="font-size:12.5px;color:#D1D5DB;margin-top:5px;"></div>
       <div class="pbar"><i id="sylBar" style="width:0%"></i></div>
       <div class="pmeta" id="sylMeta"></div>
+      <div id="sylDone" style="display:none;margin-top:12px;padding:13px;border:1px solid rgba(252,211,77,0.45);background:rgba(217,119,6,0.10);border-radius:11px;text-align:center;">
+        <div style="font-family:'Oswald',sans-serif;font-weight:900;font-size:16px;color:var(--accent);letter-spacing:1px;">🎓 COURSE COMPLETE</div>
+        <div style="font-size:12px;color:#D1D5DB;margin-top:4px;">You finished every lesson in this course. Professor Cluck is almost impressed.</div>
+      </div>
     </div>
     <div id="lessonList"></div>
   </div>
@@ -120,8 +124,8 @@
       </div>
       <div class="hint">Answer in plain English — no multiple-choice crutches. Enter to send · Shift+Enter for a new line.</div>
       <div class="complete-banner" id="completeBanner">
-        <div class="t">✅ LESSON COMPLETE</div>
-        <div style="font-size:12px;color:#D1D5DB;margin-top:4px">Professor Cluck says you've got this one. Onward.</div>
+        <div class="t" id="cbTitle">✅ LESSON COMPLETE</div>
+        <div id="cbText" style="font-size:12px;color:#D1D5DB;margin-top:4px">Professor Cluck says you've got this one. Onward.</div>
         <button class="nextbtn" id="nextBtn" onclick="nextLesson()">NEXT LESSON →</button>
       </div>
     </div>
@@ -154,8 +158,9 @@
     document.getElementById('courseList').innerHTML=courses.map(function(c){
       var p=courseProgress(c);
       var pct=p.total?Math.round(p.done/p.total*100):0;
+      var complete=p.total>0 && p.done>=p.total;
       return '<button class="pick" onclick="openCourse(\''+c.id+'\')">'
-        +'<div class="t">'+(c.icon||'📘')+' '+esc(c.title)+'</div>'
+        +'<div class="t">'+(c.icon||'📘')+' '+esc(c.title)+(complete?' <span title="Course complete">🎓</span>':'')+'</div>'
         +'<div class="b">'+esc(c.blurb||'')+'</div>'
         +'<div class="pbar"><i style="width:'+pct+'%"></i></div>'
         +'<div class="pmeta">'+p.done+' / '+p.total+' lessons complete</div></button>';
@@ -174,6 +179,7 @@
     var p=courseProgress(curCourse), pct=p.total?Math.round(p.done/p.total*100):0;
     document.getElementById('sylBar').style.width=pct+'%';
     document.getElementById('sylMeta').textContent=p.done+' / '+p.total+' lessons complete';
+    document.getElementById('sylDone').style.display=(p.total>0 && p.done>=p.total)?'block':'none';
     document.getElementById('lessonList').innerHTML=curCourse.lessons.map(function(l,i){
       var done=isDone(curCourse.id,l.id);
       return '<div class="lrow'+(done?' done':'')+'" onclick="openLesson(\''+esc(l.id)+'\')">'
@@ -242,11 +248,22 @@
 
   function onComplete(){
     var b=document.getElementById('completeBanner'); b.classList.add('show');
-    b.scrollIntoView({behavior:'smooth',block:'end'});
-    // Is there a next lesson?
     var idx=curCourse.lessons.findIndex(function(l){return l.id===curLesson.id;});
     var hasNext=idx>=0 && idx<curCourse.lessons.length-1;
-    document.getElementById('nextBtn').style.display=hasNext?'':'none';
+    var p=courseProgress(curCourse);
+    var courseDone = p.total>0 && p.done>=p.total;
+    var nb=document.getElementById('nextBtn');
+    if(courseDone){
+      // Graduation moment — whole course finished.
+      document.getElementById('cbTitle').textContent='🎓 COURSE COMPLETE!';
+      document.getElementById('cbText').textContent='You finished every lesson in '+curCourse.title+'. Professor Cluck tips his hat — that’s the whole course.';
+      nb.textContent='← BACK TO COURSES'; nb.onclick=goCourses; nb.style.display='';
+    } else {
+      document.getElementById('cbTitle').textContent='✅ LESSON COMPLETE';
+      document.getElementById('cbText').textContent='Professor Cluck says you’ve got this one. Onward.';
+      nb.textContent='NEXT LESSON →'; nb.onclick=nextLesson; nb.style.display=hasNext?'':'none';
+    }
+    b.scrollIntoView({behavior:'smooth',block:'end'});
   }
   function nextLesson(){
     var idx=curCourse.lessons.findIndex(function(l){return l.id===curLesson.id;});
