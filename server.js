@@ -29,6 +29,9 @@ const {
 const { runAutopsy, bagsFetch, heliusEnhancedBatched, BAGS_BASE } = require("./lib/autopsy");
 const { getTokenBuyersInWindowHelius, getWalletTokenPositionHelius } = require("./lib/helius-trades");
 const QUESTION_BANK = require("./data/question-bank.json");
+// Live Classroom curriculum (regenerate with: node scripts/extract-curriculum.js)
+let CURRICULUM = { courses: [] };
+try { CURRICULUM = require("./data/curriculum.json"); } catch (_) { console.warn("[classroom] curriculum.json missing — run scripts/extract-curriculum.js"); }
 
 // Admin/test-endpoint auth — prefer the x-premium-key HEADER over ?key= (query
 // strings persist in access logs, proxies and browser history, so a secret in
@@ -2646,47 +2649,66 @@ app.get("/api/alpha-test", async (req, res) => {
   } catch (e) { return res.status(200).json({ success: false, error: e.message }); }
 });
 
-// ── CLUCK'S LIVE CLASSROOM — interactive AI-taught lessons ─────────────────────────────
-// Professor Cluck teaches a class conversationally (Socratic: explain → ask → grade the
-// student's free-text answer → correct → continue), grounded in our real question bank so the
-// teaching is accurate and aligned with the diploma/exam. Three tracks by question source.
-const CLASSROOM_CLASSES = {
-  fundamentals: { title: "Crypto Fundamentals", source: "CURRICULUM", blurb: "Wallets, tokens, DEXs, rugs, market cap, on-chain basics — the bedrock." },
-  liquidity: { title: "Liquidity & LP Mastery", source: "LPLAB", blurb: "AMMs, impermanent loss, concentrated liquidity, fees & LP earnings — the real money mechanics." },
-  pro: { title: "Pro / Exam Prep", source: "ULTIMATE", blurb: "The tough stuff — sharpen up for the Ultimate Challenge and a verified diploma." },
-};
-function classroomSyllabus(source, n = 16) {
-  const pool = QUESTION_BANK.filter((q) => q.source === source);
-  for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
-  return pool.slice(0, n).map((q, i) =>
-    `${i + 1}. ${q.q}\n   ✓ ${q.options && q.options[q.correct] != null ? q.options[q.correct] : "?"}\n   why: ${q.explanation || ""}`).join("\n");
+// ── CLUCK'S LIVE CLASSROOM — interactive, lesson-by-lesson AI teaching ─────────────────
+// Professor Cluck teaches ONE real lesson at a time, Socratically (explain → ask → grade the
+// student's free-text answer → correct → advance), grounded in our ACTUAL curriculum content
+// (data/curriculum.json, extracted from the school's lessons). Emits [LESSON COMPLETE] once the
+// student has shown they understand the lesson's core concepts (the client marks progress).
+function ccFindCourse(id) { return (CURRICULUM.courses || []).find((c) => c.id === id); }
+function ccFindLesson(courseId, lessonId) { const c = ccFindCourse(courseId); return c ? (c.lessons || []).find((l) => l.id === lessonId) : null; }
+
+// Lightweight syllabus for the UI — courses + lessons (titles/intros), NO quiz answers shipped.
+app.get("/api/curriculum", (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  const courses = (CURRICULUM.courses || []).map((c) => ({
+    id: c.id, title: c.title, icon: c.icon, blurb: c.blurb,
+    lessons: (c.lessons || []).map((l) => ({ id: l.id, title: l.title, icon: l.icon, intro: l.intro || l.tagline || "", belt: l.belt || null, reference: !!l.reference })),
+  }));
+  res.status(200).json({ success: true, courses });
+});
+
+// The teacher's grounding for ONE lesson: real material (intro/concepts/prose/sections) + an
+// answer key (quiz Q→answer→why) so Cluck teaches accurately and can grade comprehension.
+function lessonMaterial(lesson) {
+  const parts = [`LESSON: ${lesson.title}`];
+  if (lesson.intro) parts.push(`Intro: ${lesson.intro}`);
+  if (lesson.content) parts.push(`Material:\n${String(lesson.content).slice(0, 1800)}`);
+  if (Array.isArray(lesson.concepts) && lesson.concepts.length) parts.push("Key concepts:\n" + lesson.concepts.map((c) => `• ${c.term} — ${c.def}`).join("\n"));
+  if (Array.isArray(lesson.sections) && lesson.sections.length) parts.push("Sections:\n" + lesson.sections.map((s) => `▸ ${s.heading}: ${String(s.body || "").slice(0, 500)}`).join("\n"));
+  const qs = [];
+  (lesson.questions || []).forEach((q) => qs.push(q));
+  (lesson.sections || []).forEach((s) => (s.quiz || []).forEach((q) => qs.push(q)));
+  if (qs.length) parts.push("Comprehension-check answer key (use these to test + grade the student):\n" + qs.slice(0, 8).map((q, i) => `${i + 1}. ${q.q}\n   ✓ ${q.answer}\n   why: ${q.why || ""}`).join("\n"));
+  if (lesson.cluckVerdict) parts.push(`Your closing verdict for this lesson: ${lesson.cluckVerdict}`);
+  return parts.join("\n\n").slice(0, 4000);
 }
+
 app.post("/api/classroom", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  const { classId, message, history } = req.body || {};
-  const cls = CLASSROOM_CLASSES[classId];
-  if (!cls) return res.status(400).json({ success: false, error: "pick a class" });
+  const { courseId, lessonId, message, history } = req.body || {};
+  const course = ccFindCourse(courseId), lesson = ccFindLesson(courseId, lessonId);
+  if (!course || !lesson) return res.status(400).json({ success: false, error: "pick a lesson" });
   const KEY = process.env.ANTHROPIC_API_KEY;
   if (!KEY) return res.status(500).json({ success: false, error: "Classroom is offline (AI not configured)" });
   const msg = String(message || "").slice(0, 800);
-  // Trim client history to the last ~10 turns to bound tokens.
-  const hist = Array.isArray(history) ? history.filter((m) => m && (m.role === "user" || m.role === "assistant") && m.content).slice(-10).map((m) => ({ role: m.role, content: String(m.content).slice(0, 1500) })) : [];
+  const hist = Array.isArray(history) ? history.filter((m) => m && (m.role === "user" || m.role === "assistant") && m.content).slice(-12).map((m) => ({ role: m.role, content: String(m.content).slice(0, 1500) })) : [];
   const opened = hist.length > 0;
-  const system = `You are Professor Cluck Norris — the toughest, funniest crypto professor on Solana — teaching a LIVE class: "${cls.title}".
-Your SYLLABUS (your source of truth — these are the real concepts, correct answers, and explanations; teach ONLY accurate crypto, lean on these):
-${classroomSyllabus(cls.source)}
+  const system = `You are Professor Cluck Norris — the toughest, funniest crypto professor on Solana — teaching ONE live lesson in the "${course.title}" course.
 
-HOW YOU TEACH (this is a back-and-forth conversation, NOT a lecture dump):
-- Cover ONE concept at a time. Explain it simply with a vivid analogy (chicken/farm puns welcome), then ASK the student a question about it and STOP. Wait for their answer.
-- When the student answers, JUDGE it out loud: "✅ Nailed it" / "🟡 Close" / "❌ Not quite" — then correct/clarify using the syllabus explanation, briefly. Then move to the next concept.
-- Adapt: if they clearly get it, go faster/harder; if they're lost, slow down and re-explain differently.
-- If the student asks a question, answer it, then steer back to the lesson.
-- Keep EVERY reply SHORT — 2 to 5 sentences — and end with a question or a "ready for the next one?" prompt.
-- After ~6-8 concepts, wrap with a quick recap + tell them they're ready to test it on the Ultimate Challenge for a verified diploma.
-RULES: Never give financial advice or price predictions. Encouraging but blunt. No markdown headers/asterisks.${opened ? "" : "\nThis is the FIRST message — welcome the student to class, set the vibe in 1-2 lines, teach the first concept, and ask your first question."}`;
+THE LESSON MATERIAL (your source of truth — teach ONLY this, accurately):
+${lessonMaterial(lesson)}
+
+HOW YOU TEACH (a back-and-forth, NOT a lecture dump):
+- Teach this lesson's concepts ONE at a time. Explain simply with a vivid analogy (chicken/farm puns welcome), then ASK the student a question and STOP. Wait.
+- When they answer, GRADE it out loud — "✅ Nailed it" / "🟡 Close" / "❌ Not quite" — then correct/clarify briefly from the material, and move on.
+- Adapt to their level. If they ask something, answer it then steer back.
+- Keep EVERY reply SHORT (2–5 sentences), ending with a question or "ready for the next one?".
+- Cover the lesson's key concepts (usually 3–6), then give a 1–2 line recap. When the student has shown they understand the CORE of this lesson, end that final message with the exact tag [LESSON COMPLETE] on its own line.
+RULES: Never give financial advice or price predictions. Encouraging but blunt. No markdown headers/asterisks (the [LESSON COMPLETE] tag is the only bracketed text allowed).${opened ? "" : "\nThis is the FIRST message — welcome them to the lesson in 1 line, teach the first concept, and ask your first question."}`;
   try {
     const messages = [...hist];
-    messages.push({ role: "user", content: opened ? (msg || "(continue)") : "Start class, professor." });
+    messages.push({ role: "user", content: opened ? (msg || "(continue)") : "Start the lesson, professor." });
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" },
@@ -2694,14 +2716,18 @@ RULES: Never give financial advice or price predictions. Encouraging but blunt. 
     });
     const data = await r.json();
     if (data && data.content && data.content[0]) {
-      const reply = data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
-      return res.status(200).json({ success: true, reply });
+      let reply = data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
+      const complete = /\[LESSON COMPLETE\]/i.test(reply);
+      reply = reply.replace(/\[LESSON COMPLETE\]/ig, "").trim();
+      return res.status(200).json({ success: true, reply, complete });
     }
     return res.status(500).json({ success: false, error: (data && data.error && data.error.message) || "Professor Cluck is hoarse — try again." });
   } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
 });
 
-
+// Build the Telegram + X post text for a brief (no sending). X ALWAYS tags the ecosystem
+// partners (@JupiterExchange = routing artery + our earner's venue; @BagsApp = the launchpad/
+// hackathon host), then tags trending tokens by their X handle (engagement — tagged projects
 // often re-engage). Packs trending tags to fit 280.
 function buildAlphaPosts(a) {
   const body = (a.brief || "").trim();

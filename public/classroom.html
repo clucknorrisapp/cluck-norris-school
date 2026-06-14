@@ -4,36 +4,46 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>🎓 Cluck's Live Classroom — Learn Crypto with Professor Cluck</title>
-<meta name="description" content="Take a live class with Professor Cluck — an interactive AI crypto teacher. He explains, asks you questions, grades your answers, and adapts. Crypto fundamentals, LP mastery, and exam prep. Free."/>
+<meta name="description" content="Take a live class with Professor Cluck — an interactive AI crypto teacher. He explains, asks you questions, grades your answers, and adapts, lesson by lesson. Crypto fundamentals, LP mastery, deep dives. Free."/>
 <meta property="og:title" content="🎓 Cluck's Live Classroom"/>
-<meta property="og:description" content="Class is in session. Professor Cluck teaches you crypto live — and quizzes you as you go."/>
+<meta property="og:description" content="Class is in session. Professor Cluck teaches you crypto live — lesson by lesson — and quizzes you as you go."/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
 <style>
   :root{color-scheme:dark;--bg:#0a0a0a;--card:#111;--border:rgba(255,255,255,0.08);--text:#F9FAFB;--sub:#6B7280;--accent:#FCD34D;--orange:#D97706;--green:#6EE7B7;--mono:'Courier New',monospace;}
   *{box-sizing:border-box;margin:0;padding:0;}
   body{background:var(--bg);background-image:radial-gradient(ellipse at 20% 8%,rgba(217,119,6,0.12),transparent 50%),radial-gradient(ellipse at 85% 92%,rgba(16,185,129,0.06),transparent 50%);color:var(--text);font-family:system-ui,sans-serif;min-height:100vh;}
-  .wrap{max-width:760px;margin:0 auto;padding:24px 16px 60px;}
+  .wrap{max-width:780px;margin:0 auto;padding:24px 16px 60px;}
   a.back-home{display:inline-flex;align-items:center;gap:6px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:var(--orange);text-decoration:none;margin:0 0 12px;}
   .back-home img{height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid var(--orange);}
   .header{display:flex;align-items:center;gap:14px;margin-bottom:8px;}
   .header-icon{font-size:42px;filter:drop-shadow(0 0 16px rgba(217,119,6,0.5));}
-  .brand-mini{font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:4px;color:var(--orange);font-weight:700;}
+  .brand-mini{font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:3px;color:var(--orange);font-weight:700;}
   h1{font-family:'Oswald',sans-serif;font-size:30px;font-weight:900;letter-spacing:2px;background:linear-gradient(135deg,#FCD34D,#D97706,#F59E0B);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1;}
   .sub-h{font-family:var(--mono);font-size:11px;color:var(--sub);letter-spacing:1px;margin:6px 0 18px;}
   .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:16px;}
-  .classes{display:grid;grid-template-columns:1fr;gap:12px;}
-  .class-pick{text-align:left;background:#0d0d0d;border:1px solid var(--border);border-radius:12px;padding:16px;cursor:pointer;transition:border-color .12s,transform .12s;}
-  .class-pick:hover{border-color:var(--orange);transform:translateY(-1px);}
-  .class-pick .t{font-family:'Oswald',sans-serif;font-weight:900;font-size:17px;color:var(--text);letter-spacing:0.5px;}
-  .class-pick .b{font-size:12.5px;color:#D1D5DB;line-height:1.55;margin-top:5px;}
-  .class-pick .go{font-family:'Oswald',sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;color:var(--orange);margin-top:10px;}
-  #room{display:none;}
-  .room-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
-  .room-title{font-family:'Oswald',sans-serif;font-weight:900;font-size:18px;color:var(--accent);letter-spacing:0.5px;}
-  .leave{margin-left:auto;background:none;border:1px solid var(--border);border-radius:18px;color:var(--sub);font-family:var(--mono);font-size:11px;padding:5px 12px;cursor:pointer;}
-  .chat{display:flex;flex-direction:column;gap:12px;min-height:200px;}
-  .msg{max-width:88%;padding:12px 14px;border-radius:12px;font-size:14.5px;line-height:1.6;white-space:pre-wrap;}
+  .crumbs{font-family:var(--mono);font-size:11px;color:var(--sub);margin-bottom:12px;}
+  .crumbs a{color:var(--orange);cursor:pointer;text-decoration:none;}
+  .pick{text-align:left;background:#0d0d0d;border:1px solid var(--border);border-radius:12px;padding:16px;cursor:pointer;transition:border-color .12s,transform .12s;margin-bottom:12px;display:block;width:100%;}
+  .pick:hover{border-color:var(--orange);transform:translateY(-1px);}
+  .pick .t{font-family:'Oswald',sans-serif;font-weight:900;font-size:17px;color:var(--text);letter-spacing:0.5px;}
+  .pick .b{font-size:12.5px;color:#D1D5DB;line-height:1.55;margin-top:5px;}
+  .pbar{height:6px;border-radius:4px;background:#0d0d0d;border:1px solid var(--border);overflow:hidden;margin-top:10px;}
+  .pbar > i{display:block;height:100%;background:linear-gradient(90deg,#10B981,#6EE7B7);}
+  .pmeta{font-family:var(--mono);font-size:10px;color:var(--sub);margin-top:5px;}
+  .lrow{display:flex;align-items:center;gap:12px;padding:13px 14px;border:1px solid var(--border);border-radius:11px;background:#0d0d0d;cursor:pointer;margin-bottom:9px;transition:border-color .12s;}
+  .lrow:hover{border-color:var(--orange);}
+  .lrow.done{border-color:rgba(16,185,129,0.4);background:rgba(16,185,129,0.05);}
+  .lrow .ic{font-size:22px;flex-shrink:0;width:26px;text-align:center;}
+  .lrow .mid{flex:1;min-width:0;}
+  .lrow .lt{font-family:'Oswald',sans-serif;font-weight:700;font-size:14.5px;color:var(--text);letter-spacing:0.4px;}
+  .lrow .li{font-size:11px;color:var(--sub);line-height:1.45;margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .lrow .chk{flex-shrink:0;font-size:16px;color:var(--green);}
+  .lrow .ref{font-family:var(--mono);font-size:8px;color:var(--sub);border:1px solid var(--border);border-radius:8px;padding:1px 5px;}
+  .room-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;}
+  .room-title{font-family:'Oswald',sans-serif;font-weight:900;font-size:19px;color:var(--accent);letter-spacing:0.5px;}
+  .chat{display:flex;flex-direction:column;gap:12px;min-height:180px;margin-top:8px;}
+  .msg{max-width:90%;padding:12px 14px;border-radius:12px;font-size:14.5px;line-height:1.6;white-space:pre-wrap;}
   .msg.cluck{align-self:flex-start;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-left:3px solid var(--orange);}
   .msg.me{align-self:flex-end;background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.35);}
   .msg .who{font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.5px;margin-bottom:4px;}
@@ -42,12 +52,16 @@
   .answer-row textarea{flex:1;background:#0d0d0d;border:1px solid var(--border);border-radius:10px;padding:12px;color:var(--text);font-family:system-ui;font-size:14px;resize:vertical;min-height:50px;}
   .send{padding:0 18px;border:none;border-radius:10px;background:linear-gradient(135deg,#D97706,#F59E0B);color:#1a1a1a;font-family:'Oswald',sans-serif;font-weight:900;letter-spacing:1px;font-size:14px;cursor:pointer;}
   .send:disabled{opacity:0.5;cursor:wait;}
+  .complete-banner{display:none;margin-top:14px;padding:14px;border:1px solid rgba(16,185,129,0.45);background:rgba(16,185,129,0.08);border-radius:11px;text-align:center;}
+  .complete-banner.show{display:block;}
+  .complete-banner .t{font-family:'Oswald',sans-serif;font-weight:900;font-size:16px;color:var(--green);letter-spacing:1px;}
+  .nextbtn{margin-top:10px;padding:11px 18px;border:none;border-radius:10px;background:linear-gradient(135deg,#10B981,#059669);color:#04140d;font-family:'Oswald',sans-serif;font-weight:900;letter-spacing:1px;font-size:13px;cursor:pointer;}
   .spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,0.2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;}
   @keyframes spin{to{transform:rotate(360deg);}}
   .hint{font-family:var(--mono);font-size:10px;color:var(--sub);margin-top:8px;text-align:center;}
-  .crosslink{display:block;text-align:center;margin-top:8px;padding:13px;border:1px dashed rgba(16,185,129,0.4);border-radius:10px;background:rgba(16,185,129,0.05);color:var(--green);text-decoration:none;font-family:'Oswald',sans-serif;font-weight:700;letter-spacing:1px;font-size:13px;}
   .err{display:none;margin:10px 0;padding:11px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);border-radius:9px;color:#FCA5A5;font-family:var(--mono);font-size:12px;}
   .err.show{display:block;}
+  .muted{color:var(--sub);}
 </style>
 </head>
 <body>
@@ -60,111 +74,179 @@
       <h1>LIVE CLASSROOM</h1>
     </div>
   </div>
-  <div class="sub-h">CLASS WITH PROFESSOR CLUCK — HE TEACHES, HE ASKS, YOU ANSWER, HE GRADES YOU.</div>
+  <div class="sub-h">CLASS WITH PROFESSOR CLUCK — HE TEACHES, HE ASKS, YOU ANSWER, HE GRADES YOU. LESSON BY LESSON.</div>
 
-  <div id="picker" class="card">
-    <div style="font-size:13px;color:#D1D5DB;line-height:1.6;margin-bottom:14px;">Pick a class. Professor Cluck teaches it live — one concept at a time — and he <b style="color:var(--accent)">will</b> call on you. Answer in your own words; he grades it and corrects you. Free, no wallet connect.</div>
-    <div class="classes" id="classes"></div>
+  <div class="err" id="err"></div>
+
+  <!-- COURSES -->
+  <div id="vCourses">
+    <div class="card">
+      <div style="font-size:13px;color:#D1D5DB;line-height:1.6;margin-bottom:6px;">Pick a course. Each one is a series of <b style="color:var(--accent)">live lessons</b> — Professor Cluck teaches one concept at a time and <b style="color:var(--accent)">calls on you</b>. Answer in your own words; he grades it, corrects you, and moves on. Your progress saves on this device.</div>
+    </div>
+    <div id="courseList"><div class="card muted" style="text-align:center"><span class="spin"></span> loading the catalog…</div></div>
   </div>
 
-  <div id="room" class="card">
-    <div class="room-head">
-      <span class="room-title" id="roomTitle"></span>
-      <button class="leave" onclick="leaveClass()">✕ leave class</button>
+  <!-- SYLLABUS -->
+  <div id="vSyllabus" style="display:none;">
+    <div class="crumbs"><a onclick="goCourses()">← All courses</a></div>
+    <div class="card">
+      <div class="room-title" id="sylTitle"></div>
+      <div class="b" id="sylBlurb" style="font-size:12.5px;color:#D1D5DB;margin-top:5px;"></div>
+      <div class="pbar"><i id="sylBar" style="width:0%"></i></div>
+      <div class="pmeta" id="sylMeta"></div>
     </div>
-    <div class="err" id="err"></div>
-    <div class="chat" id="chat"></div>
-    <div class="answer-row">
-      <textarea id="answer" placeholder="Type your answer (or ask the professor a question)…" disabled></textarea>
-      <button class="send" id="sendBtn" onclick="sendAnswer()" disabled>SEND</button>
-    </div>
-    <div class="hint">Tip: answer in plain English — there are no multiple-choice crutches here. Press Enter to send (Shift+Enter for a new line).</div>
+    <div id="lessonList"></div>
   </div>
 
-  <div class="hint" style="margin-top:18px;">🧪 Cluck's Live Classroom is a new beta — separate from the main curriculum for now. Free to try.</div>
+  <!-- LESSON -->
+  <div id="vLesson" style="display:none;">
+    <div class="crumbs"><a onclick="goCourses()">All courses</a> &nbsp;›&nbsp; <a id="crumbCourse" onclick="goSyllabus()"></a> &nbsp;›&nbsp; <span id="crumbLesson" class="muted"></span></div>
+    <div class="card">
+      <div class="room-head"><span class="room-title" id="lessonTitle"></span></div>
+      <div class="chat" id="chat"></div>
+      <div class="answer-row">
+        <textarea id="answer" placeholder="Type your answer (or ask the professor a question)…"></textarea>
+        <button class="send" id="sendBtn" onclick="sendAnswer()">SEND</button>
+      </div>
+      <div class="hint">Answer in plain English — no multiple-choice crutches. Enter to send · Shift+Enter for a new line.</div>
+      <div class="complete-banner" id="completeBanner">
+        <div class="t">✅ LESSON COMPLETE</div>
+        <div style="font-size:12px;color:#D1D5DB;margin-top:4px">Professor Cluck says you've got this one. Onward.</div>
+        <button class="nextbtn" id="nextBtn" onclick="nextLesson()">NEXT LESSON →</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
   var esc=function(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});};
-  var CLASSES=[
-    {id:"fundamentals",icon:"📚",t:"Crypto Fundamentals",b:"Wallets, tokens, DEXs, rugs, market cap, on-chain basics — the bedrock every crypto survivor needs."},
-    {id:"liquidity",icon:"💧",t:"Liquidity & LP Mastery",b:"AMMs, impermanent loss, concentrated liquidity, fees & LP earnings — the real money mechanics."},
-    {id:"pro",icon:"⚔️",t:"Pro / Exam Prep",b:"The tough stuff. Sharpen up for the Ultimate Challenge and a verified, shareable diploma."}
-  ];
-  var classId=null, history=[], busy=false;
+  var DONE_KEY='clkn_classroom_done_v1';
+  var courses=[], curCourse=null, curLesson=null, history=[], busy=false;
 
-  document.getElementById('classes').innerHTML=CLASSES.map(function(c){
-    return '<div class="class-pick" onclick="startClass(\''+c.id+'\')">'
-      +'<div class="t">'+c.icon+' '+esc(c.t)+'</div>'
-      +'<div class="b">'+esc(c.b)+'</div>'
-      +'<div class="go">ENTER CLASS →</div></div>';
-  }).join('');
+  function loadDone(){ try{ return JSON.parse(localStorage.getItem(DONE_KEY))||{}; }catch(e){ return {}; } }
+  function isDone(cid,lid){ var d=loadDone(); return !!(d[cid]&&d[cid][lid]); }
+  function markDone(cid,lid){ var d=loadDone(); d[cid]=d[cid]||{}; d[cid][lid]=1; try{localStorage.setItem(DONE_KEY,JSON.stringify(d));}catch(e){} }
+  function courseProgress(c){ var done=0; c.lessons.forEach(function(l){ if(isDone(c.id,l.id)) done++; }); return {done:done,total:c.lessons.length}; }
 
-  function showErr(m){var e=document.getElementById('err');e.textContent=m;e.classList.add('show');}
-  function clearErr(){document.getElementById('err').classList.remove('show');}
+  function showErr(m){var e=document.getElementById('err');e.textContent=m;e.classList.add('show');setTimeout(function(){e.classList.remove('show');},6000);}
+  function show(v){ ['vCourses','vSyllabus','vLesson'].forEach(function(id){document.getElementById(id).style.display=(id===v?'':'none');}); window.scrollTo(0,0); }
+
+  async function init(){
+    try{
+      var r=await fetch('/api/curriculum'); var d=await r.json();
+      if(!d.success||!d.courses.length){ document.getElementById('courseList').innerHTML='<div class="card muted">Classroom catalog is warming up — refresh in a moment.</div>'; return; }
+      courses=d.courses;
+      renderCourses();
+    }catch(e){ document.getElementById('courseList').innerHTML='<div class="card muted">Network hiccup — refresh.</div>'; }
+  }
+
+  function renderCourses(){
+    document.getElementById('courseList').innerHTML=courses.map(function(c){
+      var p=courseProgress(c);
+      var pct=p.total?Math.round(p.done/p.total*100):0;
+      return '<button class="pick" onclick="openCourse(\''+c.id+'\')">'
+        +'<div class="t">'+(c.icon||'📘')+' '+esc(c.title)+'</div>'
+        +'<div class="b">'+esc(c.blurb||'')+'</div>'
+        +'<div class="pbar"><i style="width:'+pct+'%"></i></div>'
+        +'<div class="pmeta">'+p.done+' / '+p.total+' lessons complete</div></button>';
+    }).join('');
+  }
+
+  function openCourse(cid){
+    curCourse=courses.find(function(c){return c.id===cid;});
+    if(!curCourse) return;
+    document.getElementById('sylTitle').textContent=(curCourse.icon||'')+' '+curCourse.title;
+    document.getElementById('sylBlurb').textContent=curCourse.blurb||'';
+    renderSyllabus();
+    show('vSyllabus');
+  }
+  function renderSyllabus(){
+    var p=courseProgress(curCourse), pct=p.total?Math.round(p.done/p.total*100):0;
+    document.getElementById('sylBar').style.width=pct+'%';
+    document.getElementById('sylMeta').textContent=p.done+' / '+p.total+' lessons complete';
+    document.getElementById('lessonList').innerHTML=curCourse.lessons.map(function(l,i){
+      var done=isDone(curCourse.id,l.id);
+      return '<div class="lrow'+(done?' done':'')+'" onclick="openLesson(\''+esc(l.id)+'\')">'
+        +'<div class="ic">'+(l.icon||'📘')+'</div>'
+        +'<div class="mid"><div class="lt">'+(i+1)+'. '+esc(l.title)+(l.reference?' <span class="ref">REF</span>':'')+'</div>'
+        +(l.intro?'<div class="li">'+esc(l.intro)+'</div>':'')+'</div>'
+        +'<div class="chk">'+(done?'✓':'')+'</div></div>';
+    }).join('');
+  }
+  function goCourses(){ renderCourses(); show('vCourses'); }
+  function goSyllabus(){ renderSyllabus(); show('vSyllabus'); }
+
+  async function openLesson(lid){
+    curLesson=curCourse.lessons.find(function(l){return l.id===lid;});
+    if(!curLesson) return;
+    history=[];
+    document.getElementById('crumbCourse').textContent=curCourse.title;
+    document.getElementById('crumbLesson').textContent=curLesson.title;
+    document.getElementById('lessonTitle').textContent=(curLesson.icon||'')+' '+curLesson.title;
+    document.getElementById('chat').innerHTML='';
+    document.getElementById('completeBanner').classList.remove('show');
+    document.getElementById('answer').disabled=false;
+    document.getElementById('sendBtn').disabled=false;
+    show('vLesson');
+    await turn('');
+    document.getElementById('answer').focus();
+  }
 
   function addMsg(role,text){
     var chat=document.getElementById('chat');
     var d=document.createElement('div');
     d.className='msg '+(role==='assistant'?'cluck':'me');
     d.innerHTML='<div class="who">'+(role==='assistant'?'🐔 PROFESSOR CLUCK':'YOU')+'</div>'+esc(text);
-    chat.appendChild(d);
-    d.scrollIntoView({behavior:'smooth',block:'end'});
+    chat.appendChild(d); d.scrollIntoView({behavior:'smooth',block:'end'});
   }
   function thinking(on){
-    var chat=document.getElementById('chat');
-    var ex=document.getElementById('thinkMsg');
+    var chat=document.getElementById('chat'), ex=document.getElementById('thinkMsg');
     if(on){ if(ex)return; var d=document.createElement('div'); d.id='thinkMsg'; d.className='msg cluck'; d.innerHTML='<div class="who">🐔 PROFESSOR CLUCK</div><span class="spin"></span> thinking…'; chat.appendChild(d); d.scrollIntoView({behavior:'smooth',block:'end'}); }
     else if(ex){ ex.remove(); }
   }
 
-  async function startClass(id){
-    classId=id; history=[];
-    var c=CLASSES.find(function(x){return x.id===id;});
-    document.getElementById('picker').style.display='none';
-    document.getElementById('room').style.display='block';
-    document.getElementById('roomTitle').textContent=c.icon+' '+c.t;
-    document.getElementById('chat').innerHTML='';
-    document.getElementById('answer').disabled=false;
-    document.getElementById('sendBtn').disabled=false;
-    await turn('');  // open the class
-    document.getElementById('answer').focus();
-  }
-  function leaveClass(){
-    classId=null;history=[];
-    document.getElementById('room').style.display='none';
-    document.getElementById('picker').style.display='block';
-  }
-
   async function turn(message){
-    if(busy) return; busy=true; clearErr();
+    if(busy) return; busy=true;
     document.getElementById('sendBtn').disabled=true;
     thinking(true);
     try{
       var r=await fetch('/api/classroom',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({classId:classId, message:message, history:history})});
+        body:JSON.stringify({courseId:curCourse.id, lessonId:curLesson.id, message:message, history:history})});
       var d=await r.json();
       thinking(false);
       if(!d.success){ showErr(d.error||'Professor Cluck stepped out — try again.'); return; }
       if(message) history.push({role:'user',content:message});
       history.push({role:'assistant',content:d.reply});
       addMsg('assistant', d.reply);
+      if(d.complete){ markDone(curCourse.id,curLesson.id); onComplete(); }
     }catch(e){ thinking(false); showErr('Network hiccup — try again.'); }
     finally{ busy=false; document.getElementById('sendBtn').disabled=false; }
   }
 
+  function onComplete(){
+    var b=document.getElementById('completeBanner'); b.classList.add('show');
+    b.scrollIntoView({behavior:'smooth',block:'end'});
+    // Is there a next lesson?
+    var idx=curCourse.lessons.findIndex(function(l){return l.id===curLesson.id;});
+    var hasNext=idx>=0 && idx<curCourse.lessons.length-1;
+    document.getElementById('nextBtn').style.display=hasNext?'':'none';
+  }
+  function nextLesson(){
+    var idx=curCourse.lessons.findIndex(function(l){return l.id===curLesson.id;});
+    if(idx>=0 && idx<curCourse.lessons.length-1){ openLesson(curCourse.lessons[idx+1].id); }
+    else { goSyllabus(); }
+  }
+
   async function sendAnswer(){
-    var ta=document.getElementById('answer');
-    var v=ta.value.trim();
+    var ta=document.getElementById('answer'); var v=ta.value.trim();
     if(!v || busy) return;
-    addMsg('user', v);
-    ta.value='';
-    await turn(v);
-    ta.focus();
+    addMsg('user', v); ta.value='';
+    await turn(v); ta.focus();
   }
   document.getElementById('answer').addEventListener('keydown',function(e){
     if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendAnswer(); }
   });
+  init();
 </script>
 </body>
 </html>

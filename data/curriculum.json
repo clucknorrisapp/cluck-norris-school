@@ -1,0 +1,1881 @@
+{
+  "generatedAt": "2026-06-14T18:55:34.942Z",
+  "courses": [
+    {
+      "id": "fundamentals",
+      "title": "Crypto Fundamentals",
+      "icon": "📚",
+      "blurb": "Wallets, tokens, DEXs, rugs, market cap, on-chain basics — the bedrock every survivor needs.",
+      "lessons": [
+        {
+          "id": "lp",
+          "title": "Liquidity Pools",
+          "icon": "💧",
+          "belt": "FRESHMAN",
+          "intro": "Every trade on a DEX pulls from a Liquidity Pool — a smart contract holding two tokens. LP providers earn fees from every swap. No order books. No middlemen. Just math and the market.",
+          "concepts": [
+            {
+              "term": "Liquidity Pool",
+              "def": "A smart contract holding two tokens (e.g. SOL/USDC) that traders swap against."
+            },
+            {
+              "term": "LP Provider",
+              "def": "Someone who deposits tokens into a pool and earns a share of every trading fee."
+            },
+            {
+              "term": "Trading Fees",
+              "def": "Usually 0.25-1% per swap, split proportionally among all LP providers."
+            },
+            {
+              "term": "Impermanent Loss",
+              "def": "When token prices diverge, your pool share shifts — you may end up with less than just holding."
+            },
+            {
+              "term": "AMM",
+              "def": "Automated Market Maker — the algorithm that prices trades based on pool ratios instead of order books."
+            }
+          ],
+          "questions": [
+            {
+              "q": "What do liquidity providers earn?",
+              "answer": "A share of trading fees",
+              "why": "LP providers earn a cut of every swap fee. The more volume through the pool, the more you earn."
+            },
+            {
+              "q": "What is Impermanent Loss?",
+              "answer": "Value loss when token prices diverge vs. just holding",
+              "why": "IL happens when the price ratio of your pooled tokens changes. It's 'impermanent' because it can reverse if prices converge."
+            },
+            {
+              "q": "What does a Liquidity Pool replace?",
+              "answer": "A traditional order book",
+              "why": "DEXs use AMMs with liquidity pools instead of traditional order books used by CEXs."
+            },
+            {
+              "q": "What is an AMM?",
+              "answer": "An algorithm that prices trades based on pool ratios",
+              "why": "AMM stands for Automated Market Maker. It uses a mathematical formula to price trades based on the ratio of tokens in the pool."
+            },
+            {
+              "q": "If a pool has equal value of SOL and USDC, and SOL price doubles, what happens to an LP provider?",
+              "answer": "They experience impermanent loss vs just holding SOL",
+              "why": "When prices diverge, the AMM rebalances the pool automatically. You end up with less of the token that went up and more of the one that didn't — impermanent loss."
+            }
+          ]
+        },
+        {
+          "id": "rugs",
+          "title": "Rugs & Scams",
+          "icon": "⚠️",
+          "belt": "SOPHOMORE",
+          "intro": "In crypto, a rug pull is when devs drain liquidity or dump tokens, leaving holders with worthless bags. Knowing the red flags is your first line of defense.",
+          "concepts": [
+            {
+              "term": "Rug Pull",
+              "def": "Devs remove all liquidity or dump tokens suddenly, crashing the price to zero."
+            },
+            {
+              "term": "Liquidity Lock",
+              "def": "LP tokens locked in a time contract — proves devs can't pull liquidity early."
+            },
+            {
+              "term": "Dev Wallet",
+              "def": "The wallet that deployed the token. Large allocations here = major red flag."
+            },
+            {
+              "term": "Honeypot",
+              "def": "A contract that lets you buy but blocks selling. You're trapped the moment you enter."
+            },
+            {
+              "term": "Social Engineering",
+              "def": "Manipulating people psychologically to gain trust before executing a scam."
+            }
+          ],
+          "questions": [
+            {
+              "q": "What is a honeypot token?",
+              "answer": "A contract you can buy but not sell",
+              "why": "Honeypots are coded to block sell transactions. Once you buy, your funds are stuck. Always test with a small amount first."
+            },
+            {
+              "q": "Why is a liquidity lock important?",
+              "answer": "It means the dev can't remove liquidity early",
+              "why": "A liquidity lock proves devs committed their LP for a period of time — they physically can't rug before the lock expires."
+            },
+            {
+              "q": "Which is a major red flag on a new token?",
+              "answer": "Dev wallet holds 40% of supply",
+              "why": "Concentrated dev wallet = concentrated dump risk. If they hold 40%, one sell can collapse the price."
+            },
+            {
+              "q": "A project DMs you saying you won a giveaway and need to connect your wallet to claim. What do you do?",
+              "answer": "Ignore and report — it's a scam",
+              "why": "Unsolicited DMs asking you to connect your wallet are almost always phishing scams. Legitimate projects don't give away tokens through cold DMs."
+            },
+            {
+              "q": "What is social engineering in crypto?",
+              "answer": "Psychologically manipulating people to gain trust before scamming them",
+              "why": "Social engineering is when scammers build fake relationships or urgency to trick you into giving up access to your wallet or funds."
+            }
+          ]
+        },
+        {
+          "id": "volatility",
+          "title": "Volatility & Weak Hands",
+          "icon": "📈",
+          "belt": "JUNIOR",
+          "intro": "Crypto moves fast. 50% drops in hours. 10x runs overnight. Money is lost both ways: panic-selling a good project at the bottom, and refusing to sell a project that's actually broken. The skill is telling those two apart.",
+          "concepts": [
+            {
+              "term": "Volatility",
+              "def": "The rate at which a price moves up or down. High vol = big swings both ways."
+            },
+            {
+              "term": "Weak Hands",
+              "def": "Traders who sell at the first sign of red, usually locking in losses at the worst moment."
+            },
+            {
+              "term": "Diamond Hands",
+              "def": "Holding through extreme volatility without panic selling."
+            },
+            {
+              "term": "Stop Loss",
+              "def": "A pre-set price where you automatically sell to limit downside. Discipline over emotion."
+            },
+            {
+              "term": "Dollar Cost Averaging",
+              "def": "Buying fixed amounts at regular intervals regardless of price. Reduces timing risk."
+            }
+          ],
+          "questions": [
+            {
+              "q": "What do weak hands do during a price dip?",
+              "answer": "Panic sell, locking in losses",
+              "why": "Weak hands react emotionally — they sell a sound project the moment it dips, often right before recovery. The discipline is holding through volatility when nothing has actually changed about the project."
+            },
+            {
+              "q": "What is a stop loss?",
+              "answer": "A pre-set automatic sell to limit downside",
+              "why": "A stop loss removes emotion from the equation. You pre-decide your exit — the market doesn't get to decide for you."
+            },
+            {
+              "q": "High volatility means:",
+              "answer": "Large price swings in both directions",
+              "why": "Volatility is neutral — it means big moves happen. That means big gains AND big losses are both possible."
+            },
+            {
+              "q": "What is Dollar Cost Averaging (DCA)?",
+              "answer": "Buying fixed amounts at regular intervals regardless of price",
+              "why": "DCA removes the pressure of timing the market. You buy $50 every week whether price is up or down — over time it averages out your entry price."
+            },
+            {
+              "q": "A token drops 60% in a day. A disciplined trader would:",
+              "answer": "Find out WHY it dropped before doing anything",
+              "why": "A 60% drop is information. It could be market-wide noise — or a hack, a vesting unlock, or a whale heading for the exit. A disciplined trader finds out the cause first. Only once you know WHY can you decide whether to buy, hold, or cut it."
+            }
+          ]
+        },
+        {
+          "id": "wallets",
+          "title": "Wallets & Keys",
+          "icon": "🔐",
+          "belt": "SENIOR",
+          "intro": "Your wallet doesn't hold tokens — the blockchain does. Your wallet holds the KEYS that prove ownership. Lose the keys, lose everything. Forever.",
+          "concepts": [
+            {
+              "term": "Private Key",
+              "def": "A secret string that gives full control over your wallet. Never share it. Ever."
+            },
+            {
+              "term": "Seed Phrase",
+              "def": "12-24 words that regenerate your private key. Write it on paper. Never digitally."
+            },
+            {
+              "term": "Custodial Wallet",
+              "def": "An exchange holds your keys. Convenient but risky — 'not your keys, not your coins.'"
+            },
+            {
+              "term": "Non-Custodial Wallet",
+              "def": "You hold your own keys. Full control. Full responsibility. Phantom, Backpack, etc."
+            },
+            {
+              "term": "Hardware Wallet",
+              "def": "A physical device that stores your private key offline. Most secure option for large holdings."
+            }
+          ],
+          "questions": [
+            {
+              "q": "What does 'not your keys, not your coins' mean?",
+              "answer": "If an exchange holds your keys, they control your funds",
+              "why": "When a CEX holds your keys, they actually control your funds. If they go bankrupt or freeze withdrawals — you have no recourse."
+            },
+            {
+              "q": "Where should you store your seed phrase?",
+              "answer": "Written on paper, stored offline",
+              "why": "Seed phrases stored digitally can be hacked. Paper doesn't get hacked. Store it offline, somewhere safe."
+            },
+            {
+              "q": "What is a non-custodial wallet?",
+              "answer": "A wallet where you control your own private keys",
+              "why": "Non-custodial means YOU hold the keys. Phantom, Backpack, and Solflare are non-custodial Solana wallets."
+            },
+            {
+              "q": "Why is a hardware wallet more secure than a software wallet?",
+              "answer": "It stores your private key offline, away from internet threats",
+              "why": "Hardware wallets keep your private key on a physical device that never touches the internet. Even if your computer is hacked, your keys are safe."
+            },
+            {
+              "q": "Someone online says they can recover your lost crypto if you give them your seed phrase. What do you do?",
+              "answer": "Never share your seed phrase with anyone, ever",
+              "why": "Your seed phrase gives complete control of your wallet. Anyone who asks for it is trying to steal your funds. No legitimate service ever needs your seed phrase."
+            }
+          ]
+        },
+        {
+          "id": "slippage",
+          "title": "Slippage & MEV",
+          "icon": "🤖",
+          "belt": "GRADUATE",
+          "intro": "Every time you swap on a DEX, bots are watching. They can see your trade and rush to get their own transaction ordered right in front of it — buying first to push the price up, so you buy higher, then selling into you. It's called a sandwich attack. Knowing this changes how you trade.",
+          "concepts": [
+            {
+              "term": "Slippage",
+              "def": "The difference between the price you expect and the price you actually get."
+            },
+            {
+              "term": "MEV",
+              "def": "Maximal Extractable Value — profit bots extract by reordering transactions within a block."
+            },
+            {
+              "term": "Sandwich Attack",
+              "def": "A bot buys before your trade (raising price), lets you buy higher, then sells for profit."
+            },
+            {
+              "term": "Slippage Tolerance",
+              "def": "The max % price change you'll accept. Set too high = bot target. Too low = failed trade."
+            },
+            {
+              "term": "Front-running",
+              "def": "A bot sees your pending transaction and executes the same trade first to profit from your price impact."
+            }
+          ],
+          "questions": [
+            {
+              "q": "What is a sandwich attack?",
+              "answer": "A bot buys before and sells after your trade to profit at your expense",
+              "why": "Sandwich bots front-run your swap, then back-run it. You pay more, they profit. Setting tight slippage is your defense."
+            },
+            {
+              "q": "What does setting a LOW slippage tolerance do?",
+              "answer": "Protects you from sandwich attacks but may cause failed transactions",
+              "why": "Low slippage = trade only executes if price stays close to what you expect. Bots can't profitably sandwich you, but you risk the trade failing."
+            },
+            {
+              "q": "What does MEV stand for?",
+              "answer": "Maximal Extractable Value",
+              "why": "MEV is profit extracted by validators or bots who control transaction ordering."
+            },
+            {
+              "q": "What is front-running?",
+              "answer": "A bot executing the same trade as you but before your transaction confirms",
+              "why": "Front-running bots watch for large pending trades and rush to get their own transaction ordered first, profiting from the price impact your trade will cause. On Ethereum they do this via the public mempool; Solana has no public mempool, so bots race transaction ordering at the validator instead."
+            },
+            {
+              "q": "On Solana, MEV is:",
+              "answer": "Less severe than Ethereum but still occurs on high-volume DEXs",
+              "why": "Solana's speed reduces but doesn't eliminate MEV. High-volume pools on Jupiter and Raydium still see bot activity, especially during high-profile launches."
+            }
+          ]
+        },
+        {
+          "id": "tokenomics",
+          "title": "Tokenomics",
+          "icon": "📊",
+          "belt": "POST-GRAD",
+          "intro": "Tokenomics is the economics of a token — supply, distribution, vesting, and inflation. A token with bad tokenomics will dump no matter how good the project is.",
+          "concepts": [
+            {
+              "term": "Total Supply",
+              "def": "The max number of tokens that will ever exist."
+            },
+            {
+              "term": "Circulating Supply",
+              "def": "How many tokens are actually tradeable right now."
+            },
+            {
+              "term": "Vesting Schedule",
+              "def": "A lock-up period for team/investor tokens. Watch unlock dates."
+            },
+            {
+              "term": "Token Distribution",
+              "def": "How tokens are split between team, investors, community, treasury."
+            },
+            {
+              "term": "Burn Mechanism",
+              "def": "Permanently removing tokens from circulation to reduce supply over time."
+            }
+          ],
+          "questions": [
+            {
+              "q": "Why does vesting schedule matter to traders?",
+              "answer": "It shows when locked team/investor tokens unlock and can be sold",
+              "why": "When a vesting cliff hits, millions of insider tokens unlock. If team or VCs sell, price can crash hard."
+            },
+            {
+              "q": "A token has 1 trillion total supply and costs $0.001. Is it cheap?",
+              "answer": "No — supply determines real value, not price per token",
+              "why": "1 trillion tokens × $0.001 = a $1B market cap. A sub-penny price tells you nothing on its own — supply is what makes a project big or small."
+            },
+            {
+              "q": "What is circulating supply?",
+              "answer": "Tokens currently tradeable in the market",
+              "why": "Circulating supply is what's actually on the market. Market cap = price × circulating supply."
+            },
+            {
+              "q": "What does a burn mechanism do?",
+              "answer": "Permanently removes tokens from circulation reducing supply",
+              "why": "Burning tokens reduces supply over time. If demand stays the same and supply decreases, price pressure is upward. Bitcoin's halving is a similar concept."
+            },
+            {
+              "q": "A token has 5% team allocation with a 4-year vesting schedule. Is this good or bad?",
+              "answer": "Good — low alloc with long vesting",
+              "why": "Low team allocation with long vesting is a green flag. It means the team can't dump on holders early and is incentivized to build long-term value."
+            },
+            {
+              "q": "What happens to price when a large vesting unlock occurs?",
+              "answer": "Price often drops as insiders sell their newly unlocked tokens",
+              "why": "Vesting unlocks create sell pressure. Even if markets partially price it in, the actual unlock often causes a price dip as insiders take profits."
+            }
+          ]
+        },
+        {
+          "id": "marketcap",
+          "title": "Market Cap vs Price",
+          "icon": "💰",
+          "belt": "TENURED",
+          "intro": "The biggest beginner mistake in crypto: thinking a $0.001 token is cheaper than $50,000 BTC. Price per token means nothing. Market cap is everything.",
+          "concepts": [
+            {
+              "term": "Market Cap",
+              "def": "Price × Circulating Supply. The real size of a project."
+            },
+            {
+              "term": "FDV",
+              "def": "Fully Diluted Valuation — Price × the full supply, counting every token that will ever exist (including locked and not-yet-released ones)."
+            },
+            {
+              "term": "Price Per Token",
+              "def": "Meaningless without supply context."
+            },
+            {
+              "term": "Low Cap vs Large Cap",
+              "def": "Low cap (<$10M) = more upside, more risk. Large cap (>$1B) = more stable, harder to 10x."
+            },
+            {
+              "term": "Liquidity vs Market Cap",
+              "def": "A $10M market cap token with $50K liquidity can't absorb large buys without massive price impact."
+            }
+          ],
+          "questions": [
+            {
+              "q": "Token A: $0.001 price, 1 trillion supply. Token B: $100 price, 100,000 supply. Which has the higher market cap?",
+              "answer": "Token A — $1B market cap vs Token B's $10M",
+              "why": "Token A: $0.001 × 1T = $1B. Token B: $100 × 100K = $10M. Price per token is meaningless."
+            },
+            {
+              "q": "What does FDV tell you?",
+              "answer": "What market cap would be if all tokens were in circulation",
+              "why": "FDV uses total supply including locked tokens. High FDV vs market cap = lots of potential sell pressure ahead."
+            },
+            {
+              "q": "For a $1M investment to 100x, what must happen?",
+              "answer": "The market cap must also 100x",
+              "why": "Your return is tied to market cap growth. A project at $500M market cap needs $50B to 100x — much harder."
+            },
+            {
+              "q": "A token has a $1M market cap but only $10K in liquidity. What does this mean?",
+              "answer": "Even a small buy will cause massive price impact — very risky",
+              "why": "Low liquidity means your buy moves the price dramatically — and selling is even harder. You could buy in easily but be trapped when trying to exit."
+            },
+            {
+              "q": "Why is FDV often higher than market cap?",
+              "answer": "Because many tokens are locked, vesting, or not yet released",
+              "why": "FDV accounts for ALL tokens that will ever exist. Locked team tokens, vesting allocations, and unreleased supply all count toward FDV but not market cap."
+            },
+            {
+              "q": "A project has $100M market cap and $1B FDV. What does this signal?",
+              "answer": "90% of tokens are still locked — massive future sell pressure likely",
+              "why": "When FDV is 10x market cap, it means 90% of tokens haven't hit the market yet. As they unlock, sustained sell pressure can suppress price for years."
+            }
+          ]
+        },
+        {
+          "id": "dex",
+          "title": "DEX vs CEX",
+          "icon": "⚔️",
+          "belt": "HEADMASTER",
+          "intro": "Two ways to trade crypto. CEX is the on-ramp — easy, regulated, ID required. DEX is the frontier — permissionless, self-custody, always open.",
+          "concepts": [
+            {
+              "term": "CEX",
+              "def": "Centralized Exchange (Coinbase, Binance). Requires ID. Holds your keys. Regulated."
+            },
+            {
+              "term": "DEX",
+              "def": "Decentralized Exchange (Jupiter, Raydium). No ID. You keep your keys. No central operator who can freeze you out."
+            },
+            {
+              "term": "KYC",
+              "def": "Know Your Customer — identity verification required by CEXs."
+            },
+            {
+              "term": "Order Book",
+              "def": "A CEX feature matching buyers and sellers at specific prices."
+            },
+            {
+              "term": "Self-Custody",
+              "def": "You control your own keys. No third party can freeze or seize your funds."
+            }
+          ],
+          "questions": [
+            {
+              "q": "What does a CEX require that a DEX does not?",
+              "answer": "Identity verification (KYC)",
+              "why": "CEXs are regulated businesses — they require ID. DEXs are permissionless smart contracts. No ID, no account."
+            },
+            {
+              "q": "What is slippage on a DEX?",
+              "answer": "The difference between expected and actual trade price",
+              "why": "Low liquidity = high slippage. For small-cap tokens, even a modest trade can move the price significantly."
+            },
+            {
+              "q": "Which is always available 24/7 with no downtime?",
+              "answer": "DEX — it's a smart contract on the blockchain",
+              "why": "The DEX smart contract has no maintenance windows and no company that can freeze your account — it runs as long as the blockchain does. Two honest caveats: the website front-end you use to reach it can still go down or be hacked, and the blockchain itself can have outages (Solana has had them). 'Decentralized' is not the same as 'never fails.'"
+            },
+            {
+              "q": "What is the biggest risk of keeping funds on a CEX?",
+              "answer": "The CEX can freeze withdrawals, get hacked, or go bankrupt",
+              "why": "FTX, Celsius, and many others showed the risk — when a CEX fails, user funds can disappear overnight. Not your keys, not your coins."
+            },
+            {
+              "q": "What does self-custody mean?",
+              "answer": "Controlling your own private keys with no third party involvement",
+              "why": "Self-custody means you hold your own keys. No exchange, no bank, no government can freeze or seize your funds without physical access to your device."
+            }
+          ]
+        },
+        {
+          "id": "onchain",
+          "title": "On-Chain Analysis",
+          "icon": "🔍",
+          "belt": "PROFESSOR",
+          "intro": "Every transaction on Solana is public and permanent. On-chain analysis means reading this data to understand who is buying, who is selling, where the smart money is going, and whether a project is healthy or dying. This is the edge most retail traders never develop.",
+          "concepts": [
+            {
+              "term": "Wallet Tracking",
+              "def": "Monitoring specific wallet addresses to see when whales buy, sell, or move tokens."
+            },
+            {
+              "term": "Transaction History",
+              "def": "Every swap, transfer, and interaction a wallet has ever made — all public on-chain."
+            },
+            {
+              "term": "Solscan / Solana Explorer",
+              "def": "Block explorers that let you read Solana transaction data in human-readable form."
+            },
+            {
+              "term": "Whale Wallet",
+              "def": "A wallet holding a large amount of a token. When whales move, price often follows."
+            },
+            {
+              "term": "Smart Money",
+              "def": "Wallets consistently making profitable trades — often early VCs, insiders, or skilled traders."
+            }
+          ],
+          "questions": [
+            {
+              "q": "What can on-chain analysis reveal that price charts cannot?",
+              "answer": "Who is actually buying and selling, and in what size",
+              "why": "Price charts show the result of trading activity. On-chain data shows who is doing it — whether whales are accumulating, insiders are dumping, or smart money is entering."
+            },
+            {
+              "q": "What is a block explorer?",
+              "answer": "A website that lets you read all blockchain transaction data",
+              "why": "Solscan and Solana Explorer let you look up any wallet address, transaction, or token on Solana. Everything is public — no account needed."
+            },
+            {
+              "q": "A whale wallet you track just bought $500K of a token you've never heard of. What should you do?",
+              "answer": "Research the token and understand why before making any decision",
+              "why": "Whale activity is a signal worth investigating — but not a guaranteed buy signal. Research what the token is first. Whales can also be wrong, or already planning to exit."
+            },
+            {
+              "q": "What does it mean when multiple new wallets buy a token right before a major price spike?",
+              "answer": "Possible insider trading or coordinated buying",
+              "why": "When fresh wallets with no history suddenly appear right before a pump, it often suggests insider knowledge or coordinated activity. This is a yellow flag worth noting."
+            },
+            {
+              "q": "On Solana, all transactions are:",
+              "answer": "Public and permanently visible to anyone",
+              "why": "The blockchain is a public ledger. Every transaction you've ever made is permanently visible to anyone with a block explorer. There is no privacy on-chain without specific privacy tools."
+            },
+            {
+              "q": "What is 'smart money' in crypto?",
+              "answer": "Wallets that consistently make profitable early trades",
+              "why": "Smart money wallets consistently buy early and exit before crashes. Tracking them doesn't guarantee copying their success — they have information advantages you don't — but it's valuable signal."
+            },
+            {
+              "q": "A token's top 10 wallets hold 80% of supply. Is this a red flag?",
+              "answer": "Yes — extreme concentration means a few wallets can crash the price at will",
+              "why": "Highly concentrated supply is a major risk. If the top 10 holders decide to sell simultaneously, no amount of buying pressure can stop the crash. Always check token distribution."
+            }
+          ]
+        },
+        {
+          "id": "staking",
+          "title": "Staking & Yield Farming",
+          "icon": "🌾",
+          "belt": "DEAN",
+          "intro": "Staking and yield farming let your crypto work for you while you hold. But high APY comes with real risks that most beginners ignore. Understanding what you're actually earning — and what you're risking — is the difference between growing wealth and losing it.",
+          "concepts": [
+            {
+              "term": "Staking",
+              "def": "Locking tokens to support a network or protocol in exchange for rewards."
+            },
+            {
+              "term": "APY",
+              "def": "Annual Percentage Yield — the yearly return on your staked or farmed assets."
+            },
+            {
+              "term": "Yield Farming",
+              "def": "Providing liquidity to DeFi protocols in exchange for token rewards, often at high APY."
+            },
+            {
+              "term": "Inflationary Rewards",
+              "def": "When staking rewards are paid by minting new tokens — diluting all existing holders."
+            },
+            {
+              "term": "Lock-up Period",
+              "def": "Time you must wait before unstaking. You can't sell during this period."
+            }
+          ],
+          "questions": [
+            {
+              "q": "What does staking mean?",
+              "answer": "Locking tokens to support a network in exchange for rewards",
+              "why": "Staking involves locking your tokens in a protocol — either to validate transactions (proof of stake) or to earn protocol rewards. In return you receive staking rewards."
+            },
+            {
+              "q": "A protocol offers 500% APY. What is the most likely explanation?",
+              "answer": "The rewards are paid in new tokens being minted — heavily inflationary",
+              "why": "Extremely high APY is almost always funded by token inflation. The protocol mints new tokens to pay you — but this dilutes the token's value. Your 500% APY might be worth very little if the token crashes."
+            },
+            {
+              "q": "What is impermanent loss in yield farming?",
+              "answer": "Value loss compared to just holding when token prices diverge in an LP",
+              "why": "When you provide liquidity and token prices diverge, the AMM rebalances your position. You end up with less of the token that went up. This loss is 'impermanent' but can become permanent if you exit."
+            },
+            {
+              "q": "What is a lock-up period?",
+              "answer": "The time you must wait before you can unstake and access your tokens",
+              "why": "Many staking protocols require you to lock your tokens for days, weeks, or months. During a crash, you cannot sell — this is a critical risk to understand before staking."
+            },
+            {
+              "q": "What does APY stand for?",
+              "answer": "Annual Percentage Yield",
+              "why": "APY is Annual Percentage Yield — your projected return over a full year including compounding. Compare this to APR (Annual Percentage Rate) which doesn't include compounding."
+            },
+            {
+              "q": "You stake a token earning 100% APY. The token loses 80% of its value over the year. What happened?",
+              "answer": "You lost money — token price decline exceeded your staking rewards",
+              "why": "APY is paid in the token you're earning. Start with $100, earn 100% APY → you hold 2× the tokens. But the token's price fell 80%: twice the tokens at one-fifth the price = $40. You're down 60%, despite the '100% APY.' Always weigh token price risk against the headline yield."
+            },
+            {
+              "q": "What is the safest type of yield in DeFi?",
+              "answer": "Yield from real protocol fees (not token emissions)",
+              "why": "Real yield — paid from actual protocol fee revenue rather than token inflation — is the most sustainable. It's usually lower APY but backed by real economic activity, not just token printing."
+            }
+          ]
+        },
+        {
+          "id": "bags",
+          "title": "How Bags.fm Works",
+          "icon": "🎒",
+          "belt": "CHANCELLOR",
+          "intro": "Bags.fm is a Solana token launchpad where creators earn 1% of all trading volume forever. Understanding how it works — from launch to graduation to fee claiming — gives you an edge when evaluating any Bags.fm token.",
+          "concepts": [
+            {
+              "term": "DBC (Dynamic Bonding Curve)",
+              "def": "The initial launch mechanism. Price increases as more tokens are bought along a curve."
+            },
+            {
+              "term": "Graduation",
+              "def": "When a token raises enough SOL on the bonding curve to migrate to a full Meteora DAMM V2 liquidity pool."
+            },
+            {
+              "term": "Creator Fees",
+              "def": "1% of all trading volume goes to the token creator — forever, whether they're active or not."
+            },
+            {
+              "term": "Partner Ref Code",
+              "def": "A referral code that earns a % of platform fees when users trade through your link."
+            },
+            {
+              "term": "Meteora DAMM V2",
+              "def": "The graduated liquidity pool — deeper liquidity, tighter spreads, more professional trading environment."
+            }
+          ],
+          "questions": [
+            {
+              "q": "What is the DBC phase on Bags.fm?",
+              "answer": "The initial bonding curve launch phase where price rises with each buy",
+              "why": "DBC stands for Dynamic Bonding Curve. When a token launches on Bags.fm, it starts on a bonding curve — each buy raises the price slightly. Once enough SOL is raised, it graduates to a full liquidity pool."
+            },
+            {
+              "q": "What does graduation mean on Bags.fm?",
+              "answer": "The token migrates from bonding curve to a full Meteora liquidity pool",
+              "why": "Graduation is a milestone — it means the token raised enough initial liquidity to move to Meteora DAMM V2, a professional AMM pool. Graduated tokens have deeper liquidity and more stable trading."
+            },
+            {
+              "q": "How much do Bags.fm creators earn from trading volume?",
+              "answer": "1%",
+              "why": "Creators earn 1% of all trading volume on their token — forever. This means the more people trade your token, the more you earn, even if you never touch the project again."
+            },
+            {
+              "q": "What is a partner ref code on Bags.fm?",
+              "answer": "A referral code that earns a % of platform fees",
+              "why": "A partner ref code earns a share of platform fees when other people's tokens are launched or traded through your link — it's a referral mechanism, separate from the fees a token earns on its own trading."
+            },
+            {
+              "q": "What is Meteora DAMM V2?",
+              "answer": "A graduated liquidity pool providing deeper, more stable trading",
+              "why": "Meteora DAMM V2 is where Bags.fm tokens go after graduation. It's a more sophisticated AMM with concentrated liquidity, tighter spreads, and better trading conditions than the initial bonding curve."
+            },
+            {
+              "q": "If a Bags.fm token never graduates, what happens?",
+              "answer": "It stays on the bonding curve indefinitely",
+              "why": "Not every Bags.fm token graduates. If a token doesn't attract enough buying pressure to fill the bonding curve, it stays there indefinitely. Many tokens fail at this stage — research is critical."
+            },
+            {
+              "q": "Where does a Bags.fm token's own project revenue actually come from?",
+              "answer": "The creator fee — a cut of every trade of that token",
+              "why": "A token's project revenue is the creator fee — roughly 1% of every trade of that token. A partner ref code is a separate thing that earns from OTHER projects routed through it, not the token's own trades. CLKN reinvests 100% of its creator fee back into buying CLKN."
+            }
+          ]
+        },
+        {
+          "id": "memecoins",
+          "title": "Memecoins & Culture",
+          "icon": "🐸",
+          "belt": "EMERITUS",
+          "intro": "Memecoins are the most volatile, most dangerous, and most exciting corner of crypto. They have no utility — their value is entirely driven by community, narrative, and timing. Understanding how they work is how you survive them.",
+          "concepts": [
+            {
+              "term": "Memecoin",
+              "def": "A token with no inherent utility — value is driven purely by community, narrative, and speculation."
+            },
+            {
+              "term": "Narrative",
+              "def": "The story or theme driving a memecoin's momentum. Dog coins, political figures, viral memes."
+            },
+            {
+              "term": "Community",
+              "def": "The single most important factor in a memecoin's success. A strong community creates buying pressure and holds through dips."
+            },
+            {
+              "term": "Pump and Dump",
+              "def": "Coordinated buying to raise price followed by coordinated selling — leaving late buyers holding worthless bags."
+            },
+            {
+              "term": "Degen Trading",
+              "def": "High-risk, high-reward trading strategy focused on early memecoin entries with small position sizes."
+            }
+          ],
+          "questions": [
+            {
+              "q": "What gives a memecoin its value?",
+              "answer": "Community belief, narrative, and speculation",
+              "why": "Memecoins have no fundamental value — no product, no revenue, no utility. Their value is entirely narrative-driven. The meme, the community, and the timing determine everything."
+            },
+            {
+              "q": "What is the most important factor in a memecoin's long-term survival?",
+              "answer": "A strong, engaged community that believes in the narrative",
+              "why": "Memecoins that survive are held together by community. When the community believes and holds through dips, the token has a chance. When community leaves, it's over — no fundamentals to fall back on."
+            },
+            {
+              "q": "What is a pump and dump scheme?",
+              "answer": "Coordinated buying to inflate price, then coordinated selling",
+              "why": "Pump and dump groups coordinate buying to create artificial price spikes, then exit simultaneously. Late buyers — usually retail — are left holding worthless tokens. This is illegal in traditional markets but common in crypto."
+            },
+            {
+              "q": "What does degen trading mean?",
+              "answer": "High-risk early entries into speculative tokens with small position sizes",
+              "why": "Degen (degenerate) trading is high-risk speculation — usually early entries into memecoins or new launches. Experienced degens use small position sizes, take profits early, and accept that most bets will fail."
+            },
+            {
+              "q": "You find a brand new memecoin at a $10K market cap with a funny meme. What is the correct risk management approach?",
+              "answer": "Only invest what you can completely afford to lose — treat it like a lottery ticket",
+              "why": "Ultra small cap memecoins are essentially lottery tickets. The upside can be enormous but the probability of failure is very high. Only ever invest what you can afford to completely lose — because you probably will."
+            },
+            {
+              "q": "What is narrative in memecoin culture?",
+              "answer": "The story or theme driving community excitement and buying pressure",
+              "why": "Narrative is everything in memecoin culture. 'Dog with hat', political figures, AI themes, animal coins — when a narrative captures the zeitgeist, it drives viral spread and buying pressure. Without narrative, there's nothing."
+            },
+            {
+              "q": "CLKN is a memecoin built on Bags.fm. What makes it different from a typical memecoin?",
+              "answer": "It has a real education platform behind it",
+              "why": "CLKN pairs the token with an actual utility layer — the School of Crypto Hard Knocks — and reinvests its creator fee back into the token. That doesn't make it safe: like any memecoin it can still go to zero. But a token doing real work is rarer than one that isn't."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "basics",
+      "title": "Crypto 101 (Absolute Basics)",
+      "icon": "🐣",
+      "blurb": "Brand new? Start here — wallets, tokens, on-ramps, what a DEX even is, staying safe.",
+      "lessons": [
+        {
+          "id": "wallet",
+          "title": "What is a Wallet?",
+          "icon": "🥚",
+          "intro": "In crypto, a wallet doesn't hold money — it holds KEYS. Your wallet is basically a password manager for your crypto. There are two keys you need to know about.",
+          "concepts": [
+            {
+              "term": "Public Key",
+              "def": "Like your home address — you can share it with anyone so they can send you crypto. It's safe to show."
+            },
+            {
+              "term": "Private Key / Seed Phrase",
+              "def": "Like the key to your front door. NEVER share this with anyone. Whoever has it owns your crypto."
+            },
+            {
+              "term": "Non-Custodial Wallet",
+              "def": "A wallet where YOU control the keys. Examples: Phantom, MetaMask. You are your own bank."
+            },
+            {
+              "term": "Custodial Wallet",
+              "def": "A wallet controlled by a company (like Coinbase). They hold your keys — if they go down, you could lose access."
+            }
+          ],
+          "content": "",
+          "questions": [
+            {
+              "q": "Your public key is like your home address — safe to share so people can send you crypto.",
+              "answer": "True",
+              "why": "Correct! Your public key is safe to share. It's how others send crypto to you. Never confuse it with your private key or seed phrase."
+            },
+            {
+              "q": "You should share your seed phrase with customer support if they ask for it.",
+              "answer": "False",
+              "why": "NEVER share your seed phrase with anyone — ever. Legitimate support teams will never ask for it. Anyone asking is trying to steal your crypto."
+            },
+            {
+              "q": "With a non-custodial wallet, who controls your crypto?",
+              "answer": "You do",
+              "why": "Non-custodial means YOU hold the keys. No company can freeze or take your funds. With great power comes great responsibility — back up your seed phrase!"
+            }
+          ]
+        },
+        {
+          "id": "tokens",
+          "title": "What is a Token?",
+          "icon": "🐣",
+          "intro": "You've probably heard 'coin' and 'token' used interchangeably — but they're different. Understanding this helps you know what you're actually buying.",
+          "concepts": [
+            {
+              "term": "Coin",
+              "def": "A native cryptocurrency that powers its own blockchain. Examples: SOL (Solana), ETH (Ethereum), BTC (Bitcoin)."
+            },
+            {
+              "term": "Token",
+              "def": "A crypto asset built ON TOP of an existing blockchain. CLKN is a token built on Solana. Tokens don't have their own blockchain."
+            },
+            {
+              "term": "Mint Address",
+              "def": "The unique ID of a token on Solana — like a social security number for the token. Used to identify the exact token you're buying."
+            },
+            {
+              "term": "Supply",
+              "def": "The total number of tokens that exist. A fixed supply means no more can ever be created."
+            }
+          ],
+          "content": "",
+          "questions": [
+            {
+              "q": "SOL is a token built on the Ethereum blockchain.",
+              "answer": "False",
+              "why": "SOL is actually the native coin of the Solana blockchain — not Ethereum. Tokens are built ON a blockchain, while coins ARE the blockchain's currency."
+            },
+            {
+              "q": "What is CLKN?",
+              "answer": "A token built on Solana",
+              "why": "CLKN is a Solana token — it lives on the Solana blockchain and uses SOL for transactions. It doesn't have its own blockchain."
+            },
+            {
+              "q": "Why does a token's mint address matter?",
+              "answer": "It uniquely identifies the exact token so you don't buy a fake copy",
+              "why": "Scammers create fake tokens with similar names. The mint address is the only guaranteed way to confirm you have the right token. Always verify!"
+            }
+          ]
+        },
+        {
+          "id": "ramps",
+          "title": "On-Ramps & Off-Ramps",
+          "icon": "🏦",
+          "intro": "Before you can do anything in crypto you have to get some — and one day you'll want to cash some out. The bridge between regular money and crypto is called a ramp. Knowing how ramps work is genuinely step one.",
+          "concepts": [
+            {
+              "term": "On-Ramp",
+              "def": "Any service that turns government money — dollars, euros — into crypto. It's your way in: connect a bank account or card, buy crypto, and it lands in a wallet."
+            },
+            {
+              "term": "Off-Ramp",
+              "def": "The reverse trip — turning crypto back into regular money in your bank. You sell crypto for cash and withdraw it. Always understand your exit before you need it."
+            },
+            {
+              "term": "Centralized Exchange (CEX)",
+              "def": "The most common ramp. Companies like Coinbase, Kraken, and Binance let you buy crypto with a bank transfer or card — then you can withdraw it to your own wallet. A CEX works as both an on-ramp and an off-ramp."
+            },
+            {
+              "term": "KYC & Fees",
+              "def": "By law, ramps must verify your identity — KYC, 'Know Your Customer' — so expect to upload a photo ID. Ramps also charge fees; instant card-buy services like MoonPay are fast but cost more. Always check the fee before you confirm."
+            }
+          ],
+          "content": "",
+          "questions": [
+            {
+              "q": "An on-ramp is any service that turns regular money, like dollars, into crypto.",
+              "answer": "True",
+              "why": "Correct. An on-ramp is your entry point — connect a bank or card, buy crypto, and it arrives in your wallet. The off-ramp is the same trip in reverse, back to cash."
+            },
+            {
+              "q": "You can buy crypto on a major exchange like Coinbase without ever verifying your identity.",
+              "answer": "False",
+              "why": "False. By law, on-ramps must do KYC — Know Your Customer — so expect to upload a photo ID. Any 'exchange' that skips identity checks entirely is a red flag."
+            },
+            {
+              "q": "Why should you understand off-ramps before you put any money in?",
+              "answer": "So you know exactly how to cash out — the fees, the wait, the steps — before you ever need to",
+              "why": "Always know your exit. Understanding how to convert crypto back to cash before you need to means no panic and no nasty surprises when it's time to take profit."
+            }
+          ]
+        },
+        {
+          "id": "dex",
+          "title": "What is a DEX?",
+          "icon": "🌱",
+          "intro": "A DEX (Decentralized Exchange) lets you trade crypto directly from your wallet — no account, no ID, no bank. Think of it as a vending machine instead of a cashier.",
+          "concepts": [
+            {
+              "term": "DEX",
+              "def": "Decentralized Exchange. A platform where you trade directly from your wallet using smart contracts. No company controls it."
+            },
+            {
+              "term": "CEX",
+              "def": "Centralized Exchange. A company (like Coinbase or Binance) that holds your crypto and processes trades. Requires an account and ID."
+            },
+            {
+              "term": "Smart Contract",
+              "def": "A self-executing program on the blockchain. When you trade on a DEX, a smart contract handles the swap automatically — no middleman."
+            },
+            {
+              "term": "Permissionless",
+              "def": "Anyone can use a DEX without approval. No application, no waiting, no ID required. Just connect your wallet and trade."
+            },
+            {
+              "term": "Network Fee (Gas)",
+              "def": "Every action on a blockchain — a trade, a transfer — costs a small fee paid in that chain's native coin (SOL on Solana, ETH on Ethereum). It's called gas. Always keep a little of the native coin in your wallet to cover it."
+            }
+          ],
+          "content": "",
+          "questions": [
+            {
+              "q": "To use a DEX you need to create an account and verify your identity.",
+              "answer": "False",
+              "why": "DEXs are permissionless — just connect your wallet and trade. No signup, no ID, no approval needed. That's the beauty of DeFi."
+            },
+            {
+              "q": "On a DEX, who processes your trade?",
+              "answer": "A smart contract on the blockchain",
+              "why": "Smart contracts automatically execute trades based on code. No human is involved — which means no one can stop your trade or freeze your funds."
+            },
+            {
+              "q": "Which is safer from company bankruptcy?",
+              "answer": "DEX (Decentralized Exchange)",
+              "why": "FTX, Celsius, and others showed the risk of CEXs — when they fail, user funds disappear. A DEX can't go bankrupt because no company holds your funds."
+            }
+          ]
+        },
+        {
+          "id": "liquidity",
+          "title": "What is Liquidity?",
+          "icon": "💧",
+          "intro": "Liquidity is basically how easy it is to buy or sell something without moving the price. More liquidity = smoother trades. Less liquidity = bigger price swings.",
+          "concepts": [
+            {
+              "term": "Liquidity",
+              "def": "The amount of crypto available for trading. High liquidity = easy to buy/sell at stable prices. Low liquidity = prices jump around a lot."
+            },
+            {
+              "term": "Liquidity Pool",
+              "def": "A pot of two tokens locked in a smart contract that traders swap against. LP providers deposit tokens and earn fees from every trade."
+            },
+            {
+              "term": "Slippage",
+              "def": "When the price you actually get differs from the price you saw — because the market moved between you submitting the trade and it executing. Worse on low-liquidity tokens."
+            },
+            {
+              "term": "Price Impact",
+              "def": "How much YOUR trade moves the price. A big buy in a small pool pushes the price up significantly."
+            }
+          ],
+          "content": "",
+          "questions": [
+            {
+              "q": "A token with $500 in liquidity is easier to trade without price impact than one with $500,000.",
+              "answer": "False",
+              "why": "More liquidity means your trade is a smaller percentage of the pool, causing less price impact. Low liquidity tokens can move dramatically on even small trades."
+            },
+            {
+              "q": "What is slippage?",
+              "answer": "The difference between expected price and actual price you receive",
+              "why": "Slippage happens because prices change between when you submit a trade and when it executes. High slippage tolerance protects against failed transactions but exposes you to worse prices."
+            },
+            {
+              "q": "You want to buy a token. Which pool is safer to trade in?",
+              "answer": "Pool with $100,000 liquidity",
+              "why": "More liquidity means less price impact on your trade. A $1,000 pool could move dramatically on a $100 buy. Always check liquidity before trading."
+            }
+          ]
+        },
+        {
+          "id": "marketcap",
+          "title": "What is Market Cap?",
+          "icon": "📈",
+          "intro": "Price alone doesn't tell you how big a project is. A token at $0.000001 could be worth more overall than one at $100. Market cap is the real measure.",
+          "concepts": [
+            {
+              "term": "Market Cap",
+              "def": "Price × Circulating Supply. This is the true size of a project. A $0.00001 token with 1 trillion supply has a $10M market cap."
+            },
+            {
+              "term": "Circulating Supply",
+              "def": "The number of tokens actually available to trade right now. Locked or unvested tokens don't count."
+            },
+            {
+              "term": "FDV (Fully Diluted Valuation)",
+              "def": "Price × Total Supply (including tokens not yet released). Shows what the market cap would be if all tokens existed today."
+            },
+            {
+              "term": "Price vs Value",
+              "def": "A cheap price doesn't mean a good deal. Always check market cap. A $0.001 token with $1B market cap has less room to grow than a $10 token with $1M market cap."
+            }
+          ],
+          "content": "",
+          "questions": [
+            {
+              "q": "Token A costs $100 and Token B costs $0.001. Token A is definitely the bigger project.",
+              "answer": "False",
+              "why": "Price means nothing without supply context. Token B could have a trillion tokens in supply making it worth far more overall. Always check market cap, not just price."
+            },
+            {
+              "q": "What is market cap?",
+              "answer": "Price multiplied by circulating supply",
+              "why": "Market cap = price × circulating supply. It's the most important metric for comparing project sizes. Two tokens at the same price can have wildly different market caps."
+            },
+            {
+              "q": "A token has a $500K market cap. What does that mean?",
+              "answer": "The total value of all circulating tokens is $500K",
+              "why": "Market cap represents the current total value of all tokens in circulation at today's price. It's not money raised — it's market valuation."
+            }
+          ]
+        },
+        {
+          "id": "safety",
+          "title": "Staying Safe in Crypto",
+          "icon": "🔑",
+          "intro": "Crypto has no customer service hotline. No chargebacks. No refunds. Once your crypto is gone, it's gone. These basics will protect you from the most common traps.",
+          "concepts": [
+            {
+              "term": "Rug Pull",
+              "def": "When developers abandon a project and take all the liquidity, leaving holders with worthless tokens. Research the team and check if liquidity is locked."
+            },
+            {
+              "term": "Phishing",
+              "def": "Fake websites or DMs designed to steal your seed phrase or private key. Always verify URLs. Never click links from strangers."
+            },
+            {
+              "term": "DYOR",
+              "def": "Do Your Own Research. Never invest based on hype or someone else's advice alone. Read, verify, think critically."
+            },
+            {
+              "term": "Mint Authority",
+              "def": "If a token's mint authority isn't revoked, the creator can print unlimited new tokens and crash the price. Check this before buying."
+            }
+          ],
+          "content": "",
+          "questions": [
+            {
+              "q": "Someone DMs you on Telegram offering to help recover your wallet — you should share your seed phrase with them.",
+              "answer": "False",
+              "why": "NEVER. This is the most common scam in crypto. No legitimate person will ever need your seed phrase. Anyone asking for it is trying to steal everything in your wallet."
+            },
+            {
+              "q": "Locked liquidity on a token means:",
+              "answer": "Devs can't pull the trading liquidity for a set time",
+              "why": "Locked liquidity is a major trust signal. It means devs physically cannot drain the pool during the lock period. Always check if liquidity is locked before buying."
+            },
+            {
+              "q": "What does DYOR mean?",
+              "answer": "Do Your Own Research",
+              "why": "Do Your Own Research. In crypto, you are your own bank and your own analyst. Never rely solely on influencers, Telegram groups, or random advice. Verify everything yourself."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "lp",
+      "title": "Liquidity & LP Mastery",
+      "icon": "💧",
+      "blurb": "AMMs, impermanent loss, concentrated liquidity, fees & LP earnings — the real money mechanics.",
+      "lessons": [
+        {
+          "id": 1,
+          "title": "What Is Liquidity?",
+          "icon": "💧",
+          "tagline": "The foundation. Everything else builds on this.",
+          "intro": "The foundation. Everything else builds on this.",
+          "sections": [
+            {
+              "heading": "The Basic Concept",
+              "body": "Liquidity is simply how easily an asset can be bought or sold without dramatically changing its price.\n\nThink of it like water. A deep ocean — you can throw a rock in and barely see a ripple. A shallow puddle — that same rock creates waves that hit every edge.\n\nIn crypto, the \"water\" is the money sitting in a trading pool. More water = more liquidity = less price impact when you trade.\n\nHIGH LIQUIDITY POOL:\n• Large trades execute near the quoted price\n• Tight bid/ask spread\n• Price is stable under normal trading volume\n\nLOW LIQUIDITY POOL:\n• Even small trades move the price significantly\n• Wide spread\n• Vulnerable to price manipulation",
+              "quiz": []
+            },
+            {
+              "heading": "Why Liquidity Matters To YOU",
+              "body": "Every time you swap a token you are interacting with a liquidity pool. The depth of that pool determines how good or bad your execution price is.\n\nThis is called SLIPPAGE — the difference between the price you expected and the price you actually got.\n\nEXAMPLE:\nYou want to buy $100 worth of a token.\n• Deep pool ($500K TVL) → slippage costs you only a few cents. You keep essentially all of your value.\n• Shallow pool ($10K TVL) → slippage costs you around $2 — roughly 2%.\n\nThat may not sound like much on $100. But slippage scales fast with trade size: the same shallow pool that costs 2% on a $100 trade can cost a brutal double-digit percentage on a large one. That gap is money leaving your wallet — permanently, before the market even moves.\n\nHard Knocks Rule: ALWAYS check the pool liquidity before you buy. If you cannot find the pool depth, do not trade it.",
+              "quiz": []
+            },
+            {
+              "heading": "Where Does Liquidity Come From?",
+              "body": "In traditional finance, large institutions called market makers provide liquidity. They sit on both sides of the order book and pocket the spread.\n\nIn DeFi, YOU can be the market maker. Anyone can deposit tokens into a liquidity pool and earn fees from every trade that passes through it.\n\nThis is the fundamental promise of DeFi liquidity:\n• Traders get access to markets 24/7\n• Liquidity providers earn passive income from trading fees\n• No middleman takes the spread\n\nThe people depositing tokens into pools are called Liquidity Providers — LPs. Every lesson in this lab is building toward making you a smarter one.",
+              "quiz": []
+            },
+            {
+              "heading": "Liquidity Across Protocols",
+              "body": "The same concept exists on every DEX in crypto. The implementation differs but the fundamentals are identical. Master the concept on one protocol and you can walk into any of them.",
+              "quiz": []
+            },
+            {
+              "heading": "Common Mistakes",
+              "body": "These are the mistakes that cost people real money. Learn them here instead of the hard way.\n\n❌ Trading illiquid tokens without checking pool depth first\n❌ Setting slippage tolerance too high — bots will sandwich your transaction\n❌ Setting slippage tolerance too low — your transactions will fail constantly\n❌ Confusing token market cap with liquidity depth — they are not the same thing\n❌ Assuming a token with a high price has deep liquidity — price and depth are independent\n❌ Buying into a pool right after a large buy moved the price — you are the exit liquidity",
+              "quiz": []
+            }
+          ],
+          "cluckVerdict": "Liquidity is the foundation. Every single lesson in this lab builds on what you just learned. If you skipped something, go back. The LP Lab has no shortcuts and no sympathy for lazy students."
+        },
+        {
+          "id": 2,
+          "title": "How AMMs Work",
+          "icon": "⚙️",
+          "tagline": "Every swap you have ever made went through one of these.",
+          "intro": "Every swap you have ever made went through one of these.",
+          "sections": [
+            {
+              "heading": "What Is an AMM?",
+              "body": "An Automated Market Maker is a smart contract that holds two tokens in a pool and automatically sets the price between them based on their ratio. There is no order book. There are no buyers and sellers being matched. Just math.\n\nTRADITIONAL EXCHANGE (Order Book):\n• Buyers post bids — prices they will pay\n• Sellers post asks — prices they will accept\n• A trade happens when a bid meets an ask\n• Requires constant participation from market makers\n\nAMM (Liquidity Pool):\n• Two tokens sit in a pool — for example SOL and CLKN\n• The ratio between them determines the price\n• Anyone can swap against the pool at any time\n• Price adjusts automatically with every trade\n\nThe AMM never sleeps. It never runs out of quotes. It never needs a counterparty. It is just math running on a blockchain 24 hours a day.",
+              "quiz": []
+            },
+            {
+              "heading": "The x*y=k Formula",
+              "body": "The most common AMM formula is the constant product formula. It looks like this:\n\nx × y = k\n\nWhere:\n• x = the amount of Token A in the pool\n• y = the amount of Token B in the pool\n• k = a constant — it never changes\n\nEXAMPLE:\nPool has 1,000 SOL and 100,000,000 CLKN\nk = 1,000 × 100,000,000 = 100,000,000,000\n\nYou want to buy some SOL by selling CLKN.\nYou add 1,000,000 CLKN to the pool.\nNew y = 101,000,000 CLKN\n\nTo keep k constant:\nNew x = k / new y = 100,000,000,000 / 101,000,000 = 990.099 SOL\n\nYou added 1,000,000 CLKN and received 1,000 - 990.099 = 9.9 SOL\n\nThe pool always maintains the constant product. This is why large trades relative to pool size move the price significantly — adding a lot to one side requires removing a lot from the other side to keep k the same.",
+              "quiz": []
+            },
+            {
+              "heading": "How Price Moves",
+              "body": "The price in an AMM is simply the ratio of the two tokens.\n\nPrice of SOL in CLKN = CLKN in pool / SOL in pool\n\nSTARTING STATE:\nPool: 1,000 SOL / 100,000,000 CLKN\nPrice: 100,000 CLKN per SOL\n\nAFTER SOMEONE BUYS SOL (adds CLKN, removes SOL):\nPool: 990.099 SOL / 101,000,000 CLKN\nNew price: 102,010 CLKN per SOL\n\nThe price went up because there is now less SOL relative to CLKN in the pool. Every buy pushes price up. Every sell pushes price down.\n\nThis is why AMMs are called self-balancing — as the price in the pool drifts from the market price, arbitrageurs step in to buy the cheaper asset and sell the more expensive one, bringing the pool back into alignment. Arbitrage is what keeps AMM prices accurate.",
+              "quiz": []
+            },
+            {
+              "heading": "Price Impact vs Slippage",
+              "body": "These two terms are related but they are not the same thing. Confusing them costs people money.\n\nPRICE IMPACT:\nThe change in price caused by your specific trade. It is deterministic — based purely on your trade size relative to the pool size. You can calculate it exactly before trading.\n\nLarge trade in small pool = high price impact\nSmall trade in large pool = low price impact\n\nSLIPPAGE:\nThe difference between the price when you submitted the transaction and the price when it actually executed. Caused by other trades happening between submission and execution.\n\nYou set a slippage tolerance — the maximum you are willing to accept. If price moves more than your tolerance before your trade executes, the transaction fails.\n\nTOO HIGH slippage tolerance: Your trade always goes through but sandwich bots exploit the gap to extract value from you.\nTOO LOW slippage tolerance: Your trades fail constantly during volatile markets.\n\nFINDING THE RIGHT TOLERANCE:\n• Stable pairs and deep pools: 0.1-0.5%\n• Normal pairs with good liquidity: 0.5-1%\n• Volatile or illiquid tokens: 1-3%\n• Never set above 5% unless you understand exactly what you are doing",
+              "quiz": []
+            },
+            {
+              "heading": "Common Mistakes",
+              "body": "❌ Not checking price impact before a large trade — open DexScreener first\n❌ Setting slippage too high on illiquid tokens — sandwich bots are watching\n❌ Assuming the quoted price is what you will get — always check the minimum received\n❌ Trading the same token in multiple transactions without checking pool state between them\n❌ Ignoring the \"minimum received\" field — this is your actual worst-case execution\n❌ Thinking failed transactions mean no cost — you still pay the gas fee on failed transactions on EVM chains (not Solana)",
+              "quiz": []
+            }
+          ],
+          "cluckVerdict": "x times y equals k. Four characters. The foundation of hundreds of billions of dollars of DeFi volume. Now you know what actually happens when you hit swap."
+        },
+        {
+          "id": 3,
+          "title": "Impermanent Loss",
+          "icon": "📉",
+          "tagline": "The #1 risk every LP must understand before deploying capital.",
+          "intro": "The #1 risk every LP must understand before deploying capital.",
+          "sections": [
+            {
+              "heading": "What Is Impermanent Loss?",
+              "body": "Impermanent loss is the difference in value between holding two tokens in your wallet versus providing them as liquidity in a pool.\n\nWhen token prices change relative to each other, the AMM automatically rebalances — arbitrageurs buy the appreciating token from your pool until the ratio reflects the new market price. The result: you end up holding more of the token that went down and less of the one that went up.\n\nIt is called impermanent because if prices return to your entry ratio, the loss disappears entirely. It becomes permanent the moment you withdraw at a different price ratio than you entered.\n\nSIMPLE EXAMPLE:\nYou deposit $1,000 into a SOL/USDC pool: $500 SOL + $500 USDC.\nSOL doubles in price. The pool rebalances automatically.\nIf you had just held: $1,000 SOL + $500 USDC = $1,500\nAs an LP after rebalancing: approximately $1,414\n\nImpermanent loss = $86 or 5.7%\n\nThe pool did not lose your money. The rebalancing mechanic redirected value away from you and toward the arbitrageurs who corrected the price.",
+              "quiz": []
+            },
+            {
+              "heading": "The IL Table — Know These Numbers Cold",
+              "body": "The relationship between price change and IL follows a predictable curve. Memorize the key data points.\n\nPRICE CHANGE → IMPERMANENT LOSS:\n1.25x price change → 0.6% IL\n1.5x price change → 2.0% IL\n2x price change → 5.7% IL\n3x price change → 13.4% IL\n4x price change → 20.0% IL\n5x price change → 25.5% IL\n10x price change → 42.5% IL\n\nThis applies whether the price goes up OR down by that multiple. A 2x move in either direction costs you the same 5.7%.\n\nTHE CRITICAL INSIGHT:\nFor low-volatility pairs the IL is manageable. For meme coins and volatile assets it is brutal. A 10x move — common in crypto — means you lose 42.5% of your position value compared to simply holding. Your fee income would need to be exceptional to overcome that.",
+              "quiz": []
+            },
+            {
+              "heading": "When IL Matters and When It Does Not",
+              "body": "IL is not always a problem. Context determines whether it is significant or irrelevant.\n\nIL MATTERS WHEN:\n• Tokens in the pair are uncorrelated — they move independently\n• One token experiences a large price move while the other stays flat\n• Fee income is low relative to the price divergence\n• You are LPing meme coins or highly volatile assets\n\nIL DOES NOT MATTER WHEN:\n• Both tokens are highly correlated — they move together (BTC/ETH, SOL/jitoSOL)\n• You are in a stablecoin pair — USDC/USDT has near-zero IL\n• Fee income significantly exceeds the IL rate\n• You believe prices will return to your entry ratio before you withdraw\n• You are a long-term holder who would have held both tokens anyway\n\nTHE CORRELATED PAIR INSIGHT:\nIf you LP SOL/mSOL — both tokens track SOL price closely. When SOL goes up, both go up together. IL is minimal. This is why stablecoin pairs and liquid staking pairs are popular for conservative LPs.",
+              "quiz": []
+            },
+            {
+              "heading": "IL vs Fee Income — The Real Calculation",
+              "body": "The only number that actually matters is net return = Fee APR minus IL rate.\n\nA pool showing 80% APR is meaningless if you are experiencing 70% annualized IL from price divergence. Your real return is 10%.\n\nHOW TO EVALUATE:\nStep 1: Find the pool's 30-day fee APR on DexScreener or the protocol dashboard\nStep 2: Estimate your expected IL based on the token pair's historical volatility\nStep 3: Subtract estimated IL from fee APR\nStep 4: Compare that number to simply holding the tokens\n\nIf net return after IL is higher than holding — LP position makes sense.\nIf net return after IL is lower than holding — you are better off just holding.\n\nCLUCK'S FRAMEWORK: Never enter an LP position without running this calculation. The number of people who think they are earning yield while actually underperforming a simple hold is staggering.",
+              "quiz": []
+            },
+            {
+              "heading": "Common Mistakes",
+              "body": "❌ Providing liquidity to meme coin pairs without calculating expected IL\n❌ Celebrating fee APR without subtracting IL — the gross number is meaningless\n❌ Thinking IL only applies when prices go up — a 2x drop costs the same as a 2x rise\n❌ Withdrawing immediately after a price move locks in IL permanently — sometimes waiting is correct\n❌ Assuming stablecoin pairs have zero IL — they have very low IL but depeg events can cause real losses\n❌ Not tracking your entry price ratio — you cannot calculate IL without knowing where you started",
+              "quiz": []
+            }
+          ],
+          "cluckVerdict": "IL is not a bug. It is the cost of being a market maker. Know the cost before you accept the job. Run the numbers every single time."
+        },
+        {
+          "id": 4,
+          "title": "LP Fees & Earnings",
+          "icon": "💰",
+          "tagline": "The upside of being an LP. How fees work, what they are worth, and when they win.",
+          "intro": "The upside of being an LP. How fees work, what they are worth, and when they win.",
+          "sections": [
+            {
+              "heading": "How LP Fees Work",
+              "body": "Every swap through a liquidity pool pays a fee. That fee is distributed to liquidity providers proportionally based on their share of the pool.\n\nTHE MECHANICS:\n• Trader executes a $1,000 swap in a 0.25% fee pool\n• Fee generated = $2.50\n• That $2.50 is added to the pool reserves\n• Every LP's position value increases by their proportional share of $2.50\n\nYOUR SHARE OF FEES:\nIf you own 1% of the pool and the pool generates $10,000 in fees today, you earned $100.\nIf you own 0.1% of the pool, you earned $10.\n\nFee income = Your LP % × Total pool fees generated\n\nThe more volume a pool generates, the more fees LPs collect. This is why volume is more important than TVL when evaluating an LP opportunity.",
+              "quiz": []
+            },
+            {
+              "heading": "Fee Tiers Across Protocols",
+              "body": "Every protocol offers different fee tiers for different types of pairs. Choosing the right fee tier matters.\n\nRAYDIUM:\n• Standard AMM pools: 0.25% fixed\n• CLMM concentrated pools: 0.01% / 0.05% / 0.25% / 1%\n• Use 0.01% for stable pairs, 0.25% for standard, 1% for exotic/volatile\n\nORCA WHIRLPOOLS:\n• 0.01% / 0.05% / 0.3% / 1%\n• Similar logic — stable pairs use low tiers, volatile pairs use high tiers\n\nMETEORA:\n• DAMM: Dynamic fees that adjust automatically to market volatility\n• DLMM: Variable fees set per bin — higher fee bins capture more during volatility\n• Dynamic fees are one of Meteora's strongest features for LPs\n\nUNISWAP V3 (Ethereum):\n• 0.05% / 0.3% / 1%\n• The original tiered fee system that others copied\n\nCHOOSING THE RIGHT TIER:\nStable pairs (USDC/USDT): 0.01-0.05% — low fee, high volume\nBlue chip pairs (SOL/USDC): 0.05-0.25% — balanced\nVolatile/exotic pairs: 0.5-1% — compensates for higher IL risk",
+              "quiz": []
+            },
+            {
+              "heading": "The Key Metric — Volume/TVL Ratio",
+              "body": "Fee APR is not what the protocol shows you. It is what you calculate yourself.\n\nTHE FORMULA:\nFee APR = (Daily Fees / TVL) × 365 × 100\n\nEXAMPLE:\nPool TVL: $500,000\nDaily fees generated: $1,500\nFee APR = ($1,500 / $500,000) × 365 × 100 = 109.5% APR\n\nThis is the number that matters. Not the headline APR that includes token emissions.\n\nWHAT TO LOOK FOR:\n• Daily fees / TVL > 0.1% is excellent\n• Daily fees / TVL of 0.03-0.1% is decent\n• Daily fees / TVL below 0.01% is probably not worth the IL risk\n\nIMPORTANT: Check 7-day and 30-day averages. A single high-volume day can make a pool look incredible on DexScreener. Consistency matters more than spikes.\n\nWHERE TO FIND THIS DATA:\n• DexScreener — shows 24H fees and volume\n• Raydium analytics dashboard\n• Orca pool analytics\n• Meteora analytics — shows fee APR directly",
+              "quiz": []
+            },
+            {
+              "heading": "When Fees Beat IL",
+              "body": "This is the core decision every LP must make. Do fees outweigh the IL risk for this specific pair?\n\nFEES BEAT IL WHEN:\n• Volume is consistently high relative to TVL — high turnover pool\n• The pair is correlated — prices move together minimizing IL\n• You are in a stablecoin pair — near-zero IL means almost all fees are profit\n• Meteora dynamic fees spike during volatility — fees increase exactly when IL risk increases\n\nFEES LOSE TO IL WHEN:\n• One token experiences a major price move — IL accelerates faster than fee income\n• Volume dries up during low activity periods — no fees, but IL remains\n• You are in a very concentrated range that frequently goes out of range — earning nothing while price moves away\n\nTHE SWEET SPOT:\nHigh volume, correlated pair, appropriate fee tier. Stablecoin pools with high volume are the most consistent performers. SOL/USDC in a tight range during high activity periods can generate exceptional returns.\n\nCLUCK'S REALITY CHECK: Most retail LPs chase high APR numbers without doing the volume/TVL math. They end up in low-volume pools with high IL and wonder why they underperformed holding.",
+              "quiz": []
+            },
+            {
+              "heading": "Common Mistakes",
+              "body": "❌ Trusting headline APR that includes token emission rewards — those emissions dilute holders and are not sustainable\n❌ Not checking if fee APR is calculated from real fees or subsidized rewards\n❌ Entering a pool during a volume spike and assuming that volume is permanent\n❌ Ignoring fee tier selection — wrong fee tier means competing LPs at the right tier capture most of the volume\n❌ Not compounding fees — reinvesting fee income back into the pool dramatically improves long-term returns\n❌ Comparing fee APR across different pool types without accounting for IL differences",
+              "quiz": []
+            }
+          ],
+          "cluckVerdict": "Fees are your income. IL is your expense. Run the business properly — know both numbers before you deploy a single dollar."
+        },
+        {
+          "id": 5,
+          "title": "Concentrated Liquidity",
+          "icon": "🎯",
+          "tagline": "More fees, less capital, more work. Welcome to the advanced class.",
+          "intro": "More fees, less capital, more work. Welcome to the advanced class.",
+          "sections": [
+            {
+              "heading": "The Problem With Full Range Liquidity",
+              "body": "In a traditional AMM like Uniswap v2 or Raydium standard pools, your liquidity is spread across every possible price from zero to infinity.\n\nTHE PROBLEM:\nTokens almost never trade at extreme prices. If SOL is at $150 today, essentially zero volume happens at $1 or $10,000. But your capital is deployed across all those prices — earning nothing.\n\nTHE REALITY:\nIn a full-range pool for SOL/USDC, the large majority of your capital sits idle at price points that almost never see trading activity. Only the slice near the current price is actually working — earning fees from the real trading range.\n\nYou deploy the full $10,000, but only a small fraction of it earns anything. That is terrible capital efficiency.\n\nThis is exactly the problem concentrated liquidity was designed to solve.",
+              "quiz": []
+            },
+            {
+              "heading": "How Concentrated Liquidity Works",
+              "body": "Concentrated liquidity lets you focus your entire capital within a specific price range. Only that range earns fees — but it earns them at dramatically higher efficiency.\n\nTHE CONCEPT:\nInstead of spreading $10,000 across all prices, you deploy it between $140 and $160 for SOL trading at $150.\n\nWhen price is within your range:\n• Your capital provides deep liquidity\n• You earn a much larger share of fees from volume in that range\n• Same fee share as a full-range LP with 10-100x more capital\n\nWhen price moves outside your range:\n• Your position earns zero fees\n• You hold 100% of one token\n• Position behaves like a limit order\n\nCAPITAL EFFICIENCY EXAMPLE:\nFull range LP with $100,000 — earns same fees as concentrated LP with $5,000 in the right range.\nConcentrated LP deploys 20x less capital for the same fee income. Or deploys the same capital for 20x more fee income.",
+              "quiz": []
+            },
+            {
+              "heading": "Ticks and Bins — How Ranges Are Defined",
+              "body": "Different protocols implement concentrated liquidity differently. Understanding the mechanics helps you set ranges effectively.\n\nTICK-BASED (Uniswap v3, Raydium CLMM, Orca Whirlpools):\n• Price range divided into discrete ticks\n• Each tick represents a 0.01% price increment\n• You set a lower tick and upper tick to define your range\n• Liquidity is uniform across your entire range\n• Clean and predictable — easy to understand your exposure\n\nBIN-BASED (Meteora DLMM):\n• Price range divided into discrete bins\n• Only the active bin (current price) earns fees\n• Only the active bin earns fees — adjacent bins sit idle until price moves into them\n• More granular control over fee capture\n• Can set different fee amounts per bin\n• More complex but more powerful for active managers\n\nCHOOSING YOUR APPROACH:\n• New to concentrated LP: Start with tick-based (Raydium CLMM or Orca)\n• Want more control: Meteora DLMM with bin-based positioning\n• Passive management: Wider ranges on tick-based systems\n• Active management: Narrow bins on DLMM",
+              "quiz": []
+            },
+            {
+              "heading": "Choosing Your Range",
+              "body": "Range selection is the most important decision in concentrated LP. Too narrow and you go out of range constantly. Too wide and you lose the capital efficiency advantage.\n\nCONSERVATIVE (Wide Range):\n• Set range at 50-200% around current price\n• Rarely goes out of range\n• Lower fee APR — capital spread across wide range\n• Good for beginners and passive managers\n• Works well for volatile assets you want to LP\n\nMODERATE (Standard Range):\n• Set range at 20-50% around current price\n• Reasonable balance of APR and time in range\n• Most common approach for active LPs\n• Requires checking and rebalancing monthly\n\nAGGRESSIVE (Narrow Range):\n• Set range at 5-10% around current price\n• Highest fee APR when active\n• Goes out of range frequently\n• Requires daily monitoring and rebalancing\n• Only for disciplined active managers\n\nTHE VOLATILITY RULE:\nMatch your range width to the asset's volatility. A stablecoin can use a 0.1% range. SOL needs at least 20-30%. A meme coin needs 50%+ or avoid concentrated LP entirely.",
+              "quiz": []
+            },
+            {
+              "heading": "The Hidden Cost — Concentrated Liquidity Amplifies IL",
+              "body": "Most concentrated-liquidity tutorials sell the upside and skip this: a narrow range does not just earn more fees — it also makes impermanent loss WORSE.\n\nLesson 3 taught full-range IL: a 2x move costs about 5.7%. Concentrate that same capital into a thin band and the identical price move rebalances you far more aggressively — all your capital is packed where the trading happens, so it gets converted from one token to the other much faster. By the time price reaches the edge of your range you are fully converted, and the loss on that conversion can be several times steeper than the full-range number.\n\nTHE TRADE-OFF IN ONE SENTENCE:\nA tighter range earns more fees per dollar while in range — and inflicts more IL per dollar as price moves through it. Concentrating does not let you escape IL. It amplifies both sides.\n\nWHAT THIS MEANS FOR YOU:\n• A narrow range only wins if fees genuinely outrun the amplified IL — run the numbers, never assume\n• The tighter you go, the more the position behaves like an aggressive limit order, not passive yield\n• On a volatile asset, a narrow range can lose to simply holding even while showing a high fee APR\n• \"More fees\" is the headline. \"More IL\" is the fine print. Read both.\n\nThis is why Lesson 3 is the foundation of the whole lab. Concentrated liquidity does not replace IL math — it multiplies it.",
+              "quiz": []
+            },
+            {
+              "heading": "Common Mistakes",
+              "body": "❌ Setting a range and forgetting about it — concentrated positions require monitoring\n❌ Using narrow ranges on volatile assets — you will spend more on rebalancing fees than you earn\n❌ Not understanding that out-of-range positions earn zero fees — your capital is idle and exposed\n❌ Ignoring the rebalancing cost — every time you reset a range you pay swap fees and gas\n❌ Choosing the wrong fee tier for your range — narrow range + low fee tier = you earn very little per trade\n❌ Not tracking your actual performance vs simply holding — concentrated LP can underperform a hold if managed poorly",
+              "quiz": []
+            }
+          ],
+          "cluckVerdict": "Concentrated liquidity is not for everyone. But if you understand it and manage it properly it is the most powerful tool available to retail LPs. You now understand it. Whether you manage it properly is up to you."
+        },
+        {
+          "id": 6,
+          "title": "Price Bins & Ticks",
+          "icon": "📊",
+          "tagline": "The mechanics underneath concentrated liquidity. Know what is actually happening inside your range.",
+          "intro": "The mechanics underneath concentrated liquidity. Know what is actually happening inside your range.",
+          "sections": [
+            {
+              "heading": "What Are Ticks?",
+              "body": "Ticks are the discrete price points that divide price space in tick-based systems like Uniswap v3, Raydium CLMM, and Orca Whirlpools.\n\nEach tick represents a 0.01% price increment — specifically, each tick multiplies the price by 1.0001.\n\nTick 0 = price 1.0000\nTick 100 = approximately 1% above tick 0\nTick 1000 = approximately 10.5% above tick 0\n\nTICK SPACING per fee tier:\n• 0.01% fee — tick spacing 1 (finest granularity)\n• 0.05% fee — tick spacing 10\n• 0.25% fee — tick spacing 50\n• 1% fee — tick spacing 200\n\nLower fee tiers allow finer price ranges. When you set a range, you define a lower and upper tick. Your liquidity distributes uniformly across every tick in between — all earning fees proportionally when price passes through them.",
+              "quiz": []
+            },
+            {
+              "heading": "What Are Bins?",
+              "body": "Bins are Meteora DLMM's approach to concentrated liquidity. Instead of uniform liquidity across a range, bins divide price space into discrete buckets where ONLY the active bin earns fees.\n\nHOW BINS WORK:\n• Price range divided into bins of equal width (set by bin step)\n• Only the bin containing the current price earns fees\n• All other bins earn nothing until price moves into them\n• Smaller bin step = more precise positioning but exits faster\n• Larger bin step = stays active longer per bin\n\nExample bin steps:\n• Bin step 1 = 0.01% per bin (very tight)\n• Bin step 10 = 0.1% per bin (moderate)\n• Bin step 100 = 1% per bin (wide)\n\nBecause only the active bin earns, all trading volume at the current price flows to a single concentrated point — making fee capture more efficient than tick-based systems when managed correctly.",
+              "quiz": []
+            },
+            {
+              "heading": "Ticks vs Bins — Direct Comparison",
+              "body": "TICK-BASED (Raydium CLMM, Orca, Uniswap v3):\n• Liquidity distributed uniformly across entire range\n• All ticks earn fees proportionally\n• Price moving within your range changes earnings gradually\n• More forgiving for volatile assets\n• Simpler to understand and manage\n\nBIN-BASED (Meteora DLMM):\n• Only active bin earns — maximum concentration\n• Exiting active bin immediately stops fee earnings\n• More precise fee capture when price is stable\n• Dynamic fees adjust to market volatility\n• More complex but more powerful for active managers\n\nWHEN TO USE EACH:\nStable or slow-moving pairs: DLMM bins for maximum precision\nVolatile assets, wider ranges: Tick-based — more forgiving\nNew to concentrated LP: Tick-based — easier to start\nDaily active management: DLMM — higher potential with discipline",
+              "quiz": []
+            },
+            {
+              "heading": "Setting Ranges Like a Pro",
+              "body": "Most LPs set ranges based on gut feeling. Professionals use data.\n\nSTEP 1 — CHECK HISTORICAL VOLATILITY:\nLook at 30-day price history. What is the typical daily range? Match your range to your management frequency:\n• Daily check: ±5-10%\n• Weekly check: ±15-25%\n• Monthly check: ±40-60%\n\nSTEP 2 — USE PRICE STRUCTURE:\nNear support? Set range wider below. Near resistance? Wider above. Use structure intentionally.\n\nSTEP 3 — CALCULATE BREAKEVEN:\nRebalancing cost / (Daily fee earnings) = Days needed in range to break even.\n\nREADING THE UI:\n• Raydium CLMM: Highlighted band on price chart. Green = in range.\n• Orca: Deposit ratio indicator showing token split at current price.\n• Meteora DLMM: Individual bins shown, active bin highlighted. Three distribution shapes:\n  - Spot: Equal liquidity per bin\n  - Curve: More near current price for tighter fee capture\n  - Bid-Ask: More at edges, acts like limit orders",
+              "quiz": []
+            },
+            {
+              "heading": "Common Mistakes",
+              "body": "❌ Setting ranges without checking historical volatility\n❌ Using DLMM bins for volatile assets — constant out-of-range with zero fees\n❌ Ignoring DLMM distribution shape — default is not always optimal\n❌ Rebalancing after every small price move — killed by transaction costs\n❌ Forgetting that out-of-range = no hedge, just no fees and price exposure\n❌ Comparing DLMM and tick-based APR directly — different mechanics\n❌ Setting asymmetric ranges without a reason — know why you are weighting one side",
+              "quiz": []
+            }
+          ],
+          "cluckVerdict": "The interface makes it look simple. The math underneath is not. Now you know both. Set ranges with data, understand what is happening inside them, and manage the cost of rebalancing. That is how serious LPs operate."
+        },
+        {
+          "id": 7,
+          "title": "Single-Sided Deposits",
+          "icon": "↕️",
+          "tagline": "One token. Smarter positioning. More control over how you enter and exit.",
+          "intro": "One token. Smarter positioning. More control over how you enter and exit.",
+          "sections": [
+            {
+              "heading": "What Is a Single-Sided Deposit?",
+              "body": "A single-sided deposit lets you add just ONE token to a concentrated liquidity position.\n\nIn concentrated liquidity, the token ratio depends entirely on where current price sits relative to your range.\n\nIF PRICE IS BELOW YOUR ENTIRE RANGE:\nYour position holds 100% Token A — waiting to sell it as price rises through your range.\n\nIF PRICE IS ABOVE YOUR ENTIRE RANGE:\nYour position holds 100% Token B — it already sold all Token A as price moved up.\n\nIF PRICE IS INSIDE YOUR RANGE:\nYou hold a mix of both — the exact ratio depends on where in the range price sits.\n\nThis is why you can set a range entirely above current price depositing only USDC to buy as price rises, or entirely below depositing only SOL to sell as price climbs. Concentrated positions are sophisticated limit orders that earn fees while they wait.",
+              "quiz": []
+            },
+            {
+              "heading": "How It Works in Practice",
+              "body": "Think of a single-sided position as a limit order that earns fees while waiting to fill.\n\nBUYING SOL WITH USDC:\nCurrent price $150. You expect a pullback to $120-$130.\nDeposit USDC into a range of $120-$130.\n\nWhat happens:\n• Price above $130 — position idle, earns nothing\n• Price drops to $130 — position activates, starts earning fees\n• Price moves through range — USDC gradually converts to SOL\n• Price reaches $120 — position is 100% SOL, fully accumulated\n\nSELLING SOL INTO USDC:\nSet range entirely above current price. Your SOL gradually sells as price rises through. Earn fees on the way up.",
+              "quiz": []
+            },
+            {
+              "heading": "DCA Mechanics",
+              "body": "Single-sided deposits are one of the most powerful DCA tools in DeFi.\n\nLP-BASED DCA vs TRADITIONAL DCA:\nTraditional DCA buys a fixed dollar amount at regular intervals — simple but not price-aware.\n\nLP-based DCA sets a single-sided position across your target range. You accumulate more at lower prices and less at higher prices — the AMM math gives you a better average entry plus fee income that reduces your effective cost basis.\n\nHOW TO SET IT UP:\n1. Choose accumulation range — example $80-$120 for token at $130\n2. Deposit stablecoin covering that range\n3. Accumulate gradually as price falls through range\n4. Earn LP fees during accumulation\n5. Hold 100% target token once price exits bottom\n\nTHE RISK:\nCapital sits idle earning nothing if price never reaches your range. Rapid crash through range means full accumulation at the bottom on a falling asset.",
+              "quiz": []
+            },
+            {
+              "heading": "Token Launch Liquidity",
+              "body": "Single-sided deposits are the foundation of how new tokens launch in DeFi.\n\nTHE BONDING CURVE:\nWhen a token launches on Bags.fm or Pump.fun, initial liquidity is single-sided — only the new token exists. Buyers add SOL and price rises along a mathematical curve.\n\nHOW CLKN LAUNCHED:\nCLKN launched on Bags.fm with token-only liquidity. As the community bought in SOL accumulated. At the graduation threshold the bonding curve closed and liquidity migrated automatically to Meteora DAMM V2 as a full two-sided pool.\n\nEarly buyers paid less because every purchase moves price higher on the curve — earlier participants enter before accumulated buys push price up. This is why believing early in a project on Bags.fm is rewarded.",
+              "quiz": []
+            },
+            {
+              "heading": "Risks and Common Mistakes",
+              "body": "Single-sided deposits punish misuse.\n\nTHE MAIN RISK — PRICE NEVER REACHES YOUR RANGE:\nCapital sits idle earning nothing for potentially months. Significant opportunity cost vs deploying elsewhere.\n\nTHE CONVERSION RISK:\nPrice blasting through your range quickly means minimal fees earned — it acts like a limit order not an LP.\n\nCOMMON MISTAKES:\n❌ Setting accumulation range too far from current price — capital idle too long\n❌ Ignoring opportunity cost of idle capital\n❌ Narrow single-sided ranges during volatility — fills and reverses instantly\n❌ Forgetting a fully filled position still has full price exposure\n❌ Sell ranges too tight — rapid pumps blast through before much fee income\n❌ Not monitoring as price approaches your range",
+              "quiz": []
+            }
+          ],
+          "cluckVerdict": "Single-sided deposits are a tool. Like every tool in DeFi they work brilliantly when used correctly and punish you when you do not understand them. Now you understand them. Use them deliberately."
+        },
+        {
+          "id": 8,
+          "title": "Active vs Passive LP",
+          "icon": "⚖️",
+          "tagline": "Know which type of LP you are — and make that choice deliberately.",
+          "intro": "Know which type of LP you are — and make that choice deliberately.",
+          "sections": [
+            {
+              "heading": "The Spectrum",
+              "body": "LP management exists on a spectrum from completely passive to intensely active. Neither end is wrong — but pretending to be active while being passive is how people lose money.\n\nFULLY PASSIVE:\n• Full range AMM positions (Raydium standard, old-style AMMs)\n• Wide concentrated ranges — set once, check monthly\n• Correlated pairs like SOL/jitoSOL or stablecoin pairs\n• Time commitment: 30 minutes per month\n• Return profile: modest, consistent, rarely optimal\n\nSEMI-ACTIVE:\n• Moderate concentrated ranges — check weekly\n• DLMM with medium bin steps\n• Standard pairs like SOL/USDC with weekly rebalancing\n• Time commitment: 1-2 hours per week\n• Return profile: meaningfully better than passive when managed\n\nFULLY ACTIVE:\n• Tight concentrated ranges or single-bin DLMM\n• Daily monitoring and rebalancing\n• Multiple positions across different pairs\n• Time commitment: 30-60 minutes per day\n• Return profile: highest potential, highest variance, highest risk of mistakes\n\nCHOOSE HONESTLY:\nIf you have a full-time job and check your phone twice a day, a fully active strategy will underperform a passive one — because you will miss rebalancing windows and your position will sit out of range earning nothing for days.",
+              "quiz": []
+            },
+            {
+              "heading": "Passive LP Strategies",
+              "body": "Passive LP is not set and forget — it is set and monitor occasionally. The key is choosing positions that can tolerate infrequent attention.\n\nBEST PASSIVE POSITIONS:\n\nFULL RANGE on correlated pairs:\nSOL/jitoSOL, BTC/cbBTC, stablecoin pairs. Near-zero IL. Fees accumulate without intervention. Check monthly to compound fees back in.\n\nWIDE CONCENTRATED on major pairs:\nSOL/USDC with a ±50% range. Stays in range through most normal market movement. Check weekly. Rebalance only if price breaks out of range significantly.\n\nSTABLE PAIRS:\nUSDC/USDT, USDC/USDC.e — extremely low IL, steady fee income from high stablecoin trading volume. Near-zero management required.\n\nWHAT TO WATCH FOR:\n• Fee APR dropping significantly — pool may be losing volume\n• Position going out of range and staying there — reset when confirmed\n• Protocol changes or security issues — always monitor project news\n\nTOOLS FOR PASSIVE LPS:\n• DexScreener alerts — get notified when price moves past thresholds\n• Telegram bots — several Solana LP bots send range alerts\n• Protocol dashboards — Meteora, Raydium, and Orca all show position status",
+              "quiz": []
+            },
+            {
+              "heading": "Active LP Strategies",
+              "body": "Active LP demands discipline, speed, and a systematic approach. Without all three it becomes expensive noise.\n\nWHAT ACTIVE LP ACTUALLY REQUIRES:\n\nDAILY:\n• Check all positions — are they in range?\n• Review fee earnings — is the position performing?\n• Monitor pair price action — is trend changing?\n• Execute rebalances if price thresholds triggered\n\nWEEKLY:\n• Evaluate which positions to keep vs close\n• Compare performance against holding benchmark\n• Review gas and rebalancing cost totals\n• Adjust ranges based on updated volatility view\n\nACTIVE STRATEGIES THAT WORK:\n\nTIGHT DLMM on stable pairs:\n1-2 bin range on USDC/USDT or SOL/USDC during high volume periods. High fee capture, minimal movement out of range.\n\nTREND-FOLLOWING RANGES:\nMove your range in the direction of a strong trend. Instead of resetting to center on current price, skew your range in the direction price is moving — capturing more fees from trending moves.\n\nVOLATILITY FARMING:\nProvide tight liquidity during high-volume events (token launches, market events) then widen or exit during low-volume periods. Fee income is highest when markets are moving.\n\nWHAT ACTIVE LP IS NOT:\n• Checking your phone every 10 minutes in a panic\n• Rebalancing every time price moves 1%\n• Opening 20 positions across different protocols simultaneously\n• Chasing the highest APR pool every week",
+              "quiz": []
+            },
+            {
+              "heading": "Rebalancing Triggers",
+              "body": "Random rebalancing is worse than no rebalancing. You need a system.\n\nPRICE-BASED TRIGGERS:\nSet a threshold — for example, rebalance when price moves more than 20% from the center of your range. This prevents unnecessary rebalancing during normal volatility while ensuring you act before your position goes too far out of range.\n\nTIME-BASED TRIGGERS:\nCheck at fixed intervals — every Sunday morning for example. If price is still within range, do nothing. If out of range, reset. Simple, systematic, easy to execute.\n\nFEE-BASED TRIGGERS:\nRebalance when accumulated fees exceed the cost of rebalancing by a meaningful margin. Example: if rebalancing costs $5 in fees and your position has earned $50, rebalancing and resetting is profitable even if you are still in range.\n\nTHE REBALANCING COST CALCULATION:\nTotal cost = swap fee to rebalance tokens + gas to close position + gas to open new position\n\nOn Solana this is typically $0.02-0.10 total. Your position needs to earn more than this per day to make active management worthwhile.\n\nWHEN NOT TO REBALANCE:\n• Price spiked outside range on unusually high volume — may return quickly\n• Market is in extreme volatility — wait for consolidation\n• Your fee income does not justify the cost\n• You have a strong directional view — let the position ride",
+              "quiz": []
+            },
+            {
+              "heading": "Tracking Performance",
+              "body": "Most LPs have no idea if they are actually making money. They see fees accumulating and assume success. The real benchmark is different.\n\nTHE ONLY BENCHMARK THAT MATTERS:\nAre you outperforming simply holding both tokens in your wallet?\n\nHOW TO CALCULATE:\n1. Record your entry — token amounts and dollar values\n2. Track fees earned — cumulative in dollar terms\n3. Track current position value — what you would receive if you withdrew right now\n4. Compare to hold value — what those same tokens would be worth if you had just held them\n\nPERFORMANCE = (Current position value + fees earned) minus (Hold value)\n\nIf this number is positive — LP is working\nIf this number is negative — you would have been better off holding\n\nCOMMON TRACKING MISTAKES:\n❌ Only looking at fee APR — ignoring IL against the position value\n❌ Not accounting for the time cost of active management\n❌ Comparing against USD performance only — compare against holding the tokens\n❌ Checking too frequently — daily noise obscures the real trend\n❌ Not tracking rebalancing costs — they add up over time\n\nTOOLS FOR TRACKING:\n• Spreadsheet — simple and reliable for small number of positions\n• DeBank — tracks portfolio value across protocols\n• Step Finance — Solana-specific portfolio tracker\n• Kamino Finance — has built-in LP performance analytics",
+              "quiz": []
+            },
+            {
+              "heading": "Risks Beyond IL — When the Pool Itself Is the Trap",
+              "body": "Every lesson so far has treated impermanent loss as the LP's main enemy. It is not. IL makes you underperform a hold. The risks in this section make you lose everything. Know them before you deposit a dollar.\n\nTHE LIQUIDITY-PULL RUG:\nIf a token's liquidity is not locked, whoever controls it can withdraw the entire pool — including the value backing your position — and leave you holding a worthless token. You LP'd into a pool the creator could empty at will. Before LPing any token, confirm its liquidity is locked or burned.\n\nMINT AND FREEZE AUTHORITY:\nIf the token you pair against still has mint authority live, the creator can print unlimited new supply and dump it into your pool — your position rebalances entirely into the inflated token. If freeze authority is live, they can freeze the account holding your position. Both should be revoked. Cluck Score and Security Coop both surface this — check before you LP.\n\nSMART-CONTRACT RISK:\nYou are trusting the AMM's code with your capital. Stick to established, audited protocols — Meteora, Raydium, Orca. A brand-new \"500% APR\" pool on an unknown program is a bet on unaudited code holding your money.\n\nTHE THIN-POOL TRAP:\nA pool with very low TVL can be drained or manipulated by a single large trade. Being the main LP in a near-empty pool means you are the exit liquidity for everyone else.\n\nTHE HARD KNOCKS RULE:\nIL is a cost you can model. A rug is a loss you cannot recover. Before any LP position: liquidity locked, authorities revoked, protocol established, pool deep enough to matter. If you cannot confirm all four — do not provide liquidity.",
+              "quiz": []
+            }
+          ],
+          "cluckVerdict": "Passive is not lazy. Active is not always better. The right strategy is the one you will actually execute consistently. Know yourself before you know the market."
+        },
+        {
+          "id": 9,
+          "title": "LP Risk Management",
+          "icon": "🛡️",
+          "tagline": "Know your risk or the market will teach you.",
+          "intro": "Know your risk or the market will teach you.",
+          "sections": [
+            {
+              "heading": "Risk Capital — What You Can Actually Afford To Lose",
+              "body": "Before any position, answer one question honestly: if this entire position went to zero, would it change how you live? If the answer is yes, the position is too big — or you should not be in it at all.\n\nLP capital is RISK capital. It is exposed to impermanent loss, smart-contract risk, and the price risk of both tokens at once. Money you need for rent, food, or your emergency fund has no business in a liquidity pool.\n\nTHE RULE:\n• Only LP money you can fully lose without it affecting your life\n• Keep an emergency fund completely separate and untouched\n• Never LP borrowed money or money with a deadline attached to it\n\nPeople who break this rule do not make better decisions under pressure — they make worse ones. They pull positions at the bottom, chase losses into riskier pools, and turn a manageable drawdown into a disaster. Risk capital is not just a financial rule, it is a psychological one.",
+              "quiz": []
+            },
+            {
+              "heading": "Position Sizing — The Number Most LPs Get Wrong",
+              "body": "The single biggest difference between LPs who survive and LPs who blow up is position size. Not pair selection. Not timing. Size.\n\nA position that is too large turns normal volatility into panic. A position sized correctly lets you hold through the noise and actually earn the fees you came for.\n\nA SANE FRAMEWORK:\n• Stablecoin / correlated pairs (USDC/USDT, SOL/jitoSOL): can be a large share of your LP capital — IL risk is near zero\n• Major volatile pairs (SOL/USDC): moderate size — real IL risk but a known, liquid asset\n• Speculative / new-token pairs: small — treat each as money you might not see again\n• A single brand-new launch pool: tiny — position-of-last-resort sizing\n\nNEVER let one volatile position dominate your LP capital. If a single pool going to zero would wreck your whole LP portfolio, that pool is too big regardless of the APR it advertises.\n\nTHE TEST:\nImagine the riskier token in your pair drops 80% overnight. Look at the dollar amount you would lose. If that number makes your stomach drop, cut the position until it does not. Size to the downside, not the dream.",
+              "quiz": []
+            },
+            {
+              "heading": "The Range-Width Risk Tradeoff",
+              "body": "In concentrated liquidity, the width of your range IS a risk dial. Most people only see the reward side of it.\n\nTIGHT RANGE:\n• Higher fee capture per dollar while in range\n• Goes out of range faster — earns nothing when it does\n• Amplified impermanent loss when price moves through it\n• Demands active management\n\nWIDE RANGE:\n• Lower fee capture per dollar\n• Stays in range through more market movement\n• Gentler IL\n• Tolerates passive management\n\nThere is no free lunch. A tight range is not \"better\" — it is a higher-risk, higher-maintenance bet that price stays where you think it will. A wide range is a lower-risk, lower-yield bet that you would rather stay in range than maximize every fee.\n\nMatch the width to two things: your conviction about where price is going, and the time you can actually commit to managing it. A tight range you cannot babysit is just a fast way to sit out of range earning zero while IL eats your position.",
+              "quiz": []
+            },
+            {
+              "heading": "Correlation Risk — The Pair Defines Your Downside",
+              "body": "Your IL risk is decided the moment you choose the pair. Everything after that is management.\n\nTHE CORRELATION SPECTRUM:\n• Identical-peg pairs (USDC/USDT): the two assets are designed to track each other — IL is minimal, the main risk is one of them de-pegging\n• Correlated pairs (SOL/jitoSOL, BTC/cbBTC): move together most of the time — low IL, occasional divergence\n• Major-vs-stable (SOL/USDC): one volatile leg — IL is real and scales with how far SOL moves from your entry\n• Volatile-vs-volatile or new-token pairs: both legs move independently and violently — maximum IL, maximum risk\n\nTHE TRAP:\nA pool pairs a new token against SOL. People focus on the new token and forget they are also exposed to SOL's price. You are long BOTH assets' relationship to each other. When the new token dumps against SOL, IL converts your position into a bag of the thing that just crashed.\n\nPick the pair like you are picking your downside — because you are.",
+              "quiz": []
+            },
+            {
+              "heading": "Exit Planning — Decide Before You Enter",
+              "body": "The worst time to decide when to exit a position is while it is moving against you. Emotion makes that decision, and emotion is a terrible LP.\n\nSET YOUR EXITS IN ADVANCE:\n• Maximum acceptable IL: a number where you close and reassess, decided before you deposit\n• Invalidation: a price or on-chain event (volume dies, liquidity status changes, project news) that means your thesis is broken\n• Profit-taking: a point where you withdraw earned fees or scale the position down\n• Time horizon: how long you intend to hold before re-evaluating from scratch\n\nWRITE IT DOWN. A position with a written exit plan is a managed risk. A position without one is a hope.\n\nWHEN THE TRIGGER HITS, ACT:\nThe whole point of pre-setting exits is to remove the in-the-moment debate. If your invalidation hits, you close — you do not negotiate with yourself about whether this time is different. Discipline is doing the thing you already decided was right when it stops feeling good.",
+              "quiz": []
+            },
+            {
+              "heading": "The Hard Knocks Risk Checklist",
+              "body": "Run this before every position. If you cannot answer all of them, you are not ready to deposit.\n\n✓ Is this money I can fully lose without it changing my life?\n✓ If the riskier token dropped 80%, is the dollar loss one I can stomach?\n✓ Is this position small enough that it alone cannot wreck my LP capital?\n✓ Does the range width match the time I can actually commit?\n✓ Do I understand which leg of the pair carries the IL risk?\n✓ Have I written down my exit conditions — max IL, invalidation, profit-take?\n✓ Did I run the token through Cluck Score / Autopsy / Security Coop first?\n\nRisk management is not the exciting part. It is the part that keeps you in the game long enough for the exciting parts to matter.",
+              "quiz": []
+            }
+          ],
+          "cluckVerdict": "Risk management is the boring discipline that keeps you alive long enough to win. Size to your downside, choose your pair like you are choosing your loss, and write your exit before you enter. The market does not care how confident you feel — it only respects how well you prepared."
+        },
+        {
+          "id": 10,
+          "title": "Reading Pool Data",
+          "icon": "🔍",
+          "tagline": "Volume, TVL, APR — what it all actually means.",
+          "intro": "Volume, TVL, APR — what it all actually means.",
+          "sections": [
+            {
+              "heading": "The Numbers That Actually Matter",
+              "body": "A pool page throws a dozen metrics at you. Four of them decide whether you should be there.\n\nTVL (Total Value Locked):\nThe combined dollar value of both tokens in the pool. Higher TVL means deeper liquidity and less price impact per trade — but it also means your share of the fees is split among more capital.\n\n24H VOLUME:\nHow much was actually traded through the pool in the last day. Volume is what GENERATES fees. No volume, no fees — no matter how high the advertised APR.\n\nFEE APR:\nThe annualized fee return, usually extrapolated from recent volume. This is the most over-trusted and most misleading number on the page. Treat it as a starting question, not an answer.\n\nVOLUME-TO-TVL RATIO:\nDaily volume divided by TVL. This is the LP's most important number, and the next section is entirely about it.",
+              "quiz": []
+            },
+            {
+              "heading": "Volume-to-TVL — The LP's Most Important Ratio",
+              "body": "Fees come from volume. The capital that has to share those fees is TVL. So the real question for any LP is: how much volume is each dollar of liquidity actually working?\n\nThat is the volume-to-TVL ratio. Daily volume divided by TVL.\n\nWHY IT BEATS RAW APR:\nA pool can show a huge APR simply because it has very little TVL and one big trade went through. That APR will evaporate the moment normal conditions return. The volume-to-TVL ratio tells you how hard the pool is actually working its liquidity, day in and day out.\n\nREADING IT:\n• High ratio (lots of volume per dollar of TVL): the pool is efficient — each LP dollar is capturing meaningful fee flow\n• Low ratio (TVL dwarfs volume): a lot of capital chasing very little fee income — yield will be thin no matter what the APR banner says\n• Absurdly high ratio with no price movement: a red flag for fake volume (next section)\n\nWhen you compare two pools, do not compare their APRs. Compare how much real volume flows through each dollar of liquidity, and whether that flow is consistent over multiple days rather than one lucky spike.",
+              "quiz": []
+            },
+            {
+              "heading": "Fee APR vs Reality",
+              "body": "The headline APR is the number most likely to cost you money, because it is almost always backward-looking and volatile.\n\nWHY THE QUOTED APR LIES:\n• It is usually annualized from a short recent window — one busy day gets multiplied into a giant yearly number\n• It does not subtract impermanent loss — APR is gross fee yield, not your net result\n• It assumes volume stays constant forever, which it never does\n• On concentrated pools, it often assumes your liquidity is in range 100% of the time\n\nWHAT TO DO INSTEAD:\n• Look at volume over several days, not the single best day\n• Mentally haircut the advertised APR hard, then ask if the position still makes sense\n• Remember the only real benchmark from Lesson 8: position value plus fees versus simply holding the tokens\n• Treat any APR over a few hundred percent as a question (\"why is this so high, and is it sustainable?\"), never as a promise",
+              "quiz": []
+            },
+            {
+              "heading": "Spotting Fake Volume",
+              "body": "Some pools manufacture volume to inflate their APR and climb trending lists. As an LP, fake volume is poison — it lures your capital in, then the \"volume\" disappears and you are left holding a thin, illiquid position.\n\nSIGNS OF WASH-TRADED VOLUME:\n• Enormous volume with almost no price discovery — the price barely moves despite \"millions\" traded\n• The same trade sizes repeating over and over\n• Volume concentrated among a tiny number of wallets recycling the same liquidity\n• Volume-to-TVL ratio that is wildly, implausibly high with no organic chart action\n• A trending token whose holder count and unique-trader count do not match its volume\n\nHOW TO CONFIRM:\nThis is exactly what the Cluck Norris tools exist for. Run the token through Cluck Score for a distribution and risk read, and Token Autopsy for a forensic look at who is actually trading. Real volume comes from many different wallets, different sizes, different timing. Manufactured volume comes from a handful of wallets passing the same money back and forth.\n\nForensic rule, same as everywhere: the chain shows you WHAT happened, not WHY. State what the data shows — clustered wallets, repeated sizes, flat price — and let that evidence decide whether the volume is real.",
+              "quiz": []
+            },
+            {
+              "heading": "Liquidity Distribution & Depth",
+              "body": "TVL is a single number, but WHERE that liquidity sits matters as much as how much there is.\n\nFULL-RANGE / SPREAD LIQUIDITY:\nLiquidity is spread across a wide price range. Trades have low price impact across the board, but fee capture per dollar is diluted.\n\nCONCENTRATED LIQUIDITY:\nLiquidity is bunched near the current price. Trades near that price get excellent execution and LPs there earn outsized fees — but move outside the concentration and depth falls off a cliff.\n\nWHAT TO READ ON A DLMM / CONCENTRATED POOL:\n• How is liquidity distributed across the bins or ticks?\n• Is most of it clustered right at the current price, or spread out?\n• If you add liquidity, where does YOUR position sit relative to where the volume is trading?\n\nA pool with $1M TVL spread thin can give worse execution near price than a $200K pool concentrated tightly at price. As an LP, you want your liquidity where the trades actually happen — that is where the fees are.",
+              "quiz": []
+            },
+            {
+              "heading": "Where To Read This Data",
+              "body": "Knowing the metrics is useless if you do not know where to find honest versions of them. Cross-reference — never trust a single source.",
+              "quiz": []
+            }
+          ],
+          "cluckVerdict": "A pool page is a story told in numbers. TVL and volume set the scene, the volume-to-TVL ratio is the plot, APR is the marketing tagline, and fake volume is the villain. Learn to read all of it — and verify with the tools — before your capital becomes a character in someone else's story."
+        },
+        {
+          "id": 11,
+          "title": "Token Launch Liquidity",
+          "icon": "🚀",
+          "tagline": "Bonding curves, graduation, and the riskiest LP there is.",
+          "intro": "Bonding curves, graduation, and the riskiest LP there is.",
+          "sections": [
+            {
+              "heading": "How a Launch Creates Liquidity — The Bonding Curve",
+              "body": "Most launches today do not start with a traditional two-sided liquidity pool. They start with a BONDING CURVE.\n\nA bonding curve is a smart contract that sells tokens according to a formula. As people buy, the price rises along the curve automatically. There is no separate LP depositing two tokens — the curve itself is the market.\n\nKEY POINTS:\n• The curve holds the token and accepts SOL (or another base asset) as people buy in\n• Price increases as more is bought and decreases as people sell back\n• There is no traditional LP position to provide yet — the curve is doing the market-making\n• Early buyers are buying directly from the curve, not from other liquidity providers\n\nThis is why the earliest phase of a launch is pure price discovery. The \"liquidity\" is the SOL accumulating in the curve contract, and it grows as buying continues. Understanding this matters because it tells you exactly when a real LP opportunity does — and does not — exist.",
+              "quiz": []
+            },
+            {
+              "heading": "Graduation — When the Curve Becomes a Pool",
+              "body": "A bonding-curve token does not stay on the curve forever. When it accumulates enough buying to hit a threshold, it GRADUATES.\n\nWHAT GRADUATION MEANS:\nAt the threshold (often expressed as a market-cap or raised-SOL target), the accumulated liquidity migrates out of the bonding curve and into a real DEX pool — on Solana that is frequently a Meteora pool. From that point on, the token trades like any other AMM pair, and traditional LP positions become possible.\n\nTHE GRADUATION EVENT IS A MOMENT OF RISK AND OPPORTUNITY:\n• The migration creates the first real two-sided pool for the token\n• Volatility around graduation is extreme — price can spike and dump violently\n• Early curve buyers may take profit the moment a liquid market exists\n• The structure of who holds the supply at graduation tells you a lot about what comes next\n\nThis is precisely what the Cluck Norris near-graduation tracker and graduation alerts watch for — the transition from curve to pool is one of the most important events in a token's life, for traders and LPs alike.",
+              "quiz": []
+            },
+            {
+              "heading": "Bags.fm and the Dynamic Bonding Curve",
+              "body": "Bags.fm is a Solana launchpad, and CLKN itself launched on it — so this is worth knowing precisely.\n\nHOW IT WORKS:\n• Tokens launch on a bonding curve (a dynamic bonding curve, or DBC) rather than an immediate open pool\n• Buyers transact against the curve during the pre-graduation phase\n• Creators can earn fees from the activity their token generates\n• On graduation, liquidity migrates into a Meteora pool where standard LPing applies\n\nWHY THIS MATTERS FOR AN LP:\nBefore graduation, there is no conventional LP position to take — you are buying on the curve, not providing liquidity. After graduation, a real pool exists and the normal LP rules from this entire lab apply: check depth, check the volume-to-TVL ratio, check the token's authorities, size to your downside.\n\nTHE FORENSIC RULE STILL HOLDS:\nA launchpad API like Bags can confirm the verified creator and whether buyers came through the actual bonding curve. Use that. But the chain shows WHAT happened, not WHY — only call a wallet \"creator\" or \"team\" when the launchpad data confirms it. Never assume intent from on-chain motion alone.",
+              "quiz": []
+            },
+            {
+              "heading": "Why LPing a Fresh Launch Is the Highest-Risk LP There Is",
+              "body": "Everything that makes a launch exciting also makes it the most dangerous place to provide liquidity. Stack the risks honestly:\n\nEXTREME IMPERMANENT LOSS:\nA freshly graduated token can move 50%, 80%, in either direction within hours. IL is brutal when one leg is that volatile — the AMM rebalances you straight into whichever side is crashing.\n\nYOU ARE PRICE DISCOVERY:\nEarly on, there is no established fair value. As an LP you are absorbing the violence of the market figuring out what the token is worth.\n\nLIQUIDITY AND AUTHORITY RISK:\nA brand-new token may have unlocked liquidity, live mint authority, or live freeze authority — every danger from Lesson 8, concentrated into the riskiest moment of the token's life.\n\nTHE ASYMMETRY:\nYour upside as an LP is fees plus whatever the volatile token does. Your downside is the token going to zero while IL maximizes your exposure to it on the way down. For most fresh launches, that asymmetry is not in your favor.",
+              "quiz": []
+            },
+            {
+              "heading": "If You Do It Anyway — Rules of Engagement",
+              "body": "Some LPs deliberately farm launch volatility because fee income is highest when markets move most. If you choose to, do it with discipline, not hope.\n\nTHE LAUNCH-LP RULES:\n• Verify first: run Cluck Score and Token Autopsy; confirm mint and freeze authority are revoked and liquidity status with Security Coop\n• Confirm graduation: only LP a real graduated pool, not a curve you do not understand\n• Size tiny: this is position-of-last-resort sizing — money you have fully written off\n• Manage actively: launch LP is never passive; you are watching it closely or you should not be in it\n• Pre-set your exit: decide your invalidation and max loss before you deposit, because price will move faster than your decision-making\n• Watch the holder structure: extreme concentration means a few wallets can crash the pool at will\n\nLaunch LP can pay well during high-volume windows — that is real. But it is an active, high-skill, small-size game. Treat it like volatility farming with a strict risk budget, not like a place to park capital.",
+              "quiz": []
+            }
+          ],
+          "cluckVerdict": "Token launches are the beating heart of this whole ecosystem — and the fastest place to get wrecked as an LP. The curve is the market until graduation; after graduation the real pool and the real risk arrive together. Verify everything, size for total loss, manage like a hawk, and never confuse buying on a curve with providing liquidity."
+        },
+        {
+          "id": 12,
+          "title": "Building a Real LP Strategy",
+          "icon": "♟️",
+          "tagline": "Put it all together — capital, tiers, discipline.",
+          "intro": "Put it all together — capital, tiers, discipline.",
+          "sections": [
+            {
+              "heading": "Start With Capital Allocation, Not Pools",
+              "body": "Amateurs start by hunting for the highest-APR pool. Professionals start by deciding how their capital is allocated, then find pools that fit each slot. Reverse the order and you will always be chasing.\n\nTHE FIRST DECISIONS, IN ORDER:\n1. How much total capital is genuinely risk capital for LPing? (Lesson 9)\n2. How much time can you realistically commit each week? (Lesson 8)\n3. Given that time, how much of your capital should be passive vs active?\n4. Only THEN: which specific pools fit each slot?\n\nYour time budget is as important as your money budget. An honest \"30 minutes a week\" points you toward a mostly passive allocation. Pretending you will manage active positions you do not have time for is the single most common way LPs underperform.",
+              "quiz": []
+            },
+            {
+              "heading": "The Three-Tier LP Portfolio",
+              "body": "A durable LP strategy is layered, like a pyramid. The base is boring and safe. The top is small and spicy. Most of your capital lives at the bottom.\n\nTHE THREE TIERS:\n\nCORE (the base — most of your capital):\nStablecoin pairs and correlated pairs. Near-zero IL, steady fees, near-zero management. This tier is your foundation — it should be hard to lose money here.\n\nGROWTH (the middle):\nMajor volatile pairs like SOL/USDC with wide-to-moderate concentrated ranges. Real fee income, manageable IL, weekly check-ins. This is where you actively earn above the baseline.\n\nDEGEN (the top — small):\nNew tokens, freshly graduated pools, launch volatility farming. High risk, active management, tiny size. Every dollar here is money you have already written off. Wins here are a bonus, not the plan.\n\nThe exact percentages are yours to set based on your risk tolerance and time — but the SHAPE should hold: the safe tier is the largest, the speculative tier is the smallest. If your pyramid is upside down, you do not have a strategy, you have a gamble.",
+              "quiz": []
+            },
+            {
+              "heading": "Choosing Your Pairs Deliberately",
+              "body": "Within each tier, pick pairs on purpose, not on hype.\n\nFOR THE CORE TIER:\nChoose the deepest, most boring pairs you can find — USDC/USDT, SOL/jitoSOL. You want maximum reliability and minimum attention. Verify the protocol is established and the pool has real, sustained volume-to-TVL.\n\nFOR THE GROWTH TIER:\nPick majors you understand and are comfortable holding either side of. Set range width to match how often you will actually check in. Weekly check-in means a wider range that stays in range between visits.\n\nFOR THE DEGEN TIER:\nRun every token through Cluck Score, Token Autopsy, and Security Coop first. Confirm authorities revoked and liquidity status. Only LP graduated pools you understand. Size each as total-loss money.\n\nThe pair makes the bet. Tier sets the size and the management. Get those two right and you are already ahead of most LPs.",
+              "quiz": []
+            },
+            {
+              "heading": "A Worked Example — A $5,000 LP Plan",
+              "body": "Numbers make it concrete. This is an illustration of the SHAPE, not financial advice — your own split depends on your risk tolerance and time.\n\nSOMEONE WITH $5,000 RISK CAPITAL AND ~1 HOUR PER WEEK:\n\nCORE — the largest slice:\nA meaningful majority in a stablecoin pair and a SOL/jitoSOL position. Checked monthly. This is the foundation that should quietly compound.\n\nGROWTH — the middle slice:\nA SOL/USDC concentrated position with a wide range. Checked weekly, rebalanced only when price genuinely breaks out of range.\n\nDEGEN — the smallest slice:\nA small amount reserved for an occasional graduated-launch position, fully written off, actively managed when used and left in stables when not.\n\nWHY IT WORKS:\nMost of the capital cannot easily be lost. The middle earns real yield with light management that fits the one-hour-per-week budget. The small speculative slice provides upside without threatening the whole. A bad month in the degen tier is survivable; a good one is a bonus. That asymmetry — protected downside, open upside — is the entire point of a tiered strategy.",
+              "quiz": []
+            },
+            {
+              "heading": "Your Personal LP Rules",
+              "body": "Every disciplined LP has a written set of rules they follow when emotion is screaming at them to do otherwise. Cluck Norris is built on discipline — this is where you apply it to your own capital.\n\nWRITE DOWN YOUR RULES. EXAMPLES:\n• I only LP money I can fully lose\n• No single position exceeds my set share of LP capital\n• Every new token gets run through Cluck Score, Autopsy, and Security Coop before I deposit\n• I write my exit conditions before I enter, and I honor them\n• I measure performance against holding, not against zero\n• I do not chase the highest-APR pool of the week\n• My pyramid stays right-side up — safe tier largest, degen tier smallest\n\nThe rules matter most precisely when you least want to follow them. The market will test every one of them. The LPs who survive are not the ones who never feel fear or greed — they are the ones who wrote the rules down while calm and followed them when it counted.",
+              "quiz": []
+            },
+            {
+              "heading": "The Full Workflow — Research to Review",
+              "body": "Here is the whole lab, distilled into a repeatable loop you run for every position.\n\n1. RESEARCH: Vet the token and pool — Cluck Score, Token Autopsy, Security Coop, and the pool data from Lesson 10 (TVL, volume, volume-to-TVL, distribution).\n2. DECIDE THE TIER: Core, growth, or degen — this sets your size and management style.\n3. SIZE: Apply Lesson 9 — size to your downside, never let one position threaten the whole.\n4. SET RANGE: Match range width to your tier and the time you will commit.\n5. WRITE THE EXIT: Max IL, invalidation, profit-take — before you deposit.\n6. ENTER: Deposit deliberately, not on impulse.\n7. MONITOR: At the cadence your tier demands — monthly, weekly, or daily.\n8. MEASURE: Position value plus fees versus holding. Honestly.\n9. ADJUST: Rebalance on your triggers, not on emotion. Cut what is broken, compound what works.\n\nRun that loop with discipline and you are no longer gambling on liquidity — you are operating a strategy. That is the difference this entire lab was built to make.",
+              "quiz": []
+            }
+          ],
+          "cluckVerdict": "This is graduation. You started not knowing what liquidity was; you finish with a tiered, rule-based system and a workflow you can run on any protocol. Knowledge was never the goal — discipline applied to capital is. Build your pyramid, write your rules, run the loop, and provide liquidity like a professional. Class dismissed."
+        },
+        {
+          "id": "lib-what-is-liquidity",
+          "title": "What is Liquidity?",
+          "icon": "💧",
+          "intro": "Liquidity is how easily an asset can be bought or sold without moving the price.",
+          "content": "Liquidity refers to how much of an asset is available for trading at any given time. High liquidity means you can buy or sell large amounts without dramatically changing the price. Low liquidity means even small trades cause big price swings.\n\nIn DeFi, liquidity lives in pools — smart contracts holding two tokens that traders swap against. The more tokens in the pool, the less your trade moves the price.\n\nThink of it like a swimming pool vs a bathtub. Jump into an Olympic pool and barely make a splash. Jump into a bathtub and everything overflows.\n\nWHY IT MATTERS: Before buying any token, always check the liquidity. A token with $500 in liquidity can be moved 50% by a $250 buy. A token with $500,000 in liquidity barely moves on the same trade.",
+          "reference": true
+        },
+        {
+          "id": "lib-amm",
+          "title": "How AMMs Work",
+          "icon": "⚙️",
+          "intro": "Automated Market Makers use a mathematical formula to set prices automatically.",
+          "content": "An Automated Market Maker (AMM) is a smart contract that holds two tokens and automatically calculates their price based on supply and demand — no order book, no human market maker needed.\n\nThe most common formula is the Constant Product Formula:\n\nx × y = k\n\nWhere x = amount of Token A, y = amount of Token B, and k = a constant that never changes.\n\nWhen you buy Token A, you add Token B to the pool and remove Token A. Because k must stay constant, as Token A supply goes down, its price goes up. This is automatic — no one sets the price manually.\n\nEXAMPLE: A pool has 100 SOL and 1,000,000 CLKN. k = 100,000,000. You buy 10 SOL worth of CLKN. Now the pool has 110 SOL — to keep k constant, it must have ~909,090 CLKN. You received ~90,910 CLKN. The price moved because you changed the ratio.",
+          "reference": true
+        },
+        {
+          "id": "lib-impermanent-loss",
+          "title": "Impermanent Loss",
+          "icon": "📉",
+          "intro": "When token prices diverge, LP providers end up with less value than just holding.",
+          "content": "Impermanent Loss (IL) happens when the price ratio of your two pooled tokens changes after you deposit. The AMM constantly rebalances the pool, which means you end up with more of the token that went down and less of the token that went up.\n\nIt's called \"impermanent\" because if prices return to their original ratio, the loss disappears. But if you withdraw while prices are diverged, the loss becomes permanent.\n\nEXAMPLE: You deposit $1,000 into a SOL/USDC pool — $500 SOL and $500 USDC. SOL doubles in price. The AMM has rebalanced — you now have less SOL and more USDC than you started with. If you'd just held your SOL and USDC, you'd be worth more than your LP position.\n\nIL is the #1 risk for liquidity providers. It's why LP fees must exceed IL for the position to be profitable. Concentrated liquidity amplifies both earnings AND impermanent loss.",
+          "reference": true
+        },
+        {
+          "id": "lib-concentrated-liquidity",
+          "title": "Concentrated Liquidity",
+          "icon": "🎯",
+          "intro": "Provide liquidity in a specific price range and earn more fees per dollar.",
+          "content": "Traditional AMMs spread your liquidity across all possible prices from zero to infinity. Most of that liquidity sits in price ranges that will never be traded — it's wasted capital.\n\nConcentrated liquidity (pioneered by Uniswap v3) lets you choose a specific price range for your liquidity. Your capital only earns fees when the token trades within your range — but it earns much more per dollar than a full-range position.\n\nEXAMPLE: Instead of providing liquidity from $0 to infinity, you provide between $0.000001 and $0.000002 for a token currently trading at $0.0000015. All your capital is actively earning fees within that tight range.\n\nTHE TRADEOFF: If price moves outside your range, you stop earning fees entirely and your position becomes 100% one token. Concentrated liquidity requires active management. This is exactly what Meteora DAMM V2 — where CLKN trades — uses.",
+          "reference": true
+        },
+        {
+          "id": "lib-dynamic-bonding-curve",
+          "title": "Dynamic Bonding Curves",
+          "icon": "📈",
+          "intro": "A price mechanism that automatically increases price as more tokens are bought.",
+          "content": "A bonding curve is a mathematical relationship between a token's price and its supply. As more tokens are purchased, the price automatically rises along the curve. As tokens are sold, the price falls.\n\nBags.fm uses a Dynamic Bonding Curve (DBC) for token launches. When you're the first buyer, you get the lowest price. As more people buy, the curve pushes the price higher. This creates a fair launch where early supporters are rewarded.\n\nThe curve has a graduation threshold — when enough SOL has been raised (the exact threshold is set by the launch configuration), the bonding curve closes, the liquidity migrates automatically to a Meteora DAMM V2 pool, and the token becomes a permanent DEX pair.\n\nCLKN completed this journey — it launched on a Bags.fm bonding curve and graduated to Meteora DAMM V2. This is why the liquidity pool itself is permanent and cannot be pulled by the creator. That closes the most common rug vector — though it is not a guarantee against every risk, such as a creator selling their own token allocation.",
+          "reference": true
+        },
+        {
+          "id": "lib-meteora-damm",
+          "title": "Meteora DAMM V2",
+          "icon": "🌊",
+          "intro": "The liquidity pool where CLKN trades after graduating from Bags.fm.",
+          "content": "Meteora's Dynamic AMM (DAMM) V2 is a next-generation liquidity pool on Solana designed to maximize fee earnings for liquidity providers while minimizing impermanent loss through dynamic fee adjustments.\n\nKey features of Meteora DAMM V2:\n\nDYNAMIC FEES: Fee tiers adjust based on market volatility. When the market is volatile, fees increase to compensate LPs for higher impermanent loss risk. When markets are calm, fees decrease to attract more volume.\n\nCONCENTRATED LIQUIDITY: Like Uniswap v3, DAMM V2 supports concentrated positions for capital efficiency.\n\nBAGS.FM INTEGRATION: When a Bags.fm token graduates, its liquidity migrates directly into a Meteora DAMM V2 pool. The migration is automatic, trustless, and permanent — no human interaction required.\n\nCLKN trades in pool: 64WXkHM4zyWUkYy32TfUeBV5wDAfdcUGDxe5ntM4xaTd",
+          "reference": true
+        },
+        {
+          "id": "lib-price-impact",
+          "title": "Price Impact & Slippage",
+          "icon": "💥",
+          "intro": "The difference between the expected price and what you actually pay.",
+          "content": "Price impact and slippage are related but different concepts that every trader needs to understand.\n\nPRICE IMPACT is how much YOUR specific trade moves the market price. It's determined by the size of your trade relative to the pool's liquidity. A $1,000 buy in a $10,000 pool has 10% price impact — you're consuming 10% of available liquidity in one trade.\n\nSLIPPAGE is the acceptable difference between the price when you submit a transaction and the price when it executes. On Solana, transactions can take a few hundred milliseconds — the price can move during that time.\n\nSLIPPAGE TOLERANCE is how much movement you'll accept before your transaction fails automatically. Set it too low and your trades fail constantly. Set it too high and you're exposed to sandwich attacks.\n\nSANDWICH ATTACKS: MEV bots watch your pending transaction, buy before you (pushing price up), let your trade execute at a worse price, then sell immediately after (profiting from your slippage). This is why low slippage protects you — the sandwich becomes unprofitable.",
+          "reference": true
+        },
+        {
+          "id": "lib-fee-sharing",
+          "title": "Fee Sharing & LP Earnings",
+          "icon": "💰",
+          "intro": "How liquidity providers and token creators earn from trading activity.",
+          "content": "Every trade on a DEX generates fees. These fees are the incentive that attracts liquidity providers to deposit their tokens into pools.\n\nHOW LP FEES WORK: When you trade in a pool, you pay a small percentage fee (typically 0.25%-1%). This fee is distributed proportionally to all liquidity providers in the pool based on their share of the total liquidity.\n\nBAGS.FM FEE STRUCTURE: Bags.fm adds a creator fee layer on top. When you launch a token on Bags.fm, you (the creator) earn a percentage of all trading fees forever — even after graduation to Meteora. This is the revolutionary part — creators have a permanent financial stake in their token's trading activity.\n\nPARTNER FEES: Bags.fm also has a partner program. Platforms and builders can register a referral code and earn a share of platform fees on trades that come through their link. Important distinction: a partner code only earns from OTHER projects that launch or trade through it — it is NOT the same as the creator fee a token earns on its own trading. CLKN's project revenue is its creator fee — roughly 1% of every CLKN trade — and that is reinvested into the token; it does not come from a partner referral.\n\nCLKN LIFETIME FEES: You can see the total SOL earned from CLKN trading activity live in the Token Data tab — powered by the Bags.fm API.",
+          "reference": true
+        },
+        {
+          "id": "lib-reading-pool",
+          "title": "How to Read a Liquidity Pool",
+          "icon": "🔍",
+          "intro": "Understand what the numbers in a liquidity pool actually mean.",
+          "content": "When you look at a pool on DexScreener or Meteora, you'll see several key metrics. Here's what they all mean:\n\nLIQUIDITY / TVL: Total value locked in the pool. This is the combined dollar value of both tokens. Higher = more stable prices and less slippage.\n\nPRICE: The current exchange rate between the two tokens, derived from their ratio in the pool.\n\nVOLUME (24H): Total dollar value traded in the last 24 hours. High volume relative to liquidity = high fee earnings for LPs.\n\nVOLUME/LIQUIDITY RATIO: Divide 24H volume by liquidity. A ratio above 1.0 means daily trading volume is larger than the entire pool — a sign of an active, healthy pool. Actual fee income is that volume times the fee rate (e.g. a 1.0 ratio at a 0.3% fee earns the pool roughly 0.3% of its TVL per day), not the full ratio.\n\nPRICE CHANGE (24H): How much the token price moved in 24 hours. Expressed as a percentage.\n\nTRANSACTIONS (24H): Number of individual buy/sell transactions. Shows activity level.\n\nBUYS vs SELLS: Breakdown of transaction direction. More buys than sells = buying pressure.\n\nSOL IN POOL: For SOL pairs, this shows how much SOL backs the token. More SOL = stronger liquidity backing.",
+          "reference": true
+        },
+        {
+          "id": "lib-lp-strategy",
+          "title": "LP Strategy Basics",
+          "icon": "♟️",
+          "intro": "When to add liquidity, when to remove it, and how to think about LP positions.",
+          "content": "Providing liquidity isn't just clicking a button — it's a strategy that requires understanding the tradeoffs.\n\nWHEN LP MAKES SENSE:\n- You plan to hold both tokens long-term anyway (IL doesn't matter if you'd hold both)\n- The pool generates high fees relative to IL risk\n- You believe the price ratio will stay relatively stable\n- You want passive income from your holdings\n\nWHEN LP DOESN'T MAKE SENSE:\n- You're strongly bullish on one token and bearish the other (just hold the one you like)\n- The pool has low volume and won't generate meaningful fees\n- You need your capital liquid for other opportunities\n\nFULL RANGE vs CONCENTRATED:\nFull range positions are set-and-forget. Concentrated positions earn more but require monitoring and rebalancing when price moves outside your range.\n\nIMPERMANENT LOSS CALCULATOR: Before adding to any pool, calculate your breakeven fee earnings vs potential IL. If you need 30 days of fees to break even on IL, make sure you're committed to that timeline.\n\nREMOVING LIQUIDITY: You can remove liquidity at any time — your position is not locked (unless you use a lock protocol). When you remove, you receive both tokens at their current ratio.",
+          "reference": true
+        }
+      ]
+    },
+    {
+      "id": "deepdive",
+      "title": "Deep Dives",
+      "icon": "🔍",
+      "blurb": "How to research a token, read Solscan, trading psychology, tax basics, finding alpha, and more.",
+      "lessons": [
+        {
+          "id": "wallet-security",
+          "title": "Wallet Security Deep Dive",
+          "icon": "🔐",
+          "intro": "Your wallet is your bank, your identity, and your entire crypto life. Lose it and it's gone forever.",
+          "content": "",
+          "sections": [
+            {
+              "heading": "Seed Phrases — The Master Key",
+              "body": "Your seed phrase is a 12 or 24 word sequence that controls your entire wallet. Anyone who has it owns everything in it. Period.\n\nRULES THAT ARE NOT NEGOTIABLE:\n• Never type your seed phrase into any website, app, or form — ever\n• Never photograph it and store it in cloud storage (Google Photos, iCloud)\n• Never send it to anyone — not support, not a mod, not Cluck Norris himself\n• Write it on paper. Store copies in multiple physical locations\n• Consider a fireproof/waterproof safe for long term storage\n\nHardware wallets like Ledger and Trezor store your seed phrase offline. The seed phrase never touches the internet. This is the gold standard for serious holders.\n\nThe single most common way people lose crypto: they type their seed phrase into a fake website pretending to be MetaMask, Phantom, or a hardware wallet setup page."
+            },
+            {
+              "heading": "Hot Wallets vs Cold Wallets",
+              "body": "HOT WALLET — Connected to the internet (Phantom, MetaMask, Backpack)\n• Convenient for daily use and trading\n• Vulnerable to malware, phishing, and browser exploits\n• Use for amounts you are comfortable losing\n• Never store your life savings in a hot wallet\n\nCOLD WALLET — Offline storage (Ledger, Trezor, Coldcard)\n• Private keys never touch the internet\n• Must physically confirm transactions on the device\n• More friction but dramatically more secure\n• Use for long-term holdings and large amounts\n\nTHE SMART STRATEGY:\nUse a hot wallet for trading and daily activity. Use a cold wallet for storing anything significant. Think of your hot wallet like a physical wallet you carry — only put in what you need for the day."
+            },
+            {
+              "heading": "Approval Exploits — The Silent Killer",
+              "body": "When you interact with DeFi protocols, you sign token approvals that give smart contracts permission to spend your tokens. Most people blindly click approve without reading what they are signing.\n\nHOW THE ATTACK WORKS:\n1. You visit a malicious site or click a bad link\n2. It asks you to sign a transaction that looks routine\n3. You have actually approved an unlimited spend on your tokens\n4. The attacker drains your wallet immediately\n\nPROTECTION:\n• Use a revoker to audit and clear unused approvals regularly — revoke.cash supports Solana, and this app's own Security Coop tool checks and revokes risky approvals\n• Never sign transactions on sites you do not trust completely\n• Read what you are signing — the amount, the contract address, the permission\n• If a site asks for an approval that seems larger than needed, walk away\n\nOn Solana specifically — the most common drainer does not set a standing allowance at all. It tricks you into signing a single transaction that transfers your tokens and SOL straight out, or reassigns your token account's authority. The rule is the same everywhere: read every transaction before you sign it, and be extra wary of NFT mints, airdrops, and token claims."
+            },
+            {
+              "heading": "Phishing & Social Engineering",
+              "body": "The most sophisticated attacks do not need to hack your wallet. They trick you into handing over access.\n\nCOMMON ATTACK VECTORS:\n• Fake support DMs — no legitimate support will ever DM you first\n• Fake airdrop sites — if you did not sign up for it, it is not real\n• Impersonation — scammers copy profile pictures and names of trusted accounts\n• Urgent messages — \"your wallet will be suspended\" creates panic that bypasses judgment\n• Fake browser extensions — always download from official sources only\n• Discord and Telegram DMs — treat every unsolicited DM as a scam until proven otherwise\n\nCLUCK'S RULE: If someone contacts you first about your wallet, crypto, or money — it is a scam. 100% of the time. No exceptions."
+            },
+            {
+              "heading": "Common Mistakes",
+              "body": "❌ Using the same wallet for everything — separate wallets for different risk levels\n❌ Storing seed phrase digitally — one data breach and it is gone\n❌ Clicking links in Discord and Telegram — always go directly to official sites\n❌ Connecting your main wallet to unknown protocols — use a burner wallet to test\n❌ Ignoring approval limits — unlimited approvals are dangerous\n❌ Trusting someone because they have followers — scammers build credibility deliberately"
+            }
+          ]
+        },
+        {
+          "id": "token-research",
+          "title": "How to Research a Token",
+          "icon": "🔍",
+          "intro": "A complete framework for evaluating any token before you put a single dollar in.",
+          "content": "",
+          "sections": [
+            {
+              "heading": "Step 1 — The Contract Check",
+              "body": "Before anything else, verify the contract address from the official source.\n\nWHY THIS MATTERS: Scammers create tokens with nearly identical names and symbols to legitimate projects. The only thing that cannot be faked is the contract address.\n\n• Always copy the contract from the official website, CoinGecko, or the project's verified social media\n• Search the contract on Solscan or Etherscan and read what you find\n• Check when the contract was deployed — very new contracts are higher risk\n• Look at the top holders — if 5 wallets hold 80% of supply, concentration risk is extreme\n• Check if the contract is verified and open source — unverified contracts are a red flag"
+            },
+            {
+              "heading": "Step 2 — Liquidity and Volume",
+              "body": "A token with no liquidity cannot be sold. This is called a liquidity trap.\n\nWHAT TO CHECK ON DEXSCREENER:\n• Total liquidity — under $10K is extremely risky, you may not be able to exit\n• Is liquidity locked? On Solana, check Jupiter Lock or the pool authority via Rugcheck or Solscan (team.finance and UNCX are mainly Ethereum-side tools)\n• Who controls the liquidity? Creator-controlled LP can be removed (rug pull)\n• 24H volume relative to liquidity — low volume with high liquidity means little interest\n• Age of the liquidity pool — very new pools carry more risk\n\nCLKN EXAMPLE: CLKN graduated from the Bags.fm bonding curve to Meteora DAMM V2. The graduation process locks the liquidity pool permanently — so the LP itself can't be pulled. That closes the most common rug vector, but it does not remove every risk: holder concentration and large insider allocations are separate things you still have to check on any token."
+            },
+            {
+              "heading": "Step 3 — Team and Transparency",
+              "body": "Anonymous teams are normal in crypto. Lack of any transparency is not.\n\nWHAT TO LOOK FOR:\n• Is there a website? Is it real content or a template with placeholder text?\n• Does the project have a whitepaper or documentation?\n• Are there social channels with genuine engagement or bot-inflated numbers?\n• Has the team communicated consistently over time or just around launches?\n• Are there known advisors, backers, or partnerships that can be verified?\n\nCOMMUNITY SIGNALS:\n• Organic community engagement beats follower counts\n• Real users asking real questions is a positive signal\n• Communities that only pump and never discuss fundamentals are warning signs\n• Check how the team responds to critical questions — defensiveness is a red flag"
+            },
+            {
+              "heading": "Step 4 — Tokenomics",
+              "body": "How tokens are distributed and released determines who profits at whose expense.\n\nKEY QUESTIONS:\n• What is the total supply and circulating supply?\n• Are there team/investor allocations with vesting schedules?\n• Is there a token unlock schedule — when do large allocations become tradeable?\n• What is the fully diluted valuation vs market cap? Large gap = future sell pressure\n• Is there a burn mechanism, buyback program, or deflationary model?\n\nRED FLAGS:\n• Team holds large % with no lock or vesting\n• Upcoming unlocks that dwarf current circulating supply\n• Emissions that continuously dilute holders\n• No clear utility for why the token needs to exist"
+            },
+            {
+              "heading": "Step 5 — The Gut Check",
+              "body": "After all the research, ask yourself these questions honestly:\n\n• Do I understand what this project actually does?\n• Can I explain why the token needs to exist?\n• Would I still buy this if no one else was talking about it?\n• Am I buying because of FOMO or because of conviction?\n• Have I sized this position appropriately for the risk level?\n• Do I have a plan for if it goes down 50%?\n\nThe answers matter more than any metric. Most people skip the gut check entirely and regret it.\n\nCLUCK'S FRAMEWORK: Research first. Size second. Enter third. Never reverse the order."
+            }
+          ]
+        },
+        {
+          "id": "solscan",
+          "title": "Reading Solscan Like a Pro",
+          "icon": "🔎",
+          "intro": "The blockchain is a public ledger. Everything is visible to everyone. Here is how to read it.",
+          "content": "",
+          "sections": [
+            {
+              "heading": "What Is Solscan?",
+              "body": "Solscan is a blockchain explorer for Solana. It shows you every transaction, every wallet, every token transfer, and every smart contract interaction — all publicly visible, all searchable.\n\nKEY THINGS YOU CAN DO ON SOLSCAN:\n• Look up any wallet address and see its complete transaction history\n• Track token movements — who is buying, who is selling, how much\n• See when a token contract was deployed and by whom\n• Verify that a transaction actually went through\n• Find top holders of any token\n• Read smart contract code (if verified)\n\nThink of Solscan as the full history of everything that has happened on Solana. Nothing can be hidden. Nothing can be deleted."
+            },
+            {
+              "heading": "Reading a Wallet",
+              "body": "When you search a wallet address on Solscan you see:\n\nOVERVIEW TAB:\n• SOL balance and total portfolio value\n• All token holdings with current values\n• Transaction count and first/last activity\n\nTRANSACTIONS TAB:\n• Every transaction chronologically\n• What was sent, received, swapped, or staked\n• Timestamp and transaction fee paid\n• Whether it succeeded or failed\n\nTOKEN ACCOUNTS TAB:\n• Every SPL token the wallet has ever held\n• Current balance and token mint address\n\nHOW TO USE THIS:\nTrack wallets of successful traders — see what they are buying before it moves. Find deployer wallets of token projects — see if they are selling while promoting. Verify that a team wallet has not dumped its allocation."
+            },
+            {
+              "heading": "Reading a Transaction",
+              "body": "Click any transaction signature to see the full detail:\n\nWHAT YOU WILL SEE:\n• Block and timestamp — exactly when it happened\n• Fee payer — who paid the transaction fee\n• Instructions — what the transaction actually did\n• Token transfers — which tokens moved, how much, between which wallets\n• Account inputs and outputs — all accounts involved\n\nBALANCE CHANGES TAB:\nThis is the most useful view. It shows exactly what changed in each wallet as a result of this transaction. Positive numbers = received, negative numbers = sent.\n\nPRO TIP: The Balance Changes tab is how you verify on-chain payments. If you see your wallet with a positive CLKN balance change matching your expected amount — the payment went through."
+            },
+            {
+              "heading": "Finding Smart Money",
+              "body": "Smart money wallets are wallets that consistently buy tokens early and sell at peaks. Tracking them gives you early signals on what is gaining traction.\n\nHOW TO FIND THEM:\n• Look at early transactions on any successful token\n• Find wallets that bought early with significant size\n• Check their other holdings — do they have a pattern of early entries?\n• Tools like Birdeye, Cielo, and Nansen help surface these wallets automatically\n\nHOW TO USE THE SIGNAL:\n• Smart money buying is a positive signal — not a guarantee\n• Smart money selling is a warning signal — take it seriously\n• Multiple smart money wallets entering the same token simultaneously is a stronger signal\n• Do your own research in addition to following wallets — they can be wrong too\n\nCAUTION: Some wallets appear to be smart money but are actually insider wallets. Entry before any public announcement is a red flag, not a signal to follow."
+            },
+            {
+              "heading": "Common Mistakes",
+              "body": "❌ Assuming a transaction succeeded without verifying on Solscan\n❌ Following a wallet without understanding why it makes the decisions it does\n❌ Ignoring the age of transactions — old activity is less relevant than recent\n❌ Not checking if a token deployer has dumped their allocation\n❌ Misreading balance changes — always check the sign (positive/negative)\n❌ Confusing token accounts with wallet addresses — they are different things"
+            }
+          ]
+        },
+        {
+          "id": "stablecoins",
+          "title": "Understanding Stablecoins",
+          "icon": "💵",
+          "intro": "Not all stable is created equal. Some stablecoins are safer than others. Some have failed catastrophically.",
+          "content": "",
+          "sections": [
+            {
+              "heading": "What Is a Stablecoin?",
+              "body": "A stablecoin is a cryptocurrency designed to maintain a stable value — usually pegged to $1 USD. They serve as a safe haven in volatile markets and as a medium of exchange in DeFi.\n\nWHY STABLECOINS EXIST:\n• Move value without exposure to crypto volatility\n• Earn yield in DeFi without holding volatile assets\n• Trade in and out of positions quickly without converting to fiat\n• Send money globally instantly with minimal fees\n\nThe key question for any stablecoin: what backs the peg? How is the $1 value maintained? The answer determines how safe it actually is."
+            },
+            {
+              "heading": "Types of Stablecoins",
+              "body": "FIAT-BACKED (Centralized)\nExamples: USDC, USDT, PYUSD\n• Backed 1:1 by real USD held in bank accounts\n• Most stable and battle-tested\n• Counterparty risk — you trust the issuer (Circle, Tether)\n• Subject to regulatory action and account freezing\n• USDC can freeze wallets on command\n\nCRYPTO-BACKED (Decentralized)\nExamples: DAI, LUSD\n• Backed by overcollateralized crypto deposits\n• No central issuer — governed by smart contracts\n• More decentralized but more complex\n• Can depeg if collateral value drops too fast\n• DAI is the most established — has held its peg through multiple crashes\n\nALGORITHMIC (Experimental)\nExamples: UST (collapsed 2022), FRAX\n• Use algorithms and incentive mechanisms to maintain the peg\n• Not backed by real assets\n• UST/LUNA collapsed in May 2022 — $40B wiped out in days\n• Treat all algorithmic stables as high risk until proven otherwise over years\n\nYIELD-BEARING\nExamples: sDAI, USDe\n• Stablecoins that automatically earn yield\n• Usually backed by staked assets or basis trade strategies\n• Higher yield = higher complexity = higher risk"
+            },
+            {
+              "heading": "Depegging Events",
+              "body": "A depeg happens when a stablecoin loses its $1 value. Minor depegs (a few cents) are common during volatility. Major depegs can be catastrophic.\n\nFAMOUS DEPEGS:\n• UST/LUNA (May 2022) — algorithmic stable collapsed from $1 to near zero in 72 hours, wiping out $40B+\n• USDC (March 2023) — briefly depegged to $0.87 when Silicon Valley Bank (which held Circle's reserves) failed. Recovered within days.\n• DAI — has experienced minor depegs during extreme market stress but always recovered\n\nHOW DEPEGS HAPPEN:\n• Algorithmic mechanisms break under bank-run conditions\n• Reserve backing is questioned or proven insufficient\n• Smart contract exploits drain backing assets\n• Regulatory action freezes reserves\n\nRULE: Never keep more in a stablecoin than you can afford to lose entirely. USDC and USDT are the safest options but nothing is truly risk-free."
+            },
+            {
+              "heading": "Stablecoins in DeFi",
+              "body": "Stablecoins are the lifeblood of DeFi. They enable:\n\nLP POSITIONS: Stablecoin pairs (USDC/USDT) have minimal impermanent loss and earn steady fees. Popular with conservative LPs.\n\nLENDING: Borrow against your crypto collateral in stablecoins. Keep your crypto exposure while getting liquidity.\n\nYIELD FARMING: Deposit stablecoins into protocols to earn yield. Always evaluate what generates the yield — sustainable protocol fees vs unsustainable token emissions.\n\nSAFE HAVEN: During market crashes, moving to stablecoins preserves value while waiting for re-entry opportunities.\n\nCLUCK'S TAKE: USDC for safety, DAI for decentralization, and stay far away from anything calling itself an algorithmic stable until it has survived at least two full market cycles."
+            }
+          ]
+        },
+        {
+          "id": "bridges",
+          "title": "Bridges & Cross-Chain",
+          "icon": "🌉",
+          "intro": "Moving assets between blockchains is powerful but carries unique risks. Bridge hacks have cost billions.",
+          "content": "",
+          "sections": [
+            {
+              "heading": "What Is a Bridge?",
+              "body": "A bridge is a protocol that allows you to move assets from one blockchain to another. Without bridges, Ethereum, Solana, Bitcoin, and other chains would be entirely isolated ecosystems.\n\nHOW BRIDGES WORK (simplified):\n1. You deposit Token A on Chain A into the bridge contract\n2. The bridge locks your Token A\n3. The bridge mints a wrapped version of Token A on Chain B\n4. You receive the wrapped token on Chain B\n5. To go back, you burn the wrapped token and receive the original\n\nThe bridge holds the locked assets on one side. This makes it a massive target — it is essentially a vault holding billions of dollars of crypto secured by smart contract code."
+            },
+            {
+              "heading": "Types of Bridges",
+              "body": "LOCK AND MINT BRIDGES\nMost common. Lock assets on source chain, mint wrapped assets on destination.\nExamples: Wormhole, Portal Bridge\nRisk: If the bridge contract is exploited, all locked assets can be drained.\n\nLIQUIDITY NETWORK BRIDGES\nUse liquidity pools on both sides. Faster but requires sufficient liquidity.\nExamples: Stargate, Across Protocol\nRisk: Liquidity can be depleted during high demand.\n\nNATIVE BRIDGES\nBuilt by the blockchain itself. Generally more secure but slower.\nExamples: Ethereum L2 bridges (Arbitrum, Optimism native bridges)\nRisk: Lower smart contract risk but usually slower withdrawal times.\n\nCROSS-CHAIN MESSAGING\nNot just tokens — passes data and instructions between chains.\nExamples: LayerZero, Chainlink CCIP\nRisk: Complex interactions increase attack surface."
+            },
+            {
+              "heading": "Major Bridge Hacks",
+              "body": "Bridge hacks are the largest category of crypto exploit by total value stolen.\n\nRONIN BRIDGE — March 2022 — $625M stolen\nHackers compromised 5 of 9 validator keys and drained the bridge.\n\nWORMHOLE — February 2022 — $320M stolen\nA bug in the Solana smart contract allowed minting of 120,000 wrapped ETH without depositing collateral.\n\nNOMAD BRIDGE — August 2022 — $190M stolen\nA single misconfiguration allowed anyone to drain the bridge. Became a free-for-all as hundreds of wallets copied the exploit transaction.\n\nHARMONY HORIZON — June 2022 — $100M stolen\n2 of 5 multisig keys compromised — insufficient decentralization.\n\nTOTAL BRIDGE LOSSES 2022: Over $2 billion.\n\nThe pattern: bridges concentrate enormous value in smart contracts that are difficult to secure perfectly. Every line of code is an attack surface."
+            },
+            {
+              "heading": "How to Bridge Safely",
+              "body": "You cannot eliminate bridge risk but you can manage it.\n\nBEST PRACTICES:\n• Use the most battle-tested bridges — age and audit history matter\n• Check that the bridge has been audited by reputable security firms\n• Never bridge more than you need at one time\n• Use native bridges when speed is not critical — they are generally safer\n• Check bridge TVL — very low TVL means less liquidity and less battle-testing\n• Do not leave assets on bridged contracts longer than necessary\n\nFOR SOLANA SPECIFICALLY:\n• Wormhole is the most established Solana bridge — it was hacked but has since recovered and been heavily audited\n• Allbridge and deBridge are alternatives\n• Always verify the destination contract address before sending\n\nRULE: Treat bridging like surgery. Do it when necessary, use the best tools available, and keep the exposure time as short as possible."
+            }
+          ]
+        },
+        {
+          "id": "psychology",
+          "title": "Trading Psychology",
+          "icon": "🧠",
+          "intro": "The market does not beat most people with complexity. It beats them with emotion.",
+          "content": "",
+          "sections": [
+            {
+              "heading": "FOMO — Fear of Missing Out",
+              "body": "FOMO is the emotional state that makes you buy a token after it has already gone up 300% because you are afraid of missing further gains.\n\nHOW IT WORKS AGAINST YOU:\n• You see a token pumping on your timeline\n• You imagine the gains you would have had if you bought earlier\n• You convince yourself it still has more to run\n• You buy near the top\n• Early buyers take profit using your money as exit liquidity\n• Price drops. You hold hoping for a recovery that may never come.\n\nFOMO PROTECTION:\n• Make your entry decisions before the price moves, not after\n• If you missed a move, accept it and look for the next one\n• Ask yourself: would I buy this at this price if I had never seen a lower price? If no — do not buy\n• Set price alerts in advance so you are not reacting, you are executing a plan"
+            },
+            {
+              "heading": "FUD — Fear, Uncertainty, Doubt",
+              "body": "FUD is information — real or manufactured — designed to create fear and trigger selling.\n\nTYPES OF FUD:\n• Legitimate — real negative news that should affect your decision\n• Manufactured — coordinated campaigns to suppress price so large buyers can accumulate\n• Uncertainty bias — your own brain magnifying risks in a downturn\n\nHOW TO EVALUATE FUD:\n• Is it based on verifiable facts or rumors and speculation?\n• Does the source have an incentive to spread fear?\n• Would this matter in 6 months?\n• Has the project addressed it directly and transparently?\n• Is everyone else scared for the same reason at the same time? (Often a buy signal, not a sell signal)\n\nCLUCK'S RULE: Panic selling at the bottom is the most expensive thing most retail investors ever do."
+            },
+            {
+              "heading": "Loss Aversion and Revenge Trading",
+              "body": "Loss aversion is the psychological phenomenon where losses feel twice as painful as equivalent gains feel good. This causes irrational behavior.\n\nLOSS AVERSION TRAPS:\n• Holding a losing position too long because selling makes the loss \"real\"\n• Refusing to cut losses because of how much you paid (sunk cost fallacy)\n• Taking excessive risk to \"get back to even\" after a loss\n\nREVENGE TRADING:\nAfter a loss, the brain wants to recover immediately. This leads to:\n• Larger position sizes to make back losses faster\n• Lower quality setups accepted out of impatience\n• Emotional decision-making instead of analytical\n• The loss compounds\n\nTHE FIX:\n• Pre-set your maximum loss per trade before entering\n• After a significant loss, stop trading for 24 hours\n• Your goal is not to win back what you lost — it is to make the next best decision with what you have now"
+            },
+            {
+              "heading": "Building a Discipline Framework",
+              "body": "Discipline is not willpower. Willpower is finite and unreliable. Discipline is a system that makes the right choice the path of least resistance.\n\nBUILD YOUR FRAMEWORK:\n• Written rules — document your strategy before emotion is involved\n• Position sizing rules — never size based on conviction, always based on risk\n• Exit rules — define profit targets and stop losses before entering\n• No-trade zones — times or conditions when you do not trade at all\n• Review process — analyze your decisions weekly, not just your results\n\nTHE JOURNALING HABIT:\nWrite down why you entered every trade and what you expected. Review it after. The pattern of where you are wrong is the most valuable information you have.\n\nCLUCK'S FRAMEWORK: Plan the trade. Trade the plan. Review the result. Improve the plan. Repeat."
+            },
+            {
+              "heading": "Common Mistakes",
+              "body": "❌ Checking prices every 5 minutes — it creates anxiety and impulse decisions\n❌ Trading based on what others are doing rather than your own analysis\n❌ Having no exit plan when you enter — hope is not a strategy\n❌ Overtrading — more trades does not mean more profit, it means more fees and more mistakes\n❌ Letting a trade become an investment — if you would not buy it today, why are you still holding it?\n❌ Confusing luck with skill in early wins — the market will eventually test your process"
+            }
+          ]
+        },
+        {
+          "id": "taxes",
+          "title": "Crypto Tax Basics",
+          "icon": "🧾",
+          "intro": "Not financial or tax advice. But you need to understand the basics before tax season surprises you.",
+          "content": "",
+          "sections": [
+            {
+              "heading": "What Triggers a Taxable Event",
+              "body": "In most jurisdictions, the following are taxable events for crypto:\n\nGENERALLY TAXABLE:\n• Selling crypto for fiat (USD, EUR, etc.)\n• Trading one crypto for another (BTC → ETH is a taxable event)\n• Using crypto to purchase goods or services\n• Receiving crypto as income (staking rewards, airdrops, payments)\n• DeFi activities — swapping tokens, receiving LP fees, yield farming rewards\n\nGENERALLY NOT TAXABLE:\n• Buying crypto with fiat and holding it\n• Transferring crypto between your own wallets\n• Gifting crypto (rules vary by jurisdiction and amount)\n\nTHE IMPORTANT TRUTH: In most countries, every single token swap in DeFi is potentially a taxable event. If you made 500 trades this year, you potentially have 500 taxable events to report.\n\nThis is not legal or tax advice. Consult a qualified tax professional in your jurisdiction."
+            },
+            {
+              "heading": "Short vs Long Term Capital Gains",
+              "body": "HOW GAINS ARE CALCULATED:\nCapital gain = Sale price minus cost basis (what you paid)\n\nSHORT TERM CAPITAL GAINS:\n• Assets held less than 1 year (in US)\n• Taxed as ordinary income — your highest tax rate\n• Can be 10-37% depending on your total income\n\nLONG TERM CAPITAL GAINS:\n• Assets held more than 1 year (in US)\n• Taxed at preferential rates — 0%, 15%, or 20%\n• Significantly lower than short term rates\n\nTHE IMPLICATION:\nHolding a position for over 12 months before selling can dramatically reduce your tax liability. This is one of the most powerful legal tax strategies available and most traders ignore it completely.\n\nIMPORTANT: Tax law varies by country. Some countries have no capital gains tax on crypto. Others treat it as income. Always verify the rules in your specific jurisdiction."
+            },
+            {
+              "heading": "Record Keeping",
+              "body": "The single most important thing you can do is keep records. The IRS and other tax authorities are increasingly sophisticated about crypto.\n\nWHAT TO RECORD FOR EVERY TRANSACTION:\n• Date and time\n• Amount bought or sold\n• Price at time of transaction (in your local currency)\n• Any fees paid\n• Which wallet or exchange\n• Transaction hash for verification\n\nTOOLS THAT HELP:\n• Koinly — import from exchanges and wallets automatically\n• CoinTracker — multi-chain support including Solana\n• TaxBit — enterprise-grade, used by exchanges\n• Rotki — open source, self-hosted option\n\nSOLANA SPECIFICALLY:\nDeFi activity on Solana is complex — many transactions per interaction, wrapping and unwrapping tokens, LP positions. Use a tool that specifically supports Solana DeFi rather than trying to track manually."
+            },
+            {
+              "heading": "Common Tax Mistakes",
+              "body": "❌ Thinking you only owe tax when you cash out to fiat — token-to-token trades are taxable in most jurisdictions\n❌ Not keeping records because \"the amounts are small\" — small trades compound to significant totals\n❌ Forgetting about staking and farming rewards — these are typically taxable as income when received\n❌ Using FIFO vs HIFO without understanding the difference — accounting method affects your tax significantly\n❌ Waiting until December to think about taxes — tax loss harvesting opportunities are missed\n❌ Not reporting because \"they will never know\" — blockchain is public and permanently auditable\n\nCLUCK'S DISCLAIMER: None of this is tax advice. This is general educational information. Hire a crypto-qualified accountant. It is worth the cost."
+            }
+          ]
+        },
+        {
+          "id": "nfts",
+          "title": "NFTs & Digital Ownership",
+          "icon": "🖼️",
+          "intro": "NFTs are not just JPEGs. They are a technology for digital ownership. Understanding what they are and are not matters.",
+          "content": "",
+          "sections": [
+            {
+              "heading": "What Is an NFT?",
+              "body": "NFT stands for Non-Fungible Token. Non-fungible means unique — not interchangeable with another identical item.\n\nFUNGIBLE: 1 USDC = 1 USDC. They are identical and interchangeable.\nNON-FUNGIBLE: NFT #1234 is not the same as NFT #5678, even from the same collection.\n\nHOW NFTS WORK:\n• A smart contract on the blockchain records that a specific wallet owns a specific token ID\n• The token ID can point to an image, video, audio file, or any other data\n• The ownership record is permanent and publicly verifiable\n• Transferring the NFT transfers the ownership record\n\nWHAT AN NFT IS NOT:\n• Owning an NFT does not mean you own the copyright to the image\n• The image itself is usually stored off-chain (IPFS or centralized server)\n• If the server hosting the image goes down, your NFT may point to a broken link\n• Owning an NFT of a brand does not give you any legal rights to that brand"
+            },
+            {
+              "heading": "Real Use Cases",
+              "body": "Beyond profile picture collections, NFTs have legitimate applications:\n\nGAMING ASSETS\nTrue digital ownership of in-game items. Trade, sell, or use across compatible games. The item exists on the blockchain — not on a company's server they can shut down.\n\nEVENT TICKETS\nNFT tickets cannot be counterfeited. Resale royalties go to the event organizer. Attendance can be verified on-chain permanently.\n\nMUSIC AND CONTENT\nArtists sell directly to fans without labels or platforms. Royalties are programmable — automatically paid to creators on every resale.\n\nREAL WORLD ASSETS (RWAs)\nTokenizing real estate, art, commodities. Each NFT represents fractional ownership. Emerging use case with significant regulatory complexity.\n\nIDENTITY AND CREDENTIALS\nVerifiable credentials, membership passes, certificates of completion. Cluck Norris could issue NFT certificates to Ultimate Challenge passers — the achievement would be on-chain forever.\n\nDOMAIN NAMES\nSolana Name Service (.sol domains), ENS (.eth). Your wallet address as a readable name."
+            },
+            {
+              "heading": "The 2021 Bubble and What Happened",
+              "body": "In 2021, NFT trading volume exploded. Profile picture collections sold for hundreds of thousands of dollars. Floor prices collapsed 90%+ in 2022.\n\nWHY IT HAPPENED:\n• New technology attracted speculative capital\n• Social status driven by ownership of rare profile pictures\n• Easy money from stimulus and crypto bull market\n• FOMO buying at peak prices\n• Most buyers had no framework for valuing what they were buying\n\nWHAT ACTUALLY HAS VALUE:\n• Projects with real utility beyond ownership (gaming, ticketing, real assets)\n• Projects with strong communities and brand identity\n• Projects from established creators with proven track records\n• Projects where the NFT grants access to something genuinely valuable\n\nWHAT DOES NOT HAVE VALUE:\n• Randomly generated image collections with no utility\n• Projects where the value proposition is purely \"it might go up\"\n• Collections with anonymous teams and no roadmap\n\nThe technology survived the bubble. Most of the 2021 projects did not."
+            },
+            {
+              "heading": "NFTs on Solana",
+              "body": "Solana has a significant NFT ecosystem due to low transaction costs and fast confirmation times.\n\nKEY PLATFORMS:\n• Magic Eden — largest Solana NFT marketplace\n• Tensor — popular with power users, advanced trading features\n• Exchange.art — focused on digital art\n\nNOTABLE COLLECTIONS:\n• Mad Lads — Backpack wallet's flagship collection\n• DeGods and y00ts — famously migrated off Solana in 2023, then returned to Solana in 2024\n• Okay Bears — established Solana blue chip\n\nSOLANA NFT SPECIFICS:\n• Uses the Metaplex standard for NFT metadata\n• Compressed NFTs (cNFTs) dramatically reduce minting costs\n• Creator royalties have been a contested issue on Solana marketplaces\n\nIF YOU ARE BUYING NFTS ON SOLANA:\n• Stick to established marketplaces\n• Verify the official collection address before buying\n• Fake collections with identical art are common scams\n• Understand what you are actually getting — utility vs pure speculation"
+            }
+          ]
+        },
+        {
+          "id": "daos",
+          "title": "DAOs — Decentralized Autonomous Organizations",
+          "icon": "🏛️",
+          "intro": "DAOs are a new form of organization governed by code and token holders instead of executives and boards.",
+          "content": "",
+          "sections": [
+            {
+              "heading": "What Is a DAO?",
+              "body": "A Decentralized Autonomous Organization is an organization governed by smart contracts and token-based voting instead of traditional hierarchies.\n\nTHE CORE IDEA:\n• Rules are encoded in smart contracts — transparent, automatic, tamper-resistant\n• Decisions are made by governance token holders through on-chain voting\n• Treasury funds are controlled by the smart contract, not an individual\n• Anyone with tokens can propose and vote on changes\n\nTRADITIONAL COMPANY vs DAO:\nTraditional: CEO decides, board approves, lawyers enforce\nDAO: Token holders vote, smart contract executes, blockchain enforces\n\nTHE PROMISE:\nCoordination without trust. You do not need to trust the organization's leadership because the rules are in code, the votes are public, and the treasury is on-chain."
+            },
+            {
+              "heading": "How DAO Governance Works",
+              "body": "GOVERNANCE TOKENS:\nMembers hold governance tokens that give them voting rights. More tokens = more voting power in most systems.\n\nTHE PROPOSAL PROCESS:\n1. Member submits a proposal (usually requires holding minimum tokens)\n2. Discussion period — community debates the proposal\n3. Voting period — token holders vote yes or no\n4. If passed — smart contract executes automatically (or multisig executes)\n5. If failed — proposal is rejected\n\nQUORUM REQUIREMENTS:\nMost DAOs require a minimum percentage of tokens to participate for a vote to be valid. Low voter turnout is a chronic problem — most token holders do not vote.\n\nDELEGATION:\nSome governance systems allow you to delegate your votes to another wallet — useful if you trust someone else's judgment or are too busy to vote on every proposal."
+            },
+            {
+              "heading": "DAO Treasuries",
+              "body": "Many DAOs control significant treasuries — pools of funds used to fund operations, development, and ecosystem growth.\n\nHOW TREASURIES WORK:\n• Funds are held in a multisig wallet or governed directly by smart contracts\n• Spending requires passing a governance vote\n• All transactions are publicly visible on-chain\n• Members can audit every dollar in and out\n\nFAMOUS DAO TREASURIES:\n• Uniswap DAO — billions in UNI token treasury\n• MakerDAO — manages billions in DAI stablecoin collateral\n• Compound, Aave, Curve — all have significant on-chain treasuries\n\nTHE TENSION:\nLarge treasuries attract governance attacks — buying enough tokens to pass malicious proposals. Balancer Protocol suffered an attempted governance attack. Always check how a DAO's voting power is distributed."
+            },
+            {
+              "heading": "DAO Risks and Limitations",
+              "body": "DAOs are an experiment in governance. They have real limitations.\n\nVOTER APATHY:\nMost token holders do not vote. A small group of active voters or large holders effectively controls most DAOs.\n\nPLUTOCRACY RISK:\nToken-weighted voting means wealth = power. Whales can dominate decisions regardless of community sentiment.\n\nGOVERNANCE ATTACKS:\nAn attacker can accumulate tokens and pass malicious proposals. The Beanstalk Protocol lost $182M to a flash loan governance attack in 2022.\n\nLEGAL UNCERTAINTY:\nDAO legal status is unclear in most jurisdictions. Members may have personal liability. Wyoming and a few other states have DAO-specific legislation but it is early.\n\nCOORDINATION PROBLEMS:\nMoving fast is hard when every decision requires a vote. Many DAOs have moved to core team execution with token holder oversight — a compromise between decentralization and efficiency.\n\nCLUCK'S TAKE: DAOs are a genuine innovation in coordination and governance. They are also immature, exploitable, and often dominated by insiders despite decentralization theater. Evaluate each one on its actual governance structure, not its marketing."
+            }
+          ]
+        },
+        {
+          "id": "alpha",
+          "title": "Finding Alpha",
+          "icon": "⚡",
+          "intro": "Alpha is an edge — information or insight that others do not have yet. Here is how to build a system for finding it.",
+          "content": "",
+          "sections": [
+            {
+              "heading": "What Is Alpha?",
+              "body": "Alpha is an edge over the market. Information, insight, or analysis that is not yet priced in — that allows you to position ahead of others.\n\nTYPES OF ALPHA:\n• Information alpha — you know something before others do\n• Analytical alpha — you interpret public information better than others\n• Speed alpha — you act on information faster than others\n• Network alpha — relationships give you early access to opportunities\n• Structural alpha — understanding market mechanics others ignore\n\nTHE HARD TRUTH:\nMost retail crypto traders have no edge. They react to news that is already priced in, follow the same influencers, use the same tools, and wonder why they underperform.\n\nBuilding alpha means doing work others will not do."
+            },
+            {
+              "heading": "On-Chain Alpha",
+              "body": "The blockchain is public. Every transaction is visible. This creates alpha opportunities for those willing to read it.\n\nWHAT TO TRACK ON-CHAIN:\n• Smart money wallet activity — what are consistent winners buying?\n• Token unlock schedules — large unlocks create predictable sell pressure\n• LP movements — large liquidity additions or removals signal intent\n• Exchange inflows/outflows — large exchange inflows often precede selling\n• Whale accumulation — large wallets quietly building positions\n\nTOOLS:\n• Nansen — tracks labeled smart money wallets (paid)\n• Cielo Finance — wallet tracking and alerts\n• Birdeye — Solana token analytics and wallet tracking\n• Solscan — manual on-chain research\n• DexScreener — new pair alerts and volume analysis\n\nSETTING UP ALERTS:\nThe key is not just having the tools but setting up systematic alerts so you see signals in real time rather than after they have already moved."
+            },
+            {
+              "heading": "Social and Community Alpha",
+              "body": "Information spreads through communities before it spreads through media. Being in the right communities early matters.\n\nWHERE ALPHA LIVES:\n• Builder communities — developers often discuss what they are building before launching\n• Protocol Discord servers — announcements hit Discord before X\n• Early-stage project Telegrams — before projects get traction\n• Developer GitHub activity — watch repos for new commits and activity\n\nHOW TO EVALUATE COMMUNITY SIGNALS:\n• Is the alpha actionable or just hype?\n• Who is sharing it and what is their track record?\n• Is there on-chain data to support the narrative?\n• Is the opportunity already known widely or still emerging?\n\nTHE SIGNAL-TO-NOISE PROBLEM:\nMost \"alpha\" shared in public channels is already priced in or is designed to create buying pressure for someone else's bags. Apply the same skepticism to community signals that you apply to everything else."
+            },
+            {
+              "heading": "Building a System",
+              "body": "Alpha is not a single find. It is a system you build and run consistently.\n\nYOUR ALPHA STACK:\n1. On-chain data feeds — 2-3 wallet trackers you check daily\n2. New pair monitoring — alerts for new Solana pairs above liquidity threshold\n3. Community channels — 3-5 high signal communities, not 50 noisy ones\n4. News aggregation — crypto news filtered for actionability, not noise\n5. Personal research time — dedicated time each day for independent analysis\n\nTHE WORKFLOW:\n• Morning: Check overnight on-chain activity and new deployments\n• Ongoing: Monitor wallet alerts and community signals\n• Weekly: Review performance of positions and update watchlist\n• Monthly: Evaluate which information sources actually produced alpha\n\nCLUCK'S RULE: Quality over quantity. One actionable insight from genuine research beats ten recycled tweets. Build a small, reliable system and run it consistently."
+            },
+            {
+              "heading": "Common Alpha Mistakes",
+              "body": "❌ Thinking public alpha is still alpha — if it is trending on CT it is already priced in\n❌ Following too many sources — noise drowns signal\n❌ Confusing access to information with the ability to act on it profitably\n❌ Not tracking your own alpha performance — which sources actually worked?\n❌ Paying for alpha that should be free — most paid alpha groups underperform\n❌ Confusing being early with being right — early and wrong still loses money"
+            }
+          ]
+        },
+        {
+          "id": "airdropper-101",
+          "title": "How to Use an Airdropper Without Burning Yourself",
+          "icon": "🪂",
+          "intro": "Airdroppers send tokens to many wallets in batches — convenient, but irreversible. One typo or one bad approval drains your wallet.",
+          "content": "",
+          "sections": [
+            {
+              "heading": "What An Airdropper Actually Does",
+              "body": "An airdropper takes a list of wallet addresses + amounts, builds a stack of Solana transactions that transfer your tokens to each one, and asks your wallet to sign each batch.\n\nWHY BATCHES:\nSolana caps every transaction at 1232 bytes. A single transfer is small, but each instruction adds account references that eat space fast. Most airdroppers fit ~10-20 wallets per transaction. A 100-recipient airdrop is typically 5-10 separate wallet popups, each one signed by you.\n\nWHAT YOUR WALLET SEES:\nFor every batch, your wallet popup shows:\n• The exact instructions being signed (CreateATA, TokenTransfer, etc.)\n• The destination accounts for each transfer\n• The amounts in raw + UI units\n• The estimated fee\n\nIf any of that looks wrong — wrong mint, unexpected recipients, weird amounts — reject. Once approved, the tokens leave your wallet immediately and the transaction can't be reversed."
+            },
+            {
+              "heading": "Token Accounts and the SOL Rent You Pay",
+              "body": "Every Solana wallet that holds a specific token needs a \"token account\" for that token. If a recipient has never held the token you're sending, they don't have an account for it yet.\n\nYOU PAY TO OPEN THEIR ACCOUNT:\nThe airdropper has to create a new token account for each first-time recipient. Solana charges ~0.00203928 SOL of rent per new account (a one-time cost, refundable if the account is later closed). This rent comes out of YOUR wallet, not theirs.\n\nDO THE MATH BEFORE YOU SEND:\n100 first-time recipients = ~0.20 SOL in rent alone. At a typical SOL price that's $30+ before you've even sent the first token. A good airdropper shows the rent estimate up front. If it doesn't, walk away.\n\nEXIT THE TOOL IF:\n• Your wallet's SOL balance is below the estimated rent + tx fees\n• You don't recognize the recipient list (was it pasted from somewhere trustworthy?)\n• You can't see the per-batch instruction breakdown in your wallet popup"
+            },
+            {
+              "heading": "The Five Mistakes That Drain Airdroppers",
+              "body": "1. WRONG TOKEN MINT. You select the wrong token and send 100K of a token you actually wanted to keep. Always verify the mint shown matches what you intend to send.\n\n2. RECIPIENT TYPO. Solana addresses are 32-44 base58 characters. A single wrong character sends tokens to a wallet nobody controls — gone forever. Always paste from a verified source. Never type addresses by hand.\n\n3. WRONG COLUMN ORDER. The amount column and address column get swapped in a CSV. You send 1 token to 100 wallets instead of 100 tokens to 1. Preview before you sign.\n\n4. RUNNING OUT OF SOL MID-AIRDROP. Wallet runs dry around batch 4 of 10. Half the recipients get tokens, half don't. Some airdrops fail entirely without refunding rent. Top up before you start.\n\n5. APPROVING WITHOUT READING. The wallet popup shows you exactly what's being signed. Most users hit approve without looking. If a malicious site or a compromised tool builds drainer instructions, the popup will show them — but only if you actually read it. Approve nothing you don't recognize."
+            },
+            {
+              "heading": "What to Verify In Every Wallet Popup",
+              "body": "When your wallet popup appears, before clicking approve:\n\n✓ DESTINATION ADDRESSES match your prepared list (sample-check 2-3 random rows)\n✓ MINT being transferred matches the token you intend to send\n✓ AMOUNT per recipient matches what you set\n✓ NUMBER OF INSTRUCTIONS is reasonable (10-20 transfers per batch, not 200)\n✓ NO UNEXPECTED INSTRUCTIONS — you should see Transfer / CreateATA, not Close / SetAuthority / random program calls\n✓ ESTIMATED FEE is in the expected SOL range (fractions of a SOL, not 1+ SOL)\n\nIf anything is off — REJECT. There's no penalty for rejecting. There's no recovery from approving the wrong thing."
+            },
+            {
+              "heading": "Our Airdropper Specifically",
+              "body": "The Cluck Norris airdropper at clucknorris.app/airdrop:\n\n• Signs through Phantom, Solflare, or Jupiter Wallet (no other wallets yet)\n• Costs 100 CLKN to unlock for 1 hour (5 hours if you hold 2M+ CLKN)\n• Shows you the full recipient list, batch count, total tokens, and estimated SOL cost in the preview before you sign anything\n• Tags new-ATA recipients in the preview so you can see exactly which ones cost you rent\n• Lets you optionally skip new-ATA recipients to save SOL\n• Never holds custody — every batch is signed by YOUR wallet, broadcast directly to Solana\n\nThe 100 CLKN unlock fee is for TOOL ACCESS — it has nothing to do with the tokens you're airdropping. Those leave your wallet only when you approve each batch in your wallet popup."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
