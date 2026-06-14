@@ -103,15 +103,33 @@ async function run(){
   btn.disabled=false; btn.textContent=orig;
 }
 
+function fmtUsd(n){n=Number(n)||0;return n>=1e6?'$'+(n/1e6).toFixed(2)+'M':n>=1e3?'$'+(n/1e3).toFixed(1)+'K':'$'+n.toFixed(2);}
 function render(d){
-  const approvals=d.approvals||[], risky=d.riskyHoldings||[];
+  const approvals=d.approvals||[], risky=d.riskyHoldings||[], holdings=(d.holdings||[]).filter(h=>h.valueUsd>0);
   let html='';
-  // Summary
+  // Summary — now leads with live portfolio value
   html+='<div class="summary">'
+    +'<div class="stat"><div class="v" style="color:#6EE7B7">'+fmtUsd(d.portfolioUsd||0)+'</div><div class="l">PORTFOLIO VALUE</div></div>'
     +'<div class="stat"><div class="v" style="color:#FCD34D">'+(d.tokensHeld||0).toLocaleString()+(d.capped?'+':'')+'</div><div class="l">TOKENS HELD</div></div>'
     +'<div class="stat"><div class="v" style="color:'+(approvals.length?'#FCA5A5':'#6EE7B7')+'">'+approvals.length+'</div><div class="l">OPEN APPROVALS</div></div>'
     +'<div class="stat"><div class="v" style="color:'+(risky.length?'#F59E0B':'#6EE7B7')+'">'+risky.length+'</div><div class="l">RISKY HOLDINGS</div></div>'
     +'</div>';
+
+  // Portfolio — live holdings by USD value (the wallet-tracker view)
+  if(holdings.length){
+    html+='<div class="card"><div class="sec-title" style="color:#6EE7B7">💰 PORTFOLIO — '+fmtUsd(d.portfolioUsd||0)+'</div>';
+    html+='<div style="font-size:11px;color:#9CA3AF;line-height:1.6;margin-bottom:10px">Live token holdings ranked by USD value. Prices from CoinGecko + on-chain DEX data; long-tail tokens with no market show $0.</div>';
+    holdings.slice(0,25).forEach(h=>{
+      const pct=d.portfolioUsd>0?(h.valueUsd/d.portfolioUsd*100):0;
+      html+='<div class="row" style="display:flex;align-items:center;gap:10px">'
+        +(h.logo?'<img src="'+esc(h.logo)+'" onerror="this.style.display=\'none\'" style="width:24px;height:24px;border-radius:50%;flex-shrink:0">':'<div style="width:24px;height:24px;border-radius:50%;background:#222;flex-shrink:0"></div>')
+        +'<div style="flex:1;min-width:0"><b>'+esc(h.symbol||shortAddr(h.mint))+'</b> <span style="color:var(--sub);font-size:11px">'+fmtNum(h.amount)+'</span></div>'
+        +'<div style="text-align:right"><b style="color:#6EE7B7">'+fmtUsd(h.valueUsd)+'</b><div style="font-size:10px;color:var(--sub)">'+pct.toFixed(1)+'%</div></div>'
+        +'</div>';
+    });
+    if(holdings.length>25) html+='<div style="font-size:11px;color:var(--sub);margin-top:6px">+ '+(holdings.length-25)+' smaller holdings</div>';
+    html+='</div>';
+  }
 
   if(!approvals.length && !risky.length){
     html+='<div class="card"><div class="clear"><div class="big">🛡✅</div><div class="t">ALL CLEAR</div>'
@@ -138,11 +156,11 @@ function render(d){
   // Risky holdings
   if(risky.length){
     html+='<div class="card">';
-    html+='<div class="sec-title" style="color:#F59E0B">⚠ RISKY HOLDINGS — '+risky.length+'</div>';
+    html+='<div class="sec-title" style="color:#F59E0B">⚠ RISKY HOLDINGS — '+risky.length+(d.atRiskUsd>0?' · '+fmtUsd(d.atRiskUsd)+' at risk':'')+'</div>';
     risky.forEach(t=>{
       const sev='sev'+(t.severity||1);
       html+='<div class="row '+sev+'">'
-        +'<div class="mono"><b>'+esc(shortAddr(t.mint))+'</b> <a class="copy" onclick="copyCA(event,\''+esc(t.mint)+'\')">copy</a> · holding '+fmtNum(t.amount)+'</div>'
+        +'<div class="mono"><b>'+esc(t.symbol||shortAddr(t.mint))+'</b>'+(t.valueUsd>0?' <span style="color:#F59E0B">'+fmtUsd(t.valueUsd)+'</span>':'')+' <a class="copy" onclick="copyCA(event,\''+esc(t.mint)+'\')">copy</a> · holding '+fmtNum(t.amount)+'</div>'
         +t.issues.map(i=>'<div class="issue'+(t.severity<2?' lo':'')+'">• '+esc(i)+'</div>').join('')
         +'<div class="links">'
           +'<a class="lk-score" href="/score?mint='+esc(t.mint)+'" target="_blank" rel="noreferrer">🩺 SCORE</a>'

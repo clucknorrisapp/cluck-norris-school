@@ -4741,6 +4741,27 @@ app.post("/api/credential/verify-ownership", (req, res) => {
 // (the one permission that persists), honeypot/Token-2022-trap holdings, and
 // tokens whose mint/freeze authority is still live. Reuses Security Coop's
 // delegate scanner + the same honeypot logic the Cluck Score uses.
+// Batch price + identity for many Solana mints (chunks of 30) via the GeckoTerminal onchain
+// multi-token endpoint → { mint: {symbol,name,priceUsd,logo} }. Powers wallet portfolio USD
+// values (wallet-checkup) and per-holder USD (holders/snapshot). Routes through cgFetch (Pro).
+async function priceTokensBatch(mints) {
+  const out = {};
+  const uniq = [...new Set((mints || []).filter(Boolean))];
+  for (let i = 0; i < uniq.length; i += 30) {
+    const chunk = uniq.slice(i, i + 30);
+    try {
+      const j = await lpScanner.cgFetch(`/networks/solana/tokens/multi/${chunk.join(",")}`);
+      for (const t of (j.data || [])) {
+        const a = t.attributes || {};
+        const mint = (a.address || (t.id || "").replace("solana_", ""));
+        if (!mint) continue;
+        out[mint] = { symbol: a.symbol || null, name: a.name || null, priceUsd: Number(a.price_usd) || 0, logo: a.image_url && a.image_url !== "missing.png" ? a.image_url : null };
+      }
+    } catch (_) { /* skip the chunk on failure — those tokens just show no price */ }
+  }
+  return out;
+}
+
 app.get("/api/wallet-checkup", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
@@ -4801,11 +4822,25 @@ app.get("/api/wallet-checkup", async (req, res) => {
     let approvals = [];
     try { approvals = await securityCoop.scanDelegates(wallet); } catch (_) {}
 
+    // 4. Portfolio view — price every held token (one batched call) → USD value per holding +
+    // total wallet value + how much sits in the risky tokens. Turns the safety scan into a
+    // proper wallet tracker. Tokens with no market price (long-tail/dead) just show $0.
+    const priced = await priceTokensBatch(mints);
+    const holdings = mints.map((m) => {
+      const e = byMint.get(m), p = priced[m] || {};
+      return { mint: m, amount: e.amount, symbol: p.symbol || null, name: p.name || null, logo: p.logo || null, priceUsd: p.priceUsd || 0, valueUsd: Number(((e.amount || 0) * (p.priceUsd || 0)).toFixed(2)) };
+    }).sort((a, b) => b.valueUsd - a.valueUsd);
+    const portfolioUsd = Number(holdings.reduce((s, h) => s + h.valueUsd, 0).toFixed(2));
+    let atRiskUsd = 0;
+    riskyHoldings.forEach((r) => { const h = holdings.find((x) => x.mint === r.mint); r.valueUsd = h ? h.valueUsd : null; r.symbol = h ? h.symbol : null; if (h) atRiskUsd += h.valueUsd; });
+
     return res.status(200).json({
       success: true, wallet,
       tokensHeld: byMint.size,
       scanned: mints.length,
       capped: byMint.size > mints.length,
+      portfolioUsd, atRiskUsd: Number(atRiskUsd.toFixed(2)),
+      holdings,
       approvals,
       riskyHoldings,
     });
