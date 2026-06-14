@@ -3021,7 +3021,8 @@ async function sendJupUsdcRecap({ send = true, reset = false, rebaselineClaimedU
   // accurate from here. bankedClaimed + live-claimed must equal that total.
   if (rebaselineClaimedUsd != null && Number.isFinite(Number(rebaselineClaimedUsd))) {
     L.bankedClaimedUsd = Math.max(0, Number(rebaselineClaimedUsd) - claimedUsd);
-    kv.set("jupUsdcLedger", L); // persist immediately, independent of send
+    kv.set("jupUsdcLedger", L);        // persist immediately, independent of send
+    kv.set("jupUsdcRecapSnap", null);  // drop the stale snapshot so the next recap's delta isn't a spurious spike
   }
   const lifetimeFeesUsd = (L.bankedClaimedUsd || 0) + claimedUsd + claimableUsd;
   const netUsd = lifetimeFeesUsd - (L.rebalanceCostUsd || 0);
