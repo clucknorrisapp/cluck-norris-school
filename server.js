@@ -2625,14 +2625,21 @@ app.get("/api/alpha", async (req, res) => {
   catch (e) { return res.status(200).json({ success: false, error: e.message }); }
 });
 
-// Admin — force-build the brief; &post=1 also fires it to Telegram (silent) + X.
+// Admin — force-build the brief; &post=1 fires it to Telegram (silent) + X; &xonly=1 X only;
+// &markposted=1 marks today already-posted (so the daily auto-poster skips it) without sending.
 app.get("/api/alpha-test", async (req, res) => {
   if (!adminAuthOK(req)) return res.status(404).json({ success: false, error: "not found" });
+  const today = new Date().toISOString().slice(0, 10);
+  if (req.query.markposted === "1") { kv.set("dailyAlphaPostedDate", today); return res.status(200).json({ success: true, marked: today }); }
   try {
     const a = await buildDailyAlpha({ force: true });
     const preview = buildAlphaPosts(a); // the exact TG + X text (tags included), no sending
     let posted = null;
-    if (req.query.post === "1" || req.query.xonly === "1") posted = await postDailyAlpha(a, { xOnly: req.query.xonly === "1" });
+    if (req.query.post === "1" || req.query.xonly === "1") {
+      posted = await postDailyAlpha(a, { xOnly: req.query.xonly === "1" });
+      // Any successful post marks today done so the daily auto-poster won't double-post.
+      if ((posted.x && posted.x.ok) || posted.telegram) kv.set("dailyAlphaPostedDate", today);
+    }
     return res.status(200).json({ success: true, preview, posted, ...a });
   } catch (e) { return res.status(200).json({ success: false, error: e.message }); }
 });
@@ -8468,6 +8475,24 @@ app.listen(PORT, () => {
       pollClknBuys();
       setInterval(pollClknBuys, 30000);
     }, 5000);
+    // Cluck's Daily Alpha — auto-post once/day at ~ALPHA_POST_HOUR UTC to X + (silent) Telegram.
+    // Stamps the date BEFORE posting so a crash/retry can't double-post publicly; a rare failed
+    // post is recoverable via /api/alpha-test?post=1. Change the hour freely (or kv alphaPostHour).
+    async function dailyAlphaTick() {
+      try {
+        const now = new Date();
+        const hour = Number(kv.get("alphaPostHour", 14)); // 14:00 UTC ≈ 9–10am ET
+        if (now.getUTCHours() < hour) return;
+        const today = now.toISOString().slice(0, 10);
+        if (kv.get("dailyAlphaPostedDate", null) === today) return;
+        kv.set("dailyAlphaPostedDate", today);
+        const a = await buildDailyAlpha({ force: true });
+        const posted = await postDailyAlpha(a);
+        console.log("[daily-alpha] posted", today, { x: !!(posted.x && posted.x.ok), tg: !!posted.telegram, xErr: posted.x && posted.x.body });
+      } catch (e) { console.warn("[daily-alpha] tick failed:", e.message); }
+    }
+    setInterval(dailyAlphaTick, 10 * 60 * 1000); // check every 10 min; fires once/day past the hour
+    setTimeout(dailyAlphaTick, 95000);
     // Toolkit reminder — checked each minute, fires at fixed 4-hour marks.
     setInterval(toolsReminderTick, 60 * 1000);
     // Bags Launch Radar — checked each minute, fires at fixed 2-hour marks.
