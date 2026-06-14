@@ -188,7 +188,7 @@
     document.getElementById('answer').disabled=false;
     document.getElementById('sendBtn').disabled=false;
     show('vLesson');
-    await turn('');
+    await turn('', true);  // open with one auto-retry on a transient blip
     document.getElementById('answer').focus();
   }
 
@@ -205,7 +205,7 @@
     else if(ex){ ex.remove(); }
   }
 
-  async function turn(message){
+  async function turn(message, retry){
     if(busy) return; busy=true;
     document.getElementById('sendBtn').disabled=true;
     thinking(true);
@@ -214,12 +214,19 @@
         body:JSON.stringify({courseId:curCourse.id, lessonId:curLesson.id, message:message, history:history})});
       var d=await r.json();
       thinking(false);
-      if(!d.success){ showErr(d.error||'Professor Cluck stepped out — try again.'); return; }
+      if(!d.success){
+        if(retry){ busy=false; await new Promise(function(x){setTimeout(x,1500);}); return turn(message,false); } // one auto-retry (deploy blip / cold call)
+        showErr(d.error||'Professor Cluck stepped out — try again.'); return;
+      }
       if(message) history.push({role:'user',content:message});
       history.push({role:'assistant',content:d.reply});
       addMsg('assistant', d.reply);
       if(d.complete){ markDone(curCourse.id,curLesson.id); onComplete(); }
-    }catch(e){ thinking(false); showErr('Network hiccup — try again.'); }
+    }catch(e){
+      thinking(false);
+      if(retry){ busy=false; await new Promise(function(x){setTimeout(x,1500);}); return turn(message,false); }
+      showErr('Network hiccup — try again. (Tip: type anything and hit send to wake the professor.)');
+    }
     finally{ busy=false; document.getElementById('sendBtn').disabled=false; }
   }
 

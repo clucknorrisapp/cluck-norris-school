@@ -2684,6 +2684,25 @@ function lessonMaterial(lesson) {
   return parts.join("\n\n").slice(0, 4000);
 }
 
+// LIVE EXAMPLE — for market/LP lessons, pull a REAL pool or token snapshot from our data stack
+// so Cluck teaches with today's actual numbers (cached sources → cheap). Empty for lessons
+// where a market example doesn't fit (e.g. "What is a Wallet?").
+async function classroomLiveExample(course, lesson) {
+  const t = `${lesson.title || ""} ${course.id || ""} ${lesson.intro || ""}`.toLowerCase();
+  try {
+    if (/liquid|pool|amm|fee|lp|impermanent|concentrat|yield|slippage|price impact|bonding/.test(t)) {
+      const tp = await lpScanner.topPools({ kind: "bluechip" });
+      const p = (tp.pools || [])[0];
+      if (p) return `\n\nLIVE EXAMPLE (a real Solana pool RIGHT NOW — weave it in to make the lesson concrete): ${p.pair} on ${p.dex} — TVL $${Math.round(p.tvlUsd).toLocaleString()}, 24h volume $${Math.round((p.volume && p.volume.h24) || 0).toLocaleString()}, fee tier ${p.feeTier}%, ~${p.feeYield7dPctDay != null ? p.feeYield7dPctDay : p.feeYieldPctDay}%/day fee yield.`;
+    }
+    if (/market cap|price|token|research|on-?chain|volatil|trading|alpha|stablecoin|tokenomics|solscan/.test(t)) {
+      const ov = await fetch(`http://localhost:${PORT}/api/token-overview?mint=So11111111111111111111111111111111111111112`, { signal: AbortSignal.timeout(6000) }).then((r) => r.json()).catch(() => null);
+      if (ov && ov.success) return `\n\nLIVE EXAMPLE (real, right now — use it to make the lesson concrete): SOL is $${ov.priceUsd}${ov.change24hPct != null ? `, ${ov.change24hPct.toFixed(1)}% 24h` : ""}${ov.marketCapRank ? `, market-cap rank #${ov.marketCapRank}` : ""}${ov.marketCapUsd ? `, ~$${(ov.marketCapUsd / 1e9).toFixed(0)}B market cap` : ""}.`;
+    }
+  } catch (_) {}
+  return "";
+}
+
 app.post("/api/classroom", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   const { courseId, lessonId, message, history } = req.body || {};
@@ -2694,10 +2713,11 @@ app.post("/api/classroom", async (req, res) => {
   const msg = String(message || "").slice(0, 800);
   const hist = Array.isArray(history) ? history.filter((m) => m && (m.role === "user" || m.role === "assistant") && m.content).slice(-12).map((m) => ({ role: m.role, content: String(m.content).slice(0, 1500) })) : [];
   const opened = hist.length > 0;
+  const live = await classroomLiveExample(course, lesson).catch(() => "");
   const system = `You are Professor Cluck Norris — the toughest, funniest crypto professor on Solana — teaching ONE live lesson in the "${course.title}" course.
 
 THE LESSON MATERIAL (your source of truth — teach ONLY this, accurately):
-${lessonMaterial(lesson)}
+${lessonMaterial(lesson)}${live}
 
 HOW YOU TEACH (a back-and-forth, NOT a lecture dump):
 - Teach this lesson's concepts ONE at a time. Explain simply with a vivid analogy (chicken/farm puns welcome), then ASK the student a question and STOP. Wait.
