@@ -136,7 +136,7 @@
 <script>
   var esc=function(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});};
   var DONE_KEY='clkn_classroom_done_v1', LAST_KEY='clkn_classroom_last_v1';
-  var courses=[], curCourse=null, curLesson=null, history=[], busy=false;
+  var courses=[], curCourse=null, curLesson=null, chatHist=[], busy=false; // NOTE: not 'history' — window.history is a read-only global and would shadow it
   function loadLast(){ try{ return JSON.parse(localStorage.getItem(LAST_KEY))||null; }catch(e){ return null; } }
   function saveLast(cid,lid){ try{ localStorage.setItem(LAST_KEY,JSON.stringify({courseId:cid,lessonId:lid})); }catch(e){} }
 
@@ -218,7 +218,7 @@
     curLesson=curCourse.lessons.find(function(l){return l.id===lid;});
     if(!curLesson) return;
     saveLast(curCourse.id, lid);
-    history=[];
+    chatHist=[];
     document.getElementById('crumbCourse').textContent=curCourse.title;
     document.getElementById('crumbLesson').textContent=curLesson.title;
     document.getElementById('lessonTitle').textContent=(curLesson.icon||'')+' '+curLesson.title;
@@ -253,7 +253,7 @@
       var ctrl = ('AbortController' in window) ? new AbortController() : null;
       var to = ctrl ? setTimeout(function(){ try{ctrl.abort();}catch(e){} }, 45000) : null;
       var r=await fetch('/api/classroom',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({courseId:curCourse.id, lessonId:curLesson.id, message:message, history:history}),
+        body:JSON.stringify({courseId:curCourse.id, lessonId:curLesson.id, message:message, history:chatHist}),
         signal: ctrl?ctrl.signal:undefined, cache:'no-store'});
       if(to) clearTimeout(to);
       var text=await r.text();
@@ -265,8 +265,8 @@
         if(retry){ busy=false; await new Promise(function(x){setTimeout(x,1800);}); return turn(message,false); }
         showErr(d.error||'Professor Cluck stepped out — try again.'); return;
       }
-      if(message) history.push({role:'user',content:message});
-      history.push({role:'assistant',content:d.reply});
+      if(message) chatHist.push({role:'user',content:message});
+      chatHist.push({role:'assistant',content:d.reply});
       addMsg('assistant', d.reply);
       if(d.complete){ markDone(curCourse.id,curLesson.id); onComplete(); }
     }catch(e){
@@ -287,7 +287,7 @@
   }
   function retryTurn(btn){
     try{ if(btn&&btn.parentElement) btn.parentElement.remove(); }catch(e){}
-    turn(history.length?'(continue)':'', true);
+    turn(chatHist.length?'(continue)':'', true);
   }
 
   function onComplete(){
