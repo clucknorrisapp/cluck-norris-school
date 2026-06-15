@@ -12,7 +12,7 @@
   :root {
     color-scheme: dark;
     --bg: #0a0a0a; --card: #111111; --border: rgba(255,255,255,0.08);
-    --text: #F9FAFB; --subtext: #6B7280; --accent: #FCD34D; --orange: #D97706;
+    --text: #F9FAFB; --subtext: #AEB4BE; --accent: #FCD34D; --orange: #D97706;
     --green: #10B981; --red: #EF4444; --blue: #60A5FA; --mono: 'Courier New', monospace;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -40,7 +40,7 @@
   .ac-item .s { font-family:'Oswald',sans-serif; font-weight:700; color:var(--text); font-size:13px; }
   .ac-item .n { font-size:10px; color:var(--subtext); margin-left:auto; max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   input[type=text], input[type=number] { width:100%; background:#0d0d0d; border:1px solid var(--border); border-radius:9px; padding:12px; color:var(--text); font-family:var(--mono); font-size:15px; }
-  input::placeholder { color:#4B5563; }
+  input::placeholder { color:#8A909C; }
   .scan-btn { width:100%; margin-top:14px; padding:14px; border:none; border-radius:10px; background:linear-gradient(135deg,#D97706,#F59E0B); color:#1a1a1a; font-family:'Oswald',sans-serif; font-weight:900; letter-spacing:2px; font-size:15px; cursor:pointer; }
   .scan-btn:disabled { opacity:0.5; cursor:wait; }
   .quick { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
@@ -119,8 +119,8 @@
   <div class="card" id="topCard" style="padding:11px 13px;">
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
       <button id="topToggle" onclick="toggleTop()" style="background:none;border:none;color:var(--accent);font-family:'Oswald',sans-serif;font-weight:900;letter-spacing:1px;font-size:14px;cursor:pointer;padding:0;">🔥 TOP POOLS <span id="topCaret">▾</span></button>
-      <button class="top-tab on" id="tab-trending" onclick="setTopKind('trending')">Trending</button>
-      <button class="top-tab" id="tab-bluechip" onclick="setTopKind('bluechip')">Blue-chip</button>
+      <button class="top-tab" id="tab-trending" onclick="setTopKind('trending')">Trending</button>
+      <button class="top-tab on" id="tab-bluechip" onclick="setTopKind('bluechip')">Blue-chip</button>
       <span class="note-line" id="topUpdated" style="margin:0 0 0 auto;"></span>
     </div>
     <div id="topBody">
@@ -128,7 +128,7 @@
         ⚠️ <b>Mostly fresh memecoins — very high risk.</b> Those huge yields are real fee numbers, but these pools can lose most of their value or rug in hours; IL + a dying token routinely wipe out far more than the fees pay. High yield ≠ safe. <b>Not financial advice.</b>
       </div>
       <div class="top-strip" id="topStrip"><span class="muted" style="padding:8px;"><span class="spin"></span> loading…</span></div>
-      <div class="note-line" id="topNote" style="margin:0;">Hottest pairs right now across every Solana DEX, refreshed hourly. Swipe ➜ &nbsp;·&nbsp; tap any for the details.</div>
+      <div class="note-line" id="topNote" style="margin:0;">Durable, won’t-disappear projects — majors, stables, LSTs, BTC/ETH — ranked by 7-day-avg fee yield. The long-term board. Swipe ➜ &nbsp;·&nbsp; tap any for the details.</div>
     </div>
   </div>
 
@@ -142,7 +142,7 @@
     <div class="pair-row">
       <div class="f"><label class="fld">TOKEN A (name/symbol or contract)</label><input type="text" id="tokenA" placeholder="PEPE" autocomplete="off"/><div class="ac-drop" id="acA"></div></div>
       <div class="vs">/</div>
-      <div class="f"><label class="fld">TOKEN B <span style="color:#4B5563">(optional — blank = all pairs)</span></label><input type="text" id="tokenB" placeholder="leave blank" autocomplete="off"/><div class="ac-drop" id="acB"></div></div>
+      <div class="f"><label class="fld">TOKEN B <span style="color:var(--subtext)">(optional — blank = all pairs)</span></label><input type="text" id="tokenB" placeholder="optional — all pairs" autocomplete="off"/><div class="ac-drop" id="acB"></div></div>
     </div>
     <label class="fld" style="margin-top:14px;">YOUR DEPOSIT (USD, optional — for $/day estimate)</label>
     <input type="number" id="amount" placeholder="5000" min="0"/>
@@ -174,7 +174,7 @@
       <div id="ilNote" class="note-line"></div>
       <div style="overflow-x:auto;margin-top:8px;">
         <table>
-          <thead><tr><th id="col1Head">DEX</th><th>Fee</th><th>TVL</th><th>24h Vol</th><th>Yield/d<br><span style="font-weight:400;color:#4B5563">7d-avg</span></th><th id="estHead">Est $/day</th></tr></thead>
+          <thead><tr><th id="col1Head">DEX</th><th>Fee</th><th>TVL</th><th>24h Vol</th><th>Yield/d<br><span style="font-weight:400;color:var(--subtext)">7d-avg</span></th><th id="estHead">Est $/day</th></tr></thead>
           <tbody id="poolRows"></tbody>
         </table>
       </div>
@@ -301,10 +301,10 @@
       var yv = p.feeYield7dPctDay!=null ? p.feeYield7dPctDay : p.feeYieldPctDay;
       var trendColor = p.volTrend==='spiking'?'#FCD34D':p.volTrend==='cooling'?'#9CA3AF':'#6EE7B7';
       var trendCell = p.volTrend ? '<div style="font-size:9px;color:'+trendColor+';letter-spacing:0.5px;">'+esc(p.volTrend)+'</div>' : '';
-      var ilDot = p.ilRisk ? '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+(ilColor[p.ilRisk.level]||'#6B7280')+';margin-right:6px;" title="IL: '+esc(p.ilRisk.level)+'"></span>' : '';
-      var dead = (p.volume&&p.volume.h24>0)?'':' <span style="font-size:8px;color:#6B7280;">idle</span>';
+      var ilDot = p.ilRisk ? '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+(ilColor[p.ilRisk.level]||'#9CA3AF')+';margin-right:6px;" title="IL: '+esc(p.ilRisk.level)+'"></span>' : '';
+      var dead = (p.volume&&p.volume.h24>0)?'':' <span style="font-size:8px;color:#9CA3AF;">idle</span>';
       rows+='<tr class="clk '+(isBest?'best':'')+'" data-pool="'+esc(p.address)+'" data-dex="'+esc(p.dex)+'">'
-        +'<td>'+ilDot+'<span class="dex">'+(isBest?'<span class="crown">★ </span>':'')+esc(p.pair||'?')+'</span>'+dead+'<div style="font-size:9px;color:#6B7280;text-transform:capitalize;">'+esc(p.dex)+'</div></td>'
+        +'<td>'+ilDot+'<span class="dex">'+(isBest?'<span class="crown">★ </span>':'')+esc(p.pair||'?')+'</span>'+dead+'<div style="font-size:9px;color:#9CA3AF;text-transform:capitalize;">'+esc(p.dex)+'</div></td>'
         +'<td>'+(hasFee?esc(p.feeTier)+'%':'<span class="muted">—</span>')+'</td>'
         +'<td>'+fmt(p.tvlUsd)+'</td>'
         +'<td>'+fmt(p.volume&&p.volume.h24)+'</td>'
@@ -347,7 +347,7 @@
 
   // Top Pools — compact horizontal scroller at the top. Trending (hot, memes) + Blue-chip
   // (durable). Refreshed server-side hourly. Tap a chip → simulator. Collapsible.
-  var topKind='trending', topLoaded={};
+  var topKind='bluechip', topLoaded={};
   function toggleTop(){
     var b=document.getElementById('topBody'); var open=b.style.display!=='none';
     b.style.display=open?'none':''; document.getElementById('topCaret').textContent=open?'▸':'▾';
@@ -376,7 +376,7 @@
         var yv = p.feeYield7dPctDay!=null ? p.feeYield7dPctDay : p.feeYieldPctDay;
         var lvl = (p.ilRisk && p.ilRisk.level) || '';
         var risky = (p.dex==='pumpswap') || (lvl==='high');
-        var dot = lvl ? '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:'+(ilColor[lvl]||'#6B7280')+';margin-right:5px;vertical-align:middle;"></span>' : '';
+        var dot = lvl ? '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:'+(ilColor[lvl]||'#9CA3AF')+';margin-right:5px;vertical-align:middle;"></span>' : '';
         var yColor = risky ? '#FCD34D' : '#6EE7B7';
         var yStr = yv!=null ? (yv+'%/d') : '—';
         html+='<div class="top-chip'+(risky?' risk':'')+'" data-pool="'+esc(p.address)+'" data-dex="'+esc(p.dex)+'" data-label="'+esc(p.pair||'')+'">'
