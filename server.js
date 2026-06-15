@@ -1676,6 +1676,11 @@ app.use("/api/", rateLimit("api", { windowMs: 60000, max: 150 }));
 app.use("/api/ask-cluck", rateLimit("ai", { windowMs: 60000, max: 15 }));
 app.use("/api/lp-ask", rateLimit("ai", { windowMs: 60000, max: 12 }));
 app.use("/api/verify-clkn-payment", rateLimit("pay", { windowMs: 60000, max: 20 }));
+// Classroom: generous enough for a real multi-turn lesson/exam, tight enough to stop a bot
+// hammering the reward loop. Claim is rare (one per graduation) so it's capped hard.
+app.use("/api/classroom-exam", rateLimit("exam", { windowMs: 60000, max: 25 }));
+app.use("/api/classroom/graduate-claim", rateLimit("gradclaim", { windowMs: 60000, max: 6 }));
+app.use("/api/classroom", rateLimit("class", { windowMs: 60000, max: 30 })); // also covers /api/classroom-exam + claim (counts on top)
 
 // The Hatchery (token creator) — mounted before the global JSON parser so its
 // own larger body limit handles the base64 logo upload instead of the 100kb default.
@@ -2757,6 +2762,19 @@ RULES: Never give financial advice or price predictions. Encouraging but blunt. 
 // queue; the OWNER verifies the social proof and batch-airdrops CLKN via the Airdropper. One
 // reward per wallet. No auto-spend — keeps the money owner-controlled and Sybil-reviewable.
 const GRAD_TOKEN_TTL = 24 * 3600 * 1000;
+// Normalize an X/Telegram link or handle to a single dedupe key, so the Sybil unit is the
+// SOCIAL ACCOUNT (hard to mass-create) not the wallet (free). x.com/<user>/status/…, t.me/<user>,
+// or a bare @handle all collapse to one key. Falls back to the raw string if unparseable.
+function socialHandleKey(s) {
+  s = String(s || "").trim().toLowerCase();
+  let m = s.match(/(?:x\.com|twitter\.com)\/([a-z0-9_]{1,15})(?:[\/?#]|$)/);
+  if (m && m[1] !== "i" && m[1] !== "home") return "x:" + m[1];
+  m = s.match(/(?:t\.me|telegram\.me)\/([a-z0-9_]{3,32})/);
+  if (m) return "tg:" + m[1];
+  m = s.match(/^@?([a-z0-9_]{2,32})$/);
+  if (m) return "h:" + m[1];
+  return "raw:" + s.replace(/\s+/g, "").slice(0, 60);
+}
 app.post("/api/classroom/graduate-claim", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
@@ -2765,17 +2783,24 @@ app.post("/api/classroom/graduate-claim", async (req, res) => {
   if (!SOL_ADDR_RE.test(w)) return res.status(400).json({ success: false, error: "Enter a valid Solana wallet address" });
   const soc = String(social || "").trim().slice(0, 300);
   if (soc.length < 5) return res.status(400).json({ success: false, error: "Paste your X or Telegram post link / handle so we can verify" });
-  // Verify + consume the single-use graduation token.
+  const hk = socialHandleKey(soc);
+  // Verify the single-use graduation token is valid (don't consume until checks pass).
   const toks = kv.get("classroomGradTokens", {}) || {};
   const t = token && toks[String(token)];
   if (!t || t.courseId !== courseId || (Date.now() - (t.ts || 0)) > GRAD_TOKEN_TTL) {
     return res.status(400).json({ success: false, error: "Graduation not verified — pass the course final first (or it expired; retake the final)." });
   }
-  delete toks[String(token)]; kv.set("classroomGradTokens", toks); // single-use
   const grads = kv.get("classroomGraduates", {}) || {};
   if (grads[w]) return res.status(200).json({ success: true, already: true, message: "This wallet already claimed a graduate reward — one per wallet. You're on the list." });
+  // One reward per SOCIAL ACCOUNT (the real anti-Sybil gate).
+  const handles = kv.get("classroomGradHandles", {}) || {};
+  if (handles[hk] && handles[hk] !== w) {
+    return res.status(200).json({ success: false, error: "That social account already claimed a graduate reward — one reward per X/Telegram account." });
+  }
+  delete toks[String(token)]; kv.set("classroomGradTokens", toks); // consume (single-use)
+  handles[hk] = w; kv.set("classroomGradHandles", handles);
   const course = ccFindCourse(courseId);
-  grads[w] = { wallet: w, courseId, courseTitle: course ? course.title : courseId, social: soc, ts: Date.now(), status: "pending" };
+  grads[w] = { wallet: w, courseId, courseTitle: course ? course.title : courseId, social: soc, handleKey: hk, ts: Date.now(), status: "pending" };
   kv.set("classroomGraduates", grads);
   return res.status(200).json({ success: true, message: "🎓 Claim received! You're on the graduate list. We verify the social post, then send your CLKN reward. Welcome to the flock." });
 });
@@ -2787,8 +2812,11 @@ app.get("/api/classroom/graduates", (req, res) => {
   const grads = kv.get("classroomGraduates", {}) || {};
   const action = req.query.action, w = String(req.query.wallet || "").trim();
   if (action && w && grads[w]) {
-    if (action === "reject") delete grads[w];
-    else if (["approve", "paid", "pending"].includes(action)) grads[w].status = action;
+    if (action === "reject") {
+      const hk = grads[w].handleKey;
+      delete grads[w];
+      if (hk) { const handles = kv.get("classroomGradHandles", {}) || {}; if (handles[hk] === w) { delete handles[hk]; kv.set("classroomGradHandles", handles); } }
+    } else if (["approve", "paid", "pending"].includes(action)) grads[w].status = action;
     kv.set("classroomGraduates", grads);
   }
   const list = Object.values(grads).sort((a, b) => (b.ts || 0) - (a.ts || 0));
