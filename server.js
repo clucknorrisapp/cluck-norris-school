@@ -110,7 +110,7 @@ async function notifyToolsReminder() {
     "🛠 <b>THE CLUCK NORRIS TOOLKIT</b>\n\n" +
     "Beyond the school — real, live Solana tools. Five are 100% free; the operator " +
     "tools let you preview everything, then unlock with a small CLKN payment:\n\n" +
-    "🩺 <b>Cluck Score</b> — 0–100 health check on any token · <b>FREE</b>\n" +
+    "🩻 <b>Wallet X-Ray</b> — full wallet deep dive: funding origin, trades, bot/dumper signals · <b>FREE</b>\n" +
     "🔒 <b>Security Coop</b> — find &amp; revoke risky wallet approvals · <b>FREE</b>\n" +
     "📸 <b>Snapshot</b> — every holder + airdrop CSV for any token · <b>FREE</b>\n" +
     "🔍 <b>Trace</b> — full wallet × token transaction history · <b>FREE</b>\n" +
@@ -524,7 +524,7 @@ const EDU_TOOL_ROUTES = [
   { match: /wash trading|organic volume|arbitrage/i, label: "See honest liquidity proven live (organic score 0→32+)", url: "clucknorris.app/liquidity-engine" },
   { match: /bonding curve|graduation|graduated|creator fees/i, label: "Watch live Bags launches & graduations", url: "clucknorris.app/bags" },
   { match: /honeypot|rug pull|red flags|on-chain research|contract address|authorities|locked liquidity|faked out|phantom pool/i, label: "Run a free Token Autopsy on any mint", url: "clucknorris.app/autopsy" },
-  { match: /market cap|low-liquidity|deep liquidity|manipulate/i, label: "Get any token's free 0–100 health score", url: "clucknorris.app/score" },
+  { match: /market cap|low-liquidity|deep liquidity|manipulate/i, label: "Run a free deep-dive Token Autopsy on any mint", url: "clucknorris.app/autopsy" },
   { match: /liquidity pool|AMM|x\*y=k|impermanent|providers earn|concentrated liquidity|bins and ticks|price bins|asks vs bids|ask is a sell|active vs passive|pool's liquidity/i, label: "Practice in the free interactive LP Lab", url: "clucknorris.app" },
   { match: /dollar-cost|risk budget|position sizing|stop-loss|survive/i, label: "Practice with $1K fake money in the Survival Simulator", url: "clucknorris.app" },
 ];
@@ -977,7 +977,7 @@ async function buyLeadersReply(c, chatId, replyTo) {
 }
 
 // ── Interactive slash commands ─────────────────────────────────────────────
-// The bot is otherwise send-only; this lets group members run /score, /trace,
+// The bot is otherwise send-only; this lets group members run /walletxray, /trace,
 // /autopsy, /bags, /hatchery, etc. and get back a deep link (pre-filled with the
 // mint/wallet they pass, where the tool page supports it). Delivered via a
 // Telegram webhook (the server is public) — a secret_token validates that
@@ -1072,8 +1072,8 @@ function tgCommandReply(cmd, arg) {
   const addr = arg && SOL_ADDR_RE.test(arg) ? arg : null;
   const link = (path, qp) => `${TG_PUBLIC_BASE}${path}${addr && qp ? `?${qp}=${addr}` : ""}`;
   switch (cmd) {
-    case "score":
-      return `🩺 <b>Cluck Score</b> — 0–100 health check on any token\n${link("/score", "mint")}` + (addr ? "" : "\n\nTip: <code>/score &lt;mint&gt;</code> pre-fills a token.");
+    case "walletxray":
+      return `🩻 <b>Wallet X-Ray</b> — full wallet deep dive: funding origin, every trade, bot/dumper signals\n${link("/wallet-xray", "wallet")}` + (addr ? "" : "\n\nTip: <code>/walletxray &lt;wallet&gt;</code> pre-fills a wallet.");
     case "autopsy":
       return `🪦 <b>Token Autopsy</b> — deep forensic breakdown\n${link("/autopsy", "mint")}` + (addr ? "" : "\n\nTip: <code>/autopsy &lt;mint&gt;</code>.");
     case "trace":
@@ -1099,7 +1099,7 @@ function tgCommandReply(cmd, arg) {
         "<i>Each opens the tool on clucknorris.app, with your mint/wallet pre-filled where supported.</i>\n\n" +
         "🐥 /guide — new here? get pointed the right way\n" +
         "💵 /price — CLKN price, market cap, volume &amp; organic score\n" +
-        "🩺 /score <code>&lt;mint&gt;</code> — token health 0–100\n" +
+        "🩻 /walletxray <code>&lt;wallet&gt;</code> — full wallet deep dive\n" +
         "🪦 /autopsy <code>&lt;mint&gt;</code> — full forensic breakdown\n" +
         "🔍 /trace <code>&lt;wallet&gt;</code> — wallet × token history\n" +
         "📸 /snapshot <code>&lt;mint&gt;</code> — holders + airdrop CSV\n" +
@@ -1187,7 +1187,7 @@ async function priceReply(chatId, replyTo) {
   }
 }
 
-const TG_KNOWN_CMDS = ["score","autopsy","trace","snapshot","holders","securitycoop","buyspecial","rose","hatchery","bags","tools","liquidity","price","commands","start","help","guide","buyleaders","chatid"];
+const TG_KNOWN_CMDS = ["walletxray","autopsy","trace","snapshot","holders","securitycoop","buyspecial","rose","hatchery","bags","tools","liquidity","price","commands","start","help","guide","buyleaders","chatid"];
 // In a non-CLKN project room (e.g. ROSE) the bot only serves that project's liquidity +
 // buy competitions; chatid stays so an operator can wire a buy comp. Everything else off.
 const PROJECT_ROOM_CMDS = ["liquidity","price","buyleaders","chatid"];
@@ -1228,13 +1228,13 @@ function guideRoute(key) {
         "New to it? Walk Lesson 1 (What Is Liquidity?) first. Reply here with any LP question and I'll break it down.";
     case "research":
       return "🔬 <b>Token research — vet anything on-chain before you trust it.</b>\n\n" +
-        `🩺 <b>Cluck Score</b> — 0–100 health check → ${B}/score\n` +
         `🪦 <b>Token Autopsy</b> — deep forensic breakdown → ${B}/autopsy\n` +
+        `🩻 <b>Wallet X-Ray</b> — full wallet deep dive (funding, trades, bot/dumper) → ${B}/wallet-xray\n` +
         `🔍 <b>Trace</b> — wallet × token history → ${B}/trace\n` +
         `📸 <b>Snapshot</b> — every holder + airdrop CSV → ${B}/snapshot\n` +
         `🔒 <b>Wallet Checkup</b> — find &amp; revoke risky approvals → ${B}/security-coop\n` +
         `🎒 <b>Bags feed</b> — live launches &amp; graduations → ${B}/bags\n\n` +
-        "Tip: right here in chat you can run <code>/score &lt;mint&gt;</code>. The chain shows <i>what</i>, never <i>why</i> — always DYOR.";
+        "Tip: right here in chat you can run <code>/autopsy &lt;mint&gt;</code> or <code>/walletxray &lt;wallet&gt;</code>. The chain shows <i>what</i>, never <i>why</i> — always DYOR.";
     case "about":
       return "🐔 <b>About Cluck Norris &amp; CLKN.</b>\n\n" +
         "Cluck Norris is the free <b>School of Crypto Hard Knocks</b> + a Solana token-safety toolkit — born from the FireChicken (FCKN) community, now with real utility.\n\n" +
@@ -1258,7 +1258,7 @@ function guideSystemPrompt() {
     "You are Cluck Norris, the friendly guide for the Cluck Norris app (clucknorris.app) — a FREE crypto school ('School of Crypto Hard Knocks') plus a Solana token-research toolkit. You're helping someone in a Telegram group find their way around and answering their crypto/app questions.",
     "WHAT THE APP HAS — route people to the right part:",
     "- The School (free, no wallet or sign-up to learn): the INCUBATOR (tiny beginner lessons: wallets, tokens, staying safe), the 12-LESSON COURSE (belts Freshman→Emeritus), the ULTIMATE CHALLENGE (pass for a verified, shareable diploma), and the LP LAB (12 advanced liquidity lessons).",
-    "- Free tools: CLUCK SCORE (clucknorris.app/score — 0-100 token health), TOKEN AUTOPSY (/autopsy — deep forensics), TRACE (/trace — wallet×token history), SNAPSHOT (/snapshot — holders + airdrop CSV), WALLET CHECKUP (/security-coop — find & revoke risky approvals), BAGS feed (/bags — live launches & graduations), and the toolkit index (/tools).",
+    "- Free tools: TOKEN AUTOPSY (/autopsy — deep forensics), WALLET X-RAY (/wallet-xray — full wallet deep dive: funding origin, every trade, bot/dumper signals), TRACE (/trace — wallet×token history), SNAPSHOT (/snapshot — holders + airdrop CSV), WALLET CHECKUP (/security-coop — find & revoke risky approvals), BAGS feed (/bags — live launches & graduations), and the toolkit index (/tools).",
     "- THE HATCHERY (/hatchery): guided token creation with a safety preview.",
     "- CLKN token: unlocks premium operator tools via a small on-chain payment (no wallet-connect needed); holding it earns airdrop eligibility. The school itself is always free.",
     "- WHERE TO BUY CLKN: it's a normal swap on a Solana DEX — Jupiter is easiest. When asked where to buy, share this exact link: https://jup.ag/tokens/" + CLKN_MINT + " (chart: https://" + CLKN_DEXSCREENER + "). Buying needs a Solana wallet with some SOL; the app itself needs no wallet-connect. This is just logistics, NOT financial advice — never say whether or how much to buy.",
@@ -1308,40 +1308,6 @@ async function handleGuideCallback(cq) {
     const mid = await tgSendKb(chatId, guideRoute(data.slice(2)), null, replyTo);
     if (mid) registerCluckAnswer(mid, { guide: true, history: [] });
   } catch (e) { console.warn("[GUIDE] callback failed:", e.message); }
-}
-
-// /score <mint> → compute the real Cluck Score and reply IN-CHAT (number, grade,
-// verdict, key stats). Calls our own /api/cluck-score (same as the card gen).
-const scoreCooldown = new Map(); // chatId -> last /score ts (light anti-spam)
-async function scoreAndReply(chatId, mint, replyTo) {
-  try {
-    const r = await fetch(`http://localhost:${PORT}/api/cluck-score?mint=${encodeURIComponent(mint)}`);
-    const d = await r.json().catch(() => null);
-    if (!d || !d.success || d.score == null) {
-      tgSend(chatId, `🩺 Couldn't score that one — not enough on-chain data (double-check it's a valid Solana mint).\n\nclucknorris.app/score?mint=${mint}`, replyTo);
-      return;
-    }
-    const f = d.factors || {};
-    const fmtUsd = (n) => n == null ? "—" : (n >= 1e6 ? "$" + (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? "$" + (n / 1e3).toFixed(0) + "K" : "$" + Math.round(n));
-    const t10 = f.concentration?.top10Share;
-    const t10pct = t10 == null ? null : (t10 <= 1 ? t10 * 100 : t10);
-    const lines = [
-      `🩺 <b>CLUCK SCORE — ${tgEsc(d.name || d.ticker || "Token")}${d.ticker ? " ($" + tgEsc(d.ticker) + ")" : ""}</b>`,
-      `<b>${d.score}/100</b>  ·  Grade ${tgEsc(d.grade)}`,
-      ``,
-      tgEsc(d.verdict),
-      ``,
-      `💧 Liquidity ${fmtUsd(f.liquidity?.value)}    👥 ${f.holders?.value ?? "—"} holders`,
-      `🔒 Mint ${f.mintAuthority?.revoked ? "revoked ✅" : "active ⚠️"}    ❄️ Freeze ${f.freezeAuthority?.revoked ? "revoked ✅" : "active ⚠️"}`,
-      (t10pct != null ? `📊 Top-10 hold ${t10pct.toFixed(0)}%` : ""),
-      ``,
-      `📋 Full breakdown → clucknorris.app/score?mint=${mint}`,
-    ];
-    tgSend(chatId, lines.join("\n").replace(/\n{3,}/g, "\n\n"), replyTo);
-  } catch (e) {
-    console.warn("[TELEGRAM] score reply failed:", e.message);
-    tgSend(chatId, `🩺 Score hiccup — try again in a moment.\nclucknorris.app/score?mint=${mint}`, replyTo);
-  }
 }
 
 // ── Reply-bot: educational Q&A on lesson replies (threaded) ────────────────
@@ -1513,14 +1479,6 @@ function handleTelegramUpdate(update) {
       const c = buyCompByChat(msg.chat.id);
       if (!c) { tgSend(msg.chat.id, "🌹 No active buy competition in this group right now.", msg.message_id); return; }
       buyLeadersReply(c, msg.chat.id, msg.message_id);
-      return;
-    }
-    // /score with a real mint → live in-chat score (light per-chat cooldown).
-    if (cmd === "score" && arg && SOL_ADDR_RE.test(arg)) {
-      const now = Date.now(), last = scoreCooldown.get(msg.chat.id) || 0;
-      if (now - last < 6000) { tgSend(msg.chat.id, "🐔 Already scoring one — give it a few seconds.", msg.message_id); return; }
-      scoreCooldown.set(msg.chat.id, now);
-      scoreAndReply(msg.chat.id, arg, msg.message_id);
       return;
     }
     // /liquidity → live, sanitized snapshot of the Liquidity Engine's positions.
@@ -5026,7 +4984,7 @@ app.post("/api/credential/verify-ownership", (req, res) => {
 // wallet for the things that actually drain people: lingering delegate approvals
 // (the one permission that persists), honeypot/Token-2022-trap holdings, and
 // tokens whose mint/freeze authority is still live. Reuses Security Coop's
-// delegate scanner + the same honeypot logic the Cluck Score uses.
+// delegate scanner + the autopsy's honeypot logic.
 // Batch price + identity for many Solana mints (chunks of 30) via the GeckoTerminal onchain
 // multi-token endpoint → { mint: {symbol,name,priceUsd,logo} }. Powers wallet portfolio USD
 // values (wallet-checkup) and per-holder USD (holders/snapshot). Routes through cgFetch (Pro).
@@ -5195,8 +5153,6 @@ const TOOL_GRANTS = {
   airdrop:    { cost: 100, grants: { sessions: 1 } },
   buyspecial: { cost: 500, grants: { hoursOfAccess: 168 } },
   rose:       { cost: 500, grants: { hoursOfAccess: 168 } },
-  // The Cluck Score card is free — generated for any mint at /api/cluck-card,
-  // no payment gate. (It was never enforced; this keeps the config honest.)
   // Premium forensics: the 7-CLKN send is an OWNERSHIP PROOF, not a purchase —
   // it proves the sender controls the wallet so we can gate on its balance. On
   // a match we hand back a proof token (see verify-clkn-payment response).
@@ -5893,21 +5849,7 @@ app.get("/api/supply", async (req, res) => {
   }
 });
 
-// -- Cluck Score (free, public) -- 0-100 health score for any Solana mint.
-// Multi-factor read from on-chain data + DexScreener. Foundation for the future
-// /score page, sharable card, and ecosystem twitter bot.
-//
-// v1 factors (weights total to 100):
-//   Holders (15%)             — log-scale, more = better
-//   Liquidity health (20%)    — liq / FDV ratio, higher = better
-//   Mint authority (15%)      — revoked = full points
-//   Freeze authority (10%)    — revoked / null = full points
-//   Holder concentration (20%) — top-10 supply share, lower = better
-//   24h volume (10%)          — has real trading, log-scale
-//   Pool graduation (10%)     — moved off bonding curve to a real AMM = full points
-//
-// v2 (later) plugs in the /holders.html six-signal classifier so "Holders" reflects
-// TRUE human wallets, not LP/locked/program addresses.
+// -- GeckoTerminal liquidity/price fallback (shared by /api/token-overview) --
 // DexScreener stops indexing a pair ~24h after its last trade, which makes a
 // quiet-but-real token look like it has zero liquidity. GeckoTerminal indexes
 // pools straight from the chain and keeps quiet ones listed, so it's used as a
@@ -5952,462 +5894,6 @@ async function fetchGeckoTerminalFallback(mint) {
     return null;
   }
 }
-
-app.get("/api/cluck-score", async (req, res) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Cache-Control", "public, max-age=300"); // 5-minute edge cache
-  const mint = (req.query.mint || "").trim();
-  if (!SOL_ADDR_RE.test(mint)) {
-    return res.status(400).json({ success: false, error: "Invalid mint" });
-  }
-  try { analytics.trackTool("cluck_score"); } catch (_) {}
-  const HELIUS_KEY = process.env.HELIUS_API_KEY;
-  if (!HELIUS_KEY) {
-    return res.status(500).json({ success: false, error: "Server not configured" });
-  }
-  const rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
-
-  // One retry with backoff on a transient failure (429 / 5xx / network) so a
-  // single rate-limited call doesn't silently drop a whole scoring factor. The
-  // score is edge-cached 5 min, so the extra calls are bounded.
-  async function rpcCall(id, method, params, _retry = 0) {
-    try {
-      const r = await fetch(rpcUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jsonrpc: "2.0", id, method, params })
-      });
-      if (r.status === 429 || r.status >= 500) throw new Error("rpc " + r.status);
-      return await r.json();
-    } catch (e) {
-      if (_retry < 1) { await new Promise(res => setTimeout(res, 350)); return rpcCall(id, method, params, _retry + 1); }
-      throw e;
-    }
-  }
-
-  try {
-    const [holdersData, dexData, supplyData, mintInfoData, largestData, bagsCtxData] = await Promise.allSettled([
-      // Holder count — same paginated walk as /api/holders. Walk up to 10 pages
-      // (10k accounts); if we hit the limit on a full page, more holders exist —
-      // flag it as capped so the count is shown as "10,000+" instead of a wrong exact.
-      (async () => {
-        const owners = new Set();
-        let capped = false;
-        const MAX_PAGES = 10;
-        for (let page = 1; page <= MAX_PAGES; page++) {
-          const d = await rpcCall(`score-holders-${page}`, "getTokenAccounts", {
-            page, limit: 1000, mint, displayOptions: { showZeroBalance: false }
-          });
-          const accounts = d?.result?.token_accounts || [];
-          if (!accounts.length) break;
-          for (const a of accounts) {
-            if (parseInt(a.amount) > 0) owners.add(a.owner);
-          }
-          if (accounts.length < 1000) break;
-          if (page === MAX_PAGES) capped = true;
-        }
-        return { count: owners.size, capped };
-      })(),
-      fetch(`https://api.dexscreener.com/token-pairs/v1/solana/${mint}`).then(r => r.json()),
-      rpcCall("score-supply", "getTokenSupply", [mint]),
-      rpcCall("score-mint-info", "getAccountInfo", [mint, { encoding: "jsonParsed" }]),
-      rpcCall("score-largest", "getTokenLargestAccounts", [mint]),
-      // Shared Bags + Jupiter context — cached per-mint so multiple endpoints
-      // hitting the same mint share the result.
-      fetchBagsContext(mint),
-    ]);
-
-    // Extract data with safe defaults
-    const holderInfo = holdersData.status === "fulfilled" ? holdersData.value : null;
-    const holderCount = holderInfo ? holderInfo.count : null;
-    const holderCountCapped = !!(holderInfo && holderInfo.capped);
-    const allDexPairs = dexData.status === "fulfilled" && Array.isArray(dexData.value) ? dexData.value : [];
-    // Only count Solana pairs. Sum liquidity across all of them — a token with
-    // $20K on Meteora + $20K on Raydium has $40K of real exit liquidity, not $20K.
-    const solPairs = allDexPairs.filter(p => p.chainId === "solana" || !p.chainId);
-    let totalLiqUsd = solPairs.reduce((s, p) => s + (parseFloat(p.liquidity?.usd) || 0), 0);
-    let totalVol24h = solPairs.reduce((s, p) => s + (parseFloat(p.volume?.h24) || 0), 0);
-    // Unique DEX *protocols* (collapsing "meteora-damm-v2" / "meteora-dlmm" → "meteora")
-    let dexFamilies = new Set();
-    for (const p of solPairs) {
-      const id = (p.dexId || "").toLowerCase().split("-")[0];
-      if (id) dexFamilies.add(id);
-    }
-    // Top pair still used as the source of truth for price + graduation detection.
-    let topPair = solPairs.length
-      ? solPairs.slice().sort((a,b) => (parseFloat(b.liquidity?.usd) || 0) - (parseFloat(a.liquidity?.usd) || 0))[0]
-      : null;
-    let poolCount = solPairs.length;
-
-    // No DexScreener liquidity usually means the pair went quiet and got
-    // dropped from its index — the pool still exists on-chain. Recover the
-    // numbers from GeckoTerminal so a quiet token isn't scored as dead.
-    let scoreSource = "dexscreener";
-    if (totalLiqUsd === 0) {
-      const gecko = await fetchGeckoTerminalFallback(mint);
-      if (gecko) {
-        scoreSource = "geckoterminal";
-        totalLiqUsd = gecko.totalLiqUsd;
-        totalVol24h = gecko.totalVol24h;
-        dexFamilies = gecko.dexFamilies;
-        poolCount = gecko.poolCount;
-        topPair = {
-          priceUsd: gecko.priceUsd,
-          fdv: gecko.fdv,
-          marketCap: gecko.fdv,
-          dexId: gecko.dexId,
-          labels: [],
-          pairAddress: gecko.pairAddress,
-          baseToken: { symbol: gecko.symbol, name: gecko.name },
-        };
-      }
-    }
-    // Solana Tracker correction for launchpad bonding-curve tokens. DexScreener
-    // reports a phantom near-zero pool for on-curve Bags/pump tokens (a tiny
-    // non-zero value that BYPASSES the $0 GeckoTerminal fallback above), which
-    // would unfairly tank the liquidity component of the score. ST reads the
-    // curve reserve directly — use it when it's materially larger, the same fix
-    // applied to the autopsy and the launches feed.
-    let onBondingCurve = false, curvePctToGrad = null;
-    // ST reads the bonding-curve reserve to correct phantom near-zero DEX liquidity on
-    // on-curve tokens. Only call it when liquidity looks phantom/thin — a token with real
-    // DEX liquidity is graduated and needs no correction. This keeps the public Score OFF
-    // ST for the common case (ST credits are reserved for the Bags radar and renew monthly),
-    // while preserving the correction for the on-curve tokens that actually need it.
-    if (totalLiqUsd < 5000) {
-      try {
-        const stm = await solanaTracker.getTokenMarketStatus(mint);
-        if (stm) {
-          onBondingCurve = stm.onBondingCurve === true;
-          curvePctToGrad = stm.curvePercentage;
-          if (stm.liquidityUsd != null && stm.liquidityUsd > totalLiqUsd) {
-            totalLiqUsd = stm.liquidityUsd;
-            scoreSource = scoreSource === "dexscreener" ? "solana-tracker" : scoreSource + "+st";
-            if (poolCount === 0) poolCount = 1;
-          }
-        }
-      } catch (_) { /* degrade — keep DexScreener/Gecko numbers */ }
-    }
-
-    const rawSupply = supplyData.status === "fulfilled" ? supplyData.value?.result?.value?.amount : null;
-    const decimals = supplyData.status === "fulfilled" ? (supplyData.value?.result?.value?.decimals || 9) : 9;
-    const supplyTokens = rawSupply ? parseInt(rawSupply) / Math.pow(10, decimals) : null;
-    const mintParsed = mintInfoData.status === "fulfilled" ? mintInfoData.value?.result?.value?.data?.parsed?.info : null;
-    const mintAuthority = mintParsed ? mintParsed.mintAuthority : undefined; // null = revoked, string = not revoked
-    const freezeAuthority = mintParsed ? mintParsed.freezeAuthority : undefined;
-
-    // Token-2022 honeypot scan — read straight off the mint account we already
-    // fetched (no extra RPC). Dangerous extensions let a token block sells, seize
-    // holders' tokens, or tax every transfer — so a token can otherwise score well
-    // and still be a trap. Hard-danger extensions cap the score.
-    const TOKEN_2022_PROGRAM = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
-    const SYS_PROG = "11111111111111111111111111111111";
-    const mintProgram = mintInfoData.status === "fulfilled" ? mintInfoData.value?.result?.value?.owner : null;
-    const isToken2022 = mintProgram === TOKEN_2022_PROGRAM;
-    const exts = Array.isArray(mintParsed?.extensions) ? mintParsed.extensions : [];
-    const extState = (name) => { const e = exts.find(x => x && x.extension === name); return e ? (e.state || {}) : null; };
-    const sellWarnings = [];
-    let honeypotHardDanger = false;
-    let transferFeeBps = null;
-    if (isToken2022) {
-      const pd = extState("permanentDelegate");
-      if (pd && pd.delegate && pd.delegate !== SYS_PROG) { sellWarnings.push("Permanent delegate set — an authority can move or burn your tokens at will."); honeypotHardDanger = true; }
-      const th = extState("transferHook");
-      if (th && th.programId && th.programId !== SYS_PROG) { sellWarnings.push("Transfer hook active — a custom program runs on every transfer and can block sells."); honeypotHardDanger = true; }
-      const das = extState("defaultAccountState");
-      if (das && das.accountState === "frozen") { sellWarnings.push("Accounts default to FROZEN — new holders can't transfer until the authority thaws them."); honeypotHardDanger = true; }
-      const tf = extState("transferFeeConfig");
-      if (tf) {
-        transferFeeBps = Math.max(Number(tf.newerTransferFee?.transferFeeBasisPoints) || 0, Number(tf.olderTransferFee?.transferFeeBasisPoints) || 0);
-        if (transferFeeBps > 0) {
-          sellWarnings.push("Transfer fee of " + (transferFeeBps / 100).toFixed(transferFeeBps % 100 ? 2 : 0) + "% taxed on every buy and sell.");
-          if (transferFeeBps >= 1000) honeypotHardDanger = true; // ≥10% = honeypot-grade tax
-        }
-      }
-    }
-
-    const largestRaw = largestData.status === "fulfilled" ? (largestData.value?.result?.value || []) : [];
-
-    // Filter top-20 token accounts to ACTUAL HUMAN HOLDERS only.
-    // Step 1: each top-20 token account has an owner — that owner is a wallet pubkey.
-    // Step 2: fetch each owner's account info — if `owner` of THAT account is the
-    //         System Program, it's a regular wallet (human). Otherwise it's a PDA
-    //         owned by some program (LP, lock, vesting, AMM authority, etc.).
-    // Two extra getMultipleAccounts calls — both batched, both small.
-    const SYSTEM_PROGRAM_ID = "11111111111111111111111111111111";
-    let top10HumanShare = null;
-    let top10RawShare = null;
-    let humanTop10Holdings = [];
-    let lpInTop20 = 0;
-    if (largestRaw.length && supplyTokens) {
-      // Raw share (informational fallback if classification fails)
-      const rawSum = largestRaw.slice(0, 10).reduce((s, a) => s + (parseFloat(a.uiAmount) || 0), 0);
-      top10RawShare = supplyTokens > 0 ? rawSum / supplyTokens : null;
-
-      try {
-        // Get the owner of each token account
-        const tokenAccountInfos = await rpcCall("score-tacc-owners", "getMultipleAccounts", [
-          largestRaw.map(a => a.address),
-          { encoding: "jsonParsed" }
-        ]);
-        const taccValues = tokenAccountInfos?.result?.value || [];
-        const enriched = largestRaw.map((a, i) => ({
-          tokenAccount: a.address,
-          uiAmount: parseFloat(a.uiAmount) || 0,
-          owner: taccValues[i]?.data?.parsed?.info?.owner || null,
-        })).filter(e => e.owner);
-
-        // Classify each owner: System-Program-owned = human wallet
-        if (enriched.length) {
-          const ownerInfos = await rpcCall("score-owner-class", "getMultipleAccounts", [
-            enriched.map(e => e.owner),
-            { encoding: "base64" }
-          ]);
-          const ownerValues = ownerInfos?.result?.value || [];
-          const humans = [];
-          enriched.forEach((e, i) => {
-            const ownerAcc = ownerValues[i];
-            const isHuman = ownerAcc && ownerAcc.owner === SYSTEM_PROGRAM_ID;
-            if (isHuman) humans.push(e);
-            else lpInTop20++;
-          });
-          humanTop10Holdings = humans.slice(0, 10);
-          const humanSum = humanTop10Holdings.reduce((s, e) => s + e.uiAmount, 0);
-          top10HumanShare = supplyTokens > 0 ? humanSum / supplyTokens : null;
-        }
-      } catch (e) {
-        console.warn("[cluck-score] Owner classification failed, using raw top-10:", e.message);
-      }
-    }
-    // Prefer the classified human-only share. Fall back to raw if classification
-    // failed (so we always have a score, even if it's a bit pessimistic).
-    const top10Share = top10HumanShare != null ? top10HumanShare : top10RawShare;
-
-    const liqUsd = totalLiqUsd; // sum across all Solana pools
-    const fdv = parseFloat(topPair?.fdv || topPair?.marketCap) || (supplyTokens && parseFloat(topPair?.priceUsd) ? supplyTokens * parseFloat(topPair.priceUsd) : null);
-    const liqRatio = (fdv && liqUsd) ? liqUsd / fdv : null; // 0..1
-    const vol24h = totalVol24h; // sum across all Solana pools
-    const dexId = (topPair?.dexId || "").toLowerCase();
-    const labels = topPair?.labels || [];
-    // DexScreener dexIds:
-    //   graduated (real AMM): meteora / raydium / orca / phoenix / openbook / lifinity
-    //                         + pumpswap (pump.fun's own AMM — pump.fun grads land here now)
-    //   bonding curve:        bags / pumpfun / moonshot / fluxbeam (still on launchpad)
-    const graduatedDexIds = ["meteora", "raydium", "orca", "phoenix", "openbook", "lifinity", "pumpswap"];
-    const bondingCurveDexIds = ["bags", "pumpfun", "moonshot", "fluxbeam"];
-    const isGraduated = !!topPair && (
-      graduatedDexIds.some(s => dexId === s || dexId.startsWith(s + "-")) ||
-      labels.some(l => /damm|dlmm|clmm|whirlpool|v[23]/i.test(l))
-    ) && !bondingCurveDexIds.some(s => dexId.includes(s));
-
-    // Score each factor (0..100)
-    const f = {};
-    // Holders: anchored to industry signals.
-    //   500 holders = score 50 (Jupiter's minimum bar to even apply for verification)
-    //   5000 holders = score 100 (real distribution)
-    //   <100 = effectively dead
-    // Formula: log10(holders) * 50 - 85, clamped to [0, 100].
-    f.holders = holderCount == null ? null : Math.max(0, Math.min(100, Math.log10(Math.max(1, holderCount)) * 50 - 85));
-    // Liquidity: base score from total liq÷FDV (20% = 100 points). Multi-DEX presence
-    // (≥2 protocols) adds a 5-point bonus — but only if base score is already meaningful,
-    // so a token with $0 spread across 5 dead pools doesn't get free credit.
-    const liqBase = liqRatio == null ? null : Math.min(100, liqRatio * 500);
-    const multiDexBonus = (liqBase != null && liqBase >= 20 && dexFamilies.size >= 2) ? 5 : 0;
-    f.liquidity = liqBase == null ? null : Math.min(100, liqBase + multiDexBonus);
-    f.mintAuthority = mintAuthority === null ? 100 : (mintAuthority === undefined ? null : 0);
-    f.freezeAuthority = (freezeAuthority === null) ? 100 : (freezeAuthority === undefined ? null : 0);
-    // Concentration: top10Share is the LP/lock/program-FILTERED human share
-    // (top10HumanShare) whenever owner classification succeeds — so the "excellent"
-    // floor is a true human floor (10%), not the lenient 25% that only made sense
-    // when LP/contracts were still counted in the number. If classification fails we
-    // fall back to the RAW share (LP included) and keep the 25% floor so a token isn't
-    // unfairly penalized for its own pool sitting in the top 10.
-    //   human-filtered: 10% → 100, 20% → 80, 30% → 60, 40% → 40, 50% → 20, 60%+ → 0
-    //   raw fallback:   25% → 100 … 75%+ → 0
-    const concFloor = top10HumanShare != null ? 0.10 : 0.25;
-    f.concentration = top10Share == null ? null : Math.max(0, Math.min(100, 100 - Math.max(0, top10Share - concFloor) * 200));
-    f.volume = vol24h == null ? null : Math.min(100, Math.log10(Math.max(1, vol24h)) * 25); // ~$10k = 100
-
-    // --- Bags-aware verification factors (new) ---
-    // The Cluck Score used to be blind to Bags context: it didn't know a token
-    // had a verified team, didn't credit active fee-claim revenue, didn't
-    // recognize "buy-and-lock" patterns, and could mis-flag the Bags platform
-    // launcher wallet as a "dev with 1956 launches." These factors fix that.
-    const bagsCtx = bagsCtxData.status === "fulfilled" ? bagsCtxData.value : { bagsInfo: null, jupiterInfo: null, projectFeeWallets: [] };
-    const teamActivity = classifyTeamActivity(bagsCtx.bagsInfo);
-    const isBagsToken = !!(bagsCtx.bagsInfo && bagsCtx.bagsInfo.isBagsToken);
-    const isJupVerified = !!(bagsCtx.jupiterInfo && bagsCtx.jupiterInfo.listed && Array.isArray(bagsCtx.jupiterInfo.tags) && bagsCtx.jupiterInfo.tags.some(t => t === "verified"));
-    const jupOrganic = bagsCtx.jupiterInfo?.organicScoreLabel || null;
-    // verifiedTeam (0..100): Bags-verified creator with active fee claims = 100;
-    // verified but stale = 60; verified but never claimed = 40; unverified = 0.
-    let verifiedTeamScore = null;
-    if (isBagsToken && bagsCtx.bagsInfo.officialCreators.length > 0) {
-      if (teamActivity === "active") verifiedTeamScore = 100;
-      else if (teamActivity === "stale") verifiedTeamScore = 60;
-      else if ((bagsCtx.bagsInfo.totalClaimedSol || 0) > 0) verifiedTeamScore = 70;
-      else verifiedTeamScore = 40;
-    } else if (isJupVerified) {
-      verifiedTeamScore = 80;
-    }
-    f.verifiedTeam = verifiedTeamScore;
-
-    // independentVerification (0..100): cross-checks against Jupiter's audit.
-    // A token gets full credit when our reading of mint/freeze auth and
-    // top-holder concentration MATCHES Jupiter's independent audit. This
-    // catches our own errors and confirms reality.
-    let indVerifyScore = null;
-    const jupAudit = bagsCtx.jupiterInfo?.audit;
-    if (jupAudit) {
-      let matches = 0, checked = 0;
-      checked++; if (jupAudit.mintAuthorityDisabled === (mintAuthority === null)) matches++;
-      checked++; if (jupAudit.freezeAuthorityDisabled === (freezeAuthority === null)) matches++;
-      if (top10Share != null && jupAudit.topHoldersPercentage != null) {
-        checked++;
-        if (Math.abs((top10Share * 100) - jupAudit.topHoldersPercentage) < 10) matches++;
-      }
-      indVerifyScore = checked > 0 ? (matches / checked) * 100 : null;
-    } else if (bagsCtx.jupiterInfo?.listed) {
-      // On Jupiter but no audit → small positive signal anyway
-      indVerifyScore = 60;
-    }
-    f.independentVerification = indVerifyScore;
-
-    // Platform-wallet guard: when Jupiter's audit shows the genesis "dev"
-    // wallet has done >50 migrations, that's the platform launcher, NOT the
-    // project team. Used downstream to soften any other "dev concentration"
-    // signal (the concentration factor above is already top-10 humans, but
-    // we record the platform-wallet status so the UI can show it).
-    const isPlatformLauncherDev = !!(jupAudit && jupAudit.devMigrations != null && jupAudit.devMigrations > 50);
-    // Pool type / graduation factor removed — wasn't discriminating well and we can't
-    // properly distinguish "on bonding curve" from "LP-only AMM pool" without the
-    // full holders classifier. isGraduated info still exposed in the response for
-    // reference but doesn't count toward the score.
-
-    // Weighted average (skip null factors, redistribute weight).
-    // New (Bags-aware) weights:
-    //   holders 18, liquidity 20, mintAuth 12, freezeAuth 8, concentration 18,
-    //   volume 8, verifiedTeam 10, independentVerification 6.
-    // The verifiedTeam + indVerify factors are NEW and only count when data
-    // is present; for non-Bags / non-Jupiter tokens they're null and the
-    // remaining factors get full weight as before.
-    const weights = {
-      holders: 18, liquidity: 20, mintAuthority: 12, freezeAuthority: 8,
-      concentration: 18, volume: 8,
-      verifiedTeam: 10, independentVerification: 6,
-    };
-    let totalWeight = 0;
-    let weightedSum = 0;
-    for (const k of Object.keys(weights)) {
-      if (f[k] != null) {
-        weightedSum += f[k] * weights[k];
-        totalWeight += weights[k];
-      }
-    }
-    let score = totalWeight > 0 ? Math.round(weightedSum / totalWeight) : null;
-    // Hard-danger Token-2022 extensions (sell-block / seize / honeypot-tax) cap the
-    // score — no amount of liquidity or holders makes a token you can't safely sell
-    // a healthy one.
-    if (honeypotHardDanger && score != null) score = Math.min(score, 35);
-    // Confidence: flag a score built from sparse data (missing the two biggest
-    // factors — liquidity 20 + holders 18 — drops totalWeight below 40), so the
-    // UI can label it rather than present a thin read as authoritative.
-    const factorsUsed = Object.keys(weights).filter(k => f[k] != null).length;
-    const lowConfidence = totalWeight < 40;
-
-    // Standard academic grading scale — what every reader expects.
-    //   95+ → A+   90+ → A   80+ → B   70+ → C   60+ → D   <60 → F
-    const grade = score == null ? "—"
-      : score >= 95 ? "A+"
-      : score >= 90 ? "A"
-      : score >= 80 ? "B"
-      : score >= 70 ? "C"
-      : score >= 60 ? "D"
-      : "F";
-
-    let verdict = score == null
-      ? "Couldn't pull enough data to score this one. Cluck shrugs."
-      : score >= 90 ? "Cluck Norris approves. Distribution, liquidity, authorities — all check out. No red flags."
-      : score >= 80 ? "Healthy bird. Solid reads across the board. Normal caution applies."
-      : score >= 70 ? "Decent. Worth a deeper look at the weaker factors before sizing up."
-      : score >= 60 ? "Watch the eggs. A couple yellow flags here — research before getting big."
-      : score >= 45 ? "Cluck raises an eyebrow. Real concerns in the breakdown below — tread carefully."
-      : "Don't bring this back to the schoolyard. Multiple red flags. Cluck's not impressed.";
-    if (honeypotHardDanger) verdict = "Dangerous token mechanics detected — it can block sells, seize tokens, or tax every transfer. Cluck says stay away, no matter how the rest looks.";
-
-    return res.status(200).json({
-      success: true,
-      mint,
-      ticker: topPair?.baseToken?.symbol || null,
-      name: topPair?.baseToken?.name || null,
-      score,
-      grade,
-      verdict,
-      dataConfidence: lowConfidence ? "low" : "ok",
-      factorsUsed,
-      warnings: sellWarnings,
-      token2022: isToken2022,
-      transferFeeBps,
-      factors: {
-        holders:          { score: f.holders          == null ? null : Math.round(f.holders),          weight: weights.holders,          value: holderCount, capped: holderCountCapped },
-        liquidity:        { score: f.liquidity        == null ? null : Math.round(f.liquidity),        weight: weights.liquidity,        value: liqUsd, ratio: liqRatio, poolCount, dexCount: dexFamilies.size, dexes: [...dexFamilies], multiDexBonus },
-        mintAuthority:    { score: f.mintAuthority,    weight: weights.mintAuthority,    revoked: mintAuthority === null },
-        freezeAuthority:  { score: f.freezeAuthority,  weight: weights.freezeAuthority,  revoked: freezeAuthority === null },
-        concentration:    { score: f.concentration    == null ? null : Math.round(f.concentration),    weight: weights.concentration,    top10Share: top10Share, top10RawShare, top10HumanShare, humanFiltered: top10HumanShare != null, lpFilteredFromTop20: lpInTop20, isPlatformLauncherDev },
-        volume:           { score: f.volume           == null ? null : Math.round(f.volume),           weight: weights.volume,           value: vol24h },
-        verifiedTeam: {
-          score: f.verifiedTeam == null ? null : Math.round(f.verifiedTeam),
-          weight: weights.verifiedTeam,
-          isBagsToken,
-          isJupVerified,
-          teamActivity,
-          officialCreators: bagsCtx.bagsInfo?.officialCreators?.map(c => ({
-            wallet: c.wallet,
-            username: c.username,
-            provider: c.provider,
-            isAdmin: c.isAdmin,
-            royaltyBps: c.royaltyBps,
-          })) || [],
-          totalClaimedSol: bagsCtx.bagsInfo?.totalClaimedSol || null,
-          claimEventCount: bagsCtx.bagsInfo?.claimEventCount || 0,
-          daysSinceLastClaim: bagsCtx.bagsInfo?.lastClaimTimestamp
-            ? Math.round((Date.now() - bagsCtx.bagsInfo.lastClaimTimestamp) / 86400000)
-            : null,
-        },
-        independentVerification: {
-          score: f.independentVerification == null ? null : Math.round(f.independentVerification),
-          weight: weights.independentVerification,
-          jupiterListed: !!bagsCtx.jupiterInfo?.listed,
-          jupiterTags: bagsCtx.jupiterInfo?.tags || [],
-          jupiterHolderCount: bagsCtx.jupiterInfo?.holderCount || null,
-          jupiterOrganicScore: jupOrganic,
-          jupiterAudit: jupAudit ? {
-            mintAuthorityDisabled: jupAudit.mintAuthorityDisabled,
-            freezeAuthorityDisabled: jupAudit.freezeAuthorityDisabled,
-            topHoldersPercentage: jupAudit.topHoldersPercentage,
-            devMigrations: jupAudit.devMigrations,
-          } : null,
-        },
-        // graduation/pool-type removed from scoring; isGraduated still exposed as a hint
-        // for the UI to display informationally if it wants.
-      },
-      raw: {
-        priceUsd: topPair?.priceUsd ? parseFloat(topPair.priceUsd) : null,
-        fdv,
-        liquidityUsd: liqUsd,
-        volume24h: vol24h,
-        circulatingSupply: supplyTokens,
-        pairAddress: topPair?.pairAddress || null,
-        source: scoreSource,
-        onBondingCurve,
-        curvePctToGrad: curvePctToGrad != null ? Number(curvePctToGrad.toFixed(1)) : null,
-      },
-      generatedAt: new Date().toISOString(),
-    });
-  } catch (err) {
-    console.error("Cluck Score error:", err.message);
-    return res.status(500).json({ success: false, error: publicErrMsg(err) });
-  }
-});
 
 // Address primitives + program/wallet tables now live in lib/solana-addr.js
 // (one source of truth for trace / snapshot / cluck-score / autopsy).
@@ -7565,119 +7051,6 @@ HOW YOU ANSWER:
   } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
 });
 
-// -- Cluck Score PNG card (1200x630, Twitter-card optimal) --
-// Generates a shareable image for any mint by calling our own /api/cluck-score
-// endpoint and rasterizing the result with @napi-rs/canvas. Cached 5 min same as
-// the score endpoint. This is what makes the share button viral instead of just
-// a text tweet.
-const GRADE_COLORS = { "A+": "#10B981", A: "#10B981", B: "#60A5FA", C: "#F59E0B", D: "#D97706", F: "#EF4444" };
-
-function renderScoreCard(scoreData) {
-  const W = 1200, H = 630;
-  const canvas = createCanvas(W, H);
-  const ctx = canvas.getContext("2d");
-
-  // Background — same dark/orange theme as the rest of the app
-  ctx.fillStyle = "#0a0a0a";
-  ctx.fillRect(0, 0, W, H);
-  // Soft radial accents
-  const accent = ctx.createRadialGradient(220, 120, 0, 220, 120, 560);
-  accent.addColorStop(0, "rgba(217, 119, 6, 0.18)");
-  accent.addColorStop(1, "rgba(217, 119, 6, 0)");
-  ctx.fillStyle = accent;
-  ctx.fillRect(0, 0, W, H);
-  const accent2 = ctx.createRadialGradient(1000, 580, 0, 1000, 580, 460);
-  accent2.addColorStop(0, "rgba(239, 68, 68, 0.12)");
-  accent2.addColorStop(1, "rgba(239, 68, 68, 0)");
-  ctx.fillStyle = accent2;
-  ctx.fillRect(0, 0, W, H);
-
-  // Brand header
-  ctx.textBaseline = "top";
-  ctx.fillStyle = "#D97706";
-  ctx.font = "900 22px Oswald, sans-serif";
-  ctx.fillText("CLUCK SCORE", 60, 50);
-  ctx.fillStyle = "#6B7280";
-  ctx.font = "16px Oswald, sans-serif";
-  ctx.fillText("School of Crypto Hard Knocks", 60, 82);
-
-  // Token identity
-  const ticker = scoreData.ticker ? "$" + scoreData.ticker.toUpperCase() : "$UNKNOWN";
-  const name = scoreData.name || (scoreData.mint ? scoreData.mint.slice(0, 10) + "…" : "");
-  ctx.fillStyle = "#9CA3AF";
-  ctx.font = "900 28px Oswald, sans-serif";
-  ctx.fillText(ticker, 60, 140);
-  ctx.fillStyle = "#F9FAFB";
-  ctx.font = "900 44px Oswald, sans-serif";
-  ctx.fillText(name, 60, 178);
-
-  // Big gradient score
-  const scoreText = scoreData.score == null ? "—" : String(scoreData.score);
-  ctx.font = "900 220px Oswald, sans-serif";
-  const scoreGrad = ctx.createLinearGradient(60, 260, 460, 480);
-  scoreGrad.addColorStop(0, "#FCD34D");
-  scoreGrad.addColorStop(0.5, "#F97316");
-  scoreGrad.addColorStop(1, "#EF4444");
-  ctx.fillStyle = scoreGrad;
-  ctx.fillText(scoreText, 60, 250);
-  const scoreWidth = ctx.measureText(scoreText).width;
-
-  // " / 100" suffix
-  ctx.fillStyle = "#6B7280";
-  ctx.font = "300 40px Oswald, sans-serif";
-  ctx.fillText("/ 100", 60 + scoreWidth + 16, 408);
-
-  // Grade chip (right of score)
-  const grade = scoreData.grade || "—";
-  const gradeColor = GRADE_COLORS[grade] || GRADE_COLORS[grade[0]] || "#6B7280";
-  const chipX = 60 + scoreWidth + 110;
-  const chipY = 280;
-  const chipW = 220, chipH = 170;
-  ctx.fillStyle = gradeColor + "22";
-  ctx.fillRect(chipX, chipY, chipW, chipH);
-  ctx.strokeStyle = gradeColor;
-  ctx.lineWidth = 3;
-  ctx.strokeRect(chipX, chipY, chipW, chipH);
-  ctx.fillStyle = gradeColor;
-  ctx.font = "900 110px Oswald, sans-serif";
-  const gradeWidth = ctx.measureText(grade).width;
-  ctx.fillText(grade, chipX + (chipW - gradeWidth) / 2, chipY + 30);
-  // "GRADE" label below
-  ctx.font = "900 14px Oswald, sans-serif";
-  ctx.fillStyle = gradeColor;
-  const lblWidth = ctx.measureText("GRADE").width;
-  ctx.fillText("GRADE", chipX + (chipW - lblWidth) / 2, chipY + 145);
-
-  // Verdict text (word-wrapped, italic, max 2 lines)
-  ctx.fillStyle = "#D1D5DB";
-  ctx.font = "italic 22px Oswald, sans-serif";
-  const verdict = '"' + (scoreData.verdict || "") + '"';
-  const maxW = W - 120;
-  const words = verdict.split(" ");
-  const lines = [];
-  let current = "";
-  for (const w of words) {
-    const test = current ? current + " " + w : w;
-    if (ctx.measureText(test).width <= maxW) current = test;
-    else { lines.push(current); current = w; if (lines.length === 1) break; }
-  }
-  if (current) lines.push(current);
-  const verdictTop = 490;
-  for (let i = 0; i < Math.min(2, lines.length); i++) {
-    ctx.fillText(lines[i] + (i === 1 && lines.length > 2 ? "…" : ""), 60, verdictTop + i * 30);
-  }
-
-  // Footer URL
-  ctx.fillStyle = "#D97706";
-  ctx.font = "900 18px Oswald, sans-serif";
-  ctx.fillText("clucknorris.app/score", 60, 580);
-  ctx.fillStyle = "#6B7280";
-  ctx.font = "14px Oswald, sans-serif";
-  ctx.fillText("free · no wallet connect · any solana mint", 60, 604);
-
-  return canvas.toBuffer("image/png");
-}
-
 // Shareable LP Pair Scanner card — the top pool for a pair, its real fee yield, and (if a
 // deposit was given) the estimated $/day. Built for X/Telegram virality + brand reach.
 async function renderLpCard(scan) {
@@ -7794,30 +7167,6 @@ app.get("/api/lp-card", async (req, res) => {
     return res.end(png);
   } catch (err) {
     console.error("LP card render error:", err.message);
-    return res.status(500).json({ success: false, error: publicErrMsg(err) });
-  }
-});
-
-app.get("/api/cluck-card", async (req, res) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Cache-Control", "public, max-age=300");
-  const mint = (req.query.mint || "").trim();
-  if (!mint || mint.length < 32) {
-    return res.status(400).json({ success: false, error: "Invalid mint" });
-  }
-  try {
-    // Re-use the score endpoint so the card and the JSON always agree.
-    const scoreRes = await fetch(`http://localhost:${PORT}/api/cluck-score?mint=${encodeURIComponent(mint)}`);
-    const scoreData = await scoreRes.json();
-    if (!scoreData?.success) {
-      return res.status(400).json({ success: false, error: scoreData?.error || "Could not score this mint" });
-    }
-    const png = renderScoreCard(scoreData);
-    res.setHeader("Content-Type", "image/png");
-    res.setHeader("Content-Length", png.length);
-    return res.end(png);
-  } catch (err) {
-    console.error("Card render error:", err.message);
     return res.status(500).json({ success: false, error: publicErrMsg(err) });
   }
 });
@@ -8195,35 +7544,6 @@ app.get("/bags", (req, res) => {
 // links never carry the raw Railway host even if the server is reached that way.
 // Env-overridable for a future domain change or local testing.
 const CANONICAL_ORIGIN = process.env.CANONICAL_ORIGIN || "https://clucknorris.app";
-
-// -- Cluck Score public page (paste any mint, see the score rendered) --
-// When a ?mint= param is present, inject mint-specific og:image and twitter:card
-// meta tags so the card image unfurls on social platforms automatically.
-let _scoreHtmlCache = null;
-function getScoreHtml() {
-  if (_scoreHtmlCache) return _scoreHtmlCache;
-  _scoreHtmlCache = fs.readFileSync(join(__dirname, "public", "score.html"), "utf8");
-  return _scoreHtmlCache;
-}
-app.get("/score", (req, res) => {
-  const mint = (req.query.mint || "").trim();
-  let html = getScoreHtml();
-  if (mint && mint.length >= 32) {
-    const cardUrl = `${CANONICAL_ORIGIN}/api/cluck-card?mint=${encodeURIComponent(mint)}`;
-    const pageUrl = `${CANONICAL_ORIGIN}/score?mint=${encodeURIComponent(mint)}`;
-    const meta = [
-      `<meta property="og:image" content="${cardUrl}"/>`,
-      `<meta property="og:image:width" content="1200"/>`,
-      `<meta property="og:image:height" content="630"/>`,
-      `<meta property="og:url" content="${pageUrl}"/>`,
-      `<meta name="twitter:card" content="summary_large_image"/>`,
-      `<meta name="twitter:image" content="${cardUrl}"/>`,
-    ].join("\n");
-    html = html.replace("</head>", meta + "\n</head>");
-  }
-  res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.send(html);
-});
 
 // -- Permanent transcript page (reads the slug from the path, fetches the JSON) --
 let _transcriptHtmlCache = null;
@@ -9597,7 +8917,7 @@ app.listen(PORT, () => {
           body: JSON.stringify({ commands: [
             { command: "guide", description: "Where do I start? Get pointed the right way" },
             { command: "price", description: "CLKN price, market cap, volume & organic score" },
-            { command: "score", description: "Token health 0–100 (/score <mint>)" },
+            { command: "walletxray", description: "Full wallet deep dive (/walletxray <wallet>)" },
             { command: "autopsy", description: "Forensic breakdown (/autopsy <mint>)" },
             { command: "trace", description: "Wallet × token history (/trace <wallet>)" },
             { command: "snapshot", description: "Holders + airdrop CSV (/snapshot <mint>)" },

@@ -118,8 +118,8 @@
 
   <div class="card">
     <span class="free-badge">FREE PUBLIC GOOD</span>
-    <h3>🩺 Cluck Score — token health for any Solana mint</h3>
-    <p>Paste any Solana token mint, get a 0–100 health score in seconds: holder distribution, liquidity depth, mint/freeze authority status, and a top-holder concentration figure that filters out LP pools and lock contracts so the number reflects real human wallets. It also scans <strong>Token‑2022 honeypot mechanics</strong> (sell‑blocks, permanent‑delegate seize, transfer‑tax) and caps the score on anything a holder couldn't safely sell. Served free at <code>/score</code> with a public JSON API and shareable card. Helps any user — not just ours — avoid bad tokens.</p>
+    <h3>🩻 Wallet X-Ray — full-wallet deep dive for any address</h3>
+    <p>Paste any Solana wallet, get its whole story in seconds: the <strong>true funding origin</strong> traced all the way to the wallet's first transaction (with dust/spam filtered out and exchange hot-wallets identified), every buy, sell and transfer across <em>every</em> token, and a behavior read — bot cadence, fast-flip dumping, CEX cash-out, LP, or diamond-hands holder. A searchable timeline, charts, and a built-in "ask Cluck Norris about this transaction" AI. Served free at <code>/wallet-xray</code>. Helps any user — not just ours — vet a wallet before trusting it.</p>
   </div>
 
   <div class="card">
@@ -161,7 +161,6 @@
   <div class="section-title">LIVE ECOSYSTEM FOOTPRINT</div>
   <div class="stats">
     <div class="stat"><div class="stat-value" id="statHolders">—</div><div class="stat-label">TOKEN HOLDERS</div></div>
-    <div class="stat"><div class="stat-value" id="statScore">—</div><div class="stat-label">OUR OWN CLUCK SCORE</div><div class="stat-sub" id="statScoreGrade"></div></div>
     <div class="stat"><div class="stat-value" id="statFees">—</div><div class="stat-label">LIFETIME FEES REINVESTED</div></div>
     <div class="stat"><div class="stat-value" id="statGrads">—</div><div class="stat-label">VERIFIED GRADUATES</div><div class="stat-sub" id="statGradsSub">server-scored diplomas</div></div>
   </div>
@@ -196,9 +195,9 @@
   <div class="section-title">WHY THIS BENEFITS SOLANA</div>
   <div class="prose">
     <ul>
-      <li><strong>Reduces newcomer losses.</strong> Most new users on Solana lose money to rugs, drains, and bad tokens in their first weeks. Cluck Norris teaches them <em>before</em> they get hurt — and Cluck Score gives them a free way to vet a token before buying.</li>
-      <li><strong>Free and token-agnostic.</strong> Cluck Score, the school, and the snapshot tool work for <em>any</em> Solana token and any user. They're public goods, not funnels for one project.</li>
-      <li><strong>Open source.</strong> MIT-licensed. Other builders can fork the curriculum, the scoring engine, or the no-wallet-connect payment pattern.</li>
+      <li><strong>Reduces newcomer losses.</strong> Most new users on Solana lose money to rugs, drains, and bad tokens in their first weeks. Cluck Norris teaches them <em>before</em> they get hurt — and the free Token Autopsy and Wallet X-Ray give them a way to vet a token or wallet before trusting it.</li>
+      <li><strong>Free and token-agnostic.</strong> The Token Autopsy, Wallet X-Ray, the school, and the snapshot tool work for <em>any</em> Solana token and any user. They're public goods, not funnels for one project.</li>
+      <li><strong>Open source.</strong> MIT-licensed. Other builders can fork the curriculum, the forensic engine, or the no-wallet-connect payment pattern.</li>
       <li><strong>Reaching Solana Mobile.</strong> The app is wrapped as a native Android app (Capacitor) and is <strong>live on the Solana Seeker dApp Store</strong> — putting free crypto-safety education directly on the Seeker. <span style="opacity:.8">Deeper Mobile Wallet Adapter / Seed Vault integration is on the roadmap; today the app delivers the full web experience natively, not in-app native wallet signing.</span></li>
       <li><strong>Already shipped.</strong> This is not a roadmap — it's a working product in production. The grant scales what's proven, with low execution risk.</li>
     </ul>
@@ -212,7 +211,7 @@
   <div class="section-title">LINKS FOR REVIEW</div>
   <div class="links">
     <a class="link-btn link-primary" href="https://clucknorris.app">LIVE APP — clucknorris.app</a>
-    <a class="link-btn link-secondary" href="https://clucknorris.app/score">FREE CLUCK SCORE</a>
+    <a class="link-btn link-secondary" href="https://clucknorris.app/wallet-xray">FREE WALLET X-RAY</a>
   </div>
   <div class="links">
     <a class="link-btn link-secondary" href="https://clucknorris.app/snapshot">FREE SNAPSHOT TOOL</a>
@@ -249,17 +248,6 @@ fetch('/api/fees')
     const n = parseInt(lamports);
     if (Number.isFinite(n)) {
       document.getElementById('statFees').textContent = (n / 1e9).toFixed(2) + ' SOL';
-    }
-  })
-  .catch(function(){});
-
-fetch('/api/cluck-score?mint=' + CLKN_MINT)
-  .then(r => r.json())
-  .then(d => {
-    if (!d || !d.success) return;
-    if (d.score != null) {
-      document.getElementById('statScore').textContent = d.score + '/100';
-      document.getElementById('statScoreGrade').textContent = 'grade ' + (d.grade || '—');
     }
   })
   .catch(function(){});

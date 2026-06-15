@@ -5667,7 +5667,7 @@ function Landing({onStart,onChallenge,onIncubator,onStartHere,completed}){
         </div>
       </div>
       {/* Tools & Utilities — the front door to the product beyond the school:
-          Cluck Score, the Hatchery, the competition trackers, the airdropper,
+          the Hatchery, the competition trackers, the airdropper,
           Security Coop. Full hub lives at /tools. */}
       <div style={{marginTop:22,paddingTop:18,borderTop:"1px solid rgba(255,255,255,0.06)"}}>
         <div style={{fontFamily:"'Oswald',sans-serif",fontSize:10,color:"#6B7280",letterSpacing:3,marginBottom:10}}>
@@ -5686,7 +5686,7 @@ function Landing({onStart,onChallenge,onIncubator,onStartHere,completed}){
           🛠 TOOLS &amp; UTILITIES
         </a>
         <p style={{marginTop:6,fontSize:11,color:"#4B5563",fontFamily:"'Oswald',sans-serif",letterSpacing:1}}>
-          CLUCK SCORE · TOKEN CREATOR · COMPETITION TRACKERS · AIRDROPPER · WALLET SECURITY
+          WALLET X-RAY · TOKEN CREATOR · COMPETITION TRACKERS · AIRDROPPER · WALLET SECURITY
         </p>
       </div>
       {/* Bags.fm info link — autopsy panel sends folks here for context. */}
@@ -6024,7 +6024,6 @@ function StartHere({ onGo }){
       </>)},
     { key:"research", icon:"🔬", title:"Token research & CLKN tools", tag:"Vet anything on-chain", body:()=>(<>
         <p style={txt}>Free tools to check a token before you trust it. The chain shows <em>what</em>, never <em>why</em> — always DYOR.</p>
-        <Act label="🩺 Cluck Score" onClick={goIn("/score")}/>
         <Act label="🪦 Token Autopsy" onClick={goIn("/autopsy")}/>
         <Act label="🔍 Trace" onClick={goIn("/trace")}/>
         <Act label="🔒 Wallet Checkup" onClick={goIn("/security-coop")}/>
@@ -7344,7 +7343,7 @@ THE LIQUIDITY-PULL RUG:
 If a token's liquidity is not locked, whoever controls it can withdraw the entire pool — including the value backing your position — and leave you holding a worthless token. You LP'd into a pool the creator could empty at will. Before LPing any token, confirm its liquidity is locked or burned.
 
 MINT AND FREEZE AUTHORITY:
-If the token you pair against still has mint authority live, the creator can print unlimited new supply and dump it into your pool — your position rebalances entirely into the inflated token. If freeze authority is live, they can freeze the account holding your position. Both should be revoked. Cluck Score and Security Coop both surface this — check before you LP.
+If the token you pair against still has mint authority live, the creator can print unlimited new supply and dump it into your pool — your position rebalances entirely into the inflated token. If freeze authority is live, they can freeze the account holding your position. Both should be revoked. Token Autopsy and Security Coop both surface this — check before you LP.
 
 SMART-CONTRACT RISK:
 You are trusting the AMM's code with your capital. Stick to established, audited protocols — Meteora, Raydium, Orca. A brand-new "500% APR" pool on an unknown program is a bet on unaudited code holding your money.
@@ -7516,7 +7515,7 @@ The whole point of pre-setting exits is to remove the in-the-moment debate. If y
 ✓ Does the range width match the time I can actually commit?
 ✓ Do I understand which leg of the pair carries the IL risk?
 ✓ Have I written down my exit conditions — max IL, invalidation, profit-take?
-✓ Did I run the token through Cluck Score / Autopsy / Security Coop first?
+✓ Did I run the token through Token Autopsy / Security Coop first?
 
 Risk management is not the exciting part. It is the part that keeps you in the game long enough for the exciting parts to matter.`
       }
@@ -7635,7 +7634,7 @@ SIGNS OF WASH-TRADED VOLUME:
 • A trending token whose holder count and unique-trader count do not match its volume
 
 HOW TO CONFIRM:
-This is exactly what the Cluck Norris tools exist for. Run the token through Cluck Score for a distribution and risk read, and Token Autopsy for a forensic look at who is actually trading. Real volume comes from many different wallets, different sizes, different timing. Manufactured volume comes from a handful of wallets passing the same money back and forth.
+This is exactly what the Cluck Norris tools exist for. Run the token through Token Autopsy for a forensic look at who is actually trading and a distribution and risk read. Real volume comes from many different wallets, different sizes, different timing. Manufactured volume comes from a handful of wallets passing the same money back and forth.
 
 Forensic rule, same as everywhere: the chain shows you WHAT happened, not WHY. State what the data shows — clustered wallets, repeated sizes, flat price — and let that evidence decide whether the volume is real.`
       },
@@ -7666,7 +7665,7 @@ A pool with $1M TVL spread thin can give worse execution near price than a $200K
             ["GeckoTerminal", "Cross-DEX pool comparison", "APR figures are extrapolated"],
             ["Meteora / Orca / Raydium", "Real bin/tick distribution, true fee APR", "Each shows its own pools only"],
             ["Solana Tracker", "Holder and trade-level verification", "Read it to confirm volume is organic"],
-            ["Cluck Score / Autopsy", "Distribution + forensic read on the token", "Use before LPing any new token"],
+            ["Token Autopsy", "Distribution + forensic read on the token", "Use before LPing any new token"],
           ]
         }
       }
@@ -7688,7 +7687,7 @@ A pool with $1M TVL spread thin can give worse execution near price than a $200K
         q: "Which of these is a classic sign of fake (wash-traded) volume?",
         options: ["Many different wallets trading different sizes at different times", "Enormous volume with almost no price movement, driven by a few wallets recycling the same trades", "Volume that grows steadily as a project gains real users", "A volume-to-TVL ratio that is modest and stable"],
         correct: 1,
-        explanation: "Wash trading produces huge volume with little price discovery, repeated trade sizes, and a tiny set of wallets passing the same money back and forth. Real volume is messy — many wallets, varied sizes, varied timing. Cluck Score and Token Autopsy exist to confirm whether the trading is organic."
+        explanation: "Wash trading produces huge volume with little price discovery, repeated trade sizes, and a tiny set of wallets passing the same money back and forth. Real volume is messy — many wallets, varied sizes, varied timing. Token Autopsy exists to confirm whether the trading is organic."
       },
       {
         q: "Two pools hold the same TVL. Pool A spreads its liquidity full-range; Pool B concentrates it tightly at the current price. For trades happening right at the current price, which gives better execution?",
@@ -7712,7 +7711,7 @@ A pool with $1M TVL spread thin can give worse execution near price than a $200K
         q: "What is the smartest habit when reading pool data across sources?",
         options: ["Trust whichever source shows the highest APR", "Cross-reference multiple sources and confirm volume is organic before depositing", "Only ever use one tool to keep it simple", "Rely on trending lists since the crowd is usually right"],
         correct: 1,
-        explanation: "No single source is complete, and trending lists can be gamed. Cross-reference DexScreener, GeckoTerminal, the native protocol dashboard, and verification tools like Solana Tracker and Cluck Score. The goal is to confirm the volume and depth are real before your capital relies on them."
+        explanation: "No single source is complete, and trending lists can be gamed. Cross-reference DexScreener, GeckoTerminal, the native protocol dashboard, and verification tools like Solana Tracker and Token Autopsy. The goal is to confirm the volume and depth are real before your capital relies on them."
       }
     ],
     cluckVerdict: "A pool page is a story told in numbers. TVL and volume set the scene, the volume-to-TVL ratio is the plot, APR is the marketing tagline, and fake volume is the villain. Learn to read all of it — and verify with the tools — before your capital becomes a character in someone else's story."
@@ -7791,7 +7790,7 @@ Your upside as an LP is fees plus whatever the volatile token does. Your downsid
         body: `Some LPs deliberately farm launch volatility because fee income is highest when markets move most. If you choose to, do it with discipline, not hope.
 
 THE LAUNCH-LP RULES:
-• Verify first: run Cluck Score and Token Autopsy; confirm mint and freeze authority are revoked and liquidity status with Security Coop
+• Verify first: run Token Autopsy; confirm mint and freeze authority are revoked and liquidity status with Security Coop
 • Confirm graduation: only LP a real graduated pool, not a curve you do not understand
 • Size tiny: this is position-of-last-resort sizing — money you have fully written off
 • Manage actively: launch LP is never passive; you are watching it closely or you should not be in it
@@ -7840,13 +7839,13 @@ Launch LP can pay well during high-volume windows — that is real. But it is an
         q: "If you deliberately choose to LP a fresh launch to farm volatility, which approach is disciplined rather than reckless?",
         options: ["Deposit a large position and hold passively for months", "Verify authorities and liquidity first, size tiny, manage actively, and pre-set your exit and invalidation", "Skip the research since launches move too fast to analyze", "Put in money you need soon, to force yourself to pay attention"],
         correct: 1,
-        explanation: "Launch LP is volatility farming: verify the token with Cluck Score, Autopsy, and Security Coop; confirm a real graduated pool; size it as money you have written off; manage it actively; and decide your exit before depositing. It is a high-skill, small-size game — never a place to park capital you need."
+        explanation: "Launch LP is volatility farming: verify the token with Token Autopsy and Security Coop; confirm a real graduated pool; size it as money you have written off; manage it actively; and decide your exit before depositing. It is a high-skill, small-size game — never a place to park capital you need."
       },
       {
         q: "A freshly graduated token's top wallets hold an enormous share of supply. Why does this matter to an LP in its pool?",
         options: ["It does not matter once a token graduates", "Extreme holder concentration means a few wallets can dump and crash the pool at will, maximizing your IL", "Concentration guarantees the price will rise", "It only affects the token creator, not LPs"],
         correct: 1,
-        explanation: "Concentration is a pool-level risk for LPs. If a handful of wallets hold most of the supply, they can sell into your liquidity and crash the price, rebalancing your position into the collapsing token. Reading holder structure — exactly what Cluck Score surfaces — is part of vetting any launch pool."
+        explanation: "Concentration is a pool-level risk for LPs. If a handful of wallets hold most of the supply, they can sell into your liquidity and crash the price, rebalancing your position into the collapsing token. Reading holder structure — exactly what Token Autopsy surfaces — is part of vetting any launch pool."
       },
       {
         q: "Applying the forensic rule to a launch, when is it fair to call a wallet the 'creator' or 'team'?",
@@ -7913,7 +7912,7 @@ FOR THE GROWTH TIER:
 Pick majors you understand and are comfortable holding either side of. Set range width to match how often you will actually check in. Weekly check-in means a wider range that stays in range between visits.
 
 FOR THE DEGEN TIER:
-Run every token through Cluck Score, Token Autopsy, and Security Coop first. Confirm authorities revoked and liquidity status. Only LP graduated pools you understand. Size each as total-loss money.
+Run every token through Token Autopsy and Security Coop first. Confirm authorities revoked and liquidity status. Only LP graduated pools you understand. Size each as total-loss money.
 
 The pair makes the bet. Tier sets the size and the management. Get those two right and you are already ahead of most LPs.`
       },
@@ -7942,7 +7941,7 @@ Most of the capital cannot easily be lost. The middle earns real yield with ligh
 WRITE DOWN YOUR RULES. EXAMPLES:
 • I only LP money I can fully lose
 • No single position exceeds my set share of LP capital
-• Every new token gets run through Cluck Score, Autopsy, and Security Coop before I deposit
+• Every new token gets run through Token Autopsy and Security Coop before I deposit
 • I write my exit conditions before I enter, and I honor them
 • I measure performance against holding, not against zero
 • I do not chase the highest-APR pool of the week
@@ -7954,7 +7953,7 @@ The rules matter most precisely when you least want to follow them. The market w
         heading: "The Full Workflow — Research to Review",
         body: `Here is the whole lab, distilled into a repeatable loop you run for every position.
 
-1. RESEARCH: Vet the token and pool — Cluck Score, Token Autopsy, Security Coop, and the pool data from Lesson 10 (TVL, volume, volume-to-TVL, distribution).
+1. RESEARCH: Vet the token and pool — Token Autopsy, Security Coop, and the pool data from Lesson 10 (TVL, volume, volume-to-TVL, distribution).
 2. DECIDE THE TIER: Core, growth, or degen — this sets your size and management style.
 3. SIZE: Apply Lesson 9 — size to your downside, never let one position threaten the whole.
 4. SET RANGE: Match range width to your tier and the time you will commit.
@@ -7988,9 +7987,9 @@ Run that loop with discipline and you are no longer gambling on liquidity — yo
       },
       {
         q: "Before adding any new token to your degen tier, what should you do?",
-        options: ["Deposit quickly before the opportunity passes", "Run it through Cluck Score, Token Autopsy, and Security Coop, and confirm authorities and liquidity status", "Check only the advertised APR", "Trust the trending list that surfaced it"],
+        options: ["Deposit quickly before the opportunity passes", "Run it through Token Autopsy and Security Coop, and confirm authorities and liquidity status", "Check only the advertised APR", "Trust the trending list that surfaced it"],
         correct: 1,
-        explanation: "Every degen-tier token gets vetted first: Cluck Score for distribution and risk, Token Autopsy for a forensic read, Security Coop and authority checks for mint/freeze/liquidity status. Only LP graduated pools you understand, and size each as total-loss money. Research is the price of admission to the riskiest tier."
+        explanation: "Every degen-tier token gets vetted first: Token Autopsy for a forensic read plus distribution and risk, Security Coop and authority checks for mint/freeze/liquidity status. Only LP graduated pools you understand, and size each as total-loss money. Research is the price of admission to the riskiest tier."
       },
       {
         q: "Why is writing down your personal LP rules while calm so important?",
@@ -8600,7 +8599,7 @@ function PoolHealthCalc() {
   if (ratio < 0.1) { verdict = "Capital-heavy — lots of TVL, little volume. Fee yield will be thin no matter the advertised APR."; vcolor = "#F59E0B"; }
   else if (ratio <= 2) { verdict = "Healthy working liquidity — volume is doing real work for the TVL."; vcolor = "#10B981"; }
   else if (ratio <= 10) { verdict = "Very active — high fees, but confirm the volume is organic before you trust it."; vcolor = "#60A5FA"; }
-  else { verdict = "Implausibly high volume-to-TVL — strong wash-trading risk. Verify with Cluck Score / Autopsy."; vcolor = "#EF4444"; }
+  else { verdict = "Implausibly high volume-to-TVL — strong wash-trading risk. Verify with Token Autopsy."; vcolor = "#EF4444"; }
   const lab = {fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#9CA3AF",letterSpacing:1,display:"block",marginBottom:6};
   const box = {borderRadius:8,padding:"12px",textAlign:"center"};
   const cap = {fontFamily:"'Oswald',sans-serif",fontSize:10,color:"#9CA3AF",letterSpacing:1,marginBottom:4};
@@ -8652,7 +8651,7 @@ function LaunchRiskGate() {
   return (
     <div style={{background:"rgba(16,185,129,0.05)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:12,padding:"18px 16px",marginTop:20}}>
       <div style={{fontFamily:"'Oswald',sans-serif",fontSize:14,fontWeight:700,color:"#10B981",letterSpacing:1,marginBottom:6,textAlign:"center"}}>🚀 LAUNCH LP GO / NO-GO</div>
-      <div style={{fontFamily:"'Oswald',sans-serif",fontSize:10,color:"#6B7280",letterSpacing:0.5,textAlign:"center",marginBottom:14,lineHeight:1.5}}>Run Cluck Score / Autopsy / Security Coop to fill these in. Critical checks marked •</div>
+      <div style={{fontFamily:"'Oswald',sans-serif",fontSize:10,color:"#6B7280",letterSpacing:0.5,textAlign:"center",marginBottom:14,lineHeight:1.5}}>Run Token Autopsy / Security Coop to fill these in. Critical checks marked •</div>
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
         {checks.map(c=>{
           const on = !!state[c.key];

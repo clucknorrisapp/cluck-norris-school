@@ -50,8 +50,8 @@ Disciplined learning, real value, zero gatekeeping. The flock learns or the floc
 - ⚗️ **LP Lab** — a 12-lesson interactive liquidity course with 7 interactive tools (AMM price impact, IL calculator, fee breakeven, capital efficiency, bin visualizer, DCA, strategy matcher), covering the fundamentals through risk management, reading pool data, token-launch liquidity, and building a full LP strategy. Works on Meteora, Raydium, Orca, Uniswap — anywhere you LP
 - 📚 **The Library** — 50‑term glossary, deep‑dives across Survival / Research / Concepts (including 🪂 *How to Use an Airdropper Without Burning Yourself*), curated resources
 - 🤖 **Ask Cluck Norris** — Claude Haiku tough‑love crypto professor embedded in every lesson. 10 questions/day. No signup. No wallet
-- 🩺 **Cluck Score** — free 0–100 token‑health score for **any** Solana mint, served at [`/score`](https://clucknorris.app/score). Eight weighted, Bags‑aware factors, LP‑filtered human‑only top‑10 concentration, sharable PNG card. **Scans Token‑2022 honeypot mechanics** (sell‑blocks, permanent‑delegate seize, transfer‑tax) and caps the score on anything you couldn't safely sell. **Live now.**
-- 🛡 **Wallet Safety Checkup** — free read‑only scan at [`/wallet-checkup`](https://clucknorris.app/wallet-checkup): paste any address (no wallet‑connect) for the things that actually drain people — lingering token approvals, honeypot/can't‑sell holdings, and tokens whose dev can still freeze or mint. Routes each finding to revoke (Security Coop) or research (Score/Autopsy/Trace)
+- 🩻 **Wallet X-Ray** — free full‑wallet deep dive for **any** Solana address, served at [`/wallet-xray`](https://clucknorris.app/wallet-xray). Traces the **true funding origin** all the way to the wallet's first transaction (dust/spam filtered, exchange hot‑wallets identified), maps every buy/sell/transfer across **every** token, and reads the behavior pattern — bot cadence, fast‑flip dumping, CEX cash‑out, LP, or holder. Searchable timeline, charts, Coal Miner deep‑scan, and a built‑in "ask Cluck about this transaction" AI. **Live now.**
+- 🛡 **Wallet Safety Checkup** — free read‑only scan at [`/wallet-checkup`](https://clucknorris.app/wallet-checkup): paste any address (no wallet‑connect) for the things that actually drain people — lingering token approvals, honeypot/can't‑sell holdings, and tokens whose dev can still freeze or mint. Routes each finding to revoke (Security Coop) or research (Autopsy/Trace)
 - 🔬 **Token Autopsy** — a free AI forensic post‑mortem on any Solana mint at [`/autopsy`](https://clucknorris.app/autopsy): ~10 on‑chain phases (LP lock/burn, Token‑2022 honeypot‑extension scan, real‑creator detection, creator buy‑back & fee‑reinvestment trace, hidden‑exit / transfer‑then‑dump detection, holder forensics), cross‑verified against Bags, Jupiter and Solana Tracker, then narrated by Cluck. Honest "cause of death" verdict
 - ⚡ **Embedded Jupiter** — full DEX aggregator, CLKN preselected
 - 🎒 **Live Bags Feed** — every new launch, real‑time prices, direct trade links
@@ -117,33 +117,28 @@ The tools that *do* execute on‑chain — the airdrop sender, the Hatchery, and
 
 ---
 
-## 🩺 Cluck Score — the free moat
+## 🩻 Wallet X-Ray — the free moat
 
-[clucknorris.app/score](https://clucknorris.app/score) — paste any Solana mint, get a 0–100 health score in seconds.
+[clucknorris.app/wallet-xray](https://clucknorris.app/wallet-xray) — paste any Solana wallet, get its whole story in seconds.
 
-**Eight weighted, Bags‑aware factors:**
+**What it surfaces:**
 
-| Factor | Weight | What it measures |
-|---|---|---|
-| Liquidity health | 20% | Liq÷FDV summed across all Solana pools. +5 bonus for multi‑DEX presence |
-| Holders | 18% | Anchored to Jupiter's verification minimum (500 holders = 50 score, 5000 = 100) |
-| Top‑10 concentration | 18% | **LP / lock / program filtered** — only counts actual human wallets |
-| Mint authority | 12% | Revoked = 100, still active = 0 |
-| Freeze authority | 8% | Revoked = 100, still active = 0 |
-| 24h volume | 8% | Log scale — $10k+ = 100 |
-| Verified team activity | 10% | Bags/Pump‑verified creator with active fee claims = full marks |
-| Independent verification | 6% | Cross‑checks our reading against Jupiter's audit (mint/freeze/top‑holder) |
+| Section | What it shows |
+|---|---|
+| Funding origin | The **true first transaction**, traced to genesis by cheap signature‑paging — with dust/spam filtered out and exchange hot‑wallets (Coinbase/Binance/Kraken/OKX/Bybit) identified. Honest wallet age |
+| Trade behavior | Every buy, sell, and transfer across **every** token — counts, sell:buy ratio, tokens traded, distinct counterparties |
+| Behavior signals | Bot cadence (txns/day, sub‑2s bursts), fast‑flip dumping (hold‑time distribution), CEX cash‑out, LP, diamond‑hands holder — each backed by the on‑chain numbers, never a claim of intent |
+| Timeline | A searchable, filterable, CSV‑exportable list of every transaction in plain English |
+| Charts | Activity over time, action breakdown, hold‑time distribution |
+| Ask Cluck | A built‑in AI you can ask about the wallet or any specific transaction — grounded by re‑fetching that exact tx on‑chain |
+| ⛏ Coal Miner | A deep‑scan mode for heavy wallets — digs up to ~5,000 transactions |
 
-The last two factors only count when the data exists — for a non‑Bags / non‑Jupiter token they're skipped and the remaining weight redistributes, so a plain SPL token still scores fairly.
+The forensic rule holds throughout: the chain shows **what happened, never why**. Every signal is on‑chain evidence, not a verdict.
 
-The concentration filter is the differentiator: we fetch the owner of each top‑20 token account and exclude positions held by AMM pool authorities, Streamflow/Jupiter Lock contracts, and program PDAs. The "top 10 wallets" number reflects **actual humans**, not the AMM holding the LP.
-
-Open the score directly with a query param — handy for sharing or linking:
+Open a wallet directly with a query param — handy for sharing or linking:
 ```
-https://clucknorris.app/score?mint=DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS
+https://clucknorris.app/wallet-xray?wallet=<address>
 ```
-
-Cards (`/api/cluck-card?mint=…`) unfurl on Twitter / Telegram / Discord automatically.
 
 ---
 
@@ -161,8 +156,8 @@ Cards (`/api/cluck-card?mint=…`) unfurl on Twitter / Telegram / Discord automa
 
 ## 🛠 Token‑agnostic Solana tooling (the moat)
 
-1. **🩺 Cluck Score** — public 0–100 health score for any Solana mint, with LP‑filtered concentration and a sharable PNG card. Free.
-2. **🐔 Holder Truth Engine** *(internal, powers Cluck Score)* — six‑signal classification (on‑chain owner field → known programs → DexScreener pairs → AMM pool vault bytecode scan → Bubblemaps → activity heuristic → manual overrides). Catches Bags.fm DBC pool authorities that look System‑Program‑owned but aren't. The LP‑filtered concentration logic in Cluck Score runs on this engine.
+1. **🩻 Wallet X-Ray** — public full‑wallet deep dive for any Solana address: true funding origin (traced to genesis, dust filtered), every trade/transfer across every token, bot/dumper/cash‑out signals, searchable timeline, charts, and per‑transaction AI. Free.
+2. **🐔 Holder Truth Engine** *(internal, powers the Autopsy + Holders tools)* — six‑signal classification (on‑chain owner field → known programs → DexScreener pairs → AMM pool vault bytecode scan → Bubblemaps → activity heuristic → manual overrides). Catches Bags.fm DBC pool authorities that look System‑Program‑owned but aren't. The LP‑filtered concentration logic runs on this engine.
 3. **📈 Buy‑Competition Trackers** — two flavours on one engine: **buyspecial** (every qualifying buyer rewarded) and **Rose** (ranked prizes for the top buyers). A value‑flow engine reads net on‑chain balances, so it counts every real buy — any pool, any aggregator, any pay currency — never miscounts a wallet‑to‑wallet transfer as a buy, splits credit by who actually holds the tokens, and traces transfers one hop to the wallet that should be paid. Buy data is **multi‑source with automatic failover** (Helius chain parsing → GeckoTerminal → Solana Tracker), each result cross‑verified against an independent feed, and the project's own market‑maker wallets are auto‑excluded so engine activity can never win a community contest. Hands results straight to the airdropper.
 4. **💰 Batch Airdrop Sender** — Phantom / Solflare / Jupiter‑signed SPL transfers, auto‑ATA creation, deduping, CSV / manual / equal‑split modes, dynamic batching for Solana's 1232‑byte tx limit, SOL rent pre‑flight estimate, exportable send record with Solscan links. The user's keys, never the server's.
 5. **🥚 The Hatchery** — guided SPL token creator. Every mint‑time decision explained, metadata to Arweave, stops at liquidity on purpose. Flat SOL/CLKN fee.
@@ -182,7 +177,7 @@ The product reaches into the community Telegram (and X), not just the website:
 - **Cluck's Lesson** — short, accurate crypto‑safety micro‑lessons written by Claude Haiku, auto‑posted to Telegram **and** cross‑posted to X several times a day on a fixed UTC schedule. Topics rotate through the real curriculum and never repeat until the set is exhausted.
 - **Ask Cluck, in‑chat** — reply to any lesson and the bot answers right there, with threaded follow‑ups. Open to everyone, 20 answers/user/day, strictly educational (declines buy/sell/price and off‑topic, ends every reply with a not‑financial‑advice line).
 - **New‑member welcome + "Where do I start?" concierge** — every join gets a tagged welcome and the journey menu (inline buttons → curated routes, including a Buy‑CLKN‑on‑Jupiter link); replying hands the question to an app‑aware guide AI. Also on demand via `/guide` or `/start`. Cooldown‑guarded so a join wave can't spam the group.
-- **Interactive slash commands** — `/guide` (the concierge), `/score <mint>` (returns a live in‑chat Cluck Score), `/autopsy`, `/trace`, `/snapshot`, `/holders`, `/securitycoop`, `/buyspecial`, `/rose`, `/hatchery`, `/bags`, `/liquidity` (live AMM depth, wallet/balances redacted), `/tools` — delivered via a secret‑validated Telegram webhook.
+- **Interactive slash commands** — `/guide` (the concierge), `/walletxray <wallet>` (full wallet deep dive), `/autopsy`, `/trace`, `/snapshot`, `/holders`, `/securitycoop`, `/buyspecial`, `/rose`, `/hatchery`, `/bags`, `/liquidity` (live AMM depth, wallet/balances redacted), `/tools` — delivered via a secret‑validated Telegram webhook.
 - **Buy / sell alerts** — a 30s pool poller posts every real CLKN trade (buy and sell) with USD value, price, market cap, route, and a holder‑tier rank for the trader. Project buy‑backs get their own "community reinvestment" framing.
 - **Bags Hub** ([`/bags`](https://clucknorris.app/bags)) — live launches feed (newest · near‑graduation · recently graduated), plus a watcher that fires "close to bonding" (85%) and "graduated!" alerts, backed by our own 48h graduation tracker (independent of pump.fun flooding the shared indexer).
 - **Scheduled posts** — Bags Launch Radar, hourly‑ish Market Check (CLKN / SOL / BTC), and a daily flow recap — all self‑cleaning (delete‑previous) and minute‑gated so a redeploy never double‑posts.
@@ -210,8 +205,8 @@ The product reaches into the community Telegram (and X), not just the website:
 | License | MIT |
 
 **Public API:**
-- `/api/cluck-score?mint=…` — 0–100 score with full factor breakdown (JSON)
-- `/api/cluck-card?mint=…` — 1200×630 PNG card for sharing
+- `/api/wallet-xray?wallet=…[&deep=1]` — full‑wallet deep dive: funding origin, all‑token trades, behavior signals, timeline + charts (JSON)
+- `/api/wallet-xray/ask` — AI Q&A about a wallet or a specific transaction (POST)
 - `/api/autopsy?mint=…` — full forensic report (cached ~3 min)
 - `/api/snapshot?mint=…` — classified, LP/lock‑filtered holder list + stats (airdrop CSV source)
 - `/api/trace?wallet=…&mint=…` — wallet × token transaction history + counterparty flow

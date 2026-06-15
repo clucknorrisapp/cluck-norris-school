@@ -89,7 +89,7 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 - **Never commit secrets.** Don't put a model identifier in committed files.
 
 ## Repo layout
-- `server.js` — the monolith (~7.4k lines): every API endpoint, the Cluck Score, CLKN
+- `server.js` — the monolith (~9k lines): every API endpoint, the Wallet X-Ray, CLKN
   payment verification, Telegram/X automation, the trade poller, all schedulers, and
   static file serving. (The Token Autopsy engine was extracted to `lib/autopsy.js`.)
 - `lib/` — `bags-context`, `solana-tracker`, `solscan`, `premium-forensics`, `analytics`,
@@ -102,7 +102,7 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   Tracker (quota-billed, last resort)**. Don't re-point buy tracking at ST directly.
   `solana-addr` — pure address primitives (base58 codec, ed25519 on-curve check, ATA
   derivation) + the DEX/locker/token-program, program-label, service-wallet and CEX-wallet
-  tables; one source of truth for trace/snapshot/score/autopsy classification.
+  tables; one source of truth for trace/snapshot/autopsy/wallet-xray classification.
   `autopsy` — the Token Autopsy engine: `runAutopsy(mint, {nocache}) → {status, body}`;
   the `/api/autopsy` route in server.js is a thin wrapper (validation + 3-min cache +
   headers). It also exports `bagsFetch`/`heliusEnhancedBatched`/`BAGS_BASE`, which
@@ -117,9 +117,13 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 - `hatchery.js` (guided token creator), `securitycoop.js` (approval revoker), and
   `whirlpool-mm.js` (Liquidity Engine — Orca Whirlpools market maker + autonomous vault) —
   Express routers mounted by `server.js`.
-- `public/*.html` — standalone vanilla-HTML tool pages: score, autopsy, trace, snapshot,
-  holders, airdrop, buyspecial, rose, hatchery, security-coop, liquidity, premium, slots,
-  bags, tools, investors, grant, stats, transcript.
+- `public/*.html` — standalone vanilla-HTML tool pages: autopsy, wallet-xray, trace, snapshot,
+  holders, airdrop, buyspecial, rose, hatchery, security-coop, wallet-checkup, liquidity, premium,
+  slots, bags, tools, investors, grant, stats, transcript, pool-monitor.
+  ⛔ **Cluck Score was REMOVED (2026-06-15, owner's call): it gave good scores to tokens that
+  then rugged — misleading, not worth it. Do NOT rebuild it.** Gone: `/score` page + `score.html`,
+  `/api/cluck-score`, `/api/cluck-card`, `renderScoreCard`, the `/score` Telegram command, and all
+  links. The replacement free flagship is **Wallet X-Ray** (`/wallet-xray`, `/api/wallet-xray`).
 - `src/` — the React/Vite school (landing app).
 
 ## Credentials / transcripts (the school's permanent output)

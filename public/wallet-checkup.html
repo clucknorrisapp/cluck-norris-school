@@ -163,7 +163,6 @@ function render(d){
         +'<div class="mono"><b>'+esc(t.symbol||shortAddr(t.mint))+'</b>'+(t.valueUsd>0?' <span style="color:#F59E0B">'+fmtUsd(t.valueUsd)+'</span>':'')+' <a class="copy" onclick="copyCA(event,\''+esc(t.mint)+'\')">copy</a> · holding '+fmtNum(t.amount)+'</div>'
         +t.issues.map(i=>'<div class="issue'+(t.severity<2?' lo':'')+'">• '+esc(i)+'</div>').join('')
         +'<div class="links">'
-          +'<a class="lk-score" href="/score?mint='+esc(t.mint)+'" target="_blank" rel="noreferrer">🩺 SCORE</a>'
           +'<a class="lk-autopsy" href="/autopsy?mint='+esc(t.mint)+'" target="_blank" rel="noreferrer">🔬 AUTOPSY</a>'
           +'<a class="lk-trace" href="/trace?wallet='+esc(d.wallet)+'&mint='+esc(t.mint)+'" target="_blank" rel="noreferrer">🔍 TRACE</a>'
         +'</div>'

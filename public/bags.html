@@ -421,7 +421,6 @@ function lfPaint(){
       +'<div class="lf-ca" onclick="lfCopyCA(event,\''+t.tokenMint+'\',this)" title="Copy contract address">📋 '+t.tokenMint.slice(0,4)+'…'+t.tokenMint.slice(-4)+'</div>'
       +(showResearch
         ? '<span class="lf-research">'
-            +'<span class="lf-tool" onclick="lfOpenTool(event,\'/score?mint='+t.tokenMint+'\')" title="Run a free Cluck Score">🩺 SCORE</span>'
             +'<span class="lf-tool" onclick="lfOpenTool(event,\'/autopsy?mint='+t.tokenMint+'\')" title="Run a free Token Autopsy">🔬 AUTOPSY</span>'
           +'</span>'
         : '')

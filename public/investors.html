@@ -293,12 +293,6 @@
         <div class="stat-value" id="statVol">—</div>
         <div class="stat-sub">trading activity</div>
       </div>
-      <a class="stat gold" href="#cluckscore" style="display:block;text-decoration:none;color:inherit;cursor:pointer">
-        <div class="stat-label">🩺 CLUCK SCORE</div>
-        <div class="stat-value" id="statScore">—</div>
-        <div class="stat-sub" id="statScoreGrade">our own grading</div>
-        <div style="font-family:'Oswald',sans-serif;font-size:9px;letter-spacing:1px;color:var(--accent);margin-top:5px">ⓘ WHAT IS THIS? →</div>
-      </a>
       <div class="stat green">
         <div class="stat-label">🎓 VERIFIED GRADUATES</div>
         <div class="stat-value" id="statGrads">—</div>
@@ -307,32 +301,13 @@
     </div>
   </div>
 
-  <!-- What is a Cluck Score -->
-  <div class="section" id="cluckscore">
-    <div class="section-title">🩺 WHAT IS A CLUCK SCORE?</div>
-    <p>The <strong>Cluck Score</strong> in the panel above is our own 0–100 health rating for a Solana token — and we run it on <strong>CLKN itself</strong> and publish the result. Most projects won't show you a number they didn't get to pick.</p>
-    <p>It's a free tool — <a href="/score" style="color:#FCD34D;text-decoration:none">clucknorris.app/score</a> — that scores <em>any</em> mint, not just ours. Eight weighted, Bags‑aware factors roll into the final number and a letter grade:</p>
-    <ul>
-      <li><strong>Liquidity (20%)</strong> — real exit liquidity, summed across every Solana pool, with a small bonus for being live on more than one DEX</li>
-      <li><strong>Holders (18%)</strong> — how many unique wallets actually hold it, anchored to industry bars (500 holders is Jupiter's verification minimum)</li>
-      <li><strong>Concentration (18%)</strong> — what the top 10 wallets control, judged honestly: LP, locks and program wallets routinely sit up there and aren't whale risk</li>
-      <li><strong>Mint authority (12%)</strong> — whether the creator can still print new supply (revoked = full marks)</li>
-      <li><strong>Freeze authority (8%)</strong> — whether the creator can still freeze your wallet (revoked = full marks)</li>
-      <li><strong>24h volume (8%)</strong> — recent trading as a sign of a live market</li>
-      <li><strong>Verified team activity (10%)</strong> — Bags/Pump‑verified creator with active, recent fee claims</li>
-      <li><strong>Independent verification (6%)</strong> — cross‑checks our reading against Jupiter's own audit data</li>
-    </ul>
-    <p style="font-size:13px;color:#9CA3AF">The last two only count when a token is Bags/Pump or Jupiter‑listed; for a plain SPL token they're skipped and the weight redistributes, so it's still scored fairly.</p>
-    <p>Those roll up into a weighted score on a standard grading scale — A+ at 95, down to F below 60. A mid-range grade is normal and honest for a small-cap; what matters is the number is <strong>live, on-chain, and produced by the exact tool anyone can run on any token</strong>. We don't hide it, and we don't grade on a curve.</p>
-  </div>
-
   <!-- What we built -->
   <div class="section" id="built">
     <div class="section-title">🛠 WHAT WE'VE ACTUALLY BUILT</div>
     <p>A whole product suite under one token. All deployed, all working in production:</p>
     <ul>
       <li><a class="xref" href="/">The Schoolyard</a> — 7 beginner lessons, 12 belted progressive lessons, a 50‑question, <strong>server‑scored</strong> Ultimate Challenge (94% to pass — the answer key never reaches the browser, and the pool now spans the core curriculum <strong>and</strong> the LP Lab) that mints a <strong>permanent, verifiable transcript</strong> keyed to your wallet, a <a class="xref" href="#simulator">135‑scenario Survival Simulator</a> where you walk through real‑world crypto decisions with a $1,000 simulated bankroll, a 12‑lesson LP Lab with interactive calculators and visualizers, a 50‑term glossary, deep dives across Survival / Research / Concepts, and a Claude‑powered AI tutor embedded everywhere (10 free questions/day). New here? A <strong>"Where do I start?" concierge</strong> right on the landing asks where you are on your crypto journey and points you to the right lesson or tool — or just ask Cluck anything.</li>
-      <li><strong>Free token research &amp; forensics</strong> — <a class="xref" href="#cluckscore">Cluck Score</a>, a free 0–100 health score for any Solana mint (weighted factors, a human‑only top‑10 concentration filter, a Token‑2022 honeypot scan that caps anything you couldn't safely sell, a sharable PNG card); <a class="xref" href="/wallet-checkup">Wallet Safety Checkup</a>, a free read‑only scan of any address for lingering approvals, honeypot holdings and live mint/freeze authority — the things that actually drain newcomers; <a class="xref" href="/autopsy">Token Autopsy</a>, a deep forensic post‑mortem on any token — LP lock/burn status, Token‑2022 honeypot‑extension scan, real‑creator detection, creator buy‑back tracing, hidden‑exit (transfer‑then‑dump) detection, and an honest cause‑of‑death verdict; <a class="xref" href="/security-coop">Security Coop</a>, a free wallet permission check that finds lingering token approvals and revokes the risky ones; <a class="xref" href="/snapshot">Snapshot</a>, every holder and balance for any mint with an airdrop-ready CSV; <a class="xref" href="/trace">Trace</a>, every transaction between a wallet and a token in chronological order; and <a class="xref" href="/holders">Holders</a>, a token's true-holder breakdown — real wallets versus LP, locks and program accounts.</li>
+      <li><strong>Free token research &amp; forensics</strong> — <a class="xref" href="/autopsy">Token Autopsy</a>, a deep forensic post‑mortem on any token — LP lock/burn status, Token‑2022 honeypot‑extension scan, real‑creator detection, creator buy‑back tracing, hidden‑exit (transfer‑then‑dump) detection, and an honest cause‑of‑death verdict; <a class="xref" href="/wallet-xray">Wallet X-Ray</a>, a full-wallet deep dive — true funding origin (traced to genesis, dust filtered), every buy/sell/transfer across every token, and behavior signals (bot cadence, fast-flip, CEX cash-out) with a built-in "ask Cluck" on any transaction; <a class="xref" href="/wallet-checkup">Wallet Safety Checkup</a>, a free read‑only scan of any address for lingering approvals, honeypot holdings and live mint/freeze authority — the things that actually drain newcomers; <a class="xref" href="/security-coop">Security Coop</a>, a free wallet permission check that finds lingering token approvals and revokes the risky ones; <a class="xref" href="/snapshot">Snapshot</a>, every holder and balance for any mint with an airdrop-ready CSV; <a class="xref" href="/trace">Trace</a>, every transaction between a wallet and a token in chronological order; and <a class="xref" href="/holders">Holders</a>, a token's true-holder breakdown — real wallets versus LP, locks and program accounts.</li>
       <li><strong>Premium operator tools paid in CLKN</strong> — an AI tutor extension, a <a class="xref" href="/airdrop">batch airdrop sender</a> (11 wallets — Phantom, Solflare, Backpack, OKX &amp; more), two buy‑competition trackers (<a class="xref" href="/buyspecial">Buy Special</a> and <a class="xref" href="/rose">Rose</a>) with multiple prize models, a score‑card generator, and a <a class="xref" href="/premium">premium forensics tier</a> (downstream‑dump tracing, wallet P&amp;L, creator rap sheet, money‑flow). Every paid action is a unique‑decimal CLKN micropayment verified on‑chain — <strong>no wallet connect to pay</strong>.</li>
       <li><a class="xref" href="/hatchery">The Hatchery</a> — a guided SPL token creator. It teaches every mint‑time decision (supply, metadata, mint/freeze authority) and deploys a real token, with metadata stored permanently on Arweave. It deliberately <strong>stops at liquidity</strong> — minting is not launching. Flat fee in SOL or CLKN.</li>
       <li><a class="xref" href="/bags">The Bags Hub</a> + live community automation — a dedicated Bags.fm showcase with a live launches feed (newest · closest‑to‑bonding · recently graduated), plus an interactive Telegram bot (14 slash commands, including an in‑chat token score and a live AMM‑depth view), a <strong>new‑member welcome that greets every join with a "Where do I start?" concierge</strong> — tap‑through journey buttons (brand new · basics · liquidity · token research · about &amp; where to buy CLKN · exploring), or just reply and the AI guides you — automated "close to bonding" and "graduated" alerts on Bags tokens, and "Cluck's Lesson" — short educational lessons auto‑posted to Telegram <strong>and</strong> X several times a day.</li>
@@ -363,13 +338,11 @@
       <div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.25);border-radius:10px;padding:12px 14px">
         <div style="font-family:'Oswald',sans-serif;font-size:10px;color:#10B981;letter-spacing:2px;margin-bottom:6px;font-weight:700">🩺 FREE RESEARCH</div>
         <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
-          • <a class="xref" href="/score">Cluck Score</a> for any mint<br>
-          • 6‑factor weighted scoring<br>
-          • LP / lock / program filter<br>
-          • PNG card generator<br>
           • <a class="xref" href="/autopsy">Token Autopsy</a> — forensic post‑mortem<br>
           • LP lock/burn + honeypot scan<br>
           • Holder Truth Engine + pool vault detection<br>
+          • <a class="xref" href="/wallet-xray">Wallet X-Ray</a> — full wallet deep dive<br>
+          • Funding origin (to genesis) + bot/dumper signals<br>
           • <a class="xref" href="/snapshot">Snapshot</a> — holders + airdrop CSV<br>
           • <a class="xref" href="/trace">Trace</a> — wallet × token history<br>
           • <a class="xref" href="/holders">Holders</a> — true holders vs LP &amp; locks
@@ -381,7 +354,6 @@
           • AI tutor extension (500)<br>
           • <a class="xref" href="/airdrop">Batch airdrop sender</a> (100)<br>
           • <a class="xref" href="/buyspecial">Buy Special</a> + <a class="xref" href="/rose">Rose</a> comp trackers<br>
-          • <a class="xref" href="/score">Cluck Score card</a> (100)<br>
           • Holder bonus 5× at 2M+ CLKN<br>
           • No wallet connect to pay
         </div>
@@ -465,7 +437,7 @@
         <div style="font-family:'Oswald',sans-serif;font-size:10px;color:#60A5FA;letter-spacing:2px;margin-bottom:6px;font-weight:700">🤖 TELEGRAM + X BOT</div>
         <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
           • 14 interactive slash commands (incl. /guide concierge)<br>
-          • <strong style="color:#FCD34D">In‑chat token score</strong> (just type /score &lt;mint&gt;)<br>
+          • <strong style="color:#FCD34D">In‑chat wallet deep dive</strong> (just type /walletxray &lt;wallet&gt;)<br>
           • "Close to bonding" + "graduated" Bags alerts<br>
           • Bags Launch Radar + hourly Market Check<br>
           • <a class="xref" href="/bags">Bags Hub</a> — live launches feed<br>
@@ -514,11 +486,11 @@
       <li><strong>AI:</strong> Anthropic Claude Haiku 4.5 — fast and cheap enough to embed for free at 10 questions/day per user</li>
       <li><strong>Solana data:</strong> Helius (DAS + enhanced txns) with automatic RPC failover (public node + optional backup keys on rate‑limit/outage), Solana Tracker (independent trade/holder/risk cross‑verification), DexScreener, Bubblemaps, Bags.fm API, Jupiter — all proxied server‑side so keys are never exposed</li>
       <li><strong>Persistence:</strong> a Railway volume backs durable state (consumed‑payment signatures, the Bags graduation tracker, post schedulers) so nothing resets on a redeploy</li>
-      <li><strong>Image generation:</strong> @napi-rs/canvas with bundled Oswald typeface for the Cluck Score card</li>
+      <li><strong>Image generation:</strong> @napi-rs/canvas with bundled Oswald typeface for the LP Scanner &amp; credential cards</li>
       <li><strong>Security:</strong> full hardening pass — per‑IP rate limiting on every API, RPC method allow‑listing, locked‑down admin/debug endpoints, replay‑proof on‑chain payment verification, output escaping (XSS) across all tool pages, plus HSTS / X‑Frame‑Options / X‑Content‑Type‑Options / Referrer‑Policy and vendored solana‑web3.js (same‑origin)</li>
       <li><strong>No custody:</strong> Server never sees a private key. Every signing flow runs in the user's wallet extension.</li>
     </ul>
-    <p style="margin-top:10px"><strong>Public API surface:</strong> <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/cluck-score</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/cluck-card</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/verify-clkn-payment</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/ask-cluck</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/holders</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/fees</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/supply</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/locks</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/bubblemaps</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/bags-proxy</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/helius-rpc</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/helius-tx</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/hatchery/*</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/security-coop/*</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/claim</code></p>
+    <p style="margin-top:10px"><strong>Public API surface:</strong> <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/autopsy</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/wallet-xray</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/verify-clkn-payment</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/ask-cluck</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/holders</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/fees</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/supply</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/locks</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/bubblemaps</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/bags-proxy</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/helius-rpc</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/helius-tx</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/hatchery/*</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/security-coop/*</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/claim</code></p>
     <p style="margin-top:12px;background:rgba(217,119,6,0.08);border:1px solid rgba(217,119,6,0.3);border-radius:8px;padding:12px 14px;font-size:13px;line-height:1.65"><strong style="color:#FCD34D">📂 A note on the repo — straight talk:</strong> the GitHub is <strong>live and current</strong> at its new home, <a href="https://github.com/clucknorrisapp/cluck-norris-school" target="_blank" rel="noreferrer" style="color:#FCD34D;text-decoration:underline">github.com/clucknorrisapp/cluck-norris-school</a>. For about 11 days an earlier account was flagged and restricted by an automated system for unusually high commit volume (we ship daily, sometimes many pushes an hour), so we migrated the project to this new home and kept going. The original restriction was later <strong>fully lifted</strong> — but we'd already moved, so we're staying here. We never stopped shipping: we built <strong>roughly half of this entire product during that stretch</strong>, deploying every day through a separate pipeline, and the repo now reflects the complete, current codebase. MIT‑licensed and open source — every claim on this page lives in the code.</p>
   </div>
 
@@ -551,7 +523,7 @@
     <ul>
       <li class="yes"><strong>The token is a key, not a vote.</strong> Every premium action is a CLKN micropayment that actually moves on‑chain. Continuous demand tied to product usage, not speculation.</li>
       <li class="yes"><strong>The free tier is a real funnel.</strong> Free education brings users in. Free token research keeps them coming back. The free tier is the marketing.</li>
-      <li class="yes"><strong>The premium tier is real software.</strong> A <a class="xref" href="/airdrop">batch airdropper</a>, <a class="xref" href="/buyspecial">buy‑competition trackers</a>, and a <a class="xref" href="/score">score‑card generator</a> — tools that operators pay for elsewhere. We charge ~$0.01 to $0.06 per use in CLKN.</li>
+      <li class="yes"><strong>The premium tier is real software.</strong> A <a class="xref" href="/airdrop">batch airdropper</a> and <a class="xref" href="/buyspecial">buy‑competition trackers</a> — tools that operators pay for elsewhere. We charge ~$0.01 to $0.06 per use in CLKN.</li>
       <li class="yes"><strong>The holder bonus is unforgeable.</strong> Rewarding real holders normally means a wallet‑connect — which is trivially faked. We do it from the payment instead. When you pay for any tool, we read your wallet's CLKN balance straight from that transaction, on‑chain. If you still hold 2M+ CLKN <em>after</em> paying, every unlock is stretched <strong>5×</strong> — a 7‑day Buy Special pass becomes 35 days, one airdrop session becomes five, 20 AI‑tutor questions become 100. The payment proves you control the wallet; the post‑send balance proves you're genuinely holding, not just passing tokens through. Nothing to connect, nothing to spoof.</li>
       <li class="yes"><strong>The guardrails are the brand.</strong> First‑timers can't pay for a tool until they understand it. That's rare in crypto and judges/investors notice.</li>
       <li class="yes"><strong>The roadmap is short on words and long on commits.</strong> Open source and MIT-licensed — every claim on this page lives in the code, live and current on <a href="https://github.com/clucknorrisapp/cluck-norris-school" target="_blank" rel="noreferrer" style="color:#FCD34D;text-decoration:none">GitHub</a>.</li>
@@ -689,7 +661,7 @@
     <div class="actions">
       <a class="action-btn" href="/">🏫 SCHOOL</a>
       <a class="action-btn" href="/tools">🛠 TOOLS &amp; UTILITIES</a>
-      <a class="action-btn" href="/score">🩺 CLUCK SCORE</a>
+      <a class="action-btn" href="/wallet-xray">🩻 WALLET X-RAY</a>
       <a class="action-btn" href="/hatchery">🥚 THE HATCHERY</a>
     </div>
   </div>
@@ -746,30 +718,20 @@ fetch('/api/fees')
   })
   .catch(() => {});
 
-// Live Cluck Score — eats it's own dog food, shows our own grade right on the investor page
-fetch('/api/cluck-score?mint=' + CLKN_MINT)
+// Live CLKN market snapshot — price, liquidity, volume right on the investor page.
+fetch('/api/token-overview?mint=' + CLKN_MINT)
   .then(r => r.json())
   .then(d => {
     if (!d?.success) return;
-    if (d.score != null) {
-      document.getElementById('statScore').textContent = d.score + '/100';
-      document.getElementById('statScoreGrade').textContent = 'grade ' + (d.grade || '—');
-    }
-    const r = d.raw || {};
-    if (r.priceUsd != null) {
-      const p = r.priceUsd < 0.01 ? r.priceUsd.toPrecision(3) : r.priceUsd.toFixed(6);
+    if (d.priceUsd != null) {
+      const p = d.priceUsd < 0.01 ? d.priceUsd.toPrecision(3) : d.priceUsd.toFixed(6);
       document.getElementById('statPrice').textContent = '$' + p;
     }
-    if (r.liquidityUsd != null) {
-      document.getElementById('statLiq').textContent = fmtUsd(r.liquidityUsd);
-      const lf = d.factors?.liquidity;
-      if (lf?.poolCount > 1) {
-        document.getElementById('statLiqSub').textContent = lf.poolCount + ' pools' + (lf.dexCount > 1 ? ' · ' + lf.dexCount + ' DEXes' : '');
-      }
+    if (d.liquidityUsd != null) {
+      document.getElementById('statLiq').textContent = fmtUsd(d.liquidityUsd);
+      if (d.marketCount > 1) document.getElementById('statLiqSub').textContent = d.marketCount + ' pools' + (d.dexes && d.dexes.length > 1 ? ' · ' + d.dexes.length + ' DEXes' : '');
     }
-    if (r.volume24h != null) {
-      document.getElementById('statVol').textContent = fmtUsd(r.volume24h);
-    }
+    if (d.volume24hUsd != null) document.getElementById('statVol').textContent = fmtUsd(d.volume24hUsd);
   })
   .catch(() => {});
 

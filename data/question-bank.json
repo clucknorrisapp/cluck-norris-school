@@ -2492,7 +2492,7 @@
       "A volume-to-TVL ratio that is modest and stable"
     ],
     "correct": 1,
-    "explanation": "Wash trading produces huge volume with little price discovery, repeated trade sizes, and a tiny set of wallets passing the same money back and forth. Real volume is messy — many wallets, varied sizes, varied timing. Cluck Score and Token Autopsy exist to confirm whether the trading is organic.",
+    "explanation": "Wash trading produces huge volume with little price discovery, repeated trade sizes, and a tiny set of wallets passing the same money back and forth. Real volume is messy — many wallets, varied sizes, varied timing. Token Autopsy exists to confirm whether the trading is organic.",
     "source": "LPLAB"
   },
   {
@@ -2544,7 +2544,7 @@
       "Rely on trending lists since the crowd is usually right"
     ],
     "correct": 1,
-    "explanation": "No single source is complete, and trending lists can be gamed. Cross-reference DexScreener, GeckoTerminal, the native protocol dashboard, and verification tools like Solana Tracker and Cluck Score. The goal is to confirm the volume and depth are real before your capital relies on them.",
+    "explanation": "No single source is complete, and trending lists can be gamed. Cross-reference DexScreener, GeckoTerminal, the native protocol dashboard, and verification tools like Solana Tracker and Token Autopsy. The goal is to confirm the volume and depth are real before your capital relies on them.",
     "source": "LPLAB"
   },
   {
@@ -2609,7 +2609,7 @@
       "Put in money you need soon, to force yourself to pay attention"
     ],
     "correct": 1,
-    "explanation": "Launch LP is volatility farming: verify the token with Cluck Score, Autopsy, and Security Coop; confirm a real graduated pool; size it as money you have written off; manage it actively; and decide your exit before depositing. It is a high-skill, small-size game — never a place to park capital you need.",
+    "explanation": "Launch LP is volatility farming: verify the token with Token Autopsy and Security Coop; confirm a real graduated pool; size it as money you have written off; manage it actively; and decide your exit before depositing. It is a high-skill, small-size game — never a place to park capital you need.",
     "source": "LPLAB"
   },
   {
@@ -2622,7 +2622,7 @@
       "It only affects the token creator, not LPs"
     ],
     "correct": 1,
-    "explanation": "Concentration is a pool-level risk for LPs. If a handful of wallets hold most of the supply, they can sell into your liquidity and crash the price, rebalancing your position into the collapsing token. Reading holder structure — exactly what Cluck Score surfaces — is part of vetting any launch pool.",
+    "explanation": "Concentration is a pool-level risk for LPs. If a handful of wallets hold most of the supply, they can sell into your liquidity and crash the price, rebalancing your position into the collapsing token. Reading holder structure — exactly what Token Autopsy surfaces — is part of vetting any launch pool.",
     "source": "LPLAB"
   },
   {
@@ -2682,12 +2682,12 @@
     "q": "Before adding any new token to your degen tier, what should you do?",
     "options": [
       "Deposit quickly before the opportunity passes",
-      "Run it through Cluck Score, Token Autopsy, and Security Coop, and confirm authorities and liquidity status",
+      "Run it through Token Autopsy and Security Coop, and confirm authorities and liquidity status",
       "Check only the advertised APR",
       "Trust the trending list that surfaced it"
     ],
     "correct": 1,
-    "explanation": "Every degen-tier token gets vetted first: Cluck Score for distribution and risk, Token Autopsy for a forensic read, Security Coop and authority checks for mint/freeze/liquidity status. Only LP graduated pools you understand, and size each as total-loss money. Research is the price of admission to the riskiest tier.",
+    "explanation": "Every degen-tier token gets vetted first: Token Autopsy for a forensic read plus distribution and risk, Security Coop and authority checks for mint/freeze/liquidity status. Only LP graduated pools you understand, and size each as total-loss money. Research is the price of admission to the riskiest tier.",
     "source": "LPLAB"
   },
   {
