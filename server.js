@@ -7080,7 +7080,10 @@ app.get("/api/wallet-xray", async (req, res) => {
 
     // 1. Pull the wallet's enhanced transaction history (newest → oldest),
     //    paged, time-budgeted so a hyperactive wallet can't hang the request.
-    const MAX_PAGES = 15, PAGE = 100, DEADLINE = Date.now() + 55000;
+    //    COAL MINER MODE (deep=1): for wallets with more history than the
+    //    standard scan reaches, dig far deeper (5,000 txns, ~4-min budget).
+    const deep = String(req.query.deep || "") === "1";
+    const MAX_PAGES = deep ? 50 : 15, PAGE = 100, DEADLINE = Date.now() + (deep ? 235000 : 55000);
     let before = null; const txs = []; let pages = 0, reachedEnd = false;
     for (; pages < MAX_PAGES; pages++) {
       if (Date.now() > DEADLINE) break;
@@ -7114,6 +7117,8 @@ app.get("/api/wallet-xray", async (req, res) => {
     const sentTo = new Set(), recvFrom = new Set();
     const initiatedTs = [];        // timestamps of wallet-initiated txs (cadence)
     let firstFunding = null;       // earliest external SOL inflow (funding origin)
+    const rows = [];               // normalized per-tx timeline (returned for display + AI)
+    const dayMap = new Map();      // day bucket → activity counts (for the activity chart)
 
     for (const tx of txs) {
       if (!tx || !tx.signature) continue;
@@ -7183,6 +7188,44 @@ app.get("/api/wallet-xray", async (req, res) => {
           firstFunding = { ts, amountSol: solDelta, from: src, label: labelWallet(src), sig: tx.signature };
         }
       }
+
+      // Normalized timeline row — one per tx that did something we can name.
+      let action = "other";
+      if (/LIQUIDITY/i.test(type)) action = /ADD|DEPOSIT|INCREASE/i.test(type) ? "lp_add" : "lp_remove";
+      else if (isSwap && moved.length) action = quoteUsd < -0.01 ? "buy" : quoteUsd > 0.01 ? "sell" : (moved.some(([, v]) => v > 0) ? "buy" : "sell");
+      else if (moved.length) {
+        const anyIn = moved.some(([, v]) => v > 0), anyOut = moved.some(([, v]) => v < 0);
+        action = anyOut && !anyIn ? "send" : anyIn && !anyOut ? "receive" : "swap";
+      } else if (solDelta > 0.0005) action = "sol_in";
+      else if (solDelta < -0.0005) action = "sol_out";
+
+      // Primary external counterparty for the row.
+      let cp = null, cpLabel = null;
+      if (action === "send" || action === "sol_out") cp = [...extOut][0] || null;
+      else if (action === "receive" || action === "sol_in") cp = [...extIn][0] || null;
+      else cp = [...extOut][0] || [...extIn][0] || null;
+      cpLabel = (action === "buy" || action === "sell" || action === "swap" || action === "lp_add" || action === "lp_remove")
+        ? (tx.source ? String(tx.source).replace(/_/g, " ") : null)
+        : (cp ? labelWallet(cp) : null);
+
+      if (action !== "other" || moved.length) {
+        rows.push({
+          signature: tx.signature, ts, type, source: tx.source || null, action,
+          solDelta: Number(solDelta.toFixed(6)), quoteUsd: Number(quoteUsd.toFixed(2)),
+          tokens: moved.map(([m, v]) => ({ mint: m, delta: v })),
+          counterparty: cp, counterpartyLabel: cpLabel,
+          fee: Number(((tx.fee || 0) / 1e9).toFixed(6)),
+          description: String(tx.description || "").slice(0, 280),
+        });
+      }
+      if (ts) {
+        const day = Math.floor(ts / 86400);
+        const e = dayMap.get(day) || { day, count: 0, buys: 0, sells: 0, in: 0, out: 0 };
+        e.count++;
+        if (action === "buy") e.buys++; else if (action === "sell") e.sells++;
+        else if (action === "receive" || action === "sol_in") e.in++; else if (action === "send" || action === "sol_out") e.out++;
+        dayMap.set(day, e);
+      }
     }
 
     // 3. Current token holdings (for "still holds" + portfolio value).
@@ -7231,10 +7274,10 @@ app.get("/api/wallet-xray", async (req, res) => {
     const flipFrac = holds.length ? fastFlipCount / holds.length : 0;
 
     // 5. Top tokens by activity, enriched with symbol + held value.
-    const topMints = [...mintStats.values()]
-      .sort((a, b) => (b.bought + b.sold + b.recv + b.sent) - (a.bought + a.sold + a.recv + a.sent))
-      .slice(0, 20);
-    const priceInfo = await priceTokensBatch([...topMints.map((t) => t.mint), ...heldByMint.keys()].slice(0, 60)).catch(() => ({}));
+    const byActivity = [...mintStats.values()].sort((a, b) => (b.bought + b.sold + b.recv + b.sent) - (a.bought + a.sold + a.recv + a.sent));
+    const topMints = byActivity.slice(0, 20);
+    // Price the most-active mints (for token cards AND timeline symbols) + everything held.
+    const priceInfo = await priceTokensBatch([...new Set([...byActivity.slice(0, 90).map((t) => t.mint), ...heldByMint.keys()])].slice(0, 100)).catch(() => ({}));
     let portfolioUsd = 0;
     for (const [m, amt] of heldByMint) { const p = priceInfo[m]; if (p && p.priceUsd) portfolioUsd += amt * p.priceUsd; }
     const topTokens = topMints.map((t) => {
@@ -7254,6 +7297,26 @@ app.get("/api/wallet-xray", async (req, res) => {
         held, heldUsd: held * (p.priceUsd || 0), classification: cls,
       };
     });
+
+    // 5b. Enrich the timeline rows with token symbols + a best-effort USD value.
+    for (const r of rows) {
+      let usd = 0;
+      if (r.action === "buy" || r.action === "sell") usd = Math.abs(r.quoteUsd);
+      else if (r.action === "sol_in" || r.action === "sol_out") usd = Math.abs(r.solDelta) * solUsd;
+      for (const tc of r.tokens) {
+        const p = priceInfo[tc.mint];
+        if (p) { tc.symbol = p.symbol || null; tc.logo = p.logo || null; }
+        if (!usd && p && p.priceUsd) usd += Math.abs(tc.delta) * p.priceUsd;
+      }
+      r.usd = Number(usd.toFixed(2));
+    }
+    // 5c. Chart series: daily activity (oldest→newest) + hold-time distribution.
+    const daily = [...dayMap.values()].sort((a, b) => a.day - b.day).map((e) => ({ ts: e.day * 86400, count: e.count, buys: e.buys, sells: e.sells, in: e.in, out: e.out }));
+    const HB = [{ lbl: "<1m", max: 60 }, { lbl: "1–10m", max: 600 }, { lbl: "10–60m", max: 3600 }, { lbl: "1–6h", max: 21600 }, { lbl: "6–24h", max: 86400 }, { lbl: "1–7d", max: 604800 }, { lbl: ">7d", max: Infinity }];
+    const holdBuckets = HB.map((b) => ({ label: b.lbl, count: 0 }));
+    for (const h of holds) { const i = HB.findIndex((b) => h < b.max); if (i >= 0) holdBuckets[i].count++; }
+    const actionBreakdown = {};
+    for (const r of rows) actionBreakdown[r.action] = (actionBreakdown[r.action] || 0) + 1;
 
     // 6. CEX net direction.
     const cex = [...cexFlows.entries()].map(([name, e]) => ({ name, ...e, net: e.out - e.in })).sort((a, b) => b.count - a.count);
@@ -7297,8 +7360,8 @@ app.get("/api/wallet-xray", async (req, res) => {
     const verdict = verdictBits.join(" ");
 
     return res.status(200).json({
-      success: true, wallet, generatedAt: new Date().toISOString(), truncated,
-      scanned: { txCount: totalTx, pages, truncated, spanDays: Number(spanDays.toFixed(2)), firstSeen: minTs === Infinity ? null : minTs, lastSeen: maxTs || null, ageDays: Number(nowDays.toFixed(1)) },
+      success: true, wallet, generatedAt: new Date().toISOString(), truncated, mode: deep ? "coalminer" : "xray",
+      scanned: { txCount: totalTx, pages, truncated, deep, spanDays: Number(spanDays.toFixed(2)), firstSeen: minTs === Infinity ? null : minTs, lastSeen: maxTs || null, ageDays: Number(nowDays.toFixed(1)) },
       balances: { solBalance, solUsd, solUsdValue: solBalance * solUsd, tokenCount: heldByMint.size, portfolioUsd },
       funding: firstFunding,
       activity: { buyCount, sellCount, swapCount, tokenSendCount, tokenRecvCount, solInCount, solOutCount, distinctTokens, txPerDay: Number(txPerDay.toFixed(1)), lpAdd, lpRemove, nftCount, sellBuyRatio: Number(sellBuyRatio.toFixed(2)) },
@@ -7306,12 +7369,93 @@ app.get("/api/wallet-xray", async (req, res) => {
       flips: { medianHoldSec: Math.round(medianHoldSec), fastFlipCount, flipFrac: Number(flipFrac.toFixed(3)), recvThenSold },
       cex, topSources: [...sources.entries()].map(([source, count]) => ({ source, count })).sort((a, b) => b.count - a.count).slice(0, 8),
       topTokens, labels, verdict,
+      charts: { daily, holdBuckets, actionBreakdown },
+      transactions: rows.slice(0, deep ? 2500 : 800), txReturned: Math.min(rows.length, deep ? 2500 : 800), txTotal: rows.length,
       disclaimer: "These are on-chain behavioral patterns, not statements of intent. The same pattern can come from a bot, a fund, a market maker, or a person — use this as a research lead, not a verdict.",
     });
   } catch (err) {
     console.error("[wallet-xray] error:", err.message);
     return res.status(500).json({ success: false, error: publicErrMsg(err) });
   }
+});
+
+// Ask Cluck about a wallet or a SPECIFIC transaction — conversational forensic
+// helper. The client passes the lightweight wallet profile it already rendered
+// (display context only); when a signature is given we RE-FETCH that one tx from
+// Helius server-side so the explanation is grounded in real on-chain data, not
+// just what the client claims. Cheap (1 enhanced-tx call), accurate, and keeps
+// the forensic rule intact: explain WHAT happened, never assert WHY.
+app.use("/api/wallet-xray/ask", rateLimit("xrayask", { windowMs: 60000, max: 20 }));
+app.post("/api/wallet-xray/ask", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  const KEY = process.env.ANTHROPIC_API_KEY;
+  if (!KEY) return res.status(500).json({ success: false, error: "Cluck is offline (AI not configured)" });
+  const { wallet, question, signature, profile, history } = req.body || {};
+  const w = String(wallet || "").trim();
+  const q = String(question || "").slice(0, 600);
+  if (!q) return res.status(400).json({ success: false, error: "Ask a question" });
+  const hist = Array.isArray(history) ? history.filter((m) => m && (m.role === "user" || m.role === "assistant") && m.content).slice(-8).map((m) => ({ role: m.role, content: String(m.content).slice(0, 1200) })) : [];
+
+  // Ground the answer: if a signature is given, fetch + describe that exact tx.
+  let txContext = "";
+  const sig = String(signature || "").trim();
+  if (sig && /^[1-9A-HJ-NP-Za-km-z]{60,100}$/.test(sig)) {
+    const HELIUS_KEY = process.env.HELIUS_API_KEY;
+    if (HELIUS_KEY) {
+      try {
+        const r = await fetch(`https://api.helius.xyz/v0/transactions?api-key=${HELIUS_KEY}`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ transactions: [sig] }), signal: AbortSignal.timeout(12000),
+        });
+        const arr = await r.json();
+        const tx = Array.isArray(arr) && arr[0];
+        if (tx) {
+          const lines = [];
+          lines.push(`Signature: ${tx.signature}`);
+          if (tx.timestamp) lines.push(`When: ${new Date(tx.timestamp * 1000).toISOString()}`);
+          lines.push(`Type: ${tx.type || "?"} · Source: ${tx.source || "?"} · Fee payer: ${tx.feePayer || "?"}`);
+          if (tx.description) lines.push(`Helius description: ${tx.description}`);
+          const tt = (tx.tokenTransfers || []).slice(0, 24).map((t) => `  ${t.fromUserAccount || "?"} → ${t.toUserAccount || "?"}: ${t.tokenAmount} of ${t.mint}`);
+          if (tt.length) lines.push("Token transfers:\n" + tt.join("\n"));
+          const nt = (tx.nativeTransfers || []).slice(0, 16).map((n) => `  ${n.fromUserAccount || "?"} → ${n.toUserAccount || "?"}: ${(Number(n.amount) || 0) / 1e9} SOL`);
+          if (nt.length) lines.push("Native SOL transfers:\n" + nt.join("\n"));
+          if (tx.events && tx.events.swap) lines.push(`Swap event present (DEX trade).`);
+          txContext = `\n\nTHE SPECIFIC TRANSACTION THE USER IS ASKING ABOUT (real on-chain data, fetched just now — this is your source of truth for THIS tx):\n${lines.join("\n")}\nThe wallet under investigation is ${w}. Interpret every transfer relative to THAT wallet (into it = received/bought; out of it = sent/sold).`;
+        }
+      } catch (_) { /* fall back to profile-only context */ }
+    }
+  }
+
+  // Lightweight wallet profile from the client (display context only — capped).
+  let profCtx = "";
+  try { if (profile) profCtx = "\n\nTHE WALLET'S PROFILE (from the X-Ray report on screen):\n" + JSON.stringify(profile).slice(0, 4000); } catch (_) {}
+
+  const system = `You are Cluck Norris — a sharp, plain-spoken Solana on-chain forensic analyst with a wry chicken-themed wit. The user is investigating a Solana wallet with the Wallet X-Ray tool and is asking you to make sense of it${sig ? ", specifically about one transaction" : ""}.
+
+Wallet under investigation: ${w || "(unknown)"}${profCtx}${txContext}
+
+HOW YOU ANSWER:
+- Be concrete and use the real data above. Translate raw transfers into plain English ("this wallet swapped 12 SOL for ~4M BONK on Jupiter", "received 50K tokens from another wallet, then sold them 3 minutes later").
+- THE GOLDEN RULE: state WHAT the chain shows, NEVER assert WHY (intent). Say "this pattern is consistent with…" not "this person is a scammer". The chain shows what, not why.
+- Point out what's notable for an investigator: funding source, fast flips, transfers to/from exchanges, bot-like timing, accumulation vs distribution — but always as on-chain evidence, not a verdict.
+- If asked something the data can't answer, say so and suggest what to check (Solscan, the token's autopsy, tracing a counterparty).
+- Keep it tight: 2–6 sentences usually. No markdown headers or asterisks. No financial advice or price predictions.`;
+
+  try {
+    const messages = [...hist, { role: "user", content: q }];
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 700, system, messages }),
+    });
+    const data = await r.json();
+    if (data && data.content && data.content[0]) {
+      const reply = data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
+      return res.status(200).json({ success: true, reply });
+    }
+    return res.status(500).json({ success: false, error: (data && data.error && data.error.message) || "Cluck went quiet — try again." });
+  } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
 });
 
 // -- Cluck Score PNG card (1200x630, Twitter-card optimal) --

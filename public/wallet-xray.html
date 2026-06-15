@@ -22,8 +22,8 @@
     background-image:radial-gradient(ellipse at 18% 8%,rgba(167,139,250,0.10),transparent 50%),
                      radial-gradient(ellipse at 85% 95%,rgba(34,211,238,0.06),transparent 50%);
     color:var(--text);font-family:system-ui,sans-serif;min-height:100vh;}
-  .wrap{max-width:820px;margin:0 auto;padding:22px 16px 80px;}
-  @media(min-width:1100px){.wrap{max-width:1100px;}}
+  .wrap{max-width:880px;margin:0 auto;padding:22px 16px 110px;}
+  @media(min-width:1180px){.wrap{max-width:1180px;}}
   .back{display:inline-flex;align-items:center;gap:6px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:var(--orange);text-decoration:none;margin-bottom:14px;}
   .back img{height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid var(--orange);}
   .header{display:flex;align-items:center;gap:14px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border);}
@@ -53,21 +53,24 @@
   .loading-timer{font-family:var(--mono);font-size:11px;color:var(--sub);}
   .loading-note{font-family:Oswald,sans-serif;font-size:11px;color:var(--muted);letter-spacing:1px;margin-top:10px;}
   .result{display:none;}.result.show{display:block;}
+  /* tabs */
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;position:sticky;top:0;z-index:30;background:rgba(10,10,10,0.92);backdrop-filter:blur(8px);padding:10px 0;margin-bottom:6px;border-bottom:1px solid var(--border);}
+  .tab{font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;padding:8px 13px;border-radius:9px;cursor:pointer;border:1px solid var(--border);background:rgba(255,255,255,0.02);color:var(--sub);}
+  .tab.active{border-color:var(--purple);background:rgba(167,139,250,0.14);color:#fff;}
+  .panel{display:none;}.panel.active{display:block;}
   /* verdict */
   .verdict{background:linear-gradient(135deg,rgba(252,211,77,0.07),rgba(167,139,250,0.04));border:1px solid rgba(252,211,77,0.3);border-radius:12px;padding:15px 16px;margin-bottom:14px;}
-  .verdict .lbl{font-family:Oswald,sans-serif;font-size:10px;color:var(--accent);letter-spacing:2px;font-weight:700;margin-bottom:8px;}
+  .verdict .lbl{font-family:Oswald,sans-serif;font-size:10px;color:var(--accent);letter-spacing:2px;font-weight:700;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;}
   .verdict .body{font-family:system-ui;font-size:14px;line-height:1.65;color:#E5E7EB;}
+  .miniask{font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:0.5px;color:#0a0a0a;background:linear-gradient(135deg,var(--accent),var(--orange));border:none;border-radius:7px;padding:5px 10px;cursor:pointer;}
   /* label chips */
   .labels{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
   .chip{display:flex;flex-direction:column;gap:3px;border-radius:10px;padding:9px 12px;min-width:140px;flex:1 1 200px;border:1px solid var(--border);background:rgba(255,255,255,0.02);}
   .chip .t{font-family:Oswald,sans-serif;font-weight:700;font-size:13px;letter-spacing:0.5px;}
   .chip .e{font-family:var(--mono);font-size:10px;color:var(--sub);line-height:1.45;}
-  .chip.high{border-color:rgba(239,68,68,0.45);background:rgba(239,68,68,0.07);}
-  .chip.high .t{color:var(--red);}
-  .chip.med{border-color:rgba(245,158,11,0.45);background:rgba(245,158,11,0.07);}
-  .chip.med .t{color:var(--amber);}
-  .chip.info{border-color:rgba(96,165,250,0.35);background:rgba(96,165,250,0.06);}
-  .chip.info .t{color:var(--blue);}
+  .chip.high{border-color:rgba(239,68,68,0.45);background:rgba(239,68,68,0.07);}.chip.high .t{color:var(--red);}
+  .chip.med{border-color:rgba(245,158,11,0.45);background:rgba(245,158,11,0.07);}.chip.med .t{color:var(--amber);}
+  .chip.info{border-color:rgba(96,165,250,0.35);background:rgba(96,165,250,0.06);}.chip.info .t{color:var(--blue);}
   /* stat grid */
   .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:9px;}
   .stat{background:#0d0d0d;border:1px solid var(--border);border-radius:9px;padding:10px 11px;}
@@ -80,6 +83,8 @@
   .origin .lbl{font-family:Oswald,sans-serif;font-size:10px;color:var(--cyan);letter-spacing:2px;font-weight:700;margin-bottom:6px;}
   .origin .body{font-family:var(--mono);font-size:12px;color:#E5E7EB;line-height:1.6;word-break:break-all;}
   .origin a{color:var(--blue);text-decoration:none;}
+  .pill{display:inline-block;font-family:var(--mono);font-size:11px;padding:4px 9px;border-radius:6px;margin:3px 5px 0 0;background:rgba(255,255,255,0.04);border:1px solid var(--border);color:var(--sub);}
+  .cexpill{background:rgba(252,211,77,0.1);border-color:rgba(252,211,77,0.4);color:var(--accent);}
   /* token rows */
   .trow{display:flex;align-items:center;gap:11px;padding:10px 0;border-top:1px solid var(--border);}
   .trow:first-child{border-top:none;}
@@ -92,11 +97,70 @@
   .cls-holding{background:rgba(16,185,129,0.14);color:var(--green);}
   .cls-fastflip,.cls-receivedsold,.cls-netseller{background:rgba(239,68,68,0.12);color:#FCA5A5;}
   .cls-traded,.cls-moved{background:rgba(96,165,250,0.12);color:var(--blue);}
-  .pill{display:inline-block;font-family:var(--mono);font-size:11px;padding:4px 9px;border-radius:6px;margin:3px 5px 0 0;background:rgba(255,255,255,0.04);border:1px solid var(--border);color:var(--sub);}
-  .cexpill{background:rgba(252,211,77,0.1);border-color:rgba(252,211,77,0.4);color:var(--accent);}
-  .disc{font-family:var(--mono);font-size:11px;line-height:1.6;color:#9aa1ab;background:linear-gradient(135deg,rgba(107,114,128,0.06),rgba(107,114,128,0.01));border:1px solid rgba(107,114,128,0.3);border-radius:12px;padding:14px 16px;}
+  /* timeline */
+  .filters{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;align-items:center;}
+  .fchip{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:0.5px;padding:6px 11px;border-radius:8px;cursor:pointer;border:1px solid var(--border);background:rgba(255,255,255,0.02);color:var(--sub);user-select:none;}
+  .fchip.on{border-color:var(--purple);background:rgba(167,139,250,0.14);color:#fff;}
+  .searchbox{flex:1;min-width:160px;background:#0d0d0d;border:1px solid var(--border);border-radius:8px;padding:8px 11px;color:var(--text);font-family:var(--mono);font-size:12px;}
+  .csv-btn{background:rgba(252,211,77,0.08);border:1px solid rgba(252,211,77,0.35);border-radius:8px;padding:7px 11px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;color:var(--accent);cursor:pointer;font-weight:700;}
+  .tx{display:flex;gap:11px;padding:11px;border:1px solid var(--border);border-radius:10px;margin-bottom:7px;background:rgba(255,255,255,0.02);}
+  .tx-badge{flex-shrink:0;width:62px;text-align:center;}
+  .tx-act{font-family:Oswald,sans-serif;font-size:10px;font-weight:900;letter-spacing:0.5px;padding:3px 0;border-radius:5px;display:block;}
+  .a-buy{background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.4);color:var(--green);}
+  .a-sell{background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:var(--red);}
+  .a-receive,.a-sol_in{background:rgba(96,165,250,0.15);border:1px solid rgba(96,165,250,0.4);color:var(--blue);}
+  .a-send,.a-sol_out{background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.4);color:var(--amber);}
+  .a-lp_add,.a-lp_remove,.a-swap,.a-other{background:rgba(167,139,250,0.15);border:1px solid rgba(167,139,250,0.4);color:var(--purple);}
+  .tx-usd{font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:4px;}
+  .tx-body{flex:1;min-width:0;}
+  .tx-l1{display:flex;justify-content:space-between;gap:8px;align-items:baseline;}
+  .tx-main{font-family:var(--mono);font-size:13px;color:var(--text);font-weight:700;word-break:break-word;}
+  .tx-time{font-family:var(--mono);font-size:10px;color:var(--muted);white-space:nowrap;}
+  .tx-meta{font-family:var(--mono);font-size:11px;color:var(--sub);margin-top:5px;line-height:1.5;word-break:break-all;}
+  .tx-meta a{color:var(--blue);text-decoration:none;}
+  .tx-ask{font-family:Oswald,sans-serif;font-size:10px;font-weight:700;letter-spacing:0.5px;color:#0a0a0a;background:linear-gradient(135deg,var(--accent),var(--orange));border:none;border-radius:6px;padding:3px 8px;cursor:pointer;margin-left:8px;}
+  .loadmore{width:100%;padding:11px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:9px;color:var(--sub);font-family:Oswald,sans-serif;letter-spacing:1px;font-size:12px;cursor:pointer;margin-top:4px;}
+  /* charts */
+  .chart-row{margin-bottom:18px;}
+  .chart-h{font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1px;color:var(--purple);font-weight:700;margin-bottom:8px;}
+  .bars{display:flex;align-items:flex-end;gap:2px;height:120px;border-bottom:1px solid var(--border);padding-bottom:1px;}
+  .bars .col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:1px;min-width:2px;}
+  .bars .seg{width:100%;border-radius:1px 1px 0 0;}
+  .seg-buy{background:var(--green);}.seg-sell{background:var(--red);}.seg-other{background:rgba(167,139,250,0.5);}
+  .baxis{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:4px;}
+  .hbar{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+  .hbar .hl{font-family:var(--mono);font-size:10px;color:var(--sub);width:74px;flex-shrink:0;text-align:right;}
+  .hbar .ht{flex:1;height:16px;background:rgba(255,255,255,0.04);border-radius:4px;overflow:hidden;}
+  .hbar .hf{height:100%;border-radius:4px;}
+  .hbar .hn{font-family:var(--mono);font-size:10px;color:var(--text);width:42px;flex-shrink:0;}
+  .legend{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:6px;}
+  .legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin:0 4px 0 10px;vertical-align:middle;}
+  .disc{font-family:var(--mono);font-size:11px;line-height:1.6;color:#9aa1ab;background:linear-gradient(135deg,rgba(107,114,128,0.06),rgba(107,114,128,0.01));border:1px solid rgba(107,114,128,0.3);border-radius:12px;padding:14px 16px;margin-top:6px;}
   .foot{font-family:var(--mono);font-size:10px;color:var(--muted);text-align:center;margin-top:14px;}
   .foot a{color:var(--sub);text-decoration:none;}
+  /* ask cluck drawer */
+  .ask-fab{position:fixed;right:16px;bottom:16px;z-index:50;font-family:Oswald,sans-serif;font-weight:900;letter-spacing:1px;font-size:13px;color:#0a0a0a;background:linear-gradient(135deg,var(--accent),var(--orange));border:none;border-radius:30px;padding:13px 18px;cursor:pointer;box-shadow:0 6px 22px rgba(0,0,0,0.5);display:none;}
+  .ask-fab.show{display:block;}
+  .drawer{position:fixed;right:0;bottom:0;top:0;width:min(440px,100%);z-index:60;background:#0d0d0d;border-left:1px solid var(--border);display:flex;flex-direction:column;transform:translateX(100%);transition:transform 0.22s ease;}
+  .drawer.open{transform:translateX(0);}
+  .drawer-h{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border);}
+  .drawer-h .t{font-family:Oswald,sans-serif;font-weight:900;letter-spacing:1px;color:var(--accent);font-size:15px;}
+  .drawer-x{background:none;border:none;color:var(--sub);font-size:22px;cursor:pointer;line-height:1;}
+  .ctxpill{margin:10px 16px 0;font-family:var(--mono);font-size:11px;color:var(--cyan);background:rgba(34,211,238,0.08);border:1px solid rgba(34,211,238,0.3);border-radius:8px;padding:7px 10px;display:none;justify-content:space-between;align-items:center;gap:8px;}
+  .ctxpill.show{display:flex;}
+  .ctxpill button{background:none;border:none;color:var(--sub);cursor:pointer;font-size:14px;}
+  .chat{flex:1;overflow-y:auto;padding:14px 16px;display:flex;flex-direction:column;gap:10px;}
+  .bub{max-width:88%;padding:10px 12px;border-radius:12px;font-size:13px;line-height:1.55;white-space:pre-wrap;word-break:break-word;}
+  .bub.u{align-self:flex-end;background:rgba(167,139,250,0.16);border:1px solid rgba(167,139,250,0.35);color:#fff;}
+  .bub.c{align-self:flex-start;background:rgba(255,255,255,0.04);border:1px solid var(--border);color:#E5E7EB;}
+  .bub.sys{align-self:center;color:var(--muted);font-family:var(--mono);font-size:11px;text-align:center;}
+  .suggests{display:flex;flex-wrap:wrap;gap:6px;padding:0 16px 8px;}
+  .sug{font-family:var(--mono);font-size:11px;padding:6px 10px;border-radius:7px;border:1px solid var(--border);background:rgba(255,255,255,0.02);color:var(--sub);cursor:pointer;}
+  .chat-in{display:flex;gap:8px;padding:12px 14px;border-top:1px solid var(--border);}
+  .chat-in input{flex:1;background:#111;border:1px solid var(--border);border-radius:9px;padding:11px;color:var(--text);font-size:13px;}
+  .chat-in button{background:linear-gradient(135deg,var(--purple),var(--cyan));border:none;border-radius:9px;color:#0a0a0a;font-family:Oswald,sans-serif;font-weight:900;padding:0 16px;cursor:pointer;}
+  .scrim{position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:55;display:none;}
+  .scrim.show{display:block;}
 </style>
 </head>
 <body>
@@ -108,13 +172,13 @@
     <div>
       <div class="brand-mini">CLUCK NORRIS</div>
       <h1>WALLET X-RAY</h1>
-      <p>FULL-WALLET DEEP DIVE · FUNDING · TRADES · BEHAVIOR</p>
+      <p>FULL-WALLET DEEP DIVE · FUNDING · TRADES · BEHAVIOR · ASK CLUCK</p>
     </div>
   </div>
 
   <div class="hero">
     <div class="hero-tag">DEEP DIVE MODE</div>
-    <div class="hero-sub">Paste any Solana wallet. X-Ray reads its whole recent history — where it was first funded from, everything it's bought, sold and transferred across <b>every</b> token, and the behavior pattern: bot cadence, fast-flip dumping, CEX cash-out, LP, or diamond-hands holder. One wallet, the whole story.</div>
+    <div class="hero-sub">Paste any Solana wallet. X-Ray reads its whole recent history — where it was first funded, everything it bought / sold / transferred across <b>every</b> token, the behavior pattern (bot, dumper, cash-out, LP, holder), a full searchable timeline, charts — and you can <b>ask Cluck Norris about any specific transaction</b>.</div>
   </div>
 
   <div class="card">
@@ -132,12 +196,45 @@
     <div class="loading-note">A busy wallet has thousands of txns — this can take up to a minute.</div>
   </div>
 
-  <div class="result" id="result"></div>
+  <div class="result" id="result">
+    <div class="tabs" id="tabs">
+      <div class="tab active" data-tab="overview">OVERVIEW</div>
+      <div class="tab" data-tab="timeline">TIMELINE</div>
+      <div class="tab" data-tab="charts">CHARTS</div>
+      <div class="tab" data-tab="tokens">TOKENS</div>
+    </div>
+    <div class="panel active" id="p-overview"></div>
+    <div class="panel" id="p-timeline"></div>
+    <div class="panel" id="p-charts"></div>
+    <div class="panel" id="p-tokens"></div>
+    <div class="disc" id="discBox"></div>
+  </div>
 
   <div class="foot"><a href="/tools">← all Cluck tools</a> · read-only · no wallet-connect</div>
 </div>
 
+<!-- Ask Cluck -->
+<button class="ask-fab" id="askFab" onclick="openChat(null,null)">🐔 ASK CLUCK</button>
+<div class="scrim" id="scrim" onclick="closeChat()"></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-h"><div class="t">🐔 ASK CLUCK</div><button class="drawer-x" onclick="closeChat()">✕</button></div>
+  <div class="ctxpill" id="ctxPill"><span id="ctxText"></span><button onclick="clearCtx()">✕</button></div>
+  <div class="chat" id="chat"></div>
+  <div class="suggests" id="suggests"></div>
+  <div class="chat-in">
+    <input id="chatInput" placeholder="Ask about this wallet or a transaction…" autocomplete="off"/>
+    <button onclick="sendChat()">ASK</button>
+  </div>
+</div>
+
 <script>
+let DATA=null;            // full report
+let txFilter='all';       // timeline action filter
+let txSearch='';
+let txShown=40;           // timeline pagination
+let askSig=null;          // active "ask about this tx" signature
+let chatHist=[];          // [{role,content}]
+
 const wi=document.getElementById('walletInput'), runBtn=document.getElementById('runBtn');
 wi.addEventListener('input',()=>{runBtn.disabled=wi.value.trim().length<32;});
 const qp=new URLSearchParams(location.search);
@@ -148,70 +245,91 @@ function shortAddr(a){return a?a.slice(0,4)+'…'+a.slice(-4):'—';}
 function fmtNum(n){n=Number(n)||0;const a=Math.abs(n);if(a===0)return'0';if(a>=1e9)return(n/1e9).toFixed(2)+'B';if(a>=1e6)return(n/1e6).toFixed(2)+'M';if(a>=1e3)return(n/1e3).toFixed(2)+'K';if(a>=1)return n.toLocaleString(undefined,{maximumFractionDigits:2});return n.toLocaleString(undefined,{maximumFractionDigits:4});}
 function fmtUsd(n){n=Number(n)||0;return n>=1e6?'$'+(n/1e6).toFixed(2)+'M':n>=1e3?'$'+(n/1e3).toFixed(1)+'K':'$'+n.toFixed(2);}
 function fmtDate(ts){if(!ts)return'—';return new Date(ts*1000).toLocaleDateString(undefined,{year:'2-digit',month:'short',day:'numeric'});}
+function fmtDT(ts){if(!ts)return'—';return new Date(ts*1000).toLocaleString(undefined,{year:'2-digit',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});}
 function dur(sec){sec=Math.max(0,Math.round(sec||0));if(sec<90)return sec+'s';if(sec<5400)return Math.round(sec/60)+'m';if(sec<172800)return(sec/3600).toFixed(1)+'h';return(sec/86400).toFixed(1)+'d';}
 
+/* ---------- run ---------- */
 let stageTimer,secTimer,startedAt;
 const STAGES=["Pulling the wallet's full transaction history…","Parsing buys, sells and transfers across every token…","Measuring trade cadence and hold times…","Checking funding origin and exchange flows…","Reading the behavior pattern…"];
-function startLoading(){let i=0;startedAt=Date.now();document.getElementById('stage').textContent=STAGES[0];document.getElementById('timer').textContent='0s';document.getElementById('loading').classList.add('show');document.getElementById('result').classList.remove('show');
-  stageTimer=setInterval(()=>{i=Math.min(i+1,STAGES.length-1);document.getElementById('stage').textContent=STAGES[i];},6000);
+const STAGES_DEEP=["⛏ Coal Miner mode — descending into the full history…","⛏ Digging deep — paging thousands of transactions…","⛏ This is a heavy wallet — keep the pickaxe swinging…","⛏ Parsing every buy, sell and transfer…","⛏ Reading the behavior pattern from the full dig…"];
+function startLoading(deep){let i=0;startedAt=Date.now();const S=deep?STAGES_DEEP:STAGES;document.getElementById('stage').textContent=S[0];document.getElementById('timer').textContent='0s';
+  document.querySelector('.loading-note').textContent=deep?'Coal Miner mode digs up to ~5,000 transactions — this can take a few minutes. Worth it.':"A busy wallet has thousands of txns — this can take up to a minute.";
+  document.getElementById('loading').classList.add('show');document.getElementById('result').classList.remove('show');
+  stageTimer=setInterval(()=>{i=Math.min(i+1,S.length-1);document.getElementById('stage').textContent=S[i];},deep?14000:6000);
   secTimer=setInterval(()=>{document.getElementById('timer').textContent=Math.round((Date.now()-startedAt)/1000)+'s';},1000);}
 function stopLoading(){document.getElementById('loading').classList.remove('show');clearInterval(stageTimer);clearInterval(secTimer);}
 function showErr(m){const e=document.getElementById('err');e.textContent=m;e.classList.add('show');}
 
-async function run(){
+async function run(deep){
   document.getElementById('err').classList.remove('show');
-  runBtn.disabled=true;startLoading();
+  runBtn.disabled=true;startLoading(!!deep);
+  chatHist=[];askSig=null;txShown=40;txFilter='all';txSearch='';
   const wallet=wi.value.trim();
   try{
-    const r=await fetch('/api/wallet-xray?wallet='+encodeURIComponent(wallet));
+    const r=await fetch('/api/wallet-xray?wallet='+encodeURIComponent(wallet)+(deep?'&deep=1':''));
     const d=await r.json();
     stopLoading();runBtn.disabled=false;
     if(!d.success){showErr(d.error||'Deep dive failed');return;}
-    render(d);
-  }catch(e){stopLoading();runBtn.disabled=false;showErr('Network error: '+e.message);}
+    DATA=d;renderAll();
+  }catch(e){stopLoading();runBtn.disabled=false;showErr(deep?'The deep dig timed out — the wallet is very large. The standard scan still has the recent history.':'Network error: '+e.message);}
 }
 
 function stat(k,v,cls,s){return '<div class="stat"><div class="k">'+k+'</div><div class="v '+(cls||'')+'">'+v+'</div>'+(s?'<div class="s">'+s+'</div>':'')+'</div>';}
 
-function render(d){
+function renderAll(){
   const R=document.getElementById('result');
-  if(d.empty){
-    R.innerHTML='<div class="verdict"><div class="lbl">CLUCK\'S READ</div><div class="body">'+esc(d.verdict)+'</div></div>';
-    R.classList.add('show');R.scrollIntoView({behavior:'smooth'});return;
+  if(DATA.empty){
+    document.getElementById('tabs').style.display='none';
+    document.getElementById('p-overview').innerHTML='<div class="verdict"><div class="lbl">CLUCK\'S READ</div><div class="body">'+esc(DATA.verdict)+'</div></div>';
+    document.getElementById('discBox').textContent='';
+    R.classList.add('show');document.getElementById('askFab').classList.add('show');R.scrollIntoView({behavior:'smooth'});return;
   }
-  const a=d.activity,sc=d.scanned,b=d.balances,c=d.cadence,f=d.flips;
+  document.getElementById('tabs').style.display='flex';
+  renderOverview();renderTimeline();renderCharts();renderTokens();
+  document.getElementById('discBox').innerHTML='📜 '+esc(DATA.disclaimer);
+  R.classList.add('show');
+  document.getElementById('askFab').classList.add('show');
+  R.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+/* ---------- tabs ---------- */
+document.getElementById('tabs').addEventListener('click',e=>{
+  const t=e.target.closest('.tab');if(!t)return;
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t));
+  const id=t.dataset.tab;
+  document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id==='p-'+id));
+});
+
+/* ---------- overview ---------- */
+function renderOverview(){
+  const d=DATA,a=d.activity,sc=d.scanned,b=d.balances,c=d.cadence,f=d.flips;
   let h='';
-
-  // verdict
-  h+='<div class="verdict"><div class="lbl">🐔 CLUCK\'S READ</div><div class="body">'+esc(d.verdict)+'</div></div>';
-
-  // labels
-  if((d.labels||[]).length){
-    h+='<div class="labels">'+d.labels.map(l=>
-      '<div class="chip '+esc(l.level)+'"><div class="t">'+esc(l.icon)+' '+esc(l.tag)+'</div><div class="e">'+esc(l.evidence)+'</div></div>'
-    ).join('')+'</div>';
+  // Coal Miner banner — offer the deep dig (truncated standard scan) or report the deep result.
+  if(d.mode==='coalminer'){
+    h+='<div class="origin" style="border-color:rgba(252,211,77,0.4);background:rgba(252,211,77,0.05)"><div class="lbl" style="color:var(--accent)">⛏ COAL MINER MODE — DEEP DIG</div><div class="body">Scanned <b>'+fmtNum(sc.txCount)+'</b> transactions'
+      +(d.truncated?' and the history is <b>still deeper than this</b> — an extremely heavy wallet. Recent + bulk history is captured; the very oldest may remain below the floor.':' — reached the full readable history. 🏆')+'</div></div>';
+  } else if(d.truncated){
+    h+='<div class="origin" style="border-color:rgba(252,211,77,0.4);background:rgba(252,211,77,0.05)"><div class="lbl" style="color:var(--accent)">⛏ THIS WALLET HAS MORE HISTORY</div><div class="body">The standard scan hit its '+fmtNum(sc.txCount)+'-txn floor — there is older activity below. Fire up <b>Coal Miner mode</b> to dig the full history (up to ~5,000 txns; takes a few minutes).<br><button class="miniask" style="margin-top:9px" onclick="run(true)">⛏ RUN COAL MINER MODE</button></div></div>';
   }
-
-  // funding origin
-  if(d.funding){
-    const fn=d.funding;
+  h+='<div class="verdict"><div class="lbl"><span>🐔 CLUCK\'S READ</span><button class="miniask" onclick="openChat(\'Give me your overall read on this wallet — what stands out?\',null)">Ask a follow-up →</button></div><div class="body">'+esc(d.verdict)+'</div></div>';
+  if((d.labels||[]).length){
+    h+='<div class="labels">'+d.labels.map(l=>'<div class="chip '+esc(l.level)+'"><div class="t">'+esc(l.icon)+' '+esc(l.tag)+'</div><div class="e">'+esc(l.evidence)+'</div></div>').join('')+'</div>';
+  }
+  if(d.funding){const fn=d.funding;
     h+='<div class="origin"><div class="lbl">🌱 FUNDING ORIGIN — WHERE THE SOL CAME FROM</div><div class="body">'
       +'First funded with <b>'+fmtNum(fn.amountSol)+' SOL</b> on '+fmtDate(fn.ts)+' from '
       +(fn.label?('<b style="color:var(--accent)">🏦 '+esc(fn.label)+'</b> '):'')
       +'<a href="https://solscan.io/account/'+esc(fn.from)+'" target="_blank">'+esc(shortAddr(fn.from))+' ↗</a>'
       +(d.truncated?' <span style="color:var(--amber)">(earliest within the scanned window — older history may exist)</span>':'')
-      +' · <a href="https://solscan.io/tx/'+esc(fn.sig)+'" target="_blank">tx ↗</a></div></div>';
+      +' · <a href="https://solscan.io/tx/'+esc(fn.sig)+'" target="_blank">tx ↗</a>'
+      +' · <button class="miniask" onclick="openChat(\'Where was this wallet funded from, and is that notable?\',\''+esc(fn.sig)+'\')">ask 🐔</button></div></div>';
   }
-
-  // headline stats
   h+='<div class="card"><div class="card-title">📊 WALLET AT A GLANCE</div><div class="grid">'
     +stat('SOL BALANCE',fmtNum(b.solBalance),'a',b.solUsdValue?fmtUsd(b.solUsdValue):'')
     +stat('TOKEN VALUE',b.portfolioUsd?fmtUsd(b.portfolioUsd):'—','g',b.tokenCount+' tokens held')
     +stat('TXNS SCANNED',fmtNum(sc.txCount),'',sc.truncated?'truncated':'full history')
     +stat('ACTIVE SPAN',sc.spanDays>=1?sc.spanDays.toFixed(0)+'d':dur(sc.spanDays*86400),'b','first '+fmtDate(sc.firstSeen))
     +'</div></div>';
-
-  // trade behavior
   h+='<div class="card"><div class="card-title">💱 TRADE & TRANSFER BEHAVIOR</div><div class="grid">'
     +stat('BUYS',fmtNum(a.buyCount),'g')
     +stat('SELLS',fmtNum(a.sellCount),'r','sell:buy '+a.sellBuyRatio+'×')
@@ -222,48 +340,209 @@ function render(d){
     +stat('MEDIAN HOLD',f.medianHoldSec?dur(f.medianHoldSec):'—','',f.fastFlipCount+' flips <1h')
     +stat('BURST',c.maxPerMinute+'/min','',(c.fastGapFrac*100).toFixed(0)+'% ≤2s apart')
     +(a.lpAdd+a.lpRemove>0?stat('LP ACTIONS',(a.lpAdd+a.lpRemove),'p',a.lpAdd+' add / '+a.lpRemove+' pull'):'')
+    +(a.nftCount>0?stat('NFT TXNS',a.nftCount,'p',''):'')
     +'</div></div>';
-
-  // CEX + sources
   if((d.cex||[]).length||(d.topSources||[]).length){
     h+='<div class="card"><div class="card-title">🔗 VENUES & EXCHANGE FLOW</div>';
-    if((d.cex||[]).length){
-      h+='<div style="margin-bottom:8px">'+d.cex.map(c=>'<span class="pill cexpill">🏦 '+esc(c.name)+': '+c.out+' out / '+c.in+' in</span>').join('')+'</div>';
-    }
-    if((d.topSources||[]).length){
-      h+='<div>'+d.topSources.map(s=>'<span class="pill">'+esc((s.source||'').replace(/_/g,' '))+' ·'+s.count+'</span>').join('')+'</div>';
-    }
+    if((d.cex||[]).length)h+='<div style="margin-bottom:8px">'+d.cex.map(c=>'<span class="pill cexpill">🏦 '+esc(c.name)+': '+c.out+' out / '+c.in+' in</span>').join('')+'</div>';
+    if((d.topSources||[]).length)h+='<div>'+d.topSources.map(s=>'<span class="pill">'+esc((s.source||'').replace(/_/g,' '))+' ·'+s.count+'</span>').join('')+'</div>';
     h+='</div>';
   }
-
-  // top tokens
-  if((d.topTokens||[]).length){
-    h+='<div class="card"><div class="card-title">🪙 MOST-ACTIVE TOKENS</div>';
-    h+=d.topTokens.map(t=>{
-      const flows=[];
-      if(t.bought>0)flows.push('<span class="g">+'+fmtNum(t.bought)+' bought</span>');
-      if(t.sold>0)flows.push('<span class="r">−'+fmtNum(t.sold)+' sold</span>');
-      if(t.recv>0)flows.push('<span class="b">+'+fmtNum(t.recv)+' in</span>');
-      if(t.sent>0)flows.push('<span class="am">−'+fmtNum(t.sent)+' out</span>');
-      const clsKey='cls-'+(t.classification||'').replace(/[^a-z]/g,'');
-      return '<div class="trow">'
-        +(t.logo?'<img class="tlogo" src="'+esc(t.logo)+'" onerror="this.style.visibility=\'hidden\'"/>':'<div class="tlogo"></div>')
-        +'<div class="tname"><div class="sym">'+esc(t.symbol||shortAddr(t.mint))+'</div>'
-        +'<a href="https://solscan.io/token/'+esc(t.mint)+'" target="_blank">'+esc(shortAddr(t.mint))+' ↗</a> '
-        +'<span class="tcls '+clsKey+'">'+esc(t.classification)+'</span></div>'
-        +'<div class="tflow">'+(flows.join('<br>')||'—')
-        +(t.held>0?'<br><span style="color:var(--green)">holds '+fmtNum(t.held)+(t.heldUsd?' · '+fmtUsd(t.heldUsd):'')+'</span>':'')
-        +'</div></div>';
-    }).join('');
-    h+='</div>';
-  }
-
-  h+='<div class="disc">📜 '+esc(d.disclaimer)+'</div>';
-
-  R.innerHTML=h;
-  R.classList.add('show');
-  R.scrollIntoView({behavior:'smooth',block:'start'});
+  document.getElementById('p-overview').innerHTML=h;
 }
+
+/* ---------- timeline ---------- */
+const ACTS=[['all','ALL'],['buy','BUYS'],['sell','SELLS'],['send','SENT'],['receive','RECEIVED'],['sol_in','SOL IN'],['sol_out','SOL OUT'],['lp_add','LP'],['other','OTHER']];
+const ACT_LABEL={buy:'BUY',sell:'SELL',send:'SEND',receive:'RECV',sol_in:'SOL+',sol_out:'SOL−',lp_add:'+LP',lp_remove:'−LP',swap:'SWAP',other:'·'};
+function filteredTx(){
+  let txs=DATA.transactions||[];
+  if(txFilter!=='all')txs=txs.filter(t=>txFilter==='lp_add'?(t.action==='lp_add'||t.action==='lp_remove'):t.action===txFilter);
+  if(txSearch){const q=txSearch.toLowerCase();txs=txs.filter(t=>{
+    const sym=(t.tokens||[]).map(x=>(x.symbol||x.mint||'')).join(' ').toLowerCase();
+    return sym.includes(q)||(t.signature||'').toLowerCase().includes(q)||(t.counterparty||'').toLowerCase().includes(q)||(t.counterpartyLabel||'').toLowerCase().includes(q)||(t.source||'').toLowerCase().includes(q);
+  });}
+  return txs;
+}
+function renderTimeline(){
+  const counts={};(DATA.transactions||[]).forEach(t=>{counts[t.action]=(counts[t.action]||0)+1;});
+  let h='<div class="card"><div class="filters">';
+  h+=ACTS.map(([k,lbl])=>{
+    const n=k==='all'?(DATA.transactions||[]).length:(k==='lp_add'?((counts.lp_add||0)+(counts.lp_remove||0)):(counts[k]||0));
+    if(k!=='all'&&!n)return'';
+    return '<div class="fchip'+(txFilter===k?' on':'')+'" data-f="'+k+'">'+lbl+' '+n+'</div>';
+  }).join('');
+  h+='<input class="searchbox" id="txSearch" placeholder="search token / wallet / source / sig…" value="'+esc(txSearch)+'"/>';
+  h+='<button class="csv-btn" onclick="downloadCsv()">⬇ CSV</button>';
+  h+='</div><div id="txList"></div></div>';
+  document.getElementById('p-timeline').innerHTML=h;
+  document.querySelector('#p-timeline .filters').addEventListener('click',e=>{const c=e.target.closest('.fchip');if(!c)return;txFilter=c.dataset.f;txShown=40;renderTimeline();});
+  const sb=document.getElementById('txSearch');
+  sb.addEventListener('input',()=>{txSearch=sb.value.trim();txShown=40;renderTxList();sb.focus();});
+  renderTxList();
+}
+function renderTxList(){
+  const txs=filteredTx();
+  const slice=txs.slice(0,txShown);
+  const el=document.getElementById('txList');
+  if(!slice.length){el.innerHTML='<div style="text-align:center;color:var(--muted);font-family:var(--mono);font-size:12px;padding:24px 0">No transactions match.</div>';return;}
+  el.innerHTML=slice.map(t=>{
+    const toks=(t.tokens||[]).map(x=>{
+      const s=x.symbol||shortAddr(x.mint);
+      return (x.delta>0?'+':'')+fmtNum(x.delta)+' '+esc(s);
+    }).join(', ');
+    let main;
+    if(t.action==='buy')main='Bought '+toks;
+    else if(t.action==='sell')main='Sold '+toks;
+    else if(t.action==='send')main='Sent '+toks;
+    else if(t.action==='receive')main='Received '+toks;
+    else if(t.action==='sol_in')main='Received '+fmtNum(t.solDelta)+' SOL';
+    else if(t.action==='sol_out')main='Sent '+fmtNum(Math.abs(t.solDelta))+' SOL';
+    else if(t.action==='lp_add')main='Added LP '+toks;
+    else if(t.action==='lp_remove')main='Removed LP '+toks;
+    else main=(toks||esc(t.description||t.type||'activity'));
+    const cp=t.counterpartyLabel?esc(t.counterpartyLabel):(t.counterparty?('<a href="https://solscan.io/account/'+esc(t.counterparty)+'" target="_blank">'+esc(shortAddr(t.counterparty))+' ↗</a>'):'');
+    return '<div class="tx">'
+      +'<div class="tx-badge"><span class="tx-act a-'+esc(t.action)+'">'+(ACT_LABEL[t.action]||'·')+'</span>'+(t.usd?'<div class="tx-usd">'+fmtUsd(t.usd)+'</div>':'')+'</div>'
+      +'<div class="tx-body"><div class="tx-l1"><span class="tx-main">'+main+'</span><span class="tx-time">'+fmtDT(t.ts)+'</span></div>'
+      +'<div class="tx-meta">'+(cp?(((t.action==='buy'||t.action==='sell')?'via ':'')+cp+' · '):'')
+      +'<a href="https://solscan.io/tx/'+esc(t.signature)+'" target="_blank">tx ↗</a>'
+      +'<button class="tx-ask" data-sig="'+esc(t.signature)+'">🐔 ask</button></div></div></div>';
+  }).join('');
+  if(txs.length>txShown)el.innerHTML+='<button class="loadmore" id="loadMore">Show more ('+(txs.length-txShown)+' left)</button>';
+  el.querySelectorAll('.tx-ask').forEach(b=>b.addEventListener('click',()=>openChat('Explain this transaction in plain English — what happened here?',b.dataset.sig)));
+  const lm=document.getElementById('loadMore');if(lm)lm.addEventListener('click',()=>{txShown+=60;renderTxList();});
+}
+function downloadCsv(){
+  const txs=filteredTx();
+  const lines=['timestamp,datetime,action,usd,sol_delta,tokens,counterparty,counterparty_label,source,signature'];
+  for(const t of txs){
+    const toks=(t.tokens||[]).map(x=>(x.delta>0?'+':'')+x.delta+' '+(x.symbol||x.mint)).join(' | ');
+    lines.push([t.ts,new Date(t.ts*1000).toISOString(),t.action,t.usd||'',t.solDelta,'"'+toks+'"',t.counterparty||'',(t.counterpartyLabel||'').replace(/,/g,' '),t.source||'',t.signature].join(','));
+  }
+  const blob=new Blob([lines.join('\n')],{type:'text/csv'});const u=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=u;a.download='wallet-xray_'+DATA.wallet.slice(0,6)+'_'+Date.now()+'.csv';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(u);
+}
+
+/* ---------- charts ---------- */
+function renderCharts(){
+  const ch=DATA.charts||{};let h='';
+  // activity over time
+  const daily=ch.daily||[];
+  if(daily.length){
+    let series=daily;
+    if(series.length>60){const step=Math.ceil(series.length/60);const out=[];for(let i=0;i<series.length;i+=step){const grp=series.slice(i,i+step);out.push({ts:grp[0].ts,count:grp.reduce((s,x)=>s+x.count,0),buys:grp.reduce((s,x)=>s+x.buys,0),sells:grp.reduce((s,x)=>s+x.sells,0)});}series=out;}
+    const mx=Math.max(1,...series.map(x=>x.count));
+    h+='<div class="card chart-row"><div class="chart-h">📈 ACTIVITY OVER TIME ('+daily.length+' active days)</div><div class="bars">'
+      +series.map(x=>{const other=Math.max(0,x.count-x.buys-x.sells);const sc=v=>Math.round(v/mx*116);
+        return '<div class="col" title="'+fmtDate(x.ts)+': '+x.count+' txns">'
+          +(other?'<div class="seg seg-other" style="height:'+sc(other)+'px"></div>':'')
+          +(x.sells?'<div class="seg seg-sell" style="height:'+sc(x.sells)+'px"></div>':'')
+          +(x.buys?'<div class="seg seg-buy" style="height:'+sc(x.buys)+'px"></div>':'')
+          +'</div>';}).join('')
+      +'</div><div class="baxis"><span>'+fmtDate(series[0].ts)+'</span><span>'+fmtDate(series[series.length-1].ts)+'</span></div>'
+      +'<div class="legend"><i class="seg-buy" style="background:var(--green)"></i>buys<i class="seg-sell" style="background:var(--red)"></i>sells<i class="seg-other" style="background:rgba(167,139,250,0.6)"></i>other</div></div>';
+  }
+  // action breakdown
+  const ab=ch.actionBreakdown||{};const abE=Object.entries(ab).sort((a,b)=>b[1]-a[1]);
+  if(abE.length){const mx=Math.max(1,...abE.map(x=>x[1]));
+    const col={buy:'var(--green)',sell:'var(--red)',send:'var(--amber)',receive:'var(--blue)',sol_in:'var(--blue)',sol_out:'var(--amber)',lp_add:'var(--purple)',lp_remove:'var(--purple)',swap:'var(--purple)',other:'var(--muted)'};
+    h+='<div class="card chart-row"><div class="chart-h">🧮 WHAT IT DID (by transaction type)</div>'
+      +abE.map(([k,v])=>'<div class="hbar"><div class="hl">'+(ACT_LABEL[k]||k)+'</div><div class="ht"><div class="hf" style="width:'+(v/mx*100)+'%;background:'+(col[k]||'var(--muted)')+'"></div></div><div class="hn">'+v+'</div></div>').join('')
+      +'</div>';
+  }
+  // hold-time distribution
+  const hb=(ch.holdBuckets||[]).filter(x=>x.count>0);
+  if(hb.length){const mx=Math.max(1,...hb.map(x=>x.count));
+    h+='<div class="card chart-row"><div class="chart-h">⏱ HOLD TIME — buy → first sell ('+(DATA.flips?DATA.flips.fastFlipCount:0)+' flipped under 1h)</div>'
+      +(ch.holdBuckets||[]).map(x=>'<div class="hbar"><div class="hl">'+esc(x.label)+'</div><div class="ht"><div class="hf" style="width:'+(x.count/mx*100)+'%;background:'+(['<1m','1–10m','10–60m'].includes(x.label)?'var(--red)':'var(--green)')+'"></div></div><div class="hn">'+x.count+'</div></div>').join('')
+      +'<div class="legend">Short bars on the left = fast flips (sold soon after buying). Bars on the right = real holding.</div></div>';
+  }
+  if(!h)h='<div class="card" style="text-align:center;color:var(--muted)">Not enough data to chart.</div>';
+  document.getElementById('p-charts').innerHTML=h;
+}
+
+/* ---------- tokens ---------- */
+function renderTokens(){
+  const d=DATA;let h='<div class="card"><div class="card-title">🪙 MOST-ACTIVE TOKENS</div>';
+  if(!(d.topTokens||[]).length){h+='<div style="color:var(--muted)">No token activity.</div></div>';document.getElementById('p-tokens').innerHTML=h;return;}
+  h+=d.topTokens.map(t=>{
+    const flows=[];
+    if(t.bought>0)flows.push('<span class="g">+'+fmtNum(t.bought)+' bought</span>');
+    if(t.sold>0)flows.push('<span class="r">−'+fmtNum(t.sold)+' sold</span>');
+    if(t.recv>0)flows.push('<span class="b">+'+fmtNum(t.recv)+' in</span>');
+    if(t.sent>0)flows.push('<span class="am">−'+fmtNum(t.sent)+' out</span>');
+    const clsKey='cls-'+(t.classification||'').replace(/[^a-z]/g,'');
+    return '<div class="trow">'
+      +(t.logo?'<img class="tlogo" src="'+esc(t.logo)+'" onerror="this.style.visibility=\'hidden\'"/>':'<div class="tlogo"></div>')
+      +'<div class="tname"><div class="sym">'+esc(t.symbol||shortAddr(t.mint))+'</div>'
+      +'<a href="https://solscan.io/token/'+esc(t.mint)+'" target="_blank">'+esc(shortAddr(t.mint))+' ↗</a> '
+      +'<a href="/trace?wallet='+esc(d.wallet)+'&mint='+esc(t.mint)+'" target="_blank" style="color:var(--cyan)">trace ↗</a> '
+      +'<span class="tcls '+clsKey+'">'+esc(t.classification)+'</span></div>'
+      +'<div class="tflow">'+(flows.join('<br>')||'—')
+      +(t.held>0?'<br><span style="color:var(--green)">holds '+fmtNum(t.held)+(t.heldUsd?' · '+fmtUsd(t.heldUsd):'')+'</span>':'')
+      +'</div></div>';
+  }).join('');
+  h+='</div>';
+  document.getElementById('p-tokens').innerHTML=h;
+}
+
+/* ---------- Ask Cluck ---------- */
+function compactProfile(){
+  if(!DATA)return null;
+  return {
+    verdict:DATA.verdict,
+    labels:(DATA.labels||[]).map(l=>({tag:l.tag,evidence:l.evidence})),
+    funding:DATA.funding,
+    scanned:DATA.scanned,
+    balances:DATA.balances,
+    activity:DATA.activity,
+    cadence:DATA.cadence,
+    flips:DATA.flips,
+    cex:DATA.cex,
+    topTokens:(DATA.topTokens||[]).slice(0,12).map(t=>({symbol:t.symbol,classification:t.classification,bought:t.bought,sold:t.sold,held:t.held}))
+  };
+}
+const SUGGEST=['Is this a bot?','Bot or real person?','Is it dumping?','Where did the money come from?','Is it cashing out to an exchange?','What are the biggest red flags?'];
+function renderSuggests(){
+  document.getElementById('suggests').innerHTML=SUGGEST.map(s=>'<div class="sug">'+esc(s)+'</div>').join('');
+  document.querySelectorAll('#suggests .sug').forEach(el=>el.addEventListener('click',()=>{document.getElementById('chatInput').value=el.textContent;sendChat();}));
+}
+function pushBub(role,text){const c=document.getElementById('chat');const b=document.createElement('div');b.className='bub '+(role==='user'?'u':role==='sys'?'sys':'c');b.textContent=text;c.appendChild(b);c.scrollTop=c.scrollHeight;return b;}
+function setCtx(sig){
+  askSig=sig||null;
+  const pill=document.getElementById('ctxPill');
+  if(askSig){document.getElementById('ctxText').textContent='📌 Asking about tx '+askSig.slice(0,10)+'…';pill.classList.add('show');}
+  else pill.classList.remove('show');
+}
+function clearCtx(){setCtx(null);}
+function openChat(prefill,sig){
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('scrim').classList.add('show');
+  setCtx(sig);
+  if(!document.getElementById('chat').children.length){
+    pushBub('sys','Ask me anything about this wallet — funding, trades, bot vs human, dumping, exchange flows, or any specific transaction (hit "🐔 ask" on a timeline row).');
+    renderSuggests();
+  }
+  const inp=document.getElementById('chatInput');
+  if(prefill){inp.value=prefill;sendChat();}else inp.focus();
+}
+function closeChat(){document.getElementById('drawer').classList.remove('open');document.getElementById('scrim').classList.remove('show');}
+async function sendChat(){
+  const inp=document.getElementById('chatInput');const q=inp.value.trim();if(!q)return;
+  inp.value='';
+  pushBub('user',q);chatHist.push({role:'user',content:q});
+  document.getElementById('suggests').innerHTML='';
+  const typing=pushBub('cluck','🐔 …');
+  try{
+    const r=await fetch('/api/wallet-xray/ask',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({wallet:DATA.wallet,question:q,signature:askSig,profile:compactProfile(),history:chatHist.slice(0,-1)})});
+    const d=await r.json();
+    typing.remove();
+    if(!d.success){pushBub('sys',d.error||'Cluck went quiet — try again.');return;}
+    pushBub('cluck',d.reply);chatHist.push({role:'assistant',content:d.reply});
+  }catch(e){typing.remove();pushBub('sys','Network error — try again.');}
+}
+document.getElementById('chatInput').addEventListener('keydown',e=>{if(e.key==='Enter')sendChat();});
 
 if(qp.get('wallet'))run();
 </script>
