@@ -1078,6 +1078,13 @@ function tgCommandReply(cmd, arg) {
         `📊 Chart → https://${CLKN_DEXSCREENER}\n` +
         `💸 Buy on Jupiter → https://jup.ag/tokens/${CLKN_MINT}\n\n` +
         `<i>Tap the address to copy. Always double-check the CA before buying.</i>`;
+    case "x":
+      return `🐦 <b>Follow Cluck Norris on X</b>\nhttps://x.com/firechicken007`;
+    case "website":
+    case "app":
+      return `🐔 <b>Cluck Norris</b> — the free crypto school + Solana tools\n${TG_PUBLIC_BASE}`;
+    case "dex":
+      return `📊 <b>CLKN on DexScreener</b>\nhttps://${CLKN_DEXSCREENER}`;
     case "walletxray":
       return `🩻 <b>Wallet X-Ray</b> — full wallet deep dive: funding origin, every trade, bot/dumper signals\n${link("/wallet-xray", "wallet")}` + (addr ? "" : "\n\nTip: <code>/walletxray &lt;wallet&gt;</code> pre-fills a wallet.");
     case "autopsy":
@@ -1105,6 +1112,9 @@ function tgCommandReply(cmd, arg) {
         "<i>Each opens the tool on clucknorris.app, with your mint/wallet pre-filled where supported.</i>\n\n" +
         "🐥 /guide — new here? get pointed the right way\n" +
         "🐔 /ca — CLKN contract address + chart\n" +
+        "📊 /dex — CLKN DexScreener chart\n" +
+        "🐦 /x — our X (Twitter) account\n" +
+        "🌐 /website (or /app) — clucknorris.app\n" +
         "💵 /price — CLKN price, market cap, volume &amp; organic score\n" +
         "🩻 /walletxray <code>&lt;wallet&gt;</code> — full wallet deep dive\n" +
         "🪦 /autopsy <code>&lt;mint&gt;</code> — full forensic breakdown\n" +
@@ -1194,7 +1204,7 @@ async function priceReply(chatId, replyTo) {
   }
 }
 
-const TG_KNOWN_CMDS = ["ca","walletxray","autopsy","trace","snapshot","holders","securitycoop","buyspecial","rose","hatchery","bags","tools","liquidity","price","commands","start","help","guide","buyleaders","chatid"];
+const TG_KNOWN_CMDS = ["ca","x","website","app","dex","walletxray","autopsy","trace","snapshot","holders","securitycoop","buyspecial","rose","hatchery","bags","tools","liquidity","price","commands","start","help","guide","buyleaders","chatid"];
 // In a non-CLKN project room (e.g. ROSE) the bot only serves that project's liquidity +
 // buy competitions; chatid stays so an operator can wire a buy comp. Everything else off.
 const PROJECT_ROOM_CMDS = ["liquidity","price","buyleaders","chatid"];
@@ -8931,6 +8941,10 @@ app.listen(PORT, () => {
           body: JSON.stringify({ commands: [
             { command: "guide", description: "Where do I start? Get pointed the right way" },
             { command: "ca", description: "CLKN contract address + DexScreener chart" },
+            { command: "dex", description: "CLKN DexScreener chart" },
+            { command: "x", description: "Our X (Twitter) account" },
+            { command: "website", description: "clucknorris.app — school + tools" },
+            { command: "app", description: "clucknorris.app — school + tools" },
             { command: "price", description: "CLKN price, market cap, volume & organic score" },
             { command: "walletxray", description: "Full wallet deep dive (/walletxray <wallet>)" },
             { command: "autopsy", description: "Forensic breakdown (/autopsy <mint>)" },
