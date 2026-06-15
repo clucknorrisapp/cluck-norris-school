@@ -31,7 +31,7 @@
   label.fld { display:block; font-family:var(--mono); font-size:10px; color:var(--subtext); letter-spacing:1px; margin:0 0 6px; }
   .pair-row { display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; }
   .pair-row .f { flex:1; min-width:120px; position:relative; }
-  .pair-row .vs { font-family:'Oswald',sans-serif; font-weight:900; color:var(--subtext); padding-bottom:12px; }
+  .pair-row .vs { font-family:'Oswald',sans-serif; font-weight:900; font-size:22px; color:#A78BFA; padding-bottom:10px; }
   .ac-drop { position:absolute; top:100%; left:0; right:0; z-index:30; background:#0d0d0d; border:1px solid var(--border); border-radius:9px; margin-top:4px; max-height:260px; overflow-y:auto; display:none; box-shadow:0 10px 28px rgba(0,0,0,0.6); }
   .ac-drop.show { display:block; }
   .ac-item { display:flex; align-items:center; gap:8px; padding:9px 10px; cursor:pointer; border-bottom:1px solid rgba(255,255,255,0.04); }
@@ -39,10 +39,19 @@
   .ac-item img { width:22px; height:22px; border-radius:50%; object-fit:cover; background:#222; flex-shrink:0; }
   .ac-item .s { font-family:'Oswald',sans-serif; font-weight:700; color:var(--text); font-size:13px; }
   .ac-item .n { font-size:10px; color:var(--subtext); margin-left:auto; max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  input[type=text], input[type=number] { width:100%; background:#0d0d0d; border:1px solid var(--border); border-radius:9px; padding:12px; color:var(--text); font-family:var(--mono); font-size:15px; }
+  input[type=text], input[type=number] { width:100%; background:#0d0d0d; border:1px solid var(--border); border-radius:10px; padding:13px; color:var(--text); font-family:var(--mono); font-size:15px; transition:border-color 0.12s, box-shadow 0.12s; }
   input::placeholder { color:#8A909C; }
-  .scan-btn { width:100%; margin-top:14px; padding:14px; border:none; border-radius:10px; background:linear-gradient(135deg,#D97706,#F59E0B); color:#1a1a1a; font-family:'Oswald',sans-serif; font-weight:900; letter-spacing:2px; font-size:15px; cursor:pointer; }
-  .scan-btn:disabled { opacity:0.5; cursor:wait; }
+  input:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(252,211,77,0.14); }
+  /* The hero scan card — the centerpiece, so it gets a gradient glow + animated accent border. */
+  .scan-card { position:relative; background:linear-gradient(160deg, rgba(217,119,6,0.09), rgba(167,139,250,0.06) 52%, rgba(34,211,238,0.05)); border:1px solid rgba(252,211,77,0.22); border-radius:16px; padding:22px 20px; margin-bottom:16px; box-shadow:0 20px 55px -24px rgba(217,119,6,0.45); overflow:hidden; }
+  .scan-card::before { content:""; position:absolute; inset:0; border-radius:16px; padding:1px; background:linear-gradient(120deg,#FCD34D,#A78BFA,#22D3EE,#6EE7B7); -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask-composite:exclude; opacity:0.45; pointer-events:none; }
+  .scan-card > * { position:relative; z-index:1; }
+  .scan-head { font-family:'Oswald',sans-serif; font-weight:900; letter-spacing:2px; font-size:17px; line-height:1; background:linear-gradient(90deg,#FCD34D,#F59E0B); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  .scan-sub { font-family:var(--mono); font-size:10.5px; color:var(--subtext); margin:5px 0 18px; letter-spacing:0.5px; }
+  .scan-divide { margin:18px -20px 0; border-top:1px solid var(--border); padding:14px 20px 0; }
+  .scan-btn { width:100%; margin-top:18px; padding:16px; border:none; border-radius:12px; background:linear-gradient(135deg,#D97706,#F59E0B,#FCD34D); color:#1a1a1a; font-family:'Oswald',sans-serif; font-weight:900; letter-spacing:3px; font-size:16px; cursor:pointer; box-shadow:0 10px 28px -10px rgba(245,158,11,0.7); transition:transform 0.1s, filter 0.12s; }
+  .scan-btn:hover { filter:brightness(1.07); transform:translateY(-1px); }
+  .scan-btn:disabled { opacity:0.5; cursor:wait; transform:none; }
   .quick { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
   .quick button { background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:20px; padding:6px 12px; color:#D1D5DB; font-family:var(--mono); font-size:11px; cursor:pointer; transition:all 0.12s; }
   .quick button:hover { transform:translateY(-1px); }
@@ -147,7 +156,9 @@
     </div>
   </div>
 
-  <div class="card">
+  <div class="scan-card">
+    <div class="scan-head">🔎 SCAN ANY PAIR OR TOKEN</div>
+    <div class="scan-sub">Real fee yield across every Solana DEX — not made-up APRs. One token = every pair it trades in.</div>
     <div class="pair-row">
       <div class="f"><label class="fld">TOKEN A (name/symbol or contract)</label><input type="text" id="tokenA" placeholder="PEPE" autocomplete="off"/><div class="ac-drop" id="acA"></div></div>
       <div class="vs">/</div>
@@ -163,7 +174,7 @@
       <button onclick="quick('cbBTC','SOL')">cbBTC / SOL</button>
     </div>
     <button class="scan-btn" id="scanBtn" onclick="runScan()">SCAN POOLS</button>
-    <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px;">
+    <div class="scan-divide">
       <label class="fld">⚡ POWER USER — paste a pool address to jump straight to a pool's details</label>
       <div style="display:flex;gap:8px;">
         <input type="text" id="poolAddr" placeholder="pool address" autocomplete="off" style="flex:1;"/>
