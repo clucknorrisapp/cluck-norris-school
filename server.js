@@ -6641,6 +6641,303 @@ async function wxFindOrigin(wallet, rpcUrl, HELIUS_KEY, labelWallet, { maxPages,
   };
 }
 
+// Token Vitals — FACTS-ONLY token snapshot. This intentionally returns NO score, NO grade,
+// NO verdict: the removed Cluck Score gave reassuring grades to tokens that then rugged, so the
+// roll-up itself was the problem. Here we surface the same on-chain readings the score was built
+// from (authorities, liquidity, holders/concentration, Token-2022 mechanics, market, Bags/Jupiter
+// context) and let the reader judge. Forensic rule: state WHAT's on-chain, never assert intent.
+app.get("/api/token-vitals", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "public, max-age=300"); // 5-minute edge cache
+  const mint = (req.query.mint || "").trim();
+  if (!SOL_ADDR_RE.test(mint)) {
+    return res.status(400).json({ success: false, error: "Invalid mint" });
+  }
+  try { analytics.trackTool("token_vitals"); } catch (_) {}
+  const HELIUS_KEY = process.env.HELIUS_API_KEY;
+  if (!HELIUS_KEY) {
+    return res.status(500).json({ success: false, error: "Server not configured" });
+  }
+  const rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
+
+  // One retry with backoff on a transient failure (429 / 5xx / network) so a single
+  // rate-limited call doesn't silently drop a whole fact. Edge-cached 5 min → calls bounded.
+  async function rpcCall(id, method, params, _retry = 0) {
+    try {
+      const r = await fetch(rpcUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id, method, params })
+      });
+      if (r.status === 429 || r.status >= 500) throw new Error("rpc " + r.status);
+      return await r.json();
+    } catch (e) {
+      if (_retry < 1) { await new Promise(res => setTimeout(res, 350)); return rpcCall(id, method, params, _retry + 1); }
+      throw e;
+    }
+  }
+
+  try {
+    const [holdersData, dexData, supplyData, mintInfoData, largestData, bagsCtxData] = await Promise.allSettled([
+      // Holder count — paginated walk (up to 10k accounts); flag capped so a hit limit shows
+      // as "10,000+" instead of a wrong exact.
+      (async () => {
+        const owners = new Set();
+        let capped = false;
+        const MAX_PAGES = 10;
+        for (let page = 1; page <= MAX_PAGES; page++) {
+          const d = await rpcCall(`tv-holders-${page}`, "getTokenAccounts", {
+            page, limit: 1000, mint, displayOptions: { showZeroBalance: false }
+          });
+          const accounts = d?.result?.token_accounts || [];
+          if (!accounts.length) break;
+          for (const a of accounts) { if (parseInt(a.amount) > 0) owners.add(a.owner); }
+          if (accounts.length < 1000) break;
+          if (page === MAX_PAGES) capped = true;
+        }
+        return { count: owners.size, capped };
+      })(),
+      fetch(`https://api.dexscreener.com/token-pairs/v1/solana/${mint}`).then(r => r.json()),
+      rpcCall("tv-supply", "getTokenSupply", [mint]),
+      rpcCall("tv-mint-info", "getAccountInfo", [mint, { encoding: "jsonParsed" }]),
+      rpcCall("tv-largest", "getTokenLargestAccounts", [mint]),
+      fetchBagsContext(mint),
+    ]);
+
+    const holderInfo = holdersData.status === "fulfilled" ? holdersData.value : null;
+    const holderCount = holderInfo ? holderInfo.count : null;
+    const holderCountCapped = !!(holderInfo && holderInfo.capped);
+    const allDexPairs = dexData.status === "fulfilled" && Array.isArray(dexData.value) ? dexData.value : [];
+    // Only Solana pairs. Sum liquidity/volume across all of them (multi-pool = real total exit depth).
+    const solPairs = allDexPairs.filter(p => p.chainId === "solana" || !p.chainId);
+    let totalLiqUsd = solPairs.reduce((s, p) => s + (parseFloat(p.liquidity?.usd) || 0), 0);
+    let totalVol24h = solPairs.reduce((s, p) => s + (parseFloat(p.volume?.h24) || 0), 0);
+    let dexFamilies = new Set();
+    for (const p of solPairs) {
+      const id = (p.dexId || "").toLowerCase().split("-")[0];
+      if (id) dexFamilies.add(id);
+    }
+    let topPair = solPairs.length
+      ? solPairs.slice().sort((a, b) => (parseFloat(b.liquidity?.usd) || 0) - (parseFloat(a.liquidity?.usd) || 0))[0]
+      : null;
+    let poolCount = solPairs.length;
+
+    // Quiet pools get dropped from DexScreener's index but still exist on-chain — recover
+    // numbers from GeckoTerminal so a quiet token isn't reported as dead.
+    let vitalsSource = "dexscreener";
+    if (totalLiqUsd === 0) {
+      const gecko = await fetchGeckoTerminalFallback(mint);
+      if (gecko) {
+        vitalsSource = "geckoterminal";
+        totalLiqUsd = gecko.totalLiqUsd;
+        totalVol24h = gecko.totalVol24h;
+        dexFamilies = gecko.dexFamilies;
+        poolCount = gecko.poolCount;
+        topPair = {
+          priceUsd: gecko.priceUsd, fdv: gecko.fdv, marketCap: gecko.fdv, dexId: gecko.dexId,
+          labels: [], pairAddress: gecko.pairAddress,
+          baseToken: { symbol: gecko.symbol, name: gecko.name },
+        };
+      }
+    }
+    // Solana Tracker correction for on-curve launchpad tokens: DexScreener reports a phantom
+    // near-zero pool that bypasses the $0 Gecko fallback. ST reads the curve reserve directly.
+    // Only call it when liquidity looks phantom/thin (real DEX liquidity = graduated, no fix needed).
+    let onBondingCurve = false, curvePctToGrad = null;
+    if (totalLiqUsd < 5000) {
+      try {
+        const stm = await solanaTracker.getTokenMarketStatus(mint);
+        if (stm) {
+          onBondingCurve = stm.onBondingCurve === true;
+          curvePctToGrad = stm.curvePercentage;
+          if (stm.liquidityUsd != null && stm.liquidityUsd > totalLiqUsd) {
+            totalLiqUsd = stm.liquidityUsd;
+            vitalsSource = vitalsSource === "dexscreener" ? "solana-tracker" : vitalsSource + "+st";
+            if (poolCount === 0) poolCount = 1;
+          }
+        }
+      } catch (_) { /* degrade — keep DexScreener/Gecko numbers */ }
+    }
+
+    const rawSupply = supplyData.status === "fulfilled" ? supplyData.value?.result?.value?.amount : null;
+    const decimals = supplyData.status === "fulfilled" ? (supplyData.value?.result?.value?.decimals || 9) : 9;
+    const supplyTokens = rawSupply ? parseInt(rawSupply) / Math.pow(10, decimals) : null;
+    const mintParsed = mintInfoData.status === "fulfilled" ? mintInfoData.value?.result?.value?.data?.parsed?.info : null;
+    const mintAuthority = mintParsed ? mintParsed.mintAuthority : undefined;   // null = revoked, string = active
+    const freezeAuthority = mintParsed ? mintParsed.freezeAuthority : undefined;
+
+    // Token-2022 honeypot scan — read straight off the mint account already fetched (no extra RPC).
+    const TOKEN_2022_PROGRAM = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
+    const SYS_PROG = "11111111111111111111111111111111";
+    const mintProgram = mintInfoData.status === "fulfilled" ? mintInfoData.value?.result?.value?.owner : null;
+    const isToken2022 = mintProgram === TOKEN_2022_PROGRAM;
+    const exts = Array.isArray(mintParsed?.extensions) ? mintParsed.extensions : [];
+    const extState = (name) => { const e = exts.find(x => x && x.extension === name); return e ? (e.state || {}) : null; };
+    const sellWarnings = [];
+    let honeypotHardDanger = false;
+    let transferFeeBps = null;
+    if (isToken2022) {
+      const pd = extState("permanentDelegate");
+      if (pd && pd.delegate && pd.delegate !== SYS_PROG) { sellWarnings.push("Permanent delegate set — an authority can move or burn your tokens at will."); honeypotHardDanger = true; }
+      const th = extState("transferHook");
+      if (th && th.programId && th.programId !== SYS_PROG) { sellWarnings.push("Transfer hook active — a custom program runs on every transfer and can block sells."); honeypotHardDanger = true; }
+      const das = extState("defaultAccountState");
+      if (das && das.accountState === "frozen") { sellWarnings.push("Accounts default to FROZEN — new holders can't transfer until the authority thaws them."); honeypotHardDanger = true; }
+      const tf = extState("transferFeeConfig");
+      if (tf) {
+        transferFeeBps = Math.max(Number(tf.newerTransferFee?.transferFeeBasisPoints) || 0, Number(tf.olderTransferFee?.transferFeeBasisPoints) || 0);
+        if (transferFeeBps > 0) {
+          sellWarnings.push("Transfer fee of " + (transferFeeBps / 100).toFixed(transferFeeBps % 100 ? 2 : 0) + "% taxed on every buy and sell.");
+          if (transferFeeBps >= 1000) honeypotHardDanger = true; // ≥10% = honeypot-grade tax
+        }
+      }
+    }
+
+    const largestRaw = largestData.status === "fulfilled" ? (largestData.value?.result?.value || []) : [];
+    // Classify top-20 token accounts to ACTUAL HUMAN HOLDERS (System-Program-owned), filtering
+    // out LP/lock/vesting/AMM PDAs so concentration reflects humans, not the token's own pool.
+    const SYSTEM_PROGRAM_ID = "11111111111111111111111111111111";
+    let top10HumanShare = null, top10RawShare = null, humanTop10Holdings = [], lpInTop20 = 0;
+    if (largestRaw.length && supplyTokens) {
+      const rawSum = largestRaw.slice(0, 10).reduce((s, a) => s + (parseFloat(a.uiAmount) || 0), 0);
+      top10RawShare = supplyTokens > 0 ? rawSum / supplyTokens : null;
+      try {
+        const tokenAccountInfos = await rpcCall("tv-tacc-owners", "getMultipleAccounts", [
+          largestRaw.map(a => a.address), { encoding: "jsonParsed" }
+        ]);
+        const taccValues = tokenAccountInfos?.result?.value || [];
+        const enriched = largestRaw.map((a, i) => ({
+          tokenAccount: a.address,
+          uiAmount: parseFloat(a.uiAmount) || 0,
+          owner: taccValues[i]?.data?.parsed?.info?.owner || null,
+        })).filter(e => e.owner);
+        if (enriched.length) {
+          const ownerInfos = await rpcCall("tv-owner-class", "getMultipleAccounts", [
+            enriched.map(e => e.owner), { encoding: "base64" }
+          ]);
+          const ownerValues = ownerInfos?.result?.value || [];
+          const humans = [];
+          enriched.forEach((e, i) => {
+            const ownerAcc = ownerValues[i];
+            if (ownerAcc && ownerAcc.owner === SYSTEM_PROGRAM_ID) humans.push(e);
+            else lpInTop20++;
+          });
+          humanTop10Holdings = humans.slice(0, 10);
+          const humanSum = humanTop10Holdings.reduce((s, e) => s + e.uiAmount, 0);
+          top10HumanShare = supplyTokens > 0 ? humanSum / supplyTokens : null;
+        }
+      } catch (e) {
+        console.warn("[token-vitals] Owner classification failed, using raw top-10:", e.message);
+      }
+    }
+    const top10Share = top10HumanShare != null ? top10HumanShare : top10RawShare;
+
+    const liqUsd = totalLiqUsd;
+    const fdv = parseFloat(topPair?.fdv || topPair?.marketCap) || (supplyTokens && parseFloat(topPair?.priceUsd) ? supplyTokens * parseFloat(topPair.priceUsd) : null);
+    const liqRatio = (fdv && liqUsd) ? liqUsd / fdv : null;
+    const vol24h = totalVol24h;
+    const dexId = (topPair?.dexId || "").toLowerCase();
+    const labels = topPair?.labels || [];
+    const graduatedDexIds = ["meteora", "raydium", "orca", "phoenix", "openbook", "lifinity", "pumpswap"];
+    const bondingCurveDexIds = ["bags", "pumpfun", "moonshot", "fluxbeam"];
+    const isGraduated = !!topPair && (
+      graduatedDexIds.some(s => dexId === s || dexId.startsWith(s + "-")) ||
+      labels.some(l => /damm|dlmm|clmm|whirlpool|v[23]/i.test(l))
+    ) && !bondingCurveDexIds.some(s => dexId.includes(s));
+
+    // Bags + Jupiter context as FACTS (not scored): verified creators, fee-claim activity,
+    // Jupiter listing/audit. classifyTeamActivity returns "active"/"stale"/"none"/null.
+    const bagsCtx = bagsCtxData.status === "fulfilled" ? bagsCtxData.value : { bagsInfo: null, jupiterInfo: null, projectFeeWallets: [] };
+    const teamActivity = classifyTeamActivity(bagsCtx.bagsInfo);
+    const isBagsToken = !!(bagsCtx.bagsInfo && bagsCtx.bagsInfo.isBagsToken);
+    const isJupVerified = !!(bagsCtx.jupiterInfo && bagsCtx.jupiterInfo.listed && Array.isArray(bagsCtx.jupiterInfo.tags) && bagsCtx.jupiterInfo.tags.some(t => t === "verified"));
+    const jupAudit = bagsCtx.jupiterInfo?.audit || null;
+    const isPlatformLauncherDev = !!(jupAudit && jupAudit.devMigrations != null && jupAudit.devMigrations > 50);
+
+    return res.status(200).json({
+      success: true,
+      mint,
+      ticker: topPair?.baseToken?.symbol || null,
+      name: topPair?.baseToken?.name || null,
+      // ⚠️ No score/grade/verdict by design — these are raw on-chain readings, not a safety rating.
+      authorities: {
+        mint: mintAuthority === null ? "revoked" : (mintAuthority === undefined ? "unknown" : "active"),
+        freeze: freezeAuthority === null ? "revoked" : (freezeAuthority === undefined ? "unknown" : "active"),
+        mintAuthorityAddress: (mintAuthority && mintAuthority !== undefined) ? mintAuthority : null,
+        freezeAuthorityAddress: (freezeAuthority && freezeAuthority !== undefined) ? freezeAuthority : null,
+      },
+      token2022: {
+        isToken2022,
+        transferFeeBps,
+        hardDangerMechanics: honeypotHardDanger,
+        findings: sellWarnings,
+      },
+      liquidity: {
+        totalUsd: liqUsd,
+        liqToFdvRatio: liqRatio != null ? Number(liqRatio.toFixed(4)) : null,
+        poolCount,
+        dexCount: dexFamilies.size,
+        dexes: [...dexFamilies],
+      },
+      volume24hUsd: vol24h,
+      holders: {
+        count: holderCount,
+        capped: holderCountCapped,
+        top10Share,
+        top10HumanShare,
+        top10RawShare,
+        humanFiltered: top10HumanShare != null,
+        lpFilteredFromTop20: lpInTop20,
+        topHolders: humanTop10Holdings.map(h => ({
+          owner: h.owner,
+          uiAmount: h.uiAmount,
+          share: (supplyTokens && supplyTokens > 0) ? h.uiAmount / supplyTokens : null,
+        })),
+      },
+      market: {
+        priceUsd: topPair?.priceUsd ? parseFloat(topPair.priceUsd) : null,
+        fdv,
+        circulatingSupply: supplyTokens,
+        decimals,
+        pairAddress: topPair?.pairAddress || null,
+        source: vitalsSource,
+        onBondingCurve,
+        curvePctToGrad: curvePctToGrad != null ? Number(curvePctToGrad.toFixed(1)) : null,
+        isGraduated,
+      },
+      bags: {
+        isBagsToken,
+        teamActivity,
+        officialCreators: bagsCtx.bagsInfo?.officialCreators?.map(c => ({
+          wallet: c.wallet, username: c.username, provider: c.provider, isAdmin: c.isAdmin, royaltyBps: c.royaltyBps,
+        })) || [],
+        totalClaimedSol: bagsCtx.bagsInfo?.totalClaimedSol || null,
+        claimEventCount: bagsCtx.bagsInfo?.claimEventCount || 0,
+        daysSinceLastClaim: bagsCtx.bagsInfo?.lastClaimTimestamp
+          ? Math.round((Date.now() - bagsCtx.bagsInfo.lastClaimTimestamp) / 86400000) : null,
+      },
+      jupiter: {
+        listed: !!bagsCtx.jupiterInfo?.listed,
+        verified: isJupVerified,
+        tags: bagsCtx.jupiterInfo?.tags || [],
+        holderCount: bagsCtx.jupiterInfo?.holderCount || null,
+        organicScore: bagsCtx.jupiterInfo?.organicScoreLabel || null,
+        isPlatformLauncherDev,
+        audit: jupAudit ? {
+          mintAuthorityDisabled: jupAudit.mintAuthorityDisabled,
+          freezeAuthorityDisabled: jupAudit.freezeAuthorityDisabled,
+          topHoldersPercentage: jupAudit.topHoldersPercentage,
+          devMigrations: jupAudit.devMigrations,
+        } : null,
+      },
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error("Token Vitals error:", err.message);
+    return res.status(500).json({ success: false, error: publicErrMsg(err) });
+  }
+});
+
 app.get("/api/wallet-xray", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
@@ -7459,6 +7756,12 @@ app.get("/wallet-checkup", (req, res) => {
 // Wallet X-Ray — full-wallet behavioral deep dive (funding, buys/sells/transfers, bot/dumper signals).
 app.get("/wallet-xray", (req, res) => {
   res.sendFile(join(__dirname, "public", "wallet-xray.html"));
+});
+
+// Token Vitals — facts-only token snapshot (authorities, liquidity, holders, Token-2022 safety,
+// market). Deliberately NO score/grade/verdict (see the API note) — just the on-chain readings.
+app.get("/token-vitals", (req, res) => {
+  res.sendFile(join(__dirname, "public", "token-vitals.html"));
 });
 
 // Tools & Utilities hub — the front door to the toolkit, linked from the landing.

@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="robots" content="noindex"/>
+<title>🩺 Token Vitals — On-Chain Facts, No Score</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    color-scheme:dark;
+    --bg:#0a0a0a;--card:#111;--border:rgba(255,255,255,0.08);
+    --text:#F9FAFB;--sub:#9CA3AF;--muted:#6B7280;
+    --accent:#FCD34D;--orange:#D97706;--green:#10B981;--red:#EF4444;
+    --amber:#F59E0B;--blue:#60A5FA;--purple:#A78BFA;--cyan:#22D3EE;
+    --mono:'Courier New',monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);
+    background-image:radial-gradient(ellipse at 18% 8%,rgba(34,211,238,0.09),transparent 50%),
+                     radial-gradient(ellipse at 85% 95%,rgba(252,211,77,0.05),transparent 50%);
+    color:var(--text);font-family:system-ui,sans-serif;min-height:100vh;}
+  .wrap{max-width:880px;margin:0 auto;padding:22px 16px 90px;}
+  .back{display:inline-flex;align-items:center;gap:6px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:var(--orange);text-decoration:none;margin-bottom:14px;}
+  .back img{height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid var(--orange);}
+  .header{display:flex;align-items:center;gap:14px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border);}
+  .header-icon{font-size:38px;filter:drop-shadow(0 0 16px rgba(34,211,238,0.5));}
+  .brand-mini{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:4px;color:var(--orange);font-weight:700;}
+  h1{font-family:Oswald,sans-serif;font-size:27px;font-weight:900;letter-spacing:3px;line-height:1;
+    background:linear-gradient(135deg,#FCD34D,#22D3EE,#10B981);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+  .header p{font-family:Oswald,sans-serif;font-size:11px;color:var(--sub);letter-spacing:2px;margin-top:6px;}
+  .hero{background:linear-gradient(135deg,rgba(34,211,238,0.06),rgba(252,211,77,0.03));border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:16px;}
+  .hero-tag{font-family:Oswald,sans-serif;font-size:10px;color:var(--accent);letter-spacing:3px;margin-bottom:6px;}
+  .hero-sub{font-family:Oswald,sans-serif;font-size:12px;color:var(--sub);line-height:1.6;letter-spacing:0.3px;}
+  .hero-sub b{color:var(--text);}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px;}
+  .card-title{font-family:Oswald,sans-serif;font-size:15px;font-weight:900;color:var(--accent);letter-spacing:1.5px;margin-bottom:13px;text-transform:uppercase;display:flex;align-items:center;gap:8px;}
+  .field-label{font-family:Oswald,sans-serif;font-size:13px;color:var(--cyan);letter-spacing:1.5px;margin-bottom:6px;font-weight:700;}
+  .token-input{width:100%;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;padding:12px 13px;font-family:var(--mono);font-size:15px;color:var(--accent);font-weight:600;}
+  .token-input::placeholder{color:var(--muted);font-weight:400;}
+  .token-input:focus{outline:none;border-color:var(--accent);}
+  .run-btn{width:100%;margin-top:13px;padding:14px;background:linear-gradient(135deg,var(--cyan),var(--green));border:none;border-radius:10px;font-family:Oswald,sans-serif;font-size:14px;font-weight:900;color:#0a0a0a;letter-spacing:3px;cursor:pointer;}
+  .run-btn:disabled{opacity:0.45;cursor:not-allowed;}
+  .quick{margin-top:11px;display:flex;flex-wrap:wrap;gap:7px;}
+  .quick span{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;color:var(--muted);align-self:center;}
+  .chip{font-family:var(--mono);font-size:11px;padding:5px 9px;border-radius:7px;border:1px solid var(--border);background:rgba(255,255,255,0.02);color:var(--sub);cursor:pointer;}
+  .chip:hover{border-color:var(--cyan);color:var(--text);}
+  .err{background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px 14px;font-size:12px;color:#FCA5A5;margin-bottom:12px;display:none;}
+  .err.show{display:block;}
+  .loading{display:none;text-align:center;padding:36px 20px;background:linear-gradient(135deg,rgba(255,255,255,0.03),rgba(34,211,238,0.04));border:1px solid var(--border);border-radius:12px;margin-bottom:16px;}
+  .loading.show{display:block;}
+  .spinner{font-size:42px;animation:bob 1.4s ease-in-out infinite;display:inline-block;margin-bottom:12px;}
+  @keyframes bob{0%,100%{transform:translateY(0) rotate(-3deg);}50%{transform:translateY(-6px) rotate(3deg);}}
+  .loading-stage{font-family:var(--mono);font-size:13px;color:var(--text);margin-bottom:8px;}
+  .loading-timer{font-family:var(--mono);font-size:11px;color:var(--sub);}
+  .result{display:none;}.result.show{display:block;}
+  /* identity strip */
+  .idrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .idname{font-family:Oswald,sans-serif;font-size:22px;font-weight:900;letter-spacing:1px;}
+  .idtick{font-family:var(--mono);font-size:13px;color:var(--cyan);}
+  .mintline{font-family:var(--mono);font-size:11px;color:var(--muted);word-break:break-all;margin-top:8px;}
+  /* fact grid */
+  .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:11px;}
+  .fact{background:rgba(255,255,255,0.025);border:1px solid var(--border);border-radius:9px;padding:10px 12px;}
+  .fact .k{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:var(--sub);text-transform:uppercase;margin-bottom:4px;}
+  .fact .v{font-family:var(--mono);font-size:15px;color:var(--text);font-weight:700;}
+  .fact .note{font-size:10px;color:var(--muted);margin-top:3px;line-height:1.35;}
+  /* status pill (factual on-chain state, NOT a grade) */
+  .pill{display:inline-block;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;padding:3px 9px;border-radius:6px;}
+  .pill.ok{background:rgba(16,185,129,0.14);color:#6EE7B7;border:1px solid rgba(16,185,129,0.35);}
+  .pill.warn{background:rgba(245,158,11,0.14);color:#FCD34D;border:1px solid rgba(245,158,11,0.4);}
+  .pill.danger{background:rgba(239,68,68,0.14);color:#FCA5A5;border:1px solid rgba(239,68,68,0.4);}
+  .pill.neutral{background:rgba(255,255,255,0.05);color:var(--sub);border:1px solid var(--border);}
+  .finding{display:flex;gap:9px;align-items:flex-start;padding:9px 11px;background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.3);border-radius:8px;margin-bottom:8px;font-size:12.5px;line-height:1.5;color:#FCA5A5;}
+  .holder-row{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.05);font-size:12px;}
+  .holder-row:last-child{border-bottom:none;}
+  .holder-row .addr{font-family:var(--mono);color:var(--sub);}
+  .holder-row .sh{font-family:var(--mono);color:var(--text);font-weight:700;}
+  .dex-tag{display:inline-block;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;padding:3px 9px;border-radius:6px;background:rgba(34,211,238,0.1);color:var(--cyan);border:1px solid rgba(34,211,238,0.25);margin:0 5px 5px 0;text-transform:capitalize;}
+  .row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);font-size:13px;align-items:center;}
+  .row:last-child{border-bottom:none;}
+  .row .k{color:var(--sub);}
+  .row .val{font-family:var(--mono);color:var(--text);font-weight:700;text-align:right;}
+  .muted{color:var(--muted);}
+  .disc{background:rgba(252,211,77,0.05);border:1px solid rgba(252,211,77,0.25);border-radius:10px;padding:13px 15px;font-size:12px;line-height:1.6;color:var(--sub);margin-top:6px;}
+  .disc b{color:var(--accent);}
+  .crosslink{display:block;text-align:center;font-family:Oswald,sans-serif;font-size:11.5px;letter-spacing:1px;color:var(--purple);text-decoration:none;padding:11px;border:1px dashed rgba(167,139,250,0.4);border-radius:10px;margin-bottom:14px;}
+  .crosslink:hover{background:rgba(167,139,250,0.06);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="/" class="back"><img src="/cluck-norris-logo.jpg" alt=""/>&larr; CLUCK NORRIS HOME</a>
+
+  <div class="header">
+    <div class="header-icon">🩺</div>
+    <div>
+      <div class="brand-mini">CLUCK NORRIS</div>
+      <h1>TOKEN VITALS</h1>
+      <p>ON-CHAIN FACTS · NO SCORE · NO VERDICT</p>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div class="hero-tag">JUST THE READINGS</div>
+    <div class="hero-sub">Paste any Solana token. Vitals pulls every fact the chain will tell you — <b>mint &amp; freeze authority, liquidity across every pool, holder count &amp; real concentration, Token-2022 sell mechanics, market data, and team/listing context</b> — and lays it out plainly. <b>No grade, no rating, no "buy" signal.</b> The chain shows <i>what</i>, not <i>why</i> — you decide.</div>
+  </div>
+
+  <div class="card">
+    <div class="field-label">TOKEN MINT ADDRESS</div>
+    <input id="mintInput" class="token-input" placeholder="paste a token mint address…" spellcheck="false" autocomplete="off"/>
+    <button id="runBtn" class="run-btn" disabled>READ VITALS</button>
+    <div class="quick">
+      <span>TRY:</span>
+      <button class="chip" data-mint="DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS">CLKN</button>
+      <button class="chip" data-mint="JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN">JUP</button>
+      <button class="chip" data-mint="EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm">WIF</button>
+    </div>
+  </div>
+
+  <div class="err" id="err"></div>
+
+  <div class="loading" id="loading">
+    <div class="spinner">🩺</div>
+    <div class="loading-stage" id="stage">Reading the chain…</div>
+    <div class="loading-timer" id="timer">0s</div>
+  </div>
+
+  <div class="result" id="result"></div>
+
+  <a href="/autopsy" class="crosslink">🔬 Want the post-mortem (is it dead / rugged / honeypot)? → Token Autopsy</a>
+</div>
+
+<script>
+  var esc=function(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});};
+  function fmtUsd(n){n=Number(n);if(!isFinite(n))return "—";if(n>=1e9)return "$"+(n/1e9).toFixed(2)+"B";if(n>=1e6)return "$"+(n/1e6).toFixed(2)+"M";if(n>=1e3)return "$"+(n/1e3).toFixed(1)+"K";return "$"+(n<1?n.toPrecision(2):Math.round(n).toLocaleString());}
+  function fmtNum(n){n=Number(n);if(!isFinite(n))return "—";if(n>=1e9)return (n/1e9).toFixed(2)+"B";if(n>=1e6)return (n/1e6).toFixed(2)+"M";if(n>=1e3)return (n/1e3).toFixed(1)+"K";return Math.round(n).toLocaleString();}
+  function pct(x){return x==null?"—":(x*100).toFixed(x<0.1?1:0)+"%";}
+  function shortAddr(a){a=String(a||"");return a.length>12?a.slice(0,4)+"…"+a.slice(-4):a;}
+
+  var mi=document.getElementById('mintInput'), runBtn=document.getElementById('runBtn');
+  mi.addEventListener('input',function(){runBtn.disabled=mi.value.trim().length<32;});
+  runBtn.addEventListener('click',function(){run();});
+  mi.addEventListener('keydown',function(e){if(e.key==='Enter'&&!runBtn.disabled)run();});
+  Array.prototype.forEach.call(document.querySelectorAll('.chip'),function(c){
+    c.addEventListener('click',function(){mi.value=c.dataset.mint;runBtn.disabled=false;run();});
+  });
+  var qp=new URLSearchParams(location.search);
+  var pre=(qp.get('mint')||qp.get('token')||'').trim();
+  if(pre){mi.value=pre;runBtn.disabled=pre.length<32;if(pre.length>=32)run();}
+
+  var stageTimer,secTimer,startedAt;
+  var STAGES=["Reading mint authorities…","Counting holders…","Summing liquidity across pools…","Classifying top holders…","Checking Token-2022 mechanics…","Pulling market + team context…"];
+  function startLoading(){var i=0;startedAt=Date.now();document.getElementById('stage').textContent=STAGES[0];document.getElementById('timer').textContent='0s';
+    document.getElementById('loading').classList.add('show');document.getElementById('result').classList.remove('show');
+    stageTimer=setInterval(function(){i=Math.min(i+1,STAGES.length-1);document.getElementById('stage').textContent=STAGES[i];},2500);
+    secTimer=setInterval(function(){document.getElementById('timer').textContent=Math.round((Date.now()-startedAt)/1000)+'s';},1000);}
+  function stopLoading(){document.getElementById('loading').classList.remove('show');clearInterval(stageTimer);clearInterval(secTimer);}
+  function showErr(m){var e=document.getElementById('err');e.textContent=m;e.classList.add('show');}
+
+  async function run(){
+    document.getElementById('err').classList.remove('show');
+    var mint=mi.value.trim();
+    if(mint.length<32){showErr("Paste a valid Solana token mint address.");return;}
+    runBtn.disabled=true;startLoading();
+    try{
+      var r=await fetch('/api/token-vitals?mint='+encodeURIComponent(mint));
+      var d=await r.json();
+      stopLoading();
+      if(!d||!d.success){showErr((d&&d.error)||"Couldn't read this token.");runBtn.disabled=false;return;}
+      render(d);
+    }catch(e){stopLoading();showErr("Network error — try again.");}
+    runBtn.disabled=false;
+  }
+
+  function authPill(state, activeNote, revokedNote){
+    if(state==='revoked')return '<span class="pill ok">REVOKED</span><div class="note">'+revokedNote+'</div>';
+    if(state==='active')return '<span class="pill warn">ACTIVE</span><div class="note">'+activeNote+'</div>';
+    return '<span class="pill neutral">UNKNOWN</span><div class="note">Couldn\'t read this authority right now.</div>';
+  }
+
+  function render(d){
+    var R=document.getElementById('result');
+    var h='';
+
+    // ── Identity & market ───────────────────────────────────────────
+    var m=d.market||{};
+    var statusPill = m.onBondingCurve
+      ? '<span class="pill warn">ON BONDING CURVE'+(m.curvePctToGrad!=null?' · '+m.curvePctToGrad+'% to grad':'')+'</span>'
+      : (m.isGraduated ? '<span class="pill ok">GRADUATED (on a DEX)</span>' : '<span class="pill neutral">—</span>');
+    h+='<div class="card">';
+    h+='<div class="idrow"><div class="idname">'+esc(d.name||'Unknown token')+'</div>'+(d.ticker?'<div class="idtick">$'+esc(d.ticker)+'</div>':'')+statusPill+'</div>';
+    h+='<div class="mintline">'+esc(d.mint)+'</div>';
+    h+='<div class="facts" style="margin-top:13px;">';
+    h+=fact('Price', m.priceUsd!=null?('$'+(m.priceUsd<0.01?m.priceUsd.toPrecision(3):m.priceUsd.toLocaleString(undefined,{maximumFractionDigits:6}))):'—');
+    h+=fact('FDV / Mkt Cap', fmtUsd(m.fdv));
+    h+=fact('Circ. Supply', m.circulatingSupply!=null?fmtNum(m.circulatingSupply):'—');
+    h+=fact('24h Volume', fmtUsd(d.volume24hUsd));
+    h+='</div>';
+    h+='<div class="note" style="font-size:10px;color:var(--muted);margin-top:9px;">Market data via '+esc(m.source||'on-chain')+'.</div>';
+    h+='</div>';
+
+    // ── Authorities (objective on-chain state) ──────────────────────
+    var a=d.authorities||{};
+    h+='<div class="card"><div class="card-title">🔑 Mint &amp; Freeze Authority</div>';
+    h+='<div class="facts">';
+    h+='<div class="fact"><div class="k">Mint Authority</div><div class="v" style="font-size:13px;">'+authPill(a.mint,"The creator can still print new supply at any time — supply is not fixed.","No one can mint more — total supply is fixed.")+'</div></div>';
+    h+='<div class="fact"><div class="k">Freeze Authority</div><div class="v" style="font-size:13px;">'+authPill(a.freeze,"An authority can freeze individual wallets, blocking their transfers/sells.","No wallet can be frozen.")+'</div></div>';
+    h+='</div></div>';
+
+    // ── Token-2022 mechanics ────────────────────────────────────────
+    var t=d.token2022||{};
+    h+='<div class="card"><div class="card-title">🧪 Transfer Mechanics</div>';
+    if(t.isToken2022){
+      if((t.findings||[]).length){
+        h+='<div style="margin-bottom:6px;font-size:12px;color:var(--sub);">Token-2022 extensions found on this mint:</div>';
+        t.findings.forEach(function(f){h+='<div class="finding">⚠️ <div>'+esc(f)+'</div></div>';});
+        if(t.hardDangerMechanics)h+='<div class="note" style="color:#FCA5A5;font-size:11.5px;margin-top:4px;">These mechanics can block or seize sells regardless of how the rest of the numbers look.</div>';
+      } else {
+        h+='<div class="row"><span class="k">Token-2022 program</span><span class="val"><span class="pill neutral">YES</span></span></div><div class="note" style="margin-top:6px;">No dangerous extensions (no transfer hook, permanent delegate, default-freeze, or transfer fee) detected.</div>';
+      }
+    } else {
+      h+='<div class="row"><span class="k">Token program</span><span class="val"><span class="pill ok">STANDARD SPL</span></span></div><div class="note" style="margin-top:6px;">Classic SPL token — none of the Token-2022 sell-blocking / tax extensions exist on this mint.</div>';
+    }
+    h+='</div>';
+
+    // ── Liquidity & pools ───────────────────────────────────────────
+    var L=d.liquidity||{};
+    h+='<div class="card"><div class="card-title">💧 Liquidity &amp; Pools</div><div class="facts">';
+    h+=fact('Total Liquidity', fmtUsd(L.totalUsd));
+    h+=fact('Liq ÷ FDV', L.liqToFdvRatio!=null?(L.liqToFdvRatio*100).toFixed(1)+'%':'—','How much of the token\'s value is actually exitable depth.');
+    h+=fact('Pools', (L.poolCount!=null?L.poolCount:'—')+(L.dexCount?(' · '+L.dexCount+' DEX'+(L.dexCount>1?'es':'')):''));
+    h+='</div>';
+    if((L.dexes||[]).length){h+='<div style="margin-top:11px;">';L.dexes.forEach(function(x){h+='<span class="dex-tag">'+esc(x)+'</span>';});h+='</div>';}
+    h+='</div>';
+
+    // ── Holders & concentration ─────────────────────────────────────
+    var H=d.holders||{};
+    h+='<div class="card"><div class="card-title">👥 Holders &amp; Concentration</div><div class="facts">';
+    h+=fact('Holders', H.count!=null?(fmtNum(H.count)+(H.capped?'+':'')):'—');
+    h+=fact('Top 10 (humans)', H.top10HumanShare!=null?pct(H.top10HumanShare):(H.top10RawShare!=null?pct(H.top10RawShare)+' (raw)':'—'), H.humanFiltered?('LP / locks / program accounts filtered out'+(H.lpFilteredFromTop20?(' · '+H.lpFilteredFromTop20+' removed from top 20'):'')):'Could not separate humans from contracts — raw top 10 shown.');
+    if(H.humanFiltered && H.top10RawShare!=null) h+=fact('Top 10 (raw)', pct(H.top10RawShare), 'Includes LP / contract accounts.');
+    h+='</div>';
+    if((H.topHolders||[]).length){
+      h+='<div style="margin-top:13px;"><div class="field-label" style="font-size:11px;color:var(--sub);">TOP HUMAN HOLDERS</div>';
+      H.topHolders.forEach(function(x,i){
+        h+='<div class="holder-row"><span class="addr">'+(i+1)+'. '+esc(shortAddr(x.owner))+'</span><span class="sh">'+(x.share!=null?pct(x.share):fmtNum(x.uiAmount))+'</span></div>';
+      });
+      h+='</div>';
+    }
+    h+='</div>';
+
+    // ── Team & listing context ──────────────────────────────────────
+    var B=d.bags||{}, J=d.jupiter||{};
+    var hasCtx = B.isBagsToken || J.listed || (B.officialCreators||[]).length;
+    if(hasCtx){
+      h+='<div class="card"><div class="card-title">🎒 Team &amp; Listing Context</div>';
+      if(B.isBagsToken){
+        h+='<div class="row"><span class="k">Bags launch</span><span class="val"><span class="pill ok">YES</span></span></div>';
+        if((B.officialCreators||[]).length){
+          B.officialCreators.forEach(function(c){
+            h+='<div class="row"><span class="k">Creator'+(c.isAdmin?' (admin)':'')+'</span><span class="val">'+(c.username?'@'+esc(c.username):esc(shortAddr(c.wallet)))+(c.provider?(' · '+esc(c.provider)):'')+'</span></div>';
+          });
+        }
+        h+='<div class="row"><span class="k">Fee claims</span><span class="val">'+(B.totalClaimedSol!=null?B.totalClaimedSol.toFixed(2)+' SOL':'—')+(B.claimEventCount?(' · '+B.claimEventCount+'x'):'')+'</span></div>';
+        h+='<div class="row"><span class="k">Last claim</span><span class="val">'+(B.daysSinceLastClaim!=null?(B.daysSinceLastClaim+'d ago'):'never')+'</span></div>';
+        h+='<div class="row"><span class="k">Creator activity</span><span class="val">'+(B.teamActivity?'<span class="pill neutral">'+esc(String(B.teamActivity).toUpperCase())+'</span>':'—')+'</span></div>';
+      }
+      h+='<div class="row"><span class="k">Jupiter listed</span><span class="val">'+(J.listed?(J.verified?'<span class="pill ok">VERIFIED</span>':'<span class="pill neutral">LISTED</span>'):'<span class="pill neutral">NO</span>')+'</span></div>';
+      if(J.organicScore)h+='<div class="row"><span class="k">Jupiter organic score</span><span class="val">'+esc(J.organicScore)+'</span></div>';
+      if(J.audit){
+        var au=J.audit;
+        if(au.topHoldersPercentage!=null)h+='<div class="row"><span class="k">Jupiter top-holders %</span><span class="val">'+Number(au.topHoldersPercentage).toFixed(1)+'%</span></div>';
+        if(au.devMigrations!=null)h+='<div class="row"><span class="k">Dev prior launches</span><span class="val">'+au.devMigrations+(J.isPlatformLauncherDev?' (platform launcher)':'')+'</span></div>';
+      }
+      h+='</div>';
+    }
+
+    // ── Persistent honesty disclaimer ───────────────────────────────
+    h+='<div class="disc"><b>These are individual on-chain readings — not a safety rating.</b> There is deliberately no score, grade, or "buy/avoid" verdict here, because a reassuring number is exactly what lets a token look safe right before it rugs. Each fact above can be good and the token can still go to zero — authorities can be revoked yet liquidity pulled, holders can look distributed yet be one person\'s wallets. The chain shows <i>what</i>, never <i>why</i>. Always do your own research. <b>Not financial advice.</b></div>';
+
+    R.innerHTML=h;
+    R.classList.add('show');
+    R.scrollIntoView({behavior:'smooth',block:'start'});
+  }
+
+  function fact(k,v,note){
+    return '<div class="fact"><div class="k">'+esc(k)+'</div><div class="v">'+v+'</div>'+(note?'<div class="note">'+esc(note)+'</div>':'')+'</div>';
+  }
+</script>
+</body>
+</html>
