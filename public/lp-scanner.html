@@ -216,7 +216,7 @@
 
   <div class="card" style="margin-top:16px;">
     <div class="disclaimer">
-      <b>Informational only — NOT financial advice.</b> Providing liquidity carries impermanent-loss and smart-contract risk. Earnings estimates use a calibrated model and are not guarantees. Always do your own research. Fee tiers read live (Meteora DLMM &amp; DAMM v2, Orca, Raydium, PumpSwap, PancakeSwap v3, FluxBeam, Saros); a few smaller DEXs aren't wired yet and honestly show "—". Proprietary/dark AMMs you can't retail-LP (HumidiFi, SolFi, ZeroFi) are excluded by design.
+      <b>Informational only — NOT financial advice.</b> Providing liquidity carries impermanent-loss and smart-contract risk. Earnings estimates use a calibrated model and are not guarantees. Always do your own research. Fee tiers read live (Meteora DLMM &amp; DAMM v2, Orca, Raydium, PumpSwap, PancakeSwap v3, Byreal, FluxBeam, Saros); a few smaller DEXs aren't wired yet and honestly show "—". Proprietary/dark AMMs you can't retail-LP (HumidiFi, SolFi, ZeroFi) are excluded by design.
     </div>
   </div>
 </div>
@@ -225,7 +225,7 @@
   var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
   var fmt = function(n){ n=Number(n)||0; return n>=1e6?("$"+(n/1e6).toFixed(2)+"M"):n>=1e3?("$"+(n/1e3).toFixed(1)+"K"):("$"+Math.round(n)); };
   // Signature color per DEX so the venue jumps out at a glance instead of grey text.
-  var DEX_COLORS={meteora:'#A78BFA','meteora-damm-v2':'#C4B5FD','meteora-damm':'#C4B5FD',orca:'#38BDF8',raydium:'#22D3EE','raydium-clmm':'#22D3EE','raydium-cpmm':'#22D3EE',pumpswap:'#F9A8D4','pancakeswap-v3-solana':'#F472B6',lifinity:'#6EE7B7',invariant:'#FCD34D',crema:'#FBBF24',fluxbeam:'#FB923C',saber:'#34D399',humidifi:'#94A3B8',solfi:'#94A3B8'};
+  var DEX_COLORS={meteora:'#A78BFA','meteora-damm-v2':'#C4B5FD','meteora-damm':'#C4B5FD',orca:'#38BDF8',raydium:'#22D3EE','raydium-clmm':'#22D3EE','raydium-cpmm':'#22D3EE',pumpswap:'#F9A8D4','pancakeswap-v3-solana':'#F472B6',byreal:'#34D399',lifinity:'#6EE7B7',invariant:'#FCD34D',crema:'#FBBF24',fluxbeam:'#FB923C',saber:'#34D399',humidifi:'#94A3B8',solfi:'#94A3B8'};
   function dexColor(d){ return DEX_COLORS[(d||'').toLowerCase()]||'#A8B0BC'; }
   var lastScan = null;
 
