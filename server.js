@@ -2751,6 +2751,60 @@ RULES: Never give financial advice or price predictions. Encouraging but blunt. 
   } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
 });
 
+// Course FINAL EXAM — Cluck administers a graded 6-question final from the whole course's
+// material. Pass = Course Graduate. Emits [EXAM PASSED] / [EXAM FAILED] on the final message.
+function courseExamPool(course) {
+  const qs = [];
+  for (const l of (course.lessons || [])) {
+    (l.questions || []).forEach((q) => { if (q && q.q && q.answer) qs.push(q); });
+    (l.sections || []).forEach((s) => (s.quiz || []).forEach((q) => { if (q && q.q && q.answer) qs.push(q); }));
+  }
+  return qs.slice(0, 16).map((q, i) => `${i + 1}. ${q.q}\n   ✓ ${q.answer}\n   why: ${q.why || ""}`).join("\n");
+}
+app.post("/api/classroom-exam", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  const { courseId, message, history } = req.body || {};
+  const course = ccFindCourse(courseId);
+  if (!course) return res.status(400).json({ success: false, error: "pick a course" });
+  const KEY = process.env.ANTHROPIC_API_KEY;
+  if (!KEY) return res.status(500).json({ success: false, error: "Exam hall is offline (AI not configured)" });
+  const pool = courseExamPool(course);
+  if (!pool) return res.status(400).json({ success: false, error: "this course has no exam questions" });
+  const msg = String(message || "").slice(0, 800);
+  const hist = Array.isArray(history) ? history.filter((m) => m && (m.role === "user" || m.role === "assistant") && m.content).slice(-16).map((m) => ({ role: m.role, content: String(m.content).slice(0, 1200) })) : [];
+  const opened = hist.length > 0;
+  const system = `You are Professor Cluck Norris administering the FINAL EXAM for the "${course.title}" course. This is a graded test — be fair but rigorous (a little less hand-holding than class).
+
+THE EXAM QUESTION BANK (your source of truth + answer key):
+${pool}
+
+HOW THE EXAM RUNS:
+- Administer a SIX-question final. Ask ONE question at a time (you may lightly reword for plain English), then STOP and wait for the student's answer.
+- Grade each answer out loud: "✅ Correct" / "🟡 Partial" / "❌ Incorrect" + one short line of why. Count ✅ as 1 point, 🟡 as 0.5.
+- Track the question number ("Question 3 of 6"). Use the conversation so far to know how many you've already asked.
+- This is a TEST: don't teach the answer before they try, and don't give hints. (If they say they don't know, mark it and move on.)
+- After the 6th answer, give the final score as X/6 and a verdict. PASS = 4/6 or better. End that final message with the tag [EXAM PASSED] or [EXAM FAILED] on its own line.
+RULES: No financial advice. Encouraging but honest. No markdown headers/asterisks (the [EXAM PASSED]/[EXAM FAILED] tag is the only bracketed text).${opened ? "" : "\nThis is the FIRST message — welcome them to the final exam in one line, then ask Question 1 of 6."}`;
+  try {
+    const messages = [...hist];
+    messages.push({ role: "user", content: opened ? (msg || "(continue)") : "Begin the final exam, professor." });
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 700, system, messages }),
+    });
+    const data = await r.json();
+    if (data && data.content && data.content[0]) {
+      let reply = data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
+      const passed = /\[EXAM PASSED\]/i.test(reply);
+      const failed = /\[EXAM FAILED\]/i.test(reply);
+      reply = reply.replace(/\[EXAM (PASSED|FAILED)\]/ig, "").trim();
+      return res.status(200).json({ success: true, reply, finished: passed || failed, passed });
+    }
+    return res.status(500).json({ success: false, error: (data && data.error && data.error.message) || "Professor Cluck is hoarse — try again." });
+  } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
+});
+
 // Build the Telegram + X post text for a brief (no sending). X ALWAYS tags the ecosystem
 // partners (@JupiterExchange = routing artery + our earner's venue; @BagsApp = the launchpad/
 // hackathon host), then tags trending tokens by their X handle (engagement — tagged projects
