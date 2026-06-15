@@ -7024,6 +7024,296 @@ app.get("/api/trace", async (req, res) => {
   }
 });
 
+// === Wallet X-Ray — full-wallet behavioral deep dive (all tokens) ===========
+// Unlike /api/trace (one wallet × one token), this reads the wallet's ENTIRE
+// recent enhanced history and profiles the wallet itself: where it was funded
+// from, everything it bought / sold / transferred across every token, and
+// pattern signals (bot cadence, fast-flip dumping, CEX cash-out, LP, holder).
+// Forensic rule: these are ON-CHAIN PATTERNS, never asserted intent — a "bot"
+// or "dumper" label is a behavioral read of the tape, not a verdict on a person.
+const WX_WSOL = "So11111111111111111111111111111111111111112";
+const WX_USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+const WX_USDT = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
+const WX_STABLES = new Set([WX_USDC, WX_USDT]);
+// Helius `source` values that mean "this tx ran through a DEX / aggregator" —
+// used to disambiguate a swap (priced trade) from a bare wallet-to-wallet move.
+const WX_DEX_SOURCES = new Set([
+  "JUPITER", "RAYDIUM", "ORCA", "METEORA", "PUMP_FUN", "PUMP_AMM", "PUMPSWAP",
+  "PHOENIX", "LIFINITY", "ALDRIN", "SABER", "SERUM", "OPENBOOK", "STEP_FINANCE",
+  "CROPPER", "FLUXBEAM", "INVARIANT", "RAYDIUM_CLMM", "RAYDIUM_CPMM", "DEXLAB",
+]);
+function wxMedian(arr) {
+  if (!arr.length) return 0;
+  const s = [...arr].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+function wxDur(sec) {
+  sec = Math.max(0, Math.round(sec || 0));
+  if (sec < 90) return sec + "s";
+  if (sec < 5400) return Math.round(sec / 60) + "m";
+  if (sec < 172800) return (sec / 3600).toFixed(1) + "h";
+  return (sec / 86400).toFixed(1) + "d";
+}
+
+app.get("/api/wallet-xray", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  const wallet = String(req.query.wallet || "").trim();
+  if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ success: false, error: "Provide a valid wallet address" });
+  const HELIUS_KEY = process.env.HELIUS_API_KEY;
+  if (!HELIUS_KEY) return res.status(500).json({ success: false, error: "Server not configured" });
+  const rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
+  const rpc = async (method, params) => {
+    const r = await fetch(rpcUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: method, method, params }) });
+    return r.json();
+  };
+  const labelWallet = (a) => KNOWN_CEX_WALLETS[a] || KNOWN_SERVICE_WALLETS[a] || null;
+
+  try {
+    // 0. SOL price + current SOL balance (parallel, both best-effort).
+    let solUsd = 0, solBalance = 0;
+    await Promise.all([
+      (async () => { try { const p = await lpScanner.cgPro("/simple/price?ids=solana&vs_currencies=usd"); solUsd = (p && p.solana && p.solana.usd) || 0; } catch {} })(),
+      (async () => { try { const b = await rpc("getBalance", [wallet]); solBalance = (b?.result?.value || 0) / 1e9; } catch {} })(),
+    ]);
+
+    // 1. Pull the wallet's enhanced transaction history (newest → oldest),
+    //    paged, time-budgeted so a hyperactive wallet can't hang the request.
+    const MAX_PAGES = 15, PAGE = 100, DEADLINE = Date.now() + 55000;
+    let before = null; const txs = []; let pages = 0, reachedEnd = false;
+    for (; pages < MAX_PAGES; pages++) {
+      if (Date.now() > DEADLINE) break;
+      const url = `https://api.helius.xyz/v0/addresses/${wallet}/transactions?api-key=${HELIUS_KEY}&limit=${PAGE}` + (before ? `&before=${before}` : "");
+      let arr = [];
+      try { const r = await fetch(url, { signal: AbortSignal.timeout(15000) }); arr = await r.json(); } catch { break; }
+      if (!Array.isArray(arr) || !arr.length) { reachedEnd = true; break; }
+      txs.push(...arr);
+      if (arr.length < PAGE) { reachedEnd = true; break; }
+      before = arr[arr.length - 1].signature;
+    }
+    const truncated = !reachedEnd; // history deeper than we scanned (oldest activity not seen)
+    if (!txs.length) {
+      return res.status(200).json({
+        success: true, wallet, generatedAt: new Date().toISOString(),
+        empty: true, balances: { solBalance, solUsd, solUsdValue: solBalance * solUsd },
+        labels: [{ tag: "No activity", icon: "🫥", level: "info", evidence: "No enhanced transaction history was returned for this wallet." }],
+        verdict: "This wallet has no readable on-chain history in the scanned window — brand new, dormant, or it only holds with no transactions.",
+      });
+    }
+
+    // 2. Walk every tx, accumulating wallet-centric aggregates.
+    let minTs = Infinity, maxTs = 0;
+    let buyCount = 0, sellCount = 0, swapCount = 0, tokenSendCount = 0, tokenRecvCount = 0;
+    let solInCount = 0, solOutCount = 0, lpAdd = 0, lpRemove = 0, nftCount = 0;
+    let solSpentBuys = 0, solGainedSells = 0; // rough USD throughput on swaps
+    const tokensTraded = new Set();
+    const mintStats = new Map();   // mint → behavior record
+    const cexFlows = new Map();    // exchange name → {in,out,count}
+    const sources = new Map();     // helius source → count
+    const sentTo = new Set(), recvFrom = new Set();
+    const initiatedTs = [];        // timestamps of wallet-initiated txs (cadence)
+    let firstFunding = null;       // earliest external SOL inflow (funding origin)
+
+    for (const tx of txs) {
+      if (!tx || !tx.signature) continue;
+      const ts = Number(tx.timestamp) || 0;
+      if (ts) { if (ts < minTs) minTs = ts; if (ts > maxTs) maxTs = ts; }
+      if (tx.feePayer === wallet && ts) initiatedTs.push(ts);
+      if (tx.source) sources.set(tx.source, (sources.get(tx.source) || 0) + 1);
+      const type = tx.type || "";
+      const isDexSrc = WX_DEX_SOURCES.has(tx.source);
+
+      // Native SOL net delta + the external counterparties on each side.
+      let solDelta = 0; const extIn = new Set(), extOut = new Set();
+      for (const n of tx.nativeTransfers || []) {
+        const a = (Number(n.amount) || 0) / 1e9;
+        if (n.toUserAccount === wallet) { solDelta += a; if (n.fromUserAccount && n.fromUserAccount !== wallet) extIn.add(n.fromUserAccount); }
+        if (n.fromUserAccount === wallet) { solDelta -= a; if (n.toUserAccount && n.toUserAccount !== wallet) extOut.add(n.toUserAccount); }
+      }
+      // Per-mint token net delta for this wallet.
+      const deltas = new Map();
+      for (const t of tx.tokenTransfers || []) {
+        if (!t.mint) continue;
+        const a = Number(t.tokenAmount) || 0;
+        if (t.toUserAccount === wallet) { deltas.set(t.mint, (deltas.get(t.mint) || 0) + a); if (t.fromUserAccount && t.fromUserAccount !== wallet) extIn.add(t.fromUserAccount); }
+        if (t.fromUserAccount === wallet) { deltas.set(t.mint, (deltas.get(t.mint) || 0) - a); if (t.toUserAccount && t.toUserAccount !== wallet) extOut.add(t.toUserAccount); }
+      }
+      // Fold wSOL into the SOL leg; pull stables out as quote.
+      if (deltas.has(WX_WSOL)) { solDelta += deltas.get(WX_WSOL); deltas.delete(WX_WSOL); }
+      let stableDelta = 0;
+      for (const s of WX_STABLES) if (deltas.has(s)) { stableDelta += deltas.get(s); deltas.delete(s); }
+      const quoteUsd = solDelta * solUsd + stableDelta; // + = wallet received value, − = wallet spent value
+
+      // Known-CEX touch detection (cash-out vs funding signal).
+      for (const a of extOut) { const nm = KNOWN_CEX_WALLETS[a]; if (nm) { const e = cexFlows.get(nm) || { in: 0, out: 0, count: 0 }; e.out++; e.count++; cexFlows.set(nm, e); } }
+      for (const a of extIn) { const nm = KNOWN_CEX_WALLETS[a]; if (nm) { const e = cexFlows.get(nm) || { in: 0, out: 0, count: 0 }; e.in++; e.count++; cexFlows.set(nm, e); } }
+      if (/LIQUIDITY/i.test(type)) { if (/ADD|DEPOSIT|INCREASE/i.test(type)) lpAdd++; else lpRemove++; }
+      if (/NFT/i.test(type)) nftCount++;
+
+      const moved = [...deltas.entries()].filter(([, v]) => Math.abs(v) > 1e-9);
+      const isSwap = type === "SWAP" || (tx.events && tx.events.swap) || (moved.length > 0 && isDexSrc && Math.abs(quoteUsd) > 0.01);
+      if (isSwap) swapCount++;
+
+      for (const [m, v] of moved) {
+        tokensTraded.add(m);
+        const st = mintStats.get(m) || { mint: m, bought: 0, sold: 0, recv: 0, sent: 0, buyCount: 0, sellCount: 0, firstAcq: null, firstSell: null };
+        if (v > 0) {
+          if (isSwap || quoteUsd < -0.01) { st.bought += v; st.buyCount++; buyCount++; if (quoteUsd < 0) solSpentBuys += -quoteUsd; }
+          else { st.recv += v; tokenRecvCount++; recvFrom.add([...extIn][0] || ""); }
+          if (st.firstAcq == null || (ts && ts < st.firstAcq)) st.firstAcq = ts;
+        } else {
+          const av = -v;
+          if (isSwap || quoteUsd > 0.01) { st.sold += av; st.sellCount++; sellCount++; if (quoteUsd > 0) solGainedSells += quoteUsd; }
+          else { st.sent += av; tokenSendCount++; sentTo.add([...extOut][0] || ""); }
+          if (st.firstSell == null || (ts && ts < st.firstSell)) st.firstSell = ts;
+        }
+        mintStats.set(m, st);
+      }
+
+      // Pure SOL transfers (no token moved) — wallet-to-wallet / CEX moves.
+      if (!moved.length) {
+        if (solDelta > 0.0005) solInCount++;
+        else if (solDelta < -0.0005) solOutCount++;
+      }
+      // Funding origin: earliest tx where the wallet RECEIVED SOL from an external party.
+      if (solDelta > 0 && extIn.size && ts) {
+        if (!firstFunding || ts < firstFunding.ts) {
+          const src = [...extIn][0];
+          firstFunding = { ts, amountSol: solDelta, from: src, label: labelWallet(src), sig: tx.signature };
+        }
+      }
+    }
+
+    // 3. Current token holdings (for "still holds" + portfolio value).
+    const heldByMint = new Map();
+    for (const prog of ["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"]) {
+      try {
+        const d = await rpc("getTokenAccountsByOwner", [wallet, { programId: prog }, { encoding: "jsonParsed" }]);
+        for (const acc of (d?.result?.value || [])) {
+          const info = acc.account?.data?.parsed?.info;
+          const amt = info?.tokenAmount?.uiAmount || 0;
+          if (info?.mint && amt > 0) heldByMint.set(info.mint, (heldByMint.get(info.mint) || 0) + amt);
+        }
+      } catch {}
+    }
+
+    // 4. Derived metrics.
+    const totalTx = txs.length;
+    const spanSec = (maxTs && minTs !== Infinity) ? (maxTs - minTs) : 0;
+    const spanDays = spanSec / 86400;
+    const nowDays = (Date.now() / 1000 - (minTs === Infinity ? Date.now() / 1000 : minTs)) / 86400;
+    const txPerDay = spanDays > 0.04 ? totalTx / spanDays : totalTx; // <1h span → just use count
+    const distinctTokens = tokensTraded.size;
+    const sellBuyRatio = sellCount / Math.max(1, buyCount);
+
+    // Cadence (bot tell): gaps between consecutive wallet-initiated txs.
+    initiatedTs.sort((a, b) => a - b);
+    const gaps = [];
+    for (let i = 1; i < initiatedTs.length; i++) gaps.push(initiatedTs[i] - initiatedTs[i - 1]);
+    const medianGapSec = wxMedian(gaps);
+    const fastGapFrac = gaps.length ? gaps.filter((g) => g <= 2).length / gaps.length : 0;
+    const minuteBuckets = new Map();
+    for (const t of initiatedTs) { const k = Math.floor(t / 60); minuteBuckets.set(k, (minuteBuckets.get(k) || 0) + 1); }
+    const maxPerMinute = minuteBuckets.size ? Math.max(...minuteBuckets.values()) : 0;
+
+    // Flip speed (dumper tell): for tokens both acquired and sold, hold = firstSell − firstAcq.
+    const holds = [];
+    let fastFlipCount = 0, recvThenSold = 0;
+    for (const st of mintStats.values()) {
+      if (st.firstAcq && st.firstSell && st.firstSell >= st.firstAcq) {
+        const h = st.firstSell - st.firstAcq; holds.push(h);
+        if (h < 3600) fastFlipCount++;
+      }
+      if (st.recv > 0 && st.sold > 0) recvThenSold++;
+    }
+    const medianHoldSec = wxMedian(holds);
+    const flipFrac = holds.length ? fastFlipCount / holds.length : 0;
+
+    // 5. Top tokens by activity, enriched with symbol + held value.
+    const topMints = [...mintStats.values()]
+      .sort((a, b) => (b.bought + b.sold + b.recv + b.sent) - (a.bought + a.sold + a.recv + a.sent))
+      .slice(0, 20);
+    const priceInfo = await priceTokensBatch([...topMints.map((t) => t.mint), ...heldByMint.keys()].slice(0, 60)).catch(() => ({}));
+    let portfolioUsd = 0;
+    for (const [m, amt] of heldByMint) { const p = priceInfo[m]; if (p && p.priceUsd) portfolioUsd += amt * p.priceUsd; }
+    const topTokens = topMints.map((t) => {
+      const held = heldByMint.get(t.mint) || 0;
+      const p = priceInfo[t.mint] || {};
+      let cls;
+      if (held > 0 && t.sellCount === 0 && t.buyCount > 0) cls = "holding";
+      else if (t.firstAcq && t.firstSell && (t.firstSell - t.firstAcq) < 3600) cls = "fast flip";
+      else if (t.recv > 0 && t.sold > 0) cls = "received & sold";
+      else if (t.sold > t.bought * 1.2 && t.sold > 0) cls = "net seller";
+      else if (t.buyCount > 0 || t.sellCount > 0) cls = "traded";
+      else cls = "moved";
+      return {
+        mint: t.mint, symbol: p.symbol || null, name: p.name || null, logo: p.logo || null,
+        bought: t.bought, sold: t.sold, recv: t.recv, sent: t.sent,
+        buyCount: t.buyCount, sellCount: t.sellCount,
+        held, heldUsd: held * (p.priceUsd || 0), classification: cls,
+      };
+    });
+
+    // 6. CEX net direction.
+    const cex = [...cexFlows.entries()].map(([name, e]) => ({ name, ...e, net: e.out - e.in })).sort((a, b) => b.count - a.count);
+    const netCexOut = cex.reduce((s, c) => s + (c.out - c.in), 0);
+    const cexNames = [...new Set(cex.map((c) => c.name))];
+
+    // 7. Behavioral labels — each is on-chain EVIDENCE, not a claim of intent.
+    const labels = [];
+    const isFresh = totalTx < 12 && distinctTokens < 4;
+    const veryHighFreq = txPerDay >= 120 || maxPerMinute >= 18 || fastGapFrac >= 0.32;
+    const highFreq = txPerDay >= 40 || maxPerMinute >= 8 || fastGapFrac >= 0.16;
+    const dumpHeavy = sellBuyRatio >= 1.6 && sellCount >= 5;
+    const fastFlipper = flipFrac >= 0.4 && fastFlipCount >= 4;
+    const farmDump = recvThenSold >= 4;
+    const holder = buyCount >= 3 && sellCount <= Math.max(1, buyCount * 0.25) && (portfolioUsd > 0 || heldByMint.size > 0);
+    const whale = solBalance >= 200 || portfolioUsd >= 50000;
+    const cashingOut = netCexOut >= 2;
+    const cexFunded = cex.some((c) => c.in > 0) && (firstFunding && firstFunding.label);
+    const lpProvider = (lpAdd + lpRemove) >= 3;
+    const trader = distinctTokens >= 8 && swapCount >= 10 && !veryHighFreq;
+
+    if (isFresh) labels.push({ tag: "Fresh / low activity", icon: "🆕", level: "info", evidence: `Only ${totalTx} txns across ${distinctTokens} token${distinctTokens === 1 ? "" : "s"} in the scanned window.` });
+    if (veryHighFreq) labels.push({ tag: "Bot-like cadence", icon: "🤖", level: "high", evidence: `~${Math.round(txPerDay)} txns/day, up to ${maxPerMinute} in one minute, ${(fastGapFrac * 100).toFixed(0)}% of txns fire ≤2s apart — automated trading cadence.` });
+    else if (highFreq) labels.push({ tag: "High-frequency", icon: "⚙️", level: "med", evidence: `~${Math.round(txPerDay)} txns/day (median ${wxDur(medianGapSec)} between txns) — far above a manual trader.` });
+    if (fastFlipper) labels.push({ tag: "Fast flipper", icon: "⚡", level: "high", evidence: `${fastFlipCount} token${fastFlipCount === 1 ? "" : "s"} sold within an hour of buying (median hold ${wxDur(medianHoldSec)}).` });
+    if (dumpHeavy) labels.push({ tag: "Sell-heavy / dumper", icon: "📉", level: "high", evidence: `${sellCount} sells vs ${buyCount} buys (${sellBuyRatio.toFixed(1)}× sell:buy) — exits far more than it accumulates.` });
+    if (farmDump) labels.push({ tag: "Receives & dumps", icon: "🪂", level: "med", evidence: `${recvThenSold} tokens were received by transfer/airdrop and then sold — airdrop-farm / distribution-then-sell pattern.` });
+    if (cashingOut) labels.push({ tag: "Cashing out to CEX", icon: "🏦", level: "med", evidence: `Net ${netCexOut} more deposits to ${cexNames.join(", ")} than withdrawals — funds flowing toward an exchange off-ramp.` });
+    if (lpProvider) labels.push({ tag: "Liquidity provider", icon: "💧", level: "info", evidence: `${lpAdd} add-LP and ${lpRemove} remove-LP actions — runs liquidity positions.` });
+    if (holder) labels.push({ tag: "Accumulator / holder", icon: "💎", level: "info", evidence: `${buyCount} buys vs only ${sellCount} sells, still holding ${heldByMint.size} token${heldByMint.size === 1 ? "" : "s"}${portfolioUsd > 0 ? ` (~${fmtUsdShort(portfolioUsd)})` : ""}.` });
+    if (whale) labels.push({ tag: "Whale-sized", icon: "🐋", level: "info", evidence: `Holds ${solBalance.toFixed(1)} SOL${portfolioUsd > 0 ? ` + ~${fmtUsdShort(portfolioUsd)} in tokens` : ""}.` });
+    if (trader && !labels.some((l) => l.level === "high")) labels.push({ tag: "Active trader", icon: "🎯", level: "info", evidence: `${swapCount} swaps across ${distinctTokens} tokens — a busy but human-paced trader.` });
+    if (!labels.length) labels.push({ tag: "Ordinary activity", icon: "👤", level: "info", evidence: `${totalTx} txns, ${buyCount} buys / ${sellCount} sells across ${distinctTokens} tokens — no standout bot or dumping pattern.` });
+
+    // 8. Plain-English read (deterministic, evidence-only).
+    const verdictBits = [];
+    if (firstFunding) verdictBits.push(`First funded with ~${firstFunding.amountSol.toFixed(2)} SOL${firstFunding.label ? ` from ${firstFunding.label}` : " from another wallet"}${truncated ? " (within the scanned window)" : ""}.`);
+    verdictBits.push(`Across ${totalTx} scanned txns it made ${buyCount} buys and ${sellCount} sells over ${distinctTokens} tokens, sent ${tokenSendCount} token transfers out and received ${tokenRecvCount}.`);
+    const headline = labels.filter((l) => l.level === "high").map((l) => l.tag);
+    if (headline.length) verdictBits.push(`Strongest signals: ${headline.join(" + ")}.`);
+    const verdict = verdictBits.join(" ");
+
+    return res.status(200).json({
+      success: true, wallet, generatedAt: new Date().toISOString(), truncated,
+      scanned: { txCount: totalTx, pages, truncated, spanDays: Number(spanDays.toFixed(2)), firstSeen: minTs === Infinity ? null : minTs, lastSeen: maxTs || null, ageDays: Number(nowDays.toFixed(1)) },
+      balances: { solBalance, solUsd, solUsdValue: solBalance * solUsd, tokenCount: heldByMint.size, portfolioUsd },
+      funding: firstFunding,
+      activity: { buyCount, sellCount, swapCount, tokenSendCount, tokenRecvCount, solInCount, solOutCount, distinctTokens, txPerDay: Number(txPerDay.toFixed(1)), lpAdd, lpRemove, nftCount, sellBuyRatio: Number(sellBuyRatio.toFixed(2)) },
+      cadence: { medianGapSec: Math.round(medianGapSec), fastGapFrac: Number(fastGapFrac.toFixed(3)), maxPerMinute },
+      flips: { medianHoldSec: Math.round(medianHoldSec), fastFlipCount, flipFrac: Number(flipFrac.toFixed(3)), recvThenSold },
+      cex, topSources: [...sources.entries()].map(([source, count]) => ({ source, count })).sort((a, b) => b.count - a.count).slice(0, 8),
+      topTokens, labels, verdict,
+      disclaimer: "These are on-chain behavioral patterns, not statements of intent. The same pattern can come from a bot, a fund, a market maker, or a person — use this as a research lead, not a verdict.",
+    });
+  } catch (err) {
+    console.error("[wallet-xray] error:", err.message);
+    return res.status(500).json({ success: false, error: publicErrMsg(err) });
+  }
+});
+
 // -- Cluck Score PNG card (1200x630, Twitter-card optimal) --
 // Generates a shareable image for any mint by calling our own /api/cluck-score
 // endpoint and rasterizing the result with @napi-rs/canvas. Cached 5 min same as
@@ -7537,6 +7827,11 @@ app.get("/security-coop", (req, res) => {
 // Wallet Safety Checkup — read-only scan (approvals + risky holdings).
 app.get("/wallet-checkup", (req, res) => {
   res.sendFile(join(__dirname, "public", "wallet-checkup.html"));
+});
+
+// Wallet X-Ray — full-wallet behavioral deep dive (funding, buys/sells/transfers, bot/dumper signals).
+app.get("/wallet-xray", (req, res) => {
+  res.sendFile(join(__dirname, "public", "wallet-xray.html"));
 });
 
 // Tools & Utilities hub — the front door to the toolkit, linked from the landing.

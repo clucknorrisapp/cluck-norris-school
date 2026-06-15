@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="robots" content="noindex"/>
+<title>🩻 Wallet X-Ray — Full Wallet Deep Dive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    color-scheme:dark;
+    --bg:#0a0a0a;--card:#111;--border:rgba(255,255,255,0.08);
+    --text:#F9FAFB;--sub:#9CA3AF;--muted:#6B7280;
+    --accent:#FCD34D;--orange:#D97706;--green:#10B981;--red:#EF4444;
+    --amber:#F59E0B;--blue:#60A5FA;--purple:#A78BFA;--cyan:#22D3EE;
+    --mono:'Courier New',monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);
+    background-image:radial-gradient(ellipse at 18% 8%,rgba(167,139,250,0.10),transparent 50%),
+                     radial-gradient(ellipse at 85% 95%,rgba(34,211,238,0.06),transparent 50%);
+    color:var(--text);font-family:system-ui,sans-serif;min-height:100vh;}
+  .wrap{max-width:820px;margin:0 auto;padding:22px 16px 80px;}
+  @media(min-width:1100px){.wrap{max-width:1100px;}}
+  .back{display:inline-flex;align-items:center;gap:6px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:var(--orange);text-decoration:none;margin-bottom:14px;}
+  .back img{height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid var(--orange);}
+  .header{display:flex;align-items:center;gap:14px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border);}
+  .header-icon{font-size:38px;filter:drop-shadow(0 0 16px rgba(167,139,250,0.5));}
+  .brand-mini{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:4px;color:var(--orange);font-weight:700;}
+  h1{font-family:Oswald,sans-serif;font-size:27px;font-weight:900;letter-spacing:3px;line-height:1;
+    background:linear-gradient(135deg,#FCD34D,#A78BFA,#22D3EE);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+  .header p{font-family:Oswald,sans-serif;font-size:11px;color:var(--sub);letter-spacing:2px;margin-top:6px;}
+  .hero{background:linear-gradient(135deg,rgba(167,139,250,0.06),rgba(34,211,238,0.03));border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:16px;}
+  .hero-tag{font-family:Oswald,sans-serif;font-size:10px;color:var(--accent);letter-spacing:3px;margin-bottom:6px;}
+  .hero-sub{font-family:Oswald,sans-serif;font-size:12px;color:var(--sub);line-height:1.6;letter-spacing:0.3px;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px;}
+  .card-title{font-family:Oswald,sans-serif;font-size:18px;font-weight:900;color:var(--accent);letter-spacing:1.5px;margin-bottom:13px;text-transform:uppercase;}
+  .field-label{font-family:Oswald,sans-serif;font-size:13px;color:var(--purple);letter-spacing:1.5px;margin-bottom:6px;font-weight:700;}
+  .token-input{width:100%;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;padding:12px 13px;font-family:var(--mono);font-size:15px;color:var(--accent);font-weight:600;}
+  .token-input::placeholder{color:var(--muted);font-weight:400;}
+  .token-input:focus{outline:none;border-color:var(--accent);}
+  .run-btn{width:100%;margin-top:13px;padding:14px;background:linear-gradient(135deg,var(--purple),var(--cyan));border:none;border-radius:10px;font-family:Oswald,sans-serif;font-size:14px;font-weight:900;color:#0a0a0a;letter-spacing:3px;cursor:pointer;}
+  .run-btn:disabled{opacity:0.45;cursor:not-allowed;}
+  .err{background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px 14px;font-size:12px;color:#FCA5A5;margin-bottom:12px;display:none;}
+  .err.show{display:block;}
+  .loading{display:none;text-align:center;padding:36px 20px;background:linear-gradient(135deg,rgba(255,255,255,0.03),rgba(167,139,250,0.04));border:1px solid var(--border);border-radius:12px;margin-bottom:16px;}
+  .loading.show{display:block;}
+  .spinner{font-size:42px;animation:bob 1.4s ease-in-out infinite;display:inline-block;margin-bottom:12px;}
+  @keyframes bob{0%,100%{transform:translateY(0) rotate(-3deg);}50%{transform:translateY(-6px) rotate(3deg);}}
+  .loading-stage{font-family:var(--mono);font-size:13px;color:var(--text);margin-bottom:8px;min-height:18px;}
+  .loading-timer{font-family:var(--mono);font-size:11px;color:var(--sub);}
+  .loading-note{font-family:Oswald,sans-serif;font-size:11px;color:var(--muted);letter-spacing:1px;margin-top:10px;}
+  .result{display:none;}.result.show{display:block;}
+  /* verdict */
+  .verdict{background:linear-gradient(135deg,rgba(252,211,77,0.07),rgba(167,139,250,0.04));border:1px solid rgba(252,211,77,0.3);border-radius:12px;padding:15px 16px;margin-bottom:14px;}
+  .verdict .lbl{font-family:Oswald,sans-serif;font-size:10px;color:var(--accent);letter-spacing:2px;font-weight:700;margin-bottom:8px;}
+  .verdict .body{font-family:system-ui;font-size:14px;line-height:1.65;color:#E5E7EB;}
+  /* label chips */
+  .labels{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
+  .chip{display:flex;flex-direction:column;gap:3px;border-radius:10px;padding:9px 12px;min-width:140px;flex:1 1 200px;border:1px solid var(--border);background:rgba(255,255,255,0.02);}
+  .chip .t{font-family:Oswald,sans-serif;font-weight:700;font-size:13px;letter-spacing:0.5px;}
+  .chip .e{font-family:var(--mono);font-size:10px;color:var(--sub);line-height:1.45;}
+  .chip.high{border-color:rgba(239,68,68,0.45);background:rgba(239,68,68,0.07);}
+  .chip.high .t{color:var(--red);}
+  .chip.med{border-color:rgba(245,158,11,0.45);background:rgba(245,158,11,0.07);}
+  .chip.med .t{color:var(--amber);}
+  .chip.info{border-color:rgba(96,165,250,0.35);background:rgba(96,165,250,0.06);}
+  .chip.info .t{color:var(--blue);}
+  /* stat grid */
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:9px;}
+  .stat{background:#0d0d0d;border:1px solid var(--border);border-radius:9px;padding:10px 11px;}
+  .stat .k{font-family:var(--mono);font-size:9px;color:var(--sub);letter-spacing:0.5px;}
+  .stat .v{font-family:Oswald,sans-serif;font-weight:700;font-size:18px;margin-top:3px;}
+  .stat .s{font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:2px;}
+  .g{color:var(--green);}.r{color:var(--red);}.b{color:var(--blue);}.a{color:var(--accent);}.p{color:var(--purple);}.am{color:var(--amber);}
+  /* funding */
+  .origin{background:rgba(34,211,238,0.05);border:1px solid rgba(34,211,238,0.3);border-radius:10px;padding:12px 14px;margin-bottom:14px;}
+  .origin .lbl{font-family:Oswald,sans-serif;font-size:10px;color:var(--cyan);letter-spacing:2px;font-weight:700;margin-bottom:6px;}
+  .origin .body{font-family:var(--mono);font-size:12px;color:#E5E7EB;line-height:1.6;word-break:break-all;}
+  .origin a{color:var(--blue);text-decoration:none;}
+  /* token rows */
+  .trow{display:flex;align-items:center;gap:11px;padding:10px 0;border-top:1px solid var(--border);}
+  .trow:first-child{border-top:none;}
+  .tlogo{width:30px;height:30px;border-radius:50%;flex-shrink:0;background:#1a1a1a;object-fit:cover;border:1px solid var(--border);}
+  .tname{flex:1;min-width:0;}
+  .tname .sym{font-family:Oswald,sans-serif;font-weight:700;font-size:14px;color:var(--text);}
+  .tname a{color:var(--blue);text-decoration:none;font-family:var(--mono);font-size:11px;}
+  .tflow{font-family:var(--mono);font-size:11px;text-align:right;flex-shrink:0;line-height:1.5;}
+  .tcls{display:inline-block;font-family:Oswald,sans-serif;font-size:9px;letter-spacing:0.5px;padding:2px 7px;border-radius:5px;margin-top:3px;}
+  .cls-holding{background:rgba(16,185,129,0.14);color:var(--green);}
+  .cls-fastflip,.cls-receivedsold,.cls-netseller{background:rgba(239,68,68,0.12);color:#FCA5A5;}
+  .cls-traded,.cls-moved{background:rgba(96,165,250,0.12);color:var(--blue);}
+  .pill{display:inline-block;font-family:var(--mono);font-size:11px;padding:4px 9px;border-radius:6px;margin:3px 5px 0 0;background:rgba(255,255,255,0.04);border:1px solid var(--border);color:var(--sub);}
+  .cexpill{background:rgba(252,211,77,0.1);border-color:rgba(252,211,77,0.4);color:var(--accent);}
+  .disc{font-family:var(--mono);font-size:11px;line-height:1.6;color:#9aa1ab;background:linear-gradient(135deg,rgba(107,114,128,0.06),rgba(107,114,128,0.01));border:1px solid rgba(107,114,128,0.3);border-radius:12px;padding:14px 16px;}
+  .foot{font-family:var(--mono);font-size:10px;color:var(--muted);text-align:center;margin-top:14px;}
+  .foot a{color:var(--sub);text-decoration:none;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="/" class="back"><img src="/cluck-norris-logo.jpg" alt=""/>&larr; CLUCK NORRIS HOME</a>
+
+  <div class="header">
+    <div class="header-icon">🩻</div>
+    <div>
+      <div class="brand-mini">CLUCK NORRIS</div>
+      <h1>WALLET X-RAY</h1>
+      <p>FULL-WALLET DEEP DIVE · FUNDING · TRADES · BEHAVIOR</p>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div class="hero-tag">DEEP DIVE MODE</div>
+    <div class="hero-sub">Paste any Solana wallet. X-Ray reads its whole recent history — where it was first funded from, everything it's bought, sold and transferred across <b>every</b> token, and the behavior pattern: bot cadence, fast-flip dumping, CEX cash-out, LP, or diamond-hands holder. One wallet, the whole story.</div>
+  </div>
+
+  <div class="card">
+    <div class="field-label">WALLET ADDRESS</div>
+    <input type="text" class="token-input" id="walletInput" placeholder="Paste any Solana wallet address…" autocomplete="off"/>
+    <button class="run-btn" id="runBtn" onclick="run()" disabled>🩻 RUN DEEP DIVE</button>
+  </div>
+
+  <div class="err" id="err"></div>
+
+  <div class="loading" id="loading">
+    <div class="spinner">🐔</div>
+    <div class="loading-stage" id="stage">Pulling the wallet's full transaction history…</div>
+    <div class="loading-timer" id="timer">0s</div>
+    <div class="loading-note">A busy wallet has thousands of txns — this can take up to a minute.</div>
+  </div>
+
+  <div class="result" id="result"></div>
+
+  <div class="foot"><a href="/tools">← all Cluck tools</a> · read-only · no wallet-connect</div>
+</div>
+
+<script>
+const wi=document.getElementById('walletInput'), runBtn=document.getElementById('runBtn');
+wi.addEventListener('input',()=>{runBtn.disabled=wi.value.trim().length<32;});
+const qp=new URLSearchParams(location.search);
+if(qp.get('wallet')){wi.value=qp.get('wallet').trim();runBtn.disabled=wi.value.trim().length<32;}
+
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function shortAddr(a){return a?a.slice(0,4)+'…'+a.slice(-4):'—';}
+function fmtNum(n){n=Number(n)||0;const a=Math.abs(n);if(a===0)return'0';if(a>=1e9)return(n/1e9).toFixed(2)+'B';if(a>=1e6)return(n/1e6).toFixed(2)+'M';if(a>=1e3)return(n/1e3).toFixed(2)+'K';if(a>=1)return n.toLocaleString(undefined,{maximumFractionDigits:2});return n.toLocaleString(undefined,{maximumFractionDigits:4});}
+function fmtUsd(n){n=Number(n)||0;return n>=1e6?'$'+(n/1e6).toFixed(2)+'M':n>=1e3?'$'+(n/1e3).toFixed(1)+'K':'$'+n.toFixed(2);}
+function fmtDate(ts){if(!ts)return'—';return new Date(ts*1000).toLocaleDateString(undefined,{year:'2-digit',month:'short',day:'numeric'});}
+function dur(sec){sec=Math.max(0,Math.round(sec||0));if(sec<90)return sec+'s';if(sec<5400)return Math.round(sec/60)+'m';if(sec<172800)return(sec/3600).toFixed(1)+'h';return(sec/86400).toFixed(1)+'d';}
+
+let stageTimer,secTimer,startedAt;
+const STAGES=["Pulling the wallet's full transaction history…","Parsing buys, sells and transfers across every token…","Measuring trade cadence and hold times…","Checking funding origin and exchange flows…","Reading the behavior pattern…"];
+function startLoading(){let i=0;startedAt=Date.now();document.getElementById('stage').textContent=STAGES[0];document.getElementById('timer').textContent='0s';document.getElementById('loading').classList.add('show');document.getElementById('result').classList.remove('show');
+  stageTimer=setInterval(()=>{i=Math.min(i+1,STAGES.length-1);document.getElementById('stage').textContent=STAGES[i];},6000);
+  secTimer=setInterval(()=>{document.getElementById('timer').textContent=Math.round((Date.now()-startedAt)/1000)+'s';},1000);}
+function stopLoading(){document.getElementById('loading').classList.remove('show');clearInterval(stageTimer);clearInterval(secTimer);}
+function showErr(m){const e=document.getElementById('err');e.textContent=m;e.classList.add('show');}
+
+async function run(){
+  document.getElementById('err').classList.remove('show');
+  runBtn.disabled=true;startLoading();
+  const wallet=wi.value.trim();
+  try{
+    const r=await fetch('/api/wallet-xray?wallet='+encodeURIComponent(wallet));
+    const d=await r.json();
+    stopLoading();runBtn.disabled=false;
+    if(!d.success){showErr(d.error||'Deep dive failed');return;}
+    render(d);
+  }catch(e){stopLoading();runBtn.disabled=false;showErr('Network error: '+e.message);}
+}
+
+function stat(k,v,cls,s){return '<div class="stat"><div class="k">'+k+'</div><div class="v '+(cls||'')+'">'+v+'</div>'+(s?'<div class="s">'+s+'</div>':'')+'</div>';}
+
+function render(d){
+  const R=document.getElementById('result');
+  if(d.empty){
+    R.innerHTML='<div class="verdict"><div class="lbl">CLUCK\'S READ</div><div class="body">'+esc(d.verdict)+'</div></div>';
+    R.classList.add('show');R.scrollIntoView({behavior:'smooth'});return;
+  }
+  const a=d.activity,sc=d.scanned,b=d.balances,c=d.cadence,f=d.flips;
+  let h='';
+
+  // verdict
+  h+='<div class="verdict"><div class="lbl">🐔 CLUCK\'S READ</div><div class="body">'+esc(d.verdict)+'</div></div>';
+
+  // labels
+  if((d.labels||[]).length){
+    h+='<div class="labels">'+d.labels.map(l=>
+      '<div class="chip '+esc(l.level)+'"><div class="t">'+esc(l.icon)+' '+esc(l.tag)+'</div><div class="e">'+esc(l.evidence)+'</div></div>'
+    ).join('')+'</div>';
+  }
+
+  // funding origin
+  if(d.funding){
+    const fn=d.funding;
+    h+='<div class="origin"><div class="lbl">🌱 FUNDING ORIGIN — WHERE THE SOL CAME FROM</div><div class="body">'
+      +'First funded with <b>'+fmtNum(fn.amountSol)+' SOL</b> on '+fmtDate(fn.ts)+' from '
+      +(fn.label?('<b style="color:var(--accent)">🏦 '+esc(fn.label)+'</b> '):'')
+      +'<a href="https://solscan.io/account/'+esc(fn.from)+'" target="_blank">'+esc(shortAddr(fn.from))+' ↗</a>'
+      +(d.truncated?' <span style="color:var(--amber)">(earliest within the scanned window — older history may exist)</span>':'')
+      +' · <a href="https://solscan.io/tx/'+esc(fn.sig)+'" target="_blank">tx ↗</a></div></div>';
+  }
+
+  // headline stats
+  h+='<div class="card"><div class="card-title">📊 WALLET AT A GLANCE</div><div class="grid">'
+    +stat('SOL BALANCE',fmtNum(b.solBalance),'a',b.solUsdValue?fmtUsd(b.solUsdValue):'')
+    +stat('TOKEN VALUE',b.portfolioUsd?fmtUsd(b.portfolioUsd):'—','g',b.tokenCount+' tokens held')
+    +stat('TXNS SCANNED',fmtNum(sc.txCount),'',sc.truncated?'truncated':'full history')
+    +stat('ACTIVE SPAN',sc.spanDays>=1?sc.spanDays.toFixed(0)+'d':dur(sc.spanDays*86400),'b','first '+fmtDate(sc.firstSeen))
+    +'</div></div>';
+
+  // trade behavior
+  h+='<div class="card"><div class="card-title">💱 TRADE & TRANSFER BEHAVIOR</div><div class="grid">'
+    +stat('BUYS',fmtNum(a.buyCount),'g')
+    +stat('SELLS',fmtNum(a.sellCount),'r','sell:buy '+a.sellBuyRatio+'×')
+    +stat('TOKENS TRADED',fmtNum(a.distinctTokens),'p')
+    +stat('SENT OUT',fmtNum(a.tokenSendCount),'am','token transfers')
+    +stat('RECEIVED IN',fmtNum(a.tokenRecvCount),'b','token transfers')
+    +stat('TXNS / DAY',a.txPerDay>=1?fmtNum(a.txPerDay):a.txPerDay,'','pace')
+    +stat('MEDIAN HOLD',f.medianHoldSec?dur(f.medianHoldSec):'—','',f.fastFlipCount+' flips <1h')
+    +stat('BURST',c.maxPerMinute+'/min','',(c.fastGapFrac*100).toFixed(0)+'% ≤2s apart')
+    +(a.lpAdd+a.lpRemove>0?stat('LP ACTIONS',(a.lpAdd+a.lpRemove),'p',a.lpAdd+' add / '+a.lpRemove+' pull'):'')
+    +'</div></div>';
+
+  // CEX + sources
+  if((d.cex||[]).length||(d.topSources||[]).length){
+    h+='<div class="card"><div class="card-title">🔗 VENUES & EXCHANGE FLOW</div>';
+    if((d.cex||[]).length){
+      h+='<div style="margin-bottom:8px">'+d.cex.map(c=>'<span class="pill cexpill">🏦 '+esc(c.name)+': '+c.out+' out / '+c.in+' in</span>').join('')+'</div>';
+    }
+    if((d.topSources||[]).length){
+      h+='<div>'+d.topSources.map(s=>'<span class="pill">'+esc((s.source||'').replace(/_/g,' '))+' ·'+s.count+'</span>').join('')+'</div>';
+    }
+    h+='</div>';
+  }
+
+  // top tokens
+  if((d.topTokens||[]).length){
+    h+='<div class="card"><div class="card-title">🪙 MOST-ACTIVE TOKENS</div>';
+    h+=d.topTokens.map(t=>{
+      const flows=[];
+      if(t.bought>0)flows.push('<span class="g">+'+fmtNum(t.bought)+' bought</span>');
+      if(t.sold>0)flows.push('<span class="r">−'+fmtNum(t.sold)+' sold</span>');
+      if(t.recv>0)flows.push('<span class="b">+'+fmtNum(t.recv)+' in</span>');
+      if(t.sent>0)flows.push('<span class="am">−'+fmtNum(t.sent)+' out</span>');
+      const clsKey='cls-'+(t.classification||'').replace(/[^a-z]/g,'');
+      return '<div class="trow">'
+        +(t.logo?'<img class="tlogo" src="'+esc(t.logo)+'" onerror="this.style.visibility=\'hidden\'"/>':'<div class="tlogo"></div>')
+        +'<div class="tname"><div class="sym">'+esc(t.symbol||shortAddr(t.mint))+'</div>'
+        +'<a href="https://solscan.io/token/'+esc(t.mint)+'" target="_blank">'+esc(shortAddr(t.mint))+' ↗</a> '
+        +'<span class="tcls '+clsKey+'">'+esc(t.classification)+'</span></div>'
+        +'<div class="tflow">'+(flows.join('<br>')||'—')
+        +(t.held>0?'<br><span style="color:var(--green)">holds '+fmtNum(t.held)+(t.heldUsd?' · '+fmtUsd(t.heldUsd):'')+'</span>':'')
+        +'</div></div>';
+    }).join('');
+    h+='</div>';
+  }
+
+  h+='<div class="disc">📜 '+esc(d.disclaimer)+'</div>';
+
+  R.innerHTML=h;
+  R.classList.add('show');
+  R.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+if(qp.get('wallet'))run();
+</script>
+</body>
+</html>
