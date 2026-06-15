@@ -3583,7 +3583,10 @@ const JUPUSDC_POOL = "HfgjZDmexhFVD28Vkb1NbQwWeXP3uDcVTLPjSGHmRHhL";
 // Split anti-thrash: minRecenterSecOor (120s) = OUT of range → earning $0, react on the
 // next check; minRecenterSec (1800s) = near-edge but still earning → wait so we don't churn
 // (each rebalance crystallizes IL — the "tight chasers died on choppy days" lesson).
-function jupUsdcCfg() { return { enabled: false, halfWidthPct: 3, distribution: "curve", edgeFrac: 0.12, minRecenterSec: 1800, minRecenterSecOor: 120, maxImpactPct: 0.2, ...kv.get("jupUsdcCfg", {}) }; }
+// distribution "spot" (owner's call 2026-06-15, switched from "curve"): the reopened position
+// spreads liquidity EVENLY across the ±width band instead of center-weighting it. A kv
+// {distribution:"curve"} can override; the code default is the owner's current intent.
+function jupUsdcCfg() { return { enabled: false, halfWidthPct: 3, distribution: "spot", edgeFrac: 0.12, minRecenterSec: 1800, minRecenterSecOor: 120, maxImpactPct: 0.2, ...kv.get("jupUsdcCfg", {}) }; }
 async function jupUsdcRecenter({ dryRun = false, force = false } = {}) {
   if (!meteora.isEnabled()) return { action: "none", reason: "operator not set" };
   const cfg = jupUsdcCfg();
