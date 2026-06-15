@@ -129,6 +129,14 @@
         <div class="t" id="cbTitle">✅ LESSON COMPLETE</div>
         <div id="cbText" style="font-size:12px;color:#D1D5DB;margin-top:4px">Professor Cluck says you've got this one. Onward.</div>
         <button class="nextbtn" id="nextBtn" onclick="nextLesson()">NEXT LESSON →</button>
+        <div id="gradClaim" style="display:none;margin-top:14px;padding-top:13px;border-top:1px dashed rgba(255,255,255,0.12);text-align:left;">
+          <div style="font-family:'Oswald',sans-serif;font-weight:700;color:var(--accent);font-size:13px;letter-spacing:0.5px;">🎁 GRADUATE REWARD — CLAIM CLKN</div>
+          <div style="font-size:11.5px;color:#D1D5DB;line-height:1.55;margin:6px 0 9px;">Show off your win: post on <b>X tagging @firechicken007</b> <i>or</i> drop it in our <b>Telegram</b>, then claim. We verify and send your CLKN. One reward per wallet.</div>
+          <input id="gradWallet" type="text" placeholder="Your Solana wallet address" autocomplete="off" style="width:100%;background:#0d0d0d;border:1px solid var(--border);border-radius:9px;padding:10px;color:var(--text);font-family:var(--mono);font-size:13px;margin-bottom:7px;"/>
+          <input id="gradSocial" type="text" placeholder="Paste your X post link OR Telegram @handle" autocomplete="off" style="width:100%;background:#0d0d0d;border:1px solid var(--border);border-radius:9px;padding:10px;color:var(--text);font-family:var(--mono);font-size:13px;margin-bottom:9px;"/>
+          <button class="nextbtn" id="gradClaimBtn" style="background:linear-gradient(135deg,#10B981,#059669);color:#04140d;" onclick="submitGradClaim()">CLAIM CLKN REWARD</button>
+          <div id="gradMsg" style="font-size:12px;line-height:1.5;margin-top:9px;"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -265,21 +273,40 @@
     await turn('', true);
     document.getElementById('answer').focus();
   }
-  function onExamFinished(passed){
+  var gradToken=null;
+  function onExamFinished(passed, token){
     var b=document.getElementById('completeBanner'); b.classList.add('show');
     var t=document.getElementById('cbTitle'), tx=document.getElementById('cbText'), nb=document.getElementById('nextBtn');
     document.getElementById('answer').disabled=true; document.getElementById('sendBtn').disabled=true;
     if(passed){
-      markGraduated(curCourse.id);
+      markGraduated(curCourse.id); gradToken=token||null;
       t.textContent='🎓 PASSED — COURSE GRADUATE!';
       tx.textContent='You passed the final for '+curCourse.title+'. That one\'s in the books.';
       nb.textContent='← BACK TO COURSES'; nb.onclick=goCourses; nb.style.display='';
+      var gc=document.getElementById('gradClaim'); document.getElementById('gradMsg').textContent='';
+      gc.style.display = gradToken ? 'block' : 'none'; // reward claim only with a valid token
     } else {
+      gradToken=null; document.getElementById('gradClaim').style.display='none';
       t.textContent='📕 Not this time';
       tx.textContent='You didn\'t hit the pass mark — review the lessons and retake the final when you\'re ready.';
       nb.textContent='↻ RETAKE THE FINAL'; nb.onclick=openExam; nb.style.display='';
     }
     b.scrollIntoView({behavior:'smooth',block:'end'});
+  }
+  async function submitGradClaim(){
+    var w=(document.getElementById('gradWallet').value||'').trim();
+    var soc=(document.getElementById('gradSocial').value||'').trim();
+    var msg=document.getElementById('gradMsg'), btn=document.getElementById('gradClaimBtn');
+    if(!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(w)){ msg.style.color='#FCA5A5'; msg.textContent='Enter a valid Solana wallet address.'; return; }
+    if(soc.length<5){ msg.style.color='#FCA5A5'; msg.textContent='Paste your X post link or Telegram @handle so we can verify.'; return; }
+    btn.disabled=true; msg.style.color='#9CA3AF'; msg.textContent='Submitting…';
+    try{
+      var r=await fetch('/api/classroom/graduate-claim',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({courseId:curCourse.id, token:gradToken, wallet:w, social:soc})});
+      var d=await r.json();
+      if(d.success){ msg.style.color='#6EE7B7'; msg.textContent=d.message||'Claim received!'; btn.style.display='none'; }
+      else { msg.style.color='#FCA5A5'; msg.textContent=d.error||'Could not submit — try again.'; btn.disabled=false; }
+    }catch(e){ msg.style.color='#FCA5A5'; msg.textContent='Network hiccup — try again.'; btn.disabled=false; }
   }
 
   function addMsg(role,text){
@@ -320,7 +347,7 @@
       if(message) chatHist.push({role:'user',content:message});
       chatHist.push({role:'assistant',content:d.reply});
       addMsg('assistant', d.reply);
-      if(mode==='exam'){ if(d.finished) onExamFinished(!!d.passed); }
+      if(mode==='exam'){ if(d.finished) onExamFinished(!!d.passed, d.gradToken); }
       else if(d.complete){ markDone(curCourse.id,curLesson.id); onComplete(); }
     }catch(e){
       thinking(false);
@@ -345,6 +372,7 @@
 
   function onComplete(){
     var b=document.getElementById('completeBanner'); b.classList.add('show');
+    document.getElementById('gradClaim').style.display='none'; // claim form is exam-only
     var idx=curCourse.lessons.findIndex(function(l){return l.id===curLesson.id;});
     var hasNext=idx>=0 && idx<curCourse.lessons.length-1;
     var p=courseProgress(curCourse);

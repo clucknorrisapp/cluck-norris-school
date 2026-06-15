@@ -2751,6 +2751,50 @@ RULES: Never give financial advice or price predictions. Encouraging but blunt. 
   } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
 });
 
+// ── Classroom graduate reward claim ────────────────────────────────────────────────────
+// A graduate who PASSED a course final (single-use server-issued token) submits a wallet +
+// social proof (X post tagging us, or a Telegram post — owner's call). Recorded to a review
+// queue; the OWNER verifies the social proof and batch-airdrops CLKN via the Airdropper. One
+// reward per wallet. No auto-spend — keeps the money owner-controlled and Sybil-reviewable.
+const GRAD_TOKEN_TTL = 24 * 3600 * 1000;
+app.post("/api/classroom/graduate-claim", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  const { courseId, token, wallet, social } = req.body || {};
+  const w = String(wallet || "").trim();
+  if (!SOL_ADDR_RE.test(w)) return res.status(400).json({ success: false, error: "Enter a valid Solana wallet address" });
+  const soc = String(social || "").trim().slice(0, 300);
+  if (soc.length < 5) return res.status(400).json({ success: false, error: "Paste your X or Telegram post link / handle so we can verify" });
+  // Verify + consume the single-use graduation token.
+  const toks = kv.get("classroomGradTokens", {}) || {};
+  const t = token && toks[String(token)];
+  if (!t || t.courseId !== courseId || (Date.now() - (t.ts || 0)) > GRAD_TOKEN_TTL) {
+    return res.status(400).json({ success: false, error: "Graduation not verified — pass the course final first (or it expired; retake the final)." });
+  }
+  delete toks[String(token)]; kv.set("classroomGradTokens", toks); // single-use
+  const grads = kv.get("classroomGraduates", {}) || {};
+  if (grads[w]) return res.status(200).json({ success: true, already: true, message: "This wallet already claimed a graduate reward — one per wallet. You're on the list." });
+  const course = ccFindCourse(courseId);
+  grads[w] = { wallet: w, courseId, courseTitle: course ? course.title : courseId, social: soc, ts: Date.now(), status: "pending" };
+  kv.set("classroomGraduates", grads);
+  return res.status(200).json({ success: true, message: "🎓 Claim received! You're on the graduate list. We verify the social post, then send your CLKN reward. Welcome to the flock." });
+});
+
+// Admin — review/manage the graduate reward queue. ?action=approve|paid|reject&wallet=… to set status;
+// no action = list. Approved/paid wallets are what you batch into the Airdropper.
+app.get("/api/classroom/graduates", (req, res) => {
+  if (!adminAuthOK(req)) return res.status(404).json({ success: false, error: "not found" });
+  const grads = kv.get("classroomGraduates", {}) || {};
+  const action = req.query.action, w = String(req.query.wallet || "").trim();
+  if (action && w && grads[w]) {
+    if (action === "reject") delete grads[w];
+    else if (["approve", "paid", "pending"].includes(action)) grads[w].status = action;
+    kv.set("classroomGraduates", grads);
+  }
+  const list = Object.values(grads).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  return res.status(200).json({ success: true, count: list.length, byStatus: list.reduce((m, g) => { m[g.status] = (m[g.status] || 0) + 1; return m; }, {}), graduates: list });
+});
+
 // Course FINAL EXAM — Cluck administers a graded 6-question final from the whole course's
 // material. Pass = Course Graduate. Emits [EXAM PASSED] / [EXAM FAILED] on the final message.
 function courseExamPool(course) {
@@ -2799,7 +2843,14 @@ RULES: No financial advice. Encouraging but honest. No markdown headers/asterisk
       const passed = /\[EXAM PASSED\]/i.test(reply);
       const failed = /\[EXAM FAILED\]/i.test(reply);
       reply = reply.replace(/\[EXAM (PASSED|FAILED)\]/ig, "").trim();
-      return res.status(200).json({ success: true, reply, finished: passed || failed, passed });
+      let gradToken = null;
+      if (passed) { // issue a single-use, server-verified graduation token so a claim can't be faked
+        gradToken = randomBytes(18).toString("hex");
+        const toks = kv.get("classroomGradTokens", {}) || {};
+        toks[gradToken] = { courseId, ts: Date.now() };
+        kv.set("classroomGradTokens", toks);
+      }
+      return res.status(200).json({ success: true, reply, finished: passed || failed, passed, gradToken });
     }
     return res.status(500).json({ success: false, error: (data && data.error && data.error.message) || "Professor Cluck is hoarse — try again." });
   } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
