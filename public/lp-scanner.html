@@ -16,14 +16,14 @@
     --green: #10B981; --red: #EF4444; --blue: #60A5FA; --mono: 'Courier New', monospace;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); background-image: radial-gradient(ellipse at 20% 10%, rgba(217,119,6,0.10) 0%, transparent 50%), radial-gradient(ellipse at 80% 90%, rgba(16,185,129,0.06) 0%, transparent 50%); color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh; }
+  body { background: var(--bg); background-image: radial-gradient(ellipse at 12% 6%, rgba(217,119,6,0.13) 0%, transparent 45%), radial-gradient(ellipse at 88% 4%, rgba(167,139,250,0.10) 0%, transparent 45%), radial-gradient(ellipse at 78% 92%, rgba(34,211,238,0.08) 0%, transparent 50%), radial-gradient(ellipse at 18% 96%, rgba(16,185,129,0.07) 0%, transparent 50%); color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh; }
   .wrap { max-width: 760px; margin: 0 auto; padding: 24px 16px 80px; }
   a.back-home { display:inline-flex; align-items:center; gap:6px; font-family:Oswald,sans-serif; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin:0 0 12px; }
   .back-home img { height:22px; width:22px; object-fit:cover; border-radius:50%; border:1px solid var(--orange); }
   .header { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
   .header-icon { font-size: 40px; filter: drop-shadow(0 0 16px rgba(217,119,6,0.5)); }
   .header .brand-mini { font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 4px; color: var(--orange); margin-bottom: 4px; font-weight: 700; }
-  .header h1 { font-family: 'Oswald', sans-serif; font-size: 27px; font-weight: 900; letter-spacing: 2px; background: linear-gradient(135deg, #FCD34D, #D97706, #F59E0B); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
+  .header h1 { font-family: 'Oswald', sans-serif; font-size: 27px; font-weight: 900; letter-spacing: 2px; background: linear-gradient(110deg, #FCD34D, #F59E0B, #A78BFA, #22D3EE, #6EE7B7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
   .header p { font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
   .intro { font-size: 13px; line-height: 1.7; color: #D1D5DB; }
@@ -44,8 +44,17 @@
   .scan-btn { width:100%; margin-top:14px; padding:14px; border:none; border-radius:10px; background:linear-gradient(135deg,#D97706,#F59E0B); color:#1a1a1a; font-family:'Oswald',sans-serif; font-weight:900; letter-spacing:2px; font-size:15px; cursor:pointer; }
   .scan-btn:disabled { opacity:0.5; cursor:wait; }
   .quick { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
-  .quick button { background:transparent; border:1px solid var(--border); border-radius:20px; padding:6px 12px; color:var(--subtext); font-family:var(--mono); font-size:11px; cursor:pointer; }
-  .quick button:hover { border-color:var(--orange); color:var(--accent); }
+  .quick button { background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:20px; padding:6px 12px; color:#D1D5DB; font-family:var(--mono); font-size:11px; cursor:pointer; transition:all 0.12s; }
+  .quick button:hover { transform:translateY(-1px); }
+  /* Rotating accent colors so the quick picks pop instead of a row of grey pills. */
+  .quick button:nth-child(5n+1){ border-color:rgba(167,139,250,0.5); color:#C4B5FD; }
+  .quick button:nth-child(5n+2){ border-color:rgba(34,211,238,0.5); color:#67E8F9; }
+  .quick button:nth-child(5n+3){ border-color:rgba(110,231,183,0.5); color:#6EE7B7; }
+  .quick button:nth-child(5n+4){ border-color:rgba(252,211,77,0.5); color:#FCD34D; }
+  .quick button:nth-child(5n+5){ border-color:rgba(244,114,182,0.5); color:#F9A8D4; }
+  .quick button:hover { background:rgba(255,255,255,0.06); }
+  /* DEX signature colors — applied to dex labels in chips + the results table. */
+  .dexcol { font-weight:700; }
   .badge { display:inline-block; font-family:'Oswald',sans-serif; font-weight:700; font-size:11px; letter-spacing:1px; padding:4px 10px; border-radius:20px; }
   .il-minimal { background:rgba(16,185,129,0.12); color:#6EE7B7; border:1px solid rgba(16,185,129,0.4); }
   .il-low { background:rgba(96,165,250,0.12); color:#93C5FD; border:1px solid rgba(96,165,250,0.4); }
@@ -198,7 +207,7 @@
 
   <div class="card" style="margin-top:16px;">
     <div class="disclaimer">
-      <b>Informational only — NOT financial advice.</b> Providing liquidity carries impermanent-loss and smart-contract risk. Earnings estimates use a calibrated model and are not guarantees. Always do your own research. Fee tiers read on-chain (Meteora / Orca / Raydium); some newer DEXs aren't indexed yet and show "—".
+      <b>Informational only — NOT financial advice.</b> Providing liquidity carries impermanent-loss and smart-contract risk. Earnings estimates use a calibrated model and are not guarantees. Always do your own research. Fee tiers read live (Meteora DLMM &amp; DAMM v2, Orca, Raydium, PumpSwap, PancakeSwap v3); a few smaller DEXs aren't wired yet and honestly show "—".
     </div>
   </div>
 </div>
@@ -206,6 +215,9 @@
 <script>
   var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
   var fmt = function(n){ n=Number(n)||0; return n>=1e6?("$"+(n/1e6).toFixed(2)+"M"):n>=1e3?("$"+(n/1e3).toFixed(1)+"K"):("$"+Math.round(n)); };
+  // Signature color per DEX so the venue jumps out at a glance instead of grey text.
+  var DEX_COLORS={meteora:'#A78BFA','meteora-damm-v2':'#C4B5FD','meteora-damm':'#C4B5FD',orca:'#38BDF8',raydium:'#22D3EE','raydium-clmm':'#22D3EE','raydium-cpmm':'#22D3EE',pumpswap:'#F9A8D4','pancakeswap-v3-solana':'#F472B6',lifinity:'#6EE7B7',invariant:'#FCD34D',crema:'#FBBF24',fluxbeam:'#FB923C',saber:'#34D399',humidifi:'#94A3B8',solfi:'#94A3B8'};
+  function dexColor(d){ return DEX_COLORS[(d||'').toLowerCase()]||'#A8B0BC'; }
   var lastScan = null;
 
   var lastMode='pair';
@@ -304,7 +316,7 @@
       var ilDot = p.ilRisk ? '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+(ilColor[p.ilRisk.level]||'#9CA3AF')+';margin-right:6px;" title="IL: '+esc(p.ilRisk.level)+'"></span>' : '';
       var dead = (p.volume&&p.volume.h24>0)?'':' <span style="font-size:8px;color:#9CA3AF;">idle</span>';
       rows+='<tr class="clk '+(isBest?'best':'')+'" data-pool="'+esc(p.address)+'" data-dex="'+esc(p.dex)+'">'
-        +'<td>'+ilDot+'<span class="dex">'+(isBest?'<span class="crown">★ </span>':'')+esc(p.pair||'?')+'</span>'+dead+'<div style="font-size:9px;color:#9CA3AF;text-transform:capitalize;">'+esc(p.dex)+'</div></td>'
+        +'<td>'+ilDot+'<span class="dex">'+(isBest?'<span class="crown">★ </span>':'')+esc(p.pair||'?')+'</span>'+dead+'<div class="dexcol" style="font-size:9px;color:'+dexColor(p.dex)+';text-transform:capitalize;">'+esc(p.dex)+'</div></td>'
         +'<td>'+(hasFee?esc(p.feeTier)+'%':'<span class="muted">—</span>')+'</td>'
         +'<td>'+fmt(p.tvlUsd)+'</td>'
         +'<td>'+fmt(p.volume&&p.volume.h24)+'</td>'
@@ -379,9 +391,9 @@
         var dot = lvl ? '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:'+(ilColor[lvl]||'#9CA3AF')+';margin-right:5px;vertical-align:middle;"></span>' : '';
         var yColor = risky ? '#FCD34D' : '#6EE7B7';
         var yStr = yv!=null ? (yv+'%/d') : '—';
-        html+='<div class="top-chip'+(risky?' risk':'')+'" data-pool="'+esc(p.address)+'" data-dex="'+esc(p.dex)+'" data-label="'+esc(p.pair||'')+'">'
+        html+='<div class="top-chip'+(risky?' risk':'')+'" style="border-left:3px solid '+dexColor(p.dex)+'" data-pool="'+esc(p.address)+'" data-dex="'+esc(p.dex)+'" data-label="'+esc(p.pair||'')+'">'
           +'<div class="p">'+dot+esc(p.pair||'?')+'</div>'
-          +'<div class="d">'+esc(p.dex)+(risky?' · ⚠ risk':'')+'</div>'
+          +'<div class="d dexcol" style="color:'+dexColor(p.dex)+'">'+esc(p.dex)+(risky?' · ⚠ risk':'')+'</div>'
           +'<div class="y" style="color:'+yColor+'">'+yStr+'</div>'
           +'</div>';
       });
