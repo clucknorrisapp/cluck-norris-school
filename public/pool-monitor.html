@@ -112,7 +112,6 @@
     // peak bursts
     html+='<div class="grid" style="margin-top:9px">'
       +stat('🚀 PEAK $/MIN', f.peakPerMinUsd?('$'+Number(f.peakPerMinUsd).toFixed(2)+'/min'):'—','o')
-      +stat('🚀 PEAK $/MIN → /DAY', f.peakPerMinUsd?('~'+fmtBig(f.peakPerMinUsd*1440)+'/day'):'—','o')
       +stat('🚀 BEST HOUR', f.peakPerHourUsd?fmtUsd(f.peakPerHourUsd):'—','o')
       +'</div></div>';
     // live pool
