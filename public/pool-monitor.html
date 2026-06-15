@@ -133,7 +133,7 @@
     document.getElementById('content').innerHTML=html;
   }
 
-  if(getKey()) load();
+  load(); // always: shows the key input when there's no key, otherwise loads data
   setInterval(load, 20000);
 </script>
 </body>
