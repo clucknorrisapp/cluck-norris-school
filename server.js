@@ -6735,16 +6735,21 @@ app.get("/api/wallet-xray", async (req, res) => {
 
       for (const [m, v] of moved) {
         tokensTraded.add(m);
-        const st = mintStats.get(m) || { mint: m, bought: 0, sold: 0, recv: 0, sent: 0, buyCount: 0, sellCount: 0, firstAcq: null, firstSell: null };
+        const st = mintStats.get(m) || { mint: m, bought: 0, sold: 0, recv: 0, sent: 0, buyCount: 0, sellCount: 0, firstBuy: null, firstSell: null };
         if (v > 0) {
-          if (isSwap || quoteUsd < -0.01) { st.bought += v; st.buyCount++; buyCount++; if (quoteUsd < 0) solSpentBuys += -quoteUsd; }
-          else { st.recv += v; tokenRecvCount++; recvFrom.add([...extIn][0] || ""); }
-          if (st.firstAcq == null || (ts && ts < st.firstAcq)) st.firstAcq = ts;
+          if (isSwap || quoteUsd < -0.01) {
+            st.bought += v; st.buyCount++; buyCount++; if (quoteUsd < 0) solSpentBuys += -quoteUsd;
+            // firstBuy = first real BUY only (a transfer/airdrop IN is NOT a buy).
+            if (st.firstBuy == null || (ts && ts < st.firstBuy)) st.firstBuy = ts;
+          } else { st.recv += v; tokenRecvCount++; recvFrom.add([...extIn][0] || ""); }
         } else {
           const av = -v;
-          if (isSwap || quoteUsd > 0.01) { st.sold += av; st.sellCount++; sellCount++; if (quoteUsd > 0) solGainedSells += quoteUsd; }
-          else { st.sent += av; tokenSendCount++; sentTo.add([...extOut][0] || ""); }
-          if (st.firstSell == null || (ts && ts < st.firstSell)) st.firstSell = ts;
+          if (isSwap || quoteUsd > 0.01) {
+            st.sold += av; st.sellCount++; sellCount++; if (quoteUsd > 0) solGainedSells += quoteUsd;
+            // firstSell = first real SELL only. A plain transfer OUT to another wallet is NOT a
+            // sell and must never count as a flip (you didn't exit — you moved it).
+            if (st.firstSell == null || (ts && ts < st.firstSell)) st.firstSell = ts;
+          } else { st.sent += av; tokenSendCount++; sentTo.add([...extOut][0] || ""); }
         }
         mintStats.set(m, st);
       }
@@ -6833,12 +6838,13 @@ app.get("/api/wallet-xray", async (req, res) => {
     for (const t of initiatedTs) { const k = Math.floor(t / 60); minuteBuckets.set(k, (minuteBuckets.get(k) || 0) + 1); }
     const maxPerMinute = minuteBuckets.size ? Math.max(...minuteBuckets.values()) : 0;
 
-    // Flip speed (dumper tell): for tokens both acquired and sold, hold = firstSell − firstAcq.
+    // Flip speed (dumper tell): a flip is BOUGHT then SOLD — hold = firstSell − firstBuy.
+    // Tokens that were only transferred out (not sold) are NOT flips and don't count here.
     const holds = [];
     let fastFlipCount = 0, recvThenSold = 0;
     for (const st of mintStats.values()) {
-      if (st.firstAcq && st.firstSell && st.firstSell >= st.firstAcq) {
-        const h = st.firstSell - st.firstAcq; holds.push(h);
+      if (st.firstBuy && st.firstSell && st.firstSell >= st.firstBuy) {
+        const h = st.firstSell - st.firstBuy; holds.push(h);
         if (h < 3600) fastFlipCount++;
       }
       if (st.recv > 0 && st.sold > 0) recvThenSold++;
@@ -6858,9 +6864,10 @@ app.get("/api/wallet-xray", async (req, res) => {
       const p = priceInfo[t.mint] || {};
       let cls;
       if (held > 0 && t.sellCount === 0 && t.buyCount > 0) cls = "holding";
-      else if (t.firstAcq && t.firstSell && (t.firstSell - t.firstAcq) < 3600) cls = "fast flip";
+      else if (t.firstBuy && t.firstSell && (t.firstSell - t.firstBuy) < 3600) cls = "fast flip";
       else if (t.recv > 0 && t.sold > 0) cls = "received & sold";
       else if (t.sold > t.bought * 1.2 && t.sold > 0) cls = "net seller";
+      else if (t.sent > 0 && t.sellCount === 0 && t.buyCount === 0) cls = "transferred out";
       else if (t.buyCount > 0 || t.sellCount > 0) cls = "traded";
       else cls = "moved";
       return {
