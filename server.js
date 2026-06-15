@@ -3307,7 +3307,7 @@ app.get("/api/pool-monitor", async (req, res) => {
       const win = samples.filter((s) => s.ts >= b.ts - 3600000); if (win.length >= 2) last1hUsd = Number((win[win.length - 1].lifetimeUsd - win[0].lifetimeUsd).toFixed(2));
     }
     let pool = {};
-    try { const j = await lpScanner.cgFetch(`/pools/${JUPUSDC_POOL}`); const a = (j.data || {}).attributes || {}; const v = a.volume_usd || {}; pool = { tvlUsd: Math.round(+a.reserve_in_usd || 0), volH1: Math.round(+v.h1 || 0), volH24: Math.round(+v.h24 || 0) }; } catch (_) {}
+    try { const j = await lpScanner.cgFetch(`/networks/solana/pools/${JUPUSDC_POOL}`); const a = (j.data || {}).attributes || {}; const v = a.volume_usd || {}; pool = { tvlUsd: Math.round(+a.reserve_in_usd || 0), volH1: Math.round(+v.h1 || 0), volH24: Math.round(+v.h24 || 0) }; } catch (_) {}
     let position = null;
     if (pos) {
       const span = pos.upperBinId - pos.lowerBinId, frac = span > 0 ? (pos.activeBinId - pos.lowerBinId) / span : 0.5;
