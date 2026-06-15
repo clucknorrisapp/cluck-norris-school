@@ -17,7 +17,11 @@
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); background-image: radial-gradient(ellipse at 12% 6%, rgba(217,119,6,0.13) 0%, transparent 45%), radial-gradient(ellipse at 88% 4%, rgba(167,139,250,0.10) 0%, transparent 45%), radial-gradient(ellipse at 78% 92%, rgba(34,211,238,0.08) 0%, transparent 50%), radial-gradient(ellipse at 18% 96%, rgba(16,185,129,0.07) 0%, transparent 50%); color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh; }
-  .wrap { max-width: 760px; margin: 0 auto; padding: 24px 16px 80px; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 24px 16px 80px; display:flex; flex-direction:column; }
+  /* Page order: scan tool on top, Top Pools collapsible below it (set via flex order so we
+     don't shuffle DOM). Everything gets an explicit order so nothing floats out of place. */
+  a.back-home { order:1; } .header { order:2; } .scan-card { order:3; } #topCard { order:4; }
+  #err { order:5; } #results { order:6; } .card { order:7; } .intro-card { order:8; }
   a.back-home { display:inline-flex; align-items:center; gap:6px; font-family:Oswald,sans-serif; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin:0 0 12px; }
   .back-home img { height:22px; width:22px; object-fit:cover; border-radius:50%; border:1px solid var(--orange); }
   .header { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
@@ -136,23 +140,17 @@
   <!-- Top Pools — compact horizontal scroller at the top; expand/collapse; doesn't push results down -->
   <div class="card" id="topCard" style="padding:11px 13px;">
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-      <button id="topToggle" onclick="toggleTop()" style="background:none;border:none;color:var(--accent);font-family:'Oswald',sans-serif;font-weight:900;letter-spacing:1px;font-size:14px;cursor:pointer;padding:0;">🔥 TOP POOLS <span id="topCaret">▾</span></button>
+      <button id="topToggle" onclick="toggleTop()" style="background:none;border:none;color:var(--accent);font-family:'Oswald',sans-serif;font-weight:900;letter-spacing:1px;font-size:14px;cursor:pointer;padding:0;">🔥 TOP POOLS <span style="font-size:10px;color:var(--subtext);letter-spacing:0.5px;">— tap to expand</span> <span id="topCaret">▸</span></button>
       <button class="top-tab" id="tab-trending" onclick="setTopKind('trending')">Trending</button>
       <button class="top-tab on" id="tab-bluechip" onclick="setTopKind('bluechip')">Blue-chip</button>
       <span class="note-line" id="topUpdated" style="margin:0 0 0 auto;"></span>
     </div>
-    <div id="topBody">
+    <div id="topBody" style="display:none">
       <div id="topRisk" style="display:none;margin:8px 0 0;padding:9px 11px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.4);border-radius:9px;font-family:system-ui;font-size:11px;line-height:1.5;color:#FCA5A5;">
         ⚠️ <b>Mostly fresh memecoins — very high risk.</b> Those huge yields are real fee numbers, but these pools can lose most of their value or rug in hours; IL + a dying token routinely wipe out far more than the fees pay. High yield ≠ safe. <b>Not financial advice.</b>
       </div>
       <div class="top-strip" id="topStrip"><span class="muted" style="padding:8px;"><span class="spin"></span> loading…</span></div>
       <div class="note-line" id="topNote" style="margin:0;">Durable, won’t-disappear projects — majors, stables, LSTs, BTC/ETH — ranked by 7-day-avg fee yield. The long-term board. Swipe ➜ &nbsp;·&nbsp; tap any for the details.</div>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="intro">
-      Picking where to provide liquidity? <b>Scan every open pool across every Solana DEX</b> — Meteora, Orca, Raydium &amp; more — ranked by real <b>fee yield</b>, not just volume. Enter <b>one token</b> to see <b>every pair it trades in</b>, or <b>two</b> for a head-to-head. Then ask Cluck.
     </div>
   </div>
 
@@ -370,12 +368,16 @@
 
   // Top Pools — compact horizontal scroller at the top. Trending (hot, memes) + Blue-chip
   // (durable). Refreshed server-side hourly. Tap a chip → simulator. Collapsible.
-  var topKind='bluechip', topLoaded={};
+  var topKind='bluechip', topLoaded={}, topEverOpened=false;
   function toggleTop(){
     var b=document.getElementById('topBody'); var open=b.style.display!=='none';
     b.style.display=open?'none':''; document.getElementById('topCaret').textContent=open?'▸':'▾';
+    // Lazy-load: only fetch the board the first time it's expanded (it's collapsed by default now).
+    if(!open && !topEverOpened){ topEverOpened=true; loadTopPools(); }
   }
   function setTopKind(k){
+    // Clicking a tab also expands the (default-collapsed) panel so the result is visible.
+    var tb=document.getElementById('topBody'); if(tb.style.display==='none'){ tb.style.display=''; document.getElementById('topCaret').textContent='▾'; topEverOpened=true; }
     if(k===topKind && topLoaded[k]) return;
     topKind=k;
     document.getElementById('tab-trending').className='top-tab'+(k==='trending'?' on':'');
@@ -415,7 +417,7 @@
       if(d.updatedAt){ var mins=Math.round((Date.now()-d.updatedAt)/60000); document.getElementById('topUpdated').textContent='updated '+(mins<1?'just now':mins+'m ago'); }
     }catch(e){ document.getElementById('topCard').style.display='none'; }
   }
-  loadTopPools();
+  // Top Pools is collapsed by default + lazy-loaded on first expand (see toggleTop).
 
   // ── Pool deep-dive + range/earnings simulator ──────────────────────────────
   var ddState = null; // { pool, dex, width }
