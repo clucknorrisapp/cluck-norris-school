@@ -3275,10 +3275,16 @@ app.get("/api/pool-monitor", async (req, res) => {
     const L = jupUsdcLedger();
     const mon = kv.get("poolMonitor", {}) || {};
     const samples = (mon.samples || []);
-    let recentRatePerMin = null, last1hUsd = null;
+    let recentRatePerMin = null, last1hUsd = null, paceWindowMin = null;
     if (samples.length >= 2) {
-      const a = samples[samples.length - 2], b = samples[samples.length - 1];
-      const dMin = (b.ts - a.ts) / 60000; if (dMin > 0) recentRatePerMin = Number(((b.lifetimeUsd - a.lifetimeUsd) / dMin).toFixed(3));
+      const b = samples[samples.length - 1];
+      // PACE over a trailing 30-min window. A single 2-min sample-to-sample delta is far too
+      // noisy: fees don't accrue every sample, so the rate read ~$0/day almost constantly.
+      // Fall back to the widest window available if <30 min of samples exist yet.
+      let pw = samples.filter((s) => s.ts >= b.ts - 30 * 60000);
+      if (pw.length < 2) pw = samples.slice(-2);
+      const dMin = (pw[pw.length - 1].ts - pw[0].ts) / 60000;
+      if (dMin > 0) { recentRatePerMin = Number(((pw[pw.length - 1].lifetimeUsd - pw[0].lifetimeUsd) / dMin).toFixed(3)); paceWindowMin = Math.round(dMin); }
       const win = samples.filter((s) => s.ts >= b.ts - 3600000); if (win.length >= 2) last1hUsd = Number((win[win.length - 1].lifetimeUsd - win[0].lifetimeUsd).toFixed(2));
     }
     let pool = {};
@@ -3294,7 +3300,7 @@ app.get("/api/pool-monitor", async (req, res) => {
       success: true, position, pool,
       fees: {
         lifetimeUsd, claimableUsd: position ? position.claimableUsd : null,
-        recentRatePerMin, recentRatePerDay: recentRatePerMin != null ? Number((recentRatePerMin * 1440).toFixed(0)) : null,
+        recentRatePerMin, recentRatePerDay: recentRatePerMin != null ? Number((recentRatePerMin * 1440).toFixed(0)) : null, paceWindowMin,
         last1hUsd, peakPerMinUsd: mon.peakPerMinUsd || 0, peakPerMinAt: mon.peakPerMinAt || null,
         peakPerHourUsd: mon.peakPerHourUsd || 0, peakPerHourAt: mon.peakPerHourAt || null, rebalances: L.recenters || 0,
       },

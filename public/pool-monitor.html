@@ -106,7 +106,7 @@
     html+='<div class="card"><div class="sec">💵 FEES &amp; PACE</div><div class="grid">'
       +stat('LIFETIME',fmtUsd(f.lifetimeUsd),'g')
       +stat('LAST 1H', f.last1hUsd!=null?fmtUsd(f.last1hUsd):'—','g')
-      +stat('NOW (PACE)', f.recentRatePerDay!=null?('~'+fmtBig(f.recentRatePerDay)+'/day'):'—')
+      +stat('PACE'+(f.paceWindowMin?' ('+f.paceWindowMin+'M)':''), f.recentRatePerDay!=null?('~'+fmtBig(f.recentRatePerDay)+'/day'):'—')
       +stat('REBALANCES', (f.rebalances||0))
       +'</div>';
     // peak bursts
