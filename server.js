@@ -3287,6 +3287,47 @@ app.get("/api/jup-recap-test", async (req, res) => {
   catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
 
+// Pool Monitor — live close-watch of the JUP/USDC earner (gated). Position + fee pace + peak
+// $/min & $/hr bursts (from poolMonitorTick) + live pool volume + edge proximity, so the owner
+// can watch closely and adjust. Powers the /pool-monitor dashboard.
+app.get("/api/pool-monitor", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ success: false, error: "not found" });
+  try {
+    let jupUsd = 0; try { jupUsd = (await getJupUsd()) || 0; } catch (_) {}
+    const m = await meteora.status({ jupUsd });
+    const pos = (m.positions || []).find((p) => p.pair === "JUP/USDC" && (p.valueUsd || 0) >= 1) || null;
+    const L = jupUsdcLedger();
+    const mon = kv.get("poolMonitor", {}) || {};
+    const samples = (mon.samples || []);
+    let recentRatePerMin = null, last1hUsd = null;
+    if (samples.length >= 2) {
+      const a = samples[samples.length - 2], b = samples[samples.length - 1];
+      const dMin = (b.ts - a.ts) / 60000; if (dMin > 0) recentRatePerMin = Number(((b.lifetimeUsd - a.lifetimeUsd) / dMin).toFixed(3));
+      const win = samples.filter((s) => s.ts >= b.ts - 3600000); if (win.length >= 2) last1hUsd = Number((win[win.length - 1].lifetimeUsd - win[0].lifetimeUsd).toFixed(2));
+    }
+    let pool = {};
+    try { const j = await lpScanner.cgFetch(`/pools/${JUPUSDC_POOL}`); const a = (j.data || {}).attributes || {}; const v = a.volume_usd || {}; pool = { tvlUsd: Math.round(+a.reserve_in_usd || 0), volH1: Math.round(+v.h1 || 0), volH24: Math.round(+v.h24 || 0) }; } catch (_) {}
+    let position = null;
+    if (pos) {
+      const span = pos.upperBinId - pos.lowerBinId, frac = span > 0 ? (pos.activeBinId - pos.lowerBinId) / span : 0.5;
+      const jupUsdVal = (pos.amountX || 0) * pos.currentPrice, tot = jupUsdVal + (pos.amountY || 0);
+      position = { valueUsd: pos.valueUsd, inRange: pos.inRange, price: pos.currentPrice, lower: pos.lowerPrice, upper: pos.upperPrice, claimableUsd: Number((pos.pendingFeeUsd || 0).toFixed(2)), jupPct: tot > 0 ? Math.round(jupUsdVal / tot * 100) : null, edgePct: Math.round(Math.min(frac, 1 - frac) * 100), frac: Number(frac.toFixed(3)) };
+    }
+    const lifetimeUsd = pos ? Number(((L.bankedClaimedUsd || 0) + (pos.claimedFeeUsd || 0) + (pos.pendingFeeUsd || 0)).toFixed(2)) : (mon.lastLifetimeUsd != null ? Number(mon.lastLifetimeUsd.toFixed(2)) : null);
+    return res.status(200).json({
+      success: true, position, pool,
+      fees: {
+        lifetimeUsd, claimableUsd: position ? position.claimableUsd : null,
+        recentRatePerMin, recentRatePerDay: recentRatePerMin != null ? Number((recentRatePerMin * 1440).toFixed(0)) : null,
+        last1hUsd, peakPerMinUsd: mon.peakPerMinUsd || 0, peakPerMinAt: mon.peakPerMinAt || null,
+        peakPerHourUsd: mon.peakPerHourUsd || 0, peakPerHourAt: mon.peakPerHourAt || null, rebalances: L.recenters || 0,
+      },
+      samples: samples.slice(-90), updatedAt: mon.lastTs || null,
+    });
+  } catch (e) { return res.status(200).json({ success: false, error: publicErrMsg(e) }); }
+});
+
 // Meteora DLMM positions — read-only status (gated). Lists the treasury wallet's
 // Meteora positions (range, amounts, pending fees, in-range) so the cbBTC/SOL
 // position on Meteora can be tracked alongside the Orca vault. Values use the
@@ -3442,6 +3483,9 @@ async function sendJupUsdcRecap({ send = true, reset = false, rebaselineClaimedU
   const costLine = (L.recenters || 0) > 0
     ? `\n🔄 Rebalances: <b>${L.recenters}</b> · est. cost ${fmtUsd(L.rebalanceCostUsd)} <i>(close→reopen seen; manual UI in-place swaps not counted)</i>`
     : `\n🔄 Rebalances: 0`;
+  const mon = kv.get("poolMonitor", {}) || {};
+  const peakLine = (mon.peakPerHourUsd || mon.peakPerMinUsd)
+    ? `\n🚀 Peak burst: <b>${fmtUsd((mon.peakPerMinUsd || 0) * 60)}/hr</b> rate (best hour ${fmtUsd(mon.peakPerHourUsd || 0)})` : "";
   const text =
     `💰 <b>JUP/USDC earner</b> — private recap\n` +
     `💧 Liquidity: <b>${fmtUsd(valueUsd)}</b> · ${pos.inRange ? "✅ in range" : "⚠️ OUT of range"}${rangeStr}\n` +
@@ -3449,6 +3493,7 @@ async function sendJupUsdcRecap({ send = true, reset = false, rebaselineClaimedU
     `💵 Fees lifetime: <b>${fmtUsd(lifetimeFeesUsd)}</b>` +
     deltaLine +
     costLine +
+    peakLine +
     `\n🧮 Net (fees − est. cost): <b>${signed(netUsd)}</b>` +
     `\n<i>operator-only · not posted to the community</i>`;
   if (send) meteoraDM(text);
@@ -7457,6 +7502,11 @@ app.get("/classroom", (req, res) => {
   res.sendFile(join(__dirname, "public", "classroom.html"));
 });
 
+app.get("/pool-monitor", (req, res) => {
+  res.setHeader("Cache-Control", "no-store, must-revalidate");
+  res.sendFile(join(__dirname, "public", "pool-monitor.html"));
+});
+
 // Shared market-header script for the token tools (repo public/ isn't statically mounted).
 app.get("/market-header.js", (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=3600");
@@ -8945,6 +8995,38 @@ app.listen(PORT, () => {
     }
     setInterval(jupUsdcRecenterTick, 5 * 60 * 1000);
     setTimeout(jupUsdcRecenterTick, 75000);
+    // Pool Monitor — sample the JUP/USDC earner every 2 min: fee pace + peak $/min & $/hr
+    // bursts + edge proximity, so the owner can watch closely and adjust. Powers /api/pool-monitor.
+    async function poolMonitorTick() {
+      try {
+        if (!meteora.isEnabled()) return;
+        let jupUsd = 0; try { jupUsd = (await getJupUsd()) || 0; } catch (_) {}
+        const m = await meteora.status({ jupUsd });
+        const pos = (m.positions || []).find((p) => p.pair === "JUP/USDC" && (p.valueUsd || 0) >= 1);
+        if (!pos) return;
+        const L = jupUsdcLedger();
+        const claimable = pos.pendingFeeUsd || 0, claimed = pos.claimedFeeUsd || 0;
+        const lifetimeUsd = (L.bankedClaimedUsd || 0) + claimed + claimable;
+        const now = Date.now();
+        const mon = kv.get("poolMonitor", null) || { peakPerMinUsd: 0, peakPerHourUsd: 0, samples: [] };
+        if (mon.lastTs && mon.lastLifetimeUsd != null) {
+          const dMin = (now - mon.lastTs) / 60000, dFee = lifetimeUsd - mon.lastLifetimeUsd;
+          if (dMin > 0 && dMin <= 6 && dFee >= 0) {
+            const rpm = dFee / dMin;
+            if (rpm > (mon.peakPerMinUsd || 0)) { mon.peakPerMinUsd = Number(rpm.toFixed(3)); mon.peakPerMinAt = now; }
+          }
+        }
+        const span = pos.upperBinId - pos.lowerBinId, frac = span > 0 ? (pos.activeBinId - pos.lowerBinId) / span : 0.5;
+        mon.samples.push({ ts: now, lifetimeUsd: Number(lifetimeUsd.toFixed(2)), value: Number((pos.valueUsd || 0).toFixed(2)), price: pos.currentPrice, inRange: pos.inRange, claimable: Number(claimable.toFixed(2)), frac: Number(frac.toFixed(3)) });
+        if (mon.samples.length > 200) mon.samples = mon.samples.slice(-200); // ~6.6h @ 2min
+        const win = mon.samples.filter((s) => s.ts >= now - 3600000);
+        if (win.length >= 2) { const hr = win[win.length - 1].lifetimeUsd - win[0].lifetimeUsd; if (hr > (mon.peakPerHourUsd || 0)) { mon.peakPerHourUsd = Number(hr.toFixed(2)); mon.peakPerHourAt = now; } }
+        mon.lastTs = now; mon.lastLifetimeUsd = lifetimeUsd;
+        kv.set("poolMonitor", mon);
+      } catch (e) { console.warn("[pool-monitor] tick failed:", e.message); }
+    }
+    setInterval(poolMonitorTick, 2 * 60 * 1000);
+    setTimeout(poolMonitorTick, 60000);
     // CLKN Blitz auto-revert — reset-proof: checks the persisted expiry every minute and
     // once shortly after boot, so a redeploy mid-blitz still reverts on time.
     setInterval(clknBlitzCheck, 60 * 1000);

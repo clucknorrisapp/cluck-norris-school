@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>📊 Pool Monitor — JUP/USDC Earner</title>
+<meta name="robots" content="noindex"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{color-scheme:dark;--bg:#0a0a0a;--card:#111;--border:rgba(255,255,255,0.08);--text:#F9FAFB;--sub:#6B7280;--accent:#FCD34D;--orange:#D97706;--green:#6EE7B7;--red:#FCA5A5;--mono:'Courier New',monospace;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);background-image:radial-gradient(ellipse at 20% 8%,rgba(217,119,6,0.10),transparent 50%);color:var(--text);font-family:system-ui,sans-serif;min-height:100vh;}
+  .wrap{max-width:760px;margin:0 auto;padding:22px 16px 70px;}
+  .header{display:flex;align-items:center;gap:12px;margin-bottom:4px;}
+  .header-icon{font-size:34px;}
+  h1{font-family:'Oswald',sans-serif;font-size:24px;font-weight:900;letter-spacing:2px;background:linear-gradient(135deg,#FCD34D,#D97706);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1;}
+  .sub{font-family:var(--mono);font-size:10px;color:var(--sub);letter-spacing:1px;margin:4px 0 16px;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px;}
+  .sec{font-family:'Oswald',sans-serif;font-weight:700;letter-spacing:1px;color:var(--accent);font-size:12px;margin-bottom:11px;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:9px;}
+  .stat{background:#0d0d0d;border:1px solid var(--border);border-radius:9px;padding:10px 11px;}
+  .stat .k{font-family:var(--mono);font-size:9px;color:var(--sub);letter-spacing:0.5px;}
+  .stat .v{font-family:'Oswald',sans-serif;font-weight:700;font-size:18px;margin-top:3px;}
+  .g{color:var(--green);} .a{color:var(--accent);} .r{color:var(--red);} .o{color:var(--orange);}
+  .range-wrap{margin-top:6px;}
+  .range-bar{position:relative;height:10px;border-radius:6px;background:linear-gradient(90deg,rgba(239,68,68,0.3),rgba(16,185,129,0.25),rgba(239,68,68,0.3));border:1px solid var(--border);}
+  .range-bar .mark{position:absolute;top:-3px;width:3px;height:16px;background:#fff;border-radius:2px;}
+  .range-lbl{display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;color:var(--sub);margin-top:4px;}
+  .banner{padding:10px 13px;border-radius:9px;font-family:system-ui;font-size:13px;font-weight:600;margin-bottom:14px;text-align:center;}
+  .ok{background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.4);color:var(--green);}
+  .warn{background:rgba(217,119,6,0.12);border:1px solid rgba(217,119,6,0.5);color:var(--accent);}
+  .bad{background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.5);color:var(--red);}
+  .keyrow{display:flex;gap:8px;margin-bottom:14px;}
+  .keyrow input{flex:1;background:#0d0d0d;border:1px solid var(--border);border-radius:9px;padding:11px;color:var(--text);font-family:var(--mono);font-size:13px;}
+  .keyrow button,.refresh{padding:0 16px;border:none;border-radius:9px;background:linear-gradient(135deg,#D97706,#F59E0B);color:#1a1a1a;font-family:'Oswald',sans-serif;font-weight:900;letter-spacing:1px;font-size:13px;cursor:pointer;}
+  .spark{display:flex;align-items:flex-end;gap:2px;height:46px;margin-top:8px;}
+  .spark i{flex:1;background:rgba(16,185,129,0.5);border-radius:1px;min-height:1px;}
+  .muted{color:var(--sub);font-size:12px;}
+  .foot{font-family:var(--mono);font-size:10px;color:var(--sub);text-align:center;margin-top:10px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header"><div class="header-icon">📊</div><div><h1>POOL MONITOR</h1></div></div>
+  <div class="sub">JUP/USDC EARNER · LIVE CLOSE-WATCH · OPERATOR ONLY</div>
+
+  <div class="keyrow" id="keyRow" style="display:none;">
+    <input id="keyInput" type="password" placeholder="Operator key" autocomplete="off"/>
+    <button onclick="saveKey()">UNLOCK</button>
+  </div>
+
+  <div id="content"><div class="card muted" style="text-align:center"><span id="boot">Enter your operator key to watch the pool.</span></div></div>
+  <div class="foot" id="foot"></div>
+</div>
+
+<script>
+  var KEY_LS='clkn_pm_key';
+  function getKey(){ try{ return localStorage.getItem(KEY_LS)||''; }catch(e){ return ''; } }
+  function saveKey(){ var k=document.getElementById('keyInput').value.trim(); if(!k)return; try{localStorage.setItem(KEY_LS,k);}catch(e){} document.getElementById('keyRow').style.display='none'; load(); }
+  function fmtUsd(n){n=Number(n)||0;return n>=1e6?'$'+(n/1e6).toFixed(2)+'M':n>=1e3?'$'+(n/1e3).toFixed(1)+'K':'$'+n.toFixed(2);}
+  function fmtBig(n){n=Number(n)||0;return n>=1e6?'$'+(n/1e6).toFixed(2)+'M':n>=1e3?'$'+(n/1e3).toFixed(0)+'K':'$'+Math.round(n);}
+  function ago(ts){ if(!ts)return''; var s=Math.round((Date.now()-ts)/1000); return s<60?(s+'s ago'):(Math.round(s/60)+'m ago'); }
+
+  function stat(k,v,cls){ return '<div class="stat"><div class="k">'+k+'</div><div class="v '+(cls||'')+'">'+v+'</div></div>'; }
+
+  async function load(){
+    var key=getKey();
+    if(!key){ document.getElementById('keyRow').style.display='flex'; document.getElementById('boot').textContent='Enter your operator key to watch the pool.'; return; }
+    try{
+      var r=await fetch('/api/pool-monitor?key='+encodeURIComponent(key),{cache:'no-store'});
+      if(r.status===404){ document.getElementById('keyRow').style.display='flex'; document.getElementById('content').innerHTML='<div class="card bad" style="text-align:center">Key rejected — try again.</div>'; return; }
+      var d=await r.json();
+      if(!d.success){ document.getElementById('content').innerHTML='<div class="card muted" style="text-align:center">'+(d.error||'No data yet — the monitor warms up a couple minutes after deploy.')+'</div>'; return; }
+      render(d);
+      document.getElementById('foot').textContent='auto-refreshing · data '+ago(d.updatedAt);
+    }catch(e){ document.getElementById('content').innerHTML='<div class="card muted" style="text-align:center">Network hiccup — retrying…</div>'; }
+  }
+
+  function render(d){
+    var p=d.position, f=d.fees||{}, pool=d.pool||{};
+    var html='';
+    // status banner
+    if(p){
+      if(!p.inRange) html+='<div class="banner bad">⚠️ OUT OF RANGE — earning $0. Rebalancer should recenter shortly.</div>';
+      else if(p.edgePct!=null && p.edgePct<=12) html+='<div class="banner warn">⚠️ Near the edge ('+p.edgePct+'% from out-of-range) — watch for a recenter.</div>';
+      else html+='<div class="banner ok">✅ In range &amp; earning · '+(p.edgePct!=null?p.edgePct+'% from the nearest edge':'')+'</div>';
+    }
+    // position
+    if(p){
+      html+='<div class="card"><div class="sec">💧 POSITION</div><div class="grid">'
+        +stat('VALUE',fmtUsd(p.valueUsd))
+        +stat('PRICE','$'+Number(p.price).toFixed(5))
+        +stat('SPLIT', (p.jupPct!=null?(p.jupPct+'% JUP / '+(100-p.jupPct)+'% USDC'):'—'))
+        +stat('CLAIMABLE',fmtUsd(p.claimableUsd),'a')
+        +'</div>';
+      // range bar
+      if(p.lower&&p.upper&&p.price){
+        var pos=Math.max(0,Math.min(1,(p.price-p.lower)/(p.upper-p.lower)))*100;
+        html+='<div class="range-wrap"><div class="range-bar"><div class="mark" style="left:'+pos.toFixed(1)+'%"></div></div>'
+          +'<div class="range-lbl"><span>$'+Number(p.lower).toFixed(5)+'</span><span>range</span><span>$'+Number(p.upper).toFixed(5)+'</span></div></div>';
+      }
+      html+='</div>';
+    }
+    // fees + pace
+    html+='<div class="card"><div class="sec">💵 FEES &amp; PACE</div><div class="grid">'
+      +stat('LIFETIME',fmtUsd(f.lifetimeUsd),'g')
+      +stat('LAST 1H', f.last1hUsd!=null?fmtUsd(f.last1hUsd):'—','g')
+      +stat('NOW (PACE)', f.recentRatePerDay!=null?('~'+fmtBig(f.recentRatePerDay)+'/day'):'—')
+      +stat('REBALANCES', (f.rebalances||0))
+      +'</div>';
+    // peak bursts
+    html+='<div class="grid" style="margin-top:9px">'
+      +stat('🚀 PEAK $/MIN', f.peakPerMinUsd?('$'+Number(f.peakPerMinUsd).toFixed(2)+'/min'):'—','o')
+      +stat('🚀 PEAK $/MIN → /DAY', f.peakPerMinUsd?('~'+fmtBig(f.peakPerMinUsd*1440)+'/day'):'—','o')
+      +stat('🚀 BEST HOUR', f.peakPerHourUsd?fmtUsd(f.peakPerHourUsd):'—','o')
+      +'</div></div>';
+    // live pool
+    html+='<div class="card"><div class="sec">🌊 LIVE POOL VOLUME</div><div class="grid">'
+      +stat('1H VOL',fmtBig(pool.volH1))
+      +stat('24H VOL',fmtBig(pool.volH24))
+      +stat('POOL TVL',fmtBig(pool.tvlUsd))
+      +'</div>';
+    // fee sparkline (lifetime deltas between samples)
+    var s=d.samples||[];
+    if(s.length>3){
+      var deltas=[]; for(var i=1;i<s.length;i++){ deltas.push(Math.max(0,(s[i].lifetimeUsd-s[i-1].lifetimeUsd))); }
+      var mx=Math.max.apply(null,deltas)||1;
+      html+='<div style="margin-top:4px"><div class="k" style="font-family:var(--mono);font-size:9px;color:var(--sub)">FEE FLOW (per 2-min sample, last '+deltas.length+')</div><div class="spark">'
+        +deltas.map(function(x){return '<i style="height:'+Math.max(2,Math.round(x/mx*46))+'px"></i>';}).join('')+'</div></div>';
+    }
+    html+='</div>';
+    document.getElementById('content').innerHTML=html;
+  }
+
+  if(getKey()) load();
+  setInterval(load, 20000);
+</script>
+</body>
+</html>
