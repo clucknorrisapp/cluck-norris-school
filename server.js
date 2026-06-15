@@ -7056,6 +7056,85 @@ function wxDur(sec) {
   return (sec / 86400).toFixed(1) + "d";
 }
 
+// Find a wallet's TRUE origin — its very first transaction and who funded it.
+// This is independent of the (capped) enhanced-history scan: we page SIGNATURES
+// ONLY (cheap — no enhanced parse) straight to the bottom of the wallet's history,
+// grab the oldest signature, then enhanced-parse just THAT one tx to see where the
+// first lamports came from (a CEX hot wallet, a service, or another wallet). Paging
+// signatures is fast enough to reach genesis on all but the most extreme wallets;
+// reachedGenesis reports honestly whether we hit the very first tx. totalSigs is the
+// wallet's lifetime transaction count when genesis is reached.
+async function wxFindOrigin(wallet, rpcUrl, HELIUS_KEY, labelWallet, { maxPages, deadline }) {
+  let before = null, oldestSig = null, totalSigs = 0, reachedGenesis = false, pages = 0, lastPage = [];
+  for (; pages < maxPages; pages++) {
+    if (Date.now() > deadline) break;
+    let arr = [];
+    try {
+      const r = await fetch(rpcUrl, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: "wo", method: "getSignaturesForAddress", params: [wallet, { limit: 1000, ...(before ? { before } : {}) }] }),
+      });
+      arr = (await r.json()).result || [];
+    } catch { break; }
+    if (!arr.length) { reachedGenesis = true; break; }
+    totalSigs += arr.length;
+    lastPage = arr;                          // keep the oldest page reached (sigs come newest-first)
+    oldestSig = arr[arr.length - 1].signature;
+    if (arr.length < 1000) { reachedGenesis = true; break; }
+    before = oldestSig;
+  }
+  if (!oldestSig) return null;
+
+  // Examine the OLDEST ~10 transactions, chronological. The wallet's first-ever tx is
+  // often unsolicited token DUST/spam — not the real funding. So we separate the first
+  // on-chain appearance from the first genuine SOL inflow (the actual money source).
+  const oldestSigs = lastPage.slice(-10).reverse().map((s) => s.signature); // oldest → newer
+  let parsed = [];
+  try {
+    const r = await fetch(`https://api.helius.xyz/v0/transactions?api-key=${HELIUS_KEY}`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transactions: oldestSigs }), signal: AbortSignal.timeout(14000),
+    });
+    const a = await r.json();
+    if (Array.isArray(a)) parsed = a.filter(Boolean).sort((x, y) => (x.timestamp || 0) - (y.timestamp || 0));
+  } catch {}
+
+  const DUST_SOL = 0.0015; // below this an inbound "SOL" is just rent dust, not funding
+  let firstActivity = null, funding = null, firstTokenIn = null;
+  for (const tx of parsed) {
+    const ts = tx.timestamp || 0;
+    if (!firstActivity) firstActivity = { sig: tx.signature, ts, type: tx.type || null, source: tx.source || null };
+    // First meaningful SOL inflow = the real funding event.
+    if (!funding) {
+      let best = 0, from = null;
+      for (const n of tx.nativeTransfers || []) { if (n.toUserAccount === wallet) { const amt = (Number(n.amount) || 0) / 1e9; if (amt > best) { best = amt; from = n.fromUserAccount; } } }
+      if (best >= DUST_SOL && from) funding = { sig: tx.signature, ts, funder: from, amountSol: best, kind: "SOL" };
+    }
+    // Track the first token received (for the dust note / token-funded wallets).
+    if (!firstTokenIn) for (const t of tx.tokenTransfers || []) { if (t.toUserAccount === wallet && t.fromUserAccount && t.fromUserAccount !== wallet) { firstTokenIn = { sig: tx.signature, ts, from: t.fromUserAccount, mint: t.mint }; break; } }
+    if (funding) break;
+  }
+
+  // Fall back to a token-funded origin if no SOL inflow appeared in the oldest slice.
+  if (!funding && firstTokenIn) funding = { sig: firstTokenIn.sig, ts: firstTokenIn.ts, funder: firstTokenIn.from, amountSol: 0, kind: "token" };
+  if (!funding && firstActivity && parsed[0] && parsed[0].feePayer && parsed[0].feePayer !== wallet) funding = { sig: firstActivity.sig, ts: firstActivity.ts, funder: parsed[0].feePayer, amountSol: 0, kind: "first-action" };
+
+  const dustFirst = !!(firstActivity && funding && firstActivity.sig !== funding.sig && firstActivity.ts < funding.ts);
+  return {
+    firstSig: firstActivity ? firstActivity.sig : oldestSig,
+    firstTs: firstActivity ? firstActivity.ts : 0,
+    firstActivity,
+    funder: funding ? funding.funder : null,
+    funderLabel: funding && funding.funder ? labelWallet(funding.funder) : null,
+    amountSol: funding ? funding.amountSol : 0,
+    kind: funding ? funding.kind : null,
+    fundingSig: funding ? funding.sig : null,
+    fundingTs: funding ? funding.ts : 0,
+    dustFirst,
+    lifetimeTx: totalSigs, reachedGenesis,
+  };
+}
+
 app.get("/api/wallet-xray", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
@@ -7084,6 +7163,14 @@ app.get("/api/wallet-xray", async (req, res) => {
     //    standard scan reaches, dig far deeper (5,000 txns, ~4-min budget).
     const deep = String(req.query.deep || "") === "1";
     const MAX_PAGES = deep ? 50 : 15, PAGE = 100, DEADLINE = Date.now() + (deep ? 235000 : 55000);
+    // Trace the wallet's TRUE origin in parallel (signature-paging to genesis is
+    // cheap and independent of the enhanced-history cap) — this is the vital
+    // "where did the money first come from" answer, reliable even on deep wallets.
+    // Signature-only paging is cheap (~1k sigs/request), so reach for genesis hard —
+    // this is what makes the AGE + funding origin honest on years-old wallets.
+    const originPromise = wxFindOrigin(wallet, rpcUrl, HELIUS_KEY, labelWallet, {
+      maxPages: deep ? 800 : 300, deadline: Date.now() + (deep ? 180000 : 48000),
+    }).catch(() => null);
     let before = null; const txs = []; let pages = 0, reachedEnd = false;
     for (; pages < MAX_PAGES; pages++) {
       if (Date.now() > DEADLINE) break;
@@ -7318,6 +7405,20 @@ app.get("/api/wallet-xray", async (req, res) => {
     const actionBreakdown = {};
     for (const r of rows) actionBreakdown[r.action] = (actionBreakdown[r.action] || 0) + 1;
 
+    // 5d. Resolve the true wallet origin (paged in parallel) and unify the funding read.
+    const origin = await originPromise;
+    let funding = null;
+    if (origin && origin.funder) {
+      funding = {
+        ts: origin.fundingTs || origin.firstTs, amountSol: origin.amountSol, from: origin.funder,
+        label: origin.funderLabel, sig: origin.fundingSig || origin.firstSig, kind: origin.kind,
+        exact: origin.reachedGenesis, reachedGenesis: origin.reachedGenesis, lifetimeTx: origin.lifetimeTx,
+        firstTs: origin.firstTs, firstSig: origin.firstSig, dustFirst: origin.dustFirst,
+      };
+    } else if (firstFunding) {
+      funding = { ...firstFunding, kind: "SOL", exact: false, reachedGenesis: false, firstTs: firstFunding.ts, dustFirst: false };
+    }
+
     // 6. CEX net direction.
     const cex = [...cexFlows.entries()].map(([name, e]) => ({ name, ...e, net: e.out - e.in })).sort((a, b) => b.count - a.count);
     const netCexOut = cex.reduce((s, c) => s + (c.out - c.in), 0);
@@ -7353,7 +7454,13 @@ app.get("/api/wallet-xray", async (req, res) => {
 
     // 8. Plain-English read (deterministic, evidence-only).
     const verdictBits = [];
-    if (firstFunding) verdictBits.push(`First funded with ~${firstFunding.amountSol.toFixed(2)} SOL${firstFunding.label ? ` from ${firstFunding.label}` : " from another wallet"}${truncated ? " (within the scanned window)" : ""}.`);
+    if (funding) {
+      const whoFrom = funding.label ? `from ${funding.label}` : "from another wallet";
+      const genNote = funding.exact ? " (traced to genesis)" : " (oldest reached — couldn't page fully to genesis)";
+      if (funding.kind === "SOL" && funding.amountSol > 0) verdictBits.push(`First funded with ~${funding.amountSol.toFixed(2)} SOL ${whoFrom}${genNote}.`);
+      else verdictBits.push(`First funding ${whoFrom}${genNote}.`);
+      if (funding.dustFirst) verdictBits.push(`Its first on-chain appearance was an unsolicited token transfer — likely dust/spam, not the funding source.`);
+    }
     verdictBits.push(`Across ${totalTx} scanned txns it made ${buyCount} buys and ${sellCount} sells over ${distinctTokens} tokens, sent ${tokenSendCount} token transfers out and received ${tokenRecvCount}.`);
     const headline = labels.filter((l) => l.level === "high").map((l) => l.tag);
     if (headline.length) verdictBits.push(`Strongest signals: ${headline.join(" + ")}.`);
@@ -7361,9 +7468,9 @@ app.get("/api/wallet-xray", async (req, res) => {
 
     return res.status(200).json({
       success: true, wallet, generatedAt: new Date().toISOString(), truncated, mode: deep ? "coalminer" : "xray",
-      scanned: { txCount: totalTx, pages, truncated, deep, spanDays: Number(spanDays.toFixed(2)), firstSeen: minTs === Infinity ? null : minTs, lastSeen: maxTs || null, ageDays: Number(nowDays.toFixed(1)) },
+      scanned: { txCount: totalTx, pages, truncated, deep, spanDays: Number(spanDays.toFixed(2)), firstSeen: minTs === Infinity ? null : minTs, lastSeen: maxTs || null, ageDays: Number(nowDays.toFixed(1)), lifetimeTx: origin ? origin.lifetimeTx : null, reachedGenesis: origin ? origin.reachedGenesis : false },
       balances: { solBalance, solUsd, solUsdValue: solBalance * solUsd, tokenCount: heldByMint.size, portfolioUsd },
-      funding: firstFunding,
+      funding,
       activity: { buyCount, sellCount, swapCount, tokenSendCount, tokenRecvCount, solInCount, solOutCount, distinctTokens, txPerDay: Number(txPerDay.toFixed(1)), lpAdd, lpRemove, nftCount, sellBuyRatio: Number(sellBuyRatio.toFixed(2)) },
       cadence: { medianGapSec: Math.round(medianGapSec), fastGapFrac: Number(fastGapFrac.toFixed(3)), maxPerMinute },
       flips: { medianHoldSec: Math.round(medianHoldSec), fastFlipCount, flipFrac: Number(flipFrac.toFixed(3)), recvThenSold },

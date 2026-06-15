@@ -303,6 +303,12 @@ document.getElementById('tabs').addEventListener('click',e=>{
 /* ---------- overview ---------- */
 function renderOverview(){
   const d=DATA,a=d.activity,sc=d.scanned,b=d.balances,c=d.cadence,f=d.flips;
+  // AGE is only honest if we reached the wallet's TRUE first transaction (genesis).
+  // The depth-capped enhanced scan can cover only a day or two of a years-old wallet,
+  // so never derive "age" from it — show the oldest point we actually reached instead.
+  const ageExact=!!(d.funding&&d.funding.exact);
+  const oldestTs=d.funding?(d.funding.firstTs||d.funding.ts):sc.firstSeen; // wallet's first-ever appearance
+  const ageD=ageExact&&oldestTs?(Date.now()/1000-oldestTs)/86400:null;
   let h='';
   // Coal Miner banner — offer the deep dig (truncated standard scan) or report the deep result.
   if(d.mode==='coalminer'){
@@ -315,20 +321,34 @@ function renderOverview(){
   if((d.labels||[]).length){
     h+='<div class="labels">'+d.labels.map(l=>'<div class="chip '+esc(l.level)+'"><div class="t">'+esc(l.icon)+' '+esc(l.tag)+'</div><div class="e">'+esc(l.evidence)+'</div></div>').join('')+'</div>';
   }
-  if(d.funding){const fn=d.funding;
-    h+='<div class="origin"><div class="lbl">🌱 FUNDING ORIGIN — WHERE THE SOL CAME FROM</div><div class="body">'
-      +'First funded with <b>'+fmtNum(fn.amountSol)+' SOL</b> on '+fmtDate(fn.ts)+' from '
-      +(fn.label?('<b style="color:var(--accent)">🏦 '+esc(fn.label)+'</b> '):'')
-      +'<a href="https://solscan.io/account/'+esc(fn.from)+'" target="_blank">'+esc(shortAddr(fn.from))+' ↗</a>'
-      +(d.truncated?' <span style="color:var(--amber)">(earliest within the scanned window — older history may exist)</span>':'')
-      +' · <a href="https://solscan.io/tx/'+esc(fn.sig)+'" target="_blank">tx ↗</a>'
-      +' · <button class="miniask" onclick="openChat(\'Where was this wallet funded from, and is that notable?\',\''+esc(fn.sig)+'\')">ask 🐔</button></div></div>';
+  if(d.funding){const fn=d.funding;const isCex=!!fn.label;
+    const head=fn.exact?'🌱 WALLET ORIGIN — WHERE THE MONEY CAME FROM':'🌱 FUNDING ORIGIN — EARLIEST REACHED';
+    // Dust note: if the wallet's first-ever appearance was an (often spam) token transfer
+    // BEFORE any real SOL arrived, call that out so it isn't mistaken for the funding source.
+    let dustLine='';
+    if(fn.dustFirst&&fn.firstTs){
+      dustLine='<div style="margin-bottom:7px;color:var(--amber)">⚠ First on-chain appearance was a <b>token transfer in</b> on '+fmtDate(fn.firstTs)+' — likely unsolicited dust/spam, not the funding. The real money came later 👇</div>';
+    }
+    let line=(fn.kind==='SOL'&&fn.amountSol>0)?('Funded with <b>'+fmtNum(fn.amountSol)+' SOL</b>')
+      :(fn.kind==='token')?'First received tokens':'First activity';
+    line+=' on '+fmtDate(fn.ts)+' from ';
+    line+=isCex?('<b style="color:var(--accent)">🏦 '+esc(fn.label)+' — exchange hot wallet</b> '):'<b style="color:var(--blue)">another wallet</b> ';
+    line+='<a href="https://solscan.io/account/'+esc(fn.from)+'" target="_blank">'+esc(shortAddr(fn.from))+' ↗</a>';
+    line+=fn.exact
+      ? ' <span style="color:var(--green)">✓ traced to genesis'+(fn.lifetimeTx?' · '+fmtNum(fn.lifetimeTx)+' lifetime txns':'')+'</span>'
+      : ' <span style="color:var(--amber)">(couldn\'t page all the way to genesis — an extremely heavy wallet; this is the oldest reached)</span>';
+    line+=' · <a href="https://solscan.io/tx/'+esc(fn.sig)+'" target="_blank">funding tx ↗</a>';
+    line+=' · <button class="miniask" onclick="openChat(\'Where was this wallet first funded from (ignoring any dust), and is that notable for an investigation?\',\''+esc(fn.sig)+'\')">ask 🐔</button>';
+    h+='<div class="origin"><div class="lbl">'+head+'</div><div class="body">'+dustLine+line+'</div></div>';
   }
   h+='<div class="card"><div class="card-title">📊 WALLET AT A GLANCE</div><div class="grid">'
     +stat('SOL BALANCE',fmtNum(b.solBalance),'a',b.solUsdValue?fmtUsd(b.solUsdValue):'')
     +stat('TOKEN VALUE',b.portfolioUsd?fmtUsd(b.portfolioUsd):'—','g',b.tokenCount+' tokens held')
-    +stat('TXNS SCANNED',fmtNum(sc.txCount),'',sc.truncated?'truncated':'full history')
-    +stat('ACTIVE SPAN',sc.spanDays>=1?sc.spanDays.toFixed(0)+'d':dur(sc.spanDays*86400),'b','first '+fmtDate(sc.firstSeen))
+    +(sc.lifetimeTx!=null?stat('LIFETIME TXNS',fmtNum(sc.lifetimeTx),'p',sc.reachedGenesis?'to genesis ✓':'≥ this'):stat('TXNS SCANNED',fmtNum(sc.txCount),'',sc.truncated?'truncated':'full history'))
+    +stat('TXNS ANALYZED',fmtNum(sc.txCount),'',sc.truncated?'depth-capped':'full')
+    +(ageExact
+        ? stat('WALLET AGE',ageD>=1?Math.round(ageD)+'d':dur(ageD*86400),'b','since '+fmtDate(oldestTs))
+        : stat('OLDEST REACHED',fmtDate(oldestTs),'am','wallet is older — couldn\'t page to genesis'))
     +'</div></div>';
   h+='<div class="card"><div class="card-title">💱 TRADE & TRANSFER BEHAVIOR</div><div class="grid">'
     +stat('BUYS',fmtNum(a.buyCount),'g')
