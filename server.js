@@ -9228,11 +9228,18 @@ app.listen(PORT, () => {
       } catch (e) { console.warn("[meteora-recenter] failed:", e.message); }
     }
     setInterval(meteoraRecenterTick, 5 * 60 * 1000);
-    // JUP/USDC earner auto-recenter — ON by default (owner-authorized 2026-06-12);
-    // disable via kv jupUsdcCfg {enabled:false}. Edge/anti-thrash live in jupUsdcRecenter.
+    // ⛔ JUP/USDC autonomous rebalancer — HARD-DISABLED at the code level (owner's call,
+    // 2026-06-16: "stop rebalancing period, don't touch it"). The loop auto-adopted a
+    // manually-opened position and recentered it; the owner wants it dead so NO kv flag can
+    // revive it by accident. JUP_AUTO_REBALANCE_KILLED gates the tick below — it never calls
+    // jupUsdcRecenter. To bring back autonomous rebalancing, set this to false AND set
+    // jupUsdcCfg.enabled — a deliberate, two-step opt-in, never a silent default.
+    // (The manual lever /api/meteora/recenter?which=jup&force=1 is owner-initiated + key-gated
+    // and is intentionally left available — it only ever runs when the owner explicitly calls it.)
+    const JUP_AUTO_REBALANCE_KILLED = true;
     async function jupUsdcRecenterTick() {
       try {
-        if (!meteora.isEnabled() || !jupUsdcCfg().enabled) return;
+        if (JUP_AUTO_REBALANCE_KILLED || !meteora.isEnabled() || !jupUsdcCfg().enabled) return;
         const r = await jupUsdcRecenter({});
         if (r && !["none", "hold", "deferred"].includes(r.action)) console.log("[jup-usdc-recenter]", r.action, "·", r.reason || "");
       } catch (e) { console.warn("[jup-usdc-recenter] failed:", e.message); }
