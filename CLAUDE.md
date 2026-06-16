@@ -20,15 +20,20 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 > (EnTZxY…) and the CLKN/JUP pool (5AvtoSvf…) exist on-chain but are EMPTY — harmless
 > shells. Do NOT redeploy CLKN liquidity or buy/sell CLKN without the owner asking.
 >
-> ⏸️ **THE EARNER — PAUSED (owner's call, 2026-06-16): funds PULLED from the pool.** With high
-> market volatility the close→swap→reopen rebalancing was crystallizing too much IL (fees beaten
-> by impermanent loss), so the owner withdrew all JUP/USDC liquidity to the treasury wallet and is
-> stepping away to work on other things. **Will REDEPLOY when the market calms to fine chop** (the
-> regime this DLMM strategy actually wins in). DO NOT re-open a position or re-enable the rebalancer
-> without the owner's explicit ask. With no position, all the JUP/USDC schedulers (recap, pool-monitor,
-> OOR alerts, daily LP-vs-HODL check) self-silence. To fully stop the loop too:
-> `/api/meteora/config?which=jup&enabled=0&key=…` (re-enable later with `enabled=1`). Everything
-> below is kept intact for the redeploy. ⬇️
+> ⛔ **THE EARNER — AUTONOMOUS REBALANCER HARD-KILLED IN CODE (owner's call, 2026-06-16:
+> "stop rebalancing period, don't touch it").** Background: the owner pulled all JUP/USDC liquidity
+> in high vol (close→swap→reopen was crystallizing too much IL), then opened a NEW position MANUALLY —
+> and the still-`enabled` autonomous loop AUTO-ADOPTED it (`jupUsdcRecenterTick` pins any JUP/USDC
+> position it finds) and recentered it to ±4% spot, changing the owner's manual setup. Funds were
+> intact (recenter preserves value), but it touched a position it shouldn't have. **FIX SHIPPED:**
+> `JUP_AUTO_REBALANCE_KILLED = true` in server.js hard-gates the tick so it NEVER calls
+> `jupUsdcRecenter` — independent of `jupUsdcCfg.enabled`, so no kv flag can revive it by accident.
+> **DO NOT re-enable** (set the const false AND `jupUsdcCfg.enabled`) without the owner's explicit ask —
+> this is a deliberate two-step opt-in by design. The owner manages positions MANUALLY now; the loop
+> must not adopt them. The manual lever (`/api/meteora/recenter?which=jup&force=1`, key-gated) is left
+> available but only ever runs when the owner explicitly calls it. Read-only schedulers (recap,
+> pool-monitor, OOR alerts, daily LP-vs-HODL) don't touch positions; they self-silence with no position.
+> Everything below is kept intact for an eventual deliberate redeploy. ⬇️
 >
 > 💰 **THE EARNER (the main money-maker when live): JUP/USDC Meteora DLMM** pool
 > `HfgjZDmexhFVD28Vkb1NbQwWeXP3uDcVTLPjSGHmRHhL` (~6x/day turnover) under the TREASURY
