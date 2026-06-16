@@ -394,7 +394,7 @@ function lfPaint(){
     else if(mc>=30000){ lab='⚡ NEAR GRAD'; col='#D97706'; }
     else if(mc>=5000){ lab='🔥 GAINING'; col='#F97316'; }
     else { lab='📈 EARLY'; col='#6B7280'; }
-    // Score/Autopsy need real on-chain history — only meaningful once a token is
+    // Autopsy/research chips need real on-chain history — only meaningful once a token is
     // near graduation or graduated. Brand-new bonding-curve tokens have too
     // little data, so the research chips are hidden for them.
     const graduated = (t.status==='MIGRATED'||onCurve===false);
