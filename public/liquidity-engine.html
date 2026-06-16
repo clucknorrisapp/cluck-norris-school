@@ -130,7 +130,7 @@
     <div class="hero-tag">REAL DEPTH — NOT A VOLUME BOT</div>
     <div class="hero-title">Your token's order book, run like a <span class="hl">professional market maker</span> — automatically, and without faking a single trade.</div>
     <div class="hero-sub">Thin liquidity is why most tokens feel dead: every buy slips, the chart whipsaws, and aggregators rank you last. The usual "fix" is a <b>wash-trading volume bot</b> — fake trades that lie to your community and get flagged. We built the opposite: an autonomous market maker that places <b>real two-sided depth</b>, fills <b>real traders</b>, and earns fees on <b>real volume</b> — and you can prove every bit of it on-chain.</div>
-    <div class="hero-sub" style="margin-top:10px">It's the thing a seasoned operator does by hand, every day, for years — now automated, guardrailed, and live. <b>This is what we run on CLKN ourselves.</b></div>
+    <div class="hero-sub" style="margin-top:10px">It's the thing a seasoned operator does by hand, every day, for years — now automated and guardrailed. <b>This is what we run on CLKN ourselves — actively under testing and fine‑tuning.</b></div>
     <div class="actions">
       <a class="action-btn primary" href="#access">REQUEST EARLY ACCESS</a>
       <a class="action-btn" href="/liquidity">TRY THE TOOL (NON-CUSTODIAL)</a>
@@ -156,23 +156,14 @@
   <!-- LIVE PROOF widget -->
   <div class="section" id="proof">
     <div class="section-title">📡 LIVE RIGHT NOW · CLKN — AUDIT IT YOURSELF</div>
-    <p>This isn't a mockup. The engine is running on Cluck Norris's own token across Orca pools this second. These numbers are pulled live from DexScreener as this page loads:</p>
+    <p>This isn't a mockup. The engine is running on Cluck Norris's own token across Orca pools this second — and it's <strong>actively under testing and fine‑tuning</strong> as we dial in ranges, cadence and inventory handling. These numbers are pulled live from DexScreener as this page loads:</p>
     <div class="stat-grid" id="liveStats">
       <div class="stat green"><div class="stat-label">CLKN LIQUIDITY</div><div class="stat-value" id="lvLiq">…</div><div class="stat-sub">across all pools</div></div>
       <div class="stat gold"><div class="stat-label">24H VOLUME</div><div class="stat-value" id="lvVol">…</div><div class="stat-sub">real trades</div></div>
       <div class="stat blue"><div class="stat-label">ACTIVE POOLS</div><div class="stat-value" id="lvPools">…</div><div class="stat-sub">Orca + Meteora</div></div>
       <div class="stat"><div class="stat-label">WASH TRADES</div><div class="stat-value" style="color:#6EE7B7">0</div><div class="stat-sub">by design</div></div>
-      <div class="stat gold"><div class="stat-label">JUP ORGANIC SCORE</div><div class="stat-value" id="lvOrg">…</div><div class="stat-sub" id="lvOrgSub">0 at launch — can't be faked</div></div>
     </div>
 
-    <h3 style="margin-top:18px">📈 ORGANIC SCORE OVER TIME — THE WASH-PROOF METRIC</h3>
-    <p style="font-size:13px">Jupiter scores every Solana token 0–100 on how much of its flow is <b>real</b> — their models filter out wash trading, so a volume bot can't move this number. CLKN started at <b>0</b>. The engine's tight, honest depth is what's moved it since. We log it hourly; gold bands mark <b>Blitz</b> windows (our timed tight-range mode) so you can see exactly what each one does:</p>
-    <div style="border:1px solid var(--border); border-radius:10px; padding:12px 14px; background:rgba(255,255,255,0.02); margin-top:8px">
-      <canvas id="orgChart" style="width:100%; height:160px; display:block"></canvas>
-      <div class="muted" style="margin-top:8px; font-family:var(--mono); font-size:10px">
-        <span style="color:#FCD34D">■</span> Blitz window &nbsp;·&nbsp; <span style="color:#6EE7B7">—</span> organic score (hourly) &nbsp;·&nbsp; <span id="orgChartNote">loading…</span>
-      </div>
-    </div>
     <p class="muted" style="margin-top:12px">Verify independently: open the CLKN pools on <a class="xref" style="color:#93C5FD" href="https://dexscreener.com/solana/DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS" target="_blank">DexScreener</a>, or run <code>/liquidity</code> in the <a class="xref" style="color:#93C5FD" href="https://t.me/FireChicken007" target="_blank">Telegram</a> for a live depth snapshot. Better yet — run our own <a class="xref" style="color:#93C5FD" href="/autopsy">Token Autopsy</a> on CLKN: a wash bot would light it up. It won't.</p>
   </div>
 
@@ -485,73 +476,6 @@
     });
 })();
 
-// Organic-score proof — live Jupiter score + hourly history with Blitz windows.
-// Same-origin API; all values rendered via textContent / canvas (nothing trusted into HTML).
-(function(){
-  var LABEL_COLOR = { high:'#6EE7B7', medium:'#FCD34D', low:'#FCA5A5' };
-  fetch('/api/engine-proof')
-    .then(function(r){ return r.json(); })
-    .then(function(d){
-      var el = document.getElementById('lvOrg'), sub = document.getElementById('lvOrgSub');
-      if (d && d.organic && typeof d.organic.score === 'number') {
-        el.textContent = d.organic.score.toFixed(1);
-        if (LABEL_COLOR[d.organic.label]) { el.style.color = LABEL_COLOR[d.organic.label]; sub.textContent = d.organic.label + ' — 0 at launch'; }
-      } else { el.textContent = '—'; }
-      drawOrgChart((d && d.history) || []);
-    })
-    .catch(function(){
-      document.getElementById('lvOrg').textContent='—';
-      document.getElementById('orgChartNote').textContent='chart unavailable';
-    });
-
-  function drawOrgChart(hist){
-    var note = document.getElementById('orgChartNote');
-    var cv = document.getElementById('orgChart');
-    if (!cv || !cv.getContext) return;
-    if (hist.length < 2) {
-      note.textContent = 'hourly logging just started — this chart fills in as data accrues';
-      if (hist.length === 1) note.textContent += ' (latest: ' + hist[0].s.toFixed(1) + ')';
-      return;
-    }
-    var dpr = window.devicePixelRatio || 1;
-    var W = cv.clientWidth, H = cv.clientHeight || 160;
-    cv.width = W * dpr; cv.height = H * dpr;
-    var ctx = cv.getContext('2d'); ctx.scale(dpr, dpr);
-    var pad = { l: 28, r: 6, t: 8, b: 16 };
-    var t0 = hist[0].t, t1 = hist[hist.length-1].t || (t0+1);
-    var sMax = 0; hist.forEach(function(e){ if (e.s > sMax) sMax = e.s; });
-    sMax = Math.max(10, Math.ceil(sMax / 10) * 10);
-    var x = function(t){ return pad.l + (W - pad.l - pad.r) * ((t - t0) / Math.max(1, t1 - t0)); };
-    var y = function(s){ return pad.t + (H - pad.t - pad.b) * (1 - s / sMax); };
-    // grid + axis labels
-    ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.fillStyle = 'rgba(255,255,255,0.35)';
-    ctx.font = '9px monospace'; ctx.textAlign = 'right';
-    [0, sMax/2, sMax].forEach(function(s){
-      ctx.beginPath(); ctx.moveTo(pad.l, y(s)); ctx.lineTo(W - pad.r, y(s)); ctx.stroke();
-      ctx.fillText(String(s), pad.l - 4, y(s) + 3);
-    });
-    // blitz bands (gold)
-    ctx.fillStyle = 'rgba(252,211,77,0.16)';
-    for (var i = 0; i < hist.length; i++) {
-      if (!hist[i].b) continue;
-      var xa = x(hist[i].t), xb = x(hist[Math.min(i+1, hist.length-1)].t);
-      ctx.fillRect(xa, pad.t, Math.max(2, xb - xa), H - pad.t - pad.b);
-    }
-    // score line
-    ctx.strokeStyle = '#6EE7B7'; ctx.lineWidth = 2; ctx.beginPath();
-    hist.forEach(function(e, idx){ var px = x(e.t), py = y(e.s); idx ? ctx.lineTo(px, py) : ctx.moveTo(px, py); });
-    ctx.stroke();
-    // end dot
-    var last = hist[hist.length-1];
-    ctx.fillStyle = '#6EE7B7'; ctx.beginPath(); ctx.arc(x(last.t), y(last.s), 3, 0, Math.PI*2); ctx.fill();
-    // x-axis range label
-    ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.textAlign = 'left';
-    ctx.fillText(new Date(t0).toLocaleDateString(), pad.l, H - 4);
-    ctx.textAlign = 'right'; ctx.fillText('now', W - pad.r, H - 4);
-    var days = ((t1 - t0) / 86400000).toFixed(1);
-    note.textContent = hist.length + ' hourly samples over ' + days + ' days';
-  }
-})();
 </script>
 </body>
 </html>

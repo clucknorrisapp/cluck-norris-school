@@ -247,10 +247,10 @@ function bagsLaunchesTick() {
 // kv marketCheckEnabled true. The manual /api/market-check-test still works regardless.
 let lastMarketCheckMsgId = kv.get("marketCheckMsgId", null); // delete-previous, persisted across deploys
 // Shared market-snapshot builder — used by /price (on demand) and the 2×/day auto-post.
-// Price + market cap from the deepest pool, 24h change/volume, liquidity, and the Jupiter
-// organic score. Returns the HTML message string, or null if no live price is available.
+// Price + market cap from the deepest pool, 24h change/volume, and liquidity.
+// Returns the HTML message string, or null if no live price is available.
 async function buildMarketSnapshotText(mint = CLKN_MINT_ADDR, sym = "CLKN") {
-  const [mkt, organic] = await Promise.all([getTokenMarket(mint), getClknOrganicScore(mint)]);
+  const mkt = await getTokenMarket(mint);
   if (!mkt || !mkt.priceUsd) return null;
   const fmtPrice = (p) => p >= 0.01 ? "$" + p.toFixed(4) : "$" + p.toPrecision(3);
   const chg = (v) => v == null ? null : (v >= 0 ? "+" : "") + Number(v).toFixed(1) + "%";
@@ -262,7 +262,6 @@ async function buildMarketSnapshotText(mint = CLKN_MINT_ADDR, sym = "CLKN") {
   if (parts.length) m += `📊 ${parts.join(" · ")}\n`;
   const vol = fmtUsdShort(mkt.vol24h); if (vol) m += `🔁 24h volume: <b>${vol}</b>\n`;
   if (mkt.liqUsd) m += `💧 Liquidity: <b>${fmtUsdShort(mkt.liqUsd)}</b>\n`;
-  const org = fmtOrganicScore(organic); if (org) m += `🪐 Jupiter organic score: <b>${org}</b>\n`;
   m += `\n🐔 ${TG_PUBLIC_BASE}`;
   return m;
 }
@@ -521,7 +520,7 @@ const EDU_TOOL_ROUTES = [
   { match: /self-custody|not your keys/i, label: "Free wallet safety checkup — paste any address", url: "clucknorris.app/wallet-checkup" },
   { match: /block explorer|transaction actually did/i, label: "Trace any wallet × token history yourself (free)", url: "clucknorris.app/trace" },
   { match: /holder concentration|volume vs demand|handful of real buyers/i, label: "See any token's REAL holders vs LP & locks (free)", url: "clucknorris.app/holders" },
-  { match: /wash trading|organic volume|arbitrage/i, label: "See honest liquidity proven live (organic score 0→32+)", url: "clucknorris.app/liquidity-engine" },
+  { match: /wash trading|organic volume|arbitrage/i, label: "See how honest, non‑wash liquidity works (Liquidity Engine)", url: "clucknorris.app/liquidity-engine" },
   { match: /bonding curve|graduation|graduated|creator fees/i, label: "Watch live Bags launches & graduations", url: "clucknorris.app/bags" },
   { match: /honeypot|rug pull|red flags|on-chain research|contract address|authorities|locked liquidity|faked out|phantom pool/i, label: "Run a free Token Autopsy on any mint", url: "clucknorris.app/autopsy" },
   { match: /market cap|low-liquidity|deep liquidity|manipulate/i, label: "Run a free deep-dive Token Autopsy on any mint", url: "clucknorris.app/autopsy" },
@@ -1115,7 +1114,7 @@ function tgCommandReply(cmd, arg) {
         "📊 /dex — CLKN DexScreener chart\n" +
         "🐦 /x — our X (Twitter) account\n" +
         "🌐 /website (or /app) — clucknorris.app\n" +
-        "💵 /price — CLKN price, market cap, volume &amp; organic score\n" +
+        "💵 /price — CLKN price, market cap &amp; volume\n" +
         "🩻 /walletxray <code>&lt;wallet&gt;</code> — full wallet deep dive\n" +
         "🪦 /autopsy <code>&lt;mint&gt;</code> — full forensic breakdown\n" +
         "🔍 /trace <code>&lt;wallet&gt;</code> — wallet × token history\n" +
@@ -1170,11 +1169,9 @@ async function liquidityReply(chatId, replyTo) {
       m += `   <b>${money(p.valueUsd)}</b> depth — ${tok(p.clknAmount)} ${sym} + ${quoteStr}\n`;
     }
     const vol = fmtUsdShort(await getClkn24hVolume(proj.tokenMint || CLKN_MINT_ADDR));
-    const organic = fmtOrganicScore(await getClknOrganicScore(proj.tokenMint || CLKN_MINT_ADDR));
     m += `\n💧 <b>Total depth: ${money(r.totalUsd)}</b>`;
     if (r.stale) m += `  <i>(snapshot ~${r.staleSeconds}s old — live read is rate-limited)</i>`;
     if (vol) m += `  ·  📈 24h vol: <b>${vol}</b>`;
-    if (organic) m += `\n🪐 <b>Jupiter organic score: ${organic}</b> <i>(Jupiter's own measure of real, non-faked trading)</i>`;
     // Active engine mode (only when a named mode is applied — "custom" stays hidden).
     try {
       const cm = whirlpoolMM.vault.listModes(projectId).current;
@@ -9338,7 +9335,7 @@ app.listen(PORT, () => {
             { command: "x", description: "Our X (Twitter) account" },
             { command: "website", description: "clucknorris.app — school + tools" },
             { command: "app", description: "clucknorris.app — school + tools" },
-            { command: "price", description: "CLKN price, market cap, volume & organic score" },
+            { command: "price", description: "CLKN price, market cap & volume" },
             { command: "walletxray", description: "Full wallet deep dive (/walletxray <wallet>)" },
             { command: "autopsy", description: "Forensic breakdown (/autopsy <mint>)" },
             { command: "trace", description: "Wallet × token history (/trace <wallet>)" },
