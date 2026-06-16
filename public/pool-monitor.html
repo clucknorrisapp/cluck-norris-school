@@ -106,14 +106,28 @@
     html+='<div class="card"><div class="sec">💵 FEES &amp; PACE</div><div class="grid">'
       +stat('LIFETIME',fmtUsd(f.lifetimeUsd),'g')
       +stat('LAST 1H', f.last1hUsd!=null?fmtUsd(f.last1hUsd):'—','g')
-      +stat('NOW (PACE)', f.recentRatePerDay!=null?('~'+fmtBig(f.recentRatePerDay)+'/day'):'—')
+      +stat('PACE'+(f.paceWindowMin?' ('+f.paceWindowMin+'M)':''), f.recentRatePerDay!=null?('~'+fmtBig(f.recentRatePerDay)+'/day'):'—')
       +stat('REBALANCES', (f.rebalances||0))
       +'</div>';
     // peak bursts
     html+='<div class="grid" style="margin-top:9px">'
       +stat('🚀 PEAK $/MIN', f.peakPerMinUsd?('$'+Number(f.peakPerMinUsd).toFixed(2)+'/min'):'—','o')
       +stat('🚀 BEST HOUR', f.peakPerHourUsd?fmtUsd(f.peakPerHourUsd):'—','o')
+      +stat('REBAL COST', f.rebalanceCostUsd!=null?fmtUsd(f.rebalanceCostUsd):'—','r')
       +'</div></div>';
+    // LP vs HODL — the real bottom line: fees net of impermanent loss + swap cost.
+    if(d.lpVsHodl){
+      var lv=d.lpVsHodl.lpVsHodlUsd, win=lv>=0;
+      var since=d.lpVsHodl.sinceTs?(' · since '+Math.round((Date.now()-d.lpVsHodl.sinceTs)/3600000)+'h ago'):'';
+      html+='<div class="card"><div class="sec">📊 LP vs HODL'+(win?' ✅':' ⚠️')+'</div>'
+        +'<div class="grid">'
+        +stat('NET (FEES − IL)', (win?'+':'−')+fmtUsd(Math.abs(lv)), win?'g':'r')
+        +stat('LP VALUE', fmtUsd(d.lpVsHodl.lpNowUsd))
+        +stat('IF HELD (HODL)', fmtUsd(d.lpVsHodl.hodlNowUsd))
+        +'</div>'
+        +'<div class="range-lbl"><span>'+(win?'fees are beating impermanent loss':'impermanent loss + swap cost is eating fees')+'</span><span>'+since.replace(' · ','')+'</span></div>'
+        +'<div class="range-lbl"><span>re-baseline after any manual add/remove</span><span></span></div></div>';
+    }
     // live pool
     html+='<div class="card"><div class="sec">🌊 LIVE POOL VOLUME</div><div class="grid">'
       +stat('1H VOL',fmtBig(pool.volH1))
