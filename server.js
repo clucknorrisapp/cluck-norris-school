@@ -56,7 +56,7 @@ function publicErrMsg(err, fallback = "internal error") {
 }
 const { PublicKey } = require("@solana/web3.js");
 
-// Register Oswald (the site's display font) for the score card. Without this,
+// Register Oswald (the site's display font) for the transcript card. Without this,
 // Railway's container has no usable fallback for "sans-serif" and text silently
 // fails to render. WOFF files are bundled in /public/vendor/fonts/ so this
 // doesn't depend on node_modules surviving the Railway deploy.
@@ -7550,7 +7550,7 @@ function getLogo() {
   return _logoPromise;
 }
 
-// -- Transcript share card (1200x630 PNG) — same canvas rig as the score card --
+// -- Transcript share card (1200x630 PNG) — canvas rig --
 // No emoji in canvas (the bundled Oswald has none); text labels only.
 // Cluck's diploma line — uplifting, but with the schoolyard edge. Tier-based off the record.
 function cluckDiplomaMessage(rec) {

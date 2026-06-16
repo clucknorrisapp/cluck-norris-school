@@ -14,7 +14,7 @@
 Five things, in one product:
 
 1. 🆓 **A free crypto school** — disciplined, voice‑driven, no signup, no wallet
-2. 🩺 **Free token research & forensics** — a 0–100 health score, a deep AI token *autopsy*, holder snapshots and transaction tracing for any Solana mint, plus a free wallet‑safety checker
+2. 🩺 **Free token research & forensics** — a full **Wallet X‑Ray**, a deep AI token *autopsy*, holder snapshots and transaction tracing for any Solana mint, plus a free wallet‑safety checker
 3. 🔒 **Premium operator tools** — buy‑competition trackers, a batch airdrop sender, and a holder‑gated deep‑forensics tier, unlocked with on‑chain CLKN micropayments
 4. 🥚 **A guided token creator** — mint a real SPL token, taught decision by decision
 5. 💧 **The Liquidity Engine** — an honest, automated market maker (real depth, zero wash trades) running live on CLKN, with its results published on a wash‑proof public metric
@@ -195,7 +195,7 @@ The product reaches into the community Telegram (and X), not just the website:
 | AI tutor + lessons + autopsy narration | Anthropic Claude Haiku 4.5 |
 | Solana RPC | Helius (DAS + enhanced txns) — automatic failover to a public node (and optional backup RPC keys) on rate‑limit / outage |
 | Token data & forensics | Bags.fm API · DexScreener · GeckoTerminal · Bubblemaps · Jupiter · Solana Tracker · Solscan |
-| Score card rendering | `@napi-rs/canvas` with bundled Oswald typeface |
+| Transcript card rendering | `@napi-rs/canvas` with bundled Oswald typeface |
 | Persistence | Railway volume at `/data` (consumed‑payment sigs, graduation tracker, schedulers, analytics) — survives redeploys |
 | Community | Telegram bot (webhook + scheduled posts + buy alerts) · X / Twitter (OAuth 1.0a, no SDK) |
 | Trophy log | Google Sheets (JWT auth) |
