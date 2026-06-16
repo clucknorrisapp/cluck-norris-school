@@ -20,7 +20,17 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 > (EnTZxY…) and the CLKN/JUP pool (5AvtoSvf…) exist on-chain but are EMPTY — harmless
 > shells. Do NOT redeploy CLKN liquidity or buy/sell CLKN without the owner asking.
 >
-> 💰 **THE EARNER (live, the main money-maker now): JUP/USDC Meteora DLMM** pool
+> ⏸️ **THE EARNER — PAUSED (owner's call, 2026-06-16): funds PULLED from the pool.** With high
+> market volatility the close→swap→reopen rebalancing was crystallizing too much IL (fees beaten
+> by impermanent loss), so the owner withdrew all JUP/USDC liquidity to the treasury wallet and is
+> stepping away to work on other things. **Will REDEPLOY when the market calms to fine chop** (the
+> regime this DLMM strategy actually wins in). DO NOT re-open a position or re-enable the rebalancer
+> without the owner's explicit ask. With no position, all the JUP/USDC schedulers (recap, pool-monitor,
+> OOR alerts, daily LP-vs-HODL check) self-silence. To fully stop the loop too:
+> `/api/meteora/config?which=jup&enabled=0&key=…` (re-enable later with `enabled=1`). Everything
+> below is kept intact for the redeploy. ⬇️
+>
+> 💰 **THE EARNER (the main money-maker when live): JUP/USDC Meteora DLMM** pool
 > `HfgjZDmexhFVD28Vkb1NbQwWeXP3uDcVTLPjSGHmRHhL` (~6x/day turnover) under the TREASURY
 > wallet (`MM_OPERATOR_SECRET_TREASURY`, pubkey 2zMCU…). **~$4K, ±4% SPOT distribution**
 > (switched curve→spot 2026-06-15; **WIDENED ±3%→±4% on 2026-06-16, owner's call** — fewer recenters =
@@ -35,10 +45,10 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 > (price-impact-capped 0.2%). The fix is FEWER recenters (the ±4% widen), not cheaper swaps — you can't route
 > around IL. LP-vs-HODL (below) now makes this measurable.
 >
-> ✅ **AUTONOMOUS REBALANCING = ON (owner "Chuck" authorized 2026-06-13, reversing the
-> earlier manual-only rule). It is the `jupUsdcRecenter` close→swap→reopen loop ("Option
-> B"), VERIFIED LIVE** (recentered 58%→50% across, rebalanced to 50/50, **$0 wallet
-> residue**, value intact). DON'T rip it out or re-pin it off without the owner's say-so.
+> ⏸️ **AUTONOMOUS REBALANCING = PAUSED (2026-06-16, funds pulled — see banner above).** When live it
+> was the `jupUsdcRecenter` close→swap→reopen loop ("Option B"), owner-authorized 2026-06-13 and
+> VERIFIED LIVE (recentered 58%→50% across, rebalanced to 50/50, **$0 wallet residue**, value intact).
+> The mechanics below stay valid for the redeploy. DON'T rip it out or re-enable without the owner's say-so.
 > WHAT FINALLY WORKED, and WHY earlier attempts failed (so the next session doesn't undo it):
 > the UI "Rebalance" = a Jupiter swap (heavy side → ~50/50, e.g. "Swaps Required: 6.93K
 > JUP → 1.17K USDC via Jupiter") **+** a DLMM redeposit, fired as a Jito bundle. The bare
