@@ -22,11 +22,18 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 >
 > 💰 **THE EARNER (live, the main money-maker now): JUP/USDC Meteora DLMM** pool
 > `HfgjZDmexhFVD28Vkb1NbQwWeXP3uDcVTLPjSGHmRHhL` (~6x/day turnover) under the TREASURY
-> wallet (`MM_OPERATOR_SECRET_TREASURY`, pubkey 2zMCU…). **~$4K, ±2.56% TIGHT, SPOT distribution**
-> (switched curve→spot 2026-06-15, owner's call — autonomous reopens now spread liquidity EVENLY
-> across the band; owner runs it narrow + actively, growing toward ~$5K with manual adds). Earning well:
-> ~1% in fees inside a day; PnL beating LP-vs-HODL so far. Strategy: fees COMPOUND
-> in-position; CLKN buybacks MANUAL-ONLY on the owner's explicit ask.
+> wallet (`MM_OPERATOR_SECRET_TREASURY`, pubkey 2zMCU…). **~$4K, ±4% SPOT distribution**
+> (switched curve→spot 2026-06-15; **WIDENED ±3%→±4% on 2026-06-16, owner's call** — fewer recenters =
+> less impermanent-loss crystallization, after the owner flagged fees being eaten by rebalance swaps;
+> autonomous reopens spread liquidity EVENLY across the band; growing toward ~$5K with manual adds).
+> `cfg.halfWidthPct=4` is the new default; the LIVE position only adopts ±4% on its next reopen — to widen
+> NOW: `/api/meteora/config?which=jup&halfWidthPct=4&key=…` then `/api/meteora/recenter?which=jup&run=1&force=1`.
+> Strategy: fees COMPOUND in-position; CLKN buybacks MANUAL-ONLY on the owner's explicit ask.
+> **WHERE THE FEES GO (owner's 2026-06-16 question — "made ~$400 fees, position only grew ~$150"):** the gap is
+> mostly IMPERMANENT LOSS, not swap fees. Each recenter swaps the freed funds to 50/50 at the current
+> (post-move) price — when OOR it's sold the dumped side low — crystallizing IL. The swap *fee* itself is tiny
+> (price-impact-capped 0.2%). The fix is FEWER recenters (the ±4% widen), not cheaper swaps — you can't route
+> around IL. LP-vs-HODL (below) now makes this measurable.
 >
 > ✅ **AUTONOMOUS REBALANCING = ON (owner "Chuck" authorized 2026-06-13, reversing the
 > earlier manual-only rule). It is the `jupUsdcRecenter` close→swap→reopen loop ("Option
@@ -60,6 +67,13 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 > community) every 6h with liquidity + claimable/claimed fees + a fees-vs-cost delta;
 > `/api/jup-recap-test` (&send=1/&reset=1). The old cbBTC/SOL 6h treasury report is DISABLED.
 > NOTE: the treasury wallet now holds ONLY the JUP/USDC position — no cbBTC/SOL backbone.
+> **LP-vs-HODL (added 2026-06-16, the only honest "are we winning?" number):** recap + `/api/pool-monitor` +
+> the `/pool-monitor` page now show LP value vs. what the BASELINE token basket (JUP+USDC) would be worth now
+> (`jupLpVsHodl`/`ensureJupHodlBaseline`, baseline in kv `jupUsdcLedger`). Positive = fees beat IL; negative =
+> IL+swap cost eating fees. Swap cost is no longer a flat $1/recenter — `jupUsdcRecenter` now logs the REAL
+> impact (`|diff|·impactPct`) into `rebalanceCostUsd`. **⚠️ LIMITATION: manual adds/removes aren't tracked —
+> re-baseline with `&reset=1` right after any add/remove or the comparison skews.** (The recap `reset` also
+> re-baselines the HODL basket.) Pool-monitor `PACE` is now a trailing-30-min window (was a noisy 2-min delta).
 >
 > ⏰ **ACTIVE WATCH (updated 2026-06-12): CoinGecko REJECTED the reapplication**
 > (req `CL1106260002`; owner reported the rejection 2026-06-12 — stated reason not yet

@@ -3296,13 +3296,17 @@ app.get("/api/pool-monitor", async (req, res) => {
       position = { valueUsd: pos.valueUsd, inRange: pos.inRange, price: pos.currentPrice, lower: pos.lowerPrice, upper: pos.upperPrice, claimableUsd: Number((pos.pendingFeeUsd || 0).toFixed(2)), jupPct: tot > 0 ? Math.round(jupUsdVal / tot * 100) : null, edgePct: Math.round(Math.min(frac, 1 - frac) * 100), frac: Number(frac.toFixed(3)) };
     }
     const lifetimeUsd = pos ? Number(((L.bankedClaimedUsd || 0) + (pos.claimedFeeUsd || 0) + (pos.pendingFeeUsd || 0)).toFixed(2)) : (mon.lastLifetimeUsd != null ? Number(mon.lastLifetimeUsd.toFixed(2)) : null);
+    // LP-vs-HODL (read-only): fees net of impermanent loss + swap cost. Baseline backfilled by
+    // the recap / poolMonitorTick; null until it's set. rebalanceCostUsd = real swap impact captured per recenter.
+    const lpVsHodl = pos ? jupLpVsHodl(L, pos.valueUsd || 0, pos.pendingFeeUsd || 0, jupUsd) : null;
     return res.status(200).json({
-      success: true, position, pool,
+      success: true, position, pool, lpVsHodl,
       fees: {
         lifetimeUsd, claimableUsd: position ? position.claimableUsd : null,
         recentRatePerMin, recentRatePerDay: recentRatePerMin != null ? Number((recentRatePerMin * 1440).toFixed(0)) : null, paceWindowMin,
         last1hUsd, peakPerMinUsd: mon.peakPerMinUsd || 0, peakPerMinAt: mon.peakPerMinAt || null,
-        peakPerHourUsd: mon.peakPerHourUsd || 0, peakPerHourAt: mon.peakPerHourAt || null, rebalances: L.recenters || 0,
+        peakPerHourUsd: mon.peakPerHourUsd || 0, peakPerHourAt: mon.peakPerHourAt || null,
+        rebalances: L.recenters || 0, rebalanceCostUsd: Number((L.rebalanceCostUsd || 0).toFixed(2)),
       },
       samples: samples.slice(-90), updatedAt: mon.lastTs || null,
     });
@@ -3393,7 +3397,8 @@ function meteoraDM(text) {
 // Honest limit: a MANUAL in-place rebalance in the Meteora UI keeps the same pubkey and
 // its swap cost isn't visible to us — so the cost figure is a floor + estimate, labelled.
 function jupUsdcLedger() { return kv.get("jupUsdcLedger", { bankedClaimedUsd: 0, lastPubkey: null, lastClaimedUsd: 0, recenters: 0, rebalanceCostUsd: 0, baselineTs: Date.now() }); }
-const EST_RECENTER_COST_USD = 1.0;   // close→reopen recenter: cheap Jupiter swap + tx (estimate)
+const EST_RECENTER_COST_USD = 1.0;   // manual/unseen recenter fallback (recap pubkey-change path): swap + tx estimate
+const EST_RECENTER_TX_USD = 0.02;    // autonomous recenter: ~2 tx fees only; the REAL swap impact is added separately by jupUsdcRecenter
 // Called by the in-place rebalance tool with the ACTUAL swapped USD (its swap keeps the
 // same pubkey, so the recap's pubkey-change detector won't see it — log it here instead).
 function jupUsdcLogRebalance(swapUsd) {
@@ -3413,11 +3418,37 @@ function jupUsdcBankClose(closedPos) {
   const realized = (Number(closedPos && closedPos.claimedFeeUsd) || 0) + (Number(closedPos && closedPos.pendingFeeUsd) || 0);
   L.bankedClaimedUsd = (L.bankedClaimedUsd || 0) + realized;
   L.recenters = (L.recenters || 0) + 1;
-  L.rebalanceCostUsd = (L.rebalanceCostUsd || 0) + EST_RECENTER_COST_USD;
+  L.rebalanceCostUsd = (L.rebalanceCostUsd || 0) + EST_RECENTER_TX_USD; // tx only; jupUsdcRecenter adds the real swap impact after the swap lands
   L.lastPubkey = null;        // closed; recap re-adopts the next live position without re-banking
   L.lastClaimedUsd = 0;
   kv.set("jupUsdcLedger", L);
   return realized;
+}
+// ── LP-vs-HODL: the only honest "are we actually winning?" number ──────────────
+// Fee counters can't see impermanent loss — fees can read +$400 while the position grew
+// only $150 because each recenter swaps to 50/50 at an adverse price, crystallizing IL.
+// LP-vs-HODL compares the position's value now to what the BASELINE token basket
+// (JUP + USDC held since baseline) would be worth now. Positive = fees beat IL; negative =
+// IL (+ swap cost, already inside valueUsd) is eating the fees. Swap costs need no separate
+// subtraction here — they reduce valueUsd directly, so they're already captured.
+// LIMITATION: manual adds/removes aren't tracked, so re-baseline (&reset=1) after any.
+function ensureJupHodlBaseline(L, pos, jupUsd) {
+  if (L && L.hodlBaseJup == null && pos && jupUsd > 0) {
+    L.hodlBaseJup = Number(pos.amountX || 0);   // JUP held at baseline
+    L.hodlBaseUsdc = Number(pos.amountY || 0);   // USDC held at baseline
+    L.hodlBaseJupUsd = jupUsd;
+    L.hodlBaseTs = Date.now();
+  }
+  return L;
+}
+function jupLpVsHodl(L, valueUsd, claimableUsd, jupUsd) {
+  if (!L || L.hodlBaseJup == null || !(jupUsd > 0)) return null;
+  const hodlNowUsd = L.hodlBaseJup * jupUsd + (L.hodlBaseUsdc || 0); // baseline basket priced now
+  const lpNowUsd = (Number(valueUsd) || 0) + (Number(claimableUsd) || 0); // position (fees compound in) + unclaimed
+  return {
+    hodlNowUsd: Number(hodlNowUsd.toFixed(2)), lpNowUsd: Number(lpNowUsd.toFixed(2)),
+    lpVsHodlUsd: Number((lpNowUsd - hodlNowUsd).toFixed(2)), sinceTs: L.hodlBaseTs || null,
+  };
 }
 async function sendJupUsdcRecap({ send = true, reset = false, rebaselineClaimedUsd = null } = {}) {
   if (!meteora.isEnabled()) return { skipped: "meteora not enabled" };
@@ -3430,7 +3461,8 @@ async function sendJupUsdcRecap({ send = true, reset = false, rebaselineClaimedU
   const claimedUsd = pos.claimedFeeUsd || 0;
   const pubkey = pos.positionPubkey || null;
   // Ledger update (skipped on a read-only preview so previews never mutate accounting).
-  let L = reset ? { bankedClaimedUsd: 0, lastPubkey: pubkey, lastClaimedUsd: claimedUsd, recenters: 0, rebalanceCostUsd: 0, baselineTs: Date.now() } : jupUsdcLedger();
+  let L = reset ? { bankedClaimedUsd: 0, lastPubkey: pubkey, lastClaimedUsd: claimedUsd, recenters: 0, rebalanceCostUsd: 0, baselineTs: Date.now(), hodlBaseJup: Number(pos.amountX || 0), hodlBaseUsdc: Number(pos.amountY || 0), hodlBaseJupUsd: jupUsd, hodlBaseTs: Date.now() } : jupUsdcLedger();
+  if (!reset) ensureJupHodlBaseline(L, pos, jupUsd);   // backfill the basket for ledgers predating LP-vs-HODL
   if (!reset && L.lastPubkey && pubkey && pubkey !== L.lastPubkey) {
     // Position changed → a close→reopen recenter happened: bank the old position's final
     // claimed fees (they vanish from the live read) and count/estimate the recenter cost.
@@ -3467,6 +3499,11 @@ async function sendJupUsdcRecap({ send = true, reset = false, rebaselineClaimedU
   const mon = kv.get("poolMonitor", {}) || {};
   const peakLine = (mon.peakPerHourUsd || mon.peakPerMinUsd)
     ? `\n🚀 Peak burst: <b>${fmtUsd((mon.peakPerMinUsd || 0) * 60)}/hr</b> rate (best hour ${fmtUsd(mon.peakPerHourUsd || 0)})` : "";
+  // LP-vs-HODL — the real bottom line (fees net of IL + swap cost). See jupLpVsHodl.
+  const lp = jupLpVsHodl(L, valueUsd, claimableUsd, jupUsd);
+  const lpLine = lp
+    ? `\n📊 LP vs HODL: <b>${signed(lp.lpVsHodlUsd)}</b> ${lp.lpVsHodlUsd >= 0 ? "— fees beating IL ✅" : "— IL eating fees ⚠️"}${lp.sinceTs ? ` (since ${((Date.now() - lp.sinceTs) / 3600000).toFixed(0)}h ago)` : ""}\n   <i>vs holding the baseline basket; re-baseline (&reset=1) after any manual add/remove</i>`
+    : "";
   const text =
     `💰 <b>JUP/USDC earner</b> — private recap\n` +
     `💧 Liquidity: <b>${fmtUsd(valueUsd)}</b> · ${pos.inRange ? "✅ in range" : "⚠️ OUT of range"}${rangeStr}\n` +
@@ -3476,9 +3513,10 @@ async function sendJupUsdcRecap({ send = true, reset = false, rebaselineClaimedU
     costLine +
     peakLine +
     `\n🧮 Net (fees − est. cost): <b>${signed(netUsd)}</b>` +
+    lpLine +
     `\n<i>operator-only · not posted to the community</i>`;
   if (send) meteoraDM(text);
-  return { sent: send, valueUsd, claimableUsd, lifetimeFeesUsd, recenters: L.recenters || 0, rebalanceCostUsd: L.rebalanceCostUsd || 0, netUsd, preview: text };
+  return { sent: send, valueUsd, claimableUsd, lifetimeFeesUsd, recenters: L.recenters || 0, rebalanceCostUsd: L.rebalanceCostUsd || 0, netUsd, lpVsHodl: lp, preview: text };
 }
 
 async function meteoraRecenter({ dryRun = false, force = false } = {}) {
@@ -3592,7 +3630,7 @@ const JUPUSDC_POOL = "HfgjZDmexhFVD28Vkb1NbQwWeXP3uDcVTLPjSGHmRHhL";
 // distribution "spot" (owner's call 2026-06-15, switched from "curve"): the reopened position
 // spreads liquidity EVENLY across the ±width band instead of center-weighting it. A kv
 // {distribution:"curve"} can override; the code default is the owner's current intent.
-function jupUsdcCfg() { return { enabled: false, halfWidthPct: 3, distribution: "spot", edgeFrac: 0.12, minRecenterSec: 1800, minRecenterSecOor: 120, maxImpactPct: 0.2, ...kv.get("jupUsdcCfg", {}) }; }
+function jupUsdcCfg() { return { enabled: false, halfWidthPct: 4, distribution: "spot", edgeFrac: 0.12, minRecenterSec: 1800, minRecenterSecOor: 120, maxImpactPct: 0.2, ...kv.get("jupUsdcCfg", {}) }; }
 async function jupUsdcRecenter({ dryRun = false, force = false } = {}) {
   if (!meteora.isEnabled()) return { action: "none", reason: "operator not set" };
   const cfg = jupUsdcCfg();
@@ -3656,7 +3694,11 @@ async function jupUsdcRecenter({ dryRun = false, force = false } = {}) {
         if (sw && sw.action === "swap") {
           if (diff > 0) { depX = target / jupUsd; depY = freedY + diff * 0.998; }
           else { depY = target; depX = freedX + (-diff / jupUsd) * 0.998; }
-          steps.push({ rebalancedUsd: Number(Math.abs(diff).toFixed(2)), impactPct: sw.impactPct });
+          // Log the ACTUAL swap cost (price impact on the swapped notional) — replaces the
+          // old flat $1/recenter estimate so the recap's cost + LP-vs-HODL reflect reality.
+          const swapCostUsd = Math.abs(diff) * ((Number(sw.impactPct) || 0) / 100);
+          try { const Lc = jupUsdcLedger(); Lc.rebalanceCostUsd = (Lc.rebalanceCostUsd || 0) + swapCostUsd; kv.set("jupUsdcLedger", Lc); } catch (_) {}
+          steps.push({ rebalancedUsd: Number(Math.abs(diff).toFixed(2)), impactPct: sw.impactPct, swapCostUsd: Number(swapCostUsd.toFixed(3)) });
           await new Promise((res) => setTimeout(res, 2500));
         } else {
           steps.push({ swapSkipped: (sw && sw.reason) || "no route" });
@@ -9207,6 +9249,7 @@ app.listen(PORT, () => {
         const pos = (m.positions || []).find((p) => p.pair === "JUP/USDC" && (p.valueUsd || 0) >= 1);
         if (!pos) return;
         const L = jupUsdcLedger();
+        if (L.hodlBaseJup == null) { ensureJupHodlBaseline(L, pos, jupUsd); try { kv.set("jupUsdcLedger", L); } catch (_) {} } // seed LP-vs-HODL basket
         const claimable = pos.pendingFeeUsd || 0, claimed = pos.claimedFeeUsd || 0;
         const lifetimeUsd = (L.bankedClaimedUsd || 0) + claimed + claimable;
         const now = Date.now();
