@@ -9239,6 +9239,37 @@ app.listen(PORT, () => {
     }
     setInterval(jupUsdcRecenterTick, 5 * 60 * 1000);
     setTimeout(jupUsdcRecenterTick, 75000);
+    // JUP/USDC daily LP-vs-HODL scorecard — the durable check-in (the app is always-on, so this
+    // survives container/session resets). Fires at most once/24h, and only once the HODL baseline
+    // is ≥24h old (needs a day of data to be meaningful). Tells the owner whether fees are beating
+    // impermanent loss, with the action to take if not. Silent DM (per the silent-default rule).
+    async function jupLpVsHodlDailyCheck() {
+      try {
+        if (!meteora.isEnabled() || !jupUsdcCfg().enabled) return;
+        if (Date.now() - kv.get("jupLpHodlCheckAt", 0) < 24 * 3600 * 1000) return;
+        let jupUsd = 0; try { jupUsd = (await getJupUsd()) || 0; } catch (_) {}
+        const m = await meteora.status({ jupUsd });
+        const pos = (m.positions || []).find((p) => p.pair === "JUP/USDC" && (p.valueUsd || 0) >= 1);
+        if (!pos) return;
+        const L = jupUsdcLedger();
+        const lp = jupLpVsHodl(L, pos.valueUsd || 0, pos.pendingFeeUsd || 0, jupUsd);
+        if (!lp || !lp.sinceTs) return;
+        const ageH = (Date.now() - lp.sinceTs) / 3600000;
+        if (ageH < 24) return;                                  // wait for a full day of data
+        kv.set("jupLpHodlCheckAt", Date.now());
+        const win = lp.lpVsHodlUsd >= 0;
+        const pct = pos.valueUsd > 0 ? (lp.lpVsHodlUsd / pos.valueUsd * 100) : 0;
+        meteoraDM(
+          `📊 <b>JUP/USDC — daily LP-vs-HODL check</b>\n` +
+          `${win ? "✅" : "⚠️"} <b>${win ? "+" : "−"}$${Math.abs(lp.lpVsHodlUsd).toFixed(2)}</b> (${pct >= 0 ? "+" : ""}${pct.toFixed(2)}% of position) over ${ageH.toFixed(0)}h\n` +
+          `LP $${lp.lpNowUsd.toFixed(0)} vs if-held $${lp.hodlNowUsd.toFixed(0)} · ${L.recenters || 0} rebalances (cost $${(L.rebalanceCostUsd || 0).toFixed(2)})\n` +
+          (win ? "Fees are beating impermanent loss. 👍" : "IL + swap cost is eating fees — consider widening the band further or slowing the OOR cadence (minRecenterSecOor).") +
+          `\n<i>re-baseline (&reset=1) after any manual add/remove</i>`
+        );
+      } catch (e) { console.warn("[jup-lphodl] failed:", e.message); }
+    }
+    setInterval(jupLpVsHodlDailyCheck, 60 * 60 * 1000);          // checks hourly, DMs at most once/24h
+    setTimeout(jupLpVsHodlDailyCheck, 95000);
     // Pool Monitor — sample the JUP/USDC earner every 2 min: fee pace + peak $/min & $/hr
     // bursts + edge proximity, so the owner can watch closely and adjust. Powers /api/pool-monitor.
     async function poolMonitorTick() {

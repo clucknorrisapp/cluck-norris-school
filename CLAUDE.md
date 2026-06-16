@@ -74,6 +74,12 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 > impact (`|diff|·impactPct`) into `rebalanceCostUsd`. **⚠️ LIMITATION: manual adds/removes aren't tracked —
 > re-baseline with `&reset=1` right after any add/remove or the comparison skews.** (The recap `reset` also
 > re-baselines the HODL basket.) Pool-monitor `PACE` is now a trailing-30-min window (was a noisy 2-min delta).
+> **Daily LP-vs-HODL check-in (`jupLpVsHodlDailyCheck`, server.js — hourly tick, DMs once per 24h):** the durable
+> "review it once data accumulates" hook the owner asked for (2026-06-16). Fires only after the baseline is ≥24h
+> old; DMs the treasury chat a focused verdict (fees beating IL ✅ / IL eating fees ⚠️ + the action: widen further
+> or slow `minRecenterSecOor`). Lives in the always-on server so it survives container/session resets. kv
+> `jupLpHodlCheckAt`. (A cloud session can't self-schedule days out — the container is ephemeral — so the check-in
+> is server-side by design.)
 >
 > ⏰ **ACTIVE WATCH (updated 2026-06-12): CoinGecko REJECTED the reapplication**
 > (req `CL1106260002`; owner reported the rejection 2026-06-12 — stated reason not yet
