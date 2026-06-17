@@ -259,6 +259,17 @@ function render(d){
       </div></div>`;
   }
 
+  // cross-pool dislocation — the live arb spread between this token's pools
+  if(ow&&ow.poolPrices&&ow.poolPrices.filter(p=>p.priceUsd>0).length>=1){
+    const pp=ow.poolPrices.filter(p=>p.priceUsd>0), dis=ow.dislocation;
+    const rows=pp.map(p=>`<tr><td><span>CLKN/${esc(p.quote||'?')}</span></td><td><span>${fmtPrice(p.priceUsd)}</span></td></tr>`).join("");
+    html+=`<div class="card"><h2>↔ Cross‑pool dislocation${dis?` — <span class="${dis.spreadPct>1?'ask-c':'muted'}">${dis.spreadPct.toFixed(2)}% spread</span>`:''}</h2>
+      <p class="explain">CLKN's price on each pool <b>right now</b>. When a quote (SOL/JUP) moves, the pools drift apart — that spread is the live <b>arbitrage pull</b> that generates your organic volume. Bigger spread = a bigger arb waiting to be taken.</p>
+      <table><thead><tr><th>Pool</th><th>CLKN price</th></tr></thead><tbody>${rows}</tbody></table>
+      ${dis?`<div class="muted" style="margin-top:8px">Cheapest on <b>CLKN/${esc(dis.low.quote)}</b> (${fmtPrice(dis.low.priceUsd)}), richest on <b>CLKN/${esc(dis.high.quote)}</b> (${fmtPrice(dis.high.priceUsd)}) — arbers buy the cheap pool & sell the rich one until they converge.</div>`:''}
+    </div>`;
+  }
+
   // in-range two-sided LP — the full liquidity picture (yours + everyone's)
   if(ow&&ow.lp&&ow.lp.length){
     const lpRows=ow.lp.map(o=>`<tr><td><span>CLKN/${esc(o.quoteSymbol||'?')}</span></td><td><span>${fmtPrice(o.priceLowUsd)} – ${fmtPrice(o.priceHighUsd)}</span></td><td><span>${fmtUsd(o.sizeUsd)}</span></td><td>${ownerTag(o.owner)}</td></tr>`).join("");
