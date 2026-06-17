@@ -4638,6 +4638,7 @@ app.get("/api/order-scan", async (req, res) => {
   if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ error: "bad mint" });
   try {
     if (req.query.debug === "orca") { const pool = String(req.query.pool || ""); if (!SOL_ADDR_RE.test(pool)) return res.status(400).json({ error: "bad pool" }); return res.json({ success: true, debug: await orderbook.debugOrcaPositions(pool) }); }
+    if (req.query.debug === "orcawalls") { const pool = String(req.query.pool || ""); if (!SOL_ADDR_RE.test(pool)) return res.status(400).json({ error: "bad pool" }); const orca = require("./lib/orca-whirlpools"); const spot = await orderbook.getUsdPrice(mint).catch(() => null); return res.json({ success: true, debug: await orca.poolWalls(pool, mint, spot) }); }
     if (req.query.debug) return res.json({ success: true, debug: await orderbook.debugJupSample(mint, String(req.query.debug)) });
     const data = await orderbook.scan(mint, { nocache: req.query.nocache === "1" });
     return res.json({ success: true, ...data });
