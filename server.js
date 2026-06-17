@@ -4720,16 +4720,39 @@ async function recordClknStructureSnapshot() {
   const spot = await orderbook.getUsdPrice(CLKN_MINT_ADDR).catch(() => null);
   const organic = await getClknOrganicScore(CLKN_MINT_ADDR).catch(() => null);
   const vol24h = await getClkn24hVolume(CLKN_MINT_ADDR).catch(() => null);
+  // per-pool 24h volume from GeckoTerminal (keyless), matched by pool address —
+  // lets us see whether SOL+JUP volume holds up when the USDC anchor goes inactive.
+  const poolVol = {};
+  try {
+    const gr = await fetch(`https://api.geckoterminal.com/api/v2/networks/solana/tokens/${CLKN_MINT_ADDR}/pools`, { signal: AbortSignal.timeout(10000) });
+    if (gr.ok) { const j = await gr.json(); for (const p of (j.data || [])) { const a = p && p.attributes; if (a && a.address) poolVol[a.address] = parseFloat(a.volume_usd && a.volume_usd.h24) || 0; } }
+  } catch (_) {}
   const pools = [];
   for (const { pool, pair } of CLKN_ORCA_POOLS) {
     try {
       const r = await orca.poolWalls(pool, CLKN_MINT_ADDR, spot);
       const all = r.walls || [];
-      pools.push({ pair, positions: all.length, inRange: all.filter(w => w.inRange).length, outOfRange: all.filter(w => !w.inRange).length, valueUsd: Math.round(all.reduce((s, w) => s + (w.sizeUsd || 0), 0)) });
-    } catch (e) { pools.push({ pair, error: String(e.message || e).slice(0, 80) }); }
+      const inRange = all.filter(w => w.inRange).length;
+      pools.push({ pair, pool, positions: all.length, inRange, outOfRange: all.length - inRange, valueUsd: Math.round(all.reduce((s, w) => s + (w.sizeUsd || 0), 0)), vol24h: Math.round(poolVol[pool] || 0), active: inRange > 0 });
+    } catch (e) { pools.push({ pair, pool, error: String(e.message || e).slice(0, 80) }); }
   }
-  const snap = { at: Date.now(), spotUsd: spot, organic: organic && Number.isFinite(organic.score) ? organic.score : null, vol24h: vol24h || null, totalValueUsd: Math.round(pools.reduce((s, p) => s + (p.valueUsd || 0), 0)), pools };
+  const at = Date.now();
+  const snap = { at, spotUsd: spot, organic: organic && Number.isFinite(organic.score) ? organic.score : null, vol24h: vol24h || null, totalValueUsd: Math.round(pools.reduce((s, p) => s + (p.valueUsd || 0), 0)), pools };
   let hist = kv.get("clknStructureLog", []) || [];
+  // OOR-event markers: a pool flipping active<->inactive (e.g. USDC anchor going
+  // out of range as price moves up) gets timestamped so we can study volume/arb around it.
+  const prev = hist[hist.length - 1];
+  if (prev && Array.isArray(prev.pools)) {
+    let events = kv.get("clknStructureEvents", []) || [];
+    for (const p of pools) {
+      const pp = prev.pools.find(x => x.pool === p.pool) || prev.pools.find(x => x.pair === p.pair);
+      if (pp && typeof pp.active === "boolean" && typeof p.active === "boolean" && pp.active !== p.active) {
+        events.push({ at, pair: p.pair, event: p.active ? "back-in-range" : "went-out-of-range", spotUsd: spot, vol24h: vol24h || null });
+      }
+    }
+    if (events.length > 200) events = events.slice(-200);
+    kv.set("clknStructureEvents", events);
+  }
   hist.push(snap); if (hist.length > 800) hist = hist.slice(-800);
   kv.set("clknStructureLog", hist);
   return snap;
@@ -4740,7 +4763,8 @@ app.get("/api/order-watch/structure", async (req, res) => {
   try {
     if (req.query.run === "1") await recordClknStructureSnapshot();
     const hist = kv.get("clknStructureLog", []) || [];
-    return res.json({ success: true, latest: hist[hist.length - 1] || null, count: hist.length, history: hist.slice(-200) });
+    const events = kv.get("clknStructureEvents", []) || [];
+    return res.json({ success: true, latest: hist[hist.length - 1] || null, count: hist.length, history: hist.slice(-200), events: events.slice(-50) });
   } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
 });
 
