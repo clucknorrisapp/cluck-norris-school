@@ -4733,12 +4733,13 @@ async function recordClknStructureSnapshot() {
         const a = p && p.attributes; const dex = p && p.relationships && p.relationships.dex && p.relationships.dex.data && p.relationships.dex.data.id;
         if (!a || !a.address) continue;
         poolVol[a.address] = parseFloat(a.volume_usd && a.volume_usd.h24) || 0;
-        if (dex === "orca") discovered.push({ pool: a.address, pair: String(a.name || "").replace(/\s+/g, ""), vol: poolVol[a.address] });
+        if (dex === "orca") discovered.push({ pool: a.address, pair: String(a.name || "").replace(/\s+/g, ""), vol: poolVol[a.address], reserve: parseFloat(a.reserve_in_usd) || 0 });
       }
     }
   } catch (_) {}
-  // top Orca pools by volume; fall back to the known set if discovery failed
-  let poolList = discovered.sort((x, y) => (y.vol || 0) - (x.vol || 0)).slice(0, 6).map(p => ({ pool: p.pool, pair: p.pair }));
+  // top Orca pools by max(volume, liquidity) — so a freshly-seeded pool (high
+  // reserve, ~0 volume yet) is tracked immediately; fall back to the known set.
+  let poolList = discovered.sort((x, y) => Math.max(y.vol || 0, y.reserve || 0) - Math.max(x.vol || 0, x.reserve || 0)).slice(0, 6).map(p => ({ pool: p.pool, pair: p.pair }));
   if (!poolList.length) poolList = CLKN_ORCA_POOLS;
   const pools = [];
   for (const { pool, pair } of poolList) {
