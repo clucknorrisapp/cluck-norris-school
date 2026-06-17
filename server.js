@@ -8621,7 +8621,23 @@ function detectClknTrade(tx) {
   // Same direction => liquidity add/remove, not a trade — don't fire an alert.
   if (Math.sign(poolClkn) === Math.sign(quoteDelta)) return null;
 
-  return { action, trader, clknAmount, quote: { mint: quoteMint, amount: quoteAmount } };
+  // Cross-pool ARBITRAGE detector. A true arb atomically BUYS CLKN from one pool
+  // and SELLS it into another in the SAME tx — so CLKN LEAVES one pool's vault and
+  // ENTERS another's (opposite directions) and the arber keeps ~no net CLKN. This
+  // is the bulk of CLKN's volume (the multi-quote dislocation→arb thesis) but it's
+  // NOT a real buyer, so we don't want it pinging the buy channel.
+  // A genuine buy — even one Jupiter SPLIT-routes across several pools — moves CLKN
+  // OUT of every pool leg the same way, so pool-IN stays ~0. We flag ONLY the
+  // two-sided rotation (a meaningful opposite leg, ≥50% of the dominant one).
+  let poolIn = 0, poolOut = 0;
+  for (const [owner, delta] of clknByOwner) {
+    if (onCurve(owner)) continue;             // pool vaults are off-curve accounts
+    if (delta > 0) poolIn += delta; else poolOut += -delta;
+  }
+  const domLeg = Math.max(poolIn, poolOut), subLeg = Math.min(poolIn, poolOut);
+  const crossPoolArb = domLeg > 0 && subLeg >= 0.5 * domLeg;
+
+  return { action, trader, clknAmount, quote: { mint: quoteMint, amount: quoteAmount }, crossPoolArb };
 }
 
 function fmtClkn(n) {
@@ -9220,7 +9236,17 @@ async function pollSinglePool(pool, HELIUS_KEY) {
       console.log(`[TELEGRAM] ${trade.action === "sell" ? "Sell" : "Buy"} detected (pool ${poolAddress.slice(0,6)}/${pool.dexId}, source ${tx.source || "?"}): ${trade.clknAmount.toFixed(0)} CLKN for ${trade.quote.amount} ${quoteMeta.symbol} (${usdStr}) by ${trade.trader ? trade.trader.slice(0,6) : "unknown"} · sig ${sig.slice(0,8)}`);
       // Feed the rolling daily recap (all real swaps, not just alert-worthy ones
       // — the recap is about total flow, so it records below the alert floor).
+      // Arb IS real volume, so it still counts here — it's only muted from alerts.
       recap.record({ action: trade.action, usd, trader: trade.trader, sig });
+      // Cross-pool arbitrage = CLKN rotated between our pools, not a real buyer/
+      // seller. Mute it from the buy/sell channel (kv toggle, default ON) so the
+      // alerts show only genuine community flow. Volume recap above still counts it.
+      if (trade.crossPoolArb && kv.get("suppressArbAlerts", true)) {
+        console.log(`[TELEGRAM] Skipping cross-pool arbitrage (CLKN rotated between pools, no net buyer) · sig ${sig.slice(0,8)}`);
+        rememberSig(sig);
+        if (!blocked) advanceTo = sig;
+        continue;
+      }
       if (usd == null || usd < floor) {
         console.log(`[TELEGRAM] Skipping (${usdStr} < $${floor})`);
         rememberSig(sig); // remember so other pools don't re-process it
