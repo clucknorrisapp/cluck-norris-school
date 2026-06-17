@@ -4780,7 +4780,7 @@ app.get("/api/order-flow", async (req, res) => {
     }
     const biggest = [...trades].sort((a, b) => (b.usd || 0) - (a.usd || 0)).slice(0, 10).map(t => ({ side: t.side, usd: Math.round(t.usd || 0), wallet: t.wallet, at: t.ts }));
     return res.json({
-      success: true, mint, windowMins: mins, txsScanned: tape.txsScanned,
+      success: true, mint, windowMins: mins, txsScanned: tape.txsScanned, capped: !!tape.capped,
       flow: {
         buys: buys.length, sells: sells.length, buyUsd: Math.round(sumUsd(buys)), sellUsd: Math.round(sumUsd(sells)), netUsd: Math.round(sumUsd(buys) - sumUsd(sells)),
         uniqueBuyers: new Set(buys.map(t => t.wallet)).size, uniqueSellers: new Set(sells.map(t => t.wallet)).size,
