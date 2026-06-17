@@ -4625,6 +4625,61 @@ function heliusRpcCall(HELIUS_URL) {
   };
 }
 
+// ── Order Wall / Limit-Order Scanner (GATED, v1 discovery) ───────────────────
+// Surfaces resting limit orders around a token's spot. v1 targets the Jupiter
+// Limit Order program (true limit orders, works for any token incl. memecoins).
+// GATED (404 without the premium key) while in development — it does NOT touch
+// the public site/UX. This first pass is a layout probe: getProgramAccounts can
+// only run server-side (Helius key), so we report where the mint/SOL/USDC keys
+// sit in the order account + the u64 fields, to finalize the decode in one step.
+const JUP_LIMIT_PROGRAM = "jupoNjAxXgZ4rjzxzPMP4oxduvQsQtZzyknqvzYNrNu";
+const WSOL_MINT_ADDR = "So11111111111111111111111111111111111111112";
+const USDC_MINT_ADDR = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+function _pubkeyOffsetsIn(buf, b58) {
+  try {
+    const needle = Buffer.from(base58Decode(b58));
+    if (needle.length !== 32) return [];
+    const hits = [];
+    for (let i = 0; i + 32 <= buf.length; i++) if (buf.compare(needle, 0, 32, i, i + 32) === 0) hits.push(i);
+    return hits;
+  } catch { return []; }
+}
+app.get("/api/order-scan", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  const HELIUS_KEY = process.env.HELIUS_API_KEY;
+  if (!HELIUS_KEY) return res.status(500).json({ error: "Missing HELIUS_API_KEY" });
+  const mint = String(req.query.mint || CLKN_MINT_ADDR);
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ error: "bad mint" });
+  const call = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`);
+  try {
+    const out = { mint, program: JUP_LIMIT_PROGRAM, probes: {} };
+    // Probe candidate mint-field offsets (Anchor: disc8 + maker32 → first mint at 40, second at 72).
+    for (const off of [8, 40, 72]) {
+      const r = await call("gpa", "getProgramAccounts", [JUP_LIMIT_PROGRAM, {
+        encoding: "base64", filters: [{ memcmp: { offset: off, bytes: mint } }],
+      }]);
+      if (r?.error) { out.probes[off] = { error: r.error.message || String(r.error) }; continue; }
+      const accts = r?.result || [];
+      const probe = { count: accts.length, samples: [] };
+      for (const a of accts.slice(0, 3)) {
+        const buf = Buffer.from(a.account.data[0], "base64");
+        const u64s = {};
+        for (let i = 8; i + 8 <= buf.length && i <= 300; i += 8) u64s[i] = buf.readBigUInt64LE(i).toString();
+        probe.samples.push({
+          pubkey: a.pubkey, len: buf.length,
+          mintAt: _pubkeyOffsetsIn(buf, mint), solAt: _pubkeyOffsetsIn(buf, WSOL_MINT_ADDR), usdcAt: _pubkeyOffsetsIn(buf, USDC_MINT_ADDR),
+          u64s,
+        });
+      }
+      out.probes[off] = probe;
+    }
+    return res.json(out);
+  } catch (e) {
+    return res.status(500).json({ error: publicErrMsg(e) });
+  }
+});
+
 // Authoritative locked-supply reader for ANY mint. The naive approach (getTokenAccounts
 // by owner=lock program) returns 0 — Jupiter Lock holds tokens in escrow PDAs, not under
 // the program ID directly. Correct method (same as the Autopsy's 145M figure): list the
