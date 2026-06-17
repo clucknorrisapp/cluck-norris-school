@@ -4645,6 +4645,51 @@ app.get("/api/order-scan", async (req, res) => {
   }
 });
 
+// ── Order Book MONITOR — day-to-day resting-order tracking + alerts ──────────
+// Thin tokens rarely show resting limit orders, and the ones that do often fill
+// within seconds. A periodic snapshot catches any order that rests longer than
+// the poll interval, keeps a short history, and DMs the owner when a resting
+// limit order APPEARS or DISAPPEARS (filled/cancelled) — "look day to day"
+// without watching live. Storage: kv obSnaps_<mint> { history, current, lastDiff }.
+const OB_SNAP_KEY = (mint) => `obSnaps_${mint}`;
+function obWatchMints() { const w = kv.get("obWatch", null); return Array.isArray(w) && w.length ? w : [CLKN_MINT_ADDR]; }
+async function recordOrderbookSnapshot(mint) {
+  const m = await orderbook.monitorScan(mint);
+  const orders = (m.orders || []).filter(o => o.orderPubkey && o.priceUsd != null);
+  const pkSet = new Set(orders.map(o => o.orderPubkey));
+  const store = kv.get(OB_SNAP_KEY(mint), { history: [], current: null, lastDiff: null });
+  const prev = store.current;
+  const asks = orders.filter(o => o.side === "sell"), bids = orders.filter(o => o.side === "buy");
+  const sum = a => a.reduce((s, o) => s + (o.sizeUsd || 0), 0);
+  const at = Date.now();
+  const compact = o => ({ side: o.side, priceUsd: o.priceUsd, sizeUsd: o.sizeUsd, distPct: o.distPct, venue: o.venue, orderPubkey: o.orderPubkey });
+  let diff = null;
+  if (prev) {
+    const prevSet = new Set(prev.pubkeys || []);
+    const appeared = orders.filter(o => !prevSet.has(o.orderPubkey)).slice(0, 30).map(compact);
+    const disappeared = (prev.orders || []).filter(o => !pkSet.has(o.orderPubkey)).slice(0, 30);
+    if (appeared.length || disappeared.length) diff = { at, appeared, disappeared };
+  }
+  store.history.push({ at, spotUsd: m.spotUsd, asks: asks.length, bids: bids.length, askUsd: sum(asks), bidUsd: sum(bids) });
+  if (store.history.length > 300) store.history = store.history.slice(-300);
+  store.current = { at, spotUsd: m.spotUsd, pubkeys: orders.map(o => o.orderPubkey).slice(0, 400), orders: orders.slice(0, 80).map(compact) };
+  if (diff) store.lastDiff = diff;
+  kv.set(OB_SNAP_KEY(mint), store);
+  return { at, spotUsd: m.spotUsd, asks: asks.length, bids: bids.length, diff };
+}
+// Day-to-day view (gated): current resting orders + recent history + last change.
+app.get("/api/order-watch", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  const mint = String(req.query.mint || CLKN_MINT_ADDR);
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ error: "bad mint" });
+  try {
+    if (req.query.run === "1") await recordOrderbookSnapshot(mint);
+    const store = kv.get(OB_SNAP_KEY(mint), { history: [], current: null, lastDiff: null });
+    return res.json({ success: true, mint, watching: obWatchMints().includes(mint), current: store.current, lastDiff: store.lastDiff, history: store.history.slice(-100) });
+  } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
+});
+
 // Authoritative locked-supply reader for ANY mint. The naive approach (getTokenAccounts
 // by owner=lock program) returns 0 — Jupiter Lock holds tokens in escrow PDAs, not under
 // the program ID directly. Correct method (same as the Autopsy's 145M figure): list the
@@ -9268,6 +9313,26 @@ app.listen(PORT, () => {
     }
     setInterval(jupUsdcRecenterTick, 5 * 60 * 1000);
     setTimeout(jupUsdcRecenterTick, 75000);
+    // Order Book monitor — snapshot watched mints' resting limit orders every 10 min and
+    // DM (silent) when one appears or fills/cancels, so the owner can catch them day-to-day.
+    async function orderbookMonitorTick() {
+      try {
+        for (const mint of obWatchMints()) {
+          const { diff } = await recordOrderbookSnapshot(mint);
+          if (!diff || (!diff.appeared.length && !diff.disappeared.length)) continue;
+          const sym = mint === CLKN_MINT_ADDR ? "CLKN" : (mint.slice(0, 4) + "…");
+          const line = o => `  ${o.side === "sell" ? "🔴 SELL" : "🟢 BUY"} ${fmtUsdShort(o.sizeUsd) || "?"} @ ${o.priceUsd ? "$" + Number(o.priceUsd).toPrecision(4) : "?"}${o.distPct != null ? ` (${o.distPct >= 0 ? "+" : ""}${Number(o.distPct).toFixed(1)}%)` : ""}`;
+          let msg = `🧱 <b>Order Book — ${sym}</b>`;
+          if (diff.appeared.length) msg += `\n\n🆕 <b>${diff.appeared.length} limit order(s) APPEARED:</b>\n` + diff.appeared.slice(0, 8).map(line).join("\n");
+          if (diff.disappeared.length) msg += `\n\n✅ <b>${diff.disappeared.length} filled/cancelled:</b>\n` + diff.disappeared.slice(0, 8).map(line).join("\n");
+          msg += `\n\n🔍 ${TG_PUBLIC_BASE}/order-book`;
+          const chat = kv.get("obWatchChat", "") || "1846034838"; // operator/treasury DM (silent)
+          try { await tgSend(chat, msg); } catch (_) {}
+        }
+      } catch (e) { console.warn("[order-book-monitor] failed:", e.message); }
+    }
+    setInterval(orderbookMonitorTick, 10 * 60 * 1000);
+    setTimeout(orderbookMonitorTick, 120000);
     // JUP/USDC daily LP-vs-HODL scorecard — the durable check-in (the app is always-on, so this
     // survives container/session resets). Fires at most once/24h, and only once the HODL baseline
     // is ≥24h old (needs a day of data to be meaningful). Tells the owner whether fees are beating
