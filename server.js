@@ -4632,7 +4632,10 @@ function heliusRpcCall(HELIUS_URL) {
 // the public site/UX. This first pass is a layout probe: getProgramAccounts can
 // only run server-side (Helius key), so we report where the mint/SOL/USDC keys
 // sit in the order account + the u64 fields, to finalize the decode in one step.
-const JUP_LIMIT_PROGRAM = "jupoNjAxXgZ4rjzxzPMP4oxduvQsQtZzyknqvzYNrNu";
+const JUP_LIMIT_PROGRAMS = {
+  v1: "jupoNjAxXgZ4rjzxzPMP4oxduvQsQtZzyknqvzYNrNu",   // Jupiter Limit Order v1
+  v2: "j1o2qRpjcyUwEvwtcfhEQefh773ZgjxcVRry7LDqg5X",   // Jupiter Limit Order v2 (candidate — confirm via ref token)
+};
 const WSOL_MINT_ADDR = "So11111111111111111111111111111111111111112";
 const USDC_MINT_ADDR = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 function _pubkeyOffsetsIn(buf, b58) {
@@ -4650,29 +4653,42 @@ app.get("/api/order-scan", async (req, res) => {
   const HELIUS_KEY = process.env.HELIUS_API_KEY;
   if (!HELIUS_KEY) return res.status(500).json({ error: "Missing HELIUS_API_KEY" });
   const mint = String(req.query.mint || CLKN_MINT_ADDR);
-  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ error: "bad mint" });
+  const ref = String(req.query.ref || "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm"); // WIF — known to carry Jupiter limit orders
+  if (!SOL_ADDR_RE.test(mint) || !SOL_ADDR_RE.test(ref)) return res.status(400).json({ error: "bad mint" });
   const call = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`);
+  const tokens = { mint, ref };
+  const offsets = [8, 40, 72];
   try {
-    const out = { mint, program: JUP_LIMIT_PROGRAM, probes: {} };
-    // Probe candidate mint-field offsets (Anchor: disc8 + maker32 → first mint at 40, second at 72).
-    for (const off of [8, 40, 72]) {
-      const r = await call("gpa", "getProgramAccounts", [JUP_LIMIT_PROGRAM, {
-        encoding: "base64", filters: [{ memcmp: { offset: off, bytes: mint } }],
-      }]);
-      if (r?.error) { out.probes[off] = { error: r.error.message || String(r.error) }; continue; }
+    const out = { tokens, programs: {} };
+    // Phase 1: counts only (dataSlice length 0 → tiny payloads, safe even for huge tokens).
+    for (const [pname, pid] of Object.entries(JUP_LIMIT_PROGRAMS)) {
+      out.programs[pname] = { id: pid, counts: { mint: {}, ref: {} } };
+      for (const [tname, taddr] of Object.entries(tokens)) {
+        for (const off of offsets) {
+          const r = await call("c", "getProgramAccounts", [pid, { encoding: "base64", dataSlice: { offset: 0, length: 0 }, filters: [{ memcmp: { offset: off, bytes: taddr } }] }]);
+          out.programs[pname].counts[tname][off] = r?.error ? ("err:" + (r.error.message || "")) : (r?.result?.length || 0);
+        }
+      }
+    }
+    // Phase 2: pick the smallest positive (program, token, offset) and pull a few bounded samples to map the layout.
+    let best = null;
+    for (const [pname, pid] of Object.entries(JUP_LIMIT_PROGRAMS))
+      for (const tname of ["mint", "ref"])
+        for (const off of offsets) {
+          const c = out.programs[pname].counts[tname][off];
+          if (typeof c === "number" && c > 0 && (!best || c < best.c)) best = { pname, pid, taddr: tokens[tname], tname, off, c };
+        }
+    if (best && best.c <= 1500) {
+      const r = await call("s", "getProgramAccounts", [best.pid, { encoding: "base64", dataSlice: { offset: 0, length: 360 }, filters: [{ memcmp: { offset: best.off, bytes: best.taddr } }] }]);
       const accts = r?.result || [];
-      const probe = { count: accts.length, samples: [] };
-      for (const a of accts.slice(0, 3)) {
+      out.sample = { ...best, decoded: accts.slice(0, 3).map(a => {
         const buf = Buffer.from(a.account.data[0], "base64");
         const u64s = {};
-        for (let i = 8; i + 8 <= buf.length && i <= 300; i += 8) u64s[i] = buf.readBigUInt64LE(i).toString();
-        probe.samples.push({
-          pubkey: a.pubkey, len: buf.length,
-          mintAt: _pubkeyOffsetsIn(buf, mint), solAt: _pubkeyOffsetsIn(buf, WSOL_MINT_ADDR), usdcAt: _pubkeyOffsetsIn(buf, USDC_MINT_ADDR),
-          u64s,
-        });
-      }
-      out.probes[off] = probe;
+        for (let i = 8; i + 8 <= buf.length; i += 8) u64s[i] = buf.readBigUInt64LE(i).toString();
+        return { pubkey: a.pubkey, len: buf.length, mintAt: _pubkeyOffsetsIn(buf, best.taddr), solAt: _pubkeyOffsetsIn(buf, WSOL_MINT_ADDR), usdcAt: _pubkeyOffsetsIn(buf, USDC_MINT_ADDR), u64s };
+      }) };
+    } else {
+      out.sample = best ? { note: "smallest positive count too large to sample safely", best } : { note: "no positive counts — program IDs and/or offsets need revisiting" };
     }
     return res.json(out);
   } catch (e) {
