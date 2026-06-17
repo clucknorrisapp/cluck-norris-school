@@ -8269,7 +8269,7 @@ const QUOTE_TOKENS = {
 // Buys below this USD value don't fire a Telegram notification. Default $5 so
 // the channel shows the steady stream of smaller buys (good for hype during a
 // Buy Special) while still filtering bot dust. Override via env var.
-const MIN_BUY_USD = parseFloat(process.env.MIN_BUY_USD || "20");
+const MIN_BUY_USD = parseFloat(process.env.MIN_BUY_USD || "5");
 // Sells have a higher floor than buys by default — only larger sells are worth
 // surfacing. Override either side via MIN_BUY_USD / MIN_SELL_USD.
 const MIN_SELL_USD = parseFloat(process.env.MIN_SELL_USD || "50");
