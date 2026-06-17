@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>🧱 Cluck Order Book — resting orders & walls</title>
+<style>
+  :root { --bg:#0a0a0a; --card:#141414; --border:#262626; --text:#F5F5F5; --sub:#9CA3AF; --orange:#F97316; --gold:#FCD34D; --red:#F87171; --green:#34D399; --mono:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,sans-serif; line-height:1.5; }
+  .wrap { max-width:1000px; margin:0 auto; padding:18px 16px 60px; }
+  a.back { color:var(--orange); text-decoration:none; font-size:13px; }
+  h1 { font-size:22px; margin:14px 0 2px; }
+  .tag { color:var(--sub); font-size:13px; margin:0 0 18px; }
+  .controls { display:flex; flex-wrap:wrap; gap:8px; align-items:center; background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px; }
+  input { background:#0e0e0e; border:1px solid var(--border); color:var(--text); border-radius:8px; padding:10px 12px; font-family:var(--mono); font-size:13px; }
+  #mint { flex:1; min-width:240px; }
+  #key { width:160px; }
+  button { background:linear-gradient(135deg,var(--gold),var(--orange)); color:#1a1207; border:none; border-radius:8px; padding:10px 18px; font-weight:700; cursor:pointer; font-size:13px; }
+  button:disabled { opacity:.5; cursor:default; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+  .chip { background:#1c1c1c; border:1px solid var(--border); color:var(--sub); border-radius:20px; padding:5px 12px; font-size:12px; cursor:pointer; }
+  .chip:hover { border-color:var(--orange); color:var(--text); }
+  #status { margin:16px 2px; color:var(--sub); font-size:13px; min-height:18px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px; margin-top:16px; }
+  .card h2 { font-size:14px; letter-spacing:1px; text-transform:uppercase; color:var(--gold); margin:0 0 12px; }
+  .spot { font-size:26px; font-family:var(--mono); font-weight:700; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:680px){ .grid2 { grid-template-columns:1fr; } }
+  table { width:100%; border-collapse:collapse; font-family:var(--mono); font-size:12.5px; }
+  th { text-align:right; color:var(--sub); font-weight:600; padding:4px 6px; border-bottom:1px solid var(--border); font-size:11px; }
+  th:first-child, td:first-child { text-align:left; }
+  td { padding:5px 6px; position:relative; }
+  .bar { position:absolute; top:2px; bottom:2px; left:0; opacity:.14; border-radius:3px; z-index:0; }
+  .bar.ask { background:var(--red); } .bar.bid { background:var(--green); }
+  td span { position:relative; z-index:1; }
+  .ask-c { color:var(--red); } .bid-c { color:var(--green); }
+  .muted { color:var(--sub); font-size:12px; }
+  .pill { display:inline-block; font-size:10px; color:var(--sub); border:1px solid var(--border); border-radius:4px; padding:1px 5px; margin-left:6px; }
+  .none { color:var(--sub); font-style:italic; padding:8px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/">&larr; Cluck Norris</a>
+  <h1>🧱 Cluck Order Book</h1>
+  <p class="tag">Where buy &amp; sell pressure rests around a token — Jupiter limit orders + live cross-pool AMM depth. The chain shows <em>what</em>, never <em>why</em>.</p>
+
+  <div class="controls">
+    <input id="mint" placeholder="Token mint address" />
+    <input id="key" type="password" placeholder="access key" title="Your PREMIUM_ACCESS_KEY (stored locally)" />
+    <button id="scan">Scan</button>
+  </div>
+  <div class="chips">
+    <span class="chip" data-m="DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS">CLKN</span>
+    <span class="chip" data-m="EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm">WIF</span>
+    <span class="chip" data-m="JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN">JUP</span>
+  </div>
+
+  <div id="status"></div>
+  <div id="out"></div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+const KEY_LS = "ob_key", MINT_LS = "ob_mint";
+$("#key").value = localStorage.getItem(KEY_LS) || "";
+$("#mint").value = localStorage.getItem(MINT_LS) || "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
+
+function fmtPrice(p){ if(p==null||!isFinite(p)) return "—"; if(p>=1) return "$"+p.toFixed(4); if(p>=0.0001) return "$"+p.toFixed(6); return "$"+p.toExponential(3); }
+function fmtUsd(v){ if(v==null||!isFinite(v)) return "—"; if(v>=1e9) return "$"+(v/1e9).toFixed(2)+"B"; if(v>=1e6) return "$"+(v/1e6).toFixed(2)+"M"; if(v>=1e3) return "$"+(v/1e3).toFixed(1)+"k"; return "$"+v.toFixed(0); }
+function fmtPct(p){ if(p==null||!isFinite(p)) return "—"; return (p>=0?"+":"")+p.toFixed(1)+"%"; }
+
+document.querySelectorAll(".chip").forEach(c => c.onclick = () => { $("#mint").value = c.dataset.m; scan(); });
+$("#scan").onclick = scan;
+$("#mint").addEventListener("keydown", e => { if(e.key==="Enter") scan(); });
+
+async function scan(){
+  const mint = $("#mint").value.trim();
+  const key = $("#key").value.trim();
+  if(!mint){ $("#status").textContent = "Enter a token mint."; return; }
+  localStorage.setItem(KEY_LS, key); localStorage.setItem(MINT_LS, mint);
+  $("#scan").disabled = true; $("#out").innerHTML = ""; $("#status").textContent = "Scanning every venue (Jupiter limit orders + cross-pool AMM depth)…";
+  try {
+    const r = await fetch("/api/order-scan?mint="+encodeURIComponent(mint), { headers: { "x-premium-key": key } });
+    if(r.status===404){ $("#status").innerHTML = "Access key required (or wrong). Paste your key and scan again."; return; }
+    const d = await r.json();
+    if(!d.success){ $("#status").textContent = "Error: "+esc(d.error||"unknown"); return; }
+    $("#status").innerHTML = "Scanned "+esc(new Date(d.scannedAt).toLocaleString())+(d.cached?" · cached":"")+" · sources: "+esc(JSON.stringify(d.sources));
+    render(d);
+  } catch(e){ $("#status").textContent = "Network error: "+esc(e.message); }
+  finally { $("#scan").disabled = false; }
+}
+
+function render(d){
+  const spot = d.spotUsd;
+  let html = `<div class="card"><h2>Spot</h2><div class="spot">${fmtPrice(spot)}</div><div class="muted">${esc(d.mint)}</div></div>`;
+
+  // AMM depth ladder (universal — works even with no limit orders)
+  const am = d.ammDepth || {};
+  const ask = (am.ask||[]), bid = (am.bid||[]);
+  const maxImp = Math.max(1, ...ask.map(r=>r.impactPct||0), ...bid.map(r=>r.impactPct||0));
+  const ladder = (rows, cls, moveLabel) => rows.length ? rows.map(r => `
+    <tr><td><div class="bar ${cls}" style="width:${Math.min(100,(r.impactPct/maxImp)*100)}%"></div><span>${fmtUsd(r.usd)}</span></td>
+    <td><span>${fmtPrice(r.avgPriceUsd)}</span></td>
+    <td><span class="${cls}-c">${fmtPct(r.distPct)}</span></td>
+    <td><span class="muted">${(r.impactPct||0).toFixed(1)}%</span></td></tr>`).join("") : `<tr><td colspan="4" class="none">no route</td></tr>`;
+  html += `<div class="card"><h2>Liquidity depth — how far a trade moves price (all pools, via Jupiter)</h2><div class="grid2">
+    <div><div class="muted ask-c" style="margin-bottom:6px">⬆ BUYING pushes price up (resistance)</div>
+      <table><thead><tr><th>Buy size</th><th>Avg fill</th><th>Move</th><th>Impact</th></tr></thead><tbody>${ladder(ask,"ask")}</tbody></table></div>
+    <div><div class="muted bid-c" style="margin-bottom:6px">⬇ SELLING pushes price down (support)</div>
+      <table><thead><tr><th>Sell size</th><th>Avg fill</th><th>Move</th><th>Impact</th></tr></thead><tbody>${ladder(bid,"bid")}</tbody></table></div>
+  </div></div>`;
+
+  // Limit orders (Jupiter) — discrete resting orders
+  const lo = d.limitOrders || {};
+  const A = lo.asks||{top:[],count:0,usd:0}, B = lo.bids||{top:[],count:0,usd:0};
+  const maxUsd = Math.max(1, ...(A.top||[]).map(o=>o.sizeUsd||0), ...(B.top||[]).map(o=>o.sizeUsd||0));
+  const orderRows = (list, cls) => list.length ? list.map(o => `
+    <tr><td><div class="bar ${cls}" style="width:${Math.min(100,((o.sizeUsd||0)/maxUsd)*100)}%"></div><span>${fmtPrice(o.priceUsd)}</span></td>
+    <td><span class="${cls}-c">${fmtPct(o.distPct)}</span></td>
+    <td><span>${fmtUsd(o.sizeUsd)}</span></td>
+    <td><span class="muted">${esc((o.venue||"").replace("jupiter-lo-",""))}</span></td></tr>`).join("") : `<tr><td colspan="4" class="none">none resting right now</td></tr>`;
+  html += `<div class="card"><h2>Resting limit orders — Jupiter (${A.count} sells / ${B.count} buys · ${fmtUsd(A.usd)} / ${fmtUsd(B.usd)})</h2>
+    <div class="grid2">
+      <div><div class="muted ask-c" style="margin-bottom:6px">SELL walls (asks above spot)</div>
+        <table><thead><tr><th>Price</th><th>Move</th><th>Size</th><th>v</th></tr></thead><tbody>${orderRows(A.top||[],"ask")}</tbody></table></div>
+      <div><div class="muted bid-c" style="margin-bottom:6px">BUY support (bids below spot)</div>
+        <table><thead><tr><th>Price</th><th>Move</th><th>Size</th><th>v</th></tr></thead><tbody>${orderRows(B.top||[],"bid")}</tbody></table></div>
+    </div>
+    <div class="muted" style="margin-top:10px">No resting limit orders is normal for thin tokens — they often appear briefly and fill in seconds. Use day-to-day monitoring (coming) to catch them.</div>
+  </div>`;
+
+  $("#out").innerHTML = html;
+}
+
+if($("#key").value) scan();
+</script>
+</body>
+</html>
