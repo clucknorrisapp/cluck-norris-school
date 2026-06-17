@@ -256,6 +256,13 @@ function render(d){
       </div></div>`;
   }
 
+  // in-range two-sided LP — the full liquidity picture (yours + everyone's)
+  if(ow&&ow.lp&&ow.lp.length){
+    const lpRows=ow.lp.map(o=>`<tr><td><span>CLKN/${esc(o.quoteSymbol||'?')}</span></td><td><span>${fmtPrice(o.priceLowUsd)} – ${fmtPrice(o.priceHighUsd)}</span></td><td><span>${fmtUsd(o.sizeUsd)}</span></td><td>${ownerTag(o.owner)}</td></tr>`).join("");
+    html+=`<div class="card"><h2>In‑range LP — the full liquidity picture</h2><p class="explain">Two‑sided positions providing active liquidity <b>right now</b> — the depth that actually fills trades at spot. Shown so the whole book is visible: <span style="color:var(--green)">yours</span> and everyone else's. (Not "walls" — walls are one‑sided and sit above/below; these straddle the price.)</p>
+      <table><thead><tr><th>Pair</th><th>Price range</th><th>Value</th><th>Owner</th></tr></thead><tbody>${lpRows}</tbody></table></div>`;
+  }
+
   html+=`<div class="legend"><span class="sw" style="background:var(--red)"></span>sell / resistance &nbsp;&nbsp;<span class="sw" style="background:var(--green)"></span>buy / support &nbsp;&nbsp; "Move" = distance from current price &nbsp;·&nbsp; bar = relative size</div>`;
   $("#out").innerHTML=html;
   const cv=document.getElementById("depthCanvas"); if(cv&&hasDepth){ try{ drawDepth(cv,asksCum,bidsCum); }catch(_){} }
