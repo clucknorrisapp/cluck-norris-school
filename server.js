@@ -4720,20 +4720,33 @@ async function recordClknStructureSnapshot() {
   const spot = await orderbook.getUsdPrice(CLKN_MINT_ADDR).catch(() => null);
   const organic = await getClknOrganicScore(CLKN_MINT_ADDR).catch(() => null);
   const vol24h = await getClkn24hVolume(CLKN_MINT_ADDR).catch(() => null);
-  // per-pool 24h volume from GeckoTerminal (keyless), matched by pool address —
-  // lets us see whether SOL+JUP volume holds up when the USDC anchor goes inactive.
+  // Discover CLKN's Orca pools (so a newly-created pool — e.g. a 0.02% JUP pool —
+  // is tracked automatically, no hardcoding) + per-pool 24h volume, from one
+  // GeckoTerminal call. Lets us see whether SOL+JUP volume holds when USDC is out.
   const poolVol = {};
+  let discovered = [];
   try {
     const gr = await fetch(`https://api.geckoterminal.com/api/v2/networks/solana/tokens/${CLKN_MINT_ADDR}/pools`, { signal: AbortSignal.timeout(10000) });
-    if (gr.ok) { const j = await gr.json(); for (const p of (j.data || [])) { const a = p && p.attributes; if (a && a.address) poolVol[a.address] = parseFloat(a.volume_usd && a.volume_usd.h24) || 0; } }
+    if (gr.ok) {
+      const j = await gr.json();
+      for (const p of (j.data || [])) {
+        const a = p && p.attributes; const dex = p && p.relationships && p.relationships.dex && p.relationships.dex.data && p.relationships.dex.data.id;
+        if (!a || !a.address) continue;
+        poolVol[a.address] = parseFloat(a.volume_usd && a.volume_usd.h24) || 0;
+        if (dex === "orca") discovered.push({ pool: a.address, pair: String(a.name || "").replace(/\s+/g, ""), vol: poolVol[a.address] });
+      }
+    }
   } catch (_) {}
+  // top Orca pools by volume; fall back to the known set if discovery failed
+  let poolList = discovered.sort((x, y) => (y.vol || 0) - (x.vol || 0)).slice(0, 6).map(p => ({ pool: p.pool, pair: p.pair }));
+  if (!poolList.length) poolList = CLKN_ORCA_POOLS;
   const pools = [];
-  for (const { pool, pair } of CLKN_ORCA_POOLS) {
+  for (const { pool, pair } of poolList) {
     try {
       const r = await orca.poolWalls(pool, CLKN_MINT_ADDR, spot);
       const all = r.walls || [];
       const inRange = all.filter(w => w.inRange).length;
-      pools.push({ pair, pool, positions: all.length, inRange, outOfRange: all.length - inRange, valueUsd: Math.round(all.reduce((s, w) => s + (w.sizeUsd || 0), 0)), vol24h: Math.round(poolVol[pool] || 0), active: inRange > 0 });
+      pools.push({ pair, pool, feeTierPct: r.feeTierPct, positions: all.length, inRange, outOfRange: all.length - inRange, valueUsd: Math.round(all.reduce((s, w) => s + (w.sizeUsd || 0), 0)), vol24h: Math.round(poolVol[pool] || 0), active: inRange > 0 });
     } catch (e) { pools.push({ pair, pool, error: String(e.message || e).slice(0, 80) }); }
   }
   const at = Date.now();
