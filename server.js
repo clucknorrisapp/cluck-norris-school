@@ -4705,6 +4705,45 @@ app.get("/api/order-watch", async (req, res) => {
   } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
 });
 
+// ── CLKN multi-quote STRUCTURE watch (read-only, strategy phase) ─────────────
+// Hourly snapshot of how the owner-managed 3-pair Orca structure moves: per-pool
+// position count / in-range / value, plus organic score + 24h volume. Pure
+// observation for strategy-building — NEVER acts on positions (owner controls
+// manually). kv clknStructureLog (ring). View: /api/order-watch/structure.
+const CLKN_ORCA_POOLS = [
+  { pool: "EL1ZDnuTE4J4LZJLP76VapFSDiM7Xt18ZsnzVeqNvaPr", pair: "CLKN/SOL" },
+  { pool: "H1r9ut25xAU1B1AbZRhvSJjShd4Q3mtmysYHBisFES7H", pair: "CLKN/USDC" },
+  { pool: "7eVP5Jqe5CiX7LJtfzC6xdfGxFpfPX7jsvaoLnCdn9aB", pair: "CLKN/JUP" },
+];
+async function recordClknStructureSnapshot() {
+  const orca = require("./lib/orca-whirlpools");
+  const spot = await orderbook.getUsdPrice(CLKN_MINT_ADDR).catch(() => null);
+  const organic = await getClknOrganicScore(CLKN_MINT_ADDR).catch(() => null);
+  const vol24h = await getClkn24hVolume(CLKN_MINT_ADDR).catch(() => null);
+  const pools = [];
+  for (const { pool, pair } of CLKN_ORCA_POOLS) {
+    try {
+      const r = await orca.poolWalls(pool, CLKN_MINT_ADDR, spot);
+      const all = r.walls || [];
+      pools.push({ pair, positions: all.length, inRange: all.filter(w => w.inRange).length, outOfRange: all.filter(w => !w.inRange).length, valueUsd: Math.round(all.reduce((s, w) => s + (w.sizeUsd || 0), 0)) });
+    } catch (e) { pools.push({ pair, error: String(e.message || e).slice(0, 80) }); }
+  }
+  const snap = { at: Date.now(), spotUsd: spot, organic: organic && Number.isFinite(organic.score) ? organic.score : null, vol24h: vol24h || null, totalValueUsd: Math.round(pools.reduce((s, p) => s + (p.valueUsd || 0), 0)), pools };
+  let hist = kv.get("clknStructureLog", []) || [];
+  hist.push(snap); if (hist.length > 800) hist = hist.slice(-800);
+  kv.set("clknStructureLog", hist);
+  return snap;
+}
+app.get("/api/order-watch/structure", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  try {
+    if (req.query.run === "1") await recordClknStructureSnapshot();
+    const hist = kv.get("clknStructureLog", []) || [];
+    return res.json({ success: true, latest: hist[hist.length - 1] || null, count: hist.length, history: hist.slice(-200) });
+  } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
+});
+
 // Authoritative locked-supply reader for ANY mint. The naive approach (getTokenAccounts
 // by owner=lock program) returns 0 — Jupiter Lock holds tokens in escrow PDAs, not under
 // the program ID directly. Correct method (same as the Autopsy's 145M figure): list the
@@ -9352,6 +9391,9 @@ app.listen(PORT, () => {
     }
     setInterval(orderbookMonitorTick, 10 * 60 * 1000);
     setTimeout(orderbookMonitorTick, 120000);
+    // CLKN structure watch — hourly read-only log of how the 3-pair strategy moves.
+    setInterval(recordClknStructureSnapshot, 60 * 60 * 1000);
+    setTimeout(recordClknStructureSnapshot, 150000);
     // JUP/USDC daily LP-vs-HODL scorecard — the durable check-in (the app is always-on, so this
     // survives container/session resets). Fires at most once/24h, and only once the HODL baseline
     // is ≥24h old (needs a day of data to be meaningful). Tells the owner whether fees are beating
