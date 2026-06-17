@@ -7903,6 +7903,11 @@ app.get("/snapshot", (req, res) => {
   res.sendFile(join(__dirname, "public", "snapshot.html"));
 });
 
+// -- Cluck Order Book (resting orders + cross-pool AMM depth; UI for /api/order-scan) --
+app.get("/order-book", (req, res) => {
+  res.sendFile(join(__dirname, "public", "order-book.html"));
+});
+
 // -- Grant overview page (public-good framing for ecosystem grant reviewers) --
 app.get("/grant", (req, res) => {
   res.sendFile(join(__dirname, "public", "grant.html"));
