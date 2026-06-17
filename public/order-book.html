@@ -129,8 +129,27 @@ function render(d){
       <div><div class="muted bid-c" style="margin-bottom:6px">BUY support (bids below spot)</div>
         <table><thead><tr><th>Price</th><th>Move</th><th>Size</th><th>v</th></tr></thead><tbody>${orderRows(B.top||[],"bid")}</tbody></table></div>
     </div>
-    <div class="muted" style="margin-top:10px">No resting limit orders is normal for thin tokens — they often appear briefly and fill in seconds. Use day-to-day monitoring (coming) to catch them.</div>
+    <div class="muted" style="margin-top:10px">No resting limit orders is normal for thin tokens — they often appear briefly and fill in seconds.</div>
   </div>`;
+
+  // Orca single-sided positions = "Orca limit orders"
+  const ow = d.orcaWalls;
+  if (ow) {
+    const owRows = (list, cls) => list.length ? list.map(o => `
+      <tr><td><span>${fmtPrice(o.priceUsd)}</span></td>
+      <td><span class="${cls}-c">${fmtPct(o.distPct)}</span></td>
+      <td><span>${fmtUsd(o.sizeUsd)}</span></td>
+      <td><span class="muted">${esc(o.quoteSymbol||'')}</span></td></tr>`).join("") : `<tr><td colspan="4" class="none">none single-sided</td></tr>`;
+    html += `<div class="card"><h2>Orca single-sided walls — "Orca limit orders" (${ow.pools} pool${ow.pools===1?'':'s'} · ${ow.twoSided} two-sided LP)</h2>
+      <div class="grid2">
+        <div><div class="muted ask-c" style="margin-bottom:6px">SELL walls (token above spot)</div>
+          <table><thead><tr><th>Price</th><th>Move</th><th>Size</th><th>quote</th></tr></thead><tbody>${owRows(ow.sells,"ask")}</tbody></table></div>
+        <div><div class="muted bid-c" style="margin-bottom:6px">BUY walls (quote below spot)</div>
+          <table><thead><tr><th>Price</th><th>Move</th><th>Size</th><th>quote</th></tr></thead><tbody>${owRows(ow.buys,"bid")}</tbody></table></div>
+      </div>
+      <div class="muted" style="margin-top:10px">Single-sided Orca positions act like limit orders. Two-sided positions are ordinary LP.</div>
+    </div>`;
+  }
 
   $("#out").innerHTML = html;
 }
