@@ -51,6 +51,9 @@
     <input id="key" type="password" placeholder="access key" title="Your PREMIUM_ACCESS_KEY (stored locally)" />
     <button id="scan">Scan</button>
   </div>
+  <div class="controls" style="margin-top:8px">
+    <input id="wallets" style="flex:1;min-width:240px" placeholder="your LP wallet(s), comma-separated — optional, to tag yours vs 3rd-party" />
+  </div>
   <div class="chips">
     <span class="chip" data-m="DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS">CLKN</span>
     <span class="chip" data-m="EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm">WIF</span>
@@ -67,6 +70,15 @@ const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c => ({"&":"&amp;","<"
 const KEY_LS = "ob_key", MINT_LS = "ob_mint";
 $("#key").value = localStorage.getItem(KEY_LS) || "";
 $("#mint").value = localStorage.getItem(MINT_LS) || "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
+$("#wallets").value = localStorage.getItem("ob_wallets") || "";
+function myWallets(){ return ($("#wallets").value||"").split(",").map(s=>s.trim()).filter(Boolean); }
+function ownerTag(owner){
+  if(!owner) return '<span class="muted">—</span>';
+  const mine = myWallets(), isMine = mine.includes(owner), short = esc(owner.slice(0,4)+'…'+owner.slice(-4));
+  if(isMine) return '<span class="pill" style="color:#34D399;border-color:rgba(52,211,153,.4)">✓ YOURS '+short+'</span>';
+  if(mine.length) return '<span class="pill" style="color:#FCD34D;border-color:rgba(252,211,77,.4)">⚠ 3RD-PARTY '+short+'</span>';
+  return '<span class="pill">'+short+'</span>';
+}
 
 function fmtPrice(p){ if(p==null||!isFinite(p)) return "—"; if(p>=1) return "$"+p.toFixed(4); if(p>=0.0001) return "$"+p.toFixed(6); return "$"+p.toExponential(3); }
 function fmtUsd(v){ if(v==null||!isFinite(v)) return "—"; if(v>=1e9) return "$"+(v/1e9).toFixed(2)+"B"; if(v>=1e6) return "$"+(v/1e6).toFixed(2)+"M"; if(v>=1e3) return "$"+(v/1e3).toFixed(1)+"k"; return "$"+v.toFixed(0); }
@@ -80,7 +92,7 @@ async function scan(){
   const mint = $("#mint").value.trim();
   const key = $("#key").value.trim();
   if(!mint){ $("#status").textContent = "Enter a token mint."; return; }
-  localStorage.setItem(KEY_LS, key); localStorage.setItem(MINT_LS, mint);
+  localStorage.setItem(KEY_LS, key); localStorage.setItem(MINT_LS, mint); localStorage.setItem("ob_wallets", $("#wallets").value||"");
   $("#scan").disabled = true; $("#out").innerHTML = ""; $("#status").textContent = "Scanning every venue (Jupiter limit orders + cross-pool AMM depth)…";
   try {
     const r = await fetch("/api/order-scan?mint="+encodeURIComponent(mint), { headers: { "x-premium-key": key } });
@@ -139,15 +151,15 @@ function render(d){
       <tr><td><span>${fmtPrice(o.priceUsd)}</span></td>
       <td><span class="${cls}-c">${fmtPct(o.distPct)}</span></td>
       <td><span>${fmtUsd(o.sizeUsd)}</span></td>
-      <td><span class="muted">${esc(o.quoteSymbol||'')}</span></td></tr>`).join("") : `<tr><td colspan="4" class="none">none single-sided</td></tr>`;
+      <td>${ownerTag(o.owner)}</td></tr>`).join("") : `<tr><td colspan="4" class="none">none single-sided</td></tr>`;
     html += `<div class="card"><h2>Orca single-sided walls — "Orca limit orders" (${ow.pools} pool${ow.pools===1?'':'s'} · ${ow.twoSided} two-sided LP)</h2>
       <div class="grid2">
         <div><div class="muted ask-c" style="margin-bottom:6px">SELL walls (token above spot)</div>
-          <table><thead><tr><th>Price</th><th>Move</th><th>Size</th><th>quote</th></tr></thead><tbody>${owRows(ow.sells,"ask")}</tbody></table></div>
+          <table><thead><tr><th>Price</th><th>Move</th><th>Size</th><th>owner</th></tr></thead><tbody>${owRows(ow.sells,"ask")}</tbody></table></div>
         <div><div class="muted bid-c" style="margin-bottom:6px">BUY walls (quote below spot)</div>
-          <table><thead><tr><th>Price</th><th>Move</th><th>Size</th><th>quote</th></tr></thead><tbody>${owRows(ow.buys,"bid")}</tbody></table></div>
+          <table><thead><tr><th>Price</th><th>Move</th><th>Size</th><th>owner</th></tr></thead><tbody>${owRows(ow.buys,"bid")}</tbody></table></div>
       </div>
-      <div class="muted" style="margin-top:10px">Single-sided Orca positions act like limit orders. Two-sided positions are ordinary LP.</div>
+      <div class="muted" style="margin-top:10px">Single-sided Orca positions act like limit orders. Add your LP wallet(s) above to tag <span style="color:#34D399">✓ yours</span> vs <span style="color:#FCD34D">⚠ 3rd-party</span>. Two-sided positions are ordinary LP.</div>
     </div>`;
   }
 

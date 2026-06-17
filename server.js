@@ -4655,8 +4655,12 @@ app.get("/api/order-scan", async (req, res) => {
 // without watching live. Storage: kv obSnaps_<mint> { history, current, lastDiff }.
 const OB_SNAP_KEY = (mint) => `obSnaps_${mint}`;
 function obWatchMints() { const w = kv.get("obWatch", null); return Array.isArray(w) && w.length ? w : [CLKN_MINT_ADDR]; }
+function obOwnerWallets() { const w = kv.get("obOwnerWallets", null); return Array.isArray(w) ? w : []; } // your LP wallets → alerts tag yours vs 3rd-party
 async function recordOrderbookSnapshot(mint) {
   const m = await orderbook.monitorScan(mint);
+  // Degraded read (no spot price) → don't snapshot/diff, so a transient data
+  // outage can't fire a false "appeared/filled" alert.
+  if (m.spotUsd == null) return { at: Date.now(), spotUsd: null, asks: 0, bids: 0, diff: null, degraded: true };
   const orders = (m.orders || []).filter(o => o.orderPubkey && o.priceUsd != null);
   const pkSet = new Set(orders.map(o => o.orderPubkey));
   const store = kv.get(OB_SNAP_KEY(mint), { history: [], current: null, lastDiff: null });
@@ -4664,7 +4668,7 @@ async function recordOrderbookSnapshot(mint) {
   const asks = orders.filter(o => o.side === "sell"), bids = orders.filter(o => o.side === "buy");
   const sum = a => a.reduce((s, o) => s + (o.sizeUsd || 0), 0);
   const at = Date.now();
-  const compact = o => ({ side: o.side, priceUsd: o.priceUsd, sizeUsd: o.sizeUsd, distPct: o.distPct, venue: o.venue, orderPubkey: o.orderPubkey });
+  const compact = o => ({ side: o.side, priceUsd: o.priceUsd, sizeUsd: o.sizeUsd, distPct: o.distPct, venue: o.venue, orderPubkey: o.orderPubkey, owner: o.owner || null });
   let diff = null;
   if (prev) {
     const prevSet = new Set(prev.pubkeys || []);
@@ -9323,7 +9327,11 @@ app.listen(PORT, () => {
           const { diff } = await recordOrderbookSnapshot(mint);
           if (!diff || (!diff.appeared.length && !diff.disappeared.length)) continue;
           const sym = mint === CLKN_MINT_ADDR ? "CLKN" : (mint.slice(0, 4) + "…");
-          const line = o => `  ${o.side === "sell" ? "🔴 SELL" : "🟢 BUY"} ${fmtUsdShort(o.sizeUsd) || "?"} @ ${o.priceUsd ? "$" + Number(o.priceUsd).toPrecision(4) : "?"}${o.distPct != null ? ` (${o.distPct >= 0 ? "+" : ""}${Number(o.distPct).toFixed(1)}%)` : ""}`;
+          const mine = obOwnerWallets();
+          const line = o => {
+            const tag = o.owner ? (mine.includes(o.owner) ? " · ✅ yours" : " · ⚠️ " + o.owner.slice(0, 4) + "…" + o.owner.slice(-4)) : "";
+            return `  ${o.side === "sell" ? "🔴 SELL" : "🟢 BUY"} ${fmtUsdShort(o.sizeUsd) || "?"} @ ${o.priceUsd ? "$" + Number(o.priceUsd).toPrecision(4) : "?"}${o.distPct != null ? ` (${o.distPct >= 0 ? "+" : ""}${Number(o.distPct).toFixed(1)}%)` : ""}${o.venue ? " [" + o.venue + "]" : ""}${tag}`;
+          };
           let msg = `🧱 <b>Order Book — ${sym}</b>`;
           if (diff.appeared.length) msg += `\n\n🆕 <b>${diff.appeared.length} limit order(s) APPEARED:</b>\n` + diff.appeared.slice(0, 8).map(line).join("\n");
           if (diff.disappeared.length) msg += `\n\n✅ <b>${diff.disappeared.length} filled/cancelled:</b>\n` + diff.disappeared.slice(0, 8).map(line).join("\n");
