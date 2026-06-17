@@ -4637,6 +4637,7 @@ app.get("/api/order-scan", async (req, res) => {
   const mint = String(req.query.mint || CLKN_MINT_ADDR);
   if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ error: "bad mint" });
   try {
+    if (req.query.debug === "orca") { const pool = String(req.query.pool || ""); if (!SOL_ADDR_RE.test(pool)) return res.status(400).json({ error: "bad pool" }); return res.json({ success: true, debug: await orderbook.debugOrcaPositions(pool) }); }
     if (req.query.debug) return res.json({ success: true, debug: await orderbook.debugJupSample(mint, String(req.query.debug)) });
     const data = await orderbook.scan(mint, { nocache: req.query.nocache === "1" });
     return res.json({ success: true, ...data });
