@@ -154,6 +154,7 @@ async function scan(){
     if(!d.success){ $("#status").textContent="Error: "+esc(d.error||"unknown"); $("#out").innerHTML=""; return; }
     $("#status").innerHTML="Scanned "+esc(new Date(d.scannedAt).toLocaleString())+(d.cached?" · cached":"")+" &nbsp;·&nbsp; "+srcLine(d.sources||{});
     render(d);
+    loadFlow(mint, key);
   }catch(e){ $("#status").textContent="Network error: "+esc(e.message); $("#out").innerHTML=""; }
   finally{ $("#scan").disabled=false; }
 }
@@ -219,6 +220,8 @@ function render(d){
     </div>
   </div>`;
 
+  html+=`<div id="flowCard"></div>`; // trade-flow loads async after main render
+
   // depth chart
   const asksCum=combinedCum(A.cumulative,owSells,+1), bidsCum=combinedCum(B.cumulative,owBuys,-1);
   const hasDepth=asksCum.some(p=>p.usd>0)||bidsCum.some(p=>p.usd>0);
@@ -266,6 +269,40 @@ function render(d){
   html+=`<div class="legend"><span class="sw" style="background:var(--red)"></span>sell / resistance &nbsp;&nbsp;<span class="sw" style="background:var(--green)"></span>buy / support &nbsp;&nbsp; "Move" = distance from current price &nbsp;·&nbsp; bar = relative size</div>`;
   $("#out").innerHTML=html;
   const cv=document.getElementById("depthCanvas"); if(cv&&hasDepth){ try{ drawDepth(cv,asksCum,bidsCum); }catch(_){} }
+}
+
+async function loadFlow(mint, key){
+  const el=document.getElementById("flowCard"); if(!el) return;
+  el.innerHTML='<div class="card"><div class="muted">Loading trade flow…</div></div>';
+  try{
+    const r=await fetch("/api/order-flow?mint="+encodeURIComponent(mint)+"&mins=60&minUsd=25&reactSec=15",{headers:{"x-premium-key":key}});
+    const d=await r.json();
+    if(!d.success||!d.flow){ el.innerHTML=""; return; }
+    const f=d.flow, buyUsd=f.buyUsd||0, sellUsd=f.sellUsd||0, tot=Math.max(1,buyUsd+sellUsd), net=f.netUsd||0;
+    const arb=(d.txsScanned>50 && (f.buys+f.sells) < d.txsScanned*0.15);
+    const rs=d.reactiveSells||[];
+    let h=`<div class="card"><h2>📈 Trade flow — last ${d.windowMins}m${d.capped?' (recent, capped)':''}</h2>
+      <p class="explain">Real swaps in the window, classified buy vs sell — net = directional pressure. ${arb?'<b style="color:var(--gold)">Most volume here is arbitrage (net‑neutral) — directional retail flow is light.</b>':''}</p>
+      <div class="stats">
+        <div class="stat"><div class="k">Buys</div><div class="v bid-c">${f.buys} · ${fmtUsd(buyUsd)}</div></div>
+        <div class="stat"><div class="k">Sells</div><div class="v ask-c">${f.sells} · ${fmtUsd(sellUsd)}</div></div>
+        <div class="stat"><div class="k">Net flow</div><div class="v" style="color:${net>=0?'var(--green)':'var(--red)'}">${net>=0?'+':'−'}${fmtUsd(Math.abs(net))}</div></div>
+        <div class="stat"><div class="k">Uniq buy/sell</div><div class="v">${f.uniqueBuyers}/${f.uniqueSellers}</div></div>
+      </div>
+      <div style="height:9px;border-radius:5px;overflow:hidden;display:flex;margin-top:12px;background:#222">
+        <div style="width:${(buyUsd/tot*100).toFixed(1)}%;background:var(--green)"></div><div style="width:${(sellUsd/tot*100).toFixed(1)}%;background:var(--red)"></div>
+      </div>
+      <div class="muted" style="margin-top:4px">${(buyUsd/tot*100).toFixed(0)}% buy / ${(sellUsd/tot*100).toFixed(0)}% sell pressure · ${d.txsScanned} txs scanned</div>`;
+    if(rs.length){
+      h+=`<div class="side-h ask-c" style="margin-top:14px">⚡ Reactive sells — a sell within seconds of a buy (${rs.length})</div>
+        <table><thead><tr><th>Buy</th><th>→ Sell</th><th>Gap</th><th>Seller</th></tr></thead><tbody>`+
+        rs.slice(0,8).map(r=>`<tr><td><span>${fmtUsd(r.buyUsd)}</span></td><td><span class="ask-c">${fmtUsd(r.sellUsd)}</span></td><td><span>${r.gapSec}s</span></td><td>${ownerTag(r.sellWallet)}</td></tr>`).join("")+
+        `</tbody></table><div class="muted" style="margin-top:6px">A sell firing seconds after a buy = an <b>off‑chain bot order</b> — there's no on‑chain resting order to scan, so this flow view is the only way to catch it.</div>`;
+    } else {
+      h+=`<div class="muted" style="margin-top:12px">No reactive bot‑sells in this window. They're event‑driven — scan right after a buy/push to catch one in the act.</div>`;
+    }
+    el.innerHTML=h+`</div>`;
+  }catch(e){ el.innerHTML=""; }
 }
 
 if($("#key").value) scan();
