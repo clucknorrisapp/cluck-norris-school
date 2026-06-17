@@ -4,20 +4,22 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>🧱 Cluck Order Book — where buy & sell pressure rests</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
-  :root { --bg:#0a0a0a; --card:#151515; --card2:#1b1b1b; --border:#2a2a2a; --text:#F5F5F5; --sub:#9CA3AF; --orange:#F97316; --gold:#FCD34D; --red:#F87171; --green:#34D399; --blue:#60A5FA; --mono:ui-monospace,SFMono-Regular,Menlo,monospace; }
+  :root { --bg:#0a0a0a; --card:#161616; --card2:#1c1c1c; --border:#2a2a2a; --text:#F5F5F5; --sub:#9CA3AF; --orange:#F97316; --gold:#FCD34D; --red:#F87171; --redbg:#2a1414; --green:#34D399; --greenbg:#0f231c; --blue:#60A5FA; --mono:ui-monospace,SFMono-Regular,Menlo,monospace; --disp:'Oswald',system-ui,sans-serif; }
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,sans-serif; line-height:1.55; }
-  .wrap { max-width:1020px; margin:0 auto; padding:18px 16px 70px; }
+  body { margin:0; background:radial-gradient(1100px 500px at 50% -120px,#1a1206 0%,var(--bg) 55%); color:var(--text); font-family:system-ui,-apple-system,sans-serif; line-height:1.55; }
+  .wrap { max-width:1040px; margin:0 auto; padding:18px 16px 70px; }
   a.back { color:var(--orange); text-decoration:none; font-size:13px; }
-  h1 { font-size:23px; margin:14px 0 2px; }
+  h1 { font-family:var(--disp); font-size:30px; font-weight:700; letter-spacing:.5px; margin:14px 0 2px; }
   .tag { color:var(--sub); font-size:13.5px; margin:0 0 16px; }
   .controls { display:flex; flex-wrap:wrap; gap:8px; align-items:center; background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px; }
-  input { background:#0e0e0e; border:1px solid var(--border); color:var(--text); border-radius:8px; padding:10px 12px; font-family:var(--mono); font-size:13px; }
+  input { background:#0e0e0e; border:1px solid var(--border); color:var(--text); border-radius:8px; padding:11px 12px; font-family:var(--mono); font-size:13px; }
   #mint { flex:1; min-width:230px; }
   #key { width:150px; }
-  button { background:linear-gradient(135deg,var(--gold),var(--orange)); color:#1a1207; border:none; border-radius:8px; padding:10px 20px; font-weight:700; cursor:pointer; font-size:13px; }
-  button:disabled { opacity:.5; cursor:default; }
+  button { background:linear-gradient(135deg,var(--gold),var(--orange)); color:#1a1207; border:none; border-radius:8px; padding:11px 22px; font-weight:700; cursor:pointer; font-size:13px; box-shadow:0 4px 16px rgba(249,115,22,.25); }
+  button:disabled { opacity:.5; cursor:default; box-shadow:none; }
   .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; align-items:center; }
   .chip { background:#1c1c1c; border:1px solid var(--border); color:var(--sub); border-radius:20px; padding:5px 12px; font-size:12px; cursor:pointer; }
   .chip:hover { border-color:var(--orange); color:var(--text); }
@@ -26,36 +28,50 @@
   details.help summary::-webkit-details-marker { display:none; }
   details.help[open] summary { border-bottom:1px solid var(--border); }
   .help-body { padding:12px 16px; font-size:13px; color:#D1D5DB; }
-  .help-body b { color:var(--text); }
-  .help-body .row { margin:9px 0; }
+  .help-body b { color:var(--text); } .help-body .row { margin:9px 0; }
   #status { margin:14px 2px; color:var(--sub); font-size:12.5px; min-height:18px; }
   .srcs { display:inline-flex; gap:8px; flex-wrap:wrap; }
-  .src-ok { color:var(--green); } .src-bad { color:var(--red); }
-  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px; margin-top:16px; }
-  .card h2 { font-size:13px; letter-spacing:.5px; text-transform:uppercase; color:var(--gold); margin:0 0 4px; }
+  .src-ok { color:var(--green); } .src-bad { color:var(--red); } .src-warn { color:var(--gold); }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:18px; margin-top:16px; }
+  .card h2 { font-family:var(--disp); font-size:15px; font-weight:600; letter-spacing:.6px; text-transform:uppercase; color:var(--gold); margin:0 0 4px; }
   .card .explain { color:var(--sub); font-size:12.5px; margin:0 0 14px; }
-  .spot { font-size:28px; font-family:var(--mono); font-weight:700; }
-  .verdict { border-left:4px solid var(--blue); }
-  .verdict.thin { border-left-color:var(--red); } .verdict.moderate { border-left-color:var(--gold); } .verdict.deep { border-left-color:var(--green); }
-  .verdict h2 { color:var(--text); text-transform:none; font-size:18px; letter-spacing:0; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-  .vline { font-size:14px; margin:8px 0; color:#E5E7EB; }
+  /* hero / verdict */
+  .hero { background:linear-gradient(135deg,#1a1a1a,#141414); border:1px solid var(--border); border-radius:16px; padding:20px 22px; margin-top:16px; border-left:5px solid var(--blue); }
+  .hero.thin { border-left-color:var(--red); } .hero.moderate { border-left-color:var(--gold); } .hero.deep { border-left-color:var(--green); }
+  .hero-top { display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; }
+  .hero .sym { font-family:var(--disp); font-size:22px; font-weight:700; }
+  .hero .price { font-family:var(--mono); font-size:30px; font-weight:700; }
+  .hero .vbadge { font-family:var(--disp); font-size:13px; font-weight:700; letter-spacing:1px; padding:3px 12px; border-radius:20px; }
+  .vbadge.thin { color:var(--red); background:var(--redbg); } .vbadge.moderate { color:var(--gold); background:#2a2410; } .vbadge.deep { color:var(--green); background:var(--greenbg); }
+  .vline { font-size:14px; margin:9px 0 0; color:#E5E7EB; }
   .vline b.thin { color:var(--red); } .vline b.moderate { color:var(--gold); } .vline b.deep { color:var(--green); }
+  /* stat cards */
+  .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-top:14px; }
+  .stat { background:var(--card2); border:1px solid var(--border); border-radius:12px; padding:12px 14px; }
+  .stat .k { font-size:10.5px; letter-spacing:1px; text-transform:uppercase; color:var(--sub); }
+  .stat .v { font-family:var(--mono); font-size:18px; font-weight:700; margin-top:3px; }
+  @media (max-width:680px){ .stats { grid-template-columns:repeat(2,1fr); } #key{width:100%} }
+  /* depth chart */
+  .chartwrap { position:relative; height:200px; background:linear-gradient(180deg,#121212,#161616); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+  canvas { width:100%; height:100%; display:block; }
+  .chart-empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--sub); font-size:13px; }
   .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-  @media (max-width:680px){ .grid2 { grid-template-columns:1fr; } #key{width:100%} }
+  @media (max-width:680px){ .grid2 { grid-template-columns:1fr; } }
   table { width:100%; border-collapse:collapse; font-family:var(--mono); font-size:12.5px; }
   th { text-align:right; color:var(--sub); font-weight:600; padding:4px 6px; border-bottom:1px solid var(--border); font-size:11px; }
   th:first-child, td:first-child { text-align:left; }
-  td { padding:5px 6px; position:relative; }
-  .bar { position:absolute; top:2px; bottom:2px; left:0; opacity:.16; border-radius:3px; z-index:0; }
-  .bar.ask { background:var(--red); } .bar.bid { background:var(--green); }
+  td { padding:6px 6px; position:relative; }
+  tbody tr { border-bottom:1px solid rgba(255,255,255,.03); }
+  .bar { position:absolute; top:1px; bottom:1px; left:0; border-radius:3px; z-index:0; }
+  .bar.ask { background:linear-gradient(90deg,rgba(248,113,113,.32),rgba(248,113,113,.06)); }
+  .bar.bid { background:linear-gradient(90deg,rgba(52,211,153,.32),rgba(52,211,153,.06)); }
   td span { position:relative; z-index:1; }
   .ask-c { color:var(--red); } .bid-c { color:var(--green); }
-  .side-h { font-size:12px; font-weight:700; margin-bottom:6px; display:flex; align-items:center; gap:6px; }
+  .side-h { font-family:var(--disp); font-size:13px; font-weight:600; letter-spacing:.5px; margin-bottom:8px; display:flex; align-items:center; gap:6px; }
   .muted { color:var(--sub); font-size:12px; }
   .pill { display:inline-block; font-size:10px; color:var(--sub); border:1px solid var(--border); border-radius:4px; padding:1px 5px; margin-left:6px; }
-  .none { color:var(--sub); font-style:italic; padding:8px 0; }
-  .hint { border-bottom:1px dotted var(--sub); cursor:help; }
-  .legend { font-size:11px; color:var(--sub); margin-top:10px; }
+  .none { color:var(--sub); font-style:italic; padding:10px 0; }
+  .legend { font-size:11px; color:var(--sub); margin-top:12px; }
   .sw { display:inline-block; width:9px; height:9px; border-radius:2px; vertical-align:middle; margin-right:3px; }
 </style>
 </head>
@@ -83,11 +99,10 @@
   <details class="help">
     <summary>❓ How to read this — plain English</summary>
     <div class="help-body">
-      <div class="row"><b>Limit order / wall</b> — a buy or sell order someone parked at a set price, waiting for the market to reach it. A big <b style="color:var(--red)">sell wall above</b> the price acts as <em>resistance</em> (price has to chew through it to go up); a big <b style="color:var(--green)">buy wall below</b> acts as <em>support</em>.</div>
-      <div class="row"><b>Liquidity depth / price impact</b> — how far the price moves when someone trades a given size. If a $5,000 buy moves the price <b>+30%</b>, liquidity is <em>thin</em> (easy to move); if it barely moves, it's <em>deep</em>. This is measured across <em>every</em> pool at once (via Jupiter routing).</div>
-      <div class="row"><b>Single‑sided Orca position</b> — on Orca, a one‑sided liquidity position acts exactly like a limit order: it sells (or buys) as the price passes through it. We read these directly and show who owns them.</div>
-      <div class="row"><b>Yours vs 3rd‑party</b> — put your LP wallet(s) in the box above and any wall you own is tagged <span style="color:var(--green)">✓ yours</span>; anything else is <span style="color:var(--gold)">⚠ 3rd‑party</span> — the stuff worth watching.</div>
-      <div class="row muted">Sources scanned: Jupiter limit orders (v1+v2), cross‑pool AMM depth, and Orca single‑sided walls. Empty results are normal for thin tokens — orders often appear and fill within seconds (the monitor catches those).</div>
+      <div class="row"><b>Limit order / wall</b> — a buy or sell parked at a set price, waiting. A big <b style="color:var(--red)">sell wall above</b> = <em>resistance</em>; a big <b style="color:var(--green)">buy wall below</b> = <em>support</em>.</div>
+      <div class="row"><b>Depth chart</b> — the green (buy) and red (sell) curves show the <em>cumulative</em> money stacked up as you move away from the current price. Tall, close‑in walls move price; a flat curve means little is resting.</div>
+      <div class="row"><b>Liquidity depth / price impact</b> — how far the price moves when someone trades a size, across <em>every</em> pool at once. A $5k buy moving <b>+30%</b> = thin; barely moving = deep.</div>
+      <div class="row"><b>Single‑sided Orca position</b> — a one‑sided liquidity position acts like a limit order. Add your LP wallet(s) above to tag <span style="color:var(--green)">✓ yours</span> vs <span style="color:var(--gold)">⚠ 3rd‑party</span>.</div>
     </div>
   </details>
 
@@ -98,14 +113,14 @@
 <script>
 const $ = s => document.querySelector(s);
 const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
-const KEY_LS = "ob_key", MINT_LS = "ob_mint";
+const KEY_LS="ob_key", MINT_LS="ob_mint";
 $("#key").value = localStorage.getItem(KEY_LS) || "";
 $("#mint").value = localStorage.getItem(MINT_LS) || "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
 $("#wallets").value = localStorage.getItem("ob_wallets") || "";
 function myWallets(){ return ($("#wallets").value||"").split(",").map(s=>s.trim()).filter(Boolean); }
 function ownerTag(owner){
   if(!owner) return '<span class="muted">—</span>';
-  const mine = myWallets(), isMine = mine.includes(owner), short = esc(owner.slice(0,4)+'…'+owner.slice(-4));
+  const mine=myWallets(), isMine=mine.includes(owner), short=esc(owner.slice(0,4)+'…'+owner.slice(-4));
   if(isMine) return '<span class="pill" style="color:#34D399;border-color:rgba(52,211,153,.4)">✓ YOURS '+short+'</span>';
   if(mine.length) return '<span class="pill" style="color:#FCD34D;border-color:rgba(252,211,77,.4)">⚠ 3RD‑PARTY '+short+'</span>';
   return '<span class="pill">'+short+'</span>';
@@ -114,118 +129,140 @@ function fmtPrice(p){ if(p==null||!isFinite(p)) return "—"; if(p>=1) return "$
 function fmtUsd(v){ if(v==null||!isFinite(v)) return "—"; if(v>=1e9) return "$"+(v/1e9).toFixed(2)+"B"; if(v>=1e6) return "$"+(v/1e6).toFixed(2)+"M"; if(v>=1e3) return "$"+(v/1e3).toFixed(1)+"k"; return "$"+v.toFixed(0); }
 function fmtPct(p){ if(p==null||!isFinite(p)) return "—"; return (p>=0?"+":"")+p.toFixed(1)+"%"; }
 
-document.querySelectorAll(".chip").forEach(c => c.onclick = () => { $("#mint").value = c.dataset.m; scan(); });
+document.querySelectorAll(".chip").forEach(c => c.onclick = () => { $("#mint").value=c.dataset.m; scan(); });
 $("#scan").onclick = scan;
 $("#mint").addEventListener("keydown", e => { if(e.key==="Enter") scan(); });
 
-function srcLine(sources){
-  const items = [];
-  const j = sources["jupiter-lo"]; items.push(j && !j.error ? '<span class="src-ok">✓ Jupiter</span>' : '<span class="src-bad">✕ Jupiter</span>');
-  const a = sources["amm-depth"]; items.push(a && !a.error && !a.skipped ? '<span class="src-ok">✓ AMM depth</span>' : '<span class="src-bad">✕ AMM depth</span>');
-  const o = sources["orca-walls"]; items.push(o && !o.error ? '<span class="src-ok">✓ Orca'+(o.pools?(' ('+o.pools+' pools)'):'')+'</span>' : '<span class="src-bad">✕ Orca</span>');
-  return '<span class="srcs">'+items.join(" · ")+'</span>';
+function srcLine(s){
+  const it=[]; const j=s["jupiter-lo"], a=s["amm-depth"], o=s["orca-walls"];
+  it.push(j&&!j.error ? '<span class="src-ok">✓ Jupiter</span>' : '<span class="src-bad">✕ Jupiter</span>');
+  it.push(a&&!a.error&&(a.askPts||a.bidPts) ? '<span class="src-ok">✓ AMM depth</span>' : '<span class="src-warn">⚠ AMM depth (rate‑limited, retry)</span>');
+  it.push(o&&!o.error ? '<span class="src-ok">✓ Orca'+(o.pools?(' ('+o.pools+')'):'')+'</span>' : '<span class="src-bad">✕ Orca</span>');
+  return '<span class="srcs">'+it.join(" · ")+'</span>';
 }
 
 async function scan(){
-  const mint = $("#mint").value.trim(); const key = $("#key").value.trim();
-  if(!mint){ $("#status").textContent = "Enter a token mint."; return; }
-  localStorage.setItem(KEY_LS, key); localStorage.setItem(MINT_LS, mint); localStorage.setItem("ob_wallets", $("#wallets").value||"");
-  $("#scan").disabled = true; $("#status").textContent = "🔎 Scanning every venue — Jupiter limit orders, cross‑pool depth, Orca walls…";
-  $("#out").innerHTML = '<div class="card"><div class="muted">Reading the chain… (a few seconds)</div></div>';
-  try {
-    const r = await fetch("/api/order-scan?mint="+encodeURIComponent(mint), { headers: { "x-premium-key": key } });
-    if(r.status===404){ $("#status").innerHTML = "🔑 Access key required (or wrong). Paste your key above and scan again."; $("#out").innerHTML=""; return; }
-    const d = await r.json();
-    if(!d.success){ $("#status").textContent = "Error: "+esc(d.error||"unknown"); $("#out").innerHTML=""; return; }
-    $("#status").innerHTML = "Scanned "+esc(new Date(d.scannedAt).toLocaleString())+(d.cached?" · cached":"")+" &nbsp;·&nbsp; "+srcLine(d.sources||{});
+  const mint=$("#mint").value.trim(), key=$("#key").value.trim();
+  if(!mint){ $("#status").textContent="Enter a token mint."; return; }
+  localStorage.setItem(KEY_LS,key); localStorage.setItem(MINT_LS,mint); localStorage.setItem("ob_wallets",$("#wallets").value||"");
+  $("#scan").disabled=true; $("#status").textContent="🔎 Scanning Jupiter limit orders, cross‑pool depth, and Orca walls…";
+  $("#out").innerHTML='<div class="card"><div class="muted">Reading the chain… (a few seconds)</div></div>';
+  try{
+    const r=await fetch("/api/order-scan?mint="+encodeURIComponent(mint),{headers:{"x-premium-key":key}});
+    if(r.status===404){ $("#status").innerHTML="🔑 Access key required (or wrong). Paste your key above and scan again."; $("#out").innerHTML=""; return; }
+    const d=await r.json();
+    if(!d.success){ $("#status").textContent="Error: "+esc(d.error||"unknown"); $("#out").innerHTML=""; return; }
+    $("#status").innerHTML="Scanned "+esc(new Date(d.scannedAt).toLocaleString())+(d.cached?" · cached":"")+" &nbsp;·&nbsp; "+srcLine(d.sources||{});
     render(d);
-  } catch(e){ $("#status").textContent = "Network error: "+esc(e.message); $("#out").innerHTML=""; }
-  finally { $("#scan").disabled = false; }
+  }catch(e){ $("#status").textContent="Network error: "+esc(e.message); $("#out").innerHTML=""; }
+  finally{ $("#scan").disabled=false; }
+}
+
+const BANDS=[1,2,5,10,25,50,100];
+function combinedCum(jCum, owList, dir){ // dir +1 asks / -1 bids
+  return BANDS.map(b=>{
+    let usd=((jCum||[]).find(x=>x.withinPct===b)||{}).usd||0;
+    usd+=(owList||[]).filter(w=> dir>0?(w.distPct>0&&w.distPct<=b):(w.distPct<0&&w.distPct>=-b)).reduce((s,w)=>s+(w.sizeUsd||0),0);
+    return {pct:b, usd};
+  });
+}
+function drawDepth(cv, asksCum, bidsCum){
+  const ctx=cv.getContext("2d"), dpr=window.devicePixelRatio||1, W=cv.clientWidth, H=cv.clientHeight;
+  cv.width=W*dpr; cv.height=H*dpr; ctx.scale(dpr,dpr); ctx.clearRect(0,0,W,H);
+  const maxUsd=Math.max(1,...asksCum.map(p=>p.usd),...bidsCum.map(p=>p.usd));
+  const cx=W/2, padT=14, padB=20, halfW=W/2-8;
+  const xs=pct=>Math.sqrt(Math.min(pct,100)/100);            // sqrt scale spreads near‑spot
+  const yOf=usd=>padT+(H-padT-padB)*(1-usd/maxUsd);
+  // gridlines + % ticks
+  ctx.strokeStyle="rgba(255,255,255,.06)"; ctx.fillStyle="rgba(255,255,255,.35)"; ctx.font="9px monospace"; ctx.textAlign="center";
+  [1,10,100].forEach(p=>{ [1,-1].forEach(d=>{ const x=cx+d*xs(p)*halfW; ctx.beginPath(); ctx.moveTo(x,padT); ctx.lineTo(x,H-padB); ctx.stroke(); ctx.fillText((d>0?"+":"-")+p+"%",x,H-6); }); });
+  ctx.strokeStyle="rgba(255,255,255,.25)"; ctx.beginPath(); ctx.moveTo(cx,padT); ctx.lineTo(cx,H-padB); ctx.stroke();
+  ctx.fillStyle="rgba(255,255,255,.5)"; ctx.fillText("spot",cx,11);
+  function side(cum,dir,stroke,fill){
+    if(!cum.some(p=>p.usd>0)) return;
+    ctx.beginPath(); ctx.moveTo(cx,yOf(0));
+    cum.forEach(p=>ctx.lineTo(cx+dir*xs(p.pct)*halfW,yOf(p.usd)));
+    ctx.strokeStyle=stroke; ctx.lineWidth=2; ctx.stroke();
+    ctx.lineTo(cx+dir*xs(cum[cum.length-1].pct)*halfW,H-padB); ctx.lineTo(cx,H-padB); ctx.closePath();
+    ctx.fillStyle=fill; ctx.fill();
+  }
+  side(bidsCum,-1,"#34D399","rgba(52,211,153,.16)");
+  side(asksCum,+1,"#F87171","rgba(248,113,113,.16)");
+  ctx.fillStyle="rgba(255,255,255,.4)"; ctx.textAlign="left"; ctx.fillText("max "+ (maxUsd>=1e6?("$"+(maxUsd/1e6).toFixed(1)+"M"):("$"+Math.round(maxUsd/1e3)+"k")), 4, 11);
 }
 
 function render(d){
-  const sym = (d.mint||"").slice(0,4)+"…"+(d.mint||"").slice(-4);
-  const am = d.ammDepth || {}; const ask = am.ask||[], bid = am.bid||[];
-  const lo = d.limitOrders || {}; const A = lo.asks||{top:[],count:0,usd:0}, B = lo.bids||{top:[],count:0,usd:0};
-  const ow = d.orcaWalls;
+  const sym=(d.mint||"").slice(0,4)+"…"+(d.mint||"").slice(-4);
+  const am=d.ammDepth||{}, ask=am.ask||[], bid=am.bid||[];
+  const lo=d.limitOrders||{}, A=lo.asks||{top:[],count:0,usd:0,cumulative:[]}, B=lo.bids||{top:[],count:0,usd:0,cumulative:[]};
+  const ow=d.orcaWalls;
+  const owSells=ow?ow.sells||[]:[], owBuys=ow?ow.buys||[]:[];
 
-  // ---- Verdict (plain English) ----
-  const ref = ask.find(r=>r.usd===5000) || ask.find(r=>r.usd===10000) || ask[ask.length-1];
-  let cls="", liqWord="unknown", liqLine="";
-  if(ref){ const m=ref.distPct; cls = m>25?"thin":(m>10?"moderate":"deep"); liqWord = cls.toUpperCase();
-    liqLine = `A <b>${fmtUsd(ref.usd)}</b> buy moves the price <b class="${cls}">${fmtPct(ref.distPct)}</b> — liquidity is <b class="${cls}">${liqWord}</b>.`; }
-  const thirdParty = ow ? [].concat(ow.sells||[], ow.buys||[]).filter(w=>{const m=myWallets(); return w.owner && !m.includes(w.owner);}).length : 0;
-  const loLine = (A.count||B.count) ? `<b>${A.count}</b> sell &amp; <b>${B.count}</b> buy limit order(s) resting within ±100% of price (Jupiter).` : `No resting Jupiter limit orders right now.`;
-  const owLine = ow ? (thirdParty>0 ? `<b style="color:var(--gold)">${thirdParty} third‑party single‑sided wall(s)</b> on Orca — worth a look.` : `No third‑party single‑sided walls on Orca${myWallets().length?"":" (add your wallet(s) to tell yours apart)"}.`) : "";
+  // verdict
+  const ref=ask.find(r=>r.usd===5000)||ask.find(r=>r.usd===10000)||ask[ask.length-1];
+  let cls="",liqWord="—",liqLine="Liquidity depth unavailable this scan (Jupiter quotes rate‑limited — rescan).";
+  if(ref){ const m=ref.distPct; cls=m>25?"thin":(m>10?"moderate":"deep"); liqWord=cls.toUpperCase(); liqLine=`A <b>${fmtUsd(ref.usd)}</b> buy moves the price <b class="${cls}">${fmtPct(ref.distPct)}</b>.`; }
+  const thirdParty=[].concat(owSells,owBuys).filter(w=>{const m=myWallets(); return w.owner&&!m.includes(w.owner);}).length;
+  const loLine=(A.count||B.count)?`<b>${A.count}</b> sell &amp; <b>${B.count}</b> buy limit order(s) resting within ±100% (Jupiter).`:`No resting Jupiter limit orders right now.`;
+  const owLine=ow?(thirdParty>0?`<b style="color:var(--gold)">${thirdParty} third‑party single‑sided wall(s)</b> on Orca — worth a look.`:`No third‑party Orca walls${myWallets().length?"":" (add your wallet(s) to tell yours apart)"}.`):"";
+  const sellTot=(A.usd||0)+owSells.reduce((s,w)=>s+(w.sizeUsd||0),0);
+  const buyTot=(B.usd||0)+owBuys.reduce((s,w)=>s+(w.sizeUsd||0),0);
 
-  let html = `<div class="card verdict ${cls}">
-    <h2>${esc(sym)} <span class="spot" style="font-size:22px">${fmtPrice(d.spotUsd)}</span></h2>
-    <div class="vline">${liqLine||"Liquidity depth unavailable."}</div>
-    <div class="vline">${loLine}</div>
-    ${owLine?`<div class="vline">${owLine}</div>`:""}
-    <div class="muted" style="margin-top:8px">${esc(d.mint)}</div>
-  </div>`;
-
-  // ---- Liquidity depth ----
-  const maxImp = Math.max(1, ...ask.map(r=>r.impactPct||0), ...bid.map(r=>r.impactPct||0));
-  const ladder = (rows, c) => rows.length ? rows.map(r => `
-    <tr><td><div class="bar ${c}" style="width:${Math.min(100,(r.impactPct/maxImp)*100)}%"></div><span>${fmtUsd(r.usd)}</span></td>
-    <td><span>${fmtPrice(r.avgPriceUsd)}</span></td>
-    <td><span class="${c}-c">${fmtPct(r.distPct)}</span></td>
-    <td><span class="muted">${(r.impactPct||0).toFixed(1)}%</span></td></tr>`).join("") : `<tr><td colspan="4" class="none">no route</td></tr>`;
-  html += `<div class="card"><h2>Liquidity depth</h2>
-    <p class="explain">How far the price moves if someone trades each size, across <b>every pool at once</b>. Bigger % = thinner liquidity = easier to push. "Impact" is the price‑impact of that single trade.</p>
-    <div class="grid2">
-      <div><div class="side-h ask-c">⬆ BUYING pushes price up — <span class="muted" style="font-weight:400">resistance</span></div>
-        <table><thead><tr><th>Buy size</th><th title="Average price you'd pay">Avg fill</th><th title="How far it moves spot">Move</th><th>Impact</th></tr></thead><tbody>${ladder(ask,"ask")}</tbody></table></div>
-      <div><div class="side-h bid-c">⬇ SELLING pushes price down — <span class="muted" style="font-weight:400">support</span></div>
-        <table><thead><tr><th>Sell size</th><th>Avg fill</th><th>Move</th><th>Impact</th></tr></thead><tbody>${ladder(bid,"bid")}</tbody></table></div>
+  let html=`<div class="hero ${cls}">
+    <div class="hero-top"><span class="sym">${esc(sym)}</span><span class="price">${fmtPrice(d.spotUsd)}</span>${ref?`<span class="vbadge ${cls}">${liqWord} LIQUIDITY</span>`:""}</div>
+    <div class="vline">${liqLine}</div><div class="vline">${loLine}</div>${owLine?`<div class="vline">${owLine}</div>`:""}
+    <div class="stats">
+      <div class="stat"><div class="k">Spot</div><div class="v">${fmtPrice(d.spotUsd)}</div></div>
+      <div class="stat"><div class="k">Liquidity</div><div class="v ${cls}-c" style="font-family:var(--disp)">${liqWord}</div></div>
+      <div class="stat"><div class="k">Sell‑side resting</div><div class="v ask-c">${fmtUsd(sellTot)}</div></div>
+      <div class="stat"><div class="k">Buy‑side resting</div><div class="v bid-c">${fmtUsd(buyTot)}</div></div>
     </div>
   </div>`;
 
-  // ---- Jupiter limit orders ----
-  const maxUsd = Math.max(1, ...(A.top||[]).map(o=>o.sizeUsd||0), ...(B.top||[]).map(o=>o.sizeUsd||0));
-  const orderRows = (list, c) => list.length ? list.map(o => `
-    <tr><td><div class="bar ${c}" style="width:${Math.min(100,((o.sizeUsd||0)/maxUsd)*100)}%"></div><span>${fmtPrice(o.priceUsd)}</span></td>
-    <td><span class="${c}-c">${fmtPct(o.distPct)}</span></td>
-    <td><span>${fmtUsd(o.sizeUsd)}</span></td>
-    <td><span class="muted">${esc((o.venue||"").replace("jupiter-lo-",""))}</span></td></tr>`).join("") : `<tr><td colspan="4" class="none">none resting right now</td></tr>`;
-  const farNote = (A.far||B.far) ? ` <span class="muted">(+${(A.far||0)+(B.far||0)} far/stale hidden)</span>` : "";
-  html += `<div class="card"><h2>Resting limit orders · Jupiter</h2>
-    <p class="explain">Pre‑set orders parked at a price, waiting to fill. <b style="color:var(--red)">Sell walls above</b> = resistance; <b style="color:var(--green)">buy support below</b>. Showing orders within ±100% of spot${farNote}.</p>
-    <div class="grid2">
-      <div><div class="side-h ask-c">SELL walls — ${A.count} · ${fmtUsd(A.usd)}</div>
-        <table><thead><tr><th>Price</th><th>Move</th><th>Size</th><th title="Jupiter program version">v</th></tr></thead><tbody>${orderRows(A.top||[],"ask")}</tbody></table></div>
-      <div><div class="side-h bid-c">BUY support — ${B.count} · ${fmtUsd(B.usd)}</div>
-        <table><thead><tr><th>Price</th><th>Move</th><th>Size</th><th>v</th></tr></thead><tbody>${orderRows(B.top||[],"bid")}</tbody></table></div>
-    </div>
-    ${(!A.count&&!B.count)?'<div class="muted" style="margin-top:10px">Nothing resting — normal for thin tokens. These often appear and fill within seconds; the day‑to‑day monitor catches those.</div>':''}
+  // depth chart
+  const asksCum=combinedCum(A.cumulative,owSells,+1), bidsCum=combinedCum(B.cumulative,owBuys,-1);
+  const hasDepth=asksCum.some(p=>p.usd>0)||bidsCum.some(p=>p.usd>0);
+  html+=`<div class="card"><h2>📊 Depth chart — resting orders around spot</h2>
+    <p class="explain">Cumulative money stacked up as price moves away from now. <b style="color:var(--green)">Green</b> = buy support below, <b style="color:var(--red)">red</b> = sell resistance above. Combines Jupiter limit orders + Orca walls.</p>
+    <div class="chartwrap"><canvas id="depthCanvas"></canvas>${hasDepth?"":'<div class="chart-empty">No resting orders to chart right now</div>'}</div>
   </div>`;
 
-  // ---- Orca single-sided walls ----
-  if (ow) {
-    const owRows = (list, c) => list.length ? list.map(o => `
-      <tr><td><span>${fmtPrice(o.priceUsd)}</span></td>
-      <td><span class="${c}-c">${fmtPct(o.distPct)}</span></td>
-      <td><span>${fmtUsd(o.sizeUsd)}</span></td>
-      <td>${ownerTag(o.owner)}</td></tr>`).join("") : `<tr><td colspan="4" class="none">none single‑sided</td></tr>`;
-    html += `<div class="card"><h2>Orca single‑sided walls</h2>
-      <p class="explain">On Orca, a one‑sided liquidity position acts like a limit order. We read every position and show <b>who owns it</b> — add your LP wallet(s) above to tag <span style="color:var(--green)">✓ yours</span> vs <span style="color:var(--gold)">⚠ 3rd‑party</span>. <span class="muted">${ow.pools} pool(s) · ${ow.twoSided} two‑sided LP (ordinary liquidity, not walls).</span></p>
+  // liquidity depth tables
+  const maxImp=Math.max(1,...ask.map(r=>r.impactPct||0),...bid.map(r=>r.impactPct||0));
+  const ladder=(rows,c)=>rows.length?rows.map(r=>`<tr><td><div class="bar ${c}" style="width:${Math.min(100,(r.impactPct/maxImp)*100)}%"></div><span>${fmtUsd(r.usd)}</span></td><td><span>${fmtPrice(r.avgPriceUsd)}</span></td><td><span class="${c}-c">${fmtPct(r.distPct)}</span></td><td><span class="muted">${(r.impactPct||0).toFixed(1)}%</span></td></tr>`).join(""):`<tr><td colspan="4" class="none">no route / rate‑limited — rescan</td></tr>`;
+  html+=`<div class="card"><h2>Liquidity depth</h2><p class="explain">How far the price moves if someone trades each size, across <b>every pool at once</b>. Bigger % = thinner = easier to push.</p>
+    <div class="grid2">
+      <div><div class="side-h ask-c">⬆ BUYING pushes up — resistance</div><table><thead><tr><th>Buy size</th><th>Avg fill</th><th>Move</th><th>Impact</th></tr></thead><tbody>${ladder(ask,"ask")}</tbody></table></div>
+      <div><div class="side-h bid-c">⬇ SELLING pushes down — support</div><table><thead><tr><th>Sell size</th><th>Avg fill</th><th>Move</th><th>Impact</th></tr></thead><tbody>${ladder(bid,"bid")}</tbody></table></div>
+    </div></div>`;
+
+  // jupiter limit orders
+  const maxUsd=Math.max(1,...(A.top||[]).map(o=>o.sizeUsd||0),...(B.top||[]).map(o=>o.sizeUsd||0));
+  const orderRows=(list,c)=>list.length?list.map(o=>`<tr><td><div class="bar ${c}" style="width:${Math.min(100,((o.sizeUsd||0)/maxUsd)*100)}%"></div><span>${fmtPrice(o.priceUsd)}</span></td><td><span class="${c}-c">${fmtPct(o.distPct)}</span></td><td><span>${fmtUsd(o.sizeUsd)}</span></td><td><span class="muted">${esc((o.venue||"").replace("jupiter-lo-",""))}</span></td></tr>`).join(""):`<tr><td colspan="4" class="none">none resting right now</td></tr>`;
+  const farNote=(A.far||B.far)?` <span class="muted">(+${(A.far||0)+(B.far||0)} far/stale hidden)</span>`:"";
+  html+=`<div class="card"><h2>Resting limit orders · Jupiter</h2><p class="explain">Orders parked at a price, waiting to fill. <b style="color:var(--red)">Sell walls above</b> = resistance; <b style="color:var(--green)">buy support below</b>.${farNote}</p>
+    <div class="grid2">
+      <div><div class="side-h ask-c">SELL walls — ${A.count} · ${fmtUsd(A.usd)}</div><table><thead><tr><th>Price</th><th>Move</th><th>Size</th><th>v</th></tr></thead><tbody>${orderRows(A.top||[],"ask")}</tbody></table></div>
+      <div><div class="side-h bid-c">BUY support — ${B.count} · ${fmtUsd(B.usd)}</div><table><thead><tr><th>Price</th><th>Move</th><th>Size</th><th>v</th></tr></thead><tbody>${orderRows(B.top||[],"bid")}</tbody></table></div>
+    </div>${(!A.count&&!B.count)?'<div class="muted" style="margin-top:10px">Nothing resting — normal for thin tokens. These often appear and fill within seconds; the monitor catches those.</div>':''}</div>`;
+
+  // orca walls
+  if(ow){
+    const owRows=(list,c)=>list.length?list.map(o=>`<tr><td><span>${fmtPrice(o.priceUsd)}</span></td><td><span class="${c}-c">${fmtPct(o.distPct)}</span></td><td><span>${fmtUsd(o.sizeUsd)}</span></td><td>${ownerTag(o.owner)}</td></tr>`).join(""):`<tr><td colspan="4" class="none">none single‑sided</td></tr>`;
+    html+=`<div class="card"><h2>Orca single‑sided walls</h2><p class="explain">A one‑sided Orca position acts like a limit order — we show <b>who owns it</b>. <span class="muted">${ow.pools} pool(s) · ${ow.twoSided} two‑sided LP (ordinary liquidity).</span></p>
       <div class="grid2">
-        <div><div class="side-h ask-c">SELL walls (token above spot)</div>
-          <table><thead><tr><th>Price</th><th>Move</th><th>Size</th><th>Owner</th></tr></thead><tbody>${owRows(ow.sells,"ask")}</tbody></table></div>
-        <div><div class="side-h bid-c">BUY walls (quote below spot)</div>
-          <table><thead><tr><th>Price</th><th>Move</th><th>Size</th><th>Owner</th></tr></thead><tbody>${owRows(ow.buys,"bid")}</tbody></table></div>
-      </div>
-    </div>`;
+        <div><div class="side-h ask-c">SELL walls (token above spot)</div><table><thead><tr><th>Price</th><th>Move</th><th>Size</th><th>Owner</th></tr></thead><tbody>${owRows(owSells,"ask")}</tbody></table></div>
+        <div><div class="side-h bid-c">BUY walls (quote below spot)</div><table><thead><tr><th>Price</th><th>Move</th><th>Size</th><th>Owner</th></tr></thead><tbody>${owRows(owBuys,"bid")}</tbody></table></div>
+      </div></div>`;
   }
 
-  html += `<div class="legend"><span class="sw" style="background:var(--red)"></span>sell / resistance &nbsp;&nbsp; <span class="sw" style="background:var(--green)"></span>buy / support &nbsp;&nbsp; "Move" = distance from current price &nbsp;·&nbsp; bar length = relative size</div>`;
-
-  $("#out").innerHTML = html;
+  html+=`<div class="legend"><span class="sw" style="background:var(--red)"></span>sell / resistance &nbsp;&nbsp;<span class="sw" style="background:var(--green)"></span>buy / support &nbsp;&nbsp; "Move" = distance from current price &nbsp;·&nbsp; bar = relative size</div>`;
+  $("#out").innerHTML=html;
+  const cv=document.getElementById("depthCanvas"); if(cv&&hasDepth){ try{ drawDepth(cv,asksCum,bidsCum); }catch(_){} }
 }
 
 if($("#key").value) scan();
+window.addEventListener("resize", ()=>{ const cv=document.getElementById("depthCanvas"); /* redraw skipped — rescan to refresh */ });
 </script>
 </body>
 </html>
