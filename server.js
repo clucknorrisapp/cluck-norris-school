@@ -4710,10 +4710,13 @@ app.get("/api/order-watch", async (req, res) => {
 // position count / in-range / value, plus organic score + 24h volume. Pure
 // observation for strategy-building — NEVER acts on positions (owner controls
 // manually). kv clknStructureLog (ring). View: /api/order-watch/structure.
+// Known active CLKN/quote pools — ALWAYS tracked (merged with auto-discovery) so a
+// brand-new pool GeckoTerminal hasn't surfaced yet is never missed. (CLKN/JUP moved
+// 0.05% 7eVP5… → 0.02% 5Avto… on 2026-06-17.)
 const CLKN_ORCA_POOLS = [
   { pool: "EL1ZDnuTE4J4LZJLP76VapFSDiM7Xt18ZsnzVeqNvaPr", pair: "CLKN/SOL" },
   { pool: "H1r9ut25xAU1B1AbZRhvSJjShd4Q3mtmysYHBisFES7H", pair: "CLKN/USDC" },
-  { pool: "7eVP5Jqe5CiX7LJtfzC6xdfGxFpfPX7jsvaoLnCdn9aB", pair: "CLKN/JUP" },
+  { pool: "5AvtoSvfKFscxoB9uuEG2UNf25REkzgr9Ue9RHnJWMdb", pair: "CLKN/JUP" },
 ];
 async function recordClknStructureSnapshot() {
   const orca = require("./lib/orca-whirlpools");
@@ -4737,10 +4740,16 @@ async function recordClknStructureSnapshot() {
       }
     }
   } catch (_) {}
-  // top Orca pools by max(volume, liquidity) — so a freshly-seeded pool (high
-  // reserve, ~0 volume yet) is tracked immediately; fall back to the known set.
-  let poolList = discovered.sort((x, y) => Math.max(y.vol || 0, y.reserve || 0) - Math.max(x.vol || 0, x.reserve || 0)).slice(0, 6).map(p => ({ pool: p.pool, pair: p.pair }));
-  if (!poolList.length) poolList = CLKN_ORCA_POOLS;
+  // The known-active set is ALWAYS tracked (so a just-created pool GeckoTerminal
+  // hasn't surfaced/ranked yet — e.g. the new 0.02% JUP pool — is never missed),
+  // merged with the top auto-discovered Orca pools by max(volume, liquidity), deduped.
+  const seen = new Set(CLKN_ORCA_POOLS.map(p => p.pool));
+  const extra = discovered
+    .sort((x, y) => Math.max(y.vol || 0, y.reserve || 0) - Math.max(x.vol || 0, x.reserve || 0))
+    .filter(p => !seen.has(p.pool))
+    .slice(0, 5)
+    .map(p => ({ pool: p.pool, pair: p.pair }));
+  const poolList = CLKN_ORCA_POOLS.concat(extra);
   const pools = [];
   for (const { pool, pair } of poolList) {
     try {
