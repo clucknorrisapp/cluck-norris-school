@@ -13,12 +13,24 @@ matters, and claims should match the code.
 
 CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 
-> 🛑 **ENGINE STATUS (2026-06-12, owner's call): NO CLKN pools at all — full-earner
-> strategy.** The clkn Orca vault is PAUSED with zero positions; CLKN trades only on the
-> community Meteora pool (64WXkH…, 2% fee). The operator wallet holds ~10.6M CLKN (brand
-> bag — NEVER sold) + ~1.1 SOL gas + ~$30 USDC. The 1%-tier CLKN/USDC Orca pool
-> (EnTZxY…) and the CLKN/JUP pool (5AvtoSvf…) exist on-chain but are EMPTY — harmless
-> shells. Do NOT redeploy CLKN liquidity or buy/sell CLKN without the owner asking.
+> 🟢 **ENGINE STATUS (2026-06-17, owner's call — SUPERSEDES the old "no CLKN pools / full-earner"
+> note): CLKN is actively LP'd across THREE Orca pairs as a MULTI-QUOTE ARBITRAGE STRATEGY,
+> owner-managed MANUALLY.** Live two-sided positions under the **TREASURY wallet
+> `2zMCUkE9pBjcC7ihtLqm28EsCoEHVmCdJYr5262EuPy8`**: **CLKN/USDC** (`H1r9ut25xAU1B1AbZRhvSJjShd4Q3mtmysYHBisFES7H`),
+> **CLKN/SOL** (`EL1ZDnuTE4J4LZJLP76VapFSDiM7Xt18ZsnzVeqNvaPr`), **CLKN/JUP**
+> (`7eVP5Jqe5CiX7LJtfzC6xdfGxFpfPX7jsvaoLnCdn9aB`) — ~9.9M CLKN in layered tight-inner/wide-outer
+> bands, all in-range. **Thesis (now PROVEN, not theoretical): pairing CLKN against multiple
+> volatile quote assets (SOL + JUP, anchored by stable USDC) means each quote's OWN volatility
+> dislocates CLKN's cross-pool price → third-party arbitrageurs trade it back into line → real,
+> organic two-way volume the project doesn't generate itself.** JUP (~1.75× SOL daily vol) added an
+> independent SECOND dislocation engine → volume jumped and **Jupiter organic score climbed to 33.0**.
+> (Each arb is a small IL bite on the LP; net-positive while fees + organic standing outrun it.)
+> ⛔ **AGENT IS WATCH-ONLY. The owner controls these positions MANUALLY. Do NOT rebalance, recenter,
+> close, redeploy, add/remove liquidity, or buy/sell CLKN — and do NOT "take over" — until the owner
+> explicitly says so.** We are in a strategy-BUILDING phase: observe how the structure moves, log it,
+> don't touch it. The brand bag (~10.6M CLKN) is still NEVER sold. Public organic-score copy stays
+> OFF the site until the 33 holds longer (owner's call). The community Meteora pool (64WXkH…, 2% fee)
+> remains the canonical chart.
 >
 > ⛔ **THE EARNER — AUTONOMOUS REBALANCER HARD-KILLED IN CODE (owner's call, 2026-06-16:
 > "stop rebalancing period, don't touch it").** Background: the owner pulled all JUP/USDC liquidity
