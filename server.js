@@ -4661,7 +4661,10 @@ async function recordOrderbookSnapshot(mint) {
   // Degraded read (no spot price) → don't snapshot/diff, so a transient data
   // outage can't fire a false "appeared/filled" alert.
   if (m.spotUsd == null) return { at: Date.now(), spotUsd: null, asks: 0, bids: 0, diff: null, degraded: true };
-  const orders = (m.orders || []).filter(o => o.orderPubkey && o.priceUsd != null);
+  // Exclude the project's own LP wallets — alerts should only fire for orders/walls
+  // that AREN'T yours (your own positions flipping in/out of range shouldn't ping).
+  const myW = new Set(obOwnerWallets());
+  const orders = (m.orders || []).filter(o => o.orderPubkey && o.priceUsd != null && !(o.owner && myW.has(o.owner)));
   const pkSet = new Set(orders.map(o => o.orderPubkey));
   const store = kv.get(OB_SNAP_KEY(mint), { history: [], current: null, lastDiff: null });
   const prev = store.current;
@@ -4687,6 +4690,12 @@ async function recordOrderbookSnapshot(mint) {
 app.get("/api/order-watch", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  // Register your LP wallet(s) so the monitor never alerts on your own positions.
+  if (req.query.setOwners != null) {
+    const list = String(req.query.setOwners).split(",").map(s => s.trim()).filter(w => SOL_ADDR_RE.test(w));
+    kv.set("obOwnerWallets", list);
+    return res.json({ success: true, ownerWallets: list });
+  }
   const mint = String(req.query.mint || CLKN_MINT_ADDR);
   if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ error: "bad mint" });
   try {
