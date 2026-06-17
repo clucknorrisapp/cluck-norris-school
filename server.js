@@ -4744,6 +4744,53 @@ app.get("/api/order-watch/structure", async (req, res) => {
   } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
 });
 
+// ── Trade FLOW + reactive-sell detection (read-only) ─────────────────────────
+// The dimension resting-order scans miss entirely: parse recent swaps across all
+// pools, summarize buy/sell flow, and flag a sell firing within seconds of a buy
+// — the off-chain trading-bot pattern (BonkBot/Trojan/etc.) that has no on-chain
+// resting order to find. This is what catches the "2-second sell after my buy".
+app.get("/api/order-flow", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  const mint = String(req.query.mint || CLKN_MINT_ADDR);
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ error: "bad mint" });
+  const mins = Math.min(360, Math.max(5, parseInt(req.query.mins || "60", 10) || 60));
+  const reactSec = Math.min(120, Math.max(1, parseInt(req.query.reactSec || "15", 10) || 15));
+  const minUsd = Math.max(0, parseFloat(req.query.minUsd || "50") || 50);
+  try {
+    const { getTradeTapeHelius } = require("./lib/helius-trades");
+    const key = (rpc.heliusKeys()[0]) || process.env.HELIUS_API_KEY;
+    if (!key) return res.status(500).json({ success: false, error: "Missing HELIUS_API_KEY" });
+    const [solUsd, tokenPriceUsd] = await Promise.all([
+      orderbook.getUsdPrice("So11111111111111111111111111111111111111112").catch(() => 0),
+      orderbook.getUsdPrice(mint).catch(() => 0),
+    ]);
+    const toMs = Date.now(), fromMs = toMs - mins * 60000;
+    const tape = await getTradeTapeHelius(mint, fromMs, toMs, { heliusKey: key, heliusEnhancedBatched, solUsd: solUsd || 0, tokenPriceUsd: tokenPriceUsd || 0 });
+    if (!tape) return res.json({ success: true, mint, windowMins: mins, flow: null, note: "no pools / data" });
+    const trades = tape.trades || [];
+    const buys = trades.filter(t => t.side === "buy"), sells = trades.filter(t => t.side === "sell");
+    const sumUsd = a => a.reduce((s, t) => s + (t.usd || 0), 0);
+    // reactive sell = a sell ≥ minUsd within reactSec AFTER a buy ≥ minUsd (bot reacting to the buy)
+    const reactive = [];
+    for (const b of buys) {
+      if ((b.usd || 0) < minUsd) continue;
+      const s = sells.find(x => x.ts >= b.ts && x.ts - b.ts <= reactSec * 1000 && (x.usd || 0) >= minUsd && x.sig !== b.sig);
+      if (s) reactive.push({ buyUsd: Math.round(b.usd || 0), buyWallet: b.wallet, sellUsd: Math.round(s.usd || 0), sellWallet: s.wallet, gapSec: Math.round((s.ts - b.ts) / 1000), sameWallet: s.wallet === b.wallet, at: b.ts, sellSig: s.sig });
+    }
+    const biggest = [...trades].sort((a, b) => (b.usd || 0) - (a.usd || 0)).slice(0, 10).map(t => ({ side: t.side, usd: Math.round(t.usd || 0), wallet: t.wallet, at: t.ts }));
+    return res.json({
+      success: true, mint, windowMins: mins, txsScanned: tape.txsScanned,
+      flow: {
+        buys: buys.length, sells: sells.length, buyUsd: Math.round(sumUsd(buys)), sellUsd: Math.round(sumUsd(sells)), netUsd: Math.round(sumUsd(buys) - sumUsd(sells)),
+        uniqueBuyers: new Set(buys.map(t => t.wallet)).size, uniqueSellers: new Set(sells.map(t => t.wallet)).size,
+      },
+      reactiveSells: reactive.slice(0, 25),
+      biggest,
+    });
+  } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
+});
+
 // Authoritative locked-supply reader for ANY mint. The naive approach (getTokenAccounts
 // by owner=lock program) returns 0 — Jupiter Lock holds tokens in escrow PDAs, not under
 // the program ID directly. Correct method (same as the Autopsy's 145M figure): list the
