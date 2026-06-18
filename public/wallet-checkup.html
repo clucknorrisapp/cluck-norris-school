@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<link rel="stylesheet" href="/theme.css">
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>🛡 Wallet Safety Checkup — Free Solana Wallet Scan</title>
@@ -9,11 +10,10 @@
 <meta property="og:description" content="Paste any Solana address — see lingering approvals, honeypot holdings, and risky tokens. Read-only, no wallet connect."/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
 <style>
-  :root { color-scheme: dark; --bg:#0a0a0a; --card:#111; --border:rgba(255,255,255,0.08); --text:#F9FAFB; --sub:#6B7280; --accent:#FCD34D; --orange:#D97706; --green:#10B981; --red:#EF4444; --amber:#F59E0B; --mono:'Courier New',monospace; }
+  :root{color-scheme:dark;--bg:#0a0503;--bg-grad:radial-gradient(125% 75% at 50% -12%,#2c0f04 0%,#160b06 46%,#0a0503 100%);--card:#1a0f08;--card2:#160c07;--surface:#150f12;--panel:#150f12;--border:rgba(255,122,24,0.28);--border-soft:rgba(255,122,24,0.14);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
   * { box-sizing:border-box; margin:0; padding:0; }
-  body { background:#0C0C0C; background-image:radial-gradient(ellipse at 20% 10%,rgba(217,119,6,.08) 0%,transparent 50%),radial-gradient(ellipse at 80% 90%,rgba(239,68,68,.06) 0%,transparent 50%); color:var(--text); font-family:'Oswald',sans-serif; min-height:100vh; }
+  body { background:#0C0C0C; background-image:radial-gradient(ellipse at 20% 10%,rgba(217,119,6,.08) 0%,transparent 50%),radial-gradient(ellipse at 80% 90%,rgba(239,68,68,.06) 0%,transparent 50%); color:var(--text); font-family:'Anton',sans-serif; min-height:100vh; }
   .wrap { max-width:640px; margin:0 auto; padding:24px 16px 80px; }
   .back-home { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
   .back-home img { height:22px; width:22px; object-fit:cover; border-radius:50%; border:1px solid var(--orange); }
@@ -54,6 +54,9 @@
   .clear .t { font-size:16px; font-weight:900; color:var(--green); letter-spacing:2px; margin-top:8px; }
   .footer { text-align:center; font-size:10px; color:var(--sub); letter-spacing:2px; margin-top:24px; }
   a.copy { cursor:pointer; color:var(--sub); border:1px solid var(--border); border-radius:6px; padding:2px 7px; font-size:10px; text-decoration:none; margin-left:6px; }
+
+html{background:var(--bg-grad);background-attachment:fixed;}
+body{background:transparent;font-family:var(--body);}
 </style>
 </head>
 <body>

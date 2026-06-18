@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<link rel="stylesheet" href="/theme.css">
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Bags.fm — Live Launches + About · Cluck Norris</title>
@@ -18,17 +19,10 @@
 <meta name="twitter:image" content="https://clucknorris.app/cluck-norris.png"/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
 <link rel="icon" type="image/svg+xml" href="/icon.svg"/>
 <link rel="apple-touch-icon" href="/cluck-norris.png"/>
 <style>
-  :root {
-    color-scheme: dark;
-    --bg: #0a0a0a; --card: #111111; --border: rgba(255,255,255,0.08);
-    --text: #F9FAFB; --subtext: #6B7280; --accent: #FCD34D; --orange: #D97706;
-    --green: #10B981; --red: #EF4444; --blue: #60A5FA;
-    --mono: 'Courier New', monospace;
-  }
+  :root{color-scheme:dark;--bg:#0a0503;--bg-grad:radial-gradient(125% 75% at 50% -12%,#2c0f04 0%,#160b06 46%,#0a0503 100%);--card:#1a0f08;--card2:#160c07;--surface:#150f12;--panel:#150f12;--border:rgba(255,122,24,0.28);--border-soft:rgba(255,122,24,0.14);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     background: var(--bg);
@@ -37,71 +31,71 @@
     color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh;
   }
   .wrap { max-width: 760px; margin: 0 auto; padding: 28px 18px 80px; }
-  .back { display: inline-flex; align-items: center; gap: 6px; font-family: 'Oswald', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 2px; color: var(--orange); text-decoration: none; margin-bottom: 14px; }
+  .back { display: inline-flex; align-items: center; gap: 6px; font-family: 'Anton', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 2px; color: var(--orange); text-decoration: none; margin-bottom: 14px; }
   .header { text-align: center; margin-bottom: 18px; }
   .header .logos { display: inline-flex; align-items: center; justify-content: center; gap: 16px; flex-wrap: wrap; }
   .header .ck-logo { height: 76px; width: auto; display: inline-block; }
-  .header .logo-x { font-family: 'Oswald', sans-serif; font-size: 22px; font-weight: 700; color: var(--subtext); }
+  .header .logo-x { font-family: 'Anton', sans-serif; font-size: 22px; font-weight: 700; color: var(--subtext); }
   .header .bags-logo { width: 58px; height: 58px; }
-  .header .brand-mini { font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 4px; color: var(--orange); margin-top: 6px; font-weight: 700; }
+  .header .brand-mini { font-family: 'Anton', sans-serif; font-size: 10px; letter-spacing: 4px; color: var(--orange); margin-top: 6px; font-weight: 700; }
   .header h1 {
-    font-family: 'Oswald', sans-serif; font-size: 32px; font-weight: 900; letter-spacing: 2.5px;
+    font-family: 'Anton', sans-serif; font-size: 32px; font-weight: 900; letter-spacing: 2.5px;
     background: linear-gradient(135deg, #FCD34D, #F97316, #D97706);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
     line-height: 1.1; margin: 4px 0;
   }
-  .header p { font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; }
+  .header p { font-family: 'Anton', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; }
   .lede { text-align: center; font-size: 14px; line-height: 1.7; color: #D1D5DB; max-width: 580px; margin: 18px auto 26px; }
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 22px 22px; margin-bottom: 16px; }
-  .card-title { font-family: 'Oswald', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 2.5px; color: var(--orange); margin-bottom: 12px; }
+  .card-title { font-family: 'Anton', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 2.5px; color: var(--orange); margin-bottom: 12px; }
   .card p { font-family: var(--mono); font-size: 13px; line-height: 1.7; color: #D1D5DB; margin-bottom: 12px; }
   .card p:last-child { margin-bottom: 0; }
   .card p strong { color: var(--accent); font-weight: 700; }
   .card p em { font-style: normal; color: var(--orange); }
   .quirk { background: rgba(217,119,6,0.06); border: 1px solid rgba(217,119,6,0.25); border-radius: 10px; padding: 14px 16px; margin: 10px 0; }
-  .quirk .label { font-family: 'Oswald', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; color: var(--orange); margin-bottom: 6px; }
+  .quirk .label { font-family: 'Anton', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; color: var(--orange); margin-bottom: 6px; }
   .quirk .body { font-family: var(--mono); font-size: 12px; line-height: 1.65; color: #D1D5DB; }
   .pill-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
-  .pill { padding: 9px 16px; background: rgba(217,119,6,0.10); border: 1px solid rgba(217,119,6,0.35); border-radius: 22px; font-family: 'Oswald', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; color: var(--orange); text-decoration: none; }
+  .pill { padding: 9px 16px; background: rgba(217,119,6,0.10); border: 1px solid rgba(217,119,6,0.35); border-radius: 22px; font-family: 'Anton', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; color: var(--orange); text-decoration: none; }
   .pill:hover { background: rgba(217,119,6,0.18); color: var(--accent); }
   .pill.green { background: rgba(16,185,129,0.10); border-color: rgba(16,185,129,0.35); color: var(--green); }
   .pill.green:hover { background: rgba(16,185,129,0.18); }
-  .footer-tag { text-align: center; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
+  .footer-tag { text-align: center; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Anton', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
   .footer-tag a { color: var(--orange); text-decoration: none; }
   /* Live launches feed */
   .lf-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
-  .lf-meta { font-family:'Oswald',sans-serif; font-size:9px; color:#4B5563; letter-spacing:1px; }
+  .lf-meta { font-family:'Anton',sans-serif; font-size:9px; color:#4B5563; letter-spacing:1px; }
   .lf-refresh { background:rgba(217,119,6,0.15); border:1px solid rgba(217,119,6,0.35); border-radius:8px; color:var(--orange); font-size:16px; line-height:1; cursor:pointer; padding:4px 11px; }
   .lf-refresh:hover { background:rgba(217,119,6,0.25); }
   .lf-refresh:disabled { opacity:0.5; cursor:default; }
   .lf-toggles { display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap; }
-  .lf-caption { font-family:'Oswald',sans-serif; font-size:10px; color:var(--subtext); letter-spacing:0.5px; margin-bottom:12px; }
-  .lf-tg { background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:7px; color:var(--subtext); font-family:'Oswald',sans-serif; font-size:11px; font-weight:700; letter-spacing:1px; padding:5px 11px; cursor:pointer; }
+  .lf-caption { font-family:'Anton',sans-serif; font-size:10px; color:var(--subtext); letter-spacing:0.5px; margin-bottom:12px; }
+  .lf-tg { background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:7px; color:var(--subtext); font-family:'Anton',sans-serif; font-size:11px; font-weight:700; letter-spacing:1px; padding:5px 11px; cursor:pointer; }
   .lf-tg.on { background:rgba(217,119,6,0.2); border-color:rgba(217,119,6,0.5); color:var(--orange); }
   .lf-controls { display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
-  .lf-search { flex:1; min-width:160px; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:7px; color:var(--text); font-family:'Oswald',sans-serif; font-size:12px; padding:7px 11px; outline:none; }
+  .lf-search { flex:1; min-width:160px; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:7px; color:var(--text); font-family:'Anton',sans-serif; font-size:12px; padding:7px 11px; outline:none; }
   .lf-search:focus { border-color:rgba(217,119,6,0.5); }
-  .lf-sort { background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:7px; color:var(--text); font-family:'Oswald',sans-serif; font-size:11px; font-weight:700; letter-spacing:0.5px; padding:7px 9px; cursor:pointer; outline:none; }
+  .lf-sort { background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:7px; color:var(--text); font-family:'Anton',sans-serif; font-size:11px; font-weight:700; letter-spacing:0.5px; padding:7px 9px; cursor:pointer; outline:none; }
   .lf-card { display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:11px; padding:13px 15px; text-decoration:none; color:inherit; margin-bottom:7px; }
   .lf-card.new { background:rgba(16,185,129,0.06); border-color:rgba(16,185,129,0.45); box-shadow:0 0 16px rgba(16,185,129,0.16); }
-  .lf-ic { width:42px; height:42px; border-radius:50%; flex-shrink:0; background:#1a1a1a; display:flex; align-items:center; justify-content:center; font-family:'Oswald',sans-serif; font-weight:900; font-size:17px; color:var(--orange); overflow:hidden; }
+  .lf-ic { width:42px; height:42px; border-radius:50%; flex-shrink:0; background:#1a1a1a; display:flex; align-items:center; justify-content:center; font-family:'Anton',sans-serif; font-weight:900; font-size:17px; color:var(--orange); overflow:hidden; }
   .lf-ic img { width:100%; height:100%; object-fit:cover; }
-  .lf-name { font-family:'Oswald',sans-serif; font-size:20px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .lf-name { font-family:'Anton',sans-serif; font-size:20px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .lf-name .sym { color:var(--subtext); font-size:15px; }
-  .lf-new { font-family:'Oswald',sans-serif; font-size:10px; font-weight:700; letter-spacing:1px; color:var(--green); background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.4); border-radius:5px; padding:1px 6px; margin-right:6px; vertical-align:middle; }
-  .lf-metrics { display:flex; gap:10px; align-items:center; margin-top:5px; flex-wrap:wrap; font-family:'Oswald',sans-serif; font-size:13px; }
+  .lf-new { font-family:'Anton',sans-serif; font-size:10px; font-weight:700; letter-spacing:1px; color:var(--green); background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.4); border-radius:5px; padding:1px 6px; margin-right:6px; vertical-align:middle; }
+  .lf-metrics { display:flex; gap:10px; align-items:center; margin-top:5px; flex-wrap:wrap; font-family:'Anton',sans-serif; font-size:13px; }
   .lf-metrics .price { font-family:var(--mono); color:var(--accent); }
   .lf-metrics .mc { font-weight:700; color:#8B5CF6; }
   .lf-bar { margin-top:7px; height:5px; background:rgba(255,255,255,0.08); border-radius:3px; overflow:hidden; }
   .lf-bar > div { height:100%; border-radius:3px; }
-  .lf-handle { font-family:'Oswald',sans-serif; font-size:12px; color:var(--blue); margin-top:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .lf-handle { font-family:'Anton',sans-serif; font-size:12px; color:var(--blue); margin-top:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .lf-ca { display:inline-block; margin-top:6px; font-family:var(--mono); font-size:11px; color:var(--subtext); background:rgba(255,255,255,0.05); border:1px solid var(--border); border-radius:6px; padding:2px 8px; cursor:pointer; }
   .lf-ca:hover { color:var(--orange); border-color:rgba(217,119,6,0.4); }
   .lf-research { display:inline-flex; gap:6px; margin-top:6px; margin-left:6px; }
-  .lf-tool { font-family:'Oswald',sans-serif; font-size:10px; letter-spacing:1px; color:#6EE7B7; background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.3); border-radius:6px; padding:2px 8px; cursor:pointer; white-space:nowrap; }
+  .lf-tool { font-family:'Anton',sans-serif; font-size:10px; letter-spacing:1px; color:#6EE7B7; background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.3); border-radius:6px; padding:2px 8px; cursor:pointer; white-space:nowrap; }
   .lf-tool:hover { background:rgba(16,185,129,0.18); }
-  .lf-trade { font-family:'Oswald',sans-serif; font-size:12px; color:var(--orange); letter-spacing:1px; flex-shrink:0; margin-left:10px; }
-  .lf-status { text-align:center; color:var(--subtext); font-size:11px; letter-spacing:2px; padding:24px 0; font-family:'Oswald',sans-serif; }
+  .lf-trade { font-family:'Anton',sans-serif; font-size:12px; color:var(--orange); letter-spacing:1px; flex-shrink:0; margin-left:10px; }
+  .lf-status { text-align:center; color:var(--subtext); font-size:11px; letter-spacing:2px; padding:24px 0; font-family:'Anton',sans-serif; }
   /* Phones: the launches feed cards get crowded — tighten type, gaps, and let
      the contract chip + research chips wrap to their own line. */
   @media (max-width: 560px) {
@@ -117,6 +111,9 @@
     .lf-tool { font-size:9px; padding:2px 7px; }
     .lf-trade { font-size:11px; margin-left:8px; letter-spacing:0; }
   }
+
+html{background:var(--bg-grad);background-attachment:fixed;}
+body{background:transparent;font-family:var(--body);}
 </style>
 </head>
 <body>

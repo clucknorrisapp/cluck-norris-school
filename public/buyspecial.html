@@ -1,36 +1,24 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<link rel="stylesheet" href="/theme.css">
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>🐔 Buy Special Analyzer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
 <style>
-  :root {
-    color-scheme: dark;
-    --bg: #0a0a0a;
-    --card: #111111;
-    --border: rgba(255,255,255,0.08);
-    --text: #F9FAFB;
-    --subtext: #6B7280;
-    --accent: #FCD34D;
-    --green: #10B981;
-    --red: #EF4444;
-    --purple: #A78BFA;
-    --mono: 'Courier New', monospace;
-  }
+  :root{color-scheme:dark;--bg:#0a0503;--bg-grad:radial-gradient(125% 75% at 50% -12%,#2c0f04 0%,#160b06 46%,#0a0503 100%);--card:#1a0f08;--card2:#160c07;--surface:#150f12;--panel:#150f12;--border:rgba(255,122,24,0.28);--border-soft:rgba(255,122,24,0.14);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); background-image: radial-gradient(ellipse at 20% 10%, rgba(217,119,6,0.10) 0%, transparent 50%), radial-gradient(ellipse at 80% 90%, rgba(239,68,68,0.07) 0%, transparent 50%); color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh; }
   .wrap { max-width: 700px; margin: 0 auto; padding: 24px 16px 80px; }
 
   .header { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
   .header-icon { font-size: 40px; filter: drop-shadow(0 0 16px rgba(217,119,6,0.5)); }
-  .header .brand-mini { font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 4px; color: #D97706; margin-bottom: 4px; font-weight: 700; }
-  .header h1 { font-family: 'Oswald', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg, #FCD34D, #F97316, #EF4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
-  .header p { font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
-  .footer-tag { text-align: center; margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
+  .header .brand-mini { font-family: 'Anton', sans-serif; font-size: 10px; letter-spacing: 4px; color: #D97706; margin-bottom: 4px; font-weight: 700; }
+  .header h1 { font-family: 'Anton', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg, #FCD34D, #F97316, #EF4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
+  .header p { font-family: 'Anton', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
+  .footer-tag { text-align: center; margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Anton', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
   .footer-tag a { color: #D97706; text-decoration: none; }
 
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
@@ -154,23 +142,23 @@
 
   /* 🔒 CLKN Unlock Gate (same pattern as the airdrop tool) */
   .unlock-gate { background: linear-gradient(135deg, rgba(217,119,6,0.08), rgba(239,68,68,0.04)); border: 1px solid rgba(217,119,6,0.45); border-radius: 12px; padding: 24px 22px; margin-bottom: 16px; box-shadow: 0 0 30px rgba(217,119,6,0.12); }
-  .unlock-title { font-family: 'Oswald', sans-serif; font-size: 20px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg,#FCD34D,#F97316,#EF4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-align: center; margin-bottom: 4px; }
-  .unlock-sub { font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); text-align: center; letter-spacing: 3px; margin-bottom: 18px; }
-  .quick-preset-btn { flex: 1; min-width: 140px; background: rgba(255,255,255,0.04); border: 1px solid rgba(252,211,77,0.3); border-radius: 8px; padding: 9px 12px; font-family: 'Oswald', sans-serif; font-size: 11px; font-weight: 700; color: #FCD34D; letter-spacing: 1px; cursor: pointer; transition: all 0.15s; }
+  .unlock-title { font-family: 'Anton', sans-serif; font-size: 20px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg,#FCD34D,#F97316,#EF4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-align: center; margin-bottom: 4px; }
+  .unlock-sub { font-family: 'Anton', sans-serif; font-size: 10px; color: var(--subtext); text-align: center; letter-spacing: 3px; margin-bottom: 18px; }
+  .quick-preset-btn { flex: 1; min-width: 140px; background: rgba(255,255,255,0.04); border: 1px solid rgba(252,211,77,0.3); border-radius: 8px; padding: 9px 12px; font-family: 'Anton', sans-serif; font-size: 11px; font-weight: 700; color: #FCD34D; letter-spacing: 1px; cursor: pointer; transition: all 0.15s; }
   .quick-preset-btn:hover { background: rgba(252,211,77,0.1); transform: translateY(-1px); }
   .quick-preset-btn.applied { background: linear-gradient(135deg,#10B981,#065F46); color: #fff; border-color: rgba(16,185,129,0.5); }
 
   .unlock-amount-card { background: rgba(0,0,0,0.4); border: 1px solid rgba(217,119,6,0.45); border-radius: 10px; padding: 16px; text-align: center; margin-bottom: 10px; cursor: pointer; transition: border-color 0.15s; }
   .unlock-amount-card:hover { border-color: var(--accent); }
-  .unlock-amount-card .lbl { font-family: 'Oswald', sans-serif; font-size: 9px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 6px; }
+  .unlock-amount-card .lbl { font-family: 'Anton', sans-serif; font-size: 9px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 6px; }
   .unlock-amount-card .val { font-family: var(--mono); font-size: 26px; font-weight: 700; color: #FCD34D; letter-spacing: 1px; }
-  .unlock-amount-card .hint { font-family: 'Oswald', sans-serif; font-size: 8px; letter-spacing: 1px; margin-top: 4px; color: var(--accent); }
+  .unlock-amount-card .hint { font-family: 'Anton', sans-serif; font-size: 8px; letter-spacing: 1px; margin-top: 4px; color: var(--accent); }
   .unlock-wallet-card { background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; cursor: pointer; transition: border-color 0.15s; }
   .unlock-wallet-card:hover { border-color: var(--accent); }
-  .unlock-wallet-card .lbl { font-family: 'Oswald', sans-serif; font-size: 9px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 4px; }
+  .unlock-wallet-card .lbl { font-family: 'Anton', sans-serif; font-size: 9px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 4px; }
   .unlock-wallet-card .val { font-family: var(--mono); font-size: 15px; font-weight: 600; color: var(--text); word-break: break-all; line-height: 1.55; }
-  .unlock-wallet-card .hint { font-family: 'Oswald', sans-serif; font-size: 8px; letter-spacing: 1px; margin-top: 6px; text-align: right; color: var(--accent); }
-  .unlock-blurb { font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--subtext); text-align: center; line-height: 1.7; margin-bottom: 14px; letter-spacing: 1px; }
+  .unlock-wallet-card .hint { font-family: 'Anton', sans-serif; font-size: 8px; letter-spacing: 1px; margin-top: 6px; text-align: right; color: var(--accent); }
+  .unlock-blurb { font-family: 'Anton', sans-serif; font-size: 11px; color: var(--subtext); text-align: center; line-height: 1.7; margin-bottom: 14px; letter-spacing: 1px; }
   .unlock-blurb .price { color: var(--accent); font-weight: 700; }
   .unlock-blurb .bonus { color: #6B7280; font-size: 10px; display: block; margin-top: 4px; }
   .unlock-status { font-family: var(--mono); font-size: 11px; color: var(--subtext); text-align: center; padding: 12px 14px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; }
@@ -179,18 +167,18 @@
   .unlock-status.success .pulse { background: var(--green); animation: none; }
   .unlock-status.idle { color: var(--subtext); border-color: rgba(255,255,255,0.06); background: rgba(255,255,255,0.02); }
   .unlock-status.idle .pulse { background: var(--subtext); animation: none; }
-  .unlock-restart-btn { width: 100%; margin-top: 10px; padding: 12px; background: linear-gradient(135deg,#D97706,#EF4444); border: none; border-radius: 8px; font-family: 'Oswald', sans-serif; font-size: 12px; font-weight: 700; color: #fff; letter-spacing: 2px; cursor: pointer; transition: opacity 0.15s; }
+  .unlock-restart-btn { width: 100%; margin-top: 10px; padding: 12px; background: linear-gradient(135deg,#D97706,#EF4444); border: none; border-radius: 8px; font-family: 'Anton', sans-serif; font-size: 12px; font-weight: 700; color: #fff; letter-spacing: 2px; cursor: pointer; transition: opacity 0.15s; }
   .unlock-restart-btn:hover { opacity: 0.9; }
 
   /* Sticky unlocked banner */
   .unlock-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; background: linear-gradient(135deg, rgba(16,185,129,0.14), rgba(16,185,129,0.04)); border: 1px solid rgba(16,185,129,0.4); border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; box-shadow: 0 0 18px rgba(16,185,129,0.1); }
   .unlock-banner-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
   .banner-check { font-family: var(--mono); font-size: 16px; color: var(--green); background: rgba(16,185,129,0.18); border: 1px solid rgba(16,185,129,0.45); border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; }
-  .banner-title { font-family: 'Oswald', sans-serif; font-size: 12px; font-weight: 700; color: var(--green); letter-spacing: 2px; }
+  .banner-title { font-family: 'Anton', sans-serif; font-size: 12px; font-weight: 700; color: var(--green); letter-spacing: 2px; }
   .banner-meta { font-family: var(--mono); font-size: 10px; color: var(--subtext); margin-top: 2px; word-break: break-all; }
-  .banner-bonus { display: inline-block; font-family: 'Oswald', sans-serif; font-size: 8px; font-weight: 700; letter-spacing: 1px; color: #FCD34D; background: rgba(252,211,77,0.12); border: 1px solid rgba(252,211,77,0.4); border-radius: 4px; padding: 2px 6px; margin-left: 6px; vertical-align: middle; }
+  .banner-bonus { display: inline-block; font-family: 'Anton', sans-serif; font-size: 8px; font-weight: 700; letter-spacing: 1px; color: #FCD34D; background: rgba(252,211,77,0.12); border: 1px solid rgba(252,211,77,0.4); border-radius: 4px; padding: 2px 6px; margin-left: 6px; vertical-align: middle; }
   .unlock-banner-right { text-align: right; flex-shrink: 0; }
-  .banner-countdown-label { font-family: 'Oswald', sans-serif; font-size: 9px; color: var(--subtext); letter-spacing: 2px; }
+  .banner-countdown-label { font-family: 'Anton', sans-serif; font-size: 9px; color: var(--subtext); letter-spacing: 2px; }
   .banner-countdown { font-family: var(--mono); font-size: 18px; font-weight: 700; color: var(--accent); letter-spacing: 1px; margin-top: 2px; }
   .banner-countdown.warning { color: #F59E0B; }
   .banner-countdown.expiring { color: var(--red); animation: pulse 1s infinite; }
@@ -201,7 +189,7 @@
 
   /* Locked-state sample preview */
   .sample-preview { border: 1px dashed rgba(217,119,6,0.45); border-radius: 10px; padding: 16px; background: rgba(217,119,6,0.04); margin-bottom: 14px; }
-  .sample-tag { font-family: 'Oswald',sans-serif; font-size: 10px; letter-spacing: 2px; color: var(--subtext); margin-bottom: 12px; text-align: center; font-weight: 700; }
+  .sample-tag { font-family: 'Anton',sans-serif; font-size: 10px; letter-spacing: 2px; color: var(--subtext); margin-bottom: 12px; text-align: center; font-weight: 700; }
   .sample-row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; margin-bottom: 6px; border-radius: 7px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); font-family: var(--mono); font-size: 12px; }
   .sample-row .addr { color: var(--subtext); flex: 1; }
   .sample-row .amt { color: var(--text); white-space: nowrap; }
@@ -215,11 +203,14 @@
   @media (min-width: 1040px) {
     .wrap { max-width: 1040px; }
   }
+
+html{background:var(--bg-grad);background-attachment:fixed;}
+body{background:transparent;font-family:var(--body);}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#D97706;text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid #D97706;"/>&larr; CLUCK NORRIS HOME</a>
+  <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:Anton,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#D97706;text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid #D97706;"/>&larr; CLUCK NORRIS HOME</a>
 
   <div class="header">
     <div class="header-icon">🐔</div>
@@ -284,7 +275,7 @@
 
   <!-- Operator-facing intro — frames the tool as for ANY token, not just CLKN. -->
   <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:14px">
-    <div style="font-family:'Oswald',sans-serif;font-size:11px;color:#FCD34D;letter-spacing:3px;font-weight:700;margin-bottom:8px">🏆 FOR TOKEN OPERATORS · ANY SOLANA MINT</div>
+    <div style="font-family:'Anton',sans-serif;font-size:11px;color:#FCD34D;letter-spacing:3px;font-weight:700;margin-bottom:8px">🏆 FOR TOKEN OPERATORS · ANY SOLANA MINT</div>
     <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.65">
       Run a buy competition on your community in two phases:
       <strong style="color:#FCD34D">Phase 1</strong> scans every buy in your chosen window and filters out anyone who sold.
@@ -298,7 +289,7 @@
        config; the operator picks their token separately above. -->
   <div style="background:linear-gradient(135deg, rgba(252,211,77,0.06), rgba(217,119,6,0.03));border:1px solid rgba(252,211,77,0.3);border-radius:12px;padding:14px 16px;margin-bottom:16px">
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-      <div style="font-family:'Oswald',sans-serif;font-size:11px;color:#FCD34D;letter-spacing:2px;font-weight:700">⚡ QUICK CONTEST PRESETS</div>
+      <div style="font-family:'Anton',sans-serif;font-size:11px;color:#FCD34D;letter-spacing:2px;font-weight:700">⚡ QUICK CONTEST PRESETS</div>
       <div style="font-family:var(--mono);font-size:10px;color:var(--subtext)">— fill the timing + bonus, your token stays as selected</div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -449,7 +440,7 @@
 
     <div class="airdrop-section" id="airdropSection">
       <button class="airdrop-btn" onclick="goToAirdrop()">🚀 OPEN AIRDROP TOOL WITH THESE WALLETS</button>
-      <button onclick="showRecipientCsv()" style="width:100%;margin-top:8px;padding:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.15);border-radius:8px;font-family:'Oswald',sans-serif;font-size:12px;font-weight:700;color:#D1D5DB;letter-spacing:2px;cursor:pointer">
+      <button onclick="showRecipientCsv()" style="width:100%;margin-top:8px;padding:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.15);border-radius:8px;font-family:'Anton',sans-serif;font-size:12px;font-weight:700;color:#D1D5DB;letter-spacing:2px;cursor:pointer">
         📋 SHOW / COPY RECIPIENT CSV
       </button>
       <div style="font-family:var(--mono);font-size:10px;color:var(--subtext);margin-top:6px;text-align:center">
@@ -1503,7 +1494,7 @@ function showRecipientCsv() {
       'padding:10px;font-family:var(--mono);font-size:11px;color:#D1D5DB;resize:vertical"></textarea>' +
     '<button id="csvCopyBtn" onclick="copyCsvText()" style="width:100%;margin-top:6px;padding:10px;' +
       'background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);border-radius:8px;' +
-      'font-family:\'Oswald\',sans-serif;font-size:12px;font-weight:700;color:#6EE7B7;' +
+      'font-family:\'Anton\',sans-serif;font-size:12px;font-weight:700;color:#6EE7B7;' +
       'letter-spacing:2px;cursor:pointer">📋 COPY CSV</button>';
   document.getElementById('csvText').value = csv;
 }

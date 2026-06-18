@@ -1,50 +1,43 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<link rel="stylesheet" href="/theme.css">
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <meta name="robots" content="noindex"/>
 <title>🩺 Token Vitals — On-Chain Facts, No Score</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
 <style>
-  :root{
-    color-scheme:dark;
-    --bg:#0a0a0a;--card:#111;--border:rgba(255,255,255,0.08);
-    --text:#F9FAFB;--sub:#9CA3AF;--muted:#6B7280;
-    --accent:#FCD34D;--orange:#D97706;--green:#10B981;--red:#EF4444;
-    --amber:#F59E0B;--blue:#60A5FA;--purple:#A78BFA;--cyan:#22D3EE;
-    --mono:'Courier New',monospace;
-  }
+  :root{color-scheme:dark;--bg:#0a0503;--bg-grad:radial-gradient(125% 75% at 50% -12%,#2c0f04 0%,#160b06 46%,#0a0503 100%);--card:#1a0f08;--card2:#160c07;--surface:#150f12;--panel:#150f12;--border:rgba(255,122,24,0.28);--border-soft:rgba(255,122,24,0.14);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
   *{box-sizing:border-box;margin:0;padding:0;}
   body{background:var(--bg);
     background-image:radial-gradient(ellipse at 18% 8%,rgba(34,211,238,0.09),transparent 50%),
                      radial-gradient(ellipse at 85% 95%,rgba(252,211,77,0.05),transparent 50%);
     color:var(--text);font-family:system-ui,sans-serif;min-height:100vh;}
   .wrap{max-width:880px;margin:0 auto;padding:22px 16px 90px;}
-  .back{display:inline-flex;align-items:center;gap:6px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:var(--orange);text-decoration:none;margin-bottom:14px;}
+  .back{display:inline-flex;align-items:center;gap:6px;font-family:Anton,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:var(--orange);text-decoration:none;margin-bottom:14px;}
   .back img{height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid var(--orange);}
   .header{display:flex;align-items:center;gap:14px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border);}
   .header-icon{font-size:38px;filter:drop-shadow(0 0 16px rgba(34,211,238,0.5));}
-  .brand-mini{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:4px;color:var(--orange);font-weight:700;}
-  h1{font-family:Oswald,sans-serif;font-size:27px;font-weight:900;letter-spacing:3px;line-height:1;
+  .brand-mini{font-family:Anton,sans-serif;font-size:10px;letter-spacing:4px;color:var(--orange);font-weight:700;}
+  h1{font-family:Anton,sans-serif;font-size:27px;font-weight:900;letter-spacing:3px;line-height:1;
     background:linear-gradient(135deg,#FCD34D,#22D3EE,#10B981);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
-  .header p{font-family:Oswald,sans-serif;font-size:11px;color:var(--sub);letter-spacing:2px;margin-top:6px;}
+  .header p{font-family:Anton,sans-serif;font-size:11px;color:var(--sub);letter-spacing:2px;margin-top:6px;}
   .hero{background:linear-gradient(135deg,rgba(34,211,238,0.06),rgba(252,211,77,0.03));border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:16px;}
-  .hero-tag{font-family:Oswald,sans-serif;font-size:10px;color:var(--accent);letter-spacing:3px;margin-bottom:6px;}
-  .hero-sub{font-family:Oswald,sans-serif;font-size:12px;color:var(--sub);line-height:1.6;letter-spacing:0.3px;}
+  .hero-tag{font-family:Anton,sans-serif;font-size:10px;color:var(--accent);letter-spacing:3px;margin-bottom:6px;}
+  .hero-sub{font-family:Anton,sans-serif;font-size:12px;color:var(--sub);line-height:1.6;letter-spacing:0.3px;}
   .hero-sub b{color:var(--text);}
   .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px;}
-  .card-title{font-family:Oswald,sans-serif;font-size:15px;font-weight:900;color:var(--accent);letter-spacing:1.5px;margin-bottom:13px;text-transform:uppercase;display:flex;align-items:center;gap:8px;}
-  .field-label{font-family:Oswald,sans-serif;font-size:13px;color:var(--cyan);letter-spacing:1.5px;margin-bottom:6px;font-weight:700;}
+  .card-title{font-family:Anton,sans-serif;font-size:15px;font-weight:900;color:var(--accent);letter-spacing:1.5px;margin-bottom:13px;text-transform:uppercase;display:flex;align-items:center;gap:8px;}
+  .field-label{font-family:Anton,sans-serif;font-size:13px;color:var(--cyan);letter-spacing:1.5px;margin-bottom:6px;font-weight:700;}
   .token-input{width:100%;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;padding:12px 13px;font-family:var(--mono);font-size:15px;color:var(--accent);font-weight:600;}
   .token-input::placeholder{color:var(--muted);font-weight:400;}
   .token-input:focus{outline:none;border-color:var(--accent);}
-  .run-btn{width:100%;margin-top:13px;padding:14px;background:linear-gradient(135deg,var(--cyan),var(--green));border:none;border-radius:10px;font-family:Oswald,sans-serif;font-size:14px;font-weight:900;color:#0a0a0a;letter-spacing:3px;cursor:pointer;}
+  .run-btn{width:100%;margin-top:13px;padding:14px;background:linear-gradient(135deg,var(--cyan),var(--green));border:none;border-radius:10px;font-family:Anton,sans-serif;font-size:14px;font-weight:900;color:#0a0a0a;letter-spacing:3px;cursor:pointer;}
   .run-btn:disabled{opacity:0.45;cursor:not-allowed;}
   .quick{margin-top:11px;display:flex;flex-wrap:wrap;gap:7px;}
-  .quick span{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;color:var(--muted);align-self:center;}
+  .quick span{font-family:Anton,sans-serif;font-size:10px;letter-spacing:1px;color:var(--muted);align-self:center;}
   .chip{font-family:var(--mono);font-size:11px;padding:5px 9px;border-radius:7px;border:1px solid var(--border);background:rgba(255,255,255,0.02);color:var(--sub);cursor:pointer;}
   .chip:hover{border-color:var(--cyan);color:var(--text);}
   .err{background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px 14px;font-size:12px;color:#FCA5A5;margin-bottom:12px;display:none;}
@@ -58,17 +51,17 @@
   .result{display:none;}.result.show{display:block;}
   /* identity strip */
   .idrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
-  .idname{font-family:Oswald,sans-serif;font-size:22px;font-weight:900;letter-spacing:1px;}
+  .idname{font-family:Anton,sans-serif;font-size:22px;font-weight:900;letter-spacing:1px;}
   .idtick{font-family:var(--mono);font-size:13px;color:var(--cyan);}
   .mintline{font-family:var(--mono);font-size:11px;color:var(--muted);word-break:break-all;margin-top:8px;}
   /* fact grid */
   .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:11px;}
   .fact{background:rgba(255,255,255,0.025);border:1px solid var(--border);border-radius:9px;padding:10px 12px;}
-  .fact .k{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:var(--sub);text-transform:uppercase;margin-bottom:4px;}
+  .fact .k{font-family:Anton,sans-serif;font-size:10px;letter-spacing:1.5px;color:var(--sub);text-transform:uppercase;margin-bottom:4px;}
   .fact .v{font-family:var(--mono);font-size:15px;color:var(--text);font-weight:700;}
   .fact .note{font-size:10px;color:var(--muted);margin-top:3px;line-height:1.35;}
   /* status pill (factual on-chain state, NOT a grade) */
-  .pill{display:inline-block;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;padding:3px 9px;border-radius:6px;}
+  .pill{display:inline-block;font-family:Anton,sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;padding:3px 9px;border-radius:6px;}
   .pill.ok{background:rgba(16,185,129,0.14);color:#6EE7B7;border:1px solid rgba(16,185,129,0.35);}
   .pill.warn{background:rgba(245,158,11,0.14);color:#FCD34D;border:1px solid rgba(245,158,11,0.4);}
   .pill.danger{background:rgba(239,68,68,0.14);color:#FCA5A5;border:1px solid rgba(239,68,68,0.4);}
@@ -78,7 +71,7 @@
   .holder-row:last-child{border-bottom:none;}
   .holder-row .addr{font-family:var(--mono);color:var(--sub);}
   .holder-row .sh{font-family:var(--mono);color:var(--text);font-weight:700;}
-  .dex-tag{display:inline-block;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;padding:3px 9px;border-radius:6px;background:rgba(34,211,238,0.1);color:var(--cyan);border:1px solid rgba(34,211,238,0.25);margin:0 5px 5px 0;text-transform:capitalize;}
+  .dex-tag{display:inline-block;font-family:Anton,sans-serif;font-size:11px;letter-spacing:1px;padding:3px 9px;border-radius:6px;background:rgba(34,211,238,0.1);color:var(--cyan);border:1px solid rgba(34,211,238,0.25);margin:0 5px 5px 0;text-transform:capitalize;}
   .row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);font-size:13px;align-items:center;}
   .row:last-child{border-bottom:none;}
   .row .k{color:var(--sub);}
@@ -86,8 +79,11 @@
   .muted{color:var(--muted);}
   .disc{background:rgba(252,211,77,0.05);border:1px solid rgba(252,211,77,0.25);border-radius:10px;padding:13px 15px;font-size:12px;line-height:1.6;color:var(--sub);margin-top:6px;}
   .disc b{color:var(--accent);}
-  .crosslink{display:block;text-align:center;font-family:Oswald,sans-serif;font-size:11.5px;letter-spacing:1px;color:var(--purple);text-decoration:none;padding:11px;border:1px dashed rgba(167,139,250,0.4);border-radius:10px;margin-bottom:14px;}
+  .crosslink{display:block;text-align:center;font-family:Anton,sans-serif;font-size:11.5px;letter-spacing:1px;color:var(--purple);text-decoration:none;padding:11px;border:1px dashed rgba(167,139,250,0.4);border-radius:10px;margin-bottom:14px;}
   .crosslink:hover{background:rgba(167,139,250,0.06);}
+
+html{background:var(--bg-grad);background-attachment:fixed;}
+body{background:transparent;font-family:var(--body);}
 </style>
 </head>
 <body>

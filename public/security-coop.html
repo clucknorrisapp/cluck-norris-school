@@ -1,28 +1,23 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<link rel="stylesheet" href="/theme.css">
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>🔒 Security Coop — Cluck Norris</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
 <style>
-  :root {
-    color-scheme: dark;
-    --bg: #0a0a0a; --card: #111111; --border: rgba(255,255,255,0.08);
-    --text: #F9FAFB; --subtext: #6B7280; --accent: #FCD34D;
-    --green: #10B981; --red: #EF4444; --mono: 'Courier New', monospace;
-  }
+  :root{color-scheme:dark;--bg:#0a0503;--bg-grad:radial-gradient(125% 75% at 50% -12%,#2c0f04 0%,#160b06 46%,#0a0503 100%);--card:#1a0f08;--card2:#160c07;--surface:#150f12;--panel:#150f12;--border:rgba(255,122,24,0.28);--border-soft:rgba(255,122,24,0.14);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); background-image: radial-gradient(ellipse at 20% 10%, rgba(16,185,129,0.10) 0%, transparent 50%), radial-gradient(ellipse at 80% 90%, rgba(239,68,68,0.07) 0%, transparent 50%); color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh; }
   .wrap { max-width: 640px; margin: 0 auto; padding: 24px 16px 80px; }
 
   .header { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
   .header-icon { font-size: 40px; filter: drop-shadow(0 0 16px rgba(16,185,129,0.5)); }
-  .header .brand-mini { font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 4px; color: #D97706; margin-bottom: 4px; font-weight: 700; }
-  .header h1 { font-family: 'Oswald', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg, #FCD34D, #10B981, #34D399); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
-  .header p { font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
+  .header .brand-mini { font-family: 'Anton', sans-serif; font-size: 10px; letter-spacing: 4px; color: #D97706; margin-bottom: 4px; font-weight: 700; }
+  .header h1 { font-family: 'Anton', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg, #FCD34D, #10B981, #34D399); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
+  .header p { font-family: 'Anton', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
 
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
   .card-title { font-family: var(--mono); font-size: 10px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 14px; }
@@ -50,9 +45,9 @@
   .wallet-info { font-family: var(--mono); font-size: 12px; color: var(--green); margin-top: 10px; padding: 10px 12px; background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.25); border-radius: 8px; display: none; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
   .wallet-info.show { display: flex; }
   .wallet-info-addr { word-break: break-all; flex: 1; min-width: 0; }
-  .wallet-disc-btn { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: #FCA5A5; font-family: 'Oswald', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+  .wallet-disc-btn { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: #FCA5A5; font-family: 'Anton', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; padding: 6px 12px; border-radius: 6px; cursor: pointer; }
 
-  .scan-btn { width: 100%; background: linear-gradient(135deg, #10B981, #059669); border: none; border-radius: 10px; padding: 14px; font-family: 'Oswald', sans-serif; font-size: 15px; font-weight: 900; letter-spacing: 2px; color: #04150F; cursor: pointer; transition: opacity 0.15s; }
+  .scan-btn { width: 100%; background: linear-gradient(135deg, #10B981, #059669); border: none; border-radius: 10px; padding: 14px; font-family: 'Anton', sans-serif; font-size: 15px; font-weight: 900; letter-spacing: 2px; color: #04150F; cursor: pointer; transition: opacity 0.15s; }
   .scan-btn:hover { opacity: 0.9; }
   .scan-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
@@ -64,7 +59,7 @@
 
   /* Results */
   .clear-box { margin-top: 14px; padding: 16px; text-align: center; background: rgba(16,185,129,0.07); border: 1px solid rgba(16,185,129,0.3); border-radius: 10px; }
-  .clear-box .ct { font-family: 'Oswald', sans-serif; font-size: 18px; font-weight: 900; letter-spacing: 2px; color: var(--green); margin-bottom: 6px; }
+  .clear-box .ct { font-family: 'Anton', sans-serif; font-size: 18px; font-weight: 900; letter-spacing: 2px; color: var(--green); margin-bottom: 6px; }
   .clear-box .cd { font-size: 12px; line-height: 1.6; color: #D1D5DB; }
 
   .found-head { margin-top: 14px; font-family: var(--mono); font-size: 12px; color: #FCA5A5; }
@@ -73,10 +68,10 @@
   .approval .ar .k { color: var(--subtext); }
   .approval .ar a { color: #93C5FD; text-decoration: none; }
   .approval .tag { display: inline-block; font-family: var(--mono); font-size: 9px; letter-spacing: 1px; color: var(--subtext); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
-  .revoke-btn { margin-top: 10px; width: 100%; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.5); color: #FCA5A5; font-family: 'Oswald', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1.5px; padding: 9px; border-radius: 7px; cursor: pointer; }
+  .revoke-btn { margin-top: 10px; width: 100%; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.5); color: #FCA5A5; font-family: 'Anton', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1.5px; padding: 9px; border-radius: 7px; cursor: pointer; }
   .revoke-btn:hover { background: rgba(239,68,68,0.25); }
   .revoke-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-  .revoke-all { margin-top: 12px; width: 100%; background: linear-gradient(135deg, #EF4444, #B91C1C); border: none; color: #fff; font-family: 'Oswald', sans-serif; font-size: 13px; font-weight: 900; letter-spacing: 2px; padding: 12px; border-radius: 8px; cursor: pointer; }
+  .revoke-all { margin-top: 12px; width: 100%; background: linear-gradient(135deg, #EF4444, #B91C1C); border: none; color: #fff; font-family: 'Anton', sans-serif; font-size: 13px; font-weight: 900; letter-spacing: 2px; padding: 12px; border-radius: 8px; cursor: pointer; }
   .revoke-all:disabled { opacity: 0.4; cursor: not-allowed; }
 
   .info-details { margin-bottom: 16px; }
@@ -88,18 +83,21 @@
   .info-body .sec { margin-top: 12px; }
   .info-body .sec:first-child { margin-top: 0; }
 
-  .footer-tag { text-align: center; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
+  .footer-tag { text-align: center; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Anton', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
   .footer-tag a { color: #D97706; text-decoration: none; }
 
   /* Desktop — wider container so the page fills a larger screen */
   @media (min-width: 1040px) {
     .wrap { max-width: 1040px; }
   }
+
+html{background:var(--bg-grad);background-attachment:fixed;}
+body{background:transparent;font-family:var(--body);}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#D97706;text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid #D97706;"/>&larr; CLUCK NORRIS HOME</a>
+  <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:Anton,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#D97706;text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid #D97706;"/>&larr; CLUCK NORRIS HOME</a>
 
   <div class="header">
     <div class="header-icon">🔒</div>

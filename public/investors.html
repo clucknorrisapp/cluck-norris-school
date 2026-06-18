@@ -1,30 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<link rel="stylesheet" href="/theme.css">
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>🐔 Cluck Norris — Investor / Interested Party Zone</title>
 <meta name="description" content="What Cluck Norris is, why we think it's a good value, and an honest list of who CLKN is NOT for. Live on-chain stats. No promises, no roadmap theater."/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
 <style>
-  :root {
-    color-scheme: dark;
-    --bg: #0a0a0a;
-    --card: #111111;
-    --border: rgba(255,255,255,0.08);
-    --text: #F9FAFB;
-    --subtext: #6B7280;
-    --accent: #FCD34D;
-    --orange: #D97706;
-    --green: #10B981;
-    --red: #EF4444;
-    --amber: #F59E0B;
-    --blue: #60A5FA;
-    --purple: #A78BFA;
-    --mono: 'Courier New', monospace;
-  }
+  :root{color-scheme:dark;--bg:#0a0503;--bg-grad:radial-gradient(125% 75% at 50% -12%,#2c0f04 0%,#160b06 46%,#0a0503 100%);--card:#1a0f08;--card2:#160c07;--surface:#150f12;--panel:#150f12;--border:rgba(255,122,24,0.28);--border-soft:rgba(255,122,24,0.14);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     background: var(--bg);
@@ -38,9 +23,9 @@
 
   .header { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
   .header-icon { font-size: 40px; filter: drop-shadow(0 0 16px rgba(217,119,6,0.5)); }
-  .header .brand-mini { font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 4px; color: var(--orange); margin-bottom: 4px; font-weight: 700; }
-  .header h1 { font-family: 'Oswald', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg, #FCD34D, #F97316, #EF4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
-  .header p { font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
+  .header .brand-mini { font-family: 'Anton', sans-serif; font-size: 10px; letter-spacing: 4px; color: var(--orange); margin-bottom: 4px; font-weight: 700; }
+  .header h1 { font-family: 'Anton', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg, #FCD34D, #F97316, #EF4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
+  .header p { font-family: 'Anton', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
 
   .hero {
     background: linear-gradient(135deg, rgba(217,119,6,0.08), rgba(239,68,68,0.04));
@@ -49,8 +34,8 @@
     padding: 22px 22px;
     margin-bottom: 18px;
   }
-  .hero-tag { font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--accent); letter-spacing: 3px; margin-bottom: 8px; font-weight: 700; }
-  .hero-title { font-family: 'Oswald', sans-serif; font-size: 22px; font-weight: 900; color: var(--text); letter-spacing: 1px; line-height: 1.3; margin-bottom: 10px; }
+  .hero-tag { font-family: 'Anton', sans-serif; font-size: 11px; color: var(--accent); letter-spacing: 3px; margin-bottom: 8px; font-weight: 700; }
+  .hero-title { font-family: 'Anton', sans-serif; font-size: 22px; font-weight: 900; color: var(--text); letter-spacing: 1px; line-height: 1.3; margin-bottom: 10px; }
   .hero-sub { font-family: system-ui, sans-serif; font-size: 14px; color: #D1D5DB; line-height: 1.7; }
 
   .section {
@@ -61,7 +46,7 @@
     margin-bottom: 16px;
   }
   .section-title {
-    font-family: 'Oswald', sans-serif;
+    font-family: 'Anton', sans-serif;
     font-size: 13px;
     color: var(--accent);
     letter-spacing: 3px;
@@ -93,8 +78,8 @@
     padding: 14px 16px;
     transition: border-color 0.2s;
   }
-  .stat-label { font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 6px; font-weight: 700; }
-  .stat-value { font-family: 'Oswald', sans-serif; font-size: 22px; color: var(--text); font-weight: 900; line-height: 1.1; }
+  .stat-label { font-family: 'Anton', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 6px; font-weight: 700; }
+  .stat-value { font-family: 'Anton', sans-serif; font-size: 22px; color: var(--text); font-weight: 900; line-height: 1.1; }
   .stat-sub { font-family: var(--mono); font-size: 10px; color: var(--subtext); margin-top: 4px; }
   .stat.gold     { border-color: rgba(252,211,77,0.30); }
   .stat.gold .stat-value     { color: #FCD34D; }
@@ -115,7 +100,7 @@
     padding: 18px 20px;
     margin-bottom: 16px;
   }
-  .disclaimer-title { font-family: 'Oswald', sans-serif; font-size: 12px; color: #FCA5A5; letter-spacing: 3px; font-weight: 700; margin-bottom: 12px; }
+  .disclaimer-title { font-family: 'Anton', sans-serif; font-size: 12px; color: #FCA5A5; letter-spacing: 3px; font-weight: 700; margin-bottom: 12px; }
   .disclaimer p { font-family: system-ui, sans-serif; font-size: 13px; color: #FCA5A5; line-height: 1.7; margin-bottom: 8px; }
   .disclaimer strong { color: #FEE2E2; font-weight: 700; }
 
@@ -128,7 +113,7 @@
     background: rgba(255,255,255,0.04);
     border: 1px solid var(--border);
     border-radius: 10px;
-    font-family: 'Oswald', sans-serif;
+    font-family: 'Anton', sans-serif;
     font-size: 12px;
     font-weight: 700;
     color: var(--text);
@@ -151,7 +136,7 @@
   }
 
   .pull-quote {
-    font-family: 'Oswald', sans-serif;
+    font-family: 'Anton', sans-serif;
     font-size: 18px;
     color: var(--accent);
     text-align: center;
@@ -162,7 +147,7 @@
     line-height: 1.5;
   }
 
-  .footer-tag { text-align: center; margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
+  .footer-tag { text-align: center; margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Anton', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
   .footer-tag a { color: var(--orange); text-decoration: none; }
 
   .ca-row {
@@ -175,9 +160,9 @@
     margin-bottom: 8px;
   }
   .ca-row:hover { border-color: var(--accent); }
-  .ca-row .lbl { font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 6px; }
+  .ca-row .lbl { font-family: 'Anton', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 6px; }
   .ca-row .val { font-family: var(--mono); font-size: 15px; font-weight: 600; color: #FCD34D; word-break: break-all; line-height: 1.5; }
-  .ca-row .hint { font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--accent); text-align: right; margin-top: 6px; letter-spacing: 1px; }
+  .ca-row .hint { font-family: 'Anton', sans-serif; font-size: 10px; color: var(--accent); text-align: right; margin-top: 6px; letter-spacing: 1px; }
 
   html { scroll-behavior: smooth; }
   .section { scroll-margin-top: 140px; }
@@ -190,11 +175,11 @@
     box-shadow: 0 6px 24px rgba(0,0,0,0.6);
   }
   .quicklinks .ql-label {
-    width: 100%; font-family: 'Oswald', sans-serif; font-size: 10px;
+    width: 100%; font-family: 'Anton', sans-serif; font-size: 10px;
     letter-spacing: 3px; color: var(--orange); font-weight: 700; margin-bottom: 4px;
   }
   .quicklinks a {
-    font-family: 'Oswald', sans-serif; font-size: 11px; font-weight: 700;
+    font-family: 'Anton', sans-serif; font-size: 11px; font-weight: 700;
     letter-spacing: 1px; text-decoration: none;
     padding: 7px 12px; border-radius: 8px;
     transition: border-color .15s, color .15s, background .15s;
@@ -224,11 +209,14 @@
   @media (min-width: 1040px) {
     .wrap { max-width: 1040px; }
   }
+
+html{background:var(--bg-grad);background-attachment:fixed;}
+body{background:transparent;font-family:var(--body);}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#D97706;text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid #D97706;"/>&larr; CLUCK NORRIS HOME</a>
+  <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:Anton,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#D97706;text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid #D97706;"/>&larr; CLUCK NORRIS HOME</a>
 
   <div class="header">
     <div class="header-icon">📜</div>
@@ -322,7 +310,7 @@
 
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:14px">
       <div style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.25);border-radius:10px;padding:12px 14px">
-        <div style="font-family:'Oswald',sans-serif;font-size:10px;color:#60A5FA;letter-spacing:2px;margin-bottom:6px;font-weight:700">🆓 FREE EDUCATION</div>
+        <div style="font-family:'Anton',sans-serif;font-size:10px;color:#60A5FA;letter-spacing:2px;margin-bottom:6px;font-weight:700">🆓 FREE EDUCATION</div>
         <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
           • 7‑lesson Incubator<br>
           • 12 belted lessons (Freshman→Emeritus)<br>
@@ -336,7 +324,7 @@
         </div>
       </div>
       <div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.25);border-radius:10px;padding:12px 14px">
-        <div style="font-family:'Oswald',sans-serif;font-size:10px;color:#10B981;letter-spacing:2px;margin-bottom:6px;font-weight:700">🩺 FREE RESEARCH</div>
+        <div style="font-family:'Anton',sans-serif;font-size:10px;color:#10B981;letter-spacing:2px;margin-bottom:6px;font-weight:700">🩺 FREE RESEARCH</div>
         <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
           • <a class="xref" href="/autopsy">Token Autopsy</a> — forensic post‑mortem<br>
           • LP lock/burn + honeypot scan<br>
@@ -349,7 +337,7 @@
         </div>
       </div>
       <div style="background:rgba(252,211,77,0.06);border:1px solid rgba(252,211,77,0.25);border-radius:10px;padding:12px 14px">
-        <div style="font-family:'Oswald',sans-serif;font-size:10px;color:#FCD34D;letter-spacing:2px;margin-bottom:6px;font-weight:700">🔒 CLKN‑PAID TOOLS</div>
+        <div style="font-family:'Anton',sans-serif;font-size:10px;color:#FCD34D;letter-spacing:2px;margin-bottom:6px;font-weight:700">🔒 CLKN‑PAID TOOLS</div>
         <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
           • AI tutor extension (500)<br>
           • <a class="xref" href="/airdrop">Batch airdrop sender</a> (100)<br>
@@ -359,7 +347,7 @@
         </div>
       </div>
       <div style="background:rgba(217,119,6,0.06);border:1px solid rgba(217,119,6,0.25);border-radius:10px;padding:12px 14px">
-        <div style="font-family:'Oswald',sans-serif;font-size:10px;color:#D97706;letter-spacing:2px;margin-bottom:6px;font-weight:700">🛡 SAFETY + UX</div>
+        <div style="font-family:'Anton',sans-serif;font-size:10px;color:#D97706;letter-spacing:2px;margin-bottom:6px;font-weight:700">🛡 SAFETY + UX</div>
         <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
           • Mandatory acknowledgment gate<br>
           • Per‑IP rate limiting on all APIs<br>
@@ -372,7 +360,7 @@
         </div>
       </div>
       <div style="background:rgba(167,139,250,0.06);border:1px solid rgba(167,139,250,0.25);border-radius:10px;padding:12px 14px">
-        <div style="font-family:'Oswald',sans-serif;font-size:10px;color:#A78BFA;letter-spacing:2px;margin-bottom:6px;font-weight:700">⚡ INTEGRATIONS</div>
+        <div style="font-family:'Anton',sans-serif;font-size:10px;color:#A78BFA;letter-spacing:2px;margin-bottom:6px;font-weight:700">⚡ INTEGRATIONS</div>
         <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
           • Embedded Jupiter swap<br>
           • Live Bags.fm launch feed<br>
@@ -384,7 +372,7 @@
         </div>
       </div>
       <div style="background:rgba(56,189,248,0.06);border:1px solid rgba(56,189,248,0.25);border-radius:10px;padding:12px 14px">
-        <div style="font-family:'Oswald',sans-serif;font-size:10px;color:#38BDF8;letter-spacing:2px;margin-bottom:6px;font-weight:700">🤖 COMMUNITY · TELEGRAM</div>
+        <div style="font-family:'Anton',sans-serif;font-size:10px;color:#38BDF8;letter-spacing:2px;margin-bottom:6px;font-weight:700">🤖 COMMUNITY · TELEGRAM</div>
         <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
           • Daily "Cluck's Lesson" posts (TG + X)<br>
           • <strong style="color:#FCD34D">Ask Cluck</strong> — reply to a lesson, AI answers<br>
@@ -398,7 +386,7 @@
         </div>
       </div>
       <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.25);border-radius:10px;padding:12px 14px">
-        <div style="font-family:'Oswald',sans-serif;font-size:10px;color:#EF4444;letter-spacing:2px;margin-bottom:6px;font-weight:700">🔧 OPERATOR TOOLS</div>
+        <div style="font-family:'Anton',sans-serif;font-size:10px;color:#EF4444;letter-spacing:2px;margin-bottom:6px;font-weight:700">🔧 OPERATOR TOOLS</div>
         <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
           • 48h CLKN contest preset<br>
           • CSV export of winners<br>
@@ -410,7 +398,7 @@
         </div>
       </div>
       <div style="background:rgba(252,211,77,0.06);border:1px solid rgba(252,211,77,0.25);border-radius:10px;padding:12px 14px">
-        <div style="font-family:'Oswald',sans-serif;font-size:10px;color:#FCD34D;letter-spacing:2px;margin-bottom:6px;font-weight:700">🥚 CREATE &amp; PROTECT</div>
+        <div style="font-family:'Anton',sans-serif;font-size:10px;color:#FCD34D;letter-spacing:2px;margin-bottom:6px;font-weight:700">🥚 CREATE &amp; PROTECT</div>
         <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
           • <a class="xref" href="/hatchery">The Hatchery</a> — token creator<br>
           • Guided mint, every decision<br>
@@ -421,7 +409,7 @@
         </div>
       </div>
       <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.25);border-radius:10px;padding:12px 14px">
-        <div style="font-family:'Oswald',sans-serif;font-size:10px;color:#EF4444;letter-spacing:2px;margin-bottom:6px;font-weight:700">🔬 TOKEN AUTOPSY</div>
+        <div style="font-family:'Anton',sans-serif;font-size:10px;color:#EF4444;letter-spacing:2px;margin-bottom:6px;font-weight:700">🔬 TOKEN AUTOPSY</div>
         <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
           • <a class="xref" href="/autopsy">Forensic post‑mortem</a> on any mint<br>
           • LP lock/burn status (rug check)<br>
@@ -434,7 +422,7 @@
         </div>
       </div>
       <div style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.25);border-radius:10px;padding:12px 14px">
-        <div style="font-family:'Oswald',sans-serif;font-size:10px;color:#60A5FA;letter-spacing:2px;margin-bottom:6px;font-weight:700">🤖 TELEGRAM + X BOT</div>
+        <div style="font-family:'Anton',sans-serif;font-size:10px;color:#60A5FA;letter-spacing:2px;margin-bottom:6px;font-weight:700">🤖 TELEGRAM + X BOT</div>
         <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
           • 14 interactive slash commands (incl. /guide concierge)<br>
           • <strong style="color:#FCD34D">In‑chat wallet deep dive</strong> (just type /walletxray &lt;wallet&gt;)<br>
@@ -446,7 +434,7 @@
         </div>
       </div>
       <div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.25);border-radius:10px;padding:12px 14px">
-        <div style="font-family:'Oswald',sans-serif;font-size:10px;color:#10B981;letter-spacing:2px;margin-bottom:6px;font-weight:700">💧 LIQUIDITY ENGINE</div>
+        <div style="font-family:'Anton',sans-serif;font-size:10px;color:#10B981;letter-spacing:2px;margin-bottom:6px;font-weight:700">💧 LIQUIDITY ENGINE</div>
         <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
           • <a class="xref" href="/liquidity">Non‑custodial LP tool</a> on Orca Whirlpools<br>
           • Single‑sided walls + balanced ranges<br>
@@ -486,7 +474,7 @@
       <li><strong>AI:</strong> Anthropic Claude Haiku 4.5 — fast and cheap enough to embed for free at 10 questions/day per user</li>
       <li><strong>Solana data:</strong> Helius (DAS + enhanced txns) with automatic RPC failover (public node + optional backup keys on rate‑limit/outage), Solana Tracker (independent trade/holder/risk cross‑verification), DexScreener, Bubblemaps, Bags.fm API, Jupiter — all proxied server‑side so keys are never exposed</li>
       <li><strong>Persistence:</strong> a Railway volume backs durable state (consumed‑payment signatures, the Bags graduation tracker, post schedulers) so nothing resets on a redeploy</li>
-      <li><strong>Image generation:</strong> @napi-rs/canvas with bundled Oswald typeface for the LP Scanner &amp; credential cards</li>
+      <li><strong>Image generation:</strong> @napi-rs/canvas with bundled Anton typeface for the LP Scanner &amp; credential cards</li>
       <li><strong>Security:</strong> full hardening pass — per‑IP rate limiting on every API, RPC method allow‑listing, locked‑down admin/debug endpoints, replay‑proof on‑chain payment verification, output escaping (XSS) across all tool pages, plus HSTS / X‑Frame‑Options / X‑Content‑Type‑Options / Referrer‑Policy and vendored solana‑web3.js (same‑origin)</li>
       <li><strong>No custody:</strong> Server never sees a private key. Every signing flow runs in the user's wallet extension.</li>
     </ul>
@@ -571,7 +559,7 @@
     <p>Not "we'll reinvest later." Not "we'll consider buybacks at $X market cap." Already happening, every day.</p>
     <!-- Live fee-claim record — collapsible; pulled from the Bags API; hidden until data loads -->
     <details id="reinvestFeed" style="display:none;background:rgba(0,0,0,0.25);border:1px solid rgba(16,185,129,0.3);border-radius:10px;padding:12px 16px;margin:14px 0">
-      <summary style="cursor:pointer;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:2px;color:#6EE7B7;font-weight:700">📊 LIVE · CREATOR FEES CLAIMED<span id="reinvestSummary" style="color:#9CA3AF;font-weight:400;letter-spacing:1px"></span></summary>
+      <summary style="cursor:pointer;font-family:'Anton',sans-serif;font-size:11px;letter-spacing:2px;color:#6EE7B7;font-weight:700">📊 LIVE · CREATOR FEES CLAIMED<span id="reinvestSummary" style="color:#9CA3AF;font-weight:400;letter-spacing:1px"></span></summary>
       <div style="font-family:system-ui,sans-serif;font-size:12px;color:#9CA3AF;line-height:1.6;margin:10px 0 8px">Every row below is the project pulling its 1% creator fee off Bags — the exact SOL that funds the CLKN buybacks. Real on-chain transactions; tap any one to verify it yourself.</div>
       <div id="reinvestFeedBody" style="max-height:260px;overflow-y:auto"></div>
     </details>
@@ -760,7 +748,7 @@ fetch('/api/reinvestment')
         + 'style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.07);color:inherit;text-decoration:none">'
         + '<span style="font-family:var(--mono);font-size:12px;color:#9CA3AF">' + date + '</span>'
         + '<span style="font-family:var(--mono);font-size:13px;color:#6EE7B7;font-weight:700">' + c.sol.toFixed(4) + ' SOL</span>'
-        + '<span style="font-family:\'Oswald\',sans-serif;font-size:9px;letter-spacing:1px;color:#FCD34D">VERIFY ↗</span>'
+        + '<span style="font-family:\'Anton\',sans-serif;font-size:9px;letter-spacing:1px;color:#FCD34D">VERIFY ↗</span>'
         + '</a>';
     }).join('');
     document.getElementById('reinvestFeedBody').innerHTML = rows;

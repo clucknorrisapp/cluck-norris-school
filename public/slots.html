@@ -1,13 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<link rel="stylesheet" href="/theme.css">
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <meta name="robots" content="noindex,nofollow"/>
 <title>The Coop Spinner · Cluck Norris</title>
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
 <style>
-:root{--bg:#0a0608;--panel:#150f12;--gold:#FFC53D;--orange:#F97316;--red:#EF4444;--green:#34D399;--blue:#60A5FA;--text:#FBE9D0;--sub:#9a8a7a;--border:rgba(249,115,22,0.28);--head:'Oswald',sans-serif;--mono:'Share Tech Mono',monospace}
+:root{color-scheme:dark;--bg:#0a0503;--bg-grad:radial-gradient(125% 75% at 50% -12%,#2c0f04 0%,#160b06 46%,#0a0503 100%);--card:#1a0f08;--card2:#160c07;--surface:#150f12;--panel:#150f12;--border:rgba(255,122,24,0.28);--border-soft:rgba(255,122,24,0.14);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
 *{box-sizing:border-box}
 body{margin:0;background:radial-gradient(ellipse at top,#1c0f08 0%,var(--bg) 60%);color:var(--text);font-family:var(--mono);padding:0 14px 70px;-webkit-font-smoothing:antialiased;min-height:100vh}
 .wrap{max-width:560px;margin:0 auto}
@@ -57,6 +57,9 @@ input{width:100%;background:rgba(0,0,0,0.35);border:1px solid var(--border);bord
 .sparkle{position:fixed;pointer-events:none;font-size:24px;z-index:90;animation:fall 1.4s linear forwards}@keyframes fall{0%{opacity:1;transform:translateY(-10px)}100%{opacity:0;transform:translateY(440px) rotate(360deg)}}
 a{color:var(--orange)} .hidden{display:none}
 .opbtn{flex:1;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;padding:9px;font-family:var(--head);font-size:12px;letter-spacing:1px;color:var(--sub);cursor:pointer}
+
+html{background:var(--bg-grad);background-attachment:fixed;}
+body{background:transparent;font-family:var(--body);}
 </style>
 </head>
 <body>
@@ -272,11 +275,11 @@ const PAL=['#F97316','#FFC53D','#EF4444','#34D399','#60A5FA','#A78BFA','#F472B6'
 let wheelRot=0, entrants=[];
 function buildWheel(lb){ const q=lb.filter(p=>p.qualified); entrants=q.map((p,i)=>({short:p.short,isMe:p.isMe,weight:Math.max(1,Math.min(5,Math.round(p.pts/120))),color:PAL[i%PAL.length]})); drawWheel(wheelRot); }
 function drawWheel(rot){ const c=$('wheel'),x=c.getContext('2d'),R=c.width/2; x.clearRect(0,0,c.width,c.height);
-  if(!entrants.length){ x.fillStyle='#160d09'; x.beginPath();x.arc(R,R,R-6,0,7);x.fill(); x.fillStyle='#9a8a7a'; x.font='700 13px Oswald';x.textAlign='center';x.fillText('wheel fills as people spin',R,R); return; }
+  if(!entrants.length){ x.fillStyle='#160d09'; x.beginPath();x.arc(R,R,R-6,0,7);x.fill(); x.fillStyle='#9a8a7a'; x.font='700 13px Anton';x.textAlign='center';x.fillText('wheel fills as people spin',R,R); return; }
   const tot=entrants.reduce((a,e)=>a+e.weight,0); let a=rot;
   entrants.forEach(e=>{ const ang=e.weight/tot*2*Math.PI; x.beginPath();x.moveTo(R,R);x.arc(R,R,R-6,a,a+ang);x.closePath();x.fillStyle=e.color;x.fill();x.strokeStyle='rgba(0,0,0,.35)';x.lineWidth=2;x.stroke();
-    x.save();x.translate(R,R);x.rotate(a+ang/2);x.textAlign='right';x.fillStyle=e.isMe?'#06241a':'#1a1209';x.font='700 12px Oswald';x.fillText((e.isMe?'YOU':e.short)+(e.weight>1?' ×'+e.weight:''),R-14,4);x.restore(); a+=ang; });
-  x.beginPath();x.arc(R,R,26,0,7);x.fillStyle='#160d09';x.fill();x.strokeStyle='#FFC53D';x.lineWidth=3;x.stroke();x.fillStyle='#FFC53D';x.font='900 20px Oswald';x.textAlign='center';x.fillText('🐔',R,R+7); }
+    x.save();x.translate(R,R);x.rotate(a+ang/2);x.textAlign='right';x.fillStyle=e.isMe?'#06241a':'#1a1209';x.font='700 12px Anton';x.fillText((e.isMe?'YOU':e.short)+(e.weight>1?' ×'+e.weight:''),R-14,4);x.restore(); a+=ang; });
+  x.beginPath();x.arc(R,R,26,0,7);x.fillStyle='#160d09';x.fill();x.strokeStyle='#FFC53D';x.lineWidth=3;x.stroke();x.fillStyle='#FFC53D';x.font='900 20px Anton';x.textAlign='center';x.fillText('🐔',R,R+7); }
 function spinWheelTo(winnerShort){ if(!entrants.length) return; let idx=entrants.findIndex(e=>e.short===winnerShort); if(idx<0) idx=0;
   const tot=entrants.reduce((a,e)=>a+e.weight,0); let a=0; for(let i=0;i<idx;i++) a+=entrants[i].weight/tot*2*Math.PI; const mid=a+(entrants[idx].weight/tot*2*Math.PI)/2;
   const target=(-Math.PI/2)-mid+2*Math.PI*6, start=wheelRot, t0=performance.now(), dur=4600;
