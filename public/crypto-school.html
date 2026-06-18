@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cluck Norris Crypto School — Live Lectures</title>
+<meta name="description" content="The toughest crypto professor on Solana. Tap a topic or ask anything — Cluck Norris delivers a live lecture in his Chuck-Norris-fact voice.">
+<meta property="og:title" content="Cluck Norris Crypto School">
+<meta property="og:description" content="Live AI crypto lectures from the rooster drill-sergeant. Wallets, DeFi, scams — taught with zero sugar-coating.">
+<meta property="og:image" content="https://clucknorris.app/cluck-norris-mascot.jpg">
+<link rel="icon" href="/cluck-norris-mascot.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Chakra+Petch:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
+  ::-webkit-scrollbar{width:8px;height:8px;}
+  ::-webkit-scrollbar-thumb{background:rgba(255,122,24,.3);border-radius:8px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  @keyframes cluckGlow{0%,100%{box-shadow:0 0 0 2px rgba(255,122,24,.55),0 0 22px 5px rgba(232,30,14,.5),0 0 50px 10px rgba(255,122,24,.22);}50%{box-shadow:0 0 0 2px rgba(255,182,39,.85),0 0 34px 9px rgba(255,90,10,.7),0 0 68px 18px rgba(255,122,24,.38);}}
+  @keyframes emberRise{0%{transform:translateY(0) scale(.6);opacity:0;}12%{opacity:.95;}100%{transform:translateY(-340px) scale(1.15);opacity:0;}}
+  @keyframes blink{0%,80%,100%{opacity:.2;transform:translateY(0);}40%{opacity:1;transform:translateY(-3px);}}
+  @keyframes pulseDot{0%,100%{opacity:.4;}50%{opacity:1;}}
+  @keyframes msgIn{0%{opacity:0;transform:translateY(12px);}100%{opacity:1;transform:translateY(0);}}
+  body{font-family:'Chakra Petch',sans-serif;background:#0a0503;color:#FFEFE0;}
+  .app{position:relative;height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;background:radial-gradient(125% 75% at 50% -12%, #2c0f04 0%, #160b06 46%, #0a0503 100%);}
+  .embers{position:absolute;inset:0;z-index:1;overflow:hidden;pointer-events:none;}
+  .embers span{position:absolute;bottom:40px;border-radius:50%;background:radial-gradient(circle,#FFD56B,#FF5A0A);}
+  .embers.off{display:none;}
+  .header{position:relative;z-index:3;flex:none;display:flex;align-items:center;gap:15px;padding:16px 22px;border-bottom:1px solid rgba(255,122,24,.18);background:linear-gradient(180deg, rgba(22,11,6,.92), rgba(22,11,6,.45));backdrop-filter:blur(6px);}
+  .avatar{width:58px;height:58px;border-radius:50%;object-fit:cover;object-position:center 12%;border:2px solid #FFB627;animation:cluckGlow 2.6s ease-in-out infinite;flex:none;}
+  .wordmark{font-family:'Anton',sans-serif;letter-spacing:1px;font-size:27px;line-height:1;}
+  .wordmark .c{color:#FF7A18;} .wordmark .n{color:#FFEFE0;}
+  .subtitle{font-weight:600;font-size:11px;letter-spacing:3px;color:#C9A892;margin-top:5px;}
+  .pill{margin-left:auto;display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;letter-spacing:1.5px;color:#7BE26B;border:1px solid rgba(123,226,107,.3);background:rgba(123,226,107,.08);padding:6px 11px;border-radius:999px;white-space:nowrap;}
+  .pill .dot{width:7px;height:7px;border-radius:50%;background:#7BE26B;box-shadow:0 0 8px #7BE26B;animation:pulseDot 1.8s ease-in-out infinite;}
+  .feed{position:relative;z-index:2;flex:1;overflow-y:auto;padding:24px 20px 10px;display:flex;flex-direction:column;gap:16px;}
+  .user{align-self:flex-end;max-width:80%;background:linear-gradient(135deg,#FF7A18,#E81E0E);color:#fff;font-weight:600;font-size:15px;line-height:1.45;padding:12px 16px;border-radius:16px 16px 4px 16px;box-shadow:0 6px 20px rgba(232,30,14,.35);animation:msgIn .35s ease both;word-wrap:break-word;}
+  .cluck{align-self:flex-start;max-width:90%;display:flex;gap:10px;align-items:flex-start;animation:msgIn .4s ease both;}
+  .cluck .mini{width:38px;height:38px;border-radius:50%;object-fit:cover;object-position:center 12%;border:1.5px solid #FF7A18;flex:none;margin-top:2px;}
+  .card{background:linear-gradient(180deg,#1d110a,#160c07);border:1px solid rgba(255,122,24,.28);border-radius:6px 16px 16px 16px;padding:16px 18px;box-shadow:0 10px 30px rgba(0,0,0,.5);min-width:0;}
+  .loading{display:flex;align-items:center;gap:10px;font-weight:600;color:#C9A892;font-size:14px;}
+  .loading .dots{display:flex;gap:5px;}
+  .loading .dots i{width:6px;height:6px;border-radius:50%;background:#FF7A18;animation:blink 1.2s infinite;}
+  .loading .dots i:nth-child(2){animation-delay:.2s;} .loading .dots i:nth-child(3){animation-delay:.4s;}
+  .eyebrow{font-size:11px;font-weight:700;letter-spacing:2px;color:#FF7A18;text-transform:uppercase;margin-bottom:9px;}
+  .fact{font-family:'Anton',sans-serif;font-size:21px;color:#FFB627;line-height:1.18;text-transform:uppercase;letter-spacing:.5px;text-shadow:0 2px 10px rgba(255,90,10,.35);}
+  .lecture{margin:15px 0 0;padding:0;list-style:none;}
+  .lecture li{display:flex;gap:10px;margin-bottom:10px;font-size:14.5px;line-height:1.55;color:#EAD8C8;}
+  .lecture li .mk{color:#FF7A18;font-weight:700;flex:none;}
+  .drill{margin-top:14px;display:flex;gap:8px;align-items:flex-start;background:linear-gradient(90deg,rgba(232,30,14,.2),rgba(255,122,24,.05));border-left:3px solid #E81E0E;padding:10px 14px;border-radius:4px;font-weight:700;font-size:13px;letter-spacing:.4px;color:#FFD9A0;text-transform:uppercase;line-height:1.4;}
+  .grounded{margin-top:12px;font-size:10.5px;letter-spacing:1px;color:#9C7E68;text-transform:uppercase;}
+  .grounded b{color:#C9A892;}
+  .chips{position:relative;z-index:3;flex:none;display:flex;gap:9px;overflow-x:auto;padding:12px 18px;border-top:1px solid rgba(255,122,24,.12);background:rgba(14,7,4,.4);}
+  .chip{flex:none;font-family:inherit;font-weight:600;font-size:13px;color:#FFD9A0;background:rgba(255,122,24,.08);border:1px solid rgba(255,122,24,.3);border-radius:999px;padding:8px 14px;white-space:nowrap;cursor:pointer;transition:all .15s;}
+  .chip:hover{background:rgba(255,122,24,.2);border-color:#FF7A18;color:#fff;}
+  .tweaks{position:relative;z-index:3;flex:none;display:flex;align-items:center;gap:14px;padding:6px 18px;background:rgba(14,7,4,.4);font-size:11px;color:#9C7E68;letter-spacing:.5px;flex-wrap:wrap;}
+  .tweaks .grp{display:flex;align-items:center;gap:6px;}
+  .tweaks label{text-transform:uppercase;font-weight:700;letter-spacing:1px;}
+  .seg{display:inline-flex;border:1px solid rgba(255,122,24,.25);border-radius:999px;overflow:hidden;}
+  .seg button{font-family:inherit;font-size:11px;font-weight:700;letter-spacing:.5px;color:#C9A892;background:transparent;border:0;padding:4px 11px;cursor:pointer;transition:all .15s;}
+  .seg button.on{background:linear-gradient(135deg,#FF7A18,#E81E0E);color:#fff;}
+  .tweaks .home{margin-left:auto;color:#FF7A18;text-decoration:none;font-weight:700;letter-spacing:1px;text-transform:uppercase;}
+  .inputbar{position:relative;z-index:3;flex:none;display:flex;gap:10px;padding:14px 18px calc(18px + env(safe-area-inset-bottom));background:linear-gradient(0deg,rgba(20,10,5,.96),rgba(20,10,5,.45));border-top:1px solid rgba(255,122,24,.14);}
+  .inputbar input{flex:1;font-family:inherit;font-size:15px;font-weight:500;color:#FFEFE0;background:#180d07;border:1px solid rgba(255,122,24,.28);border-radius:12px;padding:13px 16px;outline:none;transition:border-color .15s;min-width:0;}
+  .inputbar input:focus{border-color:#FF7A18;}
+  .inputbar input::placeholder{color:#7d5f4c;}
+  .ask{font-family:'Anton',sans-serif;font-size:18px;letter-spacing:1.5px;color:#fff;background:linear-gradient(135deg,#FF7A18,#E81E0E);border:0;border-radius:12px;padding:0 24px;box-shadow:0 6px 18px rgba(232,30,14,.4);cursor:pointer;transition:transform .1s;}
+  .ask:active{transform:scale(.95);}
+  .ask:disabled{opacity:.55;cursor:not-allowed;}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="embers" id="embers"></div>
+
+  <div class="header">
+    <img class="avatar" src="/cluck-norris-mascot.jpg" alt="Cluck Norris">
+    <div>
+      <div class="wordmark"><span class="c">CLUCK</span> <span class="n">NORRIS</span></div>
+      <div class="subtitle">CRYPTO SCHOOL · LIVE LECTURES</div>
+    </div>
+    <div class="pill"><span class="dot"></span>IN SESSION</div>
+  </div>
+
+  <div class="feed" id="feed"></div>
+
+  <div class="tweaks">
+    <div class="grp"><label>Lecture</label>
+      <span class="seg" id="styleSeg">
+        <button data-v="punchy" class="on">Punchy</button>
+        <button data-v="professor">Professor</button>
+      </span>
+    </div>
+    <div class="grp"><label>Fire</label>
+      <span class="seg" id="fireSeg">
+        <button data-v="inferno" class="on">Inferno</button>
+        <button data-v="calm">Calm</button>
+      </span>
+    </div>
+    <a class="home" href="/">← School</a>
+  </div>
+
+  <div class="chips" id="chips"></div>
+
+  <form class="inputbar" id="form" autocomplete="off">
+    <input id="input" type="text" placeholder="Ask Cluck anything about crypto..." maxlength="2000">
+    <button class="ask" id="askBtn" type="submit">ASK</button>
+  </form>
+</div>
+
+<script>
+(function () {
+  var feed = document.getElementById('feed');
+  var input = document.getElementById('input');
+  var form = document.getElementById('form');
+  var askBtn = document.getElementById('askBtn');
+  var embers = document.getElementById('embers');
+
+  var STYLE = 'punchy';
+  var busy = false;
+
+  // Escape EVERYTHING from the model/user before innerHTML (token/AI text is untrusted).
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  // --- Topic chips → the question sent to the AI ---
+  var TOPICS = [
+    ['What even is a blockchain?', 'What even is a blockchain? Explain it clearly.'],
+    ['Wallets & private keys', 'How do crypto wallets and private keys actually work?'],
+    ['How not to get rekt', 'How do I avoid getting rekt trading crypto? Teach trading psychology.'],
+    ['DeFi & staking', 'Explain DeFi staking and liquidity pools clearly.'],
+    ['Dodge rug pulls', 'What is a rug pull and how do I spot and avoid crypto scams?'],
+    ['Impermanent loss', 'Explain impermanent loss for liquidity providers, clearly.'],
+    ['🔥 Surprise me', 'Give me one piece of hard-earned crypto wisdom most people learn the hard way.']
+  ];
+  var chips = document.getElementById('chips');
+  TOPICS.forEach(function (t) {
+    var b = document.createElement('button');
+    b.className = 'chip'; b.type = 'button'; b.textContent = t[0];
+    b.addEventListener('click', function () { if (!busy) send(t[1]); });
+    chips.appendChild(b);
+  });
+
+  // --- Embers (ambient) ---
+  function buildEmbers() {
+    var cfg = [[9,5,6.2,.1],[21,3,7.4,1.6],[34,4,5.6,.9],[48,6,8.1,2.4],[61,3,6.8,.4],[74,5,7.0,3.1],[87,4,6.0,1.2],[94,3,7.8,2.0]];
+    embers.innerHTML = '';
+    cfg.forEach(function (c) {
+      var s = document.createElement('span');
+      s.style.left = c[0] + '%'; s.style.width = c[1] + 'px'; s.style.height = c[1] + 'px';
+      s.style.boxShadow = '0 0 ' + (c[1] + 4) + 'px 2px rgba(255,90,10,.7)';
+      s.style.animation = 'emberRise ' + c[2] + 's linear infinite';
+      s.style.animationDelay = c[3] + 's';
+      embers.appendChild(s);
+    });
+  }
+  buildEmbers();
+
+  // --- Segmented toggles ---
+  function wireSeg(id, onPick) {
+    var seg = document.getElementById(id);
+    seg.addEventListener('click', function (e) {
+      var btn = e.target.closest('button'); if (!btn) return;
+      [].forEach.call(seg.children, function (c) { c.classList.remove('on'); });
+      btn.classList.add('on'); onPick(btn.getAttribute('data-v'));
+    });
+  }
+  wireSeg('styleSeg', function (v) { STYLE = v; });
+  wireSeg('fireSeg', function (v) { embers.classList.toggle('off', v === 'calm'); });
+
+  // --- Rendering ---
+  function scrollDown() { feed.scrollTop = feed.scrollHeight; }
+
+  function addUser(text) {
+    var d = document.createElement('div');
+    d.className = 'user'; d.textContent = text;
+    feed.appendChild(d); scrollDown();
+  }
+
+  function addCluckLoading() {
+    var wrap = document.createElement('div');
+    wrap.className = 'cluck';
+    wrap.innerHTML = '<img class="mini" src="/cluck-norris-mascot.jpg" alt="Cluck">' +
+      '<div class="card"><div class="loading">Cluck is loading the lecture' +
+      '<span class="dots"><i></i><i></i><i></i></span></div></div>';
+    feed.appendChild(wrap); scrollDown();
+    return wrap;
+  }
+
+  function renderLecture(wrap, data) {
+    var lec = (data.lecture || []).map(function (p) {
+      return '<li><span class="mk">▸</span><span>' + esc(p) + '</span></li>';
+    }).join('');
+    var drill = data.drill ? '<div class="drill"><span>🪖</span><span>' + esc(data.drill) + '</span></div>' : '';
+    var grounded = data.grounded ? '<div class="grounded">📚 From the curriculum · <b>' + esc(data.grounded.lesson) + '</b></div>' : '';
+    wrap.innerHTML = '<img class="mini" src="/cluck-norris-mascot.jpg" alt="Cluck">' +
+      '<div class="card">' +
+        '<div class="eyebrow">🔥 Cluck Norris Fact</div>' +
+        '<div class="fact">' + esc(data.fact) + '</div>' +
+        '<ul class="lecture">' + lec + '</ul>' +
+        drill + grounded +
+      '</div>';
+    scrollDown();
+  }
+
+  function renderError(wrap, msg) {
+    renderLecture(wrap, {
+      fact: "Cluck Norris doesn't get errors — errors get Cluck Norris.",
+      lecture: [msg || 'The lecture hall hiccuped. Rephrase it and run it back, recruit.'],
+      drill: 'Try again. Quitters get rekt.'
+    });
+  }
+
+  // --- The AI call (server-side; the key never touches the browser) ---
+  function send(question) {
+    question = String(question || '').trim();
+    if (!question || busy) return;
+    busy = true; askBtn.disabled = true;
+    addUser(question);
+    var wrap = addCluckLoading();
+    fetch('/api/lecture', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: question, style: STYLE })
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (res.j && res.j.success && res.j.fact) renderLecture(wrap, res.j);
+        else renderError(wrap, (res.j && res.j.error) || null);
+      })
+      .catch(function () { renderError(wrap, 'Comms down — check your connection and try again.'); })
+      .finally(function () { busy = false; askBtn.disabled = false; input.focus(); });
+  }
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var q = input.value.trim(); if (!q) return;
+    input.value = ''; send(q);
+  });
+
+  // --- Welcome seed card ---
+  (function welcome() {
+    var wrap = document.createElement('div');
+    wrap.className = 'cluck';
+    feed.appendChild(wrap);
+    renderLecture(wrap, {
+      fact: "Cluck Norris doesn't read the whitepaper — the whitepaper reads him.",
+      lecture: [
+        'Welcome to Cluck Norris Crypto School, recruit. Tap a topic below or ask me anything.',
+        'I teach the real mechanics — wallets, keys, DeFi, scams — with zero sugar-coating.',
+        "I won't tell you what to buy. I'll teach you how not to get rekt."
+      ],
+      drill: 'Strap in. Class is in session.'
+    });
+  })();
+})();
+</script>
+</body>
+</html>

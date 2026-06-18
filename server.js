@@ -1647,6 +1647,7 @@ setInterval(() => {
 // per call); the on-chain payment check is also throttled to deter brute force.
 app.use("/api/", rateLimit("api", { windowMs: 60000, max: 150 }));
 app.use("/api/ask-cluck", rateLimit("ai", { windowMs: 60000, max: 15 }));
+app.use("/api/lecture", rateLimit("ai", { windowMs: 60000, max: 15 }));
 app.use("/api/lp-ask", rateLimit("ai", { windowMs: 60000, max: 12 }));
 app.use("/api/verify-clkn-payment", rateLimit("pay", { windowMs: 60000, max: 20 }));
 // Classroom: generous enough for a real multi-turn lesson/exam, tight enough to stop a bot
@@ -2727,6 +2728,93 @@ RULES: Never give financial advice or price predictions. Encouraging but blunt. 
     }
     return res.status(500).json({ success: false, error: (data && data.error && data.error.message) || "Professor Cluck is hoarse — try again." });
   } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
+});
+
+// ── Cluck Norris Crypto School — live lecture cards (/crypto-school) ─────────────────────
+// A standalone interactive tool: tap a topic chip or ask anything → Cluck delivers a
+// structured lecture as a punchy Chuck-Norris-style FACT + 3–4 LECTURE points + a DRILL
+// (tough-love takeaway). Grounded on our REAL curriculum (data/curriculum.json via
+// lessonMaterial) so the teaching stays accurate to the school. Server-side AI
+// (ANTHROPIC_API_KEY) — the key never reaches the browser.
+let _ccAllLessonsCache = null;
+function ccAllLessons() {
+  if (_ccAllLessonsCache) return _ccAllLessonsCache;
+  const out = [];
+  for (const c of (CURRICULUM.courses || [])) for (const l of (c.lessons || [])) out.push({ course: c, lesson: l });
+  _ccAllLessonsCache = out;
+  return out;
+}
+// Pick the lesson whose title/intro/concepts best overlap the question so Cluck grounds
+// the lecture in real material. Title hits weigh extra. Returns null when nothing matches
+// (free-form question → pure persona, still answers anything).
+function pickLessonForQuestion(question) {
+  const words = new Set(String(question || "").toLowerCase().match(/[a-z0-9]{4,}/g) || []);
+  if (!words.size) return null;
+  let best = null, bestScore = 0;
+  for (const { course, lesson } of ccAllLessons()) {
+    const hay = `${lesson.title} ${lesson.intro || ""} ${(lesson.concepts || []).map((c) => `${c.term} ${c.def}`).join(" ")}`.toLowerCase();
+    const titleLc = String(lesson.title || "").toLowerCase();
+    let score = 0;
+    for (const w of words) { if (hay.includes(w)) score++; if (titleLc.includes(w)) score += 2; }
+    if (score > bestScore) { bestScore = score; best = { course, lesson }; }
+  }
+  return bestScore >= 2 ? best : null;
+}
+// Defensive parse of the model's JSON lecture (strip fences, slice first { to last }).
+function parseLectureJson(raw) {
+  try {
+    let s = String(raw || "").trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+    const a = s.indexOf("{"), b = s.lastIndexOf("}");
+    if (a < 0 || b < 0) return null;
+    const obj = JSON.parse(s.slice(a, b + 1));
+    const fact = String(obj.fact || "").trim();
+    const lecture = Array.isArray(obj.lecture) ? obj.lecture.map((x) => String(x).trim()).filter(Boolean) : [];
+    const drill = String(obj.drill || "").trim();
+    if (!fact || !lecture.length) return null;
+    return { fact, lecture: lecture.slice(0, 5), drill };
+  } catch (_) { return null; }
+}
+app.post("/api/lecture", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  const question = String((req.body && req.body.question) || "").trim();
+  const style = ((req.body && req.body.style) || "").toLowerCase() === "professor" ? "professor" : "punchy";
+  if (question.length < 3) return res.status(400).json({ success: false, error: "Ask Cluck a real question, recruit." });
+  if (question.length > 2000) return res.status(400).json({ success: false, error: "Too long — one question at a time." });
+  const KEY = process.env.ANTHROPIC_API_KEY;
+  if (!KEY) return res.status(500).json({ success: false, error: "The lecture hall's lights are off (AI not configured)." });
+
+  const match = pickLessonForQuestion(question);
+  const grounding = match
+    ? `\n\nGROUND YOUR LECTURE IN THIS REAL COURSE MATERIAL (teach it accurately — it's from our "${match.course.title}" course):\n${lessonMaterial(match.lesson)}`
+    : "";
+  const styleLine = style === "professor"
+    ? "Lean a touch more explanatory — still punchy, but give a little more depth in each teaching point."
+    : "Keep every line razor-short and punchy.";
+  const system = `You are CLUCK NORRIS — a battle-hardened rooster drill-sergeant who runs an elite crypto school (the School of Crypto Hard Knocks, live at clucknorris.app, powered by the CLKN token on Solana).
+VOICE: Chuck-Norris-fact bravado (e.g. "Cluck Norris doesn't buy the dip — the dip buys him") fused with genuinely accurate, practical crypto education. Confident, funny, a little unhinged — but your teaching is CORRECT and responsible.
+RULES: Never give financial or investment advice. Never shill or recommend specific tokens (CLKN included). Teach concepts, mechanics, and safety. No long disclaimers. ${styleLine}${grounding}
+Answer the student's question below.
+Respond with ONLY valid minified JSON — no markdown, no code fences — exactly this shape:
+{"fact":"<one punchy Cluck-Norris-style one-liner riffing on the topic>","lecture":["<3 to 4 short, accurate teaching points, each 1-2 sentences>"],"drill":"<one short tough-love takeaway order>"}`;
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 1024, system, messages: [{ role: "user", content: question }] }),
+    });
+    const data = await r.json();
+    const raw = data && data.content && data.content[0] && data.content[0].text;
+    if (!raw) return res.status(500).json({ success: false, error: (data && data.error && data.error.message) || "Cluck is hoarse — run it back." });
+    const parsed = parseLectureJson(raw);
+    if (!parsed) return res.status(500).json({ success: false, error: "That lecture scrambled the comms — rephrase and try again." });
+    if (match) parsed.grounded = { course: match.course.title, lesson: match.lesson.title };
+    console.log(`[AI] Lecture: "${question.slice(0, 50)}" -> ${parsed.lecture.length} pts${match ? ` (grounded: ${match.lesson.title})` : ""}`);
+    return res.status(200).json({ success: true, ...parsed });
+  } catch (e) {
+    console.error("Lecture error:", e.message);
+    return res.status(500).json({ success: false, error: publicErrMsg(e) });
+  }
 });
 
 // ── Classroom graduate reward claim ────────────────────────────────────────────────────
@@ -8099,6 +8187,11 @@ app.get("/snapshot", (req, res) => {
 // -- Cluck Order Book (resting orders + cross-pool AMM depth; UI for /api/order-scan) --
 app.get("/order-book", (req, res) => {
   res.sendFile(join(__dirname, "public", "order-book.html"));
+});
+
+// -- Cluck Norris Crypto School — interactive live lectures (UI for /api/lecture) --
+app.get("/crypto-school", (req, res) => {
+  res.sendFile(join(__dirname, "public", "crypto-school.html"));
 });
 
 // -- Grant overview page (public-good framing for ecosystem grant reviewers) --
