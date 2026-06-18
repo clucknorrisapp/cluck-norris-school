@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>🧱 Cluck Order Book — where buy & sell pressure rests</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/theme.css">
 <style>
-  :root { --bg:#0a0a0a; --card:#161616; --card2:#1c1c1c; --border:#2a2a2a; --text:#F5F5F5; --sub:#9CA3AF; --orange:#F97316; --gold:#FCD34D; --red:#F87171; --redbg:#2a1414; --green:#34D399; --greenbg:#0f231c; --blue:#60A5FA; --mono:ui-monospace,SFMono-Regular,Menlo,monospace; --disp:'Oswald',system-ui,sans-serif; }
+  /* Tokens + base (palette, fonts, ember-gradient ground) come from /theme.css. */
   * { box-sizing:border-box; }
-  body { margin:0; background:radial-gradient(1100px 500px at 50% -120px,#1a1206 0%,var(--bg) 55%); color:var(--text); font-family:system-ui,-apple-system,sans-serif; line-height:1.55; }
+  body { margin:0; background:var(--bg-grad); background-attachment:fixed; color:var(--text); font-family:var(--body); line-height:1.55; }
   .wrap { max-width:1040px; margin:0 auto; padding:18px 16px 70px; }
   a.back { color:var(--orange); text-decoration:none; font-size:13px; }
   h1 { font-family:var(--disp); font-size:30px; font-weight:700; letter-spacing:.5px; margin:14px 0 2px; }

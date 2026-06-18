@@ -1,0 +1,113 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   Cluck Norris — shared FIRE THEME (canonical design system)
+   One source of truth for the look first shipped on /crypto-school.
+
+   NEW pages: use the .ck-* component classes directly.
+   EXISTING pages: <link> this in <head>, then DELETE the page's own :root{}
+   token block — the page's .card/button/h1 rules (which already read
+   var(--orange) etc.) then inherit the fire palette automatically.
+
+   Palette: fire orange #FF7A18 · hot red #E81E0E · gold #FFB627 on a dark
+   ember-gradient ground. Display = Anton, body = Chakra Petch.
+   ───────────────────────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Anton&family=Chakra+Petch:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg: #0a0503;
+  --bg-grad: radial-gradient(125% 75% at 50% -12%, #2c0f04 0%, #160b06 46%, #0a0503 100%);
+  --card: #1a0f08;
+  --card-grad: linear-gradient(180deg, #1d110a, #160c07);
+  --card2: #160c07;
+  --border: rgba(255,122,24,.28);
+  --border-soft: rgba(255,122,24,.14);
+  --orange: #FF7A18;
+  --red: #E81E0E;
+  --red-soft: #F87171;
+  --gold: #FFB627;
+  --text: #FFEFE0;
+  --body-text: #EAD8C8;
+  --sub: #C9A892;
+  --muted: #9C7E68;
+  --green: #7BE26B;
+  --greenbg: rgba(123,226,107,.08);
+  --redbg: rgba(232,30,14,.14);
+  /* legacy "blue" accent on older pages → re-pointed to gold to stay on-palette */
+  --blue: #FFB627;
+  --disp: 'Anton', system-ui, sans-serif;
+  --body: 'Chakra Petch', system-ui, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  background: var(--bg-grad);
+  background-attachment: fixed;
+  color: var(--text);
+  font-family: var(--body);
+  line-height: 1.55;
+}
+h1, h2, h3 { font-family: var(--disp); letter-spacing: .5px; }
+a { color: var(--orange); }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: rgba(255,122,24,.3); border-radius: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ── Animations ── */
+@keyframes ckGlow {
+  0%,100% { box-shadow: 0 0 0 2px rgba(255,122,24,.55), 0 0 22px 5px rgba(232,30,14,.5), 0 0 50px 10px rgba(255,122,24,.22); }
+  50%     { box-shadow: 0 0 0 2px rgba(255,182,39,.85), 0 0 34px 9px rgba(255,90,10,.7), 0 0 68px 18px rgba(255,122,24,.38); }
+}
+@keyframes ckEmber { 0% { transform: translateY(0) scale(.6); opacity: 0; } 12% { opacity: .95; } 100% { transform: translateY(-340px) scale(1.15); opacity: 0; } }
+@keyframes ckPulse { 0%,100% { opacity: .4; } 50% { opacity: 1; } }
+@keyframes ckIn    { 0% { opacity: 0; transform: translateY(12px); } 100% { opacity: 1; transform: translateY(0); } }
+
+/* ── Reusable components (opt-in via .ck-*) ── */
+.ck-wrap { max-width: 1040px; margin: 0 auto; padding: 18px 16px 70px; position: relative; z-index: 2; }
+.ck-h1 { font-family: var(--disp); font-size: 30px; font-weight: 700; margin: 14px 0 2px; }
+.ck-h1 .c { color: var(--orange); }
+.ck-tag { color: var(--sub); font-size: 13.5px; margin: 0 0 16px; }
+.ck-back { color: var(--orange); text-decoration: none; font-size: 13px; font-weight: 600; }
+
+.ck-card {
+  background: var(--card-grad);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 18px;
+  margin-top: 16px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.5);
+}
+.ck-card h2 { font-family: var(--disp); font-size: 15px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; color: var(--gold); margin: 0 0 4px; }
+.ck-card .explain { color: var(--sub); font-size: 12.5px; margin: 0 0 14px; }
+
+.ck-btn {
+  font-family: var(--disp); letter-spacing: 1.2px; color: #fff;
+  background: linear-gradient(135deg, var(--orange), var(--red));
+  border: none; border-radius: 12px; padding: 11px 22px; font-size: 15px;
+  cursor: pointer; box-shadow: 0 6px 18px rgba(232,30,14,.4); transition: transform .1s;
+}
+.ck-btn:active { transform: scale(.96); }
+.ck-btn:disabled { opacity: .55; cursor: not-allowed; box-shadow: none; }
+
+.ck-chip {
+  font-family: var(--body); font-weight: 600; font-size: 13px; color: #FFD9A0;
+  background: rgba(255,122,24,.08); border: 1px solid var(--border); border-radius: 999px;
+  padding: 8px 14px; cursor: pointer; white-space: nowrap; transition: all .15s;
+}
+.ck-chip:hover { background: rgba(255,122,24,.2); border-color: var(--orange); color: #fff; }
+
+.ck-pill { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700; letter-spacing: 1.5px; color: var(--green); border: 1px solid rgba(123,226,107,.3); background: var(--greenbg); padding: 6px 11px; border-radius: 999px; }
+.ck-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: ckPulse 1.8s ease-in-out infinite; }
+
+.ck-input { background: #180d07; border: 1px solid var(--border); color: var(--text); border-radius: 12px; padding: 13px 16px; font-size: 14px; outline: none; font-family: var(--mono); transition: border-color .15s; }
+.ck-input:focus { border-color: var(--orange); }
+
+.ck-stat { background: var(--card2); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+.ck-stat .k { font-size: 10.5px; letter-spacing: 1px; text-transform: uppercase; color: var(--sub); }
+.ck-stat .v { font-family: var(--mono); font-size: 18px; font-weight: 700; margin-top: 3px; color: var(--text); }
+
+/* ── Ambient embers (optional; add .ck-embers div with 8 spans) ── */
+.ck-embers { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.ck-embers span { position: absolute; bottom: 40px; border-radius: 50%; background: radial-gradient(circle, #FFD56B, #FF5A0A); }
+.ck-embers.off { display: none; }
