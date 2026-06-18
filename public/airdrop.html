@@ -1,26 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<link rel="stylesheet" href="/theme.css">
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>🐔 CLKN Airdrop Tool</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
 <style>
-  :root {
-    color-scheme: dark;
-    --bg: #0a0a0a;
-    --card: #111111;
-    --border: rgba(255,255,255,0.08);
-    --text: #F9FAFB;
-    --subtext: #6B7280;
-    --accent: #FCD34D;
-    --green: #10B981;
-    --red: #EF4444;
-    --purple: #A78BFA;
-    --mono: 'Courier New', monospace;
-  }
+  :root{color-scheme:dark;--bg:#0a0503;--bg-grad:radial-gradient(125% 75% at 50% -12%,#2c0f04 0%,#160b06 46%,#0a0503 100%);--card:#1a0f08;--card2:#160c07;--surface:#150f12;--panel:#150f12;--border:rgba(255,122,24,0.28);--border-soft:rgba(255,122,24,0.14);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); background-image: radial-gradient(ellipse at 20% 10%, rgba(217,119,6,0.10) 0%, transparent 50%), radial-gradient(ellipse at 80% 90%, rgba(239,68,68,0.07) 0%, transparent 50%); color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh; }
   .wrap { max-width: 700px; margin: 0 auto; padding: 24px 16px 80px; }
@@ -28,10 +16,10 @@
   /* Header */
   .header { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
   .header-icon { font-size: 40px; filter: drop-shadow(0 0 16px rgba(217,119,6,0.5)); }
-  .header .brand-mini { font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 4px; color: #D97706; margin-bottom: 4px; font-weight: 700; }
-  .header h1 { font-family: 'Oswald', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg, #FCD34D, #F97316, #EF4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
-  .header p { font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
-  .footer-tag { text-align: center; margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
+  .header .brand-mini { font-family: 'Anton', sans-serif; font-size: 10px; letter-spacing: 4px; color: #D97706; margin-bottom: 4px; font-weight: 700; }
+  .header h1 { font-family: 'Anton', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg, #FCD34D, #F97316, #EF4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
+  .header p { font-family: 'Anton', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
+  .footer-tag { text-align: center; margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Anton', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
   .footer-tag a { color: #D97706; text-decoration: none; }
 
   /* Cards */
@@ -62,7 +50,7 @@
   .wallet-info.show { display: flex; }
   .wallet-info-addr { word-break: break-all; flex: 1; min-width: 0; }
   .wallet-info-actions { display: flex; gap: 6px; flex-shrink: 0; }
-  .wallet-disc-btn { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: #FCA5A5; font-family: 'Oswald', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; padding: 6px 12px; border-radius: 6px; cursor: pointer; transition: opacity 0.15s; }
+  .wallet-disc-btn { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: #FCA5A5; font-family: 'Anton', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; padding: 6px 12px; border-radius: 6px; cursor: pointer; transition: opacity 0.15s; }
   .wallet-disc-btn:hover { opacity: 0.85; background: rgba(239,68,68,0.25); }
 
   /* Token selector */
@@ -155,19 +143,19 @@
 
   /* Unlock gate (CLKN-paid tool access) */
   .unlock-gate { background: linear-gradient(135deg, rgba(217,119,6,0.08), rgba(239,68,68,0.04)); border: 1px solid rgba(217,119,6,0.45); border-radius: 12px; padding: 24px 22px; margin-bottom: 16px; box-shadow: 0 0 30px rgba(217,119,6,0.12); }
-  .unlock-title { font-family: 'Oswald', sans-serif; font-size: 20px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg,#FCD34D,#F97316,#EF4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-align: center; margin-bottom: 4px; }
-  .unlock-sub { font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); text-align: center; letter-spacing: 3px; margin-bottom: 18px; }
+  .unlock-title { font-family: 'Anton', sans-serif; font-size: 20px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg,#FCD34D,#F97316,#EF4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-align: center; margin-bottom: 4px; }
+  .unlock-sub { font-family: 'Anton', sans-serif; font-size: 10px; color: var(--subtext); text-align: center; letter-spacing: 3px; margin-bottom: 18px; }
   .unlock-amount-card { background: rgba(0,0,0,0.4); border: 1px solid rgba(217,119,6,0.45); border-radius: 10px; padding: 16px; text-align: center; margin-bottom: 10px; cursor: pointer; transition: border-color 0.15s; }
   .unlock-amount-card:hover { border-color: var(--accent); }
-  .unlock-amount-card .lbl { font-family: 'Oswald', sans-serif; font-size: 9px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 6px; }
+  .unlock-amount-card .lbl { font-family: 'Anton', sans-serif; font-size: 9px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 6px; }
   .unlock-amount-card .val { font-family: var(--mono); font-size: 26px; font-weight: 700; color: #FCD34D; letter-spacing: 1px; }
-  .unlock-amount-card .hint { font-family: 'Oswald', sans-serif; font-size: 8px; letter-spacing: 1px; margin-top: 4px; color: var(--accent); }
+  .unlock-amount-card .hint { font-family: 'Anton', sans-serif; font-size: 8px; letter-spacing: 1px; margin-top: 4px; color: var(--accent); }
   .unlock-wallet-card { background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; cursor: pointer; transition: border-color 0.15s; }
   .unlock-wallet-card:hover { border-color: var(--accent); }
-  .unlock-wallet-card .lbl { font-family: 'Oswald', sans-serif; font-size: 9px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 4px; }
+  .unlock-wallet-card .lbl { font-family: 'Anton', sans-serif; font-size: 9px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 4px; }
   .unlock-wallet-card .val { font-family: var(--mono); font-size: 15px; font-weight: 600; color: var(--text); word-break: break-all; line-height: 1.55; }
-  .unlock-wallet-card .hint { font-family: 'Oswald', sans-serif; font-size: 8px; letter-spacing: 1px; margin-top: 6px; text-align: right; color: var(--accent); }
-  .unlock-blurb { font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--subtext); text-align: center; line-height: 1.7; margin-bottom: 14px; letter-spacing: 1px; }
+  .unlock-wallet-card .hint { font-family: 'Anton', sans-serif; font-size: 8px; letter-spacing: 1px; margin-top: 6px; text-align: right; color: var(--accent); }
+  .unlock-blurb { font-family: 'Anton', sans-serif; font-size: 11px; color: var(--subtext); text-align: center; line-height: 1.7; margin-bottom: 14px; letter-spacing: 1px; }
   .unlock-blurb .price { color: var(--accent); font-weight: 700; }
   .unlock-blurb .bonus { color: #6B7280; font-size: 10px; display: block; margin-top: 4px; }
   .unlock-status { font-family: var(--mono); font-size: 11px; color: var(--subtext); text-align: center; padding: 12px 14px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; }
@@ -179,18 +167,18 @@
   /* Idle status (after polling auto-stops) + restart button */
   .unlock-status.idle { color: var(--subtext); border-color: rgba(255,255,255,0.06); background: rgba(255,255,255,0.02); }
   .unlock-status.idle .pulse { background: var(--subtext); animation: none; }
-  .unlock-restart-btn { width: 100%; margin-top: 10px; padding: 12px; background: linear-gradient(135deg,#D97706,#EF4444); border: none; border-radius: 8px; font-family: 'Oswald', sans-serif; font-size: 12px; font-weight: 700; color: #fff; letter-spacing: 2px; cursor: pointer; transition: opacity 0.15s; }
+  .unlock-restart-btn { width: 100%; margin-top: 10px; padding: 12px; background: linear-gradient(135deg,#D97706,#EF4444); border: none; border-radius: 8px; font-family: 'Anton', sans-serif; font-size: 12px; font-weight: 700; color: #fff; letter-spacing: 2px; cursor: pointer; transition: opacity 0.15s; }
   .unlock-restart-btn:hover { opacity: 0.9; }
 
   /* Sticky unlocked banner — visible the whole time the tool is unlocked, live countdown */
   .unlock-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; background: linear-gradient(135deg, rgba(16,185,129,0.14), rgba(16,185,129,0.04)); border: 1px solid rgba(16,185,129,0.4); border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; box-shadow: 0 0 18px rgba(16,185,129,0.1); }
   .unlock-banner-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
   .banner-check { font-family: var(--mono); font-size: 16px; color: var(--green); background: rgba(16,185,129,0.18); border: 1px solid rgba(16,185,129,0.45); border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; }
-  .banner-title { font-family: 'Oswald', sans-serif; font-size: 12px; font-weight: 700; color: var(--green); letter-spacing: 2px; }
+  .banner-title { font-family: 'Anton', sans-serif; font-size: 12px; font-weight: 700; color: var(--green); letter-spacing: 2px; }
   .banner-meta { font-family: var(--mono); font-size: 10px; color: var(--subtext); margin-top: 2px; word-break: break-all; }
-  .banner-bonus { display: inline-block; font-family: 'Oswald', sans-serif; font-size: 8px; font-weight: 700; letter-spacing: 1px; color: #FCD34D; background: rgba(252,211,77,0.12); border: 1px solid rgba(252,211,77,0.4); border-radius: 4px; padding: 2px 6px; margin-left: 6px; vertical-align: middle; }
+  .banner-bonus { display: inline-block; font-family: 'Anton', sans-serif; font-size: 8px; font-weight: 700; letter-spacing: 1px; color: #FCD34D; background: rgba(252,211,77,0.12); border: 1px solid rgba(252,211,77,0.4); border-radius: 4px; padding: 2px 6px; margin-left: 6px; vertical-align: middle; }
   .unlock-banner-right { text-align: right; flex-shrink: 0; }
-  .banner-countdown-label { font-family: 'Oswald', sans-serif; font-size: 9px; color: var(--subtext); letter-spacing: 2px; }
+  .banner-countdown-label { font-family: 'Anton', sans-serif; font-size: 9px; color: var(--subtext); letter-spacing: 2px; }
   .banner-countdown { font-family: var(--mono); font-size: 18px; font-weight: 700; color: var(--accent); letter-spacing: 1px; margin-top: 2px; }
   .banner-countdown.warning { color: #F59E0B; }
   .banner-countdown.expiring { color: var(--red); animation: pulse 1s infinite; }
@@ -215,11 +203,14 @@
   @media (min-width: 1040px) {
     .wrap { max-width: 1040px; }
   }
+
+html{background:var(--bg-grad);background-attachment:fixed;}
+body{background:transparent;font-family:var(--body);}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#D97706;text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid #D97706;"/>&larr; CLUCK NORRIS HOME</a>
+  <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:Anton,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#D97706;text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid #D97706;"/>&larr; CLUCK NORRIS HOME</a>
 
   <div class="header">
     <div class="header-icon">🐔</div>
@@ -243,12 +234,12 @@
     </div>
 
     <!-- Education + acknowledgment — must be checked before payment instructions appear -->
-    <button id="airdropLearnToggle" onclick="toggleAirdropLearn()" style="width:100%;display:flex;align-items:center;justify-content:space-between;background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.3);border-radius:10px;padding:11px 14px;font-family:'Oswald',sans-serif;font-size:13px;color:#60A5FA;letter-spacing:1.5px;font-weight:700;cursor:pointer;margin-bottom:10px">
+    <button id="airdropLearnToggle" onclick="toggleAirdropLearn()" style="width:100%;display:flex;align-items:center;justify-content:space-between;background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.3);border-radius:10px;padding:11px 14px;font-family:'Anton',sans-serif;font-size:13px;color:#60A5FA;letter-spacing:1.5px;font-weight:700;cursor:pointer;margin-bottom:10px">
       <span>📖 HOW DOES AN AIRDROPPER WORK?</span>
       <span id="airdropLearnChevron">▼</span>
     </button>
     <div id="airdropLearnPanel" style="display:none;background:rgba(96,165,250,0.04);border:1px solid rgba(96,165,250,0.25);border-radius:10px;padding:14px 16px;margin-bottom:12px;font-family:var(--mono);font-size:12px;color:#D1D5DB;line-height:1.7">
-      <div style="font-family:'Oswald',sans-serif;font-size:11px;color:#93C5FD;letter-spacing:2px;margin-bottom:10px;font-weight:700">🐔 CLUCK'S AIRDROPPER 101</div>
+      <div style="font-family:'Anton',sans-serif;font-size:11px;color:#93C5FD;letter-spacing:2px;margin-bottom:10px;font-weight:700">🐔 CLUCK'S AIRDROPPER 101</div>
 
       <div style="margin-bottom:10px"><span style="color:#FCD34D;font-weight:700">1. WHAT IT DOES.</span> You give it a list of Solana wallet addresses + amounts. It builds Solana transactions that transfer your tokens to all of them, batched ~10 wallets per transaction to stay under Solana's 1232-byte tx limit.</div>
 
@@ -306,7 +297,7 @@
     <!-- Stay-safe panel — small but persistent. Sets expectations about what we
          do and don't do so users have a checklist for spotting clones / drainers. -->
     <div style="margin-top:16px;padding:12px 14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:10px">
-      <div style="font-family:'Oswald',sans-serif;font-size:10px;color:#9CA3AF;letter-spacing:2px;margin-bottom:8px;font-weight:700">🛡 STAY SAFE</div>
+      <div style="font-family:'Anton',sans-serif;font-size:10px;color:#9CA3AF;letter-spacing:2px;margin-bottom:8px;font-weight:700">🛡 STAY SAFE</div>
       <ul style="margin:0;padding-left:18px;list-style:none;font-family:var(--mono);font-size:11px;color:#9CA3AF;line-height:1.7">
         <li style="position:relative"><span style="position:absolute;left:-16px;color:#10B981">✓</span> Always check the URL — should be <span style="color:#FCD34D">clucknorris.app/airdrop</span>. Phishing clones use lookalikes.</li>
         <li style="position:relative"><span style="position:absolute;left:-16px;color:#10B981">✓</span> We <strong>never</strong> ask for your seed phrase. Anyone who does is a scammer.</li>
@@ -355,7 +346,7 @@
     <div id="mobileConnect" style="display:none;margin-top:12px;flex-direction:column;gap:8px"></div>
     <div class="wallet-info" id="walletInfo">
       <div>
-        <div style="font-family:'Oswald',sans-serif;font-size:9px;color:#6EE7B7;letter-spacing:2px;margin-bottom:2px;font-weight:700"><span id="walletInfoLabel">✓ CONNECTED</span></div>
+        <div style="font-family:'Anton',sans-serif;font-size:9px;color:#6EE7B7;letter-spacing:2px;margin-bottom:2px;font-weight:700"><span id="walletInfoLabel">✓ CONNECTED</span></div>
         <div class="wallet-info-addr" id="walletInfoAddr">—</div>
       </div>
       <div class="wallet-info-actions">
@@ -477,7 +468,7 @@
          the wallet popup will actually ask them to approve. Last line of defense
          against accidentally approving a malicious tx if our HTML ever got tampered. -->
     <div style="padding:12px 14px;background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.3);border-radius:8px;font-family:var(--mono);font-size:12px;color:#93C5FD;line-height:1.6;margin-bottom:10px">
-      <div style="font-family:'Oswald',sans-serif;font-size:10px;color:#60A5FA;letter-spacing:2px;margin-bottom:6px;font-weight:700">🛡 YOUR WALLET POPUP WILL SHOW</div>
+      <div style="font-family:'Anton',sans-serif;font-size:10px;color:#60A5FA;letter-spacing:2px;margin-bottom:6px;font-weight:700">🛡 YOUR WALLET POPUP WILL SHOW</div>
       <div id="walletPopupSummary">— set up your recipients first —</div>
       <div style="font-size:10px;color:#6B7280;margin-top:6px">If those numbers don't match what you see in the popup, hit reject.</div>
     </div>
@@ -497,7 +488,7 @@
     <div class="progress-text" id="progressText">Preparing transactions...</div>
     <div class="progress-bar-wrap"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
     <div id="resultList" style="margin-top:12px;max-height:300px;overflow-y:auto"></div>
-    <button id="exportRecordBtn" onclick="exportAirdropRecord()" style="display:none;width:100%;margin-top:10px;padding:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.15);border-radius:8px;font-family:'Oswald',sans-serif;font-size:12px;font-weight:700;color:#D1D5DB;letter-spacing:2px;cursor:pointer">📋 EXPORT AIRDROP RECORD</button>
+    <button id="exportRecordBtn" onclick="exportAirdropRecord()" style="display:none;width:100%;margin-top:10px;padding:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.15);border-radius:8px;font-family:'Anton',sans-serif;font-size:12px;font-weight:700;color:#D1D5DB;letter-spacing:2px;cursor:pointer">📋 EXPORT AIRDROP RECORD</button>
     <div id="recordPanel" style="display:none;margin-top:8px"></div>
   </div>
 
@@ -1297,7 +1288,7 @@ function exportAirdropRecord() {
       'padding:10px;font-family:var(--mono);font-size:11px;color:#D1D5DB;resize:vertical"></textarea>' +
     '<button id="recordCopyBtn" onclick="copyRecordText()" style="width:100%;margin-top:6px;padding:10px;' +
       'background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);border-radius:8px;' +
-      'font-family:\'Oswald\',sans-serif;font-size:12px;font-weight:700;color:#6EE7B7;' +
+      'font-family:\'Anton\',sans-serif;font-size:12px;font-weight:700;color:#6EE7B7;' +
       'letter-spacing:2px;cursor:pointer">📋 COPY RECORD</button>';
   document.getElementById('recordText').value = txt;
 }
@@ -1537,7 +1528,7 @@ function initUnlockGate() {
     if (banner) {
       banner.innerHTML = '<div class="unlock-banner-left">' +
         '<span style="font-size:22px">🎁</span>' +
-        '<div><div style="font-family:\'Oswald\',sans-serif;font-size:13px;font-weight:700;letter-spacing:1px;color:#10B981">FREE AIRDROP</div>' +
+        '<div><div style="font-family:\'Anton\',sans-serif;font-size:13px;font-weight:700;letter-spacing:1px;color:#10B981">FREE AIRDROP</div>' +
         '<div style="font-size:11px;color:var(--subtext)">Unlocked free — you came from the Buy Special tool</div></div></div>';
       banner.style.display = 'flex';
     }

@@ -1,20 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<link rel="stylesheet" href="/theme.css">
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>🔬 LP Pair Scanner — Cluck Norris</title>
 <meta name="description" content="Compare every liquidity pool for any pair across every Solana DEX — TVL, volume, fees, yield, and your estimated earnings. Then ask Cluck."/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
 <style>
-  :root {
-    color-scheme: dark;
-    --bg: #0a0a0a; --card: #111111; --border: rgba(255,255,255,0.08);
-    --text: #F9FAFB; --subtext: #AEB4BE; --accent: #FCD34D; --orange: #D97706;
-    --green: #10B981; --red: #EF4444; --blue: #60A5FA; --mono: 'Courier New', monospace;
-  }
+  :root{color-scheme:dark;--bg:#0a0503;--bg-grad:radial-gradient(125% 75% at 50% -12%,#2c0f04 0%,#160b06 46%,#0a0503 100%);--card:#1a0f08;--card2:#160c07;--surface:#150f12;--panel:#150f12;--border:rgba(255,122,24,0.28);--border-soft:rgba(255,122,24,0.14);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); background-image: radial-gradient(ellipse at 12% 6%, rgba(217,119,6,0.13) 0%, transparent 45%), radial-gradient(ellipse at 88% 4%, rgba(167,139,250,0.10) 0%, transparent 45%), radial-gradient(ellipse at 78% 92%, rgba(34,211,238,0.08) 0%, transparent 50%), radial-gradient(ellipse at 18% 96%, rgba(16,185,129,0.07) 0%, transparent 50%); color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh; }
   .wrap { max-width: 760px; margin: 0 auto; padding: 24px 16px 80px; display:flex; flex-direction:column; }
@@ -22,26 +17,26 @@
      don't shuffle DOM). Everything gets an explicit order so nothing floats out of place. */
   a.back-home { order:1; } .header { order:2; } .scan-card { order:3; } #topCard { order:4; }
   #err { order:5; } #results { order:6; } .card { order:7; } .intro-card { order:8; }
-  a.back-home { display:inline-flex; align-items:center; gap:6px; font-family:Oswald,sans-serif; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin:0 0 12px; }
+  a.back-home { display:inline-flex; align-items:center; gap:6px; font-family:Anton,sans-serif; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin:0 0 12px; }
   .back-home img { height:22px; width:22px; object-fit:cover; border-radius:50%; border:1px solid var(--orange); }
   .header { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
   .header-icon { font-size: 40px; filter: drop-shadow(0 0 16px rgba(217,119,6,0.5)); }
-  .header .brand-mini { font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 4px; color: var(--orange); margin-bottom: 4px; font-weight: 700; }
-  .header h1 { font-family: 'Oswald', sans-serif; font-size: 27px; font-weight: 900; letter-spacing: 2px; background: linear-gradient(110deg, #FCD34D, #F59E0B, #A78BFA, #22D3EE, #6EE7B7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
-  .header p { font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
+  .header .brand-mini { font-family: 'Anton', sans-serif; font-size: 10px; letter-spacing: 4px; color: var(--orange); margin-bottom: 4px; font-weight: 700; }
+  .header h1 { font-family: 'Anton', sans-serif; font-size: 27px; font-weight: 900; letter-spacing: 2px; background: linear-gradient(110deg, #FCD34D, #F59E0B, #A78BFA, #22D3EE, #6EE7B7); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
+  .header p { font-family: 'Anton', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
   .intro { font-size: 13px; line-height: 1.7; color: #D1D5DB; }
   .intro b { color: var(--accent); }
   label.fld { display:block; font-family:var(--mono); font-size:10px; color:var(--subtext); letter-spacing:1px; margin:0 0 6px; }
   .pair-row { display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; }
   .pair-row .f { flex:1; min-width:120px; position:relative; }
-  .pair-row .vs { font-family:'Oswald',sans-serif; font-weight:900; font-size:22px; color:#A78BFA; padding-bottom:10px; }
+  .pair-row .vs { font-family:'Anton',sans-serif; font-weight:900; font-size:22px; color:#A78BFA; padding-bottom:10px; }
   .ac-drop { position:absolute; top:100%; left:0; right:0; z-index:30; background:#0d0d0d; border:1px solid var(--border); border-radius:9px; margin-top:4px; max-height:260px; overflow-y:auto; display:none; box-shadow:0 10px 28px rgba(0,0,0,0.6); }
   .ac-drop.show { display:block; }
   .ac-item { display:flex; align-items:center; gap:8px; padding:9px 10px; cursor:pointer; border-bottom:1px solid rgba(255,255,255,0.04); }
   .ac-item:hover { background:rgba(217,119,6,0.12); }
   .ac-item img { width:22px; height:22px; border-radius:50%; object-fit:cover; background:#222; flex-shrink:0; }
-  .ac-item .s { font-family:'Oswald',sans-serif; font-weight:700; color:var(--text); font-size:13px; }
+  .ac-item .s { font-family:'Anton',sans-serif; font-weight:700; color:var(--text); font-size:13px; }
   .ac-item .n { font-size:10px; color:var(--subtext); margin-left:auto; max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   input[type=text], input[type=number] { width:100%; background:#0d0d0d; border:1px solid var(--border); border-radius:10px; padding:13px; color:var(--text); font-family:var(--mono); font-size:15px; transition:border-color 0.12s, box-shadow 0.12s; }
   input::placeholder { color:#8A909C; }
@@ -50,10 +45,10 @@
   .scan-card { position:relative; background:linear-gradient(160deg, rgba(217,119,6,0.09), rgba(167,139,250,0.06) 52%, rgba(34,211,238,0.05)); border:1px solid rgba(252,211,77,0.22); border-radius:16px; padding:22px 20px; margin-bottom:16px; box-shadow:0 20px 55px -24px rgba(217,119,6,0.45); overflow:hidden; }
   .scan-card::before { content:""; position:absolute; inset:0; border-radius:16px; padding:1px; background:linear-gradient(120deg,#FCD34D,#A78BFA,#22D3EE,#6EE7B7); -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite:xor; mask-composite:exclude; opacity:0.45; pointer-events:none; }
   .scan-card > * { position:relative; z-index:1; }
-  .scan-head { font-family:'Oswald',sans-serif; font-weight:900; letter-spacing:2px; font-size:17px; line-height:1; background:linear-gradient(90deg,#FCD34D,#F59E0B); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  .scan-head { font-family:'Anton',sans-serif; font-weight:900; letter-spacing:2px; font-size:17px; line-height:1; background:linear-gradient(90deg,#FCD34D,#F59E0B); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
   .scan-sub { font-family:var(--mono); font-size:10.5px; color:var(--subtext); margin:5px 0 18px; letter-spacing:0.5px; }
   .scan-divide { margin:18px -20px 0; border-top:1px solid var(--border); padding:14px 20px 0; }
-  .scan-btn { width:100%; margin-top:18px; padding:16px; border:none; border-radius:12px; background:linear-gradient(135deg,#D97706,#F59E0B,#FCD34D); color:#1a1a1a; font-family:'Oswald',sans-serif; font-weight:900; letter-spacing:3px; font-size:16px; cursor:pointer; box-shadow:0 10px 28px -10px rgba(245,158,11,0.7); transition:transform 0.1s, filter 0.12s; }
+  .scan-btn { width:100%; margin-top:18px; padding:16px; border:none; border-radius:12px; background:linear-gradient(135deg,#D97706,#F59E0B,#FCD34D); color:#1a1a1a; font-family:'Anton',sans-serif; font-weight:900; letter-spacing:3px; font-size:16px; cursor:pointer; box-shadow:0 10px 28px -10px rgba(245,158,11,0.7); transition:transform 0.1s, filter 0.12s; }
   .scan-btn:hover { filter:brightness(1.07); transform:translateY(-1px); }
   .scan-btn:disabled { opacity:0.5; cursor:wait; transform:none; }
   .quick { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
@@ -68,7 +63,7 @@
   .quick button:hover { background:rgba(255,255,255,0.06); }
   /* DEX signature colors — applied to dex labels in chips + the results table. */
   .dexcol { font-weight:700; }
-  .badge { display:inline-block; font-family:'Oswald',sans-serif; font-weight:700; font-size:11px; letter-spacing:1px; padding:4px 10px; border-radius:20px; }
+  .badge { display:inline-block; font-family:'Anton',sans-serif; font-weight:700; font-size:11px; letter-spacing:1px; padding:4px 10px; border-radius:20px; }
   .il-minimal { background:rgba(16,185,129,0.12); color:#6EE7B7; border:1px solid rgba(16,185,129,0.4); }
   .il-low { background:rgba(96,165,250,0.12); color:#93C5FD; border:1px solid rgba(96,165,250,0.4); }
   .il-moderate { background:rgba(217,119,6,0.12); color:var(--accent); border:1px solid rgba(217,119,6,0.4); }
@@ -79,18 +74,18 @@
   td { padding:10px 6px; text-align:right; border-bottom:1px solid rgba(255,255,255,0.04); font-family:var(--mono); }
   td:first-child { text-align:left; }
   tr.best td { background:rgba(217,119,6,0.07); }
-  .dex { font-family:'Oswald',sans-serif; font-weight:700; letter-spacing:0.5px; color:var(--text); text-transform:capitalize; }
+  .dex { font-family:'Anton',sans-serif; font-weight:700; letter-spacing:0.5px; color:var(--text); text-transform:capitalize; }
   .yield-v { color:#6EE7B7; font-weight:700; }
   .muted { color:var(--subtext); }
   .crown { color:var(--orange); }
   .ask-q { width:100%; background:#0d0d0d; border:1px solid var(--border); border-radius:9px; padding:12px; color:var(--text); font-family:system-ui; font-size:14px; resize:vertical; min-height:54px; }
-  .ask-btn { margin-top:10px; padding:12px 18px; border:none; border-radius:10px; background:rgba(217,119,6,0.15); border:1px solid rgba(217,119,6,0.4); color:var(--accent); font-family:'Oswald',sans-serif; font-weight:700; letter-spacing:1.5px; font-size:13px; cursor:pointer; }
+  .ask-btn { margin-top:10px; padding:12px 18px; border:none; border-radius:10px; background:rgba(217,119,6,0.15); border:1px solid rgba(217,119,6,0.4); color:var(--accent); font-family:'Anton',sans-serif; font-weight:700; letter-spacing:1.5px; font-size:13px; cursor:pointer; }
   .ask-btn:disabled { opacity:0.5; cursor:wait; }
   .answer { margin-top:14px; padding:14px; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-left:3px solid var(--orange); border-radius:8px; font-family:system-ui; font-size:13.5px; line-height:1.65; color:#E5E7EB; white-space:pre-wrap; display:none; }
   .answer.show { display:block; }
   .disclaimer { font-size:11px; color:var(--subtext); line-height:1.6; margin-top:8px; }
   .disclaimer b { color:#FCA5A5; }
-  .crosslink { display:block; text-align:center; margin-top:16px; padding:14px; border:1px dashed rgba(16,185,129,0.4); border-radius:10px; background:rgba(16,185,129,0.05); color:#6EE7B7; text-decoration:none; font-family:'Oswald',sans-serif; font-weight:700; letter-spacing:1px; font-size:13px; }
+  .crosslink { display:block; text-align:center; margin-top:16px; padding:14px; border:1px dashed rgba(16,185,129,0.4); border-radius:10px; background:rgba(16,185,129,0.05); color:#6EE7B7; text-decoration:none; font-family:'Anton',sans-serif; font-weight:700; letter-spacing:1px; font-size:13px; }
   .err { display:none; margin-bottom:14px; padding:12px; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.4); border-radius:9px; color:#FCA5A5; font-family:var(--mono); font-size:12px; }
   .err.show { display:block; }
   .spin { display:inline-block; width:14px; height:14px; border:2px solid rgba(255,255,255,0.2); border-top-color:var(--accent); border-radius:50%; animation:spin 0.7s linear infinite; vertical-align:middle; }
@@ -99,12 +94,12 @@
   .note-line { font-family:var(--mono); font-size:10px; color:var(--subtext); margin-top:10px; line-height:1.5; }
   tr.clk { cursor:pointer; transition:background 0.12s; }
   tr.clk:hover td { background:rgba(217,119,6,0.10); }
-  .sim-head { font-family:'Oswald',sans-serif; font-weight:900; letter-spacing:1px; font-size:17px; color:var(--text); }
+  .sim-head { font-family:'Anton',sans-serif; font-weight:900; letter-spacing:1px; font-size:17px; color:var(--text); }
   .sim-sub { font-family:var(--mono); font-size:10px; color:var(--subtext); letter-spacing:0.5px; margin-top:2px; }
   .stat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(96px,1fr)); gap:8px; margin:12px 0; }
   .stat { background:#0d0d0d; border:1px solid var(--border); border-radius:9px; padding:9px 10px; }
   .stat .k { font-family:var(--mono); font-size:9px; color:var(--subtext); letter-spacing:0.5px; }
-  .stat .v { font-family:'Oswald',sans-serif; font-weight:700; font-size:16px; color:var(--text); margin-top:3px; }
+  .stat .v { font-family:'Anton',sans-serif; font-weight:700; font-size:16px; color:var(--text); margin-top:3px; }
   .stat .v.g { color:#6EE7B7; }
   .chips { display:flex; gap:6px; flex-wrap:wrap; margin:6px 0 12px; }
   .chip { background:transparent; border:1px solid var(--border); border-radius:18px; padding:6px 12px; color:var(--subtext); font-family:var(--mono); font-size:11px; cursor:pointer; }
@@ -117,11 +112,14 @@
   .top-chip { flex:0 0 auto; min-width:124px; background:#0d0d0d; border:1px solid var(--border); border-radius:10px; padding:8px 10px; cursor:pointer; transition:border-color 0.12s; }
   .top-chip:hover { border-color:var(--orange); }
   .top-chip.risk { border-color:rgba(239,68,68,0.45); }
-  .top-chip .p { font-family:'Oswald',sans-serif; font-weight:700; font-size:13px; color:var(--text); white-space:nowrap; }
+  .top-chip .p { font-family:'Anton',sans-serif; font-weight:700; font-size:13px; color:var(--text); white-space:nowrap; }
   .top-chip .d { font-size:8px; color:var(--subtext); text-transform:capitalize; letter-spacing:0.5px; }
-  .top-chip .y { font-family:'Oswald',sans-serif; font-weight:700; font-size:15px; margin-top:4px; }
+  .top-chip .y { font-family:'Anton',sans-serif; font-weight:700; font-size:15px; margin-top:4px; }
   .top-tab { background:transparent; border:1px solid var(--border); border-radius:16px; padding:4px 11px; color:var(--subtext); font-family:var(--mono); font-size:11px; cursor:pointer; }
   .top-tab.on { background:rgba(217,119,6,0.18); border-color:var(--orange); color:var(--accent); font-weight:700; }
+
+html{background:var(--bg-grad);background-attachment:fixed;}
+body{background:transparent;font-family:var(--body);}
 </style>
 </head>
 <body>
@@ -140,7 +138,7 @@
   <!-- Top Pools — compact horizontal scroller at the top; expand/collapse; doesn't push results down -->
   <div class="card" id="topCard" style="padding:11px 13px;">
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-      <button id="topToggle" onclick="toggleTop()" style="background:none;border:none;color:var(--accent);font-family:'Oswald',sans-serif;font-weight:900;letter-spacing:1px;font-size:14px;cursor:pointer;padding:0;">🔥 TOP POOLS <span style="font-size:10px;color:var(--subtext);letter-spacing:0.5px;">— tap to expand</span> <span id="topCaret">▸</span></button>
+      <button id="topToggle" onclick="toggleTop()" style="background:none;border:none;color:var(--accent);font-family:'Anton',sans-serif;font-weight:900;letter-spacing:1px;font-size:14px;cursor:pointer;padding:0;">🔥 TOP POOLS <span style="font-size:10px;color:var(--subtext);letter-spacing:0.5px;">— tap to expand</span> <span id="topCaret">▸</span></button>
       <button class="top-tab" id="tab-trending" onclick="setTopKind('trending')">Trending</button>
       <button class="top-tab on" id="tab-bluechip" onclick="setTopKind('bluechip')">Blue-chip</button>
       <span class="note-line" id="topUpdated" style="margin:0 0 0 auto;"></span>
@@ -186,7 +184,7 @@
   <div id="results" class="hidden">
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
-        <div style="font-family:'Oswald',sans-serif;font-weight:900;letter-spacing:1px;font-size:18px;" id="pairTitle"></div>
+        <div style="font-family:'Anton',sans-serif;font-weight:900;letter-spacing:1px;font-size:18px;" id="pairTitle"></div>
         <span id="ilBadge" class="badge"></span>
       </div>
       <div id="ilNote" class="note-line"></div>
@@ -219,7 +217,7 @@
     <div class="card hidden" id="deepdive"></div>
 
     <div class="card" id="askCard">
-      <div style="font-family:'Oswald',sans-serif;font-weight:700;letter-spacing:1px;color:var(--accent);font-size:14px;margin-bottom:4px;">🐔 ASK CLUCK ABOUT THESE POOLS</div>
+      <div style="font-family:'Anton',sans-serif;font-weight:700;letter-spacing:1px;color:var(--accent);font-size:14px;margin-bottom:4px;">🐔 ASK CLUCK ABOUT THESE POOLS</div>
       <div class="note-line" style="margin:0 0 10px;">Cluck reads the live numbers above and answers — grounded, not generic.</div>
       <textarea class="ask-q" id="askQ" placeholder="Which pool is best for my size, and what should I watch out for?"></textarea>
       <button class="ask-btn" id="askBtn" onclick="askCluck()">ASK CLUCK</button>

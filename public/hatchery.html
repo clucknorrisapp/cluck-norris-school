@@ -1,28 +1,23 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<link rel="stylesheet" href="/theme.css">
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>🥚 The Hatchery — CLKN Token Creator</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
 <style>
-  :root {
-    color-scheme: dark;
-    --bg: #0a0a0a; --card: #111111; --border: rgba(255,255,255,0.08);
-    --text: #F9FAFB; --subtext: #6B7280; --accent: #FCD34D;
-    --green: #10B981; --red: #EF4444; --mono: 'Courier New', monospace;
-  }
+  :root{color-scheme:dark;--bg:#0a0503;--bg-grad:radial-gradient(125% 75% at 50% -12%,#2c0f04 0%,#160b06 46%,#0a0503 100%);--card:#1a0f08;--card2:#160c07;--surface:#150f12;--panel:#150f12;--border:rgba(255,122,24,0.28);--border-soft:rgba(255,122,24,0.14);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); background-image: radial-gradient(ellipse at 20% 10%, rgba(217,119,6,0.10) 0%, transparent 50%), radial-gradient(ellipse at 80% 90%, rgba(239,68,68,0.07) 0%, transparent 50%); color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh; }
   .wrap { max-width: 640px; margin: 0 auto; padding: 24px 16px 80px; }
 
   .header { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
   .header-icon { font-size: 40px; filter: drop-shadow(0 0 16px rgba(217,119,6,0.5)); }
-  .header .brand-mini { font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 4px; color: #D97706; margin-bottom: 4px; font-weight: 700; }
-  .header h1 { font-family: 'Oswald', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg, #FCD34D, #F97316, #EF4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
-  .header p { font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
+  .header .brand-mini { font-family: 'Anton', sans-serif; font-size: 10px; letter-spacing: 4px; color: #D97706; margin-bottom: 4px; font-weight: 700; }
+  .header h1 { font-family: 'Anton', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg, #FCD34D, #F97316, #EF4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
+  .header p { font-family: 'Anton', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
 
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
   .card-title { font-family: var(--mono); font-size: 10px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 14px; }
@@ -49,7 +44,7 @@
   .wallet-info { font-family: var(--mono); font-size: 12px; color: var(--green); margin-top: 10px; padding: 10px 12px; background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.25); border-radius: 8px; display: none; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
   .wallet-info.show { display: flex; }
   .wallet-info-addr { word-break: break-all; flex: 1; min-width: 0; }
-  .wallet-disc-btn { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: #FCA5A5; font-family: 'Oswald', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+  .wallet-disc-btn { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: #FCA5A5; font-family: 'Anton', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; padding: 6px 12px; border-radius: 6px; cursor: pointer; }
 
   /* Form */
   .field { margin-bottom: 14px; }
@@ -85,7 +80,7 @@
   .fee-box .fee-tip { margin-top: 9px; padding: 9px 11px; background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.3); border-radius: 6px; font-size: 11px; color: var(--text); line-height: 1.6; }
   .fee-box .fee-tip b { color: #4ade80; }
 
-  .hatch-btn { width: 100%; background: linear-gradient(135deg, #FCD34D, #F97316); border: none; border-radius: 10px; padding: 15px; font-family: 'Oswald', sans-serif; font-size: 16px; font-weight: 900; letter-spacing: 2px; color: #1a1a1a; cursor: pointer; transition: opacity 0.15s; }
+  .hatch-btn { width: 100%; background: linear-gradient(135deg, #FCD34D, #F97316); border: none; border-radius: 10px; padding: 15px; font-family: 'Anton', sans-serif; font-size: 16px; font-weight: 900; letter-spacing: 2px; color: #1a1a1a; cursor: pointer; transition: opacity 0.15s; }
   .hatch-btn:hover { opacity: 0.9; }
   .hatch-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
@@ -97,7 +92,7 @@
 
   .result { display: none; }
   .result.show { display: block; }
-  .result-title { font-family: 'Oswald', sans-serif; font-size: 20px; font-weight: 900; letter-spacing: 2px; color: var(--green); margin-bottom: 12px; }
+  .result-title { font-family: 'Anton', sans-serif; font-size: 20px; font-weight: 900; letter-spacing: 2px; color: var(--green); margin-bottom: 12px; }
   .result-row { font-family: var(--mono); font-size: 12px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); word-break: break-all; }
   .result-row .rk { color: var(--subtext); }
   .result-row a { color: #93C5FD; text-decoration: none; }
@@ -127,18 +122,21 @@
   .calc-teach { margin-top: 10px; font-family: system-ui, sans-serif; font-size: 11px; line-height: 1.6; color: var(--subtext); }
   .calc-teach b { color: #D1D5DB; }
 
-  .footer-tag { text-align: center; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
+  .footer-tag { text-align: center; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Anton', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
   .footer-tag a { color: #D97706; text-decoration: none; }
 
   /* Desktop — wider container so the page fills a larger screen */
   @media (min-width: 1040px) {
     .wrap { max-width: 1040px; }
   }
+
+html{background:var(--bg-grad);background-attachment:fixed;}
+body{background:transparent;font-family:var(--body);}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#D97706;text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid #D97706;"/>&larr; CLUCK NORRIS HOME</a>
+  <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:Anton,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#D97706;text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid #D97706;"/>&larr; CLUCK NORRIS HOME</a>
 
   <div class="header">
     <div class="header-icon">🥚</div>
@@ -172,7 +170,7 @@
     <div style="font-size:12.5px;color:#9CA3AF;line-height:1.6;margin-bottom:10px">Stuck on a term anywhere on this page — <i>decimals, mint authority, liquidity, concentrated pool</i>? Ask in plain English. Cluck answers free.</div>
     <div style="display:flex;gap:6px">
       <input id="askInput" type="text" autocomplete="off" placeholder="e.g. what does revoking mint authority do?" style="flex:1;min-width:0;background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:#F9FAFB;font-size:13px;outline:none" onkeydown="if(event.key==='Enter')askCluck()"/>
-      <button id="askBtn" onclick="askCluck()" style="flex-shrink:0;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.4);border-radius:8px;padding:9px 16px;font-family:'Oswald',sans-serif;font-size:12px;font-weight:700;color:#38BDF8;letter-spacing:1px;cursor:pointer">ASK</button>
+      <button id="askBtn" onclick="askCluck()" style="flex-shrink:0;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.4);border-radius:8px;padding:9px 16px;font-family:'Anton',sans-serif;font-size:12px;font-weight:700;color:#38BDF8;letter-spacing:1px;cursor:pointer">ASK</button>
     </div>
     <div id="askAnswer" style="display:none;margin-top:10px;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:8px;padding:11px 13px;font-size:13px;color:#D1D5DB;line-height:1.65;white-space:pre-wrap"></div>
     <div style="margin-top:10px;font-size:11.5px;color:#6B7280">Don't trust Cluck? 📚 <a href="/#library" style="color:#FCD34D;text-decoration:none">Go read the Library yourself →</a></div>

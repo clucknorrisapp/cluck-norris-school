@@ -1,19 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<link rel="stylesheet" href="/theme.css">
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <meta name="robots" content="noindex,nofollow"/>
 <title>Premium Forensics · Cluck Norris</title>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet"/>
 <style>
-:root{
-  color-scheme:dark;
-  --bg:#070710; --surface:#0f0f1a; --border:rgba(139,92,246,0.20);
-  --accent:#8b5cf6; --accent2:#a78bfa; --gold:#ffd54f; --green:#69f0ae;
-  --red:#ef5350; --amber:#f59e0b; --dim:#55556a; --text:#e8e8f4; --subtext:#9090b0;
-  --mono:'Share Tech Mono',monospace; --head:'Barlow Condensed',sans-serif;
-}
+:root{color-scheme:dark;--bg:#0a0503;--bg-grad:radial-gradient(125% 75% at 50% -12%,#2c0f04 0%,#160b06 46%,#0a0503 100%);--card:#1a0f08;--card2:#160c07;--surface:#150f12;--panel:#150f12;--border:rgba(255,122,24,0.28);--border-soft:rgba(255,122,24,0.14);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font-family:var(--mono);padding:0 16px 60px;-webkit-font-smoothing:antialiased}
 .wrap{max-width:780px;margin:0 auto}
@@ -65,6 +60,9 @@ a{color:var(--accent2)}
 .copyfield .copybtn{flex-shrink:0;background:rgba(139,92,246,0.25);border:1px solid var(--border);border-radius:6px;padding:7px 13px;font-size:13px;color:var(--accent2);font-family:var(--mono);white-space:nowrap}
 .copyfield .hint{font-size:11px;color:var(--dim);margin-left:6px}
 .vok{background:rgba(105,240,174,0.1);border:1px solid rgba(105,240,174,0.35);color:#86efac;border-radius:8px;padding:12px;margin-bottom:10px;font-size:15px}
+
+html{background:var(--bg-grad);background-attachment:fixed;}
+body{background:transparent;font-family:var(--body);}
 </style>
 </head>
 <body>

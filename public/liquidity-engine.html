@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<link rel="stylesheet" href="/theme.css">
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>💧 The Liquidity Engine — Honest Automated Market Making · Cluck Norris</title>
@@ -10,15 +11,8 @@
 <meta property="og:type" content="website"/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
 <style>
-  :root {
-    color-scheme: dark;
-    --bg: #0a0a0a; --card: #111111; --border: rgba(255,255,255,0.08);
-    --text: #F9FAFB; --subtext: #6B7280; --accent: #FCD34D; --orange: #D97706;
-    --green: #10B981; --red: #EF4444; --amber: #F59E0B; --blue: #60A5FA; --purple: #A78BFA;
-    --mono: 'Courier New', monospace;
-  }
+  :root{color-scheme:dark;--bg:#0a0503;--bg-grad:radial-gradient(125% 75% at 50% -12%,#2c0f04 0%,#160b06 46%,#0a0503 100%);--card:#1a0f08;--card2:#160c07;--surface:#150f12;--panel:#150f12;--border:rgba(255,122,24,0.28);--border-soft:rgba(255,122,24,0.14);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     background: var(--bg);
@@ -27,47 +21,47 @@
     color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh;
   }
   .wrap { max-width: 820px; margin: 0 auto; padding: 24px 16px 80px; }
-  a.back-home { display:inline-flex; align-items:center; gap:6px; font-family:Oswald,sans-serif; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin:0 0 12px; }
+  a.back-home { display:inline-flex; align-items:center; gap:6px; font-family:Anton,sans-serif; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin:0 0 12px; }
   a.back-home img { height:22px; width:22px; object-fit:cover; border-radius:50%; border:1px solid var(--orange); }
 
   .header { display:flex; align-items:center; gap:14px; margin-bottom:20px; padding-bottom:18px; border-bottom:1px solid var(--border); }
   .header-icon { font-size:40px; filter:drop-shadow(0 0 16px rgba(16,185,129,0.5)); }
-  .header .brand-mini { font-family:'Oswald',sans-serif; font-size:10px; letter-spacing:4px; color:var(--orange); margin-bottom:4px; font-weight:700; }
-  .header h1 { font-family:'Oswald',sans-serif; font-size:26px; font-weight:900; letter-spacing:2px; background:linear-gradient(135deg,#FCD34D,#10B981,#34D399); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; line-height:1; }
-  .header p { font-family:'Oswald',sans-serif; font-size:11px; color:var(--subtext); letter-spacing:3px; margin-top:6px; }
+  .header .brand-mini { font-family:'Anton',sans-serif; font-size:10px; letter-spacing:4px; color:var(--orange); margin-bottom:4px; font-weight:700; }
+  .header h1 { font-family:'Anton',sans-serif; font-size:26px; font-weight:900; letter-spacing:2px; background:linear-gradient(135deg,#FCD34D,#10B981,#34D399); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; line-height:1; }
+  .header p { font-family:'Anton',sans-serif; font-size:11px; color:var(--subtext); letter-spacing:3px; margin-top:6px; }
 
   .hero { background:linear-gradient(135deg, rgba(16,185,129,0.09), rgba(217,119,6,0.05)); border:1px solid rgba(16,185,129,0.3); border-radius:14px; padding:24px; margin-bottom:16px; }
-  .hero-tag { font-family:'Oswald',sans-serif; font-size:11px; color:var(--accent); letter-spacing:3px; margin-bottom:10px; font-weight:700; }
-  .hero-title { font-family:'Oswald',sans-serif; font-size:27px; font-weight:900; color:var(--text); letter-spacing:0.5px; line-height:1.25; margin-bottom:12px; }
+  .hero-tag { font-family:'Anton',sans-serif; font-size:11px; color:var(--accent); letter-spacing:3px; margin-bottom:10px; font-weight:700; }
+  .hero-title { font-family:'Anton',sans-serif; font-size:27px; font-weight:900; color:var(--text); letter-spacing:0.5px; line-height:1.25; margin-bottom:12px; }
   .hero-title .hl { background:linear-gradient(135deg,#FCD34D,#34D399); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
   .hero-sub { font-size:15px; color:#D1D5DB; line-height:1.7; margin-bottom:8px; }
   .hero-sub b { color:var(--accent); }
 
   .section { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:20px 22px; margin-bottom:16px; scroll-margin-top:90px; }
-  .section-title { font-family:'Oswald',sans-serif; font-size:13px; color:var(--accent); letter-spacing:3px; font-weight:700; margin-bottom:14px; padding-bottom:10px; border-bottom:1px solid var(--border); }
+  .section-title { font-family:'Anton',sans-serif; font-size:13px; color:var(--accent); letter-spacing:3px; font-weight:700; margin-bottom:14px; padding-bottom:10px; border-bottom:1px solid var(--border); }
   .section p { font-size:14px; color:#D1D5DB; line-height:1.75; margin-bottom:10px; }
   .section ul { margin:10px 0 14px 0; padding-left:22px; list-style:none; }
   .section li { font-size:14px; color:#D1D5DB; line-height:1.7; padding:5px 0; position:relative; }
   .section li::before { content:'🐔'; position:absolute; left:-22px; font-size:12px; }
   .section li.yes::before { content:'✅'; } .section li.no::before { content:'🚫'; } .section li.warn::before { content:'⚠️'; }
   .section strong { color:var(--accent); font-weight:700; }
-  .section h3 { font-family:'Oswald',sans-serif; font-size:15px; color:var(--text); letter-spacing:1px; margin:16px 0 8px; }
+  .section h3 { font-family:'Anton',sans-serif; font-size:15px; color:var(--text); letter-spacing:1px; margin:16px 0 8px; }
 
   .stat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
   .stat { background:linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)); border:1px solid var(--border); border-radius:10px; padding:14px 16px; }
-  .stat-label { font-family:'Oswald',sans-serif; font-size:10px; color:var(--subtext); letter-spacing:2px; margin-bottom:6px; font-weight:700; }
-  .stat-value { font-family:'Oswald',sans-serif; font-size:22px; color:var(--text); font-weight:900; line-height:1.1; }
+  .stat-label { font-family:'Anton',sans-serif; font-size:10px; color:var(--subtext); letter-spacing:2px; margin-bottom:6px; font-weight:700; }
+  .stat-value { font-family:'Anton',sans-serif; font-size:22px; color:var(--text); font-weight:900; line-height:1.1; }
   .stat-sub { font-family:var(--mono); font-size:10px; color:var(--subtext); margin-top:4px; }
   .stat.green { border-color:rgba(16,185,129,0.3); } .stat.green .stat-value { color:#6EE7B7; }
   .stat.gold { border-color:rgba(252,211,77,0.3); } .stat.gold .stat-value { color:#FCD34D; }
   .stat.blue { border-color:rgba(96,165,250,0.3); } .stat.blue .stat-value { color:#93C5FD; }
 
-  .pull-quote { font-family:'Oswald',sans-serif; font-size:18px; color:var(--accent); text-align:center; font-style:italic; letter-spacing:0.5px; margin:20px 0; padding:0 16px; line-height:1.5; }
+  .pull-quote { font-family:'Anton',sans-serif; font-size:18px; color:var(--accent); text-align:center; font-style:italic; letter-spacing:0.5px; margin:20px 0; padding:0 16px; line-height:1.5; }
 
   /* compare table */
   .compare { width:100%; border-collapse:collapse; margin:8px 0 6px; font-size:13.5px; }
   .compare th, .compare td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); vertical-align:top; line-height:1.55; }
-  .compare th { font-family:'Oswald',sans-serif; letter-spacing:1px; font-size:11px; color:var(--subtext); }
+  .compare th { font-family:'Anton',sans-serif; letter-spacing:1px; font-size:11px; color:var(--subtext); }
   .compare td.bad { color:#FCA5A5; } .compare td.good { color:#6EE7B7; }
   .compare tr td:first-child { color:var(--subtext); font-family:var(--mono); font-size:12px; }
 
@@ -75,17 +69,17 @@
   .flow { display:grid; grid-template-columns:1fr; gap:8px; margin:10px 0; }
   .flow-step { background:rgba(16,185,129,0.05); border:1px solid rgba(16,185,129,0.22); border-radius:9px; padding:11px 14px; font-size:13.5px; color:#D1D5DB; line-height:1.55; }
   .flow-step b { color:#6EE7B7; }
-  .flow-step .n { font-family:'Oswald',sans-serif; font-weight:900; color:#34D399; margin-right:8px; }
+  .flow-step .n { font-family:'Anton',sans-serif; font-weight:900; color:#34D399; margin-right:8px; }
 
   /* tier cards */
   .tiers { display:grid; grid-template-columns:1fr; gap:12px; margin-top:6px; }
   @media (min-width:680px) { .tiers { grid-template-columns:1fr 1fr; } }
   .tier { border:1px solid var(--border); border-radius:12px; padding:16px 18px; background:rgba(255,255,255,0.02); }
   .tier.feature { border-color:rgba(16,185,129,0.4); background:linear-gradient(135deg, rgba(16,185,129,0.07), rgba(16,185,129,0.02)); }
-  .tier .t-name { font-family:'Oswald',sans-serif; font-size:16px; font-weight:900; letter-spacing:1px; color:var(--text); }
+  .tier .t-name { font-family:'Anton',sans-serif; font-size:16px; font-weight:900; letter-spacing:1px; color:var(--text); }
   .tier.feature .t-name { color:#6EE7B7; }
-  .tier .t-tag { font-family:'Oswald',sans-serif; font-size:9px; letter-spacing:2px; color:var(--subtext); margin-top:2px; }
-  .tier .t-price { font-family:'Oswald',sans-serif; font-size:14px; color:var(--accent); margin:10px 0; font-weight:700; }
+  .tier .t-tag { font-family:'Anton',sans-serif; font-size:9px; letter-spacing:2px; color:var(--subtext); margin-top:2px; }
+  .tier .t-price { font-family:'Anton',sans-serif; font-size:14px; color:var(--accent); margin:10px 0; font-weight:700; }
   .tier ul { margin:0; padding-left:18px; list-style:none; }
   .tier li { font-size:12.5px; color:#D1D5DB; line-height:1.6; padding:3px 0; position:relative; }
   .tier li::before { content:'•'; position:absolute; left:-14px; color:var(--green); }
@@ -99,18 +93,21 @@
   .callout.info b { color:#DBEAFE; }
 
   .actions { display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; }
-  .action-btn { flex:1; min-width:150px; padding:14px; border-radius:10px; font-family:'Oswald',sans-serif; font-size:13px; font-weight:700; letter-spacing:2px; cursor:pointer; transition:all 0.15s; text-decoration:none; text-align:center; background:rgba(255,255,255,0.04); border:1px solid var(--border); color:var(--text); }
+  .action-btn { flex:1; min-width:150px; padding:14px; border-radius:10px; font-family:'Anton',sans-serif; font-size:13px; font-weight:700; letter-spacing:2px; cursor:pointer; transition:all 0.15s; text-decoration:none; text-align:center; background:rgba(255,255,255,0.04); border:1px solid var(--border); color:var(--text); }
   .action-btn:hover { border-color:var(--accent); color:var(--accent); transform:translateY(-1px); }
   .action-btn.primary { background:linear-gradient(135deg,#FCD34D,#10B981); color:#04150F; border:none; }
 
   .quicklinks { display:flex; flex-wrap:wrap; gap:8px; background:rgba(17,17,17,0.93); backdrop-filter:blur(8px); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:18px; position:sticky; top:0; z-index:50; box-shadow:0 6px 24px rgba(0,0,0,0.6); }
-  .quicklinks a { font-family:'Oswald',sans-serif; font-size:11px; font-weight:700; letter-spacing:1px; text-decoration:none; padding:7px 11px; border-radius:8px; color:#6EE7B7; border:1px solid rgba(16,185,129,0.28); background:rgba(16,185,129,0.07); }
+  .quicklinks a { font-family:'Anton',sans-serif; font-size:11px; font-weight:700; letter-spacing:1px; text-decoration:none; padding:7px 11px; border-radius:8px; color:#6EE7B7; border:1px solid rgba(16,185,129,0.28); background:rgba(16,185,129,0.07); }
   .quicklinks a:hover { border-color:#10B981; background:rgba(16,185,129,0.17); }
   html { scroll-behavior:smooth; }
 
-  .footer-tag { text-align:center; margin-top:30px; padding-top:20px; border-top:1px solid var(--border); font-family:'Oswald',sans-serif; font-size:10px; color:var(--subtext); letter-spacing:3px; }
+  .footer-tag { text-align:center; margin-top:30px; padding-top:20px; border-top:1px solid var(--border); font-family:'Anton',sans-serif; font-size:10px; color:var(--subtext); letter-spacing:3px; }
   .footer-tag a { color:var(--orange); text-decoration:none; }
   .muted { color:var(--subtext); font-size:12px; }
+
+html{background:var(--bg-grad);background-attachment:fixed;}
+body{background:transparent;font-family:var(--body);}
 </style>
 </head>
 <body>
@@ -173,7 +170,7 @@
     <p>Brand new to liquidity, or a seasoned operator? There's a track for each — because the Cluck Norris way is to <strong>meet you where you are and teach you up.</strong> Tap a guide to open it.</p>
 
     <details style="border:1px solid rgba(16,185,129,0.32); border-radius:10px; margin:12px 0; background:rgba(16,185,129,0.04)">
-      <summary style="cursor:pointer; list-style:none; padding:14px 16px; font-family:'Oswald',sans-serif; font-weight:700; letter-spacing:1px; color:#6EE7B7; font-size:14px">🐣 BEGINNER'S GUIDE — "I'm new to liquidity"</summary>
+      <summary style="cursor:pointer; list-style:none; padding:14px 16px; font-family:'Anton',sans-serif; font-weight:700; letter-spacing:1px; color:#6EE7B7; font-size:14px">🐣 BEGINNER'S GUIDE — "I'm new to liquidity"</summary>
       <div style="padding:0 16px 16px; font-size:13.5px; color:#D1D5DB; line-height:1.75">
         <p style="margin:8px 0"><b style="color:#6EE7B7">What's a liquidity pool?</b> Picture a shared pot holding two things — your token and USDC (or SOL). Every buy and sell trades against that pot. A <b>deep</b> pot = smooth, fair prices. A <b>thin</b> pot = every little trade yanks the price around. That yank is called <b>slippage</b>.</p>
         <p style="margin:8px 0"><b style="color:#6EE7B7">Why does it matter?</b> Thin liquidity means a small buy spikes the price and a small sell tanks it. Buyers get scared off, the chart looks broken, and apps like Jupiter rank you last. Deep liquidity fixes all of that — <b>and you earn a small fee on every trade</b> that goes through your pot.</p>
@@ -185,7 +182,7 @@
     </details>
 
     <details style="border:1px solid rgba(96,165,250,0.32); border-radius:10px; margin:12px 0; background:rgba(96,165,250,0.04)">
-      <summary style="cursor:pointer; list-style:none; padding:14px 16px; font-family:'Oswald',sans-serif; font-weight:700; letter-spacing:1px; color:#93C5FD; font-size:14px">🎓 ADVANCED GUIDE — "I run liquidity already"</summary>
+      <summary style="cursor:pointer; list-style:none; padding:14px 16px; font-family:'Anton',sans-serif; font-weight:700; letter-spacing:1px; color:#93C5FD; font-size:14px">🎓 ADVANCED GUIDE — "I run liquidity already"</summary>
       <div style="padding:0 16px 16px; font-size:13.5px; color:#D1D5DB; line-height:1.75">
         <p style="margin:8px 0"><b style="color:#93C5FD">Concentrated liquidity (Orca Whirlpools).</b> Place capital in a tight range around price for far deeper effective liquidity and higher fee capture than full-range. Pick fee tiers deliberately: a <b>tight tier (0.02%)</b> wins Jupiter routing and pulls real volume; a <b>wider tier (0.65–1%)</b> works as a premium ask-wall for selling into pumps.</p>
         <p style="margin:8px 0"><b style="color:#93C5FD">Single-sided vs balanced.</b> A range entirely <em>above</em> price holds only your token (asks); entirely <em>below</em> holds only the quote (bids); straddling holds both. Orientation matters — your token can be tokenA or tokenB depending on the pair, and the range math flips accordingly.</p>
@@ -299,7 +296,7 @@
     <div class="callout info" style="margin-top:14px"><b>Lean it your way — the tilt.</b> On top of any mode, choose where your depth leans: <b>Balanced</b> (even both sides), <b>Distribution</b> (heavier asks — sell into strength as buyers push up), or <b>Accumulation</b> (lighter asks — let price find buyers, accumulate the dips). CLKN runs <b>Steady · Distribution</b>.</div>
 
     <details style="border:1px solid rgba(96,165,250,0.32); border-radius:10px; margin:12px 0; background:rgba(96,165,250,0.04)">
-      <summary style="cursor:pointer; list-style:none; padding:14px 16px; font-family:'Oswald',sans-serif; font-weight:700; letter-spacing:1px; color:#93C5FD; font-size:14px">🎓 ADVANCED — what each mode actually sets</summary>
+      <summary style="cursor:pointer; list-style:none; padding:14px 16px; font-family:'Anton',sans-serif; font-weight:700; letter-spacing:1px; color:#93C5FD; font-size:14px">🎓 ADVANCED — what each mode actually sets</summary>
       <div style="padding:0 16px 16px; font-size:13.5px; color:#D1D5DB; line-height:1.75">
         <p style="margin:8px 0">A mode is a preset over the engine's shape knobs. It deliberately <b>does not touch</b> your risk reserves, fee tier, or trading pair — so switching a mode changes <em>strategy shape</em>, never custody, risk policy, or routing.</p>
         <table class="compare" style="margin-top:4px">

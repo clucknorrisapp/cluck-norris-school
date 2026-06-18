@@ -1,22 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<link rel="stylesheet" href="/theme.css">
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <meta name="robots" content="noindex"/>
 <title>🔍 Cluck Trace — Wallet × Token Forensic History</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap" rel="stylesheet">
 <style>
-  :root {
-    color-scheme: dark;
-    --bg: #0a0a0a; --card: #111111; --border: rgba(255,255,255,0.08);
-    --text: #F9FAFB; --subtext: #9CA3AF; --muted: #6B7280;
-    --accent: #FCD34D; --orange: #D97706; --green: #10B981; --red: #EF4444;
-    --amber: #F59E0B; --blue: #60A5FA; --purple: #A78BFA;
-    --mono: 'Courier New', monospace;
-  }
+  :root{color-scheme:dark;--bg:#0a0503;--bg-grad:radial-gradient(125% 75% at 50% -12%,#2c0f04 0%,#160b06 46%,#0a0503 100%);--card:#1a0f08;--card2:#160c07;--surface:#150f12;--panel:#150f12;--border:rgba(255,122,24,0.28);--border-soft:rgba(255,122,24,0.14);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     background: var(--bg);
@@ -28,31 +21,31 @@
 
   .header { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }
   .header-icon { font-size: 38px; filter: drop-shadow(0 0 16px rgba(167,139,250,0.5)); }
-  .header .brand-mini { font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 4px; color: var(--orange); margin-bottom: 4px; font-weight: 700; }
-  .header h1 { font-family: 'Oswald', sans-serif; font-size: 27px; font-weight: 900; letter-spacing: 3px;
+  .header .brand-mini { font-family: 'Anton', sans-serif; font-size: 10px; letter-spacing: 4px; color: var(--orange); margin-bottom: 4px; font-weight: 700; }
+  .header h1 { font-family: 'Anton', sans-serif; font-size: 27px; font-weight: 900; letter-spacing: 3px;
     background: linear-gradient(135deg, #FCD34D, #A78BFA, #60A5FA); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
-  .header p { font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 2px; margin-top: 6px; }
+  .header p { font-family: 'Anton', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 2px; margin-top: 6px; }
 
   .hero { background: linear-gradient(135deg, rgba(167,139,250,0.06), rgba(96,165,250,0.03)); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; }
-  .hero-tag { font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--accent); letter-spacing: 3px; margin-bottom: 6px; }
-  .hero-sub { font-family: 'Oswald', sans-serif; font-size: 12px; color: var(--subtext); line-height: 1.6; letter-spacing: 0.5px; }
+  .hero-tag { font-family: 'Anton', sans-serif; font-size: 10px; color: var(--accent); letter-spacing: 3px; margin-bottom: 6px; }
+  .hero-sub { font-family: 'Anton', sans-serif; font-size: 12px; color: var(--subtext); line-height: 1.6; letter-spacing: 0.5px; }
 
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
-  .card-title { font-family: 'Oswald', sans-serif; font-size: 19px; font-weight: 900; color: var(--accent);
+  .card-title { font-family: 'Anton', sans-serif; font-size: 19px; font-weight: 900; color: var(--accent);
     letter-spacing: 1.5px; margin-bottom: 14px; text-transform: uppercase;
     text-shadow: 0 0 18px rgba(252,211,77,0.25); }
   .sec-toggle { display: flex; justify-content: space-between; align-items: center; cursor: pointer; margin-bottom: 0; gap: 10px; }
   .sec-toggle .sec-icon { color: var(--blue); font-weight: 700; font-size: 13px; font-family: var(--mono); white-space: nowrap; }
-  .dig-divider { text-align: center; font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 3px;
+  .dig-divider { text-align: center; font-family: 'Anton', sans-serif; font-size: 10px; letter-spacing: 3px;
     color: var(--muted); margin: 6px 0 14px; }
   #timelineBody, #cpList { margin-top: 12px; }
-  .field-label { font-family: 'Oswald', sans-serif; font-size: 13px; color: var(--blue); letter-spacing: 1.5px; margin: 14px 0 6px; font-weight: 700; }
+  .field-label { font-family: 'Anton', sans-serif; font-size: 13px; color: var(--blue); letter-spacing: 1.5px; margin: 14px 0 6px; font-weight: 700; }
   .field-label:first-child { margin-top: 0; }
   .token-input { width: 100%; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 8px; padding: 12px 13px; font-family: var(--mono); font-size: 15px; color: var(--accent); font-weight: 600; }
   .token-input::placeholder { color: var(--muted); font-weight: 400; }
   .token-input:focus { outline: none; border-color: var(--accent); }
 
-  .run-btn { width: 100%; margin-top: 14px; padding: 14px; background: linear-gradient(135deg, var(--purple), var(--blue)); border: none; border-radius: 10px; font-family: 'Oswald', sans-serif; font-size: 14px; font-weight: 900; color: #fff; letter-spacing: 3px; cursor: pointer; transition: opacity 0.15s; }
+  .run-btn { width: 100%; margin-top: 14px; padding: 14px; background: linear-gradient(135deg, var(--purple), var(--blue)); border: none; border-radius: 10px; font-family: 'Anton', sans-serif; font-size: 14px; font-weight: 900; color: #fff; letter-spacing: 3px; cursor: pointer; transition: opacity 0.15s; }
   .run-btn:hover { opacity: 0.92; }
   .run-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
@@ -62,10 +55,10 @@
   .loading { display: none; text-align: center; padding: 38px 20px 32px; background: linear-gradient(135deg, rgba(255,255,255,0.03), rgba(167,139,250,0.04)); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 16px; }
   .loading.show { display: block; }
   .loading-spinner { font-size: 42px; animation: bobble 1.4s ease-in-out infinite; margin-bottom: 14px; display: inline-block; }
-  .loading-title { font-family: 'Oswald', sans-serif; font-size: 14px; color: var(--accent); letter-spacing: 3px; margin-bottom: 14px; font-weight: 700; }
+  .loading-title { font-family: 'Anton', sans-serif; font-size: 14px; color: var(--accent); letter-spacing: 3px; margin-bottom: 14px; font-weight: 700; }
   .loading-stage { font-family: var(--mono); font-size: 13px; color: var(--text); margin-bottom: 10px; min-height: 20px; }
   .loading-timer { font-family: var(--mono); font-size: 11px; color: var(--subtext); }
-  .loading-note { font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--muted); letter-spacing: 1px; margin-top: 12px; }
+  .loading-note { font-family: 'Anton', sans-serif; font-size: 11px; color: var(--muted); letter-spacing: 1px; margin-top: 12px; }
   @keyframes bobble { 0%,100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-6px) rotate(3deg); } }
 
   .result { display: none; }
@@ -74,14 +67,14 @@
   /* Summary */
   .sum-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
   .sum-cell { background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
-  .sum-cell .lbl { font-family: 'Oswald', sans-serif; font-size: 9px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 5px; font-weight: 700; }
+  .sum-cell .lbl { font-family: 'Anton', sans-serif; font-size: 9px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 5px; font-weight: 700; }
   .sum-cell .val { font-family: var(--mono); font-size: 17px; color: var(--text); font-weight: 700; line-height: 1.2; }
   .sum-cell .sub { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 3px; }
   .sum-cell.green .val { color: var(--green); } .sum-cell.red .val { color: var(--red); }
   .sum-cell.blue .val { color: var(--blue); } .sum-cell.amber .val { color: var(--amber); }
 
   .origin { background: rgba(252,211,77,0.05); border: 1px solid rgba(252,211,77,0.3); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
-  .origin .lbl { font-family: 'Oswald', sans-serif; font-size: 10px; color: var(--accent); letter-spacing: 2px; font-weight: 700; margin-bottom: 6px; }
+  .origin .lbl { font-family: 'Anton', sans-serif; font-size: 10px; color: var(--accent); letter-spacing: 2px; font-weight: 700; margin-bottom: 6px; }
   .origin .body { font-family: var(--mono); font-size: 12px; color: #E5E7EB; line-height: 1.6; word-break: break-all; }
   .origin a { color: var(--blue); text-decoration: none; }
 
@@ -91,11 +84,11 @@
   .tx-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 10px; flex-wrap: wrap; }
   .sort-btn { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 7px; padding: 7px 12px; font-family: var(--mono); font-size: 11px; color: var(--subtext); cursor: pointer; }
   .sort-btn:hover { border-color: var(--accent); color: var(--accent); }
-  .csv-btn { background: rgba(252,211,77,0.08); border: 1px solid rgba(252,211,77,0.35); border-radius: 7px; padding: 7px 12px; font-family: 'Oswald', sans-serif; font-size: 11px; letter-spacing: 1px; color: var(--accent); cursor: pointer; font-weight: 700; }
+  .csv-btn { background: rgba(252,211,77,0.08); border: 1px solid rgba(252,211,77,0.35); border-radius: 7px; padding: 7px 12px; font-family: 'Anton', sans-serif; font-size: 11px; letter-spacing: 1px; color: var(--accent); cursor: pointer; font-weight: 700; }
 
   .tx { display: flex; gap: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; background: rgba(255,255,255,0.02); }
   .tx-badge { flex-shrink: 0; width: 64px; text-align: center; }
-  .tx-badge .act { font-family: 'Oswald', sans-serif; font-size: 10px; font-weight: 900; letter-spacing: 1px; padding: 3px 0; border-radius: 5px; display: block; }
+  .tx-badge .act { font-family: 'Anton', sans-serif; font-size: 10px; font-weight: 900; letter-spacing: 1px; padding: 3px 0; border-radius: 5px; display: block; }
   .act-buy { background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.4); color: var(--green); }
   .act-sell { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: var(--red); }
   .act-receive { background: rgba(96,165,250,0.15); border: 1px solid rgba(96,165,250,0.4); color: var(--blue); }
@@ -127,7 +120,7 @@
   #graphHolder svg { width: 100%; max-width: 480px; height: auto; display: block; margin: 0 auto; }
   .graph-more { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 8px; text-align: center; }
   .gfilter { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
-  .gchip { font-family: 'Oswald', sans-serif; font-size: 10px; letter-spacing: 1px; padding: 5px 11px; border-radius: 7px;
+  .gchip { font-family: 'Anton', sans-serif; font-size: 10px; letter-spacing: 1px; padding: 5px 11px; border-radius: 7px;
     cursor: pointer; border: 1px solid var(--border); background: rgba(255,255,255,0.03); color: var(--muted); user-select: none; }
   .gchip.off { opacity: 0.4; text-decoration: line-through; }
   .gchip.f-wallet { border-color: rgba(96,165,250,0.5); background: rgba(96,165,250,0.12); color: var(--blue); }
@@ -151,7 +144,7 @@
   .tx-amt.pos { color: var(--green); } .tx-amt.neg { color: var(--red); }
   .tx-time { font-family: var(--mono); font-size: 10px; color: var(--muted); white-space: nowrap; }
   .tx-meta { font-family: var(--mono); font-size: 11px; color: var(--subtext); margin-top: 5px; line-height: 1.6; word-break: break-all; }
-  .tag { display: inline-block; font-size: 9px; padding: 1px 6px; border-radius: 4px; font-family: 'Oswald', sans-serif; letter-spacing: 0.5px; }
+  .tag { display: inline-block; font-size: 9px; padding: 1px 6px; border-radius: 4px; font-family: 'Anton', sans-serif; letter-spacing: 0.5px; }
   .tag-wallet { background: rgba(96,165,250,0.12); color: var(--blue); border: 1px solid rgba(96,165,250,0.3); }
   .tag-contract { background: rgba(245,158,11,0.12); color: var(--amber); border: 1px solid rgba(245,158,11,0.3); }
   .tag-market { background: rgba(167,139,250,0.13); color: var(--purple); border: 1px solid rgba(167,139,250,0.35); }
@@ -165,7 +158,7 @@
   .cp-link { white-space: nowrap; }
   .cp-link:hover { text-decoration: underline; }
 
-  .footer-link { display: block; text-align: center; margin-top: 24px; font-family: 'Oswald', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 2px; text-decoration: none; }
+  .footer-link { display: block; text-align: center; margin-top: 24px; font-family: 'Anton', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 2px; text-decoration: none; }
   .footer-link:hover { color: var(--accent); }
 
   /* Multi-hop */
@@ -180,11 +173,11 @@
   /* Education panel */
   .edu { background: rgba(96,165,250,0.05); border: 1px solid rgba(96,165,250,0.22); border-radius: 12px; margin-bottom: 16px; overflow: hidden; }
   .edu-head { padding: 14px 16px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-  .edu-head .lbl { font-family: 'Oswald', sans-serif; font-size: 13px; letter-spacing: 1.5px; color: var(--blue); font-weight: 700; }
+  .edu-head .lbl { font-family: 'Anton', sans-serif; font-size: 13px; letter-spacing: 1.5px; color: var(--blue); font-weight: 700; }
   .edu-head .tg { font-family: var(--mono); font-size: 12px; color: var(--blue); white-space: nowrap; }
   .edu-body { padding: 0 16px 16px; display: none; font-family: system-ui, sans-serif; font-size: 13px; line-height: 1.7; color: #D1D5DB; }
   .edu.open .edu-body { display: block; }
-  .edu-body h4 { font-family: 'Oswald', sans-serif; font-size: 12px; color: var(--accent); letter-spacing: 1px; margin: 14px 0 5px; }
+  .edu-body h4 { font-family: 'Anton', sans-serif; font-size: 12px; color: var(--accent); letter-spacing: 1px; margin: 14px 0 5px; }
   .edu-body p { margin-bottom: 8px; }
   .edu-body strong { color: var(--text); }
   .edu-body .ico { font-size: 14px; }
@@ -193,11 +186,14 @@
   @media (min-width: 1040px) {
     .wrap { max-width: 1040px; }
   }
+
+html{background:var(--bg-grad);background-attachment:fixed;}
+body{background:transparent;font-family:var(--body);}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#D97706;text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid #D97706;"/>&larr; CLUCK NORRIS HOME</a>
+  <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:Anton,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#D97706;text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid #D97706;"/>&larr; CLUCK NORRIS HOME</a>
 
   <div class="header">
     <div class="header-icon">🔍</div>
@@ -744,7 +740,7 @@ function renderGraph() {
   const hW = 112, hH = 54;
   const wallet = `<a href="https://solscan.io/account/${d.wallet}" target="_blank" style="cursor:pointer">
     <rect x="${cx-hW/2}" y="${cy-hH/2}" width="${hW}" height="${hH}" rx="9" fill="rgba(252,211,77,0.16)" stroke="#FCD34D" stroke-width="1.6"/>
-    <text x="${cx}" y="${cy-hH/2+15}" text-anchor="middle" fill="#FCD34D" font-size="8" font-family="Oswald,sans-serif" font-weight="700">INVESTIGATED</text>
+    <text x="${cx}" y="${cy-hH/2+15}" text-anchor="middle" fill="#FCD34D" font-size="8" font-family="Anton,sans-serif" font-weight="700">INVESTIGATED</text>
     <text x="${cx}" y="${cy-hH/2+31}" text-anchor="middle" fill="#F9FAFB" font-size="10" font-family="monospace">${shortAddr(d.wallet)}</text>
     <text x="${cx}" y="${cy-hH/2+45}" text-anchor="middle" fill="#9CA3AF" font-size="7.5" font-family="monospace">holds ${fmtNum(d.summary.currentBalance, dec)}</text>
   </a>`;
