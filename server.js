@@ -8331,8 +8331,15 @@ app.use((req, res, next) => {
 // don't block third-party CDN scripts that the airdrop tool depends on) --
 app.use("/vendor", express.static(join(__dirname, "public", "vendor"), { maxAge: "30d", immutable: true }));
 
-// -- Serve React app --
-app.use(express.static(join(__dirname, "dist")));
+// -- Homepage: a lightweight front door at / (learn + build + token story). The
+// React school moves to /school (still served by the SPA catch-all below). This
+// keeps the root fast — the 9k-line app no longer loads just to reach the homepage. --
+app.get("/", (req, res) => {
+  res.sendFile(join(__dirname, "public", "home.html"));
+});
+
+// -- Serve React app (the school) at /school + every non-root path via the catch-all --
+app.use(express.static(join(__dirname, "dist"), { index: false }));
 app.get("*", (req, res) => {
   res.sendFile(join(__dirname, "dist", "index.html"));
 });

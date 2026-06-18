@@ -2,7 +2,7 @@
   "name": "Cluck Norris: School of Crypto Hard Knocks",
   "short_name": "Cluck Norris",
   "description": "A free Solana crypto school plus token-research tools. Powered by CLKN.",
-  "start_url": "/",
+  "start_url": "/school",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",

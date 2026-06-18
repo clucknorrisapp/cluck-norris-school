@@ -65,3 +65,26 @@ Nothing here is implemented — it's a prioritized opportunity backlog.
   score-claim removals). Don't let any "referral" or "leaderboard" idea drift into token incentives.
 
 <!-- Append future growth/product rounds below as ## Round 2, ... -->
+
+## Round 2 — Homepage / positioning brief (owner, 2026-06-18)
+
+**Problem:** the site grew so much that a visitor can't tell what Cluck Norris IS.
+The root `/` was the 9k-line React school doing triple duty (splash + dashboard + nav)
+— too heavy AND unclear. Fix = a dedicated lightweight front door at `/`; the React
+school moves to `/school` (already reachable via the SPA catch-all).
+
+**The story the homepage must tell (owner's words):**
+- Cluck Norris is **a place to learn AND to build** — lead with this, NOT "buy".
+- 🎓 a **free crypto school** (12-lesson course, Incubator, Ultimate Challenge, Classroom, Ask Cluck)
+- 🛠️ **free tools** (Wallet X-Ray, Autopsy, Order Book…) + **premium tools** + more in development
+- 🪙 we are **also a real token (CLKN)** — but we do NOT push people to buy. Thesis: *as the
+  brand grows, so does the token.*
+- 🌊 we **practice what we teach** — the same LP/liquidity strategies from LP School are used to
+  create natural volume + fees that feed back into the project. Everything we learn and teach,
+  applied to our own token. ("We eat our own cooking" — the differentiator.)
+
+**Decisions:** `/` = static, fast, themed homepage (front door). `/school` = the React app
+(unchanged). PWA `start_url` → `/school` so the installed Seeker app still opens into the school.
+Internal code-split of the React app (App.jsx split + lazy-load, the audit's #1 frontend debt)
+remains a worthwhile FOLLOW-UP to speed the school itself — no longer blocking, since `/` no
+longer loads it.
