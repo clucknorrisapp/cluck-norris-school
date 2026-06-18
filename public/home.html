@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Cluck Norris — Learn Crypto. Build a Token. The Hard Way.</title>
-<meta name="description" content="Cluck Norris is a place to learn and to build: a free Solana crypto school, free + premium token-research tools, and a real token (CLKN) that practices the liquidity strategies it teaches.">
+<meta name="description" content="Cluck Norris is a place to learn and to build: a free Solana crypto school, free + premium token-research tools, and a real token (CLKN) that runs the liquidity strategies it teaches.">
 <meta property="og:title" content="Cluck Norris — School of Crypto Hard Knocks">
 <meta property="og:description" content="A free crypto school + free tools + a real token that eats its own cooking. Learn and build — no buy pitch.">
 <meta property="og:image" content="https://clucknorris.app/cluck-norris-mascot.jpg">
@@ -12,88 +12,109 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="stylesheet" href="/theme.css">
 <style>
-  /* tokens, fonts, ground, keyframes from /theme.css */
   body{ -webkit-font-smoothing:antialiased; }
   a{ color:inherit; text-decoration:none; }
   .embers{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;}
   .embers span{position:absolute;bottom:40px;border-radius:50%;background:radial-gradient(circle,#FFD56B,#FF5A0A);}
 
-  /* top bar */
-  .nav{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:14px;padding:12px 20px;
-       background:linear-gradient(180deg,rgba(22,11,6,.92),rgba(22,11,6,.55));backdrop-filter:blur(6px);
+  /* ── sticky top bar ── */
+  .nav{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:14px;padding:11px 20px;
+       background:linear-gradient(180deg,rgba(18,9,5,.94),rgba(18,9,5,.6));backdrop-filter:blur(8px);
        border-bottom:1px solid var(--border-soft);}
   .nav .brand{display:flex;align-items:center;gap:10px;font-family:var(--disp);font-size:18px;letter-spacing:.5px;}
-  .nav .brand img{width:34px;height:34px;border-radius:50%;object-fit:cover;object-position:center 12%;border:1.5px solid var(--gold);}
+  .nav .brand img{width:32px;height:32px;border-radius:50%;object-fit:cover;object-position:center 12%;border:1.5px solid var(--gold);}
   .nav .brand .c{color:var(--orange);} .nav .brand .n{color:var(--text);}
-  .nav .links{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;}
-  .nav .links a{font-family:var(--body);font-weight:600;font-size:12px;letter-spacing:.5px;color:var(--sub);
-       padding:7px 12px;border-radius:999px;border:1px solid transparent;text-transform:uppercase;}
-  .nav .links a:hover{color:#fff;border-color:var(--border);background:rgba(255,122,24,.08);}
+  .nav .links{margin-left:auto;display:flex;gap:4px;align-items:center;flex-wrap:wrap;}
+  .nav .links a{font-family:var(--body);font-weight:600;font-size:12px;letter-spacing:.4px;color:var(--sub);
+       padding:7px 11px;border-radius:999px;text-transform:uppercase;}
+  .nav .links a:hover{color:#fff;background:rgba(255,122,24,.1);}
+  .nav .links a.cta{color:#fff;background:linear-gradient(135deg,var(--orange),var(--red));box-shadow:0 4px 14px rgba(232,30,14,.35);}
+  .nav .links a.cta:hover{color:#fff;filter:brightness(1.05);}
 
-  .wrap{position:relative;z-index:2;max-width:1080px;margin:0 auto;padding:0 18px 80px;}
+  .wrap{position:relative;z-index:2;max-width:1100px;margin:0 auto;padding:0 18px 84px;}
 
-  /* hero */
-  .hero{text-align:center;padding:54px 10px 28px;}
-  .hero .avatar{width:120px;height:120px;border-radius:50%;object-fit:cover;object-position:center 12%;
+  /* ── hero ── */
+  .hero{text-align:center;padding:58px 10px 26px;}
+  .hero .avatar{width:118px;height:118px;border-radius:50%;object-fit:cover;object-position:center 12%;
        border:3px solid var(--gold);animation:ckGlow 2.6s ease-in-out infinite;}
-  .hero h1{font-family:var(--disp);font-size:54px;line-height:1.02;margin:18px 0 6px;letter-spacing:1px;}
+  .hero .kicker{font-family:var(--disp);font-size:13px;letter-spacing:5px;color:var(--sub);text-transform:uppercase;margin-top:16px;}
+  .hero h1{font-family:var(--disp);font-size:56px;line-height:1.02;margin:8px 0 4px;letter-spacing:1px;}
   .hero h1 .c{color:var(--orange);} .hero h1 .n{color:var(--text);}
-  .hero .kicker{font-family:var(--disp);font-size:13px;letter-spacing:5px;color:var(--sub);text-transform:uppercase;}
-  .hero .tag{font-family:var(--disp);font-size:24px;color:var(--gold);letter-spacing:.5px;margin:14px auto 8px;max-width:760px;line-height:1.18;text-transform:uppercase;text-shadow:0 2px 12px rgba(255,90,10,.3);}
-  .hero .lede{font-size:16px;color:var(--body-text);max-width:640px;margin:0 auto;line-height:1.6;}
+  .hero .tag{font-family:var(--disp);font-size:25px;color:var(--gold);letter-spacing:.5px;margin:14px auto 10px;max-width:780px;line-height:1.16;text-transform:uppercase;text-shadow:0 2px 14px rgba(255,90,10,.3);}
+  .hero .lede{font-size:16.5px;color:var(--body-text);max-width:660px;margin:0 auto;line-height:1.65;}
   .hero .lede b{color:var(--text);}
-  .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:24px;}
-  .btn{font-family:var(--disp);letter-spacing:1px;font-size:16px;padding:13px 26px;border-radius:12px;cursor:pointer;border:1px solid transparent;display:inline-flex;align-items:center;gap:8px;transition:transform .1s,box-shadow .12s;}
+  .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:26px;}
+  .btn{font-family:var(--disp);letter-spacing:1px;font-size:16px;padding:13px 28px;border-radius:12px;cursor:pointer;border:1px solid transparent;display:inline-flex;align-items:center;gap:8px;transition:transform .1s,box-shadow .12s,filter .12s;}
   .btn.primary{color:#fff;background:linear-gradient(135deg,var(--orange),var(--red));box-shadow:0 6px 18px rgba(232,30,14,.4);}
+  .btn.primary:hover{transform:translateY(-1px);filter:brightness(1.05);}
   .btn.ghost{color:var(--gold);background:rgba(255,122,24,.08);border-color:var(--border);}
-  .btn:hover{transform:translateY(-1px);}
-  .nopitch{margin-top:16px;font-size:12.5px;color:var(--muted);letter-spacing:.5px;}
+  .btn.ghost:hover{transform:translateY(-1px);border-color:var(--orange);color:#fff;}
+  .nopitch{margin-top:15px;font-size:12.5px;color:var(--muted);letter-spacing:.4px;}
 
-  .section-h{font-family:var(--disp);font-size:13px;letter-spacing:3px;color:var(--orange);text-transform:uppercase;margin:48px 0 4px;text-align:center;}
-  .section-sub{text-align:center;color:var(--sub);font-size:13.5px;margin:0 auto 22px;max-width:620px;line-height:1.5;}
+  /* ── credibility strip ── */
+  .creds{display:flex;flex-wrap:wrap;justify-content:center;gap:10px 26px;margin:8px auto 0;max-width:900px;
+         padding:16px 18px;border-top:1px solid var(--border-soft);border-bottom:1px solid var(--border-soft);}
+  .cred{display:flex;align-items:baseline;gap:7px;font-family:var(--body);font-size:13px;color:var(--sub);}
+  .cred b{font-family:var(--disp);font-size:17px;color:var(--gold);letter-spacing:.3px;}
+  .cred .lbl{text-transform:uppercase;letter-spacing:.6px;font-size:11px;}
 
-  /* three pillars */
-  .pillars{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
-  .pillar{background:var(--card-grad);border:1px solid var(--border);border-radius:16px;padding:22px;box-shadow:0 10px 30px rgba(0,0,0,.4);}
-  .pillar .ic{font-size:30px;}
-  .pillar h3{font-family:var(--disp);font-size:20px;color:var(--gold);margin:10px 0 8px;letter-spacing:.5px;}
-  .pillar p{font-size:13.5px;color:var(--body-text);line-height:1.6;margin:0;}
+  /* ── section headers ── */
+  .section-h{font-family:var(--disp);font-size:13px;letter-spacing:3px;color:var(--orange);text-transform:uppercase;margin:52px 0 4px;text-align:center;}
+  .section-sub{text-align:center;color:var(--sub);font-size:14px;margin:0 auto 22px;max-width:640px;line-height:1.55;}
 
-  /* nav card grid */
+  /* ── choose-your-path ── */
+  .paths{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}
+  .path{position:relative;display:block;background:var(--card-grad);border:1px solid var(--border);border-radius:16px;padding:20px 18px;
+        transition:transform .12s,border-color .12s,box-shadow .12s;overflow:hidden;}
+  .path:hover{transform:translateY(-3px);border-color:var(--orange);box-shadow:0 14px 34px rgba(232,30,14,.2);}
+  .path .ic{font-size:30px;}
+  .path .who{font-family:var(--body);font-weight:700;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-top:12px;}
+  .path .t{font-family:var(--disp);font-size:19px;color:var(--gold);margin:3px 0 7px;letter-spacing:.4px;line-height:1.1;}
+  .path p{font-size:12.5px;color:var(--body-text);line-height:1.55;margin:0;}
+  .path .go{margin-top:12px;font-family:var(--disp);font-size:12px;letter-spacing:1px;color:var(--orange);text-transform:uppercase;}
+  .path:hover .go{color:#fff;}
+
+  /* ── catalog card grids ── */
   .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
   .card{display:block;background:var(--card-grad);border:1px solid var(--border);border-radius:14px;padding:18px;
         transition:transform .12s,border-color .12s,box-shadow .12s;}
   .card:hover{transform:translateY(-2px);border-color:var(--orange);box-shadow:0 10px 28px rgba(232,30,14,.18);}
   .card .top{display:flex;align-items:center;gap:10px;}
-  .card .ic{font-size:24px;}
-  .card .t{font-family:var(--disp);font-size:17px;color:var(--text);letter-spacing:.4px;}
-  .card .free{margin-left:auto;font-family:var(--body);font-weight:700;font-size:9.5px;letter-spacing:1px;text-transform:uppercase;padding:3px 8px;border-radius:999px;}
-  .free.f{color:var(--green);background:var(--greenbg);border:1px solid rgba(123,226,107,.3);}
-  .free.p{color:var(--gold);background:rgba(255,182,39,.08);border:1px solid rgba(255,182,39,.3);}
-  .free.dev{color:var(--sub);background:rgba(255,122,24,.06);border:1px solid var(--border);}
+  .card .ic{font-size:23px;}
+  .card .t{font-family:var(--disp);font-size:16.5px;color:var(--text);letter-spacing:.4px;}
+  .card .tag{margin-left:auto;font-family:var(--body);font-weight:700;font-size:9.5px;letter-spacing:1px;text-transform:uppercase;padding:3px 8px;border-radius:999px;}
+  .tag.f{color:var(--green);background:var(--greenbg);border:1px solid rgba(123,226,107,.3);}
+  .tag.p{color:var(--gold);background:rgba(255,182,39,.08);border:1px solid rgba(255,182,39,.3);}
+  .tag.dev{color:var(--sub);background:rgba(255,122,24,.06);border:1px solid var(--border);}
   .card p{font-size:12.5px;color:var(--body-text);line-height:1.55;margin:9px 0 0;}
 
-  /* token story */
-  .token{background:linear-gradient(180deg,rgba(255,122,24,.07),rgba(22,11,6,.2));border:1px solid var(--border);border-radius:18px;padding:30px 26px;margin-top:24px;}
-  .token h2{font-family:var(--disp);font-size:26px;color:var(--gold);letter-spacing:.5px;margin:0 0 6px;text-align:center;}
+  /* ── token story ── */
+  .token{background:linear-gradient(180deg,rgba(255,122,24,.07),rgba(22,11,6,.25));border:1px solid var(--border);border-radius:18px;padding:32px 26px;margin-top:26px;}
+  .token h2{font-family:var(--disp);font-size:27px;color:var(--gold);letter-spacing:.5px;margin:0 0 6px;text-align:center;}
   .token .flow{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:22px 0 6px;}
-  .token .step{text-align:center;background:var(--card-grad);border:1px solid var(--border);border-radius:12px;padding:14px 10px;}
+  .token .step{text-align:center;background:var(--card-grad);border:1px solid var(--border);border-radius:12px;padding:15px 10px;position:relative;}
   .token .step .n{font-family:var(--disp);font-size:11px;color:var(--orange);letter-spacing:2px;}
   .token .step .b{font-family:var(--disp);font-size:14px;color:var(--text);margin-top:5px;line-height:1.2;}
   .token .step .d{font-size:11px;color:var(--sub);margin-top:5px;line-height:1.4;}
-  .token .note{text-align:center;color:var(--body-text);font-size:14px;line-height:1.65;max-width:780px;margin:14px auto 0;}
+  .token .engine{display:flex;justify-content:center;flex-wrap:wrap;gap:8px 22px;margin:20px 0 4px;}
+  .token .engine .m{display:flex;align-items:baseline;gap:7px;font-size:12.5px;color:var(--sub);}
+  .token .engine .m b{font-family:var(--disp);font-size:18px;color:var(--gold);}
+  .token .note{text-align:center;color:var(--body-text);font-size:14px;line-height:1.65;max-width:800px;margin:14px auto 0;}
   .token .note b{color:var(--gold);}
+  .token .note a{color:var(--orange);}
 
-  footer{margin-top:54px;padding-top:24px;border-top:1px solid var(--border-soft);text-align:center;color:var(--sub);font-size:12.5px;line-height:1.8;}
+  footer{margin-top:56px;padding-top:26px;border-top:1px solid var(--border-soft);text-align:center;color:var(--sub);font-size:12.5px;line-height:1.9;}
   footer a{color:var(--orange);}
+  footer .row{margin-bottom:6px;}
   footer .mint{font-family:var(--mono);font-size:10.5px;color:var(--muted);word-break:break-all;margin-top:10px;}
-  footer .disc{color:var(--muted);font-size:11px;max-width:680px;margin:12px auto 0;line-height:1.5;}
+  footer .disc{color:var(--muted);font-size:11px;max-width:700px;margin:12px auto 0;line-height:1.55;}
 
-  @media(max-width:780px){
-    .pillars,.grid,.token .flow{grid-template-columns:1fr;}
+  @media(max-width:880px){ .paths{grid-template-columns:1fr 1fr;} .grid{grid-template-columns:1fr 1fr;} }
+  @media(max-width:620px){
+    .paths,.grid,.token .flow{grid-template-columns:1fr;}
     .token .flow{grid-template-columns:1fr 1fr;}
-    .hero h1{font-size:40px;} .hero .tag{font-size:19px;}
-    .nav .links{display:none;}
+    .hero h1{font-size:42px;} .hero .tag{font-size:20px;}
+    .nav .links a:not(.cta){display:none;}
   }
 </style>
 </head>
@@ -111,10 +132,11 @@
 <nav class="nav">
   <a class="brand" href="/"><img src="/cluck-norris-mascot.jpg" alt=""><span><span class="c">CLUCK</span> <span class="n">NORRIS</span></span></a>
   <div class="links">
-    <a href="/school">School</a>
-    <a href="/ask-cluck">Ask Cluck</a>
-    <a href="/tools">Tools</a>
+    <a href="#paths">Start</a>
+    <a href="#learn">Learn</a>
+    <a href="#tools">Tools</a>
     <a href="#token">Token</a>
+    <a class="cta" href="/school">Enter School</a>
   </div>
 </nav>
 
@@ -126,57 +148,79 @@
     <div class="kicker">School of Crypto Hard Knocks</div>
     <h1><span class="c">CLUCK</span> <span class="n">NORRIS</span></h1>
     <div class="tag">Learn crypto. Build a token. The hard way.</div>
-    <p class="lede">A place to <b>learn</b> and to <b>build</b>: a free crypto school, free and premium token-research tools, and a real token that runs on the very strategies it teaches.</p>
+    <p class="lede">A place to <b>learn</b> and to <b>build</b> — a free Solana crypto school, free and premium token-research tools, and a real token that runs on the very strategies it teaches.</p>
     <div class="cta">
       <a class="btn primary" href="/school">🎓 Enter the School</a>
-      <a class="btn ghost" href="/tools">🛠️ Explore the Tools</a>
+      <a class="btn ghost" href="#paths">Find your starting point</a>
     </div>
     <div class="nopitch">No buy pitch. No hype. Just learn, build, and watch the brand grow.</div>
   </header>
 
-  <!-- THREE PILLARS -->
-  <div class="section-h">What Cluck Norris Is</div>
-  <p class="section-sub">Three things, one mission — take everything we learn and teach, and put it to work.</p>
-  <div class="pillars">
-    <div class="pillar">
-      <div class="ic">🎓</div>
-      <h3>Learn</h3>
-      <p>A genuinely free crypto school — wallets &amp; safety for total beginners, a 12-lesson belt course, an LP/liquidity deep-dive, a live AI classroom, and the brutal Ultimate Challenge. Pass it and earn a permanent on-chain diploma.</p>
-    </div>
-    <div class="pillar">
-      <div class="ic">🛠️</div>
-      <h3>Build</h3>
-      <p>Free, no-wallet-connect tools to research any Solana token — Wallet X-Ray, Token Autopsy, the Order Book scanner, and more. Premium operator tools for the serious, with new ones always in development.</p>
-    </div>
-    <div class="pillar">
-      <div class="ic">🪙</div>
-      <h3>The Token</h3>
-      <p>CLKN is a real token — but we don't ask you to buy. The bet is simple: as the brand grows, so does the token. We fund the project the way we teach, not by selling hype.</p>
-    </div>
+  <!-- CREDIBILITY -->
+  <div class="creds" id="creds">
+    <div class="cred"><b>52</b><span class="lbl">free lessons</span></div>
+    <div class="cred"><b id="cr-markets">20</b><span class="lbl">live markets</span></div>
+    <div class="cred"><b>3</b><span class="lbl">DEXs · Orca · Meteora · Raydium</span></div>
+    <div class="cred"><b>MIT</b><span class="lbl">open source</span></div>
+    <div class="cred"><b>Seeker</b><span class="lbl">dApp store</span></div>
+  </div>
+
+  <!-- CHOOSE YOUR PATH -->
+  <div class="section-h" id="paths">Find Your Starting Point</div>
+  <p class="section-sub">Tell us where you're at — we'll drop you exactly where you should begin.</p>
+  <div class="paths">
+    <a class="path" href="/school#incubator">
+      <div class="ic">🐣</div>
+      <div class="who">Brand new to crypto</div>
+      <div class="t">Start in the Incubator</div>
+      <p>Wallets, keys, tokens, and not getting rekt — the gentle on-ramp for total beginners.</p>
+      <div class="go">Begin →</div>
+    </a>
+    <a class="path" href="/school">
+      <div class="ic">🏫</div>
+      <div class="who">Know the basics</div>
+      <div class="t">Level Up at School</div>
+      <p>12 progressive lessons, belts Freshman → Emeritus. Pass to promote — then take the Ultimate Challenge.</p>
+      <div class="go">Enroll →</div>
+    </a>
+    <a class="path" href="/school#lplab">
+      <div class="ic">🌊</div>
+      <div class="who">Want LP mastery</div>
+      <div class="t">Go Deep in LP School</div>
+      <p>Our specialty. AMMs, impermanent loss, concentrated liquidity, and building a real LP strategy.</p>
+      <div class="go">Dive in →</div>
+    </a>
+    <a class="path" href="/tools">
+      <div class="ic">🔬</div>
+      <div class="who">Here to research</div>
+      <div class="t">Use the Tools</div>
+      <p>Investigate any Solana token or wallet — X-Ray, Autopsy, Order Book. No wallet connect needed.</p>
+      <div class="go">Investigate →</div>
+    </a>
   </div>
 
   <!-- LEARN -->
-  <div class="section-h">🎓 The Free School</div>
-  <p class="section-sub">Start wherever you are. Everything here is free.</p>
+  <div class="section-h" id="learn">🎓 The Free School</div>
+  <p class="section-sub">Everything here is free. Earn a permanent, shareable on-chain diploma when you pass.</p>
   <div class="grid">
-    <a class="card" href="/school#incubator"><div class="top"><span class="ic">🐣</span><span class="t">The Incubator</span><span class="free f">Free</span></div><p>Brand new to crypto? Wallets, keys, tokens, and not getting rekt — the gentle on-ramp.</p></a>
-    <a class="card" href="/school"><div class="top"><span class="ic">🏫</span><span class="t">Hard Knocks Course</span><span class="free f">Free</span></div><p>12 progressive lessons, belts from Freshman to Emeritus. Pass to promote — no participation trophies.</p></a>
-    <a class="card" href="/ask-cluck"><div class="top"><span class="ic">🔥</span><span class="t">Ask Cluck</span><span class="free f">Free</span></div><p>Tap a topic or ask anything — a live AI lecture in Cluck's Chuck-Norris-fact voice.</p></a>
-    <a class="card" href="/classroom"><div class="top"><span class="ic">🎓</span><span class="t">Live Classroom</span><span class="free f">Free</span></div><p>Professor Cluck teaches one concept at a time, quizzes you, and grades your answers — lesson by lesson.</p></a>
-    <a class="card" href="/school#lplab"><div class="top"><span class="ic">⚗️</span><span class="t">LP School</span><span class="free f">Free</span></div><p>Our specialty. AMMs, impermanent loss, concentrated liquidity, and building a real LP strategy — protocol-agnostic.</p></a>
-    <a class="card" href="/school#challenge"><div class="top"><span class="ic">🏆</span><span class="t">Ultimate Challenge</span><span class="free f">Free</span></div><p>50 questions, 94% to pass. Most don't. Pass it and mint a permanent, shareable diploma.</p></a>
+    <a class="card" href="/school#incubator"><div class="top"><span class="ic">🐣</span><span class="t">The Incubator</span><span class="tag f">Free</span></div><p>Brand new? Wallets, keys, tokens, and not getting rekt — the gentle on-ramp.</p></a>
+    <a class="card" href="/school"><div class="top"><span class="ic">🏫</span><span class="t">Hard Knocks Course</span><span class="tag f">Free</span></div><p>12 progressive lessons, belts from Freshman to Emeritus. Pass to promote.</p></a>
+    <a class="card" href="/ask-cluck"><div class="top"><span class="ic">🔥</span><span class="t">Ask Cluck</span><span class="tag f">Free</span></div><p>Tap a topic or ask anything — a live AI lecture in Cluck's Chuck-Norris-fact voice.</p></a>
+    <a class="card" href="/classroom"><div class="top"><span class="ic">🎓</span><span class="t">Live Classroom</span><span class="tag f">Free</span></div><p>Professor Cluck teaches one concept at a time, quizzes you, and grades your answers.</p></a>
+    <a class="card" href="/school#lplab"><div class="top"><span class="ic">⚗️</span><span class="t">LP School</span><span class="tag f">Free</span></div><p>AMMs, impermanent loss, concentrated liquidity — protocol-agnostic LP mastery.</p></a>
+    <a class="card" href="/school#challenge"><div class="top"><span class="ic">🏆</span><span class="t">Ultimate Challenge</span><span class="tag f">Free</span></div><p>50 questions, 94% to pass. Most don't. Pass it and mint a permanent diploma.</p></a>
   </div>
 
   <!-- BUILD -->
-  <div class="section-h">🛠️ The Tools</div>
+  <div class="section-h" id="tools">🛠️ The Tools</div>
   <p class="section-sub">Research any Solana token. No wallet connect required.</p>
   <div class="grid">
-    <a class="card" href="/wallet-xray"><div class="top"><span class="ic">🩻</span><span class="t">Wallet X-Ray</span><span class="free f">Free</span></div><p>Full deep-dive on any wallet — holdings, behavior, and the story the chain tells.</p></a>
-    <a class="card" href="/autopsy"><div class="top"><span class="ic">🔬</span><span class="t">Token Autopsy</span><span class="free f">Free</span></div><p>AI forensic agent for any Solana token. Paste a mint, learn from the corpse.</p></a>
-    <a class="card" href="/order-book"><div class="top"><span class="ic">🧱</span><span class="t">Order Book</span><span class="free f">Free</span></div><p>Where buy &amp; sell pressure rests — limit orders, walls, and cross-pool depth across venues.</p></a>
-    <a class="card" href="/tools"><div class="top"><span class="ic">🧰</span><span class="t">All Free Tools</span><span class="free f">Free</span></div><p>Holders, trace, snapshot, airdrop checker, wallet checkup, and the rest of the toolkit.</p></a>
-    <a class="card" href="/premium"><div class="top"><span class="ic">💎</span><span class="t">Premium Tools</span><span class="free p">Premium</span></div><p>Deeper forensics and operator tooling for the serious — unlocked with CLKN, no wallet-connect to pay.</p></a>
-    <a class="card" href="/hatchery"><div class="top"><span class="ic">🥚</span><span class="t">More In Development</span><span class="free dev">Soon</span></div><p>We're always building. New tools and features ship continuously — this list keeps growing.</p></a>
+    <a class="card" href="/wallet-xray"><div class="top"><span class="ic">🩻</span><span class="t">Wallet X-Ray</span><span class="tag f">Free</span></div><p>Full deep-dive on any wallet — holdings, behavior, and the story the chain tells.</p></a>
+    <a class="card" href="/autopsy"><div class="top"><span class="ic">🔬</span><span class="t">Token Autopsy</span><span class="tag f">Free</span></div><p>AI forensic agent for any Solana token. Paste a mint, learn from the corpse.</p></a>
+    <a class="card" href="/order-book"><div class="top"><span class="ic">🧱</span><span class="t">Order Book</span><span class="tag f">Free</span></div><p>Where buy &amp; sell pressure rests — limit orders, walls, and cross-pool depth.</p></a>
+    <a class="card" href="/tools"><div class="top"><span class="ic">🧰</span><span class="t">All Free Tools</span><span class="tag f">Free</span></div><p>Holders, trace, snapshot, airdrop checker, wallet checkup, and the rest of the kit.</p></a>
+    <a class="card" href="/premium"><div class="top"><span class="ic">💎</span><span class="t">Premium Tools</span><span class="tag p">Premium</span></div><p>Deeper forensics and operator tooling — unlocked with CLKN, no wallet-connect to pay.</p></a>
+    <a class="card" href="/hatchery"><div class="top"><span class="ic">🥚</span><span class="t">More In Development</span><span class="tag dev">Soon</span></div><p>We're always building. New tools and features ship continuously.</p></a>
   </div>
 
   <!-- TOKEN STORY -->
@@ -184,22 +228,27 @@
     <h2>🪙 We Eat Our Own Cooking</h2>
     <p class="section-sub" style="margin-bottom:0">CLKN is where everything we learn and teach gets applied — to our own token.</p>
     <div class="flow">
-      <div class="step"><div class="n">01</div><div class="b">We Teach It</div><div class="d">Liquidity, fees, and LP strategy — the LP School curriculum.</div></div>
-      <div class="step"><div class="n">02</div><div class="b">We Run It</div><div class="d">The same strategies manage CLKN's own liquidity across pools.</div></div>
+      <div class="step"><div class="n">01</div><div class="b">We Teach It</div><div class="d">Liquidity, fees &amp; LP strategy — the LP School curriculum.</div></div>
+      <div class="step"><div class="n">02</div><div class="b">We Run It</div><div class="d">Those same strategies manage CLKN's own liquidity across pools.</div></div>
       <div class="step"><div class="n">03</div><div class="b">It Creates Volume</div><div class="d">Natural, organic trading volume and fees — not wash, not hype.</div></div>
-      <div class="step"><div class="n">04</div><div class="b">It Feeds Back</div><div class="d">Fees flow back into the project, funding the school and the tools.</div></div>
+      <div class="step"><div class="n">04</div><div class="b">It Feeds Back</div><div class="d">Fees flow back in, funding the school and the tools.</div></div>
     </div>
-    <p class="note">We don't ask you to buy. <b>As the brand grows, so does the token</b> — and the token's own liquidity engine, built on the strategies we teach, keeps the lights on. Everything we try to teach, put together in our own little token. Want to understand it first? <a href="/school#clkn" style="color:var(--orange)">See the live token data &amp; how it works →</a></p>
+    <div class="engine" id="engine">
+      <div class="m"><b id="en-vol">$34K</b><span>organic 24h volume</span></div>
+      <div class="m"><b id="en-markets">20</b><span>live markets</span></div>
+      <div class="m"><b id="en-liq">$42K</b><span>pool liquidity</span></div>
+    </div>
+    <p class="note">We don't ask you to buy. <b>As the brand grows, so does the token</b> — and its own liquidity engine, built on the strategies we teach, keeps the lights on. Everything we learn and teach, put together in our own little token. Want the details first? <a href="/school#clkn">See the live token data &amp; how it works →</a></p>
   </section>
 
   <footer>
-    <div>
+    <div class="row">
+      <a href="/school">School</a> · <a href="/ask-cluck">Ask Cluck</a> · <a href="/tools">Tools</a> ·
+      <a href="/premium">Premium</a> · <a href="/grant">Grant</a> · <a href="/investors">Investors</a>
+    </div>
+    <div class="row">
       <a href="https://x.com/firechicken007" target="_blank" rel="noreferrer">𝕏 Twitter</a> ·
-      <a href="https://t.me/FireChicken007" target="_blank" rel="noreferrer">✈️ Telegram</a> ·
-      <a href="/school">School</a> ·
-      <a href="/tools">Tools</a> ·
-      <a href="/grant">Grant</a> ·
-      <a href="/investors">Investors</a>
+      <a href="https://t.me/FireChicken007" target="_blank" rel="noreferrer">✈️ Telegram</a>
     </div>
     <div class="mint">CLKN · DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS</div>
     <div class="disc">Educational tools and forensic data only — the chain shows <em>what</em>, never <em>why</em>. Nothing here is financial advice. Cluck Norris teaches; he doesn't tell you what to buy.</div>
@@ -207,13 +256,33 @@
 </div>
 
 <script>
-  // Backward-compat: old deep links like /#library or /#challenge used to drive the
-  // React app at the root. The school now lives at /school — forward those through.
+  // Backward-compat: old /#screen deep links → /school#screen
   (function () {
     var h = (location.hash || "").replace(/^#/, "");
     if (["library","incubator","lplab","survive","clkn","challenge","select","start"].indexOf(h) !== -1) {
       location.replace("/school#" + h);
     }
+  })();
+
+  // Live engine stats — real numbers read more professional than static claims.
+  // Graceful: if the fetch fails, the sensible static fallbacks above just stay.
+  (function () {
+    var fmt = function (n) {
+      n = Number(n) || 0;
+      if (n >= 1e6) return "$" + (n / 1e6).toFixed(1) + "M";
+      if (n >= 1e3) return "$" + Math.round(n / 1e3) + "K";
+      return "$" + Math.round(n);
+    };
+    fetch("/api/token-overview?mint=DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS")
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.success) return;
+        var set = function (id, v) { var el = document.getElementById(id); if (el && v != null) el.textContent = v; };
+        if (d.volume24hUsd != null) set("en-vol", fmt(d.volume24hUsd));
+        if (d.liquidityUsd != null) set("en-liq", fmt(d.liquidityUsd));
+        if (d.marketCount != null) { set("en-markets", d.marketCount); set("cr-markets", d.marketCount); }
+      })
+      .catch(function () {});
   })();
 </script>
 </body>
