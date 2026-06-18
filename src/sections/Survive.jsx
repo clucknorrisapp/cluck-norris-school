@@ -1877,9 +1877,9 @@ function SurvivalSimulator() {
   const scenario = scenarios[round];
 
   function getTier(val) {
-    if (val >= 2000) return { label: "CLUCK NORRIS CERTIFIED 👑", color: "#FCD34D", msg: "You survived everything the market threw at you. Cluck Norris is grudgingly impressed." };
+    if (val >= 2000) return { label: "CLUCK NORRIS CERTIFIED 👑", color: "#FFB627", msg: "You survived everything the market threw at you. Cluck Norris is grudgingly impressed." };
     if (val >= 1500) return { label: "STREET SMART ✅", color: "#10B981", msg: "You made more right calls than wrong ones. There is hope for you in this schoolyard." };
-    if (val >= 1000) return { label: "STILL LEARNING 😐", color: "#F59E0B", msg: "You survived but barely grew. More lessons needed before you touch serious capital." };
+    if (val >= 1000) return { label: "STILL LEARNING 😐", color: "#FFB627", msg: "You survived but barely grew. More lessons needed before you touch serious capital." };
     if (val >= 500) return { label: "LUCKY TO BE ALIVE 😬", color: "#EF4444", msg: "You made it to the end with most of your starting capital gone. The market is a patient teacher." };
     return { label: "REKT 💀", color: "#7F1D1D", msg: "The market took you to school and charged full tuition. Go back to Lesson 1. All of them." };
   }
@@ -1890,34 +1890,34 @@ function SurvivalSimulator() {
     <div style={{padding:"0 16px 40px",maxWidth:COLW,margin:"0 auto"}}>
       <div style={{textAlign:"center",marginBottom:24}}>
         <div style={{fontSize:52,marginBottom:8}}>🎮</div>
-        <h2 style={{fontFamily:"'Oswald',sans-serif",fontSize:30,fontWeight:900,color:"#F9FAFB",margin:"0 0 4px",letterSpacing:2}}>CRYPTO SURVIVAL</h2>
-        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:14,color:"#6B7280",letterSpacing:3,marginBottom:16}}>SIMULATOR</div>
-        <div style={{background:"rgba(217,119,6,0.08)",border:"1px solid rgba(217,119,6,0.25)",borderRadius:12,padding:"16px",marginBottom:20,display:"flex",gap:12,alignItems:"flex-start",textAlign:"left"}}>
-          <img src={LOGO_B64} alt="CN" style={{width:40,height:40,borderRadius:"50%",objectFit:"cover",border:"2px solid #D97706",flexShrink:0}}/>
-          <p style={{margin:0,fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FCD34D",fontSize:15,lineHeight:1.7}}>You start with $1,000 USDC. The market is going to try to take it. Ten rounds. Real scenarios. Ready?</p>
+        <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:30,fontWeight:900,color:"#F9FAFB",margin:"0 0 4px",letterSpacing:2}}>CRYPTO SURVIVAL</h2>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:14,color:"#6B7280",letterSpacing:3,marginBottom:16}}>SIMULATOR</div>
+        <div style={{background:"rgba(255,122,24,0.08)",border:"1px solid rgba(255,122,24,0.25)",borderRadius:12,padding:"16px",marginBottom:20,display:"flex",gap:12,alignItems:"flex-start",textAlign:"left"}}>
+          <img src={LOGO_B64} alt="CN" style={{width:40,height:40,borderRadius:"50%",objectFit:"cover",border:"2px solid #FF7A18",flexShrink:0}}/>
+          <p style={{margin:0,fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FFB627",fontSize:15,lineHeight:1.7}}>You start with $1,000 USDC. The market is going to try to take it. Ten rounds. Real scenarios. Ready?</p>
         </div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>
         {[{emoji:"🚨",label:"DANGER",desc:"Scams, rugs, exploits"},{emoji:"📈",label:"OPPORTUNITY",desc:"Legit plays and yields"},{emoji:"🧠",label:"KNOWLEDGE",desc:"DeFi mechanics"},{emoji:"😱",label:"EMOTIONAL",desc:"Psychology traps"}].map((c,i)=>(
           <div key={i} style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"14px"}}>
             <div style={{fontSize:28,marginBottom:6}}>{c.emoji}</div>
-            <div style={{fontFamily:"'Oswald',sans-serif",fontSize:15,fontWeight:700,color:"#D1D5DB",letterSpacing:1,marginBottom:3}}>{c.label}</div>
-            <div style={{fontFamily:"'Oswald',sans-serif",fontSize:12,color:"#6B7280"}}>{c.desc}</div>
+            <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#D1D5DB",letterSpacing:1,marginBottom:3}}>{c.label}</div>
+            <div style={{fontFamily:"'Anton',sans-serif",fontSize:12,color:"#6B7280"}}>{c.desc}</div>
           </div>
         ))}
       </div>
       <div style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"14px 16px",marginBottom:20}}>
-        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:12,color:"#6B7280",letterSpacing:2,marginBottom:10}}>HOW IT WORKS</div>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:12,color:"#6B7280",letterSpacing:2,marginBottom:10}}>HOW IT WORKS</div>
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
           {["10 scenarios drawn randomly from 75 total","Each choice affects your portfolio value","Realistic outcomes — even good decisions can lose sometimes","Cluck Norris judges every move","No second chances. No rewinds."].map((t,i)=>(
             <div key={i} style={{display:"flex",gap:10,alignItems:"flex-start"}}>
-              <span style={{color:"#D97706",fontSize:14,flexShrink:0}}>•</span>
-              <span style={{fontFamily:"'Oswald',sans-serif",fontSize:14,color:"#D1D5DB",lineHeight:1.6}}>{t}</span>
+              <span style={{color:"#FF7A18",fontSize:14,flexShrink:0}}>•</span>
+              <span style={{fontFamily:"'Anton',sans-serif",fontSize:14,color:"#D1D5DB",lineHeight:1.6}}>{t}</span>
             </div>
           ))}
         </div>
       </div>
-      <button onClick={startGame} style={{width:"100%",background:"linear-gradient(135deg,#D97706,#EF4444)",border:"none",borderRadius:10,padding:"16px",fontFamily:"'Oswald',sans-serif",fontSize:18,fontWeight:900,color:"#fff",letterSpacing:3,cursor:"pointer"}}>
+      <button onClick={startGame} style={{width:"100%",background:"linear-gradient(135deg,#FF7A18,#EF4444)",border:"none",borderRadius:10,padding:"16px",fontFamily:"'Anton',sans-serif",fontSize:18,fontWeight:900,color:"#fff",letterSpacing:3,cursor:"pointer"}}>
         ENTER THE SCHOOLYARD →
       </button>
     </div>
@@ -1930,19 +1930,19 @@ function SurvivalSimulator() {
       <div style={{padding:"0 16px 40px",maxWidth:COLW,margin:"0 auto"}}>
         <div style={{textAlign:"center",marginBottom:20}}>
           <div style={{fontSize:48,marginBottom:8}}>📊</div>
-          <h2 style={{fontFamily:"'Oswald',sans-serif",fontSize:22,fontWeight:900,color:"#F9FAFB",margin:"0 0 4px",letterSpacing:2}}>SURVIVAL COMPLETE</h2>
+          <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:22,fontWeight:900,color:"#F9FAFB",margin:"0 0 4px",letterSpacing:2}}>SURVIVAL COMPLETE</h2>
         </div>
         <div style={{background:"rgba(0,0,0,0.4)",border:`2px solid ${tier.color}40`,borderRadius:14,padding:20,marginBottom:16,textAlign:"center"}}>
-          <div style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:2,marginBottom:8}}>FINAL PORTFOLIO</div>
+          <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:2,marginBottom:8}}>FINAL PORTFOLIO</div>
           <div style={{fontFamily:"monospace",fontSize:36,fontWeight:900,color:tier.color,marginBottom:4}}>${portfolio.toLocaleString()}</div>
-          <div style={{fontFamily:"'Oswald',sans-serif",fontSize:11,color:change>=0?"#10B981":"#EF4444",marginBottom:12}}>
+          <div style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:change>=0?"#10B981":"#EF4444",marginBottom:12}}>
             {change>=0?"+":""}{change.toLocaleString()} from $1,000 start
           </div>
-          <div style={{fontFamily:"'Oswald',sans-serif",fontSize:16,fontWeight:900,color:tier.color,letterSpacing:2,marginBottom:8}}>{tier.label}</div>
-          <p style={{fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FCD34D",fontSize:12,margin:0,lineHeight:1.7}}>{tier.msg}</p>
+          <div style={{fontFamily:"'Anton',sans-serif",fontSize:16,fontWeight:900,color:tier.color,letterSpacing:2,marginBottom:8}}>{tier.label}</div>
+          <p style={{fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FFB627",fontSize:12,margin:0,lineHeight:1.7}}>{tier.msg}</p>
         </div>
         <div style={{marginBottom:16}}>
-          <div style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:2,marginBottom:10}}>YOUR DECISIONS</div>
+          <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:2,marginBottom:10}}>YOUR DECISIONS</div>
           {history.map((h,i)=>{
             const gained = h.portfolioAfter > h.portfolioBefore;
             const flat = h.portfolioAfter === h.portfolioBefore;
@@ -1950,8 +1950,8 @@ function SurvivalSimulator() {
               <div key={i} style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,background:"rgba(255,255,255,0.02)",borderRadius:8,padding:"8px 10px"}}>
                 <span style={{fontSize:14}}>{h.scenario.emoji}</span>
                 <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontFamily:"'Oswald',sans-serif",fontSize:10,color:"#D1D5DB"}}>{h.scenario.title}</div>
-                  <div style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#6B7280",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.choice.text}</div>
+                  <div style={{fontFamily:"'Anton',sans-serif",fontSize:10,color:"#D1D5DB"}}>{h.scenario.title}</div>
+                  <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h.choice.text}</div>
                 </div>
                 <div style={{fontFamily:"monospace",fontSize:11,color:gained?"#10B981":flat?"#6B7280":"#EF4444",fontWeight:700,flexShrink:0}}>
                   {gained?"+":""}{(h.portfolioAfter-h.portfolioBefore).toLocaleString()}
@@ -1960,7 +1960,7 @@ function SurvivalSimulator() {
             );
           })}
         </div>
-        <button onClick={startGame} style={{width:"100%",background:"linear-gradient(135deg,#D97706,#EF4444)",border:"none",borderRadius:10,padding:"14px",fontFamily:"'Oswald',sans-serif",fontSize:14,fontWeight:900,color:"#fff",letterSpacing:3,cursor:"pointer"}}>
+        <button onClick={startGame} style={{width:"100%",background:"linear-gradient(135deg,#FF7A18,#EF4444)",border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:14,fontWeight:900,color:"#fff",letterSpacing:3,cursor:"pointer"}}>
           PLAY AGAIN →
         </button>
         <div style={{marginTop:10,textAlign:"center"}}><MintAddress compact/></div>
@@ -1974,31 +1974,31 @@ function SurvivalSimulator() {
   return (
     <div style={{padding:"0 16px 40px",maxWidth:COLW,margin:"0 auto"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:10,color:"#6B7280",letterSpacing:2}}>ROUND {round+1} OF {ROUNDS}</div>
-        <div style={{background:"rgba(0,0,0,0.4)",border:"1px solid rgba(252,211,77,0.3)",borderRadius:20,padding:"4px 12px"}}>
-          <span style={{fontFamily:"monospace",fontSize:13,color:"#FCD34D",fontWeight:700}}>${portfolio.toLocaleString()}</span>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:10,color:"#6B7280",letterSpacing:2}}>ROUND {round+1} OF {ROUNDS}</div>
+        <div style={{background:"rgba(0,0,0,0.4)",border:"1px solid rgba(255,182,39,0.3)",borderRadius:20,padding:"4px 12px"}}>
+          <span style={{fontFamily:"monospace",fontSize:13,color:"#FFB627",fontWeight:700}}>${portfolio.toLocaleString()}</span>
         </div>
       </div>
       <div style={{height:3,background:"rgba(255,255,255,0.08)",borderRadius:2,marginBottom:16}}>
-        <div style={{height:"100%",width:`${(round/ROUNDS)*100}%`,background:"linear-gradient(90deg,#D97706,#EF4444)",borderRadius:2}}/>
+        <div style={{height:"100%",width:`${(round/ROUNDS)*100}%`,background:"linear-gradient(90deg,#FF7A18,#EF4444)",borderRadius:2}}/>
       </div>
       <div style={{display:"inline-flex",alignItems:"center",gap:6,background:`${catColor}20`,border:`1px solid ${catColor}50`,borderRadius:20,padding:"4px 12px",marginBottom:12}}>
         <span style={{fontSize:12}}>{scenario.emoji}</span>
-        <span style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:catColor,letterSpacing:2}}>{scenario.category}</span>
+        <span style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:catColor,letterSpacing:2}}>{scenario.category}</span>
       </div>
-      <h3 style={{fontFamily:"'Oswald',sans-serif",fontSize:24,fontWeight:900,color:"#F9FAFB",margin:"0 0 12px",letterSpacing:1}}>{scenario.title}</h3>
+      <h3 style={{fontFamily:"'Anton',sans-serif",fontSize:24,fontWeight:900,color:"#F9FAFB",margin:"0 0 12px",letterSpacing:1}}>{scenario.title}</h3>
       <div style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"14px 16px",marginBottom:12}}>
         <p style={{margin:0,fontSize:15,color:"#D1D5DB",lineHeight:1.8}}>{scenario.context}</p>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:16}}>
         {scenario.data.map((d,i)=>(
           <div key={i} style={{background:d.flag?"rgba(239,68,68,0.08)":"rgba(255,255,255,0.03)",border:`1px solid ${d.flag?"rgba(239,68,68,0.3)":"rgba(255,255,255,0.08)"}`,borderRadius:8,padding:"8px 10px"}}>
-            <div style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:d.flag?"#EF4444":"#6B7280",letterSpacing:1,marginBottom:2}}>{d.flag?"⚠️ ":""}{d.label}</div>
-            <div style={{fontFamily:"'Oswald',sans-serif",fontSize:13,color:d.flag?"#FCA5A5":"#D1D5DB",fontWeight:700}}>{d.value}</div>
+            <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:d.flag?"#EF4444":"#6B7280",letterSpacing:1,marginBottom:2}}>{d.flag?"⚠️ ":""}{d.label}</div>
+            <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:d.flag?"#FCA5A5":"#D1D5DB",fontWeight:700}}>{d.value}</div>
           </div>
         ))}
       </div>
-      <div style={{fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#6B7280",letterSpacing:2,marginBottom:8}}>YOUR CHOICE:</div>
+      <div style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#6B7280",letterSpacing:2,marginBottom:8}}>YOUR CHOICE:</div>
       <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:12}}>
         {scenario.choices.map((c,i)=>{
           let bg="rgba(255,255,255,0.04)",border="rgba(255,255,255,0.1)",textColor="#D1D5DB";
@@ -2011,7 +2011,7 @@ function SurvivalSimulator() {
             } else { bg="rgba(255,255,255,0.02)"; textColor="#4B5563"; border="rgba(255,255,255,0.05)"; }
           }
           return (
-            <button key={i} onClick={()=>makeChoice(i)} disabled={chosen!==null} style={{background:bg,border:`1px solid ${border}`,borderRadius:10,padding:"14px 16px",textAlign:"left",fontFamily:"'Oswald',sans-serif",fontSize:14,color:textColor,cursor:chosen===null?"pointer":"default",letterSpacing:0.5,lineHeight:1.6}}>
+            <button key={i} onClick={()=>makeChoice(i)} disabled={chosen!==null} style={{background:bg,border:`1px solid ${border}`,borderRadius:10,padding:"14px 16px",textAlign:"left",fontFamily:"'Anton',sans-serif",fontSize:14,color:textColor,cursor:chosen===null?"pointer":"default",letterSpacing:0.5,lineHeight:1.6}}>
               <span style={{color:"#6B7280",marginRight:10,fontSize:12}}>{String.fromCharCode(65+i)}.</span>{c.text}
             </button>
           );
@@ -2024,7 +2024,7 @@ function SurvivalSimulator() {
           <>
             {/* BIG verdict banner */}
             <div style={{background:good?"rgba(16,185,129,0.15)":"rgba(239,68,68,0.15)",border:`2px solid ${good?"#10B981":"#EF4444"}`,borderRadius:12,padding:"14px 16px",marginBottom:12,textAlign:"center"}}>
-              <div style={{fontFamily:"'Oswald',sans-serif",fontSize:22,fontWeight:900,color:good?"#10B981":"#EF4444",letterSpacing:3,marginBottom:4}}>
+              <div style={{fontFamily:"'Anton',sans-serif",fontSize:22,fontWeight:900,color:good?"#10B981":"#EF4444",letterSpacing:3,marginBottom:4}}>
                 {good?"✅ GOOD CALL":"❌ WRONG MOVE"}
               </div>
               <div style={{fontFamily:"monospace",fontSize:20,fontWeight:700,color:good?"#10B981":"#EF4444"}}>
@@ -2032,18 +2032,18 @@ function SurvivalSimulator() {
               </div>
             </div>
             {/* Cluck explanation */}
-            <div style={{background:"rgba(217,119,6,0.08)",border:"1px solid rgba(217,119,6,0.35)",borderRadius:12,padding:"14px 16px",marginBottom:12}}>
+            <div style={{background:"rgba(255,122,24,0.08)",border:"1px solid rgba(255,122,24,0.35)",borderRadius:12,padding:"14px 16px",marginBottom:12}}>
               <div style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:8}}>
-                <img src={LOGO_B64} alt="CN" style={{width:34,height:34,borderRadius:"50%",objectFit:"cover",border:"2px solid #D97706",flexShrink:0}}/>
-                <div style={{fontFamily:"'Oswald',sans-serif",fontSize:11,fontWeight:700,color:"#D97706",letterSpacing:1,paddingTop:8}}>🐔 CLUCK NORRIS EXPLAINS:</div>
+                <img src={LOGO_B64} alt="CN" style={{width:34,height:34,borderRadius:"50%",objectFit:"cover",border:"2px solid #FF7A18",flexShrink:0}}/>
+                <div style={{fontFamily:"'Anton',sans-serif",fontSize:11,fontWeight:700,color:"#FF7A18",letterSpacing:1,paddingTop:8}}>🐔 CLUCK NORRIS EXPLAINS:</div>
               </div>
-              <p style={{margin:0,fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FCD34D",fontSize:14,lineHeight:1.8}}>"{scenario.choices[chosen].cluck}"</p>
+              <p style={{margin:0,fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FFB627",fontSize:14,lineHeight:1.8}}>"{scenario.choices[chosen].cluck}"</p>
             </div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"rgba(0,0,0,0.3)",borderRadius:8,padding:"10px 14px",marginBottom:12}}>
-              <span style={{fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#6B7280",letterSpacing:1}}>PORTFOLIO NOW</span>
-              <span style={{fontFamily:"monospace",fontSize:20,color:"#FCD34D",fontWeight:700}}>${portfolio.toLocaleString()}</span>
+              <span style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#6B7280",letterSpacing:1}}>PORTFOLIO NOW</span>
+              <span style={{fontFamily:"monospace",fontSize:20,color:"#FFB627",fontWeight:700}}>${portfolio.toLocaleString()}</span>
             </div>
-            <button onClick={nextRound} style={{width:"100%",background:"linear-gradient(135deg,#D97706,#EF4444)",border:"none",borderRadius:10,padding:"14px",fontFamily:"'Oswald',sans-serif",fontSize:16,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer"}}>
+            <button onClick={nextRound} style={{width:"100%",background:"linear-gradient(135deg,#FF7A18,#EF4444)",border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:16,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer"}}>
               {round+1>=ROUNDS?"SEE FINAL SCORE →":"NEXT ROUND →"}
             </button>
           </>

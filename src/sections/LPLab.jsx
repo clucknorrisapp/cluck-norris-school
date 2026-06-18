@@ -1847,7 +1847,7 @@ function StrategyMatcher() {
     protocols = "Raydium Standard AMM • Meteora DAMM • Orca stable pools • USDC/USDT on any protocol";
   } else if (score <= 9) {
     strategy = "SEMI-ACTIVE";
-    color = "#F59E0B";
+    color = "#FFB627";
     details = "Moderate concentrated ranges on major pairs. Weekly check-ins. Rebalance when price breaks out significantly. Use alerts to know when to act.";
     protocols = "Raydium CLMM wide range • Orca Whirlpools moderate range • Meteora DAMM V2";
   } else if (score <= 12) {
@@ -1871,29 +1871,29 @@ function StrategyMatcher() {
 
   return (
     <div style={{background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.25)",borderRadius:12,padding:16,marginTop:16,marginBottom:8}}>
-      <div style={{fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#10B981",letterSpacing:2,marginBottom:4}}>🧮 INTERACTIVE — LP STRATEGY MATCHER</div>
-      <p style={{fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#9CA3AF",margin:"0 0 14px",lineHeight:1.6}}>Answer 4 questions and get your recommended LP strategy.</p>
+      <div style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#10B981",letterSpacing:2,marginBottom:4}}>🧮 INTERACTIVE — LP STRATEGY MATCHER</div>
+      <p style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#9CA3AF",margin:"0 0 14px",lineHeight:1.6}}>Answer 4 questions and get your recommended LP strategy.</p>
 
       {questions.map((q,i)=>(
         <div key={i} style={{marginBottom:14}}>
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-            <span style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1}}>{q.label}</span>
-            <span style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#FCD34D"}}>{["1","2","3","4"][q.val-1]}/4</span>
+            <span style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1}}>{q.label}</span>
+            <span style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#FFB627"}}>{["1","2","3","4"][q.val-1]}/4</span>
           </div>
           <input type="range" min="1" max="4" step="1" value={q.val} onChange={e=>q.set(Number(e.target.value))} style={{width:"100%",accentColor:"#10B981",marginBottom:4}}/>
           <div style={{display:"flex",justifyContent:"space-between"}}>
-            <span style={{fontFamily:"'Oswald',sans-serif",fontSize:8,color:"#4B5563"}}>{q.low}</span>
-            <span style={{fontFamily:"'Oswald',sans-serif",fontSize:8,color:"#4B5563"}}>{q.high}</span>
+            <span style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#4B5563"}}>{q.low}</span>
+            <span style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#4B5563"}}>{q.high}</span>
           </div>
         </div>
       ))}
 
       <div style={{background:`${color}15`,border:`1px solid ${color}40`,borderRadius:10,padding:14,marginTop:4}}>
-        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:2,marginBottom:6}}>RECOMMENDED STRATEGY</div>
-        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:20,fontWeight:900,color,letterSpacing:2,marginBottom:8}}>{strategy}</div>
-        <p style={{fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#D1D5DB",margin:"0 0 10px",lineHeight:1.7}}>{details}</p>
-        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1,marginBottom:4}}>BEST PROTOCOLS FOR YOU:</div>
-        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:10,color,lineHeight:1.8}}>{protocols}</div>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:2,marginBottom:6}}>RECOMMENDED STRATEGY</div>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:20,fontWeight:900,color,letterSpacing:2,marginBottom:8}}>{strategy}</div>
+        <p style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#D1D5DB",margin:"0 0 10px",lineHeight:1.7}}>{details}</p>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1,marginBottom:4}}>BEST PROTOCOLS FOR YOU:</div>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:10,color,lineHeight:1.8}}>{protocols}</div>
       </div>
     </div>
   );
@@ -1916,41 +1916,41 @@ function DCACalculator() {
 
   return (
     <div style={{background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.25)",borderRadius:12,padding:16,marginTop:16,marginBottom:8}}>
-      <div style={{fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#10B981",letterSpacing:2,marginBottom:4}}>🧮 INTERACTIVE — DCA ACCUMULATION CALCULATOR</div>
-      <p style={{fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#9CA3AF",margin:"0 0 14px",lineHeight:1.6}}>Set your accumulation range and see how many tokens you collect vs buying at current price.</p>
+      <div style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#10B981",letterSpacing:2,marginBottom:4}}>🧮 INTERACTIVE — DCA ACCUMULATION CALCULATOR</div>
+      <p style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#9CA3AF",margin:"0 0 14px",lineHeight:1.6}}>Set your accumulation range and see how many tokens you collect vs buying at current price.</p>
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
         <div>
-          <div style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1,marginBottom:4}}>CURRENT PRICE ($)</div>
+          <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1,marginBottom:4}}>CURRENT PRICE ($)</div>
           <input type="number" value={currentPrice} min={1} onChange={e=>setCurrentPrice(Math.max(1,Number(e.target.value)))}
             style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(16,185,129,0.3)",borderRadius:8,padding:"8px 10px",color:"#F9FAFB",fontFamily:"monospace",fontSize:14,boxSizing:"border-box",outline:"none"}}/>
         </div>
         <div>
-          <div style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1,marginBottom:4}}>CAPITAL TO DEPLOY ($)</div>
+          <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1,marginBottom:4}}>CAPITAL TO DEPLOY ($)</div>
           <input type="number" value={capital} min={100} onChange={e=>setCapital(Math.max(100,Number(e.target.value)))}
             style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(16,185,129,0.3)",borderRadius:8,padding:"8px 10px",color:"#F9FAFB",fontFamily:"monospace",fontSize:14,boxSizing:"border-box",outline:"none"}}/>
         </div>
       </div>
 
       <div style={{marginBottom:12}}>
-        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1,marginBottom:8}}>ACCUMULATION RANGE ($)</div>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1,marginBottom:8}}>ACCUMULATION RANGE ($)</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
           <div>
-            <div style={{fontFamily:"'Oswald',sans-serif",fontSize:8,color:"#6B7280",marginBottom:4}}>RANGE BOTTOM</div>
+            <div style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#6B7280",marginBottom:4}}>RANGE BOTTOM</div>
             <input type="number" value={rangeBottom} min={1} onChange={e=>setRangeBottom(Math.max(1,Number(e.target.value)))}
               style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:8,padding:"8px 10px",color:"#F9FAFB",fontFamily:"monospace",fontSize:14,boxSizing:"border-box",outline:"none"}}/>
           </div>
           <div>
-            <div style={{fontFamily:"'Oswald',sans-serif",fontSize:8,color:"#6B7280",marginBottom:4}}>RANGE TOP</div>
+            <div style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#6B7280",marginBottom:4}}>RANGE TOP</div>
             <input type="number" value={rangeTop} min={1} onChange={e=>setRangeTop(Math.max(1,Number(e.target.value)))}
-              style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(245,158,11,0.3)",borderRadius:8,padding:"8px 10px",color:"#F9FAFB",fontFamily:"monospace",fontSize:14,boxSizing:"border-box",outline:"none"}}/>
+              style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,182,39,0.3)",borderRadius:8,padding:"8px 10px",color:"#F9FAFB",fontFamily:"monospace",fontSize:14,boxSizing:"border-box",outline:"none"}}/>
           </div>
         </div>
       </div>
 
       {/* Visual range bar */}
       <div style={{marginBottom:14,background:"rgba(0,0,0,0.3)",borderRadius:8,padding:"10px 12px"}}>
-        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:8,color:"#6B7280",letterSpacing:1,marginBottom:6}}>PRICE VISUALIZATION</div>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#6B7280",letterSpacing:1,marginBottom:6}}>PRICE VISUALIZATION</div>
         <div style={{position:"relative",height:24,background:"rgba(255,255,255,0.05)",borderRadius:4}}>
           {/* Range bar */}
           {inRange && (() => {
@@ -1962,15 +1962,15 @@ function DCACalculator() {
             return (
               <>
                 <div style={{position:"absolute",left:`${rangeLeftPct}%`,width:`${rangeWidthPct}%`,height:"100%",background:"rgba(16,185,129,0.4)",borderRadius:4}}/>
-                <div style={{position:"absolute",left:`${currentPct}%`,top:0,bottom:0,width:2,background:"#FCD34D",transform:"translateX(-50%)"}}/>
-                <div style={{position:"absolute",left:`${currentPct}%`,top:-16,fontFamily:"monospace",fontSize:8,color:"#FCD34D",transform:"translateX(-50%)",whiteSpace:"nowrap"}}>NOW ${currentPrice}</div>
+                <div style={{position:"absolute",left:`${currentPct}%`,top:0,bottom:0,width:2,background:"#FFB627",transform:"translateX(-50%)"}}/>
+                <div style={{position:"absolute",left:`${currentPct}%`,top:-16,fontFamily:"monospace",fontSize:8,color:"#FFB627",transform:"translateX(-50%)",whiteSpace:"nowrap"}}>NOW ${currentPrice}</div>
               </>
             );
           })()}
         </div>
         <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
           <span style={{fontFamily:"monospace",fontSize:8,color:"#EF4444"}}>${rangeBottom} (buy zone start)</span>
-          <span style={{fontFamily:"monospace",fontSize:8,color:"#F59E0B"}}>${rangeTop} (buy zone end)</span>
+          <span style={{fontFamily:"monospace",fontSize:8,color:"#FFB627"}}>${rangeTop} (buy zone end)</span>
         </div>
       </div>
 
@@ -1978,11 +1978,11 @@ function DCACalculator() {
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
         {[
           {label:"AVG BUY PRICE", value:`$${avgPrice.toFixed(2)}`, color:"#10B981"},
-          {label:"TOKENS VIA LP", value:tokensAccumulated.toFixed(1), color:"#FCD34D"},
+          {label:"TOKENS VIA LP", value:tokensAccumulated.toFixed(1), color:"#FFB627"},
           {label:"TOKENS IF BUY NOW", value:singleBuyTokens.toFixed(1), color:"#9CA3AF"},
         ].map((r,i)=>(
           <div key={i} style={{background:"rgba(0,0,0,0.3)",borderRadius:8,padding:"10px 8px",textAlign:"center"}}>
-            <div style={{fontFamily:"'Oswald',sans-serif",fontSize:7,color:"#6B7280",letterSpacing:1,marginBottom:4}}>{r.label}</div>
+            <div style={{fontFamily:"'Anton',sans-serif",fontSize:7,color:"#6B7280",letterSpacing:1,marginBottom:4}}>{r.label}</div>
             <div style={{fontFamily:"monospace",fontSize:14,color:r.color,fontWeight:700}}>{r.value}</div>
           </div>
         ))}
@@ -1990,14 +1990,14 @@ function DCACalculator() {
 
       {rangeTop < currentPrice && improvement > 0 && (
         <div style={{background:"rgba(16,185,129,0.1)",border:"1px solid rgba(16,185,129,0.3)",borderRadius:8,padding:"8px 12px"}}>
-          <p style={{margin:0,fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#10B981",lineHeight:1.6}}>
+          <p style={{margin:0,fontFamily:"'Anton',sans-serif",fontSize:11,color:"#10B981",lineHeight:1.6}}>
             ✅ LP DCA gets you {improvement.toFixed(1)}% more tokens than buying at current price — plus fees earned during accumulation.
           </p>
         </div>
       )}
       {rangeTop >= currentPrice && (
         <div style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:8,padding:"8px 12px"}}>
-          <p style={{margin:0,fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#EF4444",lineHeight:1.6}}>
+          <p style={{margin:0,fontFamily:"'Anton',sans-serif",fontSize:11,color:"#EF4444",lineHeight:1.6}}>
             ⚠️ Range top is at or above current price — this is not a true single-sided deposit. Set your entire range below current price to accumulate.
           </p>
         </div>
@@ -2031,13 +2031,13 @@ function BinVisualizer() {
 
   return (
     <div style={{background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.25)",borderRadius:12,padding:16,marginTop:16,marginBottom:8}}>
-      <div style={{fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#10B981",letterSpacing:2,marginBottom:4}}>🧮 INTERACTIVE — BIN & TICK RANGE VISUALIZER</div>
-      <p style={{fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#9CA3AF",margin:"0 0 14px",lineHeight:1.6}}>See how bins and ticks work at different range widths and price levels.</p>
+      <div style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#10B981",letterSpacing:2,marginBottom:4}}>🧮 INTERACTIVE — BIN & TICK RANGE VISUALIZER</div>
+      <p style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#9CA3AF",margin:"0 0 14px",lineHeight:1.6}}>See how bins and ticks work at different range widths and price levels.</p>
 
       {/* Mode toggle */}
       <div style={{display:"flex",gap:8,marginBottom:12}}>
         {[{id:"dlmm",label:"METEORA DLMM (BINS)"},{id:"tick",label:"RAYDIUM/ORCA (TICKS)"}].map(m=>(
-          <button key={m.id} onClick={()=>setMode(m.id)} style={{flex:1,background:mode===m.id?"rgba(16,185,129,0.2)":"rgba(255,255,255,0.04)",border:`1px solid ${mode===m.id?"#10B981":"rgba(255,255,255,0.1)"}`,borderRadius:8,padding:"8px",fontFamily:"'Oswald',sans-serif",fontSize:9,color:mode===m.id?"#10B981":"#6B7280",cursor:"pointer",letterSpacing:1}}>
+          <button key={m.id} onClick={()=>setMode(m.id)} style={{flex:1,background:mode===m.id?"rgba(16,185,129,0.2)":"rgba(255,255,255,0.04)",border:`1px solid ${mode===m.id?"#10B981":"rgba(255,255,255,0.1)"}`,borderRadius:8,padding:"8px",fontFamily:"'Anton',sans-serif",fontSize:9,color:mode===m.id?"#10B981":"#6B7280",cursor:"pointer",letterSpacing:1}}>
             {m.label}
           </button>
         ))}
@@ -2046,8 +2046,8 @@ function BinVisualizer() {
       {/* Controls */}
       <div style={{marginBottom:10}}>
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-          <span style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1}}>RANGE WIDTH (each side)</span>
-          <span style={{fontFamily:"monospace",fontSize:12,color:"#FCD34D"}}>±{rangeWidth}%</span>
+          <span style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1}}>RANGE WIDTH (each side)</span>
+          <span style={{fontFamily:"monospace",fontSize:12,color:"#FFB627"}}>±{rangeWidth}%</span>
         </div>
         <input type="range" min="5" max="50" step="5" value={rangeWidth} onChange={e=>setRangeWidth(Number(e.target.value))} style={{width:"100%",accentColor:"#10B981"}}/>
       </div>
@@ -2055,8 +2055,8 @@ function BinVisualizer() {
       {mode === "dlmm" && (
         <div style={{marginBottom:14}}>
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-            <span style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1}}>BIN STEP</span>
-            <span style={{fontFamily:"monospace",fontSize:12,color:"#FCD34D"}}>{binStep} ({(binStep/100).toFixed(2)}% per bin)</span>
+            <span style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1}}>BIN STEP</span>
+            <span style={{fontFamily:"monospace",fontSize:12,color:"#FFB627"}}>{binStep} ({(binStep/100).toFixed(2)}% per bin)</span>
           </div>
           <input type="range" min="1" max="100" step="1" value={binStep} onChange={e=>setBinStep(Number(e.target.value))} style={{width:"100%",accentColor:"#10B981"}}/>
         </div>
@@ -2064,7 +2064,7 @@ function BinVisualizer() {
 
       {/* Bin visualization */}
       <div style={{marginBottom:12}}>
-        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1,marginBottom:8,textAlign:"center"}}>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1,marginBottom:8,textAlign:"center"}}>
           {mode==="dlmm" ? "BINS (only 🟢 ACTIVE bin earns fees)" : "TICKS (all 🟢 IN-RANGE ticks earn fees)"}
         </div>
         <div style={{display:"flex",gap:2,alignItems:"flex-end",height:60,justifyContent:"center"}}>
@@ -2075,12 +2075,12 @@ function BinVisualizer() {
               ? isActive ? 60 : Math.max(10, 60 - bin.distFromActive * 8)
               : 45;
             const color = mode==="dlmm"
-              ? isActive ? "#10B981" : bin.distFromActive < 2 ? "#065F46" : "#1F2937"
+              ? isActive ? "#10B981" : bin.distFromActive < 2 ? "#065F46" : "#1a0f08"
               : "#10B981";
             return (
               <div key={i} style={{flex:1,background:color,borderRadius:"3px 3px 0 0",height:`${height}px`,minWidth:4,position:"relative",transition:"height 0.2s"}}>
                 {isActive && (
-                  <div style={{position:"absolute",top:-16,left:"50%",transform:"translateX(-50%)",fontFamily:"'Oswald',sans-serif",fontSize:8,color:"#10B981",whiteSpace:"nowrap"}}>
+                  <div style={{position:"absolute",top:-16,left:"50%",transform:"translateX(-50%)",fontFamily:"'Anton',sans-serif",fontSize:8,color:"#10B981",whiteSpace:"nowrap"}}>
                     {mode==="dlmm"?"ACTIVE":"CURRENT"}
                   </div>
                 )}
@@ -2090,7 +2090,7 @@ function BinVisualizer() {
         </div>
         <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
           <span style={{fontFamily:"monospace",fontSize:9,color:"#6B7280"}}>${lowerPrice.toFixed(1)}</span>
-          <span style={{fontFamily:"monospace",fontSize:10,color:"#FCD34D",fontWeight:700}}>${currentPrice}</span>
+          <span style={{fontFamily:"monospace",fontSize:10,color:"#FFB627",fontWeight:700}}>${currentPrice}</span>
           <span style={{fontFamily:"monospace",fontSize:9,color:"#6B7280"}}>${upperPrice.toFixed(1)}</span>
         </div>
       </div>
@@ -2100,11 +2100,11 @@ function BinVisualizer() {
         {[
           {label:"TOTAL BINS/TICKS", value: mode==="dlmm" ? `~${Math.max(1,totalBins)}` : `~${Math.floor(rangeWidth*2/0.01)}`, color:"#9CA3AF"},
           {label:"EARNING NOW", value: mode==="dlmm" ? "1 BIN" : "ALL IN RANGE", color:"#10B981"},
-          {label:"FEE EFFICIENCY", value: mode==="dlmm" ? "MAXIMUM" : "DISTRIBUTED", color:"#FCD34D"},
+          {label:"FEE EFFICIENCY", value: mode==="dlmm" ? "MAXIMUM" : "DISTRIBUTED", color:"#FFB627"},
         ].map((r,i)=>(
           <div key={i} style={{background:"rgba(0,0,0,0.3)",borderRadius:8,padding:"8px",textAlign:"center"}}>
-            <div style={{fontFamily:"'Oswald',sans-serif",fontSize:7,color:"#6B7280",letterSpacing:1,marginBottom:4}}>{r.label}</div>
-            <div style={{fontFamily:"'Oswald',sans-serif",fontSize:11,color:r.color,fontWeight:700}}>{r.value}</div>
+            <div style={{fontFamily:"'Anton',sans-serif",fontSize:7,color:"#6B7280",letterSpacing:1,marginBottom:4}}>{r.label}</div>
+            <div style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:r.color,fontWeight:700}}>{r.value}</div>
           </div>
         ))}
       </div>
@@ -2127,8 +2127,8 @@ function ILCalculator() {
 
   return (
     <div style={{background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.25)",borderRadius:12,padding:16,marginTop:16,marginBottom:8}}>
-      <div style={{fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#10B981",letterSpacing:2,marginBottom:4}}>🧮 INTERACTIVE — IL CALCULATOR</div>
-      <p style={{fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#9CA3AF",margin:"0 0 14px",lineHeight:1.6}}>Enter your entry price and current price for one token to see your exact impermanent loss.</p>
+      <div style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#10B981",letterSpacing:2,marginBottom:4}}>🧮 INTERACTIVE — IL CALCULATOR</div>
+      <p style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#9CA3AF",margin:"0 0 14px",lineHeight:1.6}}>Enter your entry price and current price for one token to see your exact impermanent loss.</p>
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
         {[
@@ -2136,7 +2136,7 @@ function ILCalculator() {
           {label:"CURRENT PRICE ($)", val:currentPrice, set:setCurrentPrice, min:1, max:100000, step:1},
         ].map((f,i)=>(
           <div key={i}>
-            <div style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1,marginBottom:4}}>{f.label}</div>
+            <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1,marginBottom:4}}>{f.label}</div>
             <input type="number" value={f.val} onChange={e=>f.set(Math.max(1,Number(e.target.value)))}
               style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(16,185,129,0.3)",borderRadius:8,padding:"8px 10px",color:"#F9FAFB",fontFamily:"monospace",fontSize:14,boxSizing:"border-box",outline:"none"}}/>
           </div>
@@ -2146,16 +2146,16 @@ function ILCalculator() {
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
         {[
           {label:"PRICE CHANGE", value:`${priceRatio.toFixed(2)}x`, color:"#9CA3AF"},
-          {label:"IL %", value:`${Math.abs(il).toFixed(2)}%`, color: Math.abs(il) > 10 ? "#EF4444" : Math.abs(il) > 5 ? "#F59E0B" : "#10B981"},
+          {label:"IL %", value:`${Math.abs(il).toFixed(2)}%`, color: Math.abs(il) > 10 ? "#EF4444" : Math.abs(il) > 5 ? "#FFB627" : "#10B981"},
           {label:"IL IN $", value:`$${Math.abs(ilDollar).toFixed(2)}`, color:"#EF4444"},
         ].map((r,i)=>(
           <div key={i} style={{background:"rgba(0,0,0,0.3)",borderRadius:8,padding:"10px 8px",textAlign:"center"}}>
-            <div style={{fontFamily:"'Oswald',sans-serif",fontSize:8,color:"#6B7280",letterSpacing:1,marginBottom:4}}>{r.label}</div>
+            <div style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#6B7280",letterSpacing:1,marginBottom:4}}>{r.label}</div>
             <div style={{fontFamily:"monospace",fontSize:16,color:r.color,fontWeight:700}}>{r.value}</div>
           </div>
         ))}
       </div>
-      <p style={{fontFamily:"'Oswald',sans-serif",fontSize:10,color:"#6B7280",margin:0,lineHeight:1.6}}>
+      <p style={{fontFamily:"'Anton',sans-serif",fontSize:10,color:"#6B7280",margin:0,lineHeight:1.6}}>
         Based on $1,000 deposit ($500 each token). Hold value: ${holdValue.toFixed(2)} vs LP value: ${lpValue.toFixed(2)}
       </p>
     </div>
@@ -2172,21 +2172,21 @@ function FeeILCalculator() {
 
   return (
     <div style={{background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.25)",borderRadius:12,padding:16,marginTop:16,marginBottom:8}}>
-      <div style={{fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#10B981",letterSpacing:2,marginBottom:4}}>🧮 INTERACTIVE — FEE vs IL CALCULATOR</div>
-      <p style={{fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#9CA3AF",margin:"0 0 14px",lineHeight:1.6}}>Enter the pool's fee APR and expected price change to see your real net return.</p>
+      <div style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#10B981",letterSpacing:2,marginBottom:4}}>🧮 INTERACTIVE — FEE vs IL CALCULATOR</div>
+      <p style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#9CA3AF",margin:"0 0 14px",lineHeight:1.6}}>Enter the pool's fee APR and expected price change to see your real net return.</p>
 
       <div style={{marginBottom:12}}>
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-          <span style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1}}>FEE APR</span>
-          <span style={{fontFamily:"monospace",fontSize:13,color:"#FCD34D",fontWeight:700}}>{feeAPR}%</span>
+          <span style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1}}>FEE APR</span>
+          <span style={{fontFamily:"monospace",fontSize:13,color:"#FFB627",fontWeight:700}}>{feeAPR}%</span>
         </div>
         <input type="range" min="0" max="500" step="5" value={feeAPR} onChange={e=>setFeeAPR(Number(e.target.value))} style={{width:"100%",accentColor:"#10B981"}}/>
       </div>
 
       <div style={{marginBottom:14}}>
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-          <span style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1}}>PRICE CHANGE (x)</span>
-          <span style={{fontFamily:"monospace",fontSize:13,color:"#FCD34D",fontWeight:700}}>{priceChange}x</span>
+          <span style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1}}>PRICE CHANGE (x)</span>
+          <span style={{fontFamily:"monospace",fontSize:13,color:"#FFB627",fontWeight:700}}>{priceChange}x</span>
         </div>
         <input type="range" min="1" max="10" step="0.25" value={priceChange} onChange={e=>setPriceChange(Number(e.target.value))} style={{width:"100%",accentColor:"#10B981"}}/>
       </div>
@@ -2195,22 +2195,22 @@ function FeeILCalculator() {
         {[
           {label:"FEE APR", value:`${feeAPR}%`, color:"#10B981"},
           {label:"IL RATE", value:`${ilPct.toFixed(1)}%`, color:"#EF4444"},
-          {label:"NET RETURN", value:`${netReturn.toFixed(1)}%`, color: netReturn > 0 ? "#FCD34D" : "#EF4444"},
+          {label:"NET RETURN", value:`${netReturn.toFixed(1)}%`, color: netReturn > 0 ? "#FFB627" : "#EF4444"},
         ].map((r,i)=>(
           <div key={i} style={{background:"rgba(0,0,0,0.3)",borderRadius:8,padding:"10px 8px",textAlign:"center"}}>
-            <div style={{fontFamily:"'Oswald',sans-serif",fontSize:8,color:"#6B7280",letterSpacing:1,marginBottom:4}}>{r.label}</div>
+            <div style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#6B7280",letterSpacing:1,marginBottom:4}}>{r.label}</div>
             <div style={{fontFamily:"monospace",fontSize:18,color:r.color,fontWeight:700}}>{r.value}</div>
           </div>
         ))}
       </div>
       {netReturn < 0 && (
         <div style={{marginTop:10,background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:8,padding:"8px 12px"}}>
-          <p style={{margin:0,fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#EF4444",lineHeight:1.6}}>⚠️ IL exceeds fee income. You would be better off just holding these tokens.</p>
+          <p style={{margin:0,fontFamily:"'Anton',sans-serif",fontSize:11,color:"#EF4444",lineHeight:1.6}}>⚠️ IL exceeds fee income. You would be better off just holding these tokens.</p>
         </div>
       )}
       {netReturn > 0 && netReturn < 20 && (
-        <div style={{marginTop:10,background:"rgba(245,158,11,0.1)",border:"1px solid rgba(245,158,11,0.3)",borderRadius:8,padding:"8px 12px"}}>
-          <p style={{margin:0,fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#F59E0B",lineHeight:1.6}}>⚠️ Marginal return. Make sure you are accounting for rebalancing costs and gas fees.</p>
+        <div style={{marginTop:10,background:"rgba(255,182,39,0.1)",border:"1px solid rgba(255,182,39,0.3)",borderRadius:8,padding:"8px 12px"}}>
+          <p style={{margin:0,fontFamily:"'Anton',sans-serif",fontSize:11,color:"#FFB627",lineHeight:1.6}}>⚠️ Marginal return. Make sure you are accounting for rebalancing costs and gas fees.</p>
         </div>
       )}
     </div>
@@ -2232,29 +2232,29 @@ function CapitalEfficiencyCalc() {
 
   return (
     <div style={{background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.25)",borderRadius:12,padding:16,marginTop:16,marginBottom:8}}>
-      <div style={{fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#10B981",letterSpacing:2,marginBottom:4}}>🧮 INTERACTIVE — CAPITAL EFFICIENCY CALCULATOR</div>
-      <p style={{fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#9CA3AF",margin:"0 0 14px",lineHeight:1.6}}>See how concentrated liquidity amplifies your fee earnings compared to full range.</p>
+      <div style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#10B981",letterSpacing:2,marginBottom:4}}>🧮 INTERACTIVE — CAPITAL EFFICIENCY CALCULATOR</div>
+      <p style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#9CA3AF",margin:"0 0 14px",lineHeight:1.6}}>See how concentrated liquidity amplifies your fee earnings compared to full range.</p>
 
       <div style={{marginBottom:12}}>
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-          <span style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1}}>CAPITAL DEPLOYED</span>
-          <span style={{fontFamily:"monospace",fontSize:13,color:"#FCD34D",fontWeight:700}}>${capital.toLocaleString()}</span>
+          <span style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1}}>CAPITAL DEPLOYED</span>
+          <span style={{fontFamily:"monospace",fontSize:13,color:"#FFB627",fontWeight:700}}>${capital.toLocaleString()}</span>
         </div>
         <input type="range" min="1000" max="100000" step="1000" value={capital} onChange={e=>setCapital(Number(e.target.value))} style={{width:"100%",accentColor:"#10B981"}}/>
       </div>
 
       <div style={{marginBottom:12}}>
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-          <span style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1}}>RANGE WIDTH (% around current price)</span>
-          <span style={{fontFamily:"monospace",fontSize:13,color:"#FCD34D",fontWeight:700}}>±{rangeWidth}%</span>
+          <span style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1}}>RANGE WIDTH (% around current price)</span>
+          <span style={{fontFamily:"monospace",fontSize:13,color:"#FFB627",fontWeight:700}}>±{rangeWidth}%</span>
         </div>
         <input type="range" min="5" max="100" step="5" value={rangeWidth} onChange={e=>setRangeWidth(Number(e.target.value))} style={{width:"100%",accentColor:"#10B981"}}/>
       </div>
 
       <div style={{marginBottom:14}}>
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-          <span style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1}}>POOL BASE FEE APR (FULL RANGE)</span>
-          <span style={{fontFamily:"monospace",fontSize:13,color:"#FCD34D",fontWeight:700}}>{poolFeeAPR}%</span>
+          <span style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1}}>POOL BASE FEE APR (FULL RANGE)</span>
+          <span style={{fontFamily:"monospace",fontSize:13,color:"#FFB627",fontWeight:700}}>{poolFeeAPR}%</span>
         </div>
         <input type="range" min="10" max="200" step="10" value={poolFeeAPR} onChange={e=>setPoolFeeAPR(Number(e.target.value))} style={{width:"100%",accentColor:"#10B981"}}/>
       </div>
@@ -2265,14 +2265,14 @@ function CapitalEfficiencyCalc() {
           {label:"CONCENTRATED", apr:`~${Math.min(concentratedFeeAPR, 9999).toFixed(0)}%`, annual:`$${Math.min(capital * concentratedFeeAPR / 100, 9999999).toFixed(0)}`, color:"#10B981", bg:"rgba(16,185,129,0.08)"},
         ].map((r,i)=>(
           <div key={i} style={{background:r.bg,border:`1px solid ${r.color}40`,borderRadius:10,padding:12,textAlign:"center"}}>
-            <div style={{fontFamily:"'Oswald',sans-serif",fontSize:10,color:r.color,letterSpacing:1,marginBottom:6}}>{r.label}</div>
+            <div style={{fontFamily:"'Anton',sans-serif",fontSize:10,color:r.color,letterSpacing:1,marginBottom:6}}>{r.label}</div>
             <div style={{fontFamily:"monospace",fontSize:24,color:r.color,fontWeight:700,marginBottom:2}}>{r.apr}</div>
-            <div style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#6B7280",marginBottom:4}}>EST. APR · IN RANGE</div>
-            <div style={{fontFamily:"monospace",fontSize:14,color:"#FCD34D"}}>{r.annual}/yr</div>
+            <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",marginBottom:4}}>EST. APR · IN RANGE</div>
+            <div style={{fontFamily:"monospace",fontSize:14,color:"#FFB627"}}>{r.annual}/yr</div>
           </div>
         ))}
       </div>
-      <p style={{fontFamily:"'Oswald',sans-serif",fontSize:10,color:"#F59E0B",margin:"10px 0 0",lineHeight:1.6,textAlign:"center"}}>
+      <p style={{fontFamily:"'Anton',sans-serif",fontSize:10,color:"#FFB627",margin:"10px 0 0",lineHeight:1.6,textAlign:"center"}}>
         ⚠️ The concentrated rate applies only WHILE your position is in range. A tight range falls out of range fast — out-of-range time earns 0%, and concentrating also amplifies impermanent loss. This is in-range potential, not a realized annual return.
       </p>
     </div>
@@ -2308,29 +2308,29 @@ function AMMCalculator() {
 
   return (
     <div style={{background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.25)",borderRadius:12,padding:16,marginTop:16,marginBottom:8}}>
-      <div style={{fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#10B981",letterSpacing:2,marginBottom:4}}>🧮 INTERACTIVE — AMM PRICE CALCULATOR</div>
-      <p style={{fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#9CA3AF",margin:"0 0 14px",lineHeight:1.6}}>Adjust the pool size and trade size to see how x*y=k works in practice.</p>
+      <div style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#10B981",letterSpacing:2,marginBottom:4}}>🧮 INTERACTIVE — AMM PRICE CALCULATOR</div>
+      <p style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#9CA3AF",margin:"0 0 14px",lineHeight:1.6}}>Adjust the pool size and trade size to see how x*y=k works in practice.</p>
 
       {/* Pool setup */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
         <div>
-          <div style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1,marginBottom:4}}>SOL IN POOL</div>
+          <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1,marginBottom:4}}>SOL IN POOL</div>
           <input type="range" min="100" max="10000" step="100" value={solInPool} onChange={e=>setSolInPool(Number(e.target.value))} style={{width:"100%",accentColor:"#10B981"}}/>
-          <div style={{fontFamily:"monospace",fontSize:13,color:"#FCD34D",textAlign:"center"}}>{solInPool.toLocaleString()} SOL</div>
+          <div style={{fontFamily:"monospace",fontSize:13,color:"#FFB627",textAlign:"center"}}>{solInPool.toLocaleString()} SOL</div>
         </div>
         <div>
-          <div style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1,marginBottom:4}}>TOKENS IN POOL</div>
+          <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1,marginBottom:4}}>TOKENS IN POOL</div>
           <input type="range" min="1000000" max="500000000" step="1000000" value={tokenInPool} onChange={e=>setTokenInPool(Number(e.target.value))} style={{width:"100%",accentColor:"#10B981"}}/>
-          <div style={{fontFamily:"monospace",fontSize:13,color:"#FCD34D",textAlign:"center"}}>{(tokenInPool/1000000).toFixed(0)}M</div>
+          <div style={{fontFamily:"monospace",fontSize:13,color:"#FFB627",textAlign:"center"}}>{(tokenInPool/1000000).toFixed(0)}M</div>
         </div>
       </div>
 
       {/* Trade direction */}
       <div style={{display:"flex",gap:8,marginBottom:12}}>
-        <button onClick={()=>setTradeDir("buyToken")} style={{flex:1,background:tradeDir==="buyToken"?"rgba(16,185,129,0.2)":"rgba(255,255,255,0.04)",border:`1px solid ${tradeDir==="buyToken"?"#10B981":"rgba(255,255,255,0.1)"}`,borderRadius:8,padding:"8px",fontFamily:"'Oswald',sans-serif",fontSize:10,color:tradeDir==="buyToken"?"#10B981":"#6B7280",cursor:"pointer",letterSpacing:1}}>
+        <button onClick={()=>setTradeDir("buyToken")} style={{flex:1,background:tradeDir==="buyToken"?"rgba(16,185,129,0.2)":"rgba(255,255,255,0.04)",border:`1px solid ${tradeDir==="buyToken"?"#10B981":"rgba(255,255,255,0.1)"}`,borderRadius:8,padding:"8px",fontFamily:"'Anton',sans-serif",fontSize:10,color:tradeDir==="buyToken"?"#10B981":"#6B7280",cursor:"pointer",letterSpacing:1}}>
           BUY TOKENS WITH SOL
         </button>
-        <button onClick={()=>setTradeDir("buySOL")} style={{flex:1,background:tradeDir==="buySOL"?"rgba(16,185,129,0.2)":"rgba(255,255,255,0.04)",border:`1px solid ${tradeDir==="buySOL"?"#10B981":"rgba(255,255,255,0.1)"}`,borderRadius:8,padding:"8px",fontFamily:"'Oswald',sans-serif",fontSize:10,color:tradeDir==="buySOL"?"#10B981":"#6B7280",cursor:"pointer",letterSpacing:1}}>
+        <button onClick={()=>setTradeDir("buySOL")} style={{flex:1,background:tradeDir==="buySOL"?"rgba(16,185,129,0.2)":"rgba(255,255,255,0.04)",border:`1px solid ${tradeDir==="buySOL"?"#10B981":"rgba(255,255,255,0.1)"}`,borderRadius:8,padding:"8px",fontFamily:"'Anton',sans-serif",fontSize:10,color:tradeDir==="buySOL"?"#10B981":"#6B7280",cursor:"pointer",letterSpacing:1}}>
           BUY SOL WITH TOKENS
         </button>
       </div>
@@ -2338,8 +2338,8 @@ function AMMCalculator() {
       {/* Trade size */}
       <div style={{marginBottom:14}}>
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-          <span style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1}}>TRADE SIZE ({tradeDir==="buyToken"?"SOL":"TOKENS"})</span>
-          <span style={{fontFamily:"monospace",fontSize:13,color:"#FCD34D",fontWeight:700}}>{tradeDir==="buyToken"?`${tradeAmount} SOL`:`${tradeAmount.toLocaleString()} tokens`}</span>
+          <span style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1}}>TRADE SIZE ({tradeDir==="buyToken"?"SOL":"TOKENS"})</span>
+          <span style={{fontFamily:"monospace",fontSize:13,color:"#FFB627",fontWeight:700}}>{tradeDir==="buyToken"?`${tradeAmount} SOL`:`${tradeAmount.toLocaleString()} tokens`}</span>
         </div>
         <input type="range" min={tradeDir==="buyToken"?1:100000} max={tradeDir==="buyToken"?solInPool*0.5:tokenInPool*0.5} step={tradeDir==="buyToken"?1:100000} value={tradeAmount} onChange={e=>setTradeAmount(Number(e.target.value))} style={{width:"100%",accentColor:"#10B981"}}/>
       </div>
@@ -2347,19 +2347,19 @@ function AMMCalculator() {
       {/* Results */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
         {[
-          {label:"YOU RECEIVE", value: tradeDir==="buyToken" ? `${Math.floor(receive).toLocaleString()}` : `${receive.toFixed(2)} SOL`, color:"#FCD34D"},
-          {label:"PRICE IMPACT", value:`${Math.abs(priceImpact).toFixed(2)}%`, color: priceImpact > 5 ? "#EF4444" : priceImpact > 2 ? "#F59E0B" : "#10B981"},
+          {label:"YOU RECEIVE", value: tradeDir==="buyToken" ? `${Math.floor(receive).toLocaleString()}` : `${receive.toFixed(2)} SOL`, color:"#FFB627"},
+          {label:"PRICE IMPACT", value:`${Math.abs(priceImpact).toFixed(2)}%`, color: priceImpact > 5 ? "#EF4444" : priceImpact > 2 ? "#FFB627" : "#10B981"},
           {label:"NEW PRICE", value:`${Math.floor(newPrice).toLocaleString()}`, color:"#9CA3AF"},
         ].map((r,i)=>(
           <div key={i} style={{background:"rgba(0,0,0,0.3)",borderRadius:8,padding:"10px 8px",textAlign:"center"}}>
-            <div style={{fontFamily:"'Oswald',sans-serif",fontSize:8,color:"#6B7280",letterSpacing:1,marginBottom:4}}>{r.label}</div>
+            <div style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#6B7280",letterSpacing:1,marginBottom:4}}>{r.label}</div>
             <div style={{fontFamily:"monospace",fontSize:14,color:r.color,fontWeight:700}}>{r.value}</div>
           </div>
         ))}
       </div>
       {Math.abs(priceImpact) > 5 && (
         <div style={{marginTop:10,background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:8,padding:"8px 12px"}}>
-          <p style={{margin:0,fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#EF4444",lineHeight:1.6}}>
+          <p style={{margin:0,fontFamily:"'Anton',sans-serif",fontSize:11,color:"#EF4444",lineHeight:1.6}}>
             ⚠️ {Math.abs(priceImpact).toFixed(1)}% price impact. That is significant. Cluck Norris would not make this trade without checking alternatives first.
           </p>
         </div>
@@ -2379,15 +2379,15 @@ function PositionSizer() {
   let verdict, vcolor;
   if (pct <= 5) { verdict = "Sized for survival — one bad position can't sink your LP capital."; vcolor = "#10B981"; }
   else if (pct <= 15) { verdict = "Moderate size. Reasonable for a pair you understand and actively manage."; vcolor = "#60A5FA"; }
-  else if (pct <= 30) { verdict = "Large. Be certain about this pair — it's a meaningful chunk of your LP capital."; vcolor = "#F59E0B"; }
+  else if (pct <= 30) { verdict = "Large. Be certain about this pair — it's a meaningful chunk of your LP capital."; vcolor = "#FFB627"; }
   else { verdict = "Oversized. This single position dominates your LP capital — a bad outcome here wrecks the whole book."; vcolor = "#EF4444"; }
-  const lab = {fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#9CA3AF",letterSpacing:1,display:"block",marginBottom:6};
+  const lab = {fontFamily:"'Anton',sans-serif",fontSize:11,color:"#9CA3AF",letterSpacing:1,display:"block",marginBottom:6};
   const box = {borderRadius:8,padding:"12px",textAlign:"center"};
-  const cap = {fontFamily:"'Oswald',sans-serif",fontSize:10,color:"#9CA3AF",letterSpacing:1,marginBottom:4};
-  const num = {fontFamily:"'Oswald',sans-serif",fontSize:19,fontWeight:900};
+  const cap = {fontFamily:"'Anton',sans-serif",fontSize:10,color:"#9CA3AF",letterSpacing:1,marginBottom:4};
+  const num = {fontFamily:"'Anton',sans-serif",fontSize:19,fontWeight:900};
   return (
     <div style={{background:"rgba(16,185,129,0.05)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:12,padding:"18px 16px",marginTop:20}}>
-      <div style={{fontFamily:"'Oswald',sans-serif",fontSize:14,fontWeight:700,color:"#10B981",letterSpacing:1,marginBottom:14,textAlign:"center"}}>🛡️ POSITION SIZER</div>
+      <div style={{fontFamily:"'Anton',sans-serif",fontSize:14,fontWeight:700,color:"#10B981",letterSpacing:1,marginBottom:14,textAlign:"center"}}>🛡️ POSITION SIZER</div>
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <div><label style={lab}>LP CAPITAL: ${capital.toLocaleString()}</label><input type="range" min="100" max="50000" step="100" value={capital} onChange={e=>setCapital(Number(e.target.value))} style={{width:"100%",accentColor:"#10B981"}}/></div>
         <div><label style={lab}>THIS POSITION: {pct}% of LP capital</label><input type="range" min="1" max="100" step="1" value={pct} onChange={e=>setPct(Number(e.target.value))} style={{width:"100%",accentColor:"#10B981"}}/></div>
@@ -2398,7 +2398,7 @@ function PositionSizer() {
         <div style={{...box,background:"rgba(239,68,68,0.08)"}}><div style={cap}>STRESS LOSS</div><div style={{...num,color:"#EF4444"}}>${Math.round(stressLoss).toLocaleString()}</div></div>
         <div style={{...box,background:"rgba(16,185,129,0.08)"}}><div style={cap}>OF CAPITAL</div><div style={{...num,color:vcolor}}>{lossPctOfCapital.toFixed(0)}%</div></div>
       </div>
-      <div style={{marginTop:12,fontFamily:"'Oswald',sans-serif",fontSize:11,color:vcolor,textAlign:"center",letterSpacing:0.5,lineHeight:1.5}}>{verdict}</div>
+      <div style={{marginTop:12,fontFamily:"'Anton',sans-serif",fontSize:11,color:vcolor,textAlign:"center",letterSpacing:0.5,lineHeight:1.5}}>{verdict}</div>
     </div>
   );
 }
@@ -2412,17 +2412,17 @@ function PoolHealthCalc() {
   const feesPer1k = tvl > 0 ? (volume * feeTier) / tvl * 1000 : 0;
   const apr = ratio * feeTier * 365 * 100;
   let verdict, vcolor;
-  if (ratio < 0.1) { verdict = "Capital-heavy — lots of TVL, little volume. Fee yield will be thin no matter the advertised APR."; vcolor = "#F59E0B"; }
+  if (ratio < 0.1) { verdict = "Capital-heavy — lots of TVL, little volume. Fee yield will be thin no matter the advertised APR."; vcolor = "#FFB627"; }
   else if (ratio <= 2) { verdict = "Healthy working liquidity — volume is doing real work for the TVL."; vcolor = "#10B981"; }
   else if (ratio <= 10) { verdict = "Very active — high fees, but confirm the volume is organic before you trust it."; vcolor = "#60A5FA"; }
   else { verdict = "Implausibly high volume-to-TVL — strong wash-trading risk. Verify with Token Autopsy."; vcolor = "#EF4444"; }
-  const lab = {fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#9CA3AF",letterSpacing:1,display:"block",marginBottom:6};
+  const lab = {fontFamily:"'Anton',sans-serif",fontSize:11,color:"#9CA3AF",letterSpacing:1,display:"block",marginBottom:6};
   const box = {borderRadius:8,padding:"12px",textAlign:"center"};
-  const cap = {fontFamily:"'Oswald',sans-serif",fontSize:10,color:"#9CA3AF",letterSpacing:1,marginBottom:4};
-  const num = {fontFamily:"'Oswald',sans-serif",fontSize:19,fontWeight:900};
+  const cap = {fontFamily:"'Anton',sans-serif",fontSize:10,color:"#9CA3AF",letterSpacing:1,marginBottom:4};
+  const num = {fontFamily:"'Anton',sans-serif",fontSize:19,fontWeight:900};
   return (
     <div style={{background:"rgba(16,185,129,0.05)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:12,padding:"18px 16px",marginTop:20}}>
-      <div style={{fontFamily:"'Oswald',sans-serif",fontSize:14,fontWeight:700,color:"#10B981",letterSpacing:1,marginBottom:14,textAlign:"center"}}>🔍 POOL HEALTH CHECK</div>
+      <div style={{fontFamily:"'Anton',sans-serif",fontSize:14,fontWeight:700,color:"#10B981",letterSpacing:1,marginBottom:14,textAlign:"center"}}>🔍 POOL HEALTH CHECK</div>
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <div><label style={lab}>TVL: ${tvl.toLocaleString()}</label><input type="range" min="5000" max="2000000" step="5000" value={tvl} onChange={e=>setTvl(Number(e.target.value))} style={{width:"100%",accentColor:"#10B981"}}/></div>
         <div><label style={lab}>24H VOLUME: ${volume.toLocaleString()}</label><input type="range" min="0" max="5000000" step="5000" value={volume} onChange={e=>setVolume(Number(e.target.value))} style={{width:"100%",accentColor:"#10B981"}}/></div>
@@ -2430,7 +2430,7 @@ function PoolHealthCalc() {
           <label style={lab}>FEE TIER</label>
           <div style={{display:"flex",gap:6}}>
             {[{v:0.0001,l:"0.01%"},{v:0.0005,l:"0.05%"},{v:0.003,l:"0.30%"},{v:0.01,l:"1%"}].map(f=>(
-              <button key={f.v} onClick={()=>setFeeTier(f.v)} style={{flex:1,padding:"8px 0",borderRadius:7,border:`1px solid ${feeTier===f.v?"rgba(16,185,129,0.6)":"rgba(255,255,255,0.1)"}`,background:feeTier===f.v?"rgba(16,185,129,0.2)":"rgba(255,255,255,0.03)",color:feeTier===f.v?"#10B981":"#9CA3AF",fontFamily:"'Oswald',sans-serif",fontSize:11,fontWeight:700,letterSpacing:0.5,cursor:"pointer"}}>{f.l}</button>
+              <button key={f.v} onClick={()=>setFeeTier(f.v)} style={{flex:1,padding:"8px 0",borderRadius:7,border:`1px solid ${feeTier===f.v?"rgba(16,185,129,0.6)":"rgba(255,255,255,0.1)"}`,background:feeTier===f.v?"rgba(16,185,129,0.2)":"rgba(255,255,255,0.03)",color:feeTier===f.v?"#10B981":"#9CA3AF",fontFamily:"'Anton',sans-serif",fontSize:11,fontWeight:700,letterSpacing:0.5,cursor:"pointer"}}>{f.l}</button>
             ))}
           </div>
         </div>
@@ -2438,9 +2438,9 @@ function PoolHealthCalc() {
       <div style={{marginTop:16,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
         <div style={{...box,background:"rgba(16,185,129,0.08)"}}><div style={cap}>VOL / TVL</div><div style={{...num,color:vcolor}}>{ratio.toFixed(2)}x</div></div>
         <div style={{...box,background:"rgba(255,255,255,0.05)"}}><div style={cap}>FEES / $1K·DAY</div><div style={{...num,color:"#F9FAFB"}}>${feesPer1k.toFixed(2)}</div></div>
-        <div style={{...box,background:"rgba(255,255,255,0.05)"}}><div style={cap}>IMPLIED APR</div><div style={{...num,color:"#FCD34D"}}>{apr>9999?"9999+":apr.toFixed(0)}%</div></div>
+        <div style={{...box,background:"rgba(255,255,255,0.05)"}}><div style={cap}>IMPLIED APR</div><div style={{...num,color:"#FFB627"}}>{apr>9999?"9999+":apr.toFixed(0)}%</div></div>
       </div>
-      <div style={{marginTop:12,fontFamily:"'Oswald',sans-serif",fontSize:11,color:vcolor,textAlign:"center",letterSpacing:0.5,lineHeight:1.5}}>{verdict}</div>
+      <div style={{marginTop:12,fontFamily:"'Anton',sans-serif",fontSize:11,color:vcolor,textAlign:"center",letterSpacing:0.5,lineHeight:1.5}}>{verdict}</div>
     </div>
   );
 }
@@ -2463,25 +2463,25 @@ function LaunchRiskGate() {
   let gauge, verdict, vcolor;
   if (allGood) { gauge="GO"; verdict="Cleared for a disciplined, tiny launch LP — now manage it like a hawk."; vcolor="#10B981"; }
   else if (criticalFail) { gauge="NO-GO"; verdict="A critical safety check failed. Do not provide liquidity until every critical box is true."; vcolor="#EF4444"; }
-  else { gauge="CAUTION"; verdict="Critical safety checks pass, but discipline checks are missing. Proceed only with extreme care."; vcolor="#F59E0B"; }
+  else { gauge="CAUTION"; verdict="Critical safety checks pass, but discipline checks are missing. Proceed only with extreme care."; vcolor="#FFB627"; }
   return (
     <div style={{background:"rgba(16,185,129,0.05)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:12,padding:"18px 16px",marginTop:20}}>
-      <div style={{fontFamily:"'Oswald',sans-serif",fontSize:14,fontWeight:700,color:"#10B981",letterSpacing:1,marginBottom:6,textAlign:"center"}}>🚀 LAUNCH LP GO / NO-GO</div>
-      <div style={{fontFamily:"'Oswald',sans-serif",fontSize:10,color:"#6B7280",letterSpacing:0.5,textAlign:"center",marginBottom:14,lineHeight:1.5}}>Run Token Autopsy / Security Coop to fill these in. Critical checks marked •</div>
+      <div style={{fontFamily:"'Anton',sans-serif",fontSize:14,fontWeight:700,color:"#10B981",letterSpacing:1,marginBottom:6,textAlign:"center"}}>🚀 LAUNCH LP GO / NO-GO</div>
+      <div style={{fontFamily:"'Anton',sans-serif",fontSize:10,color:"#6B7280",letterSpacing:0.5,textAlign:"center",marginBottom:14,lineHeight:1.5}}>Run Token Autopsy / Security Coop to fill these in. Critical checks marked •</div>
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
         {checks.map(c=>{
           const on = !!state[c.key];
           return (
             <button key={c.key} onClick={()=>toggle(c.key)} style={{display:"flex",alignItems:"center",gap:10,textAlign:"left",padding:"10px 12px",borderRadius:8,cursor:"pointer",border:`1px solid ${on?"rgba(16,185,129,0.5)":(c.critical?"rgba(239,68,68,0.3)":"rgba(255,255,255,0.1)")}`,background:on?"rgba(16,185,129,0.12)":"rgba(255,255,255,0.03)"}}>
-              <span style={{flexShrink:0,width:18,height:18,borderRadius:5,border:`1px solid ${on?"#10B981":"#4B5563"}`,background:on?"#10B981":"transparent",color:"#0a0a0a",fontSize:12,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>{on?"✓":""}</span>
-              <span style={{fontFamily:"'Oswald',sans-serif",fontSize:12,color:on?"#F9FAFB":"#9CA3AF",letterSpacing:0.3}}>{c.critical?"• ":""}{c.label}</span>
+              <span style={{flexShrink:0,width:18,height:18,borderRadius:5,border:`1px solid ${on?"#10B981":"#4B5563"}`,background:on?"#10B981":"transparent",color:"#0a0503",fontSize:12,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>{on?"✓":""}</span>
+              <span style={{fontFamily:"'Anton',sans-serif",fontSize:12,color:on?"#F9FAFB":"#9CA3AF",letterSpacing:0.3}}>{c.critical?"• ":""}{c.label}</span>
             </button>
           );
         })}
       </div>
       <div style={{marginTop:16,textAlign:"center"}}>
-        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:30,fontWeight:900,color:vcolor,letterSpacing:2}}>{gauge}</div>
-        <div style={{marginTop:6,fontFamily:"'Oswald',sans-serif",fontSize:11,color:vcolor,letterSpacing:0.5,lineHeight:1.5}}>{verdict}</div>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:30,fontWeight:900,color:vcolor,letterSpacing:2}}>{gauge}</div>
+        <div style={{marginTop:6,fontFamily:"'Anton',sans-serif",fontSize:11,color:vcolor,letterSpacing:0.5,lineHeight:1.5}}>{verdict}</div>
       </div>
     </div>
   );
@@ -2499,26 +2499,26 @@ function TierAllocationBuilder() {
   if (over) { verdict = "Core + Degen exceeds 100% — pull the sliders down so the tiers fit."; vcolor = "#EF4444"; }
   else if (degen > core || degen > growth) { verdict = "Upside-down pyramid — too much in the riskiest tier. That's a gamble, not a strategy."; vcolor = "#EF4444"; }
   else if (core >= growth && growth >= degen) { verdict = "Pyramid is right-side up — safe core largest, degen smallest. This is a strategy."; vcolor = "#10B981"; }
-  else { verdict = "Workable, but your core (safe) tier should be your largest slice."; vcolor = "#F59E0B"; }
-  const lab = {fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#9CA3AF",letterSpacing:1,display:"block",marginBottom:6};
+  else { verdict = "Workable, but your core (safe) tier should be your largest slice."; vcolor = "#FFB627"; }
+  const lab = {fontFamily:"'Anton',sans-serif",fontSize:11,color:"#9CA3AF",letterSpacing:1,display:"block",marginBottom:6};
   const box = {borderRadius:8,padding:"12px",textAlign:"center"};
-  const cap = {fontFamily:"'Oswald',sans-serif",fontSize:10,color:"#9CA3AF",letterSpacing:1,marginBottom:4};
-  const num = {fontFamily:"'Oswald',sans-serif",fontSize:18,fontWeight:900};
+  const cap = {fontFamily:"'Anton',sans-serif",fontSize:10,color:"#9CA3AF",letterSpacing:1,marginBottom:4};
+  const num = {fontFamily:"'Anton',sans-serif",fontSize:18,fontWeight:900};
   return (
     <div style={{background:"rgba(16,185,129,0.05)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:12,padding:"18px 16px",marginTop:20}}>
-      <div style={{fontFamily:"'Oswald',sans-serif",fontSize:14,fontWeight:700,color:"#10B981",letterSpacing:1,marginBottom:14,textAlign:"center"}}>♟️ THREE-TIER PORTFOLIO BUILDER</div>
+      <div style={{fontFamily:"'Anton',sans-serif",fontSize:14,fontWeight:700,color:"#10B981",letterSpacing:1,marginBottom:14,textAlign:"center"}}>♟️ THREE-TIER PORTFOLIO BUILDER</div>
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <div><label style={lab}>LP CAPITAL: ${capital.toLocaleString()}</label><input type="range" min="500" max="50000" step="500" value={capital} onChange={e=>setCapital(Number(e.target.value))} style={{width:"100%",accentColor:"#10B981"}}/></div>
         <div><label style={lab}>CORE (safe): {core}%</label><input type="range" min="0" max="100" step="5" value={core} onChange={e=>setCore(Number(e.target.value))} style={{width:"100%",accentColor:"#10B981"}}/></div>
         <div><label style={lab}>DEGEN (risky): {degen}%</label><input type="range" min="0" max="100" step="5" value={degen} onChange={e=>setDegen(Number(e.target.value))} style={{width:"100%",accentColor:"#EF4444"}}/></div>
-        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#6B7280",letterSpacing:0.5,textAlign:"center"}}>Growth (middle) auto-fills the rest: {growth}%</div>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#6B7280",letterSpacing:0.5,textAlign:"center"}}>Growth (middle) auto-fills the rest: {growth}%</div>
       </div>
       <div style={{marginTop:16,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
         <div style={{...box,background:"rgba(16,185,129,0.08)"}}><div style={cap}>CORE {core}%</div><div style={{...num,color:"#10B981"}}>${Math.round(coreUSD).toLocaleString()}</div></div>
         <div style={{...box,background:"rgba(96,165,250,0.08)"}}><div style={cap}>GROWTH {growth}%</div><div style={{...num,color:"#60A5FA"}}>${Math.round(growthUSD).toLocaleString()}</div></div>
         <div style={{...box,background:"rgba(239,68,68,0.08)"}}><div style={cap}>DEGEN {degen}%</div><div style={{...num,color:"#EF4444"}}>${Math.round(degenUSD).toLocaleString()}</div></div>
       </div>
-      <div style={{marginTop:12,fontFamily:"'Oswald',sans-serif",fontSize:11,color:vcolor,textAlign:"center",letterSpacing:0.5,lineHeight:1.5}}>{verdict}</div>
+      <div style={{marginTop:12,fontFamily:"'Anton',sans-serif",fontSize:11,color:vcolor,textAlign:"center",letterSpacing:0.5,lineHeight:1.5}}>{verdict}</div>
     </div>
   );
 }
@@ -2577,11 +2577,11 @@ function LPLessonView({ lesson, onBack, onComplete }) {
 
   if (phase === "quiz") return (
     <div style={{padding:"0 16px 40px",maxWidth:COLW,margin:"0 auto"}}>
-      <button onClick={()=>setPhase("content")} style={{background:"none",border:"none",color:"#6B7280",fontFamily:"'Oswald',sans-serif",fontSize:10,letterSpacing:2,cursor:"pointer",marginBottom:16}}>← BACK TO LESSON</button>
-      <div style={{fontFamily:"'Oswald',sans-serif",fontSize:10,color:"#10B981",letterSpacing:2,marginBottom:4}}>⚗️ LP LAB — LESSON {lesson.id} QUIZ</div>
-      <div style={{fontFamily:"'Oswald',sans-serif",fontSize:10,color:"#6B7280",letterSpacing:1,marginBottom:16}}>QUESTION {qi+1} OF {shuffledQuestions.length}</div>
+      <button onClick={()=>setPhase("content")} style={{background:"none",border:"none",color:"#6B7280",fontFamily:"'Anton',sans-serif",fontSize:10,letterSpacing:2,cursor:"pointer",marginBottom:16}}>← BACK TO LESSON</button>
+      <div style={{fontFamily:"'Anton',sans-serif",fontSize:10,color:"#10B981",letterSpacing:2,marginBottom:4}}>⚗️ LP LAB — LESSON {lesson.id} QUIZ</div>
+      <div style={{fontFamily:"'Anton',sans-serif",fontSize:10,color:"#6B7280",letterSpacing:1,marginBottom:16}}>QUESTION {qi+1} OF {shuffledQuestions.length}</div>
       <div style={{background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:12,padding:"14px 16px",marginBottom:16}}>
-        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:15,color:"#F9FAFB",lineHeight:1.5}}>{q.q}</div>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,color:"#F9FAFB",lineHeight:1.5}}>{q.q}</div>
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
         {q.options.map((opt,i)=>{
@@ -2593,7 +2593,7 @@ function LPLessonView({ lesson, onBack, onComplete }) {
             else if (i === sel) { bg="rgba(239,68,68,0.15)"; border="#EF4444"; color="#EF4444"; }
           }
           return (
-            <button key={i} onClick={()=>pickAnswer(i)} style={{background:bg,border:`1px solid ${border}`,borderRadius:10,padding:"12px 14px",textAlign:"left",fontFamily:"'Oswald',sans-serif",fontSize:13,color,cursor:sel===null?"pointer":"default",letterSpacing:0.5}}>
+            <button key={i} onClick={()=>pickAnswer(i)} style={{background:bg,border:`1px solid ${border}`,borderRadius:10,padding:"12px 14px",textAlign:"left",fontFamily:"'Anton',sans-serif",fontSize:13,color,cursor:sel===null?"pointer":"default",letterSpacing:0.5}}>
               <span style={{color:"#6B7280",marginRight:8}}>{String.fromCharCode(65+i)}.</span>{opt}
             </button>
           );
@@ -2601,14 +2601,14 @@ function LPLessonView({ lesson, onBack, onComplete }) {
       </div>
       {showExp && (
         <div style={{background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:10,padding:14,marginBottom:12}}>
-          <div style={{fontFamily:"'Oswald',sans-serif",fontSize:10,color:sel===q.correct?"#10B981":"#EF4444",letterSpacing:1,marginBottom:6}}>{sel===q.correct?"✓ CORRECT":"✗ NOT QUITE"} — CLUCK EXPLAINS:</div>
+          <div style={{fontFamily:"'Anton',sans-serif",fontSize:10,color:sel===q.correct?"#10B981":"#EF4444",letterSpacing:1,marginBottom:6}}>{sel===q.correct?"✓ CORRECT":"✗ NOT QUITE"} — CLUCK EXPLAINS:</div>
           <p style={{margin:0,fontSize:13,color:"#D1D5DB",lineHeight:1.7}}>{q.explanation}</p>
         </div>
       )}
       {showExp && (
         <>
           <AskCluck context={`LP Lab Lesson ${lesson.id}: ${lesson.title}`} compact={true}/>
-          <button onClick={nextQuestion} style={{width:"100%",background:"linear-gradient(135deg,#10B981,#059669)",border:"none",borderRadius:10,padding:"13px",fontFamily:"'Oswald',sans-serif",fontSize:14,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer",marginTop:8}}>
+          <button onClick={nextQuestion} style={{width:"100%",background:"linear-gradient(135deg,#10B981,#059669)",border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:14,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer",marginTop:8}}>
             {qi+1<shuffledQuestions.length?"NEXT QUESTION →":"SEE RESULTS →"}
           </button>
         </>
@@ -2619,24 +2619,24 @@ function LPLessonView({ lesson, onBack, onComplete }) {
   if (phase === "result") return (
     <div style={{padding:"0 16px 40px",maxWidth:COLW,margin:"0 auto",textAlign:"center"}}>
       <div style={{fontSize:48,marginBottom:12}}>{score===shuffledQuestions.length?"🏆":score>=3?"✅":"📚"}</div>
-      <div style={{fontFamily:"'Oswald',sans-serif",fontSize:20,fontWeight:900,color:"#10B981",letterSpacing:2,marginBottom:8}}>
+      <div style={{fontFamily:"'Anton',sans-serif",fontSize:20,fontWeight:900,color:"#10B981",letterSpacing:2,marginBottom:8}}>
         {score}/{shuffledQuestions.length} CORRECT
       </div>
       <div style={{background:"rgba(16,185,129,0.08)",border:"1px solid rgba(16,185,129,0.25)",borderRadius:12,padding:16,marginBottom:16}}>
-        <p style={{fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FCD34D",fontSize:14,margin:"0 0 8px",lineHeight:1.6}}>
+        <p style={{fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FFB627",fontSize:14,margin:"0 0 8px",lineHeight:1.6}}>
           {score===shuffledQuestions.length
             ? '"Perfect score. You actually read it. Rare in this schoolyard. Move on to the next lesson."'
             : score>=3
             ? '"Decent. You understand the basics. But decent doesn\'t survive this market. Review what you missed."'
             : '"You need to go back. Read every section again. The market doesn\'t grade on a curve."'}
         </p>
-        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:10,color:"#D97706",letterSpacing:2}}>— CLUCK NORRIS</div>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:10,color:"#FF7A18",letterSpacing:2}}>— CLUCK NORRIS</div>
       </div>
       <div style={{display:"flex",gap:10}}>
-        <button onClick={()=>{setPhase("content");setQi(0);setSel(null);setAnswers([]);setShowExp(false);}} style={{flex:1,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:10,padding:"12px",fontFamily:"'Oswald',sans-serif",fontSize:12,color:"#D1D5DB",cursor:"pointer",letterSpacing:1}}>
+        <button onClick={()=>{setPhase("content");setQi(0);setSel(null);setAnswers([]);setShowExp(false);}} style={{flex:1,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:10,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:12,color:"#D1D5DB",cursor:"pointer",letterSpacing:1}}>
           📖 REVIEW LESSON
         </button>
-        <button onClick={onComplete} style={{flex:1,background:"linear-gradient(135deg,#10B981,#059669)",border:"none",borderRadius:10,padding:"12px",fontFamily:"'Oswald',sans-serif",fontSize:12,fontWeight:700,color:"#fff",letterSpacing:1,cursor:"pointer"}}>
+        <button onClick={onComplete} style={{flex:1,background:"linear-gradient(135deg,#10B981,#059669)",border:"none",borderRadius:10,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:12,fontWeight:700,color:"#fff",letterSpacing:1,cursor:"pointer"}}>
           NEXT LESSON →
         </button>
       </div>
@@ -2645,27 +2645,27 @@ function LPLessonView({ lesson, onBack, onComplete }) {
 
   return (
     <div style={{padding:"0 16px 40px",maxWidth:COLW,margin:"0 auto"}}>
-      <button onClick={onBack} style={{background:"none",border:"none",color:"#6B7280",fontFamily:"'Oswald',sans-serif",fontSize:10,letterSpacing:2,cursor:"pointer",marginBottom:16}}>← BACK TO LP LAB</button>
+      <button onClick={onBack} style={{background:"none",border:"none",color:"#6B7280",fontFamily:"'Anton',sans-serif",fontSize:10,letterSpacing:2,cursor:"pointer",marginBottom:16}}>← BACK TO LP LAB</button>
 
       {/* Header */}
       <div style={{textAlign:"center",marginBottom:20}}>
         <div style={{fontSize:40,marginBottom:6}}>{lesson.icon}</div>
-        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:10,color:"#10B981",letterSpacing:3,marginBottom:4}}>⚗️ LP LAB — LESSON {lesson.id}</div>
-        <h2 style={{fontFamily:"'Oswald',sans-serif",fontSize:26,fontWeight:900,color:"#F9FAFB",margin:"0 0 6px",letterSpacing:2}}>{lesson.title}</h2>
-        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#6B7280",letterSpacing:2}}>{lesson.tagline}</div>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:10,color:"#10B981",letterSpacing:3,marginBottom:4}}>⚗️ LP LAB — LESSON {lesson.id}</div>
+        <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:26,fontWeight:900,color:"#F9FAFB",margin:"0 0 6px",letterSpacing:2}}>{lesson.title}</h2>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#6B7280",letterSpacing:2}}>{lesson.tagline}</div>
       </div>
 
       {/* Cluck hook */}
-      <div style={{background:"rgba(217,119,6,0.08)",border:"1px solid rgba(217,119,6,0.25)",borderRadius:12,padding:"14px 16px",marginBottom:20,display:"flex",gap:12,alignItems:"flex-start"}}>
-        <img src={LOGO_B64} alt="CN" style={{width:36,height:36,borderRadius:"50%",objectFit:"cover",border:"2px solid #D97706",flexShrink:0}}/>
-        <p style={{margin:0,fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FCD34D",fontSize:13,lineHeight:1.7}}>{lesson.cluckHook}</p>
+      <div style={{background:"rgba(255,122,24,0.08)",border:"1px solid rgba(255,122,24,0.25)",borderRadius:12,padding:"14px 16px",marginBottom:20,display:"flex",gap:12,alignItems:"flex-start"}}>
+        <img src={LOGO_B64} alt="CN" style={{width:36,height:36,borderRadius:"50%",objectFit:"cover",border:"2px solid #FF7A18",flexShrink:0}}/>
+        <p style={{margin:0,fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FFB627",fontSize:13,lineHeight:1.7}}>{lesson.cluckHook}</p>
       </div>
 
       {/* Sections */}
       {lesson.sections.map((sec, i) => (
         <div key={i} style={{marginBottom:8}}>
           <button onClick={()=>setOpenSection(openSection===i?-1:i)} style={{width:"100%",background:openSection===i?"rgba(16,185,129,0.1)":"rgba(255,255,255,0.03)",border:`1px solid ${openSection===i?"rgba(16,185,129,0.4)":"rgba(255,255,255,0.08)"}`,borderRadius:openSection===i?"12px 12px 0 0":"12px",padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
-            <span style={{fontFamily:"'Oswald',sans-serif",fontSize:13,fontWeight:700,color:openSection===i?"#10B981":"#D1D5DB",letterSpacing:1}}>{sec.heading}</span>
+            <span style={{fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,color:openSection===i?"#10B981":"#D1D5DB",letterSpacing:1}}>{sec.heading}</span>
             <span style={{color:openSection===i?"#10B981":"#6B7280",fontSize:16}}>{openSection===i?"▲":"▼"}</span>
           </button>
           {openSection===i && (
@@ -2676,14 +2676,14 @@ function LPLessonView({ lesson, onBack, onComplete }) {
                   <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
                     <thead>
                       <tr>{sec.table.headers.map((h,j)=>(
-                        <th key={j} style={{background:"rgba(16,185,129,0.15)",padding:"8px 10px",textAlign:"left",fontFamily:"'Oswald',sans-serif",color:"#10B981",letterSpacing:1,borderBottom:"1px solid rgba(16,185,129,0.3)"}}>{h}</th>
+                        <th key={j} style={{background:"rgba(16,185,129,0.15)",padding:"8px 10px",textAlign:"left",fontFamily:"'Anton',sans-serif",color:"#10B981",letterSpacing:1,borderBottom:"1px solid rgba(16,185,129,0.3)"}}>{h}</th>
                       ))}</tr>
                     </thead>
                     <tbody>
                       {sec.table.rows.map((row,j)=>(
                         <tr key={j} style={{borderBottom:"1px solid rgba(255,255,255,0.05)"}}>
                           {row.map((cell,k)=>(
-                            <td key={k} style={{padding:"8px 10px",color:k===0?"#FCD34D":"#D1D5DB",fontFamily:k===0?"'Oswald',sans-serif":"inherit",letterSpacing:k===0?1:0}}>{cell}</td>
+                            <td key={k} style={{padding:"8px 10px",color:k===0?"#FFB627":"#D1D5DB",fontFamily:k===0?"'Anton',sans-serif":"inherit",letterSpacing:k===0?1:0}}>{cell}</td>
                           ))}
                         </tr>
                       ))}
@@ -2733,19 +2733,19 @@ function LPLessonView({ lesson, onBack, onComplete }) {
 
       {/* Interactive: Liquidity Depth Visualizer */}
       <div style={{background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.25)",borderRadius:12,padding:16,marginTop:16,marginBottom:8}}>
-        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#10B981",letterSpacing:2,marginBottom:4}}>🧮 INTERACTIVE — LIQUIDITY DEPTH VISUALIZER</div>
-        <p style={{fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#9CA3AF",margin:"0 0 14px",lineHeight:1.6}}>See how pool depth affects your trade. Drag the slider to change trade size.</p>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#10B981",letterSpacing:2,marginBottom:4}}>🧮 INTERACTIVE — LIQUIDITY DEPTH VISUALIZER</div>
+        <p style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#9CA3AF",margin:"0 0 14px",lineHeight:1.6}}>See how pool depth affects your trade. Drag the slider to change trade size.</p>
         
         <div style={{marginBottom:14}}>
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-            <span style={{fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#D1D5DB",letterSpacing:1}}>TRADE SIZE</span>
-            <span style={{fontFamily:"monospace",fontSize:14,color:"#FCD34D",fontWeight:700}}>${tradeSize.toLocaleString()}</span>
+            <span style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#D1D5DB",letterSpacing:1}}>TRADE SIZE</span>
+            <span style={{fontFamily:"monospace",fontSize:14,color:"#FFB627",fontWeight:700}}>${tradeSize.toLocaleString()}</span>
           </div>
           <input type="range" min="50" max="50000" step="50" value={tradeSize} onChange={e=>setTradeSize(Number(e.target.value))}
             style={{width:"100%",accentColor:"#10B981"}}/>
           <div style={{display:"flex",justifyContent:"space-between"}}>
-            <span style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#4B5563"}}>$50</span>
-            <span style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#4B5563"}}>$50,000</span>
+            <span style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#4B5563"}}>$50</span>
+            <span style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#4B5563"}}>$50,000</span>
           </div>
         </div>
 
@@ -2755,11 +2755,11 @@ function LPLessonView({ lesson, onBack, onComplete }) {
             {label:"DEEP POOL",tvl:"$500,000 TVL",impact:deepImpact,color:"#10B981",bg:"rgba(16,185,129,0.08)",border:"rgba(16,185,129,0.3)"},
           ].map((pool,i)=>(
             <div key={i} style={{background:pool.bg,border:`1px solid ${pool.border}`,borderRadius:10,padding:12,textAlign:"center"}}>
-              <div style={{fontFamily:"'Oswald',sans-serif",fontSize:13,color:pool.color,letterSpacing:1,marginBottom:3}}>{pool.label}</div>
-              <div style={{fontFamily:"'Oswald',sans-serif",fontSize:12,color:"#9CA3AF",marginBottom:8}}>{pool.tvl}</div>
+              <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:pool.color,letterSpacing:1,marginBottom:3}}>{pool.label}</div>
+              <div style={{fontFamily:"'Anton',sans-serif",fontSize:12,color:"#9CA3AF",marginBottom:8}}>{pool.tvl}</div>
               <div style={{fontFamily:"monospace",fontSize:32,fontWeight:700,color:pool.color,marginBottom:3}}>{pool.impact}%</div>
-              <div style={{fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#9CA3AF",letterSpacing:1}}>PRICE IMPACT</div>
-              <div style={{marginTop:8,fontFamily:"'Oswald',sans-serif",fontSize:12,color:pool.color}}>
+              <div style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#9CA3AF",letterSpacing:1}}>PRICE IMPACT</div>
+              <div style={{marginTop:8,fontFamily:"'Anton',sans-serif",fontSize:12,color:pool.color}}>
                 You lose ${(tradeSize * pool.impact / 100).toFixed(2)} to impact
               </div>
             </div>
@@ -2767,7 +2767,7 @@ function LPLessonView({ lesson, onBack, onComplete }) {
         </div>
         {parseFloat(shallowImpact) > 5 && (
           <div style={{marginTop:10,background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:8,padding:"8px 12px"}}>
-            <p style={{margin:0,fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#EF4444",lineHeight:1.6}}>
+            <p style={{margin:0,fontFamily:"'Anton',sans-serif",fontSize:11,color:"#EF4444",lineHeight:1.6}}>
               ⚠️ That's a {shallowImpact}% price impact in the shallow pool. Cluck Norris would not make that trade.
             </p>
           </div>
@@ -2775,13 +2775,13 @@ function LPLessonView({ lesson, onBack, onComplete }) {
       </div>
 
       {/* Cluck verdict */}
-      <div style={{background:"rgba(217,119,6,0.06)",border:"1px solid rgba(217,119,6,0.2)",borderRadius:12,padding:"14px 16px",marginBottom:16,marginTop:8}}>
-        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#D97706",letterSpacing:2,marginBottom:6}}>🐔 CLUCK'S VERDICT</div>
-        <p style={{margin:0,fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FCD34D",fontSize:13,lineHeight:1.7}}>{lesson.cluckVerdict}</p>
+      <div style={{background:"rgba(255,122,24,0.06)",border:"1px solid rgba(255,122,24,0.2)",borderRadius:12,padding:"14px 16px",marginBottom:16,marginTop:8}}>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#FF7A18",letterSpacing:2,marginBottom:6}}>🐔 CLUCK'S VERDICT</div>
+        <p style={{margin:0,fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FFB627",fontSize:13,lineHeight:1.7}}>{lesson.cluckVerdict}</p>
       </div>
 
       <AskCluck context={`LP Lab Lesson ${lesson.id}: ${lesson.title}`} compact={true}/>
-      <button onClick={()=>{setPhase("quiz");setQi(0);setSel(null);setAnswers([]);setShowExp(false);}} style={{width:"100%",background:"linear-gradient(135deg,#10B981,#059669)",border:"none",borderRadius:10,padding:"14px",fontFamily:"'Oswald',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer",marginTop:12}}>
+      <button onClick={()=>{setPhase("quiz");setQi(0);setSel(null);setAnswers([]);setShowExp(false);}} style={{width:"100%",background:"linear-gradient(135deg,#10B981,#059669)",border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer",marginTop:12}}>
         ✅ TAKE THE QUIZ →
       </button>
     </div>
@@ -2827,24 +2827,24 @@ function LPLab() {
       {/* Header */}
       <div style={{textAlign:"center",marginBottom:24}}>
         <div style={{fontSize:36,marginBottom:6}}>⚗️</div>
-        <h2 style={{fontFamily:"'Oswald',sans-serif",fontSize:28,fontWeight:900,color:"#F9FAFB",margin:"0 0 4px",letterSpacing:2}}>THE LP LAB</h2>
-        <div style={{fontFamily:"'Oswald',sans-serif",fontSize:10,color:"#6B7280",letterSpacing:3,marginBottom:12}}>ADVANCED LIQUIDITY TRAINING</div>
+        <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:28,fontWeight:900,color:"#F9FAFB",margin:"0 0 4px",letterSpacing:2}}>THE LP LAB</h2>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:10,color:"#6B7280",letterSpacing:3,marginBottom:12}}>ADVANCED LIQUIDITY TRAINING</div>
         <div style={{background:"rgba(16,185,129,0.08)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:10,padding:"10px 14px",display:"inline-block"}}>
-          <p style={{margin:0,fontFamily:"'Oswald',sans-serif",fontSize:11,color:"#10B981",lineHeight:1.6,letterSpacing:0.5}}>
+          <p style={{margin:0,fontFamily:"'Anton',sans-serif",fontSize:11,color:"#10B981",lineHeight:1.6,letterSpacing:0.5}}>
             Protocol-agnostic. Works on Meteora, Raydium, Orca, Uniswap — anywhere. Master the mechanics, not just the buttons.
           </p>
         </div>
       </div>
 
       {/* Live tool cross-link — put the theory to work */}
-      <a href="/lp-scanner" style={{display:"block",textDecoration:"none",background:"linear-gradient(135deg,rgba(217,119,6,0.12),rgba(245,158,11,0.06))",border:"1px solid rgba(217,119,6,0.4)",borderRadius:12,padding:"14px 16px",marginBottom:16}}>
+      <a href="/lp-scanner" style={{display:"block",textDecoration:"none",background:"linear-gradient(135deg,rgba(255,122,24,0.12),rgba(255,182,39,0.06))",border:"1px solid rgba(255,122,24,0.4)",borderRadius:12,padding:"14px 16px",marginBottom:16}}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
           <div style={{fontSize:26,flexShrink:0}}>🔬</div>
           <div style={{flex:1}}>
-            <div style={{fontFamily:"'Oswald',sans-serif",fontSize:15,fontWeight:900,color:"#FCD34D",letterSpacing:1}}>LP PAIR SCANNER <span style={{fontSize:9,color:"#6B7280",letterSpacing:2}}>LIVE TOOL</span></div>
-            <div style={{fontFamily:"'Oswald',sans-serif",fontSize:10.5,color:"#D1D5DB",letterSpacing:0.5,lineHeight:1.5,marginTop:3}}>Ready to apply it? Scan every pool for any pair across every Solana DEX, then run the range &amp; earnings simulator on real volatility.</div>
+            <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:900,color:"#FFB627",letterSpacing:1}}>LP PAIR SCANNER <span style={{fontSize:9,color:"#6B7280",letterSpacing:2}}>LIVE TOOL</span></div>
+            <div style={{fontFamily:"'Anton',sans-serif",fontSize:10.5,color:"#D1D5DB",letterSpacing:0.5,lineHeight:1.5,marginTop:3}}>Ready to apply it? Scan every pool for any pair across every Solana DEX, then run the range &amp; earnings simulator on real volatility.</div>
           </div>
-          <span style={{color:"#D97706",fontSize:16,flexShrink:0}}>→</span>
+          <span style={{color:"#FF7A18",fontSize:16,flexShrink:0}}>→</span>
         </div>
       </a>
 
@@ -2857,11 +2857,11 @@ function LPLab() {
               <div style={{fontSize:28,flexShrink:0}}>{lesson.icon}</div>
               <div style={{flex:1}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
-                  <span style={{fontFamily:"'Oswald',sans-serif",fontSize:9,color:"#10B981",letterSpacing:2}}>LESSON {lesson.id}</span>
-                  {done && <span style={{fontFamily:"'Oswald',sans-serif",fontSize:8,color:"#10B981",background:"rgba(16,185,129,0.15)",border:"1px solid rgba(16,185,129,0.3)",borderRadius:10,padding:"1px 6px",letterSpacing:1}}>✓ DONE</span>}
+                  <span style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#10B981",letterSpacing:2}}>LESSON {lesson.id}</span>
+                  {done && <span style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#10B981",background:"rgba(16,185,129,0.15)",border:"1px solid rgba(16,185,129,0.3)",borderRadius:10,padding:"1px 6px",letterSpacing:1}}>✓ DONE</span>}
                 </div>
-                <div style={{fontFamily:"'Oswald',sans-serif",fontSize:15,fontWeight:700,color:"#F9FAFB",marginBottom:2,letterSpacing:1}}>{lesson.title}</div>
-                <div style={{fontFamily:"'Oswald',sans-serif",fontSize:10,color:"#6B7280",letterSpacing:0.5}}>{lesson.tagline}</div>
+                <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#F9FAFB",marginBottom:2,letterSpacing:1}}>{lesson.title}</div>
+                <div style={{fontFamily:"'Anton',sans-serif",fontSize:10,color:"#6B7280",letterSpacing:0.5}}>{lesson.tagline}</div>
               </div>
               <span style={{color:"#10B981",fontSize:16,flexShrink:0}}>→</span>
             </button>
