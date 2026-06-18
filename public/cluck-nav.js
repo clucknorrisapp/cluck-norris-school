@@ -16,7 +16,7 @@
     a.setAttribute("aria-label", "Ask Cluck — live crypto lectures");
     a.innerHTML = '<span style="font-size:14px;line-height:1">🔥</span><span>Ask Cluck</span>';
     a.style.cssText = [
-      "position:fixed", "top:12px", "right:12px", "z-index:2147483000",
+      "position:fixed", "top:12px", "left:50%", "transform:translateX(-50%)", "z-index:2147483000",
       "display:inline-flex", "align-items:center", "gap:6px",
       "font-family:'Anton','Chakra Petch',system-ui,sans-serif",
       "font-size:13px", "font-weight:400", "letter-spacing:.6px", "text-transform:uppercase",
@@ -28,8 +28,8 @@
       "transition:transform .12s,box-shadow .12s",
       "-webkit-tap-highlight-color:transparent"
     ].join(";");
-    a.addEventListener("mouseenter", function () { a.style.transform = "translateY(-1px)"; a.style.boxShadow = "0 6px 20px rgba(232,30,14,.6)"; });
-    a.addEventListener("mouseleave", function () { a.style.transform = ""; a.style.boxShadow = "0 4px 16px rgba(232,30,14,.45)"; });
+    a.addEventListener("mouseenter", function () { a.style.transform = "translateX(-50%) translateY(-1px)"; a.style.boxShadow = "0 6px 20px rgba(232,30,14,.6)"; });
+    a.addEventListener("mouseleave", function () { a.style.transform = "translateX(-50%)"; a.style.boxShadow = "0 4px 16px rgba(232,30,14,.45)"; });
     document.body.appendChild(a);
   }
 
