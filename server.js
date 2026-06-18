@@ -8189,8 +8189,9 @@ app.get("/order-book", (req, res) => {
   res.sendFile(join(__dirname, "public", "order-book.html"));
 });
 
-// -- Cluck Norris Crypto School — interactive live lectures (UI for /api/lecture) --
-app.get("/crypto-school", (req, res) => {
+// -- Ask Cluck — interactive live lectures (UI for /api/lecture). Primary route
+//    /ask-cluck; /crypto-school kept as an alias so older links don't break. --
+app.get(["/ask-cluck", "/crypto-school"], (req, res) => {
   res.sendFile(join(__dirname, "public", "crypto-school.html"));
 });
 
