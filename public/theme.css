@@ -111,3 +111,13 @@ a { color: var(--orange); }
 .ck-embers { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
 .ck-embers span { position: absolute; bottom: 40px; border-radius: 50%; background: radial-gradient(circle, #FFD56B, #FF5A0A); }
 .ck-embers.off { display: none; }
+
+/* ── Display-type proportion control ──────────────────────────────────────
+   Anton is a heavier, taller poster face than the Oswald it replaced, so at
+   the old px sizes display text reads oversized/chunky. Rein it in site-wide:
+   tighter leading + a hair of tracking, and a gentle cap on the largest page
+   titles. Higher-specificity (html h1…) so it lands over each page's own
+   bare h1 rule without per-page edits. Tune here once → applies everywhere. */
+h1, h2, h3, .ck-h1, .room-title, .wordmark { line-height: 1.12; }
+html h1, html .ck-h1 { font-size: 26px; letter-spacing: .4px; }
+@media (max-width: 600px) { html h1, html .ck-h1 { font-size: 22px; } }
