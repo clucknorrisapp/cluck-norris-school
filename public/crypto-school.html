@@ -56,7 +56,8 @@
   .drill{margin-top:14px;display:flex;gap:8px;align-items:flex-start;background:linear-gradient(90deg,rgba(232,30,14,.2),rgba(255,122,24,.05));border-left:3px solid #E81E0E;padding:10px 14px;border-radius:4px;font-weight:700;font-size:13px;letter-spacing:.4px;color:#FFD9A0;text-transform:uppercase;line-height:1.4;}
   .grounded{margin-top:12px;font-size:10.5px;letter-spacing:1px;color:#9C7E68;text-transform:uppercase;}
   .grounded b{color:#C9A892;}
-  .chips{position:relative;z-index:3;flex:none;display:flex;gap:9px;overflow-x:auto;padding:12px 18px;border-top:1px solid rgba(255,122,24,.12);background:rgba(14,7,4,.4);}
+  .chips{position:relative;z-index:3;flex:none;display:flex;gap:9px;overflow-x:auto;padding:12px 18px;border-top:1px solid rgba(255,122,24,.12);background:rgba(14,7,4,.4);align-items:center;}
+  .chiplabel{flex:none;align-self:center;font-family:'Chakra Petch',sans-serif;font-size:10.5px;letter-spacing:.5px;color:#9C7E68;text-transform:uppercase;white-space:nowrap;margin-right:4px;}
   .chip{flex:none;font-family:inherit;font-weight:600;font-size:13px;color:#FFD9A0;background:rgba(255,122,24,.08);border:1px solid rgba(255,122,24,.3);border-radius:999px;padding:8px 14px;white-space:nowrap;cursor:pointer;transition:all .15s;}
   .chip:hover{background:rgba(255,122,24,.2);border-color:#FF7A18;color:#fff;}
   .tweaks{position:relative;z-index:3;flex:none;display:flex;align-items:center;gap:14px;padding:6px 18px;background:rgba(14,7,4,.4);font-size:11px;color:#9C7E68;letter-spacing:.5px;flex-wrap:wrap;}
@@ -140,8 +141,8 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
-  // --- Topic chips → the question sent to the AI ---
-  var TOPICS = [
+  // --- Chips: casual prompts in Ask mode · the standardized lecture syllabus in Lecture mode ---
+  var ASK_TOPICS = [
     ['What even is a blockchain?', 'What even is a blockchain? Explain it clearly.'],
     ['Wallets & private keys', 'How do crypto wallets and private keys actually work?'],
     ['How not to get rekt', 'How do I avoid getting rekt trading crypto? Teach trading psychology.'],
@@ -150,13 +151,43 @@
     ['Impermanent loss', 'Explain impermanent loss for liquidity providers, clearly.'],
     ['🔥 Surprise me', 'Give me one piece of hard-earned crypto wisdom most people learn the hard way.']
   ];
+  // Standardized lectures — a core syllabus to tap through, replaced by the real
+  // curriculum from /api/curriculum once it loads (so people don't have to free-text).
+  var LECTURE_TOPICS = [
+    ['What is a blockchain?', 'What is a blockchain?'], ['Wallets & keys', 'How do crypto wallets and private keys work?'],
+    ['What is a token?', 'What is a crypto token and how is it created?'], ['DEXs & swaps', 'How do decentralized exchanges and swaps work?'],
+    ['Liquidity pools', 'What is a liquidity pool and how does it work?'], ['Impermanent loss', 'Explain impermanent loss for LPs.'],
+    ['Market cap & supply', 'How do market cap and token supply work?'], ['Rug pulls & scams', 'What is a rug pull and how do I avoid scams?'],
+    ['MEV', 'What is MEV and how does it affect me?'], ['Tokenomics', 'Explain tokenomics — what makes a token healthy?']
+  ];
   var chips = document.getElementById('chips');
-  TOPICS.forEach(function (t) {
-    var b = document.createElement('button');
-    b.className = 'chip'; b.type = 'button'; b.textContent = t[0];
-    b.addEventListener('click', function () { if (!busy) send(t[1]); });
-    chips.appendChild(b);
-  });
+  function renderChips() {
+    var lec = (MODE === 'lecture');
+    chips.innerHTML = '';
+    var label = document.createElement('span');
+    label.className = 'chiplabel';
+    label.textContent = lec ? '📋 Standardized lectures — tap to begin:' : 'Popular:';
+    chips.appendChild(label);
+    (lec ? LECTURE_TOPICS : ASK_TOPICS).forEach(function (t) {
+      var b = document.createElement('button');
+      b.className = 'chip'; b.type = 'button'; b.textContent = t[0];
+      b.addEventListener('click', function () { if (!busy) send(t[1]); });
+      chips.appendChild(b);
+    });
+  }
+  renderChips();
+  // Pull the real curriculum as the standardized lecture list (graceful fallback above).
+  fetch('/api/curriculum').then(function (r) { return r.json(); }).then(function (d) {
+    if (!d || !d.success || !d.courses) return;
+    var seen = {}, out = [];
+    d.courses.forEach(function (c) {
+      (c.lessons || []).forEach(function (l) {
+        var t = String(l.title || '').trim();
+        if (t && !seen[t.toLowerCase()]) { seen[t.toLowerCase()] = 1; out.push([t, 'Give me the lecture on: ' + t]); }
+      });
+    });
+    if (out.length) { LECTURE_TOPICS = out; if (MODE === 'lecture') renderChips(); }
+  }).catch(function () {});
 
   // --- Embers (ambient) ---
   function buildEmbers() {
@@ -184,7 +215,7 @@
   }
   wireSeg('styleSeg', function (v) { STYLE = v; });
   wireSeg('fireSeg', function (v) { embers.classList.toggle('off', v === 'calm'); });
-  wireSeg('modeSeg', function (v) { MODE = v; input.placeholder = v === 'lecture' ? 'Ask for a lecture on any topic...' : 'Ask Cluck anything...'; });
+  wireSeg('modeSeg', function (v) { MODE = v; input.placeholder = v === 'lecture' ? 'Or type any lecture topic...' : 'Ask Cluck anything...'; renderChips(); });
 
   // --- Rendering ---
   function scrollDown() { feed.scrollTop = feed.scrollHeight; }
