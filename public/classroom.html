@@ -357,8 +357,9 @@
       var ctrl = ('AbortController' in window) ? new AbortController() : null;
       var to = ctrl ? setTimeout(function(){ try{ctrl.abort();}catch(e){} }, 45000) : null;
       var endpoint = (mode==='exam') ? '/api/classroom-exam' : '/api/classroom';
+      var _L = (function(){ try { var s = localStorage.getItem('clkn_lang'); if (s) return s; } catch(e){} return (navigator.language||'').toLowerCase().slice(0,2)==='zh'?'zh':'en'; })();
       var r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({courseId:curCourse.id, lessonId:curLesson?curLesson.id:null, message:message, history:chatHist}),
+        body:JSON.stringify({courseId:curCourse.id, lessonId:curLesson?curLesson.id:null, message:message, history:chatHist, lang:_L}),
         signal: ctrl?ctrl.signal:undefined, cache:'no-store'});
       if(to) clearTimeout(to);
       var text=await r.text();

@@ -278,7 +278,8 @@
     var wrap = addCluckLoading();
     var lecture = (MODE === 'lecture');
     var url = lecture ? '/api/lecture' : '/api/ask-cluck';
-    var body = lecture ? { question: question, style: STYLE } : { question: question };
+    var L = (function(){ try { var s = localStorage.getItem('clkn_lang'); if (s) return s; } catch(e){} return (navigator.language||'').toLowerCase().slice(0,2)==='zh'?'zh':'en'; })();
+    var body = lecture ? { question: question, style: STYLE, lang: L } : { question: question, lang: L };
     fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
