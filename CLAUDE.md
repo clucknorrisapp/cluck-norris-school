@@ -255,6 +255,11 @@ Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.
   `reconcileSettleSec` (240). The poller itself also now re-checks dropped trades against
   raw `getTransaction` before suppressing (the enhanced Helius format misreads Jupiter-
   routed swaps as false-arb / false-below-floor — this ate a real ~$700 buy on 2026-06-19).
+- `/api/health-check[&run=1]` — data-source health (Solana Tracker / Helius / Bags / Telegram).
+  Dry returns live status JSON; `&run=1` also DMs the operator (treasury) chat. A 10-min
+  `sourceHealthTick` alerts the operator chat ONLY on a source's state change (down/up) +
+  a once-daily all-green heartbeat (kv `sourceHealth`/`sourceHealthHeartbeatDate`). So a
+  feed going dark (e.g. ST out of credits) pings you instead of being found by a user.
 - `/api/grad-watch-status[&run=1]` — graduation watchlist + the 48h graduated record.
 - `/api/stats` — traffic dashboard data. `/api/autopsy-premium` — gated deep forensics.
 - `/api/claims` — the full airdrop list (wallets + balances) from the Google Sheet.
