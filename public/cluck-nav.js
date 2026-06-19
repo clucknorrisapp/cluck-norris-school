@@ -36,6 +36,16 @@
 
   function inject() {
     if (document.getElementById("cluck-nav-bar") || !document.body) return;
+    // On deep pages (not the homepage), this bar IS the nav — so hide each page's
+    // own redundant back-to-home link and give the fixed bar clearance so it
+    // doesn't overlap the page's top content.
+    if (showHome && !document.getElementById("cluck-nav-css")) {
+      var st = document.createElement("style");
+      st.id = "cluck-nav-css";
+      st.textContent = "a.back,a.back-home,a.home{display:none!important}" +
+        ".wrap{padding-top:58px!important}";
+      document.head.appendChild(st);
+    }
     var bar = document.createElement("div");
     bar.id = "cluck-nav-bar";
     bar.style.cssText = ["position:fixed", "top:12px", "left:50%", "transform:translateX(-50%)",

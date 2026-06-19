@@ -305,3 +305,25 @@ Keep every public claim on the right side of this line. The honesty *is* the pro
 ---
 
 *Cluck Norris — real depth, real fills, no fakes. 🐔*
+
+## Range strategy / parameterization (owner, 2026-06-19)
+
+How to set the engine's bands per token profile (the multi-quote tight-pool playbook,
+proven on CLKN — made organic volume and lifted the Jupiter organic score):
+
+- **Default:** ±2% bands run against price action on **USDC, SOL, and JUP** (three quotes).
+  Three quotes works **better** than two — each volatile quote (SOL, JUP) independently
+  dislocates the token's cross-pool price, so third-party arbitrage trades it back into
+  line = more organic two-way volume. It still works with just **USDC + SOL** (two quotes),
+  just less dislocation flow.
+- **Low-cap / low-volume project:** keep the pools **tight (~±2%)** — the tight bands are
+  what *create* the volume. Start here, then adjust.
+- **Higher-volume token with real price action (moving up/down):** tight pools cause **a lot
+  of reshuffling / IL crystallization** and may not be beneficial. **Scale the bands out to
+  ±5%, ±10%, or wider** — fewer recenters, less IL — especially if the goal is extra volume on
+  an already-moving token.
+- Rule of thumb: **tighter = more manufactured volume but more reshuffle/IL; wider = less
+  churn, better for tokens whose price is already moving.** Match band width to how much the
+  price is actually moving.
+- ⛔ Still **owner-managed, watch-only for the agent** — these are the settings to use when the
+  owner runs it, not a license to auto-rebalance. Public engine is LOCKED (private testing).

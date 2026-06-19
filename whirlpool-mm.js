@@ -82,6 +82,23 @@ function projectOwnedBy(wallet) {
 const router = express.Router();
 router.use(express.json());
 
+// ── Public engine LOCK (owner's call) ────────────────────────────────────────
+// The Liquidity Engine is in private testing — the public, non-custodial build/use
+// path is disabled so no one can run it right now. The owner's autonomous vault
+// (server-side schedulers + the key-gated /vault/* endpoints) is unaffected; only
+// the user-facing build endpoints are blocked. Flip ENGINE_PUBLIC_LOCKED=false to
+// reopen. Interested users are routed to Telegram / X for access.
+const ENGINE_PUBLIC_LOCKED = true;
+function engineLock(req, res) {
+  return res.status(403).json({
+    locked: true,
+    error: "The Cluck Norris Liquidity Engine is in private testing right now. Want details or access? Ask in our Telegram (https://t.me/FireChicken007) or DM @firechicken007 on X.",
+  });
+}
+if (ENGINE_PUBLIC_LOCKED) {
+  ["/quote", "/open", "/close"].forEach((p) => router.all(p, engineLock));
+}
+
 // GET /api/whirlpool/pools[?token=MINT&symbol=SYM] — every USDC/SOL Whirlpool for the
 // token (defaults to CLKN), with fee tier, tick spacing, current price, and whether the
 // pool is empty. Also a feasibility check for onboarding: an empty list means the token
