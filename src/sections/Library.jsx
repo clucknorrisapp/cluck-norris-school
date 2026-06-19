@@ -1157,7 +1157,7 @@ function Library() {
       <div style={{textAlign:"center",marginBottom:20}}>
         <div style={{fontSize:36,marginBottom:6}}>📚</div>
         <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:28,fontWeight:900,color:"#F9FAFB",margin:"0 0 4px",letterSpacing:2}}>THE LIBRARY</h2>
-        <p style={{fontFamily:"'Anton',sans-serif",fontSize:10,color:"#6B7280",letterSpacing:3,margin:0}}>INDEPENDENT STUDY — NO EXAMS</p>
+        <p style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#6B7280",letterSpacing:3,margin:0}}>INDEPENDENT STUDY — NO EXAMS</p>
         <div style={{marginTop:10,height:1,background:"linear-gradient(90deg,transparent,rgba(255,122,24,0.5),transparent)"}}/>
       </div>
 
@@ -1186,7 +1186,7 @@ function Library() {
       {tab==="deepdives" && (
         <div>
           <div style={{background:"rgba(255,182,39,0.08)",border:"1px solid rgba(255,182,39,0.2)",borderRadius:10,padding:"12px 14px",marginBottom:16}}>
-            <p style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#FFB627",letterSpacing:1,margin:0,lineHeight:1.7}}>
+            <p style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:"#FFB627",letterSpacing:1,margin:0,lineHeight:1.7}}>
               📖 SELF STUDY — No exams. No pressure. Read at your own pace. Cover the topics that matter most to you.
             </p>
           </div>
@@ -1202,11 +1202,11 @@ function Library() {
                     <div style={{display:"flex",alignItems:"center",gap:10,textAlign:"left"}}>
                       <span style={{fontSize:22}}>{topic.icon}</span>
                       <div>
-                        <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,color:openTopic===topic.id?"#FFB627":"#D1D5DB",letterSpacing:1}}>{topic.title}</div>
+                        <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:openTopic===topic.id?"#FFB627":"#D1D5DB",letterSpacing:1}}>{topic.title}</div>
                         <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:0.5,marginTop:2}}>{topic.summary}</div>
                       </div>
                     </div>
-                    <span style={{color:openTopic===topic.id?"#FFB627":"#6B7280",fontSize:14,flexShrink:0}}>{openTopic===topic.id?"▲":"▼"}</span>
+                    <span style={{color:openTopic===topic.id?"#FFB627":"#6B7280",fontSize:15.5,flexShrink:0}}>{openTopic===topic.id?"▲":"▼"}</span>
                   </button>
                   {openTopic===topic.id && (
                     <div style={{background:"rgba(255,122,24,0.04)",border:"1px solid rgba(255,182,39,0.2)",borderTop:"none",borderRadius:"0 0 12px 12px",padding:"16px",position:"relative"}}>
@@ -1214,23 +1214,23 @@ function Library() {
                         {/* Cluck hook */}
                       <div style={{background:"rgba(255,122,24,0.08)",border:"1px solid rgba(255,122,24,0.2)",borderRadius:10,padding:"12px 14px",marginBottom:16,display:"flex",gap:10,alignItems:"flex-start"}}>
                         <img src={LOGO_B64} alt="CN" style={{width:30,height:30,borderRadius:"50%",objectFit:"cover",border:"1px solid #FF7A18",flexShrink:0}}/>
-                        <p style={{margin:0,fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FFB627",fontSize:12,lineHeight:1.7}}>{topic.cluckHook}</p>
+                        <p style={{margin:0,fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FFB627",fontSize:13.5,lineHeight:1.7}}>{topic.cluckHook}</p>
                       </div>
                       {/* Sections */}
                       {topic.sections.map((sec,i)=>(
                         <div key={i} style={{marginBottom:14}}>
-                          <div style={{fontFamily:"'Anton',sans-serif",fontSize:12,fontWeight:700,color:"#FFB627",letterSpacing:1,marginBottom:8,borderBottom:"1px solid rgba(255,182,39,0.2)",paddingBottom:6}}>{sec.heading}</div>
-                          <p style={{margin:0,fontSize:13,color:"#D1D5DB",lineHeight:1.8,whiteSpace:"pre-line"}}>{sec.body}</p>
+                          <div style={{fontFamily:"'Anton',sans-serif",fontSize:13.5,fontWeight:700,color:"#FFB627",letterSpacing:1,marginBottom:8,borderBottom:"1px solid rgba(255,182,39,0.2)",paddingBottom:6}}>{sec.heading}</div>
+                          <p style={{margin:0,fontSize:15,color:"#D1D5DB",lineHeight:1.8,whiteSpace:"pre-line"}}>{sec.body}</p>
                         </div>
                       ))}
                       {/* Cluck verdict */}
                       <div style={{background:"rgba(255,122,24,0.06)",border:"1px solid rgba(255,122,24,0.2)",borderRadius:10,padding:"12px 14px",marginTop:8}}>
                         <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#FF7A18",letterSpacing:2,marginBottom:6}}>🐔 CLUCK'S VERDICT</div>
-                        <p style={{margin:0,fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FFB627",fontSize:12,lineHeight:1.7}}>{topic.cluckVerdict}</p>
+                        <p style={{margin:0,fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FFB627",fontSize:13.5,lineHeight:1.7}}>{topic.cluckVerdict}</p>
                       </div>
                       {/* Close button at bottom + sticky */}
                       <div style={{position:"sticky",bottom:16,zIndex:10,textAlign:"center",marginTop:16}}>
-                        <button onClick={()=>setOpenTopic(null)} style={{background:"rgba(255,182,39,0.95)",border:"none",borderRadius:20,padding:"8px 24px",fontFamily:"'Anton',sans-serif",fontSize:11,fontWeight:700,color:"#1a0f08",letterSpacing:1,cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.5)"}}>
+                        <button onClick={()=>setOpenTopic(null)} style={{background:"rgba(255,182,39,0.95)",border:"none",borderRadius:20,padding:"8px 24px",fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,color:"#1a0f08",letterSpacing:1,cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.5)"}}>
                           ▲ CLOSE SECTION
                         </button>
                       </div>
@@ -1247,7 +1247,7 @@ function Library() {
       {tab==="liquidity" && (
         <div>
           <div style={{background:"rgba(6,182,212,0.08)",border:"1px solid rgba(6,182,212,0.2)",borderRadius:10,padding:"12px 14px",marginBottom:16}}>
-            <p style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#06B6D4",letterSpacing:1,margin:0,lineHeight:1.7}}>
+            <p style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:"#06B6D4",letterSpacing:1,margin:0,lineHeight:1.7}}>
               🌊 LIQUIDITY IS OUR SPECIALTY — This section goes deeper than any lesson. Study at your own pace, no exam required.
             </p>
           </div>
@@ -1258,8 +1258,8 @@ function Library() {
                   <div style={{display:"flex",alignItems:"center",gap:10}}>
                     <span style={{fontSize:20}}>{item.icon}</span>
                     <div>
-                      <div style={{fontFamily:"'Anton',sans-serif",fontSize:14,fontWeight:700,color:"#F9FAFB"}}>{item.title}</div>
-                      <div style={{fontFamily:"'Anton',sans-serif",fontSize:10,color:"#6B7280",marginTop:2}}>{item.summary}</div>
+                      <div style={{fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#F9FAFB"}}>{item.title}</div>
+                      <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#6B7280",marginTop:2}}>{item.summary}</div>
                     </div>
                   </div>
                   <span style={{color:"#06B6D4",fontSize:16,flexShrink:0,marginLeft:8}}>{expanded===item.id?"▲":"▼"}</span>
@@ -1268,10 +1268,10 @@ function Library() {
                   <div style={{padding:"0 16px 16px",position:"relative"}}>
                     <div style={{height:1,background:"rgba(6,182,212,0.2)",marginBottom:14}}/>
                     {item.content.split("\n\n").map((para,i)=>(
-                      <p key={i} style={{fontSize:13,color:para===para.toUpperCase()&&para.length<50?"#06B6D4":"#9CA3AF",lineHeight:1.8,margin:"0 0 12px",fontFamily:para===para.toUpperCase()&&para.length<50?"'Anton',sans-serif":"inherit",letterSpacing:para===para.toUpperCase()&&para.length<50?1:0,fontWeight:para===para.toUpperCase()&&para.length<50?700:"normal"}}>{para}</p>
+                      <p key={i} style={{fontSize:15,color:para===para.toUpperCase()&&para.length<50?"#06B6D4":"#9CA3AF",lineHeight:1.8,margin:"0 0 12px",fontFamily:para===para.toUpperCase()&&para.length<50?"'Anton',sans-serif":"inherit",letterSpacing:para===para.toUpperCase()&&para.length<50?1:0,fontWeight:para===para.toUpperCase()&&para.length<50?700:"normal"}}>{para}</p>
                     ))}
                     <div style={{position:"sticky",bottom:16,zIndex:10,textAlign:"center",marginTop:16}}>
-                      <button onClick={()=>setExpanded(null)} style={{background:"rgba(6,182,212,0.95)",border:"none",borderRadius:20,padding:"8px 24px",fontFamily:"'Anton',sans-serif",fontSize:11,fontWeight:700,color:"#1a0f08",letterSpacing:1,cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.5)"}}>
+                      <button onClick={()=>setExpanded(null)} style={{background:"rgba(6,182,212,0.95)",border:"none",borderRadius:20,padding:"8px 24px",fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,color:"#1a0f08",letterSpacing:1,cursor:"pointer",boxShadow:"0 4px 12px rgba(0,0,0,0.5)"}}>
                         ▲ CLOSE SECTION
                       </button>
                     </div>
@@ -1290,14 +1290,14 @@ function Library() {
             value={search}
             onChange={e=>setSearch(e.target.value)}
             placeholder="🔍 Search terms..."
-            style={{width:"100%",background:"rgba(255,122,24,0.07)",border:"1px solid rgba(255,122,24,0.2)",borderRadius:8,padding:"10px 14px",color:"#F9FAFB",fontFamily:"'Anton',sans-serif",fontSize:12,letterSpacing:1,marginBottom:14,boxSizing:"border-box",outline:"none"}}
+            style={{width:"100%",background:"rgba(255,122,24,0.07)",border:"1px solid rgba(255,122,24,0.2)",borderRadius:8,padding:"10px 14px",color:"#F9FAFB",fontFamily:"'Anton',sans-serif",fontSize:13.5,letterSpacing:1,marginBottom:14,boxSizing:"border-box",outline:"none"}}
           />
           <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#4B5563",letterSpacing:1,marginBottom:10}}>{filteredGlossary.length} TERMS</div>
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
             {filteredGlossary.map(g=>(
               <div key={g.term} style={{background:"rgba(255,122,24,0.05)",border:"1px solid rgba(167,139,250,0.15)",borderRadius:10,padding:"12px 14px"}}>
-                <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,color:"#A78BFA",marginBottom:4}}>{g.term}</div>
-                <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.6}}>{g.def}</div>
+                <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#A78BFA",marginBottom:4}}>{g.term}</div>
+                <div style={{fontSize:13.5,color:"#9CA3AF",lineHeight:1.6}}>{g.def}</div>
               </div>
             ))}
           </div>
@@ -1309,15 +1309,15 @@ function Library() {
         <div style={{display:"flex",flexDirection:"column",gap:20}}>
           {LIBRARY_RESOURCES.map(cat=>(
             <div key={cat.category}>
-              <div style={{fontFamily:"'Anton',sans-serif",fontSize:11,letterSpacing:2,color:"#FF7A18",marginBottom:10}}>{cat.category}</div>
+              <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,letterSpacing:2,color:"#FF7A18",marginBottom:10}}>{cat.category}</div>
               <div style={{display:"flex",flexDirection:"column",gap:8}}>
                 {cat.links.map(link=>(
                   <a key={link.name} href={link.url} target="_blank" rel="noreferrer" style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"rgba(255,122,24,0.05)",border:"1px solid rgba(255,122,24,0.16)",borderRadius:10,padding:"12px 14px",textDecoration:"none"}}>
                     <div>
-                      <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,color:"#F9FAFB",marginBottom:2}}>{link.name}</div>
-                      <div style={{fontSize:11,color:"#6B7280"}}>{link.desc}</div>
+                      <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#F9FAFB",marginBottom:2}}>{link.name}</div>
+                      <div style={{fontSize:13,color:"#6B7280"}}>{link.desc}</div>
                     </div>
-                    <span style={{color:"#FF7A18",fontSize:12,flexShrink:0,marginLeft:8}}>→</span>
+                    <span style={{color:"#FF7A18",fontSize:13.5,flexShrink:0,marginLeft:8}}>→</span>
                   </a>
                 ))}
               </div>
