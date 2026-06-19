@@ -160,10 +160,18 @@
     }
   }
 
-  fetch("/i18n/" + lang + ".json")
-    .then(function (r) { return r.ok ? r.json() : {}; })
-    .then(function (d) {
-      DICT = d || {};
+  // Load the base dictionary (every page) + a school dictionary (curriculum
+  // content) only on /school, so the large lesson corpus never weighs down the
+  // tool pages. Later dicts override earlier on key collision.
+  function loadDict(name) {
+    return fetch("/i18n/" + name + ".json").then(function (r) { return r.ok ? r.json() : {}; }).catch(function () { return {}; });
+  }
+  var jobs = [loadDict(lang)];
+  if ((location.pathname || "").indexOf("/school") === 0) jobs.push(loadDict(lang + ".school"));
+  Promise.all(jobs)
+    .then(function (parts) {
+      DICT = {};
+      parts.forEach(function (p) { for (var k in p) DICT[k] = p[k]; });
       window.CLKN_I18N = { lang: lang, dict: DICT };
       onReady(start);
     })
