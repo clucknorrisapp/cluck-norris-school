@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Cluck Norris — Learn Crypto, Beginner to Advanced. Free School + Tools.</title>
-<meta name="description" content="Cluck Norris: learn crypto from your first wallet to advanced strategy and launching the right way. A free Solana crypto school, free + advanced research tools, and a token (CLKN) that practices what it teaches.">
+<meta name="description" content="Cluck Norris: learn crypto from your first wallet to advanced strategy. A free Solana crypto school, free + advanced research tools, and a token (CLKN) that practices what it teaches.">
 <meta property="og:title" content="Cluck Norris — School of Crypto Hard Knocks">
 <meta property="og:description" content="We took the hard knocks so you don't have to. A free crypto school (beginner to advanced) plus free + advanced tools.">
 <meta property="og:image" content="https://clucknorris.app/cluck-norris-mascot.jpg">
@@ -27,54 +27,58 @@
   .nav .links a:hover{color:#fff;background:rgba(255,122,24,.1);}
   .nav .links a.cta{color:#fff;background:linear-gradient(135deg,var(--orange),var(--red));box-shadow:0 4px 14px rgba(232,30,14,.35);}
 
-  .wrap{position:relative;z-index:2;max-width:1000px;margin:0 auto;padding:0 18px 70px;}
+  .wrap{position:relative;z-index:2;max-width:760px;margin:0 auto;padding:0 18px 70px;}
 
-  .hero{text-align:center;padding:60px 10px 26px;}
+  .hero{text-align:center;padding:54px 10px 6px;}
   .hero .avatar{width:116px;height:116px;border-radius:50%;object-fit:cover;object-position:center 12%;border:3px solid var(--gold);animation:ckGlow 2.6s ease-in-out infinite;}
   .hero .kicker{font-family:var(--disp);font-size:13px;letter-spacing:5px;color:var(--sub);text-transform:uppercase;margin-top:16px;}
   .hero h1{font-family:var(--disp);font-size:56px;line-height:1.02;margin:8px 0 6px;letter-spacing:1px;}
   .hero h1 .c{color:var(--orange);} .hero h1 .n{color:var(--text);}
-  .hero .tag{font-family:var(--disp);font-size:25px;color:var(--gold);letter-spacing:.5px;margin:14px auto 12px;max-width:740px;line-height:1.15;text-transform:uppercase;text-shadow:0 2px 14px rgba(255,90,10,.3);}
-  .hero .lede{font-size:16.5px;color:var(--body-text);max-width:600px;margin:0 auto;line-height:1.6;}
+  .hero .tag{font-family:var(--disp);font-size:24px;color:var(--gold);letter-spacing:.5px;margin:14px auto 10px;max-width:680px;line-height:1.15;text-transform:uppercase;text-shadow:0 2px 14px rgba(255,90,10,.3);}
+  .hero .lede{font-size:16px;color:var(--body-text);max-width:560px;margin:0 auto;line-height:1.6;}
 
-  .section{margin-top:46px;}
-  .section-h{font-family:var(--disp);font-size:14px;letter-spacing:3px;color:var(--orange);text-transform:uppercase;margin:0 0 4px;text-align:center;}
-  .section-sub{text-align:center;color:var(--sub);font-size:14.5px;margin:0 auto 24px;max-width:600px;line-height:1.5;}
+  /* ── THE large capsule pill: AI journey guide ── */
+  .guide{margin:36px auto 0;}
+  .guidebtn{width:100%;display:flex;align-items:center;gap:16px;cursor:pointer;text-align:left;
+            background:linear-gradient(135deg,rgba(255,122,24,.2),rgba(232,30,14,.14));
+            border:1.5px solid var(--orange);border-radius:999px;padding:18px 26px;
+            box-shadow:0 0 34px rgba(255,122,24,.26);transition:transform .12s,box-shadow .12s,border-radius .2s;}
+  .guidebtn:hover{transform:translateY(-1px);box-shadow:0 0 46px rgba(255,122,24,.4);}
+  .guidebtn[aria-expanded="true"]{border-radius:26px;}
+  .guidebtn img{width:52px;height:52px;border-radius:50%;object-fit:cover;object-position:center 12%;border:2px solid var(--gold);flex:none;animation:ckGlow 2.6s ease-in-out infinite;}
+  .guidebtn .gtext{flex:1;min-width:0;}
+  .guidebtn .gt{display:block;font-family:var(--disp);font-size:22px;color:var(--gold);letter-spacing:.4px;line-height:1.12;}
+  .guidebtn .gs{display:block;font-family:var(--body);font-size:13px;color:var(--body-text);margin-top:4px;}
+  .guidebtn .chev{font-size:22px;color:var(--orange);flex:none;transition:transform .2s;}
+  .guidebtn[aria-expanded="true"] .chev{transform:rotate(180deg);}
 
-  /* journey concierge — the centerpiece */
-  .paths{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;}
-  .path{display:flex;flex-direction:column;background:var(--card-grad);border:1px solid var(--border);border-radius:18px;padding:26px 24px;transition:transform .12s,border-color .12s,box-shadow .12s;}
-  .path:hover{transform:translateY(-3px);border-color:var(--orange);box-shadow:0 16px 38px rgba(232,30,14,.22);}
-  .path .ic{font-size:38px;line-height:1;}
-  .path .who{font-family:var(--body);font-weight:700;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-top:14px;}
-  .path .t{font-family:var(--disp);font-size:25px;color:var(--gold);margin:4px 0 9px;letter-spacing:.4px;line-height:1.08;}
-  .path p{font-size:14px;color:var(--body-text);line-height:1.55;margin:0;flex:1;}
-  .path .go{margin-top:15px;font-family:var(--disp);font-size:13px;letter-spacing:1px;color:var(--orange);text-transform:uppercase;}
-  .path:hover .go{color:#fff;}
-  .guide{display:flex;justify-content:center;margin-top:18px;}
-  .guide a{display:inline-flex;align-items:center;gap:9px;font-family:var(--disp);font-size:15px;letter-spacing:.8px;color:#fff;
-           background:linear-gradient(135deg,var(--orange),var(--red));border:1px solid rgba(255,182,39,.5);border-radius:999px;padding:12px 24px;box-shadow:0 6px 18px rgba(232,30,14,.4);transition:transform .1s,filter .12s;}
-  .guide a:hover{transform:translateY(-1px);filter:brightness(1.06);}
+  .guidemenu{margin-top:10px;display:grid;gap:8px;animation:ckIn .25s ease both;}
+  .guidemenu[hidden]{display:none;}
+  .gopt{display:flex;align-items:center;gap:14px;background:var(--card-grad);border:1px solid var(--border);border-radius:14px;padding:15px 18px;transition:transform .1s,border-color .1s,box-shadow .1s;}
+  .gopt:hover{transform:translateX(3px);border-color:var(--orange);box-shadow:0 8px 22px rgba(232,30,14,.16);}
+  .gopt .oic{font-size:25px;flex:none;width:30px;text-align:center;}
+  .gopt .ol{flex:1;min-width:0;}
+  .gopt .ol b{display:block;font-family:var(--disp);font-size:17px;color:var(--text);letter-spacing:.3px;}
+  .gopt .ol i{display:block;font-style:normal;font-size:12.5px;color:var(--sub);margin-top:2px;}
+  .gopt .oar{font-family:var(--disp);color:var(--orange);font-size:18px;flex:none;}
+  .gopt:hover .oar{color:#fff;}
 
-  /* clean feature panels for School + Tools */
-  .panel{display:flex;gap:20px;align-items:flex-start;background:var(--card-grad);border:1px solid var(--border);border-radius:18px;padding:26px;box-shadow:0 10px 30px rgba(0,0,0,.4);}
-  .panel .pic{font-size:42px;line-height:1;flex:none;}
-  .panel .body{flex:1;min-width:0;}
-  .panel h3{font-family:var(--disp);font-size:24px;color:var(--gold);letter-spacing:.4px;margin:2px 0 8px;}
-  .panel p{font-size:14.5px;color:var(--body-text);line-height:1.6;margin:0 0 14px;}
-  .chips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px;}
-  .chips span{font-family:var(--body);font-weight:600;font-size:12px;color:#FFD9A0;background:rgba(255,122,24,.08);border:1px solid var(--border);border-radius:999px;padding:5px 12px;}
-  .panel .cta{display:inline-flex;align-items:center;gap:7px;font-family:var(--disp);font-size:14px;letter-spacing:.8px;color:#fff;background:linear-gradient(135deg,var(--orange),var(--red));border-radius:11px;padding:11px 22px;box-shadow:0 6px 16px rgba(232,30,14,.35);transition:transform .1s,filter .12s;}
-  .panel .cta:hover{transform:translateY(-1px);filter:brightness(1.05);}
+  /* ── simple quick links ── */
+  .quick{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:30px;}
+  .ql{display:flex;flex-direction:column;align-items:center;gap:7px;background:var(--card-grad);border:1px solid var(--border);border-radius:14px;padding:18px 10px;transition:transform .1s,border-color .1s,box-shadow .1s;}
+  .ql:hover{transform:translateY(-2px);border-color:var(--orange);box-shadow:0 8px 20px rgba(232,30,14,.16);}
+  .ql .qic{font-size:26px;}
+  .ql .qt{font-family:var(--disp);font-size:14px;letter-spacing:.5px;color:var(--text);text-align:center;}
 
-  footer{margin-top:54px;padding-top:24px;border-top:1px solid var(--border-soft);text-align:center;color:var(--sub);font-size:12.5px;line-height:1.9;}
+  footer{margin-top:50px;padding-top:22px;border-top:1px solid var(--border-soft);text-align:center;color:var(--sub);font-size:12.5px;line-height:1.9;}
   footer a{color:var(--orange);}
   footer .mint{font-family:var(--mono);font-size:10.5px;color:var(--muted);word-break:break-all;margin-top:10px;}
-  footer .disc{color:var(--muted);font-size:11px;max-width:660px;margin:10px auto 0;line-height:1.5;}
+  footer .disc{color:var(--muted);font-size:11px;max-width:640px;margin:10px auto 0;line-height:1.5;}
 
   @media(max-width:680px){
-    .paths{grid-template-columns:1fr;} .panel{flex-direction:column;gap:12px;}
-    .hero h1{font-size:44px;} .hero .tag{font-size:21px;}
+    .quick{grid-template-columns:1fr 1fr;}
+    .hero h1{font-size:44px;} .hero .tag{font-size:20px;}
+    .guidebtn .gt{font-size:19px;}
     .nav .links a:not(.cta){display:none;}
   }
 </style>
@@ -108,70 +112,33 @@
     <p class="lede">Crypto knowledge from your first wallet to advanced strategy — taught straight, so you skip the expensive mistakes.</p>
   </header>
 
-  <!-- 1. JOURNEY CONCIERGE -->
-  <section class="section">
-    <div class="section-h">Where Are You on Your Crypto Journey?</div>
-    <p class="section-sub">Tell Cluck where you're at — he'll point you the right way.</p>
-    <div class="paths">
-      <a class="path" href="/school#incubator">
-        <div class="ic">🐣</div>
-        <div class="who">Brand new to crypto</div>
-        <div class="t">Start in the Incubator</div>
-        <p>Wallets, keys, tokens, and not getting rekt — the gentle on-ramp for total beginners.</p>
-        <div class="go">Begin →</div>
-      </a>
-      <a class="path" href="/school">
-        <div class="ic">🏫</div>
-        <div class="who">Know the basics</div>
-        <div class="t">Level Up at School</div>
-        <p>12 progressive lessons, belts Freshman → Emeritus. Pass to promote, then take the Ultimate Challenge.</p>
-        <div class="go">Enroll →</div>
-      </a>
-      <a class="path" href="/school#lplab">
-        <div class="ic">🌊</div>
-        <div class="who">Want LP mastery</div>
-        <div class="t">Go Deep in LP School</div>
-        <p>Our specialty — AMMs, impermanent loss, concentrated liquidity, and building a real LP strategy.</p>
-        <div class="go">Dive in →</div>
-      </a>
-      <a class="path" href="/hatchery">
-        <div class="ic">🚀</div>
-        <div class="who">Thinking of launching</div>
-        <div class="t">Launch a Token — Right</div>
-        <p>What to do, what to avoid, and what not to fear — an educated launch instead of a costly mistake.</p>
-        <div class="go">Learn to launch →</div>
-      </a>
+  <!-- THE big capsule: AI journey guide → expands to the detailed list -->
+  <div class="guide">
+    <button class="guidebtn" id="guidebtn" aria-expanded="false" aria-controls="guidemenu">
+      <img src="/cluck-norris-mascot.jpg" alt="">
+      <span class="gtext">
+        <span class="gt">Where are you on your crypto journey?</span>
+        <span class="gs">Tap and tell Cluck — he'll point you the right way.</span>
+      </span>
+      <span class="chev">▾</span>
+    </button>
+    <div class="guidemenu" id="guidemenu" hidden>
+      <a class="gopt" href="/school#incubator"><span class="oic">🐣</span><span class="ol"><b>I'm very new</b><i>Wallets, keys, safety — start in the Incubator</i></span><span class="oar">→</span></a>
+      <a class="gopt" href="/school"><span class="oic">📈</span><span class="ol"><b>I have some knowledge</b><i>Level up — the 12-lesson belt course</i></span><span class="oar">→</span></a>
+      <a class="gopt" href="/school#lplab"><span class="oic">🌊</span><span class="ol"><b>I want to learn about LP</b><i>Go deep in LP School — our specialty</i></span><span class="oar">→</span></a>
+      <a class="gopt" href="/school#library"><span class="oic">📖</span><span class="ol"><b>I want to learn at my own pace</b><i>Browse the Library — deep dives, no exams</i></span><span class="oar">→</span></a>
+      <a class="gopt" href="/tools"><span class="oic">🔬</span><span class="ol"><b>I need research tools</b><i>X-Ray, Autopsy, Order Book — any Solana token</i></span><span class="oar">→</span></a>
+      <a class="gopt" href="/premium"><span class="oic">🛠️</span><span class="ol"><b>I need development / advanced tools</b><i>Operator-grade forensics &amp; builder tooling</i></span><span class="oar">→</span></a>
     </div>
-    <div class="guide"><a href="/school#start">🔥 Not sure? Let Cluck guide you →</a></div>
-  </section>
+  </div>
 
-  <!-- 2. SCHOOL & EDUCATION -->
-  <section class="section">
-    <div class="section-h">School &amp; Education</div>
-    <div class="panel">
-      <div class="pic">🎓</div>
-      <div class="body">
-        <h3>The Free School</h3>
-        <p>From your first wallet to advanced LP strategy — a real curriculum, not a glossary. Learn with the live AI Classroom, then prove it on the Ultimate Challenge and earn a permanent, shareable on-chain diploma. Always free.</p>
-        <div class="chips"><span>🐣 Incubator</span><span>🏫 12-Lesson Course</span><span>⚗️ LP School</span><span>🎓 Live Classroom</span><span>🏆 Ultimate Challenge</span></div>
-        <a class="cta" href="/school">Enter the School →</a>
-      </div>
-    </div>
-  </section>
-
-  <!-- 3. FREE & ADVANCED TOOLS -->
-  <section class="section">
-    <div class="section-h">Free &amp; Advanced Tools</div>
-    <div class="panel">
-      <div class="pic">🛠️</div>
-      <div class="body">
-        <h3>Research Any Solana Token</h3>
-        <p>Investigate any token or wallet on-chain — no wallet connect required. Wallet X-Ray, Token Autopsy, the Order Book scanner and more are free. Advanced operator forensics unlock with CLKN — no wallet-connect to pay.</p>
-        <div class="chips"><span>🩻 Wallet X-Ray</span><span>🔬 Token Autopsy</span><span>🧱 Order Book</span><span>💎 Premium Tools</span></div>
-        <a class="cta" href="/tools">Browse the Tools →</a>
-      </div>
-    </div>
-  </section>
+  <!-- simple quick links -->
+  <div class="quick">
+    <a class="ql" href="/ask-cluck"><span class="qic">🔥</span><span class="qt">Ask Cluck</span></a>
+    <a class="ql" href="/school#incubator"><span class="qic">🐣</span><span class="qt">Incubator</span></a>
+    <a class="ql" href="/school"><span class="qic">🏫</span><span class="qt">School</span></a>
+    <a class="ql" href="/tools"><span class="qic">🛠️</span><span class="qt">Tools</span></a>
+  </div>
 
   <footer>
     <div>
@@ -186,11 +153,17 @@
 
 <script>
   (function () {
+    var btn = document.getElementById("guidebtn"), menu = document.getElementById("guidemenu");
+    function setOpen(open) { menu.hidden = !open; btn.setAttribute("aria-expanded", open ? "true" : "false"); }
+    btn.addEventListener("click", function (e) { e.stopPropagation(); setOpen(menu.hidden); });
+    document.addEventListener("click", function (e) { if (!menu.hidden && !menu.contains(e.target) && !btn.contains(e.target)) setOpen(false); });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") setOpen(false); });
+  })();
+  (function () {
     var h = (location.hash || "").replace(/^#/, "");
     if (["library","incubator","lplab","survive","clkn","challenge","select","start"].indexOf(h) !== -1) location.replace("/school#" + h);
   })();
 </script>
-<!-- Global Ask Cluck pill (consistent on every page) -->
 <script defer src="/cluck-nav.js"></script>
 </body>
 </html>
