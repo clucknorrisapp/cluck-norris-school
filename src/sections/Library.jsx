@@ -1170,8 +1170,8 @@ function Library() {
           {id:"resources",label:"🔗 RESOURCES",color:"#10B981"},
         ].map(t=>(
           <button key={t.id} onClick={()=>setTab(t.id)} style={{
-            flex:1,background:tab===t.id?`${t.color}20`:"rgba(255,255,255,0.03)",
-            border:`1px solid ${tab===t.id?t.color:"rgba(255,255,255,0.08)"}`,
+            flex:1,background:tab===t.id?`${t.color}20`:"rgba(255,122,24,0.05)",
+            border:`1px solid ${tab===t.id?t.color:"rgba(255,122,24,0.18)"}`,
             borderRadius:8,padding:"8px 4px",fontFamily:"'Anton',sans-serif",
             fontSize:9,fontWeight:700,color:tab===t.id?t.color:"#6B7280",
             letterSpacing:1,cursor:"pointer"
@@ -1193,12 +1193,12 @@ function Library() {
           {/* Category groupings */}
           {["SURVIVAL","RESEARCH","CONCEPTS"].map(cat=>(
             <div key={cat} style={{marginBottom:20}}>
-              <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:3,marginBottom:10,borderBottom:"1px solid rgba(255,255,255,0.06)",paddingBottom:6}}>
+              <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:3,marginBottom:10,borderBottom:"1px solid rgba(255,122,24,0.09)",paddingBottom:6}}>
                 {cat==="SURVIVAL"?"🛡️":cat==="RESEARCH"?"🔍":"💡"} {cat}
               </div>
               {LIBRARY_TOPICS.filter(t=>t.category===cat).map(topic=>(
                 <div key={topic.id} style={{marginBottom:8}}>
-                  <button onClick={()=>setOpenTopic(openTopic===topic.id?null:topic.id)} style={{width:"100%",background:openTopic===topic.id?"rgba(255,182,39,0.08)":"rgba(255,255,255,0.03)",border:`1px solid ${openTopic===topic.id?"rgba(255,182,39,0.4)":"rgba(255,255,255,0.08)"}`,borderRadius:openTopic===topic.id?"12px 12px 0 0":"12px",padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
+                  <button onClick={()=>setOpenTopic(openTopic===topic.id?null:topic.id)} style={{width:"100%",background:openTopic===topic.id?"rgba(255,182,39,0.08)":"rgba(255,122,24,0.05)",border:`1px solid ${openTopic===topic.id?"rgba(255,182,39,0.4)":"rgba(255,122,24,0.18)"}`,borderRadius:openTopic===topic.id?"12px 12px 0 0":"12px",padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
                     <div style={{display:"flex",alignItems:"center",gap:10,textAlign:"left"}}>
                       <span style={{fontSize:22}}>{topic.icon}</span>
                       <div>
@@ -1209,7 +1209,7 @@ function Library() {
                     <span style={{color:openTopic===topic.id?"#FFB627":"#6B7280",fontSize:14,flexShrink:0}}>{openTopic===topic.id?"▲":"▼"}</span>
                   </button>
                   {openTopic===topic.id && (
-                    <div style={{background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,182,39,0.2)",borderTop:"none",borderRadius:"0 0 12px 12px",padding:"16px",position:"relative"}}>
+                    <div style={{background:"rgba(255,122,24,0.04)",border:"1px solid rgba(255,182,39,0.2)",borderTop:"none",borderRadius:"0 0 12px 12px",padding:"16px",position:"relative"}}>
                       {/* Sticky close button */}
                         {/* Cluck hook */}
                       <div style={{background:"rgba(255,122,24,0.08)",border:"1px solid rgba(255,122,24,0.2)",borderRadius:10,padding:"12px 14px",marginBottom:16,display:"flex",gap:10,alignItems:"flex-start"}}>
@@ -1253,7 +1253,7 @@ function Library() {
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {LIBRARY_LIQUIDITY.map(item=>(
-              <div key={item.id} style={{background:"rgba(255,255,255,0.03)",border:`1px solid ${expanded===item.id?"rgba(6,182,212,0.4)":"rgba(255,255,255,0.07)"}`,borderRadius:10,overflow:"hidden"}}>
+              <div key={item.id} style={{background:"rgba(255,122,24,0.05)",border:`1px solid ${expanded===item.id?"rgba(6,182,212,0.4)":"rgba(255,122,24,0.16)"}`,borderRadius:10,overflow:"hidden"}}>
                 <button onClick={()=>setExpanded(expanded===item.id?null:item.id)} style={{width:"100%",background:"none",border:"none",padding:"14px 16px",cursor:"pointer",textAlign:"left",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div style={{display:"flex",alignItems:"center",gap:10}}>
                     <span style={{fontSize:20}}>{item.icon}</span>
@@ -1290,12 +1290,12 @@ function Library() {
             value={search}
             onChange={e=>setSearch(e.target.value)}
             placeholder="🔍 Search terms..."
-            style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:8,padding:"10px 14px",color:"#F9FAFB",fontFamily:"'Anton',sans-serif",fontSize:12,letterSpacing:1,marginBottom:14,boxSizing:"border-box",outline:"none"}}
+            style={{width:"100%",background:"rgba(255,122,24,0.07)",border:"1px solid rgba(255,122,24,0.2)",borderRadius:8,padding:"10px 14px",color:"#F9FAFB",fontFamily:"'Anton',sans-serif",fontSize:12,letterSpacing:1,marginBottom:14,boxSizing:"border-box",outline:"none"}}
           />
           <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#4B5563",letterSpacing:1,marginBottom:10}}>{filteredGlossary.length} TERMS</div>
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
             {filteredGlossary.map(g=>(
-              <div key={g.term} style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(167,139,250,0.15)",borderRadius:10,padding:"12px 14px"}}>
+              <div key={g.term} style={{background:"rgba(255,122,24,0.05)",border:"1px solid rgba(167,139,250,0.15)",borderRadius:10,padding:"12px 14px"}}>
                 <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,color:"#A78BFA",marginBottom:4}}>{g.term}</div>
                 <div style={{fontSize:12,color:"#9CA3AF",lineHeight:1.6}}>{g.def}</div>
               </div>
@@ -1312,7 +1312,7 @@ function Library() {
               <div style={{fontFamily:"'Anton',sans-serif",fontSize:11,letterSpacing:2,color:"#FF7A18",marginBottom:10}}>{cat.category}</div>
               <div style={{display:"flex",flexDirection:"column",gap:8}}>
                 {cat.links.map(link=>(
-                  <a key={link.name} href={link.url} target="_blank" rel="noreferrer" style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:10,padding:"12px 14px",textDecoration:"none"}}>
+                  <a key={link.name} href={link.url} target="_blank" rel="noreferrer" style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"rgba(255,122,24,0.05)",border:"1px solid rgba(255,122,24,0.16)",borderRadius:10,padding:"12px 14px",textDecoration:"none"}}>
                     <div>
                       <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,color:"#F9FAFB",marginBottom:2}}>{link.name}</div>
                       <div style={{fontSize:11,color:"#6B7280"}}>{link.desc}</div>

@@ -1899,14 +1899,14 @@ function SurvivalSimulator() {
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>
         {[{emoji:"🚨",label:"DANGER",desc:"Scams, rugs, exploits"},{emoji:"📈",label:"OPPORTUNITY",desc:"Legit plays and yields"},{emoji:"🧠",label:"KNOWLEDGE",desc:"DeFi mechanics"},{emoji:"😱",label:"EMOTIONAL",desc:"Psychology traps"}].map((c,i)=>(
-          <div key={i} style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"14px"}}>
+          <div key={i} style={{background:"rgba(255,122,24,0.05)",border:"1px solid rgba(255,122,24,0.18)",borderRadius:10,padding:"14px"}}>
             <div style={{fontSize:28,marginBottom:6}}>{c.emoji}</div>
             <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#D1D5DB",letterSpacing:1,marginBottom:3}}>{c.label}</div>
             <div style={{fontFamily:"'Anton',sans-serif",fontSize:12,color:"#6B7280"}}>{c.desc}</div>
           </div>
         ))}
       </div>
-      <div style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"14px 16px",marginBottom:20}}>
+      <div style={{background:"rgba(255,122,24,0.05)",border:"1px solid rgba(255,122,24,0.18)",borderRadius:10,padding:"14px 16px",marginBottom:20}}>
         <div style={{fontFamily:"'Anton',sans-serif",fontSize:12,color:"#6B7280",letterSpacing:2,marginBottom:10}}>HOW IT WORKS</div>
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
           {["10 scenarios drawn randomly from 75 total","Each choice affects your portfolio value","Realistic outcomes — even good decisions can lose sometimes","Cluck Norris judges every move","No second chances. No rewinds."].map((t,i)=>(
@@ -1947,7 +1947,7 @@ function SurvivalSimulator() {
             const gained = h.portfolioAfter > h.portfolioBefore;
             const flat = h.portfolioAfter === h.portfolioBefore;
             return (
-              <div key={i} style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,background:"rgba(255,255,255,0.02)",borderRadius:8,padding:"8px 10px"}}>
+              <div key={i} style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,background:"rgba(255,122,24,0.04)",borderRadius:8,padding:"8px 10px"}}>
                 <span style={{fontSize:14}}>{h.scenario.emoji}</span>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontFamily:"'Anton',sans-serif",fontSize:10,color:"#D1D5DB"}}>{h.scenario.title}</div>
@@ -1979,7 +1979,7 @@ function SurvivalSimulator() {
           <span style={{fontFamily:"monospace",fontSize:13,color:"#FFB627",fontWeight:700}}>${portfolio.toLocaleString()}</span>
         </div>
       </div>
-      <div style={{height:3,background:"rgba(255,255,255,0.08)",borderRadius:2,marginBottom:16}}>
+      <div style={{height:3,background:"rgba(255,122,24,0.18)",borderRadius:2,marginBottom:16}}>
         <div style={{height:"100%",width:`${(round/ROUNDS)*100}%`,background:"linear-gradient(90deg,#FF7A18,#EF4444)",borderRadius:2}}/>
       </div>
       <div style={{display:"inline-flex",alignItems:"center",gap:6,background:`${catColor}20`,border:`1px solid ${catColor}50`,borderRadius:20,padding:"4px 12px",marginBottom:12}}>
@@ -1987,12 +1987,12 @@ function SurvivalSimulator() {
         <span style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:catColor,letterSpacing:2}}>{scenario.category}</span>
       </div>
       <h3 style={{fontFamily:"'Anton',sans-serif",fontSize:24,fontWeight:900,color:"#F9FAFB",margin:"0 0 12px",letterSpacing:1}}>{scenario.title}</h3>
-      <div style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"14px 16px",marginBottom:12}}>
+      <div style={{background:"rgba(255,122,24,0.05)",border:"1px solid rgba(255,122,24,0.18)",borderRadius:10,padding:"14px 16px",marginBottom:12}}>
         <p style={{margin:0,fontSize:15,color:"#D1D5DB",lineHeight:1.8}}>{scenario.context}</p>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:16}}>
         {scenario.data.map((d,i)=>(
-          <div key={i} style={{background:d.flag?"rgba(239,68,68,0.08)":"rgba(255,255,255,0.03)",border:`1px solid ${d.flag?"rgba(239,68,68,0.3)":"rgba(255,255,255,0.08)"}`,borderRadius:8,padding:"8px 10px"}}>
+          <div key={i} style={{background:d.flag?"rgba(239,68,68,0.08)":"rgba(255,122,24,0.05)",border:`1px solid ${d.flag?"rgba(239,68,68,0.3)":"rgba(255,122,24,0.18)"}`,borderRadius:8,padding:"8px 10px"}}>
             <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:d.flag?"#EF4444":"#6B7280",letterSpacing:1,marginBottom:2}}>{d.flag?"⚠️ ":""}{d.label}</div>
             <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:d.flag?"#FCA5A5":"#D1D5DB",fontWeight:700}}>{d.value}</div>
           </div>
@@ -2001,14 +2001,14 @@ function SurvivalSimulator() {
       <div style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#6B7280",letterSpacing:2,marginBottom:8}}>YOUR CHOICE:</div>
       <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:12}}>
         {scenario.choices.map((c,i)=>{
-          let bg="rgba(255,255,255,0.04)",border="rgba(255,255,255,0.1)",textColor="#D1D5DB";
+          let bg="rgba(255,122,24,0.06)",border="rgba(255,122,24,0.2)",textColor="#D1D5DB";
           if (chosen !== null) {
             if (i === chosen) {
               const good = c.multiplier >= 1.0;
               bg = good?"rgba(16,185,129,0.15)":"rgba(239,68,68,0.15)";
               border = good?"#10B981":"#EF4444";
               textColor = good?"#10B981":"#EF4444";
-            } else { bg="rgba(255,255,255,0.02)"; textColor="#4B5563"; border="rgba(255,255,255,0.05)"; }
+            } else { bg="rgba(255,122,24,0.04)"; textColor="#4B5563"; border="rgba(255,122,24,0.07)"; }
           }
           return (
             <button key={i} onClick={()=>makeChoice(i)} disabled={chosen!==null} style={{background:bg,border:`1px solid ${border}`,borderRadius:10,padding:"14px 16px",textAlign:"left",fontFamily:"'Anton',sans-serif",fontSize:14,color:textColor,cursor:chosen===null?"pointer":"default",letterSpacing:0.5,lineHeight:1.6}}>
