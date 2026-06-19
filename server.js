@@ -2256,66 +2256,76 @@ const BAGS_BONDING_SOL = 85;    // SOL raised to complete a Bags bonding curve
 // Bags tokens closest to graduating — platform-wide via ST's "graduating"
 // list (one call), filtered to Bags (meteora-curve), sorted by curve % desc.
 // Result-cached; reused by the /bags page AND the Telegram launch pulse.
+// Lazy Meteora Dynamic Bonding Curve client (state reads only) — points at the
+// primary Helius RPC. Lets us read a Bags token's on-chain bonding-curve progress
+// directly, with ZERO Solana Tracker credits. Created once, reused.
+let _dbcState = null;
+function dbcState() {
+  if (_dbcState) return _dbcState;
+  const { Connection } = require("@solana/web3.js");
+  const sdk = require("@meteora-ag/dynamic-bonding-curve-sdk");
+  const url = (rpc.primaryRpcUrl && rpc.primaryRpcUrl()) || `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`;
+  _dbcState = new sdk.DynamicBondingCurveClient(new Connection(url, "confirmed"), "confirmed").state;
+  return _dbcState;
+}
+// ST-FREE near-grad scan: take recent Bags launches still ON the curve (PRE_GRAD)
+// from the Bags launch feed (the feed carries each token's dbcPoolKey), read each
+// one's on-chain bonding-curve progress via the Meteora DBC SDK (Helius), and
+// surface the closest-to-graduating. No Solana Tracker. Throws only if the Bags
+// feed itself is unreachable (→ caller marks sourceDown).
+async function scanNearGradFree() {
+  const fr = await fetch(`${BAGS_BASE}token-launch/feed`, { headers: { "x-api-key": process.env.BAGS_API_KEY }, signal: AbortSignal.timeout(10000) });
+  const fd = await fr.json();
+  if (!fd || !Array.isArray(fd.response)) throw new Error("bags feed unavailable");
+  const candidates = fd.response.filter(t =>
+    t && t.tokenMint && t.dbcPoolKey && t.status === "PRE_GRAD" && String(t.tokenMint).toLowerCase().endsWith("bags")
+  ).slice(0, NEAR_GRAD_SCAN);
+  const st = dbcState();
+  const withProg = [];
+  for (let i = 0; i < candidates.length; i += 10) {        // batched so we don't spike Helius
+    await Promise.all(candidates.slice(i, i + 10).map(async (t) => {
+      try {
+        const p = await st.getPoolQuoteTokenCurveProgress(t.dbcPoolKey);   // 0..1
+        const pct = Number(p) * 100;
+        if (Number.isFinite(pct) && pct >= 0.1 && pct < 100) withProg.push({ t, pct });
+      } catch (_) { /* skip unreadable pool */ }
+    }));
+  }
+  withProg.sort((a, b) => b.pct - a.pct);
+  const top = withProg.slice(0, 15);
+  // Enrich price/MC/volume via GeckoTerminal (free) — same snapshot the feed uses.
+  const out = [];
+  await Promise.all(top.map(async ({ t, pct }) => {
+    let snap = null; try { snap = await getBagsTokenSnapshot(t.tokenMint); } catch (_) {}
+    out.push({
+      tokenMint: t.tokenMint, name: t.name, symbol: t.symbol,
+      image: t.image || snap?.image || null, twitter: t.twitter || null,
+      priceUsd: snap?.priceUsd ?? null, marketCap: snap?.marketCap ?? null,
+      change24h: snap?.change24h ?? null, volume24h: snap?.volume24h ?? null,
+      curvePct: +pct.toFixed(2),
+      solRaised: +(BAGS_BONDING_SOL * pct / 100).toFixed(2),       // of 85 SOL
+      solToGrad: +(BAGS_BONDING_SOL * (1 - pct / 100)).toFixed(2), // SOL left to bond
+      createdAt: snap?.createdAt || null,
+    });
+  }));
+  out.sort((a, b) => (b.curvePct || 0) - (a.curvePct || 0));
+  return out;
+}
 async function getBagsNearGrad() {
   const now = Date.now();
   if (NEAR_GRAD_CACHE.list && now - NEAR_GRAD_CACHE.ts < NEAR_GRAD_TTL) {
     return { tokens: NEAR_GRAD_CACHE.list, cached: true };
   }
-  const r = await solanaTracker.probe("/tokens/multi/graduating");
-  // Curve % (the near-grad ranking signal) ONLY comes from Solana Tracker — when
-  // ST is unreachable (e.g. out of credits, 403), we can't build this board. Don't
-  // overwrite a good cache with an empty list; surface sourceDown so the page can
-  // show an honest "temporarily unavailable" instead of a misleading "none right now".
-  if (!r.ok) {
-    return { tokens: NEAR_GRAD_CACHE.list || [], cached: !!NEAR_GRAD_CACHE.list, sourceDown: true, status: r.status };
+  // ST-FREE path: Bags launch feed + on-chain DBC curve progress (Helius). No
+  // Solana Tracker credits. sourceDown now means Bags/Helius is down (rare), not ST.
+  try {
+    const top = await scanNearGradFree();
+    NEAR_GRAD_CACHE.list = top; NEAR_GRAD_CACHE.ts = now;
+    return { tokens: top, cached: false, scanned: top.length, source: "bags+dbc" };
+  } catch (e) {
+    console.warn("[near-grad] free scan failed:", e.message);
+    return { tokens: NEAR_GRAD_CACHE.list || [], cached: !!NEAR_GRAD_CACHE.list, sourceDown: true };
   }
-  const arr = Array.isArray(r.data) ? r.data : [];
-  const out = [];
-  for (const item of arr) {
-    const tok = item.token || {};
-    const pools = Array.isArray(item.pools) ? item.pools : [];
-    if (pools.length === 0 || !tok.mint) continue;
-    const primary = pools.reduce((best, p) => ((p.liquidity || {}).usd || 0) > ((best.liquidity || {}).usd || 0) ? p : best, pools[0]);
-    // ONLY real Bags tokens — the mint's "bags" vanity suffix is authoritative.
-    // market === "meteora-curve" alone leaked non-Bags curve tokens.
-    const isBags = String(tok.mint).toLowerCase().endsWith("bags");
-    if (!isBags || primary.curvePercentage == null) continue;
-    const curvePct = Number(primary.curvePercentage);
-    // A full curve (>=100%) has already bonded — it belongs on Recently
-    // Graduated, not "near grad". Drop it.
-    if (curvePct >= 100) continue;
-    out.push({
-      tokenMint: tok.mint,
-      name: tok.name, symbol: tok.symbol, image: tok.image, twitter: tok.twitter,
-      priceUsd: primary.price?.usd ?? null,
-      marketCap: primary.marketCap?.usd ?? null,
-      change24h: item.events?.["24h"]?.priceChangePercentage ?? null,
-      volume24h: primary.txns?.volume24h ?? primary.txns?.volume ?? null,
-      curvePct,
-      solRaised: +(BAGS_BONDING_SOL * curvePct / 100).toFixed(2),       // of 85 SOL
-      solToGrad: +(BAGS_BONDING_SOL * (1 - curvePct / 100)).toFixed(2), // SOL left to bond
-      createdAt: primary.createdAt || null,
-    });
-  }
-  out.sort((a, b) => (b.curvePct || 0) - (a.curvePct || 0));
-  let top = out.slice(0, 15);
-  // Authoritative double-check on the highest-% candidates: ST's "graduating"
-  // feed can lag and still list a token that has actually bonded (the case that
-  // made a $92k/99.3% token look already-graduated). getBagsTokenSnapshot reads
-  // the curve reserve directly, so onBondingCurve===false (now on an AMM) =
-  // graduated → drop it. Only the most-at-risk (>=90%) are checked, reusing the
-  // shared snapshot cache, so ST usage stays bounded.
-  const atRisk = top.filter(t => t.curvePct >= 90).map(t => t.tokenMint).slice(0, 6);   // bound per-candidate ST snapshot rechecks
-  if (atRisk.length) {
-    const bonded = new Set();
-    await Promise.all(atRisk.map(async (mint) => {
-      const snap = await getBagsTokenSnapshot(mint);
-      if (snap && (snap.onBondingCurve === false || (snap.curvePct != null && snap.curvePct >= 100))) bonded.add(mint);
-    }));
-    if (bonded.size) top = top.filter(t => !bonded.has(t.tokenMint));
-  }
-  NEAR_GRAD_CACHE.list = top; NEAR_GRAD_CACHE.ts = now;
-  return { tokens: top, cached: false, scanned: arr.length };
 }
 
 // ── LP Pair Scanner (Liquidity Lab flagship) — see docs/LP_SCANNER.md ──────────

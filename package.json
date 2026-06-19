@@ -18,6 +18,7 @@
     "@metaplex-foundation/umi-bundle-defaults": "^1.5.1",
     "@meteora-ag/cp-amm-sdk": "^1.4.3",
     "@meteora-ag/dlmm": "^1.9.10",
+    "@meteora-ag/dynamic-bonding-curve-sdk": "^1.5.10",
     "@napi-rs/canvas": "^1.0.0",
     "@orca-so/whirlpools-sdk": "^0.20.0",
     "@raydium-io/raydium-sdk-v2": "^0.2.50-alpha",
