@@ -2237,21 +2237,10 @@ export default function App(){
       {/* Header */}
       {/* Header */}
       <div style={{borderBottom:"1px solid rgba(255,122,24,0.18)",background:"rgba(0,0,0,0.6)",backdropFilter:"blur(10px)",padding:"calc(50px + env(safe-area-inset-top, 0px)) 18px 12px",position:"sticky",top:0,zIndex:100}}>
-        {/* Top row */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-          <div onClick={()=>setScreen("landing")} style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
-            <img src={LOGO_B64} alt="Cluck Norris" style={{width:34,height:34,objectFit:"cover",borderRadius:"50%",border:"2px solid #FF7A18",flexShrink:0}}/>
-            <div>
-              <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,letterSpacing:2,color:"#FF7A18",lineHeight:1}}>CLUCK NORRIS</div>
-              <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:2,lineHeight:1.4}}>SCHOOL OF CRYPTO HARD KNOCKS</div>
-            </div>
-          </div>
-          <div style={{display:"flex",gap:5}}>
-            {LESSONS.map(l=><div key={l.id} style={{width:7,height:7,borderRadius:"50%",background:completed.includes(l.id)?l.color:"rgba(255,122,24,0.2)"}}/>)}
-          </div>
-        </div>
-        <div style={{marginBottom:6,display:"flex",justifyContent:"center"}}>
-          <MintAddress compact/>
+        {/* Brand row — compact, matching the homepage nav (no subtitle / contract / progress dots) */}
+        <div onClick={()=>setScreen("landing")} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,cursor:"pointer"}}>
+          <img src={LOGO_B64} alt="Cluck Norris" style={{width:30,height:30,objectFit:"cover",borderRadius:"50%",border:"1.5px solid #FF7A18",flexShrink:0}}/>
+          <div style={{fontFamily:"'Anton',sans-serif",fontSize:17,fontWeight:700,letterSpacing:0.5,lineHeight:1}}><span style={{color:"#FF7A18"}}>CLUCK</span> <span style={{color:"#F9FAFB"}}>NORRIS</span></div>
         </div>
         {/* Nav tabs — school sections only (top-level routing lives on the homepage) */}
         <div style={{display:"flex",gap:5}}>
