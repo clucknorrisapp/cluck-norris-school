@@ -3230,6 +3230,72 @@ app.get("/api/outreach-test", async (req, res) => {
   return res.status(200).json({ kind, count: deck.length, hint: "add &post=1 to send · &kind=learners|projects" });
 });
 
+// ── Daily Tool Spotlight ─────────────────────────────────────────────────────
+// Once a day, feature ONE of our free tools on X + (silent) Telegram, rotating
+// through the deck. Pulls people into the actual product instead of just hyping
+// the token. X posts tag @BagsApp + @JupiterExchange per the owner's standing ask.
+// Preview/fire: /api/tool-spotlight-test?key=…[&post=1]. Hour via kv toolSpotHour
+// (default 17 UTC); rotation pointer kv toolSpotPos; once-per-day guard toolSpotDate.
+const TOOL_SPOTLIGHTS = [
+  {
+    name: "Wallet X-Ray",
+    tg: "🔎 <b>Wallet X-Ray</b> — paste ANY Solana address and see what it's really holding, what it's been trading, and the red flags. Seconds. Free. No wallet-connect.\n\nKnow who you're dealing with <i>before</i> you trust them.\n\n👉 clucknorris.app/wallet-xray",
+    x: "🔎 Wallet X-Ray: paste any Solana address and see what it's really holding, trading, and hiding — in seconds. Free, no wallet-connect.\n\nKnow who you're dealing with before you trust them.\n\nclucknorris.app/wallet-xray",
+  },
+  {
+    name: "Token Autopsy",
+    tg: "🔬 <b>Token Autopsy</b> — paste any mint and get a full forensic report: mint/freeze authorities, LP locks, holder concentration, and the deployer's history. The chain shows <i>what</i> happened — we lay it out.\n\nDon't ape blind. Free.\n\n👉 clucknorris.app/autopsy",
+    x: "🔬 Token Autopsy: paste any Solana mint, get a full rug-risk forensic report — authorities, LP locks, holder concentration, deployer history.\n\nThe chain shows what happened. We lay it out. Free.\n\nclucknorris.app/autopsy",
+  },
+  {
+    name: "Ask Cluck",
+    tg: "🐔 <b>Ask Cluck</b> — a live AI crypto tutor. Ask anything (\"what's impermanent loss?\", \"is this a scam?\") or switch to Lecture mode for a structured class. Grounded in our real curriculum.\n\nThe meanest professor in crypto, on call 24/7. Free.\n\n👉 clucknorris.app/ask-cluck",
+    x: "🐔 Ask Cluck: a live AI crypto tutor. Ask anything — \"what's impermanent loss?\", \"is this a scam?\" — or switch to Lecture mode for a structured class.\n\nThe meanest professor in crypto, on call 24/7. Free.\n\nclucknorris.app/ask-cluck",
+  },
+  {
+    name: "Trace",
+    tg: "🧭 <b>Trace</b> — pick a wallet × a token and see the entire history: every buy, sell, and transfer between them. Settle the \"did they actually dump?\" question yourself.\n\nReceipts, not rumors. Free.\n\n👉 clucknorris.app/trace",
+    x: "🧭 Trace: pick a wallet × a token and see the entire on-chain history between them — every buy, sell, transfer.\n\nSettle \"did they actually dump?\" yourself. Receipts, not rumors. Free.\n\nclucknorris.app/trace",
+  },
+  {
+    name: "Security Co-op",
+    tg: "🛡️ <b>Security Co-op</b> — scan your wallet for risky token approvals and revoke the ones draining your safety. The silent way wallets get emptied is an old approval you forgot about.\n\nClose the door. Free, non-custodial.\n\n👉 clucknorris.app/security-coop",
+    x: "🛡️ Security Co-op: scan your wallet for risky token approvals and revoke them.\n\nThe silent way wallets get drained is an old approval you forgot about. Close the door — free, non-custodial.\n\nclucknorris.app/security-coop",
+  },
+  {
+    name: "Wallet Checkup",
+    tg: "🩺 <b>Wallet Checkup</b> — paste any address for a fast safety read: exposure, sketchy approvals, and what to clean up. Great before you connect to anything new.\n\nA 30-second checkup beats a drained wallet. Free.\n\n👉 clucknorris.app/wallet-checkup",
+    x: "🩺 Wallet Checkup: paste any Solana address for a fast safety read — exposure, sketchy approvals, what to clean up.\n\nA 30-second checkup beats a drained wallet. Free.\n\nclucknorris.app/wallet-checkup",
+  },
+  {
+    name: "Bags Launch Radar",
+    tg: "📡 <b>Bags Launch Radar</b> — live new Bags launches and graduations, sortable by newest, market cap, or near-grad. See what's hatching before it trends.\n\nFree, updates live.\n\n👉 clucknorris.app/bags",
+    x: "📡 Bags Launch Radar: live new launches + graduations, sortable by newest / market cap / near-grad.\n\nSee what's hatching before it trends. Free, updates live.\n\nclucknorris.app/bags",
+  },
+  {
+    name: "Free Crypto School",
+    tg: "🎓 <b>The free School of Crypto Hard Knocks</b> — wallets, DeFi, LP, scam-spotting, real survival skills. Pass the Ultimate Challenge and earn a permanent, on-chain diploma.\n\nWe took the hard knocks so you don't have to. 100% free.\n\n👉 clucknorris.app",
+    x: "🎓 The free School of Crypto Hard Knocks: wallets, DeFi, LP, scam-spotting, survival skills. Pass the Ultimate Challenge for a permanent on-chain diploma.\n\nWe took the hard knocks so you don't have to. Free.\n\nclucknorris.app",
+  },
+];
+async function postToolSpotlight() {
+  const i = (Number(kv.get("toolSpotPos", 0)) || 0) % TOOL_SPOTLIGHTS.length;
+  kv.set("toolSpotPos", i + 1);
+  const t = TOOL_SPOTLIGHTS[i];
+  const out = { index: i, name: t.name };
+  const chat = process.env.TELEGRAM_CHAT_ID;
+  if (chat) { try { out.telegram = await tgSend(chat, t.tg, null, { silent: true }); } catch (e) { out.telegramErr = e.message; } }
+  try { out.x = await postToX(t.x + "\n\n@BagsApp @JupiterExchange"); } catch (e) { out.xErr = e.message; }
+  return out;
+}
+app.get("/api/tool-spotlight-test", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (req.query.post === "1") { const r = await postToolSpotlight(); return res.status(200).json({ posted: true, ...r }); }
+  const i = (Number(kv.get("toolSpotPos", 0)) || 0) % TOOL_SPOTLIGHTS.length;
+  return res.status(200).json({ count: TOOL_SPOTLIGHTS.length, next: TOOL_SPOTLIGHTS[i], hint: "add &post=1 to send (X + Telegram)" });
+});
+
 // &post=1 posts a tweet (uses &text=... or a default) so you can verify posting
 // works the moment the keys are added in Railway.
 app.get("/api/x-post-test", async (req, res) => {
@@ -9527,6 +9593,21 @@ app.listen(PORT, () => {
     }
     setInterval(outreachTick, 10 * 60 * 1000); // check every 10 min; two slots/day
     setTimeout(outreachTick, 110000);
+    // Daily Tool Spotlight — feature one of our tools on X + (silent) Telegram once/day,
+    // rotating the deck. Stamps the date BEFORE posting so a crash/retry can't double-post
+    // publicly. Hour via kv toolSpotHour (default 17 UTC ≈ midday ET).
+    async function toolSpotlightTick() {
+      try {
+        const now = new Date(), today = now.toISOString().slice(0, 10);
+        if (now.getUTCHours() < Number(kv.get("toolSpotHour", 17))) return;
+        if (kv.get("toolSpotDate", null) === today) return;
+        kv.set("toolSpotDate", today);
+        const r = await postToolSpotlight();
+        console.log("[tool-spotlight] posted", today, r.name, { x: !!(r.x && r.x.ok), tg: !!r.telegram });
+      } catch (e) { console.warn("[tool-spotlight] tick failed:", e.message); }
+    }
+    setInterval(toolSpotlightTick, 10 * 60 * 1000); // check every 10 min; fires once/day past the hour
+    setTimeout(toolSpotlightTick, 125000);
     // Toolkit reminder — checked each minute, fires at fixed 4-hour marks.
     setInterval(toolsReminderTick, 60 * 1000);
     // Bags Launch Radar — checked each minute, fires at fixed 2-hour marks.
