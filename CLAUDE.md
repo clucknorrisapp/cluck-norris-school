@@ -247,6 +247,14 @@ Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.
   `toolSpotHour` default 17 UTC); X posts tag @BagsApp + @JupiterExchange.
 - `/api/buy-replay?sig=…[&run=1]` — manually (re)fire a buy/sell alert the live poller
   dropped; dry-run unless `&run=1`; remembers the sig so the poller won't double-post.
+- `/api/reconcile-test[&run=1]` — preview/run the RECONCILIATION BACKSTOP: a 12-min sweep
+  (`reconcileMissedTrades`) that recovers any buy/sell the 30s poller dropped (transient
+  error, restart gap, RPC quirk). Settled-window + durably-deduped (`handledSigAt`/kv
+  `buyHandledSigAt`, 2h time-pruned, so it can NEVER double-post) and uses the same raw
+  (authoritative) detection + suppression rules. Tunables: kv `reconcileLookbackMin` (45),
+  `reconcileSettleSec` (240). The poller itself also now re-checks dropped trades against
+  raw `getTransaction` before suppressing (the enhanced Helius format misreads Jupiter-
+  routed swaps as false-arb / false-below-floor — this ate a real ~$700 buy on 2026-06-19).
 - `/api/grad-watch-status[&run=1]` — graduation watchlist + the 48h graduated record.
 - `/api/stats` — traffic dashboard data. `/api/autopsy-premium` — gated deep forensics.
 - `/api/claims` — the full airdrop list (wallets + balances) from the Google Sheet.
