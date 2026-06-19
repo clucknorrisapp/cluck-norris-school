@@ -7,17 +7,20 @@
 [![Auto-deployed on Railway](https://img.shields.io/badge/Deploy-Railway-blueviolet)](https://railway.app)
 [![Source on GitHub](https://img.shields.io/badge/Source-GitHub-181717?logo=github)](https://github.com/clucknorrisapp/cluck-norris-school)
 
-> *"No participation trophies. No hand‑holding. Just hard knocks."*
+> *"We took the hard knocks so you don't have to."*
 >
-> **A Bags.fm token where the school is free, token research is free, and premium tools are paid for in CLKN — wrapped in guardrails that teach first‑timers before they can hurt themselves.**
+> **A place to actually learn crypto — beginner to advanced, including how to launch a token responsibly and what *not* to do — backed by free research tools, premium operator tools, and a token that funds the work instead of begging you to buy it.**
 
-Five things, in one product:
+Cluck Norris is a **knowledge project first.** The "School of Hard Knocks" name is the whole point: crypto is brutal, we've taken the losses, and the mission is to pass on what those cost us so the next person doesn't repeat them. Everything core is free. The token does real work behind the scenes — no wallet‑connect to pay, no buy‑pressure, no governance theater.
 
-1. 🆓 **A free crypto school** — disciplined, voice‑driven, no signup, no wallet
-2. 🩺 **Free token research & forensics** — a full **Wallet X‑Ray**, a deep AI token *autopsy*, holder snapshots and transaction tracing for any Solana mint, plus a free wallet‑safety checker
-3. 🔒 **Premium operator tools** — buy‑competition trackers, a batch airdrop sender, and a holder‑gated deep‑forensics tier, unlocked with on‑chain CLKN micropayments
-4. 🥚 **A guided token creator** — mint a real SPL token, taught decision by decision
-5. 💧 **The Liquidity Engine** — an honest, automated market maker (real depth, zero wash trades) running live on CLKN, with its results published on a wash‑proof public metric
+What's in the box:
+
+1. 🆓 **A free crypto school** — beginner Incubator → 12‑lesson Hard Knocks course → LP Lab → an Ultimate Challenge that can actually fail you. No signup, no wallet.
+2. 🤖 **Ask Cluck** — a live AI crypto tutor: ask anything, or switch to **Lecture mode** for a structured class grounded in the real curriculum.
+3. 🩺 **Free token research & forensics** — a full **Wallet X‑Ray**, a deep AI token *autopsy*, holder snapshots, transaction tracing, and a wallet‑safety checkup for any Solana mint.
+4. 💎 **Premium operator tools** — buy‑competition trackers, a batch airdrop sender, and a holder‑gated deep‑forensics tier, unlocked with on‑chain CLKN micropayments (pennies, no subscription, no accounts).
+5. 🥚 **A guided token creator** — mint a real SPL token, taught decision by decision, that deliberately stops short of launching.
+6. 💧 **The Liquidity Engine** — honest, automated market making (real two‑sided depth, never wash trades), offered as a premium hands‑on service and proven on CLKN's own pools.
 
 The token does real work. The school keeps people alive long enough to use it.
 
@@ -49,7 +52,7 @@ Disciplined learning, real value, zero gatekeeping. The flock learns or the floc
 - 🎮 **Survival Simulator** — start with $1,000 simulated capital. Each run draws 10 scenarios at random from a bank of **135** real‑world crypto situations (DM "alpha", dev wallet dumps, FOMO buys, 900% APR pools, phishing impersonators, wallet drainers, leverage liquidations, exchange freezes, vesting unlocks) — so no two playthroughs are alike. Every choice has a multiplier; Cluck explains why each move worked or didn't. **Practice the decisions before you have to make them with real money.**
 - ⚗️ **LP Lab** — a 12-lesson interactive liquidity course with 7 interactive tools (AMM price impact, IL calculator, fee breakeven, capital efficiency, bin visualizer, DCA, strategy matcher), covering the fundamentals through risk management, reading pool data, token-launch liquidity, and building a full LP strategy. Works on Meteora, Raydium, Orca, Uniswap — anywhere you LP
 - 📚 **The Library** — 50‑term glossary, deep‑dives across Survival / Research / Concepts (including 🪂 *How to Use an Airdropper Without Burning Yourself*), curated resources
-- 🤖 **Ask Cluck Norris** — Claude Haiku tough‑love crypto professor embedded in every lesson. 10 questions/day. No signup. No wallet
+- 🤖 **Ask Cluck** — a Claude‑powered tough‑love crypto professor. Embedded in every lesson (10 questions/day), live in the Telegram group, and as a standalone tool at [`/ask-cluck`](https://clucknorris.app/ask-cluck) with two modes: **Ask Anything** for free‑form questions, or **Lecture** for a structured, curriculum‑grounded class you can tap through. No signup, no wallet
 - 🩻 **Wallet X-Ray** — free full‑wallet deep dive for **any** Solana address, served at [`/wallet-xray`](https://clucknorris.app/wallet-xray). Traces the **true funding origin** all the way to the wallet's first transaction (dust/spam filtered, exchange hot‑wallets identified), maps every buy/sell/transfer across **every** token, and reads the behavior pattern — bot cadence, fast‑flip dumping, CEX cash‑out, LP, or holder. Searchable timeline, charts, Coal Miner deep‑scan, and a built‑in "ask Cluck about this transaction" AI. **Live now.**
 - 🛡 **Wallet Safety Checkup** — free read‑only scan at [`/wallet-checkup`](https://clucknorris.app/wallet-checkup): paste any address (no wallet‑connect) for the things that actually drain people — lingering token approvals, honeypot/can't‑sell holdings, and tokens whose dev can still freeze or mint. Routes each finding to revoke (Security Coop) or research (Autopsy/Trace)
 - 🔬 **Token Autopsy** — a free AI forensic post‑mortem on any Solana mint at [`/autopsy`](https://clucknorris.app/autopsy): ~10 on‑chain phases (LP lock/burn, Token‑2022 honeypot‑extension scan, real‑creator detection, creator buy‑back & fee‑reinvestment trace, hidden‑exit / transfer‑then‑dump detection, holder forensics), cross‑verified against Bags, Jupiter and Solana Tracker, then narrated by Cluck. Honest "cause of death" verdict
@@ -89,18 +92,18 @@ Two tools where you *do* connect a wallet — not to hand over anything, but to 
 
 Most "volume bots" wash‑trade: the same operator buys and sells their own token through wallets they control to fake activity. We built the **opposite** — and you can audit it with our own Token Autopsy.
 
-The Liquidity Engine is a concentrated‑liquidity market maker on **Orca Whirlpools** — with **Raydium CLMM** support built to the same interface, so a project can run on either venue — that puts **real two‑sided depth** into a token's pools — tighter spreads, less price impact for real buyers and sellers, and fees earned on genuine trades. Two layers:
+The Liquidity Engine is a concentrated‑liquidity market maker that puts **real two‑sided depth** into a token's pools — tighter spreads, less price impact for real buyers and sellers, and fees earned on genuine trades. It runs on **Orca Whirlpools**, with **Raydium CLMM** and **Meteora DLMM** adapters built to the same interface, so a project can run on whichever venue it lives on. Two layers under the hood:
 
-- **🛠 Non‑custodial tool** ([`/liquidity`](https://clucknorris.app/liquidity)) — connect a wallet, pick a pool + fee tier, choose a **single‑sided wall** (CLKN‑only asks above price, or quote‑only bids below) or a **balanced range**, preview the exact token amounts, and **sign your own transactions**. The server builds the unsigned position txs (open / close / collect fees) and initializes pool tick‑arrays automatically so it works even on a brand‑new pool; keys never touch it — same pattern as the Hatchery and Security Coop.
-- **🤖 Autonomous Liquidity Vault** *(operator‑gated)* — funded from a **dedicated hot wallet** whose key lives only in the Railway environment (unset = the vault is fully off, a safe no‑op). It runs hands‑off: a **balanced CLKN/USDC base** for everyday two‑sided depth, an **upside ask‑wall** in a higher fee tier (premium capture selling into strength), and a **CLKN/SOL position** that sits on the natural SOL‑driven arbitrage between pools. It **re‑centers automatically** as price moves and **auto‑rebalances inventory** (swapping SOL↔USDC via Jupiter, never selling CLKN) so the pools keep themselves funded — fund the wallet and it deploys itself. Guardrails throughout: per‑fee‑tier pools, anti‑thrash interval, daily action caps, price‑gap anomaly guard, slippage caps, and a one‑flag kill switch.
+- **🛠 Non‑custodial position builders** — the server builds the unsigned position transactions (open / close / collect fees) and initializes pool tick‑arrays automatically so it works even on a brand‑new pool; the operator signs their own transactions and keys never touch the server — the same pattern as the Hatchery and Security Coop.
+- **🤖 Autonomous vault** — funded from a **dedicated hot wallet** whose key lives only in the server environment (unset = fully off, a safe no‑op). It can hold balanced two‑sided depth, an upside ask‑wall in a higher fee tier, and a multi‑quote layout that earns on natural cross‑pool arbitrage; it re‑centers as price moves and rebalances inventory by swapping **quote assets only — never selling the brand's own token.** Guardrails throughout: per‑fee‑tier pools, anti‑thrash intervals, daily action caps, a price‑gap anomaly guard, slippage caps, and a one‑flag kill switch.
+
+**The multi‑quote idea.** Pairing a token against several quote assets (e.g. USDC + SOL + JUP) means each quote's *own* volatility dislocates the token's price across pools, and third‑party arbitrageurs trade it back into line — producing real, organic two‑way volume the project never generates itself. We're proving this out live on CLKN's own pools.
 
 **Honest by design.** Every fill is a real counterparty trading against real depth — that's real volume because the trades are real. It never trades against itself. (Our [Token Autopsy](https://clucknorris.app/autopsy) exists to catch the fake kind — running a wash bot would flag our own token.)
 
-**Under testing & fine‑tuning.** The engine is being actively tested and tuned on CLKN's own pools — distribution shapes, range widths, re‑center cadence and inventory handling — before we lean on it harder. The goal is steady, honest depth, not headline metrics; we'd rather under‑promise here and let the on‑chain record speak.
+**Premium, by request — not self‑serve.** This is a serious tool with real risks (impermanent loss, the big‑sell scenario), and how it's tuned depends on the token. So we set it up *with* each project personally — what it does, what it can do for you, and the risks — rather than handing over a button. One project helping another. The product page ([`/liquidity-engine`](https://clucknorris.app/liquidity-engine)) explains it with honest risk education built in; to talk it through, DM **[@firechicken007](https://x.com/firechicken007)** on X or reach us in the Telegram group.
 
-**Built multi‑tenant.** The engine is designed multi‑tenant — each project would run on its own dedicated operator wallet with its own guardrails and Telegram alert room. There's a public product page ([`/liquidity-engine`](https://clucknorris.app/liquidity-engine)) with honest risk education built in (including the big‑sell scenario most MM services won't explain), an **owner portal** ([`/portal`](https://clucknorris.app/portal)) where a project signs in with its wallet to watch its own vault, and pricing in CLKN — the intended path to more CLKN utility as the engine proves out. A **Meteora DLMM** adapter runs on the same codebase, alongside Orca Whirlpools and Raydium CLMM.
-
-Live now on CLKN (CLKN/USDC + CLKN/SOL on Orca); **Raydium CLMM** is supported as a venue for projects that live there. Check current depth in Telegram with **`/liquidity`**, or on the [`/liquidity`](https://clucknorris.app/liquidity) page. It's an operator‑grade, *auditable* liquidity‑management capability — the same work experienced operators do by hand, automated.
+**Status — actively testing on CLKN.** We're tuning the engine on CLKN's own pools (distribution shapes, range widths, re‑center cadence, inventory handling, the multi‑quote layout) under hands‑on management before leaning on it harder. The goal is steady, honest depth — not headline metrics — so we'd rather under‑promise here and let the on‑chain record speak. Built multi‑tenant: each project would run on its own dedicated operator wallet, guardrails, and Telegram alert room.
 
 ---
 
@@ -180,7 +183,8 @@ The product reaches into the community Telegram (and X), not just the website:
 - **Interactive slash commands** — `/guide` (the concierge), `/walletxray <wallet>` (full wallet deep dive), `/autopsy`, `/trace`, `/snapshot`, `/holders`, `/securitycoop`, `/buyspecial`, `/rose`, `/hatchery`, `/bags`, `/liquidity` (live AMM depth, wallet/balances redacted), `/tools` — delivered via a secret‑validated Telegram webhook.
 - **Buy / sell alerts** — a 30s pool poller posts every real CLKN trade (buy and sell) with USD value, price, market cap, route, and a holder‑tier rank for the trader. Project buy‑backs get their own "community reinvestment" framing.
 - **Bags Hub** ([`/bags`](https://clucknorris.app/bags)) — live launches feed (newest · near‑graduation · recently graduated), plus a watcher that fires "close to bonding" (85%) and "graduated!" alerts, backed by our own 48h graduation tracker (independent of pump.fun flooding the shared indexer).
-- **Scheduled posts** — Bags Launch Radar, hourly‑ish Market Check (CLKN / SOL / BTC), and a daily flow recap — all self‑cleaning (delete‑previous) and minute‑gated so a redeploy never double‑posts.
+- **Scheduled posts** — a daily **Alpha** brief, Bags Launch Radar, hourly‑ish Market Check (CLKN / SOL / BTC), a daily flow recap, and a daily **Tool Spotlight** (a rotating free‑tool feature on X + silent Telegram) — all self‑cleaning and minute‑gated so a redeploy never double‑posts.
+- **Reliable buy tracking** — beyond the 30s poller, a reconciliation backstop sweeps every ~12 min to recover any real trade a transient hiccup dropped, with durable de‑dup so it can never double‑post. A buy won't silently slip through.
 - **🎰 The Coop Spinner** ([`/slots`](https://clucknorris.app/slots), beta) — a holder‑rewards slot game: holding CLKN earns free daily spins (banded by balance, with a live "next free spins in…" countdown to the UTC reset), points + jackpots feed a weekly wheel. Server‑authoritative, ownership‑proof gated. Beta — no prizes yet.
 - **📱 Live on the Solana Seeker dApp Store** — the live site is wrapped as a native Android app (Capacitor) and is **live in the Seeker dApp Store** (search "Cluck Norris"), backed by published [Privacy Policy](https://clucknorris.app/privacy) and [Terms of Use](https://clucknorris.app/terms). Because it loads the live site, every web ship reaches the app instantly — no resubmission. *Honest scope: deeper Mobile Wallet Adapter / Seed Vault integration is roadmap, not yet built.*
 
@@ -218,7 +222,7 @@ The product reaches into the community Telegram (and X), not just the website:
 - `/api/credential/:slug` — public transcript JSON · `/api/credential-card?slug=…` — transcript share PNG · `/api/school-stats` — verified‑graduate metrics
 - `/api/hatchery/*` — token creator: Arweave metadata upload, unsigned mint‑tx build, live fee config
 - `/api/security-coop/*` — wallet delegate‑approval scan + unsigned revoke‑tx build
-- `/api/whirlpool/*` — Liquidity Engine: Orca pool discovery, suggested ranges, liquidity quotes, and non‑custodial open/close position‑tx builds (public); the autonomous vault's `/vault/*` (status / tick / rebalance / swap / pause) is gated on `PREMIUM_ACCESS_KEY` and runs per‑project on **Orca or Raydium**
+- `/api/whirlpool/*` — Liquidity Engine: Orca pool discovery, suggested ranges, and liquidity quotes (read‑only); the position‑tx builders and the autonomous vault's `/vault/*` (status / tick / rebalance / pause) are gated — the engine is offered as a premium, by‑request service and runs per‑project on **Orca, Raydium, or Meteora**
 - `/api/holders`, `/api/locks`, `/api/fees`, `/api/supply`, `/api/reinvestment`, `/api/bubblemaps` — Solana token telemetry proxies
 - `/api/bags-proxy`, `/api/bags-feed-prices`, `/api/bags-near-grad`, `/api/bags-graduated` — Bags launch data
 - `/api/helius-rpc`, `/api/helius-tx` — Helius proxies with API keys hidden server‑side, with automatic failover on rate‑limit / outage
@@ -235,7 +239,7 @@ The product reaches into the community Telegram (and X), not just the website:
 - **Trade:** [bags.fm](https://bags.fm/DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS?ref=firechicken007) · [Jupiter](https://jup.ag/tokens/DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS)
 - **Project fee:** ~1% on every CLKN trade — real SOL revenue, 100% reinvested into buying CLKN on the chart
 - **Jupiter Ref:** `A4fSbCMAya9rLWY4incNYaVfhYA9mpCownbFEW3dUZAg` — 0.1% swap fee
-- **Liquidity:** Meteora DAMM V2 (`64WXkHM4zyWUkYy32TfUeBV5wDAfdcUGDxe5ntM4xaTd`), plus project‑run **Orca Whirlpool** depth (CLKN/USDC + CLKN/SOL) managed by the [Liquidity Engine](#-the-liquidity-engine--honest-automated-market-making)
+- **Liquidity:** Meteora DAMM V2 (`64WXkHM4zyWUkYy32TfUeBV5wDAfdcUGDxe5ntM4xaTd`, the canonical chart), plus project‑run **Orca Whirlpool** depth across a **multi‑quote layout** (CLKN/USDC · CLKN/SOL · CLKN/JUP) — the [Liquidity Engine](#-the-liquidity-engine--honest-automated-market-making) thesis, currently managed hands‑on
 - **Live stats:** Holder count and lifetime trading fees are pulled fresh from on‑chain via `/api/holders` and `/api/fees`. See current numbers on the [TOKEN DATA tab](https://clucknorris.app) of the live app.
 
 ---
