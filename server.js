@@ -3196,6 +3196,40 @@ async function gradHotTick() {
 }
 
 // X / Twitter status + live test (gated). Returns whether the 4 X keys are set;
+// ── Twice-daily outreach posts — "why us / why now" ──────────────────────────
+// One "projects → reach out for liquidity" post + one "individuals → free
+// education + the opportunity" post per day, to the community chat (SILENT).
+// Decks rotate so it isn't repetitive. Scheduler lives in the listen block;
+// dry-run/preview here: /api/outreach-test?key=…[&kind=learners][&post=1].
+const OUTREACH_PROJECTS = [
+  "🤝 <b>Building a Solana token? Let's talk liquidity.</b>\n\nMost projects either pay for fake volume or let their LP die. We do neither. The Cluck Norris Liquidity Engine runs <b>honest, two-sided market making</b> — real depth that earns real fees — the same engine we run on our own token.\n\n<b>Why now:</b> thin, dead order books kill good projects before they get a shot. <b>Why us:</b> we set it up <i>with</i> you and walk through the risks. One project helping another.\n\nDM @firechicken007 on X or reply here. 💧",
+  "💧 <b>Your chart looks dead because your liquidity is.</b>\n\nWe build genuine two-sided depth on Orca — tuned to <i>your</i> token, not a wash-trade bot. It's a premium, hands-on service: we explain exactly what it does, what it can do for you, and the risks, before anything goes live.\n\n<b>Why us / why now:</b> we run it on CLKN and it works — real organic volume, real fees back into the project. Reach out and let's see if it fits yours.",
+  "🔥 <b>One project helping another.</b>\n\nWe're opening our liquidity engine to a few serious Solana projects. Honest market making, real depth, full transparency on the risks — done <i>with</i> you, not <i>to</i> you. Not self-serve; we sit down and set it up right.\n\nIf your token needs real, organic volume, DM @firechicken007 on X or ping us here.",
+];
+const OUTREACH_LEARNERS = [
+  "🎓 <b>New to crypto and tired of getting rekt?</b>\n\nCluck Norris is a <b>free</b> school — wallets, DeFi, LP, scams — plus free tools to X-ray any token before you ape, and a live AI tutor that answers anything.\n\n<b>Why us:</b> we take the hard knocks so you don't have to. <b>Why now:</b> the cheapest tuition in crypto is the lesson you learn <i>before</i> you lose money. Start free → clucknorris.app 🐔",
+  "🐔 <b>We don't pump. We build.</b>\n\nFree crypto school, free research tools, a real AI tutor — and a token (CLKN) that grows with the brand instead of begging you to buy. We even run our own honest liquidity engine and feed the fees back in.\n\n<b>Why look closer:</b> a community that actually ships and practices what it teaches. Come learn first → clucknorris.app",
+  "📚 <b>Learn crypto. Don't get rekt. Maybe back a community worth backing.</b>\n\nEverything at clucknorris.app is free to learn — pass the Ultimate Challenge for an on-chain diploma. And if you like what the flock is building, CLKN is how you come along: no hype, no buy pressure, just a brand and a community that keep growing.\n\n<b>Why now?</b> The best time to learn was before your last bad trade. 🔥",
+];
+async function postOutreach(kind) {
+  const tok = process.env.TELEGRAM_BOT_TOKEN, chat = process.env.TELEGRAM_CHAT_ID;
+  if (!tok || !chat) return { ok: false, reason: "telegram not configured" };
+  const deck = kind === "learners" ? OUTREACH_LEARNERS : OUTREACH_PROJECTS;
+  const posKey = kind === "learners" ? "outreachLearnPos" : "outreachProjPos";
+  const i = (Number(kv.get(posKey, 0)) || 0) % deck.length;
+  kv.set(posKey, i + 1);
+  const r = await tgSend(chat, deck[i], null, { silent: true });
+  return { ok: true, kind, index: i, telegram: r };
+}
+app.get("/api/outreach-test", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  const kind = req.query.kind === "learners" ? "learners" : "projects";
+  if (req.query.post === "1") { const r = await postOutreach(kind); return res.status(200).json({ posted: true, ...r }); }
+  const deck = kind === "learners" ? OUTREACH_LEARNERS : OUTREACH_PROJECTS;
+  return res.status(200).json({ kind, count: deck.length, hint: "add &post=1 to send · &kind=learners|projects" });
+});
+
 // &post=1 posts a tweet (uses &text=... or a default) so you can verify posting
 // works the moment the keys are added in Railway.
 app.get("/api/x-post-test", async (req, res) => {
@@ -9419,6 +9453,23 @@ app.listen(PORT, () => {
     }
     setInterval(dailyAlphaTick, 10 * 60 * 1000); // check every 10 min; fires once/day past the hour
     setTimeout(dailyAlphaTick, 95000);
+    // Twice-daily outreach — one "projects → liquidity" post + one "learners →
+    // education/opportunity" post per day (why us / why now). Silent. Hours via kv
+    // outreachProjHour (default 15 UTC) / outreachLearnHour (default 23 UTC).
+    async function outreachTick() {
+      try {
+        if (!process.env.TELEGRAM_CHAT_ID) return;
+        const now = new Date(), today = now.toISOString().slice(0, 10), h = now.getUTCHours();
+        if (h >= Number(kv.get("outreachProjHour", 15)) && kv.get("outreachProjDate", null) !== today) {
+          kv.set("outreachProjDate", today); await postOutreach("projects"); console.log("[outreach] projects post", today);
+        }
+        if (h >= Number(kv.get("outreachLearnHour", 23)) && kv.get("outreachLearnDate", null) !== today) {
+          kv.set("outreachLearnDate", today); await postOutreach("learners"); console.log("[outreach] learners post", today);
+        }
+      } catch (e) { console.warn("[outreach] tick failed:", e.message); }
+    }
+    setInterval(outreachTick, 10 * 60 * 1000); // check every 10 min; two slots/day
+    setTimeout(outreachTick, 110000);
     // Toolkit reminder — checked each minute, fires at fixed 4-hour marks.
     setInterval(toolsReminderTick, 60 * 1000);
     // Bags Launch Radar — checked each minute, fires at fixed 2-hour marks.
