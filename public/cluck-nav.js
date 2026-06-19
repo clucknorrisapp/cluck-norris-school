@@ -13,7 +13,10 @@
     "/buyspecial","/rose","/liquidity","/liquidity-engine","/premium","/pool-monitor"];
   var showHome  = (p !== "" && p !== "/");
   var showTools = (TOOL_PAGES.indexOf(p) !== -1);
-  var showAsk   = (p !== "/ask-cluck" && p !== "/crypto-school");
+  // The home page has its OWN nav (with an Ask Cluck link), so don't inject the
+  // floating bar there — it would overlap the page's own header. showHome is false
+  // only on home, so gating Ask Cluck on it suppresses the whole bar on home.
+  var showAsk   = (showHome && p !== "/ask-cluck" && p !== "/crypto-school");
   if (!showHome && !showTools && !showAsk) return;
 
   function pill(href, html, primary) {
@@ -43,12 +46,12 @@
       var st = document.createElement("style");
       st.id = "cluck-nav-css";
       st.textContent = "a.back,a.back-home,a.home{display:none!important}" +
-        ".wrap{padding-top:58px!important}";
+        ".wrap{padding-top:calc(58px + env(safe-area-inset-top,0px))!important}";
       document.head.appendChild(st);
     }
     var bar = document.createElement("div");
     bar.id = "cluck-nav-bar";
-    bar.style.cssText = ["position:fixed", "top:12px", "left:50%", "transform:translateX(-50%)",
+    bar.style.cssText = ["position:fixed", "top:calc(12px + env(safe-area-inset-top,0px))", "left:50%", "transform:translateX(-50%)",
       "z-index:2147483000", "display:flex", "gap:8px", "align-items:center", "flex-wrap:wrap",
       "justify-content:center", "max-width:96vw"].join(";");
     if (showHome)  bar.appendChild(pill("/", '<span style="font-size:14px;line-height:1">🏠</span><span>Home</span>', false));

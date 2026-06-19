@@ -2262,6 +2262,13 @@ async function getBagsNearGrad() {
     return { tokens: NEAR_GRAD_CACHE.list, cached: true };
   }
   const r = await solanaTracker.probe("/tokens/multi/graduating");
+  // Curve % (the near-grad ranking signal) ONLY comes from Solana Tracker — when
+  // ST is unreachable (e.g. out of credits, 403), we can't build this board. Don't
+  // overwrite a good cache with an empty list; surface sourceDown so the page can
+  // show an honest "temporarily unavailable" instead of a misleading "none right now".
+  if (!r.ok) {
+    return { tokens: NEAR_GRAD_CACHE.list || [], cached: !!NEAR_GRAD_CACHE.list, sourceDown: true, status: r.status };
+  }
   const arr = Array.isArray(r.data) ? r.data : [];
   const out = [];
   for (const item of arr) {
@@ -2980,7 +2987,7 @@ app.get("/api/bags-near-grad", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   try {
     const r = await getBagsNearGrad();
-    return res.status(200).json({ success: true, cached: r.cached, scanned: r.scanned, tokens: r.tokens });
+    return res.status(200).json({ success: true, cached: r.cached, scanned: r.scanned, sourceDown: !!r.sourceDown, tokens: r.tokens });
   } catch (e) {
     if (NEAR_GRAD_CACHE.list) return res.status(200).json({ success: true, cached: true, stale: true, tokens: NEAR_GRAD_CACHE.list });
     return res.status(200).json({ success: false, tokens: [], error: e.message });
@@ -3058,6 +3065,31 @@ async function getBagsGraduatedBoard() {
     const st = await getBagsGraduated();
     for (const t of (st.tokens || [])) { if (!seen.has(t.tokenMint)) { seen.add(t.tokenMint); tokens.push(t); } }
   } catch (_) {}
+  // ST-INDEPENDENT backfill: when the tracker + ST yield a thin board (e.g. ST is
+  // out of credits), pull recently-MIGRATED tokens straight from the Bags launch
+  // feed (Bags API, no ST) and enrich price/MC via GeckoTerminal. Keeps the
+  // "recently graduated" tab alive even with ST fully down.
+  if (tokens.length < 10) {
+    try {
+      const fr = await fetch(`${BAGS_BASE}token-launch/feed`, { headers: { "x-api-key": process.env.BAGS_API_KEY } });
+      const fd = await fr.json();
+      const migrated = ((fd && fd.response) || []).filter(t =>
+        t && t.tokenMint && t.status === "MIGRATED" && String(t.tokenMint).toLowerCase().endsWith("bags"));
+      for (const t of migrated) {
+        if (seen.has(t.tokenMint) || tokens.length >= 15) continue;
+        seen.add(t.tokenMint);
+        let snap = null; try { snap = await getBagsTokenSnapshot(t.tokenMint); } catch (_) {}
+        tokens.push({
+          tokenMint: t.tokenMint, name: t.name, symbol: t.symbol,
+          image: t.image || snap?.image || null, twitter: t.twitter || null,
+          priceUsd: snap?.priceUsd ?? null, marketCap: snap?.marketCap ?? null,
+          change24h: snap?.change24h ?? null, volume24h: snap?.volume24h ?? null,
+          createdAt: snap?.createdAt || null,
+          source: "bags-feed",
+        });
+      }
+    } catch (_) {}
+  }
   tokens.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)); // most recently graduated first
   const top = tokens.slice(0, 15);
   GRAD_BOARD_CACHE.list = top; GRAD_BOARD_CACHE.ts = now;
