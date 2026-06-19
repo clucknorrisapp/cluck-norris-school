@@ -1,14 +1,20 @@
-/* Cluck Norris — global floating nav: a Home link + an "Ask Cluck" link, pinned
-   top-center on every page that includes this script. One file controls both.
+/* Cluck Norris — global floating nav: Home + (All Tools) + Ask Cluck, pinned
+   top-center on every page that includes this script. One file controls all three.
    - Home hides when you're already at "/".
+   - All Tools shows only on a tool page (so tools aren't dead-ends), hidden on /tools.
    - Ask Cluck hides on the Ask Cluck page itself (/ask-cluck, /crypto-school).
    Self-contained inline styles so it works even without theme.css.
    Add to a page with: <script defer src="/cluck-nav.js"></script> */
 (function () {
   var p = (location.pathname || "").replace(/\/+$/, "");
-  var showHome = (p !== "" && p !== "/");                         // not already home
-  var showAsk  = (p !== "/ask-cluck" && p !== "/crypto-school");  // not already there
-  if (!showHome && !showAsk) return;
+  // pages that belong to the Tools hub — get an "All Tools" back-link
+  var TOOL_PAGES = ["/wallet-xray","/autopsy","/order-book","/trace","/snapshot","/holders",
+    "/token-vitals","/lp-scanner","/wallet-checkup","/security-coop","/hatchery","/airdrop",
+    "/buyspecial","/rose","/liquidity","/liquidity-engine","/premium","/pool-monitor"];
+  var showHome  = (p !== "" && p !== "/");
+  var showTools = (TOOL_PAGES.indexOf(p) !== -1);
+  var showAsk   = (p !== "/ask-cluck" && p !== "/crypto-school");
+  if (!showHome && !showTools && !showAsk) return;
 
   function pill(href, html, primary) {
     var a = document.createElement("a");
@@ -33,9 +39,11 @@
     var bar = document.createElement("div");
     bar.id = "cluck-nav-bar";
     bar.style.cssText = ["position:fixed", "top:12px", "left:50%", "transform:translateX(-50%)",
-      "z-index:2147483000", "display:flex", "gap:8px", "align-items:center"].join(";");
-    if (showHome) bar.appendChild(pill("/", '<span style="font-size:14px;line-height:1">🏠</span><span>Home</span>', false));
-    if (showAsk)  bar.appendChild(pill("/ask-cluck", '<span style="font-size:14px;line-height:1">🔥</span><span>Ask Cluck</span>', true));
+      "z-index:2147483000", "display:flex", "gap:8px", "align-items:center", "flex-wrap:wrap",
+      "justify-content:center", "max-width:96vw"].join(";");
+    if (showHome)  bar.appendChild(pill("/", '<span style="font-size:14px;line-height:1">🏠</span><span>Home</span>', false));
+    if (showTools) bar.appendChild(pill("/tools", '<span style="font-size:14px;line-height:1">🛠️</span><span>All Tools</span>', false));
+    if (showAsk)   bar.appendChild(pill("/ask-cluck", '<span style="font-size:14px;line-height:1">🔥</span><span>Ask Cluck</span>', true));
     document.body.appendChild(bar);
   }
 

@@ -1771,6 +1771,7 @@ function Landing({onStart,onChallenge,onIncubator,onStartHere,completed}){
         {completed.length===0?"🏫 Start the 12-Class Course":"📚 Continue Class"}
       </button>
       <p style={{marginTop:12,fontSize:12,color:"#6B7280",fontFamily:"'Anton',sans-serif",letterSpacing:2}}>12 CLASSES • 72 EXAMS • NO EXTRA CREDIT</p>
+      <a href="/classroom" style={{display:"inline-block",marginTop:2,fontFamily:"'Anton',sans-serif",fontSize:12,letterSpacing:1,color:"#FF7A18",textDecoration:"none"}}>🎓 Prefer a live teacher? Take it in the Classroom →</a>
 
       {/* YOUR PROGRESS — transcript (always shown so newcomers see where they're headed) */}
       <div style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"14px 16px",marginTop:18,marginBottom:12,textAlign:"left"}}>
