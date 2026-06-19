@@ -808,7 +808,7 @@ function UltimateChallenge({ onBack }) {
               <div style={{fontSize:32,marginBottom:6}}>🏆</div>
               <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,color:"#FFB627",letterSpacing:2,marginBottom:4}}>YOU EARNED YOUR SPOT</div>
               <p style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#9CA3AF",margin:0,lineHeight:1.6}}>
-                Drop your Solana wallet address to be considered for future CLKN airdrops and exclusive giveaways. Only passers qualify.
+                Drop your Solana wallet address to claim your graduation diploma (NFT) and get entered for CLKN airdrops. Only passers qualify.
               </p>
             </div>
             {!claimed ? (
