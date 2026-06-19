@@ -3149,8 +3149,11 @@ app.get("/api/bags-graduated", async (req, res) => {
 // Every few minutes: scan the Bags near-bonding list, alert once when a token
 // crosses 85% to graduation, and when a watched token leaves the near-grad list
 // having actually graduated (off the curve = has a DEX pool), record it to our
-// 48h tracker and post a "graduated!" alert. Both alerts stay in the chat.
+// 48h tracker and post a "graduated!" alert. The near-bonding alert still posts to
+// the chat; the GRADUATED alert is Telegram-OFF / X-ON (owner's call 2026-06-19 —
+// keep tagging the graduated project's community on X, but stop the TG announcement).
 const GRAD_WATCH_ENABLED = true;
+const GRAD_TG_ANNOUNCE = false;   // graduated → Telegram announcement OFF (X post stays on). Flip true to restore.
 const NEAR_BONDING_ALERT_PCT = 70;
 // Extract a valid @handle from a token's twitter field (URL or raw handle) so
 // project-specific X posts can tag the project. Validates against Twitter's
@@ -3185,7 +3188,7 @@ async function notifyNearBonding(t) {
 }
 async function notifyGraduated(rec) {
   const token = process.env.TELEGRAM_BOT_TOKEN, chatId = process.env.TELEGRAM_CHAT_ID;
-  if (token && chatId) {
+  if (GRAD_TG_ANNOUNCE && token && chatId) {
     const text = `🎓 <b>GRADUATED!</b>\n\n🎒 <b>${tgEsc(rec.name || "?")}</b> (${tgEsc(rec.symbol || "?")}) just bonded off the Bags curve onto its Meteora pool.\n\n📊 Chart → https://dexscreener.com/solana/${rec.mint}`;
     try {
       await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
