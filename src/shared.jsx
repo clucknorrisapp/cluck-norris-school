@@ -367,7 +367,7 @@ export function AskCluck({ context, compact }) {
       const res = await fetch("/api/ask-cluck", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, context, lang: (function(){ try { var s = localStorage.getItem("clkn_lang"); if (s) return s; } catch(e){} return (navigator.language||"").toLowerCase().slice(0,2)==="zh"?"zh":"en"; })() })
+        body: JSON.stringify({ question, context, lang: (function(){ try { var s = localStorage.getItem("clkn_lang"); if (s) return s; } catch(e){} var _l=(navigator.language||"").toLowerCase().slice(0,2); return _l==="zh"?"zh":_l==="es"?"es":"en"; })() })
       });
       const data = await res.json();
       if (data.success) {

@@ -5,43 +5,74 @@
    English is a no-op. A floating 中文/EN toggle is injected on every page.
    Loaded globally via cluck-nav.js. */
 (function () {
-  var SUPPORTED = { zh: "中文", en: "EN" };
+  // Add a language here + drop a /i18n/<code>.json dictionary to support it.
+  var LANGS = [
+    { code: "en", label: "English",  short: "EN",   html: "en" },
+    { code: "zh", label: "中文",      short: "中文", html: "zh-CN" },
+    { code: "es", label: "Español",  short: "ES",   html: "es" }
+  ];
+  var SUPPORTED = {}; LANGS.forEach(function (L) { SUPPORTED[L.code] = L; });
   function detect() {
     try {
       var saved = localStorage.getItem("clkn_lang");
       if (saved && SUPPORTED[saved]) return saved;
       var navs = navigator.languages || [navigator.language || "en"];
       for (var i = 0; i < navs.length; i++) {
-        if (String(navs[i] || "").toLowerCase().indexOf("zh") === 0) return "zh";
+        var l = String(navs[i] || "").toLowerCase();
+        if (l.indexOf("zh") === 0) return "zh";
+        if (l.indexOf("es") === 0) return "es";
       }
     } catch (_) {}
     return "en";
   }
   var lang = detect();
-  try { document.documentElement.setAttribute("lang", lang === "zh" ? "zh-CN" : "en"); } catch (_) {}
+  // Persist the resolved language so the AI callers (which read clkn_lang) stay in
+  // sync with the UI even when it was auto-detected and never explicitly picked.
+  try { if (!localStorage.getItem("clkn_lang")) localStorage.setItem("clkn_lang", lang); } catch (_) {}
+  try { document.documentElement.setAttribute("lang", (SUPPORTED[lang] || SUPPORTED.en).html); } catch (_) {}
 
+  function shortOf(c) { return (SUPPORTED[c] || SUPPORTED.en).short; }
+  // Floating language picker (bottom-right): a button showing the current language
+  // that opens a small menu of all supported languages. Marked data-i18n-skip so
+  // its own labels are never translated.
   function injectToggle() {
     if (document.getElementById("clkn-lang-toggle") || !document.body) return;
-    var btn = document.createElement("button");
-    btn.id = "clkn-lang-toggle";
-    btn.type = "button";
-    btn.setAttribute("data-i18n-skip", "1");           // never translate the toggle itself
-    btn.setAttribute("translate", "no");
-    btn.textContent = lang === "zh" ? "EN" : "中文";
-    btn.title = lang === "zh" ? "Switch to English" : "切换到中文";
-    btn.style.cssText = [
-      "position:fixed", "bottom:calc(14px + env(safe-area-inset-bottom,0px))", "right:12px",
-      "z-index:2147483600", "font-family:'Chakra Petch',system-ui,sans-serif",
-      "font-size:13px", "font-weight:700", "letter-spacing:.5px", "color:#FFD9A0",
-      "background:rgba(26,15,8,.96)", "border:1px solid rgba(255,122,24,.55)",
-      "border-radius:999px", "padding:8px 13px", "cursor:pointer",
-      "box-shadow:0 4px 16px rgba(0,0,0,.5)", "-webkit-tap-highlight-color:transparent"
-    ].join(";");
-    btn.addEventListener("click", function () {
-      try { localStorage.setItem("clkn_lang", lang === "zh" ? "en" : "zh"); } catch (_) {}
-      location.reload();
+    var wrap = document.createElement("div");
+    wrap.id = "clkn-lang-toggle";
+    wrap.setAttribute("data-i18n-skip", "1");
+    wrap.setAttribute("translate", "no");
+    wrap.style.cssText = ["position:fixed", "bottom:calc(14px + env(safe-area-inset-bottom,0px))", "right:12px",
+      "z-index:2147483600", "font-family:'Chakra Petch',system-ui,sans-serif"].join(";");
+    var menu = document.createElement("div");
+    menu.style.cssText = ["position:absolute", "bottom:46px", "right:0", "display:none", "flex-direction:column",
+      "gap:3px", "background:rgba(20,11,6,.98)", "border:1px solid rgba(255,122,24,.45)", "border-radius:12px",
+      "padding:6px", "box-shadow:0 8px 24px rgba(0,0,0,.55)", "min-width:124px"].join(";");
+    LANGS.forEach(function (L) {
+      var it = document.createElement("button");
+      it.type = "button";
+      it.textContent = L.label + (L.code === lang ? "  ✓" : "");
+      it.style.cssText = ["text-align:left", "font:inherit", "font-size:13px", "font-weight:700",
+        "color:" + (L.code === lang ? "#FFB627" : "#FFD9A0"), "background:" + (L.code === lang ? "rgba(255,122,24,.14)" : "transparent"),
+        "border:0", "border-radius:8px", "padding:8px 12px", "cursor:pointer", "white-space:nowrap"].join(";");
+      it.addEventListener("click", function (e) {
+        e.stopPropagation();
+        if (L.code === lang) { menu.style.display = "none"; return; }
+        try { localStorage.setItem("clkn_lang", L.code); } catch (_) {}
+        location.reload();
+      });
+      menu.appendChild(it);
     });
-    document.body.appendChild(btn);
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = "🌐 " + shortOf(lang);
+    btn.title = "Language · 语言 · Idioma";
+    btn.style.cssText = ["font:inherit", "font-size:13px", "font-weight:700", "letter-spacing:.5px", "color:#FFD9A0",
+      "background:rgba(26,15,8,.96)", "border:1px solid rgba(255,122,24,.55)", "border-radius:999px",
+      "padding:8px 13px", "cursor:pointer", "box-shadow:0 4px 16px rgba(0,0,0,.5)", "-webkit-tap-highlight-color:transparent"].join(";");
+    btn.addEventListener("click", function (e) { e.stopPropagation(); menu.style.display = (menu.style.display === "none") ? "flex" : "none"; });
+    document.addEventListener("click", function () { menu.style.display = "none"; });
+    wrap.appendChild(menu); wrap.appendChild(btn);
+    document.body.appendChild(wrap);
   }
   function onReady(fn) {
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fn);
