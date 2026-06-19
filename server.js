@@ -4356,6 +4356,18 @@ app.get("/api/buy-replay", async (req, res) => {
   }
 });
 
+// Reconciliation backstop — preview/run the sweep that recovers buys/sells the live
+// poller dropped. DRY by default (lists what it WOULD recover, posts nothing); add
+// &run=1 to actually recover+post. Same sweep the 12-min scheduler runs.
+app.get("/api/reconcile-test", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  try {
+    const r = await reconcileMissedTrades({ dry: req.query.run !== "1" });
+    return res.status(200).json({ success: true, ran: req.query.run === "1", ...r });
+  } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
+});
+
 // Telegram webhook diagnostics (gated). getWebhookInfo + getMe — shows whether the
 // webhook URL is registered, how many updates are queued, and Telegram's last delivery
 // error (why commands like /liquidity might go unanswered). Add &reset=1 to re-register
@@ -9298,6 +9310,13 @@ async function notifyClknSell(trade, tx, pool, usdValue, HELIUS_KEY) {
 // the most recent buy/sell it had already posted (the "same reinvestment every update"
 // bug). Loaded from the volume on boot, rewritten as new sigs are recorded.
 const recentlyNotifiedSigs = new Set(kv.get("buyNotifiedSigs", []));
+// Durable, TIME-pruned record of every sig the poller has finished with (posted OR
+// deliberately skipped). The count-capped set above can evict under heavy arb churn;
+// this map is pruned by AGE (2h) instead, so it always covers the reconcile sweep's
+// lookback window — guaranteeing the backstop can never re-post something we already
+// handled. Keyed sig -> last-touched ms.
+const SIG_RETAIN_MS = 2 * 60 * 60 * 1000;
+let handledSigAt = new Map(Object.entries(kv.get("buyHandledSigAt", {})));
 function rememberSig(sig) {
   recentlyNotifiedSigs.add(sig);
   // Keep set bounded — drop oldest if it grows past 1000 entries
@@ -9306,6 +9325,18 @@ function rememberSig(sig) {
     recentlyNotifiedSigs.delete(first);
   }
   try { kv.set("buyNotifiedSigs", [...recentlyNotifiedSigs]); } catch (_) {}
+  // Stamp + prune the durable time map.
+  const now = Date.now();
+  handledSigAt.set(sig, now);
+  if (handledSigAt.size > 200) {
+    for (const [s, t] of handledSigAt) if (now - t > SIG_RETAIN_MS) handledSigAt.delete(s);
+  }
+  try { kv.set("buyHandledSigAt", Object.fromEntries(handledSigAt)); } catch (_) {}
+}
+// True if a sig was already handled (posted or skipped) — checks both the recent set
+// and the durable time map, so a reconcile sweep won't double-post evicted entries.
+function sigAlreadyHandled(sig) {
+  return recentlyNotifiedSigs.has(sig) || handledSigAt.has(sig);
 }
 
 // Does an enhanced-API tx actually carry the token-balance deltas detectClknTrade
@@ -9554,6 +9585,71 @@ async function pollSinglePool(pool, HELIUS_KEY) {
   }
 }
 
+// Reconciliation backstop. The 30s poller is the source of truth; this slower sweep
+// is defense-in-depth that catches a buy/sell it dropped for ANY reason (a transient
+// cycle error, a restart gap, an RPC quirk) and posts it so nothing is silently lost.
+// Safe against double-posting: it only considers sigs in a bounded window that are
+// SETTLED (older than reconcileSettleSec, so the live poller has had its shot) and
+// NOT already handled (sigAlreadyHandled checks the durable time-pruned map, which
+// always covers this window). Uses the SAME detection + suppression rules + raw
+// (authoritative) tx data as the poller. Returns a summary for the test endpoint.
+async function reconcileMissedTrades({ dry = false } = {}) {
+  const HELIUS_KEY = process.env.HELIUS_API_KEY;
+  if (!HELIUS_KEY || !process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHAT_ID) {
+    return { skipped: "not configured" };
+  }
+  const lookbackMin = Math.min(180, Math.max(10, Number(kv.get("reconcileLookbackMin", 45)) || 45));
+  const settleSec = Math.min(1800, Math.max(60, Number(kv.get("reconcileSettleSec", 240)) || 240));
+  const now = Date.now(), minTs = now - lookbackMin * 60000, maxTs = now - settleSec * 1000;
+  const rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
+  let scanned = 0, posted = 0; const found = [];
+  try {
+    await Promise.all([getSolUsd(), getBtcUsd(), getJupUsd()]);
+    const pools = await getClknPools();
+    for (const pool of pools) {
+      let sigs = [];
+      try {
+        const r = await fetch(rpcUrl, { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jsonrpc: "2.0", id: "reconcile", method: "getSignaturesForAddress", params: [pool.address, { limit: 100 }] }) });
+        sigs = (await r.json())?.result || [];
+      } catch (_) { continue; }
+      for (const s of sigs) {
+        if (s.err) continue;
+        const bt = (s.blockTime || 0) * 1000;
+        if (!bt || bt < minTs) break;       // list is newest→oldest; past the window → done with this pool
+        if (bt > maxTs) continue;           // too fresh — leave it to the live poller
+        if (sigAlreadyHandled(s.signature)) continue;
+        scanned++;
+        const tx = await fetchRawTradeTx(s.signature, HELIUS_KEY);
+        if (!hasTokenBalanceData(tx)) continue;       // not indexed yet — a later sweep will catch it
+        const trade = detectClknTrade(tx);
+        if (!trade) { continue; }                     // not a trade (e.g. an LP add/remove) — don't mark; harmless to re-see
+        // Same rules as the poller.
+        if (trade.trader && trade.action === "sell" && mmOperatorWallets().includes(trade.trader)) { rememberSig(s.signature); continue; }
+        const usd = quoteUsdValue(trade);
+        if (trade.crossPoolArb && kv.get("suppressArbAlerts", true)) { rememberSig(s.signature); continue; }
+        const floor = trade.action === "sell" ? MIN_SELL_USD
+                    : (trade.action !== "sell" && isReinvestWallet(trade.trader)) ? MIN_REINVEST_USD
+                    : MIN_BUY_USD;
+        if (usd == null || usd < floor) { rememberSig(s.signature); continue; }
+        // A postable trade the poller never announced → recover it.
+        found.push({ sig: s.signature, action: trade.action, usd: Number(usd.toFixed(2)), ageMin: Math.round((now - bt) / 60000) });
+        if (!dry) {
+          console.warn(`[reconcile] recovering missed ${trade.action} · $${usd.toFixed(2)} · sig ${s.signature.slice(0, 8)} (${Math.round((now - bt) / 60000)}m old)`);
+          if (trade.action === "sell") await notifyClknSell(trade, tx, pool, usd, HELIUS_KEY);
+          else                         await notifyClknBuy(trade, tx, pool, usd, HELIUS_KEY);
+          rememberSig(s.signature);
+          recap.record({ action: trade.action, usd, trader: trade.trader, sig: s.signature });
+          posted++;
+        }
+      }
+      await new Promise(r => setTimeout(r, 200));
+    }
+  } catch (e) { console.warn("[reconcile] sweep error:", e.message); return { error: e.message, scanned, posted }; }
+  if (posted) console.log(`[reconcile] swept ${scanned} candidate(s), recovered ${posted} missed trade(s)`);
+  return { windowMin: lookbackMin, settleSec, scanned, posted, found };
+}
+
 app.listen(PORT, () => {
   console.log(`[CLUCK] Cluck Norris server running on port ${PORT}`);
   // Boot env audit — one line saying exactly which expected vars are absent, so
@@ -9630,6 +9726,11 @@ app.listen(PORT, () => {
     }
     setInterval(toolSpotlightTick, 10 * 60 * 1000); // check every 10 min; fires once/day past the hour
     setTimeout(toolSpotlightTick, 125000);
+    // Reconciliation backstop — every ~12 min, recover any buy/sell the 30s poller
+    // dropped (transient error, restart gap, RPC quirk). Settled + durably-deduped,
+    // so it never double-posts. First run delayed so the poller initializes first.
+    setInterval(() => { reconcileMissedTrades().catch(e => console.warn("[reconcile] tick:", e.message)); }, 12 * 60 * 1000);
+    setTimeout(() => { reconcileMissedTrades().catch(() => {}); }, 6 * 60 * 1000);
     // Toolkit reminder — checked each minute, fires at fixed 4-hour marks.
     setInterval(toolsReminderTick, 60 * 1000);
     // Bags Launch Radar — checked each minute, fires at fixed 2-hour marks.
