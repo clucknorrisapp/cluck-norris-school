@@ -391,9 +391,13 @@ function lfPaint(){
   el.innerHTML=list.map(t=>{
     const p=lfPrices[t.tokenMint]||{}; const ts=lfAges[t.tokenMint]; const isNew=ts&&(Date.now()/1000-ts)<7200;
     const onCurve=p.onBondingCurve, cp=p.curvePct, mc=p.marketCap||0; let lab,col;
+    // A token still on the bonding curve has NO reliable market cap (GeckoTerminal's
+    // FDV is wrong pre-graduation), so never label/show MC for it — use curve % only.
+    const isCurve=(t.status==='PRE_GRAD')||onCurve===true;
     if(t.status==='MIGRATED'||onCurve===false){ lab='🎓 GRADUATED'; col='#10B981'; }
     else if(t.status==='MIGRATING'){ lab='⏳ MIGRATING'; col='#F59E0B'; }
-    else if(onCurve===true&&cp!=null){ if(cp>=80){ lab='⚡ '+cp.toFixed(0)+'% TO GRAD'; col='#D97706'; } else { lab='🌱 ON CURVE · '+cp.toFixed(0)+'%'; col='#F97316'; } }
+    else if(cp!=null){ if(cp>=80){ lab='⚡ '+cp.toFixed(0)+'% TO GRAD'; col='#D97706'; } else { lab='🌱 ON CURVE · '+cp.toFixed(0)+'%'; col='#F97316'; } }
+    else if(isCurve){ lab='🌱 ON CURVE'; col='#F97316'; }
     else if(mc>=30000){ lab='⚡ NEAR GRAD'; col='#D97706'; }
     else if(mc>=5000){ lab='🔥 GAINING'; col='#F97316'; }
     else { lab='📈 EARLY'; col='#6B7280'; }
@@ -401,7 +405,7 @@ function lfPaint(){
     // near graduation or graduated. Brand-new bonding-curve tokens have too
     // little data, so the research chips are hidden for them.
     const graduated = (t.status==='MIGRATED'||onCurve===false);
-    const nearGrad = (t.status==='PRE_GRAD')||(onCurve===true&&cp!=null&&cp>=80)||(cp==null&&mc>=30000);
+    const nearGrad = (t.status==='PRE_GRAD')||(onCurve===true&&cp!=null&&cp>=80)||(!isCurve&&cp==null&&mc>=30000);
     const showResearch = graduated||nearGrad;
     const handle=lfHandle(p.twitter||t.twitter); const img=p.image||t.image; const vol=lfAbbrev(p.volume24h); const ag=lfAge(ts);
     const bar=(onCurve===true&&cp!=null)?'<div class="lf-bar"><div style="width:'+Math.min(100,Math.max(2,cp))+'%;background:'+(cp>=80?'linear-gradient(90deg,#D97706,#10B981)':'linear-gradient(90deg,#F97316,#D97706)')+'"></div></div>':'';
@@ -415,8 +419,8 @@ function lfPaint(){
       +'<div class="lf-name">'+(isNew?'<span class="lf-new">🆕 NEW</span>':'')+esc(t.name||'?')+' <span class="sym">('+esc(t.symbol||'?')+')</span></div>'
       +'<div class="lf-metrics"><span style="font-weight:700;color:'+col+'">'+lab+'</span>'
       +((onCurve===true&&cp!=null)?'<span style="color:#34D399;font-weight:700">~'+(GRAD_SOL*(1-cp/100)).toFixed(1)+' SOL to grad</span>':'')
-      +(p.priceUsd?'<span class="price">$'+parseFloat(p.priceUsd).toFixed(6)+'</span>':'')
-      +(p.marketCap?'<span class="mc">MC $'+parseInt(p.marketCap).toLocaleString()+'</span>':'')
+      +((!isCurve&&p.priceUsd)?'<span class="price">$'+parseFloat(p.priceUsd).toFixed(6)+'</span>':'')
+      +((!isCurve&&p.marketCap)?'<span class="mc">MC $'+parseInt(p.marketCap).toLocaleString()+'</span>':'')
       +(p.change24h!=null?'<span style="font-weight:700;color:'+(p.change24h>0?'#10B981':'#EF4444')+'">'+(p.change24h>0?'+':'')+parseFloat(p.change24h).toFixed(1)+'%</span>':'')
       +(vol?'<span style="color:#94A3B8">V '+vol+'</span>':'')
       +(ag?'<span style="color:var(--subtext)">🕒 '+ag+'</span>':'')+'</div>'
