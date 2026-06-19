@@ -241,7 +241,12 @@ Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.
 - `/api/tg-test?text=…[&loud=1]` — post a custom one-off message to the Telegram chat
   (silent by default; `&loud=1` pings). Use this to send a "we're testing" notice.
 - `/api/bags-radar-test`, `/api/market-check-test`, `/api/recap-test`, `/api/edu-post-test`,
-  `/api/x-post-test` — dry-run the scheduled posts; add `&post=1` to actually fire.
+  `/api/x-post-test`, `/api/outreach-test`, `/api/tool-spotlight-test` — dry-run the scheduled
+  posts; add `&post=1` to actually fire. `tool-spotlight` = the DAILY tool feature on X +
+  (silent) Telegram, rotating `TOOL_SPOTLIGHTS` (kv `toolSpotPos`/`toolSpotDate`, hour kv
+  `toolSpotHour` default 17 UTC); X posts tag @BagsApp + @JupiterExchange.
+- `/api/buy-replay?sig=…[&run=1]` — manually (re)fire a buy/sell alert the live poller
+  dropped; dry-run unless `&run=1`; remembers the sig so the poller won't double-post.
 - `/api/grad-watch-status[&run=1]` — graduation watchlist + the 48h graduated record.
 - `/api/stats` — traffic dashboard data. `/api/autopsy-premium` — gated deep forensics.
 - `/api/claims` — the full airdrop list (wallets + balances) from the Google Sheet.
