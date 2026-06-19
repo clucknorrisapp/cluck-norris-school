@@ -1773,70 +1773,70 @@ function Landing({onStart,onChallenge,onIncubator,onStartHere,completed}){
       {/* School header (slim — the big brand hero lives on the homepage now) */}
       <div style={{position:"relative",display:"inline-block",marginTop:6,marginBottom:8}}>
         <div style={{position:"absolute",inset:-14,background:"radial-gradient(circle,rgba(255,122,24,.22) 0%,transparent 70%)",borderRadius:"50%"}}/>
-        <img src={LOGO_B64} alt="Cluck Norris" style={{width:116,height:116,objectFit:"cover",borderRadius:"50%",border:"3px solid #FF7A18",position:"relative",zIndex:1,filter:"drop-shadow(0 0 16px rgba(255,122,24,0.55))"}}/>
+        <img src={LOGO_B64} alt="Cluck Norris" style={{width:134,height:134,objectFit:"cover",borderRadius:"50%",border:"3px solid #FF7A18",position:"relative",zIndex:1,filter:"drop-shadow(0 0 16px rgba(255,122,24,0.55))"}}/>
       </div>
-      <div style={{fontFamily:"'Anton',sans-serif",fontSize:12,letterSpacing:4,color:"#FF7A18",marginBottom:6}}>SCHOOL OF CRYPTO HARD KNOCKS</div>
-      <h1 style={{fontFamily:"'Anton',sans-serif",fontSize:34,margin:"0 0 8px",color:"#FFB627",textTransform:"uppercase",letterSpacing:1,lineHeight:1}}>The School</h1>
-      <p style={{color:"#9CA3AF",fontSize:14,lineHeight:1.6,margin:"0 auto 20px",maxWidth:420,fontStyle:"italic"}}>"No participation trophies. No hand-holding. Just hard knocks."</p>
+      <div style={{fontFamily:"'Anton',sans-serif",fontSize:13.5,letterSpacing:4,color:"#FF7A18",marginBottom:6}}>SCHOOL OF CRYPTO HARD KNOCKS</div>
+      <h1 style={{fontFamily:"'Anton',sans-serif",fontSize:42,margin:"0 0 8px",color:"#FFB627",textTransform:"uppercase",letterSpacing:1,lineHeight:1}}>The School</h1>
+      <p style={{color:"#9CA3AF",fontSize:15.5,lineHeight:1.6,margin:"0 auto 20px",maxWidth:420,fontStyle:"italic"}}>"No participation trophies. No hand-holding. Just hard knocks."</p>
 
       {/* Primary CTA — the 12-class course */}
       <button onClick={onStart} style={{background:"linear-gradient(135deg,#FF7A18,#EF4444)",border:"none",borderRadius:10,padding:"14px 40px",fontFamily:"'Anton',sans-serif",fontSize:16,fontWeight:700,color:"#fff",letterSpacing:2,textTransform:"uppercase",cursor:"pointer",boxShadow:"0 0 28px rgba(255,122,24,0.45)"}}>
         {completed.length===0?"🏫 Start the 12-Class Course":"📚 Continue Class"}
       </button>
-      <p style={{marginTop:12,fontSize:12,color:"#6B7280",fontFamily:"'Anton',sans-serif",letterSpacing:2}}>12 CLASSES • 72 EXAMS • NO EXTRA CREDIT</p>
-      <a href="/classroom" style={{display:"inline-block",marginTop:2,fontFamily:"'Anton',sans-serif",fontSize:12,letterSpacing:1,color:"#FF7A18",textDecoration:"none"}}>🎓 Prefer a live teacher? Take it in the Classroom →</a>
+      <p style={{marginTop:12,fontSize:13.5,color:"#6B7280",fontFamily:"'Anton',sans-serif",letterSpacing:2}}>12 CLASSES • 72 EXAMS • NO EXTRA CREDIT</p>
+      <a href="/classroom" style={{display:"inline-block",marginTop:2,fontFamily:"'Anton',sans-serif",fontSize:13.5,letterSpacing:1,color:"#FF7A18",textDecoration:"none"}}>🎓 Prefer a live teacher? Take it in the Classroom →</a>
 
       {/* YOUR PROGRESS — transcript (always shown so newcomers see where they're headed) */}
       <div style={{background:"rgba(255,122,24,0.06)",border:"1px solid rgba(255,122,24,0.18)",borderRadius:10,padding:"14px 16px",marginTop:18,marginBottom:12,textAlign:"left"}}>
-        <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#9CA3AF",fontFamily:"'Anton',sans-serif",letterSpacing:1,marginBottom:6}}><span>📋 YOUR TRANSCRIPT</span><span>{completed.length}/{LESSONS.length} CLASSES PASSED</span></div>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:13.5,color:"#9CA3AF",fontFamily:"'Anton',sans-serif",letterSpacing:1,marginBottom:6}}><span>📋 YOUR TRANSCRIPT</span><span>{completed.length}/{LESSONS.length} CLASSES PASSED</span></div>
         <div style={{height:6,background:"rgba(255,122,24,0.18)",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:`${pct}%`,background:"linear-gradient(90deg,#FF7A18,#FFB627)",borderRadius:3}}/></div>
         <div style={{marginTop:10,display:"flex",gap:8,justifyContent:"flex-start",flexWrap:"wrap"}}>
-          {LESSONS.map(l=><span key={l.id} style={{fontSize:10,color:completed.includes(l.id)?"#FFB627":"#4B5563",fontFamily:"'Anton',sans-serif"}}>{completed.includes(l.id)?"✓":"○"} {l.title.split(" ")[0]}</span>)}
+          {LESSONS.map(l=><span key={l.id} style={{fontSize:12.5,color:completed.includes(l.id)?"#FFB627":"#4B5563",fontFamily:"'Anton',sans-serif"}}>{completed.includes(l.id)?"✓":"○"} {l.title.split(" ")[0]}</span>)}
         </div>
       </div>
       {/* Rank */}
       <div style={{background:"rgba(255,122,24,0.08)",border:"1px solid rgba(255,122,24,0.3)",borderRadius:10,padding:"12px 16px",marginBottom:12}}>
-        <div style={{fontFamily:"'Anton',sans-serif",fontSize:10,letterSpacing:3,color:"#FF7A18",marginBottom:8}}>CURRENT RANK</div>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:3,color:"#FF7A18",marginBottom:8}}>CURRENT RANK</div>
         {allDone ? (
           <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexWrap:"wrap"}}>
             <Belt belt="EMERITUS"/>
-            <span style={{fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,color:"#FFB627",letterSpacing:1}}>🏆 SCHOOL COMPLETE</span>
+            <span style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#FFB627",letterSpacing:1}}>🏆 SCHOOL COMPLETE</span>
           </div>
         ) : currentBelt ? (
           <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexWrap:"wrap"}}>
             <Belt belt={currentBelt}/>
-            <span style={{fontFamily:"'Anton',sans-serif",fontSize:12,color:"#9CA3AF",letterSpacing:1}}>→ 1 lesson to</span>
+            <span style={{fontFamily:"'Anton',sans-serif",fontSize:13.5,color:"#9CA3AF",letterSpacing:1}}>→ 1 lesson to</span>
             <Belt belt={nextLesson.belt} small/>
           </div>
         ) : (
           <div style={{textAlign:"center"}}>
-            <div style={{fontFamily:"'Anton',sans-serif",fontSize:12,fontWeight:700,color:"#F9FAFB",letterSpacing:1,marginBottom:4}}>UNRANKED</div>
-            <div style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#9CA3AF",letterSpacing:1}}>Pass {nextLesson.title} to earn <Belt belt={nextLesson.belt} small/></div>
+            <div style={{fontFamily:"'Anton',sans-serif",fontSize:13.5,fontWeight:700,color:"#F9FAFB",letterSpacing:1,marginBottom:4}}>UNRANKED</div>
+            <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:"#9CA3AF",letterSpacing:1}}>Pass {nextLesson.title} to earn <Belt belt={nextLesson.belt} small/></div>
           </div>
         )}
       </div>
 
       {/* GRADUATE REWARD — CLKN airdrop + graduation NFT */}
       <div style={{background:"linear-gradient(135deg,rgba(255,182,39,0.12),rgba(255,122,24,0.06))",border:"1px solid rgba(255,182,39,0.45)",borderRadius:12,padding:"16px 18px",marginBottom:14,textAlign:"left",boxShadow:"0 0 22px rgba(255,182,39,0.12)"}}>
-        <div style={{fontFamily:"'Anton',sans-serif",fontSize:14,letterSpacing:1,color:"#FFB627",marginBottom:6}}>🎓 GRADUATE REWARD</div>
-        <p style={{fontFamily:"system-ui,sans-serif",fontSize:13,color:"#D1D5DB",lineHeight:1.6,margin:"0 0 11px"}}>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:15.5,letterSpacing:1,color:"#FFB627",marginBottom:6}}>🎓 GRADUATE REWARD</div>
+        <p style={{fontFamily:"system-ui,sans-serif",fontSize:15,color:"#D1D5DB",lineHeight:1.6,margin:"0 0 11px"}}>
           Every graduate is <b style={{color:"#FFB627"}}>entered to receive CLKN airdrops</b>. Finish all 12 classes to mint an <b style={{color:"#FFB627"}}>on-chain graduation NFT</b>, or pass the Ultimate Challenge for a <b style={{color:"#FFB627"}}>verified diploma</b> — then drop your Solana address to claim it and get entered for CLKN airdrops.
         </p>
-        <button onClick={onChallenge} style={{background:"linear-gradient(135deg,#FF7A18,#EF4444)",border:"none",borderRadius:9,padding:"11px 22px",fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,color:"#fff",letterSpacing:1.5,textTransform:"uppercase",cursor:"pointer"}}>🎓 Take the Ultimate Challenge</button>
+        <button onClick={onChallenge} style={{background:"linear-gradient(135deg,#FF7A18,#EF4444)",border:"none",borderRadius:9,padding:"11px 22px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:1.5,textTransform:"uppercase",cursor:"pointer"}}>🎓 Take the Ultimate Challenge</button>
       </div>
 
       {/* Incubator — beginners */}
       <button onClick={onIncubator} style={{width:"100%",boxSizing:"border-box",background:"rgba(255,122,24,0.08)",border:"2px solid rgba(255,122,24,0.4)",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#FF7A18",letterSpacing:2,cursor:"pointer",marginBottom:4}}>
         🥚 CLKN INCUBATOR — NEW? START HERE
       </button>
-      <p style={{marginTop:2,fontSize:11,color:"#4B5563",fontFamily:"'Anton',sans-serif",letterSpacing:1}}>6 BEGINNER LESSONS · WALLETS, TOKENS &amp; SAFETY</p>
+      <p style={{marginTop:2,fontSize:13,color:"#4B5563",fontFamily:"'Anton',sans-serif",letterSpacing:1}}>6 BEGINNER LESSONS · WALLETS, TOKENS &amp; SAFETY</p>
 
       {/* Transcript lookup */}
       <div style={{marginTop:22,paddingTop:18,borderTop:"1px solid rgba(255,122,24,0.09)"}}>
-        <div style={{fontFamily:"'Anton',sans-serif",fontSize:10,color:"#6B7280",letterSpacing:3,marginBottom:10}}>🎓 LOOK UP ANY TRANSCRIPT</div>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#6B7280",letterSpacing:3,marginBottom:10}}>🎓 LOOK UP ANY TRANSCRIPT</div>
         <div style={{maxWidth:440,margin:"0 auto",display:"flex",gap:6}}>
-          <input value={lookupAddr} onChange={e=>setLookupAddr(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter" && lookupAddr.trim().length>=32) window.open("/transcript/"+encodeURIComponent(lookupAddr.trim()),"_blank","noopener"); }} placeholder="🎓 Look up a transcript by wallet address…" style={{flex:1,background:"rgba(255,122,24,0.07)",border:"1px solid rgba(255,122,24,0.22)",borderRadius:8,padding:"9px 12px",color:"#F9FAFB",fontFamily:"monospace",fontSize:11,outline:"none"}}/>
-          <button onClick={()=>{ if(lookupAddr.trim().length>=32) window.open("/transcript/"+encodeURIComponent(lookupAddr.trim()),"_blank","noopener"); }} disabled={lookupAddr.trim().length<32} style={{background:lookupAddr.trim().length>=32?"rgba(16,185,129,0.18)":"rgba(255,122,24,0.07)",border:"1px solid rgba(16,185,129,0.4)",borderRadius:8,padding:"9px 14px",fontFamily:"'Anton',sans-serif",fontSize:11,fontWeight:700,color:lookupAddr.trim().length>=32?"#6EE7B7":"#4B5563",letterSpacing:1,cursor:lookupAddr.trim().length>=32?"pointer":"default"}}>VIEW</button>
+          <input value={lookupAddr} onChange={e=>setLookupAddr(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter" && lookupAddr.trim().length>=32) window.open("/transcript/"+encodeURIComponent(lookupAddr.trim()),"_blank","noopener"); }} placeholder="🎓 Look up a transcript by wallet address…" style={{flex:1,background:"rgba(255,122,24,0.07)",border:"1px solid rgba(255,122,24,0.22)",borderRadius:8,padding:"9px 12px",color:"#F9FAFB",fontFamily:"monospace",fontSize:13,outline:"none"}}/>
+          <button onClick={()=>{ if(lookupAddr.trim().length>=32) window.open("/transcript/"+encodeURIComponent(lookupAddr.trim()),"_blank","noopener"); }} disabled={lookupAddr.trim().length<32} style={{background:lookupAddr.trim().length>=32?"rgba(16,185,129,0.18)":"rgba(255,122,24,0.07)",border:"1px solid rgba(16,185,129,0.4)",borderRadius:8,padding:"9px 14px",fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,color:lookupAddr.trim().length>=32?"#6EE7B7":"#4B5563",letterSpacing:1,cursor:lookupAddr.trim().length>=32?"pointer":"default"}}>VIEW</button>
         </div>
       </div>
     </div>
