@@ -1707,6 +1707,81 @@ app.use("/api/whirlpool", whirlpoolMM.router);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// ── Machine-translation i18n layer ───────────────────────────────────────────
+// Translates ANY visible string to zh/es via Claude Haiku, cached durably on the
+// volume so each unique string is translated once (then served free + instant).
+// The curated phrase-map dictionaries take priority for quality on key UI; this
+// fills EVERYTHING else so a language mode is complete, not piecemeal. Public +
+// rate-limited; a daily global budget on NEW translations caps cost/abuse — once
+// the app's finite string set is warm, ongoing cost is ~zero (all cache hits).
+const I18N_MT_LANGNAMES = { zh: "Simplified Chinese (简体中文)", es: "neutral Latin-American Spanish" };
+const I18N_MT_DIR = process.env.DATA_DIR || "/data";
+const I18N_MT_DAILY_NEW_CAP = 8000;
+const i18nMt = {};            // lang -> { text: translation } (in-memory, lazy-loaded)
+const i18nMtDirty = {};
+let i18nMtNewToday = 0, i18nMtNewDay = "";
+function i18nMtStore(lang) {
+  if (i18nMt[lang]) return i18nMt[lang];
+  let m = {};
+  try { const p = join(I18N_MT_DIR, "i18n-mt-" + lang + ".json"); if (fs.existsSync(p)) m = JSON.parse(fs.readFileSync(p, "utf8")) || {}; } catch (_) {}
+  i18nMt[lang] = m; return m;
+}
+let i18nMtTimer = null;
+function i18nMtPersistSoon() {
+  if (i18nMtTimer) return;
+  i18nMtTimer = setTimeout(() => {
+    i18nMtTimer = null;
+    for (const lang of Object.keys(i18nMtDirty)) {
+      if (!i18nMtDirty[lang]) continue; i18nMtDirty[lang] = false;
+      try { fs.writeFileSync(join(I18N_MT_DIR, "i18n-mt-" + lang + ".json"), JSON.stringify(i18nMt[lang])); } catch (_) {}
+    }
+  }, 4000);
+}
+async function i18nMtBatch(lang, texts) {
+  const store = i18nMtStore(lang);
+  const need = [];
+  for (const t of texts) if (store[t] === undefined) need.push(t);
+  const today = new Date().toISOString().slice(0, 10);
+  if (today !== i18nMtNewDay) { i18nMtNewDay = today; i18nMtNewToday = 0; }
+  const KEY = process.env.ANTHROPIC_API_KEY;
+  if (need.length && KEY && i18nMtNewToday < I18N_MT_DAILY_NEW_CAP) {
+    const sys = "You are a professional translator for a Solana crypto-education web app. Translate each English string in the input JSON array into " + I18N_MT_LANGNAMES[lang] + ". Keep crypto tickers/symbols, protocol & product names, code, URLs, @handles, hashtags and wallet/contract addresses EXACTLY as-is — never translate CLKN, SOL, USDC, USDT, JUP, cbBTC, DeFi, AMM, LP, NFT, MEV, APR, APY, TVL, IL, DEX, CEX, Solana, Jupiter, Bags, Orca, Meteora, Raydium, Uniswap, Phantom, DexScreener, etc. Keep numbers/percentages as digits. Preserve any leading/trailing emoji. Natural and concise, same register as the source. Output ONLY a JSON array of the translated strings — identical length and order to the input, no commentary, no code fences.";
+    for (let i = 0; i < need.length && i18nMtNewToday < I18N_MT_DAILY_NEW_CAP; i += 40) {
+      const chunk = need.slice(i, i + 40);
+      try {
+        const r = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST", headers: { "Content-Type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" },
+          body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 4096, system: sys, messages: [{ role: "user", content: JSON.stringify(chunk) }] }),
+        });
+        const d = await r.json();
+        let raw = (d && d.content && d.content[0] && d.content[0].text) || "";
+        raw = raw.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+        let arr = null; try { arr = JSON.parse(raw); } catch (_) {}
+        if (Array.isArray(arr) && arr.length === chunk.length) {
+          for (let j = 0; j < chunk.length; j++) if (typeof arr[j] === "string" && arr[j]) { store[chunk[j]] = arr[j]; i18nMtNewToday++; }
+          i18nMtDirty[lang] = true;
+        }
+      } catch (_) {}
+    }
+    i18nMtPersistSoon();
+  }
+  const out = {};
+  for (const t of texts) if (store[t] !== undefined) out[t] = store[t];
+  return out;
+}
+app.post("/api/i18n/translate", rateLimit("i18nmt", { windowMs: 60000, max: 90 }), async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  const lang = String((req.body && req.body.lang) || "").toLowerCase().slice(0, 2);
+  if (!I18N_MT_LANGNAMES[lang]) return res.status(400).json({ error: "unsupported lang" });
+  let texts = req.body && req.body.texts;
+  if (!Array.isArray(texts)) return res.status(400).json({ error: "texts[] required" });
+  texts = texts.filter((t) => typeof t === "string" && t.length > 0 && t.length <= 800).slice(0, 60);
+  try { return res.status(200).json({ map: await i18nMtBatch(lang, texts) }); }
+  catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
+});
+
 const PORT = process.env.PORT || 3000;
 
 const JUPITER_LOCK_PROGRAM = "LocpQgucEQHbqNABEYvBvwoxCPsSbG91A1QaQhQQqjn";
