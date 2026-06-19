@@ -4304,13 +4304,13 @@ app.get("/api/tg-test", async (req, res) => {
 // remembers the sig so the poller won't double-post if it later catches up.
 app.get("/api/buy-replay", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  const KEY = process.env.PREMIUM_ACCESS_KEY;
-  const provided = req.query.key || req.headers["x-premium-key"];
-  if (!KEY || provided !== KEY) return res.status(404).json({ error: "not_found" });
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
   const HELIUS_KEY = process.env.HELIUS_API_KEY;
   if (!HELIUS_KEY) return res.status(200).json({ success: false, error: "HELIUS_API_KEY unset on this server" });
+  // Solana signatures are base58, ~87–88 chars. Validate shape so a junk param
+  // can't be forwarded to the RPC.
   const sig = String(req.query.sig || "").trim();
-  if (!sig || sig.length < 60) return res.status(400).json({ success: false, error: "missing/invalid ?sig" });
+  if (!/^[1-9A-HJ-NP-Za-km-z]{60,100}$/.test(sig)) return res.status(400).json({ success: false, error: "missing/invalid ?sig" });
   try {
     // Refresh quote prices so quoteUsdValue can value SOL/JUP/cbBTC legs.
     await Promise.all([getSolUsd(), getBtcUsd(), getJupUsd()]);
@@ -4322,11 +4322,14 @@ app.get("/api/buy-replay", async (req, res) => {
     if (!trade) return res.status(200).json({ success: false, error: "not a CLKN buy/sell (no opposite-direction pool+quote leg — e.g. a liquidity add/remove)", sig });
     const usd = quoteUsdValue(trade);
     const quoteMeta = QUOTE_TOKENS[trade.quote.mint] || { symbol: "?" };
-    // Pool object for route/label display. Caller may override &dex=&pool=; default to
-    // the canonical Meteora pool (where post-Orca-close fills route).
+    // Pool object for route/label display only (never rendered raw — prettyDex maps
+    // dexId via DEX_LABELS / title-cases it). Caller may override &dex=&pool=; both
+    // are validated so a key holder can't inject markup into the Telegram caption.
+    const dexId = String(req.query.dex || "meteora").toLowerCase();
+    const poolAddr = String(req.query.pool || CLKN_POOL_ADDRESS);
     const pool = {
-      address: String(req.query.pool || CLKN_POOL_ADDRESS),
-      dexId: String(req.query.dex || "meteora").toLowerCase(),
+      address: SOL_ADDR_RE.test(poolAddr) ? poolAddr : CLKN_POOL_ADDRESS,
+      dexId: /^[a-z]{2,16}$/.test(dexId) ? dexId : "meteora",
       labels: [],
     };
     const preview = {
@@ -9451,10 +9454,11 @@ async function pollSinglePool(pool, HELIUS_KEY) {
       if (recentlyNotifiedSigs.has(sig)) { if (!blocked) advanceTo = sig; continue; }
 
       let tx = enhancedById.get(sig);
+      let usedRaw = false;
       // Enhanced API returned nothing usable (missing, or not enriched yet) → raw RPC.
       if (!hasTokenBalanceData(tx)) {
         const rawTx = await fetchRawTradeTx(sig, HELIUS_KEY);
-        if (rawTx) tx = rawTx;
+        if (rawTx) { tx = rawTx; usedRaw = true; }
       }
 
       // Still no balance data anywhere → not indexed yet. Hold the pointer and retry,
@@ -9496,32 +9500,50 @@ async function pollSinglePool(pool, HELIUS_KEY) {
       const usd = quoteUsdValue(trade);
       const quoteMeta = QUOTE_TOKENS[trade.quote.mint] || { symbol: '?' };
       const usdStr = usd == null ? "no USD" : "$" + usd.toFixed(4);
-      const isReinvestBuy = trade.action !== "sell" && isReinvestWallet(trade.trader);
-      const floor = trade.action === "sell" ? MIN_SELL_USD
-                  : isReinvestBuy ? MIN_REINVEST_USD
-                  : MIN_BUY_USD;
       console.log(`[TELEGRAM] ${trade.action === "sell" ? "Sell" : "Buy"} detected (pool ${poolAddress.slice(0,6)}/${pool.dexId}, source ${tx.source || "?"}): ${trade.clknAmount.toFixed(0)} CLKN for ${trade.quote.amount} ${quoteMeta.symbol} (${usdStr}) by ${trade.trader ? trade.trader.slice(0,6) : "unknown"} · sig ${sig.slice(0,8)}`);
-      // Feed the rolling daily recap (all real swaps, not just alert-worthy ones
-      // — the recap is about total flow, so it records below the alert floor).
-      // Arb IS real volume, so it still counts here — it's only muted from alerts.
-      recap.record({ action: trade.action, usd, trader: trade.trader, sig });
+      // The enhanced Helius format can MISREPRESENT Jupiter-routed swaps — a real
+      // on-curve buyer's CLKN can read like a cross-pool rotation (false arb), or
+      // the pooled quote leg can read tiny (false below-floor) — silently dropping
+      // genuine buys (this ate a real ~$700 buy on 2026-06-19). Raw getTransaction
+      // pre/post balances are authoritative, so whenever the enhanced verdict is
+      // "DON'T post" (arb-mute or below-floor) we re-check against raw and trust it.
+      const floorFor = (t) => t.action === "sell" ? MIN_SELL_USD
+                            : (t.action !== "sell" && isReinvestWallet(t.trader)) ? MIN_REINVEST_USD
+                            : MIN_BUY_USD;
+      const arbMuted = (t) => t.crossPoolArb && kv.get("suppressArbAlerts", true);
+      const dropped = (t, u) => arbMuted(t) || u == null || u < floorFor(t);
+      let pTrade = trade, pUsd = usd, pTx = tx;
+      if (dropped(trade, usd) && !usedRaw) {
+        const rawTx = await fetchRawTradeTx(sig, HELIUS_KEY);
+        const rawTrade = rawTx ? detectClknTrade(rawTx) : null;
+        if (rawTrade) {
+          const rawUsd = quoteUsdValue(rawTrade);
+          if (!dropped(rawTrade, rawUsd)) {
+            console.log(`[TELEGRAM] Raw re-check OVERRIDES enhanced drop · sig ${sig.slice(0,8)} (arb ${trade.crossPoolArb}->${rawTrade.crossPoolArb}, usd ${usdStr}->$${rawUsd == null ? "?" : rawUsd.toFixed(2)})`);
+            pTrade = rawTrade; pUsd = rawUsd; pTx = rawTx;
+          }
+        }
+      }
+      // Feed the rolling daily recap (all real swaps, not just alert-worthy ones —
+      // total flow, so it records below the alert floor). Arb IS real volume, so it
+      // still counts here — it's only muted from alerts.
+      recap.record({ action: pTrade.action, usd: pUsd, trader: pTrade.trader, sig });
       // Cross-pool arbitrage = CLKN rotated between our pools, not a real buyer/
-      // seller. Mute it from the buy/sell channel (kv toggle, default ON) so the
-      // alerts show only genuine community flow. Volume recap above still counts it.
-      if (trade.crossPoolArb && kv.get("suppressArbAlerts", true)) {
+      // seller. Mute it from the buy/sell channel (kv toggle, default ON).
+      if (arbMuted(pTrade)) {
         console.log(`[TELEGRAM] Skipping cross-pool arbitrage (CLKN rotated between pools, no net buyer) · sig ${sig.slice(0,8)}`);
         rememberSig(sig);
         if (!blocked) advanceTo = sig;
         continue;
       }
-      if (usd == null || usd < floor) {
-        console.log(`[TELEGRAM] Skipping (${usdStr} < $${floor})`);
+      if (pUsd == null || pUsd < floorFor(pTrade)) {
+        console.log(`[TELEGRAM] Skipping ($${pUsd == null ? "?" : pUsd.toFixed(4)} < $${floorFor(pTrade)})`);
         rememberSig(sig); // remember so other pools don't re-process it
         if (!blocked) advanceTo = sig;
         continue;
       }
-      if (trade.action === "sell") await notifyClknSell(trade, tx, pool, usd, HELIUS_KEY);
-      else                         await notifyClknBuy(trade, tx, pool, usd, HELIUS_KEY);
+      if (pTrade.action === "sell") await notifyClknSell(pTrade, pTx, pool, pUsd, HELIUS_KEY);
+      else                         await notifyClknBuy(pTrade, pTx, pool, pUsd, HELIUS_KEY);
       rememberSig(sig);
       if (!blocked) advanceTo = sig;
     }
