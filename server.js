@@ -4400,6 +4400,21 @@ app.get("/api/reconcile-test", async (req, res) => {
   } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
 });
 
+// Data-source health (gated). Live status of Solana Tracker / Helius / Bags /
+// Telegram. Dry by default; &run=1 also DMs the operator chat (forced summary).
+app.get("/api/health-check", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  try {
+    if (req.query.run === "1") {
+      const r = await sourceHealthTick({ force: true });
+      return res.status(200).json({ success: true, dmSent: true, ...r });
+    }
+    const health = await checkSourceHealth();
+    return res.status(200).json({ success: true, health, note: "add &run=1 to also DM the operator chat" });
+  } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
+});
+
 // Telegram webhook diagnostics (gated). getWebhookInfo + getMe — shows whether the
 // webhook URL is registered, how many updates are queued, and Telegram's last delivery
 // error (why commands like /liquidity might go unanswered). Add &reset=1 to re-register
@@ -9682,6 +9697,95 @@ async function reconcileMissedTrades({ dry = false } = {}) {
   return { windowMin: lookbackMin, settleSec, scanned, posted, found };
 }
 
+// ── Data-source health monitor ───────────────────────────────────────────────
+// Probe the critical external feeds and report each as ok / down / not-configured.
+// Cheap calls only. Used by the tick (alert on state change) + the gated endpoint.
+const HEALTH_LABELS = { solanaTracker: "Solana Tracker", helius: "Helius RPC", bags: "Bags API", telegram: "Telegram" };
+async function checkSourceHealth() {
+  const out = {};
+  // 1) Solana Tracker — cheapest baseline call; distinguish "out of credits".
+  if (process.env.SOLANA_TRACKER_API_KEY) {
+    try {
+      const r = await solanaTracker.probe(`/price?token=${CLKN_MINT_ADDR}`);
+      if (r.ok) out.solanaTracker = { ok: true };
+      else {
+        const body = String((r.data && (r.data.error || JSON.stringify(r.data))) || "");
+        const credits = /credit/i.test(body) || r.status === 402;
+        out.solanaTracker = { ok: false, status: r.status, reason: credits ? "out of credits" : (r.reason || "http-" + r.status) };
+      }
+    } catch (e) { out.solanaTracker = { ok: false, reason: e.message }; }
+  } else out.solanaTracker = { ok: null, reason: "not configured" };
+  // 2) Helius RPC — getHealth.
+  if (process.env.HELIUS_API_KEY) {
+    try {
+      const r = await fetch(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: "health", method: "getHealth" }), signal: AbortSignal.timeout(8000) });
+      const j = await r.json().catch(() => ({}));
+      out.helius = (r.ok && (j.result === "ok" || j.result != null)) ? { ok: true }
+                 : { ok: false, status: r.status, reason: (j.error && j.error.message) || "http-" + r.status };
+    } catch (e) { out.helius = { ok: false, reason: e.message }; }
+  } else out.helius = { ok: null, reason: "not configured" };
+  // 3) Bags API — the launch feed (also powers near-grad fallback).
+  if (process.env.BAGS_API_KEY) {
+    try {
+      const r = await fetch(`${BAGS_BASE}token-launch/feed`, { headers: { "x-api-key": process.env.BAGS_API_KEY }, signal: AbortSignal.timeout(8000) });
+      const j = await r.json().catch(() => ({}));
+      const n = Array.isArray(j && j.response) ? j.response.length : 0;
+      out.bags = (r.ok && n > 0) ? { ok: true } : { ok: false, status: r.status, reason: r.ok ? "empty feed" : "http-" + r.status };
+    } catch (e) { out.bags = { ok: false, reason: e.message }; }
+  } else out.bags = { ok: null, reason: "not configured" };
+  // 4) Telegram bot — getMe.
+  if (process.env.TELEGRAM_BOT_TOKEN) {
+    try {
+      const r = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/getMe`, { signal: AbortSignal.timeout(8000) });
+      const j = await r.json().catch(() => ({}));
+      out.telegram = (j && j.ok) ? { ok: true } : { ok: false, reason: (j && j.description) || "getMe failed" };
+    } catch (e) { out.telegram = { ok: false, reason: e.message }; }
+  } else out.telegram = { ok: null, reason: "not configured" };
+  return out;
+}
+// Tick: alert the OPERATOR (treasury chat) ONLY when a source's status CHANGES
+// (down/up) so you're never the last to know a feed went dark — plus a once-daily
+// "all green" heartbeat so silence means working. Last status in kv sourceHealth.
+async function sourceHealthTick({ force = false } = {}) {
+  if (!process.env.TELEGRAM_BOT_TOKEN) return { skipped: "no telegram" };
+  const proj = (whirlpoolMM.vault.getProject && whirlpoolMM.vault.getProject("treasury")) || null;
+  const chat = (proj && proj.telegramChatId) || process.env.TELEGRAM_CHAT_ID;  // operator chat preferred
+  if (!chat) return { skipped: "no chat" };
+  const health = await checkSourceHealth();
+  const prev = kv.get("sourceHealth", {}) || {};
+  const changes = [];
+  for (const k of Object.keys(health)) {
+    const now = health[k].ok;                       // true | false | null(not configured)
+    if (now === null) continue;
+    const was = prev[k] ? prev[k].ok : undefined;
+    if (was === undefined) { if (now === false) changes.push({ k, ...health[k], up: false }); continue; }  // first sighting: only alert if down
+    if (now !== was) changes.push({ k, ...health[k], up: now });
+  }
+  kv.set("sourceHealth", health);
+  const dot = (v) => v.ok === null ? "—" : v.ok ? "✅" : "⚠️";
+  const summary = Object.keys(health).map(k => `${HEALTH_LABELS[k]}: ${dot(health[k])}`).join(" · ");
+  if (changes.length) {
+    const lines = changes.map(c => (c.up ? "✅ RECOVERED: " : "⚠️ DOWN: ") + HEALTH_LABELS[c.k] +
+      (c.up ? "" : " — " + (c.reason || "error") + (c.status ? ` (${c.status})` : "")));
+    await tgSend(chat, "🩺 <b>Data-source health</b>\n" + lines.join("\n") + "\n\n<i>Now:</i> " + summary, null, { silent: true });
+    console.log("[health] state change:", changes.map(c => `${c.k}=${c.up ? "up" : "down"}`).join(","));
+  } else if (force) {
+    await tgSend(chat, "🩺 <b>Data-source health</b> (manual check)\n" +
+      Object.keys(health).map(k => `${dot(health[k])} ${HEALTH_LABELS[k]}${health[k].ok === false ? " — " + (health[k].reason || "down") : ""}`).join("\n"), null, { silent: true });
+  } else {
+    // once-daily "all green" heartbeat (only when everything healthy)
+    const today = new Date().toISOString().slice(0, 10);
+    const allOk = Object.keys(health).every(k => health[k].ok !== false);
+    if (allOk && kv.get("sourceHealthHeartbeatDate", null) !== today) {
+      kv.set("sourceHealthHeartbeatDate", today);
+      await tgSend(chat, "🩺 <b>Data-source health</b> — all systems green ✅\n" + summary, null, { silent: true });
+    }
+  }
+  return { health, changes };
+}
+
 app.listen(PORT, () => {
   console.log(`[CLUCK] Cluck Norris server running on port ${PORT}`);
   // Boot env audit — one line saying exactly which expected vars are absent, so
@@ -9763,6 +9867,10 @@ app.listen(PORT, () => {
     // so it never double-posts. First run delayed so the poller initializes first.
     setInterval(() => { reconcileMissedTrades().catch(e => console.warn("[reconcile] tick:", e.message)); }, 12 * 60 * 1000);
     setTimeout(() => { reconcileMissedTrades().catch(() => {}); }, 6 * 60 * 1000);
+    // Data-source health monitor — alert the operator on any source going down/up,
+    // plus a once-daily all-green heartbeat. First check shortly after boot.
+    setInterval(() => { sourceHealthTick().catch(e => console.warn("[health] tick:", e.message)); }, 10 * 60 * 1000);
+    setTimeout(() => { sourceHealthTick().catch(() => {}); }, 75000);
     // Toolkit reminder — checked each minute, fires at fixed 4-hour marks.
     setInterval(toolsReminderTick, 60 * 1000);
     // Bags Launch Radar — checked each minute, fires at fixed 2-hour marks.
