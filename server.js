@@ -8046,7 +8046,7 @@ app.get("/hatchery", (req, res) => {
 
 // Liquidity Engine — Orca Whirlpools concentrated-liquidity market maker.
 app.get("/liquidity", (req, res) => {
-  res.sendFile(join(__dirname, "public", "liquidity.html"));
+  res.sendFile(join(__dirname, "public", "liquidity-locked.html"));
 });
 
 // LP Pair Scanner — standalone flagship: every pool for a pair across every DEX + Ask Cluck.
@@ -8077,7 +8077,7 @@ app.get("/market-header.js", (req, res) => {
 
 // Liquidity Engine — product / education / platform page (the flagship pitch).
 app.get("/liquidity-engine", (req, res) => {
-  res.sendFile(join(__dirname, "public", "liquidity-engine.html"));
+  res.sendFile(join(__dirname, "public", "liquidity-locked.html"));
 });
 
 // Liquidity Engine — multi-project operator dashboard (key-gated client-side).
