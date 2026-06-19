@@ -30,12 +30,12 @@
     btn.textContent = lang === "zh" ? "EN" : "中文";
     btn.title = lang === "zh" ? "Switch to English" : "切换到中文";
     btn.style.cssText = [
-      "position:fixed", "top:calc(10px + env(safe-area-inset-top,0px))", "right:10px",
+      "position:fixed", "bottom:calc(14px + env(safe-area-inset-bottom,0px))", "right:12px",
       "z-index:2147483600", "font-family:'Chakra Petch',system-ui,sans-serif",
-      "font-size:12px", "font-weight:700", "letter-spacing:.5px", "color:#FFD9A0",
-      "background:rgba(26,15,8,.94)", "border:1px solid rgba(255,122,24,.5)",
-      "border-radius:999px", "padding:6px 11px", "cursor:pointer",
-      "box-shadow:0 4px 14px rgba(0,0,0,.45)", "-webkit-tap-highlight-color:transparent"
+      "font-size:13px", "font-weight:700", "letter-spacing:.5px", "color:#FFD9A0",
+      "background:rgba(26,15,8,.96)", "border:1px solid rgba(255,122,24,.55)",
+      "border-radius:999px", "padding:8px 13px", "cursor:pointer",
+      "box-shadow:0 4px 16px rgba(0,0,0,.5)", "-webkit-tap-highlight-color:transparent"
     ].join(";");
     btn.addEventListener("click", function () {
       try { localStorage.setItem("clkn_lang", lang === "zh" ? "en" : "zh"); } catch (_) {}
