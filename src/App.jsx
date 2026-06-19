@@ -1749,63 +1749,38 @@ function AppIcon({size=64}){
 
 function Landing({onStart,onChallenge,onIncubator,onStartHere,completed}){
   const pct=Math.round((completed.length/LESSONS.length)*100);
-  // Belts earn consecutively from FRESHMAN. Skipping a lesson doesn't promote you past the gap.
   let consecutive=0;
   for(let i=0;i<LESSONS.length;i++){ if(completed.includes(LESSONS[i].id)) consecutive++; else break; }
   const currentBelt = consecutive>0 ? LESSONS[consecutive-1].belt : null;
   const nextLesson = consecutive<LESSONS.length ? LESSONS[consecutive] : null;
   const allDone = !nextLesson;
-
   const [lookupAddr, setLookupAddr] = useState("");
   return(
     <div style={{textAlign:"center",padding:"0 20px 40px",maxWidth:COL,margin:"0 auto"}}>
-      {/* logo */}
-      <div style={{position:"relative",display:"inline-block",marginBottom:6}}>
-        <div style={{position:"absolute",inset:-16,background:"radial-gradient(circle,rgba(255,122,24,.25) 0%,transparent 70%)",borderRadius:"50%"}}/>
-        <img src={LOGO_B64} alt="Cluck Norris" style={{width:200,height:200,objectFit:"cover",borderRadius:"50%",border:"3px solid #FF7A18",position:"relative",zIndex:1,filter:"drop-shadow(0 0 20px rgba(255,122,24,0.6))"}}/>
+      {/* School header (slim — the big brand hero lives on the homepage now) */}
+      <div style={{position:"relative",display:"inline-block",marginTop:6,marginBottom:8}}>
+        <div style={{position:"absolute",inset:-14,background:"radial-gradient(circle,rgba(255,122,24,.22) 0%,transparent 70%)",borderRadius:"50%"}}/>
+        <img src={LOGO_B64} alt="Cluck Norris" style={{width:116,height:116,objectFit:"cover",borderRadius:"50%",border:"3px solid #FF7A18",position:"relative",zIndex:1,filter:"drop-shadow(0 0 16px rgba(255,122,24,0.55))"}}/>
       </div>
-      <div style={{fontFamily:"'Anton',sans-serif",fontSize:14,letterSpacing:6,color:"#FF7A18",marginBottom:6}}>SCHOOL OF</div>
-      <h1 style={{fontFamily:"'Anton',sans-serif",fontSize:40,fontWeight:900,margin:"0 0 4px",background:"linear-gradient(135deg,#FFB627,#FF7A18,#EF4444)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",textTransform:"uppercase",letterSpacing:1,lineHeight:1}}>Crypto Hard Knocks</h1>
-      <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:"#6B7280",letterSpacing:4,marginBottom:12}}>POWERED BY CLKN</div>
-      {/* Social Links */}
-      <div style={{display:"flex",gap:10,marginBottom:20,justifyContent:"center"}}>
-        <a href={TWITTER_LINK} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:20,padding:"7px 18px",textDecoration:"none",fontFamily:"'Anton',sans-serif",fontSize:11,fontWeight:700,color:"#F9FAFB",letterSpacing:1}}>
-          𝕏 TWITTER
-        </a>
-        <a href={TELEGRAM_LINK} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,background:"rgba(37,99,235,0.12)",border:"1px solid rgba(37,99,235,0.3)",borderRadius:20,padding:"7px 18px",textDecoration:"none",fontFamily:"'Anton',sans-serif",fontSize:11,fontWeight:700,color:"#60A5FA",letterSpacing:1}}>
-          ✈️ TELEGRAM
-        </a>
-      </div>
-      {/* Newcomer concierge — the antidote to "this app has so much, where do I start?" */}
-      {onStartHere&&(
-        <button onClick={onStartHere} style={{display:"block",width:"100%",maxWidth:440,margin:"0 auto 14px",background:"linear-gradient(135deg,rgba(255,122,24,0.18),rgba(239,68,68,0.12))",border:"1px solid rgba(255,122,24,0.5)",borderRadius:12,padding:"13px 16px",cursor:"pointer",textAlign:"left",boxShadow:"0 0 22px rgba(255,122,24,0.18)"}}>
-          <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <span style={{fontSize:26,flexShrink:0}}>🐥</span>
-            <span style={{flex:1}}>
-              <span style={{display:"block",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#FFB627",letterSpacing:0.5}}>New here? Where do I start?</span>
-              <span style={{display:"block",fontFamily:"system-ui,sans-serif",fontSize:12,color:"#D1D5DB"}}>Tell Cluck where you're at — he'll point you the right way.</span>
-            </span>
-            <span style={{color:"#FF7A18",fontSize:18}}>›</span>
-          </div>
-        </button>
-      )}
-      {/* Primary CTA — directly under the concierge */}
-      <button onClick={onStart} style={{marginTop:4,background:"linear-gradient(135deg,#FF7A18,#EF4444)",border:"none",borderRadius:10,padding:"14px 44px",fontFamily:"'Anton',sans-serif",fontSize:16,fontWeight:700,color:"#fff",letterSpacing:3,textTransform:"uppercase",cursor:"pointer",boxShadow:"0 0 28px rgba(255,122,24,0.5)"}}>
-        {completed.length===0?"🏫 Start School":"📚 Back to Class"}
+      <div style={{fontFamily:"'Anton',sans-serif",fontSize:12,letterSpacing:4,color:"#FF7A18",marginBottom:6}}>SCHOOL OF CRYPTO HARD KNOCKS</div>
+      <h1 style={{fontFamily:"'Anton',sans-serif",fontSize:34,margin:"0 0 8px",color:"#FFB627",textTransform:"uppercase",letterSpacing:1,lineHeight:1}}>The School</h1>
+      <p style={{color:"#9CA3AF",fontSize:14,lineHeight:1.6,margin:"0 auto 20px",maxWidth:420,fontStyle:"italic"}}>"No participation trophies. No hand-holding. Just hard knocks."</p>
+
+      {/* Primary CTA — the 12-class course */}
+      <button onClick={onStart} style={{background:"linear-gradient(135deg,#FF7A18,#EF4444)",border:"none",borderRadius:10,padding:"14px 40px",fontFamily:"'Anton',sans-serif",fontSize:16,fontWeight:700,color:"#fff",letterSpacing:2,textTransform:"uppercase",cursor:"pointer",boxShadow:"0 0 28px rgba(255,122,24,0.45)"}}>
+        {completed.length===0?"🏫 Start the 12-Class Course":"📚 Continue Class"}
       </button>
-      <p style={{marginTop:14,fontSize:13,color:"#6B7280",fontFamily:"'Anton',sans-serif",letterSpacing:2}}>12 CLASSES • 72 EXAMS • NO EXTRA CREDIT</p>
-      <p style={{color:"#9CA3AF",fontSize:16,lineHeight:1.7,marginTop:20,marginBottom:24,fontStyle:"italic"}}>"No participation trophies. No hand-holding. Just hard knocks."</p>
-      {/* Transcript progress (swapped above the rank banner) */}
-      {completed.length>0&&(
-        <div style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"12px 16px",marginBottom:12}}>
-          <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#9CA3AF",fontFamily:"'Anton',sans-serif",letterSpacing:1,marginBottom:6}}><span>TRANSCRIPT</span><span>{completed.length}/{LESSONS.length} CLASSES PASSED</span></div>
-          <div style={{height:5,background:"rgba(255,255,255,0.08)",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:`${pct}%`,background:"linear-gradient(90deg,#FF7A18,#FFB627)",borderRadius:3}}/></div>
-          <div style={{marginTop:8,display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap"}}>
-            {LESSONS.map(l=><span key={l.id} style={{fontSize:10,color:completed.includes(l.id)?"#FFB627":"#4B5563",fontFamily:"'Anton',sans-serif"}}>{completed.includes(l.id)?"✓":"○"} {l.title.split(" ")[0]}</span>)}
-          </div>
+      <p style={{marginTop:12,fontSize:12,color:"#6B7280",fontFamily:"'Anton',sans-serif",letterSpacing:2}}>12 CLASSES • 72 EXAMS • NO EXTRA CREDIT</p>
+
+      {/* YOUR PROGRESS — transcript (always shown so newcomers see where they're headed) */}
+      <div style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"14px 16px",marginTop:18,marginBottom:12,textAlign:"left"}}>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#9CA3AF",fontFamily:"'Anton',sans-serif",letterSpacing:1,marginBottom:6}}><span>📋 YOUR TRANSCRIPT</span><span>{completed.length}/{LESSONS.length} CLASSES PASSED</span></div>
+        <div style={{height:6,background:"rgba(255,255,255,0.08)",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:`${pct}%`,background:"linear-gradient(90deg,#FF7A18,#FFB627)",borderRadius:3}}/></div>
+        <div style={{marginTop:10,display:"flex",gap:8,justifyContent:"flex-start",flexWrap:"wrap"}}>
+          {LESSONS.map(l=><span key={l.id} style={{fontSize:10,color:completed.includes(l.id)?"#FFB627":"#4B5563",fontFamily:"'Anton',sans-serif"}}>{completed.includes(l.id)?"✓":"○"} {l.title.split(" ")[0]}</span>)}
         </div>
-      )}
-      {/* Rank banner (swapped below the transcript progress) */}
+      </div>
+      {/* Rank */}
       <div style={{background:"rgba(255,122,24,0.08)",border:"1px solid rgba(255,122,24,0.3)",borderRadius:10,padding:"12px 16px",marginBottom:12}}>
         <div style={{fontFamily:"'Anton',sans-serif",fontSize:10,letterSpacing:3,color:"#FF7A18",marginBottom:8}}>CURRENT RANK</div>
         {allDone ? (
@@ -1826,80 +1801,30 @@ function Landing({onStart,onChallenge,onIncubator,onStartHere,completed}){
           </div>
         )}
       </div>
-      <div style={{marginTop:16,borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:16,display:"flex",flexDirection:"column",gap:10}}>
-        <button onClick={onIncubator} style={{width:"100%",background:"rgba(96,165,250,0.1)",border:"2px solid rgba(96,165,250,0.4)",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:16,fontWeight:700,color:"#60A5FA",letterSpacing:3,cursor:"pointer",boxShadow:"0 0 20px rgba(96,165,250,0.2)"}}>
-          🥚 CLKN INCUBATOR
-        </button>
-        <p style={{marginTop:-4,fontSize:11,color:"#4B5563",fontFamily:"'Anton',sans-serif",letterSpacing:1}}>CRYPTO NEWBIE? START HERE — 6 BEGINNER LESSONS</p>
+
+      {/* GRADUATE REWARD — CLKN airdrop + graduation NFT */}
+      <div style={{background:"linear-gradient(135deg,rgba(255,182,39,0.12),rgba(255,122,24,0.06))",border:"1px solid rgba(255,182,39,0.45)",borderRadius:12,padding:"16px 18px",marginBottom:14,textAlign:"left",boxShadow:"0 0 22px rgba(255,182,39,0.12)"}}>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:14,letterSpacing:1,color:"#FFB627",marginBottom:6}}>🎓 GRADUATE REWARD</div>
+        <p style={{fontFamily:"system-ui,sans-serif",fontSize:13,color:"#D1D5DB",lineHeight:1.6,margin:"0 0 11px"}}>
+          Every Cluck Norris graduate earns a small <b style={{color:"#FFB627"}}>CLKN airdrop</b> and a <b style={{color:"#FFB627"}}>graduation NFT</b>. Finish all 12 classes <b>or</b> pass the Ultimate Challenge, then drop your Solana address on your graduation page to claim your diploma and join the airdrop list.
+        </p>
+        <button onClick={onChallenge} style={{background:"linear-gradient(135deg,#FF7A18,#EF4444)",border:"none",borderRadius:9,padding:"11px 22px",fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,color:"#fff",letterSpacing:1.5,textTransform:"uppercase",cursor:"pointer"}}>🎓 Take the Ultimate Challenge</button>
       </div>
-      {/* Transcript lookup — moved out of the hero flow into a quiet utility row */}
+
+      {/* Incubator — beginners */}
+      <button onClick={onIncubator} style={{width:"100%",boxSizing:"border-box",background:"rgba(255,122,24,0.08)",border:"2px solid rgba(255,122,24,0.4)",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#FF7A18",letterSpacing:2,cursor:"pointer",marginBottom:4}}>
+        🥚 CLKN INCUBATOR — NEW? START HERE
+      </button>
+      <p style={{marginTop:2,fontSize:11,color:"#4B5563",fontFamily:"'Anton',sans-serif",letterSpacing:1}}>6 BEGINNER LESSONS · WALLETS, TOKENS &amp; SAFETY</p>
+
+      {/* Transcript lookup */}
       <div style={{marginTop:22,paddingTop:18,borderTop:"1px solid rgba(255,255,255,0.06)"}}>
         <div style={{fontFamily:"'Anton',sans-serif",fontSize:10,color:"#6B7280",letterSpacing:3,marginBottom:10}}>🎓 LOOK UP ANY TRANSCRIPT</div>
         <div style={{maxWidth:440,margin:"0 auto",display:"flex",gap:6}}>
-          <input
-            value={lookupAddr}
-            onChange={e=>setLookupAddr(e.target.value)}
-            onKeyDown={e=>{ if(e.key==="Enter" && lookupAddr.trim().length>=32) window.open("/transcript/"+encodeURIComponent(lookupAddr.trim()),"_blank","noopener"); }}
-            placeholder="🎓 Look up a transcript by wallet address…"
-            style={{flex:1,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:8,padding:"9px 12px",color:"#F9FAFB",fontFamily:"monospace",fontSize:11,outline:"none"}}
-          />
-          <button
-            onClick={()=>{ if(lookupAddr.trim().length>=32) window.open("/transcript/"+encodeURIComponent(lookupAddr.trim()),"_blank","noopener"); }}
-            disabled={lookupAddr.trim().length<32}
-            style={{background:lookupAddr.trim().length>=32?"rgba(16,185,129,0.18)":"rgba(255,255,255,0.05)",border:"1px solid rgba(16,185,129,0.4)",borderRadius:8,padding:"9px 14px",fontFamily:"'Anton',sans-serif",fontSize:11,fontWeight:700,color:lookupAddr.trim().length>=32?"#6EE7B7":"#4B5563",letterSpacing:1,cursor:lookupAddr.trim().length>=32?"pointer":"default"}}
-          >VIEW</button>
+          <input value={lookupAddr} onChange={e=>setLookupAddr(e.target.value)} onKeyDown={e=>{ if(e.key==="Enter" && lookupAddr.trim().length>=32) window.open("/transcript/"+encodeURIComponent(lookupAddr.trim()),"_blank","noopener"); }} placeholder="🎓 Look up a transcript by wallet address…" style={{flex:1,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:8,padding:"9px 12px",color:"#F9FAFB",fontFamily:"monospace",fontSize:11,outline:"none"}}/>
+          <button onClick={()=>{ if(lookupAddr.trim().length>=32) window.open("/transcript/"+encodeURIComponent(lookupAddr.trim()),"_blank","noopener"); }} disabled={lookupAddr.trim().length<32} style={{background:lookupAddr.trim().length>=32?"rgba(16,185,129,0.18)":"rgba(255,255,255,0.05)",border:"1px solid rgba(16,185,129,0.4)",borderRadius:8,padding:"9px 14px",fontFamily:"'Anton',sans-serif",fontSize:11,fontWeight:700,color:lookupAddr.trim().length>=32?"#6EE7B7":"#4B5563",letterSpacing:1,cursor:lookupAddr.trim().length>=32?"pointer":"default"}}>VIEW</button>
         </div>
       </div>
-      {/* Tools & Utilities — the front door to the product beyond the school:
-          the Hatchery, the competition trackers, the airdropper,
-          Security Coop. Full hub lives at /tools. */}
-      <div style={{marginTop:22,paddingTop:18,borderTop:"1px solid rgba(255,255,255,0.06)"}}>
-        <div style={{fontFamily:"'Anton',sans-serif",fontSize:10,color:"#6B7280",letterSpacing:3,marginBottom:10}}>
-          🐔 BEYOND THE SCHOOL — THE TOOLKIT
-        </div>
-        <a href="/tools" style={{
-          display:"block",width:"100%",boxSizing:"border-box",
-          background:"linear-gradient(135deg,rgba(255,182,39,0.14),rgba(255,122,24,0.06))",
-          border:"2px solid rgba(255,182,39,0.5)",
-          borderRadius:10,padding:"16px",
-          fontFamily:"'Anton',sans-serif",fontSize:17,fontWeight:700,
-          color:"#FFB627",letterSpacing:3,textDecoration:"none",
-          textAlign:"center",
-          boxShadow:"0 0 22px rgba(255,182,39,0.2)"
-        }}>
-          🛠 TOOLS &amp; UTILITIES
-        </a>
-        <p style={{marginTop:6,fontSize:11,color:"#4B5563",fontFamily:"'Anton',sans-serif",letterSpacing:1}}>
-          WALLET X-RAY · TOKEN CREATOR · COMPETITION TRACKERS · AIRDROPPER · WALLET SECURITY
-        </p>
-      </div>
-      {/* Bags.fm info link — autopsy panel sends folks here for context. */}
-      <a href="/bags" style={{
-        display:"inline-block",marginTop:12,
-        background:"rgba(255,122,24,0.08)",border:"1px solid rgba(255,122,24,0.3)",
-        borderRadius:8,padding:"9px 18px",
-        fontFamily:"'Anton',sans-serif",fontSize:11,fontWeight:700,
-        color:"#FF7A18",letterSpacing:2,textDecoration:"none",
-      }}>
-        🟠 ABOUT BAGS.FM — WHY WE LAUNCHED HERE
-      </a>
-      <a href={CLKN_TRADE_LINK} target="_blank" rel="noreferrer" style={{
-        display:"inline-block",marginTop:16,
-        background:"rgba(255,122,24,0.1)",border:"1px solid rgba(255,122,24,0.35)",
-        borderRadius:10,padding:"12px 32px",
-        fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,
-        color:"#FF7A18",letterSpacing:3,textDecoration:"none",
-        boxShadow:"0 0 16px rgba(255,122,24,0.2)",
-      }}>
-        🔥 TRADE CLKN ON BAGS.FM
-      </a>
-      {/* Investor Zone link hidden from public landing — page still lives at /investors
-          and /investor for direct sharing while we get private feedback on the copy. */}
-      <JupiterSwapButton
-        label="⚡ BUY ON JUPITER"
-        style={{display:"block",width:"100%",background:"rgba(74,222,128,0.12)",border:"1px solid rgba(74,222,128,0.3)",borderRadius:10,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,color:"#4ADE80",letterSpacing:3,textAlign:"center",marginTop:8,boxSizing:"border-box",cursor:"pointer"}}
-      />
-      <MintAddress/>
     </div>
   );
 }
