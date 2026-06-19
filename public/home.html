@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Cluck Norris — Learn Crypto, Beginner to Advanced. Free School + Tools.</title>
-<meta name="description" content="Cluck Norris: learn crypto from your first wallet to advanced strategy and launching the right way. A free Solana crypto school, free + premium research tools, and a token (CLKN) that practices what it teaches.">
+<meta name="description" content="Cluck Norris: learn crypto from your first wallet to advanced strategy and launching the right way. A free Solana crypto school, free + advanced research tools, and a token (CLKN) that practices what it teaches.">
 <meta property="og:title" content="Cluck Norris — School of Crypto Hard Knocks">
-<meta property="og:description" content="We took the hard knocks so you don't have to. A free crypto school (beginner to advanced), free tools, and a token that practices what it teaches.">
+<meta property="og:description" content="We took the hard knocks so you don't have to. A free crypto school (beginner to advanced) plus free + advanced tools.">
 <meta property="og:image" content="https://clucknorris.app/cluck-norris-mascot.jpg">
 <link rel="icon" href="/cluck-norris-mascot.jpg">
 <link rel="manifest" href="/manifest.webmanifest">
@@ -17,10 +17,8 @@
   .embers{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;}
   .embers span{position:absolute;bottom:40px;border-radius:50%;background:radial-gradient(circle,#FFD56B,#FF5A0A);}
 
-  /* sticky top bar */
   .nav{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:14px;padding:11px 20px;
-       background:linear-gradient(180deg,rgba(18,9,5,.94),rgba(18,9,5,.55));backdrop-filter:blur(8px);
-       border-bottom:1px solid var(--border-soft);}
+       background:linear-gradient(180deg,rgba(18,9,5,.94),rgba(18,9,5,.55));backdrop-filter:blur(8px);border-bottom:1px solid var(--border-soft);}
   .nav .brand{display:flex;align-items:center;gap:10px;font-family:var(--disp);font-size:18px;letter-spacing:.5px;}
   .nav .brand img{width:32px;height:32px;border-radius:50%;object-fit:cover;object-position:center 12%;border:1.5px solid var(--gold);}
   .nav .brand .c{color:var(--orange);} .nav .brand .n{color:var(--text);}
@@ -31,35 +29,43 @@
 
   .wrap{position:relative;z-index:2;max-width:1000px;margin:0 auto;padding:0 18px 70px;}
 
-  /* hero */
-  .hero{text-align:center;padding:62px 10px 30px;}
-  .hero .avatar{width:118px;height:118px;border-radius:50%;object-fit:cover;object-position:center 12%;border:3px solid var(--gold);animation:ckGlow 2.6s ease-in-out infinite;}
+  .hero{text-align:center;padding:60px 10px 26px;}
+  .hero .avatar{width:116px;height:116px;border-radius:50%;object-fit:cover;object-position:center 12%;border:3px solid var(--gold);animation:ckGlow 2.6s ease-in-out infinite;}
   .hero .kicker{font-family:var(--disp);font-size:13px;letter-spacing:5px;color:var(--sub);text-transform:uppercase;margin-top:16px;}
-  .hero h1{font-family:var(--disp);font-size:58px;line-height:1.02;margin:8px 0 6px;letter-spacing:1px;}
+  .hero h1{font-family:var(--disp);font-size:56px;line-height:1.02;margin:8px 0 6px;letter-spacing:1px;}
   .hero h1 .c{color:var(--orange);} .hero h1 .n{color:var(--text);}
-  .hero .tag{font-family:var(--disp);font-size:26px;color:var(--gold);letter-spacing:.5px;margin:14px auto 12px;max-width:760px;line-height:1.15;text-transform:uppercase;text-shadow:0 2px 14px rgba(255,90,10,.3);}
+  .hero .tag{font-family:var(--disp);font-size:25px;color:var(--gold);letter-spacing:.5px;margin:14px auto 12px;max-width:740px;line-height:1.15;text-transform:uppercase;text-shadow:0 2px 14px rgba(255,90,10,.3);}
   .hero .lede{font-size:16.5px;color:var(--body-text);max-width:600px;margin:0 auto;line-height:1.6;}
 
-  /* find your starting point — THE homepage */
-  .section-h{font-family:var(--disp);font-size:14px;letter-spacing:3px;color:var(--orange);text-transform:uppercase;margin:42px 0 4px;text-align:center;}
-  .section-sub{text-align:center;color:var(--sub);font-size:14.5px;margin:0 auto 26px;max-width:600px;line-height:1.5;}
-  .paths{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;}
-  .path{position:relative;display:flex;flex-direction:column;background:var(--card-grad);border:1px solid var(--border);border-radius:18px;padding:28px 26px;
-        transition:transform .12s,border-color .12s,box-shadow .12s;}
-  .path:hover{transform:translateY(-3px);border-color:var(--orange);box-shadow:0 16px 38px rgba(232,30,14,.22);}
-  .path .ic{font-size:40px;line-height:1;}
-  .path .who{font-family:var(--body);font-weight:700;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-top:16px;}
-  .path .t{font-family:var(--disp);font-size:26px;color:var(--gold);margin:4px 0 10px;letter-spacing:.4px;line-height:1.08;}
-  .path p{font-size:14px;color:var(--body-text);line-height:1.6;margin:0;flex:1;}
-  .path .go{margin-top:16px;font-family:var(--disp);font-size:13px;letter-spacing:1px;color:var(--orange);text-transform:uppercase;}
-  .path:hover .go{color:#fff;}
+  .section{margin-top:46px;}
+  .section-h{font-family:var(--disp);font-size:14px;letter-spacing:3px;color:var(--orange);text-transform:uppercase;margin:0 0 4px;text-align:center;}
+  .section-sub{text-align:center;color:var(--sub);font-size:14.5px;margin:0 auto 24px;max-width:600px;line-height:1.5;}
 
-  /* slim secondary row */
-  .more{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-top:30px;}
-  .more a{font-family:var(--body);font-weight:600;font-size:13px;letter-spacing:.3px;color:var(--body-text);
-          border:1px solid var(--border);background:rgba(255,122,24,.05);border-radius:999px;padding:9px 16px;transition:all .12s;}
-  .more a:hover{border-color:var(--orange);color:#fff;background:rgba(255,122,24,.14);transform:translateY(-1px);}
-  .more .lbl{width:100%;text-align:center;color:var(--muted);font-size:11.5px;letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;}
+  /* journey concierge — the centerpiece */
+  .paths{display:grid;grid-template-columns:repeat(2,1fr);gap:18px;}
+  .path{display:flex;flex-direction:column;background:var(--card-grad);border:1px solid var(--border);border-radius:18px;padding:26px 24px;transition:transform .12s,border-color .12s,box-shadow .12s;}
+  .path:hover{transform:translateY(-3px);border-color:var(--orange);box-shadow:0 16px 38px rgba(232,30,14,.22);}
+  .path .ic{font-size:38px;line-height:1;}
+  .path .who{font-family:var(--body);font-weight:700;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-top:14px;}
+  .path .t{font-family:var(--disp);font-size:25px;color:var(--gold);margin:4px 0 9px;letter-spacing:.4px;line-height:1.08;}
+  .path p{font-size:14px;color:var(--body-text);line-height:1.55;margin:0;flex:1;}
+  .path .go{margin-top:15px;font-family:var(--disp);font-size:13px;letter-spacing:1px;color:var(--orange);text-transform:uppercase;}
+  .path:hover .go{color:#fff;}
+  .guide{display:flex;justify-content:center;margin-top:18px;}
+  .guide a{display:inline-flex;align-items:center;gap:9px;font-family:var(--disp);font-size:15px;letter-spacing:.8px;color:#fff;
+           background:linear-gradient(135deg,var(--orange),var(--red));border:1px solid rgba(255,182,39,.5);border-radius:999px;padding:12px 24px;box-shadow:0 6px 18px rgba(232,30,14,.4);transition:transform .1s,filter .12s;}
+  .guide a:hover{transform:translateY(-1px);filter:brightness(1.06);}
+
+  /* clean feature panels for School + Tools */
+  .panel{display:flex;gap:20px;align-items:flex-start;background:var(--card-grad);border:1px solid var(--border);border-radius:18px;padding:26px;box-shadow:0 10px 30px rgba(0,0,0,.4);}
+  .panel .pic{font-size:42px;line-height:1;flex:none;}
+  .panel .body{flex:1;min-width:0;}
+  .panel h3{font-family:var(--disp);font-size:24px;color:var(--gold);letter-spacing:.4px;margin:2px 0 8px;}
+  .panel p{font-size:14.5px;color:var(--body-text);line-height:1.6;margin:0 0 14px;}
+  .chips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:16px;}
+  .chips span{font-family:var(--body);font-weight:600;font-size:12px;color:#FFD9A0;background:rgba(255,122,24,.08);border:1px solid var(--border);border-radius:999px;padding:5px 12px;}
+  .panel .cta{display:inline-flex;align-items:center;gap:7px;font-family:var(--disp);font-size:14px;letter-spacing:.8px;color:#fff;background:linear-gradient(135deg,var(--orange),var(--red));border-radius:11px;padding:11px 22px;box-shadow:0 6px 16px rgba(232,30,14,.35);transition:transform .1s,filter .12s;}
+  .panel .cta:hover{transform:translateY(-1px);filter:brightness(1.05);}
 
   footer{margin-top:54px;padding-top:24px;border-top:1px solid var(--border-soft);text-align:center;color:var(--sub);font-size:12.5px;line-height:1.9;}
   footer a{color:var(--orange);}
@@ -67,7 +73,7 @@
   footer .disc{color:var(--muted);font-size:11px;max-width:660px;margin:10px auto 0;line-height:1.5;}
 
   @media(max-width:680px){
-    .paths{grid-template-columns:1fr;}
+    .paths{grid-template-columns:1fr;} .panel{flex-direction:column;gap:12px;}
     .hero h1{font-size:44px;} .hero .tag{font-size:21px;}
     .nav .links a:not(.cta){display:none;}
   }
@@ -88,7 +94,6 @@
   <div class="links">
     <a href="/school">School</a>
     <a href="/tools">Tools</a>
-    <a href="/ask-cluck">Ask Cluck</a>
     <a class="cta" href="/school">Enter School</a>
   </div>
 </nav>
@@ -103,46 +108,70 @@
     <p class="lede">Crypto knowledge from your first wallet to advanced strategy — taught straight, so you skip the expensive mistakes.</p>
   </header>
 
-  <div class="section-h">Find Your Starting Point</div>
-  <p class="section-sub">Tell us where you're at — we'll drop you exactly where you should begin.</p>
-  <div class="paths">
-    <a class="path" href="/school#incubator">
-      <div class="ic">🐣</div>
-      <div class="who">Brand new to crypto</div>
-      <div class="t">Start in the Incubator</div>
-      <p>Wallets, keys, tokens, and not getting rekt — the gentle on-ramp for total beginners.</p>
-      <div class="go">Begin →</div>
-    </a>
-    <a class="path" href="/school">
-      <div class="ic">🏫</div>
-      <div class="who">Know the basics</div>
-      <div class="t">Level Up at School</div>
-      <p>12 progressive lessons, belts Freshman → Emeritus. Pass to promote, then take the Ultimate Challenge.</p>
-      <div class="go">Enroll →</div>
-    </a>
-    <a class="path" href="/school#lplab">
-      <div class="ic">🌊</div>
-      <div class="who">Want LP mastery</div>
-      <div class="t">Go Deep in LP School</div>
-      <p>Our specialty — AMMs, impermanent loss, concentrated liquidity, and building a real LP strategy.</p>
-      <div class="go">Dive in →</div>
-    </a>
-    <a class="path" href="/hatchery">
-      <div class="ic">🚀</div>
-      <div class="who">Thinking of launching</div>
-      <div class="t">Launch a Token — Right</div>
-      <p>What to do, what to avoid, and what not to fear — an educated launch instead of a costly mistake.</p>
-      <div class="go">Learn to launch →</div>
-    </a>
-  </div>
+  <!-- 1. JOURNEY CONCIERGE -->
+  <section class="section">
+    <div class="section-h">Where Are You on Your Crypto Journey?</div>
+    <p class="section-sub">Tell Cluck where you're at — he'll point you the right way.</p>
+    <div class="paths">
+      <a class="path" href="/school#incubator">
+        <div class="ic">🐣</div>
+        <div class="who">Brand new to crypto</div>
+        <div class="t">Start in the Incubator</div>
+        <p>Wallets, keys, tokens, and not getting rekt — the gentle on-ramp for total beginners.</p>
+        <div class="go">Begin →</div>
+      </a>
+      <a class="path" href="/school">
+        <div class="ic">🏫</div>
+        <div class="who">Know the basics</div>
+        <div class="t">Level Up at School</div>
+        <p>12 progressive lessons, belts Freshman → Emeritus. Pass to promote, then take the Ultimate Challenge.</p>
+        <div class="go">Enroll →</div>
+      </a>
+      <a class="path" href="/school#lplab">
+        <div class="ic">🌊</div>
+        <div class="who">Want LP mastery</div>
+        <div class="t">Go Deep in LP School</div>
+        <p>Our specialty — AMMs, impermanent loss, concentrated liquidity, and building a real LP strategy.</p>
+        <div class="go">Dive in →</div>
+      </a>
+      <a class="path" href="/hatchery">
+        <div class="ic">🚀</div>
+        <div class="who">Thinking of launching</div>
+        <div class="t">Launch a Token — Right</div>
+        <p>What to do, what to avoid, and what not to fear — an educated launch instead of a costly mistake.</p>
+        <div class="go">Learn to launch →</div>
+      </a>
+    </div>
+    <div class="guide"><a href="/school#start">🔥 Not sure? Let Cluck guide you →</a></div>
+  </section>
 
-  <div class="more">
-    <span class="lbl">Or jump straight in</span>
-    <a href="/ask-cluck">🔥 Ask Cluck</a>
-    <a href="/classroom">🎓 Live Classroom</a>
-    <a href="/tools">🛠️ Free Tools</a>
-    <a href="/school#clkn">🪙 The Token</a>
-  </div>
+  <!-- 2. SCHOOL & EDUCATION -->
+  <section class="section">
+    <div class="section-h">School &amp; Education</div>
+    <div class="panel">
+      <div class="pic">🎓</div>
+      <div class="body">
+        <h3>The Free School</h3>
+        <p>From your first wallet to advanced LP strategy — a real curriculum, not a glossary. Learn with the live AI Classroom, then prove it on the Ultimate Challenge and earn a permanent, shareable on-chain diploma. Always free.</p>
+        <div class="chips"><span>🐣 Incubator</span><span>🏫 12-Lesson Course</span><span>⚗️ LP School</span><span>🎓 Live Classroom</span><span>🏆 Ultimate Challenge</span></div>
+        <a class="cta" href="/school">Enter the School →</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. FREE & ADVANCED TOOLS -->
+  <section class="section">
+    <div class="section-h">Free &amp; Advanced Tools</div>
+    <div class="panel">
+      <div class="pic">🛠️</div>
+      <div class="body">
+        <h3>Research Any Solana Token</h3>
+        <p>Investigate any token or wallet on-chain — no wallet connect required. Wallet X-Ray, Token Autopsy, the Order Book scanner and more are free. Advanced operator forensics unlock with CLKN — no wallet-connect to pay.</p>
+        <div class="chips"><span>🩻 Wallet X-Ray</span><span>🔬 Token Autopsy</span><span>🧱 Order Book</span><span>💎 Premium Tools</span></div>
+        <a class="cta" href="/tools">Browse the Tools →</a>
+      </div>
+    </div>
+  </section>
 
   <footer>
     <div>
@@ -156,11 +185,12 @@
 </div>
 
 <script>
-  // Old /#screen deep links → /school#screen
   (function () {
     var h = (location.hash || "").replace(/^#/, "");
     if (["library","incubator","lplab","survive","clkn","challenge","select","start"].indexOf(h) !== -1) location.replace("/school#" + h);
   })();
 </script>
+<!-- Global Ask Cluck pill (consistent on every page) -->
+<script defer src="/cluck-nav.js"></script>
 </body>
 </html>
