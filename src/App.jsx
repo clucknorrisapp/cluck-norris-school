@@ -2243,38 +2243,13 @@ export default function App(){
         <div style={{marginBottom:6,display:"flex",justifyContent:"center"}}>
           <MintAddress compact/>
         </div>
-        {/* Nav tabs — two rows */}
-        <div style={{display:"flex",flexDirection:"column",gap:5}}>
-          {/* Row 1 — main navigation */}
-          <div style={{display:"flex",gap:5}}>
-            <button onClick={()=>setScreen("landing")} style={{flex:1,background:screen==="landing"?"rgba(255,255,255,0.12)":"rgba(255,255,255,0.04)",border:`1px solid ${screen==="landing"?"rgba(255,255,255,0.25)":"rgba(255,255,255,0.08)"}`,borderRadius:7,padding:"7px 0",fontFamily:"'Anton',sans-serif",fontSize:10,fontWeight:700,color:screen==="landing"?"#F9FAFB":"#6B7280",letterSpacing:1,cursor:"pointer"}}>
-              🏫 SCHOOL
-            </button>
-            <button onClick={()=>setScreen("incubator")} style={{flex:1,background:screen==="incubator"?"rgba(96,165,250,0.25)":"rgba(96,165,250,0.06)",border:`1px solid ${screen==="incubator"?"rgba(96,165,250,0.6)":"rgba(96,165,250,0.2)"}`,borderRadius:7,padding:"7px 0",fontFamily:"'Anton',sans-serif",fontSize:10,fontWeight:700,color:"#60A5FA",letterSpacing:1,cursor:"pointer"}}>
-              🥚 INCUBATOR
-            </button>
-            <button onClick={()=>{window.location.href="/tools";}} style={{flex:1,background:"rgba(255,182,39,0.08)",border:"1px solid rgba(255,182,39,0.25)",borderRadius:7,padding:"7px 0",fontFamily:"'Anton',sans-serif",fontSize:10,fontWeight:700,color:"#FFB627",letterSpacing:1,cursor:"pointer"}}>
-              🛠 TOOLS
-            </button>
-            <button onClick={()=>setScreen("library")} style={{flex:1,background:screen==="library"?"rgba(255,122,24,0.25)":"rgba(255,122,24,0.06)",border:`1px solid ${screen==="library"?"rgba(255,122,24,0.6)":"rgba(255,122,24,0.2)"}`,borderRadius:7,padding:"7px 0",fontFamily:"'Anton',sans-serif",fontSize:10,fontWeight:700,color:"#FF7A18",letterSpacing:1,cursor:"pointer"}}>
-              📚 LIBRARY
-            </button>
-          </div>
-          {/* Row 2 — data */}
-          <div style={{display:"flex",gap:5}}>
-            <button onClick={()=>setScreen(screen==="clkn"?"landing":"clkn")} style={{flex:1,background:screen==="clkn"?"rgba(255,122,24,0.25)":"rgba(255,122,24,0.08)",border:`1px solid ${screen==="clkn"?"rgba(255,122,24,0.6)":"rgba(255,122,24,0.2)"}`,borderRadius:7,padding:"7px 0",fontFamily:"'Anton',sans-serif",fontSize:10,fontWeight:700,color:"#FF7A18",letterSpacing:1,cursor:"pointer"}}>
-              📊 TOKEN DATA
-            </button>
-            <button onClick={()=>{window.location.href="/bags";}} style={{flex:1,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:7,padding:"7px 0",fontFamily:"'Anton',sans-serif",fontSize:10,fontWeight:700,color:"#9CA3AF",letterSpacing:1,cursor:"pointer"}}>
-              🎒 BAGS
-            </button>
-            <button onClick={()=>setScreen(screen==="lplab"?"landing":"lplab")} style={{flex:1,background:screen==="lplab"?"rgba(16,185,129,0.25)":"rgba(16,185,129,0.06)",border:`1px solid ${screen==="lplab"?"rgba(16,185,129,0.6)":"rgba(16,185,129,0.2)"}`,borderRadius:7,padding:"7px 0",fontFamily:"'Anton',sans-serif",fontSize:10,fontWeight:700,color:"#10B981",letterSpacing:1,cursor:"pointer"}}>
-              ⚗️ LP LAB
-            </button>
-            <button onClick={()=>setScreen(screen==="survive"?"landing":"survive")} style={{flex:1,background:screen==="survive"?"rgba(239,68,68,0.25)":"rgba(239,68,68,0.06)",border:`1px solid ${screen==="survive"?"rgba(239,68,68,0.6)":"rgba(239,68,68,0.2)"}`,borderRadius:7,padding:"7px 0",fontFamily:"'Anton',sans-serif",fontSize:10,fontWeight:700,color:"#EF4444",letterSpacing:1,cursor:"pointer"}}>
-              🎮 SURVIVE
-            </button>
-          </div>
+        {/* Nav tabs — school sections only (top-level routing lives on the homepage) */}
+        <div style={{display:"flex",gap:5}}>
+          <button onClick={()=>setScreen("landing")} style={{flex:1,background:screen==="landing"?"rgba(255,255,255,0.12)":"rgba(255,255,255,0.04)",border:`1px solid ${screen==="landing"?"rgba(255,255,255,0.25)":"rgba(255,255,255,0.08)"}`,borderRadius:7,padding:"7px 2px",fontFamily:"'Anton',sans-serif",fontSize:10,fontWeight:700,color:screen==="landing"?"#F9FAFB":"#6B7280",letterSpacing:0.5,cursor:"pointer"}}>🏫 SCHOOL</button>
+          <button onClick={()=>setScreen("incubator")} style={{flex:1,background:screen==="incubator"?"rgba(96,165,250,0.25)":"rgba(96,165,250,0.06)",border:`1px solid ${screen==="incubator"?"rgba(96,165,250,0.6)":"rgba(96,165,250,0.2)"}`,borderRadius:7,padding:"7px 2px",fontFamily:"'Anton',sans-serif",fontSize:10,fontWeight:700,color:"#60A5FA",letterSpacing:0.5,cursor:"pointer"}}>🥚 INCUBATOR</button>
+          <button onClick={()=>setScreen(screen==="library"?"landing":"library")} style={{flex:1,background:screen==="library"?"rgba(255,122,24,0.25)":"rgba(255,122,24,0.06)",border:`1px solid ${screen==="library"?"rgba(255,122,24,0.6)":"rgba(255,122,24,0.2)"}`,borderRadius:7,padding:"7px 2px",fontFamily:"'Anton',sans-serif",fontSize:10,fontWeight:700,color:"#FF7A18",letterSpacing:0.5,cursor:"pointer"}}>📚 LIBRARY</button>
+          <button onClick={()=>setScreen(screen==="lplab"?"landing":"lplab")} style={{flex:1,background:screen==="lplab"?"rgba(16,185,129,0.25)":"rgba(16,185,129,0.06)",border:`1px solid ${screen==="lplab"?"rgba(16,185,129,0.6)":"rgba(16,185,129,0.2)"}`,borderRadius:7,padding:"7px 2px",fontFamily:"'Anton',sans-serif",fontSize:10,fontWeight:700,color:"#10B981",letterSpacing:0.5,cursor:"pointer"}}>⚗️ LP LAB</button>
+          <button onClick={()=>setScreen(screen==="survive"?"landing":"survive")} style={{flex:1,background:screen==="survive"?"rgba(239,68,68,0.25)":"rgba(239,68,68,0.06)",border:`1px solid ${screen==="survive"?"rgba(239,68,68,0.6)":"rgba(239,68,68,0.2)"}`,borderRadius:7,padding:"7px 2px",fontFamily:"'Anton',sans-serif",fontSize:10,fontWeight:700,color:"#EF4444",letterSpacing:0.5,cursor:"pointer"}}>🎮 SURVIVE</button>
         </div>
       </div>
       <div style={{paddingTop:28}}>
