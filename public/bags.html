@@ -262,7 +262,7 @@ body{background:transparent;font-family:var(--body);}
 // DexScreener fallback. Same backend as the in-app feed.
 const lfREF='?ref=firechicken007';
 const GRAD_SOL=85; // Bags MIGRATION_QUOTE_THRESHOLD = 85 SOL accumulated in the curve = graduation
-let lfFeed=[], lfPrices={}, lfAges={}, lfSort='newest', lfLast=0, lfNearGrad=null, lfGraduated=null;
+let lfFeed=[], lfPrices={}, lfAges={}, lfSort='newest', lfLast=0, lfNearGrad=null, lfGraduated=null, lfNearGradDown=false;
 let lfSearch='', lfSortBy='default';
 function lfSetSearch(v){ lfSearch=(v||'').trim().toLowerCase(); lfPaint(); }
 function lfSetSortBy(v){ lfSortBy=v; lfPaint(); }
@@ -284,6 +284,7 @@ async function lfLoadGraduated(){
 async function lfLoadNearGrad(){
   try{
     const r=await fetch('/api/bags-near-grad'); const d=await r.json();
+    lfNearGradDown=!!(d&&d.sourceDown);
     if(d&&d.success&&Array.isArray(d.tokens)){
       lfNearGrad=d.tokens.map(t=>{
         lfPrices[t.tokenMint]={priceUsd:t.priceUsd,marketCap:t.marketCap,change24h:t.change24h,volume24h:t.volume24h,curvePct:t.curvePct,onBondingCurve:true,image:t.image,twitter:t.twitter};
@@ -378,7 +379,12 @@ function lfPaint(){
   if(lfSearch) cap=list.length+' match'+(list.length===1?'':'es')+' for "'+lfSearch+'"';
   const capEl=document.getElementById('lfCaption'); if(capEl) capEl.textContent=cap;
   if(!list.length){
-    el.innerHTML='<div class="lf-status">'+(lfSearch?'NO LAUNCHES MATCH YOUR SEARCH':lfSort==='bonding'?'NO BAGS TOKENS NEAR GRADUATION RIGHT NOW':lfSort==='graduated'?'NO RECENTLY GRADUATED BAGS TOKENS RIGHT NOW':'NO LAUNCHES RIGHT NOW')+'</div>';
+    const msg=lfSearch?'NO LAUNCHES MATCH YOUR SEARCH'
+      :(lfSort==='bonding'&&lfNearGradDown)?'⚠️ Live bonding-curve data is temporarily unavailable (data-provider quota). Newest launches &amp; graduated are still live — check back soon.'
+      :lfSort==='bonding'?'NO BAGS TOKENS NEAR GRADUATION RIGHT NOW'
+      :lfSort==='graduated'?'NO RECENTLY GRADUATED BAGS TOKENS RIGHT NOW'
+      :'NO LAUNCHES RIGHT NOW';
+    el.innerHTML='<div class="lf-status">'+msg+'</div>';
     const mm=document.getElementById('lfMeta'); if(mm) mm.textContent='⟳ 60s · '+new Date(lfLast).toLocaleTimeString();
     return;
   }

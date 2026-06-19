@@ -17,7 +17,8 @@
   .embers{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;}
   .embers span{position:absolute;bottom:40px;border-radius:50%;background:radial-gradient(circle,#FFD56B,#FF5A0A);}
 
-  .nav{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:14px;padding:11px 20px;
+  .nav{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:14px;
+       padding:calc(11px + env(safe-area-inset-top,0px)) 20px 11px;
        background:linear-gradient(180deg,rgba(18,9,5,.94),rgba(18,9,5,.55));backdrop-filter:blur(8px);border-bottom:1px solid var(--border-soft);}
   .nav .brand{display:flex;align-items:center;gap:10px;font-family:var(--disp);font-size:18px;letter-spacing:.5px;}
   .nav .brand img{width:32px;height:32px;border-radius:50%;object-fit:cover;object-position:center 12%;border:1.5px solid var(--gold);}
@@ -25,6 +26,8 @@
   .nav .links{margin-left:auto;display:flex;gap:4px;align-items:center;flex-wrap:wrap;}
   .nav .links a{font-family:var(--body);font-weight:600;font-size:12px;letter-spacing:.4px;color:var(--sub);padding:7px 11px;border-radius:999px;text-transform:uppercase;}
   .nav .links a:hover{color:#fff;background:rgba(255,122,24,.1);}
+  .nav .links a.ask{color:var(--gold);background:rgba(255,122,24,.1);border:1px solid rgba(255,122,24,.5);}
+  .nav .links a.ask:hover{color:#fff;background:rgba(255,122,24,.2);}
   .nav .links a.cta{color:#fff;background:linear-gradient(135deg,var(--orange),var(--red));box-shadow:0 4px 14px rgba(232,30,14,.35);}
 
   .wrap{position:relative;z-index:2;max-width:760px;margin:0 auto;padding:0 18px 70px;}
@@ -80,7 +83,7 @@
     .quick{grid-template-columns:1fr 1fr;}
     .hero h1{font-size:44px;} .hero .tag{font-size:20px;}
     .guidebtn .gt{font-size:19px;}
-    .nav .links a:not(.cta){display:none;}
+    .nav .links a:not(.cta):not(.ask){display:none;}
   }
 </style>
 </head>
@@ -98,6 +101,7 @@
   <a class="brand" href="/"><img src="/cluck-norris-mascot.jpg" alt=""><span><span class="c">CLUCK</span> <span class="n">NORRIS</span></span></a>
   <div class="links">
     <a href="/tools">Tools</a>
+    <a class="ask" href="/ask-cluck">🔥 Ask Cluck</a>
     <a class="cta" href="/school">Enter School</a>
   </div>
 </nav>
