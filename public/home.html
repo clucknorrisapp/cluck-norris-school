@@ -67,7 +67,7 @@
   .gopt:hover .oar{color:#fff;}
 
   /* ── simple quick links ── */
-  .quick{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:30px;}
+  .quick{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:30px;}
   .ql{display:flex;flex-direction:column;align-items:center;gap:7px;background:var(--card-grad);border:1px solid var(--border);border-radius:14px;padding:18px 10px;transition:transform .1s,border-color .1s,box-shadow .1s;}
   .ql:hover{transform:translateY(-2px);border-color:var(--orange);box-shadow:0 8px 20px rgba(232,30,14,.16);}
   .ql .qic{font-size:26px;}
@@ -81,6 +81,7 @@
 
   @media(max-width:680px){
     .quick{grid-template-columns:1fr 1fr;}
+    .quick .ql:last-child{grid-column:1 / -1;}
     .hero h1{font-size:44px;} .hero .tag{font-size:20px;}
     .guidebtn .gt{font-size:19px;}
     .nav .links a:not(.cta):not(.ask){display:none;}
@@ -134,6 +135,7 @@
       <a class="gopt" href="/school#library"><span class="oic">📖</span><span class="ol"><b>I want to learn at my own pace</b><i>Browse the Library — deep dives, no exams</i></span><span class="oar">→</span></a>
       <a class="gopt" href="/tools"><span class="oic">🔬</span><span class="ol"><b>I need research tools</b><i>X-Ray, Autopsy, Order Book — any Solana token</i></span><span class="oar">→</span></a>
       <a class="gopt" href="/premium"><span class="oic">🛠️</span><span class="ol"><b>I need development / advanced tools</b><i>Operator-grade forensics &amp; builder tooling</i></span><span class="oar">→</span></a>
+      <a class="gopt" href="/school#clkn"><span class="oic">🪙</span><span class="ol"><b>I want to know about CLKN</b><i>The token — price, holders, chart &amp; where to buy</i></span><span class="oar">→</span></a>
     </div>
   </div>
 
@@ -143,6 +145,7 @@
     <a class="ql" href="/school#incubator"><span class="qic">🐣</span><span class="qt">Incubator</span><span class="qd">New here? Wallets, tokens &amp; safety</span></a>
     <a class="ql" href="/school"><span class="qic">🏫</span><span class="qt">School</span><span class="qd">12-class course → diploma</span></a>
     <a class="ql" href="/tools"><span class="qic">🛠️</span><span class="qt">Tools</span><span class="qd">Research &amp; development tools</span></a>
+    <a class="ql" href="/school#clkn"><span class="qic">🪙</span><span class="qt">CLKN Token</span><span class="qd">Price, holders, chart &amp; where to buy</span></a>
   </div>
 
   <footer>
@@ -151,7 +154,7 @@
       <a href="https://t.me/FireChicken007" target="_blank" rel="noreferrer">✈️ Telegram</a> ·
       <a href="/investors">Investors</a>
     </div>
-    <div class="mint">CLKN · DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS</div>
+    <div class="mint"><a href="/school#clkn">CLKN · DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS</a></div>
     <div class="disc">Educational tools and forensic data only — the chain shows <em>what</em>, never <em>why</em>. Nothing here is financial advice.</div>
   </footer>
 </div>
