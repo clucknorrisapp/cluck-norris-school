@@ -55,8 +55,34 @@ function publicErrMsg(err, fallback = "internal error") {
   // still bounding pathological blobs; secrets are already stripped above.
   return m.length > 1500 ? m.slice(0, 1500) + "…" : m;
 }
-const { PublicKey } = require("@solana/web3.js");
 
+// ── Multi-language support for the AI endpoints ──────────────────────────────
+// The tutor/lectures/classroom answer in the learner's language. Crypto tickers,
+// protocol names, and addresses stay in English. Add languages here as we expand.
+const AI_LANGS = {
+  en: "English",
+  zh: "Simplified Chinese (简体中文)",
+  es: "Spanish",
+  pt: "Portuguese (Brazil)",
+  ru: "Russian",
+  tr: "Turkish",
+  vi: "Vietnamese",
+  ko: "Korean",
+  fr: "French",
+};
+function aiLangName(lang) {
+  const k = String(lang || "").toLowerCase().slice(0, 2);
+  return AI_LANGS[k] || null;
+}
+// Suffix appended to an AI system prompt so the model replies in `lang`. Empty for
+// English (or unknown) so existing behavior is untouched.
+function aiLangDirective(lang) {
+  const name = aiLangName(lang);
+  if (!name || name === "English") return "";
+  return `\n\nIMPORTANT — OUTPUT LANGUAGE: Respond ENTIRELY in ${name}. Keep crypto tickers, token symbols, protocol names, wallet/contract addresses, URLs and code EXACTLY as-is — do NOT translate or transliterate CLKN, SOL, USDC, JUP, DeFi, AMM, LP, NFT, Jupiter, Bags, Orca, Meteora, Solana, etc. Preserve the same tough, punchy Cluck Norris voice and meaning — localize naturally, do not translate word-for-word.`;
+}
+
+const { PublicKey } = require("@solana/web3.js");
 // Register Oswald (the site's display font) for the transcript card. Without this,
 // Railway's container has no usable fallback for "sans-serif" and text silently
 // fails to render. WOFF files are bundled in /public/vendor/fonts/ so this
@@ -2702,7 +2728,7 @@ async function classroomLiveExample(course, lesson) {
 
 app.post("/api/classroom", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  const { courseId, lessonId, message, history } = req.body || {};
+  const { courseId, lessonId, message, history, lang } = req.body || {};
   const course = ccFindCourse(courseId), lesson = ccFindLesson(courseId, lessonId);
   if (!course || !lesson) return res.status(400).json({ success: false, error: "pick a lesson" });
   const KEY = process.env.ANTHROPIC_API_KEY;
@@ -2728,7 +2754,7 @@ HOW YOU TEACH (a back-and-forth, NOT a lecture dump):
 - If the student says they're NOT SURE / don't know the answer — do NOT mark it wrong and do NOT move on. Warmly teach the answer clearly (with the explanation + a simple example), THEN ask a fresh, slightly easier check question on the SAME concept so they can get it. Learning, not gotchas.
 - Keep EVERY reply SHORT (2–5 sentences), ending with a question or "ready for the next one?".
 - Cover the lesson's key concepts (usually 3–6), then give a 1–2 line recap. When the student has shown they understand the CORE of this lesson, end that final message with the exact tag [LESSON COMPLETE] on its own line.
-RULES: Never give financial advice or price predictions. Encouraging but blunt. No markdown headers/asterisks (the [LESSON COMPLETE] tag is the only bracketed text allowed).${opened ? "" : "\nThis is the FIRST message — welcome them to the lesson in 1 line, teach the first concept, and ask your first question."}`;
+RULES: Never give financial advice or price predictions. Encouraging but blunt. No markdown headers/asterisks (the [LESSON COMPLETE] tag is the only bracketed text allowed).${opened ? "" : "\nThis is the FIRST message — welcome them to the lesson in 1 line, teach the first concept, and ask your first question."}${aiLangDirective(lang)}${aiLangName(lang) && aiLangName(lang) !== "English" ? "\nNOTE: the [LESSON COMPLETE] tag must stay EXACTLY in English ([LESSON COMPLETE]) — never translate it." : ""}`;
   try {
     const messages = [...hist];
     messages.push({ role: "user", content: opened ? (msg || "(continue)") : "Start the lesson, professor." });
@@ -2814,7 +2840,8 @@ VOICE: Chuck-Norris-fact bravado (e.g. "Cluck Norris doesn't buy the dip — the
 RULES: Never give financial or investment advice. Never shill or recommend specific tokens (CLKN included). Teach concepts, mechanics, and safety. No long disclaimers. ${styleLine}${grounding}
 Answer the student's question below.
 Respond with ONLY valid minified JSON — no markdown, no code fences — exactly this shape:
-{"fact":"<one punchy Cluck-Norris-style one-liner riffing on the topic>","lecture":["<3 to 4 short, accurate teaching points, each 1-2 sentences>"],"drill":"<one short tough-love takeaway order>"}`;
+{"fact":"<one punchy Cluck-Norris-style one-liner riffing on the topic>","lecture":["<3 to 4 short, accurate teaching points, each 1-2 sentences>"],"drill":"<one short tough-love takeaway order>"}${aiLangDirective(req.body && req.body.lang)}
+(The JSON keys stay exactly "fact"/"lecture"/"drill" in English; only their VALUES are written in the output language.)`;
   try {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -6283,7 +6310,7 @@ app.post("/api/slots/open", (req, res) => {
 // -- Ask Cluck Norris (Claude AI) --
 app.post("/api/ask-cluck", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  const { question, context } = req.body;
+  const { question, context, lang } = req.body;
   if (!question || question.trim().length < 3) {
     return res.status(400).json({ success: false, error: "Question too short" });
   }
@@ -6380,7 +6407,7 @@ Your personality:
 - If someone asks something off-topic or inappropriate, shut it down with humor.
 - Always end with something memorable or a challenge.
 - You are educational first, entertaining second.
-${safeContext ? `\nThe student is currently studying: ${safeContext}` : ''}`;
+${safeContext ? `\nThe student is currently studying: ${safeContext}` : ''}${aiLangDirective(lang)}`;
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",

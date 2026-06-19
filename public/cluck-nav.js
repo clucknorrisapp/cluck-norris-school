@@ -6,6 +6,13 @@
    Self-contained inline styles so it works even without theme.css.
    Add to a page with: <script defer src="/cluck-nav.js"></script> */
 (function () {
+  // Load the global i18n runtime (中文/EN) on every page that includes this script
+  // — BEFORE any early return below, so it runs even where the nav bar is hidden.
+  if (!document.getElementById("clkn-i18n-js")) {
+    var i18 = document.createElement("script");
+    i18.id = "clkn-i18n-js"; i18.src = "/i18n.js"; i18.defer = true;
+    (document.head || document.documentElement).appendChild(i18);
+  }
   var p = (location.pathname || "").replace(/\/+$/, "");
   // pages that belong to the Tools hub — get an "All Tools" back-link
   var TOOL_PAGES = ["/wallet-xray","/autopsy","/order-book","/trace","/snapshot","/holders",
