@@ -1648,6 +1648,7 @@ setInterval(() => {
 app.use("/api/", rateLimit("api", { windowMs: 60000, max: 150 }));
 app.use("/api/ask-cluck", rateLimit("ai", { windowMs: 60000, max: 15 }));
 app.use("/api/lecture", rateLimit("ai", { windowMs: 60000, max: 15 }));
+app.use("/api/track", rateLimit("track", { windowMs: 60000, max: 120 })); // learning-funnel events (many per session)
 app.use("/api/lp-ask", rateLimit("ai", { windowMs: 60000, max: 12 }));
 app.use("/api/verify-clkn-payment", rateLimit("pay", { windowMs: 60000, max: 20 }));
 // Classroom: generous enough for a real multi-turn lesson/exam, tight enough to stop a bot
@@ -8222,6 +8223,14 @@ app.get("/api/stats", (req, res) => {
   }
   const n = Math.max(1, Math.min(90, parseInt(req.query.days, 10) || 30));
   return res.status(200).json({ success: true, ...analytics.summary(n) });
+});
+// Learning-funnel event sink (public, no PII) — the React school posts step events
+// here (lesson_start/lesson_complete, school/incubator/challenge/graduation) so we can
+// see where learners drop off. Validated + capped in analytics.trackFunnel.
+app.post("/api/track", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try { const ev = req.body && req.body.event; if (ev) analytics.trackFunnel(ev); } catch (_) {}
+  return res.status(204).end();
 });
 app.get("/bags", (req, res) => {
   res.sendFile(join(__dirname, "public", "bags.html"));

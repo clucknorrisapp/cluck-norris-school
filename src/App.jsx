@@ -12,6 +12,17 @@ const JUPITER_TRADE_LINK = "https://jup.ag/tokens/DW6DF2mjtyx67vcNmMhFm9XdxAwREu
 // ── JUPITER WIDGET ──
 const JUPITER_REFERRAL = "A4fSbCMAya9rLWY4incNYaVfhYA9mpCownbFEW3dUZAg";
 
+// Fire-and-forget learning-funnel event (no PII) — see /api/track + lib/analytics.
+// Lets us see where learners drop off (per-lesson start/complete, school/incubator/
+// challenge/graduation). Never throws, never blocks the UI.
+function track(event){
+  try{
+    var ev=String(event||"").toLowerCase().replace(/[^a-z0-9_:-]/g,"").slice(0,64);
+    if(ev) fetch("/api/track",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({event:ev}),keepalive:true}).catch(function(){});
+  }catch(_){}
+}
+const trackId=(prefix,id)=>track(prefix+":"+String(id).toLowerCase().replace(/[^a-z0-9-]/g,"").slice(0,48));
+
 // ── ERROR BOUNDARY for interactive calculators ──
 class CalcErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { error: null }; }
@@ -673,6 +684,7 @@ function UltimateChallenge({ onBack }) {
       setQuestions(data.questions);
       setSessionId(data.sessionId);
       setQi(0); setAnswers([]); setSel(null); setFinished(false); setResult(null);
+      track("challenge_start");
       setStarted(true);
     } catch(e) {
       setLoadErr("Couldn't load the exam — try again in a moment.");
@@ -735,6 +747,7 @@ function UltimateChallenge({ onBack }) {
         body: JSON.stringify({ wallet, score, total: result ? result.total : questions.length, pct, passToken: result && result.passToken, coursework: readCoursework() })
       });
       const data = await res.json();
+      track("claim_submit:challenge");
       setClaimed(true);
       setIsHolder(data.isHolder || false);
       setHolderBalance(data.balance || 0);
@@ -1999,6 +2012,7 @@ function Complete({onRestart}){
         body: JSON.stringify({ wallet, score: 12, total: 12, pct: 100, source: "GRADUATION", coursework: readCoursework() })
       });
       const data = await res.json();
+      track("claim_submit:graduation");
       setClaimed(true);
       setIsHolder(data.isHolder || false);
       setHolderBalance(data.balance || 0);
@@ -2211,9 +2225,10 @@ export default function App(){
 
   function finish(id,passed){
     if(passed&&!completed.includes(id)){
+      trackId("lesson_complete",id);
       const next=[...completed,id];
       setCompleted(next);
-      if(next.length===LESSONS.length){setScreen("complete");return;}
+      if(next.length===LESSONS.length){track("graduation");setScreen("complete");return;}
     }
     setScreen("select");
   }
@@ -2254,15 +2269,15 @@ export default function App(){
         </div>
       </div>
       <div style={{paddingTop:28}}>
-        {screen==="landing"&&<Landing onStart={()=>setScreen("select")} onChallenge={()=>setScreen("challenge")} onIncubator={()=>setScreen("incubator")} onStartHere={()=>setScreen("start")} completed={completed}/>}
+        {screen==="landing"&&<Landing onStart={()=>{track("school_start");setScreen("select");}} onChallenge={()=>setScreen("challenge")} onIncubator={()=>{track("incubator_start");setScreen("incubator");}} onStartHere={()=>setScreen("start")} completed={completed}/>}
         {screen==="start"&&<StartHere onGo={(s)=>setScreen(s)}/>}
         {screen==="challenge"&&<UltimateChallenge onBack={()=>setScreen("landing")}/>}
-        {screen==="incubator"&&<Incubator onComplete={()=>setScreen("select")} onBack={()=>setScreen("landing")}/>}
+        {screen==="incubator"&&<Incubator onComplete={()=>{track("incubator_complete");setScreen("select");}} onBack={()=>setScreen("landing")}/>}
         {screen==="clkn"&&<CLKNWidget/>}
         {screen==="survive"&&<Suspense fallback={<div style={{padding:40,textAlign:"center",color:"#9CA3AF"}}>LOADING…</div>}><SurvivalSimulator/></Suspense>}
         {screen==="lplab"&&<Suspense fallback={<div style={{padding:40,textAlign:"center",color:"#9CA3AF"}}>LOADING…</div>}><LPLab/></Suspense>}
         {screen==="library"&&<Suspense fallback={<div style={{padding:40,textAlign:"center",color:"#9CA3AF"}}>LOADING…</div>}><Library/></Suspense>}
-        {screen==="select"&&<Select onSelect={id=>{setLessonId(id);setScreen("lesson");}} completed={completed}/>}
+        {screen==="select"&&<Select onSelect={id=>{trackId("lesson_start",id);setLessonId(id);setScreen("lesson");}} completed={completed}/>}
         {screen==="lesson"&&lesson&&<Lesson lesson={lesson} onComplete={finish} onBack={()=>setScreen("select")}/>}
         {screen==="complete"&&<Complete onRestart={()=>{setCompleted([]);setScreen("landing");}}/>}
       </div>
