@@ -4230,6 +4230,63 @@ app.get("/api/tg-test", async (req, res) => {
   }
 });
 
+// Manually (re)fire a buy/sell alert for a specific signature — the recovery lever
+// for a trade the live poller dropped on a transient cycle. Runs the SAME detection
+// (detectClknTrade) and the SAME notify path (notifyClknBuy/Sell) as the poller, so
+// the post is identical to an organic one (graphic, rank, market cap, route). Gated;
+// DRY RUN unless &run=1 (dry run returns what it WOULD post). On a real fire it
+// remembers the sig so the poller won't double-post if it later catches up.
+app.get("/api/buy-replay", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const KEY = process.env.PREMIUM_ACCESS_KEY;
+  const provided = req.query.key || req.headers["x-premium-key"];
+  if (!KEY || provided !== KEY) return res.status(404).json({ error: "not_found" });
+  const HELIUS_KEY = process.env.HELIUS_API_KEY;
+  if (!HELIUS_KEY) return res.status(200).json({ success: false, error: "HELIUS_API_KEY unset on this server" });
+  const sig = String(req.query.sig || "").trim();
+  if (!sig || sig.length < 60) return res.status(400).json({ success: false, error: "missing/invalid ?sig" });
+  try {
+    // Refresh quote prices so quoteUsdValue can value SOL/JUP/cbBTC legs.
+    await Promise.all([getSolUsd(), getBtcUsd(), getJupUsd()]);
+    const tx = await fetchRawTradeTx(sig, HELIUS_KEY);
+    if (!hasTokenBalanceData(tx)) {
+      return res.status(200).json({ success: false, error: "tx not indexed / no token balance data yet", sig });
+    }
+    const trade = detectClknTrade(tx);
+    if (!trade) return res.status(200).json({ success: false, error: "not a CLKN buy/sell (no opposite-direction pool+quote leg — e.g. a liquidity add/remove)", sig });
+    const usd = quoteUsdValue(trade);
+    const quoteMeta = QUOTE_TOKENS[trade.quote.mint] || { symbol: "?" };
+    // Pool object for route/label display. Caller may override &dex=&pool=; default to
+    // the canonical Meteora pool (where post-Orca-close fills route).
+    const pool = {
+      address: String(req.query.pool || CLKN_POOL_ADDRESS),
+      dexId: String(req.query.dex || "meteora").toLowerCase(),
+      labels: [],
+    };
+    const preview = {
+      action: trade.action,
+      clkn: trade.clknAmount,
+      quote: `${trade.quote.amount} ${quoteMeta.symbol}`,
+      usd: usd == null ? null : Number(usd.toFixed(2)),
+      trader: trade.trader,
+      crossPoolArb: trade.crossPoolArb,
+      alreadyNotified: recentlyNotifiedSigs.has(sig),
+    };
+    if (req.query.run !== "1") {
+      return res.status(200).json({ success: true, dryRun: true, wouldPost: preview, note: "add &run=1 to actually fire the alert" });
+    }
+    if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHAT_ID) {
+      return res.status(200).json({ success: false, error: "Telegram not configured on this server", wouldPost: preview });
+    }
+    if (trade.action === "sell") await notifyClknSell(trade, tx, pool, usd, HELIUS_KEY);
+    else                         await notifyClknBuy(trade, tx, pool, usd, HELIUS_KEY);
+    rememberSig(sig); // so the live poller won't double-post it
+    return res.status(200).json({ success: true, fired: true, posted: preview });
+  } catch (e) {
+    return res.status(500).json({ success: false, error: publicErrMsg(e) });
+  }
+});
+
 // Telegram webhook diagnostics (gated). getWebhookInfo + getMe — shows whether the
 // webhook URL is registered, how many updates are queued, and Telegram's last delivery
 // error (why commands like /liquidity might go unanswered). Add &reset=1 to re-register
