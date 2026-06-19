@@ -22,14 +22,14 @@ export function MintAddress({ compact }) {
     setTimeout(() => setCopied(false), 2000);
   }
   if (compact) return (
-    <div onClick={copy} style={{display:"inline-flex",alignItems:"center",gap:6,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:8,padding:"5px 10px",cursor:"pointer"}}>
+    <div onClick={copy} style={{display:"inline-flex",alignItems:"center",gap:6,background:"rgba(255,122,24,0.06)",border:"1px solid rgba(255,122,24,0.2)",borderRadius:8,padding:"5px 10px",cursor:"pointer"}}>
       <span style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#6B7280",letterSpacing:1}}>CA:</span>
       <span style={{fontFamily:"monospace",fontSize:9,color:"#9CA3AF"}}>{CLKN_MINT.slice(0,8)}...{CLKN_MINT.slice(-6)}</span>
       <span style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:copied?"#10B981":"#FF7A18",letterSpacing:1}}>{copied?"✓ COPIED":"COPY"}</span>
     </div>
   );
   return (
-    <div onClick={copy} style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:10,padding:"10px 14px",cursor:"pointer",marginTop:8}}>
+    <div onClick={copy} style={{background:"rgba(255,122,24,0.05)",border:"1px solid rgba(255,122,24,0.18)",borderRadius:10,padding:"10px 14px",cursor:"pointer",marginTop:8}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
         <span style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:2}}>CONTRACT ADDRESS</span>
         <span style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:copied?"#10B981":"#FF7A18",letterSpacing:1}}>{copied?"✓ COPIED":"TAP TO COPY"}</span>
@@ -167,7 +167,7 @@ function AutoVerify({ unlockAmount, onUnlock, onBack }) {
         Could not find your {unlockAmount.toFixed(3)} CLKN payment after 2 minutes. Make sure you sent the exact amount to the correct wallet.
       </p>
       <div style={{display:"flex",gap:8}}>
-        <button onClick={onBack} style={{flex:1,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:8,padding:"10px",fontFamily:"'Anton',sans-serif",fontSize:11,color:"#6B7280",cursor:"pointer"}}>← TRY AGAIN</button>
+        <button onClick={onBack} style={{flex:1,background:"rgba(255,122,24,0.07)",border:"1px solid rgba(255,122,24,0.2)",borderRadius:8,padding:"10px",fontFamily:"'Anton',sans-serif",fontSize:11,color:"#6B7280",cursor:"pointer"}}>← TRY AGAIN</button>
         <button onClick={()=>window.open(TELEGRAM_LINK,"_blank")} style={{flex:1,background:"rgba(255,122,24,0.15)",border:"1px solid rgba(255,122,24,0.3)",borderRadius:8,padding:"10px",fontFamily:"'Anton',sans-serif",fontSize:11,color:"#FF7A18",cursor:"pointer"}}>📱 GET HELP</button>
       </div>
     </div>
@@ -186,7 +186,7 @@ function AutoVerify({ unlockAmount, onUnlock, onBack }) {
       <p style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#9CA3AF",margin:"0 0 12px",lineHeight:1.7}}>
         Checking every 3 seconds{dots} usually takes less than 15 seconds after your transaction confirms.
       </p>
-      <div style={{height:4,background:"rgba(255,255,255,0.08)",borderRadius:2,marginBottom:12}}>
+      <div style={{height:4,background:"rgba(255,122,24,0.18)",borderRadius:2,marginBottom:12}}>
         <div style={{height:"100%",width:`${(attempts/maxAttempts)*100}%`,background:"linear-gradient(90deg,#FF7A18,#EF4444)",borderRadius:2,transition:"width 0.3s"}}/>
       </div>
       <button onClick={onBack} style={{background:"none",border:"none",color:"#6B7280",fontFamily:"'Anton',sans-serif",fontSize:9,letterSpacing:1,cursor:"pointer"}}>← BACK</button>
@@ -241,7 +241,7 @@ function CluckUnlock({ onUnlock }) {
       {/* Step indicator */}
       <div style={{display:"flex",gap:6,marginBottom:14}}>
         {[1,2,3].map(s=>(
-          <div key={s} style={{flex:1,height:3,borderRadius:2,background:step>=s?"#FF7A18":"rgba(255,255,255,0.1)"}}/>
+          <div key={s} style={{flex:1,height:3,borderRadius:2,background:step>=s?"#FF7A18":"rgba(255,122,24,0.2)"}}/>
         ))}
       </div>
 
@@ -266,7 +266,7 @@ function CluckUnlock({ onUnlock }) {
         <div>
           <div style={{fontFamily:"'Anton',sans-serif",fontSize:10,color:"#FF7A18",letterSpacing:2,marginBottom:8}}>STEP 2 — SEND {unlockAmount.toFixed(3)} CLKN</div>
           {/* Clickable wallet address */}
-          <div onClick={()=>{navigator.clipboard?.writeText("7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H");setWalletCopied(true);setTimeout(()=>setWalletCopied(false),2000);}} style={{background:"rgba(0,0,0,0.3)",borderRadius:8,padding:"10px 14px",marginBottom:10,cursor:"pointer",border:`1px solid ${walletCopied?"rgba(16,185,129,0.5)":"rgba(255,255,255,0.08)"}`}}>
+          <div onClick={()=>{navigator.clipboard?.writeText("7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H");setWalletCopied(true);setTimeout(()=>setWalletCopied(false),2000);}} style={{background:"rgba(0,0,0,0.3)",borderRadius:8,padding:"10px 14px",marginBottom:10,cursor:"pointer",border:`1px solid ${walletCopied?"rgba(16,185,129,0.5)":"rgba(255,122,24,0.18)"}`}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
               <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1}}>SEND TO: (TAP TO COPY)</div>
               <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:walletCopied?"#10B981":"#FF7A18",letterSpacing:1}}>{walletCopied?"✓ COPIED!":"📋 COPY"}</div>
@@ -281,7 +281,7 @@ function CluckUnlock({ onUnlock }) {
             </div>
             <div style={{fontFamily:"monospace",fontSize:20,color:"#FFB627",fontWeight:700,letterSpacing:2}}>{unlockAmount.toFixed(3)} CLKN</div>
           </div>
-          <div style={{background:"rgba(255,255,255,0.04)",borderRadius:8,padding:"10px 14px",marginBottom:10}}>
+          <div style={{background:"rgba(255,122,24,0.06)",borderRadius:8,padding:"10px 14px",marginBottom:10}}>
             <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1,marginBottom:6}}>HOW TO SEND:</div>
             {["Open the wallet holding your CLKN", "Select CLKN token", "Tap Send", `Enter amount: ${unlockAmount.toFixed(3)}`, "Paste the wallet address above", "Confirm and send"].map((s,i)=>(
               <div key={i} style={{display:"flex",gap:8,marginBottom:4,alignItems:"flex-start"}}>
@@ -302,7 +302,7 @@ function CluckUnlock({ onUnlock }) {
             Need help? Come find us on Telegram — the flock will sort you out. 🐔
           </p>
           <div style={{display:"flex",gap:8}}>
-            <button onClick={()=>setStep(1)} style={{flex:1,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:8,padding:"10px",fontFamily:"'Anton',sans-serif",fontSize:11,color:"#6B7280",cursor:"pointer"}}>← BACK</button>
+            <button onClick={()=>setStep(1)} style={{flex:1,background:"rgba(255,122,24,0.07)",border:"1px solid rgba(255,122,24,0.2)",borderRadius:8,padding:"10px",fontFamily:"'Anton',sans-serif",fontSize:11,color:"#6B7280",cursor:"pointer"}}>← BACK</button>
             <button onClick={()=>setStep(3)} style={{flex:2,background:"linear-gradient(135deg,#FF7A18,#EF4444)",border:"none",borderRadius:8,padding:"10px",fontFamily:"'Anton',sans-serif",fontSize:11,fontWeight:700,color:"#fff",letterSpacing:1,cursor:"pointer"}}>SENT IT →</button>
           </div>
         </div>
@@ -420,18 +420,18 @@ export function AskCluck({ context, compact }) {
                 onChange={e=>setQuestion(e.target.value)}
                 onKeyDown={e=>e.key==="Enter"&&askQuestion()}
                 placeholder="Ask anything about crypto, DeFi, or this lesson..."
-                style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,122,24,0.3)",borderRadius:8,padding:question?"10px 34px 10px 12px":"10px 12px",color:"#F9FAFB",fontFamily:"'Anton',sans-serif",fontSize:15,outline:"none",boxSizing:"border-box"}}
+                style={{width:"100%",background:"rgba(255,122,24,0.07)",border:"1px solid rgba(255,122,24,0.3)",borderRadius:8,padding:question?"10px 34px 10px 12px":"10px 12px",color:"#F9FAFB",fontFamily:"'Anton',sans-serif",fontSize:15,outline:"none",boxSizing:"border-box"}}
               />
               {question && (
                 <button
                   onClick={()=>setQuestion("")}
                   aria-label="Clear question"
                   title="Clear"
-                  style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:"50%",width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",color:"#9CA3AF",cursor:"pointer",fontSize:11,fontFamily:"system-ui,sans-serif",padding:0,lineHeight:1}}
+                  style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:"rgba(255,122,24,0.18)",border:"1px solid rgba(255,122,24,0.22)",borderRadius:"50%",width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",color:"#9CA3AF",cursor:"pointer",fontSize:11,fontFamily:"system-ui,sans-serif",padding:0,lineHeight:1}}
                 >✕</button>
               )}
             </div>
-            <button onClick={askQuestion} disabled={!question.trim()||loading} style={{background:question.trim()&&!loading?"linear-gradient(135deg,#FF7A18,#EF4444)":"rgba(255,255,255,0.05)",border:"none",borderRadius:8,padding:"9px 14px",fontFamily:"'Anton',sans-serif",fontSize:11,fontWeight:700,color:question.trim()&&!loading?"#fff":"#4B5563",cursor:question.trim()&&!loading?"pointer":"default",letterSpacing:1,whiteSpace:"nowrap"}}>
+            <button onClick={askQuestion} disabled={!question.trim()||loading} style={{background:question.trim()&&!loading?"linear-gradient(135deg,#FF7A18,#EF4444)":"rgba(255,122,24,0.07)",border:"none",borderRadius:8,padding:"9px 14px",fontFamily:"'Anton',sans-serif",fontSize:11,fontWeight:700,color:question.trim()&&!loading?"#fff":"#4B5563",cursor:question.trim()&&!loading?"pointer":"default",letterSpacing:1,whiteSpace:"nowrap"}}>
               {loading ? "..." : "ASK →"}
             </button>
           </div>
@@ -444,7 +444,7 @@ export function AskCluck({ context, compact }) {
       )}
 
       {answer && (
-        <div style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,122,24,0.2)",borderRadius:10,padding:"12px 14px",overflow:"hidden",minWidth:0}}>
+        <div style={{background:"rgba(255,122,24,0.06)",border:"1px solid rgba(255,122,24,0.2)",borderRadius:10,padding:"12px 14px",overflow:"hidden",minWidth:0}}>
           <div style={{display:"flex",gap:8,alignItems:"flex-start",minWidth:0}}>
             <span style={{fontSize:16,flexShrink:0}}>🐔</span>
             <p style={{margin:0,fontSize:15,color:"#D1D5DB",lineHeight:1.8,fontFamily:"inherit",wordBreak:"break-word",overflowWrap:"break-word",whiteSpace:"pre-wrap"}}>

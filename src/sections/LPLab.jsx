@@ -1923,12 +1923,12 @@ function DCACalculator() {
         <div>
           <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1,marginBottom:4}}>CURRENT PRICE ($)</div>
           <input type="number" value={currentPrice} min={1} onChange={e=>setCurrentPrice(Math.max(1,Number(e.target.value)))}
-            style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(16,185,129,0.3)",borderRadius:8,padding:"8px 10px",color:"#F9FAFB",fontFamily:"monospace",fontSize:14,boxSizing:"border-box",outline:"none"}}/>
+            style={{width:"100%",background:"rgba(255,122,24,0.07)",border:"1px solid rgba(16,185,129,0.3)",borderRadius:8,padding:"8px 10px",color:"#F9FAFB",fontFamily:"monospace",fontSize:14,boxSizing:"border-box",outline:"none"}}/>
         </div>
         <div>
           <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1,marginBottom:4}}>CAPITAL TO DEPLOY ($)</div>
           <input type="number" value={capital} min={100} onChange={e=>setCapital(Math.max(100,Number(e.target.value)))}
-            style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(16,185,129,0.3)",borderRadius:8,padding:"8px 10px",color:"#F9FAFB",fontFamily:"monospace",fontSize:14,boxSizing:"border-box",outline:"none"}}/>
+            style={{width:"100%",background:"rgba(255,122,24,0.07)",border:"1px solid rgba(16,185,129,0.3)",borderRadius:8,padding:"8px 10px",color:"#F9FAFB",fontFamily:"monospace",fontSize:14,boxSizing:"border-box",outline:"none"}}/>
         </div>
       </div>
 
@@ -1938,12 +1938,12 @@ function DCACalculator() {
           <div>
             <div style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#6B7280",marginBottom:4}}>RANGE BOTTOM</div>
             <input type="number" value={rangeBottom} min={1} onChange={e=>setRangeBottom(Math.max(1,Number(e.target.value)))}
-              style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:8,padding:"8px 10px",color:"#F9FAFB",fontFamily:"monospace",fontSize:14,boxSizing:"border-box",outline:"none"}}/>
+              style={{width:"100%",background:"rgba(255,122,24,0.07)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:8,padding:"8px 10px",color:"#F9FAFB",fontFamily:"monospace",fontSize:14,boxSizing:"border-box",outline:"none"}}/>
           </div>
           <div>
             <div style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#6B7280",marginBottom:4}}>RANGE TOP</div>
             <input type="number" value={rangeTop} min={1} onChange={e=>setRangeTop(Math.max(1,Number(e.target.value)))}
-              style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,182,39,0.3)",borderRadius:8,padding:"8px 10px",color:"#F9FAFB",fontFamily:"monospace",fontSize:14,boxSizing:"border-box",outline:"none"}}/>
+              style={{width:"100%",background:"rgba(255,122,24,0.07)",border:"1px solid rgba(255,182,39,0.3)",borderRadius:8,padding:"8px 10px",color:"#F9FAFB",fontFamily:"monospace",fontSize:14,boxSizing:"border-box",outline:"none"}}/>
           </div>
         </div>
       </div>
@@ -1951,7 +1951,7 @@ function DCACalculator() {
       {/* Visual range bar */}
       <div style={{marginBottom:14,background:"rgba(0,0,0,0.3)",borderRadius:8,padding:"10px 12px"}}>
         <div style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#6B7280",letterSpacing:1,marginBottom:6}}>PRICE VISUALIZATION</div>
-        <div style={{position:"relative",height:24,background:"rgba(255,255,255,0.05)",borderRadius:4}}>
+        <div style={{position:"relative",height:24,background:"rgba(255,122,24,0.07)",borderRadius:4}}>
           {/* Range bar */}
           {inRange && (() => {
             const min = Math.min(rangeBottom * 0.8, 1);
@@ -2037,7 +2037,7 @@ function BinVisualizer() {
       {/* Mode toggle */}
       <div style={{display:"flex",gap:8,marginBottom:12}}>
         {[{id:"dlmm",label:"METEORA DLMM (BINS)"},{id:"tick",label:"RAYDIUM/ORCA (TICKS)"}].map(m=>(
-          <button key={m.id} onClick={()=>setMode(m.id)} style={{flex:1,background:mode===m.id?"rgba(16,185,129,0.2)":"rgba(255,255,255,0.04)",border:`1px solid ${mode===m.id?"#10B981":"rgba(255,255,255,0.1)"}`,borderRadius:8,padding:"8px",fontFamily:"'Anton',sans-serif",fontSize:9,color:mode===m.id?"#10B981":"#6B7280",cursor:"pointer",letterSpacing:1}}>
+          <button key={m.id} onClick={()=>setMode(m.id)} style={{flex:1,background:mode===m.id?"rgba(16,185,129,0.2)":"rgba(255,122,24,0.06)",border:`1px solid ${mode===m.id?"#10B981":"rgba(255,122,24,0.2)"}`,borderRadius:8,padding:"8px",fontFamily:"'Anton',sans-serif",fontSize:9,color:mode===m.id?"#10B981":"#6B7280",cursor:"pointer",letterSpacing:1}}>
             {m.label}
           </button>
         ))}
@@ -2138,7 +2138,7 @@ function ILCalculator() {
           <div key={i}>
             <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1,marginBottom:4}}>{f.label}</div>
             <input type="number" value={f.val} onChange={e=>f.set(Math.max(1,Number(e.target.value)))}
-              style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(16,185,129,0.3)",borderRadius:8,padding:"8px 10px",color:"#F9FAFB",fontFamily:"monospace",fontSize:14,boxSizing:"border-box",outline:"none"}}/>
+              style={{width:"100%",background:"rgba(255,122,24,0.07)",border:"1px solid rgba(16,185,129,0.3)",borderRadius:8,padding:"8px 10px",color:"#F9FAFB",fontFamily:"monospace",fontSize:14,boxSizing:"border-box",outline:"none"}}/>
           </div>
         ))}
       </div>
@@ -2261,7 +2261,7 @@ function CapitalEfficiencyCalc() {
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
         {[
-          {label:"FULL RANGE", apr:`~${fullRangeFeeAPR.toFixed(0)}%`, annual:`$${(capital * fullRangeFeeAPR / 100).toFixed(0)}`, color:"#6B7280", bg:"rgba(255,255,255,0.04)"},
+          {label:"FULL RANGE", apr:`~${fullRangeFeeAPR.toFixed(0)}%`, annual:`$${(capital * fullRangeFeeAPR / 100).toFixed(0)}`, color:"#6B7280", bg:"rgba(255,122,24,0.06)"},
           {label:"CONCENTRATED", apr:`~${Math.min(concentratedFeeAPR, 9999).toFixed(0)}%`, annual:`$${Math.min(capital * concentratedFeeAPR / 100, 9999999).toFixed(0)}`, color:"#10B981", bg:"rgba(16,185,129,0.08)"},
         ].map((r,i)=>(
           <div key={i} style={{background:r.bg,border:`1px solid ${r.color}40`,borderRadius:10,padding:12,textAlign:"center"}}>
@@ -2327,10 +2327,10 @@ function AMMCalculator() {
 
       {/* Trade direction */}
       <div style={{display:"flex",gap:8,marginBottom:12}}>
-        <button onClick={()=>setTradeDir("buyToken")} style={{flex:1,background:tradeDir==="buyToken"?"rgba(16,185,129,0.2)":"rgba(255,255,255,0.04)",border:`1px solid ${tradeDir==="buyToken"?"#10B981":"rgba(255,255,255,0.1)"}`,borderRadius:8,padding:"8px",fontFamily:"'Anton',sans-serif",fontSize:10,color:tradeDir==="buyToken"?"#10B981":"#6B7280",cursor:"pointer",letterSpacing:1}}>
+        <button onClick={()=>setTradeDir("buyToken")} style={{flex:1,background:tradeDir==="buyToken"?"rgba(16,185,129,0.2)":"rgba(255,122,24,0.06)",border:`1px solid ${tradeDir==="buyToken"?"#10B981":"rgba(255,122,24,0.2)"}`,borderRadius:8,padding:"8px",fontFamily:"'Anton',sans-serif",fontSize:10,color:tradeDir==="buyToken"?"#10B981":"#6B7280",cursor:"pointer",letterSpacing:1}}>
           BUY TOKENS WITH SOL
         </button>
-        <button onClick={()=>setTradeDir("buySOL")} style={{flex:1,background:tradeDir==="buySOL"?"rgba(16,185,129,0.2)":"rgba(255,255,255,0.04)",border:`1px solid ${tradeDir==="buySOL"?"#10B981":"rgba(255,255,255,0.1)"}`,borderRadius:8,padding:"8px",fontFamily:"'Anton',sans-serif",fontSize:10,color:tradeDir==="buySOL"?"#10B981":"#6B7280",cursor:"pointer",letterSpacing:1}}>
+        <button onClick={()=>setTradeDir("buySOL")} style={{flex:1,background:tradeDir==="buySOL"?"rgba(16,185,129,0.2)":"rgba(255,122,24,0.06)",border:`1px solid ${tradeDir==="buySOL"?"#10B981":"rgba(255,122,24,0.2)"}`,borderRadius:8,padding:"8px",fontFamily:"'Anton',sans-serif",fontSize:10,color:tradeDir==="buySOL"?"#10B981":"#6B7280",cursor:"pointer",letterSpacing:1}}>
           BUY SOL WITH TOKENS
         </button>
       </div>
@@ -2394,7 +2394,7 @@ function PositionSizer() {
         <div><label style={lab}>STRESS TEST: riskier token drops {drawdown}%</label><input type="range" min="10" max="100" step="5" value={drawdown} onChange={e=>setDrawdown(Number(e.target.value))} style={{width:"100%",accentColor:"#10B981"}}/></div>
       </div>
       <div style={{marginTop:16,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
-        <div style={{...box,background:"rgba(255,255,255,0.05)"}}><div style={cap}>POSITION</div><div style={{...num,color:"#F9FAFB"}}>${Math.round(positionUSD).toLocaleString()}</div></div>
+        <div style={{...box,background:"rgba(255,122,24,0.07)"}}><div style={cap}>POSITION</div><div style={{...num,color:"#F9FAFB"}}>${Math.round(positionUSD).toLocaleString()}</div></div>
         <div style={{...box,background:"rgba(239,68,68,0.08)"}}><div style={cap}>STRESS LOSS</div><div style={{...num,color:"#EF4444"}}>${Math.round(stressLoss).toLocaleString()}</div></div>
         <div style={{...box,background:"rgba(16,185,129,0.08)"}}><div style={cap}>OF CAPITAL</div><div style={{...num,color:vcolor}}>{lossPctOfCapital.toFixed(0)}%</div></div>
       </div>
@@ -2430,15 +2430,15 @@ function PoolHealthCalc() {
           <label style={lab}>FEE TIER</label>
           <div style={{display:"flex",gap:6}}>
             {[{v:0.0001,l:"0.01%"},{v:0.0005,l:"0.05%"},{v:0.003,l:"0.30%"},{v:0.01,l:"1%"}].map(f=>(
-              <button key={f.v} onClick={()=>setFeeTier(f.v)} style={{flex:1,padding:"8px 0",borderRadius:7,border:`1px solid ${feeTier===f.v?"rgba(16,185,129,0.6)":"rgba(255,255,255,0.1)"}`,background:feeTier===f.v?"rgba(16,185,129,0.2)":"rgba(255,255,255,0.03)",color:feeTier===f.v?"#10B981":"#9CA3AF",fontFamily:"'Anton',sans-serif",fontSize:11,fontWeight:700,letterSpacing:0.5,cursor:"pointer"}}>{f.l}</button>
+              <button key={f.v} onClick={()=>setFeeTier(f.v)} style={{flex:1,padding:"8px 0",borderRadius:7,border:`1px solid ${feeTier===f.v?"rgba(16,185,129,0.6)":"rgba(255,122,24,0.2)"}`,background:feeTier===f.v?"rgba(16,185,129,0.2)":"rgba(255,122,24,0.05)",color:feeTier===f.v?"#10B981":"#9CA3AF",fontFamily:"'Anton',sans-serif",fontSize:11,fontWeight:700,letterSpacing:0.5,cursor:"pointer"}}>{f.l}</button>
             ))}
           </div>
         </div>
       </div>
       <div style={{marginTop:16,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
         <div style={{...box,background:"rgba(16,185,129,0.08)"}}><div style={cap}>VOL / TVL</div><div style={{...num,color:vcolor}}>{ratio.toFixed(2)}x</div></div>
-        <div style={{...box,background:"rgba(255,255,255,0.05)"}}><div style={cap}>FEES / $1K·DAY</div><div style={{...num,color:"#F9FAFB"}}>${feesPer1k.toFixed(2)}</div></div>
-        <div style={{...box,background:"rgba(255,255,255,0.05)"}}><div style={cap}>IMPLIED APR</div><div style={{...num,color:"#FFB627"}}>{apr>9999?"9999+":apr.toFixed(0)}%</div></div>
+        <div style={{...box,background:"rgba(255,122,24,0.07)"}}><div style={cap}>FEES / $1K·DAY</div><div style={{...num,color:"#F9FAFB"}}>${feesPer1k.toFixed(2)}</div></div>
+        <div style={{...box,background:"rgba(255,122,24,0.07)"}}><div style={cap}>IMPLIED APR</div><div style={{...num,color:"#FFB627"}}>{apr>9999?"9999+":apr.toFixed(0)}%</div></div>
       </div>
       <div style={{marginTop:12,fontFamily:"'Anton',sans-serif",fontSize:11,color:vcolor,textAlign:"center",letterSpacing:0.5,lineHeight:1.5}}>{verdict}</div>
     </div>
@@ -2472,7 +2472,7 @@ function LaunchRiskGate() {
         {checks.map(c=>{
           const on = !!state[c.key];
           return (
-            <button key={c.key} onClick={()=>toggle(c.key)} style={{display:"flex",alignItems:"center",gap:10,textAlign:"left",padding:"10px 12px",borderRadius:8,cursor:"pointer",border:`1px solid ${on?"rgba(16,185,129,0.5)":(c.critical?"rgba(239,68,68,0.3)":"rgba(255,255,255,0.1)")}`,background:on?"rgba(16,185,129,0.12)":"rgba(255,255,255,0.03)"}}>
+            <button key={c.key} onClick={()=>toggle(c.key)} style={{display:"flex",alignItems:"center",gap:10,textAlign:"left",padding:"10px 12px",borderRadius:8,cursor:"pointer",border:`1px solid ${on?"rgba(16,185,129,0.5)":(c.critical?"rgba(239,68,68,0.3)":"rgba(255,122,24,0.2)")}`,background:on?"rgba(16,185,129,0.12)":"rgba(255,122,24,0.05)"}}>
               <span style={{flexShrink:0,width:18,height:18,borderRadius:5,border:`1px solid ${on?"#10B981":"#4B5563"}`,background:on?"#10B981":"transparent",color:"#0a0503",fontSize:12,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>{on?"✓":""}</span>
               <span style={{fontFamily:"'Anton',sans-serif",fontSize:12,color:on?"#F9FAFB":"#9CA3AF",letterSpacing:0.3}}>{c.critical?"• ":""}{c.label}</span>
             </button>
@@ -2585,8 +2585,8 @@ function LPLessonView({ lesson, onBack, onComplete }) {
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
         {q.options.map((opt,i)=>{
-          let bg = "rgba(255,255,255,0.04)";
-          let border = "rgba(255,255,255,0.1)";
+          let bg = "rgba(255,122,24,0.06)";
+          let border = "rgba(255,122,24,0.2)";
           let color = "#D1D5DB";
           if (sel !== null) {
             if (i === q.correct) { bg="rgba(16,185,129,0.15)"; border="#10B981"; color="#10B981"; }
@@ -2633,7 +2633,7 @@ function LPLessonView({ lesson, onBack, onComplete }) {
         <div style={{fontFamily:"'Anton',sans-serif",fontSize:10,color:"#FF7A18",letterSpacing:2}}>— CLUCK NORRIS</div>
       </div>
       <div style={{display:"flex",gap:10}}>
-        <button onClick={()=>{setPhase("content");setQi(0);setSel(null);setAnswers([]);setShowExp(false);}} style={{flex:1,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:10,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:12,color:"#D1D5DB",cursor:"pointer",letterSpacing:1}}>
+        <button onClick={()=>{setPhase("content");setQi(0);setSel(null);setAnswers([]);setShowExp(false);}} style={{flex:1,background:"rgba(255,122,24,0.09)",border:"1px solid rgba(255,122,24,0.22)",borderRadius:10,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:12,color:"#D1D5DB",cursor:"pointer",letterSpacing:1}}>
           📖 REVIEW LESSON
         </button>
         <button onClick={onComplete} style={{flex:1,background:"linear-gradient(135deg,#10B981,#059669)",border:"none",borderRadius:10,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:12,fontWeight:700,color:"#fff",letterSpacing:1,cursor:"pointer"}}>
@@ -2664,12 +2664,12 @@ function LPLessonView({ lesson, onBack, onComplete }) {
       {/* Sections */}
       {lesson.sections.map((sec, i) => (
         <div key={i} style={{marginBottom:8}}>
-          <button onClick={()=>setOpenSection(openSection===i?-1:i)} style={{width:"100%",background:openSection===i?"rgba(16,185,129,0.1)":"rgba(255,255,255,0.03)",border:`1px solid ${openSection===i?"rgba(16,185,129,0.4)":"rgba(255,255,255,0.08)"}`,borderRadius:openSection===i?"12px 12px 0 0":"12px",padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
+          <button onClick={()=>setOpenSection(openSection===i?-1:i)} style={{width:"100%",background:openSection===i?"rgba(16,185,129,0.1)":"rgba(255,122,24,0.05)",border:`1px solid ${openSection===i?"rgba(16,185,129,0.4)":"rgba(255,122,24,0.18)"}`,borderRadius:openSection===i?"12px 12px 0 0":"12px",padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
             <span style={{fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,color:openSection===i?"#10B981":"#D1D5DB",letterSpacing:1}}>{sec.heading}</span>
             <span style={{color:openSection===i?"#10B981":"#6B7280",fontSize:16}}>{openSection===i?"▲":"▼"}</span>
           </button>
           {openSection===i && (
-            <div style={{background:"rgba(255,255,255,0.02)",border:"1px solid rgba(16,185,129,0.2)",borderTop:"none",borderRadius:"0 0 12px 12px",padding:"14px 16px"}}>
+            <div style={{background:"rgba(255,122,24,0.04)",border:"1px solid rgba(16,185,129,0.2)",borderTop:"none",borderRadius:"0 0 12px 12px",padding:"14px 16px"}}>
               <p style={{margin:"0 0 12px",fontSize:13,color:"#D1D5DB",lineHeight:1.8,whiteSpace:"pre-line"}}>{sec.body}</p>
               {sec.table && (
                 <div style={{overflowX:"auto",marginTop:8}}>
@@ -2681,7 +2681,7 @@ function LPLessonView({ lesson, onBack, onComplete }) {
                     </thead>
                     <tbody>
                       {sec.table.rows.map((row,j)=>(
-                        <tr key={j} style={{borderBottom:"1px solid rgba(255,255,255,0.05)"}}>
+                        <tr key={j} style={{borderBottom:"1px solid rgba(255,122,24,0.07)"}}>
                           {row.map((cell,k)=>(
                             <td key={k} style={{padding:"8px 10px",color:k===0?"#FFB627":"#D1D5DB",fontFamily:k===0?"'Anton',sans-serif":"inherit",letterSpacing:k===0?1:0}}>{cell}</td>
                           ))}
@@ -2853,7 +2853,7 @@ function LPLab() {
         {LP_LESSONS.map((lesson, i) => {
           const done = completed.includes(i);
           return (
-            <button key={i} onClick={()=>setSelectedLesson(i)} style={{background:done?"rgba(16,185,129,0.08)":"rgba(255,255,255,0.03)",border:`1px solid ${done?"rgba(16,185,129,0.4)":"rgba(255,255,255,0.08)"}`,borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",gap:14,cursor:"pointer",textAlign:"left"}}>
+            <button key={i} onClick={()=>setSelectedLesson(i)} style={{background:done?"rgba(16,185,129,0.08)":"rgba(255,122,24,0.05)",border:`1px solid ${done?"rgba(16,185,129,0.4)":"rgba(255,122,24,0.18)"}`,borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",gap:14,cursor:"pointer",textAlign:"left"}}>
               <div style={{fontSize:28,flexShrink:0}}>{lesson.icon}</div>
               <div style={{flex:1}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>

@@ -32,6 +32,9 @@
   .avatar{width:58px;height:58px;border-radius:50%;object-fit:cover;object-position:center 12%;border:2px solid #FFB627;animation:cluckGlow 2.6s ease-in-out infinite;flex:none;}
   .wordmark{font-family:'Anton',sans-serif;letter-spacing:1px;font-size:27px;line-height:1;}
   .wordmark .c{color:#FF7A18;} .wordmark .n{color:#FFEFE0;}
+  .home-btn{flex:none;display:flex;align-items:center;justify-content:center;gap:5px;height:40px;padding:0 14px;border-radius:999px;background:rgba(26,15,8,.92);border:1px solid #FF7A18;color:#FFD9A0;font-family:'Anton',sans-serif;font-size:13px;letter-spacing:.5px;text-decoration:none;white-space:nowrap;transition:background .12s;}
+  .home-btn:hover{background:rgba(255,122,24,.18);color:#fff;}
+  @media(max-width:520px){ .pill{display:none;} .home-btn span{display:none;} .home-btn{padding:0;width:40px;} }
   .subtitle{font-weight:600;font-size:11px;letter-spacing:3px;color:#C9A892;margin-top:5px;}
   .pill{margin-left:auto;display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;letter-spacing:1.5px;color:#7BE26B;border:1px solid rgba(123,226,107,.3);background:rgba(123,226,107,.08);padding:6px 11px;border-radius:999px;white-space:nowrap;}
   .pill .dot{width:7px;height:7px;border-radius:50%;background:#7BE26B;box-shadow:0 0 8px #7BE26B;animation:pulseDot 1.8s ease-in-out infinite;}
@@ -77,6 +80,7 @@
   <div class="embers" id="embers"></div>
 
   <div class="header">
+    <a href="/" class="home-btn" aria-label="Home" title="Home">🏠<span>HOME</span></a>
     <img class="avatar" src="/cluck-norris-mascot.jpg" alt="Cluck Norris">
     <div>
       <div class="wordmark"><span class="c">ASK</span> <span class="n">CLUCK</span></div>
