@@ -808,7 +808,7 @@ function UltimateChallenge({ onBack }) {
               <div style={{fontSize:32,marginBottom:6}}>🏆</div>
               <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,color:"#FFB627",letterSpacing:2,marginBottom:4}}>YOU EARNED YOUR SPOT</div>
               <p style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#9CA3AF",margin:0,lineHeight:1.6}}>
-                Drop your Solana wallet address to claim your graduation diploma (NFT) and get entered for CLKN airdrops. Only passers qualify.
+                Drop your Solana wallet address to lock in your verified diploma and get entered for CLKN airdrops. Only passers qualify.
               </p>
             </div>
             {!claimed ? (
@@ -1806,7 +1806,7 @@ function Landing({onStart,onChallenge,onIncubator,onStartHere,completed}){
       <div style={{background:"linear-gradient(135deg,rgba(255,182,39,0.12),rgba(255,122,24,0.06))",border:"1px solid rgba(255,182,39,0.45)",borderRadius:12,padding:"16px 18px",marginBottom:14,textAlign:"left",boxShadow:"0 0 22px rgba(255,182,39,0.12)"}}>
         <div style={{fontFamily:"'Anton',sans-serif",fontSize:14,letterSpacing:1,color:"#FFB627",marginBottom:6}}>🎓 GRADUATE REWARD</div>
         <p style={{fontFamily:"system-ui,sans-serif",fontSize:13,color:"#D1D5DB",lineHeight:1.6,margin:"0 0 11px"}}>
-          Every Cluck Norris graduate gets a <b style={{color:"#FFB627"}}>graduation NFT</b> and is <b style={{color:"#FFB627"}}>entered to receive CLKN airdrops</b>. Finish all 12 classes <b>or</b> pass the Ultimate Challenge, then drop your Solana address on your graduation page to claim your diploma and get entered for CLKN airdrops.
+          Every graduate is <b style={{color:"#FFB627"}}>entered to receive CLKN airdrops</b>. Finish all 12 classes to mint an <b style={{color:"#FFB627"}}>on-chain graduation NFT</b>, or pass the Ultimate Challenge for a <b style={{color:"#FFB627"}}>verified diploma</b> — then drop your Solana address to claim it and get entered for CLKN airdrops.
         </p>
         <button onClick={onChallenge} style={{background:"linear-gradient(135deg,#FF7A18,#EF4444)",border:"none",borderRadius:9,padding:"11px 22px",fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,color:"#fff",letterSpacing:1.5,textTransform:"uppercase",cursor:"pointer"}}>🎓 Take the Ultimate Challenge</button>
       </div>
@@ -2037,7 +2037,7 @@ function Complete({onRestart}){
           <div style={{fontSize:28,marginBottom:6}}>🏆</div>
           <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,color:"#FFB627",letterSpacing:2,marginBottom:4}}>YOU EARNED YOUR SPOT IN THE FLOCK</div>
           <p style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#9CA3AF",margin:0,lineHeight:1.6}}>
-            Completing all 12 lessons is no small feat. Submit your Solana wallet to be considered for future CLKN airdrops and exclusive giveaways.
+            Completing all 12 lessons is no small feat. Submit your Solana wallet to mint your on-chain diploma NFT and get entered for CLKN airdrops.
           </p>
         </div>
         {!claimed ? (
