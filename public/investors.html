@@ -24,7 +24,7 @@
   .header { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
   .header-icon { font-size: 40px; filter: drop-shadow(0 0 16px rgba(217,119,6,0.5)); }
   .header .brand-mini { font-family: 'Anton', sans-serif; font-size: 10px; letter-spacing: 4px; color: var(--orange); margin-bottom: 4px; font-weight: 700; }
-  .header h1 { font-family: 'Anton', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg, #FCD34D, #F97316, #EF4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
+  .header h1 { font-family: 'Anton', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg, #FFB627, #F97316, #EF4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
   .header p { font-family: 'Anton', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
 
   .hero {
@@ -81,14 +81,14 @@
   .stat-label { font-family: 'Anton', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 6px; font-weight: 700; }
   .stat-value { font-family: 'Anton', sans-serif; font-size: 22px; color: var(--text); font-weight: 900; line-height: 1.1; }
   .stat-sub { font-family: var(--mono); font-size: 10px; color: var(--subtext); margin-top: 4px; }
-  .stat.gold     { border-color: rgba(252,211,77,0.30); }
-  .stat.gold .stat-value     { color: #FCD34D; }
+  .stat.gold     { border-color: rgba(255,182,39,0.30); }
+  .stat.gold .stat-value     { color: #FFB627; }
   .stat.green    { border-color: rgba(16,185,129,0.30); }
   .stat.green .stat-value    { color: #6EE7B7; }
-  .stat.blue     { border-color: rgba(96,165,250,0.30); }
-  .stat.blue .stat-value     { color: #93C5FD; }
-  .stat.purple   { border-color: rgba(167,139,250,0.30); }
-  .stat.purple .stat-value   { color: #C4B5FD; }
+  .stat.blue     { border-color: rgba(255,122,24,0.30); }
+  .stat.blue .stat-value     { color: #FFB627; }
+  .stat.purple   { border-color: rgba(255,122,24,0.30); }
+  .stat.purple .stat-value   { color: #FFB627; }
   .stat.orange   { border-color: rgba(217,119,6,0.30); }
   .stat.orange .stat-value   { color: #FBBF24; }
 
@@ -125,8 +125,8 @@
   }
   .action-btn:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-1px); }
   .action-btn.primary {
-    background: linear-gradient(135deg, rgba(252,211,77,0.2), rgba(217,119,6,0.1));
-    border: 1.5px solid rgba(252,211,77,0.55);
+    background: linear-gradient(135deg, rgba(255,182,39,0.2), rgba(217,119,6,0.1));
+    border: 1.5px solid rgba(255,182,39,0.55);
     color: var(--accent);
   }
   .action-btn.danger {
@@ -161,7 +161,7 @@
   }
   .ca-row:hover { border-color: var(--accent); }
   .ca-row .lbl { font-family: 'Anton', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 6px; }
-  .ca-row .val { font-family: var(--mono); font-size: 15px; font-weight: 600; color: #FCD34D; word-break: break-all; line-height: 1.5; }
+  .ca-row .val { font-family: var(--mono); font-size: 15px; font-weight: 600; color: #FFB627; word-break: break-all; line-height: 1.5; }
   .ca-row .hint { font-family: 'Anton', sans-serif; font-size: 10px; color: var(--accent); text-align: right; margin-top: 6px; letter-spacing: 1px; }
 
   html { scroll-behavior: smooth; }
@@ -183,27 +183,27 @@
     letter-spacing: 1px; text-decoration: none;
     padding: 7px 12px; border-radius: 8px;
     transition: border-color .15s, color .15s, background .15s;
-    color: #FCD34D; border: 1px solid rgba(252,211,77,0.28);
-    background: rgba(252,211,77,0.07);
+    color: #FFB627; border: 1px solid rgba(255,182,39,0.28);
+    background: rgba(255,182,39,0.07);
   }
-  .quicklinks a:hover { border-color: #FCD34D; background: rgba(252,211,77,0.17); }
+  .quicklinks a:hover { border-color: #FFB627; background: rgba(255,182,39,0.17); }
   .quicklinks a[href="#notfor"] {
     color: #FCA5A5; border-color: rgba(239,68,68,0.32); background: rgba(239,68,68,0.08);
   }
   .quicklinks a[href="#notfor"]:hover { border-color: #EF4444; background: rgba(239,68,68,0.18); }
   .quicklinks a[href="#simulator"], .quicklinks a[href="#hood"] {
-    color: #93C5FD; border-color: rgba(96,165,250,0.32); background: rgba(96,165,250,0.08);
+    color: #FFB627; border-color: rgba(255,122,24,0.32); background: rgba(255,122,24,0.08);
   }
-  .quicklinks a[href="#simulator"]:hover, .quicklinks a[href="#hood"]:hover { border-color: #60A5FA; background: rgba(96,165,250,0.18); }
+  .quicklinks a[href="#simulator"]:hover, .quicklinks a[href="#hood"]:hover { border-color: #FF7A18; background: rgba(255,122,24,0.18); }
   .quicklinks a[href="#reinvestment"], .quicklinks a[href="#pricing"], .quicklinks a[href="#audience"] {
     color: #6EE7B7; border-color: rgba(16,185,129,0.32); background: rgba(16,185,129,0.08);
   }
   .quicklinks a[href="#reinvestment"]:hover, .quicklinks a[href="#pricing"]:hover, .quicklinks a[href="#audience"]:hover { border-color: #10B981; background: rgba(16,185,129,0.18); }
   .quicklinks a[href="#flock"] {
-    color: #C4B5FD; border-color: rgba(167,139,250,0.32); background: rgba(167,139,250,0.08);
+    color: #FFB627; border-color: rgba(255,122,24,0.32); background: rgba(255,122,24,0.08);
   }
-  .quicklinks a[href="#flock"]:hover { border-color: #A78BFA; background: rgba(167,139,250,0.18); }
-  .xref { color: #FCD34D; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+  .quicklinks a[href="#flock"]:hover { border-color: #FF7A18; background: rgba(255,122,24,0.18); }
+  .xref { color: #FFB627; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
   .xref:hover { color: #FDE68A; }
   /* Desktop — wider column so the page fills a larger screen */
   @media (min-width: 1040px) {
@@ -222,16 +222,16 @@ body{background:transparent;font-family:var(--body);}
     <div class="header-icon">📜</div>
     <div>
       <div class="brand-mini">SCHOOL OF CRYPTO HARD KNOCKS</div>
-      <h1>INVESTOR ZONE</h1>
-      <p>WHAT WE BUILT · WHY WE THINK IT MATTERS · WHO IT'S NOT FOR</p>
+      <h1>INVEST IN THE COMMUNITY</h1>
+      <p>WHY THE FLOCK · WHAT WE BUILT · HOW THE TOKEN GROWS WITH US</p>
     </div>
   </div>
 
   <div class="hero">
-    <div class="hero-tag">🐔 STRAIGHT TALK FROM CLUCK</div>
-    <div class="hero-title">Cluck Norris is a brand, a product, and a token. In that order.</div>
+    <div class="hero-tag">🐔 WHY INVEST IN THE COMMUNITY</div>
+    <div class="hero-title">You're not buying a chart. You're backing a community that actually builds.</div>
     <div class="hero-sub">
-      We built a free crypto school for first‑timers, free token research for any Solana mint and any wallet, a suite of premium operator tools paid for in CLKN micropayments — <strong style="color:#FCD34D">no wallet connect to pay</strong> — and a guided token creator. Everything is live, everything is open source. The token does real work. This page tells you what that means and, just as importantly, who CLKN is <strong style="color:#FCA5A5">not</strong> for.
+      Cluck Norris is a real community — <strong style="color:#FFB627">the flock</strong> — wrapped around a genuinely useful product: a free crypto school, free token-research tools for any Solana mint or wallet, a live AI tutor, and premium operator tools. We don't pump, and we don't beg anyone to buy. The bet is simple: <strong style="color:#FFB627">as the community and the brand grow, the token grows with them</strong> — and we fund that growth by practicing exactly what we teach, with an honest liquidity engine that creates real volume and fees that flow back into the project. Invest in the people and the mission; the token is how you come along for the ride. Everything here is live and open source.
     </div>
   </div>
 
@@ -309,13 +309,13 @@ body{background:transparent;font-family:var(--body);}
     <p style="font-size:13px;color:var(--text);font-family:var(--mono);margin-bottom:14px">Not a roadmap. Not "coming soon." This is what's deployed and working as of this page load.</p>
 
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:14px">
-      <div style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.25);border-radius:10px;padding:12px 14px">
-        <div style="font-family:'Anton',sans-serif;font-size:10px;color:#60A5FA;letter-spacing:2px;margin-bottom:6px;font-weight:700">🆓 FREE EDUCATION</div>
+      <div style="background:rgba(255,122,24,0.06);border:1px solid rgba(255,122,24,0.25);border-radius:10px;padding:12px 14px">
+        <div style="font-family:'Anton',sans-serif;font-size:10px;color:#FF7A18;letter-spacing:2px;margin-bottom:6px;font-weight:700">🆓 FREE EDUCATION</div>
         <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
           • 7‑lesson Incubator<br>
           • 12 belted lessons (Freshman→Emeritus)<br>
           • 50‑question Ultimate Challenge<br>
-          • <strong style="color:#FCD34D">135‑scenario Survival Sim</strong> ($1K bankroll)<br>
+          • <strong style="color:#FFB627">135‑scenario Survival Sim</strong> ($1K bankroll)<br>
           • 12‑lesson LP Lab w/ 7 interactive tools<br>
           • 50‑term glossary<br>
           • 11 deep‑dive lessons<br>
@@ -336,8 +336,8 @@ body{background:transparent;font-family:var(--body);}
           • <a class="xref" href="/holders">Holders</a> — true holders vs LP &amp; locks
         </div>
       </div>
-      <div style="background:rgba(252,211,77,0.06);border:1px solid rgba(252,211,77,0.25);border-radius:10px;padding:12px 14px">
-        <div style="font-family:'Anton',sans-serif;font-size:10px;color:#FCD34D;letter-spacing:2px;margin-bottom:6px;font-weight:700">🔒 CLKN‑PAID TOOLS</div>
+      <div style="background:rgba(255,182,39,0.06);border:1px solid rgba(255,182,39,0.25);border-radius:10px;padding:12px 14px">
+        <div style="font-family:'Anton',sans-serif;font-size:10px;color:#FFB627;letter-spacing:2px;margin-bottom:6px;font-weight:700">🔒 CLKN‑PAID TOOLS</div>
         <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
           • AI tutor extension (500)<br>
           • <a class="xref" href="/airdrop">Batch airdrop sender</a> (100)<br>
@@ -355,12 +355,12 @@ body{background:transparent;font-family:var(--body);}
           • Persistent storage (no resets on deploy)<br>
           • HSTS + security headers + XSS hardening<br>
           • Locked‑down admin/debug endpoints<br>
-          • <strong style="color:#FCD34D">Full‑codebase security review (June 2026)</strong> — zero critical findings, all fixes shipped<br>
+          • <strong style="color:#FFB627">Full‑codebase security review (June 2026)</strong> — zero critical findings, all fixes shipped<br>
           • No custody · 11 wallets + mobile deep links
         </div>
       </div>
-      <div style="background:rgba(167,139,250,0.06);border:1px solid rgba(167,139,250,0.25);border-radius:10px;padding:12px 14px">
-        <div style="font-family:'Anton',sans-serif;font-size:10px;color:#A78BFA;letter-spacing:2px;margin-bottom:6px;font-weight:700">⚡ INTEGRATIONS</div>
+      <div style="background:rgba(255,122,24,0.06);border:1px solid rgba(255,122,24,0.25);border-radius:10px;padding:12px 14px">
+        <div style="font-family:'Anton',sans-serif;font-size:10px;color:#FF7A18;letter-spacing:2px;margin-bottom:6px;font-weight:700">⚡ INTEGRATIONS</div>
         <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
           • Embedded Jupiter swap<br>
           • Live Bags.fm launch feed<br>
@@ -375,8 +375,8 @@ body{background:transparent;font-family:var(--body);}
         <div style="font-family:'Anton',sans-serif;font-size:10px;color:#38BDF8;letter-spacing:2px;margin-bottom:6px;font-weight:700">🤖 COMMUNITY · TELEGRAM</div>
         <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
           • Daily "Cluck's Lesson" posts (TG + X)<br>
-          • <strong style="color:#FCD34D">Ask Cluck</strong> — reply to a lesson, AI answers<br>
-          • <strong style="color:#FCD34D">New‑member welcome + "Where do I start?" concierge</strong><br>
+          • <strong style="color:#FFB627">Ask Cluck</strong> — reply to a lesson, AI answers<br>
+          • <strong style="color:#FFB627">New‑member welcome + "Where do I start?" concierge</strong><br>
           • Journey buttons → curated routes + buy‑CLKN link<br>
           • Threaded follow‑ups · 20/user/day<br>
           • Educational only · NFA on every reply<br>
@@ -397,8 +397,8 @@ body{background:transparent;font-family:var(--body);}
           • Auto‑hand‑off to airdropper
         </div>
       </div>
-      <div style="background:rgba(252,211,77,0.06);border:1px solid rgba(252,211,77,0.25);border-radius:10px;padding:12px 14px">
-        <div style="font-family:'Anton',sans-serif;font-size:10px;color:#FCD34D;letter-spacing:2px;margin-bottom:6px;font-weight:700">🥚 CREATE &amp; PROTECT</div>
+      <div style="background:rgba(255,182,39,0.06);border:1px solid rgba(255,182,39,0.25);border-radius:10px;padding:12px 14px">
+        <div style="font-family:'Anton',sans-serif;font-size:10px;color:#FFB627;letter-spacing:2px;margin-bottom:6px;font-weight:700">🥚 CREATE &amp; PROTECT</div>
         <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
           • <a class="xref" href="/hatchery">The Hatchery</a> — token creator<br>
           • Guided mint, every decision<br>
@@ -421,11 +421,11 @@ body{background:transparent;font-family:var(--body);}
           • Honest "cause of death" verdict
         </div>
       </div>
-      <div style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.25);border-radius:10px;padding:12px 14px">
-        <div style="font-family:'Anton',sans-serif;font-size:10px;color:#60A5FA;letter-spacing:2px;margin-bottom:6px;font-weight:700">🤖 TELEGRAM + X BOT</div>
+      <div style="background:rgba(255,122,24,0.06);border:1px solid rgba(255,122,24,0.25);border-radius:10px;padding:12px 14px">
+        <div style="font-family:'Anton',sans-serif;font-size:10px;color:#FF7A18;letter-spacing:2px;margin-bottom:6px;font-weight:700">🤖 TELEGRAM + X BOT</div>
         <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
           • 14 interactive slash commands (incl. /guide concierge)<br>
-          • <strong style="color:#FCD34D">In‑chat wallet deep dive</strong> (just type /walletxray &lt;wallet&gt;)<br>
+          • <strong style="color:#FFB627">In‑chat wallet deep dive</strong> (just type /walletxray &lt;wallet&gt;)<br>
           • "Close to bonding" + "graduated" Bags alerts<br>
           • Bags Launch Radar + hourly Market Check<br>
           • <a class="xref" href="/bags">Bags Hub</a> — live launches feed<br>
@@ -434,25 +434,22 @@ body{background:transparent;font-family:var(--body);}
         </div>
       </div>
       <div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.25);border-radius:10px;padding:12px 14px">
-        <div style="font-family:'Anton',sans-serif;font-size:10px;color:#10B981;letter-spacing:2px;margin-bottom:6px;font-weight:700">💧 LIQUIDITY ENGINE</div>
+        <div style="font-family:'Anton',sans-serif;font-size:10px;color:#10B981;letter-spacing:2px;margin-bottom:6px;font-weight:700">💧 LIQUIDITY ENGINE · PREMIUM</div>
         <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
-          • <a class="xref" href="/liquidity">Non‑custodial LP tool</a> on Orca Whirlpools<br>
-          • Single‑sided walls + balanced ranges<br>
-          • Autonomous multi‑project vault · Orca + Raydium + Meteora<br>
-          • Auto re‑center + inventory rebalance (Jupiter)<br>
-          • <strong style="color:#FCD34D">Real depth — not a wash‑trade bot</strong><br>
-          • <span style="color:var(--subtext)">Under testing &amp; fine‑tuning</span><br>
-          • <a class="xref" href="/liquidity-engine">Product page</a> + <a class="xref" href="/portal">owner portal</a> (wallet sign‑in)<br>
-          • Guardrails + one‑flag kill switch<br>
-          • /liquidity live depth view in Telegram
+          • Honest automated market making on Orca — <strong style="color:#FFB627">real two-sided depth, not a wash-trade bot</strong><br>
+          • Multi-quote tight-range strategy that creates organic volume + fees<br>
+          • Autonomous multi-project vault · Orca + Raydium + Meteora<br>
+          • A <strong style="color:#FFB627">premium, hands-on service for other projects</strong> — we set it up with you and walk through the risks (one project helping another)<br>
+          • Real, recurring B2B value — not self-serve; <a class="xref" href="/liquidity-engine">request access</a><br>
+          • Proven on CLKN: lifted organic volume and the Jupiter organic score
         </div>
       </div>
     </div>
   </div>
 
   <!-- Momentum / traction / what's next — forward-looking, honest, no promises -->
-  <div class="section" id="momentum" style="background:linear-gradient(135deg, rgba(252,211,77,0.07), rgba(217,119,6,0.02));border-color:rgba(252,211,77,0.3)">
-    <div class="section-title" style="color:#FCD34D;border-color:rgba(252,211,77,0.25)">🚀 MOMENTUM · WHERE WE'RE HEADED</div>
+  <div class="section" id="momentum" style="background:linear-gradient(135deg, rgba(255,182,39,0.07), rgba(217,119,6,0.02));border-color:rgba(255,182,39,0.3)">
+    <div class="section-title" style="color:#FFB627;border-color:rgba(255,182,39,0.25)">🚀 MOMENTUM · WHERE WE'RE HEADED</div>
     <p>The product is built and shipping daily. Right now we're pointing that momentum at growth:</p>
     <ul>
       <li><strong>🟢 Live on the Solana Seeker dApp Store.</strong> We wrapped the live site as a <strong>native Android app</strong> with Capacitor, tested it on a real Android device, published a <a class="xref" href="/privacy">Privacy Policy</a> and <a class="xref" href="/terms">Terms of Use</a> for the listing, and it's now <strong>live in the Seeker dApp Store</strong> (search "Cluck Norris"). Because the app loads the live site, every daily web ship reaches the app instantly, no resubmission. <span style="color:var(--subtext)">(Honest scope: deeper Mobile Wallet Adapter / Seed Vault integration is on the roadmap — today the app delivers the full Cluck Norris experience natively; it does not yet do in‑app native wallet signing.)</span></li>
@@ -465,8 +462,8 @@ body{background:transparent;font-family:var(--body);}
   </div>
 
   <!-- Tech under the hood -->
-  <div class="section" id="hood" style="background:linear-gradient(135deg, rgba(96,165,250,0.06), rgba(96,165,250,0.02));border-color:rgba(96,165,250,0.3)">
-    <div class="section-title" style="color:#93C5FD;border-color:rgba(96,165,250,0.25)">⚙️ UNDER THE HOOD</div>
+  <div class="section" id="hood" style="background:linear-gradient(135deg, rgba(255,122,24,0.06), rgba(255,122,24,0.02));border-color:rgba(255,122,24,0.3)">
+    <div class="section-title" style="color:#FFB627;border-color:rgba(255,122,24,0.25)">⚙️ UNDER THE HOOD</div>
     <p>Real engineering, not vibes:</p>
     <ul>
       <li><strong>Frontend:</strong> React + Vite for the school; vanilla HTML + JS for the operator tool pages (faster iteration, smaller surface)</li>
@@ -478,16 +475,16 @@ body{background:transparent;font-family:var(--body);}
       <li><strong>Security:</strong> full hardening pass — per‑IP rate limiting on every API, RPC method allow‑listing, locked‑down admin/debug endpoints, replay‑proof on‑chain payment verification, output escaping (XSS) across all tool pages, plus HSTS / X‑Frame‑Options / X‑Content‑Type‑Options / Referrer‑Policy and vendored solana‑web3.js (same‑origin)</li>
       <li><strong>No custody:</strong> Server never sees a private key. Every signing flow runs in the user's wallet extension.</li>
     </ul>
-    <p style="margin-top:10px"><strong>Public API surface:</strong> <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/autopsy</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/wallet-xray</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/verify-clkn-payment</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/ask-cluck</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/holders</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/fees</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/supply</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/locks</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/bubblemaps</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/bags-proxy</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/helius-rpc</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/helius-tx</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/hatchery/*</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/security-coop/*</code> · <code style="font-family:var(--mono);font-size:12px;color:#FCD34D">/api/claim</code></p>
-    <p style="margin-top:12px;background:rgba(217,119,6,0.08);border:1px solid rgba(217,119,6,0.3);border-radius:8px;padding:12px 14px;font-size:13px;line-height:1.65"><strong style="color:#FCD34D">📂 A note on the repo — straight talk:</strong> the GitHub is <strong>live and current</strong> at its new home, <a href="https://github.com/clucknorrisapp/cluck-norris-school" target="_blank" rel="noreferrer" style="color:#FCD34D;text-decoration:underline">github.com/clucknorrisapp/cluck-norris-school</a>. For about 11 days an earlier account was flagged and restricted by an automated system for unusually high commit volume (we ship daily, sometimes many pushes an hour), so we migrated the project to this new home and kept going. The original restriction was later <strong>fully lifted</strong> — but we'd already moved, so we're staying here. We never stopped shipping: we built <strong>roughly half of this entire product during that stretch</strong>, deploying every day through a separate pipeline, and the repo now reflects the complete, current codebase. MIT‑licensed and open source — every claim on this page lives in the code.</p>
+    <p style="margin-top:10px"><strong>Public API surface:</strong> <code style="font-family:var(--mono);font-size:12px;color:#FFB627">/api/autopsy</code> · <code style="font-family:var(--mono);font-size:12px;color:#FFB627">/api/wallet-xray</code> · <code style="font-family:var(--mono);font-size:12px;color:#FFB627">/api/verify-clkn-payment</code> · <code style="font-family:var(--mono);font-size:12px;color:#FFB627">/api/ask-cluck</code> · <code style="font-family:var(--mono);font-size:12px;color:#FFB627">/api/holders</code> · <code style="font-family:var(--mono);font-size:12px;color:#FFB627">/api/fees</code> · <code style="font-family:var(--mono);font-size:12px;color:#FFB627">/api/supply</code> · <code style="font-family:var(--mono);font-size:12px;color:#FFB627">/api/locks</code> · <code style="font-family:var(--mono);font-size:12px;color:#FFB627">/api/bubblemaps</code> · <code style="font-family:var(--mono);font-size:12px;color:#FFB627">/api/bags-proxy</code> · <code style="font-family:var(--mono);font-size:12px;color:#FFB627">/api/helius-rpc</code> · <code style="font-family:var(--mono);font-size:12px;color:#FFB627">/api/helius-tx</code> · <code style="font-family:var(--mono);font-size:12px;color:#FFB627">/api/hatchery/*</code> · <code style="font-family:var(--mono);font-size:12px;color:#FFB627">/api/security-coop/*</code> · <code style="font-family:var(--mono);font-size:12px;color:#FFB627">/api/claim</code></p>
+    <p style="margin-top:12px;background:rgba(217,119,6,0.08);border:1px solid rgba(217,119,6,0.3);border-radius:8px;padding:12px 14px;font-size:13px;line-height:1.65"><strong style="color:#FFB627">📂 A note on the repo — straight talk:</strong> the GitHub is <strong>live and current</strong> at its new home, <a href="https://github.com/clucknorrisapp/cluck-norris-school" target="_blank" rel="noreferrer" style="color:#FFB627;text-decoration:underline">github.com/clucknorrisapp/cluck-norris-school</a>. For about 11 days an earlier account was flagged and restricted by an automated system for unusually high commit volume (we ship daily, sometimes many pushes an hour), so we migrated the project to this new home and kept going. The original restriction was later <strong>fully lifted</strong> — but we'd already moved, so we're staying here. We never stopped shipping: we built <strong>roughly half of this entire product during that stretch</strong>, deploying every day through a separate pipeline, and the repo now reflects the complete, current codebase. MIT‑licensed and open source — every claim on this page lives in the code.</p>
   </div>
 
   <!-- The community moat — answers "what makes you different from every other
        education + utility project on Solana?" -->
-  <div class="section" id="flock" style="background:linear-gradient(135deg, rgba(167,139,250,0.07), rgba(167,139,250,0.02));border-color:rgba(167,139,250,0.3)">
-    <div class="section-title" style="color:#C4B5FD;border-color:rgba(167,139,250,0.25)">👥 THE FLOCK · WHY WE'RE NOT JUST ANOTHER EDUCATION PROJECT</div>
-    <div style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.3);border-radius:10px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-      <div style="font-family:var(--mono);font-size:12px;color:#93C5FD;line-height:1.5">
+  <div class="section" id="flock" style="background:linear-gradient(135deg, rgba(255,122,24,0.07), rgba(255,122,24,0.02));border-color:rgba(255,122,24,0.3)">
+    <div class="section-title" style="color:#FFB627;border-color:rgba(255,122,24,0.25)">👥 THE FLOCK · WHY WE'RE NOT JUST ANOTHER EDUCATION PROJECT</div>
+    <div style="background:rgba(255,122,24,0.06);border:1px solid rgba(255,122,24,0.3);border-radius:10px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <div style="font-family:var(--mono);font-size:12px;color:#FFB627;line-height:1.5">
         <strong>The Cluck Norris Telegram is open and active.</strong><br>
         <span style="color:var(--subtext)">Come hang out, ask questions, see who's actually behind this.</span>
       </div>
@@ -496,7 +493,7 @@ body{background:transparent;font-family:var(--body);}
     <p>There are other crypto education projects. Other tokens with airdroppers. Other holder analyzers. Plenty of them. <strong>What we have that nobody else does is the community that built this in the first place.</strong></p>
     <ul>
       <li><strong>Started as a community, became a product.</strong> Cluck Norris didn't begin as a token launch — it grew from the FireChicken community on Bags.fm. People helping each other learn, calling out scams, sharing alpha. CLKN is the formal layer on top of what was already happening.</li>
-      <li><strong>Real humans answer real questions.</strong> Reach us on X (<a href="https://x.com/firechicken007" target="_blank" rel="noreferrer" style="color:#FCD34D;text-decoration:none">@FireChicken007</a>) or in Telegram (<a href="https://t.me/FireChicken007" target="_blank" rel="noreferrer" style="color:#FCD34D;text-decoration:none">@FireChicken007</a>). There's someone there — not a chatbot, not a ticket system, not "we'll get back to you in 3 business days." Someone in the flock who's already been through what you're stuck on.</li>
+      <li><strong>Real humans answer real questions.</strong> Reach us on X (<a href="https://x.com/firechicken007" target="_blank" rel="noreferrer" style="color:#FFB627;text-decoration:none">@FireChicken007</a>) or in Telegram (<a href="https://t.me/FireChicken007" target="_blank" rel="noreferrer" style="color:#FFB627;text-decoration:none">@FireChicken007</a>). There's someone there — not a chatbot, not a ticket system, not "we'll get back to you in 3 business days." Someone in the flock who's already been through what you're stuck on.</li>
       <li><strong>The school is the community's voice.</strong> Every lesson, every Cluck quip, every Survival Simulator scenario was written by people who watched their friends get rugged and decided to do something about it. The DM scam scenario? Someone in the flock got that DM last week.</li>
       <li><strong>First‑timers get answered.</strong> Stuck on the airdrop tool? Confused by a Phantom popup? Don't understand what a token account is? Ask. The bird is tough but the flock is patient. That's where most projects fail — they have docs but nobody's home to read them with you.</li>
       <li><strong>This is the compound effect.</strong> Every person we help becomes someone who can help the next person. The school grows. The flock grows. The token grows. None of those happen at a rate a competitor can copy by reading the README.</li>
@@ -514,14 +511,14 @@ body{background:transparent;font-family:var(--body);}
       <li class="yes"><strong>The premium tier is real software.</strong> A <a class="xref" href="/airdrop">batch airdropper</a> and <a class="xref" href="/buyspecial">buy‑competition trackers</a> — tools that operators pay for elsewhere. We charge ~$0.01 to $0.06 per use in CLKN.</li>
       <li class="yes"><strong>The holder bonus is unforgeable.</strong> Rewarding real holders normally means a wallet‑connect — which is trivially faked. We do it from the payment instead. When you pay for any tool, we read your wallet's CLKN balance straight from that transaction, on‑chain. If you still hold 2M+ CLKN <em>after</em> paying, every unlock is stretched <strong>5×</strong> — a 7‑day Buy Special pass becomes 35 days, one airdrop session becomes five, 20 AI‑tutor questions become 100. The payment proves you control the wallet; the post‑send balance proves you're genuinely holding, not just passing tokens through. Nothing to connect, nothing to spoof.</li>
       <li class="yes"><strong>The guardrails are the brand.</strong> First‑timers can't pay for a tool until they understand it. That's rare in crypto and judges/investors notice.</li>
-      <li class="yes"><strong>The roadmap is short on words and long on commits.</strong> Open source and MIT-licensed — every claim on this page lives in the code, live and current on <a href="https://github.com/clucknorrisapp/cluck-norris-school" target="_blank" rel="noreferrer" style="color:#FCD34D;text-decoration:none">GitHub</a>.</li>
+      <li class="yes"><strong>The roadmap is short on words and long on commits.</strong> Open source and MIT-licensed — every claim on this page lives in the code, live and current on <a href="https://github.com/clucknorrisapp/cluck-norris-school" target="_blank" rel="noreferrer" style="color:#FFB627;text-decoration:none">GitHub</a>.</li>
     </ul>
   </div>
 
   <!-- Survival Simulator deserves its own callout — it's the bridge between "learn"
        and "do" and most projects don't have anything like it. -->
-  <div class="section" id="simulator" style="background:linear-gradient(135deg, rgba(96,165,250,0.06), rgba(167,139,250,0.04));border-color:rgba(96,165,250,0.3)">
-    <div class="section-title" style="color:#93C5FD;border-color:rgba(96,165,250,0.25)">🎮 SURVIVAL SIMULATOR · WHERE THEORY HITS REALITY</div>
+  <div class="section" id="simulator" style="background:linear-gradient(135deg, rgba(255,122,24,0.06), rgba(255,122,24,0.04));border-color:rgba(255,122,24,0.3)">
+    <div class="section-title" style="color:#FFB627;border-color:rgba(255,122,24,0.25)">🎮 SURVIVAL SIMULATOR · WHERE THEORY HITS REALITY</div>
     <p>Most crypto education is quizzes. Quizzes test recognition. They don't test the <strong>decision</strong> — the part where you have $1,000, a DM in your inbox, a green candle, and three seconds to react.</p>
     <p><strong>The Survival Simulator gives you that decision.</strong> 135 hand‑written scenarios across four categories — each run draws 10 at random, so no two playthroughs are alike:</p>
     <ul>
@@ -600,7 +597,7 @@ body{background:transparent;font-family:var(--body);}
       <li class="no">Anyone expecting "to the moon" promises — Cluck doesn't make those</li>
       <li class="no">Anyone who needs same‑day liquidity on huge size — we're small cap; size accordingly</li>
     </ul>
-    <p style="color:#FCD34D;margin-top:6px"><strong>Day traders welcome though.</strong> The Bags.fm LP tax on every trade routes back to the community ecosystem — so even if you're flipping, you're feeding the project. We just won't pretend our depth rivals SOL pairs.</p>
+    <p style="color:#FFB627;margin-top:6px"><strong>Day traders welcome though.</strong> The Bags.fm LP tax on every trade routes back to the community ecosystem — so even if you're flipping, you're feeding the project. We just won't pretend our depth rivals SOL pairs.</p>
   </div>
 
   <!-- Real-talk risks — honest but not apocalyptic -->
@@ -670,7 +667,7 @@ function copyCa() {
   const hint = document.getElementById('caHint');
   hint.textContent = '✓ COPIED';
   hint.style.color = '#10B981';
-  setTimeout(() => { hint.textContent = 'TAP TO COPY'; hint.style.color = '#FCD34D'; }, 1500);
+  setTimeout(() => { hint.textContent = 'TAP TO COPY'; hint.style.color = '#FFB627'; }, 1500);
 }
 
 function fmtUsd(n) {
@@ -748,7 +745,7 @@ fetch('/api/reinvestment')
         + 'style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 0;border-top:1px solid rgba(255,255,255,0.07);color:inherit;text-decoration:none">'
         + '<span style="font-family:var(--mono);font-size:12px;color:#9CA3AF">' + date + '</span>'
         + '<span style="font-family:var(--mono);font-size:13px;color:#6EE7B7;font-weight:700">' + c.sol.toFixed(4) + ' SOL</span>'
-        + '<span style="font-family:\'Anton\',sans-serif;font-size:9px;letter-spacing:1px;color:#FCD34D">VERIFY ↗</span>'
+        + '<span style="font-family:\'Anton\',sans-serif;font-size:9px;letter-spacing:1px;color:#FFB627">VERIFY ↗</span>'
         + '</a>';
     }).join('');
     document.getElementById('reinvestFeedBody').innerHTML = rows;
