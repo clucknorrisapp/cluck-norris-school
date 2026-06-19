@@ -2234,8 +2234,8 @@ export default function App(){
         @keyframes pulse{0%,100%{opacity:.6;transform:scale(1)}50%{opacity:1;transform:scale(1.05)}}
         *{box-sizing:border-box} button{transition:all .15s ease}
       `}</style>
-      {/* Header */}
-      {/* Header */}
+      {/* Header — hidden on the Token Data (clkn) screen, which uses only the floating Home/Ask Cluck bar */}
+      {screen!=="clkn" && (
       <div style={{borderBottom:"1px solid rgba(255,122,24,0.18)",background:"rgba(0,0,0,0.6)",backdropFilter:"blur(10px)",padding:"calc(50px + env(safe-area-inset-top, 0px)) 18px 12px",position:"sticky",top:0,zIndex:100}}>
         {/* Brand row — compact, matching the homepage nav (no subtitle / contract / progress dots) */}
         <div onClick={()=>setScreen("landing")} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,cursor:"pointer"}}>
@@ -2251,7 +2251,8 @@ export default function App(){
           <button onClick={()=>setScreen(screen==="survive"?"landing":"survive")} style={{flex:1,background:screen==="survive"?"rgba(239,68,68,0.25)":"rgba(239,68,68,0.06)",border:`1px solid ${screen==="survive"?"rgba(239,68,68,0.6)":"rgba(239,68,68,0.2)"}`,borderRadius:7,padding:"7px 2px",fontFamily:"'Anton',sans-serif",fontSize:12.5,fontWeight:700,color:"#EF4444",letterSpacing:0.5,cursor:"pointer"}}>🎮 SURVIVE</button>
         </div>
       </div>
-      <div style={{paddingTop:28}}>
+      )}
+      <div style={{paddingTop:screen==="clkn"?"calc(64px + env(safe-area-inset-top, 0px))":28}}>
         {screen==="landing"&&<Landing onStart={()=>{track("school_start");setScreen("select");}} onChallenge={()=>setScreen("challenge")} onIncubator={()=>{track("incubator_start");setScreen("incubator");}} onStartHere={()=>setScreen("start")} completed={completed}/>}
         {screen==="start"&&<StartHere onGo={(s)=>setScreen(s)}/>}
         {screen==="challenge"&&<UltimateChallenge onBack={()=>setScreen("landing")}/>}
