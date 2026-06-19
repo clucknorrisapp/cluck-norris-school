@@ -201,19 +201,29 @@ async function buildBagsRadarText() {
     const fr = await fetch(`${BAGS_BASE}token-launch/feed`, { headers: { "x-api-key": process.env.BAGS_API_KEY } });
     const fd = await fr.json();
     const feed = (fd && fd.response) || [];
-    // Enrich the most recent launches, drop obvious test/blank tokens, then
-    // surface the 4 with the highest market cap (the notable ones, not dust).
+    // For each recent launch: GRADUATED tokens get a real market cap (GeckoTerminal's
+    // AMM figure); ON-CURVE tokens get their on-chain bonding-curve % (GT's FDV is
+    // unreliable pre-graduation — it wrongly shows ~$50k for a 1%-filled curve). Newest
+    // first (feed order), top 4 non-dust.
     const enriched = [];
     for (const t of feed.slice(0, 12)) {
       const nm = String(t.symbol || t.name || "").trim().toLowerCase();
       if (!t.tokenMint || nm === "test" || nm === "") continue;
-      let mc = 0;
-      try { const snap = await getBagsTokenSnapshot(t.tokenMint); if (snap && snap.marketCap) mc = snap.marketCap; } catch (_) {}
-      enriched.push({ name: t.name, symbol: t.symbol, mc });
+      const graduated = t.status === "MIGRATED";
+      let mc = 0, pct = null;
+      if (graduated) {
+        try { const snap = await getBagsTokenSnapshot(t.tokenMint); if (snap && snap.marketCap) mc = snap.marketCap; } catch (_) {}
+      } else if (t.dbcPoolKey) {
+        try { const p = await dbcState().getPoolQuoteTokenCurveProgress(t.dbcPoolKey); if (Number.isFinite(p)) pct = p * 100; } catch (_) {}
+      }
+      enriched.push({ name: t.name, symbol: t.symbol, graduated, mc, pct });
+      if (enriched.length >= 4) break;
     }
-    enriched.sort((a, b) => b.mc - a.mc);
-    for (const t of enriched.slice(0, 4)) {
-      recentLines.push(`• <b>${t.name || "?"}</b> (${t.symbol || "?"})${t.mc ? ` — MC $${Math.round(t.mc).toLocaleString()}` : ""}`);
+    for (const t of enriched) {
+      let tag = "";
+      if (t.graduated && t.mc) tag = ` — 🎓 graduated · MC $${Math.round(t.mc).toLocaleString()}`;
+      else if (t.pct != null) tag = ` — ${t.pct < 1 ? t.pct.toFixed(1) : Math.round(t.pct)}% bonded`;
+      recentLines.push(`• <b>${t.name || "?"}</b> (${t.symbol || "?"})${tag}`);
     }
   } catch (_) {}
   let gradLines = [];
@@ -2324,15 +2334,18 @@ async function scanNearGradFree() {
   }
   withProg.sort((a, b) => b.pct - a.pct);
   const top = withProg.slice(0, 15);
-  // Enrich price/MC/volume via GeckoTerminal (free) — same snapshot the feed uses.
+  // Enrich image/volume via GeckoTerminal — but NOT price/market cap: GT's FDV is
+  // unreliable for on-bonding-curve tokens (it can show ~$50k for a 1%-filled
+  // curve, contradicting the on-chain progress). For near-grad we surface the
+  // authoritative curve % / SOL-raised instead, and leave priceUsd/marketCap null.
   const out = [];
   await Promise.all(top.map(async ({ t, pct }) => {
     let snap = null; try { snap = await getBagsTokenSnapshot(t.tokenMint); } catch (_) {}
     out.push({
       tokenMint: t.tokenMint, name: t.name, symbol: t.symbol,
       image: t.image || snap?.image || null, twitter: t.twitter || null,
-      priceUsd: snap?.priceUsd ?? null, marketCap: snap?.marketCap ?? null,
-      change24h: snap?.change24h ?? null, volume24h: snap?.volume24h ?? null,
+      priceUsd: null, marketCap: null,        // GT FDV is wrong pre-graduation — don't show it
+      change24h: null, volume24h: snap?.volume24h ?? null,
       curvePct: +pct.toFixed(2),
       solRaised: +(BAGS_BONDING_SOL * pct / 100).toFixed(2),       // of 85 SOL
       solToGrad: +(BAGS_BONDING_SOL * (1 - pct / 100)).toFixed(2), // SOL left to bond
