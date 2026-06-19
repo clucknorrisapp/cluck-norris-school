@@ -1601,6 +1601,11 @@ function notifyToolUnlock(tool, paidAmount, senderWallet, isHolderBonus, signatu
 
 const app = express();
 
+// gzip/brotli-style compression for every response (HTML, JS bundle, and the
+// large i18n dictionaries). Cuts the school dict from ~700KB to ~150KB on the
+// wire — a big win on mobile/Seeker. Safe: standard middleware, no streaming here.
+app.use(require("compression")());
+
 // Security headers — applied to every response.
 // HSTS forces browsers to use HTTPS for this domain for the next year,
 // even if a user types http:// or a phishing link tries to downgrade.
