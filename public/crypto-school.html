@@ -46,6 +46,7 @@
   .loading .dots i:nth-child(2){animation-delay:.2s;} .loading .dots i:nth-child(3){animation-delay:.4s;}
   .eyebrow{font-size:11px;font-weight:700;letter-spacing:2px;color:#FF7A18;text-transform:uppercase;margin-bottom:9px;}
   .fact{font-family:'Anton',sans-serif;font-size:21px;color:#FFB627;line-height:1.18;text-transform:uppercase;letter-spacing:.5px;text-shadow:0 2px 10px rgba(255,90,10,.35);}
+  .answer{font-size:14.5px;color:#EAD8C8;line-height:1.6;white-space:pre-wrap;margin-top:2px;}
   .lecture{margin:15px 0 0;padding:0;list-style:none;}
   .lecture li{display:flex;gap:10px;margin-bottom:10px;font-size:14.5px;line-height:1.55;color:#EAD8C8;}
   .lecture li .mk{color:#FF7A18;font-weight:700;flex:none;}
@@ -87,7 +88,13 @@
   <div class="feed" id="feed"></div>
 
   <div class="tweaks">
-    <div class="grp"><label>Lecture</label>
+    <div class="grp"><label>Mode</label>
+      <span class="seg" id="modeSeg">
+        <button data-v="ask" class="on">💬 Ask</button>
+        <button data-v="lecture">📋 Lecture</button>
+      </span>
+    </div>
+    <div class="grp"><label>Depth</label>
       <span class="seg" id="styleSeg">
         <button data-v="punchy" class="on">Punchy</button>
         <button data-v="professor">Professor</button>
@@ -119,6 +126,7 @@
   var embers = document.getElementById('embers');
 
   var STYLE = 'punchy';
+  var MODE = 'ask';   // 'ask' = conversational (/api/ask-cluck) · 'lecture' = structured (/api/lecture)
   var busy = false;
 
   // Escape EVERYTHING from the model/user before innerHTML (token/AI text is untrusted).
@@ -172,6 +180,7 @@
   }
   wireSeg('styleSeg', function (v) { STYLE = v; });
   wireSeg('fireSeg', function (v) { embers.classList.toggle('off', v === 'calm'); });
+  wireSeg('modeSeg', function (v) { MODE = v; input.placeholder = v === 'lecture' ? 'Ask for a lecture on any topic...' : 'Ask Cluck anything...'; });
 
   // --- Rendering ---
   function scrollDown() { feed.scrollTop = feed.scrollHeight; }
@@ -186,7 +195,7 @@
     var wrap = document.createElement('div');
     wrap.className = 'cluck';
     wrap.innerHTML = '<img class="mini" src="/cluck-norris-mascot.jpg" alt="Cluck">' +
-      '<div class="card"><div class="loading">Cluck is loading the lecture' +
+      '<div class="card"><div class="loading">' + (MODE === 'lecture' ? 'Cluck is loading the lecture' : 'Cluck is thinking') +
       '<span class="dots"><i></i><i></i><i></i></span></div></div>';
     feed.appendChild(wrap); scrollDown();
     return wrap;
@@ -208,6 +217,15 @@
     scrollDown();
   }
 
+  function renderAnswer(wrap, text) {
+    wrap.innerHTML = '<img class="mini" src="/cluck-norris-mascot.jpg" alt="Cluck">' +
+      '<div class="card">' +
+        '<div class="eyebrow">🔥 Cluck Norris</div>' +
+        '<div class="answer">' + esc(text) + '</div>' +
+      '</div>';
+    scrollDown();
+  }
+
   function renderError(wrap, msg) {
     renderLecture(wrap, {
       fact: "Cluck Norris doesn't get errors — errors get Cluck Norris.",
@@ -223,14 +241,22 @@
     busy = true; askBtn.disabled = true;
     addUser(question);
     var wrap = addCluckLoading();
-    fetch('/api/lecture', {
+    var lecture = (MODE === 'lecture');
+    var url = lecture ? '/api/lecture' : '/api/ask-cluck';
+    var body = lecture ? { question: question, style: STYLE } : { question: question };
+    fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: question, style: STYLE })
+      body: JSON.stringify(body)
     }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (res) {
-        if (res.j && res.j.success && res.j.fact) renderLecture(wrap, res.j);
-        else renderError(wrap, (res.j && res.j.error) || null);
+        if (lecture) {
+          if (res.j && res.j.success && res.j.fact) renderLecture(wrap, res.j);
+          else renderError(wrap, (res.j && res.j.error) || null);
+        } else {
+          if (res.j && res.j.success && res.j.answer) renderAnswer(wrap, res.j.answer);
+          else renderError(wrap, (res.j && res.j.error) || null);
+        }
       })
       .catch(function () { renderError(wrap, 'Comms down — check your connection and try again.'); })
       .finally(function () { busy = false; askBtn.disabled = false; input.focus(); });
