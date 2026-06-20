@@ -1406,11 +1406,6 @@ function CLKNWidget() {
   const realMc = (supply && price > 0) ? supply * price
     : (dexData ? (parseFloat(dexData.marketCap) || parseFloat(dexData.fdv) || null) : null);
   const liqUsd = dexData?.liquidity?.usd || 0;
-  const liqRatio = (realMc && liqUsd) ? (liqUsd / realMc) * 100 : null;
-  const liqHealth = liqRatio === null ? null
-    : liqRatio >= 5 ? {label:"HEALTHY",color:"#10B981"}
-    : liqRatio >= 2 ? {label:"OK",color:"#FFB627"}
-    : {label:"THIN",color:"#EF4444"};
   function copyMint(){ try { navigator.clipboard.writeText(CLKN_MINT); setCopied(true); setTimeout(()=>setCopied(false),1500); } catch(_){} }
 
   return (
@@ -1448,13 +1443,12 @@ function CLKNWidget() {
       <div style={{display:"flex",gap:8,marginBottom:12}}>
         {[
           {label:"24H VOLUME", value: dexData?.volume?.h24 ? `$${fmtNum(dexData.volume.h24,0)}` : "—", color:"#8B5CF6"},
-          {label:"LIQUIDITY", value: liqUsd ? `$${fmtNum(liqUsd,0)}` : "—", color:"#06B6D4", badge: liqHealth},
+          {label:"LIQUIDITY", value: liqUsd ? `$${fmtNum(liqUsd,0)}` : "—", color:"#06B6D4"},
           {label:"HOLDERS", value: holderCount!==null ? holderCount.toLocaleString() : "—", color:"#FFB627"},
         ].map(s=>(
-          <div key={s.label} style={{flex:1,background:"rgba(255,122,24,0.05)",border:"1px solid rgba(255,122,24,0.18)",borderRadius:12,padding:"14px 6px",textAlign:"center"}}>
-            <div style={{fontFamily:"'Anton',sans-serif",fontSize:8,letterSpacing:1,color:"#6B7280",marginBottom:6}}>{s.label}</div>
-            <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:s.color,lineHeight:1.1}}>{s.value}</div>
-            {s.badge && <div style={{marginTop:5,display:"inline-block",fontFamily:"'Anton',sans-serif",fontSize:7,fontWeight:700,letterSpacing:1,color:s.badge.color,background:`${s.badge.color}22`,border:`1px solid ${s.badge.color}55`,borderRadius:4,padding:"1px 5px"}}>{s.badge.label}</div>}
+          <div key={s.label} style={{flex:1,background:"rgba(255,122,24,0.05)",border:"1px solid rgba(255,122,24,0.18)",borderRadius:12,padding:"16px 6px",textAlign:"center"}}>
+            <div style={{fontFamily:"'Anton',sans-serif",fontSize:8,letterSpacing:1,color:"#6B7280",marginBottom:8}}>{s.label}</div>
+            <div style={{fontFamily:"'Anton',sans-serif",fontSize:21,fontWeight:700,color:s.color,lineHeight:1.05,whiteSpace:"nowrap"}}>{s.value}</div>
           </div>
         ))}
       </div>
@@ -1484,8 +1478,8 @@ function CLKNWidget() {
               const color = !ok ? "#6B7280" : n > 0 ? "#10B981" : n < 0 ? "#EF4444" : "#9CA3AF";
               return (
                 <div key={t.label} style={{flex:1,background:"rgba(255,122,24,0.06)",borderRadius:8,padding:"8px 4px",textAlign:"center"}}>
-                  <div style={{fontFamily:"'Anton',sans-serif",fontSize:8,letterSpacing:1,color:"#6B7280",marginBottom:3}}>{t.label}</div>
-                  <div style={{fontFamily:"'Anton',sans-serif",fontSize:13.5,fontWeight:700,color}}>
+                  <div style={{fontFamily:"'Anton',sans-serif",fontSize:8,letterSpacing:1,color:"#6B7280",marginBottom:4}}>{t.label}</div>
+                  <div style={{fontFamily:"'Anton',sans-serif",fontSize:16,fontWeight:700,color,whiteSpace:"nowrap"}}>
                     {ok ? `${n>0?"+":""}${n.toFixed(2)}%` : "—"}
                   </div>
                 </div>
