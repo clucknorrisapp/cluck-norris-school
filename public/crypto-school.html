@@ -111,6 +111,12 @@
         <button data-v="calm">Calm</button>
       </span>
     </div>
+    <div class="grp"><label>🔊 Auto-read</label>
+      <span class="seg" id="autoreadSeg">
+        <button data-v="off" class="on">Off</button>
+        <button data-v="on">On</button>
+      </span>
+    </div>
     <a class="home" href="/">← Home</a>
   </div>
 
@@ -132,6 +138,7 @@
 
   var STYLE = 'punchy';
   var MODE = 'ask';   // 'ask' = conversational (/api/ask-cluck) · 'lecture' = structured (/api/lecture)
+  var AUTOREAD = (function(){ try { return localStorage.getItem('clkn_autoread') === '1'; } catch (e) { return false; } })();
   var busy = false;
 
   // Escape EVERYTHING from the model/user before innerHTML (token/AI text is untrusted).
@@ -216,6 +223,13 @@
   wireSeg('styleSeg', function (v) { STYLE = v; });
   wireSeg('fireSeg', function (v) { embers.classList.toggle('off', v === 'calm'); });
   wireSeg('modeSeg', function (v) { MODE = v; input.placeholder = v === 'lecture' ? 'Or type any lecture topic...' : 'Ask Cluck anything...'; renderChips(); });
+  wireSeg('autoreadSeg', function (v) {
+    AUTOREAD = v === 'on';
+    try { localStorage.setItem('clkn_autoread', AUTOREAD ? '1' : '0'); } catch (e) {}
+    if (!AUTOREAD && window.CLKN_READ) window.CLKN_READ.stop();   // turning off stops any read in progress
+  });
+  // reflect the persisted auto-read choice in the toggle on load
+  (function () { var seg = document.getElementById('autoreadSeg'); if (seg) [].forEach.call(seg.children, function (c) { c.classList.toggle('on', c.getAttribute('data-v') === (AUTOREAD ? 'on' : 'off')); }); })();
 
   // --- Rendering ---
   function scrollDown() { feed.scrollTop = feed.scrollHeight; }
@@ -250,6 +264,10 @@
         drill + grounded +
       '</div>';
     scrollDown();
+    if (AUTOREAD && window.CLKN_READ) {
+      var rt = [data.fact].concat(data.lecture || []); if (data.drill) rt.push(data.drill);
+      window.CLKN_READ.speak(rt.filter(Boolean).join('. '));
+    }
   }
 
   function renderAnswer(wrap, text) {
@@ -259,6 +277,7 @@
         '<div class="answer">' + esc(text) + '</div>' +
       '</div>';
     scrollDown();
+    if (AUTOREAD && window.CLKN_READ) window.CLKN_READ.speak(text);
   }
 
   function renderError(wrap, msg) {
