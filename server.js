@@ -1782,6 +1782,79 @@ app.post("/api/i18n/translate", rateLimit("i18nmt", { windowMs: 60000, max: 90 }
   catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
 
+// -- Text-to-Speech (ElevenLabs) — the "real" Cluck voice, with a durable cache --
+// Mirrors the i18n MT layer: synthesize each chunk of text ONCE, store the mp3 on
+// the Railway volume, serve from cache forever after. So static lessons cost a
+// one-time spend; only NEW text (a fresh Ask Cluck answer) ever hits the paid API.
+// Falls CLOSED to a 503 when no key/over budget → read-aloud.js drops to the free
+// browser Web Speech voice. Voice + model are env-configured (owner's ElevenLabs
+// account). UNSET key = feature is a safe no-op (browser voice everywhere).
+//   ELEVENLABS_API_KEY      — required to enable; unset = off
+//   ELEVENLABS_VOICE_ID     — the custom Cluck voice (per-lang override: *_ZH / *_ES)
+//   ELEVENLABS_MODEL        — default eleven_flash_v2_5 (HALF-price credits, multilingual)
+//   TTS_DAILY_CHAR_CAP      — daily budget on NEW synthesis (default 40000)
+const TTS_DIR = join(process.env.DATA_DIR || "/data", "tts");
+const TTS_MODEL = process.env.ELEVENLABS_MODEL || "eleven_flash_v2_5";
+const TTS_DAILY_CHAR_CAP = parseInt(process.env.TTS_DAILY_CHAR_CAP || "40000", 10);
+let ttsNewChars = 0, ttsNewDay = "";
+function ttsVoiceId(lang) {
+  return process.env["ELEVENLABS_VOICE_ID_" + String(lang || "").toUpperCase()] ||
+         process.env.ELEVENLABS_VOICE_ID || "";
+}
+function ttsCachePath(lang, voiceId, text) {
+  const h = createHash("sha256").update(TTS_MODEL + ":" + voiceId + ":" + lang + ":" + text).digest("hex");
+  return join(TTS_DIR, h + ".mp3");
+}
+function ttsLangCode(l) { return l === "zh" ? "zh" : l === "es" ? "es" : "en"; }
+app.post("/api/tts", rateLimit("tts", { windowMs: 60000, max: 60 }), async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  const lang = ttsLangCode(String((req.body && req.body.lang) || "en").toLowerCase().slice(0, 2));
+  let text = String((req.body && req.body.text) || "").replace(/\s+/g, " ").trim();
+  if (!text) return res.status(400).json({ error: "text required" });
+  if (text.length > 1200) text = text.slice(0, 1200); // one chunk; client chunks long content
+  const KEY = process.env.ELEVENLABS_API_KEY;
+  const voiceId = ttsVoiceId(lang);
+  // Serve from the durable cache first — free, instant, no API call.
+  let cachePath;
+  try {
+    cachePath = ttsCachePath(lang, voiceId || "none", text);
+    if (fs.existsSync(cachePath)) {
+      res.setHeader("Content-Type", "audio/mpeg");
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      res.setHeader("X-TTS-Cache", "hit");
+      return res.status(200).send(fs.readFileSync(cachePath));
+    }
+  } catch (_) {}
+  // Not cached → need the paid API. Fail closed (503) so the client uses browser TTS.
+  if (!KEY || !voiceId) return res.status(503).json({ error: "tts unavailable" });
+  const today = new Date().toISOString().slice(0, 10);
+  if (today !== ttsNewDay) { ttsNewDay = today; ttsNewChars = 0; }
+  if (ttsNewChars + text.length > TTS_DAILY_CHAR_CAP) return res.status(503).json({ error: "tts budget reached" });
+  try {
+    const r = await fetch("https://api.elevenlabs.io/v1/text-to-speech/" + encodeURIComponent(voiceId) + "?output_format=mp3_44100_128", {
+      method: "POST",
+      headers: { "xi-api-key": KEY, "Content-Type": "application/json", "Accept": "audio/mpeg" },
+      body: JSON.stringify({ text, model_id: TTS_MODEL, language_code: lang,
+        voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.2, use_speaker_boost: true } }),
+    });
+    if (!r.ok) {
+      let msg = ""; try { msg = await r.text(); } catch (_) {}
+      console.error("[tts] elevenlabs", r.status, String(msg).slice(0, 200));
+      return res.status(503).json({ error: "tts upstream " + r.status });
+    }
+    const buf = Buffer.from(await r.arrayBuffer());
+    ttsNewChars += text.length;
+    try { fs.mkdirSync(TTS_DIR, { recursive: true }); fs.writeFileSync(cachePath, buf); } catch (_) {}
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    res.setHeader("X-TTS-Cache", "miss");
+    return res.status(200).send(buf);
+  } catch (e) {
+    console.error("[tts]", e && e.message);
+    return res.status(503).json({ error: "tts unavailable" });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 
 const JUPITER_LOCK_PROGRAM = "LocpQgucEQHbqNABEYvBvwoxCPsSbG91A1QaQhQQqjn";
