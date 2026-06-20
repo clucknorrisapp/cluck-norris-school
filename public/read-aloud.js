@@ -65,13 +65,15 @@
     for (var i = 0; i < vs.length; i++) if ((vs[i].lang || "").toLowerCase().indexOf(l) === 0) return vs[i];
     return null;
   }
-  function speakNext() {
+  function speakChunk() {
     if (idx >= queue.length) { stop(); return; }
     var u = new SpeechSynthesisUtterance(queue[idx]);
     var l = lang(); u.lang = bcp47(l); var v = pickVoice(l); if (v) u.voice = v;
     u.rate = 1; u.pitch = 1;
-    u.onend = function () { idx++; speakNext(); };
-    u.onerror = function () { idx++; speakNext(); };
+    // Only advance/continue while actually playing — so a pause()/stop() cancel
+    // (which fires onend) never skips ahead or auto-continues.
+    u.onend = function () { if (state !== "playing") return; idx++; speakChunk(); };
+    u.onerror = function () { if (state !== "playing") return; idx++; speakChunk(); };
     synth.speak(u);
   }
   function keepAlive() { // some mobile browsers cut long TTS — nudge resume periodically
@@ -86,11 +88,14 @@
     if (!parts.length) return;
     queue = chunk(parts); idx = 0;
     try { synth.cancel(); } catch (_) {}
-    state = "playing"; render(); speakNext(); keepAlive();
+    state = "playing"; render(); speakChunk(); keepAlive();
   }
-  function pause() { try { synth.pause(); } catch (_) {} state = "paused"; render(); }
-  function resume() { try { synth.resume(); } catch (_) {} state = "playing"; render(); keepAlive(); }
-  function stop() { try { synth.cancel(); } catch (_) {} state = "idle"; queue = []; idx = 0; render(); }
+  // Pause/resume via our OWN chunk index — mobile browsers' native pause()/resume()
+  // are unreliable, so we cancel and re-speak the CURRENT chunk on resume. This
+  // continues where it left off and never restarts at the top.
+  function pause() { state = "paused"; try { synth.cancel(); } catch (_) {} render(); }
+  function resume() { state = "playing"; render(); speakChunk(); keepAlive(); }
+  function stop() { state = "idle"; try { synth.cancel(); } catch (_) {} queue = []; idx = 0; render(); }
 
   function render() {
     if (!btn) return;
