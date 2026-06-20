@@ -193,7 +193,7 @@ function toolsReminderTick() {
 // bonding (with SOL-to-graduate). Content post that drives traffic to /bags.
 // buildBagsRadarText() composes the message (also used by the test endpoint
 // for dry-run verification); notifyBagsLaunches() posts it.
-const BAGS_RADAR_ENABLED = true;
+const BAGS_RADAR_ENABLED = false;   // PAUSED (owner's call 2026-06-20): no Bags Launch Radar / near-grad digest posts. Flip true to restore.
 let lastBagsRadarMsgId = kv.get("bagsRadarMsgId", null); // delete-previous, persisted across deploys
 async function buildBagsRadarText() {
   let recentLines = [];
@@ -3320,7 +3320,7 @@ app.get("/api/bags-graduated", async (req, res) => {
 // 48h tracker and post a "graduated!" alert. The near-bonding alert still posts to
 // the chat; the GRADUATED alert is Telegram-OFF / X-ON (owner's call 2026-06-19 —
 // keep tagging the graduated project's community on X, but stop the TG announcement).
-const GRAD_WATCH_ENABLED = true;
+const GRAD_WATCH_ENABLED = false;   // PAUSED (owner's call 2026-06-20): no near-bonding / graduation watching or posts (Telegram AND X). Flip true to restore.
 const GRAD_TG_ANNOUNCE = false;   // graduated → Telegram announcement OFF (X post stays on). Flip true to restore.
 const NEAR_BONDING_ALERT_PCT = 70;
 // Extract a valid @handle from a token's twitter field (URL or raw handle) so
@@ -5919,9 +5919,11 @@ const DEV_WALLETS = new Set([
   "3VELZ2avSUq79qstuR8a7C3euJ834WmQyrjt4uRnn4eb",
 ]);
 
+// Treasury operator wallet (Meteora LP + multi-quote Orca arb). Public key, not a secret.
+const TREASURY_WALLET = "2zMCUkE9pBjcC7ihtLqm28EsCoEHVmCdJYr5262EuPy8";
+
 // Managed-vault engine operator wallets (CLKN liquidity engine + any other project
-// operators). Their CLKN BUYS now render as community reinvestment — the engine
-// buying CLKN back is real buy pressure — while their SELLS stay suppressed (MM noise).
+// operators), loaded from the vault.
 function mmOperatorWallets() {
   try {
     return whirlpoolMM.vault.operatorPubkeys
@@ -5929,10 +5931,17 @@ function mmOperatorWallets() {
       : [whirlpoolMM.vault.operatorPubkey && whirlpoolMM.vault.operatorPubkey()].filter(Boolean);
   } catch (_) { return []; }
 }
-// A buy that should post as "♻️ COMMUNITY REINVESTMENT": the team deployer OR an
-// engine operator wallet. Single source of truth for the poller + the buy alert.
+// Operator wallets = the treasury + liquidity-engine wallets. Their CLKN trades are
+// LP / market-making mechanics, NOT community activity — so BOTH their buys and sells
+// are suppressed from the buy/sell feed (owner's call: don't surface an operator buy
+// as "community reinvestment").
+function isOperatorWallet(addr) {
+  return addr != null && (addr === TREASURY_WALLET || mmOperatorWallets().includes(addr));
+}
+// A buy that should post as "♻️ COMMUNITY REINVESTMENT": ONLY the team deployer
+// reinvesting claimed creator fees. Single source of truth for the poller + buy alert.
 function isReinvestWallet(addr) {
-  return addr != null && (DEV_WALLETS.has(addr) || mmOperatorWallets().includes(addr));
+  return addr != null && DEV_WALLETS.has(addr);
 }
 
 // Tool → cost (CLKN, base before the unique decimal) + what gets granted.
@@ -9773,11 +9782,11 @@ async function pollSinglePool(pool, HELIUS_KEY) {
         continue;
       }
 
-      // Skip a managed vault operator's SELLS — liquidity-management sells aren't
-      // community flow. Its BUYS now pass through and post as community reinvestment
-      // (engine buying CLKN back = real buy pressure the owner wants surfaced).
-      if (trade.trader && trade.action === "sell" && mmOperatorWallets().includes(trade.trader)) {
-        console.log(`[TELEGRAM] Skipping MM vault op SELL (liquidity management) · sig ${sig.slice(0,8)}`);
+      // Skip operator (treasury + liquidity-engine) trades entirely — both buys and
+      // sells are LP / market-making mechanics, not community flow. (Owner's call:
+      // don't surface operator CLKN buys as "community reinvestment".)
+      if (trade.trader && isOperatorWallet(trade.trader)) {
+        console.log(`[TELEGRAM] Skipping operator wallet ${trade.action} (LP/MM mechanics) · sig ${sig.slice(0,8)}`);
         rememberSig(sig);
         if (!blocked) advanceTo = sig;
         continue;
@@ -9880,7 +9889,7 @@ async function reconcileMissedTrades({ dry = false } = {}) {
         const trade = detectClknTrade(tx);
         if (!trade) { continue; }                     // not a trade (e.g. an LP add/remove) — don't mark; harmless to re-see
         // Same rules as the poller.
-        if (trade.trader && trade.action === "sell" && mmOperatorWallets().includes(trade.trader)) { rememberSig(s.signature); continue; }
+        if (trade.trader && isOperatorWallet(trade.trader)) { rememberSig(s.signature); continue; }
         const usd = quoteUsdValue(trade);
         if (trade.crossPoolArb && kv.get("suppressArbAlerts", true)) { rememberSig(s.signature); continue; }
         const floor = trade.action === "sell" ? MIN_SELL_USD
