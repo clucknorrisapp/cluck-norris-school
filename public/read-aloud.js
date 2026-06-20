@@ -82,11 +82,13 @@
 
   var queue = [], idx = 0, state = "idle"; // idle | playing | paused
   var btn, stopBtn, kaTimer = null, gapTimer = null;
+  var prefetched = {};   // idx -> Promise<Blob|null>: next line(s) fetched while the current plays
   // Advance to the next chunk after the CURRENT chunk's trailing pause (the breath
   // between sentences/paragraphs). Guarded so a pause()/stop() during the gap halts.
   function advance() {
     if (state !== "playing") return;
     var d = (queue[idx] && queue[idx].pauseMs) || 0;
+    delete prefetched[idx];   // free the chunk we just finished
     clearTimeout(gapTimer);
     if (d > 0) gapTimer = setTimeout(function () { if (state !== "playing") return; idx++; speakChunk(); }, d);
     else { idx++; speakChunk(); }
@@ -140,31 +142,42 @@
     s = s.replace(/±\s?/g, "plus or minus ");
     return s;
   }
+  // Fetch one chunk's audio. Resolves to a Blob, or null on any miss (503 = no
+  // key/over budget → flip ttsOff so the rest of the session uses the browser voice).
+  function fetchTts(text) {
+    return fetch("/api/tts", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: text, lang: lang() })
+    }).then(function (r) {
+      if (!r.ok) { if (r.status === 503) ttsOff = true; return null; }
+      return r.blob();
+    }).catch(function () { ttsOff = true; return null; });
+  }
+  // Download the NEXT line while the current one plays → gap-free first listen.
+  function prefetchNext() {
+    if (ttsOff) return;
+    var ni = idx + 1;
+    if (ni >= queue.length || prefetched[ni] !== undefined) return;
+    prefetched[ni] = fetchTts(speechNorm(queue[ni].text));
+  }
   function speakChunk() {
     if (idx >= queue.length) { stop(); return; }
     var text = speechNorm(queue[idx].text);
     if (ttsOff) { speakBrowser(text); return; }
-    // Try the real voice; fall back to the browser voice for this chunk on any miss.
     var myIdx = idx;
-    fetch("/api/tts", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: text, lang: lang() })
-    }).then(function (r) {
+    // Reuse a prefetched blob if we have one; otherwise fetch this line now.
+    if (prefetched[idx] === undefined) prefetched[idx] = fetchTts(text);
+    Promise.resolve(prefetched[idx]).then(function (b) {
       if (state !== "playing" || idx !== myIdx) return; // paused/stopped/advanced meanwhile
-      if (!r.ok) { if (r.status === 503) ttsOff = true; speakBrowser(text); return; }
-      return r.blob().then(function (b) {
-        if (state !== "playing" || idx !== myIdx) return;
-        curMode = "audio";
-        var a = getAudio();
-        try { if (a.src && a.src.indexOf("blob:") === 0) URL.revokeObjectURL(a.src); } catch (_) {}
-        a.src = URL.createObjectURL(b);
-        a.onended = function () { if (state !== "playing") return; advance(); };
-        a.onerror = function () { if (state !== "playing") return; speakBrowser(text); };
-        a.play().catch(function () { if (state === "playing") speakBrowser(text); });
-      });
-    }).catch(function () {
-      if (state !== "playing" || idx !== myIdx) return;
-      ttsOff = true; speakBrowser(text);
+      if (!b) { speakBrowser(text); return; }
+      curMode = "audio";
+      var a = getAudio();
+      try { if (a.src && a.src.indexOf("blob:") === 0) URL.revokeObjectURL(a.src); } catch (_) {}
+      a.src = URL.createObjectURL(b);
+      a.onended = function () { if (state !== "playing") return; advance(); };
+      a.onerror = function () { if (state !== "playing") return; speakBrowser(text); };
+      a.play().catch(function () { if (state === "playing") speakBrowser(text); });
+      prefetchNext(); // start the next line downloading while this one plays
     });
   }
   function keepAlive() { // some mobile browsers cut long TTS — nudge resume periodically
@@ -177,7 +190,7 @@
   function start() {
     var parts = collect();
     if (!parts.length) return;
-    queue = chunk(parts); idx = 0;
+    queue = chunk(parts); idx = 0; prefetched = {};
     try { synth.cancel(); } catch (_) {}
     state = "playing"; render(); speakChunk(); keepAlive();
   }
@@ -204,7 +217,7 @@
     clearTimeout(gapTimer);
     try { synth.cancel(); } catch (_) {}
     if (audioEl) { try { audioEl.pause(); audioEl.currentTime = 0; } catch (_) {} }
-    queue = []; idx = 0; curMode = null; render();
+    queue = []; idx = 0; prefetched = {}; curMode = null; render();
   }
 
   function render() {
@@ -245,7 +258,7 @@
   function speakText(text) {
     text = String(text || "").trim();
     if (!text) return;
-    queue = chunk([text]); idx = 0;
+    queue = chunk([text]); idx = 0; prefetched = {};
     try { synth.cancel(); } catch (_) {}
     if (audioEl) { try { audioEl.pause(); audioEl.currentTime = 0; } catch (_) {} }
     state = "playing"; render(); speakChunk(); keepAlive();
