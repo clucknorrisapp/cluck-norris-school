@@ -1,5 +1,11 @@
-/* Cluck Norris — read-aloud (browser Text-to-Speech via the Web Speech API).
-   Robotic but free, no API, works on mobile (Seeker/Android WebView + iOS).
+/* Cluck Norris — read-aloud (Text-to-Speech).
+   Two engines, transparent to the user:
+   1. REAL voice — POST /api/tts (ElevenLabs, the branded Cluck voice), cached
+      server-side so each chunk is paid once then free forever. Used when the
+      server has a key + budget.
+   2. FREE fallback — the browser's Web Speech API (robotic but $0, works offline
+      on Seeker/Android WebView + iOS). Used automatically when /api/tts answers
+      503 (no key / over daily budget) or errors.
    A floating "Listen" button (bottom-left) reads the page's main content in the
    current language (en/zh/es), with pause/resume/stop. Loaded globally via
    cluck-nav.js. Skips nav/buttons/code and our own injected UI. */
@@ -60,14 +66,24 @@
 
   var queue = [], idx = 0, state = "idle"; // idle | playing | paused
   var btn, stopBtn, kaTimer = null;
+  // Real-voice (ElevenLabs via /api/tts) playback. If the server has no key/budget
+  // it answers 503 → we set ttsOff for the session and use the free browser voice.
+  // Native <audio> pause/resume is reliable (unlike mobile speechSynthesis), so the
+  // real-voice path resumes exactly; the browser path keeps the chunk-index resume.
+  var audioEl = null, ttsOff = false, curMode = null; // curMode: "audio" | "browser"
+  function getAudio() {
+    if (audioEl) return audioEl;
+    audioEl = new Audio(); audioEl.preload = "auto";
+    return audioEl;
+  }
   function pickVoice(l) {
     var vs = synth.getVoices() || [];
     for (var i = 0; i < vs.length; i++) if ((vs[i].lang || "").toLowerCase().indexOf(l) === 0) return vs[i];
     return null;
   }
-  function speakChunk() {
-    if (idx >= queue.length) { stop(); return; }
-    var u = new SpeechSynthesisUtterance(queue[idx]);
+  function speakBrowser(text) {
+    curMode = "browser";
+    var u = new SpeechSynthesisUtterance(text);
     var l = lang(); u.lang = bcp47(l); var v = pickVoice(l); if (v) u.voice = v;
     u.rate = 1; u.pitch = 1;
     // Only advance/continue while actually playing — so a pause()/stop() cancel
@@ -76,11 +92,38 @@
     u.onerror = function () { if (state !== "playing") return; idx++; speakChunk(); };
     synth.speak(u);
   }
+  function speakChunk() {
+    if (idx >= queue.length) { stop(); return; }
+    var text = queue[idx];
+    if (ttsOff) { speakBrowser(text); return; }
+    // Try the real voice; fall back to the browser voice for this chunk on any miss.
+    var myIdx = idx;
+    fetch("/api/tts", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: text, lang: lang() })
+    }).then(function (r) {
+      if (state !== "playing" || idx !== myIdx) return; // paused/stopped/advanced meanwhile
+      if (!r.ok) { if (r.status === 503) ttsOff = true; speakBrowser(text); return; }
+      return r.blob().then(function (b) {
+        if (state !== "playing" || idx !== myIdx) return;
+        curMode = "audio";
+        var a = getAudio();
+        try { if (a.src && a.src.indexOf("blob:") === 0) URL.revokeObjectURL(a.src); } catch (_) {}
+        a.src = URL.createObjectURL(b);
+        a.onended = function () { if (state !== "playing") return; idx++; speakChunk(); };
+        a.onerror = function () { if (state !== "playing") return; speakBrowser(text); };
+        a.play().catch(function () { if (state === "playing") speakBrowser(text); });
+      });
+    }).catch(function () {
+      if (state !== "playing" || idx !== myIdx) return;
+      ttsOff = true; speakBrowser(text);
+    });
+  }
   function keepAlive() { // some mobile browsers cut long TTS — nudge resume periodically
     clearInterval(kaTimer);
     kaTimer = setInterval(function () {
       if (state !== "playing") { clearInterval(kaTimer); return; }
-      if (synth.speaking && !synth.paused) { try { synth.resume(); } catch (_) {} }
+      if (curMode === "browser" && synth.speaking && !synth.paused) { try { synth.resume(); } catch (_) {} }
     }, 8000);
   }
   function start() {
@@ -90,12 +133,29 @@
     try { synth.cancel(); } catch (_) {}
     state = "playing"; render(); speakChunk(); keepAlive();
   }
-  // Pause/resume via our OWN chunk index — mobile browsers' native pause()/resume()
-  // are unreliable, so we cancel and re-speak the CURRENT chunk on resume. This
-  // continues where it left off and never restarts at the top.
-  function pause() { state = "paused"; try { synth.cancel(); } catch (_) {} render(); }
-  function resume() { state = "playing"; render(); speakChunk(); keepAlive(); }
-  function stop() { state = "idle"; try { synth.cancel(); } catch (_) {} queue = []; idx = 0; render(); }
+  // Pause/resume: the real-voice <audio> path pauses/resumes natively (reliable).
+  // The browser-voice path uses our OWN chunk index — mobile native pause()/resume()
+  // is flaky, so we cancel and re-speak the CURRENT chunk on resume (continues where
+  // it left off, never restarts at the top).
+  function pause() {
+    state = "paused";
+    if (curMode === "audio" && audioEl) { try { audioEl.pause(); } catch (_) {} }
+    else { try { synth.cancel(); } catch (_) {} }
+    render();
+  }
+  function resume() {
+    state = "playing"; render();
+    if (curMode === "audio" && audioEl && audioEl.src && !audioEl.ended) {
+      audioEl.play().catch(function () { speakChunk(); }); keepAlive(); return;
+    }
+    speakChunk(); keepAlive();
+  }
+  function stop() {
+    state = "idle";
+    try { synth.cancel(); } catch (_) {}
+    if (audioEl) { try { audioEl.pause(); audioEl.currentTime = 0; } catch (_) {} }
+    queue = []; idx = 0; curMode = null; render();
+  }
 
   function render() {
     if (!btn) return;
@@ -137,6 +197,7 @@
     if (!text) return;
     queue = chunk([text]); idx = 0;
     try { synth.cancel(); } catch (_) {}
+    if (audioEl) { try { audioEl.pause(); audioEl.currentTime = 0; } catch (_) {} }
     state = "playing"; render(); speakChunk(); keepAlive();
   }
   window.CLKN_READ = { speak: speakText, stop: stop, get state() { return state; } };

@@ -211,6 +211,16 @@ no-op. Use a wallet holding ONLY the MM float, never the treasury or any mint au
 Optional RPC resilience (all unset = primary-only, fine): `FALLBACK_RPC_URL` (one or more
 full backup RPC URLs, comma-separated — e.g. a QuickNode/Triton/Alchemy endpoint),
 `HELIUS_API_KEY_2` (a second Helius key on a separate quota), `RPC_DEBUG` (=1 logs failover).
+Optional **TTS / "real Cluck voice"** (all unset = read-aloud uses the FREE browser Web Speech
+voice everywhere, a safe no-op): `ELEVENLABS_API_KEY` (enables `/api/tts`; ElevenLabs is the
+same engine Anthropic's own voice mode uses), `ELEVENLABS_VOICE_ID` (the branded Cluck voice;
+per-lang override `ELEVENLABS_VOICE_ID_ZH` / `_ES` / `_EN`), `ELEVENLABS_MODEL` (default
+`eleven_flash_v2_5` — HALF-price credits, multilingual), `TTS_DAILY_CHAR_CAP` (NEW-synthesis
+budget/day, default 40000). Synthesized mp3 is cached on the `/data` volume keyed by
+model+voice+lang+text → each lesson chunk is paid ONCE then served free forever; uncached text
+with no key/over budget returns 503 and the client falls back to the browser voice. ⏸️ **NOT
+YET LIVE — staged on the working branch as a "consider sending live" candidate; needs the owner
+to add an ElevenLabs key + pick/design the Cluck voice before cherry-picking to `main`.**
 Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.claude/`,
 `STRATEGY.md`.
 
