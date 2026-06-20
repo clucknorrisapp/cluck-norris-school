@@ -508,11 +508,19 @@ body{background:transparent;font-family:var(--body);}
     var il=d.ilRisk||{level:'',note:''};
     var highRisk = (p.dex==='pumpswap') || (il.level==='high');
     var riskBanner = highRisk ? '<div style="margin:10px 0 4px;padding:9px 11px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.4);border-radius:9px;font-family:system-ui;font-size:11.5px;line-height:1.5;color:#FCA5A5;">⚠️ <b>High-risk pool.</b> '+(p.dex==='pumpswap'?'Fresh memecoin AMM — the token can lose most of its value or rug fast. ':'')+'Any fee estimate ignores impermanent loss and the token going to zero, which routinely dwarf fees here. High yield ≠ safe. Not financial advice.</div>' : '';
+    var addr = (ddState && ddState.pool) || p.address || '';
+    var poolLinks = addr ? '<div class="sim-sub" style="margin-top:8px;display:flex;gap:12px;flex-wrap:wrap;align-items:center;">'
+      +'<span style="color:#9C7E68;">View pool →</span>'
+      +'<a href="https://www.geckoterminal.com/solana/pools/'+encodeURIComponent(addr)+'" target="_blank" rel="noopener" style="color:var(--accent);font-weight:700;text-decoration:none;">📊 GeckoTerminal ↗</a>'
+      +'<a href="https://dexscreener.com/solana/'+encodeURIComponent(addr)+'" target="_blank" rel="noopener" style="color:var(--accent);font-weight:700;text-decoration:none;">📈 DexScreener ↗</a>'
+      +'<a href="https://solscan.io/account/'+encodeURIComponent(addr)+'" target="_blank" rel="noopener" style="color:#9C7E68;font-weight:700;text-decoration:none;">🔎 Solscan ↗</a>'
+      +'</div>' : '';
     var dd=document.getElementById('deepdive');
     dd.innerHTML=''
       +'<button class="closex" onclick="closeDD()">✕</button>'
       +'<div class="sim-head">'+esc(p.dex||'')+' · '+esc(p.name||'pool')+'</div>'
       +'<div class="sim-sub">POOL DETAIL — fees, depth &amp; volatility for a buy-and-hold LP position</div>'
+      +poolLinks
       +riskBanner
       +'<div class="stat-grid">'
         +stat('TVL', fmt(p.tvlUsd))
