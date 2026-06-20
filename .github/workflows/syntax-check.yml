@@ -23,3 +23,5 @@ jobs:
             echo "checking $f"
             node --check "$f"
           done
+      - name: question-bank drift guard
+        run: node scripts/check-question-bank.js

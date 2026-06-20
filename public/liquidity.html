@@ -367,8 +367,9 @@ function renderStrategies(){
   if(!curRanges) return;
   const opts=curRanges.options;
   document.getElementById('stratRow').innerHTML=opts.map(o=>{
+    const _wp = (typeof curRanges.realizedWidthPct==='number' ? curRanges.realizedWidthPct : curRanges.widthPct);
     const sub = o.id==='balanced'
-      ? `Two-sided market, <b>±${curRanges.widthPct.toFixed(0)}%</b> around ${fmtNum(curRanges.currentPriceClkn)} ${esc(curRanges.quoteSymbol)}. Earns most fees in range.`
+      ? `Two-sided market, <b>±${_wp<1?_wp.toFixed(2):_wp.toFixed(1)}%</b> around ${fmtNum(curRanges.currentPriceClkn)} ${esc(curRanges.quoteSymbol)}. Earns most fees in range.`
       : `Range ${fmtNum(o.lowerPriceClkn)} → ${fmtNum(o.upperPriceClkn)} ${esc(curRanges.quoteSymbol)}. Deposit <b>${esc(o.depositSymbol)}</b> only.`;
     const title = o.id==='clkn' ? '⬆ Sell-side wall (CLKN asks)' : o.id==='quote' ? '⬇ Buy-side support ('+esc(curRanges.quoteSymbol)+' bids)' : '⚖ Balanced (both sides)';
     return `<button class="strat ${o.id===strategy?'active':''}" data-id="${o.id}" onclick="selectStrategy('${o.id}')">
