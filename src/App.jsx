@@ -344,7 +344,7 @@ function shuffleOptions(question) {
 
 const BELT_BG   = { "FRESHMAN":"#F0F0F0","SOPHOMORE":"#FFB627","JUNIOR":"#FF7A18","SENIOR":"#10B981","GRADUATE":"#06B6D4","POST-GRAD":"#92400E","TENURED":"#DC2626","HEADMASTER":"#1a0f08","PROFESSOR":"#14B8A6","DEAN":"#84CC16","CHANCELLOR":"#FF7A18","EMERITUS":"#A855F7" };
 const BELT_TEXT = { "FRESHMAN":"#1a0f08","SOPHOMORE":"#1a0f08","JUNIOR":"#fff","SENIOR":"#fff","GRADUATE":"#fff","POST-GRAD":"#fff","TENURED":"#fff","HEADMASTER":"#FFB627","PROFESSOR":"#fff","DEAN":"#1a0f08","CHANCELLOR":"#fff","EMERITUS":"#fff" };
-function Belt({belt,small}){return(<span style={{display:"inline-block",background:BELT_BG[belt],color:BELT_TEXT[belt],fontFamily:"'Anton',sans-serif",fontSize:small?9:10,fontWeight:700,letterSpacing:1.5,padding:small?"2px 6px":"3px 10px",borderRadius:3,border:belt==="BLACK BELT"?"1px solid #FFB627":"none",textTransform:"uppercase"}}>{belt}</span>);}
+function Belt({belt,small}){return(<span data-read-skip="1" style={{display:"inline-block",background:BELT_BG[belt],color:BELT_TEXT[belt],fontFamily:"'Anton',sans-serif",fontSize:small?9:10,fontWeight:700,letterSpacing:1.5,padding:small?"2px 6px":"3px 10px",borderRadius:3,border:belt==="BLACK BELT"?"1px solid #FFB627":"none",textTransform:"uppercase"}}>{belt}</span>);}
 
 
 
@@ -575,7 +575,7 @@ function Incubator({ onComplete, onBack }) {
       </div>
       <div style={{textAlign:"center",marginBottom:20}}>
         <div style={{fontSize:40,marginBottom:8}}>{lesson.icon}</div>
-        <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:3,color:lesson.color,marginBottom:4}}>LESSON {lessonIdx+1} OF {INCUBATOR_LESSONS.length}</div>
+        <div data-read-skip="1" style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:3,color:lesson.color,marginBottom:4}}>LESSON {lessonIdx+1} OF {INCUBATOR_LESSONS.length}</div>
         <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:26,fontWeight:900,color:"#F9FAFB",margin:"0 0 12px"}}>{lesson.title}</h2>
         <p style={{color:"#9CA3AF",fontSize:15.5,lineHeight:1.7,margin:0}}>{lesson.intro}</p>
       </div>
@@ -601,7 +601,7 @@ function Incubator({ onComplete, onBack }) {
   return (
     <div style={{padding:"0 16px 40px",maxWidth:READ,margin:"0 auto"}}>
       <div style={{marginBottom:16}}>
-        <div style={{display:"flex",justifyContent:"space-between",fontSize:12.5,color:"#6B7280",fontFamily:"'Anton',sans-serif",letterSpacing:1,marginBottom:5}}>
+        <div data-read-skip="1" style={{display:"flex",justifyContent:"space-between",fontSize:12.5,color:"#6B7280",fontFamily:"'Anton',sans-serif",letterSpacing:1,marginBottom:5}}>
           <span style={{color:lesson.color}}>{lesson.icon} {lesson.title.toUpperCase()}</span>
           <span>Q {qi+1} OF {lesson.questions.length}</span>
         </div>
@@ -892,7 +892,7 @@ function UltimateChallenge({ onBack }) {
   const q = questions[qi];
   return (
     <div style={{padding:"0 16px 40px",maxWidth:READ,margin:"0 auto"}}>
-      <div style={{marginBottom:16}}>
+      <div data-read-skip="1" style={{marginBottom:16}}>
         <div style={{display:"flex",justifyContent:"space-between",fontSize:12.5,color:"#6B7280",fontFamily:"'Anton',sans-serif",letterSpacing:1,marginBottom:5}}>
           <span style={{color:"#EF4444",fontWeight:700}}>🥊 ULTIMATE CHALLENGE</span>
           <span>Q {qi+1} OF {questions.length}</span>
@@ -907,7 +907,7 @@ function UltimateChallenge({ onBack }) {
         </div>
       </div>
       <div style={{background:"rgba(239,68,68,0.05)",border:"1px solid rgba(239,68,68,0.2)",borderRadius:12,padding:20,marginBottom:14}}>
-        <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#EF4444",letterSpacing:2,marginBottom:8}}>QUESTION {qi+1}</div>
+        <div data-read-skip="1" style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#EF4444",letterSpacing:2,marginBottom:8}}>QUESTION {qi+1}</div>
         <p style={{fontFamily:"'Anton',sans-serif",fontSize:18,color:"#F9FAFB",margin:0,lineHeight:1.4}}>{q.q}</p>
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
@@ -1929,7 +1929,7 @@ function Lesson({lesson:l,onComplete,onBack}){
   if(phase==="quiz") return(
     <div style={{padding:"0 16px 40px",maxWidth:READ,margin:"0 auto"}}>
       <div style={{marginBottom:20}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:10,fontFamily:"'Anton',sans-serif",letterSpacing:1,marginBottom:5}}>
+        <div data-read-skip="1" style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:10,fontFamily:"'Anton',sans-serif",letterSpacing:1,marginBottom:5}}>
           <span style={{color:l.color,fontSize:15,fontWeight:700,letterSpacing:1.5}}>{l.title.toUpperCase()}</span><span style={{color:l.color,fontSize:13.5,fontWeight:700,whiteSpace:"nowrap"}}>QUESTION {qi+1} OF {shuffledQuestions.length} • {answers.filter(Boolean).length + (sel!==null && sel===q.correct ? 1 : 0)}/{shuffledQuestions.length} CORRECT</span>
         </div>
         <div style={{height:4,background:"rgba(255,122,24,0.18)",borderRadius:2}}>
@@ -1937,7 +1937,7 @@ function Lesson({lesson:l,onComplete,onBack}){
         </div>
       </div>
       <div style={{background:"rgba(255,122,24,0.05)",border:"1px solid rgba(255,122,24,0.18)",borderRadius:12,padding:20,marginBottom:14}}>
-        <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:l.color,letterSpacing:2,marginBottom:8}}>QUESTION {qi+1}</div>
+        <div data-read-skip="1" style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:l.color,letterSpacing:2,marginBottom:8}}>QUESTION {qi+1}</div>
         <p style={{fontFamily:"'Anton',sans-serif",fontSize:18,color:"#F9FAFB",margin:0,lineHeight:1.4}}>{q.q}</p>
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
@@ -2236,7 +2236,7 @@ export default function App(){
       `}</style>
       {/* Header — hidden on the Token Data (clkn) screen, which uses only the floating Home/Ask Cluck bar */}
       {screen!=="clkn" && (
-      <div style={{borderBottom:"1px solid rgba(255,122,24,0.18)",background:"rgba(0,0,0,0.6)",backdropFilter:"blur(10px)",padding:"calc(50px + env(safe-area-inset-top, 0px)) 18px 12px",position:"sticky",top:0,zIndex:100}}>
+      <div data-read-skip="1" style={{borderBottom:"1px solid rgba(255,122,24,0.18)",background:"rgba(0,0,0,0.6)",backdropFilter:"blur(10px)",padding:"calc(50px + env(safe-area-inset-top, 0px)) 18px 12px",position:"sticky",top:0,zIndex:100}}>
         {/* Brand row — compact, matching the homepage nav (no subtitle / contract / progress dots) */}
         <div onClick={()=>setScreen("landing")} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,cursor:"pointer"}}>
           <img src={LOGO_B64} alt="Cluck Norris" style={{width:30,height:30,objectFit:"cover",borderRadius:"50%",border:"1.5px solid #FF7A18",flexShrink:0}}/>
