@@ -138,7 +138,9 @@
 
   var STYLE = 'punchy';
   var MODE = 'ask';   // 'ask' = conversational (/api/ask-cluck) · 'lecture' = structured (/api/lecture)
-  var AUTOREAD = (function(){ try { return localStorage.getItem('clkn_autoread') === '1'; } catch (e) { return false; } })();
+  // Auto-read replies aloud — ON by default on Ask Cluck (its whole purpose); a user
+  // who turns it Off is remembered ('0'). Anything other than '0' => On.
+  var AUTOREAD = (function(){ try { return localStorage.getItem('clkn_autoread') !== '0'; } catch (e) { return true; } })();
   var busy = false;
 
   // Escape EVERYTHING from the model/user before innerHTML (token/AI text is untrusted).
@@ -293,6 +295,9 @@
     question = String(question || '').trim();
     if (!question || busy) return;
     busy = true; askBtn.disabled = true;
+    // Prime the speech engine inside this user gesture so the reply can auto-read
+    // even on strict mobile browsers (iOS/WebView require a gesture to unlock TTS).
+    if (AUTOREAD && window.speechSynthesis) { try { window.speechSynthesis.cancel(); window.speechSynthesis.speak(new SpeechSynthesisUtterance(' ')); } catch (e) {} }
     addUser(question);
     var wrap = addCluckLoading();
     var lecture = (MODE === 'lecture');
