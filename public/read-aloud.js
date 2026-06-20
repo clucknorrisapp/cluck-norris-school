@@ -129,5 +129,17 @@
   try { synth.onvoiceschanged = function () {}; } catch (_) {}
   // stop reading when leaving / switching screens
   window.addEventListener("beforeunload", function () { try { synth.cancel(); } catch (_) {} });
+
+  // Public API so chat-style pages (e.g. Ask Cluck) can read a specific answer the
+  // moment it arrives, instead of the whole page top-to-bottom.
+  function speakText(text) {
+    text = String(text || "").trim();
+    if (!text) return;
+    queue = chunk([text]); idx = 0;
+    try { synth.cancel(); } catch (_) {}
+    state = "playing"; render(); speakChunk(); keepAlive();
+  }
+  window.CLKN_READ = { speak: speakText, stop: stop, get state() { return state; } };
+
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", inject); else inject();
 })();
