@@ -1857,6 +1857,31 @@ app.post("/api/tts", rateLimit("tts", { windowMs: 60000, max: 60 }), async (req,
   }
 });
 
+// TTS cache health — coarse operational stats (no text/paths, nothing sensitive),
+// so we can see how the voice cache is filling. Ungated on purpose: just counts.
+app.get("/api/tts-stats", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  let files = 0, bytes = 0;
+  try {
+    const ents = fs.existsSync(TTS_DIR) ? fs.readdirSync(TTS_DIR) : [];
+    for (const f of ents) {
+      if (!f.endsWith(".mp3")) continue;
+      files++;
+      try { bytes += fs.statSync(join(TTS_DIR, f)).size; } catch (_) {}
+    }
+  } catch (_) {}
+  const today = new Date().toISOString().slice(0, 10);
+  res.status(200).json({
+    enabled: !!process.env.ELEVENLABS_API_KEY,
+    voiceConfigured: !!ttsVoiceId("en"),
+    model: TTS_MODEL,
+    cachedClips: files,
+    cacheMB: +(bytes / 1048576).toFixed(2),
+    newCharsToday: (today === ttsNewDay) ? ttsNewChars : 0,
+    dailyCharCap: TTS_DAILY_CHAR_CAP,
+  });
+});
+
 const PORT = process.env.PORT || 3000;
 
 const JUPITER_LOCK_PROGRAM = "LocpQgucEQHbqNABEYvBvwoxCPsSbG91A1QaQhQQqjn";
