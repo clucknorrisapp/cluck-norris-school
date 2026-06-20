@@ -1311,7 +1311,6 @@ function ReinvestmentFeed() {
 }
 
 function CLKNWidget() {
-  const [pool, setPool] = useState(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [solAmount, setSolAmount] = useState("1");
@@ -1319,13 +1318,11 @@ function CLKNWidget() {
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quoteError, setQuoteError] = useState(null);
   const [slippage, setSlippage] = useState(1);
-  const [apiStatus, setApiStatus] = useState("connecting");
   const [dexData, setDexData] = useState(null);
   const [holderCount, setHolderCount] = useState(null);
   const [fees, setFees] = useState(null);
   const [supply, setSupply] = useState(null);
-
-  const isGraduated = pool && pool.dammV2PoolKey;
+  const [copied, setCopied] = useState(false);
 
   async function fetchDex() {
     try {
@@ -1360,17 +1357,10 @@ function CLKNWidget() {
   async function fetchData() {
     try {
       setLoading(true);
-      setApiStatus("connecting");
-      const poolRes = await fetch(`/api/bags-proxy?endpoint=solana/bags/pools/token-mint&tokenMint=${CLKN_MINT}`);
-      const poolData = await poolRes.json();
-      if (poolData.success) setPool(poolData.response);
       fetchDex();
       fetchHelius();
       setLastUpdated(new Date());
-      setApiStatus("ok");
-    } catch (e) {
-      setApiStatus("error");
-    }
+    } catch (e) {}
     finally { setLoading(false); }
   }
 
@@ -1410,93 +1400,73 @@ function CLKNWidget() {
   const fmtNum = (n, dec=2) => n ? parseFloat(n).toLocaleString(undefined,{maximumFractionDigits:dec}) : "—";
   const shortKey = (k) => k ? `${k.slice(0,6)}...${k.slice(-4)}` : "Not active";
 
+  // Derived display values (DexScreener + Helius supply). Prefer real circulating
+  // market cap (supply × price) over DexScreener's marketCap/FDV.
+  const price = dexData ? (parseFloat(dexData.priceUsd) || 0) : 0;
+  const realMc = (supply && price > 0) ? supply * price
+    : (dexData ? (parseFloat(dexData.marketCap) || parseFloat(dexData.fdv) || null) : null);
+  const liqUsd = dexData?.liquidity?.usd || 0;
+  const liqRatio = (realMc && liqUsd) ? (liqUsd / realMc) * 100 : null;
+  const liqHealth = liqRatio === null ? null
+    : liqRatio >= 5 ? {label:"HEALTHY",color:"#10B981"}
+    : liqRatio >= 2 ? {label:"OK",color:"#FFB627"}
+    : {label:"THIN",color:"#EF4444"};
+  function copyMint(){ try { navigator.clipboard.writeText(CLKN_MINT); setCopied(true); setTimeout(()=>setCopied(false),1500); } catch(_){} }
+
   return (
     <div style={{padding:"0 16px 40px",maxWidth:COL,margin:"0 auto"}}>
-      <div style={{textAlign:"center",marginBottom:20}}>
-        <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:4,color:"#FF7A18",marginBottom:4}}>LIVE TOKEN DATA</div>
-        <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:26,color:"#F9FAFB",margin:"0 0 8px"}}>CLKN on Bags.fm</h2>
-        <div style={{display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap"}}>
-          <div style={{display:"inline-flex",alignItems:"center",gap:6,background:apiStatus==="ok"?"rgba(16,185,129,0.1)":apiStatus==="error"?"rgba(239,68,68,0.1)":"rgba(100,100,100,0.1)",border:`1px solid ${apiStatus==="ok"?"#10B981":apiStatus==="error"?"#EF4444":"#555"}`,borderRadius:20,padding:"4px 12px"}}>
-            <div style={{width:7,height:7,borderRadius:"50%",background:apiStatus==="ok"?"#10B981":apiStatus==="error"?"#EF4444":"#888",animation:apiStatus==="connecting"?"pulse 1s infinite":"none"}}/>
-            <span style={{fontFamily:"'Anton',sans-serif",fontSize:9,letterSpacing:2,color:apiStatus==="ok"?"#10B981":apiStatus==="error"?"#EF4444":"#888"}}>
-              {apiStatus==="ok"?"BAGS API CONNECTED":apiStatus==="error"?"BAGS API ERROR":"CONNECTING..."}
-            </span>
-          </div>
-          <div style={{display:"inline-flex",alignItems:"center",gap:6,background:isGraduated?"rgba(212,175,55,0.1)":"rgba(59,130,246,0.1)",border:`1px solid ${isGraduated?"#FFB627":"#3B82F6"}`,borderRadius:20,padding:"4px 12px"}}>
-            <span style={{fontSize:12.5}}>{isGraduated?"🎓":"📈"}</span>
-            <span style={{fontFamily:"'Anton',sans-serif",fontSize:9,letterSpacing:2,color:isGraduated?"#FFB627":"#3B82F6"}}>
-              {isGraduated?"GRADUATED — METEORA":"BONDING CURVE"}
-            </span>
-          </div>
+      <div style={{textAlign:"center",marginBottom:18}}>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:11,letterSpacing:5,color:"#FF7A18",marginBottom:8}}>LIVE TOKEN DATA</div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginBottom:10}}>
+          <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:30,color:"#F9FAFB",margin:0,letterSpacing:1}}>CLUCK NORRIS</h2>
+          <span style={{fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,color:"#FFB627",background:"rgba(255,182,39,0.12)",border:"1px solid rgba(255,182,39,0.35)",borderRadius:6,padding:"3px 9px",letterSpacing:1}}>CLKN</span>
+        </div>
+        <div style={{display:"inline-flex",alignItems:"center",gap:7,background:"rgba(16,185,129,0.1)",border:"1px solid rgba(16,185,129,0.4)",borderRadius:20,padding:"4px 12px"}}>
+          <div style={{width:7,height:7,borderRadius:"50%",background:"#10B981",boxShadow:"0 0 8px #10B981",animation:"pulse 2s infinite"}}/>
+          <span style={{fontFamily:"'Anton',sans-serif",fontSize:9,letterSpacing:2,color:"#10B981"}}>LIVE{lastUpdated?` · ${lastUpdated.toLocaleTimeString()}`:""}</span>
         </div>
       </div>
 
-      {/* Bonding Curve Progress + Market Data — hidden after graduation */}
-      {!isGraduated && (
-        <div style={{background:"rgba(255,122,24,0.05)",border:"1px solid rgba(59,130,246,0.3)",borderRadius:12,padding:16,marginBottom:12,boxShadow:"0 0 20px rgba(59,130,246,0.08)"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-            <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,letterSpacing:3,color:"#3B82F6"}}>📈 BONDING CURVE PROGRESS</div>
-            <div style={{fontFamily:"'Anton',sans-serif",fontSize:13.5,fontWeight:700,color:"#FFB627"}}>
-              {dexData && dexData.marketCap ? `${Math.min(Math.round((dexData.marketCap / 34500) * 100), 99)}%` : "..."}
+      {/* Hero price */}
+      <div style={{background:"linear-gradient(135deg,rgba(255,122,24,0.13),rgba(239,68,68,0.05))",border:"1px solid rgba(255,122,24,0.3)",borderRadius:16,padding:"22px 18px",marginBottom:12,textAlign:"center",boxShadow:"0 0 30px rgba(255,122,24,0.08)"}}>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,letterSpacing:3,color:"#6B7280",marginBottom:8}}>CLKN PRICE (USD)</div>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:38,fontWeight:900,color:"#FFB627",lineHeight:1}}>{price>0?`$${price.toFixed(8)}`:"—"}</div>
+        {(() => {
+          const ch24 = dexData ? parseFloat(dexData.priceChange?.h24) : NaN;
+          const ok = Number.isFinite(ch24);
+          const c = !ok ? "#9CA3AF" : ch24>0?"#10B981":ch24<0?"#EF4444":"#9CA3AF";
+          return (
+            <div style={{display:"flex",justifyContent:"center",gap:18,marginTop:12,flexWrap:"wrap"}}>
+              <span style={{fontFamily:"'Anton',sans-serif",fontSize:14,fontWeight:700,color:c}}>{ok?`${ch24>0?"▲ +":ch24<0?"▼ ":""}${ch24.toFixed(2)}%`:"—"} <span style={{color:"#6B7280",fontSize:10}}>24H</span></span>
+              <span style={{fontFamily:"'Anton',sans-serif",fontSize:14,fontWeight:700,color:"#10B981"}}>{realMc?`$${fmtNum(realMc,0)}`:"—"} <span style={{color:"#6B7280",fontSize:10}}>MKT CAP</span></span>
             </div>
-          </div>
-          <div style={{height:10,background:"rgba(255,122,24,0.18)",borderRadius:20,overflow:"hidden",marginBottom:10}}>
-            <div style={{
-              height:"100%",
-              width: dexData && dexData.marketCap ? `${Math.min(Math.round((dexData.marketCap / 34500) * 100), 99)}%` : "0%",
-              background:"linear-gradient(90deg,#3B82F6,#06B6D4,#FFB627)",
-              borderRadius:20,
-              boxShadow:"0 0 10px rgba(6,182,212,0.5)",
-              transition:"width 1s ease"
-            }}/>
-          </div>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-            <span style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#6B7280",letterSpacing:1}}>LAUNCH</span>
-            <div style={{textAlign:"center"}}>
-              <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#06B6D4",letterSpacing:1}}>🎓 GRADUATION → METEORA</div>
-              <div style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#4B5563",letterSpacing:1,marginTop:2}}>DAMM V2 POOL INCOMING</div>
-            </div>
-            <span style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#FFB627",letterSpacing:1}}>100%</span>
-          </div>
-          {/* Market Stats from DexScreener */}
-          {dexData && (
-            <div style={{display:"flex",gap:8}}>
-              {[
-                {label:"PRICE", value: dexData.priceUsd ? `$${parseFloat(dexData.priceUsd).toFixed(8)}` : "—", color:"#FFB627"},
-                {label:"MKT CAP", value: dexData.marketCap ? `$${fmtNum(dexData.marketCap,0)}` : "—", color:"#10B981"},
-                {label:"24H VOL", value: dexData.volume?.h24 ? `$${fmtNum(dexData.volume.h24,0)}` : "—", color:"#8B5CF6"},
-                {label:"LIQUIDITY", value: dexData.liquidity?.usd ? `$${fmtNum(dexData.liquidity.usd,0)}` : "—", color:"#06B6D4"},
-              ].map(s=>(
-                <div key={s.label} style={{flex:1,background:"rgba(255,122,24,0.06)",borderRadius:8,padding:"8px 4px",textAlign:"center"}}>
-                  <div style={{fontFamily:"'Anton',sans-serif",fontSize:7,letterSpacing:1,color:"#6B7280",marginBottom:3}}>{s.label}</div>
-                  <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,color:s.color}}>{s.value}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+          );
+        })()}
+      </div>
 
-      {/* Holder Count + Locks — Helius powered */}
+      {/* Key stats */}
       <div style={{display:"flex",gap:8,marginBottom:12}}>
-        <div style={{flex:1,background:"rgba(255,122,24,0.05)",border:"1px solid rgba(255,122,24,0.22)",borderRadius:10,padding:"16px",textAlign:"center"}}>
-          <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,letterSpacing:2,color:"#9CA3AF",marginBottom:6}}>👥 HOLDERS</div>
-          <div style={{fontFamily:"'Anton',sans-serif",fontSize:40,fontWeight:700,color:"#FFB627",lineHeight:1}}>
-            {holderCount !== null ? holderCount.toLocaleString() : "—"}
+        {[
+          {label:"24H VOLUME", value: dexData?.volume?.h24 ? `$${fmtNum(dexData.volume.h24,0)}` : "—", color:"#8B5CF6"},
+          {label:"LIQUIDITY", value: liqUsd ? `$${fmtNum(liqUsd,0)}` : "—", color:"#06B6D4", badge: liqHealth},
+          {label:"HOLDERS", value: holderCount!==null ? holderCount.toLocaleString() : "—", color:"#FFB627"},
+        ].map(s=>(
+          <div key={s.label} style={{flex:1,background:"rgba(255,122,24,0.05)",border:"1px solid rgba(255,122,24,0.18)",borderRadius:12,padding:"14px 6px",textAlign:"center"}}>
+            <div style={{fontFamily:"'Anton',sans-serif",fontSize:8,letterSpacing:1,color:"#6B7280",marginBottom:6}}>{s.label}</div>
+            <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:s.color,lineHeight:1.1}}>{s.value}</div>
+            {s.badge && <div style={{marginTop:5,display:"inline-block",fontFamily:"'Anton',sans-serif",fontSize:7,fontWeight:700,letterSpacing:1,color:s.badge.color,background:`${s.badge.color}22`,border:`1px solid ${s.badge.color}55`,borderRadius:4,padding:"1px 5px"}}>{s.badge.label}</div>}
           </div>
-          <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1,marginTop:6}}>VIA HELIUS</div>
-        </div>
-        <div style={{flex:1,background:"rgba(255,122,24,0.05)",border:"1px solid rgba(255,122,24,0.3)",borderRadius:10,padding:"16px",textAlign:"center"}}>
-          <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,letterSpacing:2,color:"#FF7A18",marginBottom:6}}>💰 FEES EARNED</div>
-          <div style={{fontFamily:"'Anton',sans-serif",fontSize:28,fontWeight:700,color:"#FFB627",lineHeight:1}}>
-            {fees ? (parseInt(fees) / 1_000_000_000).toFixed(3) : "—"}
-          </div>
-          <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1,marginTop:4}}>SOL LIFETIME</div>
-
-        </div>
+        ))}
       </div>
 
-      <ReinvestmentFeed />
+      {/* Creator fees -> CLKN buybacks */}
+      <div style={{background:"rgba(255,122,24,0.05)",border:"1px solid rgba(255,122,24,0.22)",borderRadius:12,padding:16,marginBottom:12}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:10}}>
+          <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,letterSpacing:2,color:"#FF7A18"}}>💰 CREATOR FEES → CLKN BUYBACKS</div>
+          <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#FFB627",letterSpacing:1}}>{fees ? `${(parseInt(fees)/1_000_000_000).toFixed(3)} SOL` : "—"}</div>
+        </div>
+        <ReinvestmentFeed />
+      </div>
 
       {/* Market Activity — multi-timeframe price change + 24h buy/sell ratio */}
       {dexData && (
@@ -1543,77 +1513,29 @@ function CLKNWidget() {
         </div>
       )}
 
-      {/* Pool Info — switches between DBC and Meteora */}
-      <div style={{background:"rgba(255,122,24,0.05)",border:`1px solid ${isGraduated?"rgba(212,175,55,0.3)":"rgba(255,122,24,0.18)"}`,borderRadius:12,padding:16,marginBottom:12,boxShadow:isGraduated?"0 0 20px rgba(212,175,55,0.1)":"none"}}>
-        <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,letterSpacing:3,color:isGraduated?"#FFB627":"#FF7A18",marginBottom:12}}>
-          {isGraduated?"🎓 METEORA DAMM V2 POOL":"🏊 DBC POOL DATA"}
+      {/* Token Details */}
+      <div style={{background:"rgba(255,122,24,0.05)",border:"1px solid rgba(255,122,24,0.18)",borderRadius:12,padding:16,marginBottom:12}}>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,letterSpacing:3,color:"#FF7A18",marginBottom:12}}>🔎 TOKEN DETAILS</div>
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          {[
+            {label:"CIRCULATING", value: supply ? `${fmtNum(supply,0)} CLKN` : "—", color:"#A78BFA"},
+            {label:"FDV", value: (dexData && parseFloat(dexData.fdv)) ? `$${fmtNum(parseFloat(dexData.fdv),0)}` : "—", color:"#6EE7B7"},
+            {label:"24H VOLUME", value: dexData?.volume?.h24 ? `$${fmtNum(dexData.volume.h24,0)}` : "—", color:"#8B5CF6"},
+          ].map(r=>(
+            <div key={r.label} style={{background:"rgba(255,122,24,0.05)",borderRadius:8,padding:"9px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontFamily:"'Anton',sans-serif",fontSize:11,letterSpacing:2,color:"#6B7280"}}>{r.label}</span>
+              <span style={{fontFamily:"monospace",fontSize:14,fontWeight:600,color:r.color}}>{r.value}</span>
+            </div>
+          ))}
+          <button onClick={copyMint} style={{background:"rgba(255,122,24,0.05)",border:"none",borderRadius:8,padding:"9px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer",width:"100%",textAlign:"left"}}>
+            <span style={{fontFamily:"'Anton',sans-serif",fontSize:11,letterSpacing:2,color:"#6B7280"}}>MINT</span>
+            <span style={{fontFamily:"monospace",fontSize:13,color:copied?"#10B981":"#06B6D4"}}>{copied?"✓ COPIED":shortKey(CLKN_MINT)}</span>
+          </button>
         </div>
-
-        {/* DBC Pool — before graduation */}
-        {!isGraduated && pool && (
-          <div style={{display:"flex",flexDirection:"column",gap:6}}>
-            {[
-              {label:"TOKEN MINT",value:shortKey(CLKN_MINT),color:"#06B6D4"},
-              {label:"DBC POOL",value:shortKey(pool.dbcPoolKey),color:"#FF7A18"},
-              {label:"DAMM V2",value:"Pending graduation",color:"#6B7280"},
-            ].map(r=>(
-              <div key={r.label} style={{background:"rgba(255,122,24,0.05)",borderRadius:8,padding:"8px 12px",display:"flex",justifyContent:"space-between"}}>
-                <span style={{fontFamily:"'Anton',sans-serif",fontSize:9,letterSpacing:2,color:"#4B5563"}}>{r.label}</span>
-                <span style={{fontFamily:"monospace",fontSize:13,color:r.color}}>{r.value}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Graduated Pool — uses DexScreener data */}
-        {isGraduated && (
-          <div>
-            {dexData ? (
-              <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                {(() => {
-                  const liqUsd = dexData.liquidity?.usd || 0;
-                  const solPriceUsd = dexData.priceUsd && dexData.priceNative ? parseFloat(dexData.priceUsd) / parseFloat(dexData.priceNative) : 150;
-                  const solInPool = solPriceUsd > 0 ? (liqUsd / 2) / solPriceUsd : 0;
-                  const clknPriceUsd = parseFloat(dexData.priceUsd) || 0;
-                  const clknInPool = clknPriceUsd > 0 ? (liqUsd / 2) / clknPriceUsd : 0;
-                  // Prefer real circulating MC (supply × price) over DexScreener's marketCap,
-                  // which for many SPL tokens is just FDV in disguise.
-                  const realMc = (supply && clknPriceUsd > 0) ? supply * clknPriceUsd : null;
-                  const fdv = parseFloat(dexData.fdv) || parseFloat(dexData.marketCap) || null;
-                  // Liquidity health = liq / circulating MC. >5% healthy, 2-5% OK, <2% thin.
-                  const mcForHealth = realMc || fdv;
-                  const liqRatio = (mcForHealth && liqUsd) ? (liqUsd / mcForHealth) * 100 : null;
-                  const liqHealth = liqRatio === null ? null : liqRatio >= 5 ? {label:"HEALTHY",color:"#10B981"} : liqRatio >= 2 ? {label:"OK",color:"#FFB627"} : {label:"THIN",color:"#EF4444"};
-                  return [
-                  {label:"POOL ADDRESS",value:shortKey(pool.dammV2PoolKey),color:"#FFB627"},
-                  {label:"PRICE",value:dexData.priceUsd ? `$${parseFloat(dexData.priceUsd).toFixed(8)}` : "—",color:"#FFB627"},
-                  {label:"MARKET CAP",value:realMc ? `$${fmtNum(realMc,0)}` : (fdv ? `$${fmtNum(fdv,0)}` : "—"),color:"#10B981"},
-                  ...(fdv && realMc && Math.abs(fdv - realMc) / fdv > 0.01 ? [{label:"FDV",value:`$${fmtNum(fdv,0)}`,color:"#6EE7B7"}] : []),
-                  ...(supply ? [{label:"CIRCULATING",value:`${fmtNum(supply,0)} CLKN`,color:"#A78BFA"}] : []),
-                  {label:"SOL IN POOL",value:solInPool > 0 ? `${fmtNum(solInPool,2)} SOL` : "—",color:"#06B6D4"},
-                  {label:"CLKN IN POOL",value:clknInPool > 0 ? `${fmtNum(clknInPool,0)} CLKN` : "—",color:"#FFB627"},
-                  {label:"TOTAL LIQUIDITY",value:liqUsd ? `$${fmtNum(liqUsd,0)}` : "—",color:"#10B981",badge:liqHealth},
-                  {label:"24H VOLUME",value:dexData.volume?.h24 ? `$${fmtNum(dexData.volume.h24,0)}` : "—",color:"#8B5CF6"},
-                  ];
-                })().map(r=>(
-                  <div key={r.label} style={{background:"rgba(255,122,24,0.05)",borderRadius:8,padding:"8px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <span style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:2,color:"#6B7280"}}>{r.label}</span>
-                    <div style={{display:"flex",alignItems:"center",gap:8}}>
-                      <span style={{fontFamily:"monospace",fontSize:15,fontWeight:600,color:r.color}}>{r.value}</span>
-                      {r.badge && (
-                        <span style={{fontFamily:"'Anton',sans-serif",fontSize:8,fontWeight:700,letterSpacing:1,color:r.badge.color,background:`${r.badge.color}22`,border:`1px solid ${r.badge.color}55`,borderRadius:4,padding:"2px 6px"}}>{r.badge.label}</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div style={{height:120,background:"rgba(255,122,24,0.05)",borderRadius:10,animation:"pulse 1.5s infinite",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                <span style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#6B7280",letterSpacing:2}}>LOADING POOL DATA...</span>
-              </div>
-            )}
-          </div>
-        )}
+        <div style={{display:"flex",gap:8,marginTop:12}}>
+          <a href={`https://dexscreener.com/solana/${CLKN_MINT}`} target="_blank" rel="noreferrer" style={{flex:1,textAlign:"center",background:"rgba(255,122,24,0.08)",border:"1px solid rgba(255,122,24,0.25)",borderRadius:8,padding:"10px",fontFamily:"'Anton',sans-serif",fontSize:11,letterSpacing:1,color:"#FF7A18",textDecoration:"none"}}>📈 CHART</a>
+          <a href={`https://solscan.io/token/${CLKN_MINT}`} target="_blank" rel="noreferrer" style={{flex:1,textAlign:"center",background:"rgba(255,122,24,0.08)",border:"1px solid rgba(255,122,24,0.25)",borderRadius:8,padding:"10px",fontFamily:"'Anton',sans-serif",fontSize:11,letterSpacing:1,color:"#FF7A18",textDecoration:"none"}}>🔗 SOLSCAN</a>
+        </div>
       </div>
 
       {/* Live Quote */}
@@ -1685,13 +1607,10 @@ function CLKNWidget() {
         </div>
       </div>
 
-      {/* Trade Button */}
-      <a href={CLKN_TRADE_LINK} target="_blank" rel="noreferrer" style={{display:"block",width:"100%",background:"linear-gradient(135deg,#FF7A18,#EF4444)",border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,textDecoration:"none",textAlign:"center",boxShadow:"0 0 28px rgba(255,122,24,0.5)",marginBottom:8}}>
-        🔥 TRADE CLKN ON BAGS.FM
-      </a>
+      {/* Buy CLKN */}
       <JupiterSwapButton
-        label="⚡ BUY ON JUPITER"
-        style={{display:"block",width:"100%",background:"rgba(74,222,128,0.12)",border:"1px solid rgba(74,222,128,0.3)",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#4ADE80",letterSpacing:3,textAlign:"center",marginBottom:10,boxSizing:"border-box",cursor:"pointer"}}
+        label="⚡ BUY CLKN ON JUPITER"
+        style={{display:"block",width:"100%",background:"linear-gradient(135deg,#FF7A18,#EF4444)",border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:3,textAlign:"center",marginBottom:10,boxSizing:"border-box",cursor:"pointer",boxShadow:"0 0 28px rgba(255,122,24,0.45)"}}
       />
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"0 4px"}}>
         <span style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#4B5563",letterSpacing:1}}>
@@ -1700,7 +1619,7 @@ function CLKNWidget() {
         <button onClick={fetchData} style={{background:"none",border:"none",color:"#FF7A18",fontFamily:"'Anton',sans-serif",fontSize:8,letterSpacing:2,cursor:"pointer"}}>
           ↻ REFRESH
         </button>
-        <span style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#4B5563",letterSpacing:1}}>via Bags.fm API</span>
+        <span style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#4B5563",letterSpacing:1}}>via DexScreener · Helius · Jupiter</span>
       </div>
     </div>
   );
