@@ -1974,7 +1974,7 @@ function SurvivalSimulator() {
   return (
     <div style={{padding:"0 16px 40px",maxWidth:COLW,margin:"0 auto"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-        <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#6B7280",letterSpacing:2}}>ROUND {round+1} OF {ROUNDS}</div>
+        <div data-read-skip="1" style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#6B7280",letterSpacing:2}}>ROUND {round+1} OF {ROUNDS}</div>
         <div style={{background:"rgba(0,0,0,0.4)",border:"1px solid rgba(255,182,39,0.3)",borderRadius:20,padding:"4px 12px"}}>
           <span style={{fontFamily:"monospace",fontSize:15,color:"#FFB627",fontWeight:700}}>${portfolio.toLocaleString()}</span>
         </div>

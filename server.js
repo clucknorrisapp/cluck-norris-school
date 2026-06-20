@@ -1835,7 +1835,9 @@ app.post("/api/tts", rateLimit("tts", { windowMs: 60000, max: 60 }), async (req,
       method: "POST",
       headers: { "xi-api-key": KEY, "Content-Type": "application/json", "Accept": "audio/mpeg" },
       body: JSON.stringify({ text, model_id: TTS_MODEL, language_code: lang,
-        voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0.2, use_speaker_boost: true } }),
+        // Calmer/steadier delivery for long lessons: higher stability + lower style
+        // exaggeration reads less theatrical without losing the gruff character.
+        voice_settings: { stability: 0.62, similarity_boost: 0.8, style: 0.1, use_speaker_boost: true } }),
     });
     if (!r.ok) {
       let msg = ""; try { msg = await r.text(); } catch (_) {}
