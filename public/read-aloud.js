@@ -59,23 +59,38 @@
     }
     return out;
   }
+  // Each collected part is a distinct line/paragraph. Chunk WITHIN a part (so long
+  // paragraphs split into ≤180-char pieces for the synth), and tag each chunk with
+  // the pause that should follow it: a short breath between sentences, a longer one
+  // at a paragraph/line boundary — so lessons don't run together.
+  var SENT_PAUSE = 140, PARA_PAUSE = 480; // ms
   function chunk(parts) {
-    // Parts already carry their own terminal punctuation (added in collect()), so
-    // join with a space — not ". " — to avoid doubled periods / odd pauses.
-    var text = parts.join(" ");
-    var sentences = text.match(/[^.!?。！？\n]+[.!?。！？]?/g) || [text];
-    var chunks = [], cur = "";
-    for (var i = 0; i < sentences.length; i++) {
-      var s = sentences[i].trim(); if (!s) continue;
-      if ((cur + " " + s).length > 180) { if (cur) chunks.push(cur); cur = s; }
-      else cur = cur ? cur + " " + s : s;
+    var chunks = [];
+    for (var p = 0; p < parts.length; p++) {
+      var sentences = parts[p].match(/[^.!?。！？\n]+[.!?。！？]?/g) || [parts[p]];
+      var cur = "";
+      for (var i = 0; i < sentences.length; i++) {
+        var s = sentences[i].trim(); if (!s) continue;
+        if ((cur + " " + s).length > 180) { if (cur) chunks.push({ text: cur, pauseMs: SENT_PAUSE }); cur = s; }
+        else cur = cur ? cur + " " + s : s;
+      }
+      // Last chunk of this part ends a paragraph/line → longer pause.
+      if (cur) chunks.push({ text: cur, pauseMs: PARA_PAUSE });
     }
-    if (cur) chunks.push(cur);
     return chunks;
   }
 
   var queue = [], idx = 0, state = "idle"; // idle | playing | paused
-  var btn, stopBtn, kaTimer = null;
+  var btn, stopBtn, kaTimer = null, gapTimer = null;
+  // Advance to the next chunk after the CURRENT chunk's trailing pause (the breath
+  // between sentences/paragraphs). Guarded so a pause()/stop() during the gap halts.
+  function advance() {
+    if (state !== "playing") return;
+    var d = (queue[idx] && queue[idx].pauseMs) || 0;
+    clearTimeout(gapTimer);
+    if (d > 0) gapTimer = setTimeout(function () { if (state !== "playing") return; idx++; speakChunk(); }, d);
+    else { idx++; speakChunk(); }
+  }
   // Real-voice (ElevenLabs via /api/tts) playback. If the server has no key/budget
   // it answers 503 → we set ttsOff for the session and use the free browser voice.
   // Native <audio> pause/resume is reliable (unlike mobile speechSynthesis), so the
@@ -98,8 +113,8 @@
     u.rate = 1; u.pitch = 1;
     // Only advance/continue while actually playing — so a pause()/stop() cancel
     // (which fires onend) never skips ahead or auto-continues.
-    u.onend = function () { if (state !== "playing") return; idx++; speakChunk(); };
-    u.onerror = function () { if (state !== "playing") return; idx++; speakChunk(); };
+    u.onend = function () { if (state !== "playing") return; advance(); };
+    u.onerror = function () { if (state !== "playing") return; advance(); };
     synth.speak(u);
   }
   // Normalize numbers / prices / symbols so the voice reads them naturally instead
@@ -127,7 +142,7 @@
   }
   function speakChunk() {
     if (idx >= queue.length) { stop(); return; }
-    var text = speechNorm(queue[idx]);
+    var text = speechNorm(queue[idx].text);
     if (ttsOff) { speakBrowser(text); return; }
     // Try the real voice; fall back to the browser voice for this chunk on any miss.
     var myIdx = idx;
@@ -143,7 +158,7 @@
         var a = getAudio();
         try { if (a.src && a.src.indexOf("blob:") === 0) URL.revokeObjectURL(a.src); } catch (_) {}
         a.src = URL.createObjectURL(b);
-        a.onended = function () { if (state !== "playing") return; idx++; speakChunk(); };
+        a.onended = function () { if (state !== "playing") return; advance(); };
         a.onerror = function () { if (state !== "playing") return; speakBrowser(text); };
         a.play().catch(function () { if (state === "playing") speakBrowser(text); });
       });
@@ -172,6 +187,7 @@
   // it left off, never restarts at the top).
   function pause() {
     state = "paused";
+    clearTimeout(gapTimer);
     if (curMode === "audio" && audioEl) { try { audioEl.pause(); } catch (_) {} }
     else { try { synth.cancel(); } catch (_) {} }
     render();
@@ -185,6 +201,7 @@
   }
   function stop() {
     state = "idle";
+    clearTimeout(gapTimer);
     try { synth.cancel(); } catch (_) {}
     if (audioEl) { try { audioEl.pause(); audioEl.currentTime = 0; } catch (_) {} }
     queue = []; idx = 0; curMode = null; render();
