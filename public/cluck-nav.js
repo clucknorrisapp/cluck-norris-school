@@ -13,16 +13,23 @@
     i18.id = "clkn-i18n-js"; i18.src = "/i18n.js"; i18.defer = true;
     (document.head || document.documentElement).appendChild(i18);
   }
+  // Load the read-aloud (TTS) runtime too — a global "Listen" button on every page.
+  if (!document.getElementById("clkn-read-js")) {
+    var ra = document.createElement("script");
+    ra.id = "clkn-read-js"; ra.src = "/read-aloud.js"; ra.defer = true;
+    (document.head || document.documentElement).appendChild(ra);
+  }
   var p = (location.pathname || "").replace(/\/+$/, "");
   // pages that belong to the Tools hub — get an "All Tools" back-link
   var TOOL_PAGES = ["/wallet-xray","/autopsy","/order-book","/trace","/snapshot","/holders",
     "/token-vitals","/lp-scanner","/wallet-checkup","/security-coop","/hatchery","/airdrop",
     "/buyspecial","/rose","/liquidity","/liquidity-engine","/premium","/pool-monitor"];
-  var showHome  = (p !== "" && p !== "/");
+  // Pages with their OWN header/nav — don't inject the floating bar there (the i18n
+  // + read-aloud loaders above already ran, so the language switch & Listen button
+  // still appear). Home + the Ask Cluck page own their nav.
+  var ownNav = (p === "" || p === "/" || p === "/ask-cluck" || p === "/crypto-school");
+  var showHome  = !ownNav;
   var showTools = (TOOL_PAGES.indexOf(p) !== -1);
-  // The home page has its OWN nav (with an Ask Cluck link), so don't inject the
-  // floating bar there — it would overlap the page's own header. showHome is false
-  // only on home, so gating Ask Cluck on it suppresses the whole bar on home.
   var showAsk   = (showHome && p !== "/ask-cluck" && p !== "/crypto-school");
   if (!showHome && !showTools && !showAsk) return;
 
