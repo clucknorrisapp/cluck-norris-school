@@ -47,12 +47,22 @@
       if (skipped(n)) continue;
       var pe = n.parentElement;
       if (pe && isHidden(pe)) continue;
+      // A lone list marker ("1." "2)" "•") — don't read it as a spoken number.
+      if (/^(?:\d{1,3}[.)]|[•·▪◦‣*–—-])$/.test(t)) continue;
+      // Leading list/bullet marker on a real line — drop just the marker.
+      t = t.replace(/^(?:\d{1,3}[.)]|[•·▪◦‣*–—-])\s+/, "");
+      // Give the voice a sentence boundary so it pauses instead of rushing into
+      // the next line (fixes "…weak hands. Two. Never sell…" run-together cadence).
+      if (t && !/[.!?。！？:;,]$/.test(t)) t += ".";
+      if (t.length < 2) continue;
       out.push(t);
     }
     return out;
   }
   function chunk(parts) {
-    var text = parts.join(". ");
+    // Parts already carry their own terminal punctuation (added in collect()), so
+    // join with a space — not ". " — to avoid doubled periods / odd pauses.
+    var text = parts.join(" ");
     var sentences = text.match(/[^.!?。！？\n]+[.!?。！？]?/g) || [text];
     var chunks = [], cur = "";
     for (var i = 0; i < sentences.length; i++) {
