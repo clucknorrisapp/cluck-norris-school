@@ -102,9 +102,32 @@
     u.onerror = function () { if (state !== "playing") return; idx++; speakChunk(); };
     synth.speak(u);
   }
+  // Normalize numbers / prices / symbols so the voice reads them naturally instead
+  // of "dot zero zero one" or spelling a bare "$50,000" oddly. Applies to BOTH the
+  // ElevenLabs voice and the browser fallback (runs before either speaks).
+  function speechNorm(s) {
+    s = String(s || "");
+    // .001 -> 0.001  (add the missing leading zero; leaves 3.14 and "U.S." alone)
+    s = s.replace(/(^|[^\w.])\.(\d)/g, "$10.$2");
+    // $50K / $1.5M / $2B / $3T -> "50 thousand dollars", etc.
+    s = s.replace(/\$\s?([\d,]+(?:\.\d+)?)\s?([KkMmBbTt])\b/g, function (_, n, suf) {
+      return n + " " + ({ k: "thousand", m: "million", b: "billion", t: "trillion" }[suf.toLowerCase()]) + " dollars";
+    });
+    // $50,000 / $0.001 -> "50,000 dollars" / "0.001 dollars"
+    s = s.replace(/\$\s?([\d,]+(?:\.\d+)?)/g, "$1 dollars");
+    // bare 50K / 2.5M / 1B / 1.4T (no $) -> "50 thousand", "2.5 million", etc.
+    s = s.replace(/\b([\d,]+(?:\.\d+)?)\s?([KkMmBbTt])\b/g, function (_, n, suf) {
+      return n + " " + ({ k: "thousand", m: "million", b: "billion", t: "trillion" }[suf.toLowerCase()]);
+    });
+    // 10x / 1.5x -> "10 times"  (hex like 0x1F is left untouched)
+    s = s.replace(/\b(\d+(?:\.\d+)?)x\b/g, "$1 times");
+    // ± -> "plus or minus"
+    s = s.replace(/±\s?/g, "plus or minus ");
+    return s;
+  }
   function speakChunk() {
     if (idx >= queue.length) { stop(); return; }
-    var text = queue[idx];
+    var text = speechNorm(queue[idx]);
     if (ttsOff) { speakBrowser(text); return; }
     // Try the real voice; fall back to the browser voice for this chunk on any miss.
     var myIdx = idx;
