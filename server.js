@@ -3507,11 +3507,8 @@ const TOOL_SPOTLIGHTS = [
     tg: "🩺 <b>Wallet Checkup</b> — paste any address for a fast safety read: exposure, sketchy approvals, and what to clean up. Great before you connect to anything new.\n\nA 30-second checkup beats a drained wallet. Free.\n\n👉 clucknorris.app/wallet-checkup",
     x: "🩺 Wallet Checkup: paste any Solana address for a fast safety read — exposure, sketchy approvals, what to clean up.\n\nA 30-second checkup beats a drained wallet. Free.\n\nclucknorris.app/wallet-checkup",
   },
-  {
-    name: "Bags Launch Radar",
-    tg: "📡 <b>Bags Launch Radar</b> — live new Bags launches and graduations, sortable by newest, market cap, or near-grad. See what's hatching before it trends.\n\nFree, updates live.\n\n👉 clucknorris.app/bags",
-    x: "📡 Bags Launch Radar: live new launches + graduations, sortable by newest / market cap / near-grad.\n\nSee what's hatching before it trends. Free, updates live.\n\nclucknorris.app/bags",
-  },
+  // Bags Launch Radar spotlight PAUSED (owner's call 2026-06-20) — stepping back from
+  // Bags near-grad/graduation promotion (X spam-risk). Restore the entry to re-enable.
   {
     name: "Free Crypto School",
     tg: "🎓 <b>The free School of Crypto Hard Knocks</b> — wallets, DeFi, LP, scam-spotting, real survival skills. Pass the Ultimate Challenge and earn a permanent, on-chain diploma.\n\nWe took the hard knocks so you don't have to. 100% free.\n\n👉 clucknorris.app",
