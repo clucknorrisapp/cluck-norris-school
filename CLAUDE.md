@@ -193,7 +193,11 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   either, re-port into the bank (match the `source` tag). The exam draw is STRATIFIED by source —
   `EXAM_SOURCE_MIX` in server.js pins 20 CURRICULUM / 20 ULTIMATE / 10 LPLAB per exam (backfills from
   the leftover pool if a source runs short), so adding questions to one source no longer skews the exam.
-  Remaining structural gap: the App.jsx↔bank sync is still manual (no CI drift check yet).
+  The App.jsx↔bank sync is still MANUAL, but a CI drift guard now catches the common case:
+  `scripts/check-question-bank.js` (wired into `.github/workflows/syntax-check.yml`) fails the
+  build if any CURRICULUM/LPLAB bank question's TEXT no longer appears in its source file
+  (caught: reworded/removed questions). Limitation: it matches question text only — a changed
+  answer/options under an unchanged question still needs human review.
 - Public surfaces: `/transcript/:slug` (page, with OG card), `/api/credential/:slug` (JSON — exposes
   holder *status* only, never balance), `/api/credential-card?slug=` (PNG), `/api/school-stats`
   (aggregate verified-graduate metrics, shown on the grant + investor pages).
@@ -361,8 +365,10 @@ trace.html/autopsy.html XSS escaped. The LOW hygiene backlog is now CLEARED exce
 `source` whitelist DONE (prettySource only renders Helius-enum-shaped strings, else generic
 "DEX"), header-vs-`?key=` admin auth DONE (adminAuthOK prefers x-premium-key header; `?key=`
 is a deprecated fallback), generic RPC error passthrough DONE (publicErrMsg strips
-credential-bearing URLs + bounds length on every 500). Remaining: range-label honesty on the
-public endpoint — still open, still not a vuln.
+credential-bearing URLs + bounds length on every 500). Range-label honesty on the public
+endpoint DONE (2026-06-20): `suggestRanges` now returns `realizedWidthPct` (the band after
+tick-alignment + tight-width guards) and the balanced label + the /liquidity "±X%" headline
+render the realized width, not the requested slider value. LOW backlog now fully cleared.
 
 ## Conventions
 - Tool pages are vanilla HTML + inline JS; the school is React. **Escape any API/token-
@@ -420,14 +426,13 @@ public endpoint — still open, still not a vuln.
   `slotDayEndsAt()`; the page shows a live "next free spins in …" countdown
   (`spinsResetAt` is returned from `/api/slots/state`, the spin response, and the
   `no_spins_left` 429). The points-week board reset is the separate `weekEndsAt`.
-- **Autopsy: latent `excludeSet` bug (pre-existing, NOT yet fixed — needs a decision).**
-  In `lib/autopsy.js`, the Phase 2G‑bis sub‑distributor filter references `excludeSet`,
-  which is defined NOWHERE (entered dangling in the Wallet‑Safety‑Checkup commit). Any
-  time sub‑distributor candidates exist it throws inside the phase's try/catch, silently
-  disabling the team‑network multi‑hop trace — so that path has never run in production.
-  Fixing it (e.g. `const excludeSet = new Set(Object.keys(KNOWN_CEX_WALLETS))` per the
-  neighboring exclusion‑set comment) would ENABLE a never‑exercised code path — do it
-  deliberately and verify the report output on a few mints, don't drive‑by it.
+- **Autopsy `excludeSet` bug — FIXED (2026-06-20).** The Phase 2G‑bis sub‑distributor
+  filter in `lib/autopsy.js` referenced `excludeSet`, which was defined NOWHERE — so it
+  threw inside the phase's try/catch and silently disabled the team‑network multi‑hop
+  trace (that path had never run in production). Now defined as a Set of CEX wallets +
+  DEX/LP programs + token programs + labeled programs (lockers stay covered by
+  `traceLockerSet`). The phase still degrades gracefully (try/catch) if a sub-trace fails.
+  This ENABLED a previously‑dead path — spot‑check autopsy reports on a few mints after deploy.
 - **Autopsy premium styling — design decision (not yet made).** The premium
   forensic sections render in a different color scheme that doesn't match the
   site's dark/orange theme. Open question: leave it visually distinct so the
