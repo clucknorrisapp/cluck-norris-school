@@ -731,18 +731,23 @@ function eduPostTick() {
 
 // ── Lesson amplification ("bumps") ──────────────────────────────────────────
 // Instead of posting MORE lessons, quote-tweet the day's single lesson at later
-// slots with a fresh one-liner + a DIFFERENT ecosystem tag group each time — bumps
-// it back into feeds for new audiences with NO new long-form content (so no
-// duplicate-content risk). X-only; only ever bumps TODAY's lesson. Two slots/day.
+// slots with a fresh INTERACTION prompt + a different ecosystem tag group each time
+// — re-surfaces it for new audiences AND drives replies, turning the one daily
+// lesson into the day's engagement thread. No new long-form content (no duplicate
+// risk). X-only; only ever bumps TODAY's lesson. Three slots/day.
 const LESSON_BUMPS = [
-  { hour: 17, tags: "@JupiterExchange @BagsApp" },   // ~1pm ET
-  { hour: 0,  tags: "@solana @Ricomoneybags" },      // ~7pm ET
+  { hour: 16, tags: "@JupiterExchange @BagsApp" },   // ~11am ET
+  { hour: 20, tags: "@solana" },                     // ~3pm ET
+  { hour: 0,  tags: "@Ricomoneybags" },              // ~7pm ET
 ];
+// Engagement prompts — each asks for a reply so the lesson becomes a conversation.
 const LESSON_BUMP_HOOKS = [
-  "ICYMI — today's Cluck's Lesson 👇 Free crypto school, no fluff.",
-  "Worth two minutes if you trade on Solana 👇",
-  "The lesson the market keeps re-teaching the hard way 👇",
-  "Learn it free here so you don't pay tuition to the chain 👇",
+  "Today's Cluck's Lesson 👇 What tripped YOU up most when you started? Reply below.",
+  "ICYMI 👇 Agree or disagree? Drop your take in the replies.",
+  "Reply with the lesson YOU learned the hard way 👇",
+  "Did this match your experience? Tell us below 👇",
+  "What would you add to this? 👇 (lesson 👆)",
+  "Quote this with the one tip you'd give a new trader 👇",
 ];
 async function lessonBumpTick() {
   if (!EDU_POST_ENABLED || !xConfigured()) return;
