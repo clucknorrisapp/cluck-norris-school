@@ -480,6 +480,10 @@ function lockReportTick() {
 // each pass so it never reads like the same predictable loop.
 // Posts STAY (no self-clean) — they're a learning record.
 const EDU_POST_ENABLED = true;
+// Outreach + Tool Spotlight DROPPED (owner's call 2026-06-20 — trimming scheduled
+// post volume). Flip true to restore.
+const OUTREACH_ENABLED = false;
+const TOOL_SPOTLIGHT_ENABLED = false;
 // 3×/day on the US-active window: 13/19/01 UTC = 9am · 3pm · 9pm ET. Kept on ODD
 // UTC hours so they never collide with the even-hour posts (Market Check / recap).
 // The 13:00 (morning) slot is the LONG lesson; 19:00 and 01:00 are punchy shorts.
@@ -10074,6 +10078,7 @@ app.listen(PORT, () => {
     // outreachProjHour (default 15 UTC) / outreachLearnHour (default 23 UTC).
     async function outreachTick() {
       try {
+        if (!OUTREACH_ENABLED) return;
         if (!process.env.TELEGRAM_CHAT_ID) return;
         const now = new Date(), today = now.toISOString().slice(0, 10), h = now.getUTCHours();
         if (h >= Number(kv.get("outreachProjHour", 15)) && kv.get("outreachProjDate", null) !== today) {
@@ -10091,6 +10096,7 @@ app.listen(PORT, () => {
     // publicly. Hour via kv toolSpotHour (default 17 UTC ≈ midday ET).
     async function toolSpotlightTick() {
       try {
+        if (!TOOL_SPOTLIGHT_ENABLED) return;
         const now = new Date(), today = now.toISOString().slice(0, 10);
         if (now.getUTCHours() < Number(kv.get("toolSpotHour", 17))) return;
         if (kv.get("toolSpotDate", null) === today) return;
