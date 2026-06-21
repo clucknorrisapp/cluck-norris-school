@@ -1288,7 +1288,7 @@ function ReinvestmentFeed() {
   if (!claims || claims.length === 0) return null;
   return (
     <details style={{background:"rgba(16,185,129,0.04)",border:"1px solid rgba(16,185,129,0.3)",borderRadius:12,padding:16,marginBottom:12}}>
-      <summary style={{cursor:"pointer",fontFamily:"'Anton',sans-serif",fontSize:9,letterSpacing:3,color:"#6EE7B7"}}>🔁 100% FEE REINVESTMENT · {claimCount} CLAIMS</summary>
+      <summary style={{cursor:"pointer",fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:3,color:"#6EE7B7"}}>🔁 100% FEE REINVESTMENT · {claimCount} CLAIMS</summary>
       <div style={{fontFamily:"system-ui,sans-serif",fontSize:13,color:"#9CA3AF",lineHeight:1.6,marginBottom:10}}>
         Every creator fee the project claims off Bags goes straight back into buying CLKN. Each row is a real on-chain claim — tap to verify it.
       </div>
@@ -1424,7 +1424,7 @@ function CLKNWidget() {
 
       {/* Hero price */}
       <div style={{background:"linear-gradient(135deg,rgba(255,122,24,0.13),rgba(239,68,68,0.05))",border:"1px solid rgba(255,122,24,0.3)",borderRadius:16,padding:"22px 18px",marginBottom:12,textAlign:"center",boxShadow:"0 0 30px rgba(255,122,24,0.08)"}}>
-        <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,letterSpacing:3,color:"#6B7280",marginBottom:8}}>CLKN PRICE (USD)</div>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:11,letterSpacing:3,color:"#6B7280",marginBottom:8}}>CLKN PRICE (USD)</div>
         <div style={{fontFamily:"'Anton',sans-serif",fontSize:38,fontWeight:900,color:"#FFB627",lineHeight:1}}>{price>0?`$${price.toFixed(8)}`:"—"}</div>
         {(() => {
           const ch24 = dexData ? parseFloat(dexData.priceChange?.h24) : NaN;
@@ -1456,8 +1456,8 @@ function CLKNWidget() {
       {/* Creator fees -> CLKN buybacks */}
       <div style={{background:"rgba(255,122,24,0.05)",border:"1px solid rgba(255,122,24,0.22)",borderRadius:12,padding:16,marginBottom:12}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:10}}>
-          <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,letterSpacing:2,color:"#FF7A18"}}>💰 CREATOR FEES → CLKN BUYBACKS</div>
-          <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#FFB627",letterSpacing:1}}>{fees ? `${(parseInt(fees)/1_000_000_000).toFixed(3)} SOL` : "—"}</div>
+          <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:2,color:"#FF7A18"}}>💰 CREATOR FEES → CLKN BUYBACKS</div>
+          <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#FFB627",letterSpacing:1}}>{fees ? `${(parseInt(fees)/1_000_000_000).toFixed(3)} SOL` : "—"}</div>
         </div>
         <ReinvestmentFeed />
       </div>
@@ -1465,7 +1465,7 @@ function CLKNWidget() {
       {/* Market Activity — multi-timeframe price change + 24h buy/sell ratio */}
       {dexData && (
         <div style={{background:"rgba(255,122,24,0.05)",border:"1px solid rgba(255,122,24,0.18)",borderRadius:12,padding:16,marginBottom:12}}>
-          <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,letterSpacing:3,color:"#FF7A18",marginBottom:12}}>📊 MARKET ACTIVITY</div>
+          <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:3,color:"#FF7A18",marginBottom:12}}>📊 MARKET ACTIVITY</div>
           <div style={{display:"flex",gap:6,marginBottom:14}}>
             {[
               {label:"5M",  v: dexData.priceChange?.m5},
@@ -1509,7 +1509,7 @@ function CLKNWidget() {
 
       {/* Token Details */}
       <div style={{background:"rgba(255,122,24,0.05)",border:"1px solid rgba(255,122,24,0.18)",borderRadius:12,padding:16,marginBottom:12}}>
-        <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,letterSpacing:3,color:"#FF7A18",marginBottom:12}}>🔎 TOKEN DETAILS</div>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:3,color:"#FF7A18",marginBottom:12}}>🔎 TOKEN DETAILS</div>
         <div style={{display:"flex",flexDirection:"column",gap:6}}>
           {[
             {label:"CIRCULATING", value: supply ? `${fmtNum(supply,0)} CLKN` : "—", color:"#A78BFA"},
@@ -1535,7 +1535,7 @@ function CLKNWidget() {
       {/* Live Quote */}
       <div style={{background:"rgba(255,122,24,0.05)",border:"1px solid rgba(255,122,24,0.25)",borderRadius:12,padding:16,marginBottom:12}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-          <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,letterSpacing:3,color:"#FF7A18"}}>💱 LIVE TRADE QUOTE</div>
+          <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:3,color:"#FF7A18"}}>💱 LIVE TRADE QUOTE</div>
           <div style={{display:"flex",alignItems:"center",gap:6}}>
             <span style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#6B7280",letterSpacing:1}}>SLIPPAGE</span>
             {[0.5,1,2,5].map(s=>(
