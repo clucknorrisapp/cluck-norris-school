@@ -492,6 +492,9 @@ const EDU_LONG_HOUR = 13; // one full lesson per day (morning); the other two sl
 // X-only @mentions appended to each cross-posted tweet (NOT added to Telegram).
 // Easy to trim/remove here if it starts reading as spam.
 const X_MENTION_TAGS = "@BagsApp @BagsHackathon";
+// Solana Foundation — tagged on every learning lesson tweet (we have an active grant
+// application with them; the lessons are exactly the public-good work it funds).
+const X_LEARN_TAG = "@SolanaFndn";
 // Standard footer on lesson X posts: site, Telegram, CLKN contract, mention tags.
 // (Telegram posts get their own footer — this is X-only.)
 const CLKN_MINT = "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
@@ -695,11 +698,13 @@ async function notifyEduPost() {
   // it's never truncated. Trimmed fallback only if a long post is ever rejected.
   if (xConfigured()) {
     try {
-      // Clean, link-free lesson in the post body (max algorithmic reach)…
-      let r = await postToX(body);
+      // Clean, link-free lesson body + tag the Solana Foundation (grant relationship —
+      // every learning lesson tags @SolanaFndn). Link-free keeps algorithmic reach.
+      const xBody = body + "\n\n" + X_LEARN_TAG;
+      let r = await postToX(xBody);
       if (!r || !r.ok) {
-        const short = body.length > 270 ? body.slice(0, 269).trim() + "…" : body;
-        r = await postToX(short);
+        const short = body.length > 250 ? body.slice(0, 249).trim() + "…" : body;
+        r = await postToX(short + "\n\n" + X_LEARN_TAG);
       }
       if (r && r.ok) {
         console.log(`[X] lesson tweeted (id ${r.id})`);
