@@ -484,11 +484,12 @@ const EDU_POST_ENABLED = true;
 // post volume). Flip true to restore.
 const OUTREACH_ENABLED = false;
 const TOOL_SPOTLIGHT_ENABLED = false;
-// 3×/day on the US-active window: 13/19/01 UTC = 9am · 3pm · 9pm ET. Kept on ODD
-// UTC hours so they never collide with the even-hour posts (Market Check / recap).
-// The 13:00 (morning) slot is the LONG lesson; 19:00 and 01:00 are punchy shorts.
-const EDU_HOURS_UTC = [13, 19, 1];
-const EDU_LONG_HOUR = 13; // one full lesson per day (morning); the other two slots are short
+// 1×/day (owner's call 2026-06-20 — was 3×/day): ONE full lesson at 13:00 UTC
+// (9am ET), then amplified by lessonBumpTick (quote-tweets at later slots tagging
+// different ecosystem groups) instead of posting more new lessons. Odd hour so it
+// never collides with even-hour posts.
+const EDU_HOURS_UTC = [13];
+const EDU_LONG_HOUR = 13; // the daily lesson is the full lesson
 // X-only @mentions appended to each cross-posted tweet (NOT added to Telegram).
 // Easy to trim/remove here if it starts reading as spam.
 const X_MENTION_TAGS = "@BagsApp @BagsHackathon";
@@ -628,6 +629,7 @@ async function postToX(text, opts = {}) {
   try {
     const payload = { text };
     if (opts.replyToId) payload.reply = { in_reply_to_tweet_id: String(opts.replyToId) };  // threaded self-reply (links go here, not the post body)
+    if (opts.quoteId) payload.quote_tweet_id = String(opts.quoteId);  // quote-tweet (used to "bump" a lesson back into feeds)
     const r = await fetch(url, { method: "POST", headers: { Authorization: authHeader, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     const j = await r.json().catch(() => ({}));
     if (r.ok) return { ok: true, id: j?.data?.id };
@@ -708,6 +710,8 @@ async function notifyEduPost() {
       }
       if (r && r.ok) {
         console.log(`[X] lesson tweeted (id ${r.id})`);
+        // Remember today's lesson tweet so lessonBumpTick can quote-tweet ("bump") it later.
+        try { kv.set("lessonXTweet", { id: r.id, date: new Date().toISOString().slice(0, 10) }); } catch (_) {}
         // …links follow as a self-reply so they never throttle the lesson's reach.
         try { await postToX(route ? `🛠 ${route.label} → ${route.url}\n\n${X_LESSON_REPLY}` : X_LESSON_REPLY, { replyToId: r.id }); } catch (_) {}
       } else console.warn("[X] lesson tweet failed:", JSON.stringify(r).slice(0, 200));
@@ -722,6 +726,43 @@ function eduPostTick() {
   if (now.getUTCMinutes() < 2 && EDU_HOURS_UTC.includes(h)) {
     const stamp = `${now.getUTCFullYear()}-${now.getUTCMonth()}-${now.getUTCDate()}-${h}`;
     if (stamp !== lastEduStamp) { lastEduStamp = stamp; kv.set("eduStamp", stamp); notifyEduPost(); }
+  }
+}
+
+// ── Lesson amplification ("bumps") ──────────────────────────────────────────
+// Instead of posting MORE lessons, quote-tweet the day's single lesson at later
+// slots with a fresh one-liner + a DIFFERENT ecosystem tag group each time — bumps
+// it back into feeds for new audiences with NO new long-form content (so no
+// duplicate-content risk). X-only; only ever bumps TODAY's lesson. Two slots/day.
+const LESSON_BUMPS = [
+  { hour: 17, tags: "@JupiterExchange @BagsApp" },   // ~1pm ET
+  { hour: 0,  tags: "@solana @Ricomoneybags" },      // ~7pm ET
+];
+const LESSON_BUMP_HOOKS = [
+  "ICYMI — today's Cluck's Lesson 👇 Free crypto school, no fluff.",
+  "Worth two minutes if you trade on Solana 👇",
+  "The lesson the market keeps re-teaching the hard way 👇",
+  "Learn it free here so you don't pay tuition to the chain 👇",
+];
+async function lessonBumpTick() {
+  if (!EDU_POST_ENABLED || !xConfigured()) return;
+  const now = new Date(), h = now.getUTCHours(), today = now.toISOString().slice(0, 10);
+  if (now.getUTCMinutes() >= 2) return;
+  const lt = kv.get("lessonXTweet", null);
+  if (!lt || lt.date !== today || !lt.id) return;     // only bump TODAY's lesson
+  const done = kv.get("lessonBumpDone", {}) || {};
+  for (const key of Object.keys(done)) if (!key.startsWith(today)) delete done[key]; // prune old days
+  for (let i = 0; i < LESSON_BUMPS.length; i++) {
+    const b = LESSON_BUMPS[i];
+    if (h !== b.hour) continue;
+    const k = `${today}:${b.hour}`;
+    if (done[k]) continue;
+    const hook = LESSON_BUMP_HOOKS[(now.getUTCDate() + i) % LESSON_BUMP_HOOKS.length];
+    try {
+      const r = await postToX(`${hook}\n\n${b.tags}`, { quoteId: lt.id });
+      if (r && r.ok) { done[k] = true; kv.set("lessonBumpDone", done); console.log(`[lesson-bump] ${b.hour}:00 quoted ${lt.id} → ${b.tags}`); }
+      else console.warn("[lesson-bump] post not ok:", JSON.stringify(r).slice(0, 160));
+    } catch (e) { console.warn("[lesson-bump] failed:", e.message); }
   }
 }
 
@@ -10135,8 +10176,10 @@ app.listen(PORT, () => {
     setTimeout(gradWatcherTick, 12000);
     setInterval(gradWatcherTick, 300 * 1000);   // 5 min — broad discovery: find tokens entering "close to bonding" + fire near-grad alerts
     setInterval(gradHotTick, 60 * 1000);        // 1 min — fast-watch ONLY the alerted ("close to bonding") tokens so graduations post within ~1 min (cost scales with the tiny hot set)
-    // Cluck's Lesson — educational post 3×/day on odd UTC hours (13/19/01): 1 long + 2 short.
+    // Cluck's Lesson — ONE full lesson/day (13 UTC), then quote-tweet "bumps" at later
+    // slots (17 + 00 UTC) tagging different ecosystem groups to re-surface it.
     setInterval(eduPostTick, 60 * 1000);
+    setInterval(lessonBumpTick, 60 * 1000);
     // Treasury report — private DM (the treasury project's chat) of balances + fees every
     // 6h. Persisted stamp so redeploys don't re-fire; no-op unless the treasury is funded.
     let lastTreasuryReportAt = kv.get("treasuryReportAt", 0);
