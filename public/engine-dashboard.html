@@ -243,14 +243,9 @@ async function loadProject(id, meta){
     let costs = status.costs, earnings = status.earnings;
     if(!costs || costs.error){ const c=await jget('/api/whirlpool/vault/costs?key='+k+'&project='+pid); if(c.ok&&c.data&&!c.data.error) costs=c.data; }
     if(!earnings || earnings.error){ const e=await jget('/api/whirlpool/vault/earnings?key='+k+'&project='+pid); if(e.ok&&e.data&&!e.data.error) earnings=e.data; }
-    // Per-pool positions (accurate current price / in-range / $ per pool — incl. JUP).
-    // One retry — the on-chain read occasionally blips, and falling back loses the gauge.
-    let positions = null;
-    for(let attempt=0; attempt<2 && positions===null; attempt++){
-      try { const pr = await jget('/api/whirlpool/vault/positions?key='+k+'&project='+pid); if(pr.ok && pr.data && Array.isArray(pr.data.positions)) positions = pr.data.positions; } catch(_){}
-      if(positions===null && attempt===0) await new Promise(r=>setTimeout(r,800));
-    }
-    el.innerHTML = renderProject(id, meta, status, costs, earnings, positions);
+    // $ depth per pool now comes folded into status (status.poolValues) — one reliable
+    // fetch, no separate on-chain call that could stall the card.
+    el.innerHTML = renderProject(id, meta, status, costs, earnings);
     el.dataset.live = (status && status.enabled && !status.paused) ? '1' : '0';
     el.dataset.loaded = '1';
     applyFilter();
@@ -287,7 +282,7 @@ function roleLabel(p){
   return 'two-sided';
 }
 
-function renderProject(id, meta, status, costs, earnings, livePositions){
+function renderProject(id, meta, status, costs, earnings){
   const enabled = !!status.enabled;
   const paused = !!status.paused;
   let badges = '';
@@ -330,8 +325,7 @@ function renderProject(id, meta, status, costs, earnings, livePositions){
   const px = (earnings && earnings.prices) || {};
   const clknUsd = Number(px.clknUsd)||0, solUsd = Number(px.solUsd)||0, jupUsd = Number(px.jupUsd)||0;
   const curFor = (q)=> q==='SOL' ? (solUsd>0?clknUsd/solUsd:null) : q==='JUP' ? (jupUsd>0?clknUsd/jupUsd:null) : (clknUsd>0?clknUsd:null);
-  const usdFor = {};
-  if(Array.isArray(livePositions)) for(const lp of livePositions){ if(lp.quoteSymbol) usdFor[lp.quoteSymbol]=(usdFor[lp.quoteSymbol]||0)+(Number(lp.valueUsd)||0); }
+  const usdFor = (status && status.poolValues) || {};
   const positions = [];
   if(st.positionMint) positions.push({ label:'CLKN/USDC', quote:'USDC', range:st.range });
   if(st.askWall && typeof st.askWall==='object' && st.askWall.mint) positions.push({ label:'Ask wall · upside', quote:'USDC', range:{lower:st.askWall.lower, upper:st.askWall.upper} });
