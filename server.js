@@ -9297,7 +9297,17 @@ function detectClknTrade(tx) {
     if (delta > 0) poolIn += delta; else poolOut += -delta;
   }
   const domLeg = Math.max(poolIn, poolOut), subLeg = Math.min(poolIn, poolOut);
-  const crossPoolArb = domLeg > 0 && subLeg >= 0.5 * domLeg;
+  // Quote leg "washed through" — routed IN≈OUT so its |net| is tiny vs the gross we
+  // use for magnitude. A clean directional trade moves the pool's quote ONE way
+  // (|net| ≈ gross); a near-zero net against a large gross means the quote was routed
+  // through, which is what inflates the USD on a phantom "huge" trade. Combined with
+  // ANY opposite CLKN pool leg, that's an arb/rotation — not a real buyer/seller.
+  const quoteWashed = quoteAmount > 0 && Math.abs(quoteDelta) < 0.25 * quoteAmount;
+  // Flag arb on a meaningful opposite leg (lowered 0.5→0.2 to catch lopsided / 3-pool
+  // rotations), OR a washed quote with even a small opposite leg. A genuine buy/sell —
+  // even Jupiter SPLIT-routed — moves CLKN ONE way across pools (opposite leg ≈ 0), so
+  // neither branch fires for real trades.
+  const crossPoolArb = domLeg > 0 && (subLeg >= 0.2 * domLeg || (quoteWashed && subLeg >= 0.05 * domLeg));
 
   return { action, trader, clknAmount, quote: { mint: quoteMint, amount: quoteAmount }, crossPoolArb };
 }
