@@ -322,60 +322,47 @@ function renderProject(id, meta, status, costs, earnings, livePositions){
   // role, range, and in/out of range. (The sanitized $ depth view lives in the public
   // /liquidity command; status is the operator's structural view.)
   html += '<div class="sec-title">POSITIONS</div>';
-  // Prefer the per-pool /vault/positions feed: each row carries ITS OWN current price,
-  // in-range flag, and $ value — so SOL/JUP aren't wrongly judged against the USD price,
-  // and every pool (incl. CLKN/JUP) shows. Fall back to status.state if it's unavailable.
-  if(Array.isArray(livePositions) && livePositions.length){
+  // Built from status.state ranges + per-pool current price derived from the status
+  // price feed (clknUsd/solUsd/jupUsd) — reliable, no dependence on a separate on-chain
+  // call. Each pool shows a gauge of where price sits in its own range. $ depth is
+  // overlaid from the live positions feed when present (best-effort).
+  const st = status.state || {};
+  const px = (earnings && earnings.prices) || {};
+  const clknUsd = Number(px.clknUsd)||0, solUsd = Number(px.solUsd)||0, jupUsd = Number(px.jupUsd)||0;
+  const curFor = (q)=> q==='SOL' ? (solUsd>0?clknUsd/solUsd:null) : q==='JUP' ? (jupUsd>0?clknUsd/jupUsd:null) : (clknUsd>0?clknUsd:null);
+  const usdFor = {};
+  if(Array.isArray(livePositions)) for(const lp of livePositions){ if(lp.quoteSymbol) usdFor[lp.quoteSymbol]=(usdFor[lp.quoteSymbol]||0)+(Number(lp.valueUsd)||0); }
+  const positions = [];
+  if(st.positionMint) positions.push({ label:'CLKN/USDC', quote:'USDC', range:st.range });
+  if(st.askWall && typeof st.askWall==='object' && st.askWall.mint) positions.push({ label:'Ask wall · upside', quote:'USDC', range:{lower:st.askWall.lower, upper:st.askWall.upper} });
+  if(st.solVault && typeof st.solVault==='object' && st.solVault.mint) positions.push({ label:'CLKN/SOL', quote:'SOL', range:{lower:st.solVault.lower, upper:st.solVault.upper} });
+  if(st.jupVault && typeof st.jupVault==='object' && st.jupVault.mint) positions.push({ label:'CLKN/JUP', quote:'JUP', range:{lower:st.jupVault.lower, upper:st.jupVault.upper} });
+  if(!positions.length){
+    html += '<div class="note">No open positions right now. The engine opens depth on its next tick.</div>';
+  } else {
     let tot = 0;
-    for(const p of livePositions){
-      tot += Number(p.valueUsd)||0;
-      const inRange = (p.inRange===true) ? true : (p.inRange===false ? false : null);
-      const dot = inRange===null ? '⚪' : (inRange?'🟢':'⚪');
-      const rangeStr = (p.lower!=null && p.upper!=null) ? (price(p.lower)+' → '+price(p.upper)) : '—';
-      const lbl = (p.pair || ('CLKN/'+(p.quoteSymbol||'?')));
-      // Visual gauge: where the current price sits inside [lower, upper].
-      let gauge = '';
-      if(p.lower!=null && p.upper!=null && p.current!=null && p.upper>p.lower){
-        const f = (p.current - p.lower)/(p.upper - p.lower);
-        const pct = Math.max(0, Math.min(100, f*100));
-        const edge = Math.min(f, 1-f);            // 0 = at an edge, 0.5 = dead center
-        const col = (f<=0||f>=1) ? '#EF4444' : (edge<0.15 ? '#F59E0B' : '#10B981');
-        const tag = (f<=0||f>=1) ? ' · OUT OF RANGE' : (edge<0.15 ? ' · NEAR EDGE' : '');
-        gauge =
-          '<div style="position:relative;height:9px;background:linear-gradient(90deg,rgba(239,68,68,.18),rgba(16,185,129,.18),rgba(239,68,68,.18));border:1px solid rgba(255,255,255,.12);border-radius:5px;margin:9px 0 3px">'
-          + '<div style="position:absolute;left:'+pct.toFixed(1)+'%;top:-3px;width:3px;height:15px;border-radius:2px;background:'+col+';box-shadow:0 0 6px '+col+';transform:translateX(-1.5px)"></div>'
-          + '</div>'
-          + '<div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:#6B7280">'
-          + '<span>'+esc(price(p.lower))+'</span>'
-          + '<span style="color:'+col+';font-weight:700">'+pct.toFixed(0)+'% across'+tag+'</span>'
-          + '<span>'+esc(price(p.upper))+'</span></div>';
+    for(const p of positions){
+      const r = p.range||{}, cur = curFor(p.quote), usd = usdFor[p.quote];
+      if(usd) tot += usd;
+      let inRange=null, gauge='';
+      if(r.lower!=null && r.upper!=null && cur!=null && r.upper>r.lower){
+        const f=(cur-r.lower)/(r.upper-r.lower); inRange = f>0 && f<1;
+        const pct=Math.max(0,Math.min(100,f*100)), edge=Math.min(f,1-f);
+        const col=(f<=0||f>=1)?'#EF4444':(edge<0.15?'#F59E0B':'#10B981');
+        const tag=(f<=0||f>=1)?' · OUT OF RANGE':(edge<0.15?' · NEAR EDGE':'');
+        gauge='<div style="position:relative;height:9px;background:linear-gradient(90deg,rgba(239,68,68,.18),rgba(16,185,129,.18),rgba(239,68,68,.18));border:1px solid rgba(255,255,255,.12);border-radius:5px;margin:9px 0 3px">'
+          +'<div style="position:absolute;left:'+pct.toFixed(1)+'%;top:-3px;width:3px;height:15px;border-radius:2px;background:'+col+';box-shadow:0 0 6px '+col+';transform:translateX(-1.5px)"></div></div>'
+          +'<div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:#6B7280">'
+          +'<span>'+esc(price(r.lower))+'</span><span style="color:'+col+';font-weight:700">'+pct.toFixed(0)+'% across'+tag+'</span><span>'+esc(price(r.upper))+'</span></div>';
       }
+      const dot = inRange===null?'⚪':(inRange?'🟢':'⚪');
       html += `<div class="pos">
-        <div class="ph"><span class="pair">${esc(lbl)}</span><span>${p.valueUsd!=null?'<b>'+money(p.valueUsd)+'</b> · ':''}${dot} <span class="role">${inRange===null?'range n/a':(inRange?'in range':'out of range')}</span></span></div>
-        <div class="meta">now <b>${p.current!=null?esc(price(p.current)):'—'}</b></div>
+        <div class="ph"><span class="pair">${esc(p.label)}</span><span>${usd?'<b>'+money(usd)+'</b> · ':''}${dot} <span class="role">${inRange===null?'range n/a':(inRange?'in range':'out of range')}</span></span></div>
+        <div class="meta">now <b>${cur!=null?esc(price(cur)):'—'}</b></div>
         ${gauge}
       </div>`;
     }
-    html += '<div class="note" style="text-align:right">Deployed depth: <b>'+money(tot)+'</b></div>';
-  } else {
-    const st = status.state || {};
-    const positions = [];
-    if(st.positionMint) positions.push({ label:'Base range', mint:st.positionMint, range:st.range });
-    if(st.askWall && typeof st.askWall==='object' && st.askWall.mint) positions.push({ label:'Ask wall · upside', mint:st.askWall.mint, range:{lower:st.askWall.lower, upper:st.askWall.upper} });
-    if(st.solVault && typeof st.solVault==='object' && st.solVault.mint) positions.push({ label:'CLKN/SOL range', mint:st.solVault.mint, range:{lower:st.solVault.lower, upper:st.solVault.upper} });
-    if(st.jupVault && typeof st.jupVault==='object' && st.jupVault.mint) positions.push({ label:'CLKN/JUP range', mint:st.jupVault.mint, range:{lower:st.jupVault.lower, upper:st.jupVault.upper} });
-    if(!positions.length){
-      html += '<div class="note">No open positions right now. The engine opens depth on its next tick.</div>';
-    } else {
-      for(const p of positions){
-        const r = p.range || {};
-        const rangeStr = (r.lower!=null && r.upper!=null) ? (price(r.lower)+' → '+price(r.upper)) : '—';
-        html += `<div class="pos">
-          <div class="ph"><span class="pair">${esc(p.label)}</span><span class="role">open</span></div>
-          <div class="meta">Range: <b>${esc(rangeStr)}</b><br>Position: <b>${esc(shorten(p.mint))}</b></div>
-        </div>`;
-      }
-    }
+    if(tot>0) html += '<div class="note" style="text-align:right">Deployed depth: <b>'+money(tot)+'</b></div>';
   }
 
   // Earnings + cost breakdown (friendly)
