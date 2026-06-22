@@ -472,6 +472,43 @@ function lockReportTick() {
   }
 }
 
+// ── Lock-change watcher ──────────────────────────────────────────────────────
+// Checks the on-chain locked total every ~2h and auto-posts a short "NEW LOCK"
+// alert ONLY when it INCREASES past a dust threshold — so a fresh lock is announced
+// within ~2h instead of waiting for the daily report. Uses its own baseline
+// (lockWatchTotal) but, when it posts, also syncs lockSnapshot so the daily report
+// won't re-announce the same lock. First tick after boot just primes the baseline
+// (never posts), so a deploy with a stale snapshot can't fire a surprise post — the
+// daily report (separate baseline) is the backstop for a lock during a deploy gap.
+const LOCK_WATCH_ENABLED = true;
+const LOCK_WATCH_MIN_DELTA = 500_000; // CLKN — real locks are millions; ignore dust
+let lockWatchPrimed = false;
+async function lockWatchTick() {
+  if (!LOCK_WATCH_ENABLED) return;
+  const built = await buildLockReport().catch(() => null);
+  if (!built || !built.ok) return;
+  const total = built.data.totalLocked;
+  const base = kv.get("lockWatchTotal", null);
+  if (!lockWatchPrimed || typeof base !== "number") {
+    lockWatchPrimed = true; kv.set("lockWatchTotal", total); return; // prime on boot — never posts
+  }
+  const delta = total - base;
+  if (delta < LOCK_WATCH_MIN_DELTA) {
+    if (delta < 0) kv.set("lockWatchTotal", total); // a lock expired/withdrew — track down silently
+    return;
+  }
+  kv.set("lockWatchTotal", total);
+  kv.set("lockSnapshot", { tokens: total, ts: Date.now() }); // so the daily report won't re-announce it
+  const pct = built.data.pctOfSupply != null ? (built.data.pctOfSupply * 100).toFixed(2) + "%" : "—";
+  const msg =
+    `🔒 <b>NEW CLKN LOCK</b>\n\n` +
+    `<b>+${fmtTokensShort(delta)} CLKN</b> just locked.\n` +
+    `Now <b>${fmtTokensShort(total)} CLKN</b> locked — <b>${pct}</b> of supply.\n\n` +
+    `🔒 Removed from circulation — long-term commitment. Verify on Jupiter Lock:\nhttps://lock.jup.ag/token/${CLKN_MINT}`;
+  await tgSend(process.env.TELEGRAM_CHAT_ID, msg);
+  console.log(`[LOCK-WATCH] new lock +${Math.round(delta)} → total ${Math.round(total)} (${pct})`);
+}
+
 // ── Daily educational posts ("Cluck's Lesson") ────────────────────────────
 // Hybrid: we own the topic list (drawn from the real curriculum — Incubator,
 // School of Hard Knocks, LP Lab, security); Claude writes each lesson in Cluck's
@@ -10178,6 +10215,9 @@ app.listen(PORT, () => {
     // Daily Flow Recap — checked each minute, fires once per day at 00:00 UTC.
     setInterval(recapTick, 60 * 1000);
     setInterval(lockReportTick, 60 * 1000);
+    // Lock-change watcher — every 2h, auto-post when the locked total increases.
+    setInterval(lockWatchTick, 2 * 60 * 60 * 1000);
+    setTimeout(lockWatchTick, 90000); // prime the baseline shortly after boot
     // Bags graduation watcher — every 3 min: alert near-bonding (85%) + capture
     // graduations into our own 48h record (independent of pump.fun flooding ST).
     setTimeout(gradWatcherTick, 12000);
