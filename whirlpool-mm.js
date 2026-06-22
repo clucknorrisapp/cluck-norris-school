@@ -460,6 +460,14 @@ router.get("/vault/concentration", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message || "concentration switch failed" }); }
 });
 
+// GET /api/whirlpool/vault/alerts-to-main?key=…&hours=24 — temporarily route ALL
+// engine alerts to the main community chat (transparency/test window). hours=0 cancels.
+router.get("/vault/alerts-to-main", (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  try { res.json(vault.routeAlertsToMain(req.query.hours != null ? req.query.hours : 24)); }
+  catch (e) { res.status(500).json({ error: e.message || "failed" }); }
+});
+
 // POST /api/whirlpool/vault/pause?key=… and /resume?key=… — kill switch.
 router.post("/vault/pause", (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
