@@ -129,6 +129,7 @@ body{background:transparent;font-family:var(--body);}
         <button class="btn btn-primary" id="loadBtn" onclick="saveKeyAndLoad()">LOAD</button>
         <button class="btn btn-ghost" id="refreshBtn" onclick="loadAll()">🔄 REFRESH</button>
         <label class="auto-toggle"><input type="checkbox" id="autoChk" onchange="toggleAuto()"/> auto-refresh 30s</label>
+        <label class="auto-toggle"><input type="checkbox" id="hideChk" checked onchange="applyFilter()"/> hide paused / inactive</label>
       </div>
     </div>
     <div class="updated" id="updated"></div>
@@ -219,23 +220,39 @@ async function loadAll(){
   }
 }
 
+// Hide-inactive filter — a project is "live" only when enabled and not paused.
+function applyFilter(){
+  const hide = !!(document.getElementById('hideChk')||{}).checked;
+  document.querySelectorAll('.proj').forEach(el=>{
+    const live = el.dataset.live === '1';
+    el.style.display = (hide && !live && el.dataset.loaded==='1') ? 'none' : '';
+  });
+}
+
 async function loadProject(id, meta){
   const el = document.getElementById('proj-'+id);
   if(!el) return;
   const k = encodeURIComponent(adminKey), pid = encodeURIComponent(id);
   try {
     const sres = await jget('/api/whirlpool/vault/status?key='+k+'&project='+pid);
-    if(sres.status===404){ el.innerHTML = card404(meta); return; }
-    if(!sres.ok || !sres.data){ el.innerHTML = cardError(meta, (sres.data&&sres.data.error)||'status failed'); return; }
+    if(sres.status===404){ el.innerHTML = card404(meta); el.dataset.live='0'; el.dataset.loaded='1'; applyFilter(); return; }
+    if(!sres.ok || !sres.data){ el.innerHTML = cardError(meta, (sres.data&&sres.data.error)||'status failed'); el.dataset.live='0'; el.dataset.loaded='1'; applyFilter(); return; }
     let status = sres.data;
     // status folds in costs/earnings only when enabled; otherwise fetch them
     // separately (best-effort, never blocks the card).
     let costs = status.costs, earnings = status.earnings;
     if(!costs || costs.error){ const c=await jget('/api/whirlpool/vault/costs?key='+k+'&project='+pid); if(c.ok&&c.data&&!c.data.error) costs=c.data; }
     if(!earnings || earnings.error){ const e=await jget('/api/whirlpool/vault/earnings?key='+k+'&project='+pid); if(e.ok&&e.data&&!e.data.error) earnings=e.data; }
-    el.innerHTML = renderProject(id, meta, status, costs, earnings);
+    // Per-pool positions (accurate current price / in-range / $ per pool — incl. JUP).
+    let positions = null;
+    try { const pr = await jget('/api/whirlpool/vault/positions?key='+k+'&project='+pid); if(pr.ok && pr.data && Array.isArray(pr.data.positions)) positions = pr.data.positions; } catch(_){}
+    el.innerHTML = renderProject(id, meta, status, costs, earnings, positions);
+    el.dataset.live = (status && status.enabled && !status.paused) ? '1' : '0';
+    el.dataset.loaded = '1';
+    applyFilter();
   } catch(e){
     el.innerHTML = cardError(meta, e.message||String(e));
+    el.dataset.live='0'; el.dataset.loaded='1'; applyFilter();
   }
 }
 
@@ -266,7 +283,7 @@ function roleLabel(p){
   return 'two-sided';
 }
 
-function renderProject(id, meta, status, costs, earnings){
+function renderProject(id, meta, status, costs, earnings, livePositions){
   const enabled = !!status.enabled;
   const paused = !!status.paused;
   let badges = '';
@@ -301,25 +318,41 @@ function renderProject(id, meta, status, costs, earnings){
   // role, range, and in/out of range. (The sanitized $ depth view lives in the public
   // /liquidity command; status is the operator's structural view.)
   html += '<div class="sec-title">POSITIONS</div>';
-  const st = status.state || {};
-  const positions = [];
-  if(st.positionMint) positions.push({ kind:'base', label:'Base range', mint:st.positionMint, range:st.range });
-  if(st.askWall && typeof st.askWall==='object' && st.askWall.mint) positions.push({ kind:'askwall', label:'Ask wall · upside', mint:st.askWall.mint, range:{lower:st.askWall.lower, upper:st.askWall.upper} });
-  if(st.solVault && typeof st.solVault==='object' && st.solVault.mint) positions.push({ kind:'sol', label:'CLKN/SOL range', mint:st.solVault.mint, range:{lower:st.solVault.lower, upper:st.solVault.upper} });
-
-  if(!positions.length){
-    html += '<div class="note">No open positions right now. The engine opens depth on its next tick.</div>';
-  } else {
-    const cur = st.lastPrice;
-    for(const p of positions){
-      const r = p.range || {};
-      const inRange = (cur!=null && r.lower!=null && r.upper!=null) ? (cur>=r.lower && cur<=r.upper) : null;
+  // Prefer the per-pool /vault/positions feed: each row carries ITS OWN current price,
+  // in-range flag, and $ value — so SOL/JUP aren't wrongly judged against the USD price,
+  // and every pool (incl. CLKN/JUP) shows. Fall back to status.state if it's unavailable.
+  if(Array.isArray(livePositions) && livePositions.length){
+    let tot = 0;
+    for(const p of livePositions){
+      tot += Number(p.valueUsd)||0;
+      const inRange = (p.inRange===true) ? true : (p.inRange===false ? false : null);
       const dot = inRange===null ? '⚪' : (inRange?'🟢':'⚪');
-      const rangeStr = (r.lower!=null && r.upper!=null) ? (price(r.lower)+' → '+price(r.upper)) : '—';
+      const rangeStr = (p.lower!=null && p.upper!=null) ? (price(p.lower)+' → '+price(p.upper)) : '—';
+      const lbl = (p.pair || ('CLKN/'+(p.quoteSymbol||'?')));
       html += `<div class="pos">
-        <div class="ph"><span class="pair">${esc(p.label)}</span><span>${dot} <span class="role">${inRange===null?'range n/a':(inRange?'in range':'out of range')}</span></span></div>
-        <div class="meta">Range: <b>${esc(rangeStr)}</b>${cur!=null?' · now <b>'+esc(price(cur))+'</b>':''}<br>Position: <b>${esc(shorten(p.mint))}</b></div>
+        <div class="ph"><span class="pair">${esc(lbl)}</span><span>${p.valueUsd!=null?'<b>'+money(p.valueUsd)+'</b> · ':''}${dot} <span class="role">${inRange===null?'range n/a':(inRange?'in range':'out of range')}</span></span></div>
+        <div class="meta">Range: <b>${esc(rangeStr)}</b>${p.current!=null?' · now <b>'+esc(price(p.current))+'</b>':''}</div>
       </div>`;
+    }
+    html += '<div class="note" style="text-align:right">Deployed depth: <b>'+money(tot)+'</b></div>';
+  } else {
+    const st = status.state || {};
+    const positions = [];
+    if(st.positionMint) positions.push({ label:'Base range', mint:st.positionMint, range:st.range });
+    if(st.askWall && typeof st.askWall==='object' && st.askWall.mint) positions.push({ label:'Ask wall · upside', mint:st.askWall.mint, range:{lower:st.askWall.lower, upper:st.askWall.upper} });
+    if(st.solVault && typeof st.solVault==='object' && st.solVault.mint) positions.push({ label:'CLKN/SOL range', mint:st.solVault.mint, range:{lower:st.solVault.lower, upper:st.solVault.upper} });
+    if(st.jupVault && typeof st.jupVault==='object' && st.jupVault.mint) positions.push({ label:'CLKN/JUP range', mint:st.jupVault.mint, range:{lower:st.jupVault.lower, upper:st.jupVault.upper} });
+    if(!positions.length){
+      html += '<div class="note">No open positions right now. The engine opens depth on its next tick.</div>';
+    } else {
+      for(const p of positions){
+        const r = p.range || {};
+        const rangeStr = (r.lower!=null && r.upper!=null) ? (price(r.lower)+' → '+price(r.upper)) : '—';
+        html += `<div class="pos">
+          <div class="ph"><span class="pair">${esc(p.label)}</span><span class="role">open</span></div>
+          <div class="meta">Range: <b>${esc(rangeStr)}</b><br>Position: <b>${esc(shorten(p.mint))}</b></div>
+        </div>`;
+      }
     }
   }
 
