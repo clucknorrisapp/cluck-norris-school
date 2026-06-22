@@ -425,7 +425,7 @@ function fmtTokensShort(n) {
   return Math.round(n).toLocaleString();
 }
 // Build the locked-supply report message (+ data). Reads on-chain; does not post.
-async function buildLockReport() {
+async function buildLockReport(note = "") {
   const HELIUS_KEY = process.env.HELIUS_API_KEY;
   if (!HELIUS_KEY) return { ok: false, error: "no HELIUS_API_KEY" };
   const rpcCall = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`);
@@ -447,11 +447,12 @@ async function buildLockReport() {
     `Across <b>${data.lockCount}</b> lock account${data.lockCount === 1 ? "" : "s"}` +
     (bd ? `\n${bd}` : "") +
     deltaLine +
+    (note ? `\n\n${note}` : "") +
     `\n\n🔒 Locked = removed from circulation — a long-term commitment to the project. Verify it yourself on Jupiter Lock:\nhttps://lock.jup.ag/token/${CLKN_MINT}`;
   return { ok: true, data, msg };
 }
-async function notifyLockReport({ dryRun = false } = {}) {
-  const built = await buildLockReport();
+async function notifyLockReport({ dryRun = false, note = "" } = {}) {
+  const built = await buildLockReport(note);
   if (!built.ok) return built;
   if (!dryRun) {
     await tgSend(process.env.TELEGRAM_CHAT_ID, built.msg);
@@ -4555,7 +4556,8 @@ app.get("/api/lock-report-test", async (req, res) => {
   const provided = req.query.key || req.headers["x-premium-key"];
   if (!KEY || provided !== KEY) return res.status(404).json({ error: "not_found" });
   try {
-    const r = await notifyLockReport({ dryRun: req.query.post !== "1" });
+    const note = typeof req.query.note === "string" ? req.query.note.slice(0, 280) : "";
+    const r = await notifyLockReport({ dryRun: req.query.post !== "1", note });
     return res.status(200).json(r);
   } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
 });
