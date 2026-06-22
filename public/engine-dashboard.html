@@ -244,8 +244,12 @@ async function loadProject(id, meta){
     if(!costs || costs.error){ const c=await jget('/api/whirlpool/vault/costs?key='+k+'&project='+pid); if(c.ok&&c.data&&!c.data.error) costs=c.data; }
     if(!earnings || earnings.error){ const e=await jget('/api/whirlpool/vault/earnings?key='+k+'&project='+pid); if(e.ok&&e.data&&!e.data.error) earnings=e.data; }
     // Per-pool positions (accurate current price / in-range / $ per pool — incl. JUP).
+    // One retry — the on-chain read occasionally blips, and falling back loses the gauge.
     let positions = null;
-    try { const pr = await jget('/api/whirlpool/vault/positions?key='+k+'&project='+pid); if(pr.ok && pr.data && Array.isArray(pr.data.positions)) positions = pr.data.positions; } catch(_){}
+    for(let attempt=0; attempt<2 && positions===null; attempt++){
+      try { const pr = await jget('/api/whirlpool/vault/positions?key='+k+'&project='+pid); if(pr.ok && pr.data && Array.isArray(pr.data.positions)) positions = pr.data.positions; } catch(_){}
+      if(positions===null && attempt===0) await new Promise(r=>setTimeout(r,800));
+    }
     el.innerHTML = renderProject(id, meta, status, costs, earnings, positions);
     el.dataset.live = (status && status.enabled && !status.paused) ? '1' : '0';
     el.dataset.loaded = '1';
@@ -329,9 +333,27 @@ function renderProject(id, meta, status, costs, earnings, livePositions){
       const dot = inRange===null ? '⚪' : (inRange?'🟢':'⚪');
       const rangeStr = (p.lower!=null && p.upper!=null) ? (price(p.lower)+' → '+price(p.upper)) : '—';
       const lbl = (p.pair || ('CLKN/'+(p.quoteSymbol||'?')));
+      // Visual gauge: where the current price sits inside [lower, upper].
+      let gauge = '';
+      if(p.lower!=null && p.upper!=null && p.current!=null && p.upper>p.lower){
+        const f = (p.current - p.lower)/(p.upper - p.lower);
+        const pct = Math.max(0, Math.min(100, f*100));
+        const edge = Math.min(f, 1-f);            // 0 = at an edge, 0.5 = dead center
+        const col = (f<=0||f>=1) ? '#EF4444' : (edge<0.15 ? '#F59E0B' : '#10B981');
+        const tag = (f<=0||f>=1) ? ' · OUT OF RANGE' : (edge<0.15 ? ' · NEAR EDGE' : '');
+        gauge =
+          '<div style="position:relative;height:9px;background:linear-gradient(90deg,rgba(239,68,68,.18),rgba(16,185,129,.18),rgba(239,68,68,.18));border:1px solid rgba(255,255,255,.12);border-radius:5px;margin:9px 0 3px">'
+          + '<div style="position:absolute;left:'+pct.toFixed(1)+'%;top:-3px;width:3px;height:15px;border-radius:2px;background:'+col+';box-shadow:0 0 6px '+col+';transform:translateX(-1.5px)"></div>'
+          + '</div>'
+          + '<div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:#6B7280">'
+          + '<span>'+esc(price(p.lower))+'</span>'
+          + '<span style="color:'+col+';font-weight:700">'+pct.toFixed(0)+'% across'+tag+'</span>'
+          + '<span>'+esc(price(p.upper))+'</span></div>';
+      }
       html += `<div class="pos">
         <div class="ph"><span class="pair">${esc(lbl)}</span><span>${p.valueUsd!=null?'<b>'+money(p.valueUsd)+'</b> · ':''}${dot} <span class="role">${inRange===null?'range n/a':(inRange?'in range':'out of range')}</span></span></div>
-        <div class="meta">Range: <b>${esc(rangeStr)}</b>${p.current!=null?' · now <b>'+esc(price(p.current))+'</b>':''}</div>
+        <div class="meta">now <b>${p.current!=null?esc(price(p.current)):'—'}</b></div>
+        ${gauge}
       </div>`;
     }
     html += '<div class="note" style="text-align:right">Deployed depth: <b>'+money(tot)+'</b></div>';
