@@ -313,6 +313,18 @@ Live money is managed across two systems. Facts here survive container resets/co
 - **Cloud session recovery:** containers reset mid-session. If files look stale:
   `git fetch origin --prune && git checkout claude/<branch> && git reset --hard origin/claude/<branch> && npm install`.
   GitHub is always the truth; nothing committed is ever lost. `MIN_BUY_USD` default is 35 (buy-alert floor; owner's call 2026-06-17, raised from 15).
+- 💡 **IDEA — PERMANENT WIDE "ANCHOR" POSITIONS (filed 2026-06-23, owner's idea; NOT yet
+  implemented).** Problem: because we own ~100% of the Orca CLKN pools, fully pulling our
+  concentrated positions leaves the pool EMPTY → price goes stale / a tiny trade shoves it far
+  off market → on redeploy we must recenter around a dislocated price and wait for arb to settle
+  (the "front-end work"). Fix to consider: leave a TINY (~$10) ultra-wide position per pool that
+  we NEVER close — e.g. ±80%, or asymmetric −50%/+200% (more headroom up for a memecoin). It keeps
+  a continuous, arbitrageable quote so the pool price always tracks the real market (arbs align it
+  even against thin liquidity), and being ultra-wide it never goes out-of-range / never needs
+  touching. Then restarting the tight positions finds price already live + in-range → no settle
+  wait. Cheap + correct ONLY on Orca (one position spans the whole band for ~0.006 SOL rent, $10
+  capital, negligible IL); do NOT do this on Meteora (width-scaled bin-array rent makes a band that
+  wide very expensive). Sound CL technique — revisit when the engine is un-paused.
 
 ## Venue decision (settled — don't re-debate)
 **CLKN stays on Orca; treasury stays on Meteora.** Different reasons per asset:
