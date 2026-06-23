@@ -9021,34 +9021,28 @@ let cachedSolUsdAt = 0;
 async function getSolUsd() {
   const now = Date.now();
   if (now - cachedSolUsdAt < 5 * 60 * 1000 && cachedSolUsdAt > 0) return cachedSolUsd;
+  const sane = (p) => Number.isFinite(p) && p >= 5 && p <= 5000; // SOL realistic range
   // Try CoinGecko first (free, reliable, no key needed). Fall back to DexScreener
   // SOL/USDC pair if CoinGecko hiccups so the bot stays accurate.
   try {
     const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd");
     const data = await res.json();
     const price = parseFloat(data?.solana?.usd);
-    if (Number.isFinite(price) && price > 0) {
-      cachedSolUsd = price;
-      cachedSolUsdAt = now;
-      return cachedSolUsd;
-    }
+    if (sane(price)) { cachedSolUsd = price; cachedSolUsdAt = now; return cachedSolUsd; }
   } catch (e) {
     console.warn("[TELEGRAM] CoinGecko SOL fetch failed:", e.message);
   }
-  // Fallback — pull from DexScreener's SOL token pair (any pair gives priceUsd)
+  // Fallback — most-liquid SANE SOL pair (skips any mispriced pool)
   try {
     const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${WSOL_MINT}`);
     const data = await res.json();
-    const pair = data?.pairs?.[0];
-    const price = parseFloat(pair?.priceUsd);
-    if (Number.isFinite(price) && price > 0) {
-      cachedSolUsd = price;
-      cachedSolUsdAt = now;
-    }
+    const pairs = (data?.pairs || []).filter(p => sane(parseFloat(p.priceUsd))).sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0));
+    const price = pairs.length ? parseFloat(pairs[0].priceUsd) : NaN;
+    if (sane(price)) { cachedSolUsd = price; cachedSolUsdAt = now; }
   } catch (e) {
     console.warn("[TELEGRAM] DexScreener SOL fallback failed, using last-known price:", e.message);
   }
-  return cachedSolUsd;
+  return sane(cachedSolUsd) ? cachedSolUsd : null;
 }
 
 // Cached BTC/USD price for valuing cbBTC-quoted trades on the new CLKN/cbBTC pool.
@@ -9059,19 +9053,21 @@ let cachedBtcUsdAt = 0;
 async function getBtcUsd() {
   const now = Date.now();
   if (now - cachedBtcUsdAt < 5 * 60 * 1000 && cachedBtcUsdAt > 0) return cachedBtcUsd;
+  const sane = (p) => Number.isFinite(p) && p >= 1000 && p <= 1000000; // BTC realistic range
   try {
     const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd");
     const data = await res.json();
     const price = parseFloat(data?.bitcoin?.usd);
-    if (Number.isFinite(price) && price > 0) { cachedBtcUsd = price; cachedBtcUsdAt = now; return cachedBtcUsd; }
+    if (sane(price)) { cachedBtcUsd = price; cachedBtcUsdAt = now; return cachedBtcUsd; }
   } catch (e) { console.warn("[TELEGRAM] CoinGecko BTC fetch failed:", e.message); }
   try {
     const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${CBBTC_MINT}`);
     const data = await res.json();
-    const price = parseFloat(data?.pairs?.[0]?.priceUsd);
-    if (Number.isFinite(price) && price > 0) { cachedBtcUsd = price; cachedBtcUsdAt = now; }
+    const pairs = (data?.pairs || []).filter(p => sane(parseFloat(p.priceUsd))).sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0));
+    const price = pairs.length ? parseFloat(pairs[0].priceUsd) : NaN;
+    if (sane(price)) { cachedBtcUsd = price; cachedBtcUsdAt = now; }
   } catch (e) { console.warn("[TELEGRAM] DexScreener cbBTC fallback failed:", e.message); }
-  return cachedBtcUsd;
+  return sane(cachedBtcUsd) ? cachedBtcUsd : null;
 }
 
 // Cached JUP/USD price for valuing JUP-quoted trades on the new CLKN/JUP pool.
