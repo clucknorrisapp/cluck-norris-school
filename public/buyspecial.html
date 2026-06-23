@@ -8,15 +8,15 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <style>
-  :root{color-scheme:dark;--bg:#0a0503;--bg-grad:radial-gradient(125% 75% at 50% -12%,#2c0f04 0%,#160b06 46%,#0a0503 100%);--card:#1a0f08;--card2:#160c07;--surface:#150f12;--panel:#150f12;--border:rgba(255,122,24,0.28);--border-soft:rgba(255,122,24,0.14);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
+  :root{color-scheme:dark;--bg:#0a0503;--bg-grad:#2c0f04;--card:#1a0f08;--card2:#160c07;--surface:#150f12;--panel:#150f12;--border:rgba(255,122,24,0.28);--border-soft:rgba(255,122,24,0.14);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); background-image: radial-gradient(ellipse at 20% 10%, rgba(217,119,6,0.10) 0%, transparent 50%), radial-gradient(ellipse at 80% 90%, rgba(239,68,68,0.07) 0%, transparent 50%); color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh; }
+  body { background: var(--bg);  color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh; }
   .wrap { max-width: 700px; margin: 0 auto; padding: 24px 16px 80px; }
 
   .header { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
   .header-icon { font-size: 40px; filter: drop-shadow(0 0 16px rgba(217,119,6,0.5)); }
   .header .brand-mini { font-family: 'Anton', sans-serif; font-size: 10px; letter-spacing: 4px; color: #D97706; margin-bottom: 4px; font-weight: 700; }
-  .header h1 { font-family: 'Anton', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg, #FCD34D, #F97316, #EF4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
+  .header h1 { font-family: 'Anton', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: #FCD34D; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
   .header p { font-family: 'Anton', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
   .footer-tag { text-align: center; margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Anton', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
   .footer-tag a { color: #D97706; text-decoration: none; }
@@ -44,7 +44,7 @@
   .preset-btn:hover { border-color: var(--accent); color: var(--accent); }
   .preset-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(252,211,77,0.08); }
 
-  .run-btn { background: linear-gradient(135deg, #D97706, #EF4444); border: none; border-radius: 10px; padding: 13px 24px; font-family: var(--mono); font-size: 14px; font-weight: 900; color: #fff; cursor: pointer; letter-spacing: 2px; transition: opacity 0.15s; }
+  .run-btn { background: #D97706; border: none; border-radius: 10px; padding: 13px 24px; font-family: var(--mono); font-size: 14px; font-weight: 900; color: #fff; cursor: pointer; letter-spacing: 2px; transition: opacity 0.15s; }
   .run-btn:hover { opacity: 0.9; }
   .run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .stop-btn { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 10px; padding: 13px 20px; font-family: var(--mono); font-size: 12px; color: var(--red); cursor: pointer; display: none; }
@@ -59,7 +59,7 @@
   .status-dot.done { background: var(--green); animation: none; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
   .progress-bar { flex: 1; height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; }
-  .progress-fill { height: 100%; background: linear-gradient(90deg, #D97706, #EF4444); border-radius: 2px; transition: width 0.3s; }
+  .progress-fill { height: 100%; background: #D97706; border-radius: 2px; transition: width 0.3s; }
 
   .window-info { background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; font-family: var(--mono); font-size: 11px; color: var(--subtext); margin-bottom: 16px; display: none; }
   .window-info.show { display: block; }
@@ -126,7 +126,7 @@
   .expand-btn { background: none; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; padding: 2px 8px; font-size: 10px; color: var(--subtext); cursor: pointer; font-family: var(--mono); margin-left: 6px; }
   .expand-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-  .airdrop-btn { width: 100%; padding: 15px; background: linear-gradient(135deg, #10B981, #065F46); border: none; border-radius: 10px; font-family: var(--mono); font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; letter-spacing: 2px; margin-top: 16px; transition: opacity 0.15s; }
+  .airdrop-btn { width: 100%; padding: 15px; background: #10B981; border: none; border-radius: 10px; font-family: var(--mono); font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; letter-spacing: 2px; margin-top: 16px; transition: opacity 0.15s; }
   .airdrop-btn:hover { opacity: 0.9; }
 
   .airdrop-section { display: none; margin-top: 8px; }
@@ -141,12 +141,12 @@
   .disq-row td { opacity: 0.6; }
 
   /* 🔒 CLKN Unlock Gate (same pattern as the airdrop tool) */
-  .unlock-gate { background: linear-gradient(135deg, rgba(217,119,6,0.08), rgba(239,68,68,0.04)); border: 1px solid rgba(217,119,6,0.45); border-radius: 12px; padding: 24px 22px; margin-bottom: 16px; box-shadow: 0 0 30px rgba(217,119,6,0.12); }
-  .unlock-title { font-family: 'Anton', sans-serif; font-size: 20px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg,#FCD34D,#F97316,#EF4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-align: center; margin-bottom: 4px; }
+  .unlock-gate { background: rgba(217,119,6,0.08); border: 1px solid rgba(217,119,6,0.45); border-radius: 12px; padding: 24px 22px; margin-bottom: 16px; box-shadow: 0 0 30px rgba(217,119,6,0.12); }
+  .unlock-title { font-family: 'Anton', sans-serif; font-size: 20px; font-weight: 900; letter-spacing: 3px; background: #FCD34D; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-align: center; margin-bottom: 4px; }
   .unlock-sub { font-family: 'Anton', sans-serif; font-size: 10px; color: var(--subtext); text-align: center; letter-spacing: 3px; margin-bottom: 18px; }
   .quick-preset-btn { flex: 1; min-width: 140px; background: rgba(255,255,255,0.04); border: 1px solid rgba(252,211,77,0.3); border-radius: 8px; padding: 9px 12px; font-family: 'Anton', sans-serif; font-size: 11px; font-weight: 700; color: #FCD34D; letter-spacing: 1px; cursor: pointer; transition: all 0.15s; }
   .quick-preset-btn:hover { background: rgba(252,211,77,0.1); transform: translateY(-1px); }
-  .quick-preset-btn.applied { background: linear-gradient(135deg,#10B981,#065F46); color: #fff; border-color: rgba(16,185,129,0.5); }
+  .quick-preset-btn.applied { background: #10B981; color: #fff; border-color: rgba(16,185,129,0.5); }
 
   .unlock-amount-card { background: rgba(0,0,0,0.4); border: 1px solid rgba(217,119,6,0.45); border-radius: 10px; padding: 16px; text-align: center; margin-bottom: 10px; cursor: pointer; transition: border-color 0.15s; }
   .unlock-amount-card:hover { border-color: var(--accent); }
@@ -167,11 +167,11 @@
   .unlock-status.success .pulse { background: var(--green); animation: none; }
   .unlock-status.idle { color: var(--subtext); border-color: rgba(255,255,255,0.06); background: rgba(255,255,255,0.02); }
   .unlock-status.idle .pulse { background: var(--subtext); animation: none; }
-  .unlock-restart-btn { width: 100%; margin-top: 10px; padding: 12px; background: linear-gradient(135deg,#D97706,#EF4444); border: none; border-radius: 8px; font-family: 'Anton', sans-serif; font-size: 12px; font-weight: 700; color: #fff; letter-spacing: 2px; cursor: pointer; transition: opacity 0.15s; }
+  .unlock-restart-btn { width: 100%; margin-top: 10px; padding: 12px; background: #D97706; border: none; border-radius: 8px; font-family: 'Anton', sans-serif; font-size: 12px; font-weight: 700; color: #fff; letter-spacing: 2px; cursor: pointer; transition: opacity 0.15s; }
   .unlock-restart-btn:hover { opacity: 0.9; }
 
   /* Sticky unlocked banner */
-  .unlock-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; background: linear-gradient(135deg, rgba(16,185,129,0.14), rgba(16,185,129,0.04)); border: 1px solid rgba(16,185,129,0.4); border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; box-shadow: 0 0 18px rgba(16,185,129,0.1); }
+  .unlock-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; background: rgba(16,185,129,0.14); border: 1px solid rgba(16,185,129,0.4); border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; box-shadow: 0 0 18px rgba(16,185,129,0.1); }
   .unlock-banner-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
   .banner-check { font-family: var(--mono); font-size: 16px; color: var(--green); background: rgba(16,185,129,0.18); border: 1px solid rgba(16,185,129,0.45); border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; }
   .banner-title { font-family: 'Anton', sans-serif; font-size: 12px; font-weight: 700; color: var(--green); letter-spacing: 2px; }
@@ -287,7 +287,7 @@ body{background:transparent;font-family:var(--body);}
 
   <!-- Quick presets — token-agnostic. Each one fills the timing/bonus/hold/min-reward
        config; the operator picks their token separately above. -->
-  <div style="background:linear-gradient(135deg, rgba(252,211,77,0.06), rgba(217,119,6,0.03));border:1px solid rgba(252,211,77,0.3);border-radius:12px;padding:14px 16px;margin-bottom:16px">
+  <div style="background:rgba(252,211,77,0.06);border:1px solid rgba(252,211,77,0.3);border-radius:12px;padding:14px 16px;margin-bottom:16px">
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
       <div style="font-family:'Anton',sans-serif;font-size:11px;color:#FCD34D;letter-spacing:2px;font-weight:700">⚡ QUICK CONTEST PRESETS</div>
       <div style="font-family:var(--mono);font-size:10px;color:var(--subtext)">— fill the timing + bonus, your token stays as selected</div>
@@ -379,7 +379,7 @@ body{background:transparent;font-family:var(--body);}
     <div class="stat-box"><div class="stat-val" id="statVolume">--</div><div class="stat-label">TOTAL BOUGHT</div></div>
   </div>
 
-  <div id="stCrossCheck" style="display:none;margin:14px 0;padding:12px 16px;border-radius:10px;border:1px solid rgba(16,185,129,0.3);background:linear-gradient(135deg,rgba(16,185,129,0.06),rgba(16,185,129,0.01));font-family:'Courier New',monospace;font-size:12px;line-height:1.6;color:#D1D5DB;"></div>
+  <div id="stCrossCheck" style="display:none;margin:14px 0;padding:12px 16px;border-radius:10px;border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.06);font-family:'Courier New',monospace;font-size:12px;line-height:1.6;color:#D1D5DB;"></div>
 
   <div id="marketHeader"></div>
 
@@ -426,7 +426,7 @@ body{background:transparent;font-family:var(--body);}
         Token price is used to filter out bonus amounts below the minimum reward value. Leave 0 to skip filtering.
       </div>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-        <button class="run-btn" id="holdBtn" onclick="runHoldCheck()" style="background:linear-gradient(135deg,#7C3AED,#4F46E5)">🔒 RUN HOLD CHECK</button>
+        <button class="run-btn" id="holdBtn" onclick="runHoldCheck()" style="background:#7C3AED">🔒 RUN HOLD CHECK</button>
       </div>
     </div>
 

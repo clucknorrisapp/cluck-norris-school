@@ -1158,7 +1158,7 @@ function Library() {
         <div style={{fontSize:36,marginBottom:6}}>📚</div>
         <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:28,fontWeight:900,color:"#F9FAFB",margin:"0 0 4px",letterSpacing:2}}>THE LIBRARY</h2>
         <p style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#6B7280",letterSpacing:3,margin:0}}>INDEPENDENT STUDY — NO EXAMS</p>
-        <div style={{marginTop:10,height:1,background:"linear-gradient(90deg,transparent,rgba(255,122,24,0.5),transparent)"}}/>
+        <div style={{marginTop:10,height:1,background:"rgba(255,122,24,0.5)"}}/>
       </div>
 
       {/* Section tabs */}

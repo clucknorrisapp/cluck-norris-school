@@ -10,12 +10,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <style>
-  :root{color-scheme:dark;--bg:#0a0503;--bg-grad:radial-gradient(125% 75% at 50% -12%,#2c0f04 0%,#160b06 46%,#0a0503 100%);--card:#1a0f08;--card2:#160c07;--surface:#150f12;--panel:#150f12;--border:rgba(255,122,24,0.28);--border-soft:rgba(255,122,24,0.14);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
+  :root{color-scheme:dark;--bg:#0a0503;--bg-grad:#2c0f04;--card:#1a0f08;--card2:#160c07;--surface:#150f12;--panel:#150f12;--border:rgba(255,122,24,0.28);--border-soft:rgba(255,122,24,0.14);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     background: var(--bg);
-    background-image: radial-gradient(ellipse at 15% 5%, rgba(217,119,6,0.10) 0%, transparent 55%),
-                      radial-gradient(ellipse at 85% 95%, rgba(16,185,129,0.06) 0%, transparent 55%);
+    
     color: var(--text);
     font-family: system-ui, -apple-system, sans-serif;
     min-height: 100vh;
@@ -26,7 +25,7 @@
   .header { text-align: center; padding-bottom: 26px; border-bottom: 1px solid var(--border); margin-bottom: 28px; }
   .header .icon { font-size: 52px; filter: drop-shadow(0 0 18px rgba(217,119,6,0.5)); }
   .header h1 { font-family: 'Anton', sans-serif; font-size: 34px; font-weight: 900; letter-spacing: 2px; margin-top: 8px;
-    background: linear-gradient(135deg, #FCD34D, #F97316, #EF4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    background: #FCD34D; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
   .header .tagline { font-family: 'Anton', sans-serif; font-size: 13px; color: var(--subtext); letter-spacing: 2px; margin-top: 8px; }
   .header .grant-tag { display: inline-block; margin-top: 14px; padding: 5px 16px; font-family: 'Anton', sans-serif; font-size: 11px;
     letter-spacing: 2px; color: var(--green); background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.35); border-radius: 20px; }
@@ -48,7 +47,7 @@
     background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); border-radius: 4px; padding: 2px 8px; margin-bottom: 8px; }
 
   .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 16px 0; }
-  .stat { background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015));
+  .stat { background: rgba(255,255,255,0.04);
     border: 1px solid var(--border); border-radius: 10px; padding: 16px; text-align: center; }
   .stat .stat-value { font-family: 'Anton', sans-serif; font-size: 26px; font-weight: 900; color: var(--accent); }
   .stat .stat-label { font-family: 'Anton', sans-serif; font-size: 10px; letter-spacing: 2px; color: var(--muted); margin-top: 4px; }
@@ -75,7 +74,7 @@
   .link-btn { flex: 1; min-width: 200px; padding: 13px 16px; border-radius: 10px; text-decoration: none;
     font-family: 'Anton', sans-serif; font-size: 12px; letter-spacing: 1.5px; text-align: center; transition: opacity 0.15s; }
   .link-btn:hover { opacity: 0.85; }
-  .link-primary { background: linear-gradient(135deg, var(--orange), #EF4444); color: #fff; }
+  .link-primary { background: #EF4444; color: #fff; }
   .link-secondary { background: rgba(96,165,250,0.1); border: 1px solid rgba(96,165,250,0.35); color: var(--blue); }
 
   .footer { text-align: center; margin-top: 36px; font-family: var(--mono); font-size: 11px; color: var(--muted); }

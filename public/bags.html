@@ -22,12 +22,11 @@
 <link rel="icon" type="image/svg+xml" href="/icon.svg"/>
 <link rel="apple-touch-icon" href="/cluck-norris.png"/>
 <style>
-  :root{color-scheme:dark;--bg:#0a0503;--bg-grad:radial-gradient(125% 75% at 50% -12%,#2c0f04 0%,#160b06 46%,#0a0503 100%);--card:#1a0f08;--card2:#160c07;--surface:#150f12;--panel:#150f12;--border:rgba(255,122,24,0.28);--border-soft:rgba(255,122,24,0.14);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
+  :root{color-scheme:dark;--bg:#0a0503;--bg-grad:#2c0f04;--card:#1a0f08;--card2:#160c07;--surface:#150f12;--panel:#150f12;--border:rgba(255,122,24,0.28);--border-soft:rgba(255,122,24,0.14);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     background: var(--bg);
-    background-image: radial-gradient(ellipse at 18% 8%, rgba(217,119,6,0.14) 0%, transparent 55%),
-                      radial-gradient(ellipse at 82% 92%, rgba(252,211,77,0.06) 0%, transparent 55%);
+    
     color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh;
   }
   .wrap { max-width: 760px; margin: 0 auto; padding: 28px 18px 80px; }
@@ -40,7 +39,7 @@
   .header .brand-mini { font-family: 'Anton', sans-serif; font-size: 10px; letter-spacing: 4px; color: var(--orange); margin-top: 6px; font-weight: 700; }
   .header h1 {
     font-family: 'Anton', sans-serif; font-size: 32px; font-weight: 900; letter-spacing: 2.5px;
-    background: linear-gradient(135deg, #FCD34D, #F97316, #D97706);
+    background: #FCD34D;
     -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
     line-height: 1.1; margin: 4px 0;
   }
@@ -408,7 +407,7 @@ function lfPaint(){
     const nearGrad = (t.status==='PRE_GRAD')||(onCurve===true&&cp!=null&&cp>=80)||(!isCurve&&cp==null&&mc>=30000);
     const showResearch = graduated||nearGrad;
     const handle=lfHandle(p.twitter||t.twitter); const img=p.image||t.image; const vol=lfAbbrev(p.volume24h); const ag=lfAge(ts);
-    const bar=(onCurve===true&&cp!=null)?'<div class="lf-bar"><div style="width:'+Math.min(100,Math.max(2,cp))+'%;background:'+(cp>=80?'linear-gradient(90deg,#D97706,#10B981)':'linear-gradient(90deg,#F97316,#D97706)')+'"></div></div>':'';
+    const bar=(onCurve===true&&cp!=null)?'<div class="lf-bar"><div style="width:'+Math.min(100,Math.max(2,cp))+'%;background:'+(cp>=80?'#D97706':'#F97316')+'"></div></div>':'';
     const grad=(lfSort==='graduated');
     const cardHref=grad?('https://dexscreener.com/solana/'+t.tokenMint):('https://bags.fm/'+t.tokenMint+lfREF);
     const cardLabel=grad?'📊 CHART →':'TRADE →';

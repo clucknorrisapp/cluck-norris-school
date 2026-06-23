@@ -39,9 +39,7 @@ body::before {
 content: '';
 position: fixed;
 inset: 0;
-background-image:
-linear-gradient(rgba(220,80,80,0.03) 1px, transparent 1px),
-linear-gradient(90deg, rgba(220,80,80,0.03) 1px, transparent 1px);
+
 background-size: 40px 40px;
 pointer-events: none;
 z-index: 0;
@@ -87,7 +85,7 @@ input[type=datetime-local] { width: 230px; }
 input:focus { border-color: var(--accent); }
 
 .run-btn {
-background: linear-gradient(135deg, #dc5050, #b71c1c);
+background: #dc5050;
 border: none; border-radius: 7px;
 padding: 11px 32px;
 font-family: var(--head); font-size: 16px; font-weight: 700;
@@ -115,7 +113,7 @@ transition: all 0.2s; margin-top: 4px; display: none;
 .status-dot.done { background: var(--green); animation: none; }
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
 .progress-bar { flex: 1; height: 3px; background: rgba(255,255,255,0.07); border-radius: 2px; overflow: hidden; }
-.progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 2px; transition: width 0.4s; }
+.progress-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.4s; }
 #statusText { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Window info */
@@ -187,7 +185,7 @@ th:nth-child(4), td:nth-child(4) { display: none; }
 }
 
 /* Winners & transaction detail styles */
-.winners-banner { background: linear-gradient(135deg, rgba(255,215,0,0.12), rgba(255,165,0,0.08)); border: 1px solid rgba(255,215,0,0.4); border-radius: 10px; padding: 12px 16px; margin-bottom: 12px; display: flex; align-items: center; gap: 12px; }
+.winners-banner { background: rgba(255,215,0,0.12); border: 1px solid rgba(255,215,0,0.4); border-radius: 10px; padding: 12px 16px; margin-bottom: 12px; display: flex; align-items: center; gap: 12px; }
 .winners-banner .trophy { font-size: 24px; }
 .winners-banner .winner-text { font-family: var(--mono); font-size: 13px; color: #FCD34D; font-weight: 700; letter-spacing: 1px; }
 .winners-banner .winner-sub { font-size: 11px; color: var(--subtext); margin-top: 2px; }
@@ -218,8 +216,8 @@ th:nth-child(4), td:nth-child(4) { display: none; }
 
   /* 🔒 CLKN Unlock Gate (preview model — tool stays visible, RUN is gated) */
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
-  .unlock-gate { background: linear-gradient(135deg, rgba(217,119,6,0.08), rgba(220,80,80,0.05)); border: 1px solid rgba(217,119,6,0.45); border-radius: 12px; padding: 24px 22px; margin-bottom: 16px; box-shadow: 0 0 30px rgba(217,119,6,0.12); }
-  .unlock-title { font-family: var(--head); font-size: 18px; font-weight: 900; letter-spacing: 2px; background: linear-gradient(135deg,#FCD34D,#F97316,#EF4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-align: center; margin-bottom: 4px; }
+  .unlock-gate { background: rgba(217,119,6,0.08); border: 1px solid rgba(217,119,6,0.45); border-radius: 12px; padding: 24px 22px; margin-bottom: 16px; box-shadow: 0 0 30px rgba(217,119,6,0.12); }
+  .unlock-title { font-family: var(--head); font-size: 18px; font-weight: 900; letter-spacing: 2px; background: #FCD34D; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-align: center; margin-bottom: 4px; }
   .unlock-sub { font-family: var(--head); font-size: 10px; color: var(--subtext); text-align: center; letter-spacing: 3px; margin-bottom: 18px; }
   .unlock-amount-card { background: rgba(0,0,0,0.4); border: 1px solid rgba(217,119,6,0.45); border-radius: 10px; padding: 16px; text-align: center; margin-bottom: 10px; cursor: pointer; transition: border-color 0.15s; }
   .unlock-amount-card:hover { border-color: var(--accent); }
@@ -240,10 +238,10 @@ th:nth-child(4), td:nth-child(4) { display: none; }
   .unlock-status.success .pulse { background: var(--green); animation: none; }
   .unlock-status.idle { color: var(--subtext); border-color: rgba(255,255,255,0.06); background: rgba(255,255,255,0.02); }
   .unlock-status.idle .pulse { background: var(--subtext); animation: none; }
-  .unlock-restart-btn { width: 100%; margin-top: 10px; padding: 12px; background: linear-gradient(135deg,#D97706,#EF4444); border: none; border-radius: 8px; font-family: var(--head); font-size: 12px; font-weight: 700; color: #fff; letter-spacing: 2px; cursor: pointer; }
+  .unlock-restart-btn { width: 100%; margin-top: 10px; padding: 12px; background: #D97706; border: none; border-radius: 8px; font-family: var(--head); font-size: 12px; font-weight: 700; color: #fff; letter-spacing: 2px; cursor: pointer; }
   .unlock-restart-btn:hover { opacity: 0.9; }
   .unlock-preview-note { font-family: var(--mono); font-size: 10px; color: var(--subtext); text-align: center; margin-top: 12px; line-height: 1.6; }
-  .unlock-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; background: linear-gradient(135deg, rgba(105,240,174,0.14), rgba(105,240,174,0.04)); border: 1px solid rgba(105,240,174,0.4); border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; }
+  .unlock-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; background: rgba(105,240,174,0.14); border: 1px solid rgba(105,240,174,0.4); border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; }
   .unlock-banner-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
   .banner-check { font-family: var(--mono); font-size: 16px; color: var(--green); background: rgba(105,240,174,0.18); border: 1px solid rgba(105,240,174,0.45); border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; }
   .banner-title { font-family: var(--head); font-size: 12px; font-weight: 700; color: var(--green); letter-spacing: 2px; }
@@ -1307,7 +1305,7 @@ function appendPrizeSection(winners, container, prefill) {
       <span style="min-width:40px"></span>
     </div>
     ${rowsHtml}
-    <button class="airdrop-launch-btn" disabled style="width:100%;margin-top:14px;padding:13px;background:linear-gradient(135deg,#10B981,#065F46);border:none;border-radius:10px;font-family:var(--mono);font-size:14px;font-weight:900;color:#fff;cursor:not-allowed;letter-spacing:2px;opacity:0.4;transition:opacity 0.15s">🔒 ENTER AT LEAST ONE AMOUNT</button>`;
+    <button class="airdrop-launch-btn" disabled style="width:100%;margin-top:14px;padding:13px;background:#10B981;border:none;border-radius:10px;font-family:var(--mono);font-size:14px;font-weight:900;color:#fff;cursor:not-allowed;letter-spacing:2px;opacity:0.4;transition:opacity 0.15s">🔒 ENTER AT LEAST ONE AMOUNT</button>`;
 
   container.appendChild(section);
 
@@ -1355,7 +1353,7 @@ async function runStCrossCheck(mint, startTime, endTime, localBuyerSet) {
   if (!box) {
     box = document.createElement('div');
     box.id = 'stCrossCheck';
-    box.style.cssText = 'margin:0 0 14px;padding:12px 16px;border-radius:10px;border:1px solid rgba(16,185,129,0.3);background:linear-gradient(135deg,rgba(16,185,129,0.06),rgba(16,185,129,0.01));font-family:var(--mono);font-size:12px;line-height:1.6;color:#D1D5DB;';
+    box.style.cssText = 'margin:0 0 14px;padding:12px 16px;border-radius:10px;border:1px solid rgba(16,185,129,0.3);background:rgba(16,185,129,0.06);font-family:var(--mono);font-size:12px;line-height:1.6;color:#D1D5DB;';
     results.insertAdjacentElement('afterbegin', box);
   }
   try {
