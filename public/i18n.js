@@ -11,7 +11,8 @@
   var LANGS = [
     { code: "en", label: "English",  short: "EN",   html: "en" },
     { code: "zh", label: "中文",      short: "中文", html: "zh-CN" },
-    { code: "es", label: "Español",  short: "ES",   html: "es" }
+    { code: "es", label: "Español",  short: "ES",   html: "es" },
+    { code: "it", label: "Italiano", short: "IT",   html: "it" }
   ];
   var SUPPORTED = {}; LANGS.forEach(function (L) { SUPPORTED[L.code] = L; });
   function detect() {
@@ -23,6 +24,7 @@
         var l = String(navs[i] || "").toLowerCase();
         if (l.indexOf("zh") === 0) return "zh";
         if (l.indexOf("es") === 0) return "es";
+        if (l.indexOf("it") === 0) return "it";
       }
     } catch (_) {}
     return "en";
