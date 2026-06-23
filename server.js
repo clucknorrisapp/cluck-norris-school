@@ -9082,19 +9082,23 @@ let cachedJupUsdAt = 0;
 async function getJupUsd() {
   const now = Date.now();
   if (now - cachedJupUsdAt < 5 * 60 * 1000 && cachedJupUsdAt > 0) return cachedJupUsd;
+  const sane = (p) => Number.isFinite(p) && p >= 0.01 && p <= 10; // JUP realistic range — rejects mispriced pools
   try {
     const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=jupiter-exchange-solana&vs_currencies=usd");
     const data = await res.json();
     const price = parseFloat(data?.["jupiter-exchange-solana"]?.usd);
-    if (Number.isFinite(price) && price > 0) { cachedJupUsd = price; cachedJupUsdAt = now; return cachedJupUsd; }
+    if (sane(price)) { cachedJupUsd = price; cachedJupUsdAt = now; return cachedJupUsd; }
   } catch (e) { console.warn("[TELEGRAM] CoinGecko JUP fetch failed:", e.message); }
   try {
     const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${JUP_MINT}`);
     const data = await res.json();
-    const price = parseFloat(data?.pairs?.[0]?.priceUsd);
-    if (Number.isFinite(price) && price > 0) { cachedJupUsd = price; cachedJupUsdAt = now; }
+    // Pick the most-liquid pair whose price is in JUP's realistic range — skips broken
+    // pools (e.g. a JUP/MET pair DexScreener mis-prices at ~$997) that used to poison this.
+    const pairs = (data?.pairs || []).filter(p => sane(parseFloat(p.priceUsd))).sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0));
+    const price = pairs.length ? parseFloat(pairs[0].priceUsd) : NaN;
+    if (sane(price)) { cachedJupUsd = price; cachedJupUsdAt = now; }
   } catch (e) { console.warn("[TELEGRAM] DexScreener JUP fallback failed:", e.message); }
-  return cachedJupUsd;
+  return sane(cachedJupUsd) ? cachedJupUsd : null;   // never return a poisoned cached value
 }
 
 // Convert a trade's quote leg (SOL/USDC/USDT/cbBTC/JUP) into USD. Works for buys and
