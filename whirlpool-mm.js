@@ -417,6 +417,25 @@ router.get("/vault/close-position", async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message || "close failed" }); }
 });
 
+// GET /api/whirlpool/vault/open-anchor?key=&project=&quote=USDC|SOL|JUP&usd=10&down=85&up=400[&run=1]
+// Open a tiny, ultra-wide, NEVER-auto-closed "anchor" position that keeps the pool
+// continuously quotable so pulling the tight positions doesn't leave it empty/stale —
+// on redeploy the price is already live + in-range (no settle/recenter front-end work).
+// Pinned + excluded from autonomous adoption. DRY RUN unless run=1.
+router.get("/vault/open-anchor", async (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  try {
+    res.json(await vault.openAnchor({
+      projectId: proj(req),
+      quoteSym: String(req.query.quote || "").toUpperCase(),
+      usd: req.query.usd != null ? Number(req.query.usd) : 10,
+      downPct: req.query.down != null ? Number(req.query.down) : 85,
+      upPct: req.query.up != null ? Number(req.query.up) : 400,
+      dryRun: req.query.run !== "1",
+    }));
+  } catch (e) { res.status(500).json({ error: e.message || "open-anchor failed" }); }
+});
+
 // GET /api/whirlpool/vault/add-liquidity?key=&project=&mint=&from=SOL&amount=…[&run=1]
 // Top up an EXISTING position (no close/reopen) — deposit `amount` of `from` into its
 // range; the SDK pulls the matching other side. DRY RUN unless run=1.
