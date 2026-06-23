@@ -16,14 +16,15 @@
   var LABELS = {
     en: { listen: "🔊 Listen", pause: "⏸ Pause", resume: "▶ Resume" },
     zh: { listen: "🔊 朗读",   pause: "⏸ 暂停",  resume: "▶ 继续" },
-    es: { listen: "🔊 Escuchar", pause: "⏸ Pausa", resume: "▶ Seguir" }
+    es: { listen: "🔊 Escuchar", pause: "⏸ Pausa", resume: "▶ Seguir" },
+    it: { listen: "🔊 Ascolta", pause: "⏸ Pausa", resume: "▶ Riprendi" }
   };
   function lang() {
     try { var s = localStorage.getItem("clkn_lang"); if (s && LABELS[s]) return s; } catch (_) {}
     var h = (document.documentElement.getAttribute("lang") || "en").toLowerCase();
-    return h.indexOf("zh") === 0 ? "zh" : h.indexOf("es") === 0 ? "es" : "en";
+    return h.indexOf("zh") === 0 ? "zh" : h.indexOf("es") === 0 ? "es" : h.indexOf("it") === 0 ? "it" : "en";
   }
-  function bcp47(l) { return l === "zh" ? "zh-CN" : l === "es" ? "es-ES" : "en-US"; }
+  function bcp47(l) { return l === "zh" ? "zh-CN" : l === "es" ? "es-ES" : l === "it" ? "it-IT" : "en-US"; }
 
   var SKIP = { SCRIPT: 1, STYLE: 1, NOSCRIPT: 1, CODE: 1, PRE: 1, BUTTON: 1, SELECT: 1, TEXTAREA: 1, SVG: 1, NAV: 1, HEADER: 1, FOOTER: 1, INPUT: 1, KBD: 1, SAMP: 1 };
   function isHidden(el) { try { return !(el.offsetParent !== null || (el.getClientRects && el.getClientRects().length)); } catch (_) { return false; } }
