@@ -789,6 +789,7 @@ const LESSON_BUMP_HOOKS = [
 ];
 async function lessonBumpTick() {
   if (!EDU_POST_ENABLED || !xConfigured()) return;
+  { const bl = kv.get("xBlitz", null); if (bl && bl.active) return; } // paused during the X blitz
   const now = new Date(), h = now.getUTCHours(), today = now.toISOString().slice(0, 10);
   if (now.getUTCMinutes() >= 2) return;
   const lt = kv.get("lessonXTweet", null);
@@ -807,6 +808,57 @@ async function lessonBumpTick() {
       else console.warn("[lesson-bump] post not ok:", JSON.stringify(r).slice(0, 160));
     } catch (e) { console.warn("[lesson-bump] failed:", e.message); }
   }
+}
+
+// ── X hackathon blitz ────────────────────────────────────────────────────────
+// A multi-day showcase campaign: ~5 DISTINCT posts/day (each a different thing we
+// built), spaced out, tagging @BagsApp + @BagsHackathon (and @finnbags on the
+// strongest few). Server-side so it runs across days unattended, then auto-stops
+// when the deck is exhausted. Started/stopped via /api/x-blitz. No duplicate
+// content (ban-safe); lesson bumps pause while it runs.
+const X_BLITZ_TAGS = "@BagsApp @BagsHackathon";
+const X_BLITZ_PER_DAY = 5;
+const X_BLITZ_MIN_GAP_MIN = 150;          // ~2.5h between posts
+const X_BLITZ_DECK = [
+  { finn: true,  t: "We didn't build a hackathon demo — we shipped a real, working product.\n\nCluck Norris: a free crypto school + a dozen+ live on-chain tools + a non-custodial liquidity engine. All live today. 🐔\n\nclucknorris.app" },
+  { t: "A whole free School of Crypto Hard Knocks — wallets, DeFi, LP, scam-spotting, real survival skills. Structured lessons, not a thread dump.\n\nclucknorris.app" },
+  { t: "Pass our Ultimate Challenge → earn a permanent, on-chain diploma. Server-scored, verifiable, shareable. Real credentials for crypto literacy.\n\nclucknorris.app" },
+  { finn: true, t: "Our lessons are READ ALOUD in a real voice — in English, 中文, and Español (more languages on request). Learn crypto hands-free, in your language. 🔊\n\nclucknorris.app" },
+  { t: "LP Lab: a hands-on course on liquidity providing — ranges, impermanent loss, fees, the real mechanics — with quizzes that actually test you.\n\nclucknorris.app" },
+  { t: "15+ free, live on-chain tools — no wallet-connect just to look. Wallet X-Ray, Token Autopsy, Trace, Holders, Snapshot, Security Co-op…\n\nclucknorris.app/tools" },
+  { t: "Wallet X-Ray: paste any wallet → funding origin, full trade history, bot/dumper signals. Free.\n\nclucknorris.app/wallet-xray" },
+  { t: "Token Autopsy: a full forensic breakdown of any token — creator, distribution, locks, red flags. The chain shows WHAT, never why.\n\nclucknorris.app/autopsy" },
+  { t: "Security Co-op: scan your wallet for risky token approvals and revoke them. The silent way wallets get drained is an old approval you forgot. Free.\n\nclucknorris.app/security-coop" },
+  { t: "A non-custodial Liquidity Engine — honest, two-sided market-making on Orca. The same engine we run on our own token, openable for any project.\n\nclucknorris.app/liquidity" },
+  { finn: true, t: "21.6% of CLKN supply is locked on-chain — a real long-term commitment, verifiable on Jupiter Lock. No games. 🔒" },
+  { t: "Survival Simulator: practice real crypto decisions — rugs, MEV, volatility, FOMO — in a safe sandbox before it costs you real money.\n\nclucknorris.app" },
+  { t: "The entire app — every page, every lesson — switches to 中文 and Español. Crypto education shouldn't be English-only.\n\nclucknorris.app" },
+  { t: "Ask Cluck: a live AI crypto tutor that answers anything, in your language, and reads the answer aloud. Office hours that never close.\n\nclucknorris.app" },
+  { finn: true, t: "Built on @BagsApp because creators earn 1% of volume forever — real, aligned incentives. We even teach how Bags works inside the school." },
+  { finn: true, t: "Feedback from @finnbags: drop the gradients, simplify. We stripped all 348 gradients out of the app the same day. We move fast. 🐔" },
+  { t: "100% of CLKN creator fees go straight back into buying CLKN — every claim is on-chain and verifiable right in the app.\n\nclucknorris.app" },
+  { t: "Everything core is FREE — the school, the tools, the AI tutor. Premium operator tools unlock with a tiny CLKN payment. No wallet-connect to pay.\n\nclucknorris.app" },
+  { t: "Forensic rule, everywhere we build: state what's on-chain, never assert intent. The chain shows what happened, not why. Receipts, not rumors.\n\nclucknorris.app" },
+  { finn: true, t: "Months of work, one mission: take the hard knocks so you don't have to. Free school, free tools, real token, live engine.\n\nThis is our @BagsHackathon entry. 🐔\n\nclucknorris.app" },
+];
+async function xBlitzTick() {
+  if (!xConfigured()) return;
+  const st = kv.get("xBlitz", null);
+  if (!st || !st.active) return;
+  if (st.pos >= X_BLITZ_DECK.length) { st.active = false; kv.set("xBlitz", st); console.log("[x-blitz] deck exhausted — campaign complete"); return; }
+  const now = new Date(), h = now.getUTCHours();
+  if (!(h >= 13 || h < 2)) return;                                  // active window ~8am–9pm CT
+  const today = now.toISOString().slice(0, 10);
+  if (st.day !== today) { st.day = today; st.today = 0; }
+  if ((st.today || 0) >= X_BLITZ_PER_DAY) { kv.set("xBlitz", st); return; }
+  if (st.lastAt && Date.now() - st.lastAt < X_BLITZ_MIN_GAP_MIN * 60 * 1000) return;
+  const item = X_BLITZ_DECK[st.pos];
+  const text = item.t + "\n\n" + X_BLITZ_TAGS + (item.finn ? " @finnbags" : "");
+  try {
+    const r = await postToX(text);
+    if (r && r.ok) { st.pos++; st.today = (st.today || 0) + 1; st.lastAt = Date.now(); kv.set("xBlitz", st); console.log(`[x-blitz] posted ${st.pos}/${X_BLITZ_DECK.length}`); }
+    else console.warn("[x-blitz] post failed:", JSON.stringify(r).slice(0, 160));
+  } catch (e) { console.warn("[x-blitz] error:", e.message); }
 }
 
 // ── Live Buy-Competition Leaderboard ("The Siren") ───────────────────────────
@@ -3663,6 +3715,22 @@ app.get("/api/x-post-test", async (req, res) => {
     return res.status(200).json({ configured: true, posted: r.ok, result: r });
   }
   return res.status(200).json({ configured: true, posted: false, hint: "add &post=1 to send a test tweet" });
+});
+
+// X hackathon blitz control — ?start=1 begins it (and posts the first immediately),
+// ?stop=1 halts it, no param = status. Gated.
+app.get("/api/x-blitz", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (req.query.stop === "1") { const st = kv.get("xBlitz", {}) || {}; st.active = false; kv.set("xBlitz", st); return res.status(200).json({ active: false, stopped: true, pos: st.pos || 0, total: X_BLITZ_DECK.length }); }
+  if (req.query.start === "1") {
+    kv.set("xBlitz", { active: true, pos: 0, today: 0, day: "", lastAt: 0 });
+    await xBlitzTick().catch(() => {});                 // fire the first one now
+    const st = kv.get("xBlitz", {}) || {};
+    return res.status(200).json({ active: true, started: true, posted: st.pos || 0, perDay: X_BLITZ_PER_DAY, total: X_BLITZ_DECK.length });
+  }
+  const st = kv.get("xBlitz", null) || {};
+  return res.status(200).json({ active: !!st.active, pos: st.pos || 0, today: st.today || 0, total: X_BLITZ_DECK.length });
 });
 
 // Cluck's Lesson — dry-run/preview (gated). Returns a freshly generated lesson
@@ -10237,6 +10305,9 @@ app.listen(PORT, () => {
     // slots (17 + 00 UTC) tagging different ecosystem groups to re-surface it.
     setInterval(eduPostTick, 60 * 1000);
     setInterval(lessonBumpTick, 60 * 1000);
+    // X hackathon blitz — checks every 10 min, posts the next deck item when due.
+    setInterval(xBlitzTick, 10 * 60 * 1000);
+    setTimeout(xBlitzTick, 60000);
     // Treasury report — private DM (the treasury project's chat) of balances + fees every
     // 6h. Persisted stamp so redeploys don't re-fire; no-op unless the treasury is funded.
     let lastTreasuryReportAt = kv.get("treasuryReportAt", 0);
