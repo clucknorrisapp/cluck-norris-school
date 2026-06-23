@@ -3733,6 +3733,71 @@ app.get("/api/x-blitz", async (req, res) => {
   return res.status(200).json({ active: !!st.active, pos: st.pos || 0, today: st.today || 0, total: X_BLITZ_DECK.length });
 });
 
+// ── 4-pool System Depth — the coupled CLKN pool system, valued artifact-proof ──
+// Reads RAW on-chain token balances per pool (CLKN base + quote) and values them at
+// a CANONICAL CLKN/USD (the deepest sane pool's marginal price) + sanity-bounded quote
+// prices — NOT DexScreener's per-pool USD (which the thin JUP pool poisons). Shows each
+// pool's composition, cross-pool price dislocation, and the SYSTEM's CLKN-vs-quote
+// rotation (which way the market has pushed us).
+async function buildPoolDepth() {
+  const [solUsd, jupUsd, btcUsd] = await Promise.all([
+    getSolUsd().catch(() => null), getJupUsd().catch(() => null), getBtcUsd().catch(() => null),
+  ]);
+  const quoteUsdFor = (sym) => sym === "SOL" || sym === "WSOL" ? solUsd : sym === "JUP" ? jupUsd
+    : (sym === "USDC" || sym === "USDT") ? 1 : (sym === "cbBTC" || sym === "CBBTC") ? btcUsd : null;
+  let pairs = [];
+  try {
+    const res = await fetch(`https://api.dexscreener.com/token-pairs/v1/solana/${CLKN_MINT_ADDR}`);
+    const data = await res.json();
+    if (Array.isArray(data)) pairs = data;
+  } catch (_) {}
+  const pools = pairs.map((p) => {
+    const sym = (p.quoteToken && p.quoteToken.symbol) || "?";
+    const qUsd = quoteUsdFor(sym);
+    const priceNative = Number(p.priceNative);   // quote per CLKN — a ratio, artifact-resistant
+    const impliedClknUsd = (Number.isFinite(priceNative) && priceNative > 0 && qUsd) ? priceNative * qUsd : null;
+    return {
+      dex: (p.dexId || "?").toLowerCase(), quoteSym: sym, address: p.pairAddress,
+      clkn: Number.isFinite(Number(p.liquidity?.base)) ? Number(p.liquidity.base) : null,
+      quote: Number.isFinite(Number(p.liquidity?.quote)) ? Number(p.liquidity.quote) : null,
+      quoteUsd: qUsd, impliedClknUsd,
+    };
+  });
+  // Canonical CLKN/USD = the implied price of the deepest pool whose price is in a sane
+  // CLKN range (skips the dislocated JUP pool's artifact).
+  const sane = (v) => Number.isFinite(v) && v > 0.00003 && v < 0.003;
+  const ranked = pools.filter((p) => sane(p.impliedClknUsd) && p.clkn).sort((a, b) => (b.clkn * b.impliedClknUsd) - (a.clkn * a.impliedClknUsd));
+  const canonicalClknUsd = ranked.length ? ranked[0].impliedClknUsd : null;
+  let totClkn = 0, totDepth = 0; const quoteTotals = {};
+  for (const p of pools) {
+    p.clknUsd = (p.clkn != null && canonicalClknUsd) ? p.clkn * canonicalClknUsd : null;
+    p.quoteUsdVal = (p.quote != null && p.quoteUsd != null) ? p.quote * p.quoteUsd : null;
+    p.depthUsd = (p.clknUsd || 0) + (p.quoteUsdVal || 0);
+    p.dislocationPct = (canonicalClknUsd && p.impliedClknUsd) ? (p.impliedClknUsd / canonicalClknUsd - 1) * 100 : null;
+    if (p.clkn) totClkn += p.clkn;
+    totDepth += p.depthUsd;
+    if (p.quoteSym && p.quoteUsdVal) quoteTotals[p.quoteSym] = (quoteTotals[p.quoteSym] || 0) + p.quoteUsdVal;
+  }
+  const clknUsdTotal = totClkn * (canonicalClknUsd || 0);
+  pools.sort((a, b) => b.depthUsd - a.depthUsd);
+  return {
+    canonicalClknUsd, prices: { solUsd, jupUsd, btcUsd },
+    pools,
+    system: {
+      totalClkn: totClkn, totalDepthUsd: totDepth,
+      clknUsd: clknUsdTotal, quoteUsd: totDepth - clknUsdTotal,
+      clknSharePct: totDepth ? (clknUsdTotal / totDepth) * 100 : 0,
+      quoteTotals,
+    },
+  };
+}
+app.get("/api/pool-depth", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  try { return res.status(200).json(await buildPoolDepth()); }
+  catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
+});
+
 // Cluck's Lesson — dry-run/preview (gated). Returns a freshly generated lesson
 // for the NEXT topic in rotation without advancing it; &post=1 advances the
 // rotation and actually posts to the group. &topic=<text> overrides the topic.
