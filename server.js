@@ -773,10 +773,13 @@ function eduPostTick() {
 // — re-surfaces it for new audiences AND drives replies, turning the one daily
 // lesson into the day's engagement thread. No new long-form content (no duplicate
 // risk). X-only; only ever bumps TODAY's lesson. Three slots/day.
+// Timed to the audience's X active-time peaks (owner is US Central): the daily
+// lesson lands on the 8am CT peak (EDU_HOURS_UTC 13), and these three bumps sit on
+// the 12pm / 4pm / 8pm CT peaks. Retune here if the active-times heatmap shifts.
 const LESSON_BUMPS = [
-  { hour: 16, tags: "@JupiterExchange @BagsApp" },   // ~11am ET
-  { hour: 20, tags: "@solana" },                     // ~3pm ET
-  { hour: 0,  tags: "@Ricomoneybags" },              // ~7pm ET
+  { hour: 17, tags: "@JupiterExchange @BagsApp" },   // 12pm CT — midday peak
+  { hour: 21, tags: "@solana" },                     // 4pm CT — afternoon peak
+  { hour: 1,  tags: "@Ricomoneybags" },              // 8pm CT — evening peak
 ];
 // Engagement prompts — each asks for a reply so the lesson becomes a conversation.
 const LESSON_BUMP_HOOKS = [
