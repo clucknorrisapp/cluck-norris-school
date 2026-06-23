@@ -153,7 +153,7 @@ function AutoVerify({ unlockAmount, onUnlock, onBack }) {
       <div style={{fontFamily:"'Anton',sans-serif",fontSize:13.5,color:"#9CA3AF",lineHeight:1.7,marginBottom:16}}>
         Cluck Norris is impressed. Don't waste them. 🐔
       </div>
-      <button onClick={()=>onUnlock(grantedQ)} style={{width:"100%",background:"linear-gradient(135deg,#10B981,#059669)",border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer"}}>
+      <button onClick={()=>onUnlock(grantedQ)} style={{width:"100%",background:"#10B981",border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer"}}>
         ASK NEXT QUESTION →
       </button>
     </div>
@@ -187,7 +187,7 @@ function AutoVerify({ unlockAmount, onUnlock, onBack }) {
         Checking every 3 seconds{dots} usually takes less than 15 seconds after your transaction confirms.
       </p>
       <div style={{height:4,background:"rgba(255,122,24,0.18)",borderRadius:2,marginBottom:12}}>
-        <div style={{height:"100%",width:`${(attempts/maxAttempts)*100}%`,background:"linear-gradient(90deg,#FF7A18,#EF4444)",borderRadius:2,transition:"width 0.3s"}}/>
+        <div style={{height:"100%",width:`${(attempts/maxAttempts)*100}%`,background:"#FF7A18",borderRadius:2,transition:"width 0.3s"}}/>
       </div>
       <button onClick={onBack} style={{background:"none",border:"none",color:"#6B7280",fontFamily:"'Anton',sans-serif",fontSize:9,letterSpacing:1,cursor:"pointer"}}>← BACK</button>
     </div>
@@ -256,7 +256,7 @@ function CluckUnlock({ onUnlock }) {
           <p style={{fontFamily:"'Anton',sans-serif",fontSize:15,color:"#9CA3AF",margin:"0 0 12px",lineHeight:1.7}}>
             The specific decimal amount is how we identify your payment — no memo needed. Send the exact amount shown above.
           </p>
-          <button onClick={()=>setStep(2)} style={{width:"100%",background:"linear-gradient(135deg,#FF7A18,#EF4444)",border:"none",borderRadius:8,padding:"11px",fontFamily:"'Anton',sans-serif",fontSize:13.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer"}}>
+          <button onClick={()=>setStep(2)} style={{width:"100%",background:"#FF7A18",border:"none",borderRadius:8,padding:"11px",fontFamily:"'Anton',sans-serif",fontSize:13.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer"}}>
             GOT IT — NEXT →
           </button>
         </div>
@@ -303,7 +303,7 @@ function CluckUnlock({ onUnlock }) {
           </p>
           <div style={{display:"flex",gap:8}}>
             <button onClick={()=>setStep(1)} style={{flex:1,background:"rgba(255,122,24,0.07)",border:"1px solid rgba(255,122,24,0.2)",borderRadius:8,padding:"10px",fontFamily:"'Anton',sans-serif",fontSize:13,color:"#6B7280",cursor:"pointer"}}>← BACK</button>
-            <button onClick={()=>setStep(3)} style={{flex:2,background:"linear-gradient(135deg,#FF7A18,#EF4444)",border:"none",borderRadius:8,padding:"10px",fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,color:"#fff",letterSpacing:1,cursor:"pointer"}}>SENT IT →</button>
+            <button onClick={()=>setStep(3)} style={{flex:2,background:"#FF7A18",border:"none",borderRadius:8,padding:"10px",fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,color:"#fff",letterSpacing:1,cursor:"pointer"}}>SENT IT →</button>
           </div>
         </div>
       )}
@@ -431,7 +431,7 @@ export function AskCluck({ context, compact }) {
                 >✕</button>
               )}
             </div>
-            <button onClick={askQuestion} disabled={!question.trim()||loading} style={{background:question.trim()&&!loading?"linear-gradient(135deg,#FF7A18,#EF4444)":"rgba(255,122,24,0.07)",border:"none",borderRadius:8,padding:"9px 14px",fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,color:question.trim()&&!loading?"#fff":"#4B5563",cursor:question.trim()&&!loading?"pointer":"default",letterSpacing:1,whiteSpace:"nowrap"}}>
+            <button onClick={askQuestion} disabled={!question.trim()||loading} style={{background:question.trim()&&!loading?"#FF7A18":"rgba(255,122,24,0.07)",border:"none",borderRadius:8,padding:"9px 14px",fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,color:question.trim()&&!loading?"#fff":"#4B5563",cursor:question.trim()&&!loading?"pointer":"default",letterSpacing:1,whiteSpace:"nowrap"}}>
               {loading ? "..." : "ASK →"}
             </button>
           </div>

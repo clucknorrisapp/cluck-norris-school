@@ -553,7 +553,7 @@ function Incubator({ onComplete, onBack }) {
         </div>
         <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,color:"#9CA3AF",marginTop:12,letterSpacing:1}}>{INCUBATOR_LESSONS.length} LESSONS COMPLETED</div>
       </div>
-      <button onClick={onComplete} style={{width:"100%",background:"linear-gradient(135deg,#60A5FA,#3B82F6)",border:"none",borderRadius:10,padding:"16px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer",boxShadow:"0 0 28px rgba(96,165,250,0.4)",marginBottom:10}}>
+      <button onClick={onComplete} style={{width:"100%",background:"#60A5FA",border:"none",borderRadius:10,padding:"16px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer",boxShadow:"0 0 28px rgba(96,165,250,0.4)",marginBottom:10}}>
         🏫 ENTER THE SCHOOL OF HARD KNOCKS
       </button>
       <button onClick={onBack} style={{background:"none",border:"none",color:"#6B7280",fontFamily:"'Anton',sans-serif",fontSize:13,letterSpacing:2,cursor:"pointer"}}>
@@ -783,7 +783,7 @@ function UltimateChallenge({ onBack }) {
           </div>
         ))}
       </div>
-      <button onClick={startChallenge} disabled={loading} style={{width:"100%",background:"linear-gradient(135deg,#EF4444,#DC2626)",border:"none",borderRadius:10,padding:"16px",fontFamily:"'Anton',sans-serif",fontSize:16,fontWeight:700,color:"#fff",letterSpacing:3,cursor:loading?"default":"pointer",opacity:loading?0.7:1,boxShadow:"0 0 30px rgba(239,68,68,0.5)",marginBottom:12}}>
+      <button onClick={startChallenge} disabled={loading} style={{width:"100%",background:"#EF4444",border:"none",borderRadius:10,padding:"16px",fontFamily:"'Anton',sans-serif",fontSize:16,fontWeight:700,color:"#fff",letterSpacing:3,cursor:loading?"default":"pointer",opacity:loading?0.7:1,boxShadow:"0 0 30px rgba(239,68,68,0.5)",marginBottom:12}}>
         {loading ? "ENTERING THE DOJO..." : "🥊 STEP INTO THE DOJO"}
       </button>
       {loadErr && <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:"#EF4444",letterSpacing:1,marginBottom:12}}>{loadErr}</div>}
@@ -806,7 +806,7 @@ function UltimateChallenge({ onBack }) {
           <div style={{fontFamily:"'Anton',sans-serif",fontSize:60,fontWeight:900,color:tier.color,lineHeight:1}}>{pct}%</div>
           <div style={{fontFamily:"'Anton',sans-serif",fontSize:15.5,color:"#6B7280",marginTop:8,letterSpacing:2}}>{score} / {questions.length} CORRECT</div>
           <div style={{marginTop:16,height:8,background:"rgba(255,122,24,0.18)",borderRadius:20,overflow:"hidden"}}>
-            <div style={{height:"100%",width:`${pct}%`,background:`linear-gradient(90deg,#EF4444,${tier.color})`,borderRadius:20,transition:"width 1s ease"}}/>
+            <div style={{height:"100%",width:`${pct}%`,background:`#EF4444`,borderRadius:20,transition:"width 1s ease"}}/>
           </div>
           <div style={{display:"flex",justifyContent:"space-between",marginTop:6}}>
             <span style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#4B5563"}}>0%</span>
@@ -832,7 +832,7 @@ function UltimateChallenge({ onBack }) {
                   placeholder="Your Solana wallet address..."
                   style={{width:"100%",background:"rgba(255,122,24,0.07)",border:"1px solid rgba(212,175,55,0.3)",borderRadius:8,padding:"10px 12px",color:"#F9FAFB",fontFamily:"monospace",fontSize:13,marginBottom:10,boxSizing:"border-box",outline:"none"}}
                 />
-                <button onClick={claimSpot} disabled={!wallet||wallet.length<32||claiming} style={{width:"100%",background:wallet&&wallet.length>=32?"linear-gradient(135deg,#FFB627,#FFB627)":"rgba(255,122,24,0.07)",border:"none",borderRadius:8,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:wallet&&wallet.length>=32?"#1a0f08":"#4B5563",letterSpacing:2,cursor:wallet&&wallet.length>=32?"pointer":"default"}}>
+                <button onClick={claimSpot} disabled={!wallet||wallet.length<32||claiming} style={{width:"100%",background:wallet&&wallet.length>=32?"#FFB627":"rgba(255,122,24,0.07)",border:"none",borderRadius:8,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:wallet&&wallet.length>=32?"#1a0f08":"#4B5563",letterSpacing:2,cursor:wallet&&wallet.length>=32?"pointer":"default"}}>
                   {claiming?"SUBMITTING...":"🏆 CLAIM YOUR SPOT"}
                 </button>
               </>
@@ -876,7 +876,7 @@ function UltimateChallenge({ onBack }) {
           </a>
         )}
         <div style={{display:"flex",flexDirection:"column",gap:10}}>
-          <button onClick={()=>{setStarted(false);setFinished(false);setQi(0);setAnswers([]);setSel(null);setResult(null);setSessionId("");setWallet("");setClaimed(false);setSlug("");}} style={{background:"linear-gradient(135deg,#EF4444,#DC2626)",border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer"}}>
+          <button onClick={()=>{setStarted(false);setFinished(false);setQi(0);setAnswers([]);setSel(null);setResult(null);setSessionId("");setWallet("");setClaimed(false);setSlug("");}} style={{background:"#EF4444",border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer"}}>
             🥊 FIGHT AGAIN
           </button>
           <button onClick={onBack} style={{background:"rgba(255,122,24,0.07)",border:"1px solid rgba(255,122,24,0.2)",borderRadius:10,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:13.5,color:"#9CA3AF",letterSpacing:2,cursor:"pointer"}}>
@@ -898,7 +898,7 @@ function UltimateChallenge({ onBack }) {
           <span>Q {qi+1} OF {questions.length}</span>
         </div>
         <div style={{height:6,background:"rgba(255,122,24,0.18)",borderRadius:3,overflow:"hidden"}}>
-          <div style={{height:"100%",width:`${((qi)/questions.length)*100}%`,background:"linear-gradient(90deg,#EF4444,#FFB627)",borderRadius:3}}/>
+          <div style={{height:"100%",width:`${((qi)/questions.length)*100}%`,background:"#EF4444",borderRadius:3}}/>
         </div>
         <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
           <span style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#4B5563"}}>START</span>
@@ -922,7 +922,7 @@ function UltimateChallenge({ onBack }) {
         })}
       </div>
       {sel!==null&&(
-        <button onClick={next} disabled={submitting} style={{width:"100%",background:"linear-gradient(135deg,#EF4444,#DC2626)",border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:submitting?"default":"pointer",opacity:submitting?0.7:1}}>
+        <button onClick={next} disabled={submitting} style={{width:"100%",background:"#EF4444",border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:submitting?"default":"pointer",opacity:submitting?0.7:1}}>
           {submitting?"SCORING...":(qi+1<questions.length?"NEXT QUESTION →":"SEE FINAL VERDICT →")}
         </button>
       )}
@@ -1115,7 +1115,7 @@ function BagsPage() {
 
       {/* CTA Buttons */}
       <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:16}}>
-        <a href={BAGS_SIGNUP} target="_blank" rel="noreferrer" style={{display:"block",background:"linear-gradient(135deg,#FF7A18,#EF4444)",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,textDecoration:"none",textAlign:"center",boxShadow:"0 0 28px rgba(255,122,24,0.4)"}}>
+        <a href={BAGS_SIGNUP} target="_blank" rel="noreferrer" style={{display:"block",background:"#FF7A18",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,textDecoration:"none",textAlign:"center",boxShadow:"0 0 28px rgba(255,122,24,0.4)"}}>
           🎒 SIGN UP ON BAGS.FM
         </a>
         <div style={{display:"flex",gap:10}}>
@@ -1227,7 +1227,7 @@ function BagsPage() {
                     {/* Graduation progress bar — on-curve tokens only (ST curve %) */}
                     {(() => { const fp = feedPrices[p.tokenMint]||{}; const cp = fp.curvePct; return (fp.onBondingCurve===true && cp!=null) ? (
                       <div style={{marginTop:8,height:5,background:"rgba(255,122,24,0.18)",borderRadius:3,overflow:"hidden"}}>
-                        <div style={{width:`${Math.min(100,Math.max(2,cp))}%`,height:"100%",background:cp>=80?"linear-gradient(90deg,#FF7A18,#10B981)":"linear-gradient(90deg,#FF7A18,#FF7A18)",borderRadius:3}}/>
+                        <div style={{width:`${Math.min(100,Math.max(2,cp))}%`,height:"100%",background:cp>=80?"#FF7A18":"#FF7A18",borderRadius:3}}/>
                       </div>
                     ) : null; })()}
                     {handle && (
@@ -1423,7 +1423,7 @@ function CLKNWidget() {
       </div>
 
       {/* Hero price */}
-      <div style={{background:"linear-gradient(135deg,rgba(255,122,24,0.13),rgba(239,68,68,0.05))",border:"1px solid rgba(255,122,24,0.3)",borderRadius:16,padding:"22px 18px",marginBottom:12,textAlign:"center",boxShadow:"0 0 30px rgba(255,122,24,0.08)"}}>
+      <div style={{background:"rgba(255,122,24,0.13)",border:"1px solid rgba(255,122,24,0.3)",borderRadius:16,padding:"22px 18px",marginBottom:12,textAlign:"center",boxShadow:"0 0 30px rgba(255,122,24,0.08)"}}>
         <div style={{fontFamily:"'Anton',sans-serif",fontSize:11,letterSpacing:3,color:"#6B7280",marginBottom:8}}>CLKN PRICE (USD)</div>
         <div style={{fontFamily:"'Anton',sans-serif",fontSize:38,fontWeight:900,color:"#FFB627",lineHeight:1}}>{price>0?`$${price.toFixed(8)}`:"—"}</div>
         {(() => {
@@ -1604,7 +1604,7 @@ function CLKNWidget() {
       {/* Buy CLKN */}
       <JupiterSwapButton
         label="⚡ BUY CLKN ON JUPITER"
-        style={{display:"block",width:"100%",background:"linear-gradient(135deg,#FF7A18,#EF4444)",border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:3,textAlign:"center",marginBottom:10,boxSizing:"border-box",cursor:"pointer",boxShadow:"0 0 28px rgba(255,122,24,0.45)"}}
+        style={{display:"block",width:"100%",background:"#FF7A18",border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:3,textAlign:"center",marginBottom:10,boxSizing:"border-box",cursor:"pointer",boxShadow:"0 0 28px rgba(255,122,24,0.45)"}}
       />
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"0 4px"}}>
         <span style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#4B5563",letterSpacing:1}}>
@@ -1685,7 +1685,7 @@ function Landing({onStart,onChallenge,onIncubator,onStartHere,completed}){
     <div style={{textAlign:"center",padding:"0 20px 40px",maxWidth:COL,margin:"0 auto"}}>
       {/* School header (slim — the big brand hero lives on the homepage now) */}
       <div style={{position:"relative",display:"inline-block",marginTop:6,marginBottom:8}}>
-        <div style={{position:"absolute",inset:-14,background:"radial-gradient(circle,rgba(255,122,24,.22) 0%,transparent 70%)",borderRadius:"50%"}}/>
+        <div style={{position:"absolute",inset:-14,background:"rgba(255,122,24,.22)",borderRadius:"50%"}}/>
         <img src={LOGO_B64} alt="Cluck Norris" style={{width:134,height:134,objectFit:"cover",borderRadius:"50%",border:"3px solid #FF7A18",position:"relative",zIndex:1,filter:"drop-shadow(0 0 16px rgba(255,122,24,0.55))"}}/>
       </div>
       <div style={{fontFamily:"'Anton',sans-serif",fontSize:13.5,letterSpacing:4,color:"#FF7A18",marginBottom:6}}>SCHOOL OF CRYPTO HARD KNOCKS</div>
@@ -1693,7 +1693,7 @@ function Landing({onStart,onChallenge,onIncubator,onStartHere,completed}){
       <p style={{color:"#9CA3AF",fontSize:15.5,lineHeight:1.6,margin:"0 auto 20px",maxWidth:420,fontStyle:"italic"}}>"No participation trophies. No hand-holding. Just hard knocks."</p>
 
       {/* Primary CTA — the 12-class course */}
-      <button onClick={onStart} style={{background:"linear-gradient(135deg,#FF7A18,#EF4444)",border:"none",borderRadius:10,padding:"14px 40px",fontFamily:"'Anton',sans-serif",fontSize:16,fontWeight:700,color:"#fff",letterSpacing:2,textTransform:"uppercase",cursor:"pointer",boxShadow:"0 0 28px rgba(255,122,24,0.45)"}}>
+      <button onClick={onStart} style={{background:"#FF7A18",border:"none",borderRadius:10,padding:"14px 40px",fontFamily:"'Anton',sans-serif",fontSize:16,fontWeight:700,color:"#fff",letterSpacing:2,textTransform:"uppercase",cursor:"pointer",boxShadow:"0 0 28px rgba(255,122,24,0.45)"}}>
         {completed.length===0?"🏫 Start the 12-Class Course":"📚 Continue Class"}
       </button>
       <p style={{marginTop:12,fontSize:13.5,color:"#6B7280",fontFamily:"'Anton',sans-serif",letterSpacing:2}}>12 CLASSES • 72 EXAMS • NO EXTRA CREDIT</p>
@@ -1702,7 +1702,7 @@ function Landing({onStart,onChallenge,onIncubator,onStartHere,completed}){
       {/* YOUR PROGRESS — transcript (always shown so newcomers see where they're headed) */}
       <div style={{background:"rgba(255,122,24,0.06)",border:"1px solid rgba(255,122,24,0.18)",borderRadius:10,padding:"14px 16px",marginTop:18,marginBottom:12,textAlign:"left"}}>
         <div style={{display:"flex",justifyContent:"space-between",fontSize:13.5,color:"#9CA3AF",fontFamily:"'Anton',sans-serif",letterSpacing:1,marginBottom:6}}><span>📋 YOUR TRANSCRIPT</span><span>{completed.length}/{LESSONS.length} CLASSES PASSED</span></div>
-        <div style={{height:6,background:"rgba(255,122,24,0.18)",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:`${pct}%`,background:"linear-gradient(90deg,#FF7A18,#FFB627)",borderRadius:3}}/></div>
+        <div style={{height:6,background:"rgba(255,122,24,0.18)",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:`${pct}%`,background:"#FF7A18",borderRadius:3}}/></div>
         <div style={{marginTop:10,display:"flex",gap:8,justifyContent:"flex-start",flexWrap:"wrap"}}>
           {LESSONS.map(l=><span key={l.id} style={{fontSize:12.5,color:completed.includes(l.id)?"#FFB627":"#4B5563",fontFamily:"'Anton',sans-serif"}}>{completed.includes(l.id)?"✓":"○"} {l.title.split(" ")[0]}</span>)}
         </div>
@@ -1730,12 +1730,12 @@ function Landing({onStart,onChallenge,onIncubator,onStartHere,completed}){
       </div>
 
       {/* GRADUATE REWARD — CLKN airdrop + graduation NFT */}
-      <div style={{background:"linear-gradient(135deg,rgba(255,182,39,0.12),rgba(255,122,24,0.06))",border:"1px solid rgba(255,182,39,0.45)",borderRadius:12,padding:"16px 18px",marginBottom:14,textAlign:"left",boxShadow:"0 0 22px rgba(255,182,39,0.12)"}}>
+      <div style={{background:"rgba(255,182,39,0.12)",border:"1px solid rgba(255,182,39,0.45)",borderRadius:12,padding:"16px 18px",marginBottom:14,textAlign:"left",boxShadow:"0 0 22px rgba(255,182,39,0.12)"}}>
         <div style={{fontFamily:"'Anton',sans-serif",fontSize:15.5,letterSpacing:1,color:"#FFB627",marginBottom:6}}>🎓 GRADUATE REWARD</div>
         <p style={{fontFamily:"system-ui,sans-serif",fontSize:15,color:"#D1D5DB",lineHeight:1.6,margin:"0 0 11px"}}>
           Every graduate is <b style={{color:"#FFB627"}}>entered to receive CLKN airdrops</b>. Finish all 12 classes to mint an <b style={{color:"#FFB627"}}>on-chain graduation NFT</b>, or pass the Ultimate Challenge for a <b style={{color:"#FFB627"}}>verified diploma</b> — then drop your Solana address to claim it and get entered for CLKN airdrops.
         </p>
-        <button onClick={onChallenge} style={{background:"linear-gradient(135deg,#FF7A18,#EF4444)",border:"none",borderRadius:9,padding:"11px 22px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:1.5,textTransform:"uppercase",cursor:"pointer"}}>🎓 Take the Ultimate Challenge</button>
+        <button onClick={onChallenge} style={{background:"#FF7A18",border:"none",borderRadius:9,padding:"11px 22px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:1.5,textTransform:"uppercase",cursor:"pointer"}}>🎓 Take the Ultimate Challenge</button>
       </div>
 
       {/* Incubator — beginners */}
@@ -1764,16 +1764,16 @@ function Select({onSelect,completed}){
         <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:4,color:"#FF7A18",marginBottom:4}}>PICK YOUR POISON</div>
         <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:28,color:"#FFB627",margin:0,letterSpacing:1}}>The Schoolyard</h2>
       </div>
-      <div style={{background:"linear-gradient(180deg,#1d110a,#160c07)",border:"1px solid rgba(255,122,24,0.28)",borderRadius:14,padding:"13px 16px",marginBottom:18,boxShadow:"0 8px 24px rgba(0,0,0,.4)"}}>
+      <div style={{background:"#1d110a",border:"1px solid rgba(255,122,24,0.28)",borderRadius:14,padding:"13px 16px",marginBottom:18,boxShadow:"0 8px 24px rgba(0,0,0,.4)"}}>
         <div style={{display:"flex",justifyContent:"space-between",fontFamily:"'Anton',sans-serif",fontSize:13,letterSpacing:1,color:"#C9A892",marginBottom:8}}><span>📋 YOUR PROGRESS</span><span>{completed.length}/{LESSONS.length} CLASSES PASSED</span></div>
-        <div style={{height:6,background:"rgba(255,122,24,0.12)",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:`${Math.round((completed.length/LESSONS.length)*100)}%`,background:"linear-gradient(90deg,#FF7A18,#FFB627)",borderRadius:3}}/></div>
+        <div style={{height:6,background:"rgba(255,122,24,0.12)",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:`${Math.round((completed.length/LESSONS.length)*100)}%`,background:"#FF7A18",borderRadius:3}}/></div>
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
         {LESSONS.map((l,i)=>{
           const done=completed.includes(l.id);
           const locked=i>0&&!completed.includes(LESSONS[i-1].id);
           return(
-            <button key={l.id} onClick={()=>!locked&&onSelect(l.id)} style={{background:"linear-gradient(180deg,#1d110a,#160c07)",border:`1px solid ${done?l.color:locked?"rgba(255,122,24,0.12)":"rgba(255,122,24,0.28)"}`,borderRadius:14,padding:"15px 18px",cursor:locked?"not-allowed":"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:14,opacity:locked?0.5:1,boxShadow:done?`0 0 16px ${l.glow}`:"0 6px 18px rgba(0,0,0,.35)"}}>
+            <button key={l.id} onClick={()=>!locked&&onSelect(l.id)} style={{background:"#1d110a",border:`1px solid ${done?l.color:locked?"rgba(255,122,24,0.12)":"rgba(255,122,24,0.28)"}`,borderRadius:14,padding:"15px 18px",cursor:locked?"not-allowed":"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:14,opacity:locked?0.5:1,boxShadow:done?`0 0 16px ${l.glow}`:"0 6px 18px rgba(0,0,0,.35)"}}>
               <div style={{fontSize:24,minWidth:36,textAlign:"center"}}>{done?"✅":locked?"🔒":l.icon}</div>
               <div style={{flex:1}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
@@ -1892,7 +1892,7 @@ function Lesson({lesson:l,onComplete,onBack}){
       </div>
       <div style={{display:"flex",gap:10}}>
         {!passed&&<button onClick={retry} style={{flex:1,background:"rgba(255,122,24,0.09)",border:"1px solid rgba(255,122,24,0.22)",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15,color:"#D1D5DB",cursor:"pointer",letterSpacing:2}}>↩ RETAKE</button>}
-        <button onClick={()=>onComplete(l.id,passed)} style={{flex:2,background:passed?`linear-gradient(135deg,${l.color},#FF7A18)`:"rgba(239,68,68,0.2)",border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",letterSpacing:2,boxShadow:passed?`0 0 20px ${l.glow}`:"none"}}>
+        <button onClick={()=>onComplete(l.id,passed)} style={{flex:2,background:passed?`#FF7A18`:"rgba(239,68,68,0.2)",border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",cursor:"pointer",letterSpacing:2,boxShadow:passed?`0 0 20px ${l.glow}`:"none"}}>
           {passed?"NEXT CLASS →":"BACK TO SCHOOLYARD"}
         </button>
       </div>
@@ -1934,11 +1934,11 @@ function Complete({onRestart}){
   return(
     <div style={{padding:"0 16px 40px",maxWidth:COL,margin:"0 auto",textAlign:"center"}}>
       <div style={{position:"relative",display:"inline-block",marginBottom:12}}>
-        <div style={{position:"absolute",inset:-24,background:"radial-gradient(circle,rgba(255,122,24,.4) 0%,transparent 70%)",borderRadius:"50%",animation:"pulse 2s infinite"}}/>
+        <div style={{position:"absolute",inset:-24,background:"rgba(255,122,24,.4)",borderRadius:"50%",animation:"pulse 2s infinite"}}/>
         <img src={LOGO_B64} alt="Cluck Norris" style={{width:150,height:150,objectFit:"cover",borderRadius:"50%",border:"3px solid #FF7A18",position:"relative",zIndex:1,filter:"drop-shadow(0 0 30px rgba(255,122,24,0.8))"}}/>
       </div>
       <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:6,color:"#FF7A18",marginBottom:6}}>GRADUATED. FEW MAKE IT.</div>
-      <h1 style={{fontFamily:"'Anton',sans-serif",fontSize:34,fontWeight:900,background:"linear-gradient(135deg,#FFB627,#FF7A18)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",margin:"0 0 6px"}}>HEADMASTER CERTIFIED</h1>
+      <h1 style={{fontFamily:"'Anton',sans-serif",fontSize:34,fontWeight:900,background:"#FFB627",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",margin:"0 0 6px"}}>HEADMASTER CERTIFIED</h1>
       <div style={{fontSize:24,margin:"8px 0 16px"}}>🎓📜🏆</div>
       <div style={{background:"rgba(255,122,24,0.05)",border:"1px solid rgba(255,122,24,0.3)",borderRadius:12,padding:18,marginBottom:20,boxShadow:"0 0 28px rgba(255,122,24,0.2)"}}>
         <p style={{fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FFB627",fontSize:16,margin:"0 0 10px",lineHeight:1.5}}>"You graduated from the Hard Knocks. Most dropped out. The blockchain remembers those who stayed."</p>
@@ -1970,7 +1970,7 @@ function Complete({onRestart}){
               placeholder="Your Solana wallet address..."
               style={{width:"100%",background:"rgba(255,122,24,0.07)",border:"1px solid rgba(212,175,55,0.3)",borderRadius:8,padding:"10px 12px",color:"#F9FAFB",fontFamily:"monospace",fontSize:13,marginBottom:10,boxSizing:"border-box",outline:"none"}}
             />
-            <button onClick={claimSpot} disabled={!wallet||wallet.length<32||claiming} style={{width:"100%",background:wallet&&wallet.length>=32?"linear-gradient(135deg,#FFB627,#FFB627)":"rgba(255,122,24,0.07)",border:"none",borderRadius:8,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:wallet&&wallet.length>=32?"#1a0f08":"#4B5563",letterSpacing:2,cursor:wallet&&wallet.length>=32?"pointer":"default"}}>
+            <button onClick={claimSpot} disabled={!wallet||wallet.length<32||claiming} style={{width:"100%",background:wallet&&wallet.length>=32?"#FFB627":"rgba(255,122,24,0.07)",border:"none",borderRadius:8,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:wallet&&wallet.length>=32?"#1a0f08":"#4B5563",letterSpacing:2,cursor:wallet&&wallet.length>=32?"pointer":"default"}}>
               {claiming ? "SUBMITTING..." : "🏆 CLAIM YOUR SPOT"}
             </button>
           </>
@@ -2015,7 +2015,7 @@ function Complete({onRestart}){
       )}
 
       <div style={{display:"flex",gap:10,marginBottom:16}}>
-        <a href={CLKN_TRADE_LINK} target="_blank" rel="noreferrer" style={{flex:1,background:"linear-gradient(135deg,#FF7A18,#EF4444)",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:2,textDecoration:"none",textAlign:"center",boxShadow:"0 0 20px rgba(255,122,24,0.4)"}}>
+        <a href={CLKN_TRADE_LINK} target="_blank" rel="noreferrer" style={{flex:1,background:"#FF7A18",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:2,textDecoration:"none",textAlign:"center",boxShadow:"0 0 20px rgba(255,122,24,0.4)"}}>
           🔥 TRADE CLKN
         </a>
         <button onClick={onRestart} style={{flex:1,background:"rgba(255,122,24,0.09)",border:"1px solid rgba(255,122,24,0.22)",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15,color:"#D1D5DB",cursor:"pointer",letterSpacing:2}}>
@@ -2079,7 +2079,7 @@ function StartHere({ onGo }){
     <div style={{maxWidth:COL,margin:"0 auto",padding:"0 18px 48px"}}>
       <div style={{textAlign:"center",marginBottom:18}}>
         <div style={{fontSize:38,marginBottom:4}}>🐥</div>
-        <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:26,fontWeight:900,letterSpacing:1,margin:"0 0 4px",background:"linear-gradient(135deg,#FFB627,#FF7A18,#EF4444)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>WHERE DO I START?</h2>
+        <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:26,fontWeight:900,letterSpacing:1,margin:"0 0 4px",background:"#FFB627",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>WHERE DO I START?</h2>
         <p style={{color:"#9CA3AF",fontSize:15.5,lineHeight:1.6,margin:0}}>The coop is a free crypto school + real token-research tools. Tell me where you're at and I'll point you the right way.</p>
       </div>
       <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,letterSpacing:2,color:"#FF7A18",textAlign:"center",marginBottom:10}}>WHERE ARE YOU ON YOUR CRYPTO JOURNEY?</div>
@@ -2141,7 +2141,7 @@ export default function App(){
   }
 
   return(
-    <div style={{minHeight:"100vh",background:"#0a0503",backgroundImage:"radial-gradient(ellipse at 20% 10%,rgba(255,122,24,.08) 0%,transparent 50%),radial-gradient(ellipse at 80% 90%,rgba(239,68,68,.06) 0%,transparent 50%)",color:"#F9FAFB"}}>
+    <div style={{minHeight:"100vh",background:"#0a0503",backgroundImage:"rgba(255,122,24,.08),rgba(239,68,68,.06)",color:"#F9FAFB"}}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700;900&display=swap');
         @keyframes pulse{0%,100%{opacity:.6;transform:scale(1)}50%{opacity:1;transform:scale(1.05)}}
