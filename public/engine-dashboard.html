@@ -135,6 +135,11 @@ body{background:transparent;font-family:var(--body);}
     <div class="updated" id="updated"></div>
   </div>
 
+  <div class="card" id="sysdepthCard">
+    <div class="card-title">🌐 4-POOL SYSTEM DEPTH · canonical pricing (artifact-proof)</div>
+    <div id="sysdepth"><div class="note">Loading pool system…</div></div>
+  </div>
+
   <div class="grid" id="grid"></div>
 
   <div class="footer-tag">
@@ -189,7 +194,33 @@ function loadStoredKey(){
 function toggleAuto(){
   const on = document.getElementById('autoChk').checked;
   if(autoTimer){ clearInterval(autoTimer); autoTimer=null; }
-  if(on) autoTimer = setInterval(()=>{ if(adminKey) loadAll(); }, 30000);
+  if(on) autoTimer = setInterval(()=>{ if(adminKey) loadAll(); loadSystemDepth(); }, 30000);
+}
+
+// 4-pool System Depth — public endpoint (no key), artifact-proof valuation.
+function fmtClknShort(n){ n=Number(n)||0; return n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(0)+'K':Math.round(n).toLocaleString(); }
+async function loadSystemDepth(){
+  const el = document.getElementById('sysdepth'); if(!el) return;
+  try {
+    const r = await fetch('/api/pool-depth', { headers:{'Accept':'application/json'} });
+    const d = await r.json();
+    if(!d || !Array.isArray(d.pools) || !d.pools.length){ el.innerHTML='<div class="note">Pool data unavailable.</div>'; return; }
+    const sy = d.system||{};
+    const rows = d.pools.map(p=>{
+      const dis=p.dislocationPct;
+      const col = dis==null?'var(--subtext)':(Math.abs(dis)<2?'#6EE7B7':Math.abs(dis)<5?'#FCD34D':'#FCA5A5');
+      return '<div class="pos"><div class="ph"><span class="pair">'+esc(p.dex)+' · CLKN/'+esc(p.quoteSym)+'</span><span><b>'+money(p.depthUsd)+'</b> · <span style="color:'+col+'">'+(dis!=null?(dis>0?'+':'')+dis.toFixed(1)+'%':'—')+'</span></span></div>'
+        + '<div class="meta">'+fmtClknShort(p.clkn)+' CLKN + '+(Math.round((p.quote||0)*100)/100).toLocaleString()+' '+esc(p.quoteSym)+'</div></div>';
+    }).join('');
+    const clknPct = Math.max(0,Math.min(100,Math.round(sy.clknSharePct||0)));
+    const bar = '<div style="display:flex;height:12px;border-radius:6px;overflow:hidden;margin:12px 0 4px;border:1px solid var(--border)">'
+      + '<div style="width:'+clknPct+'%;background:var(--orange)"></div><div style="width:'+(100-clknPct)+'%;background:#3B82F6"></div></div>'
+      + '<div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px"><span style="color:var(--orange)">CLKN '+clknPct+'% · '+money(sy.clknUsd)+'</span><span style="color:#93C5FD">quote '+(100-clknPct)+'% · '+money(sy.quoteUsd)+'</span></div>';
+    const qt = Object.entries(sy.quoteTotals||{}).map(([k,v])=>k+' '+money(v)).join(' · ');
+    el.innerHTML = '<div class="note" style="margin-bottom:8px">Canonical CLKN <b>$'+(d.canonicalClknUsd||0).toFixed(6)+'</b> · total depth <b>'+money(sy.totalDepthUsd)+'</b> · '+fmtClknShort(sy.totalClkn)+' CLKN deployed</div>'
+      + rows + bar + '<div class="note" style="margin-top:6px">Quote held: '+(qt||'—')+'</div>'
+      + '<div class="note" style="margin-top:4px;font-size:10px">Dislocation = each pool’s CLKN price vs the canonical (deep) pool. Tight = arb aligned.</div>';
+  } catch(e){ el.innerHTML='<div class="note">Could not load pool system.</div>'; }
 }
 
 // ── Load all projects then per-project detail ──────────────────────────────
@@ -433,6 +464,7 @@ function advanced(id, meta, status, costs, earnings){
 // ── Init ───────────────────────────────────────────────────────────────────
 document.getElementById('keyInput').addEventListener('keydown', e=>{ if(e.key==='Enter') saveKeyAndLoad(); });
 loadStoredKey();
+loadSystemDepth();  // public endpoint — renders the 4-pool depth view with or without an admin key
 </script>
 <script defer src="/cluck-nav.js"></script>
 </body>
