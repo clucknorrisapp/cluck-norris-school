@@ -1917,7 +1917,7 @@ function SurvivalSimulator() {
           ))}
         </div>
       </div>
-      <button onClick={startGame} style={{width:"100%",background:"linear-gradient(135deg,#FF7A18,#EF4444)",border:"none",borderRadius:10,padding:"16px",fontFamily:"'Anton',sans-serif",fontSize:18,fontWeight:900,color:"#fff",letterSpacing:3,cursor:"pointer"}}>
+      <button onClick={startGame} style={{width:"100%",background:"#FF7A18",border:"none",borderRadius:10,padding:"16px",fontFamily:"'Anton',sans-serif",fontSize:18,fontWeight:900,color:"#fff",letterSpacing:3,cursor:"pointer"}}>
         ENTER THE SCHOOLYARD →
       </button>
     </div>
@@ -1960,7 +1960,7 @@ function SurvivalSimulator() {
             );
           })}
         </div>
-        <button onClick={startGame} style={{width:"100%",background:"linear-gradient(135deg,#FF7A18,#EF4444)",border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:900,color:"#fff",letterSpacing:3,cursor:"pointer"}}>
+        <button onClick={startGame} style={{width:"100%",background:"#FF7A18",border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:900,color:"#fff",letterSpacing:3,cursor:"pointer"}}>
           PLAY AGAIN →
         </button>
         <div style={{marginTop:10,textAlign:"center"}}><MintAddress compact/></div>
@@ -1980,7 +1980,7 @@ function SurvivalSimulator() {
         </div>
       </div>
       <div style={{height:3,background:"rgba(255,122,24,0.18)",borderRadius:2,marginBottom:16}}>
-        <div style={{height:"100%",width:`${(round/ROUNDS)*100}%`,background:"linear-gradient(90deg,#FF7A18,#EF4444)",borderRadius:2}}/>
+        <div style={{height:"100%",width:`${(round/ROUNDS)*100}%`,background:"#FF7A18",borderRadius:2}}/>
       </div>
       <div style={{display:"inline-flex",alignItems:"center",gap:6,background:`${catColor}20`,border:`1px solid ${catColor}50`,borderRadius:20,padding:"4px 12px",marginBottom:12}}>
         <span style={{fontSize:13.5}}>{scenario.emoji}</span>
@@ -2043,7 +2043,7 @@ function SurvivalSimulator() {
               <span style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:"#6B7280",letterSpacing:1}}>PORTFOLIO NOW</span>
               <span style={{fontFamily:"monospace",fontSize:20,color:"#FFB627",fontWeight:700}}>${portfolio.toLocaleString()}</span>
             </div>
-            <button onClick={nextRound} style={{width:"100%",background:"linear-gradient(135deg,#FF7A18,#EF4444)",border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:16,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer"}}>
+            <button onClick={nextRound} style={{width:"100%",background:"#FF7A18",border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:16,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer"}}>
               {round+1>=ROUNDS?"SEE FINAL SCORE →":"NEXT ROUND →"}
             </button>
           </>

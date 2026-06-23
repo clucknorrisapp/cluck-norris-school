@@ -9,12 +9,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <style>
-  :root{color-scheme:dark;--bg:#0a0503;--bg-grad:radial-gradient(125% 75% at 50% -12%,#2c0f04 0%,#160b06 46%,#0a0503 100%);--card:#1a0f08;--card2:#160c07;--surface:#150f12;--panel:#150f12;--border:rgba(255,122,24,0.28);--border-soft:rgba(255,122,24,0.14);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
+  :root{color-scheme:dark;--bg:#0a0503;--bg-grad:#2c0f04;--card:#1a0f08;--card2:#160c07;--surface:#150f12;--panel:#150f12;--border:rgba(255,122,24,0.28);--border-soft:rgba(255,122,24,0.14);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     background: var(--bg);
-    background-image: radial-gradient(ellipse at 20% 10%, rgba(217,119,6,0.10) 0%, transparent 50%),
-                      radial-gradient(ellipse at 80% 90%, rgba(167,139,250,0.06) 0%, transparent 50%);
+    
     color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh;
   }
   .wrap { max-width: 760px; margin: 0 auto; padding: 24px 16px 80px; }
@@ -23,10 +22,10 @@
   .header-icon { font-size: 38px; filter: drop-shadow(0 0 16px rgba(167,139,250,0.5)); }
   .header .brand-mini { font-family: 'Anton', sans-serif; font-size: 10px; letter-spacing: 4px; color: var(--orange); margin-bottom: 4px; font-weight: 700; }
   .header h1 { font-family: 'Anton', sans-serif; font-size: 27px; font-weight: 900; letter-spacing: 3px;
-    background: linear-gradient(135deg, #FCD34D, #A78BFA, #60A5FA); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
+    background: #FCD34D; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
   .header p { font-family: 'Anton', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 2px; margin-top: 6px; }
 
-  .hero { background: linear-gradient(135deg, rgba(167,139,250,0.06), rgba(96,165,250,0.03)); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; }
+  .hero { background: rgba(167,139,250,0.06); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; }
   .hero-tag { font-family: 'Anton', sans-serif; font-size: 10px; color: var(--accent); letter-spacing: 3px; margin-bottom: 6px; }
   .hero-sub { font-family: 'Anton', sans-serif; font-size: 12px; color: var(--subtext); line-height: 1.6; letter-spacing: 0.5px; }
 
@@ -45,14 +44,14 @@
   .token-input::placeholder { color: var(--muted); font-weight: 400; }
   .token-input:focus { outline: none; border-color: var(--accent); }
 
-  .run-btn { width: 100%; margin-top: 14px; padding: 14px; background: linear-gradient(135deg, var(--purple), var(--blue)); border: none; border-radius: 10px; font-family: 'Anton', sans-serif; font-size: 14px; font-weight: 900; color: #fff; letter-spacing: 3px; cursor: pointer; transition: opacity 0.15s; }
+  .run-btn { width: 100%; margin-top: 14px; padding: 14px; background: var(--purple); border: none; border-radius: 10px; font-family: 'Anton', sans-serif; font-size: 14px; font-weight: 900; color: #fff; letter-spacing: 3px; cursor: pointer; transition: opacity 0.15s; }
   .run-btn:hover { opacity: 0.92; }
   .run-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
   .err { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #FCA5A5; margin-bottom: 12px; display: none; }
   .err.show { display: block; }
 
-  .loading { display: none; text-align: center; padding: 38px 20px 32px; background: linear-gradient(135deg, rgba(255,255,255,0.03), rgba(167,139,250,0.04)); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 16px; }
+  .loading { display: none; text-align: center; padding: 38px 20px 32px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 16px; }
   .loading.show { display: block; }
   .loading-spinner { font-size: 42px; animation: bobble 1.4s ease-in-out infinite; margin-bottom: 14px; display: inline-block; }
   .loading-title { font-family: 'Anton', sans-serif; font-size: 14px; color: var(--accent); letter-spacing: 3px; margin-bottom: 14px; font-weight: 700; }
@@ -66,7 +65,7 @@
 
   /* Summary */
   .sum-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
-  .sum-cell { background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .sum-cell { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
   .sum-cell .lbl { font-family: 'Anton', sans-serif; font-size: 9px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 5px; font-weight: 700; }
   .sum-cell .val { font-family: var(--mono); font-size: 17px; color: var(--text); font-weight: 700; line-height: 1.2; }
   .sum-cell .sub { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 3px; }
@@ -321,7 +320,7 @@ body{background:transparent;font-family:var(--body);}
       <div id="hopBody" style="display:none"></div>
     </div>
 
-    <div class="card" id="disclaimerCard" style="background:linear-gradient(135deg,rgba(107,114,128,0.06),rgba(107,114,128,0.01));border-color:rgba(107,114,128,0.30);">
+    <div class="card" id="disclaimerCard" style="background:rgba(107,114,128,0.06);border-color:rgba(107,114,128,0.30);">
       <div class="card-title" style="color:#D1D5DB;">📜 HOW TO READ THIS REPORT</div>
       <div style="font-family:var(--mono);font-size:12px;line-height:1.65;color:#B0B6BE;">
         <p style="margin-bottom:10px;">This trace reports <strong style="color:var(--text);">what's on the chain — not why people do things</strong>. Transfers, swaps, locks, and counterparties describe <em style="color:var(--accent);font-style:normal;">what happened</em>, not <em style="color:var(--accent);font-style:normal;">intent</em>. The same pattern can come from a team migration, routine operations, or a coordinated dump.</p>

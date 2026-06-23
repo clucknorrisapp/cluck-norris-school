@@ -9,12 +9,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <style>
-  :root{color-scheme:dark;--bg:#0a0503;--bg-grad:radial-gradient(125% 75% at 50% -12%,#2c0f04 0%,#160b06 46%,#0a0503 100%);--card:#1a0f08;--card2:#160c07;--surface:#150f12;--panel:#150f12;--border:rgba(255,122,24,0.28);--border-soft:rgba(255,122,24,0.14);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
+  :root{color-scheme:dark;--bg:#0a0503;--bg-grad:#2c0f04;--card:#1a0f08;--card2:#160c07;--surface:#150f12;--panel:#150f12;--border:rgba(255,122,24,0.28);--border-soft:rgba(255,122,24,0.14);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     background: var(--bg);
-    background-image: radial-gradient(ellipse at 20% 10%, rgba(217,119,6,0.10) 0%, transparent 50%),
-                      radial-gradient(ellipse at 80% 90%, rgba(239,68,68,0.07) 0%, transparent 50%);
+    
     color: var(--text);
     font-family: system-ui, sans-serif;
     min-height: 100vh;
@@ -24,11 +23,11 @@
   .header { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
   .header-icon { font-size: 40px; filter: drop-shadow(0 0 16px rgba(217,119,6,0.5)); }
   .header .brand-mini { font-family: 'Anton', sans-serif; font-size: 10px; letter-spacing: 4px; color: var(--orange); margin-bottom: 4px; font-weight: 700; }
-  .header h1 { font-family: 'Anton', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg, #FFB627, #F97316, #EF4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
+  .header h1 { font-family: 'Anton', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: #FFB627; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
   .header p { font-family: 'Anton', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
 
   .hero {
-    background: linear-gradient(135deg, rgba(217,119,6,0.08), rgba(239,68,68,0.04));
+    background: rgba(217,119,6,0.08);
     border: 1px solid rgba(217,119,6,0.3);
     border-radius: 12px;
     padding: 22px 22px;
@@ -72,7 +71,7 @@
   /* Live stats grid */
   .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
   .stat {
-    background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015));
+    background: rgba(255,255,255,0.04);
     border: 1px solid var(--border);
     border-radius: 10px;
     padding: 14px 16px;
@@ -125,12 +124,12 @@
   }
   .action-btn:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-1px); }
   .action-btn.primary {
-    background: linear-gradient(135deg, rgba(255,182,39,0.2), rgba(217,119,6,0.1));
+    background: rgba(255,182,39,0.2);
     border: 1.5px solid rgba(255,182,39,0.55);
     color: var(--accent);
   }
   .action-btn.danger {
-    background: linear-gradient(135deg,#D97706,#EF4444);
+    background: #D97706;
     color: #fff;
     border: none;
   }
@@ -448,7 +447,7 @@ body{background:transparent;font-family:var(--body);}
   </div>
 
   <!-- Momentum / traction / what's next — forward-looking, honest, no promises -->
-  <div class="section" id="momentum" style="background:linear-gradient(135deg, rgba(255,182,39,0.07), rgba(217,119,6,0.02));border-color:rgba(255,182,39,0.3)">
+  <div class="section" id="momentum" style="background:rgba(255,182,39,0.07);border-color:rgba(255,182,39,0.3)">
     <div class="section-title" style="color:#FFB627;border-color:rgba(255,182,39,0.25)">🚀 MOMENTUM · WHERE WE'RE HEADED</div>
     <p>The product is built and shipping daily. Right now we're pointing that momentum at growth:</p>
     <ul>
@@ -462,7 +461,7 @@ body{background:transparent;font-family:var(--body);}
   </div>
 
   <!-- Tech under the hood -->
-  <div class="section" id="hood" style="background:linear-gradient(135deg, rgba(255,122,24,0.06), rgba(255,122,24,0.02));border-color:rgba(255,122,24,0.3)">
+  <div class="section" id="hood" style="background:rgba(255,122,24,0.06);border-color:rgba(255,122,24,0.3)">
     <div class="section-title" style="color:#FFB627;border-color:rgba(255,122,24,0.25)">⚙️ UNDER THE HOOD</div>
     <p>Real engineering, not vibes:</p>
     <ul>
@@ -481,7 +480,7 @@ body{background:transparent;font-family:var(--body);}
 
   <!-- The community moat — answers "what makes you different from every other
        education + utility project on Solana?" -->
-  <div class="section" id="flock" style="background:linear-gradient(135deg, rgba(255,122,24,0.07), rgba(255,122,24,0.02));border-color:rgba(255,122,24,0.3)">
+  <div class="section" id="flock" style="background:rgba(255,122,24,0.07);border-color:rgba(255,122,24,0.3)">
     <div class="section-title" style="color:#FFB627;border-color:rgba(255,122,24,0.25)">👥 THE FLOCK · WHY WE'RE NOT JUST ANOTHER EDUCATION PROJECT</div>
     <div style="background:rgba(255,122,24,0.06);border:1px solid rgba(255,122,24,0.3);border-radius:10px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
       <div style="font-family:var(--mono);font-size:12px;color:#FFB627;line-height:1.5">
@@ -517,7 +516,7 @@ body{background:transparent;font-family:var(--body);}
 
   <!-- Survival Simulator deserves its own callout — it's the bridge between "learn"
        and "do" and most projects don't have anything like it. -->
-  <div class="section" id="simulator" style="background:linear-gradient(135deg, rgba(255,122,24,0.06), rgba(255,122,24,0.04));border-color:rgba(255,122,24,0.3)">
+  <div class="section" id="simulator" style="background:rgba(255,122,24,0.06);border-color:rgba(255,122,24,0.3)">
     <div class="section-title" style="color:#FFB627;border-color:rgba(255,122,24,0.25)">🎮 SURVIVAL SIMULATOR · WHERE THEORY HITS REALITY</div>
     <p>Most crypto education is quizzes. Quizzes test recognition. They don't test the <strong>decision</strong> — the part where you have $1,000, a DM in your inbox, a green candle, and three seconds to react.</p>
     <p><strong>The Survival Simulator gives you that decision.</strong> 135 hand‑written scenarios across four categories — each run draws 10 at random, so no two playthroughs are alike:</p>
@@ -533,7 +532,7 @@ body{background:transparent;font-family:var(--body);}
 
   <!-- Pricing strategy — answers "but the fees are like a penny right now, how
        does that even matter?" with the compound-growth story. -->
-  <div class="section" id="pricing" style="background:linear-gradient(135deg, rgba(16,185,129,0.07), rgba(110,231,183,0.03));border-color:rgba(16,185,129,0.3)">
+  <div class="section" id="pricing" style="background:rgba(16,185,129,0.07);border-color:rgba(16,185,129,0.3)">
     <div class="section-title" style="color:#6EE7B7;border-color:rgba(16,185,129,0.25)">💰 PRICING STRATEGY · WHY IT'S 1¢ TODAY (AND WHAT THAT MEANS LATER)</div>
     <p>Look at our pricing table — most tools are 1–6¢ in USD terms. Some investors see that and ask "how is this ever real revenue?" Fair question. Here's the play:</p>
     <ul>
@@ -550,7 +549,7 @@ body{background:transparent;font-family:var(--body);}
 
   <!-- 100% fee reinvestment story — verifiable on-chain, structurally aligned.
        This is the kind of commitment that doesn't fit in a tokenomics graphic. -->
-  <div class="section" id="reinvestment" style="background:linear-gradient(135deg, rgba(16,185,129,0.07), rgba(110,231,183,0.03));border-color:rgba(16,185,129,0.3)">
+  <div class="section" id="reinvestment" style="background:rgba(16,185,129,0.07);border-color:rgba(16,185,129,0.3)">
     <div class="section-title" style="color:#6EE7B7;border-color:rgba(16,185,129,0.25)">🔁 100% FEE REINVESTMENT · WHERE EVERY SOL OF CREATOR REVENUE GOES</div>
     <p>The project earns a <strong style="color:#6EE7B7">1% fee on every CLKN trade</strong> — and every cent of that SOL goes <strong style="color:#6EE7B7">directly back into buying CLKN on the chart</strong>.</p>
     <p>Not "we'll reinvest later." Not "we'll consider buybacks at $X market cap." Already happening, every day.</p>
@@ -575,7 +574,7 @@ body{background:transparent;font-family:var(--body);}
   </div>
 
   <!-- Who it's for / not for -->
-  <div class="section" id="audience" style="background:linear-gradient(135deg, rgba(16,185,129,0.07), rgba(110,231,183,0.03));border-color:rgba(16,185,129,0.3)">
+  <div class="section" id="audience" style="background:rgba(16,185,129,0.07);border-color:rgba(16,185,129,0.3)">
     <div class="section-title" style="color:#6EE7B7;border-color:rgba(16,185,129,0.25)">🎯 WHO CLKN IS FOR</div>
     <ul>
       <li class="yes">Crypto educators and content creators who want a real product behind their teaching</li>
@@ -587,7 +586,7 @@ body{background:transparent;font-family:var(--body);}
     </ul>
   </div>
 
-  <div class="section" id="notfor" style="background:linear-gradient(135deg, rgba(239,68,68,0.06), rgba(239,68,68,0.02));border-color:rgba(239,68,68,0.3)">
+  <div class="section" id="notfor" style="background:rgba(239,68,68,0.06);border-color:rgba(239,68,68,0.3)">
     <div class="section-title" style="color:#FCA5A5;border-color:rgba(239,68,68,0.25)">🚫 WHO CLKN IS NOT THE BEST FIT FOR</div>
     <p style="color:#FCA5A5">We're not for everyone. If any of these describe you, just be honest with yourself before you size in:</p>
     <ul>

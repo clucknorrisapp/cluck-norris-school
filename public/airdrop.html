@@ -8,16 +8,16 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <style>
-  :root{color-scheme:dark;--bg:#0a0503;--bg-grad:radial-gradient(125% 75% at 50% -12%,#2c0f04 0%,#160b06 46%,#0a0503 100%);--card:#1a0f08;--card2:#160c07;--surface:#150f12;--panel:#150f12;--border:rgba(255,122,24,0.28);--border-soft:rgba(255,122,24,0.14);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
+  :root{color-scheme:dark;--bg:#0a0503;--bg-grad:#2c0f04;--card:#1a0f08;--card2:#160c07;--surface:#150f12;--panel:#150f12;--border:rgba(255,122,24,0.28);--border-soft:rgba(255,122,24,0.14);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); background-image: radial-gradient(ellipse at 20% 10%, rgba(217,119,6,0.10) 0%, transparent 50%), radial-gradient(ellipse at 80% 90%, rgba(239,68,68,0.07) 0%, transparent 50%); color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh; }
+  body { background: var(--bg);  color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh; }
   .wrap { max-width: 700px; margin: 0 auto; padding: 24px 16px 80px; }
 
   /* Header */
   .header { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
   .header-icon { font-size: 40px; filter: drop-shadow(0 0 16px rgba(217,119,6,0.5)); }
   .header .brand-mini { font-family: 'Anton', sans-serif; font-size: 10px; letter-spacing: 4px; color: #D97706; margin-bottom: 4px; font-weight: 700; }
-  .header h1 { font-family: 'Anton', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg, #FCD34D, #F97316, #EF4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
+  .header h1 { font-family: 'Anton', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: #FCD34D; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
   .header p { font-family: 'Anton', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
   .footer-tag { text-align: center; margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Anton', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
   .footer-tag a { color: #D97706; text-decoration: none; }
@@ -27,24 +27,24 @@
   .card-title { font-family: var(--mono); font-size: 10px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 14px; }
 
   /* Wallet connect */
-  .connect-btn { background: linear-gradient(135deg, #9945FF, #6B21A8); border: none; border-radius: 10px; padding: 12px 20px; font-family: var(--mono); font-size: 13px; font-weight: 700; color: #fff; cursor: pointer; letter-spacing: 1px; width: 100%; transition: opacity 0.15s; }
+  .connect-btn { background: #9945FF; border: none; border-radius: 10px; padding: 12px 20px; font-family: var(--mono); font-size: 13px; font-weight: 700; color: #fff; cursor: pointer; letter-spacing: 1px; width: 100%; transition: opacity 0.15s; }
   .connect-btn:hover { opacity: 0.85; }
-  .connect-btn.connected { background: linear-gradient(135deg, #10B981, #065F46); }
+  .connect-btn.connected { background: #10B981; }
   /* Wallet picker — one button per supported wallet */
   .wallet-picker { display: flex; gap: 8px; flex-wrap: wrap; }
   .wallet-btn { flex: 1; min-width: 140px; display: flex; align-items: center; justify-content: center; gap: 8px; border: none; border-radius: 10px; padding: 12px 14px; font-family: var(--mono); font-size: 13px; font-weight: 700; color: #fff; letter-spacing: 1px; cursor: pointer; transition: transform 0.15s, opacity 0.15s; }
   .wallet-btn:hover { transform: translateY(-1px); opacity: 0.95; }
-  .wallet-btn.phantom  { background: linear-gradient(135deg, #9945FF, #6B21A8); }
-  .wallet-btn.solflare { background: linear-gradient(135deg, #FC822B, #B85F1F); }
-  .wallet-btn.backpack { background: linear-gradient(135deg, #E33E3F, #991B1B); }
-  .wallet-btn.okx      { background: linear-gradient(135deg, #4B5563, #1F2937); }
-  .wallet-btn.coinbase { background: linear-gradient(135deg, #2563EB, #1E3A8A); }
-  .wallet-btn.trust    { background: linear-gradient(135deg, #3375BB, #1E4C82); }
-  .wallet-btn.glow     { background: linear-gradient(135deg, #8B5CF6, #5B21B6); }
-  .wallet-btn.exodus   { background: linear-gradient(135deg, #6366F1, #3730A3); }
-  .wallet-btn.bitget   { background: linear-gradient(135deg, #00C2C2, #0E7490); }
-  .wallet-btn.brave    { background: linear-gradient(135deg, #FB542B, #B7320F); }
-  .wallet-btn.jupiter  { background: linear-gradient(135deg, #4D8FF7, #1E429F); }
+  .wallet-btn.phantom  { background: #9945FF; }
+  .wallet-btn.solflare { background: #FC822B; }
+  .wallet-btn.backpack { background: #E33E3F; }
+  .wallet-btn.okx      { background: #4B5563; }
+  .wallet-btn.coinbase { background: #2563EB; }
+  .wallet-btn.trust    { background: #3375BB; }
+  .wallet-btn.glow     { background: #8B5CF6; }
+  .wallet-btn.exodus   { background: #6366F1; }
+  .wallet-btn.bitget   { background: #00C2C2; }
+  .wallet-btn.brave    { background: #FB542B; }
+  .wallet-btn.jupiter  { background: #4D8FF7; }
   .wallet-btn .wb-icon { font-size: 16px; }
   .wallet-info { font-family: var(--mono); font-size: 12px; color: var(--green); margin-top: 10px; padding: 10px 12px; background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.25); border-radius: 8px; display: none; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
   .wallet-info.show { display: flex; }
@@ -120,7 +120,7 @@
   .warning-row td { background: rgba(239,68,68,0.05); }
 
   /* Send button */
-  .send-btn { width: 100%; padding: 15px; background: linear-gradient(135deg, #D97706, #EF4444); border: none; border-radius: 10px; font-family: var(--mono); font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; letter-spacing: 2px; transition: opacity 0.15s; }
+  .send-btn { width: 100%; padding: 15px; background: #D97706; border: none; border-radius: 10px; font-family: var(--mono); font-size: 15px; font-weight: 900; color: #fff; cursor: pointer; letter-spacing: 2px; transition: opacity 0.15s; }
   .send-btn:hover { opacity: 0.9; }
   .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
@@ -128,7 +128,7 @@
   .progress-card { display: none; }
   .progress-card.show { display: block; }
   .progress-bar-wrap { height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; margin: 10px 0; }
-  .progress-fill { height: 100%; background: linear-gradient(90deg, #D97706, #10B981); border-radius: 3px; transition: width 0.3s; }
+  .progress-fill { height: 100%; background: #D97706; border-radius: 3px; transition: width 0.3s; }
   .progress-text { font-family: var(--mono); font-size: 11px; color: var(--subtext); }
 
   /* Results */
@@ -142,8 +142,8 @@
   .tx-link-small { color: var(--accent); text-decoration: none; font-size: 10px; }
 
   /* Unlock gate (CLKN-paid tool access) */
-  .unlock-gate { background: linear-gradient(135deg, rgba(217,119,6,0.08), rgba(239,68,68,0.04)); border: 1px solid rgba(217,119,6,0.45); border-radius: 12px; padding: 24px 22px; margin-bottom: 16px; box-shadow: 0 0 30px rgba(217,119,6,0.12); }
-  .unlock-title { font-family: 'Anton', sans-serif; font-size: 20px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg,#FCD34D,#F97316,#EF4444); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-align: center; margin-bottom: 4px; }
+  .unlock-gate { background: rgba(217,119,6,0.08); border: 1px solid rgba(217,119,6,0.45); border-radius: 12px; padding: 24px 22px; margin-bottom: 16px; box-shadow: 0 0 30px rgba(217,119,6,0.12); }
+  .unlock-title { font-family: 'Anton', sans-serif; font-size: 20px; font-weight: 900; letter-spacing: 3px; background: #FCD34D; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-align: center; margin-bottom: 4px; }
   .unlock-sub { font-family: 'Anton', sans-serif; font-size: 10px; color: var(--subtext); text-align: center; letter-spacing: 3px; margin-bottom: 18px; }
   .unlock-amount-card { background: rgba(0,0,0,0.4); border: 1px solid rgba(217,119,6,0.45); border-radius: 10px; padding: 16px; text-align: center; margin-bottom: 10px; cursor: pointer; transition: border-color 0.15s; }
   .unlock-amount-card:hover { border-color: var(--accent); }
@@ -167,11 +167,11 @@
   /* Idle status (after polling auto-stops) + restart button */
   .unlock-status.idle { color: var(--subtext); border-color: rgba(255,255,255,0.06); background: rgba(255,255,255,0.02); }
   .unlock-status.idle .pulse { background: var(--subtext); animation: none; }
-  .unlock-restart-btn { width: 100%; margin-top: 10px; padding: 12px; background: linear-gradient(135deg,#D97706,#EF4444); border: none; border-radius: 8px; font-family: 'Anton', sans-serif; font-size: 12px; font-weight: 700; color: #fff; letter-spacing: 2px; cursor: pointer; transition: opacity 0.15s; }
+  .unlock-restart-btn { width: 100%; margin-top: 10px; padding: 12px; background: #D97706; border: none; border-radius: 8px; font-family: 'Anton', sans-serif; font-size: 12px; font-weight: 700; color: #fff; letter-spacing: 2px; cursor: pointer; transition: opacity 0.15s; }
   .unlock-restart-btn:hover { opacity: 0.9; }
 
   /* Sticky unlocked banner — visible the whole time the tool is unlocked, live countdown */
-  .unlock-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; background: linear-gradient(135deg, rgba(16,185,129,0.14), rgba(16,185,129,0.04)); border: 1px solid rgba(16,185,129,0.4); border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; box-shadow: 0 0 18px rgba(16,185,129,0.1); }
+  .unlock-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; background: rgba(16,185,129,0.14); border: 1px solid rgba(16,185,129,0.4); border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; box-shadow: 0 0 18px rgba(16,185,129,0.1); }
   .unlock-banner-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
   .banner-check { font-family: var(--mono); font-size: 16px; color: var(--green); background: rgba(16,185,129,0.18); border: 1px solid rgba(16,185,129,0.45); border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; }
   .banner-title { font-family: 'Anton', sans-serif; font-size: 12px; font-weight: 700; color: var(--green); letter-spacing: 2px; }

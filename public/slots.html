@@ -7,13 +7,13 @@
 <meta name="robots" content="noindex,nofollow"/>
 <title>The Coop Spinner · Cluck Norris</title>
 <style>
-:root{color-scheme:dark;--bg:#0a0503;--bg-grad:radial-gradient(125% 75% at 50% -12%,#2c0f04 0%,#160b06 46%,#0a0503 100%);--card:#1a0f08;--card2:#160c07;--surface:#150f12;--panel:#150f12;--border:rgba(255,122,24,0.28);--border-soft:rgba(255,122,24,0.14);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
+:root{color-scheme:dark;--bg:#0a0503;--bg-grad:#2c0f04;--card:#1a0f08;--card2:#160c07;--surface:#150f12;--panel:#150f12;--border:rgba(255,122,24,0.28);--border-soft:rgba(255,122,24,0.14);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
 *{box-sizing:border-box}
-body{margin:0;background:radial-gradient(ellipse at top,#1c0f08 0%,var(--bg) 60%);color:var(--text);font-family:var(--mono);padding:0 14px 70px;-webkit-font-smoothing:antialiased;min-height:100vh}
+body{margin:0;background:#1c0f08;color:var(--text);font-family:var(--mono);padding:0 14px 70px;-webkit-font-smoothing:antialiased;min-height:100vh}
 .wrap{max-width:560px;margin:0 auto}
 .hero{text-align:center;padding:22px 0 6px}
 .hero .kick{font-family:var(--head);font-size:11px;letter-spacing:5px;color:var(--orange);text-transform:uppercase;font-weight:700}
-.hero h1{font-family:var(--head);font-size:40px;font-weight:900;margin:2px 0;letter-spacing:1px;line-height:1;background:linear-gradient(135deg,#FFE08A,var(--gold),var(--orange),var(--red));-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-transform:uppercase}
+.hero h1{font-family:var(--head);font-size:40px;font-weight:900;margin:2px 0;letter-spacing:1px;line-height:1;background:#FFE08A;-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-transform:uppercase}
 .badge{display:inline-block;border:1px solid var(--border);border-radius:6px;padding:3px 10px;font-size:10px;letter-spacing:3px;color:var(--gold);margin-top:6px}
 .sub{color:var(--sub);font-size:12px;line-height:1.6;margin:8px 0 0}
 .roads{display:flex;gap:8px;margin-top:14px}
@@ -32,16 +32,16 @@ input{width:100%;background:rgba(0,0,0,0.35);border:1px solid var(--border);bord
 .copyf .cft{flex:1;word-break:break-all;min-width:0}.copyf .cb{flex-shrink:0;background:rgba(255,197,61,0.2);border:1px solid var(--border);border-radius:6px;padding:6px 11px;font-size:12px;color:var(--gold);white-space:nowrap}
 .vmsg{font-size:12px;color:var(--sub);line-height:1.5;margin-top:6px;min-height:16px}
 .verified{background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.35);color:var(--green);border-radius:8px;padding:10px;font-size:13px}
-.machine{margin:14px auto 0;background:linear-gradient(180deg,#23140c,#160d09);border:2px solid var(--gold);border-radius:20px;padding:18px;box-shadow:0 0 40px rgba(249,115,22,0.25),inset 0 0 30px rgba(0,0,0,0.6);position:relative}
-.machine::before{content:"🐔 CLUCK NORRIS 🐔";position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,var(--orange),var(--red));font-family:var(--head);font-weight:900;font-size:11px;letter-spacing:2px;color:#fff;padding:3px 14px;border-radius:20px;white-space:nowrap}
+.machine{margin:14px auto 0;background:#23140c;border:2px solid var(--gold);border-radius:20px;padding:18px;box-shadow:0 0 40px rgba(249,115,22,0.25),inset 0 0 30px rgba(0,0,0,0.6);position:relative}
+.machine::before{content:"🐔 CLUCK NORRIS 🐔";position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--orange);font-family:var(--head);font-weight:900;font-size:11px;letter-spacing:2px;color:#fff;padding:3px 14px;border-radius:20px;white-space:nowrap}
 .reels{display:flex;gap:8px;justify-content:center;background:#000;border-radius:14px;padding:10px;border:1px solid rgba(255,197,61,0.3);box-shadow:inset 0 0 24px rgba(0,0,0,0.9)}
-.reel{height:120px;width:104px;overflow:hidden;background:linear-gradient(180deg,#1a1a1f,#0c0c10);border-radius:10px;position:relative;border:1px solid rgba(255,255,255,0.06)}
-.reel::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,.55) 0%,transparent 22%,transparent 78%,rgba(0,0,0,.55) 100%)}
+.reel{height:120px;width:104px;overflow:hidden;background:#1a1a1f;border-radius:10px;position:relative;border:1px solid rgba(255,255,255,0.06)}
+.reel::after{content:"";position:absolute;inset:0;pointer-events:none;background:rgba(0,0,0,.55)}
 .strip{display:flex;flex-direction:column;will-change:transform}.sym{height:120px;display:flex;align-items:center;justify-content:center;font-size:70px}
 .reel.win{box-shadow:0 0 0 2px var(--gold),0 0 22px var(--gold)}
 .result{text-align:center;min-height:48px;margin:12px 0 4px}.result .big{font-family:var(--head);font-weight:900;font-size:24px;line-height:1.1}.result .amt{font-family:var(--head);font-size:15px;font-weight:700;color:var(--gold);margin-top:2px}
 .win .big{color:var(--gold)}.jackpot .big{font-size:30px}.lose .big{color:var(--sub);font-size:17px}.err .big{color:#fca5a5;font-size:16px}
-.spinbtn{width:100%;background:linear-gradient(135deg,var(--orange),var(--red));border:none;border-radius:14px;padding:16px;font-family:var(--head);font-size:22px;font-weight:900;letter-spacing:3px;color:#fff;cursor:pointer;box-shadow:0 6px 0 #8a2d10;transition:transform .06s,box-shadow .06s}
+.spinbtn{width:100%;background:var(--orange);border:none;border-radius:14px;padding:16px;font-family:var(--head);font-size:22px;font-weight:900;letter-spacing:3px;color:#fff;cursor:pointer;box-shadow:0 6px 0 #8a2d10;transition:transform .06s,box-shadow .06s}
 .spinbtn:active{transform:translateY(4px);box-shadow:0 2px 0 #8a2d10}.spinbtn:disabled{opacity:.55;cursor:not-allowed}
 .statbar{display:flex;gap:8px;margin-top:12px}.stat{flex:1;background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:10px;padding:8px;text-align:center}
 .stat .l{font-size:9px;letter-spacing:1px;color:var(--sub);text-transform:uppercase}.stat .v{font-family:var(--head);font-size:19px;font-weight:900;margin-top:2px;color:var(--gold)}.stat .v.on{color:var(--green)}.stat .v.dq{color:#fca5a5}
@@ -75,7 +75,7 @@ body{background:transparent;font-family:var(--body);}
       <div class="road"><div class="n">ROAD 2</div><div class="t">🎲 Wild-card</div><div class="d"><b>Random draws</b> from everyone else who played — the little-guy lane.</div></div>
       <div class="road"><div class="n">ROAD 3</div><div class="t">🐔 Jackpot</div><div class="d">Hit 🐔🐔🐔 → a <b>guaranteed</b> seat (jumps the line).</div></div>
     </div>
-    <div style="margin-top:12px;background:linear-gradient(135deg,rgba(249,115,22,0.16),rgba(255,197,61,0.12));border:1px solid rgba(255,197,61,0.45);border-radius:12px;padding:12px 16px;line-height:1.55">
+    <div style="margin-top:12px;background:rgba(249,115,22,0.16);border:1px solid rgba(255,197,61,0.45);border-radius:12px;padding:12px 16px;line-height:1.55">
       <div style="font-size:14px;font-weight:800;letter-spacing:.4px;color:var(--gold)">🩺🔥🐔 THE DOCTOR FIRE CHICKEN</div>
       <div style="font-size:12px;color:var(--sub);margin-top:4px">Somewhere in the reels hides a secret combo — a tribute to the OG <b>Fire Chicken</b> roost that came before Cluck Norris. Land it and you get an <b>automatic prize</b> (no wheel needed). <b>Brutally rare.</b> Will you summon the Doctor? 👀</div>
     </div>

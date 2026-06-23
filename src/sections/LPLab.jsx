@@ -2608,7 +2608,7 @@ function LPLessonView({ lesson, onBack, onComplete }) {
       {showExp && (
         <>
           <AskCluck context={`LP Lab Lesson ${lesson.id}: ${lesson.title}`} compact={true}/>
-          <button onClick={nextQuestion} style={{width:"100%",background:"linear-gradient(135deg,#10B981,#059669)",border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer",marginTop:8}}>
+          <button onClick={nextQuestion} style={{width:"100%",background:"#10B981",border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer",marginTop:8}}>
             {qi+1<shuffledQuestions.length?"NEXT QUESTION →":"SEE RESULTS →"}
           </button>
         </>
@@ -2636,7 +2636,7 @@ function LPLessonView({ lesson, onBack, onComplete }) {
         <button onClick={()=>{setPhase("content");setQi(0);setSel(null);setAnswers([]);setShowExp(false);}} style={{flex:1,background:"rgba(255,122,24,0.09)",border:"1px solid rgba(255,122,24,0.22)",borderRadius:10,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:13.5,color:"#D1D5DB",cursor:"pointer",letterSpacing:1}}>
           📖 REVIEW LESSON
         </button>
-        <button onClick={onComplete} style={{flex:1,background:"linear-gradient(135deg,#10B981,#059669)",border:"none",borderRadius:10,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:13.5,fontWeight:700,color:"#fff",letterSpacing:1,cursor:"pointer"}}>
+        <button onClick={onComplete} style={{flex:1,background:"#10B981",border:"none",borderRadius:10,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:13.5,fontWeight:700,color:"#fff",letterSpacing:1,cursor:"pointer"}}>
           NEXT LESSON →
         </button>
       </div>
@@ -2781,7 +2781,7 @@ function LPLessonView({ lesson, onBack, onComplete }) {
       </div>
 
       <AskCluck context={`LP Lab Lesson ${lesson.id}: ${lesson.title}`} compact={true}/>
-      <button onClick={()=>{setPhase("quiz");setQi(0);setSel(null);setAnswers([]);setShowExp(false);}} style={{width:"100%",background:"linear-gradient(135deg,#10B981,#059669)",border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer",marginTop:12}}>
+      <button onClick={()=>{setPhase("quiz");setQi(0);setSel(null);setAnswers([]);setShowExp(false);}} style={{width:"100%",background:"#10B981",border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer",marginTop:12}}>
         ✅ TAKE THE QUIZ →
       </button>
     </div>
@@ -2837,7 +2837,7 @@ function LPLab() {
       </div>
 
       {/* Live tool cross-link — put the theory to work */}
-      <a href="/lp-scanner" style={{display:"block",textDecoration:"none",background:"linear-gradient(135deg,rgba(255,122,24,0.12),rgba(255,182,39,0.06))",border:"1px solid rgba(255,122,24,0.4)",borderRadius:12,padding:"14px 16px",marginBottom:16}}>
+      <a href="/lp-scanner" style={{display:"block",textDecoration:"none",background:"rgba(255,122,24,0.12)",border:"1px solid rgba(255,122,24,0.4)",borderRadius:12,padding:"14px 16px",marginBottom:16}}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
           <div style={{fontSize:26,flexShrink:0}}>🔬</div>
           <div style={{flex:1}}>
