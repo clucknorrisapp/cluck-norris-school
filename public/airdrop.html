@@ -510,8 +510,10 @@ const TX_BATCH_SIZE = 20; // legacy cap; planBatches() does the real sizing now
 const LAMPORTS_PER_ATA_RENT = 2039280; // 0.00203928 SOL
 const LAMPORTS_PER_TX_FEE = 5000;      // base fee per signed Solana tx
 // Per-recipient batch weight: a transfer slot is 1, an ATA-create+transfer slot is 2.
-// Solana's 1232-byte tx limit fits ~18 weighted slots before the tx serialization fails.
-const TX_WEIGHT_BUDGET = 18;
+// Solana's 1232-byte tx limit fits ~18 weighted slots of plain transfers — but the
+// checked-transfer (adds the mint account) + per-tx memo push the densest ATA-heavy
+// batch close to the limit, so we hold the budget at 16 for a safe ~110-byte margin.
+const TX_WEIGHT_BUDGET = 16;
 
 // ── State ────────────────────────────────────────────────────────────────────
 let walletPubkey = null;
@@ -1087,6 +1089,14 @@ async function sendAirdrop() {
     const senderTokenAccount = senderAccounts?.value?.[0]?.pubkey;
     if (!senderTokenAccount) throw new Error(`No ${currentMint} token account found in your wallet`);
 
+    // Authoritative decimals straight from the on-chain account. The preset list
+    // assumes 9; a CUSTOM token could be anything (e.g. 6). transferChecked REQUIRES
+    // the exact decimals (and toBaseUnits needs them too), so read them on-chain and
+    // override the assumed value — never guess for the actual transfer.
+    const onchainDecimals = senderAccounts?.value?.[0]?.account?.data?.parsed?.info?.tokenAmount?.decimals;
+    const txDecimals = Number.isInteger(onchainDecimals) ? onchainDecimals : currentDecimals;
+    currentDecimals = txDecimals;   // keep the rest of the UI/amount math in sync
+
     // Refresh ATA status right before sending — pre-flight may be a few minutes old.
     // Also catches the case where the user changed token between preview and send.
     setProgress('Re-checking recipient token accounts...', 1);
@@ -1187,27 +1197,35 @@ async function sendAirdrop() {
 // ── Transaction Builder ──────────────────────────────────────────────────────
 // Uses Solana web3.js loaded from CDN
 async function buildTransaction(instructions, feePayer, blockhash, mint, decimals) {
-  const { Transaction, PublicKey, SystemProgram } = solanaWeb3;
-  const { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, createTransferInstruction, createAssociatedTokenAccountInstruction, getAssociatedTokenAddressSync } = splToken;
+  const { Transaction, PublicKey } = solanaWeb3;
+  const { createTransferCheckedInstruction, createAssociatedTokenAccountIdempotentInstruction, createMemoInstruction } = splToken;
 
   const tx = new Transaction();
   tx.recentBlockhash = blockhash;
   tx.feePayer = new PublicKey(feePayer);
+  const feePayerPk = new PublicKey(feePayer);
+  const mintPk = new PublicKey(mint);
+
+  // Self-describing memo first — gives the simulator the tx's intent up front instead
+  // of leaving it to score an unlabeled multi-recipient transfer as a possible drain.
+  tx.add(createMemoInstruction('clucknorris.app airdrop', [feePayerPk]));
 
   for (const ix of instructions) {
     if (ix.type === 'createATA') {
-      tx.add(createAssociatedTokenAccountInstruction(
-        new PublicKey(feePayer),
+      tx.add(createAssociatedTokenAccountIdempotentInstruction(
+        feePayerPk,
         new PublicKey(ix.ata),
         new PublicKey(ix.owner),
-        new PublicKey(ix.mint)
+        mintPk
       ));
     } else if (ix.type === 'transfer') {
-      tx.add(createTransferInstruction(
+      tx.add(createTransferCheckedInstruction(
         new PublicKey(ix.from),
+        mintPk,
         new PublicKey(ix.to),
-        new PublicKey(feePayer),
-        ix.amount
+        feePayerPk,
+        ix.amount,
+        decimals
       ));
     }
   }
@@ -1626,6 +1644,65 @@ const splToken = {
       ],
       programId: ATA_PROGRAM,
       data: new Uint8Array(0),
+    });
+  },
+
+  // CreateIdempotent (ATA program ix #1) — identical to Create but a NO-OP if the
+  // account already exists, instead of failing the whole batch. Guards the race
+  // where a recipient's ATA appears between our pre-flight check and the send.
+  createAssociatedTokenAccountIdempotentInstruction(payer, ata, owner, mint) {
+    const { PublicKey, TransactionInstruction } = solanaWeb3;
+    const ATA_PROGRAM = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
+    const TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+    const SYSVAR_RENT = new PublicKey('SysvarRent111111111111111111111111111111111');
+    return new TransactionInstruction({
+      keys: [
+        { pubkey: payer, isSigner: true, isWritable: true },
+        { pubkey: ata, isSigner: false, isWritable: true },
+        { pubkey: owner, isSigner: false, isWritable: false },
+        { pubkey: mint, isSigner: false, isWritable: false },
+        { pubkey: new PublicKey('11111111111111111111111111111111'), isSigner: false, isWritable: false },
+        { pubkey: TOKEN_PROGRAM, isSigner: false, isWritable: false },
+        { pubkey: SYSVAR_RENT, isSigner: false, isWritable: false },
+      ],
+      programId: ATA_PROGRAM,
+      data: new Uint8Array([1]),   // 1 = CreateIdempotent
+    });
+  },
+
+  // TransferChecked (token program ix #12) — carries the mint + decimals so a wallet
+  // simulator (Phantom Lighthouse / Blockaid) can verify EXACTLY what's moving ("X CLKN")
+  // rather than inferring it, which makes the tx far less likely to be scored suspicious.
+  createTransferCheckedInstruction(source, mint, dest, owner, amount, decimals) {
+    const { PublicKey, TransactionInstruction } = solanaWeb3;
+    const TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+    // byte 0 = TransferChecked opcode (12), bytes 1-8 = amount u64 LE, byte 9 = decimals u8.
+    const data = new Uint8Array(10);
+    data[0] = 12;
+    new DataView(data.buffer).setBigUint64(1, BigInt(amount), true);
+    data[9] = decimals & 0xff;
+    return new TransactionInstruction({
+      keys: [
+        { pubkey: source, isSigner: false, isWritable: true },
+        { pubkey: mint,   isSigner: false, isWritable: false },
+        { pubkey: dest,   isSigner: false, isWritable: true },
+        { pubkey: owner,  isSigner: true,  isWritable: false },
+      ],
+      programId: TOKEN_PROGRAM,
+      data,
+    });
+  },
+
+  // SPL Memo — labels the batch so the transaction is self-describing to simulators
+  // and shows up in the recipient's history as a clucknorris.app airdrop.
+  createMemoInstruction(memoText, signers) {
+    const { PublicKey, TransactionInstruction } = solanaWeb3;
+    const MEMO_PROGRAM = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
+    const keys = (signers || []).map(s => ({ pubkey: s, isSigner: true, isWritable: false }));
+    return new TransactionInstruction({
+      keys,
+      programId: MEMO_PROGRAM,
+      data: new TextEncoder().encode(memoText),
     });
   }
 };
