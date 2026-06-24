@@ -436,6 +436,24 @@ router.get("/vault/open-anchor", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message || "open-anchor failed" }); }
 });
 
+// GET /api/whirlpool/vault/open-wall?key=&project=&quote=USDC&usd=500&lower=<clknPrice>&upper=<clknPrice>[&run=1]
+// Open a single-sided CLKN SELL-WALL at a custom band ABOVE spot (laddered take-profit that
+// also cushions price impact on big buys). Deposits CLKN only; sells into a run-up. Pinned +
+// excluded from autonomous adoption. DRY RUN unless run=1.
+router.get("/vault/open-wall", async (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  try {
+    res.json(await vault.openWall({
+      projectId: proj(req),
+      quoteSym: String(req.query.quote || "USDC").toUpperCase(),
+      usd: req.query.usd != null ? Number(req.query.usd) : 500,
+      lowerPriceClkn: Number(req.query.lower),
+      upperPriceClkn: Number(req.query.upper),
+      dryRun: req.query.run !== "1",
+    }));
+  } catch (e) { res.status(500).json({ error: e.message || "open-wall failed" }); }
+});
+
 // GET /api/whirlpool/vault/add-liquidity?key=&project=&mint=&from=SOL&amount=…[&run=1]
 // Top up an EXISTING position (no close/reopen) — deposit `amount` of `from` into its
 // range; the SDK pulls the matching other side. DRY RUN unless run=1.
