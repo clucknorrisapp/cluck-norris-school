@@ -9050,6 +9050,14 @@ app.use((req, res, next) => {
 app.use("/vendor", express.static(join(__dirname, "public", "vendor"), { maxAge: "30d", immutable: true }));
 
 // -- Homepage: a lightweight front door at / (learn + build + token story). The
+// Preview/fire the school credential watcher manually: /api/grad-alert-test?key=…[&run=1].
+// MUST be before the catch-all below. schoolGradTick is a hoisted fn declared later.
+app.get("/api/grad-alert-test", async (req, res) => {
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  try { res.json(await schoolGradTick({ dryRun: req.query.run !== "1" })); }
+  catch (e) { res.status(500).json({ error: publicErrMsg(e) }); }
+});
+
 // React school moves to /school (still served by the SPA catch-all below). This
 // keeps the root fast — the 9k-line app no longer loads just to reach the homepage. --
 app.get("/", (req, res) => {
@@ -10284,13 +10292,6 @@ async function schoolGradTick({ dryRun = false } = {}) {
     return { new: newCreds.length + newDip.length, alerted: !!chat };
   } catch (e) { console.warn("[school-grad] tick:", e.message); return { error: e.message }; }
 }
-// Preview/fire manually: /api/grad-alert-test?key=…[&run=1]  (&run=1 actually DMs)
-app.get("/api/grad-alert-test", async (req, res) => {
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
-  try { res.json(await schoolGradTick({ dryRun: req.query.run !== "1" })); }
-  catch (e) { res.status(500).json({ error: publicErrMsg(e) }); }
-});
-
 // ── Data-source health monitor ───────────────────────────────────────────────
 // Probe the critical external feeds and report each as ok / down / not-configured.
 // Cheap calls only. Used by the tick (alert on state change) + the gated endpoint.
