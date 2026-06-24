@@ -9073,10 +9073,12 @@ const QUOTE_TOKENS = {
   [CBBTC_MINT]: { symbol: "cbBTC", emoji: "₿", isStable: false },
   [JUP_MINT]: { symbol: "JUP", emoji: "🪐", isStable: false },
 };
-// Buys below this USD value don't fire a Telegram notification. Default $5 so
-// the channel shows the steady stream of smaller buys (good for hype during a
-// Buy Special) while still filtering bot dust. Override via env var.
-const MIN_BUY_USD = parseFloat(process.env.MIN_BUY_USD || "5");
+// Buys below this USD value don't fire a Telegram notification. Default $35: the
+// multi-quote engine's arb flow washes tiny ($5-6) buys through our Orca pools
+// ("via Jupiter → Orca"), and at a $5 floor they flood the channel. $35 filters that
+// dust while still surfacing real buyers. (This was an env var that didn't persist —
+// hard-defaulted so it holds; override higher via MIN_BUY_USD env if arb ramps.)
+const MIN_BUY_USD = parseFloat(process.env.MIN_BUY_USD || "35");
 // Sells have a higher floor than buys by default — only larger sells are worth
 // surfacing. Override either side via MIN_BUY_USD / MIN_SELL_USD.
 const MIN_SELL_USD = parseFloat(process.env.MIN_SELL_USD || "50");
