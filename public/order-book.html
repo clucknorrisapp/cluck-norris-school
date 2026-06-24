@@ -194,7 +194,11 @@ function drawDepth(cv, asksCum, bidsCum){
 }
 
 function render(d){
-  const sym=(d.mint||"").slice(0,4)+"…"+(d.mint||"").slice(-4);
+  const shortMint=(d.mint||"").slice(0,4)+"…"+(d.mint||"").slice(-4);
+  const tname=d.name?esc(d.name):"", tsym=d.symbol?esc(d.symbol):"";
+  // headline = "Name (TICKER)" when we have metadata, else the short mint. sym is
+  // already HTML-escaped here, so it must NOT be re-escaped at the render site.
+  const sym = tsym ? (tname && tname.toLowerCase()!==tsym.toLowerCase() ? `${tname} <span style="opacity:.7">(${tsym})</span>` : tsym) : esc(shortMint);
   const am=d.ammDepth||{}, ask=am.ask||[], bid=am.bid||[];
   const lo=d.limitOrders||{}, A=lo.asks||{top:[],count:0,usd:0,cumulative:[]}, B=lo.bids||{top:[],count:0,usd:0,cumulative:[]};
   const ow=d.orcaWalls;
@@ -211,7 +215,8 @@ function render(d){
   const buyTot=(B.usd||0)+owBuys.reduce((s,w)=>s+(w.sizeUsd||0),0);
 
   let html=`<div class="hero ${cls}">
-    <div class="hero-top"><span class="sym">${esc(sym)}</span><span class="price">${fmtPrice(d.spotUsd)}</span>${ref?`<span class="vbadge ${cls}">${liqWord} LIQUIDITY</span>`:""}</div>
+    <div class="hero-top"><span class="sym">${sym}</span><span class="price">${fmtPrice(d.spotUsd)}</span>${ref?`<span class="vbadge ${cls}">${liqWord} LIQUIDITY</span>`:""}</div>
+    <div style="font-family:var(--mono);font-size:11px;opacity:.5;margin-top:4px;word-break:break-all">${esc(d.mint||"")}</div>
     <div class="vline">${liqLine}</div><div class="vline">${loLine}</div>${owLine?`<div class="vline">${owLine}</div>`:""}
     <div class="stats">
       <div class="stat"><div class="k">Spot</div><div class="v">${fmtPrice(d.spotUsd)}</div></div>
