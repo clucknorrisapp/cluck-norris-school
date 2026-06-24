@@ -517,7 +517,11 @@ async function lockWatchTick() {
 // (persisted) — every topic airs once before any repeat, but the order reshuffles
 // each pass so it never reads like the same predictable loop.
 // Posts STAY (no self-clean) — they're a learning record.
-const EDU_POST_ENABLED = true;
+const EDU_POST_ENABLED = false; // PAUSED (owner's call 2026-06-24): no learning-lesson posts (Telegram + X) or quote-tweet bumps. Flip true to resume.
+// MASTER X PAUSE (owner's call 2026-06-24): hard-gates postToX so NOTHING auto-posts to
+// X — lessons, daily alpha, blitz, market check, spotlights, the lot. One switch. The
+// manual gated test endpoints (&post=1) also no-op while this is true. Flip false to resume.
+const X_AUTOPOST_PAUSED = true;
 // Outreach + Tool Spotlight DROPPED (owner's call 2026-06-20 — trimming scheduled
 // post volume). Flip true to restore.
 const OUTREACH_ENABLED = false;
@@ -647,6 +651,7 @@ function xPercentEncode(s) {
   return encodeURIComponent(String(s)).replace(/[!*'()]/g, c => "%" + c.charCodeAt(0).toString(16).toUpperCase());
 }
 async function postToX(text, opts = {}) {
+  if (X_AUTOPOST_PAUSED) return { ok: false, paused: true };
   if (!xConfigured()) return { ok: false, skipped: true };
   const ck = process.env.X_API_KEY, cs = process.env.X_API_SECRET, at = process.env.X_ACCESS_TOKEN, ats = process.env.X_ACCESS_SECRET;
   const url = "https://api.x.com/2/tweets";
@@ -10410,7 +10415,9 @@ app.listen(PORT, () => {
     // Cluck's Daily Alpha — auto-post once/day at ~ALPHA_POST_HOUR UTC to X + (silent) Telegram.
     // Stamps the date BEFORE posting so a crash/retry can't double-post publicly; a rare failed
     // post is recoverable via /api/alpha-test?post=1. Change the hour freely (or kv alphaPostHour).
+    const DAILY_ALPHA_ENABLED = false; // PAUSED (owner's call 2026-06-24): no daily update / Daily Alpha brief (Telegram + X). Flip true to resume.
     async function dailyAlphaTick() {
+      if (!DAILY_ALPHA_ENABLED) return;
       try {
         const now = new Date();
         const hour = Number(kv.get("alphaPostHour", 14)); // 14:00 UTC ≈ 9–10am ET
