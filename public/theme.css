@@ -13,13 +13,16 @@
 @import url('https://fonts.googleapis.com/css2?family=Anton&family=Chakra+Petch:wght@400;500;600;700&display=swap');
 
 :root {
-  --bg: #0a0503;
-  --bg-grad: radial-gradient(125% 75% at 50% -12%, #2c0f04 0%, #160b06 46%, #0a0503 100%);
-  --card: #1a0f08;
-  --card-grad: linear-gradient(180deg, #1d110a, #160c07);
-  --card2: #160c07;
-  --border: rgba(255,122,24,.28);
-  --border-soft: rgba(255,122,24,.14);
+  /* Clean professional dark ground — NO orange gradient (fire lives in the
+     accents: buttons, links, headings, key numbers). Flat neutral slate so the
+     tools read like a serious dashboard, not a warm-brown wash. */
+  --bg: #0b0c0e;
+  --bg-grad: #0b0c0e;
+  --card: #14151a;
+  --card-grad: #14151a;
+  --card2: #101116;
+  --border: rgba(255,255,255,.09);
+  --border-soft: rgba(255,255,255,.05);
   --orange: #FF7A18;
   --red: #E81E0E;
   --red-soft: #F87171;
