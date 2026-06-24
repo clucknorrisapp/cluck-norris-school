@@ -10237,6 +10237,60 @@ async function reconcileMissedTrades({ dry = false } = {}) {
   return { windowMin: lookbackMin, settleSec, scanned, posted, found };
 }
 
+// ── School credential watcher ────────────────────────────────────────────────
+// DMs the operator (treasury chat, silent) with NEW course-completion claims (a learner
+// finished + submitted a Solana address via /api/claim) and NEW graduation diploma cNFTs
+// minted. New-only: the first run BASELINES current state silently (never dumps the backlog).
+// Idempotent via kv `schoolGradSeen`, so frequent redeploys can't double-alert.
+async function schoolGradTick({ dryRun = false } = {}) {
+  try {
+    const all = (credentials.all && credentials.all()) || [];
+    const minted = kv.get(diplomaNft.MINTED_KV, {}) || {};
+    const mintedWallets = Object.keys(minted);
+    let seen = kv.get("schoolGradSeen", null);
+    if (!seen) { // baseline — record current, don't alert on the historical backlog
+      if (!dryRun) kv.set("schoolGradSeen", { creds: all.map(c => c.wallet), diplomas: mintedWallets, baselinedAt: Date.now() });
+      return { baselined: true, creds: all.length, diplomas: mintedWallets.length };
+    }
+    const seenCreds = new Set(seen.creds || []), seenDip = new Set(seen.diplomas || []);
+    const newCreds = all.filter(c => !seenCreds.has(c.wallet));
+    const newDip = mintedWallets.filter(w => !seenDip.has(w));
+    if (!newCreds.length && !newDip.length) return { new: 0 };
+
+    const sh = (w) => `${String(w).slice(0, 4)}…${String(w).slice(-4)}`;
+    const lines = [];
+    if (newCreds.length) {
+      lines.push(`🎓 <b>${newCreds.length} new credential${newCreds.length === 1 ? "" : "s"}</b> (learner submitted a wallet)`);
+      for (const c of newCreds.slice(0, 15)) {
+        const kind = c.diploma ? (c.diploma.verified === "server-scored" ? "✅ Diploma (verified)" : "📜 Diploma") : (c.graduation ? "🎓 Graduated" : "📝 Claim");
+        lines.push(`• <code>${sh(c.wallet)}</code> — ${kind} · <a href="https://clucknorris.app/transcript/${c.slug}">transcript</a>`);
+      }
+      if (newCreds.length > 15) lines.push(`…and ${newCreds.length - 15} more`);
+    }
+    if (newDip.length) {
+      lines.push(`${newCreds.length ? "\n" : ""}🪙 <b>${newDip.length} new diploma NFT${newDip.length === 1 ? "" : "s"} minted</b>`);
+      for (const w of newDip.slice(0, 15)) {
+        const m = minted[w] || {};
+        lines.push(`• <code>${sh(w)}</code>${m.sig ? ` · <a href="https://solscan.io/tx/${m.sig}">tx</a>` : ""}`);
+      }
+    }
+    const text = "🏫 <b>SCHOOL — new activity</b>\n" + lines.join("\n");
+    if (dryRun) return { new: newCreds.length + newDip.length, preview: text };
+
+    const proj = whirlpoolMM.vault.getProject("treasury");
+    const chat = (proj && proj.telegramChatId) || process.env.TELEGRAM_CHAT_ID;
+    if (chat) await tgSend(chat, text, null, { silent: true });
+    kv.set("schoolGradSeen", { creds: all.map(c => c.wallet), diplomas: mintedWallets, baselinedAt: seen.baselinedAt });
+    return { new: newCreds.length + newDip.length, alerted: !!chat };
+  } catch (e) { console.warn("[school-grad] tick:", e.message); return { error: e.message }; }
+}
+// Preview/fire manually: /api/grad-alert-test?key=…[&run=1]  (&run=1 actually DMs)
+app.get("/api/grad-alert-test", async (req, res) => {
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  try { res.json(await schoolGradTick({ dryRun: req.query.run !== "1" })); }
+  catch (e) { res.status(500).json({ error: publicErrMsg(e) }); }
+});
+
 // ── Data-source health monitor ───────────────────────────────────────────────
 // Probe the critical external feeds and report each as ok / down / not-configured.
 // Cheap calls only. Used by the tick (alert on state change) + the gated endpoint.
@@ -10425,6 +10479,10 @@ app.listen(PORT, () => {
     // Lock-change watcher — every 2h, auto-post when the locked total increases.
     setInterval(lockWatchTick, 2 * 60 * 60 * 1000);
     setTimeout(lockWatchTick, 90000); // prime the baseline shortly after boot
+    // School credential watcher — ~4x/day (every 6h): DM the operator on NEW course-completion
+    // claims (a learner submitted a Solana address) + NEW graduation diploma cNFTs minted.
+    setInterval(() => { schoolGradTick().catch(e => console.warn("[school-grad] tick:", e.message)); }, 6 * 60 * 60 * 1000);
+    setTimeout(() => { schoolGradTick().catch(() => {}); }, 120000); // baseline / first check ~2 min after boot
     // Bags graduation watcher — every 3 min: alert near-bonding (85%) + capture
     // graduations into our own 48h record (independent of pump.fun flooding ST).
     setTimeout(gradWatcherTick, 12000);
