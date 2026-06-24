@@ -2364,6 +2364,10 @@ function AMMCalculator() {
           </p>
         </div>
       )}
+      <div style={{marginTop:10,fontFamily:"'Anton',sans-serif",fontSize:11.5,color:"#9CA3AF",lineHeight:1.65,letterSpacing:0.3}}>
+        📍 This is the textbook <b>full‑range</b> x*y=k model — the universal concept, the same on every chain. <b>Real concentrated‑liquidity pools</b> (Orca, Meteora) pack their depth into a tight band, so once a buy eats through that band the price moves <b>steeper</b> than this. Treat this number as a floor, not a promise.{" "}
+        <a href="/order-book" target="_blank" rel="noreferrer" style={{color:"#5B8DD6",fontWeight:700,textDecoration:"none"}}>See CLKN's live price impact →</a>
+      </div>
     </div>
   );
 }
