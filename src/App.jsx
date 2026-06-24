@@ -355,7 +355,7 @@ const INCUBATOR_LESSONS = [
     id: "wallet",
     icon: "🥚",
     title: "What is a Wallet?",
-    color: "#60A5FA",
+    color: "#5B8DD6",
     intro: "In crypto, a wallet doesn't hold money — it holds KEYS. Your wallet is basically a password manager for your crypto. There are two keys you need to know about.",
     concepts: [
       { term: "Public Key", def: "Like your home address — you can share it with anyone so they can send you crypto. It's safe to show." },
@@ -537,23 +537,23 @@ function Incubator({ onComplete, onBack }) {
   if (phase === "complete") return (
     <div style={{padding:"0 16px 40px",maxWidth:READ,margin:"0 auto",textAlign:"center"}}>
       <div style={{fontSize:60,marginBottom:16}}>🐔</div>
-      <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,letterSpacing:4,color:"#60A5FA",marginBottom:8}}>INCUBATOR COMPLETE</div>
+      <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,letterSpacing:4,color:"#5B8DD6",marginBottom:8}}>INCUBATOR COMPLETE</div>
       <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:28,fontWeight:900,color:"#F9FAFB",margin:"0 0 8px",lineHeight:1}}>YOU'VE HATCHED!</h2>
       <p style={{fontFamily:"'Anton',sans-serif",fontSize:15.5,color:"#9CA3AF",marginBottom:24,fontStyle:"italic",lineHeight:1.6}}>
         "Every legend started somewhere. Now step into the real Hard Knocks."
       </p>
-      <div style={{background:"rgba(96,165,250,0.08)",border:"1px solid rgba(96,165,250,0.3)",borderRadius:12,padding:20,marginBottom:24}}>
+      <div style={{background:"rgba(91,141,214,0.08)",border:"1px solid rgba(91,141,214,0.3)",borderRadius:12,padding:20,marginBottom:24}}>
         <div style={{display:"flex",justifyContent:"center",gap:12,flexWrap:"wrap"}}>
           {INCUBATOR_LESSONS.map(l=>(
             <div key={l.id} style={{textAlign:"center"}}>
               <div style={{fontSize:24}}>{l.icon}</div>
-              <div style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#60A5FA",letterSpacing:1,marginTop:2}}>✓</div>
+              <div style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#5B8DD6",letterSpacing:1,marginTop:2}}>✓</div>
             </div>
           ))}
         </div>
         <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,color:"#9CA3AF",marginTop:12,letterSpacing:1}}>{INCUBATOR_LESSONS.length} LESSONS COMPLETED</div>
       </div>
-      <button onClick={onComplete} style={{width:"100%",background:"#60A5FA",border:"none",borderRadius:10,padding:"16px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer",boxShadow:"0 0 28px rgba(96,165,250,0.4)",marginBottom:10}}>
+      <button onClick={onComplete} style={{width:"100%",background:"#5B8DD6",border:"none",borderRadius:10,padding:"16px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer",boxShadow:"0 6px 20px rgba(91,141,214,0.22)",marginBottom:10}}>
         🏫 ENTER THE SCHOOL OF HARD KNOCKS
       </button>
       <button onClick={onBack} style={{background:"none",border:"none",color:"#6B7280",fontFamily:"'Anton',sans-serif",fontSize:13,letterSpacing:2,cursor:"pointer"}}>
@@ -568,7 +568,7 @@ function Incubator({ onComplete, onBack }) {
       {/* Progress dots */}
       <div style={{display:"flex",gap:6,justifyContent:"center",marginBottom:20}}>
         {INCUBATOR_LESSONS.map((l,i)=>(
-          <div key={l.id} style={{width:28,height:28,borderRadius:"50%",background:completed.includes(l.id)?"rgba(96,165,250,0.3)":i===lessonIdx?lesson.color:"rgba(255,122,24,0.18)",border:`2px solid ${completed.includes(l.id)?"#60A5FA":i===lessonIdx?lesson.color:"rgba(255,122,24,0.2)"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13.5}}>
+          <div key={l.id} style={{width:28,height:28,borderRadius:"50%",background:completed.includes(l.id)?"rgba(91,141,214,0.3)":i===lessonIdx?lesson.color:"rgba(255,122,24,0.18)",border:`2px solid ${completed.includes(l.id)?"#5B8DD6":i===lessonIdx?lesson.color:"rgba(255,122,24,0.2)"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13.5}}>
             {completed.includes(l.id) ? "✓" : l.icon}
           </div>
         ))}
@@ -1231,7 +1231,7 @@ function BagsPage() {
                       </div>
                     ) : null; })()}
                     {handle && (
-                      <div style={{fontFamily:"'Anton',sans-serif",fontSize:13.5,color:"#60A5FA",marginTop:6,letterSpacing:0.5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>𝕏 @{handle}</div>
+                      <div style={{fontFamily:"'Anton',sans-serif",fontSize:13.5,color:"#5B8DD6",marginTop:6,letterSpacing:0.5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>𝕏 @{handle}</div>
                     )}
                   </div>
                 </div>
@@ -2040,7 +2040,7 @@ function StartHere({ onGo }){
   const PATHS=[
     { key:"new", icon:"🐣", title:"Brand new to crypto", tag:"Start at the very beginning", body:()=>(<>
         <p style={txt}>Tiny, plain-English lessons first — what a wallet is, what a token is, how to stay safe. No wallet, no money, no sign-up needed to learn.</p>
-        <Act label="🥚 Open the Incubator" onClick={()=>onGo("incubator")} color="#60A5FA" bg="rgba(96,165,250,0.1)" bd="rgba(96,165,250,0.4)"/>
+        <Act label="🥚 Open the Incubator" onClick={()=>onGo("incubator")} color="#5B8DD6" bg="rgba(91,141,214,0.1)" bd="rgba(91,141,214,0.4)"/>
         <Act label="📚 The 12-lesson course" onClick={()=>onGo("select")}/>
       </>)},
     { key:"basics", icon:"📚", title:"I know the basics", tag:"Level up", body:()=>(<>
@@ -2158,7 +2158,7 @@ export default function App(){
         {/* Nav tabs — school sections only (top-level routing lives on the homepage) */}
         <div style={{display:"flex",gap:5}}>
           <button onClick={()=>setScreen("landing")} style={{flex:1,background:screen==="landing"?"rgba(255,122,24,0.22)":"rgba(255,122,24,0.06)",border:`1px solid ${screen==="landing"?"rgba(255,255,255,0.25)":"rgba(255,122,24,0.18)"}`,borderRadius:7,padding:"7px 2px",fontFamily:"'Anton',sans-serif",fontSize:12.5,fontWeight:700,color:screen==="landing"?"#F9FAFB":"#6B7280",letterSpacing:0.5,cursor:"pointer"}}>🏫 SCHOOL</button>
-          <button onClick={()=>setScreen("incubator")} style={{flex:1,background:screen==="incubator"?"rgba(96,165,250,0.25)":"rgba(96,165,250,0.06)",border:`1px solid ${screen==="incubator"?"rgba(96,165,250,0.6)":"rgba(96,165,250,0.2)"}`,borderRadius:7,padding:"7px 2px",fontFamily:"'Anton',sans-serif",fontSize:12.5,fontWeight:700,color:"#60A5FA",letterSpacing:0.5,cursor:"pointer"}}>🥚 INCUBATOR</button>
+          <button onClick={()=>setScreen("incubator")} style={{flex:1,background:screen==="incubator"?"rgba(91,141,214,0.25)":"rgba(91,141,214,0.06)",border:`1px solid ${screen==="incubator"?"rgba(91,141,214,0.6)":"rgba(91,141,214,0.2)"}`,borderRadius:7,padding:"7px 2px",fontFamily:"'Anton',sans-serif",fontSize:12.5,fontWeight:700,color:"#5B8DD6",letterSpacing:0.5,cursor:"pointer"}}>🥚 INCUBATOR</button>
           <button onClick={()=>setScreen(screen==="library"?"landing":"library")} style={{flex:1,background:screen==="library"?"rgba(255,122,24,0.25)":"rgba(255,122,24,0.06)",border:`1px solid ${screen==="library"?"rgba(255,122,24,0.6)":"rgba(255,122,24,0.2)"}`,borderRadius:7,padding:"7px 2px",fontFamily:"'Anton',sans-serif",fontSize:12.5,fontWeight:700,color:"#FF7A18",letterSpacing:0.5,cursor:"pointer"}}>📚 LIBRARY</button>
           <button onClick={()=>setScreen(screen==="lplab"?"landing":"lplab")} style={{flex:1,background:screen==="lplab"?"rgba(16,185,129,0.25)":"rgba(16,185,129,0.06)",border:`1px solid ${screen==="lplab"?"rgba(16,185,129,0.6)":"rgba(16,185,129,0.2)"}`,borderRadius:7,padding:"7px 2px",fontFamily:"'Anton',sans-serif",fontSize:12.5,fontWeight:700,color:"#10B981",letterSpacing:0.5,cursor:"pointer"}}>⚗️ LP LAB</button>
           <button onClick={()=>setScreen(screen==="survive"?"landing":"survive")} style={{flex:1,background:screen==="survive"?"rgba(239,68,68,0.25)":"rgba(239,68,68,0.06)",border:`1px solid ${screen==="survive"?"rgba(239,68,68,0.6)":"rgba(239,68,68,0.2)"}`,borderRadius:7,padding:"7px 2px",fontFamily:"'Anton',sans-serif",fontSize:12.5,fontWeight:700,color:"#EF4444",letterSpacing:0.5,cursor:"pointer"}}>🎮 SURVIVE</button>
