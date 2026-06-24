@@ -12,7 +12,9 @@
     { code: "en", label: "English",  short: "EN",   html: "en" },
     { code: "zh", label: "中文",      short: "中文", html: "zh-CN" },
     { code: "es", label: "Español",  short: "ES",   html: "es" },
-    { code: "it", label: "Italiano", short: "IT",   html: "it" }
+    { code: "it", label: "Italiano", short: "IT",   html: "it" },
+    { code: "pt", label: "Português", short: "PT",  html: "pt" },
+    { code: "vi", label: "Tiếng Việt", short: "VI", html: "vi" }
   ];
   var SUPPORTED = {}; LANGS.forEach(function (L) { SUPPORTED[L.code] = L; });
   function detect() {
@@ -25,6 +27,8 @@
         if (l.indexOf("zh") === 0) return "zh";
         if (l.indexOf("es") === 0) return "es";
         if (l.indexOf("it") === 0) return "it";
+        if (l.indexOf("pt") === 0) return "pt";
+        if (l.indexOf("vi") === 0) return "vi";
       }
     } catch (_) {}
     return "en";
