@@ -251,8 +251,8 @@ function render(d){
   const ladder=(rows,c)=>rows.length?rows.map(r=>`<tr><td><div class="bar ${c}" style="width:${Math.min(100,(impAbs(r)/maxImp)*100)}%"></div><span>${fmtUsd(r.usd)}</span></td><td><span>${fmtPrice(r.avgPriceUsd)}</span></td><td><span class="${c}-c">${impAbs(r).toFixed(2)}%</span></td></tr>`).join(""):`<tr><td colspan="3" class="none">no route / rate‑limited — rescan</td></tr>`;
   html+=`<div class="card"><h2>Liquidity depth — price impact</h2><p class="explain">The <b>real</b> price impact of a trade each size — live Jupiter routing across <b>every pool at once</b>, measured as average fill vs spot (exactly what you'd see buying on Jupiter). Bigger % = thinner = easier to push.</p>
     <div class="grid2">
-      <div><div class="side-h ask-c">⬆ BUYING pushes up — resistance</div><table><thead><tr><th>Buy size</th><th>Avg fill</th><th>Price impact</th></tr></thead><tbody>${ladder(ask,"ask")}</tbody></table></div>
-      <div><div class="side-h bid-c">⬇ SELLING pushes down — support</div><table><thead><tr><th>Sell size</th><th>Avg fill</th><th>Price impact</th></tr></thead><tbody>${ladder(bid,"bid")}</tbody></table></div>
+      <div><div class="side-h bid-c">⬆ BUYING — pushes price up (resistance)</div><table><thead><tr><th>Buy size</th><th>Avg fill</th><th>Price impact</th></tr></thead><tbody>${ladder(ask,"bid")}</tbody></table></div>
+      <div><div class="side-h ask-c">⬇ SELLING — pushes price down (support)</div><table><thead><tr><th>Sell size</th><th>Avg fill</th><th>Price impact</th></tr></thead><tbody>${ladder(bid,"ask")}</tbody></table></div>
     </div></div>`;
 
   // jupiter limit orders
