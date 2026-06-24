@@ -55,8 +55,8 @@ export function JupiterSwapButton({ label, style }) {
           initialOutputMint: CLKN_MINT,
           fixedOutputMint: true,
           swapMode: "ExactIn",
-          referralAccount: JUPITER_REFERRAL,
-          referralFee: 50, // 0.5% — Jupiter's referral minimum (0.1% is below their floor)
+          // Referral fee OFF until the referral account is initialized under the Plugin's
+          // referral project (DkiqsTrw1u1bYFumumC7sCG2S8K25qc2v). Frictionless buy meanwhile.
         },
         defaultExplorer: "Solscan",
       });
