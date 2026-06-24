@@ -7756,6 +7756,13 @@ app.get("/api/token-vitals", async (req, res) => {
     const solPairs = allDexPairs.filter(p => p.chainId === "solana" || !p.chainId);
     let totalLiqUsd = solPairs.reduce((s, p) => s + (parseFloat(p.liquidity?.usd) || 0), 0);
     let totalVol24h = solPairs.reduce((s, p) => s + (parseFloat(p.volume?.h24) || 0), 0);
+    // CLKN: DexScreener mis-reports the CLKN/JUP pair's token-denominated volume (artifact) and
+    // its liquidity sum differs from Jupiter's — use Jupiter's authoritative volume + liquidity.
+    if (mint === CLKN_MINT_ADDR) {
+      const jv = await getClkn24hVolume(CLKN_MINT_ADDR).catch(() => null); // Jupiter vol (also warms cachedJupLiq)
+      if (jv != null && jv >= 0) totalVol24h = jv;
+      if (cachedJupLiq != null && cachedJupLiq > 0) totalLiqUsd = cachedJupLiq;
+    }
     let dexFamilies = new Set();
     for (const p of solPairs) {
       const id = (p.dexId || "").toLowerCase().split("-")[0];
@@ -8802,6 +8809,11 @@ app.get("/wallet-xray", (req, res) => {
   res.sendFile(join(__dirname, "public", "wallet-xray.html"));
 });
 
+// CLKN token page — clean, standalone, all data from Jupiter (price/vol/liq/holders/organic/verified) + Buy widget.
+app.get("/clkn", (req, res) => {
+  res.sendFile(join(__dirname, "public", "clkn.html"));
+});
+
 // Token Vitals — facts-only token snapshot (authorities, liquidity, holders, Token-2022 safety,
 // market). Deliberately NO score/grade/verdict (see the API note) — just the on-chain readings.
 app.get("/token-vitals", (req, res) => {
@@ -9524,6 +9536,7 @@ async function getWalletStats(wallet, HELIUS_KEY) {
 // Total CLKN 24h volume across all Solana pairs (DexScreener), cached 5 min.
 let cached24hVol = null, cached24hVolAt = 0; // CLKN fast-path (back-compat)
 let cachedJupVol = null, cachedJupVolAt = 0;  // CLKN REAL 24h volume from Jupiter (artifact-free)
+let cachedJupLiq = null;                      // CLKN total liquidity from Jupiter
 const vol24hByMint = new Map(); // mint -> { v, at } for other projects
 // Jupiter Tokens API V2 search — uses the KEYED host (higher rate limits) when
 // JUPITER_API_KEY is set on Railway, with an AUTOMATIC fallback to the free lite-api if the
@@ -9621,9 +9634,12 @@ async function getClknOrganicScore(mint = CLKN_MINT_ADDR) {
       const data = await jupTokensSearch(mint);
       if (Array.isArray(data) && data.length) {
         const t = data.find((d) => d.id === mint) || data[0];
-        if (t && isClkn && t.stats24h) {
-          const sv = (Number(t.stats24h.buyVolume) || 0) + (Number(t.stats24h.sellVolume) || 0);
-          if (sv > 0) { cachedJupVol = sv; cachedJupVolAt = now; }
+        if (t && isClkn) {
+          if (t.stats24h) {
+            const sv = (Number(t.stats24h.buyVolume) || 0) + (Number(t.stats24h.sellVolume) || 0);
+            if (sv > 0) { cachedJupVol = sv; cachedJupVolAt = now; }
+          }
+          if (Number.isFinite(Number(t.liquidity))) cachedJupLiq = Number(t.liquidity);
         }
         if (t && t.organicScore != null) {
           const o = { score: Number(t.organicScore), label: t.organicScoreLabel || null };

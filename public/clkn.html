@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>CLKN — Cluck Norris Token</title>
+<meta name="description" content="Live CLKN token data — price, volume, liquidity, holders and organic score, straight from Jupiter. Buy CLKN, verified on Jupiter."/>
+<link rel="icon" href="/cluck-norris-logo.jpg"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Chakra+Petch:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Jupiter Plugin — Buy CLKN widget -->
+<script src="https://plugin.jup.ag/plugin-v1.js" data-preload defer></script>
+<style>
+  /* Clean slate — cool dark base, white data, orange/gold reserved for brand + price. */
+  :root{
+    --bg:#0a0c11; --bg2:#0d1016; --card:#141923; --card2:#1b2230; --line:rgba(255,255,255,0.07);
+    --text:#F1F5F9; --sub:#9AA7B8; --muted:#647084;
+    --orange:#FF8A33; --gold:#FFC24A; --cyan:#38BDF8; --green:#34D399; --red:#F87171; --purple:#A78BFA;
+    --disp:'Anton',sans-serif; --body:'Chakra Petch',system-ui,sans-serif; --mono:ui-monospace,'Share Tech Mono','Courier New',monospace;
+    color-scheme:dark;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:var(--body);min-height:100vh;
+    background-image:radial-gradient(120% 60% at 50% -10%, #11151d 0%, var(--bg) 55%);}
+  a{color:inherit;}
+  .wrap{max-width:680px;margin:0 auto;padding:20px 16px 90px;}
+  .back{display:inline-flex;align-items:center;gap:8px;font-family:var(--disp);font-size:11px;letter-spacing:2px;color:var(--sub);text-decoration:none;margin-bottom:18px;}
+  .back img{height:22px;width:22px;border-radius:50%;object-fit:cover;border:1px solid var(--line);}
+
+  /* header */
+  .head{display:flex;align-items:center;gap:13px;margin-bottom:18px;}
+  .head img{height:52px;width:52px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,138,51,.5);}
+  .head .nm{font-family:var(--disp);font-size:26px;letter-spacing:1px;line-height:1;}
+  .head .tk{font-family:var(--mono);font-size:12px;color:var(--sub);margin-top:4px;}
+  .vbadge{display:inline-flex;align-items:center;gap:5px;font-family:var(--disp);font-size:10px;letter-spacing:1px;color:var(--cyan);
+    background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.35);border-radius:999px;padding:4px 10px;margin-left:auto;white-space:nowrap;}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:13px;}
+  .ttl{font-family:var(--disp);font-size:11px;letter-spacing:2.5px;color:var(--sub);margin-bottom:13px;text-transform:uppercase;}
+
+  /* price */
+  .price-card{text-align:center;background:linear-gradient(180deg,#161b25,#11151d);}
+  .price{font-family:var(--disp);font-size:46px;letter-spacing:0.5px;color:var(--gold);line-height:1;word-break:break-all;}
+  .price-sub{margin-top:10px;font-family:var(--mono);font-size:13px;color:var(--sub);display:flex;gap:14px;justify-content:center;flex-wrap:wrap;}
+  .chg.up{color:var(--green);} .chg.down{color:var(--red);}
+
+  /* metric grid */
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:11px;}
+  @media(min-width:520px){.grid{grid-template-columns:repeat(4,1fr);}}
+  .m{background:var(--card2);border:1px solid var(--line);border-radius:11px;padding:13px 12px;}
+  .m .k{font-family:var(--disp);font-size:9.5px;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase;margin-bottom:6px;}
+  .m .v{font-family:var(--mono);font-size:18px;font-weight:700;color:var(--text);}
+  .m .v.cy{color:var(--cyan);}
+
+  /* organic score bar */
+  .org{display:flex;align-items:center;gap:12px;}
+  .org .num{font-family:var(--disp);font-size:30px;}
+  .org .bar{flex:1;height:9px;border-radius:6px;background:rgba(255,255,255,.07);overflow:hidden;}
+  .org .fill{height:100%;border-radius:6px;}
+
+  /* activity row */
+  .act{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;}
+  .act .a{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:11px 6px;text-align:center;}
+  .act .a .t{font-family:var(--disp);font-size:10px;letter-spacing:1px;color:var(--muted);margin-bottom:5px;}
+  .act .a .p{font-family:var(--mono);font-size:13px;font-weight:700;}
+
+  .row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13.5px;}
+  .row:last-child{border-bottom:none;}
+  .row .k{color:var(--sub);} .row .v{font-family:var(--mono);color:var(--text);font-weight:600;text-align:right;}
+  .ok{color:var(--green);}
+
+  .buy{display:block;width:100%;font-family:var(--disp);font-size:18px;letter-spacing:2.5px;text-transform:uppercase;color:#15110a;
+    background:linear-gradient(180deg,var(--gold),var(--orange));border:none;border-radius:13px;padding:17px;cursor:pointer;
+    box-shadow:0 8px 30px rgba(255,138,51,.35);margin-bottom:10px;}
+  .links{display:flex;gap:9px;}
+  .links a{flex:1;text-align:center;font-family:var(--disp);font-size:11px;letter-spacing:1.5px;color:var(--sub);text-decoration:none;
+    background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:12px;}
+  .mint{font-family:var(--mono);font-size:11px;color:var(--muted);word-break:break-all;cursor:pointer;text-align:center;margin-top:14px;}
+  .live{font-family:var(--mono);font-size:10px;color:var(--muted);text-align:center;margin-top:14px;}
+  .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);margin-right:5px;vertical-align:middle;animation:pulse 1.6s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+  .skel{color:var(--muted);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/"><img src="/cluck-norris-logo.jpg" alt=""/>&larr; CLUCK NORRIS</a>
+
+  <div class="head">
+    <img src="/cluck-norris-logo.jpg" alt="CLKN"/>
+    <div>
+      <div class="nm">CLUCK NORRIS</div>
+      <div class="tk">CLKN · Solana</div>
+    </div>
+    <span class="vbadge" id="vbadge" style="display:none">✓ Verified on Jupiter</span>
+  </div>
+
+  <!-- Price -->
+  <div class="card price-card">
+    <div class="ttl">CLKN Price (USD)</div>
+    <div class="price" id="price">—</div>
+    <div class="price-sub">
+      <span id="chg24" class="chg">—</span>
+      <span>MC <b id="mcap" style="color:var(--text)">—</b></span>
+    </div>
+  </div>
+
+  <!-- Buy -->
+  <button class="buy" id="buyBtn">⚡ Buy CLKN</button>
+  <div class="links">
+    <a href="https://dexscreener.com/solana/DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS" target="_blank" rel="noreferrer">📈 Chart</a>
+    <a href="https://jup.ag/tokens/DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS" target="_blank" rel="noreferrer">🪐 Jupiter</a>
+    <a href="https://lock.jup.ag/token/DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS" target="_blank" rel="noreferrer">🔒 Locks</a>
+  </div>
+
+  <!-- Metrics (all from Jupiter) -->
+  <div class="card" style="margin-top:13px;">
+    <div class="ttl">Market — live via Jupiter</div>
+    <div class="grid">
+      <div class="m"><div class="k">24h Volume</div><div class="v cy" id="vol">—</div></div>
+      <div class="m"><div class="k">Liquidity</div><div class="v cy" id="liq">—</div></div>
+      <div class="m"><div class="k">Holders</div><div class="v" id="holders">—</div></div>
+      <div class="m"><div class="k">24h Traders</div><div class="v" id="traders">—</div></div>
+    </div>
+  </div>
+
+  <!-- Organic score -->
+  <div class="card">
+    <div class="ttl">Jupiter Organic Score</div>
+    <div class="org">
+      <span class="num" id="orgNum">—</span>
+      <div class="bar"><div class="fill" id="orgFill" style="width:0%"></div></div>
+    </div>
+    <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:9px;line-height:1.5">Jupiter's measure of real, non-manipulated trading. Higher = healthier organic demand.</div>
+  </div>
+
+  <!-- Price activity -->
+  <div class="card">
+    <div class="ttl">Price Change</div>
+    <div class="act">
+      <div class="a"><div class="t">5M</div><div class="p" id="c5">—</div></div>
+      <div class="a"><div class="t">1H</div><div class="p" id="c1">—</div></div>
+      <div class="a"><div class="t">6H</div><div class="p" id="c6">—</div></div>
+      <div class="a"><div class="t">24H</div><div class="p" id="c24">—</div></div>
+    </div>
+  </div>
+
+  <!-- Token details -->
+  <div class="card">
+    <div class="ttl">Token Details</div>
+    <div class="row"><span class="k">FDV</span><span class="v" id="fdv">—</span></div>
+    <div class="row"><span class="k">Circulating supply</span><span class="v" id="circ">—</span></div>
+    <div class="row"><span class="k">Mint authority</span><span class="v" id="mintAuth">—</span></div>
+    <div class="row"><span class="k">Freeze authority</span><span class="v" id="freezeAuth">—</span></div>
+    <div class="row"><span class="k">Top-10 holders</span><span class="v" id="topHolders">—</span></div>
+  </div>
+
+  <div class="mint" id="mint" title="Tap to copy">DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS</div>
+  <div class="live"><span class="dot"></span><span id="liveAt">loading live data…</span></div>
+</div>
+
+<script>
+  var CLKN = "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
+  function $(id){return document.getElementById(id);}
+  function fmtUsd(n){ n=Number(n); if(!isFinite(n))return "—";
+    if(n>=1e9)return "$"+(n/1e9).toFixed(2)+"B"; if(n>=1e6)return "$"+(n/1e6).toFixed(2)+"M";
+    if(n>=1e3)return "$"+(n/1e3).toFixed(1)+"K"; if(n>=1)return "$"+n.toFixed(2); return "$"+n.toFixed(6); }
+  function fmtNum(n){ n=Number(n); if(!isFinite(n))return "—";
+    if(n>=1e9)return (n/1e9).toFixed(2)+"B"; if(n>=1e6)return (n/1e6).toFixed(2)+"M"; if(n>=1e3)return (n/1e3).toFixed(1)+"K"; return Math.round(n).toLocaleString(); }
+  function pct(n){ if(n==null||!isFinite(n))return null; return (n>=0?"+":"")+Number(n).toFixed(2)+"%"; }
+  function setChg(el,n){ var p=pct(n); if(p==null){el.textContent="—";return;} el.textContent=p; el.style.color=n>=0?"var(--green)":"var(--red)"; }
+
+  async function load(){
+    try{
+      var r = await fetch("https://lite-api.jup.ag/tokens/v2/search?query="+CLKN);
+      var a = await r.json();
+      var t = (Array.isArray(a)?a:(a.tokens||[])).find(function(x){return x.id===CLKN;}) || (Array.isArray(a)?a[0]:null);
+      if(!t){ $("liveAt").textContent="data unavailable — try the chart link"; return; }
+      var s = t.stats24h||{};
+      // price + mcap
+      $("price").textContent = fmtUsd(t.usdPrice);
+      setChg($("chg24"), s.priceChange);
+      $("mcap").textContent = fmtUsd(t.mcap||t.fdv);
+      // verified
+      if(t.isVerified){ $("vbadge").style.display="inline-flex"; }
+      // metrics
+      var vol = (Number(s.buyVolume)||0)+(Number(s.sellVolume)||0);
+      $("vol").textContent = fmtUsd(vol);
+      $("liq").textContent = fmtUsd(t.liquidity);
+      $("holders").textContent = fmtNum(t.holderCount);
+      $("traders").textContent = fmtNum(s.numTraders);
+      // organic
+      var os = Number(t.organicScore);
+      if(isFinite(os)){
+        $("orgNum").textContent = os.toFixed(1);
+        var col = t.organicScoreLabel==="high"?"var(--green)":t.organicScoreLabel==="medium"?"var(--gold)":"var(--orange)";
+        $("orgNum").style.color = col;
+        $("orgFill").style.width = Math.max(2,Math.min(100,os))+"%";
+        $("orgFill").style.background = col;
+      }
+      // activity
+      setChg($("c5"), (t.stats5m||{}).priceChange);
+      setChg($("c1"), (t.stats1h||{}).priceChange);
+      setChg($("c6"), (t.stats6h||{}).priceChange);
+      setChg($("c24"), s.priceChange);
+      // details
+      $("fdv").textContent = fmtUsd(t.fdv||t.mcap);
+      $("circ").textContent = (t.circSupply!=null? fmtNum(t.circSupply)+" CLKN":"—");
+      var au = t.audit||{};
+      $("mintAuth").innerHTML = au.mintAuthorityDisabled===true?'<span class="ok">✓ Renounced</span>':(au.mintAuthorityDisabled===false?"Active ⚠":"—");
+      $("freezeAuth").innerHTML = au.freezeAuthorityDisabled===true?'<span class="ok">✓ Renounced</span>':(au.freezeAuthorityDisabled===false?"Active ⚠":"—");
+      $("topHolders").textContent = (au.topHoldersPercentage!=null? Number(au.topHoldersPercentage).toFixed(1)+"%":"—");
+      $("liveAt").textContent = "live · updated "+new Date().toLocaleTimeString();
+    }catch(e){ $("liveAt").textContent="couldn't load live data — use the chart link"; }
+  }
+  load();
+  setInterval(load, 60000);
+
+  // Copy mint
+  $("mint").addEventListener("click", function(){
+    try{ navigator.clipboard.writeText(CLKN); var o=$("mint").textContent; $("mint").textContent="✓ copied"; setTimeout(function(){$("mint").textContent=o;},1400); }catch(_){}
+  });
+
+  // Buy CLKN — Jupiter Plugin modal (init once, resume to open). Fallback to jup.ag.
+  (function(){
+    var inited=false;
+    $("buyBtn").addEventListener("click", function(){
+      if(!window.Jupiter){ window.open("https://jup.ag/tokens/"+CLKN,"_blank","noopener"); return; }
+      if(!inited){
+        window.Jupiter.init({ displayMode:"modal", formProps:{ initialOutputMint:CLKN, fixedOutputMint:true, swapMode:"ExactIn", referralAccount:"A4fSbCMAya9rLWY4incNYaVfhYA9mpCownbFEW3dUZAg", referralFee:10 }, defaultExplorer:"Solscan" });
+        inited=true;
+      }
+      window.Jupiter.resume();
+    });
+  })();
+</script>
+<script defer src="/cluck-nav.js"></script>
+</body>
+</html>
