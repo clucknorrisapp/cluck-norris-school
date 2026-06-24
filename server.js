@@ -9523,18 +9523,30 @@ async function getWalletStats(wallet, HELIUS_KEY) {
 
 // Total CLKN 24h volume across all Solana pairs (DexScreener), cached 5 min.
 let cached24hVol = null, cached24hVolAt = 0; // CLKN fast-path (back-compat)
+let cachedJupVol = null, cachedJupVolAt = 0;  // CLKN REAL 24h volume from Jupiter (artifact-free)
 const vol24hByMint = new Map(); // mint -> { v, at } for other projects
 async function getClkn24hVolume(mint = CLKN_MINT_ADDR) {
   const now = Date.now();
   const isClkn = mint === CLKN_MINT_ADDR;
   if (isClkn && cached24hVol !== null && now - cached24hVolAt < 5 * 60 * 1000) return cached24hVol;
   if (!isClkn) { const c = vol24hByMint.get(mint); if (c && now - c.at < 5 * 60 * 1000) return c.v; }
+  // CLKN: prefer Jupiter's REAL volume. DexScreener sums the CLKN/JUP pair's mis-reported
+  // token-denominated volume as ~millions — NEVER trust that figure for CLKN.
+  if (isClkn) {
+    if (!(cachedJupVol !== null && now - cachedJupVolAt < 5 * 60 * 1000)) { await getClknOrganicScore(CLKN_MINT_ADDR).catch(() => {}); }
+    if (cachedJupVol !== null && cachedJupVol > 0 && Date.now() - cachedJupVolAt < 6 * 60 * 1000) { cached24hVol = cachedJupVol; cached24hVolAt = Date.now(); return cachedJupVol; }
+  }
   try {
     const res = await fetch(`https://api.dexscreener.com/token-pairs/v1/solana/${mint}`);
     const data = await res.json();
     if (Array.isArray(data)) {
       let v = 0;
-      for (const p of data) { const h = Number(p?.volume?.h24); if (Number.isFinite(h)) v += h; }
+      for (const p of data) {
+        const h = Number(p?.volume?.h24); if (!Number.isFinite(h)) continue;
+        const liq = Number(p?.liquidity?.usd) || 0;
+        // Artifact guard: no pool realistically turns over >50x its liquidity in a day.
+        v += (liq > 0 && h > liq * 50) ? liq * 50 : h;
+      }
       if (isClkn) { cached24hVol = v; cached24hVolAt = now; } else { vol24hByMint.set(mint, { v, at: now }); }
       return v;
     }
@@ -9559,7 +9571,13 @@ async function getTokenMarket(mint = CLKN_MINT_ADDR) {
     const data = await res.json();
     if (!Array.isArray(data) || !data.length) return null;
     let vol24h = 0;
-    for (const p of data) { const h = Number(p?.volume?.h24); if (Number.isFinite(h)) vol24h += h; }
+    for (const p of data) {
+      const h = Number(p?.volume?.h24); if (!Number.isFinite(h)) continue;
+      const liq = Number(p?.liquidity?.usd) || 0;
+      vol24h += (liq > 0 && h > liq * 50) ? liq * 50 : h;   // artifact guard (see getClkn24hVolume)
+    }
+    // CLKN: the CLKN/JUP pair poisons the DexScreener sum — use Jupiter's artifact-free figure.
+    if (mint === CLKN_MINT_ADDR) { const jv = await getClkn24hVolume(CLKN_MINT_ADDR).catch(() => null); if (jv != null && jv >= 0) vol24h = jv; }
     const deepest = data.slice().sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
     return {
       priceUsd: Number(deepest.priceUsd) || null,
@@ -9591,6 +9609,10 @@ async function getClknOrganicScore(mint = CLKN_MINT_ADDR) {
       const data = await res.json();
       if (Array.isArray(data) && data.length) {
         const t = data.find((d) => d.id === mint) || data[0];
+        if (t && isClkn && t.stats24h) {
+          const sv = (Number(t.stats24h.buyVolume) || 0) + (Number(t.stats24h.sellVolume) || 0);
+          if (sv > 0) { cachedJupVol = sv; cachedJupVolAt = now; }
+        }
         if (t && t.organicScore != null) {
           const o = { score: Number(t.organicScore), label: t.organicScoreLabel || null };
           if (isClkn) { cachedOrganic = o; cachedOrganicAt = now; } else { organicByMint.set(mint, { o, at: now }); }
