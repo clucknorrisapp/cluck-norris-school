@@ -9525,13 +9525,21 @@ async function getWalletStats(wallet, HELIUS_KEY) {
 let cached24hVol = null, cached24hVolAt = 0; // CLKN fast-path (back-compat)
 let cachedJupVol = null, cachedJupVolAt = 0;  // CLKN REAL 24h volume from Jupiter (artifact-free)
 const vol24hByMint = new Map(); // mint -> { v, at } for other projects
-// Jupiter Tokens API V2 — use the KEYED host (higher rate limits) when JUPITER_API_KEY
-// is set on Railway, else the free lite-api. Same response schema either way, so dropping
-// the key in env auto-upgrades every tokens/v2 call below — no code change needed. No-op
-// (current behavior) until a key exists.
+// Jupiter Tokens API V2 search — uses the KEYED host (higher rate limits) when
+// JUPITER_API_KEY is set on Railway, with an AUTOMATIC fallback to the free lite-api if the
+// keyed call fails (bad/expired key, quota, outage) so our core CLKN data (organic score +
+// real volume) never breaks. Unset key = lite-api only (current behavior). Same schema either way.
 const JUP_API_KEY = process.env.JUPITER_API_KEY || "";
-const JUP_TOKENS_BASE = JUP_API_KEY ? "https://api.jup.ag/tokens/v2/" : "https://lite-api.jup.ag/tokens/v2/";
-const jupTokensHeaders = () => (JUP_API_KEY ? { "x-api-key": JUP_API_KEY } : {});
+async function jupTokensSearch(query) {
+  const tries = JUP_API_KEY
+    ? [{ u: "https://api.jup.ag/tokens/v2/search?query=" + query, h: { "x-api-key": JUP_API_KEY } },
+       { u: "https://lite-api.jup.ag/tokens/v2/search?query=" + query, h: {} }]
+    : [{ u: "https://lite-api.jup.ag/tokens/v2/search?query=" + query, h: {} }];
+  for (const t of tries) {
+    try { const r = await fetch(t.u, { headers: t.h, signal: AbortSignal.timeout(8000) }); if (r.ok) return await r.json(); } catch (_) {}
+  }
+  return null;
+}
 async function getClkn24hVolume(mint = CLKN_MINT_ADDR) {
   const now = Date.now();
   const isClkn = mint === CLKN_MINT_ADDR;
@@ -9609,12 +9617,8 @@ async function getClknOrganicScore(mint = CLKN_MINT_ADDR) {
   if (isClkn && cachedOrganic !== null && now - cachedOrganicAt < 5 * 60 * 1000) return cachedOrganic;
   if (!isClkn) { const c = organicByMint.get(mint); if (c && now - c.at < 5 * 60 * 1000) return c.o; }
   try {
-    const res = await fetch(`${JUP_TOKENS_BASE}search?query=${mint}`, {
-      headers: jupTokensHeaders(),
-      signal: AbortSignal.timeout(8000),
-    });
-    if (res.ok) {
-      const data = await res.json();
+    {
+      const data = await jupTokensSearch(mint);
       if (Array.isArray(data) && data.length) {
         const t = data.find((d) => d.id === mint) || data[0];
         if (t && isClkn && t.stats24h) {
