@@ -215,6 +215,11 @@ no-op. Use a wallet holding ONLY the MM float, never the treasury or any mint au
 Optional RPC resilience (all unset = primary-only, fine): `FALLBACK_RPC_URL` (one or more
 full backup RPC URLs, comma-separated — e.g. a QuickNode/Triton/Alchemy endpoint),
 `HELIUS_API_KEY_2` (a second Helius key on a separate quota), `RPC_DEBUG` (=1 logs failover).
+Optional `JUPITER_API_KEY` (unset = the FREE `lite-api.jup.ag` Tokens V2 endpoint, fine for our
+cached low-volume use): when set, every `tokens/v2` call (CLKN organic score + REAL 24h volume in
+server.js, autopsy cross-verify, bags-context, lp-scanner) auto-switches to the keyed `api.jup.ag`
+host with an `x-api-key` header for higher rate limits — same response schema, so it's a pure
+no-op until the key exists. Drop the key in env, redeploy, done.
 Optional **TTS / "real Cluck voice"** (all unset = read-aloud uses the FREE browser Web Speech
 voice everywhere, a safe no-op): `ELEVENLABS_API_KEY` (enables `/api/tts`; ElevenLabs is the
 same engine Anthropic's own voice mode uses), `ELEVENLABS_VOICE_ID` (the branded Cluck voice;
