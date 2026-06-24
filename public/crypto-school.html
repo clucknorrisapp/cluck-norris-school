@@ -23,12 +23,12 @@
   @keyframes blink{0%,80%,100%{opacity:.2;transform:translateY(0);}40%{opacity:1;transform:translateY(-3px);}}
   @keyframes pulseDot{0%,100%{opacity:.4;}50%{opacity:1;}}
   @keyframes msgIn{0%{opacity:0;transform:translateY(12px);}100%{opacity:1;transform:translateY(0);}}
-  body{font-family:'Chakra Petch',sans-serif;background:#0a0503;color:#FFEFE0;}
-  .app{position:relative;height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;background:#0a0503;}
+  body{font-family:'Chakra Petch',sans-serif;background:#0a090c;color:#FFEFE0;}
+  .app{position:relative;height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;background:#0a090c;}
   .embers{position:absolute;inset:0;z-index:1;overflow:hidden;pointer-events:none;}
   .embers span{position:absolute;bottom:40px;border-radius:50%;background:#FFD56B;}
   .embers.off{display:none;}
-  .header{position:relative;z-index:3;flex:none;display:flex;align-items:center;gap:15px;padding:16px 22px;border-bottom:1px solid rgba(255,122,24,.18);background:rgba(22,11,6,.92);backdrop-filter:blur(6px);}
+  .header{position:relative;z-index:3;flex:none;display:flex;align-items:center;gap:15px;padding:16px 22px;border-bottom:1px solid rgba(255,122,24,.18);background:rgba(14,12,16,.92);backdrop-filter:blur(6px);}
   .avatar{width:58px;height:58px;border-radius:50%;object-fit:cover;object-position:center 12%;border:2px solid #FFB627;animation:cluckGlow 2.6s ease-in-out infinite;flex:none;}
   .wordmark{font-family:'Anton',sans-serif;letter-spacing:1px;font-size:27px;line-height:1;}
   .wordmark .c{color:#FF7A18;} .wordmark .n{color:#FFEFE0;}
@@ -42,7 +42,7 @@
   .user{align-self:flex-end;max-width:80%;background:#FF7A18;color:#fff;font-weight:600;font-size:15px;line-height:1.45;padding:12px 16px;border-radius:16px 16px 4px 16px;box-shadow:0 6px 20px rgba(232,30,14,.35);animation:msgIn .35s ease both;word-wrap:break-word;}
   .cluck{align-self:flex-start;max-width:90%;display:flex;gap:10px;align-items:flex-start;animation:msgIn .4s ease both;}
   .cluck .mini{width:38px;height:38px;border-radius:50%;object-fit:cover;object-position:center 12%;border:1.5px solid #FF7A18;flex:none;margin-top:2px;}
-  .card{background:#1d110a;border:1px solid rgba(255,122,24,.28);border-radius:6px 16px 16px 16px;padding:16px 18px;box-shadow:0 10px 30px rgba(0,0,0,.5);min-width:0;}
+  .card{background:#14131a;border:1px solid rgba(255,122,24,.28);border-radius:6px 16px 16px 16px;padding:16px 18px;box-shadow:0 10px 30px rgba(0,0,0,.5);min-width:0;}
   .loading{display:flex;align-items:center;gap:10px;font-weight:600;color:#C9A892;font-size:14px;}
   .loading .dots{display:flex;gap:5px;}
   .loading .dots i{width:6px;height:6px;border-radius:50%;background:#FF7A18;animation:blink 1.2s infinite;}
@@ -56,19 +56,19 @@
   .drill{margin-top:14px;display:flex;gap:8px;align-items:flex-start;background:rgba(232,30,14,.2);border-left:3px solid #E81E0E;padding:10px 14px;border-radius:4px;font-weight:700;font-size:13px;letter-spacing:.4px;color:#FFD9A0;text-transform:uppercase;line-height:1.4;}
   .grounded{margin-top:12px;font-size:10.5px;letter-spacing:1px;color:#9C7E68;text-transform:uppercase;}
   .grounded b{color:#C9A892;}
-  .chips{position:relative;z-index:3;flex:none;display:flex;gap:9px;overflow-x:auto;padding:12px 18px;border-top:1px solid rgba(255,122,24,.12);background:rgba(14,7,4,.4);align-items:center;}
+  .chips{position:relative;z-index:3;flex:none;display:flex;gap:9px;overflow-x:auto;padding:12px 18px;border-top:1px solid rgba(255,122,24,.12);background:rgba(13,12,16,.4);align-items:center;}
   .chiplabel{flex:none;align-self:center;font-family:'Chakra Petch',sans-serif;font-size:10.5px;letter-spacing:.5px;color:#9C7E68;text-transform:uppercase;white-space:nowrap;margin-right:4px;}
   .chip{flex:none;font-family:inherit;font-weight:600;font-size:13px;color:#FFD9A0;background:rgba(255,122,24,.08);border:1px solid rgba(255,122,24,.3);border-radius:999px;padding:8px 14px;white-space:nowrap;cursor:pointer;transition:all .15s;}
   .chip:hover{background:rgba(255,122,24,.2);border-color:#FF7A18;color:#fff;}
-  .tweaks{position:relative;z-index:3;flex:none;display:flex;align-items:center;gap:14px;padding:6px 18px;background:rgba(14,7,4,.4);font-size:11px;color:#9C7E68;letter-spacing:.5px;flex-wrap:wrap;}
+  .tweaks{position:relative;z-index:3;flex:none;display:flex;align-items:center;gap:14px;padding:6px 18px;background:rgba(13,12,16,.4);font-size:11px;color:#9C7E68;letter-spacing:.5px;flex-wrap:wrap;}
   .tweaks .grp{display:flex;align-items:center;gap:6px;}
   .tweaks label{text-transform:uppercase;font-weight:700;letter-spacing:1px;}
   .seg{display:inline-flex;border:1px solid rgba(255,122,24,.25);border-radius:999px;overflow:hidden;}
   .seg button{font-family:inherit;font-size:11px;font-weight:700;letter-spacing:.5px;color:#C9A892;background:transparent;border:0;padding:4px 11px;cursor:pointer;transition:all .15s;}
   .seg button.on{background:#FF7A18;color:#fff;}
   .tweaks .home{margin-left:auto;color:#FF7A18;text-decoration:none;font-weight:700;letter-spacing:1px;text-transform:uppercase;}
-  .inputbar{position:relative;z-index:3;flex:none;display:flex;gap:10px;padding:14px 18px calc(18px + env(safe-area-inset-bottom));background:rgba(20,10,5,.96);border-top:1px solid rgba(255,122,24,.14);}
-  .inputbar input{flex:1;font-family:inherit;font-size:15px;font-weight:500;color:#FFEFE0;background:#180d07;border:1px solid rgba(255,122,24,.28);border-radius:12px;padding:13px 16px;outline:none;transition:border-color .15s;min-width:0;}
+  .inputbar{position:relative;z-index:3;flex:none;display:flex;gap:10px;padding:14px 18px calc(18px + env(safe-area-inset-bottom));background:rgba(13,12,16,.96);border-top:1px solid rgba(255,122,24,.14);}
+  .inputbar input{flex:1;font-family:inherit;font-size:15px;font-weight:500;color:#FFEFE0;background:#131218;border:1px solid rgba(255,122,24,.28);border-radius:12px;padding:13px 16px;outline:none;transition:border-color .15s;min-width:0;}
   .inputbar input:focus{border-color:#FF7A18;}
   .inputbar input::placeholder{color:#7d5f4c;}
   .ask{font-family:'Anton',sans-serif;font-size:18px;letter-spacing:1.5px;color:#fff;background:#FF7A18;border:0;border-radius:12px;padding:0 24px;box-shadow:0 6px 18px rgba(232,30,14,.4);cursor:pointer;transition:transform .1s;}
