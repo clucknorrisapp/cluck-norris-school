@@ -1,7 +1,7 @@
 // Shared primitives extracted from App.jsx so lazy-loaded sections can reuse them
 // without importing the whole app (which would defeat code-splitting). Keep this
 // module dependency-light: constants + small presentational components only.
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 export const CLKN_MINT = "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
 export const JUPITER_REFERRAL = "A4fSbCMAya9rLWY4incNYaVfhYA9mpCownbFEW3dUZAg";
@@ -40,30 +40,33 @@ export function MintAddress({ compact }) {
 }
 
 export function JupiterSwapButton({ label, style }) {
-  const [open, setOpen] = useState(false);
+  const inited = useRef(false);
 
-  useEffect(() => {
-    if (open && window.Jupiter) {
+  function openSwap() {
+    if (!window.Jupiter) return;            // plugin script not loaded yet
+    if (!inited.current) {
+      // Jupiter Plugin (plugin-v1.js): init ONCE — re-initing on every open broke it.
+      // referralAccount/referralFee live INSIDE formProps (not top-level). Output locked
+      // to CLKN so it's a dedicated "buy CLKN" widget. swapMode "ExactIn" = user enters
+      // the SOL/USDC amount to spend.
       window.Jupiter.init({
         displayMode: "modal",
         formProps: {
-          initialOutputMint: "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS",
-          swapMode: "ExactInOrOut",
+          initialOutputMint: CLKN_MINT,
+          fixedOutputMint: true,
+          swapMode: "ExactIn",
+          referralAccount: JUPITER_REFERRAL,
+          referralFee: 10, // 0.1% (basis points) — project referral fee
         },
-        referralAccount: JUPITER_REFERRAL,
-        referralFee: 10, // 0.1% in basis points * 100
         defaultExplorer: "Solscan",
       });
-      window.Jupiter.resume();
-      setOpen(false);
+      inited.current = true;
     }
-  }, [open]);
+    window.Jupiter.resume();                // init mounts; resume opens (and re-opens later)
+  }
 
   return (
-    <button
-      onClick={() => setOpen(true)}
-      style={style}
-    >
+    <button onClick={openSwap} style={style}>
       {label}
     </button>
   );
