@@ -222,9 +222,12 @@ per-lang override `ELEVENLABS_VOICE_ID_ZH` / `_ES` / `_EN`), `ELEVENLABS_MODEL` 
 `eleven_flash_v2_5` — HALF-price credits, multilingual), `TTS_DAILY_CHAR_CAP` (NEW-synthesis
 budget/day, default 40000). Synthesized mp3 is cached on the `/data` volume keyed by
 model+voice+lang+text → each lesson chunk is paid ONCE then served free forever; uncached text
-with no key/over budget returns 503 and the client falls back to the browser voice. ⏸️ **NOT
-YET LIVE — staged on the working branch as a "consider sending live" candidate; needs the owner
-to add an ElevenLabs key + pick/design the Cluck voice before cherry-picking to `main`.**
+with no key/over budget returns 503 and the client falls back to the browser voice. 🟢 **LIVE
+(owner added `ELEVENLABS_API_KEY` + `ELEVENLABS_VOICE_ID` on Railway).** The flash model is
+MULTILINGUAL — the ONE Cluck voice speaks every language (EN/中文/ES/IT verified synthesizing real
+audio); we pass `language_code` per request, so adding a new language needs NOTHING in ElevenLabs.
+Per-language voice overrides (`ELEVENLABS_VOICE_ID_IT`/`_ES`/`_ZH`/`_EN`) are OPTIONAL — only if the
+owner wants a distinct natively-accented voice; unset = the main voice handles all langs.
 Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.claude/`,
 `STRATEGY.md`.
 
