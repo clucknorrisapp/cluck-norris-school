@@ -14,10 +14,13 @@
   a.back { color:var(--orange); text-decoration:none; font-size:13px; }
   h1 { font-family:var(--disp); font-size:30px; font-weight:700; letter-spacing:.5px; margin:14px 0 2px; }
   .tag { color:var(--sub); font-size:13.5px; margin:0 0 16px; }
-  .controls { display:flex; flex-wrap:wrap; gap:8px; align-items:center; background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px; }
+  .controls { display:flex; flex-direction:column; gap:8px; background:var(--card); border:1px solid var(--border); border-radius:12px; padding:12px; }
+  .ctrl-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .ctrl-row.sub input { font-size:12px; }
   input { background:#0e0e0e; border:1px solid var(--border); color:var(--text); border-radius:8px; padding:11px 12px; font-family:var(--mono); font-size:13px; }
-  #mint { flex:1; min-width:230px; }
-  #key { width:150px; }
+  #mint { flex:1; min-width:200px; }
+  #wallets { flex:1; min-width:200px; }
+  #key { width:160px; flex:none; }
   button { background:var(--gold); color:#1a1207; border:none; border-radius:8px; padding:11px 22px; font-weight:700; cursor:pointer; font-size:13px; box-shadow:0 4px 16px rgba(249,115,22,.25); }
   button:disabled { opacity:.5; cursor:default; box-shadow:none; }
   .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; align-items:center; }
@@ -83,12 +86,14 @@
   <p class="tag">See where <b style="color:var(--green)">buyers</b> and <b style="color:var(--red)">sellers</b> are waiting around any Solana token — resting limit orders, single‑sided walls, and how much it takes to move the price. <em>The chain shows what's there, never why.</em></p>
 
   <div class="controls">
-    <input id="mint" placeholder="Token mint address" />
-    <input id="key" type="password" placeholder="access key" title="Your access key (stored only in this browser)" />
-    <button id="scan">Scan</button>
-  </div>
-  <div class="controls" style="margin-top:8px">
-    <input id="wallets" style="flex:1;min-width:240px" placeholder="your LP wallet(s), comma‑separated — optional, tags walls as yours vs 3rd‑party" />
+    <div class="ctrl-row">
+      <input id="mint" placeholder="Paste any Solana token mint address" />
+      <button id="scan">Scan</button>
+    </div>
+    <div class="ctrl-row sub">
+      <input id="wallets" placeholder="Your LP wallet(s) — optional, tags walls as yours vs 3rd‑party" />
+      <input id="key" type="password" placeholder="access key" title="Your access key (stored only in this browser)" />
+    </div>
   </div>
   <div class="chips">
     <span class="muted">Try:</span>
