@@ -1865,7 +1865,7 @@ app.use(express.urlencoded({ extended: true }));
 // the app's finite string set is warm, ongoing cost is ~zero (all cache hits).
 const I18N_MT_LANGNAMES = { zh: "Simplified Chinese (简体中文)", es: "neutral Latin-American Spanish", it: "Italian" };
 const I18N_MT_DIR = process.env.DATA_DIR || "/data";
-const I18N_MT_DAILY_NEW_CAP = 8000;
+const I18N_MT_DAILY_NEW_CAP = 20000;
 const i18nMt = {};            // lang -> { text: translation } (in-memory, lazy-loaded)
 const i18nMtDirty = {};
 let i18nMtNewToday = 0, i18nMtNewDay = "";
@@ -1895,12 +1895,21 @@ async function i18nMtBatch(lang, texts) {
   const KEY = process.env.ANTHROPIC_API_KEY;
   if (need.length && KEY && i18nMtNewToday < I18N_MT_DAILY_NEW_CAP) {
     const sys = "You are a professional translator for a Solana crypto-education web app. Translate each English string in the input JSON array into " + I18N_MT_LANGNAMES[lang] + ". Keep crypto tickers/symbols, protocol & product names, code, URLs, @handles, hashtags and wallet/contract addresses EXACTLY as-is — never translate CLKN, SOL, USDC, USDT, JUP, cbBTC, DeFi, AMM, LP, NFT, MEV, APR, APY, TVL, IL, DEX, CEX, Solana, Jupiter, Bags, Orca, Meteora, Raydium, Uniswap, Phantom, DexScreener, etc. Keep numbers/percentages as digits. Preserve any leading/trailing emoji. Natural and concise, same register as the source. Output ONLY a JSON array of the translated strings — identical length and order to the input, no commentary, no code fences.";
-    for (let i = 0; i < need.length && i18nMtNewToday < I18N_MT_DAILY_NEW_CAP; i += 40) {
-      const chunk = need.slice(i, i + 40);
+    // Chunk by BOTH count and total chars: a few long strings (lesson paragraphs) in a
+    // 40-string chunk can overflow the model's output budget → the whole chunk's JSON is
+    // truncated and silently dropped. Cap each chunk at ~25 strings or ~4000 chars.
+    const chunks = []; let curChunk = [], curLen = 0;
+    for (const t of need) {
+      if (curChunk.length && (curChunk.length >= 25 || curLen + t.length > 4000)) { chunks.push(curChunk); curChunk = []; curLen = 0; }
+      curChunk.push(t); curLen += t.length;
+    }
+    if (curChunk.length) chunks.push(curChunk);
+    for (const chunk of chunks) {
+      if (i18nMtNewToday >= I18N_MT_DAILY_NEW_CAP) break;
       try {
         const r = await fetch("https://api.anthropic.com/v1/messages", {
           method: "POST", headers: { "Content-Type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" },
-          body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 4096, system: sys, messages: [{ role: "user", content: JSON.stringify(chunk) }] }),
+          body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 8192, system: sys, messages: [{ role: "user", content: JSON.stringify(chunk) }] }),
         });
         const d = await r.json();
         let raw = (d && d.content && d.content[0] && d.content[0].text) || "";
@@ -1925,7 +1934,7 @@ app.post("/api/i18n/translate", rateLimit("i18nmt", { windowMs: 60000, max: 90 }
   if (!I18N_MT_LANGNAMES[lang]) return res.status(400).json({ error: "unsupported lang" });
   let texts = req.body && req.body.texts;
   if (!Array.isArray(texts)) return res.status(400).json({ error: "texts[] required" });
-  texts = texts.filter((t) => typeof t === "string" && t.length > 0 && t.length <= 800).slice(0, 60);
+  texts = texts.filter((t) => typeof t === "string" && t.length > 0 && t.length <= 2500).slice(0, 60);
   try { return res.status(200).json({ map: await i18nMtBatch(lang, texts) }); }
   catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
