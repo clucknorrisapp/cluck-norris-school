@@ -9525,6 +9525,13 @@ async function getWalletStats(wallet, HELIUS_KEY) {
 let cached24hVol = null, cached24hVolAt = 0; // CLKN fast-path (back-compat)
 let cachedJupVol = null, cachedJupVolAt = 0;  // CLKN REAL 24h volume from Jupiter (artifact-free)
 const vol24hByMint = new Map(); // mint -> { v, at } for other projects
+// Jupiter Tokens API V2 — use the KEYED host (higher rate limits) when JUPITER_API_KEY
+// is set on Railway, else the free lite-api. Same response schema either way, so dropping
+// the key in env auto-upgrades every tokens/v2 call below — no code change needed. No-op
+// (current behavior) until a key exists.
+const JUP_API_KEY = process.env.JUPITER_API_KEY || "";
+const JUP_TOKENS_BASE = JUP_API_KEY ? "https://api.jup.ag/tokens/v2/" : "https://lite-api.jup.ag/tokens/v2/";
+const jupTokensHeaders = () => (JUP_API_KEY ? { "x-api-key": JUP_API_KEY } : {});
 async function getClkn24hVolume(mint = CLKN_MINT_ADDR) {
   const now = Date.now();
   const isClkn = mint === CLKN_MINT_ADDR;
@@ -9602,7 +9609,8 @@ async function getClknOrganicScore(mint = CLKN_MINT_ADDR) {
   if (isClkn && cachedOrganic !== null && now - cachedOrganicAt < 5 * 60 * 1000) return cachedOrganic;
   if (!isClkn) { const c = organicByMint.get(mint); if (c && now - c.at < 5 * 60 * 1000) return c.o; }
   try {
-    const res = await fetch(`https://lite-api.jup.ag/tokens/v2/search?query=${mint}`, {
+    const res = await fetch(`${JUP_TOKENS_BASE}search?query=${mint}`, {
+      headers: jupTokensHeaders(),
       signal: AbortSignal.timeout(8000),
     });
     if (res.ok) {
