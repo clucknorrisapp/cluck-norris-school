@@ -299,6 +299,8 @@ async function buildMarketSnapshotText(mint = CLKN_MINT_ADDR, sym = "CLKN") {
   if (parts.length) m += `📊 ${parts.join(" · ")}\n`;
   const vol = fmtUsdShort(mkt.vol24h); if (vol) m += `🔁 24h volume: <b>${vol}</b>\n`;
   if (mkt.liqUsd) m += `💧 Liquidity: <b>${fmtUsdShort(mkt.liqUsd)}</b>\n`;
+  const orgStr = fmtOrganicScore(await getClknOrganicScore(mint).catch(() => null));
+  if (orgStr) m += `🌱 Organic score: <b>${orgStr}</b>\n`;
   m += `\n🐔 ${TG_PUBLIC_BASE}`;
   return m;
 }
@@ -9619,14 +9621,45 @@ async function getTokenMarket(mint = CLKN_MINT_ADDR) {
     }
     // CLKN: the CLKN/JUP pair poisons the DexScreener sum — use Jupiter's artifact-free figure.
     if (mint === CLKN_MINT_ADDR) { const jv = await getClkn24hVolume(CLKN_MINT_ADDR).catch(() => null); if (jv != null && jv >= 0) vol24h = jv; }
-    const deepest = data.slice().sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
-    return {
+    // Pick the deepest pool for price/mc/liq/change — but GUARD against a single
+    // mis-priced pool poisoning the read. DexScreener mis-reports our CLKN/JUP Orca
+    // pair ($1.10 / $1.1B mcap / +500000% — a JUP-side decimal artifact), and it's the
+    // "deepest" by its fake $7.8M liquidity. Drop pairs whose price is a wild outlier
+    // vs the median of the token's own base pairs before choosing deepest.
+    const basePairs = data.filter(p => p?.baseToken?.address === mint && Number(p.priceUsd) > 0);
+    const pool = basePairs.length ? basePairs : data;
+    const prices = pool.map(p => Number(p.priceUsd)).filter(n => n > 0).sort((a, b) => a - b);
+    const median = prices.length ? prices[Math.floor(prices.length / 2)] : null;
+    const sane = (median && pool.length > 1)
+      ? pool.filter(p => { const pr = Number(p.priceUsd); return pr > 0 && pr <= median * 5 && pr >= median / 5; })
+      : pool;
+    const deepest = (sane.length ? sane : pool).slice().sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+    const out = {
       priceUsd: Number(deepest.priceUsd) || null,
       mc: Number(deepest.marketCap || deepest.fdv) || null,
       liqUsd: Math.round(deepest.liquidity?.usd || 0),
       vol24h,
       change: deepest.priceChange || {},
     };
+    // CLKN: prefer Jupiter's authoritative price/mc/liq/change (artifact-free), same
+    // as we do for volume — Jupiter aggregates correctly across our pools.
+    if (mint === CLKN_MINT_ADDR) {
+      try {
+        const jd = await jupTokensSearch(mint);
+        const t = Array.isArray(jd) ? (jd.find(x => x.id === mint) || jd[0]) : null;
+        if (t && Number(t.usdPrice) > 0) {
+          out.priceUsd = Number(t.usdPrice);
+          if (Number(t.mcap || t.fdv) > 0) out.mc = Number(t.mcap || t.fdv);
+          if (Number.isFinite(Number(t.liquidity))) out.liqUsd = Math.round(Number(t.liquidity));
+          out.change = {
+            h1: t.stats1h?.priceChange != null ? Number(t.stats1h.priceChange) : out.change.h1,
+            h6: t.stats6h?.priceChange != null ? Number(t.stats6h.priceChange) : out.change.h6,
+            h24: t.stats24h?.priceChange != null ? Number(t.stats24h.priceChange) : out.change.h24,
+          };
+        }
+      } catch (_) {}
+    }
+    return out;
   } catch (e) { console.warn("[TELEGRAM] market fetch failed:", e.message); return null; }
 }
 
