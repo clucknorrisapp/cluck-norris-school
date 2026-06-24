@@ -227,7 +227,7 @@
     $("buyBtn").addEventListener("click", function(){
       if(!window.Jupiter){ window.open("https://jup.ag/tokens/"+CLKN,"_blank","noopener"); return; }
       if(!inited){
-        window.Jupiter.init({ displayMode:"modal", formProps:{ initialOutputMint:CLKN, fixedOutputMint:true, swapMode:"ExactIn", referralAccount:"A4fSbCMAya9rLWY4incNYaVfhYA9mpCownbFEW3dUZAg", referralFee:10 }, defaultExplorer:"Solscan" });
+        window.Jupiter.init({ displayMode:"modal", formProps:{ initialOutputMint:CLKN, fixedOutputMint:true, swapMode:"ExactIn" }, defaultExplorer:"Solscan" });
         inited=true;
       }
       window.Jupiter.resume();
