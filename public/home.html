@@ -11,6 +11,8 @@
 <link rel="icon" href="/cluck-norris-mascot.jpg">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="stylesheet" href="/theme.css">
+<!-- Jupiter Plugin — powers the "Buy CLKN" widget below -->
+<script src="https://plugin.jup.ag/plugin-v1.js" data-preload defer></script>
 <style>
   body{ -webkit-font-smoothing:antialiased; }
   a{ color:inherit; text-decoration:none; }
@@ -115,6 +117,9 @@
     <h1><span class="c">CLUCK</span> <span class="n">NORRIS</span></h1>
     <div class="tag">We took the hard knocks. So you don't have to.</div>
     <p class="lede">Crypto knowledge from your first wallet to advanced strategy — taught straight, so you skip the expensive mistakes.</p>
+    <div style="margin-top:24px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+      <button id="buyClkn" type="button" style="font-family:var(--disp);font-size:17px;letter-spacing:2px;text-transform:uppercase;color:#fff;background:var(--orange);border:none;border-radius:999px;padding:15px 34px;cursor:pointer;box-shadow:0 6px 26px rgba(232,30,14,.45);">⚡ Buy CLKN</button>
+    </div>
   </header>
 
   <!-- THE big capsule: AI journey guide → expands to the detailed list -->
@@ -170,6 +175,31 @@
   (function () {
     var h = (location.hash || "").replace(/^#/, "");
     if (["library","incubator","lplab","survive","clkn","challenge","select","start"].indexOf(h) !== -1) location.replace("/school#" + h);
+  })();
+  // Buy CLKN — Jupiter Plugin modal (init once, resume to open/reopen). Falls back to
+  // opening jup.ag in a new tab if the plugin script didn't load.
+  (function () {
+    var CLKN = "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS", inited = false;
+    var btn = document.getElementById("buyClkn");
+    if (!btn) return;
+    btn.addEventListener("click", function () {
+      if (!window.Jupiter) { window.open("https://jup.ag/tokens/" + CLKN, "_blank", "noopener"); return; }
+      if (!inited) {
+        window.Jupiter.init({
+          displayMode: "modal",
+          formProps: {
+            initialOutputMint: CLKN,
+            fixedOutputMint: true,
+            swapMode: "ExactIn",
+            referralAccount: "A4fSbCMAya9rLWY4incNYaVfhYA9mpCownbFEW3dUZAg",
+            referralFee: 10,
+          },
+          defaultExplorer: "Solscan",
+        });
+        inited = true;
+      }
+      window.Jupiter.resume();
+    });
   })();
 </script>
 <script defer src="/cluck-nav.js"></script>
