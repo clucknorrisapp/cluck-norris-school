@@ -5503,6 +5503,9 @@ const CLKN_ORCA_POOLS = [
   { pool: "5AvtoSvfKFscxoB9uuEG2UNf25REkzgr9Ue9RHnJWMdb", pair: "CLKN/JUP" },
 ];
 async function recordClknStructureSnapshot() {
+  // Mirror recordOrganicSnapshot's defensive wrapper: this runs on a bare
+  // setInterval/setTimeout, so an unguarded throw becomes an unhandled rejection.
+  try {
   const orca = require("./lib/orca-whirlpools");
   const spot = await orderbook.getUsdPrice(CLKN_MINT_ADDR).catch(() => null);
   const organic = await getClknOrganicScore(CLKN_MINT_ADDR).catch(() => null);
@@ -5563,6 +5566,7 @@ async function recordClknStructureSnapshot() {
   hist.push(snap); if (hist.length > 800) hist = hist.slice(-800);
   kv.set("clknStructureLog", hist);
   return snap;
+  } catch (e) { console.warn("[clkn-structure] snapshot failed:", e.message); return null; }
 }
 app.get("/api/order-watch/structure", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");

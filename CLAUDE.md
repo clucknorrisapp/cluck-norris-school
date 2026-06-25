@@ -18,7 +18,8 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 > owner-managed MANUALLY.** Live two-sided positions under the **TREASURY wallet
 > `2zMCUkE9pBjcC7ihtLqm28EsCoEHVmCdJYr5262EuPy8`**: **CLKN/USDC** (`H1r9ut25xAU1B1AbZRhvSJjShd4Q3mtmysYHBisFES7H`),
 > **CLKN/SOL** (`EL1ZDnuTE4J4LZJLP76VapFSDiM7Xt18ZsnzVeqNvaPr`), **CLKN/JUP**
-> (`7eVP5Jqe5CiX7LJtfzC6xdfGxFpfPX7jsvaoLnCdn9aB`) — ~9.9M CLKN in layered tight-inner/wide-outer
+> (`5AvtoSvfKFscxoB9uuEG2UNf25REkzgr9Ue9RHnJWMdb`, 0.02% — moved here from the old 0.05%
+> `7eVP5Jqe…` on 2026-06-17) — ~9.9M CLKN in layered tight-inner/wide-outer
 > bands, all in-range. **Thesis (now PROVEN, not theoretical): pairing CLKN against multiple
 > volatile quote assets (SOL + JUP, anchored by stable USDC) means each quote's OWN volatility
 > dislocates CLKN's cross-pool price → third-party arbitrageurs trade it back into line → real,
