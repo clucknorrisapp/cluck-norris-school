@@ -456,11 +456,15 @@ async function buildLockReport(note = "") {
 async function notifyLockReport({ dryRun = false, note = "" } = {}) {
   const built = await buildLockReport(note);
   if (!built.ok) return built;
+  let xResult = null;
   if (!dryRun) {
+    const prev = kv.get("lockSnapshot", null);
+    const deltaTokens = (prev && typeof prev.tokens === "number") ? built.data.totalLocked - prev.tokens : 0;
     await tgSend(process.env.TELEGRAM_CHAT_ID, built.msg);
     kv.set("lockSnapshot", { tokens: built.data.totalLocked, ts: Date.now() });
+    xResult = await postLockToX(built.data, deltaTokens).catch(e => ({ ok: false, error: e.message })); // auto-post new locks to X (scoped carve-out)
   }
-  return { ok: true, posted: !dryRun, ...built };
+  return { ok: true, posted: !dryRun, xResult, ...built };
 }
 // Daily at 16:00 UTC (noon ET), minute-gated; persisted day-guard prevents repeats.
 let lastLockReportDay = kv.get("lockReportDay", -1);
@@ -508,6 +512,7 @@ async function lockWatchTick() {
     `Now <b>${fmtTokensShort(total)} CLKN</b> locked — <b>${pct}</b> of supply.\n\n` +
     `🔒 Removed from circulation — long-term commitment. Verify on Jupiter Lock:\nhttps://lock.jup.ag/token/${CLKN_MINT}`;
   await tgSend(process.env.TELEGRAM_CHAT_ID, msg);
+  postLockToX(built.data, delta).catch(e => console.warn("[LOCK→X] failed:", e.message)); // auto-post new locks to X (scoped carve-out)
   console.log(`[LOCK-WATCH] new lock +${Math.round(delta)} → total ${Math.round(total)} (${pct})`);
 }
 
@@ -653,7 +658,7 @@ function xPercentEncode(s) {
   return encodeURIComponent(String(s)).replace(/[!*'()]/g, c => "%" + c.charCodeAt(0).toString(16).toUpperCase());
 }
 async function postToX(text, opts = {}) {
-  if (X_AUTOPOST_PAUSED) return { ok: false, paused: true };
+  if (X_AUTOPOST_PAUSED && !opts.force) return { ok: false, paused: true }; // opts.force = scoped carve-out (lock announcements only) — see postLockToX
   if (!xConfigured()) return { ok: false, skipped: true };
   const ck = process.env.X_API_KEY, cs = process.env.X_API_SECRET, at = process.env.X_ACCESS_TOKEN, ats = process.env.X_ACCESS_SECRET;
   const url = "https://api.x.com/2/tweets";
@@ -681,6 +686,25 @@ async function postToX(text, opts = {}) {
     console.warn("[X] post failed", r.status, JSON.stringify(j).slice(0, 200));
     return { ok: false, status: r.status, body: j };
   } catch (e) { console.warn("[X] post error", e.message); return { ok: false, error: e.message }; }
+}
+// Lock announcements are the ONE thing allowed to auto-post to X while the master X
+// pause is on (owner's call: "auto post about new locks"). force-bypasses the pause for
+// THIS post only; gated to a real new lock (≥ the watcher's dust threshold) so a no-change
+// daily report never tweets. Plain text + Jupiter/Bags tags + a proof URL (a URL, not a
+// bare CA, so it dodges the post-auth raw-CA 403).
+async function postLockToX(data, deltaTokens) {
+  if (!xConfigured()) return { ok: false, skipped: true };
+  if (!(deltaTokens >= LOCK_WATCH_MIN_DELTA)) return { ok: false, skipped: "no-new-lock" };
+  const pct = data.pctOfSupply != null ? (data.pctOfSupply * 100).toFixed(2) : null;
+  const totalSupply = data.pctOfSupply > 0 ? data.totalLocked / data.pctOfSupply : null;
+  const deltaPct = totalSupply ? (deltaTokens / totalSupply) * 100 : null;
+  const head = deltaPct ? `🔒 CLKN just locked another ${deltaPct.toFixed(1)}% of supply.` : `🔒 CLKN supply-lock update.`;
+  const text =
+    `${head}\n\n` +
+    `${fmtTokensShort(data.totalLocked)} CLKN${pct ? ` — ${pct}% of total supply` : ""} now locked across ${data.lockCount} @JupiterExchange Lock escrow${data.lockCount === 1 ? "" : "s"}. Removed from circulation, on-chain, verifiable by anyone.\n\n` +
+    `Verify 👉 https://lock.jup.ag/token/${CLKN_MINT}\n\n` +
+    `Built on @BagsApp 🐔`;
+  return postToX(text, { force: true });
 }
 // Tweet-length (≤280) version of a lesson on the given topic, for X.
 async function generateEduTweet(topic) {
