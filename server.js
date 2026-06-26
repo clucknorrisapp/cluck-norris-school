@@ -1307,6 +1307,7 @@ function tgCommandReply(cmd, arg) {
         "🐦 /x — our X (Twitter) account\n" +
         "🌐 /website (or /app) — clucknorris.app\n" +
         "💵 /price — CLKN price, market cap &amp; volume\n" +
+        "🔒 /lock — locked supply + Jupiter Lock proof\n" +
         "🩻 /walletxray <code>&lt;wallet&gt;</code> — full wallet deep dive\n" +
         "🪦 /autopsy <code>&lt;mint&gt;</code> — full forensic breakdown\n" +
         "🔍 /trace <code>&lt;wallet&gt;</code> — wallet × token history\n" +
@@ -1393,7 +1394,7 @@ async function priceReply(chatId, replyTo) {
   }
 }
 
-const TG_KNOWN_CMDS = ["ca","x","website","app","dex","walletxray","autopsy","trace","snapshot","holders","securitycoop","buyspecial","rose","hatchery","bags","tools","liquidity","price","commands","start","help","guide","buyleaders","chatid"];
+const TG_KNOWN_CMDS = ["ca","x","website","app","dex","walletxray","autopsy","trace","snapshot","holders","lock","securitycoop","buyspecial","rose","hatchery","bags","tools","liquidity","price","commands","start","help","guide","buyleaders","chatid"];
 // In a non-CLKN project room (e.g. ROSE) the bot only serves that project's liquidity +
 // buy competitions; chatid stays so an operator can wire a buy comp. Everything else off.
 const PROJECT_ROOM_CMDS = ["liquidity","price","buyleaders","chatid"];
@@ -1695,6 +1696,13 @@ function handleTelegramUpdate(update) {
     // /price → quick market snapshot (price, MC, change, volume, organic score).
     if (cmd === "price") {
       priceReply(msg.chat.id, msg.message_id);
+      return;
+    }
+    // /lock → on-demand locked-supply report (same data as the daily message) + Jupiter Lock proof link.
+    if (cmd === "lock") {
+      buildLockReport()
+        .then(b => tgSend(msg.chat.id, (b && b.ok) ? b.msg : "🔒 Lock data is unavailable right now — try again in a moment.", msg.message_id))
+        .catch(() => tgSend(msg.chat.id, "🔒 Lock data is unavailable right now — try again in a moment.", msg.message_id));
       return;
     }
     tgSend(msg.chat.id, tgCommandReply(cmd, arg), msg.message_id);
@@ -10822,6 +10830,7 @@ app.listen(PORT, () => {
             { command: "website", description: "clucknorris.app — school + tools" },
             { command: "app", description: "clucknorris.app — school + tools" },
             { command: "price", description: "CLKN price, market cap & volume" },
+            { command: "lock", description: "Current locked supply + Jupiter Lock proof" },
             { command: "walletxray", description: "Full wallet deep dive (/walletxray <wallet>)" },
             { command: "autopsy", description: "Forensic breakdown (/autopsy <mint>)" },
             { command: "trace", description: "Wallet × token history (/trace <wallet>)" },
