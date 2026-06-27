@@ -6248,6 +6248,55 @@ function isReinvestWallet(addr) {
   return addr != null && DEV_WALLETS.has(addr);
 }
 
+// ── Arb-bot filter (behavioral, size-independent) ────────────────────────────
+// A wallet that round-trips CLKN — buys then sells (or vice-versa) the SAME position
+// within minutes — is an arb/MEV churner, not a real buyer. We flag such wallets and
+// suppress BOTH their buys and sells. This catches the MULTI-tx round-trips the single-tx
+// crossPoolArb detector can't see (it only flags atomic same-tx rotations), so it works at
+// any MIN_BUY_USD floor. Auto-flags on a detected round-trip; list is viewable/editable via
+// /api/arb-bots. Window is kv-tunable (arbRoundtripSec, default 180s).
+function getArbBots() { return kv.get("arbBotWallets", {}) || {}; }
+function isArbBot(addr) { return addr != null && !!getArbBots()[addr]; }
+function flagArbBot(addr, reason = "round-trip") {
+  if (!addr) return;
+  const bots = getArbBots();
+  if (bots[addr]) { bots[addr].hits = (bots[addr].hits || 1) + 1; bots[addr].lastAt = Date.now(); }
+  else { bots[addr] = { flaggedAt: Date.now(), lastAt: Date.now(), reason, hits: 1 }; console.log(`[ARB-BOT] flagged ${addr} (${reason})`); }
+  kv.set("arbBotWallets", bots);
+}
+// Record a trade in a short rolling per-wallet memory; flag the wallet if this trade
+// completes an opposite-side round-trip within the (kv-tunable) window.
+function noteTradeForArb(addr, action, tsMs) {
+  if (!addr || (action !== "buy" && action !== "sell")) return;
+  const now = tsMs || Date.now();
+  const winMs = Math.max(15, kv.get("arbRoundtripSec", 180)) * 1000;
+  const cutoff = now - winMs;
+  const memo = kv.get("walletTradeMemo", {}) || {};
+  for (const k of Object.keys(memo)) { const m = memo[k]; if ((m.buyAt || 0) < cutoff && (m.sellAt || 0) < cutoff) delete memo[k]; }
+  const m = memo[addr] || {};
+  const oppAt = action === "sell" ? m.buyAt : m.sellAt;
+  if (oppAt && Math.abs(now - oppAt) <= winMs) flagArbBot(addr, "round-trip");
+  if (action === "sell") m.sellAt = now; else m.buyAt = now;
+  memo[addr] = m;
+  kv.set("walletTradeMemo", memo);
+}
+// One-time seed of arb bots identified via /api/order-flow (2026-06-27).
+(function seedArbBots() {
+  const seed = ["ESuvjvsQtjuxC4XGsDeMhx8Wp5yjQcCFGncGhupcJbg8", "o721mrttB9kBELuCaiiAE2e6EaahkmmspY6Xyo4t9EW"];
+  const bots = getArbBots(); let changed = false;
+  for (const a of seed) { if (!bots[a]) { bots[a] = { flaggedAt: Date.now(), lastAt: Date.now(), reason: "seed:order-flow", hits: 1 }; changed = true; } }
+  if (changed) kv.set("arbBotWallets", bots);
+})();
+// View / manually add / remove flagged arb bots (gated). ?add=<wallet> / ?remove=<wallet>.
+app.get("/api/arb-bots", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (req.query.add && SOL_ADDR_RE.test(String(req.query.add))) flagArbBot(String(req.query.add), "manual");
+  if (req.query.remove) { const b = getArbBots(); delete b[String(req.query.remove)]; kv.set("arbBotWallets", b); }
+  const bots = getArbBots();
+  return res.json({ success: true, count: Object.keys(bots).length, roundtripSec: kv.get("arbRoundtripSec", 180), bots });
+});
+
 // Tool → cost (CLKN, base before the unique decimal) + what gets granted.
 // The base must be unique per tool so a user can't pay a 100-CLKN "airdrop" amount
 // and reuse the verification to unlock a 500-CLKN tool. Math.floor(amount) checks this.
@@ -10198,6 +10247,16 @@ async function pollSinglePool(pool, HELIUS_KEY) {
         continue;
       }
 
+      // Arb-bot filter: record the trade + flag the wallet if it just round-tripped, then
+      // suppress flagged bots (buys AND sells). Catches the multi-tx churn crossPoolArb misses.
+      noteTradeForArb(trade.trader, trade.action, (tx && tx.timestamp ? tx.timestamp * 1000 : Date.now()));
+      if (trade.trader && isArbBot(trade.trader)) {
+        console.log(`[TELEGRAM] Skipping arb-bot ${trade.action} (round-trip churner) · ${trade.trader.slice(0,6)} · sig ${sig.slice(0,8)}`);
+        rememberSig(sig);
+        if (!blocked) advanceTo = sig;
+        continue;
+      }
+
       const usd = quoteUsdValue(trade);
       const quoteMeta = QUOTE_TOKENS[trade.quote.mint] || { symbol: '?' };
       const usdStr = usd == null ? "no USD" : "$" + usd.toFixed(4);
@@ -10296,6 +10355,8 @@ async function reconcileMissedTrades({ dry = false } = {}) {
         if (!trade) { continue; }                     // not a trade (e.g. an LP add/remove) — don't mark; harmless to re-see
         // Same rules as the poller.
         if (trade.trader && isOperatorWallet(trade.trader)) { rememberSig(s.signature); continue; }
+        noteTradeForArb(trade.trader, trade.action, bt || Date.now());
+        if (trade.trader && isArbBot(trade.trader)) { rememberSig(s.signature); continue; }
         const usd = quoteUsdValue(trade);
         if (trade.crossPoolArb && kv.get("suppressArbAlerts", true)) { rememberSig(s.signature); continue; }
         const floor = trade.action === "sell" ? MIN_SELL_USD

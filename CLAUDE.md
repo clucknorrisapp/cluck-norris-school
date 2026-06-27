@@ -322,6 +322,7 @@ Live money is managed across two systems. Facts here survive container resets/co
 - **Cloud session recovery:** containers reset mid-session. If files look stale:
   `git fetch origin --prune && git checkout claude/<branch> && git reset --hard origin/claude/<branch> && npm install`.
   GitHub is always the truth; nothing committed is ever lost. `MIN_BUY_USD` default is 5 (buy-alert floor; owner's call 2026-06-27, lowered from 35 — arb dust is now muted separately via `suppressArbAlerts`, so the floor can be low to surface small real buys).
+- **Arb-bot filter (behavioral, 2026-06-27):** a size-independent denylist that catches the MULTI-tx round-trip churners the single-tx `crossPoolArb` detector misses. `noteTradeForArb` records each trade in a short per-wallet memory and `flagArbBot`s any wallet that round-trips CLKN (buy↔sell, same wallet) within `arbRoundtripSec` (kv, default 180s); flagged wallets (kv `arbBotWallets`) have BOTH buys and sells suppressed in the poller + reconcile, like operator wallets. Seeded with two confirmed bots (`ESuvjvsQ…`, `o721mrtt…`). Manage via gated `/api/arb-bots` (`?add=`/`?remove=`). False positives (a real wallet that happened to flip fast) are removable there.
 - 💡 **IDEA — PERMANENT WIDE "ANCHOR" POSITIONS (filed 2026-06-23, owner's idea; NOT yet
   implemented).** Problem: because we own ~100% of the Orca CLKN pools, fully pulling our
   concentrated positions leaves the pool EMPTY → price goes stale / a tiny trade shoves it far
