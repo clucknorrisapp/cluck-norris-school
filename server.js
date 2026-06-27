@@ -4783,6 +4783,19 @@ app.get("/api/lock-report-test", async (req, res) => {
   } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
 });
 
+// Operator X announcement — post arbitrary text to X, bypassing the master X pause for
+// THIS manual, key-gated call only (the X counterpart to /api/tg-test). Auto-posting stays
+// off; this is a deliberate operator lever. Dry-run unless &post=1.
+app.get("/api/x-announce", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  const text = String(req.query.text || "").slice(0, 24000);
+  if (!text) return res.status(400).json({ error: "missing text" });
+  if (req.query.post !== "1") return res.status(200).json({ ok: true, dryRun: true, chars: text.length, preview: text });
+  try { const r = await postToX(text, { force: true }); return res.status(200).json(r); }
+  catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+
 // Telegram test message — fire a one-off custom post to the community chat,
 // gated by PREMIUM_ACCESS_KEY. Lets an operator send an arbitrary note (e.g.
 // "we're running a test") without shipping new content or a code change. The
