@@ -4796,6 +4796,18 @@ app.get("/api/x-announce", async (req, res) => {
   catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
 
+// Arm/disarm the treasury engine's auto-stop window (gated). ?hours=48 arms it; ?off=1 disarms.
+// On elapse, a 5-min checker pauses the treasury vault back to watch-only (positions untouched).
+app.get("/api/treasury-engine-window", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (req.query.off === "1") { kv.set("treasuryEnginePauseAt", 0); return res.status(200).json({ ok: true, armed: false }); }
+  const hours = Math.min(168, Math.max(1, parseFloat(req.query.hours || "48") || 48));
+  const at = Date.now() + hours * 3600 * 1000;
+  kv.set("treasuryEnginePauseAt", at);
+  return res.status(200).json({ ok: true, armed: true, hours, pauseAt: new Date(at).toISOString() });
+});
+
 // Telegram test message — fire a one-off custom post to the community chat,
 // gated by PREMIUM_ACCESS_KEY. Lets an operator send an arbitrary note (e.g.
 // "we're running a test") without shipping new content or a code change. The
@@ -10904,6 +10916,21 @@ app.listen(PORT, () => {
     // once shortly after boot, so a redeploy mid-blitz still reverts on time.
     setInterval(clknBlitzCheck, 60 * 1000);
     setTimeout(clknBlitzCheck, 12000);
+    // Treasury engine 48h auto-stop — when the armed window elapses, pause the treasury vault
+    // back to watch-only (a bounded test run; a cloud session can't be relied on to be alive to
+    // do it). kv treasuryEnginePauseAt; arm/disarm via /api/treasury-engine-window. Positions are
+    // left in place — only the auto-recenter loop stops.
+    setInterval(() => {
+      try {
+        const at = kv.get("treasuryEnginePauseAt", 0);
+        if (at && Date.now() >= at) {
+          kv.set("treasuryEnginePauseAt", 0);
+          try { whirlpoolMM.vault.pause("treasury"); } catch (_) {}
+          console.log("[treasury-engine] 48h window elapsed — paused to watch-only");
+          try { tgSend("1846034838", "🛑 <b>Treasury Liquidity Engine — test window ended.</b>\n\nThe 48h auto-rebalance run is complete; the engine is paused back to watch-only. Positions stay put — recenter manually or re-arm when you want."); } catch (_) {}
+        }
+      } catch (_) {}
+    }, 5 * 60 * 1000);
     // Live buy-competition leaderboards — refresh active boards, close on window end.
     setInterval(buyCompTick, 60 * 1000);
     // Interactive slash commands — register the webhook + the "/" command menu.
