@@ -294,6 +294,19 @@ Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.
 
 ## Liquidity ops — durable session memory (read this; don't rediscover it)
 Live money is managed across two systems. Facts here survive container resets/compaction.
+- **⚠️ OUR wallet balances are an OPS concern — NEVER read them with the product tools. Before
+  ANY treasury/engine decision or transaction (sizing a position, a swap, a buyback, quoting
+  "what's available"), read balances DIRECTLY ON-CHAIN.** The public forensic tools
+  (`/api/wallet-xray`, autopsy) are *activity scanners*, not balance snapshots — they undercount
+  and miss holdings (missed live USDC and Token-2022 LP positions, 2026-06-27, which led to two
+  wrong balance reports in one session). Do NOT size a trade off them, ever. Authoritative read =
+  `getTokenAccountsByOwner` (encoding `jsonParsed`) for BOTH token programs — legacy
+  `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA` **and** Token-2022
+  `TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb` — plus `getBalance` for native SOL, POSTed to the
+  `/api/helius-rpc` proxy (it holds the key and these methods are on its allow-list; works
+  headless in a fresh cloud session). Sum `tokenAmount.uiAmount` per mint. On-chain is the ONLY
+  source of truth for our funds. (Same rule for LP positions: the Token-2022-aware
+  `listPositions`/`/api/whirlpool/positions` read, never a forensic endpoint.)
 - **Treasury** (wallet env `MM_OPERATOR_SECRET_TREASURY`, pubkey `2zMCU…`): lives on
   **Meteora DLMM cbBTC/SOL** pool `Hz1EtXTGaFEtAWRgRNpDMFV6vnSZtQUY9UqmdM6vfKSS` (picked for
   ~10–19x vol/TVL turnover vs Orca's crowded $5M pool, where our ~$1.2k was ~0.02% of depth).
