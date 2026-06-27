@@ -1526,6 +1526,9 @@ async function welcomeNewMembers(msg) {
     const prev = welcomeLastMsg.get(chatId);
     if (prev && prev !== mid) tgDelete(chatId, prev);      // self-clean: newest welcome only
     welcomeLastMsg.set(chatId, mid);
+    // Auto-delete this welcome after 5 min to keep the room tidy. Best-effort timer; the
+    // self-clean above is the backstop if a restart drops the timer before it fires.
+    setTimeout(() => { tgDelete(chatId, mid); if (welcomeLastMsg.get(chatId) === mid) welcomeLastMsg.delete(chatId); }, 5 * 60 * 1000);
   }
 }
 // Handle a journey button tap: reply with the curated route, keep it reply-able.
