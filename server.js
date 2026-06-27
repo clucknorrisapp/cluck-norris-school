@@ -10930,7 +10930,7 @@ app.listen(PORT, () => {
           kv.set("treasuryEnginePauseAt", 0);
           try { whirlpoolMM.vault.pause("treasury"); } catch (_) {}
           console.log("[treasury-engine] 48h window elapsed — paused to watch-only");
-          try { tgSend("1846034838", "🛑 <b>Treasury Liquidity Engine — test window ended.</b>\n\nThe 48h auto-rebalance run is complete; the engine is paused back to watch-only. Positions stay put — recenter manually or re-arm when you want."); } catch (_) {}
+          try { tgSend("1846034838", "🛑 <b>Treasury Liquidity Engine — 48h test complete.</b>\n\nThe engine is now paused (watch-only). Your ±3% positions are <b>left in place</b> — nothing closed, nothing moved. Let's review the volume + Jupiter organic score and decide whether to keep it running."); } catch (_) {}
         }
       } catch (_) {}
     }, 5 * 60 * 1000);
