@@ -321,7 +321,7 @@ Live money is managed across two systems. Facts here survive container resets/co
   claim+close; `open-position` takes `half=` + `dist=spot|curve|bidask`.
 - **Cloud session recovery:** containers reset mid-session. If files look stale:
   `git fetch origin --prune && git checkout claude/<branch> && git reset --hard origin/claude/<branch> && npm install`.
-  GitHub is always the truth; nothing committed is ever lost. `MIN_BUY_USD` default is 35 (buy-alert floor; owner's call 2026-06-17, raised from 15).
+  GitHub is always the truth; nothing committed is ever lost. `MIN_BUY_USD` default is 5 (buy-alert floor; owner's call 2026-06-27, lowered from 35 — arb dust is now muted separately via `suppressArbAlerts`, so the floor can be low to surface small real buys).
 - 💡 **IDEA — PERMANENT WIDE "ANCHOR" POSITIONS (filed 2026-06-23, owner's idea; NOT yet
   implemented).** Problem: because we own ~100% of the Orca CLKN pools, fully pulling our
   concentrated positions leaves the pool EMPTY → price goes stale / a tiny trade shoves it far

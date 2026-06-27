@@ -9136,12 +9136,13 @@ const QUOTE_TOKENS = {
   [CBBTC_MINT]: { symbol: "cbBTC", emoji: "₿", isStable: false },
   [JUP_MINT]: { symbol: "JUP", emoji: "🪐", isStable: false },
 };
-// Buys below this USD value don't fire a Telegram notification. Default $35: the
-// multi-quote engine's arb flow washes tiny ($5-6) buys through our Orca pools
-// ("via Jupiter → Orca"), and at a $5 floor they flood the channel. $35 filters that
-// dust while still surfacing real buyers. (This was an env var that didn't persist —
-// hard-defaulted so it holds; override higher via MIN_BUY_USD env if arb ramps.)
-const MIN_BUY_USD = parseFloat(process.env.MIN_BUY_USD || "35");
+// Buys below this USD value don't fire a Telegram notification. $5 (owner's call
+// 2026-06-27, lowered from $35): cross-pool engine-arb dust is now muted SEPARATELY via
+// suppressArbAlerts (the crossPoolArb check) and the engine is paused, so the floor no
+// longer needs to guard against the arb flood the old $35 was for — a low floor surfaces
+// small REAL buys (manual buybacks, organic newcomers). (Env didn't persist on Railway,
+// so this hard default is the live value; raise it here if arb dust ever leaks past the mute.)
+const MIN_BUY_USD = parseFloat(process.env.MIN_BUY_USD || "5");
 // Sells have a higher floor than buys by default — only larger sells are worth
 // surfacing. Override either side via MIN_BUY_USD / MIN_SELL_USD.
 const MIN_SELL_USD = parseFloat(process.env.MIN_SELL_USD || "50");
