@@ -348,6 +348,20 @@ Live money is managed across two systems. Facts here survive container resets/co
   wait. Cheap + correct ONLY on Orca (one position spans the whole band for ~0.006 SOL rent, $10
   capital, negligible IL); do NOT do this on Meteora (width-scaled bin-array rent makes a band that
   wide very expensive). Sound CL technique — revisit when the engine is un-paused.
+- 💡 **PLANNED — generalize the Meteora keepalive to the multi-project liq engine (owner's
+  call 2026-06-27).** Built for CLKN now (`vault.meteoraKeepalive` + the `meteoraCanonKeepaliveTick`
+  scheduler + `/api/meteora-keepalive`): when the canonical pool goes quiet ≥23h it fires ONE
+  ~$10 SOL→CLKN BUY forced through `64WXkH` (Jupiter `dexes="Meteora DAMM v2"` + ammKey route-verify;
+  buy-only; 1×/24h max; kv `meteoraKeepalive{Enabled,Hours,Usd}`) so the pool doesn't drop off
+  watchlists (24h-no-trade cutoff). Currently HARDCODED to the `treasury` project + the `64WXkH`
+  address — to productize for client projects, make the canonical-pool address + params per-project
+  config (the vault is already multi-project). It's **volume-triggered, so it self-scales**: a client
+  with a healthy LOW-fee main pool gets organic arb → never trips it; only starved pools fire it.
+  **Fee-structure lever (why CLKN needs it and most clients won't):** CLKN's canonical pool is Meteora
+  **2%** (high) while the engine pools are Orca **0.02%** (cheap), so arb routes AROUND the main pool
+  and starves it. Clients with a low-fee main/canonical pool get arb flowing there naturally. **When
+  onboarding clients, steer them to a LOW-fee main pool** — keepalive becomes a rare backstop, not a
+  daily cost.
 
 ## Venue decision (settled — don't re-debate)
 **CLKN stays on Orca; treasury stays on Meteora.** Different reasons per asset:
