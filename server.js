@@ -4811,6 +4811,19 @@ app.get("/api/treasury-engine-window", (req, res) => {
   return res.status(200).json({ ok: true, armed: true, hours, pauseAt: new Date(at).toISOString() });
 });
 
+// Manual Meteora keepalive — dry-run (route check only) by default; &run=1 fires a real
+// ~$10 SOL→CLKN buy FORCED through 64WXkH. &usd= to size. Same path the auto-keepalive uses.
+app.get("/api/meteora-keepalive", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  try {
+    const usd = Math.max(1, parseFloat(req.query.usd || "10") || 10);
+    const r = await whirlpoolMM.vault.meteoraKeepalive({ projectId: "treasury", usd, dryRun: req.query.run !== "1" });
+    if (req.query.run === "1" && r && r.ok) kv.set("meteoraLastKeepaliveAt", Date.now());
+    return res.status(200).json(r);
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+
 // Telegram test message — fire a one-off custom post to the community chat,
 // gated by PREMIUM_ACCESS_KEY. Lets an operator send an arbitrary note (e.g.
 // "we're running a test") without shipping new content or a code change. The
@@ -10953,7 +10966,22 @@ app.listen(PORT, () => {
         if (sinceHrs >= quietHrs && !st.alerted) {
           st.alerted = true;
           const v = Math.round(Number(a.volume_usd && a.volume_usd.h24) || 0);
-          tgSend("1846034838", `⚠️ <b>Meteora canonical pool quiet</b>\n\nThe community CLKN Meteora pool (64WXkH…, the canonical chart) has had no trades in ~${Math.round(sinceHrs)}h (24h vol $${v}). Volume's running on the Orca engine pools, so the public chart is going stale. Consider a small keepalive buy through it.`);
+          tgSend("1846034838", `⚠️ <b>Meteora canonical pool quiet</b>\n\nThe community CLKN Meteora pool (64WXkH…, the canonical chart) has had no trades in ~${Math.round(sinceHrs)}h (24h vol $${v}). Volume's on the Orca engine pools; the keepalive will fire a small buy if it stays quiet.`);
+        }
+        // Auto-keepalive: 1×/24h max, only when quiet ≥ kaHrs — one ~$10 SOL→CLKN buy FORCED
+        // through 64WXkH (route-verified, BUY-ONLY) so the pool stays on watchlists. kv flags:
+        // meteoraKeepaliveEnabled (default on) / meteoraKeepaliveHours (23) / meteoraKeepaliveUsd (10).
+        if (kv.get("meteoraKeepaliveEnabled", true) && sinceHrs >= kv.get("meteoraKeepaliveHours", 23)
+            && (now - kv.get("meteoraLastKeepaliveAt", 0)) >= 24 * 3600 * 1000) {
+          kv.set("meteoraLastKeepaliveAt", now); // one attempt per 24h regardless of outcome
+          const kaUsd = kv.get("meteoraKeepaliveUsd", 10);
+          const ka = await whirlpoolMM.vault.meteoraKeepalive({ projectId: "treasury", usd: kaUsd }).catch((e) => ({ ok: false, reason: e.message }));
+          if (ka && ka.ok) {
+            st.lastTradeAt = now; st.alerted = false; // our buy is a trade — reset the quiet clock
+            tgSend("1846034838", `🔁 <b>Meteora keepalive fired</b>\n\n~${Math.round(sinceHrs)}h quiet → sent a $${kaUsd} SOL→CLKN buy (~${ka.solIn} SOL) through 64WXkH to keep it on watchlists. Buy-only. tx <code>${ka.sig ? ka.sig.slice(0, 12) : "?"}</code>`);
+          } else {
+            tgSend("1846034838", `⚠️ <b>Meteora keepalive skipped</b>\n\n~${Math.round(sinceHrs)}h quiet but the buy didn't fire: ${ka && ka.reason ? ka.reason : "unknown"}. Pool may need a manual nudge.`);
+          }
         }
         kv.set("meteoraCanonState", st);
       } catch (_) {}
