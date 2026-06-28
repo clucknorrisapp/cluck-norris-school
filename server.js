@@ -10934,6 +10934,32 @@ app.listen(PORT, () => {
         }
       } catch (_) {}
     }, 5 * 60 * 1000);
+    // Meteora canonical-pool keepalive monitor — the community CLKN Meteora pool (64WXkH,
+    // the canonical chart) can go quiet for ~24h now that volume runs on the Orca engine
+    // pools. Alert the operator when it's had no trades for a while so the public chart
+    // doesn't read dead. kv meteoraCanonState / meteoraQuietHours (default 14h).
+    async function meteoraCanonKeepaliveTick() {
+      try {
+        const r = await fetch("https://api.geckoterminal.com/api/v2/networks/solana/pools/64WXkHM4zyWUkYy32TfUeBV5wDAfdcUGDxe5ntM4xaTd", { signal: AbortSignal.timeout(10000) });
+        if (!r.ok) return;
+        const a = ((await r.json()).data || {}).attributes || {};
+        const tx = a.transactions || {};
+        const h1 = tx.h1 ? (Number(tx.h1.buys || 0) + Number(tx.h1.sells || 0)) : 0;
+        const now = Date.now();
+        const st = kv.get("meteoraCanonState", null) || { lastTradeAt: now, alerted: false };
+        if (h1 > 0) { st.lastTradeAt = now; st.alerted = false; }
+        const quietHrs = kv.get("meteoraQuietHours", 14);
+        const sinceHrs = (now - (st.lastTradeAt || now)) / 3600000;
+        if (sinceHrs >= quietHrs && !st.alerted) {
+          st.alerted = true;
+          const v = Math.round(Number(a.volume_usd && a.volume_usd.h24) || 0);
+          tgSend("1846034838", `⚠️ <b>Meteora canonical pool quiet</b>\n\nThe community CLKN Meteora pool (64WXkH…, the canonical chart) has had no trades in ~${Math.round(sinceHrs)}h (24h vol $${v}). Volume's running on the Orca engine pools, so the public chart is going stale. Consider a small keepalive buy through it.`);
+        }
+        kv.set("meteoraCanonState", st);
+      } catch (_) {}
+    }
+    setInterval(meteoraCanonKeepaliveTick, 60 * 60 * 1000);
+    setTimeout(meteoraCanonKeepaliveTick, 90000);
     // Live buy-competition leaderboards — refresh active boards, close on window end.
     setInterval(buyCompTick, 60 * 1000);
     // Interactive slash commands — register the webhook + the "/" command menu.
