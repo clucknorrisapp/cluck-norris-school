@@ -4883,13 +4883,15 @@ app.get("/api/tg-test", async (req, res) => {
   else if (req.query.project) {
     try { const p = whirlpoolMM.vault.getProject(String(req.query.project)); if (p && p.telegramChatId) chatId = p.telegramChatId; } catch (_) {}
   }
+  const photo = req.query.photo ? String(req.query.photo) : null;  // optional image URL -> sendPhoto with caption
   try {
-    const r = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    const endpoint = photo ? "sendPhoto" : "sendMessage";
+    const body = photo
+      ? { chat_id: chatId, photo, caption: text.slice(0, 1024), parse_mode: "HTML", disable_notification: silent }  // caption max 1024
+      : { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true, disable_notification: silent };
+    const r = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/${endpoint}`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId, text,
-        parse_mode: "HTML", disable_web_page_preview: true, disable_notification: silent,
-      }),
+      body: JSON.stringify(body),
     });
     const data = await r.json().catch(() => ({}));
     // &pin=1 — pin the message we just sent (silently, matching the send's notification mode).
