@@ -657,11 +657,10 @@ function xConfigured() {
 function xPercentEncode(s) {
   return encodeURIComponent(String(s)).replace(/[!*'()]/g, c => "%" + c.charCodeAt(0).toString(16).toUpperCase());
 }
-async function postToX(text, opts = {}) {
-  if (X_AUTOPOST_PAUSED && !opts.force) return { ok: false, paused: true }; // opts.force = scoped carve-out (lock announcements only) — see postLockToX
-  if (!xConfigured()) return { ok: false, skipped: true };
+// OAuth 1.0a header (HMAC-SHA1, oauth_* params only — neither our JSON tweet body nor a
+// multipart media body is part of the signature). Shared by postToX + uploadXMediaFromUrl.
+function xOAuthHeader(method, url) {
   const ck = process.env.X_API_KEY, cs = process.env.X_API_SECRET, at = process.env.X_ACCESS_TOKEN, ats = process.env.X_ACCESS_SECRET;
-  const url = "https://api.x.com/2/tweets";
   const oauth = {
     oauth_consumer_key: ck,
     oauth_nonce: randomBytes(16).toString("hex"),
@@ -670,16 +669,41 @@ async function postToX(text, opts = {}) {
     oauth_token: at,
     oauth_version: "1.0",
   };
-  // v2 + JSON body: only the oauth_* params are signed (JSON body is not).
   const paramStr = Object.keys(oauth).sort().map(k => `${xPercentEncode(k)}=${xPercentEncode(oauth[k])}`).join("&");
-  const base = `POST&${xPercentEncode(url)}&${xPercentEncode(paramStr)}`;
+  const base = `${method}&${xPercentEncode(url)}&${xPercentEncode(paramStr)}`;
   const signingKey = `${xPercentEncode(cs)}&${xPercentEncode(ats)}`;
   oauth.oauth_signature = createHmac("sha1", signingKey).update(base).digest("base64");
-  const authHeader = "OAuth " + Object.keys(oauth).sort().map(k => `${xPercentEncode(k)}="${xPercentEncode(oauth[k])}"`).join(", ");
+  return "OAuth " + Object.keys(oauth).sort().map(k => `${xPercentEncode(k)}="${xPercentEncode(oauth[k])}"`).join(", ");
+}
+// Fetch an image by URL and upload it to X (v1.1 media/upload, multipart). Returns the
+// media_id_string to attach to a tweet, or null on failure. Lets us post a generated
+// graphic with an announcement.
+async function uploadXMediaFromUrl(imageUrl) {
+  if (!xConfigured() || !imageUrl) return null;
+  try {
+    const img = await fetch(imageUrl);
+    if (!img.ok) { console.warn("[X] media fetch failed", img.status); return null; }
+    const buf = Buffer.from(await img.arrayBuffer());
+    const ct = img.headers.get("content-type") || "image/png";
+    const uploadUrl = "https://upload.twitter.com/1.1/media/upload.json";
+    const form = new FormData();
+    form.append("media", new Blob([buf], { type: ct }), "image");
+    const r = await fetch(uploadUrl, { method: "POST", headers: { Authorization: xOAuthHeader("POST", uploadUrl) }, body: form });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { console.warn("[X] media upload failed", r.status, JSON.stringify(j).slice(0, 200)); return null; }
+    return j.media_id_string || (j.media_id != null ? String(j.media_id) : null);
+  } catch (e) { console.warn("[X] media upload error", e.message); return null; }
+}
+async function postToX(text, opts = {}) {
+  if (X_AUTOPOST_PAUSED && !opts.force) return { ok: false, paused: true }; // opts.force = scoped carve-out (lock announcements only) — see postLockToX
+  if (!xConfigured()) return { ok: false, skipped: true };
+  const url = "https://api.x.com/2/tweets";
+  const authHeader = xOAuthHeader("POST", url);
   try {
     const payload = { text };
     if (opts.replyToId) payload.reply = { in_reply_to_tweet_id: String(opts.replyToId) };  // threaded self-reply (links go here, not the post body)
     if (opts.quoteId) payload.quote_tweet_id = String(opts.quoteId);  // quote-tweet (used to "bump" a lesson back into feeds)
+    if (Array.isArray(opts.mediaIds) && opts.mediaIds.length) payload.media = { media_ids: opts.mediaIds.map(String) };  // attach uploaded image(s)
     const r = await fetch(url, { method: "POST", headers: { Authorization: authHeader, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     const j = await r.json().catch(() => ({}));
     if (r.ok) return { ok: true, id: j?.data?.id };
@@ -4793,10 +4817,19 @@ app.get("/api/x-announce", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
   const text = String(req.query.text || "").slice(0, 24000);
+  const image = req.query.image ? String(req.query.image) : null;  // optional image URL to attach
   if (!text) return res.status(400).json({ error: "missing text" });
-  if (req.query.post !== "1") return res.status(200).json({ ok: true, dryRun: true, chars: text.length, preview: text });
-  try { const r = await postToX(text, { force: true }); return res.status(200).json(r); }
-  catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+  if (req.query.post !== "1") return res.status(200).json({ ok: true, dryRun: true, chars: text.length, image, preview: text });
+  try {
+    let mediaIds = null;
+    if (image) {
+      const mid = await uploadXMediaFromUrl(image);
+      if (!mid) return res.status(200).json({ ok: false, error: "media upload failed — image not attached (text not posted)" });
+      mediaIds = [mid];
+    }
+    const r = await postToX(text, { force: true, mediaIds });
+    return res.status(200).json({ ...r, mediaAttached: !!mediaIds });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
 
 // Arm/disarm the treasury engine's auto-stop window (gated). ?hours=48 arms it; ?off=1 disarms.
