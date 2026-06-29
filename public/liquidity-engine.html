@@ -7,7 +7,7 @@
 <title>💧 The Liquidity Engine — Honest Automated Market Making · Cluck Norris</title>
 <meta name="description" content="Real on-chain depth, automated. The honest alternative to wash-trading 'volume bots' — concentrated liquidity market making on Orca, auto re-centering, inventory rebalancing, and a live CLKN reference you can audit yourself."/>
 <meta property="og:title" content="💧 The Liquidity Engine — Honest Automated Market Making"/>
-<meta property="og:description" content="Real depth, real fills, real volume — auditable. The market-maker product that passes its own forensic audit. Live on CLKN; opening to projects."/>
+<meta property="og:description" content="Real depth, real fills, real volume — auditable. A concentrated-liquidity market maker we're building and testing on CLKN's own pools. In active development; not yet offered to other projects."/>
 <meta property="og:type" content="website"/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -128,9 +128,9 @@ body{background:transparent;font-family:var(--body);}
     <div class="hero-sub">Thin liquidity is why most tokens feel dead: every buy slips, the chart whipsaws, and aggregators rank you last. The usual "fix" is a <b>wash-trading volume bot</b> — fake trades that lie to your community and get flagged. We built the opposite: an autonomous market maker that places <b>real two-sided depth</b>, fills <b>real traders</b>, and earns fees on <b>real volume</b> — and you can prove every bit of it on-chain.</div>
     <div class="hero-sub" style="margin-top:10px">It's the thing a seasoned operator does by hand, every day, for years — now automated and guardrailed. <b>This is what we run on CLKN ourselves — actively under testing and fine‑tuning.</b></div>
     <div class="actions">
-      <a class="action-btn primary" href="#access">REQUEST EARLY ACCESS</a>
+      <a class="action-btn primary" href="#how">HOW IT WORKS</a>
       <a class="action-btn" href="/liquidity">TRY THE TOOL (NON-CUSTODIAL)</a>
-      <a class="action-btn" href="#how">HOW IT WORKS</a>
+      <a class="action-btn" href="#status">STATUS</a>
     </div>
   </div>
 
@@ -142,10 +142,9 @@ body{background:transparent;font-family:var(--body);}
     <a href="#modes">MODES</a>
     <a href="#honest">REAL vs WASH</a>
     <a href="#run">HOW IT'S RUN</a>
-    <a href="#pricing">PRICING</a>
     <a href="#risk">RISK</a>
     <a href="#proof">LIVE PROOF</a>
-    <a href="#access">EARLY ACCESS</a>
+    <a href="#status">STATUS</a>
     <a href="/portal">🔐 OWNER PORTAL</a>
   </div>
 
@@ -346,7 +345,7 @@ body{background:transparent;font-family:var(--body);}
       <div class="tier">
         <div class="t-name">🤖 MANAGED VAULT</div>
         <div class="t-tag">AUTONOMOUS · DEDICATED FLOAT</div>
-        <div class="t-price">Early access</div>
+        <div class="t-price">In development</div>
         <ul>
           <li>You create a <strong>fresh, dedicated wallet</strong> and fund it with <em>only</em> your market-making float</li>
           <li>The engine runs the strategy hands-off — re-center, rebalance, buy back</li>
@@ -358,35 +357,19 @@ body{background:transparent;font-family:var(--body);}
     </div>
     <div class="callout good" style="margin-top:14px"><b>You hold the keys — and the controls.</b> Managed-vault owners get a <strong>wallet-login portal</strong> at <a class="xref" style="color:#FCD34D" href="/portal">/portal</a>: sign in with your project wallet (a one-tap signature — there's no password for us to lose or leak, and no shared admin key), see live depth, fees and P&amp;L for <em>your</em> project, and <strong>pause or resume the engine yourself</strong> from any device. Your access is scoped to your project only.</div>
     <div class="callout info" style="margin-top:14px"><b>Where we're headed — trustless mode.</b> The endgame is an on-chain delegate that can <em>only</em> perform liquidity operations and <em>cannot</em> withdraw to any outside address — so the strategy runs autonomously while you keep full custody and we never can touch the funds. That's the roadmap; the Managed Vault (dedicated float wallet) is the pragmatic version available now.</div>
-    <div class="callout warn"><b>Honest scope:</b> the autonomous Managed Vault runs live on CLKN today and is opening to a small number of projects in early access. The fully self-serve, multi-project dashboard and trustless delegate are in active development — we'll never pretend a feature is shipped before it is. That honesty is the brand.</div>
+    <div class="callout warn"><b>Honest scope:</b> the autonomous Managed Vault runs live on CLKN's own pools today, where we're actively testing and fine-tuning it. It is <strong>not yet offered to other projects</strong> — we want to make it better first. The fully self-serve, multi-project dashboard and trustless delegate are also in active development. We'll never pretend a feature is shipped before it is. That honesty is the brand.</div>
   </div>
 
-  <!-- PRICING -->
-  <div class="section" id="pricing">
-    <div class="section-title">💰 PRICING · ALIGNED, IN CLKN</div>
-    <p>Pricing is paid in <strong>CLKN</strong> — the same on-chain micropayment model as the rest of our tools — so the product that helps your liquidity also gives CLKN real, recurring utility. <span class="muted">(Indicative — finalised as early access opens.)</span></p>
-    <div class="tiers">
-      <div class="tier">
-        <div class="t-name">SELF-SERVE</div>
-        <div class="t-price">Free / tiny CLKN unlock</div>
-        <ul>
-          <li>The non-custodial tool, open to everyone</li>
-          <li>Pay-per-session in CLKN, or free for CLKN holders</li>
-          <li>You run your own strategy</li>
-        </ul>
-      </div>
-      <div class="tier feature">
-        <div class="t-name">MANAGED VAULT</div>
-        <div class="t-price">Setup + monthly, in CLKN</div>
-        <ul>
-          <li>We run the autonomous engine on your dedicated float</li>
-          <li>Holder-gated: hold a CLKN threshold to qualify</li>
-          <li>Wallet-login dashboard (<a class="xref" style="color:#FCD34D" href="/portal">/portal</a>), alerts, kill switch, support</li>
-          <li>Optional performance component on real fees earned</li>
-        </ul>
-      </div>
-    </div>
-    <p class="muted" style="margin-top:12px">Every tier deepens CLKN utility: access and payment run through the token, so a growing liquidity-service business directly grows demand to hold and use CLKN. Utility first, speculation second — same as everything we build.</p>
+  <!-- STATUS -->
+  <div class="section" id="status">
+    <div class="section-title">🚧 STATUS · IN DEVELOPMENT</div>
+    <p>The Liquidity Engine is <strong>not a product we're selling yet</strong>. We're building and testing it on <strong>CLKN's own pools</strong> — learning how it behaves, refining the strategy, and being honest about the risks (impermanent loss is real) — before we'd ever run it for anyone else.</p>
+    <ul>
+      <li class="yes"><strong>Live today:</strong> the free, non-custodial <a class="xref" style="color:#FCD34D" href="/liquidity">/liquidity tool</a> — anyone can use it from their own wallet, keys never leave their device.</li>
+      <li class="yes"><strong>In testing on CLKN:</strong> the autonomous Managed Vault, running on our own pools while we fine-tune it.</li>
+      <li class="no"><strong>Not yet offered to other projects.</strong> No pricing, no sign-ups, no early access — we want to make it better first.</li>
+    </ul>
+    <p class="muted" style="margin-top:12px">When it's ready, access and payment will run through CLKN — the same on-chain micropayment model as the rest of our tools. We'll say so clearly here when that day comes; until then, treat this page as a look at what we're building, not a service you can buy.</p>
   </div>
 
   <!-- WHO IT'S FOR -->
@@ -428,15 +411,14 @@ body{background:transparent;font-family:var(--body);}
     <p class="muted" style="margin-top:14px">None of this is financial advice. Providing liquidity can lose money — through impermanent loss, a sustained downtrend while you hold inventory, or a large sell that leaves you token-heavy and needing to rebuild. We teach every bit of it honestly in the <a class="xref" style="color:#FCD34D" href="/">LP Lab</a> before you put a dollar to work. We provide genuine market-making depth; we do not and will not manufacture fake volume.</p>
   </div>
 
-  <!-- EARLY ACCESS CTA -->
+  <!-- FOLLOW ALONG -->
   <div class="section" id="access" style="border-color:rgba(16,185,129,0.4); background:rgba(16,185,129,0.07)">
-    <div class="section-title" style="color:#6EE7B7; border-color:rgba(16,185,129,0.25)">🚀 EARLY ACCESS</div>
-    <p>We're opening the Managed Vault to a small number of projects who want real, honest liquidity — and want to learn how it works, not just rent a black box. If that's you:</p>
+    <div class="section-title" style="color:#6EE7B7; border-color:rgba(16,185,129,0.25)">🐔 FOLLOW ALONG</div>
+    <p>We're building this in the open and testing it on CLKN's own pools. It isn't open to other projects yet — but the non-custodial tool is free to use today, and you can watch how the strategy plays out on-chain:</p>
     <div class="actions">
-      <a class="action-btn primary" href="https://t.me/FireChicken007" target="_blank">TALK TO US ON TELEGRAM</a>
-      <a class="action-btn" href="/liquidity">TRY THE SELF-SERVE TOOL</a>
-      <a class="action-btn" href="/portal">OWNER LOGIN → YOUR PORTAL</a>
+      <a class="action-btn primary" href="/liquidity">TRY THE SELF-SERVE TOOL</a>
       <a class="action-btn" href="/">EXPLORE CLUCK NORRIS</a>
+      <a class="action-btn" href="https://t.me/FireChicken007" target="_blank">QUESTIONS? TELEGRAM</a>
     </div>
     <p class="muted" style="margin-top:14px">Not financial advice. Providing liquidity carries real risks — impermanent loss and market risk are real, and we teach them honestly in the <a class="xref" style="color:#FCD34D" href="/">LP Lab</a> before you put a dollar to work. The Liquidity Engine provides genuine market-making depth; it does not and will not manufacture fake volume.</p>
   </div>

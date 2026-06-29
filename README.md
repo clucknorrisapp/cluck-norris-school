@@ -20,7 +20,7 @@ What's in the box:
 3. 🩺 **Free token research & forensics** — a full **Wallet X‑Ray**, a deep AI token *autopsy*, holder snapshots, transaction tracing, and a wallet‑safety checkup for any Solana mint.
 4. 💎 **Premium operator tools** — buy‑competition trackers, a batch airdrop sender, and a holder‑gated deep‑forensics tier, unlocked with on‑chain CLKN micropayments (pennies, no subscription, no accounts).
 5. 🥚 **A guided token creator** — mint a real SPL token, taught decision by decision, that deliberately stops short of launching.
-6. 💧 **The Liquidity Engine** — honest, automated market making (real two‑sided depth, never wash trades), offered as a premium hands‑on service and proven on CLKN's own pools.
+6. 💧 **The Liquidity Engine** — a concentrated‑liquidity market maker (real two‑sided depth, never wash trades) that we're **building and testing on CLKN's own pools**. Not yet offered to other projects.
 
 The token does real work. The school keeps people alive long enough to use it.
 
@@ -97,11 +97,11 @@ The Liquidity Engine is a concentrated‑liquidity market maker that puts **real
 - **🛠 Non‑custodial position builders** — the server builds the unsigned position transactions (open / close / collect fees) and initializes pool tick‑arrays automatically so it works even on a brand‑new pool; the operator signs their own transactions and keys never touch the server — the same pattern as the Hatchery and Security Coop.
 - **🤖 Autonomous vault** — funded from a **dedicated hot wallet** whose key lives only in the server environment (unset = fully off, a safe no‑op). It can hold balanced two‑sided depth, an upside ask‑wall in a higher fee tier, and a multi‑quote layout that earns on natural cross‑pool arbitrage; it re‑centers as price moves and rebalances inventory by swapping **quote assets only — never selling the brand's own token.** Guardrails throughout: per‑fee‑tier pools, anti‑thrash intervals, daily action caps, a price‑gap anomaly guard, slippage caps, and a one‑flag kill switch.
 
-**The multi‑quote idea.** Pairing a token against several quote assets (e.g. USDC + SOL + JUP) means each quote's *own* volatility dislocates the token's price across pools, and third‑party arbitrageurs trade it back into line — producing real, organic two‑way volume the project never generates itself. We're proving this out live on CLKN's own pools.
+**The multi‑quote idea.** Pairing a token against several quote assets (e.g. USDC + SOL + JUP) means each quote's *own* volatility dislocates the token's price across pools, and third‑party arbitrageurs trade it back into line — producing real, third‑party two‑way volume the project never generates itself. We're **testing this idea live on CLKN's own pools** — building and refining it before we'd ever offer it to anyone else.
 
 **Honest by design.** Every fill is a real counterparty trading against real depth — that's real volume because the trades are real. It never trades against itself. (Our [Token Autopsy](https://clucknorris.app/autopsy) exists to catch the fake kind — running a wash bot would flag our own token.)
 
-**Premium, by request — not self‑serve.** This is a serious tool with real risks (impermanent loss, the big‑sell scenario), and how it's tuned depends on the token. So we set it up *with* each project personally — what it does, what it can do for you, and the risks — rather than handing over a button. One project helping another. The product page ([`/liquidity-engine`](https://clucknorris.app/liquidity-engine)) explains it with honest risk education built in; to talk it through, DM **[@firechicken007](https://x.com/firechicken007)** on X or reach us in the Telegram group.
+**Building and testing — not yet offered.** This is a serious tool with real risks (impermanent loss, the big‑sell scenario), and we're still refining it on CLKN's own pools. We're **not offering it to other projects yet** — we want to make it better first. The product page ([`/liquidity-engine`](https://clucknorris.app/liquidity-engine)) explains the approach with honest risk education built in.
 
 **Status — actively testing on CLKN.** We're tuning the engine on CLKN's own pools (distribution shapes, range widths, re‑center cadence, inventory handling, the multi‑quote layout) under hands‑on management before leaning on it harder. The goal is steady, honest depth — not headline metrics — so we'd rather under‑promise here and let the on‑chain record speak. Built multi‑tenant: each project would run on its own dedicated operator wallet, guardrails, and Telegram alert room.
 
@@ -222,7 +222,7 @@ The product reaches into the community Telegram (and X), not just the website:
 - `/api/credential/:slug` — public transcript JSON · `/api/credential-card?slug=…` — transcript share PNG · `/api/school-stats` — verified‑graduate metrics
 - `/api/hatchery/*` — token creator: Arweave metadata upload, unsigned mint‑tx build, live fee config
 - `/api/security-coop/*` — wallet delegate‑approval scan + unsigned revoke‑tx build
-- `/api/whirlpool/*` — Liquidity Engine: Orca pool discovery, suggested ranges, and liquidity quotes (read‑only); the position‑tx builders and the autonomous vault's `/vault/*` (status / tick / rebalance / pause) are gated — the engine is offered as a premium, by‑request service and runs per‑project on **Orca, Raydium, or Meteora**
+- `/api/whirlpool/*` — Liquidity Engine: Orca pool discovery, suggested ranges, and liquidity quotes (read‑only); the position‑tx builders and the autonomous vault's `/vault/*` (status / tick / rebalance / pause) are gated — the engine is **in active development**, currently being tested on CLKN's own pools (**Orca**, with **Raydium** and **Meteora** adapters built to the same interface); not yet offered to other projects
 - `/api/holders`, `/api/locks`, `/api/fees`, `/api/supply`, `/api/reinvestment`, `/api/bubblemaps` — Solana token telemetry proxies
 - `/api/bags-proxy`, `/api/bags-feed-prices`, `/api/bags-near-grad`, `/api/bags-graduated` — Bags launch data
 - `/api/helius-rpc`, `/api/helius-tx` — Helius proxies with API keys hidden server‑side, with automatic failover on rate‑limit / outage
