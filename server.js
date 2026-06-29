@@ -28,6 +28,7 @@ const {
   KNOWN_SERVICE_WALLETS, KNOWN_CEX_WALLETS,
 } = require("./lib/solana-addr");
 const { runAutopsy, bagsFetch, heliusEnhancedBatched, BAGS_BASE } = require("./lib/autopsy");
+const { ddEnabled, ddWalletReport } = require("./lib/webacy-dd"); // DD.xyz (Webacy) wallet risk cross-check (no-op without WEBACY_API_KEY)
 const { getTokenBuyersInWindowHelius, getWalletTokenPositionHelius } = require("./lib/helius-trades");
 const QUESTION_BANK = require("./data/question-bank.json");
 // Live Classroom curriculum (regenerate with: node scripts/extract-curriculum.js)
@@ -8170,6 +8171,11 @@ app.get("/api/wallet-xray", async (req, res) => {
     return r.json();
   };
   const labelWallet = (a) => KNOWN_CEX_WALLETS[a] || KNOWN_SERVICE_WALLETS[a] || null;
+  // DD.xyz (Webacy) wallet risk + address-poisoning cross-check — fired in
+  // parallel, no-op without WEBACY_API_KEY, and never throws into the request.
+  const ddPromise = ddEnabled()
+    ? ddWalletReport(wallet).catch(() => ({ available: false }))
+    : Promise.resolve({ available: false });
 
   try {
     // 0. SOL price + current SOL balance (parallel, both best-effort).
@@ -8481,6 +8487,14 @@ app.get("/api/wallet-xray", async (req, res) => {
     if (trader && !labels.some((l) => l.level === "high")) labels.push({ tag: "Active trader", icon: "🎯", level: "info", evidence: `${swapCount} swaps across ${distinctTokens} tokens — a busy but human-paced trader.` });
     if (!labels.length) labels.push({ tag: "Ordinary activity", icon: "👤", level: "info", evidence: `${totalTx} txns, ${buyCount} buys / ${sellCount} sells across ${distinctTokens} tokens — no standout bot or dumping pattern.` });
 
+    // 7b. DD.xyz (Webacy) third-party risk cross-check — fold high-risk / poisoning
+    // signals into the labels so they reach the verdict too. No-op without the key.
+    const ddRisk = await ddPromise;
+    if (ddRisk && ddRisk.available) {
+      if (ddRisk.poisoningDetected) labels.push({ tag: "Address-poisoning exposure", icon: "☣️", level: "high", evidence: "DD.xyz flagged address-poisoning activity touching this wallet — double-check any address copied from its history before sending." });
+      if (ddRisk.riskLevel === "high") labels.push({ tag: "DD.xyz: high risk", icon: "🛑", level: "high", evidence: `Third-party risk engine (DD.xyz) scored this wallet high risk${(ddRisk.flags || []).length ? ": " + ddRisk.flags.slice(0, 3).join(", ") : "."}` });
+    }
+
     // 8. Plain-English read (deterministic, evidence-only).
     const verdictBits = [];
     if (funding) {
@@ -8497,6 +8511,8 @@ app.get("/api/wallet-xray", async (req, res) => {
 
     return res.status(200).json({
       success: true, wallet, generatedAt: new Date().toISOString(), truncated, mode: deep ? "coalminer" : "xray",
+      // DD.xyz (Webacy) independent risk cross-check — null unless WEBACY_API_KEY is set.
+      dd: ddRisk && ddRisk.available ? { riskScore: ddRisk.riskScore, riskLevel: ddRisk.riskLevel, flags: (ddRisk.flags || []).slice(0, 8), poisoningDetected: ddRisk.poisoningDetected, source: "dd.xyz" } : null,
       scanned: { txCount: totalTx, pages, truncated, deep, spanDays: Number(spanDays.toFixed(2)), firstSeen: minTs === Infinity ? null : minTs, lastSeen: maxTs || null, ageDays: Number(nowDays.toFixed(1)), lifetimeTx: origin ? origin.lifetimeTx : null, reachedGenesis: origin ? origin.reachedGenesis : false },
       balances: { solBalance, solUsd, solUsdValue: solBalance * solUsd, tokenCount: heldByMint.size, portfolioUsd },
       funding,
