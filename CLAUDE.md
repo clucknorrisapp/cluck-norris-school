@@ -232,6 +232,10 @@ with no key/over budget returns 503 and the client falls back to the browser voi
 (owner added `ELEVENLABS_API_KEY` + `ELEVENLABS_VOICE_ID` on Railway).** The flash model is
 MULTILINGUAL — the ONE Cluck voice speaks every language (EN/中文/ES/IT verified synthesizing real
 audio); we pass `language_code` per request, so adding a new language needs NOTHING in ElevenLabs.
+**⚠️ LANGUAGE COUNT: the school ships in SIX languages — `en` / `es` / `it` / `pt` / `vi` / `zh`
+(English, Español, Italiano, Português, Tiếng Việt, 中文)** — full UI + curriculum translations live
+in `public/i18n/*.json` + `public/i18n/*.school.json`. That 6 is the real count to quote (e.g. grants);
+the `EN/中文/ES/IT` above is only the narrower subset with *TTS audio verified* (4), NOT the language total.
 Per-language voice overrides (`ELEVENLABS_VOICE_ID_IT`/`_ES`/`_ZH`/`_EN`) are OPTIONAL — only if the
 owner wants a distinct natively-accented voice; unset = the main voice handles all langs.
 Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.claude/`,
