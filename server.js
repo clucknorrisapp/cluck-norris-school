@@ -1300,6 +1300,26 @@ async function tgDelete(chatId, messageId) {
     });
   } catch (_) {}
 }
+// Send a photo + caption + optional inline keyboard to a SPECIFIC chat. Silent
+// by default (owner rule). Returns the message_id, or null on failure. Used by
+// the Content Engine to DM an approval card with Approve/Skip buttons.
+async function tgSendPhotoKb(chatId, photoUrl, caption, keyboard) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token || !chatId) return null;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId, photo: photoUrl, caption: String(caption || "").slice(0, 1024),
+        parse_mode: "HTML", disable_notification: true,
+        ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}),
+      }),
+    });
+    const data = await res.json().catch(() => null);
+    return data && data.ok && data.result ? data.result.message_id : null;
+  } catch (_) { return null; }
+}
+
 // ms → "2d 3h 14m" / "3h 14m" / "14m"
 function bcFmtDur(ms) {
   if (ms <= 0) return "0m";
@@ -1696,7 +1716,12 @@ async function answerLessonReply(msg) {
 function handleTelegramUpdate(update) {
   try {
     // Journey button taps arrive as callback queries.
-    if (update && update.callback_query) { handleGuideCallback(update.callback_query); return; }
+    if (update && update.callback_query) {
+      const cqData = String(update.callback_query.data || "");
+      // Content Engine approval buttons (operator-only) route to their own handler.
+      if (cqData.startsWith("capr:") || cqData.startsWith("cskp:")) { handleContentApprovalCallback(update.callback_query); return; }
+      handleGuideCallback(update.callback_query); return;
+    }
     // New members → tagged welcome + concierge (a join is a service message, no .text).
     if (update && update.message && Array.isArray(update.message.new_chat_members) && update.message.new_chat_members.length) {
       welcomeNewMembers(update.message); return;
@@ -4694,6 +4719,17 @@ app.get("/api/ops-report-test", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
   try { return res.status(200).json(await sendOps12hReport({ send: req.query.send === "1" })); }
+  catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
+});
+
+// Content & Discovery Engine — gated. Dry-run (default) returns the composed draft
+// (X text + TG caption + card URL) WITHOUT sending. &post=1 queues it for operator
+// approval (DMs the treasury chat with the card + Approve/Skip buttons). It never
+// posts publicly directly — public posting only happens on an operator approval tap.
+app.get("/api/content-engine-test", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  try { return res.status(200).json(await contentEngineRun({ send: req.query.post === "1" })); }
   catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
 
@@ -8935,6 +8971,108 @@ app.get("/api/credential-card", async (req, res) => {
   }
 });
 
+// -- Token Autopsy share card (1200x630 PNG) — the forensic "catch card" the
+// Content Engine attaches to each daily post. Built from a runAutopsy() body.
+// NOTE: the bundled Oswald font has NO emoji glyphs — text labels only on canvas.
+function _tcSev(sev) {
+  if (sev === "ALIVE") return { solid: "#10B981", soft: "rgba(16,185,129,0.15)" };
+  if (sev === "AT_RISK") return { solid: "#FCD34D", soft: "rgba(252,211,77,0.15)" };
+  if (sev === "DEAD" || sev === "DYING") return { solid: "#FCA5A5", soft: "rgba(252,165,165,0.15)" };
+  return { solid: "#9CA3AF", soft: "rgba(148,163,184,0.12)" };
+}
+async function renderTokenCard(body) {
+  const W = 1200, H = 630;
+  const canvas = createCanvas(W, H);
+  const ctx = canvas.getContext("2d");
+  const f = body.facts || {};
+  const v = body.verdict || {};
+  const c = _tcSev(v.severity);
+  const fUsd = (n) => { if (n == null || !isFinite(n)) return "—"; const a = Math.abs(n); if (a >= 1e9) return "$" + (n / 1e9).toFixed(2) + "B"; if (a >= 1e6) return "$" + (n / 1e6).toFixed(2) + "M"; if (a >= 1e3) return "$" + (n / 1e3).toFixed(1) + "K"; return "$" + n.toFixed(0); };
+  const fPct = (x) => (x == null || !isFinite(x)) ? "—" : Math.round(x * 100) + "%";
+
+  ctx.fillStyle = "#0a0a0a"; ctx.fillRect(0, 0, W, H);
+  let g = ctx.createRadialGradient(220, 120, 0, 220, 120, 600);
+  g.addColorStop(0, "rgba(217,119,6,0.20)"); g.addColorStop(1, "rgba(217,119,6,0)");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  g = ctx.createRadialGradient(1000, 560, 0, 1000, 560, 520);
+  g.addColorStop(0, c.soft); g.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+  ctx.textBaseline = "top";
+  ctx.fillStyle = "#D97706"; ctx.font = "900 22px Oswald, sans-serif";
+  ctx.fillText("TOKEN AUTOPSY", 60, 50);
+  ctx.fillStyle = "#6B7280"; ctx.font = "16px Oswald, sans-serif";
+  ctx.fillText("School of Crypto Hard Knocks", 60, 82);
+
+  const logo = await getLogo();
+  if (logo) {
+    const r = 46, lx = W - 60 - r * 2, ly = 46;
+    ctx.save(); ctx.beginPath(); ctx.arc(lx + r, ly + r, r, 0, Math.PI * 2); ctx.closePath(); ctx.clip();
+    ctx.drawImage(logo, lx, ly, r * 2, r * 2); ctx.restore();
+    ctx.strokeStyle = "#D97706"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(lx + r, ly + r, r, 0, Math.PI * 2); ctx.stroke();
+  }
+
+  // Token symbol + name
+  const sym = String(body.symbol || f.symbol || "UNKNOWN").replace(/[^\x20-\x7E]/g, "").slice(0, 16) || "UNKNOWN";
+  ctx.fillStyle = "#F9FAFB"; ctx.font = "900 72px Oswald, sans-serif";
+  ctx.fillText("$" + sym.toUpperCase(), 60, 140);
+  ctx.fillStyle = "#9CA3AF"; ctx.font = "26px Oswald, sans-serif";
+  ctx.fillText(String(body.name || f.name || "").replace(/[^\x20-\x7E]/g, "").slice(0, 42), 60, 224);
+
+  // Verdict badge (under the logo, right-aligned)
+  const vlabel = String(v.label || v.type || "UNCLEAR").toUpperCase().replace(/[^\x20-\x7E]/g, "").slice(0, 26);
+  ctx.font = "900 26px Oswald, sans-serif";
+  const lw = ctx.measureText(vlabel).width, bw = lw + 40, bh = 52, bx = W - 60 - bw, by = 150;
+  ctx.fillStyle = c.soft; ctx.fillRect(bx, by, bw, bh);
+  ctx.strokeStyle = c.solid; ctx.lineWidth = 2; ctx.strokeRect(bx, by, bw, bh);
+  ctx.fillStyle = c.solid; ctx.fillText(vlabel, bx + 20, by + 13);
+
+  // Stats grid — two columns
+  const safe = !!(f.mintAuthorityRevoked && f.freezeAuthorityRevoked);
+  const stat = (x, y, label, value, valColor) => {
+    ctx.fillStyle = "#6B7280"; ctx.font = "900 16px Oswald, sans-serif"; ctx.fillText(label, x, y);
+    ctx.fillStyle = valColor || "#E5E7EB"; ctx.font = "900 40px Oswald, sans-serif"; ctx.fillText(value, x, y + 22);
+  };
+  const L = 60, R = 640; let y = 300; const rh = 100;
+  stat(L, y, "LIQUIDITY", fUsd(f.totalLiqUsd)); stat(R, y, "24H VOLUME", fUsd(f.totalVol24h)); y += rh;
+  stat(L, y, "MARKET CAP", fUsd(f.marketCap)); stat(R, y, "AGE", f.ageDays != null ? f.ageDays + "d" : "—"); y += rh;
+  stat(L, y, "TOP-10 HOLD", fPct(f.top10Concentration), (f.top10Concentration != null && f.top10Concentration > 0.5) ? "#FCA5A5" : "#E5E7EB");
+  stat(R, y, "MINT / FREEZE", safe ? "REVOKED" : "ACTIVE", safe ? "#10B981" : "#FCA5A5");
+
+  ctx.fillStyle = "#D97706"; ctx.font = "900 18px Oswald, sans-serif";
+  ctx.fillText("clucknorris.app/autopsy", 60, 582);
+  ctx.fillStyle = "#6B7280"; ctx.font = "14px Oswald, sans-serif";
+  ctx.fillText("the chain shows what, not why  —  not financial advice", 60, 606);
+
+  return canvas.toBuffer("image/png");
+}
+
+// Serve the token card PNG. Reuses the autopsy 3-min cache (AUTOPSY_CACHE) so a
+// card request right after the engine ran the autopsy renders from cache.
+app.get("/api/token-card", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "public, max-age=300");
+  const mint = String(req.query.mint || "").trim();
+  if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(400).json({ success: false, error: "Invalid mint" });
+  try {
+    let body = null;
+    const hit = AUTOPSY_CACHE.get(mint);
+    if (hit && Date.now() - hit.ts < AUTOPSY_TTL_MS) body = hit.body;
+    if (!body) {
+      const r = await runAutopsy(mint, {});
+      if (r.status === 200 && r.body && r.body.success) { body = r.body; AUTOPSY_CACHE.set(mint, { body, ts: Date.now() }); }
+    }
+    if (!body) return res.status(404).json({ success: false, error: "no autopsy data" });
+    const png = await renderTokenCard(body);
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Content-Length", png.length);
+    return res.end(png);
+  } catch (err) {
+    console.error("Token card error:", err.message);
+    return res.status(500).json({ success: false, error: publicErrMsg(err) });
+  }
+});
+
 // -- ROSE Buy Competition Analyzer --
 // The Hatchery — guided token creator. Unlisted: not linked from nav anywhere,
 // reachable only by direct URL while in private testing.
@@ -10023,6 +10161,165 @@ async function opsReportTick() {
   } catch (e) { console.warn("[ops-report] tick:", e.message); }
 }
 
+// ══ Content & Discovery Engine ═══════════════════════════════════════════════
+// Each cycle: pull recently-GRADUATED Bags tokens → run a full Token Autopsy on
+// the freshest un-featured one → compose an honest, forensic, brand-voice post
+// (+ a generated autopsy card) → DM the OPERATOR chat with Approve/Skip buttons.
+// On Approve it posts to X (card + text, tagged) and mirrors to the community.
+// Nothing goes public without a tap. Server-side, so it's always-on. Honors the
+// forensic rule (state what's on-chain, never assert intent) and NEVER amplifies
+// a DEAD/DYING token as anything but a warning (those are filtered out here).
+const CONTENT_ENGINE_ENABLED = true;   // master kill-switch (also kv contentEngineEnabled)
+function contentEngineOn() { return CONTENT_ENGINE_ENABLED && kv.get("contentEngineEnabled", true) !== false; }
+function operatorChatId() { try { const p = whirlpoolMM.vault.getProject("treasury"); return (p && p.telegramChatId) || null; } catch (_) { return null; } }
+
+// Dedupe ledger: mint -> { at, status }. Never re-queue a mint seen within 14d;
+// lets a token re-feature later once it ages out. Pruned on every write.
+function contentSeen(mint) { const m = kv.get("brandSeenTokens", {}) || {}; const e = m[mint]; return (e && (Date.now() - e.at) < 14 * 24 * 3600 * 1000) ? e : null; }
+function contentMark(mint, status) {
+  const m = kv.get("brandSeenTokens", {}) || {}, now = Date.now();
+  for (const k of Object.keys(m)) if (now - m[k].at > 14 * 24 * 3600 * 1000) delete m[k];
+  m[mint] = { at: now, status }; kv.set("brandSeenTokens", m);
+}
+
+// Build the X post + Telegram caption + card URL from a runAutopsy() body.
+// X is premium (no 280 limit). Token name/symbol are attacker-controlled —
+// HTML-escaped for the TG caption, control-stripped for X.
+function composeBrandPost(body) {
+  const f = body.facts || {}, v = body.verdict || {}, mint = body.mint, sev = v.severity || "";
+  const sym = String(body.symbol || f.symbol || "TOKEN").replace(/[^\w$]/g, "").slice(0, 12).toUpperCase() || "TOKEN";
+  const nameRaw = String(body.name || f.name || "");
+  const fUsd = (n) => { if (n == null || !isFinite(n)) return "—"; const a = Math.abs(n); if (a >= 1e9) return "$" + (n / 1e9).toFixed(2) + "B"; if (a >= 1e6) return "$" + (n / 1e6).toFixed(2) + "M"; if (a >= 1e3) return "$" + (n / 1e3).toFixed(1) + "K"; return "$" + Math.round(n); };
+  const fPct = (x) => (x == null || !isFinite(x)) ? "—" : Math.round(x * 100) + "%";
+  const tw = body.jupiterInfo && body.jupiterInfo.twitter || body.pumpInfo && body.pumpInfo.twitter
+    || ((body.creatorVerification && body.creatorVerification.handles) || []).filter((h) => h.provider === "twitter").map((h) => h.username)[0] || null;
+  const handle = tw ? "@" + String(tw).replace(/^@+/, "").replace(/[^\w]/g, "").slice(0, 30) : null;
+  const dexUrl = f.topPair && f.topPair.url || null;
+  const safe = !!(f.mintAuthorityRevoked && f.freezeAuthorityRevoked);
+
+  const lines = [
+    `Liquidity: ${fUsd(f.totalLiqUsd)}  •  24h vol: ${fUsd(f.totalVol24h)}`,
+    `Market cap: ${fUsd(f.marketCap)}  •  Age: ${f.ageDays != null ? f.ageDays + "d" : "—"}`,
+    `Top-10 hold: ${fPct(f.top10Concentration)}  •  Mint/Freeze: ${safe ? "revoked ✓" : "ACTIVE ⚠"}`,
+  ];
+  if (body.lpStatus && body.lpStatus.status) lines.push(`LP: ${body.lpStatus.status}`);
+  if (body.dd && body.dd.riskLevel) lines.push(`DD.xyz risk: ${body.dd.riskLevel}`);
+  const flags = (body.redFlags || []).slice(0, 3).map((s) => String(s).replace(/[ -]/g, ""));
+  const hook = sev === "ALIVE" ? `Fresh off the bonding curve: $${sym}`
+    : sev === "AT_RISK" ? `New on Solana — worth a closer look: $${sym}` : `Token autopsy: $${sym}`;
+  const verdictLine = v.label ? `Verdict: ${String(v.label).replace(/[ -]/g, "")}` : "";
+
+  // X (no markup)
+  const nameX = nameRaw.replace(/[ -]/g, "").slice(0, 60);
+  let x = `🔬 ${hook}` + (nameX ? ` (${nameX})` : "") + `\n\nWhat the chain shows:\n` + lines.map((l) => "• " + l).join("\n");
+  if (flags.length) x += `\n\nFlags:\n` + flags.map((fl) => "• " + fl).join("\n");
+  if (verdictLine) x += `\n\n${verdictLine}`;
+  x += `\n\nThe chain shows what, not why. Always DYOR — run your own free autopsy at clucknorris.app/autopsy`;
+  const tags = ["@JupiterExchange", "@BagsApp"]; if (handle) tags.unshift(handle);
+  x += `\n\n${tags.join(" ")}`;
+  if (dexUrl) x += `\nChart: ${dexUrl}`;
+
+  // Telegram caption (HTML, ≤1024)
+  const nameTg = tgEsc(nameRaw.slice(0, 50));
+  let tg = `🔬 <b>${tgEsc(hook)}</b>` + (nameTg ? ` <i>(${nameTg})</i>` : "") + `\n\n` + lines.map((l) => "• " + tgEsc(l)).join("\n");
+  if (verdictLine) tg += `\n\n<b>${tgEsc(verdictLine)}</b>`;
+  tg += `\n\nThe chain shows what, not why. DYOR → clucknorris.app/autopsy`;
+  if (tg.length > 980) tg = tg.slice(0, 980);
+
+  return { mint, symbol: sym, xText: x, tgCaption: tg, imageUrl: `https://clucknorris.app/api/token-card?mint=${mint}`, severity: sev, handle };
+}
+
+// One cycle. send=false → dry-run returning the composed draft. send=true → queue
+// the draft for operator approval. Autopsy is heavy/quota-bound, so candidates are
+// walked SERIALLY with a hard cap per cycle.
+async function contentEngineRun({ send = false } = {}) {
+  if (!process.env.HELIUS_API_KEY) return { skipped: "no helius key" };
+  let board = null; try { board = await getBagsGraduatedBoard(); } catch (_) {}
+  const cands = ((board && board.tokens) || []).filter((t) => t && t.tokenMint && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(t.tokenMint));
+  if (!cands.length) return { skipped: "no graduated candidates" };
+
+  let pick = null, fallback = null, scanned = 0;
+  for (const t of cands) {
+    if (scanned >= 6) break;                          // cap autopsy calls / protect Helius
+    if (contentSeen(t.tokenMint)) continue;           // already featured/skipped recently
+    scanned++;
+    let r = null; try { r = await runAutopsy(t.tokenMint, {}); } catch (_) {}
+    if (!r || r.status !== 200 || !r.body || !r.body.success) continue;
+    AUTOPSY_CACHE.set(t.tokenMint, { body: r.body, ts: Date.now() });   // warm the card cache
+    const sev = r.body.verdict && r.body.verdict.severity;
+    if (sev === "DEAD" || sev === "DYING") continue;  // do-NOT-amplify
+    if (sev === "ALIVE") { pick = r.body; break; }
+    if (sev === "AT_RISK" && !fallback) fallback = r.body;
+  }
+  const chosen = pick || fallback;
+  if (!chosen) return { skipped: `no postable token (${scanned} scanned)` };
+
+  const draft = composeBrandPost(chosen);
+  if (!send) return { dryRun: true, scanned, draft };
+
+  contentMark(draft.mint, "queued");
+  const mid = await queueContentDraft(draft);
+  return { queued: !!mid, mint: draft.mint, symbol: draft.symbol, severity: draft.severity, scanned };
+}
+
+// DM the operator chat with the card + Approve/Skip buttons; persist the draft in
+// kv (survives restarts) keyed by mint (≤44 chars, fits the 64-byte callback cap).
+async function queueContentDraft(draft) {
+  const chat = operatorChatId();
+  if (!chat) return null;
+  kv.set("cdraft:" + draft.mint, { mint: draft.mint, symbol: draft.symbol, xText: draft.xText, tgCaption: draft.tgCaption, imageUrl: draft.imageUrl, at: Date.now() });
+  const kb = [[
+    { text: "✅ Approve & Post", callback_data: "capr:" + draft.mint },
+    { text: "⏭ Skip", callback_data: "cskp:" + draft.mint },
+  ]];
+  const cap = draft.tgCaption + `\n\n<i>Approve → posts to X + community. Skip → discard.</i>`;
+  let mid = await tgSendPhotoKb(chat, draft.imageUrl, cap, kb);
+  if (!mid) mid = await tgSendKb(chat, cap, kb);     // fallback to text + buttons if the photo fails
+  return mid;
+}
+
+// Operator approval handler (routed from handleTelegramUpdate for capr:/cskp:).
+async function handleContentApprovalCallback(cq) {
+  try {
+    const data = String(cq.data || ""), i = data.indexOf(":"), action = data.slice(0, i), mint = data.slice(i + 1);
+    const chatId = cq.message && cq.message.chat && cq.message.chat.id;
+    const msgId = cq.message && cq.message.message_id;
+    const opChat = operatorChatId();
+    if (opChat && String(chatId) !== String(opChat)) { tgAnswerCallback(cq.id, "Not authorized."); return; }  // operator-only
+    const draft = kv.get("cdraft:" + mint, null);
+    if (!draft) { tgAnswerCallback(cq.id, "Draft expired."); if (chatId && msgId) tgDelete(chatId, msgId); return; }
+    kv.set("cdraft:" + mint, null);                   // consume FIRST → idempotent vs double-tap / webhook retry
+
+    if (action === "cskp") {
+      contentMark(mint, "skipped");
+      tgAnswerCallback(cq.id, "Skipped.");
+      if (chatId && msgId) tgDelete(chatId, msgId);
+      if (chatId) tgSend(chatId, `⏭ <b>$${tgEsc(draft.symbol)}</b> skipped — not posted.`, null, { silent: true });
+      return;
+    }
+    tgAnswerCallback(cq.id, "Posting…");
+    let mediaIds = null;
+    try { const m = await uploadXMediaFromUrl(draft.imageUrl); if (m) mediaIds = [m]; } catch (_) {}
+    const r = await postToX(draft.xText, { force: true, mediaIds });
+    contentMark(mint, "posted");
+    try { if (draft.imageUrl) await notifyTelegramPhoto(draft.imageUrl, draft.tgCaption); else await notifyTelegram(draft.tgCaption); } catch (_) {}
+    if (chatId && msgId) tgDelete(chatId, msgId);
+    if (chatId) tgSend(chatId, (r && r.ok)
+      ? `✅ <b>$${tgEsc(draft.symbol)}</b> posted to X + community.\nhttps://x.com/i/web/status/${r.id}`
+      : `⚠️ <b>$${tgEsc(draft.symbol)}</b> — X post failed (community mirror attempted). ${tgEsc(JSON.stringify((r && r.body) || r || {}).slice(0, 160))}`, null, { silent: true });
+  } catch (e) { try { tgAnswerCallback(cq.id, "Error."); } catch (_) {} console.warn("[content-approval] failed:", e.message); }
+}
+
+async function contentEngineTick() {
+  try {
+    if (!contentEngineOn()) return;
+    const windowH = Number(kv.get("contentEngineHours", 12)) || 12;
+    if (Date.now() - kv.get("contentEngineAt", 0) < windowH * 3600 * 1000) return;
+    kv.set("contentEngineAt", Date.now());            // STAMP before generating — a crash can't double-queue
+    await contentEngineRun({ send: true });
+  } catch (e) { console.warn("[content-engine] tick:", e.message); }
+}
+
 // One-shot reminder: armed via /api/clkn-organic-log?remindIn=<hours>. The hourly
 // logger checks it; once we're past the target time it DMs the operator room (loud,
 // the private bot chat — NOT the community group) with the current organic score, then
@@ -10963,6 +11260,8 @@ app.listen(PORT, () => {
     setInterval(recordOrganicSnapshot, 60 * 60 * 1000);
     setInterval(opsReportTick, 60 * 60 * 1000);   // 12h operator ops report (private chat) — checks hourly, fires once/12h
     setTimeout(opsReportTick, 110000);            // first check ~110s after boot
+    setInterval(contentEngineTick, 10 * 60 * 1000); // Content Engine — polls every 10 min, queues a draft once per (kv) contentEngineHours, default 12h
+    setTimeout(contentEngineTick, 160000);          // first check ~160s after boot
     setTimeout(recordOrganicSnapshot, 25000);
     setInterval(meteoraOorTick, 5 * 60 * 1000);
     setTimeout(meteoraOorTick, 45000);
