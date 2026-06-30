@@ -1782,8 +1782,47 @@ function handleTelegramUpdate(update) {
         .catch(() => tgSend(msg.chat.id, "🔒 Lock data is unavailable right now — try again in a moment.", msg.message_id));
       return;
     }
+    // /autopsy <mint> → run the REAL autopsy in-chat (cooldown-guarded). No mint
+    // given → fall through to the link reply below.
+    if (cmd === "autopsy" && arg) { tgAutopsyReply(msg.chat.id, arg, msg.message_id); return; }
     tgSend(msg.chat.id, tgCommandReply(cmd, arg), msg.message_id);
   } catch (e) { console.warn("[TELEGRAM] update handler error:", e.message); }
+}
+
+// In-chat /autopsy <mint> — runs the REAL Token Autopsy and replies with the PNG
+// card + a compact forensic summary. Cooldown-guarded per chat (autopsy is heavy
+// + Helius/ST quota-bound), so it can't be spammed into a quota-drain.
+const _tgAutopsyCooldown = new Map();   // chatId -> last run ts
+async function tgAutopsyReply(chatId, mint, replyTo) {
+  mint = String(mint || "").trim();
+  if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) { tgSend(chatId, "🔬 Usage: <code>/autopsy &lt;mint&gt;</code> — or the full tool at clucknorris.app/autopsy", replyTo); return; }
+  const now = Date.now(), last = _tgAutopsyCooldown.get(String(chatId)) || 0;
+  if (now - last < 20000) { tgSend(chatId, "🔬 Easy — one autopsy at a time. Give it a few seconds.", replyTo); return; }
+  _tgAutopsyCooldown.set(String(chatId), now);
+  try {
+    let body = null; const hit = AUTOPSY_CACHE.get(mint);
+    if (hit && Date.now() - hit.ts < AUTOPSY_TTL_MS) body = hit.body;
+    if (!body) { const r = await runAutopsy(mint, {}); if (r.status === 200 && r.body && r.body.success) { body = r.body; AUTOPSY_CACHE.set(mint, { body, ts: Date.now() }); } }
+    if (!body) { tgSend(chatId, "🔬 Couldn't autopsy that mint right now — try the full tool at clucknorris.app/autopsy", replyTo); return; }
+    const f = body.facts || {}, v = body.verdict || {};
+    const fUsd = (n) => { if (n == null || !isFinite(n)) return "—"; const a = Math.abs(n); if (a >= 1e9) return "$" + (n / 1e9).toFixed(2) + "B"; if (a >= 1e6) return "$" + (n / 1e6).toFixed(2) + "M"; if (a >= 1e3) return "$" + (n / 1e3).toFixed(1) + "K"; return "$" + Math.round(n); };
+    const safe = !!(f.mintAuthorityRevoked && f.freezeAuthorityRevoked);
+    const sym = tgEsc(String(body.symbol || f.symbol || "TOKEN"));
+    const L = [
+      `Liquidity: ${fUsd(f.totalLiqUsd)}  •  24h vol: ${fUsd(f.totalVol24h)}`,
+      `Market cap: ${fUsd(f.marketCap)}  •  Age: ${f.ageDays != null ? f.ageDays + "d" : "—"}`,
+      `Top-10 hold: ${f.top10Concentration != null ? Math.round(f.top10Concentration * 100) + "%" : "—"}  •  Mint/Freeze: ${safe ? "revoked ✓" : "ACTIVE ⚠"}`,
+    ];
+    if (body.lpStatus && body.lpStatus.status) L.push(`LP: ${body.lpStatus.status}`);
+    if (body.dd && body.dd.riskLevel) L.push(`DD.xyz risk: ${body.dd.riskLevel}`);
+    const flags = (body.redFlags || []).slice(0, 2);
+    let cap = `🔬 <b>$${sym} — ${tgEsc(v.label || v.type || "")}</b>\n` + L.map((l) => "• " + tgEsc(l)).join("\n");
+    if (flags.length) cap += `\n\n<b>Flags:</b>\n` + flags.map((x) => "• " + tgEsc(String(x).slice(0, 140))).join("\n");
+    cap += `\n\nThe chain shows what, not why. Full report → clucknorris.app/autopsy`;
+    if (cap.length > 1024) cap = cap.slice(0, 1020);
+    const mid = await tgSendPhotoKb(chatId, `https://clucknorris.app/api/token-card?mint=${mint}`, cap, null);
+    if (!mid) tgSend(chatId, cap, replyTo);     // fallback to text if the card image fails
+  } catch (e) { tgSend(chatId, "🔬 Autopsy failed — try clucknorris.app/autopsy", replyTo); console.warn("[tg-autopsy] failed:", e.message); }
 }
 
 // Send an image with caption text. Telegram fetches the photo URL itself, so it
