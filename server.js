@@ -4687,6 +4687,16 @@ app.get("/api/clkn-organic-log", async (req, res) => {
   } catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
 });
 
+// Dry-run / fire the 12h operator ops report (private chat). Gated. Without &send=1
+// it returns the composed caption (no send); &send=1 actually DMs the operator chat
+// and resets the 12h timer. Use this to verify formatting + the QuickChart image.
+app.get("/api/ops-report-test", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  try { return res.status(200).json(await sendOps12hReport({ send: req.query.send === "1" })); }
+  catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
+});
+
 // PUBLIC engine proof — the live Jupiter organic score + a safe history subset for the
 // /liquidity-engine page's proof chart. Organic score / volume / price are all public
 // market data; this exposes no wallet, position, or strategy detail. Cached 2 min.
@@ -9919,6 +9929,100 @@ async function recordOrganicSnapshot() {
   } catch (e) { console.warn("[organic-log] failed:", e.message); }
 }
 
+// ── 12-hour operator ops report (PRIVATE chat) ───────────────────────────────
+// Every 12h, DM the treasury/operator chat (never the community) a snapshot:
+// an hourly organic-score + volume chart (QuickChart image, last 24h) plus the
+// engine's current ±-width positions and how many times each pool rebalanced
+// since the prior report. Server-side so it survives ephemeral cloud sessions.
+// kv: opsReportAt (last send ts), opsReportPrev (prior mints/score for deltas +
+// rebalance detection via position-mint changes). Silent by default.
+function opsChartUrl(log) {
+  const pts = (log || []).filter((e) => e.score != null).slice(-24);
+  if (pts.length < 2) return null;
+  const labels = pts.map((e) => { const d = new Date(e.ts); return `${String(d.getUTCHours()).padStart(2, "0")}:00`; });
+  const scores = pts.map((e) => Number(e.score));
+  const vols = pts.map((e) => (e.vol24h != null ? Math.round(e.vol24h / 1000) : null));
+  const cfg = {
+    type: "line",
+    data: { labels, datasets: [
+      { label: "Organic score", data: scores, yAxisID: "y", borderColor: "#22c55e", backgroundColor: "#22c55e", fill: false, tension: 0.3, pointRadius: 0 },
+      { label: "Vol 24h ($k)", data: vols, yAxisID: "y1", borderColor: "#f59e0b", backgroundColor: "#f59e0b", fill: false, tension: 0.3, pointRadius: 0 },
+    ] },
+    options: { plugins: { title: { display: true, text: "CLKN organic score + 24h volume (hourly)" } },
+      scales: { y: { position: "left", title: { display: true, text: "Organic score" } },
+        y1: { position: "right", grid: { drawOnChartArea: false }, title: { display: true, text: "Vol 24h ($k)" } } } },
+  };
+  return `https://quickchart.io/chart?w=660&h=330&bkg=white&c=${encodeURIComponent(JSON.stringify(cfg))}`;
+}
+
+async function sendOps12hReport({ send = true } = {}) {
+  if (!process.env.TELEGRAM_BOT_TOKEN) return { skipped: "no telegram token" };
+  const proj = (whirlpoolMM.vault.getProject && whirlpoolMM.vault.getProject("treasury")) || null;
+  const chat = proj && proj.telegramChatId;                       // PRIVATE only — never fall back to community
+  if (!chat) return { skipped: "no treasury/operator chat configured" };
+
+  const log = kv.get("clknOrganicLog", []) || [];
+  const scored = log.filter((e) => e.score != null);
+  const latest = scored[scored.length - 1] || null;
+  const at = (hrsAgo) => { const t = Date.now() - hrsAgo * 3600 * 1000; let best = null; for (const e of scored) if (e.ts <= t) best = e; return best; };
+  const cur = latest ? Number(latest.score) : null;
+  const delta = (p) => (cur != null && p && p.score != null ? cur - Number(p.score) : null);
+  const fmtD = (v) => (v == null ? "n/a" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}`);
+
+  // Current engine positions + per-pool rebalance detection via position-mint changes.
+  let posLine = "positions unavailable", mints = {};
+  try {
+    const st = await whirlpoolMM.vault.status("treasury");
+    const s = (st && st.state) || {};
+    mints = { base: s.positionMint || null, sol: (s.solVault && s.solVault.mint) || null, jup: (s.jupVault && s.jupVault.mint) || null };
+    const pv = await whirlpoolMM.vault.publicPositions("treasury");
+    const eng = (pv.positions || []).filter((p) => p.valueUsd >= 100 && p.inRange);
+    const byPair = {}; for (const p of eng) byPair[p.pair] = (byPair[p.pair] || 0) + p.valueUsd;
+    posLine = ["CLKN/SOL", "CLKN/JUP", "CLKN/USDC"].map((k) => (byPair[k] ? `${k.replace("CLKN/", "")} $${Math.round(byPair[k])}` : null)).filter(Boolean).join(" · ") || "no in-range engine positions";
+  } catch (_) {}
+
+  const prev = kv.get("opsReportPrev", null);
+  let rebalNote = "";
+  if (prev && prev.mints) {
+    const n = ["base", "sol", "jup"].filter((k) => mints[k] && prev.mints[k] !== mints[k]).length;
+    rebalNote = `\nRebalances since last report: <b>${n}</b>`;
+  }
+
+  const dot = latest ? (latest.label === "high" ? "🟢" : latest.label === "medium" ? "🟡" : "🟠") : "";
+  const volK = latest && latest.vol24h != null ? `$${(latest.vol24h / 1000).toFixed(1)}k` : "n/a";
+  const caption =
+    `📊 <b>CLKN Ops — 12h report</b>\n\n` +
+    `Organic score: <b>${cur != null ? cur.toFixed(1) : "n/a"}</b> ${dot}  (12h ${fmtD(delta(at(12)))} · 24h ${fmtD(delta(at(24)))})\n` +
+    `24h volume: <b>${volK}</b>\n` +
+    `Engine: ±3% · ${posLine}${rebalNote}`;
+
+  const chartUrl = opsChartUrl(log);
+  if (!send) return { would_send: true, hasChart: !!chartUrl, caption };
+
+  let ok = false;
+  if (chartUrl) {
+    try {
+      const r = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendPhoto`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chat, photo: chartUrl, caption: caption.slice(0, 1024), parse_mode: "HTML", disable_notification: true }),
+      });
+      ok = r.ok;
+      if (!ok) console.warn("[ops-report] sendPhoto failed:", r.status, (await r.text().catch(() => "")).slice(0, 160));
+    } catch (e) { console.warn("[ops-report] sendPhoto error:", e.message); }
+  }
+  if (!ok) { try { await tgSend(chat, caption, null, { silent: true }); ok = true; } catch (_) {} }
+
+  kv.set("opsReportPrev", { ts: Date.now(), mints, score: cur, vol24h: latest ? latest.vol24h : null });
+  kv.set("opsReportAt", Date.now());
+  return { sent: ok, usedChart: ok && !!chartUrl, caption };
+}
+
+async function opsReportTick() {
+  try {
+    if (Date.now() - kv.get("opsReportAt", 0) >= 12 * 3600 * 1000) await sendOps12hReport({ send: true });
+  } catch (e) { console.warn("[ops-report] tick:", e.message); }
+}
+
 // One-shot reminder: armed via /api/clkn-organic-log?remindIn=<hours>. The hourly
 // logger checks it; once we're past the target time it DMs the operator room (loud,
 // the private bot chat — NOT the community group) with the current organic score, then
@@ -10857,6 +10961,8 @@ app.listen(PORT, () => {
     // Organic-score logger — hourly CLKN snapshot tagged with Blitz activity (proves the
     // Blitz→organic-score effect over time). Cheap; just two cached API reads + a kv write.
     setInterval(recordOrganicSnapshot, 60 * 60 * 1000);
+    setInterval(opsReportTick, 60 * 60 * 1000);   // 12h operator ops report (private chat) — checks hourly, fires once/12h
+    setTimeout(opsReportTick, 110000);            // first check ~110s after boot
     setTimeout(recordOrganicSnapshot, 25000);
     setInterval(meteoraOorTick, 5 * 60 * 1000);
     setTimeout(meteoraOorTick, 45000);
