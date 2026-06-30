@@ -224,7 +224,7 @@ async function buildBagsRadarText() {
       let tag = "";
       if (t.graduated && t.mc) tag = ` — 🎓 graduated · MC $${Math.round(t.mc).toLocaleString()}`;
       else if (t.pct != null) tag = ` — ${t.pct < 1 ? t.pct.toFixed(1) : Math.round(t.pct)}% bonded`;
-      recentLines.push(`• <b>${t.name || "?"}</b> (${t.symbol || "?"})${tag}`);
+      recentLines.push(`• <b>${tgEsc(t.name || "?")}</b> (${tgEsc(t.symbol || "?")})${tag}`);
     }
   } catch (_) {}
   let gradLines = [];
@@ -232,7 +232,7 @@ async function buildBagsRadarText() {
     const ng = await getBagsNearGrad();
     for (const t of (ng.tokens || []).slice(0, 2)) {
       const toGrad = (85 * (1 - (t.curvePct || 0) / 100)).toFixed(1);
-      gradLines.push(`• <b>${t.name || "?"}</b> (${t.symbol || "?"}) — ${(t.curvePct || 0).toFixed(0)}% · ~${toGrad} SOL to graduate`);
+      gradLines.push(`• <b>${tgEsc(t.name || "?")}</b> (${tgEsc(t.symbol || "?")}) — ${(t.curvePct || 0).toFixed(0)}% · ~${toGrad} SOL to graduate`);
     }
   } catch (_) {}
   if (!recentLines.length && !gradLines.length) return null;
@@ -1931,6 +1931,15 @@ app.use("/api/ask-cluck", rateLimit("ai", { windowMs: 60000, max: 15 }));
 app.use("/api/lecture", rateLimit("ai", { windowMs: 60000, max: 15 }));
 app.use("/api/track", rateLimit("track", { windowMs: 60000, max: 120 })); // learning-funnel events (many per session)
 app.use("/api/lp-ask", rateLimit("ai", { windowMs: 60000, max: 12 }));
+// Heavy forensic GETs fan out to many billed Helius/ST/Bags upstream calls each;
+// give them a tight SHARED per-IP budget on top of the global 150/min so an
+// anonymous caller can't drain paid quota. (sec M3)
+app.use("/api/autopsy", rateLimit("forensic", { windowMs: 60000, max: 15 }));
+app.use("/api/wallet-xray", rateLimit("forensic", { windowMs: 60000, max: 15 }));
+app.use("/api/trace", rateLimit("forensic", { windowMs: 60000, max: 15 }));
+app.use("/api/snapshot", rateLimit("forensic", { windowMs: 60000, max: 15 }));
+app.use("/api/holders", rateLimit("forensic", { windowMs: 60000, max: 15 }));
+app.use("/api/token-card", rateLimit("forensic", { windowMs: 60000, max: 15 }));
 app.use("/api/verify-clkn-payment", rateLimit("pay", { windowMs: 60000, max: 20 }));
 // Classroom: generous enough for a real multi-turn lesson/exam, tight enough to stop a bot
 // hammering the reward loop. Claim is rare (one per graduation) so it's capped hard.
@@ -3045,7 +3054,7 @@ function alphaDataSummary(d) {
   if (d.gainers.length) lines.push("TOP 24h GAINERS: " + d.gainers.map((g) => `${g.sym} ${pct(g.chg)}`).join(", "));
   if (d.losers.length) lines.push("TOP 24h LOSERS: " + d.losers.map((g) => `${g.sym} ${pct(g.chg)}`).join(", "));
   if (d.hotPools.length) lines.push("HOTTEST SOLANA POOLS (by volume): " + d.hotPools.map((p) => `${p.pair} on ${p.dex} ($${Math.round(p.vol / 1000)}K 24h vol${p.yieldPct != null ? ", " + p.yieldPct + "%/day fee yield" : ""}${p.risk === "high" ? ", HIGH IL risk" : ""})`).join("; "));
-  if (d.newPools.length) lines.push("BRAND-NEW SOLANA POOLS: " + d.newPools.map((p) => `${p.name} ($${Math.round(p.vol / 1000)}K vol, $${Math.round(p.liq / 1000)}K liq, ${p.ageH}h old)`).join("; "));
+  if (d.newPools.length) lines.push("BRAND-NEW SOLANA POOLS: " + d.newPools.map((p) => `${tgEsc(p.name)} ($${Math.round(p.vol / 1000)}K vol, $${Math.round(p.liq / 1000)}K liq, ${p.ageH}h old)`).join("; "));
   if (d.lpPicks.length) lines.push("BLUE-CHIP LP YIELD (our scanner, fees/TVL): " + d.lpPicks.map((p) => `${p.pair} on ${p.dex} ${p.yieldPct}%/day`).join(", "));
   return lines.join("\n");
 }
@@ -5491,6 +5500,10 @@ app.post("/api/helius-rpc", async (req, res) => {
     "getSlot", "getBlockHeight", "getEpochInfo", "getGenesisHash", "getVersion", "getHealth",
   ]);
   const calls = Array.isArray(req.body) ? req.body : [req.body];
+  // Cap batch fan-out: this route is unauthenticated, and the per-request limiter
+  // counts a batch as ONE — without this, one IP can amplify into thousands of
+  // billed Helius credits. Legit client tools batch only a handful. (sec M1)
+  if (calls.length > 25) return res.status(413).json({ error: "batch_too_large" });
   if (!calls.length || calls.some(c => !c || typeof c.method !== "string" || !ALLOWED_RPC.has(c.method))) {
     return res.status(403).json({ error: "method_not_allowed" });
   }
@@ -5523,6 +5536,13 @@ app.post("/api/helius-tx", async (req, res) => {
   // so a credit cap on one key rolls to the other instead of going blind.
   const keys = rpc.heliusKeys();
   if (!keys.length) return res.status(500).json({ error: "Missing HELIUS_API_KEY" });
+  // Validate the body is an array of <=100 signature strings before forwarding —
+  // unauthenticated, and Helius bills per parsed tx, so an unbounded array is a
+  // credit-drain amplifier. Helius itself caps at 100/request. (sec M2)
+  const _sigs = req.body;
+  if (!Array.isArray(_sigs) || _sigs.length === 0 || _sigs.length > 100 || _sigs.some((s) => typeof s !== "string" || s.length > 100)) {
+    return res.status(400).json({ error: "expected an array of <=100 signature strings" });
+  }
   let lastErr;
   for (let i = 0; i < keys.length; i++) {
     const isLast = i === keys.length - 1;
@@ -9349,7 +9369,10 @@ app.get("/api/autopsy", async (req, res) => {
   if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ success: false, error: "Invalid mint" });
   try { analytics.trackTool("autopsy"); } catch (_) {}
 
-  if (req.query.nocache !== "1") {
+  // nocache=1 forces a fresh full upstream re-run (burns credits); gate it behind
+  // the admin key so anonymous callers can't bypass the cache to drain quota. (sec M3)
+  const noCache = req.query.nocache === "1" && adminAuthOK(req);
+  if (!noCache) {
     const hit = AUTOPSY_CACHE.get(mint);
     if (hit && Date.now() - hit.ts < AUTOPSY_TTL_MS) {
       res.setHeader("X-Autopsy-Cache", "hit");
@@ -9360,7 +9383,7 @@ app.get("/api/autopsy", async (req, res) => {
   // The report builder lives in lib/autopsy.js — runAutopsy(mint) → { status, body }.
   // Store the assembled report so the next caller rides the cache. Only
   // successful reports are stored (errors should re-try fresh).
-  const { status, body } = await runAutopsy(mint, { nocache: req.query.nocache === "1" });
+  const { status, body } = await runAutopsy(mint, { nocache: noCache });
   if (status === 200 && body && body.success) {
     AUTOPSY_CACHE.set(mint, { body, ts: Date.now() });
     if (AUTOPSY_CACHE.size > 300) { const cut = Date.now() - AUTOPSY_TTL_MS; for (const [k, v] of AUTOPSY_CACHE) if (v.ts < cut) AUTOPSY_CACHE.delete(k); }
@@ -10185,6 +10208,18 @@ function contentMark(mint, status) {
 // Build the X post + Telegram caption + card URL from a runAutopsy() body.
 // X is premium (no 280 limit). Token name/symbol are attacker-controlled —
 // HTML-escaped for the TG caption, control-stripped for X.
+// Sanitize attacker-controlled token metadata before it enters the VERIFIED X post:
+// strip control/bidi/zero-width chars, URLs + bare domains, and @/#/$ link triggers,
+// so a maliciously-named token can't inject a clickable link or @mention into the
+// project's official tweet. Keeps normal text readable (no space/hyphen mangling). (sec M4)
+function _stripUnsafe(s, max = 80) {
+  return String(s == null ? "" : s)
+    .replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2066-\u2069]/g, "")
+    .replace(/\b(?:https?:\/\/|www\.)\S+/gi, "")
+    .replace(/\b[\w-]+\.(?:com|xyz|io|net|org|app|fun|gg|me|co|fi|so|ai|lol|wtf|click|link|finance|capital|cash)\b\S*/gi, "")
+    .replace(/[@#$＠]/g, "")
+    .replace(/\s+/g, " ").trim().slice(0, max);
+}
 function composeBrandPost(body) {
   const f = body.facts || {}, v = body.verdict || {}, mint = body.mint, sev = v.severity || "";
   const sym = String(body.symbol || f.symbol || "TOKEN").replace(/[^\w$]/g, "").slice(0, 12).toUpperCase() || "TOKEN";
@@ -10204,13 +10239,13 @@ function composeBrandPost(body) {
   ];
   if (body.lpStatus && body.lpStatus.status) lines.push(`LP: ${body.lpStatus.status}`);
   if (body.dd && body.dd.riskLevel) lines.push(`DD.xyz risk: ${body.dd.riskLevel}`);
-  const flags = (body.redFlags || []).slice(0, 3).map((s) => String(s).replace(/[ -]/g, ""));
+  const flags = (body.redFlags || []).slice(0, 3).map((s) => String(s).slice(0, 160));
   const hook = sev === "ALIVE" ? `Fresh off the bonding curve: $${sym}`
     : sev === "AT_RISK" ? `New on Solana — worth a closer look: $${sym}` : `Token autopsy: $${sym}`;
-  const verdictLine = v.label ? `Verdict: ${String(v.label).replace(/[ -]/g, "")}` : "";
+  const verdictLine = v.label ? `Verdict: ${String(v.label)}` : "";
 
   // X (no markup)
-  const nameX = nameRaw.replace(/[ -]/g, "").slice(0, 60);
+  const nameX = _stripUnsafe(nameRaw, 60);
   let x = `🔬 ${hook}` + (nameX ? ` (${nameX})` : "") + `\n\nWhat the chain shows:\n` + lines.map((l) => "• " + l).join("\n");
   if (flags.length) x += `\n\nFlags:\n` + flags.map((fl) => "• " + fl).join("\n");
   if (verdictLine) x += `\n\n${verdictLine}`;
@@ -10284,7 +10319,9 @@ async function queueContentDraft(draft) {
     { text: "✅ Approve & Post", callback_data: "capr:" + draft.mint },
     { text: "⏭ Skip", callback_data: "cskp:" + draft.mint },
   ]];
-  const cap = draft.tgCaption + `\n\n<i>Approve → posts to X + community. Skip → discard.</i>`;
+  // Show the operator the EXACT text that will post to X (HTML-escaped for safe
+  // display) — not just the community caption — so approval reviews the real post. (sec M4)
+  const cap = `🔬 <b>Daily Catch — review before posting</b>\n\n<b>This exact text posts to X:</b>\n${tgEsc(draft.xText)}\n\n<i>✅ Approve → X + community · ⏭ Skip → discard</i>`;
   let mid = await tgSendPhotoKb(chat, draft.imageUrl, cap, kb);
   if (!mid) mid = await tgSendKb(chat, cap, kb);     // fallback to text + buttons if the photo fails
   return mid;
@@ -10297,7 +10334,7 @@ async function handleContentApprovalCallback(cq) {
     const chatId = cq.message && cq.message.chat && cq.message.chat.id;
     const msgId = cq.message && cq.message.message_id;
     const opChat = operatorChatId();
-    if (opChat && String(chatId) !== String(opChat)) { tgAnswerCallback(cq.id, "Not authorized."); return; }  // operator-only
+    if (!opChat || String(chatId) !== String(opChat)) { tgAnswerCallback(cq.id, "Not authorized."); return; }  // operator-only, fail-closed (sec I1)
     const draft = kv.get("cdraft:" + mint, null);
     if (!draft) { tgAnswerCallback(cq.id, "Draft expired."); if (chatId && msgId) tgDelete(chatId, msgId); return; }
     kv.set("cdraft:" + mint, null);                   // consume FIRST → idempotent vs double-tap / webhook retry
