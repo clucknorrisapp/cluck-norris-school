@@ -9284,6 +9284,9 @@ app.get("/wallet-checkup", (req, res) => {
 app.get("/wallet-xray", (req, res) => {
   res.sendFile(join(__dirname, "public", "wallet-xray.html"));
 });
+app.get("/badge", (req, res) => {
+  res.sendFile(join(__dirname, "public", "badge.html"));
+});
 
 // CLKN token page — clean, standalone, all data from Jupiter (price/vol/liq/holders/organic/verified) + Buy widget.
 app.get("/clkn", (req, res) => {
