@@ -10238,7 +10238,12 @@ async function contentEngineRun({ send = false } = {}) {
   const cands = ((board && board.tokens) || []).filter((t) => t && t.tokenMint && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(t.tokenMint));
   if (!cands.length) return { skipped: "no graduated candidates" };
 
-  let pick = null, fallback = null, scanned = 0;
+  // Quality bar (kv-tunable). We'd rather post NOTHING than feature a dud — the
+  // brand is honest forensics, not pumping a dead microcap. Gate on real depth;
+  // AT_RISK needs more substance + must not be an active collapse; score so a
+  // healthy (ALIVE) token with deep liquidity always wins.
+  const minLiq = Number(kv.get("contentMinLiqUsd", 12000)) || 12000;
+  let best = null, scanned = 0;
   for (const t of cands) {
     if (scanned >= 6) break;                          // cap autopsy calls / protect Helius
     if (contentSeen(t.tokenMint)) continue;           // already featured/skipped recently
@@ -10246,13 +10251,20 @@ async function contentEngineRun({ send = false } = {}) {
     let r = null; try { r = await runAutopsy(t.tokenMint, {}); } catch (_) {}
     if (!r || r.status !== 200 || !r.body || !r.body.success) continue;
     AUTOPSY_CACHE.set(t.tokenMint, { body: r.body, ts: Date.now() });   // warm the card cache
-    const sev = r.body.verdict && r.body.verdict.severity;
+    const b = r.body, f = b.facts || {}, sev = b.verdict && b.verdict.severity;
     if (sev === "DEAD" || sev === "DYING") continue;  // do-NOT-amplify
-    if (sev === "ALIVE") { pick = r.body; break; }
-    if (sev === "AT_RISK" && !fallback) fallback = r.body;
+    const liq = f.totalLiqUsd || 0, age = f.ageDays;
+    if (liq < minLiq) continue;                       // skip dust — no thin-liquidity microcaps
+    if (sev === "AT_RISK") {
+      if (liq < minLiq * 2.5) continue;               // a flagged token needs real depth to be worth featuring
+      if (f.priceChangeH24 != null && f.priceChangeH24 < -60) continue;   // not an active -60%+ collapse
+    }
+    // Score: ALIVE dominates; then liquidity; freshness bonus (<=7d graduated).
+    const score = (sev === "ALIVE" ? 1e12 : 0) + liq + (age != null && age <= 7 ? 5e6 : 0);
+    if (!best || score > best.score) best = { body: b, score };
   }
-  const chosen = pick || fallback;
-  if (!chosen) return { skipped: `no postable token (${scanned} scanned)` };
+  const chosen = best && best.body;
+  if (!chosen) return { skipped: `no token met the quality bar (${scanned} scanned)` };
 
   const draft = composeBrandPost(chosen);
   if (!send) return { dryRun: true, scanned, draft };
