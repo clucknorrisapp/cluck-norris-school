@@ -10192,7 +10192,13 @@ async function opsReportTick() {
 // Nothing goes public without a tap. Server-side, so it's always-on. Honors the
 // forensic rule (state what's on-chain, never assert intent) and NEVER amplifies
 // a DEAD/DYING token as anything but a warning (those are filtered out here).
-const CONTENT_ENGINE_ENABLED = true;   // master kill-switch (also kv contentEngineEnabled)
+// DISABLED (owner's call): we do NOT feature/recommend individual tokens — even a
+// neutral "forensic look" is an implicit spotlight, and if the token later rugs it
+// burns our credibility. This is the same reason Cluck Score was removed. The
+// per-user FORENSIC TOOLS (autopsy / wallet-xray / badge / token-qa / watchlists)
+// stay — those analyze a token the USER chose; they don't recommend one we picked.
+// Leave OFF unless the engine is repurposed to non-token-featuring content.
+const CONTENT_ENGINE_ENABLED = false;  // master kill-switch (also kv contentEngineEnabled)
 function contentEngineOn() { return CONTENT_ENGINE_ENABLED && kv.get("contentEngineEnabled", true) !== false; }
 function operatorChatId() { try { const p = whirlpoolMM.vault.getProject("treasury"); return (p && p.telegramChatId) || null; } catch (_) { return null; } }
 
