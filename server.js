@@ -9093,6 +9093,48 @@ app.get("/api/token-card", async (req, res) => {
   }
 });
 
+// -- Embeddable Safety Badge (SVG) — a live token-safety badge any project can
+// drop on their site: <img src="https://clucknorris.app/api/token-badge?mint=MINT">.
+// Read-only, cached, reuses the autopsy cache. Distribution + brand: every embed
+// is a backlink and a forensic stamp. Token symbol/verdict are XML-escaped.
+function _xmlEsc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function renderTokenBadgeSvg(body) {
+  const f = body.facts || {}, v = body.verdict || {}, c = _tcSev(v.severity);
+  const fUsd = (n) => { if (n == null || !isFinite(n)) return "—"; const a = Math.abs(n); if (a >= 1e9) return "$" + (n / 1e9).toFixed(2) + "B"; if (a >= 1e6) return "$" + (n / 1e6).toFixed(2) + "M"; if (a >= 1e3) return "$" + (n / 1e3).toFixed(1) + "K"; return "$" + Math.round(n); };
+  const sym = _xmlEsc(String(body.symbol || f.symbol || "TOKEN").replace(/[^\x20-\x7E]/g, "").slice(0, 12).toUpperCase() || "TOKEN");
+  const verdict = _xmlEsc(String(v.label || v.type || "UNCLEAR").toUpperCase().replace(/[^\x20-\x7E]/g, "").slice(0, 22));
+  const safe = !!(f.mintAuthorityRevoked && f.freezeAuthorityRevoked);
+  const top10 = f.top10Concentration != null ? Math.round(f.top10Concentration * 100) + "%" : "—";
+  const W = 380, H = 132, vw = 14 + verdict.length * 8.2;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" font-family="Arial,Helvetica,sans-serif">
+<rect width="${W}" height="${H}" rx="12" fill="#0a0a0a"/>
+<rect x="1.5" y="1.5" width="${W - 3}" height="${H - 3}" rx="11" fill="none" stroke="${c.solid}" stroke-opacity="0.55"/>
+<text x="18" y="30" fill="#D97706" font-size="13" font-weight="bold">TOKEN AUTOPSY &#183; clucknorris.app</text>
+<text x="18" y="68" fill="#F9FAFB" font-size="32" font-weight="bold">$${sym}</text>
+<rect x="18" y="82" width="${vw}" height="27" rx="6" fill="${c.solid}" fill-opacity="0.16" stroke="${c.solid}"/>
+<text x="25" y="101" fill="${c.solid}" font-size="14" font-weight="bold">${verdict}</text>
+<text x="${W - 18}" y="54" text-anchor="end" fill="#9CA3AF" font-size="13">Liq ${fUsd(f.totalLiqUsd)} &#183; Vol ${fUsd(f.totalVol24h)}</text>
+<text x="${W - 18}" y="76" text-anchor="end" fill="#9CA3AF" font-size="13">Top-10 hold ${top10}</text>
+<text x="${W - 18}" y="100" text-anchor="end" fill="${safe ? "#10B981" : "#FCA5A5"}" font-size="13" font-weight="bold">Mint/Freeze ${safe ? "revoked" : "ACTIVE"}</text>
+<text x="18" y="124" fill="#6B7280" font-size="10">the chain shows what, not why &#8212; not financial advice</text>
+</svg>`;
+}
+app.get("/api/token-badge", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "public, max-age=600");
+  const mint = String(req.query.mint || "").trim();
+  if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(400).json({ success: false, error: "Invalid mint" });
+  try {
+    let body = null;
+    const hit = AUTOPSY_CACHE.get(mint);
+    if (hit && Date.now() - hit.ts < AUTOPSY_TTL_MS) body = hit.body;
+    if (!body) { const r = await runAutopsy(mint, {}); if (r.status === 200 && r.body && r.body.success) { body = r.body; AUTOPSY_CACHE.set(mint, { body, ts: Date.now() }); } }
+    if (!body) return res.status(404).json({ success: false, error: "no autopsy data" });
+    res.setHeader("Content-Type", "image/svg+xml; charset=utf-8");
+    return res.end(renderTokenBadgeSvg(body));
+  } catch (err) { return res.status(500).json({ success: false, error: publicErrMsg(err) }); }
+});
+
 // -- ROSE Buy Competition Analyzer --
 // The Hatchery — guided token creator. Unlisted: not linked from nav anywhere,
 // reachable only by direct URL while in private testing.
