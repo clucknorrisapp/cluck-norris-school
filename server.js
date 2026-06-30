@@ -4874,8 +4874,10 @@ app.get("/api/x-announce", async (req, res) => {
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
   const text = String(req.query.text || "").slice(0, 24000);
   const image = req.query.image ? String(req.query.image) : null;  // optional image URL to attach
+  const replyTo = req.query.replyTo ? String(req.query.replyTo).replace(/[^0-9]/g, "") : null;  // thread UNDER this tweet id
+  const quote = req.query.quote ? String(req.query.quote).replace(/[^0-9]/g, "") : null;        // quote-repost this tweet id
   if (!text) return res.status(400).json({ error: "missing text" });
-  if (req.query.post !== "1") return res.status(200).json({ ok: true, dryRun: true, chars: text.length, image, preview: text });
+  if (req.query.post !== "1") return res.status(200).json({ ok: true, dryRun: true, chars: text.length, image, replyTo, quote, preview: text });
   try {
     let mediaIds = null;
     if (image) {
@@ -4883,8 +4885,16 @@ app.get("/api/x-announce", async (req, res) => {
       if (!mid) return res.status(200).json({ ok: false, error: "media upload failed — image not attached (text not posted)" });
       mediaIds = [mid];
     }
-    const r = await postToX(text, { force: true, mediaIds });
-    return res.status(200).json({ ...r, mediaAttached: !!mediaIds });
+    const r = await postToX(text, { force: true, mediaIds, ...(replyTo ? { replyToId: replyTo } : {}), ...(quote ? { quoteId: quote } : {}) });
+    // &mirror=1 → also drop the post's link in the Telegram community (the standing
+    // "X post → link in Telegram" rule). Optional &mirrorText= sets the intro line.
+    let mirrored = false;
+    if (req.query.mirror === "1" && r && r.ok && r.id && process.env.TELEGRAM_CHAT_ID) {
+      const url = `https://x.com/FireChicken007/status/${r.id}`;
+      const intro = req.query.mirrorText ? String(req.query.mirrorText).slice(0, 600) : "📢 Fresh on X 👇";
+      try { const m = await tgSend(process.env.TELEGRAM_CHAT_ID, `${tgEsc(intro)}\n\n${url}`, null, { silent: true }); mirrored = !!m; } catch (_) {}
+    }
+    return res.status(200).json({ ...r, mediaAttached: !!mediaIds, replyTo, quote, mirrored });
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
 
