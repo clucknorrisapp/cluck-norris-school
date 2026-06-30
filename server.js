@@ -1463,7 +1463,7 @@ async function priceReply(chatId, replyTo) {
   }
 }
 
-const TG_KNOWN_CMDS = ["ca","x","website","app","dex","walletxray","autopsy","trace","snapshot","holders","lock","securitycoop","buyspecial","rose","hatchery","bags","tools","liquidity","price","commands","start","help","guide","buyleaders","chatid"];
+const TG_KNOWN_CMDS = ["ca","x","website","app","dex","walletxray","autopsy","trace","snapshot","holders","lock","securitycoop","buyspecial","rose","hatchery","bags","tools","liquidity","price","commands","start","help","guide","buyleaders","chatid","watch","unwatch","watchlist"];
 // In a non-CLKN project room (e.g. ROSE) the bot only serves that project's liquidity +
 // buy competitions; chatid stays so an operator can wire a buy comp. Everything else off.
 const PROJECT_ROOM_CMDS = ["liquidity","price","buyleaders","chatid"];
@@ -1785,6 +1785,10 @@ function handleTelegramUpdate(update) {
     // /autopsy <mint> → run the REAL autopsy in-chat (cooldown-guarded). No mint
     // given → fall through to the link reply below.
     if (cmd === "autopsy" && arg) { tgAutopsyReply(msg.chat.id, arg, msg.message_id); return; }
+    // Watchlist: /watch <mint>, /unwatch <mint>, /watchlist (per-chat, opt-in).
+    if (cmd === "watch") { tgWatchCmd(msg.chat.id, "add", arg, msg.message_id); return; }
+    if (cmd === "unwatch") { tgWatchCmd(msg.chat.id, "remove", arg, msg.message_id); return; }
+    if (cmd === "watchlist") { tgWatchCmd(msg.chat.id, "list", null, msg.message_id); return; }
     tgSend(msg.chat.id, tgCommandReply(cmd, arg), msg.message_id);
   } catch (e) { console.warn("[TELEGRAM] update handler error:", e.message); }
 }
@@ -10540,6 +10544,83 @@ async function contentEngineTick() {
   } catch (e) { console.warn("[content-engine] tick:", e.message); }
 }
 
+// ══ Token Watchlists + change alerts ═════════════════════════════════════════
+// /watch <mint> in any chat adds a token to THAT chat's watchlist; a periodic tick
+// re-runs the autopsy and DMs the same chat ONLY when something material changes
+// (verdict worsens, mint/freeze authority flips active, LP degrades, big price
+// move). Opt-in per chat; per-chat cap + per-cycle autopsy budget bound the quota.
+const WATCH_MAX_PER_CHAT = 10;
+const _WATCH_SEV_RANK = { ALIVE: 0, UNCLEAR: 1, AT_RISK: 2, DYING: 3, DEAD: 4 };
+function getWatchlists() { return kv.get("watchlists", {}) || {}; }
+function watchSnap(body) {
+  const f = body.facts || {}, v = body.verdict || {};
+  return {
+    severity: v.severity || null, verdictLabel: v.label || null,
+    mintRevoked: !!f.mintAuthorityRevoked, freezeRevoked: !!f.freezeAuthorityRevoked,
+    lpStatus: body.lpStatus ? body.lpStatus.status : null,
+    priceUsd: (f.priceUsd != null && isFinite(f.priceUsd)) ? f.priceUsd : null,
+  };
+}
+function watchDiff(prev, cur) {
+  if (!prev) return null;
+  const m = [];
+  if (_WATCH_SEV_RANK[cur.severity] > _WATCH_SEV_RANK[prev.severity]) m.push(`status worsened → <b>${tgEsc(cur.verdictLabel || cur.severity || "?")}</b>`);
+  if (prev.mintRevoked && !cur.mintRevoked) m.push("⚠️ mint authority is now ACTIVE (was revoked)");
+  if (prev.freezeRevoked && !cur.freezeRevoked) m.push("⚠️ freeze authority is now ACTIVE (was revoked)");
+  if (prev.lpStatus && cur.lpStatus && prev.lpStatus !== cur.lpStatus && (cur.lpStatus === "unlocked" || cur.lpStatus === "distributed")) m.push(`LP status: ${tgEsc(prev.lpStatus)} → <b>${tgEsc(cur.lpStatus)}</b>`);
+  if (prev.priceUsd && cur.priceUsd) { const ch = (cur.priceUsd - prev.priceUsd) / prev.priceUsd; if (Math.abs(ch) >= 0.4) m.push(`price <b>${ch >= 0 ? "+" : ""}${Math.round(ch * 100)}%</b> since last check`); }
+  return m.length ? m.join("\n") : null;
+}
+// /watch <mint> — seed a snapshot + confirm. /unwatch, /watchlist.
+async function tgWatchCmd(chatId, action, mint, replyTo) {
+  const all = getWatchlists(), key = String(chatId), list = all[key] || {};
+  if (action === "list") {
+    const mints = Object.keys(list);
+    if (!mints.length) { tgSend(chatId, "👁️ This chat's watchlist is empty. Add one: <code>/watch &lt;mint&gt;</code>", replyTo); return; }
+    const rows = mints.map((m) => `• <code>${m.slice(0, 6)}…${m.slice(-4)}</code> — ${tgEsc((list[m].lastSnap && list[m].lastSnap.verdictLabel) || "pending")}`).join("\n");
+    tgSend(chatId, `👁️ <b>Watchlist (${mints.length})</b>\n${rows}`, replyTo); return;
+  }
+  mint = String(mint || "").trim();
+  if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) { tgSend(chatId, "👁️ Usage: <code>/watch &lt;mint&gt;</code> · <code>/unwatch &lt;mint&gt;</code> · <code>/watchlist</code>", replyTo); return; }
+  if (action === "remove") {
+    if (list[mint]) { delete list[mint]; all[key] = list; kv.set("watchlists", all); tgSend(chatId, "👁️ Removed from this chat's watchlist.", replyTo); }
+    else tgSend(chatId, "👁️ That mint isn't on this chat's watchlist.", replyTo);
+    return;
+  }
+  // add
+  if (list[mint]) { tgSend(chatId, "👁️ Already watching that one.", replyTo); return; }
+  if (Object.keys(list).length >= WATCH_MAX_PER_CHAT) { tgSend(chatId, `👁️ Watchlist full (max ${WATCH_MAX_PER_CHAT}). Remove one with <code>/unwatch &lt;mint&gt;</code>.`, replyTo); return; }
+  tgSend(chatId, "👁️ Adding — running the first scan…", replyTo);
+  let snap = null, sym = "token";
+  try { const r = await runAutopsy(mint, {}); if (r.status === 200 && r.body && r.body.success) { AUTOPSY_CACHE.set(mint, { body: r.body, ts: Date.now() }); snap = watchSnap(r.body); sym = r.body.symbol || sym; } } catch (_) {}
+  list[mint] = { addedAt: Date.now(), checkedAt: Date.now(), lastSnap: snap };
+  all[key] = list; kv.set("watchlists", all);
+  tgSend(chatId, `👁️ <b>Watching $${tgEsc(String(sym))}</b>${snap ? ` — ${tgEsc(snap.verdictLabel || snap.severity || "")}` : ""}\nI'll DM this chat if its status, authorities, LP, or price change materially. <code>/watchlist</code> to view.`, replyTo);
+}
+async function watchlistTick() {
+  try {
+    if (kv.get("watchlistEnabled", true) === false) return;
+    const all = getWatchlists();
+    let budget = 12;   // cap autopsies per cycle — protect Helius/ST quota
+    for (const chatId of Object.keys(all)) {
+      const list = all[chatId] || {};
+      for (const mint of Object.keys(list)) {
+        if (budget <= 0) { kv.set("watchlists", all); return; }
+        budget--;
+        let r = null; try { r = await runAutopsy(mint, {}); } catch (_) {}
+        if (!r || r.status !== 200 || !r.body || !r.body.success) continue;
+        AUTOPSY_CACHE.set(mint, { body: r.body, ts: Date.now() });
+        const cur = watchSnap(r.body), prev = list[mint].lastSnap;
+        const diff = watchDiff(prev, cur);
+        list[mint].lastSnap = cur; list[mint].checkedAt = Date.now();
+        if (diff) { try { await tgSend(chatId, `👁️ <b>Watchlist alert — $${tgEsc(String(r.body.symbol || "token"))}</b>\n${diff}\n\nFull re-scan: <code>/autopsy ${mint}</code>`, null, { silent: true }); } catch (_) {} }
+      }
+      all[chatId] = list;
+    }
+    kv.set("watchlists", all);
+  } catch (e) { console.warn("[watchlist] tick:", e.message); }
+}
+
 // One-shot reminder: armed via /api/clkn-organic-log?remindIn=<hours>. The hourly
 // logger checks it; once we're past the target time it DMs the operator room (loud,
 // the private bot chat — NOT the community group) with the current organic score, then
@@ -11481,6 +11562,8 @@ app.listen(PORT, () => {
     setInterval(opsReportTick, 60 * 60 * 1000);   // 12h operator ops report (private chat) — checks hourly, fires once/12h
     setTimeout(opsReportTick, 110000);            // first check ~110s after boot
     setInterval(contentEngineTick, 10 * 60 * 1000); // Content Engine — polls every 10 min, queues a draft once per (kv) contentEngineHours, default 12h
+    setInterval(watchlistTick, 30 * 60 * 1000);     // Watchlist change alerts — re-autopsy watched tokens every 30 min (budgeted)
+    setTimeout(watchlistTick, 200000);              // first check ~200s after boot
     setTimeout(contentEngineTick, 160000);          // first check ~160s after boot
     setTimeout(recordOrganicSnapshot, 25000);
     setInterval(meteoraOorTick, 5 * 60 * 1000);
