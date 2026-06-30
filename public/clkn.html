@@ -124,6 +124,37 @@
     </div>
   </div>
 
+  <!-- ════════ CoinGecko price widget — PRE-BUILT, GO-LIVE ON LISTING ════════
+       When CLKN's CoinGecko migration goes through and it gets a coin page, set
+       CLKN_CG_ID below to its CoinGecko slug — the <slug> in the page URL
+       coingecko.com/en/coins/<slug> (e.g. "cluck-norris"). The widget then renders
+       automatically. Until it's set, this card stays HIDDEN — no broken/empty widget.
+       (Tip: on listing day, also grab the exact embed from CoinGecko's "Get code"
+       to confirm the current widget tag, but this standard one should just work.) -->
+  <div class="card" id="cgCard" style="display:none;margin-top:13px">
+    <div class="ttl">📈 Live on CoinGecko</div>
+    <div id="cgWidgetMount"></div>
+  </div>
+  <script>
+    (function () {
+      var CLKN_CG_ID = "";   // ← SET to the CoinGecko slug on listing day, e.g. "cluck-norris"
+      if (!CLKN_CG_ID) return;
+      var s = document.createElement("script");
+      s.src = "https://widgets.coingecko.com/gecko-coin-price-chart-widget.js";
+      document.head.appendChild(s);
+      var el = document.createElement("gecko-coin-price-chart-widget");
+      el.setAttribute("locale", "en");
+      el.setAttribute("dark-mode", "true");
+      el.setAttribute("outlined", "true");
+      el.setAttribute("coin-id", CLKN_CG_ID);
+      el.setAttribute("initial-currency", "usd");
+      var mount = document.getElementById("cgWidgetMount");
+      if (mount) mount.appendChild(el);
+      var card = document.getElementById("cgCard");
+      if (card) card.style.display = "";
+    })();
+  </script>
+
   <!-- Organic score -->
   <div class="card">
     <div class="ttl">Jupiter Organic Score</div>
