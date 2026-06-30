@@ -1979,6 +1979,8 @@ app.use("/api/trace", rateLimit("forensic", { windowMs: 60000, max: 15 }));
 app.use("/api/snapshot", rateLimit("forensic", { windowMs: 60000, max: 15 }));
 app.use("/api/holders", rateLimit("forensic", { windowMs: 60000, max: 15 }));
 app.use("/api/token-card", rateLimit("forensic", { windowMs: 60000, max: 15 }));
+app.use("/api/token-badge", rateLimit("forensic", { windowMs: 60000, max: 15 }));
+app.use("/api/v1", rateLimit("apiv1", { windowMs: 60000, max: 30 }));   // Forensic API (developer surface)
 app.use("/api/verify-clkn-payment", rateLimit("pay", { windowMs: 60000, max: 20 }));
 // Classroom: generous enough for a real multi-turn lesson/exam, tight enough to stop a bot
 // hammering the reward loop. Claim is rare (one per graduation) so it's capped hard.
@@ -9215,6 +9217,48 @@ app.get("/api/token-qa", async (req, res) => {
     if (!answer) return res.status(502).json({ success: false, error: "AI did not respond" });
     return res.status(200).json({ success: true, mint, symbol: body.symbol, verdict: body.verdict && body.verdict.label, answer });
   } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
+});
+
+// ── Forensic API (v1) — a stable, versioned, documented developer surface ───────
+// The forensic data is also available via the public tools; v1 is the contract
+// integrators build on (won't change under them) and the future home for keyed /
+// metered (CLKN-settled) access. Scaffold: open preview, rate-limited.
+app.get("/api/v1", (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.json({
+    name: "Cluck Norris Forensic API", version: "1", status: "preview",
+    endpoints: { "GET /api/v1/token?mint=<mint>": "Forensic safety summary for a Solana token." },
+    auth: "Open preview, rate-limited. Higher-limit / metered access (CLKN-settled) planned — DM @firechicken007.",
+    docs: "https://clucknorris.app/autopsy",
+  });
+});
+app.get("/api/v1/token", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "public, max-age=120");
+  const mint = String(req.query.mint || "").trim();
+  if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(400).json({ error: "invalid_mint" });
+  try {
+    let body = null;
+    const hit = AUTOPSY_CACHE.get(mint);
+    if (hit && Date.now() - hit.ts < AUTOPSY_TTL_MS) body = hit.body;
+    if (!body) { const r = await runAutopsy(mint, {}); if (r.status === 200 && r.body && r.body.success) { body = r.body; AUTOPSY_CACHE.set(mint, { body, ts: Date.now() }); } }
+    if (!body) return res.status(404).json({ error: "not_found" });
+    const f = body.facts || {}, v = body.verdict || {};
+    // Curated, versioned subset — internal autopsy changes never break integrators.
+    return res.json({
+      schema: "clkn.forensic.v1", mint, symbol: body.symbol, name: body.name,
+      verdict: { type: v.type, label: v.label, severity: v.severity },
+      authorities: { mintRevoked: !!f.mintAuthorityRevoked, freezeRevoked: !!f.freezeAuthorityRevoked },
+      market: { liquidityUsd: f.totalLiqUsd ?? null, volume24hUsd: f.totalVol24h ?? null, marketCapUsd: f.marketCap ?? null, priceUsd: f.priceUsd ?? null, ageDays: f.ageDays ?? null, poolCount: f.poolCount ?? null },
+      holders: { top10ConcentrationPct: f.top10Concentration != null ? Math.round(f.top10Concentration * 100) : null },
+      liquidity: { lpStatus: body.lpStatus ? body.lpStatus.status : null, lockedSupplyPct: body.lockedSupplyShare != null ? Math.round(body.lockedSupplyShare * 100) : null },
+      token2022: !!f.token2022,
+      riskFlags: (body.redFlags || []).slice(0, 10),
+      thirdPartyRisk: body.dd ? { source: "dd.xyz", level: body.dd.riskLevel, score: body.dd.riskScore } : null,
+      disclaimer: "On-chain analysis, not financial advice. The chain shows what, not why.",
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (e) { return res.status(500).json({ error: "internal_error" }); }
 });
 
 // -- ROSE Buy Competition Analyzer --
