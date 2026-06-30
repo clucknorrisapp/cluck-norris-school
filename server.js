@@ -1999,6 +1999,72 @@ app.use("/api/security-coop", securityCoop.router);
 // Liquidity Engine — Orca Whirlpools market maker (non-custodial; builds unsigned txs).
 app.use("/api/whirlpool", whirlpoolMM.router);
 
+// ── CoinGecko webhook receiver (Analyst plan+) ───────────────────────────────
+// Registered BEFORE express.json() so the HMAC can be verified over the RAW body.
+// Factual, operator-only alerts (NOT a token-recommendation surface): CLKN listing,
+// CLKN price-target crosses, CLKN info updates. Set COINGECKO_WEBHOOK_SECRET
+// (whsec_…) to enable; unset = 503 no-op. COINGECKO_CLKN_ID = CLKN's CoinGecko id.
+// NOTE: CoinGecko's exact signature scheme isn't publicly documented — cgVerifySig
+// checks the common variants (raw body vs ts.body, hex/base64, raw/base64 key);
+// confirm with a test event from the CG dashboard after wiring the secret.
+const CLKN_CG_ID = process.env.COINGECKO_CLKN_ID || "cluck-norris";
+function cgVerifySig(secret, raw, ts, sig) {
+  if (!sig) return false;
+  const keys = [secret];
+  if (secret.startsWith("whsec_")) { try { keys.push(Buffer.from(secret.slice(6), "base64")); } catch (_) {} }
+  const payloads = [raw]; if (ts) payloads.push(ts + "." + raw);
+  for (const key of keys) for (const p of payloads) for (const enc of ["hex", "base64"]) {
+    let mac; try { mac = createHmac("sha256", key).update(p).digest(enc); } catch (_) { continue; }
+    for (const tok of String(sig).split(/[\s,]+/)) {
+      const t = tok.includes("=") ? tok.split("=").pop() : tok;
+      if (t && t.length === mac.length) { try { if (require("crypto").timingSafeEqual(Buffer.from(t), Buffer.from(mac))) return true; } catch (_) {} }
+    }
+  }
+  return false;
+}
+async function handleCgEvent(evt) {
+  const type = String(evt.type || evt.event || (evt.data && evt.data.type) || "");
+  const data = evt.data || evt;
+  const coinId = String(data.id || data.coin_id || (data.coin && data.coin.id) || "");
+  const isClkn = coinId && coinId.toLowerCase() === CLKN_CG_ID.toLowerCase();
+  const opChat = operatorChatId();
+  if (!opChat) return;
+  if (type.includes("listed")) {
+    if (isClkn) tgSend(opChat, `🟢 <b>CLKN is now LISTED on CoinGecko.</b>\nThe application went through — update the site/grant copy and decide on an announcement.`, null, { silent: true });
+    else tgSend(opChat, `📋 CoinGecko listed: <code>${tgEsc(coinId)}</code>`, null, { silent: true });
+    return;
+  }
+  // Price/info alerts for ANY subscribed coin → operator (you chose them in the CG
+  // dashboard). Useful NOW for the assets we actually hold (SOL/JUP/BTC) for ops,
+  // and CLKN once listed. Operator-only + factual — never a public token feature.
+  if (type.includes("price")) {
+    const price = data.price != null ? data.price : (data.market_data && data.market_data.current_price);
+    const label = isClkn ? "CLKN" : tgEsc(coinId || "coin");
+    tgSend(opChat, `📈 <b>${label} price alert</b> — your CoinGecko target was crossed${price != null ? ` (now ${tgEsc(String(price))})` : ""}.`, null, { silent: true });
+    return;
+  }
+  if (type.includes("info")) { const label = isClkn ? "CLKN" : tgEsc(coinId || "coin"); tgSend(opChat, `ℹ️ CoinGecko updated ${label} coin info (metadata / links / categories).`, null, { silent: true }); }
+}
+app.post("/api/cg-webhook", express.raw({ type: "*/*", limit: "256kb" }), async (req, res) => {
+  const secret = process.env.COINGECKO_WEBHOOK_SECRET;
+  if (!secret) return res.status(503).json({ error: "not_configured" });
+  const raw = Buffer.isBuffer(req.body) ? req.body.toString("utf8") : "";
+  const sig = String(req.headers["x-cg-signature"] || "");
+  const ts = String(req.headers["x-cg-timestamp"] || "");
+  const eventId = String(req.headers["x-cg-event-id"] || "");
+  if (ts) { const tnum = Number(ts) * (ts.length <= 10 ? 1000 : 1); if (isFinite(tnum) && Math.abs(Date.now() - tnum) > 5 * 60 * 1000) return res.status(400).json({ error: "stale_timestamp" }); }
+  if (!cgVerifySig(secret, raw, ts, sig)) return res.status(401).json({ error: "bad_signature" });
+  if (eventId) {
+    const seen = kv.get("cgWebhookSeen", {}) || {};
+    if (seen[eventId]) return res.status(200).json({ ok: true, dedup: true });
+    seen[eventId] = Date.now();
+    for (const k of Object.keys(seen)) if (Date.now() - seen[k] > 24 * 3600 * 1000) delete seen[k];
+    kv.set("cgWebhookSeen", seen);
+  }
+  res.status(200).json({ ok: true });   // ack fast, then process
+  try { await handleCgEvent(JSON.parse(raw || "{}")); } catch (e) { console.warn("[cg-webhook] handle:", e.message); }
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
