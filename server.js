@@ -515,7 +515,18 @@ async function lockWatchTick() {
     `Now <b>${fmtTokensShort(total)} CLKN</b> locked — <b>${pct}</b> of supply.\n\n` +
     `🔒 Removed from circulation — long-term commitment. Verify on Jupiter Lock:\nhttps://lock.jup.ag/token/${CLKN_MINT}`;
   await tgSend(process.env.TELEGRAM_CHAT_ID, msg);
-  postLockToX(built.data, delta).catch(e => console.warn("[LOCK→X] failed:", e.message)); // auto-post new locks to X (scoped carve-out)
+  let xr = null;
+  try { xr = await postLockToX(built.data, delta); } // auto-post new locks to X (scoped carve-out)
+  catch (e) { console.warn("[LOCK→X] failed:", e.message); }
+  // Flag the celebration for the scheduled image run (a Claude session picks this up,
+  // generates a unique "Cluck hauls the bag to the vault" image via Higgsfield, posts it
+  // threaded under the X announcement + as a Telegram photo, then clears the flag via
+  // /api/lock-celebration?clear=1). Text posts above remain the reliable baseline.
+  kv.set("lockCelebrationPending", {
+    delta: Math.round(delta), total: Math.round(total), pct,
+    deltaShort: fmtTokensShort(delta), totalShort: fmtTokensShort(total),
+    lockCount: built.data.lockCount, xPostId: (xr && xr.id) || null, at: Date.now(),
+  });
   console.log(`[LOCK-WATCH] new lock +${Math.round(delta)} → total ${Math.round(total)} (${pct})`);
 }
 
@@ -5052,6 +5063,21 @@ app.get("/api/tg-test", async (req, res) => {
   } catch (e) {
     return res.status(500).json({ success: false, error: publicErrMsg(e) });
   }
+});
+
+// Lock-celebration handoff (gated). The scheduled Claude image run polls this:
+//  GET            → { pending } (null when nothing to celebrate) + { probe } (last run's Higgsfield status)
+//  ?clear=1       → celebration handled, clear the flag
+//  ?probe=STATUS  → the scheduled run reports whether Higgsfield tools were reachable (observability)
+app.get("/api/lock-celebration", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (req.query.clear === "1") { kv.set("lockCelebrationPending", null); return res.status(200).json({ ok: true, cleared: true }); }
+  if (req.query.probe) {
+    kv.set("lockCelebrationProbe", { status: String(req.query.probe).slice(0, 60), at: Date.now() });
+    return res.status(200).json({ ok: true });
+  }
+  return res.status(200).json({ ok: true, pending: kv.get("lockCelebrationPending", null), probe: kv.get("lockCelebrationProbe", null) });
 });
 
 // Manually (re)fire a buy/sell alert for a specific signature — the recovery lever
