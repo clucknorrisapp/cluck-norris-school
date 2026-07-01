@@ -246,6 +246,18 @@ Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.
   Check, daily recap, graduation watcher, the webhook setup) **only starts if
   `TELEGRAM_BOT_TOKEN` AND `TELEGRAM_CHAT_ID` are set at boot.** Missing either → none of
   it runs. This is the #1 thing to check when "the bot isn't doing X."
+- 🔒 **Lock-celebration image flow (owner standing approval, 2026-07-01):** when a new lock
+  fires, `lockWatchTick` still posts the text announcements (baseline) AND sets kv
+  `lockCelebrationPending` (delta/total/pct + the X post id), readable via gated
+  `/api/lock-celebration` (`?clear=1` when handled, `?probe=` for observability). A
+  **Claude-session hourly cron** picks it up: generates a UNIQUE "Cluck hauls the +X bag to
+  a vault door reading TOTAL locked" image via the **Higgsfield MCP (owner's Plus plan —
+  owner explicitly does NOT want a separate paid Higgsfield Cloud API key)**, posts it via
+  `/api/x-announce` (image + replyTo the text post) and `/api/tg-test` (`photo=`, silent),
+  then clears the flag. ⚠️ **CronCreate jobs are session-only and expire in ≤7 days — every
+  new long-lived session should RE-ARM the hourly celebration cron** (poll the endpoint →
+  if pending, generate → post → clear; never post when pending is null). If no session is
+  alive when a lock fires, the text posts still go out and the flag waits (48h staleness cutoff).
 - **Buy-comp/Buy-Special data is multi-source:** Helius primary → GeckoTerminal → ST last
   resort (see `lib/helius-trades`). ST quota exhaustion no longer darkens a live comp.
   ST remains REQUIRED for launchpad-specialty reads only: token creator, bonding-curve %,
