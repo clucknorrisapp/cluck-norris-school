@@ -71,6 +71,7 @@ const AI_LANGS = {
   vi: "Vietnamese",
   ko: "Korean",
   fr: "French",
+  hi: "Hindi",
 };
 function aiLangName(lang) {
   const k = String(lang || "").toLowerCase().slice(0, 2);
@@ -2039,7 +2040,7 @@ app.use(express.urlencoded({ extended: true }));
 // fills EVERYTHING else so a language mode is complete, not piecemeal. Public +
 // rate-limited; a daily global budget on NEW translations caps cost/abuse — once
 // the app's finite string set is warm, ongoing cost is ~zero (all cache hits).
-const I18N_MT_LANGNAMES = { zh: "Simplified Chinese (简体中文)", es: "neutral Latin-American Spanish", it: "Italian", pt: "Brazilian Portuguese", vi: "Vietnamese" };
+const I18N_MT_LANGNAMES = { zh: "Simplified Chinese (简体中文)", es: "neutral Latin-American Spanish", it: "Italian", pt: "Brazilian Portuguese", vi: "Vietnamese", hi: "Hindi (हिन्दी, Devanagari script)" };
 const I18N_MT_DIR = process.env.DATA_DIR || "/data";
 const I18N_MT_DAILY_NEW_CAP = 20000;
 const i18nMt = {};            // lang -> { text: translation } (in-memory, lazy-loaded)
@@ -2138,7 +2139,7 @@ function ttsCachePath(lang, voiceId, text) {
   const h = createHash("sha256").update(TTS_MODEL + ":" + voiceId + ":" + lang + ":" + text).digest("hex");
   return join(TTS_DIR, h + ".mp3");
 }
-function ttsLangCode(l) { return ["zh","es","it","pt","vi"].includes(l) ? l : "en"; }
+function ttsLangCode(l) { return ["zh","es","it","pt","vi","hi"].includes(l) ? l : "en"; }
 app.post("/api/tts", rateLimit("tts", { windowMs: 60000, max: 60 }), async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   const lang = ttsLangCode(String((req.body && req.body.lang) || "en").toLowerCase().slice(0, 2));

@@ -14,7 +14,8 @@
     { code: "es", label: "Español",  short: "ES",   html: "es" },
     { code: "it", label: "Italiano", short: "IT",   html: "it" },
     { code: "pt", label: "Português", short: "PT",  html: "pt" },
-    { code: "vi", label: "Tiếng Việt", short: "VI", html: "vi" }
+    { code: "vi", label: "Tiếng Việt", short: "VI", html: "vi" },
+    { code: "hi", label: "हिन्दी",     short: "HI", html: "hi" }
   ];
   var SUPPORTED = {}; LANGS.forEach(function (L) { SUPPORTED[L.code] = L; });
   function detect() {
@@ -29,6 +30,7 @@
         if (l.indexOf("it") === 0) return "it";
         if (l.indexOf("pt") === 0) return "pt";
         if (l.indexOf("vi") === 0) return "vi";
+        if (l.indexOf("hi") === 0) return "hi";
       }
     } catch (_) {}
     return "en";
