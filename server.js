@@ -29,6 +29,7 @@ const {
 } = require("./lib/solana-addr");
 const { runAutopsy, bagsFetch, heliusEnhancedBatched, BAGS_BASE } = require("./lib/autopsy");
 const { ddEnabled, ddWalletReport } = require("./lib/webacy-dd"); // DD.xyz (Webacy) wallet risk cross-check (no-op without WEBACY_API_KEY)
+const schoolAirdrop = require("./lib/school-airdrop"); // CLKN graduate-reward airdrops (off unless AIRDROP_SECRET set)
 const { getTokenBuyersInWindowHelius, getWalletTokenPositionHelius } = require("./lib/helius-trades");
 const QUESTION_BANK = require("./data/question-bank.json");
 // Live Classroom curriculum (regenerate with: node scripts/extract-curriculum.js)
@@ -1636,6 +1637,75 @@ function isCluckAnswer(messageId) {
 function threadFor(messageId) {
   return kv.get("cluckThreads", {})[messageId] || null;
 }
+// ── Airdrop-by-reply (graduate rewards) ──────────────────────────────────────
+// Remember which graduate wallets a school-activity DM was about, keyed by that
+// message's id, so an operator reply ("yes 25000" / "no") to it pays or skips them.
+// kv-backed (survives restarts — the DM may fire overnight and be answered later).
+const AIRDROP_PROMPT_RING = 60;
+function registerAirdropPrompt(messageId, ctx) {
+  if (!messageId) return;
+  const ids = kv.get("airdropPromptIds", []);
+  const map = kv.get("airdropPrompts", {});
+  ids.push(messageId);
+  map[messageId] = ctx; // { chatId, wallets:[], at, done? }
+  while (ids.length > AIRDROP_PROMPT_RING) { const drop = ids.shift(); delete map[drop]; }
+  kv.set("airdropPromptIds", ids);
+  kv.set("airdropPrompts", map);
+}
+function airdropPromptFor(messageId) {
+  return (messageId && kv.get("airdropPrompts", {})[messageId]) || null;
+}
+function markAirdropPromptDone(messageId, done) {
+  const map = kv.get("airdropPrompts", {});
+  if (map[messageId]) { map[messageId] = { ...map[messageId], done }; kv.set("airdropPrompts", map); }
+}
+// Parse "yes 25000" / "yes 25k" / "yes 25,000" / "no". Returns {decision:'yes'|'no'|null, amount:Number|null}.
+function parseAirdropReply(text) {
+  const t = String(text || "").trim().toLowerCase();
+  if (/^(no|n|skip|nope)\b/.test(t)) return { decision: "no", amount: null };
+  if (!/\b(y|yes|yep|send|pay|airdrop)\b/.test(t)) return { decision: null, amount: null };
+  const m = t.match(/(\d[\d,\.]*)\s*([km]?)/); // first number, optional k/m suffix
+  if (!m) return { decision: "yes", amount: null };
+  let n = parseFloat(m[1].replace(/,/g, ""));
+  if (m[2] === "k") n *= 1e3; else if (m[2] === "m") n *= 1e6;
+  return { decision: "yes", amount: Number.isFinite(n) ? n : null };
+}
+// Handle an operator reply to a graduate-airdrop prompt. Authorized purely by the reply
+// landing in the SAME chat the prompt was DMed to (the private treasury/operator chat).
+async function schoolAirdropReply(msg, ctx) {
+  const chatId = msg.chat.id;
+  if (String(chatId) !== String(ctx.chatId)) return; // only in the chat the prompt was sent to
+  const replyId = msg.message_id;
+  const { decision, amount } = parseAirdropReply(msg.text);
+  if (ctx.done) { tgSend(chatId, `🐔 That airdrop prompt was already handled (${ctx.done}).`, replyId); return; }
+  if (decision === "no") { markAirdropPromptDone(msg.reply_to_message.message_id, "skipped"); tgSend(chatId, "👍 Skipped — no tokens sent.", replyId); return; }
+  if (decision !== "yes") return; // not a yes/no — ignore (let other handlers pass)
+  if (!schoolAirdrop.isEnabled()) { tgSend(chatId, "⚠️ Airdrop wallet not configured (set AIRDROP_SECRET on Railway).", replyId); return; }
+  if (!amount) { tgSend(chatId, "🐔 How many? Reply like <code>yes 25000</code>.", replyId); return; }
+  if (amount > schoolAirdrop.maxPerSend()) {
+    tgSend(chatId, `⚠️ ${amount.toLocaleString()} exceeds the ${schoolAirdrop.maxPerSend().toLocaleString()} per-send cap (typo guard). Raise it with <code>/api/school-airdrop?max=…&key=…</code> if intended.`, replyId); return;
+  }
+  const wallets = Array.isArray(ctx.wallets) ? ctx.wallets : [];
+  if (!wallets.length) { tgSend(chatId, "🐔 No pending graduate wallets on this prompt.", replyId); return; }
+  markAirdropPromptDone(msg.reply_to_message.message_id, "processing");
+  // Pre-flight: enough CLKN?
+  try {
+    const bal = await schoolAirdrop.balances();
+    const need = amount * wallets.filter(w => !schoolAirdrop.isPaid(w)).length;
+    if (bal && bal.clkn < need) { tgSend(chatId, `⚠️ Airdrop wallet holds ${Math.floor(bal.clkn).toLocaleString()} CLKN but needs ${need.toLocaleString()} for ${wallets.length}×${amount.toLocaleString()}. Top up <code>${bal.pubkey}</code> and retry.`, replyId); markAirdropPromptDone(msg.reply_to_message.message_id, null); return; }
+    if (bal && bal.sol < 0.01) { tgSend(chatId, `⚠️ Airdrop wallet is low on SOL (${bal.sol.toFixed(4)}) for fees/ATA rent. Top up <code>${bal.pubkey}</code>.`, replyId); markAirdropPromptDone(msg.reply_to_message.message_id, null); return; }
+  } catch (_) { /* balance read failed — proceed; per-send guards still apply */ }
+  tgSend(chatId, `⏳ Airdropping ${amount.toLocaleString()} CLKN to ${wallets.length} graduate${wallets.length === 1 ? "" : "s"}…`, replyId);
+  const results = await schoolAirdrop.sendRewards(wallets, amount);
+  const okr = results.filter(r => r.ok && !r.already);
+  const dup = results.filter(r => r.ok && r.already);
+  const err = results.filter(r => !r.ok);
+  const lines = [`✅ <b>Airdrop done</b> — ${okr.length} sent · ${dup.length} already-paid · ${err.length} failed`];
+  for (const r of okr) lines.push(`• ${amount.toLocaleString()} → <code>${r.wallet}</code> · <a href="https://solscan.io/tx/${r.sig}">tx</a>`);
+  for (const r of err) lines.push(`• ⚠️ <code>${r.wallet}</code> — ${tgEsc(String(r.error || "failed"))}`);
+  markAirdropPromptDone(msg.reply_to_message.message_id, "paid");
+  tgSend(chatId, lines.join("\n"), replyId, { silent: true });
+}
 // Returns true (and increments) if the user is under their daily cap, else false.
 function replyBotConsume(userId) {
   if (!userId) return false;
@@ -1733,6 +1803,11 @@ function handleTelegramUpdate(update) {
     // (follow-up) → educational answer. Other bot posts (market check, etc.) and
     // slash commands are not triggers.
     const rt = msg.reply_to_message;
+    // Operator reply to a graduate-airdrop prompt ("yes 25000" / "no") → pay/skip.
+    if (text[0] !== "/" && rt && rt.from && rt.from.is_bot) {
+      const adCtx = airdropPromptFor(rt.message_id);
+      if (adCtx) { schoolAirdropReply(msg, adCtx); return; }
+    }
     if (text[0] !== "/" && rt && rt.from && rt.from.is_bot
         && (isLessonMessage(rt.message_id) || isCluckAnswer(rt.message_id))) {
       answerLessonReply(msg);
@@ -8985,6 +9060,36 @@ app.get("/api/diploma-mint", async (req, res) => {
   } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
 });
 
+// Graduate-reward airdrop admin (gated, 404 without key).
+//  (no action)         → status: enabled?, wallet pubkey, CLKN/SOL balance, per-send max
+//  ?max=NN              → set the per-send max guard (kv schoolAirdropMax)
+//  ?wallet=…&amount=NN&run=1 → manually airdrop to one wallet (same idempotent path as the reply flow)
+app.get("/api/school-airdrop", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  try {
+    if (req.query.max != null) {
+      const m = Math.max(1, parseInt(req.query.max, 10) || 0);
+      kv.set("schoolAirdropMax", m);
+      return res.status(200).json({ success: true, maxPerSend: m });
+    }
+    if (req.query.wallet) {
+      const wallet = String(req.query.wallet);
+      if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ success: false, error: "valid &wallet= required" });
+      const amount = Number(req.query.amount);
+      if (!(amount > 0)) return res.status(400).json({ success: false, error: "&amount= (>0) required" });
+      if (req.query.run !== "1") return res.status(200).json({ success: true, dryRun: true, wallet, amount });
+      return res.status(200).json(await schoolAirdrop.sendReward(wallet, amount, { force: req.query.force === "1" }));
+    }
+    const bal = schoolAirdrop.isEnabled() ? await schoolAirdrop.balances() : null;
+    return res.status(200).json({
+      success: true, enabled: schoolAirdrop.isEnabled(), payer: schoolAirdrop.payerPubkey(),
+      maxPerSend: schoolAirdrop.maxPerSend(), mint: schoolAirdrop.MINT, balances: bal,
+      paidCount: Object.keys(kv.get(schoolAirdrop.PAID_KV, {}) || {}).length,
+    });
+  } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
+});
+
 app.get("/api/credential-card", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "public, max-age=120");
@@ -10959,13 +11064,13 @@ async function schoolGradTick({ dryRun = false } = {}) {
     const newDip = mintedWallets.filter(w => !seenDip.has(w));
     if (!newCreds.length && !newDip.length) return { new: 0 };
 
-    const sh = (w) => `${String(w).slice(0, 4)}…${String(w).slice(-4)}`;
     const lines = [];
     if (newCreds.length) {
       lines.push(`🎓 <b>${newCreds.length} new credential${newCreds.length === 1 ? "" : "s"}</b> (learner submitted a wallet)`);
       for (const c of newCreds.slice(0, 15)) {
         const kind = c.diploma ? (c.diploma.verified === "server-scored" ? "✅ Diploma (verified)" : "📜 Diploma") : (c.graduation ? "🎓 Graduated" : "📝 Claim");
-        lines.push(`• <code>${sh(c.wallet)}</code> — ${kind} · <a href="https://clucknorris.app/transcript/${c.slug}">transcript</a>`);
+        // Full wallet as tap-to-copy <code> (private operator chat) so it pastes straight into an airdrop.
+        lines.push(`• ${kind} · <a href="https://clucknorris.app/transcript/${c.slug}">transcript</a>\n<code>${c.wallet}</code>`);
       }
       if (newCreds.length > 15) lines.push(`…and ${newCreds.length - 15} more`);
     }
@@ -10973,15 +11078,27 @@ async function schoolGradTick({ dryRun = false } = {}) {
       lines.push(`${newCreds.length ? "\n" : ""}🪙 <b>${newDip.length} new diploma NFT${newDip.length === 1 ? "" : "s"} minted</b>`);
       for (const w of newDip.slice(0, 15)) {
         const m = minted[w] || {};
-        lines.push(`• <code>${sh(w)}</code>${m.sig ? ` · <a href="https://solscan.io/tx/${m.sig}">tx</a>` : ""}`);
+        lines.push(`• diploma cNFT${m.sig ? ` · <a href="https://solscan.io/tx/${m.sig}">mint tx</a>` : ""}\n<code>${w}</code>`);
       }
+    }
+    // Airdrop-by-reply: if newly-minted diplomas exist and the airdrop wallet is configured,
+    // append the prompt + remember these wallets against this message so a "yes <amount>"
+    // reply in the operator chat pays them (schoolAirdropReply).
+    const airdropWallets = newDip.slice(0, 25);
+    if (airdropWallets.length && schoolAirdrop.isEnabled()) {
+      lines.push(`\n💸 Reply <b>yes &lt;amount&gt;</b> to airdrop CLKN to ${airdropWallets.length === 1 ? "this graduate" : `these ${airdropWallets.length} graduates`} (e.g. <code>yes 25000</code>). Reply <b>no</b> to skip.`);
     }
     const text = "🏫 <b>SCHOOL — new activity</b>\n" + lines.join("\n");
     if (dryRun) return { new: newCreds.length + newDip.length, preview: text };
 
     const proj = whirlpoolMM.vault.getProject("treasury");
     const chat = (proj && proj.telegramChatId) || process.env.TELEGRAM_CHAT_ID;
-    if (chat) await tgSend(chat, text, null, { silent: true });
+    let sentId = null;
+    if (chat) sentId = await tgSend(chat, text, null, { silent: true });
+    // Register the pending airdrop so an operator reply to THIS message can fund it.
+    if (sentId && airdropWallets.length && schoolAirdrop.isEnabled()) {
+      registerAirdropPrompt(sentId, { chatId: chat, wallets: airdropWallets, at: Date.now() });
+    }
     kv.set("schoolGradSeen", { creds: all.map(c => c.wallet), diplomas: mintedWallets, baselinedAt: seen.baselinedAt });
     return { new: newCreds.length + newDip.length, alerted: !!chat };
   } catch (e) { console.warn("[school-grad] tick:", e.message); return { error: e.message }; }
