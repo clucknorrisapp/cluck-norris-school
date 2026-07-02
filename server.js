@@ -10435,7 +10435,10 @@ function _stripUnsafe(s, max = 80) {
   return String(s == null ? "" : s)
     .replace(/[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2066-\u2069]/g, "")
     .replace(/\b(?:https?:\/\/|www\.)\S+/gi, "")
-    .replace(/\b[\w-]+\.(?:com|xyz|io|net|org|app|fun|gg|me|co|fi|so|ai|lol|wtf|click|link|finance|capital|cash)\b\S*/gi, "")
+    // Domain-SHAPE strip (allowlist by structure, not a TLD denylist): any word.tld[/…] token
+    // is removed — a denylist missed .vip/.top/.ru etc. that X still auto-links, so a token
+    // named "freeclaim.vip" no longer survives as a clickable link in a tweet.
+    .replace(/\b[\w-]+(?:\.[a-z]{2,})+(?:\/\S*)?/gi, "")
     .replace(/[@#$＠]/g, "")
     .replace(/\s+/g, " ").trim().slice(0, max);
 }
