@@ -495,18 +495,31 @@ async function lockWatchTick() {
   if (!LOCK_WATCH_ENABLED) return;
   const built = await buildLockReport().catch(() => null);
   if (!built || !built.ok) return;
+  // A PARTIAL on-chain read is an under-count — never post or move the baseline off it, or a
+  // transient RPC blip fabricates a "lock dropped then re-locked +XM" phantom announcement.
+  if (built.data.partial) { console.warn("[LOCK-WATCH] partial read — skipping tick"); return; }
   const total = built.data.totalLocked;
   const base = kv.get("lockWatchTotal", null);
+  const seenHigh = kv.get("lockWatchHigh", null); // durable high-water mark of what we've announced
   // The kv baseline is durable and accurate, so compare against it even right after a
   // boot — a lock that lands during a deploy gap is announced on the first tick instead
   // of being silently re-baselined (the old in-memory prime swallowed those). Only a
   // genuinely missing baseline (first-ever run) primes silently.
-  if (typeof base !== "number") { kv.set("lockWatchTotal", total); return; }
+  if (typeof base !== "number") { kv.set("lockWatchTotal", total); kv.set("lockWatchHigh", total); return; }
   const delta = total - base;
   if (delta < LOCK_WATCH_MIN_DELTA) {
     if (delta < 0) kv.set("lockWatchTotal", total); // a lock expired/withdrew — track down silently
     return;
   }
+  // Guard against a recovered-read phantom: if this "increase" only restores a level we've
+  // already seen/announced (within dust of the high-water mark), it's an RPC recovery, not a
+  // new lock. Re-baseline silently, don't announce.
+  if (typeof seenHigh === "number" && total <= seenHigh + LOCK_WATCH_MIN_DELTA) {
+    kv.set("lockWatchTotal", total);
+    console.warn(`[LOCK-WATCH] delta +${Math.round(delta)} only restores prior high ${Math.round(seenHigh)} — no announce`);
+    return;
+  }
+  kv.set("lockWatchHigh", Math.max(seenHigh || 0, total));
   kv.set("lockWatchTotal", total);
   kv.set("lockSnapshot", { tokens: total, ts: Date.now() }); // so the daily report won't re-announce it
   const pct = built.data.pctOfSupply != null ? (built.data.pctOfSupply * 100).toFixed(2) + "%" : "—";
@@ -1680,12 +1693,16 @@ function markAirdropPromptDone(messageId, done) {
 // Parse "yes 25000" / "yes 25k" / "yes 25,000" / "no". Returns {decision:'yes'|'no'|null, amount:Number|null}.
 function parseAirdropReply(text) {
   const t = String(text || "").trim().toLowerCase();
-  if (/^(no|n|skip|nope)\b/.test(t)) return { decision: "no", amount: null };
-  if (!/\b(y|yes|yep|send|pay|airdrop)\b/.test(t)) return { decision: null, amount: null };
-  const m = t.match(/(\d[\d,\.]*)\s*([km]?)/); // first number, optional k/m suffix
+  // Decision word must START the reply — "don't send 25000, too risky" is NOT an approval.
+  if (/^(no|n|nope|nah|skip|cancel|stop|don'?t|do not)\b/.test(t)) return { decision: "no", amount: null };
+  if (!/^(y|yes|yep|yeah|yup|ok|okay|send|pay|airdrop|go)\b/.test(t)) return { decision: null, amount: null };
+  const m = t.match(/(\d[\d,]*(?:\.\d+)?)/); // first number
   if (!m) return { decision: "yes", amount: null };
   let n = parseFloat(m[1].replace(/,/g, ""));
-  if (m[2] === "k") n *= 1e3; else if (m[2] === "m") n *= 1e6;
+  // k/m multiplier only if it directly follows the number and isn't the first letter of a word
+  // ("25000 max" stays 25000, not 25 billion).
+  const suf = t.slice(m.index + m[0].length).match(/^\s?([km])(?![a-z])/i);
+  if (suf) { if (suf[1].toLowerCase() === "k") n *= 1e3; else n *= 1e6; }
   return { decision: "yes", amount: Number.isFinite(n) ? n : null };
 }
 // Handle an operator reply to a graduate-airdrop prompt. Authorized purely by the reply
@@ -1694,6 +1711,13 @@ async function schoolAirdropReply(msg, ctx) {
   const chatId = msg.chat.id;
   if (String(chatId) !== String(ctx.chatId)) return; // only in the chat the prompt was sent to
   const replyId = msg.message_id;
+  // Optional operator allowlist (defense-in-depth on top of the now-private-only chat): if
+  // TELEGRAM_OPERATOR_IDS is set (comma-separated Telegram user ids), only those users can
+  // approve. Unset = rely on the chat being the private operator DM (fail-closed in schoolGradTick).
+  const opIds = String(process.env.TELEGRAM_OPERATOR_IDS || "").split(",").map(s => s.trim()).filter(Boolean);
+  if (opIds.length && !opIds.includes(String(msg.from && msg.from.id))) {
+    tgSend(chatId, "⛔ Not authorized to approve airdrops.", replyId); return;
+  }
   const { decision, amount } = parseAirdropReply(msg.text);
   if (ctx.done) { tgSend(chatId, `🐔 That airdrop prompt was already handled (${ctx.done}).`, replyId); return; }
   if (decision === "no") { markAirdropPromptDone(msg.reply_to_message.message_id, "skipped"); tgSend(chatId, "👍 Skipped — no tokens sent.", replyId); return; }
@@ -5936,11 +5960,16 @@ async function getLockedSupply(mint, rpcCall) {
     if (v) { decimals = v.decimals ?? 9; supplyUi = parseInt(v.amount) / Math.pow(10, decimals); }
   } catch (_) { /* fall back to defaults */ }
 
+  // `partial` = a page (or the classify pass) errored mid-scan, so the account set is an
+  // UNDER-count. Callers that trigger public posts (lock watcher) must treat a partial read
+  // as non-authoritative — otherwise a transient RPC blip looks like a big lock DROP, and its
+  // recovery on the next tick looks like a phantom "+X NEW LOCK".
   const accts = [];
+  let partial = false;
   for (let p = 1; p <= 5; p++) {
     let r;
     try { r = await rpcCall(`locks-tas-${p}`, "getTokenAccounts", { page: p, limit: 1000, mint, displayOptions: { showZeroBalance: false } }); }
-    catch (_) { break; }
+    catch (_) { partial = true; break; }
     const a = r?.result?.token_accounts || [];
     if (!a.length) break;
     accts.push(...a);
@@ -5950,7 +5979,9 @@ async function getLockedSupply(mint, rpcCall) {
     .map(a => ({ tokenAccount: a.address, authority: a.owner, tokens: (parseInt(a.amount || "0") || 0) / Math.pow(10, decimals) }))
     .filter(h => h.tokens > 0);
 
-  const cls = await classifyAddressTypes(holders.map(h => h.authority), rpcCall);
+  let cls;
+  try { cls = await classifyAddressTypes(holders.map(h => h.authority), rpcCall); }
+  catch (_) { partial = true; cls = new Map(); }
   let totalLocked = 0;
   const byLabel = new Map();
   const locks = [];
@@ -5964,7 +5995,7 @@ async function getLockedSupply(mint, rpcCall) {
   }
   locks.sort((a, b) => b.tokens - a.tokens);
   return {
-    success: true, mint, decimals, supply: supplyUi,
+    success: true, partial, mint, decimals, supply: supplyUi,
     totalLocked,
     pctOfSupply: supplyUi > 0 ? totalLocked / supplyUi : null,
     lockCount: locks.length,
@@ -6255,7 +6286,7 @@ app.post("/api/exam/submit", (req, res) => {
   return res.status(200).json({ success: true, passed, score, total, pct, passToken });
 });
 
-app.post("/api/claim", async (req, res) => {
+app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   const { wallet, score, total, pct, source, passToken, coursework } = req.body;
   if (!SOL_ADDR_RE.test(String(wallet || ""))) return res.status(400).json({ success: false, error: "Invalid wallet" });
@@ -6293,10 +6324,34 @@ app.post("/api/claim", async (req, res) => {
     const rec = credentials.record(wallet, { kind, score: effScore, total: effTotal, pct: effPct, verified, isHolder, balance, coursework });
     // Graduating the FULL curriculum earns the on-chain diploma NFT (not the Ultimate
     // Challenge). Best-effort: a mint hiccup never fails the claim — the record is saved.
+    // The graduation door is self-reported (no exam pass token), and each mint spends
+    // treasury SOL — so a DAILY GLOBAL BUDGET bounds abuse: distributed spam (many wallets
+    // / IPs past the per-IP rate limit) can't drain the treasury or fill the shared tree
+    // beyond the cap. Legit single graduations are far under it. kv schoolDiplomaDailyCap
+    // (default 60). A brand-new wallet only mints once (diplomaNft is per-wallet idempotent),
+    // so the budget is only consumed by genuinely NEW graduates. Re-mints of an existing
+    // wallet don't count.
     let nft = null;
     if (kind === "graduation") {
-      try { nft = await diplomaNft.mintDiploma(wallet, rec.slug); }
-      catch (e) { nft = { ok: false, error: publicErrMsg(e) }; }
+      const already = (kv.get(diplomaNft.MINTED_KV, {}) || {})[wallet];
+      if (already) {
+        try { nft = await diplomaNft.mintDiploma(wallet, rec.slug); } // idempotent — returns the existing mint, spends nothing
+        catch (e) { nft = { ok: false, error: publicErrMsg(e) }; }
+      } else {
+        const today = new Date().toISOString().slice(0, 10);
+        const day = kv.get("schoolDiplomaMintDay", "");
+        let count = day === today ? (kv.get("schoolDiplomaMintCount", 0) || 0) : 0;
+        const cap = kv.get("schoolDiplomaDailyCap", 60);
+        if (count >= cap) {
+          nft = { ok: false, reason: "daily diploma-mint budget reached — try again tomorrow" };
+          console.warn(`[DIPLOMA] daily mint cap ${cap} hit — skipping mint for ${wallet.slice(0, 6)}…`);
+        } else {
+          try {
+            nft = await diplomaNft.mintDiploma(wallet, rec.slug);
+            if (nft && nft.ok && !nft.already) { kv.set("schoolDiplomaMintDay", today); kv.set("schoolDiplomaMintCount", count + 1); }
+          } catch (e) { nft = { ok: false, error: publicErrMsg(e) }; }
+        }
+      }
     }
     return res.status(200).json({
       success: true, isHolder, balance, verified,
@@ -11133,10 +11188,14 @@ async function schoolGradTick({ dryRun = false } = {}) {
     const text = "🏫 <b>SCHOOL — new activity</b>\n" + lines.join("\n");
     if (dryRun) return { new: newCreds.length + newDip.length, preview: text };
 
-    const proj = whirlpoolMM.vault.getProject("treasury");
-    const chat = (proj && proj.telegramChatId) || process.env.TELEGRAM_CHAT_ID;
+    // PRIVATE only — this DM carries full graduate wallets AND a fund-moving "reply yes to
+    // airdrop" prompt, so it must NEVER fall back to the public community chat. If the
+    // operator/treasury chat isn't configured, skip entirely (mirrors the content-approval
+    // + OOR handlers). Baseline still advances so we don't spam the backlog once it's set.
+    const chat = operatorChatId();
     let sentId = null;
     if (chat) sentId = await tgSend(chat, text, null, { silent: true });
+    else console.warn("[school-grad] no private operator chat configured — DM skipped (won't post wallets/airdrop prompt publicly)");
     // Register the pending airdrop so an operator reply to THIS message can fund it.
     if (sentId && airdropWallets.length && schoolAirdrop.isEnabled()) {
       registerAirdropPrompt(sentId, { chatId: chat, wallets: airdropWallets, at: Date.now() });
