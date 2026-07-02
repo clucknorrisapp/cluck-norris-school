@@ -258,6 +258,9 @@ Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.
   new long-lived session should RE-ARM the hourly celebration cron** (poll the endpoint →
   if pending, generate → post → clear; never post when pending is null). If no session is
   alive when a lock fires, the text posts still go out and the flag waits (48h staleness cutoff).
+  **Model note (owner, 2026-07-02): use SONNET 5 (`claude-sonnet-5`) for Higgsfield prompt
+  crafting** — noticeably better image prompts; the Mac runner passes `--model claude-sonnet-5`,
+  and in-session celebrations should spawn a sonnet subagent to write the Higgsfield prompt.
 - **Buy-comp/Buy-Special data is multi-source:** Helius primary → GeckoTerminal → ST last
   resort (see `lib/helius-trades`). ST quota exhaustion no longer darkens a live comp.
   ST remains REQUIRED for launchpad-specialty reads only: token creator, bonding-curve %,
