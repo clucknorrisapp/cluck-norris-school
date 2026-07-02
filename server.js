@@ -523,9 +523,14 @@ async function lockWatchTick() {
   // generates a unique "Cluck hauls the bag to the vault" image via Higgsfield, posts it
   // threaded under the X announcement + as a Telegram photo, then clears the flag via
   // /api/lock-celebration?clear=1). Text posts above remain the reliable baseline.
+  // MERGE with any un-celebrated pending (fresh <48h) so a second lock can't erase the
+  // first one's image slot — the celebration then covers the combined amount.
+  const prevPending = kv.get("lockCelebrationPending", null);
+  const mergedDelta = Math.round(delta) +
+    ((prevPending && typeof prevPending.delta === "number" && Date.now() - (prevPending.at || 0) < 48 * 3600 * 1000) ? prevPending.delta : 0);
   kv.set("lockCelebrationPending", {
-    delta: Math.round(delta), total: Math.round(total), pct,
-    deltaShort: fmtTokensShort(delta), totalShort: fmtTokensShort(total),
+    delta: mergedDelta, total: Math.round(total), pct,
+    deltaShort: fmtTokensShort(mergedDelta), totalShort: fmtTokensShort(total),
     lockCount: built.data.lockCount, xPostId: (xr && xr.id) || null, at: Date.now(),
   });
   console.log(`[LOCK-WATCH] new lock +${Math.round(delta)} → total ${Math.round(total)} (${pct})`);
