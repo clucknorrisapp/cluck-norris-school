@@ -491,16 +491,17 @@ function lockReportTick() {
 // daily report (separate baseline) is the backstop for a lock during a deploy gap.
 const LOCK_WATCH_ENABLED = true;
 const LOCK_WATCH_MIN_DELTA = 500_000; // CLKN — real locks are millions; ignore dust
-let lockWatchPrimed = false;
 async function lockWatchTick() {
   if (!LOCK_WATCH_ENABLED) return;
   const built = await buildLockReport().catch(() => null);
   if (!built || !built.ok) return;
   const total = built.data.totalLocked;
   const base = kv.get("lockWatchTotal", null);
-  if (!lockWatchPrimed || typeof base !== "number") {
-    lockWatchPrimed = true; kv.set("lockWatchTotal", total); return; // prime on boot — never posts
-  }
+  // The kv baseline is durable and accurate, so compare against it even right after a
+  // boot — a lock that lands during a deploy gap is announced on the first tick instead
+  // of being silently re-baselined (the old in-memory prime swallowed those). Only a
+  // genuinely missing baseline (first-ever run) primes silently.
+  if (typeof base !== "number") { kv.set("lockWatchTotal", total); return; }
   const delta = total - base;
   if (delta < LOCK_WATCH_MIN_DELTA) {
     if (delta < 0) kv.set("lockWatchTotal", total); // a lock expired/withdrew — track down silently
@@ -11317,9 +11318,11 @@ app.listen(PORT, () => {
     // Daily Flow Recap — checked each minute, fires once per day at 00:00 UTC.
     setInterval(recapTick, 60 * 1000);
     setInterval(lockReportTick, 60 * 1000);
-    // Lock-change watcher — every 2h, auto-post when the locked total increases.
-    setInterval(lockWatchTick, 2 * 60 * 60 * 1000);
-    setTimeout(lockWatchTick, 90000); // prime the baseline shortly after boot
+    // Lock-change watcher — every 30 min (Helius plan upgraded 2026-07-01; was 2h),
+    // auto-post when the locked total increases. First check 90s after boot — with the
+    // durable kv baseline this ALSO announces any lock that landed during the deploy gap.
+    setInterval(lockWatchTick, 30 * 60 * 1000);
+    setTimeout(lockWatchTick, 90000);
     // School credential watcher — ~4x/day (every 6h): DM the operator on NEW course-completion
     // claims (a learner submitted a Solana address) + NEW graduation diploma cNFTs minted.
     setInterval(() => { schoolGradTick().catch(e => console.warn("[school-grad] tick:", e.message)); }, 6 * 60 * 60 * 1000);
