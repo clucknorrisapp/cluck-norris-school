@@ -132,6 +132,13 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 > material until retested. Remove this note when CoinGecko decides.
 
 ## Working agreement
+- ⛔ **PLAN ≠ EXECUTE for money (owner rule, 2026-07-02).** For ANY action that moves funds,
+  opens/closes positions or pools, or resumes an engine: state the exact plan (amounts, tiers,
+  pools) and STOP — execute only after the owner replies with an explicit go. Plan and execution
+  never share a turn. An owner message describing intent ("want to reset X", "thinking we should Y")
+  opens a DISCUSSION, not authorization — parameters like fee tiers are the owner's to pick.
+  (Set after a session executed a full pool reset at a self-chosen fee tier from "want to reset
+  them with slightly higher fee ratings".) Reads/status checks are always fine.
 - **Always commit AND push to the active working branch** — hackathon pace, standing
   permission to push. Give a heads-up before anything touching `main` (merge/PR) or
   destructive (force-push, `reset --hard`, branch delete).
