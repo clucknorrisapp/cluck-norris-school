@@ -5006,7 +5006,10 @@ app.get("/api/meteora-keepalive", async (req, res) => {
   try {
     const usd = Math.max(1, parseFloat(req.query.usd || "10") || 10);
     const r = await whirlpoolMM.vault.meteoraKeepalive({ projectId: "treasury", usd, dryRun: req.query.run !== "1" });
-    if (req.query.run === "1" && r && r.ok) kv.set("meteoraLastKeepaliveAt", Date.now());
+    if (req.query.run === "1" && r && r.ok) {
+      kv.set("meteoraLastKeepaliveAt", Date.now());
+      if (r.sig) rememberSig(r.sig); // self-buy: never announce as a community buy
+    }
     return res.status(200).json(r);
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
@@ -10928,10 +10931,15 @@ async function pollSinglePool(pool, HELIUS_KEY) {
         continue;
       }
 
-      // Skip operator (treasury + liquidity-engine) trades entirely — both buys and
-      // sells are LP / market-making mechanics, not community flow. (Owner's call:
-      // don't surface operator CLKN buys as "community reinvestment".)
-      if (trade.trader && isOperatorWallet(trade.trader)) {
+      // Skip operator (liquidity-engine) trades — LP / market-making mechanics, not
+      // community flow. EXCEPTION (owner's call 2026-07-02): TREASURY BUYS are real,
+      // deliberate purchases and DO announce. Treasury sells stay suppressed (the brand
+      // bag is never sold — any sell-looking tx is LP mechanics), engine wallets stay
+      // fully suppressed, and the daily Meteora keepalive self-buy is pre-marked handled
+      // at fire time so it can't slip through as a fake community buy.
+      const opSuppressed = trade.trader && isOperatorWallet(trade.trader)
+        && !(trade.trader === TREASURY_WALLET && trade.action === "buy");
+      if (opSuppressed) {
         console.log(`[TELEGRAM] Skipping operator wallet ${trade.action} (LP/MM mechanics) · sig ${sig.slice(0,8)}`);
         rememberSig(sig);
         if (!blocked) advanceTo = sig;
@@ -11044,8 +11052,9 @@ async function reconcileMissedTrades({ dry = false } = {}) {
         if (!hasTokenBalanceData(tx)) continue;       // not indexed yet — a later sweep will catch it
         const trade = detectClknTrade(tx);
         if (!trade) { continue; }                     // not a trade (e.g. an LP add/remove) — don't mark; harmless to re-see
-        // Same rules as the poller.
-        if (trade.trader && isOperatorWallet(trade.trader)) { rememberSig(s.signature); continue; }
+        // Same rules as the poller (treasury BUYS announce; everything operator else suppressed).
+        if (trade.trader && isOperatorWallet(trade.trader)
+            && !(trade.trader === TREASURY_WALLET && trade.action === "buy")) { rememberSig(s.signature); continue; }
         noteTradeForArb(trade.trader, trade.action, bt || Date.now());
         if (trade.trader && isArbBot(trade.trader)) { rememberSig(s.signature); continue; }
         const usd = quoteUsdValue(trade);
@@ -11646,6 +11655,7 @@ app.listen(PORT, () => {
           const ka = await whirlpoolMM.vault.meteoraKeepalive({ projectId: "treasury", usd: kaUsd }).catch((e) => ({ ok: false, reason: e.message }));
           if (ka && ka.ok) {
             st.lastTradeAt = now; st.alerted = false; // our buy is a trade — reset the quiet clock
+            if (ka.sig) rememberSig(ka.sig); // self-buy: never announce it as a community buy (treasury buys otherwise DO announce)
             tgSend("1846034838", `🔁 <b>Meteora keepalive fired</b>\n\n~${Math.round(sinceHrs)}h quiet → sent a $${kaUsd} SOL→CLKN buy (~${ka.solIn} SOL) through 64WXkH to keep it on watchlists. Buy-only. tx <code>${ka.sig ? ka.sig.slice(0, 12) : "?"}</code>`);
           } else {
             tgSend("1846034838", `⚠️ <b>Meteora keepalive skipped</b>\n\n~${Math.round(sinceHrs)}h quiet but the buy didn't fire: ${ka && ka.reason ? ka.reason : "unknown"}. Pool may need a manual nudge.`);
