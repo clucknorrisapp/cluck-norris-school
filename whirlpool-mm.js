@@ -22,7 +22,9 @@ function isPubkey(s) {
 // a wrong/absent key returns 404 (not 401), so the endpoints are invisible without it.
 function adminOK(req) {
   const k = process.env.PREMIUM_ACCESS_KEY;
-  return !!k && req.query.key === k;
+  // Prefer the header (query strings leak into logs/proxies/history); ?key= kept as fallback.
+  const provided = (req.headers && req.headers["x-premium-key"]) || (req.query && req.query.key);
+  return !!k && provided === k;
 }
 
 // Which project an admin request targets (default the built-in CLKN project).

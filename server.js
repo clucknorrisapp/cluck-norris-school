@@ -482,13 +482,14 @@ function lockReportTick() {
 }
 
 // ── Lock-change watcher ──────────────────────────────────────────────────────
-// Checks the on-chain locked total every ~2h and auto-posts a short "NEW LOCK"
-// alert ONLY when it INCREASES past a dust threshold — so a fresh lock is announced
-// within ~2h instead of waiting for the daily report. Uses its own baseline
-// (lockWatchTotal) but, when it posts, also syncs lockSnapshot so the daily report
-// won't re-announce the same lock. First tick after boot just primes the baseline
-// (never posts), so a deploy with a stale snapshot can't fire a surprise post — the
-// daily report (separate baseline) is the backstop for a lock during a deploy gap.
+// Checks the on-chain locked total every ~30 min and auto-posts a short "NEW LOCK"
+// alert ONLY when it INCREASES past a dust threshold. Compares against the DURABLE kv
+// baseline (lockWatchTotal) even right after boot, so a lock that lands during a deploy
+// gap is still announced (only a first-ever-run missing baseline primes silently). Two
+// phantom-guards (audit 2026-07-02): a PARTIAL on-chain read is ignored entirely, and a
+// positive delta that merely restores a prior high-water mark (lockWatchHigh) is treated
+// as an RPC recovery, not a new lock. When it posts, it syncs lockSnapshot so the daily
+// report won't re-announce the same lock.
 const LOCK_WATCH_ENABLED = true;
 const LOCK_WATCH_MIN_DELTA = 500_000; // CLKN — real locks are millions; ignore dust
 async function lockWatchTick() {
@@ -1994,6 +1995,12 @@ app.use((req, res, next) => {
 // X-Forwarded-For for the real client IP rather than the proxy's.
 app.set("trust proxy", true);
 
+// Last-resort guards: on Node ≥15 an unhandled promise rejection (e.g. a throw inside an
+// un-.catch'd setInterval tick) terminates the process, taking down every scheduler AND the
+// web server. Log and survive instead — a single flaky tick must never crash the app.
+process.on("unhandledRejection", (reason) => console.error("[unhandledRejection]", (reason && reason.message) || reason));
+process.on("uncaughtException", (err) => console.error("[uncaughtException]", err && err.message));
+
 // ── First-party page-view analytics ───────────────────────────────────────
 // Counts human page loads (privacy-respecting; see lib/analytics.js). Mounted
 // early so it sees every request, but only records GETs to real pages — never
@@ -2935,7 +2942,7 @@ app.get("/api/lp-scan", async (req, res) => {
   if (req.query.debug === "readers") return res.status(200).json({ success: true, readers: await lpScanner.debugReaders() });
   if (req.query.debug === "1") {
     try { return res.status(200).json({ success: true, debug: await lpScanner.debugFee(String(req.query.pool || "HfgjZDmexhFVD28Vkb1NbQwWeXP3uDcVTLPjSGHmRHhL")) }); }
-    catch (e) { return res.status(200).json({ success: false, debugError: e.message, stack: String(e.stack || "").split("\n").slice(0, 4) }); }
+    catch (e) { console.warn("[near-grad] test error:", e.stack || e.message); return res.status(200).json({ success: false, error: publicErrMsg(e) }); }
   }
   const amountUsd = Number(req.query.amount) || 0;
   try { return res.status(200).json({ success: true, ...(await lpScanner.scanPair(String(A), String(B), { amountUsd })) }); }
@@ -11394,8 +11401,8 @@ app.listen(PORT, () => {
     // Lock-change watcher — every 30 min (Helius plan upgraded 2026-07-01; was 2h),
     // auto-post when the locked total increases. First check 90s after boot — with the
     // durable kv baseline this ALSO announces any lock that landed during the deploy gap.
-    setInterval(lockWatchTick, 30 * 60 * 1000);
-    setTimeout(lockWatchTick, 90000);
+    setInterval(() => lockWatchTick().catch(e => console.warn("[LOCK-WATCH] tick:", e.message)), 30 * 60 * 1000);
+    setTimeout(() => lockWatchTick().catch(e => console.warn("[LOCK-WATCH] tick:", e.message)), 90000);
     // School credential watcher — ~4x/day (every 6h): DM the operator on NEW course-completion
     // claims (a learner submitted a Solana address) + NEW graduation diploma cNFTs minted.
     setInterval(() => { schoolGradTick().catch(e => console.warn("[school-grad] tick:", e.message)); }, 6 * 60 * 60 * 1000);
