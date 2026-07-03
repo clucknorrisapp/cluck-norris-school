@@ -269,7 +269,11 @@ Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.
   escrows today; until built, the owner TELLS the session when he locks via Streamflow and the
   celebration is run manually** — via the **Higgsfield MCP (owner's Plus plan —
   owner explicitly does NOT want a separate paid Higgsfield Cloud API key)**, posts it via
-  `/api/x-announce` (image + replyTo the text post) and `/api/tg-test` (`photo=`, silent,
+  `/api/x-announce` (image + replyTo the text post — **the reply text must be a SHORT punchline
+  ONLY, e.g. "Cluck made the delivery. 🐔🔥" + the two standing tags; NEVER repeat the
+  numbers/announcement copy in the reply — the parent post and the image itself carry the
+  stats, a restated reply reads as a doubled announcement (owner ask 2026-07-03)**) and
+  `/api/tg-test` (`photo=`, silent,
   **plus `replaceMsg=` = pending.tgMessageIds comma-joined, so the photo DELETES the text
   announcement(s) — the community sees ONE Telegram announcement, not two (owner ask
   2026-07-03); the photo caption must therefore be self-sufficient: numbers + the
