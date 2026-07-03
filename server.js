@@ -3042,22 +3042,10 @@ app.get("/api/token-overview", async (req, res) => {
   if (!mint || mint.length < 32) return res.status(400).json({ success: false, error: "pass ?mint=<mint>" });
   try {
     const onchain = await fetchGeckoTerminalFallback(mint).catch(() => null);
-    let cg = null;
-    const id = await lpScanner.coingeckoIdForMint(mint).catch(() => null);
-    if (id) {
-      try {
-        const c = await lpScanner.cgPro(`/coins/${id}?localization=false&tickers=false&community_data=false&developer_data=false&sparkline=false`);
-        const m = c.market_data || {};
-        cg = {
-          coinId: id, symbol: (c.symbol || "").toUpperCase() || null, name: c.name || null,
-          rank: c.market_cap_rank ?? null,
-          priceUsd: m.current_price?.usd ?? null, marketCapUsd: m.market_cap?.usd ?? null,
-          volume24hUsd: m.total_volume?.usd ?? null, change24hPct: m.price_change_percentage_24h ?? null,
-          athUsd: m.ath?.usd ?? null, athChangePct: m.ath_change_percentage?.usd ?? null, athDate: m.ath_date?.usd ?? null,
-          image: c.image?.small || c.image?.thumb || null,
-        };
-      } catch (_) { /* listed but detail fetch failed → onchain only */ }
-    }
+    // CG-API divorce (owner's call 2026-07-03): the aggregated CoinGecko lookup (rank/ATH/mcap
+    // for listed coins) is GONE — this endpoint is onchain-only now. The response keeps the
+    // same shape (aggregated fields null) so the market-header client needs no change.
+    const cg = null;
     if (!onchain && !cg) return res.status(200).json({ success: false, error: "no market data for this token yet" });
     const listed = !!cg;
     return res.status(200).json({
@@ -3161,46 +3149,51 @@ ${ctx || "(no pools found for this pair)"}`;
 // synthesize a punchy, educational daily brief. Cached ~daily; posted to TG + X by the
 // scheduler. Informational only — NOT financial advice.
 const ALPHA_TTL = 20 * 3600 * 1000;
-// A coin's X/Twitter handle from CoinGecko (links.twitter_screen_name), cached. Used to TAG
-// trending tokens in the X post for engagement. Returns "handle" (no @) or null.
+// A Solana token's X/Twitter handle from its GeckoTerminal token profile (twitter_handle),
+// cached. Used to TAG trending tokens in the X post for engagement. Was CoinGecko
+// links.twitter_screen_name until the CG-API divorce (2026-07-03). Returns "handle" or null.
 const _twHandleCache = new Map();
-async function coinTwitter(coinId) {
-  if (!coinId) return null;
-  if (_twHandleCache.has(coinId)) return _twHandleCache.get(coinId);
+async function mintTwitter(mint) {
+  if (!mint) return null;
+  if (_twHandleCache.has(mint)) return _twHandleCache.get(mint);
   let h = null;
   try {
-    const c = await lpScanner.cgPro(`/coins/${coinId}?localization=false&tickers=false&market_data=false&community_data=false&developer_data=false&sparkline=false`);
-    const t = c && c.links && c.links.twitter_screen_name;
+    const j = await lpScanner.cgFetch(`/networks/solana/tokens/${mint}/info`);
+    const t = j && j.data && j.data.attributes && j.data.attributes.twitter_handle;
     if (t && /^[A-Za-z0-9_]{1,15}$/.test(t)) h = t; // valid X handle shape only
   } catch (_) {}
-  _twHandleCache.set(coinId, h);
+  _twHandleCache.set(mint, h);
   return h;
 }
 async function gatherAlphaData() {
   const d = { majors: [], trending: [], gainers: [], losers: [], hotPools: [], newPools: [], lpPicks: [] };
   try {
-    const p = await lpScanner.cgPro("/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd&include_24hr_change=true");
-    d.majors = [["BTC", "bitcoin"], ["ETH", "ethereum"], ["SOL", "solana"]]
-      .map(([sym, id]) => ({ sym, price: p[id] && p[id].usd, chg: p[id] && p[id].usd_24h_change })).filter((m) => m.price != null);
+    // Majors via Jupiter Price v3 (free/keyless, includes priceChange24h) — BTC through cbBTC
+    // (Coinbase-wrapped, tracks spot 1:1), ETH through wormhole WETH. No CoinGecko.
+    const MAJOR_MINTS = { BTC: "cbbtcf3aa214zXHbiAZQwf4122FBYbraNdFqgw4iMij", ETH: "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs", SOL: "So11111111111111111111111111111111111111112" };
+    const p = await jupPriceV3(Object.values(MAJOR_MINTS));
+    d.majors = Object.entries(MAJOR_MINTS)
+      .map(([sym, m]) => ({ sym, price: p[m] && p[m].usdPrice, chg: p[m] && p[m].priceChange24h })).filter((m) => m.price != null);
   } catch (_) {}
   try {
-    const t = await lpScanner.cgPro("/search/trending");
-    d.trending = (t.coins || []).slice(0, 7).map((c) => ({ id: c.item.id, sym: (c.item.symbol || "").toUpperCase(), name: c.item.name, rank: c.item.market_cap_rank, chg: c.item.data && c.item.data.price_change_percentage_24h && c.item.data.price_change_percentage_24h.usd }));
-    // Pull X handles for the top trending coins so the X post can TAG them (engagement bait —
-    // the projects often see the mention and engage). One light /coins/{id} call each, cached.
-    await Promise.all(d.trending.slice(0, 5).map(async (c) => { c.handle = await coinTwitter(c.id); }));
-  } catch (_) {}
-  try {
-    // top_gainers_losers is a PRO-only endpoint (sub cancelled 2026-07-03) — compute the same
-    // thing from the free /coins/markets read: top-250 by mcap sorted by 24h change. Arguably
-    // better: their endpoint surfaced micro-cap dust; this stays in coins readers recognize.
-    const mk = await lpScanner.cgPro("/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=1&price_change_percentage=24h");
-    const rows = (Array.isArray(mk) ? mk : [])
-      .map((c) => ({ sym: (c.symbol || "").toUpperCase(), chg: c.price_change_percentage_24h, price: c.current_price }))
-      .filter((c) => c.chg != null && c.sym);
-    rows.sort((a, b) => b.chg - a.chg);
-    d.gainers = rows.slice(0, 5);
-    d.losers = rows.slice(-5).reverse();
+    // Trending + movers via GeckoTerminal Solana trending pools (free) — replaces CoinGecko
+    // /search/trending and the Pro-only top_gainers_losers (CG-API divorce 2026-07-03).
+    // MORE relevant to our audience anyway: Solana pools, not global CEX coins.
+    const t = await lpScanner.cgFetch("/networks/solana/trending_pools");
+    const seen = new Set();
+    const pools = (t.data || []).map((p) => { const a = p.attributes || {}; return {
+      sym: String(a.name || "").split("/")[0].trim(),
+      chg: Number((a.price_change_percentage || {}).h24),
+      vol: Number((a.volume_usd || {}).h24) || 0,
+      mint: (String((((p.relationships || {}).base_token || {}).data || {}).id || "").match(/^solana_(.+)$/) || [])[1] || null,
+    }; }).filter((p) => p.sym && !seen.has(p.sym) && seen.add(p.sym));
+    d.trending = pools.slice(0, 7).map((p) => ({ sym: p.sym, chg: Number.isFinite(p.chg) ? p.chg : null, mint: p.mint }));
+    // Pull X handles for the top trending tokens so the X post can TAG them (engagement bait —
+    // the projects often see the mention and engage). One light GT info call each, cached.
+    await Promise.all(d.trending.slice(0, 5).map(async (c) => { c.handle = await mintTwitter(c.mint); }));
+    const movers = pools.filter((p) => p.vol > 25000 && Number.isFinite(p.chg)).sort((a, b) => b.chg - a.chg);
+    d.gainers = movers.filter((p) => p.chg > 0).slice(0, 5).map((p) => ({ sym: p.sym, chg: p.chg }));
+    d.losers = movers.filter((p) => p.chg < 0).slice(-5).reverse().map((p) => ({ sym: p.sym, chg: p.chg }));
   } catch (_) {}
   try {
     const tp = await lpScanner.topPools({ kind: "trending" });
@@ -3221,9 +3214,9 @@ function alphaDataSummary(d) {
   const pct = (n) => n == null ? "?" : (n >= 0 ? "+" : "") + Number(n).toFixed(1) + "%";
   const lines = [];
   if (d.majors.length) lines.push("MAJORS: " + d.majors.map((m) => `${m.sym} $${Number(m.price).toLocaleString()} (${pct(m.chg)})`).join(", "));
-  if (d.trending.length) lines.push("TRENDING (CoinGecko): " + d.trending.map((t) => `${t.sym}${t.chg != null ? " " + pct(t.chg) : ""}`).join(", "));
-  if (d.gainers.length) lines.push("TOP 24h GAINERS: " + d.gainers.map((g) => `${g.sym} ${pct(g.chg)}`).join(", "));
-  if (d.losers.length) lines.push("TOP 24h LOSERS: " + d.losers.map((g) => `${g.sym} ${pct(g.chg)}`).join(", "));
+  if (d.trending.length) lines.push("TRENDING ON SOLANA (GeckoTerminal): " + d.trending.map((t) => `${t.sym}${t.chg != null ? " " + pct(t.chg) : ""}`).join(", "));
+  if (d.gainers.length) lines.push("TOP SOLANA MOVERS ↑ (24h): " + d.gainers.map((g) => `${g.sym} ${pct(g.chg)}`).join(", "));
+  if (d.losers.length) lines.push("TOP SOLANA MOVERS ↓ (24h): " + d.losers.map((g) => `${g.sym} ${pct(g.chg)}`).join(", "));
   if (d.hotPools.length) lines.push("HOTTEST SOLANA POOLS (by volume): " + d.hotPools.map((p) => `${p.pair} on ${p.dex} ($${Math.round(p.vol / 1000)}K 24h vol${p.yieldPct != null ? ", " + p.yieldPct + "%/day fee yield" : ""}${p.risk === "high" ? ", HIGH IL risk" : ""})`).join("; "));
   if (d.newPools.length) lines.push("BRAND-NEW SOLANA POOLS: " + d.newPools.map((p) => `${tgEsc(p.name)} ($${Math.round(p.vol / 1000)}K vol, $${Math.round(p.liq / 1000)}K liq, ${p.ageH}h old)`).join("; "));
   if (d.lpPicks.length) lines.push("BLUE-CHIP LP YIELD (our scanner, fees/TVL): " + d.lpPicks.map((p) => `${p.pair} on ${p.dex} ${p.yieldPct}%/day`).join(", "));
@@ -3233,7 +3226,7 @@ async function cluckBrief(d) {
   const summary = alphaDataSummary(d);
   const KEY = process.env.ANTHROPIC_API_KEY;
   if (!KEY) return `🐔 CLUCK'S DAILY ALPHA\n\n${summary}\n\nNot financial advice. Do your own research.`;
-  const system = `You are Cluck Norris — the toughest crypto professor on Solana — writing your DAILY ALPHA brief for the flock. Use ONLY the real market data below (it's live from CoinGecko + on-chain DEX data + our own LP scanner).
+  const system = `You are Cluck Norris — the toughest crypto professor on Solana — writing your DAILY ALPHA brief for the flock. Use ONLY the real market data below (it's live on-chain DEX data from GeckoTerminal + Jupiter + our own LP scanner).
 STYLE: punchy, confident, funny, a chicken pun or two, but genuinely informative. Teach while you report. 5 short sections with emoji headers, in this order:
 🌡️ THE MOOD — read the majors (BTC/ETH/SOL) in one or two lines.
 🔥 WHAT'S HOT — trending coins + the standout 24h gainers; note if a gainer looks like a pump.
@@ -8495,7 +8488,7 @@ app.get("/api/wallet-xray", async (req, res) => {
     // 0. SOL price + current SOL balance (parallel, both best-effort).
     let solUsd = 0, solBalance = 0;
     await Promise.all([
-      (async () => { try { const p = await lpScanner.cgPro("/simple/price?ids=solana&vs_currencies=usd"); solUsd = (p && p.solana && p.solana.usd) || 0; } catch {} })(),
+      (async () => { try { solUsd = (await getSolUsd()) || 0; } catch {} })(),
       (async () => { try { const b = await rpc("getBalance", [wallet]); solBalance = (b?.result?.value || 0) / 1e9; } catch {} })(),
     ]);
 
@@ -9742,28 +9735,33 @@ const MIN_SELL_USD = parseFloat(process.env.MIN_SELL_USD || "50");
 const MIN_REINVEST_USD = parseFloat(process.env.MIN_REINVEST_USD || "1");
 
 // Cached SOL/USD price for converting non-stable quote amounts into USD.
-// Refreshed every 5 minutes from CoinGecko (with DexScreener fallback). We start
+// Refreshed every 5 minutes from Jupiter Price v3 (with DexScreener fallback) — no
+// CoinGecko since the CG-API divorce (owner's call 2026-07-03). We start
 // with NO price rather than a hardcoded guess — a fabricated rate would post a
 // silently-wrong dollar value on a SOL-quoted buy. Until a real price is fetched
 // (or both sources are down), getSolUsd returns null and the SOL-quoted alert is
 // skipped rather than mis-valued; stable-quoted (USDC/USDT) trades are unaffected.
 // An operator can seed an approximate rate via SOL_USD_FALLBACK if they'd rather
 // post an estimate than skip during a total price-source outage.
+// Jupiter Price API v3 (lite-api host: free, keyless, Solana-native) — usdPrice +
+// priceChange24h per mint. Primary price source for the bot and the alpha majors.
+async function jupPriceV3(mints) {
+  const res = await fetch(`https://lite-api.jup.ag/price/v3?ids=${mints.join(",")}`, { signal: AbortSignal.timeout(8000) });
+  if (!res.ok) throw new Error(`Jupiter price ${res.status}`);
+  return res.json();
+}
 let cachedSolUsd = parseFloat(process.env.SOL_USD_FALLBACK) || null;
 let cachedSolUsdAt = 0;
 async function getSolUsd() {
   const now = Date.now();
   if (now - cachedSolUsdAt < 5 * 60 * 1000 && cachedSolUsdAt > 0) return cachedSolUsd;
   const sane = (p) => Number.isFinite(p) && p >= 5 && p <= 5000; // SOL realistic range
-  // Try CoinGecko first (free, reliable, no key needed). Fall back to DexScreener
-  // SOL/USDC pair if CoinGecko hiccups so the bot stays accurate.
   try {
-    const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd");
-    const data = await res.json();
-    const price = parseFloat(data?.solana?.usd);
+    const data = await jupPriceV3([WSOL_MINT]);
+    const price = parseFloat(data?.[WSOL_MINT]?.usdPrice);
     if (sane(price)) { cachedSolUsd = price; cachedSolUsdAt = now; return cachedSolUsd; }
   } catch (e) {
-    console.warn("[TELEGRAM] CoinGecko SOL fetch failed:", e.message);
+    console.warn("[TELEGRAM] Jupiter SOL price fetch failed:", e.message);
   }
   // Fallback — most-liquid SANE SOL pair (skips any mispriced pool)
   try {
@@ -9779,8 +9777,8 @@ async function getSolUsd() {
 }
 
 // Cached BTC/USD price for valuing cbBTC-quoted trades on the new CLKN/cbBTC pool.
-// Same pattern as getSolUsd: CoinGecko first, DexScreener cbBTC fallback, null until
-// a real price loads (so we skip rather than post a fabricated USD value).
+// Same pattern as getSolUsd: Jupiter Price v3 (cbBTC mint) first, DexScreener cbBTC
+// fallback, null until a real price loads (so we skip rather than post a fabricated value).
 let cachedBtcUsd = parseFloat(process.env.BTC_USD_FALLBACK) || null;
 let cachedBtcUsdAt = 0;
 async function getBtcUsd() {
@@ -9788,11 +9786,10 @@ async function getBtcUsd() {
   if (now - cachedBtcUsdAt < 5 * 60 * 1000 && cachedBtcUsdAt > 0) return cachedBtcUsd;
   const sane = (p) => Number.isFinite(p) && p >= 1000 && p <= 1000000; // BTC realistic range
   try {
-    const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd");
-    const data = await res.json();
-    const price = parseFloat(data?.bitcoin?.usd);
+    const data = await jupPriceV3([CBBTC_MINT]);
+    const price = parseFloat(data?.[CBBTC_MINT]?.usdPrice);
     if (sane(price)) { cachedBtcUsd = price; cachedBtcUsdAt = now; return cachedBtcUsd; }
-  } catch (e) { console.warn("[TELEGRAM] CoinGecko BTC fetch failed:", e.message); }
+  } catch (e) { console.warn("[TELEGRAM] Jupiter cbBTC price fetch failed:", e.message); }
   try {
     const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${CBBTC_MINT}`);
     const data = await res.json();
@@ -9804,8 +9801,8 @@ async function getBtcUsd() {
 }
 
 // Cached JUP/USD price for valuing JUP-quoted trades on the new CLKN/JUP pool.
-// Same pattern as getSolUsd: CoinGecko first, DexScreener JUP fallback, null until
-// a real price loads (so we skip rather than post a fabricated USD value).
+// Same pattern as getSolUsd: Jupiter Price v3 first (JUP priced on its own venue —
+// fitting), DexScreener JUP fallback, null until a real price loads.
 let cachedJupUsd = parseFloat(process.env.JUP_USD_FALLBACK) || null;
 let cachedJupUsdAt = 0;
 async function getJupUsd() {
@@ -9813,11 +9810,10 @@ async function getJupUsd() {
   if (now - cachedJupUsdAt < 5 * 60 * 1000 && cachedJupUsdAt > 0) return cachedJupUsd;
   const sane = (p) => Number.isFinite(p) && p >= 0.01 && p <= 10; // JUP realistic range — rejects mispriced pools
   try {
-    const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=jupiter-exchange-solana&vs_currencies=usd");
-    const data = await res.json();
-    const price = parseFloat(data?.["jupiter-exchange-solana"]?.usd);
+    const data = await jupPriceV3([JUP_MINT]);
+    const price = parseFloat(data?.[JUP_MINT]?.usdPrice);
     if (sane(price)) { cachedJupUsd = price; cachedJupUsdAt = now; return cachedJupUsd; }
-  } catch (e) { console.warn("[TELEGRAM] CoinGecko JUP fetch failed:", e.message); }
+  } catch (e) { console.warn("[TELEGRAM] Jupiter JUP price fetch failed:", e.message); }
   try {
     const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${JUP_MINT}`);
     const data = await res.json();
