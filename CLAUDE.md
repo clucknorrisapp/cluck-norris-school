@@ -115,10 +115,17 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 > previously-listed predecessor token + sent multiple emails) — so "apply as migration instead"
 > is NOT an unexplored fix; don't re-suggest it. CONSEQUENCE (owner's call, same day): the
 > $129/mo CoinGecko Analyst API sub is being CANCELLED ("I will not support them if they don't
-> support us") — code is now free-tier-proof: `cgPro` falls back to the free api.coingecko.com
-> host (dead/absent key = auto-fallback), the Pro-only top_gainers_losers endpoint was replaced
-> with a free /coins/markets computation, and the onchain side already fell back to free
-> GeckoTerminal. `COINGECKO_API_KEY` in env is now optional/legacy. ACTIONABLE listing fix
+> support us") — **sub runs until JULY 13; everything must be off the Analyst API by then.
+> STATUS: DONE &amp; VERIFIED IN PROD 2026-07-04** — full divorce shipped: bot price getters
+> (SOL/cbBTC/JUP) = Jupiter Price v3 (lite-api, keyless) with DexScreener fallback; Daily Alpha
+> majors = Jupiter Price v3 (BTC via cbBTC mint, ETH via wormhole WETH); trending +
+> gainers/losers = GeckoTerminal Solana trending_pools; X-handle tagging = GT token-info
+> twitter_handle (mintTwitter, was coinTwitter); /api/token-overview = onchain-only (same
+> response shape, aggregated fields null). Verified live: token-overview source:"onchain",
+> alpha-test majors/trending on new sources. Remaining cgPro refs are gated DEBUG probes only;
+> `cgPro` itself falls back to the free api.coingecko.com host if ever invoked, so a dead key
+> can't break anything. `COINGECKO_API_KEY` on Railway is now UNUSED by runtime paths — safe
+> (and recommended) to delete before the 13th. ACTIONABLE listing fix
 > found the same day: the GeckoTerminal token profile's WEBSITE field points to the Bags
 > launchpad page (bags.fm/dw6df2…) not clucknorris.app, and the description says
 > "clucknorris.vip" (half-dead domain) with stale stats (12 lessons/72 questions) — a reviewer
