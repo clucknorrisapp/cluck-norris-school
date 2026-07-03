@@ -1,6 +1,6 @@
 // Shared live market header for the token tools (Snapshot / Holders / Trace). Fetches
-// /api/token-overview (CoinGecko aggregated for listed coins + GeckoTerminal onchain for
-// everything) and renders a compact, theme-matched strip. Self-contained: inline styles,
+// /api/token-overview (GeckoTerminal on-chain data; the CoinGecko aggregated side was
+// removed in the 2026-07-03 CG-API divorce) and renders a compact, theme-matched strip. Self-contained: inline styles,
 // no dependency on the host page's CSS. Usage: renderMarketHeader(mint, "containerId").
 (function () {
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
@@ -29,9 +29,7 @@
       var chg = d.change24hPct != null ? '<span style="color:' + (up ? '#6EE7B7' : '#FCA5A5') + ';font-size:12px;font-weight:700;"> ' + (up ? '▲' : '▼') + ' ' + Math.abs(d.change24hPct).toFixed(1) + '%</span>' : '';
       var img = d.image ? '<img src="' + esc(d.image) + '" onerror="this.style.display=\'none\'" style="width:30px;height:30px;border-radius:50%;object-fit:cover;flex-shrink:0;"/>' : '';
       var rankBadge = d.marketCapRank ? '<span style="background:rgba(217,119,6,0.15);border:1px solid rgba(217,119,6,0.4);color:#FCD34D;font-family:\'Oswald\',sans-serif;font-size:10px;font-weight:700;padding:2px 7px;border-radius:12px;letter-spacing:0.5px;">RANK #' + d.marketCapRank + '</span>' : '';
-      var listedTag = d.listed
-        ? '<span style="font-family:\'Courier New\',monospace;font-size:8.5px;color:#6EE7B7;">● CoinGecko + on-chain</span>'
-        : '<span style="font-family:\'Courier New\',monospace;font-size:8.5px;color:#6B7280;">● on-chain (not CoinGecko-listed)</span>';
+      var listedTag = '<span style="font-family:\'Courier New\',monospace;font-size:8.5px;color:#6B7280;">● live on-chain data</span>';
 
       var pills = '';
       pills += pill('PRICE', fmtPrice(d.priceUsd) + chg);

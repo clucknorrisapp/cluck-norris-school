@@ -5,7 +5,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>🐔 Cluck's Daily Alpha — Solana Market Brief</title>
-<meta name="description" content="Cluck Norris's daily Solana market brief — majors, trending coins, fresh pools, and real LP fee yields. Powered by live on-chain + CoinGecko data. Not financial advice."/>
+<meta name="description" content="Cluck Norris's daily Solana market brief — majors, trending coins, fresh pools, and real LP fee yields. Powered by live on-chain + GeckoTerminal data. Not financial advice."/>
 <meta property="og:title" content="🐔 Cluck's Daily Alpha — Solana Market Brief"/>
 <meta property="og:description" content="The flock's daily read on Solana: the mood, what's hot, fresh pools, and where the real LP fees are."/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -98,7 +98,7 @@ body{background:transparent;font-family:var(--body);}
         html+=card('🌡️ THE MAJORS','<div class="ticker">'+data.majors.map(function(m){return '<div class="tk"><div class="s">'+esc(m.sym)+'</div><div class="p">$'+Number(m.price).toLocaleString()+' '+pct(m.chg)+'</div></div>';}).join('')+'</div>');
       }
       if((data.trending||[]).length){
-        html+=card('🔥 TRENDING (CoinGecko)','<div class="chips">'+data.trending.map(function(t){return '<span class="chip">'+esc(t.sym)+(t.chg!=null?' '+pct(t.chg):'')+'</span>';}).join('')+'</div>');
+        html+=card('🔥 TRENDING ON SOLANA (GeckoTerminal)','<div class="chips">'+data.trending.map(function(t){return '<span class="chip">'+esc(t.sym)+(t.chg!=null?' '+pct(t.chg):'')+'</span>';}).join('')+'</div>');
       }
       if((data.gainers||[]).length||(data.losers||[]).length){
         var col=function(t,arr,cls){return '<div><div class="sec-title" style="font-size:11px;">'+t+'</div><div class="chips" style="flex-direction:column;align-items:flex-start;">'+arr.map(function(g){return '<span class="chip"><b>'+esc(g.sym)+'</b> '+pct(g.chg)+'</span>';}).join('')+'</div></div>';};
@@ -117,7 +117,7 @@ body{background:transparent;font-family:var(--body);}
         html+=card('🌶️ FRESH OFF THE GRILL <span style="font-weight:400;color:#FCA5A5;font-size:10px;">(new pools — high risk)</span>','<table><thead><tr><th>Pool</th><th>24h Vol</th><th>Liq</th><th>Age</th></tr></thead><tbody>'+np+'</tbody></table>');
       }
       document.getElementById('cards').innerHTML=html;
-      document.getElementById('powered').textContent='● powered by CoinGecko + Helius + on-chain DEX data · synthesized by Cluck AI';
+      document.getElementById('powered').textContent='● powered by Jupiter + GeckoTerminal + Helius + on-chain DEX data · synthesized by Cluck AI';
     }catch(e){ document.getElementById('brief').textContent='🐔 Network hiccup — refresh in a moment.'; }
   })();
 </script>

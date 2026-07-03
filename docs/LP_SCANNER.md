@@ -58,7 +58,7 @@ open." Every output carries an explicit not-advice + IL-risk disclaimer.
 - **`/api/lp-scan?a=&b=&amount=`** — pair → every pool across DEXs (GeckoTerminal), enriched
   with on-chain fee tier → 24h fees, fee/TVL yield, 7d-avg yield + volTrend (spiking/cooling/
   steady), calibrated per-deposit `estDailyUsd`. `scanPair()`. Fee reads run SEQUENTIAL (RPC
-  saturation fix) + 60s cache; OHLCV history is parallel (CoinGecko Pro handles the burst).
+  saturation fix) + 60s cache; OHLCV history is concurrency-capped at 4 (free GeckoTerminal ~30 req/min; cgFetch retries once on 429).
 - **`/api/lp-token-search?q=`** — typeahead over the Jupiter verified list (`searchTokens`),
   endpoint `lite-api.jup.ag/tokens/v2/tag?query=verified` (fields: mint=`id`, logo=`icon`).
 - **`/api/lp-pool?pool=&amount=&width=`** — POOL DEEP-DIVE + RANGE/EARNINGS SIMULATOR
@@ -85,5 +85,5 @@ they show "—" honestly, never a guessed yield. Add new readers in `feePctForPo
 - Informational only; never financial advice; always show the IL-risk + not-advice disclaimer.
 - Honest numbers: estimates calibrated to live results; label every estimate as an estimate.
   Time-in-range / rebalances-per-day are ROUGH (single-day band-hold proxy) — labeled as such.
-- ST is NOT a dependency here — GeckoTerminal (→ CoinGecko Pro when COINGECKO_API_KEY set) +
+- ST is NOT a dependency here — GeckoTerminal (free; the CoinGecko Pro upgrade slot is unused since the 2026-07-03 CG-API divorce) +
   on-chain + Helius only.

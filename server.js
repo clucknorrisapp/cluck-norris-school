@@ -3047,7 +3047,7 @@ app.get("/api/token-overview", async (req, res) => {
     // same shape (aggregated fields null) so the market-header client needs no change.
     const cg = null;
     if (!onchain && !cg) return res.status(200).json({ success: false, error: "no market data for this token yet" });
-    const listed = !!cg;
+    const listed = false; // aggregated CG side removed — every token is served on-chain-only now
     return res.status(200).json({
       success: true, mint, listed,
       symbol: (cg && cg.symbol) || onchain?.symbol || null,
@@ -6469,7 +6469,7 @@ app.post("/api/credential/verify-ownership", (req, res) => {
 // delegate scanner + the autopsy's honeypot logic.
 // Batch price + identity for many Solana mints (chunks of 30) via the GeckoTerminal onchain
 // multi-token endpoint → { mint: {symbol,name,priceUsd,logo} }. Powers wallet portfolio USD
-// values (wallet-checkup) and per-holder USD (holders/snapshot). Routes through cgFetch (Pro).
+// values (wallet-checkup) and per-holder USD (holders/snapshot). Routes through cgFetch (free GeckoTerminal).
 async function priceTokensBatch(mints) {
   const out = {};
   const uniq = [...new Set((mints || []).filter(Boolean))];
@@ -7396,7 +7396,7 @@ app.get("/api/supply", async (req, res) => {
 // fallback to recover liquidity / price / FDV. Returns null on any failure.
 async function fetchGeckoTerminalFallback(mint) {
   try {
-    // Routes through the CoinGecko Pro onchain API when COINGECKO_API_KEY is set (fuller multi-
+    // Routes through free GeckoTerminal via cgFetch (the CG Pro upgrade slot is unused since the 2026-07-03 divorce; fuller multi-
     // DEX coverage, accurate aggregated volume, no rate-limit throttling), else free GeckoTerminal.
     const j = await lpScanner.cgFetch(`/networks/solana/tokens/${mint}/pools?include=base_token`);
     const pools = Array.isArray(j?.data) ? j.data : [];
