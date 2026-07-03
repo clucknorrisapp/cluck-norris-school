@@ -259,10 +259,12 @@ Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.
   it in kv `lockCelebrationPending` (delta/total/pct/newLocks/lockCount + `tgText`/`xText` +
   `announced:false`), readable via gated `/api/lock-celebration` (`?clear=1` when handled,
   `?probe=` for observability). A **Claude session** (60s watcher when live + the hourly cron)
-  picks it up, generates the image, and posts ONE combined post per channel:
-  **X** = `/api/x-announce` `post=1` + `text={pending.xText}` + `image={rawUrl}` (standalone, no
-  replyTo); **Telegram** = `/api/tg-test` `photo={rawUrl}` + `text={pending.tgText}` (silent).
-  Then `?clear=1`. **FALLBACK:** if no session picks it up within `LOCK_ANNOUNCE_FALLBACK_MS`
+  picks it up, generates the image, and posts ONE combined post per channel — **X FIRST, then
+  Telegram with the X link (owner ask 2026-07-03)**:
+  **1. X** = `/api/x-announce` `post=1` + `text={pending.xText}` + `image={rawUrl}` (standalone,
+  no replyTo) → capture the returned post id; **2. Telegram** = `/api/tg-test` `photo={rawUrl}` +
+  `text={pending.tgText}` + a trailing "🐦 On X — like &amp; repost:
+  https://x.com/FireChicken007/status/{id}" line (silent). Then `?clear=1`. **FALLBACK:** if no session picks it up within `LOCK_ANNOUNCE_FALLBACK_MS`
   (6h, server.js), the tick posts the stored text-only copy itself (a lock never goes silent)
   and marks `announced:true` + records `xPostId`/`tgMessageIds`; a session that arrives LATER
   then degrades to the old two-step: X image reply under `xPostId` with a SHORT punchline only
