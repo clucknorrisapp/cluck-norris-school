@@ -536,7 +536,11 @@ async function lockWatchTick() {
     `<b>+${fmtTokensShort(delta)} CLKN</b> just locked.\n` +
     `Now <b>${fmtTokensShort(total)} CLKN</b> locked — <b>${pct}</b> of supply.\n\n` +
     `🔒 Removed from circulation — long-term commitment. Verify on Jupiter Lock:\nhttps://lock.jup.ag/token/${CLKN_MINT}`;
-  await tgSend(process.env.TELEGRAM_CHAT_ID, msg);
+  // Keep the message_id: when the celebration image posts to Telegram it REPLACES this
+  // text announcement (tg-test &replaceMsg= deletes it) so the community sees ONE
+  // announcement, not two (owner ask 2026-07-03). If no session picks up the flag,
+  // the text stays — it remains the reliable baseline.
+  const tgMsgId = await tgSend(process.env.TELEGRAM_CHAT_ID, msg);
   let xr = null;
   try { xr = await postLockToX(built.data, delta); } // auto-post new locks to X (scoped carve-out)
   catch (e) { console.warn("[LOCK→X] failed:", e.message); }
@@ -554,7 +558,11 @@ async function lockWatchTick() {
     delta: mergedDelta, total: Math.round(total), pct,
     deltaShort: fmtTokensShort(mergedDelta), totalShort: fmtTokensShort(total),
     newLocks: mergedNewLocks, // bags in the celebration image: one per new lock account this window
-    lockCount: built.data.lockCount, xPostId: (xr && xr.id) || null, at: Date.now(),
+    lockCount: built.data.lockCount, xPostId: (xr && xr.id) || null,
+    // ALL un-celebrated text announcements (merged pendings can hold several) — the image's
+    // tg-test &replaceMsg= deletes every one so the photo is the single visible announcement.
+    tgMessageIds: [...(prevFresh && Array.isArray(prevPending.tgMessageIds) ? prevPending.tgMessageIds : []), ...(tgMsgId ? [tgMsgId] : [])],
+    at: Date.now(),
   });
   console.log(`[LOCK-WATCH] new lock +${Math.round(delta)} → total ${Math.round(total)} (${pct})`);
 }
@@ -5096,6 +5104,24 @@ app.get("/api/tg-test", async (req, res) => {
       body: JSON.stringify(body),
     });
     const data = await r.json().catch(() => ({}));
+    // &replaceMsg=ID[,ID…] — after a SUCCESSFUL send, delete those earlier bot messages in the
+    // same chat (used by the lock-celebration image to replace the text announcement(s) so the
+    // community sees ONE announcement, not two). Best-effort: a delete failure (already deleted,
+    // >48h old) never fails the send.
+    let replaced = null;
+    if (req.query.replaceMsg && data?.ok) {
+      replaced = [];
+      for (const idStr of String(req.query.replaceMsg).split(",").map(s => s.trim()).filter(s => /^\d+$/.test(s)).slice(0, 10)) {
+        try {
+          const dr = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/deleteMessage`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chat_id: chatId, message_id: Number(idStr) }),
+          });
+          const dd = await dr.json().catch(() => ({}));
+          replaced.push({ id: Number(idStr), deleted: !!(dd && dd.ok) });
+        } catch (_) { replaced.push({ id: Number(idStr), deleted: false }); }
+      }
+    }
     // &pin=1 — pin the message we just sent (silently, matching the send's notification mode).
     let pinned = null;
     if (req.query.pin === "1" && data?.result?.message_id) {
@@ -5108,7 +5134,7 @@ app.get("/api/tg-test", async (req, res) => {
         pinned = !!(pd && pd.ok);
       } catch (_) { pinned = false; }
     }
-    return res.status(200).json({ success: !!(data && data.ok), messageId: data?.result?.message_id || null, pinned, telegram: data });
+    return res.status(200).json({ success: !!(data && data.ok), messageId: data?.result?.message_id || null, pinned, replaced, telegram: data });
   } catch (e) {
     return res.status(500).json({ success: false, error: publicErrMsg(e) });
   }

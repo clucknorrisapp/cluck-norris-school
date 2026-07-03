@@ -269,8 +269,11 @@ Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.
   escrows today; until built, the owner TELLS the session when he locks via Streamflow and the
   celebration is run manually** — via the **Higgsfield MCP (owner's Plus plan —
   owner explicitly does NOT want a separate paid Higgsfield Cloud API key)**, posts it via
-  `/api/x-announce` (image + replyTo the text post) and `/api/tg-test` (`photo=`, silent),
-  then clears the flag. ⚠️ **CronCreate jobs are session-only and expire in ≤7 days — every
+  `/api/x-announce` (image + replyTo the text post) and `/api/tg-test` (`photo=`, silent,
+  **plus `replaceMsg=` = pending.tgMessageIds comma-joined, so the photo DELETES the text
+  announcement(s) — the community sees ONE Telegram announcement, not two (owner ask
+  2026-07-03); the photo caption must therefore be self-sufficient: numbers + the
+  lock.jup.ag/token/CLKN-mint verify link**), then clears the flag. ⚠️ **CronCreate jobs are session-only and expire in ≤7 days — every
   new long-lived session should RE-ARM the hourly celebration cron** (poll the endpoint →
   if pending, generate → post → clear; never post when pending is null). If no session is
   alive when a lock fires, the text posts still go out and the flag waits (48h staleness cutoff).
