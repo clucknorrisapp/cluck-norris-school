@@ -2974,6 +2974,7 @@ async function getBagsNearGrad() {
 // every Solana DEX (GeckoTerminal), ranked by turnover. Public read — it's a tool.
 // Informational only, NOT financial advice. No Solana Tracker dependency.
 app.get("/api/lp-scan", async (req, res) => {
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" }); // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
   const A = req.query.a || req.query.tokenA, B = req.query.b || req.query.tokenB;
@@ -2991,6 +2992,7 @@ app.get("/api/lp-scan", async (req, res) => {
 
 // LP Scanner token search (autocomplete) — ?q=. Public read.
 app.get("/api/lp-token-search", async (req, res) => {
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" }); // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "public, max-age=300");
   try { return res.status(200).json({ success: true, tokens: await lpScanner.searchTokens(String(req.query.q || "")) }); }
@@ -3013,6 +3015,7 @@ app.get("/api/cg-agg-test", async (req, res) => {
 // LP Scanner TOP POOLS — busiest Solana pools across all DEXs, refreshed hourly (warmed by
 // a background timer below; this returns the cached set, computing it on the first cold call).
 app.get("/api/lp-top", async (req, res) => {
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" }); // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "public, max-age=600");
   try { return res.status(200).json({ success: true, ...(await lpScanner.topPools({ kind: req.query.kind, force: req.query.refresh === "1" })) }); }
@@ -3028,8 +3031,10 @@ function warmTopPools() {
       .catch(e => console.warn(`[lp-top] warm ${kind} failed:`, e.message));
   }
 }
-setTimeout(warmTopPools, 12000);
-setInterval(warmTopPools, 60 * 60 * 1000);
+// Warmer timers REMOVED (2026-07-04): the scanner is operator-only now — no reason to poll
+// GeckoTerminal hourly for an idle tool. Internal callers compute on demand (hourly TTL cache).
+// warmTopPools stays defined for a manual warm if ever needed.
+void warmTopPools;
 
 // Token market overview — a compact, tool-agnostic market snapshot for any mint. Fuses the
 // AGGREGATED CoinGecko data (authoritative rank/ATH/24h-change/mcap) for LISTED coins with the
@@ -3072,6 +3077,7 @@ app.get("/api/token-overview", async (req, res) => {
 // LP Scanner single-token mode — ?token=<symbol|mint>, optional &amount=<usd>. Returns EVERY
 // pair/pool this token trades in across all Solana DEXs with volume + real fee yield. Public.
 app.get("/api/lp-token", async (req, res) => {
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" }); // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
   const T = req.query.token || req.query.t;
@@ -3085,6 +3091,7 @@ app.get("/api/lp-token", async (req, res) => {
 // &amount=<usd>&width=<halfWidthPct>. Models the concentrated-liquidity tradeoff against
 // the pool's real 7d volatility. Public read. Informational only, NOT financial advice.
 app.get("/api/lp-pool", async (req, res) => {
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" }); // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
   const pool = req.query.pool || req.query.address;
@@ -3098,6 +3105,7 @@ app.get("/api/lp-pool", async (req, res) => {
 // Ask Cluck about pools — pool-aware AI. Scans the pair LIVE, then has Cluck analyze the
 // REAL numbers (grounded, not generic). Informational only; turnover≠yield; IL flagged.
 app.post("/api/lp-ask", async (req, res) => {
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" }); // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
   res.setHeader("Access-Control-Allow-Origin", "*");
   const { question, a, b, amount } = req.body || {};
   if (!question || String(question).trim().length < 3) return res.status(400).json({ success: false, error: "Question too short" });
@@ -9021,6 +9029,7 @@ async function renderLpCard(scan) {
 }
 
 app.get("/api/lp-card", async (req, res) => {
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" }); // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "public, max-age=300");
   const A = req.query.a || req.query.tokenA, B = req.query.b || req.query.tokenB;

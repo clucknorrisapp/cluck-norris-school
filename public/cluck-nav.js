@@ -22,7 +22,7 @@
   var p = (location.pathname || "").replace(/\/+$/, "");
   // pages that belong to the Tools hub — get an "All Tools" back-link
   var TOOL_PAGES = ["/wallet-xray","/autopsy","/order-book","/trace","/snapshot","/holders",
-    "/token-vitals","/lp-scanner","/wallet-checkup","/security-coop","/hatchery","/airdrop",
+    "/token-vitals","/wallet-checkup","/security-coop","/hatchery","/airdrop",
     "/buyspecial","/rose","/liquidity","/liquidity-engine","/premium","/pool-monitor"];
   // Pages with their OWN header/nav — don't inject the floating bar there (the i18n
   // + read-aloud loaders above already ran, so the language switch & Listen button

@@ -235,6 +235,19 @@ body{background:transparent;font-family:var(--body);}
 </div>
 
 <script>
+  // Operator-only since 2026-07-04: every /api/lp-* endpoint is key-gated. The page reads
+  // ?key= once, remembers it locally, and appends it to every API call.
+  var LPKEY = new URLSearchParams(location.search).get('key') || localStorage.getItem('lpKey') || '';
+  if (new URLSearchParams(location.search).get('key')) localStorage.setItem('lpKey', LPKEY);
+  function withKey(u){ return u + (u.indexOf('?') >= 0 ? '&' : '?') + 'key=' + encodeURIComponent(LPKEY); }
+  if (!LPKEY) document.addEventListener('DOMContentLoaded', function(){
+    var b = document.createElement('div');
+    b.style.cssText = 'background:#7f1d1d;color:#fecaca;padding:10px 14px;font:12px monospace;text-align:center';
+    b.textContent = 'Operator tool — open with ?key=YOUR_PREMIUM_ACCESS_KEY (it is remembered on this device).';
+    document.body.prepend(b);
+  });
+</script>
+<script>
   var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
   var fmt = function(n){ n=Number(n)||0; return n>=1e6?("$"+(n/1e6).toFixed(2)+"M"):n>=1e3?("$"+(n/1e3).toFixed(1)+"K"):("$"+Math.round(n)); };
   // Signature color per DEX so the venue jumps out at a glance instead of grey text.
@@ -259,12 +272,12 @@ body{background:transparent;font-family:var(--body);}
     try{
       if(!b){
         // SINGLE-TOKEN MODE — every pair this token trades in, across all DEXs
-        var r=await fetch('/api/lp-token?token='+encodeURIComponent(a)+(amt?('&amount='+encodeURIComponent(amt)):''));
+        var r=await fetch(withKey('/api/lp-token?token='+encodeURIComponent(a)+(amt?('&amount='+encodeURIComponent(amt)):'')));
         var d=await r.json();
         if(!d.success){ showErr(d.error||'Scan failed'); return; }
         lastMode='token'; lastScan=d; renderTokenScan(d);
       } else {
-        var url='/api/lp-scan?a='+encodeURIComponent(a)+'&b='+encodeURIComponent(b)+(amt?('&amount='+encodeURIComponent(amt)):'');
+        var url=withKey('/api/lp-scan?a='+encodeURIComponent(a)+'&b='+encodeURIComponent(b)+(amt?('&amount='+encodeURIComponent(amt)):''));
         var r2=await fetch(url); var d2=await r2.json();
         if(!d2.success){ showErr(d2.error||'Scan failed'); return; }
         lastMode='pair'; lastScan=d2; renderScan(d2);
@@ -437,7 +450,7 @@ body{background:transparent;font-family:var(--body);}
   }
   async function loadTopPools(){
     try{
-      var r=await fetch('/api/lp-top?kind='+encodeURIComponent(topKind)); var d=await r.json();
+      var r=await fetch(withKey('/api/lp-top?kind='+encodeURIComponent(topKind))); var d=await r.json();
       var strip=document.getElementById('topStrip');
       if(!d.success || !(d.pools||[]).length){ strip.innerHTML='<span class="muted" style="padding:8px;">No pools right now — try the other tab.</span>'; return; }
       topLoaded[topKind]=1;
@@ -477,7 +490,7 @@ body{background:transparent;font-family:var(--body);}
     dd.scrollIntoView({behavior:'smooth', block:'start'});
     var amt=document.getElementById('amount').value.trim();
     try{
-      var url='/api/lp-pool?pool='+encodeURIComponent(pool)+(amt?('&amount='+encodeURIComponent(amt)):'')+(width?('&width='+encodeURIComponent(width)):'');
+      var url=withKey('/api/lp-pool?pool='+encodeURIComponent(pool)+(amt?('&amount='+encodeURIComponent(amt)):'')+(width?('&width='+encodeURIComponent(width)):''));
       var r=await fetch(url); var d=await r.json();
       if(!d.success){ dd.innerHTML='<button class="closex" onclick="closeDD()">✕</button><div class="sim-sub" style="color:#FCA5A5;">'+esc(d.error||'Could not load this pool.')+'</div>'; return; }
       renderDeepDive(d);
@@ -539,7 +552,7 @@ body{background:transparent;font-family:var(--body);}
   function shareCard(){
     if(!lastScan){ showErr('Scan a pair first.'); return; }
     var a=lastScan.mintA, b=lastScan.mintB, amt=lastScan.amountUsd||0;
-    var url=location.origin+'/api/lp-card?a='+encodeURIComponent(a)+'&b='+encodeURIComponent(b)+(amt?('&amount='+amt):'');
+    var url=withKey(location.origin+'/api/lp-card?a='+encodeURIComponent(a)+'&b='+encodeURIComponent(b)+(amt?('&amount='+amt):''));
     window.open(url,'_blank');
     var best=(lastScan.pools||[]).filter(function(p){return p.feeTier!=null;})[0];
     var yld=best?(best.feeYield7dPctDay!=null?best.feeYield7dPctDay:best.feeYieldPctDay):null;
@@ -557,7 +570,7 @@ body{background:transparent;font-family:var(--body);}
     btn.disabled=true; btn.innerHTML='<span class="spin"></span> CLUCK IS THINKING...';
     ans.classList.remove('show');
     try{
-      var r=await fetch('/api/lp-ask',{method:'POST',headers:{'Content-Type':'application/json'},
+      var r=await fetch('/api/lp-ask',{method:'POST',headers:{'Content-Type':'application/json','x-premium-key':LPKEY},
         body:JSON.stringify({question:q, a:lastScan.mintA, b:lastScan.mintB, amount:lastScan.amountUsd||0})});
       var d=await r.json();
       ans.textContent = d.success ? d.answer : ('🐔 '+(d.error||'Cluck is hoarse — try again.'));
@@ -583,7 +596,7 @@ body{background:transparent;font-family:var(--body);}
       if(q.length<1 || /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(q)){ drop.classList.remove('show'); return; } // pasted a mint? skip search
       t=setTimeout(async function(){
         try{
-          var r=await fetch('/api/lp-token-search?q='+encodeURIComponent(q)); var d=await r.json();
+          var r=await fetch(withKey('/api/lp-token-search?q='+encodeURIComponent(q))); var d=await r.json();
           var toks=d.tokens||[];
           if(!toks.length){ drop.classList.remove('show'); return; }
           drop.innerHTML=toks.map(function(tk){

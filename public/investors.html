@@ -469,7 +469,7 @@ body{background:transparent;font-family:var(--body);}
       <li><strong>AI:</strong> Anthropic Claude Haiku 4.5 — fast and cheap enough to embed for free at 10 questions/day per user</li>
       <li><strong>Solana data:</strong> Helius (DAS + enhanced txns) with automatic RPC failover (public node + optional backup keys on rate‑limit/outage), Solana Tracker (independent trade/holder/risk cross‑verification), DexScreener, Bubblemaps, Bags.fm API, Jupiter — all proxied server‑side so keys are never exposed</li>
       <li><strong>Persistence:</strong> a Railway volume backs durable state (consumed‑payment signatures, the Bags graduation tracker, post schedulers) so nothing resets on a redeploy</li>
-      <li><strong>Image generation:</strong> @napi-rs/canvas with bundled Anton typeface for the LP Scanner &amp; credential cards</li>
+      <li><strong>Image generation:</strong> @napi-rs/canvas with bundled Anton typeface for the credential &amp; share cards</li>
       <li><strong>Security:</strong> full hardening pass — per‑IP rate limiting on every API, RPC method allow‑listing, locked‑down admin/debug endpoints, replay‑proof on‑chain payment verification, output escaping (XSS) across all tool pages, plus HSTS / X‑Frame‑Options / X‑Content‑Type‑Options / Referrer‑Policy and vendored solana‑web3.js (same‑origin)</li>
       <li><strong>No custody:</strong> Server never sees a private key. Every signing flow runs in the user's wallet extension.</li>
     </ul>

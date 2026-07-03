@@ -200,6 +200,12 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 - `public/*.html` — standalone vanilla-HTML tool pages: autopsy, wallet-xray, trace, snapshot,
   holders, airdrop, buyspecial, rose, hatchery, security-coop, wallet-checkup, liquidity, premium,
   slots, bags, tools, investors, grant, stats, transcript, pool-monitor.
+  ⛔ **LP Scanner is OPERATOR-ONLY (2026-07-04, owner's call — off public, kept for CLKN ops):**
+  all seven `/api/lp-*` endpoints are adminAuthOK-gated (404 without key); `/lp-scanner` page
+  still exists but needs `?key=PREMIUM_ACCESS_KEY` once (remembered in localStorage); public
+  links removed from tools.html, cluck-nav.js and the LP Lab lesson. The hourly `warmTopPools`
+  timers were removed with it (no idle GeckoTerminal polling). Don't re-publicize without the
+  owner's ask.
   ⛔ **Cluck Score was REMOVED (2026-06-15, owner's call): it gave good scores to tokens that
   then rugged — misleading, not worth it. Do NOT rebuild it.** Gone: `/score` page + `score.html`,
   `/api/cluck-score`, `/api/cluck-card`, `renderScoreCard`, the `/score` Telegram command, and all

@@ -2840,18 +2840,6 @@ function LPLab() {
         </div>
       </div>
 
-      {/* Live tool cross-link — put the theory to work */}
-      <a href="/lp-scanner" style={{display:"block",textDecoration:"none",background:"rgba(255,122,24,0.12)",border:"1px solid rgba(255,122,24,0.4)",borderRadius:12,padding:"14px 16px",marginBottom:16}}>
-        <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <div style={{fontSize:26,flexShrink:0}}>🔬</div>
-          <div style={{flex:1}}>
-            <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:900,color:"#FFB627",letterSpacing:1}}>LP PAIR SCANNER <span style={{fontSize:9,color:"#6B7280",letterSpacing:2}}>LIVE TOOL</span></div>
-            <div style={{fontFamily:"'Anton',sans-serif",fontSize:10.5,color:"#D1D5DB",letterSpacing:0.5,lineHeight:1.5,marginTop:3}}>Ready to apply it? Scan every pool for any pair across every Solana DEX, then run the range &amp; earnings simulator on real volatility.</div>
-          </div>
-          <span style={{color:"#FF7A18",fontSize:16,flexShrink:0}}>→</span>
-        </div>
-      </a>
-
       {/* Lessons list */}
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
         {LP_LESSONS.map((lesson, i) => {
