@@ -491,7 +491,7 @@ function lockReportTick() {
 // as an RPC recovery, not a new lock. When it posts, it syncs lockSnapshot so the daily
 // report won't re-announce the same lock.
 const LOCK_WATCH_ENABLED = true;
-const LOCK_WATCH_MIN_DELTA = 500_000; // CLKN — real locks are millions; ignore dust
+const LOCK_WATCH_MIN_DELTA = 10_000; // CLKN — low floor so community locks get seen (owner's call 2026-07-03: social proof drives more locking; was 500K); still filters read-noise dust
 async function lockWatchTick() {
   if (!LOCK_WATCH_ENABLED) return;
   const built = await buildLockReport().catch(() => null);
