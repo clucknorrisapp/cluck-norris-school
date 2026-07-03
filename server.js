@@ -494,9 +494,11 @@ const LOCK_WATCH_ENABLED = true;
 const LOCK_WATCH_MIN_DELTA = 10_000; // CLKN — low floor so community locks get seen (owner's call 2026-07-03: social proof drives more locking; was 500K); still filters read-noise dust
 // Text + image go out TOGETHER as one post (owner ask 2026-07-03: no announcement-then-image
 // doubles). Detection no longer posts — it stores ready-to-post copy in lockCelebrationPending
-// and a Claude session posts the combined announcement. If no session picks it up within this
-// window, the tick posts the text-only version so a lock never goes silent.
-const LOCK_ANNOUNCE_FALLBACK_MS = 6 * 3600 * 1000;
+// and a Claude session posts the combined announcement. The image is WORTH WAITING FOR (owner,
+// 2026-07-03: "we wait 30 mins to scan, why is it a big deal to wait a couple for the image") —
+// text-only fallback only if EVERY image path (session watcher, hourly cron, Mac runner) is
+// dead for a full day. Must stay below the 48h pending-staleness cutoff or nothing ever posts.
+const LOCK_ANNOUNCE_FALLBACK_MS = 24 * 3600 * 1000;
 async function lockWatchTick() {
   if (!LOCK_WATCH_ENABLED) return;
   // FALLBACK: a pending combined announcement nobody picked up (no live Claude session /
