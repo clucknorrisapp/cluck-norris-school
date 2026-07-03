@@ -506,10 +506,10 @@ async function lockWatchTick() {
   // boot — a lock that lands during a deploy gap is announced on the first tick instead
   // of being silently re-baselined (the old in-memory prime swallowed those). Only a
   // genuinely missing baseline (first-ever run) primes silently.
-  if (typeof base !== "number") { kv.set("lockWatchTotal", total); kv.set("lockWatchHigh", total); return; }
+  if (typeof base !== "number") { kv.set("lockWatchTotal", total); kv.set("lockWatchHigh", total); kv.set("lockWatchCount", built.data.lockCount); return; }
   const delta = total - base;
   if (delta < LOCK_WATCH_MIN_DELTA) {
-    if (delta < 0) kv.set("lockWatchTotal", total); // a lock expired/withdrew — track down silently
+    if (delta < 0) { kv.set("lockWatchTotal", total); kv.set("lockWatchCount", built.data.lockCount); } // a lock expired/withdrew — track down silently
     return;
   }
   // Guard against a recovered-read phantom: if this "increase" only restores a level we've
@@ -517,9 +517,16 @@ async function lockWatchTick() {
   // new lock. Re-baseline silently, don't announce.
   if (typeof seenHigh === "number" && total <= seenHigh + LOCK_WATCH_MIN_DELTA) {
     kv.set("lockWatchTotal", total);
+    kv.set("lockWatchCount", built.data.lockCount);
     console.warn(`[LOCK-WATCH] delta +${Math.round(delta)} only restores prior high ${Math.round(seenHigh)} — no announce`);
     return;
   }
+  // How many distinct NEW lock accounts landed this window — drives the number of bags
+  // Cluck carries in the celebration image (owner ask 2026-07-03). Count can also DROP
+  // (an old lock expired) while tokens rise, so floor at 1 when we're announcing a delta.
+  const prevCount = kv.get("lockWatchCount", null);
+  const newLocks = Math.max(1, typeof prevCount === "number" ? built.data.lockCount - prevCount : 1);
+  kv.set("lockWatchCount", built.data.lockCount);
   kv.set("lockWatchHigh", Math.max(seenHigh || 0, total));
   kv.set("lockWatchTotal", total);
   kv.set("lockSnapshot", { tokens: total, ts: Date.now() }); // so the daily report won't re-announce it
@@ -540,11 +547,13 @@ async function lockWatchTick() {
   // MERGE with any un-celebrated pending (fresh <48h) so a second lock can't erase the
   // first one's image slot — the celebration then covers the combined amount.
   const prevPending = kv.get("lockCelebrationPending", null);
-  const mergedDelta = Math.round(delta) +
-    ((prevPending && typeof prevPending.delta === "number" && Date.now() - (prevPending.at || 0) < 48 * 3600 * 1000) ? prevPending.delta : 0);
+  const prevFresh = prevPending && typeof prevPending.delta === "number" && Date.now() - (prevPending.at || 0) < 48 * 3600 * 1000;
+  const mergedDelta = Math.round(delta) + (prevFresh ? prevPending.delta : 0);
+  const mergedNewLocks = newLocks + (prevFresh && typeof prevPending.newLocks === "number" ? prevPending.newLocks : 0);
   kv.set("lockCelebrationPending", {
     delta: mergedDelta, total: Math.round(total), pct,
     deltaShort: fmtTokensShort(mergedDelta), totalShort: fmtTokensShort(total),
+    newLocks: mergedNewLocks, // bags in the celebration image: one per new lock account this window
     lockCount: built.data.lockCount, xPostId: (xr && xr.id) || null, at: Date.now(),
   });
   console.log(`[LOCK-WATCH] new lock +${Math.round(delta)} → total ${Math.round(total)} (${pct})`);

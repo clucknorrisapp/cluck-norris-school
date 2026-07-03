@@ -260,7 +260,14 @@ Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.
   **Claude-session hourly cron** picks it up: generates a UNIQUE "Cluck hauls the +X bag to
   a vault door reading TOTAL locked" image — **the LOWER part of the vault door must ALSO read
   the percent of supply locked (pending.pct, e.g. "28.49% OF SUPPLY LOCKED"); owner requirement
-  2026-07-03, mandatory in every celebration image** — via the **Higgsfield MCP (owner's Plus plan —
+  2026-07-03, mandatory in every celebration image. If `pending.newLocks` > 1 (multiple lock
+  accounts landed in one 30-min watch window, or merged pendings), Cluck carries THAT MANY bags —
+  one per locker, combined delta across them (owner ask 2026-07-03: every locker gets seen).
+  Announcement floor is 10K CLKN (`LOCK_WATCH_MIN_DELTA`, was 500K — owner's call 2026-07-03:
+  small community locks deserve recognition; social proof drives more locking). 📋 DEFERRED:
+  also watch **Streamflow** locks (streamflow.finance) — buildLockReport only reads Jupiter Lock
+  escrows today; until built, the owner TELLS the session when he locks via Streamflow and the
+  celebration is run manually** — via the **Higgsfield MCP (owner's Plus plan —
   owner explicitly does NOT want a separate paid Higgsfield Cloud API key)**, posts it via
   `/api/x-announce` (image + replyTo the text post) and `/api/tg-test` (`photo=`, silent),
   then clears the flag. ⚠️ **CronCreate jobs are session-only and expire in ≤7 days — every
