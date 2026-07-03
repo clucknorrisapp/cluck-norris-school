@@ -258,7 +258,9 @@ Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.
   `lockCelebrationPending` (delta/total/pct + the X post id), readable via gated
   `/api/lock-celebration` (`?clear=1` when handled, `?probe=` for observability). A
   **Claude-session hourly cron** picks it up: generates a UNIQUE "Cluck hauls the +X bag to
-  a vault door reading TOTAL locked" image via the **Higgsfield MCP (owner's Plus plan —
+  a vault door reading TOTAL locked" image — **the LOWER part of the vault door must ALSO read
+  the percent of supply locked (pending.pct, e.g. "28.49% OF SUPPLY LOCKED"); owner requirement
+  2026-07-03, mandatory in every celebration image** — via the **Higgsfield MCP (owner's Plus plan —
   owner explicitly does NOT want a separate paid Higgsfield Cloud API key)**, posts it via
   `/api/x-announce` (image + replyTo the text post) and `/api/tg-test` (`photo=`, silent),
   then clears the flag. ⚠️ **CronCreate jobs are session-only and expire in ≤7 days — every
