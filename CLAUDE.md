@@ -109,6 +109,22 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 > `jupLpHodlCheckAt`. (A cloud session can't self-schedule days out — the container is ephemeral — so the check-in
 > is server-side by design.)
 >
+> ⏰ **UPDATE 2026-07-03: CoinGecko REJECTED AGAIN (3rd time) — boilerplate reasons: liquidity
+> (they read TOTAL TVL, ~$39K now — concentration doesn't move that number), life of token, and
+> team presence. The MIGRATION route was already used (owner applied as a migration from the
+> previously-listed predecessor token + sent multiple emails) — so "apply as migration instead"
+> is NOT an unexplored fix; don't re-suggest it. CONSEQUENCE (owner's call, same day): the
+> $129/mo CoinGecko Analyst API sub is being CANCELLED ("I will not support them if they don't
+> support us") — code is now free-tier-proof: `cgPro` falls back to the free api.coingecko.com
+> host (dead/absent key = auto-fallback), the Pro-only top_gainers_losers endpoint was replaced
+> with a free /coins/markets computation, and the onchain side already fell back to free
+> GeckoTerminal. `COINGECKO_API_KEY` in env is now optional/legacy. ACTIONABLE listing fix
+> found the same day: the GeckoTerminal token profile's WEBSITE field points to the Bags
+> launchpad page (bags.fm/dw6df2…) not clucknorris.app, and the description says
+> "clucknorris.vip" (half-dead domain) with stale stats (12 lessons/72 questions) — a reviewer
+> sees "no real website" → the team-presence boilerplate. Submit a GT/CG token-info update
+> (website → clucknorris.app, socials, refreshed description) before any reapply.** Older
+> context below ⬇️
 > ⏰ **ACTIVE WATCH (updated 2026-06-12): CoinGecko REJECTED the reapplication**
 > (req `CL1106260002`; owner reported the rejection 2026-06-12 — stated reason not yet
 > in the session, ask for the email text). Strategy: build a visibly better tape and

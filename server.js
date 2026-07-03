@@ -3191,9 +3191,16 @@ async function gatherAlphaData() {
     await Promise.all(d.trending.slice(0, 5).map(async (c) => { c.handle = await coinTwitter(c.id); }));
   } catch (_) {}
   try {
-    const g = await lpScanner.cgPro("/coins/top_gainers_losers?vs_currency=usd&duration=24h");
-    d.gainers = (g.top_gainers || []).slice(0, 5).map((c) => ({ sym: (c.symbol || "").toUpperCase(), chg: c.usd_24h_change, price: c.usd }));
-    d.losers = (g.top_losers || []).slice(0, 5).map((c) => ({ sym: (c.symbol || "").toUpperCase(), chg: c.usd_24h_change, price: c.usd }));
+    // top_gainers_losers is a PRO-only endpoint (sub cancelled 2026-07-03) — compute the same
+    // thing from the free /coins/markets read: top-250 by mcap sorted by 24h change. Arguably
+    // better: their endpoint surfaced micro-cap dust; this stays in coins readers recognize.
+    const mk = await lpScanner.cgPro("/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=1&price_change_percentage=24h");
+    const rows = (Array.isArray(mk) ? mk : [])
+      .map((c) => ({ sym: (c.symbol || "").toUpperCase(), chg: c.price_change_percentage_24h, price: c.current_price }))
+      .filter((c) => c.chg != null && c.sym);
+    rows.sort((a, b) => b.chg - a.chg);
+    d.gainers = rows.slice(0, 5);
+    d.losers = rows.slice(-5).reverse();
   } catch (_) {}
   try {
     const tp = await lpScanner.topPools({ kind: "trending" });
