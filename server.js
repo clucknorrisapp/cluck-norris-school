@@ -492,8 +492,29 @@ function lockReportTick() {
 // report won't re-announce the same lock.
 const LOCK_WATCH_ENABLED = true;
 const LOCK_WATCH_MIN_DELTA = 10_000; // CLKN — low floor so community locks get seen (owner's call 2026-07-03: social proof drives more locking; was 500K); still filters read-noise dust
+// Text + image go out TOGETHER as one post (owner ask 2026-07-03: no announcement-then-image
+// doubles). Detection no longer posts — it stores ready-to-post copy in lockCelebrationPending
+// and a Claude session posts the combined announcement. If no session picks it up within this
+// window, the tick posts the text-only version so a lock never goes silent.
+const LOCK_ANNOUNCE_FALLBACK_MS = 6 * 3600 * 1000;
 async function lockWatchTick() {
   if (!LOCK_WATCH_ENABLED) return;
+  // FALLBACK: a pending combined announcement nobody picked up (no live Claude session /
+  // Higgsfield down) → post the stored text-only copy now so the lock never goes silent.
+  // The pending stays (announced:true) so a later session can still add the image: it
+  // threads the X art under the fallback post and replaces the TG text with the photo.
+  const pendingNow = kv.get("lockCelebrationPending", null);
+  if (pendingNow && !pendingNow.announced && pendingNow.tgText && Date.now() - (pendingNow.at || 0) > LOCK_ANNOUNCE_FALLBACK_MS) {
+    const tgMsgId = await tgSend(process.env.TELEGRAM_CHAT_ID, pendingNow.tgText);
+    let xr = null;
+    try { xr = pendingNow.xText ? await postToX(pendingNow.xText, { force: true }) : null; }
+    catch (e) { console.warn("[LOCK→X] fallback failed:", e.message); }
+    kv.set("lockCelebrationPending", {
+      ...pendingNow, announced: true, xPostId: (xr && xr.id) || pendingNow.xPostId || null,
+      tgMessageIds: [...(Array.isArray(pendingNow.tgMessageIds) ? pendingNow.tgMessageIds : []), ...(tgMsgId ? [tgMsgId] : [])],
+    });
+    console.log("[LOCK-WATCH] fallback text-only announcement posted (no session took the celebration)");
+  }
   const built = await buildLockReport().catch(() => null);
   if (!built || !built.ok) return;
   // A PARTIAL on-chain read is an under-count — never post or move the baseline off it, or a
@@ -531,40 +552,40 @@ async function lockWatchTick() {
   kv.set("lockWatchTotal", total);
   kv.set("lockSnapshot", { tokens: total, ts: Date.now() }); // so the daily report won't re-announce it
   const pct = built.data.pctOfSupply != null ? (built.data.pctOfSupply * 100).toFixed(2) + "%" : "—";
-  const msg =
-    `🔒 <b>NEW CLKN LOCK</b>\n\n` +
-    `<b>+${fmtTokensShort(delta)} CLKN</b> just locked.\n` +
-    `Now <b>${fmtTokensShort(total)} CLKN</b> locked — <b>${pct}</b> of supply.\n\n` +
-    `🔒 Removed from circulation — long-term commitment. Verify on Jupiter Lock:\nhttps://lock.jup.ag/token/${CLKN_MINT}`;
-  // Keep the message_id: when the celebration image posts to Telegram it REPLACES this
-  // text announcement (tg-test &replaceMsg= deletes it) so the community sees ONE
-  // announcement, not two (owner ask 2026-07-03). If no session picks up the flag,
-  // the text stays — it remains the reliable baseline.
-  const tgMsgId = await tgSend(process.env.TELEGRAM_CHAT_ID, msg);
-  let xr = null;
-  try { xr = await postLockToX(built.data, delta); } // auto-post new locks to X (scoped carve-out)
-  catch (e) { console.warn("[LOCK→X] failed:", e.message); }
-  // Flag the celebration for the scheduled image run (a Claude session picks this up,
-  // generates a unique "Cluck hauls the bag to the vault" image via Higgsfield, posts it
-  // threaded under the X announcement + as a Telegram photo, then clears the flag via
-  // /api/lock-celebration?clear=1). Text posts above remain the reliable baseline.
-  // MERGE with any un-celebrated pending (fresh <48h) so a second lock can't erase the
-  // first one's image slot — the celebration then covers the combined amount.
+  // NO posting at detection (owner ask 2026-07-03: text + image are ONE post). Compose the
+  // ready-to-post copy for BOTH channels, store it in the pending flag, and let the Claude
+  // session post the combined announcement (image attached). MERGE with any un-celebrated
+  // pending (fresh <48h) so a second lock can't erase the first one's slot — the combined
+  // celebration then covers the merged amount. The fallback at the top of this tick posts
+  // text-only if no session shows up within LOCK_ANNOUNCE_FALLBACK_MS.
   const prevPending = kv.get("lockCelebrationPending", null);
   const prevFresh = prevPending && typeof prevPending.delta === "number" && Date.now() - (prevPending.at || 0) < 48 * 3600 * 1000;
   const mergedDelta = Math.round(delta) + (prevFresh ? prevPending.delta : 0);
   const mergedNewLocks = newLocks + (prevFresh && typeof prevPending.newLocks === "number" ? prevPending.newLocks : 0);
+  const tgText =
+    `🔒 <b>NEW CLKN LOCK</b>\n\n` +
+    `<b>+${fmtTokensShort(mergedDelta)} CLKN</b> just locked.\n` +
+    `Now <b>${fmtTokensShort(total)} CLKN</b> locked — <b>${pct}</b> of supply.\n\n` +
+    `🔒 Removed from circulation — long-term commitment. Verify on Jupiter Lock:\nhttps://lock.jup.ag/token/${CLKN_MINT}`;
+  const totalSupply = built.data.pctOfSupply > 0 ? total / built.data.pctOfSupply : null;
+  const deltaPct = totalSupply ? (mergedDelta / totalSupply) * 100 : null;
+  const xText =
+    `${deltaPct ? `🔒 CLKN just locked another ${deltaPct.toFixed(1)}% of supply.` : `🔒 CLKN supply-lock update.`}\n\n` +
+    `${fmtTokensShort(total)} CLKN — ${pct} of total supply now locked across ${built.data.lockCount} @JupiterExchange Lock escrow${built.data.lockCount === 1 ? "" : "s"}. Removed from circulation, on-chain, verifiable by anyone.\n\n` +
+    `Verify 👉 https://lock.jup.ag/token/${CLKN_MINT}\n\n` +
+    `Built on @BagsApp 🐔`;
   kv.set("lockCelebrationPending", {
     delta: mergedDelta, total: Math.round(total), pct,
     deltaShort: fmtTokensShort(mergedDelta), totalShort: fmtTokensShort(total),
     newLocks: mergedNewLocks, // bags in the celebration image: one per new lock account this window
-    lockCount: built.data.lockCount, xPostId: (xr && xr.id) || null,
-    // ALL un-celebrated text announcements (merged pendings can hold several) — the image's
-    // tg-test &replaceMsg= deletes every one so the photo is the single visible announcement.
-    tgMessageIds: [...(prevFresh && Array.isArray(prevPending.tgMessageIds) ? prevPending.tgMessageIds : []), ...(tgMsgId ? [tgMsgId] : [])],
-    at: Date.now(),
+    lockCount: built.data.lockCount,
+    announced: prevFresh && prevPending.announced ? true : false, // true only if a fallback already posted text for part of this
+    tgText, xText, // ready-to-post copy — the session posts these WITH the image as one post per channel
+    xPostId: (prevFresh && prevPending.xPostId) || null, // set only by a fallback post (thread target)
+    tgMessageIds: prevFresh && Array.isArray(prevPending.tgMessageIds) ? prevPending.tgMessageIds : [], // set only by a fallback post (replace targets)
+    at: prevFresh ? prevPending.at : Date.now(), // keep the ORIGINAL clock so merges can't dodge the fallback window
   });
-  console.log(`[LOCK-WATCH] new lock +${Math.round(delta)} → total ${Math.round(total)} (${pct})`);
+  console.log(`[LOCK-WATCH] new lock +${Math.round(delta)} → total ${Math.round(total)} (${pct}) — combined announcement pending`);
 }
 
 // ── Daily educational posts ("Cluck's Lesson") ────────────────────────────

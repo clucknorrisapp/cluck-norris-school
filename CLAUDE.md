@@ -253,34 +253,31 @@ Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.
   Check, daily recap, graduation watcher, the webhook setup) **only starts if
   `TELEGRAM_BOT_TOKEN` AND `TELEGRAM_CHAT_ID` are set at boot.** Missing either → none of
   it runs. This is the #1 thing to check when "the bot isn't doing X."
-- 🔒 **Lock-celebration image flow (owner standing approval, 2026-07-01):** when a new lock
-  fires, `lockWatchTick` still posts the text announcements (baseline) AND sets kv
-  `lockCelebrationPending` (delta/total/pct + the X post id), readable via gated
-  `/api/lock-celebration` (`?clear=1` when handled, `?probe=` for observability). A
-  **Claude-session hourly cron** picks it up: generates a UNIQUE "Cluck hauls the +X bag to
-  a vault door reading TOTAL locked" image — **the LOWER part of the vault door must ALSO read
-  the percent of supply locked (pending.pct, e.g. "28.49% OF SUPPLY LOCKED"); owner requirement
-  2026-07-03, mandatory in every celebration image. If `pending.newLocks` > 1 (multiple lock
-  accounts landed in one 30-min watch window, or merged pendings), Cluck carries THAT MANY bags —
-  one per locker, combined delta across them (owner ask 2026-07-03: every locker gets seen).
-  Announcement floor is 10K CLKN (`LOCK_WATCH_MIN_DELTA`, was 500K — owner's call 2026-07-03:
-  small community locks deserve recognition; social proof drives more locking). 📋 DEFERRED:
-  also watch **Streamflow** locks (streamflow.finance) — buildLockReport only reads Jupiter Lock
-  escrows today; until built, the owner TELLS the session when he locks via Streamflow and the
-  celebration is run manually** — via the **Higgsfield MCP (owner's Plus plan —
-  owner explicitly does NOT want a separate paid Higgsfield Cloud API key)**, posts it via
-  `/api/x-announce` (image + replyTo the text post — **the reply text must be a SHORT punchline
-  ONLY, e.g. "Cluck made the delivery. 🐔🔥" + the two standing tags; NEVER repeat the
-  numbers/announcement copy in the reply — the parent post and the image itself carry the
-  stats, a restated reply reads as a doubled announcement (owner ask 2026-07-03)**) and
-  `/api/tg-test` (`photo=`, silent,
-  **plus `replaceMsg=` = pending.tgMessageIds comma-joined, so the photo DELETES the text
-  announcement(s) — the community sees ONE Telegram announcement, not two (owner ask
-  2026-07-03); the photo caption must therefore be self-sufficient: numbers + the
-  lock.jup.ag/token/CLKN-mint verify link**), then clears the flag. ⚠️ **CronCreate jobs are session-only and expire in ≤7 days — every
+- 🔒 **Lock-celebration flow (owner standing approval 2026-07-01; ONE-POST redesign 2026-07-03 —
+  "text and image go out TOGETHER, that was the whole point"):** when a new lock fires,
+  `lockWatchTick` posts NOTHING. It composes the announcement copy for both channels and stores
+  it in kv `lockCelebrationPending` (delta/total/pct/newLocks/lockCount + `tgText`/`xText` +
+  `announced:false`), readable via gated `/api/lock-celebration` (`?clear=1` when handled,
+  `?probe=` for observability). A **Claude session** (60s watcher when live + the hourly cron)
+  picks it up, generates the image, and posts ONE combined post per channel:
+  **X** = `/api/x-announce` `post=1` + `text={pending.xText}` + `image={rawUrl}` (standalone, no
+  replyTo); **Telegram** = `/api/tg-test` `photo={rawUrl}` + `text={pending.tgText}` (silent).
+  Then `?clear=1`. **FALLBACK:** if no session picks it up within `LOCK_ANNOUNCE_FALLBACK_MS`
+  (6h, server.js), the tick posts the stored text-only copy itself (a lock never goes silent)
+  and marks `announced:true` + records `xPostId`/`tgMessageIds`; a session that arrives LATER
+  then degrades to the old two-step: X image reply under `xPostId` with a SHORT punchline only
+  (never restate the numbers), TG photo with self-sufficient caption + `replaceMsg=` (comma-join
+  `tgMessageIds`) which deletes the fallback text(s). IMAGE SPEC (all mandatory): Cluck hauls
+  bag(s) to a vault door — main bag "+{deltaShort} CLKN"; **exactly `pending.newLocks` bags, one
+  per locker**; door UPPER "{totalShort} CLKN LOCKED", door LOWER "{pct} OF SUPPLY LOCKED";
+  VIEW the render and verify bag count + all text before posting. Announcement floor is 10K CLKN
+  (`LOCK_WATCH_MIN_DELTA`, was 500K — owner's call 2026-07-03). Images via the **Higgsfield MCP
+  (owner's Plus plan — owner explicitly does NOT want a separate paid Higgsfield Cloud API key)**.
+  📋 DEFERRED: also watch **Streamflow** locks (streamflow.finance) — buildLockReport only reads
+  Jupiter Lock escrows; until built the owner TELLS the session when he locks there and the
+  celebration runs manually. ⚠️ **CronCreate jobs are session-only and expire in ≤7 days — every
   new long-lived session should RE-ARM the hourly celebration cron** (poll the endpoint →
-  if pending, generate → post → clear; never post when pending is null). If no session is
-  alive when a lock fires, the text posts still go out and the flag waits (48h staleness cutoff).
+  if pending, generate → post → clear; never post when pending is null).
   **Model note (owner, 2026-07-02): use SONNET 5 (`claude-sonnet-5`) for Higgsfield prompt
   crafting** — noticeably better image prompts; the Mac runner passes `--model claude-sonnet-5`,
   and in-session celebrations should spawn a sonnet subagent to write the Higgsfield prompt.
