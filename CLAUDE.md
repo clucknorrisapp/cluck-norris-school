@@ -307,15 +307,21 @@ Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.
   and marks `announced:true` + records `xPostId`/`tgMessageIds`; a session that arrives LATER
   then degrades to the old two-step: X image reply under `xPostId` with a SHORT punchline only
   (never restate the numbers), TG photo with self-sufficient caption + `replaceMsg=` (comma-join
-  `tgMessageIds`) which deletes the fallback text(s). IMAGE SPEC (all mandatory): Cluck hauls
-  bag(s) to a vault door — main bag "+{deltaShort} CLKN"; **exactly `pending.newLocks` bags, one
-  per locker**; door UPPER "{totalShort} CLKN LOCKED", door LOWER "{pct} OF SUPPLY LOCKED";
-  VIEW the render and verify bag count + all text before posting. Announcement floor is 10K CLKN
-  (`LOCK_WATCH_MIN_DELTA`, was 500K — owner's call 2026-07-03). Images via the **Higgsfield MCP
-  (owner's Plus plan — owner explicitly does NOT want a separate paid Higgsfield Cloud API key)**.
-  📋 DEFERRED: also watch **Streamflow** locks (streamflow.finance) — buildLockReport only reads
-  Jupiter Lock escrows; until built the owner TELLS the session when he locks there and the
-  celebration runs manually. ⚠️ **CronCreate jobs are session-only and expire in ≤7 days — every
+  `tgMessageIds`) which deletes the fallback text(s). **TWO-VAULT IMAGE SPEC (owner ask
+  2026-07-04, all mandatory):** the scene shows **TWO vault doors** — one labeled "JUPITER LOCK"
+  (engraved with `pending.jupLockedShort` CLKN), one labeled "STREAMFLOW" (engraved with
+  `pending.strmLockedShort` CLKN). Cluck hauls **exactly `pending.newLocks` bag(s)** (main bag
+  "+{deltaShort} CLKN") **toward the vault named in `pending.platform`** — that's the platform
+  this lock used (its door glows/is emphasized). A banner spanning both reads "{pct} OF SUPPLY
+  LOCKED" (the combined total). Dark + orange palette, crisp legible typography. VIEW the render
+  and verify: two doors with the right platform labels + subtotals, bag heading to the correct
+  vault, all text correct — before posting. Announcement floor is 10K CLKN (`LOCK_WATCH_MIN_DELTA`,
+  was 500K — owner's call 2026-07-03). Images via the **Higgsfield MCP (owner's Plus plan — owner
+  explicitly does NOT want a separate paid Higgsfield Cloud API key)**.
+  🟢 **STREAMFLOW LOCKS: SHIPPED &amp; VERIFIED 2026-07-04.** `getLockedSupply` counts Streamflow
+  (self-owned escrows) and `attributeLockPlatform` relabels them "Streamflow" via a cached
+  creation-tx trace (Streamflow program `strmRqU…`); the watcher tracks per-platform subtotals
+  and which vault grew. So both platforms are fully automatic now — no more manual runs. ⚠️ **CronCreate jobs are session-only and expire in ≤7 days — every
   new long-lived session should RE-ARM the hourly celebration cron** (poll the endpoint →
   if pending, generate → post → clear; never post when pending is null).
   **Model note (owner, 2026-07-02): use SONNET 5 (`claude-sonnet-5`) for Higgsfield prompt
