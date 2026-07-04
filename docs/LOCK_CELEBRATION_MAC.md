@@ -84,6 +84,34 @@ a later run then adds the image threaded/replacing per pending.announced.
 6. **Keep the mini awake:** System Settings → Energy → enable "Prevent automatic
    sleeping when the display is off" (or `sudo pmset -a sleep 0`).
 
+7. **Daily heartbeat (dead-man's switch)** — the runner also auto-`git pull`s each hour
+   (baked into `lock-celebration.sh`), so no manual updates. This job DMs the operator's
+   PRIVATE Telegram once a day that the mini is alive + the celebration job is loaded; a
+   MISSING daily ping = the mini is off/asleep/broken.
+   ```bash
+   chmod +x ~/cluck-norris-school/scripts/mac-heartbeat.sh
+   cat > ~/Library/LaunchAgents/com.clucknorris.heartbeat.plist <<EOF
+   <?xml version="1.0" encoding="UTF-8"?>
+   <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+   <plist version="1.0"><dict>
+     <key>Label</key><string>com.clucknorris.heartbeat</string>
+     <key>ProgramArguments</key><array>
+       <string>/bin/bash</string>
+       <string>$HOME/cluck-norris-school/scripts/mac-heartbeat.sh</string>
+     </array>
+     <key>EnvironmentVariables</key><dict>
+       <key>PATH</key><string>$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+     </dict>
+     <key>StartInterval</key><integer>86400</integer>
+     <key>RunAtLoad</key><true/>
+     <key>StandardOutPath</key><string>$HOME/Library/Logs/clkn-heartbeat.err</string>
+     <key>StandardErrorPath</key><string>$HOME/Library/Logs/clkn-heartbeat.err</string>
+   </dict></plist>
+   EOF
+   launchctl load ~/Library/LaunchAgents/com.clucknorris.heartbeat.plist
+   ```
+   (`RunAtLoad` fires one heartbeat immediately so you see it land in your operator DM.)
+
 ## Verify it's alive
 ```bash
 launchctl list | grep clucknorris          # job loaded
