@@ -162,8 +162,12 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   only checked the DEFAULT project's paused flag — `/api/whirlpool/vault/status` without
   `project=` returns the CLKN engine project, NOT treasury — and the live treasury vault
   redeployed everything 2 minutes later. ⚠️ ALWAYS pass `project=treasury` when checking/pausing
-  treasury automation. The treasury vault project is NOW PAUSED (2026-07-04) and stays paused
-  until the owner explicitly resumes it.
+  treasury automation. **UPDATE (2026-07-04, later): the owner explicitly RESTARTED the treasury
+  engine** — vault RESUMED and running autonomously at **±2% width** (widthPct/solWidthPct/
+  jupWidthPct=2) with deploy caps cut 30% (maxUsd 350 / solMaxSol 4.2 / jupMaxJup 1400). Three
+  tight ±2% CLKN positions (USDC/SOL/JUP) + the three ±94% anchors are live under treasury
+  `2zMCU…`. (Seeded the USDC pool with a 6.5 SOL→USDC swap since the wallet had 0 USDC.) So the
+  vault is intentionally RUNNING now — do NOT pause it without an owner ask.
 - ⛔ **PLAN ≠ EXECUTE for money (owner rule, 2026-07-02).** For ANY action that moves funds,
   opens/closes positions or pools, or resumes an engine: state the exact plan (amounts, tiers,
   pools) and STOP — execute only after the owner replies with an explicit go. Plan and execution
