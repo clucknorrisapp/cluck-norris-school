@@ -155,6 +155,15 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 > material until retested. Remove this note when CoinGecko decides.
 
 ## Working agreement
+- ⛔ **STOP MEANS STAY STOPPED (owner rule, 2026-07-04).** When the owner says stop/pull/close
+  something, it stays stopped until HE says restart — which means: before executing, find and
+  disarm EVERY automation that could undo it, and AFTER executing, re-verify one full tick-cycle
+  later that it stayed done. Set after a session pulled the treasury's tight Orca positions but
+  only checked the DEFAULT project's paused flag — `/api/whirlpool/vault/status` without
+  `project=` returns the CLKN engine project, NOT treasury — and the live treasury vault
+  redeployed everything 2 minutes later. ⚠️ ALWAYS pass `project=treasury` when checking/pausing
+  treasury automation. The treasury vault project is NOW PAUSED (2026-07-04) and stays paused
+  until the owner explicitly resumes it.
 - ⛔ **PLAN ≠ EXECUTE for money (owner rule, 2026-07-02).** For ANY action that moves funds,
   opens/closes positions or pools, or resumes an engine: state the exact plan (amounts, tiers,
   pools) and STOP — execute only after the owner replies with an explicit go. Plan and execution
