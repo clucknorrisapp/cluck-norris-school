@@ -5,22 +5,25 @@ built-in scheduler. Unlike a cloud Claude session (7-day cap), launchd never exp
 survives reboots. The flow:
 
 ```
-Railway bot detects a new lock (every ~2h)
-  → posts the text announcements (baseline, instant)
-  → sets the "celebration pending" flag (kv, via /api/lock-celebration)
+Railway bot detects a new lock (30-min scan)
+  → posts NOTHING (one-post redesign 2026-07-03: text + image ship together)
+  → composes the announcement copy (tgText/xText) into the "celebration pending"
+    flag (kv, via /api/lock-celebration)
 
 Mac mini, hourly (launchd → scripts/lock-celebration.sh)
   → 1-second curl: anything pending?  no → exit (Claude never launches, costs nothing)
   → yes → headless Claude Code run:
-      Higgsfield (owner's Plus plan) generates a UNIQUE "Cluck hauls +X CLKN to the
-      vault (door reads TOTAL locked)" image
-      → posts it to X threaded under the text announcement (+@JupiterExchange @BagsApp)
-      → sends it as a silent photo to the Telegram room with the X link
+      Higgsfield (owner's Plus plan) generates a UNIQUE image — Cluck hauls
+      exactly newLocks bag(s) ("+X CLKN") to a vault door reading the TOTAL
+      locked (upper) and the % OF SUPPLY LOCKED (lower)
+      → posts ONE combined X post (pending.xText verbatim + the image)
+      → THEN one silent Telegram photo (pending.tgText + the X link)
       → clears the flag
 ```
 
-If the mini is ever off, nothing is lost: text posts still went out instantly, and the
-flag waits (48h freshness cutoff) for the next run.
+If the mini is ever off, nothing is lost: the flag waits, and if NOTHING picks it up
+within 24h the Railway tick posts the text-only copy itself (a lock never goes silent);
+a later run then adds the image threaded/replacing per pending.announced.
 
 ## One-time setup (~10 minutes, on the mini)
 
