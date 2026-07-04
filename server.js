@@ -4881,6 +4881,73 @@ function clknBlitzCheck() {
     clknBlitzRevert("timer").catch((e) => console.warn("[clkn-blitz] revert failed (will retry):", e.message));
 }
 
+// ── Treasury Heavy Window ────────────────────────────────────────────────────
+// Timed MAX-HEAVY burst on the TREASURY Orca pools (owner ask 2026-07-05): deploy big for N
+// hours to pull routed volume, then AUTO-REVERT the deploy caps to normal + redeploy smaller.
+// Reset-proof like the CLKN Blitz — expiry persisted (treasuryHeavyUntil) and checked every
+// minute + on boot, so a redeploy/restart mid-window still reverts on time. Closes ONLY the
+// three vault-managed tight positions (base/sol/jup); the ±94% anchors are separate + untouched.
+async function treasuryForceRedeploy() {
+  const cur = await whirlpoolMM.vault.status("treasury"); const s = (cur && cur.state) || {};
+  const baseMint = s.positionMint || null;
+  const solMint = (s.solVault && s.solVault.mint) || (typeof s.solVault === "string" && s.solVault !== "disabled" ? s.solVault : null);
+  const jupMint = (s.jupVault && s.jupVault.mint) || (typeof s.jupVault === "string" && s.jupVault !== "disabled" ? s.jupVault : null);
+  for (const mint of [baseMint, solMint, jupMint]) {
+    if (mint && mint !== "disabled") { try { await whirlpoolMM.vault.closePosition({ projectId: "treasury", mint }); } catch (e) { console.warn("[treasury-heavy] close:", e.message); } }
+  }
+  try { await whirlpoolMM.vault.tick({ projectId: "treasury" }); } catch (e) { console.warn("[treasury-heavy] base tick:", e.message); }
+  try { await whirlpoolMM.vault.tickSol({ projectId: "treasury" }); } catch (e) { console.warn("[treasury-heavy] sol tick:", e.message); }
+  try { await whirlpoolMM.vault.tickJup({ projectId: "treasury" }); } catch (e) { console.warn("[treasury-heavy] jup tick:", e.message); }
+}
+function treasuryHeavyActive() { return kv.get("treasuryHeavyUntil", 0) > 0; }
+async function treasuryHeavyArm({ hours = 6, restore = null } = {}) {
+  const already = treasuryHeavyActive() && kv.get("treasuryHeavyRestore", null);
+  // Capture the restore (normal ~$1K caps) ONLY if not already in a window — re-arming mid-window
+  // must not bank the heavy caps as "normal".
+  const rest = already ? kv.get("treasuryHeavyRestore", null) : (restore || { maxUsd: 500, solMaxSol: 6, jupMaxJup: 2000 });
+  kv.set("treasuryHeavyRestore", rest);
+  kv.set("treasuryHeavyUntil", Date.now() + hours * 3600 * 1000);
+  blitzDM(`🔥 <b>Treasury heavy window ARMED</b> — auto-reverts to ~$1K pools (maxUsd ${rest.maxUsd}/solMaxSol ${rest.solMaxSol}/jupMaxJup ${rest.jupMaxJup}) in ${hours}h`);
+  return { armed: true, hours, restore: rest, until: kv.get("treasuryHeavyUntil", 0) };
+}
+let _treasuryHeavyReverting = false;
+async function treasuryHeavyRevert(reason = "timer") {
+  const restore = kv.get("treasuryHeavyRestore", null);
+  if (!restore) { kv.set("treasuryHeavyUntil", 0); return { reverted: false, reason: "no restore stored" }; }
+  if (_treasuryHeavyReverting) return { reverted: false, reason: "revert already in flight" };
+  _treasuryHeavyReverting = true;
+  try {
+    // Work FIRST, clear the timer only after success — so a crash mid-revert retries next minute
+    // and the pools can't get stuck max-heavy forever.
+    whirlpoolMM.vault.setConfig({ maxUsd: restore.maxUsd, solMaxSol: restore.solMaxSol, jupMaxJup: restore.jupMaxJup }, "treasury");
+    await treasuryForceRedeploy();
+    kv.set("treasuryHeavyUntil", 0);
+    kv.set("treasuryHeavyRestore", null);
+    blitzDM(`✅ <b>Treasury heavy window OVER</b> — caps restored to ~$1K pools (maxUsd ${restore.maxUsd}/solMaxSol ${restore.solMaxSol}/jupMaxJup ${restore.jupMaxJup}) (${reason})`);
+    return { reverted: true, restore };
+  } finally { _treasuryHeavyReverting = false; }
+}
+function treasuryHeavyCheck() {
+  const until = kv.get("treasuryHeavyUntil", 0);
+  if ((until && Date.now() > until) || (!until && kv.get("treasuryHeavyRestore", null)))
+    treasuryHeavyRevert("timer").catch((e) => console.warn("[treasury-heavy] revert failed (will retry):", e.message));
+}
+// Treasury heavy-window control (gated). &run=1&hours=6 arms the auto-revert timer (assumes the
+// heavy caps are ALREADY set + deployed by the operator); &abort=1 reverts now; no flag = status.
+app.get("/api/treasury-heavy", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  try {
+    if (req.query.abort === "1") return res.status(200).json(await treasuryHeavyRevert("manual abort"));
+    const until0 = kv.get("treasuryHeavyUntil", 0);
+    if (req.query.run !== "1") return res.status(200).json({ active: until0 > 0, until: until0, hoursLeft: until0 ? Number(((until0 - Date.now()) / 3600000).toFixed(2)) : 0, restore: kv.get("treasuryHeavyRestore", null) });
+    const hours = req.query.hours != null ? Number(req.query.hours) : 6;
+    const restore = { maxUsd: Number(req.query.rMaxUsd || 500), solMaxSol: Number(req.query.rSolMaxSol || 6), jupMaxJup: Number(req.query.rJupMaxJup || 2000) };
+    const r = await treasuryHeavyArm({ hours, restore });
+    return res.status(200).json({ ...r, active: true, hoursLeft: Number(((r.until - Date.now()) / 3600000).toFixed(2)) });
+  } catch (e) { return res.status(500).json({ error: publicErrMsg(e) }); }
+});
+
 // CLKN Blitz control (gated). &run=1 starts; &abort=1 reverts now; no flag = status/plan.
 app.get("/api/clkn-blitz", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
@@ -11829,6 +11896,8 @@ app.listen(PORT, () => {
     // once shortly after boot, so a redeploy mid-blitz still reverts on time.
     setInterval(clknBlitzCheck, 60 * 1000);
     setTimeout(clknBlitzCheck, 12000);
+    setInterval(treasuryHeavyCheck, 60 * 1000); // reset-proof timed treasury heavy-window revert
+    setTimeout(treasuryHeavyCheck, 14000);
     // Treasury engine 48h auto-stop — when the armed window elapses, pause the treasury vault
     // back to watch-only (a bounded test run; a cloud session can't be relied on to be alive to
     // do it). kv treasuryEnginePauseAt; arm/disarm via /api/treasury-engine-window. Positions are
