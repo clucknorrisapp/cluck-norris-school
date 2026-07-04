@@ -22,6 +22,6 @@ echo "$(date -u +%FT%TZ) PENDING LOCK — launching Claude" >> "$LOG"
 # Sonnet 5 — owner's call (2026-07-02): it writes noticeably better Higgsfield prompts.
 claude -p "$(cat scripts/lock-celebration-prompt.md)" \
   --model claude-sonnet-5 \
-  --allowedTools "Bash,ToolSearch,mcp__Higgsfield__generate_image,mcp__Higgsfield__job_display,mcp__Higgsfield__media_import_url,mcp__Higgsfield__list_workspaces,mcp__Higgsfield__select_workspace" \
+  --allowedTools "Bash,ToolSearch,mcp__higgsfield__generate_image,mcp__higgsfield__job_display,mcp__higgsfield__media_import_url,mcp__higgsfield__list_workspaces,mcp__higgsfield__select_workspace" \
   >> "$LOG" 2>&1
 echo "$(date -u +%FT%TZ) run finished" >> "$LOG"
