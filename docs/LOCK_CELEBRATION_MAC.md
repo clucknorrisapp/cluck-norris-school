@@ -50,7 +50,12 @@ a later run then adds the image threaded/replacing per pending.announced.
    tail ~/Library/Logs/clkn-lock-celebration.log   # expect "no pending lock"
    ```
 
-5. **Install the launchd job** (runs hourly, forever):
+5. **Install the launchd job** (runs hourly, forever). ⚠️ **launchd runs with a bare PATH
+   (`/usr/bin:/bin:…`) that does NOT include where `claude` is installed** — so the plist MUST
+   set `EnvironmentVariables > PATH` to include it, or every real run silently fails to find
+   `claude`. Find your path first: `which claude` (e.g. `~/.local/bin/claude` for the standard
+   installer, or `/opt/homebrew/bin/claude` via Homebrew) and make sure that directory is in the
+   PATH string below.
    ```bash
    cat > ~/Library/LaunchAgents/com.clucknorris.lock-celebration.plist <<EOF
    <?xml version="1.0" encoding="UTF-8"?>
@@ -61,12 +66,20 @@ a later run then adds the image threaded/replacing per pending.announced.
        <string>/bin/bash</string>
        <string>$HOME/cluck-norris-school/scripts/lock-celebration.sh</string>
      </array>
+     <key>EnvironmentVariables</key><dict>
+       <key>PATH</key><string>$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+     </dict>
      <key>StartInterval</key><integer>3600</integer>
+     <key>RunAtLoad</key><true/>
+     <key>StandardOutPath</key><string>$HOME/Library/Logs/clkn-lock-celebration.err</string>
      <key>StandardErrorPath</key><string>$HOME/Library/Logs/clkn-lock-celebration.err</string>
    </dict></plist>
    EOF
    launchctl load ~/Library/LaunchAgents/com.clucknorris.lock-celebration.plist
+   launchctl list | grep clucknorris          # confirm loaded
+   sleep 6; tail ~/Library/Logs/clkn-lock-celebration.log   # RunAtLoad fired: expect "no pending lock"
    ```
+   (`RunAtLoad` fires it once immediately as a smoke test — the script no-ops when nothing is pending.)
 
 6. **Keep the mini awake:** System Settings → Energy → enable "Prevent automatic
    sleeping when the display is off" (or `sudo pmset -a sleep 0`).
