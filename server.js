@@ -453,7 +453,9 @@ async function buildLockReport(note = "") {
     (bd ? `\n${bd}` : "") +
     deltaLine +
     (note ? `\n\n${note}` : "") +
-    `\n\n🔒 Locked = removed from circulation — a long-term commitment to the project. Verify it yourself on Jupiter Lock:\nhttps://lock.jup.ag/token/${CLKN_MINT}`;
+    `\n\n🔒 Locked = removed from circulation — a long-term commitment to the project. Verify it yourself:` +
+    `\n   🔒 Jupiter Lock → https://lock.jup.ag/token/${CLKN_MINT}` +
+    `\n   🌊 Streamflow → https://app.streamflow.finance/token-dashboard/solana/mainnet/${CLKN_MINT}`;
   return { ok: true, data, msg };
 }
 async function notifyLockReport({ dryRun = false, note = "" } = {}) {
@@ -590,17 +592,25 @@ async function lockWatchTick() {
   const bothLive = jupLocked > 0 && strmLocked > 0;
   const splitTg = bothLive ? `\n   🔒 Jupiter Lock: <b>${jupShort}</b>\n   🌊 Streamflow: <b>${strmShort}</b>` : "";
   const splitX = bothLive ? ` (${jupShort} on @JupiterExchange Lock + ${strmShort} on @streamflow_fi)` : "";
+  // Per-platform verify links — each has a per-token public page. Lead with the platform of THIS
+  // lock; when both are live, show both so the whole locked total is independently verifiable.
+  const jupVerify = `https://lock.jup.ag/token/${CLKN_MINT}`;
+  const strmVerify = `https://app.streamflow.finance/token-dashboard/solana/mainnet/${CLKN_MINT}`;
+  const verifyTg = bothLive
+    ? `Verify on-chain:\n   🔒 Jupiter Lock → ${jupVerify}\n   🌊 Streamflow → ${strmVerify}`
+    : `Verify on-chain 👉 ${isStrm ? strmVerify : jupVerify}`;
+  const verifyX = `Verify 👉 ${isStrm ? strmVerify : jupVerify}`;
   const tgText =
     `🔒 <b>NEW CLKN LOCK</b> — via ${platform}\n\n` +
     `<b>+${fmtTokensShort(mergedDelta)} CLKN</b> just locked.\n` +
     `Now <b>${fmtTokensShort(total)} CLKN</b> locked — <b>${pct}</b> of supply.` + splitTg + `\n\n` +
-    `🔒 Removed from circulation — long-term commitment. Verify on-chain:\nhttps://lock.jup.ag/token/${CLKN_MINT}`;
+    `🔒 Removed from circulation — long-term commitment. ${verifyTg}`;
   const totalSupply = built.data.pctOfSupply > 0 ? total / built.data.pctOfSupply : null;
   const deltaPct = totalSupply ? (mergedDelta / totalSupply) * 100 : null;
   const xText =
     `${deltaPct ? `🔒 CLKN just locked another ${deltaPct.toFixed(1)}% of supply — via ${platTagX}.` : `🔒 CLKN supply-lock update — via ${platTagX}.`}\n\n` +
     `${fmtTokensShort(total)} CLKN — ${pct} of total supply now locked across ${built.data.lockCount} escrows.` + splitX + ` Removed from circulation, on-chain, verifiable by anyone.\n\n` +
-    `Verify 👉 https://lock.jup.ag/token/${CLKN_MINT}\n\n` +
+    `${verifyX}\n\n` +
     `Built on @BagsApp 🐔`;
   kv.set("lockCelebrationPending", {
     delta: mergedDelta, total: Math.round(total), pct,
