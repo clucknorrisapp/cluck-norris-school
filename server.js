@@ -6025,6 +6025,35 @@ app.get("/api/order-flow", async (req, res) => {
 // mint's token accounts, then classify each account's AUTHORITY by the program that owns
 // it; sum balances held under locker programs (Jupiter Lock / Streamflow) + self-owned
 // permanent locks. Returns total + % of supply + per-program breakdown + the biggest locks.
+// A self-owned lock escrow's PLATFORM lives ONLY in its creation tx. Streamflow escrows are
+// self-owned SPL token accounts (authority = the account itself), so by account-state alone a
+// Streamflow lock is indistinguishable from a generic self-lock — both land in "Self-owned
+// lock". Jupiter Lock is different (program-owned authority → already labeled correctly). To
+// attribute the self-owned ones, trace the OLDEST signature (the create/fund tx) once and cache
+// forever — a lock's creator never changes. Counting is unaffected; this only fixes the LABEL.
+const STREAMFLOW_PROGRAM_ID = "strmRqUCoQUgGUan5YhzUZa6KqdzwX5L6FpUxfmKg5m";
+const JUP_LOCK_PROGRAM_ID = "LocpQgucEQHbqNABEYvBvwoxCPsSbG91A1QaQhQQqjn";
+async function attributeLockPlatform(escrow, rpcCall) {
+  const cache = kv.get("lockPlatformCache", {}) || {};
+  if (cache[escrow]) return cache[escrow];
+  let label = "Self-owned lock";
+  try {
+    const sigRes = await rpcCall("lock-attr-sigs", "getSignaturesForAddress", [escrow, { limit: 1000 }]);
+    const sigs = sigRes?.result || [];
+    if (!sigs.length) return label; // no history yet — don't cache, retry next scan
+    const oldest = sigs[sigs.length - 1].signature; // oldest = creation/funding tx
+    const txRes = await rpcCall("lock-attr-tx", "getTransaction", [oldest, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0 }]);
+    const msg = txRes?.result?.transaction?.message;
+    if (!msg) return label; // trace failed — don't cache, retry next scan
+    const progs = new Set();
+    for (const i of (msg.instructions || [])) if (i.programId) progs.add(i.programId);
+    for (const inner of (txRes.result.meta?.innerInstructions || [])) for (const i of (inner.instructions || [])) if (i.programId) progs.add(i.programId);
+    if (progs.has(STREAMFLOW_PROGRAM_ID)) label = "Streamflow";
+    else if (progs.has(JUP_LOCK_PROGRAM_ID)) label = "Jupiter Lock"; // legacy Jup-Lock self-owned variants
+  } catch (_) { return label; } // transient error — don't cache, retry next scan
+  cache[escrow] = label; kv.set("lockPlatformCache", cache);
+  return label;
+}
 async function getLockedSupply(mint, rpcCall) {
   let decimals = 9, supplyUi = 0;
   try {
@@ -6055,16 +6084,26 @@ async function getLockedSupply(mint, rpcCall) {
   let cls;
   try { cls = await classifyAddressTypes(holders.map(h => h.authority), rpcCall); }
   catch (_) { partial = true; cls = new Map(); }
+  // Collect locked holders, then ATTRIBUTE the self-owned ones to their platform. Streamflow
+  // escrows are self-owned → they classify as "Self-owned lock"; a creation-tx trace relabels
+  // them "Streamflow" (or legacy "Jupiter Lock"). Counting is identical; only the label changes.
+  const lockedHolders = [];
+  for (const h of holders) {
+    const c = cls.get(h.authority);
+    if (c && c.category === "locker") lockedHolders.push({ ...h, label: c.label });
+  }
+  for (const h of lockedHolders) {
+    if (h.label === "Self-owned lock") {
+      try { h.label = await attributeLockPlatform(h.tokenAccount, rpcCall); } catch (_) { /* keep Self-owned lock */ }
+    }
+  }
   let totalLocked = 0;
   const byLabel = new Map();
   const locks = [];
-  for (const h of holders) {
-    const c = cls.get(h.authority);
-    if (c && c.category === "locker") { // classifyAddressTypes maps Jupiter Lock / Streamflow / self-owned → "locker"
-      totalLocked += h.tokens;
-      byLabel.set(c.label, (byLabel.get(c.label) || 0) + h.tokens);
-      locks.push({ authority: h.authority, tokens: h.tokens, label: c.label });
-    }
+  for (const h of lockedHolders) {
+    totalLocked += h.tokens;
+    byLabel.set(h.label, (byLabel.get(h.label) || 0) + h.tokens);
+    locks.push({ authority: h.authority, tokens: h.tokens, label: h.label });
   }
   locks.sort((a, b) => b.tokens - a.tokens);
   return {
