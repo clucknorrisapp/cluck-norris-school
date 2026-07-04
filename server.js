@@ -525,14 +525,21 @@ async function lockWatchTick() {
   const total = built.data.totalLocked;
   const base = kv.get("lockWatchTotal", null);
   const seenHigh = kv.get("lockWatchHigh", null); // durable high-water mark of what we've announced
+  // Per-platform subtotals for the two-vault celebration image (owner ask 2026-07-04). Kept in
+  // sync with lockWatchTotal in every path below, so at announce time we can tell WHICH vault
+  // (Jupiter Lock / Streamflow) grew and point the bag there.
+  const byPlat = {};
+  for (const b of (built.data.breakdown || [])) byPlat[b.label] = b.tokens;
+  const jupLocked = byPlat["Jupiter Lock"] || 0;
+  const strmLocked = byPlat["Streamflow"] || 0;
   // The kv baseline is durable and accurate, so compare against it even right after a
   // boot — a lock that lands during a deploy gap is announced on the first tick instead
   // of being silently re-baselined (the old in-memory prime swallowed those). Only a
   // genuinely missing baseline (first-ever run) primes silently.
-  if (typeof base !== "number") { kv.set("lockWatchTotal", total); kv.set("lockWatchHigh", total); kv.set("lockWatchCount", built.data.lockCount); return; }
+  if (typeof base !== "number") { kv.set("lockWatchTotal", total); kv.set("lockWatchHigh", total); kv.set("lockWatchCount", built.data.lockCount); kv.set("lockWatchByPlatform", byPlat); return; }
   const delta = total - base;
   if (delta < LOCK_WATCH_MIN_DELTA) {
-    if (delta < 0) { kv.set("lockWatchTotal", total); kv.set("lockWatchCount", built.data.lockCount); } // a lock expired/withdrew — track down silently
+    if (delta < 0) { kv.set("lockWatchTotal", total); kv.set("lockWatchCount", built.data.lockCount); kv.set("lockWatchByPlatform", byPlat); } // a lock expired/withdrew — track down silently
     return;
   }
   // Guard against a recovered-read phantom: if this "increase" only restores a level we've
@@ -541,9 +548,20 @@ async function lockWatchTick() {
   if (typeof seenHigh === "number" && total <= seenHigh + LOCK_WATCH_MIN_DELTA) {
     kv.set("lockWatchTotal", total);
     kv.set("lockWatchCount", built.data.lockCount);
+    kv.set("lockWatchByPlatform", byPlat);
     console.warn(`[LOCK-WATCH] delta +${Math.round(delta)} only restores prior high ${Math.round(seenHigh)} — no announce`);
     return;
   }
+  // Which vault grew since the last baseline → the bag heads there in the image.
+  const prevByPlat = kv.get("lockWatchByPlatform", null);
+  let grewPlatform = null, grewAmt = -Infinity;
+  if (prevByPlat) {
+    for (const label of new Set([...Object.keys(byPlat), ...Object.keys(prevByPlat)])) {
+      const d = (byPlat[label] || 0) - (prevByPlat[label] || 0);
+      if (d > grewAmt) { grewAmt = d; grewPlatform = label; }
+    }
+  }
+  kv.set("lockWatchByPlatform", byPlat);
   // How many distinct NEW lock accounts landed this window — drives the number of bags
   // Cluck carries in the celebration image (owner ask 2026-07-03). Count can also DROP
   // (an old lock expired) while tokens rise, so floor at 1 when we're announcing a delta.
@@ -564,22 +582,31 @@ async function lockWatchTick() {
   const prevFresh = prevPending && typeof prevPending.delta === "number" && Date.now() - (prevPending.at || 0) < 48 * 3600 * 1000;
   const mergedDelta = Math.round(delta) + (prevFresh ? prevPending.delta : 0);
   const mergedNewLocks = newLocks + (prevFresh && typeof prevPending.newLocks === "number" ? prevPending.newLocks : 0);
+  // Platform-aware copy (owner ask 2026-07-04: CLKN now locks on BOTH Jupiter Lock + Streamflow).
+  const platform = grewPlatform === "Streamflow" ? "Streamflow" : (grewPlatform === "Jupiter Lock" ? "Jupiter Lock" : (strmLocked > jupLocked ? "Streamflow" : "Jupiter Lock"));
+  const isStrm = platform === "Streamflow";
+  const platTagX = isStrm ? "@streamflow_fi" : "@JupiterExchange";
+  const jupShort = fmtTokensShort(jupLocked), strmShort = fmtTokensShort(strmLocked);
+  const bothLive = jupLocked > 0 && strmLocked > 0;
+  const splitTg = bothLive ? `\n   🔒 Jupiter Lock: <b>${jupShort}</b>\n   🌊 Streamflow: <b>${strmShort}</b>` : "";
+  const splitX = bothLive ? ` (${jupShort} on @JupiterExchange Lock + ${strmShort} on @streamflow_fi)` : "";
   const tgText =
-    `🔒 <b>NEW CLKN LOCK</b>\n\n` +
+    `🔒 <b>NEW CLKN LOCK</b> — via ${platform}\n\n` +
     `<b>+${fmtTokensShort(mergedDelta)} CLKN</b> just locked.\n` +
-    `Now <b>${fmtTokensShort(total)} CLKN</b> locked — <b>${pct}</b> of supply.\n\n` +
-    `🔒 Removed from circulation — long-term commitment. Verify on Jupiter Lock:\nhttps://lock.jup.ag/token/${CLKN_MINT}`;
+    `Now <b>${fmtTokensShort(total)} CLKN</b> locked — <b>${pct}</b> of supply.` + splitTg + `\n\n` +
+    `🔒 Removed from circulation — long-term commitment. Verify on-chain:\nhttps://lock.jup.ag/token/${CLKN_MINT}`;
   const totalSupply = built.data.pctOfSupply > 0 ? total / built.data.pctOfSupply : null;
   const deltaPct = totalSupply ? (mergedDelta / totalSupply) * 100 : null;
   const xText =
-    `${deltaPct ? `🔒 CLKN just locked another ${deltaPct.toFixed(1)}% of supply.` : `🔒 CLKN supply-lock update.`}\n\n` +
-    `${fmtTokensShort(total)} CLKN — ${pct} of total supply now locked across ${built.data.lockCount} @JupiterExchange Lock escrow${built.data.lockCount === 1 ? "" : "s"}. Removed from circulation, on-chain, verifiable by anyone.\n\n` +
+    `${deltaPct ? `🔒 CLKN just locked another ${deltaPct.toFixed(1)}% of supply — via ${platTagX}.` : `🔒 CLKN supply-lock update — via ${platTagX}.`}\n\n` +
+    `${fmtTokensShort(total)} CLKN — ${pct} of total supply now locked across ${built.data.lockCount} escrows.` + splitX + ` Removed from circulation, on-chain, verifiable by anyone.\n\n` +
     `Verify 👉 https://lock.jup.ag/token/${CLKN_MINT}\n\n` +
     `Built on @BagsApp 🐔`;
   kv.set("lockCelebrationPending", {
     delta: mergedDelta, total: Math.round(total), pct,
     deltaShort: fmtTokensShort(mergedDelta), totalShort: fmtTokensShort(total),
     newLocks: mergedNewLocks, // bags in the celebration image: one per new lock account this window
+    platform, jupLockedShort: jupShort, strmLockedShort: strmShort, bothLive, // two-vault image: bag → this platform's vault; each door shows its subtotal
     lockCount: built.data.lockCount,
     announced: prevFresh && prevPending.announced ? true : false, // true only if a fallback already posted text for part of this
     tgText, xText, // ready-to-post copy — the session posts these WITH the image as one post per channel
