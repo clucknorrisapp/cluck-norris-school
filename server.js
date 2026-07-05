@@ -11866,6 +11866,30 @@ app.listen(PORT, () => {
     }
     setInterval(jupLpVsHodlDailyCheck, 60 * 60 * 1000);          // checks hourly, DMs at most once/24h
     setTimeout(jupLpVsHodlDailyCheck, 95000);
+    // Orca/Raydium vault LP-vs-HODL — the same honest daily verdict for the whirlpool
+    // engine, per project (the treasury project runs the CLKN pools now). READ-ONLY:
+    // it measures fees-net-of-IL and DMs each project's own chat; it never touches a
+    // position. For CLKN-token projects the verdict carries the organic score + real
+    // 24h volume from the hourly organic log — the "what did the IL actually buy?" line.
+    async function wpLpVsHodlDailyCheck() {
+      let projects = {};
+      try { projects = whirlpoolMM.vault.listProjects() || {}; } catch { return; }
+      for (const pidKey of Object.keys(projects)) {
+        try {
+          let extras = "";
+          try {
+            if ((projects[pidKey] || {}).tokenMint === CLKN_MINT_ADDR) {
+              const log = kv.get("clknOrganicLog", []) || [];
+              const last = log[log.length - 1];
+              if (last) extras = `24h vol $${Number(last.vol24h || 0).toLocaleString()} · organic score ${last.score != null ? last.score : "?"}`;
+            }
+          } catch (_) { /* extras are optional */ }
+          await whirlpoolMM.vault.lpVsHodlDaily({ projectId: pidKey, extras });
+        } catch (e) { console.warn(`[wp-lphodl] ${pidKey}:`, e.message); }
+      }
+    }
+    setInterval(wpLpVsHodlDailyCheck, 60 * 60 * 1000);           // hourly check, DMs at most once/24h/project
+    setTimeout(wpLpVsHodlDailyCheck, 130000);
     // Pool Monitor — sample the JUP/USDC earner every 2 min: fee pace + peak $/min & $/hr
     // bursts + edge proximity, so the owner can watch closely and adjust. Powers /api/pool-monitor.
     async function poolMonitorTick() {

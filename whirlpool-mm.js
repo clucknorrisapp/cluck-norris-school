@@ -238,6 +238,16 @@ router.get("/vault/earnings", async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message || "earnings failed" }); }
 });
 
+// GET /api/whirlpool/vault/lp-vs-hodl?key=…[&project=][&reset=1] — READ-ONLY telemetry:
+// total basket (positions + pending fees + float) valued now vs the baseline basket
+// priced now. The gap = fees − IL − tx costs. First call seeds the baseline; reset=1
+// re-baselines (do this right after any manual deposit/withdrawal or the number skews).
+router.get("/vault/lp-vs-hodl", async (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  try { res.json(await vault.lpVsHodl({ projectId: proj(req), reset: req.query.reset === "1" })); }
+  catch (e) { res.status(500).json({ error: e.message || "lp-vs-hodl failed" }); }
+});
+
 // GET /api/whirlpool/vault/tick?key=…[&run=1] — run one cycle. Without run=1 it's
 // a DRY RUN (plans, signs nothing). With run=1 it may actually roll the position.
 router.get("/vault/tick", async (req, res) => {

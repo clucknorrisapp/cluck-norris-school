@@ -108,7 +108,17 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 > or slow `minRecenterSecOor`). Lives in the always-on server so it survives container/session resets. kv
 > `jupLpHodlCheckAt`. (A cloud session can't self-schedule days out — the container is ephemeral — so the check-in
 > is server-side by design.)
->
+> **🆕 VAULT LP-vs-HODL (2026-07-05 — the same honest number, ported to the Orca/Raydium vault, PER PROJECT):**
+> `lpVsHodl`/`lpVsHodlDaily` in `lib/whirlpool-vault.js` + gated `/api/whirlpool/vault/lp-vs-hodl?project=…[&reset=1]`
+> + hourly `wpLpVsHodlDailyCheck` in server.js (DMs each project's own chat once/24h; CLKN projects get the
+> organic-score + real-24h-volume line appended — the "what did the IL buy?" readout). Baseline = the wallet's
+> TOTAL basket (positions + pending fees + free float), so the vault's own opens/closes/swaps DON'T skew it
+> (value-preserving) — this FIXES the Meteora limitation: external deposits/withdrawals show up as a diff
+> step-change >$250 (kv `wpLpHodlJumpUsd`) between daily checks and trigger an AUTO re-baseline with a DM note.
+> First read/check auto-seeds the baseline. READ-ONLY — it never touches positions. Built as the instrument for
+> judging the reimagined engine structure (2026-07-05: vault PAUSED, 3 ±94% anchors live, structure discussion open —
+> owner is width-skeptical: tight bands feed volume→organic score; the counter is same-depth-at-touch via
+> ~5× capital at ±10%, undecided).
 > ⏰ **UPDATE 2026-07-03: CoinGecko REJECTED AGAIN (3rd time) — boilerplate reasons: liquidity
 > (they read TOTAL TVL, ~$39K now — concentration doesn't move that number), life of token, and
 > team presence. The MIGRATION route was already used (owner applied as a migration from the
