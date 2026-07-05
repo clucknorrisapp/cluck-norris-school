@@ -11874,7 +11874,12 @@ app.listen(PORT, () => {
     async function wpLpVsHodlDailyCheck() {
       let projects = {};
       try { projects = whirlpoolMM.vault.listProjects() || {}; } catch { return; }
+      // OPT-IN per project (kv wpLpHodlDmProjects): the builtin "clkn" project has no
+      // telegramChatId, so its notify() falls back to the COMMUNITY chat — operator
+      // telemetry must never post there. Default: treasury (the owner's private DM) only.
+      const allow = kv.get("wpLpHodlDmProjects", ["treasury"]) || [];
       for (const pidKey of Object.keys(projects)) {
+        if (!allow.includes(pidKey)) continue;
         try {
           let extras = "";
           try {
