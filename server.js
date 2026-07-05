@@ -889,19 +889,10 @@ async function notifyEduPost() {
   // Pair the lesson with the live tool that practices it (e.g. the block-explorer
   // lesson links the Trace tool) — the lesson teaches, the link converts.
   const route = eduToolRoute(topic);
-  const toolLine = route ? `🛠 <b>${route.label}</b> → ${route.url}\n` : "";
-  const text = `🎓 <b>CLUCK'S LESSON</b>\n\n${tgEsc(body)}\n\n${toolLine}💬 <i>Reply to this lesson with a question and Cluck will answer.</i>\n📚 The full course is in session → clucknorris.app`;
-  try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true, disable_notification: true }),
-    });
-    const data = await res.json().catch(() => null);
-    // Remember this post is a LESSON so the reply-bot only answers lesson replies.
-    if (data && data.ok && data.result) registerLessonMessage(data.result.message_id, body);
-  } catch (e) { console.warn("[EDU] post failed:", e.message); }
-  // Cross-post the FULL lesson to X (the account has Premium → long posts), so
-  // it's never truncated. Trimmed fallback only if a long post is ever rejected.
+  // X FIRST (owner's call 2026-07-05) — post the full lesson, capture the tweet id, drop the
+  // tool/links as a self-reply. Then Telegram carries a link to the X post so the (active)
+  // community likes & reposts it → boosts the lesson's reach on X.
+  let xTweetId = null;
   if (xConfigured()) {
     try {
       // Clean, link-free lesson body + tag the Solana Foundation (grant relationship —
@@ -913,6 +904,7 @@ async function notifyEduPost() {
         r = await postToX(short + "\n\n" + X_LEARN_TAG);
       }
       if (r && r.ok) {
+        xTweetId = r.id;
         console.log(`[X] lesson tweeted (id ${r.id})`);
         // Remember today's lesson tweet so lessonBumpTick can REPLY under ("bump") it later.
         try { kv.set("lessonXTweet", { id: r.id, date: new Date().toISOString().slice(0, 10) }); } catch (_) {}
@@ -921,6 +913,20 @@ async function notifyEduPost() {
       } else console.warn("[X] lesson tweet failed:", JSON.stringify(r).slice(0, 200));
     } catch (e) { console.warn("[EDU] X cross-post failed:", e.message); }
   }
+  // Telegram (silent): the lesson + tool link + a "like & repost on X" link (when the X post
+  // went out) so the community boosts its engagement. Graceful if the X post failed (no link).
+  const toolLine = route ? `🛠 <b>${route.label}</b> → ${route.url}\n` : "";
+  const xLine = xTweetId ? `\n🐦 <b>Boost today's lesson on X — like &amp; repost 👇</b>\nhttps://x.com/FireChicken007/status/${xTweetId}\n` : "";
+  const text = `🎓 <b>CLUCK'S LESSON</b>\n\n${tgEsc(body)}\n\n${toolLine}${xLine}💬 <i>Reply to this lesson with a question and Cluck will answer.</i>\n📚 The full course is in session → clucknorris.app`;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true, disable_notification: true }),
+    });
+    const data = await res.json().catch(() => null);
+    // Remember this post is a LESSON so the reply-bot only answers lesson replies.
+    if (data && data.ok && data.result) registerLessonMessage(data.result.message_id, body);
+  } catch (e) { console.warn("[EDU] post failed:", e.message); }
 }
 let lastEduStamp = kv.get("eduStamp", "");
 function eduPostTick() {
