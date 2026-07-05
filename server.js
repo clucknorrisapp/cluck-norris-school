@@ -635,7 +635,7 @@ async function lockWatchTick() {
 // (persisted) — every topic airs once before any repeat, but the order reshuffles
 // each pass so it never reads like the same predictable loop.
 // Posts STAY (no self-clean) — they're a learning record.
-const EDU_POST_ENABLED = false; // PAUSED (owner's call 2026-06-24): no learning-lesson posts (Telegram + X) or quote-tweet bumps. Flip true to resume.
+const EDU_POST_ENABLED = true; // ON (owner's call 2026-07-05): ONE lesson/day + 2 self-REPLY bumps under it (not quote-tweets, not 3×). De-spammed.
 // MASTER X PAUSE (owner's call 2026-06-24): hard-gates postToX so NOTHING auto-posts to
 // X — lessons, daily alpha, blitz, market check, spotlights, the lot. One switch. The
 // manual gated test endpoints (&post=1) also no-op while this is true. Flip false to resume.
@@ -645,7 +645,7 @@ const X_AUTOPOST_PAUSED = true;
 const OUTREACH_ENABLED = false;
 const TOOL_SPOTLIGHT_ENABLED = false;
 // 1×/day (owner's call 2026-06-20 — was 3×/day): ONE full lesson at 13:00 UTC
-// (9am ET), then amplified by lessonBumpTick (quote-tweets at later slots tagging
+// (8am CT), then amplified by lessonBumpTick (self-replies at later slots tagging
 // different ecosystem groups) instead of posting more new lessons. Odd hour so it
 // never collides with even-hour posts.
 const EDU_HOURS_UTC = [13];
@@ -914,7 +914,7 @@ async function notifyEduPost() {
       }
       if (r && r.ok) {
         console.log(`[X] lesson tweeted (id ${r.id})`);
-        // Remember today's lesson tweet so lessonBumpTick can quote-tweet ("bump") it later.
+        // Remember today's lesson tweet so lessonBumpTick can REPLY under ("bump") it later.
         try { kv.set("lessonXTweet", { id: r.id, date: new Date().toISOString().slice(0, 10) }); } catch (_) {}
         // …links follow as a self-reply so they never throttle the lesson's reach.
         try { await postToX(route ? `🛠 ${route.label} → ${route.url}\n\n${X_LESSON_REPLY}` : X_LESSON_REPLY, { replyToId: r.id }); } catch (_) {}
@@ -934,27 +934,28 @@ function eduPostTick() {
 }
 
 // ── Lesson amplification ("bumps") ──────────────────────────────────────────
-// Instead of posting MORE lessons, quote-tweet the day's single lesson at later
-// slots with a fresh INTERACTION prompt + a different ecosystem tag group each time
-// — re-surfaces it for new audiences AND drives replies, turning the one daily
-// lesson into the day's engagement thread. No new long-form content (no duplicate
-// risk). X-only; only ever bumps TODAY's lesson. Three slots/day.
-// Timed to the audience's X active-time peaks (owner is US Central): the daily
-// lesson lands on the 8am CT peak (EDU_HOURS_UTC 13), and these three bumps sit on
-// the 12pm / 4pm / 8pm CT peaks. Retune here if the active-times heatmap shifts.
+// Instead of posting MORE lessons, REPLY under the day's single lesson at later slots
+// with a fresh interaction prompt + a different ecosystem tag group each time (owner's
+// call 2026-07-05: comments threaded UNDER the original, not quote-tweets). Each reply
+// bumps the original into the timeline again and drives conversation, turning the one
+// daily lesson into the day's engagement thread. No new long-form content (no duplicate
+// risk). X-only; only ever bumps TODAY's lesson. TWO slots/day (was three quote-tweets).
+// Timed to the audience's X active-time peaks (owner is US Central): the daily lesson
+// lands on the 8am CT peak (EDU_HOURS_UTC 13), and these two reply-bumps sit on the
+// 12pm / 4pm CT peaks. Retune here if the active-times heatmap shifts.
 const LESSON_BUMPS = [
   { hour: 17, tags: "@JupiterExchange @BagsApp" },   // 12pm CT — midday peak
-  { hour: 21, tags: "@solana" },                     // 4pm CT — afternoon peak
-  { hour: 1,  tags: "@Ricomoneybags" },              // 8pm CT — evening peak
+  { hour: 21, tags: "@solana @SolanaFndn" },         // 4pm CT — afternoon peak
 ];
-// Engagement prompts — each asks for a reply so the lesson becomes a conversation.
+// Reply hooks — each threads under the morning lesson and asks a question so the post
+// keeps surfacing and the thread fills with replies.
 const LESSON_BUMP_HOOKS = [
-  "Today's Cluck's Lesson 👇 What tripped YOU up most when you started? Reply below.",
-  "ICYMI 👇 Agree or disagree? Drop your take in the replies.",
-  "Reply with the lesson YOU learned the hard way 👇",
-  "Did this match your experience? Tell us below 👇",
-  "What would you add to this? 👇 (lesson 👆)",
-  "Quote this with the one tip you'd give a new trader 👇",
+  "Still the most-missed lesson from this morning 👆 What tripped YOU up when you started? 👇",
+  "ICYMI 👆 Reply with the version of this you learned the hard way. 👇",
+  "This one saves wallets. Agree — or what would you add? 👇",
+  "Bumping this for the afternoon crew 👆 Drop your take below 👇",
+  "The hard-knocks lesson of the day 👆 What's yours? 👇",
+  "New to crypto? Start with this 👆 then tell us what clicked 👇",
 ];
 async function lessonBumpTick() {
   if (!EDU_POST_ENABLED || !xConfigured()) return;
@@ -972,8 +973,8 @@ async function lessonBumpTick() {
     if (done[k]) continue;
     const hook = LESSON_BUMP_HOOKS[(now.getUTCDate() + i) % LESSON_BUMP_HOOKS.length];
     try {
-      const r = await postToX(`${hook}\n\n${b.tags}`, { quoteId: lt.id });
-      if (r && r.ok) { done[k] = true; kv.set("lessonBumpDone", done); console.log(`[lesson-bump] ${b.hour}:00 quoted ${lt.id} → ${b.tags}`); }
+      const r = await postToX(`${hook}\n\n${b.tags}`, { replyToId: lt.id }); // REPLY under the lesson (not a quote-tweet) — owner's call 2026-07-05
+      if (r && r.ok) { done[k] = true; kv.set("lessonBumpDone", done); console.log(`[lesson-bump] ${b.hour}:00 replied under ${lt.id} → ${b.tags}`); }
       else console.warn("[lesson-bump] post not ok:", JSON.stringify(r).slice(0, 160));
     } catch (e) { console.warn("[lesson-bump] failed:", e.message); }
   }
