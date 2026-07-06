@@ -19,6 +19,11 @@
   .header h1 { font-family: 'Anton', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: #FCD34D; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
   .header p { font-family: 'Anton', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
 
+  .hero { background: rgba(255,122,24,0.05); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; }
+  .hero-tag { font-family: 'Anton', sans-serif; font-size: 11px; color: var(--accent); letter-spacing: 3px; margin-bottom: 7px; }
+  .hero-title { font-family: 'Anton', sans-serif; font-size: 18px; font-weight: 700; color: var(--text); letter-spacing: .5px; margin-bottom: 8px; }
+  .hero-sub { font-family: system-ui, sans-serif; font-size: 13.5px; color: var(--sub); line-height: 1.65; }
+
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
   .card-title { font-family: var(--mono); font-size: 10px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 14px; }
 
@@ -106,6 +111,12 @@ body{background:transparent;font-family:var(--body);}
       <h1>SECURITY COOP</h1>
       <p>WALLET PERMISSION CHECK</p>
     </div>
+  </div>
+
+  <div class="hero">
+    <div class="hero-tag">WALLET PERMISSION CHECK</div>
+    <div class="hero-title">Revoke the approvals that drain wallets.</div>
+    <div class="hero-sub">Security Coop scans your wallet's token accounts for active <b>delegate approvals</b> — permissions that let another address move your tokens — and lets you clear any you don't recognise. Every revoke is a standard SPL transaction you sign yourself in your own wallet; it's non-custodial and never touches your keys.</div>
   </div>
 
   <div id="errorBox" class="error-box"></div>

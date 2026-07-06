@@ -21,6 +21,11 @@
   .header h1 { font-family: 'Anton', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: #FCD34D; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
   .header p { font-family: 'Anton', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
 
+  .hero { background: rgba(255,122,24,0.05); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; }
+  .hero-tag { font-family: 'Anton', sans-serif; font-size: 11px; color: var(--accent); letter-spacing: 3px; margin-bottom: 7px; }
+  .hero-title { font-family: 'Anton', sans-serif; font-size: 18px; font-weight: 700; color: var(--text); letter-spacing: .5px; margin-bottom: 8px; }
+  .hero-sub { font-family: system-ui, sans-serif; font-size: 13.5px; color: var(--sub); line-height: 1.65; }
+
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
   .card-title { font-family: var(--mono); font-size: 10px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 14px; }
 
@@ -136,6 +141,12 @@ body{background:transparent;font-family:var(--body);}
       <h1>LIQUIDITY ENGINE</h1>
       <p>ORCA WHIRLPOOLS · CONCENTRATED MARKET MAKER</p>
     </div>
+  </div>
+
+  <div class="hero">
+    <div class="hero-tag">ORCA WHIRLPOOLS · CONCENTRATED MM</div>
+    <div class="hero-title">Provide liquidity like a market maker.</div>
+    <div class="hero-sub">Pick a price range, see live pool depth, and place a single-sided wall or a balanced two-sided range on CLKN — the server only quotes and builds the transaction, and it's <b>non-custodial</b>: you sign and submit it from your own wallet. It's the same engine that market-makes CLKN itself.</div>
   </div>
 
   <div id="errorBox" class="error-box"></div>
