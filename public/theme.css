@@ -50,6 +50,13 @@ body {
   color: var(--text);
   font-family: var(--body);
   line-height: 1.55;
+  /* Light text on a dark background renders thick/fuzzy (a "halo") under the
+     browser default subpixel antialiasing, especially on macOS desktop. Force
+     grayscale antialiasing so glyph edges stay crisp. Site-wide (this stylesheet
+     loads on the React app AND every tool page). */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 h1, h2, h3 { font-family: var(--disp); letter-spacing: .5px; }
 a { color: var(--orange); }
