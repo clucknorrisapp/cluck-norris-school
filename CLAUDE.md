@@ -233,7 +233,14 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   then rugged — misleading, not worth it. Do NOT rebuild it.** Gone: `/score` page + `score.html`,
   `/api/cluck-score`, `/api/cluck-card`, `renderScoreCard`, the `/score` Telegram command, and all
   links. The replacement free flagship is **Wallet X-Ray** (`/wallet-xray`, `/api/wallet-xray`).
-- `src/` — the React/Vite school (landing app).
+- `src/` — the React/Vite school (landing app). **SEO note (2026-07-06):** the school is a
+  client-rendered SPA, so `/curriculum` (server route + `lib/curriculum.js`) serves a static-HTML
+  mirror of the lesson content for non-JS crawlers — it text-extracts LESSONS/INCUBATOR_LESSONS
+  (App.jsx) + LP_LESSONS (LPLab.jsx) at first request, deliberately WITHOUT quiz answers (the
+  exam draws the same questions — don't make the key googleable). `robots.txt` + `sitemap.xml`
+  are explicit server routes (the SPA catch-all would otherwise answer them with the React shell).
+  If you materially restructure those lesson arrays, sanity-check `/curriculum` still renders
+  (a failed extraction 404s that route only — nothing else is affected).
 
 ## Credentials / transcripts (the school's permanent output)
 - A learner earns a permanent, shareable transcript by **passing the Ultimate Challenge**

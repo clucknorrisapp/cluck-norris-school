@@ -21,6 +21,7 @@ const kv = require("./lib/kvstore");
 const recap = require("./lib/recap");
 const gradTracker = require("./lib/grad-tracker");
 const credentials = require("./lib/credentials");
+const curriculumPage = require("./lib/curriculum"); // crawlable /curriculum (SEO) — read-only
 const rpc = require("./lib/rpc"); // resilient RPC: primary Helius + automatic failover
 const {
   SOL_ADDR_RE, base58Decode, base58Encode, isOnCurveBytes, isOnCurve, deriveAta,
@@ -9847,6 +9848,44 @@ app.get("/api/grad-alert-test", async (req, res) => {
 // keeps the root fast — the 9k-line app no longer loads just to reach the homepage. --
 app.get("/", (req, res) => {
   res.sendFile(join(__dirname, "public", "home.html"));
+});
+
+// ── SEO surface: robots.txt + sitemap.xml + crawlable curriculum ─────────────
+// These MUST be routed before the SPA catch-all below, which otherwise answers
+// /robots.txt and /sitemap.xml with the React shell — worse than absent (a
+// crawler requesting robots.txt and receiving HTML treats it as malformed).
+// The React school itself stays a client-rendered SPA (Googlebot renders JS);
+// /curriculum is the static-HTML mirror of the lesson content for everything
+// that doesn't execute JS (Bing, AI crawlers, SEO tools). See lib/curriculum.js
+// — read-only, lazily cached, and if extraction ever fails the route 404s
+// without touching anything else.
+app.get("/robots.txt", (req, res) => {
+  res.type("text/plain").send("User-agent: *\nAllow: /\n\nSitemap: https://clucknorris.app/sitemap.xml\n");
+});
+const SITEMAP_PAGES = [
+  // Public, indexable pages only — the noindex'd pages (premium, slots, stats,
+  // grant, pool-monitor, admin) are deliberately absent; their meta handles them.
+  "/", "/school", "/curriculum", "/tools", "/autopsy", "/wallet-xray", "/trace",
+  "/snapshot", "/holders", "/airdrop", "/buyspecial", "/hatchery", "/security-coop",
+  "/wallet-checkup", "/liquidity", "/liquidity-engine", "/clkn", "/alpha",
+  "/classroom", "/order-book", "/bags", "/investors", "/privacy", "/terms",
+];
+app.get("/sitemap.xml", (req, res) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const urls = SITEMAP_PAGES.map((p) =>
+    `<url><loc>https://clucknorris.app${p}</loc><lastmod>${today}</lastmod><changefreq>${p === "/" || p === "/alpha" ? "daily" : "weekly"}</changefreq></url>`);
+  // Graduate transcripts — permanent shareable pages, capped to keep the file sane.
+  try {
+    for (const rec of credentials.all().slice(0, 500)) {
+      if (rec && rec.slug) urls.push(`<url><loc>https://clucknorris.app/transcript/${rec.slug}</loc><changefreq>monthly</changefreq></url>`);
+    }
+  } catch (_) { /* transcripts are a bonus, never a failure */ }
+  res.type("application/xml").send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join("\n")}\n</urlset>`);
+});
+app.get("/curriculum", (req, res) => {
+  const html = curriculumPage.render();
+  if (!html) return res.status(404).send("Curriculum page unavailable");
+  res.type("html").send(html);
 });
 
 // -- Serve React app (the school) at /school + every non-root path via the catch-all --
