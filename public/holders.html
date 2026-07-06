@@ -16,8 +16,12 @@
   .header { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
   .header-icon { font-size: 40px; filter: drop-shadow(0 0 16px rgba(217,119,6,0.5)); }
   .header .brand-mini { font-family: 'Anton', sans-serif; font-size: 10px; letter-spacing: 4px; color: #D97706; margin-bottom: 4px; font-weight: 700; }
-  .header h1 { font-family: 'Anton', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: #FCD34D; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
-  .header p { font-family: 'Anton', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
+  .header h1 { font-family: 'Anton', sans-serif; font-size: 32px; font-weight: 900; letter-spacing: 2px; background: linear-gradient(180deg,#FFD56B 0%,#FF9A3C 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
+  .header p { font-family: 'Anton', sans-serif; font-size: 12px; color: var(--subtext); letter-spacing: 2px; margin-top: 6px; }
+  .hero { background: rgba(255,122,24,0.05); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; }
+  .hero-tag { font-family: 'Anton', sans-serif; font-size: 11px; color: var(--accent); letter-spacing: 3px; margin-bottom: 7px; }
+  .hero-title { font-family: 'Anton', sans-serif; font-size: 18px; font-weight: 700; color: var(--text); letter-spacing: .5px; margin-bottom: 8px; }
+  .hero-sub { font-family: system-ui, sans-serif; font-size: 13.5px; color: var(--body-text); line-height: 1.65; }
   .footer-tag { text-align: center; margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Anton', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
   .footer-tag a { color: #D97706; text-decoration: none; }
 
@@ -33,7 +37,7 @@
 
   .config-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
   .config-group { display: flex; flex-direction: column; gap: 4px; }
-  .config-label { font-family: var(--mono); font-size: 9px; color: var(--subtext); letter-spacing: 1px; }
+  .config-label { font-family: var(--mono); font-size: 10.5px; color: var(--subtext); letter-spacing: 1px; }
   .config-input { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; font-family: var(--mono); font-size: 12px; color: var(--text); }
   .config-input:focus { outline: none; border-color: var(--accent); }
 
@@ -60,7 +64,7 @@
   .stat-val.red { color: var(--red); }
   .stat-val.blue { color: var(--blue); }
   .stat-val.purple { color: var(--purple); }
-  .stat-label { font-size: 9px; color: var(--subtext); letter-spacing: 1px; margin-top: 2px; }
+  .stat-label { font-family: var(--mono); font-size: 10.5px; color: var(--subtext); letter-spacing: 1.5px; margin-top: 4px; text-transform: uppercase; }
 
   .filter-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
   .filter-chip { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; font-family: var(--mono); font-size: 10px; color: var(--subtext); cursor: pointer; transition: all 0.15s; }
@@ -124,8 +128,14 @@ body{background:transparent;font-family:var(--body);}
     <div>
       <div class="brand-mini">SCHOOL OF CRYPTO HARD KNOCKS</div>
       <h1>HOLDERS ANALYZER</h1>
-      <p>Paste any token mint — see who really holds it. We filter out LP pools, locks, and program accounts so the concentration you see is real humans, not plumbing. The fast way to spot whale risk before you ape.</p>
+      <p>Real holders, not plumbing.</p>
     </div>
+  </div>
+
+  <div class="hero">
+    <div class="hero-tag">PASTE ANY SOLANA MINT · FREE</div>
+    <div class="hero-title">See who really holds this token.</div>
+    <div class="hero-sub">We filter out LP pools, locks, and program accounts so the concentration you see is <b>real humans, not plumbing</b> — the fast way to spot whale risk before you ape. Works on any Solana token, no wallet connect.</div>
   </div>
 
   <div class="error-box" id="errorBox"></div>
