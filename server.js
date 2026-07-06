@@ -9862,6 +9862,12 @@ app.get("/", (req, res) => {
 app.get("/robots.txt", (req, res) => {
   res.type("text/plain").send("User-agent: *\nAllow: /\n\nSitemap: https://clucknorris.app/sitemap.xml\n");
 });
+// Google Search Console ownership verification — serves the exact token file Google
+// looks for at the site root. MUST stay live permanently (Google re-checks it), so
+// it's a code route, not a droppable file. See docs/MAC_SETUP.md / owner's GSC setup.
+app.get("/google20f487c37773bf48.html", (req, res) => {
+  res.type("text/html").send("google-site-verification: google20f487c37773bf48.html");
+});
 const SITEMAP_PAGES = [
   // Public, indexable pages only — the noindex'd pages (premium, slots, stats,
   // grant, pool-monitor, admin) are deliberately absent; their meta handles them.
