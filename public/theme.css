@@ -57,6 +57,14 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  /* Anton and Share Tech Mono each ship a SINGLE weight (400). Applying bold/700
+     to them (via <b>, headings, or font-weight) makes the browser SYNTHESIZE
+     bold — algorithmically smeared glyphs that read as a fuzzy halo on the dark
+     theme. `font-synthesis: style` forbids WEIGHT faking (kills the halo → Anton
+     renders at its real heavy 400, Chakra Petch uses its real loaded 700) while
+     still ALLOWING italic synthesis, so the site's many <em>/italic emphases are
+     preserved. */
+  font-synthesis: style;
 }
 h1, h2, h3 { font-family: var(--disp); letter-spacing: .5px; }
 a { color: var(--orange); }
