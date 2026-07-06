@@ -115,10 +115,21 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 > TOTAL basket (positions + pending fees + free float), so the vault's own opens/closes/swaps DON'T skew it
 > (value-preserving) — this FIXES the Meteora limitation: external deposits/withdrawals show up as a diff
 > step-change >$250 (kv `wpLpHodlJumpUsd`) between daily checks and trigger an AUTO re-baseline with a DM note.
-> First read/check auto-seeds the baseline. READ-ONLY — it never touches positions. Built as the instrument for
-> judging the reimagined engine structure (2026-07-05: vault PAUSED, 3 ±94% anchors live, structure discussion open —
-> owner is width-skeptical: tight bands feed volume→organic score; the counter is same-depth-at-touch via
-> ~5× capital at ±10%, undecided).
+> First read/check auto-seeds the baseline. READ-ONLY — it never touches positions.
+> **🆕 REIMAGINED ENGINE STRUCTURE — DEPLOYED 2026-07-06 (owner's explicit GO): "same depth-at-touch,
+> ±10% width, ~5× capital" replaces the ±2% trio.** Thesis: depth-at-touch = capital ÷ width, so ~$1.8K/pool
+> at ±10% matches the old ~$350/pool at ±2% → same arb volume feeding the organic score, but recenters
+> ~never fire (price must move 10%) → the recenter IL-crystallization leak (the dominant cost, proven on
+> Meteora) is gone. LIVE under treasury `2zMCU…`, all opened via openAnchor/openWall so they're PINNED
+> (st.anchorMints — no automation can adopt/close them; **vault stays PAUSED**): CLKN/SOL ±10%
+> (`J1NPf2S8…`, 2.48M CLKN + 12.3 SOL), CLKN/JUP ±10% (`B9KG81gu…`, 2.50M CLKN + 4,103 JUP), CLKN/USDC
+> ±10% (`DNAr1hyp…`, 450K CLKN + 173 USDC — bid side deliberately SHALLOW, owner's call: no USDC left after
+> his manual DCA buys and never sell SOL/JUP to top up) + a single-sided CLKN ask wall +1%→+10%
+> (`D5CNjiVw…`, 2.08M CLKN) bringing the USDC pool's upside to par ("OUT of range" on the wall is CORRECT —
+> it's an ask above spot). The three ±94% anchors remain underneath. ~$5K deployed; ~20.5 SOL / ~3.4K JUP /
+> ~8.3M CLKN / ~$26 USDC left free as dry powder. LP-vs-HODL re-baselined at deploy ($10,442 basket) —
+> judge the structure by the daily verdicts (volume + organic score line), not vibes. If volume/score sags
+> vs the ±2% era, tightening is a config discussion with the owner, not an automatic action.
 > ⏰ **UPDATE 2026-07-03: CoinGecko REJECTED AGAIN (3rd time) — boilerplate reasons: liquidity
 > (they read TOTAL TVL, ~$39K now — concentration doesn't move that number), life of token, and
 > team presence. The MIGRATION route was already used (owner applied as a migration from the
