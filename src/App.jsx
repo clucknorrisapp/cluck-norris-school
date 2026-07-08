@@ -2043,6 +2043,15 @@ function StartHere({ onGo }){
         <Act label="🥚 Open the Incubator" onClick={()=>onGo("incubator")} color="#5B8DD6" bg="rgba(91,141,214,0.1)" bd="rgba(91,141,214,0.4)"/>
         <Act label="📚 The 12-lesson course" onClick={()=>onGo("select")}/>
       </>)},
+    { key:"coins", icon:"🧠", title:"Learn about a specific coin or chain", tag:"BTC · ETH · SOL · XRP · XLM & more", body:()=>(<>
+        <p style={txt}>Plain-English deep-dives on the majors — how each one works, what its team is building right now, and the honest risks. Diversifying your understanding is discipline, not distraction. No hype, no shilling.</p>
+        <Act label="₿ Bitcoin" onClick={goIn("/learn/btc")}/>
+        <Act label="Ξ Ethereum" onClick={goIn("/learn/eth")}/>
+        <Act label="◎ Solana" onClick={goIn("/learn/sol")}/>
+        <Act label="✕ XRP" onClick={goIn("/learn/xrp")}/>
+        <Act label="✦ Stellar" onClick={goIn("/learn/xlm")}/>
+        <Act label="🧭 Every chain" onClick={goIn("/learn")} color="#6EE7B7" bg="rgba(16,185,129,0.1)" bd="rgba(16,185,129,0.4)"/>
+      </>)},
     { key:"basics", icon:"📚", title:"I know the basics", tag:"Level up", body:()=>(<>
         <p style={txt}>Finish the 12-lesson course, then prove it on the Ultimate Challenge for a verified, shareable diploma. Want depth on liquidity? The LP Lab has 12 advanced lessons.</p>
         <Act label="🎓 Ultimate Challenge" onClick={()=>onGo("challenge")}/>
