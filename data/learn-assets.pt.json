@@ -1,0 +1,1700 @@
+[
+ {
+  "slug": "btc",
+  "category": "Reserva de valor / Blockchain Layer-1",
+  "tagline": "A primeira criptomoeda: um dinheiro digital de oferta fixa que roda em uma rede global que nenhuma empresa ou governo controla sozinho.",
+  "whatIsIt": [
+   "O Bitcoin é uma moeda digital descentralizada lançada em janeiro de 2009. Foi criado por uma pessoa ou grupo anônimo usando o nome Satoshi Nakamoto, cuja identidade real ainda é desconhecida. Nakamoto publicou um whitepaper de nove páginas em outubro de 2008 descrevendo 'um sistema de dinheiro eletrônico peer-to-peer' e então minerou o primeiro bloco em janeiro de 2009.",
+   "Ele existe para permitir que as pessoas enviem valor umas às outras pela internet sem um banco, processador de pagamentos ou qualquer intermediário de confiança no meio. As transações são registradas em um livro-razão público chamado blockchain, do qual milhares de computadores independentes ao redor do mundo mantêm cópias e verificam. Nenhuma parte central pode congelar a rede, imprimir mais moedas do que as regras permitem ou reverter transações já liquidadas.",
+   "A escolha de design mais importante de todas é o teto de oferta: só existirão 21 milhões de bitcoins, para sempre. Essa escassez rígida, combinada com o fato de que nenhuma empresa o administra, é o motivo pelo qual os apoiadores chamam o Bitcoin de 'ouro digital' e o tratam mais como uma reserva de valor de longo prazo do que como uma moeda para gastos do dia a dia.",
+   "Hoje o Bitcoin é o maior ativo cripto por valor de mercado e a referência pela qual o resto da indústria é medido. É mantido por pessoas físicas, empresas de capital aberto e, desde 2024, por ETFs spot nos EUA que permitem que contas comuns de corretora o detenham."
+  ],
+  "howItWorks": {
+   "paragraphs": [
+    "O Bitcoin é protegido por um sistema chamado Proof of Work. Computadores especializados chamados mineradores competem para adivinhar um número que, quando passado pelo algoritmo de hashing SHA-256 junto com os dados do bloco, produz um resultado abaixo de um alvo definido pela rede. Não há atalho; são necessárias trilhões de tentativas aleatórias, e o primeiro minerador a encontrar uma resposta válida ganha o direito de adicionar o próximo bloco de transações e receber bitcoins recém-criados mais as taxas.",
+    "Essa eletricidade 'desperdiçada' é justamente o ponto: ela torna reescrever a história astronomicamente caro. Para falsificar ou reverter transações, um atacante precisaria superar em poder computacional toda a rede honesta de uma vez (um 'ataque de 51%'), o que no caso do Bitcoin custaria mais do que qualquer recompensa realista. A rede também se autoajusta: a cada 2.016 blocos (cerca de duas semanas) ela ajusta a dificuldade para que um novo bloco continue chegando aproximadamente a cada 10 minutos, não importa quantos mineradores entrem ou saiam.",
+    "A nova oferta é limitada pelos 'halvings'. A cada 210.000 blocos (~4 anos) a recompensa paga aos mineradores é cortada pela metade. Começou em 50 BTC por bloco e, após o halving de abril de 2024, está em 3,125 BTC. Esse é o mecanismo que garante o teto de 21 milhões e lentamente leva a nova emissão rumo a zero por volta do ano 2140."
+   ],
+   "bullets": [
+    "Consenso: Proof of Work usando a função de hash SHA-256 — a segurança vem de energia real gasta, não de moedas em staking.",
+    "Tempo de bloco: cerca de 10 minutos, mantido estável por um ajuste automático de dificuldade a cada 2.016 blocos.",
+    "Emissão: a recompensa por bloco cai pela metade a cada ~4 anos; atualmente 3,125 BTC por bloco após o halving de abril de 2024.",
+    "Você controla as moedas com uma chave privada. 'Not your keys, not your coins' — quem detém a chave controla o bitcoin.",
+    "A camada base é deliberadamente lenta e limitada (~7 transações/segundo); a escalabilidade acontece em camadas construídas por cima, como a Lightning Network."
+   ]
+  },
+  "building": {
+   "paragraphs": [
+    "O Bitcoin não tem empresa nem CEO e não tem roadmap fixo. Mudanças são propostas como BIPs (Bitcoin Improvement Proposals), debatidas abertamente por anos e só entram em vigor se uma ampla maioria de mineradores e operadores de nós as adotar voluntariamente. Em meados de 2026 não há nenhuma atualização de rede agendada — em vez disso, há várias propostas concorrentes em discussão ativa, muitas vezes controversa, e há amplo consenso de que nenhuma delas está a caminho de ser ativada este ano.",
+    "O maior debate em curso é a resistência quântica. No início de 2026, uma nova pesquisa do Google reduziu drasticamente a estimativa de hardware necessário para eventualmente quebrar o esquema de assinaturas do Bitcoin, o que tirou o assunto da teoria e o levou para a engenharia ativa. A BIP-360, que define o primeiro tipo de endereço resistente a computação quântica do Bitcoin, foi publicada como proposta formal em fevereiro de 2026, mas ela só protege moedas daqui para frente e não tem um caminho de ativação acordado. Uma ideia complementar mais agressiva, a BIP-361 ('Post Quantum Migration and Legacy Signature Sunset', publicada em abril de 2026), eventualmente deixaria de honrar gastos de endereços antigos vulneráveis — na prática congelando moedas deixadas neles, incluindo cerca de ~1 milhão que se acredita serem de Satoshi. Isso gerou forte reação por colidir com a promessa do Bitcoin de 'suas chaves, suas moedas', e está longe de alcançar consenso.",
+    "O outro grande tema é tornar o Bitcoin mais programável via 'covenants' — propostas como OP_CTV (BIP-119), OP_CAT (BIP-347) e o pacote LNHANCE focado na Lightning. Elas permitiriam recursos mais ricos, parecidos com smart contracts (vaults melhores, Lightning mais eficiente, pontes com confiança minimizada). O OP_CTV até tem parâmetros de ativação em rascunho sobre a mesa, mas opositores rejeitam o método acelerado de sinalização para uma mudança controversa, então nenhum opcode de covenant tem um caminho definido. Enquanto isso, o BitVM2, que não exige nenhuma mudança de protocolo, já está em produção (por exemplo, alimentando a ponte do rollup mainnet da Citrea), então alguns builders estão simplesmente contornando o debate sobre soft forks."
+   ],
+   "bullets": [
+    "Defesa quântica: a BIP-360 (endereços resistentes a computação quântica) foi publicada como proposta formal no início de 2026 mas não está ativada; a controversa ideia de congelamento/migração de moedas da BIP-361 está sendo debatida ferozmente — sem data de ativação.",
+    "Programabilidade: as propostas de covenant OP_CTV, OP_CAT e LNHANCE avançam em paralelo, cada uma resolvendo uma peça diferente, mas nenhuma tem caminho de ativação definido e nenhuma deve ser ativada em 2026.",
+    "Escalabilidade Layer-2: trabalho contínuo na Lightning Network para pagamentos rápidos e baratos, além de rollups e pontes baseados em BitVM2 que não exigem mudança na camada base.",
+    "A tensão por trás de tudo: manter o Bitcoin maximamente simples e conservador, ou adicionar recursos e defesas — a rede muda devagar justamente porque precisa de quase-consenso para mudar."
+   ]
+  },
+  "quickFacts": [
+   [
+    "Lançamento",
+    "Janeiro de 2009 (whitepaper em outubro de 2008)"
+   ],
+   [
+    "Criador",
+    "Satoshi Nakamoto (pseudônimo, identidade desconhecida)"
+   ],
+   [
+    "Consenso",
+    "Proof of Work (SHA-256)"
+   ],
+   [
+    "Oferta máxima",
+    "21 milhões de BTC (teto rígido, ~95% já minerados)"
+   ],
+   [
+    "Nova emissão",
+    "3,125 BTC/bloco, halving ~a cada 4 anos"
+   ],
+   [
+    "Tempo de bloco",
+    "~10 minutos"
+   ],
+   [
+    "Uso principal",
+    "Reserva de valor / 'ouro digital', liquidação, pagamentos"
+   ],
+   [
+    "Governança",
+    "Sem empresa ou CEO; mudanças via BIPs + consenso aproximado"
+   ]
+  ],
+  "ecosystem": [
+   "Lightning Network — uma layer-2 para pagamentos em bitcoin rápidos e de taxa baixa que liquidam de volta na chain principal",
+   "ETFs spot de Bitcoin nos EUA (ex.: IBIT da BlackRock, FBTC da Fidelity) — produtos regulados detendo mais de $100B combinados mesmo após fortes saídas em meados de 2026",
+   "Tesourarias corporativas — a Strategy (antiga MicroStrategy) é a maior detentora pública, com aproximadamente 840.000 BTC em meados de 2026",
+   "Indústria de mineração — rede global de hardware ASIC e pools que protegem a chain",
+   "Custódia e exchanges — Coinbase, Kraken e outras para comprar, além de hardware wallets como Ledger e Trezor para autocustódia",
+   "Camadas emergentes — rollups e pontes BitVM2 trazendo mais programabilidade sem mudar o protocolo base"
+  ],
+  "history": [
+   {
+    "year": "2008",
+    "event": "Satoshi Nakamoto publica o whitepaper do Bitcoin descrevendo dinheiro eletrônico peer-to-peer."
+   },
+   {
+    "year": "2009",
+    "event": "O bloco gênese é minerado; o Bitcoin entra no ar e as primeiras transações acontecem."
+   },
+   {
+    "year": "2010",
+    "event": "Bitcoin Pizza Day — 10.000 BTC são gastos em duas pizzas, sua primeira compra no mundo real."
+   },
+   {
+    "year": "2012",
+    "event": "O primeiro halving corta a recompensa por bloco de 50 para 25 BTC."
+   },
+   {
+    "year": "2013",
+    "event": "O Bitcoin cruza $1.000 pela primeira vez."
+   },
+   {
+    "year": "2017",
+    "event": "Bull run até cerca de $20.000 leva o Bitcoin às manchetes do grande público."
+   },
+   {
+    "year": "2020-2021",
+    "event": "Instituições e empresas de capital aberto começam a comprar; o preço passa de $60.000."
+   },
+   {
+    "year": "2024",
+    "event": "ETFs spot de Bitcoin nos EUA aprovados em janeiro; o quarto halving em abril reduz a recompensa para 3,125 BTC; o preço supera $100.000."
+   },
+   {
+    "year": "2025",
+    "event": "Acumulação institucional agressiva prolonga o rali; o Bitcoin negocia bem acima de $100.000 nos picos."
+   },
+   {
+    "year": "2026",
+    "event": "Ano volátil: correção brusca até a faixa média dos $60.000 em julho, uma onda recorde de saídas dos ETFs spot e um debate cada vez mais intenso sobre resistência quântica (BIP-360/361)."
+   }
+  ],
+  "risks": [
+   "A volatilidade de preço é severa. O Bitcoin já caiu repetidamente 50-80% de suas máximas, e 2026 já viu uma queda brusca dos picos de seis dígitos para a faixa média dos $60.000. Não é um lugar estável para guardar dinheiro de que você possa precisar em breve.",
+   "A ameaça da computação quântica agora é uma preocupação real de engenharia, não só teoria. Moedas paradas em tipos de endereço antigos com chaves públicas expostas são as mais em risco no longo prazo, e a comunidade não chegou a um acordo sobre como — ou se — forçar uma migração para endereços à prova de computação quântica.",
+   "O uso de energia é genuinamente grande. O Proof of Work consome eletricidade na escala de um país de porte médio, o que atrai críticas ambientais constantes e, em algumas regiões, pressão regulatória sobre a mineração.",
+   "A autocustódia não perdoa. Perca sua chave privada ou caia em phishing e o dinheiro simplesmente some — não há linha de suporte, redefinição de senha nem estorno.",
+   "A incerteza regulatória persiste mundo afora. Tratamento tributário, regras de ETF, licenciamento de exchanges e proibições completas variam por país e podem mudar, afetando preço e acesso.",
+   "Concentração e reflexividade. Grandes detentores como a Strategy e os ETFs spot agora movem o mercado; quando vendem (a Strategy reduziu uma pequena fatia de suas posições no início de julho de 2026, e os ETFs viram saídas recordes em junho de 2026), isso pode amplificar as quedas.",
+   "A camada base é lenta e cara para pagamentos pequenos. Gastos do dia a dia dependem de fato de layer-2s como a Lightning, que ainda estão amadurecendo e são menos simples do que passar um cartão.",
+   "A oferta fixa corta dos dois lados: ela não pode inflacionar, mas também significa que a receita dos mineradores terá de migrar dos block rewards para taxas apenas — uma questão de segurança de longo prazo ainda não testada."
+  ],
+  "howToInvest": [
+   "Educação primeiro, não aconselhamento financeiro: entenda que o Bitcoin pode cair 50%+ e só comprometa dinheiro que você pode deixar intocado por anos. Nunca invista por hype ou FOMO.",
+   "Escolha sua exposição: um ETF spot de Bitcoin regulado (mantido em uma corretora comum) é a rota mais simples e sem trabalho, enquanto comprar BTC de verdade em uma exchange respeitável permite sacar e possuí-lo de fato. O ETF é conveniente; possuir a moeda é o próprio ponto do Bitcoin.",
+   "Use uma exchange conhecida e regulada (ex.: Coinbase, Kraken) para comprar, e ative a autenticação de dois fatores com um aplicativo autenticador — não SMS.",
+   "Para propriedade real, mova as moedas para fora da exchange, para uma wallet que você controla. Uma hardware wallet (Ledger, Trezor) mantém suas chaves privadas offline e é o padrão para guardar quantias relevantes.",
+   "Escreva sua seed phrase de recuperação em papel (ou aço), guarde-a offline em mais de um lugar seguro e NUNCA a digite em um site, compartilhe ou fotografe. Qualquer pessoa com a seed é dona das suas moedas.",
+   "Considere o dollar-cost averaging — comprar um valor pequeno e fixo em uma programação regular — em vez de tentar acertar o topo ou o fundo.",
+   "Cuidado com golpes: nenhum serviço legítimo pede sua seed phrase, garante retornos ou manda DM se passando por 'suporte'. Se parece bom demais para ser verdade, é.",
+   "Guarde registros para impostos — em muitos países vender ou gastar bitcoin é um evento tributável."
+  ]
+ },
+ {
+  "slug": "eth",
+  "category": "Plataforma de smart contracts / Blockchain Layer-1",
+  "tagline": "Uma blockchain global e programável onde o código roda exatamente como foi escrito e o ETH paga pela computação.",
+  "whatIsIt": [
+   "O Ethereum é uma blockchain descentralizada que roda programas chamados smart contracts. Enquanto o Bitcoin foi projetado principalmente para mover dinheiro, o Ethereum foi construído para ser um computador de propósito geral que milhares de computadores ao redor do mundo executam e sobre o qual chegam a acordo. O ETH é o token nativo da rede: ele paga as taxas de transação ('gas') e protege a rede por meio de staking.",
+   "Foi proposto em um whitepaper de 2013 por Vitalik Buterin, então com 19 anos, que achava o scripting do Bitcoin limitado demais. A ele se juntaram outros sete cofundadores (oito no total), incluindo Gavin Wood (que escreveu o 'Yellow Paper' técnico e cunhou o termo Ethereum Virtual Machine) e Joseph Lubin. A rede foi financiada por uma venda pública em 2014 que levantou cerca de 31.000 BTC (~$18M na época) e entrou no ar em 30 de julho de 2015.",
+   "O ponto do Ethereum é 'faça isso e ninguém pode parar ou mudar as regras'. Um contrato implantado no Ethereum roda como foi escrito, sem uma empresa ou banco no meio. Essa propriedade é o que o tornou a fundação do DeFi (finanças descentralizadas), dos NFTs, das stablecoins e da maioria dos tokens que você vê hoje.",
+   "O desenvolvimento é guiado pela Ethereum Foundation, sem fins lucrativos, mas nenhuma entidade única controla a rede. Qualquer um pode rodar o software, propor mudanças ou construir sobre ela — as atualizações só acontecem quando a comunidade mais ampla de clients e validadores as adota."
+  ],
+  "howItWorks": {
+   "paragraphs": [
+    "O Ethereum chega a acordo usando proof-of-stake (PoS). Em vez de mineradores queimando eletricidade, 'validadores' travam ETH como garantia pelo direito de propor e verificar blocos. Para rodar seu próprio validador você deposita 32 ETH; se trapacear ou ficar gravemente offline, parte desse stake pode sofrer 'slashing' (ser destruída). Isso amarra a segurança da rede diretamente a dinheiro em risco.",
+    "O tempo é fatiado em 'slots' de 12 segundos e 'epochs' de 32 slots. Em cada slot, um validador é escolhido aleatoriamente para propor um bloco, e comitês de outros validadores votam ('atestam') se ele é válido. Quando uma parcela suficiente de todo o ETH em staking respalda um bloco, ele se torna 'finalizado' — revertê-lo exigiria que um atacante controlasse e perdesse uma fração enorme de todo o ETH em staking, o que é economicamente brutal.",
+    "Os smart contracts executam na Ethereum Virtual Machine (EVM), um computador compartilhado que todos os nós rodam. Cada operação custa 'gas', pago em ETH, o que impede loops infinitos e spam. Desde o Merge de 2022, a estratégia do Ethereum é manter a camada base (L1) segura e enxuta enquanto empurra a maior parte da atividade dos usuários para rollups Layer-2 mais rápidos e baratos que publicam seus dados de volta na L1."
+   ],
+   "bullets": [
+    "Consenso: proof-of-stake — validadores fazem staking de 32 ETH cada; aproximadamente 35M de ETH (cerca de 30% da oferta) estão em staking em 1M+ de validadores em 2026.",
+    "Taxas de gas: cada transação e chamada de contrato é paga em ETH; uma parte de cada taxa é queimada (EIP-1559, ativa desde agosto de 2021).",
+    "O Merge (setembro de 2022) trocou o Ethereum do proof-of-work faminto por energia para o PoS, cortando seu consumo de energia em ~99,95%.",
+    "Rollups (Layer-2s) fazem o trabalho pesado de forma barata e liquidam no Ethereum pela segurança — a abordagem de escalabilidade 'modular'.",
+    "Você não precisa de 32 ETH para participar: pools de staking e tokens de liquid staking permitem que detentores menores façam staking, ao custo de confiança adicional em um provedor."
+   ]
+  },
+  "building": {
+   "paragraphs": [
+    "A direção do Ethereum em 2026 é 'escalar a camada base e facilitar construir sobre ela, sem abrir mão da descentralização'. A atualização Pectra (maio de 2025) adicionou os primeiros passos da account abstraction (EIP-7702, permitindo que wallets comuns atuem temporariamente como smart contracts) e aumentou a eficiência dos validadores. A Fusaka entrou no ar na mainnet em 3 de dezembro de 2025, trazendo o PeerDAS — amostragem de disponibilidade de dados que permite aos nós verificar dados de rollups sem baixar tudo — além de aumentos escalonados do limite de blobs que elevaram fortemente o throughput de dados disponível para as L2s.",
+    "A próxima grande atualização, apelidada de Glamsterdam, é esperada para o segundo semestre de 2026 (os desenvolvedores miram o Q3 depois que uma meta anterior de H1 escorregou). Seus itens de destaque são as Block-Level Access Lists (EIP-7928) e a proposer-builder separation nativa (EIP-7732), que juntas tornam seguro elevar significativamente o limite de gas dos blocos — a discussão mira sair da faixa de ~60M rumo a um teto de projeto de ~200M (os validadores ainda definem o limite real por voto), ou seja, mais transações por bloco. Trabalhos de horizonte mais longo em escopo incluem account abstraction nativa e pesquisa em criptografia pós-quântica.",
+    "A tese mais ampla: a L1 do Ethereum se torna a camada de liquidação e disponibilidade de dados que protege uma pilha crescente de rollups e ativos tokenizados, enquanto as transações do dia a dia acontecem em L2s baratas. Se isso mantém valor econômico suficiente fluindo para os detentores de ETH — em vez de vazar para as L2s — é um dos debates vivos que o roadmap tenta responder."
+   ],
+   "bullets": [
+    "Fusaka (no ar em 3 de dezembro de 2025): PeerDAS + limites de blobs maiores — mais banda de dados para os rollups Layer-2.",
+    "Pectra (maio de 2025): ponte de account abstraction EIP-7702, saldo máximo de validador maior, staking mais fluido.",
+    "Glamsterdam (esperada para H2 2026, alvo Q3): proposer-builder separation nativa + block-level access lists, viabilizando um grande aumento do limite de gas.",
+    "Em andamento: avanço da escalabilidade centrada em rollups (o 'surge'), melhoria da UX de validadores/staking e pesquisa em criptografia pós-quântica.",
+    "Direção: manter a L1 enxuta e segura como camada de liquidação; mover a atividade dos usuários para L2s onde as taxas costumam ficar abaixo de um centavo."
+   ]
+  },
+  "quickFacts": [
+   [
+    "Lançamento",
+    "30 de julho de 2015 (bloco Gênese)"
+   ],
+   [
+    "Fundadores",
+    "Vitalik Buterin + 7 cofundadores (incl. Gavin Wood, Joseph Lubin)"
+   ],
+   [
+    "Consenso",
+    "Proof-of-stake (desde o Merge, setembro de 2022)"
+   ],
+   [
+    "Modelo de oferta",
+    "Sem teto rígido; emissão modesta de PoS menos uma queima de taxas (EIP-1559) — quase estável, às vezes deflacionária"
+   ],
+   [
+    "Oferta circulante",
+    "~120,7M de ETH (meados de 2026); crescimento líquido da oferta de apenas ~0,23%/ano"
+   ],
+   [
+    "Uso do token",
+    "Paga taxas de gas, vai para staking para proteger a rede, colateral em todo o DeFi"
+   ],
+   [
+    "Governança",
+    "Off-chain, via equipes de clients, validadores e a Ethereum Foundation (sem voto on-chain)"
+   ],
+   [
+    "Para rodar um validador",
+    "32 ETH em staking (ou use um pool de staking)"
+   ]
+  ],
+  "ecosystem": [
+   "DeFi: Uniswap, Aave, MakerDAO/Sky, Curve e outros — o Ethereum foi pioneiro em empréstimos, trading e stablecoins descentralizados",
+   "Stablecoins: o maior lar de USDC e USDT, com bem mais de $150B em valor de stablecoins nos trilhos do Ethereum em 2026",
+   "Rollups Layer-2: Base (Coinbase), Arbitrum, Optimism, zkSync — Base e Arbitrum sozinhas concentram a maior parte do valor DeFi das L2s",
+   "NFTs e tokenização: a chain original dos NFTs; agora um hub para ativos reais tokenizados e pilotos de tesouraria de firmas como BlackRock e JPMorgan",
+   "Infraestrutura e padrões: os padrões ERC-20 (tokens) e ERC-721 (NFTs) que a maior parte do cripto usa hoje nasceram no Ethereum",
+   "Acesso institucional: ETFs spot de ETH nos EUA dão a investidores tradicionais exposição regulada sem autocustódia"
+  ],
+  "history": [
+   {
+    "year": "2013",
+    "event": "Vitalik Buterin, aos 19 anos, publica o whitepaper do Ethereum propondo uma blockchain programável."
+   },
+   {
+    "year": "2014",
+    "event": "Venda pública levanta ~31.000 BTC (~$18M); Gavin Wood publica o Yellow Paper definindo a EVM."
+   },
+   {
+    "year": "2015",
+    "event": "A mainnet do Ethereum entra no ar (Frontier); o bloco Gênese é minerado em 30 de julho."
+   },
+   {
+    "year": "2016",
+    "event": "O hack do The DAO drena ~$60M; um hard fork controverso o reverte e separa o Ethereum Classic."
+   },
+   {
+    "year": "2020",
+    "event": "A Beacon Chain é lançada, iniciando o proof-of-stake em paralelo ao boom do 'summer' do DeFi."
+   },
+   {
+    "year": "2021",
+    "event": "A EIP-1559 introduz o mecanismo de queima de taxas, mudando a economia de oferta do ETH."
+   },
+   {
+    "year": "2022",
+    "event": "O Merge troca o Ethereum para proof-of-stake completo, cortando o uso de energia em ~99,95%."
+   },
+   {
+    "year": "2024",
+    "event": "A atualização Dencun adiciona os 'blobs' (EIP-4844), derrubando os custos de transação das Layer-2 para frações de centavo."
+   },
+   {
+    "year": "2025",
+    "event": "As atualizações Pectra (maio) e Fusaka (3 de dezembro) são entregues — pontes de account abstraction e escalabilidade de dados com PeerDAS."
+   },
+   {
+    "year": "2026",
+    "event": "Atualização Glamsterdam esperada (H2, alvo Q3), mirando PBS nativa e um grande aumento do limite de gas."
+   }
+  ],
+  "risks": [
+   "Concorrência: L1s mais rápidas e baratas como a Solana estão vencendo em atividade de varejo, receita e parte do fluxo de stablecoins. O Ethereum lidera em valor total protegido e confiança institucional, mas essa liderança é disputada, não garantida.",
+   "Fragmentação das Layer-2: empurrar usuários para dezenas de rollups divide a liquidez e complica a experiência — muitas vezes é preciso fazer 'bridge' de ativos entre chains, e as bridges são alvo recorrente de grandes hacks.",
+   "Centralização das L2s: muitos rollups ainda dependem de um único 'sequencer' e de multisigs de upgrade que poderiam, em teoria, censurar ou alterar comportamento. Críticos argumentam que as L2s ainda não herdam a segurança plena da mainnet, apesar do marketing sugerir que sim.",
+   "Captura de valor: à medida que a atividade migra para as L2s, menos receita de taxas é queimada na L1, enfraquecendo a narrativa 'deflacionária'. Se o ETH como ativo se beneficia do crescimento do ecossistema é uma questão econômica em aberto.",
+   "Centralização do staking: uma grande fatia do ETH em staking está com poucos provedores de liquid staking (ex.: Lido) e exchanges centralizadas — um risco de concentração para uma rede que se vende pela descentralização.",
+   "Complexidade e risco de upgrade: o roadmap do Ethereum é intrincado, e hard forks carregam a chance de bugs ou falhas de consenso. O risco de smart contract também está sempre presente — o código com que você interage pode ter falhas exploráveis.",
+   "Incerteza regulatória: a classificação legal do ETH, o staking-as-a-service e as regras de DeFi seguem indefinidos em jurisdições importantes, e isso pode mudar abruptamente.",
+   "Volatilidade de preço: o ETH pode cair — e já caiu — 50%+ em ciclos passados. É um ativo de alto risco, não uma poupança."
+  ],
+  "howToInvest": [
+   "Educacional, não aconselhamento financeiro. Nada aqui é recomendação de compra — só arrisque dinheiro que você pode perder por completo.",
+   "Aprenda antes de comprar: entenda que o ETH é volátil e que você é responsável pelas próprias chaves. Se não entende um produto (alavancagem, derivativos de staking, tokens aleatórios), não coloque dinheiro nele.",
+   "Compre em uma exchange respeitável e regulada no seu país. Verifique que o ticker é ETH e a rede é Ethereum, e comece com um valor pequeno para aprender a mecânica.",
+   "Mova posições relevantes para autocustódia. 'Not your keys, not your coins' — uma wallet de autocustódia (software como MetaMask/Rabby, ou hardware como Ledger/Trezor para quantias maiores) significa que nenhuma quebra de exchange pode congelar seus fundos.",
+   "Anote sua seed phrase em papel e guarde-a offline. Nunca a digite em um site nem compartilhe — qualquer pessoa com a frase é dona do seu ETH, e não existe redefinição de senha.",
+   "Mantenha um pouco de ETH para gas. Toda transação (enviar, fazer staking, usar um app) custa ETH; nas Layer-2s isso costuma ser uma fração de centavo.",
+   "Considere o dollar-cost averaging em vez de tentar acertar o timing do mercado, e seja honesto: até cripto 'blue-chip' pode cair forte.",
+   "Se quiser rendimento com staking, entenda os trade-offs: staking solo exige 32 ETH e uptime; pools e tokens de liquid staking são mais fáceis, mas adicionam risco de smart contract e de provedor. Rendimentos anunciados mais altos geralmente significam riscos ocultos maiores.",
+   "Fique atento a golpes: falsos 'giveaways de ETH', suporte impostor e sites drenadores de wallet estão por toda parte. O Ethereum não tem suporte oficial que vá te mandar DM."
+  ]
+ },
+ {
+  "slug": "sol",
+  "category": "Blockchain Layer-1",
+  "tagline": "Uma blockchain rápida, barata e de chain única que aposta tudo em velocidade bruta em vez de dividir o trabalho entre camadas.",
+  "whatIsIt": [
+   "A Solana é uma blockchain Layer-1 — uma rede base, como Ethereum ou Bitcoin, que roda sua própria moeda (SOL) e hospeda apps diretamente na chain principal. Toda a sua filosofia de design é escalar PARA CIMA em uma única chain rápida, em vez de espalhar transações por side-chains ou redes 'Layer 2'. A proposta é simples: throughput de transações muito alto, taxas abaixo de um centavo e tempos de confirmação medidos em frações de segundo.",
+   "Foi concebida por Anatoly Yakovenko, ex-engenheiro da Qualcomm, que publicou o whitepaper do 'Proof of History' em novembro de 2017. Ele cofundou a Solana Labs em 2018 com Greg Fitzgerald, Raj Gokal, Stephen Akridge e Eric Williams. A mainnet beta foi lançada em março de 2020.",
+   "O SOL, token nativo, faz o encanamento: você paga as taxas de rede com ele, os validadores fazem staking dele para proteger a chain, e ele é usado em votações estilo governança sobre upgrades do protocolo. A Solana existe para fazer apps on-chain parecerem rápidos e baratos o bastante para uso diário — trading, pagamentos, jogos — onde chains lentas e caras sofrem.",
+   "Hoje a Solana é uma das blockchains mais usadas em contagem bruta de transações e é especialmente conhecida como o lar do DeFi de alta frequência, da liquidação de stablecoins e da cultura de lançamento de memecoins que passa por apps como pump.fun e Jupiter."
+  ],
+  "howItWorks": {
+   "paragraphs": [
+    "O truque principal da Solana é o 'Proof of History' (PoH). Ele não é um sistema de consenso independente — é um relógio criptográfico. Os validadores rodam repetidamente um hash SHA-256 em uma longa cadeia e, como cada hash depende do anterior, a sequência prova que tempo real passou e fixa a ordem dos eventos antes mesmo de os validadores começarem a concordar sobre eles. Resolver 'o que aconteceu em que ordem' com antecedência é o que permite à Solana processar transações rapidamente.",
+    "Em cima desse relógio, a Solana roda um sistema de Proof of Stake (PoS) bastante padrão para a segurança. Os validadores travam (fazem staking de) SOL, e os detentores podem delegar seu SOL a validadores para ganhar uma parte das recompensas. Quanto mais stake honesto por trás da rede, mais difícil é atacá-la — e um validador que se comporta mal arrisca seu stake. O PoH cuida do tempo e da ordenação; o PoS cuida de quem confirma e protege a chain economicamente.",
+    "O trade-off é que acompanhar essa mangueira de incêndio de transações exige hardware potente e caro. É uma escolha deliberada — a Solana prioriza velocidade e taxas baixas em vez de deixar qualquer um rodar um validador em um laptop barato, o que é um ponto real de crítica (veja os riscos)."
+   ],
+   "bullets": [
+    "Proof of History = um relógio criptográfico verificável que carimba e ordena eventos antes do consenso, cortando o atraso de coordenação.",
+    "Proof of Stake = a camada de segurança; validadores fazem staking de SOL, e delegadores podem apoiá-los para dividir recompensas.",
+    "Estado global único em uma chain só (sem Layer 2s nem shards) — tudo liquida na rede principal.",
+    "As taxas são minúsculas (tipicamente uma fração de centavo) e os blocos confirmam bem abaixo de um segundo.",
+    "Historicamente rodou principalmente no client 'Agave' baseado em Rust; um segundo client independente, o Firedancer (da Jump Crypto), agora está no ar na mainnet para adicionar performance e reduzir pontos únicos de falha."
+   ]
+  },
+  "building": {
+   "paragraphs": [
+    "Em meados de 2026, a Solana está no meio da maior reforma técnica de sua história, mirando diretamente seus dois pontos fracos históricos: confiabilidade e velocidade de finalidade. Os dois esforços emblemáticos são o Firedancer e o Alpenglow.",
+    "O Firedancer é um client de validador novo e independente, escrito do zero em C/C++ pela Jump Crypto — uma base de código completamente separada do client Agave em Rust. Uma versão híbrida ('Frankendancer', que combina a rede do Firedancer com o consenso do Agave) rodou na mainnet a partir de 2024, e o client Firedancer completo entrou no ar na mainnet em dezembro de 2025. No início de 2026 ele rodava em aproximadamente 20%+ dos validadores. O objetivo é duplo: performance muito maior (mira e já registrou benchmarks rumo a ~1 milhão de transações por segundo em condições de laboratório) e — igualmente importante — diversidade de clients, para que um bug em um software não consiga derrubar a rede inteira.",
+    "O Alpenglow é a reforma do consenso. Ele substitui a antiga votação Tower BFT e, notavelmente, foi projetado para aposentar o Proof of History em sua forma atual, usando um novo protocolo de agregação de votos (Votor) para derrubar a finalidade de cerca de ~12,8 segundos para algo em torno de 100–150 milissegundos. A atualização passou pela governança da comunidade (SIMD-0326) em setembro de 2025 com ~98% de aprovação e, em 2026, está sendo testada em clusters comunitários rumo a uma meta de mainnet no segundo semestre de 2026."
+   ],
+   "bullets": [
+    "Firedancer — novo client de validador independente e de alta performance (versão completa no ar na mainnet desde dezembro de 2025), adicionando velocidade e diversidade crítica de clients.",
+    "Alpenglow (SIMD-0326) — reescrita do consenso mirando finalidade de ~100–150ms (contra ~12,8s), aprovada na governança (~98% Sim), mainnet mirada para H2 2026.",
+    "Avanço contínuo nas finanças institucionais: ETFs spot de SOL nos EUA lançados no fim de 2025, com entradas acumuladas crescendo rumo à marca de ~$1B ao longo de 2026.",
+    "'Super apps' de DeFi — projetos como Jupiter e Kamino agrupando swaps, empréstimos, perps e yield em interfaces únicas.",
+    "Base crescente de liquidação de stablecoins (USDC, PYUSD e a nova JupUSD lastreada no BUIDL da BlackRock, lançada em janeiro de 2026)."
+   ]
+  },
+  "quickFacts": [
+   [
+    "Lançamento",
+    "Mainnet beta em março de 2020 (whitepaper em novembro de 2017)"
+   ],
+   [
+    "Fundadores",
+    "Anatoly Yakovenko, Raj Gokal, Greg Fitzgerald, Stephen Akridge, Eric Williams"
+   ],
+   [
+    "Consenso",
+    "Proof of Stake + Proof of History (reescrita Alpenglow em testes)"
+   ],
+   [
+    "Modelo de oferta",
+    "Sem teto rígido; inflacionária, caindo rumo a ~1,5% no longo prazo, parcialmente compensada pela queima de taxas"
+   ],
+   [
+    "Oferta circulante",
+    "~580 milhões de SOL (de ~630–645M no total)"
+   ],
+   [
+    "Uso do token",
+    "Taxas de rede, staking/proteção da chain, recompensas de delegação, votação de governança"
+   ],
+   [
+    "Categoria",
+    "Blockchain Layer-1 de smart contracts"
+   ]
+  ],
+  "ecosystem": [
+   "Jupiter — o agregador de DEX dominante (a grande maioria do volume agregado de swaps na Solana), agora um 'superapp de DeFi' com swaps, ordens limitadas, perps, empréstimos e a stablecoin JupUSD",
+   "pump.fun — o launchpad de memecoins que gera enorme volume de transações de varejo (milhões de tokens lançados)",
+   "Kamino — empréstimos, tomada de crédito e estratégias automatizadas de yield",
+   "Stablecoins — USDC (a maior parte dos dólares on-chain), PYUSD e a JupUSD lastreada no BUIDL da BlackRock",
+   "Meteora e Orca — AMMs de liquidez e liquidez concentrada movendo o trading on-chain",
+   "Casos de uso — DeFi de alta frequência, pagamentos e liquidação de stablecoins, NFTs, jogos on-chain e apps de consumo",
+   "Acesso institucional — ETFs spot de Solana nos EUA (lançados no fim de 2025; entradas acumuladas crescendo rumo a ~$1B em 2026)"
+  ],
+  "history": [
+   {
+    "year": "2017",
+    "event": "Anatoly Yakovenko publica o whitepaper do Proof of History"
+   },
+   {
+    "year": "2018",
+    "event": "Solana Labs é fundada; o primeiro protótipo ('Loom', depois renomeado Solana) processa 10.000 transações em meio segundo"
+   },
+   {
+    "year": "2019",
+    "event": "Series A de $20M liderada pela Multicoin Capital"
+   },
+   {
+    "year": "2020",
+    "event": "A mainnet beta é lançada em março; o SOL estreia por volta de $0,75"
+   },
+   {
+    "year": "2021",
+    "event": "O SOL atinge picos acima de ~$260 em um enorme bull run; aparecem as primeiras grandes quedas da rede"
+   },
+   {
+    "year": "2022",
+    "event": "Quedas repetidas mais os efeitos do colapso da FTX/Alameda (apoiadores próximos do ecossistema) massacram o preço e a reputação do SOL"
+   },
+   {
+    "year": "2023",
+    "event": "Recuperação do ecossistema; a Solana se posiciona em torno de uso no mundo real e mobile (celular Saga)"
+   },
+   {
+    "year": "2024",
+    "event": "A atividade de memecoins e DeFi dispara; a confiabilidade da rede melhora consideravelmente; o client híbrido 'Frankendancer' roda na mainnet"
+   },
+   {
+    "year": "2025",
+    "event": "Um ano completo sem falha grave de consenso (fev); Alpenglow passa na governança (set); o Firedancer completo entra no ar na mainnet (dez); ETFs spot de SOL nos EUA são lançados (out–nov)"
+   },
+   {
+    "year": "2026",
+    "event": "O Firedancer roda em ~20%+ dos validadores; Alpenglow testado rumo a uma meta de mainnet no H2; a stablecoin JupUSD é lançada (jan); as entradas do ETF de SOL crescem rumo a ~$1B"
+   }
+  ],
+  "risks": [
+   "Histórico de confiabilidade: a Solana sofreu cerca de sete quedas graves entre 2021 e o início de 2024, algumas durando muitas horas. O uptime melhorou bastante desde então, mas uma chain que já parou por completo carrega risco reputacional e técnico até a nova arquitetura se provar ao longo de anos.",
+   "Preocupações com centralização: hardware de validador caro e de especificação alta significa que menos pessoas podem rodar um nó. O número de validadores caiu fortemente desde o pico, concentrando o stake em operadores menos numerosos e maiores — o oposto do que a descentralização deveria entregar.",
+   "A economia dos validadores é dura: validadores precisam enviar uma transação de voto para cada bloco, o que pode custar na ordem de ~1 SOL por dia, espremendo operadores menores e empurrando para mega-validadores de taxa zero. (O Alpenglow move a votação para fora da chain, o que deve aliviar isso — mas essa atualização ainda não está na mainnet.)",
+   "Sem teto rígido de oferta: o SOL é inflacionário. A queima de taxas compensa uma parte, mas ao contrário do Bitcoin não há um teto fixo, então os detentores enfrentam diluição contínua (ainda que decrescente).",
+   "Associação com FTX/Alameda: dois dos maiores apoiadores iniciais da Solana colapsaram em 2022, e um grande bloco de SOL ficou preso no espólio da falência — uma sombra que pairou sobre o token por anos.",
+   "Upgrades ambiciosos em andamento: o Alpenglow reescreve o consenso central e aposenta o Proof of History como existe hoje. Mudanças grandes em uma chain viva de vários bilhões de dólares carregam risco de execução e de bugs até serem testadas em batalha na mainnet.",
+   "Concorrência: o ecossistema Layer-2 em amadurecimento do Ethereum (Arbitrum, Optimism, Base) e L1s de alta performance rivais disputam os mesmos desenvolvedores, usuários e capital.",
+   "Dependência de memecoins: uma grande fatia da atividade da Solana são lançamentos especulativos de memecoins. É volume real hoje, mas é volúvel — uma retração nessa cultura poderia cortar drasticamente o uso on-chain."
+  ],
+  "howToInvest": [
+   "Apenas educacional — isto não é aconselhamento financeiro. Cripto é volátil e você pode perder tudo; só comprometa dinheiro que pode perder, e faça sua própria pesquisa antes.",
+   "Aprenda antes de comprar: entenda que o valor do SOL oscila forte, que a rede já parou no passado e que upgrades em andamento adicionam tanto potencial quanto risco. Convicção deve vir de entendimento, não de hype.",
+   "Para comprar: use uma exchange respeitável que liste SOL (ex.: Coinbase, Kraken, Binance). Verifique que está no site/app oficial, ative a autenticação de dois fatores e comece pequeno.",
+   "Considere a autocustódia: 'not your keys, not your coins'. Uma wallet de autocustódia como Phantom ou Solflare (software) ou uma hardware wallet Ledger permite que você mesmo guarde seu SOL em vez de confiar em uma exchange.",
+   "Proteja sua seed phrase como dinheiro vivo: anote-a offline, nunca a digite em um site e nunca a compartilhe. Qualquer pessoa com sua seed phrase pode drenar sua wallet — e as transações rápidas e baratas da Solana também fazem dela um território de caça favorito para golpistas e sites drenadores.",
+   "Cuidado com golpes específicos da Solana: airdrops falsos de tokens, transações maliciosas de 'approve' e memecoins imitadoras são abundantes. Verifique duas vezes os endereços de contrato e desconfie de qualquer coisa prometendo retornos garantidos.",
+   "Se você detém SOL, pode fazer staking ou delegá-lo a um validador para ganhar recompensas — mas entenda o período de lock-up/unstaking e que recompensas não eliminam o risco de preço.",
+   "Nunca invista por FOMO ou pela dica de um estranho. Uma abordagem lenta, informada e de posições pequenas vence perseguir pumps."
+  ]
+ },
+ {
+  "slug": "bnb",
+  "category": "Blockchain Layer-1 / token de exchange",
+  "tagline": "O token de exchange que virou uma blockchain rápida, barata e compatível com a EVM — poderoso, amplamente usado e fortemente atrelado à Binance.",
+  "whatIsIt": [
+   "O BNB (originalmente \"Binance Coin\", agora rebatizado de \"Build and Build\") é o token nativo da BNB Chain e começou a vida como o token interno da Binance, a maior exchange de cripto do mundo. Foi lançado em uma ICO em julho de 2017 que vendeu 100 milhões de tokens e levantou cerca de $15 milhões — emitido inicialmente como um token ERC-20 comum no Ethereum, antes de a Binance construir suas próprias chains e migrá-lo para lá.",
+   "A Binance foi fundada por Changpeng Zhao (amplamente conhecido como \"CZ\") e He Yi. A proposta original era simples: segure BNB e ganhe desconto nas taxas de trading da Binance. Com os anos, a equipe acoplou muito mais utilidade — o mais importante: em 2020 lançaram uma blockchain de smart contracts em que o BNB é o token de gas, transformando-o de um cupom de fidelidade no combustível de um ecossistema inteiro.",
+   "Hoje o BNB faz três grandes trabalhos: paga as taxas de transação na BNB Chain, é usado em staking por validadores para proteger a rede e ainda destrava descontos de taxas e vantagens na exchange Binance. Está consistentemente entre as maiores criptomoedas por valor de mercado — mas entenda desde já que sua sorte está atipicamente atrelada a uma única empresa privada, a Binance."
+  ],
+  "howItWorks": {
+   "paragraphs": [
+    "A rede principal da BNB Chain, a BNB Smart Chain (BSC), é compatível com a EVM — ou seja, roda os mesmos smart contracts do Ethereum, então desenvolvedores podem portar apps do Ethereum com pouca mudança. O trade-off que a Binance escolheu foi velocidade e custo baixo em vez de descentralização: no lugar de milhares de validadores, a BSC roda com um conjunto pequeno e curado de validadores.",
+    "Ela usa um modelo de consenso chamado Proof of Staked Authority (PoSA). Um grupo limitado de validadores (cerca de 45 ativos por vez) é escolhido em grande parte por quanto BNB está em staking com eles; eles se revezam produzindo blocos. Isso mantém os blocos rápidos e as taxas minúsculas, mas concentra a produção de blocos em relativamente poucas mãos — um modelo de segurança bem diferente do Bitcoin ou do Ethereum.",
+    "A oferta encolhe com o tempo. Por meio de um \"Auto-Burn\" trimestral e de uma queima de taxas de gas em tempo real, BNB é destruído permanentemente segundo um cronograma guiado por fórmula, empurrando a oferta total para baixo rumo a uma meta rígida de 100 milhões de tokens. Menos moedas ao longo do tempo é parte central da proposta do BNB — embora queimas não garantam ganhos de preço."
+   ],
+   "bullets": [
+    "Consenso: Proof of Staked Authority (PoSA) — cerca de 45 validadores ativos, selecionados principalmente por quanto BNB está em staking com eles",
+    "Compatível com a EVM: roda smart contracts no estilo Ethereum, então apps e ferramentas portam com facilidade",
+    "Muito rápida e barata: após o hard fork Fermi de janeiro de 2026, os tempos de bloco caíram para cerca de 0,45 segundo e as taxas para cerca de um centavo",
+    "Deflacionária por design: Auto-Burn trimestral + queima de gas por transação reduzem a oferta rumo a um teto de 100M",
+    "Usos do BNB: pagar gas, fazer staking para proteger a chain, obter descontos de taxas na Binance e participar da governança on-chain",
+    "A opBNB (uma Layer 2 baseada em Optimism) e a BNB Greenfield (armazenamento descentralizado) estendem o ecossistema além da chain principal"
+   ]
+  },
+  "building": {
+   "paragraphs": [
+    "Em meados de 2026, a BNB Chain publicou um roadmap técnico para 2026 que reposiciona a rede como uma \"chain de trading de próxima geração\" — otimizada para DeFi e trading de alta frequência em vez de propósito geral para tudo. Isso vem depois de um 2025 em que a chain rodou com zero downtime enquanto lidava com carga recorde.",
+    "As metas de destaque são agressivas: cerca de 20.000 transações por segundo, empurrando a finalidade ainda mais fundo no território sub-segundo (hoje está em torno de 1,1 segundo) e mantendo as taxas perto de um centavo. Chegar lá depende de execução paralela de transações, reformas de armazenamento e banco de dados e uma estratégia de client duplo — combinando o client Geth estabelecido com um novo client Reth baseado em Rust para performance bruta. No longo prazo, a equipe acena com uma ambição distante (mirada por volta de 2028) de se aproximar de ~1 milhão de TPS com confirmações quase instantâneas (melhor caso ~150ms).",
+    "O alicerce foi uma sequência acelerada de hard forks: Pascal, Lorentz e Maxwell ao longo de 2025 cortaram o tempo de bloco de cerca de 3 segundos para cerca de 0,75 segundo, e o fork Fermi em janeiro de 2026 o levou para cerca de 0,45 segundo (com a finalidade caindo de ~7,5s para ~1,1s). Estruturalmente, a antiga BNB Beacon Chain foi totalmente aposentada no fim de 2024 (o fork final de encerramento concluiu no início de dezembro) sob o \"BNB Chain Fusion\", consolidando governança e staking na BSC para simplificar a arquitetura e cortar risco. A queima de oferta também continua: o 34º Auto-Burn trimestral em janeiro de 2026 destruiu ~1,37 milhão de BNB (valendo aproximadamente $1,27B na época), deixando a oferta total em torno de 136 milhões a caminho da meta de 100M."
+   ],
+   "bullets": [
+    "Roadmap 2026: escalar para ~20.000 TPS com finalidade sub-segundo mais profunda a taxas de ~$0,01",
+    "Execução paralela + rearquitetura de armazenamento/banco de dados para maior throughput",
+    "Estratégia de client duplo: Geth (estabilidade) mais um client Reth baseado em Rust (performance)",
+    "Novo middleware para desenvolvedores com recursos de privacidade e aplicações de agentes de IA",
+    "Auto-Burn trimestral contínuo levando a oferta rumo ao teto rígido de 100M (~136M no início de 2026)",
+    "Aposta de longo prazo (mirada em ~2028): aproximar-se de ~1M de TPS com confirmações quase instantâneas (~150ms)"
+   ]
+  },
+  "quickFacts": [
+   [
+    "Lançamento",
+    "ICO em julho de 2017; smart chain (BSC) em setembro de 2020"
+   ],
+   [
+    "Fundadores",
+    "Changpeng Zhao (CZ) e He Yi (Binance)"
+   ],
+   [
+    "Consenso",
+    "Proof of Staked Authority (PoSA)"
+   ],
+   [
+    "Modelo de oferta",
+    "Deflacionário; queimando rumo ao teto de 100M (~136M no início de 2026)"
+   ],
+   [
+    "Usos do token",
+    "Gas, staking de validadores, descontos de taxas na exchange, governança"
+   ],
+   [
+    "Tempo de bloco",
+    "~0,45 segundo (após o fork Fermi de janeiro de 2026)"
+   ],
+   [
+    "Ecossistema",
+    "BNB Smart Chain, opBNB (L2), BNB Greenfield (armazenamento)"
+   ]
+  ],
+  "ecosystem": [
+   "PancakeSwap — a DEX dominante na BNB Chain, uma das maiores exchanges descentralizadas por volume",
+   "opBNB — uma Layer 2 com OP-Stack da Optimism para transações abaixo de um centavo e de ~1 segundo",
+   "BNB Greenfield — camada de armazenamento descentralizado de dados ligada ao ecossistema BNB",
+   "Venus, e uma ampla pilha DeFi de protocolos de empréstimos, yield e stablecoins",
+   "A própria exchange Binance — o BNB destrava descontos de taxas de trading e vantagens no Launchpad",
+   "Uma grande cena de memecoins e trading de varejo, graças às taxas baratas e à compatibilidade com a EVM"
+  ],
+  "history": [
+   {
+    "year": "2017",
+    "event": "O BNB é lançado via ICO (junho–julho), vendendo 100M de tokens e levantando ~$15M como ERC-20 no Ethereum; a exchange Binance abre dias depois"
+   },
+   {
+    "year": "2019",
+    "event": "A Binance Chain (depois BNB Beacon Chain) entra no ar; o BNB migra do Ethereum para sua própria chain (BEP2)"
+   },
+   {
+    "year": "2020",
+    "event": "A Binance Smart Chain é lançada (setembro) — smart contracts compatíveis com a EVM transformam o BNB em token de gas de um ecossistema DeFi completo"
+   },
+   {
+    "year": "2021",
+    "event": "O BNB atinge sua máxima histórica durante o bull market; o mecanismo Auto-Burn é introduzido para tornar as queimas guiadas por fórmula e transparentes"
+   },
+   {
+    "year": "2022",
+    "event": "Rebatizado para \"BNB Chain\" (Build and Build) em fevereiro, unindo as marcas Beacon Chain e Smart Chain; o conjunto de validadores é expandido de 21 para 41"
+   },
+   {
+    "year": "2023",
+    "event": "A Binance fecha acordo em caso criminal nos EUA por $4,3B (novembro); CZ se declara culpado, paga multa pessoal e deixa o cargo de CEO"
+   },
+   {
+    "year": "2024",
+    "event": "O BNB Chain Fusion é concluído — a BNB Beacon Chain é totalmente aposentada no fim de 2024, consolidando tudo na BSC"
+   },
+   {
+    "year": "2025",
+    "event": "Os hard forks Pascal, Lorentz e Maxwell cortam o tempo de bloco de ~3s para ~0,75s; um ano de tráfego recorde com zero downtime"
+   },
+   {
+    "year": "2026",
+    "event": "O fork Fermi (janeiro) derruba o tempo de bloco para ~0,45s; o 34º Auto-Burn remove ~1,37M de BNB (~$1,27B); o roadmap 2026 mira ~20.000 TPS como uma \"chain de trading\""
+   }
+  ],
+  "risks": [
+   "A centralização é a crítica central. O PoSA roda com um conjunto pequeno e curado de validadores (cerca de 45 ativos) e a BNB Chain sempre foi intimamente associada à Binance — isso entrega velocidade e taxas baixas, mas abre mão da resistência à censura e da descentralização que Bitcoin e Ethereum priorizam. Se você valoriza a minimização de confiança, esse é um trade-off real, não uma nota de rodapé.",
+   "O risco de empresa é atipicamente alto. O valor do BNB está profundamente ligado à saúde e à reputação da Binance. Em novembro de 2023, a Binance se declarou culpada e pagou um acordo de $4,3B às autoridades dos EUA por violações de combate à lavagem de dinheiro e sanções; o fundador CZ se declarou culpado pessoalmente e deixou o cargo de CEO. A pressão regulatória e legal em torno da Binance pode atingir o BNB diretamente.",
+   "A incerteza regulatória persiste entre jurisdições. A SEC dos EUA alegou separadamente violações de leis de valores mobiliários pela Binance, e vários reguladores restringiram ou escrutinaram suas operações. Regras que limitem os negócios da Binance podem reduzir a demanda pelas utilidades centrais do BNB.",
+   "Queimas não são um motor de preço garantido. A narrativa deflacionária é popular, mas reduzir oferta não cria valor se a demanda cair; as queimas são financiadas pela atividade da rede/exchange, que pode encolher numa retração. Não trate \"oferta caindo\" como uma promessa de \"preço subindo\".",
+   "Histórico de segurança e de bridges. A BNB Chain sofreu um grande exploit de bridge cross-chain em 2022 (centenas de milhões em BNB cunhados antes de os validadores pararem a chain), o que evidenciou tanto o risco de bridges quanto a capacidade de um conjunto pequeno de validadores de pausar a rede.",
+   "Concorrência dura. L2s do Ethereum, Solana e outras chains rápidas disputam a mesma atividade de DeFi e trading que a BNB Chain agora almeja; ser rápida e barata já não é uma vantagem única."
+  ],
+  "howToInvest": [
+   "Isto é educação, não aconselhamento financeiro. O BNB é volátil e carrega exposição concentrada a uma única empresa (Binance) — só considere dinheiro que você pode perder, e dimensione qualquer posição de acordo.",
+   "Entenda primeiro o que está comprando: uma chain rápida, de taxas baixas, mas relativamente centralizada, cujo token está atrelado aos negócios e à situação legal da Binance. Se esses trade-offs te incomodam, isso é um sinal, não um detalhe para ignorar.",
+   "Se comprar em uma exchange, use uma respeitável e complete a verificação dela. Nunca deixe saldos grandes parados em qualquer exchange por mais tempo que o necessário — quebras e congelamentos de exchanges são um tema recorrente em cripto.",
+   "Para autocustódia, mova o BNB para uma wallet que você controla. Wallets de software como MetaMask ou Trust Wallet suportam a BNB Smart Chain; para quantias maiores, uma hardware wallet (Ledger, Trezor) mantém as chaves offline. Quem detém as chaves privadas detém as moedas.",
+   "Anote sua seed phrase em papel e guarde-a offline — nunca a digite em um site nem compartilhe. A forma mais comum de as pessoas perderem cripto é phishing e suporte falso, não hacks da chain em si.",
+   "Se quiser fazer staking ou usar DeFi, comece minúsculo e aprenda a mecânica com valores pequenos. Verifique duas vezes os endereços de contrato, cuidado com clones falsos de tokens na BSC e lembre que erros on-chain são irreversíveis.",
+   "Considere o dollar-cost averaging em vez de uma compra única de valor cheio, e não persiga velas verdes. Tenha um plano tanto para altas quanto para quedas antes de clicar em comprar."
+  ]
+ },
+ {
+  "slug": "xrp",
+  "category": "Blockchain Layer-1 de pagamentos / liquidação",
+  "tagline": "Uma rede de liquidação rápida e barata construída para mover dinheiro entre fronteiras, intimamente ligada à empresa Ripple.",
+  "whatIsIt": [
+   "O XRP é o token nativo do XRP Ledger (XRPL), uma blockchain pública que entrou no ar em junho de 2012. Foi projetado para liquidar pagamentos em poucos segundos por uma fração de centavo, mirando diretamente as transferências internacionais de dinheiro em vez de ser 'ouro digital' ou uma plataforma geral de smart contracts.",
+   "A tecnologia foi construída por David Schwartz, Jed McCaleb e Arthur Britto, que queriam uma alternativa mais rápida e menos faminta por energia do que a mineração do Bitcoin. Logo se juntou a eles Chris Larsen e, em setembro de 2012, fundaram uma empresa (primeiro NewCoin, depois OpenCoin e, desde 2015, conhecida como Ripple) para construir negócios em torno do ledger.",
+   "Todos os 100 bilhões de XRP foram criados de uma vez no lançamento — não há mineração. Os fundadores e a empresa ficaram com a vasta maioria: aproximadamente 80 bilhões foram para a empresa e o resto para os fundadores. Essa pesada alocação para insiders é central tanto para como o XRP se financia quanto para as críticas que atrai.",
+   "É importante separar as duas coisas que as pessoas querem dizer com 'XRP'. O XRP Ledger é uma rede aberta e descentralizada operada por validadores independentes mundo afora; a Ripple é uma empresa privada com fins lucrativos que usa o XRP e o ledger para vender produtos de pagamento e liquidez a bancos e fintechs. A Ripple é um grande player no ledger, mas não é 'dona' dele."
+  ],
+  "howItWorks": {
+   "paragraphs": [
+    "O XRP não usa mineração proof-of-work no estilo Bitcoin nem proof-of-stake no estilo Ethereum. Em vez disso, roda o XRP Ledger Consensus Protocol: um conjunto de servidores independentes chamados validadores compara repetidamente suas anotações sobre quais transações são válidas e em que ordem. Quando uma supermaioria forte (cerca de 80% dos validadores em que um nó confia) concorda, uma nova versão do ledger é confirmada — aproximadamente a cada 3-5 segundos.",
+    "O modelo de confiança é a parte incomum. Cada validador segue uma Unique Node List (UNL) — uma lista curada de outros validadores em que ele escolhe confiar para se comportarem honestamente. Isso torna a rede rápida e leve em energia, mas também significa que a composição dessas listas de confiança importa muito, e é aí que os debates sobre descentralização se concentram.",
+    "Como não há mineração, as taxas de transação não são pagas a mineradores ou stakers — em vez disso, uma taxa minúscula é destruída (queimada) em cada transação. Isso reduz lenta e permanentemente a oferta de XRP e ajuda a deter spam. O ledger também tem recursos nativos além de envios simples, incluindo uma exchange descentralizada embutida e, mais recentemente, primitivas de tokenização e empréstimos."
+   ],
+   "bullets": [
+    "Consenso em 3-5 segundos com taxas de uma fração de centavo, e sem mineração intensiva em energia",
+    "A segurança vem do acordo entre validadores (supermaioria de ~80%), não de poder de hash bruto ou capital em staking",
+    "Cada nó confia em uma Unique Node List (UNL) de validadores que acredita serem honestos e independentes",
+    "As taxas de transação são queimadas, não distribuídas — a oferta encolhe suavemente com o tempo (apenas cerca de 14M de XRP queimados desde 2012, uma fração minúscula da oferta)",
+    "Uma exchange descentralizada, escrow e recursos de emissão de ativos são embutidos diretamente no ledger base"
+   ]
+  },
+  "building": {
+   "paragraphs": [
+    "Em meados de 2026, a Ripple e a comunidade do XRPL estão empurrando o ledger de um puro trilho de pagamentos para uma plataforma de DeFi e tokenização de nível institucional. No início de 2026, a Ripple apresentou um roadmap centrado em empréstimos on-chain nativos, melhor programabilidade, recursos de privacidade e interoperabilidade cross-chain usando tecnologia de conhecimento zero (zero-knowledge).",
+    "O esforço de destaque é um protocolo nativo de empréstimos DeFi (emenda XLS-66), projetado para permitir que XRP e ativos tokenizados rendam yield no próprio ledger — uma tentativa de transformar o XRP de puro ativo-ponte em algo que instituições possam querer deter e pôr para trabalhar. Em meados de 2026 ele está em votação de validadores e em testes na devnet, mas ainda NÃO alcançou a supermaioria de ~80% dos validadores necessária para ativar na mainnet. Ele convive com a sidechain XRPL compatível com a EVM (mainnet desde 30 de junho de 2025), que traz smart contracts no estilo Ethereum, usa XRP como gas e se conecta a outras chains via Axelar.",
+    "Dois outros fios se destacam. A stablecoin de dólar da Ripple, RLUSD, cresceu rápido e, em meados de 2026, a maior parte de sua oferta (aproximadamente $800M, mais do que há no Ethereum) migrou para o XRP Ledger — aprofundando a liquidez on-chain. E a Ripple publicou um roadmap de segurança pós-quântica em quatro fases, mirando prontidão totalmente resistente a computação quântica até 2028, com testes de assinaturas híbridas na Devnet planejados para o segundo semestre de 2026."
+   ],
+   "bullets": [
+    "Protocolo nativo de empréstimos on-chain (XLS-66) para tornar XRP e RWAs geradores de yield para instituições — em votação de validadores em meados de 2026, ainda não ativado",
+    "Crescimento da sidechain EVM do XRPL (no ar desde junho de 2025) para smart contracts e DeFi cross-chain, com XRP como gas",
+    "Escalando ativos reais tokenizados no XRPL — supostamente cerca de $4 bilhões em meados de 2026 e subindo",
+    "Aprofundamento da liquidez da stablecoin RLUSD, agora com a maior parte de sua oferta (~$800M) no XRPL",
+    "Um roadmap de criptografia pós-quântica em quatro fases mirando prontidão total até 2028",
+    "Manutenção contínua de estabilidade/segurança após auditorias independentes em 2026 cobrindo NFTs, Vaults e o novo código de empréstimos"
+   ]
+  },
+  "quickFacts": [
+   [
+    "Lançamento",
+    "Junho de 2012 (gênese do XRP Ledger)"
+   ],
+   [
+    "Construtores",
+    "David Schwartz, Jed McCaleb, Arthur Britto; Chris Larsen cofundou a Ripple"
+   ],
+   [
+    "Empresa",
+    "Ripple (antiga OpenCoin), San Francisco"
+   ],
+   [
+    "Consenso",
+    "XRP Ledger Consensus Protocol (acordo entre validadores, sem mineração)"
+   ],
+   [
+    "Oferta máxima",
+    "100 bilhões, todos pré-criados no lançamento (teto fixo)"
+   ],
+   [
+    "Oferta circulante",
+    "~58-59 bilhões (grande parte do restante em escrow da Ripple)"
+   ],
+   [
+    "Escrow",
+    "Até 1B de XRP desbloqueados por mês; a maior parte é tipicamente retravada"
+   ],
+   [
+    "Uso do token",
+    "Pagamentos, liquidez de liquidação/ponte, trading na DEX, gas na EVM do XRPL, taxas (queimadas)"
+   ],
+   [
+    "Tempo de bloco",
+    "~3-5 segundos por ledger"
+   ]
+  ],
+  "ecosystem": [
+   "Pagamentos internacionais e liquidez sob demanda para bancos, empresas de remessas e fintechs (o negócio central da Ripple)",
+   "RLUSD — a stablecoin lastreada em USD da Ripple, emitida tanto no XRPL quanto no Ethereum (maior parte da oferta agora no XRPL)",
+   "Sidechain EVM do XRPL — smart contracts compatíveis com Ethereum usando XRP como gas, conectada via Axelar",
+   "Exchange descentralizada (DEX) e Automated Market Maker embutidos no ledger base",
+   "Ativos reais tokenizados (títulos do tesouro, fundos, commodities) emitidos no XRPL",
+   "ETFs spot de XRP em bolsas dos EUA (os primeiros lançados em novembro de 2025), dando exposição regulada de mercado",
+   "Amplamente suportado pelas principais exchanges e por wallets de custódia e autocustódia"
+  ],
+  "history": [
+   {
+    "year": "2011",
+    "event": "David Schwartz, Jed McCaleb e Arthur Britto começam a construir um ledger mais rápido e sem mineração, inspirado no Bitcoin"
+   },
+   {
+    "year": "2012",
+    "event": "O XRP Ledger entra no ar (junho); 100B de XRP são pré-criados; a empresa é fundada (NewCoin → OpenCoin) com a entrada de Chris Larsen"
+   },
+   {
+    "year": "2013-2014",
+    "event": "Jed McCaleb sai para fundar a Stellar, uma rede de pagamentos rival"
+   },
+   {
+    "year": "2015",
+    "event": "A OpenCoin é renomeada Ripple; a empresa foca em vender produtos de pagamento e liquidez a instituições financeiras"
+   },
+   {
+    "year": "2017",
+    "event": "A Ripple trava 55B de XRP em escrow criptográfico, liberando até 1B por mês para dar previsibilidade à oferta"
+   },
+   {
+    "year": "2020",
+    "event": "A SEC processa a Ripple, Chris Larsen e o CEO Brad Garlinghouse, alegando que o XRP foi vendido como um valor mobiliário não registrado"
+   },
+   {
+    "year": "2023",
+    "event": "Tribunal decide que vendas programáticas de XRP em exchanges não são valores mobiliários; vendas institucionais são tratadas como ofertas não registradas; acusações contra os executivos são retiradas"
+   },
+   {
+    "year": "2025",
+    "event": "Ripple e SEC desistem das apelações (agosto); a multa de $125M da Ripple é mantida. A sidechain EVM do XRPL é lançada (junho); o primeiro ETF spot de XRP nos EUA entra no ar (novembro)"
+   },
+   {
+    "year": "2026",
+    "event": "A Ripple avança um roadmap de DeFi institucional (o empréstimo nativo XLS-66 entra em votação de validadores), um plano pós-quântico em quatro fases, e a maior parte da oferta do RLUSD migra para o XRPL"
+   }
+  ],
+  "risks": [
+   "Preocupações com concentração e centralização: uma grande fatia do XRP está no escrow da Ripple, e as decisões mensais de retravamento da empresa efetivamente influenciam quanta oferta nova chega ao mercado — críticos chamam isso mais de um float controlado por uma corporação do que de um ativo totalmente descentralizado.",
+   "Modelo de confiança dos validadores: como os nós dependem de Unique Node Lists curadas, céticos questionam quão descentralizada a rede realmente é em comparação com Bitcoin/Ethereum. A Ripple contesta, apontando que roda apenas uma minoria dos validadores, mas o debate segue vivo.",
+   "Pressão do escrow: mesmo que a maior parte do XRP desbloqueado seja retravada, as liberações mensais constantes e as vendas OTC da Ripple são uma fonte recorrente de pressão vendedora percebida (ou real), e o fim eventual do escrow é incerto.",
+   "Resíduo regulatório: o caso da SEC de 2020-2025 terminou com a Ripple pagando uma multa de $125M e ambos os lados desistindo das apelações, mas a decisão foi cheia de nuances (vendas programáticas não são valores mobiliários, vendas institucionais tratadas como ofertas não registradas). A clareza legal melhorou, mas não é absoluta, e as regras variam por jurisdição.",
+   "Lacuna entre utilidade e preço: boa parte do valor do XRP repousa na adoção institucional futura dos trilhos de pagamento da Ripple, do RLUSD e do DeFi no XRPL. Se essa adoção decepcionar, o preço pode se descolar do uso on-chain real. Note que alguns recursos mais novos (como o protocolo de empréstimos XLS-66) estão propostos ou em votação, ainda não ativos.",
+   "Concorrência: stablecoins, Stellar, a modernização do SWIFT, outras L1s e até o próprio RLUSD da Ripple podem mover valor sem necessariamente precisar do XRP, o token, como ativo-ponte.",
+   "Risco de fronteira técnica: recursos mais novos (empréstimos, vaults, tokenização, a sidechain EVM) são código mais jovem e já precisaram de correções de bugs pós-auditoria — nova superfície significa novo risco. A computação quântica é uma ameaça de longo prazo que a Ripple está só começando a endereçar."
+  ],
+  "howToInvest": [
+   "Educação primeiro, não aconselhamento financeiro: entenda que o XRP é volátil e que boa parte de sua tese depende de uma adoção que pode ou não acontecer. Só considere dinheiro que você pode perder, e dimensione as posições de acordo.",
+   "Separe o token da empresa: você pode comprar XRP sem qualquer exposição ao capital da Ripple, e o sucesso do negócio da Ripple não garante valorização do preço do XRP. Saiba o que você realmente possui.",
+   "Se comprar em uma exchange, use uma respeitável e regulada, ative uma autenticação de dois fatores forte (aplicativo autenticador, não SMS) e desconfie de golpes de 'giveaway'/airdrop — o XRP é uma das marcas mais imitadas do cripto.",
+   "Para autocustódia, mova o XRP para uma wallet onde você controla as chaves. Hardware wallets (ex.: Ledger, Trezor) são a opção mais segura; wallets de software como a Xaman (antiga Xumm) são nativas do XRPL. Note que contas de XRP exigem uma pequena reserva de XRP para permanecerem ativas.",
+   "Proteja sua frase secreta de recuperação como dinheiro vivo: nunca a digite em um site, nunca a compartilhe e cuidado com erros de 'destination tag' ao enviar para exchanges — uma tag faltando pode fazer você perder fundos.",
+   "Considere se um ETF spot de XRP regulado (disponível em bolsas dos EUA desde o fim de 2025) se encaixa melhor na sua situação do que deter o token diretamente — ele negocia em uma conta de corretora e remove a responsabilidade da autocustódia, ao custo de taxas e de nenhum uso on-chain.",
+   "Faça sua própria pesquisa em fontes primárias (xrpl.org, materiais oficiais da Ripple) e cheque as afirmações; ignore hype de preço-alvo e influenciadores prometendo retornos garantidos. Eles não existem."
+  ]
+ },
+ {
+  "slug": "xlm",
+  "category": "Blockchain Layer-1 (pagamentos e emissão de ativos)",
+  "tagline": "Uma rede de pagamentos aberta construída para mover dinheiro e emitir ativos de forma barata entre fronteiras, administrada por uma fundação sem fins lucrativos.",
+  "whatIsIt": [
+   "A Stellar é uma blockchain pública e open-source projetada para um trabalho central: mover valor — dólares, euros, stablecoins, ativos tokenizados — de forma rápida e barata entre pessoas e instituições. Seu token nativo é o lumen (XLM). Ao contrário de uma chain de propósito geral que se vende por rodar qualquer app, a Stellar foi construída sob medida para pagamentos, conversão de moedas e emissão de ativos.",
+   "Ela foi lançada em 31 de julho de 2014, criada por Jed McCaleb (que antes cofundou a Ripple e, antes disso, construiu a exchange Mt. Gox) junto com Joyce Kim. É guiada pela Stellar Development Foundation (SDF), uma organização sem fins lucrativos dos EUA que recebeu um empréstimo inicial de $3 milhões da Stripe. O enquadramento sem fins lucrativos é central para a proposta da Stellar: ela se posiciona como infraestrutura financeira pública, não como uma empresa em busca de lucro.",
+   "A rede começou como um fork do protocolo da Ripple, mas após um problema inicial de consenso mudou em 2015 para um design próprio, o Stellar Consensus Protocol (projetado por David Mazières, de Stanford). A missão declarada permaneceu consistente: expandir o acesso a serviços financeiros de baixo custo, especialmente para pagamentos internacionais e remessas, onde taxas e atrasos doem mais.",
+   "Na prática, a Stellar hoje é melhor entendida como um trilho de liquidação para stablecoins e ativos reais tokenizados. Grande parte da atividade relevante nela não é trading de XLM — é USDC, PYUSD do PayPal e fundos tokenizados se movendo entre wallets e off-ramps."
+  ],
+  "howItWorks": {
+   "paragraphs": [
+    "A Stellar não usa mineração (proof-of-work) nem staking (proof-of-stake). Ela roda o Stellar Consensus Protocol (SCP), uma forma de Federated Byzantine Agreement. Em termos simples: cada validador escolhe um conjunto de outros participantes em que confia (sua 'quorum slice'). O consenso emerge desses círculos sobrepostos de confiança concordando sobre o ledger, em vez de vir de quem queima mais eletricidade ou faz staking de mais moedas.",
+    "A vantagem é velocidade e consumo de energia quase zero — um novo ledger fecha em aproximadamente 5 segundos e as taxas são uma fração minúscula de centavo. O trade-off é que a segurança depende de como os validadores escolhem em quem confiar, e na prática um conjunto relativamente pequeno de validadores bem operados (incluindo os da SDF) carrega boa parte da rede. Essa é uma tensão genuína de design, não só um argumento de conversa.",
+    "O XLM em si tem um papel coadjuvante, não de estrela. Ele paga as taxas minúsculas de transação, atua como ativo-ponte na conversão entre moedas e sustenta um pequeno saldo mínimo (alguns XLM) em cada conta para prevenir spam e inchaço. A Stellar também tem uma exchange descentralizada embutida e emissão nativa de ativos, então qualquer um pode cunhar um token ou stablecoin diretamente no protocolo sem implantar um contrato."
+   ],
+   "bullets": [
+    "Consenso: Stellar Consensus Protocol (SCP) — Federated Byzantine Agreement, sem mineração nem staking",
+    "Velocidade e custo: ledgers fecham em ~5 segundos; taxas são frações de centavo",
+    "Energia: insignificante comparada a chains de proof-of-work",
+    "Recursos embutidos: exchange descentralizada nativa, path payments (conversão automática de moedas) e emissão de ativos/stablecoins com um clique",
+    "O papel do XLM: pagar taxas, servir de ponte entre moedas e financiar um pequeno saldo mínimo anti-spam por conta",
+    "Smart contracts: Soroban, uma plataforma de contratos em Rust/WebAssembly (no ar na mainnet desde fevereiro de 2024), adicionada para suportar DeFi e tokenização"
+   ]
+  },
+  "building": {
+   "paragraphs": [
+    "A direção atual da Stellar é dominada por dois fios: escalar a camada base e amadurecer sua plataforma de smart contracts Soroban. A meta emblemática de escalabilidade da SDF, enquadrada como a 'road to 5000 TPS', está elevando dramaticamente o throughput do Stellar Core por meio de concorrência, caching e compilação antecipada (ahead-of-time) dos contratos Soroban, enquanto corta os tempos de fechamento do ledger rumo a ~2,5 segundos.",
+    "Isso está sendo entregue por uma cadência constante de upgrades de protocolo. Versões recentes trouxeram execução multi-thread de smart contracts e caching para elevar o throughput. No início de julho de 2026, o Protocol 27 — codinome 'Zipper' — está para uma votação de validadores na mainnet por volta de 8 de julho de 2026; seus recursos de destaque são a delegação nativa de autenticação e as smart accounts (permitindo que uma conta autorize outra a assinar por ela, o que destrava recuperação social e multisig modular), além de uma correção de segurança para uma brecha de replay de assinaturas no Soroban. Em paralelo, a fundação vem entregando contratos de token padronizados (para tokens fungíveis, NFTs, security tokens e ativos reais) e melhores ferramentas para desenvolvedores, como um RPC aprimorado e um 'Lab' mais rico para simular e depurar transações.",
+    "A aposta estratégica é clara: tornar-se a camada de liquidação padrão para stablecoins reguladas e ativos tradicionais tokenizados. O investimento está fluindo para smart wallets (recuperação de chaves via passkey e login social na wallet Freighter), para a Stellar Disbursement Platform para pagamentos corporativos em massa e para infraestrutura de oráculos para que o DeFi possa precificar ativos on-chain."
+   ],
+   "bullets": [
+    "Escalando o Stellar Core rumo a ~5.000 TPS e fechamentos de ledger mais rápidos (~2,5s)",
+    "Protocol 27 ('Zipper') em votação de validadores na mainnet por volta de 8 de julho de 2026 — delegação nativa de autenticação, smart accounts/recuperação social e uma correção contra ataques de replay no Soroban",
+    "Amadurecimento do Soroban: execução multi-thread, contratos de token padronizados (fungíveis, NFT, RWA, security tokens)",
+    "Smart wallets com passkeys/recuperação social e segurança progressiva na wallet Freighter",
+    "Trilhos corporativos: Stellar Disbursement Platform e wallets de uso único para usuários fora do cripto",
+    "Aprofundamento de seu papel como camada de liquidação de stablecoins + ativos reais tokenizados"
+   ]
+  },
+  "quickFacts": [
+   [
+    "Lançamento",
+    "31 de julho de 2014"
+   ],
+   [
+    "Fundadores",
+    "Jed McCaleb e Joyce Kim; guiada pela Stellar Development Foundation, sem fins lucrativos"
+   ],
+   [
+    "Consenso",
+    "Stellar Consensus Protocol (SCP) — Federated Byzantine Agreement"
+   ],
+   [
+    "Modelo de oferta",
+    "~50 bilhões de XLM no total; a inflação anual de 1% acabou e ~55B de lumens foram queimados em 2019; nenhum lumen novo é criado"
+   ],
+   [
+    "Uso do token",
+    "Taxas, ponte/path payments, saldo mínimo por conta"
+   ],
+   [
+    "Velocidade / taxa",
+    "Fechamento de ledger em ~5 segundos; taxas de uma fração de centavo"
+   ],
+   [
+    "Smart contracts",
+    "Soroban (Rust / WebAssembly), no ar na mainnet desde fevereiro de 2024"
+   ]
+  ],
+  "ecosystem": [
+   "USDC da Circle — uma grande stablecoin nativa na Stellar, com o CCTP V2 da Circle permitindo que o USDC se mova para outras chains sem wrapping",
+   "PayPal USD (PYUSD) — a stablecoin do PayPal está no ar na Stellar, expondo-a a uma grande base de usuários mainstream",
+   "MoneyGram — on/off-ramps de dinheiro vivo para cripto usando USDC em centenas de milhares de locais físicos; sua própria stablecoin MGUSD (emitida via Bridge) foi lançada em 2026",
+   "Franklin Templeton — seu fundo tokenizado de money market de títulos do governo dos EUA (FOBXX / BENJI) roda na Stellar, um caso emblemático de ativo real tokenizado",
+   "EURC e outras stablecoins regionais para liquidação denominada em euro",
+   "A wallet Freighter, a DEX da Stellar e um ecossistema crescente de DeFi/oráculos no Soroban (ex.: feeds de preço da RedStone)",
+   "Casos de uso centrais: remessas internacionais, liquidação de stablecoins e tokenização de fundos e ativos do mundo real"
+  ],
+  "history": [
+   {
+    "year": "2014",
+    "event": "A Stellar é lançada (31 de julho); Jed McCaleb e Joyce Kim fundam a Stellar Development Foundation, apoiada por um empréstimo de $3M da Stripe. Inicialmente é um fork do protocolo da Ripple."
+   },
+   {
+    "year": "2014",
+    "event": "Dezembro: um fork não intencional do ledger expõe fraquezas no design de consenso herdado da Ripple."
+   },
+   {
+    "year": "2015",
+    "event": "A Stellar adota o novo Stellar Consensus Protocol (SCP), projetado por David Mazières, de Stanford, substituindo o mecanismo derivado da Ripple."
+   },
+   {
+    "year": "2017",
+    "event": "Adoção crescente para pagamentos internacionais; parcerias e pilotos com empresas de pagamento e fintechs se expandem."
+   },
+   {
+    "year": "2019",
+    "event": "Validadores votam pelo fim da inflação de 1% ao ano (outubro); a SDF queima ~55 bilhões de XLM (novembro), cortando a oferta total para ~50 bilhões."
+   },
+   {
+    "year": "2021",
+    "event": "A Franklin Templeton lança um fundo tokenizado de money market de títulos do governo dos EUA (FOBXX) na Stellar — um marco institucional pioneiro de ativos reais tokenizados."
+   },
+   {
+    "year": "2021",
+    "event": "Jed McCaleb se afasta dos papéis ativos; o USDC da Circle se torna um ativo nativo na rede."
+   },
+   {
+    "year": "2024",
+    "event": "Os smart contracts Soroban entram no ar na mainnet (Protocol 20, fevereiro); MoneyGram + Circle constroem um serviço global de cripto-para-dinheiro na Stellar."
+   },
+   {
+    "year": "2025",
+    "event": "Avança a campanha de escalabilidade 'Road to 5000 TPS'; o PYUSD do PayPal entra no ar na Stellar; o valor de ativos reais tokenizados na rede cresce fortemente."
+   },
+   {
+    "year": "2026",
+    "event": "A Circle implanta o CCTP V2 na Stellar; a MoneyGram lança sua stablecoin MGUSD; o Protocol 27 ('Zipper', smart accounts + delegação de autenticação) vai a votação de validadores na mainnet por volta de 8 de julho."
+   }
+  ],
+  "risks": [
+   "Preocupações com centralização são a crítica maior e mais persistente. A Stellar Development Foundation historicamente detém uma fatia muito grande do XLM (aproximadamente metade da oferta) e opera validadores influentes, dando-lhe peso desproporcional sobre a direção da rede — longe do ideal 'trustless'.",
+   "Validadores não ganham nenhuma recompensa direta do protocolo. Sem um incentivo econômico para rodar infraestrutura, o conjunto de validadores permanece relativamente pequeno e concentrado, o que enfraquece a descentralização prática do consenso.",
+   "O XLM é um token de utilidade, não um direito sobre o sucesso do ecossistema. Mesmo com stablecoins e fundos tokenizados crescendo na Stellar, a maior parte desse valor se move em USDC/PYUSD/ativos tokenizados — não em XLM — então o uso no mundo real não se traduz automaticamente em demanda ou preço do XLM.",
+   "Concorrência feroz. A Stellar disputa o papel de pagamentos e liquidação de stablecoins contra a Ripple/XRP (sua prima próxima), além de Ethereum, Solana, Tron e outras que também cortejam emissores de stablecoins e instituições. Sua vantagem não é garantida.",
+   "Adoção institucional lenta. A tese depende de bancos e empresas migrarem para trilhos públicos, o que historicamente acontece devagar e pode estagnar ou se desviar para concorrentes.",
+   "Exposição regulatória. Sua sorte está atrelada a stablecoins e valores mobiliários tokenizados — áreas fortemente reguladas onde mudanças de regra podem ajudar ou prejudicar. A estrutura sem fins lucrativos até agora a poupou das brigas sobre valores mobiliários que a Ripple enfrentou, mas isso não é garantia.",
+   "Volatilidade de preço. Como a maioria dos criptoativos, o XLM pode oscilar forte e já passou longos períodos muito abaixo das máximas anteriores; não é uma reserva de valor estável."
+  ],
+  "howToInvest": [
+   "Educação primeiro, não aconselhamento financeiro. Entenda que o XLM é um criptoativo volátil e só considere dinheiro que você pode perder por completo. Nada aqui é recomendação de compra.",
+   "Separe a tecnologia do token. A rede Stellar pode ter sucesso na liquidação de stablecoins enquanto o XLM, o token, tem desempenho fraco — seja honesto consigo mesmo sobre em qual dos dois você está realmente apostando e por quê.",
+   "Se comprar, use uma exchange respeitável que liste XLM, complete a verificação dela e comece pequeno. Compare taxas e confirme que a plataforma opera na sua jurisdição.",
+   "Mova posições relevantes para autocustódia. Wallets nativas da Stellar como Freighter (navegador) ou Lobstr permitem que você guarde as próprias chaves; lembre que cada conta Stellar precisa de um pequeno saldo mínimo de XLM para permanecer ativa.",
+   "Anote sua frase de recuperação em papel, guarde-a offline e nunca a digite em um site nem compartilhe. Qualquer pessoa com a frase controla os fundos — nenhuma exchange ou fundação pode reverter um roubo.",
+   "Envie primeiro uma transação de teste minúscula ao mover XLM para uma nova wallet, e verifique duas vezes se não está enviando para um endereço de exchange que exige memo/tag (uma forma comum de as pessoas perderem fundos na Stellar).",
+   "Para quantias maiores, considere uma hardware wallet (ex.: Ledger) para armazenamento offline das chaves, e desconfie de qualquer site de 'airdrop', 'staking' ou 'giveaway' pedindo sua seed phrase — esses são golpes."
+  ]
+ },
+ {
+  "slug": "ton",
+  "category": "Blockchain Layer-1 (integrada ao Telegram)",
+  "tagline": "A blockchain Layer-1 conectada diretamente ao Telegram, construída para levar pagamentos e mini-apps a centenas de milhões de usuários do mensageiro.",
+  "whatIsIt": [
+   "Toncoin é a moeda nativa da The Open Network (TON), uma blockchain Layer-1 projetada para ser rápida, barata e fortemente integrada ao mensageiro Telegram. Ela paga as taxas de transação (gas), protege a rede por meio de staking e alimenta pagamentos e apps que vivem dentro dos chats do Telegram.",
+   "A tecnologia remonta a 2018, quando o Telegram (fundado por Pavel e Nikolai Durov) tentou lançar uma blockchain chamada Telegram Open Network, com um token chamado 'Gram'. Uma briga com a SEC dos EUA em 2019-2020 forçou o Telegram a abandonar o projeto e devolver o dinheiro aos investidores. Desenvolvedores independentes mantiveram o código open-source vivo, relançaram a rede em 2020, formaram a TON Foundation (sem fins lucrativos) e renomearam a moeda para Toncoin em 2021.",
+   "Por anos, a TON foi administrada pela comunidade e tinha apenas um vínculo informal com o Telegram. Isso mudou em 2026: o Telegram, sob Durov, retomou formalmente o controle da rede, tornou-se seu maior validador e liderou um plano de upgrade chamado 'Make TON Great Again'. Uma votação da comunidade então renomeou a moeda de volta para seu nome original de 2018, Gram (GRAM), com efeito a partir de 15 de junho de 2026 — mesma chain, mesmos saldos, apenas um novo rótulo na moeda.",
+   "Ela existe para ser a cripto que pessoas comuns realmente usam sem saber que é cripto: enviar dinheiro, dar gorjetas, comprar em jogos e usar web apps direto dentro de um aplicativo de chat com cerca de um bilhão de usuários mensais."
+  ],
+  "howItWorks": {
+   "paragraphs": [
+    "A TON é uma chain Proof-of-Stake. Validadores travam (fazem staking de) TON para ganhar o direito de produzir blocos e confirmar transações; se agirem de má-fé, parte do stake pode sofrer slashing. O acordo entre validadores usa um protocolo Byzantine-Fault-Tolerant chamado Catchain, então a rede continua funcionando mesmo que alguns validadores estejam com defeito ou sejam maliciosos.",
+    "Seu grande diferencial é o sharding dinâmico. Em vez de uma única chain pela qual todos competem, a TON se divide automaticamente em muitas 'shardchains' paralelas quando o tráfego está pesado e as funde de volta quando está calmo, tudo coordenado por uma 'masterchain' central. O objetivo é escalar para um throughput altíssimo mantendo as taxas perto de zero.",
+    "Um trade-off importante: os smart contracts da TON são assíncronos — os contratos conversam entre si passando mensagens em vez de se chamarem instantaneamente como no Ethereum. Isso ajuda o sharding a escalar, mas torna apps complexos mais difíceis de construir e de raciocinar a respeito, o que é um ponto de atrito real para desenvolvedores."
+   ],
+   "bullets": [
+    "Consenso: Proof-of-Stake com acordo BFT 'Catchain' (o Catchain 2.0 reduziu o tempo de bloco para cerca de 400ms e levou a finalidade para menos de um segundo / ~0,6s em 2026).",
+    "Escalabilidade: sharding dinâmico — a chain divide e funde shardchains sob demanda, coordenadas por uma masterchain.",
+    "Taxas: extremamente baixas, uma fração de centavo por transação (cerca de $0.0005) após os cortes de taxas de 2026.",
+    "Staking: rode um validador (um mínimo alto de TON, na casa das centenas de milhares) ou delegue quantias menores por meio de nominator pools.",
+    "Smart contracts: modelo assíncrono de troca de mensagens; escritos em FunC e na linguagem mais nova, Tolk.",
+    "Queima de taxas: uma parte das taxas de transação/armazenamento é queimada, mas a emissão nova ainda supera a queima (inflação líquida leve, cerca de 0,6%/ano)."
+   ]
+  },
+  "building": {
+   "paragraphs": [
+    "Em meados de 2026, a história central é o Telegram reassumindo o controle direto da rede. No início de maio de 2026, Pavel Durov publicou um plano de upgrade em sete etapas apelidado de 'Make TON Great Again' (MTONGA): o Telegram substitui a TON Foundation como principal condutor operacional, torna-se o maior validador individual por stake (fez staking de ~2,2 milhões de TON para assumir um assento de validador primário) e corta as taxas em cerca de seis vezes (de aproximadamente $0.003 para ~$0.0005). Cerca de quatro das sete etapas já haviam sido entregues até meados de 2026, com o restante em andamento. A renomeação de junho de 2026 de volta para 'Gram' faz parte do mesmo movimento de resgate das origens.",
+    "O roadmap de engenharia gira em torno de velocidade, custo e pagamentos. O Catchain 2.0 (ao vivo na mainnet em 9 de abril de 2026) reduziu os tempos de bloco para ~400ms e a finalidade para menos de um segundo; uma reescrita completa do nó validador em Rust está em andamento por desempenho e manutenibilidade; e o ferramental de desenvolvedores está sendo unificado em torno da linguagem de contratos Tolk e de um framework AppKit para construir Telegram Mini Apps.",
+    "O foco comercial é transformar o Telegram em uma plataforma de pagamentos e mini-apps. O TON Pay / TON Pay 2.0 mira um checkout de um toque, abaixo de um centavo, dentro dos chats, tanto para TON quanto para USDT, e uma ponte trustless chamada 'Teleport' está planejada para trazer liquidez de Bitcoin para a TON."
+   ],
+   "bullets": [
+    "Plano MTONGA: Telegram como operador líder + maior validador, redução de taxas de ~6x, custos de transação perto de zero (~4 das 7 etapas entregues até meados de 2026).",
+    "Catchain 2.0 ao vivo em abril de 2026 (blocos de ~400ms, finalidade de ~0,6s); reescrita do nó em Rust para a stack de validadores em andamento.",
+    "TON Pay 2.0 — checkout para comerciantes/mini-apps em TON + USDT com pagamentos abaixo de um segundo e de um centavo.",
+    "TON Teleport — uma ponte trustless de Bitcoin planejada para puxar liquidez de BTC para a TON.",
+    "Stack de desenvolvedor: linguagem de smart contracts Tolk, AppKit para Mini Apps, SDKs unificados.",
+    "Cocoon (Confidential Compute Open Network) — uma rede descentralizada de computação para IA na TON, lançada na mainnet em dezembro de 2025."
+   ]
+  },
+  "quickFacts": [
+   [
+    "Lançamento",
+    "Conceito em 2018 (o 'Gram' do Telegram); rede relançada pela comunidade em 2020, moeda renomeada Toncoin em 2021"
+   ],
+   [
+    "Fundadores",
+    "Pavel & Nikolai Durov (originais); revivida pela TON Foundation / comunidade"
+   ],
+   [
+    "Consenso",
+    "Proof-of-Stake com acordo BFT 'Catchain'"
+   ],
+   [
+    "Escalabilidade",
+    "Sharding dinâmico (masterchain + shardchains)"
+   ],
+   [
+    "Modelo de oferta",
+    "Sem teto fixo; total de ~5.2B TON, inflação leve (~0,6%/ano), parte das taxas é queimada"
+   ],
+   [
+    "Oferta circulante",
+    "Cerca de 2.7B TON (~52% do total; reservas/staking detêm o restante)"
+   ],
+   [
+    "Uso do token",
+    "Taxas de gas, staking/validação, pagamentos e a economia in-app do Telegram"
+   ],
+   [
+    "Rebrand de 2026",
+    "Renomeada para Gram (GRAM) em 15 de junho de 2026 por ~81% dos votos da comunidade — 1:1, sem migração"
+   ],
+   [
+    "Nome da chain",
+    "Continua 'The Open Network' (TON)"
+   ]
+  ],
+  "ecosystem": [
+   "O próprio Telegram — Mini Apps, pagamentos dentro do chat e compartilhamento de receita de anúncios liquidados em TON; alcance de centenas de milhões de usuários mensais (o Telegram tem cerca de um bilhão de usuários mensais no total)",
+   "Wallet no Telegram — uma wallet custodial embutida operada pela The Open Platform; em abril de 2026 adicionou trading de futuros perpétuos (até 50x, 150M+ usuários) via uma integração com a Lighter",
+   "USDT (Tether) na TON — mais de um bilhão de dólares em oferta de stablecoin, além do XAUT lastreado em ouro, tornando a TON um trilho real de pagamentos",
+   "Jogos tap-to-earn — Notcoin e Hamster Kombat geraram enormes picos iniciais de usuários (centenas de milhões de jogadores no auge, embora o uso tenha caído fortemente depois)",
+   "Blum e outros Mini Apps — apps de trading/DeFi distribuídos diretamente dentro dos chats do Telegram",
+   "TON Pay — um SDK de checkout que permite a comerciantes e Mini Apps aceitar pagamentos em TON e USDT",
+   "TON Connect — o protocolo padrão de conexão de wallet para Telegram Mini Apps",
+   "Cocoon — uma rede descentralizada de computação confidencial para IA construída na TON (mainnet em dezembro de 2025)"
+  ],
+  "history": [
+   {
+    "year": "2018",
+    "event": "O Telegram levanta ~$1.7B em uma venda privada de tokens para construir a Telegram Open Network e seu token 'Gram' — uma das maiores captações da história das cripto."
+   },
+   {
+    "year": "2019",
+    "event": "A SEC dos EUA processa o Telegram, classificando o Gram como uma oferta de valores mobiliários não registrada, e bloqueia a distribuição com uma ordem restritiva."
+   },
+   {
+    "year": "2020",
+    "event": "Um tribunal dos EUA dá razão à SEC; o Telegram abandona o projeto, paga uma multa de $18.5M e devolve cerca de $1.22B aos investidores. Desenvolvedores independentes relançam a rede open-source (inicialmente 'Free TON')."
+   },
+   {
+    "year": "2021",
+    "event": "A comunidade renomeia a moeda para Toncoin (TON) e a TON Foundation, sem fins lucrativos, se forma para zelar pela rede open-source; Durov a apoia publicamente."
+   },
+   {
+    "year": "2023-2024",
+    "event": "A TON é escolhida como a blockchain dos Telegram Mini Apps; a Tether lança o USDT na TON; jogos tap-to-earn como Notcoin e Hamster Kombat impulsionam um crescimento massivo de usuários."
+   },
+   {
+    "year": "2025",
+    "event": "A rede se estabiliza em uma base mais constante de usuários diários; os upgrades do Catchain e do ferramental continuam; a rede de computação para IA Cocoon é lançada na mainnet em dezembro."
+   },
+   {
+    "year": "Apr 2026",
+    "event": "O Catchain 2.0 entra no ar (blocos de ~400ms, finalidade de ~0,6s); o Telegram faz staking de ~2.2M TON, assume o papel operacional da Foundation e se torna o maior validador da TON sob o plano MTONGA."
+   },
+   {
+    "year": "May 2026",
+    "event": "Durov publica o roadmap de sete etapas 'Make TON Great Again': Telegram como operador/validador líder mais um corte de taxas de ~6x; o preço do TON dispara e as entradas de staking crescem fortemente."
+   },
+   {
+    "year": "Jun 2026",
+    "event": "Uma votação da comunidade (~81%) renomeia o Toncoin de volta para Gram (GRAM), com efeito em 15 de junho — 1:1, sem migração, revivendo o nome original de 2018."
+   }
+  ],
+  "risks": [
+   "Centralização é o maior de todos. O Telegram agora é o maior validador individual e o principal condutor operacional da rede, e a identidade da moeda está fundida a uma única empresa privada. Isso mina o discurso de 'descentralizada' e cria um ponto único de falha — técnico, corporativo e reputacional.",
+   "Exposição regulatória. A encarnação original da TON foi literalmente morta pela SEC, e uma corporação controlando a produção de blocos, mais um token atrelado a uma gigante plataforma social criptografada, é exatamente o que os reguladores escrutinam. Regras sobre moedas digitais privadas e transmissão de dinheiro podem bater forte.",
+   "Risco de fundador / pessoa-chave. Muita coisa depende de Pavel Durov e do Telegram. Durov enfrentou séria pressão legal na Europa (uma prisão em 2024 na França por questões de moderação de conteúdo no Telegram); problemas para o Telegram ou para Durov pessoalmente respingam direto na TON.",
+   "O número de validadores é pequeno. Em meados de 2026 a rede rodava apenas cerca de 400 validadores — um erro de arredondamento perto das centenas de milhares de validadores do Ethereum — então a descentralização é rasa na prática.",
+   "Ciclo de hype e uso volúvel. Os jogos tap-to-earn que inflaram os números de usuários da TON desabaram depois (o Hamster Kombat perdeu a vasta maioria dos usuários e do valor desde o pico). O número de 'usuários mensais' da manchete pode ser muito maior que a atividade econômica real e recorrente.",
+   "Oferta inflacionária. Não há teto fixo; a emissão nova ainda supera a queima de taxas, então os detentores enfrentam diluição gradual a menos que a demanda continue crescendo.",
+   "Atrito para desenvolvedores. Smart contracts assíncronos de troca de mensagens tornam DeFi complexo mais difícil de construir do que no Ethereum ou na Solana, o que pode desacelerar a profundidade do ecossistema.",
+   "Concorrência. A TON compete com as L2s do Ethereum, a Solana e outras por pagamentos e apps; sua principal vantagem é a distribuição do Telegram, e não um fosso técnico."
+  ],
+  "howToInvest": [
+   "Educação primeiro, não é aconselhamento financeiro: entenda que TON é um criptoativo volátil que pode perder uma grande parte do valor rapidamente. Nunca invista dinheiro que você não pode perder, e dimensione qualquer posição de acordo.",
+   "Atenção ao rebrand: desde junho de 2026 a moeda aparece como 'Gram (GRAM)' em muitas wallets e exchanges. É o mesmo ativo que Toncoin/TON, na proporção 1:1 e sem migração — não caia em nenhum golpe do tipo 'troque seu TON antigo pelo novo GRAM', porque nenhuma troca é necessária.",
+   "Compre por meio de uma exchange respeitável que liste TON/GRAM (as grandes exchanges globais listam). Prefira plataformas com um histórico sólido de segurança e, quando relevante, registro regulatório no seu país.",
+   "Para qualquer coisa além de trading de curto prazo, mova as moedas para self-custody. A TON funciona com wallets como Tonkeeper, o TON Space oficial ou a Wallet embutida no Telegram; anote sua seed phrase offline e nunca a digite em nenhum site nem compartilhe.",
+   "Tenha cuidado redobrado dentro do próprio Telegram. O ecossistema nativo do chat está cheio de Mini Apps, bots de airdrop e ofertas de 'tap-to-earn' — muitos são de baixa qualidade ou golpes descarados. Verifique links, nunca aprove permissões de wallet às cegas e trate DMs não solicitadas como hostis.",
+   "Comece pequeno e verifique o fluxo: envie primeiro uma quantia mínima de teste, confirme que você controla a wallet e só então mova quantias maiores. Confira os endereços duas vezes — malware que sequestra a área de transferência é comum em cripto.",
+   "Considere dollar-cost averaging (comprar pequenas quantias fixas ao longo do tempo) em vez de uma única compra grande, para reduzir o risco de comprar um topo local após picos movidos a notícias, como o rali da retomada pelo Telegram em 2026.",
+   "Guarde registros para impostos: compras, vendas, swaps e recompensas de staking geralmente são eventos tributáveis, dependendo da sua jurisdição."
+  ]
+ },
+ {
+  "slug": "ltc",
+  "category": "Blockchain Layer-1 / pagamentos",
+  "tagline": "Uma das moedas mais antigas das cripto — uma quase-cópia do Bitcoin ajustada para pagamentos do dia a dia mais rápidos e baratos.",
+  "whatIsIt": [
+   "Litecoin é uma criptomoeda proof-of-work lançada em outubro de 2011 por Charlie Lee, um ex-engenheiro do Google que depois trabalhou na Coinbase. Ele fez um fork do código do Bitcoin e mudou algumas configurações para criar uma moeda que confirma transações mais rápido e é mais barata de enviar — daí o apelido de 'prata para o ouro do Bitcoin'.",
+   "Ela existe para ser gasta, não apenas guardada. Enquanto o Bitcoin se apoia em ser 'ouro digital', o Litecoin sempre se posicionou como dinheiro do dia a dia: um trilho de pagamentos com taxas menores e liquidação mais rápida, usando as mesmas ideias de design testadas em batalha que tornam o Bitcoin seguro.",
+   "Não existe empresa dona do Litecoin. É software open-source mantido por desenvolvedores voluntários e pela Litecoin Foundation, sem fins lucrativos. Qualquer um pode rodar um nó, minerar ou construir sobre ele. Charlie Lee ficou famoso por vender e doar seu LTC em dezembro de 2017 para eliminar qualquer conflito de interesse, embora ainda ajude a dirigir a Foundation.",
+   "Com mais de 14 anos e sem grandes hacks em sua chain base, o Litecoin é uma das criptomoedas mais longevas e testadas que existem — mas a idade também significa que agora compete com chains muito mais novas e ricas em recursos."
+  ],
+  "howItWorks": {
+   "paragraphs": [
+    "O Litecoin é quase arquiteturalmente idêntico ao Bitcoin. Mineradores pelo mundo correm para resolver um quebra-cabeça matemático difícil; o vencedor adiciona o próximo bloco de transações e ganha LTC recém-emitido mais as taxas. Esse processo de proof-of-work é o que protege o livro-razão — reescrever o histórico custaria a um atacante uma quantidade enorme de eletricidade e hardware.",
+    "Os dois grandes ajustes em relação ao Bitcoin: o Litecoin usa o algoritmo de hash Scrypt em vez do SHA-256, e mira um novo bloco a cada ~2,5 minutos em vez de ~10. O Scrypt foi escolhido por exigir mais memória, originalmente para manter a mineração acessível em hardware comum (embora mineradores ASIC especializados em Scrypt dominem hoje). O tempo de bloco mais rápido significa que as transações confirmam cerca de quatro vezes mais rápido.",
+    "A oferta tem um teto fixo de 84 milhões de LTC — exatamente quatro vezes o teto de 21 milhões do Bitcoin. Novas moedas entram por recompensas de mineração que caem pela metade a cada 840.000 blocos (cerca de quatro anos), então a emissão vai lentamente rumo a zero, imitando o cronograma de escassez do Bitcoin."
+   ],
+   "bullets": [
+    "Consenso: proof-of-work (algoritmo Scrypt), mesmo modelo de segurança do Bitcoin",
+    "Tempo de bloco de ~2,5 minutos — confirmações cerca de 4x mais rápidas que o Bitcoin",
+    "Oferta máxima de 84 milhões de LTC; recompensas caem pela metade a cada ~4 anos (atualmente 6.25 LTC/bloco)",
+    "SegWit e a Lightning Network estão ativos para pagamentos off-chain mais baratos e rápidos",
+    "O MWEB (MimbleWimble Extension Blocks) adiciona transações confidenciais OPT-IN",
+    "Frequentemente usado como ativo-ponte de taxa baixa para mover valor entre exchanges"
+   ]
+  },
+  "building": {
+   "paragraphs": [
+    "Depois de anos 'pronto' — uma moeda de pagamentos estável e sem emoção — o ecossistema do Litecoin está avançando para smart contracts, algo que ele nunca suportou nativamente. O esforço de destaque é o LitVM, uma Layer-2 zero-knowledge compatível com EVM que pretende trazer DeFi e apps no estilo Ethereum para o Litecoin sem alterar a chain base. Sua testnet, LiteForge, foi lançada em abril de 2026 e já processou dezenas de milhões de transações de teste; a mainnet está prevista para o segundo semestre de 2026, condicionada a auditorias de segurança independentes e ainda sem data firme comprometida. O esforço atraiu recentemente um investimento estratégico de $1M da Lite Strategy, listada na Nasdaq.",
+    "Na camada base, o foco é amadurecer o MWEB, o recurso opcional de privacidade do Litecoin que entrou no ar em 2022. A adoção cresceu de forma constante, com uma grande quantidade de LTC agora em transações confidenciais, e os desenvolvedores continuam apertando suas regras de validação e expandindo o que ele pode carregar. O outro catalisador do mundo real é o ETF spot de Litecoin da Canary (LTCC), que começou a ser negociado na Nasdaq em 28 de outubro de 2025 — um marco regulatório, mesmo que os fluxos de entrada tenham sido modestos até agora (apenas alguns milhões de dólares em ativos até meados de 2026)."
+   ],
+   "bullets": [
+    "LitVM — Layer-2 zk compatível com EVM para smart contracts/DeFi; testnet LiteForge ativa (abril de 2026), mainnet prevista para o 2º semestre de 2026 condicionada a auditorias",
+    "Amadurecimento da privacidade opt-in do MWEB: validação mais rígida e crescente adoção de LTC travado",
+    "Crescimento do ecossistema em torno do ETF spot de LTC da Canary (LTCC), ativo desde 28 de outubro de 2025",
+    "O próximo halving programado, ~2027, reduz a recompensa de bloco de 6.25 para 3.125 LTC",
+    "Trabalho contínuo na Lightning Network e em integrações de pagamento para se manter relevante como trilho de gastos"
+   ]
+  },
+  "quickFacts": [
+   [
+    "Lançamento",
+    "7 de outubro de 2011"
+   ],
+   [
+    "Fundador",
+    "Charlie Lee (ex-Google, ex-Coinbase)"
+   ],
+   [
+    "Consenso",
+    "Proof-of-Work (Scrypt)"
+   ],
+   [
+    "Tempo de bloco",
+    "~2,5 minutos"
+   ],
+   [
+    "Oferta máxima",
+    "84,000,000 LTC"
+   ],
+   [
+    "Circulante",
+    "~77 milhões de LTC (2026)"
+   ],
+   [
+    "Recompensa de bloco atual",
+    "6.25 LTC (cai pela metade ~2027)"
+   ],
+   [
+    "Uso do token",
+    "Pagamentos, taxas, transferência de valor de baixo custo"
+   ],
+   [
+    "Governança",
+    "Open-source + Litecoin Foundation"
+   ]
+  ],
+  "ecosystem": [
+   "Amplamente aceito para gastos via processadores de pagamento (ex.: aceito por meio das integrações de comerciantes da BitPay)",
+   "Listado em praticamente todas as grandes exchanges; usado com frequência como ativo-ponte barato entre plataformas",
+   "Suporte à Lightning Network para micropagamentos instantâneos e de taxa ultrabaixa",
+   "MWEB para usuários que querem privacidade opcional nas transações",
+   "ETF spot de Litecoin da Canary (LTCC) na Nasdaq — exposição regulada sem self-custody",
+   "LitVM / LiteForge — camada emergente de smart contracts e DeFi (ainda no início, em estágio de testnet)",
+   "Ecossistema de mineração profundo e maduro (frequentemente minerado em conjunto com o Dogecoin usando hardware Scrypt)"
+  ],
+  "history": [
+   {
+    "year": "2011",
+    "event": "Charlie Lee lança o Litecoin em 7 de outubro como um fork do Bitcoin mais rápido e leve usando Scrypt."
+   },
+   {
+    "year": "2013",
+    "event": "O LTC se torna uma das primeiras grandes altcoins a alcançar um market cap de $1B+ durante um rali inicial."
+   },
+   {
+    "year": "2015",
+    "event": "O primeiro halving corta a recompensa de bloco de 50 para 25 LTC (agosto)."
+   },
+   {
+    "year": "2017",
+    "event": "O Litecoin ativa o SegWit e completa um dos primeiros pagamentos via Lightning Network, à frente da curva de adoção do Bitcoin."
+   },
+   {
+    "year": "2017",
+    "event": "Charlie Lee vende e doa suas posições em LTC para evitar preocupações com conflito de interesse (dezembro)."
+   },
+   {
+    "year": "2019",
+    "event": "O segundo halving reduz a recompensa para 12.5 LTC (agosto)."
+   },
+   {
+    "year": "2022",
+    "event": "O MWEB (MimbleWimble Extension Blocks) entra no ar, adicionando transações confidenciais opt-in."
+   },
+   {
+    "year": "2023",
+    "event": "O terceiro halving corta a recompensa para 6.25 LTC por bloco (agosto)."
+   },
+   {
+    "year": "2025",
+    "event": "O ETF spot de Litecoin da Canary (LTCC) começa a ser negociado na Nasdaq (28 de outubro)."
+   },
+   {
+    "year": "2026",
+    "event": "A testnet LiteForge da Layer-2 LitVM compatível com EVM é lançada (abril); mainnet prevista para mais adiante no ano."
+   }
+  ],
+  "risks": [
+   "Relevância em declínio: o Litecoin escorregou para fora das primeiras posições por market cap, e seu nicho de 'pagamentos rápidos e baratos' agora é disputado pela Lightning Network do Bitcoin, pelas stablecoins e por chains mais rápidas como a Solana.",
+   "Demanda institucional fraca: apesar de um ETF spot aprovado, o LTCC detinha apenas alguns milhões de dólares em ativos muitos meses após o lançamento — uma fração do que os ETFs de Bitcoin captaram em semanas. O ETF existe, mas a tese de demanda não está comprovada.",
+   "Ecossistema nativo fraco: o Litecoin quase não tem atividade estabelecida de DeFi, NFT ou apps. O avanço de smart contracts do LitVM é real, mas está no início, sem auditoria na mainnet, e anos atrás de Ethereum e Solana.",
+   "Óptica de fundador/centralização: Charlie Lee vendeu toda a sua participação em 2017, o que alguns leem como um mau sinal, e a Litecoin Foundation continua sendo um ponto focal de direção para um projeto supostamente descentralizado.",
+   "Risco regulatório de privacidade: as transações confidenciais do MWEB levaram algumas exchanges (especialmente em certas jurisdições) a deslistar ou restringir o LTC, e recursos de privacidade podem atrair escrutínio regulatório.",
+   "Concentração de mineração: a mineração Scrypt é dominada por ASICs e frequentemente feita em conjunto com o Dogecoin, então a segurança do Litecoin depende em parte da economia dos mineradores de Dogecoin em vez de se sustentar totalmente sozinha.",
+   "Continua sendo um ativo especulativo volátil. Ser antigo e 'comprovado' não torna o preço do LTC estável — ele pode cair, e cai, mais de 70% em bear markets."
+  ],
+  "howToInvest": [
+   "Educação primeiro, não é aconselhamento financeiro: entenda que LTC é um ativo volátil que pode perder a maior parte do valor. Só comprometa dinheiro que você pode perder por completo.",
+   "Compre em uma exchange respeitável e regulada (ex.: Coinbase, Kraken) após concluir a verificação de identidade. Comece pequeno enquanto aprende como funcionam depósitos, saques e taxas.",
+   "Mova posições relevantes para fora da exchange, para self-custody. 'Not your keys, not your coins' — uma exchange pode congelar fundos, ser hackeada ou quebrar.",
+   "Para self-custody, uma hardware wallet (Ledger, Trezor) é a opção mais segura; uma software wallet respeitável como Litecoin Core ou Electrum-LTC serve para quantias menores. Escreva sua seed phrase em papel e guarde offline — nunca a digite em um site.",
+   "Envie primeiro uma quantia mínima de teste para confirmar que o endereço funciona antes de mover um saldo grande. Endereços de Litecoin e Bitcoin parecem parecidos, mas NÃO são intercambiáveis — enviar LTC para um endereço BTC pode perdê-lo para sempre.",
+   "Se quiser exposição ao preço sem gerenciar chaves, um ETF spot de Litecoin regulado (como o LTCC) é uma opção — mas você possui uma cota, não a moeda, e paga uma taxa de administração.",
+   "Cuidado com golpes: nenhum 'giveaway' legítimo dobra seu LTC, e nenhum agente de suporte precisa da sua seed phrase. Dollar-cost averaging vence tentar cronometrar o mercado para a maioria dos iniciantes."
+  ]
+ },
+ {
+  "slug": "bch",
+  "category": "Blockchain Layer-1 / dinheiro digital peer-to-peer",
+  "tagline": "Um hard fork do Bitcoin de 2017 que manteve blocos maiores para que pagamentos do dia a dia continuem baratos e rápidos — e agora está acoplando smart contracts.",
+  "whatIsIt": [
+   "Bitcoin Cash (BCH) é uma criptomoeda que se separou do Bitcoin (BTC) em 1º de agosto de 2017. Foi criada por uma facção da comunidade Bitcoin que queria que a rede fosse usada principalmente como dinheiro eletrônico do dia a dia — pagamentos baratos e rápidos — em vez de uma reserva de valor com taxas altas. Eles fizeram isso elevando o limite de quantos dados cada bloco pode conter, para que mais transações caibam e as taxas fiquem baixas.",
+   "A separação aconteceu porque o limite de 1 MB por bloco do Bitcoin estava causando um acúmulo: conforme o uso crescia, as transações ficavam lentas e as taxas disparavam. Um lado queria manter os blocos pequenos e empurrar a escalabilidade para sistemas 'layer-2' separados; o outro queria simplesmente aumentar os blocos. Quando nenhum acordo vingou, o lado dos blocos grandes fez fork do código e da chain, e nasceu o Bitcoin Cash. Todos que detinham BTC no momento do fork receberam a mesma quantidade de BCH.",
+   "Não existe um único fundador. Foi defendido publicamente por figuras dos primórdios do Bitcoin como Roger Ver (apelidado de 'Bitcoin Jesus') e pelo magnata de hardware de mineração Jihan Wu, da Bitmain, e o software de referência inicial (Bitcoin ABC) foi liderado pelo desenvolvedor Amaury Séchet. Hoje o desenvolvimento está distribuído entre várias equipes de nós independentes em vez de uma única empresa.",
+   "Seu discurso sempre foi 'ser o dinheiro que Satoshi descreveu'. Na prática, o BCH funciona muito como o Bitcoin por baixo do capô, mas otimiza para gastos de baixo custo e, desde 2023, vem adicionando recursos programáveis de smart contracts para ampliar o que a chain pode fazer."
+  ],
+  "howItWorks": {
+   "paragraphs": [
+    "O Bitcoin Cash usa exatamente o mesmo motor central do Bitcoin: mineração Proof-of-Work SHA-256 e o modelo contábil UTXO (unspent-transaction-output). Mineradores pelo mundo correm para resolver um quebra-cabeça de hash; o vencedor adiciona o próximo bloco de transações aproximadamente a cada 10 minutos e ganha BCH recém-emitido mais as taxas. Nós verificam independentemente cada transação contra as regras, então nenhuma parte central está no comando.",
+    "A grande diferença em relação ao Bitcoin é a capacidade. O BCH elevou o limite de tamanho de bloco — do 1 MB do Bitcoin até 32 MB — para que muito mais transações caibam em cada bloco. Mais espaço por bloco significa que a rede raramente congestiona, e é por isso que as taxas do BCH costumam ser uma fração de centavo mesmo em horários de pico. O trade-off é que blocos maiores exigem mais banda e armazenamento dos nós que rodam a rede.",
+    "Desde 2023, o BCH adicionou capacidade real de smart contracts por meio dos CashTokens e de uma linguagem de script em expansão, permitindo que desenvolvedores construam tokens, NFTs e apps on-chain diretamente na camada base em vez de em uma chain separada. Os upgrades anuais recentes têm levantado, passo a passo, antigos limites de scripting para tornar esses contratos mais poderosos."
+   ],
+   "bullets": [
+    "Consenso: Proof-of-Work SHA-256 — mesmo algoritmo do Bitcoin, então o BCH pode ser minerado com hardware ASIC de Bitcoin.",
+    "Tempos de bloco de ~10 minutos e o mesmo modelo de segurança baseado em mineração com ajuste de dificuldade.",
+    "Tamanho de bloco de até 32 MB (vs. o 1 MB base do Bitcoin), a escolha de design que torna os pagamentos baratos e de alto throughput.",
+    "Modelo UTXO: sua wallet gasta pedaços discretos de moeda e gera troco, exatamente como no Bitcoin.",
+    "Smart contracts via CashTokens + CashScript — tokens, NFTs e covenants vivem na chain base, sem precisar de layer-2 separada.",
+    "As taxas normalmente ficam bem abaixo de um centavo, que é o objetivo central do projeto."
+   ]
+  },
+  "building": {
+   "paragraphs": [
+    "Em meados de 2026, a direção do Bitcoin Cash é clara: evoluir de 'apenas dinheiro peer-to-peer' para uma chain programável de smart contracts, mantendo as taxas mínimas. O BCH agora entrega um upgrade de rede em uma cadência anual previsível — todo dia 15 de maio — aprovado por meio de um processo aberto de CHIP (Cash Improvement Proposal), e não por uma única empresa. Esse ritmo anual é, em si, parte da estratégia: upgrades constantes, sem drama e sem forks.",
+    "O upgrade mais recente, apelidado de 'Layla', foi ativado em 15 de maio de 2026 e adicionou quatro CHIPs de scripting — Loops (loops limitados via OP_BEGIN/OP_UNTIL), Functions (código reutilizável OP_DEFINE/OP_INVOKE), Pay to Script e Bitwise (operações de bits restauradas). Junto com o upgrade de 2025 (que removeu o antigo teto de 201 operações e adicionou matemática BigInt de precisão arbitrária), isso torna os contratos do BCH dramaticamente mais capazes — a ponto de os desenvolvedores agora discutirem casos de uso on-chain como verificação de provas zero-knowledge e criptografia pós-quântica.",
+    "O objetivo declarado para o curto prazo é transformar essas novas capacidades de baixo nível em uso real: mais apps de CashTokens, exchanges descentralizadas, trilhos de stablecoin, escrow de crowdfunding e ferramentas para comerciantes construídas nativamente no BCH. O ponto de atenção honesto que o próprio ecossistema sinaliza é se a atividade de desenvolvedores e a utilidade on-chain real vão de fato crescer para acompanhar a nova tecnologia — a capacidade agora existe; a adoção é a questão em aberto."
+   ],
+   "bullets": [
+    "Upgrade 'Layla' (ativado em 15 de maio de 2026): CHIPs Loops, Functions, Pay to Script e Bitwise — um grande salto em expressividade de smart contracts.",
+    "Constrói sobre o upgrade de maio de 2025 (VM Limits + BigInt) que levantou limites de script de longa data e adicionou inteiros de altíssima precisão (números de até aproximadamente 80,000 bits).",
+    "Cadência anual previsível de upgrades todo 15 de maio, governada pelo processo aberto de CHIPs e por múltiplas equipes de nós independentes (BCHN, Bitcoin Verde, Knuth).",
+    "Crescimento do ecossistema CashTokens: tokens on-chain, NFTs, DEXes, trilhos de stablecoin e apps baseados em covenants na camada base.",
+    "Novas primitivas voltadas a casos de uso avançados como provas zero-knowledge e contratos prontos para o pós-quântico.",
+    "Foco contínuo: manter as taxas da camada base perto de zero e a folga de escalabilidade alta enquanto adiciona programabilidade."
+   ]
+  },
+  "quickFacts": [
+   [
+    "Lançamento",
+    "1º de agosto de 2017 (hard fork do Bitcoin no bloco 478,558)"
+   ],
+   [
+    "Fundadores",
+    "Nenhum fundador único; defendido por Roger Ver & Jihan Wu, cliente inicial (Bitcoin ABC) liderado por Amaury Séchet"
+   ],
+   [
+    "Consenso",
+    "Proof-of-Work SHA-256 (o mesmo do Bitcoin)"
+   ],
+   [
+    "Tamanho / tempo de bloco",
+    "Blocos de até 32 MB, tempo de bloco de ~10 minutos"
+   ],
+   [
+    "Oferta máxima",
+    "21 milhões de BCH (mesmo teto do Bitcoin)"
+   ],
+   [
+    "Oferta circulante",
+    "~20 milhões de BCH (em meados de 2026)"
+   ],
+   [
+    "Emissão",
+    "Halving a cada 210,000 blocos; recompensa cortada para 3.125 BCH no halving de abril de 2024"
+   ],
+   [
+    "Uso do token",
+    "Pagamentos/dinheiro digital, taxas de transação, recompensas de mineração e gas/colateral para smart contracts CashTokens"
+   ],
+   [
+    "Cadência de upgrades",
+    "Upgrade anual de rede todo 15 de maio via governança aberta por CHIPs"
+   ]
+  ],
+  "ecosystem": [
+   "CashTokens (2023) — tokens fungíveis e NFTs nativos na camada base do BCH, comparáveis em espírito ao que os tokens fazem no Ethereum, mas muito mais baratos de validar",
+   "CashScript — uma linguagem de smart contracts de alto nível para escrever pagamentos condicionais, escrow e covenants no BCH",
+   "CashFusion — uma ferramenta de privacidade não-custodial que mescla cooperativamente as transações de muitos usuários para frustrar o rastreamento na blockchain",
+   "Wallets: Electron Cash, Bitcoin.com Wallet, Paytaca, e suporte a hardware via Trezor/Ledger",
+   "Pagamentos e comerciantes: ponto de venda e remessas de taxa baixa são o caso de uso real emblemático; algumas regiões usam trilhos de stablecoin baseados em BCH",
+   "Apps on-chain: exchanges descentralizadas, contratos de crowdfunding/escrow, vouchers de pagamento e emissão de tokens construídos sobre CashTokens",
+   "Múltiplas implementações de nós independentes (Bitcoin Cash Node, Bitcoin Verde, Knuth) mantendo o protocolo descentralizado"
+  ],
+  "history": [
+   {
+    "year": "2017",
+    "event": "O Bitcoin Cash faz fork do Bitcoin em 1º de agosto, no bloco 478,558, por causa do debate de escalabilidade sobre o tamanho dos blocos; detentores de BTC recebem 1 BCH cada. Limite de bloco elevado para 8 MB."
+   },
+   {
+    "year": "2018",
+    "event": "Limite de bloco elevado para 32 MB. Em novembro, uma disputa técnica e de governança divide o BCH novamente — o Bitcoin SV (BSV), apoiado por Craig Wright e Calvin Ayre, se separa."
+   },
+   {
+    "year": "2020",
+    "event": "Primeiro halving do BCH (recompensa de bloco de 12.5 → 6.25 BCH). Uma disputa sobre um imposto de mineradores para financiar desenvolvedores (o 'Infrastructure Funding Plan') divide a chain de novo; o Bitcoin Cash Node (BCHN) se torna a implementação dominante."
+   },
+   {
+    "year": "2023",
+    "event": "Os CashTokens são ativados no upgrade de maio, dando ao BCH tokens fungíveis nativos, NFTs e capacidade de smart contracts on-chain."
+   },
+   {
+    "year": "2024",
+    "event": "O segundo halving do BCH, no início de abril, corta a recompensa de bloco de 6.25 para 3.125 BCH (no bloco 1,050,000)."
+   },
+   {
+    "year": "2025",
+    "event": "O upgrade de 15 de maio ativa os CHIPs VM Limits e BigInt — removendo o antigo teto de 201 operações de script e adicionando matemática de inteiros de precisão arbitrária."
+   },
+   {
+    "year": "2026",
+    "event": "O upgrade 'Layla' é ativado em 15 de maio com os CHIPs Loops, Functions, Pay to Script e Bitwise, expandindo fortemente o poder de smart contracts do BCH."
+   }
+  ],
+  "risks": [
+   "Segurança de rede mais fraca que a do Bitcoin. O BCH compartilha o algoritmo SHA-256 do Bitcoin, mas tem um hashrate muito menor, tornando um ataque de 51% (double-spend) muito mais barato e realista. Estimativas públicas colocaram o custo de alugar poder de hash suficiente para atacar o BCH em apenas alguns milhares de dólares por hora, e a chain já viu incidentes de mineração contenciosos no passado.",
+   "A adoção nunca acompanhou a visão. Apesar de anos de mensagem 'seja o dinheiro de verdade', o BCH não alcançou adoção por comerciantes ou consumidores nem perto da do Bitcoin. Seu efeito de rede, liquidez e reconhecimento de marca são uma pequena fração dos do BTC.",
+   "Forks contenciosos repetidos. O próprio BCH foi um fork, depois se dividiu no Bitcoin SV (2018) e de novo na briga sobre financiamento de desenvolvedores (2020). Esse histórico de cismas na comunidade sinaliza fragilidade de governança e diluiu a marca entre chains concorrentes.",
+   "Concorrência intensa. Está espremido por todos os lados — o Bitcoin como rei da reserva de valor, stablecoins e Lightning para pagamentos baratos, e chains mais rápidas/baratas (Solana etc.) mais as L2s do Ethereum para smart contracts. O BCH raramente é a melhor escolha clara para qualquer tarefa específica.",
+   "O preço tem sido fraco. O BCH negocia muito abaixo do seu topo histórico de 2017 e teve desempenho inferior ao BTC por longos períodos — caiu fortemente ao longo do ano até meados de 2026 — então os detentores carregaram drawdowns reais e custo de oportunidade.",
+   "Blocos maiores pressionam rumo à centralização. Blocos maiores exigem mais banda e armazenamento para validar, o que pode elevar o custo de rodar um nó completo com o tempo — exatamente a preocupação que os bitcoiners dos blocos pequenos levantaram na separação de 2017.",
+   "A adoção de smart contracts não está comprovada. Os upgrades de 2023–2026 deram ao BCH programabilidade real, mas se desenvolvedores e usuários vão de fato aparecer para usá-la ainda é uma questão em aberto, não um resultado consolidado.",
+   "Sobrecarga regulatória. Como todos os criptoativos, o BCH enfrenta regras incertas e mutáveis entre jurisdições que podem afetar listagens em exchanges, custódia e uso como pagamento."
+  ],
+  "howToInvest": [
+   "Educação primeiro, não é aconselhamento financeiro. Nada aqui é uma recomendação de compra — é como fazer com segurança, se você escolher fazer. Só arrisque dinheiro que você pode perder por completo; o BCH é um ativo volátil que já teve drawdowns profundos de vários anos.",
+   "Use uma exchange respeitável. O BCH é amplamente listado nas grandes exchanges reguladas (Coinbase, Kraken, Binance etc.). Prefira uma que opere legalmente no seu país, conclua a verificação de identidade e ative a autenticação de dois fatores com um app autenticador, não SMS.",
+   "Entenda as armadilhas de ticker. Compre BCH (Bitcoin Cash) — não confunda com BTC (Bitcoin), BSV (Bitcoin SV) ou tokens com nomes parecidos. Sempre confira o símbolo e a rede antes de enviar.",
+   "Mova posições relevantes para self-custody. 'Not your keys, not your coins.' Para qualquer coisa além de trocados, saque para uma wallet que você controla — Electron Cash ou Paytaca em software, ou uma hardware wallet como Trezor/Ledger para quantias maiores.",
+   "Proteja sua seed phrase como se fosse dinheiro vivo. Escreva a frase de recuperação em papel (ou metal), guarde offline em mais de um lugar e nunca a digite em um site nem compartilhe. Quem tem a seed é dono das moedas; não existe linha de suporte para reverter um roubo.",
+   "Teste primeiro com uma quantia mínima. Envie uma pequena transação de BCH para confirmar que seu endereço, wallet e processo funcionam antes de mover uma soma maior — erros on-chain são irreversíveis.",
+   "Considere dollar-cost averaging e pense no longo prazo. Comprar uma pequena quantia fixa em um cronograma reduz o risco de comprar um único topo ruim e evita tentar cronometrar um mercado notoriamente imprevisível.",
+   "Guarde registros para impostos. Em muitas jurisdições, comprar, vender ou gastar BCH é um evento tributável — registre suas transações à medida que acontecem em vez de reconstruí-las depois."
+  ]
+ },
+ {
+  "slug": "near",
+  "category": "Blockchain Layer-1",
+  "tagline": "Uma Layer-1 proof-of-stake que divide sua carga de trabalho em shards paralelos para se manter rápida e barata, agora apostando pesado em agentes de IA e \"intents\".",
+  "whatIsIt": [
+   "NEAR Protocol é uma blockchain Layer-1 — sua própria rede base, como Ethereum ou Solana, e não um app que roda em cima de uma delas. Foi construída para ser rápida, barata e fácil tanto para usuários comuns quanto para desenvolvedores, com nomes de conta legíveis por humanos (como alice.near em vez de uma longa sequência hexadecimal) e recursos de conta embutidos no nível do protocolo.",
+   "Foi fundada por Illia Polosukhin e Alexander Skidanov. O primeiro nome importa: Polosukhin foi pesquisador de machine learning no Google e coautor do paper de 2017 \"Attention Is All You Need\", que introduziu o transformer — a arquitetura por trás das IAs modernas como ChatGPT e Claude. Skidanov veio de bancos de dados distribuídos (MemSQL/SingleStore), então a escalabilidade estava no DNA da equipe desde o primeiro dia.",
+   "O projeto na verdade começou em 2017 como NEAR.ai, um esforço de escrita de código por IA. A equipe tentou pagar colaboradores distribuídos usando Ethereum, achou a experiência travada e cara, e decidiu construir sua própria blockchain. A mainnet da NEAR foi lançada em abril de 2020 e passou a ser operada pela comunidade mais tarde naquele ano.",
+   "Então a NEAR existe para ser uma blockchain escalável e acessível — e, dado o histórico dos fundadores, tem se inclinado cada vez mais a ser a chain para agentes de IA e atividade cross-chain."
+  ],
+  "howItWorks": {
+   "paragraphs": [
+    "A NEAR é uma chain Proof-of-Stake: validadores travam (fazem staking de) tokens NEAR pelo direito de processar transações e produzir blocos, e ganham recompensas por fazer isso honestamente. Não há mineração devoradora de energia como no Bitcoin. Sua tecnologia de destaque é o sharding, batizado de 'Nightshade'.",
+    "Sharding significa que a rede é dividida em várias pistas paralelas (shards), cada uma cuidando de uma fatia do tráfego ao mesmo tempo, em vez de cada nó processar cada transação em uma única fila. É assim que a NEAR pretende escalar: adicione mais shards, aguente mais carga. Um grande upgrade em agosto de 2024, chamado Nightshade 2.0, adicionou 'stateless validation', que permite aos validadores verificar um shard sem armazenar todo o seu histórico localmente — reduzindo os requisitos de hardware para que mais pessoas possam rodar nós.",
+    "Para os usuários, a NEAR foi projetada para parecer simples: finalidade abaixo de um segundo, taxas de transação de frações de centavo, contas com nome e 'abstração de gas' para que apps possam até pagar as taxas em nome do usuário. Boa parte do trabalho mais recente da NEAR é 'chain abstraction' — permitir que uma conta NEAR controle ativos em outras chains (Bitcoin, Ethereum, Solana e mais) por meio de Chain Signatures, para que os usuários não precisem manejar várias wallets."
+   ],
+   "bullets": [
+    "Consenso: Proof-of-Stake com sharding 'Nightshade' — shards paralelos processam transações simultaneamente",
+    "O Nightshade 2.0 (agosto de 2024) introduziu stateless validation, cortando os dados que validadores precisam armazenar e reduzindo os custos dos nós",
+    "Em 2025 a NEAR escalou a mainnet de seis para nove shards (via um passo intermediário de oito shards em março de 2025) e habilitou o resharding dinâmico, permitindo que a rede divida shards automaticamente conforme a demanda cresce",
+    "Rápida e barata: finalidade abaixo de um segundo e taxas de transação tipicamente de frações de centavo",
+    "Contas legíveis por humanos (name.near) e abstração de gas/taxas facilitam o onboarding em comparação com endereços hexadecimais crus",
+    "As Chain Signatures permitem que uma única conta NEAR assine transações em outras chains (Bitcoin, Ethereum, Solana etc.) — sem precisar de pontes",
+    "A equipe demonstrou publicamente um benchmark de 1 milhão de TPS usando o código core real, embora o throughput real da mainnet seja muito menor"
+   ]
+  },
+  "building": {
+   "paragraphs": [
+    "Em meados de 2026, o roadmap da NEAR é inconfundivelmente uma aposta em IA e 'intents' cross-chain. O plano de 2026 gira em torno de três pilares: convergir IA com intents, infraestrutura escalável e 'user-owned AI'. O discurso é que a NEAR se torna a camada de liquidação e coordenação onde tanto pessoas quanto agentes autônomos de IA transacionam entre muitas chains.",
+    "O produto emblemático é o NEAR Intents, lançado em novembro de 2024. Em vez de clicar manualmente por swaps e pontes, um usuário (ou um agente de IA) declara um resultado — ex.: 'trocar 100 USDC na Arbitrum por Bitcoin nativo' — e uma rede competitiva de 'solvers' encontra o melhor caminho de execução, que o contrato verificador da NEAR liquida usando Chain Signatures. A NEAR reportou que o Intents passou de $5B em volume acumulado no fim de 2025 e está tentando transformá-lo em um grande venue de trading on-chain e atividade movida por agentes, embora as taxas da camada de intents tenham superado de longe a atividade na própria L1 base.",
+    "Em tokenomics, a NEAR completou um 'halving' na mainnet em 30 de outubro de 2025, cortando sua inflação anual máxima de ~5% para ~2,5%. Notavelmente, ele foi entregue como um upgrade de protocolo adotado pelos validadores mesmo com a votação formal de governança da comunidade ficando abaixo do limiar de aprovação — uma peculiaridade de governança que vale conhecer. Junto disso, a NEAR lançou um sistema de governança 'House of Stake' / veNEAR que direciona recompensas a detentores de longo prazo e validadores menores. No lado técnico, o cofundador Illia Polosukhin sinalizou a assinatura pós-quântica ('quantum-safe') como meta para 2026."
+   ],
+   "bullets": [
+    "NEAR Intents — o modelo 'Express, Solve, Settle' para transações cross-chain e movidas por agentes (ativo desde nov de 2024), posicionado como o motor central de crescimento",
+    "Expansão da chain abstraction — Chain Signatures alcançando mais chains (Solana, TON, Stellar, Aptos, Sui e outras via suporte a EdDSA)",
+    "Foco em IA — 'user-owned AI', inferência de modelos verificável/privada e agentes de IA que podem transacionar em nome do usuário",
+    "Tokenomics — inflação máxima cortada pela metade de ~5% para ~2,5%, concluída na mainnet em outubro de 2025",
+    "House of Stake / veNEAR — uma camada de governança que direciona uma fatia das recompensas a stakers de longo prazo e validadores menores",
+    "Segurança pós-quântica — assinatura quantum-safe sinalizada pela equipe como meta para 2026",
+    "Escalabilidade — resharding dinâmico ativo na mainnet, com aumentos contínuos de throughput"
+   ]
+  },
+  "quickFacts": [
+   [
+    "Lançamento",
+    "Mainnet em abril de 2020 (operada pela comunidade desde set de 2020)"
+   ],
+   [
+    "Fundadores",
+    "Illia Polosukhin & Alexander Skidanov"
+   ],
+   [
+    "Categoria",
+    "Blockchain Layer-1 (PoS com sharding)"
+   ],
+   [
+    "Consenso",
+    "Proof-of-Stake com sharding Nightshade"
+   ],
+   [
+    "Modelo de oferta",
+    "Inflacionário, sem teto fixo (~1B no genesis; ~1.24B circulantes de ~1.3B totais). Inflação anual máxima cortada pela metade de ~5% para ~2,5% na mainnet em out de 2025"
+   ],
+   [
+    "Uso do token",
+    "Taxas de gas, staking, storage staking e governança (veNEAR)"
+   ],
+   [
+    "Modelo de taxas",
+    "Taxas muito baixas; uma parte das taxas é queimada"
+   ],
+   [
+    "Investidores",
+    "NEAR Foundation; rodadas de venture incluíram Andreessen Horowitz (a16z) e outros"
+   ]
+  ],
+  "ecosystem": [
+   "NEAR Intents — trading do tipo declare-o-resultado e execução por agentes entre chains",
+   "Chain Signatures — uma conta NEAR controlando ativos em Bitcoin, Ethereum, Solana e mais",
+   "Ref Finance / RHEA Finance — um DEX principal, evoluindo para um hub de liquidez de swap + empréstimos com chain abstraction",
+   "Aurora — um ambiente EVM na NEAR que permite a apps de Ethereum rodar com a velocidade e as taxas baixas da NEAR",
+   "Mintbase — infraestrutura de NFT usada por artistas e galerias",
+   "NEAR AI — ferramental e infraestrutura voltados a agentes de IA e inferência verificável/privada",
+   "NEAR Mobile — uma wallet que empurra abstração de taxas e ativos multi-chain",
+   "Casos de uso: DeFi cross-chain, transações de agentes de IA, pagamentos, NFTs e apps de consumo que escondem a complexidade da cripto"
+  ],
+  "history": [
+   {
+    "year": "2017",
+    "event": "Illia Polosukhin (coautor do paper do transformer 'Attention Is All You Need' do Google) e Alexander Skidanov fundam a NEAR.ai, focada em IA/síntese de programas; eles pivotam para construir uma blockchain após esbarrar nos limites do Ethereum."
+   },
+   {
+    "year": "2019-2020",
+    "event": "A NEAR levanta capital de risco em múltiplas rodadas (entre os investidores está a Andreessen Horowitz, que liderou uma rodada em 2020) e desenvolve seu design proof-of-stake com sharding."
+   },
+   {
+    "year": "April 2020",
+    "event": "A mainnet da NEAR é lançada; a rede passa a ser totalmente operada pela comunidade em setembro de 2020."
+   },
+   {
+    "year": "October 2020",
+    "event": "Uma votação da comunidade habilita as transferências do token NEAR, abrindo o trading e o staking."
+   },
+   {
+    "year": "2021-2022",
+    "event": "O ecossistema cresce (Aurora EVM, Ref Finance, Mintbase); a NEAR atinge seu preço de topo histórico durante o bull market de 2021, antes da queda generalizada de 2022."
+   },
+   {
+    "year": "2023-2024",
+    "event": "A NEAR se reposiciona em torno da 'chain abstraction'; lança as Chain Signatures e, em novembro de 2024, o NEAR Intents."
+   },
+   {
+    "year": "August 2024",
+    "event": "O Nightshade 2.0 entra no ar, adicionando stateless validation para reduzir os custos de hardware dos validadores e melhorar a descentralização."
+   },
+   {
+    "year": "2025",
+    "event": "A mainnet escala de seis para nove shards com resharding dinâmico; um benchmark de 1M de TPS é demonstrado; e em 30 de out de 2025 a NEAR completa seu 'halving', cortando a inflação máxima de ~5%→~2,5% — entregue via upgrade de protocolo adotado pelos validadores apesar de a votação formal da comunidade não atingir o limiar."
+   },
+   {
+    "year": "2026",
+    "event": "O roadmap se centra em IA + Intents e 'user-owned AI'; a governança e as recompensas do House of Stake / veNEAR são lançadas; a equipe sinaliza a assinatura pós-quântica ('quantum-safe') como meta para 2026."
+   }
+  ],
+  "risks": [
+   "Inflação e diluição: a NEAR não tem teto fixo e emite novos tokens todo ano. O halving de outubro de 2025 cortou a inflação máxima de ~5% para ~2,5%, mas o token continua inflacionário e as queimas de taxas seguiram muito pequenas em relação à emissão, então a maior parte da nova oferta ainda chega ao mercado. Mesmo a 2,5%, detentores que não fazem staking são diluídos com o tempo.",
+   "Atrito de governança: o halving reduziu a renda dos validadores, e críticos notaram que os validadores que votaram nele tinham um conflito de interesse financeiro — e que a mudança acabou sendo empurrada como upgrade de protocolo mesmo com a votação formal da comunidade não atingindo o limiar de aprovação. Qualquer grande sistema de governança (veNEAR / House of Stake) também pode concentrar influência entre grandes stakers.",
+   "Risco de caçar narrativas: a NEAR já se re-apresentou várias vezes — de startup de IA, a L1 escalável, a 'blockchain para a open web / trazer o próximo bilhão de usuários', a chain abstraction, e agora agentes de IA + intents. Reposicionamento frequente pode sinalizar adaptabilidade genuína ou um projeto em busca de product-market fit. As metas de crescimento do Intents são ambições, não garantias.",
+   "Concorrência feroz: o espaço de Layer-1 é lotado e brutal. A NEAR compete com o Ethereum e suas L2s, com a Solana (muito forte em velocidade/apps de consumo) e com outras chains de alto desempenho como Sui e Aptos. Sharding é tecnicamente difícil, e a NEAR precisa provar uso real e sustentado — não apenas números de TPS em benchmark.",
+   "Adoção vs. hype: apesar de anos construindo, a atividade on-chain e o valor em DeFi da NEAR frequentemente ficaram atrás do marketing, e mesmo as taxas da camada de Intents superaram a atividade na L1 base. Números de demonstração como '1M TPS' são benchmarks de laboratório; o throughput do mundo real e o uso ativo diário são o que realmente importa.",
+   "Risco de preço e de mercado: a NEAR negocia muito abaixo do topo histórico de 2021 e é uma altcoin volátil, de maior risco, que se move forte com o sentimento geral de cripto.",
+   "Risco regulatório e técnico: recompensas de staking, classificação de tokens e tokens de governança enfrentam regulação em evolução, e novas primitivas complexas (intents, solvers, assinatura cross-chain) ampliam a superfície para bugs, exploits ou manipulação do lado dos solvers."
+  ],
+  "howToInvest": [
+   "Educação primeiro, não é aconselhamento financeiro: nada aqui é uma recomendação de compra. Entenda o que é a NEAR e avalie honestamente se você acredita na tese de IA/intents dela antes de arriscar um centavo — e só use dinheiro que você pode perder por completo.",
+   "Faça sua própria lição de casa: leia a documentação e o roadmap oficiais da NEAR, confira as afirmações contra fontes neutras e olhe métricas de uso real (endereços ativos, valor em DeFi, taxas) em vez de gráficos de preço ou hype de influenciadores.",
+   "Se decidir comprar: use uma exchange respeitável que liste NEAR, comece pequeno e esteja ciente das taxas e da volatilidade do token. Considere que o dollar-cost-averaging (pequenas quantias ao longo do tempo) reduz o risco de comprar um único topo ruim.",
+   "Faça self-custody das suas chaves: para qualquer coisa além de trading, mova NEAR para uma wallet que você controla (ex.: NEAR Mobile / uma wallet compatível com NEAR, ou uma hardware wallet como a Ledger para quantias maiores). 'Not your keys, not your coins' — deixar fundos em uma exchange significa confiar naquela exchange.",
+   "Proteja sua seed phrase: anote sua frase de recuperação offline, nunca a digite em um site nem compartilhe, e presuma que qualquer um pedindo por ela é um golpista. O suporte da NEAR nunca vai mandar DM primeiro.",
+   "Se fizer staking: staking de NEAR rende recompensas, mas trava tokens com um atraso de unstaking, e as taxas de recompensa já mudaram com o halving de inflação de 2025 e podem mudar de novo. Entenda a escolha de validador, os prazos de lock-up e que as recompensas são pagas em um token inflacionário.",
+   "Cuidado com golpes: 'airdrops da NEAR' falsos, sites de giveaway e tokens imitadores são comuns. Verifique o contrato/ativo real da NEAR e use apenas links oficiais.",
+   "Dimensione com sensatez: trate uma única altcoin volátil como uma fatia pequena e especulativa de um portfólio — nunca dinheiro de aluguel, poupança de emergência ou fundos de que você vai precisar em breve."
+  ]
+ },
+ {
+  "slug": "sui",
+  "category": "Blockchain Layer-1",
+  "tagline": "Uma blockchain Layer-1 que trata cada ativo como um objeto, para que transferências simples possam liquidar em paralelo em vez de esperar em uma única fila.",
+  "whatIsIt": [
+   "Sui é uma blockchain Layer-1 — sua própria rede base, não um projeto construído sobre o Ethereum. Foi criada pela Mysten Labs, uma empresa fundada em 2021 por cinco ex-engenheiros da Meta que haviam trabalhado na Diem, o projeto abandonado de pagamentos cripto da Meta, e na linguagem de programação Move que saiu dele. A mainnet da Sui entrou no ar em 3 de maio de 2023.",
+   "A ideia central é que a Sui organiza a chain em torno de 'objetos' (ativos individuais como uma moeda, um NFT ou um item de jogo) em vez de contas e um único estado global do ledger. Como a maioria das ações do dia a dia só toca objetos que pertencem a uma pessoa, a rede pode verificar muitas delas ao mesmo tempo em vez de uma após a outra. O discurso é alto throughput e transações rápidas e baratas voltadas a apps de consumo, pagamentos e jogos.",
+   "A equipe por trás da Diem trouxe consigo a Move, uma linguagem de programação projetada para tratar ativos digitais como cidadãos de primeira classe que não podem ser copiados ou destruídos por acidente. Esse design elimina uma categoria de bugs comuns em linguagens de smart contract mais antigas. A Sui usa sua própria variante, às vezes chamada de Sui Move."
+  ],
+  "howItWorks": {
+   "paragraphs": [
+    "A Sui divide as transações em duas pistas. Se uma transação só toca objetos 'owned' que pertencem a um único endereço — como enviar um token seu para um amigo — os validadores podem confirmá-la de forma independente e em paralelo, sem passá-la pela rede inteira para ordenação. Esse 'caminho rápido' é o que torna transferências simples rápidas e baratas.",
+    "Transações que tocam objetos 'shared' — coisas com as quais várias pessoas interagem ao mesmo tempo, como um pool de trading DeFi — precisam, sim, que os validadores concordem em uma ordem. Para isso, a Sui roda um protocolo de consenso chamado Mysticeti, que organiza as transações usando um grafo acíclico dirigido (um DAG, uma teia ramificada de blocos em vez de uma única chain) e atinge finalidade em cerca de 400 milissegundos. A Sui é uma rede proof-of-stake: os validadores são escolhidos pela quantidade de SUI em staking com eles.",
+    "Em termos simples: a Sui tenta só fazer o trabalho caro de 'todos concordam na ordem' quando uma transação realmente precisa, e o pula para as muitas transações que não precisam. Essa é a principal alavanca por trás de suas alegações de velocidade — embora o desempenho no mundo real dependa do mix de atividade, não apenas de benchmarks de laboratório."
+   ],
+   "bullets": [
+    "Modelo centrado em objetos: ativos são objetos individuais, não apenas saldos em contas.",
+    "'Caminho rápido' paralelo para transações de dono único — sem necessidade de ordenação global.",
+    "Mysticeti: um consenso baseado em DAG para transações de objetos compartilhados, finalidade de ~400ms.",
+    "Segurança proof-of-stake: validadores são respaldados por SUI em staking (~125 validadores em meados de 2026).",
+    "Escrita em Move, uma linguagem que trata ativos digitais como tipos protegidos de primeira classe.",
+    "O token SUI paga taxas de gas, protege a rede via staking e é usado em governança."
+   ]
+  },
+  "building": {
+   "paragraphs": [
+    "Em meados de 2026, o foco da Sui mudou de apenas velocidade bruta para construir uma 'Sui Stack' completa — um conjunto de camadas de infraestrutura nativas para que apps não precisem acoplar serviços externos. O motor de consenso foi atualizado para o Mysticeti v2 (lançado em novembro de 2025) para processamento de transações mais rápido e leve, mas a maior parte da energia nova está nas camadas ao redor: dados, privacidade, armazenamento e pagamentos.",
+    "Uma peça de destaque é o Walrus, uma camada descentralizada de armazenamento e disponibilidade de dados que chegou à mainnet em 2025. Ele permite que apps armazenem arquivos e datasets grandes em infraestrutura verificável, adjacente à chain — fortemente promovido para casos de uso de IA, como armazenar dados de modelos e insumos verificáveis de machine learning. Ao lado dele, o Seal (controle de acesso / criptografia) e o Nautilus (computação off-chain e indexação de dados) completam a stack, todos ativos na mainnet.",
+    "A direção de 2026 aposta forte em pagamentos e finanças de consumo. A stablecoin nativa da Sui, USDsui — emitida pela Bridge, uma empresa da Stripe, e notável por direcionar o rendimento de suas reservas de volta à rede via recompras de SUI e alocação em DeFi, em vez de para o emissor — entrou no ar no início de 2026. Além disso, o roadmap aponta para mais liquidez de stablecoins e ativos do mundo real, transações privadas no nível do protocolo, melhores pontes cross-chain e onboarding mais fácil via nomes SuiNS. Trate qualquer afirmação específica de roadmap como um plano, não uma promessa — datas e recursos mudam."
+   ],
+   "bullets": [
+    "Consenso Mysticeti v2: processamento de transações mais rápido e leve, ativo como o motor de produção desde o fim de 2025.",
+    "Mainnet do Walrus: camada descentralizada de armazenamento / disponibilidade de dados, promovida para IA e dados em larga escala.",
+    "Seal (controle de acesso) e Nautilus (computação/indexação off-chain) ativos na mainnet, completando a 'Sui Stack'.",
+    "Stablecoin nativa USDsui (emitida via Bridge, da Stripe) já ativa, mais o crescimento de USDC, suiUSDe e ativos do mundo real tokenizados.",
+    "Temas do roadmap: pagamentos, transações privadas no nível do protocolo, melhores pontes cross-chain e onboarding mais simples (SuiNS)."
+   ]
+  },
+  "quickFacts": [
+   [
+    "Lançamento",
+    "Mainnet em 3 de maio de 2023"
+   ],
+   [
+    "Construída por",
+    "Mysten Labs (equipe ex-Meta / Diem)"
+   ],
+   [
+    "Fundadores",
+    "Evan Cheng, Sam Blackshear, Adeniyi Abiodun, George Danezis, Kostas Chalkias"
+   ],
+   [
+    "Tipo",
+    "Blockchain Layer-1"
+   ],
+   [
+    "Consenso",
+    "Delegated proof-of-stake com ordenação Mysticeti (DAG)"
+   ],
+   [
+    "Linguagem",
+    "Move (Sui Move)"
+   ],
+   [
+    "Oferta máxima",
+    "10,000,000,000 SUI (com teto)"
+   ],
+   [
+    "Circulante",
+    "~4 bilhões de SUI (~40% do máximo, meados de 2026)"
+   ],
+   [
+    "Uso do token",
+    "Taxas de gas, staking, governança"
+   ],
+   [
+    "Finalidade",
+    "~400 milissegundos"
+   ]
+  ],
+  "ecosystem": [
+   "Cetus — um DEX líder na Sui, historicamente uma grande fatia do volume de DEX da chain (drenado em um exploit de ~$223M em maio de 2025, relançado desde então)",
+   "Suilend e NAVI — mercados líderes de empréstimo / tomada de crédito (a Suilend reportou ter passado de $1B em depósitos)",
+   "Bluefin — trading de perpétuos e derivativos",
+   "DeepBook — o order book central on-chain nativo da Sui, usado por outros apps como fonte de liquidez",
+   "Walrus — camada descentralizada de armazenamento / disponibilidade de dados, peça emblemática da Sui Stack",
+   "Stablecoins e RWAs: USDC, a nativa USDsui (Bridge, uma empresa da Stripe), a suiUSDe da Ethena e ativos do mundo real tokenizados",
+   "SuiNS — nomes on-chain legíveis por humanos; apps de consumo, jogos e pagamentos são um mercado-alvo central"
+  ],
+  "history": [
+   {
+    "year": "2019-2021",
+    "event": "Os futuros fundadores da Mysten Labs constroem a blockchain Diem da Meta e a linguagem Move; o projeto é encerrado sob pressão regulatória."
+   },
+   {
+    "year": "2021",
+    "event": "Os cinco engenheiros ex-Meta saem para fundar a Mysten Labs e começam a projetar a Sui."
+   },
+   {
+    "year": "2022",
+    "event": "A testnet incentivada da Sui é lançada; a Mysten Labs fecha uma Series B de $300M liderada pela FTX Ventures (com a16z, Binance Labs, Jump e outros) a uma avaliação de ~$2B."
+   },
+   {
+    "year": "April-May 2023",
+    "event": "Lançamento do token SUI e distribuição à comunidade em torno da estreia da mainnet."
+   },
+   {
+    "year": "May 2023",
+    "event": "A mainnet da Sui entra no ar com o token SUI, staking e smart contracts em Move."
+   },
+   {
+    "year": "2024",
+    "event": "O consenso baseado em DAG Mysticeti chega à mainnet, cortando a finalidade para cerca de 400ms."
+   },
+   {
+    "year": "May 2025",
+    "event": "O DEX Cetus é explorado em ~$223M; os validadores se coordenam para congelar a maior parte dos fundos roubados on-chain, acendendo um debate sobre o quão descentralizada a Sui realmente é."
+   },
+   {
+    "year": "2025",
+    "event": "A 'Sui Stack' se consolida: Walrus (armazenamento), Seal (controle de acesso) e Nautilus (computação off-chain) são lançados na mainnet, e o Mysticeti v2 entra no ar em novembro."
+   },
+   {
+    "year": "2026",
+    "event": "A stablecoin nativa USDsui é lançada via Bridge, da Stripe, com um roadmap centrado em pagamentos, transações privadas e casos de uso de dados para IA."
+   }
+  ],
+  "risks": [
+   "Unlocks de tokens e diluição: apenas cerca de 40% da oferta máxima de 10B está circulando. Grandes unlocks programados para investidores iniciais e para a equipe continuam adicionando nova oferta por anos, o que pode pesar no preço se a demanda não acompanhar.",
+   "Propriedade concentrada: a Mysten Labs, os investidores iniciais e a equipe controlam juntos uma grande fatia da oferta total (críticos apontaram bem mais da metade em mãos de insiders/travada). Isso concentra tanto riqueza quanto, potencialmente, influência.",
+   "As questões de centralização ganharam holofote com o hack da Cetus em maio de 2025: os cerca de 125 validadores da Sui conseguiram se coordenar e congelar os fundos do atacante. Bom para recuperar dinheiro, mas mostrou que a rede pode censurar/congelar transações se validadores suficientes concordarem — o oposto de 'imparável'.",
+   "Risco de smart contracts e apps: a Move reduz algumas classes de bugs, mas o exploit da Cetus (uma falha no nível do app, não uma quebra da chain base) é um lembrete de que centenas de milhões ainda podem ser perdidos nos apps construídos por cima.",
+   "Concorrência feroz: a Sui compete de frente com a Solana, a Aptos (sua prima próxima, também de ex-pessoas da Diem, também baseada em Move) e as Layer-2s do Ethereum por desenvolvedores e usuários. Benchmarks de desempenho são marketing até se sustentarem sob carga real e contínua.",
+   "Incerteza regulatória: como a maioria dos tokens de Layer-1 com grande oferta e peso de insiders, o SUI pode enfrentar escrutínio sobre como foi distribuído e se é tratado como valor mobiliário em algumas jurisdições.",
+   "Distância entre alegações e experiência vivida: números impressionantes de 'centenas de milhares de TPS' vêm de condições ideais; o uso do dia a dia, o ferramental e a profundidade de liquidez são o que realmente importa."
+  ],
+  "howToInvest": [
+   "Aprenda primeiro, depois decida. Nada aqui é aconselhamento financeiro — entenda o que é o SUI e avalie honestamente se você pode perder o que colocar, porque tokens de Layer-1 são voláteis.",
+   "Se comprar, uma exchange centralizada respeitável que liste SUI é a porta de entrada mais simples. Verifique que você está no site verdadeiro, e lembre-se de que a Sui é sua própria chain — não envie SUI para um endereço de Ethereum ou Solana, ou os fundos se vão.",
+   "Mova para self-custody em vez de deixar na exchange ('not your keys, not your coins'). Wallets nativas da Sui como a Sui Wallet oficial ou a Slush, ou wallets multi-chain que suportam Sui, permitem que você guarde suas próprias chaves.",
+   "Para segurança de verdade com quantias maiores, use uma hardware wallet (ex.: Ledger), para que suas chaves privadas nunca toquem um dispositivo conectado à internet.",
+   "Escreva sua seed phrase em papel e guarde offline. Nunca a digite em um site nem compartilhe — qualquer um que a peça está te aplicando um golpe, sem exceções.",
+   "Você pode fazer staking de SUI com um validador para ganhar recompensas e ajudar a proteger a rede, mas entenda que isso carrega o mesmo risco de preço de simplesmente segurar, e tokens em staking podem ter um atraso de unstaking.",
+   "Tenha cuidado extra com novos apps DeFi e tokens na Sui — o hack da Cetus mostrou que até protocolos de ponta podem ser drenados. Comece pequeno, fique nos apps estabelecidos e verifique endereços de contrato em fontes oficiais."
+  ]
+ },
+ {
+  "slug": "apt",
+  "category": "Blockchain Layer-1",
+  "tagline": "Uma blockchain Layer-1 rápida construída por ex-engenheiros da Meta em torno da linguagem Move, apostando que velocidade bruta pode fazer o trading on-chain parecer uma exchange centralizada.",
+  "whatIsIt": [
+   "Aptos é uma blockchain Layer-1 (camada base), o que significa que é sua própria rede independente, com seus próprios validadores e seu próprio token (APT) usado para pagar taxas e proteger a chain. Sua mainnet foi lançada em 18 de outubro de 2022. Todo o seu discurso é velocidade e confiabilidade: processar muitas transações rapidamente, falhar raramente e parecer mais um app Web2 do que um app cripto travado.",
+   "Foi construída pela Aptos Labs, uma empresa cofundada em 2021 por Mo Shaikh e Avery Ching. Ambos são ex-engenheiros da Meta (Facebook) que trabalharam na Diem, o ambicioso mas por fim abandonado projeto de stablecoin/blockchain da Meta. Quando a Meta encerrou a Diem no início de 2022, um grupo daquela equipe fez o spin-off da tecnologia e a transformou na Aptos. Shaikh liderou como CEO até renunciar em dezembro de 2024; o cofundador Avery Ching (antes CTO) assumiu como CEO e ainda comanda a empresa hoje.",
+   "Por ter nascido da Diem, a Aptos herdou duas grandes peças daquela pesquisa: a linguagem de programação Move (uma forma segura de escrever smart contracts) e um motor de execução paralela Block-STM. A Aptos levantou mais de $350 milhões de grandes fundos de venture como a16z, Jump Crypto e FTX Ventures antes e logo após o lançamento (entre um seed de ~$200M e uma rodada de ~$150M), o que fez dela um dos lançamentos de L1 mais bem financiados e badalados da sua era.",
+   "Hoje a Aptos se apresenta como um 'Global Trading Engine' — uma chain otimizada para stablecoins, DeFi e trading on-chain de alta frequência, mirando igualar a velocidade que os usuários esperam de exchanges centralizadas sem deixar de ser descentralizada."
+  ],
+  "howItWorks": {
+   "paragraphs": [
+    "A Aptos é uma chain Proof-of-Stake: validadores travam APT para ganhar o direito de produzir e validar blocos, e detentores podem delegar seu APT a validadores para compartilhar as recompensas de staking. Se um validador se comporta mal, seu stake fica em risco. A ordem das transações é acordada por um protocolo de consenso Byzantine Fault Tolerant (BFT), que continua funcionando corretamente enquanto menos de um terço dos validadores forem maliciosos ou estiverem offline.",
+    "As duas ideias que tornam a Aptos distinta são a Move e a execução paralela. A Move é uma linguagem de smart contracts (também do projeto Diem) que trata ativos digitais como 'recursos' — coisas que literalmente não podem ser copiadas ou apagadas por acidente no nível da linguagem. Esse design elimina toda uma classe de bugs que já drenaram fundos em outras chains. O Block-STM, o motor de execução da Aptos, roda muitas transações não-conflitantes ao mesmo tempo em vários núcleos de CPU em vez de uma por uma, e depois as reconcilia — então o throughput escala com o hardware.",
+    "A Aptos também usa um design 'pipelined': as etapas de processamento de um bloco (espalhar as transações, ordená-las, executá-las, armazená-las, certificá-las) se sobrepõem e rodam concorrentemente, em vez de em uma fila rígida de etapa única. Ao longo de 2025 a equipe entregou upgrades de consenso chamados Baby Raptr e Velociraptr que empurraram os tempos de bloco da mainnet para menos de 50 milissegundos (anunciado em dezembro de 2025) — entre os mais rápidos de qualquer grande L1."
+   ],
+   "bullets": [
+    "Consenso: Proof-of-Stake com um protocolo BFT pipelined (a linha de upgrades Raptr), tolerando até 1/3 de validadores defeituosos",
+    "Linguagem Move: ativos são 'recursos' que não podem ser duplicados nem descartados, com segurança imposta pelo compilador",
+    "Block-STM: execução paralela otimista que roda transações não-conflitantes simultaneamente em vários núcleos",
+    "Finalidade abaixo de um segundo historicamente; tempos de bloco abaixo de 50ms na mainnet após os upgrades Baby Raptr / Velociraptr de 2025",
+    "A governança roda por meio de Aptos Improvement Proposals (AIPs) que os stakers votam para aprovar mudanças de protocolo"
+   ]
+  },
+  "building": {
+   "paragraphs": [
+    "Em meados de 2026, a Aptos está executando sua tese de 'Global Trading Engine' — tornar a chain rápida e barata o suficiente para hospedar trading de order book, pagamentos em stablecoin e ativos do mundo real em escala. Um resultado emblemático é a Decibel, uma exchange de perpétuos totalmente on-chain incubada pela Aptos Labs que entrou no ar em fevereiro de 2026 sobre o central limit order book (CLOB) nativo da chain e já processou mais de $1 bilhão em volume acumulado. O roadmap de engenharia gira em torno da família de consenso Raptr (um upgrade adicional chamado Archon mira fechar a lacuna restante de latência em relação às exchanges centralizadas) e do Block-STM V2, um motor de execução atualizado projetado para escalar o throughput com os núcleos de CPU dos validadores em vez de estagnar.",
+    "A outra grande história de 2026 é uma ampla reformulação de tokenomics, aprovada pela governança em 2026 (encabeçada pela Proposta #183, quase unânime), que reposiciona o APT de um token inflacionário rumo a uma trajetória deflacionária. Ela introduziu um teto fixo de oferta de 2,1 bilhões, pretende cortar as recompensas de staking aproximadamente pela metade (~5,19% para ~2,6%), elevou as taxas de gas cerca de 10x e agora queima permanentemente 100% das taxas base de gas. A Aptos Foundation também travou e mantém continuamente em staking ~210 milhões de APT (~18% da oferta circulante) que, segundo ela, nunca serão vendidos. Nota: essas são mudanças recentes e contestadas — e a receita de taxas da rede ainda é pequena em relação às emissões — então vale acompanhar como elas se materializam na prática em vez de tratá-las como consolidadas."
+   ],
+   "bullets": [
+    "Decibel — a exchange on-chain de perps/spot da Aptos Labs, ativa desde fev de 2026 sobre o CLOB nativo, >$1B de volume acumulado",
+    "Linha de consenso Raptr (Baby Raptr, Velociraptr) — tempos de bloco abaixo de 50ms na mainnet, com um upgrade Archon mirando finalidade ainda menor sob carga",
+    "Block-STM V2 — execução paralela que escala com a contagem de núcleos dos validadores em vez de estagnar",
+    "Shelby — um protocolo de 'hot storage' / disponibilidade de dados de baixa latência codesenvolvido com a Jump Crypto, anunciado em junho de 2025",
+    "Reformulação deflacionária de tokenomics (2026): teto de oferta de 2.1B, recompensas de staking de ~5,19%→~2,6%, gas 10x + queima de 100% das taxas base, ~210M APT travados",
+    "Aprofundamento dos trilhos de stablecoin e RWA (ativos do mundo real) como o caso de uso central da chain"
+   ]
+  },
+  "quickFacts": [
+   [
+    "Lançamento da mainnet",
+    "18 de outubro de 2022 (genesis em 12 de out de 2022)"
+   ],
+   [
+    "Cofundadores",
+    "Mo Shaikh & Avery Ching, ex-Meta / Diem"
+   ],
+   [
+    "CEO atual",
+    "Avery Ching (assumiu em dez de 2024; Shaikh renunciou)"
+   ],
+   [
+    "Consenso",
+    "Proof-of-Stake + BFT pipelined (upgrades Raptr)"
+   ],
+   [
+    "Linguagem de smart contracts",
+    "Move (orientada a recursos, vinda da Diem)"
+   ],
+   [
+    "Modelo de oferta",
+    "Teto fixo de ~2.1B (reformulação de 2026); ~833M circulantes; taxas base queimadas"
+   ],
+   [
+    "Uso do token",
+    "Taxas de gas, staking/segurança e governança on-chain"
+   ],
+   [
+    "Tempo de bloco",
+    "Abaixo de 50ms na mainnet após os upgrades de consenso de 2025"
+   ]
+  ],
+  "ecosystem": [
+   "Stablecoins são o caso de uso emblemático: USDT e USDC nativos mais USDe dão à Aptos uma das maiores presenças de stablecoin entre as L1s mais novas (mais de $1B on-chain)",
+   "Decibel — uma exchange de perpétuos totalmente on-chain incubada pela Aptos Labs (CLOB nativo) que entrou no ar em fev de 2026 e cruzou $1B em volume acumulado",
+   "Echelon — um protocolo líder de empréstimos e hub de liquidez de stablecoins na Aptos",
+   "Thala Labs — um 'superapp' DeFi (DEX ThalaSwap, empréstimos, a stablecoin MOD, liquid staking) que responde por uma grande fatia do volume on-chain",
+   "Hyperion e ThalaSwap V2 — DEXs nativos de alto volume que impulsionaram um grande salto no trading de DEX da Aptos ao longo de 2025",
+   "Aave — o grande protocolo de empréstimos cross-chain fez seu primeiro deployment não-EVM da história na Aptos (ago de 2025), reescrito em Move",
+   "Ativos do mundo real (RWA): fundos tokenizados e treasuries colocaram a Aptos no grupo de elite das chains por valor em RWA",
+   "Wallets e acesso: Petra (a wallet oficial da Aptos), mais Pontem, Martian e OKX Wallet"
+  ],
+  "history": [
+   {
+    "year": "2019-2021",
+    "event": "A equipe central constrói a Diem (antes Libra), o projeto de blockchain da Meta, criando a linguagem Move e a pesquisa do Block-STM"
+   },
+   {
+    "year": "2022 (Jan)",
+    "event": "A Meta engaveta a Diem; a Aptos Labs faz o spin-off para continuar a tecnologia como uma L1 independente"
+   },
+   {
+    "year": "2022 (Mar-Jul)",
+    "event": "Levanta ~$200M (a16z, Tiger Global, Multicoin) e depois mais ~$150M (FTX Ventures, Jump Crypto); roda testnets incentivadas"
+   },
+   {
+    "year": "2022 (Oct)",
+    "event": "A mainnet é lançada em 18 de outubro; airdrop de APT para os primeiros usuários da testnet. O lançamento atrai críticas pela alocação de tokens pesada em VCs e pela divulgação das tokenomics"
+   },
+   {
+    "year": "2023 (Jan)",
+    "event": "O APT atinge seu topo histórico em torno de $20 — um nível do qual ficou muito abaixo desde então (queda de ~97% até meados de 2026)"
+   },
+   {
+    "year": "2023-2024",
+    "event": "O ecossistema se desenvolve; USDT/USDC nativos chegam; a atividade de DeFi, stablecoins e RWA cresce; o cofundador Avery Ching se torna CEO em dez de 2024 quando Mo Shaikh deixa o cargo para um papel de conselheiro"
+   },
+   {
+    "year": "2025",
+    "event": "A Aave faz deployment na Aptos (primeiro não-EVM, ago); o protocolo de armazenamento Shelby é anunciado com a Jump (junho); os upgrades de consenso Baby Raptr & Velociraptr atingem tempos de bloco abaixo de 50ms (dez)"
+   },
+   {
+    "year": "2026",
+    "event": "A exchange de perps on-chain Decibel entra no ar (fev) sobre o CLOB nativo; a governança aprova uma grande reformulação de tokenomics: teto de oferta de 2.1B, recompensas de staking cortadas ~pela metade, gas 10x com queima de 100% das taxas base, ~210M APT travados — direcionando o APT rumo à deflação"
+   }
+  ],
+  "risks": [
+   "Propriedade pesada em VCs e insiders. Uma grande fatia do APT esteve nas mãos da equipe, da Aptos Labs e dos investidores iniciais, e essa foi a crítica mais barulhenta no lançamento. Mesmo travados, os insiders podem fazer staking desses tokens e vender as recompensas de staking — então 'travado' não significa que o mercado esteja totalmente isolado da venda por insiders.",
+   "Unlocks de tokens e um histórico de preço brutal. O APT está aproximadamente 97% abaixo do seu topo histórico do início de 2023, em torno de $20. Cronogramas de unlock de vários anos para investidores e colaboradores adicionaram pressão vendedora contínua; um grande ciclo de unlock de quatro anos se encerra por volta de outubro de 2026, um evento-chave a acompanhar de qualquer forma.",
+   "A reformulação de tokenomics é nova e não comprovada. Impor teto à oferta, cortar recompensas de staking, multiplicar o gas por 10 e queimar taxas é um pivô ousado rumo à deflação — mas é recente e contestado, e a receita de taxas da rede ainda é pequena em relação às emissões. Recompensas de staking menores podem enfraquecer o incentivo para proteger a rede, e gas 10x pode afastar usuários se a atividade não se sustentar. Julgue pelos resultados ao longo do tempo, não pelo anúncio.",
+   "Concorrência feroz. A Aptos compete de frente com a Solana, as L2s do Ethereum e especialmente com a Sui — outra chain baseada em Move, de um grupo diferente de ex-engenheiros da Diem. A Sui frequentemente liderou a Aptos em TVL (aproximadamente $2.6B vs ~$1B no início de 2026) e atividade de usuários apesar de tecnologia muito parecida, então a Aptos precisa continuar provando por que builders e usuários deveriam escolhê-la.",
+   "'Rápida, mas captura valor?' A Aptos tem engenharia forte e recordes reais de velocidade, mas alto throughput não se traduz automaticamente em demanda durável pelo token APT. Boa parte da atividade DeFi é liquidada em stablecoins, não em APT.",
+   "Concentração do conjunto de validadores. Como a maioria das L1s Proof-of-Stake jovens, uma fatia relevante do stake está com um conjunto limitado de validadores e grandes detentores, o que é uma ressalva real de descentralização em comparação com redes mais antigas e distribuídas.",
+   "Risco geral de cripto e regulatório. O APT é um ativo volátil em um ambiente regulatório em evolução; como os tokens de L1 são classificados e tratados pelos reguladores continua incerto em muitas jurisdições."
+  ],
+  "howToInvest": [
+   "Isto é educação, não aconselhamento financeiro. Nada aqui é uma recomendação de compra de APT — decida apenas por conta própria, com dinheiro que você pode perder por completo, e entenda o que possui antes de comprar.",
+   "Faça sua própria lição de casa primeiro. Leia a documentação da Aptos (aptos.dev) e confira dados independentes no DefiLlama e no CoinGecko. Confirme qualquer afirmação — inclusive as desta página — contra fontes primárias, já que estatísticas de cripto mudam rápido.",
+   "Se comprar, use uma exchange respeitável. O APT é negociado na maioria das grandes exchanges centralizadas. Prefira plataformas conhecidas e reguladas, ative a autenticação de dois fatores e desconfie de tokens 'Aptos' falsos ou tickers imitadores — verifique o contrato oficial antes de tocar em qualquer coisa on-chain.",
+   "Considere self-custody. 'Not your keys, not your coins.' Mover APT de uma exchange para uma wallet de self-custody como a Petra (a wallet oficial da Aptos) — ou uma hardware wallet para quantias maiores — significa que você o controla, mas também é totalmente responsável pela sua seed phrase. Nunca compartilhe nem digite sua seed phrase em nenhum site.",
+   "Entenda o staking antes de correr atrás de rendimento. Você pode fazer staking ou delegar APT para ajudar a proteger a rede e ganhar recompensas, mas as recompensas foram cortadas na reformulação de 2026, tokens em staking podem ter períodos de lock/unlock, e delegar ainda carrega risco de validador e de slashing. Leia os termos atuais primeiro.",
+   "Dimensione com sensatez e evite o hype. O APT é um ativo único de alta volatilidade, com unlocks em andamento e concorrência pesada. Não aloque demais, ignore promessas de 'retornos garantidos' e giveaways (são golpes), e nunca invista só por causa de um gráfico de preço ou de um influenciador.",
+   "Guarde registros. Acompanhe seus preços de compra, transações e quaisquer recompensas de staking para fins fiscais na sua jurisdição."
+  ]
+ }
+]

@@ -9676,17 +9676,72 @@ function loadLearnAssets() {
   _learnCacheAt = now;
   return _learnCache;
 }
-app.get("/learn", (req, res) => {
-  res.type("html").send(learnPages.renderHub(loadLearnAssets()));
-});
-app.get("/learn/:asset", (req, res) => {
-  const slug = String(req.params.asset || "").toLowerCase().replace(/[^a-z0-9-]/g, "");
+// Translations: data/learn-assets.<lang>.json (same shape, translated fields only) is
+// overlay-merged per-asset onto the English base — a missing file/asset/field falls back
+// to English, so a partial translation degrades gracefully instead of 404ing.
+const LEARN_TR_LANGS = ["es", "it", "pt", "vi", "zh", "hi"];
+const _learnTrCache = new Map(); // lang -> {at, map: slug->overlay}
+function loadLearnTranslations(lang) {
+  const now = Date.now();
+  const hit = _learnTrCache.get(lang);
+  if (hit && now - hit.at < 60000) return hit.map;
+  let map = new Map();
+  try {
+    const arr = JSON.parse(fs.readFileSync(join(__dirname, "data", `learn-assets.${lang}.json`), "utf8"));
+    for (const o of Array.isArray(arr) ? arr : []) if (o && o.slug) map.set(o.slug, o);
+  } catch { /* no translation file yet — English fallback */ }
+  _learnTrCache.set(lang, { at: now, map });
+  return map;
+}
+const LEARN_TR_FIELDS = ["category", "tagline", "whatIsIt", "howItWorks", "building", "quickFacts", "ecosystem", "history", "risks", "howToInvest"];
+function learnAssetFor(base, lang) {
+  if (lang === "en") return { ...base };
+  const tr = loadLearnTranslations(lang).get(base.slug);
+  if (!tr) return { ...base };
+  const merged = { ...base };
+  for (const f of LEARN_TR_FIELDS) if (tr[f] != null && (!Array.isArray(tr[f]) || tr[f].length)) merged[f] = tr[f];
+  return merged;
+}
+// A language is "available" (advertised in the switcher/hreflang/sitemap) only once its
+// translation file covers EVERY asset — so a half-finished translation is never offered,
+// though it still serves via English fallback if someone visits the URL directly.
+let _availLangCache = null, _availLangAt = 0;
+function availableLearnLangs() {
+  const now = Date.now();
+  if (_availLangCache && now - _availLangAt < 60000) return _availLangCache;
+  const slugs = loadLearnAssets().map((a) => a.slug);
+  const out = ["en"];
+  if (slugs.length) {
+    for (const lg of LEARN_TR_LANGS) {
+      const m = loadLearnTranslations(lg);
+      if (m.size && slugs.every((s) => m.has(s))) out.push(lg);
+    }
+  }
+  _availLangCache = out; _availLangAt = now;
+  return out;
+}
+function sendLearn(res, lang, slug) {
   const assets = loadLearnAssets();
-  const a = assets.find((x) => x.slug === slug);
-  if (!a) return res.status(404).type("html").send(learnPages.renderHub(assets));
+  const langs = availableLearnLangs();
+  if (!slug) return res.type("html").send(learnPages.renderHub(assets, lang, langs));
+  const base = assets.find((x) => x.slug === slug);
+  if (!base) return res.status(404).type("html").send(learnPages.renderHub(assets, lang, langs));
+  const a = learnAssetFor(base, lang);
   // Cross-link chips: up to 4 sibling assets.
   a._related = assets.filter((x) => x.slug !== slug).slice(0, 4).map((x) => ({ slug: x.slug, name: x.name, ticker: x.ticker }));
-  res.type("html").send(learnPages.renderAssetPage(a));
+  res.type("html").send(learnPages.renderAssetPage(a, lang, langs));
+}
+const cleanSlug = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9-]/g, "");
+app.get("/learn", (req, res) => sendLearn(res, "en", null));
+app.get("/learn/:a", (req, res) => {
+  const a = cleanSlug(req.params.a);
+  if (LEARN_TR_LANGS.includes(a)) return sendLearn(res, a, null); // /learn/es → Spanish hub
+  return sendLearn(res, "en", a); // /learn/sol → English asset page
+});
+app.get("/learn/:lang/:asset", (req, res) => {
+  const lang = cleanSlug(req.params.lang);
+  if (!LEARN_TR_LANGS.includes(lang)) return sendLearn(res, "en", cleanSlug(req.params.asset)); // unknown prefix → EN
+  return sendLearn(res, lang, cleanSlug(req.params.asset));
 });
 
 // Live price proxy for the /learn pages — CoinGecko simple/price (pro key when set,
@@ -9993,11 +10048,15 @@ app.get("/sitemap.xml", (req, res) => {
   const today = new Date().toISOString().slice(0, 10);
   const urls = SITEMAP_PAGES.map((p) =>
     `<url><loc>https://clucknorris.app${p}</loc><lastmod>${today}</lastmod><changefreq>${p === "/" || p === "/alpha" ? "daily" : "weekly"}</changefreq></url>`);
-  // Learn hub + per-asset education pages — prime SEO surface ("what is XLM" etc).
+  // Learn hub + per-asset education pages — prime SEO surface ("what is XLM" etc),
+  // in all 7 languages (EN unprefixed + /learn/<lang>/... for the translations).
   try {
-    urls.push(`<url><loc>https://clucknorris.app/learn</loc><lastmod>${today}</lastmod><changefreq>weekly</changefreq></url>`);
-    for (const a of loadLearnAssets()) {
-      if (a && a.slug) urls.push(`<url><loc>https://clucknorris.app/learn/${a.slug}</loc><lastmod>${today}</lastmod><changefreq>weekly</changefreq></url>`);
+    const learnLangs = availableLearnLangs().map((l) => (l === "en" ? "" : l + "/"));
+    for (const pfx of learnLangs) {
+      urls.push(`<url><loc>https://clucknorris.app/learn${pfx ? "/" + pfx.slice(0, -1) : ""}</loc><lastmod>${today}</lastmod><changefreq>weekly</changefreq></url>`);
+      for (const a of loadLearnAssets()) {
+        if (a && a.slug) urls.push(`<url><loc>https://clucknorris.app/learn/${pfx}${a.slug}</loc><lastmod>${today}</lastmod><changefreq>weekly</changefreq></url>`);
+      }
     }
   } catch (_) { /* learn pages are a bonus, never a failure */ }
   // Graduate transcripts — permanent shareable pages, capped to keep the file sane.

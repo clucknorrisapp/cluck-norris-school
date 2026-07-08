@@ -1,0 +1,1679 @@
+[
+ {
+  "slug": "btc",
+  "category": "Nơi lưu trữ giá trị / Blockchain Layer-1",
+  "tagline": "Đồng tiền mã hóa đầu tiên: một loại tiền kỹ thuật số có nguồn cung cố định, chạy trên một mạng lưới toàn cầu mà không công ty hay chính phủ nào kiểm soát.",
+  "whatIsIt": [
+   "Bitcoin là một đồng tiền kỹ thuật số phi tập trung ra mắt vào tháng 1 năm 2009. Nó được tạo ra bởi một cá nhân hoặc nhóm ẩn danh dùng cái tên Satoshi Nakamoto, mà danh tính thật đến nay vẫn chưa được biết. Nakamoto công bố một whitepaper dài chín trang vào tháng 10 năm 2008 mô tả 'một hệ thống tiền mặt điện tử ngang hàng' và sau đó đào block đầu tiên vào tháng 1 năm 2009.",
+   "Nó tồn tại để cho phép mọi người gửi giá trị cho nhau qua internet mà không cần ngân hàng, đơn vị xử lý thanh toán, hay bất kỳ trung gian đáng tin cậy nào ở giữa. Các giao dịch được ghi lại trên một sổ cái công khai gọi là blockchain, mà hàng nghìn máy tính độc lập trên khắp thế giới lưu bản sao và xác minh. Không một bên trung tâm nào có thể đóng băng mạng lưới, in thêm coin vượt quá quy tắc cho phép, hay đảo ngược các giao dịch đã hoàn tất.",
+   "Lựa chọn thiết kế quan trọng nhất là giới hạn nguồn cung: sẽ chỉ có tối đa 21 triệu bitcoin mà thôi. Sự khan hiếm tuyệt đối đó, kết hợp với việc không công ty nào vận hành nó, là lý do những người ủng hộ gọi Bitcoin là 'vàng kỹ thuật số' và coi nó là nơi lưu trữ giá trị dài hạn hơn là một đồng tiền chi tiêu hàng ngày.",
+   "Ngày nay Bitcoin là tài sản crypto lớn nhất theo giá trị thị trường và là thước đo chuẩn mà phần còn lại của ngành được so sánh với. Nó được nắm giữ bởi các cá nhân, các công ty đại chúng, và từ năm 2024 là các quỹ ETF Bitcoin giao ngay của Mỹ cho phép các tài khoản chứng khoán thông thường nắm giữ nó."
+  ],
+  "howItWorks": {
+   "paragraphs": [
+    "Bitcoin được bảo vệ bởi một hệ thống gọi là Proof of Work. Những máy tính chuyên dụng gọi là thợ đào (miner) cạnh tranh để đoán ra một con số mà khi đưa qua thuật toán băm SHA-256 cùng với dữ liệu của block, sẽ tạo ra kết quả thấp hơn một ngưỡng do mạng lưới đặt ra. Không có đường tắt nào cả; việc này đòi hỏi hàng nghìn tỷ lần thử ngẫu nhiên, và thợ đào đầu tiên tìm ra đáp án hợp lệ sẽ được quyền thêm block giao dịch tiếp theo và nhận bitcoin mới được tạo ra cộng với phí.",
+    "Lượng điện 'lãng phí' này chính là mấu chốt: nó khiến việc viết lại lịch sử trở nên đắt đỏ đến mức phi lý. Để làm giả hoặc đảo ngược giao dịch, kẻ tấn công sẽ phải vượt qua sức mạnh tính toán của toàn bộ mạng lưới trung thực cùng một lúc (một cuộc 'tấn công 51%'), điều mà với Bitcoin sẽ tốn kém hơn bất kỳ phần thưởng thực tế nào. Mạng lưới cũng tự điều chỉnh: cứ mỗi 2,016 block (khoảng hai tuần) nó điều chỉnh độ khó để một block mới vẫn xuất hiện đều đặn khoảng mỗi 10 phút, bất kể bao nhiêu thợ đào tham gia hay rời đi.",
+    "Nguồn cung mới bị siết chặt bởi các đợt 'halving'. Cứ mỗi 210,000 block (~4 năm) phần thưởng trả cho thợ đào bị cắt giảm một nửa. Nó bắt đầu ở mức 50 BTC mỗi block, và sau đợt halving tháng 4 năm 2024 hiện là 3.125 BTC. Đây là cơ chế thực thi giới hạn 21 triệu và từ từ đưa lượng phát hành mới về gần bằng không vào khoảng năm 2140."
+   ],
+   "bullets": [
+    "Cơ chế đồng thuận: Proof of Work sử dụng hàm băm SHA-256 — sự an toàn đến từ năng lượng thật đã tiêu tốn, không phải từ coin được stake.",
+    "Thời gian block: khoảng 10 phút, được giữ ổn định nhờ cơ chế tự động điều chỉnh độ khó mỗi 2,016 block.",
+    "Phát hành: phần thưởng block giảm một nửa mỗi ~4 năm; hiện là 3.125 BTC mỗi block sau đợt halving tháng 4 năm 2024.",
+    "Bạn kiểm soát coin bằng private key. 'Không phải key của bạn, không phải coin của bạn' — ai giữ key thì người đó kiểm soát bitcoin.",
+    "Lớp nền được cố ý thiết kế chậm và giới hạn (~7 giao dịch/giây); việc mở rộng diễn ra trên các lớp xây bên trên, như Lightning Network."
+   ]
+  },
+  "building": {
+   "paragraphs": [
+    "Bitcoin không có công ty hay CEO nào và không có lộ trình cố định. Các thay đổi được đề xuất dưới dạng BIP (Bitcoin Improvement Proposals — Đề xuất Cải tiến Bitcoin), được tranh luận công khai trong nhiều năm, và chỉ kích hoạt nếu đa số rộng rãi các thợ đào và người vận hành node tự nguyện chấp nhận chúng. Tính đến giữa năm 2026 không có đợt nâng cấp mạng nào được lên lịch — thay vào đó là một số đề xuất cạnh tranh nhau đang được thảo luận sôi nổi, thường xuyên gây tranh cãi, và có sự đồng thuận rộng rãi rằng không đề xuất nào trong số đó có khả năng kích hoạt trong năm nay.",
+    "Cuộc tranh luận lớn nhất hiện tại là khả năng kháng lượng tử. Đầu năm 2026, nghiên cứu mới từ Google đã hạ mạnh ước tính về phần cứng cần thiết để cuối cùng phá vỡ cơ chế chữ ký của Bitcoin, đẩy chủ đề này từ lý thuyết sang kỹ thuật thực tế. BIP-360, định nghĩa loại địa chỉ kháng lượng tử đầu tiên của Bitcoin, đã được công bố như một đề xuất chính thức vào tháng 2 năm 2026, nhưng nó chỉ bảo vệ coin từ đây về sau và chưa có lộ trình kích hoạt được thống nhất. Một ý tưởng đi kèm quyết liệt hơn, BIP-361 ('Post Quantum Migration and Legacy Signature Sunset', công bố tháng 4 năm 2026), cuối cùng sẽ ngừng chấp nhận các giao dịch chi tiêu từ những địa chỉ cũ dễ bị tổn thương — thực chất là đóng băng số coin còn nằm trong đó, bao gồm ước tính ~1 triệu coin được cho là của Satoshi. Điều đó đã vấp phải phản ứng dữ dội thực sự vì mâu thuẫn với lời hứa 'key của bạn, coin của bạn' của Bitcoin, và nó còn rất xa mới đạt được đồng thuận.",
+    "Hướng đi lớn còn lại là làm cho Bitcoin có khả năng lập trình cao hơn thông qua 'covenants' — các đề xuất như OP_CTV (BIP-119), OP_CAT (BIP-347), và gói LNHANCE tập trung vào Lightning. Những đề xuất này sẽ cho phép các tính năng giống smart contract phong phú hơn (vault tốt hơn, Lightning hiệu quả hơn, các cầu nối giảm thiểu niềm tin). OP_CTV thậm chí đã có các tham số kích hoạt dự thảo trên bàn, nhưng phe phản đối bác bỏ phương pháp báo hiệu kích hoạt nhanh cho một thay đổi gây tranh cãi, nên chưa có opcode covenant nào có lộ trình chắc chắn. Trong khi đó BitVM2, vốn không cần thay đổi giao thức nào cả, đã hoạt động thực tế trong sản xuất (ví dụ đang vận hành cầu nối rollup mainnet của Citrea), nên một số nhà phát triển đang đi vòng qua cuộc tranh luận soft-fork hoàn toàn."
+   ],
+   "bullets": [
+    "Phòng thủ lượng tử: BIP-360 (địa chỉ kháng lượng tử) được công bố như một đề xuất chính thức đầu năm 2026 nhưng chưa kích hoạt; ý tưởng đóng băng/di chuyển coin gây tranh cãi BIP-361 đang bị tranh luận gay gắt — chưa có ngày kích hoạt.",
+    "Khả năng lập trình: các đề xuất covenant OP_CTV, OP_CAT, và LNHANCE đang tiến triển song song, mỗi cái giải quyết một mảnh khác nhau, nhưng chưa cái nào có lộ trình kích hoạt chắc chắn và không cái nào được kỳ vọng kích hoạt trong năm 2026.",
+    "Mở rộng Layer-2: tiếp tục phát triển Lightning Network cho thanh toán nhanh, rẻ, cộng với các rollup và cầu nối dựa trên BitVM2 không đòi hỏi thay đổi lớp nền.",
+    "Sự căng thẳng bên dưới tất cả: giữ Bitcoin tối giản và bảo thủ nhất có thể, hay thêm tính năng và cơ chế phòng thủ — mạng lưới thay đổi chậm chính vì nó cần gần như đồng thuận tuyệt đối mới thay đổi được."
+   ]
+  },
+  "quickFacts": [
+   [
+    "Ra mắt",
+    "Tháng 1 năm 2009 (whitepaper tháng 10 năm 2008)"
+   ],
+   [
+    "Người tạo ra",
+    "Satoshi Nakamoto (ẩn danh, danh tính chưa được biết)"
+   ],
+   [
+    "Cơ chế đồng thuận",
+    "Proof of Work (SHA-256)"
+   ],
+   [
+    "Nguồn cung tối đa",
+    "21 triệu BTC (giới hạn cứng, ~95% đã được đào)"
+   ],
+   [
+    "Phát hành mới",
+    "3.125 BTC/block, halving ~mỗi 4 năm"
+   ],
+   [
+    "Thời gian block",
+    "~10 phút"
+   ],
+   [
+    "Công dụng chính",
+    "Nơi lưu trữ giá trị / 'vàng kỹ thuật số', quyết toán, thanh toán"
+   ],
+   [
+    "Quản trị",
+    "Không có công ty hay CEO; thay đổi qua BIP + đồng thuận tương đối"
+   ]
+  ],
+  "ecosystem": [
+   "Lightning Network — một layer-2 cho các khoản thanh toán bitcoin nhanh, phí thấp, quyết toán trở lại chuỗi chính",
+   "Các quỹ ETF Bitcoin giao ngay của Mỹ (ví dụ IBIT của BlackRock, FBTC của Fidelity) — các sản phẩm được quản lý nắm giữ tổng cộng hơn $100B ngay cả sau đợt rút vốn mạnh giữa năm 2026",
+   "Kho bạc doanh nghiệp — Strategy (trước đây là MicroStrategy) là công ty đại chúng nắm giữ lớn nhất với khoảng 840,000 BTC tính đến giữa năm 2026",
+   "Ngành khai thác — mạng lưới toàn cầu gồm phần cứng ASIC và các pool đào bảo vệ chuỗi",
+   "Lưu ký và sàn giao dịch — Coinbase, Kraken và các sàn khác để mua, cùng các ví cứng như Ledger và Trezor để tự lưu ký",
+   "Các lớp mới nổi — các rollup và cầu nối BitVM2 mang lại khả năng lập trình cao hơn mà không thay đổi giao thức nền"
+  ],
+  "history": [
+   {
+    "year": "2008",
+    "event": "Satoshi Nakamoto công bố whitepaper Bitcoin mô tả tiền mặt điện tử ngang hàng."
+   },
+   {
+    "year": "2009",
+    "event": "Block khởi nguyên (genesis block) được đào; Bitcoin đi vào hoạt động và các giao dịch đầu tiên diễn ra."
+   },
+   {
+    "year": "2010",
+    "event": "Ngày Bitcoin Pizza — 10,000 BTC được chi cho hai chiếc pizza, giao dịch mua thực tế đầu tiên của nó."
+   },
+   {
+    "year": "2012",
+    "event": "Đợt halving đầu tiên cắt phần thưởng block từ 50 xuống 25 BTC."
+   },
+   {
+    "year": "2013",
+    "event": "Bitcoin vượt mốc $1,000 lần đầu tiên."
+   },
+   {
+    "year": "2017",
+    "event": "Đợt tăng giá lên khoảng $20,000 đưa Bitcoin lên các trang tin chính thống."
+   },
+   {
+    "year": "2020-2021",
+    "event": "Các tổ chức và công ty đại chúng bắt đầu mua vào; giá vượt qua $60,000."
+   },
+   {
+    "year": "2024",
+    "event": "Các quỹ ETF Bitcoin giao ngay của Mỹ được phê duyệt vào tháng 1; đợt halving thứ tư vào tháng 4 hạ phần thưởng xuống 3.125 BTC; giá vượt $100,000."
+   },
+   {
+    "year": "2025",
+    "event": "Làn sóng tích lũy mạnh mẽ của các tổ chức kéo dài đà tăng; Bitcoin giao dịch trên $100,000 khá xa ở các đỉnh."
+   },
+   {
+    "year": "2026",
+    "event": "Một năm đầy biến động: cú điều chỉnh mạnh về vùng giữa $60,000 vào tháng 7, làn sóng rút vốn ETF giao ngay kỷ lục, và cuộc tranh luận về kháng lượng tử ngày càng nóng (BIP-360/361)."
+   }
+  ],
+  "risks": [
+   "Biến động giá rất khốc liệt. Bitcoin đã nhiều lần giảm 50-80% từ đỉnh, và năm 2026 đã chứng kiến cú rơi mạnh từ các đỉnh sáu con số về vùng giữa $60,000. Đây không phải nơi ổn định để gửi số tiền bạn có thể cần sớm.",
+   "Mối đe dọa từ máy tính lượng tử giờ là một vấn đề kỹ thuật thực sự, không còn chỉ là lý thuyết. Coin nằm trong các loại địa chỉ cũ với public key bị lộ là dễ bị tổn thương nhất về dài hạn, và cộng đồng chưa thống nhất về cách — hay thậm chí có nên — ép buộc di chuyển sang các địa chỉ an toàn trước lượng tử.",
+   "Mức tiêu thụ năng lượng thực sự lớn. Proof of Work tiêu thụ lượng điện ở quy mô của một quốc gia cỡ trung, điều này liên tục thu hút chỉ trích về môi trường và, ở một số khu vực, áp lực pháp lý lên hoạt động đào.",
+   "Tự lưu ký không khoan nhượng. Mất private key hoặc bị phishing là tiền đơn giản biến mất — không có đường dây hỗ trợ, không có đặt lại mật khẩu, và không có hoàn tiền.",
+   "Bất định pháp lý vẫn tồn tại trên toàn thế giới. Cách đánh thuế, quy định ETF, cấp phép sàn giao dịch, và cả lệnh cấm hoàn toàn khác nhau theo từng quốc gia và có thể thay đổi, ảnh hưởng đến giá và khả năng tiếp cận.",
+   "Sự tập trung và tính phản hồi. Những người nắm giữ lớn như Strategy và các quỹ ETF giao ngay giờ đây có thể lay chuyển thị trường; khi họ bán (Strategy đã bán bớt một phần nhỏ số nắm giữ đầu tháng 7 năm 2026, và các quỹ ETF ghi nhận đợt rút vốn kỷ lục tháng 6 năm 2026), điều đó có thể khuếch đại các đợt suy giảm.",
+   "Lớp nền chậm và đắt cho các khoản thanh toán nhỏ. Chi tiêu hàng ngày thực sự phụ thuộc vào các layer-2 như Lightning, vốn vẫn đang hoàn thiện và kém đơn giản hơn một cú quẹt thẻ.",
+   "Nguồn cung cố định là con dao hai lưỡi: nó không thể lạm phát, nhưng cũng có nghĩa là doanh thu của thợ đào cuối cùng phải chuyển từ phần thưởng block sang chỉ còn phí giao dịch — một câu hỏi an ninh dài hạn chưa được kiểm chứng."
+  ],
+  "howToInvest": [
+   "Giáo dục trước tiên, không phải lời khuyên tài chính: hãy hiểu rằng Bitcoin có thể giảm hơn 50% và chỉ bỏ vào số tiền bạn có thể để yên không đụng đến trong nhiều năm. Đừng bao giờ đầu tư vì hype hay FOMO.",
+   "Chọn cách tiếp cận của bạn: một quỹ ETF Bitcoin giao ngay được quản lý (giữ trong tài khoản chứng khoán thông thường) là con đường nhàn nhất, trong khi mua BTC thật trên một sàn uy tín cho phép bạn rút ra và thực sự sở hữu nó. ETF thì tiện lợi; sở hữu coin mới là ý nghĩa thật của Bitcoin.",
+   "Dùng một sàn giao dịch nổi tiếng, được quản lý (ví dụ Coinbase, Kraken) để mua, và bật xác thực hai yếu tố bằng ứng dụng authenticator — không dùng SMS.",
+   "Để sở hữu thật sự, hãy chuyển coin ra khỏi sàn vào một ví bạn kiểm soát. Một ví cứng (Ledger, Trezor) giữ private key của bạn offline và là tiêu chuẩn để nắm giữ số lượng đáng kể.",
+   "Viết cụm từ khôi phục (seed phrase) ra giấy (hoặc thép), cất giữ offline ở nhiều nơi an toàn, và TUYỆT ĐỐI KHÔNG gõ nó vào website nào, chia sẻ nó, hay chụp ảnh nó. Ai có seed phrase là người đó sở hữu coin của bạn.",
+   "Cân nhắc trung bình giá (dollar-cost averaging) — mua một khoản nhỏ cố định theo lịch — thay vì cố canh đỉnh hay đáy.",
+   "Cảnh giác với lừa đảo: không dịch vụ hợp pháp nào hỏi seed phrase của bạn, cam kết lợi nhuận, hay nhắn tin riêng cho bạn với tư cách 'hỗ trợ'. Nếu nghe quá tốt để là thật, thì đúng là như vậy.",
+   "Lưu giữ hồ sơ cho việc khai thuế — ở nhiều quốc gia, bán hoặc chi tiêu bitcoin là một sự kiện chịu thuế."
+  ]
+ },
+ {
+  "slug": "eth",
+  "category": "Nền tảng smart contract / Blockchain Layer-1",
+  "tagline": "Một blockchain toàn cầu có khả năng lập trình, nơi code chạy chính xác như được viết và ETH trả tiền cho việc tính toán.",
+  "whatIsIt": [
+   "Ethereum là một blockchain phi tập trung chạy các chương trình gọi là smart contract. Trong khi Bitcoin được thiết kế chủ yếu để chuyển tiền, Ethereum được xây dựng để trở thành một máy tính đa dụng mà hàng nghìn máy tính trên khắp thế giới cùng vận hành và thống nhất kết quả. ETH là token gốc của mạng lưới: nó trả phí giao dịch ('gas') và bảo vệ mạng lưới thông qua staking.",
+   "Nó được đề xuất trong một whitepaper năm 2013 bởi Vitalik Buterin, khi đó mới 19 tuổi, người cho rằng khả năng lập trình của Bitcoin quá hạn chế. Anh được bảy nhà đồng sáng lập khác tham gia cùng (tổng cộng tám người), bao gồm Gavin Wood (người viết tài liệu kỹ thuật 'Yellow Paper' và đặt ra khái niệm Ethereum Virtual Machine) và Joseph Lubin. Mạng lưới được tài trợ bằng đợt crowdsale công khai năm 2014 huy động khoảng 31,000 BTC (~$18M vào thời điểm đó) và đi vào hoạt động ngày 30 tháng 7 năm 2015.",
+   "Ý nghĩa cốt lõi của Ethereum là 'làm điều này và không ai có thể ngăn chặn hay thay đổi luật chơi.' Một contract được triển khai lên Ethereum sẽ chạy đúng như được viết, không có công ty hay ngân hàng nào ở giữa. Chính tính chất đó đã khiến nó trở thành nền móng cho DeFi (tài chính phi tập trung), NFT, stablecoin, và phần lớn các token bạn thấy ngày nay.",
+   "Việc phát triển được định hướng bởi tổ chức phi lợi nhuận Ethereum Foundation, nhưng không một thực thể đơn lẻ nào kiểm soát mạng lưới. Bất kỳ ai cũng có thể chạy phần mềm, đề xuất thay đổi, hay xây dựng trên đó — các nâng cấp chỉ diễn ra khi cộng đồng rộng lớn của các client và validator chấp nhận chúng."
+  ],
+  "howItWorks": {
+   "paragraphs": [
+    "Ethereum đạt được sự đồng thuận bằng proof-of-stake (PoS). Thay vì thợ đào đốt điện, các 'validator' khóa ETH làm tài sản thế chấp để đổi lấy quyền đề xuất và kiểm tra block. Để chạy validator của riêng mình bạn nạp vào 32 ETH; nếu bạn gian lận hoặc offline nghiêm trọng, một phần khoản stake đó có thể bị 'slash' (tiêu hủy). Điều này gắn trực tiếp sự an toàn của mạng lưới với số tiền đang đặt cược.",
+    "Thời gian được chia thành các 'slot' 12 giây và các 'epoch' 32 slot. Trong mỗi slot, một validator được chọn ngẫu nhiên để đề xuất một block, và các ủy ban gồm các validator khác bỏ phiếu ('attest') xem block đó có hợp lệ không. Khi đủ lượng ETH đã stake ủng hộ một block, nó trở nên 'finalized' (chung cuộc) — đảo ngược nó sẽ đòi hỏi kẻ tấn công phải kiểm soát và mất đi một phần khổng lồ của toàn bộ ETH đã stake, một cái giá kinh tế tàn khốc.",
+    "Smart contract thực thi trên Ethereum Virtual Machine (EVM), một máy tính chung mà mọi node đều chạy. Mỗi thao tác tốn 'gas', trả bằng ETH, điều này ngăn vòng lặp vô hạn và spam. Kể từ The Merge năm 2022, chiến lược của Ethereum là giữ lớp nền (L1) an toàn và tinh gọn trong khi đẩy phần lớn hoạt động của người dùng lên các rollup Layer-2 nhanh hơn, rẻ hơn, vốn đăng dữ liệu của chúng trở lại L1."
+   ],
+   "bullets": [
+    "Cơ chế đồng thuận: proof-of-stake — mỗi validator stake 32 ETH; khoảng 35M ETH (quanh 30% nguồn cung) được stake trên hơn 1M validator tính đến 2026.",
+    "Phí gas: mọi giao dịch và lời gọi contract được trả bằng ETH; một phần của mỗi khoản phí bị đốt (EIP-1559, hoạt động từ tháng 8 năm 2021).",
+    "The Merge (tháng 9 năm 2022) chuyển Ethereum từ proof-of-work ngốn năng lượng sang PoS, cắt giảm mức tiêu thụ năng lượng ~99.95%.",
+    "Các rollup (Layer-2) gánh phần việc nặng với chi phí rẻ và quyết toán về Ethereum để lấy sự an toàn — cách tiếp cận mở rộng 'mô-đun'.",
+    "Bạn không cần 32 ETH để tham gia: các staking pool và token liquid-staking cho phép người nắm giữ nhỏ hơn stake, đổi lại phải tin tưởng thêm vào một nhà cung cấp."
+   ]
+  },
+  "building": {
+   "paragraphs": [
+    "Định hướng năm 2026 của Ethereum là 'mở rộng lớp nền và giúp việc xây dựng trên đó dễ hơn, mà không từ bỏ tính phi tập trung.' Bản nâng cấp Pectra (tháng 5 năm 2025) bổ sung các bước đệm cho account abstraction (EIP-7702, cho phép ví thông thường tạm thời hoạt động như smart contract) và nâng cao hiệu suất validator. Fusaka lên mainnet ngày 3 tháng 12 năm 2025, mang theo PeerDAS — kỹ thuật lấy mẫu tính khả dụng dữ liệu cho phép các node xác minh dữ liệu rollup mà không cần tải toàn bộ — cộng với các đợt nâng giới hạn blob theo giai đoạn giúp tăng mạnh băng thông dữ liệu dành cho các L2.",
+    "Bản nâng cấp lớn tiếp theo, có biệt danh Glamsterdam, dự kiến vào nửa cuối năm 2026 (các nhà phát triển nhắm Q3 sau khi mục tiêu nửa đầu năm bị trượt). Các hạng mục nổi bật của nó là Block-Level Access Lists (EIP-7928) và proposer-builder separation được đưa vào giao thức (EIP-7732), cùng nhau giúp việc nâng đáng kể giới hạn gas của block trở nên an toàn — các cuộc thảo luận nhắm đến việc di chuyển từ vùng ~60M lên trần thiết kế ~200M (các validator vẫn quyết định giới hạn thực tế qua bỏ phiếu), nghĩa là nhiều giao dịch hơn mỗi block. Các công việc tầm xa hơn đang được phác thảo bao gồm account abstraction gốc và nghiên cứu mật mã hậu lượng tử.",
+    "Luận điểm rộng hơn: Ethereum L1 trở thành lớp quyết toán và tính khả dụng dữ liệu bảo vệ một chồng ngày càng lớn các rollup và tài sản token hóa, trong khi các giao dịch hàng ngày diễn ra trên các L2 giá rẻ. Liệu điều đó có giữ đủ giá trị kinh tế chảy về cho người nắm giữ ETH — thay vì rò rỉ sang các L2 — là một trong những cuộc tranh luận sống mà lộ trình đang cố gắng trả lời."
+   ],
+   "bullets": [
+    "Fusaka (hoạt động từ 3 tháng 12 năm 2025): PeerDAS + giới hạn blob cao hơn — nhiều băng thông dữ liệu hơn cho các rollup Layer-2.",
+    "Pectra (tháng 5 năm 2025): cầu nối account abstraction EIP-7702, số dư validator tối đa lớn hơn, staking mượt mà hơn.",
+    "Glamsterdam (dự kiến nửa cuối 2026, nhắm Q3): proposer-builder separation trong giao thức + block-level access lists, mở đường cho đợt tăng giới hạn gas lớn.",
+    "Đang tiếp diễn: đẩy mạnh mở rộng lấy rollup làm trung tâm ('the surge'), cải thiện trải nghiệm validator/staking, và nghiên cứu mật mã hậu lượng tử.",
+    "Định hướng: giữ L1 tinh gọn và an toàn như một lớp quyết toán; chuyển hoạt động của người dùng lên các L2 nơi phí thường dưới một cent."
+   ]
+  },
+  "quickFacts": [
+   [
+    "Ra mắt",
+    "30 tháng 7 năm 2015 (block Genesis)"
+   ],
+   [
+    "Nhà sáng lập",
+    "Vitalik Buterin + 7 nhà đồng sáng lập (gồm Gavin Wood, Joseph Lubin)"
+   ],
+   [
+    "Cơ chế đồng thuận",
+    "Proof-of-stake (từ The Merge, tháng 9 năm 2022)"
+   ],
+   [
+    "Mô hình nguồn cung",
+    "Không có giới hạn cứng; phát hành PoS khiêm tốn trừ đi lượng phí bị đốt (EIP-1559) — gần như đi ngang, đôi khi giảm phát"
+   ],
+   [
+    "Nguồn cung lưu hành",
+    "~120.7M ETH (giữa 2026); nguồn cung ròng chỉ tăng ~0.23%/năm"
+   ],
+   [
+    "Công dụng token",
+    "Trả phí gas, được stake để bảo vệ mạng lưới, làm tài sản thế chấp khắp DeFi"
+   ],
+   [
+    "Quản trị",
+    "Ngoài chuỗi (off-chain), qua các đội client, validator & Ethereum Foundation (không có bỏ phiếu on-chain)"
+   ],
+   [
+    "Để chạy một validator",
+    "Stake 32 ETH (hoặc dùng staking pool)"
+   ]
+  ],
+  "ecosystem": [
+   "DeFi: Uniswap, Aave, MakerDAO/Sky, Curve và những cái tên khác — Ethereum tiên phong cho vay, giao dịch và stablecoin phi tập trung",
+   "Stablecoin: mái nhà lớn nhất của USDC và USDT, với hơn $150B giá trị stablecoin trên nền tảng Ethereum tính đến 2026",
+   "Các rollup Layer-2: Base (Coinbase), Arbitrum, Optimism, zkSync — riêng Base và Arbitrum nắm phần lớn giá trị DeFi trên L2",
+   "NFT & token hóa: chuỗi NFT nguyên bản; nay là trung tâm cho tài sản thực token hóa và các thí điểm ngân quỹ từ những công ty như BlackRock và JPMorgan",
+   "Hạ tầng & tiêu chuẩn: các tiêu chuẩn ERC-20 (token) và ERC-721 (NFT) mà phần lớn crypto hiện dùng đều khởi nguồn trên Ethereum",
+   "Tiếp cận tổ chức: các quỹ ETF ETH giao ngay của Mỹ mang lại cho nhà đầu tư truyền thống sự tiếp xúc được quản lý mà không cần tự lưu ký"
+  ],
+  "history": [
+   {
+    "year": "2013",
+    "event": "Vitalik Buterin, 19 tuổi, công bố whitepaper Ethereum đề xuất một blockchain có khả năng lập trình."
+   },
+   {
+    "year": "2014",
+    "event": "Đợt crowdsale công khai huy động ~31,000 BTC (~$18M); Gavin Wood công bố Yellow Paper định nghĩa EVM."
+   },
+   {
+    "year": "2015",
+    "event": "Mainnet Ethereum đi vào hoạt động (Frontier); block Genesis được đào ngày 30 tháng 7."
+   },
+   {
+    "year": "2016",
+    "event": "Vụ hack The DAO rút mất ~$60M; một đợt hard fork gây tranh cãi đảo ngược nó và tách ra Ethereum Classic."
+   },
+   {
+    "year": "2020",
+    "event": "Beacon Chain ra mắt, khởi động proof-of-stake song song với cơn bùng nổ 'mùa hè' DeFi."
+   },
+   {
+    "year": "2021",
+    "event": "EIP-1559 giới thiệu cơ chế đốt phí, thay đổi kinh tế học nguồn cung của ETH."
+   },
+   {
+    "year": "2022",
+    "event": "The Merge chuyển Ethereum sang proof-of-stake hoàn toàn, cắt giảm mức tiêu thụ năng lượng ~99.95%."
+   },
+   {
+    "year": "2024",
+    "event": "Bản nâng cấp Dencun bổ sung 'blobs' (EIP-4844), giảm mạnh chi phí giao dịch Layer-2 xuống chỉ còn vài phần trăm của một cent."
+   },
+   {
+    "year": "2025",
+    "event": "Các bản nâng cấp Pectra (tháng 5) và Fusaka (3 tháng 12) ra mắt — cầu nối account abstraction và mở rộng dữ liệu PeerDAS."
+   },
+   {
+    "year": "2026",
+    "event": "Bản nâng cấp Glamsterdam được kỳ vọng (nửa cuối năm, nhắm Q3), hướng tới PBS trong giao thức và một đợt tăng giới hạn gas lớn."
+   }
+  ],
+  "risks": [
+   "Cạnh tranh: các L1 nhanh hơn, rẻ hơn như Solana đang thắng thế về hoạt động của người dùng nhỏ lẻ, doanh thu, và một phần dòng chảy stablecoin. Ethereum dẫn đầu về tổng giá trị được bảo vệ và niềm tin của tổ chức, nhưng vị thế dẫn đầu đó đang bị thách thức, không được đảm bảo.",
+   "Phân mảnh Layer-2: đẩy người dùng lên hàng chục rollup làm chia cắt thanh khoản và phức tạp hóa trải nghiệm — bạn thường phải 'bridge' tài sản giữa các chuỗi, và các cầu nối là mục tiêu lặp đi lặp lại của những vụ hack lớn.",
+   "Tập trung hóa L2: nhiều rollup vẫn dựa vào một 'sequencer' duy nhất và các multisig nâng cấp mà về lý thuyết có thể kiểm duyệt hoặc thay đổi hành vi. Giới phê bình cho rằng các L2 chưa thực sự thừa hưởng mức an toàn tương đương mainnet dù marketing gợi ý điều ngược lại.",
+   "Nắm bắt giá trị: khi hoạt động chuyển sang L2, lượng phí bị đốt trên L1 giảm đi, làm suy yếu câu chuyện 'giảm phát'. Liệu ETH với tư cách tài sản có hưởng lợi từ sự tăng trưởng của hệ sinh thái hay không vẫn là một câu hỏi kinh tế chưa có lời giải.",
+   "Tập trung hóa staking: một phần lớn ETH được stake nằm ở một vài nhà cung cấp liquid-staking (ví dụ Lido) và các sàn giao dịch tập trung — một rủi ro tập trung đối với một mạng lưới tự quảng bá bằng tính phi tập trung.",
+   "Độ phức tạp & rủi ro nâng cấp: lộ trình của Ethereum rất phức tạp, và các hard fork mang theo khả năng lỗi hoặc sự cố đồng thuận. Rủi ro smart contract cũng luôn hiện hữu — code bạn tương tác có thể chứa lỗ hổng có thể bị khai thác.",
+   "Bất định pháp lý: phân loại pháp lý của ETH, dịch vụ staking-as-a-service, và các quy định về DeFi vẫn chưa ngã ngũ ở các khu vực pháp lý lớn, và điều đó có thể thay đổi đột ngột.",
+   "Biến động giá: ETH có thể và đã từng giảm hơn 50% trong các chu kỳ trước. Đây là một tài sản rủi ro cao, không phải một tài khoản tiết kiệm."
+  ],
+  "howToInvest": [
+   "Mang tính giáo dục, không phải lời khuyên tài chính. Không điều gì ở đây là khuyến nghị mua — chỉ bao giờ mạo hiểm số tiền bạn có thể chấp nhận mất toàn bộ.",
+   "Học trước khi mua: hãy hiểu rằng ETH biến động mạnh và bạn tự chịu trách nhiệm về key của mình. Nếu bạn không hiểu một sản phẩm (đòn bẩy, các sản phẩm phái sinh staking, token linh tinh), đừng bỏ tiền vào đó.",
+   "Mua từ một sàn giao dịch uy tín, được quản lý ở quốc gia của bạn. Kiểm tra ticker đúng là ETH và mạng là Ethereum, và bắt đầu với số tiền nhỏ để làm quen cơ chế.",
+   "Chuyển các khoản nắm giữ đáng kể sang tự lưu ký. 'Không phải key của bạn, không phải coin của bạn' — một ví tự lưu ký (phần mềm như MetaMask/Rabby, hoặc ví cứng như Ledger/Trezor cho khoản lớn hơn) nghĩa là không sự cố sàn nào có thể đóng băng tiền của bạn.",
+   "Viết seed phrase ra giấy và cất giữ offline. Đừng bao giờ gõ nó vào website hay chia sẻ nó — ai có cụm từ đó là sở hữu ETH của bạn, và không có tính năng đặt lại mật khẩu.",
+   "Giữ lại một chút ETH để trả gas. Mỗi giao dịch (gửi, staking, dùng một ứng dụng) tốn ETH; trên các Layer-2 khoản này thường chỉ là một phần nhỏ của một cent.",
+   "Cân nhắc trung bình giá (dollar-cost averaging) thay vì canh thời điểm thị trường, và hãy thành thật rằng ngay cả crypto 'blue-chip' cũng có thể rơi mạnh.",
+   "Nếu bạn muốn lợi suất từ staking, hãy hiểu các đánh đổi: staking một mình cần 32 ETH và thời gian hoạt động ổn định; các pool và token liquid-staking dễ hơn nhưng thêm rủi ro smart contract và rủi ro nhà cung cấp. Lợi suất quảng cáo càng cao thường đồng nghĩa rủi ro ẩn càng cao.",
+   "Cảnh giác với lừa đảo: các trò 'tặng ETH miễn phí', hỗ trợ giả mạo, và các trang web rút cạn ví có ở khắp nơi. Ethereum không có bộ phận hỗ trợ chính thức nào sẽ nhắn tin riêng cho bạn."
+  ]
+ },
+ {
+  "slug": "sol",
+  "category": "Blockchain Layer-1",
+  "tagline": "Một blockchain nhanh, rẻ, một chuỗi duy nhất, đặt cược tất cả vào tốc độ thuần túy thay vì chia nhỏ công việc ra các lớp.",
+  "whatIsIt": [
+   "Solana là một blockchain Layer-1 — một mạng nền tảng, như Ethereum hay Bitcoin, vận hành đồng coin riêng (SOL) và lưu trữ các ứng dụng trực tiếp trên chuỗi chính. Toàn bộ triết lý thiết kế của nó là mở rộng LÊN trên một chuỗi nhanh duy nhất thay vì phân tán giao dịch sang các chuỗi phụ hay mạng 'Layer 2'. Lời chào hàng rất đơn giản: thông lượng giao dịch rất cao, phí dưới một cent, và thời gian xác nhận tính bằng phần nhỏ của một giây.",
+   "Nó được hình thành bởi Anatoly Yakovenko, một cựu kỹ sư Qualcomm, người công bố whitepaper 'Proof of History' vào tháng 11 năm 2017. Anh đồng sáng lập Solana Labs năm 2018 cùng Greg Fitzgerald, Raj Gokal, Stephen Akridge, và Eric Williams. Mainnet beta ra mắt vào tháng 3 năm 2020.",
+   "SOL, token gốc, đảm nhận phần hạ tầng: bạn trả phí mạng bằng nó, các validator stake nó để bảo vệ chuỗi, và nó được dùng cho việc bỏ phiếu kiểu quản trị về các nâng cấp giao thức. Solana tồn tại để làm cho các ứng dụng on-chain cảm giác đủ nhanh và rẻ cho việc sử dụng hàng ngày — giao dịch, thanh toán, game — nơi các chuỗi chậm, đắt đỏ gặp khó.",
+   "Ngày nay Solana là một trong những blockchain được sử dụng nhiều nhất tính theo số lượng giao dịch thô và đặc biệt nổi tiếng là mái nhà của DeFi tần suất cao, quyết toán stablecoin, và văn hóa phóng memecoin chạy qua các ứng dụng như pump.fun và Jupiter."
+  ],
+  "howItWorks": {
+   "paragraphs": [
+    "Chiêu bài nổi bật của Solana là 'Proof of History' (PoH). Nó không phải là một hệ thống đồng thuận độc lập — nó là một chiếc đồng hồ mật mã. Các validator liên tục chạy hàm băm SHA-256 thành một chuỗi dài, và vì mỗi giá trị băm phụ thuộc vào giá trị trước đó, chuỗi này chứng minh rằng thời gian thực đã trôi qua và cố định thứ tự các sự kiện ngay cả trước khi các validator bắt đầu thống nhất về chúng. Việc sắp xếp trước 'chuyện gì xảy ra theo thứ tự nào' chính là điều cho phép Solana xử lý giao dịch nhanh chóng.",
+    "Bên trên chiếc đồng hồ đó, Solana chạy một hệ thống Proof of Stake (PoS) khá tiêu chuẩn để đảm bảo an toàn. Các validator khóa (stake) SOL, và người nắm giữ có thể ủy quyền SOL của mình cho các validator để hưởng một phần phần thưởng. Càng nhiều stake trung thực đứng sau mạng lưới, việc tấn công càng khó — và một validator hành xử sai sẽ đặt khoản stake của mình vào rủi ro. PoH lo phần thời gian và thứ tự; PoS lo phần ai được xác nhận và bảo vệ chuỗi về mặt kinh tế.",
+    "Cái giá phải trả là việc theo kịp dòng thác giao dịch này đòi hỏi phần cứng mạnh, đắt tiền. Đó là lựa chọn có chủ ý — Solana ưu tiên tốc độ và phí thấp hơn là để bất kỳ ai cũng chạy được validator trên một chiếc laptop rẻ tiền, và đây là một điểm bị chỉ trích thực sự (xem phần rủi ro)."
+   ],
+   "bullets": [
+    "Proof of History = một chiếc đồng hồ mật mã có thể kiểm chứng, đóng dấu thời gian và sắp thứ tự các sự kiện trước khi đồng thuận, cắt giảm độ trễ phối hợp.",
+    "Proof of Stake = lớp an ninh; các validator stake SOL, và người ủy quyền có thể chống lưng cho họ để chia phần thưởng.",
+    "Trạng thái toàn cục duy nhất trên một chuỗi (không có Layer 2 hay shard) — mọi thứ quyết toán trên mạng chính.",
+    "Phí cực nhỏ (thường chỉ một phần nhỏ của một cent) và block xác nhận trong chưa đầy một giây.",
+    "Về mặt lịch sử chạy chủ yếu trên client 'Agave' viết bằng Rust; một client độc lập thứ hai, Firedancer (từ Jump Crypto), hiện đã hoạt động trên mainnet để tăng hiệu năng và giảm các điểm lỗi đơn lẻ."
+   ]
+  },
+  "building": {
+   "paragraphs": [
+    "Tính đến giữa năm 2026, Solana đang ở giữa cuộc đại tu kỹ thuật lớn nhất trong lịch sử của mình, nhắm thẳng vào hai điểm yếu lịch sử: độ tin cậy và tốc độ chung cuộc (finality). Hai nỗ lực chủ lực là Firedancer và Alpenglow.",
+    "Firedancer là một validator client mới, độc lập, được viết lại từ đầu bằng C/C++ bởi Jump Crypto — một codebase hoàn toàn tách biệt với client Agave viết bằng Rust. Một phiên bản lai ('Frankendancer', ghép phần mạng của Firedancer với phần đồng thuận của Agave) đã chạy trên mainnet từ năm 2024, và client Firedancer đầy đủ lên mainnet vào tháng 12 năm 2025. Đến đầu năm 2026 nó đã chạy trên khoảng hơn 20% số validator. Mục đích có hai mặt: hiệu năng cao hơn nhiều (nó nhắm tới và đã benchmark hướng đến ~1 triệu giao dịch mỗi giây trong điều kiện phòng thí nghiệm) và — quan trọng không kém — sự đa dạng client, để một lỗi trong một phần mềm client không thể đánh sập toàn bộ mạng lưới.",
+    "Alpenglow là cuộc đại tu cơ chế đồng thuận. Nó thay thế cơ chế bỏ phiếu Tower BFT cũ và, đáng chú ý, được thiết kế để cho Proof of History ở dạng hiện tại nghỉ hưu, dùng một giao thức tổng hợp phiếu bầu mới (Votor) để cắt thời gian chung cuộc từ khoảng ~12.8 giây xuống còn khoảng 100–150 mili-giây. Bản nâng cấp đã được cộng đồng thông qua qua quản trị (SIMD-0326) vào tháng 9 năm 2025 với ~98% tán thành và, tính đến 2026, đang được thử nghiệm trên các cụm cộng đồng hướng tới mục tiêu lên mainnet vào nửa cuối năm 2026."
+   ],
+   "bullets": [
+    "Firedancer — validator client mới hiệu năng cao, độc lập (phiên bản đầy đủ hoạt động trên mainnet từ tháng 12 năm 2025) bổ sung tốc độ và sự đa dạng client thiết yếu.",
+    "Alpenglow (SIMD-0326) — viết lại cơ chế đồng thuận nhắm tới thời gian chung cuộc ~100–150ms (từ ~12.8s), được quản trị thông qua (~98% đồng ý), nhắm mainnet nửa cuối 2026.",
+    "Tiếp tục đẩy mạnh vào tài chính tổ chức: các quỹ ETF SOL giao ngay của Mỹ ra mắt cuối 2025, với dòng vốn vào tích lũy tăng dần hướng tới mốc ~$1B trong suốt 2026.",
+    "Các 'siêu ứng dụng' DeFi — các dự án như Jupiter và Kamino gói swap, cho vay, hợp đồng vĩnh cửu (perps), và lợi suất vào một giao diện duy nhất.",
+    "Nền tảng quyết toán stablecoin ngày càng lớn (USDC, PYUSD, và JupUSD mới được bảo chứng bởi BlackRock-BUIDL, ra mắt tháng 1 năm 2026)."
+   ]
+  },
+  "quickFacts": [
+   [
+    "Ra mắt",
+    "Mainnet beta tháng 3 năm 2020 (whitepaper tháng 11 năm 2017)"
+   ],
+   [
+    "Nhà sáng lập",
+    "Anatoly Yakovenko, Raj Gokal, Greg Fitzgerald, Stephen Akridge, Eric Williams"
+   ],
+   [
+    "Cơ chế đồng thuận",
+    "Proof of Stake + Proof of History (bản viết lại Alpenglow đang thử nghiệm)"
+   ],
+   [
+    "Mô hình nguồn cung",
+    "Không có giới hạn cứng; lạm phát, giảm dần về ~1.5% dài hạn, được bù đắp một phần bởi việc đốt phí"
+   ],
+   [
+    "Nguồn cung lưu hành",
+    "~580 triệu SOL (trên tổng ~630–645M)"
+   ],
+   [
+    "Công dụng token",
+    "Phí mạng, staking/bảo vệ chuỗi, phần thưởng ủy quyền, bỏ phiếu quản trị"
+   ],
+   [
+    "Phân loại",
+    "Blockchain smart contract Layer-1"
+   ]
+  ],
+  "ecosystem": [
+   "Jupiter — trình tổng hợp DEX thống trị (chiếm phần lớn khối lượng swap tổng hợp trên Solana), nay là một 'siêu ứng dụng DeFi' với swap, lệnh giới hạn, perps, cho vay, và stablecoin JupUSD",
+   "pump.fun — bệ phóng memecoin tạo ra khối lượng giao dịch nhỏ lẻ khổng lồ (hàng triệu token đã được phóng)",
+   "Kamino — cho vay, đi vay, và các chiến lược lợi suất tự động",
+   "Stablecoin — USDC (phần lớn lượng đô-la on-chain), PYUSD, và JupUSD được bảo chứng bởi BlackRock-BUIDL",
+   "Meteora & Orca — các AMM thanh khoản và thanh khoản tập trung vận hành giao dịch on-chain",
+   "Các trường hợp sử dụng — DeFi tần suất cao, thanh toán và quyết toán stablecoin, NFT, game on-chain, và ứng dụng tiêu dùng",
+   "Tiếp cận tổ chức — các quỹ ETF Solana giao ngay của Mỹ (ra mắt cuối 2025; dòng vốn vào tích lũy tăng hướng tới ~$1B trong 2026)"
+  ],
+  "history": [
+   {
+    "year": "2017",
+    "event": "Anatoly Yakovenko công bố whitepaper Proof of History"
+   },
+   {
+    "year": "2018",
+    "event": "Solana Labs được thành lập; nguyên mẫu đầu tiên ('Loom', sau đổi tên thành Solana) xử lý 10,000 giao dịch trong nửa giây"
+   },
+   {
+    "year": "2019",
+    "event": "Vòng gọi vốn Series A $20M do Multicoin Capital dẫn dắt"
+   },
+   {
+    "year": "2020",
+    "event": "Mainnet beta ra mắt vào tháng 3; SOL chào sàn quanh mức $0.75"
+   },
+   {
+    "year": "2021",
+    "event": "SOL đạt đỉnh trên ~$260 trong đợt tăng giá khổng lồ; các sự cố sập mạng lớn đầu tiên xuất hiện"
+   },
+   {
+    "year": "2022",
+    "event": "Các đợt sập mạng liên tiếp cộng với hệ lụy từ vụ sụp đổ FTX/Alameda (những nhà hậu thuẫn thân cận của hệ sinh thái) đè nặng lên giá và danh tiếng của SOL"
+   },
+   {
+    "year": "2023",
+    "event": "Hệ sinh thái hồi phục; Solana định vị mình quanh việc sử dụng thực tế và di động (điện thoại Saga)"
+   },
+   {
+    "year": "2024",
+    "event": "Hoạt động memecoin và DeFi bùng nổ; độ tin cậy mạng lưới cải thiện rõ rệt; client lai 'Frankendancer' chạy trên mainnet"
+   },
+   {
+    "year": "2025",
+    "event": "Tròn một năm không có sự cố đồng thuận lớn nào (tháng 2); Alpenglow được quản trị thông qua (tháng 9); Firedancer đầy đủ lên mainnet (tháng 12); các quỹ ETF SOL giao ngay của Mỹ ra mắt (tháng 10–11)"
+   },
+   {
+    "year": "2026",
+    "event": "Firedancer chạy trên hơn ~20% validator; Alpenglow được thử nghiệm hướng tới mục tiêu mainnet nửa cuối năm; stablecoin JupUSD ra mắt (tháng 1); dòng vốn vào ETF SOL tăng hướng tới ~$1B"
+   }
+  ],
+  "risks": [
+   "Lịch sử về độ tin cậy: Solana đã hứng chịu khoảng bảy đợt sập mạng lớn từ 2021 đến đầu 2024, một số kéo dài nhiều giờ. Thời gian hoạt động đã cải thiện nhiều kể từ đó, nhưng một chuỗi từng dừng hoàn toàn mang theo rủi ro về danh tiếng và kỹ thuật cho đến khi kiến trúc mới chứng minh được mình qua nhiều năm.",
+   "Lo ngại về tập trung hóa: phần cứng validator đắt tiền, cấu hình cao khiến ít người có thể chạy node hơn. Số lượng validator đã giảm mạnh từ đỉnh, làm cô đặc stake vào tay ít nhà vận hành lớn hơn — điều ngược lại với những gì phi tập trung được kỳ vọng mang lại.",
+   "Kinh tế học validator rất khắc nghiệt: các validator phải gửi một giao dịch bỏ phiếu cho mỗi block, có thể tốn khoảng ~1 SOL mỗi ngày, chèn ép các nhà vận hành nhỏ và đẩy về hướng các siêu-validator phí bằng không. (Alpenglow chuyển việc bỏ phiếu ra ngoài chuỗi, nhằm giảm nhẹ điều này — nhưng bản nâng cấp đó chưa lên mainnet.)",
+   "Không có giới hạn nguồn cung cứng: SOL có tính lạm phát. Việc đốt phí bù đắp một phần, nhưng khác với Bitcoin, không có mức trần cố định, nên người nắm giữ đối mặt với sự pha loãng liên tục (dù đang giảm dần).",
+   "Mối liên hệ với FTX/Alameda: hai trong số những nhà hậu thuẫn lớn nhất thời kỳ đầu của Solana sụp đổ năm 2022, và một khối lượng lớn SOL bị kẹt trong tài sản phá sản — một cái bóng đè lên token này trong nhiều năm.",
+   "Các nâng cấp tham vọng đang trong quá trình triển khai: Alpenglow viết lại lõi đồng thuận và cho Proof of History như hiện tại nghỉ hưu. Những thay đổi lớn trên một chuỗi đang hoạt động trị giá nhiều tỷ đô mang theo rủi ro thực thi và lỗi cho đến khi được thử lửa trên mainnet.",
+   "Cạnh tranh: hệ sinh thái Layer-2 ngày càng trưởng thành của Ethereum (Arbitrum, Optimism, Base) và các L1 hiệu năng cao đối thủ cạnh tranh giành cùng những nhà phát triển, người dùng, và dòng vốn.",
+   "Phụ thuộc vào memecoin: một phần lớn hoạt động của Solana là các đợt phóng memecoin mang tính đầu cơ. Đó là khối lượng thực ngày hôm nay, nhưng nó rất thất thường — một cơn thoái trào của văn hóa đó có thể cắt giảm mạnh mức sử dụng on-chain."
+  ],
+  "howToInvest": [
+   "Chỉ mang tính giáo dục — đây không phải lời khuyên tài chính. Crypto biến động mạnh và bạn có thể mất tất cả; chỉ bao giờ bỏ vào số tiền bạn có thể chấp nhận mất, và tự nghiên cứu kỹ trước.",
+   "Học trước khi mua: hãy hiểu rằng giá trị của SOL dao động dữ dội, rằng mạng lưới đã từng dừng hoạt động trong quá khứ, và rằng các nâng cấp đang triển khai mang lại cả tiềm năng lẫn rủi ro. Niềm tin nên đến từ sự hiểu biết, không phải từ hype.",
+   "Để mua: dùng một sàn uy tín có niêm yết SOL (ví dụ Coinbase, Kraken, Binance). Kiểm tra bạn đang ở đúng trang/ứng dụng chính thức, bật xác thực hai yếu tố, và bắt đầu nhỏ.",
+   "Cân nhắc tự lưu ký: 'không phải key của bạn, không phải coin của bạn.' Một ví tự lưu ký như Phantom hay Solflare (phần mềm) hoặc ví cứng Ledger cho phép bạn tự nắm giữ SOL thay vì tin tưởng một sàn giao dịch.",
+   "Bảo vệ seed phrase như tiền mặt: viết nó ra và cất offline, đừng bao giờ gõ nó vào một website, và đừng bao giờ chia sẻ. Ai có seed phrase của bạn đều có thể rút cạn ví bạn — và các giao dịch nhanh, rẻ của Solana cũng khiến nó thành bãi săn ưa thích của những kẻ lừa đảo và các trang drainer.",
+   "Cảnh giác với các trò lừa đặc thù Solana: airdrop token giả, các giao dịch 'approve' độc hại, và memecoin nhái tràn lan. Kiểm tra kỹ địa chỉ contract và hoài nghi với bất cứ thứ gì hứa hẹn lợi nhuận đảm bảo.",
+   "Nếu nắm giữ SOL, bạn có thể stake hoặc ủy quyền nó cho một validator để nhận phần thưởng — nhưng hãy hiểu về thời gian khóa/hủy stake và rằng phần thưởng không xóa được rủi ro về giá.",
+   "Đừng bao giờ đầu tư vì FOMO hay lời mách nước của người lạ. Cách tiếp cận chậm rãi, có hiểu biết, với vị thế nhỏ luôn thắng việc đuổi theo các cú bơm giá."
+  ]
+ },
+ {
+  "slug": "bnb",
+  "category": "Blockchain Layer-1 / token sàn giao dịch",
+  "tagline": "Token sàn giao dịch đã lớn lên thành một blockchain nhanh, rẻ, tương thích EVM — mạnh mẽ, được dùng rộng rãi, và gắn chặt với Binance.",
+  "whatIsIt": [
+   "BNB (ban đầu là \"Binance Coin\", nay mang thương hiệu \"Build and Build\") là token gốc của BNB Chain và khởi đầu là token nội bộ của Binance, sàn giao dịch crypto lớn nhất thế giới. Nó ra mắt trong một đợt ICO tháng 7 năm 2017 bán ra 100 triệu token và huy động khoảng $15 triệu — ban đầu được phát hành dưới dạng một token ERC-20 thông thường trên Ethereum, trước khi Binance sau này xây dựng các chuỗi riêng và di chuyển nó sang.",
+   "Binance được sáng lập bởi Changpeng Zhao (thường được biết đến với tên \"CZ\") và He Yi. Lời chào hàng ban đầu rất đơn giản: giữ BNB, được giảm phí giao dịch trên Binance. Qua các năm, đội ngũ đã gắn thêm nhiều tiện ích hơn hẳn — quan trọng nhất là vào năm 2020 họ ra mắt một blockchain smart contract nơi BNB là token trả gas, biến nó từ một phiếu giảm giá khách hàng thân thiết thành nhiên liệu cho cả một hệ sinh thái.",
+   "Ngày nay BNB làm ba việc lớn: nó trả phí giao dịch trên BNB Chain, nó được các validator stake để bảo vệ mạng lưới, và nó vẫn mở khóa các khoản giảm phí và đặc quyền trên sàn Binance. Nó luôn nằm trong nhóm các đồng tiền mã hóa lớn nhất theo giá trị thị trường — nhưng hãy hiểu ngay từ đầu rằng vận mệnh của nó gắn liền một cách bất thường với một công ty tư nhân duy nhất, Binance."
+  ],
+  "howItWorks": {
+   "paragraphs": [
+    "Mạng chính của BNB Chain, BNB Smart Chain (BSC), tương thích EVM — nghĩa là nó chạy cùng loại smart contract như Ethereum, nên các nhà phát triển có thể chép ứng dụng Ethereum sang mà gần như không cần chỉnh sửa. Đánh đổi mà Binance đã chọn là tốc độ và chi phí thấp thay vì tính phi tập trung: thay vì hàng nghìn validator, BSC chạy trên một tập validator nhỏ, được tuyển chọn.",
+    "Nó dùng một mô hình đồng thuận gọi là Proof of Staked Authority (PoSA). Một nhóm validator giới hạn (khoảng 45 hoạt động cùng lúc) được chọn phần lớn dựa trên lượng BNB được stake cho họ; họ luân phiên nhau sản xuất block. Điều này giữ cho block nhanh và phí cực nhỏ, nhưng nó cô đặc việc sản xuất block vào tương đối ít bàn tay — một mô hình an ninh rất khác so với Bitcoin hay Ethereum.",
+    "Nguồn cung co lại theo thời gian. Thông qua \"Auto-Burn\" hàng quý và cơ chế đốt phí gas theo thời gian thực, BNB bị tiêu hủy vĩnh viễn theo một lịch trình dựa trên công thức, đưa tổng cung đi xuống dần về mục tiêu cứng 100 triệu token. Càng ít coin theo thời gian là một phần cốt lõi trong lời chào hàng của BNB — dù việc đốt không đảm bảo giá tăng."
+   ],
+   "bullets": [
+    "Cơ chế đồng thuận: Proof of Staked Authority (PoSA) — khoảng 45 validator hoạt động, được chọn chủ yếu theo lượng BNB được stake cho họ",
+    "Tương thích EVM: chạy smart contract kiểu Ethereum, nên ứng dụng và công cụ chuyển sang dễ dàng",
+    "Rất nhanh và rẻ: sau hard fork Fermi tháng 1 năm 2026, thời gian block giảm xuống khoảng 0.45 giây và phí xuống khoảng một cent",
+    "Giảm phát theo thiết kế: Auto-Burn hàng quý + đốt gas mỗi giao dịch giảm nguồn cung về mức trần 100M",
+    "Công dụng của BNB: trả gas, stake để bảo vệ chuỗi, nhận giảm phí Binance, và tham gia quản trị on-chain",
+    "opBNB (một Layer 2 dựa trên Optimism) và BNB Greenfield (lưu trữ phi tập trung) mở rộng hệ sinh thái ra ngoài chuỗi chính"
+   ]
+  },
+  "building": {
+   "paragraphs": [
+    "Tính đến giữa năm 2026, BNB Chain đã công bố lộ trình công nghệ 2026 tái định vị mạng lưới thành một \"chuỗi giao dịch thế hệ mới\" — tối ưu cho DeFi tần suất cao và giao dịch thay vì ôm đồm mọi thứ. Điều này nối tiếp một năm 2025 mà chuỗi vận hành không có phút downtime nào trong khi xử lý tải kỷ lục.",
+    "Các mục tiêu chủ đạo rất tham vọng: khoảng 20,000 giao dịch mỗi giây trong khi đẩy độ chung cuộc sâu hơn vào vùng dưới một giây (hiện khoảng 1.1 giây) và giữ phí gần một cent. Để đạt được điều đó cần thực thi giao dịch song song, đại tu lưu trữ và cơ sở dữ liệu, và chiến lược hai client — ghép client Geth lâu đời với một client Reth mới dựa trên Rust để lấy hiệu năng thô. Về dài hạn, đội ngũ hé lộ một tham vọng xa (nhắm khoảng năm 2028) tiến gần ~1 triệu TPS với xác nhận gần như tức thì (trường hợp tốt nhất ~150ms).",
+    "Nền móng là một loạt hard fork liên tiếp: Pascal, Lorentz, và Maxwell trong suốt 2025 cắt thời gian block từ khoảng 3 giây xuống còn khoảng 0.75 giây, và fork Fermi tháng 1 năm 2026 hạ tiếp xuống khoảng 0.45 giây (với độ chung cuộc giảm từ ~7.5s xuống ~1.1s). Về cấu trúc, BNB Beacon Chain cũ đã bị khai tử hoàn toàn cuối năm 2024 (fork khai tử cuối cùng hoàn tất đầu tháng 12) trong khuôn khổ \"BNB Chain Fusion\", gộp quản trị và staking vào BSC để đơn giản hóa kiến trúc và cắt giảm rủi ro. Việc đốt nguồn cung cũng tiếp tục: đợt Auto-Burn hàng quý thứ 34 vào tháng 1 năm 2026 đã tiêu hủy ~1.37 triệu BNB (trị giá khoảng $1.27B vào thời điểm đó), để lại tổng cung quanh 136 triệu trên đường về mục tiêu 100M."
+   ],
+   "bullets": [
+    "Lộ trình 2026: mở rộng tới ~20,000 TPS với độ chung cuộc sâu hơn dưới một giây ở mức phí ~$0.01",
+    "Thực thi song song + tái kiến trúc lưu trữ/cơ sở dữ liệu cho thông lượng cao hơn",
+    "Chiến lược hai client: Geth (ổn định) cộng với một client Reth dựa trên Rust (hiệu năng)",
+    "Middleware mới cho nhà phát triển phục vụ tính năng riêng tư và các ứng dụng AI-agent",
+    "Tiếp tục Auto-Burn hàng quý đưa nguồn cung về mức trần cứng 100M (~136M tính đến đầu 2026)",
+    "Tham vọng dài hơi (nhắm ~2028): tiến gần ~1M TPS với xác nhận gần như tức thì (~150ms)"
+   ]
+  },
+  "quickFacts": [
+   [
+    "Ra mắt",
+    "ICO tháng 7 năm 2017; smart chain (BSC) tháng 9 năm 2020"
+   ],
+   [
+    "Nhà sáng lập",
+    "Changpeng Zhao (CZ) & He Yi (Binance)"
+   ],
+   [
+    "Cơ chế đồng thuận",
+    "Proof of Staked Authority (PoSA)"
+   ],
+   [
+    "Mô hình nguồn cung",
+    "Giảm phát; đốt dần về mức trần 100M (~136M tính đến đầu 2026)"
+   ],
+   [
+    "Công dụng token",
+    "Gas, staking validator, giảm phí sàn giao dịch, quản trị"
+   ],
+   [
+    "Thời gian block",
+    "~0.45 giây (sau fork Fermi tháng 1 năm 2026)"
+   ],
+   [
+    "Hệ sinh thái",
+    "BNB Smart Chain, opBNB (L2), BNB Greenfield (lưu trữ)"
+   ]
+  ],
+  "ecosystem": [
+   "PancakeSwap — DEX thống trị trên BNB Chain, một trong những sàn phi tập trung lớn nhất theo khối lượng",
+   "opBNB — một Layer 2 theo OP-Stack của Optimism cho các giao dịch dưới một cent, ~1 giây",
+   "BNB Greenfield — lớp lưu trữ dữ liệu phi tập trung gắn với hệ sinh thái BNB",
+   "Venus, và một chồng DeFi rộng gồm các giao thức cho vay, lợi suất, và stablecoin",
+   "Bản thân sàn Binance — BNB mở khóa giảm phí giao dịch và các đặc quyền Launchpad",
+   "Một cộng đồng memecoin và giao dịch nhỏ lẻ lớn, nhờ phí rẻ và tính tương thích EVM"
+  ],
+  "history": [
+   {
+    "year": "2017",
+    "event": "BNB ra mắt qua ICO (tháng 6–7), bán 100M token và huy động ~$15M dưới dạng ERC-20 trên Ethereum; sàn Binance mở cửa vài ngày sau đó"
+   },
+   {
+    "year": "2019",
+    "event": "Binance Chain (sau này là BNB Beacon Chain) đi vào hoạt động; BNB rời Ethereum sang chuỗi riêng của mình (BEP2)"
+   },
+   {
+    "year": "2020",
+    "event": "Binance Smart Chain ra mắt (tháng 9) — smart contract tương thích EVM biến BNB thành token gas cho cả một hệ sinh thái DeFi đầy đủ"
+   },
+   {
+    "year": "2021",
+    "event": "BNB đạt đỉnh mọi thời đại trong thị trường tăng giá; cơ chế Auto-Burn được giới thiệu để việc đốt token minh bạch và dựa trên công thức"
+   },
+   {
+    "year": "2022",
+    "event": "Đổi thương hiệu thành \"BNB Chain\" (Build and Build) vào tháng 2, hợp nhất thương hiệu Beacon Chain và Smart Chain; tập validator mở rộng từ 21 lên 41"
+   },
+   {
+    "year": "2023",
+    "event": "Binance dàn xếp vụ án hình sự tại Mỹ với $4.3B (tháng 11); CZ nhận tội, nộp phạt cá nhân, và từ chức CEO"
+   },
+   {
+    "year": "2024",
+    "event": "BNB Chain Fusion hoàn tất — BNB Beacon Chain bị khai tử hoàn toàn cuối năm 2024, gộp mọi thứ vào BSC"
+   },
+   {
+    "year": "2025",
+    "event": "Các hard fork Pascal, Lorentz, và Maxwell cắt thời gian block từ ~3s xuống ~0.75s; một năm lưu lượng kỷ lục với không phút downtime nào"
+   },
+   {
+    "year": "2026",
+    "event": "Fork Fermi (tháng 1) hạ thời gian block xuống ~0.45s; đợt Auto-Burn thứ 34 loại bỏ ~1.37M BNB (~$1.27B); lộ trình 2026 nhắm ~20,000 TPS với tư cách một \"chuỗi giao dịch\""
+   }
+  ],
+  "risks": [
+   "Tập trung hóa là lời chỉ trích cốt lõi. PoSA chạy trên một tập validator nhỏ, được tuyển chọn (khoảng 45 hoạt động) và BNB Chain luôn gắn bó chặt chẽ với Binance — điều này mang lại tốc độ và phí thấp nhưng nhượng bộ khả năng chống kiểm duyệt và tính phi tập trung mà Bitcoin và Ethereum ưu tiên. Nếu bạn coi trọng việc giảm thiểu niềm tin, đây là một đánh đổi thực sự, không phải một chú thích nhỏ.",
+   "Rủi ro công ty cao bất thường. Giá trị của BNB gắn sâu với sức khỏe và danh tiếng của Binance. Tháng 11 năm 2023 Binance nhận tội và trả khoản dàn xếp $4.3B cho nhà chức trách Mỹ về các vi phạm chống rửa tiền và cấm vận; nhà sáng lập CZ nhận tội cá nhân và từ chức CEO. Áp lực pháp lý và quy định quanh Binance có thể đánh thẳng vào BNB.",
+   "Bất định pháp lý dai dẳng ở nhiều khu vực. SEC của Mỹ đã cáo buộc riêng Binance vi phạm luật chứng khoán, và nhiều cơ quan quản lý đã hạn chế hoặc soi xét hoạt động của họ. Các quy định bó hẹp hoạt động kinh doanh của Binance có thể làm giảm nhu cầu với các tiện ích cốt lõi của BNB.",
+   "Việc đốt token không phải cỗ máy đẩy giá được đảm bảo. Câu chuyện giảm phát rất phổ biến, nhưng giảm nguồn cung không tạo ra giá trị nếu nhu cầu giảm; việc đốt được nuôi bằng hoạt động mạng/sàn giao dịch, thứ có thể co lại khi thị trường đi xuống. Đừng coi \"nguồn cung giảm\" như một lời hứa \"giá sẽ tăng\".",
+   "Lịch sử về an ninh và cầu nối. BNB Chain hứng chịu một vụ khai thác cầu nối cross-chain lớn năm 2022 (hàng trăm triệu đô BNB bị đúc trước khi các validator dừng chuỗi), làm nổi bật cả rủi ro cầu nối lẫn khả năng của một tập validator nhỏ trong việc tạm dừng mạng lưới.",
+   "Cạnh tranh gay gắt. Các L2 của Ethereum, Solana, và các chuỗi nhanh khác đều cạnh tranh giành chính hoạt động DeFi và giao dịch mà BNB Chain đang nhắm tới; nhanh và rẻ không còn là lợi thế độc nhất nữa."
+  ],
+  "howToInvest": [
+   "Đây là giáo dục, không phải lời khuyên tài chính. BNB biến động mạnh và mang mức phơi nhiễm cô đặc vào một công ty duy nhất (Binance) — chỉ cân nhắc số tiền bạn có thể chấp nhận mất, và định cỡ vị thế tương ứng.",
+   "Hiểu rõ bạn đang mua gì trước tiên: một chuỗi nhanh, phí thấp, nhưng tương đối tập trung mà token của nó gắn với hoạt động kinh doanh và vị thế pháp lý của Binance. Nếu những đánh đổi đó khiến bạn khó chịu, đó là một tín hiệu, không phải chi tiết để bỏ qua.",
+   "Nếu mua trên sàn, dùng một sàn uy tín và hoàn thành bước xác minh. Đừng bao giờ để số dư lớn nằm trên bất kỳ sàn nào lâu hơn mức cần thiết — sự sụp đổ và đóng băng của các sàn là chủ đề lặp đi lặp lại trong crypto.",
+   "Để tự lưu ký, chuyển BNB vào một ví bạn kiểm soát. Các ví phần mềm như MetaMask hay Trust Wallet hỗ trợ BNB Smart Chain; với khoản lớn hơn, một ví cứng (Ledger, Trezor) giữ key offline. Ai giữ private key thì người đó giữ coin.",
+   "Viết seed phrase ra giấy và cất offline — đừng bao giờ gõ vào website hay chia sẻ. Cách phổ biến nhất người ta mất crypto là phishing và hỗ trợ giả mạo, không phải hack vào chính chuỗi.",
+   "Nếu muốn stake hay dùng DeFi, hãy bắt đầu thật nhỏ và học cơ chế trên các khoản tiền nhỏ. Kiểm tra kỹ địa chỉ contract, cảnh giác với các token nhái trên BSC, và nhớ rằng sai lầm on-chain là không thể đảo ngược.",
+   "Cân nhắc trung bình giá (dollar-cost averaging) thay vì mua một cục, và đừng đuổi theo các cây nến xanh. Hãy có kế hoạch cho cả kịch bản tăng lẫn giảm trước khi bấm mua."
+  ]
+ },
+ {
+  "slug": "xrp",
+  "category": "Blockchain Layer-1 thanh toán / quyết toán",
+  "tagline": "Một mạng quyết toán nhanh, rẻ, được xây để chuyển tiền xuyên biên giới, gắn bó chặt chẽ với công ty Ripple.",
+  "whatIsIt": [
+   "XRP là token gốc của XRP Ledger (XRPL), một blockchain công khai đi vào hoạt động tháng 6 năm 2012. Nó được thiết kế để quyết toán các khoản thanh toán trong vài giây với chi phí chỉ một phần nhỏ của một cent, nhắm thẳng vào chuyển tiền xuyên biên giới thay vì làm 'vàng kỹ thuật số' hay một nền tảng smart contract đa dụng.",
+   "Công nghệ này được xây dựng bởi David Schwartz, Jed McCaleb, và Arthur Britto, những người muốn có một lựa chọn thay thế nhanh hơn, ít ngốn năng lượng hơn so với việc đào của Bitcoin. Họ sớm có thêm Chris Larsen tham gia, và vào tháng 9 năm 2012 họ thành lập một công ty (đầu tiên là NewCoin, rồi OpenCoin, và từ 2015 được biết đến với tên Ripple) để xây dựng các mảng kinh doanh xoay quanh sổ cái này.",
+   "Toàn bộ 100 tỷ XRP được tạo ra một lần duy nhất khi ra mắt — không có đào coin. Các nhà sáng lập và công ty giữ lại đại đa số: khoảng 80 tỷ về tay công ty và phần còn lại về các nhà sáng lập. Việc phân bổ nội bộ nặng nề đó là trung tâm của cả cách XRP được tài trợ lẫn những chỉ trích nó thu hút.",
+   "Điều quan trọng là phải tách bạch hai thứ mọi người thường gộp chung khi nói 'XRP.' XRP Ledger là một mạng lưới mở, phi tập trung được vận hành bởi các validator độc lập trên toàn thế giới; Ripple là một công ty tư nhân vì lợi nhuận dùng XRP và sổ cái để bán các sản phẩm thanh toán và thanh khoản cho ngân hàng và các công ty fintech. Ripple là một tay chơi lớn trên sổ cái nhưng không 'sở hữu' nó."
+  ],
+  "howItWorks": {
+   "paragraphs": [
+    "XRP không dùng đào proof-of-work kiểu Bitcoin hay proof-of-stake kiểu Ethereum. Thay vào đó nó chạy XRP Ledger Consensus Protocol: một tập các máy chủ độc lập gọi là validator liên tục đối chiếu với nhau xem những giao dịch nào hợp lệ và theo thứ tự nào. Khi một siêu đa số mạnh (khoảng 80% số validator mà một node tin tưởng) đồng ý, một phiên bản sổ cái mới được xác nhận — khoảng mỗi 3-5 giây.",
+    "Mô hình niềm tin là phần khác thường. Mỗi validator tuân theo một Unique Node List (UNL) — một danh sách được tuyển chọn gồm các validator khác mà nó chọn tin tưởng sẽ hành xử trung thực. Điều này khiến mạng nhanh và tiết kiệm năng lượng, nhưng cũng có nghĩa là thành phần của những danh sách tin cậy đó rất quan trọng, và đó chính là nơi các cuộc tranh luận về phi tập trung tập trung vào.",
+    "Vì không có đào coin, phí giao dịch không được trả cho thợ đào hay người stake — thay vào đó một khoản phí cực nhỏ bị tiêu hủy (đốt) trên mỗi giao dịch. Điều này từ từ và vĩnh viễn giảm nguồn cung XRP và giúp ngăn spam. Sổ cái cũng có các tính năng gốc vượt ra ngoài việc gửi tiền đơn thuần, bao gồm một sàn phi tập trung tích hợp sẵn và, gần đây hơn, các nền tảng token hóa và cho vay."
+   ],
+   "bullets": [
+    "Đồng thuận trong 3-5 giây với phí chỉ một phần nhỏ của một cent, và không có việc đào ngốn năng lượng",
+    "Sự an toàn đến từ sự đồng ý của các validator (siêu đa số ~80%) thay vì sức mạnh băm thô hay vốn được stake",
+    "Mỗi node tin tưởng một Unique Node List (UNL) gồm các validator mà nó tin là trung thực và độc lập",
+    "Phí giao dịch bị đốt, không được trả ra — nguồn cung co nhẹ theo thời gian (chỉ khoảng 14M XRP bị đốt kể từ 2012, một phần rất nhỏ của nguồn cung)",
+    "Một sàn phi tập trung, escrow, và các tính năng phát hành tài sản được tích hợp thẳng vào sổ cái nền"
+   ]
+  },
+  "building": {
+   "paragraphs": [
+    "Tính đến giữa năm 2026, Ripple và cộng đồng XRPL đang đẩy sổ cái từ một đường ray thanh toán thuần túy sang một nền tảng DeFi và token hóa cấp tổ chức. Đầu năm 2026, Ripple công bố một lộ trình xoay quanh cho vay gốc on-chain, khả năng lập trình tốt hơn, các tính năng riêng tư, và khả năng tương tác cross-chain dùng công nghệ zero-knowledge.",
+    "Nỗ lực chủ đạo là một giao thức cho vay DeFi gốc (bản sửa đổi XLS-66), được thiết kế để XRP và các tài sản token hóa có thể sinh lợi suất ngay trên sổ cái — một nỗ lực biến XRP từ một tài sản cầu nối thuần túy thành thứ mà các tổ chức có thể nắm giữ và đưa vào hoạt động. Tính đến giữa 2026 nó đang trong quá trình bỏ phiếu của validator và thử nghiệm trên devnet, nhưng CHƯA đạt siêu đa số validator ~80% cần thiết để kích hoạt trên mainnet. Nó đứng cạnh sidechain XRPL tương thích EVM (trên mainnet từ 30 tháng 6 năm 2025), mang smart contract kiểu Ethereum, dùng XRP làm gas, và kết nối với các chuỗi khác qua Axelar.",
+    "Hai hướng khác nổi bật. Stablecoin đô-la RLUSD của Ripple đã tăng trưởng nhanh, và vào giữa 2026 phần lớn nguồn cung của nó (khoảng $800M, nhiều hơn lượng nằm trên Ethereum) đã chuyển lên XRP Ledger — làm sâu thêm thanh khoản on-chain. Và Ripple công bố một lộ trình an ninh hậu lượng tử bốn giai đoạn, nhắm tới sự sẵn sàng kháng lượng tử đầy đủ vào năm 2028, với thử nghiệm chữ ký lai trên Devnet dự kiến vào nửa cuối năm 2026."
+   ],
+   "bullets": [
+    "Giao thức cho vay gốc on-chain (XLS-66) để XRP và các RWA sinh lợi suất cho các tổ chức — đang trong quá trình bỏ phiếu validator tính đến giữa 2026, chưa kích hoạt",
+    "Phát triển sidechain XRPL EVM (hoạt động từ tháng 6 năm 2025) cho smart contract và DeFi cross-chain, với XRP làm gas",
+    "Mở rộng tài sản thực token hóa trên XRPL — theo báo cáo khoảng $4 tỷ tính đến giữa 2026 và đang tăng",
+    "Làm sâu thanh khoản stablecoin RLUSD, nay với phần lớn nguồn cung (~$800M) nằm trên XRPL",
+    "Một lộ trình mật mã hậu lượng tử bốn giai đoạn theo từng bước nhắm sự sẵn sàng đầy đủ vào 2028",
+    "Bảo trì ổn định/an ninh liên tục sau các cuộc kiểm toán độc lập năm 2026 bao phủ NFT, Vaults, và phần code cho vay mới"
+   ]
+  },
+  "quickFacts": [
+   [
+    "Ra mắt",
+    "Tháng 6 năm 2012 (khởi nguyên XRP Ledger)"
+   ],
+   [
+    "Người xây dựng",
+    "David Schwartz, Jed McCaleb, Arthur Britto; Chris Larsen đồng sáng lập Ripple"
+   ],
+   [
+    "Công ty",
+    "Ripple (trước đây là OpenCoin), San Francisco"
+   ],
+   [
+    "Cơ chế đồng thuận",
+    "XRP Ledger Consensus Protocol (đồng thuận validator, không đào)"
+   ],
+   [
+    "Nguồn cung tối đa",
+    "100 tỷ, toàn bộ được tạo trước khi ra mắt (mức trần cố định)"
+   ],
+   [
+    "Nguồn cung lưu hành",
+    "~58-59 tỷ (phần lớn số còn lại nằm trong escrow của Ripple)"
+   ],
+   [
+    "Escrow",
+    "Tối đa 1B XRP được mở khóa mỗi tháng; phần lớn thường được khóa lại"
+   ],
+   [
+    "Công dụng token",
+    "Thanh toán, thanh khoản quyết toán/cầu nối, giao dịch DEX, gas trên XRPL EVM, phí (bị đốt)"
+   ],
+   [
+    "Thời gian block",
+    "~3-5 giây mỗi sổ cái"
+   ]
+  ],
+  "ecosystem": [
+   "Thanh toán xuyên biên giới và thanh khoản theo yêu cầu cho ngân hàng, công ty chuyển tiền, và fintech (mảng kinh doanh cốt lõi của Ripple)",
+   "RLUSD — stablecoin bảo chứng bằng USD của Ripple, phát hành trên cả XRPL và Ethereum (phần lớn nguồn cung hiện trên XRPL)",
+   "Sidechain XRPL EVM — smart contract tương thích Ethereum dùng XRP làm gas, kết nối qua Axelar",
+   "Sàn phi tập trung (DEX) và Automated Market Maker tích hợp sẵn trên sổ cái nền",
+   "Tài sản thực token hóa (trái phiếu kho bạc, quỹ, hàng hóa) phát hành trên XRPL",
+   "Các quỹ ETF XRP giao ngay trên các sàn Mỹ (đầu tiên ra mắt tháng 11 năm 2025), mang lại sự tiếp cận thị trường được quản lý",
+   "Được hỗ trợ rộng rãi bởi các sàn lớn và các ví lưu ký/tự lưu ký"
+  ],
+  "history": [
+   {
+    "year": "2011",
+    "event": "David Schwartz, Jed McCaleb, và Arthur Britto bắt đầu xây dựng một sổ cái nhanh hơn, không cần đào, lấy cảm hứng từ Bitcoin"
+   },
+   {
+    "year": "2012",
+    "event": "XRP Ledger đi vào hoạt động (tháng 6); 100B XRP được tạo trước; công ty được thành lập (NewCoin → OpenCoin) với sự tham gia của Chris Larsen"
+   },
+   {
+    "year": "2013-2014",
+    "event": "Jed McCaleb rời đi để lập Stellar, một mạng thanh toán đối thủ"
+   },
+   {
+    "year": "2015",
+    "event": "OpenCoin đổi tên thành Ripple; công ty tập trung bán các sản phẩm thanh toán và thanh khoản cho các định chế tài chính"
+   },
+   {
+    "year": "2017",
+    "event": "Ripple khóa 55B XRP vào escrow mật mã, giải phóng tối đa 1B mỗi tháng để tăng tính dự đoán được của nguồn cung"
+   },
+   {
+    "year": "2020",
+    "event": "SEC kiện Ripple, Chris Larsen, và CEO Brad Garlinghouse, cáo buộc XRP được bán như một chứng khoán chưa đăng ký"
+   },
+   {
+    "year": "2023",
+    "event": "Tòa phán quyết các đợt bán XRP tự động trên sàn không phải chứng khoán; các đợt bán cho tổ chức bị coi là chào bán chưa đăng ký; các cáo buộc với các lãnh đạo được rút"
+   },
+   {
+    "year": "2025",
+    "event": "Ripple và SEC rút kháng cáo (tháng 8); khoản phạt $125M của Ripple giữ nguyên. Sidechain XRPL EVM ra mắt (tháng 6); quỹ ETF XRP giao ngay đầu tiên của Mỹ đi vào hoạt động (tháng 11)"
+   },
+   {
+    "year": "2026",
+    "event": "Ripple thúc đẩy lộ trình DeFi tổ chức (giao thức cho vay gốc XLS-66 bước vào bỏ phiếu validator), một kế hoạch hậu lượng tử bốn giai đoạn, và phần lớn nguồn cung RLUSD chuyển lên XRPL"
+   }
+  ],
+  "risks": [
+   "Lo ngại về tập trung và tập trung hóa: một phần lớn XRP nằm trong escrow của Ripple, và các quyết định khóa lại hàng tháng của công ty thực chất ảnh hưởng đến lượng cung mới ra thị trường — giới phê bình gọi đây giống một lượng lưu hành do doanh nghiệp kiểm soát hơn là một tài sản phi tập trung hoàn toàn.",
+   "Mô hình niềm tin validator: vì các node dựa vào các Unique Node List được tuyển chọn, những người hoài nghi đặt câu hỏi mạng lưới thực sự phi tập trung đến đâu so với Bitcoin/Ethereum. Ripple phản bác, chỉ ra rằng họ chỉ vận hành một thiểu số validator, nhưng đây vẫn là cuộc tranh luận đang diễn ra.",
+   "Áp lực từ escrow: dù phần lớn XRP được mở khóa lại bị khóa tiếp, các đợt giải phóng đều đặn hàng tháng và việc bán OTC của Ripple là nguồn áp lực bán được cảm nhận (hoặc có thật) lặp đi lặp lại, và thời điểm kết thúc escrow là không chắc chắn.",
+   "Dư âm pháp lý: vụ kiện SEC 2020-2025 kết thúc với việc Ripple trả khoản phạt $125M và hai bên rút kháng cáo, nhưng phán quyết mang nhiều sắc thái (bán tự động không phải chứng khoán, bán cho tổ chức bị coi là chào bán chưa đăng ký). Sự rõ ràng pháp lý đã cải thiện nhưng không tuyệt đối, và quy định khác nhau theo khu vực pháp lý.",
+   "Khoảng cách giữa tiện ích và giá: rất nhiều giá trị của XRP dựa trên sự chấp nhận trong tương lai của các tổ chức đối với đường ray thanh toán của Ripple, RLUSD, và DeFi trên XRPL. Nếu sự chấp nhận đó không đạt kỳ vọng, giá có thể tách rời khỏi mức sử dụng on-chain thực tế. Lưu ý rằng một số tính năng mới hơn (như giao thức cho vay XLS-66) mới ở dạng đề xuất hoặc đang bỏ phiếu, chưa hoạt động.",
+   "Cạnh tranh: stablecoin, Stellar, hiện đại hóa SWIFT, các L1 khác, và ngay cả RLUSD của chính Ripple đều có thể chuyển giá trị mà không nhất thiết cần đến token XRP làm tài sản cầu nối.",
+   "Rủi ro vùng biên công nghệ: các tính năng mới hơn (cho vay, vault, token hóa, sidechain EVM) là code còn non trẻ và đã cần các bản vá lỗi sau kiểm toán — bề mặt mới nghĩa là rủi ro mới. Máy tính lượng tử là mối đe dọa dài hạn mà Ripple mới chỉ bắt đầu giải quyết."
+  ],
+  "howToInvest": [
+   "Giáo dục trước tiên, không phải lời khuyên tài chính: hãy hiểu rằng XRP biến động mạnh và phần lớn luận điểm của nó phụ thuộc vào sự chấp nhận có thể xảy ra hoặc không. Chỉ cân nhắc số tiền bạn có thể chấp nhận mất, và định cỡ vị thế tương ứng.",
+   "Tách bạch token với công ty: bạn có thể mua XRP mà không có bất kỳ sự tiếp xúc nào với cổ phần của Ripple, và thành công kinh doanh của Ripple không đảm bảo giá XRP tăng. Hãy biết rõ bạn thực sự sở hữu cái gì.",
+   "Nếu mua trên sàn, dùng một sàn uy tín, được quản lý, bật xác thực hai yếu tố mạnh (ứng dụng authenticator, không phải SMS), và cảnh giác với các trò lừa 'giveaway'/airdrop — XRP là một trong những thương hiệu bị giả mạo nhiều nhất trong crypto.",
+   "Để tự lưu ký, chuyển XRP vào một ví mà bạn kiểm soát key. Ví cứng (ví dụ Ledger, Trezor) là lựa chọn an toàn nhất; các ví phần mềm như Xaman (trước đây là Xumm) là ví gốc của XRPL. Lưu ý các tài khoản XRP cần một khoản dự trữ nhỏ XRP để duy trì kích hoạt.",
+   "Bảo vệ cụm từ khôi phục bí mật như tiền mặt: đừng bao giờ gõ nó vào website, đừng bao giờ chia sẻ, và cẩn thận với các lỗi 'destination tag' khi gửi lên sàn — thiếu tag có thể làm mất tiền.",
+   "Cân nhắc liệu một quỹ ETF XRP giao ngay được quản lý (có trên các sàn Mỹ từ cuối 2025) có phù hợp với hoàn cảnh của bạn hơn việc nắm token trực tiếp — nó giao dịch trong tài khoản chứng khoán và loại bỏ trách nhiệm tự lưu ký, đổi lại là phí và không thể sử dụng on-chain.",
+   "Tự nghiên cứu từ các nguồn gốc (xrpl.org, tài liệu chính thức của Ripple) và kiểm chứng chéo các tuyên bố; bỏ qua các cơn sốt mục tiêu giá và những influencer hứa hẹn lợi nhuận đảm bảo. Không có thứ đó đâu."
+  ]
+ },
+ {
+  "slug": "xlm",
+  "category": "Blockchain Layer-1 (thanh toán & phát hành tài sản)",
+  "tagline": "Một mạng thanh toán mở được xây để chuyển tiền và phát hành tài sản giá rẻ xuyên biên giới, được vận hành bởi một tổ chức phi lợi nhuận.",
+  "whatIsIt": [
+   "Stellar là một blockchain công khai, mã nguồn mở được thiết kế cho một công việc cốt lõi: di chuyển giá trị — đô-la, euro, stablecoin, tài sản token hóa — nhanh chóng và rẻ giữa con người và các tổ chức. Token gốc của nó là lumen (XLM). Khác với một chuỗi đa dụng tự quảng bá bằng khả năng chạy mọi ứng dụng, Stellar được xây dựng chuyên biệt quanh thanh toán, chuyển đổi tiền tệ, và phát hành tài sản.",
+   "Nó ra mắt ngày 31 tháng 7 năm 2014, được tạo bởi Jed McCaleb (người trước đó đồng sáng lập Ripple và, trước cả đó, xây dựng sàn Mt. Gox) cùng với Joyce Kim. Nó được quản lý bởi Stellar Development Foundation (SDF), một tổ chức phi lợi nhuận đặt tại Mỹ nhận khoản vay ban đầu $3 triệu từ Stripe. Định vị phi lợi nhuận là trung tâm trong lời chào hàng của Stellar: nó tự đặt mình là hạ tầng tài chính công cộng thay vì một công ty chạy theo lợi nhuận.",
+   "Mạng lưới khởi đầu như một fork của giao thức Ripple, nhưng sau một sự cố đồng thuận thời kỳ đầu, nó chuyển sang thiết kế riêng vào năm 2015, Stellar Consensus Protocol (do David Mazières của Stanford thiết kế). Sứ mệnh được tuyên bố vẫn nhất quán: mở rộng khả năng tiếp cận các dịch vụ tài chính chi phí thấp, đặc biệt cho thanh toán xuyên biên giới và kiều hối, nơi phí và độ trễ gây thiệt hại nặng nhất.",
+   "Trong thực tế, Stellar ngày nay được hiểu đúng nhất là một đường ray quyết toán cho stablecoin và tài sản thực token hóa. Phần lớn hoạt động có ý nghĩa trên nó không phải là giao dịch XLM — mà là USDC, PYUSD của PayPal, và các quỹ token hóa di chuyển giữa các ví và các điểm rút tiền."
+  ],
+  "howItWorks": {
+   "paragraphs": [
+    "Stellar không dùng đào coin (proof-of-work) hay staking (proof-of-stake). Nó chạy Stellar Consensus Protocol (SCP), một dạng Federated Byzantine Agreement. Nói đơn giản: mỗi validator chọn một tập các thành viên khác mà nó tin tưởng ('quorum slice' của nó). Sự đồng thuận nảy sinh từ việc những vòng tròn tin cậy chồng lấn này thống nhất về sổ cái, thay vì từ việc ai đốt nhiều điện nhất hay stake nhiều coin nhất.",
+    "Điểm cộng là tốc độ và mức tiêu thụ năng lượng gần như bằng không — một sổ cái mới đóng lại trong khoảng 5 giây và phí chỉ là một phần cực nhỏ của một cent. Đánh đổi là sự an toàn phụ thuộc vào cách các validator chọn tin ai, và trong thực tế một tập tương đối nhỏ các validator được vận hành tốt (bao gồm của SDF) gánh phần lớn mạng lưới. Đó là một căng thẳng thiết kế có thật, không chỉ là một luận điểm nói cho vui.",
+    "Bản thân XLM đóng vai trò hỗ trợ chứ không phải ngôi sao chính. Nó trả các khoản phí giao dịch cực nhỏ, đóng vai trò tài sản cầu nối khi chuyển đổi giữa các loại tiền tệ, và thực thi một số dư tối thiểu nhỏ (vài XLM) trên mỗi tài khoản để ngăn spam và phình dữ liệu. Stellar cũng có một sàn phi tập trung tích hợp sẵn và tính năng phát hành tài sản gốc, nên bất kỳ ai cũng có thể tạo một token hay stablecoin trực tiếp trên giao thức mà không cần triển khai contract."
+   ],
+   "bullets": [
+    "Cơ chế đồng thuận: Stellar Consensus Protocol (SCP) — Federated Byzantine Agreement, không đào coin hay staking",
+    "Tốc độ & chi phí: sổ cái đóng trong ~5 giây; phí là một phần cực nhỏ của một cent",
+    "Năng lượng: không đáng kể so với các chuỗi proof-of-work",
+    "Tính năng tích hợp: sàn phi tập trung gốc, path payments (tự động chuyển đổi tiền tệ), và phát hành tài sản/stablecoin chỉ với một cú nhấp",
+    "Vai trò của XLM: trả phí, cầu nối giữa các loại tiền tệ, và nạp khoản số dư tối thiểu chống spam trên mỗi tài khoản",
+    "Smart contract: Soroban, một nền tảng contract Rust/WebAssembly (hoạt động trên mainnet từ tháng 2 năm 2024), được bổ sung để hỗ trợ DeFi và token hóa"
+   ]
+  },
+  "building": {
+   "paragraphs": [
+    "Định hướng hiện tại của Stellar bị chi phối bởi hai hướng: mở rộng lớp nền và hoàn thiện nền tảng smart contract Soroban của nó. Mục tiêu mở rộng chủ đạo của SDF, được đóng khung là 'con đường tới 5000 TPS', đang đẩy thông lượng của Stellar Core lên đáng kể thông qua xử lý đồng thời, caching, và biên dịch trước (ahead-of-time) các contract Soroban, đồng thời cắt thời gian đóng sổ cái xuống còn ~2.5 giây.",
+    "Điều này được thực hiện qua một nhịp độ nâng cấp giao thức đều đặn. Các phiên bản gần đây mang lại thực thi smart contract đa luồng và caching để nâng thông lượng. Tính đến đầu tháng 7 năm 2026, Protocol 27 — tên mã 'Zipper' — đang được đưa ra bỏ phiếu validator mainnet quanh ngày 8 tháng 7 năm 2026; các tính năng chủ đạo của nó là ủy quyền xác thực gốc và smart account (cho phép một tài khoản ủy quyền cho tài khoản khác ký thay, mở khóa khôi phục qua mạng xã hội và multisig mô-đun) cộng với một bản vá an ninh cho lỗ hổng phát lại chữ ký trên Soroban. Song song đó, quỹ đang ra mắt các contract token chuẩn hóa (cho token thông thường, NFT, token chứng khoán, và tài sản thực) và các công cụ nhà phát triển tốt hơn như RPC được nâng cấp và một 'Lab' phong phú hơn để mô phỏng và gỡ lỗi giao dịch.",
+    "Nước cờ chiến lược rất rõ ràng: trở thành lớp quyết toán mặc định cho các stablecoin được quản lý và tài sản truyền thống token hóa. Vốn đầu tư đang đổ vào smart wallet (khôi phục key bằng passkey và đăng nhập mạng xã hội trong ví Freighter), Stellar Disbursement Platform cho chi trả doanh nghiệp, và hạ tầng oracle để DeFi có thể định giá tài sản on-chain."
+   ],
+   "bullets": [
+    "Mở rộng Stellar Core hướng tới ~5,000 TPS và đóng sổ cái nhanh hơn (~2.5s)",
+    "Protocol 27 ('Zipper') được đưa ra bỏ phiếu validator mainnet quanh ngày 8 tháng 7 năm 2026 — ủy quyền xác thực gốc, smart account/khôi phục qua mạng xã hội, và bản vá tấn công phát lại trên Soroban",
+    "Hoàn thiện Soroban: thực thi đa luồng, các contract token chuẩn hóa (token thông thường, NFT, RWA, token chứng khoán)",
+    "Smart wallet với passkey/khôi phục qua mạng xã hội và bảo mật lũy tiến trong ví Freighter",
+    "Đường ray doanh nghiệp: Stellar Disbursement Platform và ví dùng-một-lần cho người dùng ngoài crypto",
+    "Củng cố vai trò lớp quyết toán cho stablecoin + tài sản thực token hóa"
+   ]
+  },
+  "quickFacts": [
+   [
+    "Ra mắt",
+    "31 tháng 7 năm 2014"
+   ],
+   [
+    "Nhà sáng lập",
+    "Jed McCaleb & Joyce Kim; được quản lý bởi tổ chức phi lợi nhuận Stellar Development Foundation"
+   ],
+   [
+    "Cơ chế đồng thuận",
+    "Stellar Consensus Protocol (SCP) — Federated Byzantine Agreement"
+   ],
+   [
+    "Mô hình nguồn cung",
+    "Tổng ~50 tỷ XLM; mức lạm phát 1%/năm đã chấm dứt và ~55B lumen bị đốt năm 2019; không có lumen mới được tạo"
+   ],
+   [
+    "Công dụng token",
+    "Phí, thanh toán cầu nối/path payments, số dư tối thiểu mỗi tài khoản"
+   ],
+   [
+    "Tốc độ / phí",
+    "Đóng sổ cái ~5 giây; phí là một phần cực nhỏ của một cent"
+   ],
+   [
+    "Smart contract",
+    "Soroban (Rust / WebAssembly), hoạt động trên mainnet từ tháng 2 năm 2024"
+   ]
+  ],
+  "ecosystem": [
+   "USDC của Circle — một stablecoin gốc lớn trên Stellar, với CCTP V2 của Circle cho phép USDC di chuyển sang các chuỗi khác mà không cần wrap",
+   "PayPal USD (PYUSD) — stablecoin của PayPal đã hoạt động trên Stellar, đưa nó đến một lượng người dùng đại chúng lớn",
+   "MoneyGram — các điểm nạp/rút tiền mặt-sang-crypto dùng USDC tại hàng trăm nghìn địa điểm vật lý; stablecoin riêng MGUSD của họ (phát hành qua Bridge) ra mắt năm 2026",
+   "Franklin Templeton — quỹ thị trường tiền tệ chính phủ Mỹ token hóa của họ (FOBXX / BENJI) chạy trên Stellar, một ca sử dụng tài sản thực tiêu biểu",
+   "EURC và các stablecoin khu vực khác cho quyết toán bằng euro",
+   "Ví Freighter, Stellar DEX, và một hệ sinh thái DeFi/oracle trên Soroban đang lớn dần (ví dụ nguồn cấp giá RedStone)",
+   "Các ca sử dụng cốt lõi: kiều hối xuyên biên giới, quyết toán stablecoin, và token hóa quỹ cùng tài sản thực"
+  ],
+  "history": [
+   {
+    "year": "2014",
+    "event": "Stellar ra mắt (31 tháng 7); Jed McCaleb và Joyce Kim thành lập Stellar Development Foundation, được hậu thuẫn bởi khoản vay $3M từ Stripe. Ban đầu fork giao thức Ripple."
+   },
+   {
+    "year": "2014",
+    "event": "Tháng 12: một cú fork sổ cái ngoài ý muốn phơi bày điểm yếu trong thiết kế đồng thuận vay mượn, có gốc từ Ripple."
+   },
+   {
+    "year": "2015",
+    "event": "Stellar áp dụng Stellar Consensus Protocol (SCP) mới, do David Mazières của Stanford thiết kế, thay thế cơ chế có gốc từ Ripple."
+   },
+   {
+    "year": "2017",
+    "event": "Sự chấp nhận cho thanh toán xuyên biên giới tăng lên; các quan hệ đối tác và thí điểm với các công ty thanh toán và fintech mở rộng."
+   },
+   {
+    "year": "2019",
+    "event": "Các validator bỏ phiếu chấm dứt lạm phát 1%/năm (tháng 10); SDF đốt ~55 tỷ XLM (tháng 11), cắt tổng cung xuống ~50 tỷ."
+   },
+   {
+    "year": "2021",
+    "event": "Franklin Templeton ra mắt một quỹ thị trường tiền tệ chính phủ Mỹ token hóa (FOBXX) trên Stellar — một cột mốc tài sản thực của tổ chức từ rất sớm."
+   },
+   {
+    "year": "2021",
+    "event": "Jed McCaleb rút khỏi các vai trò tích cực; USDC của Circle trở thành tài sản gốc trên mạng lưới."
+   },
+   {
+    "year": "2024",
+    "event": "Smart contract Soroban lên mainnet (Protocol 20, tháng 2); MoneyGram + Circle xây dựng dịch vụ crypto-sang-tiền-mặt toàn cầu trên Stellar."
+   },
+   {
+    "year": "2025",
+    "event": "Cuộc đua mở rộng 'Road to 5000 TPS'; PYUSD của PayPal hoạt động trên Stellar; giá trị tài sản thực trên mạng lưới tăng mạnh."
+   },
+   {
+    "year": "2026",
+    "event": "Circle triển khai CCTP V2 lên Stellar; MoneyGram ra mắt stablecoin MGUSD; Protocol 27 ('Zipper', smart account + ủy quyền xác thực) được đưa ra bỏ phiếu validator mainnet quanh ngày 8 tháng 7."
+   }
+  ],
+  "risks": [
+   "Lo ngại tập trung hóa là lời chỉ trích lớn nhất và dai dẳng nhất. Stellar Development Foundation trong lịch sử đã nắm một phần rất lớn XLM (khoảng một nửa nguồn cung) và vận hành các validator có ảnh hưởng, cho nó tiếng nói quá lớn về hướng đi của mạng lưới — còn xa mới đạt lý tưởng 'không cần tin ai'.",
+   "Các validator không nhận phần thưởng trực tiếp nào từ giao thức. Không có động lực kinh tế để vận hành hạ tầng, tập validator vẫn tương đối nhỏ và cô đặc, làm suy yếu tính phi tập trung thực tế của cơ chế đồng thuận.",
+   "XLM là một token tiện ích, không phải quyền hưởng lợi từ thành công của hệ sinh thái. Ngay cả khi stablecoin và các quỹ token hóa tăng trưởng trên Stellar, phần lớn giá trị đó di chuyển dưới dạng USDC/PYUSD/tài sản token hóa — không phải XLM — nên mức sử dụng thực tế không tự động chuyển thành nhu cầu hay giá của XLM.",
+   "Cạnh tranh khốc liệt. Stellar tranh giành vai trò thanh toán và quyết toán stablecoin với Ripple/XRP (người anh em họ gần), cộng với Ethereum, Solana, Tron, và những cái tên khác cũng đang chiêu mộ các nhà phát hành stablecoin và các tổ chức. Lợi thế của nó không được đảm bảo.",
+   "Sự chấp nhận của tổ chức diễn ra chậm. Luận điểm dựa vào việc ngân hàng và doanh nghiệp chuyển lên các đường ray công cộng, điều trong lịch sử diễn ra chậm chạp và có thể đình trệ hoặc chảy sang đối thủ.",
+   "Rủi ro pháp lý. Vận mệnh của nó gắn với stablecoin và chứng khoán token hóa — những lĩnh vực bị quản lý chặt, nơi thay đổi quy định có thể giúp hoặc hại. Cấu trúc phi lợi nhuận cho đến nay đã giúp nó tránh được các cuộc chiến pháp lý về chứng khoán mà Ripple phải đối mặt, nhưng đó không phải sự đảm bảo.",
+   "Biến động giá. Như hầu hết crypto, XLM có thể dao động mạnh và đã trải qua những giai đoạn dài thấp hơn nhiều so với các đỉnh trước; nó không phải nơi lưu trữ giá trị ổn định."
+  ],
+  "howToInvest": [
+   "Giáo dục trước tiên, không phải lời khuyên tài chính. Hãy hiểu rằng XLM là một tài sản crypto biến động mạnh và chỉ cân nhắc số tiền bạn có thể chấp nhận mất toàn bộ. Không điều gì ở đây là khuyến nghị mua.",
+   "Tách bạch công nghệ với token. Mạng lưới Stellar có thể thành công ở việc quyết toán stablecoin trong khi token XLM lại kém hiệu quả — hãy thành thật với chính mình về việc bạn thực sự đang đặt cược vào cái nào và tại sao.",
+   "Nếu mua, dùng một sàn uy tín có niêm yết XLM, hoàn thành bước xác minh, và bắt đầu nhỏ. So sánh phí và xác nhận nền tảng hoạt động hợp pháp trong khu vực pháp lý của bạn.",
+   "Chuyển các khoản nắm giữ đáng kể sang tự lưu ký. Các ví gốc Stellar như Freighter (trình duyệt) hoặc Lobstr cho phép bạn tự giữ key; nhớ rằng mỗi tài khoản Stellar cần một số dư XLM tối thiểu nhỏ để duy trì hoạt động.",
+   "Viết cụm từ khôi phục ra giấy, cất giữ offline, và đừng bao giờ gõ nó vào website hay chia sẻ. Ai có cụm từ đó là kiểm soát tiền — không sàn hay quỹ nào có thể đảo ngược một vụ trộm.",
+   "Gửi một giao dịch thử nhỏ trước khi chuyển XLM sang ví mới, và kiểm tra kỹ rằng bạn không gửi tới một địa chỉ sàn yêu cầu memo/tag (một cách phổ biến khiến người ta mất tiền trên Stellar).",
+   "Với khoản lớn hơn, cân nhắc ví cứng (ví dụ Ledger) để lưu key offline, và hoài nghi với bất kỳ trang 'airdrop', 'staking', hay 'giveaway' nào hỏi seed phrase của bạn — đó đều là lừa đảo."
+  ]
+ },
+ {
+  "slug": "ada",
+  "category": "Blockchain Layer-1 cho smart contract",
+  "tagline": "Một blockchain proof-of-stake phát triển chậm rãi và thận trọng, xây dựng mọi thay đổi lớn dựa trên nghiên cứu học thuật được bình duyệt (peer-review) trước tiên.",
+  "whatIsIt": [
+   "Cardano là một blockchain layer-1 kiêm nền tảng smart contract, và ADA là đồng coin gốc của nó. Nó được tạo ra bởi Charles Hoskinson, một trong tám nhà đồng sáng lập Ethereum, người đã rời Ethereum năm 2014 sau bất đồng về việc Ethereum nên là công ty vì lợi nhuận hay tổ chức phi lợi nhuận. Ông cùng Jeremy Wood vạch ra kế hoạch cho Cardano vào năm 2015 và mạng lưới chính thức hoạt động vào tháng 9 năm 2017.",
+   "Cái tên là một lời tri ân dành cho học thuật: ADA được đặt theo tên Ada Lovelace, nhà toán học thế kỷ 19 thường được gọi là lập trình viên máy tính đầu tiên, còn Cardano được đặt theo tên nhà bác học thời Phục Hưng Gerolamo Cardano. Chính khung học thuật đó là toàn bộ tinh thần của dự án — điểm nhận diện của Cardano là mọi thay đổi giao thức đều được nghiên cứu và bình duyệt trước khi triển khai.",
+   "Ba tổ chức dẫn dắt dự án: Input Output (IOG, trước đây là IOHK), công ty kỹ thuật xây dựng giao thức; Emurgo, nhánh thương mại và đầu tư mạo hiểm; và Cardano Foundation, một tổ chức phi lợi nhuận Thụy Sĩ phụ trách tiêu chuẩn và vận động chính sách. Từ năm 2024, một hệ thống quản trị on-chain đang dần chuyển giao quyền kiểm soát ngân khố (treasury) và các quyết định giao thức cho chính những người nắm giữ ADA.",
+   "Lời chào hàng của dự án là một nền tảng smart contract có khả năng mở rộng, an toàn, tiết kiệm năng lượng cho DeFi, danh tính số và các ứng dụng thực tế, được xây dựng đủ thận trọng để các tổ chức và chính phủ tin tưởng. Sự thận trọng đó là điểm mạnh hay gánh nặng — đây chính là cuộc tranh luận trung tâm xoay quanh ADA."
+  ],
+  "howItWorks": {
+   "paragraphs": [
+    "Cardano chạy trên Ouroboros, một giao thức đồng thuận proof-of-stake. Thay vì các thợ đào đốt điện để cạnh tranh giành block (như Bitcoin), mạng lưới chọn ra một 'slot leader' để tạo mỗi block, và bạn stake càng nhiều ADA thì cơ hội được chọn càng cao. Tính ngẫu nhiên được đưa vào bằng hàm ngẫu nhiên có thể kiểm chứng (verifiable random function) để không ai đoán trước hay thao túng được người dẫn đầu. IOG mô tả Ouroboros là giao thức proof-of-stake đầu tiên được bình duyệt và chứng minh an toàn bằng toán học.",
+    "Thời gian được chia thành các epoch (khoảng 5 ngày) gồm những slot rất ngắn (khoảng 1 giây mỗi slot). Chỉ một phần nhỏ các slot tạo ra block, nên trung bình một block mới xuất hiện khoảng mỗi 20 giây. Bạn không cần chạy node để kiếm thưởng: người nắm giữ ADA 'ủy quyền' (delegate) phần stake của mình cho một stake pool do một nhà vận hành quản lý, và phần thưởng từ các block mà pool đó tạo ra được tự động chia cho những người ủy quyền. ADA của bạn không bao giờ rời khỏi ví và không bị khóa — một sự linh hoạt hiếm có.",
+    "Cardano sử dụng mô hình kế toán 'extended UTXO' (eUTXO) — gần với thiết kế coin-vào, coin-ra của Bitcoin hơn là mô hình số dư tài khoản của Ethereum. Nó cho phép phí giao dịch dễ dự đoán hơn và kiểm chứng hình thức (formal verification), nhưng cũng khiến smart contract khó viết hơn, làm chậm việc thu hút lập trình viên thời kỳ đầu. Smart contract được viết bằng Plutus và Aiken, còn Marlowe nhắm đến các hợp đồng tài chính. Mạng lưới luôn được phát triển theo các giai đoạn có tên riêng: Byron, Shelley, Goguen, Basho và Voltaire."
+   ],
+   "bullets": [
+    "Proof-of-stake Ouroboros bầu người tạo block theo trọng số stake cộng với tính ngẫu nhiên có thể kiểm chứng — không đào coin, tiêu thụ năng lượng rất thấp",
+    "Mỗi epoch kéo dài ~5 ngày và được chia thành các slot ~1 giây; chỉ một phần các slot bầu ra leader, nên trung bình một block được tạo ra khoảng mỗi ~20 giây",
+    "Staking không giam giữ tài sản (non-custodial) và thanh khoản — ủy quyền cho một pool, không khóa coin, và người ủy quyền không bị phạt slashing",
+    "Mô hình Extended UTXO (eUTXO) cho phí dễ dự đoán và kiểm chứng hình thức, nhưng đường cong học tập dốc hơn cho lập trình viên",
+    "Giới hạn 45 tỷ ADA và lịch trả thưởng theo epoch được khắc sẵn vào chính sách tiền tệ"
+   ]
+  },
+  "building": {
+   "paragraphs": [
+    "Tính đến giữa năm 2026, Cardano đang ở sâu trong kỷ nguyên Voltaire (quản trị) và thúc đẩy những nâng cấp mở rộng lớn nhất từ trước đến nay. Quản trị on-chain đi vào hoạt động với hard fork Chang vào tháng 9 năm 2024 và được hoàn thiện bởi hard fork Plomin, có hiệu lực ngày 29 tháng 1 năm 2025, cho phép đầy đủ các Đại diện được Ủy quyền (DReps), các nhà vận hành stake pool và một Ủy ban Hiến pháp bỏ phiếu về thay đổi giao thức và chi tiêu ngân khố. Một bản Hiến pháp Cardano được cộng đồng phê chuẩn giờ là nền tảng cho hệ thống đó.",
+    "Trọng tâm kỹ thuật nổi bật nhất là thông lượng (throughput). Ouroboros Leios — một pipeline đồng thuận được thiết kế lại để xử lý giao dịch song song, hướng tới hơn 1.000 TPS — đã khởi động testnet công khai đầu tiên ('Musashi Dojo') vào ngày 23 tháng 6 năm 2026, với mục tiêu ra mắt mainnet vào cuối năm. Song song đó, các 'head' layer-2 Hydra hướng tới việc đẩy các giao dịch siêu nhỏ ra khỏi chain chính cho gaming và thanh toán với chi phí rất thấp. Lưu ý rằng các con số TPS bắt mắt đến từ testnet và demo, không phải thông lượng mainnet duy trì liên tục.",
+    "Về quyền riêng tư và thanh toán, Midnight — một sidechain tập trung vào quyền riêng tư sử dụng 'rational privacy' với cơ chế tiết lộ có chọn lọc — đã lên mainnet ngày 30 tháng 3 năm 2026, dù nó ra mắt trong một 'kỷ nguyên bảo hộ' (guarded era) liên hợp với các nhà vận hành node bao gồm Google Cloud thay vì phi tập trung hoàn toàn. Một thẻ chi tiêu mang thương hiệu Cardano (ảo và vật lý, qua Apple/Google Pay) cũng được đề xuất cho cuối năm 2026. Đây là các mục tiêu roadmap, không phải cam kết; Cardano có lịch sử lâu dài về việc trễ hẹn."
+   ],
+   "bullets": [
+    "Ouroboros Leios: nâng cấp mở rộng theo pipeline song song hướng tới hơn 1.000 TPS, testnet công khai đầu tiên ('Musashi Dojo') hoạt động từ tháng 6/2026, mainnet dự kiến cuối năm",
+    "Hydra: các 'head' layer-2 mở rộng cho giao dịch siêu nhỏ, rẻ, gần như tức thì (gaming, streaming, thanh toán)",
+    "Midnight: sidechain quyền riêng tư (mainnet tháng 3/2026, hiện đang trong 'guarded era' liên hợp) với 'rational privacy' tiết lộ có chọn lọc và mô hình token NIGHT/DUST",
+    "Quản trị Voltaire đã hoạt động và đang trưởng thành: DReps, bỏ phiếu ngân khố on-chain và một bản Hiến pháp được phê chuẩn",
+    "Thẻ chi tiêu Cardano và các tích hợp thanh toán thực tế rộng hơn được đề xuất cho cuối năm 2026"
+   ]
+  },
+  "quickFacts": [
+   [
+    "Ra mắt",
+    "Tháng 9/2017 (mainnet)"
+   ],
+   [
+    "Nhà sáng lập",
+    "Charles Hoskinson & Jeremy Wood"
+   ],
+   [
+    "Phát triển bởi",
+    "Input Output (IOG), Emurgo, Cardano Foundation"
+   ],
+   [
+    "Cơ chế đồng thuận",
+    "Proof-of-stake Ouroboros"
+   ],
+   [
+    "Nguồn cung tối đa",
+    "45 tỷ ADA (giới hạn cứng)"
+   ],
+   [
+    "Phát hành ban đầu",
+    "~31,1 tỷ lúc ra mắt; ~13,9 tỷ dự trữ được giải phóng làm phần thưởng staking"
+   ],
+   [
+    "Công dụng token",
+    "Phí, staking, bỏ phiếu quản trị, ngân khố"
+   ],
+   [
+    "ICO",
+    "2015–2017, huy động ~$62M, phần lớn từ người mua châu Á (chủ yếu Nhật Bản)"
+   ],
+   [
+    "Mô hình kế toán",
+    "Extended UTXO (eUTXO)"
+   ]
+  ],
+  "ecosystem": [
+   "DEX: Minswap và WingRiders để hoán đổi ADA và các token gốc",
+   "Cho vay DeFi: Liqwid Finance và Lenfi cho vay/mượn on-chain",
+   "Djed: stablecoin thế chấp vượt mức, được kiểm chứng hình thức, bảo chứng bằng ADA và SHEN",
+   "Ví: Lace (ví nhẹ của IOG), Daedalus (full-node), cùng Eternl và Vespr",
+   "Staking: hàng trăm stake pool do cộng đồng vận hành; việc ủy quyền không giam giữ tài sản",
+   "Quản trị: Intersect, DReps và Ủy ban Hiến pháp vận hành việc ra quyết định on-chain",
+   "Token gốc và NFT được phát hành trực tiếp trên lớp cơ sở (không cần smart contract để mint)",
+   "Các thí điểm thực tế / danh tính số, bao gồm các dự án giáo dục và định danh trước đây tại các thị trường châu Phi"
+  ],
+  "history": [
+   {
+    "year": "2014",
+    "event": "Charles Hoskinson rời Ethereum sau tranh cãi về hướng đi vì lợi nhuận hay phi lợi nhuận của dự án"
+   },
+   {
+    "year": "2015",
+    "event": "Hoskinson và Jeremy Wood thành lập IOHK và bắt đầu thiết kế Cardano; đợt mở bán ADA công khai bắt đầu"
+   },
+   {
+    "year": "2016",
+    "event": "Cardano Foundation được thành lập như một tổ chức phi lợi nhuận Thụy Sĩ"
+   },
+   {
+    "year": "2017",
+    "event": "ICO kết thúc (huy động ~$62M); mainnet Cardano ra mắt vào tháng 9 (kỷ nguyên Byron)"
+   },
+   {
+    "year": "2020",
+    "event": "Hard fork Shelley mang staking và phi tập trung hóa đến với người nắm giữ ADA"
+   },
+   {
+    "year": "2021",
+    "event": "Nâng cấp Alonzo/Goguen bổ sung smart contract Plutus; ADA đạt đỉnh lịch sử (~$3.10, tháng 9/2021)"
+   },
+   {
+    "year": "2022",
+    "event": "Kỷ nguyên mở rộng Basho; hard fork Vasil cải thiện thông lượng (stablecoin Djed ra mắt tiếp theo vào 2023)"
+   },
+   {
+    "year": "2024",
+    "event": "Hard fork Chang mở màn kỷ nguyên Voltaire, khởi động quản trị on-chain và DReps"
+   },
+   {
+    "year": "2025",
+    "event": "Hard fork Plomin hoàn tất việc triển khai quản trị (có hiệu lực tháng 1/2025); cộng đồng phê chuẩn Hiến pháp Cardano"
+   },
+   {
+    "year": "2026",
+    "event": "Sidechain quyền riêng tư Midnight lên mainnet (tháng 3); nâng cấp mở rộng Ouroboros Leios bắt đầu testnet công khai (tháng 6), trong khi ADA giao dịch gần đáy nhiều năm"
+   }
+  ],
+  "risks": [
+   "Thực thi chậm là lời chỉ trích tiêu biểu nhất. Quy trình nghiên-cứu-trước, bình-duyệt-trước thực sự nghiêm ngặt nhưng liên tục trễ hẹn — smart contract ra mắt muộn nhiều năm so với đối thủ, và các mốc roadmap thường xuyên trượt. 'Cẩn trọng' và 'quá chậm để còn quan trọng' nhìn từ bên ngoài trông giống hệt nhau, và giới phê bình từng gọi nó là một giải pháp luôn ngồi chờ vấn đề.",
+   "Sức hút DeFi yếu. Tổng giá trị bị khóa (TVL) của Cardano lởn vởn ở mức vài trăm triệu đến khoảng một tỷ đô la — chỉ là một phần nhỏ so với Ethereum hay Solana — bất chấp vốn hóa lớn của ADA. Vốn hóa lớn cộng với hoạt động on-chain mỏng là một lá cờ đỏ dai dẳng cho thấy người dùng và thanh khoản chưa theo kịp công nghệ.",
+   "Cạnh tranh khốc liệt. Ethereum có hiệu ứng mạng lưới còn Solana triển khai nhanh với thông lượng cao và các ứng dụng tiêu dùng nóng hổi. Cardano đang giành giật lập trình viên và người dùng trong các mảng (DeFi, NFT) mà nó đến muộn và vẫn là người chơi nhỏ.",
+   "Mô hình eUTXO là con dao hai lưỡi. Nó mang lại tính dự đoán được và kiểm chứng hình thức nhưng khiến hợp đồng khó viết và khó suy luận hơn, nâng cao rào cản cho các lập trình viên đã quen với mô hình của Ethereum.",
+   "Sự tập trung vào nhà sáng lập và các lùm xùm. Charles Hoskinson chiếm vị trí trung tâm bất thường trong hình ảnh công khai của Cardano, và sự hiện diện thường xuyên, hiếu chiến của ông trên mạng xã hội thu hút nhiều chỉ trích. Phụ thuộc nặng vào một gương mặt đại diện là rủi ro quản trị và uy tín, ngay cả khi quản trị on-chain đang cố gắng phi tập trung hóa quyền kiểm soát.",
+   "Các tuyên bố thông lượng lớn (ví dụ các con số 'triệu TPS' của Hydra) đến từ testnet và demo, không phải hiệu năng mainnet duy trì liên tục — hãy hoài nghi với các con số TPS giật tít cho đến khi được chứng minh vận hành thực tế ở quy mô lớn.",
+   "Sự yếu kém về giá là có thật và kéo dài. ADA chưa bao giờ lấy lại đỉnh 2021; giữa năm 2026 nó giao dịch dưới hẳn mốc $0.30 — thấp hơn hơn 90% so với đỉnh đó — và đã chạm đáy nhiều năm trong năm nay. Các rủi ro crypto chung cũng áp dụng: nó biến động mạnh và cách các cơ quan quản lý đối xử với token vẫn chưa ngã ngũ."
+  ],
+  "howToInvest": [
+   "Chỉ mang tính giáo dục — đây không phải lời khuyên tài chính. Crypto biến động mạnh và bạn có thể mất tiền; chỉ bỏ vào số tiền bạn có thể chấp nhận mất, và hiểu rõ thứ mình mua trước khi mua.",
+   "Mua ADA trên một sàn giao dịch uy tín có hỗ trợ nó (hầu hết các sàn lớn đều có). Dùng mật khẩu mạnh, không trùng lặp và bật xác thực hai yếu tố bằng ứng dụng authenticator, không phải SMS.",
+   "Chuyển các khoản đáng kể ra khỏi sàn vào một ví do bạn kiểm soát. Các ví phần mềm gốc Cardano gồm Lace, Eternl và Vespr; Daedalus là ví full-node cho mức phi tập trung tối đa. Với khoản nắm giữ lớn hơn, hãy dùng ví cứng như Ledger kết hợp với một trong các ví trên.",
+   "Viết seed phrase ra giấy và cất giữ ngoại tuyến. Đừng bao giờ gõ nó vào một trang web, chia sẻ nó, hay lưu trong ảnh chụp màn hình hoặc ghi chú đám mây — bất kỳ ai có cụm từ này đều sở hữu ADA của bạn, và không ai có thể đảo ngược một vụ trộm.",
+   "Bạn có thể stake ADA để kiếm thưởng bằng cách ủy quyền cho một stake pool ngay từ ví của mình. Việc ủy quyền không giam giữ tài sản, không khóa coin và không có phạt slashing — ADA luôn nằm trong quyền kiểm soát của bạn. Hãy phân tán ủy quyền cho các pool độc lập nhỏ hơn để hỗ trợ phi tập trung hóa.",
+   "Bỏ ngoài tai các dự đoán giá thổi phồng và 'lợi nhuận đảm bảo'. Hãy đánh giá Cardano bằng các nâng cấp đã triển khai và mức sử dụng thực (TVL, ứng dụng hoạt động), không phải bằng tweet. Cảnh giác với ứng dụng ví giả, lừa đảo airdrop, và bất kỳ ai nhắn tin riêng cho bạn tự xưng là 'hỗ trợ' — đội ngũ chính thức không bao giờ hỏi seed phrase của bạn."
+  ]
+ },
+ {
+  "slug": "doge",
+  "category": "Tiền mã hóa thanh toán Layer-1 (proof-of-work)",
+  "tagline": "Một meme coin từ năm 2013 trở thành một trong những đồng tiền mã hóa được nhận diện nhiều nhất — một chain thanh toán đơn giản, nhanh, được duy trì bởi một cộng đồng khổng lồ và rất nhiều sự chú ý từ Elon Musk.",
+  "whatIsIt": [
+   "Dogecoin là một đồng tiền mã hóa proof-of-work ra mắt ngày 6 tháng 12 năm 2013 bởi hai kỹ sư phần mềm, Billy Markus (khi đó làm ở IBM tại Portland, Oregon) và Jackson Palmer (khi đó làm ở Adobe tại Sydney, Australia). Nó khởi đầu như một trò đùa đúng nghĩa — sự pha trộn giữa Bitcoin và meme chú chó Shiba Inu 'Doge' — được tạo ra để châm biếm cơn đầu cơ điên cuồng trong crypto thời bấy giờ. Trò đùa thành công quá mức, và nó lớn lên thành một đồng coin thật, được giao dịch sôi động.",
+   "Về mặt kỹ thuật, nó là một fork của Luckycoin, mà bản thân Luckycoin lại có gốc từ Litecoin, nên bên dưới lớp vỏ meme, nó là họ hàng gần của công nghệ kiểu Bitcoin. Nó tồn tại để được tiêu: thanh toán nhanh, rẻ, ít rủi ro và tip trên mạng, chứ không phải để làm một nền tảng smart contract phức tạp. Không có ICO và không có pre-mine lớn — coin chỉ từng được sinh ra qua việc đào.",
+   "Không nhà sáng lập nào còn điều hành nó ngày nay. Palmer rời bỏ crypto hoàn toàn vào năm 2015 và trở thành một trong những người chỉ trích nó gay gắt nhất; Markus (vẫn hoạt động trên mạng xã hội với tên 'Shibetoshi Nakamoto') nói rằng ông chỉ nắm giữ một lượng nhỏ và không có quyền kiểm soát chính thức nào. Việc phát triển hiện do các lập trình viên tình nguyện của Dogecoin Core và Dogecoin Foundation (đã được tái lập) trông coi, và hình ảnh công khai của nó gắn chặt với Elon Musk, người tự phong là 'Dogefather'."
+  ],
+  "howItWorks": {
+   "paragraphs": [
+    "Dogecoin chạy blockchain riêng được bảo mật bằng proof-of-work sử dụng thuật toán băm Scrypt — cùng họ với Litecoin. Các thợ đào chạy đua giải các câu đố, và ai thắng sẽ thêm block tiếp theo và nhận thưởng. Block xuất hiện khoảng mỗi một phút, nên giao dịch được xác nhận nhanh hơn block ~10 phút của Bitcoin.",
+    "Tính năng bảo mật quan trọng nhất của nó là Auxiliary Proof-of-Work (AuxPoW), hay đào hợp nhất (merged mining), được thêm vào tháng 9 năm 2014. Vì Dogecoin và Litecoin dùng chung thuật toán Scrypt, thợ đào Litecoin có thể bảo vệ Dogecoin cùng lúc mà gần như không tốn thêm công sức, nhận DOGE như một khoản thưởng thêm. Điều này giúp Dogecoin 'cưỡi nhờ' trên sức mạnh băm (hashpower) lớn hơn nhiều của Litecoin, khiến một cuộc tấn công 51% khó hơn rất nhiều so với những gì thợ đào riêng của Dogecoin có thể tự chống đỡ.",
+    "Khác với Bitcoin, Dogecoin không có giới hạn nguồn cung. Mỗi block đúc ra cố định 10.000 DOGE mới, nghĩa là khoảng 14,4 triệu coin mới mỗi ngày và xấp xỉ 5 tỷ mỗi năm, mãi mãi. Vì lượng coin mới cố định trong khi tổng cung ngày càng lớn, tỷ lệ lạm phát phần trăm giảm dần theo thời gian — hiện ở khoảng 3–4% mỗi năm và mang tính 'giảm phát dần' (disinflationary) — nhưng nguồn cung thô thì không bao giờ ngừng tăng."
+   ],
+   "bullets": [
+    "Đồng thuận: proof-of-work, thuật toán Scrypt — cùng họ công nghệ với Litecoin",
+    "Đào hợp nhất (AuxPoW) cho phép thợ đào Litecoin bảo vệ Dogecoin cùng lúc, mượn hashpower của Litecoin",
+    "Thời gian block ~1 phút cho phép giao dịch hàng ngày nhanh và rẻ",
+    "Thưởng cố định 10.000 DOGE mỗi block — không halving, không giới hạn nguồn cung",
+    "~5 tỷ DOGE mới được đúc mỗi năm, nên nguồn cung là lạm phát nhưng tỷ lệ lạm phát (hiện ~3–4%) co lại khi tổng cung lớn dần",
+    "Nó là một chain thanh toán độc lập, không phải nền tảng smart contract — không có DeFi, NFT hay ứng dụng phức tạp gốc trên lớp cơ sở"
+   ]
+  },
+  "building": {
+   "paragraphs": [
+    "Việc phát triển Dogecoin có chủ đích bảo thủ và dựa vào tình nguyện viên, nên 'roadmap' của nó là một tập hợp lỏng lẻo các dự án dài hơi thay vì các bản phát hành hàng quý dồn dập. Dogecoin Foundation định hình hướng đi qua bản 'Trailmap' của mình, với sợi chỉ xuyên suốt là làm cho DOGE thực sự dùng được cho thanh toán trong khi giữ giao thức nền đơn giản và ổn định. Tiến độ là có thật nhưng chậm, và các mốc thời gian thường xuyên trượt.",
+    "Nỗ lực kỹ thuật chủ lực là Libdogecoin, một thư viện C gọn gàng gồm các khối xây dựng của Dogecoin, cho phép lập trình viên thêm tính năng ví và giao dịch vào ứng dụng mà không cần chạy full node. GigaWallet, một API hướng đến người bán để chấp nhận DOGE (đã có sẵn plugin WooCommerce), và ví MyDoge là mảng tiêu-dùng-và-thương-mại của cú đẩy đó. Còn có RadioDoge, một thử nghiệm của Foundation nhằm chuyển tiếp giao dịch qua sóng radio LoRa và Starlink cho các khu vực internet kém.",
+    "Cuộc tranh luận kỹ thuật hệ trọng nhất xoay quanh năng lực tương lai của giao thức và mức lạm phát của nó. Một đề xuất tên OP_CHECKZKP — được gửi lên mailing list lập trình viên vào tháng 7 năm 2025 bởi DogeOS, đội ngũ đứng sau ví MyDoge — sẽ thêm khả năng xác minh zero-knowledge-proof gốc (tái sử dụng opcode dự phòng OP_NOP10), có tiềm năng mở đường cho mở rộng kiểu rollup; tính đến giữa 2026 nó vẫn chỉ là một chủ đề thảo luận, chưa được kích hoạt. Riêng biệt, một số thành viên cộng đồng đã đề xuất cắt giảm mạnh lượng phát hành hàng năm (một đề xuất trên GitHub muốn hạ thưởng block xuống 1.000 DOGE, tức ~500M/năm); đề xuất này chưa được chấp nhận và sẽ gây tranh cãi. Các chất xúc tác lớn nhất của năm 2026 đến từ bên ngoài: các quỹ ETF DOGE giao ngay tại Mỹ đi vào hoạt động, và những đồn đoán tiếp diễn quanh tham vọng thanh toán của Musk."
+   ],
+   "bullets": [
+    "Libdogecoin: thư viện C di động để lập trình viên xây ví/tích hợp mà không cần full node — Foundation đánh dấu bước chương trình đầu tiên đã hoàn thành",
+    "GigaWallet + MyDoge: API thanh toán cho người bán (đã có plugin WooCommerce) và ví tiêu dùng, cả hai vẫn đang được cải tiến chậm rãi",
+    "RadioDoge: thử nghiệm dài hơi gửi giao dịch qua sóng radio LoRa và Starlink cho các vùng thiếu kết nối",
+    "OP_CHECKZKP: opcode soft-fork được đề xuất cho zero-knowledge proof gốc, gửi tháng 7/2025 — vẫn chỉ là thảo luận, chưa kích hoạt tính đến giữa 2026",
+    "Tranh luận cộng đồng vẫn chưa ngã ngũ về việc cắt giảm mạnh lượng DOGE phát hành hàng năm",
+    "Động lực lớn nhất năm 2026 đến từ bên ngoài: nhiều ETF Dogecoin giao ngay tại Mỹ đang giao dịch, cộng với sự chú ý vào tham vọng thanh toán của Musk/X"
+   ]
+  },
+  "quickFacts": [
+   [
+    "Ra mắt",
+    "6 tháng 12, 2013"
+   ],
+   [
+    "Nhà sáng lập",
+    "Billy Markus & Jackson Palmer (cả hai đều không còn điều hành)"
+   ],
+   [
+    "Cơ chế đồng thuận",
+    "Proof-of-work (Scrypt); đào hợp nhất với Litecoin"
+   ],
+   [
+    "Thời gian block",
+    "~1 phút"
+   ],
+   [
+    "Mô hình nguồn cung",
+    "Không giới hạn; cố định 10.000 DOGE mỗi block (~5 tỷ/năm), tỷ lệ lạm phát giảm dần"
+   ],
+   [
+    "Nguồn cung lưu hành",
+    "~155 tỷ DOGE và luôn tăng"
+   ],
+   [
+    "Công dụng token",
+    "Thanh toán, tip, chuyển tiền phí thấp"
+   ],
+   [
+    "Đơn vị quản lý",
+    "Các lập trình viên Dogecoin Core + Dogecoin Foundation"
+   ]
+  ],
+  "ecosystem": [
+   "Đào hợp nhất với Litecoin — các thợ đào và mining pool Scrypt chung bảo vệ cả hai chain",
+   "Ví: MyDoge, Dogecoin Core (full node chính thức), cộng hỗ trợ ví cứng (Ledger, Trezor)",
+   "Công cụ cho người bán: API GigaWallet và plugin WooCommerce để chấp nhận DOGE",
+   "Được niêm yết rộng rãi trên các sàn lớn (Coinbase, Binance, Kraken, v.v.) và là gương mặt quen thuộc trên các ứng dụng giao dịch cá nhân",
+   "Các ETF Dogecoin giao ngay hiện đang giao dịch tại Mỹ — DOJE của REX-Osprey là quỹ đầu tiên (tháng 9/2025), tiếp theo là Grayscale (GDOG) và Bitwise (BWOW), rồi quỹ 21Shares liên kết với House of Doge/Foundation (TDOG) trên Nasdaq vào tháng 1/2026",
+   "Mức độ chấp nhận thực tế đến rồi đi ở nhiều điểm bán; trong lịch sử vẫn dùng được cho tip và các khoản thanh toán nhỏ",
+   "Các mối liên hệ văn hóa/người nổi tiếng: sự quảng bá thường xuyên của Elon Musk, và các màn trình diễn trước đây như sứ mệnh SpaceX DOGE-1 và các khoảnh khắc NASCAR/NBA do Dogecoin tài trợ"
+  ],
+  "history": [
+   {
+    "year": "2013",
+    "event": "Billy Markus và Jackson Palmer ra mắt Dogecoin ngày 6 tháng 12 như một đồng coin đùa xây quanh meme Doge; là fork của Luckycoin, vốn có gốc từ Litecoin."
+   },
+   {
+    "year": "2014",
+    "event": "Cộng đồng quyên tiền cho chuyến đi Olympic của đội bobsled Jamaica và tài trợ một tay đua NASCAR; vào tháng 9, cơ chế đào hợp nhất AuxPoW với Litecoin được thêm vào để tăng bảo mật."
+   },
+   {
+    "year": "2015",
+    "event": "Nhà đồng sáng lập Jackson Palmer rời bỏ crypto hoàn toàn, sau này trở thành người chỉ trích gay gắt cả ngành."
+   },
+   {
+    "year": "2018",
+    "event": "Đạt đỉnh ngắn gần $0.017 trong bong bóng crypto, chạm vốn hóa khoảng $2B trước khi rơi trở lại."
+   },
+   {
+    "year": "2019-2020",
+    "event": "Dogecoin Foundation hồi sinh và tái tổ chức; một trào lưu TikTok tháng 7/2020 nhằm đẩy DOGE lên $1 châm ngòi một đợt tăng giá."
+   },
+   {
+    "year": "2020-2021",
+    "event": "Elon Musk bắt đầu tweet về DOGE; giá bùng nổ lên đỉnh lịch sử quanh $0.73 vào tháng 5/2021, có lúc vượt vốn hóa ~$85B."
+   },
+   {
+    "year": "2021-2022",
+    "event": "Foundation công bố 'Trailmap' và khởi động Libdogecoin cùng GigaWallet; thị trường gấu chung kéo giá xuống thấp hơn nhiều so với đỉnh."
+   },
+   {
+    "year": "2025",
+    "event": "Các ETF Dogecoin giao ngay đầu tiên tại Mỹ bắt đầu giao dịch — DOJE của REX-Osprey vào tháng 9, rồi Grayscale (GDOG) và Bitwise (BWOW) vào tháng 11; opcode zero-knowledge OP_CHECKZKP được đề xuất vào tháng 7."
+   },
+   {
+    "year": "2026",
+    "event": "Vào tháng 1, quỹ 21Shares (TDOG) niêm yết trên Nasdaq như ETF DOGE giao ngay đầu tiên nhận phê duyệt trực tiếp từ SEC; việc phát triển tiếp tục chậm rãi trên Libdogecoin, các ví và thanh toán."
+   }
+  ],
+  "risks": [
+   "Không giới hạn nguồn cung và lạm phát vĩnh viễn: ~5 tỷ DOGE mới được đúc mỗi năm, mãi mãi, liên tục pha loãng người nắm giữ. Không có câu chuyện khan hiếm cài sẵn như mức trần cố định 21 triệu của Bitcoin.",
+   "Phụ thuộc nặng vào cảm tính và một cá nhân: giá Dogecoin đã nhiều lần quay cuồng theo tweet và hành động của Elon Musk. Một đồng coin có giá trị dựa vào sự chú ý của người nổi tiếng cũng có thể rơi nhanh chừng ấy khi sự chú ý đó chuyển đi nơi khác.",
+   "Rủi ro tập trung: một số nhỏ các ví 'cá voi' rất lớn nắm phần đáng kể toàn bộ DOGE. Chỉ vài ví trong số đó bán ra phối hợp cũng có thể đánh sập giá, và nó làm suy yếu các tuyên bố về phi tập trung.",
+   "Tiện ích mỏng và phát triển chậm: chain nền là một mạng thanh toán đơn giản không có smart contract, DeFi hay NFT gốc. Các hạng mục roadmap như Libdogecoin và GigaWallet là thật nhưng tiến chậm, và các đề xuất đình đám (ví dụ OP_CHECKZKP) vẫn chưa được kích hoạt.",
+   "Chính một nhà sáng lập đã từ bỏ nó: Jackson Palmer công khai gọi crypto là bóc lột, và Dogecoin thường được nhắc đến như hình mẫu 'meme coin' điển hình với nền tảng cơ bản yếu.",
+   "Bảo mật một phần là đi mượn: Dogecoin dựa vào hashpower của Litecoin qua đào hợp nhất. Đó là điểm mạnh hôm nay, nhưng nó trói buộc bảo mật của Dogecoin vào sức khỏe kinh tế đào coin của một mạng lưới khác.",
+   "Rủi ro pháp lý và thị trường: dù các ETF giao ngay đã hoạt động, dòng tiền vào ETF thời kỳ đầu còn tương đối khiêm tốn, và crypto nói chung đối mặt với quy định pháp lý liên tục thay đổi. Là một tài sản biến động mạnh, chạy theo cảm tính, DOGE có thể rơi sâu và nằm im nhiều năm (nó từng giảm khoảng 90% từ đỉnh 2021)."
+  ],
+  "howToInvest": [
+   "Giáo dục trước, không phải lời khuyên: không có gì ở đây là lời khuyên tài chính. DOGE biến động mạnh và chạy theo cảm tính — chỉ cân nhắc số tiền bạn có thể chấp nhận mất toàn bộ, và hiểu rõ thứ mình mua trước khi mua.",
+   "Xác định 'lý do' của bạn một cách trung thực: bạn định tiêu nó (thanh toán nhanh, rẻ) hay đầu cơ giá? Đó là hai mục tiêu khác nhau với rủi ro khác nhau. Một meme coin nói chung chỉ nên là một lát cắt nhỏ, rủi ro cao trong danh mục, không phải phần lõi của nó.",
+   "Mua từ một sàn giao dịch uy tín, được cấp phép (ví dụ Coinbase, Kraken, Binance) sau khi hoàn tất xác minh danh tính. So sánh phí và dùng lệnh limit để kiểm soát mức giá bạn trả. Nếu bạn không muốn nắm coin trực tiếp, một ETF DOGE giao ngay giờ là lựa chọn thay thế nằm trong tài khoản chứng khoán thông thường.",
+   "Chuyển các khoản nắm giữ đáng kể ra khỏi sàn về tự lưu ký: 'không phải chìa khóa của bạn, không phải coin của bạn.' Dogecoin được hỗ trợ bởi ví cứng như Ledger và Trezor cùng ví phần mềm như MyDoge và Dogecoin Core chính thức.",
+   "Bảo vệ seed phrase như tiền mặt: viết ra giấy, không bao giờ gõ vào trang web hay chia sẻ, và cảnh giác kẻ mạo danh. Các trò lừa tặng quà, livestream 'Elon' giả và các trang phishing đã nhắm cụ thể vào người nắm giữ Dogecoin suốt nhiều năm.",
+   "Kiểm tra địa chỉ cẩn thận và bắt đầu bằng một giao dịch thử nhỏ trước khi gửi số tiền lớn — chuyển crypto là không thể đảo ngược.",
+   "Lưu hồ sơ cho thuế: ở nhiều khu vực pháp lý, việc bán, hoán đổi hay tiêu DOGE là sự kiện chịu thuế. Theo dõi giá vốn ngay từ đầu thay vì phải dựng lại sau này."
+  ]
+ },
+ {
+  "slug": "trx",
+  "category": "Blockchain Layer-1 (smart contract / thanh toán stablecoin)",
+  "tagline": "Một blockchain Layer-1 nhanh, phí thấp đã trở thành đường ray bận rộn nhất thế giới để chuyển Tether (USDT).",
+  "whatIsIt": [
+   "TRON là một blockchain Layer-1 được thành lập năm 2017 bởi Justin Sun, một doanh nhân gốc Trung Quốc trước đó điều hành mảng Đại Trung Hoa của Ripple. Mainnet của nó đi vào hoạt động năm 2018. Nó chạy smart contract giống Ethereum, nhưng được thiết kế ngay từ đầu để rẻ hơn và nhanh hơn khi sử dụng. Đồng coin gốc là TRX.",
+   "Lời chào hàng ban đầu vừa hoành tráng vừa mơ hồ — một 'internet phi tập trung' cho người sáng tạo nội dung — và whitepaper thời kỳ đầu từng bị tố sao chép nhiều đoạn từ các dự án khác. Qua nhiều năm, mục tiêu marketing đã âm thầm thay đổi. Thứ TRON thực sự trở nên nổi tiếng thì nhàm chán nhưng khổng lồ: chuyển các stablecoin neo giá đô la, đặc biệt là Tether (USDT), một cách rẻ tiền cho số lượng lớn người dùng phổ thông tại các thị trường mới nổi.",
+   "Năm 2018, TRON Foundation mua lại BitTorrent, công ty chia sẻ file kỳ cựu, và sau đó tạo ra token BTT riêng. Ngày nay TRON là một trong những blockchain lớn nhất tính theo giá trị được thanh toán trên nó, phần lớn nhờ một tỷ trọng lớn toàn bộ USDT đang lưu hành nằm trên TRON dưới dạng token TRC-20 (trị giá hàng chục tỷ đô la).",
+   "Điều đáng biết ngay từ đầu: TRON gắn chặt với một nhà sáng lập cực kỳ năng nổ và gây tranh cãi. Đó vừa là động cơ của nó, vừa là một trong những rủi ro lớn nhất."
+  ],
+  "howItWorks": {
+   "paragraphs": [
+    "TRON dùng Delegated Proof-of-Stake (DPoS). Thay vì mọi người cạnh tranh để tạo block, người nắm giữ TRX bỏ phiếu cho một nhóm nhỏ người tạo block. 27 người nhận nhiều phiếu nhất, gọi là Super Representative, thay phiên nhau tạo block khoảng mỗi 3 giây. Một block được coi là chung cuộc (final) khi khoảng 70% trong số họ (khoảng 19 người) đã xác nhận.",
+    "Phần khéo léo dành cho người dùng là mô hình phí. TRON tách 'bandwidth' (hạn mức byte cho giao dịch cơ bản) khỏi 'energy' (tài nguyên tính toán cho smart contract). Bạn được một lượng nhỏ bandwidth miễn phí mỗi ngày, hoặc có thể stake TRX để nhận energy và bandwidth thay vì trả phí mỗi lần. Làm đúng cách, một lệnh chuyển USDT đơn giản có thể tốn rất ít hoặc gần như bằng không — chính xác là lý do người dùng kiều hối đổ xô đến.",
+    "Smart contract chạy trên TRON Virtual Machine (TVM), tương thích với ngôn ngữ Solidity của Ethereum, nên lập trình viên có thể chuyển các ứng dụng kiểu Ethereum sang. Cái giá phải trả cho tốc độ và chi phí thấp là việc tạo block tập trung vào một nhóm validator nhỏ, mang cảm giác gần như được cấp phép (permissioned), điều mà nhiều nhà phê bình coi là tập trung hóa đáng kể."
+   ],
+   "bullets": [
+    "Đồng thuận: Delegated Proof-of-Stake (DPoS) với 27 Super Representative được bầu, tạo block mỗi ~3 giây.",
+    "Stake TRX mang lại quyền bỏ phiếu 'TRON Power' cộng tài nguyên mạng (energy + bandwidth) thay vì lãi suất trực tiếp.",
+    "Phí được trả bằng tài nguyên, không phải gas trả từng lần, nên các lệnh chuyển cơ bản có thể gần như miễn phí — động lực cho làn sóng chấp nhận stablecoin khổng lồ.",
+    "TVM tương thích Ethereum (Solidity), nên các dApp kiểu Ethereum có thể được chuyển thể sang TRON.",
+    "Nguồn cung TRX co giãn: thưởng block đúc TRX mới trong khi việc đốt phí giao dịch tiêu hủy nó, nên mức phát hành ròng dịch chuyển theo hoạt động mạng — từng giảm phát ròng trong một số giai đoạn, nhưng lại lạm phát ròng nhẹ vào đầu 2026 khi nhiều người dùng stake thay vì đốt phí."
+   ]
+  },
+  "building": {
+   "paragraphs": [
+    "Tính đến giữa 2026, định hướng công khai của TRON là tiến hóa từ một đường ray thanh toán giá rẻ thành một lớp 'hạ tầng tài chính tích hợp AI' phục vụ cả crypto lẫn tài chính truyền thống. Trên thực tế, điều đó nghĩa là ba vụ cược lớn: thanh toán stablecoin cho tổ chức, tài sản thực (RWA), và bảo mật hậu lượng tử. Cú đẩy kỹ thuật nổi bật nhất là kháng lượng tử: đầu tháng 7 năm 2026, TRON kích hoạt chữ ký hậu lượng tử trên testnet Nile sau khi một cuộc bỏ phiếu ủy ban được thông qua ngày 3 tháng 7 (bắt đầu với FN-DSA-512, dựa trên Falcon, và ML-DSA-44, dựa trên Dilithium), với kế hoạch triển khai mainnet nhắm vào Q3 2026, nhiều khả năng qua các cơ chế lai (hybrid) hỗ trợ cả chữ ký cũ lẫn chữ ký kháng lượng tử trong giai đoạn chuyển tiếp.",
+    "Về phía giao thức, bản nâng cấp GreatVoyage-v4.8.2 ('Pyrrho') (2026) gói nhiều cải tiến bám theo Ethereum, bao gồm các precompile BLS12-381 hỗ trợ zero-knowledge-proof, truy cập hash của các block cũ hơn, định giá gas chặt hơn, và các opcode mới. TRON cũng đang dồn lực vào kênh phân phối tổ chức: tháng 3 năm 2026, nó gia nhập Mastercard Crypto Partner Program để cho phép chuyển đổi TRX và USDT trên mạng lưới điểm bán của Mastercard.",
+    "Bên cạnh công nghệ, TRON đã nâng quy mô Quỹ AI từ $100M lên $1B vào tháng 3 năm 2026 và liên tục tung ra thương hiệu AI-agent / 'nền kinh tế agentic'. Hãy đón nhận các tuyên bố AI đó với sự hoài nghi lành mạnh — chúng mang tính marketing ngang với sản phẩm — nhưng mảng thanh toán và chữ ký lượng tử là cụ thể và đang chạy trên testnet."
+   ],
+   "bullets": [
+    "Mật mã hậu lượng tử: chữ ký đi vào thử nghiệm trên testnet Nile đầu tháng 7/2026 (FN-DSA-512 / ML-DSA-44); triển khai mainnet nhắm vào Q3 2026.",
+    "Nâng cấp giao thức GreatVoyage-v4.8.2 'Pyrrho' (2026) bổ sung precompile ZK-proof BLS12-381, truy cập hash block lịch sử, và các tinh chỉnh gas/opcode.",
+    "Gia nhập Mastercard Crypto Partner Program (tháng 3/2026) để đẩy TRX/USDT vào thanh toán bán lẻ.",
+    "Nâng Quỹ AI lên mức được công bố là $1B (từ $100M) cộng các sản phẩm AI-agent, định vị quanh AI + tài sản thực (RWA).",
+    "Mức sử dụng mạng được báo cáo tăng trưởng qua năm 2026, với khối lượng giao dịch hàng ngày cao và lượng thanh toán USDT gia tăng — dù các con số phần lớn đến từ báo cáo của chính TRON."
+   ]
+  },
+  "quickFacts": [
+   [
+    "Ra mắt",
+    "ICO TRX tháng 9/2017; mainnet 2018"
+   ],
+   [
+    "Nhà sáng lập",
+    "Justin Sun (TRON Foundation / TRON DAO)"
+   ],
+   [
+    "Phân loại",
+    "Blockchain Layer-1 cho smart contract"
+   ],
+   [
+    "Cơ chế đồng thuận",
+    "Delegated Proof-of-Stake, 27 Super Representative"
+   ],
+   [
+    "Thời gian block",
+    "~3 giây"
+   ],
+   [
+    "Mô hình nguồn cung",
+    "Co giãn, không có mức tối đa cố định; ~95 tỷ TRX lưu hành (đầu 2026). Thưởng block đúc coin, đốt phí tiêu hủy — gần đây lạm phát ròng nhẹ"
+   ],
+   [
+    "Công dụng token",
+    "Phí/tài nguyên (energy + bandwidth), staking, bỏ phiếu cho validator"
+   ],
+   [
+    "Ứng dụng chủ lực",
+    "Thanh toán USDT (Tether) dưới dạng token TRC-20"
+   ],
+   [
+    "Máy ảo",
+    "TVM, tương thích Ethereum/Solidity"
+   ]
+  ],
+  "ecosystem": [
+   "USDT trên TRON (TRC-20): trường hợp sử dụng chủ lực, với hàng chục tỷ đô la Tether được thanh toán on-chain, được dùng nhiều cho kiều hối tại các thị trường mới nổi",
+   "JustLend DAO: giao thức cho vay thống trị của TRON và nguồn TVL đơn lẻ lớn nhất của mạng",
+   "SunSwap: sàn giao dịch phi tập trung chính của TRON (DEX giao ngay); SunSwap V4 được triển khai trong năm 2026",
+   "USDD: stablecoin thuật toán/thế chấp của riêng TRON (lưu ý lịch sử mất neo giá trước đây, xem phần Rủi ro)",
+   "Các token JST (JustLend) và BTT (BitTorrent) gắn với hệ sinh thái TRON/BitTorrent rộng hơn",
+   "Đối tác tổ chức/thanh toán: tích hợp Mastercard Crypto Partner Program cho TRX và USDT"
+  ],
+  "history": [
+   {
+    "year": "2017",
+    "event": "Justin Sun thành lập TRON; TRON Foundation huy động khoảng $70M trong đợt ICO tháng 9 quanh thời điểm Trung Quốc chuẩn bị cấm ICO."
+   },
+   {
+    "year": "2018",
+    "event": "Mainnet ('Odyssey') ra mắt; TRON di cư khỏi Ethereum sang chain riêng và hoàn tất thương vụ mua lại BitTorrent vào tháng 7."
+   },
+   {
+    "year": "2019-2020",
+    "event": "TRON xây dựng DeFi và trở thành một điểm đến lớn cho USDT, với các lệnh chuyển TRC-20 giá rẻ thúc đẩy làn sóng chấp nhận stablecoin."
+   },
+   {
+    "year": "2022",
+    "event": "TRON ra mắt stablecoin USDD, đồng coin này mất neo giá đô la trong thời gian ngắn giữa cơn hỗn loạn thị trường năm đó."
+   },
+   {
+    "year": "2023",
+    "event": "SEC Mỹ kiện Justin Sun và các thực thể liên quan đến TRON vì bán chứng khoán chưa đăng ký, cáo buộc wash trading, và các chiến dịch quảng bá bằng người nổi tiếng không công bố."
+   },
+   {
+    "year": "2024-2025",
+    "event": "Sun đầu tư số tiền được đưa tin là hàng chục triệu đô vào World Liberty Financial có liên hệ với Trump (đơn kiện sau này của chính ông nói là $45M); các nhà lập pháp và giới phê bình nêu quan ngại xung đột lợi ích khi vụ kiện của SEC đình trệ."
+   },
+   {
+    "year": "2026",
+    "event": "SEC nộp thỏa thuận dàn xếp rút các cáo buộc chống lại Sun và các thực thể TRON (Rainberry trả $10M); TRON triển khai công nghệ hậu lượng tử trên testnet và gia nhập chương trình crypto của Mastercard — trong khi Sun và World Liberty Financial vướng vào các vụ kiện qua lại."
+   }
+  ],
+  "risks": [
+   "Tập trung hóa: với chỉ 27 người tạo block được bầu và ảnh hưởng nặng nề từ nhà sáng lập cùng foundation, TRON tập trung hơn nhiều so với các mạng như Bitcoin hay Ethereum. Một nhóm validator nhỏ thì nhanh hơn nhưng cũng dễ bị gây áp lực, thao túng phối hợp hoặc kiểm duyệt hơn.",
+   "Rủi ro nhà sáng lập/nhân vật chủ chốt: TRON gắn chặt với Justin Sun, một nhân vật rất ưa quảng bá và hay kiện tụng. SEC Mỹ đã khởi kiện ông và các thực thể TRON năm 2023 về bán chứng khoán chưa đăng ký, cáo buộc wash trading TRX, và trả tiền cho người nổi tiếng quảng bá mà không công bố. Năm 2026, SEC nộp thỏa thuận dàn xếp rút các cáo buộc chống lại Sun (với Rainberry trả phạt $10M và không thừa nhận sai phạm), nhưng các cáo buộc về hành vi nền tảng — cùng hình ảnh chính trị từ mối quan hệ (và giờ là kiện tụng) với một dự án liên hệ với Trump — vẫn là hành trang uy tín nặng nề.",
+   "Rủi ro tập trung vào stablecoin: giá trị cốt lõi của TRON dựa nặng vào việc là chain hàng đầu cho USDT. Nếu Tether sảy chân, quy định pháp lý buộc phải di cư, hoặc các đối thủ (các L2 của Ethereum, Solana, USDC) hút bớt khối lượng, con hào cốt lõi của TRON suy yếu. USDC đang giành thị phần nhờ hoạt động kinh tế thực.",
+   "Lịch sử mất neo của USDD: stablecoin riêng của TRON, USDD, đã mất neo năm 2022 và thiết kế thuật toán/thế chấp của nó gây nhiều hoài nghi — một lời nhắc rằng không phải sản phẩm nào trong hệ sinh thái cũng đã được thử lửa.",
+   "Bóng đen pháp lý: các đường ray stablecoin nằm ngay trong tầm ngắm của các cơ quan quản lý toàn cầu. Vị thế thống trị của TRON trong các lệnh chuyển đô la khối lượng lớn ngoài lãnh thổ chính là loại hoạt động mà các nhà lập pháp soi xét về rủi ro cấm vận và tài chính bất hợp pháp.",
+   "Rủi ro về câu chuyện/marketing: các cú xoay trục của TRON (internet phi tập trung, rồi thanh toán, giờ là AI và lượng tử) đi kèm quảng bá rầm rộ, và nhiều số liệu tăng trưởng của mạng đến từ báo cáo của chính TRON. Hãy coi các tít lớn về quỹ AI và lượng tử là những tuyên bố cần kiểm chứng, không phải sự thật đã an bài, và đánh giá bằng những gì thực sự chạy trên mainnet."
+  ],
+  "howToInvest": [
+   "Giáo dục trước, không phải lời khuyên: không nội dung nào ở đây là lời khuyên tài chính. TRX có thể biến động mạnh và gắn với một nhà sáng lập gây tranh cãi, nên chỉ mạo hiểm số tiền bạn có thể chấp nhận mất và tự nghiên cứu kỹ.",
+   "Tìm hiểu trước khi mua: đọc tài liệu chính thức của TRON cộng với các bên thứ ba trung lập (mảng nghiên cứu của một sàn lớn, Messari, CoinGecko) và đặc biệt đọc kỹ về vụ kiện của SEC và vụ USDD mất neo để bạn hiểu rủi ro, không chỉ nghe lời chào hàng.",
+   "Mua trên sàn uy tín: TRX được niêm yết trên hầu hết các sàn tập trung lớn, được cấp phép. Ưu tiên sàn hoạt động hợp pháp tại quốc gia của bạn và hoàn tất xác minh danh tính của họ.",
+   "Tự lưu ký những gì bạn nắm giữ: chuyển coin ra khỏi sàn về ví do bạn kiểm soát. TRON được hỗ trợ bởi các ví như TronLink, và ví cứng như Ledger hoặc Trezor thêm một lớp an toàn lưu trữ lạnh. Ai giữ private key, người đó kiểm soát coin.",
+   "Bảo vệ seed phrase: viết cụm từ khôi phục ra giấy, cất ngoại tuyến và không bao giờ gõ vào trang web hay chia sẻ. Không dịch vụ, airdrop hay 'nhân viên hỗ trợ' hợp pháp nào từng hỏi nó — lừa đảo seed phrase là cách số 1 khiến người ta mất crypto.",
+   "Nắm rõ mô hình phí/tài nguyên: trên TRON bạn có thể stake TRX để nhận energy và bandwidth giúp các lệnh chuyển tốn rất ít; hãy hiểu điều này trước khi chuyển USDT để không bất ngờ về yêu cầu tài nguyên.",
+   "Định cỡ hợp lý và nghĩ dài hạn: tránh dồn tất cả vào một token duy nhất, cảnh giác với đòn bẩy, và bỏ ngoài tai các dự đoán giá thổi phồng — đánh giá TRON qua mức sử dụng thực và các nâng cấp đã triển khai theo thời gian, không phải qua các mục tiêu giá ngắn hạn."
+  ]
+ },
+ {
+  "slug": "avax",
+  "category": "Blockchain Layer-1 (nền tảng smart contract)",
+  "tagline": "Một nền tảng smart contract tốc độ cao xây quanh cơ chế đồng thuận dựa trên bỏ phiếu mới lạ và một đội hình các sub-chain tùy biến mà nó gọi là Layer-1.",
+  "whatIsIt": [
+   "Avalanche là một blockchain Layer-1 — một mạng nền chạy smart contract và lưu trú ứng dụng, cạnh tranh trực tiếp với Ethereum và Solana. Lời chào hàng của nó là độ hoàn tất (finality) nhanh (một giao dịch được chốt trong khoảng một đến hai giây, không phải vài phút) và một thiết kế cho phép bất kỳ ai dựng blockchain tùy chỉnh riêng cắm vào mạng lưới chung.",
+   "Nó xuất thân từ học thuật. Ý tưởng đồng thuận lần đầu được công bố trong một whitepaper năm 2018 bởi một nhóm ẩn danh tự gọi là 'Team Rocket', và được phát triển song song với nghiên cứu tại Đại học Cornell. Ava Labs — thành lập năm 2019 bởi nhà khoa học máy tính Emin Gun Sirer cùng các nghiên cứu sinh tiến sĩ Kevin Sekniqi và Maofan 'Ted' Yin — biến nó thành sản phẩm và ra mắt mainnet vào tháng 9 năm 2020.",
+   "Lý do nó tồn tại là khả năng mở rộng. Các nhà sáng lập muốn một mạng lưới có thể xác nhận giao dịch nhanh và cho phép các tổ chức cùng nhà phát triển ứng dụng chạy chain chuyên dụng riêng (vì tuân thủ, quy tắc tùy chỉnh, hay gaming) mà không phải tranh giành blockspace trên một chain dùng chung. AVAX là token gốc bảo vệ mạng lưới, trả phí và dùng cho staking.",
+   "Trên thực tế, Avalanche đã dồn lực mạnh vào các trường hợp sử dụng cho tổ chức và tài sản thực (RWA) — quỹ, trái phiếu kho bạc và cổ phiếu được token hóa — nơi phần lớn câu chuyện tăng trưởng gần đây của nó diễn ra."
+  ],
+  "howItWorks": {
+   "paragraphs": [
+    "Phát minh nổi bật nhất của Avalanche là phương pháp đồng thuận — cách hàng nghìn máy tính thống nhất về điều gì là đúng mà không cần một ông chủ trung tâm. Thay vì mọi validator bỏ phiếu về mọi thứ cùng lúc, mỗi validator liên tục hỏi một mẫu ngẫu nhiên nhỏ các validator khác xem họ nghiêng về phương án nào. Lặp lại đủ nhiều vòng và cả mạng lưới 'lăn cầu tuyết' đến sự đồng thuận rất nhanh, không cần leader và không có cuộc đua đào coin. Họ giao thức này chính là nguồn gốc của độ hoàn tất khoảng một-đến-hai giây mà chain này nổi tiếng.",
+    "'Primary Network' lõi được chia thành ba chain, mỗi chain làm một việc. C-Chain (Contract) chạy môi trường tương thích Ethereum, nên hầu hết DeFi và smart contract sống ở đó. X-Chain (Exchange) xử lý các lệnh chuyển tài sản đơn giản, còn P-Chain (Platform) điều phối validator, staking và sổ đăng ký của tất cả các chain tùy chỉnh.",
+    "Điểm khác biệt là các chain tùy chỉnh đó — ban đầu gọi là subnet, giờ mang thương hiệu Avalanche L1. Một đội ngũ có thể ra mắt blockchain có chủ quyền của riêng mình với quy tắc riêng, máy ảo riêng, thậm chí token gas riêng, trong khi vẫn tận dụng bộ công cụ và mô hình bảo mật của Avalanche. Đây là cách mạng lưới 'mở rộng theo chiều ngang': tắc nghẽn trên một chain không làm nghẽn các chain khác."
+   ],
+   "bullets": [
+    "Đồng thuận: bỏ phiếu lấy mẫu ngẫu nhiên lặp lại (họ 'Snow' / Snowman), không leader, độ hoàn tất khoảng một-đến-hai giây",
+    "Primary Network = ba chain: C-Chain (hợp đồng, tương thích EVM), X-Chain (chuyển tài sản), P-Chain (staking + điều phối)",
+    "Avalanche L1 (trước đây là subnet): các chain chuyên biệt cho ứng dụng, có chủ quyền, tùy biến được",
+    "Proof-of-stake: validator khóa AVAX để bảo vệ mạng và nhận thưởng",
+    "Phí giao dịch được đốt, loại AVAX khỏi nguồn cung",
+    "C-Chain tương thích EVM, nên các công cụ và hợp đồng Ethereum chuyển sang dễ dàng"
+   ]
+  },
+  "building": {
+   "paragraphs": [
+    "Bước chuyển định hình của hai năm qua là nâng cấp Avalanche9000 (kích hoạt qua hard fork Etna ngày 16 tháng 12 năm 2024), tái cấu trúc kinh tế của việc vận hành một chain tùy chỉnh. Nó đổi tên subnet thành 'Avalanche L1', bỏ yêu cầu cũ rằng mỗi validator phải stake 2.000 AVAX và đồng thời xác thực chain chính, thay bằng một khoản phí cố định nhỏ trên mỗi validator — cắt chi phí ra mắt một chain khoảng 99%. Đây là đòn bẩy lớn nhất để thu hút các chain chuyên biệt cho ứng dụng.",
+    "Đà tiến tiếp tục qua năm 2025 với nâng cấp Octane (8 tháng 4 năm 2025), cắt mạnh phí C-Chain qua cơ chế định giá động, và nâng cấp Granite (19 tháng 11 năm 2025), bổ sung thời gian block động (nhắm mốc chốt giao dịch dưới hai giây) và ký giao dịch sinh trắc học gốc (FaceID/TouchID/passkey qua mật mã secp256r1) để việc bắt đầu sử dụng giống một ứng dụng bình thường hơn.",
+    "Nhìn về phía trước từ giữa 2026, hai mạch chính chiếm ưu thế. Thứ nhất, mở rộng thuần túy: Ava Labs đã phác thảo 'Vryx' và tiếp tục xây framework HyperSDK, nhắm tới thông lượng cao hơn nhiều (TPS sáu chữ số) bằng cách xử lý theo pipeline cách block được tạo và chia sẻ — một nỗ lực dài hạn vẫn đang phát triển, chưa vận hành ở quy mô đó trên mainnet. Thứ hai, và cụ thể hơn ở hiện tại, một cú đẩy mạnh vào tổ chức / tài sản thực — các quỹ, trái phiếu kho bạc và cổ phiếu token hóa từ những cái tên như BlackRock (quỹ BUIDL của họ, qua Securitize, hiện chạy trên Avalanche cùng vài chain khác), JPMorgan và những bên khác — định vị Avalanche làm đường ray thanh toán cho tài chính truyền thống."
+   ],
+   "bullets": [
+    "Avalanche9000 / Etna (tháng 12/2024): rẻ hơn ~99% để ra mắt một L1 tùy chỉnh — động cơ tăng trưởng cốt lõi",
+    "Octane (tháng 4/2025): cắt phí C-Chain đáng kể qua cơ chế gas động",
+    "Granite (tháng 11/2025): thời gian block động (mục tiêu dưới 2 giây) + ký giao dịch sinh trắc học (FaceID/TouchID/passkey)",
+    "Vryx + HyperSDK: mở rộng dài hạn hướng tới TPS sáu chữ số — vẫn đang phát triển",
+    "Vụ cược lớn vào token hóa tài sản thực và các thí điểm với tổ chức (BlackRock/Securitize, JPMorgan)",
+    "Tăng trưởng số L1 hoạt động trong gaming, doanh nghiệp và tài chính"
+   ]
+  },
+  "quickFacts": [
+   [
+    "Ra mắt",
+    "Mainnet tháng 9/2020"
+   ],
+   [
+    "Phát triển bởi",
+    "Ava Labs (thành lập 2019)"
+   ],
+   [
+    "Nhà sáng lập",
+    "Emin Gun Sirer, Kevin Sekniqi, Maofan 'Ted' Yin"
+   ],
+   [
+    "Cơ chế đồng thuận",
+    "Proof-of-stake, Snow/Snowman (bỏ phiếu lấy mẫu)"
+   ],
+   [
+    "Độ hoàn tất",
+    "~1-2 giây (thời gian block động từ Granite)"
+   ],
+   [
+    "Nguồn cung tối đa",
+    "720 triệu AVAX (giới hạn cứng)"
+   ],
+   [
+    "Nguồn cung ban đầu",
+    "360 triệu AVAX được đúc lúc ra mắt"
+   ],
+   [
+    "Công dụng token",
+    "Phí (được đốt), staking/bảo mật, phí L1, quản trị"
+   ],
+   [
+    "Kiến trúc",
+    "Primary Network 3 chain + các Avalanche L1 tùy chỉnh"
+   ],
+   [
+    "Tương thích EVM",
+    "Có (C-Chain)"
+   ]
+  ],
+  "ecosystem": [
+   "DeFi: Aave, LFJ (trước đây là Trader Joe), Benqi, GMX và các giao thức cho vay/DEX khác trên C-Chain",
+   "Tài sản thực: quỹ BUIDL của BlackRock (qua Securitize) trên Avalanche, cộng trái phiếu kho bạc và cổ phiếu token hóa",
+   "Thí điểm với tổ chức: JPMorgan và các ngân hàng khác thử nghiệm token hóa và thanh toán bù trừ",
+   "Gaming và app-chain: các L1 chuyên dụng như Beam và những dự án khác dùng mô hình chain tùy chỉnh",
+   "Các triển khai doanh nghiệp/khu vực đang di chuyển khối lượng tài sản lớn lên các Avalanche L1 chuyên dụng",
+   "Stablecoin (USDC, USDT) và cầu nối cross-chain cho thanh khoản",
+   "Core Wallet — ví gốc của Ava Labs — cộng hỗ trợ rộng rãi trong MetaMask và các ví cứng"
+  ],
+  "history": [
+   {
+    "year": "2018",
+    "event": "Giao thức đồng thuận lần đầu được công bố trong một whitepaper bởi nhóm ẩn danh 'Team Rocket'"
+   },
+   {
+    "year": "2019",
+    "event": "Ava Labs được thành lập bởi Emin Gun Sirer, Kevin Sekniqi và Ted Yin"
+   },
+   {
+    "year": "March 2020",
+    "event": "Mã nguồn Avalanche được phát hành mã nguồn mở"
+   },
+   {
+    "year": "July 2020",
+    "event": "Đợt mở bán token công khai huy động ~$42 triệu trong khoảng bốn tiếng rưỡi"
+   },
+   {
+    "year": "September 2020",
+    "event": "Mainnet Avalanche đi vào hoạt động"
+   },
+   {
+    "year": "2021",
+    "event": "Subnet và hệ sinh thái DeFi mở rộng; AVAX đạt đỉnh lịch sử trong thị trường tăng giá"
+   },
+   {
+    "year": "Dec 2024",
+    "event": "Nâng cấp Avalanche9000 (Etna): subnet trở thành 'L1', chi phí ra mắt giảm ~99%"
+   },
+   {
+    "year": "Apr 2025",
+    "event": "Nâng cấp Octane giảm mạnh phí giao dịch C-Chain"
+   },
+   {
+    "year": "Nov 2025",
+    "event": "Nâng cấp Granite: thời gian block động (hoàn tất dưới 2 giây) và ký giao dịch sinh trắc học"
+   },
+   {
+    "year": "2025-2026",
+    "event": "Cú đẩy RWA cho tổ chức tăng tốc (BlackRock/Securitize trên Avalanche, JPMorgan và các bên khác)"
+   }
+  ],
+  "risks": [
+   "Cạnh tranh Layer-1 khốc liệt. Avalanche đối đầu Ethereum (và các L2 rẻ hơn của nó), Solana và các chain tốc độ cao khác để giành lập trình viên, thanh khoản và sự chú ý. Nhanh không còn là của hiếm, nên nó phải liên tục tạo khác biệt — chủ yếu qua các L1 tùy chỉnh và các thương vụ với tổ chức — hoặc chấp nhận rủi ro bị lu mờ.",
+   "Tập trung validator và stake. Một tỷ trọng đáng kể AVAX được stake nằm trong tay một nhóm tương đối nhỏ các validator lớn, và các hệ thống theo trọng số stake tự nhiên ưu ái người nắm giữ lớn. Đó là mối lo về phi tập trung và ảnh hưởng quản trị đáng theo dõi.",
+   "Mở khóa token và pha loãng. Một phần lớn AVAX từng bị khóa trong các phân bổ cho đội ngũ, foundation và nhà đầu tư theo lịch vesting; các đợt mở khóa theo lịch bổ sung nguồn cung bên bán. Việc đốt phí chỉ bù đắp lượng phát hành mới khi mức sử dụng mạng cao — trong các giai đoạn trầm lắng, nguồn cung ròng vẫn có thể tăng.",
+   "Mức độ chấp nhận một phần vẫn là lời hứa, chưa phải sản phẩm hoàn thiện. Câu chuyện RWA và tổ chức là có thật nhưng còn sớm; phần nhiều là thí điểm, niêm yết và thông cáo. Nếu chúng không chuyển hóa thành khối lượng on-chain bền vững, luận điểm tăng trưởng suy yếu.",
+   "Phơi nhiễm pháp lý. Dồn lực vào chứng khoán token hóa và tài chính tổ chức đặt Avalanche thẳng vào đường đi của quy định về chứng khoán và tài chính, vốn vẫn đang định hình và có thể làm chậm hoặc tái định dạng các trường hợp sử dụng này.",
+   "Rủi ro kỹ thuật và smart contract. Các nâng cấp giao thức liên tục, việc truyền tin cross-chain giữa các L1, và các ứng dụng DeFi rộng hơn xây bên trên đều mở thêm bề mặt lỗi và khai thác. Hạ tầng chuyển động nhanh có thể hỏng theo những cách không lường trước.",
+   "Biến động giá. Như mọi crypto, AVAX biến động rất mạnh và từng giao dịch thấp hơn nhiều so với các đỉnh trước; diễn biến giá quá khứ không phải kim chỉ nam cho tương lai."
+  ],
+  "howToInvest": [
+   "Giáo dục trước, không phải lời khuyên tài chính. Hãy hiểu rằng AVAX là tài sản biến động, rủi ro cao. Đừng bao giờ đầu tư số tiền bạn không thể chấp nhận mất toàn bộ, và tự xây dựng luận điểm riêng trước khi mua — đừng mua vì hype hay một dự đoán giá.",
+   "Mua từ sàn uy tín. AVAX được niêm yết rộng rãi trên các sàn tập trung lớn, được cấp phép. Ưu tiên sàn khả dụng tại khu vực pháp lý của bạn với bảo mật tốt và phí minh bạch; kiểm tra rằng bạn đang ở trang thật, không phải bản nhái phishing.",
+   "Học sự khác biệt giữa C-Chain và việc rút tiền từ sàn. Khi chuyển AVAX ra khỏi sàn, bạn thường gửi qua C-Chain (địa chỉ Avalanche C-Chain / EVM bắt đầu bằng 0x). Gửi thử một lượng nhỏ trước và kiểm tra kỹ mạng lưới để tránh mất tiền.",
+   "Cân nhắc tự lưu ký. Với bất kỳ khoản nào bạn định nắm giữ, chuyển nó ra khỏi sàn vào ví do bạn kiểm soát (Core, MetaMask, hoặc ví cứng như Ledger/Trezor) nghĩa là bạn giữ chìa khóa. Ai giữ seed phrase, người đó kiểm soát tiền.",
+   "Bảo vệ seed phrase một cách ám ảnh. Viết nó ra giấy để ngoại tuyến, đừng bao giờ gõ vào trang web, và đừng bao giờ chia sẻ. Không dịch vụ, chương trình tặng quà hay 'nhân viên hỗ trợ' hợp pháp nào từng hỏi nó — yêu cầu đó luôn là lừa đảo.",
+   "Nếu stake, hãy hiểu các điều khoản. Stake AVAX kiếm được thưởng nhưng có thời gian khóa (tối thiểu khoảng hai tuần) và rủi ro riêng. Dùng các validator/tùy chọn ủy quyền chính thức hoặc uy tín lâu năm và biết rằng bạn không thể rút ngay lập tức.",
+   "Định cỡ hợp lý và nghĩ dài hạn. Nhiều người dùng các khoản mua nhỏ, đều đặn (trung bình giá — DCA) thay vì một cục tiền lớn để làm mượt biến động, và coi nó là một lát cắt nhỏ trong danh mục đa dạng hóa — không phải một tấm vé số."
+  ]
+ },
+ {
+  "slug": "link",
+  "category": "Mạng oracle / hạ tầng dữ liệu on-chain",
+  "tagline": "Người trung gian cung cấp cho smart contract dữ liệu thế giới thực mà tự chúng không thể lấy được.",
+  "whatIsIt": [
+   "Chainlink là một mạng oracle phi tập trung. Blockchain là những chiếc hộp kín: một smart contract không thể tự gọi API, kiểm tra giá cổ phiếu hay đọc dữ liệu ngân hàng. Chainlink là hệ thống ống dẫn bơm dữ liệu bên ngoài đó lên chain theo cách chống giả mạo, và truyền thông điệp cùng giá trị giữa các chain.",
+   "Nó được đồng sáng lập bởi Sergey Nazarov và Steve Ellis, những người công bố whitepaper Chainlink năm 2017 với giáo sư Ari Juels của Cornell làm cố vấn. Đợt bán token vào tháng 9 năm đó huy động khoảng $32 triệu. Mạng lưới chính thức ra mắt trên Ethereum năm 2019.",
+   "LINK không phải là một blockchain Layer-1 riêng. Nó là một token và một mạng lưới các 'nhà vận hành node' độc lập chạy bên trên Ethereum và hàng chục chain khác. Chainlink tồn tại vì một smart contract chỉ đáng tin cậy ngang với dữ liệu nó dựa vào để hành động, và việc lấy dữ liệu đó từ một trang web hay một công ty duy nhất sẽ tái tạo đúng cái điểm hỏng tập trung mà crypto đang cố tránh.",
+   "Ngày nay nó là nhà cung cấp oracle được sử dụng rộng rãi nhất trong DeFi, và ngày càng trở thành mô liên kết mà các ngân hàng và công ty quản lý tài sản đang thử nghiệm để đưa tài sản token hóa lên chain."
+  ],
+  "howItWorks": {
+   "paragraphs": [
+    "Khi một hợp đồng cần dữ liệu bên ngoài (chẳng hạn giá ETH/USD), nó hỏi mạng Chainlink. Thay vì tin một nguồn duy nhất, nhiều nhà vận hành node độc lập mỗi bên tự lấy dữ liệu riêng, và các câu trả lời của họ được tổng hợp thành một giá trị duy nhất trước khi lên chain. Nếu một node nói dối hoặc ngoại tuyến, các node còn lại sẽ áp đảo bằng số phiếu.",
+    "Chainlink hiện đại dùng một thiết kế gọi là Off-Chain Reporting (OCR): các node thống nhất trước về một báo cáo có chữ ký ở ngoài chain, rồi đăng nó trong một giao dịch duy nhất. Cách này rẻ hơn nhiều so với việc mỗi node tự ghi câu trả lời của mình lên blockchain — chính điều đó khiến oracle trở nên chi trả nổi ở quy mô lớn.",
+    "LINK là token bôi trơn cỗ máy này. Các ứng dụng trả LINK cho nhà vận hành node để nhận dữ liệu và dịch vụ. Dưới Staking v0.2, LINK còn được khóa làm tài sản thế chấp có thể bị cắt (slash) nếu một node hành xử sai — cho các nhà vận hành 'da thịt trong cuộc chơi' để giữ trung thực và trực tuyến."
+   ],
+   "bullets": [
+    "Không phải blockchain: Chainlink là một mạng các node oracle xếp lớp bên trên Ethereum và nhiều chain khác",
+    "Tổng hợp phi tập trung: nhiều node báo cáo độc lập, các giá trị ngoại lai bị lọc bỏ",
+    "Off-Chain Reporting (OCR): các node thống nhất ngoài chain, đăng một giao dịch có chữ ký duy nhất với chi phí rẻ",
+    "Token LINK: trả cho nhà vận hành node và được stake làm tài sản thế chấp có thể bị slash (Staking v0.2, pool ~45M LINK, tỷ suất thưởng hiệu dụng ~4.3%, thời gian chờ rút (unbonding) 28 ngày cộng cửa sổ nhận 7 ngày)",
+    "Token ERC-677 (tập mở rộng của chuẩn ERC-20) nên nó có thể kích hoạt một hợp đồng ngay trong cùng lệnh chuyển"
+   ]
+  },
+  "building": {
+   "paragraphs": [
+    "Chainlink đã xoay trục từ 'nguồn cấp giá cho DeFi' sang làm hạ tầng đa dụng cho tài chính on-chain, nhắm thẳng vào các tổ chức và tài sản thực token hóa. Tính đến giữa 2026, ba dòng sản phẩm lớn là CCIP (Cross-Chain Interoperability Protocol) để chuyển token và thông điệp giữa các chain, CRE (Chainlink Runtime Environment) để chạy các workflow tùy chỉnh, và Data Streams cho dữ liệu thị trường độ trễ thấp.",
+    "Định hướng rõ ràng là tổ chức. Chainlink đã chạy các thí điểm và tích hợp với SWIFT, DTCC và Euroclear, thậm chí còn giúp Bộ Thương mại Hoa Kỳ công bố dữ liệu kinh tế vĩ mô on-chain năm 2025. Nó đang định vị mình là oracle 'chuẩn tuân thủ', quảng bá các chứng nhận SOC 2 và ISO mà các đối thủ thuần DeFi hầu như không có."
+   ],
+   "bullets": [
+    "CCIP triển khai tích hợp token tự phục vụ và mở rộng hỗ trợ chain/rollup; được Coinbase (Wrapped Assets) và Lido (wstETH) chọn làm hạ tầng cầu nối",
+    "CRE (Chainlink Runtime Environment) mở rộng trên các mainnet và testnet, thêm workflow riêng tư/doanh nghiệp để các công ty TradFi không phải đụng đến gas hay private key",
+    "Ra mắt sản xuất appchain thế chấp của DTCC nhắm vào Q4 2026 — quản lý tài sản thế chấp, ký quỹ và thanh toán gần thời gian thực trên cả thị trường truyền thống và blockchain",
+    "Chainlink Reserve (ra mắt tháng 8/2025): phí giao thức và doanh nghiệp được quy đổi thành LINK qua Payment Abstraction, xây một ngân khố và tạo lực mua đều đặn cho token",
+    "Data Streams tiến tới phổ cập chính thức với cập nhật dưới một giây, bao gồm cổ phiếu token hóa và dữ liệu thị trường truyền thống",
+    "CME Group ra mắt hợp đồng tương lai LINK có quản lý (hợp đồng chuẩn và micro) vào tháng 2/2026 — dấu hiệu kênh tiếp cận tổ chức đang trưởng thành"
+   ]
+  },
+  "quickFacts": [
+   [
+    "Ra mắt",
+    "Whitepaper 2017; mainnet trên Ethereum 2019"
+   ],
+   [
+    "Nhà sáng lập",
+    "Sergey Nazarov & Steve Ellis (Ari Juels, cố vấn)"
+   ],
+   [
+    "Phân loại",
+    "Mạng oracle phi tập trung (không phải L1 riêng)"
+   ],
+   [
+    "Mô hình bảo mật",
+    "Off-Chain Reporting + staking/slashing của node"
+   ],
+   [
+    "Chuẩn token",
+    "LINK, ERC-677 (tương thích ERC-20)"
+   ],
+   [
+    "Tổng nguồn cung",
+    "1,000,000,000 LINK (cố định, không lạm phát)"
+   ],
+   [
+    "Đang lưu hành",
+    "~660M+ LINK (khoảng hai phần ba nguồn cung; vẫn đang mở khóa)"
+   ],
+   [
+    "Công dụng token",
+    "Trả cho nhà vận hành node; được stake làm tài sản thế chấp có thể bị slash"
+   ]
+  ],
+  "ecosystem": [
+   "Nguồn cấp giá DeFi: Aave, Compound, Synthetix và hầu hết các giao thức cho vay/phái sinh lớn dựa vào Chainlink cho giá cả",
+   "Cross-chain CCIP: Coinbase Wrapped Assets (cbBTC, cbETH và các loại khác) cùng wstETH của Lido dùng nó làm hạ tầng cầu nối",
+   "Chainlink VRF: tính ngẫu nhiên có thể kiểm chứng, được các đợt mint NFT và game on-chain sử dụng",
+   "Proof of Reserve: chứng thực on-chain rằng các tài sản token hóa/bọc (wrapped) thực sự có bảo chứng",
+   "Thí điểm với tổ chức: SWIFT, DTCC, Euroclear và các ngân hàng kết nối thử nghiệm thanh toán tài sản token hóa",
+   "Dữ liệu doanh nghiệp & chính phủ: Bộ Thương mại Hoa Kỳ công bố dữ liệu vĩ mô on-chain qua Chainlink năm 2025",
+   "Data Streams: dữ liệu thị trường độ trễ thấp cho perpetual, cổ phiếu token hóa và các trường hợp sử dụng tần suất cao"
+  ],
+  "history": [
+   {
+    "year": "2017",
+    "event": "Whitepaper được công bố bởi Nazarov, Ellis và Juels; đợt bán token tháng 9 huy động ~$32M (350M LINK ở mức ~$0.11)"
+   },
+   {
+    "year": "2019",
+    "event": "Mainnet Chainlink đi vào hoạt động trên Ethereum, cung cấp các nguồn cấp giá phi tập trung đầu tiên"
+   },
+   {
+    "year": "2020-2021",
+    "event": "DeFi bùng nổ chấp nhận (Aave, Synthetix, Compound); whitepaper Chainlink 2.0 vạch ra 'hybrid smart contracts'"
+   },
+   {
+    "year": "2022",
+    "event": "Staking v0.1 ra mắt (tháng 12), lần đầu cho phép người nắm giữ LINK hậu thuẫn bảo mật oracle"
+   },
+   {
+    "year": "2023",
+    "event": "Staking v0.2 (pool 45M LINK) hoạt động và CCIP ra mắt, đánh dấu cú đẩy vào hạ tầng cross-chain và tổ chức"
+   },
+   {
+    "year": "2024-2025",
+    "event": "Các thí điểm token hóa SWIFT/DTCC/Euroclear tiến triển; Chainlink Reserve ra mắt (tháng 8/2025, phí được quy đổi thành LINK); Bộ Thương mại Hoa Kỳ công bố dữ liệu on-chain qua Chainlink"
+   },
+   {
+    "year": "2026",
+    "event": "CME niêm yết hợp đồng tương lai LINK có quản lý (tháng 2); các workflow doanh nghiệp CRE và Data Streams mở rộng; ra mắt sản xuất appchain thế chấp DTCC nhắm vào Q4"
+   }
+  ],
+  "risks": [
+   "Tập trung hóa oracle là mối lo cấu trúc có thật. Quá nhiều mảng DeFi đọc giá từ Chainlink đến mức một nguồn cấp lỗi hoặc bị thao túng có thể lan truyền dây chuyền qua Aave, MakerDAO và các giao thức khác. Những người phê bình như Chris Blec từ lâu lập luận điều này biến Chainlink thành điểm hỏng duy nhất của cả hệ sinh thái.",
+   "Khóa quản trị (admin key) và kiểm soát multisig. Các tham số then chốt và quyền nâng cấp nằm sau các multisig của công ty/foundation. Vụ lùm xùm năm 2023 về việc lặng lẽ thay đổi người ký multisig (Chainlink nói ngưỡng 4-trên-9 vẫn được giữ) cho thấy niềm tin đặt nặng thế nào vào một nhóm nhỏ người kiểm soát — một rủi ro 'nhân vật chủ chốt' và pháp lý.",
+   "Mở khóa token và LINK chảy về đâu. Lịch nguồn cung đã giải phóng những đợt lớn qua các năm, và khoảng một phần ba tổng cung vẫn chưa lưu hành. Lượng LINK do đội ngũ/foundation nắm giữ là một khối cung treo lơ lửng mà thị trường theo dõi sát, và giới phân tích đã thúc ép Chainlink công bố chính xác những token đó đi về đâu.",
+   "Kinh tế staking chưa hoàn toàn tự nuôi được mình. Phần thưởng staking từng dựa vào phát hành token thay vì thuần phí mạng. Chainlink Reserve mới nhằm khắc phục điều này bằng cách dẫn phí thực vào LINK, nhưng bánh đà đó còn non trẻ và chưa được chứng minh ở quy mô lớn.",
+   "Câu hỏi về khả năng bắt giữ giá trị. Chainlink bảo vệ lượng giá trị khổng lồ và xử lý khối lượng lớn, nhưng mối liên hệ giữa mức sử dụng mạng và nhu cầu token LINK trong lịch sử khá gián tiếp — phe bi quan cho rằng token có thể tụt lại phía sau thành công của công nghệ.",
+   "Cạnh tranh. Pyth Network (dữ liệu thị trường bên-thứ-nhất tốc độ cao), API3, Band Protocol và UMA đều đuổi theo thị phần oracle với các mô hình khác nhau. Chainlink hiện dẫn đầu với khoảng cách lớn, nhưng vị thế đó không được bảo đảm.",
+   "Rủi ro của câu chuyện tổ chức. Phần lớn luận điểm 2026 dựa vào việc TradFi chấp nhận (DTCC, SWIFT, ngân hàng) mà hiện phần nhiều vẫn ở giai đoạn thí điểm/thử nghiệm — tiến độ có thể trượt và thí điểm không phải lúc nào cũng thành doanh thu sản xuất."
+  ],
+  "howToInvest": [
+   "Giáo dục, không phải lời khuyên tài chính. LINK là tài sản crypto biến động và bạn có thể mất tiền; chỉ bỏ vào số tiền bạn có thể chấp nhận mất, và hiểu rõ thứ mình mua trước khi mua.",
+   "Mua từ sàn uy tín. LINK là một trong những token được niêm yết rộng rãi nhất, có mặt trên các sàn lớn được cấp phép. Ưu tiên nền tảng có thành tích thực sự thay vì những nơi mờ ám.",
+   "Xác minh token trước khi chạm vào DEX. LINK là token ERC-20/677 — tồn tại các bản sao lừa đảo trùng tên. Xác nhận địa chỉ hợp đồng chính thức từ chính trang của Chainlink hoặc một trình khám phá (explorer) đáng tin cậy trước khi hoán đổi on-chain.",
+   "Chuyển về tự lưu ký. 'Không phải chìa khóa của bạn, không phải coin của bạn.' Một ví cứng (ví dụ Ledger hoặc Trezor) giữ LINK ngoài sàn. Viết seed phrase ra giấy, cất ngoại tuyến, và đừng bao giờ gõ vào trang web.",
+   "Nếu stake, hãy hiểu về khóa tài sản. Chainlink Staking v0.2 có giới hạn sức chứa và thời gian chờ rút (unbonding) 28 ngày (cộng cửa sổ nhận có giới hạn), và phần thưởng không được bảo đảm — LINK của bạn kém thanh khoản trong lúc khóa và chịu rủi ro slashing.",
+   "Cảnh giác với bất cứ thứ gì hứa hẹn 'lợi suất LINK' cố định hoặc quá cao. Tỷ suất staking hợp pháp ở mức khiêm tốn (một chữ số); lợi nhuận cao được bảo đảm là mô-típ lừa đảo kinh điển.",
+   "Định cỡ hợp lý và nghĩ dài hạn. Hạ tầng oracle là luận điểm nhiều năm — tránh tập trung quá mức, và đừng đầu tư số tiền bạn sẽ cần sớm."
+  ]
+ },
+ {
+  "slug": "dot",
+  "category": "Mạng tương tác Layer-0 / giao thức đa chain",
+  "tagline": "Một mạng lưới các blockchain cùng chia sẻ một lớp bảo mật và có thể nói chuyện với nhau.",
+  "whatIsIt": [
+   "Polkadot là một giao thức \"Layer-0\" — thay vì là một blockchain chạy ứng dụng, nó là lớp nền kết nối nhiều blockchain lại với nhau, cho phép chúng chia sẻ bảo mật và truyền thông điệp. Mỗi chain được kết nối (gọi là parachain) có thể được tinh chỉnh cho công việc riêng — DeFi, gaming, danh tính, tài sản thực — trong khi mượn bảo mật của cả mạng lưới thay vì phải tự gây dựng.",
+   "Nó được tạo ra bởi Gavin Wood, người đồng sáng lập Ethereum, viết Yellow Paper của nó, xây ngôn ngữ smart contract Solidity, và đặt ra thuật ngữ \"Web3.\" Ông công bố whitepaper Polkadot năm 2016, và dự án được xây dựng bởi Parity Technologies với sự bảo trợ của tổ chức phi lợi nhuận Thụy Sĩ Web3 Foundation.",
+   "Lý do nó tồn tại: Wood đặt cược rằng tương lai là nhiều chain chuyên biệt, không phải một chain làm tất cả, và những chain đó cần một cách tối thiểu hóa niềm tin để chia sẻ bảo mật và giao tiếp. Polkadot là nỗ lực của ông nhằm trở thành lớp điều phối kết nối chúng lại. Token gốc, DOT, được dùng cho staking (bảo mật), quản trị (bỏ phiếu) và trả phí tài nguyên mạng.",
+   "Polkadot đi vào hoạt động tháng 5 năm 2020, đã trải qua một cuộc chuyển đổi kiến trúc lớn (\"Polkadot 2.0\") và hiện đang tiến tới một cuộc tái thiết kế còn lớn hơn gọi là JAM. Nó là một trong những dự án tham vọng kỹ thuật nhất trong crypto, và cũng là dự án chật vật trong việc chuyển hóa kỹ thuật đó thành mức chấp nhận của người dùng và giá — cả hai điều cùng đúng một lúc, và khoảng cách đó đã nới rộng, chứ không thu hẹp, cho đến giữa 2026."
+  ],
+  "howItWorks": {
+   "paragraphs": [
+    "Ở trung tâm là Relay Chain. Nó không tự chạy ứng dụng — công việc duy nhất của nó là cung cấp bảo mật chung, điều phối validator và truyền thông điệp giữa các chain cắm vào nó. Hãy hình dung nó như cột sống mà mọi thứ khác kết nối vào.",
+    "Bảo mật dùng Nominated Proof-of-Stake (NPoS). Validator stake DOT và tạo/xác minh block; người nắm giữ thông thường (nominator) hậu thuẫn các validator đáng tin cậy bằng DOT của mình và chia sẻ phần thưởng. Hành vi sai trái sẽ bị \"slash\" — một phần DOT đã stake bị tiêu hủy — chính là cây gậy kinh tế giữ cho validator trung thực. Việc tạo block và tính hoàn tất được tách giữa hai cơ chế, BABE và GRANDPA.",
+    "Parachain là các chain chuyên biệt kết nối vào. Các \"collator\" của một parachain gom giao dịch của nó thành các block ứng viên rồi chuyển cho một tập con ngẫu nhiên các validator của Relay Chain, những người kiểm tra chúng theo quy tắc của chain đó. Vì nhiều parachain được xác thực song song, mạng lưới xử lý được nhiều hơn hẳn một chain đơn lẻ. Truyền tin cross-chain (XCM) là chuẩn cho phép các chain này chuyển token và dữ liệu qua lại.",
+    "Dưới Polkadot 2.0, mô hình cũ đấu giá slot hai năm cho một chỗ parachain được thay bằng \"Agile Coretime\" — giờ bạn mua thời gian tính toán của mạng một cách linh hoạt (theo tháng, hoặc thậm chí từng block), như thuê dung lượng đám mây. Các nâng cấp mang tên asynchronous backing và elastic scaling đã cắt giảm thời gian block (xuống ~6 giây trên Relay Chain) và tăng thông lượng lên khoảng gấp đôi."
+   ],
+   "bullets": [
+    "Thiết kế Layer-0: Relay Chain bảo vệ và kết nối; các parachain làm công việc ứng dụng thực tế một cách song song.",
+    "Nominated Proof-of-Stake: validator stake, nominator hậu thuẫn họ, kẻ xấu bị slash.",
+    "XCM (Cross-Consensus Messaging): ngôn ngữ chung cho phép các parachain gửi tài sản và dữ liệu cho nhau không cần tin tưởng lẫn nhau.",
+    "Agile Coretime: mua blockspace/tài nguyên tính toán theo nhu cầu thay vì phải thắng một slot cố định nhiều năm.",
+    "Bảo mật chia sẻ: một chain mới thừa hưởng toàn bộ tập validator của mạng thay vì phải tự chiêu mộ — điểm bán hàng lớn nhất so với các chain độc lập."
+   ]
+  },
+  "building": {
+   "paragraphs": [
+    "Tính đến giữa 2026, Polkadot đang tiêu hóa hai cú đẩy lớn — một đã triển khai, một còn ở phía trước. Cái đã triển khai là smart contract ngay trên mạng lõi: \"Polkadot Hub\" đi vào hoạt động cuối tháng 1 năm 2026 (qua một nâng cấp runtime, sau đợt chạy thử trên Kusama cuối 2025), mang smart contract EVM (tương thích Ethereum, qua một engine Rust tên Revive/REVM) và PolkaVM cộng block ~2 giây thẳng lên mạng chính. Mục tiêu là để lập trình viên Ethereum triển khai bằng công cụ quen thuộc (Solidity, MetaMask) mà không cần dựng cả một parachain — một sự thừa nhận rằng rào cản \"tự ra mắt chain riêng\" trước đây quá cao. Lời thẳng thắn: thị trường thờ ơ. DOT tiếp tục trượt giá (giao dịch quanh $0.85 đầu tháng 7 năm 2026), nên việc triển khai công nghệ vẫn chưa chuyển hóa thành mức chấp nhận hay giá.",
+    "Cú đẩy thứ hai, dài hạn hơn, là JAM (Join-Accumulate Machine), một cuộc tái thiết kế từ gốc, tưởng tượng lại Polkadot như một cỗ máy tính toán tổng quát, có thể kiểm chứng — Wood mô tả nó gần với một máy tính thế giới phi tập trung hơn. Testnet công khai đầu tiên của JAM đi vào hoạt động đầu 2026, bản đặc tả của nó (\"Gray Paper\") đang tiến gần bản phát hành 1.0, và một quyết định quản trị về mainnet được kỳ vọng vào cuối 2026. Đây là một cuộc tái kiến trúc thực sự tham vọng, và như mọi cuộc viết lại kiểu này, nó mang rủi ro thực thi và tiến độ có thật.",
+    "Về mặt kinh tế, một thay đổi lớn đã có hiệu lực: đợt cắt giảm phát hành khoảng 54% được quản trị phê duyệt (referenda 1710 và 1828) cùng mức trần cứng vĩnh viễn 2,1 tỷ nguồn cung có hiệu lực ngày 14 tháng 3 năm 2026 (\"Pi Day\"), hạ lạm phát hàng năm từ khoảng 10% xuống xấp xỉ 3% với các bước giảm tiếp theo mỗi hai năm — một sửa chữa có chủ đích cho tình trạng lạm phát vô hạn của DOT, một chỉ trích tồn tại từ lâu."
+   ],
+   "bullets": [
+    "Polkadot Hub — EVM gốc (qua Revive) + smart contract PolkaVM và block ~2 giây trên mạng chính, HOẠT ĐỘNG từ cuối tháng 1/2026, để chinh phục trực tiếp lập trình viên Ethereum; phản ứng về giá/mức chấp nhận cho đến nay khá im ắng.",
+    "JAM (Join-Accumulate Machine) — cuộc tái thiết kế từ đầu thành một tấm vải tính toán tổng quát có thể kiểm chứng; testnet công khai đầu tiên hoạt động đầu 2026, Gray Paper tiến gần v1.0, quyết định quản trị về mainnet được kỳ vọng cuối 2026.",
+    "Block nhanh hơn — Polkadot Hub chạy block ~2 giây; công việc PolkaVM đang tiến hành (một trình biên dịch JIT) nhắm tới tốc độ thực thi gần như native.",
+    "Tái cấu trúc tokenomics — XONG: đợt cắt phát hành ~54% và mức trần cứng 2,1 tỷ DOT có hiệu lực ngày 14/3/2026, chấm dứt lạm phát vô hạn (lạm phát hàng năm hiện ~3%, giảm dần theo thời gian).",
+    "Agile Coretime trưởng thành — hoàn thiện thị trường blockspace trả-theo-nhu-cầu đã thay thế các phiên đấu giá slot nhiều năm."
+   ]
+  },
+  "quickFacts": [
+   [
+    "Ra mắt",
+    "Tháng 5/2020 (mainnet)"
+   ],
+   [
+    "Nhà sáng lập",
+    "Gavin Wood (đồng sáng lập Ethereum), cùng Web3 Foundation & Parity"
+   ],
+   [
+    "Cơ chế đồng thuận",
+    "Nominated Proof-of-Stake (NPoS); BABE + GRANDPA cho tạo block/hoàn tất"
+   ],
+   [
+    "Kiến trúc",
+    "Relay Chain Layer-0 + các parachain song song"
+   ],
+   [
+    "Mô hình nguồn cung",
+    "Từng lạm phát ~10%/năm; đợt cắt phát hành ~54% + trần cứng 2,1 tỷ có hiệu lực tháng 3/2026 (lạm phát hiện ~3%/năm, giảm dần)"
+   ],
+   [
+    "Nguồn cung lưu hành",
+    "~1,68 tỷ DOT (giữa 2026; tiến dần đến mức trần 2,1 tỷ trong khoảng một thập kỷ tới)"
+   ],
+   [
+    "Công dụng token",
+    "Staking/bảo mật, bỏ phiếu quản trị, và mua tài nguyên mạng (coretime)"
+   ],
+   [
+    "Khả năng tương tác",
+    "Truyền tin cross-chain XCM; cầu nối tới Ethereum và các mạng khác"
+   ]
+  ],
+  "ecosystem": [
+   "Hydration (trước đây là HydraDX) — trung tâm DeFi dùng một \"Omnipool\" chung duy nhất cho thanh khoản",
+   "Acala — trung tâm DeFi với DEX, liquid staking (LDOT) và hạ tầng stablecoin",
+   "Astar — hỗ trợ cả hợp đồng EVM lẫn WASM, nổi tiếng với mô hình dApp staking",
+   "Bifrost & Interlay — liquid staking và Bitcoin-trên-Polkadot / tài sản cross-chain",
+   "Centrifuge — token hóa tài sản thực (RWA)",
+   "KILT & Phala — danh tính/chứng chỉ phi tập trung và tính toán bảo vệ quyền riêng tư",
+   "Moonbeam — từng là parachain EVM hàng đầu của Polkadot, nhưng năm 2026 nó tuyên bố sẽ ngừng hoạt động trên Polkadot và di cư token GLMR sang Base của Coinbase (hạn chót 31/7/2026), một bước lùi thực sự cho hệ sinh thái",
+   "Kusama — \"mạng hoàng yến\" (canary network) của Polkadot, nơi các nâng cấp được thử lửa với giá trị thật trước khi lên Polkadot"
+  ],
+  "history": [
+   {
+    "year": "2016",
+    "event": "Gavin Wood, sau khi rời Ethereum, công bố whitepaper Polkadot phác thảo tầm nhìn đa chain / bảo mật chia sẻ."
+   },
+   {
+    "year": "2017",
+    "event": "Web3 Foundation được thành lập; ICO của Polkadot huy động ~$145M (dù ~$90M sau đó bị đóng băng trong sự cố lỗi đóng băng ví multisig của Parity vào tháng 11 năm đó)."
+   },
+   {
+    "year": "2019",
+    "event": "Kusama, mạng 'hoàng yến' thử nghiệm của Polkadot, ra mắt (tháng 8) để thử nghiệm staking và quản trị trong thực tế."
+   },
+   {
+    "year": "2020",
+    "event": "Mainnet Polkadot đi vào hoạt động (26/5); mạng lưới chuyển sang Nominated Proof-of-Stake với cuộc bầu chọn validator công khai."
+   },
+   {
+    "year": "2021",
+    "event": "Các parachain đi vào hoạt động; các phiên đấu giá slot parachain đầu tiên diễn ra, với các dự án như Acala và Moonbeam thắng những slot đầu."
+   },
+   {
+    "year": "2023-2024",
+    "event": "Định hướng Polkadot 2.0 thành hình: Agile Coretime thay thế đấu giá slot, asynchronous backing tăng tốc block."
+   },
+   {
+    "year": "2025",
+    "event": "Các thành phần Polkadot 2.0 lên môi trường sản xuất (Agile Coretime, block ~6 giây, cầu nối Ethereum); bản đặc tả và các testnet của JAM tiến triển."
+   },
+   {
+    "year": "2026",
+    "event": "Polkadot Hub đi vào hoạt động (cuối tháng 1), mang smart contract EVM/PolkaVM gốc lên mạng chính; đợt cắt phát hành ~54% và trần cứng 2,1 tỷ có hiệu lực (14/3, 'Pi Day'); JAM bước vào testnet công khai đầu tiên."
+   }
+  ],
+  "risks": [
+   "Mức chấp nhận tụt lại rất xa so với công nghệ. Dù hoạt động lập trình viên thuộc hàng đỉnh và liên tục ra sản phẩm, tổng giá trị bị khóa DeFi của toàn hệ sinh thái vẫn nhỏ — chỉ là một phần nhỏ của Ethereum hay Solana — và giá DOT đã rơi rất xa khỏi các đỉnh 2021, giao dịch gần $0.85 vào giữa 2026. Ngay cả cú ra mắt smart contract năm 2026 cũng chỉ nhận phản ứng thị trường lạnh nhạt. Kỹ thuật xuất sắc chưa chuyển hóa thành người dùng, vốn hay giá.",
+   "Độ phức tạp cao và đường cong học tập dốc. Xây dựng trên Substrate/Rust và vận hành một parachain đầy đủ vừa khó vừa tốn kém, đẩy lập trình viên đi nơi khác. Cú đẩy smart contract năm 2026 về bản chất là nỗ lực sửa một rào cản đã tiêu tốn nhiều năm đà tiến.",
+   "Các cuộc đào tẩu của dự án chủ lực. Moonbeam — từng là parachain hàng đầu của Polkadot — đang rời đi để di cư token sang Base của Coinbase (hạn chót 31/7/2026) khi giá trị on-chain của nó sụp đổ. Khi các dự án đầu bảng rời sang hệ sinh thái đối thủ, đó là tín hiệu thật, không chỉ là nhiễu.",
+   "Chỉ trích về lạm phát và ngân khố. DOT từng lạm phát (~10%/năm) không có trần, pha loãng người nắm giữ, và ngân khố cộng đồng chi tiêu mạnh tay trong khi giới phê bình chất vấn hiệu quả thu về. Đợt trần-cứng/cắt-giảm 2026 là phản ứng trực tiếp, nhưng nó là bản sửa cho một vấn đề đã tồn tại nhiều năm — và khoảng 1,68 tỷ trong mức trần 2,1 tỷ đã lưu hành, nghĩa là phần lớn sự pha loãng đã xảy ra rồi.",
+   "Cạnh tranh gay gắt cho cùng một công việc. Cosmos (IBC), subnet của Avalanche, LayerZero và các stack module như Celestia đều đuổi theo các trường hợp sử dụng tương tác/app-chain — vài bên trong số đó hiện có sức hút lớn hơn. Polkadot không có con hào nào được bảo đảm.",
+   "Rủi ro thực thi với JAM. JAM là cuộc tái kiến trúc từ đầu của cả mạng lưới. Các cuộc viết lại tham vọng có thể trễ hẹn, phá vỡ tương thích, hoặc đánh mất cộng đồng trong một cuộc di cư nhiều năm — phần thưởng lớn nhưng rủi ro cũng lớn, và thời điểm mainnet của nó vẫn chưa chốt.",
+   "Rủi ro quản trị và độ phức tạp. OpenGov on-chain trao quyền lực thật cho người nắm token, nhưng tỷ lệ tham gia thấp và các cuộc trưng cầu (referenda) khó theo dõi khiến những quyết định kinh tế lớn có thể nằm trong tay một nhóm thiểu số nhỏ, sành sỏi."
+  ],
+  "howToInvest": [
+   "Giáo dục trước, không phải hype. Hãy hiểu rằng DOT là vụ cược vào một luận điểm cụ thể (nhiều chain tương tác chia sẻ bảo mật) được nể trọng về kỹ thuật nhưng chưa được chứng minh về thương mại, và giá của nó đã đi xuống suốt nhiều năm. Không có gì ở đây là lời khuyên tài chính — chỉ mạo hiểm số tiền bạn có thể chấp nhận mất toàn bộ.",
+   "Nếu mua, hãy dùng một sàn uy tín có niêm yết DOT, và kiểm tra rằng bạn đang ở trang thật (bookmark nó; cảnh giác các bản nhái/phishing). Hoàn tất mọi bước xác minh danh tính một cách trung thực.",
+   "Chuyển các khoản nắm giữ đáng kể ra khỏi sàn về tự lưu ký. Các ví gốc Polkadot gồm Talisman, SubWallet và Nova Wallet; ví cứng như Ledger hỗ trợ DOT cho lưu trữ lạnh. 'Không phải chìa khóa của bạn, không phải coin của bạn.'",
+   "Viết seed phrase ra giấy và cất ngoại tuyến. Đừng bao giờ gõ nó vào trang web, chia sẻ, hay lưu trong ảnh/ghi chú đám mây — bất kỳ ai có cụm từ này đều kiểm soát tiền của bạn, và không ai có thể đảo ngược một vụ trộm.",
+   "Nếu muốn lợi suất, bạn có thể stake DOT (trực tiếp, qua nomination pool, hoặc qua liquid staking như trên Bifrost/Acala), nhưng hãy hiểu rằng staking khóa tiền trong một khoảng thời gian chờ rút (unbonding) và slashing có thể gây thua lỗ. Học kỹ cơ chế trước khi cam kết.",
+   "Cảnh giác cái bẫy 'sai mạng lưới': Polkadot tương tác với nhiều parachain và giờ còn có địa chỉ kiểu EVM trên Polkadot Hub nữa — kiểm tra kỹ mạng, định dạng địa chỉ và bất kỳ cầu nối nào bạn dùng trước khi gửi, vì các lệnh chuyển crypto là không thể đảo ngược.",
+   "Định cỡ vị thế cho biến động. DOT từng giảm hơn 90% từ các đỉnh trước và vẫn tiếp tục rơi; hãy coi nó là tài sản rủi ro cao, độ bất định cao và đừng bao giờ đầu tư dựa trên giả định rằng roadmap (JAM, Hub) chắc chắn sẽ thành hiện thực hay đẩy được giá."
+  ]
+ }
+]
