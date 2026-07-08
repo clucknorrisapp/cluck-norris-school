@@ -4033,6 +4033,58 @@ app.get("/api/tool-spotlight-test", async (req, res) => {
   return res.status(200).json({ count: TOOL_SPOTLIGHTS.length, next: TOOL_SPOTLIGHTS[i], hint: "add &post=1 to send (X + Telegram)" });
 });
 
+// ── Chain Spotlight — twice-daily X posts featuring one /learn asset page ──────
+// Goal: reach each big chain's X crowd (owner ask 2026-07-08) via their $TICKER /
+// project handle and pull them into clucknorris.app/learn/<slug>. Rotates through
+// data/learn-assets.json (kv chainSpotPos); several copy shapes so it doesn't read
+// botlike. X allows ONE cashtag per post — the featured asset gets it; everything
+// else is hashtags. Slots via kv chainSpotHours "14,21" UTC; per-slot dedupe kv
+// chainSpotStamp (stamped BEFORE posting so a crash can't double-post publicly).
+// Preview/fire: /api/chain-spotlight-test?key=…[&post=1]. Disable: kv chainSpotEnabled=0.
+const CHAIN_X_HANDLES = {
+  eth: "@ethereum", sol: "@solana", bnb: "@BNBCHAIN", xrp: "@Ripple", xlm: "@StellarOrg",
+  ada: "@Cardano", doge: "@dogecoin", trx: "@trondao", avax: "@avax", link: "@chainlink",
+  dot: "@Polkadot", ton: "@ton_blockchain", ltc: "@litecoin", near: "@NEARProtocol",
+  sui: "@SuiNetwork", apt: "@Aptos", // btc/bch: no single canonical handle — cashtag/hashtag only
+};
+function chainSpotlightCopy(a, n) {
+  const url = `clucknorris.app/learn/${a.slug}`;
+  const first = (s) => String(s || "").split(". ")[0].replace(/\.$/, "");
+  const bld = first((a.building && a.building.bullets && a.building.bullets[0]) || "");
+  const hist = (a.history && a.history.length) ? a.history[n % a.history.length] : null;
+  const shapes = [
+    () => `🐔 What is ${a.name}, really?\n\n${a.tagline}\n\nHow it works, what they're building right now, and the honest risks — in plain English, free:\n\n📚 ${url}`,
+    () => bld ? `🔨 What is ${a.name} building RIGHT NOW?\n\n${bld}.\n\nThe full picture — roadmap, how it works, honest risks — explained straight:\n\n📚 ${url}` : null,
+    () => `⚠️ Every chain has trade-offs. ${a.name} too.\n\nMost pages shill. We teach — including the risks nobody puts in the thread.\n\n${a.name} in plain English, free:\n\n📚 ${url}`,
+    () => hist ? `🐔 ${a.name} history class: in ${hist.year} — ${first(hist.event)}.\n\nHow it started, how it works, where it's going (and the honest risks):\n\n📚 ${url}` : null,
+    () => `🎓 New to ${a.name}? Start here.\n\nNo hype, no shilling: how it actually works, live prices, and how to get started safely — with Ask Cluck on the page for your questions.\n\n📚 ${url}`,
+  ];
+  let body = null;
+  for (let k = 0; k < shapes.length && !body; k++) body = shapes[(n + k) % shapes.length]();
+  const tags = [`$${a.ticker}`, CHAIN_X_HANDLES[a.slug], "@JupiterExchange", "@BagsApp"].filter(Boolean).join(" ");
+  return `${body}\n\n${tags}`;
+}
+async function postChainSpotlight() {
+  const assets = loadLearnAssets();
+  if (!assets.length) return { skipped: "no assets" };
+  const n = Number(kv.get("chainSpotPos", 0)) || 0;
+  kv.set("chainSpotPos", n + 1);
+  const a = assets[n % assets.length];
+  const text = chainSpotlightCopy(a, n); // shape varies per POST (18%5≠0 → new angle per asset each cycle)
+  const out = { index: n, slug: a.slug, name: a.name };
+  try { out.x = await postToX(text); } catch (e) { out.xErr = e.message; }
+  return out;
+}
+app.get("/api/chain-spotlight-test", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (req.query.post === "1") { const r = await postChainSpotlight(); return res.status(200).json({ posted: true, ...r }); }
+  const assets = loadLearnAssets();
+  const n = Number(kv.get("chainSpotPos", 0)) || 0;
+  const a = assets.length ? assets[n % assets.length] : null;
+  return res.status(200).json({ count: assets.length, nextIndex: n, next: a && a.slug, preview: a ? chainSpotlightCopy(a, n) : null, hours: String(kv.get("chainSpotHours", "14,21")), hint: "add &post=1 to post to X now" });
+});
+
 // &post=1 posts a tweet (uses &text=... or a default) so you can verify posting
 // works the moment the keys are added in Railway.
 app.get("/api/x-post-test", async (req, res) => {
@@ -11716,6 +11768,25 @@ app.listen(PORT, () => {
     }
     setInterval(toolSpotlightTick, 10 * 60 * 1000); // check every 10 min; fires once/day past the hour
     setTimeout(toolSpotlightTick, 125000);
+    // Chain Spotlight — TWICE-daily /learn asset feature on X (owner ask 2026-07-08).
+    // Slots kv chainSpotHours (default "14,21" UTC — US morning + US afternoon/EU evening,
+    // clear of toolSpotHour 17). Stamps the slot BEFORE posting; kv chainSpotEnabled=0 kills it.
+    async function chainSpotlightTick() {
+      try {
+        if (String(kv.get("chainSpotEnabled", "1")) === "0") return;
+        const now = new Date(), today = now.toISOString().slice(0, 10);
+        const hours = String(kv.get("chainSpotHours", "14,21")).split(",").map((h) => parseInt(h, 10)).filter((h) => h >= 0 && h < 24);
+        const slot = hours.filter((h) => now.getUTCHours() >= h).pop();
+        if (slot == null) return;
+        const stamp = `${today}@${slot}`;
+        if (kv.get("chainSpotStamp", null) === stamp) return;
+        kv.set("chainSpotStamp", stamp);
+        const r = await postChainSpotlight();
+        console.log("[chain-spotlight] posted", stamp, r.slug, { x: !!(r.x && r.x.ok), err: r.xErr || null });
+      } catch (e) { console.warn("[chain-spotlight] tick failed:", e.message); }
+    }
+    setInterval(chainSpotlightTick, 10 * 60 * 1000); // two slots/day, dedupe per slot
+    setTimeout(chainSpotlightTick, 140000);
     // Reconciliation backstop — every ~12 min, recover any buy/sell the 30s poller
     // dropped (transient error, restart gap, RPC quirk). Settled + durably-deduped,
     // so it never double-posts. First run delayed so the poller initializes first.
