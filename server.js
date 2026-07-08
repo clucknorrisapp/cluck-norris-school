@@ -12023,6 +12023,43 @@ app.listen(PORT, () => {
     setTimeout(recordOrganicSnapshot, 25000);
     setInterval(meteoraOorTick, 5 * 60 * 1000);
     setTimeout(meteoraOorTick, 45000);
+    // ── CLKN tight-pool OOR alert (read-only). When a ±3% engine pool drifts OUT of
+    //    range, DM the treasury chat LOUD so the owner can recenter manually — the
+    //    autonomous rebalancer stays OFF (owner's call). Skips the ultra-wide anchors;
+    //    edge-triggered per pool (one alert per OOR episode, clears on return). Never
+    //    touches positions, so it's safe while the vault is paused. kv wpTightOorState.
+    let _wpOorState = kv.get("wpTightOorState", {});
+    async function wpTightOorTick() {
+      const wtg = process.env.TELEGRAM_BOT_TOKEN;
+      const wpr = whirlpoolMM.vault.getProject("treasury");
+      if (!wtg || !wpr || !wpr.telegramChatId) return;
+      async function wpDM(text) {
+        await fetch(`https://api.telegram.org/bot${wtg}/sendMessage`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chat_id: wpr.telegramChatId, parse_mode: "HTML", disable_web_page_preview: true, text }),
+        });
+      }
+      try {
+        const r = await whirlpoolMM.vault.publicPositions("treasury");
+        for (const p of (r.positions || [])) {
+          const lo = p.lower, up = p.upper, cur = p.current;
+          if (!(lo > 0 && up > lo && cur > 0)) continue;
+          const width = (up - lo) / ((up + lo) / 2);
+          if (width > 0.5) continue; // ultra-wide anchors — never alert
+          const key = p.pair;
+          const wasOor = !!_wpOorState[key];
+          if (!p.inRange && !wasOor) {
+            _wpOorState[key] = Date.now(); kv.set("wpTightOorState", _wpOorState);
+            await wpDM(`🚨 <b>CLKN ${p.pair} pool OUT of range</b>\nEarning $0 until re-centered · value ~$${Math.round(p.valueUsd || 0)}\nAuto-rebalance is OFF — recenter when ready.`);
+          } else if (p.inRange && wasOor) {
+            delete _wpOorState[key]; kv.set("wpTightOorState", _wpOorState);
+            await wpDM(`✅ <b>CLKN ${p.pair} pool back in range</b> · earning fees again.`);
+          }
+        }
+      } catch (e) { console.warn("[wp-oor] failed:", e.message); }
+    }
+    setInterval(wpTightOorTick, 5 * 60 * 1000);
+    setTimeout(wpTightOorTick, 55000);
     // Meteora autonomous re-center — only acts when meteoraCfg.autoRecenter is ON (ships OFF).
     // Edge/anti-thrash checks live in meteoraRecenter; this just invokes it on the cadence.
     async function meteoraRecenterTick() {
