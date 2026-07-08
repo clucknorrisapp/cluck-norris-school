@@ -116,8 +116,19 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 > (value-preserving) — this FIXES the Meteora limitation: external deposits/withdrawals show up as a diff
 > step-change >$250 (kv `wpLpHodlJumpUsd`) between daily checks and trigger an AUTO re-baseline with a DM note.
 > First read/check auto-seeds the baseline. READ-ONLY — it never touches positions.
-> **🆕 REIMAGINED ENGINE STRUCTURE — DEPLOYED 2026-07-06 (owner's explicit GO): "same depth-at-touch,
-> ±10% width, ~5× capital" replaces the ±2% trio.** Thesis: depth-at-touch = capital ÷ width, so ~$1.8K/pool
+> **🆕 CURRENT STRUCTURE — ±1.75% TRIO (owner's GO, 2026-07-08; supersedes everything below in
+> this block):** after the ±10% era produced too little volume/organic score ("not working"), the
+> owner pulled back to tight pools. LIVE under treasury `2zMCU…`, all opened via openAnchor at
+> `down=1.75&up=1.75` so they're PINNED (vault stays **PAUSED**; positions are owner-managed via
+> sessions): CLKN/SOL ±1.75% (`5vNLFy…`, ~$2.5K), CLKN/USDC ±1.75% (`5hcqAN…`, ~$2.4K), CLKN/JUP
+> ±1.75% (`6Bj3cJ…`, ~$3.4K) ≈ **$8.3K deployed**, all verified in-range + centered at open. The
+> three ±150–178% permanent anchors (`9piTqV…`/`DEzSNM…`/`GG6RGB…`, ~$190) sit underneath — NEVER
+> touch them. Float kept lean: ~0.4 SOL / ~0.4M CLKN / ~$12 USDC / ~99 JUP. LP-vs-HODL re-baselined
+> at $8,720 (2026-07-08). ±1.75% goes OOR on small moves: `wpTightOorTick` (server.js) DMs the
+> PRIVATE operator chat LOUD on out-of-range — recenters are a manual owner decision, use the
+> `pool-ops` skill (.claude/skills/pool-ops) for the full verified ritual. Historical context ⬇️
+> **REIMAGINED ENGINE STRUCTURE — DEPLOYED 2026-07-06 (superseded 2026-07-08): "same depth-at-touch,
+> ±10% width, ~5× capital" replaced the ±2% trio.** Thesis: depth-at-touch = capital ÷ width, so ~$1.8K/pool
 > at ±10% matches the old ~$350/pool at ±2% → same arb volume feeding the organic score, but recenters
 > ~never fire (price must move 10%) → the recenter IL-crystallization leak (the dominant cost, proven on
 > Meteora) is gone. LIVE under treasury `2zMCU…`, all opened via openAnchor/openWall so they're PINNED
@@ -374,6 +385,22 @@ Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.
 - **Always tag `@JupiterExchange` (routing artery + our JUP/USDC earner's venue) and `@BagsApp`
   (launchpad + hackathon host) in X posts**, plus the relevant projects' own handles
   (CoinGecko `links.twitter_screen_name`) for engagement. (Owner ask, 2026-06-14.)
+- **X→TG mirror + bump rule (owner, 2026-07-08): every X post gets (a) a SILENT Telegram
+  companion in the community chat with a "🐦 On X — like & repost" link, and (b) a follow-up
+  self-reply under the original X post a few hours later to bump engagement.** The Chain
+  Spotlight implements the pattern (TG mirror in `postChainSpotlight`, 3.5h question-bump in
+  `chainSpotlightTick`, observability kv `chainSpotLast`/`chainSpotBump`); new X surfaces should copy it.
+- ⚠️ **Master X pause (`X_AUTOPOST_PAUSED=true`, server.js ~643, owner's call 2026-06-24) hard-gates
+  `postToX` — a new X feature that doesn't pass `{force:true}` posts NOTHING and reports
+  `{ok:false,paused:true}`.** Scoped carve-outs so far: lock announcements + the twice-daily
+  Chain Spotlight (owner ask 2026-07-08). Any new auto-poster needs an explicit owner ask for its
+  own carve-out — and must alert the operator chat on failure, never fail silently (the spotlight
+  posted into the pause for a full day before anyone noticed).
+- **Media/brand generations: `docs/MEDIA_LIBRARY.md` is the manifest.** Every KEPT Higgsfield
+  render gets a row (job ID, CDN URL, verdict); check it BEFORE regenerating; confirm the exact
+  job ID with the owner before overlay/edit work. Hard rules: AI never draws real coin/brand
+  logos (overlay/end-card them from `docs/brand/`), branded mascot always needs a reference image,
+  NSFW false-flags auto-refund.
 - Persistence: Railway volume at `/data` (consumed payment signatures, graduation tracker,
   scheduler timestamps, analytics, transcripts/credentials) — survives redeploys.
 

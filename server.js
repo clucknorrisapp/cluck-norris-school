@@ -4072,17 +4072,37 @@ async function postChainSpotlight() {
   const a = assets[n % assets.length];
   const text = chainSpotlightCopy(a, n); // shape varies per POST (18%5≠0 → new angle per asset each cycle)
   const out = { index: n, slug: a.slug, name: a.name };
-  try { out.x = await postToX(text); } catch (e) { out.xErr = e.message; }
+  // force = scoped carve-out from the 2026-06-24 master X pause (same as lock announcements):
+  // the owner explicitly asked (2026-07-08) for the twice-daily /learn spotlights to go out.
+  // Everything else stays gated by X_AUTOPOST_PAUSED.
+  try { out.x = await postToX(text, { force: true }); } catch (e) { out.xErr = e.message; }
+  // Telegram companion (community chat, SILENT per standing rule) — same copy + X link.
+  try {
+    const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const xLine = out.x && out.x.ok && out.x.id ? `\n\n🐦 On X — like &amp; repost: https://x.com/FireChicken007/status/${out.x.id}` : "";
+    out.tgMsgId = await tgSend(process.env.TELEGRAM_CHAT_ID, esc(text) + xLine, null, { silent: true });
+  } catch (e) { out.tgErr = e.message; }
+  // Durable observability: last result readable via /api/chain-spotlight-test; an X failure
+  // DMs the operator chat so a dead post can never be silent again (this bit us 2026-07-08:
+  // both slots "fired" into the master pause and nobody knew).
+  const rec = { ts: Date.now(), index: n, slug: a.slug, xOk: !!(out.x && out.x.ok), xId: (out.x && out.x.id) || null, xErr: out.xErr || (out.x && !out.x.ok ? JSON.stringify(out.x).slice(0, 160) : null), tgMsgId: out.tgMsgId || null };
+  kv.set("chainSpotLast", rec);
+  if (!rec.xOk) { try { await tgSend(operatorChatId() || "1846034838", `⚠️ <b>Chain Spotlight failed to post</b> (${a.name}): <code>${rec.xErr || "unknown"}</code>`, null, { silent: true }); } catch (_) {} }
   return out;
 }
 app.get("/api/chain-spotlight-test", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
-  if (req.query.post === "1") { const r = await postChainSpotlight(); return res.status(200).json({ posted: true, ...r }); }
+  if (req.query.reset === "1") kv.set("chainSpotPos", 0); // restart the asset rotation at BTC
+  if (req.query.post === "1") {
+    const r = await postChainSpotlight();
+    if (r.x && r.x.ok && r.x.id) kv.set("chainSpotBump", { xId: r.x.id, slug: r.slug, name: r.name, ts: Date.now(), done: false });
+    return res.status(200).json({ posted: true, ...r });
+  }
   const assets = loadLearnAssets();
   const n = Number(kv.get("chainSpotPos", 0)) || 0;
   const a = assets.length ? assets[n % assets.length] : null;
-  return res.status(200).json({ count: assets.length, nextIndex: n, next: a && a.slug, preview: a ? chainSpotlightCopy(a, n) : null, hours: String(kv.get("chainSpotHours", "14,21")), hint: "add &post=1 to post to X now" });
+  return res.status(200).json({ count: assets.length, nextIndex: n, next: a && a.slug, preview: a ? chainSpotlightCopy(a, n) : null, hours: String(kv.get("chainSpotHours", "14,21")), last: kv.get("chainSpotLast", null), bump: kv.get("chainSpotBump", null), hint: "add &post=1 to post now, &reset=1 to restart rotation" });
 });
 
 // &post=1 posts a tweet (uses &text=... or a default) so you can verify posting
@@ -11833,6 +11853,15 @@ app.listen(PORT, () => {
     async function chainSpotlightTick() {
       try {
         if (String(kv.get("chainSpotEnabled", "1")) === "0") return;
+        // Engagement bump (owner rule 2026-07-08: every X post gets a follow-up under it):
+        // ~3.5h after a spotlight lands, self-reply a question to pull the thread back into feeds.
+        const bump = kv.get("chainSpotBump", null);
+        if (bump && !bump.done && bump.xId && Date.now() - bump.ts > 3.5 * 3600e3) {
+          kv.set("chainSpotBump", { ...bump, done: true }); // stamp first — a crash must not double-reply
+          const q = `What's the one thing about ${bump.name} you wish someone had explained sooner? 👇\n\nPlain-English answers, free: clucknorris.app/learn/${bump.slug}`;
+          const br = await postToX(q, { force: true, replyToId: bump.xId });
+          console.log("[chain-spotlight] bump", bump.slug, { ok: !!(br && br.ok) });
+        }
         const now = new Date(), today = now.toISOString().slice(0, 10);
         const hours = String(kv.get("chainSpotHours", "14,21")).split(",").map((h) => parseInt(h, 10)).filter((h) => h >= 0 && h < 24);
         const slot = hours.filter((h) => now.getUTCHours() >= h).pop();
@@ -11841,6 +11870,7 @@ app.listen(PORT, () => {
         if (kv.get("chainSpotStamp", null) === stamp) return;
         kv.set("chainSpotStamp", stamp);
         const r = await postChainSpotlight();
+        if (r.x && r.x.ok && r.x.id) kv.set("chainSpotBump", { xId: r.x.id, slug: r.slug, name: r.name, ts: Date.now(), done: false });
         console.log("[chain-spotlight] posted", stamp, r.slug, { x: !!(r.x && r.x.ok), err: r.xErr || null });
       } catch (e) { console.warn("[chain-spotlight] tick failed:", e.message); }
     }

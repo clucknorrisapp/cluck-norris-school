@@ -17,8 +17,10 @@ npm-debug.log*
 STRATEGY.md
 SECURITY-BACKLOG.md
 
-# Local Claude Code config (machine-specific, keep private)
-.claude/
+# Local Claude Code config (machine-specific, keep private) — but DO commit skills,
+# so fresh cloud sessions get our reusable workflows (.claude/skills/).
+.claude/*
+!.claude/skills/
 
 # Editor / OS
 .DS_Store
