@@ -9941,6 +9941,13 @@ app.get("/sitemap.xml", (req, res) => {
   const today = new Date().toISOString().slice(0, 10);
   const urls = SITEMAP_PAGES.map((p) =>
     `<url><loc>https://clucknorris.app${p}</loc><lastmod>${today}</lastmod><changefreq>${p === "/" || p === "/alpha" ? "daily" : "weekly"}</changefreq></url>`);
+  // Learn hub + per-asset education pages — prime SEO surface ("what is XLM" etc).
+  try {
+    urls.push(`<url><loc>https://clucknorris.app/learn</loc><lastmod>${today}</lastmod><changefreq>weekly</changefreq></url>`);
+    for (const a of loadLearnAssets()) {
+      if (a && a.slug) urls.push(`<url><loc>https://clucknorris.app/learn/${a.slug}</loc><lastmod>${today}</lastmod><changefreq>weekly</changefreq></url>`);
+    }
+  } catch (_) { /* learn pages are a bonus, never a failure */ }
   // Graduate transcripts — permanent shareable pages, capped to keep the file sane.
   try {
     for (const rec of credentials.all().slice(0, 500)) {
