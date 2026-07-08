@@ -9608,6 +9608,12 @@ app.get("/tools", (req, res) => {
   res.sendFile(join(__dirname, "public", "tools.html"));
 });
 
+// Learn hub — per-asset education pages (SOL, BTC, ETH, XLM, …). Exemplar page for now;
+// the full data-driven /learn/:asset engine + hub index lands once the design is signed off.
+app.get("/learn/sol", (req, res) => {
+  res.sendFile(join(__dirname, "public", "learn", "sol.html"));
+});
+
 // Privacy policy + Terms — required live at /privacy and /terms for the Solana
 // dApp Store submission's Compliance section.
 app.get("/privacy", (req, res) => {
