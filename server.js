@@ -9608,10 +9608,65 @@ app.get("/tools", (req, res) => {
   res.sendFile(join(__dirname, "public", "tools.html"));
 });
 
-// Learn hub — per-asset education pages (SOL, BTC, ETH, XLM, …). Exemplar page for now;
-// the full data-driven /learn/:asset engine + hub index lands once the design is signed off.
-app.get("/learn/sol", (req, res) => {
-  res.sendFile(join(__dirname, "public", "learn", "sol.html"));
+// Learn hub — data-driven per-asset education pages (BTC, ETH, SOL, XRP, XLM, …).
+// Content objects live in data/learn-assets.json; lib/learn-pages renders them into
+// house-styled pages with a live price strip + an inline "Ask Cluck" widget.
+const learnPages = require("./lib/learn-pages");
+const LEARN_FILE = join(__dirname, "data", "learn-assets.json");
+let _learnCache = null, _learnCacheAt = 0;
+function loadLearnAssets() {
+  const now = Date.now();
+  if (_learnCache && now - _learnCacheAt < 60000) return _learnCache;
+  try {
+    const arr = JSON.parse(fs.readFileSync(LEARN_FILE, "utf8"));
+    _learnCache = Array.isArray(arr) ? arr : (arr.assets || []);
+  } catch { _learnCache = []; }
+  _learnCacheAt = now;
+  return _learnCache;
+}
+app.get("/learn", (req, res) => {
+  res.type("html").send(learnPages.renderHub(loadLearnAssets()));
+});
+app.get("/learn/:asset", (req, res) => {
+  const slug = String(req.params.asset || "").toLowerCase().replace(/[^a-z0-9-]/g, "");
+  const assets = loadLearnAssets();
+  const a = assets.find((x) => x.slug === slug);
+  if (!a) return res.status(404).type("html").send(learnPages.renderHub(assets));
+  // Cross-link chips: up to 4 sibling assets.
+  a._related = assets.filter((x) => x.slug !== slug).slice(0, 4).map((x) => ({ slug: x.slug, name: x.name, ticker: x.ticker }));
+  res.type("html").send(learnPages.renderAssetPage(a));
+});
+
+// Live price proxy for the /learn pages — CoinGecko simple/price (pro key when set,
+// falls back to the free host), cached ~3min so pages don't hammer the API.
+const _priceCache = new Map();
+app.get("/api/asset-price", async (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=120");
+  const id = String(req.query.id || "").toLowerCase().replace(/[^a-z0-9-]/g, "");
+  if (!id) return res.status(400).json({ error: "id required" });
+  const now = Date.now();
+  const hit = _priceCache.get(id);
+  if (hit && now - hit.at < 180000) return res.json(hit.data);
+  const path = `/simple/price?ids=${id}&vs_currencies=usd&include_24hr_change=true&include_market_cap=true`;
+  try {
+    let j = null;
+    const key = process.env.COINGECKO_API_KEY;
+    if (key) {
+      try {
+        const r = await fetch(`https://pro-api.coingecko.com/api/v3${path}`, { headers: { Accept: "application/json", "x-cg-pro-api-key": key }, signal: AbortSignal.timeout(10000) });
+        if (r.ok) j = await r.json();
+      } catch { /* fall through */ }
+    }
+    if (!j) {
+      const r = await fetch(`https://api.coingecko.com/api/v3${path}`, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(10000) });
+      if (r.ok) j = await r.json();
+    }
+    const row = j && j[id];
+    if (!row) return res.status(502).json({ error: "unavailable" });
+    const data = { price: row.usd ?? null, change24h: row.usd_24h_change ?? null, mcap: row.usd_market_cap ?? null };
+    _priceCache.set(id, { at: now, data });
+    res.json(data);
+  } catch (e) { res.status(502).json({ error: "unavailable" }); }
 });
 
 // Privacy policy + Terms — required live at /privacy and /terms for the Solana

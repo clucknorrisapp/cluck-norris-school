@@ -1,0 +1,73 @@
+[
+  {
+    "slug": "sol",
+    "name": "Solana",
+    "ticker": "SOL",
+    "coingeckoId": "solana",
+    "category": "Layer-1 blockchain",
+    "gradient": ["#9945FF", "#14F195"],
+    "tagline": "A high-speed, low-fee blockchain built for apps that need to move fast. Here's how it actually works — no hype, just the fundamentals and the honest risks.",
+    "whatIsIt": [
+      "Solana is a Layer-1 blockchain — a base network, like Bitcoin or Ethereum, that records transactions and runs programs (smart contracts). It launched in March 2020, built by Solana Labs (co-founded by Anatoly Yakovenko and Raj Gokal).",
+      "Its whole design goal is speed and low cost. Where older chains process a handful of transactions per second and can charge dollars in fees, Solana targets thousands of transactions per second with fees that are usually a small fraction of a cent.",
+      "SOL is the network's native token. You use it to pay transaction fees, and you can stake it (lock it with a validator) to help secure the network and earn rewards."
+    ],
+    "howItWorks": {
+      "paragraphs": [
+        "Most blockchains slow down because every validator has to agree on when each transaction happened. Solana's key trick is Proof of History (PoH): a cryptographic clock that timestamps transactions before they reach consensus, so validators can process them in order without stopping to negotiate the time.",
+        "PoH sits on top of a Proof of Stake system, where validators stake SOL to earn the right to produce blocks. Together they give Solana its roughly 400-millisecond block times and high throughput."
+      ],
+      "bullets": [
+        "Fast: blocks finalize in well under a second.",
+        "Cheap: typical fees are tiny fractions of a cent.",
+        "Single global state: one fast chain, not many shards — simpler for apps."
+      ]
+    },
+    "building": {
+      "paragraphs": [
+        "The big current focus is reliability and scale. Firedancer, an independent validator client built by Jump Crypto, is being rolled out to make the network more resilient and remove single-client risk.",
+        "Alongside that, the ecosystem is pushing consumer and mobile crypto — the Seeker phone, Solana Pay, and token-extensions for compliant stablecoins and real-world assets."
+      ],
+      "bullets": [
+        "Firedancer: a second validator client for resilience and higher throughput.",
+        "Mobile: the Seeker phone and Mobile Stack put a wallet in your pocket.",
+        "Token extensions: richer, programmable tokens for stablecoins and RWAs."
+      ]
+    },
+    "quickFacts": [
+      ["Ticker", "SOL"],
+      ["Type", "Layer-1 blockchain (smart-contract platform)"],
+      ["Launched", "March 2020 (mainnet beta)"],
+      ["Founders", "Anatoly Yakovenko & Raj Gokal (Solana Labs)"],
+      ["Consensus", "Proof of Stake + Proof of History"],
+      ["Block time", "~400 milliseconds"],
+      ["Token use", "Fees, staking, governance across apps"],
+      ["Supply", "Inflationary with a declining schedule; staking rewards"]
+    ],
+    "ecosystem": [
+      "DeFi & trading: Jupiter (the routing layer), Orca, Raydium, Meteora — swap and provide liquidity.",
+      "Launchpads & memecoins: pump.fun, Bags — where new tokens are minted and traded.",
+      "Payments: Solana Pay and stablecoins (USDC) settle in under a second.",
+      "Mobile: the Saga and Seeker phones put a self-custody wallet in your pocket."
+    ],
+    "history": [
+      { "year": "2020", "event": "Mainnet beta launches." },
+      { "year": "2021", "event": "DeFi and NFT boom; SOL reaches an all-time high, but the network also hits congestion and outages." },
+      { "year": "2022", "event": "FTX/Alameda — prominent early backers — collapse, hammering SOL's price." },
+      { "year": "2023-2024", "event": "Network reliability improves; memecoin and consumer activity surge back." },
+      { "year": "2025-2026", "event": "Firedancer rollout and mobile/consumer push continue to harden and grow the network." }
+    ],
+    "risks": [
+      "Outage history: Solana suffered several network halts in 2021-2022 when overloaded. Reliability has improved a lot since, and Firedancer aims to harden it further — but the track record is real.",
+      "Validator cost & concentration: running a validator takes serious hardware, which can concentrate who secures the network.",
+      "Early-backer baggage: FTX/Alameda were prominent early investors; their November 2022 collapse hammered SOL's price before it recovered.",
+      "Volatility & inflation: SOL's price swings hard, and new SOL is issued over time. Never invest money you can't afford to lose."
+    ],
+    "howToInvest": [
+      "Get a wallet: Phantom or Solflare. Write your seed phrase on paper — never type it into a website.",
+      "Get some SOL: from a reputable exchange, or swap into it. You'll need a little to pay fees.",
+      "Start tiny: send a small amount first to learn the flow before moving anything meaningful.",
+      "Verify everything: scams are everywhere. Learn to read a transaction before you sign it."
+    ]
+  }
+]
