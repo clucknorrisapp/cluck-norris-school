@@ -70,10 +70,11 @@
 
   /* ── simple quick links ── */
   .quick{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:30px;max-width:720px;margin-left:auto;margin-right:auto;}
-  .ql{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:var(--card-grad);border:1px solid var(--border);border-radius:12px;padding:11px 14px;transition:transform .1s,border-color .1s,box-shadow .1s;}
-  .ql:hover{transform:translateY(-2px);border-color:var(--orange);box-shadow:0 8px 20px rgba(232,30,14,.16);}
-  .ql .qt{font-family:var(--disp);font-size:15px;letter-spacing:.5px;color:var(--text);text-align:center;}
-  .ql .qd{font-family:var(--body);font-size:11px;color:var(--sub);text-align:center;line-height:1.3;}
+  .ql{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:linear-gradient(160deg,rgba(255,122,24,.08),rgba(20,21,26,.92));border:1px solid rgba(255,122,24,.22);border-radius:12px;padding:13px 14px;transition:transform .12s,border-color .12s,box-shadow .12s;}
+  .ql:hover{transform:translateY(-2px);border-color:var(--orange);box-shadow:0 10px 26px rgba(232,30,14,.28);}
+  .ql .qt{font-family:var(--disp);font-size:16px;letter-spacing:.6px;color:var(--gold);text-align:center;text-shadow:0 0 18px rgba(255,182,39,.4);text-transform:uppercase;}
+  .ql:hover .qt{color:#FFD56B;}
+  .ql .qd{font-family:var(--body);font-size:11.5px;color:var(--body-text);text-align:center;line-height:1.3;}
 
   footer{margin-top:50px;padding-top:22px;border-top:1px solid var(--border-soft);text-align:center;color:var(--sub);font-size:12.5px;line-height:1.9;}
   footer a{color:var(--orange);}
