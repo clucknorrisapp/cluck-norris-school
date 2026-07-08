@@ -1675,5 +1675,861 @@
    "Cảnh giác cái bẫy 'sai mạng lưới': Polkadot tương tác với nhiều parachain và giờ còn có địa chỉ kiểu EVM trên Polkadot Hub nữa — kiểm tra kỹ mạng, định dạng địa chỉ và bất kỳ cầu nối nào bạn dùng trước khi gửi, vì các lệnh chuyển crypto là không thể đảo ngược.",
    "Định cỡ vị thế cho biến động. DOT từng giảm hơn 90% từ các đỉnh trước và vẫn tiếp tục rơi; hãy coi nó là tài sản rủi ro cao, độ bất định cao và đừng bao giờ đầu tư dựa trên giả định rằng roadmap (JAM, Hub) chắc chắn sẽ thành hiện thực hay đẩy được giá."
   ]
+ },
+ {
+  "slug": "ton",
+  "category": "Blockchain Layer-1 (tích hợp Telegram)",
+  "tagline": "Blockchain Layer-1 được kết nối trực tiếp vào Telegram, xây dựng để đưa thanh toán và mini-app đến hàng trăm triệu người dùng chat.",
+  "whatIsIt": [
+   "Toncoin là đồng coin gốc của The Open Network (TON), một blockchain Layer-1 được thiết kế để nhanh, rẻ, và tích hợp chặt chẽ với ứng dụng nhắn tin Telegram. Nó trả phí giao dịch (gas), bảo mật mạng lưới thông qua staking, và cung cấp năng lượng cho các thanh toán và ứng dụng nằm ngay trong các cuộc trò chuyện Telegram.",
+   "Công nghệ này bắt nguồn từ năm 2018, khi Telegram (do Pavel và Nikolai Durov sáng lập) cố gắng ra mắt một blockchain tên là Telegram Open Network với một token tên 'Gram'. Một cuộc chiến với SEC của Mỹ trong giai đoạn 2019-2020 buộc Telegram phải từ bỏ dự án và hoàn trả tiền cho các nhà đầu tư. Các nhà phát triển độc lập giữ cho mã nguồn mở tiếp tục sống, tái khởi động mạng lưới vào năm 2020, thành lập TON Foundation phi lợi nhuận, và đổi tên đồng coin thành Toncoin vào năm 2021.",
+   "Trong nhiều năm TON do cộng đồng vận hành và chỉ gắn với Telegram một cách không chính thức. Điều đó thay đổi vào năm 2026: Telegram, dưới thời Durov, chính thức tiếp quản lại mạng lưới, trở thành validator lớn nhất, và dẫn dắt kế hoạch nâng cấp 'Make TON Great Again'. Sau đó một cuộc bỏ phiếu cộng đồng đã đổi tên đồng coin trở lại cái tên nguyên gốc năm 2018 của nó, Gram (GRAM), có hiệu lực từ ngày 15 tháng 6 năm 2026 — cùng một chain, cùng số dư, chỉ là một nhãn mới trên đồng coin.",
+   "Nó tồn tại để trở thành loại crypto mà người bình thường thực sự dùng mà không biết đó là crypto: gửi tiền, tip, mua trong game, và dùng các web app ngay trong một ứng dụng chat với khoảng một tỷ người dùng hàng tháng."
+  ],
+  "howItWorks": {
+   "paragraphs": [
+    "TON là một chain Proof-of-Stake. Các validator khóa (stake) TON để giành quyền tạo block và xác nhận giao dịch; nếu họ hành xử sai, một phần stake của họ có thể bị slash. Sự đồng thuận giữa các validator sử dụng một giao thức Byzantine-Fault-Tolerant tên là Catchain, nhờ vậy mạng lưới vẫn tiếp tục hoạt động ngay cả khi một số validator bị lỗi hoặc có ý xấu.",
+    "Đặc điểm nổi bật của nó là dynamic sharding. Thay vì một chain đơn duy nhất mà mọi người tranh giành, TON tự động tách thành nhiều 'shardchain' song song khi lưu lượng cao và gộp chúng lại khi yên tĩnh, tất cả được điều phối bởi một 'masterchain' trung tâm. Mục tiêu là mở rộng lên throughput rất cao trong khi giữ phí gần bằng không.",
+    "Một sự đánh đổi quan trọng: smart contract của TON là bất đồng bộ (asynchronous) — các contract giao tiếp với nhau bằng cách truyền message thay vì gọi nhau tức thì như trên Ethereum. Điều này giúp sharding mở rộng, nhưng lại khiến các ứng dụng phức tạp khó xây dựng và khó suy luận hơn, đây là một điểm gây khó khăn thực sự cho các nhà phát triển."
+   ],
+   "bullets": [
+    "Đồng thuận: Proof-of-Stake với sự đồng thuận BFT 'Catchain' (Catchain 2.0 đã cắt thời gian block xuống còn khoảng 400ms và đẩy độ hoàn tất (finality) xuống dưới một giây / ~0.6s trong năm 2026).",
+    "Mở rộng: dynamic sharding — chain tách và gộp các shardchain theo nhu cầu, được điều phối bởi một masterchain.",
+    "Phí: cực kỳ thấp, một phần nhỏ của một xu mỗi giao dịch (khoảng $0.0005) sau các đợt cắt phí năm 2026.",
+    "Staking: chạy một validator (mức tối thiểu TON lớn, hàng trăm nghìn) hoặc ủy quyền (delegate) số lượng nhỏ hơn qua các nominator pool.",
+    "Smart contract: mô hình bất đồng bộ, truyền message; viết bằng FunC và ngôn ngữ Tolk mới hơn.",
+    "Fee burn: một phần phí giao dịch/lưu trữ bị đốt, nhưng lượng phát hành mới vẫn vượt lượng đốt (lạm phát ròng nhẹ, khoảng 0.6%/năm)."
+   ]
+  },
+  "building": {
+   "paragraphs": [
+    "Tính đến giữa năm 2026, câu chuyện trung tâm là Telegram tái khẳng định quyền kiểm soát trực tiếp mạng lưới. Đầu tháng 5 năm 2026 Pavel Durov công bố một kế hoạch nâng cấp bảy bước có biệt danh 'Make TON Great Again' (MTONGA): Telegram thay thế TON Foundation làm động lực vận hành chính, trở thành validator đơn lớn nhất theo stake (nó đã stake ~2.2 triệu TON để chiếm một ghế validator chính), và cắt phí khoảng sáu lần (từ khoảng $0.003 xuống ~$0.0005). Khoảng bốn trong bảy bước đã hoàn thành đến giữa năm 2026, phần còn lại đang được triển khai. Việc đổi tên trở lại thành 'Gram' vào tháng 6 năm 2026 là một phần của cùng nỗ lực trở về với gốc rễ.",
+    "Lộ trình kỹ thuật xoay quanh tốc độ, chi phí, và thanh toán. Catchain 2.0 (chạy trên mainnet ngày 9 tháng 4 năm 2026) đã cắt thời gian block xuống ~400ms và finality xuống dưới một giây; một bản viết lại toàn bộ validator-node bằng Rust đang được tiến hành để tăng hiệu năng và khả năng bảo trì; và bộ công cụ dành cho nhà phát triển đang được hợp nhất quanh ngôn ngữ contract Tolk và một framework AppKit để xây dựng Telegram Mini App.",
+    "Trọng tâm thương mại là biến Telegram thành một nền tảng thanh toán và mini-app. TON Pay / TON Pay 2.0 hướng tới thanh toán một chạm (one-tap) dưới một xu ngay trong các cuộc trò chuyện cho cả TON và USDT, và một cầu nối (bridge) 'Teleport' không cần tin cậy đang được lên kế hoạch để đưa thanh khoản Bitcoin vào TON."
+   ],
+   "bullets": [
+    "Kế hoạch MTONGA: Telegram làm nhà vận hành chính + validator lớn nhất, giảm phí ~6 lần, chi phí giao dịch gần như bằng không (~4 trong 7 bước đã hoàn thành đến giữa năm 2026).",
+    "Catchain 2.0 chạy tháng 4 năm 2026 (~400ms mỗi block, ~0.6s finality); bản viết lại node bằng Rust cho bộ validator đang được tiến hành.",
+    "TON Pay 2.0 — thanh toán cho merchant/mini-app đối với TON + USDT với thanh toán dưới một giây, dưới một xu.",
+    "TON Teleport — một cầu nối Bitcoin không cần tin cậy được lên kế hoạch để kéo thanh khoản BTC vào TON.",
+    "Bộ công cụ nhà phát triển: ngôn ngữ smart contract Tolk, AppKit cho Mini App, các SDK hợp nhất.",
+    "Cocoon (Confidential Compute Open Network) — một mạng lưới tính toán AI phi tập trung trên TON, ra mắt trên mainnet vào tháng 12 năm 2025."
+   ]
+  },
+  "quickFacts": [
+   [
+    "Ra mắt",
+    "Ý tưởng 2018 ('Gram' của Telegram); mạng lưới được cộng đồng tái khởi động 2020, đồng coin đổi tên thành Toncoin 2021"
+   ],
+   [
+    "Nhà sáng lập",
+    "Pavel & Nikolai Durov (nguyên gốc); được TON Foundation / cộng đồng hồi sinh"
+   ],
+   [
+    "Đồng thuận",
+    "Proof-of-Stake với sự đồng thuận BFT 'Catchain'"
+   ],
+   [
+    "Mở rộng",
+    "Dynamic sharding (masterchain + shardchain)"
+   ],
+   [
+    "Mô hình cung",
+    "Không có giới hạn cứng; tổng ~5.2B TON, lạm phát nhẹ (~0.6%/năm), một phần phí bị đốt"
+   ],
+   [
+    "Cung lưu hành",
+    "Khoảng 2.7B TON (~52% tổng cung; dự trữ/staking giữ phần còn lại)"
+   ],
+   [
+    "Công dụng token",
+    "Phí gas, staking/validation, thanh toán, và nền kinh tế trong ứng dụng Telegram"
+   ],
+   [
+    "Đổi thương hiệu 2026",
+    "Đổi tên thành Gram (GRAM) ngày 15 tháng 6 năm 2026 qua bỏ phiếu cộng đồng ~81% — tỷ lệ 1:1, không cần migration"
+   ],
+   [
+    "Tên chain",
+    "Vẫn là 'The Open Network' (TON)"
+   ]
+  ],
+  "ecosystem": [
+   "Bản thân Telegram — Mini App, thanh toán trong chat, và chia sẻ doanh thu quảng cáo thanh toán bằng TON; tiếp cận hàng trăm triệu người dùng hàng tháng (Telegram có khoảng một tỷ người dùng hàng tháng nói chung)",
+   "Wallet trong Telegram — một ví custodial tích hợp sẵn do The Open Platform vận hành; vào tháng 4 năm 2026 nó bổ sung giao dịch perpetual futures (lên tới 50x, 150M+ người dùng) thông qua tích hợp Lighter",
+   "USDT (Tether) trên TON — hơn một tỷ đô la nguồn cung stablecoin, cùng với XAUT được bảo chứng bằng vàng, biến TON thành một kênh thanh toán thực sự",
+   "Các game tap-to-earn — Notcoin và Hamster Kombat đã tạo ra những đợt tăng vọt người dùng ban đầu khổng lồ (hàng trăm triệu người chơi ở đỉnh, dù mức sử dụng giảm mạnh sau đó)",
+   "Blum và các Mini App khác — các ứng dụng trading/DeFi được phân phối trực tiếp trong các cuộc trò chuyện Telegram",
+   "TON Pay — một SDK thanh toán cho phép merchant và Mini App chấp nhận thanh toán TON và USDT",
+   "TON Connect — giao thức kết nối ví tiêu chuẩn cho Telegram Mini App",
+   "Cocoon — một mạng lưới tính toán AI bảo mật phi tập trung xây dựng trên TON (mainnet tháng 12 năm 2025)"
+  ],
+  "history": [
+   {
+    "year": "2018",
+    "event": "Telegram huy động ~$1.7B trong một đợt bán token riêng tư để xây dựng Telegram Open Network và token 'Gram' của nó — một trong những đợt huy động lớn nhất trong lịch sử crypto."
+   },
+   {
+    "year": "2019",
+    "event": "SEC của Mỹ kiện Telegram, gọi Gram là một đợt chào bán chứng khoán chưa đăng ký, và chặn việc phân phối bằng một lệnh cấm."
+   },
+   {
+    "year": "2020",
+    "event": "Một tòa án Mỹ đứng về phía SEC; Telegram từ bỏ dự án, nộp phạt $18.5M, và hoàn trả khoảng $1.22B cho các nhà đầu tư. Các nhà phát triển độc lập tái khởi động mạng lưới mã nguồn mở (ban đầu là 'Free TON')."
+   },
+   {
+    "year": "2021",
+    "event": "Cộng đồng đổi tên đồng coin thành Toncoin (TON) và TON Foundation phi lợi nhuận được thành lập để quản lý mạng lưới mã nguồn mở; Durov công khai ủng hộ nó."
+   },
+   {
+    "year": "2023-2024",
+    "event": "TON được chọn làm blockchain cho Telegram Mini App; Tether triển khai USDT trên TON; các game tap-to-earn như Notcoin và Hamster Kombat thúc đẩy tăng trưởng người dùng khổng lồ."
+   },
+   {
+    "year": "2025",
+    "event": "Mạng lưới chuyển sang một mức nền người dùng hàng ngày ổn định hơn; các nâng cấp Catchain và công cụ tiếp tục; mạng lưới tính toán AI Cocoon ra mắt trên mainnet vào tháng 12."
+   },
+   {
+    "year": "Apr 2026",
+    "event": "Catchain 2.0 chạy (~400ms mỗi block, ~0.6s finality); Telegram stake ~2.2M TON, tiếp quản vai trò vận hành của Foundation, và trở thành validator lớn nhất của TON theo kế hoạch MTONGA."
+   },
+   {
+    "year": "May 2026",
+    "event": "Durov công bố lộ trình bảy bước 'Make TON Great Again': Telegram làm nhà vận hành/validator chính cùng với việc cắt phí ~6 lần; giá TON tăng vọt và dòng vốn staking tăng mạnh."
+   },
+   {
+    "year": "Jun 2026",
+    "event": "Một cuộc bỏ phiếu cộng đồng (~81%) đổi tên Toncoin trở lại thành Gram (GRAM), có hiệu lực từ ngày 15 tháng 6 — tỷ lệ 1:1, không cần migration, hồi sinh cái tên nguyên gốc năm 2018."
+   }
+  ],
+  "risks": [
+   "Tập trung hóa là vấn đề lớn nhất. Telegram giờ là validator đơn lớn nhất và là động lực vận hành chính của mạng lưới, và danh tính của đồng coin bị hòa quyện với một công ty tư nhân. Điều đó làm suy yếu tuyên bố 'phi tập trung' và tạo ra một điểm lỗi duy nhất — về kỹ thuật, doanh nghiệp, và uy tín.",
+   "Rủi ro pháp lý. Phiên bản nguyên gốc của TON đúng nghĩa đã bị SEC giết chết, và một tập đoàn kiểm soát việc tạo block cộng với một token gắn với một nền tảng mạng xã hội mã hóa khổng lồ chính là điều mà các cơ quan quản lý soi xét. Các quy định về tiền số tư nhân và chuyển tiền có thể tác động mạnh.",
+   "Rủi ro nhà sáng lập / nhân vật chủ chốt. Quá nhiều thứ phụ thuộc vào Pavel Durov và Telegram. Durov đã đối mặt với áp lực pháp lý nghiêm trọng ở châu Âu (một vụ bắt giữ năm 2024 tại Pháp về các vấn đề kiểm duyệt nội dung trên Telegram); rắc rối cho Telegram hoặc cá nhân Durov đổ thẳng lên TON.",
+   "Số lượng validator nhỏ. Đến giữa năm 2026 mạng lưới chỉ chạy khoảng 400 validator — một con số làm tròn nhỏ bé so với hàng trăm nghìn validator của Ethereum — nên phi tập trung hóa trên thực tế còn mỏng.",
+   "Chu kỳ hype và mức sử dụng thất thường. Các game tap-to-earn từng thổi phồng số lượng người dùng của TON đã sụp đổ sau đó (Hamster Kombat mất phần lớn người dùng và giá trị từ đỉnh). Con số 'người dùng hàng tháng' nổi bật có thể lớn hơn nhiều so với hoạt động kinh tế thực sự và bền vững.",
+   "Nguồn cung lạm phát. Không có giới hạn cứng; lượng phát hành mới vẫn vượt lượng đốt phí, nên người nắm giữ đối mặt với sự pha loãng dần trừ khi nhu cầu tiếp tục tăng.",
+   "Khó khăn cho nhà phát triển. Smart contract bất đồng bộ, truyền message khiến DeFi phức tạp khó xây dựng hơn so với trên Ethereum hay Solana, điều này có thể làm chậm chiều sâu hệ sinh thái.",
+   "Cạnh tranh. TON cạnh tranh với các Layer-2 của Ethereum, Solana, và những chain khác về thanh toán và ứng dụng; lợi thế chính của nó là kênh phân phối Telegram chứ không phải một hào lũy kỹ thuật."
+  ],
+  "howToInvest": [
+   "Giáo dục trước, không phải lời khuyên tài chính: hãy hiểu rằng TON là một tài sản crypto biến động có thể mất một phần lớn giá trị rất nhanh. Đừng bao giờ đầu tư số tiền bạn không thể mất được, và điều chỉnh quy mô vị thế cho phù hợp.",
+   "Lưu ý việc đổi thương hiệu: kể từ tháng 6 năm 2026 đồng coin hiển thị là 'Gram (GRAM)' trên nhiều ví và sàn giao dịch. Nó là cùng một tài sản với Toncoin/TON ở tỷ lệ 1:1 mà không cần migration — đừng mắc bẫy bất kỳ trò lừa 'đổi TON cũ của bạn lấy GRAM mới' nào, vì không cần swap gì cả.",
+   "Mua qua một sàn giao dịch uy tín có niêm yết TON/GRAM (các sàn lớn toàn cầu đều có). Ưu tiên các nền tảng có hồ sơ bảo mật vững chắc và, nếu có liên quan, đăng ký pháp lý tại quốc gia của bạn.",
+   "Đối với bất cứ điều gì ngoài giao dịch ngắn hạn, hãy chuyển coin vào tự lưu ký (self-custody). TON hoạt động với các ví như Tonkeeper, TON Space chính thức, hoặc Wallet tích hợp sẵn trong Telegram; viết seed phrase của bạn ra offline và đừng bao giờ gõ nó vào bất kỳ website nào hoặc chia sẻ nó.",
+   "Hãy đặc biệt cẩn thận ngay bên trong Telegram. Hệ sinh thái chat-native đầy rẫy Mini App, bot airdrop, và các lời chào 'tap-to-earn' — nhiều cái chất lượng thấp hoặc lừa đảo thẳng thừng. Xác minh liên kết, đừng bao giờ chấp thuận quyền ví một cách mù quáng, và coi các DM không mời như thù địch.",
+   "Bắt đầu nhỏ và kiểm tra quy trình: gửi một lượng thử nhỏ trước, xác nhận bạn kiểm soát ví, và chỉ sau đó mới chuyển số lượng lớn hơn. Kiểm tra kỹ địa chỉ — phần mềm độc hại cướp clipboard rất phổ biến trong crypto.",
+   "Cân nhắc dollar-cost averaging (mua các lượng nhỏ cố định theo thời gian) thay vì một lần mua lớn duy nhất, để giảm rủi ro mua phải đỉnh cục bộ sau các đợt tăng do tin tức như đợt rally tiếp quản của Telegram năm 2026.",
+   "Giữ hồ sơ cho thuế: mua, bán, swap, và phần thưởng staking thường là các sự kiện chịu thuế tùy theo khu vực pháp lý của bạn."
+  ]
+ },
+ {
+  "slug": "ltc",
+  "category": "Blockchain Layer-1 / thanh toán",
+  "tagline": "Một trong những đồng coin lâu đời nhất của crypto — gần như bản sao của Bitcoin được tinh chỉnh cho thanh toán hằng ngày nhanh hơn, rẻ hơn.",
+  "whatIsIt": [
+   "Litecoin là một loại tiền mã hóa proof-of-work ra mắt vào tháng 10 năm 2011 bởi Charlie Lee, một cựu kỹ sư Google sau này làm việc tại Coinbase. Ông đã fork mã nguồn của Bitcoin và thay đổi một vài thiết lập để tạo ra một đồng coin xác nhận giao dịch nhanh hơn và rẻ hơn để gửi — do đó có biệt danh 'bạc so với vàng của Bitcoin'.",
+   "Nó tồn tại để được tiêu, chứ không chỉ để nắm giữ. Trong khi Bitcoin dựa vào việc là 'vàng số', Litecoin luôn tự định vị mình là tiền dùng hằng ngày: một kênh thanh toán với phí thấp hơn và thanh toán nhanh hơn, sử dụng cùng những ý tưởng thiết kế đã được thử thách khiến Bitcoin an toàn.",
+   "Không có công ty nào sở hữu Litecoin. Nó là phần mềm mã nguồn mở được duy trì bởi các nhà phát triển tình nguyện và Litecoin Foundation phi lợi nhuận. Bất kỳ ai cũng có thể chạy một node, đào (mine), hoặc xây dựng trên nó. Charlie Lee nổi tiếng đã bán và quyên góp toàn bộ LTC của mình vào tháng 12 năm 2017 để loại bỏ mọi xung đột lợi ích, dù ông vẫn giúp định hướng Foundation.",
+   "Với hơn 14 năm tuổi và không có vụ hack lớn nào trên chain nền tảng của nó, Litecoin là một trong những đồng tiền mã hóa hoạt động lâu nhất, được thử nghiệm nhiều nhất còn tồn tại — nhưng tuổi đời cũng có nghĩa là giờ đây nó phải cạnh tranh với các chain mới hơn nhiều, nhiều tính năng hơn."
+  ],
+  "howItWorks": {
+   "paragraphs": [
+    "Litecoin gần như giống hệt Bitcoin về mặt kiến trúc. Các miner trên khắp thế giới đua nhau giải một câu đố toán học khó; người thắng thêm block giao dịch tiếp theo và kiếm được LTC mới đúc cộng với phí. Quá trình proof-of-work này là thứ bảo mật sổ cái — việc viết lại lịch sử sẽ tốn của kẻ tấn công một lượng điện và phần cứng khổng lồ.",
+    "Hai điều chỉnh lớn so với Bitcoin: Litecoin sử dụng thuật toán băm Scrypt thay vì SHA-256, và nó nhắm tới một block mới mỗi ~2.5 phút thay vì ~10. Scrypt được chọn để tốn nhiều bộ nhớ hơn, ban đầu nhằm giữ cho việc đào dễ tiếp cận trên phần cứng thông thường (dù các miner ASIC Scrypt chuyên dụng giờ đã thống trị). Thời gian block nhanh hơn có nghĩa là giao dịch xác nhận nhanh hơn khoảng bốn lần.",
+    "Nguồn cung bị giới hạn cứng ở 84 triệu LTC — chính xác gấp bốn lần giới hạn 21 triệu của Bitcoin. Coin mới xuất hiện thông qua phần thưởng đào giảm một nửa mỗi 840,000 block (khoảng mỗi bốn năm), nên lượng phát hành chậm rãi tiến về không, mô phỏng lịch trình khan hiếm của Bitcoin."
+   ],
+   "bullets": [
+    "Đồng thuận: proof-of-work (thuật toán Scrypt), cùng mô hình bảo mật với Bitcoin",
+    "Thời gian block ~2.5 phút — xác nhận nhanh hơn Bitcoin khoảng 4 lần",
+    "Cung tối đa 84 triệu LTC; phần thưởng giảm một nửa mỗi ~4 năm (hiện là 6.25 LTC/block)",
+    "SegWit và Lightning Network đang hoạt động cho thanh toán off-chain rẻ hơn, nhanh hơn",
+    "MWEB (MimbleWimble Extension Blocks) thêm các giao dịch bảo mật TÙY CHỌN",
+    "Thường được dùng như một tài sản cầu nối phí thấp để chuyển giá trị giữa các sàn giao dịch"
+   ]
+  },
+  "building": {
+   "paragraphs": [
+    "Sau nhiều năm 'đã xong' — một đồng coin thanh toán ổn định, nhàm chán — hệ sinh thái của Litecoin đang tiến vào smart contract, thứ mà nó chưa bao giờ hỗ trợ nguyên bản. Nỗ lực nổi bật là LitVM, một Layer-2 zero-knowledge tương thích EVM nhằm đưa DeFi và ứng dụng kiểu Ethereum vào Litecoin mà không thay đổi chain nền tảng. Testnet của nó, LiteForge, ra mắt vào tháng 4 năm 2026 và đã xử lý hàng chục triệu giao dịch thử nghiệm; mainnet được nhắm tới nửa cuối năm 2026, còn tùy thuộc các cuộc kiểm toán bảo mật độc lập và chưa có ngày cụ thể nào được cam kết. Nỗ lực này gần đây thu hút một khoản đầu tư chiến lược $1M từ Lite Strategy niêm yết trên Nasdaq.",
+    "Trên lớp nền tảng, trọng tâm là hoàn thiện MWEB, tính năng bảo mật tùy chọn của Litecoin đã ra mắt năm 2022. Mức áp dụng đã tăng đều, với một lượng lớn LTC giờ nằm trong các giao dịch bảo mật, và các nhà phát triển tiếp tục siết chặt các quy tắc xác thực của nó và mở rộng những gì nó có thể mang theo. Chất xúc tác thực tế khác là Canary spot Litecoin ETF (LTCC), bắt đầu giao dịch trên Nasdaq vào ngày 28 tháng 10 năm 2025 — một cột mốc pháp lý, dù dòng vốn cho đến nay vẫn khiêm tốn (chỉ vài triệu đô la tài sản đến giữa năm 2026)."
+   ],
+   "bullets": [
+    "LitVM — zk-Layer-2 tương thích EVM cho smart contract/DeFi; testnet LiteForge chạy (tháng 4 năm 2026), mainnet nhắm tới nửa cuối 2026 tùy thuộc kiểm toán",
+    "Hoàn thiện tính năng bảo mật tùy chọn MWEB: xác thực chặt chẽ hơn và mức áp dụng LTC bị khóa ngày càng tăng",
+    "Tăng trưởng hệ sinh thái quanh Canary spot LTC ETF (LTCC), hoạt động từ ngày 28 tháng 10 năm 2025",
+    "Đợt halving theo lịch tiếp theo ~2027 giảm phần thưởng block từ 6.25 xuống 3.125 LTC",
+    "Công việc tích hợp Lightning Network và thanh toán đang tiến hành để giữ tính liên quan như một kênh chi tiêu"
+   ]
+  },
+  "quickFacts": [
+   [
+    "Ra mắt",
+    "Ngày 7 tháng 10 năm 2011"
+   ],
+   [
+    "Nhà sáng lập",
+    "Charlie Lee (cựu Google, cựu Coinbase)"
+   ],
+   [
+    "Đồng thuận",
+    "Proof-of-Work (Scrypt)"
+   ],
+   [
+    "Thời gian block",
+    "~2.5 phút"
+   ],
+   [
+    "Cung tối đa",
+    "84,000,000 LTC"
+   ],
+   [
+    "Lưu hành",
+    "~77 triệu LTC (2026)"
+   ],
+   [
+    "Phần thưởng block hiện tại",
+    "6.25 LTC (giảm một nửa ~2027)"
+   ],
+   [
+    "Công dụng token",
+    "Thanh toán, phí, chuyển giá trị chi phí thấp"
+   ],
+   [
+    "Quản trị",
+    "Mã nguồn mở + Litecoin Foundation"
+   ]
+  ],
+  "ecosystem": [
+   "Được hỗ trợ rộng rãi để chi tiêu qua các đơn vị xử lý thanh toán (ví dụ được chấp nhận qua tích hợp merchant BitPay)",
+   "Được niêm yết trên hầu như mọi sàn giao dịch lớn; thường được dùng như một tài sản cầu nối giá rẻ giữa các nền tảng",
+   "Hỗ trợ Lightning Network cho các micropayment tức thời, phí siêu thấp",
+   "MWEB cho những người dùng muốn bảo mật giao dịch tùy chọn",
+   "Canary spot Litecoin ETF (LTCC) trên Nasdaq — tiếp cận có kiểm soát pháp lý mà không cần tự lưu ký",
+   "LitVM / LiteForge — lớp smart contract và DeFi mới nổi (vẫn còn sơ khai, giai đoạn testnet)",
+   "Hệ sinh thái đào sâu, trưởng thành (thường được merge-mine với Dogecoin bằng phần cứng Scrypt)"
+  ],
+  "history": [
+   {
+    "year": "2011",
+    "event": "Charlie Lee phát hành Litecoin vào ngày 7 tháng 10 như một bản fork Bitcoin nhanh hơn, nhẹ hơn sử dụng Scrypt."
+   },
+   {
+    "year": "2013",
+    "event": "LTC trở thành một trong những altcoin lớn đầu tiên đạt vốn hóa thị trường trên $1B trong một đợt tăng giá sớm."
+   },
+   {
+    "year": "2015",
+    "event": "Đợt halving đầu tiên cắt phần thưởng block từ 50 xuống 25 LTC (tháng 8)."
+   },
+   {
+    "year": "2017",
+    "event": "Litecoin kích hoạt SegWit và hoàn thành một thanh toán Lightning Network sớm, đi trước đường cong áp dụng của Bitcoin."
+   },
+   {
+    "year": "2017",
+    "event": "Charlie Lee bán và quyên góp toàn bộ LTC nắm giữ để tránh lo ngại xung đột lợi ích (tháng 12)."
+   },
+   {
+    "year": "2019",
+    "event": "Đợt halving thứ hai giảm phần thưởng xuống 12.5 LTC (tháng 8)."
+   },
+   {
+    "year": "2022",
+    "event": "MWEB (MimbleWimble Extension Blocks) chạy, thêm các giao dịch bảo mật tùy chọn."
+   },
+   {
+    "year": "2023",
+    "event": "Đợt halving thứ ba cắt phần thưởng xuống 6.25 LTC mỗi block (tháng 8)."
+   },
+   {
+    "year": "2025",
+    "event": "Canary spot Litecoin ETF (LTCC) bắt đầu giao dịch trên Nasdaq (28 tháng 10)."
+   },
+   {
+    "year": "2026",
+    "event": "Testnet LiteForge cho LitVM Layer-2 tương thích EVM ra mắt (tháng 4); mainnet nhắm tới cuối năm."
+   }
+  ],
+  "risks": [
+   "Sự liên quan phai nhạt: Litecoin đã tụt khỏi các thứ hạng hàng đầu theo vốn hóa thị trường, và ngách 'thanh toán nhanh rẻ' của nó giờ bị tranh giành bởi Lightning Network của Bitcoin, các stablecoin, và các chain nhanh hơn như Solana.",
+   "Nhu cầu tổ chức mỏng: dù có một spot ETF được phê duyệt, LTCC chỉ nắm vài triệu đô la tài sản nhiều tháng sau khi ra mắt — một phần nhỏ so với những gì các Bitcoin ETF thu hút được trong vài tuần. ETF tồn tại, nhưng luận điểm về nhu cầu chưa được chứng minh.",
+   "Hệ sinh thái nguyên bản yếu: Litecoin gần như không có hoạt động DeFi, NFT, hay ứng dụng đã được thiết lập. Nỗ lực smart contract LitVM là thật nhưng còn sơ khai, chưa được kiểm toán ở mainnet, và đi sau Ethereum và Solana nhiều năm.",
+   "Hình ảnh về nhà sáng lập/tập trung hóa: Charlie Lee bán toàn bộ cổ phần của mình năm 2017, điều mà một số người đọc là một tín hiệu xấu, và Litecoin Foundation vẫn là một điểm tập trung định hướng cho một dự án được cho là phi tập trung.",
+   "Rủi ro pháp lý về bảo mật: các giao dịch bảo mật của MWEB đã khiến một số sàn giao dịch (đặc biệt ở một số khu vực pháp lý) hủy niêm yết hoặc hạn chế LTC, và các tính năng bảo mật có thể thu hút sự soi xét của cơ quan quản lý.",
+   "Tập trung hóa đào: đào Scrypt bị thống trị bởi các ASIC và thường được merge-mine với Dogecoin, nên bảo mật của Litecoin một phần dựa vào kinh tế của miner Dogecoin thay vì đứng vững hoàn toàn bằng chính nó.",
+   "Nó vẫn là một tài sản đầu cơ biến động. Việc lâu đời và 'đã được chứng minh' không khiến giá LTC ổn định — nó có thể và đã giảm hơn 70% trong các thị trường gấu."
+  ],
+  "howToInvest": [
+   "Giáo dục trước, không phải lời khuyên tài chính: hãy hiểu rằng LTC là một tài sản biến động có thể mất phần lớn giá trị. Chỉ cam kết số tiền bạn có thể mất hoàn toàn.",
+   "Mua trên một sàn giao dịch uy tín, có kiểm soát pháp lý (ví dụ Coinbase, Kraken) sau khi hoàn thành xác minh danh tính. Bắt đầu nhỏ trong khi bạn học cách nạp, rút, và phí hoạt động thế nào.",
+   "Chuyển các khoản nắm giữ đáng kể khỏi sàn vào tự lưu ký. 'Không phải khóa của bạn, không phải coin của bạn' — một sàn có thể đóng băng, bị hack, hoặc phá sản.",
+   "Đối với tự lưu ký, một ví cứng (Ledger, Trezor) là lựa chọn an toàn nhất; một ví phần mềm uy tín như Litecoin Core hoặc Electrum-LTC hoạt động tốt cho số lượng nhỏ. Viết seed phrase của bạn ra giấy và cất offline — đừng bao giờ gõ nó vào một website.",
+   "Gửi một lượng thử nhỏ trước để xác nhận địa chỉ hoạt động trước khi chuyển một số dư lớn. Địa chỉ Litecoin và Bitcoin trông giống nhau nhưng KHÔNG thể hoán đổi cho nhau — gửi LTC đến một địa chỉ BTC có thể làm mất nó vĩnh viễn.",
+   "Nếu bạn muốn tiếp cận giá mà không cần quản lý khóa, một spot Litecoin ETF có kiểm soát pháp lý (như LTCC) là một lựa chọn — nhưng bạn sở hữu một cổ phần, không phải đồng coin, và trả phí quản lý.",
+   "Cẩn thận với lừa đảo: không có 'quà tặng' hợp pháp nào nhân đôi LTC của bạn, và không nhân viên hỗ trợ nào cần seed phrase của bạn. Dollar-cost averaging tốt hơn việc cố canh thời điểm thị trường đối với hầu hết người mới."
+  ]
+ },
+ {
+  "slug": "bch",
+  "category": "Blockchain Layer-1 / tiền mặt số ngang hàng",
+  "tagline": "Một bản hard fork năm 2017 của Bitcoin giữ block lớn hơn để thanh toán hằng ngày vẫn rẻ và nhanh — giờ đang gắn thêm smart contract.",
+  "whatIsIt": [
+   "Bitcoin Cash (BCH) là một loại tiền mã hóa tách ra từ Bitcoin (BTC) vào ngày 1 tháng 8 năm 2017. Nó được tạo ra bởi một nhóm trong cộng đồng Bitcoin muốn mạng lưới được dùng chủ yếu như tiền mặt điện tử hằng ngày — thanh toán rẻ, nhanh — thay vì một kho lưu trữ giá trị với phí cao. Họ làm điều này bằng cách nâng giới hạn về lượng dữ liệu mỗi block có thể chứa, để nhiều giao dịch vừa hơn và phí giữ ở mức thấp.",
+   "Sự chia tách xảy ra vì giới hạn kích thước block 1 MB của Bitcoin đang gây ra ùn tắc: khi mức sử dụng tăng, giao dịch trở nên chậm và phí tăng vọt. Một phe muốn giữ block nhỏ và đẩy việc mở rộng sang các hệ thống 'layer-2' riêng biệt; phe kia chỉ muốn làm block lớn hơn. Khi không có thỏa hiệp nào trụ được, phe block-lớn fork mã nguồn và chain, và Bitcoin Cash ra đời. Mọi người nắm giữ BTC vào thời điểm fork nhận được một lượng BCH bằng nhau.",
+   "Không có một nhà sáng lập duy nhất. Nó được ủng hộ công khai bởi các nhân vật Bitcoin đời đầu như Roger Ver (biệt danh 'Bitcoin Jesus') và ông trùm phần cứng đào Jihan Wu của Bitmain, và phần mềm tham chiếu ban đầu (Bitcoin ABC) do nhà phát triển Amaury Séchet dẫn dắt. Ngày nay việc phát triển được phân tán trên nhiều nhóm node độc lập thay vì một công ty.",
+   "Luận điểm của nó luôn là 'trở thành loại tiền mặt mà Satoshi mô tả'. Trên thực tế BCH hoạt động khá giống Bitcoin ở bên dưới, nhưng nó tối ưu cho chi tiêu chi phí thấp và, kể từ năm 2023, đã bổ sung các tính năng smart contract có thể lập trình để mở rộng những gì chain có thể làm."
+  ],
+  "howItWorks": {
+   "paragraphs": [
+    "Bitcoin Cash sử dụng chính xác cùng một cỗ máy lõi như Bitcoin: đào Proof-of-Work SHA-256 và mô hình kế toán UTXO (unspent-transaction-output). Các miner trên khắp thế giới đua nhau giải một câu đố băm; người thắng thêm block giao dịch tiếp theo khoảng mỗi 10 phút và kiếm được BCH mới đúc cộng với phí. Các node độc lập xác minh mọi giao dịch theo các quy tắc, nên không có bên trung tâm nào phụ trách.",
+    "Khác biệt lớn so với Bitcoin là dung lượng. BCH đã nâng giới hạn kích thước block — từ 1 MB của Bitcoin lên tới 32 MB — nên nhiều giao dịch hơn nhiều vừa vào mỗi block. Nhiều chỗ hơn cho mỗi block có nghĩa là mạng lưới hiếm khi tắc nghẽn, đó là lý do phí BCH thường là một phần nhỏ của một xu ngay cả khi bận. Sự đánh đổi là block lớn hơn đòi hỏi nhiều băng thông và bộ nhớ hơn từ các node vận hành mạng lưới.",
+    "Kể từ năm 2023, BCH đã bổ sung khả năng smart contract thực sự thông qua CashTokens và một ngôn ngữ scripting đang mở rộng, cho phép các nhà phát triển xây dựng token, NFT và ứng dụng on-chain trực tiếp trên lớp nền tảng thay vì trên một chain riêng biệt. Các nâng cấp hằng năm gần đây đã đều đặn nới các giới hạn scripting cũ để làm cho các contract này mạnh mẽ hơn."
+   ],
+   "bullets": [
+    "Đồng thuận: Proof-of-Work SHA-256 — cùng thuật toán với Bitcoin, nên BCH có thể được đào bằng phần cứng ASIC Bitcoin.",
+    "Thời gian block ~10 phút và cùng mô hình bảo mật dựa trên đào, tự điều chỉnh độ khó.",
+    "Kích thước block lên tới 32 MB (so với 1 MB nền tảng của Bitcoin), lựa chọn thiết kế khiến thanh toán rẻ và throughput cao.",
+    "Mô hình UTXO: ví của bạn chi tiêu các khối coin rời rạc và tạo ra tiền thối, giống hệt Bitcoin.",
+    "Smart contract qua CashTokens + CashScript — token, NFT và covenant sống trên chain nền tảng, không cần một layer-2 riêng.",
+    "Phí thường thấp hơn nhiều một xu, đó là toàn bộ mục đích của dự án."
+   ]
+  },
+  "building": {
+   "paragraphs": [
+    "Tính đến giữa năm 2026, hướng đi của Bitcoin Cash đã rõ ràng: tiến hóa từ 'chỉ là tiền mặt ngang hàng' thành một chain smart contract có thể lập trình, trong khi giữ phí siêu nhỏ. BCH giờ triển khai một nâng cấp mạng lưới theo nhịp hằng năm có thể dự đoán — mỗi ngày 15 tháng 5 — được bỏ phiếu thông qua một quy trình CHIP (Cash Improvement Proposal) mở thay vì bởi bất kỳ công ty đơn lẻ nào. Chính nhịp điệu hằng năm đó là một phần của chiến lược: các nâng cấp đều đặn, nhàm chán, không cần fork.",
+    "Nâng cấp gần đây nhất, biệt danh 'Layla', kích hoạt vào ngày 15 tháng 5 năm 2026 và bổ sung bốn CHIP scripting — Loops (vòng lặp có giới hạn qua OP_BEGIN/OP_UNTIL), Functions (mã tái sử dụng OP_DEFINE/OP_INVOKE), Pay to Script, và Bitwise (khôi phục các phép toán bit). Cùng với nâng cấp năm 2025 (loại bỏ giới hạn cũ 201 phép toán và bổ sung toán học BigInt độ chính xác tùy ý), những cái này khiến các contract BCH mạnh hơn đáng kể — đủ để các nhà phát triển giờ đang thảo luận về các trường hợp sử dụng on-chain như xác minh zero-knowledge-proof và post-quantum cryptography.",
+    "Mục tiêu công bố cho ngắn hạn là biến những khả năng cấp thấp mới này thành mức sử dụng thực tế: nhiều ứng dụng CashTokens hơn, các sàn giao dịch phi tập trung, các kênh stablecoin, escrow gọi vốn cộng đồng và các công cụ merchant được xây dựng nguyên bản trên BCH. Điểm cần theo dõi trung thực mà chính hệ sinh thái nêu ra là liệu hoạt động của nhà phát triển và tiện ích on-chain thực tế có thực sự tăng lên để tương xứng với công nghệ mới hay không — khả năng giờ đã có; sự áp dụng là câu hỏi còn bỏ ngỏ."
+   ],
+   "bullets": [
+    "Nâng cấp 'Layla' (kích hoạt ngày 15 tháng 5 năm 2026): các CHIP Loops, Functions, Pay to Script, và Bitwise — một bước nhảy lớn về khả năng biểu đạt của smart contract.",
+    "Xây dựng trên nâng cấp tháng 5 năm 2025 (VM Limits + BigInt) đã nới các giới hạn script tồn tại lâu và bổ sung số nguyên độ chính xác rất cao (số lên tới khoảng 80,000 bit).",
+    "Nhịp nâng cấp hằng năm có thể dự đoán mỗi ngày 15 tháng 5, được quản trị bởi quy trình CHIP mở và nhiều nhóm node độc lập (BCHN, Bitcoin Verde, Knuth).",
+    "Phát triển hệ sinh thái CashTokens: token on-chain, NFT, DEX, kênh stablecoin và các ứng dụng dựa trên covenant trên lớp nền tảng.",
+    "Các primitive mới nhắm tới các trường hợp sử dụng nâng cao như zero-knowledge proof và các contract sẵn sàng post-quantum.",
+    "Trọng tâm liên tục: giữ phí lớp nền tảng gần bằng không và dư địa mở rộng cao trong khi bổ sung khả năng lập trình."
+   ]
+  },
+  "quickFacts": [
+   [
+    "Ra mắt",
+    "Ngày 1 tháng 8 năm 2017 (hard fork từ Bitcoin tại block 478,558)"
+   ],
+   [
+    "Nhà sáng lập",
+    "Không có nhà sáng lập duy nhất; được Roger Ver & Jihan Wu ủng hộ, client đầu tiên (Bitcoin ABC) do Amaury Séchet dẫn dắt"
+   ],
+   [
+    "Đồng thuận",
+    "Proof-of-Work SHA-256 (giống Bitcoin)"
+   ],
+   [
+    "Kích thước / thời gian block",
+    "Block lên tới 32 MB, thời gian block ~10 phút"
+   ],
+   [
+    "Cung tối đa",
+    "21 triệu BCH (cùng giới hạn với Bitcoin)"
+   ],
+   [
+    "Cung lưu hành",
+    "~20 triệu BCH (tính đến giữa năm 2026)"
+   ],
+   [
+    "Phát hành",
+    "Halving mỗi 210,000 block; phần thưởng giảm còn 3.125 BCH tại đợt halving tháng 4 năm 2024"
+   ],
+   [
+    "Công dụng token",
+    "Thanh toán/tiền mặt số, phí giao dịch, phần thưởng đào, và gas/thế chấp cho smart contract CashTokens"
+   ],
+   [
+    "Nhịp nâng cấp",
+    "Nâng cấp mạng lưới hằng năm mỗi ngày 15 tháng 5 qua quản trị CHIP mở"
+   ]
+  ],
+  "ecosystem": [
+   "CashTokens (2023) — token fungible nguyên bản và NFT trên lớp nền tảng BCH, tương tự về tinh thần với những gì token làm trên Ethereum nhưng rẻ hơn nhiều để xác thực",
+   "CashScript — một ngôn ngữ smart contract cấp cao để viết các thanh toán có điều kiện, escrow và covenant trên BCH",
+   "CashFusion — một công cụ bảo mật không lưu ký (non-custodial) hợp nhất một cách hợp tác nhiều giao dịch của người dùng để cản trở việc truy vết blockchain",
+   "Ví: Electron Cash, Bitcoin.com Wallet, Paytaca, và hỗ trợ phần cứng qua Trezor/Ledger",
+   "Thanh toán & merchant: điểm bán hàng (point-of-sale) và chuyển tiền phí thấp là trường hợp sử dụng thực tế nổi bật; một số khu vực dùng các kênh stablecoin dựa trên BCH",
+   "Ứng dụng on-chain: các sàn giao dịch phi tập trung, các contract gọi vốn cộng đồng/escrow, voucher thanh toán và phát hành token xây dựng trên CashTokens",
+   "Nhiều triển khai node độc lập (Bitcoin Cash Node, Bitcoin Verde, Knuth) giữ cho giao thức phi tập trung"
+  ],
+  "history": [
+   {
+    "year": "2017",
+    "event": "Bitcoin Cash fork khỏi Bitcoin vào ngày 1 tháng 8 tại block 478,558 vì tranh cãi mở rộng kích thước block; người nắm BTC nhận 1 BCH mỗi đồng. Giới hạn block nâng lên 8 MB."
+   },
+   {
+    "year": "2018",
+    "event": "Giới hạn block nâng lên 32 MB. Vào tháng 11, một tranh chấp về quản trị và kỹ thuật lại chia tách BCH lần nữa — Bitcoin SV (BSV), do Craig Wright và Calvin Ayre hậu thuẫn, tách ra."
+   },
+   {
+    "year": "2020",
+    "event": "Đợt halving BCH đầu tiên (phần thưởng block 12.5 → 6.25 BCH). Một tranh chấp về đề xuất thuế nhà phát triển do miner tài trợ (the 'Infrastructure Funding Plan') lại chia tách chain; Bitcoin Cash Node (BCHN) trở thành triển khai chủ đạo."
+   },
+   {
+    "year": "2023",
+    "event": "CashTokens kích hoạt trong nâng cấp tháng 5, mang lại cho BCH token fungible nguyên bản, NFT và khả năng smart contract on-chain."
+   },
+   {
+    "year": "2024",
+    "event": "Đợt halving BCH thứ hai vào đầu tháng 4 cắt phần thưởng block từ 6.25 xuống 3.125 BCH (tại block 1,050,000)."
+   },
+   {
+    "year": "2025",
+    "event": "Nâng cấp ngày 15 tháng 5 kích hoạt các CHIP VM Limits và BigInt — loại bỏ giới hạn script cũ 201 phép toán và bổ sung toán số nguyên độ chính xác tùy ý."
+   },
+   {
+    "year": "2026",
+    "event": "Nâng cấp 'Layla' kích hoạt ngày 15 tháng 5 với các CHIP Loops, Functions, Pay to Script và Bitwise, mở rộng mạnh sức mạnh smart contract của BCH."
+   }
+  ],
+  "risks": [
+   "Bảo mật mạng lưới yếu hơn Bitcoin. BCH chia sẻ thuật toán SHA-256 của Bitcoin nhưng có hashrate nhỏ hơn nhiều, khiến một cuộc tấn công 51% (double-spend) rẻ hơn và thực tế hơn nhiều. Các ước tính công khai đã định giá chi phí thuê đủ sức mạnh băm để tấn công BCH chỉ vài nghìn đô la mỗi giờ, và chain đã chứng kiến các sự cố đào gây tranh cãi trong quá khứ.",
+   "Sự áp dụng chưa bao giờ tương xứng với tầm nhìn. Dù nhiều năm truyền thông 'trở thành tiền mặt thật', BCH chưa đạt được sự áp dụng của merchant hay người tiêu dùng ở bất cứ đâu gần với Bitcoin. Hiệu ứng mạng lưới, thanh khoản và độ nhận diện thương hiệu của nó chỉ là một phần nhỏ của BTC.",
+   "Các đợt fork gây tranh cãi lặp lại. Bản thân BCH là một bản fork, sau đó tách thành Bitcoin SV (2018) và lại một lần nữa vì cuộc chiến tài trợ nhà phát triển (2020). Lịch sử chia rẽ cộng đồng này báo hiệu sự mong manh trong quản trị và đã làm loãng thương hiệu trên các chain cạnh tranh.",
+   "Cạnh tranh khốc liệt. Nó bị ép từ mọi phía — Bitcoin làm vua kho lưu trữ giá trị, stablecoin và Lightning cho thanh toán rẻ, và các chain nhanh/rẻ hơn (Solana, v.v.) cộng với các Layer-2 của Ethereum cho smart contract. BCH hiếm khi là lựa chọn tốt nhất rõ ràng cho bất kỳ công việc đơn lẻ nào.",
+   "Giá đã yếu. BCH giao dịch thấp hơn nhiều so với đỉnh mọi thời đại năm 2017 và đã kém hiệu quả hơn BTC trong những giai đoạn dài — nó giảm mạnh trong năm tính đến giữa năm 2026 — nên người nắm giữ đã gánh những đợt sụt giảm thực sự và chi phí cơ hội.",
+   "Block lớn hơn đẩy về phía áp lực tập trung hóa. Block lớn hơn cần nhiều băng thông và bộ nhớ hơn để xác thực, điều này có thể làm tăng chi phí vận hành một full node theo thời gian — chính là mối lo mà những người ủng hộ block-nhỏ của Bitcoin nêu ra tại đợt chia tách năm 2017.",
+   "Sự áp dụng smart contract chưa được chứng minh. Các nâng cấp 2023–2026 đã cho BCH khả năng lập trình thực sự, nhưng liệu các nhà phát triển và người dùng có thực sự xuất hiện để dùng nó hay không vẫn là một câu hỏi bỏ ngỏ, chứ không phải một kết quả đã định.",
+   "Rủi ro pháp lý bao trùm. Như mọi tài sản crypto, BCH đối mặt với các quy tắc bất định và thay đổi trên các khu vực pháp lý có thể ảnh hưởng đến việc niêm yết sàn, lưu ký và sử dụng làm phương tiện thanh toán."
+  ],
+  "howToInvest": [
+   "Giáo dục trước, không phải lời khuyên tài chính. Không có gì ở đây là khuyến nghị mua — đó là cách làm an toàn nếu bạn chọn làm. Chỉ đầu tư số tiền bạn có thể mất hoàn toàn; BCH là một tài sản biến động đã trải qua những đợt sụt giảm sâu, kéo dài nhiều năm.",
+   "Dùng một sàn giao dịch uy tín. BCH được niêm yết rộng rãi trên các sàn lớn có kiểm soát pháp lý (Coinbase, Kraken, Binance, v.v.). Ưu tiên một sàn hoạt động hợp pháp tại quốc gia của bạn, hoàn thành xác minh danh tính của nó, và bật xác thực hai yếu tố bằng ứng dụng authenticator, không phải SMS.",
+   "Hiểu các bẫy ticker. Mua BCH (Bitcoin Cash) — đừng nhầm nó với BTC (Bitcoin), BSV (Bitcoin SV), hay các token tên na ná. Luôn kiểm tra kỹ ký hiệu và mạng lưới trước khi gửi.",
+   "Chuyển các khoản nắm giữ đáng kể vào tự lưu ký. 'Không phải khóa của bạn, không phải coin của bạn.' Đối với bất cứ thứ gì lớn hơn tiền lẻ, hãy rút vào một ví bạn kiểm soát — Electron Cash hoặc Paytaca cho phần mềm, hoặc một ví cứng như Trezor/Ledger cho số lượng lớn hơn.",
+   "Giữ seed phrase của bạn như tiền mặt. Viết cụm từ khôi phục ra giấy (hoặc kim loại), cất offline ở nhiều hơn một nơi, và đừng bao giờ gõ nó vào một website hoặc chia sẻ nó. Bất kỳ ai có seed đều sở hữu coin; không có đường dây hỗ trợ nào để đảo ngược một vụ trộm.",
+   "Thử với một lượng nhỏ trước. Gửi một giao dịch BCH nhỏ để xác nhận địa chỉ, ví và quy trình của bạn hoạt động trước khi chuyển một khoản lớn hơn — sai lầm on-chain là không thể đảo ngược.",
+   "Cân nhắc dollar-cost averaging và nghĩ dài hạn. Mua một lượng nhỏ cố định theo lịch trình giảm rủi ro mua phải một đỉnh xấu duy nhất, và tránh việc cố canh thời điểm một thị trường nổi tiếng khó lường.",
+   "Giữ hồ sơ cho thuế. Ở nhiều khu vực pháp lý, mua, bán hoặc chi tiêu BCH là một sự kiện chịu thuế — ghi lại các giao dịch của bạn khi làm thay vì dựng lại chúng sau này."
+  ]
+ },
+ {
+  "slug": "near",
+  "category": "Blockchain Layer-1",
+  "tagline": "Một Layer-1 proof-of-stake chia nhỏ khối lượng công việc của nó qua các shard song song để duy trì nhanh và rẻ, giờ đang xoay trục mạnh về phía các AI agent và \"intents\".",
+  "whatIsIt": [
+   "NEAR Protocol là một blockchain Layer-1 — mạng lưới nền tảng riêng của nó, như Ethereum hay Solana, không phải một ứng dụng chạy trên một chain khác. Nó được xây dựng để nhanh, rẻ, và dễ dàng cho cả người dùng thường lẫn nhà phát triển, với các tên tài khoản dễ đọc cho con người (như alice.near thay vì một chuỗi hex dài) và các tính năng tài khoản được tích hợp ngay ở cấp giao thức.",
+   "Nó được sáng lập bởi Illia Polosukhin và Alexander Skidanov. Cái tên đầu tiên đó rất quan trọng: Polosukhin là một nhà nghiên cứu machine-learning tại Google và đồng tác giả của bài báo 'Attention Is All You Need' năm 2017 đã giới thiệu transformer — kiến trúc đứng sau AI hiện đại như ChatGPT và Claude. Skidanov đến từ lĩnh vực cơ sở dữ liệu phân tán (MemSQL/SingleStore), nên khả năng mở rộng đã nằm trong DNA của đội ngũ ngay từ ngày đầu.",
+   "Dự án thực ra bắt đầu vào năm 2017 với tên NEAR.ai, một nỗ lực viết mã bằng AI. Đội ngũ đã thử trả tiền cho các cộng tác viên phân tán bằng Ethereum, thấy nó cồng kềnh và đắt đỏ, và quyết định tự xây dựng blockchain của riêng mình. Mainnet NEAR ra mắt vào tháng 4 năm 2020 và trở thành do cộng đồng vận hành cuối năm đó.",
+   "Vậy nên NEAR tồn tại để trở thành một blockchain có thể mở rộng, dễ tiếp cận — và với nền tảng của các nhà sáng lập, nó ngày càng nghiêng về việc trở thành chain cho các AI agent và hoạt động cross-chain."
+  ],
+  "howItWorks": {
+   "paragraphs": [
+    "NEAR là một chain Proof-of-Stake: các validator khóa (stake) token NEAR để giành quyền xử lý giao dịch và tạo block, và họ kiếm được phần thưởng nếu làm điều đó một cách trung thực. Không có việc đào tốn năng lượng như Bitcoin. Công nghệ nổi bật của nó là sharding, được đặt thương hiệu là 'Nightshade'.",
+    "Sharding có nghĩa là mạng lưới được chia thành nhiều làn song song (shard), mỗi cái xử lý một phần lưu lượng cùng lúc, thay vì mọi node xử lý mọi giao dịch trong một hàng đợi. Đây là cách NEAR nhắm tới việc mở rộng: thêm shard, xử lý nhiều tải hơn. Một nâng cấp lớn vào tháng 8 năm 2024 tên Nightshade 2.0 đã bổ sung 'stateless validation', cho phép các validator xác minh một shard mà không cần lưu trữ toàn bộ lịch sử của nó cục bộ — hạ yêu cầu phần cứng để nhiều người có thể chạy node hơn.",
+    "Đối với người dùng, NEAR được thiết kế để cảm thấy đơn giản: finality dưới một giây, phí giao dịch chỉ là một phần nhỏ của một xu, tài khoản có tên, và 'gas abstraction' để các ứng dụng thậm chí có thể trả phí thay cho người dùng. Phần lớn công việc mới hơn của NEAR là 'chain abstraction' — cho phép một tài khoản NEAR kiểm soát tài sản trên các chain khác (Bitcoin, Ethereum, Solana và nhiều hơn) thông qua Chain Signatures, để người dùng không phải quản lý nhiều ví."
+   ],
+   "bullets": [
+    "Đồng thuận: Proof-of-Stake với sharding 'Nightshade' — các shard song song xử lý giao dịch đồng thời",
+    "Nightshade 2.0 (tháng 8 năm 2024) giới thiệu stateless validation, cắt lượng dữ liệu validator phải lưu trữ và hạ chi phí node",
+    "Năm 2025 NEAR mở rộng mainnet từ sáu lên chín shard (qua một bước trung gian tám shard vào tháng 3 năm 2025) và kích hoạt dynamic resharding, cho phép mạng lưới tự động tách shard khi nhu cầu tăng",
+    "Nhanh và rẻ: finality dưới một giây và phí giao dịch thường chỉ là một phần nhỏ của một xu",
+    "Tài khoản dễ đọc cho con người (name.near) và gas/fee abstraction khiến việc onboard dễ hơn so với các địa chỉ hex thô",
+    "Chain Signatures cho phép một tài khoản NEAR duy nhất ký các giao dịch trên các chain khác (Bitcoin, Ethereum, Solana, v.v.) — không cần bridge",
+    "Đội ngũ đã công khai demo một benchmark 1 triệu TPS bằng mã lõi chạy thực, dù throughput mainnet thực tế thấp hơn nhiều"
+   ]
+  },
+  "building": {
+   "paragraphs": [
+    "Tính đến giữa năm 2026, lộ trình của NEAR rõ ràng là một cược vào AI và 'intents' cross-chain. Kế hoạch 2026 xoay quanh ba trụ cột: hội tụ AI với intents, hạ tầng có thể mở rộng, và 'AI do người dùng sở hữu'. Luận điểm là NEAR trở thành lớp thanh toán và điều phối nơi cả con người lẫn các AI agent tự trị giao dịch qua nhiều chain.",
+    "Sản phẩm chủ lực là NEAR Intents, ra mắt vào tháng 11 năm 2024. Thay vì thủ công bấm qua các đợt swap và bridge, một người dùng (hoặc một AI agent) khai báo một kết quả mong muốn — ví dụ 'swap 100 USDC trên Arbitrum lấy Bitcoin nguyên bản' — và một mạng lưới cạnh tranh của các 'solver' tìm ra đường thực thi tốt nhất, mà contract verifier của NEAR thanh toán bằng Chain Signatures. NEAR báo cáo Intents đã vượt $5B khối lượng tích lũy vào cuối năm 2025 và đang cố phát triển nó thành một địa điểm lớn cho giao dịch on-chain và hoạt động do agent điều khiển, dù phí của lớp intent đã vượt xa hoạt động trên chính L1 nền tảng.",
+    "Về tokenomics, NEAR đã hoàn thành một đợt 'halving' trên mainnet vào ngày 30 tháng 10 năm 2025, cắt lạm phát hằng năm tối đa từ ~5% xuống ~2.5%. Đáng chú ý, nó được triển khai như một nâng cấp giao thức được các validator áp dụng dù cuộc bỏ phiếu quản trị cộng đồng chính thức không đạt ngưỡng phê duyệt — một điểm gợn về quản trị đáng biết. Cùng với nó, NEAR triển khai một hệ thống quản trị 'House of Stake' / veNEAR định tuyến phần thưởng đến những người nắm token dài hạn và các validator nhỏ hơn. Về mặt công nghệ, đồng sáng lập Illia Polosukhin đã đánh dấu việc ký post-quantum ('quantum-safe') là một mục tiêu năm 2026."
+   ],
+   "bullets": [
+    "NEAR Intents — mô hình 'Express, Solve, Settle' cho các giao dịch cross-chain và do agent điều khiển (hoạt động từ tháng 11 năm 2024), được định vị là động cơ tăng trưởng cốt lõi",
+    "Mở rộng chain abstraction — Chain Signatures vươn tới nhiều chain hơn (Solana, TON, Stellar, Aptos, Sui và những chain khác qua hỗ trợ EdDSA)",
+    "Trọng tâm AI — 'AI do người dùng sở hữu', suy luận mô hình có thể xác minh/riêng tư, và các AI agent có thể giao dịch thay mặt người dùng",
+    "Tokenomics — lạm phát tối đa giảm một nửa từ ~5% xuống ~2.5%, hoàn thành trên mainnet vào tháng 10 năm 2025",
+    "House of Stake / veNEAR — một lớp quản trị định tuyến một phần phần thưởng đến các staker dài hạn và validator nhỏ hơn",
+    "Bảo mật post-quantum — việc ký quantum-safe được đội ngũ đánh dấu là một mục tiêu năm 2026",
+    "Khả năng mở rộng — dynamic resharding hoạt động trên mainnet, với throughput tiếp tục tăng"
+   ]
+  },
+  "quickFacts": [
+   [
+    "Ra mắt",
+    "Mainnet tháng 4 năm 2020 (do cộng đồng vận hành từ tháng 9 năm 2020)"
+   ],
+   [
+    "Nhà sáng lập",
+    "Illia Polosukhin & Alexander Skidanov"
+   ],
+   [
+    "Danh mục",
+    "Blockchain Layer-1 (PoS sharded)"
+   ],
+   [
+    "Đồng thuận",
+    "Proof-of-Stake với sharding Nightshade"
+   ],
+   [
+    "Mô hình cung",
+    "Lạm phát, không có giới hạn cứng (~1B lúc genesis; ~1.24B lưu hành trên ~1.3B tổng). Lạm phát hằng năm tối đa giảm một nửa từ ~5% xuống ~2.5% trên mainnet vào tháng 10 năm 2025"
+   ],
+   [
+    "Công dụng token",
+    "Phí gas, staking, storage staking, và quản trị (veNEAR)"
+   ],
+   [
+    "Mô hình phí",
+    "Phí rất thấp; một phần phí bị đốt"
+   ],
+   [
+    "Nhà hậu thuẫn",
+    "NEAR Foundation; các vòng gọi vốn venture gồm Andreessen Horowitz (a16z) và những nhà khác"
+   ]
+  ],
+  "ecosystem": [
+   "NEAR Intents — giao dịch khai-báo-kết-quả và thực thi agent qua các chain",
+   "Chain Signatures — một tài khoản NEAR kiểm soát tài sản trên Bitcoin, Ethereum, Solana và nhiều hơn",
+   "Ref Finance / RHEA Finance — một DEX chính, đang tiến hóa thành một trung tâm thanh khoản swap + cho vay được trừu tượng hóa chain",
+   "Aurora — một môi trường EVM trên NEAR cho phép các ứng dụng Ethereum chạy với tốc độ và phí thấp của NEAR",
+   "Mintbase — hạ tầng NFT được các nghệ sĩ và phòng trưng bày sử dụng",
+   "NEAR AI — công cụ và hạ tầng nhắm tới các AI agent và suy luận có thể xác minh/riêng tư",
+   "NEAR Mobile — một ví đẩy mạnh fee abstraction và tài sản đa chain",
+   "Trường hợp sử dụng: DeFi cross-chain, giao dịch AI-agent, thanh toán, NFT, và các ứng dụng tiêu dùng che giấu sự phức tạp của crypto"
+  ],
+  "history": [
+   {
+    "year": "2017",
+    "event": "Illia Polosukhin (đồng tác giả bài báo transformer 'Attention Is All You Need' của Google) và Alexander Skidanov khởi động NEAR.ai, tập trung vào AI/tổng hợp chương trình; họ xoay trục sang xây dựng một blockchain sau khi gặp phải các giới hạn của Ethereum."
+   },
+   {
+    "year": "2019-2020",
+    "event": "NEAR huy động vốn venture qua nhiều vòng (các nhà hậu thuẫn gồm Andreessen Horowitz, đơn vị dẫn dắt một vòng năm 2020) và phát triển thiết kế proof-of-stake sharded của mình."
+   },
+   {
+    "year": "April 2020",
+    "event": "Mainnet NEAR ra mắt; mạng lưới trở thành do cộng đồng vận hành hoàn toàn vào tháng 9 năm 2020."
+   },
+   {
+    "year": "October 2020",
+    "event": "Một cuộc bỏ phiếu cộng đồng kích hoạt việc chuyển token NEAR, mở ra giao dịch và staking."
+   },
+   {
+    "year": "2021-2022",
+    "event": "Hệ sinh thái tăng trưởng (Aurora EVM, Ref Finance, Mintbase); NEAR đạt giá đỉnh mọi thời đại trong thị trường tăng giá 2021 trước đợt suy thoái rộng năm 2022."
+   },
+   {
+    "year": "2023-2024",
+    "event": "NEAR đổi thương hiệu quanh 'chain abstraction'; ra mắt Chain Signatures và, vào tháng 11 năm 2024, NEAR Intents."
+   },
+   {
+    "year": "August 2024",
+    "event": "Nightshade 2.0 chạy, bổ sung stateless validation để hạ chi phí phần cứng validator và cải thiện phi tập trung hóa."
+   },
+   {
+    "year": "2025",
+    "event": "Mainnet mở rộng từ sáu lên chín shard với dynamic resharding; một benchmark 1M-TPS được trình diễn; và vào ngày 30 tháng 10 năm 2025 NEAR hoàn thành đợt 'halving', cắt lạm phát tối đa ~5%→~2.5% — được triển khai qua một nâng cấp giao thức do validator áp dụng dù cuộc bỏ phiếu cộng đồng chính thức không đạt ngưỡng."
+   },
+   {
+    "year": "2026",
+    "event": "Lộ trình xoay quanh AI + Intents và 'AI do người dùng sở hữu'; quản trị và phần thưởng House of Stake / veNEAR được triển khai; đội ngũ đánh dấu việc ký post-quantum ('quantum-safe') là một mục tiêu năm 2026."
+   }
+  ],
+  "risks": [
+   "Lạm phát và pha loãng: NEAR không có giới hạn cứng và đúc token mới mỗi năm. Đợt halving tháng 10 năm 2025 cắt lạm phát tối đa từ ~5% xuống ~2.5%, nhưng token vẫn lạm phát và lượng đốt phí vẫn rất nhỏ so với lượng phát hành, nên phần lớn nguồn cung mới vẫn đổ ra thị trường. Ngay cả ở mức 2.5%, những người nắm giữ không stake vẫn bị pha loãng theo thời gian.",
+   "Ma sát quản trị: đợt halving giảm thu nhập của validator, và các nhà phê bình lưu ý rằng các validator bỏ phiếu về nó có xung đột lợi ích tài chính — và rằng thay đổi này cuối cùng vẫn được đẩy qua như một nâng cấp giao thức dù cuộc bỏ phiếu cộng đồng chính thức không đạt ngưỡng phê duyệt. Bất kỳ hệ thống quản trị lớn nào (veNEAR / House of Stake) cũng có thể tập trung ảnh hưởng vào các staker lớn.",
+   "Rủi ro chạy theo câu chuyện: NEAR đã nhiều lần tự định vị lại — từ một startup AI, tới một L1 có thể mở rộng, tới 'blockchain cho web mở / onboard tỷ người tiếp theo', tới chain abstraction, và giờ là các AI agent + intents. Việc tái định vị thường xuyên có thể báo hiệu khả năng thích ứng thực sự hoặc một dự án đang tìm kiếm product-market fit. Các mục tiêu tăng trưởng của Intents là tham vọng, không phải sự đảm bảo.",
+   "Cạnh tranh khốc liệt: không gian Layer-1 đông đúc và tàn khốc. NEAR cạnh tranh với Ethereum và các L2 của nó, Solana (rất mạnh về tốc độ/ứng dụng tiêu dùng), và các chain hiệu năng cao khác như Sui và Aptos. Sharding khó về mặt kỹ thuật, và NEAR phải chứng minh mức sử dụng thực, bền vững — không chỉ các con số benchmark TPS.",
+   "Sự áp dụng so với hype: dù nhiều năm xây dựng, hoạt động on-chain và giá trị DeFi của NEAR thường đi sau việc tiếp thị, và ngay cả phí của lớp Intents cũng đã vượt hoạt động trên L1 nền tảng. Các con số demo như '1M TPS' là các benchmark phòng lab; throughput thực tế và mức sử dụng hoạt động hằng ngày mới là điều thực sự quan trọng.",
+   "Rủi ro giá và thị trường: NEAR giao dịch thấp hơn nhiều so với đỉnh mọi thời đại năm 2021 và là một altcoin biến động, rủi ro cao hơn di chuyển mạnh theo tâm lý crypto tổng thể.",
+   "Rủi ro pháp lý và kỹ thuật: phần thưởng staking, phân loại token, và các token quản trị đối mặt với quy định đang thay đổi, và các primitive mới phức tạp (intents, solver, ký cross-chain) mở rộng bề mặt cho lỗi, khai thác (exploit), hoặc thao túng từ phía solver."
+  ],
+  "howToInvest": [
+   "Giáo dục trước, không phải lời khuyên tài chính: không có gì ở đây là khuyến nghị mua. Hãy hiểu NEAR là gì và đánh giá trung thực xem bạn có tin vào luận điểm AI/intents của nó không trước khi mạo hiểm một xu — và chỉ dùng số tiền bạn có thể mất hoàn toàn.",
+   "Tự làm bài tập của bạn: đọc tài liệu và lộ trình chính thức của NEAR, đối chiếu các tuyên bố với các nguồn trung lập, và nhìn vào các chỉ số sử dụng thực (địa chỉ hoạt động, giá trị DeFi, phí) thay vì biểu đồ giá hay hype của influencer.",
+   "Nếu bạn chọn mua: dùng một sàn giao dịch uy tín có niêm yết NEAR, bắt đầu nhỏ, và ý thức về phí và độ biến động của token. Cân nhắc rằng dollar-cost-averaging (số lượng nhỏ theo thời gian) giảm rủi ro mua phải một đỉnh xấu duy nhất.",
+   "Tự lưu ký khóa của bạn: đối với bất cứ điều gì ngoài giao dịch, hãy chuyển NEAR vào một ví bạn kiểm soát (ví dụ NEAR Mobile / một ví tương thích NEAR, hoặc một ví cứng như Ledger cho số lượng lớn hơn). 'Không phải khóa của bạn, không phải coin của bạn' — để tiền trên một sàn nghĩa là tin tưởng sàn đó.",
+   "Giữ seed phrase của bạn: viết cụm từ khôi phục của bạn ra offline, đừng bao giờ gõ nó vào một website hoặc chia sẻ nó, và giả định bất kỳ ai hỏi nó đều là kẻ lừa đảo. Hỗ trợ NEAR sẽ không bao giờ DM bạn trước.",
+   "Nếu bạn stake: staking NEAR kiếm phần thưởng nhưng khóa token với một độ trễ unstaking, và tỷ lệ phần thưởng đã thay đổi với đợt halving lạm phát năm 2025 và có thể thay đổi lần nữa. Hiểu việc chọn validator, thời điểm khóa, và rằng phần thưởng được trả bằng một token lạm phát.",
+   "Cẩn thận với lừa đảo: các 'airdrop NEAR' giả, các site quà tặng, và các token nhái rất phổ biến. Xác minh contract/tài sản NEAR thật và chỉ dùng các liên kết chính thức.",
+   "Điều chỉnh quy mô hợp lý: coi một altcoin biến động duy nhất như một lát nhỏ, mang tính đầu cơ của một danh mục — đừng bao giờ dùng tiền đi vay, tiền tiết kiệm khẩn cấp, hay các khoản tiền bạn sẽ cần sớm."
+  ]
+ },
+ {
+  "slug": "sui",
+  "category": "Blockchain Layer-1",
+  "tagline": "Một blockchain Layer-1 coi mọi tài sản là một object, để các giao dịch chuyển đơn giản có thể thanh toán song song thay vì chờ trong một hàng dài duy nhất.",
+  "whatIsIt": [
+   "Sui là một blockchain Layer-1 — mạng lưới nền tảng riêng của nó, không phải một dự án xây dựng trên Ethereum. Nó được xây dựng bởi Mysten Labs, một công ty thành lập năm 2021 bởi năm cựu kỹ sư Meta từng làm việc trên Diem, dự án thanh toán crypto bị bỏ dở của Meta, và trên ngôn ngữ lập trình Move ra đời từ đó. Mainnet của Sui chạy vào ngày 3 tháng 5 năm 2023.",
+   "Ý tưởng cốt lõi là Sui tổ chức chain quanh các 'object' (các tài sản riêng lẻ như một đồng coin, một NFT, hay một vật phẩm game) thay vì quanh các tài khoản và một trạng thái sổ cái toàn cục duy nhất. Vì hầu hết các hành động hằng ngày chỉ chạm vào các object thuộc sở hữu của một người, mạng lưới có thể xác minh nhiều trong số chúng cùng lúc thay vì cái này sau cái kia. Luận điểm là throughput cao và các giao dịch nhanh, rẻ nhắm tới các ứng dụng tiêu dùng, thanh toán, và game.",
+   "Đội ngũ đứng sau Diem đã mang theo Move, một ngôn ngữ lập trình được thiết kế để coi các tài sản số như những thứ hạng nhất không thể vô tình bị sao chép hay hủy hoại. Thiết kế đó chặn đứng một loại lỗi phổ biến ở các ngôn ngữ smart contract cũ hơn. Sui dùng một biến thể riêng của nó, đôi khi gọi là Sui Move."
+  ],
+  "howItWorks": {
+   "paragraphs": [
+    "Sui chia giao dịch thành hai làn. Nếu một giao dịch chỉ chạm vào các object 'owned' (sở hữu) thuộc về một địa chỉ duy nhất — như gửi một token từ bạn cho một người bạn — các validator có thể xác nhận nó độc lập và song song, mà không cần chạy nó qua toàn bộ mạng lưới để sắp thứ tự. 'Đường nhanh' (fast path) này là thứ khiến các giao dịch chuyển đơn giản nhanh và rẻ.",
+    "Các giao dịch chạm vào các object 'shared' (chia sẻ) — những thứ nhiều người tương tác cùng lúc, như một pool giao dịch DeFi — thì cần các validator đồng ý về một thứ tự. Cho việc đó, Sui chạy một giao thức đồng thuận tên Mysticeti, sắp xếp các giao dịch bằng một directed acyclic graph (một DAG, một mạng lưới block phân nhánh thay vì một chain đơn) và đạt finality trong khoảng 400 mili giây. Sui là một mạng lưới proof-of-stake: các validator được chọn theo lượng SUI được stake cho họ.",
+    "Nói đơn giản: Sui cố chỉ làm công việc đắt đỏ 'mọi người đồng ý theo thứ tự' khi một giao dịch thực sự cần nó, và bỏ qua nó cho nhiều giao dịch không cần. Đó là đòn bẩy chính đứng sau các tuyên bố về tốc độ của nó — dù hiệu năng thực tế phụ thuộc vào sự pha trộn của hoạt động, không chỉ các benchmark phòng lab."
+   ],
+   "bullets": [
+    "Mô hình lấy object làm trung tâm: tài sản là các object riêng lẻ, không chỉ là số dư trong tài khoản.",
+    "'Đường nhanh' song song cho các giao dịch một-chủ-sở-hữu — không cần sắp thứ tự toàn cục.",
+    "Mysticeti: một đồng thuận dựa trên DAG cho các giao dịch object chia sẻ, finality ~400ms.",
+    "Bảo mật proof-of-stake: các validator được hậu thuẫn bởi SUI đã stake (~125 validator tính đến giữa năm 2026).",
+    "Viết bằng Move, một ngôn ngữ coi các tài sản số như các kiểu hạng nhất được bảo vệ.",
+    "Token SUI trả phí gas, bảo mật mạng lưới qua staking, và được dùng cho quản trị."
+   ]
+  },
+  "building": {
+   "paragraphs": [
+    "Tính đến giữa năm 2026, trọng tâm của Sui đã chuyển từ chỉ tốc độ thô sang xây dựng một 'Sui Stack' đầy đủ — một bộ các lớp hạ tầng nguyên bản để các ứng dụng không phải gắn thêm các dịch vụ bên ngoài. Công cụ đồng thuận đã được nâng cấp lên Mysticeti v2 (triển khai tháng 11 năm 2025) để xử lý giao dịch nhanh hơn, nhẹ hơn, nhưng phần lớn năng lượng mới xoay quanh các lớp dữ liệu, bảo mật, lưu trữ, và thanh toán xung quanh.",
+    "Một mảnh nổi bật là Walrus, một lớp lưu trữ và data-availability phi tập trung đã lên mainnet vào năm 2025. Nó cho phép các ứng dụng lưu trữ các tệp lớn và tập dữ liệu trên hạ tầng có thể xác minh, gần-on-chain — được quảng bá mạnh hướng tới các trường hợp sử dụng AI như lưu trữ dữ liệu mô hình và đầu vào machine-learning có thể xác minh. Cùng với nó, Seal (kiểm soát truy cập / mã hóa) và Nautilus (tính toán off-chain và lập chỉ mục dữ liệu) hoàn thiện bộ stack, tất cả đang hoạt động trên mainnet.",
+    "Hướng đi năm 2026 nghiêng mạnh về thanh toán và tài chính tiêu dùng. Stablecoin nguyên bản của Sui, USDsui — được phát hành bởi Bridge, một công ty của Stripe, và đáng chú ý vì định tuyến lợi suất dự trữ của nó trở lại mạng lưới qua các đợt buyback SUI và triển khai DeFi thay vì cho nhà phát hành — đã chạy vào đầu năm 2026. Ngoài đó, lộ trình chỉ tới thanh khoản stablecoin và tài sản thế giới thực sâu hơn, các giao dịch riêng tư ở cấp giao thức, cải thiện bridging cross-chain, và onboard dễ hơn qua đặt tên SuiNS. Hãy coi bất kỳ tuyên bố lộ trình cụ thể nào là một kế hoạch, không phải một lời hứa — ngày tháng và tính năng thay đổi."
+   ],
+   "bullets": [
+    "Đồng thuận Mysticeti v2: xử lý giao dịch nhanh hơn, nhẹ hơn, hoạt động như công cụ sản xuất từ cuối năm 2025.",
+    "Mainnet Walrus: lớp lưu trữ / data-availability phi tập trung, được tiếp thị hướng tới AI và dữ liệu quy mô lớn.",
+    "Seal (kiểm soát truy cập) và Nautilus (tính toán/lập chỉ mục off-chain) hoạt động trên mainnet, hoàn thiện 'Sui Stack'.",
+    "Stablecoin nguyên bản USDsui (phát hành qua Bridge của Stripe) giờ đang hoạt động, cùng với USDC, suiUSDe đang tăng trưởng và các tài sản thế giới thực được token hóa.",
+    "Chủ đề lộ trình: thanh toán, các giao dịch riêng tư ở cấp giao thức, bridging cross-chain tốt hơn, và onboard đơn giản hơn (SuiNS)."
+   ]
+  },
+  "quickFacts": [
+   [
+    "Ra mắt",
+    "Mainnet ngày 3 tháng 5 năm 2023"
+   ],
+   [
+    "Xây dựng bởi",
+    "Mysten Labs (đội ngũ cựu Meta / Diem)"
+   ],
+   [
+    "Nhà sáng lập",
+    "Evan Cheng, Sam Blackshear, Adeniyi Abiodun, George Danezis, Kostas Chalkias"
+   ],
+   [
+    "Loại",
+    "Blockchain Layer-1"
+   ],
+   [
+    "Đồng thuận",
+    "Delegated proof-of-stake với sắp thứ tự Mysticeti (DAG)"
+   ],
+   [
+    "Ngôn ngữ",
+    "Move (Sui Move)"
+   ],
+   [
+    "Cung tối đa",
+    "10,000,000,000 SUI (có giới hạn)"
+   ],
+   [
+    "Lưu hành",
+    "~4 tỷ SUI (~40% cung tối đa, giữa năm 2026)"
+   ],
+   [
+    "Công dụng token",
+    "Phí gas, staking, quản trị"
+   ],
+   [
+    "Finality",
+    "~400 mili giây"
+   ]
+  ],
+  "ecosystem": [
+   "Cetus — một DEX hàng đầu trên Sui, trong lịch sử chiếm một phần lớn khối lượng DEX của chain (bị rút cạn trong một vụ khai thác ~$223M vào tháng 5 năm 2025, kể từ đó đã tái khởi động)",
+   "Suilend và NAVI — các thị trường cho vay / vay hàng đầu (Suilend đã báo cáo vượt $1B tiền gửi)",
+   "Bluefin — giao dịch perpetual và phái sinh",
+   "DeepBook — sổ lệnh giới hạn tập trung (CLOB) on-chain nguyên bản của Sui, được các ứng dụng khác dùng để lấy thanh khoản",
+   "Walrus — lớp lưu trữ / data-availability phi tập trung, một mảnh chủ lực của Sui Stack",
+   "Stablecoin & RWA: USDC, USDsui nguyên bản (Bridge, một công ty của Stripe), suiUSDe của Ethena, và các tài sản thế giới thực được token hóa",
+   "SuiNS — các tên on-chain dễ đọc cho con người; các ứng dụng tiêu dùng, game, và thanh toán là thị trường mục tiêu cốt lõi"
+  ],
+  "history": [
+   {
+    "year": "2019-2021",
+    "event": "Các nhà sáng lập tương lai của Mysten Labs xây dựng blockchain Diem của Meta và ngôn ngữ Move; dự án bị đóng lại dưới áp lực pháp lý."
+   },
+   {
+    "year": "2021",
+    "event": "Năm kỹ sư cựu Meta rời đi để sáng lập Mysten Labs và bắt đầu thiết kế Sui."
+   },
+   {
+    "year": "2022",
+    "event": "Testnet có thưởng của Sui ra mắt; Mysten Labs đóng một vòng Series B $300M do FTX Ventures dẫn dắt (với a16z, Binance Labs, Jump và những nhà khác) ở định giá ~$2B."
+   },
+   {
+    "year": "April-May 2023",
+    "event": "Ra mắt token SUI và phân phối cộng đồng quanh thời điểm mainnet chạy."
+   },
+   {
+    "year": "May 2023",
+    "event": "Mainnet Sui chạy với token SUI, staking, và smart contract Move."
+   },
+   {
+    "year": "2024",
+    "event": "Đồng thuận dựa trên DAG Mysticeti lên mainnet, cắt finality xuống khoảng 400ms."
+   },
+   {
+    "year": "May 2025",
+    "event": "DEX Cetus bị khai thác ~$223M; các validator phối hợp để đóng băng phần lớn số tiền bị đánh cắp on-chain, khơi mào một cuộc tranh luận về việc Sui thực sự phi tập trung đến đâu."
+   },
+   {
+    "year": "2025",
+    "event": "'Sui Stack' hình thành: Walrus (lưu trữ), Seal (kiểm soát truy cập), và Nautilus (tính toán off-chain) ra mắt trên mainnet, và Mysticeti v2 triển khai vào tháng 11."
+   },
+   {
+    "year": "2026",
+    "event": "Stablecoin nguyên bản USDsui ra mắt qua Bridge của Stripe, với một lộ trình xoay quanh thanh toán, các giao dịch riêng tư, và các trường hợp sử dụng dữ liệu AI."
+   }
+  ],
+  "risks": [
+   "Mở khóa token và pha loãng: chỉ khoảng 40% của cung tối đa 10B đang lưu hành. Các đợt mở khóa lớn theo lịch cho các nhà đầu tư sớm và đội ngũ tiếp tục bổ sung nguồn cung mới trong nhiều năm, điều này có thể đè lên giá trừ khi nhu cầu theo kịp.",
+   "Sở hữu tập trung: Mysten Labs, các nhà đầu tư sớm, và đội ngũ cùng nhau kiểm soát một phần lớn tổng cung (các nhà phê bình đã chỉ ra rằng hơn một nửa được nắm giữ/khóa bởi người trong cuộc). Điều đó tập trung cả của cải và, tiềm tàng, cả ảnh hưởng.",
+   "Các câu hỏi về tập trung hóa đã được làm nổi bật bởi vụ hack Cetus tháng 5 năm 2025: khoảng 125 validator của Sui đã có thể phối hợp và đóng băng tiền của kẻ tấn công. Tốt cho việc thu hồi tiền, nhưng nó cho thấy mạng lưới có thể kiểm duyệt/đóng băng giao dịch nếu đủ validator đồng ý — trái ngược với 'không thể ngăn cản'.",
+   "Rủi ro smart contract và ứng dụng: Move giảm một số loại lỗi, nhưng vụ khai thác Cetus (một lỗ hổng ở cấp ứng dụng, không phải một sự cố phá vỡ chain nền tảng) là một lời nhắc rằng hàng trăm triệu vẫn có thể mất trong các ứng dụng xây dựng bên trên.",
+   "Cạnh tranh khốc liệt: Sui cạnh tranh trực diện với Solana, Aptos (người anh em họ gần gũi của nó, cũng từ những người cựu Diem, cũng dựa trên Move), và các Layer-2 của Ethereum để giành nhà phát triển và người dùng. Các benchmark hiệu năng chỉ là tiếp thị cho đến khi chúng trụ vững dưới tải thực, bền vững.",
+   "Bất định pháp lý: như hầu hết các token Layer-1 cung lớn, nặng người-trong-cuộc, SUI có thể đối mặt với sự soi xét về cách nó được phân phối và liệu nó có được coi là chứng khoán ở một số khu vực pháp lý hay không.",
+   "Khoảng cách giữa tuyên bố và trải nghiệm thực tế: các con số 'hàng trăm nghìn TPS' gây choáng đến từ các điều kiện lý tưởng; mức sử dụng hằng ngày, công cụ, và chiều sâu thanh khoản mới là điều thực sự quan trọng."
+  ],
+  "howToInvest": [
+   "Học trước, rồi quyết định. Không có gì ở đây là lời khuyên tài chính — hãy hiểu SUI là gì và đánh giá trung thực xem bạn có thể mất số tiền bỏ vào không, vì các token Layer-1 biến động.",
+   "Nếu bạn mua, một sàn giao dịch tập trung uy tín có niêm yết SUI là kênh vào đơn giản nhất. Xác minh bạn đang ở đúng site thật, và lưu ý SUI là chain riêng của nó — đừng gửi nó đến một địa chỉ Ethereum hay Solana, nếu không tiền sẽ mất.",
+   "Chuyển nó vào tự lưu ký thay vì để trên một sàn ('không phải khóa của bạn, không phải coin của bạn'). Các ví nguyên bản Sui như Sui Wallet chính thức hoặc Slush, hoặc các ví đa chain hỗ trợ Sui, cho phép bạn giữ khóa của riêng mình.",
+   "Để thực sự an toàn với số lượng lớn hơn, dùng một ví cứng (ví dụ Ledger) để khóa riêng tư của bạn không bao giờ chạm vào một thiết bị kết nối internet.",
+   "Viết seed phrase của bạn ra giấy và cất offline. Đừng bao giờ gõ nó vào một website hoặc chia sẻ nó — bất kỳ ai hỏi nó đều đang lừa bạn, không có ngoại lệ.",
+   "Bạn có thể stake SUI cho một validator để kiếm phần thưởng và giúp bảo mật mạng lưới, nhưng hãy hiểu nó mang cùng rủi ro giá như việc nắm giữ, và các token đã stake có thể có một độ trễ unstaking.",
+   "Hãy đặc biệt cẩn thận với các ứng dụng và token DeFi mới trên Sui — vụ hack Cetus cho thấy ngay cả các giao thức hàng đầu cũng có thể bị rút cạn. Bắt đầu nhỏ, bám vào các ứng dụng đã được thiết lập, và xác minh các địa chỉ contract từ các nguồn chính thức."
+  ]
+ },
+ {
+  "slug": "apt",
+  "category": "Blockchain Layer-1",
+  "tagline": "Một blockchain Layer-1 nhanh do các cựu kỹ sư Meta xây dựng quanh ngôn ngữ Move, đặt cược rằng tốc độ thô có thể khiến giao dịch on-chain cảm thấy như một sàn tập trung.",
+  "whatIsIt": [
+   "Aptos là một blockchain Layer-1 (lớp nền tảng), nghĩa là nó là mạng lưới độc lập riêng của nó với các validator riêng và token riêng (APT) được dùng để trả phí và bảo mật chain. Nó ra mắt mainnet vào ngày 18 tháng 10 năm 2022. Toàn bộ luận điểm của nó là tốc độ và độ tin cậy: xử lý nhiều giao dịch nhanh chóng, hiếm khi lỗi, và cảm thấy gần với một ứng dụng Web2 hơn là một ứng dụng crypto vụng về.",
+   "Nó được xây dựng bởi Aptos Labs, một công ty đồng sáng lập năm 2021 bởi Mo Shaikh và Avery Ching. Cả hai đều là cựu kỹ sư Meta (Facebook) từng làm việc trên Diem, dự án stablecoin/blockchain đầy tham vọng nhưng rốt cuộc bị bỏ dở của Meta. Khi Meta đóng Diem lại vào đầu năm 2022, một nhóm của đội ngũ đó đã tách công nghệ ra và biến nó thành Aptos. Shaikh dẫn dắt với vai trò CEO cho đến khi ông từ chức vào tháng 12 năm 2024; đồng sáng lập Avery Ching (trước đó là CTO) tiếp quản làm CEO và vẫn điều hành công ty đến ngày nay.",
+   "Vì nó lớn lên từ Diem, Aptos kế thừa hai mảnh lớn của nghiên cứu đó: ngôn ngữ lập trình Move (một cách an toàn để viết smart contract) và một công cụ thực thi song song Block-STM. Aptos huy động hơn $350 triệu từ các quỹ đầu tư mạo hiểm lớn như a16z, Jump Crypto, và FTX Ventures trước và ngay sau khi ra mắt (qua một vòng seed ~$200M và một vòng ~$150M), khiến nó trở thành một trong những đợt ra mắt L1 được tài trợ mạnh nhất và được hype nhiều nhất của thời kỳ đó.",
+   "Ngày nay Aptos tự tiếp thị mình là một 'Global Trading Engine' — một chain tối ưu cho stablecoin, DeFi, và giao dịch on-chain tần suất cao, nhắm tới việc sánh ngang tốc độ mà người dùng kỳ vọng từ các sàn tập trung trong khi vẫn phi tập trung."
+  ],
+  "howItWorks": {
+   "paragraphs": [
+    "Aptos là một chain Proof-of-Stake: các validator khóa APT để giành quyền tạo và xác thực block, và người nắm giữ có thể ủy quyền (delegate) APT của họ cho các validator để chia sẻ phần thưởng staking. Nếu một validator hành xử sai, stake của nó bị đặt vào rủi ro. Thứ tự các giao dịch được đồng thuận bởi một giao thức đồng thuận Byzantine Fault Tolerant (BFT), giữ cho hoạt động đúng đắn miễn là ít hơn một phần ba validator có ý xấu hoặc offline.",
+    "Hai ý tưởng khiến Aptos khác biệt là Move và thực thi song song. Move là một ngôn ngữ smart contract (cũng từ dự án Diem) coi các tài sản số như các 'resource' — những thứ thực sự không thể bị sao chép hoặc vô tình xóa ở cấp ngôn ngữ. Thiết kế đó chặn đứng cả một loại lỗi từng rút cạn tiền trên các chain khác. Block-STM, công cụ thực thi của Aptos, chạy nhiều giao dịch không xung đột cùng lúc trên các lõi CPU thay vì từng cái một, rồi hòa giải chúng — nên throughput mở rộng theo phần cứng.",
+    "Aptos cũng dùng một thiết kế 'pipelined': các bước xử lý một block (phát tán giao dịch, sắp thứ tự chúng, thực thi chúng, lưu trữ chúng, chứng nhận chúng) chồng lên nhau và chạy đồng thời thay vì theo một hàng đơn nghiêm ngặt. Trong suốt năm 2025 đội ngũ triển khai các nâng cấp đồng thuận tên Baby Raptr và Velociraptr đã đẩy thời gian block mainnet xuống dưới 50 mili giây (công bố tháng 12 năm 2025) — thuộc hàng nhanh nhất của bất kỳ L1 lớn nào."
+   ],
+   "bullets": [
+    "Đồng thuận: Proof-of-Stake với một giao thức BFT pipelined (dòng nâng cấp Raptr), chịu được tới 1/3 validator lỗi",
+    "Ngôn ngữ Move: tài sản là các 'resource' không thể bị nhân bản hoặc bỏ rơi, được thực thi bởi compiler để an toàn",
+    "Block-STM: thực thi song song lạc quan chạy các giao dịch không xung đột đồng thời trên các lõi",
+    "Finality dưới một giây trong lịch sử; thời gian block dưới 50ms trên mainnet sau các nâng cấp Baby Raptr / Velociraptr năm 2025",
+    "Quản trị chạy qua các Aptos Improvement Proposal (AIP) mà các staker bỏ phiếu để phê duyệt các thay đổi giao thức"
+   ]
+  },
+  "building": {
+   "paragraphs": [
+    "Tính đến giữa năm 2026, Aptos đang thực thi luận điểm 'Global Trading Engine' của nó — làm cho chain đủ nhanh và rẻ để lưu trữ giao dịch order-book, thanh toán stablecoin, và tài sản thế giới thực ở quy mô lớn. Một kết quả chủ lực là Decibel, một sàn perpetual hoàn toàn on-chain được Aptos Labs ươm tạo đã chạy vào tháng 2 năm 2026 trên sổ lệnh giới hạn tập trung (CLOB) nguyên bản của chain và kể từ đó đã xử lý hơn $1 tỷ khối lượng tích lũy. Lộ trình kỹ thuật xoay quanh họ đồng thuận Raptr (một nâng cấp xa hơn tên Archon nhắm tới việc thu hẹp khoảng cách độ trễ còn lại với các sàn tập trung) và Block-STM V2, một công cụ thực thi nâng cấp được thiết kế để mở rộng throughput theo các lõi CPU của validator thay vì chững lại.",
+    "Câu chuyện lớn khác của năm 2026 là một cuộc đại tu tokenomics lớn, được quản trị thông qua vào năm 2026 (đứng đầu là Proposal #183 gần như nhất trí), tái định vị APT từ một token lạm phát về hướng một lộ trình giảm phát. Nó giới thiệu một giới hạn cung cứng 2.1 tỷ, nhắm cắt phần thưởng staking khoảng một nửa (~5.19% xuống ~2.6%), tăng phí gas khoảng 10 lần, và giờ đốt vĩnh viễn 100% phí gas nền tảng. Aptos Foundation cũng khóa và liên tục stake ~210 triệu APT (~18% cung lưu hành) mà họ nói sẽ không bao giờ được bán. Lưu ý: đây là các thay đổi gần đây, gây tranh cãi — và doanh thu phí mạng lưới vẫn nhỏ so với lượng phát hành — nên đáng để theo dõi xem chúng đáp xuống thế nào trên thực tế thay vì coi chúng là đã định."
+   ],
+   "bullets": [
+    "Decibel — sàn perps/spot on-chain của Aptos Labs, hoạt động từ tháng 2 năm 2026 trên CLOB nguyên bản, >$1B khối lượng tích lũy",
+    "Dòng đồng thuận Raptr (Baby Raptr, Velociraptr) — thời gian block mainnet dưới 50ms, với một nâng cấp Archon nhắm tới finality thậm chí thấp hơn dưới tải",
+    "Block-STM V2 — thực thi song song mở rộng theo số lõi của validator thay vì chững lại",
+    "Shelby — một giao thức 'hot storage' / data-availability độ trễ thấp đồng phát triển với Jump Crypto, công bố tháng 6 năm 2025",
+    "Đại tu tokenomics giảm phát (2026): giới hạn cung 2.1B, phần thưởng staking ~5.19%→~2.6%, gas gấp 10 lần + đốt 100% phí nền tảng, ~210M APT bị khóa",
+    "Đào sâu các kênh stablecoin và RWA (tài sản thế giới thực) làm trường hợp sử dụng cốt lõi của chain"
+   ]
+  },
+  "quickFacts": [
+   [
+    "Ra mắt mainnet",
+    "Ngày 18 tháng 10 năm 2022 (genesis 12 tháng 10 năm 2022)"
+   ],
+   [
+    "Đồng sáng lập",
+    "Mo Shaikh & Avery Ching, cựu Meta / Diem"
+   ],
+   [
+    "CEO hiện tại",
+    "Avery Ching (tiếp quản tháng 12 năm 2024; Shaikh từ chức)"
+   ],
+   [
+    "Đồng thuận",
+    "Proof-of-Stake + BFT pipelined (các nâng cấp Raptr)"
+   ],
+   [
+    "Ngôn ngữ smart contract",
+    "Move (hướng resource, từ Diem)"
+   ],
+   [
+    "Mô hình cung",
+    "~2.1B giới hạn cứng (đại tu 2026); ~833M lưu hành; phí nền tảng bị đốt"
+   ],
+   [
+    "Công dụng token",
+    "Phí gas, staking/bảo mật, và quản trị on-chain"
+   ],
+   [
+    "Thời gian block",
+    "Dưới 50ms trên mainnet sau các nâng cấp đồng thuận năm 2025"
+   ]
+  ],
+  "ecosystem": [
+   "Stablecoin là trường hợp sử dụng chủ lực: USDT và USDC nguyên bản cộng với USDe mang lại cho Aptos một trong những dấu ấn stablecoin lớn hơn trong số các L1 mới hơn (hơn $1B on-chain)",
+   "Decibel — một sàn perpetual hoàn toàn on-chain (CLOB nguyên bản) do Aptos-Labs ươm tạo đã chạy tháng 2 năm 2026 và vượt $1B khối lượng tích lũy",
+   "Echelon — một giao thức cho vay hàng đầu và trung tâm thanh khoản stablecoin trên Aptos",
+   "Thala Labs — một 'superapp' DeFi (DEX ThalaSwap, cho vay, stablecoin MOD, liquid staking) xử lý một phần lớn khối lượng on-chain",
+   "Hyperion và ThalaSwap V2 — các DEX nguyên bản khối lượng cao đã thúc đẩy một đợt tăng vọt lớn trong giao dịch DEX của Aptos suốt năm 2025",
+   "Aave — giao thức cho vay cross-chain lớn thực hiện lần triển khai non-EVM đầu tiên của nó trên Aptos (tháng 8 năm 2025), viết lại bằng Move",
+   "Tài sản thế giới thực (RWA): các quỹ và trái phiếu kho bạc được token hóa đã đẩy Aptos vào nhóm hàng đầu các chain theo giá trị RWA",
+   "Ví và truy cập: Petra (ví Aptos chính thức), cùng với Pontem, Martian, và OKX Wallet"
+  ],
+  "history": [
+   {
+    "year": "2019-2021",
+    "event": "Đội ngũ lõi xây dựng Diem (trước đây là Libra), dự án blockchain của Meta, tạo ra ngôn ngữ Move và nghiên cứu Block-STM"
+   },
+   {
+    "year": "2022 (Jan)",
+    "event": "Meta xếp Diem lại; Aptos Labs tách ra để tiếp tục công nghệ như một L1 độc lập"
+   },
+   {
+    "year": "2022 (Mar-Jul)",
+    "event": "Huy động ~$200M (a16z, Tiger Global, Multicoin) rồi ~$150M nữa (FTX Ventures, Jump Crypto); chạy các testnet có thưởng"
+   },
+   {
+    "year": "2022 (Oct)",
+    "event": "Mainnet chạy ngày 18 tháng 10; airdrop APT cho những người dùng testnet sớm. Đợt ra mắt bị chỉ trích về phân bổ token nặng VC và việc công bố tokenomics"
+   },
+   {
+    "year": "2023 (Jan)",
+    "event": "APT đạt đỉnh mọi thời đại quanh $20 — một mức mà nó đã ở dưới xa kể từ đó (giảm ~97% đến giữa năm 2026)"
+   },
+   {
+    "year": "2023-2024",
+    "event": "Hệ sinh thái mở rộng; USDT/USDC nguyên bản xuất hiện; hoạt động DeFi, stablecoin, và RWA tăng trưởng; đồng sáng lập Avery Ching trở thành CEO vào tháng 12 năm 2024 khi Mo Shaikh lùi về vai trò cố vấn"
+   },
+   {
+    "year": "2025",
+    "event": "Aave triển khai trên Aptos (non-EVM đầu tiên, tháng 8); giao thức lưu trữ Shelby được công bố cùng Jump (tháng 6); các nâng cấp đồng thuận Baby Raptr & Velociraptr đạt thời gian block dưới 50ms (tháng 12)"
+   },
+   {
+    "year": "2026",
+    "event": "Sàn perps on-chain Decibel chạy (tháng 2) trên CLOB nguyên bản; quản trị thông qua một cuộc đại tu tokenomics lớn: giới hạn cung 2.1B, phần thưởng staking cắt ~một nửa, gas gấp 10 lần với đốt 100% phí nền tảng, ~210M APT bị khóa — lái APT về hướng giảm phát"
+   }
+  ],
+  "risks": [
+   "Sở hữu nặng VC và người-trong-cuộc. Một phần lớn APT đã được nắm giữ bởi đội ngũ, Aptos Labs, và các nhà đầu tư sớm, và đây là lời chỉ trích ồn ào nhất lúc ra mắt. Ngay cả khi bị khóa, người trong cuộc có thể stake các token đó và bán phần thưởng staking — nên 'bị khóa' không có nghĩa là thị trường được cách ly hoàn toàn khỏi việc bán của người trong cuộc.",
+   "Các đợt mở khóa token và lịch sử giá tàn khốc. APT đã giảm khoảng 97% từ đỉnh mọi thời đại đầu năm 2023 khoảng $20. Các lịch mở khóa nhiều năm cho các nhà đầu tư và cộng tác viên đã bổ sung áp lực bán liên tục; một chu kỳ mở khóa lớn bốn năm kết thúc quanh tháng 10 năm 2026, đây là một sự kiện chủ chốt cần theo dõi dù thế nào đi nữa.",
+   "Cuộc đại tu tokenomics là mới và chưa được chứng minh. Giới hạn cung, cắt mạnh phần thưởng staking, tăng gas gấp 10 lần, và đốt phí là một cú xoay trục táo bạo về hướng giảm phát — nhưng nó mới đây và gây tranh cãi, và doanh thu phí mạng lưới vẫn nhỏ so với lượng phát hành. Phần thưởng staking thấp hơn có thể làm suy yếu động lực bảo mật mạng lưới, và gas gấp 10 lần có thể ngăn cản người dùng nếu hoạt động không trụ vững. Hãy đánh giá nó bằng kết quả theo thời gian, không phải bằng thông báo.",
+   "Cạnh tranh khốc liệt. Aptos cạnh tranh trực diện với Solana, các Layer-2 của Ethereum, và đặc biệt là Sui — một chain dựa trên Move khác từ một nhóm cựu kỹ sư Diem khác. Sui thường xuyên dẫn trước Aptos về TVL (khoảng $2.6B so với ~$1B đầu năm 2026) và mức hoạt động của người dùng dù công nghệ rất tương tự, nên Aptos phải liên tục chứng minh vì sao các nhà xây dựng và người dùng nên chọn nó.",
+   "'Nhanh nhưng có nắm bắt được giá trị không?' Aptos có kỹ thuật mạnh và các kỷ lục tốc độ thực sự, nhưng throughput cao không tự động chuyển thành nhu cầu bền vững cho token APT. Phần lớn hoạt động DeFi thanh toán bằng stablecoin, không phải APT.",
+   "Tập trung hóa bộ validator. Như hầu hết các L1 Proof-of-Stake còn non trẻ, một phần đáng kể stake nằm ở một tập hợp validator hạn chế và các người nắm giữ lớn, đây là một điểm dè chừng thực sự về phi tập trung hóa so với các mạng lưới cũ hơn, phân tán hơn.",
+   "Rủi ro crypto và pháp lý chung. APT là một tài sản biến động trong một môi trường pháp lý đang thay đổi; cách các token L1 được phân loại và đối xử bởi các cơ quan quản lý vẫn còn bất định ở nhiều khu vực pháp lý."
+  ],
+  "howToInvest": [
+   "Đây là giáo dục, không phải lời khuyên tài chính. Không có gì ở đây là khuyến nghị mua APT — chỉ tự quyết định cho bản thân với số tiền bạn có thể mất hoàn toàn, và hiểu bạn sở hữu gì trước khi mua.",
+   "Tự làm bài tập của bạn trước. Đọc tài liệu Aptos (aptos.dev) và kiểm tra dữ liệu độc lập trên DefiLlama và CoinGecko. Đối chiếu bất kỳ tuyên bố nào — kể cả những cái trên trang này — với các nguồn gốc, vì các số liệu thống kê crypto thay đổi nhanh.",
+   "Nếu bạn mua, dùng một sàn giao dịch uy tín. APT giao dịch trên hầu hết các sàn tập trung lớn. Ưu tiên các địa điểm nổi tiếng, có kiểm soát pháp lý, bật xác thực hai yếu tố, và cảnh giác với các token 'Aptos' giả hoặc các ticker nhái — xác minh contract chính thức trước khi chạm vào bất cứ thứ gì on-chain.",
+   "Cân nhắc tự lưu ký. 'Không phải khóa của bạn, không phải coin của bạn.' Chuyển APT khỏi một sàn vào một ví tự lưu ký như Petra (ví Aptos chính thức) — hoặc một ví cứng cho số lượng lớn hơn — nghĩa là bạn kiểm soát nó, nhưng bạn cũng hoàn toàn chịu trách nhiệm về seed phrase của mình. Đừng bao giờ chia sẻ hoặc gõ seed phrase của bạn vào bất kỳ website nào.",
+   "Hiểu về staking trước khi chạy theo lợi suất. Bạn có thể stake hoặc ủy quyền APT để giúp bảo mật mạng lưới và kiếm phần thưởng, nhưng phần thưởng đã bị cắt trong đợt đại tu 2026, các token đã stake có thể có thời gian khóa/mở khóa, và việc ủy quyền vẫn mang rủi ro validator và slashing. Đọc các điều khoản hiện tại trước.",
+   "Điều chỉnh quy mô hợp lý và tránh hype. APT là một tài sản đơn lẻ biến động cao với các đợt mở khóa liên tục và cạnh tranh nặng nề. Đừng phân bổ quá mức, bỏ qua các lời chào 'lợi nhuận đảm bảo' và quà tặng (chúng là lừa đảo), và đừng bao giờ đầu tư chỉ vì một biểu đồ giá hay influencer.",
+   "Giữ hồ sơ. Theo dõi giá mua, các giao dịch, và bất kỳ phần thưởng staking nào của bạn cho mục đích thuế trong khu vực pháp lý của bạn."
+  ]
  }
 ]
