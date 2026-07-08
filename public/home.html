@@ -69,10 +69,10 @@
   .gopt:hover .oar{color:#fff;}
 
   /* ── simple quick links ── */
-  .quick{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:30px;}
-  .ql{display:flex;flex-direction:column;align-items:center;gap:7px;background:var(--card-grad);border:1px solid var(--border);border-radius:14px;padding:18px 10px;transition:transform .1s,border-color .1s,box-shadow .1s;}
+  .quick{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:30px;max-width:660px;margin-left:auto;margin-right:auto;}
+  .ql{display:flex;flex-direction:column;align-items:center;gap:5px;background:var(--card-grad);border:1px solid var(--border);border-radius:14px;padding:12px 10px;transition:transform .1s,border-color .1s,box-shadow .1s;}
   .ql:hover{transform:translateY(-2px);border-color:var(--orange);box-shadow:0 8px 20px rgba(232,30,14,.16);}
-  .ql .qic{font-size:26px;}
+  .ql .qic{font-size:22px;}
   .ql .qt{font-family:var(--disp);font-size:14px;letter-spacing:.5px;color:var(--text);text-align:center;}
   .ql .qd{font-family:var(--body);font-size:11px;color:var(--sub);text-align:center;line-height:1.35;margin-top:1px;}
 
@@ -82,8 +82,7 @@
   footer .disc{color:var(--muted);font-size:11px;max-width:640px;margin:10px auto 0;line-height:1.5;}
 
   @media(max-width:680px){
-    .quick{grid-template-columns:1fr 1fr;}
-    .quick .ql:last-child{grid-column:1 / -1;}
+    .quick{grid-template-columns:1fr 1fr;max-width:none;}
     .hero h1{font-size:44px;} .hero .tag{font-size:20px;}
     .guidebtn .gt{font-size:19px;}
     .nav .links a:not(.cta):not(.ask){display:none;}
