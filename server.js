@@ -899,10 +899,12 @@ async function notifyEduPost() {
       // Clean, link-free lesson body + tag the Solana Foundation (grant relationship —
       // every learning lesson tags @SolanaFndn). Link-free keeps algorithmic reach.
       const xBody = body + "\n\n" + X_LEARN_TAG;
-      let r = await postToX(xBody);
+      // force = scoped carve-out from the master X pause (owner's explicit call 2026-07-08:
+      // "Cluck lesson, one per day with comments under it"). Lesson + its self-replies only.
+      let r = await postToX(xBody, { force: true });
       if (!r || !r.ok) {
         const short = body.length > 250 ? body.slice(0, 249).trim() + "…" : body;
-        r = await postToX(short + "\n\n" + X_LEARN_TAG);
+        r = await postToX(short + "\n\n" + X_LEARN_TAG, { force: true });
       }
       if (r && r.ok) {
         xTweetId = r.id;
@@ -910,7 +912,7 @@ async function notifyEduPost() {
         // Remember today's lesson tweet so lessonBumpTick can REPLY under ("bump") it later.
         try { kv.set("lessonXTweet", { id: r.id, date: new Date().toISOString().slice(0, 10) }); } catch (_) {}
         // …links follow as a self-reply so they never throttle the lesson's reach.
-        try { await postToX(route ? `🛠 ${route.label} → ${route.url}\n\n${X_LESSON_REPLY}` : X_LESSON_REPLY, { replyToId: r.id }); } catch (_) {}
+        try { await postToX(route ? `🛠 ${route.label} → ${route.url}\n\n${X_LESSON_REPLY}` : X_LESSON_REPLY, { replyToId: r.id, force: true }); } catch (_) {}
       } else console.warn("[X] lesson tweet failed:", JSON.stringify(r).slice(0, 200));
     } catch (e) { console.warn("[EDU] X cross-post failed:", e.message); }
   }
@@ -980,7 +982,7 @@ async function lessonBumpTick() {
     if (done[k]) continue;
     const hook = LESSON_BUMP_HOOKS[(now.getUTCDate() + i) % LESSON_BUMP_HOOKS.length];
     try {
-      const r = await postToX(`${hook}\n\n${b.tags}`, { replyToId: lt.id }); // REPLY under the lesson (not a quote-tweet) — owner's call 2026-07-05
+      const r = await postToX(`${hook}\n\n${b.tags}`, { replyToId: lt.id, force: true }); // REPLY under the lesson (not a quote-tweet) — owner's call 2026-07-05; force = lesson carve-out 2026-07-08
       if (r && r.ok) { done[k] = true; kv.set("lessonBumpDone", done); console.log(`[lesson-bump] ${b.hour}:00 replied under ${lt.id} → ${b.tags}`); }
       else console.warn("[lesson-bump] post not ok:", JSON.stringify(r).slice(0, 160));
     } catch (e) { console.warn("[lesson-bump] failed:", e.message); }

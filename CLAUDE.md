@@ -158,11 +158,10 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 > `cgPro` itself falls back to the free api.coingecko.com host if ever invoked, so a dead key
 > can't break anything. `COINGECKO_API_KEY` on Railway is now UNUSED by runtime paths — safe
 > (and recommended) to delete before the 13th. ACTIONABLE listing fix
-> found the same day: the GeckoTerminal token profile's WEBSITE field points to the Bags
-> launchpad page (bags.fm/dw6df2…) not clucknorris.app, and the description says
-> "clucknorris.vip" (half-dead domain) with stale stats (12 lessons/72 questions) — a reviewer
-> sees "no real website" → the team-presence boilerplate. Submit a GT/CG token-info update
-> (website → clucknorris.app, socials, refreshed description) before any reapply.** Older
+> found the same day: the GeckoTerminal token profile's WEBSITE field pointed at the Bags
+> launchpad page, not clucknorris.app. **STATUS (owner, 2026-07-08): FIXED — the GT profile now
+> lists both websites; clucknorris.app just isn't shown first (ordering is GT's, not ours).
+> Don't re-flag this; remaining nice-to-have is only the stale description text.** Older
 > context below ⬇️
 > ⏰ **ACTIVE WATCH (updated 2026-06-12): CoinGecko REJECTED the reapplication**
 > (req `CL1106260002`; owner reported the rejection 2026-06-12 — stated reason not yet
@@ -392,8 +391,10 @@ Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.
   `chainSpotlightTick`, observability kv `chainSpotLast`/`chainSpotBump`); new X surfaces should copy it.
 - ⚠️ **Master X pause (`X_AUTOPOST_PAUSED=true`, server.js ~643, owner's call 2026-06-24) hard-gates
   `postToX` — a new X feature that doesn't pass `{force:true}` posts NOTHING and reports
-  `{ok:false,paused:true}`.** Scoped carve-outs so far: lock announcements + the twice-daily
-  Chain Spotlight (owner ask 2026-07-08). Any new auto-poster needs an explicit owner ask for its
+  `{ok:false,paused:true}`.** Scoped carve-outs so far: lock announcements, the twice-daily
+  Chain Spotlight (owner ask 2026-07-08), and Cluck's Lesson 1×/day @13 UTC + its self-reply
+  comments/bumps (owner ask 2026-07-08 — the 07-05 "lesson ON" call had silently no-oped
+  against the pause until then). Any new auto-poster needs an explicit owner ask for its
   own carve-out — and must alert the operator chat on failure, never fail silently (the spotlight
   posted into the pause for a full day before anyone noticed).
 - **Media/brand generations: `docs/MEDIA_LIBRARY.md` is the manifest.** Every KEPT Higgsfield
