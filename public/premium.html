@@ -22,7 +22,7 @@ html.embed body{padding:6px 12px 24px}
 .panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px}
 .cfg-label{font-size:11px;letter-spacing:2px;color:var(--subtext);text-transform:uppercase;margin-bottom:6px}
 input{width:100%;background:rgba(0,0,0,0.35);border:1px solid var(--border);border-radius:7px;padding:13px 14px;color:var(--text);font-family:var(--mono);font-size:15px;margin-bottom:10px}
-.runbtn{width:100%;background:#8b5cf6;border:none;border-radius:9px;padding:15px;font-family:var(--head);font-size:18px;font-weight:900;letter-spacing:2px;color:#fff;cursor:pointer}
+.runbtn{width:100%;background:linear-gradient(135deg,#FF7A18,#E81E0E);border:none;border-radius:9px;padding:15px;font-family:var(--head);font-size:18px;font-weight:900;letter-spacing:2px;color:#fff;cursor:pointer}
 .runbtn:disabled{opacity:0.5;cursor:not-allowed}
 .feat{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px}
 .feat h2{font-family:var(--head);font-size:20px;font-weight:900;letter-spacing:1px;margin:0 0 4px;display:flex;align-items:center;gap:8px}
@@ -31,7 +31,7 @@ input{width:100%;background:rgba(0,0,0,0.35);border:1px solid var(--border);bord
 .v-bad{background:rgba(239,83,80,0.14);border:1px solid rgba(239,83,80,0.4);color:#fca5a5}
 .v-warn{background:rgba(245,158,11,0.14);border:1px solid rgba(245,158,11,0.4);color:#fcd34d}
 .v-ok{background:rgba(105,240,174,0.12);border:1px solid rgba(105,240,174,0.35);color:#86efac}
-.v-neutral{background:rgba(139,92,246,0.12);border:1px solid var(--border);color:var(--accent2)}
+.v-neutral{background:rgba(255,122,24,0.12);border:1px solid var(--border);color:var(--accent2)}
 .kv{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
 .kv .box{background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:8px;padding:9px 13px;min-width:96px}
 .kv .box .l{font-size:11px;letter-spacing:1px;color:var(--subtext);text-transform:uppercase}
@@ -51,19 +51,27 @@ a{color:var(--accent2)}
 .vm-title{font-family:var(--head);font-size:16px;font-weight:700;letter-spacing:1px;color:var(--accent2);margin-bottom:4px}
 .vm-sub{font-size:13px;color:var(--subtext);line-height:1.55;margin-bottom:8px}
 .wallet-picker{display:flex;flex-wrap:wrap;gap:6px}
-.wbtn{flex:1 1 30%;min-width:90px;background:rgba(139,92,246,0.12);border:1px solid var(--border);border-radius:7px;padding:11px;color:var(--text);font-family:var(--mono);font-size:14px;cursor:pointer}
-.wbtn:hover{background:rgba(139,92,246,0.22)}
-.vbtn{width:100%;background:rgba(139,92,246,0.2);border:1px solid var(--border);border-radius:7px;padding:12px;color:#fff;font-family:var(--head);font-size:15px;font-weight:700;letter-spacing:1px;cursor:pointer;margin-top:4px}
+.wbtn{flex:1 1 30%;min-width:90px;background:rgba(255,122,24,0.12);border:1px solid var(--border);border-radius:7px;padding:11px;color:var(--text);font-family:var(--mono);font-size:14px;cursor:pointer}
+.wbtn:hover{background:rgba(255,122,24,0.22)}
+.vbtn{width:100%;background:rgba(255,122,24,0.2);border:1px solid var(--border);border-radius:7px;padding:12px;color:#fff;font-family:var(--head);font-size:15px;font-weight:700;letter-spacing:1px;cursor:pointer;margin-top:4px}
 .copyfield{display:flex;align-items:center;gap:10px;background:rgba(0,0,0,0.35);border:1px solid var(--border);border-radius:7px;padding:12px;margin-bottom:6px;cursor:pointer;font-size:18px;color:var(--gold);line-height:1.4}
 .copyfield:hover{border-color:var(--accent)}
 .copyfield .cf-text{flex:1;word-break:break-all;min-width:0}
-.copyfield .copybtn{flex-shrink:0;background:rgba(139,92,246,0.25);border:1px solid var(--border);border-radius:6px;padding:7px 13px;font-size:13px;color:var(--accent2);font-family:var(--mono);white-space:nowrap}
+.copyfield .copybtn{flex-shrink:0;background:rgba(255,122,24,0.25);border:1px solid var(--border);border-radius:6px;padding:7px 13px;font-size:13px;color:var(--accent2);font-family:var(--mono);white-space:nowrap}
 .copyfield .hint{font-size:11px;color:var(--dim);margin-left:6px}
 .vok{background:rgba(105,240,174,0.1);border:1px solid rgba(105,240,174,0.35);color:#86efac;border-radius:8px;padding:12px;margin-bottom:10px;font-size:15px}
 
 html{background:var(--bg-grad);background-attachment:fixed;}
 body{background:transparent;font-family:var(--body);}
 </style>
+  <meta name="theme-color" content="#0b0c10">
+  <meta property="og:title" content="Premium Forensics">
+  <meta property="og:description" content="Deep-trace add-ons: downstream dumps, cash-out flow, creator track records, wallet P&L rankings. Pay in CLKN.">
+  <meta property="og:image" content="https://clucknorris.app/cluck-norris.png">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://clucknorris.app/cluck-norris.png">
+  <meta name="description" content="Deep-trace add-ons: downstream dumps, cash-out flow, creator track records, wallet P&L rankings. Pay in CLKN.">
 </head>
 <body>
 <div class="wrap">

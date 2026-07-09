@@ -55,23 +55,37 @@
     if (document.getElementById("cluck-nav-bar") || !document.body) return;
     // On deep pages (not the homepage), this bar IS the nav — so hide each page's
     // own redundant back-to-home link and give the fixed bar clearance so it
-    // doesn't overlap the page's top content.
+    // doesn't overlap the page's top content. The bar NEVER wraps (a stacked bar
+    // buried page titles on phones, found 2026-07-09): on narrow screens the pills
+    // compact instead, and the clearance matches the single-row height. The bottom
+    // padding keeps the floating Listen/language pills off the last card on mobile.
     if (showHome && !document.getElementById("cluck-nav-css")) {
       var st = document.createElement("style");
       st.id = "cluck-nav-css";
       st.textContent = "a.back,a.back-home,a.home{display:none!important}" +
-        ".wrap{padding-top:calc(58px + env(safe-area-inset-top,0px))!important}";
+        ".wrap{padding-top:calc(58px + env(safe-area-inset-top,0px))!important}" +
+        "#cluck-nav-bar{flex-wrap:nowrap!important}" +
+        "@media (max-width:560px){" +
+          "#cluck-nav-bar a{font-size:11px!important;padding:7px 10px!important;gap:4px!important;letter-spacing:.4px!important}" +
+          "#cluck-nav-bar a span:first-child{font-size:12px!important}" +
+          "body{padding-bottom:calc(72px + env(safe-area-inset-bottom,0px))}" +
+        "}";
       document.head.appendChild(st);
     }
     var bar = document.createElement("div");
     bar.id = "cluck-nav-bar";
     bar.style.cssText = ["position:fixed", "top:calc(12px + env(safe-area-inset-top,0px))", "left:50%", "transform:translateX(-50%)",
-      "z-index:2147483000", "display:flex", "gap:8px", "align-items:center", "flex-wrap:wrap",
+      "z-index:2147483000", "display:flex", "gap:8px", "align-items:center", "flex-wrap:nowrap",
       "justify-content:center", "max-width:96vw"].join(";");
     if (showHome)  bar.appendChild(pill("/", '<span style="font-size:14px;line-height:1">🏠</span><span>Home</span>', false));
     if (showTools) bar.appendChild(pill("/tools", '<span style="font-size:14px;line-height:1">🛠️</span><span>All Tools</span>', false));
     if (showAsk)   bar.appendChild(pill("/ask-cluck", '<span style="font-size:14px;line-height:1">🔥</span><span>Ask Cluck</span>', true));
     document.body.appendChild(bar);
+    // Pages without a .wrap container get no CSS clearance — pad the body directly.
+    if (showHome && !document.querySelector(".wrap")) {
+      var cur = parseInt(getComputedStyle(document.body).paddingTop, 10) || 0;
+      if (cur < 54) document.body.style.paddingTop = "calc(" + (cur + 54) + "px + env(safe-area-inset-top,0px))";
+    }
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", inject);
