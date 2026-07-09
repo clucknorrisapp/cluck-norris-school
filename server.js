@@ -8463,8 +8463,16 @@ app.get("/api/token-vitals", async (req, res) => {
     const allDexPairs = dexData.status === "fulfilled" && Array.isArray(dexData.value) ? dexData.value : [];
     // Only Solana pairs. Sum liquidity/volume across all of them (multi-pool = real total exit depth).
     const solPairs = allDexPairs.filter(p => p.chainId === "solana" || !p.chainId);
-    let totalLiqUsd = solPairs.reduce((s, p) => s + (parseFloat(p.liquidity?.usd) || 0), 0);
-    let totalVol24h = solPairs.reduce((s, p) => s + (parseFloat(p.volume?.h24) || 0), 0);
+    // DexScreener artifact guard (found 2026-07-09 on CLKN/JUP: the token-quoted pair reported
+    // price $2.31 and $17M liquidity for a $0.00046 token in a ~$3K pool — and "top pair by
+    // liquidity" happily crowned it). A pair only counts toward price/liquidity/volume if its
+    // priceUsd agrees with the MEDIAN price across the token's pairs (within 3× either way).
+    const _pxs = solPairs.map((p) => parseFloat(p.priceUsd)).filter((v) => v > 0).sort((a, b) => a - b);
+    const _medPx = _pxs.length ? _pxs[Math.floor(_pxs.length / 2)] : 0;
+    const _saneP = (p) => { const v = parseFloat(p.priceUsd); return !(v > 0 && _medPx > 0) || (v / _medPx <= 3 && _medPx / v <= 3); };
+    const sanePairs = solPairs.filter(_saneP);
+    let totalLiqUsd = sanePairs.reduce((s, p) => s + (parseFloat(p.liquidity?.usd) || 0), 0);
+    let totalVol24h = sanePairs.reduce((s, p) => s + (parseFloat(p.volume?.h24) || 0), 0);
     // CLKN: DexScreener mis-reports the CLKN/JUP pair's token-denominated volume (artifact) and
     // its liquidity sum differs from Jupiter's — use Jupiter's authoritative volume + liquidity.
     if (mint === CLKN_MINT_ADDR) {
@@ -8477,10 +8485,10 @@ app.get("/api/token-vitals", async (req, res) => {
       const id = (p.dexId || "").toLowerCase().split("-")[0];
       if (id) dexFamilies.add(id);
     }
-    let topPair = solPairs.length
-      ? solPairs.slice().sort((a, b) => (parseFloat(b.liquidity?.usd) || 0) - (parseFloat(a.liquidity?.usd) || 0))[0]
-      : null;
-    let poolCount = solPairs.length;
+    let topPair = sanePairs.length
+      ? sanePairs.slice().sort((a, b) => (parseFloat(b.liquidity?.usd) || 0) - (parseFloat(a.liquidity?.usd) || 0))[0]
+      : (solPairs[0] || null);
+    let poolCount = solPairs.length; // structural count stays real — the guard only affects USD aggregates
 
     // Quiet pools get dropped from DexScreener's index but still exist on-chain — recover
     // numbers from GeckoTerminal so a quiet token isn't reported as dead.
