@@ -8808,7 +8808,17 @@ app.get("/api/wallet-xray", async (req, res) => {
         if (t.fromUserAccount === wallet) { deltas.set(t.mint, (deltas.get(t.mint) || 0) - a); if (t.toUserAccount && t.toUserAccount !== wallet) extOut.add(t.toUserAccount); }
       }
       // Fold wSOL into the SOL leg; pull stables out as quote.
-      if (deltas.has(WX_WSOL)) { solDelta += deltas.get(WX_WSOL); deltas.delete(WX_WSOL); }
+      // ⚠️ Same-sign legs are ONE flow seen twice (swap pays wSOL to a temp ATA that is
+      // unwrapped+closed in the same tx → Helius reports BOTH a wSOL tokenTransfer and the
+      // native lamport transfer). Summing them doubled every swap's SOL/USD side (found
+      // 2026-07-10: sells showed 2× their real proceeds). Take the larger leg instead;
+      // opposite signs = a genuine self wrap/unwrap, which correctly nets to ~0.
+      if (deltas.has(WX_WSOL)) {
+        const w = deltas.get(WX_WSOL); deltas.delete(WX_WSOL);
+        if (w > 0 && solDelta > 0) solDelta = Math.max(solDelta, w);
+        else if (w < 0 && solDelta < 0) solDelta = Math.min(solDelta, w);
+        else solDelta += w;
+      }
       let stableDelta = 0;
       for (const s of WX_STABLES) if (deltas.has(s)) { stableDelta += deltas.get(s); deltas.delete(s); }
       const quoteUsd = solDelta * solUsd + stableDelta; // + = wallet received value, − = wallet spent value
