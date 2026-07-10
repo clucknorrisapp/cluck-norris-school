@@ -6943,16 +6943,20 @@ async function whaleRefresh({ topN = 20 } = {}) {
     const r = await fetch(rpcUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: "whale", method, params }) });
     return (await r.json()).result;
   };
-  const largest = (await call("getTokenLargestAccounts", [CLKN_MINT_ADDR]))?.value || [];
   const supply = Number((await call("getTokenSupply", [CLKN_MINT_ADDR]))?.value?.uiAmount || 0);
-  // Resolve token accounts → owners (batched)
-  const infos = (await call("getMultipleAccounts", [largest.map((a) => a.address), { encoding: "jsonParsed" }]))?.value || [];
+  // Full holder walk (same Helius getTokenAccounts pagination as token-vitals): the
+  // RPC's getTokenLargestAccounts caps at 20 token ACCOUNTS, and most of those are
+  // PDAs (pools/escrows) — after filtering, too few humans survive. Walk it all.
   const byOwner = new Map();
-  for (let i = 0; i < largest.length; i++) {
-    const owner = infos[i]?.data?.parsed?.info?.owner;
-    const amt = Number(largest[i].uiAmount || 0);
-    if (!owner || !(amt > 0)) continue;
-    byOwner.set(owner, (byOwner.get(owner) || 0) + amt);
+  for (let page = 1; page <= 10; page++) {
+    const d = await call("getTokenAccounts", { page, limit: 1000, mint: CLKN_MINT_ADDR, displayOptions: { showZeroBalance: false } });
+    const accounts = d?.token_accounts || [];
+    if (!accounts.length) break;
+    for (const a of accounts) {
+      const amt = (parseInt(a.amount) || 0) / 1e9; // CLKN has 9 decimals
+      if (amt > 0 && a.owner) byOwner.set(a.owner, (byOwner.get(a.owner) || 0) + amt);
+    }
+    if (accounts.length < 1000) break;
   }
   const whales = [];
   for (const [owner, bal] of [...byOwner.entries()].sort((a, b) => b[1] - a[1])) {
