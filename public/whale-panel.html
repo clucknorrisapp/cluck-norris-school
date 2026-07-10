@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Whale Panel — Cluck Norris (private)</title>
+<meta name="theme-color" content="#0b0c10">
+<style>
+  :root{color-scheme:dark;--bg:#0b0c0e;--card:#14151a;--border:rgba(255,255,255,0.09);--text:#FFEFE0;--sub:#C9A892;--muted:#9C7E68;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Chakra Petch',system-ui,sans-serif;min-height:100vh}
+  .wrap{max-width:980px;margin:0 auto;padding:24px 14px 90px}
+  h1{font-family:'Anton',sans-serif;font-size:28px;letter-spacing:2px;color:var(--gold);text-align:center;text-shadow:0 0 18px rgba(255,182,39,.35)}
+  .sub{text-align:center;font-size:11px;letter-spacing:3px;color:var(--orange);font-family:'Anton',sans-serif;margin-bottom:4px}
+  .priv{text-align:center;font-size:11px;color:var(--muted);margin-bottom:16px}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0 18px}
+  .stat{background:linear-gradient(160deg,rgba(255,122,24,.08),rgba(20,21,26,.92));border:1px solid rgba(255,182,39,.25);border-radius:12px;padding:12px;text-align:center}
+  .stat .v{font-family:'Anton',sans-serif;font-size:22px;color:var(--text)}
+  .stat .l{font-size:10px;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-top:3px}
+  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  th{font-family:'Anton',sans-serif;font-size:10px;letter-spacing:1.5px;color:var(--orange);text-transform:uppercase;padding:10px 8px;text-align:right;border-bottom:1px solid var(--border)}
+  th:first-child,td:first-child{text-align:left}
+  td{padding:9px 8px;font-size:12.5px;text-align:right;border-bottom:1px solid rgba(255,255,255,.04)}
+  tr:last-child td{border-bottom:none}
+  .addr{font-family:ui-monospace,monospace;color:var(--sub)}
+  .addr a{color:var(--sub);text-decoration:none;border-bottom:1px dotted rgba(201,168,146,.4)}
+  .pos{color:var(--green)} .neg{color:#ff8a7a} .zero{color:var(--muted)}
+  .soldcell{color:#ff8a7a;font-weight:700}
+  .foot{text-align:center;font-size:11px;color:var(--muted);margin-top:14px}
+  .keybox{max-width:420px;margin:80px auto;text-align:center}
+  .keybox input{width:100%;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-family:ui-monospace,monospace;margin:12px 0}
+  .keybox button{padding:12px 22px;border-radius:10px;border:none;background:linear-gradient(135deg,#FF7A18,#E81E0E);color:#fff;font-family:'Anton',sans-serif;letter-spacing:1px;cursor:pointer}
+  @media(max-width:640px){.stats{grid-template-columns:1fr 1fr 1fr;gap:7px}.stat .v{font-size:16px}td,th{padding:7px 5px;font-size:11px}.hide-m{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<script>
+const $=s=>document.querySelector(s);
+const KEY_LS="clkn_whale_key";
+function getKey(){const u=new URLSearchParams(location.search);const qk=u.get("key");if(qk){localStorage.setItem(KEY_LS,qk);history.replaceState(null,"",location.pathname);}return localStorage.getItem(KEY_LS)||"";}
+function fmt(n){if(n==null)return"—";const a=Math.abs(n);if(a>=1e6)return(n/1e6).toFixed(2)+"M";if(a>=1e3)return(n/1e3).toFixed(1)+"K";return String(Math.round(n));}
+function flowCell(n){if(n==null)return'<span class="zero">—</span>';if(Math.abs(n)<1)return'<span class="zero">0</span>';const c=n>0?"pos":"neg";return`<span class="${c}">${n>0?"+":""}${fmt(n)}</span>`;}
+async function load(){
+  const key=getKey();
+  if(!key){$("#app").innerHTML=`<div class="keybox"><div class="sub">CLUCK NORRIS · PRIVATE</div><h1>WHALE PANEL</h1><p style="color:var(--muted);font-size:12px;margin-top:10px">Operator access only.</p><input id="k" type="password" placeholder="access key"><br><button onclick="localStorage.setItem('${KEY_LS}',document.getElementById('k').value);location.reload()">ENTER</button></div>`;return;}
+  const r=await fetch(`/api/whale-watch?key=${encodeURIComponent(key)}`);
+  if(r.status===404){localStorage.removeItem(KEY_LS);location.reload();return;}
+  const j=await r.json();
+  const rows=(j.whales||[]).map(w=>{
+    const t=w.today||{};
+    return`<tr>
+      <td>#${w.rank} <span class="addr"><a target="_blank" rel="noopener" href="https://solscan.io/account/${w.addr}">${w.addr.slice(0,4)}…${w.addr.slice(-4)}</a></span></td>
+      <td>${fmt(w.balance)}</td>
+      <td class="hide-m">${w.pct!=null?w.pct.toFixed(2)+"%":"—"}</td>
+      <td class="hide-m">${w.usd!=null?"$"+fmt(w.usd):"—"}</td>
+      <td>${flowCell(w.flow24h)}</td>
+      <td class="hide-m">${flowCell(w.flow7d)}</td>
+      <td>${t.sold?`<span class="soldcell">−${fmt(t.sold)} ($${t.proceedsUsd})</span>`:(t.bought?`<span class="pos">+${fmt(t.bought)}</span>`:'<span class="zero">quiet</span>')}</td>
+    </tr>`;}).join("");
+  const nf=j.netFlow24h||0;
+  $("#app").innerHTML=`
+    <div class="sub">CLUCK NORRIS · PRIVATE OPERATOR TOOL</div>
+    <h1>🐋 WHALE PANEL</h1>
+    <div class="priv">top human holders · auto-refreshed daily · sells ≥ $${40} DM the operator chat live</div>
+    <div class="stats">
+      <div class="stat"><div class="v">${(j.whales||[]).length}</div><div class="l">whales tracked</div></div>
+      <div class="stat"><div class="v">${j.concentrationPct!=null?j.concentrationPct+"%":"—"}</div><div class="l">of supply held</div></div>
+      <div class="stat"><div class="v" style="color:${nf>=0?"var(--green)":"#ff8a7a"}">${nf>0?"+":""}${fmt(nf)}</div><div class="l">whale net flow 24h</div></div>
+    </div>
+    <table>
+      <tr><th>Whale</th><th>Balance</th><th class="hide-m">Supply</th><th class="hide-m">Value</th><th>24h Flow</th><th class="hide-m">7d Flow</th><th>Today</th></tr>
+      ${rows||'<tr><td colspan="7" style="text-align:center;color:var(--muted)">no roster yet — first discovery runs shortly after deploy</td></tr>'}
+    </table>
+    ${(j.entered&&j.entered.length)?`<div class="foot">🆕 entered top list: ${j.entered.map(a=>a.slice(0,4)+"…").join(", ")}</div>`:""}
+    ${(j.exited&&j.exited.length)?`<div class="foot">👋 left top list: ${j.exited.map(a=>a.slice(0,4)+"…").join(", ")}</div>`:""}
+    <div class="foot">updated ${j.updatedAt?new Date(j.updatedAt).toLocaleString():"—"} · CLKN $${j.clknUsd?j.clknUsd.toFixed(7):"—"} · <a style="color:var(--orange)" href="#" onclick="refresh();return false">refresh roster</a></div>`;
+}
+async function refresh(){const key=getKey();await fetch(`/api/whale-watch?key=${encodeURIComponent(key)}&refresh=1`);load();}
+load();setInterval(load,60000);
+</script>
+</body>
+</html>

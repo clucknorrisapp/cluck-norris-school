@@ -6925,8 +6925,64 @@ app.get("/api/arb-bots", (req, res) => {
 function wwCfg() {
   return kv.get("walletWatchCfg", {
     enabled: true, reportHourUtc: 13,
+    alertMinUsd: 40, // owner's call 2026-07-10 ("sells above 40 dollars while small market cap") — raise as mcap grows
     wallets: [{ addr: "D9MizWDURC2AhMUPfAbYtpqRgb521RC6CQRxBEzzQUK", label: "drip-seller-1" }],
   });
+}
+// ── Whale layer: auto-discovered top CLKN holders feeding the same watcher ──────
+// Daily refresh finds the top ~20 HUMAN holders (largest token accounts → owners,
+// keeping only on-curve wallets — PDAs like pools/escrows/lockers are off-curve —
+// and dropping known CEX/service wallets + our own operator/treasury). Balances are
+// snapshotted daily (kv whaleSnaps, 14d) so the panel can show 24h/7d net flow.
+const WW_OWN_WALLETS = new Set(["2zMCUkE9pBjcC7ihtLqm28EsCoEHVmCdJYr5262EuPy8", "4Ws6jXEGQ7MG61Ke8qiuGrXhdcYX2NNVCtg3xRMsuLs8"]);
+async function whaleRefresh({ topN = 20 } = {}) {
+  const HK = process.env.HELIUS_API_KEY;
+  if (!HK) return { error: "no key" };
+  const rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${HK}`;
+  const call = async (method, params) => {
+    const r = await fetch(rpcUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: "whale", method, params }) });
+    return (await r.json()).result;
+  };
+  const largest = (await call("getTokenLargestAccounts", [CLKN_MINT_ADDR]))?.value || [];
+  const supply = Number((await call("getTokenSupply", [CLKN_MINT_ADDR]))?.value?.uiAmount || 0);
+  // Resolve token accounts → owners (batched)
+  const infos = (await call("getMultipleAccounts", [largest.map((a) => a.address), { encoding: "jsonParsed" }]))?.value || [];
+  const byOwner = new Map();
+  for (let i = 0; i < largest.length; i++) {
+    const owner = infos[i]?.data?.parsed?.info?.owner;
+    const amt = Number(largest[i].uiAmount || 0);
+    if (!owner || !(amt > 0)) continue;
+    byOwner.set(owner, (byOwner.get(owner) || 0) + amt);
+  }
+  const whales = [];
+  for (const [owner, bal] of [...byOwner.entries()].sort((a, b) => b[1] - a[1])) {
+    if (!isOnCurve(owner)) continue;                       // PDA: pool / escrow / locker / vault
+    if (KNOWN_CEX_WALLETS[owner] || KNOWN_SERVICE_WALLETS[owner]) continue;
+    if (WW_OWN_WALLETS.has(owner)) continue;
+    whales.push({ addr: owner, balance: bal, pct: supply ? (bal / supply) * 100 : null });
+    if (whales.length >= topN) break;
+  }
+  whales.forEach((w, i) => (w.rank = i + 1));
+  const prev = kv.get("whaleWatch", null);
+  const prevSet = new Set(((prev && prev.whales) || []).map((w) => w.addr));
+  const entered = whales.filter((w) => !prevSet.has(w.addr)).map((w) => w.addr);
+  const nowSet = new Set(whales.map((w) => w.addr));
+  const exited = [...prevSet].filter((a) => !nowSet.has(a));
+  kv.set("whaleWatch", { updatedAt: Date.now(), supply, whales, entered, exited });
+  const today = new Date().toISOString().slice(0, 10);
+  const snaps = kv.get("whaleSnaps", {});
+  snaps[today] = Object.fromEntries(whales.map((w) => [w.addr, Math.round(w.balance)]));
+  for (const d of Object.keys(snaps)) if (Object.keys(snaps).length > 14 && d < Object.keys(snaps).sort()[Object.keys(snaps).length - 15]) delete snaps[d];
+  kv.set("whaleSnaps", snaps);
+  return { whales: whales.length, entered: entered.length, exited: exited.length };
+}
+function whaleFlow(addr, balance, days) {
+  const snaps = kv.get("whaleSnaps", {});
+  const dates = Object.keys(snaps).sort();
+  const target = new Date(Date.now() - days * 86400e3).toISOString().slice(0, 10);
+  const base = dates.filter((d) => d <= target).pop() || dates[0];
+  if (!base || !(addr in (snaps[base] || {}))) return null;
+  return balance - snaps[base][addr];
 }
 // Net deltas for one enhanced tx from `wallet`'s perspective. Same wSOL-unwrap dedupe
 // as Wallet X-Ray (same-sign native+wSOL legs are ONE flow — see fix of 2026-07-10).
@@ -6982,7 +7038,14 @@ async function walletWatchTick({ manual = false } = {}) {
   let day = kv.get("walletWatchDay", null);
   if (!day || day.date !== today) day = { date: today, w: {} };
   const solUsd = (await getSolUsd().catch(() => 0)) || 0;
-  for (const w of cfg.wallets) {
+  // Merge explicit watch list + auto-discovered whales (dedupe; explicit label wins).
+  const roster = [...cfg.wallets];
+  const rosterSet = new Set(roster.map((w) => w.addr));
+  for (const wh of (kv.get("whaleWatch", null)?.whales) || []) {
+    if (!rosterSet.has(wh.addr)) { roster.push({ addr: wh.addr, label: `whale-#${wh.rank}`, auto: true }); rosterSet.add(wh.addr); }
+  }
+  const minUsd = Number(cfg.alertMinUsd) || 40;
+  for (const w of roster) {
     out.checked++;
     let txs = [];
     try {
@@ -7010,7 +7073,8 @@ async function walletWatchTick({ manual = false } = {}) {
       const isDex = WX_DEX_SOURCES.has(tx.source) || (tx.type || "") === "SWAP" || proceeds > 0.5;
       if (clkn < -1 && isDex && proceeds > 0) {
         st.sells++; st.sold += -clkn; st.proceedsUsd += proceeds;
-        if (!isFresh) continue; // counted, but too old to alert on
+        if (!isFresh) continue;            // counted, but too old to alert on
+        if (proceeds < minUsd) continue;   // under the alert floor (cfg.alertMinUsd) — digest only
         out.sellAlerts++;
         const bal = await wwClknBalance(w.addr);
         await wwOperatorDM(
@@ -7073,6 +7137,35 @@ app.get("/api/wallet-watch", async (req, res) => {
   if (req.query.run === "1") ran = await walletWatchTick({ manual: true }).catch((e) => ({ error: e.message }));
   if (req.query.report === "1") { await walletWatchReport().catch((e) => ({ error: e.message })); ran = { ...(ran || {}), reportSent: true }; }
   return res.json({ success: true, cfg, today: kv.get("walletWatchDay", null), seenCount: Object.keys(kv.get("walletWatchSeen", {})).length, ran });
+});
+// Whale Panel data (PRIVATE — same product test): top-holder roster + flows + today's
+// activity, one JSON for the gated /whale-panel page. &refresh=1 re-runs discovery.
+app.get("/api/whale-watch", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  let refreshed = null;
+  if (req.query.refresh === "1" || !kv.get("whaleWatch", null)) refreshed = await whaleRefresh().catch((e) => ({ error: e.message }));
+  const ww = kv.get("whaleWatch", null) || { whales: [] };
+  const day = kv.get("walletWatchDay", null) || { w: {} };
+  const clknUsd = await (async () => { try { const p = await jupPriceV3([CLKN_MINT_ADDR]); return Number(p?.[CLKN_MINT_ADDR]?.usdPrice) || 0; } catch (_) { return 0; } })();
+  const whales = (ww.whales || []).map((w) => {
+    const d = (day.w || {})[w.addr] || {};
+    return {
+      ...w,
+      usd: clknUsd ? Math.round(w.balance * clknUsd) : null,
+      flow24h: whaleFlow(w.addr, w.balance, 1),
+      flow7d: whaleFlow(w.addr, w.balance, 7),
+      today: { sells: d.sells || 0, sold: Math.round(d.sold || 0), proceedsUsd: Math.round(d.proceedsUsd || 0), buys: d.buys || 0, bought: Math.round(d.bought || 0) },
+    };
+  });
+  const totPct = whales.reduce((s, w) => s + (w.pct || 0), 0);
+  return res.json({
+    success: true, updatedAt: ww.updatedAt || null, clknUsd,
+    entered: ww.entered || [], exited: ww.exited || [],
+    concentrationPct: Math.round(totPct * 100) / 100,
+    netFlow24h: whales.reduce((s, w) => s + (w.flow24h || 0), 0),
+    whales, refreshed,
+  });
 });
 
 // Tool → cost (CLKN, base before the unique decimal) + what gets granted.
@@ -9808,6 +9901,14 @@ app.get("/pool-monitor", (req, res) => {
   res.sendFile(join(__dirname, "public", "pool-monitor.html"));
 });
 
+// Whale Panel (PRIVATE operator tool — page loads for anyone but shows a key prompt;
+// all data comes from the adminAuthOK-gated /api/whale-watch, so no key = no data.
+// Deliberately unlinked everywhere; noindex).
+app.get("/whale-panel", (req, res) => {
+  res.setHeader("Cache-Control", "no-store, must-revalidate");
+  res.sendFile(join(__dirname, "public", "whale-panel.html"));
+});
+
 // Shared market-header script for the token tools (repo public/ isn't statically mounted).
 app.get("/market-header.js", (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=3600");
@@ -12275,6 +12376,10 @@ app.listen(PORT, () => {
     // operator chat. Functions live top-level next to /api/wallet-watch (gated).
     setInterval(() => walletWatchTick().catch((e) => console.warn("[wallet-watch] tick:", e.message)), 2 * 60 * 1000);
     setTimeout(() => walletWatchTick().catch(() => {}), 80000);
+    // Whale discovery — refresh the top-holder roster + balance snapshot daily (and at boot
+    // so a fresh deploy has a roster before the first tick merges it into the watcher).
+    setInterval(() => whaleRefresh().catch((e) => console.warn("[whale] refresh:", e.message)), 24 * 3600 * 1000);
+    setTimeout(() => whaleRefresh().catch(() => {}), 40000);
     // Meteora autonomous re-center — only acts when meteoraCfg.autoRecenter is ON (ships OFF).
     // Edge/anti-thrash checks live in meteoraRecenter; this just invokes it on the cadence.
     async function meteoraRecenterTick() {
