@@ -6993,8 +6993,16 @@ async function walletWatchTick({ manual = false } = {}) {
     const st = day.w[w.addr] || (day.w[w.addr] = { sells: 0, sold: 0, proceedsUsd: 0, buys: 0, bought: 0, spentUsd: 0, clknIn: 0, clknOut: 0, otherMints: [], txs: 0 });
     for (const tx of txs.slice().reverse()) { // oldest first so "today" totals accrue in order
       if (!tx.signature || seen[tx.signature]) continue;
-      seen[tx.signature] = Number(tx.timestamp) || nowS;
-      out.newTxs++; st.txs++;
+      const txTs = Number(tx.timestamp) || nowS;
+      seen[tx.signature] = txTs;
+      // Backfill guard: on first boot (or after downtime) old txs are all "unseen" —
+      // record them silently, but only TODAY's txs hit the day stats and only txs
+      // fresher than 20 min fire an alert. No stale-alert storms.
+      const isToday = new Date(txTs * 1000).toISOString().slice(0, 10) === today;
+      const isFresh = nowS - txTs < 20 * 60;
+      out.newTxs++;
+      if (!isToday) continue;
+      st.txs++;
       const { solDelta, stableDelta, deltas } = wwParseTx(tx, w.addr);
       const clkn = deltas.get(CLKN_MINT_ADDR) || 0;
       for (const m of deltas.keys()) if (m !== CLKN_MINT_ADDR && !st.otherMints.includes(m)) st.otherMints.push(m);
@@ -7002,6 +7010,7 @@ async function walletWatchTick({ manual = false } = {}) {
       const isDex = WX_DEX_SOURCES.has(tx.source) || (tx.type || "") === "SWAP" || proceeds > 0.5;
       if (clkn < -1 && isDex && proceeds > 0) {
         st.sells++; st.sold += -clkn; st.proceedsUsd += proceeds;
+        if (!isFresh) continue; // counted, but too old to alert on
         out.sellAlerts++;
         const bal = await wwClknBalance(w.addr);
         await wwOperatorDM(
