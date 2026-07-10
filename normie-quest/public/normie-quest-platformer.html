@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="robots" content="noindex, nofollow">
+<title>NORMIE QUEST — Platformer Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0d0b1e; --stone:#2a2440; --phosphor:#3dff6e;
+    --coin:#ffd23f; --danger:#ff3860; --dim:#8f89b0; --sky:#1a2b6b;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    background:var(--ink); color:var(--phosphor);
+    font-family:'VT323',monospace; font-size:20px;
+    display:flex; flex-direction:column; align-items:center;
+    min-height:100%; padding:24px 12px 48px;
+    background-image:radial-gradient(ellipse at 50% -10%, #1c1638 0%, var(--ink) 60%);
+  }
+  .marquee{
+    font-family:'Press Start 2P',monospace; font-size:clamp(18px,4.5vw,32px);
+    letter-spacing:2px; color:var(--coin);
+    text-shadow:0 0 12px rgba(255,210,63,.55), 3px 3px 0 #7a5a00;
+    margin:12px 0 4px; text-align:center;
+  }
+  .sub{ color:var(--dim); text-align:center; margin-bottom:18px; font-size:22px; }
+  .sub b{color:var(--phosphor)}
+  .cab{
+    position:relative; background:linear-gradient(180deg,#171230,#0f0c22);
+    border:4px solid var(--stone); border-radius:14px; padding:14px;
+    box-shadow:0 0 0 2px #000, 0 18px 50px rgba(0,0,0,.7), inset 0 0 30px rgba(0,0,0,.6);
+    max-width:640px; width:100%;
+  }
+  #screen{ position:relative; width:100%; aspect-ratio:16/9; background:#000; border-radius:6px; overflow:hidden; }
+  #screen canvas{width:100%!important;height:100%!important;image-rendering:pixelated}
+  #screen::after{
+    content:""; position:absolute;inset:0; pointer-events:none;
+    background:
+      repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 1px, transparent 1px 3px),
+      radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.45) 100%);
+    border-radius:6px;
+  }
+  @media (prefers-reduced-motion: no-preference){
+    #screen::before{
+      content:""; position:absolute;left:0;right:0;height:22%;
+      background:linear-gradient(180deg,transparent,rgba(61,255,110,.045),transparent);
+      animation:sweep 7s linear infinite; pointer-events:none;z-index:2;
+    }
+    @keyframes sweep{from{top:-25%}to{top:110%}}
+  }
+  .panel{ display:flex;justify-content:space-between;gap:10px; margin-top:12px;color:var(--dim);font-size:18px;flex-wrap:wrap; }
+  .panel span b{color:var(--coin)}
+  .badge{ display:inline-block; border:2px dashed var(--danger); color:var(--danger); padding:4px 10px; border-radius:6px; font-size:18px; margin-top:16px; }
+  .how{ max-width:640px;margin-top:22px;line-height:1.5;color:var(--dim); }
+  .how h2{font-family:'Press Start 2P',monospace;font-size:13px;color:var(--phosphor);margin-bottom:8px;letter-spacing:1px}
+  .how ol{margin-left:22px}
+  .how li b{color:var(--coin)}
+</style>
+</head>
+<body>
+
+<div class="marquee">NORMIE QUEST</div>
+<div class="sub">burn <b>NORMIE</b> &nbsp;·&nbsp; run, jump, survive &nbsp;·&nbsp; top scores win <b>SOL</b></div>
+
+<div class="cab">
+  <div id="screen"></div>
+  <div class="panel">
+    <span>MOVE: <b>← → / A,D</b></span>
+    <span>JUMP: <b>SPACE / W / ↑</b></span>
+    <span>GOAL: <b>GRAB THE KEY → REACH THE DOOR</b></span>
+  </div>
+</div>
+
+<div class="badge">PROTOTYPE — burn gate is simulated, no real tokens move</div>
+
+<div class="how">
+  <h2>HOW THE REAL VERSION WORKS</h2>
+  <ol>
+    <li>Player sends a tiny amount of <b>NORMIE</b> to the burn address with a one-time memo code.</li>
+    <li>Our webhook confirms the burn on-chain in seconds — <b>no wallet connect, ever</b>.</li>
+    <li>A play session unlocks. Score posts to the leaderboard.</li>
+    <li>Weekly prize pool (funded by creator fees) pays <b>SOL + NORMIE</b> to top scores. Skill contest, not a raffle.</li>
+  </ol>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
+<script>
+(function(){
+"use strict";
+
+var W = 480, H = 270;                 // 16:9 viewport
+var LEVEL_W = 4200;                   // scrolling world width
+var TILE = 24;
+
+var COLORS = {
+  ink:0x0d0b1e, sky1:0x241a52, sky2:0x120c2e, hill:0x2a1e5c,
+  dirt:0x8a5a2b, dirtDark:0x5e3c1a, grass:0x3dff6e, grassDark:0x1da84a,
+  brick:0x6b4a8f, brickDark:0x3f2a5c,
+  hero:0xffb347, heroDark:0xc77d22, heroCap:0xff3860, skin:0xffe0bd,
+  coin:0xffd23f, coinDark:0xb8860b,
+  fud:0x8f89b0, fudDark:0x4a4668, fudEye:0xff3860,
+  key:0xffd23f, keyDark:0xb8860b, door:0x3a2a6b, doorDark:0x241a52,
+  white:0xffffff, danger:0xff3860, phos:0x3dff6e
+};
+
+/* ---------- Boot: draw every sprite in code, zero asset files ---------- */
+var Boot = new Phaser.Class({
+  Extends: Phaser.Scene,
+  initialize:function(){ Phaser.Scene.call(this,{key:'Boot'}); },
+  create:function(){
+    var g = this.add.graphics();
+
+    // Normie hero (16x20) — original mascot: cap + tunic + little sword on back
+    g.clear();
+    g.fillStyle(COLORS.heroDark); g.fillRect(13,6,2,9);            // sword blade on back
+    g.fillStyle(0x8a6a3a);        g.fillRect(13,14,2,3);           // sword hilt
+    g.fillStyle(COLORS.heroCap);  g.fillRect(3,1,10,4); g.fillRect(2,4,12,2); // cap + brim
+    g.fillStyle(COLORS.skin);     g.fillRect(4,6,8,5);             // face
+    g.fillStyle(0x111111);        g.fillRect(6,8,1,1); g.fillRect(9,8,1,1); // eyes
+    g.fillStyle(COLORS.hero);     g.fillRect(3,11,10,6);           // tunic
+    g.fillStyle(COLORS.heroDark); g.fillRect(3,11,10,1);           // belt line
+    g.fillStyle(COLORS.skin);     g.fillRect(1,12,2,4); g.fillRect(13,12,2,4); // arms
+    g.fillStyle(COLORS.heroDark); g.fillRect(4,17,3,3); g.fillRect(9,17,3,3);  // boots
+    g.generateTexture('hero',16,20);
+
+    // coin (12x12)
+    g.clear();
+    g.fillStyle(COLORS.coinDark); g.fillCircle(6,6,6);
+    g.fillStyle(COLORS.coin);     g.fillCircle(6,6,5);
+    g.fillStyle(COLORS.coinDark); g.fillRect(5,3,2,6);
+    g.generateTexture('coin',12,12);
+
+    // FUD enemy (18x16) — grumpy walking blob
+    g.clear();
+    g.fillStyle(COLORS.fudDark); g.fillRoundedRect(0,2,18,14,5);
+    g.fillStyle(COLORS.fud);     g.fillRoundedRect(1,3,16,11,4);
+    g.fillStyle(COLORS.white);   g.fillRect(4,6,4,4); g.fillRect(10,6,4,4);   // eyes
+    g.fillStyle(COLORS.fudEye);  g.fillRect(5,7,2,2); g.fillRect(11,7,2,2);   // angry pupils
+    g.fillStyle(COLORS.fudDark); g.fillRect(5,12,3,2); g.fillRect(10,12,3,2); // frown/feet
+    g.generateTexture('fud',18,16);
+
+    // dirt/grass ground tile (24x24)
+    g.clear();
+    g.fillStyle(COLORS.dirt);     g.fillRect(0,0,24,24);
+    g.fillStyle(COLORS.dirtDark); g.fillRect(0,0,24,24); g.fillRect(2,2,20,20);
+    g.fillStyle(COLORS.dirt);     g.fillRect(3,3,18,18);
+    g.fillStyle(COLORS.grassDark);g.fillRect(0,0,24,6);
+    g.fillStyle(COLORS.grass);    g.fillRect(0,0,24,3);
+    g.generateTexture('ground',24,24);
+
+    // floating brick platform tile (24x24)
+    g.clear();
+    g.fillStyle(COLORS.brickDark); g.fillRect(0,0,24,24);
+    g.fillStyle(COLORS.brick);     g.fillRect(1,1,22,22);
+    g.fillStyle(COLORS.brickDark); g.fillRect(0,11,24,2); g.fillRect(11,0,2,11); g.fillRect(6,13,2,11);
+    g.generateTexture('brick',24,24);
+
+    // key (14x14)
+    g.clear();
+    g.fillStyle(COLORS.keyDark); g.fillCircle(5,5,4);
+    g.fillStyle(COLORS.key);     g.fillCircle(5,5,3);
+    g.fillStyle(COLORS.ink);     g.fillCircle(5,5,1);
+    g.fillStyle(COLORS.key);     g.fillRect(7,6,6,2); g.fillRect(10,8,2,2); g.fillRect(12,8,1,3);
+    g.generateTexture('key',14,14);
+
+    // door / goal (28x40)
+    g.clear();
+    g.fillStyle(COLORS.doorDark); g.fillRect(0,0,28,40);
+    g.fillStyle(COLORS.door);     g.fillRect(2,2,24,38);
+    g.fillStyle(COLORS.doorDark); g.fillRect(4,6,20,30);
+    g.fillStyle(COLORS.coin);     g.fillCircle(20,22,2);           // handle
+    g.fillStyle(COLORS.grass);    g.fillRect(10,0,8,3);            // lintel glow
+    g.generateTexture('door',28,40);
+
+    // heart (14x14)
+    g.clear();
+    g.fillStyle(COLORS.danger);
+    g.fillCircle(4,4,4); g.fillCircle(10,4,4); g.fillTriangle(0,6,14,6,7,14);
+    g.generateTexture('heart',14,14);
+
+    // cloud (40x18)
+    g.clear();
+    g.fillStyle(0x2f2668);
+    g.fillCircle(10,12,8); g.fillCircle(22,9,10); g.fillCircle(33,13,7); g.fillRect(8,12,26,6);
+    g.generateTexture('cloud',44,22);
+
+    // simple touch button bg (64x64 circle)
+    g.clear();
+    g.fillStyle(0x000000,0.001); g.fillRect(0,0,64,64);           // keep texture sized
+    g.lineStyle(3,COLORS.phos,0.9); g.strokeCircle(32,32,26);
+    g.fillStyle(COLORS.phos,0.14); g.fillCircle(32,32,26);
+    g.generateTexture('btn',64,64);
+
+    g.destroy();
+    this.scene.start('Title');
+  }
+});
+
+/* ---------- Title ---------- */
+var Title = new Phaser.Class({
+  Extends: Phaser.Scene,
+  initialize:function(){ Phaser.Scene.call(this,{key:'Title'}); },
+  create:function(){
+    this.cameras.main.setBackgroundColor(COLORS.sky2);
+    this.add.image(90,70,'cloud').setScale(1.4).setAlpha(.7);
+    this.add.image(360,50,'cloud').setScale(1.1).setAlpha(.6);
+    this.add.text(W/2, 70, 'NORMIE\nQUEST', {fontFamily:'"Press Start 2P"', fontSize:'26px',
+      color:'#ffd23f', align:'center', lineSpacing:10}).setOrigin(.5).setShadow(3,3,'#7a5a00',0,true,true);
+    this.add.image(W/2-64, 150, 'coin').setScale(2.2);
+    this.add.image(W/2,    150, 'hero').setScale(2.4);
+    this.add.image(W/2+64, 152, 'fud').setScale(2);
+    var p = this.add.text(W/2, 200, 'PRESS TO INSERT BURN', {fontFamily:'"Press Start 2P"',
+      fontSize:'11px', color:'#3dff6e'}).setOrigin(.5);
+    this.tweens.add({targets:p, alpha:.25, duration:600, yoyo:true, repeat:-1});
+    this.add.text(W/2, 246, 'a Cluck Norris production', {fontFamily:'VT323', fontSize:'17px',
+      color:'#8f89b0'}).setOrigin(.5);
+    this.input.once('pointerdown', function(){ this.scene.start('Gate'); }, this);
+    this.input.keyboard.once('keydown', function(){ this.scene.start('Gate'); }, this);
+  }
+});
+
+/* ---------- Gate: simulated burn-to-play ---------- */
+var Gate = new Phaser.Class({
+  Extends: Phaser.Scene,
+  initialize:function(){ Phaser.Scene.call(this,{key:'Gate'}); },
+  create:function(){
+    this.cameras.main.setBackgroundColor(COLORS.ink);
+    var code = 'NQ-' + Math.random().toString(36).slice(2,6).toUpperCase();
+    this.add.text(W/2, 34, 'BURN TO PLAY', {fontFamily:'"Press Start 2P"', fontSize:'18px', color:'#ff3860'}).setOrigin(.5);
+    this.add.text(W/2, 82, 'send 1,000 NORMIE with memo:', {fontFamily:'VT323', fontSize:'21px', color:'#8f89b0'}).setOrigin(.5);
+    this.add.text(W/2, 108, code, {fontFamily:'"Press Start 2P"', fontSize:'20px', color:'#ffd23f'}).setOrigin(.5);
+    this.add.text(W/2, 138, 'to  1nc1nerator1111...1111', {fontFamily:'VT323', fontSize:'19px', color:'#8f89b0'}).setOrigin(.5);
+    var btn = this.add.text(W/2, 186, '[ SIMULATE BURN CONFIRMED ]', {fontFamily:'"Press Start 2P"',
+      fontSize:'11px', color:'#0d0b1e', backgroundColor:'#3dff6e', padding:{x:12,y:9}})
+      .setOrigin(.5).setInteractive({useHandCursor:true});
+    btn.on('pointerover', function(){ btn.setStyle({backgroundColor:'#ffffff'}); });
+    btn.on('pointerout',  function(){ btn.setStyle({backgroundColor:'#3dff6e'}); });
+    btn.on('pointerdown', function(){
+      btn.disableInteractive();
+      var s = this.add.text(W/2, 226, 'watching chain', {fontFamily:'VT323', fontSize:'21px', color:'#3dff6e'}).setOrigin(.5);
+      var dots = 0;
+      this.time.addEvent({delay:350, repeat:4, callback:function(){ dots++; s.setText('watching chain'+'.'.repeat(dots)); }});
+      this.time.delayedCall(1900, function(){
+        s.setText('BURN CONFIRMED — GO!').setColor('#ffd23f');
+        this.time.delayedCall(700, function(){ this.scene.start('Game'); }, [], this);
+      }, [], this);
+    }, this);
+    this.add.text(W/2, 254, 'demo only — nothing really burns yet', {fontFamily:'VT323', fontSize:'16px', color:'#544d75'}).setOrigin(.5);
+  }
+});
+
+/* ---------- Game: the side-scrolling platformer ---------- */
+var Game = new Phaser.Class({
+  Extends: Phaser.Scene,
+  initialize:function(){ Phaser.Scene.call(this,{key:'Game'}); },
+
+  create:function(){
+    this.score=0; this.lives=3; this.timeLeft=90; this.over=false; this.hasKey=false;
+    this.spawn={x:60,y:H-60};
+
+    this.physics.world.setBounds(0,0,LEVEL_W,H+400);
+    this.cameras.main.setBounds(0,0,LEVEL_W,H);
+    this.cameras.main.setBackgroundColor(COLORS.sky1);
+
+    // parallax backdrop: gradient band + hills + clouds (scroll-factored)
+    this.add.rectangle(0,0,LEVEL_W,H,COLORS.sky1).setOrigin(0,0).setScrollFactor(0);
+    this.add.rectangle(0,H*0.45,LEVEL_W,H,COLORS.sky2).setOrigin(0,0).setScrollFactor(0).setAlpha(.5);
+    var i;
+    for(i=0;i<10;i++){
+      this.add.image((i*140)%520, 40+((i*37)%70), 'cloud').setScrollFactor(0.25).setAlpha(.5).setScale(1+(i%3)*0.3);
+    }
+    for(i=0;i<14;i++){
+      this.add.triangle((i*320), H, 0,0, 120,-90-((i*29)%50), 240,0, COLORS.hill).setOrigin(0,0).setScrollFactor(0.5);
+    }
+
+    // ---- level geometry ----
+    this.platforms = this.physics.add.staticGroup();
+    var self=this;
+    function row(x0,x1,y){ for(var x=x0;x<x1;x+=TILE){ self.platforms.create(x+TILE/2,y+TILE/2,'ground'); } }
+    function plat(x0,n,y){ for(var k=0;k<n;k++){ self.platforms.create(x0+k*TILE+TILE/2,y+TILE/2,'brick'); } }
+
+    var GY = H-TILE;                    // ground top row y
+    // ground with pits (gap ranges skipped)
+    var gaps=[[720,840],[1560,1728],[2520,2664],[3360,3480]];
+    function inGap(x){ for(var j=0;j<gaps.length;j++){ if(x>=gaps[j][0] && x<gaps[j][1]) return true; } return false; }
+    for(var gx=0;gx<LEVEL_W;gx+=TILE){ if(!inGap(gx)) { this.platforms.create(gx+TILE/2,GY+TILE/2,'ground'); this.platforms.create(gx+TILE/2,GY+TILE/2+TILE,'ground'); } }
+
+    // floating brick platforms (x, count, y)
+    plat(360,3,H-96); plat(600,2,H-140);
+    plat(900,4,H-108); plat(1200,2,H-150);
+    plat(1500,3,H-120); plat(1800,3,H-90);
+    plat(2040,2,H-150); plat(2280,4,H-116);
+    plat(2760,3,H-96); plat(3000,2,H-140); plat(3180,2,H-96);
+    plat(3600,4,H-110); plat(3900,3,H-150);
+
+    // ---- coins (scattered, many over platforms + arcs over pits) ----
+    this.coins=this.physics.add.group({allowGravity:false});
+    var coinSpots=[
+      [384,H-120],[408,H-120],[432,H-120],[624,H-164],[648,H-164],
+      [780,H-70],[810,H-92],[840,H-70],                     // arc over first pit
+      [924,H-132],[948,H-132],[972,H-132],[996,H-132],
+      [1224,H-174],[1248,H-174],
+      [1520,H-144],[1544,H-144],[1568,H-144],
+      [1620,H-80],[1644,H-110],[1668,H-80],                 // arc over pit 2
+      [1824,H-114],[1848,H-114],[1872,H-114],
+      [2064,H-174],[2088,H-174],
+      [2304,H-140],[2328,H-140],[2352,H-140],[2376,H-140],
+      [2580,H-80],[2604,H-110],[2628,H-80],                 // arc over pit 3
+      [2784,H-120],[2808,H-120],[2832,H-120],
+      [3024,H-164],[3420,H-80],[3444,H-110],
+      [3624,H-134],[3648,H-134],[3672,H-134],[3696,H-134],
+      [3924,H-174],[3948,H-174],[3972,H-174]
+    ];
+    coinSpots.forEach(function(s){
+      var c=self.coins.create(s[0],s[1],'coin').setScale(1.4);
+      self.tweens.add({targets:c,scale:1.7,duration:420,yoyo:true,repeat:-1});
+    });
+
+    // ---- key (high platform, mid-level — the Zelda beat) ----
+    this.key = this.physics.add.sprite(2100, H-176, 'key').setScale(1.5);
+    this.key.body.setAllowGravity(false);
+    this.tweens.add({targets:this.key, y:H-188, duration:700, yoyo:true, repeat:-1, ease:'Sine.inOut'});
+
+    // ---- door / goal (far right) ----
+    this.door = this.physics.add.staticSprite(LEVEL_W-70, GY-8, 'door');
+
+    // ---- enemies (FUD) patrolling ----
+    this.enemies=this.physics.add.group();
+    var eSpots=[[430,H-110],[960,H-122],[1560,H-134],[1850,H-104],[2320,H-130],[2800,H-110],[3640,H-124],[3300,GY-14]];
+    eSpots.forEach(function(s){
+      var e=self.enemies.create(s[0],s[1],'fud').setScale(1.3);
+      e.setCollideWorldBounds(true); e.setBounce(0);
+      e.dir=Phaser.Math.RND.pick([-1,1]); e.baseSpeed=40+Math.random()*20;
+      e.homeX=s[0]; e.range=70;
+    });
+
+    // ---- player ----
+    this.player=this.physics.add.sprite(this.spawn.x,this.spawn.y,'hero').setScale(1.5);
+    this.player.body.setSize(11,18).setOffset(2,2);
+    this.player.setCollideWorldBounds(true);
+    this.player.setMaxVelocity(220,600);
+
+    // ---- collisions ----
+    this.physics.add.collider(this.player,this.platforms);
+    this.physics.add.collider(this.enemies,this.platforms);
+    this.physics.add.overlap(this.player,this.coins,this.grabCoin,null,this);
+    this.physics.add.overlap(this.player,this.key,this.grabKey,null,this);
+    this.physics.add.overlap(this.player,this.enemies,this.touchEnemy,null,this);
+    this.physics.add.overlap(this.player,this.door,this.tryDoor,null,this);
+
+    // ---- HUD (fixed to camera) ----
+    this.hudScore=this.add.text(10,8,'SCORE 0',{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#ffd23f'}).setScrollFactor(0);
+    this.hudTime =this.add.text(W-10,8,'90',{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#3dff6e'}).setOrigin(1,0).setScrollFactor(0);
+    this.hearts=[]; for(i=0;i<3;i++) this.hearts.push(this.add.image(14+i*20,30,'heart').setScale(1.2).setScrollFactor(0));
+    this.keyIcon=this.add.image(W-16,30,'key').setScale(1.1).setScrollFactor(0).setAlpha(.2);
+
+    this.time.addEvent({delay:1000,loop:true,callback:function(){
+      if(this.over) return;
+      this.timeLeft--; this.hudTime.setText(String(this.timeLeft));
+      if(this.timeLeft<=15) this.hudTime.setColor('#ff3860');
+      if(this.timeLeft<=0) this.endGame('TIME UP', false);
+    },callbackScope:this});
+
+    // ---- input: keyboard ----
+    this.cursors=this.input.keyboard.createCursorKeys();
+    this.keys=this.input.keyboard.addKeys('W,A,S,D,SPACE');
+
+    // ---- input: on-screen touch buttons (mobile) ----
+    this.touch={left:false,right:false,jump:false};
+    var isTouch = this.sys.game.device.input.touch;
+    var mkBtn=function(x,y,label,onDown,onUp){
+      var b=self.add.image(x,y,'btn').setScrollFactor(0).setInteractive({useHandCursor:true}).setAlpha(0.85);
+      var t=self.add.text(x,y,label,{fontFamily:'"Press Start 2P"',fontSize:'12px',color:'#3dff6e'}).setOrigin(.5).setScrollFactor(0);
+      b.on('pointerdown',onDown); b.on('pointerup',onUp); b.on('pointerout',onUp);
+      if(!isTouch){ b.setAlpha(0.28); t.setAlpha(0.35); }
+      return b;
+    };
+    mkBtn(30,H-28,'<',function(){self.touch.left=true;},function(){self.touch.left=false;});
+    mkBtn(78,H-28,'>',function(){self.touch.right=true;},function(){self.touch.right=false;});
+    mkBtn(W-34,H-28,'^',function(){self.touch.jump=true;},function(){self.touch.jump=false;});
+
+    this.cameras.main.startFollow(this.player,true,0.12,0.12);
+    this.cameras.main.setDeadzone(80,60);
+
+    this.jumpHeld=false;
+  },
+
+  grabCoin:function(player,coin){ coin.destroy(); this.addScore(10); },
+
+  grabKey:function(player,key){
+    if(this.hasKey) return;
+    this.hasKey=true; key.destroy(); this.keyIcon.setAlpha(1);
+    this.addScore(50);
+    this.flash('GOT THE KEY!','#ffd23f');
+  },
+
+  touchEnemy:function(player,enemy){
+    if(this.over||player.invuln||!enemy.active) return;
+    var falling = player.body.velocity.y>40;
+    var above   = (player.body.bottom <= enemy.body.top + 12);
+    if(falling && above){
+      enemy.disableBody(true,true);
+      player.setVelocityY(-260);            // stomp bounce
+      this.addScore(20);
+      this.cameras.main.shake(60,.006);
+    } else {
+      this.hurt(player, enemy.x<player.x?1:-1);
+    }
+  },
+
+  tryDoor:function(player,door){
+    if(this.over) return;
+    if(this.hasKey){ this.endGame('LEVEL CLEAR', true); }
+    else if(!this._doorHint){
+      this._doorHint=true; this.flash('LOCKED — FIND THE KEY','#ff3860');
+      this.time.delayedCall(1400,function(){ this._doorHint=false; },[],this);
+    }
+  },
+
+  hurt:function(player,knockDir){
+    this.lives--;
+    if(this.hearts[this.lives]) this.hearts[this.lives].setAlpha(.16);
+    this.cameras.main.shake(140,.012);
+    if(this.lives<=0){ this.endGame('WRECKED BY FUD', false); return; }
+    player.invuln=true;
+    player.setVelocity(knockDir*160,-160);
+    this.tweens.add({targets:player,alpha:.25,duration:100,yoyo:true,repeat:8,
+      onComplete:function(){ player.alpha=1; player.invuln=false; }});
+  },
+
+  addScore:function(n){ this.score+=n; this.hudScore.setText('SCORE '+this.score); },
+
+  flash:function(msg,color){
+    var t=this.add.text(W/2,70,msg,{fontFamily:'"Press Start 2P"',fontSize:'12px',color:color}).setOrigin(.5).setScrollFactor(0);
+    this.tweens.add({targets:t,y:52,alpha:0,duration:1200,onComplete:function(){t.destroy();}});
+  },
+
+  endGame:function(reason,cleared){
+    if(this.over) return;
+    this.over=true;
+    if(cleared) this.addScore(this.timeLeft*10);   // time bonus on clear
+    this.physics.pause();
+    this.time.delayedCall(500,function(){ this.scene.start('Over',{score:this.score,reason:reason,cleared:cleared}); },[],this);
+  },
+
+  update:function(){
+    if(this.over) return;
+    var p=this.player, b=p.body;
+    var left  = this.cursors.left.isDown  || this.keys.A.isDown || this.touch.left;
+    var right = this.cursors.right.isDown || this.keys.D.isDown || this.touch.right;
+    var jump  = this.cursors.up.isDown    || this.keys.W.isDown || this.keys.SPACE.isDown || this.touch.jump;
+
+    var accel=900;
+    if(left && !right){ p.setAccelerationX(-accel); p.setFlipX(true); }
+    else if(right && !left){ p.setAccelerationX(accel); p.setFlipX(false); }
+    else { p.setAccelerationX(0); p.setDragX(1600); }
+
+    var onGround=b.blocked.down||b.touching.down;
+    if(jump && onGround && !this.jumpHeld){ p.setVelocityY(-360); this.jumpHeld=true;
+      this.tweens.add({targets:p,scaleY:1.75,scaleX:1.25,duration:90,yoyo:true}); }
+    if(!jump) this.jumpHeld=false;
+    // variable jump height: cut upward velocity when button released early
+    if(!jump && b.velocity.y<-120) p.setVelocityY(-120);
+
+    // enemy patrol
+    this.enemies.children.iterate(function(e){
+      if(!e||!e.active) return;
+      if(e.x < e.homeX-e.range) e.dir=1;
+      if(e.x > e.homeX+e.range) e.dir=-1;
+      if(e.body.blocked.left) e.dir=1;
+      if(e.body.blocked.right) e.dir=-1;
+      e.setVelocityX(e.dir*e.baseSpeed);
+      e.setFlipX(e.dir<0);
+    });
+
+    // pit death
+    if(p.y > H+80){
+      if(this.lives<=1){ this.endGame('FELL IN A PIT', false); return; }
+      this.lives--;
+      if(this.hearts[this.lives]) this.hearts[this.lives].setAlpha(.16);
+      p.setVelocity(0,0); p.setPosition(Math.max(this.spawn.x, this.cameras.main.scrollX+60), H-80);
+      this.cameras.main.flash(150,80,0,0);
+    }
+  }
+});
+
+/* ---------- Game over / clear ---------- */
+var Over = new Phaser.Class({
+  Extends: Phaser.Scene,
+  initialize:function(){ Phaser.Scene.call(this,{key:'Over'}); },
+  init:function(d){ this.finalScore=d.score||0; this.reason=d.reason||''; this.cleared=!!d.cleared; },
+  create:function(){
+    this.cameras.main.setBackgroundColor(COLORS.ink);
+    this.add.text(W/2,50,this.reason,{fontFamily:'"Press Start 2P"',fontSize:'15px',
+      color:this.cleared?'#3dff6e':'#ff3860'}).setOrigin(.5);
+    this.add.text(W/2,100,'SCORE',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#8f89b0'}).setOrigin(.5);
+    this.add.text(W/2,132,String(this.finalScore),{fontFamily:'"Press Start 2P"',fontSize:'30px',
+      color:'#ffd23f'}).setOrigin(.5).setShadow(3,3,'#7a5a00',0,true,true);
+    this.add.text(W/2,180,'real version: score posts to the\nleaderboard, top 10 split the pool',
+      {fontFamily:'VT323',fontSize:'19px',color:'#8f89b0',align:'center'}).setOrigin(.5);
+    var p=this.add.text(W/2,230,'PRESS TO BURN AGAIN',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
+    this.tweens.add({targets:p,alpha:.25,duration:600,yoyo:true,repeat:-1});
+    this.input.once('pointerdown',function(){ this.scene.start('Gate'); },this);
+    this.input.keyboard.once('keydown',function(){ this.scene.start('Gate'); },this);
+  }
+});
+
+new Phaser.Game({
+  type:Phaser.AUTO, parent:'screen', width:W, height:H,
+  pixelArt:true, backgroundColor:'#0d0b1e',
+  scale:{ mode:Phaser.Scale.FIT, autoCenter:Phaser.Scale.CENTER_BOTH },
+  physics:{ default:'arcade', arcade:{ gravity:{y:900}, debug:false } },
+  scene:[Boot,Title,Gate,Game,Over]
+});
+
+})();
+</script>
+</body>
+</html>
