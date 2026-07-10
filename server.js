@@ -7068,6 +7068,7 @@ app.get("/api/wallet-watch", async (req, res) => {
   if (req.query.remove) { cfg.wallets = cfg.wallets.filter((w) => w.addr !== String(req.query.remove)); kv.set("walletWatchCfg", cfg); }
   if (req.query.enabled != null) { cfg.enabled = String(req.query.enabled) !== "0"; kv.set("walletWatchCfg", cfg); }
   if (req.query.reportHourUtc != null) { cfg.reportHourUtc = Math.max(0, Math.min(23, parseInt(req.query.reportHourUtc, 10) || 13)); kv.set("walletWatchCfg", cfg); }
+  if (req.query.resetDay === "1") kv.set("walletWatchDay", { date: new Date().toISOString().slice(0, 10), w: {} });
   let ran = null;
   if (req.query.run === "1") ran = await walletWatchTick({ manual: true }).catch((e) => ({ error: e.message }));
   if (req.query.report === "1") { await walletWatchReport().catch((e) => ({ error: e.message })); ran = { ...(ran || {}), reportSent: true }; }
