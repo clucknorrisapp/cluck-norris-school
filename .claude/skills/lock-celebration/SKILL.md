@@ -19,6 +19,15 @@ Spawn a **sonnet subagent** (`claude-sonnet-5`) to craft the Higgsfield prompt, 
 - Cluck hauls exactly `newLocks` bag(s), main bag reads "+{deltaShort} CLKN", walking TOWARD the vault named in `platform` (that door glows).
 - Banner across both doors: "{pct} OF SUPPLY LOCKED". Dark + orange palette, crisp legible type.
 - Use the branded mascot reference from `docs/MEDIA_LIBRARY.md`; VIEW the render and verify every label before posting.
+- Prompt the AI to keep the BOTTOM 15% of frame quiet (plain floor, no text/objects).
+
+## 2b. Composite the "ROAD TO 40%" progress tracker (owner ask 2026-07-10 — the lock-post signature)
+`python3 scripts/lockbar.py <render.png> <final.jpg> <pctLocked e.g. 38.944> [target=40]`
+(fonts ship in scripts/; needs Pillow — `pip install pillow`). Draws the exact-fill progress bar
+on the bottom strip. Host the FINAL composite (Higgsfield `media_upload` PUT → CDN URL) and post
+THAT url, not the raw render. If the render has a text typo, patch it deterministically with
+Pillow (sample brass + redraw glyph) — do NOT re-roll AI edits on tiny plaque text (it makes
+new typos; cost us a CCKN on 2026-07-10). When the 40% goal is passed, raise `target` with the owner.
 
 ## 3. Post — X FIRST, then Telegram (if `announced:false`)
 1. X: `GET /api/x-announce?key=…&post=1&text={pending.xText}&image={rawUrl}` → capture post id.

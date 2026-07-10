@@ -30,6 +30,8 @@ CDN URLs are long-lived Higgsfield/CloudFront links — downloadable from any fr
 
 ## Images / composites
 
+| `6e34e576-8804-479a-a3e0-fc4e109299a1` + Pillow post | Lock celebration 2026-07-10 (+5.00M via Jupiter → 38.94%): two-vault scene, S→5 plaque glyph patched in post, "ROAD TO 40%" progress tracker composited (scratchpad `lockbar.py` — REUSE for every future lock post; owner loves the tracker). Final: CDN `f1a04fe3….png`. Posted X `2075577233230463231` + TG 85876. | ✅ Owner asked for "special" — tracker is now the lock-post signature. |
+
 | Asset | Where | What |
 |---|---|---|
 | `docs/brand/logo-strip-top6.png` | repo (committed) | 6 official top-mcap coin logos in gold-ringed discs: BTC · ETH · BNB · XRP · SOL · TRX. For video overlays/end-cards. Real logos — AI must NEVER draw these. |
