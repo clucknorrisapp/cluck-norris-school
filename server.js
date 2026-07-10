@@ -6914,6 +6914,157 @@ app.get("/api/arb-bots", (req, res) => {
   return res.json({ success: true, count: Object.keys(bots).length, roundtripSec: kv.get("arbRoundtripSec", 180), bots });
 });
 
+// ── Wallet Watch (PRIVATE product test — owner ask 2026-07-10; OFF the public app) ──
+// Tracks specific wallets: LOUD private-operator-chat alert the moment one SELLS CLKN,
+// plus a once-daily activity digest (silent). No public UI, no links anywhere; this
+// endpoint 404s without the key. Multi-wallet by design (kv-configured) so testing the
+// tracked-wallet product needs no code changes to add/remove subjects.
+// kv: walletWatchCfg {enabled, reportHourUtc, wallets:[{addr,label}]}
+//     walletWatchSeen {sig:ts, 48h-pruned} · walletWatchDay {date, w:{addr:{…}}}
+//     walletWatchReportDate
+function wwCfg() {
+  return kv.get("walletWatchCfg", {
+    enabled: true, reportHourUtc: 13,
+    wallets: [{ addr: "D9MizWDURC2AhMUPfAbYtpqRgb521RC6CQRxBEzzQUK", label: "drip-seller-1" }],
+  });
+}
+// Net deltas for one enhanced tx from `wallet`'s perspective. Same wSOL-unwrap dedupe
+// as Wallet X-Ray (same-sign native+wSOL legs are ONE flow — see fix of 2026-07-10).
+function wwParseTx(tx, wallet) {
+  let solDelta = 0;
+  for (const n of tx.nativeTransfers || []) {
+    const a = (Number(n.amount) || 0) / 1e9;
+    if (n.toUserAccount === wallet) solDelta += a;
+    if (n.fromUserAccount === wallet) solDelta -= a;
+  }
+  const deltas = new Map();
+  for (const t of tx.tokenTransfers || []) {
+    if (!t.mint) continue;
+    const a = Number(t.tokenAmount) || 0;
+    if (t.toUserAccount === wallet) deltas.set(t.mint, (deltas.get(t.mint) || 0) + a);
+    if (t.fromUserAccount === wallet) deltas.set(t.mint, (deltas.get(t.mint) || 0) - a);
+  }
+  if (deltas.has(WX_WSOL)) {
+    const w = deltas.get(WX_WSOL); deltas.delete(WX_WSOL);
+    if (w > 0 && solDelta > 0) solDelta = Math.max(solDelta, w);
+    else if (w < 0 && solDelta < 0) solDelta = Math.min(solDelta, w);
+    else solDelta += w;
+  }
+  let stableDelta = 0;
+  for (const s of WX_STABLES) if (deltas.has(s)) { stableDelta += deltas.get(s); deltas.delete(s); }
+  return { solDelta, stableDelta, deltas };
+}
+async function wwClknBalance(addr) {
+  try {
+    const r = await fetch(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: "ww-bal", method: "getTokenAccountsByOwner", params: [addr, { mint: CLKN_MINT_ADDR }, { encoding: "jsonParsed" }] }),
+    });
+    const d = await r.json();
+    let t = 0; for (const a of d?.result?.value || []) t += Number(a.account?.data?.parsed?.info?.tokenAmount?.uiAmount || 0);
+    return t;
+  } catch (_) { return null; }
+}
+function wwOperatorDM(text, { loud = false } = {}) {
+  const chat = operatorChatId() || "1846034838";
+  return tgSend(chat, text, null, { silent: !loud });
+}
+async function walletWatchTick({ manual = false } = {}) {
+  const cfg = wwCfg();
+  const out = { checked: 0, newTxs: 0, sellAlerts: 0 };
+  if (!cfg.enabled && !manual) return out;
+  const HK = process.env.HELIUS_API_KEY;
+  if (!HK || !(cfg.wallets || []).length) return out;
+  const seen = kv.get("walletWatchSeen", {});
+  const nowS = Math.floor(Date.now() / 1000);
+  for (const k of Object.keys(seen)) if (nowS - seen[k] > 48 * 3600) delete seen[k];
+  const today = new Date().toISOString().slice(0, 10);
+  let day = kv.get("walletWatchDay", null);
+  if (!day || day.date !== today) day = { date: today, w: {} };
+  const solUsd = (await getSolUsd().catch(() => 0)) || 0;
+  for (const w of cfg.wallets) {
+    out.checked++;
+    let txs = [];
+    try {
+      const r = await fetch(`https://api.helius.xyz/v0/addresses/${w.addr}/transactions?api-key=${HK}&limit=25`);
+      if (r.ok) txs = await r.json();
+    } catch (_) { continue; }
+    if (!Array.isArray(txs)) continue;
+    const st = day.w[w.addr] || (day.w[w.addr] = { sells: 0, sold: 0, proceedsUsd: 0, buys: 0, bought: 0, spentUsd: 0, clknIn: 0, clknOut: 0, otherMints: [], txs: 0 });
+    for (const tx of txs.slice().reverse()) { // oldest first so "today" totals accrue in order
+      if (!tx.signature || seen[tx.signature]) continue;
+      seen[tx.signature] = Number(tx.timestamp) || nowS;
+      out.newTxs++; st.txs++;
+      const { solDelta, stableDelta, deltas } = wwParseTx(tx, w.addr);
+      const clkn = deltas.get(CLKN_MINT_ADDR) || 0;
+      for (const m of deltas.keys()) if (m !== CLKN_MINT_ADDR && !st.otherMints.includes(m)) st.otherMints.push(m);
+      const proceeds = solDelta * solUsd + stableDelta;
+      const isDex = WX_DEX_SOURCES.has(tx.source) || (tx.type || "") === "SWAP" || proceeds > 0.5;
+      if (clkn < -1 && isDex && proceeds > 0) {
+        st.sells++; st.sold += -clkn; st.proceedsUsd += proceeds;
+        out.sellAlerts++;
+        const bal = await wwClknBalance(w.addr);
+        await wwOperatorDM(
+          `🚨 <b>WALLET WATCH — CLKN SELL</b>\n` +
+          `<b>${w.label || "tracked wallet"}</b> · <code>${w.addr.slice(0, 4)}…${w.addr.slice(-4)}</code>\n\n` +
+          `Sold <b>${fmtTokensShort(-clkn)} CLKN</b> → ${solDelta > 0 ? solDelta.toFixed(3) + " SOL" : "$" + stableDelta.toFixed(0) + " stable"} ≈ <b>$${proceeds.toFixed(0)}</b>\n` +
+          `Venue: ${tx.source || "DEX"} · Today: ${fmtTokensShort(st.sold)} sold ($${st.proceedsUsd.toFixed(0)})\n` +
+          (bal != null ? `Balance left: <b>${fmtTokensShort(bal)} CLKN</b>\n` : "") +
+          `<a href="https://solscan.io/tx/${tx.signature}">tx</a>`, { loud: true });
+      } else if (clkn < -1 && !isDex) {
+        st.clknOut += -clkn;
+      } else if (clkn > 1 && isDex && proceeds < 0) {
+        st.buys++; st.bought += clkn; st.spentUsd += -proceeds;
+      } else if (clkn > 1) {
+        st.clknIn += clkn;
+      }
+    }
+  }
+  kv.set("walletWatchSeen", seen);
+  kv.set("walletWatchDay", day);
+  // Once-daily digest (silent) after reportHourUtc.
+  if (new Date().getUTCHours() >= (cfg.reportHourUtc ?? 13) && kv.get("walletWatchReportDate", "") !== today) {
+    kv.set("walletWatchReportDate", today);
+    await walletWatchReport(day, cfg).catch((e) => console.warn("[wallet-watch] report:", e.message));
+  }
+  return out;
+}
+async function walletWatchReport(day, cfg) {
+  day = day || kv.get("walletWatchDay", null) || { date: new Date().toISOString().slice(0, 10), w: {} };
+  cfg = cfg || wwCfg();
+  const lines = [`📒 <b>Wallet Watch — daily digest</b> (${day.date} UTC)`];
+  for (const w of cfg.wallets || []) {
+    const s = day.w[w.addr] || { sells: 0, sold: 0, proceedsUsd: 0, buys: 0, bought: 0, spentUsd: 0, clknIn: 0, clknOut: 0, otherMints: [], txs: 0 };
+    const bal = await wwClknBalance(w.addr);
+    const pace = s.sold > 0 && bal > 0 ? Math.round(bal / s.sold) : null;
+    lines.push(
+      `\n<b>${w.label || "wallet"}</b> · <code>${w.addr.slice(0, 4)}…${w.addr.slice(-4)}</code>\n` +
+      `• Sells: ${s.sells} — ${fmtTokensShort(s.sold)} CLKN ≈ $${s.proceedsUsd.toFixed(0)}\n` +
+      `• Buys: ${s.buys}${s.buys ? ` — ${fmtTokensShort(s.bought)} CLKN ($${s.spentUsd.toFixed(0)})` : ""}\n` +
+      (s.clknIn > 1 || s.clknOut > 1 ? `• Transfers: in ${fmtTokensShort(s.clknIn)} / out ${fmtTokensShort(s.clknOut)} CLKN\n` : "") +
+      `• Other txs today: ${s.txs}${s.otherMints.length ? ` · other tokens touched: ${s.otherMints.length}` : ""}\n` +
+      (bal != null ? `• Balance: <b>${fmtTokensShort(bal)} CLKN</b>${pace ? ` · ~${pace} days runway at today's sell pace` : ""}` : "")
+    );
+  }
+  await wwOperatorDM(lines.join("\n"));
+}
+app.get("/api/wallet-watch", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  const cfg = wwCfg();
+  if (req.query.add && SOL_ADDR_RE.test(String(req.query.add))) {
+    if (!cfg.wallets.some((w) => w.addr === req.query.add)) cfg.wallets.push({ addr: String(req.query.add), label: String(req.query.label || "") });
+    kv.set("walletWatchCfg", cfg);
+  }
+  if (req.query.remove) { cfg.wallets = cfg.wallets.filter((w) => w.addr !== String(req.query.remove)); kv.set("walletWatchCfg", cfg); }
+  if (req.query.enabled != null) { cfg.enabled = String(req.query.enabled) !== "0"; kv.set("walletWatchCfg", cfg); }
+  if (req.query.reportHourUtc != null) { cfg.reportHourUtc = Math.max(0, Math.min(23, parseInt(req.query.reportHourUtc, 10) || 13)); kv.set("walletWatchCfg", cfg); }
+  let ran = null;
+  if (req.query.run === "1") ran = await walletWatchTick({ manual: true }).catch((e) => ({ error: e.message }));
+  if (req.query.report === "1") { await walletWatchReport().catch((e) => ({ error: e.message })); ran = { ...(ran || {}), reportSent: true }; }
+  return res.json({ success: true, cfg, today: kv.get("walletWatchDay", null), seenCount: Object.keys(kv.get("walletWatchSeen", {})).length, ran });
+});
+
 // Tool → cost (CLKN, base before the unique decimal) + what gets granted.
 // The base must be unique per tool so a user can't pay a 100-CLKN "airdrop" amount
 // and reuse the verification to unlock a 500-CLKN tool. Math.floor(amount) checks this.
@@ -12110,6 +12261,10 @@ app.listen(PORT, () => {
     }
     setInterval(wpTightOorTick, 5 * 60 * 1000);
     setTimeout(wpTightOorTick, 55000);
+    // Wallet Watch (PRIVATE) — tracked-wallet CLKN-sell alerts + daily digest to the
+    // operator chat. Functions live top-level next to /api/wallet-watch (gated).
+    setInterval(() => walletWatchTick().catch((e) => console.warn("[wallet-watch] tick:", e.message)), 2 * 60 * 1000);
+    setTimeout(() => walletWatchTick().catch(() => {}), 80000);
     // Meteora autonomous re-center — only acts when meteoraCfg.autoRecenter is ON (ships OFF).
     // Edge/anti-thrash checks live in meteoraRecenter; this just invokes it on the cadence.
     async function meteoraRecenterTick() {
