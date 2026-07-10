@@ -441,6 +441,14 @@ Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.
 - `/api/stats` — traffic dashboard data. `/api/autopsy-premium` — gated deep forensics.
 - `/api/claims` — the full airdrop list (wallets + balances) from the Google Sheet.
   Gated on `PREMIUM_ACCESS_KEY`; returns 404 (not 401) when the key is wrong/absent.
+- `/api/wallet-watch` — **Wallet Watch, a PRIVATE product test (owner ask 2026-07-10): NO public
+  surface, don't link or mention it on the app/socials.** Tracks specific wallets (kv
+  `walletWatchCfg`, seeded with the CLKN drip-seller `D9MizW…`): a CLKN sell fires a LOUD DM to
+  the private operator chat within ~2 min (amount, proceeds, venue, daily running total, balance
+  left, tx link); a silent daily digest (default 13 UTC) covers sells/buys/transfers/balance/
+  sell-pace runway. Params: `&add=&label=`/`&remove=`/`&enabled=`/`&reportHourUtc=`/`&run=1`/
+  `&report=1`/`&resetDay=1`. Backfill-guarded (old txs record silently, never alert). Uses the
+  same wSOL-unwrap-dedupe parse as Wallet X-Ray (the 2026-07-10 2× fix — don't regress either copy).
 - `/api/whirlpool/vault/status|tick|pause|resume|config` — the autonomous Liquidity Vault
   (Orca Whirlpool LP manager). 404 without the key. `tick` is a DRY RUN unless `&run=1`;
   it only acts when `MM_OPERATOR_SECRET` is set. The public `/liquidity` tool and the
