@@ -116,8 +116,17 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 > (value-preserving) — this FIXES the Meteora limitation: external deposits/withdrawals show up as a diff
 > step-change >$250 (kv `wpLpHodlJumpUsd`) between daily checks and trigger an AUTO re-baseline with a DM note.
 > First read/check auto-seeds the baseline. READ-ONLY — it never touches positions.
-> **🆕 CURRENT STRUCTURE — ±1.75% TRIO (owner's GO, 2026-07-08; supersedes everything below in
-> this block):** after the ±10% era produced too little volume/organic score ("not working"), the
+> **🆕 CURRENT STATE — TIGHT POOLS PULLED, WAIT-AND-SEE (owner's call, 2026-07-10 morning):**
+> significant CLKN sells overnight drained the CLKN/SOL ±1.75% pool to 100% CLKN (OOR); owner
+> had the whole ±1.75% trio CLOSED. Everything sits in the treasury wallet as float
+> (~11.2M CLKN / ~0.29 SOL / ~636 USDC / ~15.7K JUP ≈ $9.1K) + the three permanent wide
+> anchors (~$190) keeping all three pools quoted. Vault PAUSED. ⚠️ SOL is at the gas floor —
+> any redeploy involving SOL needs a JUP→SOL swap first (owner's call). Owner is weighing:
+> one big slightly-wider CLKN/JUP pool vs. moving some JUP into a JUP/SOL pool for fees —
+> NO redeploy without his explicit go. (He also bought back ~1.4M CLKN manually with 4 SOL
+> pulled from another pool 2026-07-09 — that's why float CLKN grew; don't "investigate" it.)
+> Historical context ⬇️
+> **±1.75% TRIO (owner's GO, 2026-07-08; PULLED 2026-07-10 — see above):** after the ±10% era produced too little volume/organic score ("not working"), the
 > owner pulled back to tight pools. LIVE under treasury `2zMCU…`, all opened via openAnchor at
 > `down=1.75&up=1.75` so they're PINNED (vault stays **PAUSED**; positions are owner-managed via
 > sessions): CLKN/SOL ±1.75% (`5vNLFy…`, ~$2.5K), CLKN/USDC ±1.75% (`5hcqAN…`, ~$2.4K), CLKN/JUP
