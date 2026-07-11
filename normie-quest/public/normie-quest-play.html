@@ -128,6 +128,13 @@ var Boot=new Phaser.Class({ Extends:Phaser.Scene,
     g.fillStyle(0xe0a81e); g.fillCircle(12,12,3.2);
     g.fillStyle(0xfff6cf); g.fillCircle(9,9,2);
     g.generateTexture('coin',24,24);
+    // crown — the Rug King's, knocked off on the win screen
+    g.clear();
+    g.fillStyle(0xffd23f); g.fillTriangle(0,12,4,2,8,12); g.fillTriangle(7,12,11,0,15,12); g.fillTriangle(14,12,18,2,22,12); g.fillRect(0,11,22,6);
+    g.fillStyle(0xffe875); g.fillRect(0,11,22,2);
+    g.fillStyle(0xff3860); g.fillCircle(4,4,1.4); g.fillStyle(0x66ddff); g.fillCircle(11,2,1.6); g.fillStyle(0xff3860); g.fillCircle(18,4,1.4);
+    g.fillStyle(0xb8860b); g.fillRect(0,16,22,1);
+    g.generateTexture('crown',22,18);
     // ground tile — layered dirt with speckles + a grassy top with blades
     g.clear();
     g.fillStyle(0x6e4420); g.fillRect(0,0,24,24);
@@ -682,8 +689,14 @@ var Win=new Phaser.Class({ Extends:Phaser.Scene,
   create:function(){
     SFX.win();
     this.cameras.main.setZoom(2).centerOn(W/2,H/2); this.cameras.main.setBackgroundColor(0x102a1a);
-    this.add.image(W/2,96,'normie').setScale(0.6);
-    this.add.text(W/2,44,'YOU BEAT THE RUG KEEP!',{fontFamily:'"Press Start 2P"',fontSize:'14px',color:'#3dff6e',align:'center'}).setOrigin(.5);
+    // victory tableau: the Rug King toppled & greyed-out, Normie standing triumphant over him
+    var king=this.add.image(W/2+24,122,'rugking'); king.setScale(54/king.height).setRotation(1.57).setAlpha(0.9).setTint(0x9aa2ab);
+    var crown=this.add.image(W/2+60,112,'crown').setScale(1.1).setAngle(24);   // knocked-off crown
+    this.tweens.add({targets:crown,y:115,duration:900,yoyo:true,repeat:-1,ease:'Sine.inOut'});
+    var hero=this.add.image(W/2-30,96,'normie').setScale(0.64);
+    this.tweens.add({targets:hero,y:92,duration:700,yoyo:true,repeat:-1,ease:'Sine.inOut'});
+    if(this.renderer.type===Phaser.WEBGL){ try{ hero.postFX.addGlow(0xffd23f,1.2,0,false,0.1,16); }catch(e){} }
+    this.add.text(W/2,44,'YOU BEAT THE RUG KING!',{fontFamily:'"Press Start 2P"',fontSize:'14px',color:'#3dff6e',align:'center'}).setOrigin(.5);
     this.add.text(W/2,150,'FINAL SCORE',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#8f89b0'}).setOrigin(.5);
     this.add.text(W/2,182,String(this.finalScore),{fontFamily:'"Press Start 2P"',fontSize:'32px',color:'#ffd23f'}).setOrigin(.5).setShadow(3,3,'#7a5a00',0,true,true);
     this.add.text(W/2,220,'all 3 worlds cleared',{fontFamily:'VT323',fontSize:'19px',color:'#8f89b0'}).setOrigin(.5);
