@@ -12368,6 +12368,7 @@ app.listen(PORT, () => {
           if (!(lo > 0 && up > lo && cur > 0)) continue;
           const width = (up - lo) / ((up + lo) / 2);
           if (width > 0.5) continue; // ultra-wide anchors — never alert
+          if (p.role === "wall" || p.role === "askwall") continue; // ask walls live above spot — "OOR" is their correct resting state
           const key = p.pair;
           const wasOor = !!_wpOorState[key];
           if (!p.inRange && !wasOor) {
@@ -12390,6 +12391,45 @@ app.listen(PORT, () => {
     // so a fresh deploy has a roster before the first tick merges it into the watcher).
     setInterval(() => whaleRefresh().catch((e) => console.warn("[whale] refresh:", e.message)), 24 * 3600 * 1000);
     setTimeout(() => whaleRefresh().catch(() => {}), 40000);
+    // ── Sell-wall harvest alert (read-only; owner's protect mode, 2026-07-10). The
+    //    single-sided CLKN ask wall converts CLKN→USDC as price climbs into it; the owner
+    //    pulls that USDC MANUALLY (left in, a sell-off converts it back — the wall is an LP,
+    //    not a one-way order). DM the PRIVATE operator chat LOUD when harvested USDC grows
+    //    ≥ kv wallHarvestStepUsd ($250 default) since the last alert, and once more when
+    //    price clears the top of the band (fully converted — pull now). Never touches
+    //    positions. kv wallHarvestState per wall mint.
+    let _wallHarvState = kv.get("wallHarvestState", {});
+    async function wallHarvestTick() {
+      const wtg = process.env.TELEGRAM_BOT_TOKEN;
+      const wpr = whirlpoolMM.vault.getProject("treasury");
+      if (!wtg || !wpr || !wpr.telegramChatId) return;
+      try {
+        const r = await whirlpoolMM.vault.publicPositions("treasury");
+        const step = Number(kv.get("wallHarvestStepUsd", 250)) || 250;
+        for (const p of (r.positions || [])) {
+          if (p.role !== "wall" || p.quoteSymbol !== "USDC") continue;
+          const key = p.positionMint || p.pair;
+          const prev = _wallHarvState[key] || { lastUsd: 0, above: false };
+          const usd = Number(p.quoteAmount) || 0;
+          const above = p.current > p.upper;
+          let dm = null;
+          if (above && !prev.above) dm = `🚀 <b>Wall fully walked</b> — price cleared the top of the CLKN/USDC wall. ~$${Math.round(usd)} USDC harvested and it ALL converts back to CLKN if price falls. Pull the pad NOW to lock it.`;
+          else if (usd - prev.lastUsd >= step) dm = `💰 <b>Wall harvesting</b> — ~$${Math.round(usd)} USDC now in the CLKN/USDC wall (was ~$${Math.round(prev.lastUsd)}). Pull it to lock the pad before a sell-off converts it back.`;
+          if (dm) {
+            _wallHarvState[key] = { lastUsd: usd, above };
+            kv.set("wallHarvestState", _wallHarvState);
+            await fetch(`https://api.telegram.org/bot${wtg}/sendMessage`, {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ chat_id: wpr.telegramChatId, parse_mode: "HTML", disable_web_page_preview: true, text: dm }),
+            });
+          } else if (!above && prev.above) {
+            _wallHarvState[key] = { lastUsd: usd, above: false }; kv.set("wallHarvestState", _wallHarvState); // price fell back below the top — re-arm the full-walk alert
+          }
+        }
+      } catch (e) { console.warn("[wall-harvest] failed:", e.message); }
+    }
+    setInterval(wallHarvestTick, 5 * 60 * 1000);
+    setTimeout(wallHarvestTick, 65000);
     // Meteora autonomous re-center — only acts when meteoraCfg.autoRecenter is ON (ships OFF).
     // Edge/anti-thrash checks live in meteoraRecenter; this just invokes it on the cadence.
     async function meteoraRecenterTick() {
