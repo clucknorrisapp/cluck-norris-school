@@ -367,7 +367,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       self.hb(self.add.text(x,H-34,label,{fontFamily:'"Press Start 2P"',fontSize:'20px',color:'#3dff6e'}).setOrigin(.5).setAlpha(isTouch?0.95:0.28));
     };
     padBtn(40,'<'); padBtn(112,'>');
-    self.hb(self.add.rectangle(W*0.75,H*0.5,W*0.5,H,0x3dff6e,isTouch?0.05:0.0));
+    // NOTE: no jump-zone fill rectangle. It used to be a half-screen 5%-alpha green rect that,
+    // on touch devices only, tinted the right half of the screen — THE "half-screen shade seam".
+    // Touch jump is handled by raw pointer-zones in update(), so the rect served no purpose.
     if(isTouch) self.hb(self.add.text(W-58,H-22,'TAP = JUMP',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#3dff6e'}).setOrigin(.5).setAlpha(0.7));
 
     this.cameras.main.startFollow(this.player,true,0.12,0.12); this.cameras.main.setDeadzone(80,60);

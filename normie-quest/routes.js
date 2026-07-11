@@ -22,6 +22,9 @@ const burn = require('./normie-burn');   // Phase 1 burn-to-play backend (dorman
 // but no longer served. Still hidden: unguessable URL, noindex, linked nowhere.
 router.get('/normie-quest-x7', (req, res) => {
   res.set('X-Robots-Tag', 'noindex, nofollow');
+  // no-cache so mobile Safari always revalidates and picks up new builds (stale cache was
+  // making shipped fixes look like they hadn't landed).
+  res.set('Cache-Control', 'no-cache, must-revalidate');
   res.sendFile(path.join(__dirname, 'public', 'normie-quest-platformer.html'));
 });
 
