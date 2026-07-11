@@ -311,6 +311,12 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.door=this.physics.add.staticSprite(def.door,GY-8,'door'); this.door.setScale(50/this.door.height);
     this.door.y=GY-this.door.displayHeight/2+9; this.door.refreshBody();   // sit on the ground
     this.addGlow(this.door,0xffb43d,4);   // warm amber glow — the Luxurious Lounge door
+    // "TLLT" lit marquee sign above the door (crisp text on a dark plaque — legible at small size)
+    var signY=this.door.y-this.door.displayHeight*0.60;
+    var plaque=this.add.rectangle(this.door.x, signY, 34, 11, 0x160c02, 0.9).setStrokeStyle(1,0xffb43d,0.9).setDepth(7);
+    var sign=this.add.text(this.door.x, signY, 'TLLT',
+      {fontFamily:'"Press Start 2P"',fontSize:'7px',color:'#ffd23f'}).setOrigin(.5).setDepth(8);
+    if(this.renderer.type===Phaser.WEBGL){ try{ plaque.postFX.addGlow(0xffb43d,2,0,false,0.1,10); }catch(e){} }
 
     // enemies
     this.enemies=this.physics.add.group();
