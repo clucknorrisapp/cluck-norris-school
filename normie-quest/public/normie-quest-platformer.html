@@ -83,6 +83,7 @@ var LEVELS=[
     plats:[[1500,2,H-120],[2300,3,H-96],[3140,2,H-110],[3760,2,H-96]],
     spikes:[],
     powerups:[['bull',960,230],['caffeine',2880,230],['candle',3784,H-124]],
+    airdrops:[[1000,H-118],[3160,H-72]],
     coins:[[540,H-72],[820,H-74],[848,H-96],[1200,H-74],[1524,H-160],[2064,H-98],[2340,H-124],[2364,H-124],[2760,H-74],[3164,H-134],[3560,H-74],[3784,H-120],[4120,H-74]],
     enemies:[['jeet',360,230,110],['jeet',680,230,70],['jeet',1020,230,130],['ghost',1360,212,90],['jeet',1860,230,110],['jeet',2220,230,110],['ghost',2560,212,90],['jeet',2900,230,80],['jeet',3200,230,100],['ghost',3620,212,90],['jeet',3840,230,90],['jeet',4160,230,70]],
     key:[1524,H-140], door:4300 },
@@ -93,6 +94,7 @@ var LEVELS=[
     plats:[[2560,2,H-120],[1300,2,H-96],[3300,2,H-110],[4000,2,H-96]],
     spikes:[[1320],[1344],[2640],[2664],[3960],[3984]],
     powerups:[['diamond',1104,230],['moon',3324,H-134],['caffeine',4004,230]],
+    airdrops:[[1180,H-118],[3300,H-72]],
     coins:[[500,H-74],[1104,H-98],[1300,H-124],[1680,H-74],[2004,H-96],[2560,H-160],[2900,H-74],[3260,H-96],[3540,H-134],[3900,H-74],[4004,H-120],[4560,H-74]],
     enemies:[['paper',360,230,100],['jeet',640,230,70],['paper',980,230,90],['ghost',1200,212,80],['paper',1680,230,100],['ghost',1980,212,90],['jeet',2280,230,80],['paper',2560,230,70],['ghost',2960,212,90],['paper',3280,230,70],['bot',3620,230,80],['ghost',3980,212,90],['paper',4260,230,90],['bot',4560,230,80]],
     key:[2584,H-140], door:4900 },
@@ -103,6 +105,7 @@ var LEVELS=[
     plats:[[1180,2,H-120],[3480,2,H-96],[4200,2,H-110],[5040,2,H-96]],
     spikes:[[840],[864],[1800],[1824],[2700],[2724],[4080],[4104]],
     powerups:[['moon',984,230],['diamond',3504,H-124],['bull',4224,H-134],['candle',5064,H-120]],
+    airdrops:[[2100,H-118],[4180,H-72]],
     coins:[[480,H-74],[984,H-98],[1204,H-160],[1680,H-74],[2004,H-98],[2520,H-74],[3204,H-98],[3324,H-74],[3504,H-120],[4224,H-160],[4560,H-74],[5064,H-120],[5320,H-74]],
     enemies:[['bot',360,230,90],['paper',680,230,70],['ghost',900,212,70],['bot',1120,230,90],['ghost',1560,212,90],['paper',1720,230,80],['bot',2060,230,60],['ghost',2340,212,90],['paper',2560,230,70],['bot',2820,230,70],['ghost',3140,212,90],['bot',3360,230,80],['bot',4000,230,70],['ghost',4400,212,90],['paper',4680,230,90],['bot',5000,230,70],['ghost',5300,212,90]],
     key:[1204,H-140], door:5500 }
@@ -149,6 +152,17 @@ var Boot=new Phaser.Class({ Extends:Phaser.Scene,
     // key
     g.clear(); g.fillStyle(C.coinDk); g.fillCircle(5,5,4); g.fillStyle(C.coin); g.fillCircle(5,5,3); g.fillStyle(C.ink); g.fillCircle(5,5,1); g.fillStyle(C.coin); g.fillRect(7,6,6,2); g.fillRect(10,8,2,2); g.fillRect(12,8,1,3); g.generateTexture('key',14,14);
     g.clear(); g.fillStyle(0xffffff); g.fillCircle(3,3,3); g.generateTexture('spark',6,6);
+    // healing airdrop — parachute + money bag with a heart ("save our bags")
+    g.clear();
+    g.fillStyle(0x1da84a); g.fillTriangle(1,17,8,3,15,17); g.fillTriangle(10,17,18,1,26,17); g.fillTriangle(21,17,28,3,35,17);   // canopy shadow
+    g.fillStyle(0x3dff6e); g.fillTriangle(3,16,8,6,13,16); g.fillTriangle(12,16,18,4,24,16); g.fillTriangle(23,16,28,6,33,16);   // canopy face
+    g.fillStyle(0x8affa8); g.fillRect(7,5,22,2);                    // top highlight
+    g.fillStyle(0xbfe9c8); g.fillRect(9,16,1,9); g.fillRect(26,16,1,9);   // parachute strings
+    g.fillStyle(0xb8860b); g.fillRoundedRect(10,24,16,16,5);        // bag (dark)
+    g.fillStyle(0xf0c14b); g.fillRoundedRect(11,25,14,14,4);        // bag (face)
+    g.fillStyle(0x8a5e00); g.fillRect(14,22,8,3);                   // bag tie
+    g.fillStyle(C.danger); g.fillCircle(16,31,2); g.fillCircle(20,31,2); g.fillTriangle(14,32,22,32,18,37);   // heart badge
+    g.generateTexture('airdrop',36,44);
     g.destroy();
 
     // load the base64 character/enemy/power-up sprites, start Title once all registered
@@ -282,6 +296,15 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       var pg=self.addGlow(o, PUCOL[pw[0]]||0xffffff, 4);
       if(pg) self.tweens.add({targets:pg,outerStrength:11,duration:620,yoyo:true,repeat:-1,ease:'Sine.inOut'});
     });
+    // healing airdrops — 1-2 per level; restore a heart ("save our bags")
+    this.airdrops=this.physics.add.group({allowGravity:false});
+    (def.airdrops||[]).forEach(function(ad){
+      var a=self.airdrops.create(ad[0],ad[1],'airdrop').setDepth(6);
+      a.setScale(42/a.height);
+      a.body.setAllowGravity(false); a.body.setSize(a.width*1.2,a.height*1.1);
+      self.tweens.add({targets:a,y:ad[1]+8,duration:900,yoyo:true,repeat:-1,ease:'Sine.inOut'});   // gentle parachute drift
+      var ag=self.addGlow(a,0x3dff6e,3); if(ag) self.tweens.add({targets:ag,outerStrength:9,duration:700,yoyo:true,repeat:-1,ease:'Sine.inOut'});
+    });
     this.shieldUntil=0; this.bullUntil=0; this.moonUntil=0; this.caffeineUntil=0;
     this.boss=false; this.bossStarted=false;
 
@@ -303,6 +326,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.physics.add.overlap(this.player,this.spikes,this.spikeHit,null,this);
     this.physics.add.overlap(this.player,this.door,this.tryDoor,null,this);
     this.physics.add.overlap(this.player,this.powerups,this.grabPowerup,null,this);
+    this.physics.add.overlap(this.player,this.airdrops,this.grabAirdrop,null,this);
 
     // HUD — held in a container pinned at the screen centre (W/2,H/2) & scrollFactor 0.
     // Under the 2x follow-camera zoom that offset makes every child land exactly where its
@@ -368,6 +392,14 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     else if(type==='caffeine'){ this.caffeineUntil=now+11000; this.powerBanner('CAFFEINE BOOST','WIRED — super speed 11s','#ffffff'); }
     else if(type==='candle'){ if(this.lives<3){ this.lives++; if(this.hearts[this.lives-1]) this.hearts[this.lives-1].setAlpha(1); } this.addScore(100); this.powerBanner('GREEN CANDLE','PUMPING — +1 heart, +100','#3dff6e'); }
     this.addScore(30); this.cameras.main.flash(120,60,120,40); SFX.power();
+  },
+
+  grabAirdrop:function(player,a){
+    if(this.over||!a.active) return;
+    var ax=a.x, ay=a.y; this.tweens.killTweensOf(a); a.disableBody(true,true);
+    this.burst(ax,ay,0xff3860,18); SFX.power(); this.cameras.main.flash(120,40,120,60);
+    if(this.lives<3){ this.lives++; if(this.hearts[this.lives-1]) this.hearts[this.lives-1].setAlpha(1); this.powerBanner('HEALING AIRDROP','BAGS SAVED — +1 HEART','#3dff6e'); }
+    else { this.addScore(150); this.powerBanner('HEALING AIRDROP','BAGS FULL — +150','#3dff6e'); }
   },
 
   powerBanner:function(title,sub,color){
