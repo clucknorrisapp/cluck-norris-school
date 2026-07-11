@@ -350,6 +350,12 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.physics.add.overlap(this.player,this.door,this.tryDoor,null,this);
     this.physics.add.overlap(this.player,this.powerups,this.grabPowerup,null,this);
     this.physics.add.overlap(this.player,this.airdrops,this.grabAirdrop,null,this);
+    // thrown crypto coins — Normie's ranged attack ("throw money at the problem")
+    this.projectiles=this.physics.add.group();
+    this.physics.add.collider(this.projectiles,this.platforms);
+    this.physics.add.collider(this.projectiles,this.movers);
+    this.physics.add.overlap(this.projectiles,this.enemies,this.coinHitEnemy,null,this);
+    this.nextThrow=0; this.prevThrow=false;
 
     // HUD — held in a container pinned at the screen centre (W/2,H/2) & scrollFactor 0.
     // Under the 2x follow-camera zoom that offset makes every child land exactly where its
@@ -374,9 +380,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // input — touch is driven by RAW POINTER SCREEN-ZONES in update() (see the poll there),
     // NOT interactive hit-areas: the HUD lives in a scrollFactor-0 container under a 2x zoom
     // where per-object hit testing is unreliable. Pointer coords are zoom/container-immune.
-    this.cursors=this.input.keyboard.createCursorKeys(); this.keys=this.input.keyboard.addKeys('W,A,S,D,SPACE');
+    this.cursors=this.input.keyboard.createCursorKeys(); this.keys=this.input.keyboard.addKeys('W,A,S,D,SPACE,F,X');
     if(!this.registry.get('nqPtr')){ this.input.addPointer(4); this.registry.set('nqPtr',1); }   // extra pointers for multi-touch; game-global, add once
-    this.touch={left:false,right:false,jump:false};
+    this.touch={left:false,right:false,jump:false,throw:false};
     var isTouch=this.isTouch=(this.sys.game.device.input.touch||(navigator.maxTouchPoints>0)||('ontouchstart' in window));
     // on-screen control affordances (visual only — actual input is polled below)
     var padBtn=function(x,label){
@@ -387,7 +393,10 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // NOTE: no jump-zone fill rectangle. It used to be a half-screen 5%-alpha green rect that,
     // on touch devices only, tinted the right half of the screen — THE "half-screen shade seam".
     // Touch jump is handled by raw pointer-zones in update(), so the rect served no purpose.
-    if(isTouch) self.hb(self.add.text(W-58,H-22,'TAP = JUMP',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#3dff6e'}).setOrigin(.5).setAlpha(0.7));
+    // throw button (bottom-right corner) — hurl a coin. The rest of the right side = jump.
+    self.hb(self.add.image(W-30,H-30,'btn').setScale(0.58).setAlpha(isTouch?0.5:0.16));
+    self.hb(self.add.image(W-30,H-31,'coin').setScale(0.62).setAlpha(isTouch?1:0.32));
+    if(isTouch) self.hb(self.add.text(W-30,H-11,'THROW',{fontFamily:'"Press Start 2P"',fontSize:'7px',color:'#ffd23f'}).setOrigin(.5).setAlpha(0.85));
 
     this.cameras.main.startFollow(this.player,true,0.12,0.12); this.cameras.main.setDeadzone(80,60);
     this.lastGround=-9999; this.jumpBufferAt=-9999; this.prevJump=false; this.jumpsLeft=2; this.isJumping=false;
@@ -431,6 +440,19 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   hideAirdrop:function(a){   // healed back to full → tuck it away until damage happens again
     a.shown=false; this.tweens.killTweensOf(a); if(a.bob){ a.bob.stop(); a.bob=null; }
     a.setVisible(false).setActive(false); if(a.body) a.body.enable=false; a.setAlpha(0); a.y=a.restY;
+  },
+  throwCoin:function(){
+    var p=this.player, dir=p.flipX?-1:1;
+    var c=this.projectiles.create(p.x+dir*13,p.y-4,'coin').setScale(0.6).setDepth(6);
+    c.body.setSize(c.width*0.7,c.height*0.7);
+    c.setVelocity(dir*300,-150); c.setBounce(0.4,0.5); c.setAngularVelocity(dir*760); c.setCollideWorldBounds(false);
+    SFX.coin();
+    this.time.delayedCall(1600,function(){ if(c&&c.active) c.destroy(); });
+  },
+  coinHitEnemy:function(coin,enemy){
+    if(this.over||!enemy.active||!coin.active) return;
+    var ex=enemy.x,ey=enemy.y; enemy.disableBody(true,true); coin.destroy();
+    this.addScore(20); this.burst(ex,ey,0xffd23f,10); SFX.stomp(); this.cameras.main.shake(40,0.004);
   },
   grabAirdrop:function(player,a){
     if(this.over||!a.active||a.consumed) return;
@@ -549,17 +571,22 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var self=this, p=this.player, b=p.body, now=this.time.now;
     // --- touch: read raw pointer screen-zones (immune to zoom / HUD container transforms) ---
     // left third bottom = LEFT, next third bottom = RIGHT, right half (any height) = JUMP.
-    this.touch.left=this.touch.right=this.touch.jump=false;
+    this.touch.left=this.touch.right=this.touch.jump=this.touch.throw=false;
     var gw=this.scale.width, gh=this.scale.height, pts=this.input.manager.pointers;
     for(var pi=0;pi<pts.length;pi++){ var ptr=pts[pi];
       if(!ptr||!ptr.isDown||!ptr.wasTouch) continue;            // wasTouch: desktop mouse never moves the player
       var fx=ptr.x/gw, fy=ptr.y/gh;
-      if(fx>=0.46){ this.touch.jump=true; }
+      if(fx>0.84&&fy>0.72){ this.touch.throw=true; }            // bottom-right corner = throw
+      else if(fx>=0.46){ this.touch.jump=true; }
       else if(fy>0.42){ if(fx<0.20) this.touch.left=true; else if(fx<0.42) this.touch.right=true; }
     }
     var left=this.cursors.left.isDown||this.keys.A.isDown||this.touch.left;
     var right=this.cursors.right.isDown||this.keys.D.isDown||this.touch.right;
     var jump=this.cursors.up.isDown||this.keys.W.isDown||this.keys.SPACE.isDown||this.touch.jump;
+    // throw a coin (edge-triggered, cooldown) — F/X on desktop, the THROW button on touch
+    var wantThrow=this.keys.F.isDown||this.keys.X.isDown||this.touch.throw;
+    if(wantThrow&&!this.prevThrow&&now>this.nextThrow){ this.throwCoin(); this.nextThrow=now+340; }
+    this.prevThrow=wantThrow;
 
     var fast=now<this.caffeineUntil||now<this.moonUntil;      // caffeine/moon = super speed
     p.setMaxVelocity(fast?340:240,600);
