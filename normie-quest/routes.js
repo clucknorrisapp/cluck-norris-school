@@ -16,9 +16,12 @@ const path = require('path');
 const express = require('express');
 const router = express.Router();
 
+// Serves the side-scrolling platformer (real Normie character + JEET enemy).
+// The original coin-grabber prototype (normie-quest.html) is kept in the repo
+// but no longer served. Still hidden: unguessable URL, noindex, linked nowhere.
 router.get('/normie-quest-x7', (req, res) => {
   res.set('X-Robots-Tag', 'noindex, nofollow');
-  res.sendFile(path.join(__dirname, 'public', 'normie-quest.html'));
+  res.sendFile(path.join(__dirname, 'public', 'normie-quest-platformer.html'));
 });
 
 module.exports = router;
