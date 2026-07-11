@@ -244,7 +244,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     bg.add(this.add.rectangle(0,0,W,H,th.sky2).setOrigin(0,0));
     bg.add(this.add.rectangle(0,H*0.38,W,H*0.62,th.sky1).setOrigin(0,0));
     bg.add(this.add.rectangle(0,H*0.66,W,H*0.34,th.hill).setOrigin(0,0).setAlpha(0.4));
-    for(i=0;i<46;i++) bg.add(this.add.rectangle((i*47)%W,(i*29)%Math.floor(H*0.55),2,2,0xffffff,0.4));
+    // stars: RANDOM scatter (the old (i*47)%W formula lined up into diagonal streaks once
+    // the fill spanned the full width). Seeded RND keeps it deterministic per level.
+    for(i=0;i<52;i++){ var ss=Phaser.Math.RND.pick([1,1,1,2]); bg.add(this.add.rectangle(Phaser.Math.RND.between(3,W-3),Phaser.Math.RND.between(3,Math.floor(H*0.62)),ss,ss,0xffffff,Phaser.Math.RND.between(18,50)/100)); }
     for(i=0;i<Math.ceil(LW/210);i++) this.add.image(i*210+((i*37)%110),26+((i*41)%54),'cloud').setScrollFactor(0.18).setAlpha(.28).setScale(1.3+(i%3)*0.4);
     for(i=0;i<Math.ceil(LW/260)+1;i++) this.add.triangle(i*260,H,0,0,130,-70-((i*37)%60),260,0,th.sky2).setOrigin(0,0).setScrollFactor(0.32).setAlpha(0.9);
     for(i=0;i<Math.ceil(LW/300)+1;i++) this.add.triangle(i*300+90,H,0,0,150,-104-((i*29)%54),300,0,th.hill).setOrigin(0,0).setScrollFactor(0.56);
