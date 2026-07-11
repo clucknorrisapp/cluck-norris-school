@@ -801,11 +801,15 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   },
   slotPayout:function(r){
     var pay, msg, big=false;
-    if(r[0]===r[1]&&r[1]===r[2]){ pay=100; msg='JACKPOT! +100'; big=true; }
-    else if(r[0]===r[1]||r[1]===r[2]||r[0]===r[2]){ pay=30; msg='MATCH! +30'; }
-    else { pay=10; msg='+10'; }
+    if(r[0]===r[1]&&r[1]===r[2]){ pay=100; msg='JACKPOT!'; big=true; }
+    else if(r[0]===r[1]||r[1]===r[2]||r[0]===r[2]){ pay=30; msg='MATCH!'; }
+    else { pay=10; msg='NICE'; }
     this.addScore(pay); this.burst(this.slotM.x, this.slotM.y-24, 0xffd23f, big?26:14); SFX.power();
-    this.flash(msg, big?'#3dff6e':'#ffd23f'); this.cameras.main.flash(200, 255, big?255:220, big?150:90);   // bright celebratory flash
+    this.flash(msg+' +'+pay+' COINS', big?'#3dff6e':'#ffd23f'); this.cameras.main.flash(200, 255, big?255:220, big?150:90);
+    // floating "+N COINS" popup right AT the machine so the win is unmistakable
+    var wy=this.slotM.y - this.slotM.displayHeight*0.5 - 4;
+    var pop=this.add.text(this.slotM.x, wy, '+'+pay+' COINS', {fontFamily:'"Press Start 2P"',fontSize:'9px',color:big?'#3dff6e':'#ffd23f'}).setOrigin(.5,1).setDepth(22).setShadow(0,1,'#000',2);
+    this.tweens.add({targets:pop, y:wy-26, alpha:0, duration:1300, ease:'Cubic.out', onComplete:function(){ pop.destroy(); }});
   },
 
   loseLife:function(reason){ this.lives--; if(this.hearts[this.lives]) this.hearts[this.lives].setAlpha(.16); if(this.lives<=0) this.gameOver(reason); },
