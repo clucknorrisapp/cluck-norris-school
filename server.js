@@ -6914,6 +6914,23 @@ app.get("/api/arb-bots", (req, res) => {
   return res.json({ success: true, count: Object.keys(bots).length, roundtripSec: kv.get("arbRoundtripSec", 180), bots });
 });
 
+// ── Wall ratchet control (owner protect mode, 2026-07-10). ?enabled=0/1 flips the
+//    auto pull-and-reopen; numeric params patch tunables (trigFrac 0-1, usd, lowPct,
+//    upPct, minSec, maxPerDay). Always returns cfg + state + recent log. Gated.
+app.get("/api/wall-ratchet", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  const cur = kv.get("wallRatchetCfg", {});
+  const patch = {};
+  if (req.query.enabled != null) patch.enabled = req.query.enabled === "1";
+  for (const k of ["trigFrac", "usd", "lowPct", "upPct", "minSec", "maxPerDay"]) {
+    if (req.query[k] != null && Number.isFinite(Number(req.query[k]))) patch[k] = Number(req.query[k]);
+  }
+  if (Object.keys(patch).length) kv.set("wallRatchetCfg", { ...cur, ...patch });
+  const cfg = Object.assign({ enabled: true, trigFrac: 0.25, usd: 2000, lowPct: 0.5, upPct: 5, minSec: 900, maxPerDay: 8 }, kv.get("wallRatchetCfg", {}));
+  return res.json({ success: true, cfg, state: kv.get("wallRatchetState", {}), log: kv.get("wallRatchetLog", []) });
+});
+
 // ── Wallet Watch (PRIVATE product test — owner ask 2026-07-10; OFF the public app) ──
 // Tracks specific wallets: LOUD private-operator-chat alert the moment one SELLS CLKN,
 // plus a once-daily activity digest (silent). No public UI, no links anywhere; this
@@ -12430,6 +12447,67 @@ app.listen(PORT, () => {
     }
     setInterval(wallHarvestTick, 5 * 60 * 1000);
     setTimeout(wallHarvestTick, 65000);
+    // ── Wall RATCHET (owner ask 2026-07-10: "if we get 25% through the band, auto pull
+    //    and start a new single-sided pool"). When spot climbs ≥ trigFrac through the live
+    //    CLKN/USDC sell-wall band: CLOSE the wall — the harvested USDC lands in the wallet,
+    //    LOCKED (walls never redeposit USDC) — then immediately OPEN a fresh single-sided
+    //    wall above the new spot (same shape). A rising tape ratchets USDC into the wallet
+    //    step by step; a dump can only touch the CLKN side of the current rung.
+    //    This is the ONE automation allowed to touch positions while the vault is paused —
+    //    scoped to role="wall" USDC positions only, owner-authorized 2026-07-10.
+    //    Tunables kv wallRatchetCfg {enabled,trigFrac,usd,lowPct,upPct,minSec,maxPerDay};
+    //    control/observability via gated /api/wall-ratchet. Log kv wallRatchetLog.
+    let _wallRatchetBusy = false;
+    function wallRatchetCfg() { return Object.assign({ enabled: true, trigFrac: 0.25, usd: 2000, lowPct: 0.5, upPct: 5, minSec: 900, maxPerDay: 8 }, kv.get("wallRatchetCfg", {})); }
+    async function wallRatchetTick() {
+      if (_wallRatchetBusy) return;
+      const cfg = wallRatchetCfg();
+      if (!cfg.enabled) return;
+      const wtg = process.env.TELEGRAM_BOT_TOKEN;
+      const wpr = whirlpoolMM.vault.getProject("treasury");
+      if (!wpr) return;
+      const dm = async (text) => { if (!wtg || !wpr.telegramChatId) return; try { await fetch(`https://api.telegram.org/bot${wtg}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: wpr.telegramChatId, parse_mode: "HTML", disable_web_page_preview: true, text }) }); } catch (_) {} };
+      _wallRatchetBusy = true;
+      try {
+        const r = await whirlpoolMM.vault.publicPositions("treasury");
+        const w = (r.positions || []).find((p) => p.role === "wall" && p.quoteSymbol === "USDC");
+        if (!w || !(w.upper > w.lower)) return;
+        const frac = (w.current - w.lower) / (w.upper - w.lower);
+        if (!(frac >= cfg.trigFrac)) return;
+        const now = Date.now(), today = new Date().toISOString().slice(0, 10);
+        const stt = kv.get("wallRatchetState", {});
+        if (stt.lastAt && now - stt.lastAt < cfg.minSec * 1000) return;
+        const dayCount = stt.day === today ? (stt.count || 0) : 0;
+        if (dayCount >= cfg.maxPerDay) {
+          if (!stt.capNotified || stt.day !== today) { kv.set("wallRatchetState", { ...stt, day: today, count: dayCount, capNotified: true }); await dm(`⏸ <b>Wall ratchet daily cap hit</b> (${cfg.maxPerDay}) — going manual for the rest of the day. Wall still standing; pull manually if needed.`); }
+          return;
+        }
+        kv.set("wallRatchetState", { lastAt: now, day: today, count: dayCount + 1 }); // stamp BEFORE acting — a crash must not double-fire
+        const harvested = Number(w.quoteAmount) || 0;
+        const spot = w.current;
+        // 1) CLOSE — locks harvested USDC (+ remaining CLKN) into the wallet.
+        await whirlpoolMM.vault.closePosition({ projectId: "treasury", mint: w.positionMint });
+        // 2) REOPEN above the new spot. openWall reads live pool price and rejects a band
+        //    not fully above spot — on that race, bump the band up 1% and retry once.
+        await new Promise((res) => setTimeout(res, 4000));
+        let lo = spot * (1 + cfg.lowPct / 100), hi = spot * (1 + cfg.upPct / 100), opened = null;
+        for (let attempt = 0; attempt < 2 && !(opened && opened.action === "wall-opened"); attempt++) {
+          opened = await whirlpoolMM.vault.openWall({ projectId: "treasury", quoteSym: "USDC", usd: cfg.usd, lowerPriceClkn: lo, upperPriceClkn: hi, dryRun: false }).catch((e) => ({ action: "error", reason: e.message }));
+          if (opened.action !== "wall-opened") { lo *= 1.01; hi *= 1.01; }
+        }
+        const log = kv.get("wallRatchetLog", []);
+        log.unshift({ ts: now, frac: Math.round(frac * 100) / 100, lockedUsd: Math.round(harvested), closed: w.positionMint, opened: opened.positionMint || null, err: opened.action === "wall-opened" ? null : (opened.reason || "open failed") });
+        kv.set("wallRatchetLog", log.slice(0, 20));
+        if (opened.action === "wall-opened") {
+          await dm(`🔒 <b>Wall ratchet fired</b> — ${Math.round(frac * 100)}% through the band.\n💵 Locked ~$${Math.round(harvested)} USDC in the wallet.\n🧱 New wall: ~$${cfg.usd} CLKN at ${lo.toPrecision(4)} → ${hi.toPrecision(4)} (<code>${String(opened.positionMint).slice(0, 8)}…</code>)`);
+        } else {
+          await dm(`⚠️ <b>Wall ratchet: closed & locked ~$${Math.round(harvested)} USDC, but the REOPEN failed</b> (${(opened.reason || "?").slice(0, 140)}). CLKN is safe in the wallet — reopen manually or wait for the next trigger.`);
+        }
+      } catch (e) { console.warn("[wall-ratchet] failed:", e.message); }
+      finally { _wallRatchetBusy = false; }
+    }
+    setInterval(wallRatchetTick, 2 * 60 * 1000);
+    setTimeout(wallRatchetTick, 70000);
     // Meteora autonomous re-center — only acts when meteoraCfg.autoRecenter is ON (ships OFF).
     // Edge/anti-thrash checks live in meteoraRecenter; this just invokes it on the cadence.
     async function meteoraRecenterTick() {
