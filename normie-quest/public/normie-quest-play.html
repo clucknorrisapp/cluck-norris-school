@@ -162,8 +162,13 @@ var Title=new Phaser.Class({ Extends:Phaser.Scene,
   create:function(){
     this.cameras.main.setZoom(2).centerOn(W/2,H/2); this.cameras.main.setBackgroundColor(0x120c2e);
     this.add.image(90,70,'cloud').setScale(1.4).setAlpha(.7); this.add.image(360,50,'cloud').setScale(1.1).setAlpha(.6);
-    this.add.text(W/2,66,'NORMIE\nQUEST',{fontFamily:'"Press Start 2P"',fontSize:'26px',color:'#ffd23f',align:'center',lineSpacing:10}).setOrigin(.5).setShadow(3,3,'#7a5a00',0,true,true);
-    this.add.image(W/2-64,150,'coin').setScale(2.2); this.add.image(W/2,150,'normie').setScale(0.4); this.add.image(W/2+64,150,'jeet').setScale(0.42);
+    var logo=this.add.text(W/2,66,'NORMIE\nQUEST',{fontFamily:'"Press Start 2P"',fontSize:'26px',color:'#ffd23f',align:'center',lineSpacing:10}).setOrigin(.5).setShadow(3,3,'#7a5a00',0,true,true);
+    if(this.renderer.type===Phaser.WEBGL){ try{ var lg=logo.postFX.addGlow(0xffd23f,4,0,false,0.1,16); this.tweens.add({targets:lg,outerStrength:9,duration:900,yoyo:true,repeat:-1,ease:'Sine.inOut'}); }catch(e){} }
+    this.add.image(W/2-72,152,'coin').setScale(2.4);
+    var hero=this.add.image(W/2,150,'normie').setScale(0.62);   // Normie: large and in charge
+    if(this.renderer.type===Phaser.WEBGL){ try{ hero.postFX.addGlow(0x66ccff,3,0,false,0.1,16); }catch(e){} }
+    this.tweens.add({targets:hero,y:144,duration:900,yoyo:true,repeat:-1,ease:'Sine.inOut'});
+    this.add.image(W/2+70,152,'jeet').setScale(0.46);
     var p=this.add.text(W/2,200,'PRESS TO INSERT BURN',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
     this.tweens.add({targets:p,alpha:.25,duration:600,yoyo:true,repeat:-1});
     this.add.text(W/2,246,'3 worlds \u00B7 a Cluck Norris production',{fontFamily:'VT323',fontSize:'16px',color:'#8f89b0'}).setOrigin(.5);
@@ -210,6 +215,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
 
     this.physics.world.setBounds(0,0,LW,H+400);
     this.cameras.main.setBounds(0,0,LW,H); this.cameras.main.setZoom(2); this.cameras.main.setBackgroundColor(th.sky1);
+    if(this.renderer.type===Phaser.WEBGL){ try{ this.cameras.main.postFX.addVignette(0.5,0.5,0.92,0.32); }catch(e){} }   // cinematic depth
 
     // layered parallax backdrop: sky gradient -> stars -> clouds -> far mountains -> near hills
     this.add.rectangle(0,0,W,H,th.sky2).setOrigin(0,0).setScrollFactor(0);
@@ -247,33 +253,40 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     (def.coins||[]).forEach(function(cn){ var c=self.coins.create(cn[0],cn[1],'coin').setScale(1.4); self.tweens.add({targets:c,scale:1.7,duration:420,yoyo:true,repeat:-1}); });
 
     // key
-    var k=def.key; this.key=this.physics.add.sprite(k[0],k[1],'key').setScale(1.5);
+    var k=def.key; this.key=this.physics.add.sprite(k[0],k[1],'key').setScale(1.7).setDepth(6);
     this.key.body.setAllowGravity(false); this.key.body.setSize(40,40).setOffset(-13,-13);
     this.tweens.add({targets:this.key,y:k[1]-10,duration:700,yoyo:true,repeat:-1,ease:'Sine.inOut'});
+    var kg=this.addGlow(this.key,0xffd23f,4); if(kg) this.tweens.add({targets:kg,outerStrength:10,duration:700,yoyo:true,repeat:-1,ease:'Sine.inOut'});
 
     // door
     this.door=this.physics.add.staticSprite(def.door,GY-8,'door');
+    this.addGlow(this.door,0x9a7bff,3);
 
     // enemies
     this.enemies=this.physics.add.group();
     (def.enemies||[]).forEach(function(en){ self.makeEnemy(en[0],en[1],en[2],en[3]); });
 
-    // power-ups
+    // power-ups — bigger & premium: each pulses with a coloured glow halo
+    var PUCOL={ diamond:0x66ddff, bull:0x3dff6e, moon:0xffd23f, caffeine:0xffffff, candle:0x3dff6e };
     this.powerups=this.physics.add.group({allowGravity:false});
     (def.powerups||[]).forEach(function(pw){
       var o=self.powerups.create(pw[1],pw[2],pw[0]); o.ptype=pw[0];
-      o.setScale((pw[0]==='candle'?30:26)/o.height);
+      o.setScale((pw[0]==='candle'?46:40)/o.height).setDepth(6);
       o.body.setAllowGravity(false); o.body.setSize(o.width*1.6,o.height*1.4);
-      self.tweens.add({targets:o,y:pw[2]-9,duration:800,yoyo:true,repeat:-1,ease:'Sine.inOut'});
+      self.tweens.add({targets:o,y:pw[2]-11,duration:800,yoyo:true,repeat:-1,ease:'Sine.inOut'});
+      var pg=self.addGlow(o, PUCOL[pw[0]]||0xffffff, 4);
+      if(pg) self.tweens.add({targets:pg,outerStrength:11,duration:620,yoyo:true,repeat:-1,ease:'Sine.inOut'});
     });
     this.shieldUntil=0; this.bullUntil=0; this.moonUntil=0; this.caffeineUntil=0;
     this.boss=false; this.bossStarted=false;
 
-    // player
+    // player — bigger & in charge; grows even bigger on a power-up
     this.player=this.physics.add.sprite(this.spawn.x,this.spawn.y,'normie');
-    this.baseScale=30/this.player.height; this.player.setScale(this.baseScale);
+    this.baseScale=36/this.player.height; this.pscale={v:1}; this._powered=false;
+    this.player.setScale(this.baseScale).setDepth(7);
     this.player.body.setSize(this.player.width*0.60,this.player.height*0.90).setOffset(this.player.width*0.20,this.player.height*0.08);
     this.player.setCollideWorldBounds(true); this.player.setMaxVelocity(240,600);
+    this.playerGlow=this.addGlow(this.player,0x66ccff,0);   // premium aura, fires up under power
 
     // collisions
     this.physics.add.collider(this.player,this.platforms);
@@ -398,7 +411,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // spawn the Rug King
     var k=this.rugking=this.physics.add.sprite(dx-30, GY-50, 'rugking');
     k.setScale(48/k.height); k.body.setSize(k.width*0.62,k.height*0.82).setOffset(k.width*0.19,k.height*0.14);
-    k.setCollideWorldBounds(true); k.dir=-1; k.invuln=false;
+    k.setCollideWorldBounds(true); k.dir=-1; k.invuln=false; k.setDepth(7);
+    var bg2=this.addGlow(k,0xff2d55,5); if(bg2) this.tweens.add({targets:bg2,outerStrength:12,duration:520,yoyo:true,repeat:-1,ease:'Sine.inOut'});
     this.physics.add.collider(k, this.platforms);
     this.physics.add.overlap(this.player, k, this.bossTouch, null, this);
     this.door.setVisible(false);
@@ -439,6 +453,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.tweens.add({targets:player,alpha:.25,duration:100,yoyo:true,repeat:8,onComplete:function(){ player.alpha=1; player.invuln=false; }});
   },
   hb:function(o){ this.hudBox.add(o); return o; },   // route a HUD object into the pinned container
+  addGlow:function(o,color,outer){ if(this.renderer.type!==Phaser.WEBGL||!o.postFX) return null; try{ return o.postFX.addGlow(color, outer||4, 0, false, 0.1, 16); }catch(e){ return null; } },
   addScore:function(n){ this.score+=n; this.hudScore.setText('SCORE '+this.score); },
   burst:function(x,y,tint,count){ var e=this.add.particles(x,y,'spark',{speed:{min:30,max:160},lifespan:420,scale:{start:1.1,end:0},tint:tint,emitting:false,blendMode:'ADD'}).setDepth(30); e.explode(count||10); this.time.delayedCall(520,function(){ e.destroy(); }); },
   flash:function(msg,color){ var t=this.hb(this.add.text(W/2,70,msg,{fontFamily:'"Press Start 2P"',fontSize:'12px',color:color}).setOrigin(.5)); this.tweens.add({targets:t,y:52,alpha:0,duration:1200,onComplete:function(){t.destroy();}}); },
@@ -476,12 +491,18 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.isJumping&&!jump&&b.velocity.y<-120) p.setVelocityY(-120);
     if(b.velocity.y>=0) this.isJumping=false;
 
-    // power-up glow
-    if(now<this.moonUntil) p.setTint([0xffd23f,0x3dff6e,0xff3860,0x66ccff][Math.floor(now/90)%4]);
-    else if(now<this.shieldUntil) p.setTint(0x88ddff);
-    else if(now<this.bullUntil) p.setTint(0x99ff88);
-    else if(now<this.caffeineUntil) p.setTint(0xfff2a0);
-    else p.clearTint();
+    // power-up tint + "large and in charge" grow + aura
+    var powCol=0x66ccff, anyPower=true;
+    if(now<this.moonUntil){ p.setTint([0xffd23f,0x3dff6e,0xff3860,0x66ccff][Math.floor(now/90)%4]); powCol=0xffd23f; }
+    else if(now<this.shieldUntil){ p.setTint(0x88ddff); powCol=0x66ddff; }
+    else if(now<this.bullUntil){ p.setTint(0x99ff88); powCol=0x3dff6e; }
+    else if(now<this.caffeineUntil){ p.setTint(0xfff2a0); powCol=0xffffff; }
+    else { p.clearTint(); anyPower=false; }
+    // "large and in charge": grow toward the target scale every frame (deterministic ease)
+    var pt=anyPower?1.55:1; this.pscale.v+=(pt-this.pscale.v)*0.16;
+    if(anyPower&&!this._powered) this.burst(p.x,p.y-8,powCol,18);   // pop on power-up
+    this._powered=anyPower;
+    if(this.playerGlow){ this.playerGlow.color=powCol; this.playerGlow.outerStrength = anyPower ? (5+Math.sin(now/120)*2) : Math.max(0,this.playerGlow.outerStrength-0.4); }
 
     // active power-up indicator: label + shrinking timer bar
     var pw=null;
@@ -493,7 +514,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     else { this.powerBar.setVisible(false); this.powerBarBg.setVisible(false); this.powerLabel.setVisible(false); }
 
     // --- procedural animation: bob when walking, lean+stretch in air, breathe when idle ---
-    var bs=this.baseScale;
+    var bs=this.baseScale*this.pscale.v;
     if(!onGround){
       p.setRotation(Phaser.Math.Clamp(b.velocity.x/2600,-0.12,0.12));
       var sy=b.velocity.y<0?1.10:0.93; p.setScale(bs*(2-sy), bs*sy);
