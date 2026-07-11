@@ -118,8 +118,16 @@ var Boot=new Phaser.Class({ Extends:Phaser.Scene,
   initialize:function(){ Phaser.Scene.call(this,{key:'Boot'}); },
   create:function(){
     var g=this.add.graphics();
-    // coin
-    g.clear(); g.fillStyle(C.coinDk); g.fillCircle(6,6,6); g.fillStyle(C.coin); g.fillCircle(6,6,5); g.fillStyle(C.coinDk); g.fillRect(5,3,2,6); g.generateTexture('coin',12,12);
+    // coin — shiny gold, drawn at 24px for crispness: dark edge, gold rim, bright face,
+    // directional light (lighter upper-left) + a shine glint, plus an embossed inner ring
+    g.clear();
+    g.fillStyle(0x6e4a00); g.fillCircle(12,12,11);
+    g.fillStyle(0xc8941a); g.fillCircle(12,12,10);
+    g.fillStyle(0xffd23f); g.fillCircle(12,12,8);
+    g.fillStyle(0xffe875); g.fillCircle(10.5,10.5,5);
+    g.fillStyle(0xe0a81e); g.fillCircle(12,12,3.2);
+    g.fillStyle(0xfff6cf); g.fillCircle(9,9,2);
+    g.generateTexture('coin',24,24);
     // ground tile — layered dirt with speckles + a grassy top with blades
     g.clear();
     g.fillStyle(0x6e4420); g.fillRect(0,0,24,24);
@@ -181,11 +189,11 @@ var Title=new Phaser.Class({ Extends:Phaser.Scene,
   create:function(){
     this.cameras.main.setZoom(2).centerOn(W/2,H/2); this.cameras.main.setBackgroundColor(0x120c2e);
     this.add.image(90,70,'cloud').setScale(1.4).setAlpha(.7); this.add.image(360,50,'cloud').setScale(1.1).setAlpha(.6);
-    var logo=this.add.text(W/2,66,'NORMIE\nQUEST',{fontFamily:'"Press Start 2P"',fontSize:'26px',color:'#ffd23f',align:'center',lineSpacing:10}).setOrigin(.5).setShadow(3,3,'#7a5a00',0,true,true);
-    if(this.renderer.type===Phaser.WEBGL){ try{ var lg=logo.postFX.addGlow(0xffd23f,4,0,false,0.1,16); this.tweens.add({targets:lg,outerStrength:9,duration:900,yoyo:true,repeat:-1,ease:'Sine.inOut'}); }catch(e){} }
-    this.add.image(W/2-72,152,'coin').setScale(2.4);
+    // clean gold logo — a crisp drop shadow, NO blurry glow FX (looked smeared)
+    this.add.text(W/2,66,'NORMIE\nQUEST',{fontFamily:'"Press Start 2P"',fontSize:'26px',color:'#ffd23f',align:'center',lineSpacing:10}).setOrigin(.5).setShadow(4,4,'#5a3c00',0,true,true);
+    this.add.image(W/2-72,152,'coin').setScale(1.2);
     var hero=this.add.image(W/2,150,'normie').setScale(0.62);   // Normie: large and in charge
-    if(this.renderer.type===Phaser.WEBGL){ try{ hero.postFX.addGlow(0x66ccff,3,0,false,0.1,16); }catch(e){} }
+    if(this.renderer.type===Phaser.WEBGL){ try{ hero.postFX.addGlow(0x66ccff,1.2,0,false,0.1,16); }catch(e){} }
     this.tweens.add({targets:hero,y:144,duration:900,yoyo:true,repeat:-1,ease:'Sine.inOut'});
     this.add.image(W/2+70,152,'jeet').setScale(0.46);
     var p=this.add.text(W/2,200,BURN_GATE?'PRESS TO INSERT BURN':'TAP TO PLAY',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
@@ -275,7 +283,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
 
     // coins
     this.coins=this.physics.add.group({allowGravity:false});
-    (def.coins||[]).forEach(function(cn){ var c=self.coins.create(cn[0],cn[1],'coin').setScale(1.4); self.tweens.add({targets:c,scale:1.7,duration:420,yoyo:true,repeat:-1}); });
+    (def.coins||[]).forEach(function(cn){ var c=self.coins.create(cn[0],cn[1],'coin').setScale(0.7); self.tweens.add({targets:c,scale:0.85,duration:420,yoyo:true,repeat:-1}); });
 
     // key
     var k=def.key; this.key=this.physics.add.sprite(k[0],k[1],'key').setScale(1.7).setDepth(6);
@@ -365,10 +373,10 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var isTouch=this.isTouch=(this.sys.game.device.input.touch||(navigator.maxTouchPoints>0)||('ontouchstart' in window));
     // on-screen control affordances (visual only — actual input is polled below)
     var padBtn=function(x,label){
-      self.hb(self.add.image(x,H-34,'btn').setScale(1.7).setAlpha(isTouch?0.55:0.2));
-      self.hb(self.add.text(x,H-34,label,{fontFamily:'"Press Start 2P"',fontSize:'20px',color:'#3dff6e'}).setOrigin(.5).setAlpha(isTouch?0.95:0.28));
+      self.hb(self.add.image(x,H-28,'btn').setScale(0.58).setAlpha(isTouch?0.5:0.16));
+      self.hb(self.add.text(x,H-28,label,{fontFamily:'"Press Start 2P"',fontSize:'14px',color:'#3dff6e'}).setOrigin(.5).setAlpha(isTouch?0.9:0.28));
     };
-    padBtn(40,'<'); padBtn(112,'>');
+    padBtn(34,'<'); padBtn(100,'>');
     // NOTE: no jump-zone fill rectangle. It used to be a half-screen 5%-alpha green rect that,
     // on touch devices only, tinted the right half of the screen — THE "half-screen shade seam".
     // Touch jump is handled by raw pointer-zones in update(), so the rect served no purpose.
