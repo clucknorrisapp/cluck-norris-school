@@ -296,14 +296,16 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       var pg=self.addGlow(o, PUCOL[pw[0]]||0xffffff, 4);
       if(pg) self.tweens.add({targets:pg,outerStrength:11,duration:620,yoyo:true,repeat:-1,ease:'Sine.inOut'});
     });
-    // healing airdrops — 1-2 per level; restore a heart ("save our bags")
+    // healing airdrops — 1-2 per level; they only PARACHUTE IN once you've taken damage
+    // (lives<3), and vanish again if you heal back to full. Start hidden & body-disabled.
     this.airdrops=this.physics.add.group({allowGravity:false});
     (def.airdrops||[]).forEach(function(ad){
       var a=self.airdrops.create(ad[0],ad[1],'airdrop').setDepth(6);
       a.setScale(42/a.height);
       a.body.setAllowGravity(false); a.body.setSize(a.width*1.2,a.height*1.1);
-      self.tweens.add({targets:a,y:ad[1]+8,duration:900,yoyo:true,repeat:-1,ease:'Sine.inOut'});   // gentle parachute drift
-      var ag=self.addGlow(a,0x3dff6e,3); if(ag) self.tweens.add({targets:ag,outerStrength:9,duration:700,yoyo:true,repeat:-1,ease:'Sine.inOut'});
+      a.restY=ad[1]; a.shown=false; a.consumed=false; a.bob=null;
+      a.setVisible(false).setActive(false); a.body.enable=false; a.setAlpha(0);
+      a.glowFx=self.addGlow(a,0x3dff6e,3);
     });
     this.shieldUntil=0; this.bullUntil=0; this.moonUntil=0; this.caffeineUntil=0;
     this.boss=false; this.bossStarted=false;
@@ -394,8 +396,22 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.addScore(30); this.cameras.main.flash(120,60,120,40); SFX.power();
   },
 
+  revealAirdrop:function(a){   // parachute in from above, then bob
+    a.shown=true; a.setActive(true).setVisible(true); if(a.body) a.body.enable=true;
+    this.tweens.killTweensOf(a); a.setAlpha(0); a.y=a.restY-48;
+    var self=this;
+    this.tweens.add({targets:a,y:a.restY,alpha:1,duration:560,ease:'Bounce.out',onComplete:function(){
+      if(a.active&&!a.consumed) a.bob=self.tweens.add({targets:a,y:a.restY+8,duration:900,yoyo:true,repeat:-1,ease:'Sine.inOut'});
+    }});
+    if(a.glowFx&&!a.glowPulse) a.glowPulse=this.tweens.add({targets:a.glowFx,outerStrength:9,duration:700,yoyo:true,repeat:-1,ease:'Sine.inOut'});
+  },
+  hideAirdrop:function(a){   // healed back to full → tuck it away until damage happens again
+    a.shown=false; this.tweens.killTweensOf(a); if(a.bob){ a.bob.stop(); a.bob=null; }
+    a.setVisible(false).setActive(false); if(a.body) a.body.enable=false; a.setAlpha(0); a.y=a.restY;
+  },
   grabAirdrop:function(player,a){
-    if(this.over||!a.active) return;
+    if(this.over||!a.active||a.consumed) return;
+    a.consumed=true; if(a.bob){ a.bob.stop(); a.bob=null; }
     var ax=a.x, ay=a.y; this.tweens.killTweensOf(a); a.disableBody(true,true);
     this.burst(ax,ay,0xff3860,18); SFX.power(); this.cameras.main.flash(120,40,120,60);
     if(this.lives<3){ this.lives++; if(this.hearts[this.lives-1]) this.hearts[this.lives-1].setAlpha(1); this.powerBanner('HEALING AIRDROP','BAGS SAVED — +1 HEART','#3dff6e'); }
@@ -606,6 +622,14 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.boss && this.rugking && this.rugking.active && !this.rugking.invuln){
       var kb=this.rugking; kb.dir=(p.x<kb.x)?-1:1; kb.setVelocityX(kb.dir*76); kb.setFlipX(kb.dir>0); kb.setRotation(Math.sin(now/120)*0.05);
     }
+
+    // healing airdrops drop in only while you're hurt (lives<3); hide again at full health
+    var hurt=this.lives<3;
+    this.airdrops.children.iterate(function(a){
+      if(!a||a.consumed) return;
+      if(hurt&&!a.shown) self.revealAirdrop(a);
+      else if(!hurt&&a.shown) self.hideAirdrop(a);
+    });
 
     // pit death
     if(p.y>H+80){
