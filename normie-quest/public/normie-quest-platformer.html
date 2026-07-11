@@ -154,10 +154,25 @@ var Boot=new Phaser.Class({ Extends:Phaser.Scene,
     var g=this.add.graphics();
     // coin
     g.clear(); g.fillStyle(C.coinDk); g.fillCircle(6,6,6); g.fillStyle(C.coin); g.fillCircle(6,6,5); g.fillStyle(C.coinDk); g.fillRect(5,3,2,6); g.generateTexture('coin',12,12);
-    // ground tile
-    g.clear(); g.fillStyle(C.dirt); g.fillRect(0,0,24,24); g.fillStyle(C.dirtDk); g.fillRect(0,0,24,24); g.fillRect(2,2,20,20); g.fillStyle(C.dirt); g.fillRect(3,3,18,18); g.fillStyle(C.grassDk); g.fillRect(0,0,24,6); g.fillStyle(C.grass); g.fillRect(0,0,24,3); g.generateTexture('ground',24,24);
-    // brick platform tile
-    g.clear(); g.fillStyle(C.brickDk); g.fillRect(0,0,24,24); g.fillStyle(C.brick); g.fillRect(1,1,22,22); g.fillStyle(C.brickDk); g.fillRect(0,11,24,2); g.fillRect(11,0,2,11); g.fillRect(6,13,2,11); g.generateTexture('brick',24,24);
+    // ground tile — layered dirt with speckles + a grassy top with blades
+    g.clear();
+    g.fillStyle(0x6e4420); g.fillRect(0,0,24,24);
+    g.fillStyle(0x8a5a2b); g.fillRect(0,6,24,18);
+    g.fillStyle(0x5e3c1a); g.fillRect(2,12,4,3); g.fillRect(10,16,5,3); g.fillRect(17,10,4,3); g.fillRect(7,20,3,2); g.fillRect(19,19,3,2);
+    g.fillStyle(0x9a6a35); g.fillRect(4,9,2,2); g.fillRect(14,13,2,2); g.fillRect(20,16,2,2);
+    g.fillStyle(0x1da84a); g.fillRect(0,0,24,7);
+    g.fillStyle(0x2ecb5a); g.fillRect(0,4,24,1);
+    g.fillStyle(0x3dff6e); g.fillRect(0,0,24,3); g.fillRect(2,3,2,3); g.fillRect(8,3,2,4); g.fillRect(14,3,2,3); g.fillRect(20,3,2,4);
+    g.generateTexture('ground',24,24);
+    // brick platform tile — offset stone blocks with bevel highlights + mortar
+    g.clear();
+    g.fillStyle(0x2a1c3e); g.fillRect(0,0,24,24);
+    g.fillStyle(0x6b4a8f); g.fillRect(1,1,22,10); g.fillStyle(0x5a3d78); g.fillRect(1,13,22,10);
+    g.fillStyle(0x8464ab); g.fillRect(2,2,20,2); g.fillRect(2,14,20,2);
+    g.fillStyle(0x3f2a5c); g.fillRect(1,10,22,2); g.fillRect(1,22,22,1); g.fillRect(11,1,1,10); g.fillRect(6,13,1,10);
+    g.generateTexture('brick',24,24);
+    // shiny coin with a highlight
+    g.clear(); g.fillStyle(0x8a5e00); g.fillCircle(6,6,6); g.fillStyle(C.coin); g.fillCircle(6,6,5); g.fillStyle(0xfff0a0); g.fillCircle(4,4,1.6); g.fillStyle(0xb8860b); g.fillRect(5,3,2,6); g.generateTexture('coin',12,12);
     // moving platform (48x14 metal)
     g.clear(); g.fillStyle(C.moverDk); g.fillRect(0,0,48,14); g.fillStyle(C.mover); g.fillRect(1,1,46,9); g.fillStyle(C.moverDk); for(var mx=4;mx<48;mx+=8) g.fillRect(mx,10,4,3); g.generateTexture('mover',48,14);
     // spike (24x14)
