@@ -10379,6 +10379,12 @@ app.get("/curriculum", (req, res) => {
   res.type("html").send(html);
 });
 
+// Normie Quest — hidden feature (Phase 0 demo page). Self-contained, isolated
+// side project (a friend's NORMIE token game); shares nothing with CLKN code.
+// Mounted before the React catch-all so its explicit /normie-quest-x7 route wins.
+// Not in sitemap.xml (hardcoded list) and not linked anywhere — noindex/nofollow.
+app.use(require("./normie-quest/routes"));
+
 // -- Serve React app (the school) at /school + every non-root path via the catch-all --
 app.use(express.static(join(__dirname, "dist"), { index: false }));
 app.get("*", (req, res) => {
