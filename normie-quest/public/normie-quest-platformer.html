@@ -300,13 +300,16 @@ var Game = new Phaser.Class({
     function inGap(x){ for(var j=0;j<gaps.length;j++){ if(x>=gaps[j][0] && x<gaps[j][1]) return true; } return false; }
     for(var gx=0;gx<LEVEL_W;gx+=TILE){ if(!inGap(gx)) { this.platforms.create(gx+TILE/2,GY+TILE/2,'ground'); this.platforms.create(gx+TILE/2,GY+TILE/2+TILE,'ground'); } }
 
-    // floating brick platforms (x, count, y)
-    plat(360,3,H-96); plat(600,2,H-140);
-    plat(900,4,H-108); plat(1200,2,H-150);
-    plat(1500,3,H-120); plat(1800,3,H-90);
-    plat(2040,2,H-150); plat(2280,4,H-116);
-    plat(2760,3,H-96); plat(3000,2,H-140); plat(3180,2,H-96);
-    plat(3600,4,H-110); plat(3900,3,H-150);
+    // floating brick platforms (x, count, y = top surface).
+    // Every top surface sits at H-86..H-120 (60-96px above the ground) — all
+    // reachable from the ground with the tuned jump height (~103px), so no
+    // block is stranded out of reach.
+    plat(360,3,H-86);  plat(600,2,H-118);
+    plat(900,4,H-96);  plat(1200,2,H-120);
+    plat(1500,3,H-100); plat(1800,3,H-84);
+    plat(2040,2,H-112); plat(2280,4,H-98);
+    plat(2760,3,H-92); plat(3000,2,H-118); plat(3180,2,H-92);
+    plat(3600,4,H-104); plat(3900,3,H-118);
 
     // ---- coins (scattered, many over platforms + arcs over pits) ----
     this.coins=this.physics.add.group({allowGravity:false});
@@ -331,10 +334,11 @@ var Game = new Phaser.Class({
       self.tweens.add({targets:c,scale:1.7,duration:420,yoyo:true,repeat:-1});
     });
 
-    // ---- key (high platform, mid-level — the Zelda beat) ----
-    this.key = this.physics.add.sprite(2100, H-176, 'key').setScale(1.5);
+    // ---- key (the Zelda beat) — floats just above the reachable H-112 ledge
+    // at x~2064, so a hop from that platform grabs it. ----
+    this.key = this.physics.add.sprite(2064, H-140, 'key').setScale(1.5);
     this.key.body.setAllowGravity(false);
-    this.tweens.add({targets:this.key, y:H-188, duration:700, yoyo:true, repeat:-1, ease:'Sine.inOut'});
+    this.tweens.add({targets:this.key, y:H-150, duration:700, yoyo:true, repeat:-1, ease:'Sine.inOut'});
 
     // ---- door / goal (far right) ----
     this.door = this.physics.add.staticSprite(LEVEL_W-70, GY-8, 'door');
@@ -492,7 +496,7 @@ var Game = new Phaser.Class({
     this.prevJump=jump;
     // fire if a press happened recently (buffer) AND we were grounded recently (coyote)
     if(now-this.jumpBufferAt<130 && now-this.lastGround<110){
-      p.setVelocityY(-360);
+      p.setVelocityY(-430);                                // tuned so every platform is reachable
       this.jumpBufferAt=-9999; this.lastGround=-9999;      // consume both — no double jumps
       this.tweens.add({targets:p,scaleY:this.baseScale*1.15,scaleX:this.baseScale*0.9,duration:90,yoyo:true});
     }
