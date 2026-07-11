@@ -215,9 +215,10 @@ var Gate=new Phaser.Class({ Extends:Phaser.Scene,
 /* ---------- Game (data-driven, multi-level) ---------- */
 var Game=new Phaser.Class({ Extends:Phaser.Scene,
   initialize:function(){ Phaser.Scene.call(this,{key:'Game'}); },
-  init:function(d){ d=d||{}; this.levelIdx=d.level||0; this.score=d.score||0; this.lives=(d.lives!=null?d.lives:3); },
+  init:function(d){ d=d||{}; this.levelIdx=Phaser.Math.Clamp(d.level||0,0,LEVELS.length-1); this.score=d.score||0; this.lives=(d.lives!=null?d.lives:3); },
 
   create:function(){
+    this.physics.resume();   // CRITICAL: the Arcade world stays paused across scene restarts; every level/replay must un-pause it
     var self=this, i;
     var def=this.def=LEVELS[this.levelIdx];
     var LW=this.LW=def.width, th=THEMES[def.theme];
@@ -302,7 +303,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
 
     // input
     this.cursors=this.input.keyboard.createCursorKeys(); this.keys=this.input.keyboard.addKeys('W,A,S,D,SPACE');
-    this.input.addPointer(3); this.touch={left:false,right:false,jump:false};
+    if(!this.registry.get('nqPtr')){ this.input.addPointer(3); this.registry.set('nqPtr',1); }   // pointers are game-global; add once
+    this.touch={left:false,right:false,jump:false};
     var isTouch=this.sys.game.device.input.touch;
     var padBtn=function(x,label,set){
       var b=self.add.image(x,H-36,'btn').setScrollFactor(0).setScale(1.5).setAlpha(isTouch?0.9:0.28);
