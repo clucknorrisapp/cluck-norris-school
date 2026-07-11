@@ -348,6 +348,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.add.text(W/2,8,'WORLD '+def.name,{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#8f89b0'}).setOrigin(.5,0).setScrollFactor(0);
     this.hearts=[]; for(i=0;i<3;i++) this.hearts.push(this.add.image(14+i*20,30,'heart').setScale(1.2).setScrollFactor(0).setAlpha(i<this.lives?1:.16));
     this.keyIcon=this.add.image(W-16,30,'key').setScale(1.1).setScrollFactor(0).setAlpha(.2);
+    this.powerBarBg=this.add.rectangle(14,52,46,8,0x000000,0.55).setOrigin(0,0.5).setScrollFactor(0).setDepth(20).setStrokeStyle(1,0x8f89b0).setVisible(false);
+    this.powerBar=this.add.rectangle(15,52,44,5,0x3dff6e).setOrigin(0,0.5).setScrollFactor(0).setDepth(21).setVisible(false);
+    this.powerLabel=this.add.text(64,52,'',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffd23f'}).setOrigin(0,0.5).setScrollFactor(0).setDepth(21).setVisible(false);
 
     this.time.addEvent({delay:1000,loop:true,callback:function(){ if(this.over) return; this.timeLeft--; this.hudTime.setText(String(this.timeLeft)); if(this.timeLeft<=15) this.hudTime.setColor('#ff3860'); if(this.timeLeft<=0) this.gameOver('TIME UP'); },callbackScope:this});
 
@@ -531,6 +534,15 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     else if(now<this.bullUntil) p.setTint(0x99ff88);
     else if(now<this.caffeineUntil) p.setTint(0xfff2a0);
     else p.clearTint();
+
+    // active power-up indicator: label + shrinking timer bar
+    var pw=null;
+    if(now<this.moonUntil) pw=['MOON',this.moonUntil,9000,0xffd23f];
+    else if(now<this.shieldUntil) pw=['DIAMOND',this.shieldUntil,9000,0x66ddff];
+    else if(now<this.bullUntil) pw=['BULL',this.bullUntil,11000,0x3dff6e];
+    else if(now<this.caffeineUntil) pw=['CAFFEINE',this.caffeineUntil,11000,0xfff2a0];
+    if(pw){ var fr=Phaser.Math.Clamp((pw[1]-now)/pw[2],0,1); this.powerBar.width=44*fr; this.powerBar.fillColor=pw[3]; this.powerBar.setVisible(true); this.powerBarBg.setVisible(true); this.powerLabel.setText(pw[0]).setColor('#'+('000000'+pw[3].toString(16)).slice(-6)).setVisible(true); }
+    else { this.powerBar.setVisible(false); this.powerBarBg.setVisible(false); this.powerLabel.setVisible(false); }
 
     // --- procedural animation: bob when walking, lean+stretch in air, breathe when idle ---
     var bs=this.baseScale;
