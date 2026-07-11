@@ -229,8 +229,9 @@ var Title = new Phaser.Class({
     this.tweens.add({targets:p, alpha:.25, duration:600, yoyo:true, repeat:-1});
     this.add.text(W/2, 246, 'a Cluck Norris production', {fontFamily:'VT323', fontSize:'17px',
       color:'#8f89b0'}).setOrigin(.5);
-    this.input.once('pointerdown', function(){ this.scene.start('Gate'); }, this);
-    this.input.keyboard.once('keydown', function(){ this.scene.start('Gate'); }, this);
+    var go=function(){ if(this.started) return; this.started=true; this.scene.start('Gate'); };
+    this.input.once('pointerdown', go, this);
+    this.input.keyboard.once('keydown', go, this);
   }
 });
 
@@ -272,6 +273,8 @@ var Game = new Phaser.Class({
   create:function(){
     this.score=0; this.lives=3; this.timeLeft=90; this.over=false; this.hasKey=false;
     this.spawn={x:60,y:H-60};
+    this._doorHint=false;                          // reset per play (was leaking across restarts)
+    Phaser.Math.RND.sow(['normie-quest-v1']);      // deterministic RNG so enemy patrols replay identically
 
     this.physics.world.setBounds(0,0,LEVEL_W,H+400);
     this.cameras.main.setBounds(0,0,LEVEL_W,H);
@@ -338,6 +341,7 @@ var Game = new Phaser.Class({
     // at x~2064, so a hop from that platform grabs it. ----
     this.key = this.physics.add.sprite(2064, H-140, 'key').setScale(1.5);
     this.key.body.setAllowGravity(false);
+    this.key.body.setSize(40,40).setOffset(-13,-13);   // generous grab zone so the pickup isn't fiddly
     this.tweens.add({targets:this.key, y:H-150, duration:700, yoyo:true, repeat:-1, ease:'Sine.inOut'});
 
     // ---- door / goal (far right) ----
@@ -351,7 +355,7 @@ var Game = new Phaser.Class({
       e.setScale(30/e.height);
       e.body.setSize(e.width*0.70, e.height*0.80).setOffset(e.width*0.15, e.height*0.16);
       e.setCollideWorldBounds(true); e.setBounce(0);
-      e.dir=Phaser.Math.RND.pick([-1,1]); e.baseSpeed=40+Math.random()*20;
+      e.dir=Phaser.Math.RND.pick([-1,1]); e.baseSpeed=40+Phaser.Math.RND.between(0,20);
       e.homeX=s[0]; e.range=70;
     });
 
@@ -396,19 +400,22 @@ var Game = new Phaser.Class({
     var isTouch = this.sys.game.device.input.touch;
     // Movement pad: two large buttons in the bottom-left thumb zone.
     var padBtn=function(x,label,set){
-      var b=self.add.image(x,H-36,'btn').setScrollFactor(0).setScale(1.5).setInteractive().setAlpha(isTouch?0.9:0.28);
+      var b=self.add.image(x,H-36,'btn').setScrollFactor(0).setScale(1.5).setAlpha(isTouch?0.9:0.28);
       self.add.text(x,H-36,label,{fontFamily:'"Press Start 2P"',fontSize:'18px',color:'#3dff6e'}).setOrigin(.5).setScrollFactor(0).setAlpha(isTouch?1:0.35);
-      b.on('pointerdown',function(){set(true);}); b.on('pointerup',function(){set(false);});
-      b.on('pointerout',function(){set(false);}); b.on('pointerupoutside',function(){set(false);});
+      if(isTouch){ b.setInteractive();
+        b.on('pointerdown',function(){set(true);}); b.on('pointerup',function(){set(false);});
+        b.on('pointerout',function(){set(false);}); b.on('pointerupoutside',function(){set(false);}); }
     };
     padBtn(44,'<',function(v){self.touch.left=v;});
     padBtn(116,'>',function(v){self.touch.right=v;});
-    // Jump: the entire right ~55% of the screen is one big JUMP target — no need
-    // to hit a tiny button. Tap or hold anywhere on the right to jump.
-    var jz=self.add.rectangle(W*0.725,H*0.5,W*0.55,H,0x3dff6e,isTouch?0.04:0.0).setScrollFactor(0).setInteractive();
-    jz.on('pointerdown',function(){self.touch.jump=true;}); jz.on('pointerup',function(){self.touch.jump=false;});
-    jz.on('pointerout',function(){self.touch.jump=false;}); jz.on('pointerupoutside',function(){self.touch.jump=false;});
-    if(isTouch) self.add.text(W-64,H-24,'TAP = JUMP',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#3dff6e'}).setOrigin(.5).setScrollFactor(0).setAlpha(0.75);
+    // Jump: the entire right ~55% of the screen is one big JUMP target (touch only —
+    // gated so a desktop mouse click on the canvas doesn't fire a jump).
+    var jz=self.add.rectangle(W*0.725,H*0.5,W*0.55,H,0x3dff6e,isTouch?0.04:0.0).setScrollFactor(0);
+    if(isTouch){ jz.setInteractive();
+      jz.on('pointerdown',function(){self.touch.jump=true;}); jz.on('pointerup',function(){self.touch.jump=false;});
+      jz.on('pointerout',function(){self.touch.jump=false;}); jz.on('pointerupoutside',function(){self.touch.jump=false;});
+      self.add.text(W-64,H-24,'TAP = JUMP',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#3dff6e'}).setOrigin(.5).setScrollFactor(0).setAlpha(0.75);
+    }
 
     this.cameras.main.startFollow(this.player,true,0.12,0.12);
     this.cameras.main.setDeadzone(80,60);
@@ -416,27 +423,30 @@ var Game = new Phaser.Class({
     // jump feel: coyote time (jump just after leaving a ledge) + input buffering
     // (a tap just before landing still fires) — the two fixes that make platformer
     // jumping feel responsive instead of dropped.
-    this.lastGround=-9999; this.jumpBufferAt=-9999; this.prevJump=false;
+    this.lastGround=-9999; this.jumpBufferAt=-9999; this.prevJump=false; this.jumpsLeft=2; this.isJumping=false;
   },
 
-  grabCoin:function(player,coin){ coin.destroy(); this.addScore(10); },
+  grabCoin:function(player,coin){ this.tweens.killTweensOf(coin); coin.destroy(); this.addScore(10); },
 
   grabKey:function(player,key){
     if(this.hasKey) return;
-    this.hasKey=true; key.destroy(); this.keyIcon.setAlpha(1);
+    this.hasKey=true; this.tweens.killTweensOf(key); key.destroy(); this.keyIcon.setAlpha(1);
     this.addScore(50);
     this.flash('GOT THE KEY!','#ffd23f');
   },
 
   touchEnemy:function(player,enemy){
     if(this.over||player.invuln||!enemy.active) return;
-    var falling = player.body.velocity.y>40;
-    var above   = (player.body.bottom <= enemy.body.top + 12);
-    if(falling && above){
+    // Position-dominant stomp test: feet clearly on the enemy's head and not rising.
+    // Fixes slow-descent landings misreading as side-hits, and mid-bounce contact.
+    var onTop = (player.body.bottom <= enemy.body.top + 12) && player.body.velocity.y >= -20;
+    if(onTop){
       enemy.disableBody(true,true);
-      player.setVelocityY(-260);            // stomp bounce
+      player.setVelocityY(-300);            // stomp bounce (preserved by the variable-jump gate)
       this.addScore(20);
       this.cameras.main.shake(60,.006);
+      player.invuln=true;                   // brief grace so a second stacked enemy can't punish the bounce
+      this.time.delayedCall(140,function(){ if(player.active) player.invuln=false; },[],this);
     } else {
       this.hurt(player, enemy.x<player.x?1:-1);
     }
@@ -451,11 +461,16 @@ var Game = new Phaser.Class({
     }
   },
 
-  hurt:function(player,knockDir){
+  loseLife:function(reason){                        // single life-loss path so hearts + lives always agree
     this.lives--;
     if(this.hearts[this.lives]) this.hearts[this.lives].setAlpha(.16);
+    if(this.lives<=0) this.endGame(reason,false);
+  },
+
+  hurt:function(player,knockDir){
     this.cameras.main.shake(140,.012);
-    if(this.lives<=0){ this.endGame('WRECKED BY FUD', false); return; }
+    this.loseLife('WRECKED BY FUD');
+    if(this.over) return;
     player.invuln=true;
     player.setVelocity(knockDir*160,-160);
     this.tweens.add({targets:player,alpha:.25,duration:100,yoyo:true,repeat:8,
@@ -479,47 +494,62 @@ var Game = new Phaser.Class({
 
   update:function(){
     if(this.over) return;
-    var p=this.player, b=p.body;
+    var self=this, p=this.player, b=p.body;
     var left  = this.cursors.left.isDown  || this.keys.A.isDown || this.touch.left;
     var right = this.cursors.right.isDown || this.keys.D.isDown || this.touch.right;
     var jump  = this.cursors.up.isDown    || this.keys.W.isDown || this.keys.SPACE.isDown || this.touch.jump;
 
     var accel=900;
-    if(left && !right){ p.setAccelerationX(-accel); p.setFlipX(true); }
-    else if(right && !left){ p.setAccelerationX(accel); p.setFlipX(false); }
+    if(left && !right){ if(b.velocity.x>0) accel=2000; p.setAccelerationX(-accel); p.setFlipX(true); }
+    else if(right && !left){ if(b.velocity.x<0) accel=2000; p.setAccelerationX(accel); p.setFlipX(false); }
     else { p.setAccelerationX(0); p.setDragX(1600); }
 
     var onGround=b.blocked.down||b.touching.down;
     var now=this.time.now;
-    if(onGround) this.lastGround=now;
+    if(onGround){ this.lastGround=now; this.jumpsLeft=2; this.isJumping=false; }        // refill both jumps on landing
+    else if(now-this.lastGround>110 && this.jumpsLeft>1){ this.jumpsLeft=1; }           // fell off a ledge: forfeit the ground jump, keep the air jump
     if(jump && !this.prevJump) this.jumpBufferAt=now;      // rising edge = a fresh press
     this.prevJump=jump;
-    // fire if a press happened recently (buffer) AND we were grounded recently (coyote)
-    if(now-this.jumpBufferAt<130 && now-this.lastGround<110){
-      p.setVelocityY(-430);                                // tuned so every platform is reachable
-      this.jumpBufferAt=-9999; this.lastGround=-9999;      // consume both — no double jumps
+    // Double jump: a fresh buffered press fires while any jump remains. The ground jump
+    // gets coyote (jumpsLeft==2 within 110ms of ground); a second fresh press is the air jump.
+    if(now-this.jumpBufferAt<130 && this.jumpsLeft>0){
+      p.setVelocityY(-430);
+      this.jumpsLeft--; this.isJumping=true;
+      this.jumpBufferAt=-9999;
       this.tweens.add({targets:p,scaleY:this.baseScale*1.15,scaleX:this.baseScale*0.9,duration:90,yoyo:true});
     }
-    // variable jump height: cut the rise short when jump is released early
-    if(!jump && b.velocity.y<-120) p.setVelocityY(-120);
+    // variable jump height — cut ONLY jumps the player initiated (preserves stomp/knockback pops)
+    if(this.isJumping && !jump && b.velocity.y<-120) p.setVelocityY(-120);
+    if(b.velocity.y>=0) this.isJumping=false;
 
-    // enemy patrol
+    // enemy patrol — turn at patrol bounds, walls, AND ledges (so an enemy never walks
+    // off a platform edge or strolls into a pit and vanishes off-screen)
     this.enemies.children.iterate(function(e){
       if(!e||!e.active) return;
       if(e.x < e.homeX-e.range) e.dir=1;
       if(e.x > e.homeX+e.range) e.dir=-1;
       if(e.body.blocked.left) e.dir=1;
       if(e.body.blocked.right) e.dir=-1;
+      if(e.body.blocked.down){                          // only ledge-check while grounded
+        var ahead=e.x + e.dir*(e.body.width*0.5+4), below=e.body.bottom+6, ground=false;
+        self.platforms.children.iterate(function(t){
+          if(!t||ground) return;
+          if(ahead>=t.body.left && ahead<=t.body.right && below>=t.body.top && below<=t.body.bottom+2) ground=true;
+        });
+        if(!ground) e.dir=-e.dir;
+      }
       e.setVelocityX(e.dir*e.baseSpeed);
       e.setFlipX(e.dir>0);
     });
 
-    // pit death
+    // pit death — lose a life, respawn backed up onto solid ground with brief invuln
     if(p.y > H+80){
-      if(this.lives<=1){ this.endGame('FELL IN A PIT', false); return; }
-      this.lives--;
-      if(this.hearts[this.lives]) this.hearts[this.lives].setAlpha(.16);
-      p.setVelocity(0,0); p.setPosition(Math.max(this.spawn.x, this.cameras.main.scrollX+60), H-80);
+      this.loseLife('FELL IN A PIT');
+      if(this.over) return;
+      p.setVelocity(0,0);
+      p.setPosition(Math.max(this.spawn.x, p.x-260), H-100);   // pits are <=168 wide, so -260 clears them
+      p.invuln=true;
+      this.tweens.add({targets:p,alpha:.3,duration:90,yoyo:true,repeat:6,onComplete:function(){ p.alpha=1; p.invuln=false; }});
       this.cameras.main.flash(150,80,0,0);
     }
   }
@@ -541,8 +571,14 @@ var Over = new Phaser.Class({
       {fontFamily:'VT323',fontSize:'19px',color:'#8f89b0',align:'center'}).setOrigin(.5);
     var p=this.add.text(W/2,230,'PRESS TO BURN AGAIN',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
     this.tweens.add({targets:p,alpha:.25,duration:600,yoyo:true,repeat:-1});
-    this.input.once('pointerdown',function(){ this.scene.start('Gate'); },this);
-    this.input.keyboard.once('keydown',function(){ this.scene.start('Gate'); },this);
+    // Arm restart after a beat so a jump key still held from death doesn't instantly skip;
+    // guard against a pointer+key double-firing the transition.
+    var self=this; this.started=false;
+    var go=function(){ if(self.started) return; self.started=true; self.scene.start('Gate'); };
+    this.time.delayedCall(500,function(){
+      self.input.once('pointerdown', go);
+      self.input.keyboard.once('keydown', go);
+    });
   }
 });
 
