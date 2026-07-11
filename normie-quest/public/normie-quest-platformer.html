@@ -108,35 +108,38 @@ var THEMES=[
   { sky1:0x3a1226, sky2:0x1e0a14, hill:0x5c1e34 }    // 1-3 crimson keep
 ];
 
-// LEVELS — plat:[x,count,topY]  mover:[x,y,axis,range,speed]  enemy:[kind,x,y,range]
-//          spike:[x]  coin:[x,y]  key:[x,y]  door:x   (topY: bigger H-N = higher platform)
+// LEVELS — plat:[x,count,topY]  wall:[x,heightTiles]  enemy:[kind,x,y,range]
+//          spike:[x]  coin:[x,y]  key:[x,y]  door:x
+// Design rule: ground enemies at y~230 patrol the RUNNING LANE (you must stomp or
+// jump them); ghosts fly at y~212 (head height — jump over or stomp); wall columns
+// force jumps. No running under everything. Difficulty escalates 1-1 -> 1-3.
 var LEVELS=[
-  { name:'1-1', sub:'FIRST STEPS', time:75, theme:0, width:3200,
-    gaps:[[840,960],[1800,1944]],
-    plats:[[360,3,H-84],[720,2,H-110],[1140,3,H-96],[1500,2,H-108],[2040,3,H-90],[2460,2,H-110],[2820,3,H-96]],
-    movers:[],
-    spikes:[[1356],[1380]],
-    coins:[[384,H-118],[408,H-118],[900,H-66],[930,H-88],[960,H-66],[1176,H-130],[1200,H-130],[1860,H-66],[1890,H-88],[1920,H-66],[2076,H-124],[2484,H-144],[2856,H-130]],
-    enemies:[['jeet',430,H-120,60],['jeet',1160,H-126,50],['jeet',2060,H-120,60],['jeet',2840,H-126,50]],
-    key:[1524,H-130], door:3120 },
+  { name:'1-1', sub:'FIRST STEPS', time:80, theme:0, width:3200,
+    gaps:[[780,876],[1620,1740],[2420,2516]],
+    walls:[[520,2],[1200,2],[2060,3],[2740,2]],
+    plats:[[1500,2,H-120],[2300,3,H-96]],
+    spikes:[],
+    coins:[[540,H-72],[820,H-74],[848,H-96],[1200,H-74],[1524,H-160],[2064,H-98],[2340,H-124],[2364,H-124],[2760,H-74]],
+    enemies:[['jeet',360,230,110],['jeet',680,230,70],['jeet',1020,230,130],['ghost',1360,212,90],['jeet',1860,230,110],['jeet',2220,230,110],['ghost',2560,212,90],['jeet',2900,230,80]],
+    key:[1524,H-140], door:3100 },
 
-  { name:'1-2', sub:'FUD RISING', time:80, theme:1, width:3600,
-    gaps:[[720,864],[1560,1704],[2520,2664]],
-    plats:[[360,3,H-88],[1080,3,H-100],[1440,2,H-116],[1980,3,H-92],[2340,2,H-110],[3000,3,H-96]],
-    movers:[[792,H-64,'y',44,42],[1632,H-92,'x',78,50]],
-    spikes:[[1300],[1324],[2880],[2904]],
-    coins:[[792,H-116],[1116,H-134],[1476,H-150],[1632,H-132],[2016,H-126],[2364,H-144],[3036,H-130],[3060,H-130]],
-    enemies:[['paper',430,H-120,60],['ghost',1200,H-150,90],['paper',2010,H-120,60],['ghost',2420,H-150,90],['jeet',3020,H-126,50]],
-    key:[1476,H-152], door:3480 },
+  { name:'1-2', sub:'FUD RISING', time:85, theme:1, width:3600,
+    gaps:[[720,840],[1500,1620],[2340,2460],[3060,3156]],
+    walls:[[480,2],[1080,3],[1860,2],[2820,2]],
+    plats:[[2560,2,H-120],[1300,2,H-96]],
+    spikes:[[1320],[1344],[2640],[2664]],
+    coins:[[500,H-74],[1104,H-98],[1300,H-124],[1680,H-74],[2004,H-96],[2560,H-160],[2900,H-74],[3260,H-96]],
+    enemies:[['paper',360,230,100],['jeet',640,230,70],['paper',980,230,90],['ghost',1200,212,80],['paper',1680,230,100],['ghost',1980,212,90],['jeet',2280,230,80],['paper',2560,230,70],['ghost',2960,212,90],['paper',3280,230,70]],
+    key:[2584,H-140], door:3480 },
 
-  { name:'1-3', sub:'THE RUG KEEP', time:88, theme:2, width:4000,
-    gaps:[[600,744],[1320,1464],[2160,2304],[3000,3120]],
-    plats:[[360,2,H-96],[900,3,H-92],[1140,2,H-112],[1560,3,H-100],[1920,2,H-110],[2400,3,H-96],[2760,2,H-108],[3240,3,H-100]],
-    movers:[[672,H-64,'y',50,50],[2232,H-64,'y',54,52]],
-    spikes:[[840],[864],[1860],[1884],[1908],[2700],[2724]],
-    coins:[[936,H-124],[1176,H-146],[1596,H-134],[1956,H-146],[2436,H-128],[2796,H-142],[3276,H-134],[3300,H-134]],
-    enemies:[['bot',430,H-120,60],['ghost',1000,H-150,80],['paper',1600,H-128,60],['bot',2010,H-120,50],['ghost',2500,H-150,90],['bot',2770,H-140,44],['paper',3260,H-126,60]],
-    key:[1176,H-150], door:3900 }
+  { name:'1-3', sub:'THE RUG KEEP', time:90, theme:2, width:4000,
+    gaps:[[600,720],[1380,1500],[2160,2280],[2940,3060]],
+    walls:[[440,2],[960,3],[1680,2],[1980,3],[2520,2],[3300,2]],
+    plats:[[1180,2,H-120],[3480,2,H-96]],
+    spikes:[[840],[864],[1800],[1824],[2700],[2724]],
+    coins:[[480,H-74],[984,H-98],[1204,H-160],[1680,H-74],[2004,H-98],[2520,H-74],[3204,H-98],[3324,H-74]],
+    enemies:[['bot',360,230,90],['paper',680,230,70],['ghost',900,212,70],['bot',1120,230,90],['ghost',1560,212,90],['paper',1720,230,80],['bot',2060,230,60],['ghost',2340,212,90],['paper',2560,230,70],['bot',2820,230,70],['ghost',3140,212,90],['bot',3360,230,80]],
+    key:[1204,H-140], door:3880 }
 ];
 
 /* ---------- Boot ---------- */
@@ -242,6 +245,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     for(var gx=0;gx<LW;gx+=TILE){ if(!inGap(gx)){ this.platforms.create(gx+TILE/2,GY+TILE/2,'ground'); this.platforms.create(gx+TILE/2,GY+TILE/2+TILE,'ground'); } }
     // brick platforms
     (def.plats||[]).forEach(function(pl){ for(var k=0;k<pl[1];k++) self.platforms.create(pl[0]+k*TILE+TILE/2,pl[2]+TILE/2,'brick'); });
+    // wall columns (stacked bricks on the ground) — force the player to jump
+    (def.walls||[]).forEach(function(wl){ for(var k=0;k<wl[1];k++) self.platforms.create(wl[0]+TILE/2, GY-k*TILE-TILE/2, 'brick'); });
 
     // moving platforms
     this.movers=this.physics.add.group({allowGravity:false,immovable:true});
