@@ -317,20 +317,21 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var bs=this.hb(this.add.text(W/2,128,def.sub,{fontFamily:'VT323',fontSize:'22px',color:'#3dff6e'}).setOrigin(.5));
     this.tweens.add({targets:[bn,bs],alpha:0,delay:1100,duration:700,onComplete:function(){ bn.destroy(); bs.destroy(); }});
 
-    // input
+    // input — touch is driven by RAW POINTER SCREEN-ZONES in update() (see the poll there),
+    // NOT interactive hit-areas: the HUD lives in a scrollFactor-0 container under a 2x zoom
+    // where per-object hit testing is unreliable. Pointer coords are zoom/container-immune.
     this.cursors=this.input.keyboard.createCursorKeys(); this.keys=this.input.keyboard.addKeys('W,A,S,D,SPACE');
-    if(!this.registry.get('nqPtr')){ this.input.addPointer(3); this.registry.set('nqPtr',1); }   // pointers are game-global; add once
+    if(!this.registry.get('nqPtr')){ this.input.addPointer(4); this.registry.set('nqPtr',1); }   // extra pointers for multi-touch; game-global, add once
     this.touch={left:false,right:false,jump:false};
-    var isTouch=this.sys.game.device.input.touch;
-    var padBtn=function(x,label,set){
-      var b=self.hb(self.add.image(x,H-36,'btn').setScale(1.5).setAlpha(isTouch?0.9:0.28));
-      self.hb(self.add.text(x,H-36,label,{fontFamily:'"Press Start 2P"',fontSize:'18px',color:'#3dff6e'}).setOrigin(.5).setAlpha(isTouch?1:0.35));
-      if(isTouch){ b.setInteractive(); b.on('pointerdown',function(){set(true);}); b.on('pointerup',function(){set(false);}); b.on('pointerout',function(){set(false);}); b.on('pointerupoutside',function(){set(false);}); }
+    var isTouch=this.isTouch=(this.sys.game.device.input.touch||(navigator.maxTouchPoints>0)||('ontouchstart' in window));
+    // on-screen control affordances (visual only — actual input is polled below)
+    var padBtn=function(x,label){
+      self.hb(self.add.image(x,H-34,'btn').setScale(1.7).setAlpha(isTouch?0.55:0.2));
+      self.hb(self.add.text(x,H-34,label,{fontFamily:'"Press Start 2P"',fontSize:'20px',color:'#3dff6e'}).setOrigin(.5).setAlpha(isTouch?0.95:0.28));
     };
-    padBtn(44,'<',function(v){self.touch.left=v;}); padBtn(116,'>',function(v){self.touch.right=v;});
-    var jz=self.hb(self.add.rectangle(W*0.725,H*0.5,W*0.55,H,0x3dff6e,isTouch?0.04:0.0));
-    if(isTouch){ jz.setInteractive(); jz.on('pointerdown',function(){self.touch.jump=true;}); jz.on('pointerup',function(){self.touch.jump=false;}); jz.on('pointerout',function(){self.touch.jump=false;}); jz.on('pointerupoutside',function(){self.touch.jump=false;});
-      self.hb(self.add.text(W-64,H-24,'TAP = JUMP',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#3dff6e'}).setOrigin(.5).setAlpha(0.75)); }
+    padBtn(40,'<'); padBtn(112,'>');
+    self.hb(self.add.rectangle(W*0.75,H*0.5,W*0.5,H,0x3dff6e,isTouch?0.05:0.0));
+    if(isTouch) self.hb(self.add.text(W-58,H-22,'TAP = JUMP',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#3dff6e'}).setOrigin(.5).setAlpha(0.7));
 
     this.cameras.main.startFollow(this.player,true,0.12,0.12); this.cameras.main.setDeadzone(80,60);
     this.lastGround=-9999; this.jumpBufferAt=-9999; this.prevJump=false; this.jumpsLeft=2; this.isJumping=false;
@@ -468,6 +469,16 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   update:function(){
     if(this.over) return;
     var self=this, p=this.player, b=p.body, now=this.time.now;
+    // --- touch: read raw pointer screen-zones (immune to zoom / HUD container transforms) ---
+    // left third bottom = LEFT, next third bottom = RIGHT, right half (any height) = JUMP.
+    this.touch.left=this.touch.right=this.touch.jump=false;
+    var gw=this.scale.width, gh=this.scale.height, pts=this.input.manager.pointers;
+    for(var pi=0;pi<pts.length;pi++){ var ptr=pts[pi];
+      if(!ptr||!ptr.isDown||!ptr.wasTouch) continue;            // wasTouch: desktop mouse never moves the player
+      var fx=ptr.x/gw, fy=ptr.y/gh;
+      if(fx>=0.46){ this.touch.jump=true; }
+      else if(fy>0.42){ if(fx<0.20) this.touch.left=true; else if(fx<0.42) this.touch.right=true; }
+    }
     var left=this.cursors.left.isDown||this.keys.A.isDown||this.touch.left;
     var right=this.cursors.right.isDown||this.keys.D.isDown||this.touch.right;
     var jump=this.cursors.up.isDown||this.keys.W.isDown||this.keys.SPACE.isDown||this.touch.jump;
