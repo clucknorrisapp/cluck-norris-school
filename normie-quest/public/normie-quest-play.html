@@ -114,27 +114,42 @@ var LEVELS=[
     enemies:[['bot',340,230,90],['paper',660,230,70],['ghost',900,212,70],['bot',1140,230,90],['ghost',1500,212,90],['paper',1560,230,80],['bot',1960,230,60],['ghost',2340,212,90],['paper',2680,230,70],['bot',2760,230,70],['ghost',3140,212,90],['bot',3480,230,80],['bot',4000,230,70],['ghost',4300,212,90],['paper',4560,230,90],['bot',5300,230,70],['ghost',5700,212,90]],
     key:[1164,H-150], door:6300 },
 
-  // WORLD 2 — Normie Casino: a normal stage with a slot machine you "fire it in" for bonus coins.
-  { name:'2-2', sub:'NORMIE CASINO', time:120, theme:4, width:4200,
-    gaps:[[900,1000],[1900,2000],[3000,3100]],
-    walls:[[500,3,'brick',4],[1300,3,'steel',3],[2400,4,'brick',3],[3300,3,'steel',4]],
-    plats:[[950,2,H-96,'brick'],[1950,2,H-96,'steel'],[3050,2,H-96,'brick'],[1650,2,H-130,'steel']],
+  // WORLD 2 — the Sand Lands. Desert stage with green mini-worm hazards.
+  { name:'2-1', sub:'THE SAND LANDS', time:120, theme:3, width:5200,
+    gaps:[[900,1000],[1800,1900],[2800,2900],[3800,3900]],
+    walls:[[500,3,'stone',4],[1300,3,'steel',3],[2200,4,'stone',3],[3100,3,'steel',4],[4200,3,'stone',3]],
+    plats:[[950,2,H-96,'stone'],[1600,2,H-130,'stone'],[1850,2,H-96,'steel'],[2850,2,H-96,'stone'],[3850,2,H-96,'steel']],
     spikes:[],
-    powerups:[['moon',700,230],['diamond',1180,230],['candle',3600,H-124]],
-    airdrops:[[1200,H-72]],
-    coins:[[512,158],[560,158],[750,196],[1312,158],[1360,158],[1700,196],[2412,134],[2460,134],[2700,196],[3312,158],[3360,158],[3900,196]],
-    enemies:[['bot',360,230,90],['paper',680,230,70],['ghost',1120,212,80],['bot',1520,230,90],['paper',2600,230,70],['ghost',2850,212,90],['bot',3500,230,80],['paper',3900,230,70]],
+    powerups:[['bull',700,230],['diamond',1950,230],['moon',3400,230],['candle',4600,H-124]],
+    airdrops:[[1200,H-72],[3600,H-72]],
+    coins:[[512,158],[560,158],[800,196],[1312,158],[1360,158],[1700,196],[2212,134],[2260,134],[2650,196],[3112,158],[3160,158],[3700,196],[4212,158],[4260,158],[4800,196]],
+    enemies:[['bot',360,230,90],['paper',680,230,70],['ghost',1100,212,80],['bot',1500,230,90],['paper',2000,230,70],['ghost',2400,212,90],['bot',2600,230,80],['paper',3300,230,70],['ghost',3600,212,90],['bot',4000,230,80],['paper',4400,230,70]],
+    miniworms:[1150,2450,3550,4700],
+    key:[1600,H-150], door:5080 },
+
+  // WORLD 2 — Normie Casino: a normal stage with a slot machine you "fire it in" for bonus coins.
+  { name:'2-2', sub:'NORMIE CASINO', time:130, theme:4, width:5200,
+    gaps:[[900,1000],[1900,2000],[3000,3100],[4200,4300]],
+    walls:[[500,3,'brick',4],[1300,3,'steel',3],[2400,4,'brick',3],[3300,3,'steel',4],[4450,3,'brick',4]],
+    plats:[[950,2,H-96,'brick'],[1950,2,H-96,'steel'],[3050,2,H-96,'brick'],[1650,2,H-130,'steel'],[4250,2,H-96,'steel']],
+    spikes:[],
+    powerups:[['moon',700,230],['diamond',1180,230],['candle',3600,H-124],['bull',4800,230]],
+    airdrops:[[1200,H-72],[3900,H-72]],
+    coins:[[512,158],[560,158],[750,196],[1312,158],[1360,158],[1700,196],[2412,134],[2460,134],[2700,196],[3312,158],[3360,158],[3900,196],[4462,158],[4510,158],[4900,196]],
+    enemies:[['bot',360,230,90],['paper',680,230,70],['ghost',1120,212,80],['bot',1520,230,90],['paper',2600,230,70],['ghost',2850,212,90],['bot',3500,230,80],['paper',3900,230,70],['ghost',4600,212,90],['bot',4950,230,80]],
     miniworms:[1750,3700], slot:2150,
-    key:[1650,H-150], door:4100 },
+    key:[1650,H-150], door:5080 },
 
   // WORLD 2 boss arena (level 2-1 will slot in BEFORE this once built). Flat desert arena:
   // grab the key, reach the portal, and the WORMHOLE erupts. Weak point = the blue back shards.
-  { name:'2-3', sub:'THE WORMHOLE', time:120, theme:3, width:1240, boss:true, bossType:'wormhole',
-    gaps:[], walls:[],
-    plats:[[340,2,H-96,'stone'],[640,2,H-104,'stone'],[900,2,H-96,'stone']],
-    spikes:[], powerups:[], airdrops:[[600,H-72]],
-    coins:[], enemies:[],
-    key:[200,H-70], door:1120 }
+  { name:'2-3', sub:'THE WORMHOLE', time:140, theme:3, width:2500, boss:true, bossType:'wormhole',
+    gaps:[[650,750],[1250,1350]],
+    walls:[[420,2,'stone',3],[980,2,'steel',3]],
+    plats:[[670,2,H-96,'stone'],[1270,2,H-96,'steel'],[1900,2,H-104,'stone'],[2180,2,H-96,'stone']],
+    spikes:[], powerups:[['candle',1560,H-124]], airdrops:[[2050,H-72]],
+    coins:[[300,196],[860,196],[1550,196],[1912,158],[2192,158],[2350,196]],
+    enemies:[], miniworms:[520,1080,1480],
+    key:[1060,H-140], door:2380 }
 ];
 
 /* ---------- Boot ---------- */
