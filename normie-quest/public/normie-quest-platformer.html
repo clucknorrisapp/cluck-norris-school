@@ -384,24 +384,35 @@ var Game = new Phaser.Class({
     this.cursors=this.input.keyboard.createCursorKeys();
     this.keys=this.input.keyboard.addKeys('W,A,S,D,SPACE');
 
-    // ---- input: on-screen touch buttons (mobile) ----
+    // ---- input: touch controls (mobile) ----
+    // CRITICAL: allow several simultaneous touches so MOVE + JUMP work together
+    // (with a single pointer, tapping jump cancels the direction you're holding).
+    this.input.addPointer(3);
     this.touch={left:false,right:false,jump:false};
     var isTouch = this.sys.game.device.input.touch;
-    var mkBtn=function(x,y,label,onDown,onUp){
-      var b=self.add.image(x,y,'btn').setScrollFactor(0).setInteractive({useHandCursor:true}).setAlpha(0.85);
-      var t=self.add.text(x,y,label,{fontFamily:'"Press Start 2P"',fontSize:'12px',color:'#3dff6e'}).setOrigin(.5).setScrollFactor(0);
-      b.on('pointerdown',onDown); b.on('pointerup',onUp); b.on('pointerout',onUp);
-      if(!isTouch){ b.setAlpha(0.28); t.setAlpha(0.35); }
-      return b;
+    // Movement pad: two large buttons in the bottom-left thumb zone.
+    var padBtn=function(x,label,set){
+      var b=self.add.image(x,H-36,'btn').setScrollFactor(0).setScale(1.5).setInteractive().setAlpha(isTouch?0.9:0.28);
+      self.add.text(x,H-36,label,{fontFamily:'"Press Start 2P"',fontSize:'18px',color:'#3dff6e'}).setOrigin(.5).setScrollFactor(0).setAlpha(isTouch?1:0.35);
+      b.on('pointerdown',function(){set(true);}); b.on('pointerup',function(){set(false);});
+      b.on('pointerout',function(){set(false);}); b.on('pointerupoutside',function(){set(false);});
     };
-    mkBtn(30,H-28,'<',function(){self.touch.left=true;},function(){self.touch.left=false;});
-    mkBtn(78,H-28,'>',function(){self.touch.right=true;},function(){self.touch.right=false;});
-    mkBtn(W-34,H-28,'^',function(){self.touch.jump=true;},function(){self.touch.jump=false;});
+    padBtn(44,'<',function(v){self.touch.left=v;});
+    padBtn(116,'>',function(v){self.touch.right=v;});
+    // Jump: the entire right ~55% of the screen is one big JUMP target — no need
+    // to hit a tiny button. Tap or hold anywhere on the right to jump.
+    var jz=self.add.rectangle(W*0.725,H*0.5,W*0.55,H,0x3dff6e,isTouch?0.04:0.0).setScrollFactor(0).setInteractive();
+    jz.on('pointerdown',function(){self.touch.jump=true;}); jz.on('pointerup',function(){self.touch.jump=false;});
+    jz.on('pointerout',function(){self.touch.jump=false;}); jz.on('pointerupoutside',function(){self.touch.jump=false;});
+    if(isTouch) self.add.text(W-64,H-24,'TAP = JUMP',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#3dff6e'}).setOrigin(.5).setScrollFactor(0).setAlpha(0.75);
 
     this.cameras.main.startFollow(this.player,true,0.12,0.12);
     this.cameras.main.setDeadzone(80,60);
 
-    this.jumpHeld=false;
+    // jump feel: coyote time (jump just after leaving a ledge) + input buffering
+    // (a tap just before landing still fires) — the two fixes that make platformer
+    // jumping feel responsive instead of dropped.
+    this.lastGround=-9999; this.jumpBufferAt=-9999; this.prevJump=false;
   },
 
   grabCoin:function(player,coin){ coin.destroy(); this.addScore(10); },
@@ -475,10 +486,17 @@ var Game = new Phaser.Class({
     else { p.setAccelerationX(0); p.setDragX(1600); }
 
     var onGround=b.blocked.down||b.touching.down;
-    if(jump && onGround && !this.jumpHeld){ p.setVelocityY(-360); this.jumpHeld=true;
-      this.tweens.add({targets:p,scaleY:this.baseScale*1.15,scaleX:this.baseScale*0.9,duration:90,yoyo:true}); }
-    if(!jump) this.jumpHeld=false;
-    // variable jump height: cut upward velocity when button released early
+    var now=this.time.now;
+    if(onGround) this.lastGround=now;
+    if(jump && !this.prevJump) this.jumpBufferAt=now;      // rising edge = a fresh press
+    this.prevJump=jump;
+    // fire if a press happened recently (buffer) AND we were grounded recently (coyote)
+    if(now-this.jumpBufferAt<130 && now-this.lastGround<110){
+      p.setVelocityY(-360);
+      this.jumpBufferAt=-9999; this.lastGround=-9999;      // consume both — no double jumps
+      this.tweens.add({targets:p,scaleY:this.baseScale*1.15,scaleX:this.baseScale*0.9,duration:90,yoyo:true});
+    }
+    // variable jump height: cut the rise short when jump is released early
     if(!jump && b.velocity.y<-120) p.setVelocityY(-120);
 
     // enemy patrol
