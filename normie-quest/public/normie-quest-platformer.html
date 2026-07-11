@@ -118,7 +118,6 @@ var LEVELS=[
     airdrops:[[1200,H-118],[3500,H-72]],
     coins:[[472,158],[520,158],[700,196],[1312,158],[1360,158],[1500,196],[2212,134],[2260,134],[2680,196],[3012,158],[3060,158],[3600,196],[3912,158],[3960,158],[4500,196],[4812,158],[4860,158],[5300,196]],
     enemies:[['paper',340,230,100],['jeet',700,230,70],['ghost',1000,212,80],['paper',1120,230,90],['paper',1500,230,100],['ghost',1900,212,90],['jeet',2400,230,80],['paper',2680,230,70],['ghost',2900,212,90],['paper',3220,230,70],['bot',3600,230,80],['ghost',3820,212,90],['paper',4120,230,90],['bot',4500,230,80]],
-    slot:2650, slotTheme:'lucky7',
     key:[1624,H-150], door:5680 },
 
   { name:'1-3', sub:"THE RUG KING'S KEEP", time:135, theme:2, width:6400, boss:true,
@@ -479,6 +478,11 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.player.body.setSize(this.player.width*0.60,this.player.height*0.90).setOffset(this.player.width*0.20,this.player.height*0.08);
     this.player.setCollideWorldBounds(true); this.player.setMaxVelocity(240,600);
     this.playerGlow=this.addGlow(this.player,0x66ccff,0);   // premium aura, fires up under power
+    // GIGA CHAD mode: Normie stays Normie; a big shadowy chad figure looms behind him (a
+    // "channeled power" silhouette) instead of a low-quality full sprite-swap. Hidden by default.
+    this.gigaShadowScale = this.textures.exists('omegachad') ? 66/this.textures.get('omegachad').getSourceImage().height : 1;
+    this.gigaShadow = this.add.image(this.spawn.x, this.spawn.y, 'omegachad').setDepth(6).setVisible(false).setTint(0x140a24).setAlpha(0.42);
+    if(this.gigaShadow.postFX){ try{ this.gigaShadow.postFX.addGlow(0xffa020, 4, 0, false, 0.1, 14); }catch(e){} }
 
     // collisions
     this.physics.add.collider(this.player,this.platforms);
@@ -1030,33 +1034,31 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
 
     // --- frame animation: swap Normie's pose sprite by state (idle / run cycle / jump) ---
     // all four frames share one canvas size, so setTexture keeps scale + body constant.
-    // While OMEGA CHAD is active, Normie IS the chad — hold his single transform sprite.
-    if(omega){
-      if(p.texture.key!=='omegachad') p.setTexture('omegachad');
-    } else {
-      var animKey = !onGround ? 'njump'
-                  : (Math.abs(b.velocity.x)>25 ? ((Math.floor(now/(fast?70:100))%2) ? 'nrun2':'nrun1')
-                  : 'normie');
-      if(p.texture.key!==animKey) p.setTexture(animKey);
-    }
+    // Normie ALWAYS stays Normie — even in GIGA CHAD mode (the chad appears as a shadow behind him).
+    var animKey = !onGround ? 'njump'
+                : (Math.abs(b.velocity.x)>25 ? ((Math.floor(now/(fast?70:100))%2) ? 'nrun2':'nrun1')
+                : 'normie');
+    if(p.texture.key!==animKey) p.setTexture(animKey);
 
     // --- procedural animation: bob when walking, lean+stretch in air, breathe when idle ---
-    if(omega){
-      // Omega Chad: bigger, upright, a subtle power-breathe; lean in the air. Scale from HIS art.
-      var obs=this.omegaScale*(1+Math.sin(now/260)*0.03);
-      p.setRotation(!onGround?Phaser.Math.Clamp(b.velocity.x/2600,-0.14,0.14):0);
-      p.setScale(obs);
+    var bs=this.baseScale*this.pscale.v;
+    if(!onGround){
+      p.setRotation(Phaser.Math.Clamp(b.velocity.x/2600,-0.12,0.12));
+      var sy=b.velocity.y<0?1.10:0.93; p.setScale(bs*(2-sy), bs*sy);
+    } else if(Math.abs(b.velocity.x)>25){
+      var cyc=now/(fast?52:82); p.setRotation(Math.sin(cyc)*0.05);
+      var pl=Math.abs(Math.sin(cyc)); p.setScale(bs*(1-pl*0.02), bs*(1+pl*0.035));
     } else {
-      var bs=this.baseScale*this.pscale.v;
-      if(!onGround){
-        p.setRotation(Phaser.Math.Clamp(b.velocity.x/2600,-0.12,0.12));
-        var sy=b.velocity.y<0?1.10:0.93; p.setScale(bs*(2-sy), bs*sy);
-      } else if(Math.abs(b.velocity.x)>25){
-        var cyc=now/(fast?52:82); p.setRotation(Math.sin(cyc)*0.05);
-        var pl=Math.abs(Math.sin(cyc)); p.setScale(bs*(1-pl*0.02), bs*(1+pl*0.035));
-      } else {
-        p.setRotation(0); var br=Math.sin(now/500)*0.02; p.setScale(bs*(1-br), bs*(1+br));
-      }
+      p.setRotation(0); var br=Math.sin(now/500)*0.02; p.setScale(bs*(1-br), bs*(1+br));
+    }
+
+    // GIGA CHAD: loom a big shadowy chad figure behind Normie (channeled-power silhouette)
+    if(this.gigaShadow){
+      if(omega){
+        this.gigaShadow.setVisible(true).setPosition(p.x, p.y-3).setFlipX(p.flipX);
+        this.gigaShadow.setScale(this.gigaShadowScale*(1+Math.sin(now/150)*0.05));
+        this.gigaShadow.setAlpha(0.30+0.20*Math.abs(Math.sin(now/210)));
+      } else if(this.gigaShadow.visible){ this.gigaShadow.setVisible(false); }
     }
 
     // moving platforms + rider carry
