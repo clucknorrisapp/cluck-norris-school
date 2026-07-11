@@ -131,7 +131,7 @@ var LEVELS=[
     gaps:[], walls:[],
     plats:[[340,2,H-96,'stone'],[640,2,H-104,'stone'],[900,2,H-96,'stone']],
     spikes:[], powerups:[], airdrops:[[600,H-72]],
-    coins:[], enemies:[], miniworms:[440,820],
+    coins:[], enemies:[],
     key:[200,H-70], door:1120 }
 ];
 
@@ -635,24 +635,18 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     wm.body.setAllowGravity(false); wm.setImmovable(true); wm.setDepth(7); wm.invuln=true; wm.setVisible(false);
     wm.body.setSize(wm.width*0.6, wm.height*0.7).setOffset(wm.width*0.2, wm.height*0.24);
     this.wormUpY=GY - wm.displayHeight/2 + 22; this.wormDownY=GY + wm.displayHeight/2 + 16;
-    this.physics.add.overlap(this.player, wm, this.wormTouch, null, this);
+    // NOTE: hits are checked MANUALLY in wormTick (a physics overlap doesn't track a tweened
+    // immovable body, which is why the fight used to be impossible to win).
     var g=this.addGlow(wm,0x2ea8ff,4); if(g) this.tweens.add({targets:g,outerStrength:11,duration:500,yoyo:true,repeat:-1,ease:'Sine.inOut'});
     // telegraph mound (a stretched ground tile that swells before an eruption)
     this.mound=this.add.image(cx,GY,'ground').setDepth(5).setVisible(false).setTint(0xc96a2a);
-    // HUD pips + label
+    // HUD pips + label + a PERSISTENT how-to hint (stays up the whole fight)
     this.bossPips=[]; for(var i=0;i<3;i++) this.bossPips.push(this.hb(this.add.image(W/2-24+i*24,22,'heart').setScale(1.4).setDepth(40).setTint(0x66ddff)));
-    this.hb(this.add.text(W/2,42,'WORMHOLE',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#66ddff'}).setOrigin(.5,0).setDepth(40));
-    this.powerBanner('WORMHOLE','IT ERUPTS FROM THE SAND — JUMP THE BLUE SHARDS x3','#66ddff');
-    this.wormState='wait'; this.wormNextAt=this.time.now+1400; this.wormTargetX=cx;
-  },
-  wormTouch:function(player,wm){
-    if(this.over||!wm.visible||wm.invuln||this.wormState!=='up') return;
-    var now=this.time.now, b=player.body;
-    if(now<this.moonUntil){ this.wormHit(); return; }
-    var airborne=!(b.blocked.down||b.touching.down);
-    if(airborne){ player.setVelocityY(-320); this.wormHit(); return; }   // leap into the shards to damage it
-    if(player.invuln||now<this.shieldUntil) return;
-    this.hurt(player, wm.x<player.x?1:-1);                                // touched it on the ground → hurt
+    this.hb(this.add.text(W/2,40,'WORMHOLE',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#66ddff'}).setOrigin(.5,0).setDepth(40));
+    this.wormHint=this.hb(this.add.text(W/2,56,'DODGE THE MOUND, THEN JUMP INTO THE BLUE SHARDS!',{fontFamily:'VT323',fontSize:'16px',color:'#66ddff'}).setOrigin(.5,0).setDepth(40));
+    this.tweens.add({targets:this.wormHint,alpha:0.4,duration:700,yoyo:true,repeat:-1});
+    this.powerBanner('WORMHOLE','IT ERUPTS FROM THE SAND — JUMP INTO THE BLUE SHARDS x3','#66ddff');
+    this.wormState='wait'; this.wormNextAt=this.time.now+1600; this.wormTargetX=cx;
   },
   wormHit:function(){
     var wm=this.worm; if(!wm||wm.invuln) return; wm.invuln=true;
@@ -671,24 +665,36 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.time.delayedCall(2300, function(){ this.advanceLevel(); },[],this);
   },
   wormTick:function(now){
-    if(this.over||!this.worm) return; var self=this, wm=this.worm, p=this.player, st=this.wormState;
-    if(st==='wait' && now>this.wormNextAt){
+    if(this.over||!this.worm) return; var wm=this.worm, p=this.player, st=this.wormState;
+    // --- MANUAL hit check (reliable — a physics overlap can't track a tweened body) ---
+    if(st==='up' && !wm.invuln){
+      var pb=p.body, hw=wm.displayWidth*0.36, htop=wm.y-wm.displayHeight*0.22;
+      if(pb.right>wm.x-hw && pb.left<wm.x+hw && pb.bottom>htop && pb.top<GY+8){
+        if(now<this.moonUntil){ this.wormHit(); }
+        else if(!(pb.blocked.down||pb.touching.down)){ p.setVelocityY(-300); this.wormHit(); }   // airborne = leap into the shards = HIT
+        else { p.setVelocityX((p.x<wm.x?-1:1)*150); }   // on the ground = shoved back, no damage (so you learn to jump)
+      }
+    }
+    // --- phase machine (fully TIMESTAMP-driven so it can never get stuck) ---
+    if(now < this.wormNextAt) return;
+    if(st==='wait'){
       this.wormTargetX=Phaser.Math.Clamp(p.x+Phaser.Math.Between(-70,70), 150, this.def.width-150);
       this.mound.setPosition(this.wormTargetX, GY-2).setScale(0.6,0.4).setVisible(true);
       this.tweens.add({targets:this.mound, scaleX:2.4, scaleY:0.8, duration:820, ease:'Quad.out'});
-      this.wormState='telegraph'; this.wormNextAt=now+860;
-    } else if(st==='telegraph' && now>this.wormNextAt){
+      this.wormState='telegraph'; this.wormNextAt=now+880;
+    } else if(st==='telegraph'){
       this.mound.setVisible(false);
       wm.setPosition(this.wormTargetX, this.wormDownY).setVisible(true).setAngle(0).setAlpha(1); wm.invuln=false;
-      // erupting under a grounded player hurts them (dodge the mound!)
-      var pb=p.body, grounded=pb.blocked.down||pb.touching.down;
+      var grounded=p.body.blocked.down||p.body.touching.down;   // erupting under a grounded player hurts (dodge!)
       if(grounded && Math.abs(p.x-this.wormTargetX)<wm.displayWidth*0.45 && !p.invuln && now>=this.shieldUntil) this.hurt(p, p.x<this.wormTargetX?-1:1);
       this.cameras.main.shake(220,.015);
-      this.wormState='erupt';
-      this.tweens.add({targets:wm, y:this.wormUpY, duration:280, ease:'Back.out', onComplete:function(){ self.wormState='up'; self.wormNextAt=self.time.now+1700; }});
-    } else if(st==='up' && now>this.wormNextAt){
-      wm.invuln=true; this.wormState='retreat';
-      this.tweens.add({targets:wm, y:this.wormDownY, duration:340, ease:'Quad.in', onComplete:function(){ wm.setVisible(false); self.wormState='wait'; self.wormNextAt=self.time.now+600; }});
+      this.tweens.add({targets:wm, y:this.wormUpY, duration:280, ease:'Back.out'});
+      this.wormState='up'; this.wormNextAt=now+2400;
+    } else if(st==='up'){
+      wm.invuln=true; this.tweens.add({targets:wm, y:this.wormDownY, duration:340, ease:'Quad.in'});
+      this.wormState='retreat'; this.wormNextAt=now+380;
+    } else if(st==='retreat'){
+      wm.setVisible(false); this.wormState='wait'; this.wormNextAt=now+650;
     }
   },
 
