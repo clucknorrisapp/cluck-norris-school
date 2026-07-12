@@ -18,10 +18,14 @@ const router = express.Router();
 const burn = require('./normie-burn');   // Phase 1 burn-to-play backend (dormant until env-configured)
 const feedback = require('./nq-feedback');   // playtester comment store (test dashboard)
 
-// Admin key for reading feedback / the comments dashboard. Prefers a dedicated NQ key; falls
-// back to the site's PREMIUM_ACCESS_KEY so the owner can read comments with a key he already has.
+// Admin key for reading feedback / the comments dashboard. Accepts a simple shared password
+// (owner's choice — this gate only guards low-sensitivity playtest comments, no funds/PII), plus
+// a dedicated NQ_FEEDBACK_KEY env override and the site's PREMIUM_ACCESS_KEY, whichever the owner
+// uses. NOT a security-critical gate — just keeps the comments page from being casually stumbled on.
+const FEEDBACK_PW = 'normiequesttest';
 function adminOK(req) {
   const k = String((req.query && req.query.key) || req.get('x-nq-key') || '');
+  if (k && k === FEEDBACK_PW) return true;
   const want = process.env.NQ_FEEDBACK_KEY || process.env.PREMIUM_ACCESS_KEY || '';
   return !!want && k === want;
 }
