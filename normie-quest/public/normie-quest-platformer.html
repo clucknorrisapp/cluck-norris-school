@@ -1801,14 +1801,19 @@ if(typeof document!=='undefined'){ (function(){
   function layout(){
     var s=document.getElementById('screen'); if(!s) return;
     var r=s.getBoundingClientRect(), gl=r.left, gr=window.innerWidth-r.right, gutter=Math.min(gl,gr);
-    if(gutter<90){ window.__NQ_PAD_ACTIVE=false; return; }   // not enough gutter → keep the on-screen touch zones
+    // Activate whenever the gutters can hold the buttons (phones in landscape ≈ 70-90px qualify).
+    // Below this the two move buttons can't sit side-by-side without covering the game → on-screen zones.
+    if(gutter<62){ window.__NQ_PAD_ACTIVE=false; return; }
     window.__NQ_PAD_ACTIVE=true;
-    var mv=Math.max(52,Math.min(94,Math.floor((gutter-24)/2))), jp=Math.max(66,Math.min(120,gutter-26));
-    var by=Math.round(window.innerHeight*0.13), pairW=mv*2+12, lx=Math.round(Math.max(6,(gl-pairW)/2));
-    bL.style.width=bL.style.height=mv+'px'; bL.style.left=lx+'px'; bL.style.bottom=by+'px'; bL.style.fontSize=Math.round(mv*0.4)+'px';
-    bR.style.width=bR.style.height=mv+'px'; bR.style.left=(lx+mv+12)+'px'; bR.style.bottom=by+'px'; bR.style.fontSize=Math.round(mv*0.4)+'px';
-    var rx=Math.round(r.right+Math.max(6,(gr-jp)/2));
-    bJ.style.width=bJ.style.height=jp+'px'; bJ.style.left=rx+'px'; bJ.style.bottom=by+'px'; bJ.style.fontSize=Math.round(jp*0.15)+'px';
+    var gap=Math.max(4,Math.round(gutter*0.06));
+    var mv=Math.max(28,Math.min(96,Math.floor((gutter-gap)/2)));   // ◄ ► sized so BOTH fit in the gutter
+    var jp=Math.max(44,Math.min(122,gutter-6));
+    var by=Math.round(window.innerHeight*0.11);                    // low in the gutter → thumb reach
+    var pairW=mv*2+gap, lx=Math.round(Math.max(1,(gl-pairW)/2));
+    bL.style.width=bL.style.height=mv+'px'; bL.style.left=lx+'px'; bL.style.bottom=by+'px'; bL.style.fontSize=Math.round(mv*0.42)+'px';
+    bR.style.width=bR.style.height=mv+'px'; bR.style.left=(lx+mv+gap)+'px'; bR.style.bottom=by+'px'; bR.style.fontSize=Math.round(mv*0.42)+'px';
+    var rx=Math.round(r.right+Math.max(1,(gr-jp)/2));
+    bJ.style.width=bJ.style.height=jp+'px'; bJ.style.left=rx+'px'; bJ.style.bottom=by+'px'; bJ.style.fontSize=Math.round(Math.max(8,jp*0.15))+'px';
   }
   window.addEventListener('resize',layout);
   window.addEventListener('orientationchange',function(){ setTimeout(layout,220); });
