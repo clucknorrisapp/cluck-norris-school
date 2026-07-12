@@ -971,17 +971,21 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   casinoTouch:function(player,f){
     var now=this.time.now;
     if(this.over || now<f.coolUntil) return;
-    if(now<this.moonUntil || now<this.omegaUntil) return;   // too powered to be bothered
-    f.coolUntil=now+2600;
+    if(now<this.moonUntil || now<this.omegaUntil) return;   // powered up = they leave you alone
+    // NOTE: casino folk NEVER cost a life — Drink Ladies only take coins, Show Ladies only add
+    // a kid. Long cooldowns so they can't pester you into a stack while you play the slots.
     if(f.folk==='drink'){
+      f.coolUntil=now+5000;
       var steal=Math.min(this.score,25);
       if(steal>0){ this.score-=steal; this.hudScore.setText('SCORE '+this.score); }
       this.flash(steal>0?('DRINK LADY: -'+steal+' 🍸'):"DRINK LADY: TAB'S EMPTY 🍸",'#ff77cc');
       this.burst(f.x,f.y-6,0xff66cc,10); SFX.coin();
     } else {
-      this.kids=(this.kids||0)+1; this.childSupportAt=now+3200;
+      f.coolUntil=now+7000;
+      if((this.kids||0) >= 3){ this.flash("ENOUGH KIDS, NORMIE! 👶",'#ffd23f'); return; }   // cap the brood at 3
+      this.kids=(this.kids||0)+1; this.childSupportAt=now+4000;
       this.spawnLilNormie(f);
-      this.flash(this.kids>1?('LIL NORMIE #'+this.kids+'! MORE CHILD SUPPORT 👶'):"IT'S LIL NORMIE! CHILD SUPPORT NOW DUE 👶",'#ffd23f');
+      this.flash(this.kids>1?('LIL NORMIE #'+this.kids+'! MORE CHILD SUPPORT 👶'):"IT'S LIL NORMIE! CHILD SUPPORT DUE 👶",'#ffd23f');
       this.cameras.main.flash(160,255,240,150);
     }
   },
@@ -990,11 +994,11 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.tweens.add({targets:baby, y:baby.y-20, duration:900, ease:'Sine.out'});
     this.tweens.add({targets:baby, alpha:0, delay:1100, duration:700, onComplete:function(){ baby.destroy(); }});
   },
-  childSupportTick:function(now){   // recurring coin drain while Normie has kids
+  childSupportTick:function(now){   // recurring coin drain while Normie has kids (gentle + steady)
     if(!this.kids || this.over || now<this.childSupportAt) return;
-    this.childSupportAt = now + Math.max(2400, 4200 - this.kids*350);   // more kids = more frequent
+    this.childSupportAt = now + 4500;   // steady, gentle cadence (no longer speeds up with kids)
     if(this.score<=0) return;
-    var pay=Math.min(this.score, this.kids*6);
+    var pay=Math.min(this.score, this.kids*4);
     this.score-=pay; this.hudScore.setText('SCORE '+this.score);
     var p=this.player, t=this.add.text(p.x, p.y-24, 'CHILD SUPPORT -'+pay+' 👶', {fontFamily:'VT323',fontSize:'14px',color:'#ffd23f'}).setOrigin(.5,1).setDepth(25);
     this.tweens.add({targets:t, y:t.y-18, alpha:0, duration:1200, onComplete:function(){ t.destroy(); }});
@@ -1018,12 +1022,16 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       }
     });
     // the machine you're standing at: show its prompt, hide the rest
+    // Generous reach — you can play a machine from a good chunk of the screen away, so the
+    // wandering casino folk can't bump you off it. Nearest credited machine wins.
     var grounded=(b.blocked.down||b.touching.down);
-    this.slots.forEach(function(S){ var dx=Math.abs(p.x-S.m.x); if(grounded && dx<44 && Math.abs(p.y-S.m.y)<74 && dx<nd){ nd=dx; nearest=S; } });
+    this.slots.forEach(function(S){ var dx=Math.abs(p.x-S.m.x); if(grounded && dx<120 && Math.abs(p.y-S.m.y)<96 && dx<nd){ nd=dx; nearest=S; } });
     this.slots.forEach(function(S){ if(S!==nearest) S.prompt.setVisible(false); });
     if(nearest){
       nearest.prompt.setText(nearest.spinsLeft>0?('▲ '+nearest.label+'\n('+nearest.spinsLeft+' left)'):'OUT OF\nCREDITS').setVisible(true);
-      if(nearest.spinsLeft>0 && jumpEdge && !nearest.spin){ this.startSpin(now, nearest); consumed=true; }
+      // At a credited machine the jump press ALWAYS "plays it" (never makes Normie hop away):
+      // spin if it's free, otherwise just eat the press and wait out the current spin.
+      if(nearest.spinsLeft>0 && jumpEdge){ consumed=true; if(!nearest.spin) this.startSpin(now, nearest); }
     }
     return consumed;
   },
