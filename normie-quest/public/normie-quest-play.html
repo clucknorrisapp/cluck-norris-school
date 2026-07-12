@@ -1154,7 +1154,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var steal=Math.min(this.score, 60);
     if(steal>0){ this.score-=steal; this.hudScore.setText('SCORE '+this.score); }
     this.slowUntil=Math.max(this.slowUntil||0, now+700);   // sticks you for a beat (never lethal on its own)
-    this.flash(steal>0?('HONEYPOT — DRAINED '+steal+' COINS!'):"HONEYPOT — IT'S A TRAP!",'#ff9500');
+    if(steal>0) this.coinLossBanner(steal,'HONEYPOT!','#ff6644');   // mid-tier notice so the coin loss clearly registers
+    else this.flash("HONEYPOT — IT'S A TRAP!",'#ff9500');
   },
   pumpDumpTick:function(now,p,b){   // solid until stepped on, then DUMPS (falls away) and respawns
     if(!this.pumpDumps) return; var self=this;
@@ -1311,6 +1312,20 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   addScore:function(n){ this.score+=n; this.hudScore.setText('SCORE '+this.score); },
   burst:function(x,y,tint,count){ var e=this.add.particles(x,y,'spark',{speed:{min:30,max:160},lifespan:420,scale:{start:1.1,end:0},tint:tint,emitting:false,blendMode:'ADD'}).setDepth(30); e.explode(count||10); this.time.delayedCall(520,function(){ e.destroy(); }); },
   flash:function(msg,color){ var t=this.hb(this.add.text(W/2,70,msg,{fontFamily:'"Press Start 2P"',fontSize:'12px',color:color}).setOrigin(.5)); this.tweens.add({targets:t,y:52,alpha:0,duration:1200,onComplete:function(){t.destroy();}}); },
+  // mid-tier notice (bigger than flash, smaller than powerBanner): a centered pill with the coin
+  // icon + amount — used when something DRAINS your coins so it clearly registers.
+  coinLossBanner:function(amount,label,color){
+    var d=61, cy=66, cx=W/2, col=Phaser.Display.Color.HexStringToColor(color).color;
+    var pill=this.hb(this.add.rectangle(cx,cy,204,40,0x140a10,0.94).setScrollFactor(0).setDepth(d).setStrokeStyle(2,col));
+    var ic=this.hb(this.add.image(cx-74,cy,'coin').setScrollFactor(0).setDepth(d+1)); if(ic.height) ic.setScale(22/ic.height);
+    var t1=this.hb(this.add.text(cx-54,cy-9,label,{fontFamily:'"Press Start 2P"',fontSize:'8px',color:color}).setOrigin(0,.5).setScrollFactor(0).setDepth(d+1));
+    var t2=this.hb(this.add.text(cx-54,cy+9,'-'+amount+' COINS',{fontFamily:'"Press Start 2P"',fontSize:'12px',color:'#ffd23f'}).setOrigin(0,.5).setScrollFactor(0).setDepth(d+1));
+    var items=[pill,ic,t1,t2]; items.forEach(function(o){ o.alpha=0; });
+    this.tweens.add({targets:items,alpha:1,duration:170});
+    this.tweens.add({targets:t2,scale:{from:0.7,to:1},duration:260,ease:'Back.out'});
+    this.cameras.main.shake(90,.004);
+    this.time.delayedCall(1350,function(){ this.tweens.add({targets:items,alpha:0,y:'-=12',duration:420,onComplete:function(){ items.forEach(function(o){o.destroy();}); }}); },[],this);
+  },
 
   levelClear:function(){
     if(this.over) return; this.over=true; this.addScore(this.timeLeft*10); this.physics.pause(); SFX.clear();
