@@ -53,11 +53,12 @@ var W=480, H=270, TILE=24, GY=H-TILE;      // GY = ground top surface
 // flip this to true (and wire the burn UI to those endpoints) to "put it together".
 var BURN_GATE=false;
 
-// Premium perk — WORLD-2 CHECKPOINT. Clear stage 1-3 (beat the Rug King / finish World 1) and a
-// checkpoint is set at the start of World 2; dying in 2-1/2-2/2-3 then continues from 2-1 instead
-// of restarting the whole run. Off = every death restarts from 1-1 (the free-preview behaviour,
-// which is what makes the premium continue worth it). ENABLED now so it's testable in the free
-// preview; set to `= BURN_GATE` (or false) to make it a paid-tier-only perk once burn goes live.
+// Premium perk — PER-WORLD CHECKPOINTS. Beat a world's boss and a checkpoint is banked at the
+// start of the NEXT world (registry nqCp = level index, nqCpScore = score). Dying later continues
+// from the FURTHEST world reached instead of restarting the whole run — e.g. reach 4-3 and die,
+// resume at 4-1 (not 2-1). Off = every death restarts from 1-1 (the free-preview behaviour, which
+// is what makes the premium continue worth it). ENABLED now so it's testable in the free preview;
+// set to `= BURN_GATE` (or false) to make it a paid-tier-only perk once burn goes live.
 var PREMIUM_CHECKPOINTS = true;
 
 // TEST BUILD — playtester dashboard. ?test=1 (query or hash) unlocks a LEVEL SELECT screen
@@ -106,49 +107,98 @@ var NOTE={C3:130.81,D3:146.83,Eb3:155.56,E3:164.81,F3:174.61,G3:196.00,Ab3:207.6
   C4:261.63,D4:293.66,Eb4:311.13,E4:329.63,F4:349.23,Fs4:369.99,G4:392.00,Ab4:415.30,A4:440.00,Bb4:466.16,B4:493.88,
   C5:523.25,D5:587.33,Eb5:622.25,E5:659.25,F5:698.46,G5:783.99,A5:880.00,R:0};
 var MUSIC=(function(){
-  var ctx=null,gain=null,cur=null,timer=null,nextAt=0,muted=false; var N=NOTE;
+  var ctx=null,gain=null,cur=null,timer=null,nextAt=0,muted=false,phrase=0,noiseBuf=null; var N=NOTE;
   try{ muted=(typeof localStorage!=='undefined')&&localStorage.getItem('nqMute')==='1'; }catch(e){}
+  // Each track carries MULTIPLE lead + bass phrases that ALTERNATE (A→B→A…) plus a light drum
+  // groove, so the music isn't the same 4 bars looping forever (the old "basic/annoying" version).
+  // lead/bass are arrays-of-phrases; schedLoop advances the phrase counter each bar. Master gain is
+  // lower now too (0.06) so it sits under the SFX instead of grating.
   var TR={
     // World 1 — bright, bouncy platformer
-    world1:{bpm:138,leadType:'square',lead:[[N.E4,.5],[N.G4,.5],[N.C5,.5],[N.G4,.5],[N.A4,.5],[N.C5,.5],[N.E5,.5],[N.C5,.5],[N.D5,.5],[N.B4,.5],[N.G4,.5],[N.D4,.5],[N.C4,1],[N.R,.5],[N.G4,.5]],
-      bass:[[N.C3,1],[N.G3,1],[N.A3,1],[N.E3,1],[N.F3,1],[N.C3,1],[N.G3,1],[N.G3,1]]},
+    world1:{bpm:138,leadType:'square',drums:'full',
+      lead:[ [[N.E4,.5],[N.G4,.5],[N.C5,.5],[N.G4,.5],[N.A4,.5],[N.C5,.5],[N.E5,.5],[N.C5,.5],[N.D5,.5],[N.B4,.5],[N.G4,.5],[N.D4,.5],[N.C4,1],[N.R,.5],[N.G4,.5]],
+             [[N.C5,.5],[N.B4,.5],[N.A4,.5],[N.G4,.5],[N.E4,.5],[N.G4,.5],[N.A4,.5],[N.C5,.5],[N.D5,.5],[N.E5,.5],[N.G5,.5],[N.E5,.5],[N.C5,1],[N.R,.5],[N.E4,.5]] ],
+      bass:[ [[N.C3,1],[N.G3,1],[N.A3,1],[N.E3,1],[N.F3,1],[N.C3,1],[N.G3,1],[N.G3,1]],
+             [[N.F3,1],[N.C3,1],[N.G3,1],[N.G3,1],[N.A3,1],[N.E3,1],[N.F3,1],[N.G3,1]] ]},
     // Sand Lands — Zelda-like: modal, adventurous, a touch mysterious
-    desert:{bpm:104,leadType:'square',lead:[[N.A4,1],[N.B4,.5],[N.C5,.5],[N.D5,1],[N.C5,.5],[N.B4,.5],[N.A4,1.5],[N.E4,.5],[N.F4,1],[N.G4,1],[N.A4,1.5],[N.R,.5],[N.A4,.5],[N.G4,.5],[N.F4,1]],
-      bass:[[N.A3,1],[N.A3,1],[N.F3,1],[N.F3,1],[N.C3,1],[N.C3,1],[N.E3,1],[N.E3,1]]},
+    desert:{bpm:104,leadType:'square',drums:'soft',
+      lead:[ [[N.A4,1],[N.B4,.5],[N.C5,.5],[N.D5,1],[N.C5,.5],[N.B4,.5],[N.A4,1.5],[N.E4,.5],[N.F4,1],[N.G4,1]],
+             [[N.E4,1],[N.F4,.5],[N.G4,.5],[N.A4,1],[N.G4,.5],[N.F4,.5],[N.E4,1.5],[N.C4,.5],[N.D4,1],[N.E4,1]] ],
+      bass:[ [[N.A3,1],[N.A3,1],[N.F3,1],[N.F3,1],[N.C3,1],[N.C3,1],[N.E3,1],[N.E3,1]],
+             [[N.D3,1],[N.D3,1],[N.A3,1],[N.A3,1],[N.F3,1],[N.F3,1],[N.E3,1],[N.E3,1]] ]},
     // Normie Casino — fast, upbeat, playful
-    casino:{bpm:158,leadType:'square',lead:[[N.C5,.25],[N.E5,.25],[N.G4,.25],[N.C5,.25],[N.A4,.25],[N.C5,.25],[N.F5,.25],[N.A4,.25],[N.G4,.25],[N.B4,.25],[N.D5,.25],[N.G4,.25],[N.C5,.5],[N.G4,.5]],
-      bass:[[N.C3,.5],[N.G3,.5],[N.C3,.5],[N.G3,.5],[N.F3,.5],[N.C3,.5],[N.G3,.5],[N.G3,.5]]},
+    casino:{bpm:158,leadType:'square',drums:'full',
+      lead:[ [[N.C5,.25],[N.E5,.25],[N.G4,.25],[N.C5,.25],[N.A4,.25],[N.C5,.25],[N.F5,.25],[N.A4,.25],[N.G4,.25],[N.B4,.25],[N.D5,.25],[N.G4,.25],[N.C5,.5],[N.G4,.5]],
+             [[N.E5,.25],[N.G5,.25],[N.E5,.25],[N.C5,.25],[N.A4,.25],[N.C5,.25],[N.E5,.25],[N.A4,.25],[N.F5,.25],[N.D5,.25],[N.B4,.25],[N.G4,.25],[N.C5,.5],[N.E5,.5]] ],
+      bass:[ [[N.C3,.5],[N.G3,.5],[N.C3,.5],[N.G3,.5],[N.F3,.5],[N.C3,.5],[N.G3,.5],[N.G3,.5]],
+             [[N.A3,.5],[N.E3,.5],[N.F3,.5],[N.C3,.5],[N.G3,.5],[N.G3,.5],[N.C3,.5],[N.G3,.5]] ]},
     // Skyline (World 3) — energetic, neon, driving
-    skyline:{bpm:146,leadType:'square',lead:[[N.E4,.5],[N.B4,.5],[N.A4,.5],[N.E4,.5],[N.G4,.5],[N.D5,.5],[N.B4,.5],[N.G4,.5],[N.A4,.5],[N.E5,.5],[N.D5,.5],[N.B4,.5],[N.E5,1],[N.R,.5],[N.B4,.5]],
-      bass:[[N.E3,1],[N.E3,1],[N.C3,1],[N.C3,1],[N.G3,1],[N.G3,1],[N.A3,1],[N.B3,1]]},
+    skyline:{bpm:146,leadType:'square',drums:'full',
+      lead:[ [[N.E4,.5],[N.B4,.5],[N.A4,.5],[N.E4,.5],[N.G4,.5],[N.D5,.5],[N.B4,.5],[N.G4,.5],[N.A4,.5],[N.E5,.5],[N.D5,.5],[N.B4,.5],[N.E5,1],[N.R,.5],[N.B4,.5]],
+             [[N.E5,.5],[N.D5,.5],[N.B4,.5],[N.G4,.5],[N.A4,.5],[N.B4,.5],[N.D5,.5],[N.E5,.5],[N.G5,.5],[N.E5,.5],[N.D5,.5],[N.B4,.5],[N.A4,1],[N.R,.5],[N.E4,.5]] ],
+      bass:[ [[N.E3,1],[N.E3,1],[N.C3,1],[N.C3,1],[N.G3,1],[N.G3,1],[N.A3,1],[N.B3,1]],
+             [[N.C3,1],[N.C3,1],[N.G3,1],[N.G3,1],[N.A3,1],[N.A3,1],[N.E3,1],[N.B3,1]] ]},
     // The Exchange (World 4) — cold, minor, mechanical drive
-    exchange:{bpm:132,leadType:'triangle',lead:[[N.A4,.5],[N.E4,.5],[N.A4,.5],[N.C5,.5],[N.B4,.5],[N.E4,.5],[N.B4,.5],[N.D5,.5],[N.C5,.5],[N.A4,.5],[N.E5,1],[N.C5,.5],[N.A4,1],[N.R,.5]],
-      bass:[[N.A3,.5],[N.A3,.5],[N.A3,.5],[N.E3,.5],[N.F3,.5],[N.F3,.5],[N.C3,.5],[N.G3,.5]]},
+    exchange:{bpm:132,leadType:'triangle',drums:'full',
+      lead:[ [[N.A4,.5],[N.E4,.5],[N.A4,.5],[N.C5,.5],[N.B4,.5],[N.E4,.5],[N.B4,.5],[N.D5,.5],[N.C5,.5],[N.A4,.5],[N.E5,1],[N.C5,.5],[N.A4,1],[N.R,.5]],
+             [[N.A4,.5],[N.C5,.5],[N.E5,.5],[N.C5,.5],[N.A4,.5],[N.C5,.5],[N.D5,.5],[N.B4,.5],[N.E5,.5],[N.D5,.5],[N.C5,1],[N.A4,.5],[N.E4,1],[N.R,.5]] ],
+      bass:[ [[N.A3,.5],[N.A3,.5],[N.A3,.5],[N.E3,.5],[N.F3,.5],[N.F3,.5],[N.C3,.5],[N.G3,.5],[N.A3,.5],[N.A3,.5],[N.E3,.5],[N.E3,.5],[N.F3,.5],[N.C3,.5],[N.G3,.5],[N.G3,.5]],
+             [[N.F3,.5],[N.F3,.5],[N.C3,.5],[N.C3,.5],[N.A3,.5],[N.A3,.5],[N.E3,.5],[N.E3,.5],[N.D3,.5],[N.D3,.5],[N.A3,.5],[N.A3,.5],[N.G3,.5],[N.G3,.5],[N.A3,.5],[N.E3,.5]] ]},
     // Boss — tense, urgent
-    boss:{bpm:160,leadType:'sawtooth',lead:[[N.A4,.25],[N.Bb4,.25],[N.A4,.25],[N.E4,.25],[N.A4,.25],[N.C5,.25],[N.B4,.25],[N.A4,.25],[N.G4,.5],[N.Ab4,.5],[N.A4,.5],[N.R,.5]],
-      bass:[[N.A3,.5],[N.A3,.5],[N.F3,.5],[N.F3,.5],[N.E3,.5],[N.E3,.5],[N.A3,.5],[N.G3,.5]]},
+    boss:{bpm:160,leadType:'sawtooth',drums:'full',
+      lead:[ [[N.A4,.25],[N.Bb4,.25],[N.A4,.25],[N.E4,.25],[N.A4,.25],[N.C5,.25],[N.B4,.25],[N.A4,.25],[N.G4,.5],[N.Ab4,.5],[N.A4,.5],[N.R,.5]],
+             [[N.A4,.25],[N.C5,.25],[N.E5,.25],[N.C5,.25],[N.B4,.25],[N.D5,.25],[N.B4,.25],[N.G4,.25],[N.A4,.5],[N.G4,.5],[N.F4,.5],[N.E4,.5]] ],
+      bass:[ [[N.A3,.5],[N.A3,.5],[N.F3,.5],[N.F3,.5],[N.E3,.5],[N.E3,.5],[N.A3,.5],[N.G3,.5]],
+             [[N.A3,.5],[N.A3,.5],[N.G3,.5],[N.G3,.5],[N.F3,.5],[N.F3,.5],[N.E3,.5],[N.E3,.5]] ]},
     // World 5 — Sacred Seeds: heroic, adventurous overworld (Zelda-nostalgic)
-    sacred:{bpm:120,leadType:'square',lead:[[N.D4,.5],[N.G4,.75],[N.A4,.25],[N.B4,.5],[N.G4,.5],[N.B4,.5],[N.D5,.75],[N.C5,.25],[N.B4,.5],[N.A4,.5],[N.G4,1],[N.R,.5],[N.D5,.5],[N.B4,.5]],
-      bass:[[N.G3,1],[N.G3,1],[N.D3,1],[N.D3,1],[N.C3,1],[N.C3,1],[N.G3,1],[N.D3,1]]},
-    // World 6 — Proof of Work / the Mines: calm, sparse, gentle (Minecraft-like)
-    mines:{bpm:92,leadType:'triangle',lead:[[N.C5,1],[N.R,.5],[N.E5,1],[N.R,.5],[N.G4,1],[N.A4,.5],[N.G4,1.5],[N.R,1],[N.F4,1],[N.R,.5],[N.C5,1.5],[N.R,1]],
-      bass:[[N.C3,2],[N.A3,2],[N.F3,2],[N.G3,2]]}
+    sacred:{bpm:120,leadType:'square',drums:'soft',
+      lead:[ [[N.D4,.5],[N.G4,.75],[N.A4,.25],[N.B4,.5],[N.G4,.5],[N.B4,.5],[N.D5,.75],[N.C5,.25],[N.B4,.5],[N.A4,.5],[N.G4,1],[N.R,.5],[N.D5,.5],[N.B4,1]],
+             [[N.G4,.5],[N.B4,.75],[N.C5,.25],[N.D5,.5],[N.B4,.5],[N.D5,.5],[N.G5,.75],[N.E5,.25],[N.D5,.5],[N.B4,.5],[N.A4,1],[N.R,.5],[N.G4,.5],[N.D4,1]] ],
+      bass:[ [[N.G3,1],[N.G3,1],[N.D3,1],[N.D3,1],[N.C3,1],[N.C3,1],[N.G3,1],[N.D3,1]],
+             [[N.C3,1],[N.C3,1],[N.G3,1],[N.G3,1],[N.D3,1],[N.D3,1],[N.G3,1],[N.G3,1]] ]},
+    // World 6 — Proof of Work / the Mines: calm, sparse, gentle (Minecraft-like), no drums
+    mines:{bpm:92,leadType:'triangle',drums:false,
+      lead:[ [[N.C5,1],[N.R,.5],[N.E5,1],[N.R,.5],[N.G4,1],[N.A4,.5],[N.G4,2],[N.R,1.5]],
+             [[N.E5,1],[N.R,.5],[N.C5,1],[N.R,.5],[N.A4,1],[N.G4,.5],[N.F4,2],[N.R,1.5]] ],
+      bass:[ [[N.C3,2],[N.A3,2],[N.F3,2],[N.G3,2]],
+             [[N.A3,2],[N.F3,2],[N.C3,2],[N.G3,2]] ]}
   };
-  function ensure(){ ctx=_ac(); if(!ctx) return false; if(!gain){ gain=ctx.createGain(); gain.gain.value=muted?0:0.09; gain.connect(ctx.destination); } return true; }
+  function ensure(){ ctx=_ac(); if(!ctx) return false;
+    if(!gain){ gain=ctx.createGain(); gain.gain.value=muted?0:0.06; gain.connect(ctx.destination); }
+    if(!noiseBuf){ var n=Math.floor(ctx.sampleRate*0.4); noiseBuf=ctx.createBuffer(1,n,ctx.sampleRate); var d=noiseBuf.getChannelData(0); for(var i=0;i<n;i++) d[i]=Math.random()*2-1; }
+    return true; }
   function note(f,at,dur,type,vol){ if(!f) return; var o=ctx.createOscillator(),g=ctx.createGain(); o.type=type; o.frequency.value=f;
     g.gain.setValueAtTime(0.0001,at); g.gain.linearRampToValueAtTime(vol,at+0.02); g.gain.exponentialRampToValueAtTime(0.0001,at+Math.max(0.05,dur*0.9));
     o.connect(g); g.connect(gain); o.start(at); o.stop(at+dur+0.02); }
-  function schedLoop(tr,at){ var spb=60/tr.bpm, lt=at,bt=at;
-    tr.lead.forEach(function(n){ note(n[0],lt,n[1]*spb*0.96,tr.leadType,0.15); lt+=n[1]*spb; });
-    tr.bass.forEach(function(n){ note(n[0],bt,n[1]*spb*0.96,'triangle',0.20); bt+=n[1]*spb; });
-    return Math.max(lt,bt)-at; }
+  function drum(at,kind){
+    if(kind==='kick'){ var o=ctx.createOscillator(),g=ctx.createGain(); o.type='sine';
+      o.frequency.setValueAtTime(150,at); o.frequency.exponentialRampToValueAtTime(48,at+0.12);
+      g.gain.setValueAtTime(0.22,at); g.gain.exponentialRampToValueAtTime(0.0001,at+0.16);
+      o.connect(g); g.connect(gain); o.start(at); o.stop(at+0.18); return; }
+    var s=ctx.createBufferSource(); s.buffer=noiseBuf; var f=ctx.createBiquadFilter(), g2=ctx.createGain();
+    if(kind==='hat'){ f.type='highpass'; f.frequency.value=7000; g2.gain.setValueAtTime(0.05,at); g2.gain.exponentialRampToValueAtTime(0.0001,at+0.04); }
+    else { f.type='bandpass'; f.frequency.value=1900; g2.gain.setValueAtTime(0.11,at); g2.gain.exponentialRampToValueAtTime(0.0001,at+0.13); }   // snare
+    s.connect(f); f.connect(g2); g2.connect(gain); s.start(at); s.stop(at+0.2); }
+  function schedLoop(tr,at){ var spb=60/tr.bpm;
+    var lead=tr.lead[phrase % tr.lead.length], bass=tr.bass[phrase % tr.bass.length];
+    var lt=at,bt=at;
+    lead.forEach(function(n){ note(n[0],lt,n[1]*spb*0.94,tr.leadType,0.12); lt+=n[1]*spb; });
+    bass.forEach(function(n){ note(n[0],bt,n[1]*spb*0.96,'triangle',0.16); bt+=n[1]*spb; });
+    var dur=Math.max(lt,bt)-at;
+    if(tr.drums){ var beats=Math.max(1,Math.round(dur/spb));
+      for(var b=0;b<beats;b++){ var t0=at+b*spb;
+        if(tr.drums==='full'){ drum(t0, b%2===0?'kick':'snare'); drum(t0,'hat'); drum(t0+spb*0.5,'hat'); }
+        else { drum(t0,'kick'); drum(t0+spb*0.5,'hat'); }
+      } }
+    phrase++;
+    return dur; }
   function tick(){ if(!cur||!ensure()) return; var tr=TR[cur]; if(!tr) return; var now=ctx.currentTime;
     var guard=0; while(nextAt<now+1.0 && guard++<8){ nextAt+=schedLoop(tr,nextAt); } }
   return {
-    play:function(name){ if(!TR[name]) return; if(!ensure()) return; var wasStopped=!cur; cur=name;
-      if(wasStopped) nextAt=ctx.currentTime+0.05; if(!timer) timer=setInterval(tick,240); tick(); },
+    play:function(name){ if(!TR[name]) return; if(!ensure()) return; var fresh=(name!==cur); cur=name;
+      if(fresh){ phrase=0; nextAt=ctx.currentTime+0.05; } if(!timer) timer=setInterval(tick,240); tick(); },
     stop:function(){ cur=null; },
-    toggle:function(){ muted=!muted; if(gain) gain.gain.value=muted?0:0.09; try{ localStorage.setItem('nqMute',muted?'1':'0'); }catch(e){} return muted; },
+    toggle:function(){ muted=!muted; if(gain) gain.gain.value=muted?0:0.06; try{ localStorage.setItem('nqMute',muted?'1':'0'); }catch(e){} return muted; },
     muted:function(){ return muted; }
   };
 })();
@@ -271,7 +321,7 @@ var LEVELS=[
     airdrops:[[1200,H-118],[3500,H-72]],
     coins:[[472,158],[520,158],[700,196],[1312,158],[1360,158],[1500,196],[2212,134],[2260,134],[2680,196],[3012,158],[3060,158],[3600,196],[3912,158],[3960,158],[4500,196],[4812,158],[4860,158],[5300,196]],
     enemies:[['jeet',340,230,80],['bot',680,230,60],['ghost',1050,212,80],['fudster',1150,230,60],['sniper',1900,230,30],['bitmaxi',2380,230,70],['bot',2800,230,70],['ghost',2820,212,60],['sniper',3150,230,30],['fudster',3600,230,70],['bitmaxi',4100,230,70],['bot',4500,230,70],['ghost',4700,212,90]],
-    pumpdumps:[[1500,174],[3700,174]], honeypots:[[2350,232]], npcs:[[2900,90]],
+    pumpdumps:[[1500,174],[3700,174]], honeypots:[], npcs:[[2900,90]],
     key:[1624,H-150], door:5680 },
 
   { name:'3-2', sub:'THE TIMELINE', time:145, theme:5, width:6400, bgImage:'skyline',
@@ -283,7 +333,7 @@ var LEVELS=[
     airdrops:[[2300,H-118],[4200,H-72]],
     coins:[[452,158],[500,158],[700,196],[1252,134],[1300,134],[1400,196],[2112,158],[2160,158],[2208,158],[2680,196],[2972,134],[3020,134],[3200,196],[3832,158],[3880,158],[3928,158],[4692,134],[4740,134],[5512,158],[5560,158],[6100,196]],
     enemies:[['bot',340,230,70],['jeet',600,230,60],['ghost',1000,212,80],['fudster',1400,230,70],['sniper',1900,230,30],['bitmaxi',2250,230,70],['bot',2700,230,70],['ghost',3200,212,70],['sniper',3450,230,30],['fudster',3650,230,70],['bitmaxi',4000,230,70],['bot',4400,230,70],['ghost',4820,212,80],['sniper',5250,230,30],['bitmaxi',5650,230,60]],
-    pumpdumps:[[1000,174],[3500,174],[5300,174]], honeypots:[[2350,232],[4050,232]], npcs:[[3150,90]],
+    pumpdumps:[[1000,174],[3500,174],[5300,174]], honeypots:[[2350,232]], npcs:[[3150,90]],
     key:[1164,H-150], door:6300 },
 
   // WORLD 3 boss level — a LONG, HARD gauntlet up the skyline, THEN the Scammy KOL at the door.
@@ -297,7 +347,7 @@ var LEVELS=[
     airdrops:[[1500,H-118],[3100,H-72]],
     coins:[[300,196],[560,150],[620,196],[900,196],[1160,140],[1420,150],[1620,196],[1950,150],[2200,196],[2500,150],[2760,150],[2900,196],[3150,150],[3400,150],[3760,150],[4000,196],[4200,150]],
     enemies:[['jeet',340,230,70],['sniper',620,230,30],['bot',900,230,60],['fudster',1150,230,60],['ghost',1300,212,80],['sniper',1600,230,30],['bitmaxi',1950,230,70],['bot',2200,230,70],['sniper',2600,230,30],['fudster',2900,230,70],['ghost',3200,212,70],['bitmaxi',3300,230,70],['sniper',3600,230,30],['bot',3900,230,60],['ghost',4100,212,80]],
-    pumpdumps:[[1380,174],[2720,174]], honeypots:[[1250,232],[2500,232],[3760,232]], npcs:[[2450,90]],
+    pumpdumps:[[1380,174],[2720,174]], honeypots:[[1250,232],[3760,232]], npcs:[[2450,90]],
     key:[4200,H-150], door:4600 },
 
   // WORLD 4 — THE EXCHANGE (the CEX that freezes your funds). Cold steel-blue vault; obstacles get
@@ -312,7 +362,7 @@ var LEVELS=[
     airdrops:[[1250,H-118],[3600,H-72]],
     coins:[[300,196],[348,196],[500,120],[548,120],[864,120],[920,196],[1204,110],[1480,196],[2140,120],[2340,150],[2620,196],[2620,150],[3344,120],[3620,150],[3660,196],[4284,120],[4500,150],[5020,196],[5300,196]],
     enemies:[['bot',340,230,80],['sniper',700,230,30],['ghost',1050,212,80],['fudster',1160,230,60],['bitmaxi',1900,230,70],['bot',2020,230,70],['sniper',2420,230,30],['ghost',2840,212,70],['fudster',3200,230,70],['bot',3600,230,70],['bitmaxi',4120,230,70],['sniper',4400,230,30],['ghost',4700,212,90],['bot',5220,230,70]],
-    pumpdumps:[[1560,174],[3720,174]], honeypots:[[2400,232],[4160,232]], npcs:[[2950,90]],
+    pumpdumps:[[1560,174],[3720,174]], honeypots:[[2400,232]], npcs:[[2950,90]],
     key:[1680,H-150], door:5880 },
 
   { name:'4-2', sub:'THE TRADING FLOOR', time:160, theme:6, width:6600, bgImage:'exchange',
@@ -324,7 +374,7 @@ var LEVELS=[
     airdrops:[[2300,H-118],[4200,H-72]],
     coins:[[452,130],[500,130],[700,196],[1264,106],[1312,106],[1420,196],[2120,140],[2168,140],[2216,140],[2700,196],[3000,106],[3048,106],[3220,196],[3880,140],[3928,140],[4200,196],[4740,106],[4788,106],[5580,140],[5628,140],[6120,196]],
     enemies:[['bot',340,230,70],['sniper',620,230,30],['ghost',1000,212,80],['fudster',1420,230,70],['sniper',1920,230,30],['bitmaxi',2280,230,70],['bot',2720,230,70],['ghost',3220,212,70],['sniper',3480,230,30],['fudster',3680,230,70],['bitmaxi',4020,230,70],['bot',4420,230,70],['ghost',4840,212,80],['sniper',5280,230,30],['bitmaxi',5760,230,70]],
-    pumpdumps:[[1000,174],[3500,174],[5300,174]], honeypots:[[2350,232],[4050,232]], npcs:[[3150,90]],
+    pumpdumps:[[1000,174],[3500,174],[5300,174]], honeypots:[[2350,232]], npcs:[[3150,90]],
     key:[1164,H-150], door:6480 },
 
   // WORLD 4 boss level — the HARDEST gauntlet (tall+wide walls, dense snipers, spike pits), THEN
@@ -338,7 +388,7 @@ var LEVELS=[
     airdrops:[[1500,H-118],[3300,H-72]],
     coins:[[300,196],[600,130],[660,196],[960,196],[1220,106],[1620,150],[1980,140],[2340,196],[2620,110],[2960,196],[3220,140],[3560,196],[3940,106],[4160,196],[4420,150],[4560,196]],
     enemies:[['bot',340,230,70],['sniper',640,230,30],['fudster',960,230,60],['ghost',1240,212,80],['sniper',1640,230,30],['bitmaxi',2000,230,70],['bot',2340,230,70],['sniper',2620,230,30],['fudster',3080,230,70],['ghost',3420,212,70],['sniper',3560,230,30],['bitmaxi',4100,230,70],['bot',4160,230,60],['sniper',4460,230,30],['ghost',4560,212,80]],
-    pumpdumps:[[1440,174],[2880,174],[4240,174]], honeypots:[[1300,232],[2660,232],[4020,232]], npcs:[[2380,90]],
+    pumpdumps:[[1440,174],[2880,174],[4240,174]], honeypots:[[1300,232],[4020,232]], npcs:[[2380,90]],
     key:[4600,H-150], door:5000 },
 
   // WORLD 5 — THE SACRED SEEDS (Zelda-nostalgic green overworld). A quest to recover the lost seed
@@ -612,7 +662,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // (3-5)=+15% enemy speed, World 3 (6-8)=+30%. Per-level override via def.diff.
     this.diffMul = def.diff || [1,1,1,1.15,1.15,1.15,1.3,1.3,1.3,1.45,1.45,1.55,1.6,1.6,1.7,1.75,1.75,1.85][this.levelIdx] || 1;
     this.timeLeft=def.time; this.over=false; this.hasKey=false; this._doorHint=false;
-    if(this.levelIdx===0){ this.registry.set('nqCasino',0); this.registry.set('nqW2Checkpoint',0); }   // fresh run → zero the casino tally + clear the World-2 checkpoint
+    if(this.levelIdx===0){ this.registry.set('nqCasino',0); this.registry.set('nqCp',0); this.registry.set('nqCpScore',0); }   // fresh run → zero the casino tally + clear all world checkpoints
     this.spawn={x:60,y:H-60};
     Phaser.Math.RND.sow(['normie-quest-'+this.levelIdx]);   // deterministic per level
 
@@ -1187,6 +1237,10 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     });
     _tone(160,70,0.14,'square',0.06);
   },
+  // Bank a checkpoint at the START of the NEXT world whenever a (non-final) world boss falls.
+  // gameOver then continues from the FURTHEST world reached — not always World 2.
+  bankCheckpoint:function(){ if(!PREMIUM_CHECKPOINTS) return; var nx=this.levelIdx+1;
+    if(nx<LEVELS.length){ this.registry.set('nqCp',nx); this.registry.set('nqCpScore',this.score); } },
   bossDefeat:function(){
     if(this.over) return; this.over=true; var k=this.rugking, self=this;
     k.invuln=true; k.setVelocity(0,0); k.body.setAllowGravity(false);
@@ -1199,20 +1253,23 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       this.time.delayedCall(1800, function(){ this.scene.start('Win',this.winData()); },[],this);
     } else if(this.def.bossType==='ceo'){
       // Custodian down → World 4 done → on to World 5 (The Sacred Seeds).
+      this.bankCheckpoint();
       this.powerBanner('DELISTED!','WORLD 4 CLEARED','#3dff6e');
       this.time.delayedCall(1800, function(){ this.advanceLevel(); },[],this);
     } else if(this.def.bossType==='wyrm'){
       // Vault Wyrm down → World 5 done → on to World 6 (Proof of Work).
+      this.bankCheckpoint();
       this.powerBanner('WYRM SLAIN!','WORLD 5 CLEARED','#3dff6e');
       this.time.delayedCall(1800, function(){ this.advanceLevel(); },[],this);
     } else if(this.def.bossType==='kol'){
       // Scammy KOL down → World 3 done → on to World 4 (The Exchange) via the briefing.
+      this.bankCheckpoint();
       this.powerBanner('SCAM EXPOSED!','WORLD 3 CLEARED','#3dff6e');
       this.time.delayedCall(1800, function(){ this.advanceLevel(); },[],this);
     } else {
-      // Rug King → World 1 done → interlude cutscene (+ premium World-2 checkpoint), then World 2.
+      // Rug King → World 1 done → interlude cutscene (+ World-2 checkpoint), then World 2.
+      this.bankCheckpoint();
       this.powerBanner('RUG PULLED!','WORLD 1 CLEARED','#3dff6e');
-      if(PREMIUM_CHECKPOINTS){ this.registry.set('nqW2Checkpoint',1); this.registry.set('nqW2Score', this.score); }
       this.time.delayedCall(1800, function(){ if(nx<LEVELS.length) this.scene.start('Interlude',{next:nx,score:this.score}); else this.scene.start('Win',this.winData()); },[],this);
     }
   },
@@ -1259,6 +1316,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.over) return; this.over=true; var wm=this.worm; if(this.mound) this.mound.setVisible(false);
     wm.invuln=true; this.addScore(800); this.cameras.main.shake(520,.03);
     this.tweens.add({targets:wm, y:this.wormDownY+40, angle:18, alpha:0, duration:1400, ease:'Cubic.in', onComplete:function(){ if(wm.active) wm.destroy(); }});
+    this.bankCheckpoint();   // World 2 done → checkpoint at the start of World 3
     this.powerBanner('WORMHOLE CLOSED!','NORMIE SEALS THE BRIDGE — GG','#66ddff');
     this.time.delayedCall(2300, function(){ this.advanceLevel(); },[],this);
   },
@@ -1369,7 +1427,11 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     _tone(900,300,0.10,'square',0.05);
   },
   honeypotHit:function(player,hp){   // mimic trap: looks like treasure, snaps once — DRAINS COINS, never a life
-    if(this.over||hp.sprung) return; hp.sprung=true; var now=this.time.now;
+    if(this.over||hp.sprung) return; var now=this.time.now;
+    // GIGA CHAD is immune — plow straight through the honeypot, no coin drain, no snare.
+    if(now<this.omegaUntil){ hp.sprung=true; if(hp.body) hp.body.enable=false; this.tweens.killTweensOf(hp);
+      this.burst(hp.x,hp.y,0xffa020,14); this.cameras.main.shake(70,.006); this.flash('GIGA CHAD — HONEYPOT SMASHED!','#ffa020'); return; }
+    hp.sprung=true;
     this.tweens.killTweensOf(hp); this.cameras.main.shake(120,.008); this.burst(hp.x,hp.y,0xff5544,16);
     hp.setTint(0xff6644); this.tweens.add({targets:hp,scaleX:hp.scaleX*1.18,duration:110,yoyo:true});
     if(hp.body) hp.body.enable=false;   // one-shot
@@ -1567,9 +1629,11 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   gameOver:function(reason){ if(this.over) return; this.over=true; this.physics.pause();
     // TEST BUILD: no run-ending — bounce back to LEVEL SELECT so a tester can retry/switch instantly.
     if(TEST_MODE){ this.hb(this.add.text(W/2,120,'TEST — back to LEVEL SELECT',{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#ff6a99'}).setOrigin(.5)); this.time.delayedCall(900,function(){ this.scene.start('LevelSelect'); },[],this); return; }
-    // Premium World-2 checkpoint: died in 2-1/2-2/2-3 with the checkpoint banked → continue from 2-1.
-    var useCp = PREMIUM_CHECKPOINTS && this.registry.get('nqW2Checkpoint') && this.levelIdx>=3;
-    var cont = useCp ? 3 : 0, contScore = useCp ? (this.registry.get('nqW2Score')||0) : 0;
+    // Per-world checkpoint: died past a banked world boundary → continue from the FURTHEST world
+    // reached (start of that world), not always World 2. cpLvl is the highest banked level index.
+    var cpLvl = PREMIUM_CHECKPOINTS ? (this.registry.get('nqCp')||0) : 0;
+    var useCp = cpLvl>0 && this.levelIdx>=cpLvl;
+    var cont = useCp ? cpLvl : 0, contScore = useCp ? (this.registry.get('nqCpScore')||0) : 0;
     this._cont=cont; this._contScore=contScore;   // (exposed for tests)
     this.time.delayedCall(600,function(){ this.scene.start('Over',{score:this.score,reason:reason,level:this.def.name,cont:cont,contScore:contScore}); },[],this); },
 
@@ -1762,8 +1826,9 @@ var Over=new Phaser.Class({ Extends:Phaser.Scene,
     this.add.text(W/2,80,'reached world '+this.level,{fontFamily:'VT323',fontSize:'18px',color:'#8f89b0'}).setOrigin(.5);
     this.add.text(W/2,118,'SCORE',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#8f89b0'}).setOrigin(.5);
     this.add.text(W/2,150,String(this.finalScore),{fontFamily:'"Press Start 2P"',fontSize:'30px',color:'#ffd23f'}).setOrigin(.5).setShadow(3,3,'#7a5a00',0,true,true);
-    // Premium World-2 checkpoint continue takes priority over the leaderboard/free-preview copy.
-    this.add.text(W/2,198, this.cont>0 ? '★ CHECKPOINT: WORLD 2\ncontinue from the Sand Lands' : (BURN_GATE ? 'score posts to the leaderboard —\ntop 10 split the pool' : 'free preview · Worlds 1-4\nmore coming soon'),{fontFamily:'VT323',fontSize:'19px',color:this.cont>0?'#3dff6e':'#8f89b0',align:'center'}).setOrigin(.5);
+    // Per-world checkpoint continue takes priority over the leaderboard/free-preview copy.
+    var CP_LABEL={3:'WORLD 2\ncontinue from the Sand Lands',6:'WORLD 3\ncontinue from the Skyline',9:'WORLD 4\ncontinue from the Exchange',12:'WORLD 5\ncontinue from the Sacred Seeds',15:'WORLD 6\ncontinue from the Mines'};
+    this.add.text(W/2,198, this.cont>0 ? ('★ CHECKPOINT: '+(CP_LABEL[this.cont]||('LEVEL '+(this.cont+1)))) : (BURN_GATE ? 'score posts to the leaderboard —\ntop 10 split the pool' : 'free preview · Worlds 1-6\nmore coming soon'),{fontFamily:'VT323',fontSize:'19px',color:this.cont>0?'#3dff6e':'#8f89b0',align:'center'}).setOrigin(.5);
     var p=this.add.text(W/2,244, this.cont>0 ? 'PRESS TO CONTINUE →' : (BURN_GATE ? 'PRESS TO BURN AGAIN' : 'PRESS TO PLAY AGAIN'),{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
     this.tweens.add({targets:p,alpha:.25,duration:600,yoyo:true,repeat:-1});
     // Continue from the World-2 checkpoint if premium banked one; else free-preview restart, or the burn Gate.
