@@ -464,7 +464,8 @@ var Gate=new Phaser.Class({ Extends:Phaser.Scene,
 /* ---------- Game (data-driven, multi-level) ---------- */
 var Game=new Phaser.Class({ Extends:Phaser.Scene,
   initialize:function(){ Phaser.Scene.call(this,{key:'Game'}); },
-  init:function(d){ d=d||{}; this.levelIdx=Phaser.Math.Clamp(d.level||0,0,LEVELS.length-1); this.score=d.score||0; this.lives=(d.lives!=null?d.lives:3); },
+  // levelStartScore = coins banked BEFORE this level; honeypots never drain below it (they only take THIS level's coins).
+  init:function(d){ d=d||{}; this.levelIdx=Phaser.Math.Clamp(d.level||0,0,LEVELS.length-1); this.score=d.score||0; this.lives=(d.lives!=null?d.lives:3); this.levelStartScore=this.score; },
 
   create:function(){
     this.physics.resume();   // CRITICAL: the Arcade world stays paused across scene restarts; every level/replay must un-pause it
@@ -839,7 +840,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   maxiSteal:function(player,maxi){
     var steal=Math.min(this.score, 40);
     if(steal>0){ this.score-=steal; this.hudScore.setText('SCORE '+this.score); }
-    this.flash(steal>0?('MAXI STOLE '+steal+' COINS!'):'MAXI FOUND NOTHING!','#ff9500');
+    if(steal>0) this.coinLossBanner(steal,'BITCOIN MAXI!','#ff9500');   // same clear mid-tier notice as the honeypot
+    else this.flash('MAXI FOUND NOTHING!','#ff9500');
     SFX.hurt(); this.burst(player.x,player.y-4,0xff9500,12);
     player.invuln=true; player.setVelocity((maxi.x<player.x?1:-1)*170,-150);
     this.tweens.add({targets:player,alpha:.4,duration:90,yoyo:true,repeat:5,onComplete:function(){ if(player.active){ player.alpha=1; player.invuln=false; } }});
@@ -1149,11 +1151,13 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     hp.setTint(0xff6644); this.tweens.add({targets:hp,scaleX:hp.scaleX*1.18,duration:110,yoyo:true});
     if(hp.body) hp.body.enable=false;   // one-shot
     // A honeypot is a can't-sell scam: it drains your COINS (never a heart) + a brief sticky snare.
-    var steal=Math.min(this.score, 60);
+    // Drains ALL the coins you earned THIS level (score down to the level's starting bank) — never
+    // your accumulated total from earlier levels, and never a life.
+    var steal=Math.max(0, this.score - (this.levelStartScore||0));
     if(steal>0){ this.score-=steal; this.hudScore.setText('SCORE '+this.score); }
     this.slowUntil=Math.max(this.slowUntil||0, now+700);   // sticks you for a beat (never lethal on its own)
     if(steal>0) this.coinLossBanner(steal,'HONEYPOT!','#ff6644');   // mid-tier notice so the coin loss clearly registers
-    else this.flash("HONEYPOT — IT'S A TRAP!",'#ff9500');
+    else this.flash("HONEYPOT — NOTHING TO DRAIN!",'#ff9500');
   },
   pumpDumpTick:function(now,p,b){   // solid until stepped on, then DUMPS (falls away) and respawns
     if(!this.pumpDumps) return; var self=this;
@@ -1679,9 +1683,11 @@ var Controls=new Phaser.Class({ Extends:Phaser.Scene,
     this.add.text(colR,56,'MOVE:  arrows / A D\nJUMP:  UP / W / SPACE\n(press 2x = double)\nTHROW COINS:\nF  or  X',
       {fontFamily:'VT323',fontSize:'13px',color:'#e6e2f5',align:'center',lineSpacing:2}).setOrigin(.5,0);
     // the goal / core rules (full width)
-    this.add.text(cx,158,'THE GOAL',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffd23f'}).setOrigin(.5);
-    this.add.text(cx,172,'JUMP on enemies to STOMP them  ·  grab the KEY, then reach the DOOR\ngrab glowing POWER-UPS  ·  dodge spikes & hazards',
+    this.add.text(cx,150,'THE GOAL',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffd23f'}).setOrigin(.5);
+    this.add.text(cx,164,'JUMP on enemies to STOMP them  ·  grab the KEY, then reach the DOOR\ngrab glowing POWER-UPS  ·  dodge spikes & hazards',
       {fontFamily:'VT323',fontSize:'14px',color:'#c9c4e0',align:'center',lineSpacing:3,wordWrap:{width:W-44}}).setOrigin(.5,0);
+    this.add.text(cx,202,'⚠ HONEYPOTS look like treasure but DRAIN the coins you earned that level (your total stays safe)',
+      {fontFamily:'VT323',fontSize:'14px',color:'#ff9500',align:'center',lineSpacing:2,wordWrap:{width:W-40}}).setOrigin(.5,0);
     this.cont=this.add.text(cx,H-11,(isTouch?'TAP':'PRESS')+' TO START  ▶',{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#3dff6e'}).setOrigin(.5);
     this.input.on('pointerdown',function(){ self.go(); });
     this.input.keyboard.on('keydown',function(){ self.go(); });
@@ -1718,14 +1724,17 @@ var Briefing=new Phaser.Class({ Extends:Phaser.Scene,
       self.add.text(x,120,pwr.desc,{fontFamily:'VT323',fontSize:'13px',color:'#c9c4e0',align:'center',wordWrap:{width:150}}).setOrigin(.5,0);
     });
     // WATCH FOR — threats stacked one per row (icon + "NAME — what to do")
-    this.add.text(cx,162,'WATCH FOR',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#ff3860'}).setOrigin(.5);
+    this.add.text(cx,154,'WATCH FOR',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#ff3860'}).setOrigin(.5);
     var threats=this.cfg.threats||[];
-    threats.forEach(function(t,i){ var y=186+i*20;
+    threats.forEach(function(t,i){ var y=174+i*18;
       var img=self.add.image(74,y,t.tex); if(img.height) img.setScale(18/img.height);
-      self.add.text(92,y,t.name+' — '+t.desc,{fontFamily:'VT323',fontSize:'14px',color:'#e0b8c8',wordWrap:{width:330}}).setOrigin(0,.5);
+      self.add.text(92,y,t.name+' — '+t.desc,{fontFamily:'VT323',fontSize:'14px',color:'#e0b8c8',wordWrap:{width:340}}).setOrigin(0,.5);
     });
-    if(this.cfg.tip) this.add.text(cx,H-40,this.cfg.tip,{fontFamily:'VT323',fontSize:'13px',color:'#ffd23f',align:'center',wordWrap:{width:W-48}}).setOrigin(.5);
-    this.cont=this.add.text(cx,H-13,'TAP TO CONTINUE  ▶',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#3dff6e'}).setOrigin(.5);
+    if(this.cfg.tip) this.add.text(cx,214,this.cfg.tip,{fontFamily:'VT323',fontSize:'13px',color:'#ffd23f',align:'center',wordWrap:{width:W-48}}).setOrigin(.5);
+    // honeypot warning — shown every world (they first appear in World 2). Coins-from-this-level, not total.
+    this.add.text(cx,232,'⚠ HONEYPOTS: fake treasure — they drain THIS level\'s coins, not your total',
+      {fontFamily:'VT323',fontSize:'12px',color:'#ff9500',align:'center',wordWrap:{width:W-30}}).setOrigin(.5);
+    this.cont=this.add.text(cx,H-11,'TAP TO CONTINUE  ▶',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#3dff6e'}).setOrigin(.5);
     this.input.on('pointerdown',function(){ self.go(); });
     this.input.keyboard.on('keydown',function(){ self.go(); });
   },
