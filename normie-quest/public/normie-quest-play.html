@@ -284,7 +284,7 @@ var Title=new Phaser.Class({ Extends:Phaser.Scene,
     var tj=this.add.image(W/2+68,152,'jeet'); tj.setScale(38/tj.height);
     var p=this.add.text(W/2,200,BURN_GATE?'PRESS TO INSERT BURN':'TAP TO PLAY',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
     this.tweens.add({targets:p,alpha:.25,duration:600,yoyo:true,repeat:-1});
-    this.add.text(W/2,246,'3 worlds \u00B7 a Cluck Norris production',{fontFamily:'VT323',fontSize:'16px',color:'#8f89b0'}).setOrigin(.5);
+    this.add.text(W/2,246,'2 worlds \u00B7 a Cluck Norris production',{fontFamily:'VT323',fontSize:'16px',color:'#8f89b0'}).setOrigin(.5);
     // BURN_GATE is OFF for now \u2192 free preview: tap straight into the game. The burn Gate
     // (and its /api/nq backend) stay wired but dormant until we "put it together" later.
     var go=function(){ if(this.started) return; this.started=true; if(BURN_GATE) this.scene.start('Gate'); else this.scene.start('Game',{level:0,score:0,lives:3}); };
@@ -1249,10 +1249,12 @@ var Over=new Phaser.Class({ Extends:Phaser.Scene,
     this.add.text(W/2,80,'reached world '+this.level,{fontFamily:'VT323',fontSize:'18px',color:'#8f89b0'}).setOrigin(.5);
     this.add.text(W/2,118,'SCORE',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#8f89b0'}).setOrigin(.5);
     this.add.text(W/2,150,String(this.finalScore),{fontFamily:'"Press Start 2P"',fontSize:'30px',color:'#ffd23f'}).setOrigin(.5).setShadow(3,3,'#7a5a00',0,true,true);
-    this.add.text(W/2,198,'real version: score posts to the\nleaderboard, top 10 split the pool',{fontFamily:'VT323',fontSize:'19px',color:'#8f89b0',align:'center'}).setOrigin(.5);
-    var p=this.add.text(W/2,244,'PRESS TO BURN AGAIN',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
+    // Only tease the leaderboard/pool when the burn economy is actually live; otherwise it's a free preview.
+    this.add.text(W/2,198, BURN_GATE ? 'score posts to the leaderboard —\ntop 10 split the pool' : 'free preview · Worlds 1 & 2\nmore coming soon',{fontFamily:'VT323',fontSize:'19px',color:'#8f89b0',align:'center'}).setOrigin(.5);
+    var p=this.add.text(W/2,244, BURN_GATE ? 'PRESS TO BURN AGAIN' : 'PRESS TO PLAY AGAIN',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
     this.tweens.add({targets:p,alpha:.25,duration:600,yoyo:true,repeat:-1});
-    var self=this; this.started=false; var go=function(){ if(self.started) return; self.started=true; self.scene.start('Gate'); };
+    // Free preview → straight back into the game; only the live burn build routes through the Gate.
+    var self=this; this.started=false; var go=function(){ if(self.started) return; self.started=true; if(BURN_GATE) self.scene.start('Gate'); else self.scene.start('Game',{level:0,score:0,lives:3}); };
     this.time.delayedCall(500,function(){ self.input.once('pointerdown',go); self.input.keyboard.once('keydown',go); });
   }
 });
@@ -1281,7 +1283,8 @@ var Win=new Phaser.Class({ Extends:Phaser.Scene,
     this.add.text(W/2,this.casino>0?222:210,wtext,{fontFamily:'VT323',fontSize:'18px',color:'#8f89b0'}).setOrigin(.5);
     var p=this.add.text(W/2,246,'PRESS TO PLAY AGAIN',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
     this.tweens.add({targets:p,alpha:.25,duration:600,yoyo:true,repeat:-1});
-    var self=this; this.started=false; var go=function(){ if(self.started) return; self.started=true; self.scene.start('Gate'); };
+    // Free preview → straight back into the game; only the live burn build routes through the Gate.
+    var self=this; this.started=false; var go=function(){ if(self.started) return; self.started=true; if(BURN_GATE) self.scene.start('Gate'); else self.scene.start('Game',{level:0,score:0,lives:3}); };
     this.time.delayedCall(500,function(){ self.input.once('pointerdown',go); self.input.keyboard.once('keydown',go); });
   }
 });
