@@ -222,6 +222,43 @@ var LEVELS=[
     spikes:[], powerups:[['diamond',360,230],['candle',1560,H-124]], airdrops:[[2050,H-72]],
     coins:[[300,196],[860,196],[1550,196],[1912,158],[2192,158],[2350,196]],
     enemies:[['sniper',300,230,30],['bitmaxi',880,230,40]],
+    key:[1060,H-140], door:2380 },
+
+  // WORLD 4 — THE EXCHANGE (the CEX that freezes your funds). Cold steel-blue vault; obstacles get
+  // TALLER + WIDER here (walls 4-5 tall, 5-6 wide) — double-jump / Bull to clear them. Boss = the
+  // Custodian (corrupt exchange CEO): stomp him x3 while he flings "frozen withdrawal" locks.
+  { name:'4-1', sub:'THE ONBOARDING', time:150, theme:6, width:6000, bgImage:'exchange',
+    gaps:[[860,980],[1700,1820],[2560,2680],[3400,3520],[4240,4360],[5080,5180]],
+    walls:[[460,4,'steel',5],[1300,4,'steel',4],[2200,5,'steel',4],[3020,4,'stone',5],[3920,5,'steel',4],[4820,4,'steel',5]],
+    plats:[[840,2,H-96,'steel'],[1180,2,H-130,'steel'],[1660,2,H-96,'stone'],[2140,2,H-110,'steel'],[2500,2,H-96,'steel'],[3320,2,H-96,'stone'],[3860,2,H-110,'steel'],[4260,2,H-96,'steel']],
+    spikes:[[1000],[1024],[2760],[2784],[4560],[4584]],
+    powerups:[['supergeek',1000,230],['diamond',2500,H-124],['moon',3150,230],['omegachad',4050,230],['bull',4680,230],['candle',5500,H-120]],
+    airdrops:[[1250,H-118],[3600,H-72]],
+    coins:[[300,196],[348,196],[500,120],[548,120],[864,120],[920,196],[1204,110],[1480,196],[2140,120],[2340,150],[2620,196],[2620,150],[3344,120],[3620,150],[3660,196],[4284,120],[4500,150],[5020,196],[5300,196]],
+    enemies:[['bot',340,230,80],['sniper',700,230,30],['ghost',1050,212,80],['fudster',1160,230,60],['bitmaxi',1900,230,70],['bot',2020,230,70],['sniper',2420,230,30],['ghost',2840,212,70],['fudster',3200,230,70],['bot',3600,230,70],['bitmaxi',4120,230,70],['sniper',4400,230,30],['ghost',4700,212,90],['bot',5220,230,70]],
+    pumpdumps:[[1560,174],[3720,174]], honeypots:[[2400,232],[4160,232]], npcs:[[2950,90]],
+    key:[1680,H-150], door:5880 },
+
+  { name:'4-2', sub:'THE TRADING FLOOR', time:160, theme:6, width:6600, bgImage:'exchange',
+    gaps:[[780,900],[1620,1740],[2440,2560],[3260,3380],[4120,4240],[4980,5100],[5900,6020]],
+    walls:[[440,4,'steel',5],[1240,5,'steel',4],[2100,4,'steel',6],[2980,5,'stone',4],[3860,4,'steel',6],[4720,5,'steel',4],[5560,4,'steel',5]],
+    plats:[[800,2,H-96,'steel'],[1180,2,H-110,'steel'],[1660,2,H-96,'steel'],[2460,2,H-96,'steel'],[2920,2,H-110,'steel'],[3300,2,H-96,'steel'],[3520,2,H-140,'steel'],[4160,2,H-96,'steel'],[4660,2,H-110,'steel'],[5040,2,H-96,'steel']],
+    spikes:[[1000],[1024],[2000],[2024],[3600],[3624],[4400],[4424],[5300],[5324]],
+    powerups:[['supergeek',1400,230],['diamond',2650,230],['moon',3600,H-134],['omegachad',4460,230],['bull',5280,230],['candle',5720,H-120]],
+    airdrops:[[2300,H-118],[4200,H-72]],
+    coins:[[452,130],[500,130],[700,196],[1264,106],[1312,106],[1420,196],[2120,140],[2168,140],[2216,140],[2700,196],[3000,106],[3048,106],[3220,196],[3880,140],[3928,140],[4200,196],[4740,106],[4788,106],[5580,140],[5628,140],[6120,196]],
+    enemies:[['bot',340,230,70],['sniper',620,230,30],['ghost',1000,212,80],['fudster',1420,230,70],['sniper',1920,230,30],['bitmaxi',2280,230,70],['bot',2720,230,70],['ghost',3220,212,70],['sniper',3480,230,30],['fudster',3680,230,70],['bitmaxi',4020,230,70],['bot',4420,230,70],['ghost',4840,212,80],['sniper',5280,230,30],['bitmaxi',5760,230,70]],
+    pumpdumps:[[1000,174],[3500,174],[5300,174]], honeypots:[[2350,232],[4050,232]], npcs:[[3150,90]],
+    key:[1164,H-150], door:6480 },
+
+  // WORLD 4 boss arena — the Custodian (corrupt exchange CEO). Stomp him x3; dodge the frozen locks.
+  { name:'4-3', sub:'THE CUSTODIAN', time:170, theme:6, width:2500, boss:true, bossType:'ceo', bgImage:'exchange',
+    gaps:[[650,750],[1250,1350]],
+    walls:[[420,2,'steel',3],[980,2,'steel',3]],
+    plats:[[670,2,H-96,'steel'],[1270,2,H-96,'steel'],[1900,2,H-104,'steel'],[2180,2,H-96,'steel']],
+    spikes:[], powerups:[['diamond',360,230],['bull',1560,H-124]], airdrops:[[2050,H-72]],
+    coins:[[300,196],[860,196],[1550,196],[1912,158],[2192,158],[2350,196]],
+    enemies:[['sniper',300,230,30],['bitmaxi',880,230,40]],
     key:[1060,H-140], door:2380 }
 ];
 
@@ -367,7 +404,7 @@ var Title=new Phaser.Class({ Extends:Phaser.Scene,
     var tj=this.add.image(W/2+68,152,'jeet'); tj.setScale(38/tj.height);
     var p=this.add.text(W/2,200,BURN_GATE?'PRESS TO INSERT BURN':'TAP TO PLAY',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
     this.tweens.add({targets:p,alpha:.25,duration:600,yoyo:true,repeat:-1});
-    this.add.text(W/2,246,'3 worlds \u00B7 a Cluck Norris production',{fontFamily:'VT323',fontSize:'16px',color:'#8f89b0'}).setOrigin(.5);
+    this.add.text(W/2,246,'4 worlds \u00B7 a Cluck Norris production',{fontFamily:'VT323',fontSize:'16px',color:'#8f89b0'}).setOrigin(.5);
     // BURN_GATE is OFF for now \u2192 free preview: tap straight into the game. The burn Gate
     // (and its /api/nq backend) stay wired but dormant until we "put it together" later.
     var self=this;
@@ -803,6 +840,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.bossStarted) return; this.bossStarted=true; this.boss=true; this.bossHP=3;
     if(this.def.bossType==='wormhole'){ this.startWormBoss(); return; }
     if(this.def.bossType==='kol'){ this.startKolBoss(); return; }
+    if(this.def.bossType==='ceo'){ this.startCeoBoss(); return; }
     var dx=this.def.door, self=this;
     // portal into the lounge's back room: flash, pull Normie BACK across the room, and drop the
     // Rug King in on the far side. He stays inert for a beat so you can never get clipped instantly.
@@ -875,16 +913,54 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     });
     _tone(700,240,0.10,'square',0.05);
   },
+  /* ---------- The Custodian boss (corrupt CEX CEO): stomp x3; freezes withdrawals at range ---------- */
+  startCeoBoss:function(){
+    var dx=this.def.door, self=this;
+    this.cameras.main.flash(420, 60, 130, 170);
+    this.player.setPosition(dx-260, GY-40); this.player.setVelocity(0,0);
+    [dx-340, dx+40].forEach(function(x){ var w=self.physics.add.staticImage(x, H/2, 'brick').setDisplaySize(16,H*2).setAlpha(0); w.refreshBody(); self.physics.add.collider(self.player,w); });
+    var k=this.rugking=this.physics.add.sprite(dx-60, GY-56, 'ceoboss');   // stored in rugking = generic melee-boss handle
+    k.setScale(56/k.height); k.body.setSize(k.width*0.58,k.height*0.82).setOffset(k.width*0.21,k.height*0.14);
+    k.setCollideWorldBounds(true); k.dir=-1; k.invuln=true; k.setDepth(7);
+    var bg2=this.addGlow(k,0x66ddff,5); if(bg2) this.tweens.add({targets:bg2,outerStrength:12,duration:520,yoyo:true,repeat:-1,ease:'Sine.inOut'});
+    this.physics.add.collider(k, this.platforms);
+    this.physics.add.overlap(this.player, k, this.bossTouch, null, this);
+    this.door.setVisible(false);
+    this.bossPips=[]; for(var i=0;i<3;i++) this.bossPips.push(this.hb(this.add.image(W/2-24+i*24, 22, 'heart').setScale(1.4).setDepth(40).setTint(0x8fe4ff)));
+    this.hb(this.add.text(W/2, 42, 'THE CUSTODIAN', {fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#8fe4ff'}).setOrigin(.5,0).setDepth(40));
+    this.powerBanner('THE CUSTODIAN','WITHDRAWALS PAUSED — STOMP HIM x3','#8fe4ff');
+    this.rugIntro=true; this.rugGraceUntil=this.time.now+1600;
+    this.ceoNextFreeze=this.time.now+2600; this.ceoNextTaunt=this.time.now+2000;
+  },
+  ceoTick:function(now,p){
+    var k=this.rugking; if(!k||!k.active) return;
+    if(now>this.ceoNextFreeze){ this.ceoNextFreeze=now+2000; this.ceoFreeze(k,p); }
+    if(now>this.ceoNextTaunt){ this.ceoNextTaunt=now+3400; var t=['WITHDRAWALS PAUSED','IT\'S ALL SAFU','NOT YOUR KEYS','TRUST THE PROCESS','SOON™','WE\'RE REBUILDING TRUST']; this.flash(Phaser.Math.RND.pick(t),'#8fe4ff'); }
+  },
+  ceoFreeze:function(k,p){   // flings a 3-way spread of "frozen withdrawal" locks (final boss = tougher)
+    if(this.over||!this.enemyShots) return; var self=this;
+    var base=Math.atan2((p.y-8)-k.y, p.x-k.x);
+    [-0.22,0,0.22].forEach(function(off){
+      var ang=base+off, sp=205, s=self.enemyShots.create(k.x, k.y-6, 'bullet').setDepth(6);
+      if(!s||!s.body) return; s.body.setAllowGravity(false); s.body.setSize(s.width*0.9,s.height*0.9);
+      s.setVelocity(Math.cos(ang)*sp, Math.sin(ang)*sp); s.setTint(0x8fe4ff); s.dieAt=self.time.now+2900;
+    });
+    _tone(520,260,0.10,'sawtooth',0.05);
+  },
   bossDefeat:function(){
     if(this.over) return; this.over=true; var k=this.rugking, self=this;
     k.invuln=true; k.setVelocity(0,0); k.body.setAllowGravity(false);
     this.addScore(500);
     this.tweens.add({targets:k, angle:720, alpha:0, y:k.y-50, duration:1300, ease:'Cubic.in', onComplete:function(){ if(k.active) k.destroy(); }});
     var nx=this.levelIdx+1;
-    if(this.def.bossType==='kol'){
+    if(this.def.bossType==='ceo'){
       // Final boss down → the run is complete.
-      this.powerBanner('SCAM EXPOSED!','THE SCAMMY KOL IS FINISHED — GG','#3dff6e');
+      this.powerBanner('DELISTED!','THE CUSTODIAN IS FINISHED — GG','#3dff6e');
       this.time.delayedCall(1800, function(){ this.scene.start('Win',this.winData()); },[],this);
+    } else if(this.def.bossType==='kol'){
+      // Scammy KOL down → World 3 done → on to World 4 (The Exchange) via the briefing.
+      this.powerBanner('SCAM EXPOSED!','WORLD 3 CLEARED','#3dff6e');
+      this.time.delayedCall(1800, function(){ this.advanceLevel(); },[],this);
     } else {
       // Rug King → World 1 done → interlude cutscene (+ premium World-2 checkpoint), then World 2.
       this.powerBanner('RUG PULLED!','WORLD 1 CLEARED','#3dff6e');
@@ -1363,6 +1439,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     }
     // Scammy KOL: shills fake tokens at range + taunts (in addition to the charge above)
     if(this.bossStarted && this.def.bossType==='kol' && !this.rugIntro) this.kolTick(now,p);
+    if(this.bossStarted && this.def.bossType==='ceo' && !this.rugIntro) this.ceoTick(now,p);
     // WORMHOLE boss: burrow / erupt state machine
     if(this.bossStarted && this.def.bossType==='wormhole') this.wormTick(now);
     // mini-worm hazards (World 2)
@@ -1404,7 +1481,7 @@ var Over=new Phaser.Class({ Extends:Phaser.Scene,
     this.add.text(W/2,118,'SCORE',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#8f89b0'}).setOrigin(.5);
     this.add.text(W/2,150,String(this.finalScore),{fontFamily:'"Press Start 2P"',fontSize:'30px',color:'#ffd23f'}).setOrigin(.5).setShadow(3,3,'#7a5a00',0,true,true);
     // Premium World-2 checkpoint continue takes priority over the leaderboard/free-preview copy.
-    this.add.text(W/2,198, this.cont>0 ? '★ CHECKPOINT: WORLD 2\ncontinue from the Sand Lands' : (BURN_GATE ? 'score posts to the leaderboard —\ntop 10 split the pool' : 'free preview · Worlds 1 & 2\nmore coming soon'),{fontFamily:'VT323',fontSize:'19px',color:this.cont>0?'#3dff6e':'#8f89b0',align:'center'}).setOrigin(.5);
+    this.add.text(W/2,198, this.cont>0 ? '★ CHECKPOINT: WORLD 2\ncontinue from the Sand Lands' : (BURN_GATE ? 'score posts to the leaderboard —\ntop 10 split the pool' : 'free preview · Worlds 1-4\nmore coming soon'),{fontFamily:'VT323',fontSize:'19px',color:this.cont>0?'#3dff6e':'#8f89b0',align:'center'}).setOrigin(.5);
     var p=this.add.text(W/2,244, this.cont>0 ? 'PRESS TO CONTINUE →' : (BURN_GATE ? 'PRESS TO BURN AGAIN' : 'PRESS TO PLAY AGAIN'),{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
     this.tweens.add({targets:p,alpha:.25,duration:600,yoyo:true,repeat:-1});
     // Continue from the World-2 checkpoint if premium banked one; else free-preview restart, or the burn Gate.
@@ -1423,7 +1500,8 @@ var Win=new Phaser.Class({ Extends:Phaser.Scene,
   create:function(){
     SFX.win();
     // victory tableau keyed to the FINAL boss you actually beat, slumped/defeated + Normie triumphant
-    var V = this.boss==='kol'      ? {img:'scammykol',  title:'THE SCAMMY KOL EXPOSED!', color:'#c99bff', tint:0x9a86c8, scale:72, bg:0x140a24}
+    var V = this.boss==='ceo'      ? {img:'ceoboss',    title:'THE CUSTODIAN, DELISTED!', color:'#8fe4ff', tint:0x9fd6ee, scale:76, bg:0x0a1c2a}
+          : this.boss==='kol'      ? {img:'scammykol',  title:'THE SCAMMY KOL EXPOSED!', color:'#c99bff', tint:0x9a86c8, scale:72, bg:0x140a24}
           : this.boss==='wormhole' ? {img:'wormhole',   title:'THE WORMHOLE IS SEALED!', color:'#66ddff', tint:0x88aacc, scale:82, bg:0x1a1030}
           :                          {img:'rugkingdown',title:'YOU BEAT THE RUG KING!',  color:'#3dff6e', tint:0,        scale:58, bg:0x102a1a};
     this.cameras.main.setZoom(2).centerOn(W/2,H/2); this.cameras.main.setBackgroundColor(V.bg);
@@ -1522,9 +1600,19 @@ var BRIEFINGS = {
        ],
        threats:[
          {tex:'bot', name:'SNIPER BOTS', desc:'they snipe from range — keep moving'},
-         {tex:'scammykol', name:'THE SCAMMY KOL', desc:'the final boss shills at the top'}
+         {tex:'scammykol', name:'THE SCAMMY KOL', desc:'the World 3 boss shills at the top'}
        ],
-       tip:'Crypto Twitter is brutal. Reach the top & stomp the Scammy KOL x3.' }
+       tip:'Crypto Twitter is brutal. Reach the top & stomp the Scammy KOL x3.' },
+  9: { title:'WORLD 4 — THE EXCHANGE',
+       powers:[
+         {tex:'omegachad', name:'GIGA CHAD', desc:'Plow through the crowd — the vault is packed.'},
+         {tex:'bull', name:'BULL MARKET', desc:'Mega-jump — the walls here are TALL. Use it to clear them.'}
+       ],
+       threats:[
+         {tex:'bot', name:'SNIPER BOTS', desc:'more of them, everywhere — keep moving'},
+         {tex:'ceoboss', name:'THE CUSTODIAN', desc:'the FINAL boss — freezes withdrawals at range'}
+       ],
+       tip:'The exchange froze the funds. Obstacles are bigger now — stomp the Custodian x3 to free them.' }
 };
 
 /* ---------- Briefing: reusable "new powers / watch for" intel card between worlds ---------- */
@@ -1621,14 +1709,19 @@ if(TEST_MODE && typeof document!=='undefined'){ (function(){
 
   var kind='bug';
   function showToast(msg,ok){ toast.textContent=msg; toast.style.background=ok?'#04241a':'#3a0f1c'; toast.style.color=ok?'#8dffc0':'#ff9db8'; toast.classList.add('on'); setTimeout(function(){ toast.classList.remove('on'); },2200); }
+  // While the modal is open, DISABLE Phaser's keyboard — otherwise its global capture of the game
+  // keys (W A S D F X Space, arrows, L) preventDefaults them and the textarea can't receive them.
+  function kbGame(on){ try{ if(NQGAME&&NQGAME.input&&NQGAME.input.keyboard) NQGAME.input.keyboard.enabled=on; }catch(e){} }
+  function openM(){ wrap.classList.add('on'); kbGame(false); }
+  function closeM(){ wrap.classList.remove('on'); kbGame(true); }
   lvBtn.onclick=function(){ if(typeof window.__NQ_TOLEVELS==='function') window.__NQ_TOLEVELS(); };
   openBtn.onclick=function(){
     document.getElementById('nqfb-lvl').textContent='level: '+(window.__NQ_LEVEL||'—');
     var nm=document.getElementById('nqfb-name'); try{ nm.value=localStorage.getItem('nq_tester')||''; }catch(e){}
-    wrap.classList.add('on'); setTimeout(function(){ document.getElementById('nqfb-text').focus(); },50);
+    openM(); setTimeout(function(){ document.getElementById('nqfb-text').focus(); },50);
   };
-  document.getElementById('nqfb-cancel').onclick=function(){ wrap.classList.remove('on'); };
-  wrap.onclick=function(e){ if(e.target===wrap) wrap.classList.remove('on'); };
+  document.getElementById('nqfb-cancel').onclick=function(){ closeM(); };
+  wrap.onclick=function(e){ if(e.target===wrap) closeM(); };
   Array.prototype.forEach.call(document.querySelectorAll('#nqfb-kinds button'),function(b){
     b.onclick=function(){ Array.prototype.forEach.call(document.querySelectorAll('#nqfb-kinds button'),function(x){ x.classList.remove('on'); }); b.classList.add('on'); kind=b.getAttribute('data-k'); };
   });
@@ -1641,7 +1734,7 @@ if(TEST_MODE && typeof document!=='undefined'){ (function(){
     fetch('/api/nq/feedback',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({name:name,level:(window.__NQ_LEVEL||''),kind:kind,text:text})})
       .then(function(r){ return r.json().catch(function(){ return {ok:r.ok}; }); })
-      .then(function(j){ if(j&&j.ok){ document.getElementById('nqfb-text').value=''; wrap.classList.remove('on'); showToast('Thanks! Comment sent ✓',true); } else { showToast('Could not send'+(j&&j.status?' ('+j.status+')':''),false); } })
+      .then(function(j){ if(j&&j.ok){ document.getElementById('nqfb-text').value=''; closeM(); showToast('Thanks! Comment sent ✓',true); } else { showToast('Could not send'+(j&&j.status?' ('+j.status+')':''),false); } })
       .catch(function(){ showToast('Network error — not sent',false); })
       .then(function(){ send.disabled=false; send.textContent='Send'; });
   };
