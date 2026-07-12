@@ -726,10 +726,13 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(!this.registry.get('nqPtr')){ this.input.addPointer(4); this.registry.set('nqPtr',1); }   // extra pointers for multi-touch; game-global, add once
     this.touch={left:false,right:false,jump:false};
     var isTouch=this.isTouch=(this.sys.game.device.input.touch||(navigator.maxTouchPoints>0)||('ontouchstart' in window));
-    // on-screen control affordances (visual only — actual input is polled below)
+    // on-screen control affordances (visual only — actual input is polled below). Collected so they
+    // can be HIDDEN when the DOM gutter D-pad is active (tablets/wide screens use the side buttons).
+    this.padAffordances=[];
     var padBtn=function(x,label){
-      self.hb(self.add.image(x,H-28,'btn').setScale(0.58).setAlpha(isTouch?0.5:0.16));
-      self.hb(self.add.text(x,H-28,label,{fontFamily:'"Press Start 2P"',fontSize:'14px',color:'#3dff6e'}).setOrigin(.5).setAlpha(isTouch?0.9:0.28));
+      var im=self.hb(self.add.image(x,H-28,'btn').setScale(0.58).setAlpha(isTouch?0.5:0.16));
+      var tx=self.hb(self.add.text(x,H-28,label,{fontFamily:'"Press Start 2P"',fontSize:'14px',color:'#3dff6e'}).setOrigin(.5).setAlpha(isTouch?0.9:0.28));
+      self.padAffordances.push(im,tx);
     };
     padBtn(34,'<'); padBtn(100,'>');
     // NOTE: no jump-zone fill rectangle. It used to be a half-screen 5%-alpha green rect that,
@@ -1348,16 +1351,23 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   update:function(){
     if(this.over) return;
     var self=this, p=this.player, b=p.body, now=this.time.now;
-    // --- touch: read raw pointer screen-zones (immune to zoom / HUD container transforms) ---
-    // left third bottom = LEFT, next third bottom = RIGHT, right half (any height) = JUMP.
+    // --- touch input: the DOM gutter D-pad (tablets/wide screens) OR on-screen pointer zones (phones) ---
     this.touch.left=this.touch.right=this.touch.jump=false;
-    var gw=this.scale.width, gh=this.scale.height, pts=this.input.manager.pointers;
-    for(var pi=0;pi<pts.length;pi++){ var ptr=pts[pi];
-      if(!ptr||!ptr.isDown||!ptr.wasTouch) continue;            // wasTouch: desktop mouse never moves the player
-      var fx=ptr.x/gw, fy=ptr.y/gh;
-      if(fx>=0.46){ this.touch.jump=true; }
-      else if(fy>0.42){ if(fx<0.20) this.touch.left=true; else if(fx<0.42) this.touch.right=true; }
+    var padActive=(typeof window!=='undefined')&&window.__NQ_PAD_ACTIVE&&window.__NQ_PAD;
+    if(padActive){
+      this.touch.left=!!window.__NQ_PAD.left; this.touch.right=!!window.__NQ_PAD.right; this.touch.jump=!!window.__NQ_PAD.jump;
+    } else {
+      // raw pointer screen-zones (immune to zoom/HUD transforms): left third=LEFT, next third=RIGHT, right half=JUMP
+      var gw=this.scale.width, gh=this.scale.height, pts=this.input.manager.pointers;
+      for(var pi=0;pi<pts.length;pi++){ var ptr=pts[pi];
+        if(!ptr||!ptr.isDown||!ptr.wasTouch) continue;            // wasTouch: desktop mouse never moves the player
+        var fx=ptr.x/gw, fy=ptr.y/gh;
+        if(fx>=0.46){ this.touch.jump=true; }
+        else if(fy>0.42){ if(fx<0.20) this.touch.left=true; else if(fx<0.42) this.touch.right=true; }
+      }
     }
+    // when the gutter pad is driving, hide the redundant on-screen < > affordances
+    if(this.padAffordances){ var showAff=!padActive; for(var ai=0;ai<this.padAffordances.length;ai++) if(this.padAffordances[ai].visible!==showAff) this.padAffordances[ai].setVisible(showAff); }
     var left=this.cursors.left.isDown||this.keys.A.isDown||this.touch.left;
     var right=this.cursors.right.isDown||this.keys.D.isDown||this.touch.right;
     var jump=this.cursors.up.isDown||this.keys.W.isDown||this.keys.SPACE.isDown||this.touch.jump;
@@ -1676,11 +1686,11 @@ var Controls=new Phaser.Class({ Extends:Phaser.Scene,
     g.lineStyle(1,0x33305a,1); g.beginPath(); g.moveTo(cx,40); g.lineTo(cx,150); g.strokePath();   // column divider
     // MOBILE column (highlighted green if this device is touch)
     this.add.text(colL,40,'MOBILE',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:isTouch?'#3dff6e':'#8f89b0'}).setOrigin(.5);
-    this.add.text(colL,56,'MOVE:  < >  buttons\n(bottom-left)\nJUMP:  tap RIGHT half\nof the screen\nDOUBLE JUMP:\ntap again in mid-air',
+    this.add.text(colL,56,'MOVE:  the  < >  buttons\n(side gutters on tablets,\nor tap-move on phones)\nJUMP:  the JUMP button\nDOUBLE JUMP:\ntap JUMP again in air',
       {fontFamily:'VT323',fontSize:'13px',color:'#e6e2f5',align:'center',lineSpacing:2}).setOrigin(.5,0);
     // KEYBOARD column (highlighted green if this device is not touch)
     this.add.text(colR,40,'KEYBOARD',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:isTouch?'#8f89b0':'#3dff6e'}).setOrigin(.5);
-    this.add.text(colR,56,'MOVE:  arrows / A D\nJUMP:  UP / W / SPACE\n(press 2x = double)\nTHROW COINS:\nF  or  X',
+    this.add.text(colR,56,'MOVE:  arrows / A D\nJUMP:  UP / W / SPACE\n(press 2x = double)\nSTOMP enemies by\nlanding on them',
       {fontFamily:'VT323',fontSize:'13px',color:'#e6e2f5',align:'center',lineSpacing:2}).setOrigin(.5,0);
     // the goal / core rules (full width)
     this.add.text(cx,150,'THE GOAL',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffd23f'}).setOrigin(.5);
@@ -1711,7 +1721,7 @@ var Briefing=new Phaser.Class({ Extends:Phaser.Scene,
     g.lineStyle(2,0x3dff6e,1); g.strokeRect(6,38,W-12,H-66);   // inner frame: 38 .. H-28
     this.add.text(cx,15,this.cfg.title,{fontFamily:'"Press Start 2P"',fontSize:'12px',color:'#ffd23f',align:'center'}).setOrigin(.5);
     // controls reminder (each world) — one compact line covering touch + keyboard
-    this.add.text(cx,29,'controls:  < >  or arrows = MOVE  ·  tap-right / UP / SPACE = JUMP (2x)  ·  F/X = THROW',
+    this.add.text(cx,29,'controls:  < >  or arrows = MOVE  ·  JUMP button / UP / SPACE = JUMP (tap 2x = double)',
       {fontFamily:'VT323',fontSize:'11px',color:'#66ccff',align:'center'}).setOrigin(.5);
     // NEW POWERS row (two columns, narrow wrap so the descriptions never collide)
     this.add.text(cx,50,'NEW POWERS',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#3dff6e'}).setOrigin(.5);
@@ -1759,6 +1769,57 @@ try{ if(typeof window!=='undefined') window.__NQ_TOLEVELS=function(){ try{
   NQGAME.scene.getScenes(true).forEach(function(sc){ var k=sc.sys&&sc.sys.settings&&sc.sys.settings.key; if(k&&k!=='LevelSelect') NQGAME.scene.stop(k); });
   NQGAME.scene.start('LevelSelect');
 }catch(e){} }; }catch(e){}
+
+/* ---------- On-screen gutter D-pad (tablets / wide screens) ---------- */
+// On touch devices with room in the letterbox gutters (tablets, wide phones), put MOVE + JUMP in
+// those dark side areas so they don't cover the game. Buttons set window.__NQ_PAD, read by the game
+// loop; window.__NQ_PAD_ACTIVE tells the game to use them (and hide the on-screen < > affordances).
+// Narrow phones (no gutter) fall back to the on-screen touch zones automatically.
+if(typeof document!=='undefined'){ (function(){
+  var isTouch=('ontouchstart' in window)||(navigator.maxTouchPoints>0);
+  if(!isTouch) return;
+  window.__NQ_PAD={left:false,right:false,jump:false}; window.__NQ_PAD_ACTIVE=false;
+  var css=document.createElement('style');
+  css.textContent='#nqpad{display:none}'
+    +'.nqpb{position:fixed;z-index:45;border:2px solid rgba(120,180,255,.42);background:rgba(24,30,54,.5);color:#9fd4ff;'
+    +'font-family:"Press Start 2P",monospace;display:flex;align-items:center;justify-content:center;cursor:pointer;'
+    +'-webkit-user-select:none;user-select:none;touch-action:none;box-shadow:0 5px 16px rgba(0,0,0,.45);transition:background .05s}'
+    +'.nqpb.on{background:rgba(61,255,158,.55);color:#04241a;border-color:#3dff9e}'
+    +'.nqpb-move{border-radius:50%}'
+    +'.nqpb-jump{border-radius:20px;color:#a6ffcd;border-color:rgba(80,255,160,.5);background:rgba(18,42,30,.55)}';
+  document.head.appendChild(css);
+  var wrap=document.createElement('div'); wrap.id='nqpad'; document.body.appendChild(wrap);
+  function mk(cls,label){ var e=document.createElement('button'); e.className='nqpb '+cls; e.textContent=label; e.setAttribute('aria-hidden','true'); wrap.appendChild(e); return e; }
+  var bL=mk('nqpb-move','◄'), bR=mk('nqpb-move','►'), bJ=mk('nqpb-jump','JUMP');
+  function bind(el,key){
+    var set=function(v){ return function(ev){ ev.preventDefault(); ev.stopPropagation(); window.__NQ_PAD[key]=v; el.classList.toggle('on',v); }; };
+    el.addEventListener('touchstart',set(true),{passive:false}); el.addEventListener('touchend',set(false),{passive:false});
+    el.addEventListener('touchcancel',set(false),{passive:false});
+    el.addEventListener('mousedown',set(true)); el.addEventListener('mouseup',set(false)); el.addEventListener('mouseleave',set(false));
+  }
+  bind(bL,'left'); bind(bR,'right'); bind(bJ,'jump');
+  function layout(){
+    var s=document.getElementById('screen'); if(!s) return;
+    var r=s.getBoundingClientRect(), gl=r.left, gr=window.innerWidth-r.right, gutter=Math.min(gl,gr);
+    if(gutter<90){ window.__NQ_PAD_ACTIVE=false; return; }   // not enough gutter → keep the on-screen touch zones
+    window.__NQ_PAD_ACTIVE=true;
+    var mv=Math.max(52,Math.min(94,Math.floor((gutter-24)/2))), jp=Math.max(66,Math.min(120,gutter-26));
+    var by=Math.round(window.innerHeight*0.13), pairW=mv*2+12, lx=Math.round(Math.max(6,(gl-pairW)/2));
+    bL.style.width=bL.style.height=mv+'px'; bL.style.left=lx+'px'; bL.style.bottom=by+'px'; bL.style.fontSize=Math.round(mv*0.4)+'px';
+    bR.style.width=bR.style.height=mv+'px'; bR.style.left=(lx+mv+12)+'px'; bR.style.bottom=by+'px'; bR.style.fontSize=Math.round(mv*0.4)+'px';
+    var rx=Math.round(r.right+Math.max(6,(gr-jp)/2));
+    bJ.style.width=bJ.style.height=jp+'px'; bJ.style.left=rx+'px'; bJ.style.bottom=by+'px'; bJ.style.fontSize=Math.round(jp*0.15)+'px';
+  }
+  window.addEventListener('resize',layout);
+  window.addEventListener('orientationchange',function(){ setTimeout(layout,220); });
+  setTimeout(layout,300); setTimeout(layout,900);
+  // show the pad only during actual gameplay AND when the gutter is wide enough
+  setInterval(function(){
+    var inGame=false; try{ inGame=NQGAME.scene.isActive('Game'); }catch(e){}
+    wrap.style.display=(inGame&&window.__NQ_PAD_ACTIVE)?'block':'none';
+    if(!inGame){ window.__NQ_PAD.left=window.__NQ_PAD.right=window.__NQ_PAD.jump=false; bL.classList.remove('on'); bR.classList.remove('on'); bJ.classList.remove('on'); }
+  },120);
+})(); }
 
 /* ---------- TEST BUILD: DOM feedback + level-select overlay ---------- */
 // A floating HTML overlay (reliable on mobile, unlike in-canvas HUD hit areas). Only mounts
