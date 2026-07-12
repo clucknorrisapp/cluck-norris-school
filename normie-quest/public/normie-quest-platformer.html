@@ -99,6 +99,55 @@ var SFX={
   win:function(){ _seq([[523,0.12],[659,0.12],[784,0.12],[1046,0.12],[1319,0.30]],'square',0.10); }
 };
 
+/* ---------- Background music: original chiptune loops (WebAudio; per-world moods) ---------- */
+// All melodies are ORIGINAL compositions in a retro 8-bit style — NOT copies of any real game tune.
+// Routed through a dedicated low gain so SFX still sit on top. Loop-scheduled with a lookahead.
+var NOTE={C3:130.81,D3:146.83,Eb3:155.56,E3:164.81,F3:174.61,G3:196.00,Ab3:207.65,A3:220.00,Bb3:233.08,B3:246.94,
+  C4:261.63,D4:293.66,Eb4:311.13,E4:329.63,F4:349.23,Fs4:369.99,G4:392.00,Ab4:415.30,A4:440.00,Bb4:466.16,B4:493.88,
+  C5:523.25,D5:587.33,Eb5:622.25,E5:659.25,F5:698.46,G5:783.99,A5:880.00,R:0};
+var MUSIC=(function(){
+  var ctx=null,gain=null,cur=null,timer=null,nextAt=0,muted=false; var N=NOTE;
+  try{ muted=(typeof localStorage!=='undefined')&&localStorage.getItem('nqMute')==='1'; }catch(e){}
+  var TR={
+    // World 1 — bright, bouncy platformer
+    world1:{bpm:138,leadType:'square',lead:[[N.E4,.5],[N.G4,.5],[N.C5,.5],[N.G4,.5],[N.A4,.5],[N.C5,.5],[N.E5,.5],[N.C5,.5],[N.D5,.5],[N.B4,.5],[N.G4,.5],[N.D4,.5],[N.C4,1],[N.R,.5],[N.G4,.5]],
+      bass:[[N.C3,1],[N.G3,1],[N.A3,1],[N.E3,1],[N.F3,1],[N.C3,1],[N.G3,1],[N.G3,1]]},
+    // Sand Lands — Zelda-like: modal, adventurous, a touch mysterious
+    desert:{bpm:104,leadType:'square',lead:[[N.A4,1],[N.B4,.5],[N.C5,.5],[N.D5,1],[N.C5,.5],[N.B4,.5],[N.A4,1.5],[N.E4,.5],[N.F4,1],[N.G4,1],[N.A4,1.5],[N.R,.5],[N.A4,.5],[N.G4,.5],[N.F4,1]],
+      bass:[[N.A3,1],[N.A3,1],[N.F3,1],[N.F3,1],[N.C3,1],[N.C3,1],[N.E3,1],[N.E3,1]]},
+    // Normie Casino — fast, upbeat, playful
+    casino:{bpm:158,leadType:'square',lead:[[N.C5,.25],[N.E5,.25],[N.G4,.25],[N.C5,.25],[N.A4,.25],[N.C5,.25],[N.F5,.25],[N.A4,.25],[N.G4,.25],[N.B4,.25],[N.D5,.25],[N.G4,.25],[N.C5,.5],[N.G4,.5]],
+      bass:[[N.C3,.5],[N.G3,.5],[N.C3,.5],[N.G3,.5],[N.F3,.5],[N.C3,.5],[N.G3,.5],[N.G3,.5]]},
+    // Skyline (World 3) — energetic, neon, driving
+    skyline:{bpm:146,leadType:'square',lead:[[N.E4,.5],[N.B4,.5],[N.A4,.5],[N.E4,.5],[N.G4,.5],[N.D5,.5],[N.B4,.5],[N.G4,.5],[N.A4,.5],[N.E5,.5],[N.D5,.5],[N.B4,.5],[N.E5,1],[N.R,.5],[N.B4,.5]],
+      bass:[[N.E3,1],[N.E3,1],[N.C3,1],[N.C3,1],[N.G3,1],[N.G3,1],[N.A3,1],[N.B3,1]]},
+    // The Exchange (World 4) — cold, minor, mechanical drive
+    exchange:{bpm:132,leadType:'triangle',lead:[[N.A4,.5],[N.E4,.5],[N.A4,.5],[N.C5,.5],[N.B4,.5],[N.E4,.5],[N.B4,.5],[N.D5,.5],[N.C5,.5],[N.A4,.5],[N.E5,1],[N.C5,.5],[N.A4,1],[N.R,.5]],
+      bass:[[N.A3,.5],[N.A3,.5],[N.A3,.5],[N.E3,.5],[N.F3,.5],[N.F3,.5],[N.C3,.5],[N.G3,.5]]},
+    // Boss — tense, urgent
+    boss:{bpm:160,leadType:'sawtooth',lead:[[N.A4,.25],[N.Bb4,.25],[N.A4,.25],[N.E4,.25],[N.A4,.25],[N.C5,.25],[N.B4,.25],[N.A4,.25],[N.G4,.5],[N.Ab4,.5],[N.A4,.5],[N.R,.5]],
+      bass:[[N.A3,.5],[N.A3,.5],[N.F3,.5],[N.F3,.5],[N.E3,.5],[N.E3,.5],[N.A3,.5],[N.G3,.5]]}
+  };
+  function ensure(){ ctx=_ac(); if(!ctx) return false; if(!gain){ gain=ctx.createGain(); gain.gain.value=muted?0:0.09; gain.connect(ctx.destination); } return true; }
+  function note(f,at,dur,type,vol){ if(!f) return; var o=ctx.createOscillator(),g=ctx.createGain(); o.type=type; o.frequency.value=f;
+    g.gain.setValueAtTime(0.0001,at); g.gain.linearRampToValueAtTime(vol,at+0.02); g.gain.exponentialRampToValueAtTime(0.0001,at+Math.max(0.05,dur*0.9));
+    o.connect(g); g.connect(gain); o.start(at); o.stop(at+dur+0.02); }
+  function schedLoop(tr,at){ var spb=60/tr.bpm, lt=at,bt=at;
+    tr.lead.forEach(function(n){ note(n[0],lt,n[1]*spb*0.96,tr.leadType,0.15); lt+=n[1]*spb; });
+    tr.bass.forEach(function(n){ note(n[0],bt,n[1]*spb*0.96,'triangle',0.20); bt+=n[1]*spb; });
+    return Math.max(lt,bt)-at; }
+  function tick(){ if(!cur||!ensure()) return; var tr=TR[cur]; if(!tr) return; var now=ctx.currentTime;
+    var guard=0; while(nextAt<now+1.0 && guard++<8){ nextAt+=schedLoop(tr,nextAt); } }
+  return {
+    play:function(name){ if(!TR[name]) return; if(!ensure()) return; var wasStopped=!cur; cur=name;
+      if(wasStopped) nextAt=ctx.currentTime+0.05; if(!timer) timer=setInterval(tick,240); tick(); },
+    stop:function(){ cur=null; },
+    toggle:function(){ muted=!muted; if(gain) gain.gain.value=muted?0:0.09; try{ localStorage.setItem('nqMute',muted?'1':'0'); }catch(e){} return muted; },
+    muted:function(){ return muted; }
+  };
+})();
+try{ if(typeof window!=='undefined') window.__NQ_MUSIC=MUSIC; }catch(e){}
+
 var C={ ink:0x0d0b1e, coin:0xffd23f, coinDk:0xb8860b, danger:0xff3860, phos:0x3dff6e, white:0xffffff,
         dirt:0x8a5a2b, dirtDk:0x5e3c1a, grass:0x3dff6e, grassDk:0x1da84a,
         brick:0x6b4a8f, brickDk:0x3f2a5c, mover:0x9aa04e, moverDk:0x4a4f1a,
@@ -210,7 +259,7 @@ var LEVELS=[
     walls:[[460,3,'steel',4],[1300,3,'stone',4],[2200,4,'steel',3],[3000,3,'brick',4],[3900,3,'stone',4],[4800,3,'steel',4]],
     plats:[[840,2,H-96,'crate'],[1600,2,H-130,'brick'],[1660,2,H-96,'stone'],[2140,2,H-120,'steel'],[2500,2,H-96,'steel'],[3320,2,H-96,'brick'],[4220,2,H-96,'stone']],
     spikes:[[1000],[1024],[2760],[2784],[4560],[4584]],
-    powerups:[['supergeek',1000,230],['diamond',2050,230],['moon',3200,230],['omegachad',4000,230],['bull',4600,230],['candle',5300,H-120]],
+    powerups:[['supergeek',1000,230],['diamond',2050,230],['solana',2650,230],['moon',3200,230],['omegachad',4000,230],['bull',4600,230],['candle',5300,H-120]],
     airdrops:[[1200,H-118],[3500,H-72]],
     coins:[[472,158],[520,158],[700,196],[1312,158],[1360,158],[1500,196],[2212,134],[2260,134],[2680,196],[3012,158],[3060,158],[3600,196],[3912,158],[3960,158],[4500,196],[4812,158],[4860,158],[5300,196]],
     enemies:[['jeet',340,230,80],['bot',680,230,60],['ghost',1050,212,80],['fudster',1150,230,60],['sniper',1900,230,30],['bitmaxi',2380,230,70],['bot',2800,230,70],['ghost',2820,212,60],['sniper',3150,230,30],['fudster',3600,230,70],['bitmaxi',4100,230,70],['bot',4500,230,70],['ghost',4700,212,90]],
@@ -222,7 +271,7 @@ var LEVELS=[
     walls:[[440,3,'steel',4],[1240,4,'stone',4],[2100,3,'crate',5],[2960,4,'steel',4],[3820,3,'brick',5],[4680,4,'stone',4],[5500,3,'crate',4]],
     plats:[[800,2,H-96,'stone'],[1140,2,H-130,'stone'],[1640,2,H-96,'crate'],[2460,2,H-96,'steel'],[3280,2,H-96,'brick'],[3500,2,H-140,'steel'],[4140,2,H-96,'stone'],[5000,2,H-96,'crate']],
     spikes:[[1000],[1024],[2000],[2024],[3600],[3624],[4400],[4424]],
-    powerups:[['supergeek',1400,230],['diamond',2650,230],['moon',3600,H-134],['omegachad',4400,230],['bull',5250,230],['candle',5700,H-120]],
+    powerups:[['supergeek',1400,230],['solana',1900,230],['diamond',2650,230],['moon',3600,H-134],['omegachad',4400,230],['bull',5250,230],['candle',5700,H-120]],
     airdrops:[[2300,H-118],[4200,H-72]],
     coins:[[452,158],[500,158],[700,196],[1252,134],[1300,134],[1400,196],[2112,158],[2160,158],[2208,158],[2680,196],[2972,134],[3020,134],[3200,196],[3832,158],[3880,158],[3928,158],[4692,134],[4740,134],[5512,158],[5560,158],[6100,196]],
     enemies:[['bot',340,230,70],['jeet',600,230,60],['ghost',1000,212,80],['fudster',1400,230,70],['sniper',1900,230,30],['bitmaxi',2250,230,70],['bot',2700,230,70],['ghost',3200,212,70],['sniper',3450,230,30],['fudster',3650,230,70],['bitmaxi',4000,230,70],['bot',4400,230,70],['ghost',4820,212,80],['sniper',5250,230,30],['bitmaxi',5650,230,60]],
@@ -248,10 +297,10 @@ var LEVELS=[
   // Custodian (corrupt exchange CEO): stomp him x3 while he flings "frozen withdrawal" locks.
   { name:'4-1', sub:'THE ONBOARDING', time:150, theme:6, width:6000, bgImage:'exchange',
     gaps:[[860,980],[1700,1820],[2560,2680],[3400,3520],[4240,4360],[5080,5180]],
-    walls:[[460,4,'steel',5],[1300,4,'steel',4],[2200,5,'steel',4],[3020,4,'stone',5],[3920,5,'steel',4],[4820,4,'steel',5]],
+    walls:[[460,4,'steel',5],[1300,4,'steel',4],[2200,4,'steel',4],[3020,4,'stone',5],[3920,4,'steel',4],[4820,4,'steel',5]],
     plats:[[840,2,H-96,'steel'],[1180,2,H-130,'steel'],[1660,2,H-96,'stone'],[2140,2,H-110,'steel'],[2500,2,H-96,'steel'],[3320,2,H-96,'stone'],[3860,2,H-110,'steel'],[4260,2,H-96,'steel']],
     spikes:[[1000],[1024],[2760],[2784],[4560],[4584]],
-    powerups:[['supergeek',1000,230],['diamond',2500,H-124],['moon',3150,230],['omegachad',4050,230],['bull',4680,230],['candle',5500,H-120]],
+    powerups:[['supergeek',1000,230],['solana',1500,230],['diamond',2500,H-124],['moon',3150,230],['omegachad',4050,230],['bull',4680,230],['candle',5500,H-120]],
     airdrops:[[1250,H-118],[3600,H-72]],
     coins:[[300,196],[348,196],[500,120],[548,120],[864,120],[920,196],[1204,110],[1480,196],[2140,120],[2340,150],[2620,196],[2620,150],[3344,120],[3620,150],[3660,196],[4284,120],[4500,150],[5020,196],[5300,196]],
     enemies:[['bot',340,230,80],['sniper',700,230,30],['ghost',1050,212,80],['fudster',1160,230,60],['bitmaxi',1900,230,70],['bot',2020,230,70],['sniper',2420,230,30],['ghost',2840,212,70],['fudster',3200,230,70],['bot',3600,230,70],['bitmaxi',4120,230,70],['sniper',4400,230,30],['ghost',4700,212,90],['bot',5220,230,70]],
@@ -260,10 +309,10 @@ var LEVELS=[
 
   { name:'4-2', sub:'THE TRADING FLOOR', time:160, theme:6, width:6600, bgImage:'exchange',
     gaps:[[780,900],[1620,1740],[2440,2560],[3260,3380],[4120,4240],[4980,5100],[5900,6020]],
-    walls:[[440,4,'steel',5],[1240,5,'steel',4],[2100,4,'steel',6],[2980,5,'stone',4],[3860,4,'steel',6],[4720,5,'steel',4],[5560,4,'steel',5]],
+    walls:[[440,4,'steel',5],[1240,4,'steel',4],[2100,4,'steel',6],[2980,4,'stone',4],[3860,4,'steel',6],[4720,4,'steel',4],[5560,4,'steel',5]],
     plats:[[800,2,H-96,'steel'],[1180,2,H-110,'steel'],[1660,2,H-96,'steel'],[2460,2,H-96,'steel'],[2920,2,H-110,'steel'],[3300,2,H-96,'steel'],[3520,2,H-140,'steel'],[4160,2,H-96,'steel'],[4660,2,H-110,'steel'],[5040,2,H-96,'steel']],
     spikes:[[1000],[1024],[2000],[2024],[3600],[3624],[4400],[4424],[5300],[5324]],
-    powerups:[['supergeek',1400,230],['diamond',2650,230],['moon',3600,H-134],['omegachad',4460,230],['bull',5280,230],['candle',5720,H-120]],
+    powerups:[['supergeek',1400,230],['solana',1500,230],['diamond',2650,230],['moon',3600,H-134],['omegachad',4460,230],['bull',5280,230],['candle',5720,H-120]],
     airdrops:[[2300,H-118],[4200,H-72]],
     coins:[[452,130],[500,130],[700,196],[1264,106],[1312,106],[1420,196],[2120,140],[2168,140],[2216,140],[2700,196],[3000,106],[3048,106],[3220,196],[3880,140],[3928,140],[4200,196],[4740,106],[4788,106],[5580,140],[5628,140],[6120,196]],
     enemies:[['bot',340,230,70],['sniper',620,230,30],['ghost',1000,212,80],['fudster',1420,230,70],['sniper',1920,230,30],['bitmaxi',2280,230,70],['bot',2720,230,70],['ghost',3220,212,70],['sniper',3480,230,30],['fudster',3680,230,70],['bitmaxi',4020,230,70],['bot',4420,230,70],['ghost',4840,212,80],['sniper',5280,230,30],['bitmaxi',5760,230,70]],
@@ -274,7 +323,7 @@ var LEVELS=[
   // the Custodian at the door. The final world: reaching the boss should be a real fight in itself.
   { name:'4-3', sub:'THE CUSTODIAN', time:190, theme:6, width:5200, boss:true, bossType:'ceo', bgImage:'exchange',
     gaps:[[720,840],[1440,1560],[2160,2280],[2880,3000],[3600,3720],[4240,4360]],
-    walls:[[440,4,'steel',5],[1120,5,'steel',4],[1800,4,'steel',6],[2500,5,'stone',4],[3160,4,'steel',6],[3860,5,'steel',4]],
+    walls:[[440,4,'steel',5],[1120,4,'steel',4],[1800,4,'steel',6],[2500,4,'stone',4],[3160,4,'steel',6],[3860,4,'steel',4]],
     plats:[[740,2,H-96,'steel'],[1160,2,H-110,'steel'],[1580,2,H-96,'steel'],[2280,2,H-96,'steel'],[2560,2,H-120,'steel'],[2940,2,H-96,'steel'],[3620,2,H-96,'steel'],[3920,2,H-110,'steel'],[4400,2,H-96,'steel']],
     spikes:[[960],[984],[1680],[1704],[2760],[2784],[3480],[3504]],
     powerups:[['supergeek',1000,230],['diamond',2050,230],['omegachad',2700,230],['bull',3400,230],['supergeek',4500,H-124]],
@@ -472,6 +521,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var self=this, i;
     var def=this.def=LEVELS[this.levelIdx];
     var LW=this.LW=def.width, th=THEMES[def.theme];
+    // background music — per-world mood (boss arenas get the boss theme; 1-3's Rug King switches in startBoss)
+    try{ var mt=(def.boss&&def.bossType)?'boss':(def.name.charAt(0)==='1'?'world1':def.name==='2-1'?'desert':def.name==='2-2'?'casino':def.name.charAt(0)==='3'?'skyline':def.name.charAt(0)==='4'?'exchange':'world1'); MUSIC.play(mt); }catch(e){}
     // Difficulty profile: deliberate ramp by WORLD. Worlds 1 (lvl 0-2)=baseline, World 2
     // (3-5)=+15% enemy speed, World 3 (6-8)=+30%. Per-level override via def.diff.
     this.diffMul = def.diff || [1,1,1,1.15,1.15,1.15,1.3,1.3,1.3,1.45,1.45,1.55][this.levelIdx] || 1;
@@ -549,7 +600,12 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       var reelBox=self.add.rectangle(sm.x, ry, 62, 22, 0x140a20, 0.92).setStrokeStyle(2,stheme.box).setDepth(20).setVisible(false);
       var reelIcons=[]; for(var ri=0;ri<3;ri++){ var ic=self.add.image(sm.x-18+ri*18, ry, stheme.syms[0]).setDepth(21).setVisible(false); ic.setDisplaySize(16,16); reelIcons.push(ic); }
       var prompt=self.add.text(sm.x, sm.y-sm.displayHeight*0.60, '', {fontFamily:'"Press Start 2P"',fontSize:'7px',color:stheme.txt,align:'center',lineSpacing:3}).setOrigin(.5,1).setDepth(20).setVisible(false);
-      self.slots.push({ m:sm, reelBox:reelBox, reelIcons:reelIcons, prompt:prompt, syms:stheme.syms, label:stheme.label, spinsLeft:3, spin:null });
+      var S={ m:sm, reelBox:reelBox, reelIcons:reelIcons, prompt:prompt, syms:stheme.syms, label:stheme.label, spinsLeft:3, spin:null };
+      self.slots.push(S);
+      // TAP the machine to spin (no need to press jump/up). World sprites get reliable input under
+      // the zoom camera; the reach check lives in trySpinSlot. A bigger tap area covers the reels above.
+      sm.setInteractive(new Phaser.Geom.Rectangle(-sm.width*0.35, -sm.height*0.9, sm.width*0.7, sm.height*1.3), Phaser.Geom.Rectangle.Contains);
+      sm.on('pointerdown', function(){ self.trySpinSlot(S); });
     });
 
     // key
@@ -866,6 +922,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
 
   startBoss:function(){
     if(this.bossStarted) return; this.bossStarted=true; this.boss=true; this.bossHP=3;
+    try{ MUSIC.play('boss'); }catch(e){}   // kick into the boss theme (also covers 1-3's Rug King)
     if(this.def.bossType==='wormhole'){ this.startWormBoss(); return; }
     if(this.def.bossType==='kol'){ this.startKolBoss(); return; }
     if(this.def.bossType==='ceo'){ this.startCeoBoss(); return; }
@@ -1275,12 +1332,17 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.slots.forEach(function(S){ var dx=Math.abs(p.x-S.m.x); if(grounded && dx<120 && Math.abs(p.y-S.m.y)<96 && dx<nd){ nd=dx; nearest=S; } });
     this.slots.forEach(function(S){ if(S!==nearest) S.prompt.setVisible(false); });
     if(nearest){
-      nearest.prompt.setText(nearest.spinsLeft>0?('▲ '+nearest.label+'\n('+nearest.spinsLeft+' left)'):'OUT OF\nCREDITS').setVisible(true);
-      // At a credited machine the jump press ALWAYS "plays it" (never makes Normie hop away):
+      nearest.prompt.setText(nearest.spinsLeft>0?('▶ TAP TO SPIN\n'+nearest.label+' ('+nearest.spinsLeft+')'):'OUT OF\nCREDITS').setVisible(true);
+      // At a credited machine the jump press ALSO "plays it" (never makes Normie hop away):
       // spin if it's free, otherwise just eat the press and wait out the current spin.
       if(nearest.spinsLeft>0 && jumpEdge){ consumed=true; if(!nearest.spin) this.startSpin(now, nearest); }
     }
     return consumed;
+  },
+  // TAP-to-spin: fired by tapping the slot machine. Spins if the player is within reach + it has credits.
+  trySpinSlot:function(S){
+    if(this.over||!S||S.spinsLeft<=0||S.spin) return; var p=this.player; if(!p) return;
+    if(Math.abs(p.x-S.m.x)<150 && Math.abs(p.y-S.m.y)<120) this.startSpin(this.time.now, S);
   },
   startSpin:function(now, S){
     S.spinsLeft--; SFX.coin();
@@ -1824,6 +1886,21 @@ if(typeof document!=='undefined'){ (function(){
     wrap.style.display=(inGame&&window.__NQ_PAD_ACTIVE)?'block':'none';
     if(!inGame){ window.__NQ_PAD.left=window.__NQ_PAD.right=window.__NQ_PAD.jump=false; bL.classList.remove('on'); bR.classList.remove('on'); bJ.classList.remove('on'); }
   },120);
+})(); }
+
+/* ---------- Music mute toggle (M key + a small button) ---------- */
+if(typeof document!=='undefined'){ (function(){
+  var css=document.createElement('style');
+  css.textContent='#nqmute{position:fixed;top:9px;left:9px;z-index:60;width:34px;height:34px;border-radius:50%;'
+    +'border:1px solid rgba(255,255,255,.22);background:rgba(18,14,32,.55);color:#ffd23f;font-size:16px;cursor:pointer;'
+    +'display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;padding:0;line-height:1}';
+  document.head.appendChild(css);
+  var btn=document.createElement('button'); btn.id='nqmute'; btn.setAttribute('aria-label','Toggle music'); document.body.appendChild(btn);
+  function icon(){ btn.textContent=(window.__NQ_MUSIC&&window.__NQ_MUSIC.muted())?'🔇':'🔊'; }
+  btn.addEventListener('click',function(e){ e.preventDefault(); e.stopPropagation(); if(window.__NQ_MUSIC){ window.__NQ_MUSIC.toggle(); icon(); } });
+  document.addEventListener('keydown',function(e){ if(e.target&&/^(input|textarea)$/i.test(e.target.tagName)) return;
+    if(e.key==='m'||e.key==='M'){ if(window.__NQ_MUSIC){ window.__NQ_MUSIC.toggle(); icon(); } } });
+  icon();
 })(); }
 
 /* ---------- TEST BUILD: DOM feedback + level-select overlay ---------- */
