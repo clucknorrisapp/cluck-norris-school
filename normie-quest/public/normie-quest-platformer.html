@@ -195,10 +195,10 @@ var LEVELS=[
     walls:[[460,3,'steel',4],[1300,3,'stone',4],[2200,4,'steel',3],[3000,3,'brick',4],[3900,3,'stone',4],[4800,3,'steel',4]],
     plats:[[840,2,H-96,'crate'],[1600,2,H-130,'brick'],[1660,2,H-96,'stone'],[2140,2,H-120,'steel'],[2500,2,H-96,'steel'],[3320,2,H-96,'brick'],[4220,2,H-96,'stone']],
     spikes:[[1000],[1024],[2760],[2784],[4560],[4584]],
-    powerups:[['supergeek',1000,230],['diamond',2050,230],['moon',3050,230],['omegachad',4000,230],['bull',4600,230],['candle',5300,H-120]],
+    powerups:[['supergeek',1000,230],['diamond',2050,230],['moon',3200,230],['omegachad',4000,230],['bull',4600,230],['candle',5300,H-120]],
     airdrops:[[1200,H-118],[3500,H-72]],
     coins:[[472,158],[520,158],[700,196],[1312,158],[1360,158],[1500,196],[2212,134],[2260,134],[2680,196],[3012,158],[3060,158],[3600,196],[3912,158],[3960,158],[4500,196],[4812,158],[4860,158],[5300,196]],
-    enemies:[['jeet',340,230,80],['bot',680,230,60],['ghost',1050,212,80],['fudster',1150,230,60],['sniper',1900,230,30],['bitmaxi',2380,230,70],['bot',2800,230,70],['ghost',2820,212,60],['sniper',3150,230,30],['fudster',3600,230,70],['bitmaxi',3950,230,70],['bot',4500,230,70],['ghost',4700,212,90]],
+    enemies:[['jeet',340,230,80],['bot',680,230,60],['ghost',1050,212,80],['fudster',1150,230,60],['sniper',1900,230,30],['bitmaxi',2380,230,70],['bot',2800,230,70],['ghost',2820,212,60],['sniper',3150,230,30],['fudster',3600,230,70],['bitmaxi',4100,230,70],['bot',4500,230,70],['ghost',4700,212,90]],
     pumpdumps:[[1500,174],[3700,174]], honeypots:[[2350,232]], npcs:[[2900,90]],
     key:[1624,H-150], door:5680 },
 
@@ -214,15 +214,19 @@ var LEVELS=[
     pumpdumps:[[1000,174],[3500,174],[5300,174]], honeypots:[[2350,232],[4050,232]], npcs:[[3150,90]],
     key:[1164,H-150], door:6300 },
 
-  // WORLD 3 boss arena — the Scammy KOL (shill influencer). Stomp his phone x3; dodge the shills.
-  { name:'3-3', sub:'THE SCAMMY KOL', time:150, theme:5, width:2500, boss:true, bossType:'kol', bgImage:'skyline',
-    gaps:[[650,750],[1250,1350]],
-    walls:[[420,2,'stone',3],[980,2,'steel',3]],
-    plats:[[670,2,H-96,'stone'],[1270,2,H-96,'steel'],[1900,2,H-104,'stone'],[2180,2,H-96,'stone']],
-    spikes:[], powerups:[['diamond',360,230],['candle',1560,H-124]], airdrops:[[2050,H-72]],
-    coins:[[300,196],[860,196],[1550,196],[1912,158],[2192,158],[2350,196]],
-    enemies:[['sniper',300,230,30],['bitmaxi',880,230,40]],
-    key:[1060,H-140], door:2380 },
+  // WORLD 3 boss level — a LONG, HARD gauntlet up the skyline, THEN the Scammy KOL at the door.
+  // The "-3" levels are the tough ones: dense snipers/hazards + tricky jumps to even reach the boss.
+  { name:'3-3', sub:'THE SCAMMY KOL', time:175, theme:5, width:4800, boss:true, bossType:'kol', bgImage:'skyline',
+    gaps:[[700,820],[1380,1500],[2060,2180],[2720,2840],[3380,3500]],
+    walls:[[420,3,'steel',4],[1060,4,'stone',3],[1680,3,'brick',5],[2320,4,'steel',3],[2980,3,'stone',5],[3640,4,'steel',3]],
+    plats:[[720,2,H-96,'steel'],[1080,2,H-140,'brick'],[1400,2,H-96,'stone'],[2080,2,H-96,'steel'],[2360,2,H-120,'steel'],[2740,2,H-96,'brick'],[3400,2,H-96,'steel'],[3680,2,H-134,'steel']],
+    spikes:[[900],[924],[1580],[1604],[2440],[2464],[3200],[3224]],
+    powerups:[['supergeek',1000,230],['diamond',1850,230],['omegachad',2620,230],['bull',3300,230],['supergeek',3980,H-124]],
+    airdrops:[[1500,H-118],[3100,H-72]],
+    coins:[[300,196],[560,150],[620,196],[900,196],[1160,140],[1420,150],[1620,196],[1950,150],[2200,196],[2500,150],[2760,150],[2900,196],[3150,150],[3400,150],[3760,150],[4000,196],[4200,150]],
+    enemies:[['jeet',340,230,70],['sniper',620,230,30],['bot',900,230,60],['fudster',1150,230,60],['ghost',1300,212,80],['sniper',1600,230,30],['bitmaxi',1950,230,70],['bot',2200,230,70],['sniper',2600,230,30],['fudster',2900,230,70],['ghost',3200,212,70],['bitmaxi',3300,230,70],['sniper',3600,230,30],['bot',3900,230,60],['ghost',4100,212,80]],
+    pumpdumps:[[1380,174],[2720,174]], honeypots:[[1250,232],[2500,232],[3760,232]], npcs:[[2450,90]],
+    key:[4200,H-150], door:4600 },
 
   // WORLD 4 — THE EXCHANGE (the CEX that freezes your funds). Cold steel-blue vault; obstacles get
   // TALLER + WIDER here (walls 4-5 tall, 5-6 wide) — double-jump / Bull to clear them. Boss = the
@@ -251,15 +255,19 @@ var LEVELS=[
     pumpdumps:[[1000,174],[3500,174],[5300,174]], honeypots:[[2350,232],[4050,232]], npcs:[[3150,90]],
     key:[1164,H-150], door:6480 },
 
-  // WORLD 4 boss arena — the Custodian (corrupt exchange CEO). Stomp him x3; dodge the frozen locks.
-  { name:'4-3', sub:'THE CUSTODIAN', time:170, theme:6, width:2500, boss:true, bossType:'ceo', bgImage:'exchange',
-    gaps:[[650,750],[1250,1350]],
-    walls:[[420,2,'steel',3],[980,2,'steel',3]],
-    plats:[[670,2,H-96,'steel'],[1270,2,H-96,'steel'],[1900,2,H-104,'steel'],[2180,2,H-96,'steel']],
-    spikes:[], powerups:[['diamond',360,230],['bull',1560,H-124]], airdrops:[[2050,H-72]],
-    coins:[[300,196],[860,196],[1550,196],[1912,158],[2192,158],[2350,196]],
-    enemies:[['sniper',300,230,30],['bitmaxi',880,230,40]],
-    key:[1060,H-140], door:2380 }
+  // WORLD 4 boss level — the HARDEST gauntlet (tall+wide walls, dense snipers, spike pits), THEN
+  // the Custodian at the door. The final world: reaching the boss should be a real fight in itself.
+  { name:'4-3', sub:'THE CUSTODIAN', time:190, theme:6, width:5200, boss:true, bossType:'ceo', bgImage:'exchange',
+    gaps:[[720,840],[1440,1560],[2160,2280],[2880,3000],[3600,3720],[4240,4360]],
+    walls:[[440,4,'steel',5],[1120,5,'steel',4],[1800,4,'steel',6],[2500,5,'stone',4],[3160,4,'steel',6],[3860,5,'steel',4]],
+    plats:[[740,2,H-96,'steel'],[1160,2,H-110,'steel'],[1580,2,H-96,'steel'],[2280,2,H-96,'steel'],[2560,2,H-120,'steel'],[2940,2,H-96,'steel'],[3620,2,H-96,'steel'],[3920,2,H-110,'steel'],[4400,2,H-96,'steel']],
+    spikes:[[960],[984],[1680],[1704],[2760],[2784],[3480],[3504]],
+    powerups:[['supergeek',1000,230],['diamond',2050,230],['omegachad',2700,230],['bull',3400,230],['supergeek',4500,H-124]],
+    airdrops:[[1500,H-118],[3300,H-72]],
+    coins:[[300,196],[600,130],[660,196],[960,196],[1220,106],[1620,150],[1980,140],[2340,196],[2620,110],[2960,196],[3220,140],[3560,196],[3940,106],[4160,196],[4420,150],[4560,196]],
+    enemies:[['bot',340,230,70],['sniper',640,230,30],['fudster',960,230,60],['ghost',1240,212,80],['sniper',1640,230,30],['bitmaxi',2000,230,70],['bot',2340,230,70],['sniper',2620,230,30],['fudster',3080,230,70],['ghost',3420,212,70],['sniper',3560,230,30],['bitmaxi',4100,230,70],['bot',4160,230,60],['sniper',4460,230,30],['ghost',4560,212,80]],
+    pumpdumps:[[1440,174],[2880,174],[4240,174]], honeypots:[[1300,232],[2660,232],[4020,232]], npcs:[[2380,90]],
+    key:[4600,H-150], door:5000 }
 ];
 
 /* ---------- Boot ---------- */
