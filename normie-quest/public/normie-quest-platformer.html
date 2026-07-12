@@ -2,29 +2,44 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <title>NORMIE QUEST — Platformer Prototype</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
-  html,body{height:100%;width:100%;overflow:hidden}
+  html,body{height:100%;width:100%;overflow:hidden;background:#07060f;overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
   body{
-    display:flex;align-items:center;justify-content:center;min-height:100vh;
+    display:flex;align-items:center;justify-content:center;min-height:100vh;min-height:100dvh;
     background:radial-gradient(ellipse at 50% 28%, #17122e 0%, #07060f 72%);
   }
   #screen{
+    /* 16:9 box fit to the viewport. The dvw/dvh pair tracks the DYNAMIC mobile browser
+       UI, so landscape no longer hides the top/bottom behind the address bar.
+       (The vw/vh line above it is the fallback for older browsers.) */
     width:min(100vw, 177.78vh); height:min(56.25vw, 100vh);
+    width:min(100dvw, 177.78dvh); height:min(56.25dvw, 100dvh);
     background:#0a0813; overflow:hidden;
     box-shadow:0 0 0 1px #2a2440, 0 20px 70px rgba(0,0,0,.7);
   }
   #screen canvas{ width:100%!important;height:100%!important;display:block;image-rendering:pixelated }
+  /* Phones in portrait: the game is landscape (16:9), so portrait is a tiny strip —
+     prompt a rotate. Overlays the game, which stays initialised behind it. */
+  #rotate{ position:fixed;inset:0;z-index:50;display:none;
+    flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:26px;
+    background:radial-gradient(ellipse at 50% 40%, #17122e 0%, #05040c 82%); }
+  #rotate .ico{ font-size:52px;margin-bottom:20px;animation:nqrot 1.9s ease-in-out infinite;transform-origin:50% 50% }
+  #rotate .ttl{ font-family:'Press Start 2P',monospace;font-size:14px;color:#ffd23f;line-height:1.9 }
+  #rotate .sub{ font-family:'VT323',monospace;font-size:19px;color:#8f89b0;margin-top:14px }
+  @keyframes nqrot{ 0%,45%{transform:rotate(0)} 65%,100%{transform:rotate(-90deg)} }
+  @media (max-width:920px) and (orientation:portrait){ #rotate{display:flex} }
 </style>
 </head>
 <body>
 
 <div id="screen"></div>
+<div id="rotate"><div class="ico">📱</div><div class="ttl">ROTATE YOUR PHONE</div><div class="sub">Normie Quest plays best in landscape</div></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
 <script>
