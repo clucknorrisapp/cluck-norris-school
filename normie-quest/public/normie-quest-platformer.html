@@ -1143,13 +1143,16 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     s.setVelocity(dx/d*sp, dy/d*sp); s.dieAt=this.time.now+2600;
     _tone(900,300,0.10,'square',0.05);
   },
-  honeypotHit:function(player,hp){   // mimic trap: looks like treasure, snaps once
+  honeypotHit:function(player,hp){   // mimic trap: looks like treasure, snaps once — DRAINS COINS, never a life
     if(this.over||hp.sprung) return; hp.sprung=true; var now=this.time.now;
     this.tweens.killTweensOf(hp); this.cameras.main.shake(120,.008); this.burst(hp.x,hp.y,0xff5544,16);
     hp.setTint(0xff6644); this.tweens.add({targets:hp,scaleX:hp.scaleX*1.18,duration:110,yoyo:true});
     if(hp.body) hp.body.enable=false;   // one-shot
-    this.flash("HONEYPOT — IT'S A TRAP!",'#ff9500');
-    if(!(player.invuln||now<this.shieldUntil||now<this.moonUntil||now<this.omegaUntil)) this.hurt(player, hp.x<player.x?1:-1);
+    // A honeypot is a can't-sell scam: it drains your COINS (never a heart) + a brief sticky snare.
+    var steal=Math.min(this.score, 60);
+    if(steal>0){ this.score-=steal; this.hudScore.setText('SCORE '+this.score); }
+    this.slowUntil=Math.max(this.slowUntil||0, now+700);   // sticks you for a beat (never lethal on its own)
+    this.flash(steal>0?('HONEYPOT — DRAINED '+steal+' COINS!'):"HONEYPOT — IT'S A TRAP!",'#ff9500');
   },
   pumpDumpTick:function(now,p,b){   // solid until stepped on, then DUMPS (falls away) and respawns
     if(!this.pumpDumps) return; var self=this;
