@@ -372,16 +372,10 @@ var Title=new Phaser.Class({ Extends:Phaser.Scene,
     // (and its /api/nq backend) stay wired but dormant until we "put it together" later.
     var self=this;
     var go=function(){ if(this.started) return; this.started=true; if(BURN_GATE) this.scene.start('Gate'); else this.scene.start('Game',{level:0,score:0,lives:3}); };
-    if(TEST_MODE){
-      // TEST BUILD: explicit buttons (no global tap-to-start, which would double-fire with a button)
-      this.add.text(W/2,246,'TEST BUILD',{fontFamily:'VT323',fontSize:'15px',color:'#ffd23f'}).setOrigin(.5);
-      var pl=this.add.text(W/2-64,262,'▶ PLAY 1-1',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#3dff6e',backgroundColor:'#141a2e',padding:{x:7,y:5}}).setOrigin(.5).setDepth(50).setInteractive({useHandCursor:true});
-      pl.on('pointerdown',function(){ go.call(self); });
-      var ls=this.add.text(W/2+62,262,'⚙ LEVELS',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#66ccff',backgroundColor:'#141a2e',padding:{x:7,y:5}}).setOrigin(.5).setDepth(50).setInteractive({useHandCursor:true});
-      ls.on('pointerdown',function(){ if(self.started) return; self.started=true; self.scene.start('LevelSelect'); });
-    } else {
-      this.input.once('pointerdown',go,this); this.input.keyboard.once('keydown',go,this);
-    }
+    // Tap anywhere = play from 1-1 (both modes). In TEST BUILD, the reliable DOM "≡ Levels"
+    // button (bottom-left, works from here too) is how you reach LEVEL SELECT.
+    this.input.once('pointerdown',go,this); this.input.keyboard.once('keydown',go,this);
+    if(TEST_MODE){ this.add.text(W/2,262,'TEST BUILD · tap ≡ Levels below to pick a level',{fontFamily:'VT323',fontSize:'14px',color:'#ffd23f'}).setOrigin(.5); }
   }
 });
 
@@ -666,7 +660,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // TEST BUILD: expose the current level + a "back to LEVEL SELECT" hook to the DOM overlay
     // (a reliable HTML button — in-canvas HUD hit areas are unreliable under the 2x-zoom container).
     // Press L on desktop, or tap the overlay's ≡ Levels button on any device.
-    try{ if(typeof window!=='undefined'){ window.__NQ_LEVEL=(this.def&&this.def.name)||''; window.__NQ_TOLEVELS=function(){ try{ self.scene.start('LevelSelect'); }catch(e){} }; } }catch(e){}
+    try{ if(typeof window!=='undefined') window.__NQ_LEVEL=(this.def&&this.def.name)||''; }catch(e){}
     if(TEST_MODE){ this.input.keyboard.on('keydown-L',function(){ self.scene.start('LevelSelect'); }); }
     if(!this.registry.get('nqPtr')){ this.input.addPointer(4); this.registry.set('nqPtr',1); }   // extra pointers for multi-touch; game-global, add once
     this.touch={left:false,right:false,jump:false};
@@ -1574,7 +1568,7 @@ var Briefing=new Phaser.Class({ Extends:Phaser.Scene,
   }
 });
 
-new Phaser.Game({
+var NQGAME=new Phaser.Game({
   // Render at 2x internal resolution (each scene camera zooms 2x, so the world view is
   // unchanged but the backing store is 960x540 -> crisp, not blocky, when displayed big).
   type:Phaser.AUTO, parent:'screen', width:W*2, height:H*2, pixelArt:true, backgroundColor:'#0a0813', roundPixels:true,
@@ -1582,6 +1576,12 @@ new Phaser.Game({
   physics:{ default:'arcade', arcade:{ gravity:{y:900}, debug:false } },
   scene:[Boot,Title,LevelSelect,Gate,Game,Over,Win,Interlude,Briefing]
 });
+// Global "jump to LEVEL SELECT" hook — works from ANY scene (title, game, over, win), so the
+// reliable DOM "≡ Levels" button is never a dead end. Stops whatever's running, then starts it.
+try{ if(typeof window!=='undefined') window.__NQ_TOLEVELS=function(){ try{
+  NQGAME.scene.getScenes(true).forEach(function(sc){ var k=sc.sys&&sc.sys.settings&&sc.sys.settings.key; if(k&&k!=='LevelSelect') NQGAME.scene.stop(k); });
+  NQGAME.scene.start('LevelSelect');
+}catch(e){} }; }catch(e){}
 
 /* ---------- TEST BUILD: DOM feedback + level-select overlay ---------- */
 // A floating HTML overlay (reliable on mobile, unlike in-canvas HUD hit areas). Only mounts
@@ -1621,7 +1621,7 @@ if(TEST_MODE && typeof document!=='undefined'){ (function(){
 
   var kind='bug';
   function showToast(msg,ok){ toast.textContent=msg; toast.style.background=ok?'#04241a':'#3a0f1c'; toast.style.color=ok?'#8dffc0':'#ff9db8'; toast.classList.add('on'); setTimeout(function(){ toast.classList.remove('on'); },2200); }
-  lvBtn.onclick=function(){ if(typeof window.__NQ_TOLEVELS==='function') window.__NQ_TOLEVELS(); else showToast('open a level first',false); };
+  lvBtn.onclick=function(){ if(typeof window.__NQ_TOLEVELS==='function') window.__NQ_TOLEVELS(); };
   openBtn.onclick=function(){
     document.getElementById('nqfb-lvl').textContent='level: '+(window.__NQ_LEVEL||'—');
     var nm=document.getElementById('nqfb-name'); try{ nm.value=localStorage.getItem('nq_tester')||''; }catch(e){}
