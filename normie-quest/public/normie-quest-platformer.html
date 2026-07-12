@@ -416,7 +416,7 @@ var Title=new Phaser.Class({ Extends:Phaser.Scene,
     // BURN_GATE is OFF for now \u2192 free preview: tap straight into the game. The burn Gate
     // (and its /api/nq backend) stay wired but dormant until we "put it together" later.
     var self=this;
-    var go=function(){ if(this.started) return; this.started=true; if(BURN_GATE) this.scene.start('Gate'); else this.scene.start('Game',{level:0,score:0,lives:3}); };
+    var go=function(){ if(this.started) return; this.started=true; if(BURN_GATE) this.scene.start('Gate'); else this.scene.start('Controls',{next:0,score:0}); };
     // Tap anywhere = play from 1-1 (both modes). In TEST BUILD, the reliable DOM "≡ Levels"
     // button (bottom-left, works from here too) is how you reach LEVEL SELECT.
     this.input.once('pointerdown',go,this); this.input.keyboard.once('keydown',go,this);
@@ -440,7 +440,7 @@ var Gate=new Phaser.Class({ Extends:Phaser.Scene,
       _ac(); btn.disableInteractive();
       var s=this.add.text(W/2,226,'watching chain',{fontFamily:'VT323',fontSize:'21px',color:'#3dff6e'}).setOrigin(.5); var dots=0;
       this.time.addEvent({delay:350,repeat:4,callback:function(){ dots++; s.setText('watching chain'+'.'.repeat(dots)); }});
-      this.time.delayedCall(1900,function(){ s.setText('BURN CONFIRMED — GO!').setColor('#ffd23f'); this.time.delayedCall(700,function(){ this.scene.start('Game',{level:0,score:0,lives:3}); },[],this); },[],this);
+      this.time.delayedCall(1900,function(){ s.setText('BURN CONFIRMED — GO!').setColor('#ffd23f'); this.time.delayedCall(700,function(){ this.scene.start('Controls',{next:0,score:0}); },[],this); },[],this);
     },this);
     this.add.text(W/2,254,'demo only — nothing really burns yet',{fontFamily:'VT323',fontSize:'16px',color:'#544d75'}).setOrigin(.5);
   }
@@ -1617,11 +1617,47 @@ var BRIEFINGS = {
          {tex:'bull', name:'BULL MARKET', desc:'Mega-jump — the walls here are TALL. Use it to clear them.'}
        ],
        threats:[
-         {tex:'bot', name:'SNIPER BOTS', desc:'more of them, everywhere — keep moving'},
-         {tex:'ceoboss', name:'THE CUSTODIAN', desc:'the FINAL boss — freezes withdrawals at range'}
+         {tex:'bot', name:'SNIPER BOTS', desc:'everywhere now — keep moving'},
+         {tex:'ceoboss', name:'THE CUSTODIAN', desc:'FINAL boss; freezes you at range'}
        ],
-       tip:'The exchange froze the funds. Obstacles are bigger now — stomp the Custodian x3 to free them.' }
+       tip:'Obstacles are bigger now — stomp the Custodian x3 to free the funds.' }
 };
+
+/* ---------- Controls: opening HOW-TO-PLAY screen shown before World 1 ---------- */
+var Controls=new Phaser.Class({ Extends:Phaser.Scene,
+  initialize:function(){ Phaser.Scene.call(this,{key:'Controls'}); },
+  init:function(d){ d=d||{}; this.nextLevel=d.next!=null?d.next:0; this.score=d.score||0; },
+  create:function(){
+    var self=this, cx=W/2; this.done=false; this.t0=0;
+    this.cameras.main.setZoom(2).centerOn(W/2,H/2);
+    var g=this.add.graphics(); g.fillStyle(0x0d0b1e,1); g.fillRect(0,0,W,H);
+    g.fillStyle(0x1a1533,1); g.fillRect(0,0,W,28);
+    g.lineStyle(2,0x3dff6e,1); g.strokeRect(6,32,W-12,H-56);
+    this.add.text(cx,14,'HOW TO PLAY',{fontFamily:'"Press Start 2P"',fontSize:'13px',color:'#ffd23f'}).setOrigin(.5);
+    var isTouch=(this.sys.game.device.input.touch||(navigator.maxTouchPoints>0)||('ontouchstart' in window));
+    var colL=Math.round(W*0.27), colR=Math.round(W*0.73);
+    g.lineStyle(1,0x33305a,1); g.beginPath(); g.moveTo(cx,40); g.lineTo(cx,150); g.strokePath();   // column divider
+    // MOBILE column (highlighted green if this device is touch)
+    this.add.text(colL,40,'MOBILE',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:isTouch?'#3dff6e':'#8f89b0'}).setOrigin(.5);
+    this.add.text(colL,56,'MOVE:  < >  buttons\n(bottom-left)\nJUMP:  tap RIGHT half\nof the screen\nDOUBLE JUMP:\ntap again in mid-air',
+      {fontFamily:'VT323',fontSize:'13px',color:'#e6e2f5',align:'center',lineSpacing:2}).setOrigin(.5,0);
+    // KEYBOARD column (highlighted green if this device is not touch)
+    this.add.text(colR,40,'KEYBOARD',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:isTouch?'#8f89b0':'#3dff6e'}).setOrigin(.5);
+    this.add.text(colR,56,'MOVE:  arrows / A D\nJUMP:  UP / W / SPACE\n(press 2x = double)\nTHROW COINS:\nF  or  X',
+      {fontFamily:'VT323',fontSize:'13px',color:'#e6e2f5',align:'center',lineSpacing:2}).setOrigin(.5,0);
+    // the goal / core rules (full width)
+    this.add.text(cx,158,'THE GOAL',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffd23f'}).setOrigin(.5);
+    this.add.text(cx,172,'JUMP on enemies to STOMP them  ·  grab the KEY, then reach the DOOR\ngrab glowing POWER-UPS  ·  dodge spikes & hazards',
+      {fontFamily:'VT323',fontSize:'14px',color:'#c9c4e0',align:'center',lineSpacing:3,wordWrap:{width:W-44}}).setOrigin(.5,0);
+    this.cont=this.add.text(cx,H-11,(isTouch?'TAP':'PRESS')+' TO START  ▶',{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#3dff6e'}).setOrigin(.5);
+    this.input.on('pointerdown',function(){ self.go(); });
+    this.input.keyboard.on('keydown',function(){ self.go(); });
+  },
+  go:function(){ if(this.done) return; this.done=true; SFX.power(); this.scene.start('Game',{level:this.nextLevel,score:this.score,lives:3}); },
+  update:function(){ if(!this.t0){ this.t0=this.time.now; return; }
+    if(this.cont) this.cont.setAlpha(0.4+0.6*Math.abs(Math.sin(this.time.now/300)));
+    if(this.time.now-this.t0>20000) this.go(); }   // safety auto-advance
+});
 
 /* ---------- Briefing: reusable "new powers / watch for" intel card between worlds ---------- */
 var Briefing=new Phaser.Class({ Extends:Phaser.Scene,
@@ -1634,7 +1670,10 @@ var Briefing=new Phaser.Class({ Extends:Phaser.Scene,
     var g=this.add.graphics(); g.fillStyle(0x0d0b1e,1); g.fillRect(0,0,W,H);
     g.fillStyle(0x1a1533,1); g.fillRect(0,0,W,34); g.fillRect(0,H-26,W,26);
     g.lineStyle(2,0x3dff6e,1); g.strokeRect(6,38,W-12,H-66);   // inner frame: 38 .. H-28
-    this.add.text(cx,17,this.cfg.title,{fontFamily:'"Press Start 2P"',fontSize:'12px',color:'#ffd23f',align:'center'}).setOrigin(.5);
+    this.add.text(cx,15,this.cfg.title,{fontFamily:'"Press Start 2P"',fontSize:'12px',color:'#ffd23f',align:'center'}).setOrigin(.5);
+    // controls reminder (each world) — one compact line covering touch + keyboard
+    this.add.text(cx,29,'controls:  < >  or arrows = MOVE  ·  tap-right / UP / SPACE = JUMP (2x)  ·  F/X = THROW',
+      {fontFamily:'VT323',fontSize:'11px',color:'#66ccff',align:'center'}).setOrigin(.5);
     // NEW POWERS row (two columns, narrow wrap so the descriptions never collide)
     this.add.text(cx,50,'NEW POWERS',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#3dff6e'}).setOrigin(.5);
     var powers=this.cfg.powers||[], n=powers.length||1;
@@ -1670,7 +1709,7 @@ var NQGAME=new Phaser.Game({
   type:Phaser.AUTO, parent:'screen', width:W*2, height:H*2, pixelArt:true, backgroundColor:'#0a0813', roundPixels:true,
   scale:{ mode:Phaser.Scale.FIT, autoCenter:Phaser.Scale.CENTER_BOTH },
   physics:{ default:'arcade', arcade:{ gravity:{y:900}, debug:false } },
-  scene:[Boot,Title,LevelSelect,Gate,Game,Over,Win,Interlude,Briefing]
+  scene:[Boot,Title,LevelSelect,Controls,Gate,Game,Over,Win,Interlude,Briefing]
 });
 // Global "jump to LEVEL SELECT" hook — works from ANY scene (title, game, over, win), so the
 // reliable DOM "≡ Levels" button is never a dead end. Stops whatever's running, then starts it.
