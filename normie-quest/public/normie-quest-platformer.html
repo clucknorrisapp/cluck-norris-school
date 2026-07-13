@@ -107,12 +107,13 @@ var NOTE={C3:130.81,D3:146.83,Eb3:155.56,E3:164.81,F3:174.61,G3:196.00,Ab3:207.6
   C4:261.63,D4:293.66,Eb4:311.13,E4:329.63,F4:349.23,Fs4:369.99,G4:392.00,Ab4:415.30,A4:440.00,Bb4:466.16,B4:493.88,
   C5:523.25,D5:587.33,Eb5:622.25,E5:659.25,F5:698.46,G5:783.99,A5:880.00,R:0};
 var MUSIC=(function(){
-  var ctx=null,gain=null,cur=null,timer=null,nextAt=0,muted=false,phrase=0,noiseBuf=null; var N=NOTE;
+  var ctx=null,gain=null,lp=null,cur=null,timer=null,nextAt=0,muted=false,phrase=0,noiseBuf=null; var N=NOTE;
   try{ muted=(typeof localStorage!=='undefined')&&localStorage.getItem('nqMute')==='1'; }catch(e){}
-  // Each track carries MULTIPLE lead + bass phrases that ALTERNATE (A→B→A…) plus a light drum
-  // groove, so the music isn't the same 4 bars looping forever (the old "basic/annoying" version).
-  // lead/bass are arrays-of-phrases; schedLoop advances the phrase counter each bar. Master gain is
-  // lower now too (0.06) so it sits under the SFX instead of grating.
+  // LO-FI / chill treatment (owner wanted the lo-fi bossa vibe — original melodies, no Mario notes,
+  // so it's copyright-clean). Same A→B→A phrase alternation, but schedLoop renders it lo-fi: slower
+  // tempo (TEMPO scale) + shuffle swing on the offbeats, a warm master low-pass, a soft jazzy chord
+  // PAD (root+5+b7) sampled from the bass, and laid-back boom-bap drums. Master gain 0.06 so it sits
+  // under the SFX. lead/bass are arrays-of-phrases; drums: 'full' | 'soft' | false.
   var TR={
     // World 1 — bright, bouncy platformer
     world1:{bpm:138,leadType:'square',drums:'full',
@@ -164,31 +165,46 @@ var MUSIC=(function(){
              [[N.A3,2],[N.F3,2],[N.C3,2],[N.G3,2]] ]}
   };
   function ensure(){ ctx=_ac(); if(!ctx) return false;
-    if(!gain){ gain=ctx.createGain(); gain.gain.value=muted?0:0.06; gain.connect(ctx.destination); }
+    if(!gain){ gain=ctx.createGain(); gain.gain.value=muted?0:0.06;
+      lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2600; lp.Q.value=0.7;   // warm, lo-fi tone
+      gain.connect(lp); lp.connect(ctx.destination); }
     if(!noiseBuf){ var n=Math.floor(ctx.sampleRate*0.4); noiseBuf=ctx.createBuffer(1,n,ctx.sampleRate); var d=noiseBuf.getChannelData(0); for(var i=0;i<n;i++) d[i]=Math.random()*2-1; }
     return true; }
   function note(f,at,dur,type,vol){ if(!f) return; var o=ctx.createOscillator(),g=ctx.createGain(); o.type=type; o.frequency.value=f;
-    g.gain.setValueAtTime(0.0001,at); g.gain.linearRampToValueAtTime(vol,at+0.02); g.gain.exponentialRampToValueAtTime(0.0001,at+Math.max(0.05,dur*0.9));
-    o.connect(g); g.connect(gain); o.start(at); o.stop(at+dur+0.02); }
+    g.gain.setValueAtTime(0.0001,at); g.gain.linearRampToValueAtTime(vol,at+0.04);       // softer attack
+    g.gain.exponentialRampToValueAtTime(0.0001,at+Math.max(0.08,dur*1.0));                // longer, mellow release
+    o.connect(g); g.connect(gain); o.start(at); o.stop(at+dur+0.06); }
+  function padChord(root,at,dur){ var m=[1,1.4983,1.7818,2];   // root + 5th + b7 + octave: a soft jazzy bed, safe over major AND minor
+    for(var i=0;i<m.length;i++){ var o=ctx.createOscillator(),g=ctx.createGain(); o.type='sine'; o.frequency.value=root*m[i];
+      g.gain.setValueAtTime(0.0001,at); g.gain.linearRampToValueAtTime(0.03,at+0.12); g.gain.setValueAtTime(0.03,at+dur*0.55); g.gain.exponentialRampToValueAtTime(0.0001,at+dur*0.98);
+      o.connect(g); g.connect(gain); o.start(at); o.stop(at+dur+0.05); } }
   function drum(at,kind){
     if(kind==='kick'){ var o=ctx.createOscillator(),g=ctx.createGain(); o.type='sine';
-      o.frequency.setValueAtTime(150,at); o.frequency.exponentialRampToValueAtTime(48,at+0.12);
-      g.gain.setValueAtTime(0.22,at); g.gain.exponentialRampToValueAtTime(0.0001,at+0.16);
-      o.connect(g); g.connect(gain); o.start(at); o.stop(at+0.18); return; }
+      o.frequency.setValueAtTime(140,at); o.frequency.exponentialRampToValueAtTime(46,at+0.13);
+      g.gain.setValueAtTime(0.16,at); g.gain.exponentialRampToValueAtTime(0.0001,at+0.17);
+      o.connect(g); g.connect(gain); o.start(at); o.stop(at+0.19); return; }
     var s=ctx.createBufferSource(); s.buffer=noiseBuf; var f=ctx.createBiquadFilter(), g2=ctx.createGain();
-    if(kind==='hat'){ f.type='highpass'; f.frequency.value=7000; g2.gain.setValueAtTime(0.05,at); g2.gain.exponentialRampToValueAtTime(0.0001,at+0.04); }
-    else { f.type='bandpass'; f.frequency.value=1900; g2.gain.setValueAtTime(0.11,at); g2.gain.exponentialRampToValueAtTime(0.0001,at+0.13); }   // snare
-    s.connect(f); f.connect(g2); g2.connect(gain); s.start(at); s.stop(at+0.2); }
-  function schedLoop(tr,at){ var spb=60/tr.bpm;
+    if(kind==='hat'){ f.type='highpass'; f.frequency.value=8000; g2.gain.setValueAtTime(0.026,at); g2.gain.exponentialRampToValueAtTime(0.0001,at+0.03); }
+    else { f.type='bandpass'; f.frequency.value=2200; f.Q.value=1.2; g2.gain.setValueAtTime(0.06,at); g2.gain.exponentialRampToValueAtTime(0.0001,at+0.11); }   // soft rim/snare
+    s.connect(f); f.connect(g2); g2.connect(gain); s.start(at); s.stop(at+0.18); }
+  var SWING=0.09, TEMPO=0.72;   // lo-fi feel: slower overall tempo + a shuffle nudge on the offbeats
+  function schedLoop(tr,at){ var spb=60/(tr.bpm*TEMPO);
     var lead=tr.lead[phrase % tr.lead.length], bass=tr.bass[phrase % tr.bass.length];
-    var lt=at,bt=at;
-    lead.forEach(function(n){ note(n[0],lt,n[1]*spb*0.94,tr.leadType,0.12); lt+=n[1]*spb; });
-    bass.forEach(function(n){ note(n[0],bt,n[1]*spb*0.96,'triangle',0.16); bt+=n[1]*spb; });
+    var lt=at, off=0, bt=at, segs=[];
+    lead.forEach(function(n){ var fr=off-Math.floor(off), sw=(Math.abs(fr-0.5)<0.02)?SWING*spb:0;   // swing the offbeat 8ths
+      note(n[0], lt+sw, n[1]*spb*0.92, tr.leadType, 0.10); lt+=n[1]*spb; off+=n[1]; });
+    bass.forEach(function(n){ if(n[0]) segs.push({t:bt,f:n[0]}); note(n[0],bt,n[1]*spb*0.96,'triangle',0.14); bt+=n[1]*spb; });
     var dur=Math.max(lt,bt)-at;
+    // warm chord pad on a 2-beat grid (root sampled from the bass) — the lo-fi bed under everything
+    var grid=2*spb; for(var pt=at; pt<at+dur-0.01; pt+=grid){ var root=segs.length?segs[0].f:null;
+      for(var si=0;si<segs.length;si++){ if(segs[si].t<=pt+0.001) root=segs[si].f; }
+      if(root) padChord(root, pt, Math.min(grid, at+dur-pt)); }
+    // laid-back drums: kick on the 1, soft rim on the backbeat, brushed hats with swing
     if(tr.drums){ var beats=Math.max(1,Math.round(dur/spb));
       for(var b=0;b<beats;b++){ var t0=at+b*spb;
-        if(tr.drums==='full'){ drum(t0, b%2===0?'kick':'snare'); drum(t0,'hat'); drum(t0+spb*0.5,'hat'); }
-        else { drum(t0,'kick'); drum(t0+spb*0.5,'hat'); }
+        if(b%4===0) drum(t0,'kick');
+        if(tr.drums==='full'){ if(b%2===1) drum(t0,'snare'); drum(t0,'hat'); drum(t0+spb*0.5+SWING*spb,'hat'); }
+        else { drum(t0+spb*0.5+SWING*spb,'hat'); }
       } }
     phrase++;
     return dur; }
