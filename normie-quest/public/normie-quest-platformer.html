@@ -604,8 +604,9 @@ var Boot=new Phaser.Class({ Extends:Phaser.Scene,
     g.fillStyle(0xffd84a); g.fillRect(2,2,20,3);                        // top highlight
     g.fillStyle(0xb8860b); g.fillRect(1,19,22,3);                       // bottom shade
     g.fillStyle(0xfff0a0); g.fillCircle(4,4,1.5); g.fillCircle(20,4,1.5); g.fillCircle(4,20,1.5); g.fillCircle(20,20,1.5);
-    g.fillStyle(0x5e3a0a);                                              // the "?" glyph
-    g.fillRect(9,6,6,2); g.fillRect(14,7,2,3); g.fillRect(11,10,4,2); g.fillRect(11,12,2,3); g.fillRect(11,17,2,2);
+    g.fillStyle(0x5e3a0a);                                              // the NORMIE "N" glyph (not Mario's ?)
+    g.fillRect(7,6,3,12); g.fillRect(15,6,3,12);                        // the two verticals
+    g.fillRect(9,9,2,2); g.fillRect(11,11,2,2); g.fillRect(13,13,2,2);  // the diagonal stroke
     g.generateTexture('qblock',24,24);
     // spent bonus block — dull brown, rivets, no glyph (an emptied block)
     g.clear();
@@ -1092,6 +1093,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   popBlock:function(block){
     block.used=true; this.tweens.killTweensOf(block); block.setScale(1); block.setTexture('qblockused');
     this.tweens.add({targets:block, y:block.homeY-7, duration:90, yoyo:true, ease:'Quad.out'});   // the bump
+    // CLUTCH HEAL: on your last heart, a bonus block also gives back a heart (you paused near the
+    // roaming enemies to hit it — this makes that risk worth taking in the tight later levels).
+    if(this.lives<=1 && this.lives<3){ this.lives++; if(this.hearts[this.lives-1]) this.hearts[this.lives-1].setAlpha(1); SFX.power(); this.cameras.main.flash(160,255,120,160); this.flash('CLUTCH! +1 HEART','#ff5a8a'); }
     var self=this, r=block.reward;
     if(typeof r==='string'){                                        // a POWER-UP pops out the top
       SFX.power();
