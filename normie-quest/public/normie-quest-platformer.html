@@ -221,6 +221,7 @@ var MUSIC=(function(){
   // The synth starts INSTANTLY on every play() and the file cross-fades in once it's buffered, so a
   // track swap is seamless and there's never a silent gap.
   var MUSIC_BASE='/normie-quest/music/', EXTS=['mp3','m4a','ogg','wav'], els={}, missing={}, want=null, curEl=null, streaming=false;
+  var MUSIC_VOL=0.30;   // produced tracks sit QUIETLY under the game SFX (jump/coin/hit) — full volume buried them
   function elVol(el,v){ try{ el.volume=Math.max(0,Math.min(1,v)); }catch(e){} }
   function fade(el,to,ms,done){ if(!el){ if(done) done(); return; } if(el._fi) clearInterval(el._fi);
     var from=(typeof el.volume==='number'?el.volume:0), t0=Date.now();
@@ -236,7 +237,7 @@ var MUSIC=(function(){
       if(curEl && curEl!==el){ var old=curEl; fade(old,0,700,function(){ try{old.pause();}catch(e){} }); }
       curEl=el; try{ el.currentTime=0; }catch(e){}
       var p=el.play(); if(p&&p.catch) p.catch(function(){ missing[name]=true; streaming=false; if(want===name) synthPlay(name); });
-      fade(el, muted?0:1, 700); };
+      fade(el, muted?0:MUSIC_VOL, 700); };
     if(el.readyState>=3) go(); else el.addEventListener('canplaythrough',go,{once:true}); }
   return {
     play:function(name){ if(!TR[name]) return; if(name===want) return; want=name;
@@ -245,7 +246,7 @@ var MUSIC=(function(){
       synthPlay(name);          // instant sound
       tryFile(name); },         // …upgraded to the produced track if one exists
     stop:function(){ want=null; synthStop(); streaming=false; if(curEl){ var old=curEl; curEl=null; fade(old,0,300,function(){ try{old.pause();}catch(e){} }); } },
-    toggle:function(){ muted=!muted; if(gain) gain.gain.value=muted?0:0.06; if(curEl) fade(curEl,muted?0:1,150); try{ localStorage.setItem('nqMute',muted?'1':'0'); }catch(e){} return muted; },
+    toggle:function(){ muted=!muted; if(gain) gain.gain.value=muted?0:0.06; if(curEl) fade(curEl,muted?0:MUSIC_VOL,150); try{ localStorage.setItem('nqMute',muted?'1':'0'); }catch(e){} return muted; },
     muted:function(){ return muted; },
     state:function(){ return { want:want, streaming:streaming, missing:Object.keys(missing) }; }   // observability / tests
   };
@@ -1708,14 +1709,17 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var left=this.cursors.left.isDown||this.keys.A.isDown||this.touch.left;
     var right=this.cursors.right.isDown||this.keys.D.isDown||this.touch.right;
     var jump=this.cursors.up.isDown||this.keys.W.isDown||this.keys.SPACE.isDown||this.touch.jump;
+    var rawJump=jump;   // raw button for edge detection — slotTick may zero `jump`, but prevJump must track the real press
     // Normie Casino: stand by the slot machine and press jump/up to "fire it in" (eats that jump)
-    if(this.slots.length && this.slotTick(now, p, b, jump && !this.prevJump)) jump=false;
+    if(this.slots.length && this.slotTick(now, p, b, rawJump && !this.prevJump)) jump=false;
     // throw a coin (edge-triggered, cooldown) — F/X on desktop, the THROW button on touch
     // SOLANA MODE: auto-fire Solana symbols while the power is active (ends early on damage)
     if(now<this.solanaUntil && now>this.nextThrow){ this.fireSolana(); this.nextThrow=now+230; }
 
     var fast=now<this.caffeineUntil||now<this.moonUntil;      // caffeine/moon = super speed
-    var slow=(now<this.slowUntil)&&!fast;                     // FUD gas = sluggish
+    // FUD gas = sluggish, but ONLY on the ground — never rob you of air speed mid-jump (that could
+    // make a gap you already committed to unclearable → an unfair pit death).
+    var slow=(now<this.slowUntil)&&!fast&&(b.blocked.down||b.touching.down);
     p.setMaxVelocity(fast?340:(slow?120:240),600);
     var accel=fast?1500:(slow?430:900);
     if(left&&!right){ if(b.velocity.x>0) accel*=2; p.setAccelerationX(-accel); p.setFlipX(true); }
@@ -1725,7 +1729,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var onGround=b.blocked.down||b.touching.down;
     if(onGround){ this.lastGround=now; this.jumpsLeft=2; this.isJumping=false; }
     else if(now-this.lastGround>110 && this.jumpsLeft>1){ this.jumpsLeft=1; }
-    if(jump&&!this.prevJump) this.jumpBufferAt=now; this.prevJump=jump;
+    if(jump&&!this.prevJump) this.jumpBufferAt=now; this.prevJump=rawJump;
     if(now-this.jumpBufferAt<130 && this.jumpsLeft>0){
       p.setVelocityY(now<this.bullUntil?-540:-430); this.jumpsLeft--; this.isJumping=true; this.jumpBufferAt=-9999; SFX.jump();   // bull market = mega jump
     }
