@@ -85,7 +85,7 @@ function _loadSfx(){ if(_powerTried) return; var c=_ac(); if(!c) return; _powerT
   try{ var b64=_SFX_POWER_URI.split(',')[1], bin=atob(b64), n=bin.length, arr=new Uint8Array(n);
     for(var i=0;i<n;i++) arr[i]=bin.charCodeAt(i);
     c.decodeAudioData(arr.buffer, function(buf){ _powerBuf=buf; }, function(){}); }catch(e){} }
-function _playSample(buf,vol){ var c=_ac(); if(!c||!buf) return false; try{ var s=c.createBufferSource(), g=c.createGain(); var v=(vol==null?0.55:vol), t=c.currentTime, cap=Math.min(buf.duration||1.5,1.5); g.gain.setValueAtTime(v,t); g.gain.setValueAtTime(v,t+Math.max(0.05,cap-0.3)); g.gain.exponentialRampToValueAtTime(0.0001,t+cap); s.buffer=buf; s.connect(g); g.connect(c.destination); s.start(t); s.stop(t+cap+0.02); return true; }catch(e){ return false; } }   // capped ~1.5s + fade — the raw sample is long; uncapped it rang for the WHOLE power-up (owner: annoying)
+function _playSample(buf,vol){ var c=_ac(); if(!c||!buf) return false; try{ var s=c.createBufferSource(), g=c.createGain(); var v=(vol==null?0.55:vol), t=c.currentTime, cap=Math.min(buf.duration||1.5,1.5); g.gain.setValueAtTime(v,t); g.gain.setValueAtTime(v,t+Math.max(0.05,cap-0.3)); g.gain.exponentialRampToValueAtTime(0.0001,t+cap); s.buffer=buf; s.connect(g); g.connect(c.destination); s.start(t); s.stop(t+cap+0.02); return true; }catch(e){ return false; } }   // ~1.5s cap + fade (synced from a concurrent session's fix)
 // Keep the Web-Audio context alive. iOS/Safari suspends it (screen lock, tab switch, or if it
 // was never unlocked in a real tap) and will only RESUME inside a genuine user gesture — a
 // resume() call from the game loop is ignored. So unlock/resume on ANY real interaction, and
@@ -328,7 +328,7 @@ var LEVELS=[
     coins:[[492,182],[540,182],[780,196],[1252,158],[1300,158],[1600,196],[2092,182],[2140,182],[2188,182],[2500,196],[2932,158],[2980,158],[3560,196],[3732,182],[3780,182],[3828,182],[4620,158],[4900,196]],
     enemies:[['jeet',340,230,110],['jeet',680,230,70],['ghost',1000,212,90],['jeet',1080,230,130],['jeet',1500,230,110],['jeet',1960,230,110],['jeet',2400,230,80],['ghost',2760,212,90],['jeet',2820,230,90],['jeet',3200,230,100],['ghost',3600,212,90],['jeet',4100,230,70]],
     npcs:[[1500,90]],
-    bonusblocks:[[620,5],[1100,5],[1400,8],[2400,8],[3100,8],[3950,5]],
+    bonusblocks:[[1180,5],[2700,8],[4120,8]],
     key:[1584,H-150], door:5080 },
 
   { name:'1-2', sub:'FUD RISING', time:120, theme:1, width:5800,
@@ -340,7 +340,7 @@ var LEVELS=[
     airdrops:[[1200,H-118],[3500,H-72]],
     coins:[[472,158],[520,158],[700,196],[1312,158],[1360,158],[1500,196],[2212,134],[2260,134],[2680,196],[3012,158],[3060,158],[3600,196],[3912,158],[3960,158],[4500,196],[4812,158],[4860,158],[5300,196]],
     enemies:[['paper',340,230,100],['jeet',700,230,70],['ghost',1000,212,80],['paper',1120,230,90],['paper',1500,230,100],['ghost',1900,212,90],['jeet',2400,230,80],['paper',2680,230,70],['ghost',2900,212,90],['paper',3220,230,70],['bot',3600,230,80],['ghost',3820,212,90],['paper',4120,230,90],['bot',4500,230,80]],
-    bonusblocks:[[700,5],[2350,8],[3800,8]],
+    bonusblocks:[[980,5],[1950,8],[2950,5],[4020,8],[4960,8]],
     key:[1624,H-150], door:5680 },
 
   { name:'1-3', sub:"THE RUG KING'S KEEP", time:135, theme:2, width:6400, boss:true,
@@ -352,6 +352,7 @@ var LEVELS=[
     airdrops:[[2300,H-118],[4200,H-72]],
     coins:[[452,158],[500,158],[700,196],[1252,134],[1300,134],[1400,196],[2112,158],[2160,158],[2208,158],[2680,196],[2972,134],[3020,134],[3200,196],[3832,158],[3880,158],[3928,158],[4692,134],[4740,134],[5512,158],[5560,158],[6100,196]],
     enemies:[['bot',340,230,90],['paper',660,230,70],['ghost',900,212,70],['bot',1140,230,90],['ghost',1500,212,90],['paper',1560,230,80],['bot',1960,230,60],['ghost',2340,212,90],['paper',2680,230,70],['bot',2760,230,70],['ghost',3140,212,90],['bot',3480,230,80],['bot',4000,230,70],['ghost',4300,212,90],['paper',4560,230,90],['bot',5300,230,70],['ghost',5700,212,90]],
+    bonusblocks:[[1120,5],[2600,8],[3960,8],[5140,8]],
     key:[1164,H-150], door:6300 },
 
   // WORLD 2 — the Sand Lands. Desert stage with green mini-worm hazards.
@@ -365,7 +366,7 @@ var LEVELS=[
     coins:[[512,158],[560,158],[800,196],[1312,158],[1360,158],[1700,196],[2212,134],[2260,134],[2650,196],[3112,158],[3160,158],[3700,196],[4212,158],[4260,158],[4800,196]],
     enemies:[['bot',360,230,90],['paper',680,230,70],['ghost',1100,212,80],['fudster',1650,230,60],['bitmaxi',2050,230,110],['ghost',2400,212,90],['bot',2600,230,80],['paper',3300,230,70],['sniper',3650,230,36],['bot',4000,230,80],['bitmaxi',4400,230,110]],
     miniworms:[1150,3550,4700], honeypots:[[2700,232]], npcs:[[2450,90]],
-    bonusblocks:[[720,5],[1500,5],[2500,8],[3400,8],[4050,8]],
+    bonusblocks:[[1180,5],[2650,8],[4120,8]],
     key:[1600,H-150], door:5080 },
 
   // WORLD 2 — Normie Casino: a normal stage with a slot machine you "fire it in" for bonus coins.
@@ -382,6 +383,7 @@ var LEVELS=[
     slots:[[700,'casino'],[2150,'lucky7'],[2900,'degen'],[3450,'diamond'],[4700,'moonshot']],
     honeypots:[[2700,232],[3900,232]], pumpdumps:[[1600,174],[3600,174]], npcs:[[1100,80]],
     casinoFolk:[[1450,'drink',70],[2250,'show',40],[3800,'drink',70],[4550,'show',50]],
+    bonusblocks:[[820,5],[1680,8],[2700,5],[3530,8],[4420,8]],
     key:[1650,H-150], door:5080 },
 
   // WORLD 2 boss arena (level 2-1 will slot in BEFORE this once built). Flat desert arena:
@@ -393,6 +395,7 @@ var LEVELS=[
     spikes:[], powerups:[['candle',1560,H-124]], airdrops:[[2050,H-72]],
     coins:[[300,196],[860,196],[1550,196],[1912,158],[2192,158],[2350,196]],
     enemies:[['sniper',300,230,30]], miniworms:[520,1080,1480], pumpdumps:[[900,174]],
+    bonusblocks:[[610,5],[1120,8],[1570,8],[2000,8]],
     key:[1060,H-140], door:2380 },
 
   // WORLD 3 — Crypto Twitter / The Skyline. Neon rooftops; the Scammy KOL waits at the top.
@@ -406,7 +409,7 @@ var LEVELS=[
     coins:[[472,158],[520,158],[700,196],[1312,158],[1360,158],[1500,196],[2212,134],[2260,134],[2680,196],[3012,158],[3060,158],[3600,196],[3912,158],[3960,158],[4500,196],[4812,158],[4860,158],[5300,196]],
     enemies:[['jeet',340,230,80],['bot',680,230,60],['ghost',1050,212,80],['fudster',1150,230,60],['sniper',1900,230,30],['bitmaxi',2380,230,70],['bot',2800,230,70],['ghost',2820,212,60],['sniper',3150,230,30],['fudster',3600,230,70],['bitmaxi',4100,230,70],['bot',4500,230,70],['ghost',4700,212,90]],
     pumpdumps:[[1500,174],[3700,174]], honeypots:[], npcs:[[2900,90]],
-    bonusblocks:[[700,5],[1500,5],[2350,'moon'],[3800,8],[4500,8]],
+    bonusblocks:[[1280,5],[2950,'moon'],[4620,8]],
     key:[1624,H-150], door:5680 },
 
   { name:'3-2', sub:'THE TIMELINE', time:145, theme:5, width:6400, bgImage:'skyline',
@@ -419,6 +422,7 @@ var LEVELS=[
     coins:[[452,158],[500,158],[700,196],[1252,134],[1300,134],[1400,196],[2112,158],[2160,158],[2208,158],[2680,196],[2972,134],[3020,134],[3200,196],[3832,158],[3880,158],[3928,158],[4692,134],[4740,134],[5512,158],[5560,158],[6100,196]],
     enemies:[['bot',340,230,70],['jeet',600,230,60],['ghost',1000,212,80],['fudster',1400,230,70],['sniper',1900,230,30],['bitmaxi',2250,230,70],['bot',2700,230,70],['ghost',3200,212,70],['sniper',3450,230,30],['fudster',3650,230,70],['bitmaxi',4000,230,70],['bot',4400,230,70],['ghost',4820,212,80],['sniper',5250,230,30],['bitmaxi',5650,230,60]],
     pumpdumps:[[1000,174],[3500,174],[5300,174]], honeypots:[[2350,232]], npcs:[[3150,90]],
+    bonusblocks:[[1000,5],[2080,8],[3220,5],[4370,8],[5480,8]],
     key:[1164,H-150], door:6300 },
 
   // WORLD 3 boss level — a LONG, HARD gauntlet up the skyline, THEN the Scammy KOL at the door.
@@ -433,6 +437,7 @@ var LEVELS=[
     coins:[[300,196],[560,150],[620,196],[900,196],[1160,140],[1420,150],[1620,196],[1950,150],[2200,196],[2500,150],[2760,150],[2900,196],[3150,150],[3400,150],[3760,150],[4000,196],[4200,150]],
     enemies:[['jeet',340,230,70],['sniper',620,230,30],['bot',900,230,60],['fudster',1150,230,60],['ghost',1300,212,80],['sniper',1600,230,30],['bitmaxi',1950,230,70],['bot',2200,230,70],['sniper',2600,230,30],['fudster',2900,230,70],['ghost',3200,212,70],['bitmaxi',3300,230,70],['sniper',3600,230,30],['bot',3900,230,60],['ghost',4100,212,80]],
     pumpdumps:[[1380,174],[2720,174]], honeypots:[[1250,232],[3760,232]], npcs:[[2450,90]],
+    bonusblocks:[[940,5],[1950,8],[2950,8],[3840,8]],
     key:[4200,H-150], door:4600 },
 
   // WORLD 4 — THE EXCHANGE (the CEX that freezes your funds). Cold steel-blue vault; obstacles get
@@ -448,7 +453,7 @@ var LEVELS=[
     coins:[[300,196],[348,196],[500,120],[548,120],[864,120],[920,196],[1204,110],[1480,196],[2140,120],[2340,150],[2620,196],[2620,150],[3344,120],[3620,150],[3660,196],[4284,120],[4500,150],[5020,196],[5300,196]],
     enemies:[['bot',340,230,80],['sniper',700,230,30],['ghost',1050,212,80],['fudster',1160,230,60],['bitmaxi',1900,230,70],['bot',2020,230,70],['sniper',2420,230,30],['ghost',2840,212,70],['fudster',3200,230,70],['bot',3600,230,70],['bitmaxi',4120,230,70],['sniper',4400,230,30],['ghost',4700,212,90],['bot',5220,230,70]],
     pumpdumps:[[1560,174],[3720,174]], honeypots:[[2400,232]], npcs:[[2950,90]],
-    bonusblocks:[[700,5],[1500,5],[2350,'omegachad'],[3700,8],[4500,8]],
+    bonusblocks:[[1280,5],[3000,'omegachad'],[4790,8]],
     key:[1680,H-150], door:5880 },
 
   { name:'4-2', sub:'THE TRADING FLOOR', time:160, theme:6, width:6600, bgImage:'exchange',
@@ -461,6 +466,7 @@ var LEVELS=[
     coins:[[452,130],[500,130],[700,196],[1264,106],[1312,106],[1420,196],[2120,140],[2168,140],[2216,140],[2700,196],[3000,106],[3048,106],[3220,196],[3880,140],[3928,140],[4200,196],[4740,106],[4788,106],[5580,140],[5628,140],[6120,196]],
     enemies:[['bot',340,230,70],['sniper',620,230,30],['ghost',1000,212,80],['fudster',1420,230,70],['sniper',1920,230,30],['bitmaxi',2280,230,70],['bot',2720,230,70],['ghost',3220,212,70],['sniper',3480,230,30],['fudster',3680,230,70],['bitmaxi',4020,230,70],['bot',4420,230,70],['ghost',4840,212,80],['sniper',5280,230,30],['bitmaxi',5760,230,70]],
     pumpdumps:[[1000,174],[3500,174],[5300,174]], honeypots:[[2350,232]], npcs:[[3150,90]],
+    bonusblocks:[[1020,5],[2270,8],[3420,5],[4510,8],[5700,8]],
     key:[1164,H-150], door:6480 },
 
   // WORLD 4 boss level — the HARDEST gauntlet (tall+wide walls, dense snipers, spike pits), THEN
@@ -475,6 +481,7 @@ var LEVELS=[
     coins:[[300,196],[600,130],[660,196],[960,196],[1220,106],[1620,150],[1980,140],[2340,196],[2620,110],[2960,196],[3220,140],[3560,196],[3940,106],[4160,196],[4420,150],[4560,196]],
     enemies:[['bot',340,230,70],['sniper',640,230,30],['fudster',960,230,60],['ghost',1240,212,80],['sniper',1640,230,30],['bitmaxi',2000,230,70],['bot',2340,230,70],['sniper',2620,230,30],['fudster',3080,230,70],['ghost',3420,212,70],['sniper',3560,230,30],['bitmaxi',4100,230,70],['bot',4160,230,60],['sniper',4460,230,30],['ghost',4560,212,80]],
     pumpdumps:[[1440,174],[2880,174],[4240,174]], honeypots:[[1300,232],[4020,232]], npcs:[[2380,90]],
+    bonusblocks:[[990,5],[2090,8],[3140,8],[4160,8]],
     key:[4600,H-150], door:5000 },
 
   // WORLD 5 — THE BRIDGE (cross-chain). Sprint the spans over the void: planks get "exploited" and
@@ -491,7 +498,7 @@ var LEVELS=[
     enemies:[['jeet',340,230,80],['sniper',700,230,30],['ghost',1050,212,80],['paper',1160,230,60],['bitmaxi',1900,230,70],['jeet',2020,230,70],['sniper',2420,230,30],['ghost',2840,212,70],['paper',3200,230,70],['jeet',3600,230,70],['bitmaxi',4120,230,70],['sniper',4400,230,30],['ghost',4700,212,90],['jeet',5220,230,70]],
     pumpdumps:[[1560,174],[3720,174]], honeypots:[[2400,232],[4160,232]], npcs:[[2950,90]],
     planks:[[1700,5],[2560,5],[3400,5],[5080,4]],
-    bonusblocks:[[620,5],[1500,5],[2400,8],[3760,'supergeek'],[4500,8]],
+    bonusblocks:[[1280,5],[3000,'supergeek'],[4790,8]],
     key:[1680,H-150], door:5880 },
 
   { name:'5-2', sub:'THE SPAN', time:160, theme:7, width:6600,
@@ -505,6 +512,7 @@ var LEVELS=[
     enemies:[['jeet',340,230,70],['sniper',620,230,30],['ghost',1000,212,80],['paper',1420,230,70],['sniper',1920,230,30],['bitmaxi',2280,230,70],['jeet',2720,230,70],['ghost',3220,212,70],['sniper',3480,230,30],['paper',3680,230,70],['bitmaxi',4020,230,70],['jeet',4420,230,70],['ghost',4840,212,80],['sniper',5280,230,30],['bitmaxi',5760,230,70]],
     pumpdumps:[[1000,174],[3500,174],[5300,174]], honeypots:[[2350,232],[4050,232]], npcs:[[3150,90]],
     planks:[[1620,5],[2440,5],[3260,5],[4120,5],[5900,5]],
+    bonusblocks:[[1020,5],[2270,8],[3420,5],[4510,8],[5700,8]],
     key:[1164,H-150], door:6480 },
 
   // WORLD 5 boss level — bridge gauntlet up to the boss arena (wyrm mechanic for now; Bridge Drainer art next).
@@ -519,6 +527,7 @@ var LEVELS=[
     enemies:[['jeet',340,230,70],['sniper',640,230,30],['paper',960,230,60],['ghost',1240,212,80],['sniper',1640,230,30],['bitmaxi',2000,230,70],['jeet',2340,230,70],['sniper',2620,230,30],['paper',3080,230,70],['ghost',3420,212,70],['sniper',3560,230,30],['bitmaxi',4100,230,70],['jeet',4160,230,60],['sniper',4460,230,30],['ghost',4560,212,80]],
     pumpdumps:[[1440,174],[2880,174],[4240,174]], honeypots:[[1300,232],[2660,232],[4020,232]], npcs:[[2380,90]],
     planks:[[1440,5],[2880,5],[3600,5]],
+    bonusblocks:[[990,5],[2090,8],[3140,8],[4160,8]],
     key:[4600,H-150], door:5000 },
 
   // WORLD 6 — THE DEPEG (the "stable"coin that wasn't). Mint-green peg-ground breaks on a global
@@ -535,7 +544,7 @@ var LEVELS=[
     enemies:[['bot',340,230,80],['sniper',700,230,30],['ghost',1050,212,80],['bitmaxi',1160,230,60],['bot',1900,230,70],['bitmaxi',2020,230,70],['sniper',2420,230,30],['ghost',2840,212,70],['bitmaxi',3200,230,70],['bot',3600,230,70],['bitmaxi',4120,230,70],['sniper',4400,230,30],['ghost',4700,212,90],['bot',5220,230,70]],
     pumpdumps:[[1560,174],[3720,174]], honeypots:[[2400,232],[4160,232]], npcs:[[2950,90]],
     pegs:[[1700,5],[3400,5],[5080,4]],
-    bonusblocks:[[620,5],[1500,5],[2400,8],[3760,'omegachad'],[4500,8]],
+    bonusblocks:[[1280,5],[3000,'omegachad'],[4790,8]],
     key:[1680,H-150], door:5880 },
 
   { name:'6-2', sub:'DEPEG EVENT', time:160, theme:8, width:6600,
@@ -549,6 +558,7 @@ var LEVELS=[
     enemies:[['bot',340,230,70],['sniper',620,230,30],['ghost',1000,212,80],['bitmaxi',1420,230,70],['sniper',1920,230,30],['bitmaxi',2280,230,70],['bot',2720,230,70],['ghost',3220,212,70],['sniper',3480,230,30],['bitmaxi',3680,230,70],['bot',4020,230,70],['bot',4420,230,70],['ghost',4840,212,80],['sniper',5280,230,30],['bitmaxi',5760,230,70]],
     pumpdumps:[[1000,174],[3500,174],[5300,174]], honeypots:[[2350,232],[4050,232]], npcs:[[3150,90]],
     pegs:[[1620,5],[3260,5],[4980,5]],
+    bonusblocks:[[1020,5],[2270,8],[3420,5],[4510,8],[5700,8]],
     key:[1164,H-150], door:6480 },
 
   // WORLD 6 boss level — depeg gauntlet up to the boss (golem mechanic for now; Death Spiral art next).
@@ -563,6 +573,7 @@ var LEVELS=[
     enemies:[['bot',340,230,70],['sniper',640,230,30],['bitmaxi',960,230,60],['ghost',1240,212,80],['sniper',1640,230,30],['bitmaxi',2000,230,70],['bot',2340,230,70],['sniper',2620,230,30],['bitmaxi',3080,230,70],['ghost',3420,212,70],['sniper',3560,230,30],['bitmaxi',4100,230,70],['bot',4160,230,60],['sniper',4460,230,30],['ghost',4560,212,80]],
     pumpdumps:[[1440,174],[2880,174],[4240,174]], honeypots:[[1300,232],[2660,232],[4020,232]], npcs:[[2380,90]],
     pegs:[[1440,5],[3160,5]],
+    bonusblocks:[[990,5],[2090,8],[3140,8],[4160,8]],
     key:[4600,H-150], door:5000 },
 
   // WORLD 7 — THE YIELD FARM (DeFi). The neon-green LIFT platforms COMPOUND upward the longer you
@@ -579,7 +590,7 @@ var LEVELS=[
     coins:[[300,196],[348,196],[500,120],[548,120],[920,196],[1388,96],[1400,72],[1412,110],[2140,120],[2340,150],[2620,196],[2888,96],[2900,72],[2912,110],[3344,120],[3620,150],[3660,196],[4284,120],[4638,96],[4650,72],[4662,50],[5020,196],[5300,196]],
     enemies:[['bot',340,230,80],['sniper',700,230,30],['ghost',1050,212,80],['bitmaxi',1160,230,60],['bot',1900,230,70],['bitmaxi',2020,230,70],['sniper',2420,230,30],['ghost',2840,212,70],['bitmaxi',3260,230,70],['bot',3600,230,70],['bitmaxi',4120,230,70],['sniper',4400,230,30],['ghost',4700,212,90],['bot',5220,230,70]],
     pumpdumps:[[1560,174],[3720,174]], honeypots:[[2400,232],[4160,232]], npcs:[[2200,90]],
-    bonusblocks:[[620,5],[1500,5],[2440,8],[3760,'omegachad'],[4100,8]],
+    bonusblocks:[[1280,5],[3000,'omegachad'],[4790,8]],
     key:[1680,H-150], door:5880 },
 
   { name:'7-2', sub:'COMPOUND COUNTRY', time:165, theme:9, width:6600,
@@ -593,7 +604,7 @@ var LEVELS=[
     coins:[[452,130],[500,130],[700,196],[1388,96],[1400,72],[1412,110],[2120,140],[2216,140],[2688,96],[2700,70],[2712,48],[3000,106],[3220,196],[3880,140],[3928,140],[4548,96],[4560,72],[4740,106],[5708,96],[5720,70],[5732,48],[6120,196]],
     enemies:[['bot',340,230,70],['sniper',620,230,30],['ghost',1000,212,80],['bitmaxi',1420,230,70],['sniper',1920,230,30],['bitmaxi',2280,230,70],['bot',2760,230,70],['ghost',3220,212,70],['sniper',3480,230,30],['bitmaxi',3720,230,70],['bot',4040,230,70],['bot',4420,230,70],['ghost',4840,212,80],['sniper',5280,230,30],['bitmaxi',5760,230,70]],
     pumpdumps:[[1000,174],[3500,174],[5300,174]], honeypots:[[2350,232],[4050,232]], npcs:[[3150,90]],
-    bonusblocks:[[560,5],[2260,8],[4380,'supergeek']],
+    bonusblocks:[[1020,5],[2270,8],[3420,'supergeek'],[4510,8],[5700,8]],
     key:[1164,H-150], door:6480 },
 
   // WORLD 7 boss level — yield-farm gauntlet up to THE YIELD REAPER (final boss).
@@ -608,7 +619,7 @@ var LEVELS=[
     coins:[[300,196],[600,130],[660,196],[1288,96],[1300,72],[1620,150],[1980,140],[2340,196],[2688,96],[2700,70],[2712,48],[2960,196],[3220,140],[3560,196],[3988,96],[4000,72],[4160,196],[4420,150],[4560,196]],
     enemies:[['bot',340,230,70],['sniper',640,230,30],['bitmaxi',960,230,60],['ghost',1240,212,80],['sniper',1640,230,30],['bitmaxi',2000,230,70],['bot',2340,230,70],['sniper',2620,230,30],['bitmaxi',3080,230,70],['ghost',3420,212,70],['sniper',3560,230,30],['bitmaxi',4100,230,70],['bot',4160,230,60],['sniper',4460,230,30],['ghost',4560,212,80]],
     pumpdumps:[[1440,174],[2880,174],[4240,174]], honeypots:[[1300,232],[2660,232],[4020,232]], npcs:[[2380,90]],
-    bonusblocks:[[600,5],[2340,8],[3800,'omegachad']],
+    bonusblocks:[[990,5],[2090,8],[3140,8],[4160,8]],
     key:[4600,H-150], door:5000 },
 
   // WORLD 8 — THE BEAR MARKET (finale). The brutal crypto down-cycle: survive the dip & capitulation,
@@ -619,12 +630,12 @@ var LEVELS=[
     walls:[[560,3,'stone',3],[1400,3,'crate',3],[2300,3,'stone',3],[3160,3,'crate',3],[4020,3,'stone',3],[4900,3,'crate',3]],
     plats:[[880,2,H-96,'crate'],[1240,2,H-124,'crate'],[1740,2,H-96,'stone'],[2600,2,H-96,'crate'],[3460,2,H-110,'crate'],[4320,2,H-96,'crate'],[5160,2,H-110,'crate']],
     spikes:[[1320],[1344],[3080],[3104],[4780],[4804]],
-    powerups:[['omegachad',1520,230],['whale',2560,230],['coldwallet',4180,230]],
+    powerups:[['omegachad',1520,230],['candle',2160,230],['whale',2560,230],['coldwallet',4180,230]],
     airdrops:[[1980,H-118],[3760,H-72]],
     coins:[[300,224],[360,224],[640,224],[1080,224],[1300,196],[1620,224],[2000,224],[2360,196],[2740,224],[3060,196],[3400,224],[3940,196],[4460,224],[4780,196],[5360,224],[5560,224]],
     enemies:[['bot',480,230,70],['jeet',760,230,60],['ghost',1120,212,80],['bot',1620,230,70],['bitmaxi',2040,230,70],['ghost',2500,212,70],['bot',2860,230,70],['jeet',3300,230,60],['bitmaxi',3760,230,70],['ghost',4180,212,80],['bot',4600,230,70],['jeet',5040,230,60],['bot',5460,230,70]],
     pumpdumps:[[1120,174],[3600,174]], honeypots:[[2400,232],[4700,232]],
-    bonusblocks:[[700,5],[2000,8],[3300,8],[4500,8]],
+    bonusblocks:[[1310,5],[3050,8],[4790,8]],
     key:[640,222], door:5880 },
 
   { name:'8-2', sub:'CAPITULATION', time:160, theme:10, width:6600,
@@ -632,11 +643,12 @@ var LEVELS=[
     walls:[[520,3,'crate',3],[1320,3,'stone',3],[2180,3,'crate',3],[3040,3,'stone',3],[3900,3,'crate',3],[4760,3,'stone',3],[5620,3,'crate',3]],
     plats:[[800,2,H-96,'crate'],[1200,2,H-124,'crate'],[1660,2,H-96,'stone'],[2520,2,H-96,'crate'],[3380,2,H-110,'crate'],[4240,2,H-96,'crate'],[5100,2,H-110,'crate'],[5960,2,H-96,'crate']],
     spikes:[[1200],[1224],[2900],[2924],[4600],[4624],[5500],[5524]],
-    powerups:[['omegachad',700,230],['whale',2500,230],['coldwallet',3200,230],['moon',5000,230]],
+    powerups:[['omegachad',700,230],['whale',2500,230],['coldwallet',3200,230],['candle',3660,230],['moon',5000,230]],
     airdrops:[[2100,H-118],[4400,H-72]],
     coins:[[300,224],[360,224],[720,224],[1120,196],[1560,224],[1980,224],[2340,196],[2760,224],[3140,196],[3620,224],[4020,196],[4500,224],[4880,196],[5360,224],[5760,196],[6220,224]],
     enemies:[['bot',460,230,70],['sniper',760,230,30],['ghost',1100,212,80],['bitmaxi',1560,230,70],['bot',1980,230,70],['sniper',2400,230,30],['ghost',2900,212,70],['bitmaxi',3340,230,70],['bot',3780,230,70],['sniper',4180,230,30],['ghost',4700,212,80],['bitmaxi',5000,230,70],['bot',5600,230,70],['sniper',5880,230,30]],
     pumpdumps:[[1000,174],[3200,174],[5400,174]], honeypots:[[2000,232],[4900,232]],
+    bonusblocks:[[1020,5],[2160,8],[3350,5],[4510,8],[5720,8]],
     key:[700,222], door:6480 },
 
   // WORLD 8 boss level — THE GREAT BEAR (final boss, 5 hits). No cascade in the arena; the bear alone
@@ -651,7 +663,7 @@ var LEVELS=[
     coins:[[300,196],[600,130],[660,196],[1288,196],[1620,150],[1980,140],[2340,196],[2688,196],[2960,196],[3220,140],[3560,196],[3988,196],[4160,196],[4420,150],[4560,196]],
     enemies:[['bot',340,230,70],['sniper',640,230,30],['bitmaxi',960,230,60],['ghost',1240,212,80],['sniper',1640,230,30],['bitmaxi',2000,230,70],['bot',2340,230,70],['sniper',2620,230,30],['bitmaxi',3080,230,70],['ghost',3420,212,70],['sniper',3560,230,30],['bitmaxi',4100,230,70],['bot',4160,230,60],['sniper',4460,230,30]],
     pumpdumps:[[1440,174],[2880,174],[4240,174]], honeypots:[[1300,232],[2660,232],[4020,232]],
-    bonusblocks:[[560,8],[4400,10]],
+    bonusblocks:[[990,8],[2090,8],[3140,10],[4160,10]],
     key:[4600,H-150], door:5000 }
 ];
 
@@ -857,6 +869,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
 
   create:function(){
     this.physics.resume();   // CRITICAL: the Arcade world stays paused across scene restarts; every level/replay must un-pause it
+    this.paused=false; this.lastInputAt=this.time.now;   // pause state + idle-auto-pause timer
     var self=this, i;
     var def=this.def=LEVELS[this.levelIdx];
     var LW=this.LW=def.width, th=THEMES[def.theme];
@@ -1153,6 +1166,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.powerBarBg=this.hb(this.add.rectangle(14,52,46,8,0x000000,0.55).setOrigin(0,0.5).setDepth(20).setStrokeStyle(1,0x8f89b0).setVisible(false));
     this.powerBar=this.hb(this.add.rectangle(15,52,44,5,0x3dff6e).setOrigin(0,0.5).setDepth(21).setVisible(false));
     this.powerLabel=this.hb(this.add.text(64,52,'',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffd23f'}).setOrigin(0,0.5).setDepth(21).setVisible(false));
+    // PAUSE button — tap the ⏸ (top-left) on touch, or press P / Esc on desktop
+    this.hb(this.add.rectangle(120,15,20,16,0x000000,0.5).setStrokeStyle(1,0x8f89b0));
+    this.hb(this.add.rectangle(116,15,3,9,0xffd23f)); this.hb(this.add.rectangle(124,15,3,9,0xffd23f));
 
     this.time.addEvent({delay:1000,loop:true,callback:function(){ if(this.over) return; this.timeLeft--; this.hudTime.setText(String(this.timeLeft)); if(this.timeLeft<=15) this.hudTime.setColor('#ff3860'); if(this.timeLeft<=0) this.gameOver('TIME UP'); },callbackScope:this});
 
@@ -1165,6 +1181,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // NOT interactive hit-areas: the HUD lives in a scrollFactor-0 container under a 2x zoom
     // where per-object hit testing is unreliable. Pointer coords are zoom/container-immune.
     this.cursors=this.input.keyboard.createCursorKeys(); this.keys=this.input.keyboard.addKeys('W,A,S,D,SPACE,F,X');
+    // PAUSE keys: while paused, ANY key resumes; while playing, P / Esc pause. (Touch: ⏸ hotspot in update; tap resumes.)
+    this.input.keyboard.on('keydown',function(e){ if(self.paused){ self.resumeGame(); } else if(e.key==='p'||e.key==='P'||e.key==='Escape'){ self.pauseGame(false); } });
+    this.input.on('pointerdown',function(){ if(self.paused) self.resumeGame(); });   // tap anywhere resumes
     // TEST BUILD: expose the current level + a "back to LEVEL SELECT" hook to the DOM overlay
     // (a reliable HTML button — in-canvas HUD hit areas are unreliable under the 2x-zoom container).
     // Press L on desktop, or tap the overlay's ≡ Levels button on any device.
@@ -2131,9 +2150,35 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this._cont=cont; this._contScore=contScore;   // (exposed for tests)
     this.time.delayedCall(600,function(){ this.scene.start('Over',{score:this.score,reason:reason,level:this.def.name,cont:cont,contScore:contScore}); },[],this); },
 
+  // ---- PAUSE (manual ⏸ / P / Esc, or 10s idle auto-pause). Self-contained in-scene freeze:
+  //      physics + the scene clock (level countdown + boss delayedCalls) + tweens, plus a HUD
+  //      overlay. Kept OFF the scene-manager (no scene.pause/launch) to avoid launch-vs-pause races.
+  pauseGame:function(auto){ if(this.over||this.paused) return; this.paused=true;
+    try{ this.physics.pause(); }catch(e){}
+    try{ this.time.paused=true; }catch(e){}       // freeze the countdown timer + boss attack delayedCalls
+    try{ this.tweens.pauseAll(); }catch(e){}
+    try{ MUSIC.suspend(); }catch(e){}
+    var self=this, isTouch=this.isTouch;
+    this.pauseUI=[]; var mk=function(o){ self.hb(o); o.setDepth(3000); self.pauseUI.push(o); return o; };
+    mk(this.add.rectangle(W/2,H/2,W,H,0x05040e,0.74));
+    mk(this.add.text(W/2,H/2-26,'PAUSED',{fontFamily:'"Press Start 2P"',fontSize:'18px',color:'#3dff6e'}).setOrigin(.5));
+    if(auto) mk(this.add.text(W/2,H/2+2,'you stepped away — your run is safe',{fontFamily:'VT323',fontSize:'14px',color:'#ffd23f'}).setOrigin(.5));
+    mk(this.add.text(W/2,H/2+26,(isTouch?'TAP':'PRESS ANY KEY')+' TO RESUME  ▶',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#ffffff'}).setOrigin(.5)); },
+  resumeGame:function(){ if(!this.paused) return; this.paused=false;
+    try{ this.physics.resume(); }catch(e){}
+    try{ this.time.paused=false; }catch(e){}
+    try{ this.tweens.resumeAll(); }catch(e){}
+    try{ MUSIC.resume(); }catch(e){}
+    if(this.pauseUI){ this.pauseUI.forEach(function(o){ try{o.destroy();}catch(e){} }); this.pauseUI=null; }
+    this.lastInputAt=this.time.now; },   // reset idle timer so it doesn't instantly re-pause
+
   update:function(){
-    if(this.over) return;
+    if(this.over||this.paused) return;
     var self=this, p=this.player, b=p.body, now=this.time.now;
+    // PAUSE hotspot (top-left ⏸): EDGE-triggered (only a fresh press pauses), so the resume-tap can't re-pause
+    { var _pts=this.input.manager.pointers, _gw=this.scale.width, _gh=this.scale.height, _inZ=false;
+      for(var _i=0;_i<_pts.length;_i++){ var _pp=_pts[_i]; if(_pp&&_pp.isDown){ var _fx=_pp.x/_gw,_fy=_pp.y/_gh; if(_fy<0.14&&_fx>0.16&&_fx<0.34){ _inZ=true; break; } } }
+      if(_inZ&&!this._hotDown){ this._hotDown=true; this.pauseGame(false); return; } this._hotDown=_inZ; }
     // --- touch input: the DOM gutter D-pad (tablets/wide screens) OR on-screen pointer zones (phones) ---
     this.touch.left=this.touch.right=this.touch.jump=false;
     var padActive=(typeof window!=='undefined')&&window.__NQ_PAD_ACTIVE&&window.__NQ_PAD;
@@ -2154,6 +2199,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var left=this.cursors.left.isDown||this.keys.A.isDown||this.touch.left;
     var right=this.cursors.right.isDown||this.keys.D.isDown||this.touch.right;
     var jump=this.cursors.up.isDown||this.keys.W.isDown||this.keys.SPACE.isDown||this.touch.jump;
+    // auto-pause after 10s of no movement/jump input (player stepped away)
+    if(left||right||jump) this.lastInputAt=now; else if(this.lastInputAt&&now-this.lastInputAt>10000){ this.pauseGame(true); return; }
     var rawJump=jump;   // raw button for edge detection — slotTick may zero `jump`, but prevJump must track the real press
     // Normie Casino: stand by the slot machine and press jump/up to "fire it in" (eats that jump)
     if(this.slots.length && this.slotTick(now, p, b, rawJump && !this.prevJump)) jump=false;
@@ -2339,13 +2386,14 @@ var Over=new Phaser.Class({ Extends:Phaser.Scene,
     this.add.text(W/2,118,'SCORE',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#8f89b0'}).setOrigin(.5);
     this.add.text(W/2,150,String(this.finalScore),{fontFamily:'"Press Start 2P"',fontSize:'30px',color:'#ffd23f'}).setOrigin(.5).setShadow(3,3,'#7a5a00',0,true,true);
     // Per-world checkpoint continue takes priority over the leaderboard/free-preview copy.
-    var CP_LABEL={3:'WORLD 2\ncontinue from the Sand Lands',6:'WORLD 3\ncontinue from the Skyline',9:'WORLD 4\ncontinue from the Exchange',12:'WORLD 5\ncontinue from the Bridge',15:'WORLD 6\ncontinue from the Depeg'};
-    this.add.text(W/2,198, this.cont>0 ? ('★ CHECKPOINT: '+(CP_LABEL[this.cont]||('LEVEL '+(this.cont+1)))) : (BURN_GATE ? 'score posts to the leaderboard —\ntop 10 split the pool' : 'free preview · Worlds 1-6\nmore coming soon'),{fontFamily:'VT323',fontSize:'19px',color:this.cont>0?'#3dff6e':'#8f89b0',align:'center'}).setOrigin(.5);
+    var CP_LABEL={3:'WORLD 2\ncontinue from the Sand Lands',6:'WORLD 3\ncontinue from the Skyline',9:'WORLD 4\ncontinue from the Exchange',12:'WORLD 5\ncontinue from the Bridge',15:'WORLD 6\ncontinue from the Depeg',18:'WORLD 7\ncontinue from the Yield Farm',21:'WORLD 8\ncontinue from the Bear Market'};
+    this.add.text(W/2,198, this.cont>0 ? ('★ CHECKPOINT: '+(CP_LABEL[this.cont]||('LEVEL '+(this.cont+1)))) : (BURN_GATE ? 'score posts to the leaderboard —\ntop 10 split the pool' : 'free preview · all 8 Worlds\ngood luck out there'),{fontFamily:'VT323',fontSize:'19px',color:this.cont>0?'#3dff6e':'#8f89b0',align:'center'}).setOrigin(.5);
     var p=this.add.text(W/2,244, this.cont>0 ? 'PRESS TO CONTINUE →' : (BURN_GATE ? 'PRESS TO BURN AGAIN' : 'PRESS TO PLAY AGAIN'),{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
     this.tweens.add({targets:p,alpha:.25,duration:600,yoyo:true,repeat:-1});
     // Continue from the World-2 checkpoint if premium banked one; else free-preview restart, or the burn Gate.
     var self=this; this.started=false; var go=function(){ if(self.started) return; self.started=true;
-      if(self.cont>0) self.scene.start('Game',{level:self.cont,score:self.contScore,lives:3});
+      if(self.cont>0){ if(typeof BRIEFINGS!=='undefined'&&BRIEFINGS[self.cont]) self.scene.start('Briefing',{next:self.cont,score:self.contScore});   // show the world briefing (control reminder) on continue
+                        else self.scene.start('Game',{level:self.cont,score:self.contScore,lives:3}); }
       else if(BURN_GATE) self.scene.start('Gate');
       else self.scene.start('Game',{level:0,score:0,lives:3}); };
     this.time.delayedCall(500,function(){ self.input.once('pointerdown',go); self.input.keyboard.once('keydown',go); });
