@@ -267,7 +267,7 @@ var THEMES=[
   { sky1:0x172a4a, sky2:0x0a0e1e, hill:0x243a63 },   // 3-x The Skyline / Crypto Twitter (night blue)
   { sky1:0x0e2436, sky2:0x05101a, hill:0x143246 },   // 4-x The Exchange / CEX vault (cold steel cyan)
   { sky1:0x1a2438, sky2:0x07050c, hill:0x241a30 },    // 5-x The Bridge (cross-chain span over a dark chasm/void)
-  { sky1:0x7ac0f0, sky2:0x4a90d0, hill:0x4a7a34 }     // 6-x Proof of Work / the Mines (blocky sky + grass)
+  { sky1:0x123a34, sky2:0x061412, hill:0x1e5c4e }     // 6-x The Depeg (stablecoin — sterile dark teal-green, mint ground)
 ];
 
 // Slot-machine themes — one 'slot' sprite, re-skinned per theme (tint + glow + reel symbols +
@@ -483,8 +483,10 @@ var LEVELS=[
     planks:[[1440,5],[2880,5],[3600,5]],
     key:[4600,H-150], door:5000 },
 
-  // WORLD 6 — PROOF OF WORK (Minecraft-oriented blocky mines). Dig deep; boss = the Hash Lord golem.
-  { name:'6-1', sub:'THE SURFACE', time:150, theme:8, width:6000, bgImage:'mines',
+  // WORLD 6 — THE DEPEG (the "stable"coin that wasn't). Mint-green peg-ground breaks on a global
+  // rhythm: it flashes a warning, then the whole peg drops into the void for ~1.4s, then re-pegs.
+  // Time your crossings to the break. Sterile teal theme. Boss still the golem (Death Spiral art next).
+  { name:'6-1', sub:'THE PEG', time:150, theme:8, width:6000,
     gaps:[[860,980],[1700,1820],[2560,2680],[3400,3520],[4240,4360],[5080,5180]],
     walls:[[460,4,'crate',5],[1300,4,'stone',4],[2200,4,'crate',4],[3020,4,'stone',5],[3920,4,'crate',4],[4820,4,'stone',5]],
     plats:[[840,2,H-96,'crate'],[1180,2,H-130,'crate'],[1660,2,H-96,'stone'],[2140,2,H-110,'crate'],[2500,2,H-96,'crate'],[3320,2,H-96,'stone'],[3860,2,H-110,'crate'],[4260,2,H-96,'crate']],
@@ -494,9 +496,10 @@ var LEVELS=[
     coins:[[300,196],[348,196],[500,120],[548,120],[864,120],[920,196],[1204,110],[1480,196],[2140,120],[2340,150],[2620,196],[2620,150],[3344,120],[3620,150],[3660,196],[4284,120],[4500,150],[5020,196],[5300,196]],
     enemies:[['bot',340,230,80],['sniper',700,230,30],['ghost',1050,212,80],['bitmaxi',1160,230,60],['bot',1900,230,70],['bitmaxi',2020,230,70],['sniper',2420,230,30],['ghost',2840,212,70],['bitmaxi',3200,230,70],['bot',3600,230,70],['bitmaxi',4120,230,70],['sniper',4400,230,30],['ghost',4700,212,90],['bot',5220,230,70]],
     pumpdumps:[[1560,174],[3720,174]], honeypots:[[2400,232],[4160,232]], npcs:[[2950,90]],
+    pegs:[[1700,5],[3400,5],[5080,4]],
     key:[1680,H-150], door:5880 },
 
-  { name:'6-2', sub:'DEEP MINE', time:160, theme:8, width:6600, bgImage:'mines',
+  { name:'6-2', sub:'DEPEG EVENT', time:160, theme:8, width:6600,
     gaps:[[780,900],[1620,1740],[2440,2560],[3260,3380],[4120,4240],[4980,5100],[5900,6020]],
     walls:[[440,4,'crate',5],[1240,4,'stone',4],[2100,4,'crate',6],[2980,4,'stone',4],[3860,4,'crate',6],[4720,4,'stone',4],[5560,4,'crate',5]],
     plats:[[800,2,H-96,'crate'],[1180,2,H-110,'crate'],[1660,2,H-96,'crate'],[2460,2,H-96,'crate'],[2920,2,H-110,'crate'],[3300,2,H-96,'crate'],[3520,2,H-140,'crate'],[4160,2,H-96,'crate'],[4660,2,H-110,'crate'],[5040,2,H-96,'crate']],
@@ -506,10 +509,11 @@ var LEVELS=[
     coins:[[452,130],[500,130],[700,196],[1264,106],[1312,106],[1420,196],[2120,140],[2168,140],[2216,140],[2700,196],[3000,106],[3048,106],[3220,196],[3880,140],[3928,140],[4200,196],[4740,106],[4788,106],[5580,140],[5628,140],[6120,196]],
     enemies:[['bot',340,230,70],['sniper',620,230,30],['ghost',1000,212,80],['bitmaxi',1420,230,70],['sniper',1920,230,30],['bitmaxi',2280,230,70],['bot',2720,230,70],['ghost',3220,212,70],['sniper',3480,230,30],['bitmaxi',3680,230,70],['bot',4020,230,70],['bot',4420,230,70],['ghost',4840,212,80],['sniper',5280,230,30],['bitmaxi',5760,230,70]],
     pumpdumps:[[1000,174],[3500,174],[5300,174]], honeypots:[[2350,232],[4050,232]], npcs:[[3150,90]],
+    pegs:[[1620,5],[3260,5],[4980,5]],
     key:[1164,H-150], door:6480 },
 
-  // WORLD 6 boss level — the final gauntlet up to the Hash Lord golem (stomp x3; dodge thrown blocks).
-  { name:'6-3', sub:'THE HASH LORD', time:200, theme:8, width:5200, boss:true, bossType:'golem', bgImage:'mines',
+  // WORLD 6 boss level — depeg gauntlet up to the boss (golem mechanic for now; Death Spiral art next).
+  { name:'6-3', sub:'THE HASH LORD', time:200, theme:8, width:5200, boss:true, bossType:'golem',
     gaps:[[720,840],[1440,1560],[2160,2280],[2880,3000],[3600,3720],[4240,4360]],
     walls:[[440,4,'crate',5],[1120,4,'stone',4],[1800,4,'crate',6],[2500,4,'stone',4],[3160,4,'crate',6],[3860,4,'stone',4]],
     plats:[[740,2,H-96,'crate'],[1160,2,H-110,'crate'],[1580,2,H-96,'crate'],[2280,2,H-96,'crate'],[2560,2,H-120,'crate'],[2940,2,H-96,'crate'],[3620,2,H-96,'crate'],[3920,2,H-110,'crate'],[4400,2,H-96,'crate']],
@@ -519,6 +523,7 @@ var LEVELS=[
     coins:[[300,196],[600,130],[660,196],[960,196],[1220,106],[1620,150],[1980,140],[2340,196],[2620,110],[2960,196],[3220,140],[3560,196],[3940,106],[4160,196],[4420,150],[4560,196]],
     enemies:[['bot',340,230,70],['sniper',640,230,30],['bitmaxi',960,230,60],['ghost',1240,212,80],['sniper',1640,230,30],['bitmaxi',2000,230,70],['bot',2340,230,70],['sniper',2620,230,30],['bitmaxi',3080,230,70],['ghost',3420,212,70],['sniper',3560,230,30],['bitmaxi',4100,230,70],['bot',4160,230,60],['sniper',4460,230,30],['ghost',4560,212,80]],
     pumpdumps:[[1440,174],[2880,174],[4240,174]], honeypots:[[1300,232],[2660,232],[4020,232]], npcs:[[2380,90]],
+    pegs:[[1440,5],[3160,5]],
     key:[4600,H-150], door:5000 }
 ];
 
@@ -860,6 +865,14 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     (def.planks||[]).forEach(function(bp){ var count=bp[1]||3;
       for(var k=0;k<count;k++){ var m=self.bridgePlanks.create(bp[0]+k*TILE+TILE/2, GY+TILE/2, 'ground').setDepth(4);
         m.setTint(0x8a5a2b); m.homeY=m.y; m.bpState='idle'; m.bpAt=0; m.refreshBody(); } });
+    // THE DEPEG — "stable" ground that isn't. peg:[startX, countTiles] = a run of stablecoin-mint
+    // ground tiles. On a global cycle they all DEPEG at once (telegraphed flash → drop into the void
+    // → restore), so you time your crossing to the peg's rhythm. Stand on one when it breaks = fall.
+    this.pegs=this.physics.add.staticGroup();
+    (def.pegs||[]).forEach(function(pg){ var count=pg[1]||3;
+      for(var k=0;k<count;k++){ var m=self.pegs.create(pg[0]+k*TILE+TILE/2, GY+TILE/2, 'ground').setDepth(4);
+        m.setTint(0x2ee6a0); m.homeY=m.y; m.refreshBody(); } });
+    this.depegPhase='stable'; this.depegNextAt=this.time.now+4200;   // first depeg has a grace period
     // "Wen Lambo" NPCs — harmless crypto-degen bystanders who pace and shout. No damage/help.
     this.npcs=this.physics.add.group();
     (def.npcs||[]).forEach(function(np){
@@ -924,6 +937,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.physics.add.collider(this.player,this.movers);
     this.physics.add.collider(this.player,this.pumpDumps);
     this.physics.add.collider(this.player,this.bridgePlanks);
+    this.physics.add.collider(this.player,this.pegs);
     this.physics.add.collider(this.enemies,this.platforms,null,function(en){ return en.kind!=='ghost'; });
     this.physics.add.overlap(this.player,this.gasClouds,this.gasTouch,null,this);
     this.physics.add.overlap(this.player,this.honeypots,this.honeypotHit,null,this);
@@ -1537,6 +1551,24 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       }
     });
   },
+  depegTick:function(now){   // THE DEPEG: the whole "stable" peg breaks on a global rhythm — telegraph, drop, restore
+    if(!this.pegs || !this.pegs.getLength()) return; var self=this;
+    if(now<this.depegNextAt){
+      if(this.depegPhase==='warn') this.pegs.children.iterate(function(m){ if(m&&m.active) m.setAlpha(0.45+0.55*Math.abs(Math.sin(now/38))); });
+      return;
+    }
+    if(this.depegPhase==='stable'){        // stable → telegraph the break
+      this.depegPhase='warn'; this.depegNextAt=now+780;
+      this.pegs.children.iterate(function(m){ if(m) m.setTint(0xffd23f); });
+    } else if(this.depegPhase==='warn'){    // → DEPEG: the peg drops into the void
+      this.depegPhase='dropped'; this.depegNextAt=now+1400; this.cameras.main.shake(220,.010);
+      this.pegs.children.iterate(function(m){ if(!m) return; m.body.enable=false; m.setAlpha(1).setTint(0xff5544);
+        self.tweens.add({targets:m, y:m.homeY+150, alpha:0.06, angle:Phaser.Math.Between(-14,14), duration:460, ease:'Quad.in'}); });
+    } else {                                 // dropped → RE-PEG (restore)
+      this.depegPhase='stable'; this.depegNextAt=now+3600;
+      this.pegs.children.iterate(function(m){ if(!m) return; self.tweens.killTweensOf(m); m.y=m.homeY; m.angle=0; m.setAlpha(1).setTint(0x2ee6a0); m.body.enable=true; });
+    }
+  },
   npcTick:function(now){   // "Wen Lambo" bystanders pace their patch and shout on a cadence
     if(!this.npcs) return; var self=this;
     this.npcs.children.iterate(function(n){
@@ -1873,6 +1905,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // Pump-&-Dump platforms (Phase 2)
     this.pumpDumpTick(now,p,b);
     this.bridgePlankTick(now,p,b);
+    this.depegTick(now);
     // "Wen Lambo" NPCs
     this.npcTick(now);
     // Casino folk (Drink/Show Ladies) + Lil Normie child support
@@ -1908,7 +1941,7 @@ var Over=new Phaser.Class({ Extends:Phaser.Scene,
     this.add.text(W/2,118,'SCORE',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#8f89b0'}).setOrigin(.5);
     this.add.text(W/2,150,String(this.finalScore),{fontFamily:'"Press Start 2P"',fontSize:'30px',color:'#ffd23f'}).setOrigin(.5).setShadow(3,3,'#7a5a00',0,true,true);
     // Per-world checkpoint continue takes priority over the leaderboard/free-preview copy.
-    var CP_LABEL={3:'WORLD 2\ncontinue from the Sand Lands',6:'WORLD 3\ncontinue from the Skyline',9:'WORLD 4\ncontinue from the Exchange',12:'WORLD 5\ncontinue from the Bridge',15:'WORLD 6\ncontinue from the Mines'};
+    var CP_LABEL={3:'WORLD 2\ncontinue from the Sand Lands',6:'WORLD 3\ncontinue from the Skyline',9:'WORLD 4\ncontinue from the Exchange',12:'WORLD 5\ncontinue from the Bridge',15:'WORLD 6\ncontinue from the Depeg'};
     this.add.text(W/2,198, this.cont>0 ? ('★ CHECKPOINT: '+(CP_LABEL[this.cont]||('LEVEL '+(this.cont+1)))) : (BURN_GATE ? 'score posts to the leaderboard —\ntop 10 split the pool' : 'free preview · Worlds 1-6\nmore coming soon'),{fontFamily:'VT323',fontSize:'19px',color:this.cont>0?'#3dff6e':'#8f89b0',align:'center'}).setOrigin(.5);
     var p=this.add.text(W/2,244, this.cont>0 ? 'PRESS TO CONTINUE →' : (BURN_GATE ? 'PRESS TO BURN AGAIN' : 'PRESS TO PLAY AGAIN'),{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
     this.tweens.add({targets:p,alpha:.25,duration:600,yoyo:true,repeat:-1});
@@ -2053,16 +2086,16 @@ var BRIEFINGS = {
          {tex:'wyrm', name:'THE VAULT WYRM', desc:'guards the far side of the bridge'}
        ],
        tip:'CROSS-CHAIN BRIDGE: the wooden planks get exploited & collapse a beat after you step on them — KEEP MOVING, never stand still over the void.' },
-  15: { title:'WORLD 6 — PROOF OF WORK',
+  15: { title:'WORLD 6 — THE DEPEG',
        powers:[
-         {tex:'bull', name:'BULL MARKET', desc:'Mega-jump over the deep mine gaps.'},
+         {tex:'bull', name:'BULL MARKET', desc:'Mega-jump across the breaking peg.'},
          {tex:'supergeek', name:'SUPER GEEK', desc:'Audit shield — blocks the next hit.'}
        ],
        threats:[
-         {tex:'bot', name:'MINING RIGS', desc:'bots & snipers everywhere — keep moving'},
-         {tex:'golem', name:'THE HASH LORD', desc:'the FINAL boss; hurls stone blocks'}
+         {tex:'bot', name:'ARB BOTS', desc:'bots & snipers everywhere — keep moving'},
+         {tex:'golem', name:'THE HASH LORD', desc:'the FINAL boss; hurls blocks'}
        ],
-       tip:'The last stand — stomp the Hash Lord x3 to reclaim your bags.' }
+       tip:'DEPEG: the mint-green "stable" ground BREAKS on a rhythm — it flashes, then drops into the void for a moment. Time your crossings; never be standing on the peg when it snaps.' }
 };
 
 /* ---------- Controls: opening HOW-TO-PLAY screen shown before World 1 ---------- */
