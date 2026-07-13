@@ -85,7 +85,7 @@ function _loadSfx(){ if(_powerTried) return; var c=_ac(); if(!c) return; _powerT
   try{ var b64=_SFX_POWER_URI.split(',')[1], bin=atob(b64), n=bin.length, arr=new Uint8Array(n);
     for(var i=0;i<n;i++) arr[i]=bin.charCodeAt(i);
     c.decodeAudioData(arr.buffer, function(buf){ _powerBuf=buf; }, function(){}); }catch(e){} }
-function _playSample(buf,vol){ var c=_ac(); if(!c||!buf) return false; try{ var s=c.createBufferSource(), g=c.createGain(); g.gain.value=(vol==null?0.55:vol); s.buffer=buf; s.connect(g); g.connect(c.destination); s.start(); return true; }catch(e){ return false; } }
+function _playSample(buf,vol){ var c=_ac(); if(!c||!buf) return false; try{ var s=c.createBufferSource(), g=c.createGain(); var v=(vol==null?0.55:vol), t=c.currentTime, cap=Math.min(buf.duration||1.5,1.5); g.gain.setValueAtTime(v,t); g.gain.setValueAtTime(v,t+Math.max(0.05,cap-0.3)); g.gain.exponentialRampToValueAtTime(0.0001,t+cap); s.buffer=buf; s.connect(g); g.connect(c.destination); s.start(t); s.stop(t+cap+0.02); return true; }catch(e){ return false; } }   // capped ~1.5s + fade — the raw sample is long; uncapped it rang for the WHOLE power-up (owner: annoying)
 // Keep the Web-Audio context alive. iOS/Safari suspends it (screen lock, tab switch, or if it
 // was never unlocked in a real tap) and will only RESUME inside a genuine user gesture — a
 // resume() call from the game loop is ignored. So unlock/resume on ANY real interaction, and
