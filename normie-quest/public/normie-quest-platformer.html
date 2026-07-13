@@ -220,7 +220,7 @@ var MUSIC=(function(){
   // synth above keeps playing — so the game always has music and the produced tracks are drop-in.
   // The synth starts INSTANTLY on every play() and the file cross-fades in once it's buffered, so a
   // track swap is seamless and there's never a silent gap.
-  var MUSIC_BASE='/normie-quest/music/', EXTS=['mp3','ogg','wav'], els={}, missing={}, want=null, curEl=null, streaming=false;
+  var MUSIC_BASE='/normie-quest/music/', EXTS=['mp3','m4a','ogg','wav'], els={}, missing={}, want=null, curEl=null, streaming=false;
   function elVol(el,v){ try{ el.volume=Math.max(0,Math.min(1,v)); }catch(e){} }
   function fade(el,to,ms,done){ if(!el){ if(done) done(); return; } if(el._fi) clearInterval(el._fi);
     var from=(typeof el.volume==='number'?el.volume:0), t0=Date.now();

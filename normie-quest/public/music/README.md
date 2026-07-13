@@ -19,7 +19,7 @@ Name each file after the world/track it should play (the game asks for these key
 | `sacred.mp3`    | World 5 — The Sacred Seeds              | new-age lo-fi, ethereal, 82 bpm |
 | `mines.mp3`     | World 6 — Proof of Work / the Mines     | ambient lo-fi, gentle piano, 70 bpm |
 
-Formats accepted (checked in this order): **`.mp3`**, `.ogg`, `.wav`. mp3 is preferred
+Formats accepted (checked in this order): **`.mp3`**, `.m4a`, `.ogg`, `.wav`. mp3 is preferred
 (smallest). Tracks loop seamlessly and cross-fade between worlds, so export them as clean
 loop-able tracks (~1–3 min is plenty).
 
