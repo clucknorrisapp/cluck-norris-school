@@ -92,7 +92,9 @@ function _playSample(buf,vol){ var c=_ac(); if(!c||!buf) return false; try{ var 
 // again whenever the tab becomes visible. This is why sound would "quit working" and not return.
 function _unlockAudio(){ try{ var c=_ac(); if(!c) return; if(c.state==='suspended') c.resume();
   var o=c.createOscillator(), g=c.createGain(); g.gain.value=0.00008; o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime+0.03);   // silent blip fully unlocks iOS
-  _loadSfx();   // decode the embedded power-up sample once the context is live (first real gesture)
+  // Decode the power-up sample AFTER the unlock, off the gesture's critical path (a deferred timer),
+  // so nothing about the sample can interfere with iOS's finicky unlock heuristic (which gates ALL sound).
+  try{ setTimeout(_loadSfx,0); }catch(e){}
 }catch(e){} }
 if(typeof window!=='undefined'){
   ['pointerdown','touchstart','touchend','mousedown','keydown'].forEach(function(ev){ window.addEventListener(ev,_unlockAudio,{passive:true,capture:true}); });
@@ -104,7 +106,8 @@ var SFX={
   stomp:function(){ _tone(320,80,0.12,'square',0.10); },
   hurt:function(){ _tone(300,110,0.26,'sawtooth',0.10); },
   key:function(){ _seq([[660,0.09],[990,0.09],[1320,0.16]],'square',0.08); },
-  power:function(){ if(_powerBuf && _playSample(_powerBuf,0.5)) return; _seq([[523,0.08],[659,0.08],[784,0.08],[1046,0.18]],'square',0.09); },   // real .wav sample, synth chime as fallback
+  power:function(){ if(_powerBuf){ if(_playSample(_powerBuf,0.5)) return; } else { _loadSfx(); }   // real .wav sample once decoded; synth chime meanwhile / as fallback
+    _seq([[523,0.08],[659,0.08],[784,0.08],[1046,0.18]],'square',0.09); },
   boss:function(){ _tone(150,55,0.20,'sawtooth',0.12); },
   clear:function(){ _seq([[523,0.10],[784,0.10],[1046,0.24]],'square',0.09); },
   win:function(){ _seq([[523,0.12],[659,0.12],[784,0.12],[1046,0.12],[1319,0.30]],'square',0.10); }
