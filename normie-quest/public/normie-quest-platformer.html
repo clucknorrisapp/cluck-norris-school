@@ -296,6 +296,7 @@ var LEVELS=[
     coins:[[492,182],[540,182],[780,196],[1252,158],[1300,158],[1600,196],[2092,182],[2140,182],[2188,182],[2500,196],[2932,158],[2980,158],[3560,196],[3732,182],[3780,182],[3828,182],[4620,158],[4900,196]],
     enemies:[['jeet',340,230,110],['jeet',680,230,70],['ghost',1000,212,90],['jeet',1080,230,130],['jeet',1500,230,110],['jeet',1960,230,110],['jeet',2400,230,80],['ghost',2760,212,90],['jeet',2820,230,90],['jeet',3200,230,100],['ghost',3600,212,90],['jeet',4100,230,70]],
     npcs:[[1500,90]],
+    bonusblocks:[[620,5],[1400,'supergeek'],[3100,8],[3950,5]],
     key:[1584,H-150], door:5080 },
 
   { name:'1-2', sub:'FUD RISING', time:120, theme:1, width:5800,
@@ -307,6 +308,7 @@ var LEVELS=[
     airdrops:[[1200,H-118],[3500,H-72]],
     coins:[[472,158],[520,158],[700,196],[1312,158],[1360,158],[1500,196],[2212,134],[2260,134],[2680,196],[3012,158],[3060,158],[3600,196],[3912,158],[3960,158],[4500,196],[4812,158],[4860,158],[5300,196]],
     enemies:[['paper',340,230,100],['jeet',700,230,70],['ghost',1000,212,80],['paper',1120,230,90],['paper',1500,230,100],['ghost',1900,212,90],['jeet',2400,230,80],['paper',2680,230,70],['ghost',2900,212,90],['paper',3220,230,70],['bot',3600,230,80],['ghost',3820,212,90],['paper',4120,230,90],['bot',4500,230,80]],
+    bonusblocks:[[700,5],[2350,'diamond'],[3800,8]],
     key:[1624,H-150], door:5680 },
 
   { name:'1-3', sub:"THE RUG KING'S KEEP", time:135, theme:2, width:6400, boss:true,
@@ -331,6 +333,7 @@ var LEVELS=[
     coins:[[512,158],[560,158],[800,196],[1312,158],[1360,158],[1700,196],[2212,134],[2260,134],[2650,196],[3112,158],[3160,158],[3700,196],[4212,158],[4260,158],[4800,196]],
     enemies:[['bot',360,230,90],['paper',680,230,70],['ghost',1100,212,80],['fudster',1650,230,60],['bitmaxi',2050,230,110],['ghost',2400,212,90],['bot',2600,230,80],['paper',3300,230,70],['sniper',3650,230,36],['bot',4000,230,80],['bitmaxi',4400,230,110]],
     miniworms:[1150,3550,4700], honeypots:[[2700,232]], npcs:[[2450,90]],
+    bonusblocks:[[720,5],[2500,'bull'],[4050,8]],
     key:[1600,H-150], door:5080 },
 
   // WORLD 2 — Normie Casino: a normal stage with a slot machine you "fire it in" for bonus coins.
@@ -371,6 +374,7 @@ var LEVELS=[
     coins:[[472,158],[520,158],[700,196],[1312,158],[1360,158],[1500,196],[2212,134],[2260,134],[2680,196],[3012,158],[3060,158],[3600,196],[3912,158],[3960,158],[4500,196],[4812,158],[4860,158],[5300,196]],
     enemies:[['jeet',340,230,80],['bot',680,230,60],['ghost',1050,212,80],['fudster',1150,230,60],['sniper',1900,230,30],['bitmaxi',2380,230,70],['bot',2800,230,70],['ghost',2820,212,60],['sniper',3150,230,30],['fudster',3600,230,70],['bitmaxi',4100,230,70],['bot',4500,230,70],['ghost',4700,212,90]],
     pumpdumps:[[1500,174],[3700,174]], honeypots:[], npcs:[[2900,90]],
+    bonusblocks:[[700,5],[2350,'moon'],[3800,8]],
     key:[1624,H-150], door:5680 },
 
   { name:'3-2', sub:'THE TIMELINE', time:145, theme:5, width:6400, bgImage:'skyline',
@@ -412,6 +416,7 @@ var LEVELS=[
     coins:[[300,196],[348,196],[500,120],[548,120],[864,120],[920,196],[1204,110],[1480,196],[2140,120],[2340,150],[2620,196],[2620,150],[3344,120],[3620,150],[3660,196],[4284,120],[4500,150],[5020,196],[5300,196]],
     enemies:[['bot',340,230,80],['sniper',700,230,30],['ghost',1050,212,80],['fudster',1160,230,60],['bitmaxi',1900,230,70],['bot',2020,230,70],['sniper',2420,230,30],['ghost',2840,212,70],['fudster',3200,230,70],['bot',3600,230,70],['bitmaxi',4120,230,70],['sniper',4400,230,30],['ghost',4700,212,90],['bot',5220,230,70]],
     pumpdumps:[[1560,174],[3720,174]], honeypots:[[2400,232]], npcs:[[2950,90]],
+    bonusblocks:[[700,5],[2350,'omegachad'],[3700,8]],
     key:[1680,H-150], door:5880 },
 
   { name:'4-2', sub:'THE TRADING FLOOR', time:160, theme:6, width:6600, bgImage:'exchange',
@@ -582,6 +587,24 @@ var Boot=new Phaser.Class({ Extends:Phaser.Scene,
     g.fillStyle(0x323d59); g.fillRect(1,18,22,5);                      // bottom shadow
     g.fillStyle(0x9fb3d6); g.fillCircle(4,4,1.7); g.fillCircle(20,4,1.7); g.fillCircle(4,20,1.7); g.fillCircle(20,20,1.7);
     g.generateTexture('steel',24,24);
+    // ? bonus block — golden Mario-style block: bevel, corner rivets, blocky "?" glyph
+    g.clear();
+    g.fillStyle(0x8a5a10); g.fillRect(0,0,24,24);
+    g.fillStyle(0xf5b820); g.fillRect(1,1,22,22);
+    g.fillStyle(0xffd84a); g.fillRect(2,2,20,3);                        // top highlight
+    g.fillStyle(0xb8860b); g.fillRect(1,19,22,3);                       // bottom shade
+    g.fillStyle(0xfff0a0); g.fillCircle(4,4,1.5); g.fillCircle(20,4,1.5); g.fillCircle(4,20,1.5); g.fillCircle(20,20,1.5);
+    g.fillStyle(0x5e3a0a);                                              // the "?" glyph
+    g.fillRect(9,6,6,2); g.fillRect(14,7,2,3); g.fillRect(11,10,4,2); g.fillRect(11,12,2,3); g.fillRect(11,17,2,2);
+    g.generateTexture('qblock',24,24);
+    // spent bonus block — dull brown, rivets, no glyph (an emptied block)
+    g.clear();
+    g.fillStyle(0x6e4a20); g.fillRect(0,0,24,24);
+    g.fillStyle(0x9a6a35); g.fillRect(1,1,22,22);
+    g.fillStyle(0xb98a4a); g.fillRect(2,2,20,3);
+    g.fillStyle(0x5e3c1a); g.fillRect(1,19,22,3);
+    g.fillStyle(0x7a5228); g.fillCircle(4,4,1.5); g.fillCircle(20,4,1.5); g.fillCircle(4,20,1.5); g.fillCircle(20,20,1.5);
+    g.generateTexture('qblockused',24,24);
     // (coin is the Bitcoin symbol generated at the top of create)
     // moving platform (48x14 metal)
     g.clear(); g.fillStyle(C.moverDk); g.fillRect(0,0,48,14); g.fillStyle(C.mover); g.fillRect(1,1,46,9); g.fillStyle(C.moverDk); for(var mx=4;mx<48;mx+=8) g.fillRect(mx,10,4,3); g.generateTexture('mover',48,14);
@@ -873,6 +896,13 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       for(var k=0;k<count;k++){ var m=self.pegs.create(pg[0]+k*TILE+TILE/2, GY+TILE/2, 'ground').setDepth(4);
         m.setTint(0x2ee6a0); m.homeY=m.y; m.refreshBody(); } });
     this.depegPhase='stable'; this.depegNextAt=this.time.now+4200;   // first depeg has a grace period
+    // ? BONUS BLOCKS — Mario-style. bonusblock:[x, reward, y?] at head-bonk height. Bonk from BELOW
+    // → pops coins (reward = number) or a power-up (reward = a power-up key string). Solid: stand on
+    // top, bonk from under. Once hit it turns into a spent block.
+    this.bonusBlocks=this.physics.add.staticGroup();
+    (def.bonusblocks||[]).forEach(function(bb){ var by=(bb[2]!=null)?bb[2]:(H-96);
+      var m=self.bonusBlocks.create(bb[0], by, 'qblock').setDepth(4); m.reward=bb[1]; m.used=false; m.homeY=by; m.refreshBody();
+      self.tweens.add({targets:m, scaleY:1.06, duration:560, yoyo:true, repeat:-1, ease:'Sine.inOut'}); });
     // "Wen Lambo" NPCs — harmless crypto-degen bystanders who pace and shout. No damage/help.
     this.npcs=this.physics.add.group();
     (def.npcs||[]).forEach(function(np){
@@ -938,6 +968,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.physics.add.collider(this.player,this.pumpDumps);
     this.physics.add.collider(this.player,this.bridgePlanks);
     this.physics.add.collider(this.player,this.pegs);
+    this.physics.add.collider(this.player,this.bonusBlocks,this.blockBonk,null,this);
     this.physics.add.collider(this.enemies,this.platforms,null,function(en){ return en.kind!=='ghost'; });
     this.physics.add.overlap(this.player,this.gasClouds,this.gasTouch,null,this);
     this.physics.add.overlap(this.player,this.honeypots,this.honeypotHit,null,this);
@@ -1041,6 +1072,33 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     else if(type==='omegachad'){ this.omegaUntil=now+10000; this.cameras.main.shake(220,.008); this.powerBanner('GIGA CHAD','UNSTOPPABLE — plow through enemies 10s','#ffa020'); }
     else if(type==='supergeek'){ this.geekShield=true; this.powerBanner('SUPER GEEK','AUDIT ON — blocks the next hit','#2ee6c0'); }
     this.addScore(30); this.cameras.main.flash(120,60,120,40); SFX.power();
+  },
+
+  // ? BONUS BLOCK — bonk from BELOW only (block above player + head stopped by it).
+  blockBonk:function(player,block){
+    if(block.used) return;
+    if(block.body.center.y < player.body.center.y-6 && (player.body.blocked.up||player.body.touching.up)) this.popBlock(block);
+  },
+  popBlock:function(block){
+    block.used=true; this.tweens.killTweensOf(block); block.setScale(1); block.setTexture('qblockused');
+    this.tweens.add({targets:block, y:block.homeY-7, duration:90, yoyo:true, ease:'Quad.out'});   // the bump
+    var self=this, r=block.reward;
+    if(typeof r==='string'){                                        // a POWER-UP pops out the top
+      SFX.power();
+      var o=this.powerups.create(block.x, block.homeY-2, r); o.ptype=r;
+      o.setScale((r==='candle'?46:40)/o.height).setDepth(6);
+      o.body.setAllowGravity(false); o.body.setSize(o.width*1.6,o.height*1.4);
+      var pg=this.addGlow(o, (typeof PUCOL!=='undefined'&&PUCOL[r])||0xffffff, 4);
+      if(pg) this.tweens.add({targets:pg,outerStrength:11,duration:620,yoyo:true,repeat:-1,ease:'Sine.inOut'});
+      this.tweens.add({targets:o, y:block.homeY-34, duration:440, ease:'Back.out', onComplete:function(){
+        if(o.active) self.tweens.add({targets:o, y:block.homeY-43, duration:820, yoyo:true, repeat:-1, ease:'Sine.inOut'}); }});
+    } else {                                                        // COINS pop out
+      var n=(typeof r==='number'&&r>0)?r:5; this.addScore(n); SFX.coin(); this.burst(block.x, block.homeY-10, 0xffd23f, 10);
+      var c=this.add.image(block.x, block.homeY-8, 'coin'); c.setScale(20/c.height).setDepth(7);
+      this.tweens.add({targets:c, y:block.homeY-40, alpha:0, duration:560, ease:'Quad.out', onComplete:function(){ c.destroy(); }});
+      var t=this.add.text(block.x, block.homeY-16, '+'+n, {fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#ffd23f'}).setOrigin(.5).setDepth(30);
+      this.tweens.add({targets:t, y:block.homeY-42, alpha:0, duration:640, ease:'Quad.out', onComplete:function(){ t.destroy(); }});
+    }
   },
 
   revealAirdrop:function(a){   // parachute in from above, then bob
