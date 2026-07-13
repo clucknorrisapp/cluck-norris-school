@@ -143,4 +143,17 @@ router.get('/normie-quest-x7/feedback', (req, res) => {
     + 'c.style.display=(!l||cl===l)?"":"none"})}})</script></body></html>');
 });
 
+// ---- produced music files (optional) -------------------------------------
+// Drop real, OWNED/licensed tracks at normie-quest/public/music/<name>.mp3 (or .ogg / .wav) where
+// <name> is a track key the game asks for: world1, desert, casino, skyline, exchange, boss,
+// sacred, mines. The game streams the file when present and silently falls back to its built-in
+// synth music when absent — so this directory can be empty and everything still works.
+// fallthrough:false → a missing file returns a clean 404 (not the SPA shell), which the game's
+// <audio> loader reads as "no track, use the synth".
+router.use('/normie-quest/music', express.static(path.join(__dirname, 'public', 'music'), {
+  maxAge: '7d',
+  fallthrough: false,
+  setHeaders: (res) => { res.set('X-Robots-Tag', 'noindex, nofollow'); },
+}));
+
 module.exports = router;

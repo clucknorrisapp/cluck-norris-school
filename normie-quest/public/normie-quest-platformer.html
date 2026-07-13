@@ -210,12 +210,44 @@ var MUSIC=(function(){
     return dur; }
   function tick(){ if(!cur||!ensure()) return; var tr=TR[cur]; if(!tr) return; var now=ctx.currentTime;
     var guard=0; while(nextAt<now+1.0 && guard++<8){ nextAt+=schedLoop(tr,nextAt); } }
+  function synthPlay(name){ if(!TR[name]) return; if(!ensure()) return; var fresh=(name!==cur); cur=name;
+    if(fresh){ phrase=0; nextAt=ctx.currentTime+0.05; } if(!timer) timer=setInterval(tick,240); tick(); }
+  function synthStop(){ cur=null; }
+
+  // ---- PRODUCED-TRACK STREAMER --------------------------------------------------------------
+  // If a real, owned/licensed track exists at /normie-quest/music/<name>.mp3 (or .ogg), stream it
+  // (looping, cross-faded between worlds) and mute the synth. If it's missing or fails to load, the
+  // synth above keeps playing — so the game always has music and the produced tracks are drop-in.
+  // The synth starts INSTANTLY on every play() and the file cross-fades in once it's buffered, so a
+  // track swap is seamless and there's never a silent gap.
+  var MUSIC_BASE='/normie-quest/music/', EXTS=['mp3','ogg','wav'], els={}, missing={}, want=null, curEl=null, streaming=false;
+  function elVol(el,v){ try{ el.volume=Math.max(0,Math.min(1,v)); }catch(e){} }
+  function fade(el,to,ms,done){ if(!el){ if(done) done(); return; } if(el._fi) clearInterval(el._fi);
+    var from=(typeof el.volume==='number'?el.volume:0), t0=Date.now();
+    el._fi=setInterval(function(){ var k=ms>0?Math.min(1,(Date.now()-t0)/ms):1; elVol(el, from+(to-from)*k);
+      if(k>=1){ clearInterval(el._fi); el._fi=null; if(done) done(); } }, 40); }
+  function makeEl(name){ var el=els[name]; if(el) return el;
+    el=new Audio(); el.loop=true; el.preload='auto'; el.volume=0; el._ext=0; el.src=MUSIC_BASE+name+'.'+EXTS[0]; els[name]=el;
+    el.addEventListener('error',function(){ if(el._ext<EXTS.length-1){ el._ext++; el.src=MUSIC_BASE+name+'.'+EXTS[el._ext]; el.load(); } else { missing[name]=true; } });
+    return el; }
+  function tryFile(name){ if(missing[name]) return; var el=makeEl(name);
+    var go=function(){ if(want!==name||missing[name]) return;
+      streaming=true; synthStop();                                   // real track takes over → silence the synth
+      if(curEl && curEl!==el){ var old=curEl; fade(old,0,700,function(){ try{old.pause();}catch(e){} }); }
+      curEl=el; try{ el.currentTime=0; }catch(e){}
+      var p=el.play(); if(p&&p.catch) p.catch(function(){ missing[name]=true; streaming=false; if(want===name) synthPlay(name); });
+      fade(el, muted?0:1, 700); };
+    if(el.readyState>=3) go(); else el.addEventListener('canplaythrough',go,{once:true}); }
   return {
-    play:function(name){ if(!TR[name]) return; if(!ensure()) return; var fresh=(name!==cur); cur=name;
-      if(fresh){ phrase=0; nextAt=ctx.currentTime+0.05; } if(!timer) timer=setInterval(tick,240); tick(); },
-    stop:function(){ cur=null; },
-    toggle:function(){ muted=!muted; if(gain) gain.gain.value=muted?0:0.06; try{ localStorage.setItem('nqMute',muted?'1':'0'); }catch(e){} return muted; },
-    muted:function(){ return muted; }
+    play:function(name){ if(!TR[name]) return; if(name===want) return; want=name;
+      streaming=false;
+      if(curEl){ var old=curEl; curEl=null; fade(old,0,450,function(){ try{old.pause();}catch(e){} }); }
+      synthPlay(name);          // instant sound
+      tryFile(name); },         // …upgraded to the produced track if one exists
+    stop:function(){ want=null; synthStop(); streaming=false; if(curEl){ var old=curEl; curEl=null; fade(old,0,300,function(){ try{old.pause();}catch(e){} }); } },
+    toggle:function(){ muted=!muted; if(gain) gain.gain.value=muted?0:0.06; if(curEl) fade(curEl,muted?0:1,150); try{ localStorage.setItem('nqMute',muted?'1':'0'); }catch(e){} return muted; },
+    muted:function(){ return muted; },
+    state:function(){ return { want:want, streaming:streaming, missing:Object.keys(missing) }; }   // observability / tests
   };
 })();
 try{ if(typeof window!=='undefined') window.__NQ_MUSIC=MUSIC; }catch(e){}
