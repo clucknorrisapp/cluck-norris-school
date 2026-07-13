@@ -90,7 +90,7 @@ if(typeof window!=='undefined'){
 }
 var SFX={
   jump:function(){ _tone(420,760,0.13,'square',0.08); },
-  coin:function(){ _tone(940,1500,0.08,'square',0.06); },
+  coin:function(){ _seq([[1760,0.045],[2637,0.13]],'sine',0.05); },   // Sonic-style ring "ti-TING" (two bright bell tones)
   stomp:function(){ _tone(320,80,0.12,'square',0.10); },
   hurt:function(){ _tone(300,110,0.26,'sawtooth',0.10); },
   key:function(){ _seq([[660,0.09],[990,0.09],[1320,0.16]],'square',0.08); },
@@ -220,7 +220,7 @@ var MUSIC=(function(){
   // synth above keeps playing — so the game always has music and the produced tracks are drop-in.
   // The synth starts INSTANTLY on every play() and the file cross-fades in once it's buffered, so a
   // track swap is seamless and there's never a silent gap.
-  var MUSIC_BASE='/normie-quest/music/', EXTS=['mp3','m4a','ogg','wav'], els={}, missing={}, want=null, curEl=null, streaming=false;
+  var MUSIC_BASE='/normie-quest/music/', EXTS=['mp3','m4a','mp4','ogg','wav'], els={}, missing={}, want=null, curEl=null, streaming=false;
   var MUSIC_VOL=0.18;   // produced tracks sit QUIETLY under the game SFX (jump/coin/hit) — kept low so the beat never overpowers
   function elVol(el,v){ try{ el.volume=Math.max(0,Math.min(1,v)); }catch(e){} }
   function fade(el,to,ms,done){ if(!el){ if(done) done(); return; } if(el._fi) clearInterval(el._fi);
@@ -239,16 +239,26 @@ var MUSIC=(function(){
       var p=el.play(); if(p&&p.catch) p.catch(function(){ missing[name]=true; streaming=false; if(want===name) synthPlay(name); });
       fade(el, muted?0:MUSIC_VOL, 700); };
     if(el.readyState>=3) go(); else el.addEventListener('canplaythrough',go,{once:true}); }
+  function playInternal(name){ if(!TR[name]) return; if(name===want) return; want=name;
+    streaming=false;
+    if(curEl){ var old=curEl; curEl=null; fade(old,0,450,function(){ try{old.pause();}catch(e){} }); }
+    synthPlay(name);            // instant sound
+    tryFile(name); }            // …upgraded to the produced track if one exists
+  // NORMIE'S BAD BEATS — the player can lock a "channel" (a specific track) that plays everywhere,
+  // or leave it on AUTO (the per-world theme). Persisted in localStorage.
+  var channel='auto', lastWorld='world1';
+  try{ channel=(typeof localStorage!=='undefined'&&localStorage.getItem('nqChannel'))||'auto'; }catch(e){}
+  var CHANNELS=[['auto','AUTO · per world'],['world1','MAIN THEME'],['desert','SAND LANDS'],['casino','CASINO'],['skyline','SKYLINE'],['exchange','THE EXCHANGE'],['sacred','THE BRIDGE'],['mines','THE DEPEG'],['boss','BOSS RUSH']];
   return {
-    play:function(name){ if(!TR[name]) return; if(name===want) return; want=name;
-      streaming=false;
-      if(curEl){ var old=curEl; curEl=null; fade(old,0,450,function(){ try{old.pause();}catch(e){} }); }
-      synthPlay(name);          // instant sound
-      tryFile(name); },         // …upgraded to the produced track if one exists
+    play:playInternal,
+    forWorld:function(name){ if(TR[name]) lastWorld=name; playInternal(channel==='auto'?name:channel); },   // world/boss triggers route here
+    setChannel:function(name){ channel=(name==='auto'||TR[name])?name:'auto'; try{ localStorage.setItem('nqChannel',channel); }catch(e){} playInternal(channel==='auto'?lastWorld:channel); return channel; },
+    getChannel:function(){ return channel; },
+    channels:function(){ return CHANNELS; },
     stop:function(){ want=null; synthStop(); streaming=false; if(curEl){ var old=curEl; curEl=null; fade(old,0,300,function(){ try{old.pause();}catch(e){} }); } },
     toggle:function(){ muted=!muted; if(gain) gain.gain.value=muted?0:0.06; if(curEl) fade(curEl,muted?0:MUSIC_VOL,150); try{ localStorage.setItem('nqMute',muted?'1':'0'); }catch(e){} return muted; },
     muted:function(){ return muted; },
-    state:function(){ return { want:want, streaming:streaming, missing:Object.keys(missing) }; }   // observability / tests
+    state:function(){ return { want:want, streaming:streaming, missing:Object.keys(missing), channel:channel }; }   // observability / tests
   };
 })();
 try{ if(typeof window!=='undefined') window.__NQ_MUSIC=MUSIC; }catch(e){}
@@ -738,7 +748,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var def=this.def=LEVELS[this.levelIdx];
     var LW=this.LW=def.width, th=THEMES[def.theme];
     // background music — per-world mood (boss arenas get the boss theme; 1-3's Rug King switches in startBoss)
-    try{ var w0=def.name.charAt(0); var mt=(def.boss&&def.bossType)?'boss':(w0==='1'?'world1':def.name==='2-1'?'desert':def.name==='2-2'?'casino':w0==='3'?'skyline':w0==='4'?'exchange':w0==='5'?'sacred':w0==='6'?'mines':'world1'); MUSIC.play(mt); }catch(e){}
+    try{ var w0=def.name.charAt(0); var mt=(def.boss&&def.bossType)?'boss':(w0==='1'?'world1':def.name==='2-1'?'desert':def.name==='2-2'?'casino':w0==='3'?'skyline':w0==='4'?'exchange':w0==='5'?'sacred':w0==='6'?'mines':'world1'); MUSIC.forWorld(mt); }catch(e){}
     // Difficulty profile: deliberate ramp by WORLD. Worlds 1 (lvl 0-2)=baseline, World 2
     // (3-5)=+15% enemy speed, World 3 (6-8)=+30%. Per-level override via def.diff.
     this.diffMul = def.diff || [1,1,1,1.15,1.15,1.15,1.3,1.3,1.3,1.45,1.45,1.55,1.6,1.6,1.7,1.75,1.75,1.85][this.levelIdx] || 1;
@@ -1190,7 +1200,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
 
   startBoss:function(){
     if(this.bossStarted) return; this.bossStarted=true; this.boss=true; this.bossHP=3;
-    try{ MUSIC.play('boss'); }catch(e){}   // kick into the boss theme (also covers 1-3's Rug King)
+    try{ MUSIC.forWorld('boss'); }catch(e){}   // kick into the boss theme (also covers 1-3's Rug King)
     if(this.def.bossType==='wormhole'){ this.startWormBoss(); return; }
     if(this.def.bossType==='kol'){ this.startKolBoss(); return; }
     if(this.def.bossType==='ceo'){ this.startCeoBoss(); return; }
@@ -2315,15 +2325,43 @@ if(typeof document!=='undefined'){ (function(){
 /* ---------- Music mute toggle (M key + a small button) ---------- */
 if(typeof document!=='undefined'){ (function(){
   var css=document.createElement('style');
-  css.textContent='#nqmute{position:fixed;top:9px;left:9px;z-index:60;width:34px;height:34px;border-radius:50%;'
-    +'border:1px solid rgba(255,255,255,.22);background:rgba(18,14,32,.55);color:#ffd23f;font-size:16px;cursor:pointer;'
-    +'display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;padding:0;line-height:1}';
+  css.textContent='#nqmute,#nqbeats{position:fixed;top:9px;z-index:60;width:34px;height:34px;border-radius:50%;'
+    +'border:1px solid rgba(255,255,255,.22);background:rgba(18,14,32,.55);color:#ffd23f;cursor:pointer;'
+    +'display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;padding:0;line-height:1}'
+    +'#nqmute{left:9px;font-size:16px}#nqbeats{left:49px;font-size:15px}'
+    +'#nqbeats-wrap{position:fixed;inset:0;z-index:100001;background:rgba(6,4,16,.74);display:none;align-items:center;justify-content:center;padding:16px;'
+      +'font-family:"Press Start 2P",monospace}'
+    +'#nqbeats-panel{background:#160f2a;border:2px solid #3a2f5e;border-radius:12px;max-width:330px;width:100%;padding:14px 14px 10px;box-shadow:0 10px 44px rgba(0,0,0,.6)}'
+    +'#nqbeats-panel h3{color:#ffd23f;font-size:12px;margin:0 0 4px;text-align:center;line-height:1.4}'
+    +'#nqbeats-panel .sub{color:#8f89b0;font-size:13px;text-align:center;margin-bottom:12px;font-family:VT323,monospace;letter-spacing:1px}'
+    +'.nqch{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:#1e1638;border:1px solid #2f2652;color:#cbc6e6;'
+      +'border-radius:8px;padding:9px 11px;margin-bottom:6px;font-size:10px;cursor:pointer;font-family:inherit}'
+    +'.nqch.on{background:#ffd23f;color:#20142e;border-color:#ffd23f}'
+    +'.nqch .dot{width:8px;height:8px;border-radius:50%;background:#463a6e;flex:0 0 auto}.nqch.on .dot{background:#20142e}'
+    +'#nqbeats-x{display:block;margin:8px auto 2px;background:none;border:none;color:#8f89b0;font-size:9px;cursor:pointer;font-family:inherit}';
   document.head.appendChild(css);
+  // --- music mute button ---
   var btn=document.createElement('button'); btn.id='nqmute'; btn.setAttribute('aria-label','Toggle music'); document.body.appendChild(btn);
   function icon(){ btn.textContent=(window.__NQ_MUSIC&&window.__NQ_MUSIC.muted())?'🔇':'🔊'; }
   btn.addEventListener('click',function(e){ e.preventDefault(); e.stopPropagation(); if(window.__NQ_MUSIC){ window.__NQ_MUSIC.toggle(); icon(); } });
+  // --- NORMIES BAD BEATS: channel picker ---
+  var bb=document.createElement('button'); bb.id='nqbeats'; bb.setAttribute('aria-label','Normies Bad Beats - pick music'); bb.textContent='📻'; document.body.appendChild(bb);
+  var wrap=document.createElement('div'); wrap.id='nqbeats-wrap';
+  wrap.innerHTML='<div id="nqbeats-panel"><h3>📻 NORMIES BAD BEATS</h3><div class="sub">pick your channel</div><div id="nqbeats-list"></div><button id="nqbeats-x">CLOSE ✕</button></div>';
+  document.body.appendChild(wrap);
+  var listEl=wrap.querySelector('#nqbeats-list');
+  function render(){ if(!window.__NQ_MUSIC||!window.__NQ_MUSIC.channels) return; var cur=window.__NQ_MUSIC.getChannel(); listEl.innerHTML='';
+    window.__NQ_MUSIC.channels().forEach(function(ch){ var b=document.createElement('button'); b.className='nqch'+(ch[0]===cur?' on':'');
+      b.innerHTML='<span class="dot"></span>'+ch[1];
+      b.addEventListener('click',function(ev){ ev.stopPropagation(); window.__NQ_MUSIC.setChannel(ch[0]); render(); }); listEl.appendChild(b); }); }
+  function openBB(){ render(); wrap.style.display='flex'; }
+  function closeBB(){ wrap.style.display='none'; }
+  bb.addEventListener('click',function(e){ e.preventDefault(); e.stopPropagation(); openBB(); });
+  wrap.addEventListener('click',function(e){ if(e.target===wrap) closeBB(); });
+  wrap.querySelector('#nqbeats-x').addEventListener('click',function(e){ e.stopPropagation(); closeBB(); });
   document.addEventListener('keydown',function(e){ if(e.target&&/^(input|textarea)$/i.test(e.target.tagName)) return;
-    if(e.key==='m'||e.key==='M'){ if(window.__NQ_MUSIC){ window.__NQ_MUSIC.toggle(); icon(); } } });
+    if(e.key==='m'||e.key==='M'){ if(window.__NQ_MUSIC){ window.__NQ_MUSIC.toggle(); icon(); } }
+    if(e.key==='b'||e.key==='B'){ if(wrap.style.display==='flex') closeBB(); else openBB(); } });
   icon();
 })(); }
 
