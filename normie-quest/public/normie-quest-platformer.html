@@ -1754,9 +1754,10 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   },
   slotPayout:function(r, S){
     var pay, msg, big=false;
-    if(r[0]===r[1]&&r[1]===r[2]){ pay=100; msg='JACKPOT!'; big=true; }
-    else if(r[0]===r[1]||r[1]===r[2]||r[0]===r[2]){ pay=30; msg='MATCH!'; }
-    else { pay=10; msg='NICE'; }
+    // Loosened (owner's call — the Drink Ladies were out-earning the machine). Every spin still pays.
+    if(r[0]===r[1]&&r[1]===r[2]){ pay=150; msg='JACKPOT!'; big=true; }
+    else if(r[0]===r[1]||r[1]===r[2]||r[0]===r[2]){ pay=50; msg='MATCH!'; }
+    else { pay=25; msg='NICE'; }
     this.addScore(pay); this.registry.set('nqCasino',(this.registry.get('nqCasino')||0)+pay);   // tally run-total casino winnings for the finale
     this.burst(S.m.x, S.m.y-24, 0xffd23f, big?26:14); SFX.power();
     this.flash(msg+' +'+pay+' COINS', big?'#3dff6e':'#ffd23f'); this.cameras.main.flash(200, 255, big?255:220, big?150:90);
