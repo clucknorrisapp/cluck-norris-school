@@ -771,7 +771,7 @@ function xPercentEncode(s) {
 }
 // OAuth 1.0a header (HMAC-SHA1, oauth_* params only — neither our JSON tweet body nor a
 // multipart media body is part of the signature). Shared by postToX + uploadXMediaFromUrl.
-function xOAuthHeader(method, url) {
+function xOAuthHeader(method, url, extraParams) {
   const ck = process.env.X_API_KEY, cs = process.env.X_API_SECRET, at = process.env.X_ACCESS_TOKEN, ats = process.env.X_ACCESS_SECRET;
   const oauth = {
     oauth_consumer_key: ck,
@@ -781,7 +781,9 @@ function xOAuthHeader(method, url) {
     oauth_token: at,
     oauth_version: "1.0",
   };
-  const paramStr = Object.keys(oauth).sort().map(k => `${xPercentEncode(k)}=${xPercentEncode(oauth[k])}`).join("&");
+  // Query/body params (e.g. the chunked-upload STATUS GET) must join the signature base.
+  const sigParams = { ...oauth, ...(extraParams || {}) };
+  const paramStr = Object.keys(sigParams).sort().map(k => `${xPercentEncode(k)}=${xPercentEncode(sigParams[k])}`).join("&");
   const base = `${method}&${xPercentEncode(url)}&${xPercentEncode(paramStr)}`;
   const signingKey = `${xPercentEncode(cs)}&${xPercentEncode(ats)}`;
   oauth.oauth_signature = createHmac("sha1", signingKey).update(base).digest("base64");
@@ -805,6 +807,44 @@ async function uploadXMediaFromUrl(imageUrl) {
     if (!r.ok) { console.warn("[X] media upload failed", r.status, JSON.stringify(j).slice(0, 200)); return null; }
     return j.media_id_string || (j.media_id != null ? String(j.media_id) : null);
   } catch (e) { console.warn("[X] media upload error", e.message); return null; }
+}
+// Fetch a video by URL and upload to X via v1.1 CHUNKED upload (INIT → APPEND → FINALIZE →
+// STATUS poll) — required for video; the simple upload above is images-only. Returns the
+// media_id_string to attach to a tweet, or null on failure. 4MB chunks, tweet_video category.
+async function uploadXVideoFromUrl(videoUrl) {
+  if (!xConfigured() || !videoUrl) return null;
+  const uploadUrl = "https://upload.twitter.com/1.1/media/upload.json";
+  try {
+    const v = await fetch(videoUrl);
+    if (!v.ok) { console.warn("[X] video fetch failed", v.status); return null; }
+    const buf = Buffer.from(await v.arrayBuffer());
+    const post = async (fields, chunk) => {
+      const form = new FormData();
+      for (const [k, val] of Object.entries(fields)) form.append(k, String(val));
+      if (chunk) form.append("media", new Blob([chunk]), "chunk");
+      const r = await fetch(uploadUrl, { method: "POST", headers: { Authorization: xOAuthHeader("POST", uploadUrl) }, body: form });
+      const j = r.status === 204 ? {} : await r.json().catch(() => ({}));
+      if (!r.ok && r.status !== 204) throw new Error(`${fields.command} ${r.status} ${JSON.stringify(j).slice(0, 160)}`);
+      return j;
+    };
+    const init = await post({ command: "INIT", total_bytes: buf.length, media_type: "video/mp4", media_category: "tweet_video" });
+    const mediaId = init.media_id_string;
+    if (!mediaId) throw new Error("INIT returned no media_id");
+    const CHUNK = 4 * 1024 * 1024;
+    for (let i = 0; i * CHUNK < buf.length; i++) {
+      await post({ command: "APPEND", media_id: mediaId, segment_index: i }, buf.subarray(i * CHUNK, Math.min((i + 1) * CHUNK, buf.length)));
+    }
+    let fin = await post({ command: "FINALIZE", media_id: mediaId });
+    // tweet_video processes asynchronously — poll STATUS until succeeded (~2 min cap).
+    for (let w = 0; fin.processing_info && fin.processing_info.state !== "succeeded"; w++) {
+      if (fin.processing_info.state === "failed" || w > 40) { console.warn("[X] video processing failed/timeout", JSON.stringify(fin.processing_info || {}).slice(0, 160)); return null; }
+      await new Promise((res) => setTimeout(res, Math.min(10, fin.processing_info.check_after_secs || 3) * 1000));
+      const su = `${uploadUrl}?command=STATUS&media_id=${mediaId}`;
+      const r = await fetch(su, { headers: { Authorization: xOAuthHeader("GET", uploadUrl, { command: "STATUS", media_id: mediaId }) } });
+      fin = await r.json().catch(() => ({}));
+    }
+    return mediaId;
+  } catch (e) { console.warn("[X] video upload error", e.message); return null; }
 }
 async function postToX(text, opts = {}) {
   if (X_AUTOPOST_PAUSED && !opts.force) return { ok: false, paused: true }; // opts.force = scoped carve-out (lock announcements only) — see postLockToX
@@ -5232,13 +5272,18 @@ app.get("/api/x-announce", async (req, res) => {
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
   const text = String(req.query.text || "").slice(0, 24000);
   const image = req.query.image ? String(req.query.image) : null;  // optional image URL to attach
+  const video = req.query.video ? String(req.query.video) : null;  // optional video URL to attach (chunked upload)
   const replyTo = req.query.replyTo ? String(req.query.replyTo).replace(/[^0-9]/g, "") : null;  // thread UNDER this tweet id
   const quote = req.query.quote ? String(req.query.quote).replace(/[^0-9]/g, "") : null;        // quote-repost this tweet id
   if (!text) return res.status(400).json({ error: "missing text" });
-  if (req.query.post !== "1") return res.status(200).json({ ok: true, dryRun: true, chars: text.length, image, replyTo, quote, preview: text });
+  if (req.query.post !== "1") return res.status(200).json({ ok: true, dryRun: true, chars: text.length, image, video, replyTo, quote, preview: text });
   try {
     let mediaIds = null;
-    if (image) {
+    if (video) {
+      const mid = await uploadXVideoFromUrl(video);
+      if (!mid) return res.status(200).json({ ok: false, error: "video upload failed — not attached (text not posted)" });
+      mediaIds = [mid];
+    } else if (image) {
       const mid = await uploadXMediaFromUrl(image);
       if (!mid) return res.status(200).json({ ok: false, error: "media upload failed — image not attached (text not posted)" });
       mediaIds = [mid];
@@ -5311,9 +5356,12 @@ app.get("/api/tg-test", async (req, res) => {
     try { const p = whirlpoolMM.vault.getProject(String(req.query.project)); if (p && p.telegramChatId) chatId = p.telegramChatId; } catch (_) {}
   }
   const photo = req.query.photo ? String(req.query.photo) : null;  // optional image URL -> sendPhoto with caption
+  const video = req.query.video ? String(req.query.video) : null;  // optional video URL -> sendVideo with caption (Telegram URL limit ~20MB — send a compressed encode)
   try {
-    const endpoint = photo ? "sendPhoto" : "sendMessage";
-    const body = photo
+    const endpoint = video ? "sendVideo" : photo ? "sendPhoto" : "sendMessage";
+    const body = video
+      ? { chat_id: chatId, video, caption: text.slice(0, 1024), parse_mode: "HTML", disable_notification: silent }
+      : photo
       ? { chat_id: chatId, photo, caption: text.slice(0, 1024), parse_mode: "HTML", disable_notification: silent }  // caption max 1024
       : { chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true, disable_notification: silent };
     const r = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/${endpoint}`, {
