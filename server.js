@@ -10450,6 +10450,17 @@ app.get("/curriculum", (req, res) => {
 // Not in sitemap.xml (hardcoded list) and not linked anywhere — noindex/nofollow.
 app.use(require("./normie-quest/routes"));
 
+// Gated dry-run / manual-fire of the Normie Quest playtest digest (the twice-daily auto-DM).
+// Dry by default (returns the preview it WOULD send); &send=1 actually DMs the operator chat;
+// &reset=1 re-baselines the "since" watermark to now (skip already-seen comments).
+app.get("/api/nq-digest-test", async (req, res) => {
+  if (!adminAuthOK(req)) return res.status(404).json({ ok: false, error: "not_found" });
+  try {
+    const r = await nqDigest.run({ send: req.query.send === "1" || req.query.send === "true", reset: req.query.reset === "1", notify: nqNotify });
+    res.json({ ok: true, ...r });
+  } catch (e) { res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+
 // -- Serve React app (the school) at /school + every non-root path via the catch-all --
 app.use(express.static(join(__dirname, "dist"), { index: false }));
 app.get("*", (req, res) => {
@@ -11235,6 +11246,12 @@ async function opsReportTick() {
 const CONTENT_ENGINE_ENABLED = false;  // master kill-switch (also kv contentEngineEnabled)
 function contentEngineOn() { return CONTENT_ENGINE_ENABLED && kv.get("contentEngineEnabled", true) !== false; }
 function operatorChatId() { try { const p = whirlpoolMM.vault.getProject("treasury"); return (p && p.telegramChatId) || null; } catch (_) { return null; } }
+
+// ---- Normie Quest playtest feedback → AI-triaged digest (twice-daily to the operator chat) ----
+// Logic lives in normie-quest/nq-digest.js (self-contained + unit-testable); server.js only injects
+// a `notify(text)` that sends the SILENT operator DM (owner rule: never ping unless asked).
+const nqDigest = require("./normie-quest/nq-digest");
+const nqNotify = (text) => tgSend(operatorChatId() || "1846034838", text, null, { silent: true });
 
 // Dedupe ledger: mint -> { at, status }. Never re-queue a mint seen within 14d;
 // lets a token re-feature later once it ages out. Pruned on every write.
@@ -12233,6 +12250,26 @@ app.listen(PORT, () => {
     }
     setInterval(chainSpotlightTick, 10 * 60 * 1000); // two slots/day, dedupe per slot
     setTimeout(chainSpotlightTick, 140000);
+    // Normie Quest playtest digest — twice/day (kv nqDigestHours, default "15,23" UTC), AI-triaged
+    // new comments, SILENT DM to the operator chat. Self-silences when nothing new. Baseline the
+    // watermark at first boot so pre-existing (test) comments don't flood the first digest.
+    if (kv.get("nqDigestSince", null) === null) kv.set("nqDigestSince", Date.now());
+    async function nqFeedbackDigestTick() {
+      try {
+        if (String(kv.get("nqDigestEnabled", "1")) === "0") return;
+        const now = new Date(), today = now.toISOString().slice(0, 10);
+        const hours = String(kv.get("nqDigestHours", "15,23")).split(",").map((h) => parseInt(h, 10)).filter((h) => h >= 0 && h < 24);
+        const slot = hours.filter((h) => now.getUTCHours() >= h).pop();
+        if (slot == null) return;
+        const stamp = `${today}@${slot}`;
+        if (kv.get("nqDigestStamp", null) === stamp) return;
+        kv.set("nqDigestStamp", stamp); // stamp first so a crash can't double-send
+        const r = await nqDigest.run({ send: true, notify: nqNotify });
+        console.log("[nq-digest]", stamp, r.status, "new:", r.newCount);
+      } catch (e) { console.warn("[nq-digest] tick failed:", e.message); }
+    }
+    setInterval(nqFeedbackDigestTick, 10 * 60 * 1000); // two slots/day, dedupe per slot
+    setTimeout(nqFeedbackDigestTick, 130000);
     // Reconciliation backstop — every ~12 min, recover any buy/sell the 30s poller
     // dropped (transient error, restart gap, RPC quirk). Settled + durably-deduped,
     // so it never double-posts. First run delayed so the poller initializes first.
