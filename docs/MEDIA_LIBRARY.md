@@ -27,6 +27,7 @@ CDN URLs are long-lived Higgsfield/CloudFront links — downloadable from any fr
 | `621d2051-87c3-4681-9bee-0845df98cd27` | 8s 720p original lecture-hall ("crazy good") = the owner's `learnlaunch.mp4` | ✅ Owner-praised; superseded by 15s efforts but the mascot/energy benchmark. |
 | `4ff196a4-afae-496e-9b3b-dc109a8168ab` | 8s lock-celebration (Cluck carries bag to CLKN locker) | Used 2026-07-03. |
 | `2c382434-c41d-4caf-8f91-ae739104da2e` | 5s Cluck eats chicken sandwich (diner) | Fun one-off. |
+| `8373e328-46b3-4c3a-ba90-87a6f57215ca` + ffmpeg post | **$600K market-cap celebration 2026-07-13**: rooftop fireworks + chart-constellation + confetti-cannon Cluck, rendered TEXT-FREE, then cropped (bottom 120px removed a gibberish stone engraving) + Oswald-700 "$600K MARKET CAP" / "clucknorris.app" overlays. Final CDN: `32356dab-3ee7-4c47-b2b6-5858c936d741.mp4`. Posted X `2076731096054583522` (first NATIVE X video via new chunked upload) + TG 86241. Two dead takes: `8ac98853` NSFW-flagged (champagne bottle = alcohol trigger, refunded), `9ac86c38` banner typo "6700K". | ✅ The working video recipe: render text-free → stamp text with ffmpeg/Pillow. |
 
 ## Images / composites
 
