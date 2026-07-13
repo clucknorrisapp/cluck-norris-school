@@ -306,7 +306,7 @@ var LEVELS=[
     coins:[[492,182],[540,182],[780,196],[1252,158],[1300,158],[1600,196],[2092,182],[2140,182],[2188,182],[2500,196],[2932,158],[2980,158],[3560,196],[3732,182],[3780,182],[3828,182],[4620,158],[4900,196]],
     enemies:[['jeet',340,230,110],['jeet',680,230,70],['ghost',1000,212,90],['jeet',1080,230,130],['jeet',1500,230,110],['jeet',1960,230,110],['jeet',2400,230,80],['ghost',2760,212,90],['jeet',2820,230,90],['jeet',3200,230,100],['ghost',3600,212,90],['jeet',4100,230,70]],
     npcs:[[1500,90]],
-    bonusblocks:[[620,5],[1400,'supergeek'],[3100,8],[3950,5]],
+    bonusblocks:[[620,5],[1400,8],[3100,8],[3950,5]],
     key:[1584,H-150], door:5080 },
 
   { name:'1-2', sub:'FUD RISING', time:120, theme:1, width:5800,
@@ -318,7 +318,7 @@ var LEVELS=[
     airdrops:[[1200,H-118],[3500,H-72]],
     coins:[[472,158],[520,158],[700,196],[1312,158],[1360,158],[1500,196],[2212,134],[2260,134],[2680,196],[3012,158],[3060,158],[3600,196],[3912,158],[3960,158],[4500,196],[4812,158],[4860,158],[5300,196]],
     enemies:[['paper',340,230,100],['jeet',700,230,70],['ghost',1000,212,80],['paper',1120,230,90],['paper',1500,230,100],['ghost',1900,212,90],['jeet',2400,230,80],['paper',2680,230,70],['ghost',2900,212,90],['paper',3220,230,70],['bot',3600,230,80],['ghost',3820,212,90],['paper',4120,230,90],['bot',4500,230,80]],
-    bonusblocks:[[700,5],[2350,'diamond'],[3800,8]],
+    bonusblocks:[[700,5],[2350,8],[3800,8]],
     key:[1624,H-150], door:5680 },
 
   { name:'1-3', sub:"THE RUG KING'S KEEP", time:135, theme:2, width:6400, boss:true,
@@ -343,7 +343,7 @@ var LEVELS=[
     coins:[[512,158],[560,158],[800,196],[1312,158],[1360,158],[1700,196],[2212,134],[2260,134],[2650,196],[3112,158],[3160,158],[3700,196],[4212,158],[4260,158],[4800,196]],
     enemies:[['bot',360,230,90],['paper',680,230,70],['ghost',1100,212,80],['fudster',1650,230,60],['bitmaxi',2050,230,110],['ghost',2400,212,90],['bot',2600,230,80],['paper',3300,230,70],['sniper',3650,230,36],['bot',4000,230,80],['bitmaxi',4400,230,110]],
     miniworms:[1150,3550,4700], honeypots:[[2700,232]], npcs:[[2450,90]],
-    bonusblocks:[[720,5],[2500,'bull'],[4050,8]],
+    bonusblocks:[[720,5],[2500,8],[4050,8]],
     key:[1600,H-150], door:5080 },
 
   // WORLD 2 — Normie Casino: a normal stage with a slot machine you "fire it in" for bonus coins.
@@ -788,6 +788,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.platforms=this.physics.add.staticGroup();
     var gaps=def.gaps||[];
     var inGap=function(x){ for(var j=0;j<gaps.length;j++){ if(x>=gaps[j][0]&&x<gaps[j][1]) return true; } return false; };
+    this.gaps=gaps;   // stored for overPit() — the cheap ledge guard used by ground-lane patrols
     for(var gx=0;gx<LW;gx+=TILE){ if(!inGap(gx)){ this.platforms.create(gx+TILE/2,GY+TILE/2,'ground'); this.platforms.create(gx+TILE/2,GY+TILE/2+TILE,'ground'); } }
     // floating platforms — plat:[x,count,topY,type?]  (type defaults to brick)
     (def.plats||[]).forEach(function(pl){ var t=pl[3]||'brick'; for(var k=0;k<pl[1];k++) self.platforms.create(pl[0]+k*TILE+TILE/2,pl[2]+TILE/2,t); });
@@ -1641,6 +1642,10 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       this.pegs.children.iterate(function(m){ if(!m) return; self.tweens.killTweensOf(m); m.y=m.homeY; m.angle=0; m.setAlpha(1).setTint(0x2ee6a0); m.body.enable=true; });
     }
   },
+  // Cheap ledge guard: ground-lane patrols (NPCs, casino folk, non-ghost enemies) all walk on
+  // the ground row, so "is there a pit ahead?" is just a gaps[] test (O(gaps)≈5) instead of
+  // scanning every platform tile per entity per frame (was O(entities×~550 tiles) → desktop lag).
+  overPit:function(x){ var g=this.gaps; if(!g) return false; for(var i=0;i<g.length;i++){ if(x>=g[i][0]&&x<g[i][1]) return true; } return false; },
   npcTick:function(now){   // "Wen Lambo" bystanders pace their patch and shout on a cadence
     if(!this.npcs) return; var self=this;
     this.npcs.children.iterate(function(n){
@@ -1648,9 +1653,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       if(n.x<n.homeX-n.range) n.dir=1; if(n.x>n.homeX+n.range) n.dir=-1;
       if(n.body.blocked.left) n.dir=1; if(n.body.blocked.right) n.dir=-1;
       if(n.body.blocked.down){   // don't stroll off a ledge into a pit
-        var ahead=n.x+n.dir*(n.body.width*0.5+4), below=n.body.bottom+6, ground=false;
-        self.platforms.children.iterate(function(t){ if(!t||ground) return; if(ahead>=t.body.left&&ahead<=t.body.right&&below>=t.body.top&&below<=t.body.bottom+2) ground=true; });
-        if(!ground) n.dir=-n.dir;
+        var ahead=n.x+n.dir*(n.body.width*0.5+4);
+        if(self.overPit(ahead)) n.dir=-n.dir;
       }
       n.setVelocityX(n.dir*n.baseSpeed); n.setFlipX(n.dir<0);
       if(now>n.nextSay){ n.nextSay=now+Phaser.Math.Between(2600,4400); self.npcSay(n); }
@@ -1671,9 +1675,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       if(f.x<f.homeX-f.range) f.dir=1; if(f.x>f.homeX+f.range) f.dir=-1;
       if(f.body.blocked.left) f.dir=1; if(f.body.blocked.right) f.dir=-1;
       if(f.body.blocked.down){
-        var ahead=f.x+f.dir*(f.body.width*0.5+4), below=f.body.bottom+6, ground=false;
-        self.platforms.children.iterate(function(t){ if(!t||ground) return; if(ahead>=t.body.left&&ahead<=t.body.right&&below>=t.body.top&&below<=t.body.bottom+2) ground=true; });
-        if(!ground) f.dir=-f.dir;
+        var ahead=f.x+f.dir*(f.body.width*0.5+4);
+        if(self.overPit(ahead)) f.dir=-f.dir;
       }
       f.setVelocityX(f.dir*f.baseSpeed); f.setFlipX(f.dir<0);
     });
@@ -1949,9 +1952,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       if(e.x<e.homeX-e.range) e.dir=1; if(e.x>e.homeX+e.range) e.dir=-1;
       if(e.body.blocked.left) e.dir=1; if(e.body.blocked.right) e.dir=-1;
       if(e.body.blocked.down){
-        var ahead=e.x+e.dir*(e.body.width*0.5+4), below=e.body.bottom+6, ground=false;
-        self.platforms.children.iterate(function(t){ if(!t||ground) return; if(ahead>=t.body.left&&ahead<=t.body.right&&below>=t.body.top&&below<=t.body.bottom+2) ground=true; });
-        if(!ground) e.dir=-e.dir;
+        var ahead=e.x+e.dir*(e.body.width*0.5+4);
+        if(self.overPit(ahead)) e.dir=-e.dir;
       }
       e.setVelocityX(e.dir*e.baseSpeed); e.setFlipX(e.dir>0); e.setRotation(Math.sin((now+e.homeX)/110)*0.06);
       // Sniper Bot: fire an aimed bolt when the player is roughly in range
