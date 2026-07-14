@@ -1680,7 +1680,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   },
   /* ---------- THE TROLL boss (Crypto Trenches finale): charges + stomp x4, lobs REKT candles, teleports ---------- */
   startTrollBoss:function(){
-    var dx=this.def.door, self=this; this.bossHP=4;
+    var dx=this.def.door, self=this; this.bossHP=3;
     this.cameras.main.flash(420, 30, 150, 70);
     this.player.setPosition(dx-260, GY-40); this.player.setVelocity(0,0);
     [dx-340, dx+40].forEach(function(x){ var w=self.physics.add.staticImage(x, H/2, 'brick').setDisplaySize(16,H*2).setAlpha(0); w.refreshBody(); self.physics.add.collider(self.player,w); });
@@ -1691,9 +1691,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.physics.add.collider(k, this.platforms);
     this.physics.add.overlap(this.player, k, this.bossTouch, null, this);
     this.door.setVisible(false);
-    this.bossPips=[]; for(var i=0;i<4;i++) this.bossPips.push(this.hb(this.add.image(W/2-36+i*24, 22, 'heart').setScale(1.4).setDepth(40).setTint(0x2effa0)));
+    this.bossPips=[]; for(var i=0;i<3;i++) this.bossPips.push(this.hb(this.add.image(W/2-24+i*24, 22, 'heart').setScale(1.4).setDepth(40).setTint(0x2effa0)));
     this.hb(this.add.text(W/2, 42, 'THE TROLL', {fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#2effa0'}).setOrigin(.5,0).setDepth(40));
-    this.powerBanner('THE TROLL','GET TROLLED — STOMP HIS FACE x4','#2effa0');
+    this.powerBanner('THE TROLL','GET TROLLED — STOMP HIS FACE x3','#2effa0');
     this.rugIntro=true; this.rugGraceUntil=this.time.now+1700;
     this.trollNextThrow=this.time.now+2400; this.trollNextTaunt=this.time.now+1800; this.trollNextTp=this.time.now+4200;
   },
