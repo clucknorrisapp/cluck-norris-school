@@ -444,7 +444,6 @@ var LEVELS=[
     enemies:[['bot',340,230,70],['jeet',600,230,60],['ghost',1000,212,80],['fudster',1400,230,70],['sniper',1900,230,30],['bitmaxi',2250,230,70],['bot',2700,230,70],['ghost',3200,212,70],['sniper',3450,230,30],['fudster',3650,230,70],['bitmaxi',4000,230,70],['bot',4400,230,70],['ghost',4820,212,80],['sniper',5250,230,30],['bitmaxi',5650,230,60]],
     pumpdumps:[[1000,174],[3500,174],[5300,174]], honeypots:[[2350,232]], npcs:[[3150,90]],
     bonusblocks:[[1000,5],[2080,8],[3220,5],[4370,8],[5480,8]],
-    warps:[[3000,24,1]],
     key:[1164,H-150], door:6300 },
 
   // WORLD 3 boss level — a LONG, HARD gauntlet up the skyline, THEN the Scammy KOL at the door.
@@ -489,6 +488,7 @@ var LEVELS=[
     enemies:[['bot',340,230,70],['sniper',620,230,30],['ghost',1000,212,80],['fudster',1420,230,70],['sniper',1920,230,30],['bitmaxi',2280,230,70],['bot',2720,230,70],['ghost',3220,212,70],['sniper',3480,230,30],['fudster',3680,230,70],['bitmaxi',4020,230,70],['bot',4420,230,70],['ghost',4840,212,80],['sniper',5280,230,30],['bitmaxi',5760,230,70]],
     pumpdumps:[[1000,174],[3500,174],[5300,174]], honeypots:[[2350,232]], npcs:[[3150,90]],
     bonusblocks:[[1020,5],[2270,8],[3420,5],[4510,8],[5700,8]],
+    warps:[[2200,24,1]],
     key:[1164,H-150], door:6480 },
 
   // WORLD 4 boss level — the HARDEST gauntlet (tall+wide walls, dense snipers, spike pits), THEN
@@ -540,6 +540,7 @@ var LEVELS=[
     npcs:[[3150,90]],
     planks:[[1620,5],[2440,5],[3260,5],[4120,5],[5900,5],[6760,5],[7620,5]],
     bonusblocks:[[1020,5],[2270,8],[3420,5],[4510,8],[5700,8],[6767,8],[7433,8]],
+    warps:[[2200,26]],
     key:[1164,120], door:8280 },
 
   { name:'5-3', sub:'THE VAULT WYRM', time:240, theme:7, width:6700, boss:true, bossType:'wyrm',
@@ -588,6 +589,7 @@ var LEVELS=[
     npcs:[[3150,90]],
     pegs:[[1620,5],[3260,5],[4980,5],[6760,5],[7620,5]],
     bonusblocks:[[1020,5],[2270,8],[3420,5],[4510,8],[5700,8],[6767,8],[7433,8]],
+    warps:[[2200,27,1]],
     key:[1164,120], door:8280 },
 
   { name:'6-3', sub:'THE HASH LORD', time:250, theme:8, width:6700, boss:true, bossType:'golem',
@@ -637,6 +639,7 @@ var LEVELS=[
     npcs:[[3150,90]],
     bonusblocks:[[1020,5],[2270,8],[3420,'supergeek'],[4510,8],[5700,8],[6767,8],[7433,8]],
     caches:[[3600,226,200]],
+    warps:[[2200,28]],
     key:[1164,120], door:8280 },
 
   { name:'7-3', sub:'THE YIELD REAPER', time:265, theme:9, width:6700, boss:true, bossType:'reaper',
@@ -681,6 +684,7 @@ var LEVELS=[
     pumpdumps:[[1000,174],[3200,174],[5400,174],[6480,174]],
     honeypots:[[2000,232],[4900,232],[7020,232]],
     bonusblocks:[[1020,5],[2160,8],[3350,5],[4510,8],[5720,8],[6820,8],[7460,8]],
+    warps:[[2200,29,1]],
     key:[700,222], door:8280 },
 
   { name:'8-3', sub:'THE GREAT BEAR', time:275, theme:10, width:6700, boss:true, bossType:'liquidator',
@@ -722,7 +726,69 @@ var LEVELS=[
     slots:[[1520,'trench'],[4620,'trench']],
     enemies:[['bot',1220,230,80],['ghost',2420,212,90],['bot',3420,230,80],['sniper',4220,230,30],['ghost',5040,212,90],['bot',5820,230,80],['sniper',6320,230,30]],
     bonusblocks:[[1640,8],[3820,'moon'],[5240,8]],
-    key:[620,H-150], door:7060 }
+    key:[620,H-150], door:7060 },
+
+  // idx 26 — coin-flood bonus room
+  { name:'PRINTER', sub:'THE MONEY PRINTER', time:80, theme:12, width:2600, hidden:true, bonus:true,
+    gaps:[],
+    walls:[[280,2,'crate',2],[2300,2,'crate',2]],
+    plats:[[820,3,H-104,'crate'],[1400,3,H-140,'crate'],[1900,3,H-104,'crate']],
+    spikes:[],
+    powerups:[['candle',460,230]],
+    coins:[[560,224],[620,224],[680,224],[740,224],[840,H-128],[900,H-128],[1180,224],[1240,224],[1420,H-164],[1480,H-164],[1660,224],[1720,224],[1920,H-128],[1980,224],[2040,224],[2100,224]],
+    caches:[[1120,GY-20,400],[2160,GY-20,600]],
+    enemies:[],
+    key:[400,H-150], door:2440 },
+
+  // idx 27 — Diamond Hands + gems
+  { name:'DIAMONDVAULT', sub:'THE DIAMOND VAULT', time:85, theme:12, width:2600, hidden:true, bonus:true,
+    gaps:[],
+    walls:[[280,2,'stone',2],[2300,2,'stone',2]],
+    plats:[[1300,3,H-120,'stone']],
+    spikes:[],
+    powerups:[['diamond',1300,H-150]],
+    coins:[[560,224],[640,224],[760,224],[900,224],[1040,196],[1180,196],[1420,196],[1560,196],[1700,224],[1840,224],[1980,224],[2120,224]],
+    caches:[[820,GY-20,500],[1780,GY-20,500]],
+    enemies:[],
+    key:[400,H-150], door:2440 },
+
+  // idx 28 — healing airdrops
+  { name:'BUNKER', sub:'THE AIRDROP BUNKER', time:85, theme:12, width:2600, hidden:true, bonus:true,
+    gaps:[],
+    walls:[[280,2,'steel',2],[2300,2,'steel',2]],
+    plats:[[760,3,H-110,'steel'],[1560,3,H-134,'steel']],
+    spikes:[],
+    powerups:[['candle',460,230]],
+    airdrops:[[760,H-140],[1160,H-96],[1560,H-164]],
+    coins:[[540,224],[600,224],[1000,196],[1160,H-124],[1360,196],[1760,224],[1920,224],[2080,224],[2140,224]],
+    caches:[[1160,GY-20,300],[2000,GY-20,400]],
+    enemies:[],
+    key:[400,H-150], door:2440 },
+
+  // idx 29 — multi-slot casino den
+  { name:'DEN', sub:'THE DEGEN DEN', time:90, theme:12, width:2800, hidden:true, bonus:true,
+    gaps:[],
+    walls:[[280,2,'crate',2],[2500,2,'crate',2]],
+    plats:[[1400,3,H-104,'stone']],
+    spikes:[],
+    powerups:[['candle',440,230]],
+    coins:[[520,224],[580,224],[900,224],[960,224],[1160,196],[1440,H-132],[1640,196],[1880,224],[1940,224],[2280,224],[2340,224]],
+    caches:[[1760,GY-20,400]],
+    slots:[[700,'jackpot'],[1400,'trench'],[2120,'jackpot']],
+    enemies:[],
+    key:[380,H-150], door:2640 },
+
+  // idx 30 — climb to the Moon
+  { name:'LAUNCHPAD', sub:'THE LAUNCH PAD', time:85, theme:12, width:2600, hidden:true, bonus:true,
+    gaps:[],
+    walls:[[280,2,'crate',2],[2300,2,'crate',2]],
+    plats:[[680,2,H-96,'crate'],[1040,2,H-128,'crate'],[1400,2,H-160,'crate'],[1760,2,H-190,'crate']],
+    spikes:[],
+    powerups:[['caffeine',460,230],['moon',1760,H-214]],
+    coins:[[560,224],[700,H-120],[900,224],[1060,H-152],[1200,224],[1420,H-184],[1780,H-214],[2000,224],[2100,224],[2180,224]],
+    caches:[[1840,H-214,800],[2160,GY-20,400]],
+    enemies:[],
+    key:[400,H-150], door:2440 }
 ];
 
 /* ---------- Boot ---------- */
