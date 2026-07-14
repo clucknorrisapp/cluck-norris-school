@@ -1195,7 +1195,6 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.shieldUntil=0; this.bullUntil=0; this.moonUntil=0; this.caffeineUntil=0; this.solanaUntil=0;
     this.omegaUntil=0; this.geekShield=false;   // Omega Chad transform + Super Geek one-hit shield
     this.whaleUntil=0; this.coldUntil=0; this.whaleShockAt=0;   // late-game transforms: Whale Mode + Cold Wallet
-    this.greenUntil=0; this.greenNextFire=0; this._greenGrav=false; this.greenHoverY=0;   // GREEN CANDLE MODE: ride an elevated candle + auto-fire green ammo
     this.boss=false; this.bossStarted=false;
 
     // player — bigger & in charge; grows even bigger on a power-up
@@ -1220,17 +1219,6 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       hg.generateTexture('bullhorns',48,27); hg.destroy(); }
     this.bullHorns=this.add.image(this.spawn.x,this.spawn.y,'bullhorns').setDepth(8).setVisible(false);
     if(this.bullHorns.postFX){ try{ this.bullHorns.postFX.addGlow(0x3dff6e,3,0,false,0.1,10); }catch(e){} }
-    // GREEN CANDLE MODE: a horizontal green candle BROOMSTICK Normie straddles (flame at the front). Drawn once.
-    if(!this.textures.exists('greenmount')){ var gmg=this.make.graphics({x:0,y:0,add:false});
-      gmg.fillStyle(0x14602f,1); gmg.fillRoundedRect(3,8,46,7,3);       // shadow
-      gmg.fillStyle(0x2ee66a,1); gmg.fillRoundedRect(3,5,46,7,3);       // the green candle "stick"
-      gmg.fillStyle(0x9dffbe,1); gmg.fillRect(7,6,38,2);                // top highlight
-      gmg.fillStyle(0x123a1e,1); gmg.fillRect(49,7,4,3);               // wick
-      gmg.fillStyle(0xffe066,1); gmg.fillTriangle(52,10,52,4,62,7);    // flame (points FORWARD / right)
-      gmg.fillStyle(0xff9a3c,1); gmg.fillTriangle(52,9,53,6,58,7);
-      gmg.generateTexture('greenmount',63,20); gmg.destroy(); }
-    this.greenRide=this.add.image(this.spawn.x,this.spawn.y,'greenmount').setDepth(6).setVisible(false);
-    if(this.greenRide.postFX){ try{ this.greenRide.postFX.addGlow(0x2ee66a,4,0,false,0.1,12); }catch(e){} }
 
     // collisions
     this.physics.add.collider(this.player,this.platforms);
@@ -1366,13 +1354,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var type=pu.ptype, px=pu.x, py=pu.y; this.tweens.killTweensOf(pu); pu.destroy(); this.burst(px,py,0xffffff,20);
     var now=this.time.now;
     if(type==='diamond'){ this.shieldUntil=now+9000; this.powerBanner('DIAMOND HANDS','UNSHAKEABLE — no damage 9s','#66ddff'); }
-    else if(type==='bull'){
-      if(this.levelIdx>=18){   // World 7+ : BULL MARKET upgrades to MEGA GREEN MARKET (mega jump + ride the green candle + fire green ammo)
-        this.bullUntil=now+10000; this.greenUntil=now+10000; this.greenNextFire=0; this.greenHoverY=player.y-56; this.cameras.main.shake(220,.010);
-        this.powerBanner('MEGA GREEN MARKET','RIDE THE GREEN CANDLE — mega jump + auto-fires green candles! 10s','#2ee66a');
-        this.flash('GREEN CANDLES FIRING! 🟢','#2ee66a');
-      } else { this.bullUntil=now+11000; this.powerBanner('BULL MARKET','MEGA JUMP — 11s','#3dff6e'); }
-    }
+    else if(type==='bull'){ this.bullUntil=now+11000; this.powerBanner('BULL MARKET','MEGA JUMP — 11s','#3dff6e'); }
     else if(type==='moon'){ this.moonUntil=now+9000; this.powerBanner('MOON MODE','INVINCIBLE — smash everything!','#ffd23f'); }
     else if(type==='caffeine'){ this.caffeineUntil=now+11000; this.powerBanner('CAFFEINE BOOST','WIRED — super speed 11s','#ffffff'); }
     else if(type==='candle'){ if(this.lives<3){ this.lives++; if(this.hearts[this.lives-1]) this.hearts[this.lives-1].setAlpha(1); } this.addScore(100); this.powerBanner('GREEN CANDLE','PUMPING — +1 heart, +100','#3dff6e'); }
@@ -1387,9 +1369,6 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       this.powerBanner('WHALE MODE'+(PREMIUM?' ⭐':''),'MARKET MOVER — huge, invincible, shock stomps '+(WHALE_MS/1000)+'s','#2f7fff'); }
     else if(type==='coldwallet'){ this.coldUntil=now+COLD_MS; this.freezeEnemies(COLD_MS);
       this.powerBanner('COLD WALLET'+(PREMIUM?' ⭐':''),'SECURED — can\'t be liquidated + enemies FROZEN '+(COLD_MS/1000)+'s','#9fe8ff'); }
-    else if(type==='greencandle'){ this.greenUntil=now+10000; this.greenNextFire=0; this.cameras.main.shake(220,.010);
-      this.powerBanner('MEGA GREEN MARKET','RIDE THE GREEN CANDLE — auto-fires green candles! 10s','#2ee66a');
-      this.flash('GREEN CANDLES FIRING! 🟢','#2ee66a'); }
     else if(type==='supergeek'){ this.geekShield=true; this.powerBanner('SUPER GEEK','AUDIT ON — blocks the next hit','#2ee6c0'); }
     this.addScore(30); this.cameras.main.flash(120,60,120,40); SFX.power();
   },
@@ -1454,14 +1433,6 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     SFX.coin();
     this.time.delayedCall(1100,function(){ if(c&&c.active) c.destroy(); });
   },
-  fireGreenCandle:function(){   // GREEN CANDLE MODE: shoot a spinning green candle that kills enemies
-    if(this.over) return; var p=this.player, dir=p.flipX?-1:1;
-    var c=this.projectiles.create(p.x+dir*14, p.y-6, 'candle').setDepth(6); if(!c||!c.body) return;
-    c.setScale(26/c.height).setTint(0x2ee66a); c.body.setAllowGravity(false); c.body.setSize(c.width*0.7,c.height*0.7);
-    c.setVelocity(dir*440, Phaser.Math.Between(-14,14)); c.setAngularVelocity(dir*440); c.setCollideWorldBounds(false);
-    this.burst(p.x+dir*14, p.y-6, 0x2ee66a, 6); _tone(560,940,0.07,'square',0.05);
-    this.time.delayedCall(1200,function(){ if(c&&c.active) c.destroy(); });
-  },
   coinHitEnemy:function(coin,enemy){
     if(this.over||!enemy.active||!coin.active) return;
     var ex=enemy.x,ey=enemy.y; enemy.disableBody(true,true); coin.destroy();
@@ -1498,7 +1469,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       player.invuln=true; this.time.delayedCall(140,function(){ if(player.active) player.invuln=false; },[],this);
       return;
     }
-    if(player.invuln||now<this.shieldUntil||now<this.coldUntil||now<this.greenUntil) return;   // i-frames / diamond / cold wallet: no damage
+    if(player.invuln||now<this.shieldUntil||now<this.coldUntil) return;   // i-frames / diamond / cold wallet: no damage
     if(enemy.kind==='bitmaxi'){ this.maxiSteal(player,enemy); return; }   // Bitcoin Maxi robs coins instead of dealing damage
     this.hurt(player, enemy.x<player.x?1:-1);
   },
@@ -1515,7 +1486,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // the thief cackles and sprints off in the direction he was heading
     maxi.baseSpeed=Math.min(maxi.baseSpeed*1.6,150); this.cameras.main.shake(90,.006);
   },
-  spikeHit:function(player,spike){ var now=this.time.now; if(this.over||player.invuln||now<this.shieldUntil||now<this.moonUntil||now<this.omegaUntil||now<this.whaleUntil||now<this.coldUntil||now<this.greenUntil) return; this.hurt(player, player.body.velocity.x>0?-1:1); },
+  spikeHit:function(player,spike){ var now=this.time.now; if(this.over||player.invuln||now<this.shieldUntil||now<this.moonUntil||now<this.omegaUntil||now<this.whaleUntil||now<this.coldUntil) return; this.hurt(player, player.body.velocity.x>0?-1:1); },
 
   tryDoor:function(player,door){
     if(this.over) return;
@@ -1575,7 +1546,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(now<this.moonUntil||now<this.whaleUntil){ this.bossHit(); return; }   // MOON / WHALE smashes the boss on contact
     var onTop=(player.body.bottom<=k.body.top+14)&&player.body.velocity.y>=-20;
     if(onTop){ player.setVelocityY(-340); this.bossHit(); return; }
-    if(player.invuln||now<this.shieldUntil||now<this.coldUntil||now<this.greenUntil) return;
+    if(player.invuln||now<this.shieldUntil||now<this.coldUntil) return;
     this.hurt(player, k.x<player.x?1:-1);
   },
   /* ---------- Scammy KOL boss (charges + stomp x3, and shills fake tokens at range) ---------- */
@@ -2003,7 +1974,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(now<this.moonUntil||now<this.whaleUntil){ this.killMiniworm(mw); return; }
     var onTop=(player.body.bottom<=mw.body.top+12)&&player.body.velocity.y>=-20;
     if(onTop){ player.setVelocityY(-300); this.killMiniworm(mw); return; }
-    if(player.invuln||now<this.shieldUntil||now<this.coldUntil||now<this.greenUntil) return;
+    if(player.invuln||now<this.shieldUntil||now<this.coldUntil) return;
     this.hurt(player, mw.x<player.x?1:-1);
   },
   killMiniworm:function(mw){
@@ -2390,12 +2361,12 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       for(var _i=0;_i<_pts.length;_i++){ var _pp=_pts[_i]; if(_pp&&_pp.isDown){ var _fx=_pp.x/_gw,_fy=_pp.y/_gh; if(_fy<0.14&&_fx>0.16&&_fx<0.34){ _inZ=true; break; } } }
       if(_inZ&&!this._hotDown){ this._hotDown=true; this.pauseGame(false); return; } this._hotDown=_inZ; }
     // --- touch input: the DOM gutter D-pad (tablets/wide screens) OR on-screen pointer zones (phones) ---
-    this.touch.left=this.touch.right=this.touch.jump=this.touch.down=this.touch.throwBtn=false;
+    this.touch.left=this.touch.right=this.touch.jump=this.touch.down=false;
     var padActive=(typeof window!=='undefined')&&window.__NQ_PAD_ACTIVE&&window.__NQ_PAD;
     if(padActive){
-      this.touch.left=!!window.__NQ_PAD.left; this.touch.right=!!window.__NQ_PAD.right; this.touch.jump=!!window.__NQ_PAD.jump; this.touch.down=!!window.__NQ_PAD.down; this.touch.throwBtn=!!window.__NQ_PAD.throw;
+      this.touch.left=!!window.__NQ_PAD.left; this.touch.right=!!window.__NQ_PAD.right; this.touch.jump=!!window.__NQ_PAD.jump; this.touch.down=!!window.__NQ_PAD.down;
     } else {
-      // raw pointer screen-zones: left third=LEFT, next third=RIGHT, right half=JUMP, bottom-center=DUCK, top-right=THROW
+      // raw pointer screen-zones: left third=LEFT, next third=RIGHT, right half=JUMP, bottom-center=DUCK
       var gw=this.scale.width, gh=this.scale.height, pts=this.input.manager.pointers;
       for(var pi=0;pi<pts.length;pi++){ var ptr=pts[pi];
         if(!ptr||!ptr.isDown||!ptr.wasTouch) continue;            // wasTouch: desktop mouse never moves the player
@@ -2421,17 +2392,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var rawJump=jump;   // raw button for edge detection — slotTick may zero `jump`, but prevJump must track the real press
     // Normie Casino: stand by the slot machine and press jump/up to "fire it in" (eats that jump)
     if(this.slots.length && this.slotTick(now, p, b, rawJump && !this.prevJump)) jump=false;
-    // throw a coin (edge-triggered, cooldown) — F/X on desktop, the THROW button on touch
     // SOLANA MODE: auto-fire Solana symbols while the power is active (ends early on damage)
     if(now<this.solanaUntil && now>this.nextThrow){ this.fireSolana(); this.nextThrow=now+230; }
-    // GREEN CANDLE MODE: AUTO-fire a stream of green candles (works on every device); THROW/F/X fires an extra shot
-    var throwHeld=this.keys.F.isDown||this.keys.X.isDown||this.touch.throwBtn;
-    if(now<this.greenUntil){
-      if(now>this.greenNextFire){ this.fireGreenCandle(); this.greenNextFire=now+230; }   // continuous stream, like Solana mode
-      else if(throwHeld && !this.prevThrow){ this.fireGreenCandle(); }
-    }
-    this.prevThrow=throwHeld;
-
     var fast=now<this.caffeineUntil||now<this.moonUntil;      // caffeine/moon = super speed
     // FUD gas = sluggish, but ONLY on the ground — never rob you of air speed mid-jump (that could
     // make a gap you already committed to unclearable → an unfair pit death).
@@ -2453,21 +2415,12 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.isJumping&&!jump&&b.velocity.y<-120) p.setVelocityY(-120);
     if(b.velocity.y>=0) this.isJumping=false;
 
-    // GREEN CANDLE RIDE: the candle ELEVATES Normie — gravity off, he hovers at a ride height; JUMP raises it, DUCK lowers it.
-    if(now<this.greenUntil){
-      if(!this._greenGrav){ b.setAllowGravity(false); this._greenGrav=true; }
-      if(jump) this.greenHoverY-=6; else if(duck) this.greenHoverY+=6;
-      this.greenHoverY=Phaser.Math.Clamp(this.greenHoverY, 46, GY-16);
-      p.setVelocityY(Phaser.Math.Clamp((this.greenHoverY-p.y)*6 + Math.sin(now/150)*18, -340, 340));   // spring to ride height + bull bob
-    } else if(this._greenGrav){ b.setAllowGravity(true); this._greenGrav=false; }
-
     // power-up tint + "large and in charge" grow + aura
     var omega=now<this.omegaUntil;   // GIGA CHAD transform: Normie becomes the chad (internal key stays 'omegachad')
     var whale=now<this.whaleUntil, cold=now<this.coldUntil;
     var powCol=0x66ccff, anyPower=true;
     if(whale){ p.setTint(0x2f7fff); powCol=0x2f7fff; }   // WHALE MODE: deep-blue, huge
     else if(omega){ p.clearTint(); powCol=0xffa020; }   // keep his real colours; fiery orange aura
-    else if(now<this.greenUntil){ p.setTint(0x2ee66a); powCol=0x2ee66a; }   // GREEN CANDLE MODE: green glow
     else if(now<this.moonUntil){ p.setTint([0xffd23f,0x3dff6e,0xff3860,0x66ccff][Math.floor(now/90)%4]); powCol=0xffd23f; }
     else if(cold){ p.setTint(0x9fe8ff); powCol=0x9fe8ff; }   // COLD WALLET: icy shield
     else if(now<this.shieldUntil){ p.setTint(0x88ddff); powCol=0x66ddff; }
@@ -2487,7 +2440,6 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var pw=null;
     if(now<this.whaleUntil) pw=['WHALE',this.whaleUntil,WHALE_MS,0x2f7fff];
     else if(now<this.coldUntil) pw=['COLD',this.coldUntil,COLD_MS,0x9fe8ff];
-    else if(now<this.greenUntil) pw=['GREEN',this.greenUntil,10000,0x2ee66a];
     else if(now<this.omegaUntil) pw=['GIGA',this.omegaUntil,this.levelIdx>=18?9000:8000,0xffa020];
     else if(now<this.solanaUntil) pw=['SOLANA',this.solanaUntil,9000,0x14f195];
     else if(now<this.moonUntil) pw=['MOON',this.moonUntil,9000,0xffd23f];
@@ -2509,8 +2461,6 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var bs=this.baseScale*this.pscale.v;
     if(this.crouching){
       p.setRotation(0); p.setScale(bs*1.14, bs*0.60);   // squashed duck pose
-    } else if(now<this.greenUntil){
-      p.setRotation((p.flipX?-0.14:0.14) + Math.sin(now/150)*0.05); p.setScale(bs);   // lean forward, riding the broomstick candle
     } else if(!onGround){
       p.setRotation(Phaser.Math.Clamp(b.velocity.x/2600,-0.12,0.12));
       var sy=b.velocity.y<0?1.10:0.93; p.setScale(bs*(2-sy), bs*sy);
@@ -2531,16 +2481,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     }
     // BULL MARKET: strap horns onto Normie's head (follow scale/rotation/crouch)
     if(this.bullHorns){
-      if(now<this.bullUntil && now>=this.greenUntil){ var hsc=(p.displayWidth*0.98)/48;   // no horns during the green candle ride
+      if(now<this.bullUntil){ var hsc=(p.displayWidth*0.98)/48;
         this.bullHorns.setVisible(true).setScale(hsc).setPosition(p.x, p.y - p.displayHeight*0.40).setRotation(p.rotation);
       } else if(this.bullHorns.visible){ this.bullHorns.setVisible(false); }
-    }
-    // GREEN CANDLE MODE: a horizontal candle BROOMSTICK under his hips — he straddles & flies it (flame points his way)
-    if(this.greenRide){
-      if(now<this.greenUntil){ var bw=Math.max(48,p.displayWidth*1.8), bh=bw*0.30, tilt=(p.flipX?0.12:-0.12)+Math.sin(now/150)*0.05;
-        this.greenRide.setVisible(true).setDisplaySize(bw,bh).setFlipX(!p.flipX).setRotation(tilt)   // flame/exhaust trails BEHIND
-          .setPosition(p.x, p.body.center.y + p.displayHeight*0.20 + Math.sin(now/150)*2);
-      } else if(this.greenRide.visible){ this.greenRide.setVisible(false); }
     }
 
     // moving platforms + rider carry
@@ -2800,7 +2743,7 @@ var BRIEFINGS = {
   18: { title:'WORLD 7 — THE YIELD FARM',
        powers:[
          {tex:'omegachad', name:'GIGA CHAD', desc:'Plow through the swarm — the farm is crowded.'},
-         {tex:'bull', name:'MEGA GREEN MARKET', desc:'Bull Market UPGRADED here! Ride the green candle — it auto-fires green candles at enemies.'}
+         {tex:'bull', name:'BULL MARKET', desc:'Mega jump — clear the wide gaps and reach the high coins.'}
        ],
        threats:[
          {tex:'bot', name:'ARB BOTS', desc:'snipers & bots everywhere — keep moving'},
@@ -2967,14 +2910,14 @@ if(typeof document!=='undefined'){ (function(){
   document.head.appendChild(css);
   var wrap=document.createElement('div'); wrap.id='nqpad'; document.body.appendChild(wrap);
   function mk(cls,label){ var e=document.createElement('button'); e.className='nqpb '+cls; e.textContent=label; e.setAttribute('aria-hidden','true'); wrap.appendChild(e); return e; }
-  var bL=mk('nqpb-move','◄'), bR=mk('nqpb-move','►'), bJ=mk('nqpb-jump','JUMP'), bD=mk('nqpb-jump','DUCK'), bF=mk('nqpb-jump','FIRE');
+  var bL=mk('nqpb-move','◄'), bR=mk('nqpb-move','►'), bJ=mk('nqpb-jump','JUMP'), bD=mk('nqpb-jump','DUCK');
   function bind(el,key){
     var set=function(v){ return function(ev){ ev.preventDefault(); ev.stopPropagation(); window.__NQ_PAD[key]=v; el.classList.toggle('on',v); }; };
     el.addEventListener('touchstart',set(true),{passive:false}); el.addEventListener('touchend',set(false),{passive:false});
     el.addEventListener('touchcancel',set(false),{passive:false});
     el.addEventListener('mousedown',set(true)); el.addEventListener('mouseup',set(false)); el.addEventListener('mouseleave',set(false));
   }
-  bind(bL,'left'); bind(bR,'right'); bind(bJ,'jump'); bind(bD,'down'); bind(bF,'throw');
+  bind(bL,'left'); bind(bR,'right'); bind(bJ,'jump'); bind(bD,'down');
   function layout(){
     var s=document.getElementById('screen'); if(!s) return;
     var r=s.getBoundingClientRect(), gl=r.left, gr=window.innerWidth-r.right, gutter=Math.min(gl,gr);
@@ -2993,8 +2936,6 @@ if(typeof document!=='undefined'){ (function(){
     bJ.style.width=bJ.style.height=jp+'px'; bJ.style.left=rx+'px'; bJ.style.bottom=by+'px'; bJ.style.fontSize=Math.round(Math.max(8,jp*0.15))+'px';
     var dk=Math.max(34,Math.round(jp*0.60));   // DUCK: smaller, sits just above JUMP (same right-thumb reach)
     bD.style.width=bD.style.height=dk+'px'; bD.style.left=Math.round(rx+(jp-dk)/2)+'px'; bD.style.bottom=(by+jp+8)+'px'; bD.style.fontSize=Math.round(Math.max(7,dk*0.20))+'px';
-    var fk=Math.max(30,Math.round(mv*0.72));   // FIRE (green-candle ammo): above the ◄ ► pair, left-thumb reach
-    bF.style.width=bF.style.height=fk+'px'; bF.style.left=Math.round(lx+(pairW-fk)/2)+'px'; bF.style.bottom=(by+mv+10)+'px'; bF.style.fontSize=Math.round(Math.max(7,fk*0.20))+'px';
   }
   window.addEventListener('resize',layout);
   window.addEventListener('orientationchange',function(){ setTimeout(layout,220); });
