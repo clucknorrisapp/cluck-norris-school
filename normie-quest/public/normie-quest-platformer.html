@@ -116,7 +116,7 @@ var SFX={
   stomp:function(){ _tone(320,80,0.12,'square',0.10); },
   hurt:function(){ _tone(300,110,0.26,'sawtooth',0.10); },
   key:function(){ _seq([[660,0.09],[990,0.09],[1320,0.16]],'square',0.08); },
-  power:function(){ if(_powerBuf){ if(_playSample(_powerBuf,0.34)) return; } else { _loadSfx(); }   // real .wav sample once decoded (quieted per owner); synth chime meanwhile / as fallback
+  power:function(){ if(_powerBuf){ if(_playSample(_powerBuf,0.2)) return; } else { _loadSfx(); }   // real .wav sample once decoded (quieted to match the other SFX); synth chime meanwhile / as fallback
     _seq([[523,0.08],[659,0.08],[784,0.08],[1046,0.18]],'square',0.09); },
   boss:function(){ _tone(150,55,0.20,'sawtooth',0.12); },
   clear:function(){ _seq([[523,0.10],[784,0.10],[1046,0.24]],'square',0.09); },
@@ -2524,14 +2524,14 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     }
     // BULL MARKET: strap horns onto Normie's head (follow scale/rotation/crouch)
     if(this.bullHorns){
-      if(now<this.bullUntil){ var hsc=(p.displayWidth*0.98)/48;
+      if(now<this.bullUntil && now>=this.greenUntil){ var hsc=(p.displayWidth*0.98)/48;   // no horns during the green candle ride
         this.bullHorns.setVisible(true).setScale(hsc).setPosition(p.x, p.y - p.displayHeight*0.40).setRotation(p.rotation);
       } else if(this.bullHorns.visible){ this.bullHorns.setVisible(false); }
     }
     // GREEN CANDLE MODE: a horizontal candle BROOMSTICK under his hips — he straddles & flies it (flame points his way)
     if(this.greenRide){
       if(now<this.greenUntil){ var bw=Math.max(48,p.displayWidth*1.8), bh=bw*0.30, tilt=(p.flipX?0.12:-0.12)+Math.sin(now/150)*0.05;
-        this.greenRide.setVisible(true).setDisplaySize(bw,bh).setFlipX(p.flipX).setRotation(tilt)
+        this.greenRide.setVisible(true).setDisplaySize(bw,bh).setFlipX(!p.flipX).setRotation(tilt)   // flame/exhaust trails BEHIND
           .setPosition(p.x, p.body.center.y + p.displayHeight*0.20 + Math.sin(now/150)*2);
       } else if(this.greenRide.visible){ this.greenRide.setVisible(false); }
     }
