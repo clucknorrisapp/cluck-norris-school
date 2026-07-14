@@ -1213,13 +1213,15 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       hg.generateTexture('bullhorns',48,27); hg.destroy(); }
     this.bullHorns=this.add.image(this.spawn.x,this.spawn.y,'bullhorns').setDepth(8).setVisible(false);
     if(this.bullHorns.postFX){ try{ this.bullHorns.postFX.addGlow(0x3dff6e,3,0,false,0.1,10); }catch(e){} }
-    // GREEN CANDLE MODE: the green candlestick "board" Normie rides ON TOP of (drawn once)
+    // GREEN CANDLE MODE: a horizontal green candle BROOMSTICK Normie straddles (flame at the front). Drawn once.
     if(!this.textures.exists('greenmount')){ var gmg=this.make.graphics({x:0,y:0,add:false});
-      gmg.fillStyle(0x14602f,1); gmg.fillRoundedRect(2,5,44,16,5);      // base/shadow
-      gmg.fillStyle(0x2ee66a,1); gmg.fillRoundedRect(2,2,44,15,5);      // green candle body
-      gmg.fillStyle(0x9dffbe,1); gmg.fillRoundedRect(6,3,36,4,2);       // top highlight (the deck you stand on)
-      gmg.fillStyle(0x14602f,1); gmg.fillRect(22,17,5,9);               // little wick below
-      gmg.generateTexture('greenmount',48,28); gmg.destroy(); }
+      gmg.fillStyle(0x14602f,1); gmg.fillRoundedRect(3,8,46,7,3);       // shadow
+      gmg.fillStyle(0x2ee66a,1); gmg.fillRoundedRect(3,5,46,7,3);       // the green candle "stick"
+      gmg.fillStyle(0x9dffbe,1); gmg.fillRect(7,6,38,2);                // top highlight
+      gmg.fillStyle(0x123a1e,1); gmg.fillRect(49,7,4,3);               // wick
+      gmg.fillStyle(0xffe066,1); gmg.fillTriangle(52,10,52,4,62,7);    // flame (points FORWARD / right)
+      gmg.fillStyle(0xff9a3c,1); gmg.fillTriangle(52,9,53,6,58,7);
+      gmg.generateTexture('greenmount',63,20); gmg.destroy(); }
     this.greenRide=this.add.image(this.spawn.x,this.spawn.y,'greenmount').setDepth(6).setVisible(false);
     if(this.greenRide.postFX){ try{ this.greenRide.postFX.addGlow(0x2ee66a,4,0,false,0.1,12); }catch(e){} }
 
@@ -2501,7 +2503,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.crouching){
       p.setRotation(0); p.setScale(bs*1.14, bs*0.60);   // squashed duck pose
     } else if(now<this.greenUntil){
-      p.setRotation(Math.sin(now/150)*0.09); p.setScale(bs);   // ride the candle like a bull (rock)
+      p.setRotation((p.flipX?-0.14:0.14) + Math.sin(now/150)*0.05); p.setScale(bs);   // lean forward, riding the broomstick candle
     } else if(!onGround){
       p.setRotation(Phaser.Math.Clamp(b.velocity.x/2600,-0.12,0.12));
       var sy=b.velocity.y<0?1.10:0.93; p.setScale(bs*(2-sy), bs*sy);
@@ -2526,10 +2528,11 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         this.bullHorns.setVisible(true).setScale(hsc).setPosition(p.x, p.y - p.displayHeight*0.40).setRotation(p.rotation);
       } else if(this.bullHorns.visible){ this.bullHorns.setVisible(false); }
     }
-    // GREEN CANDLE MODE: a chunky green candle MOUNT below his feet — he rides ON TOP of it like a bull (rocks/bobs)
+    // GREEN CANDLE MODE: a horizontal candle BROOMSTICK under his hips — he straddles & flies it (flame points his way)
     if(this.greenRide){
-      if(now<this.greenUntil){ var bw=Math.max(34,p.displayWidth*1.1), bh=Math.max(30,p.displayHeight*0.72), rock=Math.sin(now/160)*0.07;
-        this.greenRide.setVisible(true).setDisplaySize(bw,bh).setRotation(rock).setPosition(p.x, p.body.bottom + bh*0.40 + Math.sin(now/150)*2);
+      if(now<this.greenUntil){ var bw=Math.max(48,p.displayWidth*1.8), bh=bw*0.30, tilt=(p.flipX?0.12:-0.12)+Math.sin(now/150)*0.05;
+        this.greenRide.setVisible(true).setDisplaySize(bw,bh).setFlipX(p.flipX).setRotation(tilt)
+          .setPosition(p.x, p.body.center.y + p.displayHeight*0.20 + Math.sin(now/150)*2);
       } else if(this.greenRide.visible){ this.greenRide.setVisible(false); }
     }
 
