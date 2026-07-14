@@ -1188,7 +1188,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.shieldUntil=0; this.bullUntil=0; this.moonUntil=0; this.caffeineUntil=0; this.solanaUntil=0;
     this.omegaUntil=0; this.geekShield=false;   // Omega Chad transform + Super Geek one-hit shield
     this.whaleUntil=0; this.coldUntil=0; this.whaleShockAt=0;   // late-game transforms: Whale Mode + Cold Wallet
-    this.greenUntil=0; this.greenNextFire=0;   // GREEN CANDLE MODE: ride a green candle + fire green ammo (THROW)
+    this.greenUntil=0; this.greenNextFire=0; this._greenGrav=false; this.greenHoverY=0;   // GREEN CANDLE MODE: ride an elevated candle + auto-fire green ammo
     this.boss=false; this.bossStarted=false;
 
     // player — bigger & in charge; grows even bigger on a power-up
@@ -1359,7 +1359,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(type==='diamond'){ this.shieldUntil=now+9000; this.powerBanner('DIAMOND HANDS','UNSHAKEABLE — no damage 9s','#66ddff'); }
     else if(type==='bull'){
       if(this.levelIdx>=18){   // World 7+ : BULL MARKET upgrades to MEGA GREEN MARKET (mega jump + ride the green candle + fire green ammo)
-        this.bullUntil=now+10000; this.greenUntil=now+10000; this.greenNextFire=0; this.cameras.main.shake(220,.010);
+        this.bullUntil=now+10000; this.greenUntil=now+10000; this.greenNextFire=0; this.greenHoverY=player.y-56; this.cameras.main.shake(220,.010);
         this.powerBanner('MEGA GREEN MARKET','RIDE THE GREEN CANDLE — mega jump + auto-fires green candles! 10s','#2ee66a');
         this.flash('GREEN CANDLES FIRING! 🟢','#2ee66a');
       } else { this.bullUntil=now+11000; this.powerBanner('BULL MARKET','MEGA JUMP — 11s','#3dff6e'); }
@@ -2418,7 +2418,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // GREEN CANDLE MODE: AUTO-fire a stream of green candles (works on every device); THROW/F/X fires an extra shot
     var throwHeld=this.keys.F.isDown||this.keys.X.isDown||this.touch.throwBtn;
     if(now<this.greenUntil){
-      if(now>this.greenNextFire){ this.fireGreenCandle(); this.greenNextFire=now+430; }
+      if(now>this.greenNextFire){ this.fireGreenCandle(); this.greenNextFire=now+230; }   // continuous stream, like Solana mode
       else if(throwHeld && !this.prevThrow){ this.fireGreenCandle(); }
     }
     this.prevThrow=throwHeld;
@@ -2443,6 +2443,14 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     }
     if(this.isJumping&&!jump&&b.velocity.y<-120) p.setVelocityY(-120);
     if(b.velocity.y>=0) this.isJumping=false;
+
+    // GREEN CANDLE RIDE: the candle ELEVATES Normie — gravity off, he hovers at a ride height; JUMP raises it, DUCK lowers it.
+    if(now<this.greenUntil){
+      if(!this._greenGrav){ b.setAllowGravity(false); this._greenGrav=true; }
+      if(jump) this.greenHoverY-=6; else if(duck) this.greenHoverY+=6;
+      this.greenHoverY=Phaser.Math.Clamp(this.greenHoverY, 46, GY-16);
+      p.setVelocityY(Phaser.Math.Clamp((this.greenHoverY-p.y)*6 + Math.sin(now/150)*18, -340, 340));   // spring to ride height + bull bob
+    } else if(this._greenGrav){ b.setAllowGravity(true); this._greenGrav=false; }
 
     // power-up tint + "large and in charge" grow + aura
     var omega=now<this.omegaUntil;   // GIGA CHAD transform: Normie becomes the chad (internal key stays 'omegachad')
@@ -2492,6 +2500,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var bs=this.baseScale*this.pscale.v;
     if(this.crouching){
       p.setRotation(0); p.setScale(bs*1.14, bs*0.60);   // squashed duck pose
+    } else if(now<this.greenUntil){
+      p.setRotation(Math.sin(now/150)*0.09); p.setScale(bs);   // ride the candle like a bull (rock)
     } else if(!onGround){
       p.setRotation(Phaser.Math.Clamp(b.velocity.x/2600,-0.12,0.12));
       var sy=b.velocity.y<0?1.10:0.93; p.setScale(bs*(2-sy), bs*sy);
@@ -2516,10 +2526,10 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         this.bullHorns.setVisible(true).setScale(hsc).setPosition(p.x, p.y - p.displayHeight*0.40).setRotation(p.rotation);
       } else if(this.bullHorns.visible){ this.bullHorns.setVisible(false); }
     }
-    // GREEN CANDLE MODE: a green candle board TUCKED UNDER his feet (he stands on top; never wraps him)
+    // GREEN CANDLE MODE: a chunky green candle MOUNT below his feet — he rides ON TOP of it like a bull (rocks/bobs)
     if(this.greenRide){
-      if(now<this.greenUntil){ var bw=Math.max(30,p.displayWidth*1.05), bh=14;
-        this.greenRide.setVisible(true).setDisplaySize(bw,bh).setPosition(p.x, p.body.bottom + bh*0.35 + Math.sin(now/150)*1.5);
+      if(now<this.greenUntil){ var bw=Math.max(34,p.displayWidth*1.1), bh=Math.max(30,p.displayHeight*0.72), rock=Math.sin(now/160)*0.07;
+        this.greenRide.setVisible(true).setDisplaySize(bw,bh).setRotation(rock).setPosition(p.x, p.body.bottom + bh*0.40 + Math.sin(now/150)*2);
       } else if(this.greenRide.visible){ this.greenRide.setVisible(false); }
     }
 
