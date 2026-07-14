@@ -1195,6 +1195,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.shieldUntil=0; this.bullUntil=0; this.moonUntil=0; this.caffeineUntil=0; this.solanaUntil=0;
     this.omegaUntil=0; this.geekShield=false;   // Omega Chad transform + Super Geek one-hit shield
     this.whaleUntil=0; this.coldUntil=0; this.whaleShockAt=0;   // late-game transforms: Whale Mode + Cold Wallet
+    this.throwAmmo=10;   // MANUAL THROW: 10 Solana discs per level (F/X or the THROW button); refilled by a SOLANA pickup
     this.boss=false; this.bossStarted=false;
 
     // player — bigger & in charge; grows even bigger on a power-up
@@ -1264,6 +1265,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.powerBarBg=this.hb(this.add.rectangle(14,52,46,8,0x000000,0.55).setOrigin(0,0.5).setDepth(20).setStrokeStyle(1,0x8f89b0).setVisible(false));
     this.powerBar=this.hb(this.add.rectangle(15,52,44,5,0x3dff6e).setOrigin(0,0.5).setDepth(21).setVisible(false));
     this.powerLabel=this.hb(this.add.text(64,52,'',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffd23f'}).setOrigin(0,0.5).setDepth(21).setVisible(false));
+    // MANUAL THROW ammo — a Solana disc + count, under the key (top-right)
+    this.throwIcon=this.hb(this.add.image(W-30,52,'solana').setDepth(20)); this.throwIcon.setScale(15/this.throwIcon.height);
+    this.throwCountTxt=this.hb(this.add.text(W-40,52,'x'+this.throwAmmo,{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#14f195'}).setOrigin(1,0.5).setDepth(21));
     // PAUSE button — tap the ⏸ (top-left) on touch, or press P / Esc on desktop
     this.hb(this.add.rectangle(120,15,20,16,0x000000,0.5).setStrokeStyle(1,0x8f89b0));
     this.hb(this.add.rectangle(116,15,3,9,0xffd23f)); this.hb(this.add.rectangle(124,15,3,9,0xffd23f));
@@ -1358,7 +1362,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     else if(type==='moon'){ this.moonUntil=now+9000; this.powerBanner('MOON MODE','INVINCIBLE — smash everything!','#ffd23f'); }
     else if(type==='caffeine'){ this.caffeineUntil=now+11000; this.powerBanner('CAFFEINE BOOST','WIRED — super speed 11s','#ffffff'); }
     else if(type==='candle'){ if(this.lives<3){ this.lives++; if(this.hearts[this.lives-1]) this.hearts[this.lives-1].setAlpha(1); } this.addScore(100); this.powerBanner('GREEN CANDLE','PUMPING — +1 heart, +100','#3dff6e'); }
-    else if(type==='solana'){ this.solanaUntil=now+9000; this.nextThrow=0; this.powerBanner('SOLANA MODE','FULL SEND — auto-fire 9s!','#14f195'); }
+    else if(type==='solana'){ this.solanaUntil=now+9000; this.nextThrow=0; this.throwAmmo=10; this.updateThrowHud(); this.powerBanner('SOLANA MODE','FULL SEND — auto-fire 9s + discs refilled!','#14f195'); }
     else if(type==='omegachad'){
       // ROTATING TRANSFORM: Giga Chad returns MEGA in the late worlds — a shock ring, but not so long it lasts a whole level.
       var mega=this.levelIdx>=18;   // World 7+
@@ -1432,6 +1436,17 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     c.setVelocity(dir*360,Phaser.Math.Between(-24,24)); c.setAngularVelocity(dir*520); c.setCollideWorldBounds(false);
     SFX.coin();
     this.time.delayedCall(1100,function(){ if(c&&c.active) c.destroy(); });
+  },
+  updateThrowHud:function(){
+    if(!this.throwCountTxt) return;
+    this.throwCountTxt.setText('x'+this.throwAmmo).setColor(this.throwAmmo>0?'#14f195':'#5a5a6a');
+    if(this.throwIcon) this.throwIcon.setAlpha(this.throwAmmo>0?1:0.35);
+  },
+  manualThrow:function(){   // MANUAL THROW: hurl a Solana disc from the counted ammo (F/X or THROW button)
+    if(this.over||this.paused) return;
+    if(this.throwAmmo<=0){ _tone(200,140,0.08,'square',0.04); return; }   // empty: soft click, no fire
+    this.throwAmmo--; this.fireSolana(); this.updateThrowHud();
+    this.cameras.main.flash(50,20,120,60);
   },
   coinHitEnemy:function(coin,enemy){
     if(this.over||!enemy.active||!coin.active) return;
@@ -2361,10 +2376,10 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       for(var _i=0;_i<_pts.length;_i++){ var _pp=_pts[_i]; if(_pp&&_pp.isDown){ var _fx=_pp.x/_gw,_fy=_pp.y/_gh; if(_fy<0.14&&_fx>0.16&&_fx<0.34){ _inZ=true; break; } } }
       if(_inZ&&!this._hotDown){ this._hotDown=true; this.pauseGame(false); return; } this._hotDown=_inZ; }
     // --- touch input: the DOM gutter D-pad (tablets/wide screens) OR on-screen pointer zones (phones) ---
-    this.touch.left=this.touch.right=this.touch.jump=this.touch.down=false;
+    this.touch.left=this.touch.right=this.touch.jump=this.touch.down=this.touch.throwBtn=false;
     var padActive=(typeof window!=='undefined')&&window.__NQ_PAD_ACTIVE&&window.__NQ_PAD;
     if(padActive){
-      this.touch.left=!!window.__NQ_PAD.left; this.touch.right=!!window.__NQ_PAD.right; this.touch.jump=!!window.__NQ_PAD.jump; this.touch.down=!!window.__NQ_PAD.down;
+      this.touch.left=!!window.__NQ_PAD.left; this.touch.right=!!window.__NQ_PAD.right; this.touch.jump=!!window.__NQ_PAD.jump; this.touch.down=!!window.__NQ_PAD.down; this.touch.throwBtn=!!window.__NQ_PAD.throw;
     } else {
       // raw pointer screen-zones: left third=LEFT, next third=RIGHT, right half=JUMP, bottom-center=DUCK
       var gw=this.scale.width, gh=this.scale.height, pts=this.input.manager.pointers;
@@ -2394,6 +2409,11 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.slots.length && this.slotTick(now, p, b, rawJump && !this.prevJump)) jump=false;
     // SOLANA MODE: auto-fire Solana symbols while the power is active (ends early on damage)
     if(now<this.solanaUntil && now>this.nextThrow){ this.fireSolana(); this.nextThrow=now+230; }
+    // MANUAL THROW: F/X on desktop, the THROW button on touch — edge-triggered, uses counted ammo
+    // (skipped while SOLANA MODE auto-fires so it doesn't burn discs on top of the free stream)
+    var throwHeld=this.keys.F.isDown||this.keys.X.isDown||this.touch.throwBtn;
+    if(throwHeld && !this.prevThrow && !(now<this.solanaUntil)) this.manualThrow();
+    this.prevThrow=throwHeld;
     var fast=now<this.caffeineUntil||now<this.moonUntil;      // caffeine/moon = super speed
     // FUD gas = sluggish, but ONLY on the ground — never rob you of air speed mid-jump (that could
     // make a gap you already committed to unclearable → an unfair pit death).
@@ -2910,14 +2930,14 @@ if(typeof document!=='undefined'){ (function(){
   document.head.appendChild(css);
   var wrap=document.createElement('div'); wrap.id='nqpad'; document.body.appendChild(wrap);
   function mk(cls,label){ var e=document.createElement('button'); e.className='nqpb '+cls; e.textContent=label; e.setAttribute('aria-hidden','true'); wrap.appendChild(e); return e; }
-  var bL=mk('nqpb-move','◄'), bR=mk('nqpb-move','►'), bJ=mk('nqpb-jump','JUMP'), bD=mk('nqpb-jump','DUCK');
+  var bL=mk('nqpb-move','◄'), bR=mk('nqpb-move','►'), bJ=mk('nqpb-jump','JUMP'), bD=mk('nqpb-jump','DUCK'), bF=mk('nqpb-jump','THROW');
   function bind(el,key){
     var set=function(v){ return function(ev){ ev.preventDefault(); ev.stopPropagation(); window.__NQ_PAD[key]=v; el.classList.toggle('on',v); }; };
     el.addEventListener('touchstart',set(true),{passive:false}); el.addEventListener('touchend',set(false),{passive:false});
     el.addEventListener('touchcancel',set(false),{passive:false});
     el.addEventListener('mousedown',set(true)); el.addEventListener('mouseup',set(false)); el.addEventListener('mouseleave',set(false));
   }
-  bind(bL,'left'); bind(bR,'right'); bind(bJ,'jump'); bind(bD,'down');
+  bind(bL,'left'); bind(bR,'right'); bind(bJ,'jump'); bind(bD,'down'); bind(bF,'throw');
   function layout(){
     var s=document.getElementById('screen'); if(!s) return;
     var r=s.getBoundingClientRect(), gl=r.left, gr=window.innerWidth-r.right, gutter=Math.min(gl,gr);
@@ -2936,6 +2956,8 @@ if(typeof document!=='undefined'){ (function(){
     bJ.style.width=bJ.style.height=jp+'px'; bJ.style.left=rx+'px'; bJ.style.bottom=by+'px'; bJ.style.fontSize=Math.round(Math.max(8,jp*0.15))+'px';
     var dk=Math.max(34,Math.round(jp*0.60));   // DUCK: smaller, sits just above JUMP (same right-thumb reach)
     bD.style.width=bD.style.height=dk+'px'; bD.style.left=Math.round(rx+(jp-dk)/2)+'px'; bD.style.bottom=(by+jp+8)+'px'; bD.style.fontSize=Math.round(Math.max(7,dk*0.20))+'px';
+    var fk=Math.max(30,Math.round(mv*0.72));   // THROW (Solana disc): above the ◄ ► pair, left-thumb reach
+    bF.style.width=bF.style.height=fk+'px'; bF.style.left=Math.round(lx+(pairW-fk)/2)+'px'; bF.style.bottom=(by+mv+10)+'px'; bF.style.fontSize=Math.round(Math.max(7,fk*0.185))+'px';
   }
   window.addEventListener('resize',layout);
   window.addEventListener('orientationchange',function(){ setTimeout(layout,220); });
