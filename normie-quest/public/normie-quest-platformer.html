@@ -1095,7 +1095,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       self.tweens.add({targets:pile, scaleX:pile.scaleX*1.13, scaleY:pile.scaleY*1.13, duration:520, yoyo:true, repeat:-1, ease:'Sine.inOut'}); });
 
     // 🚪 SPEAKEASY warps — hidden back-doors to bonus rooms; DUCK in front to slip in.
-    //   def.warps:[[x, targetIdx, hint]]  hint truthy → a periodic glint FLASH + sign draws the eye;
+    //   def.warps:[[x, targetIdx, hint]]  hint truthy → a sign + soft glow marks it (no flashy flare);
     //   hint falsy → a faint unmarked door you can only find by ducking around (random discovery).
     this.warps=this.physics.add.staticGroup(); this._warping=false; this._warpCool=(this._spawnX!=null?this.time.now+1400:0);
     (def.warps||[]).forEach(function(wp){ var hint=wp[2];
@@ -1105,9 +1105,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         self.addGlow(w,0x9b5bff,3);
         var sign=self.add.text(wp[0], w.y-w.displayHeight*0.5-10, 'SPEAKEASY\n▾ DUCK', {fontFamily:'"Press Start 2P"',fontSize:'6px',color:'#c99bff',align:'center',lineSpacing:3}).setOrigin(.5).setDepth(20);
         self.tweens.add({targets:sign, y:sign.y-3, duration:760, yoyo:true, repeat:-1, ease:'Sine.inOut'});
-        var glint=self.add.image(wp[0], w.y-w.displayHeight*0.32, 'spark').setDepth(21).setScale(2).setAlpha(0).setTint(0xffe66a).setBlendMode('ADD');
-        self.tweens.add({targets:glint, alpha:1, scaleX:3.6, scaleY:3.6, duration:420, yoyo:true, repeat:-1, repeatDelay:1500, ease:'Quad.out'});
-        self.time.addEvent({delay:2400, loop:true, callback:function(){ if(!self.over) self.burst(wp[0], w.y-w.displayHeight*0.42, 0xffe66a, 8); }});
+        // No flashing flare/glint: the door is already large + softly glowing with a sign,
+        // so a periodic spark burst read as too obvious (owner's call). The unhinted doors
+        // stay pure shadow.
       }
     });
 
