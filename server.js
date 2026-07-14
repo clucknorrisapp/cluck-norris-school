@@ -7104,10 +7104,19 @@ function wwOperatorDM(text, { loud = false } = {}) {
   const chat = operatorChatId() || "1846034838";
   return tgSend(chat, text, null, { silent: !loud });
 }
+// ⛔ HARD-KILL (owner's call 2026-07-14): the scheduled Wallet Watch poller was the
+// dominant Helius credit sink — ~21 wallets × 720 ticks/day ≈ 15K Enhanced-Transactions
+// requests/day, and Helius bills that API at ~100 credits/request ≈ ~1.5M credits/day
+// (~90% of the whole bill; it drove the project to 75% of the monthly cap at 19% of the
+// cycle). This const gates the SCHEDULED path independent of the kv `walletWatchCfg.enabled`
+// flag, so a stale persisted flag on the /data volume can't silently revive it. The manual
+// lever (`/api/wallet-watch?run=1&key=…`) is deliberately left working for a one-off owner
+// check. DO NOT set false without the owner's explicit ask.
+const WALLET_WATCH_KILLED = true;
 async function walletWatchTick({ manual = false } = {}) {
   const cfg = wwCfg();
   const out = { checked: 0, newTxs: 0, sellAlerts: 0 };
-  if (!cfg.enabled && !manual) return out;
+  if ((WALLET_WATCH_KILLED || !cfg.enabled) && !manual) return out;
   const HK = process.env.HELIUS_API_KEY;
   if (!HK || !(cfg.wallets || []).length) return out;
   const seen = kv.get("walletWatchSeen", {});
