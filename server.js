@@ -13,6 +13,7 @@ const diplomaNft = require("./lib/diploma-nft"); // Graduation diploma cNFT mint
 const orderbook = require("./lib/orderbook-scanner"); // Cluck Order Book — multi-venue resting-order/wall scanner
 const { fetchBagsContext, classifyTeamActivity } = require("./lib/bags-context");
 const analytics = require("./lib/analytics");
+const heliusUsage = require("./lib/helius-usage"); // Helius call attribution (which subsystem/IP burns credits)
 const solscan = require("./lib/solscan");
 const solanaTracker = require("./lib/solana-tracker");
 const premiumForensics = require("./lib/premium-forensics");
@@ -5959,6 +5960,10 @@ app.post("/api/helius-rpc", async (req, res) => {
   if (!calls.length || calls.some(c => !c || typeof c.method !== "string" || !ALLOWED_RPC.has(c.method))) {
     return res.status(403).json({ error: "method_not_allowed" });
   }
+  try {
+    const _ip = (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.ip || "unknown";
+    heliusUsage.noteProxy(_ip, "helius-rpc", calls.length);
+  } catch {}
   const HELIUS_KEY = process.env.HELIUS_API_KEY;
   if (!HELIUS_KEY) return res.status(500).json({ error: "Missing HELIUS_API_KEY" });
   try {
@@ -5995,6 +6000,11 @@ app.post("/api/helius-tx", async (req, res) => {
   if (!Array.isArray(_sigs) || _sigs.length === 0 || _sigs.length > 100 || _sigs.some((s) => typeof s !== "string" || s.length > 100)) {
     return res.status(400).json({ error: "expected an array of <=100 signature strings" });
   }
+  try {
+    const _ip = (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.ip || "unknown";
+    heliusUsage.noteProxy(_ip, "helius-tx", _sigs.length);
+    heliusUsage.note("getEnhancedTransactions", "helius-tx", "api.helius.xyz");
+  } catch {}
   let lastErr;
   for (let i = 0; i < keys.length; i++) {
     const isLast = i === keys.length - 1;
@@ -7118,6 +7128,7 @@ async function walletWatchTick({ manual = false } = {}) {
     out.checked++;
     let txs = [];
     try {
+      try { heliusUsage.note("getEnhancedTransactionsByAddress", "wallet-watch", "api.helius.xyz"); } catch {}
       const r = await fetch(`https://api.helius.xyz/v0/addresses/${w.addr}/transactions?api-key=${HK}&limit=25`);
       if (r.ok) txs = await r.json();
     } catch (_) { continue; }
@@ -9074,6 +9085,7 @@ app.get("/api/wallet-xray", async (req, res) => {
     for (; pages < MAX_PAGES; pages++) {
       if (Date.now() > DEADLINE) break;
       const url = `https://api.helius.xyz/v0/addresses/${wallet}/transactions?api-key=${HELIUS_KEY}&limit=${PAGE}` + (before ? `&before=${before}` : "");
+      try { heliusUsage.note("getEnhancedTransactionsByAddress", deep ? "wallet-xray:deep" : "wallet-xray", "api.helius.xyz"); } catch {}
       let arr = [];
       try { const r = await fetch(url, { signal: AbortSignal.timeout(15000) }); arr = await r.json(); } catch { break; }
       if (!Array.isArray(arr) || !arr.length) { reachedEnd = true; break; }
@@ -9081,6 +9093,12 @@ app.get("/api/wallet-xray", async (req, res) => {
       if (arr.length < PAGE) { reachedEnd = true; break; }
       before = arr[arr.length - 1].signature;
     }
+    // Attribute the (expensive) Enhanced-API fan-out to the CALLER IP so abusive
+    // scripted use of this public tool is traceable to actionable addresses.
+    try {
+      const _ip = (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.ip || "unknown";
+      heliusUsage.noteProxy(_ip, deep ? "wallet-xray:deep" : "wallet-xray", pages || 1);
+    } catch {}
     const truncated = !reachedEnd; // history deeper than we scanned (oldest activity not seen)
     if (!txs.length) {
       return res.status(200).json({
@@ -10254,6 +10272,18 @@ app.get("/api/stats", (req, res) => {
   }
   const n = Math.max(1, Math.min(90, parseInt(req.query.days, 10) || 30));
   return res.status(200).json({ success: true, ...analytics.summary(n) });
+});
+
+// Helius credit attribution — WHICH subsystem/IP is burning RPC credits. Gated
+// (404 without the key). Built to answer "is a usage spike real traffic or someone
+// farming our API": topCallers names our subsystems (caller 'sdk' = the liquidity
+// engine's Orca/Meteora reads); proxy.topIps names external callers of the public
+// raw proxies + Wallet X-Ray, which is where scraping shows up.
+app.get("/api/helius-usage", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  const n = Math.max(1, Math.min(14, parseInt(req.query.days, 10) || 7));
+  return res.status(200).json({ success: true, ...heliusUsage.summary(n) });
 });
 // Learning-funnel event sink (public, no PII) — the React school posts step events
 // here (lesson_start/lesson_complete, school/incubator/challenge/graduation) so we can
