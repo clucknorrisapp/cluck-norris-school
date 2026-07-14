@@ -1699,12 +1699,13 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   },
   trollTick:function(now,p){
     var k=this.rugking; if(!k||!k.active) return;
-    if(now>this.trollNextThrow){ this.trollNextThrow=now+2000; this.trollThrow(k,p); }
+    if(now>this.trollNextThrow){ this.trollNextThrow=now+2400; this.trollThrow(k,p); }
     if(now>this.trollNextTaunt){ this.trollNextTaunt=now+3400; var t=['GET TROLLED','NGMI','REKT','SKILL ISSUE','HFSP','U MAD?','FEW','COPE + SEETHE']; this.flash(Phaser.Math.RND.pick(t),'#2effa0'); }
     if(now>this.trollNextTp && !k.invuln){ this.trollNextTp=now+5200; this.trollTeleport(k,p); }
   },
   trollThrow:function(k,p){   // lobs a 3-way spread of red REKT candles (red = death, like the Reaper)
     if(this.over||!this.enemyShots) return; var self=this;
+    if(Math.abs(p.x-k.x)<86 && p.y < k.y-6) return;   // don't punish a committed stomp with point-blank candles
     var base=Math.atan2((p.y-8)-k.y, p.x-k.x);
     [-0.22,0,0.22].forEach(function(off){
       var ang=base+off, sp=210, s=self.enemyShots.create(k.x, k.y-8, 'candle').setDepth(6);
@@ -1715,9 +1716,17 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     _tone(160,70,0.12,'sawtooth',0.06);
   },
   trollTeleport:function(k,p){   // classic troll move: blink to a new spot with a cackle
-    var dx=this.def.door; this.burst(k.x,k.y,0x2effa0,16); k.setAlpha(0.2); k.setVelocityX(0);
-    var nx=Phaser.Math.Clamp(p.x + Phaser.Math.RND.pick([-1,1])*Phaser.Math.Between(120,200), dx-320, dx+20);
-    this.time.delayedCall(180, function(){ if(!k.active) return; k.x=nx; k.setAlpha(1); this.burst(k.x,k.y,0x2effa0,16); this.flash('HEHEHE','#2effa0'); }, [], this);
+    var dx=this.def.door, self=this;
+    k.invuln=true;   // NON-DAMAGING while blinking, so he can never materialize on top of you and kill you
+    this.burst(k.x,k.y,0x2effa0,16); k.setAlpha(0.2); k.setVelocityX(0);
+    // land on a side of the player, ALWAYS at least ~150px away (never blink into their hitbox)
+    var side=Phaser.Math.RND.pick([-1,1]);
+    var nx=Phaser.Math.Clamp(p.x + side*Phaser.Math.Between(170,250), dx-320, dx+20);
+    if(Math.abs(nx-p.x)<150) nx=Phaser.Math.Clamp(p.x - side*190, dx-320, dx+20);
+    this.time.delayedCall(240, function(){ if(!k.active) return;
+      k.x=nx; k.setAlpha(1); self.burst(k.x,k.y,0x2effa0,16); self.flash('HEHEHE','#2effa0');
+      self.time.delayedCall(180, function(){ if(k.active && self.bossHP>0) k.invuln=false; });   // brief materialize grace, then vulnerable again
+    }, [], this);
     _seq([[440,0.06],[520,0.06],[380,0.10]],'square',0.05);
   },
   /* ---------- The Custodian boss (corrupt CEX CEO): stomp x3; freezes withdrawals at range ---------- */
@@ -2372,10 +2381,13 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.addScore(pay); this.registry.set('nqCasino',(this.registry.get('nqCasino')||0)+pay);   // tally run-total casino winnings for the finale
     this.burst(S.m.x, S.m.y-24, 0xffd23f, big?26:14); SFX.power();
     this.flash(msg+' +'+pay+' COINS', big?'#3dff6e':'#ffd23f'); this.cameras.main.flash(200, 255, big?255:220, big?150:90);
-    // floating "+N COINS" popup right AT the machine so the win is unmistakable
+    // floating "+N COINS" popup right AT the machine so the win is unmistakable — pops in, HOLDS
+    // ~1s at full opacity (so you can actually read the amount), THEN floats up and fades.
     var wy=S.m.y - S.m.displayHeight*0.5 - 4;
-    var pop=this.add.text(S.m.x, wy, '+'+pay+' COINS', {fontFamily:'"Press Start 2P"',fontSize:'9px',color:big?'#3dff6e':'#ffd23f'}).setOrigin(.5,1).setDepth(22).setShadow(0,1,'#000',2);
-    this.tweens.add({targets:pop, y:wy-26, alpha:0, duration:1300, ease:'Cubic.out', onComplete:function(){ pop.destroy(); }});
+    var pop=this.add.text(S.m.x, wy, '+'+pay+' COINS', {fontFamily:'"Press Start 2P"',fontSize:'11px',color:big?'#3dff6e':'#ffd23f'}).setOrigin(.5,1).setDepth(22).setShadow(0,1,'#000',3);
+    pop.setScale(0.6); this.tweens.add({targets:pop, scale:1, duration:200, ease:'Back.out'});
+    this.tweens.add({targets:pop, y:wy-30, duration:1900, ease:'Sine.out'});
+    this.tweens.add({targets:pop, alpha:0, delay:1050, duration:850, onComplete:function(){ pop.destroy(); }});
   },
 
   loseLife:function(reason){ this.lives--; if(this.hearts[this.lives]) this.hearts[this.lives].setAlpha(.16); if(this.lives<=0) this.gameOver(reason); },
