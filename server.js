@@ -10818,6 +10818,52 @@ async function formatClknMarketCap(usd, clknAmount, HELIUS_KEY) {
   return `$${mc.toFixed(0)}`;
 }
 
+// ── Canonical CLKN price + market cap for trade alerts ───────────────────────
+// A trade's OWN executed price (usd/clknAmount) drifts a little off the public
+// chart — routing and which pool the fill hits move it a hair — which reads as
+// "wrong" next to DexScreener. So the alert's Price + Market cap come straight
+// from DexScreener's highest-liquidity CLKN pair (the main Meteora pool, the
+// canonical chart), cached ~60s so a burst of trades makes just one call. Falls
+// back to the trade's own price only if DexScreener is unreachable, so an alert
+// never loses the line.
+let _clknDexCache = null, _clknDexAt = 0;
+async function getClknDexScreener() {
+  const now = Date.now();
+  if (_clknDexCache && now - _clknDexAt < 60 * 1000) return _clknDexCache;
+  try {
+    const r = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${CLKN_MINT_ADDR}`, { signal: AbortSignal.timeout(8000) });
+    const d = await r.json();
+    const pairs = ((d && d.pairs) || []).filter(p => p && p.baseToken && p.baseToken.address === CLKN_MINT_ADDR && parseFloat(p.priceUsd) > 0);
+    if (pairs.length) {
+      pairs.sort((a, b) => ((b.liquidity && b.liquidity.usd) || 0) - ((a.liquidity && a.liquidity.usd) || 0));
+      const top = pairs[0]; // deepest pool = what DexScreener headlines
+      _clknDexCache = { priceUsd: parseFloat(top.priceUsd) || null, marketCap: Number(top.marketCap) || Number(top.fdv) || null };
+      _clknDexAt = now;
+    }
+  } catch (_) { /* keep last good value */ }
+  return _clknDexCache;
+}
+// Compact USD ($707.1K / $1.23M / $1.05B) — for a market-cap value already in USD.
+function fmtUsdCompact(v) {
+  if (!isFinite(v) || v <= 0) return null;
+  if (v >= 1e9) return `$${(v / 1e9).toFixed(2)}B`;
+  if (v >= 1e6) return `$${(v / 1e6).toFixed(2)}M`;
+  if (v >= 1e3) return `$${(v / 1e3).toFixed(1)}K`;
+  return `$${v.toFixed(0)}`;
+}
+// Price + market-cap strings for a buy/sell alert: DexScreener's canonical
+// numbers first, the trade's own executed price as the offline fallback.
+async function clknPriceAndMcap(usdValue, clknAmount, HELIUS_KEY) {
+  const dex = await getClknDexScreener();
+  const priceStr = (dex && dex.priceUsd)
+    ? formatClknPrice(dex.priceUsd, 1)                     // format the raw price (price = priceUsd / 1)
+    : formatClknPrice(usdValue, clknAmount);
+  const mcapStr = (dex && dex.marketCap != null)
+    ? fmtUsdCompact(dex.marketCap)                         // DexScreener's mcap is already USD — format it directly
+    : await formatClknMarketCap(usdValue, clknAmount, HELIUS_KEY);
+  return { priceStr, mcapStr };
+}
+
 // Pool-centric CLKN trade detection.
 //
 // Wallet-tracing broke on Jupiter routes: the trader and the proceeds-receiver
@@ -11514,8 +11560,7 @@ async function notifyClknBuy(trade, tx, pool, usdValue, HELIUS_KEY) {
   // stablecoin — for USDC/USDT the amount IS the dollar value.
   const usdSuffix = (meta && !meta.isStable && usdValue) ? ` <i>($${usdValue.toFixed(2)})</i>` : "";
   const routeLine = formatRoute(tx, pool);
-  const priceStr = formatClknPrice(usdValue, trade.clknAmount);
-  const mcapStr = await formatClknMarketCap(usdValue, trade.clknAmount, HELIUS_KEY);
+  const { priceStr, mcapStr } = await clknPriceAndMcap(usdValue, trade.clknAmount, HELIUS_KEY);
   const vol24Str = fmtUsdShort(await getClkn24hVolume());
   const priceLine =
     (priceStr ? `\nPrice: <b>${priceStr}</b>` : "") +
@@ -11629,8 +11674,7 @@ async function notifyClknSell(trade, tx, pool, usdValue, HELIUS_KEY) {
   // Only show "($X.XX)" suffix when the quote isn't already a USD stablecoin.
   const usdSuffix = (meta && !meta.isStable && usdValue) ? ` <i>($${usdValue.toFixed(2)})</i>` : "";
   const routeLine = formatRoute(tx, pool);
-  const priceStr = formatClknPrice(usdValue, trade.clknAmount);
-  const mcapStr = await formatClknMarketCap(usdValue, trade.clknAmount, HELIUS_KEY);
+  const { priceStr, mcapStr } = await clknPriceAndMcap(usdValue, trade.clknAmount, HELIUS_KEY);
   const vol24Str = fmtUsdShort(await getClkn24hVolume());
   const priceLine =
     (priceStr ? `\nPrice: <b>${priceStr}</b>` : "") +
