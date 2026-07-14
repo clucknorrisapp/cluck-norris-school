@@ -646,6 +646,18 @@ const X_AUTOPOST_PAUSED = true;
 // post volume). Flip true to restore.
 const OUTREACH_ENABLED = false;
 const TOOL_SPOTLIGHT_ENABLED = false;
+// ⛔ LIQUIDITY ENGINE — MASTER KILL (owner's call 2026-07-14): hard-gates EVERY autonomous
+// liquidity scheduler — the Orca vault (CLKN + treasury), the recenter/harvest/ratchet
+// actors, the Meteora keepalive buy, and the read-only pool/OOR/LP-vs-HODL monitors — so
+// nothing auto-manages positions or burns Helius credits on background reads (the SDK
+// getAccountInfo load). Independent of MM_OPERATOR_SECRET and every kv/paused flag, so no
+// stale flag can revive it (positions were already owner-closed; only the permanent
+// ultra-wide anchors remain, and they need no management). Manual gated endpoints
+// (/api/whirlpool/*, /api/meteora/*) still work for deliberate owner ops. Flip false +
+// redeploy to resume. Registrations route through liqInterval/liqTimeout below.
+const LIQ_ENGINE_KILLED = true;
+function liqInterval(fn, ms) { if (!LIQ_ENGINE_KILLED) return setInterval(fn, ms); }
+function liqTimeout(fn, ms) { if (!LIQ_ENGINE_KILLED) return setTimeout(fn, ms); }
 // 1×/day (owner's call 2026-06-20 — was 3×/day): ONE full lesson at 13:00 UTC
 // (8am CT), then amplified by lessonBumpTick (self-replies at later slots tagging
 // different ecosystem groups) instead of posting more new lessons. Odd hour so it
@@ -12405,8 +12417,8 @@ app.listen(PORT, () => {
       const now = Date.now();
       if (now - lastTreasuryRecapAt >= 6 * 3600 * 1000) { lastTreasuryRecapAt = now; kv.set("treasuryRecapAt", now); sendJupUsdcRecap({}).catch((e) => console.warn("[jup-recap] failed:", e.message)); }
     }
-    setInterval(treasuryRecapTick, 5 * 60 * 1000);
-    setTimeout(treasuryRecapTick, 30000); // first recap shortly after boot captures the baseline; then every 6h
+    liqInterval(treasuryRecapTick, 5 * 60 * 1000);
+    liqTimeout(treasuryRecapTick, 30000); // first recap shortly after boot captures the baseline; then every 6h
     // Meteora range monitor — DM the treasury chat when a position drifts NEAR an edge
     // (early nudge) or goes fully OUT of range, so the OWNER can do the 10-sec UI rebalance
     // (Rebalance tab → Curve → Rebalance → approve). Read-only + DM: this never moves funds.
@@ -12484,8 +12496,8 @@ app.listen(PORT, () => {
     setInterval(contentEngineTick, 10 * 60 * 1000); // Content Engine — polls every 10 min, queues a draft once per (kv) contentEngineHours, default 12h
     setTimeout(contentEngineTick, 160000);          // first check ~160s after boot
     setTimeout(recordOrganicSnapshot, 25000);
-    setInterval(meteoraOorTick, 5 * 60 * 1000);
-    setTimeout(meteoraOorTick, 45000);
+    liqInterval(meteoraOorTick, 5 * 60 * 1000);
+    liqTimeout(meteoraOorTick, 45000);
     // ── CLKN tight-pool OOR alert (read-only). When a ±3% engine pool drifts OUT of
     //    range, DM the treasury chat LOUD so the owner can recenter manually — the
     //    autonomous rebalancer stays OFF (owner's call). Skips the ultra-wide anchors;
@@ -12522,8 +12534,8 @@ app.listen(PORT, () => {
         }
       } catch (e) { console.warn("[wp-oor] failed:", e.message); }
     }
-    setInterval(wpTightOorTick, 5 * 60 * 1000);
-    setTimeout(wpTightOorTick, 55000);
+    liqInterval(wpTightOorTick, 5 * 60 * 1000);
+    liqTimeout(wpTightOorTick, 55000);
     // Wallet Watch (PRIVATE) — tracked-wallet CLKN-sell alerts + daily digest to the
     // operator chat. Functions live top-level next to /api/wallet-watch (gated).
     setInterval(() => walletWatchTick().catch((e) => console.warn("[wallet-watch] tick:", e.message)), 2 * 60 * 1000);
@@ -12569,8 +12581,8 @@ app.listen(PORT, () => {
         }
       } catch (e) { console.warn("[wall-harvest] failed:", e.message); }
     }
-    setInterval(wallHarvestTick, 5 * 60 * 1000);
-    setTimeout(wallHarvestTick, 65000);
+    liqInterval(wallHarvestTick, 5 * 60 * 1000);
+    liqTimeout(wallHarvestTick, 65000);
     // ── Wall RATCHET (owner ask 2026-07-10: "if we get 25% through the band, auto pull
     //    and start a new single-sided pool"). When spot climbs ≥ trigFrac through the live
     //    CLKN/USDC sell-wall band: CLOSE the wall — the harvested USDC lands in the wallet,
@@ -12630,8 +12642,8 @@ app.listen(PORT, () => {
       } catch (e) { console.warn("[wall-ratchet] failed:", e.message); }
       finally { _wallRatchetBusy = false; }
     }
-    setInterval(wallRatchetTick, 2 * 60 * 1000);
-    setTimeout(wallRatchetTick, 70000);
+    liqInterval(wallRatchetTick, 2 * 60 * 1000);
+    liqTimeout(wallRatchetTick, 70000);
     // Meteora autonomous re-center — only acts when meteoraCfg.autoRecenter is ON (ships OFF).
     // Edge/anti-thrash checks live in meteoraRecenter; this just invokes it on the cadence.
     async function meteoraRecenterTick() {
@@ -12641,7 +12653,7 @@ app.listen(PORT, () => {
         if (r && !["none", "hold", "deferred"].includes(r.action)) console.log("[meteora-recenter]", r.action, "·", r.reason || "");
       } catch (e) { console.warn("[meteora-recenter] failed:", e.message); }
     }
-    setInterval(meteoraRecenterTick, 5 * 60 * 1000);
+    liqInterval(meteoraRecenterTick, 5 * 60 * 1000);
     // ⛔ JUP/USDC autonomous rebalancer — HARD-DISABLED at the code level (owner's call,
     // 2026-06-16: "stop rebalancing period, don't touch it"). The loop auto-adopted a
     // manually-opened position and recentered it; the owner wants it dead so NO kv flag can
@@ -12658,8 +12670,8 @@ app.listen(PORT, () => {
         if (r && !["none", "hold", "deferred"].includes(r.action)) console.log("[jup-usdc-recenter]", r.action, "·", r.reason || "");
       } catch (e) { console.warn("[jup-usdc-recenter] failed:", e.message); }
     }
-    setInterval(jupUsdcRecenterTick, 5 * 60 * 1000);
-    setTimeout(jupUsdcRecenterTick, 75000);
+    liqInterval(jupUsdcRecenterTick, 5 * 60 * 1000);
+    liqTimeout(jupUsdcRecenterTick, 75000);
     // Order Book monitor — snapshot watched mints' resting limit orders every 10 min and
     // DM (silent) when one appears or fills/cancels, so the owner can catch them day-to-day.
     async function orderbookMonitorTick() {
@@ -12682,11 +12694,11 @@ app.listen(PORT, () => {
         }
       } catch (e) { console.warn("[order-book-monitor] failed:", e.message); }
     }
-    setInterval(orderbookMonitorTick, 10 * 60 * 1000);
-    setTimeout(orderbookMonitorTick, 120000);
+    liqInterval(orderbookMonitorTick, 10 * 60 * 1000);
+    liqTimeout(orderbookMonitorTick, 120000);
     // CLKN structure watch — hourly read-only log of how the 3-pair strategy moves.
-    setInterval(recordClknStructureSnapshot, 60 * 60 * 1000);
-    setTimeout(recordClknStructureSnapshot, 150000);
+    liqInterval(recordClknStructureSnapshot, 60 * 60 * 1000);
+    liqTimeout(recordClknStructureSnapshot, 150000);
     // JUP/USDC daily LP-vs-HODL scorecard — the durable check-in (the app is always-on, so this
     // survives container/session resets). Fires at most once/24h, and only once the HODL baseline
     // is ≥24h old (needs a day of data to be meaningful). Tells the owner whether fees are beating
@@ -12716,8 +12728,8 @@ app.listen(PORT, () => {
         );
       } catch (e) { console.warn("[jup-lphodl] failed:", e.message); }
     }
-    setInterval(jupLpVsHodlDailyCheck, 60 * 60 * 1000);          // checks hourly, DMs at most once/24h
-    setTimeout(jupLpVsHodlDailyCheck, 95000);
+    liqInterval(jupLpVsHodlDailyCheck, 60 * 60 * 1000);          // checks hourly, DMs at most once/24h
+    liqTimeout(jupLpVsHodlDailyCheck, 95000);
     // Orca/Raydium vault LP-vs-HODL — the same honest daily verdict for the whirlpool
     // engine, per project (the treasury project runs the CLKN pools now). READ-ONLY:
     // it measures fees-net-of-IL and DMs each project's own chat; it never touches a
@@ -12745,8 +12757,8 @@ app.listen(PORT, () => {
         } catch (e) { console.warn(`[wp-lphodl] ${pidKey}:`, e.message); }
       }
     }
-    setInterval(wpLpVsHodlDailyCheck, 60 * 60 * 1000);           // hourly check, DMs at most once/24h/project
-    setTimeout(wpLpVsHodlDailyCheck, 130000);
+    liqInterval(wpLpVsHodlDailyCheck, 60 * 60 * 1000);           // hourly check, DMs at most once/24h/project
+    liqTimeout(wpLpVsHodlDailyCheck, 130000);
     // Pool Monitor — sample the JUP/USDC earner every 2 min: fee pace + peak $/min & $/hr
     // bursts + edge proximity, so the owner can watch closely and adjust. Powers /api/pool-monitor.
     async function poolMonitorTick() {
@@ -12778,8 +12790,8 @@ app.listen(PORT, () => {
         kv.set("poolMonitor", mon);
       } catch (e) { console.warn("[pool-monitor] tick failed:", e.message); }
     }
-    setInterval(poolMonitorTick, 2 * 60 * 1000);
-    setTimeout(poolMonitorTick, 60000);
+    liqInterval(poolMonitorTick, 2 * 60 * 1000);
+    liqTimeout(poolMonitorTick, 60000);
     // CLKN Blitz auto-revert — reset-proof: checks the persisted expiry every minute and
     // once shortly after boot, so a redeploy mid-blitz still reverts on time.
     setInterval(clknBlitzCheck, 60 * 1000);
@@ -12841,8 +12853,8 @@ app.listen(PORT, () => {
         kv.set("meteoraCanonState", st);
       } catch (_) {}
     }
-    setInterval(meteoraCanonKeepaliveTick, 60 * 60 * 1000);
-    setTimeout(meteoraCanonKeepaliveTick, 90000);
+    liqInterval(meteoraCanonKeepaliveTick, 60 * 60 * 1000);
+    liqTimeout(meteoraCanonKeepaliveTick, 90000);
     // Live buy-competition leaderboards — refresh active boards, close on window end.
     setInterval(buyCompTick, 60 * 1000);
     // Interactive slash commands — register the webhook + the "/" command menu.
@@ -12937,10 +12949,10 @@ app.listen(PORT, () => {
       await runProject(id);
     }
   };
-  setTimeout(vaultBootTick, 15000);
-  setInterval(vaultTick, 600 * 1000); // 10 min — low burn; positions are almost always "hold" between ticks
+  liqTimeout(vaultBootTick, 15000);
+  liqInterval(vaultTick, 600 * 1000); // 10 min — low burn; positions are almost always "hold" between ticks
   // Treasury concentrated sleeve — faster 5-min re-center loop so the tight/mega sleeve
   // stays pinned in range (where the fees are). Lock-protected (no overlap with the 10-min
   // full tick); only runs the treasury's dual-sleeve, not the whole vault.
-  setInterval(() => { whirlpoolMM.vault.tickTreasury({ projectId: "treasury" }).catch(() => {}); }, 300 * 1000);
+  liqInterval(() => { whirlpoolMM.vault.tickTreasury({ projectId: "treasury" }).catch(() => {}); }, 300 * 1000);
 });
