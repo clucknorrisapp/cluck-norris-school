@@ -2487,7 +2487,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       if(_inZ&&!this._hotDown){ this._hotDown=true; this.pauseGame(false); return; } this._hotDown=_inZ; }
     // --- touch input: the DOM gutter D-pad (tablets/wide screens) OR on-screen pointer zones (phones) ---
     this.touch.left=this.touch.right=this.touch.jump=this.touch.down=this.touch.throwBtn=false;
-    var padActive=(typeof window!=='undefined')&&window.__NQ_PAD_ACTIVE&&window.__NQ_PAD;
+    var padActive=(typeof window!=='undefined')&&(window.__NQ_PAD_ACTIVE||window.__NQ_GAMEPAD_ACTIVE)&&window.__NQ_PAD;
     if(padActive){
       this.touch.left=!!window.__NQ_PAD.left; this.touch.right=!!window.__NQ_PAD.right; this.touch.jump=!!window.__NQ_PAD.jump; this.touch.down=!!window.__NQ_PAD.down; this.touch.throwBtn=!!window.__NQ_PAD.throw;
     } else {
@@ -3096,6 +3096,77 @@ if(typeof document!=='undefined'){ (function(){
     wrap.style.display=(inGame&&window.__NQ_PAD_ACTIVE)?'block':'none';
     if(!inGame){ window.__NQ_PAD.left=window.__NQ_PAD.right=window.__NQ_PAD.jump=false; bL.classList.remove('on'); bR.classList.remove('on'); bJ.classList.remove('on'); }
   },120);
+})(); }
+
+/* ---------- USB gamepad support (retro NES/SNES USB pads + adapters) ---------- */
+// Browser Gamepad API → the SAME window.__NQ_PAD hook the touch buttons (and the playtest
+// harness) already use, so no core game logic changes. Runs alongside the keyboard (the
+// game ORs both) and never shows the on-screen touch buttons (it uses its own
+// __NQ_GAMEPAD_ACTIVE flag, not the touch pad's __NQ_PAD_ACTIVE). Desktop browsers over
+// HTTPS. The mapping is deliberately TOLERANT: it reads the d-pad whether a pad reports it
+// as buttons (standard) OR as an axis/second-stick (most cheap retro USB adapters), and ANY
+// face button jumps. Add ?gpdebug=1 to the URL for a live button/axis readout so an oddball
+// clone's exact layout is visible and easy to tune.
+if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.getGamepads){ (function(){
+  window.__NQ_PAD = window.__NQ_PAD || {left:false,right:false,jump:false,down:false,throw:false};
+  window.__NQ_GAMEPAD_ACTIVE = false;
+  var DEBUG = /[?&#]gpdebug=1/i.test((location.search||'')+(location.hash||''));
+  var dotEl=null, toastEl=null, dbgEl=null, toastUntil=0, uiReady=false;
+
+  function ensureUI(){
+    if(uiReady || typeof document==='undefined') return; uiReady=true;
+    var css=document.createElement('style');
+    css.textContent=
+      '#nqgpdot{position:fixed;left:8px;bottom:8px;z-index:70;font-size:18px;opacity:.85;'
+        +'filter:drop-shadow(0 1px 2px #000);pointer-events:none;display:none}'
+      +'#nqgptoast{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:72;'
+        +'background:rgba(18,26,48,.94);border:2px solid #3dff9e;color:#c7ffe4;padding:7px 14px;'
+        +'border-radius:10px;font-family:"Press Start 2P",monospace;font-size:10px;letter-spacing:.5px;'
+        +'box-shadow:0 6px 20px rgba(0,0,0,.5);display:none;max-width:86vw;text-align:center}'
+      +'#nqgpdbg{position:fixed;right:8px;bottom:8px;z-index:72;background:rgba(6,10,20,.92);'
+        +'border:1px solid #2a3a66;color:#9fd4ff;padding:8px 10px;border-radius:8px;'
+        +'font:11px/1.45 monospace;white-space:pre;max-width:52vw;overflow:auto;display:none}';
+    document.head.appendChild(css);
+    dotEl=document.createElement('div'); dotEl.id='nqgpdot'; dotEl.textContent='🎮'; document.body.appendChild(dotEl);
+    toastEl=document.createElement('div'); toastEl.id='nqgptoast'; document.body.appendChild(toastEl);
+    if(DEBUG){ dbgEl=document.createElement('div'); dbgEl.id='nqgpdbg'; dbgEl.style.display='block'; document.body.appendChild(dbgEl); }
+  }
+  function toast(msg){ ensureUI(); if(!toastEl) return; toastEl.textContent=msg; toastEl.style.display='block'; toastUntil=Date.now()+4000; }
+  function anyPad(){ var p=navigator.getGamepads?navigator.getGamepads():[]; for(var i=0;i<p.length;i++) if(p[i]) return p[i]; return null; }
+
+  window.addEventListener('gamepadconnected', function(e){ ensureUI(); if(dotEl)dotEl.style.display='block';
+    toast('🎮 Controller connected'); });
+  window.addEventListener('gamepaddisconnected', function(){ if(!anyPad()){ window.__NQ_GAMEPAD_ACTIVE=false;
+    if(dotEl)dotEl.style.display='none'; toast('Controller disconnected'); } });
+
+  var DZ=0.35;
+  function poll(){
+    var gp=anyPad();
+    if(!gp){ window.__NQ_GAMEPAD_ACTIVE=false; if(dbgEl)dbgEl.textContent='no gamepad detected\n(plug one in + press a button)'; return; }
+    var B=gp.buttons||[], A=gp.axes||[];
+    var pr=function(i){ return !!(B[i] && (B[i].pressed || B[i].value>0.5)); };
+    // direction: d-pad-as-buttons (standard 12-15) OR d-pad/stick-as-axes (retro adapters)
+    var left=pr(14), right=pr(15), up=pr(12), down=pr(13);
+    if(A.length>=2){ if(A[0]<-DZ)left=true; if(A[0]>DZ)right=true; if(A[1]<-DZ)up=true; if(A[1]>DZ)down=true; }
+    if(A.length>=4){ if(A[2]<-DZ)left=true; if(A[2]>DZ)right=true; if(A[3]<-DZ)up=true; if(A[3]>DZ)down=true; }
+    // jump = ANY face button, or UP (matches the keyboard, where Up also jumps)
+    var jump = pr(0)||pr(1)||pr(2)||pr(3)||up;
+    // throw = shoulders/triggers, or Select (gives 2-button NES pads a throw)
+    var throwB = pr(4)||pr(5)||pr(6)||pr(7)||pr(8);
+    var P=window.__NQ_PAD;
+    P.left=left; P.right=right; P.jump=jump; P.down=(down && !up); P.throw=throwB;
+    window.__NQ_GAMEPAD_ACTIVE = true;
+    if(dotEl && dotEl.style.display==='none'){ dotEl.style.display='block'; }
+    if(dbgEl){
+      var bs=[]; for(var i=0;i<B.length;i++) if(pr(i)) bs.push(i);
+      var ax=[]; for(var j=0;j<A.length;j++) ax.push(j+':'+(A[j]||0).toFixed(2));
+      dbgEl.textContent='id: '+String(gp.id||'').slice(0,36)+'\nmapping: '+(gp.mapping||'(non-standard)')
+        +'\nbuttons down: '+(bs.join(',')||'-')+'\naxes: '+ax.join('  ')
+        +'\n=> L'+(+left)+' R'+(+right)+' JUMP'+(+jump)+' DUCK'+(+P.down)+' THROW'+(+throwB);
+    }
+  }
+  function loop(){ try{ poll(); }catch(e){} if(toastEl && toastUntil && Date.now()>toastUntil){ toastEl.style.display='none'; toastUntil=0; } requestAnimationFrame(loop); }
+  requestAnimationFrame(loop);
 })(); }
 
 /* ---------- Music mute toggle (M key + a small button) ---------- */
