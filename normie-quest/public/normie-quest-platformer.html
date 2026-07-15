@@ -47,6 +47,11 @@
 "use strict";
 
 var W=480, H=270, TILE=24, GY=H-TILE;      // GY = ground top surface
+// Clean, highly-legible UI font for menus / interstitials (the pixel fonts read as blocky
+// once scaled 2x by the scene cameras). UIRES renders text at higher DPI so it stays crisp
+// despite pixelArt:true. Big arcade titles keep 'Press Start 2P'; body text uses this.
+var UIFONT='system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+var UIRES=3;
 
 // Burn-to-play gate. FALSE = free preview (tap straight into the game) so the game stays
 // playable while we build. The real burn flow is served by the dormant /api/nq/* backend;
@@ -908,7 +913,7 @@ var LevelSelect=new Phaser.Class({ Extends:Phaser.Scene,
     var self=this;
     this.cameras.main.setZoom(2).centerOn(W/2,H/2); this.cameras.main.setBackgroundColor(0x0b0a1c);
     this.add.text(W/2,14,'LEVEL SELECT',{fontFamily:'"Press Start 2P"',fontSize:'13px',color:'#ffd23f'}).setOrigin(.5);
-    this.add.text(W/2,30,'TEST BUILD · tap any level',{fontFamily:'VT323',fontSize:'16px',color:'#c3cdf0'}).setOrigin(.5);
+    this.add.text(W/2,30,'TEST BUILD · tap any level',{fontFamily:UIFONT,fontStyle:'600',fontSize:'12px',color:'#c3cdf0',resolution:UIRES}).setOrigin(.5);
     // group levels by world (first digit of the "w-n" name), rendered dynamically from LEVELS
     var worlds={}, order=[];
     LEVELS.forEach(function(l,i){ if(l.hidden) return; var w=(l.name||'').split('-')[0]||'?'; if(!worlds[w]){ worlds[w]=[]; order.push(w); } worlds[w].push({l:l,i:i}); });   // hidden bonus levels never show in level-select
@@ -921,8 +926,8 @@ var LevelSelect=new Phaser.Class({ Extends:Phaser.Scene,
         var x=52+c*138, isBoss=!!o.l.boss;
         var sub=(o.l.sub||''); if(sub.length>17) sub=sub.slice(0,16)+'…';
         var box=self.add.rectangle(x,cy,130,cardH,isBoss?0x351033:0x141a2e,1).setStrokeStyle(2,isBoss?0xff3860:0x2a4a6a).setOrigin(0,.5).setInteractive({useHandCursor:true});
-        self.add.text(x+8,cy-cardH*0.24,o.l.name,{fontFamily:'"Press Start 2P"',fontSize:'7px',color:isBoss?'#ff9ec0':'#ffffff'}).setOrigin(0,.5);
-        self.add.text(x+8,cy+cardH*0.27,(isBoss?'★ ':'')+sub,{fontFamily:'VT323',fontSize:'12px',color:isBoss?'#ffd6e6':'#e2e8ff'}).setOrigin(0,.5);
+        self.add.text(x+8,cy-cardH*0.24,o.l.name,{fontFamily:UIFONT,fontStyle:'bold',fontSize:'9px',color:isBoss?'#ff9ec0':'#ffffff',resolution:UIRES}).setOrigin(0,.5);
+        self.add.text(x+8,cy+cardH*0.27,(isBoss?'★ ':'')+sub,{fontFamily:UIFONT,fontStyle:'bold',fontSize:'11px',color:isBoss?'#ffd6e6':'#eef2ff',resolution:UIRES}).setOrigin(0,.5);
         var go=function(){ self.scene.start('Game',{level:o.i,score:0,lives:3}); };
         box.on('pointerdown',go);
         box.on('pointerover',function(){ box.setFillStyle(isBoss?0x4a1848:0x1e2842,1); });
@@ -930,7 +935,7 @@ var LevelSelect=new Phaser.Class({ Extends:Phaser.Scene,
       });
       y+=rowH;
     });
-    this.add.text(W/2,H-8,'in a level: press L to return here  ·  tap any card to play',{fontFamily:'VT323',fontSize:'13px',color:'#a7b2dc'}).setOrigin(.5);
+    this.add.text(W/2,H-8,'in a level: press L to return here  ·  tap any card to play',{fontFamily:UIFONT,fontStyle:'600',fontSize:'10px',color:'#a7b2dc',resolution:UIRES}).setOrigin(.5);
     try{ if(typeof window!=='undefined') window.__NQ_LEVEL='level-select'; }catch(e){}
   }
 });
@@ -951,7 +956,7 @@ var Title=new Phaser.Class({ Extends:Phaser.Scene,
     var tj=this.add.image(W/2+68,152,'jeet'); tj.setScale(38/tj.height);
     var p=this.add.text(W/2,200,BURN_GATE?'PRESS TO INSERT BURN':'TAP TO PLAY',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
     this.tweens.add({targets:p,alpha:.25,duration:600,yoyo:true,repeat:-1});
-    this.add.text(W/2,246,(Math.ceil(LEVELS.filter(function(l){return !l.hidden;}).length/3))+' worlds + a hidden one \u00B7 a Cluck Norris production',{fontFamily:'VT323',fontSize:'16px',color:'#b6bfe0'}).setOrigin(.5);
+    this.add.text(W/2,246,(Math.ceil(LEVELS.filter(function(l){return !l.hidden;}).length/3))+' worlds + a hidden one \u00B7 a Cluck Norris production',{fontFamily:UIFONT,resolution:UIRES,fontSize:'16px',color:'#b6bfe0'}).setOrigin(.5);
     // BURN_GATE is OFF for now \u2192 free preview: tap straight into the game. The burn Gate
     // (and its /api/nq backend) stay wired but dormant until we "put it together" later.
     var self=this;
@@ -959,7 +964,7 @@ var Title=new Phaser.Class({ Extends:Phaser.Scene,
     // Tap anywhere = play from 1-1 (both modes). In TEST BUILD, the reliable DOM "≡ Levels"
     // button (bottom-left, works from here too) is how you reach LEVEL SELECT.
     this.input.once('pointerdown',go,this); this.input.keyboard.once('keydown',go,this);
-    if(TEST_MODE){ this.add.text(W/2,262,'TEST BUILD · tap ≡ Levels below to pick a level',{fontFamily:'VT323',fontSize:'14px',color:'#ffd23f'}).setOrigin(.5); }
+    if(TEST_MODE){ this.add.text(W/2,262,'TEST BUILD · tap ≡ Levels below to pick a level',{fontFamily:UIFONT,resolution:UIRES,fontSize:'14px',color:'#ffd23f'}).setOrigin(.5); }
   }
 });
 
@@ -970,18 +975,18 @@ var Gate=new Phaser.Class({ Extends:Phaser.Scene,
     this.cameras.main.setZoom(2).centerOn(W/2,H/2); this.cameras.main.setBackgroundColor(C.ink);
     var code='NQ-'+Math.random().toString(36).slice(2,6).toUpperCase();
     this.add.text(W/2,34,'BURN TO PLAY',{fontFamily:'"Press Start 2P"',fontSize:'18px',color:'#ff3860'}).setOrigin(.5);
-    this.add.text(W/2,82,'send 1,000 NORMIE with memo:',{fontFamily:'VT323',fontSize:'21px',color:'#b6bfe0'}).setOrigin(.5);
+    this.add.text(W/2,82,'send 1,000 NORMIE with memo:',{fontFamily:UIFONT,resolution:UIRES,fontSize:'21px',color:'#b6bfe0'}).setOrigin(.5);
     this.add.text(W/2,108,code,{fontFamily:'"Press Start 2P"',fontSize:'20px',color:'#ffd23f'}).setOrigin(.5);
-    this.add.text(W/2,138,'to  1nc1nerator1111...1111',{fontFamily:'VT323',fontSize:'19px',color:'#b6bfe0'}).setOrigin(.5);
+    this.add.text(W/2,138,'to  1nc1nerator1111...1111',{fontFamily:UIFONT,resolution:UIRES,fontSize:'19px',color:'#b6bfe0'}).setOrigin(.5);
     var btn=this.add.text(W/2,186,'[ SIMULATE BURN CONFIRMED ]',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#0d0b1e',backgroundColor:'#3dff6e',padding:{x:12,y:9}}).setOrigin(.5).setInteractive({useHandCursor:true});
     btn.on('pointerover',function(){ btn.setStyle({backgroundColor:'#ffffff'}); }); btn.on('pointerout',function(){ btn.setStyle({backgroundColor:'#3dff6e'}); });
     btn.on('pointerdown',function(){
       _ac(); btn.disableInteractive();
-      var s=this.add.text(W/2,226,'watching chain',{fontFamily:'VT323',fontSize:'21px',color:'#3dff6e'}).setOrigin(.5); var dots=0;
+      var s=this.add.text(W/2,226,'watching chain',{fontFamily:UIFONT,resolution:UIRES,fontSize:'21px',color:'#3dff6e'}).setOrigin(.5); var dots=0;
       this.time.addEvent({delay:350,repeat:4,callback:function(){ dots++; s.setText('watching chain'+'.'.repeat(dots)); }});
       this.time.delayedCall(1900,function(){ s.setText('BURN CONFIRMED — GO!').setColor('#ffd23f'); this.time.delayedCall(700,function(){ this.scene.start('Controls',{next:0,score:0}); },[],this); },[],this);
     },this);
-    this.add.text(W/2,254,'demo only — nothing really burns yet',{fontFamily:'VT323',fontSize:'16px',color:'#9089b8'}).setOrigin(.5);
+    this.add.text(W/2,254,'demo only — nothing really burns yet',{fontFamily:UIFONT,resolution:UIRES,fontSize:'16px',color:'#9089b8'}).setOrigin(.5);
   }
 });
 
@@ -1362,7 +1367,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
 
     // level intro banner (non-blocking)
     var bn=this.hb(this.add.text(W/2,96,'WORLD '+def.name,{fontFamily:'"Press Start 2P"',fontSize:'20px',color:'#ffd23f'}).setOrigin(.5).setShadow(3,3,'#7a5a00',0,true,true));
-    var bs=this.hb(this.add.text(W/2,128,def.sub,{fontFamily:'VT323',fontSize:'22px',color:'#3dff6e'}).setOrigin(.5));
+    var bs=this.hb(this.add.text(W/2,128,def.sub,{fontFamily:UIFONT,resolution:UIRES,fontSize:'22px',color:'#3dff6e'}).setOrigin(.5));
     this.tweens.add({targets:[bn,bs],alpha:0,delay:1100,duration:700,onComplete:function(){ bn.destroy(); bs.destroy(); }});
 
     // input — touch is driven by RAW POINTER SCREEN-ZONES in update() (see the poll there),
@@ -1449,7 +1454,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     else if(type==='moon'){ this.moonUntil=now+9000; this.powerBanner('MOON MODE','INVINCIBLE — smash everything!','#ffd23f'); }
     else if(type==='caffeine'){ this.caffeineUntil=now+11000; this.powerBanner('CAFFEINE BOOST','WIRED — super speed 11s','#ffffff'); }
     else if(type==='candle'){ if(this.lives<3){ this.lives++; if(this.hearts[this.lives-1]) this.hearts[this.lives-1].setAlpha(1); } this.addScore(100); this.powerBanner('GREEN CANDLE','PUMPING — +1 heart, +100','#3dff6e'); }
-    else if(type==='solana'){ this.solanaUntil=now+9000; this.nextThrow=0; this.throwAmmo=10; this.updateThrowHud(); this.powerBanner('SOLANA MODE','FULL SEND — auto-fire 9s + discs refilled!','#14f195'); }
+    else if(type==='solana'){ this.solanaUntil=now+9000; this.nextThrow=0; this.powerBanner('SOLANA MODE','FULL SEND — auto-fire discs for 9s!','#14f195'); }
     else if(type==='omegachad'){
       // ROTATING TRANSFORM: Giga Chad returns MEGA in the late worlds — a shock ring, but not so long it lasts a whole level.
       var mega=this.levelIdx>=18;   // World 7+
@@ -1526,9 +1531,12 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   },
   fireSolana:function(){   // auto-fire during SOLANA MODE — a straight, spinning Solana symbol
     var p=this.player, dir=p.flipX?-1:1;
-    var c=this.projectiles.create(p.x+dir*13,p.y-4,'solana').setDepth(6); c.setScale(18/c.height);
+    // Spawn at a fixed height above the FEET, not the sprite centre — in boosted modes the
+    // player grows and its centre rises, which used to lob discs clean over short ground enemies.
+    var sy=(p.body?p.body.bottom-16:p.y-4);
+    var c=this.projectiles.create(p.x+dir*13,sy,'solana').setDepth(6); c.setScale(18/c.height);
     c.body.setAllowGravity(false); c.body.setSize(c.width*0.8,c.height*0.8);
-    c.setVelocity(dir*360,Phaser.Math.Between(-24,24)); c.setAngularVelocity(dir*520); c.setCollideWorldBounds(false);
+    c.setVelocity(dir*360,Phaser.Math.Between(-12,12)); c.setAngularVelocity(dir*520); c.setCollideWorldBounds(false);
     SFX.coin();
     this.time.delayedCall(1100,function(){ if(c&&c.active) c.destroy(); });
   },
@@ -1562,7 +1570,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var tag=tags[Math.floor(this.time.now/700)%tags.length];
     var d=60, bar=this.add.rectangle(-W,90,W*1.5,54,0x0d0b1e,0.92).setScrollFactor(0).setDepth(d).setStrokeStyle(3, Phaser.Display.Color.HexStringToColor(color).color);
     var t1=this.add.text(-W,78,title,{fontFamily:'"Press Start 2P"',fontSize:'19px',color:color}).setOrigin(.5).setScrollFactor(0).setDepth(d+1);
-    var t2=this.add.text(-W,108,tag+'  \u00B7  '+sub,{fontFamily:'VT323',fontSize:'21px',color:'#ffd23f'}).setOrigin(.5).setScrollFactor(0).setDepth(d+1);
+    var t2=this.add.text(-W,108,tag+'  \u00B7  '+sub,{fontFamily:UIFONT,resolution:UIRES,fontSize:'21px',color:'#ffd23f'}).setOrigin(.5).setScrollFactor(0).setDepth(d+1);
     var items=[bar,t1,t2]; this.hudBox.add(items);
     this.tweens.add({targets:items,x:W/2,duration:300,ease:'Back.out'});
     this.tweens.add({targets:t1,scale:1.12,duration:220,yoyo:true,repeat:2,delay:300});
@@ -2002,7 +2010,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // HUD pips + label + a PERSISTENT how-to hint (stays up the whole fight)
     this.bossPips=[]; for(var i=0;i<3;i++) this.bossPips.push(this.hb(this.add.image(W/2-24+i*24,22,'heart').setScale(1.4).setDepth(40).setTint(0x66ddff)));
     this.hb(this.add.text(W/2,40,'WORMHOLE',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#66ddff'}).setOrigin(.5,0).setDepth(40));
-    this.wormHint=this.hb(this.add.text(W/2,56,'DODGE THE MOUND, THEN JUMP INTO THE BLUE SHARDS!',{fontFamily:'VT323',fontSize:'16px',color:'#66ddff'}).setOrigin(.5,0).setDepth(40));
+    this.wormHint=this.hb(this.add.text(W/2,56,'DODGE THE MOUND, THEN JUMP INTO THE BLUE SHARDS!',{fontFamily:UIFONT,resolution:UIRES,fontSize:'16px',color:'#66ddff'}).setOrigin(.5,0).setDepth(40));
     this.tweens.add({targets:this.wormHint,alpha:0.4,duration:700,yoyo:true,repeat:-1});
     this.powerBanner('WORMHOLE','IT ERUPTS FROM THE SAND — JUMP INTO THE BLUE SHARDS x3','#66ddff');
     this.wormState='wait'; this.wormNextAt=this.time.now+1600; this.wormTargetX=cx;
@@ -2285,7 +2293,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   npcSay:function(n){
     var phrases=['WEN LAMBO???','WEN LAMBO???','WEN LAMBO???','SER WEN LAMBO?','WEN MOON?','IS IT PUMPING?','WAGMI!','GM GM','TOP SIGNAL?'];
     var msg=Phaser.Math.RND.pick(phrases);
-    var t=this.add.text(n.x, n.y-n.displayHeight*0.5-6, msg, {fontFamily:'VT323',fontSize:'15px',color:'#0d0b1e',backgroundColor:'#ffd23f',padding:{x:5,y:2},align:'center'}).setOrigin(.5,1).setDepth(25);
+    var t=this.add.text(n.x, n.y-n.displayHeight*0.5-6, msg, {fontFamily:UIFONT,resolution:UIRES,fontSize:'15px',color:'#0d0b1e',backgroundColor:'#ffd23f',padding:{x:5,y:2},align:'center'}).setOrigin(.5,1).setDepth(25);
     this.tweens.add({targets:t, y:t.y-14, duration:1900, ease:'Sine.out'});
     this.tweens.add({targets:t, alpha:0, delay:1300, duration:600, onComplete:function(){ if(t){ t.destroy(); } }});
   },
@@ -2335,7 +2343,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.score<=0) return;
     var pay=Math.min(this.score, this.kids*4);
     this.score-=pay; this.hudScore.setText('SCORE '+this.score);
-    var p=this.player, t=this.add.text(p.x, p.y-24, 'CHILD SUPPORT -'+pay+' 👶', {fontFamily:'VT323',fontSize:'14px',color:'#ffd23f'}).setOrigin(.5,1).setDepth(25);
+    var p=this.player, t=this.add.text(p.x, p.y-24, 'CHILD SUPPORT -'+pay+' 👶', {fontFamily:UIFONT,resolution:UIRES,fontSize:'14px',color:'#ffd23f'}).setOrigin(.5,1).setDepth(25);
     this.tweens.add({targets:t, y:t.y-18, alpha:0, duration:1200, onComplete:function(){ t.destroy(); }});
   },
 
@@ -2468,7 +2476,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.pauseUI=[]; var mk=function(o){ self.hb(o); o.setDepth(3000); self.pauseUI.push(o); return o; };
     mk(this.add.rectangle(W/2,H/2,W,H,0x05040e,0.74));
     mk(this.add.text(W/2,H/2-26,'PAUSED',{fontFamily:'"Press Start 2P"',fontSize:'18px',color:'#3dff6e'}).setOrigin(.5));
-    if(auto) mk(this.add.text(W/2,H/2+2,'you stepped away — your run is safe',{fontFamily:'VT323',fontSize:'14px',color:'#ffd23f'}).setOrigin(.5));
+    if(auto) mk(this.add.text(W/2,H/2+2,'you stepped away — your run is safe',{fontFamily:UIFONT,resolution:UIRES,fontSize:'14px',color:'#ffd23f'}).setOrigin(.5));
     mk(this.add.text(W/2,H/2+26,(isTouch?'TAP':'PRESS ANY KEY')+' TO RESUME  ▶',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#ffffff'}).setOrigin(.5)); },
   resumeGame:function(){ if(!this.paused) return; this.paused=false;
     try{ this.physics.resume(); }catch(e){}
@@ -2597,7 +2605,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // --- frame animation: swap Normie's pose sprite by state (idle / run cycle / jump) ---
     // all four frames share one canvas size, so setTexture keeps scale + body constant.
     // Normie ALWAYS stays Normie — even in GIGA CHAD mode (the chad appears as a shadow behind him).
-    var animKey = !onGround ? 'njump'
+    var animKey = this.crouching ? 'normie'   // LOCK a single frame while ducking — the run cycle was making it "flash"
+                : !onGround ? 'njump'
                 : (Math.abs(b.velocity.x)>25 ? ((Math.floor(now/(fast?70:100))%2) ? 'nrun2':'nrun1')
                 : 'normie');
     if(p.texture.key!==animKey) p.setTexture(animKey);
@@ -2607,7 +2616,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(mw){
       p.setRotation(Math.sin(now/260)*0.05); p.setScale(bs);   // sit upright on the whale, gentle sea-swell sway
     } else if(this.crouching){
-      p.setRotation(0); p.setScale(bs*1.14, bs*0.60);   // squashed duck pose
+      // Ducking: squat low & wide + a locked frame (no run-cycle, set above) so it reads as a real
+      // crouch instead of a tiny flicker-squish.
+      p.setRotation(0); p.setScale(bs*1.28, bs*0.52);
     } else if(!onGround){
       p.setRotation(Phaser.Math.Clamp(b.velocity.x/2600,-0.12,0.12));
       var sy=b.velocity.y<0?1.10:0.93; p.setScale(bs*(2-sy), bs*sy);
@@ -2726,12 +2737,12 @@ var Over=new Phaser.Class({ Extends:Phaser.Scene,
   create:function(){
     this.cameras.main.setZoom(2).centerOn(W/2,H/2); this.cameras.main.setBackgroundColor(C.ink);
     this.add.text(W/2,48,this.reason,{fontFamily:'"Press Start 2P"',fontSize:'15px',color:'#ff3860'}).setOrigin(.5);
-    this.add.text(W/2,80,'reached world '+this.level,{fontFamily:'VT323',fontSize:'18px',color:'#b6bfe0'}).setOrigin(.5);
+    this.add.text(W/2,80,'reached world '+this.level,{fontFamily:UIFONT,resolution:UIRES,fontSize:'18px',color:'#b6bfe0'}).setOrigin(.5);
     this.add.text(W/2,118,'SCORE',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#b6bfe0'}).setOrigin(.5);
     this.add.text(W/2,150,String(this.finalScore),{fontFamily:'"Press Start 2P"',fontSize:'30px',color:'#ffd23f'}).setOrigin(.5).setShadow(3,3,'#7a5a00',0,true,true);
     // Per-world checkpoint continue takes priority over the leaderboard/free-preview copy.
     var CP_LABEL={3:'WORLD 2\ncontinue from the Sand Lands',6:'WORLD 3\ncontinue from the Skyline',9:'WORLD 4\ncontinue from the Exchange',12:'WORLD 5\ncontinue from the Bridge',15:'WORLD 6\ncontinue from the Depeg',18:'WORLD 7\ncontinue from the Yield Farm',21:'WORLD 8\ncontinue from the Bear Market'};
-    this.add.text(W/2,198, this.cont>0 ? ('★ CHECKPOINT: '+(CP_LABEL[this.cont]||('LEVEL '+(this.cont+1)))) : (BURN_GATE ? 'score posts to the leaderboard —\ntop 10 split the pool' : 'free preview · all 8 Worlds\ngood luck out there'),{fontFamily:'VT323',fontSize:'19px',color:this.cont>0?'#3dff6e':'#b6bfe0',align:'center'}).setOrigin(.5);
+    this.add.text(W/2,198, this.cont>0 ? ('★ CHECKPOINT: '+(CP_LABEL[this.cont]||('LEVEL '+(this.cont+1)))) : (BURN_GATE ? 'score posts to the leaderboard —\ntop 10 split the pool' : 'free preview · all 8 Worlds\ngood luck out there'),{fontFamily:UIFONT,resolution:UIRES,fontSize:'19px',color:this.cont>0?'#3dff6e':'#b6bfe0',align:'center'}).setOrigin(.5);
     var p=this.add.text(W/2,244, this.cont>0 ? 'PRESS TO CONTINUE →' : (BURN_GATE ? 'PRESS TO BURN AGAIN' : 'PRESS TO PLAY AGAIN'),{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
     this.tweens.add({targets:p,alpha:.25,duration:600,yoyo:true,repeat:-1});
     // Continue from the World-2 checkpoint if premium banked one; else free-preview restart, or the burn Gate.
@@ -2768,10 +2779,10 @@ var Win=new Phaser.Class({ Extends:Phaser.Scene,
     this.add.text(W/2,42,V.title,{fontFamily:'"Press Start 2P"',fontSize:'12px',color:V.color,align:'center',wordWrap:{width:W-24}}).setOrigin(.5);
     this.add.text(W/2,146,'FINAL SCORE',{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#b6bfe0'}).setOrigin(.5);
     this.add.text(W/2,174,String(this.finalScore),{fontFamily:'"Press Start 2P"',fontSize:'30px',color:'#ffd23f'}).setOrigin(.5).setShadow(3,3,'#7a5a00',0,true,true);
-    if(this.casino>0) this.add.text(W/2,202,'🎰 CASINO WINNINGS: '+this.casino,{fontFamily:'VT323',fontSize:'18px',color:'#ff8adf'}).setOrigin(.5);
+    if(this.casino>0) this.add.text(W/2,202,'🎰 CASINO WINNINGS: '+this.casino,{fontFamily:UIFONT,resolution:UIRES,fontSize:'18px',color:'#ff8adf'}).setOrigin(.5);
     var nw=Math.ceil(LEVELS.filter(function(l){return !l.hidden;}).length/3);   // 8 real worlds (exclude hidden bonus levels)
     var wtext = nw<=1?'WORLD 1 CLEARED':(nw===2?'WORLDS 1 & 2 CLEARED':'ALL '+nw+' WORLDS CLEARED');
-    this.add.text(W/2,this.casino>0?222:210,wtext,{fontFamily:'VT323',fontSize:'18px',color:'#b6bfe0'}).setOrigin(.5);
+    this.add.text(W/2,this.casino>0?222:210,wtext,{fontFamily:UIFONT,resolution:UIRES,fontSize:'18px',color:'#b6bfe0'}).setOrigin(.5);
     var p=this.add.text(W/2,246,'PRESS TO PLAY AGAIN',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
     this.tweens.add({targets:p,alpha:.25,duration:600,yoyo:true,repeat:-1});
     // Free preview → straight back into the game; only the live burn build routes through the Gate.
@@ -2840,8 +2851,8 @@ var Interlude=new Phaser.Class({ Extends:Phaser.Scene,
 var BRIEFINGS = {
   3: { title:'WORLD 2 — THE SAND LANDS',
        powers:[
-         {tex:'supergeek', name:'SUPER GEEK', desc:'Audit on — blocks the next hit. Grab him near danger.'},
-         {tex:'omegachad', name:'GIGA CHAD', desc:'Bulk up & plow through enemies for 10s. Save it for a crowd.'}
+         {tex:'supergeek', name:'SUPER GEEK', desc:'Audit on — blocks the next hit.'},
+         {tex:'omegachad', name:'GIGA CHAD', desc:'Bulk up & plow through enemies for 10s.'}
        ],
        threats:[
          {tex:'fudster', name:'FUDSTER', desc:"sprays slow-gas — don't linger in it"},
@@ -2850,7 +2861,7 @@ var BRIEFINGS = {
        tip:'New powers are your edge — it gets tougher from here. Use them.' },
   6: { title:'WORLD 3 — THE SKYLINE',
        powers:[
-         {tex:'omegachad', name:'GIGA CHAD', desc:'Your best friend up here — plow through the crowds.'},
+         {tex:'omegachad', name:'GIGA CHAD', desc:'Plow through the crowds.'},
          {tex:'supergeek', name:'SUPER GEEK', desc:'Audit shield still blocks the next hit.'}
        ],
        threats:[
@@ -2860,8 +2871,8 @@ var BRIEFINGS = {
        tip:'Crypto Twitter is brutal. Reach the top & stomp the Scammy KOL x3.' },
   9: { title:'WORLD 4 — THE EXCHANGE',
        powers:[
-         {tex:'omegachad', name:'GIGA CHAD', desc:'Plow through the crowd — the vault is packed.'},
-         {tex:'bull', name:'BULL MARKET', desc:'Mega-jump — the walls here are TALL. Use it to clear them.'}
+         {tex:'omegachad', name:'GIGA CHAD', desc:'Plow through the crowd.'},
+         {tex:'bull', name:'BULL MARKET', desc:'Mega-jump — clears the tall walls.'}
        ],
        threats:[
          {tex:'bot', name:'SNIPER BOTS', desc:'everywhere now — keep moving'},
@@ -2870,8 +2881,8 @@ var BRIEFINGS = {
        tip:'Obstacles are bigger now — stomp the Custodian x3 to free the funds.' },
   12: { title:'WORLD 5 — THE BRIDGE',
        powers:[
-         {tex:'solana', name:'SOLANA MODE', desc:'Full-send auto-fire — clears a path. Grab it!'},
-         {tex:'omegachad', name:'GIGA CHAD', desc:'Plow through the pests on the span.'}
+         {tex:'solana', name:'SOLANA MODE', desc:'Full-send auto-fire — clears a path.'},
+         {tex:'omegachad', name:'GIGA CHAD', desc:'Plow through the pests.'}
        ],
        threats:[
          {tex:'bitmaxi', name:'BITCOIN MAXI', desc:'steals your coins — stomp him'},
@@ -2890,8 +2901,8 @@ var BRIEFINGS = {
        tip:'DEPEG: the mint-green "stable" ground BREAKS on a rhythm — it flashes, then drops into the void for a moment. Time your crossings; never be standing on the peg when it snaps.' },
   18: { title:'WORLD 7 — THE YIELD FARM',
        powers:[
-         {tex:'omegachad', name:'GIGA CHAD', desc:'Plow through the swarm — the farm is crowded.'},
-         {tex:'bull', name:'BULL MARKET', desc:'Mega jump — clear the wide gaps and reach the high coins.'}
+         {tex:'omegachad', name:'GIGA CHAD', desc:'Plow through the swarm.'},
+         {tex:'bull', name:'BULL MARKET', desc:'Mega-jump — clears wide gaps.'}
        ],
        threats:[
          {tex:'bot', name:'ARB BOTS', desc:'snipers & bots everywhere — keep moving'},
@@ -2927,21 +2938,21 @@ var Controls=new Phaser.Class({ Extends:Phaser.Scene,
     // MOBILE column (highlighted green if this device is touch)
     this.add.text(colL,40,'MOBILE',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:isTouch?'#3dff6e':'#b6bfe0'}).setOrigin(.5);
     this.add.text(colL,56,'MOVE:  the  < >  buttons\n(gutter, or tap-move)\nJUMP / DUCK  buttons',
-      {fontFamily:'VT323',fontSize:'13px',color:'#e6e2f5',align:'center',lineSpacing:2}).setOrigin(.5,0);
+      {fontFamily:UIFONT,resolution:UIRES,fontSize:'12px',color:'#eef2ff',align:'center',lineSpacing:1}).setOrigin(.5,0);
     // KEYBOARD column (highlighted green if this device is not touch)
     this.add.text(colR,40,'KEYBOARD',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:isTouch?'#b6bfe0':'#3dff6e'}).setOrigin(.5);
     this.add.text(colR,56,'MOVE:  arrows / A D\nJUMP:  UP / W / SPACE\nDUCK:  DOWN / S',
-      {fontFamily:'VT323',fontSize:'13px',color:'#e6e2f5',align:'center',lineSpacing:2}).setOrigin(.5,0);
+      {fontFamily:UIFONT,resolution:UIRES,fontSize:'12px',color:'#eef2ff',align:'center',lineSpacing:1}).setOrigin(.5,0);
     // CONTROLLER row (USB gamepad) — full width; turns green the instant a pad is detected,
     // so a tester can confirm it works right here. Live status is refreshed in update().
     this.padLine=this.add.text(cx,110,'🎮 USB CONTROLLER — plug in & press a button\nD-pad move · A/B jump · Down duck · Select throw',
-      {fontFamily:'VT323',fontSize:'12px',color:'#b6bfe0',align:'center',lineSpacing:1,wordWrap:{width:W-40}}).setOrigin(.5,0);
+      {fontFamily:UIFONT,resolution:UIRES,fontSize:'12px',color:'#b6bfe0',align:'center',lineSpacing:1,wordWrap:{width:W-40}}).setOrigin(.5,0);
     // the goal / core rules (full width)
-    this.add.text(cx,150,'THE GOAL',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffd23f'}).setOrigin(.5);
-    this.add.text(cx,164,'JUMP on enemies to STOMP them  ·  grab the KEY, then reach the DOOR\ngrab glowing POWER-UPS  ·  dodge spikes & hazards',
-      {fontFamily:'VT323',fontSize:'14px',color:'#c9c4e0',align:'center',lineSpacing:3,wordWrap:{width:W-44}}).setOrigin(.5,0);
-    this.add.text(cx,202,'⚠ HONEYPOTS look like treasure but DRAIN the coins you earned that level (your total stays safe)',
-      {fontFamily:'VT323',fontSize:'14px',color:'#ff9500',align:'center',lineSpacing:2,wordWrap:{width:W-40}}).setOrigin(.5,0);
+    this.add.text(cx,148,'THE GOAL',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffd23f'}).setOrigin(.5);
+    this.add.text(cx,160,'JUMP on enemies to STOMP them  ·  grab the KEY, then reach the DOOR\ngrab glowing POWER-UPS  ·  dodge spikes & hazards',
+      {fontFamily:UIFONT,resolution:UIRES,fontSize:'11px',color:'#d6d1ec',align:'center',lineSpacing:2,wordWrap:{width:W-30}}).setOrigin(.5,0);
+    this.add.text(cx,196,'⚠ HONEYPOTS look like treasure but DRAIN the coins you earned that level (your total stays safe)',
+      {fontFamily:UIFONT,resolution:UIRES,fontSize:'11px',color:'#ff9500',align:'center',lineSpacing:1,wordWrap:{width:W-34}}).setOrigin(.5,0);
     this.cont=this.add.text(cx,H-11,(isTouch?'TAP':'PRESS')+' TO START  ▶',{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#3dff6e'}).setOrigin(.5);
     this.input.on('pointerdown',function(){ self.go(); });
     this.input.keyboard.on('keydown',function(){ self.go(); });
@@ -2975,29 +2986,29 @@ var Briefing=new Phaser.Class({ Extends:Phaser.Scene,
     g.lineStyle(2,0x3dff6e,1); g.strokeRect(6,38,W-12,H-66);   // inner frame: 38 .. H-28
     this.add.text(cx,15,this.cfg.title,{fontFamily:'"Press Start 2P"',fontSize:'12px',color:'#ffd23f',align:'center'}).setOrigin(.5);
     // controls reminder (each world) — one compact line covering touch + keyboard
-    this.add.text(cx,29,'controls:  < > = MOVE  ·  JUMP / UP = JUMP (2x = double)  ·  DUCK / DOWN = duck under shots',
-      {fontFamily:'VT323',fontSize:'11px',color:'#66ccff',align:'center'}).setOrigin(.5);
+    this.add.text(cx,28,'‹ › = MOVE  ·  JUMP / UP = JUMP  ·  DUCK / DOWN = duck under shots',
+      {fontFamily:UIFONT,resolution:UIRES,fontSize:'9px',color:'#66ccff',align:'center',wordWrap:{width:W-18}}).setOrigin(.5);
     // NEW POWERS row (two columns, narrow wrap so the descriptions never collide)
-    this.add.text(cx,50,'NEW POWERS',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#3dff6e'}).setOrigin(.5);
+    this.add.text(cx,46,'NEW POWERS',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#3dff6e'}).setOrigin(.5);
     var powers=this.cfg.powers||[], n=powers.length||1;
     powers.forEach(function(pwr,i){ var x=W*(i+1)/(n+1);
-      var img=self.add.image(x,84,pwr.tex); if(img.height) img.setScale(34/img.height); img.setDepth(4);
+      var img=self.add.image(x,78,pwr.tex); if(img.height) img.setScale(32/img.height); img.setDepth(4);
       if(self.renderer.type===Phaser.WEBGL){ try{ img.postFX.addGlow(0xffa020,1.4,0,false,0.1,12); }catch(e){} }
-      self.tweens.add({targets:img,y:80,duration:700,yoyo:true,repeat:-1,ease:'Sine.inOut'});
-      self.add.text(x,106,pwr.name,{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffffff'}).setOrigin(.5);
-      self.add.text(x,120,pwr.desc,{fontFamily:'VT323',fontSize:'13px',color:'#c9c4e0',align:'center',wordWrap:{width:150}}).setOrigin(.5,0);
+      self.tweens.add({targets:img,y:75,duration:700,yoyo:true,repeat:-1,ease:'Sine.inOut'});
+      self.add.text(x,98,pwr.name,{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffffff'}).setOrigin(.5);
+      self.add.text(x,110,pwr.desc,{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#d6d1ec',align:'center',wordWrap:{width:150}}).setOrigin(.5,0);
     });
     // WATCH FOR — threats stacked one per row (icon + "NAME — what to do")
-    this.add.text(cx,154,'WATCH FOR',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#ff3860'}).setOrigin(.5);
+    this.add.text(cx,150,'WATCH FOR',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#ff3860'}).setOrigin(.5);
     var threats=this.cfg.threats||[];
-    threats.forEach(function(t,i){ var y=174+i*18;
-      var img=self.add.image(74,y,t.tex); if(img.height) img.setScale(18/img.height);
-      self.add.text(92,y,t.name+' — '+t.desc,{fontFamily:'VT323',fontSize:'14px',color:'#e0b8c8',wordWrap:{width:340}}).setOrigin(0,.5);
+    threats.forEach(function(t,i){ var y=166+i*15;
+      var img=self.add.image(74,y,t.tex); if(img.height) img.setScale(16/img.height);
+      self.add.text(90,y,t.name+' — '+t.desc,{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#f0cede',wordWrap:{width:360}}).setOrigin(0,.5);
     });
-    if(this.cfg.tip) this.add.text(cx,214,this.cfg.tip,{fontFamily:'VT323',fontSize:'13px',color:'#ffd23f',align:'center',wordWrap:{width:W-48}}).setOrigin(.5);
+    if(this.cfg.tip) this.add.text(cx,206,this.cfg.tip,{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#ffd23f',align:'center',wordWrap:{width:W-40}}).setOrigin(.5);
     // honeypot warning — shown every world (they first appear in World 2). Coins-from-this-level, not total.
-    this.add.text(cx,232,'⚠ HONEYPOTS: fake treasure — they drain THIS level\'s coins, not your total',
-      {fontFamily:'VT323',fontSize:'12px',color:'#ff9500',align:'center',wordWrap:{width:W-30}}).setOrigin(.5);
+    this.add.text(cx,226,'⚠ HONEYPOTS: fake treasure — they drain THIS level\'s coins, not your total',
+      {fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#ff9500',align:'center',wordWrap:{width:W-24}}).setOrigin(.5);
     this.cont=this.add.text(cx,H-11,'TAP TO CONTINUE  ▶',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#3dff6e'}).setOrigin(.5);
     this.input.on('pointerdown',function(){ self.go(); });
     this.input.keyboard.on('keydown',function(){ self.go(); });
