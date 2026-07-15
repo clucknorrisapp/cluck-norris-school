@@ -31,7 +31,7 @@
     background:radial-gradient(ellipse at 50% 40%, #17122e 0%, #05040c 82%); }
   #rotate .ico{ font-size:52px;margin-bottom:20px;animation:nqrot 1.9s ease-in-out infinite;transform-origin:50% 50% }
   #rotate .ttl{ font-family:'Press Start 2P',monospace;font-size:14px;color:#ffd23f;line-height:1.9 }
-  #rotate .sub{ font-family:'VT323',monospace;font-size:19px;color:#8f89b0;margin-top:14px }
+  #rotate .sub{ font-family:'VT323',monospace;font-size:19px;color:#b6bfe0;margin-top:14px }
   @keyframes nqrot{ 0%,45%{transform:rotate(0)} 65%,100%{transform:rotate(-90deg)} }
   @media (max-width:920px) and (orientation:portrait){ #rotate{display:flex} }
 </style>
@@ -908,7 +908,7 @@ var LevelSelect=new Phaser.Class({ Extends:Phaser.Scene,
     var self=this;
     this.cameras.main.setZoom(2).centerOn(W/2,H/2); this.cameras.main.setBackgroundColor(0x0b0a1c);
     this.add.text(W/2,14,'LEVEL SELECT',{fontFamily:'"Press Start 2P"',fontSize:'13px',color:'#ffd23f'}).setOrigin(.5);
-    this.add.text(W/2,30,'TEST BUILD · tap any level',{fontFamily:'VT323',fontSize:'15px',color:'#8f89b0'}).setOrigin(.5);
+    this.add.text(W/2,30,'TEST BUILD · tap any level',{fontFamily:'VT323',fontSize:'16px',color:'#c3cdf0'}).setOrigin(.5);
     // group levels by world (first digit of the "w-n" name), rendered dynamically from LEVELS
     var worlds={}, order=[];
     LEVELS.forEach(function(l,i){ if(l.hidden) return; var w=(l.name||'').split('-')[0]||'?'; if(!worlds[w]){ worlds[w]=[]; order.push(w); } worlds[w].push({l:l,i:i}); });   // hidden bonus levels never show in level-select
@@ -921,8 +921,8 @@ var LevelSelect=new Phaser.Class({ Extends:Phaser.Scene,
         var x=52+c*138, isBoss=!!o.l.boss;
         var sub=(o.l.sub||''); if(sub.length>17) sub=sub.slice(0,16)+'…';
         var box=self.add.rectangle(x,cy,130,cardH,isBoss?0x351033:0x141a2e,1).setStrokeStyle(2,isBoss?0xff3860:0x2a4a6a).setOrigin(0,.5).setInteractive({useHandCursor:true});
-        self.add.text(x+8,cy-cardH*0.24,o.l.name,{fontFamily:'"Press Start 2P"',fontSize:'7px',color:isBoss?'#ff6a99':'#ffffff'}).setOrigin(0,.5);
-        self.add.text(x+8,cy+cardH*0.27,(isBoss?'★ ':'')+sub,{fontFamily:'VT323',fontSize:'10px',color:'#9a95bd'}).setOrigin(0,.5);
+        self.add.text(x+8,cy-cardH*0.24,o.l.name,{fontFamily:'"Press Start 2P"',fontSize:'7px',color:isBoss?'#ff9ec0':'#ffffff'}).setOrigin(0,.5);
+        self.add.text(x+8,cy+cardH*0.27,(isBoss?'★ ':'')+sub,{fontFamily:'VT323',fontSize:'12px',color:isBoss?'#ffd6e6':'#e2e8ff'}).setOrigin(0,.5);
         var go=function(){ self.scene.start('Game',{level:o.i,score:0,lives:3}); };
         box.on('pointerdown',go);
         box.on('pointerover',function(){ box.setFillStyle(isBoss?0x4a1848:0x1e2842,1); });
@@ -930,7 +930,7 @@ var LevelSelect=new Phaser.Class({ Extends:Phaser.Scene,
       });
       y+=rowH;
     });
-    this.add.text(W/2,H-8,'in a level: press L to return here  ·  tap any card to play',{fontFamily:'VT323',fontSize:'12px',color:'#6a6590'}).setOrigin(.5);
+    this.add.text(W/2,H-8,'in a level: press L to return here  ·  tap any card to play',{fontFamily:'VT323',fontSize:'13px',color:'#a7b2dc'}).setOrigin(.5);
     try{ if(typeof window!=='undefined') window.__NQ_LEVEL='level-select'; }catch(e){}
   }
 });
@@ -951,7 +951,7 @@ var Title=new Phaser.Class({ Extends:Phaser.Scene,
     var tj=this.add.image(W/2+68,152,'jeet'); tj.setScale(38/tj.height);
     var p=this.add.text(W/2,200,BURN_GATE?'PRESS TO INSERT BURN':'TAP TO PLAY',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
     this.tweens.add({targets:p,alpha:.25,duration:600,yoyo:true,repeat:-1});
-    this.add.text(W/2,246,(Math.ceil(LEVELS.filter(function(l){return !l.hidden;}).length/3))+' worlds + a hidden one \u00B7 a Cluck Norris production',{fontFamily:'VT323',fontSize:'16px',color:'#8f89b0'}).setOrigin(.5);
+    this.add.text(W/2,246,(Math.ceil(LEVELS.filter(function(l){return !l.hidden;}).length/3))+' worlds + a hidden one \u00B7 a Cluck Norris production',{fontFamily:'VT323',fontSize:'16px',color:'#b6bfe0'}).setOrigin(.5);
     // BURN_GATE is OFF for now \u2192 free preview: tap straight into the game. The burn Gate
     // (and its /api/nq backend) stay wired but dormant until we "put it together" later.
     var self=this;
@@ -970,9 +970,9 @@ var Gate=new Phaser.Class({ Extends:Phaser.Scene,
     this.cameras.main.setZoom(2).centerOn(W/2,H/2); this.cameras.main.setBackgroundColor(C.ink);
     var code='NQ-'+Math.random().toString(36).slice(2,6).toUpperCase();
     this.add.text(W/2,34,'BURN TO PLAY',{fontFamily:'"Press Start 2P"',fontSize:'18px',color:'#ff3860'}).setOrigin(.5);
-    this.add.text(W/2,82,'send 1,000 NORMIE with memo:',{fontFamily:'VT323',fontSize:'21px',color:'#8f89b0'}).setOrigin(.5);
+    this.add.text(W/2,82,'send 1,000 NORMIE with memo:',{fontFamily:'VT323',fontSize:'21px',color:'#b6bfe0'}).setOrigin(.5);
     this.add.text(W/2,108,code,{fontFamily:'"Press Start 2P"',fontSize:'20px',color:'#ffd23f'}).setOrigin(.5);
-    this.add.text(W/2,138,'to  1nc1nerator1111...1111',{fontFamily:'VT323',fontSize:'19px',color:'#8f89b0'}).setOrigin(.5);
+    this.add.text(W/2,138,'to  1nc1nerator1111...1111',{fontFamily:'VT323',fontSize:'19px',color:'#b6bfe0'}).setOrigin(.5);
     var btn=this.add.text(W/2,186,'[ SIMULATE BURN CONFIRMED ]',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#0d0b1e',backgroundColor:'#3dff6e',padding:{x:12,y:9}}).setOrigin(.5).setInteractive({useHandCursor:true});
     btn.on('pointerover',function(){ btn.setStyle({backgroundColor:'#ffffff'}); }); btn.on('pointerout',function(){ btn.setStyle({backgroundColor:'#3dff6e'}); });
     btn.on('pointerdown',function(){
@@ -981,7 +981,7 @@ var Gate=new Phaser.Class({ Extends:Phaser.Scene,
       this.time.addEvent({delay:350,repeat:4,callback:function(){ dots++; s.setText('watching chain'+'.'.repeat(dots)); }});
       this.time.delayedCall(1900,function(){ s.setText('BURN CONFIRMED — GO!').setColor('#ffd23f'); this.time.delayedCall(700,function(){ this.scene.start('Controls',{next:0,score:0}); },[],this); },[],this);
     },this);
-    this.add.text(W/2,254,'demo only — nothing really burns yet',{fontFamily:'VT323',fontSize:'16px',color:'#544d75'}).setOrigin(.5);
+    this.add.text(W/2,254,'demo only — nothing really burns yet',{fontFamily:'VT323',fontSize:'16px',color:'#9089b8'}).setOrigin(.5);
   }
 });
 
@@ -1345,7 +1345,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.hudBox=this.add.container(W/2,H/2).setScrollFactor(0).setDepth(1000);
     this.hudScore=this.hb(this.add.text(10,8,'SCORE '+this.score,{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#ffd23f'}));
     this.hudTime=this.hb(this.add.text(W-10,8,String(this.timeLeft),{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#3dff6e'}).setOrigin(1,0));
-    this.hb(this.add.text(W/2,8,'WORLD '+def.name,{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#8f89b0'}).setOrigin(.5,0));
+    this.hb(this.add.text(W/2,8,'WORLD '+def.name,{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#b6bfe0'}).setOrigin(.5,0));
     this.hearts=[]; for(i=0;i<3;i++) this.hearts.push(this.hb(this.add.image(14+i*20,30,'heart').setScale(1.2).setAlpha(i<this.lives?1:.16)));
     this.keyIcon=this.hb(this.add.image(W-18,30,'key').setAlpha(.2)); this.keyIcon.setScale(22/this.keyIcon.height);
     this.powerBarBg=this.hb(this.add.rectangle(14,52,46,8,0x000000,0.55).setOrigin(0,0.5).setDepth(20).setStrokeStyle(1,0x8f89b0).setVisible(false));
@@ -2726,12 +2726,12 @@ var Over=new Phaser.Class({ Extends:Phaser.Scene,
   create:function(){
     this.cameras.main.setZoom(2).centerOn(W/2,H/2); this.cameras.main.setBackgroundColor(C.ink);
     this.add.text(W/2,48,this.reason,{fontFamily:'"Press Start 2P"',fontSize:'15px',color:'#ff3860'}).setOrigin(.5);
-    this.add.text(W/2,80,'reached world '+this.level,{fontFamily:'VT323',fontSize:'18px',color:'#8f89b0'}).setOrigin(.5);
-    this.add.text(W/2,118,'SCORE',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#8f89b0'}).setOrigin(.5);
+    this.add.text(W/2,80,'reached world '+this.level,{fontFamily:'VT323',fontSize:'18px',color:'#b6bfe0'}).setOrigin(.5);
+    this.add.text(W/2,118,'SCORE',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#b6bfe0'}).setOrigin(.5);
     this.add.text(W/2,150,String(this.finalScore),{fontFamily:'"Press Start 2P"',fontSize:'30px',color:'#ffd23f'}).setOrigin(.5).setShadow(3,3,'#7a5a00',0,true,true);
     // Per-world checkpoint continue takes priority over the leaderboard/free-preview copy.
     var CP_LABEL={3:'WORLD 2\ncontinue from the Sand Lands',6:'WORLD 3\ncontinue from the Skyline',9:'WORLD 4\ncontinue from the Exchange',12:'WORLD 5\ncontinue from the Bridge',15:'WORLD 6\ncontinue from the Depeg',18:'WORLD 7\ncontinue from the Yield Farm',21:'WORLD 8\ncontinue from the Bear Market'};
-    this.add.text(W/2,198, this.cont>0 ? ('★ CHECKPOINT: '+(CP_LABEL[this.cont]||('LEVEL '+(this.cont+1)))) : (BURN_GATE ? 'score posts to the leaderboard —\ntop 10 split the pool' : 'free preview · all 8 Worlds\ngood luck out there'),{fontFamily:'VT323',fontSize:'19px',color:this.cont>0?'#3dff6e':'#8f89b0',align:'center'}).setOrigin(.5);
+    this.add.text(W/2,198, this.cont>0 ? ('★ CHECKPOINT: '+(CP_LABEL[this.cont]||('LEVEL '+(this.cont+1)))) : (BURN_GATE ? 'score posts to the leaderboard —\ntop 10 split the pool' : 'free preview · all 8 Worlds\ngood luck out there'),{fontFamily:'VT323',fontSize:'19px',color:this.cont>0?'#3dff6e':'#b6bfe0',align:'center'}).setOrigin(.5);
     var p=this.add.text(W/2,244, this.cont>0 ? 'PRESS TO CONTINUE →' : (BURN_GATE ? 'PRESS TO BURN AGAIN' : 'PRESS TO PLAY AGAIN'),{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
     this.tweens.add({targets:p,alpha:.25,duration:600,yoyo:true,repeat:-1});
     // Continue from the World-2 checkpoint if premium banked one; else free-preview restart, or the burn Gate.
@@ -2766,12 +2766,12 @@ var Win=new Phaser.Class({ Extends:Phaser.Scene,
     this.tweens.add({targets:hero,y:89,duration:700,yoyo:true,repeat:-1,ease:'Sine.inOut'});
     if(this.renderer.type===Phaser.WEBGL){ try{ hero.postFX.addGlow(0xffd23f,1.2,0,false,0.1,16); }catch(e){} }
     this.add.text(W/2,42,V.title,{fontFamily:'"Press Start 2P"',fontSize:'12px',color:V.color,align:'center',wordWrap:{width:W-24}}).setOrigin(.5);
-    this.add.text(W/2,146,'FINAL SCORE',{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#8f89b0'}).setOrigin(.5);
+    this.add.text(W/2,146,'FINAL SCORE',{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#b6bfe0'}).setOrigin(.5);
     this.add.text(W/2,174,String(this.finalScore),{fontFamily:'"Press Start 2P"',fontSize:'30px',color:'#ffd23f'}).setOrigin(.5).setShadow(3,3,'#7a5a00',0,true,true);
     if(this.casino>0) this.add.text(W/2,202,'🎰 CASINO WINNINGS: '+this.casino,{fontFamily:'VT323',fontSize:'18px',color:'#ff8adf'}).setOrigin(.5);
     var nw=Math.ceil(LEVELS.filter(function(l){return !l.hidden;}).length/3);   // 8 real worlds (exclude hidden bonus levels)
     var wtext = nw<=1?'WORLD 1 CLEARED':(nw===2?'WORLDS 1 & 2 CLEARED':'ALL '+nw+' WORLDS CLEARED');
-    this.add.text(W/2,this.casino>0?222:210,wtext,{fontFamily:'VT323',fontSize:'18px',color:'#8f89b0'}).setOrigin(.5);
+    this.add.text(W/2,this.casino>0?222:210,wtext,{fontFamily:'VT323',fontSize:'18px',color:'#b6bfe0'}).setOrigin(.5);
     var p=this.add.text(W/2,246,'PRESS TO PLAY AGAIN',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
     this.tweens.add({targets:p,alpha:.25,duration:600,yoyo:true,repeat:-1});
     // Free preview → straight back into the game; only the live burn build routes through the Gate.
@@ -2925,17 +2925,17 @@ var Controls=new Phaser.Class({ Extends:Phaser.Scene,
     var colL=Math.round(W*0.27), colR=Math.round(W*0.73);
     g.lineStyle(1,0x33305a,1); g.beginPath(); g.moveTo(cx,40); g.lineTo(cx,104); g.strokePath();   // column divider
     // MOBILE column (highlighted green if this device is touch)
-    this.add.text(colL,40,'MOBILE',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:isTouch?'#3dff6e':'#8f89b0'}).setOrigin(.5);
+    this.add.text(colL,40,'MOBILE',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:isTouch?'#3dff6e':'#b6bfe0'}).setOrigin(.5);
     this.add.text(colL,56,'MOVE:  the  < >  buttons\n(gutter, or tap-move)\nJUMP / DUCK  buttons',
       {fontFamily:'VT323',fontSize:'13px',color:'#e6e2f5',align:'center',lineSpacing:2}).setOrigin(.5,0);
     // KEYBOARD column (highlighted green if this device is not touch)
-    this.add.text(colR,40,'KEYBOARD',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:isTouch?'#8f89b0':'#3dff6e'}).setOrigin(.5);
+    this.add.text(colR,40,'KEYBOARD',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:isTouch?'#b6bfe0':'#3dff6e'}).setOrigin(.5);
     this.add.text(colR,56,'MOVE:  arrows / A D\nJUMP:  UP / W / SPACE\nDUCK:  DOWN / S',
       {fontFamily:'VT323',fontSize:'13px',color:'#e6e2f5',align:'center',lineSpacing:2}).setOrigin(.5,0);
     // CONTROLLER row (USB gamepad) — full width; turns green the instant a pad is detected,
     // so a tester can confirm it works right here. Live status is refreshed in update().
     this.padLine=this.add.text(cx,110,'🎮 USB CONTROLLER — plug in & press a button\nD-pad move · A/B jump · Down duck · Select throw',
-      {fontFamily:'VT323',fontSize:'12px',color:'#8f89b0',align:'center',lineSpacing:1,wordWrap:{width:W-40}}).setOrigin(.5,0);
+      {fontFamily:'VT323',fontSize:'12px',color:'#b6bfe0',align:'center',lineSpacing:1,wordWrap:{width:W-40}}).setOrigin(.5,0);
     // the goal / core rules (full width)
     this.add.text(cx,150,'THE GOAL',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffd23f'}).setOrigin(.5);
     this.add.text(cx,164,'JUMP on enemies to STOMP them  ·  grab the KEY, then reach the DOOR\ngrab glowing POWER-UPS  ·  dodge spikes & hazards',
@@ -2956,7 +2956,7 @@ var Controls=new Phaser.Class({ Extends:Phaser.Scene,
       var B=gp.buttons||[]; if((B[0]&&B[0].pressed)||(B[1]&&B[1].pressed)||(B[8]&&B[8].pressed)||(B[9]&&B[9].pressed)) press=true; } }catch(e){}
     if(this.padLine){ var want=on?'🎮 CONTROLLER CONNECTED ✓\nD-pad move · A/B jump · Down duck · Select throw'
                                   :'🎮 USB CONTROLLER — plug in & press a button\nD-pad move · A/B jump · Down duck · Select throw';
-      if(this.padLine.text!==want) this.padLine.setText(want).setColor(on?'#3dff6e':'#8f89b0'); }
+      if(this.padLine.text!==want) this.padLine.setText(want).setColor(on?'#3dff6e':'#b6bfe0'); }
     if(press && !this._pp && this.time.now-this.t0>1200) this.go();   // controller button (after grace) → start
     this._pp=press;
     if(this.time.now-this.t0>20000) this.go(); }   // safety auto-advance
@@ -3194,12 +3194,12 @@ if(typeof document!=='undefined'){ (function(){
       +'font-family:"Press Start 2P",monospace}'
     +'#nqbeats-panel{background:#160f2a;border:2px solid #3a2f5e;border-radius:12px;max-width:330px;width:100%;padding:14px 14px 10px;box-shadow:0 10px 44px rgba(0,0,0,.6)}'
     +'#nqbeats-panel h3{color:#ffd23f;font-size:12px;margin:0 0 4px;text-align:center;line-height:1.4}'
-    +'#nqbeats-panel .sub{color:#8f89b0;font-size:13px;text-align:center;margin-bottom:12px;font-family:VT323,monospace;letter-spacing:1px}'
+    +'#nqbeats-panel .sub{color:#b6bfe0;font-size:13px;text-align:center;margin-bottom:12px;font-family:VT323,monospace;letter-spacing:1px}'
     +'.nqch{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:#1e1638;border:1px solid #2f2652;color:#cbc6e6;'
       +'border-radius:8px;padding:9px 11px;margin-bottom:6px;font-size:10px;cursor:pointer;font-family:inherit}'
     +'.nqch.on{background:#ffd23f;color:#20142e;border-color:#ffd23f}'
     +'.nqch .dot{width:8px;height:8px;border-radius:50%;background:#463a6e;flex:0 0 auto}.nqch.on .dot{background:#20142e}'
-    +'#nqbeats-x{display:block;margin:8px auto 2px;background:none;border:none;color:#8f89b0;font-size:9px;cursor:pointer;font-family:inherit}';
+    +'#nqbeats-x{display:block;margin:8px auto 2px;background:none;border:none;color:#b6bfe0;font-size:9px;cursor:pointer;font-family:inherit}';
   document.head.appendChild(css);
   // --- music mute button ---
   var btn=document.createElement('button'); btn.id='nqmute'; btn.setAttribute('aria-label','Toggle music'); document.body.appendChild(btn);
