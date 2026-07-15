@@ -2972,7 +2972,7 @@ var Controls=new Phaser.Class({ Extends:Phaser.Scene,
       {fontFamily:UIFONT,resolution:UIRES,fontSize:'12px',color:'#eef2ff',align:'center',lineSpacing:1}).setOrigin(.5,0);
     // CONTROLLER row (USB gamepad) — full width; turns green the instant a pad is detected,
     // so a tester can confirm it works right here. Live status is refreshed in update().
-    this.padLine=this.add.text(cx,110,'🎮 USB CONTROLLER — plug in & press a button\nD-pad move · A/B jump · Down duck · Select throw',
+    this.padLine=this.add.text(cx,110,'🎮 USB CONTROLLER — plug in & press a button\nD-pad move · A = jump · B = throw · Down = duck',
       {fontFamily:UIFONT,resolution:UIRES,fontSize:'12px',color:'#b6bfe0',align:'center',lineSpacing:1,wordWrap:{width:W-40}}).setOrigin(.5,0);
     // the goal / core rules (full width)
     this.add.text(cx,148,'THE GOAL',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffd23f'}).setOrigin(.5);
@@ -2992,8 +2992,8 @@ var Controls=new Phaser.Class({ Extends:Phaser.Scene,
     var on=false, press=false;
     try{ var ps=(navigator.getGamepads?navigator.getGamepads():[]); for(var i=0;i<ps.length;i++){ var gp=ps[i]; if(!gp) continue; on=true;
       var B=gp.buttons||[]; if((B[0]&&B[0].pressed)||(B[1]&&B[1].pressed)||(B[8]&&B[8].pressed)||(B[9]&&B[9].pressed)) press=true; } }catch(e){}
-    if(this.padLine){ var want=on?'🎮 CONTROLLER CONNECTED ✓\nD-pad move · A/B jump · Down duck · Select throw'
-                                  :'🎮 USB CONTROLLER — plug in & press a button\nD-pad move · A/B jump · Down duck · Select throw';
+    if(this.padLine){ var want=on?'🎮 CONTROLLER CONNECTED ✓\nD-pad move · A = jump · B = throw · Down = duck'
+                                  :'🎮 USB CONTROLLER — plug in & press a button\nD-pad move · A = jump · B = throw · Down = duck';
       if(this.padLine.text!==want) this.padLine.setText(want).setColor(on?'#3dff6e':'#b6bfe0'); }
     if(press && !this._pp && this.time.now-this.t0>1200) this.go();   // controller button (after grace) → start
     this._pp=press;
@@ -3163,7 +3163,13 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
   window.__NQ_PAD = window.__NQ_PAD || {left:false,right:false,jump:false,down:false,throw:false};
   window.__NQ_GAMEPAD_ACTIVE = false;
   var DEBUG = /[?&#]gpdebug=1/i.test((location.search||'')+(location.hash||''));
-  var dotEl=null, toastEl=null, dbgEl=null, toastUntil=0, uiReady=false;
+  var AUTOREMAP = /[?&#]remap=1/i.test((location.search||'')+(location.hash||''));
+  var dotEl=null, btnEl=null, toastEl=null, dbgEl=null, remapEl=null, toastUntil=0, uiReady=false, remapping=false;
+  // Custom button map (press-to-bind), saved per browser; else sensible NES-style defaults:
+  // JUMP = a bottom/top face button (+ d-pad up); THROW = the OTHER face buttons + shoulders.
+  function loadMap(){ try{ var m=JSON.parse(localStorage.getItem('nqPadMap')||'null'); if(m&&Array.isArray(m.jump)&&Array.isArray(m.throw)&&m.jump.length&&m.throw.length) return m; }catch(e){} return null; }
+  var padMap = loadMap();
+  var DEF_JUMP=[0,3], DEF_THROW=[1,2,4,5,6,7];
 
   function ensureUI(){
     if(uiReady || typeof document==='undefined') return; uiReady=true;
@@ -3180,39 +3186,75 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
         +'font:11px/1.45 monospace;white-space:pre;max-width:52vw;overflow:auto;display:none}';
     document.head.appendChild(css);
     dotEl=document.createElement('div'); dotEl.id='nqgpdot'; dotEl.textContent='🎮'; document.body.appendChild(dotEl);
+    btnEl=document.createElement('button'); btnEl.textContent='⚙ REMAP';
+    btnEl.style.cssText='position:fixed;left:34px;bottom:7px;z-index:71;background:rgba(18,26,48,.82);border:1px solid rgba(120,180,255,.45);color:#9fd4ff;font:9px/1 "Press Start 2P",monospace;padding:6px 8px;border-radius:7px;cursor:pointer;display:none';
+    btnEl.onclick=startRemap; document.body.appendChild(btnEl);
     toastEl=document.createElement('div'); toastEl.id='nqgptoast'; document.body.appendChild(toastEl);
     if(DEBUG){ dbgEl=document.createElement('div'); dbgEl.id='nqgpdbg'; dbgEl.style.display='block'; document.body.appendChild(dbgEl); }
   }
   function toast(msg){ ensureUI(); if(!toastEl) return; toastEl.textContent=msg; toastEl.style.display='block'; toastUntil=Date.now()+4000; }
   function anyPad(){ var p=navigator.getGamepads?navigator.getGamepads():[]; for(var i=0;i<p.length;i++) if(p[i]) return p[i]; return null; }
+  // ---- press-to-bind remap: capture the JUMP button, then the THROW button, save to localStorage ----
+  function startRemap(){
+    if(remapping) return; ensureUI(); if(!anyPad()){ toast('Plug a controller in first'); return; }
+    remapping=true;
+    remapEl=document.createElement('div');
+    remapEl.style.cssText='position:fixed;inset:0;z-index:80;background:rgba(4,6,14,.93);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#eaf2ff;font-family:"Press Start 2P",monospace;padding:20px;line-height:1.7';
+    remapEl.innerHTML='<div class="q" style="font-size:15px;max-width:90vw;white-space:pre-line"></div><div style="font-size:10px;color:#9fb4dc;margin-top:16px">press the button on your controller</div><div class="r" style="margin-top:24px;font-size:9px;color:#ff9a9a;cursor:pointer;text-decoration:underline">reset to default &amp; close</div>';
+    document.body.appendChild(remapEl);
+    var q=remapEl.querySelector('.q');
+    remapEl.querySelector('.r').onclick=function(){ try{localStorage.removeItem('nqPadMap');}catch(e){} padMap=null; endRemap(); toast('Controls reset to default'); };
+    var steps=[['JUMP','jump'],['THROW','throw']], res={jump:[],throw:[]}, si=0, prevDown=true;
+    q.textContent='Press the button for  JUMP';
+    var lp=function(){
+      if(!remapping) return;
+      var gp=anyPad();
+      if(gp){ var B=gp.buttons||[], d=-1, i; for(i=0;i<B.length;i++){ if(B[i]&&(B[i].pressed||B[i].value>0.5)){ d=i; break; } }
+        if(d<0){ prevDown=false; }
+        else if(!prevDown){ prevDown=true; res[steps[si][1]]=[d]; si++;
+          if(si<steps.length){ q.textContent='Press the button for  '+steps[si][0]; }
+          else { try{ localStorage.setItem('nqPadMap',JSON.stringify(res)); }catch(e){} padMap=res;
+                 q.textContent='✓ Saved!\nJUMP = button '+res.jump[0]+'\nTHROW = button '+res.throw[0];
+                 setTimeout(endRemap,1600); return; } }
+      }
+      requestAnimationFrame(lp);
+    };
+    requestAnimationFrame(lp);
+  }
+  function endRemap(){ remapping=false; if(remapEl){ try{remapEl.remove();}catch(e){} remapEl=null; } }
+  window.__nqPadRemap=startRemap;
 
-  window.addEventListener('gamepadconnected', function(e){ ensureUI(); if(dotEl)dotEl.style.display='block';
-    toast('🎮 Controller connected'); });
+  window.addEventListener('gamepadconnected', function(e){ ensureUI(); if(dotEl)dotEl.style.display='block'; if(btnEl)btnEl.style.display='block';
+    toast('🎮 Controller connected'); if(AUTOREMAP) setTimeout(startRemap,700); });
   window.addEventListener('gamepaddisconnected', function(){ if(!anyPad()){ window.__NQ_GAMEPAD_ACTIVE=false;
-    if(dotEl)dotEl.style.display='none'; toast('Controller disconnected'); } });
+    if(dotEl)dotEl.style.display='none'; if(btnEl)btnEl.style.display='none'; toast('Controller disconnected'); } });
 
   var DZ=0.35;
   function poll(){
     var gp=anyPad();
     if(!gp){ window.__NQ_GAMEPAD_ACTIVE=false; if(dbgEl)dbgEl.textContent='no gamepad detected\n(plug one in + press a button)'; return; }
+    if(remapping) return;   // don't leak calibration presses into the game
     var B=gp.buttons||[], A=gp.axes||[];
     var pr=function(i){ return !!(B[i] && (B[i].pressed || B[i].value>0.5)); };
     // direction: d-pad-as-buttons (standard 12-15) OR d-pad/stick-as-axes (retro adapters)
     var left=pr(14), right=pr(15), up=pr(12), down=pr(13);
     if(A.length>=2){ if(A[0]<-DZ)left=true; if(A[0]>DZ)right=true; if(A[1]<-DZ)up=true; if(A[1]>DZ)down=true; }
     if(A.length>=4){ if(A[2]<-DZ)left=true; if(A[2]>DZ)right=true; if(A[3]<-DZ)up=true; if(A[3]>DZ)down=true; }
-    // jump = ANY face button, or UP (matches the keyboard, where Up also jumps)
-    var jump = pr(0)||pr(1)||pr(2)||pr(3)||up;
-    // throw = shoulders/triggers, or Select (gives 2-button NES pads a throw)
-    var throwB = pr(4)||pr(5)||pr(6)||pr(7)||pr(8);
+    // ONE button jumps, a DIFFERENT one throws (classic NES: A = jump, B = throw). Custom map wins.
+    var anyOf=function(arr){ for(var i=0;i<arr.length;i++) if(pr(arr[i])) return true; return false; };
+    var jb=padMap?padMap.jump:DEF_JUMP, tb=padMap?padMap.throw:DEF_THROW;
+    var jump = anyOf(jb) || up;   // + d-pad up also jumps
+    var throwB = anyOf(tb);
     var P=window.__NQ_PAD;
     P.left=left; P.right=right; P.jump=jump; P.down=(down && !up); P.throw=throwB;
     window.__NQ_GAMEPAD_ACTIVE = true;
     if(dotEl && dotEl.style.display==='none'){ dotEl.style.display='block'; }
+    if(btnEl && btnEl.style.display==='none'){ btnEl.style.display='block'; }
     if(dbgEl){
       var bs=[]; for(var i=0;i<B.length;i++) if(pr(i)) bs.push(i);
       var ax=[]; for(var j=0;j<A.length;j++) ax.push(j+':'+(A[j]||0).toFixed(2));
       dbgEl.textContent='id: '+String(gp.id||'').slice(0,36)+'\nmapping: '+(gp.mapping||'(non-standard)')
+        +'\njump btns: '+jb.join(',')+'   throw btns: '+tb.join(',')+(padMap?'  (custom)':'  (default)')
         +'\nbuttons down: '+(bs.join(',')||'-')+'\naxes: '+ax.join('  ')
         +'\n=> L'+(+left)+' R'+(+right)+' JUMP'+(+jump)+' DUCK'+(+P.down)+' THROW'+(+throwB);
     }
