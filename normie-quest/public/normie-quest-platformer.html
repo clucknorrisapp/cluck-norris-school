@@ -2923,15 +2923,19 @@ var Controls=new Phaser.Class({ Extends:Phaser.Scene,
     this.add.text(cx,14,'HOW TO PLAY',{fontFamily:'"Press Start 2P"',fontSize:'13px',color:'#ffd23f'}).setOrigin(.5);
     var isTouch=(this.sys.game.device.input.touch||(navigator.maxTouchPoints>0)||('ontouchstart' in window));
     var colL=Math.round(W*0.27), colR=Math.round(W*0.73);
-    g.lineStyle(1,0x33305a,1); g.beginPath(); g.moveTo(cx,40); g.lineTo(cx,150); g.strokePath();   // column divider
+    g.lineStyle(1,0x33305a,1); g.beginPath(); g.moveTo(cx,40); g.lineTo(cx,104); g.strokePath();   // column divider
     // MOBILE column (highlighted green if this device is touch)
     this.add.text(colL,40,'MOBILE',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:isTouch?'#3dff6e':'#8f89b0'}).setOrigin(.5);
-    this.add.text(colL,56,'MOVE:  the  < >  buttons\n(gutters on tablets,\nor tap-move on phones)\nJUMP:  the JUMP button\nDUCK:  the DUCK button\n(or tap bottom-centre)',
+    this.add.text(colL,56,'MOVE:  the  < >  buttons\n(gutter, or tap-move)\nJUMP / DUCK  buttons',
       {fontFamily:'VT323',fontSize:'13px',color:'#e6e2f5',align:'center',lineSpacing:2}).setOrigin(.5,0);
     // KEYBOARD column (highlighted green if this device is not touch)
     this.add.text(colR,40,'KEYBOARD',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:isTouch?'#8f89b0':'#3dff6e'}).setOrigin(.5);
-    this.add.text(colR,56,'MOVE:  arrows / A D\nJUMP:  UP / W / SPACE\nDUCK:  DOWN / S\nSTOMP enemies by\nlanding on them',
+    this.add.text(colR,56,'MOVE:  arrows / A D\nJUMP:  UP / W / SPACE\nDUCK:  DOWN / S',
       {fontFamily:'VT323',fontSize:'13px',color:'#e6e2f5',align:'center',lineSpacing:2}).setOrigin(.5,0);
+    // CONTROLLER row (USB gamepad) — full width; turns green the instant a pad is detected,
+    // so a tester can confirm it works right here. Live status is refreshed in update().
+    this.padLine=this.add.text(cx,110,'🎮 USB CONTROLLER — plug in & press a button\nD-pad move · A/B jump · Down duck · Select throw',
+      {fontFamily:'VT323',fontSize:'12px',color:'#8f89b0',align:'center',lineSpacing:1,wordWrap:{width:W-40}}).setOrigin(.5,0);
     // the goal / core rules (full width)
     this.add.text(cx,150,'THE GOAL',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffd23f'}).setOrigin(.5);
     this.add.text(cx,164,'JUMP on enemies to STOMP them  ·  grab the KEY, then reach the DOOR\ngrab glowing POWER-UPS  ·  dodge spikes & hazards',
@@ -2945,6 +2949,16 @@ var Controls=new Phaser.Class({ Extends:Phaser.Scene,
   go:function(){ if(this.done) return; this.done=true; SFX.power(); this.scene.start('Game',{level:this.nextLevel,score:this.score,lives:3}); },
   update:function(){ if(!this.t0){ this.t0=this.time.now; return; }
     if(this.cont) this.cont.setAlpha(0.4+0.6*Math.abs(Math.sin(this.time.now/300)));
+    // live USB-controller status + let a controller START the game (after a short grace so the
+    // button-press that "wakes" the pad doesn't instantly skip this screen)
+    var on=false, press=false;
+    try{ var ps=(navigator.getGamepads?navigator.getGamepads():[]); for(var i=0;i<ps.length;i++){ var gp=ps[i]; if(!gp) continue; on=true;
+      var B=gp.buttons||[]; if((B[0]&&B[0].pressed)||(B[1]&&B[1].pressed)||(B[8]&&B[8].pressed)||(B[9]&&B[9].pressed)) press=true; } }catch(e){}
+    if(this.padLine){ var want=on?'🎮 CONTROLLER CONNECTED ✓\nD-pad move · A/B jump · Down duck · Select throw'
+                                  :'🎮 USB CONTROLLER — plug in & press a button\nD-pad move · A/B jump · Down duck · Select throw';
+      if(this.padLine.text!==want) this.padLine.setText(want).setColor(on?'#3dff6e':'#8f89b0'); }
+    if(press && !this._pp && this.time.now-this.t0>1200) this.go();   // controller button (after grace) → start
+    this._pp=press;
     if(this.time.now-this.t0>20000) this.go(); }   // safety auto-advance
 });
 
