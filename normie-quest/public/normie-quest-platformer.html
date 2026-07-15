@@ -946,7 +946,7 @@ var Title=new Phaser.Class({ Extends:Phaser.Scene,
     this.cameras.main.setZoom(2).centerOn(W/2,H/2); this.cameras.main.setBackgroundColor(0x120c2e);
     this.add.image(90,70,'cloud').setScale(1.4).setAlpha(.7); this.add.image(360,50,'cloud').setScale(1.1).setAlpha(.6);
     // clean gold logo — a crisp drop shadow, NO blurry glow FX (looked smeared)
-    this.add.text(W/2,66,'NORMIE\nQUEST',{fontFamily:'"Press Start 2P"',fontSize:'26px',color:'#ffd23f',align:'center',lineSpacing:10}).setOrigin(.5).setShadow(4,4,'#5a3c00',0,true,true);
+    this.add.text(W/2,66,'NORMIE\nQUEST',{fontFamily:'"Press Start 2P"',fontSize:'26px',color:'#ffd23f',align:'center',lineSpacing:10,resolution:3}).setOrigin(.5).setStroke('#2a1a00',5).setShadow(2,3,'#140d00',0,true,true);
     var tcoin=this.add.image(W/2-68,152,'coin'); tcoin.setScale(28/tcoin.height);
     // Normie: the centerpiece, height-normalized so it fits between the logo and "TAP TO PLAY"
     // (must not overlap the title text — the sprite canvas is tall, so scale by height).
