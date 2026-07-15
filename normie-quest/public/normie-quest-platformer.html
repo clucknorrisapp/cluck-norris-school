@@ -320,7 +320,8 @@ var THEMES=[
   { sky1:0x143a1c, sky2:0x06140a, hill:0x2e7a34 },    // 7-x The Yield Farm (lush neon-green DeFi farm, gold accents)
   { sky1:0x3a0e10, sky2:0x160406, hill:0x5c1418 },    // 8-x The Bear Market (blood-red down-cycle finale)
   { sky1:0x0a1410, sky2:0x02060a, hill:0x0e2e22 },    // 11 CRYPTO TRENCHES (hidden world — near-black, toxic-green data glow)
-  { sky1:0x241a08, sky2:0x0e0a02, hill:0x4a3410 }     // 12 THE VAULT (hidden speakeasy back-room — dim gold)
+  { sky1:0x241a08, sky2:0x0e0a02, hill:0x4a3410 },    // 12 THE VAULT (hidden speakeasy back-room — dim gold)
+  { sky1:0x120e0a, sky2:0x040302, hill:0x2a2016 }     // 13 THE MINES (World 9 underground — near-black earth, molten-amber accents via darkness)
 ];
 
 // Slot-machine themes — one 'slot' sprite, re-skinned per theme (tint + glow + reel symbols +
@@ -1381,6 +1382,11 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // (a reliable HTML button — in-canvas HUD hit areas are unreliable under the 2x-zoom container).
     // Press L on desktop, or tap the overlay's ≡ Levels button on any device.
     try{ if(typeof window!=='undefined') window.__NQ_LEVEL=(this.def&&this.def.name)||''; }catch(e){}
+    // WORLD 9 (The Mines) — limited-vision lighting. A big dark overlay follows Normie with a
+    // soft transparent hole, so you only see a torch-lit circle; hazards loom out of the black.
+    // def.dark opts a level in; ?dark=1 forces it on any level (testing).
+    this._dark = !!def.dark || (typeof location!=='undefined' && /[?&#]dark=1(\b|$)/.test((location.search||'')+(location.hash||'')));
+    if(this._dark) this.setupDarkness();
     if(TEST_MODE){ this.input.keyboard.on('keydown-L',function(){ self.scene.start('LevelSelect'); }); }
     if(!this.registry.get('nqPtr')){ this.input.addPointer(4); this.registry.set('nqPtr',1); }   // extra pointers for multi-touch; game-global, add once
     this.touch={left:false,right:false,jump:false,down:false}; this.crouching=false;
@@ -1528,6 +1534,21 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   hideAirdrop:function(a){   // healed back to full → tuck it away until damage happens again
     a.shown=false; this.tweens.killTweensOf(a); if(a.bob){ a.bob.stop(); a.bob=null; }
     a.setVisible(false).setActive(false); if(a.body) a.body.enable=false; a.setAlpha(0); a.y=a.restY;
+  },
+  setupDarkness:function(){   // build the moving "torchlight" overlay for dark (mines) levels
+    var DW=1200, DH=800, R=132;   // overlay big enough to cover the viewport even when Normie is off-centre
+    if(!this.textures.exists('nqdark')){
+      var cv=this.textures.createCanvas('nqdark',DW,DH), ctx=cv.getContext();
+      ctx.fillStyle='#000'; ctx.fillRect(0,0,DW,DH);
+      var cx=DW/2, cy=DH/2;
+      var grd=ctx.createRadialGradient(cx,cy,0,cx,cy,R);
+      grd.addColorStop(0,'rgba(0,0,0,1)'); grd.addColorStop(0.42,'rgba(0,0,0,1)'); grd.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.globalCompositeOperation='destination-out';
+      ctx.fillStyle=grd; ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.fill();
+      cv.refresh();
+    }
+    this.darkOverlay=this.add.image(this.player.x,this.player.y,'nqdark').setDepth(60);
+    this.darkScale=1;
   },
   fireSolana:function(){   // auto-fire during SOLANA MODE — a straight, spinning Solana symbol
     var p=this.player, dir=p.flipX?-1:1;
@@ -2489,6 +2510,12 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   update:function(){
     if(this.over||this.paused) return;
     var self=this, p=this.player, b=p.body, now=this.time.now;
+    // dark (mines) levels: keep the torchlight centred on Normie; a candle widens it briefly
+    if(this.darkOverlay){
+      var want=(now<(this.candleUntil||0))?1.7:1;
+      this.darkScale += (want-this.darkScale)*0.1;
+      this.darkOverlay.setScale(this.darkScale); this.darkOverlay.setPosition(p.x,p.y);
+    }
     // PAUSE hotspot (top-left ⏸): EDGE-triggered (only a fresh press pauses), so the resume-tap can't re-pause
     { var _pts=this.input.manager.pointers, _gw=this.scale.width, _gh=this.scale.height, _inZ=false;
       for(var _i=0;_i<_pts.length;_i++){ var _pp=_pts[_i]; if(_pp&&_pp.isDown){ var _fx=_pp.x/_gw,_fy=_pp.y/_gh; if(_fy<0.14&&_fx>0.16&&_fx<0.34){ _inZ=true; break; } } }
