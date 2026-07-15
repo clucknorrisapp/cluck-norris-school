@@ -2570,7 +2570,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     else if(now<this.caffeineUntil){ p.setTint(0xfff2a0); powCol=0xffffff; }
     else { p.clearTint(); anyPower=false; }
     // "large and in charge": grow toward the target scale every frame (deterministic ease). Whale = biggest.
-    var pt=whale?2.05:(anyPower?1.55:1); this.pscale.v+=(pt-this.pscale.v)*0.16;
+    // MEGA WHALE rides at NORMAL scale (he sits ON the whale — the design intent above): growing him to 1.55x
+    // enlarged his physics body too, so he couldn't fit under low blocks he clears as normal Normie.
+    var pt=whale?2.05:(mw?1:(anyPower?1.55:1)); this.pscale.v+=(pt-this.pscale.v)*0.16;
     if(anyPower&&!this._powered) this.burst(p.x,p.y-8,powCol,18);   // pop on power-up
     this._powered=anyPower;
     if(this.playerGlow){
