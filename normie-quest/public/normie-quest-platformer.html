@@ -3127,17 +3127,23 @@ if(typeof document!=='undefined'){ (function(){
     window.__NQ_PAD_ACTIVE=true;
     var gap=Math.max(4,Math.round(gutter*0.06));
     var mv=Math.max(28,Math.min(96,Math.floor((gutter-gap)/2)));   // ◄ ► sized so BOTH fit in the gutter
-    var jp=Math.max(44,Math.min(122,gutter-6));
-    var by=Math.round(window.innerHeight*0.11);                    // low in the gutter → thumb reach
+    var by=Math.round(window.innerHeight*0.10);                    // bottom anchor → thumb reach
+    // LEFT gutter: the ◄ ► move pair (low, left-thumb reach)
     var pairW=mv*2+gap, lx=Math.round(Math.max(1,(gl-pairW)/2));
     bL.style.width=bL.style.height=mv+'px'; bL.style.left=lx+'px'; bL.style.bottom=by+'px'; bL.style.fontSize=Math.round(mv*0.42)+'px';
     bR.style.width=bR.style.height=mv+'px'; bR.style.left=(lx+mv+gap)+'px'; bR.style.bottom=by+'px'; bR.style.fontSize=Math.round(mv*0.42)+'px';
-    var rx=Math.round(r.right+Math.max(1,(gr-jp)/2));
-    bJ.style.width=bJ.style.height=jp+'px'; bJ.style.left=rx+'px'; bJ.style.bottom=by+'px'; bJ.style.fontSize=Math.round(Math.max(8,jp*0.15))+'px';
-    var dk=Math.max(34,Math.round(jp*0.60));   // DUCK: smaller, sits just above JUMP (same right-thumb reach)
-    bD.style.width=bD.style.height=dk+'px'; bD.style.left=Math.round(rx+(jp-dk)/2)+'px'; bD.style.bottom=(by+jp+8)+'px'; bD.style.fontSize=Math.round(Math.max(7,dk*0.20))+'px';
-    var fk=Math.max(30,Math.round(mv*0.72));   // THROW (Solana disc): above the ◄ ► pair, left-thumb reach
-    bF.style.width=bF.style.height=fk+'px'; bF.style.left=Math.round(lx+(pairW-fk)/2)+'px'; bF.style.bottom=(by+mv+10)+'px'; bF.style.fontSize=Math.round(Math.max(7,fk*0.185))+'px';
+    // RIGHT gutter: vertical action stack — THROW (top) · JUMP (middle) · DUCK (bottom).
+    // Jump+Duck sit together so the right thumb can jump OR duck while the left thumb moves;
+    // throw is the least-used, so it goes up top out of the way.
+    var vgap=Math.max(7,Math.round(gutter*0.10));
+    var avail=window.innerHeight - by - 12;
+    var jp=Math.max(40,Math.min(gutter-6, 116, Math.floor((avail - 2*vgap)/2.34)));   // JUMP (biggest), capped so all 3 fit
+    var dk=Math.max(30,Math.round(jp*0.64));   // DUCK
+    var fk=Math.max(30,Math.round(jp*0.64));   // THROW
+    var rx=Math.round(r.right+Math.max(1,(gr-jp)/2)), cxr=rx+jp/2;   // jump column; smaller buttons centre on it
+    bD.style.width=bD.style.height=dk+'px'; bD.style.left=Math.round(cxr-dk/2)+'px'; bD.style.bottom=by+'px'; bD.style.fontSize=Math.round(Math.max(7,dk*0.22))+'px';
+    bJ.style.width=bJ.style.height=jp+'px'; bJ.style.left=rx+'px'; bJ.style.bottom=(by+dk+vgap)+'px'; bJ.style.fontSize=Math.round(Math.max(8,jp*0.15))+'px';
+    bF.style.width=bF.style.height=fk+'px'; bF.style.left=Math.round(cxr-fk/2)+'px'; bF.style.bottom=(by+dk+vgap+jp+vgap)+'px'; bF.style.fontSize=Math.round(Math.max(7,fk*0.19))+'px';
   }
   window.addEventListener('resize',layout);
   window.addEventListener('orientationchange',function(){ setTimeout(layout,220); });
