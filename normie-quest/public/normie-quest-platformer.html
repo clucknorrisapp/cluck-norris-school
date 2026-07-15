@@ -956,7 +956,7 @@ var Title=new Phaser.Class({ Extends:Phaser.Scene,
     var tj=this.add.image(W/2+68,152,'jeet'); tj.setScale(38/tj.height);
     var p=this.add.text(W/2,200,BURN_GATE?'PRESS TO INSERT BURN':'TAP TO PLAY',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
     this.tweens.add({targets:p,alpha:.25,duration:600,yoyo:true,repeat:-1});
-    this.add.text(W/2,246,(Math.ceil(LEVELS.filter(function(l){return !l.hidden;}).length/3))+' worlds + a hidden one \u00B7 a Cluck Norris production',{fontFamily:UIFONT,resolution:UIRES,fontSize:'16px',color:'#b6bfe0'}).setOrigin(.5);
+    this.add.text(W/2,236,(Math.ceil(LEVELS.filter(function(l){return !l.hidden;}).length/3))+" worlds + more secrets than you'd think\n\u00B7 a Cluck Norris production \u00B7",{fontFamily:UIFONT,resolution:UIRES,fontSize:'14px',color:'#b6bfe0',align:'center',lineSpacing:1}).setOrigin(.5);
     // BURN_GATE is OFF for now \u2192 free preview: tap straight into the game. The burn Gate
     // (and its /api/nq backend) stay wired but dormant until we "put it together" later.
     var self=this;
