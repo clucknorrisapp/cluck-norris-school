@@ -6368,7 +6368,7 @@ async function getLockedSupply(mint, rpcCall) {
     pctOfSupply: supplyUi > 0 ? totalLocked / supplyUi : null,
     lockCount: locks.length,
     breakdown: [...byLabel.entries()].map(([label, tokens]) => ({ label, tokens })).sort((a, b) => b.tokens - a.tokens),
-    topLocks: locks.slice(0, 10),
+    topLocks: locks.slice(0, 20),
   };
 }
 
