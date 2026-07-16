@@ -10004,6 +10004,11 @@ app.get("/classroom", (req, res) => {
   res.sendFile(join(__dirname, "public", "classroom.html"));
 });
 
+// Jup Locker Room — token locks explained + the CLKN Lock of Fame + a create-a-lock configurator.
+app.get("/locker-room", (req, res) => {
+  res.sendFile(join(__dirname, "public", "locker-room.html"));
+});
+
 app.get("/pool-monitor", (req, res) => {
   res.setHeader("Cache-Control", "no-store, must-revalidate");
   res.sendFile(join(__dirname, "public", "pool-monitor.html"));
