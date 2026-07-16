@@ -157,7 +157,7 @@ router.post('/api/nq/wallet/verify', async (req, res) => {
 router.post('/api/nq/wallet/refresh', async (req, res) => {
   try {
     const b = req.body || {};
-    res.json(await wallet.refresh(String(b.pubkey || ''), String(b.token || '')));
+    res.json(await wallet.refresh(String(b.pubkey || ''), String(b.token || ''), { force: b.fresh === true }));
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
 router.get('/api/nq/leaderboard', async (req, res) => {

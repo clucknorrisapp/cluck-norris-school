@@ -3697,12 +3697,12 @@ if (window.__NQ_SETUP) { (function () {
     try { localStorage.removeItem('nqWallet'); } catch (e) {}
   }
   // Restore from storage + refresh tier from live balance (no re-signing). Rejected token → forget it.
-  function restoreWallet(cb) {
+  function restoreWallet(cb, fresh) {
     var saved = null; try { saved = JSON.parse(localStorage.getItem('nqWallet') || 'null'); } catch (e) {}
     if (!saved || !saved.pubkey || !saved.token) { if (cb) cb(false); return; }
     walletState.pubkey = saved.pubkey; walletState.token = saved.token;
     fetch('/api/nq/wallet/refresh', { method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ pubkey: saved.pubkey, token: saved.token }) }).then(function (r) { return r.json(); })
+      body: JSON.stringify({ pubkey: saved.pubkey, token: saved.token, fresh: !!fresh }) }).then(function (r) { return r.json(); })
       .then(function (v) {
         if (v && v.ok) { walletState.tier = v.tier; walletState.worlds = v.worlds; walletState.balances = v.balances;
           if (!handle) window.NQLB.setHandle(saved.pubkey.slice(0, 4) + '…' + saved.pubkey.slice(-4)); if (cb) cb(true); }
@@ -3822,17 +3822,42 @@ if (window.__NQ_SETUP) { (function () {
     }
 
     var jupLoaded = false;
+    var SOL_MINT = 'So11111111111111111111111111111111111111112';
     function loadJupiter() {
       if (jupLoaded) return; jupLoaded = true;
       fetch('/api/nq/wallet/config').then(function (r) { return r.json(); }).then(function (cfg) {
-        var msg = ov.querySelector('#nqp-buymsg');
-        if (!cfg.normieConfigured) { msg.textContent = 'NORMIE mint not configured yet — the swap widget arms once NQ_NORMIE_MINT is set. (You can still buy NORMIE on Jupiter directly.)'; return; }
-        msg.textContent = 'Buy NORMIE to unlock more worlds:';
-        var s = document.createElement('script'); s.src = 'https://plugin.jup.ag/plugin-v1.js'; s.onload = function () {
-          try { window.Jupiter.init({ displayMode: 'integrated', integratedTargetId: 'nqjup',
-            formProps: { initialInputMint: 'So11111111111111111111111111111111111111112', initialOutputMint: cfg.normieMint } }); }
-          catch (e) { msg.textContent = 'Jupiter widget failed to load.'; }
-        }; s.onerror = function () { msg.textContent = 'Could not load Jupiter.'; }; document.body.appendChild(s);
+        var msg = ov.querySelector('#nqp-buymsg'), host = ov.querySelector('#nqjup');
+        if (!cfg.normieConfigured || !cfg.normieMint) {
+          msg.textContent = 'The in-game NORMIE swap arms as soon as the NORMIE mint is set — it will let you buy NORMIE without leaving the game.';
+          return;
+        }
+        var mint = cfg.normieMint;
+        msg.textContent = 'Buy NORMIE right here — it unlocks more worlds by what you hold:';
+        // If the embedded widget can't load, fall back to a direct Jupiter link (still a one-tap buy).
+        function fallbackLink() {
+          host.innerHTML = '<a class="nqp-b" style="display:inline-block;text-decoration:none;margin-top:6px" target="_blank" rel="noopener" '
+            + 'href="https://jup.ag/swap/SOL-' + encodeURIComponent(mint) + '">🪙 Open Jupiter to buy NORMIE →</a>';
+        }
+        var s = document.createElement('script'); s.src = 'https://plugin.jup.ag/plugin-v1.js';
+        s.onload = function () {
+          try {
+            window.Jupiter.init({
+              displayMode: 'integrated', integratedTargetId: 'nqjup',
+              formProps: {
+                initialInputMint: SOL_MINT, initialOutputMint: mint,
+                fixedMint: mint,   // lock the output to NORMIE — a BUY-NORMIE widget, not a general swap
+              },
+              branding: { name: 'Normie Quest' },
+              onSuccess: function () {
+                // bought NORMIE → refresh the tier from LIVE balance (bypass the cache) so unlocked worlds update now
+                msg.textContent = 'NORMIE received! Updating your access…';
+                setTimeout(function () { restoreWallet(function (ok) { if (ok) { var wp = ov.querySelector('[data-pane="wal"]'); if (wp && wp.classList.contains('on')) renderWallet(); msg.textContent = 'NORMIE received — access updated ✓'; } }, true); }, 3500);
+              },
+            });
+          } catch (e) { fallbackLink(); }
+        };
+        s.onerror = fallbackLink;
+        document.body.appendChild(s);
       }).catch(function () {});
     }
   }
