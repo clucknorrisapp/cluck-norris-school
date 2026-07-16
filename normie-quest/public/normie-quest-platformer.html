@@ -3300,15 +3300,24 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
   function endRemap(){ remapping=false; if(remapEl){ try{remapEl.remove();}catch(e){} remapEl=null; } }
   window.__nqPadRemap=startRemap;
 
-  window.addEventListener('gamepadconnected', function(e){ ensureUI(); if(dotEl)dotEl.style.display='block'; if(btnEl)btnEl.style.display='block';
+  var padConnected=false;   // latched by connect/disconnect so a single empty getGamepads() frame can't flicker the controller "off"
+  window.addEventListener('gamepadconnected', function(e){ padConnected=true; ensureUI(); if(dotEl)dotEl.style.display='block'; if(btnEl)btnEl.style.display='block';
     toast('🎮 Controller connected'); if(AUTOREMAP) setTimeout(startRemap,700); });
-  window.addEventListener('gamepaddisconnected', function(){ if(!anyPad()){ window.__NQ_GAMEPAD_ACTIVE=false;
+  window.addEventListener('gamepaddisconnected', function(){ if(!anyPad()){ padConnected=false; window.__NQ_GAMEPAD_ACTIVE=false;
     if(dotEl)dotEl.style.display='none'; if(btnEl)btnEl.style.display='none'; toast('Controller disconnected'); } });
 
   var DZ=0.35;
   function poll(){
     var gp=anyPad();
-    if(!gp){ window.__NQ_GAMEPAD_ACTIVE=false; if(dbgEl)dbgEl.textContent='no gamepad detected\n(plug one in + press a button)'; return; }
+    if(!gp){
+      // A known-connected pad can briefly vanish from getGamepads() (Safari quirk) or during a heavy
+      // level build — don't flicker it "off": release inputs so nothing sticks, but stay ACTIVE and keep
+      // polling so it re-acquires immediately. Only go inactive if we've never actually seen a pad.
+      if(padConnected){ var P0=window.__NQ_PAD; if(P0){ P0.left=P0.right=P0.jump=P0.down=P0.throw=false; } }
+      else { window.__NQ_GAMEPAD_ACTIVE=false; if(dbgEl)dbgEl.textContent='no gamepad detected\n(plug one in + press a button)'; }
+      return;
+    }
+    padConnected=true;
     if(remapping) return;   // don't leak calibration presses into the game
     var B=gp.buttons||[], A=gp.axes||[];
     var pr=function(i){ return !!(B[i] && (B[i].pressed || B[i].value>0.5)); };
@@ -3337,6 +3346,11 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
   }
   function loop(){ try{ poll(); }catch(e){} if(toastEl && toastUntil && Date.now()>toastUntil){ toastEl.style.display='none'; toastUntil=0; } requestAnimationFrame(loop); }
   requestAnimationFrame(loop);
+  // Belt-and-suspenders so the controller responds instantly at level start: rAF can be starved during
+  // a heavy level build, so also poll on a fast timer, and force a poll on any input (which is exactly
+  // when a "sleeping" gamepad needs to re-acquire).
+  try{ setInterval(function(){ try{ poll(); }catch(e){} }, 30); }catch(e){}
+  ['pointerdown','keydown','touchstart'].forEach(function(ev){ try{ document.addEventListener(ev, function(){ try{ poll(); }catch(e){} }, {passive:true}); }catch(e){} });
 })(); }
 
 /* ---------- Music mute toggle (M key + a small button) ---------- */
