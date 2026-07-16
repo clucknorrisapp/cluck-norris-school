@@ -28,7 +28,7 @@ const crypto = require('crypto');
 const FILE = path.join(process.env.DATA_DIR || path.join(__dirname, '..', 'data'), 'nq-leaderboard.json');
 const MAX = 6000;                         // hard cap on stored runs (prune oldest beyond this)
 const RUN_TTL_MS = 2 * 60 * 60 * 1000;    // a run token is valid for 2h after issue
-const MAX_PTS_PER_SEC = 400;              // plausibility ceiling: above this rate a run is flagged suspect
+const MAX_PTS_PER_SEC = 600;              // plausibility ceiling on TOTAL score / TOTAL run time (generous)
 const MIN_RUN_MS = 3000;                  // token issued at run START, so a real submit is never this fast
 
 // Secret for signing run tokens. Prefer an explicit env; fall back to the site key; last resort a
@@ -153,9 +153,10 @@ function rankDistinct(rows, n) {
 
 const notSuspect = (r) => !r.suspect;
 
+// "per world" = leaders who REACHED world w or beyond (a run's world = furthest world reached).
 function topByWorld(world, n) {
   const w = intIn(world, 1, 99, 0);
-  return rankDistinct(load().filter((r) => r.world === w && notSuspect(r)), n || 10);
+  return rankDistinct(load().filter((r) => r.world >= w && notSuspect(r)), n || 10);
 }
 function topWeekly(n) {
   const ws = weekStartMs();
@@ -172,7 +173,7 @@ function boards(opts) {
   const all = load();
   const ws = weekStartMs();
   const perWorld = {};
-  worlds.forEach((w) => { perWorld[w] = rankDistinct(all.filter((r) => r.world === w && notSuspect(r)), n); });
+  worlds.forEach((w) => { perWorld[w] = rankDistinct(all.filter((r) => r.world >= w && notSuspect(r)), n); });
   return {
     weekStart: ws,
     allTime: rankDistinct(all.filter(notSuspect), n),

@@ -1045,6 +1045,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.paused=false; this.lastInputAt=this.time.now;   // pause state + idle-auto-pause timer
     var self=this, i;
     var def=this.def=LEVELS[this.levelIdx];
+    // SETUP LANE only: begin (or continue) a leaderboard run. One run token spans the whole run;
+    // the score is submitted at run-end from the Over/Win scenes. No-op on the stable tester build.
+    if(window.__NQ_SETUP && window.NQLB){ try{ window.NQLB.enterLevel(def.name, this.score); }catch(e){} }
     var LW=this.LW=def.width, th=THEMES[def.theme];
     // background music — per-world mood (boss arenas get the boss theme; 1-3's Rug King switches in startBoss)
     try{ var w0=def.name.charAt(0); var mt=(def.boss&&def.bossType)?'boss':(w0==='1'?'world1':def.name==='2-1'?'desert':def.name==='2-2'?'casino':w0==='3'?'skyline':w0==='4'?'exchange':w0==='5'?'sacred':w0==='6'?'mines':w0==='7'?'exchange':w0==='8'?'boss':'world1'); MUSIC.forWorld(mt); }catch(e){}
@@ -2829,6 +2832,8 @@ var Over=new Phaser.Class({ Extends:Phaser.Scene,
   initialize:function(){ Phaser.Scene.call(this,{key:'Over'}); },
   init:function(d){ this.finalScore=d.score||0; this.reason=d.reason||''; this.level=d.level||''; this.cont=d.cont||0; this.contScore=d.contScore||0; },
   create:function(){
+    // SETUP LANE: run ended (game over) — submit the final score to the leaderboard.
+    if(window.__NQ_SETUP && window.NQLB){ try{ window.NQLB.submitRun(window.NQLB.worldOf(this.level), this.finalScore); }catch(e){} }
     this.cameras.main.setZoom(2).centerOn(W/2,H/2); this.cameras.main.setBackgroundColor(C.ink);
     this.add.text(W/2,48,this.reason,{fontFamily:'"Press Start 2P"',fontSize:'15px',color:'#ff3860'}).setOrigin(.5);
     this.add.text(W/2,80,'reached world '+this.level,{fontFamily:UIFONT,resolution:UIRES,fontSize:'18px',color:'#b6bfe0'}).setOrigin(.5);
@@ -2855,6 +2860,8 @@ var Win=new Phaser.Class({ Extends:Phaser.Scene,
   initialize:function(){ Phaser.Scene.call(this,{key:'Win'}); },
   init:function(d){ d=d||{}; this.finalScore=d.score||0; this.boss=d.boss||'wormhole'; this.casino=d.casino||0; },
   create:function(){
+    // SETUP LANE: run WON (full clear) — submit the final score at the top world tier.
+    if(window.__NQ_SETUP && window.NQLB){ try{ var nw=Math.ceil(LEVELS.filter(function(l){return !l.hidden;}).length/3); window.NQLB.submitRun(nw, this.finalScore); }catch(e){} }
     SFX.win();
     // victory tableau keyed to the FINAL boss you actually beat, slumped/defeated + Normie triumphant
     var V = this.boss==='51attack'  ? {img:'golem',     title:'THE 51% ATTACK, DEFENDED!', color:'#ffb43a', tint:0, scale:92, bg:0x140f06}
@@ -3521,6 +3528,212 @@ if(TEST_MODE && typeof document!=='undefined'){ (function(){
 })(); }
 
 })();
+</script>
+<script>
+/* ============================================================================
+   NORMIE QUEST — PREMIUM LAYER (SETUP LANE ONLY)
+   Leaderboard client + wallet ownership (sign-message) + tier + Jupiter buy widget.
+   Entirely dormant unless window.__NQ_SETUP is true, so the stable tester build is untouched.
+   DOM-overlay based (like the touch pad / feedback widget) — no changes to the Phaser scenes
+   beyond the single startLevel/submitLevel hook in Game.create.
+   ============================================================================ */
+if (window.__NQ_SETUP) { (function () {
+  'use strict';
+
+  // ---- tiny base58 encoder (for signMessage output) -----------------------
+  var B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  function b58encode(bytes) {
+    var d = [], s = '', i, j, c, n;
+    for (i = 0; i < bytes.length; i++) {
+      c = bytes[i]; n = 0;
+      for (j = 0; j < d.length || c; j++) { n = (d[j] || 0) * 256 + c; d[j] = n % 58; c = Math.floor(n / 58); }
+    }
+    for (i = 0; i < bytes.length && bytes[i] === 0; i++) s += '1';
+    for (i = d.length - 1; i >= 0; i--) s += B58[d[i]];
+    return s;
+  }
+
+  // ---- leaderboard client (window.NQLB — called by Game.create) -----------
+  var handle = ''; try { handle = localStorage.getItem('nqHandle') || ''; } catch (e) {}
+  var walletState = { pubkey: null, token: null, tier: null, worlds: null, balances: null };
+  var run = null;   // { token } — one per run, spans levels; the score posts at run-end
+  function worldOf(name) { var m = String(name || '').match(/^(\d+)/); return m ? parseInt(m[1], 10) : 0; }
+
+  window.NQLB = {
+    worldOf: worldOf,
+    // Called from Game.create each level. Starts a run token on the FIRST level of a run; keeps it
+    // across level advances so the whole run is timed as one (honest score/second plausibility).
+    enterLevel: function (name) {
+      if (run) return;                           // run already in progress — keep the same token
+      run = { token: null };
+      fetch('/api/nq/run-start?level=' + encodeURIComponent(name || '')).then(function (r) { return r.json(); })
+        .then(function (j) { if (j && j.ok && run) run.token = { nonce: j.nonce, level: j.level, issuedAt: j.issuedAt, sig: j.sig }; })
+        .catch(function () {});
+    },
+    // Called from Over/Win. Submits the final score for the whole run, then clears it.
+    submitRun: function (world, score) {
+      var r = run; run = null;
+      if (!handle || !r) return;                 // need a handle (panel prompts) + an active run
+      var body = { name: handle, world: world, level: 'run', score: Math.round(score || 0), token: r.token };
+      if (walletState.pubkey && walletState.token) { body.wallet = walletState.pubkey; body.walletToken = walletState.token; }
+      fetch('/api/nq/score', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).catch(function () {});
+    },
+    getHandle: function () { return handle; },
+    setHandle: function (h) { handle = String(h || '').replace(/[^A-Za-z0-9 _.-]/g, '').slice(0, 16).trim(); try { localStorage.setItem('nqHandle', handle); } catch (e) {} },
+    getWallet: function () { return walletState; },
+  };
+
+  // ---- wallet: detect provider, connect, sign, verify ---------------------
+  function provider() {
+    if (window.phantom && window.phantom.solana) return window.phantom.solana;
+    if (window.solflare && window.solflare.isSolflare) return window.solflare;
+    if (window.backpack) return window.backpack;
+    if (window.solana) return window.solana;
+    return null;
+  }
+  async function connectWallet() {
+    var p = provider();
+    if (!p) throw new Error('No Solana wallet found. Install Phantom or Solflare, then reload.');
+    var resp = await p.connect();
+    var pk = (resp && resp.publicKey ? resp.publicKey : p.publicKey).toString();
+    var ch = await (await fetch('/api/nq/wallet/challenge?pubkey=' + pk)).json();
+    if (!ch.ok) throw new Error('Challenge failed: ' + (ch.status || '?'));
+    var enc = new TextEncoder().encode(ch.message);
+    var signed = await p.signMessage(enc, 'utf8');
+    var sigBytes = signed && signed.signature ? signed.signature : signed;
+    var vr = await (await fetch('/api/nq/wallet/verify', { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ pubkey: pk, signature: b58encode(sigBytes) }) })).json();
+    if (!vr.ok) throw new Error('Verify failed: ' + (vr.status || '?'));
+    walletState = { pubkey: pk, token: vr.token, tier: vr.tier, worlds: vr.worlds, balances: vr.balances };
+    if (!handle) window.NQLB.setHandle(pk.slice(0, 4) + '…' + pk.slice(-4));
+    return walletState;
+  }
+
+  // ---- UI: launcher + modal panel (Leaderboard / Wallet / Buy) ------------
+  var css = document.createElement('style');
+  css.textContent =
+    '#nqp-btn{position:fixed;left:8px;bottom:8px;z-index:9998;background:rgba(20,14,46,.85);color:#ffd23f;border:2px solid #ffb43a;border-radius:10px;'
+    + 'font:700 11px system-ui,sans-serif;padding:7px 10px;cursor:pointer;letter-spacing:.04em}'
+    + '#nqp-ov{position:fixed;inset:0;z-index:9999;background:rgba(4,3,10,.82);display:none;align-items:center;justify-content:center}'
+    + '#nqp-ov.on{display:flex}'
+    + '#nqp-card{width:min(560px,94vw);max-height:88vh;overflow:auto;background:#120e22;border:2px solid #33305a;border-radius:14px;color:#e8e6f5;'
+    + 'font-family:system-ui,sans-serif;padding:16px 16px 20px}'
+    + '#nqp-card h2{font-size:16px;color:#ffd23f;margin:0 0 2px}'
+    + '.nqp-x{float:right;color:#8f89b0;cursor:pointer;font-size:20px;line-height:1}'
+    + '.nqp-tabs{display:flex;gap:6px;margin:12px 0}'
+    + '.nqp-tab{flex:1;background:#1a1630;border:1px solid #33305a;color:#cbc6e6;border-radius:9px;padding:8px;font-size:12px;cursor:pointer;text-align:center}'
+    + '.nqp-tab.on{background:#ffd23f;color:#20142e;border-color:#ffd23f;font-weight:700}'
+    + '.nqp-pane{display:none}.nqp-pane.on{display:block}'
+    + '.nqp-row{display:flex;justify-content:space-between;align-items:center;padding:6px 9px;border-radius:7px;background:#161228;margin-bottom:4px;font-size:13px}'
+    + '.nqp-row .r{color:#8f89b0;width:26px}.nqp-row .s{color:#ffd23f;font-variant-numeric:tabular-nums;font-weight:700}'
+    + '.nqp-row .v{color:#3dff9e;font-size:10px;margin-left:5px}'
+    + '.nqp-in{width:100%;box-sizing:border-box;background:#0d0a1a;border:1px solid #33305a;color:#fff;border-radius:8px;padding:9px;font-size:14px;margin:6px 0}'
+    + '.nqp-b{background:#ffb43a;color:#20142e;border:0;border-radius:9px;padding:10px 14px;font-weight:700;cursor:pointer;font-size:13px}'
+    + '.nqp-b.alt{background:#1a1630;color:#cbc6e6;border:1px solid #33305a}'
+    + '.nqp-sub{color:#8f89b0;font-size:12px}.nqp-wsel{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0}'
+    + '.nqp-chip{background:#1a1630;border:1px solid #33305a;color:#cbc6e6;border-radius:13px;padding:3px 10px;font-size:12px;cursor:pointer}'
+    + '.nqp-chip.on{background:#22406a;color:#bfe0ff;border-color:#4a78c0}'
+    + '.nqp-tier{display:inline-block;background:#134a2e;color:#8dffc0;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:700}'
+    + '#nqjup{margin-top:10px;min-height:420px}';
+  document.head.appendChild(css);
+
+  var btn = document.createElement('button'); btn.id = 'nqp-btn'; btn.textContent = '🏆 PREMIUM';
+  var ov = document.createElement('div'); ov.id = 'nqp-ov';
+  ov.innerHTML =
+    '<div id="nqp-card">'
+    + '<span class="nqp-x" data-close>×</span><h2>Normie Quest — Premium</h2>'
+    + '<div class="nqp-sub">Setup lane · leaderboards, wallet access &amp; buy NORMIE</div>'
+    + '<div class="nqp-tabs"><div class="nqp-tab on" data-tab="lb">🏆 Leaderboard</div>'
+    + '<div class="nqp-tab" data-tab="wal">👛 Wallet</div><div class="nqp-tab" data-tab="buy">🪙 Buy NORMIE</div></div>'
+    + '<div class="nqp-pane on" data-pane="lb">'
+    + '<input class="nqp-in" id="nqp-handle" maxlength="16" placeholder="Your handle (shown on the board)">'
+    + '<div class="nqp-wsel" id="nqp-wsel"></div><div id="nqp-list"><div class="nqp-sub">Loading…</div></div></div>'
+    + '<div class="nqp-pane" data-pane="wal"><div id="nqp-wal"></div></div>'
+    + '<div class="nqp-pane" data-pane="buy"><div class="nqp-sub" id="nqp-buymsg">Loading Jupiter…</div><div id="nqjup"></div></div>'
+    + '</div>';
+  function ready() {
+    document.body.appendChild(btn); document.body.appendChild(ov);
+    var handleIn = ov.querySelector('#nqp-handle'); handleIn.value = handle;
+    handleIn.addEventListener('change', function () { window.NQLB.setHandle(handleIn.value); handleIn.value = window.NQLB.getHandle(); });
+
+    btn.addEventListener('click', function () { ov.classList.add('on'); loadBoards(); });
+    ov.addEventListener('click', function (e) { if (e.target === ov || e.target.hasAttribute('data-close')) ov.classList.remove('on'); });
+    ov.querySelectorAll('.nqp-tab').forEach(function (t) {
+      t.addEventListener('click', function () {
+        ov.querySelectorAll('.nqp-tab').forEach(function (x) { x.classList.remove('on'); }); t.classList.add('on');
+        var k = t.getAttribute('data-tab');
+        ov.querySelectorAll('.nqp-pane').forEach(function (p) { p.classList.toggle('on', p.getAttribute('data-pane') === k); });
+        if (k === 'wal') renderWallet();
+        if (k === 'buy') loadJupiter();
+      });
+    });
+
+    // world selector chips: Weekly, All-time, then worlds 1..N
+    var NW = 9; try { NW = Math.ceil(window.LEVELS.filter(function (l) { return !l.hidden; }).length / 3); } catch (e) {}
+    var sel = ov.querySelector('#nqp-wsel'); var scope = 'weekly';
+    function chip(key, label) { var c = document.createElement('span'); c.className = 'nqp-chip' + (key === scope ? ' on' : ''); c.textContent = label; c.dataset.k = key; sel.appendChild(c); }
+    chip('weekly', 'This Week'); chip('all', 'All-Time'); for (var w = 1; w <= NW; w++) chip('w' + w, 'W' + w);
+    sel.addEventListener('click', function (e) { if (!e.target.dataset.k) return; scope = e.target.dataset.k;
+      sel.querySelectorAll('.nqp-chip').forEach(function (c) { c.classList.toggle('on', c.dataset.k === scope); }); renderList(); });
+
+    var lastBoards = null;
+    window._nqScope = function () { return scope; };
+    function loadBoards() {
+      var worlds = []; for (var w = 1; w <= NW; w++) worlds.push(w);
+      fetch('/api/nq/leaderboard?worlds=' + worlds.join(',') + '&n=15').then(function (r) { return r.json(); })
+        .then(function (j) { lastBoards = j; renderList(); }).catch(function () { ov.querySelector('#nqp-list').innerHTML = '<div class="nqp-sub">Could not load.</div>'; });
+    }
+    function renderList() {
+      if (!lastBoards) return;
+      var rows = scope === 'weekly' ? lastBoards.weekly : scope === 'all' ? lastBoards.allTime : (lastBoards.byWorld[scope.slice(1)] || []);
+      var host = ov.querySelector('#nqp-list');
+      if (!rows || !rows.length) { host.innerHTML = '<div class="nqp-sub">No scores yet — be the first!</div>'; return; }
+      host.innerHTML = rows.map(function (r) {
+        var v = r.walletVerified ? '<span class="v">✓ wallet</span>' : '';
+        return '<div class="nqp-row"><span><span class="r">' + r.rank + '</span>' + esc(r.name) + v + '</span><span class="s">' + r.score.toLocaleString() + '</span></div>';
+      }).join('');
+    }
+    window._nqLoadBoards = loadBoards; window._nqRenderList = renderList;
+
+    function renderWallet() {
+      var host = ov.querySelector('#nqp-wal'); var ws = window.NQLB.getWallet();
+      if (ws.pubkey) {
+        var wl = ws.worlds === 'all' ? 'ALL worlds' : ('Worlds ' + ws.worlds[0] + '–' + ws.worlds[1]);
+        host.innerHTML = '<div class="nqp-row"><span>' + esc(ws.pubkey.slice(0, 4) + '…' + ws.pubkey.slice(-4)) + '</span>'
+          + '<span class="nqp-tier">TIER ' + ws.tier + '</span></div>'
+          + '<div class="nqp-sub" style="margin:8px 0">Access: <b style="color:#8dffc0">' + wl + '</b></div>'
+          + '<div class="nqp-sub">NORMIE: ' + (ws.balances ? ws.balances.normie.toLocaleString() : '?') + ' · CLKN: ' + (ws.balances ? ws.balances.clkn.toLocaleString() : '?') + '</div>'
+          + '<div class="nqp-sub" style="margin-top:8px">Your ranked scores now post with a verified wallet ✓</div>';
+      } else {
+        host.innerHTML = '<div class="nqp-sub" style="margin-bottom:10px">Prove wallet ownership to unlock worlds by what you HOLD. '
+          + 'This is a signature only — no transaction, no approval to move funds.</div>'
+          + '<button class="nqp-b" id="nqp-connect">👛 Connect &amp; Sign</button><div class="nqp-sub" id="nqp-walerr" style="margin-top:10px;color:#ff9db8"></div>';
+        ov.querySelector('#nqp-connect').addEventListener('click', function () {
+          ov.querySelector('#nqp-walerr').textContent = 'Connecting…';
+          connectWallet().then(function () { renderWallet(); }).catch(function (e) { ov.querySelector('#nqp-walerr').textContent = e.message || String(e); });
+        });
+      }
+    }
+
+    var jupLoaded = false;
+    function loadJupiter() {
+      if (jupLoaded) return; jupLoaded = true;
+      fetch('/api/nq/wallet/config').then(function (r) { return r.json(); }).then(function (cfg) {
+        var msg = ov.querySelector('#nqp-buymsg');
+        if (!cfg.normieConfigured) { msg.textContent = 'NORMIE mint not configured yet — the swap widget arms once NQ_NORMIE_MINT is set. (You can still buy NORMIE on Jupiter directly.)'; return; }
+        msg.textContent = 'Buy NORMIE to unlock more worlds:';
+        var s = document.createElement('script'); s.src = 'https://plugin.jup.ag/plugin-v1.js'; s.onload = function () {
+          try { window.Jupiter.init({ displayMode: 'integrated', integratedTargetId: 'nqjup',
+            formProps: { initialInputMint: 'So11111111111111111111111111111111111111112', initialOutputMint: cfg.normieMint } }); }
+          catch (e) { msg.textContent = 'Jupiter widget failed to load.'; }
+        }; s.onerror = function () { msg.textContent = 'Could not load Jupiter.'; }; document.body.appendChild(s);
+      }).catch(function () {});
+    }
+  }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+  if (document.body) ready(); else window.addEventListener('DOMContentLoaded', ready);
+})(); }
 </script>
 </body>
 </html>
