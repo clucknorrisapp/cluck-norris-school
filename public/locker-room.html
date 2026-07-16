@@ -154,7 +154,7 @@
       <input id="cMint" spellcheck="false" placeholder="Token mint address"/>
       <div class="row2">
         <div><label>Amount to lock</label><input id="cAmount" type="text" inputmode="decimal" placeholder="e.g. 10000000"/></div>
-        <div><label>Recipient wallet</label><input id="cRecipient" spellcheck="false" placeholder="who can claim (your wallet)"/></div>
+        <div><label>Recipient wallet <span class="muted" style="font-weight:400">(who can claim)</span></label><input id="cRecipient" spellcheck="false" placeholder="Leave blank to lock to yourself"/></div>
       </div>
       <div class="row2">
         <div><label>Cliff (unlocks nothing until)</label><input id="cCliff" type="date"/></div>
@@ -281,7 +281,9 @@
     if(!p){ $('#cMsg').className='msg err'; $('#cMsg').textContent='No Solana wallet found. Install Phantom or Solflare, or use the lock.jup.ag link below.'; return; }
     p.connect().then(function(resp){
       connected=(resp&&resp.publicKey?resp.publicKey:p.publicKey).toString();
-      if(!C.rec.value) C.rec.value=connected;
+      // Show the default as a PLACEHOLDER only — never write into the value, so whatever the
+      // user types always sticks (blank still locks to themselves; the submit + server default).
+      C.rec.placeholder='Leave blank to lock to yourself ('+shortAddr(connected)+')';
       $('#cConnect').style.display='none'; $('#cCreate').style.display='block';
       $('#cCreate').disabled=false; $('#cCreate').textContent='🔒 Create lock on-chain';
       $('#cWalletAddr').textContent=shortAddr(connected); $('#cWallet').style.display='block';
