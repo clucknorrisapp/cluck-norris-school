@@ -1048,6 +1048,23 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // SETUP LANE only: begin (or continue) a leaderboard run. One run token spans the whole run;
     // the score is submitted at run-end from the Over/Win scenes. No-op on the stable tester build.
     if(window.__NQ_SETUP && window.NQLB){ try{ window.NQLB.enterLevel(def.name, this.score); }catch(e){} }
+    // WORLDS 5+ balance (light touch, once per level): the SOL disc is available from the start, so
+    // add one extra shoot-favouring ground-worm (disc-only kill) per regular 5+ level, plus a couple
+    // of REALLY hidden SOL-ammo caches (worlds 5/7/9 openers) atop the highest platform — an
+    // exploration Easter egg that tops you above the 10/level for a hard stretch. Flag-guarded so a
+    // replay never stacks more worms onto the shared level object.
+    if(!def._aug5){ def._aug5=true;
+      if(this.levelIdx>=12 && !def.boss && !def.bonus && !def.hidden){
+        var _gp=def.gaps||[], _W=def.width||5200, _inGap=function(x){ for(var _i=0;_i<_gp.length;_i++){ if(x>=_gp[_i][0]-30&&x<=_gp[_i][1]+30) return true; } return false; };
+        var _wx=Math.round(_W*0.62); for(var _t=0;_t<40&&_inGap(_wx);_t++) _wx+=40;
+        if(!_inGap(_wx)) def.miniworms=(def.miniworms||[]).concat([_wx]);
+        if(this.levelIdx===12||this.levelIdx===18||this.levelIdx===24){
+          var _pl=def.plats||[], _best=null;
+          for(var _p=0;_p<_pl.length;_p++){ var _ty=_pl[_p][2]; if(_ty!=null&&(_best===null||_ty<_best.ty)) _best={ x:_pl[_p][0]+Math.round((_pl[_p][1]||1)*TILE/2), ty:_ty }; }
+          if(_best) def.powerups=(def.powerups||[]).concat([['discs',_best.x,_best.ty-24]]);
+        }
+      }
+    }
     var LW=this.LW=def.width, th=THEMES[def.theme];
     // background music — per-world mood (boss arenas get the boss theme; 1-3's Rug King switches in startBoss)
     try{ var w0=def.name.charAt(0); var mt=(def.boss&&def.bossType)?'boss':(w0==='1'?'world1':def.name==='2-1'?'desert':def.name==='2-2'?'casino':w0==='3'?'skyline':w0==='4'?'exchange':w0==='5'?'sacred':w0==='6'?'mines':w0==='7'?'exchange':w0==='8'?'boss':'world1'); MUSIC.forWorld(mt); }catch(e){}
@@ -1286,14 +1303,15 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     });
 
     // power-ups — bigger & premium: each pulses with a coloured glow halo
-    var PUCOL={ diamond:0x66ddff, bull:0x3dff6e, moon:0xffd23f, caffeine:0xffffff, candle:0x3dff6e, solana:0x14f195, omegachad:0xffa020, supergeek:0x2ee6c0, whale:0x2f7fff, coldwallet:0x9fe8ff, megawhale:0x1f6fff };
+    var PUCOL={ diamond:0x66ddff, bull:0x3dff6e, moon:0xffd23f, caffeine:0xffffff, candle:0x3dff6e, solana:0x14f195, discs:0x14f195, omegachad:0xffa020, supergeek:0x2ee6c0, whale:0x2f7fff, coldwallet:0x9fe8ff, megawhale:0x1f6fff };
     // GREEN CANDLE MODE pickup icon — a rising green candlestick chart (drawn once), distinct from the heal candle
     if(!this.textures.exists('greencandle')){ var gcx=this.make.graphics({x:0,y:0,add:false});
       [[4,28,12],[17,18,22],[30,8,32]].forEach(function(c){ gcx.fillStyle(0x0a3a1e,1); gcx.fillRect(c[0]+3,c[1]-7,3,7); gcx.fillRect(c[0]+3,c[1]+c[2],3,6); gcx.fillStyle(0x2ee66a,1); gcx.fillRect(c[0],c[1],9,c[2]); gcx.lineStyle(2,0x0a3a1e,1); gcx.strokeRect(c[0],c[1],9,c[2]); });
       gcx.generateTexture('greencandle',44,44); gcx.destroy(); }
     this.powerups=this.physics.add.group({allowGravity:false});
     (def.powerups||[]).forEach(function(pw){
-      var o=self.powerups.create(pw[1],pw[2],pw[0]); o.ptype=pw[0];
+      var ptex=(pw[0]==='discs')?'solana':pw[0];   // the hidden SOL-ammo cache reuses the disc sprite
+      var o=self.powerups.create(pw[1],pw[2],ptex); o.ptype=pw[0];
       o.setScale((pw[0]==='candle'?46:40)/o.height).setDepth(6);
       o.body.setAllowGravity(false); o.body.setSize(o.width*1.6,o.height*1.4);
       self.tweens.add({targets:o,y:pw[2]-11,duration:800,yoyo:true,repeat:-1,ease:'Sine.inOut'});
@@ -1526,6 +1544,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     else if(type==='caffeine'){ this.caffeineUntil=now+11000; this.powerBanner('CAFFEINE BOOST','WIRED — super speed 11s','#ffffff'); }
     else if(type==='candle'){ if(this.lives<3){ this.lives++; if(this.hearts[this.lives-1]) this.hearts[this.lives-1].setAlpha(1); } this.candleUntil=now+6000; this.addScore(100); this.powerBanner('GREEN CANDLE',(this._dark?'LIGHT IT UP — wider torch 6s, ':'PUMPING — ')+'+1 heart, +100','#3dff6e'); }
     else if(type==='solana'){ this.solanaUntil=now+9000; this.nextThrow=0; this.powerBanner('SOLANA MODE','FULL SEND — auto-fire discs for 9s!','#14f195'); }
+    else if(type==='discs'){ this.throwAmmo+=5; this.updateThrowHud(); SFX.coin(); this.powerBanner('SOL AMMO STASH','+5 DISCS — hidden cache!','#14f195'); }   // hidden Easter-egg ammo boost
     else if(type==='omegachad'){
       // ROTATING TRANSFORM: Giga Chad returns MEGA in the late worlds — a shock ring, but not so long it lasts a whole level.
       var mega=this.levelIdx>=18;   // World 7+
