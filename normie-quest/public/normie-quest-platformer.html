@@ -837,6 +837,22 @@ var LEVELS=[
     key:[400,H-150], door:2440 }
 ];
 
+// Let a USB / console controller BUTTON advance any "press to continue" screen (Briefing, Win,
+// Over, Title) — the same screens already accept a tap or keyboard. Polls raw gamepad buttons on an
+// interval (works without Phaser's gamepad manager); fires `go` once on a FRESH press after a short
+// grace, so the button that ended the previous screen can't instantly skip this one.
+function padAdvance(scene, go){
+  var t0=scene.time.now, prev=false, fired=false;
+  scene.time.addEvent({ delay:55, loop:true, callback:function(){
+    if(fired) return;
+    var press=false;
+    try{ var ps=(navigator.getGamepads?navigator.getGamepads():[]); for(var i=0;i<ps.length;i++){ var gp=ps[i]; if(!gp) continue;
+      var B=gp.buttons||[]; for(var j=0;j<B.length;j++){ if(B[j]&&(B[j].pressed||B[j].value>0.5)){ press=true; break; } } if(press) break; } }catch(e){}
+    if(press && !prev && (scene.time.now-t0)>500){ fired=true; go(); }
+    prev=press;
+  }});
+}
+
 /* ---------- Boot ---------- */
 var Boot=new Phaser.Class({ Extends:Phaser.Scene,
   initialize:function(){ Phaser.Scene.call(this,{key:'Boot'}); },
@@ -1008,6 +1024,7 @@ var Title=new Phaser.Class({ Extends:Phaser.Scene,
     // Tap anywhere = play from 1-1 (both modes). In TEST BUILD, the reliable DOM "≡ Levels"
     // button (bottom-left, works from here too) is how you reach LEVEL SELECT.
     this.input.once('pointerdown',go,this); this.input.keyboard.once('keydown',go,this);
+    padAdvance(this, function(){ go.call(self); });   // controller button also starts
     if(TEST_MODE){ this.add.text(W/2,262,'TEST BUILD · tap ≡ Levels below to pick a level',{fontFamily:UIFONT,resolution:UIRES,fontSize:'14px',color:'#ffd23f'}).setOrigin(.5); }
   }
 });
@@ -2883,6 +2900,7 @@ var Over=new Phaser.Class({ Extends:Phaser.Scene,
       else if(BURN_GATE) self.scene.start('Gate');
       else self.scene.start('Game',{level:0,score:0,lives:3}); };
     this.time.delayedCall(500,function(){ self.input.once('pointerdown',go); self.input.keyboard.once('keydown',go); });
+    padAdvance(self, go);   // controller button also continues
   }
 });
 
@@ -2922,6 +2940,7 @@ var Win=new Phaser.Class({ Extends:Phaser.Scene,
     // Free preview → straight back into the game; only the live burn build routes through the Gate.
     var self=this; this.started=false; var go=function(){ if(self.started) return; self.started=true; if(BURN_GATE) self.scene.start('Gate'); else self.scene.start('Game',{level:0,score:0,lives:3}); };
     this.time.delayedCall(500,function(){ self.input.once('pointerdown',go); self.input.keyboard.once('keydown',go); });
+    padAdvance(self, go);   // controller button also continues
   }
 });
 
@@ -3100,6 +3119,7 @@ var Controls=new Phaser.Class({ Extends:Phaser.Scene,
     this.cont=this.add.text(cx,H-11,(isTouch?'TAP':'PRESS')+' TO START  ▶',{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#3dff6e'}).setOrigin(.5);
     this.input.on('pointerdown',function(){ self.go(); });
     this.input.keyboard.on('keydown',function(){ self.go(); });
+    padAdvance(this, function(){ self.go(); });   // controller button also starts
   },
   go:function(){ if(this.done) return; this.done=true; SFX.power(); this.scene.start('Game',{level:this.nextLevel,score:this.score,lives:3}); },
   update:function(){ if(!this.t0){ this.t0=this.time.now; return; }
@@ -3156,6 +3176,7 @@ var Briefing=new Phaser.Class({ Extends:Phaser.Scene,
     this.cont=this.add.text(cx,H-11,'TAP TO CONTINUE  ▶',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#3dff6e'}).setOrigin(.5);
     this.input.on('pointerdown',function(){ self.go(); });
     this.input.keyboard.on('keydown',function(){ self.go(); });
+    padAdvance(this, function(){ self.go(); });   // controller button also starts
   },
   go:function(){ if(this.done) return; this.done=true; SFX.power(); this.scene.start('Game',{level:this.nextLevel,score:this.score,lives:3}); },
   update:function(){ if(!this.t0){ this.t0=this.time.now; return; }
