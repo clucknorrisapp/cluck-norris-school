@@ -24,6 +24,7 @@ function nacl() { return (_nacl = _nacl || require('tweetnacl')); }
 function bs58() { return (_bs58 = _bs58 || require('bs58')); }
 
 const CLKN_MINT_DEFAULT = 'DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS';
+const NORMIE_MINT_DEFAULT = 'FrSFwE2BxWADEyUWFXDMAeomzuB4r83ZvzdG9sevpump';   // Normie (PumpSwap); NQ_NORMIE_MINT env overrides
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
 // Ownership is "remembered until the player disconnects / clears storage" (owner's call): the
 // session token is effectively non-expiring. Tier is NOT frozen — the client re-reads live balance
@@ -34,7 +35,7 @@ const SECRET = process.env.NQ_LB_SECRET || process.env.PREMIUM_ACCESS_KEY || cry
 function num(v, d) { const n = Number(v); return Number.isFinite(n) ? n : d; }
 function cfg() {
   return {
-    normieMint: (process.env.NQ_NORMIE_MINT || '').trim(),
+    normieMint: (process.env.NQ_NORMIE_MINT || NORMIE_MINT_DEFAULT).trim(),
     clknMint: (process.env.NQ_CLKN_MINT || CLKN_MINT_DEFAULT).trim(),
     tier1Normie: num(process.env.NQ_TIER1_NORMIE, 100000),
     tier2Normie: num(process.env.NQ_TIER2_NORMIE, 500000),
