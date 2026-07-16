@@ -6587,6 +6587,14 @@ app.post("/api/lock/create-tx", async (req, res) => {
       cancelable: b.cancelable === true, recipientChangeable: b.recipientChangeable === true,
       name: b.name,
     });
+    // Best-effort token identity so the client can craft a nice "share your lock" post.
+    if (r && r.ok) {
+      try {
+        const tm = await jupTokensSearch(String(b.mint));
+        const t = Array.isArray(tm) ? (tm.find((x) => x && x.id === b.mint) || tm[0]) : null;
+        if (t) { r.tokenSymbol = t.symbol || null; r.tokenName = t.name || null; }
+      } catch (_) {}
+    }
     return res.status(200).json(r);
   } catch (err) {
     return res.status(400).json({ ok: false, error: publicErrMsg(err) });

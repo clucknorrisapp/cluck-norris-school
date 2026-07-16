@@ -100,6 +100,14 @@
   .qm:hover{border-color:#D97706;color:#f5b301;}
   .preview{background:#0d0d10;border:1px solid var(--border,rgba(255,255,255,.08));border-radius:11px;padding:14px;margin-top:14px;}
   .msg{font-size:12.5px;margin-top:10px;color:#9a9aa8;} .msg.err{color:#ff8f8f;} .msg.ok{color:#34d399;}
+  /* share-your-lock card */
+  .sharecard{margin-top:14px;background:linear-gradient(160deg,rgba(29,155,240,.12),#0d0d10 70%);border:1px solid rgba(29,155,240,.38);border-radius:12px;padding:15px;}
+  .sharehead{font-family:'Anton',sans-serif;letter-spacing:.5px;color:#7cc7ff;font-size:16px;}
+  .sharecard textarea{width:100%;background:#0d0d10;border:1px solid var(--border,rgba(255,255,255,.14));border-radius:9px;padding:11px;color:#e9e9ee;font-family:var(--body,system-ui,sans-serif);font-size:13px;line-height:1.5;resize:vertical;margin-top:9px;}
+  .sharerow{display:flex;align-items:center;gap:8px;margin-top:9px;}
+  .sharerow .btn{margin-top:0;width:auto;padding:10px 16px;font-size:13.5px;}
+  .btn.x{background:#1d9bf0;color:#fff;} .btn.x:hover{background:#1a8cd8;}
+  .charc{font-family:var(--mono,monospace);font-size:11px;color:#9a9aa8;margin-right:auto;} .charc.over{color:#ff8f8f;}
   .opts{margin-top:14px;border-top:1px solid var(--border,rgba(255,255,255,.08));padding-top:12px;}
   .tog{display:flex;align-items:center;gap:10px;margin:10px 0;cursor:pointer;font-size:13.5px;color:#e9e9ee;}
   .tog input{width:18px;height:18px;accent-color:#D97706;cursor:pointer;}
@@ -256,6 +264,16 @@
       <button class="btn" id="cCreate" style="display:none">🔒 Create lock on-chain</button>
       <div id="cWallet" style="display:none;margin-top:10px;font-size:12.5px;color:#9a9aa8;text-align:center">🟢 Connected as <b id="cWalletAddr" style="color:#e9e9ee"></b> · <a href="#" id="cDisconnect" style="color:#f5b301">Disconnect / switch wallet</a></div>
       <div class="msg" id="cMsg"></div>
+      <div class="sharecard" id="shareCard" style="display:none">
+        <div class="sharehead">📢 Announce your lock</div>
+        <p class="muted" style="font-size:12px;margin-top:2px">Here's a ready-to-post announcement — tweak it if you like, then share so your holders see it on-chain.</p>
+        <textarea id="shareTxt" rows="5" spellcheck="true"></textarea>
+        <div class="sharerow">
+          <span class="charc" id="shareCnt">0/280</span>
+          <button class="btn x" id="shareX" type="button">𝕏 Post on X</button>
+          <button class="btn alt" id="shareCopy" type="button">Copy</button>
+        </div>
+      </div>
       <div class="muted" style="font-size:11px;margin-top:10px">Not sure what to pick? <a href="#" class="acjump">Ask Cluck about locks →</a> · Prefer Jupiter’s own audited flow? <a id="cJupLink" href="https://lock.jup.ag/" target="_blank" rel="noopener">Open it on lock.jup.ag →</a></div>
     </div>
   </div>
@@ -481,12 +499,38 @@
           $('#cMsg').className='msg'; $('#cMsg').textContent='Sent — confirming on-chain…';
           return confirmSig(sig).then(function(){ return sig; });
         }).then(function(sig){
-          $('#cMsg').className='msg ok'; $('#cMsg').innerHTML='🔒 Lock created! <a href="https://solscan.io/tx/'+encodeURIComponent(sig)+'" target="_blank" rel="noopener">View on Solscan →</a>';
-          btn.textContent='✓ Lock created'; window.__fameLoaded=false;   // refresh the Lock of Fame with the new lock
-          setTimeout(function(){ document.querySelector('.tab[data-tab="fame"]').click(); $('#fameMint').value=m; loadFame(m); }, 3500);
+          $('#cMsg').className='msg ok';
+          $('#cMsg').innerHTML='🔒 Lock created! <a href="https://solscan.io/tx/'+encodeURIComponent(sig)+'" target="_blank" rel="noopener">View on Solscan →</a> · <a href="#" id="cSeeFame">See it in the Lock of Fame →</a>';
+          btn.textContent='✓ Lock created'; window.__fameLoaded=false;   // Fame reloads when opened
+          showShare(res, m, sig);   // offer a ready-to-post X announcement
+          var sf=document.getElementById('cSeeFame'); if(sf) sf.addEventListener('click',function(ev){ ev.preventDefault(); document.querySelector('.tab[data-tab="fame"]').click(); $('#fameMint').value=m; loadFame(m); });
         }).catch(function(e){ $('#cMsg').className='msg err'; $('#cMsg').textContent=(e&&e.message)?e.message:'Wallet cancelled or the transaction failed.'; btn.disabled=false; });
       }).catch(function(){ $('#cMsg').className='msg err'; $('#cMsg').textContent='Network error building the lock.'; btn.disabled=false; });
   });
+
+  // ---- Share your lock on X: a ready-to-post announcement after a successful lock ----
+  function fmtNumStr(v){ v=String(v==null?'':v).replace(/,/g,''); if(!/^\d+(\.\d+)?$/.test(v)) return v||'my tokens'; var p=v.split('.'); p[0]=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,','); return p.join('.'); }
+  // Approximate X's weighted length: URLs count as 23 (t.co), most emoji as 2.
+  function tweetLen(s){ s=String(s||'').replace(/https?:\/\/\S+/g, new Array(24).join('x')); var n=0; for(var i=0;i<s.length;i++){ var cp=s.codePointAt(i); if(cp>0xFFFF)i++; n += (cp>=0x1F000 || (cp>=0x2600&&cp<=0x27BF))?2:1; } return n; }
+  function buildShareTweet(res){
+    var amt=fmtNumStr(C.amt.value);
+    var sym=(res&&res.tokenSymbol)?('$'+String(res.tokenSymbol).replace(/[^A-Za-z0-9_]/g,'')):'my tokens';
+    var per=Math.max(1,parseInt(C.dur.value,10)||1), unit=C.intr.value;
+    var permWord=$('#cCancel')&&$('#cCancel').checked?'':'permanent ';
+    var sched=per>1?(permWord+per+'-'+unit+' vesting lock'):(permWord+'1-'+unit+' lock');
+    return '🔒 Just locked '+amt+' '+sym+' — a '+sched+' via Jupiter Lock. Non-custodial, no token cut, 100% on-chain. Did it at the 🐔 Cluck Norris Locker Room: clucknorris.app/locker-room @JupiterExchange';
+  }
+  function updShareCnt(){ var n=tweetLen($('#shareTxt').value); var el=$('#shareCnt'); if(!el)return; el.textContent=n+'/280'; el.classList.toggle('over', n>280); }
+  function showShare(res){
+    var ta=$('#shareTxt'); if(!ta)return; ta.value=buildShareTweet(res); updShareCnt();
+    $('#shareCard').style.display='block';
+    setTimeout(function(){ try{ $('#shareCard').scrollIntoView({behavior:'smooth',block:'nearest'}); }catch(_){} }, 60);
+  }
+  if($('#shareTxt')){
+    $('#shareTxt').addEventListener('input',updShareCnt);
+    $('#shareX').addEventListener('click',function(){ window.open('https://twitter.com/intent/tweet?text='+encodeURIComponent($('#shareTxt').value),'_blank','noopener'); });
+    $('#shareCopy').addEventListener('click',function(){ var ta=$('#shareTxt'); ta.select(); try{document.execCommand('copy');}catch(e){} var b=$('#shareCopy'); b.textContent='Copied'; setTimeout(function(){b.textContent='Copy';},1200); });
+  }
 
   // ---- Claim tab: shows locks where the connected wallet is the RECIPIENT, claims vested tokens ----
   var clPicker=document.createElement('div'); clPicker.id='clPicker'; clPicker.style.cssText='display:none;flex-direction:column;gap:8px;margin-top:10px';
