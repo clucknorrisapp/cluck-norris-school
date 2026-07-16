@@ -1389,6 +1389,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.physics.add.collider(this.projectiles,this.platforms);
     this.physics.add.collider(this.projectiles,this.movers);
     this.physics.add.overlap(this.projectiles,this.enemies,this.coinHitEnemy,null,this);
+    this.physics.add.overlap(this.projectiles,this.miniworms,this.discHitMiniworm,null,this);   // SOL disc is the ONLY way to kill a ground-worm
     this.nextThrow=0; this.prevThrow=false;
 
     // HUD — held in a container pinned at the screen centre (W/2,H/2) & scrollFactor 0.
@@ -2188,11 +2189,16 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   miniwormTouch:function(player,mw){
     if(this.over||mw.dead||!mw.visible||mw.mwState==='hidden'||mw.mwState==='retreat') return;
     var now=this.time.now;
-    if(now<this.moonUntil||now<this.whaleUntil){ this.killMiniworm(mw); return; }
+    if(now<this.moonUntil||now<this.whaleUntil){ this.killMiniworm(mw); return; }   // god-mode (moon/whale) plows through
     var onTop=(player.body.bottom<=mw.body.top+12)&&player.body.velocity.y>=-20;
-    if(onTop){ player.setVelocityY(-300); this.killMiniworm(mw); return; }
+    if(onTop){ player.setVelocityY(-300); return; }   // bounce off — a ground-worm can ONLY be killed by a SOL disc
     if(player.invuln||now<this.shieldUntil||now<this.coldUntil) return;
     this.hurt(player, mw.x<player.x?1:-1);
+  },
+  // SOL disc hits a ground-worm — the only normal way to kill one (stomping just bounces off).
+  discHitMiniworm:function(coin,mw){
+    if(this.over||!coin.active||mw.dead||!mw.visible||mw.mwState==='hidden'||mw.mwState==='retreat') return;
+    coin.destroy(); this.killMiniworm(mw);
   },
   killMiniworm:function(mw){
     if(mw.dead) return; mw.dead=true; this.addScore(20); this.burst(mw.x,mw.y,0x3dff6e,12); SFX.stomp();
