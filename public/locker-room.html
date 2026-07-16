@@ -337,7 +337,14 @@
         // signAndSendTransaction (which would leave base's server-side pre-sign ahead of the wallet).
         if(!p.signTransaction){ $('#cMsg').className='msg err'; $('#cMsg').textContent='This wallet can’t sign here — use Phantom or Solflare, or the lock.jup.ag link below.'; btn.disabled=false; return; }
         $('#cMsg').className='msg'; $('#cMsg').textContent='Approve the transaction in your wallet…';
-        p.signTransaction(tx).then(function(signed){
+        // Refresh the blockhash right before signing — the tx was built earlier (before you
+        // connected/reviewed), so its blockhash can expire and cause "Blockhash not found" on send.
+        fetch('/api/helius-rpc',{method:'POST',headers:{'content-type':'application/json'},
+          body:JSON.stringify({ jsonrpc:'2.0', id:'lock-bh', method:'getLatestBlockhash', params:[{ commitment:'confirmed' }] })})
+          .then(function(r){return r.json();}).then(function(j){
+            var bh=j&&j.result&&j.result.value&&j.result.value.blockhash; if(bh) tx.recentBlockhash=bh;
+            return p.signTransaction(tx);
+          }).then(function(signed){
           signed.partialSign(baseKp);   // ephemeral base signs AFTER the wallet
           var raw=signed.serialize();
           return fetch('/api/helius-rpc',{method:'POST',headers:{'content-type':'application/json'},
