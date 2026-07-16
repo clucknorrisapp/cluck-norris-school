@@ -49,11 +49,15 @@
   .faq h4{font-size:14px;color:#fff;margin-bottom:5px;}
   .faq p{font-size:13px;color:#b9b9c8;}
   /* lock of fame */
-  .tokhead{display:flex;align-items:center;gap:12px;padding:0 0 12px;border-bottom:1px solid var(--border,rgba(255,255,255,.08));margin-bottom:12px;}
-  .tokhead img{width:44px;height:44px;border-radius:50%;background:#0d0d10;border:1px solid var(--border,rgba(255,255,255,.12));object-fit:cover;flex:0 0 auto;}
-  .tokhead .ti{min-width:0;}
-  .tokhead .tname{font-family:'Anton',sans-serif;font-size:21px;letter-spacing:.5px;color:#fff;line-height:1.04;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .tokhead .tsym{font-family:var(--mono,monospace);font-size:10.5px;color:#9a9aa8;letter-spacing:.5px;margin-top:2px;}
+  .fhead{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:13px;border-bottom:1px solid var(--border,rgba(255,255,255,.08));margin-bottom:13px;}
+  .fhead-id{display:flex;align-items:center;gap:11px;min-width:0;}
+  .fhead-id img{width:42px;height:42px;border-radius:50%;background:#0d0d10;border:1px solid var(--border,rgba(255,255,255,.12));object-fit:cover;flex:0 0 auto;}
+  .fhead-id .ti{min-width:0;}
+  .fhead-id .tname{font-family:'Anton',sans-serif;font-size:22px;letter-spacing:.5px;color:#fff;line-height:1.02;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .fhead-id .tsym{font-family:var(--mono,monospace);font-size:10px;color:#9a9aa8;letter-spacing:.5px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .fhead-pct{text-align:right;flex:0 0 auto;}
+  .fhead-pct .pctbig{font-family:'Anton',sans-serif;font-size:44px;line-height:.88;background:linear-gradient(180deg,#34d399,#059669);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+  .fhead-pct .pctcap{font-family:var(--mono,monospace);font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#9a9aa8;margin-top:1px;}
   .hstat{text-align:center;padding:8px 0 4px;}
   .hstat .big{font-family:'Anton',sans-serif;font-size:62px;line-height:1;
      background:linear-gradient(180deg,#34d399,#059669);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
@@ -269,12 +273,13 @@
       if(!d||!d.success){ body.innerHTML='<div class="card"><p class="msg err">Could not read locks'+(d&&d.error?': '+esc(d.error):'')+'.</p></div>'; return; }
       var pct=d.pctOfSupply!=null?(d.pctOfSupply*100):null;
       var t=d.token||{};
-      var head=(t.name||t.symbol)?'<div class="tokhead">'+(t.icon?'<img src="'+esc(t.icon)+'" alt="" onerror="this.remove()"/>':'')+'<div class="ti"><div class="tname">'+esc(t.name||t.symbol)+'</div><div class="tsym">'+((t.symbol&&t.name)?esc(t.symbol)+' · ':'')+esc(shortAddr(mint))+'</div></div></div>':'';
+      var idHtml='<div class="fhead-id">'+(t.icon?'<img src="'+esc(t.icon)+'" alt="" onerror="this.remove()"/>':'')+'<div class="ti"><div class="tname">'+esc(t.name||t.symbol||'Token')+'</div><div class="tsym">'+((t.symbol&&t.name)?esc(t.symbol)+' · ':'')+esc(shortAddr(mint))+'</div></div></div>';
+      var fhead='<div class="fhead">'+idHtml+'<div class="fhead-pct"><div class="pctbig">'+(pct!=null?pct.toFixed(1)+'%':'—')+'</div><div class="pctcap">locked</div></div></div>';
       var bd=(d.breakdown||[]); var top=(d.topLocks||[]);
       var bars=bd.map(function(b){ var w=d.totalLocked>0?(b.tokens/d.totalLocked*100):0; return '<div><div class="brow"><span>'+pill(b.label)+' <b>'+fmt(b.tokens)+'</b></span><span class="muted">'+w.toFixed(1)+'%</span></div><div class="bar"><i style="width:'+w.toFixed(1)+'%;background:'+barColor(b.label)+'"></i></div></div>'; }).join('');
       var rows=top.map(function(l,i){ return '<div class="lockrow"><span class="rank">'+(i+1)+'</span><span class="amt">'+fmt(l.tokens)+'</span><span class="lbl">'+esc(shortAddr(l.authority))+'</span>'+pill(l.label)+'</div>'; }).join('');
       body.innerHTML=
-        '<div class="card">'+head+'<div class="hstat"><div class="big">'+(pct!=null?pct.toFixed(1)+'%':'—')+'</div><div class="cap">of supply locked</div></div>'
+        '<div class="card">'+fhead
         + '<div class="grid"><div class="stat"><div class="k">Total locked</div><div class="v">'+fmt(d.totalLocked)+'</div></div>'
         + '<div class="stat"><div class="k">Lock accounts</div><div class="v">'+(d.lockCount||0)+'</div></div>'
         + '<div class="stat"><div class="k">Total supply</div><div class="v">'+fmt(d.supply)+'</div></div></div>'
