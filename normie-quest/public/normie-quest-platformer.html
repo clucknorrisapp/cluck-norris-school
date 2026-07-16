@@ -2209,9 +2209,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.over||mw.dead||!mw.visible||mw.mwState==='hidden'||mw.mwState==='retreat') return;
     var now=this.time.now;
     if(now<this.moonUntil||now<this.whaleUntil){ this.killMiniworm(mw); return; }   // god-mode (moon/whale) plows through
-    var onTop=(player.body.bottom<=mw.body.top+12)&&player.body.velocity.y>=-20;
-    if(onTop){ player.setVelocityY(-300); return; }   // bounce off — a ground-worm can ONLY be killed by a SOL disc
-    if(player.invuln||now<this.shieldUntil||now<this.coldUntil) return;
+    if(player.invuln||now<this.shieldUntil||now<this.coldUntil) return;   // damage-immunity powers still protect
+    // ANY contact hurts — you can't stomp a ground-worm; trying to jump on it costs a life. The
+    // SOL disc is the only safe kill.
     this.hurt(player, mw.x<player.x?1:-1);
   },
   // SOL disc hits a ground-worm — the only normal way to kill one (stomping just bounces off).
