@@ -582,6 +582,20 @@ tick-alignment + tight-width guards) and the balanced label + the /liquidity "±
 render the realized width, not the requested slider value. LOW backlog now fully cleared.
 
 ## Conventions
+- 🛡️ **PHANTOM "may be malicious" WARNING on client-signed txs — ROOT CAUSE + FIX (Phantom
+  Support, 2026-05; recurring, so it's recorded HERE in the committed memory now).** Phantom's
+  **Lighthouse** security system flags any **multi-signer** transaction when the signing order is
+  wrong: the **connected wallet MUST sign FIRST**, then any additional signers. If an ephemeral
+  co-signer (e.g. a `base`/mint keypair we generate server-side) is pre-signed BEFORE the wallet,
+  Phantom shows the scary "this transaction may be malicious" screen. **Correct pattern for ANY
+  page that builds a tx with an extra signer** (Jup Locker Room `/locker-room` is the reference
+  impl): build the tx UNSIGNED server-side, hand the client the ephemeral secret, then client-side
+  `const signed = await provider.signTransaction(tx)` (**wallet first**) → `signed.partialSign(base)`
+  (**extra signer after**) → submit the fully-signed raw tx via the `/api/helius-rpc` `sendTransaction`
+  proxy. Do **NOT** `partialSign(base)` on the server, and do **NOT** use `signAndSendTransaction`
+  when a non-wallet signer exists (it leaves the pre-signed base ahead of the wallet → warning).
+  Exposing the ephemeral base secret to the client is safe: it's a throwaway that only derives a PDA
+  and never holds funds/authority.
 - Tool pages are vanilla HTML + inline JS; the school is React. **Escape any API/token-
   supplied string before `innerHTML`** — token names/symbols are attacker-controlled.
 - Forensic rule everywhere: **state what's on-chain, never assert intent** ("the chain

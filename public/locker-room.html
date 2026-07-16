@@ -180,6 +180,7 @@
       </div>
       <button class="btn" id="cConnect">👛 Connect wallet</button>
       <button class="btn" id="cCreate" style="display:none">🔒 Create lock on-chain</button>
+      <div id="cWallet" style="display:none;margin-top:10px;font-size:12.5px;color:#9a9aa8;text-align:center">🟢 Connected as <b id="cWalletAddr" style="color:#e9e9ee"></b> · <a href="#" id="cDisconnect" style="color:#f5b301">Disconnect / switch wallet</a></div>
       <div class="msg" id="cMsg"></div>
       <div class="muted" style="font-size:11px;margin-top:10px">Prefer Jupiter’s own audited flow? <a id="cJupLink" href="https://lock.jup.ag/" target="_blank" rel="noopener">Open it on lock.jup.ag →</a></div>
     </div>
@@ -280,10 +281,21 @@
       connected=(resp&&resp.publicKey?resp.publicKey:p.publicKey).toString();
       if(!C.rec.value) C.rec.value=connected;
       $('#cConnect').style.display='none'; $('#cCreate').style.display='block';
-      $('#cMsg').className='msg ok'; $('#cMsg').textContent='Connected '+shortAddr(connected)+'. Review the schedule above, then create your lock.';
+      $('#cCreate').disabled=false; $('#cCreate').textContent='🔒 Create lock on-chain';
+      $('#cWalletAddr').textContent=shortAddr(connected); $('#cWallet').style.display='block';
+      $('#cMsg').className='msg ok'; $('#cMsg').textContent='Connected. Review the schedule above, then create your lock.';
     }).catch(function(){ $('#cMsg').className='msg err'; $('#cMsg').textContent='Wallet connection cancelled.'; });
   });
+  // Disconnect / switch wallet — clears the session so you can connect a different wallet.
+  $('#cDisconnect').addEventListener('click',function(e){ e.preventDefault();
+    try{ var p=provider(); if(p&&p.disconnect) p.disconnect(); }catch(_){}
+    connected=null;
+    $('#cConnect').style.display='block'; $('#cCreate').style.display='none'; $('#cWallet').style.display='none';
+    $('#cCreate').disabled=false; $('#cCreate').textContent='🔒 Create lock on-chain';
+    $('#cMsg').className='msg'; $('#cMsg').textContent='Wallet disconnected. Connect a different wallet to switch.';
+  });
   function b64ToBytes(b64){ var bin=atob(b64), a=new Uint8Array(bin.length); for(var i=0;i<bin.length;i++) a[i]=bin.charCodeAt(i); return a; }
+  function bytesToB64(u8){ var s=''; for(var i=0;i<u8.length;i++) s+=String.fromCharCode(u8[i]); return btoa(s); }
   $('#cCreate').addEventListener('click',function(){
     var m=(C.mint.value||'').trim(), amt=(C.amt.value||'').trim();
     if(!m||!amt){ $('#cMsg').className='msg err'; $('#cMsg').textContent='Enter a token mint and an amount first.'; return; }
@@ -299,12 +311,23 @@
       .then(function(r){return r.json();}).then(function(res){
         if(!res.ok){ $('#cMsg').className='msg err'; $('#cMsg').textContent=res.error||'Could not build the lock.'; btn.disabled=false; return; }
         if(res.simError){ $('#cMsg').className='msg err'; $('#cMsg').textContent='Can’t create this lock — '+res.simError; btn.disabled=false; return; }
-        var tx; try{ tx=window.solanaWeb3.Transaction.from(b64ToBytes(res.txBase64)); }catch(e){ $('#cMsg').className='msg err'; $('#cMsg').textContent='Bad transaction from server.'; btn.disabled=false; return; }
-        $('#cMsg').className='msg'; $('#cMsg').textContent='Approve the transaction in your wallet…';
+        var tx, baseKp;
+        try{ tx=window.solanaWeb3.Transaction.from(b64ToBytes(res.txBase64)); baseKp=window.solanaWeb3.Keypair.fromSecretKey(b64ToBytes(res.baseSecret)); }
+        catch(e){ $('#cMsg').className='msg err'; $('#cMsg').textContent='Bad transaction from server.'; btn.disabled=false; return; }
         var p=provider();
-        var sendIt = p.signAndSendTransaction ? p.signAndSendTransaction(tx) : Promise.reject(new Error('Your wallet does not support signing here — use the lock.jup.ag link below.'));
-        sendIt.then(function(out){
-          var sig=(out&&out.signature)?out.signature:out;
+        // ⚠️ Phantom Lighthouse: the WALLET must sign FIRST on a multi-signer tx, then the
+        // ephemeral base signs — otherwise Phantom flags it as "may be malicious". So we use
+        // signTransaction (wallet first) → partialSign(base) → submit via our RPC, NOT
+        // signAndSendTransaction (which would leave base's server-side pre-sign ahead of the wallet).
+        if(!p.signTransaction){ $('#cMsg').className='msg err'; $('#cMsg').textContent='This wallet can’t sign here — use Phantom or Solflare, or the lock.jup.ag link below.'; btn.disabled=false; return; }
+        $('#cMsg').className='msg'; $('#cMsg').textContent='Approve the transaction in your wallet…';
+        p.signTransaction(tx).then(function(signed){
+          signed.partialSign(baseKp);   // ephemeral base signs AFTER the wallet
+          var raw=signed.serialize();
+          return fetch('/api/helius-rpc',{method:'POST',headers:{'content-type':'application/json'},
+            body:JSON.stringify({ jsonrpc:'2.0', id:'lock-send', method:'sendTransaction', params:[bytesToB64(raw),{ encoding:'base64', maxRetries:5 }] })})
+            .then(function(r){return r.json();}).then(function(j){ if(j.error) throw new Error(j.error.message||'Send failed'); return j.result; });
+        }).then(function(sig){
           $('#cMsg').className='msg ok'; $('#cMsg').innerHTML='🔒 Lock created! <a href="https://solscan.io/tx/'+encodeURIComponent(sig)+'" target="_blank" rel="noopener">View on Solscan →</a>';
           btn.textContent='✓ Lock created'; window.__fameLoaded=false;   // refresh the Lock of Fame with the new lock
           setTimeout(function(){ document.querySelector('.tab[data-tab="fame"]').click(); $('#fameMint').value=m; loadFame(m); }, 3500);
