@@ -2211,8 +2211,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(now<this.moonUntil||now<this.whaleUntil){ this.killMiniworm(mw); return; }   // god-mode (moon/whale) plows through
     if(player.invuln||now<this.shieldUntil||now<this.coldUntil) return;   // damage-immunity powers still protect
     // ANY contact hurts — you can't stomp a ground-worm; trying to jump on it costs a life. The
-    // SOL disc is the only safe kill.
-    this.hurt(player, mw.x<player.x?1:-1);
+    // SOL disc is the only safe kill. Make it READ clearly that the worm took a heart.
+    this.hurt(player, mw.x<player.x?1:-1, 'CHOMPED BY A GROUND-WORM');
+    if(!this.over){ this.burst(mw.x, mw.body.top, 0x3dff9e, 14); this.flash('WORM BITE!  -1 HEART','#ff3860'); }
   },
   // SOL disc hits a ground-worm — the only normal way to kill one (stomping just bounces off).
   discHitMiniworm:function(coin,mw){
@@ -2532,12 +2533,12 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   },
 
   loseLife:function(reason){ this.lives--; if(this.hearts[this.lives]) this.hearts[this.lives].setAlpha(.16); if(this.lives<=0) this.gameOver(reason); },
-  hurt:function(player,knockDir){
+  hurt:function(player,knockDir,reason){
     // Super Geek audit: absorb the next hit instead of losing a life (consumes the shield)
     if(this.geekShield){ this.geekShield=false; player.invuln=true; this.cameras.main.flash(150,46,230,200); SFX.power(); this.flash('AUDIT BLOCKED IT!','#2ee6c0');
       this.tweens.add({targets:player,alpha:.3,duration:90,yoyo:true,repeat:5,onComplete:function(){ player.alpha=1; player.invuln=false; }}); return; }
     this.solanaUntil=0;   // taking damage ends SOLANA MODE
-    this.cameras.main.shake(140,.012); SFX.hurt(); this.burst(player.x,player.y,0xff3860,12); this.loseLife('WRECKED BY FUD'); if(this.over) return;
+    this.cameras.main.shake(140,.012); SFX.hurt(); this.burst(player.x,player.y,0xff3860,12); this.loseLife(reason||'WRECKED BY FUD'); if(this.over) return;
     player.invuln=true; player.setVelocity(knockDir*160,-160);
     this.tweens.add({targets:player,alpha:.25,duration:100,yoyo:true,repeat:8,onComplete:function(){ player.alpha=1; player.invuln=false; }});
   },
