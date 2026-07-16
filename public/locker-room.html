@@ -73,6 +73,8 @@
   .btn{width:100%;padding:13px;border:none;border-radius:10px;background:#D97706;color:#1a1a1a;font-family:'Anton',sans-serif;font-weight:900;letter-spacing:1px;font-size:15px;cursor:pointer;margin-top:14px;}
   .btn.alt{background:#1c1d24;color:#e9e9ee;border:1px solid var(--border,rgba(255,255,255,.14));}
   .btn:disabled{opacity:.5;cursor:not-allowed;}
+  .qm{padding:6px 12px;border-radius:999px;background:#1c1d24;color:#e9e9ee;border:1px solid var(--border,rgba(255,255,255,.14));font-size:12.5px;font-weight:600;cursor:pointer;}
+  .qm:hover{border-color:#D97706;color:#f5b301;}
   .preview{background:#0d0d10;border:1px solid var(--border,rgba(255,255,255,.08));border-radius:11px;padding:14px;margin-top:14px;}
   .msg{font-size:12.5px;margin-top:10px;color:#9a9aa8;} .msg.err{color:#ff8f8f;} .msg.ok{color:#34d399;}
   .opts{margin-top:14px;border-top:1px solid var(--border,rgba(255,255,255,.08));padding-top:12px;}
@@ -152,6 +154,10 @@
       <input id="cName" maxlength="80" placeholder="e.g. CLKN Team — 12mo linear"/>
       <label>Token mint</label>
       <input id="cMint" spellcheck="false" placeholder="Token mint address"/>
+      <div class="quickmints" style="margin:7px 0 2px;display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" class="qm" data-mint="DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS">🐔 Use CLKN</button>
+        <button type="button" class="qm" data-mint="FrSFwE2BxWADEyUWFXDMAeomzuB4r83ZvzdG9sevpump">Use NORMIE</button>
+      </div>
       <div class="row2">
         <div><label>Amount to lock</label><input id="cAmount" type="text" inputmode="decimal" placeholder="e.g. 10000000"/></div>
         <div><label>Recipient wallet <span class="muted" style="font-weight:400">(who can claim)</span></label><input id="cRecipient" spellcheck="false" placeholder="Leave blank to lock to yourself"/></div>
@@ -271,6 +277,11 @@
   $('#cExplainBtn').addEventListener('click',function(){ var e=$('#cExplain'); e.style.display=(e.style.display==='none'?'block':'none'); });
   function updJupLink(){ var m=(C.mint.value||'').trim(); $('#cJupLink').href='https://lock.jup.ag/'+(m?('?mint='+encodeURIComponent(m)):''); }
   C.mint.addEventListener('input',updJupLink);
+  // Quick-fill mint buttons (CLKN / NORMIE) — set the value and fire 'input' so the
+  // preview + Jupiter link update just like typing it.
+  document.querySelectorAll('.quickmints .qm').forEach(function(btn){
+    btn.addEventListener('click',function(){ C.mint.value=btn.getAttribute('data-mint'); C.mint.dispatchEvent(new Event('input',{bubbles:true})); C.mint.focus(); });
+  });
   drawPreview();
 
   // ---- wallet connect (buy-time signing is handled by Jupiter's audited create flow for now) ----
