@@ -380,6 +380,8 @@
   function barColor(label){ var l=String(label||'').toLowerCase(); return l.indexOf('jupiter')>=0?'#f5b301':(l.indexOf('stream')>=0?'#4299e1':'#8a8aa0'); }
   function loadFame(mint){
     window.__fameLoaded=true;
+    // keep the address bar in sync so the current view is itself a shareable link
+    try{ history.replaceState(null,'', location.pathname+'?fame='+encodeURIComponent(mint)); }catch(_){}
     var body=$('#fameBody'); body.innerHTML='<div class="card"><p class="muted">Reading on-chain locks…</p></div>';
     fetch('/api/locks?mint='+encodeURIComponent(mint)).then(function(r){return r.json();}).then(function(d){
       if(!d||!d.success){ body.innerHTML='<div class="card"><p class="msg err">Could not read locks'+(d&&d.error?': '+esc(d.error):'')+'.</p></div>'; return; }
@@ -396,12 +398,30 @@
         + '<div class="stat"><div class="k">Lock accounts</div><div class="v">'+(d.lockCount||0)+'</div></div>'
         + '<div class="stat"><div class="k">Total supply</div><div class="v">'+fmt(d.supply)+'</div></div></div>'
         + (d.partial?'<p class="muted" style="margin-top:10px;font-size:11px">⚠ Partial read (an RPC page errored) — totals may be an undercount; refresh in a moment.</p>':'')
+        + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:13px"><button class="btn x" id="fameShare" type="button" style="width:auto;margin-top:0;padding:10px 18px;font-size:13.5px">𝕏 Share this report</button><button class="btn alt" id="fameCopyLink" type="button" style="width:auto;margin-top:0;padding:10px 16px;font-size:13px">Copy link</button></div>'
         + '</div>'
         + (bars?'<div class="card"><div class="sec">By platform</div>'+bars+'</div>':'')
         + (rows?'<div class="card"><div class="sec">🏆 Biggest locks</div>'+rows+'<div class="muted" style="margin-top:8px;font-size:11px">Verify every one at <a href="https://lock.jup.ag/token/'+encodeURIComponent(mint)+'" target="_blank" rel="noopener">lock.jup.ag →</a></div></div>':'<div class="card"><p class="muted">No locks found for this token yet.</p></div>');
+      // capture the loaded stats so the share button can build a post, and wire the buttons
+      window.__fameData={ mint:mint, pct:pct, total:d.totalLocked, count:(d.lockCount||0), sym:(t.symbol||''), name:(t.name||'') };
+      var fsB=$('#fameShare'); if(fsB) fsB.addEventListener('click',shareFame);
+      var fcB=$('#fameCopyLink'); if(fcB) fcB.addEventListener('click',function(){ copyText(location.origin+'/locker-room?fame='+mint, fcB); });
     }).catch(function(){ body.innerHTML='<div class="card"><p class="msg err">Network error reading locks.</p></div>'; });
   }
+  // Build + open a ready-to-post X announcement of a project's on-chain lock report.
+  function shareFame(){
+    var f=window.__fameData; if(!f) return;
+    var symdisp=f.sym?('$'+f.sym):(f.name||'this token');
+    var head=(f.pct!=null)?('🔒 '+f.pct.toFixed(1)+'% of '+symdisp+' supply is locked'):('🔒 '+symdisp+' has tokens locked on-chain');
+    var mid=fmt(f.total)+(f.sym?(' '+f.sym):' tokens')+' across '+f.count+' lock'+(f.count===1?'':'s')+', verifiable on-chain.';
+    var txt=head+' — '+mid+' See the full breakdown at the 🐔 Cluck Norris Lock of Fame: clucknorris.app/locker-room?fame='+f.mint+' @JupiterExchange';
+    window.open('https://twitter.com/intent/tweet?text='+encodeURIComponent(txt),'_blank','noopener');
+  }
   $('#fameGo').addEventListener('click',function(){ var m=$('#fameMint').value.trim(); if(m) loadFame(m); });
+  // Deep link: /locker-room?fame=<mint> opens straight to that project's Lock of Fame (shareable).
+  (function(){ var fm=(new URLSearchParams(location.search).get('fame')||'').trim();
+    if(fm){ $('#fameMint').value=fm; var tb=document.querySelector('.tab[data-tab="fame"]'); if(tb) tb.click(); }
+  })();
 
   // ---- Create configurator + live preview ----
   var C={name:$('#cName'),mint:$('#cMint'),amt:$('#cAmount'),rec:$('#cRecipient'),cliff:$('#cCliff'),cliffPct:$('#cCliffPct'),dur:$('#cDur'),intr:$('#cInt')};
