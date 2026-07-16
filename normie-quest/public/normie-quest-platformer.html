@@ -3105,6 +3105,32 @@ try{ if(typeof window!=='undefined') window.__NQ_TOLEVELS=function(){ try{
   NQGAME.scene.start('LevelSelect');
 }catch(e){} }; }catch(e){}
 
+/* ---------- ⛶ Fullscreen toggle (fills the screen; auto-exits on rotate to portrait) ---------- */
+// iPad/desktop Safari support the Fullscreen API, which hides the address bar + tabs. Entering
+// fullscreen needs a user tap (browser rule) so it's a button; we auto-EXIT when rotated back to
+// portrait ("til rotated back"). We fullscreen the whole page (documentElement) so the on-screen
+// touch controls + HUD stay visible; Phaser's FIT scaling re-fits the canvas on the resize.
+if(typeof document!=='undefined'){ (function(){
+  var docEl=document.documentElement;
+  if(!(docEl.requestFullscreen||docEl.webkitRequestFullscreen)) return;   // no Fullscreen API → skip
+  function fsEl(){ return document.fullscreenElement||document.webkitFullscreenElement||null; }
+  function enter(){ try{ (docEl.requestFullscreen||docEl.webkitRequestFullscreen).call(docEl); }catch(e){} }
+  function exit(){ try{ (document.exitFullscreen||document.webkitExitFullscreen).call(document); }catch(e){} }
+  var css=document.createElement('style');
+  css.textContent='#nqfull{position:fixed;top:8px;right:48px;z-index:60;width:34px;height:34px;border-radius:8px;'
+    +'border:2px solid rgba(120,180,255,.4);background:rgba(18,22,40,.72);color:#9fd4ff;font-size:17px;line-height:30px;'
+    +'text-align:center;cursor:pointer;-webkit-user-select:none;user-select:none}';
+  document.head.appendChild(css);
+  var btn=document.createElement('div'); btn.id='nqfull'; btn.textContent='⛶'; btn.title='Fullscreen';
+  btn.addEventListener('click', function(){ if(fsEl()) exit(); else enter(); });
+  document.body.appendChild(btn);
+  function sync(){ var on=!!fsEl(); btn.textContent=on?'🡼':'⛶'; btn.title=on?'Exit fullscreen':'Fullscreen'; }
+  document.addEventListener('fullscreenchange', sync); document.addEventListener('webkitfullscreenchange', sync);
+  // auto-exit when rotated back to portrait
+  function onOrient(){ setTimeout(function(){ if(fsEl() && window.innerHeight>window.innerWidth) exit(); }, 280); }
+  window.addEventListener('orientationchange', onOrient); window.addEventListener('resize', onOrient);
+})(); }
+
 /* ---------- ⚙ Settings: Music + Effects volume sliders (DOM = reliable input, saved) ---------- */
 if(typeof document!=='undefined'){ (function(){
   var css=document.createElement('style');
