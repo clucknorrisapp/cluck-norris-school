@@ -5874,6 +5874,181 @@ app.get("/api/buyspecial-crosscheck", async (req, res) => {
   }
 });
 
+// ══════════════════════════════════════════════════════════════════════════════
+// VESTED BUY SPECIAL — campaigns + opt-in registry (the "super dashboard" backend)
+//
+// A campaign offers buyers a LARGER bonus in exchange for having their BONUS tokens
+// (not their principal) vested over months via Jupiter Lock. Buyers OPT IN by
+// submitting their buy tx hash + acknowledging the vesting — which (a) proves a real
+// buy, (b) captures informed consent, (c) filters out bots (a bot never opts in).
+// Eligibility (in-window buy total + hold) is re-confirmed on-chain at payout time,
+// so the tx hash only needs to establish identity + a genuine buy. The vested payout
+// creates one Jupiter Lock escrow per winner (operator signs), claimed in /locker-room.
+// ══════════════════════════════════════════════════════════════════════════════
+const VESTED_CAMPAIGNS_KEY = "vestedCampaigns";
+function vcAll() { return kv.get(VESTED_CAMPAIGNS_KEY, {}); }
+function vcSave(c) { const all = vcAll(); all[c.id] = c; kv.set(VESTED_CAMPAIGNS_KEY, all); }
+function vcGet(id) { return vcAll()[String(id || "")] || null; }
+const vcParseTs = (v) => (v == null || v === "") ? null : (isNaN(+v) ? Date.parse(v) : (+v < 1e12 ? +v * 1000 : +v));
+
+// Human-readable summary of a campaign's vesting schedule.
+function vcVestSummary(v) {
+  if (!v) return "";
+  const cliff = v.cliffDays > 0 ? `${v.cliffDays}-day cliff, then ` : "";
+  const unit = v.interval === "day" ? "daily" : v.interval === "week" ? "weekly" : "monthly";
+  return `${cliff}vesting ${unit} over ${v.months} ${v.interval}${v.months > 1 ? "s" : ""}`;
+}
+
+// PUBLIC-safe view of a campaign (no opt-in wallet list, no payout token).
+function vcPublicView(c) {
+  return {
+    id: c.id, label: c.label, mint: c.mint, tokenName: c.tokenName, tokenSymbol: c.tokenSymbol,
+    tokenIcon: c.tokenIcon || null, from: c.from, to: c.to, bonusPct: c.bonusPct, vest: c.vest,
+    vestSummary: vcVestSummary(c.vest), status: c.status,
+    windowOpen: Date.now() >= c.from && Date.now() <= c.to,
+    optinCount: Object.keys(c.optins || {}).length,
+  };
+}
+
+// Create or update a vested-buy-special campaign (admin).
+app.post("/api/buyspecial/campaign", async (req, res) => {
+  if (!buyCompAdminOK(req)) return res.status(404).json({ error: "not_found" });
+  const q = Object.assign({}, req.query, req.body || {});
+  const editing = q.id ? vcGet(q.id) : null;
+  const mint = String(q.mint || (editing && editing.mint) || CLKN_MINT_ADDR).trim();
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ error: "bad mint" });
+  const from = vcParseTs(q.from) ?? (editing && editing.from);
+  const to = vcParseTs(q.to) ?? (editing && editing.to);
+  if (!from || !to || to <= from) return res.status(400).json({ error: "bad window (need to>from)" });
+  const bonusPct = Math.max(1, Math.min(100, Number(q.bonusPct) || (editing && editing.bonusPct) || 20));
+  const vest = {
+    cliffDays: Math.max(0, Math.min(3650, parseInt(q.cliffDays, 10) || (editing && editing.vest && editing.vest.cliffDays) || 0)),
+    months: Math.max(1, Math.min(1000, parseInt(q.months, 10) || (editing && editing.vest && editing.vest.months) || 12)),
+    interval: ["day", "week", "month"].includes(String(q.interval)) ? String(q.interval) : (editing && editing.vest && editing.vest.interval) || "month",
+    cancelable: String(q.cancelable) === "1" ? true : (editing ? !!(editing.vest && editing.vest.cancelable) : false),
+  };
+  // Best-effort token identity for the opt-in page.
+  let tokenName = editing && editing.tokenName, tokenSymbol = editing && editing.tokenSymbol, tokenIcon = editing && editing.tokenIcon;
+  try {
+    const tm = await jupTokensSearch(mint);
+    const t = Array.isArray(tm) ? (tm.find((x) => x && x.id === mint) || tm[0]) : null;
+    if (t) { tokenName = t.name || tokenName; tokenSymbol = t.symbol || tokenSymbol; if (typeof t.icon === "string" && /^https:\/\//.test(t.icon)) tokenIcon = t.icon; }
+  } catch (_) {}
+  const c = editing || { id: "vc_" + randomBytes(5).toString("hex"), optins: {}, createdAt: Date.now(), payoutToken: randomBytes(8).toString("hex") };
+  Object.assign(c, {
+    mint, tokenName: tokenName || "Token", tokenSymbol: tokenSymbol || null, tokenIcon: tokenIcon || null,
+    label: String(q.label || (editing && editing.label) || `${tokenSymbol || "Token"} Vested Buy Special`).slice(0, 80),
+    from, to, bonusPct, vest,
+    status: q.status ? (["live", "closed"].includes(String(q.status)) ? String(q.status) : c.status) : (c.status || "live"),
+  });
+  vcSave(c);
+  const base = `${req.protocol}://${req.get("host")}`;
+  return res.status(200).json({ ok: true, campaign: c, optinUrl: `${base}/buyspecial-optin?c=${c.id}` });
+});
+
+// Admin detail (full, incl. opt-in registry) + list.
+app.get("/api/buyspecial/campaign", (req, res) => {
+  if (!buyCompAdminOK(req)) return res.status(404).json({ error: "not_found" });
+  if (String(req.query.list || "") === "1") return res.status(200).json({ ok: true, campaigns: Object.values(vcAll()) });
+  const c = vcGet(req.query.id);
+  if (!c) return res.status(404).json({ error: "not_found" });
+  return res.status(200).json({ ok: true, campaign: c });
+});
+
+// PUBLIC campaign view for the opt-in page (no key).
+app.get("/api/buyspecial/campaign/public", (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  const c = vcGet(req.query.id);
+  if (!c) return res.status(404).json({ error: "not_found" });
+  return res.status(200).json({ ok: true, campaign: vcPublicView(c) });
+});
+
+// Verify a buy tx sig for a campaign: real BUY of the mint, in-window, by a signer.
+// Returns { ok, wallet, buyUi } or { ok:false, error }. Used by opt-in + manual add.
+async function vcVerifyBuyTx(campaign, sig) {
+  const HELIUS_KEY = process.env.HELIUS_API_KEY;
+  if (!HELIUS_KEY) return { ok: false, error: "verification unavailable right now — try again shortly" };
+  if (!/^[1-9A-HJ-NP-Za-km-z]{60,100}$/.test(String(sig || ""))) return { ok: false, error: "That doesn't look like a Solana transaction signature." };
+  const rpcCall = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`);
+  let j;
+  try { j = await rpcCall("vc-tx", "getTransaction", [String(sig), { maxSupportedTransactionVersion: 0, encoding: "jsonParsed" }]); }
+  catch (e) { return { ok: false, error: "Couldn't read that transaction — try again in a moment." }; }
+  const tx = j && j.result;
+  if (!tx || !tx.meta) return { ok: false, error: "Transaction not found on-chain. Paste the signature of your BUY transaction." };
+  if (tx.meta.err) return { ok: false, error: "That transaction failed on-chain — it wasn't a completed buy." };
+  const bt = (tx.blockTime || 0) * 1000;
+  if (bt && (bt < campaign.from || bt > campaign.to)) {
+    return { ok: false, error: "That buy is outside this special's time window." };
+  }
+  // signers on the tx
+  const keys = (tx.transaction && tx.transaction.message && tx.transaction.message.accountKeys) || [];
+  const signers = new Set(keys.filter((k) => k && k.signer).map((k) => (typeof k === "string" ? k : k.pubkey)));
+  // positive balance delta of the campaign mint, owned by a signer = a genuine buy
+  const pre = tx.meta.preTokenBalances || [], post = tx.meta.postTokenBalances || [];
+  const key = (b) => `${b.owner}`;
+  const preMap = new Map();
+  for (const b of pre) if (b.mint === campaign.mint) preMap.set(key(b), Number(b.uiTokenAmount && b.uiTokenAmount.uiAmount) || 0);
+  let best = null;
+  for (const b of post) {
+    if (b.mint !== campaign.mint) continue;
+    const owner = b.owner;
+    if (!signers.has(owner)) continue;                 // must be a signer of the tx (the buyer)
+    const delta = (Number(b.uiTokenAmount && b.uiTokenAmount.uiAmount) || 0) - (preMap.get(owner) || 0);
+    if (delta > 0 && (!best || delta > best.delta)) best = { owner, delta };
+  }
+  if (!best) return { ok: false, error: "This transaction isn't a buy of this token by your wallet (no incoming balance for a signer). Paste your BUY transaction." };
+  return { ok: true, wallet: best.owner, buyUi: best.delta };
+}
+
+// PUBLIC opt-in: buyer submits their buy tx sig + acknowledges vesting.
+app.post("/api/buyspecial/optin", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  const q = Object.assign({}, req.query, req.body || {});
+  const c = vcGet(q.id);
+  if (!c) return res.status(404).json({ ok: false, error: "This special was not found." });
+  if (c.status !== "live") return res.status(400).json({ ok: false, error: "This special is closed to new opt-ins." });
+  if (String(q.ack) !== "1" && q.ack !== true) return res.status(400).json({ ok: false, error: "Please confirm you understand your bonus will vest over time." });
+  const sig = String(q.txSig || q.sig || "").trim();
+  // reject a signature already used to opt in (single-use proof)
+  for (const o of Object.values(c.optins || {})) if (o.txSig === sig) return res.status(400).json({ ok: false, error: "That transaction has already been used to opt in." });
+  const v = await vcVerifyBuyTx(c, sig);
+  if (!v.ok) return res.status(400).json({ ok: false, error: v.error });
+  c.optins = c.optins || {};
+  c.optins[v.wallet] = { wallet: v.wallet, txSig: sig, buyUi: v.buyUi, ackAt: Date.now(), source: "self", addedAt: Date.now() };
+  vcSave(c);
+  return res.status(200).json({
+    ok: true, wallet: v.wallet, buyDetected: v.buyUi,
+    bonusPct: c.bonusPct, vestSummary: vcVestSummary(c.vest), tokenSymbol: c.tokenSymbol,
+    message: `You're in! Hold your buy through the window and your ${c.bonusPct}% bonus will be created as a vesting lock you claim in the Locker Room.`,
+  });
+});
+
+// ADMIN manual opt-in (for X / Telegram submissions). Accepts a tx sig (verified) or
+// a bare wallet the operator vouches for.
+app.post("/api/buyspecial/optin/manual", async (req, res) => {
+  if (!buyCompAdminOK(req)) return res.status(404).json({ error: "not_found" });
+  const q = Object.assign({}, req.query, req.body || {});
+  const c = vcGet(q.id);
+  if (!c) return res.status(404).json({ error: "not_found" });
+  c.optins = c.optins || {};
+  if (q.remove && SOL_ADDR_RE.test(String(q.remove))) { delete c.optins[String(q.remove)]; vcSave(c); return res.status(200).json({ ok: true, removed: String(q.remove), optinCount: Object.keys(c.optins).length }); }
+  const sig = String(q.txSig || q.sig || "").trim();
+  if (sig) {
+    const v = await vcVerifyBuyTx(c, sig);
+    if (!v.ok) return res.status(400).json({ ok: false, error: v.error });
+    c.optins[v.wallet] = { wallet: v.wallet, txSig: sig, buyUi: v.buyUi, ackAt: Date.now(), source: "manual", addedAt: Date.now() };
+    vcSave(c);
+    return res.status(200).json({ ok: true, wallet: v.wallet, buyDetected: v.buyUi, optinCount: Object.keys(c.optins).length });
+  }
+  const wallet = String(q.wallet || "").trim();
+  if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ ok: false, error: "provide a valid wallet or a tx sig" });
+  c.optins[wallet] = { wallet, txSig: null, buyUi: null, ackAt: Date.now(), source: "manual-vouched", addedAt: Date.now() };
+  vcSave(c);
+  return res.status(200).json({ ok: true, wallet, optinCount: Object.keys(c.optins).length });
+});
+
 app.get("/api/token-context", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "public, max-age=300");
@@ -10261,6 +10436,14 @@ app.get("/buycomp-admin", (req, res) => {
 // Buy Special random-draw runner + public results/verification view (?id=<drawId>).
 app.get("/buyspecial-draw", (req, res) => {
   res.sendFile(join(__dirname, "public", "buyspecial-draw.html"));
+});
+
+// Vested Buy Special — PUBLIC opt-in page (?c=<campaignId>) + gated operator dashboard.
+app.get("/buyspecial-optin", (req, res) => {
+  res.sendFile(join(__dirname, "public", "buyspecial-optin.html"));
+});
+app.get("/buyspecial-dashboard", (req, res) => {
+  res.sendFile(join(__dirname, "public", "buyspecial-dashboard.html"));
 });
 
 app.get("/rose", (req, res) => {

@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>🎛️ Vested Buy Special — Dashboard</title>
+<meta name="robots" content="noindex,nofollow"/>
+<meta name="theme-color" content="#0b0c10"/>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{background:var(--bg-grad,#0b0c0e);background-attachment:fixed;}
+  body{background:transparent;color:var(--text,#e9e9ee);font-family:var(--body,system-ui,sans-serif);min-height:100vh;line-height:1.5;}
+  .wrap{max-width:820px;margin:0 auto;padding:20px 16px 80px;}
+  a{color:var(--accent,#f5b301);}
+  h1{font-family:'Anton',sans-serif;letter-spacing:1px;font-size:26px;background:linear-gradient(180deg,#FCD34D,#D97706);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+  .tag{font-family:var(--mono,monospace);font-size:11px;color:#9a9aa8;letter-spacing:1px;text-transform:uppercase;margin:4px 0 16px;}
+  .card{background:var(--card,#14151a);border:1px solid var(--border,rgba(255,255,255,.09));border-radius:14px;padding:18px;margin-bottom:14px;}
+  .sec{font-family:'Anton',sans-serif;letter-spacing:1px;color:var(--accent,#f5b301);font-size:15px;margin-bottom:12px;text-transform:uppercase;}
+  .muted{color:var(--sub,#9a9aa8);font-size:13px;}
+  label{display:block;font-family:var(--mono,monospace);font-size:10px;letter-spacing:.5px;color:var(--sub,#9a9aa8);text-transform:uppercase;margin:10px 0 5px;}
+  input,select{width:100%;background:#0d0d10;border:1px solid var(--border,rgba(255,255,255,.12));border-radius:9px;padding:10px;color:var(--text,#e9e9ee);font-family:var(--mono,monospace);font-size:13px;}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;} .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}
+  .btn{padding:11px 16px;border:none;border-radius:10px;background:#D97706;color:#1a1a1a;font-family:'Anton',sans-serif;font-weight:900;letter-spacing:.5px;font-size:14px;cursor:pointer;margin-top:12px;}
+  .btn.alt{background:#1c1d24;color:#e9e9ee;border:1px solid var(--border,rgba(255,255,255,.14));}
+  .btn.sm{padding:7px 12px;font-size:12px;margin-top:0;}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+  .msg{font-size:12.5px;margin-top:10px;color:#9a9aa8;} .msg.err{color:#ff8f8f;} .msg.ok{color:#34d399;}
+  table{width:100%;border-collapse:collapse;margin-top:8px;font-size:12.5px;}
+  th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--border,rgba(255,255,255,.07));}
+  th{font-family:var(--mono,monospace);font-size:9.5px;color:#9a9aa8;text-transform:uppercase;letter-spacing:.5px;}
+  td.mono{font-family:var(--mono,monospace);}
+  .pill{display:inline-block;font-size:9.5px;padding:2px 8px;border-radius:12px;font-family:var(--mono,monospace);}
+  .pill.self{background:rgba(16,185,129,.15);color:#34d399;} .pill.manual{background:rgba(245,179,1,.14);color:#f5b301;}
+  .clist .ci{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;background:#0d0d10;border:1px solid var(--border,rgba(255,255,255,.08));border-radius:10px;margin-bottom:7px;cursor:pointer;}
+  .clist .ci:hover{border-color:#D97706;}
+  .clist .ci.on{border-color:#D97706;background:rgba(217,119,6,.08);}
+  .ci .cl{font-family:'Anton',sans-serif;font-size:15px;color:#fff;} .ci .cm{font-family:var(--mono,monospace);font-size:10px;color:#9a9aa8;margin-top:2px;}
+  .share{display:flex;gap:8px;align-items:center;margin-top:8px;}
+  .share input{flex:1;font-size:11px;}
+  .gate{max-width:400px;margin:60px auto;text-align:center;}
+  .hide{display:none;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎛️ Vested Buy Special</h1>
+  <div class="tag">Operator dashboard · campaigns · opt-ins · vested payouts</div>
+
+  <!-- key gate -->
+  <div id="gate" class="gate card">
+    <div class="sec">🔒 Operator access</div>
+    <p class="muted" style="margin-bottom:10px">Enter the access key (BUYCOMP_KEY or PREMIUM_ACCESS_KEY).</p>
+    <input id="keyIn" type="password" placeholder="access key"/>
+    <button class="btn" id="keyGo" style="width:100%">Unlock</button>
+    <div class="msg" id="keyMsg"></div>
+  </div>
+
+  <div id="app" class="hide">
+    <!-- create / edit -->
+    <div class="card">
+      <div class="sec" id="formTitle">Create a campaign</div>
+      <label>Token mint <span class="muted" style="font-weight:400">(blank = CLKN)</span></label>
+      <input id="fMint" spellcheck="false" placeholder="DW6DF2mjty… (CLKN default)"/>
+      <label>Label</label>
+      <input id="fLabel" placeholder="e.g. CLKN Launch Vested Special"/>
+      <div class="row2">
+        <div><label>Buy window START</label><input id="fFrom" type="datetime-local"/></div>
+        <div><label>Buy window END</label><input id="fTo" type="datetime-local"/></div>
+      </div>
+      <div class="row3">
+        <div><label>Bonus %</label><input id="fBonus" type="number" min="1" max="100" value="20"/></div>
+        <div><label>Vest periods</label><input id="fMonths" type="number" min="1" value="12"/></div>
+        <div><label>Interval</label><select id="fInt"><option value="day">Daily</option><option value="week">Weekly</option><option value="month" selected>Monthly</option></select></div>
+      </div>
+      <div class="row2">
+        <div><label>Cliff (days, 0 = none)</label><input id="fCliff" type="number" min="0" value="0"/></div>
+        <div><label>Lock is</label><select id="fCancel"><option value="0" selected>Permanent (non-cancelable)</option><option value="1">Cancelable by creator</option></select></div>
+      </div>
+      <button class="btn" id="fSave">Save campaign</button>
+      <button class="btn alt" id="fNew" style="display:none">+ New (clear form)</button>
+      <div class="msg" id="fMsg"></div>
+    </div>
+
+    <!-- campaign list -->
+    <div class="card">
+      <div class="sec">Campaigns</div>
+      <div class="clist" id="clist"><p class="muted">Loading…</p></div>
+    </div>
+
+    <!-- selected detail -->
+    <div class="card hide" id="detail">
+      <div class="sec" id="dTitle">Campaign</div>
+      <div id="dSummary" class="muted" style="margin-bottom:8px"></div>
+      <label>Public opt-in link (share this)</label>
+      <div class="share"><input id="dLink" readonly/><button class="btn sm alt" id="dCopy">Copy</button></div>
+
+      <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="btn sm alt" id="dRefresh">↻ Refresh opt-ins</button>
+        <button class="btn sm alt" id="dClose">Close campaign</button>
+      </div>
+
+      <div style="margin-top:14px">
+        <label>Manually add an opt-in (X / Telegram submission)</label>
+        <div class="share"><input id="mAdd" placeholder="paste a buy tx signature, or a wallet you vouch for"/><button class="btn sm" id="mAddGo">Add</button></div>
+        <div class="msg" id="mMsg"></div>
+      </div>
+
+      <div style="margin-top:16px">
+        <div class="sec" style="font-size:13px">Opt-ins (<span id="oCount">0</span>)</div>
+        <div id="oTable"><p class="muted">No opt-ins yet.</p></div>
+      </div>
+
+      <div class="card" style="margin-top:16px;background:#0d0d10">
+        <div class="sec" style="font-size:13px">Verify &amp; distribute</div>
+        <p class="muted">The hold check + vested-lock payout rail (one Jupiter Lock escrow per winner, claimed in the Locker Room) is the next build slice. For now, the opt-in registry above collects and verifies your informed, non-bot buyers.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+  function $(s){return document.querySelector(s);}
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function shortAddr(a){a=String(a||'');return a.length>12?a.slice(0,5)+'…'+a.slice(-5):a;}
+  function fmtDate(ms){try{return new Date(ms).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});}catch(e){return '';}}
+  function toLocalInput(ms){ var d=new Date(ms - new Date().getTimezoneOffset()*60000); return d.toISOString().slice(0,16); }
+  function fromLocalInput(v){ return v? new Date(v).getTime() : null; }
+
+  var KEY=localStorage.getItem('bcKey')||'';
+  var editingId=null, selId=null;
+
+  function api(path, opts){
+    opts=opts||{}; opts.headers=Object.assign({'x-premium-key':KEY,'content-type':'application/json'}, opts.headers||{});
+    return fetch(path, opts).then(function(r){ return r.json().catch(function(){return {};}).then(function(j){ return {status:r.status, j:j}; }); });
+  }
+
+  function unlock(){
+    $('#gate').classList.add('hide'); $('#app').classList.remove('hide'); loadList();
+  }
+  $('#keyGo').addEventListener('click',function(){
+    KEY=$('#keyIn').value.trim(); if(!KEY){ return; }
+    api('/api/buyspecial/campaign?list=1').then(function(r){
+      if(r.status===200){ localStorage.setItem('bcKey',KEY); unlock(); }
+      else { $('#keyMsg').className='msg err'; $('#keyMsg').textContent='Invalid key.'; }
+    });
+  });
+  $('#keyIn').addEventListener('keydown',function(e){ if(e.key==='Enter') $('#keyGo').click(); });
+
+  // ---- create / edit ----
+  function clearForm(){ editingId=null; $('#formTitle').textContent='Create a campaign';
+    ['fMint','fLabel'].forEach(function(id){$('#'+id).value='';});
+    $('#fBonus').value=20; $('#fMonths').value=12; $('#fInt').value='month'; $('#fCliff').value=0; $('#fCancel').value='0';
+    var now=Date.now(); $('#fFrom').value=toLocalInput(now); $('#fTo').value=toLocalInput(now+3*3600000);
+    $('#fNew').style.display='none';
+  }
+  $('#fNew').addEventListener('click',clearForm);
+  $('#fSave').addEventListener('click',function(){
+    var body={ label:$('#fLabel').value.trim(), mint:$('#fMint').value.trim(), bonusPct:+$('#fBonus').value,
+      months:+$('#fMonths').value, interval:$('#fInt').value, cliffDays:+$('#fCliff').value, cancelable:$('#fCancel').value,
+      from:fromLocalInput($('#fFrom').value), to:fromLocalInput($('#fTo').value) };
+    if(editingId) body.id=editingId;
+    if(!body.from||!body.to||body.to<=body.from){ $('#fMsg').className='msg err'; $('#fMsg').textContent='Set a valid window (end after start).'; return; }
+    $('#fMsg').className='msg'; $('#fMsg').textContent='Saving…';
+    api('/api/buyspecial/campaign',{method:'POST',body:JSON.stringify(body)}).then(function(r){
+      if(r.status!==200||!r.j.ok){ $('#fMsg').className='msg err'; $('#fMsg').textContent=(r.j&&r.j.error)||'Save failed.'; return; }
+      $('#fMsg').className='msg ok'; $('#fMsg').textContent='Saved.'; loadList(); select(r.j.campaign.id);
+    });
+  });
+
+  // ---- list ----
+  function loadList(){
+    api('/api/buyspecial/campaign?list=1').then(function(r){
+      var cs=(r.j&&r.j.campaigns)||[]; var el=$('#clist');
+      if(!cs.length){ el.innerHTML='<p class="muted">No campaigns yet. Create one above.</p>'; return; }
+      cs.sort(function(a,b){return b.createdAt-a.createdAt;});
+      el.innerHTML=cs.map(function(c){
+        return '<div class="ci'+(c.id===selId?' on':'')+'" data-id="'+esc(c.id)+'"><div><div class="cl">'+esc(c.label||'Campaign')+'</div>'
+          +'<div class="cm">'+esc(c.tokenSymbol||'')+' · +'+c.bonusPct+'% · '+Object.keys(c.optins||{}).length+' opt-ins · '+esc(c.status)+'</div></div>'
+          +'<span class="pill '+(c.status==='live'?'self':'manual')+'">'+esc(c.status)+'</span></div>';
+      }).join('');
+      el.querySelectorAll('.ci').forEach(function(ci){ ci.addEventListener('click',function(){ select(ci.getAttribute('data-id')); }); });
+    });
+  }
+
+  // ---- detail ----
+  function select(id){
+    selId=id; loadList();
+    api('/api/buyspecial/campaign?id='+encodeURIComponent(id)).then(function(r){
+      var c=r.j&&r.j.campaign; if(!c) return;
+      editingId=c.id; $('#formTitle').textContent='Edit: '+(c.label||'campaign'); $('#fNew').style.display='inline-block';
+      $('#fMint').value=c.mint; $('#fLabel').value=c.label||''; $('#fBonus').value=c.bonusPct; $('#fMonths').value=c.vest.months;
+      $('#fInt').value=c.vest.interval; $('#fCliff').value=c.vest.cliffDays; $('#fCancel').value=c.vest.cancelable?'1':'0';
+      $('#fFrom').value=toLocalInput(c.from); $('#fTo').value=toLocalInput(c.to);
+      $('#detail').classList.remove('hide');
+      $('#dTitle').textContent=(c.tokenSymbol?('$'+c.tokenSymbol+' '):'')+(c.label||'Campaign');
+      var vs=(c.vest?((c.vest.cliffDays>0?c.vest.cliffDays+'d cliff, ':'')+c.vest.months+' '+c.vest.interval+(c.vest.months>1?'s':'')):'');
+      $('#dSummary').innerHTML='+'+c.bonusPct+'% bonus · vested '+esc(vs)+' · window '+fmtDate(c.from)+' → '+fmtDate(c.to)+' · '+esc(c.status);
+      $('#dLink').value=location.origin+'/buyspecial-optin?c='+c.id;
+      var ins=Object.values(c.optins||{}); $('#oCount').textContent=ins.length;
+      if(!ins.length){ $('#oTable').innerHTML='<p class="muted">No opt-ins yet. Share the link above.</p>'; }
+      else {
+        ins.sort(function(a,b){return b.addedAt-a.addedAt;});
+        $('#oTable').innerHTML='<table><tr><th>Wallet</th><th>Buy seen</th><th>Source</th><th>Opted in</th><th></th></tr>'+
+          ins.map(function(o){ return '<tr><td class="mono">'+esc(shortAddr(o.wallet))+'</td>'+
+            '<td class="mono">'+(o.buyUi!=null?Math.round(o.buyUi).toLocaleString():'—')+'</td>'+
+            '<td><span class="pill '+(o.source==='self'?'self':'manual')+'">'+esc(o.source||'')+'</span></td>'+
+            '<td class="mono">'+fmtDate(o.addedAt)+'</td>'+
+            '<td><button class="btn sm alt" data-rm="'+esc(o.wallet)+'">✕</button></td></tr>'; }).join('')+'</table>';
+        $('#oTable').querySelectorAll('button[data-rm]').forEach(function(b){ b.addEventListener('click',function(){
+          api('/api/buyspecial/optin/manual',{method:'POST',body:JSON.stringify({id:c.id,remove:b.getAttribute('data-rm')})}).then(function(){ select(c.id); });
+        }); });
+      }
+    });
+  }
+  $('#dCopy').addEventListener('click',function(){ var i=$('#dLink'); i.select(); try{document.execCommand('copy');}catch(e){} $('#dCopy').textContent='Copied'; setTimeout(function(){$('#dCopy').textContent='Copy';},1200); });
+  $('#dRefresh').addEventListener('click',function(){ if(selId) select(selId); });
+  $('#dClose').addEventListener('click',function(){ if(!selId) return;
+    api('/api/buyspecial/campaign',{method:'POST',body:JSON.stringify({id:selId,status:'closed'})}).then(function(){ select(selId); });
+  });
+  $('#mAddGo').addEventListener('click',function(){
+    var v=$('#mAdd').value.trim(); if(!v||!selId) return;
+    // 32–44 base58 chars = a wallet; a tx signature is ~87–88 chars.
+    var body={id:selId};
+    if(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(v)) body.wallet=v; else body.txSig=v;
+    $('#mMsg').className='msg'; $('#mMsg').textContent='Adding…';
+    api('/api/buyspecial/optin/manual',{method:'POST',body:JSON.stringify(body)}).then(function(r){
+      if(r.status!==200||!r.j.ok){ $('#mMsg').className='msg err'; $('#mMsg').textContent=(r.j&&r.j.error)||'Could not add.'; return; }
+      $('#mMsg').className='msg ok'; $('#mMsg').textContent='Added '+shortAddr(r.j.wallet); $('#mAdd').value=''; select(selId);
+    });
+  });
+
+  // boot
+  if(KEY){ api('/api/buyspecial/campaign?list=1').then(function(r){ if(r.status===200){ unlock(); } clearForm(); }); }
+  else { clearForm(); }
+})();
+</script>
+</body>
+</html>

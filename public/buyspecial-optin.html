@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>🎁 Vested Buy Special — Opt In · Cluck Norris</title>
+<meta name="description" content="Opt in to a Vested Buy Special: buy in the window, hold, and get a bigger bonus vested to you over time via Jupiter Lock."/>
+<meta name="theme-color" content="#0b0c10"/>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{background:var(--bg-grad,#0b0c0e);background-attachment:fixed;}
+  body{background:transparent;color:var(--text,#e9e9ee);font-family:var(--body,system-ui,sans-serif);min-height:100vh;line-height:1.5;}
+  .wrap{max-width:600px;margin:0 auto;padding:20px 16px 80px;}
+  a{color:var(--accent,#f5b301);}
+  .backlink{display:inline-block;margin-bottom:8px;font-size:12px;color:#9a9aa8;text-decoration:none;}
+  .hero{text-align:center;padding:8px 10px 4px;}
+  .hero .gift{font-size:44px;filter:drop-shadow(0 3px 10px rgba(0,0,0,.5));}
+  h1{font-family:'Anton',sans-serif;font-weight:900;letter-spacing:1.5px;font-size:30px;line-height:1.04;margin-top:6px;
+     background:linear-gradient(180deg,#FCD34D,#D97706);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+  .hero .tag{font-family:var(--mono,monospace);font-size:11px;letter-spacing:1.5px;color:var(--sub,#9a9aa8);margin-top:6px;text-transform:uppercase;}
+  .card{background:var(--card,#14151a);border:1px solid var(--border,rgba(255,255,255,.09));border-radius:14px;padding:18px;margin-bottom:14px;}
+  .sec{font-family:'Anton',sans-serif;letter-spacing:1px;color:var(--accent,#f5b301);font-size:15px;margin-bottom:10px;text-transform:uppercase;}
+  .muted{color:var(--sub,#9a9aa8);font-size:13px;}
+  .tokrow{display:flex;align-items:center;gap:12px;margin-bottom:12px;}
+  .tokrow img{width:44px;height:44px;border-radius:50%;background:#0d0d10;border:1px solid var(--border,rgba(255,255,255,.12));object-fit:cover;flex:0 0 auto;}
+  .tokrow .tn{font-family:'Anton',sans-serif;font-size:22px;color:#fff;line-height:1.05;}
+  .tokrow .ts{font-family:var(--mono,monospace);font-size:10.5px;color:#9a9aa8;margin-top:2px;}
+  .offer{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px;}
+  .offer .o{background:#0d0d10;border:1px solid var(--border,rgba(255,255,255,.08));border-radius:11px;padding:13px;text-align:center;}
+  .offer .o .k{font-family:var(--mono,monospace);font-size:9.5px;color:#9a9aa8;letter-spacing:.6px;text-transform:uppercase;}
+  .offer .o .v{font-family:'Anton',sans-serif;font-size:24px;margin-top:4px;color:#34d399;}
+  .offer .o.big .v{font-size:30px;background:linear-gradient(180deg,#FCD34D,#D97706);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+  .steps{display:grid;gap:9px;margin-top:6px;}
+  .stp{display:flex;gap:11px;align-items:flex-start;}
+  .stp .n{font-family:'Anton',sans-serif;color:#D97706;font-size:17px;flex:0 0 auto;width:20px;}
+  .stp p{font-size:13px;color:#c9c9d6;}
+  .win{font-family:var(--mono,monospace);font-size:11px;color:#9a9aa8;margin-top:8px;text-align:center;}
+  label{display:block;font-family:var(--mono,monospace);font-size:10px;letter-spacing:.5px;color:var(--sub,#9a9aa8);text-transform:uppercase;margin:12px 0 5px;}
+  input{width:100%;background:#0d0d10;border:1px solid var(--border,rgba(255,255,255,.12));border-radius:9px;padding:11px;color:var(--text,#e9e9ee);font-family:var(--mono,monospace);font-size:13px;}
+  .tog{display:flex;align-items:flex-start;gap:10px;margin:14px 0 4px;cursor:pointer;font-size:13px;color:#e9e9ee;line-height:1.45;}
+  .tog input{width:19px;height:19px;accent-color:#D97706;cursor:pointer;flex:0 0 auto;margin-top:1px;}
+  .btn{width:100%;padding:13px;border:none;border-radius:10px;background:#D97706;color:#1a1a1a;font-family:'Anton',sans-serif;font-weight:900;letter-spacing:1px;font-size:15px;cursor:pointer;margin-top:14px;}
+  .btn:disabled{opacity:.5;cursor:not-allowed;}
+  .msg{font-size:12.5px;margin-top:11px;color:#9a9aa8;} .msg.err{color:#ff8f8f;} .msg.ok{color:#34d399;}
+  .ok-card{display:none;text-align:center;padding:22px 18px;}
+  .ok-card .em{font-size:52px;} .ok-card .h{font-family:'Anton',sans-serif;font-size:24px;color:#34d399;margin:6px 0 8px;letter-spacing:.5px;}
+  .foot{font-family:var(--mono,monospace);font-size:10px;color:var(--sub,#9a9aa8);text-align:center;margin-top:20px;line-height:1.7;}
+  .closed{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:11px;padding:14px;text-align:center;color:#ffb0b0;font-size:13px;margin-bottom:14px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="backlink" href="/locker-room">← Cluck Norris · Locker Room</a>
+  <div class="hero">
+    <div class="gift">🎁</div>
+    <h1 id="hTitle">VESTED BUY SPECIAL</h1>
+    <div class="tag">Bigger bonus · your principal stays free · only the bonus vests</div>
+  </div>
+
+  <div id="loading" class="card"><p class="muted">Loading this special…</p></div>
+
+  <div id="main" style="display:none">
+    <div id="closedBanner" class="closed" style="display:none">This special is closed to new opt-ins.</div>
+
+    <div class="card">
+      <div class="tokrow">
+        <img id="tImg" src="" alt="" style="display:none"/>
+        <div><div class="tn" id="tName">Token</div><div class="ts" id="tMint"></div></div>
+      </div>
+      <div class="offer">
+        <div class="o big"><div class="k">Your bonus</div><div class="v" id="oBonus">—</div></div>
+        <div class="o"><div class="k">Vested over</div><div class="v" id="oVest" style="font-size:16px">—</div></div>
+      </div>
+      <div class="win" id="oWindow"></div>
+    </div>
+
+    <div class="card">
+      <div class="sec">How it works</div>
+      <div class="steps">
+        <div class="stp"><span class="n">1</span><p><b>Buy</b> the token during the special's window (below), from your own wallet.</p></div>
+        <div class="stp"><span class="n">2</span><p><b>Opt in here</b> — paste your buy transaction so we know it's really you, not a bot.</p></div>
+        <div class="stp"><span class="n">3</span><p><b>Hold</b> your buy through the window (no selling it back).</p></div>
+        <div class="stp"><span class="n">4</span><p><b>Get your bonus vested</b> — created as a Jupiter Lock you claim anytime in the <a href="/locker-room">Locker Room</a> as it unlocks. Your original buy stays 100% liquid; only the bonus vests.</p></div>
+      </div>
+    </div>
+
+    <div class="card" id="formCard">
+      <div class="sec">Opt in</div>
+      <p class="muted">Paste the transaction signature (hash) of your buy. In your wallet or on Solscan, open the buy and copy its signature.</p>
+      <label>Your buy transaction signature</label>
+      <input id="sig" spellcheck="false" placeholder="e.g. 5Fh8…long signature…z9Q" autocomplete="off"/>
+      <label class="tog"><input type="checkbox" id="ack"/><span id="ackText">I understand my <b>bonus</b> tokens will be <b>vested over time</b> (not sent instantly), released on a public schedule I claim in the Locker Room. My original buy is not locked.</span></label>
+      <button class="btn" id="go" disabled>🎁 Opt in for the vested bonus</button>
+      <div class="msg" id="msg"></div>
+      <div class="muted" style="font-size:11px;margin-top:12px">Prefer to submit by hand? Send your buy tx to us on <a href="https://t.me/FireChicken007" target="_blank" rel="noopener">Telegram</a> or <a href="https://x.com/firechicken007" target="_blank" rel="noopener">X</a> and we'll add you.</div>
+    </div>
+
+    <div class="card ok-card" id="okCard">
+      <div class="em">🎉</div>
+      <div class="h">You're in!</div>
+      <p class="muted" id="okMsg"></p>
+      <p class="muted" style="margin-top:12px">Just keep holding your buy through the window. When the special ends and everyone's held is checked, your bonus is created as a vesting lock — claim it in the <a href="/locker-room">Locker Room</a>.</p>
+    </div>
+  </div>
+
+  <div class="foot">
+    🐔 Cluck Norris · vested bonuses run on <a href="https://lock.jup.ag/" target="_blank" rel="noopener">Jupiter Lock</a> (non-custodial, audited, no token cut).<br/>
+    Nothing here is financial advice. Bonus tokens vest on a fixed public schedule.
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+  function $(s){return document.querySelector(s);}
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function shortAddr(a){a=String(a||'');return a.length>12?a.slice(0,5)+'…'+a.slice(-5):a;}
+  function fmtDate(ms){try{return new Date(ms).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});}catch(e){return '';}}
+  var C=new URLSearchParams(location.search).get('c')||'';
+  if(!C){ $('#loading').innerHTML='<p class="msg err">No special specified. Use the link shared with the special.</p>'; return; }
+
+  fetch('/api/buyspecial/campaign/public?id='+encodeURIComponent(C)).then(function(r){return r.json();}).then(function(d){
+    if(!d||!d.ok||!d.campaign){ $('#loading').innerHTML='<p class="msg err">This special was not found.</p>'; return; }
+    var c=d.campaign;
+    $('#loading').style.display='none'; $('#main').style.display='block';
+    $('#hTitle').textContent=(c.tokenSymbol?('$'+c.tokenSymbol+' '):'')+'BUY SPECIAL';
+    document.title='🎁 '+(c.label||'Vested Buy Special')+' — Cluck Norris';
+    if(c.tokenIcon){ var im=$('#tImg'); im.src=c.tokenIcon; im.style.display='block'; im.onerror=function(){im.style.display='none';}; }
+    $('#tName').textContent=c.tokenName||c.tokenSymbol||'Token';
+    $('#tMint').textContent=(c.tokenSymbol?c.tokenSymbol+' · ':'')+shortAddr(c.mint);
+    $('#oBonus').textContent='+'+c.bonusPct+'%';
+    $('#oVest').textContent=(c.vest?c.vest.months+' '+c.vest.interval+(c.vest.months>1?'s':''):'—');
+    $('#oWindow').textContent='Buy window: '+fmtDate(c.from)+'  →  '+fmtDate(c.to);
+    $('#ackText').innerHTML='I understand my <b>bonus</b> tokens will be <b>vested over time</b> ('+esc(c.vestSummary||'')+'), released on a public schedule I claim in the Locker Room. My original buy is not locked.';
+    if(c.status!=='live' || !c.windowOpen){
+      // Still allow opt-in while status live; only fully block if closed.
+    }
+    if(c.status!=='live'){ $('#closedBanner').style.display='block'; $('#formCard').style.display='none'; }
+  }).catch(function(){ $('#loading').innerHTML='<p class="msg err">Network error loading this special.</p>'; });
+
+  function refresh(){ $('#go').disabled=!( ($('#sig').value.trim().length>=60) && $('#ack').checked ); }
+  $('#sig').addEventListener('input',refresh); $('#ack').addEventListener('change',refresh);
+
+  $('#go').addEventListener('click',function(){
+    var sig=$('#sig').value.trim(); if(sig.length<60||!$('#ack').checked) return;
+    var btn=$('#go'); btn.disabled=true; var msg=$('#msg'); msg.className='msg'; msg.textContent='Checking your buy on-chain…';
+    fetch('/api/buyspecial/optin',{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({ id:C, txSig:sig, ack:1 })})
+      .then(function(r){return r.json();}).then(function(d){
+        if(!d||!d.ok){ msg.className='msg err'; msg.textContent=(d&&d.error)||'Could not opt in.'; btn.disabled=false; return; }
+        $('#formCard').style.display='none'; var ok=$('#okCard'); ok.style.display='block';
+        $('#okMsg').textContent=(d.message||'')+' Wallet: '+shortAddr(d.wallet)+(d.buyDetected?(' · detected buy of ~'+Math.round(d.buyDetected).toLocaleString()+(d.tokenSymbol?(' '+d.tokenSymbol):'')):'');
+        ok.scrollIntoView({behavior:'smooth',block:'center'});
+      }).catch(function(){ msg.className='msg err'; msg.textContent='Network error — try again.'; btn.disabled=false; });
+  });
+})();
+</script>
+</body>
+</html>
