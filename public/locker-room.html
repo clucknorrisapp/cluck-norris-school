@@ -100,6 +100,18 @@
   .qm:hover{border-color:#D97706;color:#f5b301;}
   .preview{background:#0d0d10;border:1px solid var(--border,rgba(255,255,255,.08));border-radius:11px;padding:14px;margin-top:14px;}
   .msg{font-size:12.5px;margin-top:10px;color:#9a9aa8;} .msg.err{color:#ff8f8f;} .msg.ok{color:#34d399;}
+  /* verify-your-lock panel */
+  .verifycard{margin-top:12px;background:#0d0d10;border:1px solid rgba(52,211,153,.32);border-radius:12px;padding:15px;}
+  .vhead{font-family:'Anton',sans-serif;letter-spacing:.3px;color:#34d399;font-size:15px;margin-bottom:11px;}
+  .vrow{display:flex;align-items:center;gap:8px;margin-bottom:9px;flex-wrap:wrap;}
+  .vrow .vk{font-family:var(--mono,monospace);font-size:9.5px;color:#9a9aa8;text-transform:uppercase;letter-spacing:.5px;width:82px;flex:0 0 auto;}
+  .vrow .vv{font-family:var(--mono,monospace);font-size:11.5px;color:#e9e9ee;flex:1;min-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:#000;border:1px solid var(--border,rgba(255,255,255,.08));border-radius:7px;padding:7px 9px;}
+  .vcopy{background:#1c1d24;color:#e9e9ee;border:1px solid var(--border,rgba(255,255,255,.14));border-radius:7px;padding:7px 11px;font-size:11px;cursor:pointer;flex:0 0 auto;}
+  .vcopy:hover{border-color:#D97706;color:#f5b301;}
+  .vlink{font-family:var(--mono,monospace);font-size:11px;color:#7cc7ff;flex:0 0 auto;text-decoration:none;}
+  .vlink:hover{text-decoration:underline;}
+  .vjup{display:block;text-align:center;margin-top:12px;background:rgba(245,179,1,.13);border:1px solid rgba(245,179,1,.42);color:#f5b301;border-radius:10px;padding:12px;font-family:'Anton',sans-serif;letter-spacing:.5px;font-size:14px;text-decoration:none;}
+  .vjup:hover{background:rgba(245,179,1,.22);}
   /* share-your-lock card */
   .sharecard{margin-top:14px;background:linear-gradient(160deg,rgba(29,155,240,.12),#0d0d10 70%);border:1px solid rgba(29,155,240,.38);border-radius:12px;padding:15px;}
   .sharehead{font-family:'Anton',sans-serif;letter-spacing:.5px;color:#7cc7ff;font-size:16px;}
@@ -264,6 +276,13 @@
       <button class="btn" id="cCreate" style="display:none">🔒 Create lock on-chain</button>
       <div id="cWallet" style="display:none;margin-top:10px;font-size:12.5px;color:#9a9aa8;text-align:center">🟢 Connected as <b id="cWalletAddr" style="color:#e9e9ee"></b> · <a href="#" id="cDisconnect" style="color:#f5b301">Disconnect / switch wallet</a></div>
       <div class="msg" id="cMsg"></div>
+      <div class="verifycard" id="cVerify" style="display:none">
+        <div class="vhead">✅ Your lock is on-chain — verify it anywhere</div>
+        <div class="vrow"><span class="vk">Transaction</span><code class="vv" id="vSig"></code><button class="vcopy" data-copy="sig" type="button">Copy</button><a class="vlink" id="vSigLink" target="_blank" rel="noopener">Solscan ↗</a></div>
+        <div class="vrow" id="vEscRow"><span class="vk">Lock account</span><code class="vv" id="vEsc"></code><button class="vcopy" data-copy="esc" type="button">Copy</button><a class="vlink" id="vEscLink" target="_blank" rel="noopener">Solscan ↗</a></div>
+        <a class="vjup" id="vJup" target="_blank" rel="noopener">🔎 View your lock on Jupiter Lock (lock.jup.ag) ↗</a>
+        <div style="text-align:center;margin-top:9px"><a href="#" id="vFame" style="font-size:11.5px;color:#9a9aa8">Or see it in the Lock of Fame →</a></div>
+      </div>
       <div class="sharecard" id="shareCard" style="display:none">
         <div class="sharehead">📢 Announce your lock</div>
         <p class="muted" style="font-size:12px;margin-top:2px">Here's a ready-to-post announcement — tweak it if you like, then share so your holders see it on-chain.</p>
@@ -499,14 +518,30 @@
           $('#cMsg').className='msg'; $('#cMsg').textContent='Sent — confirming on-chain…';
           return confirmSig(sig).then(function(){ return sig; });
         }).then(function(sig){
-          $('#cMsg').className='msg ok';
-          $('#cMsg').innerHTML='🔒 Lock created! <a href="https://solscan.io/tx/'+encodeURIComponent(sig)+'" target="_blank" rel="noopener">View on Solscan →</a> · <a href="#" id="cSeeFame">See it in the Lock of Fame →</a>';
+          $('#cMsg').className='msg ok'; $('#cMsg').textContent='🔒 Lock created!';
           btn.textContent='✓ Lock created'; window.__fameLoaded=false;   // Fame reloads when opened
-          showShare(res, m, sig);   // offer a ready-to-post X announcement
-          var sf=document.getElementById('cSeeFame'); if(sf) sf.addEventListener('click',function(ev){ ev.preventDefault(); document.querySelector('.tab[data-tab="fame"]').click(); $('#fameMint').value=m; loadFame(m); });
+          showVerify(res, m, sig);  // prominent copy-tx + view-on-Jupiter-Lock panel
+          showShare(res);           // ready-to-post X announcement
         }).catch(function(e){ $('#cMsg').className='msg err'; $('#cMsg').textContent=(e&&e.message)?e.message:'Wallet cancelled or the transaction failed.'; btn.disabled=false; });
       }).catch(function(){ $('#cMsg').className='msg err'; $('#cMsg').textContent='Network error building the lock.'; btn.disabled=false; });
   });
+
+  // ---- Verify-your-lock panel: copy the tx, open it on Jupiter Lock's own UI ----
+  function copyText(str, btn){ var done=function(){ if(btn){ var t=btn.textContent; btn.textContent='Copied'; setTimeout(function(){btn.textContent=t;},1200); } };
+    if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(str).then(done,done); }
+    else { var ta=document.createElement('textarea'); ta.value=str; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');}catch(e){} ta.remove(); done(); } }
+  function showVerify(res, mint, sig){
+    var esc=(res&&res.escrow)?res.escrow:'';
+    window.__lastLock={ sig:sig, esc:esc };
+    $('#vSig').textContent=shortAddr(sig); $('#vSig').title=sig;
+    $('#vSigLink').href='https://solscan.io/tx/'+encodeURIComponent(sig);
+    if(esc){ $('#vEsc').textContent=shortAddr(esc); $('#vEsc').title=esc; $('#vEscLink').href='https://solscan.io/account/'+encodeURIComponent(esc); $('#vEscRow').style.display='flex'; }
+    else { $('#vEscRow').style.display='none'; }
+    $('#vJup').href='https://lock.jup.ag/token/'+encodeURIComponent(mint);
+    var vf=$('#vFame'); vf.onclick=function(ev){ ev.preventDefault(); document.querySelector('.tab[data-tab="fame"]').click(); $('#fameMint').value=mint; loadFame(mint); };
+    $('#cVerify').style.display='block';
+  }
+  document.querySelectorAll('.vcopy').forEach(function(b){ b.addEventListener('click',function(){ var which=b.getAttribute('data-copy'); var v=(window.__lastLock||{})[which]; if(v) copyText(v, b); }); });
 
   // ---- Share your lock on X: a ready-to-post announcement after a successful lock ----
   function fmtNumStr(v){ v=String(v==null?'':v).replace(/,/g,''); if(!/^\d+(\.\d+)?$/.test(v)) return v||'my tokens'; var p=v.split('.'); p[0]=p[0].replace(/\B(?=(\d{3})+(?!\d))/g,','); return p.join('.'); }
