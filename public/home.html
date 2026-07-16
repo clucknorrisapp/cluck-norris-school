@@ -42,8 +42,31 @@
   .hero .tag{font-family:var(--disp);font-size:24px;color:var(--gold);letter-spacing:.5px;margin:14px auto 10px;max-width:680px;line-height:1.15;text-transform:uppercase;text-shadow:0 2px 14px rgba(255,90,10,.3);}
   .hero .lede{font-size:16px;color:var(--body-text);max-width:560px;margin:0 auto;line-height:1.6;}
 
+  /* ── NEW feature banner: Jup Locker Room ── */
+  .newfeat{position:relative;margin:30px auto 0;display:flex;align-items:center;gap:18px;
+           background:linear-gradient(135deg,rgba(255,122,24,.18),rgba(255,182,39,.08) 55%,rgba(20,21,26,.9));
+           border:1.5px solid var(--gold);border-radius:20px;padding:20px 24px;overflow:hidden;
+           box-shadow:0 0 38px rgba(255,182,39,.22);transition:transform .12s,box-shadow .12s;}
+  .newfeat:hover{transform:translateY(-2px);box-shadow:0 0 52px rgba(255,182,39,.36);}
+  .newfeat .nfbadge{position:absolute;top:0;left:0;font-family:var(--disp);font-size:10.5px;letter-spacing:2px;
+                    color:#120905;background:var(--gold);padding:4px 14px 4px 12px;border-radius:0 0 12px 0;text-transform:uppercase;}
+  .newfeat .nficon{font-size:44px;flex:none;line-height:1;filter:drop-shadow(0 3px 10px rgba(255,90,10,.5));}
+  .newfeat .nftext{flex:1;min-width:0;padding-top:6px;}
+  .newfeat .nft{font-family:var(--disp);font-size:26px;color:var(--gold);letter-spacing:.5px;line-height:1.08;text-transform:uppercase;}
+  .newfeat .nfs{font-family:var(--body);font-size:13.5px;color:var(--body-text);margin-top:5px;line-height:1.45;}
+  .newfeat .nfs b{color:#FFD56B;font-weight:700;}
+  .newfeat .nfgo{font-family:var(--disp);font-size:13px;letter-spacing:1px;text-transform:uppercase;color:#fff;
+                 background:var(--orange);border-radius:999px;padding:12px 20px;flex:none;box-shadow:0 5px 18px rgba(232,30,14,.4);}
+  .newfeat:hover .nfgo{background:#ff8f33;}
+  @media(max-width:600px){
+    .newfeat{flex-wrap:wrap;gap:12px;padding:24px 18px 18px;}
+    .newfeat .nficon{font-size:36px;}
+    .newfeat .nft{font-size:22px;}
+    .newfeat .nfgo{width:100%;text-align:center;}
+  }
+
   /* ── THE large capsule pill: AI journey guide ── */
-  .guide{margin:36px auto 0;}
+  .guide{margin:26px auto 0;}
   .guidebtn{width:100%;display:flex;align-items:center;gap:16px;cursor:pointer;text-align:left;
             background:rgba(255,122,24,.2);
             border:1.5px solid var(--orange);border-radius:999px;padding:18px 26px;
@@ -120,6 +143,17 @@
     <p class="lede">Crypto knowledge from your first wallet to advanced strategy — taught straight, so you skip the expensive mistakes.</p>
   </header>
 
+  <!-- NEW: Jup Locker Room feature banner -->
+  <a class="newfeat" href="/locker-room">
+    <span class="nfbadge">★ New</span>
+    <span class="nficon">🔒</span>
+    <span class="nftext">
+      <span class="nft">The Locker Room</span>
+      <span class="nfs"><b>Learn about locks — then lock your Solana tokens.</b> On-chain, non-custodial, no token cut or extra fees. Powered by Jupiter Lock.</span>
+    </span>
+    <span class="nfgo">Open →</span>
+  </a>
+
   <!-- THE big capsule: AI journey guide → expands to the detailed list -->
   <div class="guide">
     <button class="guidebtn" id="guidebtn" aria-expanded="false" aria-controls="guidemenu">
@@ -150,6 +184,7 @@
     <a class="ql" href="/school#incubator"><span class="qt">Incubator</span><span class="qd">New here? Wallets, tokens &amp; safety</span></a>
     <a class="ql" href="/school"><span class="qt">School</span><span class="qd">12-class course → diploma</span></a>
     <a class="ql" href="/tools"><span class="qt">Tools</span><span class="qd">Research &amp; development tools</span></a>
+    <a class="ql" href="/locker-room"><span class="qt">Locker Room</span><span class="qd">Lock your Solana tokens — no token cut</span></a>
     <a class="ql" href="/clkn"><span class="qt">CLKN Token</span><span class="qd">Price, holders, chart &amp; where to buy</span></a>
   </div>
 
