@@ -19,11 +19,15 @@
   .wrap{max-width:640px;margin:0 auto;padding:20px 16px 80px;}
   a{color:var(--accent,#f5b301);}
   /* hero */
-  .hero{text-align:center;padding:14px 14px 4px;}
-  .hero .lock{font-size:46px;filter:drop-shadow(0 3px 10px rgba(0,0,0,.5));}
-  h1{font-family:'Anton',sans-serif;font-weight:900;letter-spacing:2px;font-size:36px;line-height:1.02;margin-top:4px;
+  .hero{text-align:center;padding:10px 14px 4px;}
+  .hero .crest{position:relative;display:inline-block;}
+  .hero .avatar{width:132px;height:132px;border-radius:50%;object-fit:cover;object-position:center 12%;border:3px solid var(--gold,#f5b301);box-shadow:0 0 34px rgba(255,122,24,.28);animation:ckGlow 2.6s ease-in-out infinite;}
+  .hero .lockbadge{position:absolute;right:-3px;bottom:4px;font-size:38px;line-height:1;filter:drop-shadow(0 2px 7px rgba(0,0,0,.7));}
+  .hero .kicker{font-family:'Anton',sans-serif;font-size:12px;letter-spacing:4px;color:var(--sub,#9a9aa8);text-transform:uppercase;margin-top:12px;}
+  h1{font-family:'Anton',sans-serif;font-weight:900;letter-spacing:1.5px;font-size:54px;line-height:1.0;margin-top:4px;
      background:linear-gradient(180deg,#FCD34D,#D97706);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
-  .hero .tag{font-family:var(--mono,monospace);font-size:11px;letter-spacing:1.5px;color:var(--sub,#9a9aa8);margin-top:6px;text-transform:uppercase;}
+  .hero .tag{font-family:var(--mono,monospace);font-size:11px;letter-spacing:1.5px;color:var(--sub,#9a9aa8);margin-top:8px;text-transform:uppercase;}
+  @media(max-width:480px){ h1{font-size:40px;} .hero .avatar{width:112px;height:112px;} .hero .lockbadge{font-size:32px;} }
   .hero .lede{max-width:520px;margin:9px auto 0;color:#cfcfe0;font-size:14px;line-height:1.5;}
   .chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px;}
   .chip{background:rgba(245,179,1,.10);border:1px solid rgba(245,179,1,.35);color:#f5b301;border-radius:20px;padding:5px 13px;font-size:12px;font-weight:600;}
@@ -126,7 +130,8 @@
 <div class="wrap">
   <a class="backlink" href="/tools">← Cluck Norris tools</a>
   <div class="hero">
-    <div class="lock">🔒</div>
+    <div class="crest"><img class="avatar" src="/cluck-norris-mascot.jpg" alt="Cluck Norris"><span class="lockbadge">🔒</span></div>
+    <div class="kicker">School of Crypto Hard Knocks</div>
     <h1>JUP LOCKER ROOM</h1>
     <div class="tag">Token locks · explained, showcased &amp; done for you</div>
     <p class="lede">Locking tokens is how a project says <b>“we’re not going anywhere.”</b> Learn how it works, see the CLKN <b>Lock of Fame</b>, and lock your own tokens with <b>Jupiter Lock</b> — non-custodial, audited, no token cut.</p>
