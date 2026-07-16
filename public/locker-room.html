@@ -252,7 +252,7 @@
       <button class="btn" id="cCreate" style="display:none">🔒 Create lock on-chain</button>
       <div id="cWallet" style="display:none;margin-top:10px;font-size:12.5px;color:#9a9aa8;text-align:center">🟢 Connected as <b id="cWalletAddr" style="color:#e9e9ee"></b> · <a href="#" id="cDisconnect" style="color:#f5b301">Disconnect / switch wallet</a></div>
       <div class="msg" id="cMsg"></div>
-      <div class="muted" style="font-size:11px;margin-top:10px">Prefer Jupiter’s own audited flow? <a id="cJupLink" href="https://lock.jup.ag/" target="_blank" rel="noopener">Open it on lock.jup.ag →</a></div>
+      <div class="muted" style="font-size:11px;margin-top:10px">Not sure what to pick? <a href="#" class="acjump">Ask Cluck about locks →</a> · Prefer Jupiter’s own audited flow? <a id="cJupLink" href="https://lock.jup.ag/" target="_blank" rel="noopener">Open it on lock.jup.ag →</a></div>
     </div>
   </div>
 
@@ -264,6 +264,7 @@
       <button class="btn" id="clConnect">👛 Connect wallet</button>
       <div id="clWallet" style="display:none;margin-top:10px;font-size:12.5px;color:#9a9aa8;text-align:center">🟢 Connected as <b id="clAddr" style="color:#e9e9ee"></b> · <a href="#" id="clDisc" style="color:#f5b301">Disconnect</a></div>
       <div class="msg" id="clMsg"></div>
+      <div class="muted" style="font-size:11px;margin-top:12px">Questions about vesting or claiming? <a href="#" class="acjump">Ask Cluck about locks →</a></div>
     </div>
     <div id="clList"></div>
   </div>
@@ -572,6 +573,15 @@
     q.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); run(); } });
     document.querySelectorAll('.ac-suggest .ac-chip').forEach(function(c){
       c.addEventListener('click',function(){ q.value=c.textContent.trim(); run(); });
+    });
+    // "Ask Cluck about locks →" links on the other tabs jump back here and land on the box.
+    document.querySelectorAll('.acjump').forEach(function(a){
+      a.addEventListener('click',function(e){ e.preventDefault();
+        var lt=document.querySelector('.tab[data-tab="learn"]'); if(lt) lt.click();
+        var card=q.closest('.card');
+        if(card&&card.scrollIntoView) card.scrollIntoView({behavior:'smooth',block:'center'});
+        setTimeout(function(){ try{ q.focus({preventScroll:true}); }catch(_){ q.focus(); } },300);
+      });
     });
   })();
 })();
