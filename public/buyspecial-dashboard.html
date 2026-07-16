@@ -40,7 +40,11 @@
   .share input{flex:1;font-size:11px;}
   .gate{max-width:400px;margin:60px auto;text-align:center;}
   .hide{display:none;}
+  .bonusIn{width:110px;padding:5px 7px;font-size:12px;}
+  .rstat{font-family:var(--mono,monospace);font-size:11px;}
+  .pill.dq{background:rgba(239,68,68,.16);color:#ff8f8f;} .pill.manual2{background:rgba(252,211,77,.16);color:#FCD34D;} .pill.elig{background:rgba(16,185,129,.16);color:#34d399;}
 </style>
+<script src="https://unpkg.com/@solana/web3.js@1.95.8/lib/index.iife.min.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -113,7 +117,21 @@
 
       <div class="card" style="margin-top:16px;background:#0d0d10">
         <div class="sec" style="font-size:13px">Verify &amp; distribute</div>
-        <p class="muted">The hold check + vested-lock payout rail (one Jupiter Lock escrow per winner, claimed in the Locker Room) is the next build slice. For now, the opt-in registry above collects and verifies your informed, non-bot buyers.</p>
+        <p class="muted" style="font-size:12px">Run the hold check to build the payout — bonus = each buyer's verified buy × the bonus %. Then create one vesting lock per winner; they claim it in the Locker Room. Fund from whatever wallet you connect.</p>
+        <button class="btn sm" id="dVerify">Run hold check &amp; build payout</button>
+        <div class="msg" id="vMsg"></div>
+        <div id="payoutWrap" style="display:none;margin-top:12px">
+          <div id="payoutSummary" class="muted" style="font-size:12px;margin-bottom:8px"></div>
+          <div id="payoutTable"></div>
+          <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <button class="btn sm alt" id="opWallet">👛 Connect operator wallet</button>
+            <span id="opWalletInfo" class="muted" style="display:none;font-size:11.5px"></span>
+            <button class="btn sm" id="doDistribute" style="display:none">🔒 Create vested locks</button>
+            <button class="btn sm alt" id="copyPayout">Copy list (airdropper)</button>
+          </div>
+          <div class="muted" id="distNote" style="font-size:11px;margin-top:8px"></div>
+          <div class="msg" id="distMsg"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -130,7 +148,7 @@
   function fromLocalInput(v){ return v? new Date(v).getTime() : null; }
 
   var KEY=localStorage.getItem('bcKey')||'';
-  var editingId=null, selId=null;
+  var editingId=null, selId=null, curCampaign=null, opProvider=null, opPubkey=null;
 
   function api(path, opts){
     opts=opts||{}; opts.headers=Object.assign({'x-premium-key':KEY,'content-type':'application/json'}, opts.headers||{});
@@ -190,6 +208,7 @@
     selId=id; loadList();
     api('/api/buyspecial/campaign?id='+encodeURIComponent(id)).then(function(r){
       var c=r.j&&r.j.campaign; if(!c) return;
+      curCampaign=c; resetPayoutUI();
       editingId=c.id; $('#formTitle').textContent='Edit: '+(c.label||'campaign'); $('#fNew').style.display='inline-block';
       $('#fMint').value=c.mint; $('#fLabel').value=c.label||''; $('#fBonus').value=c.bonusPct; $('#fMonths').value=c.vest.months;
       $('#fInt').value=c.vest.interval; $('#fCliff').value=c.vest.cliffDays; $('#fCancel').value=c.vest.cancelable?'1':'0';
@@ -230,6 +249,109 @@
       if(r.status!==200||!r.j.ok){ $('#mMsg').className='msg err'; $('#mMsg').textContent=(r.j&&r.j.error)||'Could not add.'; return; }
       $('#mMsg').className='msg ok'; $('#mMsg').textContent='Added '+shortAddr(r.j.wallet); $('#mAdd').value=''; select(selId);
     });
+  });
+
+  // ---- verify & distribute (per-winner vesting locks) ----
+  function fmtTok(n){ n=Number(n)||0; if(n>=1e9)return (n/1e9).toFixed(2)+'B'; if(n>=1e6)return (n/1e6).toFixed(2)+'M'; if(n>=1e3)return (n/1e3).toFixed(1)+'K'; return Math.round(n).toLocaleString(); }
+  function resetPayoutUI(){ $('#payoutWrap').style.display='none'; $('#payoutTable').innerHTML=''; $('#vMsg').textContent=''; $('#distMsg').textContent=''; $('#doDistribute').style.display='none'; }
+  $('#dVerify').addEventListener('click',function(){
+    if(!selId) return; $('#vMsg').className='msg'; $('#vMsg').textContent='Checking holds on-chain…'; $('#dVerify').disabled=true;
+    api('/api/buyspecial/verify',{method:'POST',body:JSON.stringify({id:selId})}).then(function(r){
+      $('#dVerify').disabled=false;
+      if(r.status!==200||!r.j.ok){ $('#vMsg').className='msg err'; $('#vMsg').textContent=(r.j&&r.j.error)||'Verify failed.'; return; }
+      $('#vMsg').textContent=''; renderPayout(r.j);
+    });
+  });
+  function renderPayout(j){
+    var rows=j.reviewed||[];
+    $('#payoutSummary').innerHTML='<b style="color:#34d399">'+j.eligible+' eligible</b> · '+j.dq+' sold/DQ · '+j.manual+' manual · total bonus '+fmtTok(j.totalBonus)+' '+(curCampaign.tokenSymbol||'tokens');
+    $('#payoutTable').innerHTML='<table><tr><th>Wallet</th><th>Bought</th><th>Bonus</th><th>Status</th><th></th></tr>'+
+      rows.map(function(rw){
+        var cls=rw.status==='eligible'?'elig':(rw.status==='dq'?'dq':'manual2');
+        return '<tr data-w="'+esc(rw.wallet)+'" data-status="'+esc(rw.status)+'"><td class="mono">'+esc(shortAddr(rw.wallet))+'</td>'+
+          '<td class="mono">'+(rw.buyUi?fmtTok(rw.buyUi):'—')+'</td>'+
+          '<td><input class="bonusIn" type="text" inputmode="decimal" value="'+(rw.bonus||0)+'"/></td>'+
+          '<td><span class="pill '+cls+'" title="'+esc(rw.note||'')+'">'+esc(rw.status)+'</span></td>'+
+          '<td class="rstat"></td></tr>';
+      }).join('')+'</table>';
+    $('#payoutWrap').style.display='block';
+    updateDistNote();
+  }
+  // Rows we'll actually create a lock for: any row with a bonus > 0 that is NOT sold/DQ.
+  // Auto-eligible rows carry a computed bonus by default; a manual/vouched row is included
+  // only once the operator types a bonus for it. Sold (dq) wallets are always excluded.
+  function eligibleRows(){ return [].slice.call(document.querySelectorAll('#payoutTable tr[data-status]')).filter(function(tr){
+    if(tr.getAttribute('data-status')==='dq') return false;
+    var inp=tr.querySelector('.bonusIn'); return inp && (parseFloat(inp.value)||0)>0;
+  }); }
+  function updateDistNote(){
+    var rows=eligibleRows(); var n=rows.length;
+    var total=rows.reduce(function(s,tr){ return s+(parseFloat(tr.querySelector('.bonusIn').value)||0); },0);
+    var rent=(n*0.03).toFixed(2);
+    $('#distNote').innerHTML=n?('Will create <b>'+n+'</b> vesting lock'+(n===1?'':'s')+' ('+ (curCampaign.vest?(curCampaign.vest.months+' '+curCampaign.vest.interval+(curCampaign.vest.months>1?'s':'')):'')+'), total <b>'+fmtTok(total)+'</b> '+(curCampaign.tokenSymbol||'tokens')+'. You sign each — budget ~<b>'+rent+' SOL</b> rent + '+n+' signature'+(n===1?'':'s')+'.'):'No eligible winners to distribute.';
+  }
+  document.addEventListener('input',function(e){ if(e.target&&e.target.classList&&e.target.classList.contains('bonusIn')) updateDistNote(); });
+  $('#copyPayout').addEventListener('click',function(){
+    var lines=eligibleRows().map(function(tr){ return tr.getAttribute('data-w')+', '+(parseFloat(tr.querySelector('.bonusIn').value)||0); }).join('\n');
+    if(!lines){ return; }
+    var ta=document.createElement('textarea'); ta.value=lines; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');}catch(e){} ta.remove();
+    $('#copyPayout').textContent='Copied'; setTimeout(function(){$('#copyPayout').textContent='Copy list (airdropper)';},1300);
+  });
+
+  // operator wallet connect (Phantom / Solflare / Backpack)
+  function detectWallets(){ var o=[];
+    if(window.phantom&&window.phantom.solana) o.push({name:'Phantom',p:window.phantom.solana});
+    else if(window.solana&&window.solana.isPhantom) o.push({name:'Phantom',p:window.solana});
+    if(window.solflare&&window.solflare.isSolflare) o.push({name:'Solflare',p:window.solflare});
+    if(window.backpack&&window.backpack.isBackpack) o.push({name:'Backpack',p:window.backpack});
+    if(!o.length&&window.solana) o.push({name:'Wallet',p:window.solana});
+    return o; }
+  $('#opWallet').addEventListener('click',function(){
+    var w=detectWallets(); if(!w.length){ $('#distMsg').className='msg err'; $('#distMsg').textContent='No Solana wallet found (install Phantom or Solflare).'; return; }
+    var x=w[0];
+    x.p.connect().then(function(resp){ opProvider=x.p; opPubkey=(resp&&resp.publicKey?resp.publicKey:x.p.publicKey).toString();
+      $('#opWallet').style.display='none'; $('#opWalletInfo').style.display='inline'; $('#opWalletInfo').textContent='🟢 '+shortAddr(opPubkey)+' ('+x.name+')';
+      $('#doDistribute').style.display='inline-block';
+    }).catch(function(){ $('#distMsg').className='msg err'; $('#distMsg').textContent='Wallet connection cancelled.'; });
+  });
+  function b64ToBytes(b){ var s=atob(b),a=new Uint8Array(s.length); for(var i=0;i<s.length;i++)a[i]=s.charCodeAt(i); return a; }
+  function bytesToB64(u){ var s=''; for(var i=0;i<u.length;i++)s+=String.fromCharCode(u[i]); return btoa(s); }
+  function rpc(method,params){ return fetch('/api/helius-rpc',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:'d',method:method,params:params})}).then(function(r){return r.json();}); }
+  function confirmSig(sig){ return new Promise(function(res,rej){ var n=0; (function poll(){ n++; rpc('getSignatureStatuses',[[sig],{searchTransactionHistory:true}]).then(function(j){ var st=j&&j.result&&j.result.value&&j.result.value[0]; if(st&&st.err)return rej(new Error('tx failed')); if(st&&(st.confirmationStatus==='confirmed'||st.confirmationStatus==='finalized'))return res(); if(n>=30)return rej(new Error('confirm timeout')); setTimeout(poll,1500); }).catch(function(){ if(n>=30)return rej(new Error('confirm error')); setTimeout(poll,1500); }); })(); }); }
+
+  $('#doDistribute').addEventListener('click',function(){
+    if(!opProvider||!opProvider.signTransaction){ $('#distMsg').className='msg err'; $('#distMsg').textContent='Connect a wallet that can sign.'; return; }
+    if(!window.solanaWeb3){ $('#distMsg').className='msg err'; $('#distMsg').textContent='Solana library still loading — try again.'; return; }
+    var rows=eligibleRows().filter(function(tr){ return (parseFloat(tr.querySelector('.bonusIn').value)||0)>0; });
+    if(!rows.length){ $('#distMsg').className='msg err'; $('#distMsg').textContent='No eligible winners with a bonus > 0.'; return; }
+    if(!confirm('Create '+rows.length+' vesting lock'+(rows.length===1?'':'s')+' from '+shortAddr(opPubkey)+'? You will approve each one.')) return;
+    $('#doDistribute').disabled=true; $('#dVerify').disabled=true;
+    var v=curCampaign.vest||{months:12,interval:'month',cliffDays:0,cancelable:false};
+    var cliffUnix=Math.floor(Date.now()/1000)+Math.max(0,(v.cliffDays||0))*86400;
+    var i=0, ok=0, fail=0;
+    (function next(){
+      if(i>=rows.length){ $('#doDistribute').disabled=false; $('#dVerify').disabled=false; $('#distMsg').className='msg ok'; $('#distMsg').textContent='Done — '+ok+' lock'+(ok===1?'':'s')+' created'+(fail?(', '+fail+' failed'):'')+'.'; return; }
+      var tr=rows[i], wallet=tr.getAttribute('data-w'), amount=String(parseFloat(tr.querySelector('.bonusIn').value)||0);
+      var st=tr.querySelector('.rstat'); st.textContent='⏳ building…'; st.style.color='#9a9aa8';
+      $('#distMsg').className='msg'; $('#distMsg').textContent='Lock '+(i+1)+' of '+rows.length+' — approve in your wallet…';
+      fetch('/api/lock/create-tx',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({
+        mint:curCampaign.mint, sender:opPubkey, recipient:wallet, amount:amount,
+        cliffUnix:cliffUnix, cliffPct:0, periods:(v.months||12), interval:(v.interval||'month'),
+        cancelable:!!v.cancelable, recipientChangeable:false, name:((curCampaign.label||'Buy Special')+' bonus').slice(0,80)
+      })}).then(function(r){return r.json();}).then(function(res){
+        if(!res.ok) throw new Error(res.error||'build failed');
+        if(res.simError) throw new Error(res.simError);
+        var tx=window.solanaWeb3.Transaction.from(b64ToBytes(res.txBase64));
+        var base=window.solanaWeb3.Keypair.fromSecretKey(b64ToBytes(res.baseSecret));
+        return rpc('getLatestBlockhash',[{commitment:'confirmed'}]).then(function(j){
+          var bh=j&&j.result&&j.result.value&&j.result.value.blockhash; if(bh) tx.recentBlockhash=bh;
+          return opProvider.signTransaction(tx);
+        }).then(function(signed){ signed.partialSign(base); var raw=signed.serialize();
+          return rpc('sendTransaction',[bytesToB64(raw),{encoding:'base64',skipPreflight:true,preflightCommitment:'confirmed',maxRetries:5}]);
+        }).then(function(j){ if(j.error) throw new Error(j.error.message||'send failed'); st.textContent='⏳ confirming…'; return confirmSig(j.result).then(function(){ return j.result; }); })
+        .then(function(sig){ ok++; st.innerHTML='✓ <a href="https://solscan.io/tx/'+encodeURIComponent(sig)+'" target="_blank" rel="noopener" style="color:#34d399">done</a>'; i++; setTimeout(next,400); });
+      }).catch(function(e){ fail++; st.textContent='✗ '+((e&&e.message)?e.message:'failed').slice(0,40); st.style.color='#ff8f8f'; i++; setTimeout(next,400); });
+    })();
   });
 
   // boot

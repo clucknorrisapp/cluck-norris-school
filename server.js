@@ -6049,6 +6049,45 @@ app.post("/api/buyspecial/optin/manual", async (req, res) => {
   return res.status(200).json({ ok: true, wallet, optinCount: Object.keys(c.optins).length });
 });
 
+// Verify hold + build the vested payout list. For each opted-in wallet: confirm it still holds
+// its buy (no sells since the window opened), and compute the suggested bonus = its recorded buy
+// × bonusPct. Stores the payout on the campaign; the operator then creates a lock per winner.
+app.post("/api/buyspecial/verify", async (req, res) => {
+  if (!buyCompAdminOK(req)) return res.status(404).json({ error: "not_found" });
+  const c = vcGet((req.query && req.query.id) || (req.body && req.body.id));
+  if (!c) return res.status(404).json({ error: "not_found" });
+  const optins = Object.values(c.optins || {});
+  const reviewed = [];
+  for (const o of optins) {
+    let status = "eligible", note = "";
+    if (o.source === "manual-vouched") {
+      status = "manual"; note = "vouched — no tx to hold-check; set the bonus by hand";
+    } else {
+      try {
+        const pos = await walletPositionMulti(o.wallet, c.mint, { fromMs: c.from });
+        if (!pos) { status = "manual"; note = "no position data — verify by hand"; }
+        else if ((pos.sells || 0) > 0) { status = "dq"; note = `sold (${pos.sells} sell${pos.sells > 1 ? "s" : ""}) — did not hold`; }
+        else if ((pos.balance || 0) <= 0) { status = "manual"; note = "holds 0 now — transferred out; verify by hand"; }
+        else { status = "eligible"; note = `holds ${Math.round(pos.balance).toLocaleString()}, no sells`; }
+      } catch (e) { status = "manual"; note = "hold lookup failed — verify by hand"; }
+      await new Promise((r) => setTimeout(r, 120));   // pace the buyer-data sources
+    }
+    const buyUi = Number(o.buyUi) || 0;
+    const bonus = Math.max(0, Math.round(buyUi * (c.bonusPct / 100) * 1e6) / 1e6);
+    reviewed.push({ wallet: o.wallet, buyUi, bonus, status, note, source: o.source, txSig: o.txSig });
+  }
+  reviewed.sort((a, b) => (b.bonus || 0) - (a.bonus || 0));
+  c.payout = reviewed; c.verifiedAt = Date.now();
+  vcSave(c);
+  return res.status(200).json({
+    ok: true, reviewed, bonusPct: c.bonusPct, vest: c.vest, mint: c.mint,
+    eligible: reviewed.filter((r) => r.status === "eligible").length,
+    dq: reviewed.filter((r) => r.status === "dq").length,
+    manual: reviewed.filter((r) => r.status === "manual").length,
+    totalBonus: reviewed.filter((r) => r.status === "eligible").reduce((s, r) => s + (r.bonus || 0), 0),
+  });
+});
+
 app.get("/api/token-context", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "public, max-age=300");
