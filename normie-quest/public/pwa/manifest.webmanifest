@@ -1,0 +1,19 @@
+{
+  "name": "Normie Quest",
+  "short_name": "Normie Quest",
+  "description": "A retro side-scrolling platformer for the Normie community.",
+  "id": "/normie-quest-x7",
+  "start_url": "/normie-quest-x7",
+  "scope": "/normie-quest-x7",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "landscape",
+  "background_color": "#07060f",
+  "theme_color": "#0e0a1e",
+  "categories": ["games"],
+  "icons": [
+    { "src": "/nq-assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/nq-assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/nq-assets/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

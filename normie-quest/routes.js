@@ -46,6 +46,28 @@ router.get('/normie-quest-x7', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'normie-quest-platformer.html'));
 });
 
+// ---- PWA: manifest, service worker, icons --------------------------------
+// Makes the game installable ("Add to Home Screen" on iOS/Android, and a TWA-wrappable
+// PWA for the Solana dApp Store). Kept noindex like the rest of this hidden feature.
+// The service worker is served from the site ROOT so its scope can cover /normie-quest-x7.
+router.get('/normie-quest-x7.webmanifest', (req, res) => {
+  res.set('X-Robots-Tag', 'noindex, nofollow');
+  res.type('application/manifest+json');
+  res.sendFile(path.join(__dirname, 'public', 'pwa', 'manifest.webmanifest'));
+});
+router.get('/nq-sw.js', (req, res) => {
+  res.set('X-Robots-Tag', 'noindex, nofollow');
+  res.set('Service-Worker-Allowed', '/');            // allow the SW to claim the root scope
+  res.set('Cache-Control', 'no-cache, must-revalidate');
+  res.type('application/javascript');
+  res.sendFile(path.join(__dirname, 'public', 'nq-sw.js'));
+});
+router.use('/nq-assets', express.static(path.join(__dirname, 'public', 'pwa'), {
+  maxAge: '7d',
+  fallthrough: false,
+  setHeaders: (res) => { res.set('X-Robots-Tag', 'noindex, nofollow'); },
+}));
+
 // ---- /api/nq/* : burn-to-play backend (Phase 1) --------------------------
 // All routes are safe while dormant: with NQ_NORMIE_MINT unset they return "not configured"
 // and the game (BURN_GATE=false) never calls them. No operator funds are ever touched — the

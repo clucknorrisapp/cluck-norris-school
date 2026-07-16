@@ -9,6 +9,12 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Normie Quest">
+<!-- PWA: installable app (Add to Home Screen on iOS/Android; TWA-wrappable for the Solana dApp Store) -->
+<link rel="manifest" href="/normie-quest-x7.webmanifest">
+<meta name="theme-color" content="#0e0a1e">
+<link rel="apple-touch-icon" href="/nq-assets/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/nq-assets/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="/nq-assets/icon-512.png">
 <title>NORMIE QUEST — Platformer Prototype</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
@@ -40,6 +46,16 @@
   @keyframes nqrot{ 0%,45%{transform:rotate(0)} 65%,100%{transform:rotate(-90deg)} }
   @media (max-width:920px) and (orientation:portrait){ #rotate{display:flex} }
 </style>
+<script>
+  /* Register the service worker so the game is an installable PWA. Best-effort — a failure
+     here never blocks the game (it just means no offline/install prompt). Scope is the site
+     root (served with Service-Worker-Allowed: /) so it can control /normie-quest-x7. */
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/nq-sw.js', { scope: '/normie-quest-x7' }).catch(function () {});
+    });
+  }
+</script>
 </head>
 <body>
 
