@@ -311,6 +311,24 @@
   });
   function b64ToBytes(b64){ var bin=atob(b64), a=new Uint8Array(bin.length); for(var i=0;i<bin.length;i++) a[i]=bin.charCodeAt(i); return a; }
   function bytesToB64(u8){ var s=''; for(var i=0;i<u8.length;i++) s+=String.fromCharCode(u8[i]); return btoa(s); }
+  // We send with skipPreflight (the server already simulated the lock), so we confirm landing here.
+  function confirmSig(sig){
+    return new Promise(function(resolve,reject){
+      var tries=0;
+      (function poll(){
+        tries++;
+        fetch('/api/helius-rpc',{method:'POST',headers:{'content-type':'application/json'},
+          body:JSON.stringify({ jsonrpc:'2.0', id:'lock-cs', method:'getSignatureStatuses', params:[[sig],{ searchTransactionHistory:true }] })})
+          .then(function(r){return r.json();}).then(function(j){
+            var st=j&&j.result&&j.result.value&&j.result.value[0];
+            if(st&&st.err) return reject(new Error('The lock transaction failed on-chain — nothing was locked. Please try again.'));
+            if(st&&(st.confirmationStatus==='confirmed'||st.confirmationStatus==='finalized')) return resolve();
+            if(tries>=30) return reject(new Error('Couldn’t confirm within ~45s. Check Solscan for the signature — if it didn’t land, just try again.'));
+            setTimeout(poll,1500);
+          }).catch(function(){ if(tries>=30) return reject(new Error('Confirmation check failed — check Solscan for the signature.')); setTimeout(poll,1500); });
+      })();
+    });
+  }
   $('#cCreate').addEventListener('click',function(){
     var m=(C.mint.value||'').trim(), amt=(C.amt.value||'').trim();
     if(!m||!amt){ $('#cMsg').className='msg err'; $('#cMsg').textContent='Enter a token mint and an amount first.'; return; }
@@ -347,9 +365,15 @@
           }).then(function(signed){
           signed.partialSign(baseKp);   // ephemeral base signs AFTER the wallet
           var raw=signed.serialize();
+          // skipPreflight: the send's preflight defaults to 'finalized' commitment and rejects our
+          // fresh 'confirmed' blockhash as "Blockhash not found" even though it's valid. The server
+          // already simulated the lock, so we skip preflight and confirm the signature below instead.
           return fetch('/api/helius-rpc',{method:'POST',headers:{'content-type':'application/json'},
-            body:JSON.stringify({ jsonrpc:'2.0', id:'lock-send', method:'sendTransaction', params:[bytesToB64(raw),{ encoding:'base64', maxRetries:5 }] })})
+            body:JSON.stringify({ jsonrpc:'2.0', id:'lock-send', method:'sendTransaction', params:[bytesToB64(raw),{ encoding:'base64', skipPreflight:true, preflightCommitment:'confirmed', maxRetries:5 }] })})
             .then(function(r){return r.json();}).then(function(j){ if(j.error) throw new Error(j.error.message||'Send failed'); return j.result; });
+        }).then(function(sig){
+          $('#cMsg').className='msg'; $('#cMsg').textContent='Sent — confirming on-chain…';
+          return confirmSig(sig).then(function(){ return sig; });
         }).then(function(sig){
           $('#cMsg').className='msg ok'; $('#cMsg').innerHTML='🔒 Lock created! <a href="https://solscan.io/tx/'+encodeURIComponent(sig)+'" target="_blank" rel="noopener">View on Solscan →</a>';
           btn.textContent='✓ Lock created'; window.__fameLoaded=false;   // refresh the Lock of Fame with the new lock
