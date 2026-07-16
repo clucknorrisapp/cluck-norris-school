@@ -6626,8 +6626,17 @@ app.get("/api/lock/recent", async (req, res) => {
     }
     const jupLock = require("./lib/jup-lock");
     const raw = await jupLock.recentLocks(12, 70);
+    // Merge our-UI events (recorded instantly at creation, tagged) with the global scan,
+    // deduped by signature, newest-first. Our events already carry token metadata.
+    const events = kv.get("recentLockEvents", []);
+    const bySig = new Map();
+    for (const e of events) bySig.set(e.sig, { mint: e.mint, amount: e.amount, creator: e.creator, sig: e.sig, ts: e.ts || e.recordedAt || 0, name: e.name || null, symbol: e.symbol || null, icon: e.icon || null, via: e.via || null });
+    for (const l of raw) if (!bySig.has(l.sig)) bySig.set(l.sig, l);
+    const merged = [...bySig.values()].sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 12);
+    // Enrich any (scan) entries that don't already have token identity.
     const metaCache = new Map();
-    for (const l of raw) {
+    for (const l of merged) {
+      if (l.symbol || l.name) continue;
       if (!metaCache.has(l.mint)) {
         let m = null;
         try {
@@ -6640,10 +6649,40 @@ app.get("/api/lock/recent", async (req, res) => {
       const m = metaCache.get(l.mint) || {};
       l.name = m.name || null; l.symbol = m.symbol || null; l.icon = m.icon || null;
     }
-    _recentLocksCache = { t: now, data: raw };
-    return res.status(200).json({ ok: true, locks: raw });
+    _recentLocksCache = { t: now, data: merged };
+    return res.status(200).json({ ok: true, locks: merged });
   } catch (err) {
     return res.status(200).json({ ok: false, error: publicErrMsg(err), locks: [] });
+  }
+});
+
+// Record a lock made through OUR UI so it shows in the "recently locked" feed instantly and
+// tagged. Verified on-chain (a sig that isn't a real lock creation is rejected — no fake entries).
+app.post("/api/lock/record", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    const sig = String((req.body && req.body.sig) || "").trim();
+    if (!/^[1-9A-HJ-NP-Za-km-z]{60,100}$/.test(sig)) return res.status(400).json({ ok: false, error: "bad sig" });
+    const events = kv.get("recentLockEvents", []);
+    if (events.some((e) => e.sig === sig)) return res.status(200).json({ ok: true, deduped: true });
+    const jupLock = require("./lib/jup-lock");
+    const v = await jupLock.verifyLockSig(sig);
+    if (!v) return res.status(400).json({ ok: false, error: "not a Jupiter Lock creation" });
+    let name = null, symbol = null, icon = null;
+    try {
+      const tm = await jupTokensSearch(v.mint);
+      const t = Array.isArray(tm) ? (tm.find((x) => x && x.id === v.mint) || tm[0]) : null;
+      if (t) { name = t.name || null; symbol = t.symbol || null; icon = (typeof t.icon === "string" && /^https:\/\//.test(t.icon)) ? t.icon : null; }
+    } catch (_) {}
+    const ev = { mint: v.mint, amount: v.amount, creator: v.creator, sig: v.sig, ts: v.ts || Date.now(), name, symbol, icon, via: "clucknorris", recordedAt: Date.now() };
+    const cutoff = Date.now() - 24 * 3600 * 1000;
+    const next = [ev, ...events.filter((e) => e.sig !== sig && (e.ts || e.recordedAt || 0) > cutoff)].slice(0, 40);
+    kv.set("recentLockEvents", next);
+    _recentLocksCache = { t: 0, data: null };   // bust cache so it appears on the next fetch
+    return res.status(200).json({ ok: true });
+  } catch (err) {
+    return res.status(200).json({ ok: false, error: publicErrMsg(err) });
   }
 });
 

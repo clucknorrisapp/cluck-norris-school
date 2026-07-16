@@ -43,6 +43,7 @@
   .rlock .ravatar{position:relative;width:30px;height:30px;border-radius:50%;background:#1c1d24;border:1px solid var(--border,rgba(255,255,255,.12));flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-family:'Anton',sans-serif;font-size:13px;color:#f5b301;overflow:hidden;}
   .rlock .ravatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
   .rlock .rsym{font-family:'Anton',sans-serif;font-size:14px;color:#fff;line-height:1.05;white-space:nowrap;}
+  .rlock .rvia{font-size:10px;margin-left:5px;vertical-align:middle;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5));}
   .rlock .ramt{font-family:var(--mono,monospace);font-size:10.5px;color:#34d399;white-space:nowrap;margin-top:1px;}
   .rlock .rtime{font-family:var(--mono,monospace);font-size:9px;color:#8a8a98;margin-top:1px;white-space:nowrap;}
   /* nav tabs */
@@ -345,7 +346,7 @@
 
   // ---- recently-locked strip (cross-token feed) ----
   function relTime(ts){ var s=Math.max(0,(Date.now()-ts)/1000); if(s<60)return Math.max(1,Math.floor(s))+'s ago'; if(s<3600)return Math.floor(s/60)+'m ago'; if(s<86400)return Math.floor(s/3600)+'h ago'; return Math.floor(s/86400)+'d ago'; }
-  (function loadRecent(){
+  function loadRecent(){
     fetch('/api/lock/recent').then(function(r){return r.json();}).then(function(d){
       if(!d||!d.ok||!Array.isArray(d.locks)||!d.locks.length) return;
       var row=$('#recentRow');
@@ -353,7 +354,8 @@
         var sym=l.symbol?esc(l.symbol):(l.name?esc(l.name):esc(shortAddr(l.mint)));
         var initial=esc(String(l.symbol||l.name||'?').slice(0,1).toUpperCase());
         var av='<div class="ravatar">'+initial+(l.icon?'<img src="'+esc(l.icon)+'" alt="" onerror="this.remove()"/>':'')+'</div>';
-        return '<div class="rlock" data-mint="'+esc(l.mint)+'">'+av+'<div class="ri"><div class="rsym">'+sym+'</div><div class="ramt">'+fmt(l.amount)+' locked</div><div class="rtime">'+relTime(l.ts)+'</div></div></div>';
+        var via=(l.via==='clucknorris')?'<span class="rvia" title="Locked here on Cluck Norris">🐔</span>':'';
+        return '<div class="rlock" data-mint="'+esc(l.mint)+'">'+av+'<div class="ri"><div class="rsym">'+sym+via+'</div><div class="ramt">'+fmt(l.amount)+' locked</div><div class="rtime">'+relTime(l.ts)+'</div></div></div>';
       }).join('');
       row.querySelectorAll('.rlock').forEach(function(c){ c.addEventListener('click',function(){
         var m=c.getAttribute('data-mint');
@@ -363,7 +365,8 @@
       }); });
       $('#recentWrap').style.display='block';
     }).catch(function(){});
-  })();
+  }
+  loadRecent();
 
   // ---- tabs ----
   var tabs=document.querySelectorAll('.tab');
@@ -582,6 +585,9 @@
           btn.textContent='✓ Lock created'; window.__fameLoaded=false;   // Fame reloads when opened
           showVerify(res, m, sig);  // prominent copy-tx + view-on-Jupiter-Lock panel
           showShare(res);           // ready-to-post X announcement
+          // Record this lock so it appears in the "recently locked" feed instantly + tagged 🐔.
+          fetch('/api/lock/record',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sig:sig})})
+            .then(function(){ setTimeout(loadRecent, 500); }).catch(function(){});
         }).catch(function(e){ $('#cMsg').className='msg err'; $('#cMsg').textContent=(e&&e.message)?e.message:'Wallet cancelled or the transaction failed.'; btn.disabled=false; });
       }).catch(function(){ $('#cMsg').className='msg err'; $('#cMsg').textContent='Network error building the lock.'; btn.disabled=false; });
   });
