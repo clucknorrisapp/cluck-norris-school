@@ -148,6 +148,8 @@
     <div class="card">
       <div class="sec">🔐 Lock your tokens</div>
       <p class="muted">Configure a lock below and watch the unlock schedule build live. When you’re ready, connect your wallet to create it on-chain with Jupiter Lock — free, and the tokens go to a program you control the schedule of, not us.</p>
+      <label>Lock name <span class="muted" style="font-weight:400">(optional — shown on the lock, like Jupiter’s UI)</span></label>
+      <input id="cName" maxlength="80" placeholder="e.g. CLKN Team — 12mo linear"/>
       <label>Token mint</label>
       <input id="cMint" spellcheck="false" placeholder="Token mint address"/>
       <div class="row2">
@@ -236,7 +238,7 @@
   $('#fameGo').addEventListener('click',function(){ var m=$('#fameMint').value.trim(); if(m) loadFame(m); });
 
   // ---- Create configurator + live preview ----
-  var C={mint:$('#cMint'),amt:$('#cAmount'),rec:$('#cRecipient'),cliff:$('#cCliff'),cliffPct:$('#cCliffPct'),dur:$('#cDur'),intr:$('#cInt')};
+  var C={name:$('#cName'),mint:$('#cMint'),amt:$('#cAmount'),rec:$('#cRecipient'),cliff:$('#cCliff'),cliffPct:$('#cCliffPct'),dur:$('#cDur'),intr:$('#cInt')};
   function intDays(u){ return u==='day'?1:u==='week'?7:30; }
   function buildSchedule(){
     var total=parseFloat(String(C.amt.value).replace(/,/g,''))||0;
@@ -306,6 +308,7 @@
     $('#cMsg').className='msg'; $('#cMsg').textContent='Building your lock transaction…';
     fetch('/api/lock/create-tx',{method:'POST',headers:{'content-type':'application/json'},
       body:JSON.stringify({ mint:m, sender:connected, recipient:(C.rec.value||connected).trim(), amount:amt.replace(/,/g,''),
+        name:(C.name.value||'').trim(),
         cliffUnix:cliffUnix, cliffPct:C.cliffPct.value, periods:C.dur.value, interval:C.intr.value,
         cancelable:$('#cCancel').checked, recipientChangeable:$('#cUpdRec').checked })})
       .then(function(r){return r.json();}).then(function(res){

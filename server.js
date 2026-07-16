@@ -6403,6 +6403,7 @@ app.post("/api/lock/create-tx", async (req, res) => {
       mint: b.mint, sender: b.sender, recipient: b.recipient, amount: b.amount,
       cliffUnix: b.cliffUnix, cliffPct: b.cliffPct, periods: b.periods, interval: b.interval,
       cancelable: b.cancelable === true, recipientChangeable: b.recipientChangeable === true,
+      name: b.name,
     });
     return res.status(200).json(r);
   } catch (err) {
