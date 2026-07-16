@@ -3209,29 +3209,34 @@ if(typeof document!=='undefined'){ (function(){
   function layout(){
     var s=document.getElementById('screen'); if(!s) return;
     var r=s.getBoundingClientRect(), gl=r.left, gr=window.innerWidth-r.right, gutter=Math.min(gl,gr);
-    // Activate whenever the gutters can hold the buttons (phones in landscape ≈ 70-90px qualify).
-    // Below this the two move buttons can't sit side-by-side without covering the game → on-screen zones.
-    if(gutter<62){ window.__NQ_PAD_ACTIVE=false; return; }
+    var vw=window.innerWidth, vh=window.innerHeight;
+    // Use the side buttons whenever there's a real gutter. Fall back to the on-screen tap zones
+    // ONLY when there's basically no gutter at all (portrait / near-square).
+    if(gutter<40){ window.__NQ_PAD_ACTIVE=false; return; }
     window.__NQ_PAD_ACTIVE=true;
-    var gap=Math.max(4,Math.round(gutter*0.06));
-    var mv=Math.max(28,Math.min(96,Math.floor((gutter-gap)/2)));   // ◄ ► sized so BOTH fit in the gutter
-    var by=Math.round(window.innerHeight*0.10);                    // bottom anchor → thumb reach
-    // LEFT gutter: the ◄ ► move pair — TALLER than wide (easier to hit) + raised a bit off the bottom.
-    var mvh=Math.round(mv*1.7), lby=Math.round(window.innerHeight*0.14);   // taller buttons, lifted from the very bottom
-    var pairW=mv*2+gap, lx=Math.round(Math.max(1,(gl-pairW)/2));
+    // Comfortable thumb targets. In fullscreen the 16:9 canvas grows to fill the tall screen, so
+    // the gutters get narrow — when a gutter is tighter than the target, the button keeps its
+    // usable size and SPILLS inward over the game's edge (buttons are translucent, and screen
+    // edges are low-value sky/ground) instead of shrinking to an un-tappable nub.
+    var gap=Math.max(4,Math.round(gutter*0.05));
+    var mv=Math.max(46,Math.min(92,Math.floor((gutter-gap)/2)));   // ◄ ► — never below a tappable 46px
+    var mvh=Math.round(mv*1.5), lby=Math.round(vh*0.13);
+    // LEFT pair: centered in the gutter if it fits, else pinned to the OUTER edge so overflow spills inward.
+    var pairW=mv*2+gap, lx=Math.max(2,Math.round((gl-pairW)/2));
     bL.style.width=mv+'px'; bL.style.height=mvh+'px'; bL.style.borderRadius='22px'; bL.style.left=lx+'px'; bL.style.bottom=lby+'px'; bL.style.fontSize=Math.round(mv*0.46)+'px';
     bR.style.width=mv+'px'; bR.style.height=mvh+'px'; bR.style.borderRadius='22px'; bR.style.left=(lx+mv+gap)+'px'; bR.style.bottom=lby+'px'; bR.style.fontSize=Math.round(mv*0.46)+'px';
     // RIGHT gutter: vertical action stack — THROW (top) · JUMP (middle) · DUCK (bottom).
     // Jump+Duck sit together so the right thumb can jump OR duck while the left thumb moves;
     // throw is the least-used, so it goes up top out of the way.
-    var vgap=Math.max(7,Math.round(gutter*0.10));
-    var avail=window.innerHeight - by - 12;
-    var jp=Math.max(40,Math.min(gutter-6, 116, Math.floor((avail - 2*vgap)/2.34)));   // JUMP (biggest), capped so all 3 fit
-    var dk=Math.max(30,Math.round(jp*0.64));   // DUCK
-    var fk=Math.max(30,Math.round(jp*0.64));   // THROW
-    var rx=Math.round(r.right+Math.max(1,(gr-jp)/2)), cxr=rx+jp/2;   // jump column; smaller buttons centre on it
-    bD.style.width=bD.style.height=dk+'px'; bD.style.left=Math.round(cxr-dk/2)+'px'; bD.style.bottom=by+'px'; bD.style.fontSize=Math.round(Math.max(7,dk*0.22))+'px';
-    bJ.style.width=bJ.style.height=jp+'px'; bJ.style.left=rx+'px'; bJ.style.bottom=(by+dk+vgap)+'px'; bJ.style.fontSize=Math.round(Math.max(8,jp*0.15))+'px';
+    var by=Math.round(vh*0.10);
+    var vgap=Math.max(6,Math.round(vh*0.02));
+    var jp=Math.max(56,Math.min(104,Math.round(gutter*1.05)));   // JUMP (biggest); comfortable, may spill inward on a tight gutter
+    var dk=Math.max(42,Math.round(jp*0.62));   // DUCK
+    var fk=Math.max(42,Math.round(jp*0.62));   // THROW
+    // Pin the column's RIGHT edge to the screen edge so any overflow spills inward over the game.
+    var jx=vw-2-jp, cxr=jx+jp/2;
+    bJ.style.width=bJ.style.height=jp+'px'; bJ.style.left=jx+'px'; bJ.style.bottom=(by+dk+vgap)+'px'; bJ.style.fontSize=Math.round(Math.max(8,jp*0.15))+'px';
+    bD.style.width=bD.style.height=dk+'px'; bD.style.left=Math.round(cxr-dk/2)+'px'; bD.style.bottom=by+'px'; bD.style.fontSize=Math.round(Math.max(7,dk*0.20))+'px';
     bF.style.width=bF.style.height=fk+'px'; bF.style.left=Math.round(cxr-fk/2)+'px'; bF.style.bottom=(by+dk+vgap+jp+vgap)+'px'; bF.style.fontSize=Math.round(Math.max(7,fk*0.19))+'px';
   }
   window.addEventListener('resize',layout);
