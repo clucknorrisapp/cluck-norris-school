@@ -6391,6 +6391,24 @@ app.get("/api/locks", async (req, res) => {
   }
 });
 
+// Jupiter Lock — build an unsigned create-vesting-escrow tx. Non-custodial: we only pre-sign with
+// an ephemeral base keypair; the user's wallet adds the fee-payer signature and sends. Validated by
+// mainnet simulation before returning (see lib/jup-lock.js).
+app.post("/api/lock/create-tx", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    const jupLock = require("./lib/jup-lock");   // lazy require: defers the anchor load until first use
+    const b = req.body || {};
+    const r = await jupLock.buildCreateLockTx({
+      mint: b.mint, sender: b.sender, recipient: b.recipient, amount: b.amount,
+      cliffUnix: b.cliffUnix, cliffPct: b.cliffPct, periods: b.periods, interval: b.interval,
+    });
+    return res.status(200).json(r);
+  } catch (err) {
+    return res.status(400).json({ ok: false, error: publicErrMsg(err) });
+  }
+});
+
 // -- Fee Share / Analytics endpoints --
 const CLKN_MINT_CONST = "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
 

@@ -78,6 +78,7 @@
   .foot{font-family:var(--mono,monospace);font-size:10px;color:var(--sub,#9a9aa8);text-align:center;margin-top:22px;line-height:1.7;}
   .backlink{display:inline-block;margin-bottom:6px;font-size:12px;color:#9a9aa8;text-decoration:none;}
 </style>
+<script src="https://unpkg.com/@solana/web3.js@1.95.8/lib/index.iife.min.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -259,13 +260,32 @@
       $('#cMsg').className='msg ok'; $('#cMsg').textContent='Connected '+shortAddr(connected)+'. Review the schedule above, then create your lock.';
     }).catch(function(){ $('#cMsg').className='msg err'; $('#cMsg').textContent='Wallet connection cancelled.'; });
   });
+  function b64ToBytes(b64){ var bin=atob(b64), a=new Uint8Array(bin.length); for(var i=0;i<bin.length;i++) a[i]=bin.charCodeAt(i); return a; }
   $('#cCreate').addEventListener('click',function(){
-    // On-chain create via Jupiter Lock is wired next (it moves real tokens, so it ships after a
-    // small verified test). For now hand off to Jupiter's audited create flow with your config.
-    var s=buildSchedule(); var m=(C.mint.value||'').trim();
-    if(!m||!s.total){ $('#cMsg').className='msg err'; $('#cMsg').textContent='Enter a token mint and an amount first.'; return; }
-    $('#cMsg').className='msg'; $('#cMsg').innerHTML='Opening Jupiter Lock to finalize your <b>'+fmt(s.total)+'</b>-token lock…';
-    window.open('https://lock.jup.ag/'+('?mint='+encodeURIComponent(m)),'_blank','noopener');
+    var m=(C.mint.value||'').trim(), amt=(C.amt.value||'').trim();
+    if(!m||!amt){ $('#cMsg').className='msg err'; $('#cMsg').textContent='Enter a token mint and an amount first.'; return; }
+    if(!connected){ $('#cMsg').className='msg err'; $('#cMsg').textContent='Connect a wallet first.'; return; }
+    if(!window.solanaWeb3){ $('#cMsg').className='msg err'; $('#cMsg').textContent='Solana library still loading — try again in a second.'; return; }
+    var cliffUnix = C.cliff.value ? Math.floor(new Date(C.cliff.value+'T00:00:00Z').getTime()/1000) : 0;
+    var btn=$('#cCreate'); btn.disabled=true;
+    $('#cMsg').className='msg'; $('#cMsg').textContent='Building your lock transaction…';
+    fetch('/api/lock/create-tx',{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({ mint:m, sender:connected, recipient:(C.rec.value||connected).trim(), amount:amt.replace(/,/g,''),
+        cliffUnix:cliffUnix, cliffPct:C.cliffPct.value, periods:C.dur.value, interval:C.intr.value })})
+      .then(function(r){return r.json();}).then(function(res){
+        if(!res.ok){ $('#cMsg').className='msg err'; $('#cMsg').textContent=res.error||'Could not build the lock.'; btn.disabled=false; return; }
+        if(res.simError){ $('#cMsg').className='msg err'; $('#cMsg').textContent='Can’t create this lock — '+res.simError; btn.disabled=false; return; }
+        var tx; try{ tx=window.solanaWeb3.Transaction.from(b64ToBytes(res.txBase64)); }catch(e){ $('#cMsg').className='msg err'; $('#cMsg').textContent='Bad transaction from server.'; btn.disabled=false; return; }
+        $('#cMsg').className='msg'; $('#cMsg').textContent='Approve the transaction in your wallet…';
+        var p=provider();
+        var sendIt = p.signAndSendTransaction ? p.signAndSendTransaction(tx) : Promise.reject(new Error('Your wallet does not support signing here — use the lock.jup.ag link below.'));
+        sendIt.then(function(out){
+          var sig=(out&&out.signature)?out.signature:out;
+          $('#cMsg').className='msg ok'; $('#cMsg').innerHTML='🔒 Lock created! <a href="https://solscan.io/tx/'+encodeURIComponent(sig)+'" target="_blank" rel="noopener">View on Solscan →</a>';
+          btn.textContent='✓ Lock created'; window.__fameLoaded=false;   // refresh the Lock of Fame with the new lock
+          setTimeout(function(){ document.querySelector('.tab[data-tab="fame"]').click(); $('#fameMint').value=m; loadFame(m); }, 3500);
+        }).catch(function(e){ $('#cMsg').className='msg err'; $('#cMsg').textContent=(e&&e.message)?e.message:'Wallet cancelled or the transaction failed.'; btn.disabled=false; });
+      }).catch(function(){ $('#cMsg').className='msg err'; $('#cMsg').textContent='Network error building the lock.'; btn.disabled=false; });
   });
   updJupLink();
 })();
