@@ -47,6 +47,21 @@
   @media (max-width:920px) and (orientation:portrait){ #rotate{display:flex} }
 </style>
 <script>
+  /* PREMIUM "SETUP LANE" flag. The stable tester URL (/normie-quest-x7) leaves this FALSE, so the
+     premium build (wallet gate, tier unlocks, leaderboard submit, Jupiter widget) stays DORMANT and
+     testers see the clean game. The dev route (/normie-quest-x7-lab) or ?setup=1 turns it ON for
+     full setup testing — same file underneath, no duplicate to keep in sync. Going live later just
+     means defaulting this on (or arming it via server config), like the burn gate. */
+  window.__NQ_SETUP = /-lab(\/|$)/.test(location.pathname) || /[?&]setup=1(?:&|$)/.test(location.search);
+  if (window.__NQ_SETUP) {
+    window.addEventListener('DOMContentLoaded', function () {
+      var b = document.createElement('div'); b.textContent = 'SETUP LANE';
+      b.style.cssText = 'position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:9999;background:#ffb43a;color:#20142e;font:700 10px/1 system-ui,sans-serif;padding:3px 9px;border-radius:0 0 8px 8px;letter-spacing:.08em;pointer-events:none;opacity:.85';
+      document.body.appendChild(b);
+    });
+  }
+</script>
+<script>
   /* Register the service worker so the game is an installable PWA. Best-effort — a failure
      here never blocks the game (it just means no offline/install prompt). Scope is the site
      root (served with Service-Worker-Allowed: /) so it can control /normie-quest-x7. */

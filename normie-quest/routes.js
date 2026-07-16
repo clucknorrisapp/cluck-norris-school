@@ -47,6 +47,15 @@ router.get('/normie-quest-x7', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'normie-quest-platformer.html'));
 });
 
+// Dev / "setup lane": the SAME game file with the premium flow forced ON (the page detects the
+// -lab path and sets window.__NQ_SETUP). Lets us build & test the wallet gate / leaderboards /
+// giveaways without touching the stable tester build at /normie-quest-x7. noindex + no-cache.
+router.get('/normie-quest-x7-lab', (req, res) => {
+  res.set('X-Robots-Tag', 'noindex, nofollow');
+  res.set('Cache-Control', 'no-cache, must-revalidate');
+  res.sendFile(path.join(__dirname, 'public', 'normie-quest-platformer.html'));
+});
+
 // ---- PWA: manifest, service worker, icons --------------------------------
 // Makes the game installable ("Add to Home Screen" on iOS/Android, and a TWA-wrappable
 // PWA for the Solana dApp Store). Kept noindex like the rest of this hidden feature.
