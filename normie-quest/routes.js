@@ -18,6 +18,7 @@ const router = express.Router();
 const burn = require('./normie-burn');   // Phase 1 burn-to-play backend (dormant until env-configured)
 const feedback = require('./nq-feedback');   // playtester comment store (test dashboard)
 const leaderboard = require('./nq-leaderboard');   // Phase 2 leaderboards (per-world + weekly)
+const wallet = require('./nq-wallet');   // Phase 2 wallet ownership + tier gate (sign-message, read-only)
 
 // Admin key for reading feedback / the comments dashboard. Accepts a simple shared password
 // (owner's choice — this gate only guards low-sensitivity playtest comments, no funds/PII), plus
@@ -123,12 +124,33 @@ router.get('/api/nq/run-start', (req, res) => {
 router.post('/api/nq/score', (req, res) => {
   try {
     const b = req.body || {};
+    // Wallet verification is server-side: a score counts as walletVerified ONLY if the wallet's
+    // session token checks out (never trust a client-supplied walletVerified flag).
+    const walletVerified = !!(b.wallet && b.walletToken && wallet.checkSession(b.wallet, b.walletToken));
     const r = leaderboard.add(
       { name: b.name, world: b.world, level: b.level, score: b.score, lives: b.lives,
-        wallet: b.wallet, walletVerified: b.walletVerified, mode: b.mode, ua: req.get('user-agent') },
+        wallet: b.wallet, walletVerified, mode: b.mode, ua: req.get('user-agent') },
       b.token || null,
     );
     res.status(r.ok ? 200 : 400).json(r);
+  } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+
+// ---- /api/nq/wallet : sign-message ownership + tier gate ------------------
+// challenge -> the player signs it in their wallet (no tx) -> verify checks the ed25519 signature
+// and reads NORMIE/CLKN balances to grant an access tier + a session token. Reads only; no funds.
+router.get('/api/nq/wallet/config', (req, res) => {
+  try { res.json({ ok: true, ...wallet.publicConfig() }); }
+  catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+router.get('/api/nq/wallet/challenge', (req, res) => {
+  try { res.json(wallet.challenge(String((req.query && req.query.pubkey) || ''))); }
+  catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+router.post('/api/nq/wallet/verify', async (req, res) => {
+  try {
+    const b = req.body || {};
+    res.json(await wallet.verify(String(b.pubkey || ''), String(b.signature || '')));
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
 router.get('/api/nq/leaderboard', (req, res) => {
