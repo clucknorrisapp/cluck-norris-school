@@ -6383,7 +6383,14 @@ app.get("/api/locks", async (req, res) => {
   if (!HELIUS_KEY) return res.status(500).json({ success: false, error: "Missing HELIUS_API_KEY" });
   try {
     const rpcCall = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`);
-    const data = await getLockedSupply(mint, rpcCall);
+    const [data, tokMeta] = await Promise.all([
+      getLockedSupply(mint, rpcCall),
+      jupTokensSearch(String(mint)).catch(() => null),
+    ]);
+    if (Array.isArray(tokMeta)) {
+      const t = tokMeta.find((x) => x && x.id === mint) || tokMeta[0];
+      if (t) data.token = { name: t.name || null, symbol: t.symbol || null, icon: (typeof t.icon === "string" && /^https:\/\//.test(t.icon)) ? t.icon : null };
+    }
     return res.status(200).json(data);
   } catch (err) {
     console.error("Locks error:", err.message);
