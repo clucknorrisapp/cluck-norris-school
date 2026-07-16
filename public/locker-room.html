@@ -103,6 +103,20 @@
   .explain{margin-top:9px;background:#0d0d10;border:1px solid var(--border,rgba(255,255,255,.08));border-radius:10px;padding:13px;}
   .explain p{font-size:12.5px;color:#c2c2d0;margin-bottom:10px;} .explain p:last-child{margin-bottom:0;}
   .trust{font-size:12.5px;font-weight:600;margin-top:8px;} .trust.strong{color:#34d399;} .trust.weak{color:#ffb454;}
+  /* ask cluck (embedded in learn) */
+  .ac-head{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
+  .ac-head img{width:34px;height:34px;border-radius:50%;object-fit:cover;border:1.5px solid #D97706;flex:0 0 auto;}
+  .ac-suggest{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0 4px;}
+  .ac-chip{background:rgba(245,179,1,.10);border:1px solid rgba(245,179,1,.32);color:#f5b301;border-radius:16px;padding:6px 12px;font-size:11.5px;cursor:pointer;line-height:1.25;text-align:left;}
+  .ac-chip:hover{background:rgba(245,179,1,.18);border-color:#D97706;}
+  .ac-inrow{display:flex;gap:8px;margin-top:12px;}
+  .ac-inrow input{flex:1;}
+  .ac-inrow .btn{margin-top:0;width:auto;flex:0 0 auto;padding:11px 18px;font-size:14px;}
+  .ac-answer{display:none;margin-top:13px;background:#0d0d10;border:1px solid rgba(245,179,1,.22);border-radius:11px;padding:14px;}
+  .ac-answer .who{font-family:'Anton',sans-serif;letter-spacing:.5px;color:#f5b301;font-size:13px;margin-bottom:7px;display:flex;align-items:center;gap:8px;}
+  .ac-answer .who img{width:24px;height:24px;border-radius:50%;object-fit:cover;border:1px solid #D97706;}
+  .ac-answer .body{font-size:13.5px;color:#e4e4ee;line-height:1.55;white-space:pre-wrap;}
+  .ac-answer.think .body{color:#9a9aa8;font-style:italic;}
   .foot{font-family:var(--mono,monospace);font-size:10px;color:var(--sub,#9a9aa8);text-align:center;margin-top:22px;line-height:1.7;}
   .backlink{display:inline-block;margin-bottom:6px;font-size:12px;color:#9a9aa8;text-decoration:none;}
 </style>
@@ -161,6 +175,22 @@
       <div class="faq"><h4>No approvals. Nothing to revoke.</h4><p>Locking here does <b>not</b> grant a token approval, a delegate, or any standing permission on your wallet — the kind of thing that later needs revoking. It’s a <b>single transfer</b> into Jupiter’s program, signed once by you. When it’s done, there’s nothing left on your wallet to take back.</p></div>
       <div class="faq"><h4>Non-custodial &amp; audited</h4><p>Your tokens go into <b>Jupiter Lock</b> — an open-source program audited by <b>OtterSec</b> and <b>Sec3</b> — not a wallet we (or Jupiter) control. We never touch your keys: we build the transaction, <b>you</b> sign it in your own wallet.</p></div>
       <div class="faq"><h4>The one thing to know</h4><p>A <b>non-cancelable</b> lock is <b>permanent</b> — that’s the point of it. Choose your schedule and cancelable/permanent setting deliberately before you sign. (Curious about wallet permissions in general? Our free <a href="/security-coop">Security Co-op</a> scans and revokes risky approvals on any wallet.)</p></div>
+    </div>
+    <div class="card">
+      <div class="ac-head"><img src="/cluck-norris-mascot.jpg" alt="Cluck Norris"/><div class="sec" style="margin-bottom:0">🐔 Ask Cluck about locks</div></div>
+      <p class="muted">Cliffs, vesting, whether a lock is legit, what to pick — ask our AI crypto professor. Free, instant, grounded in the school’s curriculum.</p>
+      <div class="ac-suggest">
+        <button type="button" class="ac-chip">What’s the difference between a cliff and vesting?</button>
+        <button type="button" class="ac-chip">Does locking my tokens cost a fee?</button>
+        <button type="button" class="ac-chip">How can I tell if a project’s lock is legit?</button>
+        <button type="button" class="ac-chip">Should I make my lock cancelable?</button>
+      </div>
+      <div class="ac-inrow">
+        <input id="acQ" maxlength="300" placeholder="Ask anything about token locks…" autocomplete="off"/>
+        <button class="btn" id="acAsk">Ask →</button>
+      </div>
+      <div class="ac-answer" id="acAns"><div class="who"><img src="/cluck-norris-mascot.jpg" alt=""/>Cluck Norris</div><div class="body" id="acBody"></div></div>
+      <div class="muted" style="font-size:11px;margin-top:10px">Want the full class? <a href="/ask-cluck">Open Ask Cluck →</a></div>
     </div>
   </div>
 
@@ -519,6 +549,31 @@
       }).catch(function(){ msg.className='msg err'; msg.textContent='Network error building the claim.'; btn.disabled=false; });
   }
   updJupLink();
+
+  // ---- Ask Cluck (embedded, lock-scoped) — calls the same /api/ask-cluck tutor ----
+  (function(){
+    var q=$('#acQ'), ask=$('#acAsk'), ans=$('#acAns'), body=$('#acBody'), busy=false;
+    if(!q||!ask) return;
+    function show(text,thinking){ ans.style.display='block'; ans.classList.toggle('think',!!thinking); body.textContent=text; }
+    function run(){
+      var text=(q.value||'').trim();
+      if(text.length<3){ q.focus(); return; }
+      if(busy) return; busy=true; ask.disabled=true; ask.textContent='…';
+      show('Cluck is thinking…',true);
+      fetch('/api/ask-cluck',{method:'POST',headers:{'content-type':'application/json'},
+        body:JSON.stringify({ question:text, context:'token locks & vesting' })})
+        .then(function(r){return r.json();}).then(function(d){
+          if(d&&d.success&&d.answer){ show(d.answer,false); }
+          else { show((d&&d.error)? d.error : 'Cluck is out of pecks right now — try again in a moment, or open the full Ask Cluck.',false); }
+        }).catch(function(){ show('Network hiccup — try again in a moment.',false); })
+        .finally(function(){ busy=false; ask.disabled=false; ask.textContent='Ask →'; });
+    }
+    ask.addEventListener('click',run);
+    q.addEventListener('keydown',function(e){ if(e.key==='Enter'){ e.preventDefault(); run(); } });
+    document.querySelectorAll('.ac-suggest .ac-chip').forEach(function(c){
+      c.addEventListener('click',function(){ q.value=c.textContent.trim(); run(); });
+    });
+  })();
 })();
 </script>
 </body>
