@@ -290,27 +290,49 @@
   });
   drawPreview();
 
-  // ---- wallet connect (buy-time signing is handled by Jupiter's audited create flow for now) ----
-  function provider(){ if(window.phantom&&window.phantom.solana)return window.phantom.solana; if(window.solflare&&window.solflare.isSolflare)return window.solflare; if(window.backpack)return window.backpack; if(window.solana)return window.solana; return null; }
-  var connected=null;
-  $('#cConnect').addEventListener('click',function(){
-    var p=provider();
-    if(!p){ $('#cMsg').className='msg err'; $('#cMsg').textContent='No Solana wallet found. Install Phantom or Solflare, or use the lock.jup.ag link below.'; return; }
+  // ---- wallet connect — supports MULTIPLE installed wallets (Phantom / Solflare / Backpack).
+  // Old code hard-preferred Phantom, so a user with both installed could never reach Solflare.
+  var connected=null, activeProvider=null;
+  function detectWallets(){
+    var out=[];
+    if(window.phantom&&window.phantom.solana) out.push({name:'Phantom',p:window.phantom.solana});
+    else if(window.solana&&window.solana.isPhantom) out.push({name:'Phantom',p:window.solana});
+    if(window.solflare&&window.solflare.isSolflare) out.push({name:'Solflare',p:window.solflare});
+    if(window.backpack&&window.backpack.isBackpack) out.push({name:'Backpack',p:window.backpack});
+    if(!out.length&&window.solana) out.push({name:'Wallet',p:window.solana});
+    return out;
+  }
+  var picker=document.createElement('div'); picker.id='cWalletPicker';
+  picker.style.cssText='display:none;flex-direction:column;gap:8px;margin-top:10px';
+  $('#cConnect').parentNode.insertBefore(picker, $('#cConnect').nextSibling);
+  function hidePicker(){ picker.style.display='none'; }
+  function connectWith(p,name){
+    hidePicker();
     p.connect().then(function(resp){
-      connected=(resp&&resp.publicKey?resp.publicKey:p.publicKey).toString();
+      connected=(resp&&resp.publicKey?resp.publicKey:p.publicKey).toString(); activeProvider=p;
       // Show the default as a PLACEHOLDER only — never write into the value, so whatever the
       // user types always sticks (blank still locks to themselves; the submit + server default).
       C.rec.placeholder='Leave blank to lock to yourself ('+shortAddr(connected)+')';
       $('#cConnect').style.display='none'; $('#cCreate').style.display='block';
       $('#cCreate').disabled=false; $('#cCreate').textContent='🔒 Create lock on-chain';
-      $('#cWalletAddr').textContent=shortAddr(connected); $('#cWallet').style.display='block';
-      $('#cMsg').className='msg ok'; $('#cMsg').textContent='Connected. Review the schedule above, then create your lock.';
+      $('#cWalletAddr').textContent=shortAddr(connected)+(name?(' · '+name):''); $('#cWallet').style.display='block';
+      $('#cMsg').className='msg ok'; $('#cMsg').textContent='Connected'+(name?(' with '+name):'')+'. Review the schedule above, then create your lock.';
     }).catch(function(){ $('#cMsg').className='msg err'; $('#cMsg').textContent='Wallet connection cancelled.'; });
+  }
+  $('#cConnect').addEventListener('click',function(){
+    var w=detectWallets();
+    if(!w.length){ $('#cMsg').className='msg err'; $('#cMsg').textContent='No Solana wallet found. Install Phantom or Solflare, or use the lock.jup.ag link below.'; return; }
+    if(w.length===1){ connectWith(w[0].p,w[0].name); return; }
+    // more than one wallet installed — let the user pick, don't silently grab Phantom
+    picker.innerHTML='<div class="muted" style="font-size:12px;text-align:center">Choose a wallet to connect</div>';
+    w.forEach(function(x){ var btn=document.createElement('button'); btn.type='button'; btn.className='btn alt'; btn.style.marginTop='0'; btn.textContent='Connect '+x.name; btn.addEventListener('click',function(){ connectWith(x.p,x.name); }); picker.appendChild(btn); });
+    picker.style.display='flex';
+    $('#cMsg').className='msg'; $('#cMsg').textContent='More than one wallet detected — pick which one holds your tokens.';
   });
   // Disconnect / switch wallet — clears the session so you can connect a different wallet.
   $('#cDisconnect').addEventListener('click',function(e){ e.preventDefault();
-    try{ var p=provider(); if(p&&p.disconnect) p.disconnect(); }catch(_){}
-    connected=null;
+    try{ if(activeProvider&&activeProvider.disconnect) activeProvider.disconnect(); }catch(_){}
+    connected=null; activeProvider=null; hidePicker();
     $('#cConnect').style.display='block'; $('#cCreate').style.display='none'; $('#cWallet').style.display='none';
     $('#cCreate').disabled=false; $('#cCreate').textContent='🔒 Create lock on-chain';
     $('#cMsg').className='msg'; $('#cMsg').textContent='Wallet disconnected. Connect a different wallet to switch.';
@@ -354,12 +376,12 @@
         var tx, baseKp;
         try{ tx=window.solanaWeb3.Transaction.from(b64ToBytes(res.txBase64)); baseKp=window.solanaWeb3.Keypair.fromSecretKey(b64ToBytes(res.baseSecret)); }
         catch(e){ $('#cMsg').className='msg err'; $('#cMsg').textContent='Bad transaction from server.'; btn.disabled=false; return; }
-        var p=provider();
+        var p=activeProvider;   // the wallet the user actually chose — NOT a re-detected default
         // ⚠️ Phantom Lighthouse: the WALLET must sign FIRST on a multi-signer tx, then the
         // ephemeral base signs — otherwise Phantom flags it as "may be malicious". So we use
         // signTransaction (wallet first) → partialSign(base) → submit via our RPC, NOT
         // signAndSendTransaction (which would leave base's server-side pre-sign ahead of the wallet).
-        if(!p.signTransaction){ $('#cMsg').className='msg err'; $('#cMsg').textContent='This wallet can’t sign here — use Phantom or Solflare, or the lock.jup.ag link below.'; btn.disabled=false; return; }
+        if(!p||!p.signTransaction){ $('#cMsg').className='msg err'; $('#cMsg').textContent='This wallet can’t sign here — use Phantom or Solflare, or the lock.jup.ag link below.'; btn.disabled=false; return; }
         $('#cMsg').className='msg'; $('#cMsg').textContent='Approve the transaction in your wallet…';
         // Refresh the blockhash right before signing — the tx was built earlier (before you
         // connected/reviewed), so its blockhash can expire and cause "Blockhash not found" on send.
