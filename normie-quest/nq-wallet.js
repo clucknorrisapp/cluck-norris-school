@@ -25,7 +25,10 @@ function bs58() { return (_bs58 = _bs58 || require('bs58')); }
 
 const CLKN_MINT_DEFAULT = 'DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS';
 const CHALLENGE_TTL_MS = 5 * 60 * 1000;
-const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+// Ownership is "remembered until the player disconnects / clears storage" (owner's call): the
+// session token is effectively non-expiring. Tier is NOT frozen — the client re-reads live balance
+// via /refresh every launch, so access always tracks current holdings. Giveaways re-check at draw time.
+const SESSION_TTL_MS = 3650 * 24 * 60 * 60 * 1000;   // ~10 years ≈ "until cleared"
 const SECRET = process.env.NQ_LB_SECRET || process.env.PREMIUM_ACCESS_KEY || crypto.randomBytes(24).toString('hex');
 
 function num(v, d) { const n = Number(v); return Number.isFinite(n) ? n : d; }
@@ -106,6 +109,19 @@ async function verify(pubkeyStr, signatureB58) {
   return { ok: true, wallet: pk, tier: grant.tier, worlds: grant.worlds, balances, token };
 }
 
+// Re-read live balance for an already-proven wallet (no re-signing) and return the CURRENT tier.
+// Called on every game launch so a remembered wallet's access tracks its holdings. The stored
+// token is the ownership proof — an invalid/forged one is rejected so nobody can claim a pubkey
+// they never proved.
+async function refresh(pubkeyStr, token) {
+  const pk = String(pubkeyStr || '').trim();
+  if (!checkSession(pk, token)) return { ok: false, status: 'bad_session' };
+  let balances;
+  try { balances = await readBalances(pk); } catch (e) { return { ok: false, status: 'rpc_error' }; }
+  const grant = tierForBalances(balances);
+  return { ok: true, wallet: pk, tier: grant.tier, worlds: grant.worlds, balances };
+}
+
 // Verify a session token belongs to this wallet and is unexpired (used by the score route).
 function checkSession(pubkeyStr, token) {
   const pk = String(pubkeyStr || '').trim();
@@ -145,4 +161,4 @@ function tierForBalances(b) {
   return { tier: 0, worlds: [1, 2] };
 }
 
-module.exports = { cfg, publicConfig, challenge, verify, checkSession, tierForBalances, readBalances, CLKN_MINT_DEFAULT };
+module.exports = { cfg, publicConfig, challenge, verify, refresh, checkSession, tierForBalances, readBalances, CLKN_MINT_DEFAULT };

@@ -3653,8 +3653,32 @@ if (window.__NQ_SETUP) { (function () {
       body: JSON.stringify({ pubkey: pk, signature: b58encode(sigBytes) }) })).json();
     if (!vr.ok) throw new Error('Verify failed: ' + (vr.status || '?'));
     walletState = { pubkey: pk, token: vr.token, tier: vr.tier, worlds: vr.worlds, balances: vr.balances };
+    saveWallet();
     if (!handle) window.NQLB.setHandle(pk.slice(0, 4) + '…' + pk.slice(-4));
     return walletState;
+  }
+
+  // Persistence: "remembered until they clear it". Store the ownership proof (pubkey + token) in
+  // localStorage; on launch restore it and re-read live balance so the tier tracks current holdings.
+  function saveWallet() {
+    try { if (walletState.pubkey && walletState.token) localStorage.setItem('nqWallet', JSON.stringify({ pubkey: walletState.pubkey, token: walletState.token })); } catch (e) {}
+  }
+  function disconnectWallet() {
+    walletState = { pubkey: null, token: null, tier: null, worlds: null, balances: null };
+    try { localStorage.removeItem('nqWallet'); } catch (e) {}
+  }
+  // Restore from storage + refresh tier from live balance (no re-signing). Rejected token → forget it.
+  function restoreWallet(cb) {
+    var saved = null; try { saved = JSON.parse(localStorage.getItem('nqWallet') || 'null'); } catch (e) {}
+    if (!saved || !saved.pubkey || !saved.token) { if (cb) cb(false); return; }
+    walletState.pubkey = saved.pubkey; walletState.token = saved.token;
+    fetch('/api/nq/wallet/refresh', { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ pubkey: saved.pubkey, token: saved.token }) }).then(function (r) { return r.json(); })
+      .then(function (v) {
+        if (v && v.ok) { walletState.tier = v.tier; walletState.worlds = v.worlds; walletState.balances = v.balances;
+          if (!handle) window.NQLB.setHandle(saved.pubkey.slice(0, 4) + '…' + saved.pubkey.slice(-4)); if (cb) cb(true); }
+        else { disconnectWallet(); if (cb) cb(false); }
+      }).catch(function () { if (cb) cb(false); });   // offline: keep the stored proof, just don't refresh now
   }
 
   // ---- UI: launcher + modal panel (Leaderboard / Wallet / Buy) ------------
@@ -3701,6 +3725,9 @@ if (window.__NQ_SETUP) { (function () {
     + '</div>';
   function ready() {
     document.body.appendChild(btn); document.body.appendChild(ov);
+    // "Remembered until cleared": restore a saved wallet on launch + refresh its tier from live balance,
+    // so verified scores keep posting and the Wallet tab shows connected without re-proving.
+    restoreWallet(function (ok) { if (ok) { var wp = ov.querySelector('[data-pane="wal"]'); if (wp && wp.classList.contains('on')) renderWallet(); } });
     var handleIn = ov.querySelector('#nqp-handle'); handleIn.value = handle;
     handleIn.addEventListener('change', function () { window.NQLB.setHandle(handleIn.value); handleIn.value = window.NQLB.getHandle(); });
 
@@ -3751,7 +3778,9 @@ if (window.__NQ_SETUP) { (function () {
           + '<span class="nqp-tier">TIER ' + ws.tier + '</span></div>'
           + '<div class="nqp-sub" style="margin:8px 0">Access: <b style="color:#8dffc0">' + wl + '</b></div>'
           + '<div class="nqp-sub">NORMIE: ' + (ws.balances ? ws.balances.normie.toLocaleString() : '?') + ' · CLKN: ' + (ws.balances ? ws.balances.clkn.toLocaleString() : '?') + '</div>'
-          + '<div class="nqp-sub" style="margin-top:8px">Your ranked scores now post with a verified wallet ✓</div>';
+          + '<div class="nqp-sub" style="margin-top:8px">Remembered on this device until you disconnect · scores post with a verified wallet ✓</div>'
+          + '<button class="nqp-b alt" id="nqp-disconnect" style="margin-top:12px">Disconnect</button>';
+        ov.querySelector('#nqp-disconnect').addEventListener('click', function () { disconnectWallet(); renderWallet(); });
       } else {
         host.innerHTML = '<div class="nqp-sub" style="margin-bottom:10px">Prove wallet ownership to unlock worlds by what you HOLD. '
           + 'This is a signature only — no transaction, no approval to move funds.</div>'

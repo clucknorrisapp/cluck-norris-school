@@ -153,6 +153,13 @@ router.post('/api/nq/wallet/verify', async (req, res) => {
     res.json(await wallet.verify(String(b.pubkey || ''), String(b.signature || '')));
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
+// re-read live balance for a remembered wallet (no re-signing) → current tier, every launch
+router.post('/api/nq/wallet/refresh', async (req, res) => {
+  try {
+    const b = req.body || {};
+    res.json(await wallet.refresh(String(b.pubkey || ''), String(b.token || '')));
+  } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
 router.get('/api/nq/leaderboard', (req, res) => {
   try {
     const q = req.query || {};
