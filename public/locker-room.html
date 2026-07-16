@@ -32,6 +32,19 @@
   .chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px;}
   .chip{background:rgba(245,179,1,.10);border:1px solid rgba(245,179,1,.35);color:#f5b301;border-radius:20px;padding:5px 13px;font-size:12px;font-weight:600;}
   .chip.g{background:rgba(16,185,129,.10);border-color:rgba(16,185,129,.4);color:#34d399;}
+  /* recently-locked strip */
+  .recent{margin:16px 0 2px;}
+  .recent-h{font-family:'Anton',sans-serif;font-size:13px;letter-spacing:.8px;color:#9a9aa8;text-transform:uppercase;margin-bottom:9px;text-align:center;}
+  .recent-h .recent-sub{color:#6b6b7a;font-size:11px;letter-spacing:.5px;}
+  .recent-row{display:flex;gap:9px;overflow-x:auto;padding-bottom:6px;scrollbar-width:thin;-webkit-overflow-scrolling:touch;}
+  .recent-row::-webkit-scrollbar{height:6px;} .recent-row::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:3px;}
+  .rlock{flex:0 0 auto;display:flex;align-items:center;gap:9px;background:#0d0d10;border:1px solid var(--border,rgba(255,255,255,.08));border-radius:11px;padding:9px 13px 9px 10px;cursor:pointer;transition:border-color .1s,transform .1s;}
+  .rlock:hover{border-color:#D97706;transform:translateY(-1px);}
+  .rlock .ravatar{position:relative;width:30px;height:30px;border-radius:50%;background:#1c1d24;border:1px solid var(--border,rgba(255,255,255,.12));flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-family:'Anton',sans-serif;font-size:13px;color:#f5b301;overflow:hidden;}
+  .rlock .ravatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+  .rlock .rsym{font-family:'Anton',sans-serif;font-size:14px;color:#fff;line-height:1.05;white-space:nowrap;}
+  .rlock .ramt{font-family:var(--mono,monospace);font-size:10.5px;color:#34d399;white-space:nowrap;margin-top:1px;}
+  .rlock .rtime{font-family:var(--mono,monospace);font-size:9px;color:#8a8a98;margin-top:1px;white-space:nowrap;}
   /* nav tabs */
   .tabs{display:flex;gap:8px;justify-content:center;margin:16px 0 14px;flex-wrap:wrap;}
   .tab{background:var(--card,#14151a);border:1px solid var(--border,rgba(255,255,255,.09));color:#cfcfe0;border-radius:10px;
@@ -160,6 +173,11 @@
       <span class="chip g">✓ Non-custodial</span>
       <span class="chip">Powered by Jupiter Lock</span>
     </div>
+  </div>
+
+  <div class="recent" id="recentWrap" style="display:none">
+    <div class="recent-h">🔒 Recently locked <span class="recent-sub">· across Solana</span></div>
+    <div class="recent-row" id="recentRow"></div>
   </div>
 
   <div class="tabs">
@@ -324,6 +342,28 @@
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
   function fmt(n){ n=Number(n)||0; if(n>=1e9)return (n/1e9).toFixed(2)+'B'; if(n>=1e6)return (n/1e6).toFixed(2)+'M'; if(n>=1e3)return (n/1e3).toFixed(1)+'K'; return Math.round(n).toLocaleString(); }
   function shortAddr(a){ a=String(a||''); return a.length>10?a.slice(0,4)+'…'+a.slice(-4):a; }
+
+  // ---- recently-locked strip (cross-token feed) ----
+  function relTime(ts){ var s=Math.max(0,(Date.now()-ts)/1000); if(s<60)return Math.max(1,Math.floor(s))+'s ago'; if(s<3600)return Math.floor(s/60)+'m ago'; if(s<86400)return Math.floor(s/3600)+'h ago'; return Math.floor(s/86400)+'d ago'; }
+  (function loadRecent(){
+    fetch('/api/lock/recent').then(function(r){return r.json();}).then(function(d){
+      if(!d||!d.ok||!Array.isArray(d.locks)||!d.locks.length) return;
+      var row=$('#recentRow');
+      row.innerHTML=d.locks.map(function(l){
+        var sym=l.symbol?esc(l.symbol):(l.name?esc(l.name):esc(shortAddr(l.mint)));
+        var initial=esc(String(l.symbol||l.name||'?').slice(0,1).toUpperCase());
+        var av='<div class="ravatar">'+initial+(l.icon?'<img src="'+esc(l.icon)+'" alt="" onerror="this.remove()"/>':'')+'</div>';
+        return '<div class="rlock" data-mint="'+esc(l.mint)+'">'+av+'<div class="ri"><div class="rsym">'+sym+'</div><div class="ramt">'+fmt(l.amount)+' locked</div><div class="rtime">'+relTime(l.ts)+'</div></div></div>';
+      }).join('');
+      row.querySelectorAll('.rlock').forEach(function(c){ c.addEventListener('click',function(){
+        var m=c.getAttribute('data-mint');
+        document.querySelector('.tab[data-tab="fame"]').click();
+        $('#fameMint').value=m; window.__fameLoaded=false; loadFame(m);
+        try{ window.scrollTo({top:0,behavior:'smooth'}); }catch(_){ window.scrollTo(0,0); }
+      }); });
+      $('#recentWrap').style.display='block';
+    }).catch(function(){});
+  })();
 
   // ---- tabs ----
   var tabs=document.querySelectorAll('.tab');

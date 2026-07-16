@@ -6613,6 +6613,40 @@ app.get("/api/lock/claimable", async (req, res) => {
   }
 });
 
+// Recent lock creations across ALL Solana tokens — for the Locker Room "recently locked" feed.
+// Cached 120s (the scan is RPC-heavy). Enriches each with token name/symbol/icon.
+let _recentLocksCache = { t: 0, data: null };
+app.get("/api/lock/recent", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "public, max-age=120");
+  try {
+    const now = Date.now();
+    if (_recentLocksCache.data && now - _recentLocksCache.t < 120000) {
+      return res.status(200).json({ ok: true, cached: true, locks: _recentLocksCache.data });
+    }
+    const jupLock = require("./lib/jup-lock");
+    const raw = await jupLock.recentLocks(12, 70);
+    const metaCache = new Map();
+    for (const l of raw) {
+      if (!metaCache.has(l.mint)) {
+        let m = null;
+        try {
+          const tm = await jupTokensSearch(l.mint);
+          const t = Array.isArray(tm) ? (tm.find((x) => x && x.id === l.mint) || tm[0]) : null;
+          if (t) m = { name: t.name || null, symbol: t.symbol || null, icon: (typeof t.icon === "string" && /^https:\/\//.test(t.icon)) ? t.icon : null };
+        } catch (_) {}
+        metaCache.set(l.mint, m);
+      }
+      const m = metaCache.get(l.mint) || {};
+      l.name = m.name || null; l.symbol = m.symbol || null; l.icon = m.icon || null;
+    }
+    _recentLocksCache = { t: now, data: raw };
+    return res.status(200).json({ ok: true, locks: raw });
+  } catch (err) {
+    return res.status(200).json({ ok: false, error: publicErrMsg(err), locks: [] });
+  }
+});
+
 // Build an unsigned claim tx for one escrow (recipient is the only signer).
 app.post("/api/lock/claim-tx", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
