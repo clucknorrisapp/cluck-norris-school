@@ -6411,6 +6411,31 @@ app.post("/api/lock/create-tx", async (req, res) => {
   }
 });
 
+// Locks the connected wallet can CLAIM (it's the recipient), with a display-only claimable estimate.
+app.get("/api/lock/claimable", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    const jupLock = require("./lib/jup-lock");
+    const list = await jupLock.listClaimable(String(req.query.recipient || ""), req.query.mint ? String(req.query.mint) : null);
+    return res.status(200).json({ ok: true, locks: list });
+  } catch (err) {
+    return res.status(400).json({ ok: false, error: publicErrMsg(err) });
+  }
+});
+
+// Build an unsigned claim tx for one escrow (recipient is the only signer).
+app.post("/api/lock/claim-tx", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    const jupLock = require("./lib/jup-lock");
+    const b = req.body || {};
+    const r = await jupLock.buildClaimTx({ recipient: b.recipient, escrow: b.escrow });
+    return res.status(200).json(r);
+  } catch (err) {
+    return res.status(400).json({ ok: false, error: publicErrMsg(err) });
+  }
+});
+
 // -- Fee Share / Analytics endpoints --
 const CLKN_MINT_CONST = "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
 

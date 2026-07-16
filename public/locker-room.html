@@ -109,6 +109,7 @@
     <div class="tab on" data-tab="learn">📚 How Locks Work</div>
     <div class="tab" data-tab="fame">🏆 Lock of Fame</div>
     <div class="tab" data-tab="create">🔐 Lock Your Tokens</div>
+    <div class="tab" data-tab="claim">💰 Claim</div>
   </div>
 
   <!-- ============ LEARN ============ -->
@@ -135,6 +136,12 @@
       <div class="faq"><h4>The cheapest lock there is — and no cut of your tokens</h4><p>This page runs on <b>Jupiter Lock</b>: <b>zero protocol fees</b>, no percentage of your tokens, ever. You pay only Solana’s network fee plus a small account rent (~0.01 SOL). Most other lockers charge a flat fee <i>and/or</i> a percentage of the tokens you lock — that’s the model we deliberately don’t use.</p></div>
       <div class="faq"><h4>Locking a Token-2022 token? This is where we beat lock.jup.ag</h4><p>Jupiter’s own UI at <a href="https://lock.jup.ag/" target="_blank" rel="noopener">lock.jup.ag</a> only lists Token-2022 tokens that are <b>Jupiter-verified</b> — so unverified ones (most fresh pump.fun graduates) simply can’t be locked there yet. This page calls the same free Jupiter Lock program <b>directly</b>, so it locks <b>any token — including unverified Token-2022 — at the same zero fee</b>. If lock.jup.ag won’t list your token, <b>lock it right here.</b></p></div>
       <div class="faq"><h4>Want your lock on lock.jup.ag too?</h4><p>Pursue <b>Jupiter verification</b> for your token separately (real liquidity, metadata, and socials all help the case). Once verified, your token shows in Jupiter’s UI as well — but you never had to wait for that to lock it here.</p></div>
+    </div>
+    <div class="card">
+      <div class="sec">Is this safe?</div>
+      <div class="faq"><h4>No approvals. Nothing to revoke.</h4><p>Locking here does <b>not</b> grant a token approval, a delegate, or any standing permission on your wallet — the kind of thing that later needs revoking. It’s a <b>single transfer</b> into Jupiter’s program, signed once by you. When it’s done, there’s nothing left on your wallet to take back.</p></div>
+      <div class="faq"><h4>Non-custodial &amp; audited</h4><p>Your tokens go into <b>Jupiter Lock</b> — an open-source program audited by <b>OtterSec</b> and <b>Sec3</b> — not a wallet we (or Jupiter) control. We never touch your keys: we build the transaction, <b>you</b> sign it in your own wallet.</p></div>
+      <div class="faq"><h4>The one thing to know</h4><p>A <b>non-cancelable</b> lock is <b>permanent</b> — that’s the point of it. Choose your schedule and cancelable/permanent setting deliberately before you sign. (Curious about wallet permissions in general? Our free <a href="/security-coop">Security Co-op</a> scans and revokes risky approvals on any wallet.)</p></div>
     </div>
   </div>
 
@@ -200,6 +207,18 @@
     </div>
   </div>
 
+  <!-- ============ CLAIM ============ -->
+  <div class="pane" data-pane="claim">
+    <div class="card">
+      <div class="sec">Claim your vested tokens</div>
+      <p class="muted">Connect the wallet that <b>receives</b> a lock. Anything that has vested can be claimed right here — one signature, non-custodial. No trip to Jupiter needed.</p>
+      <button class="btn" id="clConnect">👛 Connect wallet</button>
+      <div id="clWallet" style="display:none;margin-top:10px;font-size:12.5px;color:#9a9aa8;text-align:center">🟢 Connected as <b id="clAddr" style="color:#e9e9ee"></b> · <a href="#" id="clDisc" style="color:#f5b301">Disconnect</a></div>
+      <div class="msg" id="clMsg"></div>
+    </div>
+    <div id="clList"></div>
+  </div>
+
   <div class="foot">
     🔒 Jup Locker Room · a Cluck Norris production · powered by <a href="https://lock.jup.ag/" target="_blank" rel="noopener">Jupiter Lock</a> (open-source, audited, zero fees)<br/>
     Locks are on-chain and non-custodial — always verify before you trust.
@@ -222,6 +241,7 @@
     var k=t.getAttribute('data-tab');
     document.querySelectorAll('.pane').forEach(function(p){ p.classList.toggle('on', p.getAttribute('data-pane')===k); });
     if(k==='fame' && !window.__fameLoaded){ loadFame($('#fameMint').value.trim()||CLKN); }
+    if(k==='claim' && connected && $('#clWallet').style.display==='none'){ claimConnected(); }
   }); });
 
   // ---- Lock of Fame ----
@@ -306,7 +326,7 @@
   picker.style.cssText='display:none;flex-direction:column;gap:8px;margin-top:10px';
   $('#cConnect').parentNode.insertBefore(picker, $('#cConnect').nextSibling);
   function hidePicker(){ picker.style.display='none'; }
-  function connectWith(p,name){
+  function connectWith(p,name,onDone){
     hidePicker();
     p.connect().then(function(resp){
       connected=(resp&&resp.publicKey?resp.publicKey:p.publicKey).toString(); activeProvider=p;
@@ -317,6 +337,7 @@
       $('#cCreate').disabled=false; $('#cCreate').textContent='🔒 Create lock on-chain';
       $('#cWalletAddr').textContent=shortAddr(connected)+(name?(' · '+name):''); $('#cWallet').style.display='block';
       $('#cMsg').className='msg ok'; $('#cMsg').textContent='Connected'+(name?(' with '+name):'')+'. Review the schedule above, then create your lock.';
+      if(onDone) try{ onDone(); }catch(_){}
     }).catch(function(){ $('#cMsg').className='msg err'; $('#cMsg').textContent='Wallet connection cancelled.'; });
   }
   $('#cConnect').addEventListener('click',function(){
@@ -409,6 +430,71 @@
         }).catch(function(e){ $('#cMsg').className='msg err'; $('#cMsg').textContent=(e&&e.message)?e.message:'Wallet cancelled or the transaction failed.'; btn.disabled=false; });
       }).catch(function(){ $('#cMsg').className='msg err'; $('#cMsg').textContent='Network error building the lock.'; btn.disabled=false; });
   });
+
+  // ---- Claim tab: shows locks where the connected wallet is the RECIPIENT, claims vested tokens ----
+  var clPicker=document.createElement('div'); clPicker.id='clPicker'; clPicker.style.cssText='display:none;flex-direction:column;gap:8px;margin-top:10px';
+  $('#clConnect').parentNode.insertBefore(clPicker, $('#clConnect').nextSibling);
+  function claimConnected(){
+    clPicker.style.display='none';
+    $('#clConnect').style.display='none';
+    $('#clAddr').textContent=shortAddr(connected); $('#clWallet').style.display='block';
+    $('#clMsg').className='msg'; $('#clMsg').textContent='';
+    loadClaimable();
+  }
+  $('#clConnect').addEventListener('click',function(){
+    if(connected && activeProvider){ claimConnected(); return; }
+    var w=detectWallets();
+    if(!w.length){ $('#clMsg').className='msg err'; $('#clMsg').textContent='No Solana wallet found. Install Phantom or Solflare.'; return; }
+    if(w.length===1){ connectWith(w[0].p,w[0].name,claimConnected); return; }
+    clPicker.innerHTML='<div class="muted" style="font-size:12px;text-align:center">Choose a wallet to connect</div>';
+    w.forEach(function(x){ var b=document.createElement('button'); b.type='button'; b.className='btn alt'; b.style.marginTop='0'; b.textContent='Connect '+x.name; b.addEventListener('click',function(){ clPicker.style.display='none'; connectWith(x.p,x.name,claimConnected); }); clPicker.appendChild(b); });
+    clPicker.style.display='flex';
+  });
+  $('#clDisc').addEventListener('click',function(e){ e.preventDefault();
+    try{ if(activeProvider&&activeProvider.disconnect) activeProvider.disconnect(); }catch(_){}
+    connected=null; activeProvider=null;
+    $('#clConnect').style.display='block'; $('#clWallet').style.display='none'; $('#clList').innerHTML='';
+    $('#clMsg').className='msg'; $('#clMsg').textContent='Disconnected.';
+  });
+  function fmtAmt(raw,dec){ var s=String(raw||'0'); dec=dec||0; if(dec<=0)return s.replace(/\B(?=(\d{3})+(?!\d))/g,','); while(s.length<=dec)s='0'+s; var i=s.slice(0,s.length-dec).replace(/\B(?=(\d{3})+(?!\d))/g,','), f=s.slice(s.length-dec).replace(/0+$/,''); return f?i+'.'+f.slice(0,4):i; }
+  function loadClaimable(){
+    var body=$('#clList'); body.innerHTML='<div class="card"><p class="muted">Reading your locks on-chain…</p></div>';
+    fetch('/api/lock/claimable?recipient='+encodeURIComponent(connected)).then(function(r){return r.json();}).then(function(d){
+      if(!d.ok){ body.innerHTML='<div class="card"><p class="msg err">'+esc(d.error||'Could not read your locks.')+'</p></div>'; return; }
+      if(!d.locks.length){ body.innerHTML='<div class="card"><p class="muted">No locks found paying out to this wallet. Tokens go to the <b>recipient</b> wallet chosen when the lock was created — connect that one.</p></div>'; return; }
+      body.innerHTML=d.locks.map(function(l,i){
+        var claimable=fmtAmt(l.claimableRaw,l.decimals), total=fmtAmt(l.totalRaw,l.decimals), claimed=fmtAmt(l.claimedRaw,l.decimals);
+        var can=l.claimableRaw && l.claimableRaw!=='0';
+        var when=l.fullyVested?'fully vested':(l.startsClaimingAt*1000>Date.now()?('unlocks from '+new Date(l.startsClaimingAt*1000).toLocaleDateString()):'vesting');
+        return '<div class="card"><div class="lockrow"><span><span class="amt">'+claimable+'</span> <span class="lbl">claimable</span></span>'+
+          '<button class="btn'+(can?'':' alt')+'" data-esc="'+esc(l.escrow)+'" data-i="'+i+'" style="margin-top:0;width:auto;padding:9px 16px"'+(can?'':' disabled')+'>'+(can?'💰 Claim':'Nothing yet')+'</button></div>'+
+          '<div class="muted" style="font-size:11.5px;margin-top:8px">mint '+esc(shortAddr(l.mint))+' · total '+total+' · already claimed '+claimed+' · '+when+'</div>'+
+          '<div class="msg" id="clm'+i+'"></div></div>';
+      }).join('');
+      body.querySelectorAll('button[data-esc]').forEach(function(btn){ btn.addEventListener('click',function(){ doClaim(btn.getAttribute('data-esc'), btn.getAttribute('data-i'), btn); }); });
+    }).catch(function(){ body.innerHTML='<div class="card"><p class="msg err">Network error reading your locks.</p></div>'; });
+  }
+  function doClaim(escrow,i,btn){
+    var msg=$('#clm'+i); msg.className='msg'; msg.textContent='Building your claim…'; btn.disabled=true;
+    if(!window.solanaWeb3){ msg.className='msg err'; msg.textContent='Solana library still loading — try again.'; btn.disabled=false; return; }
+    var p=activeProvider;
+    if(!p||!p.signTransaction){ msg.className='msg err'; msg.textContent='This wallet can’t sign here — use Phantom or Solflare.'; btn.disabled=false; return; }
+    fetch('/api/lock/claim-tx',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({recipient:connected,escrow:escrow})})
+      .then(function(r){return r.json();}).then(function(res){
+        if(!res.ok){ msg.className='msg err'; msg.textContent=res.error||'Could not build the claim.'; btn.disabled=false; return; }
+        if(res.simError){ msg.className='msg err'; msg.textContent=res.simError; btn.disabled=false; return; }
+        var tx; try{ tx=window.solanaWeb3.Transaction.from(b64ToBytes(res.txBase64)); }catch(e){ msg.className='msg err'; msg.textContent='Bad transaction from server.'; btn.disabled=false; return; }
+        msg.className='msg'; msg.textContent='Approve the claim in your wallet…';
+        fetch('/api/helius-rpc',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:'cl-bh',method:'getLatestBlockhash',params:[{commitment:'confirmed'}]})})
+          .then(function(r){return r.json();}).then(function(j){ var bh=j&&j.result&&j.result.value&&j.result.value.blockhash; if(bh) tx.recentBlockhash=bh; return p.signTransaction(tx); })
+          .then(function(signed){ var raw=signed.serialize();
+            return fetch('/api/helius-rpc',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:'cl-send',method:'sendTransaction',params:[bytesToB64(raw),{encoding:'base64',skipPreflight:true,preflightCommitment:'confirmed',maxRetries:5}]})})
+              .then(function(r){return r.json();}).then(function(j){ if(j.error) throw new Error(j.error.message||'Send failed'); return j.result; }); })
+          .then(function(sig){ msg.className='msg'; msg.textContent='Confirming on-chain…'; return confirmSig(sig).then(function(){ return sig; }); })
+          .then(function(sig){ msg.className='msg ok'; msg.innerHTML='✅ Claimed! <a href="https://solscan.io/tx/'+encodeURIComponent(sig)+'" target="_blank" rel="noopener">View on Solscan →</a>'; setTimeout(loadClaimable,4000); })
+          .catch(function(e){ msg.className='msg err'; msg.textContent=(e&&e.message)?e.message:'Wallet cancelled or the claim failed.'; btn.disabled=false; });
+      }).catch(function(){ msg.className='msg err'; msg.textContent='Network error building the claim.'; btn.disabled=false; });
+  }
   updJupLink();
 })();
 </script>
