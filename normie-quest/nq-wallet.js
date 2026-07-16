@@ -100,7 +100,7 @@ async function verify(pubkeyStr, signatureB58) {
   challenges.delete(pk);   // one-time
 
   let balances;
-  try { balances = await readBalances(pk); }
+  try { balances = await readBalancesCached(pk); }
   catch (e) { return { ok: false, status: 'rpc_error' }; }
 
   const grant = tierForBalances(balances);
@@ -117,7 +117,7 @@ async function refresh(pubkeyStr, token) {
   const pk = String(pubkeyStr || '').trim();
   if (!checkSession(pk, token)) return { ok: false, status: 'bad_session' };
   let balances;
-  try { balances = await readBalances(pk); } catch (e) { return { ok: false, status: 'rpc_error' }; }
+  try { balances = await readBalancesCached(pk); } catch (e) { return { ok: false, status: 'rpc_error' }; }
   const grant = tierForBalances(balances);
   return { ok: true, wallet: pk, tier: grant.tier, worlds: grant.worlds, balances };
 }
@@ -134,6 +134,21 @@ function checkSession(pubkeyStr, token) {
 }
 
 // ---- balances + tier ----------------------------------------------------
+// Balance cache: refresh-on-every-launch would otherwise hit Helius RPC once per player per open.
+// A short per-wallet cache collapses those to one read per wallet per window, so RPC load stays flat
+// as players scale. Tier still updates within a cache window (default 5 min). kv-free, in-memory.
+const BAL_TTL_MS = Number(process.env.NQ_BALANCE_CACHE_SEC || 300) * 1000;
+const balCache = new Map();   // pubkey -> { balances, at }
+async function readBalancesCached(owner) {
+  const now = Date.now();
+  const hit = balCache.get(owner);
+  if (hit && (now - hit.at) < BAL_TTL_MS) return hit.balances;
+  const balances = await readBalances(owner);
+  balCache.set(owner, { balances, at: now });
+  if (balCache.size > 5000) { for (const [k, v] of balCache) if (now - v.at > BAL_TTL_MS) balCache.delete(k); }   // prune stale
+  return balances;
+}
+
 async function mintBalance(owner, mintStr) {
   if (!mintStr) return 0;
   const W3 = web3();

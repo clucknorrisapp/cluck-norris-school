@@ -121,13 +121,13 @@ router.get('/api/nq/run-start', (req, res) => {
   try { res.json({ ok: true, ...leaderboard.startRun(String((req.query && req.query.level) || '')) }); }
   catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
-router.post('/api/nq/score', (req, res) => {
+router.post('/api/nq/score', async (req, res) => {
   try {
     const b = req.body || {};
     // Wallet verification is server-side: a score counts as walletVerified ONLY if the wallet's
     // session token checks out (never trust a client-supplied walletVerified flag).
     const walletVerified = !!(b.wallet && b.walletToken && wallet.checkSession(b.wallet, b.walletToken));
-    const r = leaderboard.add(
+    const r = await leaderboard.add(
       { name: b.name, world: b.world, level: b.level, score: b.score, lives: b.lives,
         wallet: b.wallet, walletVerified, mode: b.mode, ua: req.get('user-agent') },
       b.token || null,
@@ -160,12 +160,12 @@ router.post('/api/nq/wallet/refresh', async (req, res) => {
     res.json(await wallet.refresh(String(b.pubkey || ''), String(b.token || '')));
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
-router.get('/api/nq/leaderboard', (req, res) => {
+router.get('/api/nq/leaderboard', async (req, res) => {
   try {
     const q = req.query || {};
     const worlds = String(q.worlds || '').split(',').map((s) => parseInt(s, 10)).filter((n) => n >= 1 && n <= 99).slice(0, 12);
     const n = Math.max(1, Math.min(50, parseInt(q.n, 10) || 10));
-    res.json({ ok: true, ...leaderboard.boards({ worlds, n }) });
+    res.json({ ok: true, ...(await leaderboard.boards({ worlds, n })) });
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
 
