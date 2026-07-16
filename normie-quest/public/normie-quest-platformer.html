@@ -2685,6 +2685,14 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var onGround=b.blocked.down||b.touching.down;
     if(onGround){ this.lastGround=now; this.jumpsLeft=2; this.isJumping=false; }
     else if(now-this.lastGround>110 && this.jumpsLeft>1){ this.jumpsLeft=1; }
+    // ANTI-STUCK SAFETY: damage knockback (or any wedge) must never trap the player INSIDE solid
+    // geometry (e.g. a steel-locker wall). Record the last safe standing spot; if the player's body
+    // CENTER is ever inside a solid tile, pop them back out so a hit can't softlock them in a wall.
+    var _pcx=b.center.x, _pcy=b.center.y, _inSolid=false;
+    this.platforms.children.iterate(function(t){ if(_inSolid||!t||!t.body) return; var s=t.body;
+      if(_pcx>s.x+2 && _pcx<s.x+s.width-2 && _pcy>s.y+3 && _pcy<s.y+s.height-3) _inSolid=true; });
+    if(_inSolid){ if(this._lastSafe){ b.reset(this._lastSafe.x, this._lastSafe.y); } b.velocity.set(0,0); this.isJumping=false; }
+    else if(onGround && !this.crouching){ this._lastSafe={ x:p.x, y:p.y }; }
     // Gamepad jump-press latch: a freshly-pressed jump button buffers a jump even if `jump` was
     // already held (stuck d-pad up) or a poll frame dropped — so a controller press is never eaten.
     var _padP=(typeof window!=='undefined')?window.__NQ_PAD:null, _padEdge=!!(_padP&&_padP.jumpEdge);
