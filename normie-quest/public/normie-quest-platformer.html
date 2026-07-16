@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
+<!-- Add-to-Home-Screen = true fullscreen on iPhone (Safari has no in-page Fullscreen API on iPhone; only iPad does) -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Normie Quest">
 <title>NORMIE QUEST — Platformer Prototype</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
@@ -3112,8 +3117,22 @@ try{ if(typeof window!=='undefined') window.__NQ_TOLEVELS=function(){ try{
 // touch controls + HUD stay visible; Phaser's FIT scaling re-fits the canvas on the resize.
 if(typeof document!=='undefined'){ (function(){
   var docEl=document.documentElement;
-  if(!(docEl.requestFullscreen||docEl.webkitRequestFullscreen)) return;   // no Fullscreen API → skip
+  var hasFS=!!(docEl.requestFullscreen||docEl.webkitRequestFullscreen);   // iPhone Safari: false (no in-page fullscreen)
+  var standalone=(navigator.standalone===true)||(window.matchMedia&&matchMedia('(display-mode: standalone)').matches);
+  var isTouch=('ontouchstart' in window)||(navigator.maxTouchPoints>0);
+  if(standalone) return;            // launched from the home screen → already chrome-free
+  if(!hasFS && !isTouch) return;    // desktop without the API → nothing useful to add
+  var hintEl=null;
   function fsEl(){ return document.fullscreenElement||document.webkitFullscreenElement||null; }
+  function showHint(){   // iPhone has no in-page fullscreen → tell them how to get it (Add to Home Screen)
+    if(hintEl){ hintEl.remove(); hintEl=null; return; }
+    hintEl=document.createElement('div');
+    hintEl.style.cssText='position:fixed;top:48px;right:8px;z-index:75;max-width:80vw;background:rgba(18,26,48,.96);border:2px solid #3dff9e;color:#eaf2ff;padding:10px 12px;border-radius:10px;font-family:"Press Start 2P",monospace;font-size:9px;line-height:1.8;box-shadow:0 6px 20px rgba(0,0,0,.5)';
+    hintEl.innerHTML='FULLSCREEN ON iPHONE:<br>tap Share ↑ → “Add to Home Screen”,<br>then open Normie Quest from the icon.<br><span style="color:#9fb4dc">(Apple blocks in-page fullscreen on iPhone — iPad only.)</span><br><span style="color:#ffd23f;text-decoration:underline">tap to close</span>';
+    hintEl.onclick=function(){ if(hintEl){hintEl.remove();hintEl=null;} };
+    document.body.appendChild(hintEl);
+    setTimeout(function(){ if(hintEl){hintEl.remove();hintEl=null;} }, 9000);
+  }
   function enter(){ try{ (docEl.requestFullscreen||docEl.webkitRequestFullscreen).call(docEl); }catch(e){} }
   function exit(){ try{ (document.exitFullscreen||document.webkitExitFullscreen).call(document); }catch(e){} }
   var css=document.createElement('style');
@@ -3121,11 +3140,11 @@ if(typeof document!=='undefined'){ (function(){
     +'border:2px solid rgba(120,180,255,.4);background:rgba(18,22,40,.72);color:#9fd4ff;font-size:17px;line-height:30px;'
     +'text-align:center;cursor:pointer;-webkit-user-select:none;user-select:none}';
   document.head.appendChild(css);
-  var btn=document.createElement('div'); btn.id='nqfull'; btn.textContent='⛶'; btn.title='Fullscreen';
-  btn.addEventListener('click', function(){ if(fsEl()) exit(); else enter(); });
+  var btn=document.createElement('div'); btn.id='nqfull'; btn.textContent='⛶'; btn.title=hasFS?'Fullscreen':'Fullscreen (Add to Home Screen)';
+  btn.addEventListener('click', function(){ if(hasFS){ if(fsEl()) exit(); else enter(); } else { showHint(); } });
   document.body.appendChild(btn);
-  function sync(){ var on=!!fsEl(); btn.textContent=on?'🡼':'⛶'; btn.title=on?'Exit fullscreen':'Fullscreen'; }
-  document.addEventListener('fullscreenchange', sync); document.addEventListener('webkitfullscreenchange', sync);
+  function sync(){ if(!hasFS) return; var on=!!fsEl(); btn.textContent=on?'🡼':'⛶'; btn.title=on?'Exit fullscreen':'Fullscreen'; }
+  if(hasFS){ document.addEventListener('fullscreenchange', sync); document.addEventListener('webkitfullscreenchange', sync); }
   // auto-exit when rotated back to portrait
   function onOrient(){ setTimeout(function(){ if(fsEl() && window.innerHeight>window.innerWidth) exit(); }, 280); }
   window.addEventListener('orientationchange', onOrient); window.addEventListener('resize', onOrient);
