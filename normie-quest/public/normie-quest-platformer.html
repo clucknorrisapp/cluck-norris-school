@@ -2642,7 +2642,12 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var onGround=b.blocked.down||b.touching.down;
     if(onGround){ this.lastGround=now; this.jumpsLeft=2; this.isJumping=false; }
     else if(now-this.lastGround>110 && this.jumpsLeft>1){ this.jumpsLeft=1; }
-    if(jump&&!this.prevJump) this.jumpBufferAt=now; this.prevJump=rawJump;
+    // Gamepad jump-press latch: a freshly-pressed jump button buffers a jump even if `jump` was
+    // already held (stuck d-pad up) or a poll frame dropped — so a controller press is never eaten.
+    var _padP=(typeof window!=='undefined')?window.__NQ_PAD:null, _padEdge=!!(_padP&&_padP.jumpEdge);
+    if((jump&&!this.prevJump) || _padEdge) this.jumpBufferAt=now;
+    if(_padP&&_padEdge) _padP.jumpEdge=false;   // consume
+    this.prevJump=rawJump;
     if(now-this.jumpBufferAt<130 && this.jumpsLeft>0){
       p.setVelocityY(now<this.bullUntil?-540:-430); this.jumpsLeft--; this.isJumping=true; this.jumpBufferAt=-9999; SFX.jump();   // bull market = mega jump
     }
@@ -3299,6 +3304,7 @@ if(typeof document!=='undefined'){ (function(){
 // clone's exact layout is visible and easy to tune.
 if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.getGamepads){ (function(){
   window.__NQ_PAD = window.__NQ_PAD || {left:false,right:false,jump:false,down:false,throw:false};
+  if(window.__NQ_PAD.jumpEdge===undefined) window.__NQ_PAD.jumpEdge=false;   // one-shot jump-press latch (consumed by the game)
   window.__NQ_GAMEPAD_ACTIVE = false;
   var DEBUG = /[?&#]gpdebug=1/i.test((location.search||'')+(location.hash||''));
   var AUTOREMAP = /[?&#]remap=1/i.test((location.search||'')+(location.hash||''));
@@ -3363,12 +3369,19 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
   window.__nqPadRemap=startRemap;
 
   var padConnected=false;   // latched by connect/disconnect so a single empty getGamepads() frame can't flicker the controller "off"
-  window.addEventListener('gamepadconnected', function(e){ padConnected=true; ensureUI(); if(dotEl)dotEl.style.display='block'; if(btnEl)btnEl.style.display='block';
+  window.addEventListener('gamepadconnected', function(e){ padConnected=true; axRest=null; ensureUI(); if(dotEl)dotEl.style.display='block'; if(btnEl)btnEl.style.display='block';
     toast('🎮 Controller connected'); if(AUTOREMAP) setTimeout(startRemap,700); });
   window.addEventListener('gamepaddisconnected', function(){ if(!anyPad()){ padConnected=false; window.__NQ_GAMEPAD_ACTIVE=false;
     if(dotEl)dotEl.style.display='none'; if(btnEl)btnEl.style.display='none'; toast('Controller disconnected'); } });
 
-  var DZ=0.35;
+  var DZ=0.5;
+  // Axis rest-calibration: many cheap USB pads rest an UNUSED axis at ±1.0 (triggers / a phantom
+  // second stick). With a naive read that looks like a permanently-held up/left — and since d-pad
+  // UP folds into JUMP, a stuck axis keeps JUMP true forever so the jump button never makes a fresh
+  // rising edge → "pressing right + jump sometimes doesn't jump." Baseline each axis at connect and
+  // only treat an axis that RESTS near centre (a real stick / d-pad-on-axis) as a direction source.
+  var axRest=null, prevJb=false, prevUp=false;
+  function axUsable(i){ return axRest && Math.abs(axRest[i]||0) < 0.35; }
   function poll(){
     var gp=anyPad();
     if(!gp){
@@ -3383,16 +3396,25 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
     if(remapping) return;   // don't leak calibration presses into the game
     var B=gp.buttons||[], A=gp.axes||[];
     var pr=function(i){ return !!(B[i] && (B[i].pressed || B[i].value>0.5)); };
-    // direction: d-pad-as-buttons (standard 12-15) OR d-pad/stick-as-axes (retro adapters)
+    if(axRest===null && A.length){ axRest=[]; for(var _a=0;_a<A.length;_a++) axRest[_a]=A[_a]; }   // baseline resting axes
+    // direction: d-pad-as-buttons (standard 12-15) OR d-pad/stick-as-axes (retro adapters). An axis
+    // only counts if it RESTS near centre (axUsable) — stuck ±1 axes are ignored, not read as held.
     var left=pr(14), right=pr(15), up=pr(12), down=pr(13);
-    if(A.length>=2){ if(A[0]<-DZ)left=true; if(A[0]>DZ)right=true; if(A[1]<-DZ)up=true; if(A[1]>DZ)down=true; }
-    if(A.length>=4){ if(A[2]<-DZ)left=true; if(A[2]>DZ)right=true; if(A[3]<-DZ)up=true; if(A[3]>DZ)down=true; }
+    if(A.length>=2){ if(axUsable(0)){ if(A[0]<-DZ)left=true; if(A[0]>DZ)right=true; } if(axUsable(1)){ if(A[1]<-DZ)up=true; if(A[1]>DZ)down=true; } }
+    if(A.length>=4){ if(axUsable(2)){ if(A[2]<-DZ)left=true; if(A[2]>DZ)right=true; } if(axUsable(3)){ if(A[3]<-DZ)up=true; if(A[3]>DZ)down=true; } }
     // ONE button jumps, a DIFFERENT one throws (classic NES: A = jump, B = throw). Custom map wins.
     var anyOf=function(arr){ for(var i=0;i<arr.length;i++) if(pr(arr[i])) return true; return false; };
     var jb=padMap?padMap.jump:DEF_JUMP, tb=padMap?padMap.throw:DEF_THROW;
-    var jump = anyOf(jb) || up;   // + d-pad up also jumps
+    var jumpBtn = anyOf(jb);
+    var jump = jumpBtn || up;   // + d-pad up also jumps
     var throwB = anyOf(tb);
     var P=window.__NQ_PAD;
+    // JUMP-PRESS LATCH: set a one-shot edge whenever the jump BUTTON (or d-pad up) is freshly
+    // pressed — even if `jump` was already held (e.g. up held) or a poll frame was dropped. The game
+    // consumes this latch to buffer a jump, so a real press can never be eaten by the per-frame edge
+    // check. This is what guarantees "right + jump" jumps every time.
+    if((jumpBtn && !prevJb) || (up && !prevUp)) P.jumpEdge=true;
+    prevJb=jumpBtn; prevUp=up;
     P.left=left; P.right=right; P.jump=jump; P.down=(down && !up); P.throw=throwB;
     window.__NQ_GAMEPAD_ACTIVE = true;
     if(dotEl && dotEl.style.display==='none'){ dotEl.style.display='block'; }
