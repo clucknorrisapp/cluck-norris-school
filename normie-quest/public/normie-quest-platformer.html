@@ -3171,10 +3171,11 @@ if(typeof document!=='undefined'){ (function(){
     var gap=Math.max(4,Math.round(gutter*0.06));
     var mv=Math.max(28,Math.min(96,Math.floor((gutter-gap)/2)));   // ◄ ► sized so BOTH fit in the gutter
     var by=Math.round(window.innerHeight*0.10);                    // bottom anchor → thumb reach
-    // LEFT gutter: the ◄ ► move pair (low, left-thumb reach)
+    // LEFT gutter: the ◄ ► move pair — TALLER than wide (easier to hit) + raised a bit off the bottom.
+    var mvh=Math.round(mv*1.7), lby=Math.round(window.innerHeight*0.14);   // taller buttons, lifted from the very bottom
     var pairW=mv*2+gap, lx=Math.round(Math.max(1,(gl-pairW)/2));
-    bL.style.width=bL.style.height=mv+'px'; bL.style.left=lx+'px'; bL.style.bottom=by+'px'; bL.style.fontSize=Math.round(mv*0.42)+'px';
-    bR.style.width=bR.style.height=mv+'px'; bR.style.left=(lx+mv+gap)+'px'; bR.style.bottom=by+'px'; bR.style.fontSize=Math.round(mv*0.42)+'px';
+    bL.style.width=mv+'px'; bL.style.height=mvh+'px'; bL.style.borderRadius='22px'; bL.style.left=lx+'px'; bL.style.bottom=lby+'px'; bL.style.fontSize=Math.round(mv*0.46)+'px';
+    bR.style.width=mv+'px'; bR.style.height=mvh+'px'; bR.style.borderRadius='22px'; bR.style.left=(lx+mv+gap)+'px'; bR.style.bottom=lby+'px'; bR.style.fontSize=Math.round(mv*0.46)+'px';
     // RIGHT gutter: vertical action stack — THROW (top) · JUMP (middle) · DUCK (bottom).
     // Jump+Duck sit together so the right thumb can jump OR duck while the left thumb moves;
     // throw is the least-used, so it goes up top out of the way.
