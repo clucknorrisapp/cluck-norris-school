@@ -17,6 +17,7 @@ const express = require('express');
 const router = express.Router();
 const burn = require('./normie-burn');   // Phase 1 burn-to-play backend (dormant until env-configured)
 const feedback = require('./nq-feedback');   // playtester comment store (test dashboard)
+const leaderboard = require('./nq-leaderboard');   // Phase 2 leaderboards (per-world + weekly)
 
 // Admin key for reading feedback / the comments dashboard. Accepts a simple shared password
 // (owner's choice — this gate only guards low-sensitivity playtest comments, no funds/PII), plus
@@ -101,6 +102,34 @@ router.get('/api/nq/verify', wrap(async (req) => {
   if (!session) return { ok: false, status: 'missing_params' };
   return await burn.verifyBurn(String(session));
 }));
+
+// ---- /api/nq/leaderboard : per-world + weekly boards ----------------------
+// run-start issues a short-lived HMAC token at level start; score submits it back so the
+// server can stamp real elapsed time + flag implausible runs. Both POST-public (sanitized in
+// the store), reads are public. Never throw a 500 leak.
+router.get('/api/nq/run-start', (req, res) => {
+  try { res.json({ ok: true, ...leaderboard.startRun(String((req.query && req.query.level) || '')) }); }
+  catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+router.post('/api/nq/score', (req, res) => {
+  try {
+    const b = req.body || {};
+    const r = leaderboard.add(
+      { name: b.name, world: b.world, level: b.level, score: b.score, lives: b.lives,
+        wallet: b.wallet, walletVerified: b.walletVerified, mode: b.mode, ua: req.get('user-agent') },
+      b.token || null,
+    );
+    res.status(r.ok ? 200 : 400).json(r);
+  } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+router.get('/api/nq/leaderboard', (req, res) => {
+  try {
+    const q = req.query || {};
+    const worlds = String(q.worlds || '').split(',').map((s) => parseInt(s, 10)).filter((n) => n >= 1 && n <= 99).slice(0, 12);
+    const n = Math.max(1, Math.min(50, parseInt(q.n, 10) || 10));
+    res.json({ ok: true, ...leaderboard.boards({ worlds, n }) });
+  } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
 
 // ---- /api/nq/feedback : playtester comment store (test dashboard) ---------
 // POST is PUBLIC (testers on the ?test=1 build submit here); size-capped, sanitized in the
