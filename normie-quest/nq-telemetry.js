@@ -1,7 +1,7 @@
 // Normie Quest — playtest difficulty telemetry (deaths + level clears).
 //
 // Self-contained: no imports from the Cluck Norris app (copy patterns, don't couple).
-// Durable JSON on the Railway volume (DATA_DIR), same pattern as nq-feedback. The game
+// Durable JSON on the Railway volume (defaults to /data, matching the main app stores). The game
 // fire-and-forgets tiny events (death: world/x/cause, clear: world/time/deaths); the store
 // aggregates them into per-world difficulty stats — death hotspots, causes, clear rates —
 // so the digest can say "37% of deaths are the World 3 pit at x≈2400" instead of relying
