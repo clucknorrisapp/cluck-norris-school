@@ -1073,6 +1073,10 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.physics.resume();   // CRITICAL: the Arcade world stays paused across scene restarts; every level/replay must un-pause it
     this.paused=false; this.lastInputAt=this.time.now;   // pause state + idle-auto-pause timer
     this._lvStartAt=Date.now(); this._lvDeaths=0;        // difficulty telemetry: time-in-level + lives lost this level
+    // DOM-overlay hooks (feedback modal pauses the game while a tester types; reassigned each
+    // level so they always point at the LIVE scene instance)
+    try{ var _sc=this; window.__NQ_PAUSE=function(){ if(!_sc.over&&!_sc.paused){ _sc.pauseGame(false); return true; } return false; };
+         window.__NQ_RESUME=function(){ if(_sc.paused) _sc.resumeGame(); }; }catch(e){}
     var self=this, i;
     var def=this.def=LEVELS[this.levelIdx];
     // SETUP LANE only: begin (or continue) a leaderboard run. One run token spans the whole run;
@@ -2651,6 +2655,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         else if(!this.paused){ _pe.anyBtnEdge=false; } } }
     if(this.over||this.paused) return;
     var self=this, p=this.player, b=p.body, now=this.time.now;
+    try{ window.__NQ_POS=Math.round(p.x); }catch(e){}   // live position for "stuck HERE" feedback tags
     // dark (mines) levels: keep the torchlight centred on Normie; a candle widens it briefly
     if(this.darkOverlay){
       var want=(now<(this.candleUntil||0))?1.7:1;
@@ -3604,6 +3609,9 @@ if(TEST_MODE && typeof document!=='undefined'){ (function(){
     +'#nqfb-card textarea{min-height:96px;resize:vertical;margin-top:8px}#nqfb-kinds{display:flex;gap:6px;margin-top:9px}'
     +'#nqfb-kinds button{flex:1;background:#0f0c1e;border:1px solid #33305a;color:#cbc6e6;border-radius:8px;padding:7px;font-size:13px;cursor:pointer}'
     +'#nqfb-kinds button.on{background:#2a2450;border-color:#8f7de6;color:#fff}'
+    +'#nqfb-quick{display:flex;gap:6px;margin-bottom:12px}'
+    +'#nqfb-quick button{flex:1;background:#241b44;border:1px solid #4a3d84;color:#e6e0ff;border-radius:8px;padding:9px 4px;font-size:12.5px;cursor:pointer}'
+    +'#nqfb-quick button:active{background:#382c66}'
     +'#nqfb-row{display:flex;gap:8px;margin-top:12px}#nqfb-row button{flex:1;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:600;cursor:pointer}'
     +'#nqfb-send{background:#3dff9e;color:#04241a}#nqfb-cancel{background:#2a2450;color:#cbc6e6}'
     +'#nqfb-toast{position:fixed;bottom:60px;left:50%;transform:translateX(-50%);z-index:100001;background:#04241a;color:#8dffc0;'
@@ -3617,6 +3625,7 @@ if(TEST_MODE && typeof document!=='undefined'){ (function(){
   var wrap=el('div',{id:'nqfb-wrap'});
   wrap.appendChild(el('div',{id:'nqfb-card'},
     '<h3>Playtest feedback</h3><div class="lv" id="nqfb-lvl">level: —</div>'
+    +'<div id="nqfb-quick"><button data-q="hard">😖 Too hard here</button><button data-q="qbug">🪲 Bug here</button><button data-q="fun">🎉 Fun!</button></div>'
     +'<input id="nqfb-name" maxlength="60" placeholder="your name / handle">'
     +'<div id="nqfb-kinds"><button data-k="bug" class="on">🐞 Bug</button><button data-k="idea">💡 Idea</button><button data-k="note">📝 Note</button></div>'
     +'<textarea id="nqfb-text" maxlength="2000" placeholder="What did you notice? Be specific — level, spot, what happened."></textarea>'
@@ -3628,14 +3637,36 @@ if(TEST_MODE && typeof document!=='undefined'){ (function(){
   // While the modal is open, DISABLE Phaser's keyboard — otherwise its global capture of the game
   // keys (W A S D F X Space, arrows, L) preventDefaults them and the textarea can't receive them.
   function kbGame(on){ try{ if(NQGAME&&NQGAME.input&&NQGAME.input.keyboard) NQGAME.input.keyboard.enabled=on; }catch(e){} }
-  function openM(){ wrap.classList.add('on'); kbGame(false); }
-  function closeM(){ wrap.classList.remove('on'); kbGame(true); }
+  // Freeze the run while the modal is open — before this, the level timer kept ticking and
+  // enemies kept moving while a tester typed. Only resume if WE paused (never stomp a manual pause).
+  var wePaused=false, posAtOpen=0;
+  function openM(){ wrap.classList.add('on'); kbGame(false);
+    posAtOpen=Number(window.__NQ_POS)||0;
+    try{ wePaused=!!(window.__NQ_PAUSE&&window.__NQ_PAUSE()); }catch(e){ wePaused=false; } }
+  function closeM(){ wrap.classList.remove('on'); kbGame(true);
+    if(wePaused){ try{ window.__NQ_RESUME&&window.__NQ_RESUME(); }catch(e){} wePaused=false; } }
+  function lvlTag(){ return (window.__NQ_LEVEL||'')+(posAtOpen?(' @x'+posAtOpen):''); }
   lvBtn.onclick=function(){ if(typeof window.__NQ_TOLEVELS==='function') window.__NQ_TOLEVELS(); };
   openBtn.onclick=function(){
-    document.getElementById('nqfb-lvl').textContent='level: '+(window.__NQ_LEVEL||'—');
+    document.getElementById('nqfb-lvl').textContent='level: '+(window.__NQ_LEVEL||'—')+((Number(window.__NQ_POS)||0)?(' @ x'+window.__NQ_POS):'');
     var nm=document.getElementById('nqfb-name'); try{ nm.value=localStorage.getItem('nq_tester')||''; }catch(e){}
     openM(); setTimeout(function(){ document.getElementById('nqfb-text').focus(); },50);
   };
+  // one-tap quick tags: no typing, position auto-attached, sent immediately
+  var QUICK={hard:{kind:'note',text:'😖 Too hard here (quick tag)'},qbug:{kind:'bug',text:'🪲 Something buggy here (quick tag)'},fun:{kind:'note',text:'🎉 Fun! (quick tag)'}};
+  Array.prototype.forEach.call(document.querySelectorAll('#nqfb-quick button'),function(b){
+    b.onclick=function(){
+      var q=QUICK[b.getAttribute('data-q')]; if(!q) return;
+      var name=''; try{ name=localStorage.getItem('nq_tester')||''; }catch(e){}
+      b.disabled=true;
+      fetch('/api/nq/feedback',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({name:name||'anon',level:lvlTag(),kind:q.kind,text:q.text})})
+        .then(function(r){ return r.json().catch(function(){ return {ok:r.ok}; }); })
+        .then(function(j){ if(j&&j.ok){ closeM(); showToast('Tagged ✓ — thanks!',true); } else { showToast('Could not send',false); } })
+        .catch(function(){ showToast('Network error — not sent',false); })
+        .then(function(){ b.disabled=false; });
+    };
+  });
   document.getElementById('nqfb-cancel').onclick=function(){ closeM(); };
   wrap.onclick=function(e){ if(e.target===wrap) closeM(); };
   Array.prototype.forEach.call(document.querySelectorAll('#nqfb-kinds button'),function(b){
@@ -3648,7 +3679,7 @@ if(TEST_MODE && typeof document!=='undefined'){ (function(){
     try{ localStorage.setItem('nq_tester',name); }catch(e){}
     var send=document.getElementById('nqfb-send'); send.disabled=true; send.textContent='Sending…';
     fetch('/api/nq/feedback',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({name:name,level:(window.__NQ_LEVEL||''),kind:kind,text:text})})
+      body:JSON.stringify({name:name,level:lvlTag(),kind:kind,text:text})})
       .then(function(r){ return r.json().catch(function(){ return {ok:r.ok}; }); })
       .then(function(j){ if(j&&j.ok){ document.getElementById('nqfb-text').value=''; closeM(); showToast('Thanks! Comment sent ✓',true); } else { showToast('Could not send'+(j&&j.status?' ('+j.status+')':''),false); } })
       .catch(function(){ showToast('Network error — not sent',false); })
@@ -3657,6 +3688,50 @@ if(TEST_MODE && typeof document!=='undefined'){ (function(){
 })(); }
 
 })();
+</script>
+<script>
+/* ---------- HOW TO PLAY — first-launch overlay (all builds) ----------
+   Shows once per browser (localStorage nqHowTo1), reopenable any time via the ? button
+   (top-right). Deliberately Phaser-independent (own script block) so a new tester learns
+   the controls even while the game is still booting. Detects a connected controller live. */
+if(typeof document!=='undefined'){ (function(){
+  function el(t,a,h){ var e=document.createElement(t); if(a) for(var k in a) e.setAttribute(k,a[k]); if(h!=null) e.innerHTML=h; return e; }
+  var css=el('style',null,
+    '#nqhow-btn{position:fixed;top:9px;right:9px;z-index:60;width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,.22);'
+    +'background:rgba(18,14,32,.55);color:#ffd23f;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;'
+    +'-webkit-tap-highlight-color:transparent;padding:0;line-height:1;font-family:"Press Start 2P",monospace}'
+    +'#nqhow-wrap{position:fixed;inset:0;z-index:100002;background:rgba(6,4,16,.82);display:none;align-items:center;justify-content:center;padding:16px;'
+    +'font-family:"Press Start 2P",monospace}'
+    +'#nqhow-wrap.on{display:flex}'
+    +'#nqhow-card{background:#160f2a;border:2px solid #3a2f5e;border-radius:12px;max-width:380px;width:100%;padding:16px 16px 12px;box-shadow:0 10px 44px rgba(0,0,0,.6)}'
+    +'#nqhow-card h3{color:#ffd23f;font-size:13px;margin:0 0 10px;text-align:center;line-height:1.5}'
+    +'.nqhow-sec{margin-bottom:10px}'
+    +'.nqhow-sec .t{color:#8fd0ff;font-size:10px;margin-bottom:5px}'
+    +'.nqhow-sec .r{color:#cbc6e6;font-size:9px;line-height:1.9;font-family:VT323,monospace;font-size:16px;letter-spacing:.5px}'
+    +'.nqhow-sec .k{color:#3dff9e}'
+    +'#nqhow-pad{display:none}#nqhow-pad.on{display:block}'
+    +'#nqhow-go{display:block;width:100%;margin-top:8px;background:#ffd23f;color:#20142e;border:none;border-radius:8px;padding:12px;'
+    +'font-size:11px;font-weight:700;cursor:pointer;font-family:inherit}');
+  document.head.appendChild(css);
+  var btn=el('button',{id:'nqhow-btn','aria-label':'How to play'},'?');
+  var wrap=el('div',{id:'nqhow-wrap'});
+  wrap.appendChild(el('div',{id:'nqhow-card'},
+    '<h3>🕹️ HOW TO PLAY</h3>'
+    +'<div class="nqhow-sec"><div class="t">⌨️ KEYBOARD</div><div class="r"><span class="k">← → / A D</span> move · <span class="k">SPACE / W</span> jump · <span class="k">F / X</span> throw · <span class="k">P / ESC</span> pause</div></div>'
+    +'<div class="nqhow-sec"><div class="t">📱 TOUCH</div><div class="r">tap <span class="k">left / mid</span> to move · <span class="k">right side</span> jump · <span class="k">⏸ top-left</span> pause</div></div>'
+    +'<div class="nqhow-sec" id="nqhow-pad"><div class="t">🎮 CONTROLLER <span style="color:#3dff9e">— detected!</span></div><div class="r"><span class="k">d-pad / stick</span> move · <span class="k">A</span> jump · <span class="k">B</span> throw · <span class="k">START</span> (or hold <span class="k">A+B</span>) pause</div></div>'
+    +'<div class="nqhow-sec"><div class="t">🎯 GOAL</div><div class="r">grab coins, dodge the FUD, find the key, reach the flag. 3 hearts per world — don’t get wrecked.</div></div>'
+    +'<button id="nqhow-go">LET’S GO ▶</button>'));
+  document.body.appendChild(btn); document.body.appendChild(wrap);
+  function padOn(){ try{ return !!window.__NQ_GAMEPAD_ACTIVE; }catch(e){ return false; } }
+  function open(){ document.getElementById('nqhow-pad').className='nqhow-sec'+(padOn()?' on':''); wrap.classList.add('on'); }
+  function close(){ wrap.classList.remove('on'); try{ localStorage.setItem('nqHowTo1','1'); }catch(e){} }
+  btn.addEventListener('click',function(e){ e.preventDefault(); e.stopPropagation(); if(wrap.classList.contains('on')) close(); else open(); });
+  document.getElementById('nqhow-go').addEventListener('click',close);
+  wrap.addEventListener('click',function(e){ if(e.target===wrap) close(); });
+  var seen=false; try{ seen=localStorage.getItem('nqHowTo1')==='1'; }catch(e){}
+  if(!seen) setTimeout(open,900);   // let the title screen paint first
+})(); }
 </script>
 <script>
 /* ============================================================================
