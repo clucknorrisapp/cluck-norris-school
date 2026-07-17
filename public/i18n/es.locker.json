@@ -62,5 +62,7 @@
   "Ask Cluck about locks →": "Pregunta a Cluck sobre bloqueos →",
   "Disconnect": "Desconectar",
   "claimable": "reclamable",
-  "Nothing yet": "Nada aún"
+  "Nothing yet": "Nada aún",
+  "Make this lock cancelable by me": "Hacer este bloqueo cancelable por mí",
+  "Allow the recipient to be changed later": "Permitir cambiar el destinatario más adelante"
 }

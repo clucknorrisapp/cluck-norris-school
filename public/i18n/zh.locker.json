@@ -62,5 +62,7 @@
   "Ask Cluck about locks →": "向 Cluck 咨询锁仓 →",
   "Disconnect": "断开连接",
   "claimable": "可领取",
-  "Nothing yet": "暂无"
+  "Nothing yet": "暂无",
+  "Make this lock cancelable by me": "允许我取消此锁仓",
+  "Allow the recipient to be changed later": "允许以后更改接收方"
 }

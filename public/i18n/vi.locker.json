@@ -62,5 +62,7 @@
   "Ask Cluck about locks →": "Hỏi Cluck về việc khóa →",
   "Disconnect": "Ngắt kết nối",
   "claimable": "có thể nhận",
-  "Nothing yet": "Chưa có gì"
+  "Nothing yet": "Chưa có gì",
+  "Make this lock cancelable by me": "Cho phép tôi hủy khóa này",
+  "Allow the recipient to be changed later": "Cho phép thay đổi người nhận sau này"
 }
