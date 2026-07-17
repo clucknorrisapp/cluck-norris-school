@@ -229,6 +229,7 @@
   }
   var jobs = [loadDict(lang)];
   if ((location.pathname || "").indexOf("/school") === 0) jobs.push(loadDict(lang + ".school"));
+  if ((location.pathname || "").indexOf("/locker-room") === 0) jobs.push(loadDict(lang + ".locker"));
   Promise.all(jobs)
     .then(function (parts) {
       DICT = {};
