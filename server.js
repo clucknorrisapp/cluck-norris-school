@@ -6711,6 +6711,13 @@ app.post("/api/lock/record", async (req, res) => {
     const jupLock = require("./lib/jup-lock");
     const v = await jupLock.verifyLockSig(sig);
     if (!v) return res.status(400).json({ ok: false, error: "not a Jupiter Lock creation" });
+    // The public path only accepts locks carrying our on-chain attribution memo (every
+    // Locker Room lock ships one since 2026-07-17) — so nobody can inject locks made
+    // elsewhere into the "made right here" feed. The admin key may still backfill
+    // pre-memo UI locks (owner-attested, like the XPX/ROSE/RANDO day-one locks).
+    if (v.via !== "clucknorris" && !adminAuthOK(req)) {
+      return res.status(400).json({ ok: false, error: "not a Locker Room lock (no attribution memo)" });
+    }
     let name = null, symbol = null, icon = null;
     try {
       const tm = await jupTokensSearch(v.mint);
