@@ -2611,7 +2611,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     mk(this.add.text(W/2,H/2-26,'PAUSED',{fontFamily:'"Press Start 2P"',fontSize:'18px',color:'#3dff6e'}).setOrigin(.5));
     if(auto) mk(this.add.text(W/2,H/2+2,'you stepped away — your run is safe',{fontFamily:UIFONT,resolution:UIRES,fontSize:'14px',color:'#ffd23f'}).setOrigin(.5));
     var padOn=(typeof window!=='undefined')&&window.__NQ_GAMEPAD_ACTIVE;
-    mk(this.add.text(W/2,H/2+26,(padOn?'PRESS START':(isTouch?'TAP':'PRESS ANY KEY'))+' TO RESUME  ▶',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#ffffff'}).setOrigin(.5)); },
+    mk(this.add.text(W/2,H/2+26,(padOn?'PRESS ANY BUTTON':(isTouch?'TAP':'PRESS ANY KEY'))+' TO RESUME  ▶',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#ffffff'}).setOrigin(.5)); },
   resumeGame:function(){ if(!this.paused) return; this.paused=false;
     try{ this.physics.resume(); }catch(e){}
     try{ this.time.paused=false; }catch(e){}
@@ -2621,11 +2621,16 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.lastInputAt=this.time.now; },   // reset idle timer so it doesn't instantly re-pause
 
   update:function(){
-    // Controller START: toggle pause. Consumed BEFORE the paused guard so the same button
-    // resumes — update() keeps running while paused (the guard below is just an early exit).
+    // Controller pause — consumed BEFORE the paused guard (update() keeps running while paused;
+    // the guard below is just an early exit). pauseEdge (START/SELECT or the 2-button A+B hold)
+    // toggles; while paused, ANY fresh button press (anyBtnEdge) also resumes. anyBtnEdge is
+    // drained every unpaused frame so a stale press can never insta-resume a fresh pause.
     { var _pe=(typeof window!=='undefined')?window.__NQ_PAD:null;
-      if(_pe&&_pe.pauseEdge){ _pe.pauseEdge=false;
-        if(this.paused){ this.resumeGame(); } else if(!this.over){ this.pauseGame(false); } } }
+      if(_pe){
+        if(_pe.pauseEdge){ _pe.pauseEdge=false; _pe.anyBtnEdge=false;
+          if(this.paused){ this.resumeGame(); } else if(!this.over){ this.pauseGame(false); } }
+        else if(this.paused && _pe.anyBtnEdge){ _pe.anyBtnEdge=false; this.resumeGame(); }
+        else if(!this.paused){ _pe.anyBtnEdge=false; } } }
     if(this.over||this.paused) return;
     var self=this, p=this.player, b=p.body, now=this.time.now;
     // dark (mines) levels: keep the torchlight centred on Normie; a candle widens it briefly
@@ -3431,7 +3436,7 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
 
   var padConnected=false;   // latched by connect/disconnect so a single empty getGamepads() frame can't flicker the controller "off"
   window.addEventListener('gamepadconnected', function(e){ padConnected=true; axRest=null; ensureUI(); if(dotEl)dotEl.style.display='block'; if(btnEl)btnEl.style.display='block';
-    toast('🎮 Controller connected'); if(AUTOREMAP) setTimeout(startRemap,700); });
+    toast('🎮 Controller connected — START (or hold A+B) pauses'); if(AUTOREMAP) setTimeout(startRemap,700); });
   window.addEventListener('gamepaddisconnected', function(){ if(!anyPad()){ padConnected=false; window.__NQ_GAMEPAD_ACTIVE=false;
     if(dotEl)dotEl.style.display='none'; if(btnEl)btnEl.style.display='none'; toast('Controller disconnected'); } });
 
@@ -3441,7 +3446,7 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
   // UP folds into JUMP, a stuck axis keeps JUMP true forever so the jump button never makes a fresh
   // rising edge → "pressing right + jump sometimes doesn't jump." Baseline each axis at connect and
   // only treat an axis that RESTS near centre (a real stick / d-pad-on-axis) as a direction source.
-  var axRest=null, prevJb=false, prevUp=false, prevStart=false;
+  var axRest=null, prevJb=false, prevUp=false, prevStart=false, prevAny=false, comboAt=0, comboFired=false;
   function axUsable(i){ return axRest && Math.abs(axRest[i]||0) < 0.35; }
   function poll(){
     var gp=anyPad();
@@ -3470,12 +3475,21 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
     var jump = jumpBtn || up;   // + d-pad up also jumps
     var throwB = anyOf(tb);
     var P=window.__NQ_PAD;
-    // START (standard-mapping button 9 — "+" on a Switch Pro pad) toggles PAUSE. Rising-edge
-    // latched here, consumed by the game's update loop (which still runs while paused). Skipped
-    // if a custom remap gave button 9 to jump/throw, so it never does double duty.
-    var startBtn = jb.indexOf(9)<0 && tb.indexOf(9)<0 && pr(9);
+    // PAUSE, three ways (all rising-edge latched into P.pauseEdge, consumed by the game's
+    // update loop, which still runs while paused):
+    //  1. START (standard button 9 — "+" on a Switch Pro pad)  2. SELECT (button 8 — where most
+    //     NES-style USB clones put it). Both skipped if a custom remap claimed that index.
+    //  3. TWO-BUTTON pads (A/B only, no Start at all): HOLD both buttons ~1s. Fires once per
+    //     hold, re-arms only after both are released.
+    // Resume-from-pause = ANY fresh button press (P.anyBtnEdge below), like "press any key".
+    var startBtn = (jb.indexOf(9)<0 && tb.indexOf(9)<0 && pr(9)) || (jb.indexOf(8)<0 && tb.indexOf(8)<0 && pr(8));
     if(startBtn && !prevStart) P.pauseEdge=true;
     prevStart=startBtn;
+    if(jumpBtn && throwB){ if(!comboAt) comboAt=Date.now(); if(!comboFired && Date.now()-comboAt>=900){ comboFired=true; P.pauseEdge=true; } }
+    else { comboAt=0; comboFired=false; }
+    var anyDown=false; for(var _b=0;_b<B.length;_b++){ if(pr(_b)){ anyDown=true; break; } }
+    if(anyDown && !prevAny) P.anyBtnEdge=true;
+    prevAny=anyDown;
     // JUMP-PRESS LATCH: set a one-shot edge whenever the jump BUTTON (or d-pad up) is freshly
     // pressed — even if `jump` was already held (e.g. up held) or a poll frame was dropped. The game
     // consumes this latch to buffer a jump, so a real press can never be eaten by the per-frame edge
