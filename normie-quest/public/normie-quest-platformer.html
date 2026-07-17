@@ -2610,7 +2610,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     mk(this.add.rectangle(W/2,H/2,W,H,0x05040e,0.74));
     mk(this.add.text(W/2,H/2-26,'PAUSED',{fontFamily:'"Press Start 2P"',fontSize:'18px',color:'#3dff6e'}).setOrigin(.5));
     if(auto) mk(this.add.text(W/2,H/2+2,'you stepped away — your run is safe',{fontFamily:UIFONT,resolution:UIRES,fontSize:'14px',color:'#ffd23f'}).setOrigin(.5));
-    mk(this.add.text(W/2,H/2+26,(isTouch?'TAP':'PRESS ANY KEY')+' TO RESUME  ▶',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#ffffff'}).setOrigin(.5)); },
+    var padOn=(typeof window!=='undefined')&&window.__NQ_GAMEPAD_ACTIVE;
+    mk(this.add.text(W/2,H/2+26,(padOn?'PRESS START':(isTouch?'TAP':'PRESS ANY KEY'))+' TO RESUME  ▶',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#ffffff'}).setOrigin(.5)); },
   resumeGame:function(){ if(!this.paused) return; this.paused=false;
     try{ this.physics.resume(); }catch(e){}
     try{ this.time.paused=false; }catch(e){}
@@ -2620,6 +2621,11 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.lastInputAt=this.time.now; },   // reset idle timer so it doesn't instantly re-pause
 
   update:function(){
+    // Controller START: toggle pause. Consumed BEFORE the paused guard so the same button
+    // resumes — update() keeps running while paused (the guard below is just an early exit).
+    { var _pe=(typeof window!=='undefined')?window.__NQ_PAD:null;
+      if(_pe&&_pe.pauseEdge){ _pe.pauseEdge=false;
+        if(this.paused){ this.resumeGame(); } else if(!this.over){ this.pauseGame(false); } } }
     if(this.over||this.paused) return;
     var self=this, p=this.player, b=p.body, now=this.time.now;
     // dark (mines) levels: keep the torchlight centred on Normie; a candle widens it briefly
@@ -3435,7 +3441,7 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
   // UP folds into JUMP, a stuck axis keeps JUMP true forever so the jump button never makes a fresh
   // rising edge → "pressing right + jump sometimes doesn't jump." Baseline each axis at connect and
   // only treat an axis that RESTS near centre (a real stick / d-pad-on-axis) as a direction source.
-  var axRest=null, prevJb=false, prevUp=false;
+  var axRest=null, prevJb=false, prevUp=false, prevStart=false;
   function axUsable(i){ return axRest && Math.abs(axRest[i]||0) < 0.35; }
   function poll(){
     var gp=anyPad();
@@ -3464,6 +3470,12 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
     var jump = jumpBtn || up;   // + d-pad up also jumps
     var throwB = anyOf(tb);
     var P=window.__NQ_PAD;
+    // START (standard-mapping button 9 — "+" on a Switch Pro pad) toggles PAUSE. Rising-edge
+    // latched here, consumed by the game's update loop (which still runs while paused). Skipped
+    // if a custom remap gave button 9 to jump/throw, so it never does double duty.
+    var startBtn = jb.indexOf(9)<0 && tb.indexOf(9)<0 && pr(9);
+    if(startBtn && !prevStart) P.pauseEdge=true;
+    prevStart=startBtn;
     // JUMP-PRESS LATCH: set a one-shot edge whenever the jump BUTTON (or d-pad up) is freshly
     // pressed — even if `jump` was already held (e.g. up held) or a poll frame was dropped. The game
     // consumes this latch to buffer a jump, so a real press can never be eaten by the per-frame edge
