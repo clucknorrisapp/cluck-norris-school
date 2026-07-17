@@ -25,7 +25,7 @@ United States
 [legal first name] / [legal last name] / [email]
 
 ## Solana On-Chain Accounts
-DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS (project token mint), [OPTIONAL: operations/fee-payer wallet — recommend listing 2zMCUkE9pBjcC7ihtLqm28EsCoEHVmCdJYr5262EuPy8, it's already publicly linked to the project on-chain]. No custom program deployed — the app composes existing programs (Jupiter Lock, Orca Whirlpools, Meteora DLMM, Metaplex) rather than introducing new on-chain risk.
+DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS (project token mint), 3VELZ2avSUq79qstuR8a7C3euJ834WmQyrjt4uRnn4eb (deployer/dev wallet — reinvests creator fees), [DZRIBK-WALLET — paste full address] (founder wallet), 2zMCUkE9pBjcC7ihtLqm28EsCoEHVmCdJYr5262EuPy8 (treasury/operations wallet). No custom program deployed — the app composes existing programs (Jupiter Lock, Orca Whirlpools, Meteora DLMM, Metaplex) rather than introducing new on-chain risk.
 
 ## Funding Amount
 $6,000
