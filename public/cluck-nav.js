@@ -23,7 +23,7 @@
   // pages that belong to the Tools hub — get an "All Tools" back-link
   var TOOL_PAGES = ["/wallet-xray","/autopsy","/order-book","/trace","/snapshot","/holders",
     "/token-vitals","/wallet-checkup","/security-coop","/hatchery","/airdrop",
-    "/buyspecial","/rose","/liquidity","/liquidity-engine","/premium","/pool-monitor"];
+    "/buyspecial","/locker-room","/rose","/liquidity","/liquidity-engine","/premium","/pool-monitor"];
   // Pages with their OWN header/nav — don't inject the floating bar there (the i18n
   // + read-aloud loaders above already ran, so the language switch & Listen button
   // still appear). Home + the Ask Cluck page own their nav.
