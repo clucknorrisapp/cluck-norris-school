@@ -80,5 +80,6 @@ async function load(){
 async function refresh(){const key=getKey();await fetch(`/api/whale-watch?key=${encodeURIComponent(key)}&refresh=1`);load();}
 load();setInterval(load,60000);
 </script>
+<script defer src="/cluck-nav.js"></script>
 </body>
 </html>
