@@ -3414,17 +3414,20 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
     document.body.appendChild(remapEl);
     var q=remapEl.querySelector('.q');
     remapEl.querySelector('.r').onclick=function(){ try{localStorage.removeItem('nqPadMap');}catch(e){} padMap=null; endRemap(); toast('Controls reset to default'); };
-    var steps=[['JUMP','jump'],['THROW','throw']], res={jump:[],throw:[]}, si=0, prevDown=true;
+    var steps=[['JUMP','jump'],['THROW','throw'],['PAUSE (START)','pause']], res={jump:[],throw:[],pause:[]}, si=0, prevDown=true;
     q.textContent='Press the button for  JUMP';
     var lp=function(){
       if(!remapping) return;
       var gp=anyPad();
       if(gp){ var B=gp.buttons||[], d=-1, i; for(i=0;i<B.length;i++){ if(B[i]&&(B[i].pressed||B[i].value>0.5)){ d=i; break; } }
         if(d<0){ prevDown=false; }
-        else if(!prevDown){ prevDown=true; res[steps[si][1]]=[d]; si++;
+        else if(!prevDown){ prevDown=true;
+          // a button can hold only ONE job — ignore a press already bound in an earlier step
+          if(res.jump.indexOf(d)>=0||res.throw.indexOf(d)>=0||res.pause.indexOf(d)>=0){ requestAnimationFrame(lp); return; }
+          res[steps[si][1]]=[d]; si++;
           if(si<steps.length){ q.textContent='Press the button for  '+steps[si][0]; }
           else { try{ localStorage.setItem('nqPadMap',JSON.stringify(res)); }catch(e){} padMap=res;
-                 q.textContent='✓ Saved!\nJUMP = button '+res.jump[0]+'\nTHROW = button '+res.throw[0];
+                 q.textContent='✓ Saved!\nJUMP = button '+res.jump[0]+'\nTHROW = button '+res.throw[0]+'\nPAUSE = button '+res.pause[0];
                  setTimeout(endRemap,1600); return; } }
       }
       requestAnimationFrame(lp);
@@ -3482,7 +3485,12 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
     //  3. TWO-BUTTON pads (A/B only, no Start at all): HOLD both buttons ~1s. Fires once per
     //     hold, re-arms only after both are released.
     // Resume-from-pause = ANY fresh button press (P.anyBtnEdge below), like "press any key".
-    var startBtn = (jb.indexOf(9)<0 && tb.indexOf(9)<0 && pr(9)) || (jb.indexOf(8)<0 && tb.indexOf(8)<0 && pr(8));
+    // A custom PAUSE binding (from the press-to-bind remap) beats the 8/9 defaults — SNES-style
+    // USB clones often report Start at index 6/7 (inside the default THROW set), so binding is
+    // the reliable path on those pads.
+    var pauseBind = (padMap && Array.isArray(padMap.pause) && padMap.pause.length) ? padMap.pause : null;
+    var startBtn = pauseBind ? anyOf(pauseBind)
+                 : ((jb.indexOf(9)<0 && tb.indexOf(9)<0 && pr(9)) || (jb.indexOf(8)<0 && tb.indexOf(8)<0 && pr(8)));
     if(startBtn && !prevStart) P.pauseEdge=true;
     prevStart=startBtn;
     if(jumpBtn && throwB){ if(!comboAt) comboAt=Date.now(); if(!comboFired && Date.now()-comboAt>=900){ comboFired=true; P.pauseEdge=true; } }
@@ -3504,7 +3512,7 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
       var bs=[]; for(var i=0;i<B.length;i++) if(pr(i)) bs.push(i);
       var ax=[]; for(var j=0;j<A.length;j++) ax.push(j+':'+(A[j]||0).toFixed(2));
       dbgEl.textContent='id: '+String(gp.id||'').slice(0,36)+'\nmapping: '+(gp.mapping||'(non-standard)')
-        +'\njump btns: '+jb.join(',')+'   throw btns: '+tb.join(',')+(padMap?'  (custom)':'  (default)')
+        +'\njump btns: '+jb.join(',')+'   throw btns: '+tb.join(',')+'   pause: '+(pauseBind?pauseBind.join(','):'8,9+combo')+(padMap?'  (custom)':'  (default)')
         +'\nbuttons down: '+(bs.join(',')||'-')+'\naxes: '+ax.join('  ')
         +'\n=> L'+(+left)+' R'+(+right)+' JUMP'+(+jump)+' DUCK'+(+P.down)+' THROW'+(+throwB);
     }
