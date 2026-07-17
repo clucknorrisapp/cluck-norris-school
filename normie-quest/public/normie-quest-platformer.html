@@ -37,7 +37,7 @@
   #screen canvas{ width:100%!important;height:100%!important;display:block;image-rendering:pixelated }
   /* Phones in portrait: the game is landscape (16:9), so portrait is a tiny strip —
      prompt a rotate. Overlays the game, which stays initialised behind it. */
-  #rotate{ position:fixed;inset:0;z-index:50;display:none;
+  #rotate{ position:fixed;inset:0;z-index:9999;display:none;   /* above every ambient button (mute/cog/premium sit at 60–9998) — they floated clickable on top of the rotate prompt */
     flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:26px;
     background:radial-gradient(ellipse at 50% 40%, #17122e 0%, #05040c 82%); }
   #rotate .ico{ font-size:52px;margin-bottom:20px;animation:nqrot 1.9s ease-in-out infinite;transform-origin:50% 50% }
@@ -1073,6 +1073,10 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.physics.resume();   // CRITICAL: the Arcade world stays paused across scene restarts; every level/replay must un-pause it
     this.paused=false; this.lastInputAt=this.time.now;   // pause state + idle-auto-pause timer
     this._lvStartAt=Date.now(); this._lvDeaths=0;        // difficulty telemetry: time-in-level + lives lost this level
+    // Drain gamepad edge-latches left over from menu navigation: the START press that launched
+    // this level also set pauseEdge (and anyBtnEdge/jumpEdge), so the first update() would
+    // instantly pause the fresh run / fire a phantom buffered jump at spawn.
+    try{ if(window.__NQ_PAD){ window.__NQ_PAD.pauseEdge=false; window.__NQ_PAD.anyBtnEdge=false; window.__NQ_PAD.jumpEdge=false; } }catch(e){}
     // DOM-overlay hooks (feedback modal pauses the game while a tester types; reassigned each
     // level so they always point at the LIVE scene instance)
     try{ var _sc=this; window.__NQ_PAUSE=function(){ if(!_sc.over&&!_sc.paused){ _sc.pauseGame(false); return true; } return false; };
@@ -1090,8 +1094,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       var tune=window.__NQ_TUNE||{};
       this.physics.world.gravity.y=(Number(tune.grav)>0?Number(tune.grav):900);
       if(window.__NQ_HEAT){
-        fetch('/api/nq/hotspots?level='+encodeURIComponent(def.name)).then(function(r){return r.json();}).then(function(d){
-          if(!d||!d.ok||!self.sys||!self.sys.isActive()) return;
+        var heatFor=def.name;   // Phaser reuses this scene instance across warps — only draw if we're still on the level we fetched for
+        fetch('/api/nq/hotspots?level='+encodeURIComponent(heatFor)).then(function(r){return r.json();}).then(function(d){
+          if(!d||!d.ok||!self.sys||!self.sys.isActive()||!self.def||self.def.name!==heatFor) return;
           var max=0; (d.buckets||[]).forEach(function(b){ if(b.n>max) max=b.n; });
           (d.buckets||[]).forEach(function(b){
             var wpx=b.xTo-b.xFrom, cx=b.xFrom+wpx/2, a=0.10+0.25*(max?b.n/max:0);
@@ -2101,6 +2106,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(nx<LEVELS.length){ this.registry.set('nqCp',nx); this.registry.set('nqCpScore',this.score); } },
   bossDefeat:function(){
     if(this.over) return; this.over=true; var k=this.rugking, self=this;
+    // difficulty telemetry: boss arenas end HERE, never via key+door levelClear — without this
+    // every boss level showed deaths but permanently 0 clears (garbage deathsPerClear).
+    nqTele('clear',{world:this.def&&this.def.name,t:Math.round((Date.now()-(this._lvStartAt||Date.now()))/1000),deaths:this._lvDeaths||0,score:this.score});
     k.invuln=true; k.setVelocity(0,0); k.body.setAllowGravity(false);
     this.addScore(500);
     this.tweens.add({targets:k, angle:720, alpha:0, y:k.y-50, duration:1300, ease:'Cubic.in', onComplete:function(){ if(k.active) k.destroy(); }});
@@ -2193,6 +2201,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   },
   wormDefeat:function(){
     if(this.over) return; this.over=true; var wm=this.worm; if(this.mound) this.mound.setVisible(false);
+    nqTele('clear',{world:this.def&&this.def.name,t:Math.round((Date.now()-(this._lvStartAt||Date.now()))/1000),deaths:this._lvDeaths||0,score:this.score});   // boss levels never reach levelClear
     wm.invuln=true; this.addScore(800); this.cameras.main.shake(520,.03);
     this.tweens.add({targets:wm, y:this.wormDownY+40, angle:18, alpha:0, duration:1400, ease:'Cubic.in', onComplete:function(){ if(wm.active) wm.destroy(); }});
     this.bankCheckpoint();   // World 2 done → checkpoint at the start of World 3
@@ -2672,7 +2681,11 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // toggles; while paused, ANY fresh button press (anyBtnEdge) also resumes. anyBtnEdge is
     // drained every unpaused frame so a stale press can never insta-resume a fresh pause.
     { var _pe=(typeof window!=='undefined')?window.__NQ_PAD:null;
-      if(_pe){
+      // while a DOM modal (feedback form / remap) owns the screen, drain pad edges but act on
+      // NOTHING — a controller press was resuming the run behind the modal while a tester typed.
+      var _modalUp=false; try{ _modalUp=!!document.querySelector('#nqfb-wrap.on'); }catch(e){}
+      if(_pe && _modalUp){ _pe.pauseEdge=false; _pe.anyBtnEdge=false; }
+      else if(_pe){
         if(_pe.pauseEdge){ _pe.pauseEdge=false; _pe.anyBtnEdge=false;
           if(this.paused){ this.resumeGame(); } else if(!this.over){ this.pauseGame(false); } }
         else if(this.paused && _pe.anyBtnEdge){ _pe.anyBtnEdge=false; this.resumeGame(); }
@@ -3264,11 +3277,14 @@ var NQGAME=new Phaser.Game({
 // Global "jump to LEVEL SELECT" hook — works from ANY scene (title, game, over, win), so the
 // reliable DOM "≡ Levels" button is never a dead end. Stops whatever's running, then starts it.
 try{ if(typeof window!=='undefined') window.__NQ_TOLEVELS=function(){ try{
+  try{ if(window.NQLB&&window.NQLB.abandonRun) window.NQLB.abandonRun(); }catch(e){}   // leaving mid-run = abandon the leaderboard run token
   NQGAME.scene.getScenes(true).forEach(function(sc){ var k=sc.sys&&sc.sys.settings&&sc.sys.settings.key; if(k&&k!=='LevelSelect') NQGAME.scene.stop(k); });
   NQGAME.scene.start('LevelSelect');
 }catch(e){} }; }catch(e){}
 // LAB toolkit: level list for the warp dropdown (name + width so the panel can bound the x input).
 try{ if(typeof window!=='undefined') window.__NQ_LEVELS_LIST=LEVELS.map(function(l,i){ return {i:i,name:l.name,sub:l.sub||'',width:l.width||5000}; }); }catch(e){}
+// Real world count for the setup-lane leaderboard chips (same formula the Win scenes use).
+try{ if(typeof window!=='undefined') window.__NQ_WORLDS=Math.ceil(LEVELS.filter(function(l){return !l.hidden;}).length/3); }catch(e){}
 
 /* ---------- ⛶ Fullscreen toggle (fills the screen; auto-exits on rotate to portrait) ---------- */
 // iPad/desktop Safari support the Fullscreen API, which hides the address bar + tabs. Entering
@@ -3324,9 +3340,9 @@ if(typeof document!=='undefined'){ (function(){
   var panel=document.createElement('div'); panel.id='nqset';
   panel.innerHTML='<div class="row"><label>♪ Music</label><input id="nqvm" type="range" min="0" max="100"></div>'
     +'<div class="row"><label>🔊 Effects</label><input id="nqvs" type="range" min="0" max="100"></div>'
-    +'<div class="mute" id="nqmute">🔇 Mute music</div>';
+    +'<div class="mute" id="nqsetmute">🔇 Mute music</div>';   // NOT id=nqmute — that id belongs to the round top-left button; the dup id let its fixed-circle CSS rip this row out of the panel
   document.body.appendChild(panel);
-  var vm=panel.querySelector('#nqvm'), vs=panel.querySelector('#nqvs'), mute=panel.querySelector('#nqmute');
+  var vm=panel.querySelector('#nqvm'), vs=panel.querySelector('#nqvs'), mute=panel.querySelector('#nqsetmute');
   function upMute(){ try{ mute.textContent=(window.__NQ_MUSIC&&window.__NQ_MUSIC.muted&&window.__NQ_MUSIC.muted())?'🔊 Unmute music':'🔇 Mute music'; }catch(e){} }
   function initVals(){ try{ vm.value=Math.round((window.__NQ_MUSIC&&window.__NQ_MUSIC.getVol?window.__NQ_MUSIC.getVol():1)*100); }catch(e){ vm.value=100; }
     try{ vs.value=Math.round((window.__NQ_SFX&&window.__NQ_SFX.getVol?window.__NQ_SFX.getVol():0.85)*100); }catch(e){ vs.value=85; } upMute(); }
@@ -3436,7 +3452,7 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
     if(uiReady || typeof document==='undefined') return; uiReady=true;
     var css=document.createElement('style');
     css.textContent=
-      '#nqgpdot{position:fixed;left:8px;bottom:8px;z-index:70;font-size:18px;opacity:.85;'
+      '#nqgpdot{position:fixed;left:8px;bottom:100px;z-index:70;font-size:18px;opacity:.85;'
         +'filter:drop-shadow(0 1px 2px #000);pointer-events:none;display:none}'
       +'#nqgptoast{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:72;'
         +'background:rgba(18,26,48,.94);border:2px solid #3dff9e;color:#c7ffe4;padding:7px 14px;'
@@ -3448,7 +3464,7 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
     document.head.appendChild(css);
     dotEl=document.createElement('div'); dotEl.id='nqgpdot'; dotEl.textContent='🎮'; document.body.appendChild(dotEl);
     btnEl=document.createElement('button'); btnEl.textContent='⚙ REMAP';
-    btnEl.style.cssText='position:fixed;left:34px;bottom:7px;z-index:71;background:rgba(18,26,48,.82);border:1px solid rgba(120,180,255,.45);color:#9fd4ff;font:9px/1 "Press Start 2P",monospace;padding:6px 8px;border-radius:7px;cursor:pointer;display:none';
+    btnEl.style.cssText='position:fixed;left:34px;bottom:99px;z-index:71;background:rgba(18,26,48,.82);border:1px solid rgba(120,180,255,.45);color:#9fd4ff;font:9px/1 "Press Start 2P",monospace;padding:6px 8px;border-radius:7px;cursor:pointer;display:none';   // above the PREMIUM/LAB corner pile — bottom:7 sat UNDER the premium button (unclickable with a pad in the setup lane)
     btnEl.onclick=startRemap; document.body.appendChild(btnEl);
     toastEl=document.createElement('div'); toastEl.id='nqgptoast'; document.body.appendChild(toastEl);
     if(DEBUG){ dbgEl=document.createElement('div'); dbgEl.id='nqgpdbg'; dbgEl.style.display='block'; document.body.appendChild(dbgEl); }
@@ -3461,25 +3477,32 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
     remapping=true;
     remapEl=document.createElement('div');
     remapEl.style.cssText='position:fixed;inset:0;z-index:80;background:rgba(4,6,14,.93);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#eaf2ff;font-family:"Press Start 2P",monospace;padding:20px;line-height:1.7';
-    remapEl.innerHTML='<div class="q" style="font-size:15px;max-width:90vw;white-space:pre-line"></div><div style="font-size:10px;color:#9fb4dc;margin-top:16px">press the button on your controller</div><div class="r" style="margin-top:24px;font-size:9px;color:#ff9a9a;cursor:pointer;text-decoration:underline">reset to default &amp; close</div>';
+    remapEl.innerHTML='<div class="q" style="font-size:15px;max-width:90vw;white-space:pre-line"></div><div style="font-size:10px;color:#9fb4dc;margin-top:16px">press the button on your controller</div>'
+      +'<div class="s" style="margin-top:20px;font-size:9px;color:#8dffc0;cursor:pointer;text-decoration:underline">skip this one (keep default)</div>'
+      +'<div class="r" style="margin-top:14px;font-size:9px;color:#ff9a9a;cursor:pointer;text-decoration:underline">reset to default &amp; close</div>';
     document.body.appendChild(remapEl);
     var q=remapEl.querySelector('.q');
     remapEl.querySelector('.r').onclick=function(){ try{localStorage.removeItem('nqPadMap');}catch(e){} padMap=null; endRemap(); toast('Controls reset to default'); };
     var steps=[['JUMP','jump'],['THROW','throw'],['PAUSE (START)','pause']], res={jump:[],throw:[],pause:[]}, si=0, prevDown=true;
+    var finish=function(){ try{ localStorage.setItem('nqPadMap',JSON.stringify(res)); }catch(e){} padMap=res;
+      q.textContent='✓ Saved!\nJUMP = '+(res.jump.length?('button '+res.jump[0]):'default')+'\nTHROW = '+(res.throw.length?('button '+res.throw[0]):'default')+'\nPAUSE = '+(res.pause.length?('button '+res.pause[0]):'default');
+      setTimeout(endRemap,1600); };
+    // "skip" keeps the default binding for the current step — without it a 2-button pad could
+    // never finish the PAUSE step (3 distinct buttons required) and the flow soft-locked.
+    var advance=function(){ si++; if(si<steps.length){ q.textContent='Press the button for  '+steps[si][0]; } else { finish(); } };
+    remapEl.querySelector('.s').onclick=function(){ if(si<steps.length) advance(); };
     q.textContent='Press the button for  JUMP';
     var lp=function(){
       if(!remapping) return;
       var gp=anyPad();
+      if(!gp){ endRemap(); toast('Controller disconnected — remap cancelled'); return; }   // don't strand the fullscreen overlay
+      if(si>=steps.length){ requestAnimationFrame(lp); return; }   // finished via skip-click — ignore further presses while "Saved!" shows
       if(gp){ var B=gp.buttons||[], d=-1, i; for(i=0;i<B.length;i++){ if(B[i]&&(B[i].pressed||B[i].value>0.5)){ d=i; break; } }
         if(d<0){ prevDown=false; }
         else if(!prevDown){ prevDown=true;
           // a button can hold only ONE job — ignore a press already bound in an earlier step
           if(res.jump.indexOf(d)>=0||res.throw.indexOf(d)>=0||res.pause.indexOf(d)>=0){ requestAnimationFrame(lp); return; }
-          res[steps[si][1]]=[d]; si++;
-          if(si<steps.length){ q.textContent='Press the button for  '+steps[si][0]; }
-          else { try{ localStorage.setItem('nqPadMap',JSON.stringify(res)); }catch(e){} padMap=res;
-                 q.textContent='✓ Saved!\nJUMP = button '+res.jump[0]+'\nTHROW = button '+res.throw[0]+'\nPAUSE = button '+res.pause[0];
-                 setTimeout(endRemap,1600); return; } }
+          res[steps[si][1]]=[d]; advance(); if(si>=steps.length) return; }
       }
       requestAnimationFrame(lp);
     };
@@ -3489,6 +3512,7 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
   window.__nqPadRemap=startRemap;
 
   var padConnected=false;   // latched by connect/disconnect so a single empty getGamepads() frame can't flicker the controller "off"
+  var lastPadKey=null;      // identity of the pad we calibrated axRest against
   window.addEventListener('gamepadconnected', function(e){ padConnected=true; axRest=null; ensureUI(); if(dotEl)dotEl.style.display='block'; if(btnEl)btnEl.style.display='block';
     toast('🎮 Controller connected — START (or hold A+B) pauses'); if(AUTOREMAP) setTimeout(startRemap,700); });
   window.addEventListener('gamepaddisconnected', function(){ if(!anyPad()){ padConnected=false; window.__NQ_GAMEPAD_ACTIVE=false;
@@ -3510,9 +3534,11 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
       // polling so it re-acquires immediately. Only go inactive if we've never actually seen a pad.
       if(padConnected){ var P0=window.__NQ_PAD; if(P0){ P0.left=P0.right=P0.jump=P0.down=P0.throw=false; } }
       else { window.__NQ_GAMEPAD_ACTIVE=false; if(dbgEl)dbgEl.textContent='no gamepad detected\n(plug one in + press a button)'; }
+      comboAt=0; comboFired=false;   // an A+B hold interrupted by unplug must not satisfy the 900ms check on replug
       return;
     }
     padConnected=true;
+    if(lastPadKey!==(gp.index+':'+gp.id)){ lastPadKey=gp.index+':'+gp.id; axRest=null; }   // active pad changed (e.g. pad #1 unplugged, #2 remains) — re-baseline axes, don't apply #1's calibration to #2
     if(remapping) return;   // don't leak calibration presses into the game
     var B=gp.buttons||[], A=gp.axes||[];
     var pr=function(i){ return !!(B[i] && (B[i].pressed || B[i].value>0.5)); };
@@ -3629,7 +3655,7 @@ if(TEST_MODE && typeof document!=='undefined'){ (function(){
   var css=el('style',null,
     '#nqfb-lv,#nqfb-open{position:fixed;bottom:12px;z-index:99999;font-family:system-ui,Segoe UI,Roboto,sans-serif;'
     +'font-size:13px;font-weight:600;border:none;border-radius:20px;padding:9px 14px;cursor:pointer;box-shadow:0 3px 10px rgba(0,0,0,.5)}'
-    +'#nqfb-open{right:12px;background:#ffd23f;color:#20142e}#nqfb-lv{left:12px;background:#1b2440;color:#8fd0ff;border:1px solid #35507e}'
+    +'#nqfb-open{right:12px;background:#ffd23f;color:#20142e}#nqfb-lv{left:122px;background:#1b2440;color:#8fd0ff;border:1px solid #35507e}'
     +'#nqfb-wrap{position:fixed;inset:0;z-index:100000;background:rgba(6,4,16,.72);display:none;align-items:center;justify-content:center;padding:16px;font-family:system-ui,Segoe UI,Roboto,sans-serif}'
     +'#nqfb-wrap.on{display:flex}#nqfb-card{background:#161228;border:1px solid #33305a;border-radius:14px;max-width:420px;width:100%;padding:18px;color:#eee}'
     +'#nqfb-card h3{margin:0 0 3px;color:#ffd23f;font-size:17px}#nqfb-card .lv{color:#8fd0ff;font-size:13px;margin-bottom:12px}'
@@ -3793,6 +3819,10 @@ if (window.__NQ_SETUP) { (function () {
 
   window.NQLB = {
     worldOf: worldOf,
+    // Called when a run is ABANDONED (≡ Levels / back to level select): drop the token so the
+    // next run gets a fresh issuedAt — reusing the old one made the server's score/second
+    // plausibility check judge the new score against the old run's start time.
+    abandonRun: function () { run = null; },
     // Called from Game.create each level. Starts a run token on the FIRST level of a run; keeps it
     // across level advances so the whole run is timed as one (honest score/second plausibility).
     enterLevel: function (name) {
@@ -3928,7 +3958,7 @@ if (window.__NQ_SETUP) { (function () {
     });
 
     // world selector chips: Weekly, All-time, then worlds 1..N
-    var NW = 9; try { NW = Math.ceil(window.LEVELS.filter(function (l) { return !l.hidden; }).length / 3); } catch (e) {}
+    var NW = 9; try { if (window.__NQ_WORLDS) NW = window.__NQ_WORLDS; } catch (e) {}   // window.LEVELS never existed — the old expression always threw and pinned NW=9
     var sel = ov.querySelector('#nqp-wsel'); var scope = 'weekly';
     function chip(key, label) { var c = document.createElement('span'); c.className = 'nqp-chip' + (key === scope ? ' on' : ''); c.textContent = label; c.dataset.k = key; sel.appendChild(c); }
     chip('weekly', 'This Week'); chip('all', 'All-Time'); for (var w = 1; w <= NW; w++) chip('w' + w, 'W' + w);
@@ -3957,7 +3987,7 @@ if (window.__NQ_SETUP) { (function () {
     function renderWallet() {
       var host = ov.querySelector('#nqp-wal'); var ws = window.NQLB.getWallet();
       if (ws.pubkey) {
-        var wl = ws.worlds === 'all' ? 'ALL worlds' : ('Worlds ' + ws.worlds[0] + '–' + ws.worlds[1]);
+        var wl = ws.worlds === 'all' ? 'ALL worlds' : (Array.isArray(ws.worlds) ? ('Worlds ' + ws.worlds[0] + '–' + ws.worlds[1]) : 'checking…');   // worlds is null until the refresh response lands
         host.innerHTML = '<div class="nqp-row"><span>' + esc(ws.pubkey.slice(0, 4) + '…' + ws.pubkey.slice(-4)) + '</span>'
           + '<span class="nqp-tier">TIER ' + ws.tier + '</span></div>'
           + '<div class="nqp-sub" style="margin:8px 0">Access: <b style="color:#8dffc0">' + wl + '</b></div>'
