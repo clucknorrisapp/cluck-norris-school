@@ -9,6 +9,7 @@
 
 const kv = require("../lib/kvstore");
 const store = require("./nq-feedback");
+const telemetry = require("./nq-telemetry");
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 
@@ -41,24 +42,52 @@ async function triage(comments) {
   } catch (_) { return fallback(); }
 }
 
-// send: actually deliver via notify() (else dry-run/preview). reset: re-baseline the watermark to now.
+// Deterministic difficulty block from the telemetry store (no AI — it's already structured).
+// Top worlds by deaths, each with clear rate, the #1 hotspot and cause, and a ⚠ flag when the
+// numbers say "review this level" (≥6 deaths per clear, or ≥8 deaths with no clear at all).
+function teleBlock(sum) {
+  if (!sum || !sum.worlds || !sum.worlds.length) return "";
+  const lines = sum.worlds.slice(0, 5).map((w) => {
+    const rate = w.clears ? `${w.deaths}☠ / ${w.clears}✓ (${w.deathsPerClear}/clear)` : `${w.deaths}☠ / 0✓`;
+    const hot = w.hotspots[0] ? ` — hot: x${w.hotspots[0].xFrom}–${w.hotspots[0].xTo} ×${w.hotspots[0].n}` : "";
+    const cause = w.topCauses[0] ? ` (${esc(w.topCauses[0].cause)} ×${w.topCauses[0].n})` : "";
+    const flag = (w.clears === 0 && w.deaths >= 8) || (w.deathsPerClear !== null && w.deathsPerClear >= 6) ? " ⚠ review" : "";
+    const clr = w.clears ? `; avg clear ${w.avgClearSec}s` : "";
+    return `• <b>${esc(w.world)}</b>: ${rate}${hot}${cause}${clr}${flag}`;
+  });
+  return `📊 <b>difficulty</b> — ${sum.events} new event${sum.events === 1 ? "" : "s"}\n${lines.join("\n")}`;
+}
+
+// send: actually deliver via notify() (else dry-run/preview). reset: re-baseline the watermarks to now.
 // notify: async (text) => messageId|null. Returns a status object.
 async function run({ send = false, reset = false, notify = null } = {}) {
-  if (reset) kv.set("nqDigestSince", Date.now());
+  if (reset) { kv.set("nqDigestSince", Date.now()); kv.set("nqTeleSince", Date.now()); }
   const since = Number(kv.get("nqDigestSince", 0)) || 0;
+  const teleSince = Number(kv.get("nqTeleSince", 0)) || 0;
   let all = [];
   try { all = store.list() || []; } catch (_) { all = []; }
   const fresh = all.filter((c) => Number(c.at || 0) > since);
-  const result = { total: all.length, sinceTs: since, newCount: fresh.length };
-  if (!fresh.length) { result.status = "no_new"; return result; }
-  const digest = await triage(fresh);
+  let teleSum = null;
+  try { teleSum = telemetry.summary(teleSince); } catch (_) { teleSum = null; }
+  const teleNew = (teleSum && teleSum.events) || 0;
+  const result = { total: all.length, sinceTs: since, newCount: fresh.length, teleNew };
+  // fire on new comments, or on a meaningful batch of telemetry alone (≥15 events keeps
+  // a lone test death from paging the operator)
+  if (!fresh.length && teleNew < 15) { result.status = "no_new"; return result; }
+  const digest = fresh.length ? await triage(fresh) : "<i>no new comments</i>";
+  const tele = teleBlock(teleSum);
   const maxAt = fresh.reduce((m, c) => Math.max(m, Number(c.at || 0)), since);
   const body = `🎮 <b>Normie Quest — playtest digest</b>\n${fresh.length} new comment${fresh.length === 1 ? "" : "s"} · `
-    + `<a href="https://clucknorris.app/normie-quest-x7/feedback?key=normiequesttest">full dashboard</a>\n\n${digest}`;
+    + `<a href="https://clucknorris.app/normie-quest-x7/feedback?key=normiequesttest">full dashboard</a>\n\n${digest}`
+    + (tele ? `\n\n${tele}` : "");
   result.digest = digest;
   if (send && typeof notify === "function") {
     const mid = await notify(body);
-    if (mid) { kv.set("nqDigestSince", maxAt); result.status = "sent"; }   // advance watermark ONLY on confirmed delivery — a failed send retries next slot
+    if (mid) {   // advance watermarks ONLY on confirmed delivery — a failed send retries next slot
+      kv.set("nqDigestSince", maxAt);
+      if (teleNew) { try { kv.set("nqTeleSince", telemetry.latestAt()); } catch (_) {} }
+      result.status = "sent";
+    }
     else { result.status = "send_failed"; }
   } else { result.status = "dry"; result.preview = body; }
   return result;

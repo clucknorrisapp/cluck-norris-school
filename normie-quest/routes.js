@@ -17,6 +17,7 @@ const express = require('express');
 const router = express.Router();
 const burn = require('./normie-burn');   // Phase 1 burn-to-play backend (dormant until env-configured)
 const feedback = require('./nq-feedback');   // playtester comment store (test dashboard)
+const telemetry = require('./nq-telemetry'); // difficulty telemetry (deaths + clears)
 const leaderboard = require('./nq-leaderboard');   // Phase 2 leaderboards (per-world + weekly)
 const wallet = require('./nq-wallet');   // Phase 2 wallet ownership + tier gate (sign-message, read-only)
 
@@ -187,6 +188,33 @@ router.post('/api/nq/feedback', (req, res) => {
 router.get('/api/nq/feedback', (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ ok: false, error: 'not_found' });
   try { const items = feedback.list(); res.json({ ok: true, count: items.length, items: items.slice().reverse() }); }
+  catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+
+// ---- /api/nq/telemetry : difficulty telemetry (deaths + clears) -----------
+// POST is PUBLIC (the game fire-and-forgets tiny events; sendBeacon can't set custom
+// headers, so no key). Size-capped + type-validated in the store, no PII, and a light
+// per-IP throttle so a hostile client can only churn its own bucket. GET is gated
+// (per-world difficulty summary: hotspots, causes, clear rates).
+const teleRate = new Map();   // ip -> {n, resetAt}
+router.post('/api/nq/telemetry', (req, res) => {
+  try {
+    const ip = String(req.headers['x-forwarded-for'] || req.ip || '?').split(',')[0].trim();
+    const now = Date.now();
+    const r0 = teleRate.get(ip);
+    if (!r0 || now > r0.resetAt) teleRate.set(ip, { n: 1, resetAt: now + 60000 });
+    else if (++r0.n > 60) return res.status(429).json({ ok: false, error: 'slow_down' });
+    if (teleRate.size > 5000) teleRate.clear();   // bounded memory, worst case a briefly looser throttle
+    const b = req.body || {};
+    const r = telemetry.add({ ev: b.ev, world: b.world, x: b.x, cause: b.cause, t: b.t, deaths: b.deaths, score: b.score });
+    res.status(r.ok ? 200 : 400).json(r);
+  } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+
+// per-world difficulty summary (gated). ?since=<ms> to scope; default = everything.
+router.get('/api/nq/telemetry', (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ ok: false, error: 'not_found' });
+  try { res.json({ ok: true, total: telemetry.count(), ...telemetry.summary(Number(req.query.since) || 0) }); }
   catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
 

@@ -1052,6 +1052,18 @@ var Gate=new Phaser.Class({ Extends:Phaser.Scene,
 });
 
 /* ---------- Game (data-driven, multi-level) ---------- */
+/* ---------- Playtest difficulty telemetry — fire-and-forget, no PII (no names, no wallets).
+   Tiny events (death: world/x/cause, clear: world/time/deaths) so the digest can point at the
+   exact hotspot ("W3 pit at x≈2400") instead of relying on remembered feedback. sendBeacon
+   survives tab closes; errors are swallowed — telemetry must never affect play. ---------- */
+function nqTele(ev,d){
+  try{
+    var b=JSON.stringify(Object.assign({ev:ev},d||{}));
+    if(navigator.sendBeacon){ navigator.sendBeacon('/api/nq/telemetry', new Blob([b],{type:'application/json'})); }
+    else { fetch('/api/nq/telemetry',{method:'POST',headers:{'content-type':'application/json'},body:b,keepalive:true}).catch(function(){}); }
+  }catch(e){}
+}
+
 var Game=new Phaser.Class({ Extends:Phaser.Scene,
   initialize:function(){ Phaser.Scene.call(this,{key:'Game'}); },
   // levelStartScore = coins banked BEFORE this level; honeypots never drain below it (they only take THIS level's coins).
@@ -1060,6 +1072,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   create:function(){
     this.physics.resume();   // CRITICAL: the Arcade world stays paused across scene restarts; every level/replay must un-pause it
     this.paused=false; this.lastInputAt=this.time.now;   // pause state + idle-auto-pause timer
+    this._lvStartAt=Date.now(); this._lvDeaths=0;        // difficulty telemetry: time-in-level + lives lost this level
     var self=this, i;
     var def=this.def=LEVELS[this.levelIdx];
     // SETUP LANE only: begin (or continue) a leaderboard run. One run token spans the whole run;
@@ -2549,7 +2562,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.tweens.add({targets:pop, alpha:0, delay:1050, duration:850, onComplete:function(){ pop.destroy(); }});
   },
 
-  loseLife:function(reason){ this.lives--; if(this.hearts[this.lives]) this.hearts[this.lives].setAlpha(.16); if(this.lives<=0) this.gameOver(reason); },
+  loseLife:function(reason){ this.lives--; this._lvDeaths=(this._lvDeaths||0)+1;
+    nqTele('death',{world:this.def&&this.def.name,x:Math.round(this.player?this.player.x:0),cause:reason||'?',t:Math.round((Date.now()-(this._lvStartAt||Date.now()))/1000),score:this.score});
+    if(this.hearts[this.lives]) this.hearts[this.lives].setAlpha(.16); if(this.lives<=0) this.gameOver(reason); },
   hurt:function(player,knockDir,reason){
     // Super Geek audit: absorb the next hit instead of losing a life (consumes the shield)
     if(this.geekShield){ this.geekShield=false; player.invuln=true; this.cameras.main.flash(150,46,230,200); SFX.power(); this.flash('AUDIT BLOCKED IT!','#2ee6c0');
@@ -2581,12 +2596,15 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
 
   levelClear:function(){
     if(this.over) return; this.over=true; this.addScore(this.timeLeft*10); this.physics.pause(); SFX.clear();
+    nqTele('clear',{world:this.def&&this.def.name,t:Math.round((Date.now()-(this._lvStartAt||Date.now()))/1000),deaths:this._lvDeaths||0,score:this.score});
     var big=this.hb(this.add.text(W/2,120,'WORLD '+this.def.name+' CLEAR!',{fontFamily:'"Press Start 2P"',fontSize:'16px',color:'#3dff6e'}).setOrigin(.5));
     this.tweens.add({targets:big,scale:1.15,duration:400,yoyo:true,repeat:1});
     var next=this.levelIdx+1;
     this.time.delayedCall(1500,function(){ if(next<LEVELS.length) this.scene.start('Game',{level:next,score:this.score,lives:3}); else this.scene.start('Win',this.winData()); },[],this);   // refill hearts each world; score stays cumulative
   },
   gameOver:function(reason){ if(this.over) return; this.over=true; this.physics.pause();
+    // TIME UP is the one run-ender that doesn't pass through loseLife — record it here (never both)
+    if(reason==='TIME UP') nqTele('death',{world:this.def&&this.def.name,x:Math.round(this.player?this.player.x:0),cause:'TIME UP',t:Math.round((Date.now()-(this._lvStartAt||Date.now()))/1000),score:this.score});
     // TEST BUILD: no run-ending — bounce back to LEVEL SELECT so a tester can retry/switch instantly.
     if(TEST_MODE){ this.hb(this.add.text(W/2,120,'TEST — back to LEVEL SELECT',{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#ff6a99'}).setOrigin(.5)); this.time.delayedCall(900,function(){ this.scene.start('LevelSelect'); },[],this); return; }
     // Per-world checkpoint: died past a banked world boundary → continue from the FURTHEST world
