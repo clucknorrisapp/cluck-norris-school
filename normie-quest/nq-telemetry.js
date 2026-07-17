@@ -85,4 +85,34 @@ function summary(sinceMs) {
 function count() { return load().length; }
 function latestAt() { const a = load(); return a.length ? Number(a[a.length - 1].at || 0) : 0; }
 
-module.exports = { add, summary, count, latestAt };
+// One world's stats with ALL death buckets (not just the top-3 the digest wants) — feeds the
+// lab build's in-level death-heatmap overlay. Aggregate difficulty data only, no PII, so it's
+// safe behind an ungated (cached) route.
+function worldDetail(world) {
+  const want = clip(world, 24).trim();
+  if (!want) return { world: '', deaths: 0, clears: 0, buckets: [] };
+  let deaths = 0, clears = 0;
+  const causes = {}, buckets = {}, clearTimes = [], clearDeaths = [];
+  for (const e of load()) {
+    if (e.world !== want) continue;
+    if (e.ev === 'death') {
+      deaths++;
+      causes[e.cause] = (causes[e.cause] || 0) + 1;
+      const b = Math.floor(e.x / HOTSPOT_BUCKET) * HOTSPOT_BUCKET;
+      buckets[b] = (buckets[b] || 0) + 1;
+    } else { clears++; clearTimes.push(e.t); clearDeaths.push(e.deaths); }
+  }
+  const avg = (a) => (a.length ? Math.round(a.reduce((s, v) => s + v, 0) / a.length) : 0);
+  return {
+    world: want,
+    deaths,
+    clears,
+    deathsPerClear: clears ? Math.round((deaths / clears) * 10) / 10 : (deaths ? null : 0),
+    avgClearSec: avg(clearTimes),
+    topCauses: Object.entries(causes).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([cause, n]) => ({ cause, n })),
+    buckets: Object.entries(buckets).map(([x, n]) => ({ xFrom: Number(x), xTo: Number(x) + HOTSPOT_BUCKET, n }))
+      .sort((a, b) => a.xFrom - b.xFrom),
+  };
+}
+
+module.exports = { add, summary, count, latestAt, worldDetail };

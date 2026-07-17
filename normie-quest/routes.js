@@ -218,6 +218,25 @@ router.get('/api/nq/telemetry', (req, res) => {
   catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
 
+// ONE world's full death-bucket detail — feeds the lab build's in-level heatmap overlay.
+// UNGATED on purpose (the lab page can't carry an admin key): aggregate difficulty numbers
+// only, no PII. 30s in-process cache per level keeps a refresh-spammer off the disk.
+const hotspotCache = new Map();   // level -> {at, body}
+router.get('/api/nq/hotspots', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  try {
+    const level = String((req.query && req.query.level) || '').slice(0, 24).trim();
+    if (!level) return res.status(400).json({ ok: false, error: 'level required' });
+    const now = Date.now();
+    const hit = hotspotCache.get(level);
+    if (hit && now - hit.at < 30000) return res.json(hit.body);
+    const body = { ok: true, ...telemetry.worldDetail(level) };
+    hotspotCache.set(level, { at: now, body });
+    if (hotspotCache.size > 200) hotspotCache.clear();
+    res.json(body);
+  } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+
 // human-readable comments dashboard for the owner (gated). Newest first, filter by level.
 router.get('/normie-quest-x7/feedback', (req, res) => {
   res.set('X-Robots-Tag', 'noindex, nofollow');

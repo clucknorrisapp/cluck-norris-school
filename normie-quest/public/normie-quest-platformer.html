@@ -1082,6 +1082,28 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // SETUP LANE only: begin (or continue) a leaderboard run. One run token spans the whole run;
     // the score is submitted at run-end from the Over/Win scenes. No-op on the stable tester build.
     if(window.__NQ_SETUP && window.NQLB){ try{ window.NQLB.enterLevel(def.name, this.score); }catch(e){} }
+    // LAB designer toolkit (owner's private bench only — dormant on the stable tester build):
+    // warp hook, live gravity tune, and the tester death-heatmap overlay.
+    if(window.__NQ_SETUP){ try{
+      window.__NQ_WARP=function(idx,x){ self.scene.start('Game',{level:idx,score:self.score,lives:self.lives,spawnX:(x>0?x:undefined)}); };
+      window.__NQ_SETGRAV=function(g){ try{ self.physics.world.gravity.y=g; }catch(e){} };
+      var tune=window.__NQ_TUNE||{};
+      this.physics.world.gravity.y=(Number(tune.grav)>0?Number(tune.grav):900);
+      if(window.__NQ_HEAT){
+        fetch('/api/nq/hotspots?level='+encodeURIComponent(def.name)).then(function(r){return r.json();}).then(function(d){
+          if(!d||!d.ok||!self.sys||!self.sys.isActive()) return;
+          var max=0; (d.buckets||[]).forEach(function(b){ if(b.n>max) max=b.n; });
+          (d.buckets||[]).forEach(function(b){
+            var wpx=b.xTo-b.xFrom, cx=b.xFrom+wpx/2, a=0.10+0.25*(max?b.n/max:0);
+            self.add.rectangle(cx,H/2,wpx,H,0xff2244,a).setDepth(2);
+            self.add.text(cx,26,String(b.n)+'☠',{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#ff8899'}).setOrigin(.5,0).setDepth(2);
+          });
+          self.add.text(90,44,'LAB HEATMAP · '+d.deaths+' deaths / '+d.clears+' clears'
+            +(d.topCauses&&d.topCauses[0]?(' · top: '+d.topCauses[0].cause):''),
+            {fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ff8899'}).setScrollFactor(0).setDepth(60);
+        }).catch(function(){});
+      }
+    }catch(e){} }
     // WORLDS 5+ balance (light touch, once per level): the SOL disc is available from the start, so
     // add one extra shoot-favouring ground-worm (disc-only kill) per regular 5+ level, plus a couple
     // of REALLY hidden SOL-ammo caches (worlds 5/7/9 openers) atop the highest platform — an
@@ -1518,7 +1540,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     e.body.setSize(e.width*0.70,e.height*0.78).setOffset(e.width*0.15,e.height*0.16); e.setBounce(0);
     e.dir=Phaser.Math.RND.pick([-1,1]);
     var spd={jeet:50,paper:66,bot:88,ghost:52,bitmaxi:72,sniper:34,fudster:44,gasgoblin:46,sandwich:58}[kind]||55;
-    e.baseSpeed=(spd+Phaser.Math.RND.between(0,12))*(this.diffMul||1);
+    e.baseSpeed=(spd+Phaser.Math.RND.between(0,12))*(this.diffMul||1)
+      *((window.__NQ_SETUP&&window.__NQ_TUNE&&Number(window.__NQ_TUNE.espd))||1);   // LAB tuning knob
     e.homeX=x; e.homeY=y; e.range=range||70; e.bob=Phaser.Math.RND.frac()*6.28;
     if(kind==='sniper'){ e.setTint(0xff6b6b); e.nextFire=this.time.now+1100+Phaser.Math.RND.between(0,900); }   // ranged shooter
     if(kind==='fudster'||kind==='gasgoblin'){ e.nextGas=this.time.now+1000+Phaser.Math.RND.between(0,700); if(kind==='gasgoblin') e.setTint(0x8ad86a); var fg=this.addGlow(e,0x7ec86e,3); if(fg) this.tweens.add({targets:fg,outerStrength:7,duration:700,yoyo:true,repeat:-1,ease:'Sine.inOut'}); }
@@ -2570,6 +2593,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     nqTele('death',{world:this.def&&this.def.name,x:Math.round(this.player?this.player.x:0),cause:reason||'?',t:Math.round((Date.now()-(this._lvStartAt||Date.now()))/1000),score:this.score});
     if(this.hearts[this.lives]) this.hearts[this.lives].setAlpha(.16); if(this.lives<=0) this.gameOver(reason); },
   hurt:function(player,knockDir,reason){
+    if(window.__NQ_SETUP&&window.__NQ_GOD) return;   // LAB god mode: designer walks through everything
     // Super Geek audit: absorb the next hit instead of losing a life (consumes the shield)
     if(this.geekShield){ this.geekShield=false; player.invuln=true; this.cameras.main.flash(150,46,230,200); SFX.power(); this.flash('AUDIT BLOCKED IT!','#2ee6c0');
       this.tweens.add({targets:player,alpha:.3,duration:90,yoyo:true,repeat:5,onComplete:function(){ player.alpha=1; player.invuln=false; }}); return; }
@@ -2909,6 +2933,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
 
     // pit death
     if(p.y>H+80){
+      if(window.__NQ_SETUP&&window.__NQ_GOD){   // LAB god mode: pits eject you instead of killing
+        p.setVelocity(0,0); p.setPosition(Math.max(this.spawn.x,p.x-260),H-100); return; }
       this.loseLife('FELL IN A PIT'); if(this.over) return;
       p.setVelocity(0,0); p.setPosition(Math.max(this.spawn.x,p.x-260),H-100);
       p.invuln=true; this.tweens.add({targets:p,alpha:.3,duration:90,yoyo:true,repeat:6,onComplete:function(){ p.alpha=1; p.invuln=false; }});
@@ -3241,6 +3267,8 @@ try{ if(typeof window!=='undefined') window.__NQ_TOLEVELS=function(){ try{
   NQGAME.scene.getScenes(true).forEach(function(sc){ var k=sc.sys&&sc.sys.settings&&sc.sys.settings.key; if(k&&k!=='LevelSelect') NQGAME.scene.stop(k); });
   NQGAME.scene.start('LevelSelect');
 }catch(e){} }; }catch(e){}
+// LAB toolkit: level list for the warp dropdown (name + width so the panel can bound the x input).
+try{ if(typeof window!=='undefined') window.__NQ_LEVELS_LIST=LEVELS.map(function(l,i){ return {i:i,name:l.name,sub:l.sub||'',width:l.width||5000}; }); }catch(e){}
 
 /* ---------- ⛶ Fullscreen toggle (fills the screen; auto-exits on rotate to portrait) ---------- */
 // iPad/desktop Safari support the Fullscreen API, which hides the address bar + tabs. Entering
@@ -3990,6 +4018,93 @@ if (window.__NQ_SETUP) { (function () {
   }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
+  if (document.body) ready(); else window.addEventListener('DOMContentLoaded', ready);
+})(); }
+
+/* ---------- 🛠 LAB DESIGNER TOOLKIT (owner's private bench — /normie-quest-x7-lab only) ----------
+   God mode, level/position warp, tester death-heatmap overlay, live tuning knobs (gravity +
+   enemy speed). Entirely dormant unless window.__NQ_SETUP is true; settings persist in
+   localStorage nqLabTune so the bench keeps its shape across reloads. */
+if (window.__NQ_SETUP) { (function () {
+  'use strict';
+  var tune = { god: 0, heat: 0, grav: 900, espd: 1 };
+  try { var s = JSON.parse(localStorage.getItem('nqLabTune') || '{}');
+    ['god','heat','grav','espd'].forEach(function (k) { if (s[k] != null) tune[k] = s[k]; }); } catch (e) {}
+  function push() {
+    window.__NQ_GOD = !!tune.god; window.__NQ_HEAT = !!tune.heat;
+    window.__NQ_TUNE = { grav: Number(tune.grav) || 900, espd: Number(tune.espd) || 1 };
+    try { localStorage.setItem('nqLabTune', JSON.stringify(tune)); } catch (e) {}
+  }
+  push();
+
+  function ready() {
+    var css = document.createElement('style');
+    css.textContent = '#nqlab-btn{position:fixed;left:8px;bottom:58px;z-index:9600;background:#1a1026;color:#c9a7ff;border:1px solid #6b46a8;border-radius:8px;font:12px monospace;padding:6px 9px;cursor:pointer;opacity:.85}'
+      + '#nqlab{position:fixed;left:8px;bottom:94px;z-index:9600;background:#140c1f;color:#e8ddff;border:1px solid #6b46a8;border-radius:10px;font:11px monospace;padding:10px 12px;width:238px;display:none}'
+      + '#nqlab.open{display:block}#nqlab h4{margin:0 0 7px;font-size:11px;color:#c9a7ff}'
+      + '#nqlab label{display:flex;align-items:center;gap:6px;margin:5px 0;cursor:pointer}'
+      + '#nqlab .row{display:flex;align-items:center;gap:6px;margin:6px 0}'
+      + '#nqlab input[type=range]{flex:1}#nqlab .v{width:38px;text-align:right;color:#ffd23f}'
+      + '#nqlab select,#nqlab input[type=number]{background:#221436;color:#e8ddff;border:1px solid #6b46a8;border-radius:5px;font:11px monospace;padding:3px}'
+      + '#nqlab input[type=number]{width:62px}'
+      + '#nqlab button{background:#6b46a8;color:#fff;border:0;border-radius:5px;font:11px monospace;padding:4px 9px;cursor:pointer}'
+      + '#nqlab .stats{margin-top:7px;padding-top:6px;border-top:1px solid #3a2758;color:#b9a5da;line-height:1.5}'
+      + '#nqlab .note{color:#8f7bb3;font-size:10px;margin-top:2px}';
+    document.head.appendChild(css);
+
+    var btn = document.createElement('button'); btn.id = 'nqlab-btn'; btn.textContent = '🛠 LAB';
+    var box = document.createElement('div'); box.id = 'nqlab';
+    box.innerHTML = '<h4>🛠 DESIGNER TOOLKIT</h4>'
+      + '<label><input type="checkbox" id="nql-god"> GOD MODE (no damage, pits eject)</label>'
+      + '<label><input type="checkbox" id="nql-heat"> DEATH HEATMAP (next level)</label>'
+      + '<div class="row">GRAV <input type="range" id="nql-grav" min="500" max="1300" step="25"><span class="v" id="nql-gravv"></span></div>'
+      + '<div class="row">E-SPD <input type="range" id="nql-espd" min="0.5" max="2" step="0.05"><span class="v" id="nql-espdv"></span></div>'
+      + '<div class="note">gravity applies live · enemy speed on next level</div>'
+      + '<div class="row"><select id="nql-lvl"></select><input type="number" id="nql-x" placeholder="x" min="0" step="100"><button id="nql-go">GO</button></div>'
+      + '<div class="stats" id="nql-stats">testers: —</div>';
+    document.body.appendChild(btn); document.body.appendChild(box);
+
+    var god = document.getElementById('nql-god'), heat = document.getElementById('nql-heat'),
+        grav = document.getElementById('nql-grav'), gravv = document.getElementById('nql-gravv'),
+        espd = document.getElementById('nql-espd'), espdv = document.getElementById('nql-espdv'),
+        lvl = document.getElementById('nql-lvl'), xin = document.getElementById('nql-x'),
+        stats = document.getElementById('nql-stats');
+    god.checked = !!tune.god; heat.checked = !!tune.heat;
+    grav.value = tune.grav; espd.value = tune.espd;
+    function paint() { gravv.textContent = grav.value; espdv.textContent = Number(espd.value).toFixed(2) + 'x'; }
+    paint();
+
+    god.onchange = function () { tune.god = god.checked ? 1 : 0; push(); };
+    heat.onchange = function () { tune.heat = heat.checked ? 1 : 0; push(); };
+    grav.oninput = function () { tune.grav = Number(grav.value); push(); paint();
+      if (typeof window.__NQ_SETGRAV === 'function') window.__NQ_SETGRAV(tune.grav); };
+    espd.oninput = function () { tune.espd = Number(espd.value); push(); paint(); };
+
+    // level dropdown fills once the game script has exposed the list (poll briefly)
+    var tries = 0;
+    (function fill() {
+      var L = window.__NQ_LEVELS_LIST;
+      if (!L || !L.length) { if (++tries < 40) return void setTimeout(fill, 250); return; }
+      lvl.innerHTML = L.map(function (l) { return '<option value="' + l.i + '" data-w="' + l.width + '">' + l.name + ' ' + l.sub + '</option>'; }).join('');
+    })();
+    document.getElementById('nql-go').onclick = function () {
+      var idx = Number(lvl.value) || 0, x = Number(xin.value) || 0;
+      if (typeof window.__NQ_WARP === 'function') window.__NQ_WARP(idx, x);
+      else alert('Start a run first — warp hooks into the live game.');
+    };
+
+    function loadStats() {
+      var name = window.__NQ_LEVEL;
+      if (!name || name === 'level-select') { stats.textContent = 'testers: start a level for its stats'; return; }
+      fetch('/api/nq/hotspots?level=' + encodeURIComponent(name)).then(function (r) { return r.json(); }).then(function (d) {
+        if (!d || !d.ok) { stats.textContent = 'testers: no data'; return; }
+        stats.textContent = 'testers @ ' + d.world + ': ' + d.deaths + ' deaths / ' + d.clears + ' clears'
+          + (d.deathsPerClear != null ? ' (' + d.deathsPerClear + ' d/c)' : '')
+          + (d.topCauses && d.topCauses[0] ? ' · top: ' + d.topCauses[0].cause : '');
+      }).catch(function () { stats.textContent = 'testers: fetch failed'; });
+    }
+    btn.onclick = function () { box.classList.toggle('open'); if (box.classList.contains('open')) loadStats(); };
+  }
   if (document.body) ready(); else window.addEventListener('DOMContentLoaded', ready);
 })(); }
 </script>
