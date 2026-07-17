@@ -55,10 +55,11 @@ $2,250 due upon completion of Milestone 2 deliverable (Adoption — people — t
 $2,250 due upon completion of Milestone 3 deliverable (Adoption — ecosystem — target: month 6): (a) 25 distinct third-party token projects (mints other than our own) with locks created through the free Locker Room, each countable on-chain via the Milestone 1 attribution memo against the Jupiter Lock program — no trust in our reporting required; and (b) 5 outside projects publicly using the free tools, evidenced by public posts from each project's own official channels (an announcement, a holder snapshot, or a competition run on our tooling) — a list of links the Foundation clicks, not analytics we compile. Funds cover hands-on onboarding of projects to the Locker Room and the RPC/infrastructure bill of sustaining it — and the rest of the tool suite — as free, zero-fee, zero-token-cut public infrastructure. This milestone is also the growth model in miniature: the product promotes itself by supporting other projects, and their communities meet the school through the tools.
 
 ## Relevant metrics about the usage of your project/product
-The strongest signal so far is that the ecosystem is used by projects beyond our own community, and that usage is publicly checkable:
+The strongest signals are the ones the Foundation can check without trusting us:
+- 130+ user reviews on the Solana Seeker dApp Store since launch — real users of Solana's own mobile device, rating the app on a platform we don't control.
 - Within days of the Locker Room launching, third-party projects (e.g. XPX, ROSE) created token locks through it — those escrows exist on the Jupiter Lock program today and are enumerable on-chain.
 - The Rose community runs its buy competitions and holder snapshots on our free tooling.
-- The app is live on the Solana Seeker dApp Store, ships in seven languages with text-to-speech, and has shipped continuously since April 2026 — the public commit history shows the cadence.
+- The app ships in seven languages with text-to-speech and has shipped continuously since April 2026 — the public commit history shows the cadence.
 - [FILL FROM ANALYTICS BEFORE SUBMITTING — the form explicitly asks for visits/usage: "X unique visitors and Y free-tool runs in the last 30 days" — pull from /api/stats; state plainly as the baseline Milestone 2 grows from.]
 - We practice what we teach: roughly 19% of our own token's supply is locked across 28+ on-chain escrows, publicly visible in the Lock of Fame we built — the same standard of public verifiability the milestones above use.
 - An active Telegram community where the free AI tutor answers learner questions in-chat daily.
