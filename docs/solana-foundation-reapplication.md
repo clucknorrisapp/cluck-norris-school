@@ -28,6 +28,10 @@ Everything we build is token-agnostic and free — the Token Autopsy, the Wallet
 
 I want to keep building this for years — for the person who just made their first wallet and doesn't want to lose everything in week one. I believe that's your mission too. That's why I'd rather do it with the Foundation than anywhere else.
 
+## One honest note — please take a fresh look
+
+When you reviewed us the first time, the GitHub you saw was our *older* repository, and it genuinely didn't reflect everything we'd built. We ship daily, and that pace actually tripped an automated system on the old account, so we moved the project to a new home and kept building without missing a beat (the original flag was later lifted, but by then we'd already settled in). The point is simply this: **what you saw before was an early snapshot.** The current, canonical repo — **github.com/clucknorrisapp/cluck-norris-school** — is live and complete, and there is far more there now than there was then. The Locker Room, the expanded curriculum and free tools, verifiable server-scored diplomas, seven-language support, and the Seeker release have all landed since. If the first review left an impression of a smaller project, I'd genuinely welcome a second look at the full thing — it has grown a lot.
+
 ## Where to look
 
 - **Live product (everything already shipped and free):** clucknorris.app
