@@ -72,7 +72,12 @@ function consume(sig) {
   try {
     fs.mkdirSync(path.dirname(CONSUMED_FILE), { recursive: true });
     fs.writeFileSync(CONSUMED_FILE, JSON.stringify([...set]));
-  } catch (e) { /* if we can't persist, fail closed below */ return false; }
+  } catch (e) {
+    // Persist failed → fail closed, but ALSO roll back the in-memory add: leaving the sig in
+    // the set made every retry of a legitimate burn read as "replay" until process restart.
+    set.delete(sig);
+    return false;
+  }
   return true;
 }
 

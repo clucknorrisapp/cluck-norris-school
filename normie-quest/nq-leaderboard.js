@@ -172,9 +172,12 @@ async function add(entry, token) {
   if (!Number.isFinite(score)) return { ok: false, status: 'bad_score' };
   const world = intIn(entry.world, 1, 99, 0);
 
+  // A valid run token is MANDATORY. It used to be checked only when present, which made the
+  // whole anti-tamper layer optional: omit the token field and a forged score landed with
+  // suspect:false (suspect required tokenOK) and showed on every board. Reject tokenless submits.
   let elapsedMs = 0, tokenOK = false, status = 'no_token';
   if (token && (token.sig || token.nonce)) { const r = checkRun(token); tokenOK = r.ok; status = r.ok ? 'ok' : r.status; elapsedMs = r.elapsedMs || 0; }
-  if (token && !tokenOK) return { ok: false, status };
+  if (!tokenOK) return { ok: false, status };
 
   const secs = Math.max(elapsedMs, 1) / 1000;
   const suspect = tokenOK && score > 0 && (elapsedMs < MIN_RUN_MS || (score / secs) > MAX_PTS_PER_SEC);

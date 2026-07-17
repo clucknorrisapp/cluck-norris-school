@@ -170,11 +170,30 @@ router.get('/api/nq/leaderboard', async (req, res) => {
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
 
+// ---- shared per-IP throttle for the PUBLIC endpoints -----------------------
+// IP = the LAST x-forwarded-for hop (appended by Railway's edge, so a client can't spoof its
+// way into a fresh bucket by inventing XFF entries — taking the FIRST entry was bypassable).
+const pubRate = new Map();   // key -> {n, resetAt}
+function clientIp(req) {
+  const xff = String(req.headers['x-forwarded-for'] || '').split(',').map(s => s.trim()).filter(Boolean);
+  return xff.length ? xff[xff.length - 1] : String(req.ip || '?');
+}
+function throttled(req, bucket, max) {
+  const key = bucket + ':' + clientIp(req);
+  const now = Date.now();
+  const r = pubRate.get(key);
+  if (!r || now > r.resetAt) { pubRate.set(key, { n: 1, resetAt: now + 60000 }); }
+  else if (++r.n > max) return true;
+  if (pubRate.size > 5000) pubRate.clear();   // bounded memory, worst case a briefly looser throttle
+  return false;
+}
+
 // ---- /api/nq/feedback : playtester comment store (test dashboard) ---------
 // POST is PUBLIC (testers on the ?test=1 build submit here); size-capped, sanitized in the
 // store. GET is gated (owner reads the raw list). Both never throw a 500 leak.
 router.post('/api/nq/feedback', (req, res) => {
   try {
+    if (throttled(req, 'fb', 10)) return res.status(429).json({ ok: false, error: 'slow_down' });
     const b = req.body || {};
     const r = feedback.add({
       name: b.name, level: b.level, kind: b.kind, text: b.text,
@@ -196,15 +215,9 @@ router.get('/api/nq/feedback', (req, res) => {
 // headers, so no key). Size-capped + type-validated in the store, no PII, and a light
 // per-IP throttle so a hostile client can only churn its own bucket. GET is gated
 // (per-world difficulty summary: hotspots, causes, clear rates).
-const teleRate = new Map();   // ip -> {n, resetAt}
 router.post('/api/nq/telemetry', (req, res) => {
   try {
-    const ip = String(req.headers['x-forwarded-for'] || req.ip || '?').split(',')[0].trim();
-    const now = Date.now();
-    const r0 = teleRate.get(ip);
-    if (!r0 || now > r0.resetAt) teleRate.set(ip, { n: 1, resetAt: now + 60000 });
-    else if (++r0.n > 60) return res.status(429).json({ ok: false, error: 'slow_down' });
-    if (teleRate.size > 5000) teleRate.clear();   // bounded memory, worst case a briefly looser throttle
+    if (throttled(req, 'tele', 60)) return res.status(429).json({ ok: false, error: 'slow_down' });
     const b = req.body || {};
     const r = telemetry.add({ ev: b.ev, world: b.world, x: b.x, cause: b.cause, t: b.t, deaths: b.deaths, score: b.score });
     res.status(r.ok ? 200 : 400).json(r);
@@ -225,6 +238,7 @@ const hotspotCache = new Map();   // level -> {at, body}
 router.get('/api/nq/hotspots', (req, res) => {
   res.set('Cache-Control', 'no-store');
   try {
+    if (throttled(req, 'hot', 30)) return res.status(429).json({ ok: false, error: 'slow_down' });
     const level = String((req.query && req.query.level) || '').slice(0, 24).trim();
     if (!level) return res.status(400).json({ ok: false, error: 'level required' });
     const now = Date.now();
