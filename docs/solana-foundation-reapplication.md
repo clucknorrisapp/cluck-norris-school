@@ -10,9 +10,9 @@
 
 To the Solana Foundation grants team,
 
-Thank you for taking the time to look at Cluck Norris the first time around, and for pointing us toward other programs and places that might be a fit. I mean that genuinely — it's more than a lot of applicants get, and I followed the links.
+Thank you for the feedback the first time around, and for pointing us toward other programs and places that might be a fit — I mean that genuinely, and I followed the links. You also mentioned we'd be welcome to reapply once things had changed for us. They have — a lot — so here I am.
 
-But the more I sat with it, the clearer one thing became: those places solve a different problem than the one we're here for. Our goals and ambitions — teaching people crypto from their very first wallet, and bringing them safely into this ecosystem for the long run — line up most naturally with the Foundation itself. Not a redirect, not a side program. With you. So I'm coming back, because I'd rather build this with the people whose mission it actually is.
+And the more I've built, the clearer one thing has become: our goals and ambitions — teaching people crypto from their very first wallet, and bringing them safely into this ecosystem for the long run — line up most naturally with the Foundation itself. Not a redirect, not a side program. With you. That's why I'd rather build this with the people whose mission it actually is.
 
 ## Why I built all of this on Solana
 
@@ -27,10 +27,6 @@ Because I see the Foundation's vision as more than a chain. Onboarding the next 
 Everything we build is token-agnostic and free — the Token Autopsy, the Wallet X-Ray, the holder-snapshot tool, the Wallet Safety Checkup, and now the Locker Room, a non-custodial, no-token-cut way for any Solana project to lock its tokens and for any holder to verify it on-chain. None of it is a funnel for our own token. It's infrastructure for the whole ecosystem, because the safer and healthier Solana is for a newcomer, the better it is for everyone building here. It's already live in seven languages and counting, and it's all open source under the MIT license, so any Solana builder can fork the curriculum, the forensic engine, or the no-wallet-connect payment pattern.
 
 I want to keep building this for years — for the person who just made their first wallet and doesn't want to lose everything in week one. I believe that's your mission too. That's why I'd rather do it with the Foundation than anywhere else.
-
-## One honest note — please take a fresh look
-
-When you reviewed us the first time, the GitHub you saw was our *older* repository, and it genuinely didn't reflect everything we'd built. We ship daily, and that pace actually tripped an automated system on the old account, so we moved the project to a new home and kept building without missing a beat (the original flag was later lifted, but by then we'd already settled in). The point is simply this: **what you saw before was an early snapshot.** The current, canonical repo — **github.com/clucknorrisapp/cluck-norris-school** — is live and complete, and there is far more there now than there was then. The Locker Room, the expanded curriculum and free tools, verifiable server-scored diplomas, seven-language support, and the Seeker release have all landed since. If the first review left an impression of a smaller project, I'd genuinely welcome a second look at the full thing — it has grown a lot.
 
 ## Where to look
 
