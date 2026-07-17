@@ -8,7 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const FILE = path.join(process.env.DATA_DIR || path.join(__dirname, '..', 'data'), 'nq-feedback.json');
+const FILE = path.join(process.env.DATA_DIR || '/data', 'nq-feedback.json');
 const MAX = 2000;   // keep the last N comments; a hard cap so the file can't grow unbounded
 
 function load() {

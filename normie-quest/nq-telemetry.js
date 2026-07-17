@@ -10,7 +10,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const FILE = path.join(process.env.DATA_DIR || path.join(__dirname, '..', 'data'), 'nq-telemetry.json');
+const FILE = path.join(process.env.DATA_DIR || '/data', 'nq-telemetry.json');
 const MAX = 8000;            // hard cap so the file can't grow unbounded (events are ~90 bytes)
 const HOTSPOT_BUCKET = 160;  // px — one screen-ish slice; wide enough to merge near-identical deaths
 

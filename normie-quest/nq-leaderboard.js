@@ -22,7 +22,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const FILE = path.join(process.env.DATA_DIR || path.join(__dirname, '..', 'data'), 'nq-leaderboard.json');
+const FILE = path.join(process.env.DATA_DIR || '/data', 'nq-leaderboard.json');
 const MAX = 6000;                         // JSON backend only: hard cap on stored runs (prune oldest)
 const RUN_TTL_MS = 2 * 60 * 60 * 1000;    // a run token is valid for 2h after issue
 const MAX_PTS_PER_SEC = 600;              // plausibility ceiling on TOTAL score / TOTAL run time

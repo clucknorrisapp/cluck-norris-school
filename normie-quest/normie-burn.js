@@ -28,7 +28,7 @@ function splToken() { return (_spl = _spl || require('@solana/spl-token')); }
 
 const INCINERATOR = '1nc1nerator11111111111111111111111111111111';
 const SESSION_TTL_MS = 15 * 60 * 1000;   // a play session's burn window
-const CONSUMED_FILE = path.join(process.env.DATA_DIR || path.join(__dirname, '..', 'data'), 'nq-consumed.json');
+const CONSUMED_FILE = path.join(process.env.DATA_DIR || '/data', 'nq-consumed.json');
 
 // ---- config -------------------------------------------------------------
 function cfg() {
