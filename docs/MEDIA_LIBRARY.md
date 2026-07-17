@@ -33,6 +33,8 @@ CDN URLs are long-lived Higgsfield/CloudFront links — downloadable from any fr
 ## Images / composites
 
 | `6e34e576-8804-479a-a3e0-fc4e109299a1` + Pillow post | Lock celebration 2026-07-10 (+5.00M via Jupiter → 38.94%): two-vault scene, S→5 plaque glyph patched in post, "ROAD TO 40%" progress tracker composited (scratchpad `lockbar.py` — REUSE for every future lock post; owner loves the tracker). Final: CDN `f1a04fe3….png`. Posted X `2075577233230463231` + TG 85876. | ✅ Owner asked for "special" — tracker is now the lock-post signature. |
+| `2d06b14a-dc34-4ef7-aaab-89bbf6788211` | **Cluck Norris BOT avatar 2026-07-17** (robot remix of the main logo, ref `b1f7713b`): plasma-blade mohawk, black wraparound visor w/ orange scanline, graphite-steel armor with glowing orange seams, capsule bandolier, hex-plate feathers, fire ring + flaming "CLUCK NORRIS" wordmark (rendered PERFECTLY by nano_banana — rare). CDN `hf_20260717_141332_2d06b14a….png`. Sent to owner's private bot chat (msg 608). | ✅ Owner: "perfect." THE bot-brand avatar. |
+| `cc4707c4-4cc1-409d-b36e-68ad52f836b2` | Same robot Cluck, TEXTLESS emblem variant (no wordmark, avatar-crop-safe, faint circuit ring behind flames). CDN `hf_20260717_141415_cc4707c4….png`. | ✅ Kept as the no-text companion (profile pics / overlays that get their own type). |
 
 | Asset | Where | What |
 |---|---|---|
