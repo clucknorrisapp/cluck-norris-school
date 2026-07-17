@@ -8,7 +8,6 @@
   "🔐 Lock Your Tokens": "🔐 अपने टोकन लॉक करें",
   "💰 Claim": "💰 क्लेम करें",
   "🔒 Recently locked": "🔒 हाल ही में लॉक किए गए",
-  "· across Solana": "· पूरे Solana में",
   "What is a token lock?": "टोकन लॉक क्या है?",
   "A lock takes tokens out of circulation and hands control to an on-chain program instead of a wallet. The tokens can only be released on a fixed, public schedule — nobody, not even the team, can pull them early. It’s the difference between a promise and a padlock: anyone can verify it on-chain.": "लॉक टोकन को सर्कुलेशन से बाहर ले जाता है और नियंत्रण वॉलेट के बजाय एक ऑन-चेन प्रोग्राम को सौंप देता है। टोकन केवल एक निश्चित, सार्वजनिक शेड्यूल पर ही रिलीज़ हो सकते हैं — कोई भी, टीम भी नहीं, उन्हें पहले नहीं निकाल सकता। यह एक वादे और एक ताले के बीच का अंतर है: कोई भी इसे ऑन-चेन सत्यापित कर सकता है।",
   "Deposit": "जमा",
@@ -64,5 +63,6 @@
   "claimable": "क्लेम-योग्य",
   "Nothing yet": "अभी कुछ नहीं",
   "Make this lock cancelable by me": "इस लॉक को मेरे द्वारा रद्द करने योग्य बनाएं",
-  "Allow the recipient to be changed later": "बाद में प्राप्तकर्ता बदलने की अनुमति दें"
+  "Allow the recipient to be changed later": "बाद में प्राप्तकर्ता बदलने की अनुमति दें",
+  "· made right here": "· यहीं बनाए गए"
 }

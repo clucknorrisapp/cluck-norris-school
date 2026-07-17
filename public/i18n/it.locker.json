@@ -8,7 +8,6 @@
   "🔐 Lock Your Tokens": "🔐 Blocca i tuoi token",
   "💰 Claim": "💰 Riscuoti",
   "🔒 Recently locked": "🔒 Bloccati di recente",
-  "· across Solana": "· su tutta Solana",
   "What is a token lock?": "Cos’è un blocco di token?",
   "A lock takes tokens out of circulation and hands control to an on-chain program instead of a wallet. The tokens can only be released on a fixed, public schedule — nobody, not even the team, can pull them early. It’s the difference between a promise and a padlock: anyone can verify it on-chain.": "Un blocco toglie i token dalla circolazione e affida il controllo a un programma on-chain anziché a un wallet. I token possono essere rilasciati solo secondo un calendario fisso e pubblico: nessuno, nemmeno il team, può ritirarli prima. È la differenza tra una promessa e un lucchetto: chiunque può verificarlo on-chain.",
   "Deposit": "Deposito",
@@ -64,5 +63,6 @@
   "claimable": "riscuotibile",
   "Nothing yet": "Ancora nulla",
   "Make this lock cancelable by me": "Rendi questo blocco annullabile da me",
-  "Allow the recipient to be changed later": "Consenti di cambiare il destinatario in seguito"
+  "Allow the recipient to be changed later": "Consenti di cambiare il destinatario in seguito",
+  "· made right here": "· creati proprio qui"
 }

@@ -8,7 +8,6 @@
   "🔐 Lock Your Tokens": "🔐 锁定你的代币",
   "💰 Claim": "💰 领取",
   "🔒 Recently locked": "🔒 最近锁仓",
-  "· across Solana": "· 全 Solana",
   "What is a token lock?": "什么是代币锁仓？",
   "A lock takes tokens out of circulation and hands control to an on-chain program instead of a wallet. The tokens can only be released on a fixed, public schedule — nobody, not even the team, can pull them early. It’s the difference between a promise and a padlock: anyone can verify it on-chain.": "锁仓将代币移出流通，并把控制权交给链上程序而非钱包。代币只能按照固定、公开的时间表释放——任何人，甚至团队，都无法提前取出。这就是承诺与挂锁的区别：任何人都能在链上验证。",
   "Deposit": "存入",
@@ -64,5 +63,6 @@
   "claimable": "可领取",
   "Nothing yet": "暂无",
   "Make this lock cancelable by me": "允许我取消此锁仓",
-  "Allow the recipient to be changed later": "允许以后更改接收方"
+  "Allow the recipient to be changed later": "允许以后更改接收方",
+  "· made right here": "· 在本页创建"
 }

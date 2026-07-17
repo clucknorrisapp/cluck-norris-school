@@ -8,7 +8,6 @@
   "🔐 Lock Your Tokens": "🔐 Bloquea tus tokens",
   "💰 Claim": "💰 Reclamar",
   "🔒 Recently locked": "🔒 Bloqueado recientemente",
-  "· across Solana": "· en toda Solana",
   "What is a token lock?": "¿Qué es un bloqueo de tokens?",
   "A lock takes tokens out of circulation and hands control to an on-chain program instead of a wallet. The tokens can only be released on a fixed, public schedule — nobody, not even the team, can pull them early. It’s the difference between a promise and a padlock: anyone can verify it on-chain.": "Un bloqueo saca los tokens de circulación y entrega el control a un programa on-chain en lugar de a una billetera. Los tokens solo pueden liberarse según un calendario fijo y público: nadie, ni siquiera el equipo, puede sacarlos antes. Es la diferencia entre una promesa y un candado: cualquiera puede verificarlo on-chain.",
   "Deposit": "Depósito",
@@ -64,5 +63,6 @@
   "claimable": "reclamable",
   "Nothing yet": "Nada aún",
   "Make this lock cancelable by me": "Hacer este bloqueo cancelable por mí",
-  "Allow the recipient to be changed later": "Permitir cambiar el destinatario más adelante"
+  "Allow the recipient to be changed later": "Permitir cambiar el destinatario más adelante",
+  "· made right here": "· hechos aquí mismo"
 }

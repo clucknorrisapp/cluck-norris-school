@@ -6664,13 +6664,16 @@ app.get("/api/lock/recent", async (req, res) => {
       return res.status(200).json({ ok: true, cached: true, locks: _recentLocksCache.data });
     }
     const jupLock = require("./lib/jup-lock");
-    const raw = await jupLock.recentLocks(12, 70);
-    // Merge our-UI events (recorded instantly at creation, tagged) with the global scan,
-    // deduped by signature, newest-first. Our events already carry token metadata.
+    // OUR locker only (owner's call 2026-07-17): the feed shows locks made through THIS UI,
+    // not everything on Solana. Two sources, both ours: the kv events recorded at creation
+    // (instant), and the program scan filtered to txs carrying our on-chain attribution memo
+    // (catches UI locks that never got recorded — a closed tab, a failed record call).
+    let scanned = [];
+    try { scanned = (await jupLock.recentLocks(12, 70)).filter((l) => l.via === "clucknorris"); } catch (_) {}
     const events = kv.get("recentLockEvents", []);
     const bySig = new Map();
     for (const e of events) bySig.set(e.sig, { mint: e.mint, amount: e.amount, creator: e.creator, sig: e.sig, ts: e.ts || e.recordedAt || 0, name: e.name || null, symbol: e.symbol || null, icon: e.icon || null, via: e.via || null });
-    for (const l of raw) if (!bySig.has(l.sig)) bySig.set(l.sig, l);
+    for (const l of scanned) if (!bySig.has(l.sig)) bySig.set(l.sig, l);
     const merged = [...bySig.values()].sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 12);
     // Enrich any (scan) entries that don't already have token identity.
     const metaCache = new Map();
@@ -6715,8 +6718,9 @@ app.post("/api/lock/record", async (req, res) => {
       if (t) { name = t.name || null; symbol = t.symbol || null; icon = (typeof t.icon === "string" && /^https:\/\//.test(t.icon)) ? t.icon : null; }
     } catch (_) {}
     const ev = { mint: v.mint, amount: v.amount, creator: v.creator, sig: v.sig, ts: v.ts || Date.now(), name, symbol, icon, via: "clucknorris", recordedAt: Date.now() };
-    const cutoff = Date.now() - 24 * 3600 * 1000;
-    const next = [ev, ...events.filter((e) => e.sig !== sig && (e.ts || e.recordedAt || 0) > cutoff)].slice(0, 40);
+    // No time-based prune: since the feed is OUR-locker-only, keep the latest 40 UI locks
+    // regardless of age so a quiet day never empties the strip.
+    const next = [ev, ...events.filter((e) => e.sig !== sig)].slice(0, 40);
     kv.set("recentLockEvents", next);
     _recentLocksCache = { t: 0, data: null };   // bust cache so it appears on the next fetch
     return res.status(200).json({ ok: true });

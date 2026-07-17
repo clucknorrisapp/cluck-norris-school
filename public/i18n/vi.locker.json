@@ -8,7 +8,6 @@
   "🔐 Lock Your Tokens": "🔐 Khóa token của bạn",
   "💰 Claim": "💰 Nhận",
   "🔒 Recently locked": "🔒 Vừa khóa gần đây",
-  "· across Solana": "· khắp Solana",
   "What is a token lock?": "Khóa token là gì?",
   "A lock takes tokens out of circulation and hands control to an on-chain program instead of a wallet. The tokens can only be released on a fixed, public schedule — nobody, not even the team, can pull them early. It’s the difference between a promise and a padlock: anyone can verify it on-chain.": "Khóa đưa token ra khỏi lưu thông và trao quyền kiểm soát cho một chương trình on-chain thay vì một ví. Token chỉ có thể được giải phóng theo một lịch trình cố định, công khai — không ai, kể cả đội ngũ, có thể rút sớm. Đó là khác biệt giữa một lời hứa và một ổ khóa: bất kỳ ai cũng có thể kiểm chứng on-chain.",
   "Deposit": "Nạp vào",
@@ -64,5 +63,6 @@
   "claimable": "có thể nhận",
   "Nothing yet": "Chưa có gì",
   "Make this lock cancelable by me": "Cho phép tôi hủy khóa này",
-  "Allow the recipient to be changed later": "Cho phép thay đổi người nhận sau này"
+  "Allow the recipient to be changed later": "Cho phép thay đổi người nhận sau này",
+  "· made right here": "· tạo ngay tại đây"
 }

@@ -177,7 +177,7 @@
   </div>
 
   <div class="recent" id="recentWrap" style="display:none">
-    <div class="recent-h">🔒 Recently locked <span class="recent-sub">· across Solana</span></div>
+    <div class="recent-h">🔒 Recently locked <span class="recent-sub">· made right here</span></div>
     <div class="recent-row" id="recentRow"></div>
   </div>
 
@@ -354,8 +354,7 @@
         var sym=l.symbol?esc(l.symbol):(l.name?esc(l.name):esc(shortAddr(l.mint)));
         var initial=esc(String(l.symbol||l.name||'?').slice(0,1).toUpperCase());
         var av='<div class="ravatar">'+initial+(l.icon?'<img src="'+esc(l.icon)+'" alt="" onerror="this.remove()"/>':'')+'</div>';
-        var via=(l.via==='clucknorris')?'<span class="rvia" title="Locked here on Cluck Norris">🐔</span>':'';
-        return '<div class="rlock" data-mint="'+esc(l.mint)+'">'+av+'<div class="ri"><div class="rsym">'+sym+via+'</div><div class="ramt">'+fmt(l.amount)+' locked</div><div class="rtime">'+relTime(l.ts)+'</div></div></div>';
+        return '<div class="rlock" data-mint="'+esc(l.mint)+'">'+av+'<div class="ri"><div class="rsym">'+sym+'</div><div class="ramt">'+fmt(l.amount)+' locked</div><div class="rtime">'+relTime(l.ts)+'</div></div></div>';
       }).join('');
       row.querySelectorAll('.rlock').forEach(function(c){ c.addEventListener('click',function(){
         var m=c.getAttribute('data-mint');
