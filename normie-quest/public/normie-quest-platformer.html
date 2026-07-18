@@ -982,10 +982,14 @@ var LevelSelect=new Phaser.Class({ Extends:Phaser.Scene,
       worlds[w].forEach(function(o,c){
         var x=52+c*138, isBoss=!!o.l.boss;
         var sub=(o.l.sub||''); if(sub.length>17) sub=sub.slice(0,16)+'…';
-        var box=self.add.rectangle(x,cy,130,cardH,isBoss?0x351033:0x141a2e,1).setStrokeStyle(2,isBoss?0xff3860:0x2a4a6a).setOrigin(0,.5).setInteractive({useHandCursor:true});
-        self.add.text(x+8,cy-cardH*0.24,o.l.name,{fontFamily:UIFONT,fontStyle:'bold',fontSize:'9px',color:isBoss?'#ff9ec0':'#ffffff',resolution:UIRES}).setOrigin(0,.5);
-        self.add.text(x+8,cy+cardH*0.27,(isBoss?'★ ':'')+sub,{fontFamily:UIFONT,fontStyle:'bold',fontSize:'11px',color:isBoss?'#ffd6e6':'#eef2ff',resolution:UIRES}).setOrigin(0,.5);
-        var go=function(){ self.scene.start('Game',{level:o.i,score:0,lives:3}); };
+        var allowed=nqWorldAllowed(o.l);
+        var box=self.add.rectangle(x,cy,130,cardH,isBoss?0x351033:0x141a2e,1).setStrokeStyle(2,allowed?(isBoss?0xff3860:0x2a4a6a):0x3a3a46).setOrigin(0,.5).setInteractive({useHandCursor:true});
+        var t1=self.add.text(x+8,cy-cardH*0.24,(allowed?'':'🔒 ')+o.l.name,{fontFamily:UIFONT,fontStyle:'bold',fontSize:'9px',color:allowed?(isBoss?'#ff9ec0':'#ffffff'):'#8a8a98',resolution:UIRES}).setOrigin(0,.5);
+        var t2=self.add.text(x+8,cy+cardH*0.27,(isBoss?'★ ':'')+sub,{fontFamily:UIFONT,fontStyle:'bold',fontSize:'11px',color:allowed?(isBoss?'#ffd6e6':'#eef2ff'):'#6e6e7c',resolution:UIRES}).setOrigin(0,.5);
+        if(!allowed){ box.setAlpha(.55); t1.setAlpha(.75); t2.setAlpha(.6); }
+        var go=allowed
+          ? function(){ self.scene.start('Game',{level:o.i,score:0,lives:3}); }
+          : function(){ try{ if(window.__NQ_OPENPREMIUM) window.__NQ_OPENPREMIUM(); }catch(e){} };   // locked → open the premium panel (verify wallet / buy NORMIE)
         box.on('pointerdown',go);
         box.on('pointerover',function(){ box.setFillStyle(isBoss?0x4a1848:0x1e2842,1); });
         box.on('pointerout',function(){ box.setFillStyle(isBoss?0x351033:0x141a2e,1); });
@@ -1056,6 +1060,20 @@ var Gate=new Phaser.Class({ Extends:Phaser.Scene,
    Tiny events (death: world/x/cause, clear: world/time/deaths) so the digest can point at the
    exact hotspot ("W3 pit at x≈2400") instead of relying on remembered feedback. sendBeacon
    survives tab closes; errors are swallowed — telemetry must never affect play. ---------- */
+// ---- SETUP-LANE world gate: is this level's world within the verified wallet's access? ----
+// Stable tester build: always true. Setup lane: tier 0 (or no wallet) = worlds 1-2, tier 1 = 1-7,
+// tier 2 / 2M CLKN = all. Hidden bonus levels (non "N-M" names) are never gated. Access is read
+// LIVE from the premium block's walletState via window.__NQ_ACCESS so a post-buy refresh applies
+// without a reload.
+function nqWorldAllowed(def){
+  if(!window.__NQ_SETUP) return true;
+  var m=/^(\d+)-/.exec((def&&def.name)||''); if(!m) return true;
+  var w=+m[1], a=null;
+  try{ a=(typeof window.__NQ_ACCESS==='function')?window.__NQ_ACCESS():null; }catch(e){}
+  if(a==='all') return true;
+  if(Array.isArray(a)&&a.length===2) return w>=a[0]&&w<=a[1];
+  return w<=2;
+}
 function nqTele(ev,d){
   try{
     var b=JSON.stringify(Object.assign({ev:ev},d||{}));
@@ -1067,7 +1085,7 @@ function nqTele(ev,d){
 var Game=new Phaser.Class({ Extends:Phaser.Scene,
   initialize:function(){ Phaser.Scene.call(this,{key:'Game'}); },
   // levelStartScore = coins banked BEFORE this level; honeypots never drain below it (they only take THIS level's coins).
-  init:function(d){ d=d||{}; this.levelIdx=Phaser.Math.Clamp(d.level||0,0,LEVELS.length-1); this.score=d.score||0; this.lives=(d.lives!=null?d.lives:3); this.levelStartScore=this.score; this._spawnX=(d.spawnX!=null?d.spawnX:null); },
+  init:function(d){ d=d||{}; this.levelIdx=Phaser.Math.Clamp(d.level||0,0,LEVELS.length-1); this.score=d.score||0; this.lives=(d.lives!=null?d.lives:3); this.levelStartScore=this.score; this._spawnX=(d.spawnX!=null?d.spawnX:null); this._labWarp=!!d.lab; },
 
   create:function(){
     this.physics.resume();   // CRITICAL: the Arcade world stays paused across scene restarts; every level/replay must un-pause it
@@ -1083,13 +1101,20 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
          window.__NQ_RESUME=function(){ if(_sc.paused) _sc.resumeGame(); }; }catch(e){}
     var self=this, i;
     var def=this.def=LEVELS[this.levelIdx];
+    // SETUP-LANE tier gate, catch-all entry point (checkpoint continues, interludes, bonus-room
+    // returns — every path lands in create). LAB warps (this._labWarp) bypass — owner's bench.
+    if(!this._labWarp && !nqWorldAllowed(def)){
+      this.scene.start('LevelSelect');
+      try{ if(window.__NQ_OPENPREMIUM) window.__NQ_OPENPREMIUM(); }catch(e){}
+      return;
+    }
     // SETUP LANE only: begin (or continue) a leaderboard run. One run token spans the whole run;
     // the score is submitted at run-end from the Over/Win scenes. No-op on the stable tester build.
     if(window.__NQ_SETUP && window.NQLB){ try{ window.NQLB.enterLevel(def.name, this.score); }catch(e){} }
     // LAB designer toolkit (owner's private bench only — dormant on the stable tester build):
     // warp hook, live gravity tune, and the tester death-heatmap overlay.
     if(window.__NQ_SETUP){ try{
-      window.__NQ_WARP=function(idx,x){ self.scene.start('Game',{level:idx,score:self.score,lives:self.lives,spawnX:(x>0?x:undefined)}); };
+      window.__NQ_WARP=function(idx,x){ self.scene.start('Game',{level:idx,score:self.score,lives:self.lives,spawnX:(x>0?x:undefined),lab:1}); };   // lab:1 = bypass the tier gate (owner bench)
       window.__NQ_SETGRAV=function(g){ try{ self.physics.world.gravity.y=g; }catch(e){} };
       var tune=window.__NQ_TUNE||{};
       this.physics.world.gravity.y=(Number(tune.grav)>0?Number(tune.grav):900);
@@ -2163,6 +2188,10 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   winData:function(){ return {score:this.score, boss:this.def.final?'51attack':(this.def.bossType||(this.def.boss?'rugking':'wormhole')), casino:this.registry.get('nqCasino')||0}; },
   advanceLevel:function(){ var next=this.levelIdx+1;
     if(next>=LEVELS.length){ this.scene.start('Win',this.winData()); return; }
+    // SETUP-LANE tier gate: cleared the last world your holdings unlock → level select + the
+    // premium panel (verify wallet / hold more NORMIE) instead of the next world.
+    if(!nqWorldAllowed(LEVELS[next])){ this.scene.start('LevelSelect');
+      try{ if(window.__NQ_OPENPREMIUM) window.__NQ_OPENPREMIUM(); }catch(e){} return; }
     if(typeof BRIEFINGS!=='undefined' && BRIEFINGS[next]) this.scene.start('Briefing',{next:next,score:this.score});   // world-boundary briefing (e.g. 2-3 -> World 3)
     else this.scene.start('Game',{level:next,score:this.score,lives:3}); },
 
@@ -3814,6 +3843,9 @@ if (window.__NQ_SETUP) { (function () {
   // ---- leaderboard client (window.NQLB — called by Game.create) -----------
   var handle = ''; try { handle = localStorage.getItem('nqHandle') || ''; } catch (e) {}
   var walletState = { pubkey: null, token: null, tier: null, worlds: null, balances: null };
+  // Live world-access reader for the game's tier gate (nqWorldAllowed): 'all' | [lo,hi] | null.
+  // null (no wallet verified yet, or refresh in flight) = the game treats it as tier 0 (worlds 1-2).
+  try { window.__NQ_ACCESS = function () { return walletState.worlds; }; } catch (e) {}
   var run = null;   // { token } — one per run, spans levels; the score posts at run-end
   function worldOf(name) { var m = String(name || '').match(/^(\d+)/); return m ? parseInt(m[1], 10) : 0; }
 
@@ -3946,6 +3978,12 @@ if (window.__NQ_SETUP) { (function () {
     handleIn.addEventListener('change', function () { window.NQLB.setHandle(handleIn.value); handleIn.value = window.NQLB.getHandle(); });
 
     btn.addEventListener('click', function () { ov.classList.add('on'); loadBoards(); });
+    // The game's tier gate opens the panel straight onto the WALLET tab when a locked world is
+    // hit — the verify/buy path is the answer to "why is this locked".
+    try { window.__NQ_OPENPREMIUM = function () {
+      ov.classList.add('on');
+      var wt = ov.querySelector('.nqp-tab[data-tab="wal"]'); if (wt) wt.click();
+    }; } catch (e) {}
     ov.addEventListener('click', function (e) { if (e.target === ov || e.target.hasAttribute('data-close')) ov.classList.remove('on'); });
     ov.querySelectorAll('.nqp-tab').forEach(function (t) {
       t.addEventListener('click', function () {
@@ -4036,7 +4074,9 @@ if (window.__NQ_SETUP) { (function () {
               onSuccess: function () {
                 // bought NORMIE → refresh the tier from LIVE balance (bypass the cache) so unlocked worlds update now
                 msg.textContent = 'NORMIE received! Updating your access…';
-                setTimeout(function () { restoreWallet(function (ok) { if (ok) { var wp = ov.querySelector('[data-pane="wal"]'); if (wp && wp.classList.contains('on')) renderWallet(); msg.textContent = 'NORMIE received — access updated ✓'; } }, true); }, 3500);
+                setTimeout(function () { restoreWallet(function (ok) { if (ok) { var wp = ov.querySelector('[data-pane="wal"]'); if (wp && wp.classList.contains('on')) renderWallet(); msg.textContent = 'NORMIE received — access updated ✓';
+                  try { if (window.__NQ_LEVEL === 'level-select' && window.__NQ_TOLEVELS) window.__NQ_TOLEVELS(); } catch (e) {}   // redraw the lock icons behind the overlay with the new tier
+                } }, true); }, 3500);
               },
             });
           } catch (e) { fallbackLink(); }
