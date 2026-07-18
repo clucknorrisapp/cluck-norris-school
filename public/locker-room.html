@@ -353,7 +353,10 @@
       row.innerHTML=d.locks.map(function(l){
         var sym=l.symbol?esc(l.symbol):(l.name?esc(l.name):esc(shortAddr(l.mint)));
         var initial=esc(String(l.symbol||l.name||'?').slice(0,1).toUpperCase());
-        var av='<div class="ravatar">'+initial+(l.icon?'<img src="'+esc(l.icon)+'" alt="" onerror="this.remove()"/>':'')+'</div>';
+        // our /api/token-icon proxy first (cached server-side — ipfs.io gateways rate-limit real
+        // browsers), the raw metadata URL as second chance, the letter underneath as final fallback
+        var av='<div class="ravatar">'+initial+'<img src="/api/token-icon?mint='+esc(l.mint)+'" alt="" '
+          +(l.icon?'data-alt="'+esc(l.icon)+'" onerror="if(this.dataset.t){this.remove()}else{this.dataset.t=1;this.src=this.dataset.alt}"':'onerror="this.remove()"')+'/></div>';
         return '<div class="rlock" data-mint="'+esc(l.mint)+'">'+av+'<div class="ri"><div class="rsym">'+sym+'</div><div class="ramt">'+fmt(l.amount)+' locked</div><div class="rtime">'+relTime(l.ts)+'</div></div></div>';
       }).join('');
       row.querySelectorAll('.rlock').forEach(function(c){ c.addEventListener('click',function(){
@@ -389,7 +392,9 @@
       if(!d||!d.success){ body.innerHTML='<div class="card"><p class="msg err">Could not read locks'+(d&&d.error?': '+esc(d.error):'')+'.</p></div>'; return; }
       var pct=d.pctOfSupply!=null?(d.pctOfSupply*100):null;
       var t=d.token||{};
-      var idHtml='<div class="fhead-id">'+(t.icon?'<img src="'+esc(t.icon)+'" alt="" onerror="this.remove()"/>':'')+'<div class="ti"><div class="tname">'+esc(t.name||t.symbol||'Token')+'</div><div class="tsym">'+((t.symbol&&t.name)?esc(t.symbol)+' · ':'')+esc(shortAddr(mint))+'</div></div></div>';
+      var idHtml='<div class="fhead-id"><img src="/api/token-icon?mint='+esc(mint)+'" alt="" '
+        +(t.icon?'data-alt="'+esc(t.icon)+'" onerror="if(this.dataset.t){this.remove()}else{this.dataset.t=1;this.src=this.dataset.alt}"':'onerror="this.remove()"')
+        +'/><div class="ti"><div class="tname">'+esc(t.name||t.symbol||'Token')+'</div><div class="tsym">'+((t.symbol&&t.name)?esc(t.symbol)+' · ':'')+esc(shortAddr(mint))+'</div></div></div>';
       var fhead='<div class="fhead">'+idHtml+'<div class="fhead-pct"><div class="pctbig">'+(pct!=null?pct.toFixed(1)+'%':'—')+'</div><div class="pctcap">locked</div></div></div>';
       var bd=(d.breakdown||[]); var top=(d.topLocks||[]);
       var bars=bd.map(function(b){ var w=d.totalLocked>0?(b.tokens/d.totalLocked*100):0; return '<div><div class="brow"><span>'+pill(b.label)+' <b>'+fmt(b.tokens)+'</b></span><span class="muted">'+w.toFixed(1)+'%</span></div><div class="bar"><i style="width:'+w.toFixed(1)+'%;background:'+barColor(b.label)+'"></i></div></div>'; }).join('');

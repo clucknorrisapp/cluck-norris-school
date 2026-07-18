@@ -6652,6 +6652,50 @@ app.get("/api/lock/claimable", async (req, res) => {
   }
 });
 
+// Token-logo proxy: fetch a token's icon ONCE (URL from Jupiter token metadata), cache the
+// bytes on the /data volume, serve from us forever. Exists because the raw metadata URLs are
+// mostly ipfs.io gateway links that rate-limit/time out in real browsers — the Locker Room
+// strip was rendering letter fallbacks despite having icon URLs. 404 = client keeps its
+// letter avatar. SSRF-guarded: https only, no IP-literal/localhost hosts, image/* only, 512KB cap.
+const TOKEN_ICON_DIR = path.join(process.env.DATA_DIR || "/data", "token-icons");
+const _tokenIconMiss = new Map();   // mint -> ts of last failed fetch (10-min negative cache)
+app.get("/api/token-icon", async (req, res) => {
+  try {
+    const mint = String((req.query && req.query.mint) || "").trim();
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(400).end();
+    fs.mkdirSync(TOKEN_ICON_DIR, { recursive: true });
+    const metaPath = path.join(TOKEN_ICON_DIR, mint + ".json");
+    const binPath = path.join(TOKEN_ICON_DIR, mint + ".img");
+    if (fs.existsSync(metaPath) && fs.existsSync(binPath)) {
+      const meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
+      res.setHeader("Content-Type", meta.type || "image/png");
+      res.setHeader("Cache-Control", "public, max-age=604800, immutable");
+      return res.status(200).send(fs.readFileSync(binPath));
+    }
+    const miss = _tokenIconMiss.get(mint);
+    if (miss && Date.now() - miss < 600000) return res.status(404).end();
+    if (_tokenIconMiss.size > 2000) _tokenIconMiss.clear();
+    let iconUrl = null;
+    try {
+      const tm = await jupTokensSearch(mint);
+      const t = Array.isArray(tm) ? (tm.find((x) => x && x.id === mint) || tm[0]) : null;
+      if (t && typeof t.icon === "string" && /^https:\/\//.test(t.icon)) iconUrl = t.icon;
+    } catch (_) {}
+    let hostOk = false;
+    try { const h = new URL(iconUrl || "").hostname; hostOk = !!h && !/^(\d+\.\d+\.\d+\.\d+|\[|localhost$)/i.test(h); } catch (_) {}
+    if (!iconUrl || !hostOk) { _tokenIconMiss.set(mint, Date.now()); return res.status(404).end(); }
+    const r = await fetch(iconUrl, { signal: AbortSignal.timeout(9000), redirect: "follow" });
+    const type = String(r.headers.get("content-type") || "");
+    if (!r.ok || !/^image\//.test(type)) { _tokenIconMiss.set(mint, Date.now()); return res.status(404).end(); }
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (!buf.length || buf.length > 524288) { _tokenIconMiss.set(mint, Date.now()); return res.status(404).end(); }
+    try { fs.writeFileSync(binPath, buf); fs.writeFileSync(metaPath, JSON.stringify({ type, src: iconUrl, at: Date.now() })); } catch (_) {}
+    res.setHeader("Content-Type", type);
+    res.setHeader("Cache-Control", "public, max-age=604800, immutable");
+    return res.status(200).send(buf);
+  } catch (err) { return res.status(404).end(); }
+});
+
 // Recent lock creations across ALL Solana tokens — for the Locker Room "recently locked" feed.
 // Cached 120s (the scan is RPC-heavy). Enriches each with token name/symbol/icon.
 let _recentLocksCache = { t: 0, data: null };
