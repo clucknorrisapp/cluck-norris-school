@@ -3457,14 +3457,25 @@ if(typeof document!=='undefined'){ (function(){
     var gb=vh-r.bottom;
     if(gutter<40 && gb>=88){
       window.__NQ_PAD_ACTIVE=true;
-      var bh=Math.max(56,Math.min(96,Math.floor(gb*0.55))), bw=Math.round(bh*1.25), bgap=10;
-      var byy=Math.max(8,Math.round((gb-bh)/2));   // vertically centered in the bottom band
+      var bgap=10;
+      // try one row: ◄ ► left-aligned + THROW/DUCK/JUMP right-aligned. On narrow webviews
+      // (Phantom reports ~390 CSS px) the two clusters overlap — then stack TWO rows in the
+      // (tall) bottom band: actions on the upper row, movement on the lower.
+      var bh=Math.max(56,Math.min(96,Math.floor(gb*0.55)));
+      var moveW=function(h){ return Math.round(h*1.25); };
+      var actW=function(h){ return Math.round(h*1.35)+bgap+Math.round(h*0.8*1.2)*2+bgap; };   // JUMP + DUCK + THROW
+      var oneRow=(10+moveW(bh)*2+bgap+24+actW(bh)+10)<=vw;
+      if(!oneRow) bh=Math.max(50,Math.min(84,Math.floor((gb-30)/2)));
+      var bw=moveW(bh);
+      var byy=oneRow?Math.max(8,Math.round((gb-bh)/2)):Math.max(6,Math.round((gb-(bh*2+14))/2));
+      var actY=oneRow?byy:(byy+bh+14);   // two-row mode: actions on the UPPER row (right thumb rests higher)
       bL.style.width=bw+'px'; bL.style.height=bh+'px'; bL.style.borderRadius='20px'; bL.style.left='10px'; bL.style.bottom=byy+'px'; bL.style.fontSize=Math.round(bh*0.42)+'px';
       bR.style.width=bw+'px'; bR.style.height=bh+'px'; bR.style.borderRadius='20px'; bR.style.left=(10+bw+bgap)+'px'; bR.style.bottom=byy+'px'; bR.style.fontSize=Math.round(bh*0.42)+'px';
       var jp2=bh, dk2=Math.round(bh*0.8), fk2=Math.round(bh*0.8);
-      bJ.style.width=Math.round(jp2*1.35)+'px'; bJ.style.height=jp2+'px'; bJ.style.left=(vw-10-Math.round(jp2*1.35))+'px'; bJ.style.bottom=byy+'px'; bJ.style.fontSize=Math.round(Math.max(8,jp2*0.16))+'px';
-      bD.style.width=Math.round(dk2*1.2)+'px'; bD.style.height=dk2+'px'; bD.style.left=(vw-10-Math.round(jp2*1.35)-bgap-Math.round(dk2*1.2))+'px'; bD.style.bottom=byy+'px'; bD.style.fontSize=Math.round(Math.max(7,dk2*0.18))+'px';
-      bF.style.width=Math.round(fk2*1.2)+'px'; bF.style.height=fk2+'px'; bF.style.left=(vw-10-Math.round(jp2*1.35)-bgap-Math.round(dk2*1.2)-bgap-Math.round(fk2*1.2))+'px'; bF.style.bottom=(byy+0)+'px'; bF.style.fontSize=Math.round(Math.max(7,fk2*0.18))+'px';
+      var jw=Math.round(jp2*1.35), dw=Math.round(dk2*1.2), fw=Math.round(fk2*1.2);
+      bJ.style.width=jw+'px'; bJ.style.height=jp2+'px'; bJ.style.left=(vw-10-jw)+'px'; bJ.style.bottom=actY+'px'; bJ.style.fontSize=Math.round(Math.max(8,jp2*0.16))+'px';
+      bD.style.width=dw+'px'; bD.style.height=dk2+'px'; bD.style.left=(vw-10-jw-bgap-dw)+'px'; bD.style.bottom=actY+'px'; bD.style.fontSize=Math.round(Math.max(7,dk2*0.18))+'px';
+      bF.style.width=fw+'px'; bF.style.height=fk2+'px'; bF.style.left=Math.max(4,vw-10-jw-bgap-dw-bgap-fw)+'px'; bF.style.bottom=actY+'px'; bF.style.fontSize=Math.round(Math.max(7,fk2*0.18))+'px';
       return;
     }
     // Use the side buttons whenever there's a real gutter. Fall back to the on-screen tap zones
