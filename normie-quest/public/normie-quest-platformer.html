@@ -2737,6 +2737,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         if(_pe.pauseEdge){ _pe.pauseEdge=false; _pe.anyBtnEdge=false;
           if(this.paused){ this.resumeGame(); } else if(!this.over){ this.pauseGame(false); } }
         else if(this.paused && _pe.anyBtnEdge){ _pe.anyBtnEdge=false; this.resumeGame(); }
+        else if(this.paused && window.__NQ_PAD_ACTIVE && (_pe.left||_pe.right||_pe.jump||_pe.down||_pe.throw)){ this.resumeGame(); }   // DOM touch-pad buttons preventDefault, so their taps never reach the canvas "TAP TO RESUME" — treat any held pad button as the resume
         else if(!this.paused){ _pe.anyBtnEdge=false; } } }
     if(this.over||this.paused) return;
     var self=this, p=this.player, b=p.body, now=this.time.now;
@@ -2759,8 +2760,12 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     } else {
       // raw pointer screen-zones: left third=LEFT, next third=RIGHT, right half=JUMP, bottom-center=DUCK
       var gw=this.scale.width, gh=this.scale.height, pts=this.input.manager.pointers;
+      // iPadOS desktop-mode browsers (Phantom's webview, Safari with desktop UA) deliver touches
+      // as MOUSE-classified pointers — on a device that HAS touch points, accept those too.
+      // A real desktop mouse (maxTouchPoints 0) still never moves the player.
+      var touchDev=(typeof navigator!=='undefined')&&(navigator.maxTouchPoints>0);
       for(var pi=0;pi<pts.length;pi++){ var ptr=pts[pi];
-        if(!ptr||!ptr.isDown||!ptr.wasTouch) continue;            // wasTouch: desktop mouse never moves the player
+        if(!ptr||!ptr.isDown||(!ptr.wasTouch&&!touchDev)) continue;
         var fx=ptr.x/gw, fy=ptr.y/gh;
         if(fy>0.80 && fx>=0.40 && fx<0.60){ this.touch.down=true; continue; }      // bottom-center DUCK strip
         if(fx>=0.46){ this.touch.jump=true; }
@@ -3446,8 +3451,24 @@ if(typeof document!=='undefined'){ (function(){
     var s=document.getElementById('screen'); if(!s) return;
     var r=s.getBoundingClientRect(), gl=r.left, gr=window.innerWidth-r.right, gutter=Math.min(gl,gr);
     var vw=window.innerWidth, vh=window.innerHeight;
+    // PORTRAIT (letterbox above/below, no side gutter — e.g. Phantom-on-iPad with the
+    // orientation override): lay the buttons in the BOTTOM band instead of bailing to the
+    // in-canvas tap zones (which don't even receive touches in iPadOS desktop-mode browsers).
+    var gb=vh-r.bottom;
+    if(gutter<40 && gb>=88){
+      window.__NQ_PAD_ACTIVE=true;
+      var bh=Math.max(56,Math.min(96,Math.floor(gb*0.55))), bw=Math.round(bh*1.25), bgap=10;
+      var byy=Math.max(8,Math.round((gb-bh)/2));   // vertically centered in the bottom band
+      bL.style.width=bw+'px'; bL.style.height=bh+'px'; bL.style.borderRadius='20px'; bL.style.left='10px'; bL.style.bottom=byy+'px'; bL.style.fontSize=Math.round(bh*0.42)+'px';
+      bR.style.width=bw+'px'; bR.style.height=bh+'px'; bR.style.borderRadius='20px'; bR.style.left=(10+bw+bgap)+'px'; bR.style.bottom=byy+'px'; bR.style.fontSize=Math.round(bh*0.42)+'px';
+      var jp2=bh, dk2=Math.round(bh*0.8), fk2=Math.round(bh*0.8);
+      bJ.style.width=Math.round(jp2*1.35)+'px'; bJ.style.height=jp2+'px'; bJ.style.left=(vw-10-Math.round(jp2*1.35))+'px'; bJ.style.bottom=byy+'px'; bJ.style.fontSize=Math.round(Math.max(8,jp2*0.16))+'px';
+      bD.style.width=Math.round(dk2*1.2)+'px'; bD.style.height=dk2+'px'; bD.style.left=(vw-10-Math.round(jp2*1.35)-bgap-Math.round(dk2*1.2))+'px'; bD.style.bottom=byy+'px'; bD.style.fontSize=Math.round(Math.max(7,dk2*0.18))+'px';
+      bF.style.width=Math.round(fk2*1.2)+'px'; bF.style.height=fk2+'px'; bF.style.left=(vw-10-Math.round(jp2*1.35)-bgap-Math.round(dk2*1.2)-bgap-Math.round(fk2*1.2))+'px'; bF.style.bottom=(byy+0)+'px'; bF.style.fontSize=Math.round(Math.max(7,fk2*0.18))+'px';
+      return;
+    }
     // Use the side buttons whenever there's a real gutter. Fall back to the on-screen tap zones
-    // ONLY when there's basically no gutter at all (portrait / near-square).
+    // ONLY when there's basically no gutter at all (true full-bleed, no letterbox anywhere).
     if(gutter<40){ window.__NQ_PAD_ACTIVE=false; return; }
     window.__NQ_PAD_ACTIVE=true;
     // Comfortable thumb targets. In fullscreen the 16:9 canvas grows to fill the tall screen, so
