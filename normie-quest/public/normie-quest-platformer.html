@@ -43,8 +43,12 @@
   #rotate .ico{ font-size:52px;margin-bottom:20px;animation:nqrot 1.9s ease-in-out infinite;transform-origin:50% 50% }
   #rotate .ttl{ font-family:'Press Start 2P',monospace;font-size:14px;color:#ffd23f;line-height:1.9 }
   #rotate .sub{ font-family:'VT323',monospace;font-size:19px;color:#b6bfe0;margin-top:14px }
+  #rotate #rotate-anyway{ margin-top:26px;background:#20142e;border:2px solid #ffb43a;color:#ffd23f;border-radius:10px;
+    font-family:'Press Start 2P',monospace;font-size:11px;padding:12px 16px;cursor:pointer;-webkit-tap-highlight-color:transparent }
+  #rotate .sub2{ font-family:'VT323',monospace;font-size:16px;color:#8b93b8;margin-top:12px;max-width:340px;line-height:1.35 }
   @keyframes nqrot{ 0%,45%{transform:rotate(0)} 65%,100%{transform:rotate(-90deg)} }
   @media (max-width:920px) and (orientation:portrait){ #rotate{display:flex} }
+  html.nq-rot-ok #rotate{ display:none !important }   /* "play anyway" override (nqRotateOK) — orientation is the player's call */
 </style>
 <script>
   /* PREMIUM "SETUP LANE" flag. The stable tester URL (/normie-quest-x7) leaves this FALSE, so the
@@ -75,7 +79,22 @@
 <body>
 
 <div id="screen"></div>
-<div id="rotate"><div class="ico">📱</div><div class="ttl">ROTATE YOUR PHONE</div><div class="sub">Normie Quest plays best in landscape</div></div>
+<div id="rotate"><div class="ico">📱</div><div class="ttl">ROTATE YOUR PHONE</div><div class="sub">Normie Quest plays best in landscape</div>
+  <button id="rotate-anyway">▶ PLAY IN THIS ORIENTATION</button>
+  <div class="sub2">some in-app browsers (Phantom on iPad) are actually BIGGER this way — your call, we'll remember it</div>
+</div>
+<script>
+/* Landscape is a recommendation, not a wall: "play anyway" is remembered (nqRotateOK) because
+   in-app browsers like Phantom-on-iPad give a LARGER viewport in portrait. Re-enable the prompt
+   from the ⚙ settings panel. */
+(function(){
+  try{ if(localStorage.getItem('nqRotateOK')==='1') document.documentElement.classList.add('nq-rot-ok'); }catch(e){}
+  var go=function(){ var b=document.getElementById('rotate-anyway'); if(!b) return;
+    b.addEventListener('click',function(){ try{ localStorage.setItem('nqRotateOK','1'); }catch(e){}
+      document.documentElement.classList.add('nq-rot-ok'); }); };
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',go); else go();
+})();
+</script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
 <script>
@@ -3369,7 +3388,8 @@ if(typeof document!=='undefined'){ (function(){
   var panel=document.createElement('div'); panel.id='nqset';
   panel.innerHTML='<div class="row"><label>♪ Music</label><input id="nqvm" type="range" min="0" max="100"></div>'
     +'<div class="row"><label>🔊 Effects</label><input id="nqvs" type="range" min="0" max="100"></div>'
-    +'<div class="mute" id="nqsetmute">🔇 Mute music</div>';   // NOT id=nqmute — that id belongs to the round top-left button; the dup id let its fixed-circle CSS rip this row out of the panel
+    +'<div class="mute" id="nqsetmute">🔇 Mute music</div>'   // NOT id=nqmute — that id belongs to the round top-left button; the dup id let its fixed-circle CSS rip this row out of the panel
+    +'<div class="mute" id="nqrotpref" style="margin-top:6px;font-size:15px"></div>';
   document.body.appendChild(panel);
   var vm=panel.querySelector('#nqvm'), vs=panel.querySelector('#nqvs'), mute=panel.querySelector('#nqsetmute');
   function upMute(){ try{ mute.textContent=(window.__NQ_MUSIC&&window.__NQ_MUSIC.muted&&window.__NQ_MUSIC.muted())?'🔊 Unmute music':'🔇 Mute music'; }catch(e){} }
@@ -3380,6 +3400,17 @@ if(typeof document!=='undefined'){ (function(){
   vs.addEventListener('input',function(){ try{ window.__NQ_SFX&&window.__NQ_SFX.setVol&&window.__NQ_SFX.setVol(vs.value/100); }catch(e){} });
   vs.addEventListener('change',function(){ try{ window.__NQ_SFX&&window.__NQ_SFX.power&&window.__NQ_SFX.power(); }catch(e){} });   // preview at the new level on release
   mute.addEventListener('click',function(){ try{ window.__NQ_MUSIC&&window.__NQ_MUSIC.toggle&&window.__NQ_MUSIC.toggle(); upMute(); }catch(e){} });
+  // Orientation preference: the rotate prompt's "play anyway" override lives in nqRotateOK;
+  // this row shows the current choice and lets the player flip it back.
+  var rot=panel.querySelector('#nqrotpref');
+  function upRot(){ var ok=false; try{ ok=localStorage.getItem('nqRotateOK')==='1'; }catch(e){}
+    rot.textContent=ok?'📱 Orientation: any (tap to prefer landscape)':'📱 Orientation: landscape prompt on (tap to allow any)'; }
+  rot.addEventListener('click',function(){ try{
+    var ok=localStorage.getItem('nqRotateOK')==='1';
+    if(ok){ localStorage.removeItem('nqRotateOK'); document.documentElement.classList.remove('nq-rot-ok'); }
+    else { localStorage.setItem('nqRotateOK','1'); document.documentElement.classList.add('nq-rot-ok'); }
+  }catch(e){} upRot(); });
+  upRot();
   initVals();
 })(); }
 
