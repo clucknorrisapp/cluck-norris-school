@@ -1532,6 +1532,13 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.hb(this.add.text(W/2,8,'WORLD '+def.name,{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#b6bfe0'}).setOrigin(.5,0));
     this.hearts=[]; for(i=0;i<3;i++) this.hearts.push(this.hb(this.add.image(14+i*20,30,'heart').setScale(1.2).setAlpha(i<this.lives?1:.16)));
     this.keyIcon=this.hb(this.add.image(W-18,30,'key').setAlpha(.2)); this.keyIcon.setScale(22/this.keyIcon.height);
+    // Returning from a speakeasy/bonus room with the carried key (nqCarryKey): grant it and
+    // remove the field key — no backtracking past the return point. Never applies to hidden
+    // levels themselves (their key opens their own exit).
+    if(!def.hidden && this.registry.get('nqCarryKey')){ this.registry.set('nqCarryKey',0);
+      this.hasKey=true; this.keyIcon.setAlpha(1);
+      if(this.key){ this.tweens.killTweensOf(this.key); this.key.destroy(); this.key=null; }
+      this.flash('KEY FROM THE SPEAKEASY!','#ffd23f'); }
     this.powerBarBg=this.hb(this.add.rectangle(14,52,46,8,0x000000,0.55).setOrigin(0,0.5).setDepth(20).setStrokeStyle(1,0x8f89b0).setVisible(false));
     this.powerBar=this.hb(this.add.rectangle(15,52,44,5,0x3dff6e).setOrigin(0,0.5).setDepth(21).setVisible(false));
     this.powerLabel=this.hb(this.add.text(64,52,'',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffd23f'}).setOrigin(0,0.5).setDepth(21).setVisible(false));
@@ -1648,6 +1655,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   },
   returnFromHidden:function(){   // a hidden bonus level's exit → back to the source level where we ducked in
     if(this.over) return; this.over=true; this.physics.pause(); SFX.clear();
+    this.registry.set('nqCarryKey',1);   // you found the lounge key in the speakeasy — carry it back (the x-2 doors return you PAST the level key, so this kills the backtrack)
     var retL=this.registry.get('nqRetLvl'), retX=this.registry.get('nqRetX')||120;
     this.hb(this.add.text(W/2,120,'BACK TO THE SURFACE',{fontFamily:'"Press Start 2P"',fontSize:'13px',color:'#3dff6e'}).setOrigin(.5));
     this.time.delayedCall(1300, function(){ if(retL!=null) this.scene.start('Game',{level:retL, score:this.score, lives:this.lives, spawnX:retX});
@@ -2176,6 +2184,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       this.time.delayedCall(1800, function(){ this.scene.start('Win',this.winData()); },[],this);
     } else if(this.def.bossType==='troll'){
       // THE TROLL down → hidden Crypto Trenches cleared → huge bounty, back to the surface.
+      this.registry.set('nqCarryKey',1);   // the Trenches exit also sends you home with the key
       var retL=this.registry.get('nqRetLvl'), retX=this.registry.get('nqRetX')||120;
       this.addScore(2000);
       this.powerBanner('TROLL SLAIN!','WHO GOT TROLLED NOW? +2000 COINS','#2effa0');
