@@ -11,6 +11,20 @@ the **canonical source** and the **hackathon + Solana Foundation grant** entry �
 accuracy in the public docs (`README.md`, `public/investors.html`, `public/grant.html`)
 matters, and claims should match the code.
 
+> 🎯 **STRATEGY (owner's calls, 2026-07-19 — supersede the brand audit's Autopsy-wedge recommendation):**
+> **(1) The LOCKER ROOM is the flagship story** — helping communities lock tokens on the Jupiter
+> Lock program and broadcast it socially. Autopsy stays but is NOT the lead ("so many rugs and
+> nobody cares"). Discoverability package shipped: locker in the sitemap, README/investors/grant
+> sections, school Library link, hatchery CTA. **(2) Normie Quest is a separate operation running
+> under Cluck Norris production for the NORMIE community** — publicly described in the narrative
+> docs as ecosystem/collaboration proof (a large recent investor came via the NORMIE ecosystem),
+> but the game URL stays UNLINKED/hidden and **all token-gating in NQ (CLKN 2M tier, NORMIE
+> holder perks, MEGA WHALE gate) is TESTING ONLY — no agreement with the NORMIE team yet on
+> NORMIE-vs-CLKN access/rewards, so never promise gating terms on any public surface.**
+> **(3) Audit cleanup is greenlit** ("feel free to clean up things as we need to") — see
+> `docs/BRAND_AUDIT_2026-07-18.md` §7 for which decisions remain open (payment rail, slots
+> truth, exam bar, Rose merge, GA4, monitors split, /bags).
+
 CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 
 > 🟢 **ENGINE STATUS (2026-06-17, owner's call — SUPERSEDES the old "no CLKN pools / full-earner"

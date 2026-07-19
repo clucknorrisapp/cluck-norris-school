@@ -1117,7 +1117,7 @@ const LIBRARY_RESOURCES = [
     links: [
       { name: "Solscan", url: "https://solscan.io", desc: "Solana block explorer — verify transactions" },
       { name: "Birdeye", url: "https://birdeye.so", desc: "Solana token analytics & wallet tracking" },
-      { name: "Jupiter Lock", url: "https://lock.jup.ag", desc: "Verify token locks on Solana" },
+      { name: "Jup Locker Room", url: "/locker-room", desc: "Lock tokens free & verify any project's locks — our locker on the Jupiter Lock program" },
       { name: "Rugcheck", url: "https://rugcheck.xyz", desc: "Token safety checker — spot red flags" },
       { name: "Bubblemaps", url: "https://bubblemaps.io", desc: "Visualize token holder distribution" },
     ]

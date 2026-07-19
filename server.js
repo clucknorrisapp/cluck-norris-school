@@ -10890,8 +10890,10 @@ const SITEMAP_PAGES = [
   // grant, pool-monitor, admin) are deliberately absent; their meta handles them.
   "/", "/school", "/curriculum", "/tools", "/autopsy", "/wallet-xray", "/trace",
   "/snapshot", "/holders", "/airdrop", "/buyspecial", "/hatchery", "/security-coop",
-  "/wallet-checkup", "/liquidity", "/liquidity-engine", "/clkn", "/alpha",
+  "/wallet-checkup", "/locker-room", "/clkn", "/alpha",
   "/classroom", "/order-book", "/bags", "/investors", "/privacy", "/terms",
+  // /liquidity + /liquidity-engine dropped 2026-07-19 (audit): both serve a locked
+  // "In Development" placeholder — re-add when the engine goes public.
 ];
 app.get("/sitemap.xml", (req, res) => {
   const today = new Date().toISOString().slice(0, 10);

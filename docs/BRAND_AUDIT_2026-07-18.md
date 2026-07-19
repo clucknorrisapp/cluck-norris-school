@@ -219,12 +219,14 @@
 ## 7. DECISIONS NEEDED FROM THE OWNER
 
 1. **The 90-day wedge bet:** commit to Autopsy-as-flagship + feature freeze (no new surfaces until the wedge shows 30 days of visitor growth), yes or no? Everything in §6 is sequenced on this.
+   **✅ ANSWERED (owner, 2026-07-19): NO — Autopsy is NOT the flagship** ("so many rugs and nobody cares — it's there, we'll use it at some point"). **The focus is the LOCKER ROOM**: helping communities lock tokens and broadcast it socially. The §6 Locker Room wedge (play #3) is the endorsed direction; Autopsy plays are deprioritized, not deleted. Discoverability package + narrative-doc rewrite shipped same day.
 2. **Payment rail:** accept SOL/USDC alongside CLKN (keeping the 2M 5× bonus as the holder perk)? This changes the token's role from gate to tier — a strategy call, not an engineering one.
 3. **Slots truth:** does the beta pay the 7,777 CLKN Fire Chicken prize or not? And is the entry floor 500k or 2M? Both contradictions need one answer each before someone claims the prize.
 4. **Exam bar:** lower 94%, shorten the exam, add practice/retake flow — or accept that "verified diploma" stays unexercised? The grant stat renders 0 until this is decided.
 5. **Rose:** merge into Buy Special (recommended) or keep as a separately-branded product with fixed copy/palette?
 6. **Analytics:** delete GA4 (restores the "no third-party scripts" claim — recommended for this brand) or extend it site-wide?
 7. **Normie Quest end-state:** hand off to the NORMIE owner, productize as a white-label token-game service, or keep hidden indefinitely? Also the timing of the monetization flag-flip.
+   **✅ PARTIALLY ANSWERED (owner, 2026-07-19):** NQ is a **continuing collaboration under Cluck Norris production** — now publicly mentioned (no URL) in README/investors/grant as ecosystem proof; a large recent investor came via the NORMIE ecosystem. **Token-gating in NQ is TESTING ONLY** — no agreement yet with the NORMIE team on NORMIE-vs-CLKN access/rewards, so no public surface may promise gating terms. Game URL stays unlinked/hidden.
 8. **Monitor un-kill:** approve the `MONITORS_KILLED` split so OOR alerting can run without re-arming fund-movers — needed *before* any manual pool redeploy.
 9. **Grant figure check:** grant.html asks $8,000 (table sums correctly); the audit brief referenced $6k. Confirm which number went to the Foundation — no $6k exists anywhere in the repo. *(Evidence thin here: only the page itself was verifiable.)*
 10. **/bags:** public (add to tools hub) or soft-launched (record the intent)?
