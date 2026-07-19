@@ -2093,6 +2093,7 @@ function notifyToolUnlock(tool, paidAmount, senderWallet, isHolderBonus, signatu
       ai:         { emoji: "🤖", name: "AI TUTOR EXTENDED",        detail: "+20 questions" },
       airdrop:    { emoji: "💰", name: "AIRDROP TOOL UNLOCKED",    detail: "1 batch session" },
       buyspecial: { emoji: "📈", name: "BUY-COMP UNLOCKED",        detail: "7 days unlimited" },
+      rose:       { emoji: "🌹", name: "ROSE COMP UNLOCKED",       detail: "7 days unlimited" },
     };
     const m = map[tool] || { emoji: "⚡", name: `${tool.toUpperCase()} UNLOCKED`, detail: "" };
     const bonusBadge = isHolderBonus ? " · 5× HOLDER BONUS 🏆" : "";
