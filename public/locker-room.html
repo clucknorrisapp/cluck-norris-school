@@ -412,7 +412,7 @@
       // capture the loaded stats so the share button can build a post, and wire the buttons
       window.__fameData={ mint:mint, pct:pct, total:d.totalLocked, count:(d.lockCount||0), sym:(t.symbol||''), name:(t.name||'') };
       var fsB=$('#fameShare'); if(fsB) fsB.addEventListener('click',shareFame);
-      var fcB=$('#fameCopyLink'); if(fcB) fcB.addEventListener('click',function(){ copyText(location.origin+'/locker-room?fame='+mint, fcB); });
+      var fcB=$('#fameCopyLink'); if(fcB) fcB.addEventListener('click',function(){ copyText(location.origin+'/lock/'+mint, fcB); });   // the /lock/:mint page unfurls with a real OG card
     }).catch(function(){ body.innerHTML='<div class="card"><p class="msg err">Network error reading locks.</p></div>'; });
   }
   // Build + open a ready-to-post X announcement of a project's on-chain lock report.
@@ -421,7 +421,7 @@
     var symdisp=f.sym?('$'+f.sym):(f.name||'this token');
     var head=(f.pct!=null)?('🔒 '+f.pct.toFixed(1)+'% of '+symdisp+' supply is locked'):('🔒 '+symdisp+' has tokens locked on-chain');
     var mid=fmt(f.total)+(f.sym?(' '+f.sym):' tokens')+' across '+f.count+' lock'+(f.count===1?'':'s')+', verifiable on-chain.';
-    var txt=head+' — '+mid+' See the full breakdown at the 🐔 Cluck Norris Lock of Fame: clucknorris.app/locker-room?fame='+f.mint+' @JupiterExchange';
+    var txt=head+' — '+mid+' See the full breakdown at the 🐔 Cluck Norris Lock of Fame: clucknorris.app/lock/'+f.mint+' @JupiterExchange';
     window.open('https://twitter.com/intent/tweet?text='+encodeURIComponent(txt),'_blank','noopener');
   }
   $('#fameGo').addEventListener('click',function(){ var m=$('#fameMint').value.trim(); if(m) loadFame(m); });

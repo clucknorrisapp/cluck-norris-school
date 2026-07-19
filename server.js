@@ -3912,7 +3912,7 @@ async function notifyNearBonding(t) {
 async function notifyGraduated(rec) {
   const token = process.env.TELEGRAM_BOT_TOKEN, chatId = process.env.TELEGRAM_CHAT_ID;
   if (GRAD_TG_ANNOUNCE && token && chatId) {
-    const text = `🎓 <b>GRADUATED!</b>\n\n🎒 <b>${tgEsc(rec.name || "?")}</b> (${tgEsc(rec.symbol || "?")}) just bonded off the Bags curve onto its Meteora pool.\n\n📊 Chart → https://dexscreener.com/solana/${rec.mint}`;
+    const text = `🎓 <b>GRADUATED!</b>\n\n🎒 <b>${tgEsc(rec.name || "?")}</b> (${tgEsc(rec.symbol || "?")}) just bonded off the Bags curve onto its Meteora pool.\n\n📊 Chart → https://dexscreener.com/solana/${rec.mint}\n🔒 Team: lock your supply free (even fresh Token-2022 mints) → clucknorris.app/locker-room`;
     try {
       await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -4148,6 +4148,7 @@ async function postChainSpotlight() {
 app.get("/api/chain-spotlight-test", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  if (req.query.enable != null) kv.set("chainSpotEnabled", req.query.enable === "1" ? "1" : "0"); // &enable=0 pauses the twice-daily poster (owner: no traction, focus on the locker — 2026-07-19)
   if (req.query.reset === "1") kv.set("chainSpotPos", 0); // restart the asset rotation at BTC
   if (req.query.post === "1") {
     const r = await postChainSpotlight();
@@ -4157,7 +4158,7 @@ app.get("/api/chain-spotlight-test", async (req, res) => {
   const assets = loadLearnAssets();
   const n = Number(kv.get("chainSpotPos", 0)) || 0;
   const a = assets.length ? assets[n % assets.length] : null;
-  return res.status(200).json({ count: assets.length, nextIndex: n, next: a && a.slug, preview: a ? chainSpotlightCopy(a, n) : null, hours: String(kv.get("chainSpotHours", "14,21")), last: kv.get("chainSpotLast", null), bump: kv.get("chainSpotBump", null), hint: "add &post=1 to post now, &reset=1 to restart rotation" });
+  return res.status(200).json({ enabled: String(kv.get("chainSpotEnabled", "1")) !== "0", count: assets.length, nextIndex: n, next: a && a.slug, preview: a ? chainSpotlightCopy(a, n) : null, hours: String(kv.get("chainSpotHours", "14,21")), last: kv.get("chainSpotLast", null), bump: kv.get("chainSpotBump", null), hint: "add &post=1 to post now, &reset=1 to restart rotation, &enable=0/1 to pause/resume" });
 });
 
 // &post=1 posts a tweet (uses &text=... or a default) so you can verify posting
@@ -6610,6 +6611,187 @@ app.get("/api/locks", async (req, res) => {
     console.error("Locks error:", err.message);
     return res.status(500).json({ success: false, error: publicErrMsg(err) });
   }
+});
+
+// -- Lock of Fame share card (1200x630 PNG) — the OG image behind /lock/:mint, the page teams
+// broadcast after locking. Cached 10 min per mint so crawlers can never trigger repeated
+// on-chain scans (the same rule as the autopsy-permalink plan). Oswald has no emoji — text only.
+const _lockCardCache = new Map();   // mint -> { buf, at }
+async function lockPageData(mint) {
+  const cached = _lockCardCache.get(mint);
+  if (cached && Date.now() - cached.at < 600000) return cached.data;
+  const HELIUS_KEY = process.env.HELIUS_API_KEY;
+  if (!HELIUS_KEY) throw new Error("no rpc");
+  const rpcCall = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`);
+  const [data, tokMeta] = await Promise.all([
+    getLockedSupply(mint, rpcCall),
+    jupTokensSearch(String(mint)).catch(() => null),
+  ]);
+  if (Array.isArray(tokMeta)) {
+    const t = tokMeta.find((x) => x && x.id === mint) || tokMeta[0];
+    if (t) data.token = { name: t.name || null, symbol: t.symbol || null, icon: (typeof t.icon === "string" && /^https:\/\//.test(t.icon)) ? t.icon : null };
+  }
+  if (_lockCardCache.size > 500) _lockCardCache.clear();
+  _lockCardCache.set(mint, { data, at: Date.now() });
+  return data;
+}
+async function renderLockCard(d) {
+  const W = 1200, H = 630;
+  const canvas = createCanvas(W, H);
+  const ctx = canvas.getContext("2d");
+  const fTok = (n) => { if (n == null || !isFinite(n)) return "—"; const a = Math.abs(n); if (a >= 1e9) return (n / 1e9).toFixed(2) + "B"; if (a >= 1e6) return (n / 1e6).toFixed(2) + "M"; if (a >= 1e3) return (n / 1e3).toFixed(1) + "K"; return String(Math.round(n)); };
+  ctx.fillStyle = "#0a0a0a"; ctx.fillRect(0, 0, W, H);
+  let g = ctx.createRadialGradient(220, 120, 0, 220, 120, 620);
+  g.addColorStop(0, "rgba(217,119,6,0.22)"); g.addColorStop(1, "rgba(217,119,6,0)");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  g = ctx.createRadialGradient(1020, 560, 0, 1020, 560, 520);
+  g.addColorStop(0, "rgba(16,185,129,0.14)"); g.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+  ctx.textBaseline = "top";
+  ctx.fillStyle = "#D97706"; ctx.font = "900 22px Oswald, sans-serif";
+  ctx.fillText("LOCK OF FAME", 60, 50);
+  ctx.fillStyle = "#6B7280"; ctx.font = "16px Oswald, sans-serif";
+  ctx.fillText("verified on-chain - clucknorris.app", 60, 82);
+  const logo = await getLogo();
+  if (logo) {
+    const r = 46, lx = W - 60 - r * 2, ly = 46;
+    ctx.save(); ctx.beginPath(); ctx.arc(lx + r, ly + r, r, 0, Math.PI * 2); ctx.closePath(); ctx.clip();
+    ctx.drawImage(logo, lx, ly, r * 2, r * 2); ctx.restore();
+    ctx.strokeStyle = "#D97706"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(lx + r, ly + r, r, 0, Math.PI * 2); ctx.stroke();
+  }
+  const t = d.token || {};
+  const sym = String(t.symbol || "").replace(/[^\x20-\x7E]/g, "").slice(0, 16);
+  ctx.fillStyle = "#F9FAFB"; ctx.font = "900 64px Oswald, sans-serif";
+  ctx.fillText(sym ? "$" + sym.toUpperCase() : "TOKEN LOCKS", 60, 132);
+  ctx.fillStyle = "#9CA3AF"; ctx.font = "26px Oswald, sans-serif";
+  ctx.fillText(String(t.name || d.mint || "").replace(/[^\x20-\x7E]/g, "").slice(0, 44), 60, 208);
+
+  // the headline number: % of supply locked
+  const pct = d.pctOfSupply != null && isFinite(d.pctOfSupply) ? (d.pctOfSupply * 100) : null;
+  ctx.fillStyle = "#10B981"; ctx.font = "900 150px Oswald, sans-serif";
+  const pctStr = pct != null ? pct.toFixed(1) + "%" : "—";
+  ctx.fillText(pctStr, 60, 268);
+  ctx.fillStyle = "#D1D5DB"; ctx.font = "900 30px Oswald, sans-serif";
+  ctx.fillText("OF SUPPLY LOCKED", 60 + ctx.measureText(pctStr).width * (150 / 30) * 0.98 + 30, 372);
+
+  // stats row
+  const stat = (x, label, value) => {
+    ctx.fillStyle = "#6B7280"; ctx.font = "18px Oswald, sans-serif"; ctx.fillText(label, x, 470);
+    ctx.fillStyle = "#F9FAFB"; ctx.font = "900 40px Oswald, sans-serif"; ctx.fillText(value, x, 494);
+  };
+  stat(60, "TOTAL LOCKED", fTok(d.totalLocked) + (sym ? " " + sym.toUpperCase() : ""));
+  stat(480, "LOCK ACCOUNTS", String(d.lockCount || 0));
+  const topPlat = (d.breakdown && d.breakdown[0]) ? String(d.breakdown[0].label).replace(/[^\x20-\x7E]/g, "").slice(0, 20) : null;
+  if (topPlat) stat(760, "TOP PLATFORM", topPlat);
+
+  ctx.fillStyle = "#374151"; ctx.fillRect(60, 566, W - 120, 2);
+  ctx.fillStyle = "#9CA3AF"; ctx.font = "20px Oswald, sans-serif";
+  ctx.fillText("Lock your tokens free - even brand-new Token-2022 mints - clucknorris.app/locker-room", 60, 584);
+  return canvas.toBuffer("image/png");
+}
+app.get("/api/lock-card", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  const mint = String(req.query.mint || "").trim();
+  if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(400).end();
+  try {
+    const d = await lockPageData(mint);
+    if (!d || !d.success) return res.status(404).end();
+    const png = await renderLockCard(d);
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "public, max-age=600");
+    return res.end(png);
+  } catch (err) {
+    console.error("Lock card error:", err.message);
+    return res.status(500).end();
+  }
+});
+
+// -- /lock/:mint — the public, shareable per-project Lock Page. Server renders the shell with
+// real OG tags (image = /api/lock-card) so the link unfurls; the numbers render client-side
+// from /api/locks. Everything token-supplied is escaped (names are attacker-controlled).
+app.get("/lock/:mint", async (req, res) => {
+  const mint = String(req.params.mint || "").trim();
+  if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(mint)) return res.status(404).send("Not found");
+  const escH = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  let title = "Token Lock Report", sub = "";
+  try {   // best-effort identity for the OG text — never block the page on it
+    const cached = _lockCardCache.get(mint);
+    const d = cached ? cached.data : await Promise.race([lockPageData(mint), new Promise((r) => setTimeout(() => r(null), 2500))]);
+    if (d && d.success) {
+      const t = d.token || {}, pct = d.pctOfSupply != null ? (d.pctOfSupply * 100).toFixed(1) : null;
+      title = (pct != null ? pct + "% of " : "") + (t.symbol ? "$" + t.symbol : "this token") + (pct != null ? " supply is locked" : " — token lock report");
+      sub = t.name || "";
+    }
+  } catch (_) {}
+  const url = `https://clucknorris.app/lock/${mint}`;
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.setHeader("Cache-Control", "public, max-age=300");
+  return res.send(`<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>🔒 ${escH(title)} · Cluck Norris Lock of Fame</title>
+<meta name="description" content="On-chain token lock report for ${escH(sub || mint)} — locked supply, lock accounts, and platform breakdown, verified live on Solana. Lock your own tokens free at the Cluck Norris Locker Room."/>
+<meta property="og:title" content="🔒 ${escH(title)}"/>
+<meta property="og:description" content="Verified on-chain: locked supply, lock accounts and platform breakdown${sub ? " for " + escH(sub) : ""}. Lock your own tokens free — even brand-new Token-2022 mints."/>
+<meta property="og:image" content="https://clucknorris.app/api/lock-card?mint=${escH(mint)}"/>
+<meta property="og:url" content="${escH(url)}"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<link rel="icon" href="/cluck-norris-logo.jpg"/>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0a0a0a;color:#F9FAFB;font:15px/1.6 'Chakra Petch',system-ui,sans-serif;padding:20px 14px 60px}
+.wrap{max-width:640px;margin:0 auto}
+.brand{display:flex;align-items:center;gap:10px;margin-bottom:18px}.brand img{width:34px;height:34px;border-radius:50%;border:2px solid #D97706}
+.brand b{color:#D97706;letter-spacing:2px;font-size:13px}.brand span{color:#6B7280;font-size:12px}
+.card{background:#141414;border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:18px;margin-bottom:14px}
+.pct{font-size:56px;font-weight:900;color:#10B981;line-height:1.05}.pctcap{color:#9CA3AF;font-size:13px;letter-spacing:2px}
+.tname{font-size:22px;font-weight:700}.tsym{color:#9CA3AF;font-size:13px;word-break:break-all}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:14px}
+.stat{background:#0f0f0f;border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:10px 12px}
+.k{color:#6B7280;font-size:11px;letter-spacing:1px}.v{font-size:20px;font-weight:700}
+.bar{height:8px;border-radius:5px;background:#1f2937;overflow:hidden;margin:4px 0 10px}.bar i{display:block;height:100%;background:#D97706}
+.brow{display:flex;justify-content:space-between;font-size:13px}
+.muted{color:#6B7280;font-size:12px}
+.btn{display:inline-block;background:#D97706;color:#0a0a0a;font-weight:700;border:0;border-radius:9px;padding:11px 18px;text-decoration:none;font-size:14px;cursor:pointer;margin:4px 6px 0 0}
+.btn.alt{background:#1f2937;color:#F9FAFB;border:1px solid rgba(255,255,255,.14)}
+.lockrow{display:flex;gap:10px;font-size:13px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.lockrow .amt{font-weight:700;min-width:90px}.lockrow .lbl{color:#9CA3AF;flex:1;word-break:break-all}
+a{color:#FCD34D}
+</style></head><body><div class="wrap">
+<div class="brand"><img src="/cluck-norris-logo.jpg" alt=""/><div><b>CLUCK NORRIS · LOCK OF FAME</b><br/><span>on-chain token lock report — read live from Solana</span></div></div>
+<div id="body"><div class="card"><p class="muted">Reading on-chain locks…</p></div></div>
+<div class="card"><b>🔒 Lock your own tokens — free.</b><br/><span class="muted">The Locker Room locks any Solana token non-custodially on the audited Jupiter Lock program — including brand-new Token-2022 mints — with no cut and no fee. Your community gets this page as the receipt.</span><br/><a class="btn" href="/locker-room">Open the Locker Room</a><a class="btn alt" href="/locker-room?fame=${escH(mint)}">Full report</a></div>
+<script>
+(function(){
+  var MINT=${JSON.stringify(mint)};
+  function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function fmt(n){if(n==null||!isFinite(n))return'—';var a=Math.abs(n);if(a>=1e9)return(n/1e9).toFixed(2)+'B';if(a>=1e6)return(n/1e6).toFixed(2)+'M';if(a>=1e3)return(n/1e3).toFixed(1)+'K';return String(Math.round(n));}
+  fetch('/api/locks?mint='+encodeURIComponent(MINT)).then(function(r){return r.json();}).then(function(d){
+    var el=document.getElementById('body');
+    if(!d||!d.success){el.innerHTML='<div class="card"><p class="muted">Could not read locks'+(d&&d.error?': '+esc(d.error):'')+'.</p></div>';return;}
+    var t=d.token||{},pct=d.pctOfSupply!=null?(d.pctOfSupply*100):null;
+    var bars=(d.breakdown||[]).map(function(b){var w=d.totalLocked>0?(b.tokens/d.totalLocked*100):0;
+      return '<div class="brow"><span>'+esc(b.label)+' · <b>'+fmt(b.tokens)+'</b></span><span class="muted">'+w.toFixed(1)+'%</span></div><div class="bar"><i style="width:'+w.toFixed(1)+'%"></i></div>';}).join('');
+    var rows=(d.topLocks||[]).slice(0,8).map(function(l,i){return '<div class="lockrow"><span class="muted">'+(i+1)+'</span><span class="amt">'+fmt(l.tokens)+'</span><span class="lbl">'+esc(l.authority.slice(0,4)+'…'+l.authority.slice(-4))+'</span><span class="muted">'+esc(l.label)+'</span></div>';}).join('');
+    var share='🔒 '+(pct!=null?pct.toFixed(1)+'% of ':'')+(t.symbol?'$'+t.symbol:'this token')+(pct!=null?' supply is locked':' has on-chain locks')+' — '+fmt(d.totalLocked)+' tokens across '+(d.lockCount||0)+' locks, verifiable on-chain. '+location.origin+'/lock/'+MINT+' @JupiterExchange';
+    el.innerHTML='<div class="card">'
+      +'<div class="tname">'+esc(t.name||t.symbol||'Token')+'</div><div class="tsym">'+(t.symbol?esc(t.symbol)+' · ':'')+esc(MINT)+'</div>'
+      +'<div style="display:flex;align-items:end;gap:12px;margin-top:12px"><div class="pct">'+(pct!=null?pct.toFixed(1)+'%':'—')+'</div><div class="pctcap">OF SUPPLY<br/>LOCKED</div></div>'
+      +'<div class="grid"><div class="stat"><div class="k">TOTAL LOCKED</div><div class="v">'+fmt(d.totalLocked)+'</div></div>'
+      +'<div class="stat"><div class="k">LOCK ACCOUNTS</div><div class="v">'+(d.lockCount||0)+'</div></div>'
+      +'<div class="stat"><div class="k">TOTAL SUPPLY</div><div class="v">'+fmt(d.supply)+'</div></div></div>'
+      +(d.partial?'<p class="muted" style="margin-top:8px">⚠ Partial read — totals may undercount; refresh in a moment.</p>':'')
+      +'<div style="margin-top:14px"><button class="btn" id="shareX">𝕏 Share</button><button class="btn alt" id="copyLink">Copy link</button></div>'
+      +'</div>'
+      +(bars?'<div class="card"><div class="k" style="margin-bottom:8px">BY PLATFORM</div>'+bars+'</div>':'')
+      +(rows?'<div class="card"><div class="k" style="margin-bottom:4px">BIGGEST LOCKS</div>'+rows+'<p class="muted" style="margin-top:8px">Cross-check any escrow at <a href="https://lock.jup.ag/token/'+encodeURIComponent(MINT)+'" target="_blank" rel="noopener">lock.jup.ag</a></p></div>':'<div class="card"><p class="muted">No locks found for this token yet — be the first: <a href="/locker-room">lock free in the Locker Room</a>.</p></div>');
+    document.getElementById('shareX').onclick=function(){window.open('https://twitter.com/intent/tweet?text='+encodeURIComponent(share),'_blank','noopener');};
+    document.getElementById('copyLink').onclick=function(){var b=this;(navigator.clipboard?navigator.clipboard.writeText(location.href):Promise.reject()).then(function(){b.textContent='Copied ✓';setTimeout(function(){b.textContent='Copy link';},1400);}).catch(function(){prompt('Copy:',location.href);});};
+  }).catch(function(){document.getElementById('body').innerHTML='<div class="card"><p class="muted">Network error reading locks.</p></div>';});
+})();
+</script>
+</div></body></html>`);
 });
 
 // Jupiter Lock — build an unsigned create-vesting-escrow tx. Non-custodial: we only pre-sign with
