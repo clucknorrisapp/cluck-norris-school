@@ -2803,7 +2803,11 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // auto-pause after 10s of no movement/jump/duck input (player stepped away)
     if(left||right||jump||duck) this.lastInputAt=now; else if(this.lastInputAt&&now-this.lastInputAt>10000){ this.pauseGame(true); return; }
     // CROUCH: duck in place on the ground (jump cancels it) — shrinks the hitbox so fireballs / sniper bolts pass over.
-    var crouching=duck && (b.blocked.down||b.touching.down) && !jump;
+    // 90ms grounded-hysteresis: blocked.down drops out for single frames on tile seams, and that
+    // 1-frame loss was toggling the crouch — the visible duck "flicker".
+    var groundedNow=(b.blocked.down||b.touching.down);
+    if(groundedNow) this._crouchGroundAt=now;
+    var crouching=duck && (groundedNow || now-(this._crouchGroundAt||0)<90) && !jump;
     if(crouching!==this.crouching){ this.crouching=crouching; var cw=this.player.width, ch=this.player.height;
       if(crouching) p.body.setSize(cw*0.60, ch*0.46).setOffset(cw*0.20, ch*0.52);
       else p.body.setSize(cw*0.60, ch*0.90).setOffset(cw*0.20, ch*0.08); }
@@ -2903,7 +2907,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // --- frame animation: swap Normie's pose sprite by state (idle / run cycle / jump) ---
     // all four frames share one canvas size, so setTexture keeps scale + body constant.
     // Normie ALWAYS stays Normie — even in GIGA CHAD mode (the chad appears as a shadow behind him).
-    var animKey = this.crouching ? 'normie'   // LOCK a single frame while ducking — the run cycle was making it "flash"
+    var animKey = this.crouching ? (this.textures.exists('nduck')?'nduck':'normie')   // real duck pose when the art exists; else locked idle frame
                 : !onGround ? 'njump'
                 : (Math.abs(b.velocity.x)>25 ? ((Math.floor(now/(fast?70:100))%2) ? 'nrun2':'nrun1')
                 : 'normie');
@@ -2914,9 +2918,12 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(mw){
       p.setRotation(Math.sin(now/260)*0.05); p.setScale(bs);   // sit upright on the whale, gentle sea-swell sway
     } else if(this.crouching){
-      // Ducking: squat low & wide + a locked frame (no run-cycle, set above) so it reads as a real
-      // crouch instead of a tiny flicker-squish.
-      p.setRotation(0); p.setScale(bs*1.28, bs*0.52);
+      // Ducking: with the dedicated 'nduck' pose art, render it UNSQUASHED at base scale (the
+      // pose is drawn small/crouched on the shared frame canvas). Fallback (no art yet): the
+      // old wide squash of the locked idle frame.
+      p.setRotation(0);
+      if(p.texture.key==='nduck') p.setScale(bs);
+      else p.setScale(bs*1.28, bs*0.52);
     } else if(!onGround){
       p.setRotation(Phaser.Math.Clamp(b.velocity.x/2600,-0.12,0.12));
       var sy=b.velocity.y<0?1.10:0.93; p.setScale(bs*(2-sy), bs*sy);
