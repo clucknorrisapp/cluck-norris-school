@@ -208,22 +208,19 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 > volume — infra ready). Public "0→32+" organic copy still unverified — keep it off new
 > material until retested. Remove this note when CoinGecko decides.
 
-> 🌹 **PENDING LAUNCH — ROSE 10% BUY SPECIAL (owner-approved 2026-07-19; fire the moment the owner
-> gives the window, likely "tonight").** Model confirmed: ALL qualifying buyers get +10% of their
-> cumulative $ROSE buys, INSTANT payout after the 48h hold check (NOT vested — no dress rehearsal
-> needed). Config: mint `RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF` (OnlyRose, X @RoseKnowsAll25
-> — GT-verified), their TG chat `-1002625127458` (bot is admin; 2 comps ran there before), hourly
-> board updates (engine auto-deletes the previous board), liveHoldFilter on, holdHours 48.
-> **Launch call:** `POST /api/buycomp/start?key=…` with mint/ticker=ROSE/chat=-1002625127458/
-> start/end/`pct=1`/`places=10`/`update=60`/`prize=EVERY qualifying buyer earns +10% of their
-> cumulative $ROSE buys — hold 48h after the window to qualify` (the free-text prize line
-> overrides the ranked default; board doubles as the announcement in their chat). Suggest
-> minVolSol≈0.05 to the owner at fire time if not specified. **Also announce on OUR X**
-> (x-announce, force carve-out per the 2026-07-19 locker-blitz authorization; tag @RoseKnowsAll25;
-> mirror=1 for the silent TG companion). **Close-out:** stop → scan ALL buyers via
-> buyersInWindowMulti (proven live 2026-07-19) → 48h hold check → payout CSV → OWNER signs the
-> airdrop (never automate the send). ST is out of credits — fine (Helius primary verified).
-> Remove this note once the comp is paid out.
+> 🌹 **LIVE — ROSE 10% BUY SPECIAL, comp `bc_e17e8c9703` (launched 2026-07-19 19:29 UTC).**
+> ALL qualifying buyers get +10% of their cumulative $ROSE buys, INSTANT payout after the 48h
+> hold check (NOT vested). Window: **2026-07-19 19:30 UTC (3:30 PM ET, incl. the owner's 30-min
+> early-buy buffer; "official" start 4 PM ET) → 2026-07-21 22:00 UTC (Tue 6 PM ET, hard cutoff)**.
+> Mint `RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF` (OnlyRose, X @RoseKnowsAll25), board in their
+> TG chat `-1002625127458`, hourly updates (prev board auto-deleted), holdHours 48, pct mode,
+> liveHoldFilter on, no minVolSol floor (owner's call). Announced on our X
+> (post 2078924286727762012) + silent TG mirror. **CLOSE-OUT DUTIES (any session after Tue 22:00
+> UTC):** the window self-closes; then scan ALL buyers in 1784489400–1784671200 via
+> `/api/buyspecial-crosscheck` / buyersInWindowMulti, run the 48h hold check on every wallet
+> (holds must survive until ~Thu 2026-07-23 22:00 UTC), produce the payout CSV (wallet → 10% of
+> cumulative buys in $ROSE), and hand it to the OWNER to sign in the airdropper — never automate
+> the send. ST is out of credits — fine (Helius primary proven). Remove this note once paid out.
 
 ## Working agreement
 - ⛔ **STOP MEANS STAY STOPPED (owner rule, 2026-07-04).** When the owner says stop/pull/close
