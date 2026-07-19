@@ -6782,7 +6782,7 @@ a{color:#FCD34D}
       +'<div class="stat"><div class="k">LOCK ACCOUNTS</div><div class="v">'+(d.lockCount||0)+'</div></div>'
       +'<div class="stat"><div class="k">TOTAL SUPPLY</div><div class="v">'+fmt(d.supply)+'</div></div></div>'
       +(d.partial?'<p class="muted" style="margin-top:8px">⚠ Partial read — totals may undercount; refresh in a moment.</p>':'')
-      +'<p class="muted" style="margin-top:8px">Scope: counts Jupiter Lock + Streamflow escrows and permanently frozen self-owned accounts, read live on-chain. Locks on other vesting platforms are not yet detected.</p>'
+      +'<p class="muted" style="margin-top:8px">Scope: counts Jupiter Lock, Streamflow and Bonfida Vesting escrows plus permanently frozen self-owned accounts, read live on-chain. Locks on other vesting platforms are not yet detected.</p>'
       +'<div style="margin-top:14px"><button class="btn" id="shareX">𝕏 Share</button><button class="btn alt" id="copyLink">Copy link</button></div>'
       +'</div>'
       +(bars?'<div class="card"><div class="k" style="margin-bottom:8px">BY PLATFORM</div>'+bars+'</div>':'')
