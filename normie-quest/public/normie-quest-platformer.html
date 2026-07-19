@@ -1134,7 +1134,13 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // level so they always point at the LIVE scene instance)
     try{ var _sc=this; window.__NQ_PAUSE=function(){ if(!_sc.over&&!_sc.paused){ _sc.pauseGame(false); return true; } return false; };
          window.__NQ_RESUME=function(){ if(_sc.paused) _sc.resumeGame(); };
-         window.__NQ_DBG=function(){ try{ return {paused:!!_sc.paused, clockPaused:!!_sc.time.paused, now:Math.round(_sc.time.now), last:Math.round(_sc.lastInputAt||0), warping:!!_sc._warping}; }catch(e){ return {err:String(e)}; } }; }catch(e){}
+         window.__NQ_DBG=function(){ try{ return {paused:!!_sc.paused, clockPaused:!!_sc.time.paused, now:Math.round(_sc.time.now), last:Math.round(_sc.lastInputAt||0), warping:!!_sc._warping, swan:_sc._swanState||null, bossHP:(_sc.bossStarted?_sc.bossHP:null), hasKey:!!_sc.hasKey, level:_sc.def&&_sc.def.name}; }catch(e){ return {err:String(e)}; } };
+         // LAB-only designer levers: grant the level key / land one boss hit (test boss fights &
+         // door flows without a full runthrough). Dormant on the tester build.
+         if(window.__NQ_SETUP){
+           window.__NQ_GRANTKEY=function(){ try{ if(_sc.over||_sc.hasKey) return false; _sc.hasKey=true; if(_sc.keyIcon) _sc.keyIcon.setAlpha(1); if(_sc.key){ _sc.tweens.killTweensOf(_sc.key); _sc.key.destroy(); _sc.key=null; } _sc.flash('LAB: KEY GRANTED','#ffd23f'); return true; }catch(e){ return false; } };
+           window.__NQ_BOSSHIT=function(){ try{ if(_sc.over||!_sc.bossStarted||!_sc.rugking||!_sc.rugking.active) return false; _sc.bossHit(); return true; }catch(e){ return false; } };
+         } }catch(e){}
     var self=this, i;
     var def=this.def=LEVELS[this.levelIdx];
     // SETUP-LANE tier gate, catch-all entry point (checkpoint continues, interludes, bonus-room
@@ -4331,6 +4337,7 @@ if (window.__NQ_SETUP) { (function () {
       + '<div class="note">gravity applies live · enemy speed on next level</div>'
       + '<div class="row"><select id="nql-lvl"></select><input type="number" id="nql-x" placeholder="x" min="0" step="100"><button id="nql-go">GO</button></div>'
       + '<div class="row"><button id="nql-select" style="flex:1">≡ LEVEL SELECT</button></div>'
+      + '<div class="row"><button id="nql-key" style="flex:1">🔑 KEY</button><button id="nql-bosshit" style="flex:1">💥 BOSS HIT</button></div>'
       + '<div class="stats" id="nql-stats">testers: —</div>';
     document.body.appendChild(btn); document.body.appendChild(box);
 
@@ -4367,6 +4374,8 @@ if (window.__NQ_SETUP) { (function () {
       if (typeof window.__NQ_TOLEVELS === 'function') window.__NQ_TOLEVELS();
       box.classList.remove('open');
     };
+    document.getElementById('nql-key').onclick = function () { if (typeof window.__NQ_GRANTKEY === 'function') window.__NQ_GRANTKEY(); box.classList.remove('open'); };
+    document.getElementById('nql-bosshit').onclick = function () { if (typeof window.__NQ_BOSSHIT === 'function') window.__NQ_BOSSHIT(); };
 
     function loadStats() {
       var name = window.__NQ_LEVEL;
