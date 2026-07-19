@@ -6666,11 +6666,17 @@ app.get("/api/token-icon", async (req, res) => {
     fs.mkdirSync(TOKEN_ICON_DIR, { recursive: true });
     const metaPath = path.join(TOKEN_ICON_DIR, mint + ".json");
     const binPath = path.join(TOKEN_ICON_DIR, mint + ".img");
-    if (fs.existsSync(metaPath) && fs.existsSync(binPath)) {
+    if (fs.existsSync(metaPath)) {
       const meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
-      res.setHeader("Content-Type", meta.type || "image/png");
-      res.setHeader("Cache-Control", "public, max-age=604800, immutable");
-      return res.status(200).send(fs.readFileSync(binPath));
+      if (meta.redirect) {   // icon too big to cache — send the client to the source
+        res.setHeader("Cache-Control", "public, max-age=604800, immutable");
+        return res.redirect(302, meta.redirect);
+      }
+      if (fs.existsSync(binPath)) {
+        res.setHeader("Content-Type", meta.type || "image/png");
+        res.setHeader("Cache-Control", "public, max-age=604800, immutable");
+        return res.status(200).send(fs.readFileSync(binPath));
+      }
     }
     const miss = _tokenIconMiss.get(mint);
     if (miss && Date.now() - miss < 600000) return res.status(404).end();
@@ -6688,7 +6694,13 @@ app.get("/api/token-icon", async (req, res) => {
     const type = String(r.headers.get("content-type") || "");
     if (!r.ok || !/^image\//.test(type)) { _tokenIconMiss.set(mint, Date.now()); return res.status(404).end(); }
     const buf = Buffer.from(await r.arrayBuffer());
-    if (!buf.length || buf.length > 524288) { _tokenIconMiss.set(mint, Date.now()); return res.status(404).end(); }
+    if (!buf.length) { _tokenIconMiss.set(mint, Date.now()); return res.status(404).end(); }
+    if (buf.length > 524288) {   // real image, too big for the disk cache (e.g. CLKN's 1.7MB ipfs
+      // PNG) — durable 302 to the source instead of a 404, so big-icon tokens still get a logo.
+      try { fs.writeFileSync(metaPath, JSON.stringify({ redirect: iconUrl, at: Date.now() })); } catch (_) {}
+      res.setHeader("Cache-Control", "public, max-age=604800, immutable");
+      return res.redirect(302, iconUrl);
+    }
     try { fs.writeFileSync(binPath, buf); fs.writeFileSync(metaPath, JSON.stringify({ type, src: iconUrl, at: Date.now() })); } catch (_) {}
     res.setHeader("Content-Type", type);
     res.setHeader("Cache-Control", "public, max-age=604800, immutable");
