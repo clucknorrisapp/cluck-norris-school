@@ -1140,7 +1140,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
          // door flows without a full runthrough). Dormant on the tester build.
          if(window.__NQ_SETUP){
            window.__NQ_GRANTKEY=function(){ try{ if(_sc.over||_sc.hasKey) return false; _sc.hasKey=true; if(_sc.keyIcon) _sc.keyIcon.setAlpha(1); if(_sc.key){ _sc.tweens.killTweensOf(_sc.key); _sc.key.destroy(); _sc.key=null; } _sc.flash('LAB: KEY GRANTED','#ffd23f'); return true; }catch(e){ return false; } };
-           window.__NQ_BOSSHIT=function(){ try{ if(_sc.over||!_sc.bossStarted||!_sc.rugking||!_sc.rugking.active) return false; _sc.bossHit(); return true; }catch(e){ return false; } };
+           window.__NQ_BOSSHIT=function(){ try{ if(_sc.over) return false;
+             if(_sc.worm&&_sc.worm.active){ _sc.wormHit(); return true; }   // 2-3's wormhole has no rugking sprite
+             if(!_sc.bossStarted||!_sc.rugking||!_sc.rugking.active) return false; _sc.bossHit(); return true; }catch(e){ return false; } };
          } }catch(e){}
     var self=this, i;
     var def=this.def=LEVELS[this.levelIdx];
@@ -2271,8 +2273,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       // TRUE FINAL boss (World 10 — the Black Swan) down → the run is complete.
       this.powerBanner('THE SWAN FALLS!','THE CYCLE IS COMPLETE — GG','#b48cff');
       this.time.delayedCall(1800, function(){ this.scene.start('Win',this.winData()); },[],this);
-    } else if(this.def.bossType==='golem'){
-      // World 9's 51% attack defended → the chain held... but something stirs. On to World 10.
+    } else if(this.def.bossType==='golem' && this.def.next!=null){
+      // World 9's 51% attack defended (only 9-3 carries def.next — 6-3's Hash Lord is ALSO a
+      // 'golem' and falls through to its own branch below). On to World 10.
       this.bankCheckpoint();
       this.powerBanner('51% DEFENDED!','THE CHAIN HELD — BUT SOMETHING STIRS…','#3dff6e');
       this.time.delayedCall(2200, function(){ this.advanceLevel(); },[],this);
@@ -2314,21 +2317,24 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       this.powerBanner('SCAM EXPOSED!','WORLD 3 CLEARED','#3dff6e');
       this.time.delayedCall(1800, function(){ this.advanceLevel(); },[],this);
     } else {
-      // Rug King → World 1 done → interlude cutscene (+ World-2 checkpoint), then World 2.
+      // Rug King → World 1 done → WorldClear celebration (+ World-2 checkpoint), then World 2.
       this.bankCheckpoint();
       this.powerBanner('RUG PULLED!','WORLD 1 CLEARED','#3dff6e');
-      this.time.delayedCall(1800, function(){ if(nx<LEVELS.length) this.scene.start('Interlude',{next:nx,score:this.score}); else this.scene.start('Win',this.winData()); },[],this);
+      this.time.delayedCall(1800, function(){ this.advanceLevel(); },[],this);
     }
   },
   winData:function(){ return {score:this.score, boss:this.def.bossType==='blackswan'?'blackswan':this.def.final?'51attack':(this.def.bossType||(this.def.boss?'rugking':'wormhole')), casino:this.registry.get('nqCasino')||0}; },
   advanceLevel:function(){ var next=(this.def&&this.def.next!=null)?this.def.next:this.levelIdx+1;   // def.next skips the hidden block (9-3 → 10-1)
     if(next>=LEVELS.length){ this.scene.start('Win',this.winData()); return; }
     // SETUP-LANE tier gate: cleared the last world your holdings unlock → level select + the
-    // premium panel (verify wallet / hold more NORMIE) instead of the next world.
-    if(!nqWorldAllowed(LEVELS[next])){ this.scene.start('LevelSelect');
+    // premium panel (verify wallet / hold more NORMIE) instead of the next world. A lab-warped
+    // run (owner's bench) stays ungated all the way through and carries the lab flag forward.
+    var lab=this._labWarp?1:undefined;
+    if(!lab && !nqWorldAllowed(LEVELS[next])){ this.scene.start('LevelSelect');
       try{ if(window.__NQ_OPENPREMIUM) window.__NQ_OPENPREMIUM(); }catch(e){} return; }
-    if(typeof BRIEFINGS!=='undefined' && BRIEFINGS[next]) this.scene.start('Briefing',{next:next,score:this.score});   // world-boundary briefing (e.g. 2-3 -> World 3)
-    else this.scene.start('Game',{level:next,score:this.score,lives:3}); },
+    if(typeof WORLD_CLEARS!=='undefined' && WORLD_CLEARS[next]) this.scene.start('WorldClear',{next:next,score:this.score,lab:lab});   // world boundary: celebration + travel page -> Briefing
+    else if(typeof BRIEFINGS!=='undefined' && BRIEFINGS[next]) this.scene.start('Briefing',{next:next,score:this.score,lab:lab});
+    else this.scene.start('Game',{level:next,score:this.score,lives:3,lab:lab}); },
 
   /* ---------- WORMHOLE boss (burrow / erupt; weak point = the blue back shards) ---------- */
   startWormBoss:function(){
@@ -3203,62 +3209,145 @@ var Win=new Phaser.Class({ Extends:Phaser.Scene,
   }
 });
 
-/* ---------- Interlude: World 1 -> World 2 cutscene (Rug King falls -> off to the Sand Lands) ---------- */
-var Interlude=new Phaser.Class({ Extends:Phaser.Scene,
-  initialize:function(){ Phaser.Scene.call(this,{key:'Interlude'}); },
-  init:function(d){ d=d||{}; this.nextLevel=d.next||0; this.score=d.score||0; },
+/* ---------- WorldClear: post-boss celebration + "traveling to the next world" story page ---------- */
+// Keyed by the level you're ABOUT to enter (same keys as BRIEFINGS). Flow after every world boss:
+// bossDefeat banner -> advanceLevel -> WorldClear (fireworks victory tableau, then a traveling page
+// with a story beat + a CRYPTO TERM card + a retro one-liner) -> Briefing (powers/threats) -> Game.
+// boss img/tint/scale mirror the Win scene's tableau values so each defeated boss looks consistent.
+var WORLD_CLEARS = {
+  3:  { world:1, title:'THE RUG KING FALLS!', color:'#3dff6e', bg:0x102a1a,
+        boss:{img:'rugkingdown',scale:58,tint:0,angle:-6},
+        theme:3, dest:'OFF TO THE SAND LANDS…',
+        story:'The Rug King is down — but the liquidity he pulled blew away into the desert, and the Bitcoin Maxis are hoarding it out in the dunes.',
+        term:{name:'RUG PULL',def:'Insiders drain a token\'s liquidity and vanish. Check the locks and the holders BEFORE you ape.'},
+        nostalgia:'THANK YOU NORMIE! BUT YOUR BAGS ARE IN ANOTHER CASTLE…' },
+  6:  { world:2, title:'THE WORMHOLE IS SEALED!', color:'#66ddff', bg:0x1a1030,
+        boss:{img:'wormhole',scale:78,tint:0x88aacc,angle:10},
+        theme:5, dest:'CLIMBING TO THE SKYLINE…',
+        story:'The bridge is sealed. But every exploit starts as a whisper — and the whispers all come from one glowing tower: CRYPTO TWITTER.',
+        term:{name:'FUD',def:'Fear, Uncertainty & Doubt. It spreads faster than facts — and it is usually somebody\'s exit liquidity.'},
+        nostalgia:'IT\'S DANGEROUS TO GO ALONE! TAKE THE AUDIT SHIELD.' },
+  9:  { world:3, title:'THE SCAMMY KOL EXPOSED!', color:'#c99bff', bg:0x140a24,
+        boss:{img:'scammykol',scale:70,tint:0x9a86c8,angle:12},
+        theme:6, dest:'DOWN TO THE EXCHANGE…',
+        story:'The KOL\'s followers scattered. His treasury? "Safe" on a centralized exchange. Time to walk into the vault and take the funds back.',
+        term:{name:'NOT YOUR KEYS',def:'Not your keys, not your coins — if an exchange holds your keys, they hold your crypto.'},
+        nostalgia:'A WINNER IS YOU. NOW MIND THE WITHDRAWAL FEES.' },
+  12: { world:4, title:'THE CUSTODIAN, DELISTED!', color:'#8fe4ff', bg:0x0a1c2a,
+        boss:{img:'ceoboss',scale:74,tint:0x9fd6ee,angle:12},
+        theme:7, dest:'OUT ONTO THE BRIDGE…',
+        story:'Funds are finally in YOUR wallet. One problem: they live on the wrong chain — and the only way across is a creaky cross-chain bridge.',
+        term:{name:'BRIDGE',def:'Locks tokens on one chain, mints them on another. Some of crypto\'s biggest hacks happened right here.'},
+        nostalgia:'NOW YOU\'RE PLAYING WITH POWER. SELF-CUSTODY POWER.' },
+  15: { world:5, title:'THE VAULT WYRM, SLAIN!', color:'#66ff88', bg:0x0e2416,
+        boss:{img:'wyrm',scale:92,tint:0,angle:14},
+        theme:8, dest:'INTO THE DEPEG ZONE…',
+        story:'You made it across. Ahead: a city built on a "stable" coin — and the mint-green ground is already wobbling off its $1.00 peg.',
+        term:{name:'DEPEG',def:'When a stablecoin slips off $1. A few cents of wobble has unwound billions before.'},
+        nostalgia:'THE PEG IS A LIE.' },
+  18: { world:6, title:'THE HASH LORD, CRACKED!', color:'#ffd23f', bg:0x141810,
+        boss:{img:'golem',scale:88,tint:0,angle:12},
+        theme:9, dest:'OFF TO THE YIELD FARM…',
+        story:'The block broke and the peg (barely) held. Downwind, neon fields promise 40,000% APY. Nothing about that sentence is safe.',
+        term:{name:'APY',def:'Annualized yield, compounding included. If it looks too good to be true, it\'s the reward token dumping.'},
+        nostalgia:'HOW HIGH CAN YOU GET? THE LIFTS COMPOUND…' },
+  21: { world:7, title:'THE YIELD REAPER, HARVESTED!', color:'#2ee66a', bg:0x0e2414,
+        boss:{img:'reaper',scale:90,tint:0,angle:12},
+        theme:10, dest:'INTO THE BEAR MARKET…',
+        story:'The farm is harvested — and the music just stopped. The sky turns red. Every chart points down. THE GREAT BEAR is awake.',
+        term:{name:'CAPITULATION',def:'When the last holders give up and sell. Max pain — and, historically, near the bottom.'},
+        nostalgia:'WAR NEVER CHANGES. NEITHER DO MARKET CYCLES.' },
+  24: { world:8, title:'THE GREAT BEAR, SLAIN!', color:'#ff5030', bg:0x1a0808,
+        boss:{img:'greatbear',scale:94,tint:0,angle:12},
+        theme:13, dest:'DOWN INTO THE MINES…',
+        story:'The Bear is down, but the chain that survived him must be secured. Deep below, miners hash in the dark — and something is eating the hashrate.',
+        term:{name:'51% ATTACK',def:'Control most of a chain\'s hashpower and you can rewrite history. Decentralization is the defense.'},
+        nostalgia:'YOU ARE LIKELY TO BE EATEN BY A GRUE. BRING A CANDLE.' },
+  34: { world:9, title:'THE 51% ATTACK, DEFENDED!', color:'#ffb43a', bg:0x140f06,
+        boss:{img:'golem',scale:88,tint:0xffb43a,angle:12},
+        theme:14, dest:'INTO THE EUPHORIA…',
+        story:'The chain held. Number went up. Everyone is rich, leverage is maxed, vibes are immaculate. Nobody is watching the sky.',
+        term:{name:'BLACK SWAN',def:'An event no model priced in — rare, extreme, and obvious only in hindsight.'},
+        nostalgia:'LEVEL 9 WAS NEVER MEANT TO BE THE END.' }
+};
+var WorldClear=new Phaser.Class({ Extends:Phaser.Scene,
+  initialize:function(){ Phaser.Scene.call(this,{key:'WorldClear'}); },
+  init:function(d){ d=d||{}; this.nextLevel=d.next||0; this.score=d.score||0; this.lab=d.lab; this.cfg=WORLD_CLEARS[this.nextLevel]; },
   create:function(){
-    var self=this, cx=W/2; this.cameras.main.setZoom(2).centerOn(W/2,H/2);
-    this.t0=0; this.phase=0; this.done=false; this.duneOff=0;   // t0 captured on the first update tick
+    var self=this, cx=W/2, cfg=this.cfg;
+    this.t0=0; this.phase=0; this.done=false; this.hillOff=0; this._pp=false;
+    if(!cfg){ this.goNext(); return; }   // no entry for this level -> pass straight through
+    this.cameras.main.setZoom(2).centerOn(W/2,H/2);
     SFX.clear();
-    // --- Phase 1: victory tableau (defeated Rug King + triumphant Normie) ---
+    // --- Phase 0: CELEBRATION — fireworks over the defeated boss + triumphant Normie ---
     this.p1=this.add.container(0,0);
-    this.p1.add(this.add.rectangle(cx,H/2,W,H,0x102a1a));
-    var king=this.add.image(cx+46,150,'rugkingdown'); king.setScale(58/king.height); king.setAngle(-6); this.p1.add(king);
-    var hero=this.add.image(cx-40,132,'normie'); hero.setScale(82/hero.height); this.p1.add(hero);
-    this.tweens.add({targets:hero,y:127,duration:700,yoyo:true,repeat:-1,ease:'Sine.inOut'});
+    this.p1.add(this.add.rectangle(cx,H/2,W,H,cfg.bg));
+    var b=this.add.image(cx+52,148,cfg.boss.img); b.setScale(cfg.boss.scale/b.height); b.setAngle(cfg.boss.angle); b.setAlpha(.92);
+    if(cfg.boss.tint) b.setTint(cfg.boss.tint); this.p1.add(b);
+    var hero=this.add.image(cx-44,132,'normie'); hero.setScale(84/hero.height); this.p1.add(hero);
+    this.tweens.add({targets:hero,y:126,duration:650,yoyo:true,repeat:-1,ease:'Sine.inOut'});
     if(this.renderer.type===Phaser.WEBGL){ try{ hero.postFX.addGlow(0xffd23f,1.2,0,false,0.1,16); }catch(e){} }
-    this.p1.add(this.add.text(cx,58,'THE RUG KING FALLS!',{fontFamily:'"Press Start 2P"',fontSize:'13px',color:'#3dff6e',align:'center'}).setOrigin(.5));
-    this.p1.add(this.add.text(cx,84,'WORLD 1 CLEARED',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#ffd23f'}).setOrigin(.5));
-    // --- Phase 2: traveling to the Sand Lands (hidden until phase 1 ends) ---
+    this.p1.add(this.add.text(cx,46,cfg.title,{fontFamily:'"Press Start 2P"',fontSize:'13px',color:cfg.color,align:'center',wordWrap:{width:W-30}}).setOrigin(.5));
+    this.p1.add(this.add.text(cx,72,'WORLD '+cfg.world+' CLEARED',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#ffd23f'}).setOrigin(.5));
+    this.p1.add(this.add.text(cx,208,'SCORE  '+this.score,{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#ffffff'}).setOrigin(.5));
+    // fireworks: spark bursts popping across the top of the tableau while the celebration runs
+    var tints=[0xffd23f,0x3dff6e,0x66ddff,0xff8adf,0xffffff];
+    this.time.addEvent({ delay:360, loop:true, callback:function(){
+      if(self.phase!==0||self.done) return;
+      var x=40+Math.random()*(W-80), y=28+Math.random()*104, tn=tints[(Math.random()*tints.length)|0];
+      var e=self.add.particles(x,y,'spark',{speed:{min:40,max:150},lifespan:520,scale:{start:1.2,end:0},tint:tn,emitting:false,blendMode:'ADD'}).setDepth(30);
+      e.explode(14); self.time.delayedCall(620,function(){ e.destroy(); });
+    }});
+    // --- Phase 1: TRAVELING page — next world's palette + story beat + crypto-term card ---
     this.p2=this.add.container(0,0).setVisible(false);
-    var g=this.add.graphics(); g.fillGradientStyle(0xe0913a,0xe0913a,0x8a4a1e,0x8a4a1e,1); g.fillRect(0,0,W,H); this.p2.add(g);
-    this.p2.add(this.add.circle(W-64,52,24,0xffe08a).setAlpha(.95));
-    this.duneG=this.add.graphics(); this.p2.add(this.duneG);
-    this.scenery=[]; for(var i=0;i<3;i++){ var c=this.add.image(80+i*170, H-40, 'cactus'); c.setScale(22/c.height); this.p2.add(c); this.scenery.push(c); }
-    this.runner=this.add.image(cx-30, H-46, 'nrun1'); this.runner.setScale(40/this.runner.height); this.p2.add(this.runner);
+    var th=THEMES[cfg.theme]||THEMES[0];
+    var g=this.add.graphics(); g.fillGradientStyle(th.sky1,th.sky1,th.sky2,th.sky2,1); g.fillRect(0,0,W,H); this.p2.add(g);
+    this.p2.add(this.add.circle(W-64,40,20,0xffe08a).setAlpha(.5));
+    this.hillG=this.add.graphics(); this.p2.add(this.hillG); this.hillCol=th.hill;
+    this.runner=this.add.image(88,H-40,'nrun1'); this.runner.setScale(38/this.runner.height); this.p2.add(this.runner);
     if(this.renderer.type===Phaser.WEBGL){ try{ this.runner.postFX.addGlow(0x66ccff,1,0,false,0.1,12); }catch(e){} }
-    this.p2.add(this.add.text(cx,52,'OFF TO THE SAND LANDS...',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#2a1408',align:'center'}).setOrigin(.5));
-    this.drawDunes();
-    // tap to skip forward
-    this.input.on('pointerdown',function(){ if(self.phase===0){ self.t0=self.time.now-2800; } else { self.next2(); } });
-    this.input.keyboard.on('keydown',function(){ if(self.phase===0){ self.t0=self.time.now-2800; } else { self.next2(); } });
+    this.p2.add(this.add.text(cx,24,'NOW TRAVELING',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#b6bfe0'}).setOrigin(.5));
+    this.p2.add(this.add.text(cx,42,cfg.dest,{fontFamily:'"Press Start 2P"',fontSize:'12px',color:cfg.color,align:'center',wordWrap:{width:W-24}}).setOrigin(.5));
+    this.p2.add(this.add.text(cx,62,cfg.story,{fontFamily:UIFONT,resolution:UIRES,fontSize:'11px',color:'#eef2ff',align:'center',lineSpacing:2,wordWrap:{width:W-90}}).setOrigin(.5,0));
+    var ty=134;   // crypto-term teaching card
+    this.p2.add(this.add.rectangle(cx,ty+24,W-84,56,0x0d0b1e,0.82).setStrokeStyle(2,0xffd23f));
+    this.p2.add(this.add.text(cx,ty+8,'CRYPTO TERM: '+cfg.term.name,{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffd23f',align:'center',wordWrap:{width:W-104}}).setOrigin(.5));
+    this.p2.add(this.add.text(cx,ty+20,cfg.term.def,{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#d6d1ec',align:'center',lineSpacing:1,wordWrap:{width:W-110}}).setOrigin(.5,0));
+    if(cfg.nostalgia) this.p2.add(this.add.text(cx,H-68,'★ '+cfg.nostalgia+' ★',{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#8f89b8',align:'center',wordWrap:{width:W-60}}).setOrigin(.5));
+    this.drawHills();
+    this.cont=this.add.text(cx,H-11,'TAP TO CONTINUE  ▶',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#3dff6e'}).setOrigin(.5).setDepth(40);
+    var adv=function(){ if(self.done) return; if(self.phase===0){ self.t0=self.time.now-3300; } else { self.goNext(); } };
+    this.input.on('pointerdown',adv); this.input.keyboard.on('keydown',adv); this.adv=adv;
   },
-  next2:function(){   // World-2 intro briefing gates the transition when one exists for this level
-    if(this.done) return; this.done=true;
-    if(typeof BRIEFINGS!=='undefined' && BRIEFINGS[this.nextLevel]) this.scene.start('Briefing',{next:this.nextLevel,score:this.score});
-    else this.scene.start('Game',{level:this.nextLevel,score:this.score,lives:3});
-  },
-  drawDunes:function(){ var d=this.duneG; d.clear();
-    d.fillStyle(0x5c3212,1); for(var i=-1;i<5;i++){ d.fillCircle(i*150 - (this.duneOff%150) + 75, H-14, 66); }
-    d.fillStyle(0x8a5a2b,1); d.fillRect(0,H-24,W,24); d.fillStyle(0x6e4420,1); d.fillRect(0,H-6,W,6);
-  },
+  goNext:function(){ if(this.done) return; this.done=true;
+    if(typeof BRIEFINGS!=='undefined' && BRIEFINGS[this.nextLevel]) this.scene.start('Briefing',{next:this.nextLevel,score:this.score,lab:this.lab});
+    else this.scene.start('Game',{level:this.nextLevel,score:this.score,lives:3,lab:this.lab}); },
+  drawHills:function(){ var d=this.hillG; if(!d) return; d.clear();
+    d.fillStyle(this.hillCol,1); for(var i=-1;i<5;i++){ d.fillCircle(i*150-(this.hillOff%150)+75,H-12,60); }
+    d.fillStyle(0x0a0813,0.35); d.fillRect(0,H-22,W,22); },
   update:function(){
+    if(this.done) return;
     if(!this.t0){ this.t0=this.time.now; return; }   // capture start on the first real tick
     var t=this.time.now-this.t0;
-    if(this.phase===1){
-      var k=(Math.floor(this.time.now/110)%2)?'nrun2':'nrun1'; if(this.runner.texture.key!==k) this.runner.setTexture(k).setScale(40/this.runner.height);
-      this.runner.y=(H-46)+Math.sin(this.time.now/90)*2;
-      this.duneOff+=1.7; this.drawDunes();
-      var self=this; this.scenery.forEach(function(s){ s.x-=1.7; if(s.x<-16) s.x+=W+32; });
+    if(this.phase===1 && this.runner){
+      var k=(Math.floor(this.time.now/110)%2)?'nrun2':'nrun1'; if(this.runner.texture.key!==k) this.runner.setTexture(k).setScale(38/this.runner.height);
+      this.runner.y=(H-40)+Math.sin(this.time.now/90)*2;
+      this.hillOff+=1.7; this.drawHills();
     }
-    if(this.phase===0 && t>2800){ this.phase=1; this.p1.setVisible(false); this.p2.setVisible(true); }
-    if(t>6300 && !this.done){ this.next2(); }
+    if(this.phase===0 && t>3300){ this.phase=1; this.p1.setVisible(false); this.p2.setVisible(true); }
+    if(this.cont) this.cont.setAlpha(0.4+0.6*Math.abs(Math.sin(this.time.now/300)));
+    // controller: any button press advances (edge-triggered; grace so the boss-kill press can't skip)
+    var press=false;
+    try{ var ps=(navigator.getGamepads?navigator.getGamepads():[]); for(var i=0;i<ps.length;i++){ var gp=ps[i]; if(!gp) continue;
+      var B=gp.buttons||[]; for(var j=0;j<B.length;j++){ if(B[j]&&(B[j].pressed||B[j].value>0.5)){ press=true; break; } } if(press) break; }}catch(e){}
+    if(press && !this._pp && t>600 && this.adv) this.adv();
+    this._pp=press;
+    if(t>14000) this.goNext();   // safety auto-advance — can never soft-lock
   }
 });
 
 // Between-world BRIEFING cards: introduce new powers + what to watch for. Keyed by the level
-// you're ABOUT to enter. Reusable — add an entry (e.g. 6 for World 3) and the Interlude/flow
+// you're ABOUT to enter. Reusable — add an entry (e.g. 6 for World 3) and the WorldClear/flow
 // will route through it automatically. tex values must be loaded texture keys.
 var BRIEFINGS = {
   3: { title:'WORLD 2 — THE SAND LANDS',
@@ -3409,7 +3498,7 @@ var Controls=new Phaser.Class({ Extends:Phaser.Scene,
 /* ---------- Briefing: reusable "new powers / watch for" intel card between worlds ---------- */
 var Briefing=new Phaser.Class({ Extends:Phaser.Scene,
   initialize:function(){ Phaser.Scene.call(this,{key:'Briefing'}); },
-  init:function(d){ d=d||{}; this.nextLevel=d.next||0; this.score=d.score||0;
+  init:function(d){ d=d||{}; this.nextLevel=d.next||0; this.score=d.score||0; this.lab=d.lab;
     this.cfg=BRIEFINGS[this.nextLevel]||{title:'GET READY',powers:[],threats:[],tip:''}; },
   create:function(){
     var self=this, cx=W/2; this.cameras.main.setZoom(2).centerOn(W/2,H/2);
@@ -3447,7 +3536,7 @@ var Briefing=new Phaser.Class({ Extends:Phaser.Scene,
     this.input.keyboard.on('keydown',function(){ self.go(); });
     padAdvance(this, function(){ self.go(); });   // controller button also starts
   },
-  go:function(){ if(this.done) return; this.done=true; SFX.power(); this.scene.start('Game',{level:this.nextLevel,score:this.score,lives:3}); },
+  go:function(){ if(this.done) return; this.done=true; SFX.power(); this.scene.start('Game',{level:this.nextLevel,score:this.score,lives:3,lab:this.lab}); },
   update:function(){ if(!this.t0){ this.t0=this.time.now; return; }
     if(this.cont) this.cont.setAlpha(0.4+0.6*Math.abs(Math.sin(this.time.now/300)));
     if(this.time.now-this.t0>16000) this.go();   // safety auto-advance so it can never soft-lock
@@ -3460,7 +3549,7 @@ var NQGAME=new Phaser.Game({
   type:Phaser.AUTO, parent:'screen', width:W*2, height:H*2, pixelArt:true, backgroundColor:'#0a0813', roundPixels:true,
   scale:{ mode:Phaser.Scale.FIT, autoCenter:Phaser.Scale.CENTER_BOTH },
   physics:{ default:'arcade', arcade:{ gravity:{y:900}, debug:false } },
-  scene:[Boot,Title,LevelSelect,Controls,Gate,Game,Over,Win,Interlude,Briefing]
+  scene:[Boot,Title,LevelSelect,Controls,Gate,Game,Over,Win,WorldClear,Briefing]
 });
 // Global "jump to LEVEL SELECT" hook — works from ANY scene (title, game, over, win), so the
 // reliable DOM "≡ Levels" button is never a dead end. Stops whatever's running, then starts it.
@@ -3477,6 +3566,17 @@ try{ if(typeof window!=='undefined') window.__NQ_STARTLEVEL=function(idx,x){ try
   NQGAME.scene.getScenes(true).forEach(function(sc){ var k=sc.sys&&sc.sys.settings&&sc.sys.settings.key; if(k) NQGAME.scene.stop(k); });
   NQGAME.scene.start('Game',{level:Math.max(0,Math.floor(idx)||0),score:0,lives:3,spawnX:(x>0?x:undefined),lab:1});
 }catch(e){} }; }catch(e){}
+// LAB toolkit: scene observability for the headless test harness — active scene keys + the
+// visible text objects (so a script can assert "WorldClear is showing THE RUG KING FALLS!").
+// Setup-lane only, read-only.
+try{ if(typeof window!=='undefined') window.__NQ_SCENES=function(){ try{
+  if(!window.__NQ_SETUP) return null;
+  var out=[]; NQGAME.scene.getScenes(true).forEach(function(sc){
+    var k=sc.sys&&sc.sys.settings&&sc.sys.settings.key, txt=[];
+    try{ sc.children.list.forEach(function(o){ if(o.text) txt.push(o.text); if(o.list) o.list.forEach(function(c){ if(c.text&&c.parentContainer&&c.parentContainer.visible) txt.push(c.text); }); }); }catch(e){}
+    out.push({key:k,text:txt.join(' | ')});
+  }); return out;
+}catch(e){ return [{key:'err',text:String(e)}]; } }; }catch(e){}
 // LAB toolkit: level list for the warp dropdown (name + width so the panel can bound the x input).
 try{ if(typeof window!=='undefined') window.__NQ_LEVELS_LIST=LEVELS.map(function(l,i){ return {i:i,name:l.name,sub:l.sub||'',width:l.width||5000}; }); }catch(e){}
 // Real world count for the setup-lane leaderboard chips (same formula the Win scenes use).
