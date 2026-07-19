@@ -1104,6 +1104,14 @@ function nqWorldAllowed(def){
   if(Array.isArray(a)&&a.length===2) return w>=a[0]&&w<=a[1];
   return w<=2;
 }
+// MEGA WHALE is a TOP-TIER holder perk (owner's call 2026-07-19): only the 'all'-worlds tier
+// (500k NORMIE / 2M CLKN verified) gets to ride. Same semantics as nqWorldAllowed — outside the
+// setup lane (no wallet tiers there) it stays open, and the owner's lab-warp bench bypasses it.
+function nqMegaWhaleUnlocked(){
+  if(!window.__NQ_SETUP) return true;
+  var a=null; try{ a=(typeof window.__NQ_ACCESS==='function')?window.__NQ_ACCESS():null; }catch(e){}
+  return a==='all';
+}
 function nqTele(ev,d){
   try{
     var b=JSON.stringify(Object.assign({ev:ev},d||{}));
@@ -1447,6 +1455,15 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       o.setScale((pw[0]==='candle'?46:40)/o.height).setDepth(6);
       o.body.setAllowGravity(false); o.body.setSize(o.width*1.6,o.height*1.4);
       self.tweens.add({targets:o,y:pw[2]-11,duration:800,yoyo:true,repeat:-1,ease:'Sine.inOut'});
+      // MEGA WHALE holder-perk gate: non-top-tier players see it greyed + locked (an upsell,
+      // not a secret) — touching it flashes the unlock hint instead of collecting.
+      if(pw[0]==='megawhale' && ((!nqMegaWhaleUnlocked() && !self._labWarp) || window.__NQ_FORCE_MW_LOCK)){
+        o.puLocked=true; o.setTint(0x8890a8); o.setAlpha(0.55);
+        var lk=self.add.text(pw[1],pw[2]-26,'🔒',{fontSize:'14px'}).setOrigin(.5).setDepth(7);
+        self.tweens.add({targets:lk,y:pw[2]-37,duration:800,yoyo:true,repeat:-1,ease:'Sine.inOut'});
+        o.puLockIcon=lk;
+        return;   // no glow halo on a locked pickup
+      }
       var pg=self.addGlow(o, PUCOL[pw[0]]||0xffffff, 4);
       if(pg) self.tweens.add({targets:pg,outerStrength:11,duration:620,yoyo:true,repeat:-1,ease:'Sine.inOut'});
     });
@@ -1682,7 +1699,12 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   },
 
   grabPowerup:function(player,pu){
-    var type=pu.ptype, px=pu.x, py=pu.y; this.tweens.killTweensOf(pu); pu.destroy(); this.burst(px,py,0xffffff,20);
+    if(pu.puLocked){
+      // tier can flip live (post-buy refresh) — re-check on touch, unlock in place if it did
+      if(nqMegaWhaleUnlocked() && !window.__NQ_FORCE_MW_LOCK){ pu.puLocked=false; pu.clearTint(); pu.setAlpha(1); if(pu.puLockIcon){ pu.puLockIcon.destroy(); pu.puLockIcon=null; } }
+      else { var lnow=this.time.now; if(!this._puLockFlashAt||lnow-this._puLockFlashAt>1500){ this._puLockFlashAt=lnow; this.flash('🔒 MEGA WHALE — 500K NORMIE HOLDER PERK','#9fb0d0'); } return; }
+    }
+    var type=pu.ptype, px=pu.x, py=pu.y; this.tweens.killTweensOf(pu); if(pu.puLockIcon) pu.puLockIcon.destroy(); pu.destroy(); this.burst(px,py,0xffffff,20);
     var now=this.time.now;
     if(type==='diamond'){ this.shieldUntil=now+9000; this.powerBanner('DIAMOND HANDS','UNSHAKEABLE — no damage 9s','#66ddff'); }
     else if(type==='bull'){ this.bullUntil=now+11000; this.powerBanner('BULL MARKET','MEGA JUMP — 11s','#3dff6e'); }
