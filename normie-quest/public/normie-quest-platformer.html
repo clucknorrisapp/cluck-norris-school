@@ -1108,6 +1108,13 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
 
   create:function(){
     this.physics.resume();   // CRITICAL: the Arcade world stays paused across scene restarts; every level/replay must un-pause it
+    // SAME trap, two more plugins: pauseGame also freezes the CLOCK (this.time.paused) and the
+    // tweens — and both survive scene restarts. Leaving a paused level (level select, LAB warp)
+    // carried a frozen clock into the next level, killing every delayedCall there: the speakeasy
+    // warp's 340ms completion never fired ("secret entrance doesn't work"), boss-defeat
+    // transitions hung, timers died. Reset ALL pause machinery on every level entry.
+    try{ this.time.paused=false; }catch(e){}
+    try{ this.tweens.resumeAll(); }catch(e){}
     this.paused=false; this.lastInputAt=this.time.now;   // pause state + idle-auto-pause timer
     this._lvStartAt=Date.now(); this._lvDeaths=0;        // difficulty telemetry: time-in-level + lives lost this level
     // Drain gamepad edge-latches left over from menu navigation: the START press that launched
@@ -1117,7 +1124,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // DOM-overlay hooks (feedback modal pauses the game while a tester types; reassigned each
     // level so they always point at the LIVE scene instance)
     try{ var _sc=this; window.__NQ_PAUSE=function(){ if(!_sc.over&&!_sc.paused){ _sc.pauseGame(false); return true; } return false; };
-         window.__NQ_RESUME=function(){ if(_sc.paused) _sc.resumeGame(); }; }catch(e){}
+         window.__NQ_RESUME=function(){ if(_sc.paused) _sc.resumeGame(); };
+         window.__NQ_DBG=function(){ try{ return {paused:!!_sc.paused, clockPaused:!!_sc.time.paused, now:Math.round(_sc.time.now), last:Math.round(_sc.lastInputAt||0), warping:!!_sc._warping}; }catch(e){ return {err:String(e)}; } }; }catch(e){}
     var self=this, i;
     var def=this.def=LEVELS[this.levelIdx];
     // SETUP-LANE tier gate, catch-all entry point (checkpoint continues, interludes, bonus-room
@@ -1627,11 +1635,16 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.time.now < this._warpCool) return;   // brief immunity right after returning
     if(!this.crouching) return;                   // the secret knock: you must DUCK in front to slip in
     this._warping=true; w.used=true;
-    var used=this.registry.get('nqUsedWarps')||{}; if(w.warpKey) used[w.warpKey]=1; this.registry.set('nqUsedWarps', used);   // remember it across the bonus-room round-trip
     this.registry.set('nqRetLvl', this.levelIdx); this.registry.set('nqRetX', Math.round(w.x+70));
     this.cameras.main.flash(360, 120, 60, 170); SFX.power();
-    var tgt=w.target;
-    this.time.delayedCall(340, function(){ this.scene.start('Game',{level:tgt, score:this.score, lives:this.lives}); }, [], this);
+    var tgt=w.target, wk=w.warpKey;
+    this.time.delayedCall(340, function(){
+      // mark the speakeasy SPENT only when the transition actually happens — writing it up-front
+      // meant a swallowed transition (the frozen-clock bug) left the door dark for the whole
+      // session with the player never having been inside.
+      var used=this.registry.get('nqUsedWarps')||{}; if(wk) used[wk]=1; this.registry.set('nqUsedWarps', used);
+      this.scene.start('Game',{level:tgt, score:this.score, lives:this.lives});
+    }, [], this);
   },
   returnFromHidden:function(){   // a hidden bonus level's exit → back to the source level where we ducked in
     if(this.over) return; this.over=true; this.physics.pause(); SFX.clear();
