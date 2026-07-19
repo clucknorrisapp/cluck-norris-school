@@ -1180,7 +1180,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         var _gp=def.gaps||[], _W=def.width||5200, _inGap=function(x){ for(var _i=0;_i<_gp.length;_i++){ if(x>=_gp[_i][0]-30&&x<=_gp[_i][1]+30) return true; } return false; };
         var _wx=Math.round(_W*0.62); for(var _t=0;_t<40&&_inGap(_wx);_t++) _wx+=40;
         if(!_inGap(_wx)) def.miniworms=(def.miniworms||[]).concat([_wx]);
-        if(this.levelIdx===12||this.levelIdx===18||this.levelIdx===24){
+        if(this.levelIdx===12||this.levelIdx===18||this.levelIdx===24||this.levelIdx===34){   // world openers 5/7/9/10
           var _pl=def.plats||[], _best=null;
           for(var _p=0;_p<_pl.length;_p++){ var _ty=_pl[_p][2]; if(_ty!=null&&(_best===null||_ty<_best.ty)) _best={ x:_pl[_p][0]+Math.round((_pl[_p][1]||1)*TILE/2), ty:_ty }; }
           if(_best) def.powerups=(def.powerups||[]).concat([['discs',_best.x,_best.ty-24]]);
