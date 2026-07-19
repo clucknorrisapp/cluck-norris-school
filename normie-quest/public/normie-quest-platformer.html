@@ -3566,7 +3566,22 @@ try{ if(typeof window!=='undefined') window.__NQ_STARTLEVEL=function(idx,x){ try
   if(!window.__NQ_SETUP) return;
   NQGAME.scene.getScenes(true).forEach(function(sc){ var k=sc.sys&&sc.sys.settings&&sc.sys.settings.key; if(k) NQGAME.scene.stop(k); });
   NQGAME.scene.start('Game',{level:Math.max(0,Math.floor(idx)||0),score:0,lives:3,spawnX:(x>0?x:undefined),lab:1});
+  try{ sessionStorage.removeItem('nqPendingWarp'); }catch(e){}   // warp landed — clear the reload-resume note
 }catch(e){} }; }catch(e){}
+// LAB warp survives a tab reload (Phantom/iOS silently evicts+reloads tabs mid-gesture — the
+// native <select> picker backgrounds the page, and a reload there loses the warp and boots you
+// back to 1-1). The DOM GO button stores its target in sessionStorage BEFORE warping; a fresh
+// boot in the setup lane finds it here and resumes the warp once the Boot scene is done.
+try{ if(typeof window!=='undefined' && window.__NQ_SETUP){
+  var _pw=null; try{ _pw=JSON.parse(sessionStorage.getItem('nqPendingWarp')||'null'); }catch(e){}
+  if(_pw && typeof _pw.i==='number' && Date.now()-_pw.t<120000){
+    var _pwTries=0, _pwIv=setInterval(function(){ _pwTries++;
+      try{ var act=NQGAME.scene.getScenes(true).map(function(sc){ return sc.sys&&sc.sys.settings&&sc.sys.settings.key; });
+        if(act.length && act.indexOf('Boot')<0){ clearInterval(_pwIv); window.__NQ_STARTLEVEL(_pw.i,_pw.x); } }catch(e){}
+      if(_pwTries>160) clearInterval(_pwIv);   // ~40s cap, then give up quietly
+    },250);
+  } else if(_pw){ try{ sessionStorage.removeItem('nqPendingWarp'); }catch(e){} }
+} }catch(e){}
 // LAB toolkit: scene observability for the headless test harness — active scene keys + the
 // visible text objects (so a script can assert "WorldClear is showing THE RUG KING FALLS!").
 // Setup-lane only, read-only.
@@ -4466,8 +4481,16 @@ if (window.__NQ_SETUP) { (function () {
       if (!L || !L.length) { if (++tries < 40) return void setTimeout(fill, 250); return; }
       lvl.innerHTML = L.map(function (l) { return '<option value="' + l.i + '" data-w="' + l.width + '">' + l.name + ' ' + l.sub + '</option>'; }).join('');
     })();
+    function warpToast(t) { try { var el = document.createElement('div'); el.textContent = t;
+      el.style.cssText = 'position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:100003;background:#221436;color:#c9ffd9;border:1px solid #3dff6e;border-radius:8px;font:12px monospace;padding:6px 12px;pointer-events:none';
+      document.body.appendChild(el); setTimeout(function () { el.remove(); }, 1600); } catch (e) {} }
     document.getElementById('nql-go').onclick = function () {
-      var idx = Number(lvl.value) || 0, x = Number(xin.value) || 0;
+      var opt = lvl.options[lvl.selectedIndex];                      // read the committed selection explicitly (iOS pickers)
+      var idx = Number(opt ? opt.value : lvl.value); if (!isFinite(idx)) idx = 0;
+      var x = Number(xin.value) || 0;
+      // store the target FIRST — if Phantom/iOS reloads the tab mid-gesture, boot resumes this warp
+      try { sessionStorage.setItem('nqPendingWarp', JSON.stringify({ i: idx, x: x, t: Date.now() })); } catch (e) {}
+      warpToast('WARP → ' + (opt ? opt.text : ('level ' + idx)));
       if (typeof window.__NQ_STARTLEVEL === 'function') window.__NQ_STARTLEVEL(idx, x);   // works from ANY scene (title included)
       else if (typeof window.__NQ_WARP === 'function') window.__NQ_WARP(idx, x);
       box.classList.remove('open');
