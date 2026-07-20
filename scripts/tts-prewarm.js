@@ -12,6 +12,11 @@
  * mirror it in COLLECT_SRC below or the pre-warmed keys stop matching.
  *
  * Usage:  node scripts/tts-prewarm.js --langs hi,pt,vi [--base https://clucknorris.app] [--dry]
+ *         In containers whose headless chromium can't reach external HTTPS, serve dist+public
+ *         locally (symlink both into one docroot, python3 -m http.server) and pass
+ *         --site http://localhost:<port> --path /index.html — pages load locally, POSTs go to
+ *         --base (prod). STATUS: collector verified against the local render; the full synth
+ *         drip has not been run yet (parked when priorities shifted 2026-07-20).
  * Notes:  needs playwright + chromium (ops environment, not Railway). Stops cleanly when the
  *         server answers 503 (TTS_DAILY_CHAR_CAP reached) — rerun tomorrow; already-cached
  *         chunks respond fast and burn nothing, so reruns are cheap and resumable.
