@@ -4254,11 +4254,43 @@ if (window.__NQ_SETUP) { (function () {
     { id: 'exodus',   name: 'Exodus',   icon: '🚀', detect: function () { return (window.exodus && window.exodus.solana) || null; } },
     { id: 'bitget',   name: 'Bitget',   icon: '🌊', detect: function () { return (window.bitkeep && window.bitkeep.solana) || (window.bitgetWallet && window.bitgetWallet.solana) || null; } },
   ];
+  // Wallet Standard discovery — modern wallets (Jupiter Mobile/extension especially) may register
+  // ONLY through these events and never touch window.* globals, which is why a Jupiter-only user
+  // saw no option. The app announces itself ('wallet-standard:app-ready') and listens for wallets
+  // ('wallet-standard:register-wallet'); every registered Solana-capable wallet lands in _stdWallets.
+  var _stdWallets = [];
+  function _stdHasSolana(w) { try { return !!(w && (w.chains || []).some(function (c) { return String(c).indexOf('solana:') === 0; }) && w.features && w.features['standard:connect'] && w.features['solana:signMessage']); } catch (e) { return false; } }
+  var _stdApi = { register: function () { for (var i = 0; i < arguments.length; i++) { var w = arguments[i]; if (w && _stdWallets.indexOf(w) < 0 && _stdHasSolana(w)) _stdWallets.push(w); } return function () {}; } };
+  try {
+    window.addEventListener('wallet-standard:register-wallet', function (ev) { try { if (ev && typeof ev.detail === 'function') ev.detail(_stdApi); } catch (e) {} });
+    window.dispatchEvent(new CustomEvent('wallet-standard:app-ready', { detail: _stdApi }));
+  } catch (e) {}
+  // Adapt a standard wallet to the provider shape connectWallet expects (connect() -> {publicKey},
+  // signMessage(bytes) -> {signature}).
+  function _stdAdapter(w) {
+    var acct = null;
+    return {
+      _std: true,
+      connect: function () { return w.features['standard:connect'].connect().then(function (out) {
+        var accs = (out && out.accounts && out.accounts.length ? out.accounts : w.accounts) || [];
+        var a = accs[0]; if (!a) throw new Error('No account authorized in ' + (w.name || 'wallet'));
+        acct = a; return { publicKey: { toString: function () { return a.address; } } }; }); },
+      signMessage: function (bytes) { return w.features['solana:signMessage'].signMessage({ account: acct, message: bytes }).then(function (res) {
+        var r = (res && res[0]) || res || {}; return { signature: r.signature }; }); },
+    };
+  }
   function detectWallets() {
+    try { window.dispatchEvent(new CustomEvent('wallet-standard:app-ready', { detail: _stdApi })); } catch (e) {}   // catch late-loading wallets on every open
     var found = [], seen = [];
     for (var i = 0; i < WALLET_DEFS.length; i++) {
       var p = null; try { p = WALLET_DEFS[i].detect(); } catch (e) {}
       if (p && seen.indexOf(p) < 0) { seen.push(p); found.push({ id: WALLET_DEFS[i].id, name: WALLET_DEFS[i].name, icon: WALLET_DEFS[i].icon, provider: p }); }
+    }
+    // Wallet-Standard-registered wallets not already found by a legacy global (dedupe by name)
+    for (var j = 0; j < _stdWallets.length; j++) {
+      var sw = _stdWallets[j], nm = String(sw.name || 'Wallet').slice(0, 24);
+      var dup = found.some(function (f) { var a = f.name.toLowerCase(), b = nm.toLowerCase(); return a === b || b.indexOf(a) >= 0 || a.indexOf(b) >= 0; });
+      if (!dup) found.push({ id: 'std' + j, name: nm, icon: '👛', img: (typeof sw.icon === 'string' && sw.icon.indexOf('data:image/') === 0) ? sw.icon : null, provider: _stdAdapter(sw) });
     }
     // anything injected we don't have a label for (covers new wallets automatically)
     if (window.solana && seen.indexOf(window.solana) < 0) found.push({ id: 'injected', name: 'Injected wallet', icon: '👛', provider: window.solana });
@@ -4420,7 +4452,8 @@ if (window.__NQ_SETUP) { (function () {
         if (det.length) {
           // one button per DETECTED wallet — auto-detected, user picks (single wallet = single button)
           host.innerHTML = intro + det.map(function (w, i) {
-            return '<button class="nqp-b" data-wi="' + i + '" style="margin-bottom:6px">' + w.icon + ' Connect ' + esc(w.name) + '</button>';
+            var ic = w.img ? '<img src="' + w.img + '" alt="" style="width:16px;height:16px;vertical-align:-3px;border-radius:4px"> ' : (w.icon + ' ');
+            return '<button class="nqp-b" data-wi="' + i + '" style="margin-bottom:6px">' + ic + 'Connect ' + esc(w.name) + '</button>';
           }).join('') + '<div class="nqp-sub" id="nqp-walerr" style="margin-top:10px;color:#ff9db8"></div>';
           host.querySelectorAll('button[data-wi]').forEach(function (b) {
             b.addEventListener('click', function () {
@@ -4438,8 +4471,15 @@ if (window.__NQ_SETUP) { (function () {
             ? '<div class="nqp-sub" style="margin-bottom:8px">📱 No wallet detected in this browser — open the game inside your wallet app:</div>'
               + '<a class="nqp-b" style="display:block;text-decoration:none;text-align:center;margin-bottom:6px" href="https://phantom.app/ul/browse/' + url + '?ref=' + ref + '">🔮 Open in Phantom</a>'
               + '<a class="nqp-b" style="display:block;text-decoration:none;text-align:center;margin-bottom:6px" href="https://solflare.com/ul/v1/browse/' + url + '?ref=' + ref + '">☀️ Open in Solflare</a>'
-              + '<div class="nqp-sub">The link only opens this page in the wallet\'s browser — nothing is signed or shared by it.</div>'
+              + '<button class="nqp-b alt" id="nqp-copylink" style="display:block;width:100%;margin-bottom:6px">🪐 Jupiter Mobile: copy link, paste in its browser</button>'
+              + '<div class="nqp-sub">The links only open this page in the wallet\'s browser — nothing is signed or shared by them. In Jupiter Mobile, open the in-app browser and paste the copied link; the connect button appears there.</div>'
             : '<div class="nqp-sub">No Solana wallet detected in this browser. Install Phantom, Solflare or the Jupiter wallet extension, then reload this page.</div>');
+          var cpb = host.querySelector('#nqp-copylink');
+          if (cpb) cpb.addEventListener('click', function () {
+            var done = function () { cpb.textContent = '✓ Link copied — paste it in Jupiter\'s browser'; };
+            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(location.href).then(done).catch(function () { prompt('Copy this link:', location.href); });
+            else prompt('Copy this link:', location.href);
+          });
         }
       }
     }
