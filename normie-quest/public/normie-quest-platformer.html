@@ -4297,7 +4297,7 @@ if (window.__NQ_SETUP) { (function () {
     return found;
   }
   function provider() { var w = detectWallets(); return w.length ? w[0].provider : null; }
-  async function connectWallet(chosen) {
+  async function connectWallet(chosen, walletName) {
     var p = chosen || provider();
     if (!p) throw new Error('No Solana wallet found. Install Phantom, Solflare or Jupiter, then reload.');
     var resp = await p.connect();
@@ -4308,7 +4308,7 @@ if (window.__NQ_SETUP) { (function () {
     var signed = await p.signMessage(enc, 'utf8');
     var sigBytes = signed && signed.signature ? signed.signature : signed;
     var vr = await (await fetch('/api/nq/wallet/verify', { method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ pubkey: pk, signature: b58encode(sigBytes) }) })).json();
+      body: JSON.stringify({ pubkey: pk, signature: b58encode(sigBytes), walletName: walletName || null }) })).json();
     if (!vr.ok) throw new Error('Verify failed: ' + (vr.status || '?'));
     walletState = { pubkey: pk, token: vr.token, tier: vr.tier, worlds: vr.worlds, balances: vr.balances };
     saveWallet();
@@ -4459,7 +4459,7 @@ if (window.__NQ_SETUP) { (function () {
             b.addEventListener('click', function () {
               var w = det[Number(b.getAttribute('data-wi'))];
               ov.querySelector('#nqp-walerr').textContent = 'Connecting ' + w.name + '…';
-              connectWallet(w.provider).then(function () { renderWallet(); }).catch(function (e) { ov.querySelector('#nqp-walerr').textContent = e.message || String(e); });
+              connectWallet(w.provider, w.name).then(function () { renderWallet(); }).catch(function (e) { ov.querySelector('#nqp-walerr').textContent = e.message || String(e); });
             });
           });
         } else {

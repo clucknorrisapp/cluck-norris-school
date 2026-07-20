@@ -13,6 +13,7 @@
 // page list in server.js — this route is simply not in it).
 
 const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const router = express.Router();
 const burn = require('./normie-burn');   // Phase 1 burn-to-play backend (dormant until env-configured)
@@ -151,7 +152,19 @@ router.get('/api/nq/wallet/challenge', (req, res) => {
 router.post('/api/nq/wallet/verify', async (req, res) => {
   try {
     const b = req.body || {};
-    res.json(await wallet.verify(String(b.pubkey || ''), String(b.signature || '')));
+    const out = await wallet.verify(String(b.pubkey || ''), String(b.signature || ''));
+    // which wallet apps testers actually connect with (aggregate counts only, no pubkeys) —
+    // feeds the rollout decisions ("is everyone on Jupiter?"). Durable next to the telemetry.
+    if (out && out.ok && b.walletName) {
+      try {
+        const f = path.join(process.env.DATA_DIR || '/data', 'nq-wallet-usage.json');
+        let m = {}; try { m = JSON.parse(fs.readFileSync(f, 'utf8')) || {}; } catch (e) {}
+        const k = String(b.walletName).replace(/[^\w .-]/g, '').slice(0, 24) || 'unknown';
+        m[k] = (m[k] || 0) + 1;
+        fs.writeFileSync(f, JSON.stringify(m));
+      } catch (e) { /* counting is best-effort */ }
+    }
+    res.json(out);
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
 // re-read live balance for a remembered wallet (no re-signing) → current tier, every launch
@@ -307,6 +320,8 @@ router.get('/normie-quest-x7/dashboard', async (req, res) => {
   try { comments = (feedback.list() || []).slice().reverse(); } catch (e) { comments = []; }
   let lb = null;
   try { lb = await leaderboard.boards({ n: 10 }); } catch (e) { lb = null; }
+  let walletUse = {};
+  try { walletUse = JSON.parse(fs.readFileSync(path.join(process.env.DATA_DIR || '/data', 'nq-wallet-usage.json'), 'utf8')) || {}; } catch (e) {}
 
   // natural level order: 1-1 … 10-3 first, hidden/bonus names after (alphabetical)
   const rows = d.worlds.slice().sort(function (a, b) {
@@ -394,6 +409,11 @@ router.get('/normie-quest-x7/dashboard', async (req, res) => {
     + '</div><div>'
     + '<h2>📅 LEADERBOARD — THIS WEEK</h2><table><tr><th>#</th><th>NAME</th><th>WORLD</th><th>SCORE</th></tr>' + lbRows(lb && lb.weekly) + '</table>'
     + '</div></div>'
+    + '<h2>👛 WALLET CONNECTS BY APP</h2>'
+    + (Object.keys(walletUse).length
+      ? '<table><tr><th>WALLET</th><th>CONNECTS</th></tr>' + Object.entries(walletUse).sort((a, b) => b[1] - a[1])
+          .map(([k, n]) => '<tr><td>' + esc(k) + '</td><td>' + n + '</td></tr>').join('') + '</table>'
+      : '<div class="dim">No wallet connects recorded yet (counting started 2026-07-20).</div>')
     + '<h2>💬 LATEST COMMENTS (' + comments.length + ' total)</h2>' + commentCards
     + '</body></html>');
 });
