@@ -1862,7 +1862,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     }
     if(player.invuln||now<this.shieldUntil||now<this.coldUntil) return;   // i-frames / diamond / cold wallet: no damage
     if(enemy.kind==='bitmaxi'){ this.maxiSteal(player,enemy); return; }   // Bitcoin Maxi robs coins instead of dealing damage
-    this.hurt(player, enemy.x<player.x?1:-1);
+    this.hurt(player, enemy.x<player.x?1:-1, (enemy.kind?String(enemy.kind).toUpperCase():'ENEMY')+' TOUCH');
   },
   // Bitcoin Maxi: "everything but BTC is trash" — on contact he STEALS your coins (score) and
   // bolts, rather than costing a life. Stomp him (or Giga/Moon-smash) to stop the theft.
@@ -1877,7 +1877,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // the thief cackles and sprints off in the direction he was heading
     maxi.baseSpeed=Math.min(maxi.baseSpeed*1.6,150); this.cameras.main.shake(90,.006);
   },
-  spikeHit:function(player,spike){ var now=this.time.now; if(this.over||player.invuln||now<this.shieldUntil||now<this.moonUntil||now<this.omegaUntil||now<this.whaleUntil||now<this.coldUntil) return; this.hurt(player, player.body.velocity.x>0?-1:1); },
+  spikeHit:function(player,spike){ var now=this.time.now; if(this.over||player.invuln||now<this.shieldUntil||now<this.moonUntil||now<this.omegaUntil||now<this.whaleUntil||now<this.coldUntil) return; this.hurt(player, player.body.velocity.x>0?-1:1, 'SPIKES'); },
 
   tryDoor:function(player,door){
     if(this.over) return;
@@ -1939,7 +1939,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var onTop=(player.body.bottom<=k.body.top+14)&&player.body.velocity.y>=-20;
     if(onTop){ player.setVelocityY(-340); this.bossHit(); return; }
     if(player.invuln||now<this.shieldUntil||now<this.coldUntil) return;
-    this.hurt(player, k.x<player.x?1:-1);
+    this.hurt(player, k.x<player.x?1:-1, 'BOSS TOUCH: '+String((this.def&&this.def.bossType)||'rugking').toUpperCase());
   },
   /* ---------- Scammy KOL boss (charges + stomp x3, and shills fake tokens at range) ---------- */
   startKolBoss:function(){
@@ -1969,7 +1969,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.over||!this.enemyShots) return; var self=this;
     var base=Math.atan2((p.y-8)-k.y, p.x-k.x);
     [-0.16,0.16].forEach(function(off){
-      var ang=base+off, sp=190, s=self.enemyShots.create(k.x, k.y-6, 'bullet').setDepth(6);
+      var ang=base+off, sp=190, s=self.enemyShots.create(k.x, k.y-6, 'bullet').setDepth(6); s.srcCause='KOL SHILL SHOT';
       if(!s||!s.body) return; s.body.setAllowGravity(false); s.body.setSize(s.width*0.9,s.height*0.9);
       s.setVelocity(Math.cos(ang)*sp, Math.sin(ang)*sp); s.setTint(0xc99bff); s.dieAt=self.time.now+2800;
     });
@@ -2005,7 +2005,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(Math.abs(p.x-k.x)<86 && p.y < k.y-6) return;   // don't punish a committed stomp with point-blank candles
     var base=Math.atan2((p.y-8)-k.y, p.x-k.x);
     [-0.22,0,0.22].forEach(function(off){
-      var ang=base+off, sp=210, s=self.enemyShots.create(k.x, k.y-8, 'candle').setDepth(6);
+      var ang=base+off, sp=210, s=self.enemyShots.create(k.x, k.y-8, 'candle').setDepth(6); s.srcCause='TROLL THROW';
       if(!s||!s.body) return; s.body.setAllowGravity(false); s.setScale(30/s.height); s.body.setSize(s.width*0.8,s.height*0.8);
       s.setVelocity(Math.cos(ang)*sp, Math.sin(ang)*sp); s.setTint(0xff3b30); s.dieAt=self.time.now+3000;
       self.tweens.add({targets:s, angle:360, duration:600, repeat:-1});
@@ -2054,7 +2054,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.over||!this.enemyShots) return; var self=this;
     var base=Math.atan2((p.y-8)-k.y, p.x-k.x);
     [-0.22,0,0.22].forEach(function(off){
-      var ang=base+off, sp=205, s=self.enemyShots.create(k.x, k.y-6, 'bullet').setDepth(6);
+      var ang=base+off, sp=205, s=self.enemyShots.create(k.x, k.y-6, 'bullet').setDepth(6); s.srcCause='CUSTODIAN FREEZE RAY';
       if(!s||!s.body) return; s.body.setAllowGravity(false); s.body.setSize(s.width*0.9,s.height*0.9);
       s.setVelocity(Math.cos(ang)*sp, Math.sin(ang)*sp); s.setTint(0x8fe4ff); s.dieAt=self.time.now+2900;
     });
@@ -2088,7 +2088,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.over||!this.enemyShots) return; var self=this;
     var base=Math.atan2((p.y-8)-k.y, p.x-k.x);
     [-0.18,0,0.18].forEach(function(off){
-      var ang=base+off, sp=210, s=self.enemyShots.create(k.x-10, k.y-10, 'bullet').setDepth(6);
+      var ang=base+off, sp=210, s=self.enemyShots.create(k.x-10, k.y-10, 'bullet').setDepth(6); s.srcCause='WYRM FIREBALL';
       if(!s||!s.body) return; s.body.setAllowGravity(false); s.body.setSize(s.width*0.9,s.height*0.9);
       s.setVelocity(Math.cos(ang)*sp, Math.sin(ang)*sp); s.setTint(0xff7020); s.setScale(1.2); s.dieAt=self.time.now+2900;
     });
@@ -2122,7 +2122,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.over||!this.enemyShots) return; var self=this;
     var base=Math.atan2((p.y-8)-k.y, p.x-k.x);
     [-0.14,0.14].forEach(function(off){
-      var ang=base+off, sp=200, s=self.enemyShots.create(k.x-10, k.y-8, 'crate').setDepth(6);
+      var ang=base+off, sp=200, s=self.enemyShots.create(k.x-10, k.y-8, 'crate').setDepth(6); s.srcCause='HASH LORD BLOCK';
       if(!s||!s.body) return; s.setScale(0.5); s.body.setAllowGravity(false); s.body.setSize(s.width*0.8,s.height*0.8);
       s.setVelocity(Math.cos(ang)*sp, Math.sin(ang)*sp); s.setAngularVelocity(220); s.dieAt=self.time.now+2900;
     });
@@ -2193,7 +2193,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.over||!this.enemyShots) return; var self=this;
     var base=Math.atan2((p.y-8)-k.y, p.x-k.x);
     [-0.22,0,0.22].forEach(function(off){
-      var ang=base+off, sp=185, s=self.enemyShots.create(k.x, k.y+4, 'gas').setDepth(6);
+      var ang=base+off, sp=185, s=self.enemyShots.create(k.x, k.y+4, 'gas').setDepth(6); s.srcCause='BLACK SWAN FEATHER';
       if(!s||!s.body) return; s.setScale(0.7); s.setTint(0x22182e);
       s.body.setAllowGravity(false); s.body.setSize(s.width*0.7,s.height*0.7);
       s.setVelocity(Math.cos(ang)*sp, Math.sin(ang)*sp); s.dieAt=self.time.now+2600;
@@ -2228,7 +2228,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.over||!this.enemyShots) return; var self=this;
     var base=Math.atan2((p.y-8)-k.y, p.x-k.x);
     [-0.20,0,0.20].forEach(function(off){
-      var ang=base+off, sp=215, s=self.enemyShots.create(k.x-10, k.y-8, 'candle').setDepth(6);
+      var ang=base+off, sp=215, s=self.enemyShots.create(k.x-10, k.y-8, 'candle').setDepth(6); s.srcCause='REAPER SCYTHE';
       if(!s||!s.body) return; s.setScale(0.5); s.body.setAllowGravity(false); s.body.setSize(s.width*0.7,s.height*0.7);
       s.setTint(0xff3b30); s.setVelocity(Math.cos(ang)*sp, Math.sin(ang)*sp); s.setAngularVelocity(300); s.dieAt=self.time.now+2900;   // RED = death (green candles are the heal power-up)
     });
@@ -2264,7 +2264,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.over||!this.enemyShots) return; var self=this;
     var base=Math.atan2((p.y-8)-k.y, p.x-k.x);
     [-0.28,-0.09,0.09,0.28].forEach(function(off){
-      var ang=base+off, sp=225, s=self.enemyShots.create(k.x-12, k.y-6, 'candle').setDepth(6);
+      var ang=base+off, sp=225, s=self.enemyShots.create(k.x-12, k.y-6, 'candle').setDepth(6); s.srcCause='BEAR CANDLE THROW';
       if(!s||!s.body) return; s.setScale(0.55); s.body.setAllowGravity(false); s.body.setSize(s.width*0.7,s.height*0.7);
       s.setTint(0xff2a2a); s.setVelocity(Math.cos(ang)*sp, Math.sin(ang)*sp); s.setAngularVelocity(320); s.dieAt=self.time.now+2900;
     });
@@ -2274,7 +2274,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.over||!this.enemyShots) return; var self=this;
     this.cameras.main.shake(260,0.012); _tone(90,200,0.18,'sawtooth',0.08); this.burst(k.x,GY-6,0xff3030,20);
     [-1,1].forEach(function(d){
-      var s=self.enemyShots.create(k.x, GY-14, 'candle').setDepth(6);
+      var s=self.enemyShots.create(k.x, GY-14, 'candle').setDepth(6); s.srcCause='BEAR SLAM WAVE';
       if(!s||!s.body) return; s.setScale(0.6); s.body.setAllowGravity(false); s.body.setSize(s.width*0.8,s.height*0.7);
       s.setTint(0xff5a2a); s.setVelocity(d*205, 0); s.setAngularVelocity(d*360); s.dieAt=self.time.now+2600;
     });
@@ -2423,7 +2423,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       this.mound.setVisible(false);
       wm.setPosition(this.wormTargetX, this.wormDownY).setVisible(true).setAngle(0).setAlpha(1); wm.invuln=false;
       var grounded=p.body.blocked.down||p.body.touching.down;   // erupting under a grounded player hurts (dodge!)
-      if(grounded && Math.abs(p.x-this.wormTargetX)<wm.displayWidth*0.45 && !p.invuln && now>=this.shieldUntil && now>=this.coldUntil && now>=this.whaleUntil) this.hurt(p, p.x<this.wormTargetX?-1:1);
+      if(grounded && Math.abs(p.x-this.wormTargetX)<wm.displayWidth*0.45 && !p.invuln && now>=this.shieldUntil && now>=this.coldUntil && now>=this.whaleUntil) this.hurt(p, p.x<this.wormTargetX?-1:1, 'WORMHOLE ERUPTION');
       this.cameras.main.shake(220,.015);
       this.tweens.add({targets:wm, y:this.wormUpY, duration:280, ease:'Back.out'});
       this.wormState='up'; this.wormNextAt=now+2400;
@@ -2457,7 +2457,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.over) return; var n=7, spread=Math.PI*0.92, base=-Math.PI/2 - spread/2, self=this;
     for(var i=0;i<n;i++){
       var ang=base + spread*(i/(n-1));
-      var s=this.enemyShots.create(mw.x, mw.y-mw.displayHeight*0.28, 'stick').setDepth(6);
+      var s=this.enemyShots.create(mw.x, mw.y-mw.displayHeight*0.28, 'stick').setDepth(6); s.srcCause='GROUND-WORM SPIT';
       s.body.setAllowGravity(false); s.body.setSize(s.width*0.7,s.height*0.7);
       s.setRotation(ang); s.setVelocity(Math.cos(ang)*160, Math.sin(ang)*160);
       s.dieAt=this.time.now+2400;
@@ -2485,9 +2485,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.tweens.add({targets:mw, y:mw.downY, alpha:0, duration:280, onComplete:function(){ if(mw.active) mw.destroy(); }});
   },
   shotHit:function(player,shot){
-    if(this.over){ return; } shot.destroy();
+    if(this.over){ return; } var srcCause=shot.srcCause||'ENEMY SHOT', goingL=(shot.body&&shot.body.velocity.x<0); shot.destroy();
     var tn=this.time.now; if(player.invuln||tn<this.shieldUntil||tn<this.moonUntil||tn<this.omegaUntil||tn<this.whaleUntil||tn<this.coldUntil) return;
-    this.hurt(player, (shot.body&&shot.body.velocity.x<0)?1:-1);
+    this.hurt(player, goingL?1:-1, srcCause);
   },
 
   /* ---------- Phase 2 hazards: FUD gas, Sniper bolts, Honeypot traps, Pump-&-Dump ---------- */
@@ -2507,7 +2507,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   sniperFire:function(e,p){   // Sniper Bot fires an aimed bolt at the player
     if(this.over||!this.enemyShots) return;
     var dx=p.x-e.x, dy=(p.y-6)-e.y, d=Math.hypot(dx,dy)||1, sp=205;
-    var s=this.enemyShots.create(e.x, e.y-6, 'bullet').setDepth(6);
+    var s=this.enemyShots.create(e.x, e.y-6, 'bullet').setDepth(6); s.srcCause='SNIPER BOLT';
     if(!s||!s.body) return;
     s.body.setAllowGravity(false); s.body.setSize(s.width*0.9,s.height*0.9);
     s.setVelocity(dx/d*sp, dy/d*sp); s.dieAt=this.time.now+2600;
@@ -2630,7 +2630,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // caught behind the edge?
     if(p.x < c.x+6){
       var immune=(now<this.shieldUntil||now<this.moonUntil||now<this.omegaUntil||now<this.whaleUntil||now<this.coldUntil);
-      if(!immune && !p.invuln){ this.hurt(p, 1); }
+      if(!immune && !p.invuln){ this.hurt(p, 1, 'LIQUIDATION WALL'); }
       p.x = c.x + 34; if(p.body.velocity.x < 120) p.setVelocityX(150);   // shove ahead of the wall either way
     }
   },
