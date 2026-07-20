@@ -1160,7 +1160,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // level so they always point at the LIVE scene instance)
     try{ var _sc=this; window.__NQ_PAUSE=function(){ if(!_sc.over&&!_sc.paused){ _sc.pauseGame(false); return true; } return false; };
          window.__NQ_RESUME=function(){ if(_sc.paused) _sc.resumeGame(); };
-         window.__NQ_DBG=function(){ try{ return {paused:!!_sc.paused, clockPaused:!!_sc.time.paused, now:Math.round(_sc.time.now), last:Math.round(_sc.lastInputAt||0), warping:!!_sc._warping, swan:_sc._swanState||null, bossHP:(_sc.bossStarted?_sc.bossHP:null), hasKey:!!_sc.hasKey, level:_sc.def&&_sc.def.name}; }catch(e){ return {err:String(e)}; } };
+         window.__NQ_DBG=function(){ try{ return {paused:!!_sc.paused, clockPaused:!!_sc.time.paused, now:Math.round(_sc.time.now), last:Math.round(_sc.lastInputAt||0), warping:!!_sc._warping, swan:_sc._swanState||null, bossHP:(_sc.bossStarted?_sc.bossHP:null), hasKey:!!_sc.hasKey, level:_sc.def&&_sc.def.name, nearSlot:(function(){ try{ return _sc.nearActiveSlot(); }catch(e){ return 'err:'+e.message; } })(), slotN:(_sc.slots?_sc.slots.length:-1), px:Math.round(_sc.player?_sc.player.x:-1)}; }catch(e){ return {err:String(e)}; } };
          // LAB-only designer levers: grant the level key / land one boss hit (test boss fights &
          // door flows without a full runthrough). Dormant on the tester build.
          if(window.__NQ_SETUP){
@@ -2782,8 +2782,17 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.over||!S||S.spinsLeft<=0||S.spin) return; var p=this.player; if(!p) return;
     if(Math.abs(p.x-S.m.x)<260 && Math.abs(p.y-S.m.y)<170) this.startSpin(this.time.now, S);   // generous reach — tap from a little distance
   },
+  // Watching the reels IS playing: standing in reach of a machine that's mid-spin or still has
+  // spins suppresses the 10s idle auto-pause (owner ask 2026-07-20 — auto-spins kept getting
+  // paused out from under players). Same reach box as trySpinSlot; once spins run dry and the
+  // player keeps idling, the normal auto-pause takes over again.
+  nearActiveSlot:function(){ var p=this.player; if(!p||!this.slots||!this.slots.length) return false;
+    for(var i=0;i<this.slots.length;i++){ var S=this.slots[i];
+      if((S.spin||S.spinsLeft>0) && Math.abs(p.x-S.m.x)<260 && Math.abs(p.y-S.m.y)<170) return true; }
+    return false; },
   startSpin:function(now, S){
     S.spinsLeft--; S.nextAutoSpin=now+2500; SFX.coin();   // every spin (tap or auto) reschedules the next auto — consistent cadence
+    this.lastInputAt=now;   // a spin counts as activity — the LAST spin gets a full fresh idle window, so the pause never lands on the payout
     S.reelBox.setVisible(true); S.reelIcons.forEach(function(ic){ ic.setVisible(true); });
     S.spin={landAt:now+950, nextCycle:now, landed:false, result:null, hideAt:0};
     this.flash(S.label+'!','#ffd23f');
@@ -2940,7 +2949,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var jump=this.cursors.up.isDown||this.keys.W.isDown||this.keys.SPACE.isDown||this.touch.jump;
     var duck=this.cursors.down.isDown||this.keys.S.isDown||this.touch.down;
     // auto-pause after 10s of no movement/jump/duck input (player stepped away)
-    if(left||right||jump||duck) this.lastInputAt=now; else if(this.lastInputAt&&now-this.lastInputAt>10000){ this.pauseGame(true); return; }
+    if(left||right||jump||duck) this.lastInputAt=now; else if(this.lastInputAt&&now-this.lastInputAt>10000){ if(this.nearActiveSlot()){ this.lastInputAt=now; } else { this.pauseGame(true); return; } }
     // CROUCH: duck in place on the ground (jump cancels it) — shrinks the hitbox so fireballs / sniper bolts pass over.
     // 90ms grounded-hysteresis: blocked.down drops out for single frames on tile seams, and that
     // 1-frame loss was toggling the crouch — the visible duck "flicker".
