@@ -293,6 +293,111 @@ router.get('/normie-quest-x7/feedback', (req, res) => {
     + 'c.style.display=(!l||cl===l)?"":"none"})}})</script></body></html>');
 });
 
+// ---- /normie-quest-x7/dashboard : the operator's everything-view -----------------------------
+// One gated page with ALL of it: per-level difficulty (all-time, every level, death-map strips),
+// leaderboards, latest comments, store health. Server-rendered like the feedback page; everything
+// tester-supplied is escaped. The digest links here.
+router.get('/normie-quest-x7/dashboard', async (req, res) => {
+  res.set('X-Robots-Tag', 'noindex, nofollow');
+  if (!adminOK(req)) return res.status(404).send('Not found');
+  const key = esc(String((req.query && req.query.key) || ''));
+  let d = { events: 0, deaths: 0, clears: 0, firstAt: 0, lastAt: 0, worlds: [] };
+  try { d = telemetry.detailAll(); } catch (e) { /* render empty */ }
+  let comments = [];
+  try { comments = (feedback.list() || []).slice().reverse(); } catch (e) { comments = []; }
+  let lb = null;
+  try { lb = await leaderboard.boards({ n: 10 }); } catch (e) { lb = null; }
+
+  // natural level order: 1-1 … 10-3 first, hidden/bonus names after (alphabetical)
+  const rows = d.worlds.slice().sort(function (a, b) {
+    const pa = /^(\d+)-(\d+)$/.exec(a.world), pb = /^(\d+)-(\d+)$/.exec(b.world);
+    if (pa && pb) return (+pa[1] - +pb[1]) || (+pa[2] - +pb[2]);
+    if (pa) return -1; if (pb) return 1;
+    return String(a.world).localeCompare(String(b.world));
+  });
+  const ago = function (ts) {
+    if (!ts) return '—';
+    const m = Math.round((Date.now() - ts) / 60000);
+    return m < 60 ? m + 'm ago' : m < 1440 ? Math.round(m / 60) + 'h ago' : Math.round(m / 1440) + 'd ago';
+  };
+  const flag = function (w) { return ((w.clears === 0 && w.deaths >= 8) || (w.deathsPerClear !== null && w.deathsPerClear >= 6)); };
+  const heat = function (w) {   // death-map strip: buckets positioned along the level span
+    if (!w.buckets.length) return '<span class="dim">—</span>';
+    const maxX = Math.max.apply(null, w.buckets.map(function (b) { return b.xTo; }));
+    const maxN = Math.max.apply(null, w.buckets.map(function (b) { return b.n; }));
+    return '<div class="strip">' + w.buckets.map(function (b) {
+      const l = (b.xFrom / maxX * 100).toFixed(1), wd = Math.max(1.5, (b.xTo - b.xFrom) / maxX * 100).toFixed(1);
+      const op = (0.25 + 0.75 * (b.n / maxN)).toFixed(2);
+      return '<i style="left:' + l + '%;width:' + wd + '%;opacity:' + op + '" title="x' + b.xFrom + '–' + b.xTo + ': ' + b.n + ' deaths"></i>';
+    }).join('') + '</div>';
+  };
+  const tableRows = rows.map(function (w) {
+    const dpc = w.deathsPerClear === null ? '<span class="bad">∞</span>' : String(w.deathsPerClear);
+    const cause = w.topCauses[0] ? esc(w.topCauses[0].cause) + ' ×' + w.topCauses[0].n : '<span class="dim">—</span>';
+    return '<tr' + (flag(w) ? ' class="warn"' : '') + '><td class="lvl">' + esc(w.world) + (flag(w) ? ' ⚠' : '') + '</td>'
+      + '<td>' + w.deaths + '</td><td>' + w.clears + '</td><td>' + dpc + '</td>'
+      + '<td>' + (w.clears ? w.avgClearSec + 's' : '<span class="dim">—</span>') + '</td>'
+      + '<td class="cause">' + cause + '</td><td class="map">' + heat(w) + '</td>'
+      + '<td class="dim">' + ago(w.lastAt) + '</td></tr>';
+  }).join('');
+  const lbRows = function (list) {
+    return (list || []).map(function (r, i) {
+      return '<tr><td>' + (i + 1) + '</td><td>' + esc(r.name || 'anon') + '</td><td>W' + esc(String(r.world != null ? r.world : '?')) + '</td><td>' + Number(r.score || 0).toLocaleString() + '</td></tr>';
+    }).join('') || '<tr><td colspan="4" class="dim">no runs yet</td></tr>';
+  };
+  const commentCards = comments.slice(0, 10).map(function (c) {
+    const when = new Date(c.at || 0).toISOString().replace('T', ' ').slice(5, 16);
+    return '<div class="c"><b>' + esc(c.name || 'anon') + '</b> <span class="lvl2">' + esc(c.level || '') + '</span> <span class="k">' + esc(c.kind || '') + '</span> <span class="dim">' + when + '</span><div>' + esc(c.text || '') + '</div></div>';
+  }).join('') || '<div class="dim">No comments yet — testers need the ?test=1 build for the feedback widget.</div>';
+  const overall = d.clears ? Math.round(d.deaths / d.clears * 10) / 10 : null;
+
+  res.set('Content-Type', 'text/html; charset=utf-8');
+  res.set('Cache-Control', 'no-store');
+  res.send('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+    + '<meta name="robots" content="noindex,nofollow"><title>Normie Quest — Operator Dashboard</title><style>'
+    + 'body{margin:0;background:#0e0a1e;color:#eee;font-family:system-ui,Segoe UI,Roboto,sans-serif;padding:16px 14px 40px}'
+    + 'h1{color:#ffd23f;font-size:20px;margin:0 0 3px}h2{color:#c9a7ff;font-size:14px;margin:26px 0 8px;letter-spacing:1px}'
+    + '.sub{color:#8f89b0;font-size:12.5px;margin-bottom:14px}.sub a{color:#66ccff}'
+    + '.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:6px}'
+    + '.tile{background:#161228;border:1px solid #2a2450;border-radius:10px;padding:9px 12px}'
+    + '.tile .n{font-size:21px;font-weight:700;color:#fff}.tile .l{font-size:10.5px;color:#8f89b0;letter-spacing:1px}'
+    + 'table{border-collapse:collapse;width:100%;font-size:13px}'
+    + 'th{color:#8f89b0;font-size:10.5px;letter-spacing:1px;text-align:left;padding:5px 8px;border-bottom:1px solid #33305a}'
+    + 'td{padding:5px 8px;border-bottom:1px solid #201a3a;vertical-align:middle}'
+    + 'tr.warn td{background:rgba(255,56,96,0.07)}.lvl{font-weight:700;color:#bfe0ff;white-space:nowrap}'
+    + '.bad{color:#ff6a99;font-weight:700}.dim{color:#6a6590}.cause{max-width:180px}'
+    + '.map{min-width:140px}.strip{position:relative;height:12px;background:#1a1630;border-radius:3px;overflow:hidden;min-width:130px}'
+    + '.strip i{position:absolute;top:0;bottom:0;background:#ff3860;border-radius:1px}'
+    + '.c{background:#161228;border:1px solid #2a2450;border-radius:9px;padding:8px 11px;margin-bottom:7px;font-size:13.5px}'
+    + '.c b{color:#66ccff}.lvl2{background:#22406a;color:#bfe0ff;border-radius:4px;padding:0 6px;font-size:11px}'
+    + '.k{color:#8dffc0;font-size:11px;text-transform:uppercase}.cols{display:grid;grid-template-columns:1fr 1fr;gap:18px}'
+    + '@media(max-width:720px){.cols{grid-template-columns:1fr}}'
+    + '</style></head><body>'
+    + '<h1>🎮 Normie Quest — Operator Dashboard</h1>'
+    + '<div class="sub">all-time playtest data · <a href="/normie-quest-x7/feedback?key=' + key + '">all comments</a> · '
+    + '<a href="/api/nq/telemetry?key=' + key + '">raw telemetry</a> · <a href="/api/nq/feedback?key=' + key + '">raw feedback</a> · refresh for live numbers</div>'
+    + '<div class="tiles">'
+    + '<div class="tile"><div class="n">' + d.events + '</div><div class="l">EVENTS</div></div>'
+    + '<div class="tile"><div class="n">' + d.deaths + '</div><div class="l">DEATHS ☠</div></div>'
+    + '<div class="tile"><div class="n">' + d.clears + '</div><div class="l">CLEARS ✓</div></div>'
+    + '<div class="tile"><div class="n">' + (overall === null ? '—' : overall) + '</div><div class="l">DEATHS / CLEAR</div></div>'
+    + '<div class="tile"><div class="n">' + d.worlds.length + '</div><div class="l">LEVELS PLAYED</div></div>'
+    + '<div class="tile"><div class="n">' + comments.length + '</div><div class="l">COMMENTS</div></div>'
+    + '<div class="tile"><div class="n">' + ((lb && lb.totalRuns) || 0) + '</div><div class="l">SCORED RUNS</div></div>'
+    + '<div class="tile"><div class="n">' + ago(d.lastAt) + '</div><div class="l">LAST EVENT</div></div>'
+    + '</div>'
+    + '<h2>📊 DIFFICULTY BY LEVEL <span class="dim" style="font-weight:400">(⚠ = ≥6 deaths/clear or ≥8 deaths with no clear · red strip = where testers die)</span></h2>'
+    + '<div style="overflow-x:auto"><table><tr><th>LEVEL</th><th>☠</th><th>✓</th><th>☠/✓</th><th>AVG CLEAR</th><th>TOP CAUSE</th><th>DEATH MAP</th><th>LAST</th></tr>'
+    + (tableRows || '<tr><td colspan="8" class="dim">No telemetry yet — it records automatically as testers play.</td></tr>') + '</table></div>'
+    + '<div class="cols"><div>'
+    + '<h2>🏆 LEADERBOARD — ALL TIME</h2><table><tr><th>#</th><th>NAME</th><th>WORLD</th><th>SCORE</th></tr>' + lbRows(lb && lb.allTime) + '</table>'
+    + '</div><div>'
+    + '<h2>📅 LEADERBOARD — THIS WEEK</h2><table><tr><th>#</th><th>NAME</th><th>WORLD</th><th>SCORE</th></tr>' + lbRows(lb && lb.weekly) + '</table>'
+    + '</div></div>'
+    + '<h2>💬 LATEST COMMENTS (' + comments.length + ' total)</h2>' + commentCards
+    + '</body></html>');
+});
+
 // ---- produced music files (optional) -------------------------------------
 // Drop real, OWNED/licensed tracks at normie-quest/public/music/<name>.mp3 (or .ogg / .wav) where
 // <name> is a track key the game asks for: world1, desert, casino, skyline, exchange, boss,

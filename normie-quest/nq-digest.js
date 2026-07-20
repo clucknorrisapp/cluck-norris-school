@@ -43,11 +43,12 @@ async function triage(comments) {
 }
 
 // Deterministic difficulty block from the telemetry store (no AI — it's already structured).
-// Top worlds by deaths, each with clear rate, the #1 hotspot and cause, and a ⚠ flag when the
-// numbers say "review this level" (≥6 deaths per clear, or ≥8 deaths with no clear at all).
+// EVERY world with fresh events (owner 2026-07-20: the old top-5 cap hid levels — "I only get
+// data for like 3 levels"), sorted by deaths, each with clear rate, the #1 hotspot and cause,
+// and a ⚠ flag when the numbers say "review this level" (≥6 deaths/clear, or ≥8 deaths no clear).
 function teleBlock(sum) {
   if (!sum || !sum.worlds || !sum.worlds.length) return "";
-  const lines = sum.worlds.slice(0, 5).map((w) => {
+  const lines = sum.worlds.slice(0, 40).map((w) => {
     const rate = w.clears ? `${w.deaths}☠ / ${w.clears}✓ (${w.deathsPerClear}/clear)` : `${w.deaths}☠ / 0✓`;
     const hot = w.hotspots[0] ? ` — hot: x${w.hotspots[0].xFrom}–${w.hotspots[0].xTo} ×${w.hotspots[0].n}` : "";
     const cause = w.topCauses[0] ? ` (${esc(w.topCauses[0].cause)} ×${w.topCauses[0].n})` : "";
@@ -78,7 +79,7 @@ async function run({ send = false, reset = false, notify = null } = {}) {
   const tele = teleBlock(teleSum);
   const maxAt = fresh.reduce((m, c) => Math.max(m, Number(c.at || 0)), since);
   const body = `🎮 <b>Normie Quest — playtest digest</b>\n${fresh.length} new comment${fresh.length === 1 ? "" : "s"} · `
-    + `<a href="https://clucknorris.app/normie-quest-x7/feedback?key=normiequesttest">full dashboard</a>\n\n${digest}`
+    + `<a href="https://clucknorris.app/normie-quest-x7/dashboard?key=normiequesttest">full dashboard</a>\n\n${digest}`
     + (tele ? `\n\n${tele}` : "");
   result.digest = digest;
   if (send && typeof notify === "function") {

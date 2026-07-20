@@ -115,4 +115,38 @@ function worldDetail(world) {
   };
 }
 
-module.exports = { add, summary, count, latestAt, worldDetail };
+// Everything in ONE pass, all-time: per-world full stats (all causes, all buckets, last-seen)
+// plus global totals — feeds the operator dashboard. Aggregate difficulty data only, no PII.
+function detailAll() {
+  const evs = load();
+  const worlds = {};
+  let deaths = 0, clears = 0, firstAt = 0, lastAt = 0;
+  for (const e of evs) {
+    const at = Number(e.at || 0);
+    if (!firstAt || (at && at < firstAt)) firstAt = at;
+    if (at > lastAt) lastAt = at;
+    const w = (worlds[e.world] = worlds[e.world] || { deaths: 0, clears: 0, clearTimes: [], clearDeaths: [], causes: {}, buckets: {}, lastAt: 0 });
+    if (at > w.lastAt) w.lastAt = at;
+    if (e.ev === 'death') {
+      deaths++; w.deaths++;
+      w.causes[e.cause] = (w.causes[e.cause] || 0) + 1;
+      const b = Math.floor(e.x / HOTSPOT_BUCKET) * HOTSPOT_BUCKET;
+      w.buckets[b] = (w.buckets[b] || 0) + 1;
+    } else { clears++; w.clears++; w.clearTimes.push(e.t); w.clearDeaths.push(e.deaths); }
+  }
+  const avg = (a) => (a.length ? Math.round(a.reduce((s, v) => s + v, 0) / a.length) : 0);
+  const rows = Object.entries(worlds).map(([world, w]) => ({
+    world,
+    deaths: w.deaths,
+    clears: w.clears,
+    deathsPerClear: w.clears ? Math.round((w.deaths / w.clears) * 10) / 10 : (w.deaths ? null : 0),
+    avgClearSec: avg(w.clearTimes),
+    avgDeathsBeforeClear: w.clearDeaths.length ? Math.round(avg(w.clearDeaths) * 10) / 10 : 0,
+    topCauses: Object.entries(w.causes).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([cause, n]) => ({ cause, n })),
+    buckets: Object.entries(w.buckets).map(([x, n]) => ({ xFrom: Number(x), xTo: Number(x) + HOTSPOT_BUCKET, n })).sort((a, b) => a.xFrom - b.xFrom),
+    lastAt: w.lastAt,
+  }));
+  return { events: evs.length, deaths, clears, firstAt, lastAt, worlds: rows };
+}
+
+module.exports = { add, summary, count, latestAt, worldDetail, detailAll };
