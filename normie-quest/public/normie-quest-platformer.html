@@ -4222,16 +4222,36 @@ if (window.__NQ_SETUP) { (function () {
   };
 
   // ---- wallet: detect provider, connect, sign, verify ---------------------
-  function provider() {
-    if (window.phantom && window.phantom.solana) return window.phantom.solana;
-    if (window.solflare && window.solflare.isSolflare) return window.solflare;
-    if (window.backpack) return window.backpack;
-    if (window.solana) return window.solana;
-    return null;
+  // Full auto-detection (ported from the site's airdrop picker — keep the tables in sync):
+  // every injected Solana wallet we know how to find, incl. the Jupiter wallet. Returns
+  // ALL detected wallets so the UI can offer a choice instead of silently grabbing one.
+  var WALLET_DEFS = [
+    { id: 'phantom',  name: 'Phantom',  icon: '🔮', detect: function () { return (window.phantom && window.phantom.solana) || (window.solana && window.solana.isPhantom ? window.solana : null); } },
+    { id: 'solflare', name: 'Solflare', icon: '☀️', detect: function () { return window.solflare || (window.solana && window.solana.isSolflare ? window.solana : null); } },
+    { id: 'jupiter',  name: 'Jupiter',  icon: '🪐', detect: function () { return window.jupiterWallet || window.jupiter || (window.solana && window.solana.isJupiter ? window.solana : null); } },
+    { id: 'backpack', name: 'Backpack', icon: '🎒', detect: function () { return (window.backpack && window.backpack.isBackpack ? window.backpack : null) || (window.solana && window.solana.isBackpack ? window.solana : null) || window.backpack || null; } },
+    { id: 'okx',      name: 'OKX',      icon: '⭕', detect: function () { return (window.okxwallet && window.okxwallet.solana) || window.okxwallet || null; } },
+    { id: 'brave',    name: 'Brave',    icon: '🦁', detect: function () { return window.braveSolana || (window.solana && window.solana.isBraveWallet ? window.solana : null); } },
+    { id: 'coinbase', name: 'Coinbase', icon: '🔵', detect: function () { return window.coinbaseSolana || window.coinbaseWalletSolana || null; } },
+    { id: 'trust',    name: 'Trust',    icon: '🛡', detect: function () { return (window.trustwallet && window.trustwallet.solana) || (window.solana && window.solana.isTrust ? window.solana : null); } },
+    { id: 'glow',     name: 'Glow',     icon: '🌐', detect: function () { return window.glowSolana || (window.glow && window.glow.solana) || (window.solana && window.solana.isGlow ? window.solana : null); } },
+    { id: 'exodus',   name: 'Exodus',   icon: '🚀', detect: function () { return (window.exodus && window.exodus.solana) || null; } },
+    { id: 'bitget',   name: 'Bitget',   icon: '🌊', detect: function () { return (window.bitkeep && window.bitkeep.solana) || (window.bitgetWallet && window.bitgetWallet.solana) || null; } },
+  ];
+  function detectWallets() {
+    var found = [], seen = [];
+    for (var i = 0; i < WALLET_DEFS.length; i++) {
+      var p = null; try { p = WALLET_DEFS[i].detect(); } catch (e) {}
+      if (p && seen.indexOf(p) < 0) { seen.push(p); found.push({ id: WALLET_DEFS[i].id, name: WALLET_DEFS[i].name, icon: WALLET_DEFS[i].icon, provider: p }); }
+    }
+    // anything injected we don't have a label for (covers new wallets automatically)
+    if (window.solana && seen.indexOf(window.solana) < 0) found.push({ id: 'injected', name: 'Injected wallet', icon: '👛', provider: window.solana });
+    return found;
   }
-  async function connectWallet() {
-    var p = provider();
-    if (!p) throw new Error('No Solana wallet found. Install Phantom or Solflare, then reload.');
+  function provider() { var w = detectWallets(); return w.length ? w[0].provider : null; }
+  async function connectWallet(chosen) {
+    var p = chosen || provider();
+    if (!p) throw new Error('No Solana wallet found. Install Phantom, Solflare or Jupiter, then reload.');
     var resp = await p.connect();
     var pk = (resp && resp.publicKey ? resp.publicKey : p.publicKey).toString();
     var ch = await (await fetch('/api/nq/wallet/challenge?pubkey=' + pk)).json();
@@ -4378,13 +4398,33 @@ if (window.__NQ_SETUP) { (function () {
           + '<button class="nqp-b alt" id="nqp-disconnect" style="margin-top:12px">Disconnect</button>';
         ov.querySelector('#nqp-disconnect').addEventListener('click', function () { disconnectWallet(); renderWallet(); });
       } else {
-        host.innerHTML = '<div class="nqp-sub" style="margin-bottom:10px">Prove wallet ownership to unlock worlds by what you HOLD. '
-          + 'This is a signature only — no transaction, no approval to move funds.</div>'
-          + '<button class="nqp-b" id="nqp-connect">👛 Connect &amp; Sign</button><div class="nqp-sub" id="nqp-walerr" style="margin-top:10px;color:#ff9db8"></div>';
-        ov.querySelector('#nqp-connect').addEventListener('click', function () {
-          ov.querySelector('#nqp-walerr').textContent = 'Connecting…';
-          connectWallet().then(function () { renderWallet(); }).catch(function (e) { ov.querySelector('#nqp-walerr').textContent = e.message || String(e); });
-        });
+        var det = detectWallets();
+        var intro = '<div class="nqp-sub" style="margin-bottom:10px">Prove wallet ownership to unlock worlds by what you HOLD. '
+          + 'This is a signature only — no transaction, no approval to move funds.</div>';
+        if (det.length) {
+          // one button per DETECTED wallet — auto-detected, user picks (single wallet = single button)
+          host.innerHTML = intro + det.map(function (w, i) {
+            return '<button class="nqp-b" data-wi="' + i + '" style="margin-bottom:6px">' + w.icon + ' Connect ' + esc(w.name) + '</button>';
+          }).join('') + '<div class="nqp-sub" id="nqp-walerr" style="margin-top:10px;color:#ff9db8"></div>';
+          host.querySelectorAll('button[data-wi]').forEach(function (b) {
+            b.addEventListener('click', function () {
+              var w = det[Number(b.getAttribute('data-wi'))];
+              ov.querySelector('#nqp-walerr').textContent = 'Connecting ' + w.name + '…';
+              connectWallet(w.provider).then(function () { renderWallet(); }).catch(function (e) { ov.querySelector('#nqp-walerr').textContent = e.message || String(e); });
+            });
+          });
+        } else {
+          // nothing injected: on mobile, deep-link this page into a wallet's built-in browser
+          // (pure navigation — the connect+sign flow runs inside); on desktop, install hint.
+          var mob = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+          var url = encodeURIComponent(location.href), ref = encodeURIComponent(location.origin);
+          host.innerHTML = intro + (mob
+            ? '<div class="nqp-sub" style="margin-bottom:8px">📱 No wallet detected in this browser — open the game inside your wallet app:</div>'
+              + '<a class="nqp-b" style="display:block;text-decoration:none;text-align:center;margin-bottom:6px" href="https://phantom.app/ul/browse/' + url + '?ref=' + ref + '">🔮 Open in Phantom</a>'
+              + '<a class="nqp-b" style="display:block;text-decoration:none;text-align:center;margin-bottom:6px" href="https://solflare.com/ul/v1/browse/' + url + '?ref=' + ref + '">☀️ Open in Solflare</a>'
+              + '<div class="nqp-sub">The link only opens this page in the wallet\'s browser — nothing is signed or shared by it.</div>'
+            : '<div class="nqp-sub">No Solana wallet detected in this browser. Install Phantom, Solflare or the Jupiter wallet extension, then reload this page.</div>');
+        }
       }
     }
 
