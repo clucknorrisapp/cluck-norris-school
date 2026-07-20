@@ -1211,9 +1211,15 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // replay never stacks more worms onto the shared level object.
     if(!def._aug5){ def._aug5=true;
       if(this.levelIdx>=12 && !def.boss && !def.bonus && !def.hidden){
-        var _gp=def.gaps||[], _W=def.width||5200, _inGap=function(x){ for(var _i=0;_i<_gp.length;_i++){ if(x>=_gp[_i][0]-30&&x<=_gp[_i][1]+30) return true; } return false; };
-        var _wx=Math.round(_W*0.62); for(var _t=0;_t<40&&_inGap(_wx);_t++) _wx+=40;
-        if(!_inGap(_wx)) def.miniworms=(def.miniworms||[]).concat([_wx]);
+        var _gp=def.gaps||[], _wl=def.walls||[], _W=def.width||5200,
+            _inGap=function(x){ for(var _i=0;_i<_gp.length;_i++){ if(x>=_gp[_i][0]-30&&x<=_gp[_i][1]+30) return true; } return false; },
+            // a worm popping up INSIDE a wall stack is unhittable (the disc stops at the blocks)
+            // while its spit still fires out — keep clear of every wall footprint + a margin
+            // (5-1's crate wall at x=4820 sat exactly on the 62% spot)
+            _inWall=function(x){ for(var _i=0;_i<_wl.length;_i++){ var _x0=_wl[_i][0], _x1=_x0+((_wl[_i][3]||1)*TILE); if(x>=_x0-60&&x<=_x1+60) return true; } return false; },
+            _badSpot=function(x){ return _inGap(x)||_inWall(x); };
+        var _wx=Math.round(_W*0.62); for(var _t=0;_t<40&&_badSpot(_wx);_t++) _wx+=40;
+        if(!_badSpot(_wx)) def.miniworms=(def.miniworms||[]).concat([_wx]);
         if(this.levelIdx===12||this.levelIdx===18||this.levelIdx===24||this.levelIdx===34){   // world openers 5/7/9/10
           var _pl=def.plats||[], _best=null;
           for(var _p=0;_p<_pl.length;_p++){ var _ty=_pl[_p][2]; if(_ty!=null&&(_best===null||_ty<_best.ty)) _best={ x:_pl[_p][0]+Math.round((_pl[_p][1]||1)*TILE/2), ty:_ty }; }
