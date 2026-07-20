@@ -411,4 +411,14 @@ router.use('/normie-quest/music', express.static(path.join(__dirname, 'public', 
   setHeaders: (res) => { res.set('X-Robots-Tag', 'noindex, nofollow'); },
 }));
 
+// ---- produced sfx samples (optional) — same drop-in pattern as the music -----
+// Drop owned files at normie-quest/public/sfx/<name>.mp3 (or .wav/.m4a/.ogg) for a key the
+// game's _SFX_FILES table knows (currently: coin). Present → the real sample plays; missing →
+// clean 404 and the built-in synth tone keeps working.
+router.use('/normie-quest/sfx', express.static(path.join(__dirname, 'public', 'sfx'), {
+  maxAge: '7d',
+  fallthrough: false,
+  setHeaders: (res) => { res.set('X-Robots-Tag', 'noindex, nofollow'); },
+}));
+
 module.exports = router;

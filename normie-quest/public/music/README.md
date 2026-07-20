@@ -8,16 +8,32 @@ this folder can be empty and everything still works.
 
 Name each file after the world/track it should play (the game asks for these keys):
 
-| File            | Where it plays                          | Suggested vibe |
-|-----------------|-----------------------------------------|----------------|
-| `world1.mp3`    | World 1 (First Steps) + title screen    | warm chill lo-fi hip hop, 85 bpm |
-| `desert.mp3`    | World 2 — The Sand Lands                | dusty lo-fi desert, 80 bpm |
-| `casino.mp3`    | Normie Casino                           | lo-fi lounge jazz, sax, 95 bpm |
-| `skyline.mp3`   | World 3 — The Skyline                   | lo-fi synthwave, 90 bpm |
-| `exchange.mp3`  | World 4 — The Exchange                  | dark moody lo-fi, 88 bpm |
-| `boss.mp3`      | Boss fights (all worlds)                | tense lo-fi trap, 100 bpm |
-| `sacred.mp3`    | World 5 — The Sacred Seeds              | new-age lo-fi, ethereal, 82 bpm |
-| `mines.mp3`     | World 6 — Proof of Work / the Mines     | ambient lo-fi, gentle piano, 70 bpm |
+This table matches the LIVE world→key mapping in `normie-quest-platformer.html` (~line 1226).
+Goal (owner, 2026-07-20): **10 fully custom tracks — one per world** (3 of 10 in as of today:
+world1, exchange, boss).
+
+| File            | Where it plays TODAY                     | status |
+|-----------------|------------------------------------------|--------|
+| `world1.mp3`    | World 1 + title screen (also the 9/10 fallback for now) | ✅ custom |
+| `desert.m4a`    | World 2 — The Sand Lands (2-1, 2-3)      | generated loop (to be replaced) |
+| `casino.m4a`    | 2-2 — Normie Casino                      | generated loop (to be replaced) |
+| `skyline.m4a`   | World 3 — The Skyline                    | generated loop (to be replaced) |
+| `exchange.mp3`  | World 4 — The Exchange (World 7 reuses it for now) | ✅ custom |
+| `sacred.m4a`    | World 5 — The Bridge                     | generated loop (to be replaced) |
+| `mines.m4a`     | World 6 — The Depeg                      | generated loop (to be replaced) |
+| `boss.mp3`      | Boss fights (World 8 reuses it as level music for now) | ✅ custom |
+
+**Waiting slots (no key mapped yet — worlds 7–10 currently reuse the tracks noted above).**
+When a custom track lands for one of these, drop the file AND flip that world's entry in the
+mapping line (one-line change; an unmapped key with no file would mean silence, so the flip
+happens together with the file):
+
+| Planned file  | World |
+|---------------|-------|
+| `farm.mp3`    | World 7 — The Yield Farm |
+| `bear.mp3`    | World 8 — The Bear Market |
+| `depths.mp3`  | World 9 — The Mines |
+| `swan.mp3`    | World 10 — Euphoria / The Black Swan |
 
 Formats accepted (checked in this order): **`.mp3`**, `.m4a`, `.ogg`, `.wav`. mp3 is preferred
 (smallest). Tracks loop seamlessly and cross-fade between worlds, so export them as clean
