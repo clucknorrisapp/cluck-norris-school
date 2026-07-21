@@ -1194,6 +1194,13 @@ function nqTele(ev,d){
   }catch(e){}
 }
 
+// ITEM RESERVE catalogue — the banked-boost items. icon = an existing texture; use(g) applies
+// the effect to the live Game scene. Extend this to add new held boosts (wheel prizes, etc.).
+var RESERVE_ITEMS = {
+  disc:   { icon:'solana',    label:'SOL DISCS +5', use:function(g){ g.throwAmmo+=5; if(g.updateThrowHud) g.updateThrowHud(); } },
+  vial:   { icon:'heart',     label:'FULL HEAL',    use:function(g){ while(g.lives<3){ g.lives++; if(g.hearts[g.lives-1]) g.hearts[g.lives-1].setAlpha(1); } } },
+  shield: { icon:'supergeek', label:'AUDIT SHIELD', use:function(g){ g.geekShield=true; } }
+};
 var Game=new Phaser.Class({ Extends:Phaser.Scene,
   initialize:function(){ Phaser.Scene.call(this,{key:'Game'}); },
   // levelStartScore = coins banked BEFORE this level; honeypots never drain below it (they only take THIS level's coins).
@@ -1218,11 +1225,12 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // level so they always point at the LIVE scene instance)
     try{ var _sc=this; window.__NQ_PAUSE=function(){ if(!_sc.over&&!_sc.paused){ _sc.pauseGame(false); return true; } return false; };
          window.__NQ_RESUME=function(){ if(_sc.paused) _sc.resumeGame(); };
-         window.__NQ_DBG=function(){ try{ return {paused:!!_sc.paused, clockPaused:!!_sc.time.paused, now:Math.round(_sc.time.now), last:Math.round(_sc.lastInputAt||0), warping:!!_sc._warping, swan:_sc._swanState||null, bossHP:(_sc.bossStarted?_sc.bossHP:null), hasKey:!!_sc.hasKey, level:_sc.def&&_sc.def.name, nearSlot:(function(){ try{ return _sc.nearActiveSlot(); }catch(e){ return 'err:'+e.message; } })(), slotN:(_sc.slots?_sc.slots.length:-1), px:Math.round(_sc.player?_sc.player.x:-1), secrets:(function(){ var a=[]; try{ _sc.platforms.children.iterate(function(m){ if(m&&m.secretSteel) a.push([Math.round(m.x),Math.round(m.y),m.used?1:0]); }); }catch(e){} return a; })(), bb:(function(){ var a=[]; try{ _sc.bonusBlocks.children.iterate(function(m){ if(m) a.push([Math.round(m.x),m.used?1:0]); }); }catch(e){} return a; })(), pscale:(_sc.pscale?+_sc.pscale.v.toFixed(2):1), lives:_sc.lives, nLevels:LEVELS.length, sig:{fb:(_sc.firebars||[]).length, gt:(_sc.gates||[]).length, rp:(_sc.rugPlats&&_sc.rugPlats.children?_sc.rugPlats.getLength():0), dz:(_sc.dumpZones||[]).length}, gate0:(_sc.gates&&_sc.gates[0]?_sc.gates[0].st:null), foes:(function(){ var n=0; try{ _sc.enemies.children.iterate(function(e){ if(e&&e.active&&_sc.def&&_sc.def.door&&e.x>_sc.def.door-460) n++; }); }catch(e){} return n; })(), dr:(_sc._drState||null), drX:(_sc.rugking&&_sc.rugking.active?Math.round(_sc.rugking.x):null), drY:(_sc.rugking&&_sc.rugking.active?Math.round(_sc.rugking.y):null), drT:(_sc._drT0?Math.round(_sc.time.now-_sc._drT0):null), bossInv:(_sc.rugking&&_sc.rugking.active?!!_sc.rugking.invuln:null), princess:!!(_sc.princess&&_sc.princess.active)}; }catch(e){ return {err:String(e)}; } };
+         window.__NQ_DBG=function(){ try{ return {paused:!!_sc.paused, clockPaused:!!_sc.time.paused, now:Math.round(_sc.time.now), last:Math.round(_sc.lastInputAt||0), warping:!!_sc._warping, swan:_sc._swanState||null, bossHP:(_sc.bossStarted?_sc.bossHP:null), hasKey:!!_sc.hasKey, level:_sc.def&&_sc.def.name, nearSlot:(function(){ try{ return _sc.nearActiveSlot(); }catch(e){ return 'err:'+e.message; } })(), slotN:(_sc.slots?_sc.slots.length:-1), px:Math.round(_sc.player?_sc.player.x:-1), secrets:(function(){ var a=[]; try{ _sc.platforms.children.iterate(function(m){ if(m&&m.secretSteel) a.push([Math.round(m.x),Math.round(m.y),m.used?1:0]); }); }catch(e){} return a; })(), bb:(function(){ var a=[]; try{ _sc.bonusBlocks.children.iterate(function(m){ if(m) a.push([Math.round(m.x),m.used?1:0]); }); }catch(e){} return a; })(), pscale:(_sc.pscale?+_sc.pscale.v.toFixed(2):1), lives:_sc.lives, nLevels:LEVELS.length, sig:{fb:(_sc.firebars||[]).length, gt:(_sc.gates||[]).length, rp:(_sc.rugPlats&&_sc.rugPlats.children?_sc.rugPlats.getLength():0), dz:(_sc.dumpZones||[]).length}, gate0:(_sc.gates&&_sc.gates[0]?_sc.gates[0].st:null), foes:(function(){ var n=0; try{ _sc.enemies.children.iterate(function(e){ if(e&&e.active&&_sc.def&&_sc.def.door&&e.x>_sc.def.door-460) n++; }); }catch(e){} return n; })(), dr:(_sc._drState||null), drX:(_sc.rugking&&_sc.rugking.active?Math.round(_sc.rugking.x):null), drY:(_sc.rugking&&_sc.rugking.active?Math.round(_sc.rugking.y):null), drT:(_sc._drT0?Math.round(_sc.time.now-_sc._drT0):null), bossInv:(_sc.rugking&&_sc.rugking.active?!!_sc.rugking.invuln:null), princess:!!(_sc.princess&&_sc.princess.active), reserve:(_sc.reserve||null)}; }catch(e){ return {err:String(e)}; } };
          // LAB-only designer levers: grant the level key / land one boss hit (test boss fights &
          // door flows without a full runthrough). Dormant on the tester build.
          if(window.__NQ_SETUP){
            window.__NQ_GRANTKEY=function(){ try{ if(_sc.over||_sc.hasKey) return false; _sc.hasKey=true; if(_sc.keyIcon) _sc.keyIcon.setAlpha(1); if(_sc.key){ _sc.tweens.killTweensOf(_sc.key); _sc.key.destroy(); _sc.key=null; } _sc.flash('LAB: KEY GRANTED','#ffd23f'); return true; }catch(e){ return false; } };
+           window.__NQ_GRANTRESERVE=function(item){ try{ return !!_sc.grantReserve(item); }catch(e){ return false; } };
            window.__NQ_BOSSHIT=function(){ try{ if(_sc.over) return false;
              if(_sc.worm&&_sc.worm.active){ _sc.wormHit(); return true; }   // 2-3's wormhole has no rugking sprite
              if(!_sc.bossStarted||!_sc.rugking||!_sc.rugking.active) return false; _sc.bossHit(); return true; }catch(e){ return false; } };
@@ -1730,6 +1738,18 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // MANUAL THROW ammo — a Solana disc + count, under the key (top-right)
     this.throwIcon=this.hb(this.add.image(W-30,52,'solana').setDepth(20)); this.throwIcon.setScale(15/this.throwIcon.height);
     this.throwCountTxt=this.hb(this.add.text(W-40,52,'x'+this.throwAmmo,{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#14f195'}).setOrigin(1,0.5).setDepth(21));
+    // ===== ITEM RESERVE (owner ask 2026-07-21) — a single held-item slot that BANKS a boost to
+    // use whenever you want. Persists across levels/deaths/sessions via localStorage 'nqReserve'
+    // (device-bound); a wallet-bound grant path (the reward-wheel backbone) writes the same slot.
+    // Items: 'disc' (+5 SOL discs), 'vial' (full heal), 'shield' (one-shot audit shield). =====
+    try{ this.reserve=localStorage.getItem('nqReserve')||null; }catch(e){ this.reserve=null; }
+    if(this.reserve && !RESERVE_ITEMS[this.reserve]) this.reserve=null;   // ignore unknown ids
+    var _rx=92, _ry=30;
+    this.reserveBox=this.hb(this.add.rectangle(_rx,_ry,20,20,0x161228,0.85).setStrokeStyle(1.5,0xffd23f).setDepth(20).setInteractive({useHandCursor:true}));
+    this.reserveIcon=this.hb(this.add.image(_rx,_ry,'solana').setDepth(21));
+    this.reserveHint=this.hb(this.add.text(_rx+12,_ry-9,'Q',{fontFamily:'"Press Start 2P"',fontSize:'7px',color:'#ffd23f'}).setOrigin(0,0).setDepth(21));
+    var _rself=this; this.reserveBox.on('pointerdown',function(){ _rself.useReserve(); });   // tap the slot to use (mobile + desktop)
+    this.updateReserveHud();
     // PAUSE button — tap the ⏸ (top-left) on touch, or press P / Esc on desktop
     this.hb(this.add.rectangle(120,15,20,16,0x000000,0.5).setStrokeStyle(1,0x8f89b0));
     this.hb(this.add.rectangle(116,15,3,9,0xffd23f)); this.hb(this.add.rectangle(124,15,3,9,0xffd23f));
@@ -1744,7 +1764,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // input — touch is driven by RAW POINTER SCREEN-ZONES in update() (see the poll there),
     // NOT interactive hit-areas: the HUD lives in a scrollFactor-0 container under a 2x zoom
     // where per-object hit testing is unreliable. Pointer coords are zoom/container-immune.
-    this.cursors=this.input.keyboard.createCursorKeys(); this.keys=this.input.keyboard.addKeys('W,A,S,D,SPACE,F,X');
+    this.cursors=this.input.keyboard.createCursorKeys(); this.keys=this.input.keyboard.addKeys('W,A,S,D,SPACE,F,X,Q,E');
     // PAUSE keys: while paused, ANY key resumes; while playing, P / Esc pause. (Touch: ⏸ hotspot in update; tap resumes.)
     this.input.keyboard.on('keydown',function(e){ if(self.paused){ self.resumeGame(); } else if(e.key==='p'||e.key==='P'||e.key==='Escape'){ self.pauseGame(false); } });
     this.input.on('pointerdown',function(){ if(self.paused) self.resumeGame(); });   // tap anywhere resumes
@@ -1980,6 +2000,34 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(!this.throwCountTxt) return;
     this.throwCountTxt.setText('x'+this.throwAmmo).setColor(this.throwAmmo>0?'#14f195':'#5a5a6a');
     if(this.throwIcon) this.throwIcon.setAlpha(this.throwAmmo>0?1:0.35);
+  },
+  // ===== ITEM RESERVE — bank one boost, spend it when YOU want (Q/E or tap the slot) =====
+  saveReserve:function(){ try{ if(this.reserve) localStorage.setItem('nqReserve',this.reserve); else localStorage.removeItem('nqReserve'); }catch(e){} },
+  grantReserve:function(item){   // put an item in the slot (won't overwrite a banked one)
+    if(!RESERVE_ITEMS[item]) return false;
+    if(this.reserve){ if(this.flash) this.flash('RESERVE FULL — USE IT (Q)','#ff9ec0'); return false; }
+    this.reserve=item; this.saveReserve(); this.updateReserveHud();
+    if(this.flash) this.flash('BANKED: '+RESERVE_ITEMS[item].label+'  (Q)','#3dff6e'); try{ SFX.coin(); }catch(e){}
+    return true;
+  },
+  useReserve:function(){
+    if(this.over||this.paused||!this.reserve) return;
+    var it=RESERVE_ITEMS[this.reserve]; if(!it){ this.reserve=null; this.saveReserve(); this.updateReserveHud(); return; }
+    if(this.reserve==='vial' && this.lives>=3){ this.flash('HEARTS ALREADY FULL','#ff9ec0'); return; }   // don't waste a full-heal at full HP
+    if(this.reserve==='shield' && this.geekShield){ this.flash('SHIELD ALREADY UP','#2ee6c0'); return; }
+    it.use(this); try{ SFX.power(); }catch(e){} this.flash(it.label+'!','#ffd23f'); this.cameras.main.flash(120,255,210,80);
+    this.reserve=null; this.saveReserve(); this.updateReserveHud();
+  },
+  updateReserveHud:function(){
+    if(!this.reserveBox) return;
+    if(this.reserve && RESERVE_ITEMS[this.reserve]){ var it=RESERVE_ITEMS[this.reserve];
+      this.reserveIcon.setTexture(it.icon); this.reserveIcon.setScale(14/this.reserveIcon.height).setAlpha(1).clearTint();
+      this.reserveBox.setStrokeStyle(1.5,0xffd23f); this.reserveHint.setAlpha(1);
+      if(!this._reservePulse){ this._reservePulse=this.tweens.add({targets:this.reserveBox,scaleX:1.14,scaleY:1.14,duration:520,yoyo:true,repeat:-1,ease:'Sine.inOut'}); }
+    } else {
+      this.reserveIcon.setAlpha(0); this.reserveHint.setAlpha(0.22); this.reserveBox.setStrokeStyle(1.5,0x3a3456);
+      if(this._reservePulse){ this._reservePulse.stop(); this._reservePulse=null; this.reserveBox.setScale(1); }
+    }
   },
   manualThrow:function(){   // MANUAL THROW: hurl a Solana disc from the counted ammo (F/X or THROW button)
     if(this.over||this.paused) return;
@@ -2648,6 +2696,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     k.invuln=true; k.setVelocity(0,0); k.body.setAllowGravity(false);
     this.addScore(500);
     this.tweens.add({targets:k, angle:720, alpha:0, y:k.y-50, duration:1300, ease:'Cubic.in', onComplete:function(){ if(k.active) k.destroy(); }});
+    // BOSS DROP: beating a boss banks a random boost for later (skipped if the slot's already full).
+    // The reward-wheel granter uses the same grantReserve() slot.
+    if(!this.reserve){ var _drop=['vial','disc','shield'][Math.floor((this.time.now/97)%3)]; this.grantReserve(_drop); }
     var nx=this.levelIdx+1;
     if(this.def.final){
       if(this.def.bossType==='dirtywhale'){
@@ -3373,6 +3424,10 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var throwHeld=this.keys.F.isDown||this.keys.X.isDown||this.touch.throwBtn;
     if(throwHeld && !this.prevThrow && !(now<this.solanaUntil)) this.manualThrow();
     this.prevThrow=throwHeld;
+    // ITEM RESERVE: Q/E (or tapping the HUD slot) spends the banked boost — edge-triggered
+    var useHeld=this.keys.Q.isDown||this.keys.E.isDown;
+    if(useHeld && !this.prevUse) this.useReserve();
+    this.prevUse=useHeld;
     var fast=now<this.caffeineUntil||now<this.moonUntil;      // caffeine/moon = super speed
     // FUD gas = sluggish, but ONLY on the ground — never rob you of air speed mid-jump (that could
     // make a gap you already committed to unclearable → an unfair pit death).
