@@ -1182,7 +1182,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // level so they always point at the LIVE scene instance)
     try{ var _sc=this; window.__NQ_PAUSE=function(){ if(!_sc.over&&!_sc.paused){ _sc.pauseGame(false); return true; } return false; };
          window.__NQ_RESUME=function(){ if(_sc.paused) _sc.resumeGame(); };
-         window.__NQ_DBG=function(){ try{ return {paused:!!_sc.paused, clockPaused:!!_sc.time.paused, now:Math.round(_sc.time.now), last:Math.round(_sc.lastInputAt||0), warping:!!_sc._warping, swan:_sc._swanState||null, bossHP:(_sc.bossStarted?_sc.bossHP:null), hasKey:!!_sc.hasKey, level:_sc.def&&_sc.def.name, nearSlot:(function(){ try{ return _sc.nearActiveSlot(); }catch(e){ return 'err:'+e.message; } })(), slotN:(_sc.slots?_sc.slots.length:-1), px:Math.round(_sc.player?_sc.player.x:-1), secrets:(function(){ var a=[]; try{ _sc.platforms.children.iterate(function(m){ if(m&&m.secretSteel) a.push([Math.round(m.x),Math.round(m.y),m.used?1:0]); }); }catch(e){} return a; })(), bb:(function(){ var a=[]; try{ _sc.bonusBlocks.children.iterate(function(m){ if(m) a.push([Math.round(m.x),m.used?1:0]); }); }catch(e){} return a; })(), pscale:(_sc.pscale?+_sc.pscale.v.toFixed(2):1), lives:_sc.lives, nLevels:LEVELS.length, sig:{fb:(_sc.firebars||[]).length, gt:(_sc.gates||[]).length, rp:(_sc.rugPlats&&_sc.rugPlats.children?_sc.rugPlats.getLength():0), dz:(_sc.dumpZones||[]).length}, gate0:(_sc.gates&&_sc.gates[0]?_sc.gates[0].st:null), dr:(_sc._drState||null), drY:(_sc.rugking&&_sc.rugking.active?Math.round(_sc.rugking.y):null), drT:(_sc._drT0?Math.round(_sc.time.now-_sc._drT0):null), bossInv:(_sc.rugking&&_sc.rugking.active?!!_sc.rugking.invuln:null), princess:!!(_sc.princess&&_sc.princess.active)}; }catch(e){ return {err:String(e)}; } };
+         window.__NQ_DBG=function(){ try{ return {paused:!!_sc.paused, clockPaused:!!_sc.time.paused, now:Math.round(_sc.time.now), last:Math.round(_sc.lastInputAt||0), warping:!!_sc._warping, swan:_sc._swanState||null, bossHP:(_sc.bossStarted?_sc.bossHP:null), hasKey:!!_sc.hasKey, level:_sc.def&&_sc.def.name, nearSlot:(function(){ try{ return _sc.nearActiveSlot(); }catch(e){ return 'err:'+e.message; } })(), slotN:(_sc.slots?_sc.slots.length:-1), px:Math.round(_sc.player?_sc.player.x:-1), secrets:(function(){ var a=[]; try{ _sc.platforms.children.iterate(function(m){ if(m&&m.secretSteel) a.push([Math.round(m.x),Math.round(m.y),m.used?1:0]); }); }catch(e){} return a; })(), bb:(function(){ var a=[]; try{ _sc.bonusBlocks.children.iterate(function(m){ if(m) a.push([Math.round(m.x),m.used?1:0]); }); }catch(e){} return a; })(), pscale:(_sc.pscale?+_sc.pscale.v.toFixed(2):1), lives:_sc.lives, nLevels:LEVELS.length, sig:{fb:(_sc.firebars||[]).length, gt:(_sc.gates||[]).length, rp:(_sc.rugPlats&&_sc.rugPlats.children?_sc.rugPlats.getLength():0), dz:(_sc.dumpZones||[]).length}, gate0:(_sc.gates&&_sc.gates[0]?_sc.gates[0].st:null), foes:(function(){ var n=0; try{ _sc.enemies.children.iterate(function(e){ if(e&&e.active&&_sc.def&&_sc.def.door&&e.x>_sc.def.door-460) n++; }); }catch(e){} return n; })(), dr:(_sc._drState||null), drY:(_sc.rugking&&_sc.rugking.active?Math.round(_sc.rugking.y):null), drT:(_sc._drT0?Math.round(_sc.time.now-_sc._drT0):null), bossInv:(_sc.rugking&&_sc.rugking.active?!!_sc.rugking.invuln:null), princess:!!(_sc.princess&&_sc.princess.active)}; }catch(e){ return {err:String(e)}; } };
          // LAB-only designer levers: grant the level key / land one boss hit (test boss fights &
          // door flows without a full runthrough). Dormant on the tester build.
          if(window.__NQ_SETUP){
@@ -2021,6 +2021,15 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   startBoss:function(){
     if(this.bossStarted) return; this.bossStarted=true; this.boss=true; this.bossHP=3;
     try{ MUSIC.forWorld('boss'); }catch(e){}   // kick into the boss theme (also covers 1-3's Rug King)
+    // ARENA SWEEP (2026-07-21, multi-agent bug sweep finding): ambient level enemies used to stay
+    // live in the boss arena — a patroller trapped INSIDE the walls plus snipers shooting THROUGH
+    // the intangible arena wall turned finales into a meat grinder (bots died in seconds with them,
+    // survived fine without). They still guard the door approach; once the fight starts, the arena
+    // belongs to the boss. Applies to every boss level (9-3/10-3/11-3/12-3 shared the layout quirk).
+    try{ var _adx=this.def.door, _bself=this;
+      if(this.enemies) this.enemies.children.iterate(function(e){ if(e&&e.active&&e.x>_adx-460){ _bself.burst(e.x,e.y,0x8890a8,8); e.disableBody(true,true); } });
+      if(this.enemyShots) this.enemyShots.children.iterate(function(s2){ if(s2&&s2.active&&s2.x>_adx-460) s2.destroy(); });
+    }catch(e){}
     if(this.def.bossType==='wormhole'){ this.startWormBoss(); return; }
     if(this.def.bossType==='kol'){ this.startKolBoss(); return; }
     if(this.def.bossType==='ceo'){ this.startCeoBoss(); return; }
@@ -3203,7 +3212,10 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // Per-world checkpoint: died past a banked world boundary → continue from the FURTHEST world
     // reached (start of that world), not always World 2. cpLvl is the highest banked level index.
     var cpLvl = PREMIUM_CHECKPOINTS ? (this.registry.get('nqCp')||0) : 0;
-    var useCp = cpLvl>0 && this.levelIdx>=cpLvl;
+    var effIdx=this.levelIdx;   // hidden bonus levels (idx 27-33) count as the level you warped FROM —
+    // otherwise a game over inside a speakeasy discards any world>=10 checkpoint (idx 34/37/40 > hidden idx)
+    try{ if(this.def&&this.def.hidden){ var _rl=this.registry.get('nqRetLvl'); if(_rl!=null) effIdx=_rl; } }catch(e){}
+    var useCp = cpLvl>0 && effIdx>=cpLvl;
     var cont = useCp ? cpLvl : 0, contScore = useCp ? (this.registry.get('nqCpScore')||0) : 0;
     this._cont=cont; this._contScore=contScore;   // (exposed for tests)
     this.time.delayedCall(600,function(){ this.scene.start('Over',{score:this.score,reason:reason,level:this.def.name,cont:cont,contScore:contScore}); },[],this); },
@@ -3541,7 +3553,7 @@ var Over=new Phaser.Class({ Extends:Phaser.Scene,
     this.add.text(W/2,118,'SCORE',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#b6bfe0'}).setOrigin(.5);
     this.add.text(W/2,150,String(this.finalScore),{fontFamily:'"Press Start 2P"',fontSize:'30px',color:'#ffd23f'}).setOrigin(.5).setShadow(3,3,'#7a5a00',0,true,true);
     // Per-world checkpoint continue takes priority over the leaderboard/free-preview copy.
-    var CP_LABEL={3:'WORLD 2\ncontinue from the Sand Lands',6:'WORLD 3\ncontinue from the Skyline',9:'WORLD 4\ncontinue from the Exchange',12:'WORLD 5\ncontinue from the Bridge',15:'WORLD 6\ncontinue from the Depeg',18:'WORLD 7\ncontinue from the Yield Farm',21:'WORLD 8\ncontinue from the Bear Market',24:'WORLD 9\ncontinue from the Mines'};
+    var CP_LABEL={3:'WORLD 2\ncontinue from the Sand Lands',6:'WORLD 3\ncontinue from the Skyline',9:'WORLD 4\ncontinue from the Exchange',12:'WORLD 5\ncontinue from the Bridge',15:'WORLD 6\ncontinue from the Depeg',18:'WORLD 7\ncontinue from the Yield Farm',21:'WORLD 8\ncontinue from the Bear Market',24:'WORLD 9\ncontinue from the Mines',34:'WORLD 10\ncontinue from the Euphoria',37:'WORLD 11\ncontinue from the Citadel gates',40:'WORLD 12\ncontinue from the Relaunch'};
     var NWORLDS=Math.ceil(LEVELS.filter(function(l){return !l.hidden;}).length/3);
     this.add.text(W/2,198, this.cont>0 ? ('★ CHECKPOINT: '+(CP_LABEL[this.cont]||('LEVEL '+(this.cont+1)))) : (BURN_GATE ? 'score posts to the leaderboard —\ntop 10 split the pool' : ('free preview · all '+NWORLDS+' Worlds\ngood luck out there')),{fontFamily:UIFONT,resolution:UIRES,fontSize:'19px',color:this.cont>0?'#3dff6e':'#b6bfe0',align:'center'}).setOrigin(.5);
     var p=this.add.text(W/2,244, this.cont>0 ? 'PRESS TO CONTINUE →' : (BURN_GATE ? 'PRESS TO BURN AGAIN' : 'PRESS TO PLAY AGAIN'),{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
