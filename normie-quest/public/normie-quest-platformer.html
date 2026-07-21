@@ -326,9 +326,22 @@ var MUSIC=(function(){
   var MUSIC_VOL=0.18, musScale=1;   // produced tracks sit QUIETLY under the game SFX; musScale = the Music slider (0..1)
   try{ if(typeof localStorage!=='undefined'){ var _mv=localStorage.getItem('nqMusVol'); if(_mv!=null) musScale=Math.max(0,Math.min(1,parseFloat(_mv)||0)); } }catch(e){}
   function effVol(){ return MUSIC_VOL*musScale; }
-  function elVol(el,v){ try{ el.volume=Math.max(0,Math.min(1,v)); }catch(e){} }
+  // iOS FIX (owner report 2026-07-21: "music slider isn't working"): HTMLMediaElement.volume is
+  // READ-ONLY on iOS — Safari silently ignores it, so the slider did nothing on the streamed
+  // produced tracks (which is most of what plays). Route each audio element through a WebAudio
+  // gain node instead; gain works on every platform. Falls back to el.volume if wiring fails.
+  function wireEl(el){ if(el._g||el._gFail||!ctx) return;
+    try{ el._src=ctx.createMediaElementSource(el); el._g=ctx.createGain();
+      el._g.gain.value=(typeof el.volume==='number')?el.volume:0;
+      el._src.connect(el._g); el._g.connect(ctx.destination); try{ el.volume=1; }catch(e){} }
+    catch(e){ el._gFail=1; } }
+  function elVol(el,v){ v=Math.max(0,Math.min(1,v));
+    if(ctx&&!el._g&&!el._gFail) wireEl(el);
+    if(el._g){ try{ el._g.gain.value=v; return; }catch(e){} }
+    try{ el.volume=v; }catch(e){} }
+  function elVolNow(el){ if(el&&el._g){ try{ return el._g.gain.value; }catch(e){} } return el&&typeof el.volume==='number'?el.volume:null; }
   function fade(el,to,ms,done){ if(!el){ if(done) done(); return; } if(el._fi) clearInterval(el._fi);
-    var from=(typeof el.volume==='number'?el.volume:0), t0=Date.now();
+    var from=elVolNow(el)||0, t0=Date.now();
     el._fi=setInterval(function(){ var k=ms>0?Math.min(1,(Date.now()-t0)/ms):1; elVol(el, from+(to-from)*k);
       if(k>=1){ clearInterval(el._fi); el._fi=null; if(done) done(); } }, 40); }
   function makeEl(name){ var el=els[name]; if(el) return el;
@@ -363,12 +376,12 @@ var MUSIC=(function(){
     // Tab hidden / browser minimized → pause the produced track (HTMLAudio keeps playing otherwise);
     // the WebAudio synth + SFX auto-suspend by browser policy. Resume the same track on return.
     suspend:function(){ try{ synthStop(); }catch(e){} if(curEl){ try{ curEl.pause(); }catch(e){} } },
-    resume:function(){ if(muted) return; if(curEl && streaming){ var p=curEl.play(); if(p&&p.catch) p.catch(function(){}); } else if(want && !streaming){ try{ synthPlay(want); }catch(e){} } },
+    resume:function(){ try{ if(ctx&&ctx.state==='suspended') ctx.resume(); }catch(e){} if(muted) return; if(curEl && streaming){ var p=curEl.play(); if(p&&p.catch) p.catch(function(){}); } else if(want && !streaming){ try{ synthPlay(want); }catch(e){} } },
     toggle:function(){ muted=!muted; if(gain) gain.gain.value=muted?0:0.06*musScale; if(curEl) fade(curEl,muted?0:effVol(),150); try{ localStorage.setItem('nqMute',muted?'1':'0'); }catch(e){} return muted; },
     muted:function(){ return muted; },
     setVol:function(s){ musScale=Math.max(0,Math.min(1,s)); if(gain) gain.gain.value=muted?0:0.06*musScale; if(curEl) fade(curEl,muted?0:effVol(),120); try{ localStorage.setItem('nqMusVol',String(musScale)); }catch(e){} },
     getVol:function(){ return musScale; },
-    state:function(){ return { want:want, streaming:streaming, missing:Object.keys(missing), channel:channel }; }   // observability / tests
+    state:function(){ return { want:want, streaming:streaming, missing:Object.keys(missing), channel:channel, elGain:elVolNow(curEl), wired:!!(curEl&&curEl._g), scale:musScale }; }   // observability / tests
   };
 })();
 try{ if(typeof window!=='undefined') window.__NQ_MUSIC=MUSIC; }catch(e){}
