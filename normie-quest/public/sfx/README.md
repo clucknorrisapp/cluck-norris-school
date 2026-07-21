@@ -15,6 +15,6 @@ Keep everything ORIGINAL/OWNED — same rule as the music (see ../MUSIC_NOTES.md
 
 ## Current samples
 
-| File       | What it is | Provenance |
-|------------|------------|------------|
-| `coin.mp3` | Coin collect — bright rising two-note "ring" chime (B5→E6) | ORIGINAL: synthesized from scratch in-session (sine + harmonic partials, scripted). Sonic-ring STYLE homage, not a sample of any game audio. Alternates (ring-B G5→D6 rounder, ring-C E6→A6 sparklier) were offered; owner can swap by replacing this file. |
+(none — the coin ring-chime sample was tried 2026-07-21 and REVERTED same day, owner's call:
+"that is horrible". The built-in synth coin tone is the live sound. The `coin` key in
+`_SFX_FILES` still works — drop an owned `coin.mp3` here any time to try another take.)
