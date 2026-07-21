@@ -12,8 +12,8 @@
 // Config (env; sensible defaults so it works the moment a NORMIE mint exists):
 //   NQ_NORMIE_MINT   the NORMIE SPL mint (shared with the burn module; unset => NORMIE gate off)
 //   NQ_CLKN_MINT     CLKN mint (default = the known public CLKN mint)
-//   NQ_TIER1_NORMIE  hold >= this NORMIE  -> tier 1 (worlds 3-7)     default 100000
-//   NQ_TIER2_NORMIE  hold >= this NORMIE  -> tier 2 (all worlds)     default 500000
+//   NQ_TIER1_NORMIE  hold >= this NORMIE  -> tier 1 (worlds 1-7)     default 10000  (~$10 on-ramp)
+//   NQ_TIER2_NORMIE  hold >= this NORMIE  -> tier 2 (all worlds)     default 50000  (~$48)
 //   NQ_CLKN_ACCESS   hold >= this CLKN    -> full access (our-production perk)  default 2000000
 //   NQ_VIP_NORMIE    hold >= this NORMIE  -> ULTRA VIP wing (worlds 13+)  default 2000000  ⚠ TESTING
 //   NQ_VIP_CLKN      hold >= this CLKN    -> ULTRA VIP wing               default 10000000 ⚠ TESTING
@@ -42,8 +42,8 @@ function cfg() {
   return {
     normieMint: (process.env.NQ_NORMIE_MINT || NORMIE_MINT_DEFAULT).trim(),
     clknMint: (process.env.NQ_CLKN_MINT || CLKN_MINT_DEFAULT).trim(),
-    tier1Normie: num(process.env.NQ_TIER1_NORMIE, 100000),
-    tier2Normie: num(process.env.NQ_TIER2_NORMIE, 500000),
+    tier1Normie: num(process.env.NQ_TIER1_NORMIE, 10000),
+    tier2Normie: num(process.env.NQ_TIER2_NORMIE, 50000),
     clknAccess: num(process.env.NQ_CLKN_ACCESS, 2000000),
     vipNormie: num(process.env.NQ_VIP_NORMIE, 0),   // 0 = balance path OFF (owner call: VIP is
     vipClkn: num(process.env.NQ_VIP_CLKN, 0),       // allowlist-only until terms are locked)
