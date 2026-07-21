@@ -29,13 +29,15 @@ public surface until the owner locks them (and the NORMIE-team agreement lands).
 (`window.__NQ_VIP()`), and `nqWorldAllowed` requires it for any `def.vip` level (setup lane;
 lab lever `__NQ_FORCE_VIP=true` bypasses for QA).
 
-Two grant paths today:
-1. **Balance threshold** — `NQ_VIP_NORMIE` (default 2,000,000 NORMIE) or `NQ_VIP_CLKN`
-   (default 10,000,000 CLKN). ⚠ Defaults are placeholders — OWNER TO CONFIRM.
-2. **Manual allowlist** — `/data/nq-vip.json`, managed via the gated endpoint
-   `GET /normie-quest-x7/vip?key=…[&add=PUBKEY|&remove=PUBKEY]` (NQ_FEEDBACK_KEY or
-   PREMIUM_ACCESS_KEY). This is how the owner grants VIP for the qualification paths
-   that aren't automated yet (below).
+**⚠ OWNER-ONLY LOCKDOWN (owner call 2026-07-21): VIP is ALLOWLIST-ONLY for now.**
+1. **Balance threshold** — `NQ_VIP_NORMIE` / `NQ_VIP_CLKN` env vars, **default 0 = OFF**
+   (so no whale tester accidentally qualifies). Set them only when terms are locked.
+2. **Manual allowlist** — `/data/nq-vip.json`, managed via
+   `GET /normie-quest-x7/vip?key=…[&add=PUBKEY|&remove=PUBKEY]`. This endpoint requires the
+   REAL admin key (`NQ_FEEDBACK_KEY` or `PREMIUM_ACCESS_KEY`) — the tester-known dashboard
+   password deliberately does NOT work here. The owner adds their own wallet to grant
+   themself access; the client-side QA lever (`__NQ_FORCE_VIP`) additionally requires the
+   designer-lab flag, so plain testers can't console-flip it.
 
 ## Qualification economy — OWNER DECISIONS PENDING
 

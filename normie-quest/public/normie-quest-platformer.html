@@ -1152,7 +1152,7 @@ function nqWorldAllowed(def){
   var w=+m[1], a=null;
   try{ a=(typeof window.__NQ_ACCESS==='function')?window.__NQ_ACCESS():null; }catch(e){}
   if(def&&def.vip){   // ULTRA VIP wing (worlds 13+): needs the VIP grant, not just top tier.
-    if(window.__NQ_FORCE_VIP) return true;   // lab lever
+    if(window.__NQ_FORCE_VIP&&(function(){try{return localStorage.getItem('nqLabTune')==='1';}catch(e){return false;}})()) return true;   // QA lever — designer lab only, not the tester lane
     try{ return !!(typeof window.__NQ_VIP==='function'&&window.__NQ_VIP()); }catch(e){ return false; }
   }
   if(a==='all') return true;

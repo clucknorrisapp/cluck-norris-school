@@ -171,7 +171,11 @@ router.post('/api/nq/wallet/verify', async (req, res) => {
 // token locks, burns, or SOL payments — the paths not yet automated. ?add= / ?remove= / list.
 // ⚠ ALL VIP terms are TESTING-ONLY (owner-to-confirm); never publish qualification numbers.
 router.get('/normie-quest-x7/vip', (req, res) => {
-  if (!adminOK(req)) return res.status(404).json({ ok: false, error: 'not_found' });
+  // STRICT admin: env keys ONLY — adminOK also accepts the tester-known dashboard password,
+  // which must NOT be able to grant ULTRA VIP (owner call 2026-07-21: VIP is owner-only).
+  const vk = String((req.query && req.query.key) || req.get('x-nq-key') || '');
+  const vw = process.env.NQ_FEEDBACK_KEY || process.env.PREMIUM_ACCESS_KEY || '';
+  if (!vw || vk !== vw) return res.status(404).json({ ok: false, error: 'not_found' });
   try {
     let list = wallet.vipList();
     const add = String(req.query.add || '').trim(), rem = String(req.query.remove || '').trim();

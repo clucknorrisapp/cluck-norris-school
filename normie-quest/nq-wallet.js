@@ -45,8 +45,8 @@ function cfg() {
     tier1Normie: num(process.env.NQ_TIER1_NORMIE, 100000),
     tier2Normie: num(process.env.NQ_TIER2_NORMIE, 500000),
     clknAccess: num(process.env.NQ_CLKN_ACCESS, 2000000),
-    vipNormie: num(process.env.NQ_VIP_NORMIE, 2000000),
-    vipClkn: num(process.env.NQ_VIP_CLKN, 10000000),
+    vipNormie: num(process.env.NQ_VIP_NORMIE, 0),   // 0 = balance path OFF (owner call: VIP is
+    vipClkn: num(process.env.NQ_VIP_CLKN, 0),       // allowlist-only until terms are locked)
   };
 }
 // Manual ULTRA VIP allowlist — owner-managed grants for qualification paths that aren't
@@ -57,7 +57,8 @@ function vipList() { try { const a = JSON.parse(fsv.readFileSync(vipListPath(), 
 function vipListWrite(a) { fsv.writeFileSync(vipListPath(), JSON.stringify(a)); }
 function isVip(owner, balances) {
   const c = cfg(), b = balances || {};
-  if (Number(b.normie || 0) >= c.vipNormie || Number(b.clkn || 0) >= c.vipClkn) return true;
+  if (c.vipNormie > 0 && Number(b.normie || 0) >= c.vipNormie) return true;
+  if (c.vipClkn > 0 && Number(b.clkn || 0) >= c.vipClkn) return true;
   return vipList().indexOf(String(owner)) !== -1;
 }
 // Public, secret-free view for the client (what to show on the gate).
