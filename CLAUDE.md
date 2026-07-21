@@ -186,7 +186,11 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 > lists both websites; clucknorris.app just isn't shown first (ordering is GT's, not ours).
 > Don't re-flag this; remaining nice-to-have is only the stale description text.** Older
 > context below ⬇️
-> ⏰ **ACTIVE WATCH (updated 2026-06-12): CoinGecko REJECTED the reapplication**
+> 🚫 **COINGECKO: CLOSED — DO NOT RE-SUGGEST (owner call 2026-07-21).** After the 3rd rejection
+> the owner considered one more reapplication and explicitly decided AGAINST it. No more
+> applications, no more CoinGecko-facing work unless the owner reopens it himself. GeckoTerminal
+> listing stays (free, live). Historical context below ⬇️
+> ⏰ **OLD WATCH (updated 2026-06-12): CoinGecko REJECTED the reapplication**
 > (req `CL1106260002`; owner reported the rejection 2026-06-12 — stated reason not yet
 > in the session, ask for the email text). Strategy: build a visibly better tape and
 > REAPPLY in ~2-4 weeks. Levers: volume mode is LIVE (±5%/±8% engine widths since
