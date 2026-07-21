@@ -15,6 +15,11 @@
 //   NQ_TIER1_NORMIE  hold >= this NORMIE  -> tier 1 (worlds 3-7)     default 100000
 //   NQ_TIER2_NORMIE  hold >= this NORMIE  -> tier 2 (all worlds)     default 500000
 //   NQ_CLKN_ACCESS   hold >= this CLKN    -> full access (our-production perk)  default 2000000
+//   NQ_VIP_NORMIE    hold >= this NORMIE  -> ULTRA VIP wing (worlds 13+)  default 2000000  ⚠ TESTING
+//   NQ_VIP_CLKN      hold >= this CLKN    -> ULTRA VIP wing               default 10000000 ⚠ TESTING
+//   (VIP also grants via the manual allowlist /data/nq-vip.json — the owner adds wallets that
+//    qualified through big buys / locks / burns / SOL payments until those checks are automated.
+//    ALL VIP terms are TESTING-ONLY and owner-to-confirm; never promise them publicly.)
 //   HELIUS_API_KEY   RPC (else public mainnet)
 
 const crypto = require('crypto');
@@ -40,7 +45,20 @@ function cfg() {
     tier1Normie: num(process.env.NQ_TIER1_NORMIE, 100000),
     tier2Normie: num(process.env.NQ_TIER2_NORMIE, 500000),
     clknAccess: num(process.env.NQ_CLKN_ACCESS, 2000000),
+    vipNormie: num(process.env.NQ_VIP_NORMIE, 2000000),
+    vipClkn: num(process.env.NQ_VIP_CLKN, 10000000),
   };
+}
+// Manual ULTRA VIP allowlist — owner-managed grants for qualification paths that aren't
+// automated yet (big buys, token locks, burns, SOL payments). Simple JSON array of pubkeys.
+const fsv = require('fs'), pathv = require('path');
+function vipListPath() { return pathv.join(process.env.DATA_DIR || '/data', 'nq-vip.json'); }
+function vipList() { try { const a = JSON.parse(fsv.readFileSync(vipListPath(), 'utf8')); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+function vipListWrite(a) { fsv.writeFileSync(vipListPath(), JSON.stringify(a)); }
+function isVip(owner, balances) {
+  const c = cfg(), b = balances || {};
+  if (Number(b.normie || 0) >= c.vipNormie || Number(b.clkn || 0) >= c.vipClkn) return true;
+  return vipList().indexOf(String(owner)) !== -1;
 }
 // Public, secret-free view for the client (what to show on the gate).
 function publicConfig() {
@@ -107,7 +125,7 @@ async function verify(pubkeyStr, signatureB58) {
   const grant = tierForBalances(balances);
   const issuedAt = Date.now();
   const token = sign(pk + '.' + issuedAt) + '.' + issuedAt;   // "<hmac>.<issuedAt>"
-  return { ok: true, wallet: pk, tier: grant.tier, worlds: grant.worlds, balances, token };
+  return { ok: true, wallet: pk, tier: grant.tier, worlds: grant.worlds, balances, vip: isVip(pk, balances), token };
 }
 
 // Re-read live balance for an already-proven wallet (no re-signing) and return the CURRENT tier.
@@ -120,7 +138,7 @@ async function refresh(pubkeyStr, token, opts) {
   let balances;
   try { balances = await readBalancesCached(pk, opts && opts.force); } catch (e) { return { ok: false, status: 'rpc_error' }; }
   const grant = tierForBalances(balances);
-  return { ok: true, wallet: pk, tier: grant.tier, worlds: grant.worlds, balances };
+  return { ok: true, wallet: pk, tier: grant.tier, worlds: grant.worlds, balances, vip: isVip(pk, balances) };
 }
 
 // Verify a session token belongs to this wallet and is unexpired (used by the score route).
@@ -177,4 +195,4 @@ function tierForBalances(b) {
   return { tier: 0, worlds: [1, 2] };
 }
 
-module.exports = { cfg, publicConfig, challenge, verify, refresh, checkSession, tierForBalances, readBalances, CLKN_MINT_DEFAULT };
+module.exports = { cfg, publicConfig, challenge, verify, refresh, checkSession, tierForBalances, readBalances, isVip, vipList, vipListWrite, CLKN_MINT_DEFAULT };

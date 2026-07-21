@@ -167,6 +167,19 @@ router.post('/api/nq/wallet/verify', async (req, res) => {
     res.json(out);
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
+// ULTRA VIP allowlist admin (owner only): grant/revoke wallets that qualified via big buys,
+// token locks, burns, or SOL payments — the paths not yet automated. ?add= / ?remove= / list.
+// ⚠ ALL VIP terms are TESTING-ONLY (owner-to-confirm); never publish qualification numbers.
+router.get('/normie-quest-x7/vip', (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ ok: false, error: 'not_found' });
+  try {
+    let list = wallet.vipList();
+    const add = String(req.query.add || '').trim(), rem = String(req.query.remove || '').trim();
+    if (add && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(add) && list.indexOf(add) === -1) { list.push(add); wallet.vipListWrite(list); }
+    if (rem) { const i = list.indexOf(rem); if (i !== -1) { list.splice(i, 1); wallet.vipListWrite(list); } }
+    res.json({ ok: true, count: list.length, wallets: list });
+  } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
 // re-read live balance for a remembered wallet (no re-signing) → current tier, every launch
 router.post('/api/nq/wallet/refresh', async (req, res) => {
   try {
