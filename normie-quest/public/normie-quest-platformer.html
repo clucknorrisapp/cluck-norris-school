@@ -1035,6 +1035,11 @@ var LevelSelect=new Phaser.Class({ Extends:Phaser.Scene,
     this.cameras.main.setZoom(2).centerOn(W/2,H/2); this.cameras.main.setBackgroundColor(0x0b0a1c);
     this.add.text(W/2,14,'LEVEL SELECT',{fontFamily:'"Press Start 2P"',fontSize:'13px',color:'#ffd23f'}).setOrigin(.5);
     this.add.text(W/2,30,'TEST BUILD · tap any level',{fontFamily:UIFONT,fontStyle:'600',fontSize:'12px',color:'#c3cdf0',resolution:UIRES}).setOrigin(.5);
+    // 👑 VIPs get a door to the Lounge (giveaways / alpha / perks) right from the world map
+    try{ if(typeof window.__NQ_VIP==='function'&&window.__NQ_VIP()){
+      var lg=this.add.text(W-14,13,'👑 VIP LOUNGE',{fontFamily:UIFONT,fontStyle:'bold',fontSize:'11px',color:'#ffd23f',resolution:UIRES}).setOrigin(1,.5).setInteractive({useHandCursor:true});
+      lg.on('pointerup',function(){ try{ window.open('/normie-quest-x7/lounge','_blank'); }catch(e){} });
+    } }catch(e){}
     // group levels by world (first digit of the "w-n" name), rendered dynamically from LEVELS
     var worlds={}, order=[];
     LEVELS.forEach(function(l,i){ if(l.hidden) return; var w=(l.name||'').split('-')[0]||'?'; if(!worlds[w]){ worlds[w]=[]; order.push(w); } worlds[w].push({l:l,i:i}); });   // hidden bonus levels never show in level-select

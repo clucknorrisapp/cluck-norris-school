@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>👑 The VIP Lounge</title>
+<style>
+  :root { --gold:#ffd23f; --dim:#8a6a1a; --bg:#0a0813; --card:#141022; --txt:#eef2ff; --mut:#b6bfe0; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--txt); font-family:system-ui,-apple-system,'Segoe UI',sans-serif; min-height:100vh; }
+  .wrap { max-width:680px; margin:0 auto; padding:28px 16px 60px; }
+  header { text-align:center; margin-bottom:26px; }
+  h1 { color:var(--gold); font-size:26px; letter-spacing:1px; }
+  .sub { color:var(--mut); font-size:13px; margin-top:6px; }
+  .card { background:var(--card); border:1px solid #2a2440; border-radius:12px; padding:18px; margin-bottom:14px; }
+  .card.vipwall { border-color:var(--dim); text-align:center; padding:34px 18px; }
+  button { background:var(--gold); color:#1a1204; border:0; border-radius:9px; padding:12px 20px; font-size:15px; font-weight:700; cursor:pointer; margin:6px 4px 0; }
+  button.ghost { background:#241f36; color:var(--txt); border:1px solid #3a3456; }
+  .err { color:#ff6a8a; font-size:13px; margin-top:10px; min-height:16px; }
+  .post { border-left:3px solid var(--gold); }
+  .post .tag { display:inline-block; font-size:11px; font-weight:700; letter-spacing:.6px; padding:2px 8px; border-radius:99px; background:#241f36; color:var(--gold); margin-bottom:8px; text-transform:uppercase; }
+  .post .tag.giveaway { color:#3dff6e; } .post .tag.alpha { color:#66ddff; } .post .tag.perk { color:#ff8adf; }
+  .post h3 { font-size:16px; margin-bottom:6px; }
+  .post p { font-size:14px; color:var(--mut); line-height:1.55; white-space:pre-wrap; }
+  .post .ts { font-size:11px; color:#6e6a86; margin-top:10px; }
+  .who { text-align:center; font-size:12px; color:var(--mut); margin-bottom:16px; }
+  .who b { color:var(--gold); }
+  .crown { font-size:44px; }
+  a { color:#66ddff; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="crown">👑</div>
+    <h1>THE VIP LOUNGE</h1>
+    <div class="sub">Giveaways · Alpha · Perks — for the project's biggest supporters</div>
+  </header>
+  <div id="gate" class="card vipwall">
+    <p style="margin-bottom:10px">Prove it's you — sign a free message with your wallet.<br>
+    <span style="font-size:12px;color:#6e6a86">No transaction, no approvals, zero cost. We only check your key.</span></p>
+    <div id="wallets"></div>
+    <div id="err" class="err"></div>
+  </div>
+  <div id="who" class="who" style="display:none"></div>
+  <div id="feed" style="display:none"></div>
+</div>
+<script>
+(function () {
+  'use strict';
+  var B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  function b58encode(bytes) {
+    var d = [], s = '', i, j, c, n;
+    for (i = 0; i < bytes.length; i++) { c = bytes[i]; n = 0;
+      for (j = 0; j < d.length || c; j++) { n = (d[j] || 0) * 256 + c; d[j] = n % 58; c = Math.floor(n / 58); } }
+    for (i = 0; i < bytes.length && bytes[i] === 0; i++) s += '1';
+    for (i = d.length - 1; i >= 0; i--) s += B58[d[i]];
+    return s;
+  }
+  function esc(t) { var d = document.createElement('div'); d.textContent = String(t == null ? '' : t); return d.innerHTML; }
+
+  // ---- wallet detection: legacy globals + Wallet Standard (Jupiter-only desktops etc.) ----
+  var stdWallets = [];
+  try {
+    window.addEventListener('wallet-standard:register-wallet', function (ev) {
+      try { var w = ev.detail && (typeof ev.detail === 'function' ? null : ev.detail); if (w) regStd(w); } catch (e) {}
+    });
+    window.addEventListener('wallet-standard:app-ready', function () {});
+    function regStd(w) { if (stdOk(w) && !stdWallets.some(function (x) { return x.name === w.name; })) stdWallets.push(w); }
+    window.dispatchEvent(new CustomEvent('wallet-standard:app-ready', { detail: { register: function (w) { regStd(w); } } }));
+  } catch (e) {}
+  function stdOk(w) { try { return !!(w && (w.chains || []).some(function (c) { return String(c).indexOf('solana:') === 0; }) && w.features && w.features['standard:connect'] && w.features['solana:signMessage']); } catch (e) { return false; } }
+  function stdAdapter(w) {
+    return { connect: function () { return w.features['standard:connect'].connect().then(function (r) {
+        var acct = (r && r.accounts && r.accounts[0]) || (w.accounts && w.accounts[0]);
+        if (!acct) throw new Error('no account');
+        var pk = acct.address; w.__acct = acct;
+        return { publicKey: { toString: function () { return pk; } } }; }); },
+      signMessage: function (bytes) { return w.features['solana:signMessage'].signMessage({ account: w.__acct, message: bytes }).then(function (res) {
+        var out = Array.isArray(res) ? res[0] : res; return { signature: out.signature }; }); } };
+  }
+  function detect() {
+    var found = [];
+    function add(name, p) { if (p && !found.some(function (f) { return f.name === name; })) found.push({ name: name, provider: p }); }
+    try { if (window.phantom && window.phantom.solana && window.phantom.solana.isPhantom) add('Phantom', window.phantom.solana); } catch (e) {}
+    try { if (window.solflare && window.solflare.isSolflare) add('Solflare', window.solflare); } catch (e) {}
+    try { if (window.backpack && window.backpack.isBackpack) add('Backpack', window.backpack); } catch (e) {}
+    try { if (window.solana && window.solana.isPhantom && !found.length) add('Phantom', window.solana); } catch (e) {}
+    try { window.dispatchEvent(new CustomEvent('wallet-standard:app-ready', { detail: { register: function (w) { if (stdOk(w) && !stdWallets.some(function (x) { return x.name === w.name; })) stdWallets.push(w); } } })); } catch (e) {}
+    stdWallets.forEach(function (w) { add(w.name, stdAdapter(w)); });
+    try { if (!found.length && window.solana) add('Wallet', window.solana); } catch (e) {}
+    return found;
+  }
+
+  var errEl = document.getElementById('err');
+  function renderButtons() {
+    var box = document.getElementById('wallets'), ws = detect();
+    box.innerHTML = '';
+    if (!ws.length) { box.innerHTML = '<p style="font-size:13px;color:#b6bfe0">No Solana wallet detected — open this page in your wallet\'s browser, or install Phantom / Solflare / Jupiter and reload.</p>'; return; }
+    ws.forEach(function (w) {
+      var b = document.createElement('button'); b.textContent = 'Connect ' + w.name;
+      b.onclick = function () { go(w).catch(function (e) { errEl.textContent = String(e && e.message || e); }); };
+      box.appendChild(b);
+    });
+  }
+
+  async function go(w) {
+    errEl.textContent = '';
+    var resp = await w.provider.connect();
+    var pk = (resp && resp.publicKey ? resp.publicKey : w.provider.publicKey).toString();
+    var ch = await (await fetch('/api/nq/wallet/challenge?pubkey=' + pk)).json();
+    if (!ch.ok) throw new Error('Challenge failed');
+    var signed = await w.provider.signMessage(new TextEncoder().encode(ch.message), 'utf8');
+    var sig = signed && signed.signature ? signed.signature : signed;
+    var vr = await (await fetch('/api/nq/wallet/verify', { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ pubkey: pk, signature: b58encode(sig), walletName: 'lounge:' + w.name }) })).json();
+    if (!vr.ok) throw new Error('Verification failed');
+    try { localStorage.setItem('nqLoungeAuth', JSON.stringify({ pubkey: pk, token: vr.token })); } catch (e) {}
+    await openLounge(pk, vr.token);
+  }
+
+  async function openLounge(pk, token) {
+    var r = await (await fetch('/api/nq/lounge?wallet=' + pk + '&token=' + encodeURIComponent(token))).json();
+    if (!r.ok) {
+      if (r.error === 'not_vip') { errEl.innerHTML = 'This wallet isn\'t on the VIP list yet.<br><span style="font-size:12px;color:#6e6a86">Ask in the community how to earn a seat. 👑</span>'; return; }
+      throw new Error('Lounge check failed');
+    }
+    document.getElementById('gate').style.display = 'none';
+    var who = document.getElementById('who');
+    who.style.display = 'block';
+    who.innerHTML = 'Welcome, <b>' + esc(pk.slice(0, 4) + '…' + pk.slice(-4)) + '</b> 👑';
+    var feed = document.getElementById('feed');
+    feed.style.display = 'block';
+    feed.innerHTML = (r.posts || []).map(function (p) {
+      return '<div class="card post"><span class="tag ' + esc(p.tag || 'perk') + '">' + esc(p.tag || 'perk') + '</span>'
+        + '<h3>' + esc(p.title) + '</h3><p>' + esc(p.body) + '</p>'
+        + '<div class="ts">' + esc(new Date(p.ts).toUTCString().replace(':00 GMT', ' UTC')) + '</div></div>';
+    }).join('') || '<div class="card post"><h3>Nothing posted yet</h3><p>Check back soon.</p></div>';
+  }
+
+  // remembered auth → straight in
+  var saved = null; try { saved = JSON.parse(localStorage.getItem('nqLoungeAuth') || 'null'); } catch (e) {}
+  if (saved && saved.pubkey && saved.token) { openLounge(saved.pubkey, saved.token).catch(function () { renderButtons(); }); }
+  renderButtons();
+  setTimeout(renderButtons, 600);   // late wallet-standard registrations (Jupiter)
+})();
+</script>
+</body>
+</html>

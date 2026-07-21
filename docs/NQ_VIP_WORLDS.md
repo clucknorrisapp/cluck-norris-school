@@ -39,6 +39,15 @@ lab lever `__NQ_FORCE_VIP=true` bypasses for QA).
    themself access; the client-side QA lever (`__NQ_FORCE_VIP`) additionally requires the
    designer-lab flag, so plain testers can't console-flip it.
 
+## 👑 The VIP Lounge (separate page)
+
+`/normie-quest-x7/lounge` — a wallet-gated page outside the game: the owner posts giveaways,
+alpha, and perk announcements for VIPs only. Sign-message auth (same session flow as the game),
+feed served only to sessions whose wallet passes `isVip`. VIPs also get a "👑 VIP LOUNGE"
+button on the game's world map. Owner posts via
+`GET /normie-quest-x7/lounge-admin?key=REAL_KEY&title=…&body=…[&tag=giveaway|alpha|perk]`
+(`&remove=<id>` deletes; bare call lists). Posts live at `/data/nq-lounge.json`.
+
 ## Qualification economy — OWNER DECISIONS PENDING
 
 The four intended paths beyond raw holding, with the infra each would reuse:

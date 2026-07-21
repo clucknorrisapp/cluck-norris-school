@@ -184,6 +184,41 @@ router.get('/normie-quest-x7/vip', (req, res) => {
     res.json({ ok: true, count: list.length, wallets: list });
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
+// ---- 👑 VIP LOUNGE — a separate wallet-gated page for VIPs: giveaways, alpha, perks ----
+// Page: /normie-quest-x7/lounge (noindex). Feed API requires a verified session token AND the
+// VIP grant. Posts live at /data/nq-lounge.json, owner-managed via the strict-key admin below.
+router.get('/normie-quest-x7/lounge', (req, res) => {
+  res.set('X-Robots-Tag', 'noindex, nofollow');
+  res.sendFile(path.join(__dirname, 'public', 'lounge.html'));
+});
+function loungePath() { return path.join(process.env.DATA_DIR || '/data', 'nq-lounge.json'); }
+function loungePosts() { try { const a = JSON.parse(fs.readFileSync(loungePath(), 'utf8')); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+router.get('/api/nq/lounge', (req, res) => {
+  try {
+    const pk = String(req.query.wallet || ''), token = String(req.query.token || '');
+    const sess = wallet.checkSession(pk, token);
+    if (!sess || sess.ok === false) return res.status(401).json({ ok: false, error: 'bad_session' });
+    if (!wallet.isVip(pk, null)) return res.status(403).json({ ok: false, error: 'not_vip' });
+    res.json({ ok: true, posts: loungePosts() });
+  } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+// Owner posting (STRICT env key only, same as the VIP allowlist): &title=&body=[&tag=giveaway|alpha|perk]
+// to add; &remove=<id> to delete; bare call lists everything.
+router.get('/normie-quest-x7/lounge-admin', (req, res) => {
+  const vk = String((req.query && req.query.key) || req.get('x-nq-key') || '');
+  const vw = process.env.NQ_FEEDBACK_KEY || process.env.PREMIUM_ACCESS_KEY || '';
+  if (!vw || vk !== vw) return res.status(404).json({ ok: false, error: 'not_found' });
+  try {
+    let posts = loungePosts();
+    const title = String(req.query.title || '').slice(0, 140), body = String(req.query.body || '').slice(0, 4000);
+    const tag = ['giveaway', 'alpha', 'perk'].indexOf(String(req.query.tag || '')) !== -1 ? String(req.query.tag) : 'perk';
+    const rem = String(req.query.remove || '');
+    if (title && body) posts.unshift({ id: Date.now().toString(36), ts: Date.now(), title, body, tag });
+    if (rem) posts = posts.filter((x) => x.id !== rem);
+    fs.writeFileSync(loungePath(), JSON.stringify(posts));
+    res.json({ ok: true, count: posts.length, posts });
+  } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
 // re-read live balance for a remembered wallet (no re-signing) → current tier, every launch
 router.post('/api/nq/wallet/refresh', async (req, res) => {
   try {
