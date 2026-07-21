@@ -1799,7 +1799,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       // meant a swallowed transition (the frozen-clock bug) left the door dark for the whole
       // session with the player never having been inside.
       var used=this.registry.get('nqUsedWarps')||{}; if(wk) used[wk]=1; this.registry.set('nqUsedWarps', used);
-      this.scene.start('Game',{level:tgt, score:this.score, lives:this.lives});
+      this.scene.start('Game',{level:tgt, score:this.score, lives:this.lives, lab:(this._labWarp?1:undefined)});
     }, [], this);
   },
   returnFromHidden:function(){   // a hidden bonus level's exit → back to the source level where we ducked in
@@ -1807,8 +1807,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.registry.set('nqCarryKey',1);   // you found the lounge key in the speakeasy — carry it back (the x-2 doors return you PAST the level key, so this kills the backtrack)
     var retL=this.registry.get('nqRetLvl'), retX=this.registry.get('nqRetX')||120;
     this.hb(this.add.text(W/2,120,'BACK TO THE SURFACE',{fontFamily:'"Press Start 2P"',fontSize:'13px',color:'#3dff6e'}).setOrigin(.5));
-    this.time.delayedCall(1300, function(){ if(retL!=null) this.scene.start('Game',{level:retL, score:this.score, lives:this.lives, spawnX:retX});
-      else this.scene.start('Game',{level:0, score:this.score, lives:this.lives}); }, [], this);
+    this.time.delayedCall(1300, function(){ if(retL!=null) this.scene.start('Game',{level:retL, score:this.score, lives:this.lives, spawnX:retX, lab:(this._labWarp?1:undefined)});
+      else this.scene.start('Game',{level:0, score:this.score, lives:this.lives, lab:(this._labWarp?1:undefined)}); }, [], this);
   },
 
   grabPowerup:function(player,pu){
@@ -2071,8 +2071,17 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.bossHP<=0) this.bossDefeat();
   },
   bossTouch:function(player,k){
-    if(this.over||!k.active||k.invuln) return;
+    if(this.over||!k.active) return;
     var now=this.time.now;
+    if(k.invuln){
+      // DIRTY WHALE mid-charge is armored but MUST hurt on contact ("DODGE THE CHARGE") — the
+      // generic invuln early-return made the charge a harmless ghost (sweep finding).
+      if(this.def.bossType==='dirtywhale' && this._whState==='charge' &&
+         !(player.invuln||now<this.shieldUntil||now<this.coldUntil||now<this.moonUntil||now<this.omegaUntil||now<this.whaleUntil)){
+        this.hurt(player, k.x<player.x?1:-1, 'CARTEL CHARGE');
+      }
+      return;
+    }
     if(now<this.moonUntil||now<this.whaleUntil){ this.bossHit(); return; }   // MOON / WHALE smashes the boss on contact
     // Head-zone stomp: tolerance scales with the boss's body (the 8-3 Great Bear's body is ~83px
     // tall — head at y≈149 vs a max-jump apex of ~143, so the old flat 14px + "must be
@@ -2632,7 +2641,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       var retL=this.registry.get('nqRetLvl'), retX=this.registry.get('nqRetX')||120;
       this.addScore(2000);
       this.powerBanner('TROLL SLAIN!','WHO GOT TROLLED NOW? +2000 COINS','#2effa0');
-      this.time.delayedCall(2000, function(){ if(retL!=null) this.scene.start('Game',{level:retL,score:this.score,lives:this.lives,spawnX:retX}); else this.scene.start('Game',{level:0,score:this.score,lives:this.lives}); },[],this);
+      this.time.delayedCall(2000, function(){ if(retL!=null) this.scene.start('Game',{level:retL,score:this.score,lives:this.lives,spawnX:retX,lab:(this._labWarp?1:undefined)}); else this.scene.start('Game',{level:0,score:this.score,lives:this.lives}); },[],this);
     } else if(this.def.bossType==='liquidator'){
       // World 8 (The Bear Market) cleared → descend into World 9 (The Mines).
       this.bankCheckpoint();
@@ -3202,7 +3211,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var big=this.hb(this.add.text(W/2,120,'WORLD '+this.def.name+' CLEAR!',{fontFamily:'"Press Start 2P"',fontSize:'16px',color:'#3dff6e'}).setOrigin(.5));
     this.tweens.add({targets:big,scale:1.15,duration:400,yoyo:true,repeat:1});
     var next=this.levelIdx+1;
-    this.time.delayedCall(1500,function(){ if(next<LEVELS.length) this.scene.start('Game',{level:next,score:this.score,lives:3}); else this.scene.start('Win',this.winData()); },[],this);   // refill hearts each world; score stays cumulative
+    this.time.delayedCall(1500,function(){ if(next<LEVELS.length) this.scene.start('Game',{level:next,score:this.score,lives:3,lab:(this._labWarp?1:undefined)}); else this.scene.start('Win',this.winData()); },[],this);   // refill hearts each world; score stays cumulative
   },
   gameOver:function(reason){ if(this.over) return; this.over=true; this.physics.pause();
     // TIME UP is the one run-ender that doesn't pass through loseLife — record it here (never both)
@@ -3487,8 +3496,12 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
 
     // Rug King intro grace ends → he wakes up and the fight begins
     if(this.rugIntro && this.rugking && now>this.rugGraceUntil){ this.rugIntro=false; this.rugking.invuln=false; this.flash('FIGHT!','#3dff6e'); }
+    // ambient sniper bolts fly THROUGH the intangible arena wall into boss fights (sweep finding) —
+    // cull them at the boundary; boss-made projectiles carry their own srcCause and pass.
+    if(this.bossStarted && this.def.door && this.enemyShots){ var _abx=this.def.door-400;
+      this.enemyShots.children.iterate(function(s3){ if(s3&&s3.active&&s3.srcCause==='SNIPER BOLT'&&s3.x>_abx) s3.destroy(); }); }
     // boss charges toward the player (Rug King)
-    if(this.boss && this.def.bossType!=='blackswan' && this.rugking && this.rugking.active && !this.rugking.invuln){   // the swan flies its own state machine — the ground-charge would fight it
+    if(this.boss && this.def.bossType!=='blackswan' && this.def.bossType!=='mevdragon' && this.def.bossType!=='dirtywhale' && this.rugking && this.rugking.active && !this.rugking.invuln){   // state-machine bosses (swan/dragon/whale) own their movement — the ground-charge made the "stunned" whale CHASE the player through its vulnerable window
       var kb=this.rugking; kb.dir=(p.x<kb.x)?-1:1; kb.setVelocityX(kb.dir*76); kb.setFlipX(kb.dir>0); kb.setRotation(Math.sin(now/120)*0.05);
     }
     // Scammy KOL: shills fake tokens at range + taunts (in addition to the charge above)
