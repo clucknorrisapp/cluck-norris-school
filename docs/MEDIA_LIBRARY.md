@@ -46,6 +46,7 @@ CDN URLs are long-lived Higgsfield/CloudFront links — downloadable from any fr
 |---|---|---|
 | `docs/brand/logo-strip-top6.png` | repo (committed) | 6 official top-mcap coin logos in gold-ringed discs: BTC · ETH · BNB · XRP · SOL · TRX. For video overlays/end-cards. Real logos — AI must NEVER draw these. |
 | `public/learn-icons/*.png` | repo (live) | 18 official coin logos (CoinGecko art) used on /learn pages. |
+| `docs/brand/dexscreener-banner-600x200.{png,webp}` | repo (committed 2026-07-21) | The LIVE DexScreener header banner (fiery branded Cluck + dynamite, ETH/BTC/SOL discs, wordmark + clucknorris.app pill). Recovered from DexScreener's CDN — it had never been archived. Source of truth for listing-site banners (Bags etc.). |
 
 ## Hard-won generation rules (save credits, save patience)
 
