@@ -1993,7 +1993,13 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.over||!k.active||k.invuln) return;
     var now=this.time.now;
     if(now<this.moonUntil||now<this.whaleUntil){ this.bossHit(); return; }   // MOON / WHALE smashes the boss on contact
-    var onTop=(player.body.bottom<=k.body.top+14)&&player.body.velocity.y>=-20;
+    // Head-zone stomp: tolerance scales with the boss's body (the 8-3 Great Bear's body is ~83px
+    // tall — head at y≈149 vs a max-jump apex of ~143, so the old flat 14px + "must be
+    // descending" gate made him effectively stomp-proof: the rising player clipped his tall body
+    // first and got hurt). Tall bosses get a deeper head zone, and near-apex contact (vy≥-120,
+    // within ~8px of the top of the arc) counts — jumping onto the head from beside now lands.
+    var headTol=Math.max(14, k.body.height*0.25);
+    var onTop=(player.body.bottom<=k.body.top+headTol)&&player.body.velocity.y>=-120;
     if(onTop){ player.setVelocityY(-340); this.bossHit(); return; }
     if(player.invuln||now<this.shieldUntil||now<this.coldUntil) return;
     this.hurt(player, k.x<player.x?1:-1, 'BOSS TOUCH: '+String((this.def&&this.def.bossType)||'rugking').toUpperCase());
