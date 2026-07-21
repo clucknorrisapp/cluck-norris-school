@@ -64,5 +64,5 @@ CDN URLs are long-lived Higgsfield/CloudFront links — downloadable from any fr
   (pip `imageio-ffmpeg`; apt ffmpeg 404s in this container). Static-PNG overlay needs
   `-loop 1 -t <dur>` or fade filters keep alpha at 0.
 
-| 2026-07-21 | NORMIE PRINCESS candidate A2 (dark dreads, NORMIE patch) | nano_banana_pro | e008bcad-c46e-41c6-88b4-fcdb10a7d2bc | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260721_132857_e008bcad-c46e-41c6-88b4-fcdb10a7d2bc.png | PENDING owner pick (game princess sprite; ref = SPRITES.normie) |
-| 2026-07-21 | NORMIE PRINCESS candidate B2 (honey dreads, tilted crown, NORMIE patch) | nano_banana_pro | dd41d712-2a18-4319-9698-4c44db0e4f93 | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260721_132906_dd41d712-2a18-4319-9698-4c44db0e4f93.png | PENDING owner pick |
+| 2026-07-21 | NORMIE PRINCESS candidate A2 (dark dreads, NORMIE patch) | nano_banana_pro | e008bcad-c46e-41c6-88b4-fcdb10a7d2bc | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260721_132857_e008bcad-c46e-41c6-88b4-fcdb10a7d2bc.png | REJECTED (owner picked B2) |
+| 2026-07-21 | NORMIE PRINCESS candidate B2 (honey dreads, tilted crown, NORMIE patch) | nano_banana_pro | dd41d712-2a18-4319-9698-4c44db0e4f93 | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260721_132906_dd41d712-2a18-4319-9698-4c44db0e4f93.png | ✅ KEPT — owner pick; bg-removed (job 9af56c75-0d04-485a-9a7c-60c0440f312a), 160x216 sprite embedded as EXTRA.princess in the game |
