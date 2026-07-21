@@ -1160,7 +1160,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // level so they always point at the LIVE scene instance)
     try{ var _sc=this; window.__NQ_PAUSE=function(){ if(!_sc.over&&!_sc.paused){ _sc.pauseGame(false); return true; } return false; };
          window.__NQ_RESUME=function(){ if(_sc.paused) _sc.resumeGame(); };
-         window.__NQ_DBG=function(){ try{ return {paused:!!_sc.paused, clockPaused:!!_sc.time.paused, now:Math.round(_sc.time.now), last:Math.round(_sc.lastInputAt||0), warping:!!_sc._warping, swan:_sc._swanState||null, bossHP:(_sc.bossStarted?_sc.bossHP:null), hasKey:!!_sc.hasKey, level:_sc.def&&_sc.def.name, nearSlot:(function(){ try{ return _sc.nearActiveSlot(); }catch(e){ return 'err:'+e.message; } })(), slotN:(_sc.slots?_sc.slots.length:-1), px:Math.round(_sc.player?_sc.player.x:-1)}; }catch(e){ return {err:String(e)}; } };
+         window.__NQ_DBG=function(){ try{ return {paused:!!_sc.paused, clockPaused:!!_sc.time.paused, now:Math.round(_sc.time.now), last:Math.round(_sc.lastInputAt||0), warping:!!_sc._warping, swan:_sc._swanState||null, bossHP:(_sc.bossStarted?_sc.bossHP:null), hasKey:!!_sc.hasKey, level:_sc.def&&_sc.def.name, nearSlot:(function(){ try{ return _sc.nearActiveSlot(); }catch(e){ return 'err:'+e.message; } })(), slotN:(_sc.slots?_sc.slots.length:-1), px:Math.round(_sc.player?_sc.player.x:-1), secrets:(function(){ var a=[]; try{ _sc.platforms.children.iterate(function(m){ if(m&&m.secretSteel) a.push([Math.round(m.x),Math.round(m.y),m.used?1:0]); }); }catch(e){} return a; })()}; }catch(e){ return {err:String(e)}; } };
          // LAB-only designer levers: grant the level key / land one boss hit (test boss fights &
          // door flows without a full runthrough). Dormant on the tester build.
          if(window.__NQ_SETUP){
@@ -1282,6 +1282,23 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // wide walls are kept short.
     (def.walls||[]).forEach(function(wl){ var t=wl[2]||'brick', wide=wl[3]||1;
       for(var k=0;k<wl[1];k++) for(var w=0;w<wide;w++) self.platforms.create(wl[0]+w*TILE+TILE/2, GY-k*TILE-TILE/2, t); });
+    // 🤫 SECRET STEEL STASHES (hidden levels only, owner ask 2026-07-21): a few steel tiles are
+    // secretly ? blocks — IDENTICAL look, zero glow/pulse/label. JUMP into one (underside or side,
+    // airborne) to crack it open: coins, a multi-hit dispenser, or a power-up (open-top tiles only,
+    // so the pop-out is always reachable — never buried in the tile above). Random per run, so
+    // replays stay a treasure hunt. Tiles STAY in this.platforms (enemy/projectile collision
+    // unchanged); steelSecretTouch on the player collider does the reveal via popBlock.
+    if(def.hidden){ (function(){
+      var steel=[], pos={};
+      self.platforms.children.iterate(function(m){ if(!m) return; pos[Math.round(m.x)+','+Math.round(m.y)]=1; if(m.texture&&m.texture.key==='steel') steel.push(m); });
+      var mark=function(m){ var openTop=!pos[Math.round(m.x)+','+Math.round(m.y-TILE)], roll=Phaser.Math.Between(1,100);
+        m.secretSteel=true; m.used=false; m.homeY=m.y; m.hitsLeft=1;
+        if(openTop&&roll>82){ m.reward=Phaser.Math.RND.pick(['moon','candle','diamond','bull','omegachad','supergeek']); }
+        else if(roll>55){ m.reward=Phaser.Math.Between(8,14); m.hitsLeft=Phaser.Math.Between(3,5); }
+        else { m.reward=Phaser.Math.Between(10,25); } };
+      var marked=0; steel.forEach(function(m){ if(Phaser.Math.Between(1,100)<=18){ mark(m); marked++; } });
+      if(steel.length&&!marked) mark(Phaser.Math.RND.pick(steel));   // a hidden level with steel always hides at least one
+    })(); }
 
     // moving platforms
     this.movers=this.physics.add.group({allowGravity:false,immovable:true});
@@ -1553,7 +1570,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.whaleRide.postFX){ try{ this.whaleRide.postFX.addGlow(0x2f7fff,5,0,false,0.1,14); }catch(e){} }
 
     // collisions
-    this.physics.add.collider(this.player,this.platforms);
+    this.physics.add.collider(this.player,this.platforms,this.steelSecretTouch,null,this);   // callback only acts on marked secret steel tiles
     this.physics.add.collider(this.player,this.movers);
     this.physics.add.collider(this.player,this.pumpDumps);
     this.physics.add.collider(this.player,this.bridgePlanks);
@@ -1762,6 +1779,16 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   },
 
   // ? BONUS BLOCK — bonk from BELOW only (block above player + head stopped by it).
+  // a marked SECRET STEEL tile got jumped into (see the hidden-level marking pass). Grounded
+  // contact never counts: standing/landing sets touching.down (from the ground/tile under you),
+  // so a find always takes an airborne hit — head-bonk from below or a jump into the side.
+  steelSecretTouch:function(player,tile){
+    if(!tile.secretSteel||tile.used) return;
+    if(player.body.touching.down) return;
+    if(tile.cool&&this.time.now<tile.cool) return; tile.cool=this.time.now+320;
+    if(!tile.foundOnce){ tile.foundOnce=true; this.flash('SECRET STASH!','#2ee6c0'); SFX.key(); }
+    this.popBlock(tile);   // full ? -block payout path: coins / multi-hit / power-up, spent → qblockused reveal
+  },
   blockBonk:function(player,block){
     if(block.used) return;
     if(block.cool && this.time.now<block.cool) return;   // debounce: one dispense per bonk (multi-hit needs a re-jump)
