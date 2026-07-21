@@ -366,8 +366,14 @@ router.get('/normie-quest-x7/dashboard', async (req, res) => {
   res.set('X-Robots-Tag', 'noindex, nofollow');
   if (!adminOK(req)) return res.status(404).send('Not found');
   const key = esc(String((req.query && req.query.key) || ''));
+  // Granular death causes shipped in commit 3e2db4c (deploy 2026-07-20 15:39 UTC). Every event
+  // BEFORE that carries the legacy generic "WRECKED BY FUD" label; everything after is specific.
+  // Default view starts at the cutoff so TOP CAUSE reflects what actually kills testers now;
+  // ?window=all shows the full history (early levels revert to their legacy-FUD backlog).
+  const CAUSES_SHIPPED_AT = 1784561949000;
+  const showAll = String((req.query && req.query.window) || '') === 'all';
   let d = { events: 0, deaths: 0, clears: 0, firstAt: 0, lastAt: 0, worlds: [] };
-  try { d = telemetry.detailAll(); } catch (e) { /* render empty */ }
+  try { d = telemetry.detailAll(showAll ? 0 : CAUSES_SHIPPED_AT); } catch (e) { /* render empty */ }
   let comments = [];
   try { comments = (feedback.list() || []).slice().reverse(); } catch (e) { comments = []; }
   let lb = null;
@@ -400,7 +406,19 @@ router.get('/normie-quest-x7/dashboard', async (req, res) => {
   };
   const tableRows = rows.map(function (w) {
     const dpc = w.deathsPerClear === null ? '<span class="bad">∞</span>' : String(w.deathsPerClear);
-    const cause = w.topCauses[0] ? esc(w.topCauses[0].cause) + ' ×' + w.topCauses[0].n : '<span class="dim">—</span>';
+    // Prefer the top REAL cause; "WRECKED BY FUD" is the pre-2026-07-20 legacy generic — show it
+    // dimmed as a trailing note so it never masks the specific cause.
+    const real = (w.topCauses || []).filter(function (c) { return c.cause !== 'WRECKED BY FUD'; });
+    const legacy = (w.topCauses || []).filter(function (c) { return c.cause === 'WRECKED BY FUD'; })[0];
+    let cause;
+    if (real[0]) {
+      cause = esc(real[0].cause) + ' ×' + real[0].n
+        + (legacy ? ' <span class="dim">(+' + legacy.n + ' legacy)</span>' : '');
+    } else if (legacy) {
+      cause = '<span class="dim">' + esc(legacy.cause) + ' ×' + legacy.n + ' (legacy)</span>';
+    } else {
+      cause = '<span class="dim">—</span>';
+    }
     return '<tr' + (flag(w) ? ' class="warn"' : '') + '><td class="lvl">' + esc(w.world) + (flag(w) ? ' ⚠' : '') + '</td>'
       + '<td>' + w.deaths + '</td><td>' + w.clears + '</td><td>' + dpc + '</td>'
       + '<td>' + (w.clears ? w.avgClearSec + 's' : '<span class="dim">—</span>') + '</td>'
@@ -441,7 +459,10 @@ router.get('/normie-quest-x7/dashboard', async (req, res) => {
     + '@media(max-width:720px){.cols{grid-template-columns:1fr}}'
     + '</style></head><body>'
     + '<h1>🎮 Normie Quest — Operator Dashboard</h1>'
-    + '<div class="sub">all-time playtest data · <a href="/normie-quest-x7/feedback?key=' + key + '">all comments</a> · '
+    + '<div class="sub">' + (showAll
+        ? 'ALL-TIME data (incl. pre-2026-07-20 legacy “FUD” deaths) · <a href="/normie-quest-x7/dashboard?key=' + key + '"><b>show since causes shipped →</b></a>'
+        : 'showing deaths SINCE granular causes shipped (2026-07-20) — real causes only · <a href="/normie-quest-x7/dashboard?key=' + key + '&window=all">show all-time (with legacy FUD) →</a>')
+    + ' · <a href="/normie-quest-x7/feedback?key=' + key + '">all comments</a> · '
     + '<a href="/api/nq/telemetry?key=' + key + '">raw telemetry</a> · <a href="/api/nq/feedback?key=' + key + '">raw feedback</a> · refresh for live numbers</div>'
     + '<div class="tiles">'
     + '<div class="tile"><div class="n">' + d.events + '</div><div class="l">EVENTS</div></div>'

@@ -117,8 +117,9 @@ function worldDetail(world) {
 
 // Everything in ONE pass, all-time: per-world full stats (all causes, all buckets, last-seen)
 // plus global totals — feeds the operator dashboard. Aggregate difficulty data only, no PII.
-function detailAll() {
-  const evs = load();
+function detailAll(sinceMs) {
+  const since = Number(sinceMs || 0);
+  const evs = since ? load().filter((e) => Number(e.at || 0) >= since) : load();
   const worlds = {};
   let deaths = 0, clears = 0, firstAt = 0, lastAt = 0;
   for (const e of evs) {
