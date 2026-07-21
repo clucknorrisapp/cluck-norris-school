@@ -1160,7 +1160,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // level so they always point at the LIVE scene instance)
     try{ var _sc=this; window.__NQ_PAUSE=function(){ if(!_sc.over&&!_sc.paused){ _sc.pauseGame(false); return true; } return false; };
          window.__NQ_RESUME=function(){ if(_sc.paused) _sc.resumeGame(); };
-         window.__NQ_DBG=function(){ try{ return {paused:!!_sc.paused, clockPaused:!!_sc.time.paused, now:Math.round(_sc.time.now), last:Math.round(_sc.lastInputAt||0), warping:!!_sc._warping, swan:_sc._swanState||null, bossHP:(_sc.bossStarted?_sc.bossHP:null), hasKey:!!_sc.hasKey, level:_sc.def&&_sc.def.name, nearSlot:(function(){ try{ return _sc.nearActiveSlot(); }catch(e){ return 'err:'+e.message; } })(), slotN:(_sc.slots?_sc.slots.length:-1), px:Math.round(_sc.player?_sc.player.x:-1), secrets:(function(){ var a=[]; try{ _sc.platforms.children.iterate(function(m){ if(m&&m.secretSteel) a.push([Math.round(m.x),Math.round(m.y),m.used?1:0]); }); }catch(e){} return a; })(), bb:(function(){ var a=[]; try{ _sc.bonusBlocks.children.iterate(function(m){ if(m) a.push([Math.round(m.x),m.used?1:0]); }); }catch(e){} return a; })(), pscale:(_sc.pscale?+_sc.pscale.v.toFixed(2):1)}; }catch(e){ return {err:String(e)}; } };
+         window.__NQ_DBG=function(){ try{ return {paused:!!_sc.paused, clockPaused:!!_sc.time.paused, now:Math.round(_sc.time.now), last:Math.round(_sc.lastInputAt||0), warping:!!_sc._warping, swan:_sc._swanState||null, bossHP:(_sc.bossStarted?_sc.bossHP:null), hasKey:!!_sc.hasKey, level:_sc.def&&_sc.def.name, nearSlot:(function(){ try{ return _sc.nearActiveSlot(); }catch(e){ return 'err:'+e.message; } })(), slotN:(_sc.slots?_sc.slots.length:-1), px:Math.round(_sc.player?_sc.player.x:-1), secrets:(function(){ var a=[]; try{ _sc.platforms.children.iterate(function(m){ if(m&&m.secretSteel) a.push([Math.round(m.x),Math.round(m.y),m.used?1:0]); }); }catch(e){} return a; })(), bb:(function(){ var a=[]; try{ _sc.bonusBlocks.children.iterate(function(m){ if(m) a.push([Math.round(m.x),m.used?1:0]); }); }catch(e){} return a; })(), pscale:(_sc.pscale?+_sc.pscale.v.toFixed(2):1), lives:_sc.lives}; }catch(e){ return {err:String(e)}; } };
          // LAB-only designer levers: grant the level key / land one boss hit (test boss fights &
          // door flows without a full runthrough). Dormant on the tester build.
          if(window.__NQ_SETUP){
@@ -2486,7 +2486,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       this.mound.setVisible(false);
       wm.setPosition(this.wormTargetX, this.wormDownY).setVisible(true).setAngle(0).setAlpha(1); wm.invuln=false;
       var grounded=p.body.blocked.down||p.body.touching.down;   // erupting under a grounded player hurts (dodge!)
-      if(grounded && Math.abs(p.x-this.wormTargetX)<wm.displayWidth*0.45 && !p.invuln && now>=this.shieldUntil && now>=this.coldUntil && now>=this.whaleUntil) this.hurt(p, p.x<this.wormTargetX?-1:1, 'WORMHOLE ERUPTION');
+      if(grounded && Math.abs(p.x-this.wormTargetX)<wm.displayWidth*0.45 && !p.invuln && now>=this.shieldUntil && now>=this.coldUntil && now>=this.whaleUntil && now>=this.moonUntil && now>=this.omegaUntil) this.hurt(p, p.x<this.wormTargetX?-1:1, 'WORMHOLE ERUPTION');
       this.cameras.main.shake(220,.015);
       this.tweens.add({targets:wm, y:this.wormUpY, duration:280, ease:'Back.out'});
       this.wormState='up'; this.wormNextAt=now+2400;
@@ -2530,7 +2530,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   miniwormTouch:function(player,mw){
     if(this.over||mw.dead||!mw.visible||mw.mwState==='hidden'||mw.mwState==='retreat') return;
     var now=this.time.now;
-    if(now<this.moonUntil||now<this.whaleUntil){ this.killMiniworm(mw); return; }   // god-mode (moon/whale) plows through
+    if(now<this.moonUntil||now<this.whaleUntil||now<this.omegaUntil){ this.killMiniworm(mw); return; }   // god-mode (moon/whale/GIGA CHAD) plows through — omega was missing, worms hurt an "invincible" player
     if(player.invuln||now<this.shieldUntil||now<this.coldUntil) return;   // damage-immunity powers still protect
     // ANY contact hurts — you can't stomp a ground-worm; trying to jump on it costs a life. The
     // SOL disc is the only safe kill. Make it READ clearly that the worm took a heart.
