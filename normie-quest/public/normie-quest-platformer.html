@@ -1026,8 +1026,9 @@ var LevelSelect=new Phaser.Class({ Extends:Phaser.Scene,
     // group levels by world (first digit of the "w-n" name), rendered dynamically from LEVELS
     var worlds={}, order=[];
     LEVELS.forEach(function(l,i){ if(l.hidden) return; var w=(l.name||'').split('-')[0]||'?'; if(!worlds[w]){ worlds[w]=[]; order.push(w); } worlds[w].push({l:l,i:i}); });   // hidden bonus levels never show in level-select
-    // Dynamic row height so EVERY world fits on one screen no matter how many there are (no scroll).
-    var top=42, n=order.length, rowH=Math.max(20,Math.min(32,Math.floor((H-26-top)/n))), cardH=rowH-5, y=top;
+    // 12+ worlds outgrew the old shrink-to-fit-on-one-screen approach (rows bottomed out at
+    // 20px and overflowed the screen) — fixed comfortable rows + SCROLL (wheel / drag / ▲▼).
+    var top=42, n=order.length, rowH=30, cardH=25, y=top;
     order.forEach(function(w){
       var cy=y+rowH/2;
       self.add.text(22,cy,'W'+w,{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#66ccff'}).setOrigin(0,.5);
@@ -1044,13 +1045,26 @@ var LevelSelect=new Phaser.Class({ Extends:Phaser.Scene,
         var go=allowed
           ? function(){ self.scene.start('Game',{level:o.i,score:0,lives:3}); }
           : function(){ try{ if(window.__NQ_OPENPREMIUM) window.__NQ_OPENPREMIUM(); }catch(e){} };   // locked → open the premium panel (verify wallet / buy NORMIE)
-        box.on('pointerdown',go);
+        box.on('pointerup',function(p){ if(p.getDistance()<12) go(); });   // pointerup + drag guard: a scroll-drag over a card must not launch it
         box.on('pointerover',function(){ box.setFillStyle(isBoss?0x4a1848:0x1e2842,1); });
         box.on('pointerout',function(){ box.setFillStyle(isBoss?0x351033:0x141a2e,1); });
       });
       y+=rowH;
     });
-    this.add.text(W/2,H-8,'in a level: press L to return here  ·  tap any card to play',{fontFamily:UIFONT,fontStyle:'600',fontSize:'10px',color:'#a7b2dc',resolution:UIRES}).setOrigin(.5);
+    // SCROLL: wheel, touch-drag anywhere, or ▲▼ — clamped to the content height. Everything
+    // scrolls together (scrollFactor-0 pinning misplaces under this zoomed/centered camera —
+    // the footer floated mid-screen; don't reintroduce it). Footer sits below the last row.
+    var contentBottom=y+6, maxOff=Math.max(0, contentBottom+16-H);
+    var cam=this.cameras.main, baseY=cam.scrollY, off=0;
+    var setOff=function(v){ off=Phaser.Math.Clamp(v,0,maxOff); cam.scrollY=baseY+off; };
+    if(maxOff>0){
+      this.input.on('wheel',function(p,over,dx,dy){ setOff(off+dy*0.4); });
+      this.input.on('pointermove',function(p){ if(p.isDown) setOff(off-(p.y-p.prevPosition.y)/cam.zoom); });
+      this.input.keyboard.on('keydown-DOWN',function(){ setOff(off+40); });
+      this.input.keyboard.on('keydown-UP',function(){ setOff(off-40); });
+      this.add.text(W-14,top-6,'▼ scroll for more',{fontFamily:UIFONT,fontStyle:'600',fontSize:'10px',color:'#ffb43a',resolution:UIRES}).setOrigin(1,.5);
+    }
+    this.add.text(W/2,contentBottom+8,'in a level: press L to return here  ·  tap any card to play',{fontFamily:UIFONT,fontStyle:'600',fontSize:'10px',color:'#a7b2dc',resolution:UIRES}).setOrigin(.5);
     try{ if(typeof window!=='undefined') window.__NQ_LEVEL='level-select'; }catch(e){}
   }
 });
