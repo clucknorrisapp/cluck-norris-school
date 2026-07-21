@@ -1845,7 +1845,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     a.setVisible(false).setActive(false); if(a.body) a.body.enable=false; a.setAlpha(0); a.y=a.restY;
   },
   setupDarkness:function(){   // build the moving "torchlight" overlay for dark (mines) levels
-    var DW=1200, DH=800, R=132;   // overlay big enough to cover the viewport even when Normie is off-centre
+    var DW=1200, DH=800, R=145;   // overlay big enough to cover the viewport even when Normie is off-centre; R was 132 — +10% light (owner call 2026-07-21, with the worm trim)
     if(!this.textures.exists('nqdark')){
       var cv=this.textures.createCanvas('nqdark',DW,DH), ctx=cv.getContext();
       ctx.fillStyle='#000'; ctx.fillRect(0,0,DW,DH);
