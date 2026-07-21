@@ -1596,12 +1596,19 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // hazards, not remixes). All def-driven so any future level can adopt them. =====
     // MEV SCANNER — def.firebars:[[pivotX,pivotY,radius,speedDegPerSec(±),orbs]] rotating orb-arm.
     this.firebars=[];
+    if((def.firebars||[]).length && !this.textures.exists('sigorb')){
+      // violet plasma orb — must NOT look like a coin (a tinted coin read as a pickup in testing)
+      var ocv=this.textures.createCanvas('sigorb',18,18), octx=ocv.getContext();
+      var og=octx.createRadialGradient(9,9,1,9,9,9);
+      og.addColorStop(0,'#ffffff'); og.addColorStop(0.35,'#d9a8ff'); og.addColorStop(0.75,'#8a3cf0'); og.addColorStop(1,'rgba(90,30,160,0)');
+      octx.fillStyle=og; octx.beginPath(); octx.arc(9,9,9,0,Math.PI*2); octx.fill(); ocv.refresh();
+    }
     (def.firebars||[]).forEach(function(fb){
       var n=fb[4]||4, orbs=[];
       self.add.circle(fb[0],fb[1],4,0xb06bff,0.9).setDepth(6);
       for(var q=0;q<n;q++){
-        var o=self.physics.add.image(fb[0],fb[1],'coin').setDepth(6).setTint(0xb06bff);
-        o.setScale(13/o.height); o.body.setAllowGravity(false); o.body.setSize(o.width*0.55,o.height*0.55);
+        var o=self.physics.add.image(fb[0],fb[1],'sigorb').setDepth(6);
+        o.setScale(15/o.height); o.body.setAllowGravity(false); o.body.setSize(o.width*0.55,o.height*0.55);
         self.addGlow(o,0xb06bff,3); o.sigCause='MEV SCANNER BEAM';
         self.physics.add.overlap(self.player,o,self.sigHazardHit,null,self); orbs.push(o);
       }
