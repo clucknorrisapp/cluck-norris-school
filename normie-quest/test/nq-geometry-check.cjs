@@ -97,6 +97,21 @@ function check(lv) {
       if (!near) warns.push(`W2 key at (${lv.key[0]},${lv.key[1]}) is ${rise}px up with no platform near`);
     }
   }
+
+  // W3/W4: powerup DISTRIBUTION (panel finding on 13-2 — generalized to every level).
+  // W3 = cluster: two powerups on ~one screen (<350px). W4 = desert: with 3+ powerups, the
+  // first sits past 45% of the level or some stretch longer than half the level has none.
+  const pux = (lv.powerups || []).map(p => p[1]).sort((a, b) => a - b);
+  for (let i = 1; i < pux.length; i++) {
+    if (pux[i] - pux[i - 1] < 350) warns.push(`W3 powerup cluster: x=${pux[i - 1]} and x=${pux[i]} are ${pux[i] - pux[i - 1]}px apart (<350)`);
+  }
+  if (pux.length >= 3) {
+    const wpx = lv.width || 5200;
+    if (pux[0] > wpx * 0.45) warns.push(`W4 powerup desert: first powerup at x=${pux[0]} (past 45% of ${wpx})`);
+    for (let i = 1; i < pux.length; i++) {
+      if (pux[i] - pux[i - 1] > wpx * 0.5) warns.push(`W4 powerup desert: ${pux[i] - pux[i - 1]}px stretch with none (x=${pux[i - 1]}→${pux[i]})`);
+    }
+  }
   return { fails, warns };
 }
 
