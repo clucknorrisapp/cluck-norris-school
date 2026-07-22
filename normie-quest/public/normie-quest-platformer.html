@@ -3148,7 +3148,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     });
   },
   npcSay:function(n){
-    var phrases=['WEN LAMBO???','WEN LAMBO???','WEN LAMBO???','SER WEN LAMBO?','WEN MOON?','IS IT PUMPING?','WAGMI!','GM GM','TOP SIGNAL?'];
+    var phrases=['WEN LAMBO???','WEN LAMBO???','SER WEN LAMBO?','WEN DEXSCREENER?','WEN CEX LISTING?','WEN BINANCE?','WEN BOOST?','WEN MOON?','WEN AIRDROP?','WEN TRENDING?','WEN UTILITY?','IS IT PUMPING?','FEW UNDERSTAND','PROBABLY NOTHING','DIAMOND HANDS','TRUST ME BRO','SER PLS','HIGHER!','LFG!!!','WAGMI!','GM GM','NGMI?','TOP SIGNAL?'];
     var msg=Phaser.Math.RND.pick(phrases);
     var t=this.add.text(n.x, n.y-n.displayHeight*0.5-6, msg, {fontFamily:UIFONT,resolution:UIRES,fontSize:'15px',color:'#0d0b1e',backgroundColor:'#ffd23f',padding:{x:5,y:2},align:'center'}).setOrigin(.5,1).setDepth(25);
     this.tweens.add({targets:t, y:t.y-14, duration:1900, ease:'Sine.out'});
