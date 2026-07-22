@@ -1207,10 +1207,15 @@ function nqTele(ev,d){
 
 // ITEM RESERVE catalogue — the banked-boost items. icon = an existing texture; use(g) applies
 // the effect to the live Game scene. Extend this to add new held boosts (wheel prizes, etc.).
+var RESERVE_SLOTS = 3;   // multi-slot inventory — bank up to this many boosts at once
 var RESERVE_ITEMS = {
   disc:   { icon:'solana',    label:'SOL DISCS +5', use:function(g){ g.throwAmmo+=5; if(g.updateThrowHud) g.updateThrowHud(); } },
   vial:   { icon:'heart',     label:'FULL HEAL',    use:function(g){ while(g.lives<3){ g.lives++; if(g.hearts[g.lives-1]) g.hearts[g.lives-1].setAlpha(1); } } },
-  shield: { icon:'supergeek', label:'AUDIT SHIELD', use:function(g){ g.geekShield=true; } }
+  shield: { icon:'supergeek', label:'AUDIT SHIELD', use:function(g){ g.geekShield=true; } },
+  // ── premium boosts (in-game drops, wheel wins, owner grants) — all map to proven mechanics ──
+  star:   { icon:'moon',      label:'STAR POWER',   use:function(g){ g.moonUntil=g.time.now+8000; if(g.powerBanner) g.powerBanner('STAR POWER','INVINCIBLE — smash everything!','#ffd23f'); } },
+  clock:  { icon:'caffeine',  label:'+30 SECONDS',  use:function(g){ g.timeLeft+=30; if(g.hudTime){ g.hudTime.setText(String(g.timeLeft)); if(g.timeLeft>15) g.hudTime.setColor('#3dff6e'); } } },
+  bomb:   { icon:'airdrop',   label:'AIRDROP BOMB', use:function(g){ if(g.enemies) g.enemies.children.iterate(function(e){ if(e&&e.active){ var ex=e.x,ey=e.y; e.disableBody(true,true); if(g.addScore) g.addScore(20); if(g.burst) g.burst(ex,ey,0xffd23f,8); } }); g.cameras.main.shake(220,0.011); } }
 };
 var Game=new Phaser.Class({ Extends:Phaser.Scene,
   initialize:function(){ Phaser.Scene.call(this,{key:'Game'}); },
@@ -1775,19 +1780,27 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // MANUAL THROW ammo — a Solana disc + count, under the key (top-right)
     this.throwIcon=this.hb(this.add.image(W-30,52,'solana').setDepth(20)); this.throwIcon.setScale(15/this.throwIcon.height);
     this.throwCountTxt=this.hb(this.add.text(W-40,52,'x'+this.throwAmmo,{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#14f195'}).setOrigin(1,0.5).setDepth(21));
-    // ===== ITEM RESERVE (owner ask 2026-07-21) — a single held-item slot that BANKS a boost to
-    // use whenever you want. Persists across levels/deaths/sessions via localStorage 'nqReserve'
-    // (device-bound); a wallet-bound grant path (the reward-wheel backbone) writes the same slot.
-    // Items: 'disc' (+5 SOL discs), 'vial' (full heal), 'shield' (one-shot audit shield). =====
-    try{ this.reserve=localStorage.getItem('nqReserve')||null; }catch(e){ this.reserve=null; }
-    if(this.reserve && !RESERVE_ITEMS[this.reserve]) this.reserve=null;   // ignore unknown ids
-    var _rx=92, _ry=30;
-    this.reserveBox=this.hb(this.add.rectangle(_rx,_ry,20,20,0x161228,0.85).setStrokeStyle(1.5,0xffd23f).setDepth(20).setInteractive({useHandCursor:true}));
-    this.reserveIcon=this.hb(this.add.image(_rx,_ry,'solana').setDepth(21));
-    this.reserveHint=this.hb(this.add.text(_rx+12,_ry-9,'Q',{fontFamily:'"Press Start 2P"',fontSize:'7px',color:'#ffd23f'}).setOrigin(0,0).setDepth(21));
-    var _rself=this; this.reserveBox.on('pointerdown',function(){ _rself.useReserve(); });   // tap the slot to use (mobile + desktop)
+    // ===== ITEM RESERVE (owner ask 2026-07-21; multi-slot 2026-07-22) — a small INVENTORY that
+    // BANKS up to RESERVE_SLOTS boosts to spend whenever you want. Persists across levels/deaths/
+    // sessions via localStorage 'nqReserve' (JSON array; migrates the old single-string format);
+    // a wallet-bound grant path (the reward-wheel backbone) fills the same slots. Items: disc/vial/
+    // shield/star/clock/bomb. Spend: press 1/2/3 (or Q for the first), or tap a slot. =====
+    try{ var _rraw=localStorage.getItem('nqReserve'); this.reserve=_rraw ? (_rraw.charAt(0)==='[' ? JSON.parse(_rraw) : [_rraw]) : []; }catch(e){ this.reserve=[]; }
+    if(!Array.isArray(this.reserve)) this.reserve=[];
+    this.reserve=this.reserve.filter(function(x){ return RESERVE_ITEMS[x]; }).slice(0,RESERVE_SLOTS);   // drop unknown ids / overflow
+    this._prevSlot=[false,false,false];
+    this.reserveBoxes=[]; this.reserveIcons=[]; this.reserveHints=[]; this._reservePulse=[];
+    var _rx0=92,_ry=30,_rgap=23,_rself=this;
+    for(var _si=0;_si<RESERVE_SLOTS;_si++){ (function(si){
+      var bx=_rx0+si*_rgap;
+      var box=_rself.hb(_rself.add.rectangle(bx,_ry,20,20,0x161228,0.85).setStrokeStyle(1.5,0x3a3456).setDepth(20).setInteractive({useHandCursor:true}));
+      var ic=_rself.hb(_rself.add.image(bx,_ry,'solana').setDepth(21).setAlpha(0));
+      var hn=_rself.hb(_rself.add.text(bx-9,_ry-9,String(si+1),{fontFamily:'"Press Start 2P"',fontSize:'7px',color:'#ffd23f'}).setOrigin(0,0).setDepth(21).setAlpha(0.3));
+      box.on('pointerdown',function(){ _rself.useReserve(si); });   // tap a slot to spend it (mobile + desktop)
+      _rself.reserveBoxes.push(box); _rself.reserveIcons.push(ic); _rself.reserveHints.push(hn); _rself._reservePulse.push(null);
+    })(_si); }
     this.updateReserveHud();
-    this.syncRewards();   // pull any pending wheel/owner reward into the slot
+    this.syncRewards();   // pull any pending wheel/owner rewards into free slots
     // PAUSE button — tap the ⏸ (top-left) on touch, or press P / Esc on desktop
     this.hb(this.add.rectangle(120,15,20,16,0x000000,0.5).setStrokeStyle(1,0x8f89b0));
     this.hb(this.add.rectangle(116,15,3,9,0xffd23f)); this.hb(this.add.rectangle(124,15,3,9,0xffd23f));
@@ -1802,7 +1815,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // input — touch is driven by RAW POINTER SCREEN-ZONES in update() (see the poll there),
     // NOT interactive hit-areas: the HUD lives in a scrollFactor-0 container under a 2x zoom
     // where per-object hit testing is unreliable. Pointer coords are zoom/container-immune.
-    this.cursors=this.input.keyboard.createCursorKeys(); this.keys=this.input.keyboard.addKeys('W,A,S,D,SPACE,F,X,Q,E');
+    this.cursors=this.input.keyboard.createCursorKeys(); this.keys=this.input.keyboard.addKeys('W,A,S,D,SPACE,F,X,Q,E,ONE,TWO,THREE');
     // PAUSE keys: while paused, ANY key resumes; while playing, P / Esc pause. (Touch: ⏸ hotspot in update; tap resumes.)
     this.input.keyboard.on('keydown',function(e){ if(self.paused){ self.resumeGame(); } else if(e.key==='p'||e.key==='P'||e.key==='Escape'){ self.pauseGame(false); } });
     this.input.on('pointerdown',function(){ if(self.paused) self.resumeGame(); });   // tap anywhere resumes
@@ -2040,44 +2053,50 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.throwIcon) this.throwIcon.setAlpha(this.throwAmmo>0?1:0.35);
   },
   // ===== ITEM RESERVE — bank one boost, spend it when YOU want (Q/E or tap the slot) =====
-  saveReserve:function(){ try{ if(this.reserve) localStorage.setItem('nqReserve',this.reserve); else localStorage.removeItem('nqReserve'); }catch(e){} },
-  // WALLET-BOUND REWARDS: pull a pending prize (wheel win / owner grant) into the slot — but ONLY
-  // when the slot is free, so the server never pops an item we can't hold (loss-free by design).
+  saveReserve:function(){ try{ if(this.reserve&&this.reserve.length) localStorage.setItem('nqReserve',JSON.stringify(this.reserve)); else localStorage.removeItem('nqReserve'); }catch(e){} },
+  // WALLET-BOUND REWARDS: pull pending prizes (wheel wins / owner grants) into FREE slots — one at a
+  // time, and never more than we can hold, so the server never pops an item we can't bank (loss-free).
   syncRewards:function(){
-    if(this.reserve||this.over) return;
+    if(this.over||!this.reserve||this.reserve.length>=RESERVE_SLOTS) return;
     var w=null; try{ w=window.NQLB&&window.NQLB.getWallet&&window.NQLB.getWallet(); }catch(e){}
     if(!w||!w.pubkey||!w.token) return;
     var self=this;
     fetch('/api/nq/rewards/claim',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({wallet:w.pubkey,token:w.token})})
       .then(function(r){ return r.json(); })
-      .then(function(j){ if(j&&j.ok&&j.item&&!self.over&&!self.reserve&&RESERVE_ITEMS[j.item]){ self.grantReserve(j.item); } })
+      .then(function(j){ if(j&&j.ok&&j.item&&!self.over&&self.reserve.length<RESERVE_SLOTS&&RESERVE_ITEMS[j.item]){ self.grantReserve(j.item); if(self.reserve.length<RESERVE_SLOTS) self.syncRewards(); } })
       .catch(function(){});
   },
-  grantReserve:function(item){   // put an item in the slot (won't overwrite a banked one)
+  grantReserve:function(item){   // add an item to the inventory (no-op when full — never overwrites)
     if(!RESERVE_ITEMS[item]) return false;
-    if(this.reserve){ if(this.flash) this.flash('RESERVE FULL — USE IT (Q)','#ff9ec0'); return false; }
-    this.reserve=item; this.saveReserve(); this.updateReserveHud();
-    if(this.flash) this.flash('BANKED: '+RESERVE_ITEMS[item].label+'  (Q)','#3dff6e'); try{ SFX.coin(); }catch(e){}
+    if(!this.reserve) this.reserve=[];
+    if(this.reserve.length>=RESERVE_SLOTS){ if(this.flash) this.flash('INVENTORY FULL — USE ONE (1/2/3)','#ff9ec0'); return false; }
+    this.reserve.push(item); this.saveReserve(); this.updateReserveHud();
+    if(this.flash) this.flash('BANKED: '+RESERVE_ITEMS[item].label,'#3dff6e'); try{ SFX.coin(); }catch(e){}
     return true;
   },
-  useReserve:function(){
-    if(this.over||this.paused||!this.reserve) return;
-    var it=RESERVE_ITEMS[this.reserve]; if(!it){ this.reserve=null; this.saveReserve(); this.updateReserveHud(); return; }
-    if(this.reserve==='vial' && this.lives>=3){ this.flash('HEARTS ALREADY FULL','#ff9ec0'); return; }   // don't waste a full-heal at full HP
-    if(this.reserve==='shield' && this.geekShield){ this.flash('SHIELD ALREADY UP','#2ee6c0'); return; }
+  useReserve:function(slot){   // spend a specific slot (default: the first filled one)
+    if(this.over||this.paused||!this.reserve||!this.reserve.length) return;
+    var idx=(typeof slot==='number'&&slot>=0&&slot<this.reserve.length)?slot:0;
+    var id=this.reserve[idx], it=RESERVE_ITEMS[id];
+    if(!it){ this.reserve.splice(idx,1); this.saveReserve(); this.updateReserveHud(); return; }
+    if(id==='vial' && this.lives>=3){ this.flash('HEARTS ALREADY FULL','#ff9ec0'); return; }   // don't waste a full-heal at full HP
+    if(id==='shield' && this.geekShield){ this.flash('SHIELD ALREADY UP','#2ee6c0'); return; }
     it.use(this); try{ SFX.power(); }catch(e){} this.flash(it.label+'!','#ffd23f'); this.cameras.main.flash(120,255,210,80);
-    this.reserve=null; this.saveReserve(); this.updateReserveHud();
-    this.syncRewards();   // slot just freed — pull the next queued reward if any
+    this.reserve.splice(idx,1); this.saveReserve(); this.updateReserveHud();
+    this.syncRewards();   // a slot just freed — pull the next queued reward if any
   },
   updateReserveHud:function(){
-    if(!this.reserveBox) return;
-    if(this.reserve && RESERVE_ITEMS[this.reserve]){ var it=RESERVE_ITEMS[this.reserve];
-      this.reserveIcon.setTexture(it.icon); this.reserveIcon.setScale(14/this.reserveIcon.height).setAlpha(1).clearTint();
-      this.reserveBox.setStrokeStyle(1.5,0xffd23f); this.reserveHint.setAlpha(1);
-      if(!this._reservePulse){ this._reservePulse=this.tweens.add({targets:this.reserveBox,scaleX:1.14,scaleY:1.14,duration:520,yoyo:true,repeat:-1,ease:'Sine.inOut'}); }
-    } else {
-      this.reserveIcon.setAlpha(0); this.reserveHint.setAlpha(0.22); this.reserveBox.setStrokeStyle(1.5,0x3a3456);
-      if(this._reservePulse){ this._reservePulse.stop(); this._reservePulse=null; this.reserveBox.setScale(1); }
+    if(!this.reserveBoxes) return;
+    for(var si=0; si<this.reserveBoxes.length; si++){
+      var id=this.reserve&&this.reserve[si], box=this.reserveBoxes[si], ic=this.reserveIcons[si], hn=this.reserveHints[si];
+      if(id && RESERVE_ITEMS[id]){ var it=RESERVE_ITEMS[id];
+        ic.setTexture(it.icon); ic.setScale(14/ic.height).setAlpha(1).clearTint();
+        box.setStrokeStyle(1.5,0xffd23f); hn.setAlpha(1);
+        if(!this._reservePulse[si]){ this._reservePulse[si]=this.tweens.add({targets:box,scaleX:1.14,scaleY:1.14,duration:520,yoyo:true,repeat:-1,ease:'Sine.inOut'}); }
+      } else {
+        ic.setAlpha(0); hn.setAlpha(0.3); box.setStrokeStyle(1.5,0x3a3456);
+        if(this._reservePulse[si]){ this._reservePulse[si].stop(); this._reservePulse[si]=null; box.setScale(1); }
+      }
     }
   },
   manualThrow:function(){   // MANUAL THROW: hurl a Solana disc from the counted ammo (F/X or THROW button)
@@ -2763,8 +2782,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.addScore(500);
     this.tweens.add({targets:k, angle:720, alpha:0, y:k.y-50, duration:1300, ease:'Cubic.in', onComplete:function(){ if(k.active) k.destroy(); }});
     // BOSS DROP: beating a boss banks a random boost for later (skipped if the slot's already full).
-    // The reward-wheel granter uses the same grantReserve() slot.
-    if(!this.reserve){ var _drop=['vial','disc','shield'][Math.floor((this.time.now/97)%3)]; this.grantReserve(_drop); }
+    // The reward-wheel granter uses the same grantReserve() inventory.
+    if(this.reserve && this.reserve.length<RESERVE_SLOTS){ var _dp=['vial','disc','shield','star','clock','bomb']; this.grantReserve(_dp[Math.floor((this.time.now/97)%_dp.length)]); }
     var nx=this.levelIdx+1;
     if(this.def.final){
       if(this.def.bossType==='dirtywhale'){
@@ -3490,10 +3509,13 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var throwHeld=this.keys.F.isDown||this.keys.X.isDown||this.touch.throwBtn;
     if(throwHeld && !this.prevThrow && !(now<this.solanaUntil)) this.manualThrow();
     this.prevThrow=throwHeld;
-    // ITEM RESERVE: Q/E (or tapping the HUD slot) spends the banked boost — edge-triggered
+    // ITEM RESERVE inventory: Q/E spends the FIRST slot; 1/2/3 spend a specific slot; tapping a HUD
+    // slot works too. All edge-triggered.
     var useHeld=this.keys.Q.isDown||this.keys.E.isDown;
     if(useHeld && !this.prevUse) this.useReserve();
     this.prevUse=useHeld;
+    var _slotKeys=[this.keys.ONE,this.keys.TWO,this.keys.THREE];
+    for(var _sk=0;_sk<3;_sk++){ var _kd=_slotKeys[_sk]; if(_kd){ if(_kd.isDown && !this._prevSlot[_sk]) this.useReserve(_sk); this._prevSlot[_sk]=_kd.isDown; } }
     var fast=now<this.caffeineUntil||now<this.moonUntil;      // caffeine/moon = super speed
     // FUD gas = sluggish, but ONLY on the ground — never rob you of air speed mid-jump (that could
     // make a gap you already committed to unclearable → an unfair pit death).

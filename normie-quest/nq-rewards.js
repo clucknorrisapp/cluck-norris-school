@@ -13,7 +13,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const ITEMS = { disc: 1, vial: 1, shield: 1 };          // valid grantable items (mirror RESERVE_ITEMS in the game)
+const ITEMS = { disc: 1, vial: 1, shield: 1, star: 1, clock: 1, bomb: 1 };   // valid grantable items (mirror RESERVE_ITEMS in the game)
 const MAX_PENDING = 20;                                  // cap a wallet's queue so it can't grow unbounded
 // Wheel prize table — EVERY spin wins something (loyalty program, not a lottery). Weighted.
 const WHEEL = [
