@@ -335,7 +335,7 @@ router.post('/api/nq/telemetry', (req, res) => {
   try {
     if (throttled(req, 'tele', 60)) return res.status(429).json({ ok: false, error: 'slow_down' });
     const b = req.body || {};
-    const r = telemetry.add({ ev: b.ev, world: b.world, x: b.x, cause: b.cause, t: b.t, deaths: b.deaths, score: b.score });
+    const r = telemetry.add({ ev: b.ev, world: b.world, x: b.x, cause: b.cause, t: b.t, deaths: b.deaths, score: b.score, who: b.who });
     res.status(r.ok ? 200 : 400).json(r);
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
@@ -487,6 +487,38 @@ router.get('/normie-quest-x7/dashboard', async (req, res) => {
   }).join('') || '<div class="dim">No comments yet — testers need the ?test=1 build for the feedback widget.</div>';
   const overall = d.clears ? Math.round(d.deaths / d.clears * 10) / 10 : null;
 
+  // 🧪 PANEL COVERAGE — one row per tagged tester (?tester=T1 links), a world-by-world strip:
+  // green = cleared a level there, red = deaths only, dark = untouched. Shows at a glance which
+  // worlds the 10-person panel has actually covered and who stalled where.
+  const NWORLDS = 21;
+  const testers = d.testers || {};
+  const testerCodes = Object.keys(testers).filter(function (c) { return c !== '(untagged)'; }).sort();
+  const panelRows = testerCodes.map(function (code) {
+    const t = testers[code];
+    const perWorld = {};   // world number -> {c,d}
+    Object.keys(t.worlds || {}).forEach(function (lvl) {
+      const m = /^(\d+)-/.exec(lvl); if (!m) return;
+      const w = +m[1]; const p = (perWorld[w] = perWorld[w] || { c: 0, d: 0 });
+      p.c += t.worlds[lvl].c; p.d += t.worlds[lvl].d;
+    });
+    let best = 0;
+    let strip = '';
+    for (let w = 1; w <= NWORLDS; w++) {
+      const p = perWorld[w];
+      const cls = p ? (p.c ? 'pw-c' : 'pw-d') : 'pw-0';
+      if (p) best = w;
+      strip += '<i class="' + cls + '" title="W' + w + (p ? ': ' + p.c + '✓ ' + p.d + '☠' : ': untouched') + '">' + w + '</i>';
+    }
+    return '<tr><td><b>' + esc(code) + '</b></td><td>' + t.clears + '</td><td>' + t.deaths + '</td>'
+      + '<td>W' + best + '</td><td><div class="pstrip">' + strip + '</div></td><td class="dim">' + ago(t.lastAt || 0) + '</td></tr>';
+  }).join('');
+  const untagged = testers['(untagged)'];
+  const panelSection = '<h2>🧪 PANEL COVERAGE <span class="dim" style="font-weight:400">(tag testers with ?tester=CODE links · green = cleared, red = deaths only, dark = untouched)</span></h2>'
+    + '<div style="overflow-x:auto"><table><tr><th>TESTER</th><th>✓</th><th>☠</th><th>BEST</th><th>WORLDS 1–' + NWORLDS + '</th><th>LAST</th></tr>'
+    + (panelRows || '<tr><td colspan="6" class="dim">No tagged testers yet — send each panelist their personal link: /normie-quest-x7?test=1&amp;tester=T1 … T10 (the tag sticks after one visit).</td></tr>')
+    + '</table></div>'
+    + (untagged ? '<div class="dim" style="margin:-6px 0 14px;font-size:12px">+ untagged traffic: ' + untagged.clears + '✓ / ' + untagged.deaths + '☠</div>' : '');
+
   res.set('Content-Type', 'text/html; charset=utf-8');
   res.set('Cache-Control', 'no-store');
   res.send('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
@@ -507,6 +539,8 @@ router.get('/normie-quest-x7/dashboard', async (req, res) => {
     + '.c{background:#161228;border:1px solid #2a2450;border-radius:9px;padding:8px 11px;margin-bottom:7px;font-size:13.5px}'
     + '.c b{color:#66ccff}.lvl2{background:#22406a;color:#bfe0ff;border-radius:4px;padding:0 6px;font-size:11px}'
     + '.k{color:#8dffc0;font-size:11px;text-transform:uppercase}.cols{display:grid;grid-template-columns:1fr 1fr;gap:18px}'
+    + '.pstrip{display:flex;gap:2px}.pstrip i{font-style:normal;font-size:10px;line-height:16px;min-width:16px;text-align:center;border-radius:3px}'
+    + '.pw-c{background:#134a2e;color:#8dffc0}.pw-d{background:#5a1330;color:#ff9db8}.pw-0{background:#191533;color:#4a4570}'
     + '@media(max-width:720px){.cols{grid-template-columns:1fr}}'
     + '</style></head><body>'
     + '<h1>🎮 Normie Quest — Operator Dashboard</h1>'
@@ -525,6 +559,7 @@ router.get('/normie-quest-x7/dashboard', async (req, res) => {
     + '<div class="tile"><div class="n">' + ((lb && lb.totalRuns) || 0) + '</div><div class="l">SCORED RUNS</div></div>'
     + '<div class="tile"><div class="n">' + ago(d.lastAt) + '</div><div class="l">LAST EVENT</div></div>'
     + '</div>'
+    + panelSection
     + '<h2>📊 DIFFICULTY BY LEVEL <span class="dim" style="font-weight:400">(⚠ = ≥6 deaths/clear or ≥8 deaths with no clear · red strip = where testers die)</span></h2>'
     + '<div style="overflow-x:auto"><table><tr><th>LEVEL</th><th>☠</th><th>✓</th><th>☠/✓</th><th>AVG CLEAR</th><th>TOP CAUSE</th><th>DEATH MAP</th><th>LAST</th></tr>'
     + (tableRows || '<tr><td colspan="8" class="dim">No telemetry yet — it records automatically as testers play.</td></tr>') + '</table></div>'

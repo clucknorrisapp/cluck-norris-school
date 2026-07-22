@@ -31,6 +31,10 @@ var WHALE_MS = PREMIUM?15000:8000, COLD_MS = PREMIUM?13000:7000;
 // comments to /api/nq/feedback. The page is a hidden preview anyway; this flag just gates
 // the tester-only UI so normal players never see it. Off = the game behaves exactly as before.
 var TEST_MODE = (function(){ try{ return /[?&#]test=1(\b|$)/.test((location.search||'')+(location.hash||'')); }catch(e){ return false; } })();
+// PANEL TESTER TAG — a personalized link (?tester=T1) stamps this browser once; every telemetry
+// beacon + feedback comment carries the code from then on, so the 10-person panel's data
+// separates per tester on the dashboard. A self-chosen code, not PII.
+try{ var _tm=((location.search||'')+(location.hash||'')).match(/[?&#]tester=([A-Za-z0-9_-]{1,16})/); if(_tm) localStorage.setItem('nq_tester',_tm[1]); }catch(e){}
 
 // Character/enemy sprites (base64 injected at build time)
 var SPRITES={ normie:'__NORMIE__', nrun1:'__NRUN1__', nrun2:'__NRUN2__', njump:'__NJUMP__', jeet:'__JEET__', paper:'__PAPER__', ghost:'__GHOST__', bot:'__BOT__', bitmaxi:'__BITMAXI__', fudster:'__FUDSTER__', wenlambo:'__WENLAMBO__', drinklady:'__DRINKLADY__', showlady:'__SHOWLADY__', lilnormie:'__LILNORMIE__' };
@@ -1116,7 +1120,8 @@ function nqMegaWhaleUnlocked(){
 }
 function nqTele(ev,d){
   try{
-    var b=JSON.stringify(Object.assign({ev:ev},d||{}));
+    var who=''; try{ who=localStorage.getItem('nq_tester')||''; }catch(e){}
+    var b=JSON.stringify(Object.assign({ev:ev,who:who||undefined},d||{}));
     if(navigator.sendBeacon){ navigator.sendBeacon('/api/nq/telemetry', new Blob([b],{type:'application/json'})); }
     else { fetch('/api/nq/telemetry',{method:'POST',headers:{'content-type':'application/json'},body:b,keepalive:true}).catch(function(){}); }
   }catch(e){}
