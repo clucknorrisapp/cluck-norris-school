@@ -859,6 +859,20 @@ async function uploadXVideoFromUrl(videoUrl) {
     return mediaId;
   } catch (e) { console.warn("[X] video upload error", e.message); return null; }
 }
+// Delete a tweet by id (X API v2 DELETE /2/tweets/:id, OAuth 1.0a user context). Used to pull
+// a post we're not happy with (e.g. a bad auto-generated media attachment). Owner-gated route below.
+async function deleteTweet(id) {
+  if (!xConfigured()) return { ok: false, error: "x_not_configured" };
+  const clean = String(id || "").replace(/[^0-9]/g, "");
+  if (!clean) return { ok: false, error: "bad_id" };
+  const url = "https://api.x.com/2/tweets/" + clean;
+  try {
+    const r = await fetch(url, { method: "DELETE", headers: { Authorization: xOAuthHeader("DELETE", url) } });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) return { ok: false, status: r.status, body: JSON.stringify(j).slice(0, 200) };
+    return { ok: true, id: clean, deleted: !!(j.data && j.data.deleted) };
+  } catch (e) { return { ok: false, error: publicErrMsg(e) }; }
+}
 async function postToX(text, opts = {}) {
   if (X_AUTOPOST_PAUSED && !opts.force) return { ok: false, paused: true }; // opts.force = scoped carve-out (lock announcements only) — see postLockToX
   if (!xConfigured()) return { ok: false, skipped: true };
@@ -5314,6 +5328,17 @@ app.get("/api/x-announce", async (req, res) => {
     }
     return res.status(200).json({ ...r, mediaAttached: !!mediaIds, replyTo, quote, mirrored });
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+
+// Delete a tweet by id (owner-gated). Dry-run unless &run=1. Use to pull a post we're not happy with.
+app.get("/api/x-delete", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  const id = String(req.query.id || "").replace(/[^0-9]/g, "");
+  if (!id) return res.status(400).json({ error: "missing id" });
+  if (req.query.run !== "1") return res.status(200).json({ ok: true, dryRun: true, id });
+  const r = await deleteTweet(id);
+  return res.status(r.ok ? 200 : 200).json(r);
 });
 
 // Arm/disarm the treasury engine's auto-stop window (gated). ?hours=48 arms it; ?off=1 disarms.
