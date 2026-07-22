@@ -25,3 +25,5 @@ jobs:
           done
       - name: question-bank drift guard
         run: node scripts/check-question-bank.js
+      - name: Normie Quest level-geometry guard (jumpability + no floating fixtures)
+        run: node normie-quest/test/nq-geometry-check.cjs
