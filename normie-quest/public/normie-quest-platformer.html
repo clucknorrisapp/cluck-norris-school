@@ -1234,6 +1234,22 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
            window.__NQ_BOSSHIT=function(){ try{ if(_sc.over) return false;
              if(_sc.worm&&_sc.worm.active){ _sc.wormHit(); return true; }   // 2-3's wormhole has no rugking sprite
              if(!_sc.bossStarted||!_sc.rugking||!_sc.rugking.active) return false; _sc.bossHit(); return true; }catch(e){ return false; } };
+           // Verify the CURRENT boss is stomp-beatable using the live production geometry
+           // (wouldStomp). Returns {stompable} — the pre-ship check so a new boss can't go live
+           // un-stompable and embarrass us. Wormhole reports its own airborne-hit mechanic.
+           window.__NQ_STOMPTEST=function(){ try{
+             var k=_sc.rugking;
+             if(_sc.worm&&_sc.worm.active) return {boss:'wormhole', mechanic:'airborne-worm-contact', stompable:true};
+             if(!_sc.bossStarted||!k||!k.active) return {boss:(_sc.def&&_sc.def.bossType)||null, stompable:null, error:'no boss active'};
+             var wasInv=k.invuln; k.invuln=false;
+             var visTop=k.y-k.displayHeight*0.5;
+             var top=_sc.wouldStomp(visTop+3, k, 200);                     // land squarely on the visible head
+             var clip=_sc.wouldStomp(visTop+k.displayHeight*0.3, k, 200);  // land slightly forward (clipped side)
+             k.invuln=wasInv;
+             return {boss:_sc.def.bossType, displayH:Math.round(k.displayHeight), bodyH:Math.round(k.body.height), stompTop:top, stompClip:clip, stompable:!!top}; }catch(e){ return {error:String(e)}; } };
+           // Force the current level's boss fight to begin (skips the walk-to-door + key), so a
+           // headless pre-ship check can spawn each boss and run __NQ_STOMPTEST.
+           window.__NQ_FORCEBOSS=function(){ try{ if(_sc.def&&_sc.def.boss&&!_sc.bossStarted){ _sc.startBoss(); return true; } return !!_sc.bossStarted; }catch(e){ return false; } };
          } }catch(e){}
     var self=this, i;
     var def=this.def=LEVELS[this.levelIdx];
@@ -2186,17 +2202,25 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // descending" gate made him effectively stomp-proof: the rising player clipped his tall body
     // first and got hurt). Tall bosses get a deeper head zone, and near-apex contact (vy≥-120,
     // within ~8px of the top of the arc) counts — jumping onto the head from beside now lands.
-    var headTol=Math.max(14, k.body.height*0.25);
-    // Head zone from BOTH the physics body AND the VISIBLE sprite. An Arcade body that doesn't
-    // scale with a big sprite (the 108px MEV Dragon, the 96px Dirty Whale) leaves body.top far
-    // below the head the player actually aims at, so a clean top-jump clipped the side and got
-    // hurt (owner: "jumping on top hitting perfectly and taking damage"). The visible-sprite band
-    // (top ~40% of what's drawn) restores the intuitive stomp. OR-only: never removes a stomp.
-    var visTop=k.y-k.displayHeight*0.5;
-    var onTop=((player.body.bottom<=k.body.top+headTol)||(player.body.bottom<=visTop+k.displayHeight*0.4))&&player.body.velocity.y>=-120;
-    if(onTop){ player.setVelocityY(-340); this.bossHit(); return; }
+    // Stomp detection lives in wouldStomp() — ONE source of truth so a QA hook can verify the
+    // EXACT same geometry per boss before we ship (window.__NQ_STOMPTEST). See wouldStomp.
+    if(this.wouldStomp(player.body.bottom, k, player.body.velocity.y)){ player.setVelocityY(-340); this.bossHit(); return; }
     if(player.invuln||now<this.shieldUntil||now<this.coldUntil) return;
     this.hurt(player, k.x<player.x?1:-1, 'BOSS TOUCH: '+String((this.def&&this.def.bossType)||'rugking').toUpperCase());
+  },
+  // ── STOMP GEOMETRY — the ONE place stomp-vs-hurt is decided (bossTouch + __NQ_STOMPTEST). ──
+  // A descending player counts as a stomp if their feet reach EITHER the physics-body head zone
+  // OR the top ~40% of the VISIBLE sprite. The visible-sprite band matters because an Arcade
+  // body sized in texture px doesn't scale with a big sprite (108px MEV Dragon, 96px Dirty
+  // Whale) — body.top sits far below the head the player aims at, so a clean top-jump used to
+  // clip the side and hurt. OR-only: it can only ADD stomp detection, never remove it.
+  // INVARIANT for every new boss: route touch through bossTouch (or a worm-style airborne hit),
+  // give it a reachable window with invuln=false, and confirm __NQ_STOMPTEST reports stompable.
+  wouldStomp:function(pbBottom, k, vy){
+    if(!k) return false;
+    var headTol=Math.max(14, k.body.height*0.25);
+    var visTop=k.y-k.displayHeight*0.5;
+    return ((pbBottom<=k.body.top+headTol)||(pbBottom<=visTop+k.displayHeight*0.4))&&vy>=-120;
   },
   /* ---------- Scammy KOL boss (charges + stomp x3, and shills fake tokens at range) ---------- */
   startKolBoss:function(){
