@@ -100,7 +100,7 @@ function ensurePhaser() {
       try {
         await page.waitForFunction(
           (name) => { try { return typeof window.__NQ_FORCEBOSS === 'function' && window.__NQ_DBG().level === name; } catch (e) { return false; } },
-          lv.name, { timeout: 15000 }); // wide later levels take a moment to build in headless Canvas
+          lv.name, { timeout: 25000 }); // wide VIP levels + drone glows are heavy to build in headless Canvas
         row.booted = true;
       } catch (e) { row.booted = false; }
 

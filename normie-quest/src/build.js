@@ -37,7 +37,8 @@ const FILE_MARKERS = {
   __CEOBOSS__:'cut_ceoboss.b64', __EXCHANGE__:'cut_exchange.b64',
   __WYRM__:'cut_wyrm.b64', __GOLEM__:'cut_golem.b64', __SACRED__:'cut_sacred.b64', __MINES__:'cut_mines.b64',
   __REAPER__:'cut_reaper.b64', __GREATBEAR__:'cut_greatbear.b64', __WHALE__:'cut_whale.b64', __COLDWALLET__:'cut_coldwallet.b64',
-  __TROLL__:'cut_troll.b64', __SAYLOR__:'cut_saylor.b64'
+  __TROLL__:'cut_troll.b64', __SAYLOR__:'cut_saylor.b64',
+  __LASERBOT__:'cut_laserbot.b64', __MEVDRONE__:'cut_mevdrone.b64'
 };
 for(const [marker,file] of Object.entries(FILE_MARKERS)){
   if(!logic.includes(marker)) continue;
