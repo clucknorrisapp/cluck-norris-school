@@ -188,21 +188,27 @@
       + '<div class="odds" id="wheelcd"></div>'
       + '<div class="odds">' + esc(oddsTxt) + (st.pending ? '  ·  ' + st.pending + ' unclaimed in-game' : '') + '</div></div>';
     var btn = document.getElementById('spinbtn'), msg = document.getElementById('wheelmsg'), wheelEl = document.getElementById('thewheel'), cd = document.getElementById('wheelcd');
+    var cdTimer = null;   // single countdown interval — cleared on every re-lock so stale ones can't flicker the button
+    function armSpin(bonus) {   // enable the button for a (regular or bonus) spin
+      if (cdTimer) { clearInterval(cdTimer); cdTimer = null; }
+      btn.disabled = false; btn.textContent = 'SPIN'; cd.textContent = '';
+      msg.innerHTML = bonus ? '🎉 <b>BONUS SPIN</b> ready — tap SPIN 👇' : 'Tap SPIN 👇';
+      btn.onclick = doSpin;
+    }
     function lockUntil() {
+      if (cdTimer) { clearInterval(cdTimer); cdTimer = null; }
       // next chance = the SOONER of tomorrow's daily reset or the next bonus-spin window
-      var nextChance = Math.min(st.nextSpinAt || Infinity, st.nextBonusAt || Infinity);
       var bonusIsSooner = (st.nextBonusAt || Infinity) < (st.nextSpinAt || Infinity);
       btn.disabled = true; btn.textContent = bonusIsSooner ? 'BONUS SPIN SOON' : 'COME BACK TOMORROW';
       var tick = function () {   // countdown lives in its OWN line so it never clobbers a prize message
+        var nextChance = Math.min(st.nextSpinAt || Infinity, st.nextBonusAt || Infinity);   // re-read (may update)
         var left = (isFinite(nextChance) ? nextChance : 0) - Date.now();
-        cd.innerHTML = (bonusIsSooner ? '🎉 Next bonus spin in <b>' : 'Next spin in <b>') + fmtCountdown(left) + '</b>';
-        if (left <= 0) { btn.disabled = false; btn.textContent = 'SPIN'; cd.textContent = ''; return; }
+        cd.innerHTML = ((st.nextBonusAt || Infinity) < (st.nextSpinAt || Infinity) ? '🎉 Next bonus spin in <b>' : 'Next spin in <b>') + fmtCountdown(left) + '</b>';
+        if (left <= 0) { if (cdTimer) { clearInterval(cdTimer); cdTimer = null; } btn.disabled = false; btn.textContent = 'SPIN'; cd.textContent = ''; btn.onclick = doSpin; return; }
       };
-      tick(); setInterval(tick, 30000);
+      tick(); cdTimer = setInterval(tick, 30000);
     }
-    if (!st.canSpin) { lockUntil(); return; }
-    msg.innerHTML = 'Tap SPIN 👇';
-    btn.onclick = async function () {
+    async function doSpin() {
       if (btn.disabled) return;
       btn.disabled = true; btn.textContent = 'SPINNING…'; msg.textContent = '';
       var res;
@@ -219,9 +225,15 @@
       setTimeout(function () {
         var m = ITEM_META[res.prize] || { emoji: '🎁', name: res.prize };
         msg.innerHTML = (res.bonus ? '🎉 <b>BONUS SPIN!</b> ' : '') + m.emoji + ' <b>' + esc(m.name) + '</b>! Banked to your Normie Quest inventory — open the game to use it.';
-        st.nextSpinAt = res.nextSpinAt; st.nextBonusAt = res.nextBonusAt; lockUntil();
+        st.nextSpinAt = res.nextSpinAt; st.nextBonusAt = res.nextBonusAt;
+        // a bonus spin may STILL be open (e.g. the daily was just consumed inside a bonus window) —
+        // keep the button live for it instead of locking the player out until reload.
+        if (res.bonusAvailable) { cd.innerHTML = '🎉 <b>Bonus spin available now!</b>'; armSpin(true); }
+        else lockUntil();
       }, 4300);
-    };
+    }
+    if (!st.canSpin) { lockUntil(); return; }
+    armSpin(st.bonusReady && !st.dailyReady);
   }
 
   // remembered auth → straight in
