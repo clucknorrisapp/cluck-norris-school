@@ -58,26 +58,41 @@ function ensurePhaser() {
   ensurePhaser();
   const PHASER = fs.readFileSync(PHASER_TMP);
 
-  const browser = await chromium.launch({ headless: true, executablePath: findChrome(), args: ['--no-sandbox'] });
-  const page = await browser.newPage();
+  const RESTART_EVERY = 12;  // relaunch the browser every N levels so 60+ level loads can't OOM one session
   let curErrs = [];
-  page.on('pageerror', e => curErrs.push(String(e.message).slice(0, 200)));
+  async function openSession() {
+    const browser = await chromium.launch({ headless: true, executablePath: findChrome(), args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+    const page = await browser.newPage();
+    page.on('pageerror', e => curErrs.push(String(e.message).slice(0, 200)));
+    await page.route('**/*', route => {
+      const u = route.request().url();
+      if (/phaser/i.test(u)) return route.fulfill({ contentType: 'application/javascript', body: PHASER });
+      if (u.startsWith(BASE) || u.startsWith('data:') || u.startsWith('blob:')) return route.continue();
+      return route.abort(); // block fonts/analytics/CDNs so nothing hangs
+    });
+    await page.goto(LAB, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForFunction(() => typeof window.__NQ_STARTLEVEL === 'function' && Array.isArray(window.__NQ_LEVELS_LIST), null, { timeout: 30000 });
+    return { browser, page };
+  }
 
-  await page.route('**/*', route => {
-    const u = route.request().url();
-    if (/phaser/i.test(u)) return route.fulfill({ contentType: 'application/javascript', body: PHASER });
-    if (u.startsWith(BASE) || u.startsWith('data:') || u.startsWith('blob:')) return route.continue();
-    return route.abort(); // block fonts/analytics/CDNs so nothing hangs
-  });
-
-  await page.goto(LAB, { waitUntil: 'domcontentloaded', timeout: 30000 });
-  await page.waitForFunction(
-    () => typeof window.__NQ_STARTLEVEL === 'function' && Array.isArray(window.__NQ_LEVELS_LIST),
-    null, { timeout: 30000 });
-
-  const levels = await page.evaluate(() => window.__NQ_LEVELS_LIST);
+  let sess = await openSession();
+  let levels = await sess.page.evaluate(() => window.__NQ_LEVELS_LIST);
+  // Optional slice filter so a single world can be verified fast (avoids a 60+ level full run).
+  //   NQ_ONLY="20-,21-"  → only levels whose name starts with one of these prefixes
+  //   NQ_ONLY="55-66"    → only level indices in [55,66]
+  const only = (process.env.NQ_ONLY || '').trim();
+  if (only) {
+    const rangeM = only.match(/^(\d+)-(\d+)$/);
+    if (rangeM) { const a = +rangeM[1], b = +rangeM[2]; levels = levels.filter(l => l.i >= a && l.i <= b); }
+    else { const pre = only.split(',').map(s => s.trim()).filter(Boolean); levels = levels.filter(l => pre.some(p => l.name.indexOf(p) === 0)); }
+    console.log(`[nq-state-test] NQ_ONLY=${only} → testing ${levels.length} level(s)`);
+  }
   const rows = [];
+  let sinceRestart = 0;
   for (const lv of levels) {
+    if (sinceRestart >= RESTART_EVERY) { try { await sess.browser.close(); } catch (_) {} sess = await openSession(); sinceRestart = 0; }
+    sinceRestart++;
+    const page = sess.page;
     curErrs = [];
     const row = { i: lv.i, name: lv.name, booted: false, boss: false, stompable: null, errs: [] };
     try {
@@ -110,7 +125,7 @@ function ensurePhaser() {
     process.stdout.write(`  [${String(row.i).padStart(2)}] ${row.name.padEnd(10)} ${tag}${row.errs.length ? '  ERR:' + row.errs.join('|') : ''}\n`);
   }
 
-  await browser.close();
+  try { await sess.browser.close(); } catch (_) {}
 
   // ---- summary ----
   const booted = rows.filter(r => r.booted).length;
