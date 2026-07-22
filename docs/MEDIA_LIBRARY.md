@@ -46,6 +46,7 @@ CDN URLs are long-lived Higgsfield/CloudFront links — downloadable from any fr
 | Asset | Where | What |
 |---|---|---|
 | `docs/brand/logo-strip-top6.png` | repo (committed) | 6 official top-mcap coin logos in gold-ringed discs: BTC · ETH · BNB · XRP · SOL · TRX. For video overlays/end-cards. Real logos — AI must NEVER draw these. |
+| `normie-quest/public/worlds/w16-citadel.png` (job `17b49783`) | repo (committed 2026-07-22) | **World 16 modern background** — full-bleed hand-painted cyber-citadel (neon skyline + riveted vault wall + orange conduits + stone ledge), the anchor for the retro→modern art transition (worlds 16-21, per owner: "slightly more modern as we go up from 15"). First roll `c9c85f3e` was rejected (nano rendered it inside a TV bezel + gibberish ticker text); re-rolled full-bleed/text-free. Not yet wired into the game as a bgImage. |
 | `public/learn-icons/*.png` | repo (live) | 18 official coin logos (CoinGecko art) used on /learn pages. |
 | `docs/brand/dexscreener-banner-600x200.{png,webp}` | repo (committed 2026-07-21) | The LIVE DexScreener header banner (fiery branded Cluck + dynamite, ETH/BTC/SOL discs, wordmark + clucknorris.app pill). Recovered from DexScreener's CDN — it had never been archived. Source of truth for listing-site banners (Bags etc.). |
 
