@@ -4,6 +4,18 @@ Side-scrolling Phaser 3.60 platformer for NORMIE/CLKN. Lives at **clucknorris.ap
 This file is the single source of truth for how the game is built and the design decisions behind it,
 so any fresh session (or a human/external auditor) can pick up cleanly.
 
+> ⚠️ **CONCURRENT-SESSION WARNING (read first).** Normie Quest has been worked on by MORE THAN ONE
+> Claude session in parallel, each building the whole `public/*.html` from its own scratchpad copy of
+> `game_logic.js`. That means `src/game_logic.js` in this repo can go STALE the moment another session
+> deploys. **Before trusting or editing `src/game_logic.js`, confirm it still rebuilds the live HTML
+> byte-identically** (`node normie-quest/src/build.js` then `git diff normie-quest/public/normie-quest-platformer.html`
+> — expect NO diff). If it differs, the deployed HTML is newer: re-extract the source from it (the game
+> logic is the last `<script>` block in `normie-quest-platformer.html`, human-readable). The committed
+> `src/` here was last reconstructed from the deployed HTML and verified byte-identical, and includes a
+> concurrent session's Worlds 16–21 work (modern image-background engine, multi-slot inventory, new
+> star/clock/bomb boosts) — 3 of that session's assets remain INLINE (not tokenized) in `game_logic.js`.
+> **To avoid future clobbering, all sessions should build from THIS committed `src/`, not private copies.**
+
 ## Source of truth & build pipeline
 The game is authored as ONE readable source file and assembled into a self-contained HTML:
 
