@@ -66,6 +66,33 @@ function nextSpinAt(nowMs) {
   const d = new Date(nowMs == null ? Date.now() : nowMs);
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1, 0, 0, 0, 0);   // next UTC midnight
 }
+
+// ---- BONUS SPINS (the "extra daily spin, given out a few times a day") --------------------
+// A few 1-hour "happy hour" windows per UTC day. During a window a VIP who has already used
+// their daily spin gets ONE extra spin. Entirely clock-driven — no scheduler/cron needed, so it
+// survives container resets. One bonus per window per wallet (tracked in s.bonus[wallet]).
+const BONUS_SPIN_HOURS = [12, 18, 22];              // UTC window START hours (each lasts 1h)
+function bonusWindowKey(nowMs) {                    // "YYYY-MM-DD:H" for the active window, else null
+  const d = new Date(nowMs == null ? Date.now() : nowMs);
+  if (BONUS_SPIN_HOURS.indexOf(d.getUTCHours()) < 0) return null;
+  return utcDay(nowMs) + ':' + d.getUTCHours();
+}
+function bonusAvailable(wallet, nowMs) {             // window open AND this wallet hasn't taken THIS window
+  const win = bonusWindowKey(nowMs); if (!win) return false;
+  const s = load(); const last = (s.bonus && s.bonus[String(wallet || '')]) || null;
+  return last !== win;
+}
+function nextBonusAt(nowMs) {                        // start of the next bonus window (UTC)
+  const base = nowMs == null ? Date.now() : nowMs;
+  const d = new Date(base);
+  for (let add = 1; add <= 48; add++) {
+    const t = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours() + add, 0, 0, 0);
+    if (BONUS_SPIN_HOURS.indexOf(new Date(t).getUTCHours()) >= 0) return t;
+  }
+  return base + 3600000;
+}
+// Either kind of spin is available right now (daily OR an open bonus window this wallet hasn't used).
+function canSpinNow(wallet, nowMs) { return canSpin(wallet, nowMs) || bonusAvailable(wallet, nowMs); }
 function pickPrize() {
   const total = WHEEL.reduce((n, p) => n + p.weight, 0);
   // crypto-strong pick (server-authoritative; every spin wins, odds published below)
@@ -76,15 +103,17 @@ function pickPrize() {
 function spin(wallet, nowMs) {
   const w = String(wallet || '');
   if (!w) return { ok: false, error: 'no_wallet' };
-  if (!canSpin(w, nowMs)) return { ok: false, error: 'already_spun', nextSpinAt: nextSpinAt(nowMs) };
+  const daily = canSpin(w, nowMs);
+  const bonus = !daily && bonusAvailable(w, nowMs);   // daily first, then a bonus window if one's open
+  if (!daily && !bonus) return { ok: false, error: 'already_spun', nextSpinAt: nextSpinAt(nowMs), nextBonusAt: nextBonusAt(nowMs) };
   const item = pickPrize();
   const g = grant(w, item, nowMs);
   if (!g.ok) return { ok: false, error: g.error, nextSpinAt: nextSpinAt(nowMs) };
   const s = load();
-  s.spins = s.spins || {};
-  s.spins[w] = utcDay(nowMs);
+  if (daily) { s.spins = s.spins || {}; s.spins[w] = utcDay(nowMs); }
+  else { s.bonus = s.bonus || {}; s.bonus[w] = bonusWindowKey(nowMs); }
   save(s);
-  return { ok: true, prize: item, pending: g.pending, nextSpinAt: nextSpinAt(nowMs) };
+  return { ok: true, prize: item, bonus: !!bonus, pending: g.pending, nextSpinAt: nextSpinAt(nowMs), nextBonusAt: nextBonusAt(nowMs), bonusAvailable: bonusAvailable(w, nowMs) };
 }
 // Published odds (shown on the wheel — provably-honest since it's server-authoritative + declared).
 function odds() {
@@ -92,4 +121,5 @@ function odds() {
   return WHEEL.map((p) => ({ item: p.item, pct: Math.round((p.weight / total) * 100) }));
 }
 
-module.exports = { grant, pendingCount, claimOne, canSpin, nextSpinAt, spin, odds, ITEMS };
+module.exports = { grant, pendingCount, claimOne, canSpin, nextSpinAt, spin, odds, ITEMS,
+  bonusAvailable, nextBonusAt, canSpinNow, bonusWindowKey, BONUS_SPIN_HOURS };

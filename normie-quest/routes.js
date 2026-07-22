@@ -255,7 +255,9 @@ router.get('/api/nq/wheel/status', (req, res) => {
     const pk = String(req.query.wallet || ''), token = String(req.query.token || '');
     const sess = wallet.checkSession(pk, token);
     if (!sess || sess.ok === false) return res.status(401).json({ ok: false, error: 'bad_session' });
-    res.json({ ok: true, vip: wallet.isVip(pk, null), canSpin: rewards.canSpin(pk), nextSpinAt: rewards.nextSpinAt(), pending: rewards.pendingCount(pk), odds: rewards.odds() });
+    const dailyReady = rewards.canSpin(pk), bonusReady = rewards.bonusAvailable(pk);
+    res.json({ ok: true, vip: wallet.isVip(pk, null), canSpin: dailyReady || bonusReady, dailyReady, bonusReady,
+      nextSpinAt: rewards.nextSpinAt(), nextBonusAt: rewards.nextBonusAt(), pending: rewards.pendingCount(pk), odds: rewards.odds() });
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
 // Claim ONE pending item into the game (any verified wallet — leaderboard/owner grants included).

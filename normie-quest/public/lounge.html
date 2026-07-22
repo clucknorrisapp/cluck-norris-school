@@ -175,7 +175,8 @@
     var oddsTxt = (st.odds || []).map(function (o) { return (ITEM_META[o.item] ? ITEM_META[o.item].emoji : '') + ' ' + o.pct + '%'; }).join('  ·  ');
     box.innerHTML =
       '<div class="wheelcard"><h2>🎡 DAILY SPIN</h2>'
-      + '<div class="cap">One free spin a day — every spin wins a game boost.</div>'
+      + '<div class="cap">One free spin a day — every spin wins a game boost.<br>🎉 <b>Bonus spins</b> drop a few times a day — check back!</div>'
+      + (st.bonusReady && !st.dailyReady ? '<div class="cap" style="color:#ffd23f">🎉 BONUS SPIN AVAILABLE NOW!</div>' : '')
       + '<div class="wheelwrap"><div class="ptr"></div>'
       + '<div class="wheel" id="thewheel">'
       + '<span class="lab" style="left:78%;top:34%">🥏</span>'
@@ -188,10 +189,13 @@
       + '<div class="odds">' + esc(oddsTxt) + (st.pending ? '  ·  ' + st.pending + ' unclaimed in-game' : '') + '</div></div>';
     var btn = document.getElementById('spinbtn'), msg = document.getElementById('wheelmsg'), wheelEl = document.getElementById('thewheel'), cd = document.getElementById('wheelcd');
     function lockUntil() {
-      btn.disabled = true; btn.textContent = 'COME BACK TOMORROW';
+      // next chance = the SOONER of tomorrow's daily reset or the next bonus-spin window
+      var nextChance = Math.min(st.nextSpinAt || Infinity, st.nextBonusAt || Infinity);
+      var bonusIsSooner = (st.nextBonusAt || Infinity) < (st.nextSpinAt || Infinity);
+      btn.disabled = true; btn.textContent = bonusIsSooner ? 'BONUS SPIN SOON' : 'COME BACK TOMORROW';
       var tick = function () {   // countdown lives in its OWN line so it never clobbers a prize message
-        var left = (st.nextSpinAt || 0) - Date.now();
-        cd.innerHTML = 'Next spin in <b>' + fmtCountdown(left) + '</b>';
+        var left = (isFinite(nextChance) ? nextChance : 0) - Date.now();
+        cd.innerHTML = (bonusIsSooner ? '🎉 Next bonus spin in <b>' : 'Next spin in <b>') + fmtCountdown(left) + '</b>';
         if (left <= 0) { btn.disabled = false; btn.textContent = 'SPIN'; cd.textContent = ''; return; }
       };
       tick(); setInterval(tick, 30000);
@@ -204,7 +208,7 @@
       var res;
       try { res = await (await fetch('/api/nq/wheel/spin', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wallet: pk, token: token }) })).json(); } catch (e) { res = { ok: false }; }
       if (!res.ok) {
-        if (res.error === 'already_spun') { st.nextSpinAt = res.nextSpinAt; lockUntil(); }
+        if (res.error === 'already_spun') { st.nextSpinAt = res.nextSpinAt; st.nextBonusAt = res.nextBonusAt; lockUntil(); }
         else { btn.disabled = false; btn.textContent = 'SPIN'; msg.textContent = 'Spin failed — try again.'; }
         return;
       }
@@ -214,8 +218,8 @@
       wheelEl.style.transform = 'rotate(' + wheelRot + 'deg)';
       setTimeout(function () {
         var m = ITEM_META[res.prize] || { emoji: '🎁', name: res.prize };
-        msg.innerHTML = m.emoji + ' <b>' + esc(m.name) + '</b>! Banked to your Normie Quest inventory — open the game to use it.';
-        st.nextSpinAt = res.nextSpinAt; lockUntil();
+        msg.innerHTML = (res.bonus ? '🎉 <b>BONUS SPIN!</b> ' : '') + m.emoji + ' <b>' + esc(m.name) + '</b>! Banked to your Normie Quest inventory — open the game to use it.';
+        st.nextSpinAt = res.nextSpinAt; st.nextBonusAt = res.nextBonusAt; lockUntil();
       }, 4300);
     };
   }
