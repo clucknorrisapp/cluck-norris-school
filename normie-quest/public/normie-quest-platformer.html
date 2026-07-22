@@ -2187,7 +2187,13 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // first and got hurt). Tall bosses get a deeper head zone, and near-apex contact (vy≥-120,
     // within ~8px of the top of the arc) counts — jumping onto the head from beside now lands.
     var headTol=Math.max(14, k.body.height*0.25);
-    var onTop=(player.body.bottom<=k.body.top+headTol)&&player.body.velocity.y>=-120;
+    // Head zone from BOTH the physics body AND the VISIBLE sprite. An Arcade body that doesn't
+    // scale with a big sprite (the 108px MEV Dragon, the 96px Dirty Whale) leaves body.top far
+    // below the head the player actually aims at, so a clean top-jump clipped the side and got
+    // hurt (owner: "jumping on top hitting perfectly and taking damage"). The visible-sprite band
+    // (top ~40% of what's drawn) restores the intuitive stomp. OR-only: never removes a stomp.
+    var visTop=k.y-k.displayHeight*0.5;
+    var onTop=((player.body.bottom<=k.body.top+headTol)||(player.body.bottom<=visTop+k.displayHeight*0.4))&&player.body.velocity.y>=-120;
     if(onTop){ player.setVelocityY(-340); this.bossHit(); return; }
     if(player.invuln||now<this.shieldUntil||now<this.coldUntil) return;
     this.hurt(player, k.x<player.x?1:-1, 'BOSS TOUCH: '+String((this.def&&this.def.bossType)||'rugking').toUpperCase());
@@ -2550,9 +2556,10 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         this._drState='grounded'; this._drT0=now; k.invuln=false;
         if(this._drMark) this._drMark.setVisible(false);
         this.cameras.main.shake(220,.013); _tone(110,55,0.2,'square',0.08);
-        this.dragonBreath(k,p);
+        this._drBreathAt=now+340; this._drBreathDone=false;   // let a committed stomp land BEFORE the breath spawns on the head (owner: "jumping on top and taking damage")
       }
     } else if(st==='grounded'){
+      if(!this._drBreathDone && now>=this._drBreathAt){ this._drBreathDone=true; this.dragonBreath(k,this.player); }   // delayed breath: clean-stomp grace window on landing
       if(now-this._drT0>2400){ this._drState='rise'; this._drT0=now; k.invuln=true; }   // 1.7s was too tight to run up + time a head-jump; 2.4s is challenging, not cruel
     } else if(st==='rise'){
       k.invuln=true;
