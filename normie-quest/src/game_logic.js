@@ -1189,8 +1189,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // SETUP-LANE tier gate, catch-all entry point (checkpoint continues, interludes, bonus-room
     // returns — every path lands in create). LAB warps (this._labWarp) bypass — owner's bench.
     if(!this._labWarp && !nqWorldAllowed(def)){
-      this.scene.start('LevelSelect');
-      try{ if(window.__NQ_OPENPREMIUM) window.__NQ_OPENPREMIUM(); }catch(e){}
+      this.scene.start('VipPitch',{locked:true,score:this.score||0});
       return;
     }
     // SETUP LANE only: begin (or continue) a leaderboard run. One run token spans the whole run;
@@ -2848,8 +2847,11 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // premium panel (verify wallet / hold more NORMIE) instead of the next world. A lab-warped
     // run (owner's bench) stays ungated all the way through and carries the lab flag forward.
     var lab=this._labWarp?1:undefined;
-    if(!lab && !nqWorldAllowed(LEVELS[next])){ this.scene.start('LevelSelect');
-      try{ if(window.__NQ_OPENPREMIUM) window.__NQ_OPENPREMIUM(); }catch(e){} return; }
+    // FREE-player upsell: after the 1st and 3rd clears, tease the VIP leagues (skippable, once each).
+    if(!lab && nqShouldPitch(this.levelIdx) && !nqIsVipOrAll()){ nqMarkPitch(this.levelIdx); this.scene.start('VipPitch',{next:next,score:this.score}); return; }
+    // SETUP-LANE tier gate: cleared the last world your holdings unlock → the VIP buy card (verify
+    // wallet / grab NORMIE) instead of the next world. A lab-warped run (owner's bench) stays ungated.
+    if(!lab && !nqWorldAllowed(LEVELS[next])){ this.scene.start('VipPitch',{locked:true,score:this.score}); return; }
     if(typeof WORLD_CLEARS!=='undefined' && WORLD_CLEARS[next]) this.scene.start('WorldClear',{next:next,score:this.score,lab:lab});   // world boundary: celebration + travel page -> Briefing
     else if(typeof BRIEFINGS!=='undefined' && BRIEFINGS[next]) this.scene.start('Briefing',{next:next,score:this.score,lab:lab});
     else this.scene.start('Game',{level:next,score:this.score,lives:3,lab:lab}); },
@@ -4228,13 +4230,73 @@ var Briefing=new Phaser.Class({ Extends:Phaser.Scene,
   }
 });
 
+/* ---------- VipPitch: the FREE-player upsell (skippable). Teased in the first rounds and shown
+   at the free wall. Copy is SOFT per the owner's call — the hold amount reads "TBD (testing)", no
+   promised gating number (NQ gating terms aren't finalized with the NORMIE team). Reuses the
+   in-game buy widget (__NQ_OPENPREMIUM) + the Premium Lounge; never blocks play. ---------- */
+var NQ_NORMIE_MINT_DEFAULT='FrSFwE2BxWADEyUWFXDMAeomzuB4r83ZvzdG9sevpump';
+function nqIsVipOrAll(){   // don't upsell players who already have access
+  try{ if(typeof window.__NQ_VIP==='function' && window.__NQ_VIP()) return true; }catch(e){}
+  try{ if(typeof window.__NQ_ACCESS==='function' && window.__NQ_ACCESS()==='all') return true; }catch(e){}
+  return false;
+}
+function nqShouldPitch(idx){   // tease once each after the 1st (1-1) and 3rd (2-1) clears, per tab session
+  if(idx!==0 && idx!==3) return false;
+  try{ if(sessionStorage.getItem('nqPitch'+idx)) return false; }catch(e){}
+  return true;
+}
+function nqMarkPitch(idx){ try{ sessionStorage.setItem('nqPitch'+idx,'1'); }catch(e){} }
+var VipPitch=new Phaser.Class({ Extends:Phaser.Scene,
+  initialize:function(){ Phaser.Scene.call(this,{key:'VipPitch'}); },
+  init:function(d){ d=d||{}; this.next=d.next||0; this.score=d.score||0; this.locked=!!d.locked; this.lab=d.lab; },
+  create:function(){
+    var self=this, cx=W/2; this.done=false; this.t0=0;
+    this.cameras.main.setZoom(2).centerOn(W/2,H/2);
+    var g=this.add.graphics(); g.fillStyle(0x0d0b1e,1); g.fillRect(0,0,W,H);
+    g.fillStyle(0x1a1533,1); g.fillRect(0,0,W,30); g.fillRect(0,H-22,W,22);
+    g.lineStyle(2,0xffb43a,1); g.strokeRect(6,34,W-12,H-58);
+    this.add.text(cx,15, this.locked?'🔒 VIP LEAGUES — LOCKED':'⭐ MORE WORLDS AWAIT',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#ffd23f',align:'center',wordWrap:{width:W-20}}).setOrigin(.5);
+    var body=this.locked
+      ? "You've hit the free frontier. Worlds 13-21 — the VIP LEAGUES — are the members' wing."
+      : "You're on the FREE rounds — a taste. Past here is a whole VIP wing: worlds 13-21, the VIP LEAGUES.";
+    this.add.text(cx,44, body, {fontFamily:UIFONT,resolution:UIRES,fontSize:'11px',color:'#e6e1ff',align:'center',wordWrap:{width:W-52}}).setOrigin(.5,0);
+    this.add.text(cx,84, "🏅 Join the VIP Leagues by holding $NORMIE\n( hold amount: TBD — testing )", {fontFamily:UIFONT,resolution:UIRES,fontSize:'11px',color:'#ffd23f',align:'center',wordWrap:{width:W-52}}).setOrigin(.5,0);
+    this.add.text(cx,118, "Grab $NORMIE in seconds — buy right here, or in the Premium Lounge.", {fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#9fb0d8',align:'center',wordWrap:{width:W-64}}).setOrigin(.5,0);
+    function mkBtn(y,label,col,txtcol,onUp){
+      var r=self.add.rectangle(cx,y,214,20,col,1).setStrokeStyle(2,0xffffff,0.18).setInteractive({useHandCursor:true});
+      self.add.text(cx,y,label,{fontFamily:'"Press Start 2P"',fontSize:'8px',color:txtcol}).setOrigin(.5).setDepth(1);
+      r.on('pointerover',function(){ r.setScale(1.05); }); r.on('pointerout',function(){ r.setScale(1); });
+      r.on('pointerup',function(){ onUp(); });
+      return r;
+    }
+    mkBtn(152,'🪙  BUY $NORMIE',0xffd23f,'#0a0813',function(){ self.buyNormie(); });
+    mkBtn(178,'🏛  PREMIUM LOUNGE',0x9b6bff,'#ffffff',function(){ try{ window.open('/normie-quest-x7/lounge','_blank'); }catch(e){} });
+    mkBtn(204, this.locked?'◀  BACK TO MAP':'▶  KEEP PLAYING',0x2ecc71,'#0a0813',function(){ self.go(); });
+    this.add.text(cx,H-10, this.locked?'you can keep any free world you already unlocked':'not now? just KEEP PLAYING', {fontFamily:UIFONT,resolution:UIRES,fontSize:'9px',color:'#8891b5',align:'center'}).setOrigin(.5);
+    padAdvance(this, function(){ self.go(); });
+  },
+  buyNormie:function(){   // prefer the integrated in-game Jupiter widget; fall back to a direct swap link
+    try{ if(typeof window.__NQ_OPENPREMIUM==='function'){ window.__NQ_OPENPREMIUM(); return; } }catch(e){}
+    var mint=(window.__NQ_NORMIE_MINT||NQ_NORMIE_MINT_DEFAULT);
+    try{ window.open('https://jup.ag/swap/SOL-'+encodeURIComponent(mint),'_blank'); }catch(e){}
+  },
+  go:function(){ if(this.done) return; this.done=true; SFX.power();
+    if(this.locked){ this.scene.start('LevelSelect'); try{ if(window.__NQ_OPENPREMIUM) window.__NQ_OPENPREMIUM(); }catch(e){} }
+    else this.scene.start('Game',{level:this.next,score:this.score,lives:3,lab:this.lab});
+  },
+  update:function(){ if(!this.t0){ this.t0=this.time.now; return; }
+    // the teaser auto-advances so it can NEVER soft-lock; the locked card waits for a choice.
+    if(!this.locked && this.time.now-this.t0>22000) this.go();
+  }
+});
+
 var NQGAME=new Phaser.Game({
   // Render at 2x internal resolution (each scene camera zooms 2x, so the world view is
   // unchanged but the backing store is 960x540 -> crisp, not blocky, when displayed big).
   type:Phaser.AUTO, parent:'screen', width:W*2, height:H*2, pixelArt:true, backgroundColor:'#0a0813', roundPixels:true,
   scale:{ mode:Phaser.Scale.FIT, autoCenter:Phaser.Scale.CENTER_BOTH },
   physics:{ default:'arcade', arcade:{ gravity:{y:900}, debug:false } },
-  scene:[Boot,Title,LevelSelect,Controls,Gate,Game,Over,Win,WorldClear,Briefing]
+  scene:[Boot,Title,LevelSelect,Controls,Gate,Game,Over,Win,WorldClear,Briefing,VipPitch]
 });
 // Global "jump to LEVEL SELECT" hook — works from ANY scene (title, game, over, win), so the
 // reliable DOM "≡ Levels" button is never a dead end. Stops whatever's running, then starts it.
