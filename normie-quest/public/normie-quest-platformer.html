@@ -1750,6 +1750,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.reserveHint=this.hb(this.add.text(_rx+12,_ry-9,'Q',{fontFamily:'"Press Start 2P"',fontSize:'7px',color:'#ffd23f'}).setOrigin(0,0).setDepth(21));
     var _rself=this; this.reserveBox.on('pointerdown',function(){ _rself.useReserve(); });   // tap the slot to use (mobile + desktop)
     this.updateReserveHud();
+    this.syncRewards();   // pull any pending wheel/owner reward into the slot
     // PAUSE button — tap the ⏸ (top-left) on touch, or press P / Esc on desktop
     this.hb(this.add.rectangle(120,15,20,16,0x000000,0.5).setStrokeStyle(1,0x8f89b0));
     this.hb(this.add.rectangle(116,15,3,9,0xffd23f)); this.hb(this.add.rectangle(124,15,3,9,0xffd23f));
@@ -2003,6 +2004,18 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   },
   // ===== ITEM RESERVE — bank one boost, spend it when YOU want (Q/E or tap the slot) =====
   saveReserve:function(){ try{ if(this.reserve) localStorage.setItem('nqReserve',this.reserve); else localStorage.removeItem('nqReserve'); }catch(e){} },
+  // WALLET-BOUND REWARDS: pull a pending prize (wheel win / owner grant) into the slot — but ONLY
+  // when the slot is free, so the server never pops an item we can't hold (loss-free by design).
+  syncRewards:function(){
+    if(this.reserve||this.over) return;
+    var w=null; try{ w=window.NQLB&&window.NQLB.getWallet&&window.NQLB.getWallet(); }catch(e){}
+    if(!w||!w.pubkey||!w.token) return;
+    var self=this;
+    fetch('/api/nq/rewards/claim',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({wallet:w.pubkey,token:w.token})})
+      .then(function(r){ return r.json(); })
+      .then(function(j){ if(j&&j.ok&&j.item&&!self.over&&!self.reserve&&RESERVE_ITEMS[j.item]){ self.grantReserve(j.item); } })
+      .catch(function(){});
+  },
   grantReserve:function(item){   // put an item in the slot (won't overwrite a banked one)
     if(!RESERVE_ITEMS[item]) return false;
     if(this.reserve){ if(this.flash) this.flash('RESERVE FULL — USE IT (Q)','#ff9ec0'); return false; }
@@ -2017,6 +2030,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.reserve==='shield' && this.geekShield){ this.flash('SHIELD ALREADY UP','#2ee6c0'); return; }
     it.use(this); try{ SFX.power(); }catch(e){} this.flash(it.label+'!','#ffd23f'); this.cameras.main.flash(120,255,210,80);
     this.reserve=null; this.saveReserve(); this.updateReserveHud();
+    this.syncRewards();   // slot just freed — pull the next queued reward if any
   },
   updateReserveHud:function(){
     if(!this.reserveBox) return;

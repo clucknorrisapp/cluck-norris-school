@@ -21,6 +21,7 @@ const feedback = require('./nq-feedback');   // playtester comment store (test d
 const telemetry = require('./nq-telemetry'); // difficulty telemetry (deaths + clears)
 const leaderboard = require('./nq-leaderboard');   // Phase 2 leaderboards (per-world + weekly)
 const wallet = require('./nq-wallet');   // Phase 2 wallet ownership + tier gate (sign-message, read-only)
+const rewards = require('./nq-rewards'); // wallet-bound game-boost reward queue + daily VIP wheel
 
 // Admin key for reading feedback / the comments dashboard. Accepts a simple shared password
 // (owner's choice — this gate only guards low-sensitivity playtest comments, no funds/PII), plus
@@ -217,6 +218,54 @@ router.get('/normie-quest-x7/lounge-admin', (req, res) => {
     if (rem) posts = posts.filter((x) => x.id !== rem);
     fs.writeFileSync(loungePath(), JSON.stringify(posts));
     res.json({ ok: true, count: posts.length, posts });
+  } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+// ---- 🎁 REWARDS: wallet-bound game-boost queue + the daily VIP prize wheel -------------------
+// Winnings are IN-GAME items (disc/vial/shield), never tokens — no funds move, nothing to sign.
+// Owner/wheel grants queue per wallet; the game claims them into the Item Reserve on next login.
+function strictAdmin(req) {
+  const vk = String((req.query && req.query.key) || req.get('x-nq-key') || '');
+  const vw = process.env.NQ_FEEDBACK_KEY || process.env.PREMIUM_ACCESS_KEY || '';
+  return !!vw && vk === vw;
+}
+// Owner grant (STRICT key): &wallet=PUBKEY&item=disc|vial|shield ; bare call shows a wallet's queue.
+router.get('/normie-quest-x7/reward', (req, res) => {
+  if (!strictAdmin(req)) return res.status(404).json({ ok: false, error: 'not_found' });
+  try {
+    const w = String(req.query.wallet || '').trim(), item = String(req.query.item || '').trim();
+    if (w && item) return res.json(rewards.grant(w, item));
+    if (w) return res.json({ ok: true, wallet: w, pending: rewards.pendingCount(w) });
+    res.json({ ok: true, odds: rewards.odds() });
+  } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+// Daily VIP wheel — player-triggered, server-authoritative (every spin wins; odds published).
+// Gated: valid session token AND VIP; one spin per UTC day per wallet.
+router.post('/api/nq/wheel/spin', (req, res) => {
+  try {
+    const b = req.body || {};
+    const pk = String(b.wallet || ''), token = String(b.token || '');
+    const sess = wallet.checkSession(pk, token);
+    if (!sess || sess.ok === false) return res.status(401).json({ ok: false, error: 'bad_session' });
+    if (!wallet.isVip(pk, null)) return res.status(403).json({ ok: false, error: 'not_vip' });
+    res.json(rewards.spin(pk));
+  } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+router.get('/api/nq/wheel/status', (req, res) => {
+  try {
+    const pk = String(req.query.wallet || ''), token = String(req.query.token || '');
+    const sess = wallet.checkSession(pk, token);
+    if (!sess || sess.ok === false) return res.status(401).json({ ok: false, error: 'bad_session' });
+    res.json({ ok: true, vip: wallet.isVip(pk, null), canSpin: rewards.canSpin(pk), nextSpinAt: rewards.nextSpinAt(), pending: rewards.pendingCount(pk), odds: rewards.odds() });
+  } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+// Claim ONE pending item into the game (any verified wallet — leaderboard/owner grants included).
+router.post('/api/nq/rewards/claim', (req, res) => {
+  try {
+    const b = req.body || {};
+    const pk = String(b.wallet || ''), token = String(b.token || '');
+    const sess = wallet.checkSession(pk, token);
+    if (!sess || sess.ok === false) return res.status(401).json({ ok: false, error: 'bad_session' });
+    res.json(rewards.claimOne(pk));
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
 // re-read live balance for a remembered wallet (no re-signing) → current tier, every launch

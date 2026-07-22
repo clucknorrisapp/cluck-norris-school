@@ -28,6 +28,22 @@
   .who b { color:var(--gold); }
   .crown { font-size:44px; }
   a { color:#66ddff; }
+  .wheelcard { background:var(--card); border:1px solid var(--dim); border-radius:12px; padding:20px 18px; margin-bottom:16px; text-align:center; }
+  .wheelcard h2 { color:var(--gold); font-size:16px; margin:0 0 2px; letter-spacing:.5px; }
+  .wheelcard .cap { font-size:12px; color:#6e6a86; margin-bottom:4px; }
+  .wheelwrap { position:relative; width:190px; height:190px; margin:14px auto 4px; }
+  .wheel { width:100%; height:100%; border-radius:50%; border:4px solid var(--gold); position:relative;
+    transition:transform 4.2s cubic-bezier(.15,.72,.18,1);
+    background:conic-gradient(from 0deg,#1f7a3f 0 120deg,#8a2f52 120deg 240deg,#2a6a86 240deg 360deg); }
+  .wheel .lab { position:absolute; font-size:24px; transform:translate(-50%,-50%); text-shadow:0 1px 3px #000; }
+  .ptr { position:absolute; top:-7px; left:50%; transform:translateX(-50%); width:0; height:0;
+    border-left:11px solid transparent; border-right:11px solid transparent; border-top:18px solid var(--gold); z-index:3; }
+  .hub { position:absolute; left:50%; top:50%; width:24px; height:24px; margin:-12px 0 0 -12px; border-radius:50%;
+    background:#1a1204; border:2px solid var(--gold); z-index:2; }
+  .spinbtn:disabled { opacity:.5; cursor:default; }
+  .wheelmsg { font-size:14px; color:var(--mut); margin-top:10px; min-height:20px; }
+  .wheelmsg b { color:var(--gold); }
+  .odds { font-size:11px; color:#6e6a86; margin-top:6px; }
 </style>
 </head>
 <body>
@@ -44,6 +60,7 @@
     <div id="err" class="err"></div>
   </div>
   <div id="who" class="who" style="display:none"></div>
+  <div id="wheel" style="display:none"></div>
   <div id="feed" style="display:none"></div>
 </div>
 <script>
@@ -130,6 +147,7 @@
     var who = document.getElementById('who');
     who.style.display = 'block';
     who.innerHTML = 'Welcome, <b>' + esc(pk.slice(0, 4) + '…' + pk.slice(-4)) + '</b> 👑';
+    renderWheel(pk, token);
     var feed = document.getElementById('feed');
     feed.style.display = 'block';
     feed.innerHTML = (r.posts || []).map(function (p) {
@@ -137,6 +155,69 @@
         + '<h3>' + esc(p.title) + '</h3><p>' + esc(p.body) + '</p>'
         + '<div class="ts">' + esc(new Date(p.ts).toUTCString().replace(':00 GMT', ' UTC')) + '</div></div>';
     }).join('') || '<div class="card post"><h3>Nothing posted yet</h3><p>Check back soon.</p></div>';
+  }
+
+  // ---- 🎡 daily VIP prize wheel — win a game boost, banked to your Normie Quest inventory ----
+  var ITEM_META = { disc: { emoji: '🥏', name: 'SOL Discs +5' }, vial: { emoji: '❤️', name: 'Full Heal' }, shield: { emoji: '🛡️', name: 'Audit Shield' } };
+  var WEDGE_CENTER = { disc: 60, vial: 180, shield: 300 };   // matches the conic-gradient wedges
+  var wheelRot = 0;
+  function fmtCountdown(ms) {
+    if (ms <= 0) return 'now';
+    var h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000);
+    return h + 'h ' + m + 'm';
+  }
+  async function renderWheel(pk, token) {
+    var box = document.getElementById('wheel');
+    var st;
+    try { st = await (await fetch('/api/nq/wheel/status?wallet=' + pk + '&token=' + encodeURIComponent(token))).json(); } catch (e) { return; }
+    if (!st || !st.ok) return;
+    box.style.display = 'block';
+    var oddsTxt = (st.odds || []).map(function (o) { return (ITEM_META[o.item] ? ITEM_META[o.item].emoji : '') + ' ' + o.pct + '%'; }).join('  ·  ');
+    box.innerHTML =
+      '<div class="wheelcard"><h2>🎡 DAILY SPIN</h2>'
+      + '<div class="cap">One free spin a day — every spin wins a game boost.</div>'
+      + '<div class="wheelwrap"><div class="ptr"></div>'
+      + '<div class="wheel" id="thewheel">'
+      + '<span class="lab" style="left:78%;top:34%">🥏</span>'
+      + '<span class="lab" style="left:50%;top:82%">❤️</span>'
+      + '<span class="lab" style="left:22%;top:34%">🛡️</span>'
+      + '</div><div class="hub"></div></div>'
+      + '<button class="spinbtn" id="spinbtn">SPIN</button>'
+      + '<div class="wheelmsg" id="wheelmsg"></div>'
+      + '<div class="odds" id="wheelcd"></div>'
+      + '<div class="odds">' + esc(oddsTxt) + (st.pending ? '  ·  ' + st.pending + ' unclaimed in-game' : '') + '</div></div>';
+    var btn = document.getElementById('spinbtn'), msg = document.getElementById('wheelmsg'), wheelEl = document.getElementById('thewheel'), cd = document.getElementById('wheelcd');
+    function lockUntil() {
+      btn.disabled = true; btn.textContent = 'COME BACK TOMORROW';
+      var tick = function () {   // countdown lives in its OWN line so it never clobbers a prize message
+        var left = (st.nextSpinAt || 0) - Date.now();
+        cd.innerHTML = 'Next spin in <b>' + fmtCountdown(left) + '</b>';
+        if (left <= 0) { btn.disabled = false; btn.textContent = 'SPIN'; cd.textContent = ''; return; }
+      };
+      tick(); setInterval(tick, 30000);
+    }
+    if (!st.canSpin) { lockUntil(); return; }
+    msg.innerHTML = 'Tap SPIN 👇';
+    btn.onclick = async function () {
+      if (btn.disabled) return;
+      btn.disabled = true; btn.textContent = 'SPINNING…'; msg.textContent = '';
+      var res;
+      try { res = await (await fetch('/api/nq/wheel/spin', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wallet: pk, token: token }) })).json(); } catch (e) { res = { ok: false }; }
+      if (!res.ok) {
+        if (res.error === 'already_spun') { st.nextSpinAt = res.nextSpinAt; lockUntil(); }
+        else { btn.disabled = false; btn.textContent = 'SPIN'; msg.textContent = 'Spin failed — try again.'; }
+        return;
+      }
+      var center = WEDGE_CENTER[res.prize] || 0;
+      var targetMod = (360 - center) % 360, cur = ((wheelRot % 360) + 360) % 360;
+      wheelRot += 5 * 360 + ((targetMod - cur + 360) % 360) + (Math.random() * 22 - 11);
+      wheelEl.style.transform = 'rotate(' + wheelRot + 'deg)';
+      setTimeout(function () {
+        var m = ITEM_META[res.prize] || { emoji: '🎁', name: res.prize };
+        msg.innerHTML = m.emoji + ' <b>' + esc(m.name) + '</b>! Banked to your Normie Quest inventory — open the game to use it.';
+        st.nextSpinAt = res.nextSpinAt; lockUntil();
+      }, 4300);
+    };
   }
 
   // remembered auth → straight in

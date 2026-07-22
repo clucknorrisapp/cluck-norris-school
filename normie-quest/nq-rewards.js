@@ -1,0 +1,95 @@
+// Normie Quest — wallet-bound REWARD store (the premium-perk backbone).
+//
+// Winnings (from the VIP daily wheel, owner grants, leaderboard airdrops) are queued PER WALLET
+// as pending game-boost items. The game client claims them one at a time into the player's Item
+// Reserve on their next login — so a prize won on the lounge wheel shows up in-game on ANY device.
+//
+// These are IN-GAME items (disc / vial / shield), NOT tokens: no funds move, nothing to sign, no
+// hot wallet, no anti-dump problem. Pure retention value. If token payouts are ever added they
+// go through the owner-signed airdropper, never this file.
+//
+// Store: /data/nq-rewards.json  { pending: { <wallet>:[item,...] }, spins: { <wallet>:"YYYY-MM-DD" } }
+
+const fs = require('fs');
+const path = require('path');
+
+const ITEMS = { disc: 1, vial: 1, shield: 1 };          // valid grantable items (mirror RESERVE_ITEMS in the game)
+const MAX_PENDING = 20;                                  // cap a wallet's queue so it can't grow unbounded
+// Wheel prize table — EVERY spin wins something (loyalty program, not a lottery). Weighted.
+const WHEEL = [
+  { item: 'disc', weight: 40 },
+  { item: 'vial', weight: 35 },
+  { item: 'shield', weight: 25 },
+];
+
+function storePath() { return path.join(process.env.DATA_DIR || '/data', 'nq-rewards.json'); }
+function load() {
+  try { const o = JSON.parse(fs.readFileSync(storePath(), 'utf8')); return o && typeof o === 'object' ? o : {}; }
+  catch (e) { return {}; }
+}
+function save(o) { try { fs.writeFileSync(storePath(), JSON.stringify(o)); return true; } catch (e) { return false; } }
+function utcDay(ts) { return new Date(ts == null ? Date.now() : ts).toISOString().slice(0, 10); }
+
+// ---- pending queue ------------------------------------------------------
+function grant(wallet, item, nowMs) {
+  const w = String(wallet || '');
+  if (!w || !ITEMS[item]) return { ok: false, error: 'bad_grant' };
+  const s = load();
+  s.pending = s.pending || {};
+  const q = (s.pending[w] = s.pending[w] || []);
+  if (q.length >= MAX_PENDING) return { ok: false, error: 'queue_full', pending: q.length };
+  q.push(item);
+  save(s);
+  return { ok: true, item, pending: q.length };
+}
+function pendingCount(wallet) {
+  const s = load(); const q = (s.pending && s.pending[String(wallet || '')]) || []; return q.length;
+}
+// Claim ONE item (the reserve holds one at a time); the client grants it and calls again when free.
+function claimOne(wallet) {
+  const w = String(wallet || '');
+  const s = load();
+  const q = (s.pending && s.pending[w]) || [];
+  if (!q.length) return { ok: true, item: null, pending: 0 };
+  const item = q.shift();
+  if (!q.length) delete s.pending[w];
+  save(s);
+  return { ok: true, item, pending: q.length };
+}
+
+// ---- daily wheel --------------------------------------------------------
+function canSpin(wallet, nowMs) {
+  const s = load(); const last = (s.spins && s.spins[String(wallet || '')]) || null;
+  return last !== utcDay(nowMs);
+}
+function nextSpinAt(nowMs) {
+  const d = new Date(nowMs == null ? Date.now() : nowMs);
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1, 0, 0, 0, 0);   // next UTC midnight
+}
+function pickPrize() {
+  const total = WHEEL.reduce((n, p) => n + p.weight, 0);
+  // crypto-strong pick (server-authoritative; every spin wins, odds published below)
+  let r = (require('crypto').randomInt(0, total));
+  for (const p of WHEEL) { if (r < p.weight) return p.item; r -= p.weight; }
+  return WHEEL[0].item;
+}
+function spin(wallet, nowMs) {
+  const w = String(wallet || '');
+  if (!w) return { ok: false, error: 'no_wallet' };
+  if (!canSpin(w, nowMs)) return { ok: false, error: 'already_spun', nextSpinAt: nextSpinAt(nowMs) };
+  const item = pickPrize();
+  const g = grant(w, item, nowMs);
+  if (!g.ok) return { ok: false, error: g.error, nextSpinAt: nextSpinAt(nowMs) };
+  const s = load();
+  s.spins = s.spins || {};
+  s.spins[w] = utcDay(nowMs);
+  save(s);
+  return { ok: true, prize: item, pending: g.pending, nextSpinAt: nextSpinAt(nowMs) };
+}
+// Published odds (shown on the wheel — provably-honest since it's server-authoritative + declared).
+function odds() {
+  const total = WHEEL.reduce((n, p) => n + p.weight, 0);
+  return WHEEL.map((p) => ({ item: p.item, pct: Math.round((p.weight / total) * 100) }));
+}
+
+module.exports = { grant, pendingCount, claimOne, canSpin, nextSpinAt, spin, odds, ITEMS };
