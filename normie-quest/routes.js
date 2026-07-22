@@ -563,4 +563,13 @@ router.use('/normie-quest/sfx', express.static(path.join(__dirname, 'public', 's
   setHeaders: (res) => { res.set('X-Robots-Tag', 'noindex, nofollow'); },
 }));
 
+// ---- modern world backdrops (worlds 16+) — hand-painted AI art served as PNGs -----
+// Drop files at normie-quest/public/worlds/<key>.png; the game's Boot preload loads them as
+// textures (bgArt on a level def). Missing → clean 404 and the level uses the procedural sky.
+router.use('/normie-quest/worlds', express.static(path.join(__dirname, 'public', 'worlds'), {
+  maxAge: '7d',
+  fallthrough: false,
+  setHeaders: (res) => { res.set('X-Robots-Tag', 'noindex, nofollow'); },
+}));
+
 module.exports = router;
