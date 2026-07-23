@@ -25,6 +25,7 @@
  *   W1  gap wider than 168px (needs a committed full-speed jump)
  *   W7  two ground enemies stacked < 24px apart (render as one)
  *   W8  a coin stacked on top of a powerup or airdrop
+ *   W9  a VIP-world level missing the 'solana' SOL-ammo powerup
  *   W2  key higher than a double jump from ground with no platform near it
  *
  * Usage: node normie-quest/test/nq-geometry-check.cjs [--json]
@@ -256,6 +257,11 @@ function check(lv) {
     (lv.powerups || []).forEach(p => { if (Math.abs(c[0] - p[1]) < 18 && Math.abs(c[1] - p[2]) < 18) warns.push(`W8 coin (${c[0]},${c[1]}) stacked on powerup ${p[0]} x${p[1]}`); });
     (lv.airdrops || []).forEach(a => { if (Math.abs(c[0] - a[0]) < 18 && Math.abs(c[1] - a[1]) < 18) warns.push(`W8 coin (${c[0]},${c[1]}) stacked on airdrop x${a[0]}`); });
   });
+
+  // W9: a VIP-world level with no 'solana' powerup (owner 2026-07-23: 'no solana mode anywhere').
+  // The solana pickup grants SOL-ammo throwing mode — every premium level should offer it. Catches
+  // hand-rebuilds that drop it (world 13 shipped without any until this was flagged).
+  if (lv.vip && !(lv.powerups || []).some(p => p[0] === 'solana')) warns.push(`W9 vip level has no solana powerup (SOL-ammo mode)`);
 
   // W5: MONOTONOUS gaps (owner rule 2026-07-23: 'not all of them should be the same width').
   // With 4+ gaps, if every gap is within 24px of the same width, the level reads as identical
