@@ -129,22 +129,36 @@ function check(lv) {
     });
   });
 
-  // F6: ? bonus-blocks must not overlap walls, platforms, or each other (owner sweep 2026-07-23 —
-  // hand-authored 13-1 stacked bonusblocks at the same x as platforms → blocks rendered inside blocks).
+  // F6: a ? bonus-block must not overlap ANY solid/interactive object — walls, platforms,
+  // pump-dumps, rug-plats, yield-lifts, gates, honeypots, caches, movers, or another bonusblock
+  // (owner sweep 2026-07-23: ? blocks were rendering jammed inside every kind of block).
+  const overlap = (ax1, ay1, ax2, ay2, bx1, by1, bx2, by2) => ax2 > bx1 && ax1 < bx2 && ay2 > by1 && ay1 < by2;
   const BB = (lv.bonusblocks || []).map(bb => ({ x: bb[0], y: (bb[2] != null ? bb[2] : (H - 96)) }));
   BB.forEach(bb => {
-    const bl = bb.x - 12, br = bb.x + 12, bt = bb.y - 12, bd = bb.y + 12;
-    (lv.walls || []).forEach(w2 => {
-      const x1 = w2[0] - 4, x2 = w2[0] + (w2[3] || 1) * TILE + 4, top = GY - w2[1] * TILE;
-      if (br > x1 && bl < x2 && bd > top) fails.push(`F6 bonusblock at (${bb.x},${bb.y}) overlaps wall x${w2[0]}`);
-    });
-    (lv.plats || []).forEach(pl => {
-      const x1 = pl[0] - 4, x2 = pl[0] + pl[1] * TILE + 4;
-      if (br > x1 && bl < x2 && bd > pl[2] - 14 && bt < pl[2] + 14) fails.push(`F6 bonusblock at (${bb.x},${bb.y}) overlaps plat x${pl[0]}@${pl[2]}`);
-    });
+    const bl = bb.x - 12, bt = bb.y - 12, br = bb.x + 12, bd = bb.y + 12;
+    const hit = (what) => fails.push(`F6 bonusblock at (${bb.x},${bb.y}) overlaps ${what}`);
+    (lv.walls || []).forEach(w2 => { const x1 = w2[0] - 4, x2 = w2[0] + (w2[3] || 1) * TILE + 4, top = GY - w2[1] * TILE; if (overlap(bl, bt, br, bd, x1, top, x2, GY)) hit(`wall x${w2[0]}`); });
+    (lv.plats || []).forEach(p => { const x1 = p[0] - 4, x2 = p[0] + p[1] * TILE + 4; if (overlap(bl, bt, br, bd, x1, p[2] - 14, x2, p[2] + 14)) hit(`plat x${p[0]}`); });
+    (lv.pumpdumps || []).forEach(p => { if (overlap(bl, bt, br, bd, p[0] - 16, p[1] - 16, p[0] + 16, p[1] + 16)) hit(`pumpdump x${p[0]}`); });
+    (lv.rugplats || []).forEach(p => { const x1 = p[0] - 2, x2 = p[0] + p[1] * TILE + 2; if (overlap(bl, bt, br, bd, x1, p[2] - 2, x2, p[2] + TILE + 2)) hit(`rugplat x${p[0]}`); });
+    (lv.yields || []).forEach(p => { const yb = (p[1] != null ? p[1] : H - 96); if (overlap(bl, bt, br, bd, p[0] - 16, yb - 16, p[0] + 16, yb + 16)) hit(`yield x${p[0]}`); });
+    (lv.gates || []).forEach(g => { if (overlap(bl, bt, br, bd, g[0] - 8, GY - 84, g[0] + 8, GY)) hit(`gate x${g[0]}`); });
+    (lv.honeypots || []).forEach(h2 => { if (overlap(bl, bt, br, bd, h2[0] - 18, h2[1] - 18, h2[0] + 18, h2[1] + 18)) hit(`honeypot x${h2[0]}`); });
+    (lv.caches || []).forEach(c => { const cy = (c[1] != null ? c[1] : GY - 18); if (overlap(bl, bt, br, bd, c[0] - 14, cy - 14, c[0] + 14, cy + 14)) hit(`cache x${c[0]}`); });
+    (lv.movers || []).forEach(mv => { if (overlap(bl, bt, br, bd, mv[0] - 26, mv[1] - 10, mv[0] + 26, mv[1] + 10)) hit(`mover x${mv[0]}`); });
   });
   for (let a = 0; a < BB.length; a++) for (let b = a + 1; b < BB.length; b++) {
     if (Math.abs(BB[a].x - BB[b].x) < 26 && Math.abs(BB[a].y - BB[b].y) < 26) fails.push(`F6 bonusblocks overlap at x${BB[a].x} / x${BB[b].x}`);
+  }
+
+  // W5: MONOTONOUS gaps (owner rule 2026-07-23: 'not all of them should be the same width').
+  // With 4+ gaps, if every gap is within 24px of the same width, the level reads as identical
+  // hops over and over — vary them (some narrow bare hops, some wide planked crossings).
+  if (gaps.length >= 4) {
+    const ws = gaps.map(g => g[1] - g[0]);
+    const spread = Math.max(...ws) - Math.min(...ws);
+    const distinct = new Set(ws.map(w => Math.round(w / 24))).size;
+    if (spread <= 24 || distinct <= 2) warns.push(`W5 gaps are monotonous (${gaps.length} gaps, widths ${ws.join('/')}) — vary the widths`);
   }
 
   // W3/W4: powerup DISTRIBUTION (panel finding on 13-2 — generalized to every level).
