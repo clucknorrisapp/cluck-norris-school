@@ -1699,9 +1699,15 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       this.hasKey=true; this.keyIcon.setAlpha(1);
       if(this.key){ this.tweens.killTweensOf(this.key); this.key.destroy(); this.key=null; }
       this.flash('KEY FROM THE SPEAKEASY!','#ffd23f'); }
-    this.powerBarBg=this.hb(this.add.rectangle(14,52,46,8,0x000000,0.55).setOrigin(0,0.5).setDepth(20).setStrokeStyle(1,0x8f89b0).setVisible(false));
-    this.powerBar=this.hb(this.add.rectangle(15,52,44,5,0x3dff6e).setOrigin(0,0.5).setDepth(21).setVisible(false));
-    this.powerLabel=this.hb(this.add.text(64,52,'',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffd23f'}).setOrigin(0,0.5).setDepth(21).setVisible(false));
+    // MULTI-POWER meters (panel finding 2026-07-22: two active powers showed ONE bar) — a small
+    // pool of stacked rows, one bar+label per simultaneously-active power (4 covers real play).
+    this.powerRows=[];
+    for(var _pr=0;_pr<4;_pr++){ var _py=52+_pr*13;
+      this.powerRows.push({
+        bg:this.hb(this.add.rectangle(14,_py,46,8,0x000000,0.55).setOrigin(0,0.5).setDepth(20).setStrokeStyle(1,0x8f89b0).setVisible(false)),
+        bar:this.hb(this.add.rectangle(15,_py,44,5,0x3dff6e).setOrigin(0,0.5).setDepth(21).setVisible(false)),
+        label:this.hb(this.add.text(64,_py,'',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffd23f'}).setOrigin(0,0.5).setDepth(21).setVisible(false))
+      }); }
     // MANUAL THROW ammo — a Solana disc + count, under the key (top-right)
     this.throwIcon=this.hb(this.add.image(W-30,52,'solana').setDepth(20)); this.throwIcon.setScale(15/this.throwIcon.height);
     this.throwCountTxt=this.hb(this.add.text(W-40,52,'x'+this.throwAmmo,{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#14f195'}).setOrigin(1,0.5).setDepth(21));
@@ -3573,19 +3579,21 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       else { this.playerGlow.color=powCol; this.playerGlow.outerStrength = anyPower ? (5+Math.sin(now/120)*2) : Math.max(0,this.playerGlow.outerStrength-0.4); }
     }
 
-    // active power-up indicator: label + shrinking timer bar
-    var pw=null;
-    if(mw) pw=['MEGA WHALE',this.megaWhaleUntil,PREMIUM?13000:10000,0x2f7fff];
-    else if(now<this.whaleUntil) pw=['WHALE',this.whaleUntil,WHALE_MS,0x2f7fff];
-    else if(now<this.coldUntil) pw=['COLD',this.coldUntil,COLD_MS,0x9fe8ff];
-    else if(now<this.omegaUntil) pw=['GIGA',this.omegaUntil,this.levelIdx>=18?9000:8000,0xffa020];
-    else if(now<this.solanaUntil) pw=['SOLANA',this.solanaUntil,9000,0x14f195];
-    else if(now<this.moonUntil) pw=['MOON',this.moonUntil,9000,0xffd23f];
-    else if(now<this.shieldUntil) pw=['DIAMOND',this.shieldUntil,9000,0x66ddff];
-    else if(now<this.bullUntil) pw=['BULL',this.bullUntil,11000,0x3dff6e];
-    else if(now<this.caffeineUntil) pw=['CAFFEINE',this.caffeineUntil,11000,0xfff2a0];
-    if(pw){ var fr=Phaser.Math.Clamp((pw[1]-now)/pw[2],0,1); this.powerBar.width=44*fr; this.powerBar.fillColor=pw[3]; this.powerBar.setVisible(true); this.powerBarBg.setVisible(true); this.powerLabel.setText(pw[0]).setColor('#'+('000000'+pw[3].toString(16)).slice(-6)).setVisible(true); }
-    else { this.powerBar.setVisible(false); this.powerBarBg.setVisible(false); this.powerLabel.setVisible(false); }
+    // active power-up indicators: ONE label + shrinking timer bar PER active power, stacked.
+    // (Panel finding: the old else-if chain showed a single meter when two powers overlapped.)
+    var actPw=[];
+    if(mw) actPw.push(['MEGA WHALE',this.megaWhaleUntil,PREMIUM?13000:10000,0x2f7fff]);
+    if(now<this.whaleUntil) actPw.push(['WHALE',this.whaleUntil,WHALE_MS,0x2f7fff]);
+    if(now<this.coldUntil) actPw.push(['COLD',this.coldUntil,COLD_MS,0x9fe8ff]);
+    if(now<this.omegaUntil) actPw.push(['GIGA',this.omegaUntil,this.levelIdx>=18?9000:8000,0xffa020]);
+    if(now<this.solanaUntil) actPw.push(['SOLANA',this.solanaUntil,9000,0x14f195]);
+    if(now<this.moonUntil) actPw.push(['MOON',this.moonUntil,9000,0xffd23f]);
+    if(now<this.shieldUntil) actPw.push(['DIAMOND',this.shieldUntil,9000,0x66ddff]);
+    if(now<this.bullUntil) actPw.push(['BULL',this.bullUntil,11000,0x3dff6e]);
+    if(now<this.caffeineUntil) actPw.push(['CAFFEINE',this.caffeineUntil,11000,0xfff2a0]);
+    for(var _ri=0;_ri<this.powerRows.length;_ri++){ var _row=this.powerRows[_ri], _p=actPw[_ri];
+      if(_p){ var fr=Phaser.Math.Clamp((_p[1]-now)/_p[2],0,1); _row.bar.width=44*fr; _row.bar.fillColor=_p[3]; _row.bar.setVisible(true); _row.bg.setVisible(true); _row.label.setText(_p[0]).setColor('#'+('000000'+_p[3].toString(16)).slice(-6)).setVisible(true); }
+      else { _row.bar.setVisible(false); _row.bg.setVisible(false); _row.label.setVisible(false); } }
 
     // --- frame animation: swap Normie's pose sprite by state (idle / run cycle / jump) ---
     // all four frames share one canvas size, so setTexture keeps scale + body constant.
