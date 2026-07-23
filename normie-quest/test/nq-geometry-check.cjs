@@ -21,6 +21,7 @@
  *   F9  a spike embedded in a wall body (hidden / pokes out)
  *   F10 an airdrop collectible buried inside a wall or platform
  *   F11 a ground enemy stuck inside a wall body
+ *   F12 a moving platform with a malformed [x,y,axis,range,speed] def (NaN → dead physics)
  *   W1  gap wider than 168px (needs a committed full-speed jump)
  *   W7  two ground enemies stacked < 24px apart (render as one)
  *   W8  a coin stacked on top of a powerup or airdrop
@@ -223,6 +224,16 @@ function check(lv) {
       const x1 = p[0] - 6, x2 = p[0] + p[1] * TILE + 6;
       if (a[0] >= x1 && a[0] <= x2 && a[1] >= p[2] - 6 && a[1] <= p[2] + 16) fails.push(`F10 airdrop (${a[0]},${a[1]}) buried in plat x${p[0]}@${p[2]}`);
     });
+  });
+
+  // F12: a moving platform MUST be [x, y, axis('x'|'y'), range>0, speed>0]. A short/malformed def
+  // leaves range/speed undefined → the mover tick sets velocity to NaN → the body's position goes
+  // NaN → it poisons Arcade Physics' RTree broad-phase and ALL overlaps silently stop firing
+  // (coins can't be grabbed, no damage). This shipped once (13-2, 2026-07-23) — never again.
+  (lv.movers || []).forEach(mv => {
+    if (mv[2] !== 'x' && mv[2] !== 'y') fails.push(`F12 mover x${mv[0]} axis is ${JSON.stringify(mv[2])} (must be 'x' or 'y') — [x,y,axis,range,speed]`);
+    if (!(mv[3] > 0)) fails.push(`F12 mover x${mv[0]} range is ${JSON.stringify(mv[3])} (must be > 0)`);
+    if (!(mv[4] > 0)) fails.push(`F12 mover x${mv[0]} speed is ${JSON.stringify(mv[4])} (must be > 0)`);
   });
 
   // F11 / W7: enemy placement (owner worlds pass 2026-07-23). A ground enemy inside a wall body
