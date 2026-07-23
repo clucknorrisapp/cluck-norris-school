@@ -98,6 +98,25 @@ function check(lv) {
     }
   }
 
+  // F5: powerup buried in/behind an obstacle (owner sweep ask 2026-07-23 — the structure
+  // generator's avoid-list didn't include powerups, so walls could land on boosts).
+  // A powerup is buried if its point sits inside a WALL's tile rect, inside a PLAT's tile
+  // rect, or within 24px of a SPIKE (grabbing it would hurt — an unintended trap).
+  (lv.powerups || []).forEach(p => {
+    const px = p[1], py = p[2];
+    (lv.walls || []).forEach(w2 => {
+      const x1 = w2[0], x2 = w2[0] + (w2[3] || 1) * TILE, top = GY - w2[1] * TILE;
+      if (px >= x1 - 8 && px <= x2 + 8 && py >= top - 10) fails.push(`F5 powerup:${p[0]} at (${px},${py}) buried in wall x${x1}-${x2} (top ${top})`);
+    });
+    (lv.plats || []).forEach(pl => {
+      const x1 = pl[0], x2 = pl[0] + pl[1] * TILE, top = pl[2];
+      if (px >= x1 - 8 && px <= x2 + 8 && py >= top - 10 && py <= top + TILE + 10) fails.push(`F5 powerup:${p[0]} at (${px},${py}) inside plat x${x1}-${x2}@${top}`);
+    });
+    (lv.spikes || []).forEach(s => {
+      if (Math.abs(px - (s[0] + TILE / 2)) < 24 && py >= 200) fails.push(`F5 powerup:${p[0]} at (${px},${py}) sits on spikes at x${s[0]}`);
+    });
+  });
+
   // W3/W4: powerup DISTRIBUTION (panel finding on 13-2 — generalized to every level).
   // W3 = cluster: two powerups on ~one screen (<350px). W4 = desert: with 3+ powerups, the
   // first sits past 45% of the level or some stretch longer than half the level has none.
