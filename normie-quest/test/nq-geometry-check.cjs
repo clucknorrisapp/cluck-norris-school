@@ -20,7 +20,10 @@
  *   F8  two structural objects overlapping each other ('blocks behind blocks')
  *   F9  a spike embedded in a wall body (hidden / pokes out)
  *   F10 an airdrop collectible buried inside a wall or platform
+ *   F11 a ground enemy stuck inside a wall body
  *   W1  gap wider than 168px (needs a committed full-speed jump)
+ *   W7  two ground enemies stacked < 24px apart (render as one)
+ *   W8  a coin stacked on top of a powerup or airdrop
  *   W2  key higher than a double jump from ground with no platform near it
  *
  * Usage: node normie-quest/test/nq-geometry-check.cjs [--json]
@@ -220,6 +223,27 @@ function check(lv) {
       const x1 = p[0] - 6, x2 = p[0] + p[1] * TILE + 6;
       if (a[0] >= x1 && a[0] <= x2 && a[1] >= p[2] - 6 && a[1] <= p[2] + 16) fails.push(`F10 airdrop (${a[0]},${a[1]}) buried in plat x${p[0]}@${p[2]}`);
     });
+  });
+
+  // F11 / W7: enemy placement (owner worlds pass 2026-07-23). A ground enemy inside a wall body
+  // is stuck/hidden (FAIL). Two ground enemies < 24px apart render as one blurry sprite (WARN).
+  const GROUND_FOE = e => !['ghost', 'wormhole', 'miniworm', 'drone', 'mevdrone', 'laserbot', 'bat'].includes(e[0]);
+  const gfoes = (lv.enemies || []).filter(GROUND_FOE);
+  gfoes.forEach(e => {
+    (lv.walls || []).forEach(w => {
+      const x1 = w[0], x2 = w[0] + (w[3] || 1) * TILE, top = GY - w[1] * TILE;
+      if (e[1] > x1 + 2 && e[1] < x2 - 2 && e[2] > top) fails.push(`F11 enemy ${e[0]} at x=${e[1]} stuck inside wall x${w[0]}`);
+    });
+  });
+  const gs = gfoes.map(e => ({ t: e[0], x: e[1], y: e[2] })).sort((a, b) => a.x - b.x);
+  for (let i = 1; i < gs.length; i++) {
+    if (gs[i].x - gs[i - 1].x < 24 && Math.abs(gs[i].y - gs[i - 1].y) < 30) warns.push(`W7 enemies stacked: ${gs[i-1].t} x${gs[i-1].x} / ${gs[i].t} x${gs[i].x} (<24px)`);
+  }
+
+  // W8: a coin sitting on top of a powerup or airdrop reads as a messy pickup stack — space it out.
+  (lv.coins || []).forEach(c => {
+    (lv.powerups || []).forEach(p => { if (Math.abs(c[0] - p[1]) < 18 && Math.abs(c[1] - p[2]) < 18) warns.push(`W8 coin (${c[0]},${c[1]}) stacked on powerup ${p[0]} x${p[1]}`); });
+    (lv.airdrops || []).forEach(a => { if (Math.abs(c[0] - a[0]) < 18 && Math.abs(c[1] - a[1]) < 18) warns.push(`W8 coin (${c[0]},${c[1]}) stacked on airdrop x${a[0]}`); });
   });
 
   // W5: MONOTONOUS gaps (owner rule 2026-07-23: 'not all of them should be the same width').
