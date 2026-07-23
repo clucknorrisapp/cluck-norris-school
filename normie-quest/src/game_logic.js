@@ -1158,7 +1158,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // Drain gamepad edge-latches left over from menu navigation: the START press that launched
     // this level also set pauseEdge (and anyBtnEdge/jumpEdge), so the first update() would
     // instantly pause the fresh run / fire a phantom buffered jump at spawn.
-    try{ if(window.__NQ_PAD){ window.__NQ_PAD.pauseEdge=false; window.__NQ_PAD.anyBtnEdge=false; window.__NQ_PAD.jumpEdge=false; } }catch(e){}
+    try{ if(window.__NQ_PAD){ window.__NQ_PAD.pauseEdge=false; window.__NQ_PAD.anyBtnEdge=false; window.__NQ_PAD.jumpEdge=false; window.__NQ_PAD.useEdge=false; } }catch(e){}
     // DOM-overlay hooks (feedback modal pauses the game while a tester types; reassigned each
     // level so they always point at the LIVE scene instance)
     try{ var _sc=this; window.__NQ_PAUSE=function(){ if(!_sc.over&&!_sc.paused){ _sc.pauseGame(false); return true; } return false; };
@@ -1724,10 +1724,12 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var _rx0=92,_ry=30,_rgap=23,_rself=this;
     for(var _si=0;_si<RESERVE_SLOTS;_si++){ (function(si){
       var bx=_rx0+si*_rgap;
-      var box=_rself.hb(_rself.add.rectangle(bx,_ry,20,20,0x161228,0.85).setStrokeStyle(1.5,0x3a3456).setDepth(20).setInteractive({useHandCursor:true}));
+      // NOTE: no setInteractive/per-object tap here — per-object hit areas are unreliable under
+      // the 2x-zoom HUD container (iPad taps never landed). The scene-level pointerdown zone
+      // handler (see input setup) resolves slot taps from raw pointer coords instead.
+      var box=_rself.hb(_rself.add.rectangle(bx,_ry,20,20,0x161228,0.85).setStrokeStyle(1.5,0x3a3456).setDepth(20));
       var ic=_rself.hb(_rself.add.image(bx,_ry,'solana').setDepth(21).setAlpha(0));
       var hn=_rself.hb(_rself.add.text(bx-9,_ry-9,String(si+1),{fontFamily:'"Press Start 2P"',fontSize:'7px',color:'#ffd23f'}).setOrigin(0,0).setDepth(21).setAlpha(0.3));
-      box.on('pointerdown',function(){ _rself.useReserve(si); });   // tap a slot to spend it (mobile + desktop)
       _rself.reserveBoxes.push(box); _rself.reserveIcons.push(ic); _rself.reserveHints.push(hn); _rself._reservePulse.push(null);
     })(_si); }
     this.updateReserveHud();
@@ -1749,7 +1751,16 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.cursors=this.input.keyboard.createCursorKeys(); this.keys=this.input.keyboard.addKeys('W,A,S,D,SPACE,F,X,Q,E,ONE,TWO,THREE');
     // PAUSE keys: while paused, ANY key resumes; while playing, P / Esc pause. (Touch: ⏸ hotspot in update; tap resumes.)
     this.input.keyboard.on('keydown',function(e){ if(self.paused){ self.resumeGame(); } else if(e.key==='p'||e.key==='P'||e.key==='Escape'){ self.pauseGame(false); } });
-    this.input.on('pointerdown',function(){ if(self.paused) self.resumeGame(); });   // tap anywhere resumes
+    // tap anywhere resumes; otherwise a tap in the INVENTORY strip spends that slot. Slot taps are
+    // resolved HERE with raw zoom-immune pointer coords (panel finding 2026-07-22: the per-object
+    // box.on('pointerdown') hit areas are unreliable under the 2x-zoom HUD container — iPad taps
+    // never landed). Desktop clicks route through the same zone, so mouse + touch behave alike.
+    this.input.on('pointerdown',function(ptr){
+      if(self.paused){ self.resumeGame(); return; }
+      try{ var gx=ptr.x/self.scale.width*W, gy=ptr.y/self.scale.height*H;
+        if(gy>=16&&gy<=44){ for(var _si=0;_si<RESERVE_SLOTS;_si++){ if(Math.abs(gx-(92+_si*23))<=12){ self.useReserve(_si); return; } } }
+      }catch(e){}
+    });
     // TEST BUILD: expose the current level + a "back to LEVEL SELECT" hook to the DOM overlay
     // (a reliable HTML button — in-canvas HUD hit areas are unreliable under the 2x-zoom container).
     // Press L on desktop, or tap the overlay's ≡ Levels button on any device.
@@ -3537,6 +3548,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var _padP=(typeof window!=='undefined')?window.__NQ_PAD:null, _padEdge=!!(_padP&&_padP.jumpEdge);
     if((jump&&!this.prevJump) || _padEdge) this.jumpBufferAt=now;
     if(_padP&&_padEdge) _padP.jumpEdge=false;   // consume
+    if(_padP&&_padP.useEdge){ _padP.useEdge=false; this.useReserve(); }   // gamepad L2/R2: spend the first inventory slot
     this.prevJump=rawJump;
     if(now-this.jumpBufferAt<130 && this.jumpsLeft>0){
       p.setVelocityY(now<this.bullUntil?-540:-430); this.jumpsLeft--; this.isJumping=true; this.jumpBufferAt=-9999; SFX.jump();   // bull market = mega jump
@@ -4556,7 +4568,7 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
   // JUMP = a bottom/top face button (+ d-pad up); THROW = the OTHER face buttons + shoulders.
   function loadMap(){ try{ var m=JSON.parse(localStorage.getItem('nqPadMap')||'null'); if(m&&Array.isArray(m.jump)&&Array.isArray(m.throw)&&m.jump.length&&m.throw.length) return m; }catch(e){} return null; }
   var padMap = loadMap();
-  var DEF_JUMP=[0,3], DEF_THROW=[1,2,4,5,6,7];
+  var DEF_JUMP=[0,3], DEF_THROW=[1,2,4,5], DEF_USE=[6,7];   // L2/R2 triggers = USE INVENTORY ITEM (carved out of throw 2026-07-23 — face+shoulder buttons still throw)
 
   function ensureUI(){
     if(uiReady || typeof document==='undefined') return; uiReady=true;
@@ -4634,7 +4646,7 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
   // UP folds into JUMP, a stuck axis keeps JUMP true forever so the jump button never makes a fresh
   // rising edge → "pressing right + jump sometimes doesn't jump." Baseline each axis at connect and
   // only treat an axis that RESTS near centre (a real stick / d-pad-on-axis) as a direction source.
-  var axRest=null, prevJb=false, prevUp=false, prevStart=false, prevAny=false, comboAt=0, comboFired=false;
+  var axRest=null, prevJb=false, prevUp=false, prevUseB=false, prevStart=false, prevAny=false, comboAt=0, comboFired=false;
   function axUsable(i){ return axRest && Math.abs(axRest[i]||0) < 0.35; }
   function poll(){
     var gp=anyPad();
@@ -4691,6 +4703,12 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
     // check. This is what guarantees "right + jump" jumps every time.
     if((jumpBtn && !prevJb) || (up && !prevUp)) P.jumpEdge=true;
     prevJb=jumpBtn; prevUp=up;
+    // USE-ITEM LATCH (L2/R2 by default): rising edge -> P.useEdge, consumed by the game update
+    // (spends the first filled inventory slot). Custom remaps that claimed 6/7 for throw still win
+    // because throw is checked from the custom map; useB only reads the dedicated DEF_USE pair.
+    var useB=anyOf((padMap&&padMap.use)?padMap.use:DEF_USE);
+    if(useB && !prevUseB) P.useEdge=true;
+    prevUseB=useB;
     P.left=left; P.right=right; P.jump=jump; P.down=(down && !up); P.throw=throwB;
     window.__NQ_GAMEPAD_ACTIVE = true;
     if(dotEl && dotEl.style.display==='none'){ dotEl.style.display='block'; }
