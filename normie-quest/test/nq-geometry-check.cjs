@@ -52,12 +52,24 @@ function check(lv) {
   const platSpan = p => ({ x1: p[0], x2: p[0] + p[1] * TILE, top: p[2] });
 
   // F1/W1: gap width vs jump range (a platform overlapping the gap span at a sane height bridges it)
+  // footing = anything you can land/run on that overlaps the gap span: a platform, a plank run,
+  // a pump-dump, a mover, or a peg run (all provide a crossing). A bare wide gap is a leap of faith.
+  const footingOver = (g) => {
+    if (plats.map(platSpan).some(s => s.x2 > g[0] && s.x1 < g[1] && s.top >= 60 && s.top <= GY - 20)) return true;
+    if ((lv.planks || []).some(p => { const x1 = p[0], x2 = p[0] + (p[1] || 3) * TILE; return x2 > g[0] && x1 < g[1]; })) return true;
+    if ((lv.pegs || []).some(p => { const x1 = p[0], x2 = p[0] + (p[1] || 3) * TILE; return x2 > g[0] && x1 < g[1]; })) return true;
+    if ((lv.pumpdumps || []).some(p => p[0] > g[0] - 24 && p[0] < g[1] + 24)) return true;
+    if ((lv.movers || []).some(mv => mv[0] > g[0] - 40 && mv[0] < g[1] + 40)) return true;
+    return false;
+  };
   gaps.forEach(g => {
     const wpx = g[1] - g[0];
     if (wpx > SAFE_GAP) {
-      const bridged = plats.map(platSpan).some(s => s.x2 > g[0] && s.x1 < g[1] && s.top >= 60 && s.top <= GY - 20);
-      if (!bridged) fails.push(`F1 gap ${g[0]}-${g[1]} is ${wpx}px (> ${SAFE_GAP}) with no bridging platform`);
-    } else if (wpx > WARN_GAP) warns.push(`W1 gap ${g[0]}-${g[1]} is ${wpx}px (full-speed jump required)`);
+      if (!footingOver(g)) fails.push(`F1 gap ${g[0]}-${g[1]} is ${wpx}px (> ${SAFE_GAP}) with no footing (platform/plank/pumpdump/mover) over it`);
+    } else if (wpx > WARN_GAP && !footingOver(g)) {
+      // owner rule 2026-07-23: a wide-ish gap with nothing over it is a bare leap — flag it.
+      warns.push(`W1 gap ${g[0]}-${g[1]} is ${wpx}px and BARE — add footing over it or narrow it`);
+    }
     if (g[0] < SPAWN_RUNWAY) fails.push(`F4 gap ${g[0]}-${g[1]} starts inside the spawn runway (< ${SPAWN_RUNWAY})`);
     if (g[1] > (lv.width || 5200)) fails.push(`F4b gap ${g[0]}-${g[1]} extends past level width ${lv.width}`);
   });
