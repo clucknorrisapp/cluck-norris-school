@@ -151,6 +151,20 @@ function check(lv) {
     if (Math.abs(BB[a].x - BB[b].x) < 26 && Math.abs(BB[a].y - BB[b].y) < 26) fails.push(`F6 bonusblocks overlap at x${BB[a].x} / x${BB[b].x}`);
   }
 
+  // F7: coins buried in a wall or platform body (owner 2026-07-23: 'coin partially blocked by
+  // block'). A coin resting ON TOP of a platform/wall is fine; one embedded in the tile is not.
+  (lv.coins || []).forEach(c => {
+    const cx = c[0], cy = c[1];
+    (lv.walls || []).forEach(w2 => {
+      const x1 = w2[0] - 6, x2 = w2[0] + (w2[3] || 1) * TILE + 6, top = GY - w2[1] * TILE;
+      if (cx >= x1 && cx <= x2 && cy >= top - 4 && cy <= GY) fails.push(`F7 coin at (${cx},${cy}) buried in wall x${w2[0]}`);
+    });
+    (lv.plats || []).forEach(pl => {
+      const x1 = pl[0] - 6, x2 = pl[0] + pl[1] * TILE + 6;
+      if (cx >= x1 && cx <= x2 && cy >= pl[2] - 4 && cy <= pl[2] + 14) fails.push(`F7 coin at (${cx},${cy}) buried in plat x${pl[0]}@${pl[2]}`);
+    });
+  });
+
   // W5: MONOTONOUS gaps (owner rule 2026-07-23: 'not all of them should be the same width').
   // With 4+ gaps, if every gap is within 24px of the same width, the level reads as identical
   // hops over and over — vary them (some narrow bare hops, some wide planked crossings).
@@ -173,6 +187,11 @@ function check(lv) {
     if (pux[0] > wpx * 0.45) warns.push(`W4 powerup desert: first powerup at x=${pux[0]} (past 45% of ${wpx})`);
     for (let i = 1; i < pux.length; i++) {
       if (pux[i] - pux[i - 1] > wpx * 0.5) warns.push(`W4 powerup desert: ${pux[i] - pux[i - 1]}px stretch with none (x=${pux[i - 1]}→${pux[i]})`);
+    }
+    // W6 (owner 2026-07-23: '3 big power-ups within 2 window widths'): no 3+ powerups packed into
+    // one ~2-screen (960px) window — that's a clump, even if each pair is >350px apart.
+    for (let i = 0; i + 2 < pux.length; i++) {
+      if (pux[i + 2] - pux[i] < 960) warns.push(`W6 powerup clump: 3 powerups within ${pux[i + 2] - pux[i]}px (x=${pux[i]}..${pux[i + 2]})`);
     }
   }
   return { fails, warns };
