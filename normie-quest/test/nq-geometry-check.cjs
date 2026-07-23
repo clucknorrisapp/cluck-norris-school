@@ -117,6 +117,24 @@ function check(lv) {
     });
   });
 
+  // F6: ? bonus-blocks must not overlap walls, platforms, or each other (owner sweep 2026-07-23 —
+  // hand-authored 13-1 stacked bonusblocks at the same x as platforms → blocks rendered inside blocks).
+  const BB = (lv.bonusblocks || []).map(bb => ({ x: bb[0], y: (bb[2] != null ? bb[2] : (H - 96)) }));
+  BB.forEach(bb => {
+    const bl = bb.x - 12, br = bb.x + 12, bt = bb.y - 12, bd = bb.y + 12;
+    (lv.walls || []).forEach(w2 => {
+      const x1 = w2[0] - 4, x2 = w2[0] + (w2[3] || 1) * TILE + 4, top = GY - w2[1] * TILE;
+      if (br > x1 && bl < x2 && bd > top) fails.push(`F6 bonusblock at (${bb.x},${bb.y}) overlaps wall x${w2[0]}`);
+    });
+    (lv.plats || []).forEach(pl => {
+      const x1 = pl[0] - 4, x2 = pl[0] + pl[1] * TILE + 4;
+      if (br > x1 && bl < x2 && bd > pl[2] - 14 && bt < pl[2] + 14) fails.push(`F6 bonusblock at (${bb.x},${bb.y}) overlaps plat x${pl[0]}@${pl[2]}`);
+    });
+  });
+  for (let a = 0; a < BB.length; a++) for (let b = a + 1; b < BB.length; b++) {
+    if (Math.abs(BB[a].x - BB[b].x) < 26 && Math.abs(BB[a].y - BB[b].y) < 26) fails.push(`F6 bonusblocks overlap at x${BB[a].x} / x${BB[b].x}`);
+  }
+
   // W3/W4: powerup DISTRIBUTION (panel finding on 13-2 — generalized to every level).
   // W3 = cluster: two powerups on ~one screen (<350px). W4 = desert: with 3+ powerups, the
   // first sits past 45% of the level or some stretch longer than half the level has none.
