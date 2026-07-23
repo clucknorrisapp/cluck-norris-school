@@ -18,6 +18,8 @@
  *       from the ground (> 205px up) with no ladder platform beneath it
  *   F4  gap starts before x=380 (player spawn runway)
  *   F8  two structural objects overlapping each other ('blocks behind blocks')
+ *   F9  a spike embedded in a wall body (hidden / pokes out)
+ *   F10 an airdrop collectible buried inside a wall or platform
  *   W1  gap wider than 168px (needs a committed full-speed jump)
  *   W2  key higher than a double jump from ground with no platform near it
  *
@@ -195,6 +197,30 @@ function check(lv) {
     if (A.kind === 'plat' && B.kind === 'plat' && Math.abs(A.y1 - B.y1) < 6) continue; // stacked ledge — intended
     fails.push(`F8 ${A.kind}(${A.tag}) overlaps ${B.kind}(${B.tag}) [${ix}x${iy}px]`);
   }
+
+  // F9: a spike embedded in a wall (owner sweep 2026-07-23). A spike whose x-span overlaps a
+  // wall's body is either invisible (hidden behind the wall the player can't pass) or pokes out
+  // of the wall base — both look broken. Spikes belong on open ground, not inside a block.
+  (lv.spikes || []).forEach(s => {
+    const sx1 = s[0], sx2 = s[0] + TILE;
+    (lv.walls || []).forEach(w => {
+      const x1 = w[0], x2 = w[0] + (w[3] || 1) * TILE, top = GY - w[1] * TILE;
+      if (sx2 > x1 + 2 && sx1 < x2 - 2 && GY > top) fails.push(`F9 spike x${s[0]} embedded in wall x${w[0]}`);
+    });
+  });
+
+  // F10: an airdrop collectible buried inside a wall or platform body (owner sweep 2026-07-23).
+  // Airdrops float in the air to be grabbed; one inside a solid block can't be collected cleanly.
+  (lv.airdrops || []).forEach(a => {
+    (lv.walls || []).forEach(w => {
+      const x1 = w[0] - 6, x2 = w[0] + (w[3] || 1) * TILE + 6, top = GY - w[1] * TILE;
+      if (a[0] >= x1 && a[0] <= x2 && a[1] >= top - 6 && a[1] <= GY) fails.push(`F10 airdrop (${a[0]},${a[1]}) buried in wall x${w[0]}`);
+    });
+    (lv.plats || []).forEach(p => {
+      const x1 = p[0] - 6, x2 = p[0] + p[1] * TILE + 6;
+      if (a[0] >= x1 && a[0] <= x2 && a[1] >= p[2] - 6 && a[1] <= p[2] + 16) fails.push(`F10 airdrop (${a[0]},${a[1]}) buried in plat x${p[0]}@${p[2]}`);
+    });
+  });
 
   // W5: MONOTONOUS gaps (owner rule 2026-07-23: 'not all of them should be the same width').
   // With 4+ gaps, if every gap is within 24px of the same width, the level reads as identical
