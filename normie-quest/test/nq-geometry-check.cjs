@@ -17,6 +17,7 @@
  *   F3  platform top above the screen (topY < 40) or higher than a double jump
  *       from the ground (> 205px up) with no ladder platform beneath it
  *   F4  gap starts before x=380 (player spawn runway)
+ *   F8  two structural objects overlapping each other ('blocks behind blocks')
  *   W1  gap wider than 168px (needs a committed full-speed jump)
  *   W2  key higher than a double jump from ground with no platform near it
  *
@@ -164,6 +165,36 @@ function check(lv) {
       if (cx >= x1 && cx <= x2 && cy >= pl[2] - 4 && cy <= pl[2] + 14) fails.push(`F7 coin at (${cx},${cy}) buried in plat x${pl[0]}@${pl[2]}`);
     });
   });
+
+  // F8: two STRUCTURAL objects visually overlapping each other — 'blocks behind blocks'
+  // (owner 2026-07-23: a crate platform was jammed inside a brick wall's edge; a yield-lift
+  // buried in a wall's side; bounce pads overhanging a wall's top corner). F6 already owns any
+  // pair involving a ? bonus-block, so F8 covers the rest: walls, plats, rugplats, pump-dumps,
+  // yield-lifts, gates, honeypots, caches, movers, npcs, firebar hubs. Boxes mirror the game's
+  // rendering (same tuning as F6). A >=6px overlap in BOTH axes is a real clash (1px touches ok).
+  // Intended overlap whitelisted: two plats at the SAME top (a hand-built wider ledge).
+  const S = [];
+  const sp = (kind, x1, y1, x2, y2, tag) => S.push({ kind, x1, y1, x2, y2, tag });
+  (lv.walls || []).forEach(w => sp('wall', w[0], GY - w[1] * TILE, w[0] + (w[3] || 1) * TILE, GY, `x${w[0]}`));
+  (lv.plats || []).forEach(p => sp('plat', p[0], p[2] - 2, p[0] + p[1] * TILE, p[2] + 16, `x${p[0]}@${p[2]}`));
+  (lv.rugplats || []).forEach(p => sp('rugplat', p[0], p[2] - 2, p[0] + p[1] * TILE, p[2] + TILE, `x${p[0]}@${p[2]}`));
+  (lv.pumpdumps || []).forEach(p => sp('pumpdump', p[0] - 20, p[1] - 14, p[0] + 20, p[1] + 14, `x${p[0]}`));
+  (lv.yields || []).forEach(p => { const y = p[1] != null ? p[1] : H - 96; sp('yield', p[0] - 20, y - 14, p[0] + 20, y + 14, `x${p[0]}`); });
+  (lv.gates || []).forEach(g => sp('gate', g[0] - 10, GY - 90, g[0] + 10, GY, `x${g[0]}`));
+  (lv.honeypots || []).forEach(h2 => sp('honeypot', h2[0] - 18, h2[1] - 18, h2[0] + 18, h2[1] + 18, `x${h2[0]}`));
+  (lv.caches || []).forEach(c => { const y = c[1] != null ? c[1] : GY - 18; sp('cache', c[0] - 14, y - 14, c[0] + 14, y + 14, `x${c[0]}`); });
+  (lv.movers || []).forEach(mv => sp('mover', mv[0] - 26, mv[1] - 10, mv[0] + 26, mv[1] + 10, `x${mv[0]}`));
+  (lv.npcs || []).forEach(n => sp('npc', n[0] - 14, GY - 44, n[0] + 14, GY, `x${n[0]}`));
+  (lv.firebars || []).forEach(f => sp('firebar', f[0] - 10, f[1] - 10, f[0] + 10, f[1] + 10, `x${f[0]}`));
+  const OVMIN = 6;
+  for (let a = 0; a < S.length; a++) for (let b = a + 1; b < S.length; b++) {
+    const A = S[a], B = S[b];
+    if (!(A.x2 > B.x1 && A.x1 < B.x2 && A.y2 > B.y1 && A.y1 < B.y2)) continue;
+    const ix = Math.min(A.x2, B.x2) - Math.max(A.x1, B.x1), iy = Math.min(A.y2, B.y2) - Math.max(A.y1, B.y1);
+    if (ix < OVMIN || iy < OVMIN) continue;
+    if (A.kind === 'plat' && B.kind === 'plat' && Math.abs(A.y1 - B.y1) < 6) continue; // stacked ledge — intended
+    fails.push(`F8 ${A.kind}(${A.tag}) overlaps ${B.kind}(${B.tag}) [${ix}x${iy}px]`);
+  }
 
   // W5: MONOTONOUS gaps (owner rule 2026-07-23: 'not all of them should be the same width').
   // With 4+ gaps, if every gap is within 24px of the same width, the level reads as identical
