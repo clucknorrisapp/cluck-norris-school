@@ -990,6 +990,17 @@ var Boot=new Phaser.Class({ Extends:Phaser.Scene,
     g.fillStyle(0x2ecb5a); g.fillRect(0,4,24,1);
     g.fillStyle(0x3dff6e); g.fillRect(0,0,24,3); g.fillRect(2,3,2,3); g.fillRect(8,3,2,4); g.fillRect(14,3,2,3); g.fillRect(20,3,2,4);
     g.generateTexture('ground',24,24);
+    // moonground — the World 21 floor tile. Same construction as 'ground' but the grass cap is
+    // replaced with a pale regolith crust: the default tile puts bright green grass on the moon.
+    g.clear();
+    g.fillStyle(0x3f434d); g.fillRect(0,0,24,24);                      // deep rock
+    g.fillStyle(0x5a606c); g.fillRect(0,6,24,18);                      // rock body
+    g.fillStyle(0x4a4f5a); g.fillRect(2,12,4,3); g.fillRect(10,16,5,3); g.fillRect(17,10,4,3); g.fillRect(7,20,3,2); g.fillRect(19,19,3,2);
+    g.fillStyle(0x767d8c); g.fillRect(4,9,2,2); g.fillRect(14,13,2,2); g.fillRect(20,16,2,2);
+    g.fillStyle(0x9aa1af); g.fillRect(0,0,24,7);                       // regolith crust (was grass)
+    g.fillStyle(0xb4bac6); g.fillRect(0,4,24,1);
+    g.fillStyle(0xdfe4ec); g.fillRect(0,0,24,3); g.fillRect(2,3,2,2); g.fillRect(8,3,2,3); g.fillRect(14,3,2,2); g.fillRect(20,3,2,3);
+    g.generateTexture('moonground',24,24);
     // brick platform tile — offset stone blocks with bevel highlights + mortar
     g.clear();
     g.fillStyle(0x2a1c3e); g.fillRect(0,0,24,24);
@@ -1442,7 +1453,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var gaps=def.gaps||[];
     var inGap=function(x){ for(var j=0;j<gaps.length;j++){ if(x>=gaps[j][0]&&x<gaps[j][1]) return true; } return false; };
     this.gaps=gaps;   // stored for overPit() — the cheap ledge guard used by ground-lane patrols
-    for(var gx=0;gx<LW;gx+=TILE){ if(!inGap(gx)){ this.platforms.create(gx+TILE/2,GY+TILE/2,'ground'); this.platforms.create(gx+TILE/2,GY+TILE/2+TILE,'ground'); } }
+    // lunar levels lay regolith instead of the default grass-capped dirt
+    var groundKey = (def.moon && this.textures.exists('moonground')) ? 'moonground' : 'ground';
+    for(var gx=0;gx<LW;gx+=TILE){ if(!inGap(gx)){ this.platforms.create(gx+TILE/2,GY+TILE/2,groundKey); this.platforms.create(gx+TILE/2,GY+TILE/2+TILE,groundKey); } }
     // floating platforms — plat:[x,count,topY,type?]  (type defaults to brick)
     (def.plats||[]).forEach(function(pl){ var t=pl[3]||'brick'; for(var k=0;k<pl[1];k++) self.platforms.create(pl[0]+k*TILE+TILE/2,pl[2]+TILE/2,t); });
     // obstacle blocks (stacked on the ground) — force the player to jump.
