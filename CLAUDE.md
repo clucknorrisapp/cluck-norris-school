@@ -285,6 +285,25 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 - `public/*.html` — standalone vanilla-HTML tool pages: autopsy, wallet-xray, trace, snapshot,
   holders, airdrop, buyspecial, rose, hatchery, security-coop, wallet-checkup, liquidity, premium,
   slots, bags, tools, investors, grant, stats, transcript, pool-monitor.
+  🎯 **BUY SPECIAL IS UNIFIED (2026-07-24 rebuild): `/buyspecial` AND `/rose` now both serve
+  `public/buyspecial-pro.html`** — ONE server-backed tool with a mode toggle: REWARD ALL HOLDERS
+  (% of in-window buys) or RANKED WINNERS (top N, equal/fixed/pro-rata prizes). The old
+  `buyspecial.html`/`rose.html` are unrouted (kept on disk only). WHY the rebuild: the old
+  client-side scan was fragile and broke in three independent ways — (1) pool discovery was
+  DexScreener-only and went blind when DexScreener dropped a token (ROSE), (2) the Reliable Payout
+  List paid % of HELD balance not in-window BUYS, (3) a hardening of `/api/helius-tx` (it required
+  a bare array but forwarded that bare array to Helius, which wants `{transactions:[...]}`) made
+  the enhanced-tx proxy reject EVERY request → 0 buyers on every client scan. All three are fixed.
+  The new tool runs entirely on server endpoints (below), so it works in webviews (Phantom) where
+  the client scan failed. Engine endpoints (all public, on-chain, indexer-independent):
+  `/api/buyspecial-crosscheck` (buyers + tokensBought via buyersInWindowMulti: Helius→GT→ST, pools
+  found on-chain via getTokenLargestAccounts), `/api/buyspecial-holdcheck` (window-scoped per-wallet
+  balance + sells), `/api/buyspecial-trace` (one-hop: if a buyer moved tokens, pay the wallet that
+  still holds), `/api/token-pools` (on-chain vaults ∪ GeckoTerminal). Operator bypass: append
+  `?key=$PREMIUM_ACCESS_KEY` (validated by `/api/admin-check`, remembered) — public users still hit
+  the CLKN unlock. Airdrop hand-off uses **localStorage** (survives `window.open`) + **same-tab**
+  nav (`/airdrop?from=buyspecial`) and **auto-parses** into the preview. Don't re-introduce the
+  client-side getSignaturesForAddress(mint) scan or the `{transactions}` body to `/api/helius-tx`.
   ⛔ **LP Scanner is OPERATOR-ONLY (2026-07-04, owner's call — off public, kept for CLKN ops):**
   all seven `/api/lp-*` endpoints are adminAuthOK-gated (404 without key); `/lp-scanner` page
   still exists but needs `?key=PREMIUM_ACCESS_KEY` once (remembered in localStorage); public
