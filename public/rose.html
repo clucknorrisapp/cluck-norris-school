@@ -1428,7 +1428,7 @@ async function renderReliablePayout(box, mint, buyers, srcName, windowFrom) {
   sec.style.cssText = 'margin-top:12px;padding-top:10px;border-top:1px dashed rgba(16,185,129,0.3);';
   sec.innerHTML = '<div style="font-weight:700;color:#6EE7B7;margin-bottom:6px;">🛟 RELIABLE PAYOUT LIST (' + srcName + ' + live balances)</div>'
     + '<div style="color:var(--subtext);font-size:11px;margin-bottom:8px;">This token’s swaps don’t surface on its mint account, so the on-chain scan above misses them. This list is built from the indexer’s buyer set: payout is a % of what each wallet <b>actually bought in the window</b>, and its <b>current on-chain balance</b> is the hold check (still holding what it bought = eligible). Tokens a wallet held but did NOT buy in the window are never paid on. A wallet that SOLD any of its buy during the window is disqualified (window-scoped sell scan).</div>'
-    + '<div style="margin-bottom:8px;">Payout <input id="relPct" type="number" value="10" min="0" step="0.5" style="width:60px;padding:3px 6px;border-radius:6px;border:1px solid #374151;background:#0b1220;color:#e5e7eb;"> % of tokens bought · <button id="relRefresh" style="padding:3px 10px;border-radius:6px;border:1px solid #374151;background:#111827;color:#e5e7eb;cursor:pointer;">recompute</button> <button id="relCsv" style="padding:3px 10px;border-radius:6px;border:1px solid #16a34a;background:#065f46;color:#d1fae5;cursor:pointer;">copy payout CSV</button></div>'
+    + '<div style="margin-bottom:8px;">Payout <input id="relPct" type="number" value="10" min="0" step="0.5" style="width:60px;padding:3px 6px;border-radius:6px;border:1px solid #374151;background:#0b1220;color:#e5e7eb;"> % of tokens bought · <button id="relRefresh" style="padding:3px 10px;border-radius:6px;border:1px solid #374151;background:#111827;color:#e5e7eb;cursor:pointer;">recompute</button> <button id="relCsv" style="padding:3px 10px;border-radius:6px;border:1px solid #16a34a;background:#065f46;color:#d1fae5;cursor:pointer;">copy payout CSV</button> <button id="relAirdrop" style="padding:3px 10px;border-radius:6px;border:1px solid #7c3aed;background:#5b21b6;color:#ede9fe;cursor:pointer;font-weight:700;">\ud83d\ude80 open in airdropper</button></div>'
     + '<div id="relRows" style="font-size:11px;">Loading balances…</div>';
   box.appendChild(sec);
 
@@ -1488,6 +1488,16 @@ async function renderReliablePayout(box, mint, buyers, srcName, windowFrom) {
     const csv = rows.filter(r => r.bought > 0 && r.held > 0 && !r.soldInWindow).map(r => r.wallet + ',' + Math.floor(Math.min(r.bought, r.held) * pct)).join('\n');
     navigator.clipboard.writeText(csv).catch(() => {});
     const btn = document.getElementById('relCsv'); const t = btn.textContent; btn.textContent = 'copied ✓'; setTimeout(() => btn.textContent = t, 1500);
+  });
+  // Hand the ELIGIBLE wallets + their reward amounts straight to the airdropper.
+  document.getElementById('relAirdrop').addEventListener('click', () => {
+    const pct = Math.max(0, parseFloat(document.getElementById('relPct').value) || 0) / 100;
+    const elig = rows.filter(r => r.bought > 0 && r.held > 0 && !r.soldInWindow);
+    if (!elig.length) { alert('No eligible wallets to airdrop.'); return; }
+    const recipients = elig.map(r => r.wallet + ',' + Math.floor(Math.min(r.bought, r.held) * pct)).join('\n');
+    const tokenName = (typeof currentTokenName !== 'undefined' ? currentTokenName : (typeof TOKEN_NAME !== 'undefined' ? TOKEN_NAME : 'TOKEN'));
+    localStorage.setItem('airdropPayload', JSON.stringify({ ts: Date.now(), mint, tokenName, recipients }));
+    window.open('/airdrop?from=buyspecial', '_blank');
   });
 }
 
