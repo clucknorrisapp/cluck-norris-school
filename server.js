@@ -5710,6 +5710,88 @@ app.get("/api/buycomp/list", (req, res) => {
   if (!buyCompAdminOK(req)) return res.status(404).json({ error: "not_found" });
   return res.status(200).json({ ok: true, competitions: Object.values(buyCompsAll()) });
 });
+// ── Airdrop hand-off stash ───────────────────────────────────────────────────
+// The tools used to hand their recipient list to /airdrop through localStorage.
+// That silently fails inside some in-app wallet browsers (Phantom's webview can
+// partition or drop storage across a navigation), which cost several rounds of
+// "still doesn't work in Phantom" — and because the read path swallowed errors,
+// it failed invisibly. The list now goes through the SERVER: the sending tool
+// POSTs it, gets a short id + read token back, and navigates to
+// /airdrop?handoff=<id>&t=<tok>. No client storage involved, survives a refresh,
+// works in every webview, and the same link can be re-opened later.
+// Contents are wallet addresses + amounts — already public on-chain data — but the
+// random read token keeps ids from being enumerable.
+const AIRDROP_HANDOFF_TTL_MS = 6 * 60 * 60 * 1000;
+const AIRDROP_HANDOFF_MAX_CHARS = 400_000;
+const AIRDROP_HANDOFF_MAX_LINES = 5000;
+function airdropHandoffPrune(all) {
+  const now = Date.now();
+  for (const [id, h] of Object.entries(all)) {
+    if (!h || now - (h.createdAt || 0) > AIRDROP_HANDOFF_TTL_MS) delete all[id];
+  }
+  return all;
+}
+app.use("/api/airdrop-handoff", rateLimit("airdropHandoff", { windowMs: 60000, max: 30 }));
+app.post("/api/airdrop-handoff", (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  const b = req.body || {};
+  const str = (v, n) => (typeof v === "string" ? v.slice(0, n) : "");
+  const list = str(b.recipients, AIRDROP_HANDOFF_MAX_CHARS);
+  const wallets = str(b.wallets, AIRDROP_HANDOFF_MAX_CHARS);
+  if (!list && !wallets) return res.status(400).json({ ok: false, error: "nothing to hand off" });
+  const lines = (list || wallets).split("\n").filter((l) => l.trim()).length;
+  if (lines > AIRDROP_HANDOFF_MAX_LINES) return res.status(400).json({ ok: false, error: "too many recipients" });
+  const dec = parseInt(b.decimals, 10);
+  const payload = {
+    mint: SOL_ADDR_RE.test(String(b.mint || "")) ? String(b.mint) : "",
+    tokenName: str(b.tokenName, 24),
+    // native=true → the prize is SOL itself, sent with a system transfer, no mint.
+    native: b.native === true || b.native === "1",
+    decimals: Number.isInteger(dec) && dec >= 0 && dec <= 18 ? dec : null,
+    mode: b.mode === "equal" ? "equal" : "manual",
+    source: str(b.source, 60) || "Buy Special",
+    recipients: list, wallets,
+  };
+  if (!payload.mint && !payload.native) return res.status(400).json({ ok: false, error: "bad mint" });
+  const id = "ah_" + randomBytes(5).toString("hex");
+  const t = randomBytes(12).toString("hex");
+  const all = airdropHandoffPrune(kv.get("airdropHandoffs", {}));
+  all[id] = { t, createdAt: Date.now(), payload };
+  kv.set("airdropHandoffs", all);
+  return res.status(200).json({ ok: true, id, t });
+});
+app.get("/api/airdrop-handoff", (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  const id = String(req.query.id || ""), t = String(req.query.t || "");
+  const h = kv.get("airdropHandoffs", {})[id];
+  if (!h || !t || h.t !== t) return res.status(404).json({ ok: false, error: "not_found" });
+  if (Date.now() - (h.createdAt || 0) > AIRDROP_HANDOFF_TTL_MS) return res.status(404).json({ ok: false, error: "expired" });
+  return res.status(200).json({ ok: true, ...h.payload });
+});
+
+// PUBLIC price + decimals for any mint (Jupiter Price v3). The Buy Special tool
+// needs both: the price to convert a "% of what you bought" prize into a DIFFERENT
+// reward token, and the decimals so payout amounts are rounded at the right
+// precision (0.05 SOL must not floor to 0).
+app.get("/api/token-price", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  const mints = String(req.query.mints || "").split(",").map((s) => s.trim()).filter((m) => SOL_ADDR_RE.test(m)).slice(0, 10);
+  if (!mints.length) return res.status(400).json({ ok: false, error: "need mints" });
+  try {
+    const data = await jupPriceV3(mints);
+    const out = {};
+    for (const m of mints) {
+      const d = data && data[m];
+      out[m] = d ? { usdPrice: Number(d.usdPrice) || null, decimals: Number.isInteger(d.decimals) ? d.decimals : null } : null;
+    }
+    return res.status(200).json({ ok: true, prices: out });
+  } catch (e) {
+    return res.status(200).json({ ok: false, error: publicErrMsg(e), prices: {} });
+  }
+});
+
 // PUBLIC, read-only: the comps the Buy Special tool should show a shortcut chip for.
 // Starting a comp via /api/buycomp/start makes its chip appear on the tool by itself;
 // the chip then EXPIRES on its own once the hold check + payout slack have passed, so
@@ -10849,6 +10931,18 @@ app.get("/market-header.js", (req, res) => {
   res.type("application/javascript");
   res.sendFile(join(__dirname, "public", "market-header.js"));
 });
+
+// Shared airdrop machinery. Explicit routes (rather than relying on the vite
+// publicDir copy into dist/) because the SPA catch-all otherwise answers an
+// unmatched .js path with the React shell — the browser then refuses it for a
+// text/html MIME type and the tool loses its send engine with no visible error.
+for (const asset of ["airdrop-engine.js", "airdrop-handoff.js"]) {
+  app.get("/" + asset, (req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.type("application/javascript");
+    res.sendFile(join(__dirname, "public", asset));
+  });
+}
 
 // Liquidity Engine — product / education / platform page (the flagship pitch).
 app.get("/liquidity-engine", (req, res) => {

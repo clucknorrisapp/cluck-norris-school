@@ -301,9 +301,26 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   balance + sells), `/api/buyspecial-trace` (one-hop: if a buyer moved tokens, pay the wallet that
   still holds), `/api/token-pools` (on-chain vaults ∪ GeckoTerminal). Operator bypass: append
   `?key=$PREMIUM_ACCESS_KEY` (validated by `/api/admin-check`, remembered) — public users still hit
-  the CLKN unlock. Airdrop hand-off uses **localStorage** (survives `window.open`) + **same-tab**
-  nav (`/airdrop?from=buyspecial`) and **auto-parses** into the preview. Don't re-introduce the
-  client-side getSignaturesForAddress(mint) scan or the `{transactions}` body to `/api/helius-tx`.
+  the CLKN unlock. Don't re-introduce the client-side getSignaturesForAddress(mint) scan or the
+  `{transactions}` body to `/api/helius-tx`.
+  🚀 **NO MORE AIRDROP HAND-OFF (2026-07-24, owner's call — "just direct wire the airdropper
+  into the buy special").** Buy Special now SENDS prizes in-page. The transfer machinery lives in
+  **`public/airdrop-engine.js`** (`splToken` shim + `CluckAirdrop.{toBaseUnits,planBatches,
+  checkRecipientAtas,buildTransaction,confirmTransaction,send}`), loaded by BOTH `/buyspecial` and
+  `/airdrop` — one implementation, so a fix lands in both. `airdrop.html` keeps its UI and calls the
+  engine through thin wrappers; don't re-inline a private copy of the shim there.
+  ⚠️ **`public/` is NOT statically mounted** — a new asset needs an explicit `app.get` route
+  (see the `airdrop-engine.js` / `airdrop-handoff.js` loop next to `/market-header.js`), or the SPA
+  catch-all answers it with the React shell and the browser refuses it on MIME type, silently.
+  **Reward token is selectable**: the comp token, SOL (native `SystemProgram.transfer`), USDC, or any
+  mint. In % mode the basis follows the token — comp token → % of tokens bought, SOL → % of SOL spent,
+  USDC/other → % of USD spent, converted via `/api/token-price` (Jupiter v3, also the source of
+  decimals so a 0.05 SOL prize can't floor to 0).
+  The tools that STILL hand off (`holders`, `snapshot`, `buycomp-admin`) go through the server stash
+  — `POST /api/airdrop-handoff` → `/airdrop?handoff=<id>&t=<tok>` (`public/airdrop-handoff.js`,
+  6h TTL). **localStorage hand-off is the fallback only**: it silently fails in Phantom's webview,
+  which is what made this look broken for four rounds. The reader clears the payload only AFTER
+  applying it and SHOWS failures instead of swallowing them.
   💰 **PRICING (owner's call 2026-07-24): free for ≥2M CLKN holders via wallet-connect (35 days),
   else 0.05 SOL (~$3.69) one-click OR 5,850 CLKN (~$2.77) sent manually — the CLKN door is
   deliberately ~25% CHEAPER so paying in the project's token is the better deal.** Enforced in

@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>🎯 Buy Special — buy competitions</title>
 <meta property="og:title" content="Buy Special — buy competitions"/>
-<meta property="og:description" content="Run a buy competition on any Solana token: reward every holder, or rank the top buyers. On-chain, hold-verified, one click to the airdropper."/>
+<meta property="og:description" content="Run a buy competition on any Solana token: reward every holder, or rank the top buyers. On-chain, hold-verified, and paid out from your own wallet without leaving the page."/>
 <meta property="og:image" content="https://clucknorris.app/cluck-norris.png"/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -79,7 +79,7 @@
 <div class="wrap">
   <a href="/tools" class="back">&larr; TOOLS</a>
   <div class="header"><div class="ic">🎯</div><div><h1>BUY SPECIAL</h1></div></div>
-  <div class="lede">Run a buy competition on any Solana token. <b>Reward all holders</b> a % of what they bought, or <b>rank the top buyers</b> for prizes. Buyer discovery + the hold check run <b>server-side, on-chain</b> — then hand the winners + amounts straight to the airdropper.</div>
+  <div class="lede">Run a buy competition on any Solana token. <b>Reward all holders</b> a % of what they bought, or <b>rank the top buyers</b> for prizes. Buyer discovery + the hold check run <b>server-side, on-chain</b> — then pay the winners straight from your own wallet — in the comp token, SOL, USDC, or any token you choose.</div>
 
   <div class="opbanner hidden" id="opBanner">✓ Operator mode — free unlimited runs.</div>
 
@@ -118,6 +118,18 @@
         <button data-mode="ranked">🏆 RANKED WINNERS</button>
       </div>
       <div class="note" id="modeNote">Every buyer who still holds (no in-window sells) earns a % of what they bought.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">REWARD TOKEN</div>
+      <div class="presets" id="rewardPresets">
+        <button class="chip active" data-kind="comp">🎯 THE COMP TOKEN</button>
+        <button class="chip" data-kind="sol">◎ SOL</button>
+        <button class="chip" data-kind="usdc">💵 USDC</button>
+        <button class="chip" data-kind="custom">✏️ ANOTHER TOKEN</button>
+      </div>
+      <input id="rewardMint" class="hidden" placeholder="Reward token mint address…" style="width:100%;margin-top:10px" />
+      <div class="note" id="rewardNote">Winners are paid in the token they bought.</div>
     </div>
 
     <div class="card">
@@ -180,15 +192,34 @@
       </div>
       <div class="row" style="margin-bottom:6px">
         <button class="btn ghost" id="copyPayBtn">📋 COPY PAYOUT CSV</button>
-        <button class="btn a" id="airdropBtn"><span class="step-n" style="background:#fff;color:#065f46">3</span>OPEN IN AIRDROPPER</button>
+        <button class="btn ghost" id="csvBtn">⬇ DOWNLOAD CSV</button>
       </div>
       <div class="tbl-wrap"><table id="resTbl"></table></div>
       <div class="note" id="resNote"></div>
+    </div>
+
+    <div class="card hidden" id="sendCard">
+      <div class="card-title"><span class="step-n">3</span>SEND THE PRIZES</div>
+      <div class="note" style="margin-top:0" id="sendIntro">Pays the list above straight from your own wallet — nothing leaves this page.</div>
+      <div class="stat-row">
+        <div class="stat"><div class="v" id="sdCount">–</div><div class="l">RECIPIENTS</div></div>
+        <div class="stat"><div class="v" id="sdTotal">–</div><div class="l">TOTAL</div></div>
+        <div class="stat"><div class="v" id="sdTx">–</div><div class="l">TRANSACTIONS</div></div>
+        <div class="stat"><div class="v" id="sdCost">–</div><div class="l">EST. SOL COST</div></div>
+      </div>
+      <div class="row">
+        <button class="btn ghost" id="sdConnect">🔗 CONNECT SENDING WALLET</button>
+        <button class="btn a hidden" id="sdSend">🚀 SEND PRIZES</button>
+      </div>
+      <div class="status" id="sdStatus"></div>
+      <div class="tbl-wrap hidden" id="sdLogWrap"><table id="sdLog"></table></div>
+      <div class="note">You sign every transaction. Prizes are sent in batches; if one batch fails the rest still go, and the log below shows exactly which wallets were paid.</div>
     </div>
   </div>
 </div>
 
 <script src="/vendor/solana-web3.iife.min.js"></script>
+<script src="/airdrop-engine.js"></script>
 <script>
 const CLKN='DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS', ROSE='RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF';
 let mint='', tokenName='CUSTOM', winFrom=0, winTo=0, mode='all';
@@ -196,6 +227,57 @@ let buyers=[], results=[], source='';
 const $=id=>document.getElementById(id);
 const fmt=n=>Number(n||0).toLocaleString(undefined,{maximumFractionDigits:0});
 function setStatus(t){ $('status').textContent=t||''; }
+
+// ── Reward token ─────────────────────────────────────────────────────────────
+// The prize doesn't have to be the token the comp was run on — it can be SOL,
+// USDC, or any other SPL token. Everything downstream (payout rounding, the
+// totals line, the airdrop hand-off) follows whatever is picked here.
+const WSOL='So11111111111111111111111111111111111111112';
+const USDC='EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+let rewardKind='comp', rewardMint=CLKN, rewardName='TOKEN', rewardDecimals=9, rewardIsNative=false;
+let solUsd=null, rewardUsd=null;
+// Round at the reward token's real precision — flooring to a whole number would
+// turn a 0.05 SOL prize into 0.
+function roundPayout(v){ if(!Number.isFinite(v)||v<=0) return 0;
+  const f=Math.pow(10,Math.min(rewardDecimals,9)); return Math.floor(v*f)/f; }
+function fmtAmt(v){ return Number(v||0).toLocaleString(undefined,{maximumFractionDigits:rewardDecimals>2?Math.min(rewardDecimals,6):2}); }
+// USD per SOL, or null when we couldn't price it — callers must not invent a rate.
+function rewardUsdPerSol(){ if(rewardKind==='usdc') return solUsd;
+  if(rewardKind==='custom') return (solUsd!=null&&rewardUsd) ? solUsd/rewardUsd : null; return null; }
+async function loadPrices(){
+  const want=[WSOL]; if(rewardKind==='custom'&&rewardMint&&rewardMint.length>=32) want.push(rewardMint);
+  try{ const d=await fetch('/api/token-price?mints='+want.join(',')).then(r=>r.json());
+    const p=(d&&d.prices)||{};
+    solUsd=(p[WSOL]&&p[WSOL].usdPrice)||null;
+    if(rewardKind==='custom'){ const rp=p[rewardMint]; rewardUsd=(rp&&rp.usdPrice)||null;
+      if(rp&&Number.isInteger(rp.decimals)) rewardDecimals=rp.decimals; }
+  }catch(e){}
+  syncRewardNote();
+}
+function syncRewardNote(){
+  const n=$('rewardNote');
+  if(rewardKind==='comp'){ rewardMint=mint||CLKN; rewardName=tokenName||'TOKEN'; rewardDecimals=9; rewardIsNative=false;
+    n.textContent='Winners are paid in the token they bought.'; return; }
+  if(rewardKind==='sol'){ rewardMint=WSOL; rewardName='SOL'; rewardDecimals=9; rewardIsNative=true;
+    n.textContent='Prizes are paid in native SOL. In % mode the bonus is a % of the SOL each wallet spent.'; return; }
+  if(rewardKind==='usdc'){ rewardMint=USDC; rewardName='USDC'; rewardDecimals=6; rewardIsNative=false;
+    n.textContent=solUsd?('Prizes are paid in USDC. In % mode the bonus is a % of the USD value bought (SOL @ $'+solUsd.toFixed(2)+').')
+      :'Prizes are paid in USDC. Couldn’t price SOL right now — % mode needs a live price, so use ranked/pool mode until it returns.'; return; }
+  rewardName='REWARD'; rewardIsNative=false;
+  n.textContent=(rewardMint&&rewardMint.length>=32)
+    ? (rewardUsd?('Prizes are paid in this token ($'+rewardUsd.toPrecision(4)+', '+rewardDecimals+' decimals). % mode converts through USD.')
+                :'Couldn’t price that mint — ranked/pool mode still works (you set the amounts); % mode needs a price.')
+    : 'Paste the mint of the token you want to pay prizes in.';
+}
+$('rewardPresets').addEventListener('click',e=>{ const b=e.target.closest('.chip'); if(!b) return;
+  document.querySelectorAll('#rewardPresets .chip').forEach(x=>x.classList.remove('active')); b.classList.add('active');
+  rewardKind=b.getAttribute('data-kind');
+  $('rewardMint').classList.toggle('hidden', rewardKind!=='custom');
+  if(rewardKind==='custom'){ rewardMint=$('rewardMint').value.trim(); $('rewardMint').focus(); }
+  rewardUsd=null; syncRewardNote(); loadPrices();
+});
+$('rewardMint').addEventListener('input',()=>{ rewardMint=$('rewardMint').value.trim(); rewardUsd=null; rewardDecimals=9; syncRewardNote();
+  clearTimeout(window._rwT); window._rwT=setTimeout(loadPrices,600); });
 
 // Delegated so chips injected later (live comps) work the same as the static ones.
 $('tokPresets').addEventListener('click',e=>{ const b=e.target.closest('.chip'); if(!b) return;
@@ -206,10 +288,11 @@ $('tokPresets').addEventListener('click',e=>{ const b=e.target.closest('.chip');
   const f=b.getAttribute('data-from'), t=b.getAttribute('data-to');
   if(f&&t){ $('from').value=toLocal(+f); $('to').value=toLocal(+t); refUtc(); }
   const pct=b.getAttribute('data-pct'); if(pct) $('bonus').value=pct;
+  syncRewardNote();
 });
 $('mint').addEventListener('input',()=>{ mint=$('mint').value.trim();
   const chip=document.querySelector('#tokPresets .chip[data-mint="'+mint+'"]');
-  tokenName=(chip&&chip.getAttribute('data-name'))||(mint===CLKN?'CLKN':'TOKEN'); });
+  tokenName=(chip&&chip.getAttribute('data-name'))||(mint===CLKN?'CLKN':'TOKEN'); syncRewardNote(); });
 
 document.querySelectorAll('#modeTog button').forEach(b=>b.addEventListener('click',()=>{
   mode=b.getAttribute('data-mode');
@@ -288,13 +371,25 @@ $('computeBtn').addEventListener('click', async ()=>{
 
 function buildRewardAll(rows, requireHold){
   const pct=(parseFloat($('bonus').value)||0)/100;
+  // The % is always "of what you bought" — but WHAT is measured depends on the
+  // reward token. Paying in the comp token, it's a % of the tokens bought. Paying
+  // in anything else, tokens-bought is the wrong unit, so the basis becomes the
+  // SOL spent (converted through USD for USDC / another token).
+  const usdPer=rewardUsdPerSol();
   rows.forEach(r=>{
     const cap=(requireHold && r.held>=0 && r.held!==Infinity)?Math.min(r.bought,r.held):r.bought;
-    r.payout=r.eligible?Math.floor(cap*pct):0;
+    const basis = rewardKind==='comp' ? cap
+                : rewardKind==='sol'  ? Number(r.sol)||0
+                : (usdPer!=null ? (Number(r.sol)||0)*usdPer : 0);
+    r.payout=r.eligible?roundPayout(basis*pct):0;
   });
   results=rows.filter(r=>r.eligible && r.payout>0);
-  renderResults(rows,'PAYOUT — '+(parseFloat($('bonus').value)||0)+'% OF BUYS',
-    'Payout = % of tokens bought in-window'+(requireHold?', capped by current balance; in-window sellers disqualified. A wallet that MOVED its tokens to another wallet shows a “trace moved” button — follow one hop and pay the wallet that still holds them.':' (holding not required).'));
+  const basisLbl = rewardKind==='comp' ? 'tokens bought in-window'
+                 : rewardKind==='sol'  ? 'SOL spent in-window'
+                 : 'the value of what they bought in-window';
+  renderResults(rows,'PAYOUT — '+(parseFloat($('bonus').value)||0)+'% OF BUYS'+(rewardKind==='comp'?'':' IN '+rewardName),
+    'Payout = % of '+basisLbl+(rewardKind==='comp'?'':', paid in '+rewardName)
+    +(requireHold?'; capped by current balance, in-window sellers disqualified. A wallet that MOVED its tokens to another wallet shows a “trace moved” button — follow one hop and pay the wallet that still holds them.':' (holding not required).'));
 }
 
 function buildRanked(rows, requireHold){
@@ -305,9 +400,10 @@ function buildRanked(rows, requireHold){
   const contenders=rows.filter(r=>r.eligible).sort((a,b)=>(b[field]-a[field]));
   const winners=contenders.slice(0,N);
   rows.forEach(r=>r.payout=0);
-  if(method==='equal'){ const each=winners.length?Math.floor(pool/winners.length):0; winners.forEach(w=>w.payout=each); }
-  else if(method==='fixed'){ winners.forEach((w,i)=>w.payout=Math.floor(fixed[i]||0)); }
-  else { const tot=winners.reduce((s,w)=>s+w[field],0)||1; winners.forEach(w=>w.payout=Math.floor(pool*(w[field]/tot))); }
+  // Prize pool / fixed prizes are denominated in the REWARD token, whatever it is.
+  if(method==='equal'){ const each=winners.length?roundPayout(pool/winners.length):0; winners.forEach(w=>w.payout=each); }
+  else if(method==='fixed'){ winners.forEach((w,i)=>w.payout=roundPayout(fixed[i]||0)); }
+  else { const tot=winners.reduce((s,w)=>s+w[field],0)||1; winners.forEach(w=>w.payout=roundPayout(pool*(w[field]/tot))); }
   winners.forEach((w,i)=>w.rank=i+1);
   results=winners.filter(w=>w.payout>0);
   renderResults(rows,'RANKED WINNERS — TOP '+N+' BY '+(rankBy==='sol'?'SOL SPENT':'TOKENS BOUGHT'),
@@ -317,11 +413,11 @@ function buildRanked(rows, requireHold){
 function renderResults(rows, title, note, winnersList){
   $('resTitle').textContent=title; $('resNote').textContent=note;
   const elig=results.length, dq=rows.filter(r=>!r.eligible).length, total=results.reduce((s,r)=>s+r.payout,0);
-  $('stElig').textContent=elig; $('stEligL').textContent=mode==='ranked'?'WINNERS':'ELIGIBLE'; $('stDq').textContent=dq; $('stTotal').textContent=fmt(total);
+  $('stElig').textContent=elig; $('stEligL').textContent=mode==='ranked'?'WINNERS':'ELIGIBLE'; $('stDq').textContent=dq; $('stTotal').textContent=fmtAmt(total)+' '+rewardName;
   let h, body;
   if(mode==='ranked'){
     h='<thead><tr><th>RANK</th><th>WALLET</th><th class="r">'+($('rankBy').value==='sol'?'SOL SPENT':'BOUGHT')+'</th><th class="r">PRIZE</th></tr></thead><tbody>';
-    body=(winnersList||[]).map(w=>'<tr><td class="win">#'+w.rank+'</td><td>'+w.wallet+'</td><td class="r">'+($('rankBy').value==='sol'?Number(w.sol).toFixed(2):fmt(w.bought))+'</td><td class="r win" style="font-weight:700">'+(w.payout>0?fmt(w.payout):'—')+'</td></tr>').join('');
+    body=(winnersList||[]).map(w=>'<tr><td class="win">#'+w.rank+'</td><td>'+w.wallet+'</td><td class="r">'+($('rankBy').value==='sol'?Number(w.sol).toFixed(2):fmt(w.bought))+'</td><td class="r win" style="font-weight:700">'+(w.payout>0?fmtAmt(w.payout):'—')+'</td></tr>').join('');
   } else {
     const sorted=rows.slice().sort((a,b)=>b.payout-a.payout);
     h='<thead><tr><th>#</th><th>WALLET</th><th class="r">BOUGHT</th><th class="r">HELD</th><th class="r">PAYOUT</th><th>STATUS</th></tr></thead><tbody>';
@@ -329,11 +425,12 @@ function renderResults(rows, title, note, winnersList){
       let st=r.sold?'<span class="dq">SOLD — DQ</span>':(!r.eligible?'<span class="dq">not eligible</span>':(r.held<0?'<span class="dq">lookup failed</span>':(r.held!==Infinity&&r.held<r.bought?'<span class="ok">moved some · paid on held</span>':'<span class="ok">HELD ✓</span>')));
       // Moved tokens to another wallet? Offer a one-hop trace to pay the wallet that still holds them.
       if(r.transfersOut>0 && r.held!==Infinity && r.held<r.bought){ st+=' <button class="btn ghost" style="padding:3px 9px;font-size:10px;margin-left:4px" onclick="traceMoved(\''+r.wallet+'\',this)">🔍 trace moved</button>'; }
-      return '<tr style="'+(r.payout>0?'':'opacity:.55')+'"><td>'+(r.payout>0?(++n):'–')+'</td><td>'+r.wallet+'</td><td class="r">'+fmt(r.bought)+'</td><td class="r">'+(r.held===Infinity?'n/a':(r.held<0?'—':fmt(r.held)))+'</td><td class="r" style="font-weight:700">'+(r.payout>0?fmt(r.payout):'—')+'</td><td>'+st+'</td></tr>';
+      return '<tr style="'+(r.payout>0?'':'opacity:.55')+'"><td>'+(r.payout>0?(++n):'–')+'</td><td>'+r.wallet+'</td><td class="r">'+fmt(r.bought)+'</td><td class="r">'+(r.held===Infinity?'n/a':(r.held<0?'—':fmt(r.held)))+'</td><td class="r" style="font-weight:700">'+(r.payout>0?fmtAmt(r.payout):'—')+'</td><td>'+st+'</td></tr>';
     }).join('');
   }
   $('resTbl').innerHTML=h+body+'</tbody>'; $('resCard').classList.remove('hidden');
-  setStatus(results.length+(mode==='ranked'?' winners':' eligible')+' · '+fmt(total)+' '+tokenName+' total. Ready for the airdropper.');
+  setStatus(results.length+(mode==='ranked'?' winners':' eligible')+' · '+fmtAmt(total)+' '+rewardName+' total.'+(rewardKind==='comp'?'':' (paid in '+rewardName+')')+' Ready to send.');
+  refreshSendCard();
 }
 
 // One-hop trace: a buyer moved tokens to another wallet — if that wallet still holds them, pay it.
@@ -349,7 +446,7 @@ async function traceMoved(w, btn){
       if(add>0){
         const ex=results.find(x=>x.wallet===d.payTo);
         if(ex) ex.payout+=add; else results.push({wallet:d.payTo, bought:d.moved, held:d.destHeld, payout:add, traced:true});
-        $('stTotal').textContent=fmt(results.reduce((s,x)=>s+x.payout,0)); $('stElig').textContent=results.length;
+        $('stTotal').textContent=fmtAmt(results.reduce((s,x)=>s+x.payout,0))+' '+rewardName; $('stElig').textContent=results.length; refreshSendCard();
         btn.textContent='✓ +'+fmt(add)+' → '+d.payTo.slice(0,4)+'…'+d.payTo.slice(-4); btn.style.color='#34D399'; btn.style.borderColor='#12C98B';
       } else { btn.textContent='held (nothing to add)'; }
     } else {
@@ -358,12 +455,70 @@ async function traceMoved(w, btn){
   }catch(e){ btn.textContent='error'; btn.disabled=false; }
 }
 
-$('copyPayBtn').addEventListener('click',()=>copy('wallet,amount\n'+results.map(r=>r.wallet+','+r.payout).join('\n')+'\n',$('copyPayBtn'),'📋 COPY PAYOUT CSV'));
-$('airdropBtn').addEventListener('click',()=>{
-  if(!results.length){ setStatus('Nothing to airdrop yet — run step 2.'); return; }
-  const recipients=results.map(r=>r.wallet+','+r.payout).join('\n');
-  localStorage.setItem('airdropPayload', JSON.stringify({ ts:Date.now(), mint, tokenName, recipients }));
-  window.location.href='/airdrop?from=buyspecial';
+function payoutCsv(){ return 'wallet,amount,token\n'+results.map(r=>r.wallet+','+r.payout+','+rewardName).join('\n')+'\n'; }
+$('copyPayBtn').addEventListener('click',()=>copy(payoutCsv(),$('copyPayBtn'),'📋 COPY PAYOUT CSV'));
+$('csvBtn').addEventListener('click',()=>{
+  const b=new Blob([payoutCsv()],{type:'text/csv'}), u=URL.createObjectURL(b), a=document.createElement('a');
+  a.href=u; a.download=(tokenName||'payout')+'-payout-'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),2000);
+});
+
+// ── Step 3: send the prizes, right here ──────────────────────────────────────
+// The payout list used to be handed to /airdrop through client storage, which kept
+// silently failing inside Phantom's in-app browser. There is no hand-off any more:
+// the shared airdrop engine (/airdrop-engine.js — the same code the standalone
+// airdropper runs) sends straight from this page.
+let sendProvider=null, sendPubkey=null, sendPlan=[];
+function refreshSendCard(){
+  if(!results.length){ $('sendCard').classList.add('hidden'); return; }
+  $('sendCard').classList.remove('hidden');
+  sendPlan=results.map(r=>({addr:r.wallet, amount:r.payout}));
+  const total=results.reduce((s,r)=>s+r.payout,0);
+  $('sdCount').textContent=results.length;
+  $('sdTotal').textContent=fmtAmt(total)+' '+rewardName;
+  // Worst case until the on-chain ATA pre-flight runs: assume every recipient needs
+  // a token account, so the cost estimate can only come DOWN, never surprise upward.
+  const weight=rewardIsNative?results.length:results.length*2;
+  const txs=Math.max(1,Math.ceil(weight/CluckAirdrop.TX_WEIGHT_BUDGET));
+  const lamports=txs*CluckAirdrop.LAMPORTS_PER_TX_FEE+(rewardIsNative?0:results.length*CluckAirdrop.LAMPORTS_PER_ATA_RENT);
+  $('sdTx').textContent=txs;
+  $('sdCost').textContent=(lamports/1e9).toFixed(4);
+  $('sendIntro').textContent=rewardIsNative
+    ? 'Pays the list above in native SOL, straight from your own wallet — nothing leaves this page.'
+    : 'Pays the list above in '+rewardName+', straight from your own wallet — nothing leaves this page.'
+      +' The SOL cost covers network fees plus rent for any recipient who doesn’t have a '+rewardName+' account yet.';
+}
+function sdStatus(t){ $('sdStatus').textContent=t||''; }
+$('sdConnect').addEventListener('click',async()=>{
+  const p=detectProvider();
+  if(!p){ sdStatus('No Solana wallet found. Open this page inside Phantom/Solflare and try again.'); return; }
+  try{ const resp=await p.connect(); sendProvider=p; sendPubkey=((resp&&resp.publicKey)||p.publicKey).toString();
+    $('sdConnect').textContent='✓ '+sendPubkey.slice(0,4)+'…'+sendPubkey.slice(-4);
+    $('sdSend').classList.remove('hidden'); sdStatus('Wallet connected. Review the list above, then send.');
+  }catch(e){ sdStatus('Connect failed: '+(e.message||e)); }
+});
+$('sdSend').addEventListener('click',async()=>{
+  if(!sendProvider||!sendPubkey){ sdStatus('Connect a wallet first.'); return; }
+  if(!sendPlan.length){ sdStatus('Nothing to send.'); return; }
+  if(!rewardIsNative&&(!rewardMint||rewardMint.length<32)){ sdStatus('Pick a valid reward token first.'); return; }
+  if(!confirm('Send '+fmtAmt(sendPlan.reduce((s,r)=>s+r.amount,0))+' '+rewardName+' to '+sendPlan.length+' wallets?')) return;
+  $('sdSend').disabled=true; $('sdConnect').disabled=true;
+  $('sdLogWrap').classList.remove('hidden');
+  $('sdLog').innerHTML='<thead><tr><th>WALLET</th><th class="r">AMOUNT</th><th>STATUS</th></tr></thead><tbody id="sdLogBody"></tbody>';
+  try{
+    const out=await CluckAirdrop.send({
+      provider:sendProvider, walletPubkey:sendPubkey, rpc:rpcCall,
+      recipients:sendPlan, mint:rewardIsNative?'':rewardMint, native:rewardIsNative,
+      decimals:rewardDecimals, memo:'clucknorris.app buy special — '+(tokenName||'comp'),
+      onProgress:(m)=>sdStatus(m),
+      onResult:(r)=>{ const b=$('sdLogBody'); if(!b) return; const tr=document.createElement('tr');
+        tr.innerHTML='<td>'+esc(r.addr)+'</td><td class="r">'+fmtAmt(r.amount)+'</td><td>'
+          +(r.status==='sent'?'<span class="ok">SENT ✓</span>':'<span class="dq">FAILED — '+esc(r.error||'')+'</span>')+'</td>';
+        b.appendChild(tr); },
+    });
+    sdStatus(out.sent+' paid'+(out.failed?', '+out.failed+' failed — fix and re-send just those':'')+'.');
+  }catch(e){ sdStatus('Send failed: '+(e.message||e)); }
+  $('sdSend').disabled=false; $('sdConnect').disabled=false;
 });
 
 function copy(text,btn,label){ const done=()=>{ btn.textContent='✓ COPIED'; setTimeout(()=>btn.textContent=label,1500); };

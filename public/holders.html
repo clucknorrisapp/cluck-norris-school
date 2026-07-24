@@ -565,17 +565,13 @@ function goToAirdrop() {
   const amt = parseFloat(document.getElementById('airdropAmt').value);
   if (!humans.length || !(amt > 0)) return;
   const lines = humans.map(h => h.addr + ',' + amt.toFixed(2)).join('\n');
-  localStorage.setItem('airdropPayload', JSON.stringify({ ts: Date.now(),
-    mint: currentMint,
-    tokenName: currentTokenName,
-    recipients: lines
-  }));
-  window.location.href = '/airdrop?from=holders';
+  cluckHandOff({ mint: currentMint, tokenName: currentTokenName, source: 'Cluck Holders', recipients: lines, mode: 'manual' }, 'holders');
 }
 </script>
 
 <div class="footer-tag">🐔 POWERED BY <a href="https://clucknorris.app">CLKN</a></div>
 
 <script defer src="/cluck-nav.js"></script>
+<script src="/airdrop-handoff.js"></script>
 </body>
 </html>

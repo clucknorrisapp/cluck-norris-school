@@ -605,13 +605,13 @@ function sendToAirdrop() {
   if (!lastSnapshot || !Array.isArray(lastSnapshot.holders)) return;
   try {
     const wallets = lastSnapshot.holders.map(h => h.wallet).filter(Boolean).join("\n");
-    localStorage.setItem("airdropPayload", JSON.stringify({ ts: Date.now(),
+    cluckHandOff({
       mint: lastSnapshot.mint,
       source: "Cluck Snapshot",
       tokenName: lastSnapshot.name || lastSnapshot.symbol || "your token",
       wallets,
       mode: "equal",
-    }));
+    }, "snapshot");
   } catch (e) {}
 }
 
@@ -627,5 +627,6 @@ function downloadJson() {
 }
 </script>
 <script defer src="/cluck-nav.js"></script>
+<script src="/airdrop-handoff.js"></script>
 </body>
 </html>

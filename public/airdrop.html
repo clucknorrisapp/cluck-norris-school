@@ -561,12 +561,10 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;
 // Convert a (possibly fractional) token amount to base units as a BigInt via a
 // fixed-point STRING — never amount * 10**decimals, whose float multiply loses
 // precision above ~9M tokens at 9 decimals (Number.MAX_SAFE_INTEGER).
+// Thin wrappers over the shared engine (/airdrop-engine.js) so the standalone
+// airdropper and the Buy Special prize sender run identical transfer logic.
 function toBaseUnits(amount, decimals) {
-  const n = Number(amount);
-  if (!isFinite(n) || n <= 0) return 0n;
-  const fixed = n.toFixed(decimals);
-  const [intPart, fracPart = ''] = fixed.split('.');
-  return BigInt(intPart) * (10n ** BigInt(decimals)) + BigInt((fracPart.padEnd(decimals, '0').slice(0, decimals)) || '0');
+  return CluckAirdrop.toBaseUnits(amount, decimals);
 }
 
 function shortAddr(a) {
@@ -875,49 +873,7 @@ async function parseRecipients() {
 // One getMultipleAccounts call per 100 derived ATA addresses. Tells us the rent cost
 // upfront so the sender isn't surprised, and lets us split batches around tx-size limits.
 async function checkRecipientAtas(arr, mint) {
-  if (!arr.length || !mint) return;
-  // Use bare identifiers — the solana-web3.js IIFE attaches to globalThis, not always window
-  if (typeof solanaWeb3 === 'undefined' || typeof splToken === 'undefined') {
-    console.warn('[airdrop] pre-flight skipped — solanaWeb3 / splToken not loaded yet');
-    return;
-  }
-  let mintPk;
-  try { mintPk = new solanaWeb3.PublicKey(mint); }
-  catch(e) { console.warn('[airdrop] pre-flight skipped — invalid mint', mint, e); return; }
-  const entries = [];
-  for (const r of arr) {
-    try {
-      const ata = splToken.getAssociatedTokenAddressSync(mintPk, new solanaWeb3.PublicKey(r.addr)).toString();
-      r.ataAddress = ata;
-      r.invalidAddress = false;
-      entries.push(r);
-    } catch(e) {
-      r.invalidAddress = true;
-      r.needsAta = false;
-      if (!r.skip) { r.skip = true; r.skipReason = 'Invalid address'; }
-    }
-  }
-  console.log('[airdrop] pre-flight checking', entries.length, 'recipients for mint', mint.slice(0,8));
-  const BATCH = 100;
-  let needCount = 0;
-  for (let i = 0; i < entries.length; i += BATCH) {
-    const slice = entries.slice(i, i + BATCH);
-    try {
-      const res = await rpc('getMultipleAccounts', [slice.map(e => e.ataAddress), { encoding: 'base64' }]);
-      const accounts = res?.value || [];
-      slice.forEach((e, idx) => {
-        e.needsAta = !accounts[idx];
-        if (e.needsAta) needCount++;
-      });
-    } catch(e) {
-      console.warn('[airdrop] getMultipleAccounts failed, assuming all need ATA:', e);
-      // On RPC failure, assume worst case (rent needed) so the cost estimate doesn't lie low.
-      slice.forEach(e => {
-        if (e.needsAta === undefined) { e.needsAta = true; needCount++; }
-      });
-    }
-  }
-  console.log('[airdrop] pre-flight done —', needCount, 'of', entries.length, 'need a new ATA');
+  return CluckAirdrop.checkRecipientAtas(arr, mint, rpc);
 }
 
 // Sender's SOL balance — needed to flag "you can't afford this airdrop" before they click send.
@@ -933,21 +889,7 @@ async function fetchSolBalance() {
 // Each transfer counts as 1 weight unit; each ATA-create+transfer counts as 2.
 // Returns an array of recipient arrays (one per planned Phantom-signed tx).
 function planBatches(active) {
-  const batches = [];
-  let current = [];
-  let weight = 0;
-  for (const r of active) {
-    const cost = r.needsAta ? 2 : 1;
-    if (current.length && weight + cost > TX_WEIGHT_BUDGET) {
-      batches.push(current);
-      current = [];
-      weight = 0;
-    }
-    current.push(r);
-    weight += cost;
-  }
-  if (current.length) batches.push(current);
-  return batches;
+  return CluckAirdrop.planBatches(active, TX_WEIGHT_BUDGET);
 }
 
 // When user toggles "Skip wallets that need new token accounts", mark needsAta=true rows
@@ -1215,63 +1157,15 @@ async function sendAirdrop() {
 // ── Transaction Builder ──────────────────────────────────────────────────────
 // Uses Solana web3.js loaded from CDN
 async function buildTransaction(instructions, feePayer, blockhash, mint, decimals) {
-  const { Transaction, PublicKey } = solanaWeb3;
-  const { createTransferCheckedInstruction, createAssociatedTokenAccountIdempotentInstruction, createMemoInstruction } = splToken;
-
-  const tx = new Transaction();
-  tx.recentBlockhash = blockhash;
-  tx.feePayer = new PublicKey(feePayer);
-  const feePayerPk = new PublicKey(feePayer);
-  const mintPk = new PublicKey(mint);
-
-  // Self-describing memo first — gives the simulator the tx's intent up front instead
-  // of leaving it to score an unlabeled multi-recipient transfer as a possible drain.
-  tx.add(createMemoInstruction('clucknorris.app airdrop', [feePayerPk]));
-
-  for (const ix of instructions) {
-    if (ix.type === 'createATA') {
-      tx.add(createAssociatedTokenAccountIdempotentInstruction(
-        feePayerPk,
-        new PublicKey(ix.ata),
-        new PublicKey(ix.owner),
-        mintPk
-      ));
-    } else if (ix.type === 'transfer') {
-      tx.add(createTransferCheckedInstruction(
-        new PublicKey(ix.from),
-        mintPk,
-        new PublicKey(ix.to),
-        feePayerPk,
-        ix.amount,
-        decimals
-      ));
-    }
-  }
-  return tx;
+  return CluckAirdrop.buildTransaction({ instructions, feePayer, blockhash, mint, decimals });
 }
 
 async function getAssociatedTokenAddress(mint, owner) {
-  const { PublicKey } = solanaWeb3;
-  const { getAssociatedTokenAddressSync } = splToken;
-  return getAssociatedTokenAddressSync(
-    new PublicKey(mint),
-    new PublicKey(owner)
-  ).toString();
+  return CluckAirdrop.getAssociatedTokenAddress(mint, owner);
 }
 
 async function confirmTransaction(signature, lastValidBlockHeight) {
-  let confirmed = false;
-  let attempts = 0;
-  while (!confirmed && attempts < 30) {
-    await new Promise(r => setTimeout(r, 1000));
-    const result = await rpc('getSignatureStatuses', [[signature]]);
-    const status = result?.value?.[0];
-    if (status?.confirmationStatus === 'confirmed' || status?.confirmationStatus === 'finalized') {
-      confirmed = true;
-    }
-    attempts++;
-  }
-  return confirmed;
+  return CluckAirdrop.confirmTransaction(signature, rpc);
 }
 
 // ── UI Helpers ───────────────────────────────────────────────────────────────
@@ -1561,6 +1455,7 @@ function initUnlockGate() {
   const _fromParam = new URLSearchParams(location.search).get('from');
   let _hasHandoff = false;
   try { _hasHandoff = !!(localStorage.getItem('airdropPayload') || sessionStorage.getItem('airdropPayload')); } catch (e) {}
+  if (new URLSearchParams(location.search).get('handoff')) _hasHandoff = true;
   if ((_fromParam && ['buyspecial','rose','holders','snapshot','buycomp','payout-desk'].includes(_fromParam)) || _hasHandoff) {
     hideGate();
     const banner = document.getElementById('unlockBanner');
@@ -1606,158 +1501,45 @@ initUnlockGate();
      prevention can't block it the way it does cdnjs in some configurations. -->
 <script src="/vendor/solana-web3.iife.min.js"></script>
 
+<!-- SPL shim + batching/tx engine, shared with the Buy Special tool so prize
+     sending and the standalone airdropper run the exact same code path. -->
+<script src="/airdrop-engine.js"></script>
+
 <script>
-// SPL Token program IDs and helpers (minimal implementation)
-// Using Helius RPC for ATA derivation instead of full SPL library
-const splToken = {
-  TOKEN_PROGRAM_ID: { toString: () => 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' },
-  ASSOCIATED_TOKEN_PROGRAM_ID: { toString: () => 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL' },
-
-  getAssociatedTokenAddressSync(mint, owner) {
-    // Derive ATA address deterministically
-    // This will be computed properly via the PublicKey.findProgramAddressSync
-    const { PublicKey } = solanaWeb3;
-    const [address] = PublicKey.findProgramAddressSync(
-      [
-        owner.toBuffer(),
-        new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA').toBuffer(),
-        mint.toBuffer(),
-      ],
-      new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL')
-    );
-    return address;
-  },
-
-  createTransferInstruction(source, dest, owner, amount) {
-    const { PublicKey, TransactionInstruction } = solanaWeb3;
-    const TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-    // Build the 9-byte instruction data with Uint8Array — the Node `Buffer`
-    // global does not exist in browsers (Safari/iOS throws "Can't find
-    // variable: Buffer"). Byte 0 = Transfer opcode (3), bytes 1-8 = amount u64 LE.
-    const data = new Uint8Array(9);
-    data[0] = 3;
-    new DataView(data.buffer).setBigUint64(1, BigInt(amount), true);
-    return new TransactionInstruction({
-      keys: [
-        { pubkey: source, isSigner: false, isWritable: true },
-        { pubkey: dest, isSigner: false, isWritable: true },
-        { pubkey: owner, isSigner: true, isWritable: false },
-      ],
-      programId: TOKEN_PROGRAM,
-      data,
-    });
-  },
-
-  createAssociatedTokenAccountInstruction(payer, ata, owner, mint) {
-    const { PublicKey, TransactionInstruction } = solanaWeb3;
-    const ATA_PROGRAM = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
-    const TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-    const SYSVAR_RENT = new PublicKey('SysvarRent111111111111111111111111111111111');
-    return new TransactionInstruction({
-      keys: [
-        { pubkey: payer, isSigner: true, isWritable: true },
-        { pubkey: ata, isSigner: false, isWritable: true },
-        { pubkey: owner, isSigner: false, isWritable: false },
-        { pubkey: mint, isSigner: false, isWritable: false },
-        { pubkey: new PublicKey('11111111111111111111111111111111'), isSigner: false, isWritable: false },
-        { pubkey: TOKEN_PROGRAM, isSigner: false, isWritable: false },
-        { pubkey: SYSVAR_RENT, isSigner: false, isWritable: false },
-      ],
-      programId: ATA_PROGRAM,
-      data: new Uint8Array(0),
-    });
-  },
-
-  // CreateIdempotent (ATA program ix #1) — identical to Create but a NO-OP if the
-  // account already exists, instead of failing the whole batch. Guards the race
-  // where a recipient's ATA appears between our pre-flight check and the send.
-  createAssociatedTokenAccountIdempotentInstruction(payer, ata, owner, mint) {
-    const { PublicKey, TransactionInstruction } = solanaWeb3;
-    const ATA_PROGRAM = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
-    const TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-    const SYSVAR_RENT = new PublicKey('SysvarRent111111111111111111111111111111111');
-    return new TransactionInstruction({
-      keys: [
-        { pubkey: payer, isSigner: true, isWritable: true },
-        { pubkey: ata, isSigner: false, isWritable: true },
-        { pubkey: owner, isSigner: false, isWritable: false },
-        { pubkey: mint, isSigner: false, isWritable: false },
-        { pubkey: new PublicKey('11111111111111111111111111111111'), isSigner: false, isWritable: false },
-        { pubkey: TOKEN_PROGRAM, isSigner: false, isWritable: false },
-        { pubkey: SYSVAR_RENT, isSigner: false, isWritable: false },
-      ],
-      programId: ATA_PROGRAM,
-      data: new Uint8Array([1]),   // 1 = CreateIdempotent
-    });
-  },
-
-  // TransferChecked (token program ix #12) — carries the mint + decimals so a wallet
-  // simulator (Phantom Lighthouse / Blockaid) can verify EXACTLY what's moving ("X CLKN")
-  // rather than inferring it, which makes the tx far less likely to be scored suspicious.
-  createTransferCheckedInstruction(source, mint, dest, owner, amount, decimals) {
-    const { PublicKey, TransactionInstruction } = solanaWeb3;
-    const TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-    // byte 0 = TransferChecked opcode (12), bytes 1-8 = amount u64 LE, byte 9 = decimals u8.
-    const data = new Uint8Array(10);
-    data[0] = 12;
-    new DataView(data.buffer).setBigUint64(1, BigInt(amount), true);
-    data[9] = decimals & 0xff;
-    return new TransactionInstruction({
-      keys: [
-        { pubkey: source, isSigner: false, isWritable: true },
-        { pubkey: mint,   isSigner: false, isWritable: false },
-        { pubkey: dest,   isSigner: false, isWritable: true },
-        { pubkey: owner,  isSigner: true,  isWritable: false },
-      ],
-      programId: TOKEN_PROGRAM,
-      data,
-    });
-  },
-
-  // SPL Memo — labels the batch so the transaction is self-describing to simulators
-  // and shows up in the recipient's history as a clucknorris.app airdrop.
-  createMemoInstruction(memoText, signers) {
-    const { PublicKey, TransactionInstruction } = solanaWeb3;
-    const MEMO_PROGRAM = new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
-    const keys = (signers || []).map(s => ({ pubkey: s, isSigner: true, isWritable: false }));
-    return new TransactionInstruction({
-      keys,
-      programId: MEMO_PROGRAM,
-      data: new TextEncoder().encode(memoText),
-    });
+// ── Apply an incoming hand-off ───────────────────────────────────────────────
+// Preferred path is the SERVER stash (/airdrop?handoff=<id>&t=<tok>) — client
+// storage silently fails inside some in-app wallet browsers, which is what made
+// this look broken in Phantom for so long. The localStorage path is kept as a
+// fallback for tools that couldn't reach the stash.
+//
+// Two rules learned the hard way: the payload is only cleared AFTER it has been
+// applied, and a failure is SHOWN rather than swallowed — the old empty catch
+// left a blank textarea with no explanation.
+(function () {
+  function notice(text, bad) {
+    const el = document.createElement('div');
+    el.style.cssText = 'background:' + (bad ? 'rgba(239,68,68,0.1)' : 'rgba(16,185,129,0.1)')
+      + ';border:1px solid ' + (bad ? 'rgba(239,68,68,0.35)' : 'rgba(16,185,129,0.3)')
+      + ';border-radius:8px;padding:10px 14px;font-family:var(--mono);font-size:11px;color:'
+      + (bad ? '#fca5a5' : '#10B981') + ';margin-bottom:12px;';
+    el.textContent = text;
+    const host = document.getElementById('airdropTool') || document.querySelector('.wrap');
+    if (host) host.insertBefore(el, host.firstChild);
+    if (!bad) setTimeout(() => el.remove(), 6000);
   }
-};
-</script>
 
-<script>
-// Auto-populate from buy special tool
-(function() {
-  const payload = localStorage.getItem('airdropPayload') || sessionStorage.getItem('airdropPayload');
-  if (!payload) return;
-  try {
-    const data = JSON.parse(payload);
-    localStorage.removeItem('airdropPayload'); sessionStorage.removeItem('airdropPayload');
-    if (data.ts && (Date.now() - data.ts) > 900000) return;   // stale hand-off (>15 min) — ignore
-    // Set token
+  function apply(data) {
     const mintInput = document.getElementById('tokenMintInput');
-    if (mintInput) {
+    if (mintInput && data.mint) {
       mintInput.value = data.mint;
       currentMint = data.mint;
-      // Try to match preset
-      if (data.mint === 'DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS') {
-        document.querySelectorAll('.token-preset').forEach(b => b.classList.remove('active'));
-        const btn = document.querySelector('[onclick*="DW6DF2"]');
-        if (btn) btn.classList.add('active');
-      } else if (data.mint === 'RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF') {
-        document.querySelectorAll('.token-preset').forEach(b => b.classList.remove('active'));
-        const btn = document.querySelector('[onclick*="RoSei"]');
-        if (btn) btn.classList.add('active');
-      }
+      if (Number.isInteger(data.decimals)) currentDecimals = data.decimals;
+      document.querySelectorAll('.token-preset').forEach(b => b.classList.remove('active'));
+      const preset = document.querySelector('[onclick*="' + data.mint.slice(0, 6) + '"]');
+      if (preset) preset.classList.add('active');
+      if (typeof fetchTokenBalance === 'function') { try { fetchTokenBalance(); } catch (e) {} }
     }
-    // Equal-split handoff (e.g. Cluck Snapshot → "airdrop to these holders"):
-    // a wallet list with no per-wallet amount; user sets one amount for all.
-    // Otherwise the manual "wallet, amount" handoff (Buy Special / Rose).
-    let count;
+    let count = 0;
     if (data.mode === 'equal' && data.wallets) {
       setMode('equal');
       const eq = document.getElementById('equalInput');
@@ -1765,22 +1547,49 @@ const splToken = {
       count = data.wallets.split('\n').filter(Boolean).length;
     } else {
       setMode('manual');
-      const textarea = document.getElementById('manualInput');
-      if (textarea) textarea.value = data.recipients;
+      const ta = document.getElementById('manualInput');
+      if (ta) ta.value = data.recipients || '';
       count = data.recipients ? data.recipients.split('\n').filter(Boolean).length : 0;
-      // Auto-import: parse the wallet,amount list straight into the airdrop preview so the
-      // operator lands on a ready-to-review list, not a raw textarea they must "Preview" first.
+      // Land on a ready-to-review list, not a raw textarea the operator must "Preview" first.
       if (count && typeof parseRecipients === 'function') { try { parseRecipients(); } catch (e) {} }
     }
-    // Show a notice — insert into the tool wrapper so the unlock gate (above it) stays clean.
-    const notice = document.createElement('div');
-    notice.style.cssText = 'background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:10px 14px;font-family:var(--mono);font-size:11px;color:#10B981;margin-bottom:12px;';
-    notice.textContent = 'Loaded ' + count + ' recipients from ' + (data.source || 'Buy Special tool') + (data.tokenName ? ' for ' + data.tokenName : '') + (data.mode === 'equal' ? ' — set the amount per wallet below.' : '');
-    const tool = document.getElementById('airdropTool');
-    if (tool) tool.insertBefore(notice, tool.firstChild);
-    else document.querySelector('.wrap').insertBefore(notice, document.querySelector('.card'));
-    setTimeout(() => notice.remove(), 5000);
-  } catch(e) {}
+    if (!count) { notice('The hand-off arrived but carried no recipients — go back and re-send the list.', true); return 0; }
+    notice('Loaded ' + count + ' recipients from ' + (data.source || 'Buy Special')
+      + (data.tokenName ? ' for ' + data.tokenName : '')
+      + (data.mode === 'equal' ? ' — set the amount per wallet below.' : ''));
+    return count;
+  }
+
+  const q = new URLSearchParams(location.search);
+  const id = q.get('handoff'), t = q.get('t');
+  if (id && t) {
+    fetch('/api/airdrop-handoff?id=' + encodeURIComponent(id) + '&t=' + encodeURIComponent(t))
+      .then(r => r.json())
+      .then(d => {
+        if (!d || !d.ok) { notice('That hand-off link has expired — go back to the tool and send the list again.', true); return; }
+        try { apply(d); } catch (e) { notice('Could not load the hand-off: ' + (e.message || e), true); }
+      })
+      .catch(e => notice('Could not reach the hand-off service: ' + (e.message || e), true));
+    return;
+  }
+
+  let raw = null;
+  try { raw = localStorage.getItem('airdropPayload') || sessionStorage.getItem('airdropPayload'); } catch (e) {}
+  if (!raw) return;
+  let data;
+  try { data = JSON.parse(raw); } catch (e) { return; }
+  if (data.ts && (Date.now() - data.ts) > 900000) {   // stale (>15 min) — ignore
+    try { localStorage.removeItem('airdropPayload'); sessionStorage.removeItem('airdropPayload'); } catch (e) {}
+    return;
+  }
+  try {
+    apply(data);
+    // Only now is it safe to drop — clearing first meant any downstream error
+    // destroyed the list and a refresh couldn't recover it.
+    try { localStorage.removeItem('airdropPayload'); sessionStorage.removeItem('airdropPayload'); } catch (e) {}
+  } catch (e) {
+    notice('Could not load the hand-off: ' + (e.message || e) + ' — your list is still saved, try refreshing.', true);
+  }
 })();
 </script>
 

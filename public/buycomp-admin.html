@@ -231,8 +231,7 @@ body{background:transparent;font-family:var(--body);}
   function openPayout(id){
     const c = COMPS[id]; if(!c||!c.verified||!c.verified.length){ alert("Run verify first."); return; }
     const recipients = c.verified.map(v=>v.wallet+", "+v.amount).join("\n");
-    try{ localStorage.setItem("airdropPayload", JSON.stringify({ ts: Date.now(), mint:prizeMintOf(c), source:"Cluck Norris Buy Comp", tokenName:c.ticker, recipients, mode:"manual" })); }catch(e){}
-    window.location.href = "/airdrop";
+    cluckHandOff({ mint:prizeMintOf(c), source:"Cluck Norris Buy Comp", tokenName:c.ticker, recipients, mode:"manual" }, "buycomp");
   }
   function copyPayoutLink(id){
     const c = COMPS[id]; if(!c||!c.payoutToken){ alert("Run verify first."); return; }
@@ -288,5 +287,6 @@ body{background:transparent;font-family:var(--body);}
   if(key()) loadComps();
 </script>
 <script defer src="/cluck-nav.js"></script>
+<script src="/airdrop-handoff.js"></script>
 </body>
 </html>
