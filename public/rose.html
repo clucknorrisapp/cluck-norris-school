@@ -1357,7 +1357,7 @@ function appendPrizeSection(winners, container, prefill) {
       if (amount > 0 && addr) recipients.push(`${addr},${amount}`);
     });
     if (recipients.length === 0) return;
-    sessionStorage.setItem('airdropPayload', JSON.stringify({
+    localStorage.setItem('airdropPayload', JSON.stringify({ ts: Date.now(),
       mint: MINT_ADDR,
       tokenName: TOKEN_NAME,
       recipients: recipients.join('\n')

@@ -1729,11 +1729,12 @@ const splToken = {
 <script>
 // Auto-populate from buy special tool
 (function() {
-  const payload = sessionStorage.getItem('airdropPayload');
+  const payload = localStorage.getItem('airdropPayload') || sessionStorage.getItem('airdropPayload');
   if (!payload) return;
   try {
     const data = JSON.parse(payload);
-    sessionStorage.removeItem('airdropPayload');
+    localStorage.removeItem('airdropPayload'); sessionStorage.removeItem('airdropPayload');
+    if (data.ts && (Date.now() - data.ts) > 900000) return;   // stale hand-off (>15 min) — ignore
     // Set token
     const mintInput = document.getElementById('tokenMintInput');
     if (mintInput) {

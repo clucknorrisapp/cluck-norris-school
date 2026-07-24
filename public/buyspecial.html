@@ -1591,7 +1591,7 @@ function goToAirdrop() {
   const data = window._airdropData;
   const lines = data.map(r => r.addr + ',' + r.amount.toFixed(2)).join('\n');
   // Store in sessionStorage for airdrop tool to pick up
-  sessionStorage.setItem('airdropPayload', JSON.stringify({
+  localStorage.setItem('airdropPayload', JSON.stringify({ ts: Date.now(),
     mint: data[0].mint,
     tokenName: data[0].tokenName,
     recipients: lines

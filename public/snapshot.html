@@ -605,7 +605,7 @@ function sendToAirdrop() {
   if (!lastSnapshot || !Array.isArray(lastSnapshot.holders)) return;
   try {
     const wallets = lastSnapshot.holders.map(h => h.wallet).filter(Boolean).join("\n");
-    sessionStorage.setItem("airdropPayload", JSON.stringify({
+    localStorage.setItem("airdropPayload", JSON.stringify({ ts: Date.now(),
       mint: lastSnapshot.mint,
       source: "Cluck Snapshot",
       tokenName: lastSnapshot.name || lastSnapshot.symbol || "your token",

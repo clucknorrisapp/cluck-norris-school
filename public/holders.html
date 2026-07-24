@@ -565,7 +565,7 @@ function goToAirdrop() {
   const amt = parseFloat(document.getElementById('airdropAmt').value);
   if (!humans.length || !(amt > 0)) return;
   const lines = humans.map(h => h.addr + ',' + amt.toFixed(2)).join('\n');
-  sessionStorage.setItem('airdropPayload', JSON.stringify({
+  localStorage.setItem('airdropPayload', JSON.stringify({ ts: Date.now(),
     mint: currentMint,
     tokenName: currentTokenName,
     recipients: lines
