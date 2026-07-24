@@ -700,6 +700,18 @@ render the realized width, not the requested slider value. LOW backlog now fully
   holders of ≥2M CLKN get a 5× unlock bonus read straight from the payment tx.
 - **Telegram posts are SILENT by default — NEVER `&loud=1` unless the owner explicitly
   says so in that moment.** (Owner rule, set 2026-06-10 after an unwanted ping.)
+- ⚠️ **A Telegram post carrying an IMAGE or VIDEO gets 1024 characters, not 4096.** A
+  caption over 1024 is **silently truncated by our own code** (`text.slice(0, 1024)` in
+  `/api/tg-test`, and `tgSendPhotoKb`) — the send returns `success:true`, Telegram never
+  errors, and whatever was at the END of the caption is simply gone. Text-only posts get
+  the full 4096. **So COUNT the caption before any `&photo=`/`&video=` send, and put the
+  load-bearing line — the "🐦 On X — like & repost: …" link, a CTA, a closing figure —
+  where truncation can't eat it, or trim the body until the whole thing fits.** Captions
+  send with `parse_mode: HTML`, so escape `&` as `&amp;` (`<` `>` likewise) or the line can
+  break. Recovery if it ships truncated: re-send the corrected caption with
+  `&replaceMsg=<oldId>` — that deletes the bad message after the new one lands, so the
+  community sees ONE post. (Set 2026-07-24 after the Buy Special rebuild announcement went
+  out at 1091 chars and lost its X link; verified fixed at 998.)
 - **Community-post accuracy:** the engine/Blitz trades happen on the TWO Orca pools —
   CLKN/USDC `H1r9ut25xAU1B1AbZRhvSJjShd4Q3mtmysYHBisFES7H` and CLKN/SOL
   `EL1ZDnuTE4J4LZJLP76VapFSDiM7Xt18ZsnzVeqNvaPr` — NOT the main Meteora pool
