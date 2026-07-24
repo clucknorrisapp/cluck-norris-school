@@ -5911,17 +5911,26 @@ app.get("/api/token-pools", async (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=300");
   const mint = (req.query.mint || "").trim();
   if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ success: false, error: "bad mint", pools: [] });
+  const pools = new Set();
+  // (a) ON-CHAIN — the token's largest accounts ARE its pool vaults; indexer-independent,
+  //     so a token no DEX indexes (e.g. ROSE returns 0 DexScreener pairs) still resolves.
+  try {
+    const rpcCall = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`);
+    const lr = await rpcCall("token-pools-largest", "getTokenLargestAccounts", [mint]);
+    for (const a of (((lr && lr.result && lr.result.value)) || [])) if (a && SOL_ADDR_RE.test(a.address)) pools.add(a.address);
+  } catch (_) {}
+  // (b) GeckoTerminal — adds the canonical pool/pair addresses (union; best-effort).
   try {
     const r = await fetch(`https://api.geckoterminal.com/api/v2/networks/solana/tokens/${mint}/pools`, { signal: AbortSignal.timeout(12000) });
-    if (!r.ok) return res.status(200).json({ success: false, error: "gt " + r.status, pools: [] });
-    const j = await r.json();
-    const pools = (j.data || [])
-      .map(d => (d.attributes && d.attributes.address) || String(d.id || "").replace(/^solana_/, ""))
-      .filter(a => SOL_ADDR_RE.test(a));
-    return res.status(200).json({ success: true, pools: [...new Set(pools)] });
-  } catch (e) {
-    return res.status(200).json({ success: false, error: e.message, pools: [] });
-  }
+    if (r.ok) {
+      const j = await r.json();
+      for (const d of (j.data || [])) {
+        const a = (d.attributes && d.attributes.address) || String(d.id || "").replace(/^solana_/, "");
+        if (SOL_ADDR_RE.test(a)) pools.add(a);
+      }
+    }
+  } catch (_) {}
+  return res.status(200).json({ success: pools.size > 0, pools: [...pools] });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
