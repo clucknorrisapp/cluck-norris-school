@@ -5912,6 +5912,47 @@ app.get("/api/buyspecial-crosscheck", async (req, res) => {
   }
 });
 
+// GET /api/buyspecial-holdcheck?mint=&wallets=w1,w2&from=&to= — precise per-wallet HOLD check
+// for a buy competition. For each wallet it returns { balance, sells } where `sells` is the count
+// of DEX SELLS whose tx timestamp falls inside [from,to] (unix seconds) — the same window-scoped
+// scan the live comp board uses (walletPositionMulti → Helius getWalletTokenPositionHelius). The
+// Reliable Payout List uses this to disqualify a wallet that SOLD its in-window buy, instead of
+// trusting total balance (which a large pre-existing bag can mask). Read-only; public; the sell
+// window is the caller's to set (typically buy-window-start → now/hold-deadline). soldInWindow is
+// authoritative only when source === "helius" (an unscoped fallback can't prove a drop).
+app.get("/api/buyspecial-holdcheck", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  const mint = (req.query.mint || "").trim();
+  const from = parseInt(req.query.from, 10);
+  const to = parseInt(req.query.to, 10);
+  const wallets = String(req.query.wallets || "").split(",").map(w => w.trim()).filter(w => SOL_ADDR_RE.test(w));
+  if (!SOL_ADDR_RE.test(mint) || !from || !to || to <= from) {
+    return res.status(400).json({ success: false, error: "Need mint, from, to (unix seconds, to>from)" });
+  }
+  if (!wallets.length) return res.status(400).json({ success: false, error: "Need wallets (comma-separated)" });
+  if (wallets.length > 200) return res.status(400).json({ success: false, error: "Too many wallets (max 200)" });
+  try {
+    const fromMs = from * 1000, toMs = to * 1000;
+    const results = [];
+    const CONC = 4;   // bounded concurrency — quota guard
+    for (let i = 0; i < wallets.length; i += CONC) {
+      await Promise.all(wallets.slice(i, i + CONC).map(async (w) => {
+        try {
+          const pos = await walletPositionMulti(w, mint, { fromMs, toMs });
+          if (!pos) { results.push({ wallet: w, balance: null, sells: null, soldInWindow: false, source: "none" }); return; }
+          const soldInWindow = pos.source === "helius" && (pos.sells || 0) > 0;
+          results.push({ wallet: w, balance: pos.balance, sells: pos.sells || 0, transfersOut: pos.transfersOut || 0, soldInWindow, source: pos.source });
+        } catch (e) { results.push({ wallet: w, balance: null, sells: null, soldInWindow: false, source: "error" }); }
+      }));
+    }
+    return res.status(200).json({ success: true, results });
+  } catch (err) {
+    console.error("[buyspecial-holdcheck] error:", err.message);
+    return res.status(200).json({ success: false, error: err.message });
+  }
+});
+
 // GET /api/token-pools?mint= — the token's DEX pool addresses (via GeckoTerminal).
 // WHY: a token's MINT account does NOT surface pool-routed swaps, so a scanner that reads
 // getSignaturesForAddress(mint) misses nearly all buys (e.g. ROSE: 17 mint-txs, 0 buyers,

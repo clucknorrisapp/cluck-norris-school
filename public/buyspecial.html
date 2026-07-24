@@ -967,7 +967,7 @@ async function runStCrossCheck(startTime, endTime, localBuyerSet) {
     // unreliable for this token. Build a RELIABLE payout list from the indexer's buyer set + live
     // on-chain balances so hold-based payouts still work even when the scan comes up short.
     if (d.buyers.length && (onlyST > 0 || localBuyerSet.size === 0)) {
-      renderReliablePayout(box, currentMint, d.buyers, srcName);
+      renderReliablePayout(box, currentMint, d.buyers, srcName, startTime);
     }
   } catch (e) {
     box.style.display = 'none';
@@ -979,11 +979,11 @@ async function runStCrossCheck(startTime, endTime, localBuyerSet) {
 // bag is never paid on. The wallet's CURRENT on-chain balance (getTokenAccountsByOwner) is the
 // hold check: payout = pct * min(tokensBought, held). Renders wallet · bought · held · pct-payout
 // with an editable % and a copy-CSV button. Pure add-on; never alters the scan.
-async function renderReliablePayout(box, mint, buyers, srcName) {
+async function renderReliablePayout(box, mint, buyers, srcName, windowFrom) {
   const sec = document.createElement('div');
   sec.style.cssText = 'margin-top:12px;padding-top:10px;border-top:1px dashed rgba(16,185,129,0.3);';
   sec.innerHTML = '<div style="font-weight:700;color:#6EE7B7;margin-bottom:6px;">🛟 RELIABLE PAYOUT LIST (' + srcName + ' + live balances)</div>'
-    + '<div style="color:var(--subtext);font-size:11px;margin-bottom:8px;">This token’s swaps don’t surface on its mint account, so the on-chain scan above misses them. This list is built from the indexer’s buyer set: payout is a % of what each wallet <b>actually bought in the window</b>, and its <b>current on-chain balance</b> is the hold check (still holding what it bought = eligible). Tokens a wallet held but did NOT buy in the window are never paid on.</div>'
+    + '<div style="color:var(--subtext);font-size:11px;margin-bottom:8px;">This token’s swaps don’t surface on its mint account, so the on-chain scan above misses them. This list is built from the indexer’s buyer set: payout is a % of what each wallet <b>actually bought in the window</b>, and its <b>current on-chain balance</b> is the hold check (still holding what it bought = eligible). Tokens a wallet held but did NOT buy in the window are never paid on. A wallet that SOLD any of its buy during the window is disqualified (window-scoped sell scan).</div>'
     + '<div style="margin-bottom:8px;">Payout <input id="relPct" type="number" value="10" min="0" step="0.5" style="width:60px;padding:3px 6px;border-radius:6px;border:1px solid #374151;background:#0b1220;color:#e5e7eb;"> % of tokens bought · <button id="relRefresh" style="padding:3px 10px;border-radius:6px;border:1px solid #374151;background:#111827;color:#e5e7eb;cursor:pointer;">recompute</button> <button id="relCsv" style="padding:3px 10px;border-radius:6px;border:1px solid #16a34a;background:#065f46;color:#d1fae5;cursor:pointer;">copy payout CSV</button></div>'
     + '<div id="relRows" style="font-size:11px;">Loading balances…</div>';
   box.appendChild(sec);
@@ -1003,18 +1003,35 @@ async function renderReliablePayout(box, mint, buyers, srcName) {
   }
   rows.sort((a, b) => b.bought - a.bought);
 
+  // Precise HOLD check: window-scoped per-wallet SELL scan (server-side, Helius). A wallet that
+  // sold any of its in-window buy — even while still holding a large pre-existing bag — is flagged
+  // and disqualified. Window = buy-start -> now (covers the buy window + the hold period). Best-
+  // effort: if the check can't run, wallets are left un-flagged (never wrongly disqualified).
+  if (windowFrom > 0) {
+    try {
+      const nowSec = Math.floor(Date.now() / 1000);
+      const wl = rows.map(r => r.wallet).join(',');
+      const hr = await fetch('/api/buyspecial-holdcheck?mint=' + encodeURIComponent(mint) + '&from=' + windowFrom + '&to=' + nowSec + '&wallets=' + encodeURIComponent(wl));
+      const hj = await hr.json();
+      if (hj && hj.success && Array.isArray(hj.results)) {
+        const m = {}; for (const x of hj.results) m[x.wallet] = x;
+        rows.forEach(r => { const h = m[r.wallet]; r.soldInWindow = !!(h && h.soldInWindow); r.sells = h ? h.sells : null; });
+      }
+    } catch (e) { /* leave unflagged */ }
+  }
+
   function draw() {
     const pct = Math.max(0, parseFloat(document.getElementById('relPct').value) || 0) / 100;
     const fmt = (n) => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
     let elig = 0, html = '<table style="width:100%;border-collapse:collapse;"><tr style="color:var(--subtext);text-align:left;"><th>wallet</th><th style="text-align:right;">bought</th><th style="text-align:right;">held</th><th style="text-align:right;">payout</th></tr>';
     for (const r of rows) {
-      // Pay on tokens BOUGHT in-window, capped by what they still HOLD (the hold check).
+      // Pay on tokens BOUGHT in-window, capped by held, and DQ anyone who SOLD in the window.
       const payBase = (r.held > 0) ? Math.min(r.bought, r.held) : 0;
-      const ok = r.bought > 0 && payBase > 0;
+      const ok = r.bought > 0 && payBase > 0 && !r.soldInWindow;
       if (ok) elig++;
       const payout = ok ? Math.floor(payBase * pct) : 0;
-      const note = r.bought <= 0 ? ' (no in-window buy)' : r.held < 0 ? ' (balance lookup failed)' : r.held <= 0 ? ' (sold — holds 0)' : (r.held < r.bought ? ' (sold some — paid on held)' : '');
-      const color = (r.held < 0 || r.bought <= 0) ? '#9CA3AF' : ok ? '#D1FAE5' : '#FCA5A5';
+      const note = r.soldInWindow ? ' (sold in window — disqualified)' : r.bought <= 0 ? ' (no in-window buy)' : r.held < 0 ? ' (balance lookup failed)' : r.held <= 0 ? ' (sold — holds 0)' : (r.held < r.bought ? ' (sold some — paid on held)' : '');
+      const color = (r.soldInWindow || r.held < 0 || r.bought <= 0) ? '#9CA3AF' : ok ? '#D1FAE5' : '#FCA5A5';
       html += '<tr style="color:' + color + ';border-top:1px solid rgba(255,255,255,0.05);"><td style="font-family:var(--mono);">' + r.wallet.slice(0, 6) + '…' + r.wallet.slice(-4) + note + '</td><td style="text-align:right;">' + fmt(r.bought) + '</td><td style="text-align:right;">' + (r.held < 0 ? '—' : fmt(r.held)) + '</td><td style="text-align:right;font-weight:700;">' + (ok ? fmt(payout) : '—') + '</td></tr>';
     }
     html += '</table><div style="margin-top:6px;color:var(--subtext);">' + elig + ' eligible (bought + still holding) of ' + rows.length + ' buyers · payout = % of tokens bought in-window, capped by current balance</div>';
@@ -1024,7 +1041,7 @@ async function renderReliablePayout(box, mint, buyers, srcName) {
   document.getElementById('relRefresh').addEventListener('click', draw);
   document.getElementById('relCsv').addEventListener('click', () => {
     const pct = Math.max(0, parseFloat(document.getElementById('relPct').value) || 0) / 100;
-    const csv = rows.filter(r => r.bought > 0 && r.held > 0).map(r => r.wallet + ',' + Math.floor(Math.min(r.bought, r.held) * pct)).join('\n');
+    const csv = rows.filter(r => r.bought > 0 && r.held > 0 && !r.soldInWindow).map(r => r.wallet + ',' + Math.floor(Math.min(r.bought, r.held) * pct)).join('\n');
     navigator.clipboard.writeText(csv).catch(() => {});
     const btn = document.getElementById('relCsv'); const t = btn.textContent; btn.textContent = 'copied ✓'; setTimeout(() => btn.textContent = t, 1500);
   });
