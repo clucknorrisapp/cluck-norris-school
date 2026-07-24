@@ -4,21 +4,23 @@
 <link rel="stylesheet" href="/theme.css">
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>🎯 Buy Special — Payout Desk</title>
-<meta name="robots" content="noindex">
+<title>🎯 Buy Special — buy competitions</title>
+<meta property="og:title" content="Buy Special — buy competitions"/>
+<meta property="og:description" content="Run a buy competition on any Solana token: reward every holder, or rank the top buyers. On-chain, hold-verified, one click to the airdropper."/>
+<meta property="og:image" content="https://clucknorris.app/cluck-norris.png"/>
 <style>
-  :root{color-scheme:dark;--bg:#0b0c0e;--card:#14151a;--border:rgba(255,255,255,0.09);--text:#FFEFE0;--sub:#C9A892;--muted:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--green:#7BE26B;--red:#E8695E;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
+  :root{color-scheme:dark;--bg:#0b0c0e;--card:#14151a;--card2:#101116;--border:rgba(255,255,255,0.09);--text:#FFEFE0;--sub:#C9A892;--muted:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--green:#7BE26B;--red:#E8695E;--purple:#a78bfa;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
   *{box-sizing:border-box;margin:0;padding:0;}
   body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;min-height:100vh;}
-  .wrap{max-width:920px;margin:0 auto;padding:22px 16px 90px;}
+  .wrap{max-width:940px;margin:0 auto;padding:20px 16px 100px;}
   a.back{display:inline-flex;align-items:center;gap:6px;font-family:Anton,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#D97706;text-decoration:none;margin-bottom:12px;}
-  .header{display:flex;align-items:center;gap:12px;margin-bottom:8px;}
+  .header{display:flex;align-items:center;gap:12px;margin-bottom:6px;}
   .header h1{font-family:Anton,sans-serif;font-size:26px;letter-spacing:2px;color:#FCD34D;}
   .header .ic{font-size:34px;}
-  .lede{font-size:13px;color:var(--sub);line-height:1.6;margin-bottom:18px;max-width:640px;}
+  .lede{font-size:13px;color:var(--sub);line-height:1.6;margin-bottom:16px;max-width:660px;}
   .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:14px;}
   .card-title{font-family:var(--mono);font-size:10px;color:var(--sub);letter-spacing:2px;margin-bottom:12px;}
-  .step-n{display:inline-block;width:20px;height:20px;line-height:20px;text-align:center;border-radius:50%;background:var(--accent);color:#1a1205;font-weight:800;font-size:11px;margin-right:6px;font-family:var(--mono);}
+  .step-n{display:inline-block;width:19px;height:19px;line-height:19px;text-align:center;border-radius:50%;background:var(--accent);color:#1a1205;font-weight:800;font-size:11px;margin-right:6px;font-family:var(--mono);}
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;}
   .fld{display:flex;flex-direction:column;gap:4px;}
   .fld label{font-family:var(--mono);font-size:9px;color:var(--sub);letter-spacing:1px;}
@@ -28,242 +30,324 @@
   .chip{background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-family:var(--mono);font-size:11px;color:var(--sub);cursor:pointer;}
   .chip.active,.chip:hover{border-color:var(--accent);color:var(--accent);}
   .btn{background:#D97706;border:none;border-radius:9px;padding:11px 20px;font-family:var(--mono);font-size:13px;font-weight:800;color:#fff;cursor:pointer;letter-spacing:1px;}
-  .btn:hover{opacity:.92;}
-  .btn:disabled{opacity:.35;cursor:not-allowed;}
-  .btn.g{background:#7C3AED;}
-  .btn.a{background:#10B981;}
+  .btn:hover{opacity:.92;} .btn:disabled{opacity:.35;cursor:not-allowed;}
+  .btn.g{background:#7C3AED;} .btn.a{background:#10B981;}
   .btn.ghost{background:rgba(255,255,255,0.05);border:1px solid var(--border);color:#e8e8e8;font-weight:700;}
   .muted{font-family:var(--mono);font-size:10px;color:var(--muted);}
+  .modetog{display:flex;gap:0;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:4px;max-width:460px;}
+  .modetog button{flex:1;background:transparent;border:none;padding:12px 10px;font-family:var(--mono);font-size:12px;font-weight:700;color:var(--sub);cursor:pointer;letter-spacing:1px;}
+  .modetog button.on{background:var(--accent);color:#1a1205;}
   .stat-row{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0;}
   .stat{background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px;padding:10px 14px;flex:1;min-width:90px;}
   .stat .v{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--accent);}
+  .stat .v.g{color:var(--green);} .stat .v.r{color:var(--red);}
   .stat .l{font-size:9px;color:var(--sub);letter-spacing:1px;margin-top:2px;}
   table{width:100%;border-collapse:collapse;margin-top:8px;}
   th{font-family:var(--mono);font-size:9px;color:var(--sub);letter-spacing:1px;padding:7px 8px;text-align:left;border-bottom:1px solid var(--border);}
   th.r,td.r{text-align:right;}
   td{padding:7px 8px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:12px;font-family:var(--mono);}
-  .tbl-wrap{overflow-x:auto;max-height:420px;overflow-y:auto;}
-  .dq{color:var(--red);}
-  .ok{color:var(--green);}
+  .tbl-wrap{overflow-x:auto;max-height:440px;overflow-y:auto;}
+  .dq{color:var(--red);} .ok{color:var(--green);} .win{color:#FCD34D;}
   .status{font-family:var(--mono);font-size:12px;color:var(--sub);padding:10px 0;min-height:20px;}
   .hidden{display:none;}
   .note{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:6px;line-height:1.5;}
-  code{color:var(--accent);}
+  .cbrow{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;color:var(--sub);margin-top:8px;}
+  .cbrow input{width:auto;}
+  .gate{background:rgba(217,119,6,0.08);border:1px solid rgba(217,119,6,0.45);border-radius:12px;padding:22px;margin-bottom:16px;}
+  .gate h2{font-family:Anton,sans-serif;font-size:19px;letter-spacing:2px;color:#FCD34D;text-align:center;margin-bottom:4px;}
+  .gate .sub{font-family:Anton,sans-serif;font-size:10px;color:var(--sub);text-align:center;letter-spacing:3px;margin-bottom:16px;}
+  .gcard{background:rgba(0,0,0,0.4);border:1px solid rgba(217,119,6,0.45);border-radius:10px;padding:14px;text-align:center;margin-bottom:10px;cursor:pointer;}
+  .gcard .lbl{font-family:Anton,sans-serif;font-size:9px;color:var(--sub);letter-spacing:2px;margin-bottom:6px;}
+  .gcard .val{font-family:var(--mono);font-size:22px;font-weight:700;color:#FCD34D;word-break:break-all;}
+  .gcard .val.sm{font-size:14px;}
+  .gcard .hint{font-family:Anton,sans-serif;font-size:8px;letter-spacing:1px;margin-top:5px;color:var(--accent);}
+  .gblurb{font-family:Anton,sans-serif;font-size:11px;color:var(--sub);text-align:center;line-height:1.7;margin-bottom:12px;letter-spacing:1px;}
+  .gstatus{font-family:var(--mono);font-size:11px;color:var(--sub);text-align:center;padding:11px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;}
+  .gstatus.ok{background:rgba(16,185,129,0.1);border-color:rgba(16,185,129,0.4);color:var(--green);font-weight:700;}
+  .opbanner{display:flex;align-items:center;gap:10px;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-family:var(--mono);font-size:12px;color:var(--green);}
 </style>
 </head>
 <body>
 <div class="wrap">
   <a href="/tools" class="back">&larr; TOOLS</a>
-  <div class="header"><div class="ic">🎯</div><div><h1>BUY SPECIAL — PAYOUT DESK</h1></div></div>
-  <div class="lede">Operator dashboard for a buy competition, end to end: <b>scan the buys</b> in a window → export CSV → run the <b>no-sells hold check</b> → hand the eligible winners + amounts straight to the airdropper. Buyer discovery and the sell scan run <b>server-side, on-chain</b> — no fragile in-browser scan.</div>
+  <div class="header"><div class="ic">🎯</div><div><h1>BUY SPECIAL</h1></div></div>
+  <div class="lede">Run a buy competition on any Solana token. <b>Reward all holders</b> a % of what they bought, or <b>rank the top buyers</b> for prizes. Buyer discovery + the hold check run <b>server-side, on-chain</b> — then hand the winners + amounts straight to the airdropper.</div>
 
-  <!-- Token -->
-  <div class="card">
-    <div class="card-title">TOKEN</div>
-    <div class="presets" id="tokPresets">
-      <button class="chip" data-mint="DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS" data-name="CLKN">🐔 CLKN</button>
-      <button class="chip" data-mint="RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF" data-name="ROSE">🌹 ROSE</button>
-      <button class="chip" data-mint="" data-name="CUSTOM">✏️ CUSTOM</button>
-    </div>
-    <input id="mint" placeholder="Token mint address…" style="width:100%" />
+  <div class="opbanner hidden" id="opBanner">✓ Operator mode — free unlimited runs.</div>
+
+  <div class="gate hidden" id="gate">
+    <h2>🔒 BUY SPECIAL</h2>
+    <div class="sub">CLKN MICROPAYMENT TO UNLOCK</div>
+    <div class="gcard" onclick="copyAmt()"><div class="lbl">SEND EXACTLY</div><div class="val" id="gAmt">—</div><div class="hint" id="gAmtHint">TAP TO COPY</div></div>
+    <div class="gcard" onclick="copyWallet()"><div class="lbl">TO THIS WALLET</div><div class="val sm">7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H</div><div class="hint" id="gWalHint">TAP TO COPY</div></div>
+    <div class="gblurb">500 CLKN ≈ $0.06 · 7 days unlimited runs · any token, any window<br>Hold ≥ 2M CLKN after sending → 5× longer (35 days)</div>
+    <div class="gstatus" id="gStatus">Watching for your payment…</div>
   </div>
 
-  <!-- Window + bonus -->
-  <div class="card">
-    <div class="card-title"><span class="step-n">1</span>BUY WINDOW</div>
-    <div class="presets" id="winPresets">
-      <button class="chip" data-preset="rose">ROSE comp (Jul 19–21)</button>
-      <button class="chip" data-preset="24">last 24h</button>
-      <button class="chip" data-preset="48">last 48h</button>
-      <button class="chip" data-preset="72">last 72h</button>
-      <button class="chip" data-preset="168">last 7d</button>
+  <div id="tool" class="hidden">
+    <div class="card">
+      <div class="card-title">TOKEN</div>
+      <div class="presets" id="tokPresets">
+        <button class="chip" data-mint="DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS" data-name="CLKN">🐔 CLKN</button>
+        <button class="chip" data-mint="RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF" data-name="ROSE">🌹 ROSE</button>
+        <button class="chip" data-mint="" data-name="CUSTOM">✏️ CUSTOM</button>
+      </div>
+      <input id="mint" placeholder="Token mint address…" style="width:100%" />
     </div>
-    <div class="row">
-      <div class="fld"><label>START (your local time)</label><input type="datetime-local" id="from"/></div>
-      <div class="fld"><label>END (your local time)</label><input type="datetime-local" id="to"/></div>
-      <div class="fld"><label>BONUS %</label><input type="number" id="bonus" value="10" min="0" step="0.5" style="width:90px"/></div>
-      <button class="btn" id="scanBtn">▶ SCAN BUYS</button>
-    </div>
-    <div class="note" id="winUtc"></div>
-  </div>
 
-  <div class="status" id="status"></div>
+    <div class="card">
+      <div class="card-title">REWARD MODE</div>
+      <div class="modetog" id="modeTog">
+        <button data-mode="all" class="on">🎁 REWARD ALL HOLDERS</button>
+        <button data-mode="ranked">🏆 RANKED WINNERS</button>
+      </div>
+      <div class="note" id="modeNote">Every buyer who still holds (no in-window sells) earns a % of what they bought.</div>
+    </div>
 
-  <!-- Step 1 results: buys -->
-  <div class="card hidden" id="buysCard">
-    <div class="card-title">BUYS IN WINDOW</div>
-    <div class="stat-row">
-      <div class="stat"><div class="v" id="stBuyers">–</div><div class="l">BUYERS</div></div>
-      <div class="stat"><div class="v" id="stBought">–</div><div class="l">TOTAL BOUGHT</div></div>
-      <div class="stat"><div class="v" id="stSrc">–</div><div class="l">SOURCE</div></div>
-    </div>
-    <div class="row" style="margin-bottom:6px">
-      <button class="btn ghost" id="copyBuysBtn">📋 COPY BUYS CSV</button>
-      <button class="btn g" id="holdBtn"><span class="step-n" style="background:#fff;color:#4c1d95">2</span>RUN NO-SELLS CHECK</button>
-    </div>
-    <div class="tbl-wrap"><table id="buysTbl"></table></div>
-  </div>
+    <div class="card">
+      <div class="card-title"><span class="step-n">1</span>BUY WINDOW</div>
+      <div class="presets" id="winPresets">
+        <button class="chip" data-preset="rose">ROSE comp (Jul 19–21)</button>
+        <button class="chip" data-preset="24">last 24h</button>
+        <button class="chip" data-preset="48">last 48h</button>
+        <button class="chip" data-preset="72">last 72h</button>
+        <button class="chip" data-preset="168">last 7d</button>
+      </div>
+      <div class="row">
+        <div class="fld"><label>START (local)</label><input type="datetime-local" id="from"/></div>
+        <div class="fld"><label>END (local)</label><input type="datetime-local" id="to"/></div>
+      </div>
+      <div class="note" id="winUtc"></div>
 
-  <!-- Step 2 results: eligible payout -->
-  <div class="card hidden" id="payCard">
-    <div class="card-title">ELIGIBLE PAYOUT LIST (bought in-window · still holding · no in-window sells)</div>
-    <div class="stat-row">
-      <div class="stat"><div class="v ok" id="stElig">–</div><div class="l">ELIGIBLE</div></div>
-      <div class="stat"><div class="v dq" id="stDq">–</div><div class="l">DISQUALIFIED</div></div>
-      <div class="stat"><div class="v" id="stPayout">–</div><div class="l">TOTAL PAYOUT</div></div>
+      <div id="cfgAll" class="row" style="margin-top:12px">
+        <div class="fld"><label>BONUS % OF BUYS</label><input type="number" id="bonus" value="10" min="0" step="0.5" style="width:110px"/></div>
+      </div>
+
+      <div id="cfgRanked" class="hidden" style="margin-top:12px">
+        <div class="row">
+          <div class="fld"><label>RANK BY</label><select id="rankBy"><option value="bought">Tokens bought</option><option value="sol">SOL spent</option></select></div>
+          <div class="fld"><label># WINNERS</label><input type="number" id="numWinners" value="10" min="1" style="width:90px"/></div>
+          <div class="fld"><label>PRIZE METHOD</label><select id="prizeMethod"><option value="equal">Equal split of pool</option><option value="fixed">Fixed per rank</option><option value="prorata">Pro-rata by amount</option></select></div>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <div class="fld" id="poolFld"><label>PRIZE POOL (tokens)</label><input type="number" id="prizePool" value="" min="0" placeholder="total to split" style="width:150px"/></div>
+          <div class="fld hidden" id="fixedFld" style="flex:1;min-width:260px"><label>FIXED PRIZES (comma-sep, 1st,2nd,3rd…)</label><input id="fixedPrizes" placeholder="e.g. 100000, 50000, 25000" style="width:100%"/></div>
+        </div>
+      </div>
+
+      <div class="cbrow"><input type="checkbox" id="requireHold" checked/><label for="requireHold">Require holding — disqualify wallets that sold within the window (recommended)</label></div>
+      <div class="row" style="margin-top:12px"><button class="btn" id="scanBtn">▶ SCAN BUYS</button></div>
     </div>
-    <div class="row" style="margin-bottom:6px">
-      <button class="btn ghost" id="copyPayBtn">📋 COPY PAYOUT CSV</button>
-      <button class="btn a" id="airdropBtn"><span class="step-n" style="background:#fff;color:#065f46">3</span>OPEN IN AIRDROPPER</button>
+
+    <div class="status" id="status"></div>
+
+    <div class="card hidden" id="buysCard">
+      <div class="card-title">BUYS IN WINDOW</div>
+      <div class="stat-row">
+        <div class="stat"><div class="v" id="stBuyers">–</div><div class="l">BUYERS</div></div>
+        <div class="stat"><div class="v" id="stBought">–</div><div class="l">TOTAL BOUGHT</div></div>
+        <div class="stat"><div class="v" id="stSrc">–</div><div class="l">SOURCE</div></div>
+      </div>
+      <div class="row" style="margin-bottom:6px">
+        <button class="btn ghost" id="copyBuysBtn">📋 COPY BUYS CSV</button>
+        <button class="btn g" id="computeBtn"><span class="step-n" style="background:#fff;color:#4c1d95">2</span>VERIFY HOLDS &amp; BUILD PAYOUT</button>
+      </div>
+      <div class="tbl-wrap"><table id="buysTbl"></table></div>
     </div>
-    <div class="tbl-wrap"><table id="payTbl"></table></div>
-    <div class="note">Payout = bonus% × <b>tokens bought in the window</b>, capped by current balance. A wallet that sold any of its buy within the window (buy-start → now) is disqualified. Hand-off opens the airdropper pre-filled; you sign the send.</div>
+
+    <div class="card hidden" id="resCard">
+      <div class="card-title" id="resTitle">PAYOUT LIST</div>
+      <div class="stat-row">
+        <div class="stat"><div class="v g" id="stElig">–</div><div class="l" id="stEligL">ELIGIBLE</div></div>
+        <div class="stat"><div class="v r" id="stDq">–</div><div class="l">DISQUALIFIED</div></div>
+        <div class="stat"><div class="v" id="stTotal">–</div><div class="l">TOTAL PAYOUT</div></div>
+      </div>
+      <div class="row" style="margin-bottom:6px">
+        <button class="btn ghost" id="copyPayBtn">📋 COPY PAYOUT CSV</button>
+        <button class="btn a" id="airdropBtn"><span class="step-n" style="background:#fff;color:#065f46">3</span>OPEN IN AIRDROPPER</button>
+      </div>
+      <div class="tbl-wrap"><table id="resTbl"></table></div>
+      <div class="note" id="resNote"></div>
+    </div>
   </div>
 </div>
 
 <script>
-const RPC = '/api/helius-rpc';
-let mint = '', tokenName = 'CUSTOM';
-let buyers = [];        // [{wallet, buyCount, tokensBought, volumeSol}]
-let source = '';
-let eligible = [];      // [{wallet, bought, held, payout}]
-let winFrom = 0, winTo = 0, bonusPct = 10;
+const CLKN='DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS', ROSE='RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF';
+let mint='', tokenName='CUSTOM', winFrom=0, winTo=0, mode='all';
+let buyers=[], results=[], source='';
+const $=id=>document.getElementById(id);
+const fmt=n=>Number(n||0).toLocaleString(undefined,{maximumFractionDigits:0});
+function setStatus(t){ $('status').textContent=t||''; }
 
-const $ = id => document.getElementById(id);
-const fmt = n => Number(n).toLocaleString(undefined, {maximumFractionDigits:0});
-function setStatus(t){ $('status').textContent = t || ''; }
-
-// ---- token select ----
-document.querySelectorAll('#tokPresets .chip').forEach(b => b.addEventListener('click', () => {
-  document.querySelectorAll('#tokPresets .chip').forEach(x => x.classList.remove('active'));
-  b.classList.add('active');
-  mint = b.getAttribute('data-mint'); tokenName = b.getAttribute('data-name');
-  $('mint').value = mint;
-  if (!mint) $('mint').focus();
+document.querySelectorAll('#tokPresets .chip').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('#tokPresets .chip').forEach(x=>x.classList.remove('active')); b.classList.add('active');
+  mint=b.getAttribute('data-mint'); tokenName=b.getAttribute('data-name'); $('mint').value=mint; if(!mint)$('mint').focus();
 }));
-$('mint').addEventListener('input', () => {
-  mint = $('mint').value.trim();
-  const known = {'DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS':'CLKN','RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF':'ROSE'};
-  tokenName = known[mint] || 'TOKEN';
-});
+$('mint').addEventListener('input',()=>{ mint=$('mint').value.trim(); const k={[CLKN]:'CLKN',[ROSE]:'ROSE'}; tokenName=k[mint]||'TOKEN'; });
 
-// ---- window presets ----
-function toLocalInput(unixSec){ const d = new Date(unixSec*1000); const p = n => String(n).padStart(2,'0');
-  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes()); }
-function refreshUtc(){
-  const f = $('from').value ? Math.floor(new Date($('from').value).getTime()/1000) : 0;
-  const t = $('to').value ? Math.floor(new Date($('to').value).getTime()/1000) : 0;
-  $('winUtc').textContent = (f && t) ? ('UTC: ' + new Date(f*1000).toISOString().replace('.000','') + '  →  ' + new Date(t*1000).toISOString().replace('.000','') + '   ·   unix ' + f + '–' + t) : '';
-}
-document.querySelectorAll('#winPresets .chip').forEach(b => b.addEventListener('click', () => {
-  const p = b.getAttribute('data-preset'); const now = Math.floor(Date.now()/1000);
-  if (p === 'rose') { $('from').value = toLocalInput(1784489400); $('to').value = toLocalInput(1784671200); }
-  else { $('to').value = toLocalInput(now); $('from').value = toLocalInput(now - parseInt(p)*3600); }
-  refreshUtc();
+document.querySelectorAll('#modeTog button').forEach(b=>b.addEventListener('click',()=>{
+  mode=b.getAttribute('data-mode');
+  document.querySelectorAll('#modeTog button').forEach(x=>x.classList.toggle('on', x===b));
+  $('cfgAll').classList.toggle('hidden', mode!=='all');
+  $('cfgRanked').classList.toggle('hidden', mode!=='ranked');
+  $('modeNote').textContent = mode==='all'
+    ? 'Every buyer who still holds (no in-window sells) earns a % of what they bought.'
+    : 'The top N buyers by amount win prizes. Sellers can be disqualified before ranking.';
+  $('computeBtn').innerHTML='<span class="step-n" style="background:#fff;color:#4c1d95">2</span>'+(mode==='all'?'VERIFY HOLDS &amp; BUILD PAYOUT':'VERIFY HOLDS &amp; RANK WINNERS');
 }));
-$('from').addEventListener('input', refreshUtc); $('to').addEventListener('input', refreshUtc);
+$('prizeMethod').addEventListener('change',()=>{ const m=$('prizeMethod').value; $('poolFld').classList.toggle('hidden', m==='fixed'); $('fixedFld').classList.toggle('hidden', m!=='fixed'); });
 
-// ---- STEP 1: scan buys (server crosscheck) ----
-$('scanBtn').addEventListener('click', async () => {
-  if (!mint || mint.length < 32) { setStatus('Enter a token mint first.'); return; }
-  winFrom = $('from').value ? Math.floor(new Date($('from').value).getTime()/1000) : 0;
-  winTo   = $('to').value ? Math.floor(new Date($('to').value).getTime()/1000) : 0;
-  bonusPct = parseFloat($('bonus').value) || 0;
-  if (!winFrom || !winTo || winTo <= winFrom) { setStatus('Set a valid start/end window.'); return; }
-  $('scanBtn').disabled = true; setStatus('Scanning on-chain buys in the window…');
-  $('buysCard').classList.add('hidden'); $('payCard').classList.add('hidden');
-  try {
-    const r = await fetch('/api/buyspecial-crosscheck?mint=' + encodeURIComponent(mint) + '&from=' + winFrom + '&to=' + winTo);
-    const d = await r.json();
-    if (!d || !d.success || !Array.isArray(d.buyers)) { setStatus('No buyer data returned. Try again in a moment.'); $('scanBtn').disabled = false; return; }
-    buyers = d.buyers.slice().sort((a,b) => (b.tokensBought||0) - (a.tokensBought||0));
-    source = d.source || 'on-chain';
-    renderBuys();
-    setStatus(buyers.length ? ('Found ' + buyers.length + ' buyer' + (buyers.length===1?'':'s') + '. Review, export, then run the no-sells check.') : 'No buys found in this window.');
-  } catch (e) { setStatus('Scan failed: ' + e.message); }
-  $('scanBtn').disabled = false;
+function toLocal(u){ const d=new Date(u*1000), p=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes()); }
+function refUtc(){ const f=$('from').value?Math.floor(new Date($('from').value).getTime()/1000):0, t=$('to').value?Math.floor(new Date($('to').value).getTime()/1000):0;
+  $('winUtc').textContent=(f&&t)?('UTC '+new Date(f*1000).toISOString().slice(0,16)+'Z → '+new Date(t*1000).toISOString().slice(0,16)+'Z'):''; }
+document.querySelectorAll('#winPresets .chip').forEach(b=>b.addEventListener('click',()=>{
+  const p=b.getAttribute('data-preset'), now=Math.floor(Date.now()/1000);
+  if(p==='rose'){ $('from').value=toLocal(1784489400); $('to').value=toLocal(1784671200); }
+  else { $('to').value=toLocal(now); $('from').value=toLocal(now-parseInt(p)*3600); } refUtc();
+}));
+$('from').addEventListener('input',refUtc); $('to').addEventListener('input',refUtc);
+
+$('scanBtn').addEventListener('click', async ()=>{
+  if(!isUnlocked()){ showGate(); return; }
+  if(!mint||mint.length<32){ setStatus('Enter a token mint first.'); return; }
+  winFrom=$('from').value?Math.floor(new Date($('from').value).getTime()/1000):0;
+  winTo=$('to').value?Math.floor(new Date($('to').value).getTime()/1000):0;
+  if(!winFrom||!winTo||winTo<=winFrom){ setStatus('Set a valid start/end window.'); return; }
+  $('scanBtn').disabled=true; setStatus('Scanning on-chain buys in the window…');
+  $('buysCard').classList.add('hidden'); $('resCard').classList.add('hidden');
+  try{
+    const r=await fetch('/api/buyspecial-crosscheck?mint='+encodeURIComponent(mint)+'&from='+winFrom+'&to='+winTo);
+    const d=await r.json();
+    if(!d||!d.success||!Array.isArray(d.buyers)){ setStatus('No buyer data returned — try again in a moment.'); $('scanBtn').disabled=false; return; }
+    buyers=d.buyers.slice(); source=d.source||'on-chain'; renderBuys();
+    setStatus(buyers.length?('Found '+buyers.length+' buyer'+(buyers.length===1?'':'s')+'. Review, then verify holds.'):'No buys found in this window.');
+  }catch(e){ setStatus('Scan failed: '+e.message); }
+  $('scanBtn').disabled=false;
 });
-
 function renderBuys(){
-  const totalBought = buyers.reduce((s,b) => s + (b.tokensBought||0), 0);
-  $('stBuyers').textContent = buyers.length;
-  $('stBought').textContent = fmt(totalBought);
-  $('stSrc').textContent = source;
-  let h = '<thead><tr><th>#</th><th>WALLET</th><th class="r">TOKENS BOUGHT</th><th class="r">BUYS</th></tr></thead><tbody>';
-  buyers.forEach((b,i) => { h += '<tr><td>'+(i+1)+'</td><td>'+b.wallet+'</td><td class="r">'+fmt(b.tokensBought||0)+'</td><td class="r">'+(b.buyCount||0)+'</td></tr>'; });
-  $('buysTbl').innerHTML = h + '</tbody>';
-  $('buysCard').classList.remove('hidden');
+  buyers.sort((a,b)=>(b.tokensBought||0)-(a.tokensBought||0));
+  $('stBuyers').textContent=buyers.length;
+  $('stBought').textContent=fmt(buyers.reduce((s,b)=>s+(b.tokensBought||0),0));
+  $('stSrc').textContent=source;
+  let h='<thead><tr><th>#</th><th>WALLET</th><th class="r">TOKENS BOUGHT</th><th class="r">SOL SPENT</th><th class="r">BUYS</th></tr></thead><tbody>';
+  buyers.forEach((b,i)=>{ h+='<tr><td>'+(i+1)+'</td><td>'+b.wallet+'</td><td class="r">'+fmt(b.tokensBought||0)+'</td><td class="r">'+(Number(b.volumeSol||0).toFixed(2))+'</td><td class="r">'+(b.buyCount||0)+'</td></tr>'; });
+  $('buysTbl').innerHTML=h+'</tbody>'; $('buysCard').classList.remove('hidden');
 }
+$('copyBuysBtn').addEventListener('click',()=>copy('wallet,tokens_bought,sol_spent\n'+buyers.map(b=>b.wallet+','+Math.floor(b.tokensBought||0)+','+Number(b.volumeSol||0).toFixed(4)).join('\n')+'\n',$('copyBuysBtn'),'📋 COPY BUYS CSV'));
 
-$('copyBuysBtn').addEventListener('click', () => {
-  const csv = 'wallet,tokens_bought\n' + buyers.map(b => b.wallet + ',' + Math.floor(b.tokensBought||0)).join('\n') + '\n';
-  copy(csv, $('copyBuysBtn'), '📋 COPY BUYS CSV');
-});
-
-// ---- STEP 2: no-sells hold check (server holdcheck) ----
-$('holdBtn').addEventListener('click', async () => {
-  if (!buyers.length) return;
-  $('holdBtn').disabled = true; setStatus('Running the no-sells hold check (buy-start → now)…');
-  try {
-    const now = Math.floor(Date.now()/1000);
-    const wl = buyers.map(b => b.wallet).join(',');
-    const r = await fetch('/api/buyspecial-holdcheck?mint=' + encodeURIComponent(mint) + '&from=' + winFrom + '&to=' + now + '&wallets=' + encodeURIComponent(wl));
-    const d = await r.json();
-    const m = {}; if (d && d.success) for (const x of d.results) m[x.wallet] = x;
-    const pct = bonusPct/100;
-    const rows = buyers.map(b => {
-      const h = m[b.wallet] || {}; const held = (h.balance == null ? -1 : h.balance);
-      const sold = !!h.soldInWindow;
-      const bought = b.tokensBought || 0;
-      const payBase = held > 0 ? Math.min(bought, held) : 0;
-      const ok = bought > 0 && payBase > 0 && !sold;
-      return { wallet: b.wallet, buys: b.buyCount||0, bought, held, sold, ok, payout: ok ? Math.floor(payBase*pct) : 0, src: h.source };
-    });
-    eligible = rows.filter(r => r.ok).map(r => ({ wallet: r.wallet, bought: r.bought, held: r.held, payout: r.payout }));
-    renderPay(rows);
-    setStatus(eligible.length + ' eligible · ' + rows.filter(r=>!r.ok).length + ' disqualified. Ready to hand off to the airdropper.');
-  } catch (e) { setStatus('Hold check failed: ' + e.message); }
-  $('holdBtn').disabled = false;
-});
-
-function renderPay(rows){
-  const totalPay = rows.reduce((s,r) => s + (r.ok ? r.payout : 0), 0);
-  $('stElig').textContent = rows.filter(r=>r.ok).length;
-  $('stDq').textContent = rows.filter(r=>!r.ok).length;
-  $('stPayout').textContent = fmt(totalPay);
-  let h = '<thead><tr><th>#</th><th>WALLET</th><th class="r">BOUGHT</th><th class="r">HELD</th><th class="r">PAYOUT ('+bonusPct+'%)</th><th>STATUS</th></tr></thead><tbody>';
-  let n = 0;
-  rows.forEach(r => {
-    const note = r.sold ? '<span class="dq">SOLD — DQ</span>' : r.bought<=0 ? '<span class="dq">no buy</span>' : r.held<0 ? '<span class="dq">lookup failed</span>' : r.held<=0 ? '<span class="dq">holds 0</span>' : (r.held<r.bought ? '<span class="ok">sold some · paid on held</span>' : '<span class="ok">HELD ✓</span>');
-    h += '<tr style="'+(r.ok?'':'opacity:.6')+'"><td>'+(r.ok?(++n):'–')+'</td><td>'+r.wallet+'</td><td class="r">'+fmt(r.bought)+'</td><td class="r">'+(r.held<0?'—':fmt(r.held))+'</td><td class="r" style="font-weight:700">'+(r.ok?fmt(r.payout):'—')+'</td><td>'+note+'</td></tr>';
+$('computeBtn').addEventListener('click', async ()=>{
+  if(!buyers.length) return;
+  $('computeBtn').disabled=true;
+  const requireHold=$('requireHold').checked;
+  let holdMap={};
+  if(requireHold){
+    setStatus('Verifying holds — window-scoped no-sells scan…');
+    try{
+      const now=Math.floor(Date.now()/1000), wl=buyers.map(b=>b.wallet).join(',');
+      const r=await fetch('/api/buyspecial-holdcheck?mint='+encodeURIComponent(mint)+'&from='+winFrom+'&to='+now+'&wallets='+encodeURIComponent(wl));
+      const d=await r.json(); if(d&&d.success) for(const x of d.results) holdMap[x.wallet]=x;
+    }catch(e){ setStatus('Hold check failed: '+e.message); $('computeBtn').disabled=false; return; }
+  }
+  const rows=buyers.map(b=>{
+    const h=holdMap[b.wallet]||{}; const held=(h.balance==null?(requireHold?-1:Infinity):h.balance); const sold=!!h.soldInWindow;
+    const bought=b.tokensBought||0, sol=b.volumeSol||0;
+    const eligible = bought>0 && (!requireHold || (held>0 && !sold));
+    return {wallet:b.wallet, bought, sol, buys:b.buyCount||0, held, sold, eligible};
   });
-  $('payTbl').innerHTML = h + '</tbody>';
-  $('payCard').classList.remove('hidden');
-}
-
-$('copyPayBtn').addEventListener('click', () => {
-  const csv = 'wallet,payout\n' + eligible.map(r => r.wallet + ',' + r.payout).join('\n') + '\n';
-  copy(csv, $('copyPayBtn'), '📋 COPY PAYOUT CSV');
+  if(mode==='all') buildRewardAll(rows, requireHold);
+  else buildRanked(rows, requireHold);
+  $('computeBtn').disabled=false;
 });
 
-// ---- STEP 3: hand off to the airdropper ----
-$('airdropBtn').addEventListener('click', () => {
-  if (!eligible.length) { setStatus('No eligible wallets to hand off.'); return; }
-  const recipients = eligible.map(r => r.wallet + ',' + r.payout).join('\n');
-  localStorage.setItem('airdropPayload', JSON.stringify({ ts: Date.now(), mint, tokenName, recipients }));
-  window.location.href = '/airdrop?from=buyspecial';
-});
-
-function copy(text, btn, label){
-  const done = () => { btn.textContent = '✓ COPIED'; setTimeout(() => btn.textContent = label, 1500); };
-  navigator.clipboard.writeText(text).then(done, () => {
-    const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
-    try { document.execCommand('copy'); done(); } catch(e){} document.body.removeChild(ta);
+function buildRewardAll(rows, requireHold){
+  const pct=(parseFloat($('bonus').value)||0)/100;
+  rows.forEach(r=>{
+    const cap=(requireHold && r.held>=0 && r.held!==Infinity)?Math.min(r.bought,r.held):r.bought;
+    r.payout=r.eligible?Math.floor(cap*pct):0;
   });
+  results=rows.filter(r=>r.eligible && r.payout>0);
+  renderResults(rows,'PAYOUT — '+(parseFloat($('bonus').value)||0)+'% OF BUYS',
+    'Payout = % of tokens bought in-window'+(requireHold?', capped by current balance; in-window sellers disqualified.':' (holding not required).'));
 }
 
-// default: CLKN selected
-document.querySelector('#tokPresets .chip').click();
+function buildRanked(rows, requireHold){
+  const rankBy=$('rankBy').value, N=Math.max(1,parseInt($('numWinners').value)||1), method=$('prizeMethod').value;
+  const field=rankBy==='sol'?'sol':'bought';
+  const pool=parseFloat($('prizePool').value)||0;
+  const fixed=($('fixedPrizes').value||'').split(',').map(x=>parseFloat(String(x).replace(/[^0-9.]/g,''))||0);
+  const contenders=rows.filter(r=>r.eligible).sort((a,b)=>(b[field]-a[field]));
+  const winners=contenders.slice(0,N);
+  rows.forEach(r=>r.payout=0);
+  if(method==='equal'){ const each=winners.length?Math.floor(pool/winners.length):0; winners.forEach(w=>w.payout=each); }
+  else if(method==='fixed'){ winners.forEach((w,i)=>w.payout=Math.floor(fixed[i]||0)); }
+  else { const tot=winners.reduce((s,w)=>s+w[field],0)||1; winners.forEach(w=>w.payout=Math.floor(pool*(w[field]/tot))); }
+  winners.forEach((w,i)=>w.rank=i+1);
+  results=winners.filter(w=>w.payout>0);
+  renderResults(rows,'RANKED WINNERS — TOP '+N+' BY '+(rankBy==='sol'?'SOL SPENT':'TOKENS BOUGHT'),
+    'Ranked by '+(rankBy==='sol'?'SOL spent':'tokens bought')+'; '+({equal:'pool split equally',fixed:'fixed prize per rank',prorata:'pool shared pro-rata by amount'}[method])+'.'+(requireHold?' In-window sellers disqualified before ranking.':''), winners);
+}
+
+function renderResults(rows, title, note, winnersList){
+  $('resTitle').textContent=title; $('resNote').textContent=note;
+  const elig=results.length, dq=rows.filter(r=>!r.eligible).length, total=results.reduce((s,r)=>s+r.payout,0);
+  $('stElig').textContent=elig; $('stEligL').textContent=mode==='ranked'?'WINNERS':'ELIGIBLE'; $('stDq').textContent=dq; $('stTotal').textContent=fmt(total);
+  let h, body;
+  if(mode==='ranked'){
+    h='<thead><tr><th>RANK</th><th>WALLET</th><th class="r">'+($('rankBy').value==='sol'?'SOL SPENT':'BOUGHT')+'</th><th class="r">PRIZE</th></tr></thead><tbody>';
+    body=(winnersList||[]).map(w=>'<tr><td class="win">#'+w.rank+'</td><td>'+w.wallet+'</td><td class="r">'+($('rankBy').value==='sol'?Number(w.sol).toFixed(2):fmt(w.bought))+'</td><td class="r win" style="font-weight:700">'+(w.payout>0?fmt(w.payout):'—')+'</td></tr>').join('');
+  } else {
+    const sorted=rows.slice().sort((a,b)=>b.payout-a.payout);
+    h='<thead><tr><th>#</th><th>WALLET</th><th class="r">BOUGHT</th><th class="r">HELD</th><th class="r">PAYOUT</th><th>STATUS</th></tr></thead><tbody>';
+    let n=0; body=sorted.map(r=>{
+      const st=r.sold?'<span class="dq">SOLD — DQ</span>':(!r.eligible?'<span class="dq">not eligible</span>':(r.held<0?'<span class="dq">lookup failed</span>':(r.held!==Infinity&&r.held<r.bought?'<span class="ok">sold some · paid on held</span>':'<span class="ok">HELD ✓</span>')));
+      return '<tr style="'+(r.payout>0?'':'opacity:.55')+'"><td>'+(r.payout>0?(++n):'–')+'</td><td>'+r.wallet+'</td><td class="r">'+fmt(r.bought)+'</td><td class="r">'+(r.held===Infinity?'n/a':(r.held<0?'—':fmt(r.held)))+'</td><td class="r" style="font-weight:700">'+(r.payout>0?fmt(r.payout):'—')+'</td><td>'+st+'</td></tr>';
+    }).join('');
+  }
+  $('resTbl').innerHTML=h+body+'</tbody>'; $('resCard').classList.remove('hidden');
+  setStatus(results.length+(mode==='ranked'?' winners':' eligible')+' · '+fmt(total)+' '+tokenName+' total. Ready for the airdropper.');
+}
+
+$('copyPayBtn').addEventListener('click',()=>copy('wallet,amount\n'+results.map(r=>r.wallet+','+r.payout).join('\n')+'\n',$('copyPayBtn'),'📋 COPY PAYOUT CSV'));
+$('airdropBtn').addEventListener('click',()=>{
+  if(!results.length){ setStatus('Nothing to airdrop yet — run step 2.'); return; }
+  const recipients=results.map(r=>r.wallet+','+r.payout).join('\n');
+  localStorage.setItem('airdropPayload', JSON.stringify({ ts:Date.now(), mint, tokenName, recipients }));
+  window.location.href='/airdrop?from=buyspecial';
+});
+
+function copy(text,btn,label){ const done=()=>{ btn.textContent='✓ COPIED'; setTimeout(()=>btn.textContent=label,1500); };
+  navigator.clipboard.writeText(text).then(done,()=>{ const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');done();}catch(e){} document.body.removeChild(ta); }); }
+
+const UNLOCK_KEY='clkn_buyspecial_unlock', OP_FLAG='clkn_buyspecial_operator';
+const DUR=7*24*60*60*1000, PRICE=500, RECV='7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H';
+let pendingAmt=null, pollT=null, pollStart=0;
+function isUnlocked(){ if(localStorage.getItem(OP_FLAG)==='1') return true; try{ const d=JSON.parse(localStorage.getItem(UNLOCK_KEY)||'null'); return !!(d&&d.expiresAt>Date.now()); }catch(e){ return false; } }
+function showTool(){ $('gate').classList.add('hidden'); $('tool').classList.remove('hidden'); }
+function showGate(){ $('gate').classList.remove('hidden'); $('gate').scrollIntoView({behavior:'smooth',block:'center'}); if(!pendingAmt) startPoll(); }
+function copyAmt(){ if(pendingAmt){ copyRaw(pendingAmt.toFixed(3)); flash('gAmtHint'); } }
+function copyWallet(){ copyRaw(RECV); flash('gWalHint'); }
+function copyRaw(t){ try{navigator.clipboard.writeText(t);}catch(e){} }
+function flash(id){ const e=$(id); const o=e.textContent; e.textContent='✓ COPIED'; setTimeout(()=>e.textContent=o,1200); }
+function startPoll(){
+  pendingAmt=parseFloat(PRICE+'.'+String(Math.floor(Math.random()*1000)).padStart(3,'0'));
+  $('gAmt').textContent=pendingAmt.toFixed(3); $('gStatus').textContent='Watching for your payment…';
+  pollStart=Date.now(); if(pollT)clearInterval(pollT); poll(); pollT=setInterval(()=>{ if(Date.now()-pollStart>120000){ clearInterval(pollT); $('gStatus').textContent="Haven't seen it in 2 min — tap the amount to re-copy and retry."; return; } poll(); },3000);
+}
+async function poll(){
+  if(!pendingAmt) return;
+  try{ const r=await fetch('/api/verify-clkn-payment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({unlockAmount:pendingAmt,tool:'buyspecial'})}); const d=await r.json();
+    if(d.success){ const stretch=d.holderBonus?5:1; localStorage.setItem(UNLOCK_KEY,JSON.stringify({unlockedAt:Date.now(),expiresAt:Date.now()+DUR*stretch})); clearInterval(pollT);
+      $('gStatus').className='gstatus ok'; $('gStatus').textContent=d.holderBonus?'✓ VERIFIED · 5× HOLDER BONUS · 35 DAYS':'✓ VERIFIED · 7 DAYS UNLOCKED'; setTimeout(showTool,1200); } }catch(e){}
+}
+(async function init(){
+  const q=new URLSearchParams(location.search), key=q.get('key');
+  if(localStorage.getItem(OP_FLAG)==='1'){ $('opBanner').classList.remove('hidden'); showTool(); }
+  if(key){ try{ const r=await fetch('/api/admin-check?key='+encodeURIComponent(key)); if(r.ok){ localStorage.setItem(OP_FLAG,'1'); $('opBanner').classList.remove('hidden'); showTool(); } }catch(e){} }
+  if(isUnlocked()){ showTool(); } else if(localStorage.getItem(OP_FLAG)!=='1'){ showGate(); }
+  const wantRose=/rose/i.test(location.pathname);
+  const def=document.querySelector('#tokPresets .chip[data-name="'+(wantRose?'ROSE':'CLKN')+'"]'); if(def) def.click();
+})();
 </script>
 </body>
 </html>

@@ -5953,6 +5953,15 @@ app.get("/api/buyspecial-holdcheck", async (req, res) => {
   }
 });
 
+// GET /api/admin-check?key= — validates the operator key so an operator page can waive its
+// public paywall for the owner. Returns {ok:true} (200) when the key matches, 404 otherwise
+// (never reveals whether a key exists). Read-only, no side effects.
+app.get("/api/admin-check", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ ok: false });
+  return res.status(200).json({ ok: true });
+});
+
 // GET /api/token-pools?mint= — the token's DEX pool addresses (via GeckoTerminal).
 // WHY: a token's MINT account does NOT surface pool-routed swaps, so a scanner that reads
 // getSignaturesForAddress(mint) misses nearly all buys (e.g. ROSE: 17 mint-txs, 0 buyers,
@@ -10941,7 +10950,7 @@ app.get("/buyspecial-dashboard", (req, res) => {
 });
 
 app.get("/rose", (req, res) => {
-  res.sendFile(join(__dirname, "public", "rose.html"));
+  res.sendFile(join(__dirname, "public", "buyspecial-pro.html"));  // unified Buy Special tool (ROSE default)
 });
 
 // -- Premium Forensics (private, unlinked; gated by access key in the page) --
@@ -10967,7 +10976,7 @@ app.get("/airdrop", (req, res) => {
 
 // -- Buy Special Analyzer --
 app.get("/buyspecial", (req, res) => {
-  res.sendFile(join(__dirname, "public", "buyspecial.html"));
+  res.sendFile(join(__dirname, "public", "buyspecial-pro.html"));  // unified Buy Special tool
 });
 
 // -- Holders Analyzer --
