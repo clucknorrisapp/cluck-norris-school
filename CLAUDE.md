@@ -248,8 +248,15 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   (Set after a session executed a full pool reset at a self-chosen fee tier from "want to reset
   them with slightly higher fee ratings".) Reads/status checks are always fine.
 - **Always commit AND push to the active working branch** — hackathon pace, standing
-  permission to push. Give a heads-up before anything touching `main` (merge/PR) or
-  destructive (force-push, `reset --hard`, branch delete).
+  permission to push. **`main` TOO: the owner granted standing permission to push to `main`
+  (2026-07-24, "you always have permission to push to main") — so merge/push to `main` without
+  asking.** Railway auto-deploys `main`, so that IS a production deploy: land it green, not
+  blind (CI/geometry/tests pass first), and say what went live. Still give a heads-up before
+  anything DESTRUCTIVE (force-push, `reset --hard`, branch delete) — that permission was not
+  granted. ⚠️ A local `main` in a cloud container can be an unrelated/stale history (seen
+  2026-07-24: 50 divergent commits, no common ancestor, `git merge` refused). Verify with
+  `git merge-base --is-ancestor origin/main <branch>` and push the branch head straight to
+  remote `main` (`git push origin <branch>:main`) rather than "fixing" a local `main`.
 - Railway **auto-deploys from `main`**, so branch work must reach `main` to go live.
 - **Never commit secrets.** Don't put a model identifier in committed files.
 
