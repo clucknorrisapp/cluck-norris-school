@@ -65,17 +65,19 @@ Disciplined learning, real value, zero gatekeeping. The flock learns or the floc
 
 ## 💎 Pay the bird — premium tools, CLKN only
 
-Pay only when you use it. No subscriptions. No accounts. No wallet connect. Just send the exact decimal and the tool unlocks.
+Pay only when you use it. No subscriptions, no accounts. Most tools need nothing but an exact‑decimal CLKN send — no wallet connect at all. Buy Special adds an optional connect so 2M+ holders get in free and everyone else can pay in one click.
 
 | Tool | Cost | What unlocks |
 |---|---|---|
 | 🤖 More AI tutoring | **500 CLKN** | 20 extra questions |
 | 💰 Batch airdrop sender | **100 CLKN** | 1 unlock session, any batch size |
-| 📈 Buy‑competition trackers (Buy Special · Rose) | **500 CLKN** | **7 days unlimited runs** each — full contest cycle (initial scan + tweaks + hold check + re‑verification) |
+| 🎯 Buy Special (buy‑competition engine) | **FREE for 2M+ CLKN holders** · else **5,850 CLKN** (~$2.77) or **0.05 SOL** (~$3.69) | **7 days unlimited runs** — a full contest cycle (initial scan + tweaks + hold check + transfer traces + re‑verification) |
 
 Pennies to pay, accessible to anyone. The token does real work without becoming a paywall.
 
-**Holder bonus, on‑chain, unforgeable.** When the server verifies your payment, it also reads how much CLKN you have *left* in the same transaction. Keep **≥ 2M CLKN** after the send and every unlock is multiplied **5×**. The send proves custody. The post‑send balance proves holding. Neither requires a wallet connect. A serious holder paying 500 CLKN for the buy‑comp analyzer gets a full **35 days** unlimited.
+**Buy Special pricing, specifically.** Connect a wallet holding **≥ 2M CLKN** and it unlocks **free for 35 days** — no payment at all. Below that you can pay **0.05 SOL** straight from the connected wallet, or send **5,850 CLKN** manually and pay about **25% less**. Paying in the project's own token is always the cheaper door, by design.
+
+**Holder bonus, on‑chain, unforgeable.** When the server verifies a CLKN payment, it also reads how much CLKN you have *left* in the same transaction. Keep **≥ 2M CLKN** after the send and every unlock is multiplied **5×**. The send proves custody. The post‑send balance proves holding. Neither requires a wallet connect.
 
 **🔬 Premium Forensics — holder‑gated deep traces** ([`/premium`](https://clucknorris.app/premium)). The forensic add‑ons that follow the money and the people: recipient‑dump tracing (prove the wallets a creator funneled tokens to actually sold), money‑flow / cash‑out mapping (net SOL out, CEX deposits, with fee‑claim round‑trips netted out), a creator "rap sheet" (every token the deployer launched and how each ended), full wallet P&L, and a neutral shared‑funding cluster map. Access proves wallet ownership two ways — a tiny CLKN send **or** a `signMessage` connect — then re‑checks a live **2M CLKN** balance on every run. No content is faked when a source is unavailable; every report says what it could and couldn't compute.
 

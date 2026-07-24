@@ -5967,11 +5967,15 @@ app.get("/api/admin-check", (req, res) => {
 // tx landed and the wallet's SOL balance rose by >= min lamports (post-pre delta). Alternative to
 // the CLKN micropayment for users who don't want to send CLKN. Read-only.
 const SOL_UNLOCK_WALLET = "7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H";
+// Server-side floor so a tampered client can't ask us to bless a dust payment.
+// 0.05 SOL — the Buy Special unlock price (owner's call 2026-07-24).
+const SOL_UNLOCK_MIN_LAMPORTS = 50_000_000;
 app.get("/api/verify-sol-payment", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const sig = (req.query.sig || "").trim();
-  const min = parseInt(req.query.min, 10) || 0;
-  if (!sig || sig.length < 80 || sig.length > 100 || !min) return res.status(400).json({ success: false, error: "need sig + min (lamports)" });
+  const askedMin = parseInt(req.query.min, 10) || 0;
+  if (!sig || sig.length < 80 || sig.length > 100 || !askedMin) return res.status(400).json({ success: false, error: "need sig + min (lamports)" });
+  const min = Math.max(askedMin, SOL_UNLOCK_MIN_LAMPORTS);
   try {
     const rpcCall = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`);
     const r = await rpcCall("verify-sol", "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]);
@@ -8061,7 +8065,10 @@ app.get("/api/whale-watch", async (req, res) => {
 const TOOL_GRANTS = {
   ai:         { cost: 500, grants: { questions: 20 } },
   airdrop:    { cost: 100, grants: { sessions: 1 } },
-  buyspecial: { cost: 500, grants: { hoursOfAccess: 168 } },
+  // 5,850 CLKN ≈ $2.77 at $0.00047/CLKN — deliberately ~25% cheaper than the
+  // 0.05 SOL (~$3.69) wallet-connect price, so paying in CLKN is the better deal.
+  // Fixed CLKN, so re-check the ratio when the price moves materially.
+  buyspecial: { cost: 5850, grants: { hoursOfAccess: 168 } },
   rose:       { cost: 500, grants: { hoursOfAccess: 168 } },
   // Premium forensics: the 7-CLKN send is an OWNERSHIP PROOF, not a purchase —
   // it proves the sender controls the wallet so we can gate on its balance. On

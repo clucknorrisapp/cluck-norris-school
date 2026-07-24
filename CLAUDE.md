@@ -304,6 +304,16 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   the CLKN unlock. Airdrop hand-off uses **localStorage** (survives `window.open`) + **same-tab**
   nav (`/airdrop?from=buyspecial`) and **auto-parses** into the preview. Don't re-introduce the
   client-side getSignaturesForAddress(mint) scan or the `{transactions}` body to `/api/helius-tx`.
+  💰 **PRICING (owner's call 2026-07-24): free for ≥2M CLKN holders via wallet-connect (35 days),
+  else 0.05 SOL (~$3.69) one-click OR 5,850 CLKN (~$2.77) sent manually — the CLKN door is
+  deliberately ~25% CHEAPER so paying in the project's token is the better deal.** Enforced in
+  THREE places that must move together: `TOOL_GRANTS.buyspecial.cost = 5850` (server.js — the
+  `Math.floor(amount)` anti-tamper check), `SOL_UNLOCK_MIN_LAMPORTS = 50_000_000` (server.js, the
+  floor `/api/verify-sol-payment` clamps `&min=` up to, so a tampered client can't bless dust), and
+  `PRICE`/`SOL_LAMPORTS` + the UI strings in `public/buyspecial-pro.html`. CLKN is a FIXED token
+  amount, so re-check the ~25% ratio (`PRICE × clknUsd` vs `0.05 × solUsd`) whenever CLKN moves
+  materially. Vestigial: `TOOL_GRANTS.rose` (500) — `/rose` serves the same page, which always
+  posts `tool:'buyspecial'`; nothing sends `rose` anymore.
   ⛔ **LP Scanner is OPERATOR-ONLY (2026-07-04, owner's call — off public, kept for CLKN ops):**
   all seven `/api/lp-*` endpoints are adminAuthOK-gated (404 without key); `/lp-scanner` page
   still exists but needs `?key=PREMIUM_ACCESS_KEY` once (remembered in localStorage); public

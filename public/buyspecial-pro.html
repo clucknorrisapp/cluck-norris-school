@@ -90,13 +90,13 @@
     <button class="btn" id="gConnect" style="width:100%">🔗 CONNECT WALLET</button>
     <div class="gblurb" style="margin:10px 0 0">Hold <b style="color:var(--gold)">≥ 2,000,000 CLKN</b> → unlock <b>FREE</b>. No CLKN? Pay a little SOL instead — no send-and-wait.</div>
     <div class="gstatus hidden" id="gWalletStatus" style="margin-top:10px"></div>
-    <button class="btn a hidden" id="gPaySol" style="width:100%;margin-top:10px">◎ PAY 0.01 SOL — UNLOCK 7 DAYS</button>
+    <button class="btn a hidden" id="gPaySol" style="width:100%;margin-top:10px">◎ PAY 0.05 SOL — UNLOCK 7 DAYS</button>
 
     <div style="text-align:center;font-family:var(--disp);font-size:11px;color:var(--muted);margin:18px 0 12px;letter-spacing:3px">— OR SEND CLKN MANUALLY —</div>
 
     <div class="gcard" onclick="copyAmt()"><div class="lbl">SEND EXACTLY</div><div class="val" id="gAmt">—</div><div class="hint" id="gAmtHint">TAP TO COPY</div></div>
     <div class="gcard" onclick="copyWallet()"><div class="lbl">TO THIS WALLET</div><div class="val sm">7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H</div><div class="hint" id="gWalHint">TAP TO COPY</div></div>
-    <div class="gblurb">500 CLKN ≈ $0.06 · 7 days · hold ≥ 2M CLKN after sending → 35 days</div>
+    <div class="gblurb"><b style="color:var(--gold)">5,850 CLKN ≈ $2.77</b> — ~25% cheaper than the SOL price · 7 days · hold ≥ 2M CLKN after sending → 35 days</div>
     <div class="gstatus" id="gStatus">Watching for your payment…</div>
   </div>
 
@@ -361,7 +361,7 @@ function copy(text,btn,label){ const done=()=>{ btn.textContent='✓ COPIED'; se
   navigator.clipboard.writeText(text).then(done,()=>{ const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');done();}catch(e){} document.body.removeChild(ta); }); }
 
 const UNLOCK_KEY='clkn_buyspecial_unlock', OP_FLAG='clkn_buyspecial_operator';
-const DUR=7*24*60*60*1000, PRICE=500, RECV='7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H';
+const DUR=7*24*60*60*1000, PRICE=5850, RECV='7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H';
 let pendingAmt=null, pollT=null, pollStart=0;
 function isUnlocked(){ if(localStorage.getItem(OP_FLAG)==='1') return true; try{ const d=JSON.parse(localStorage.getItem(UNLOCK_KEY)||'null'); return !!(d&&d.expiresAt>Date.now()); }catch(e){ return false; } }
 function showTool(){ $('gate').classList.add('hidden'); $('tool').classList.remove('hidden'); }
@@ -382,7 +382,11 @@ async function poll(){
       $('gStatus').className='gstatus ok'; $('gStatus').textContent=d.holderBonus?'✓ VERIFIED · 5× HOLDER BONUS · 35 DAYS':'✓ VERIFIED · 7 DAYS UNLOCKED'; setTimeout(showTool,1200); } }catch(e){}
 }
 // ── Wallet-connect unlock: FREE for 2M+ CLKN holders, or pay a little SOL (no CLKN send) ──
-const HOLDER_MIN=2000000, SOL_LAMPORTS=10000000; // 2M CLKN free tier · 0.01 SOL alternative (adjustable)
+// 2M CLKN holders unlock FREE. Everyone else: 0.05 SOL (~$3.69) via wallet-connect,
+// or 5,850 CLKN (~$2.77 — ~25% cheaper, PRICE above) sent manually. Keep the two in
+// step: the CLKN price is meant to stay the better deal. Server enforces both
+// (TOOL_GRANTS.buyspecial.cost + SOL_UNLOCK_MIN_LAMPORTS in server.js).
+const HOLDER_MIN=2000000, SOL_LAMPORTS=50000000;
 let wProvider=null, wPubkey=null;
 function rpcCall(method,params){ return fetch('/api/helius-rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})}).then(r=>r.json()).then(d=>{ if(d.error) throw new Error(d.error.message); return d.result; }); }
 function detectProvider(){ return (window.phantom&&window.phantom.solana) || (window.solana&&window.solana.isPhantom?window.solana:null) || window.solflare || (window.solana&&window.solana.isSolflare?window.solana:null) || window.solana || null; }
@@ -398,7 +402,7 @@ async function gCheckHolder(){
     const r=await rpcCall('getTokenAccountsByOwner',[wPubkey,{mint:CLKN},{encoding:'jsonParsed'}]);
     let bal=0; for(const a of ((r&&r.value)||[])) bal+=Number(a.account&&a.account.data&&a.account.data.parsed&&a.account.data.parsed.info.tokenAmount.uiAmount)||0;
     if(bal>=HOLDER_MIN){ gWalletMsg('✓ '+fmt(bal)+' CLKN — holder unlocked FREE for 35 days!',true); unlockNow(35); }
-    else { gWalletMsg('Connected · '+fmt(bal)+' CLKN held (need 2,000,000 for free). Pay 0.01 SOL instead:'); $('gPaySol').classList.remove('hidden'); }
+    else { gWalletMsg('Connected · '+fmt(bal)+' CLKN held (need 2,000,000 for free). Pay 0.05 SOL, or send 5,850 CLKN below and save ~25%:'); $('gPaySol').classList.remove('hidden'); }
   }catch(e){ gWalletMsg('Balance check failed: '+e.message); }
 }
 async function gPaySolFn(){
@@ -411,7 +415,7 @@ async function gPaySolFn(){
     const {Transaction,SystemProgram,PublicKey}=solanaWeb3;
     const tx=new Transaction(); tx.add(SystemProgram.transfer({fromPubkey:new PublicKey(wPubkey),toPubkey:new PublicKey(RECV),lamports:SOL_LAMPORTS}));
     tx.feePayer=new PublicKey(wPubkey); tx.recentBlockhash=bh.value.blockhash;
-    gWalletMsg('Approve the 0.01 SOL payment in your wallet…');
+    gWalletMsg('Approve the 0.05 SOL payment in your wallet…');
     const res=await wProvider.signAndSendTransaction(tx); const sig=res.signature||res;
     gWalletMsg('Confirming payment on-chain…');
     let ok=false; for(let i=0;i<24;i++){ try{ const v=await fetch('/api/verify-sol-payment?sig='+sig+'&min='+SOL_LAMPORTS).then(r=>r.json()); if(v.success){ok=true;break;} }catch(e){} await new Promise(r=>setTimeout(r,2500)); }
