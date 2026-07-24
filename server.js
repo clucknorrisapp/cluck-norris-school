@@ -6333,8 +6333,15 @@ app.post("/api/helius-tx", async (req, res) => {
   // Validate the body is an array of <=100 signature strings before forwarding —
   // unauthenticated, and Helius bills per parsed tx, so an unbounded array is a
   // credit-drain amplifier. Helius itself caps at 100/request. (sec M2)
-  const _sigs = req.body;
-  if (!Array.isArray(_sigs) || _sigs.length === 0 || _sigs.length > 100 || _sigs.some((s) => typeof s !== "string" || s.length > 100)) {
+  // Accept EITHER a bare array of sigs OR { transactions: [...] }. The client tools send the
+  // latter and Helius' v0/transactions API requires the latter, so we normalize + bound here
+  // (sec M2 — cap at 100 sig strings to stop a credit-drain amplifier) and forward the wrapped
+  // shape below. (A previous hardening validated a bare array but still forwarded req.body to
+  // Helius, so BOTH shapes failed — the client's object failed validation, a bare array failed
+  // at Helius — which silently returned 0 parsed txs to every scan.)
+  const _sigs = Array.isArray(req.body) ? req.body
+    : (req.body && Array.isArray(req.body.transactions) ? req.body.transactions : null);
+  if (!_sigs || _sigs.length === 0 || _sigs.length > 100 || _sigs.some((s) => typeof s !== "string" || s.length > 100)) {
     return res.status(400).json({ error: "expected an array of <=100 signature strings" });
   }
   try {
@@ -6349,7 +6356,7 @@ app.post("/api/helius-tx", async (req, res) => {
       const response = await fetch(`https://api.helius.xyz/v0/transactions?api-key=${keys[i]}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(req.body || {})
+        body: JSON.stringify({ transactions: _sigs })
       });
       if (rpc.isRetriableStatus(response.status) && !isLast) {
         try { await response.body?.cancel?.(); } catch {}
