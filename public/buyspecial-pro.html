@@ -251,7 +251,7 @@ $('airdropBtn').addEventListener('click', () => {
   if (!eligible.length) { setStatus('No eligible wallets to hand off.'); return; }
   const recipients = eligible.map(r => r.wallet + ',' + r.payout).join('\n');
   localStorage.setItem('airdropPayload', JSON.stringify({ ts: Date.now(), mint, tokenName, recipients }));
-  window.open('/airdrop?from=buyspecial', '_blank');
+  window.location.href = '/airdrop?from=buyspecial';
 });
 
 function copy(text, btn, label){

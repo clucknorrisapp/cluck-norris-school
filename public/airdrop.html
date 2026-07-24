@@ -1558,7 +1558,10 @@ function onAckChange() {
 function initUnlockGate() {
   // Opened straight from the Buy Special tool — that paid workflow already
   // covers the airdrop, so the unlock is waived (the fee is pennies anyway).
-  if (new URLSearchParams(location.search).get('from') === 'buyspecial') {
+  const _fromParam = new URLSearchParams(location.search).get('from');
+  let _hasHandoff = false;
+  try { _hasHandoff = !!(localStorage.getItem('airdropPayload') || sessionStorage.getItem('airdropPayload')); } catch (e) {}
+  if ((_fromParam && ['buyspecial','rose','holders','snapshot','buycomp','payout-desk'].includes(_fromParam)) || _hasHandoff) {
     hideGate();
     const banner = document.getElementById('unlockBanner');
     if (banner) {

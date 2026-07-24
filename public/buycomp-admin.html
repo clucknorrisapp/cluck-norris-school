@@ -230,7 +230,7 @@ body{background:transparent;font-family:var(--body);}
     const c = COMPS[id]; if(!c||!c.verified||!c.verified.length){ alert("Run verify first."); return; }
     const recipients = c.verified.map(v=>v.wallet+", "+v.amount).join("\n");
     try{ localStorage.setItem("airdropPayload", JSON.stringify({ ts: Date.now(), mint:prizeMintOf(c), source:"Cluck Norris Buy Comp", tokenName:c.ticker, recipients, mode:"manual" })); }catch(e){}
-    window.open("/airdrop","_blank");
+    window.location.href = "/airdrop";
   }
   function copyPayoutLink(id){
     const c = COMPS[id]; if(!c||!c.payoutToken){ alert("Run verify first."); return; }

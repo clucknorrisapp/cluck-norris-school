@@ -1053,7 +1053,7 @@ async function renderReliablePayout(box, mint, buyers, srcName, windowFrom) {
     const recipients = elig.map(r => r.wallet + ',' + Math.floor(Math.min(r.bought, r.held) * pct)).join('\n');
     const tokenName = (typeof currentTokenName !== 'undefined' ? currentTokenName : (typeof TOKEN_NAME !== 'undefined' ? TOKEN_NAME : 'TOKEN'));
     localStorage.setItem('airdropPayload', JSON.stringify({ ts: Date.now(), mint, tokenName, recipients }));
-    window.open('/airdrop?from=buyspecial', '_blank');
+    window.location.href = '/airdrop?from=buyspecial';
   });
 }
 
@@ -1606,7 +1606,7 @@ function goToAirdrop() {
     tokenName: data[0].tokenName,
     recipients: lines
   }));
-  window.open('/airdrop?from=buyspecial', '_blank');
+  window.location.href = '/airdrop?from=buyspecial';
 }
 
 // Show the recipient list as copyable CSV text. A blob file-download via
