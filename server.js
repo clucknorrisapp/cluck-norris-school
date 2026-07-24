@@ -10925,6 +10925,13 @@ app.get("/buyspecial-draw", (req, res) => {
   res.sendFile(join(__dirname, "public", "buyspecial-draw.html"));
 });
 
+// Buy Special — operator PAYOUT DESK: server-backed 3-step flow (scan buys -> no-sells
+// hold check -> hand off eligible+amounts to the airdropper). Uses the crosscheck +
+// holdcheck endpoints (on-chain, reliable) instead of the in-browser scan. Unlinked/noindex.
+app.get("/payout-desk", (req, res) => {
+  res.sendFile(join(__dirname, "public", "buyspecial-pro.html"));
+});
+
 // Vested Buy Special — PUBLIC opt-in page (?c=<campaignId>) + gated operator dashboard.
 app.get("/buyspecial-optin", (req, res) => {
   res.sendFile(join(__dirname, "public", "buyspecial-optin.html"));

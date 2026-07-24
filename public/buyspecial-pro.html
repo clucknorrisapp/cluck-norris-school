@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>🎯 Buy Special — Payout Desk</title>
+<meta name="robots" content="noindex">
+<style>
+  :root{color-scheme:dark;--bg:#0b0c0e;--card:#14151a;--border:rgba(255,255,255,0.09);--text:#FFEFE0;--sub:#C9A892;--muted:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--green:#7BE26B;--red:#E8695E;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;min-height:100vh;}
+  .wrap{max-width:920px;margin:0 auto;padding:22px 16px 90px;}
+  a.back{display:inline-flex;align-items:center;gap:6px;font-family:Anton,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#D97706;text-decoration:none;margin-bottom:12px;}
+  .header{display:flex;align-items:center;gap:12px;margin-bottom:8px;}
+  .header h1{font-family:Anton,sans-serif;font-size:26px;letter-spacing:2px;color:#FCD34D;}
+  .header .ic{font-size:34px;}
+  .lede{font-size:13px;color:var(--sub);line-height:1.6;margin-bottom:18px;max-width:640px;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:14px;}
+  .card-title{font-family:var(--mono);font-size:10px;color:var(--sub);letter-spacing:2px;margin-bottom:12px;}
+  .step-n{display:inline-block;width:20px;height:20px;line-height:20px;text-align:center;border-radius:50%;background:var(--accent);color:#1a1205;font-weight:800;font-size:11px;margin-right:6px;font-family:var(--mono);}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;}
+  .fld{display:flex;flex-direction:column;gap:4px;}
+  .fld label{font-family:var(--mono);font-size:9px;color:var(--sub);letter-spacing:1px;}
+  input,select{background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-family:var(--mono);font-size:13px;color:var(--text);}
+  input:focus,select:focus{outline:none;border-color:var(--accent);}
+  .presets{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;}
+  .chip{background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-family:var(--mono);font-size:11px;color:var(--sub);cursor:pointer;}
+  .chip.active,.chip:hover{border-color:var(--accent);color:var(--accent);}
+  .btn{background:#D97706;border:none;border-radius:9px;padding:11px 20px;font-family:var(--mono);font-size:13px;font-weight:800;color:#fff;cursor:pointer;letter-spacing:1px;}
+  .btn:hover{opacity:.92;}
+  .btn:disabled{opacity:.35;cursor:not-allowed;}
+  .btn.g{background:#7C3AED;}
+  .btn.a{background:#10B981;}
+  .btn.ghost{background:rgba(255,255,255,0.05);border:1px solid var(--border);color:#e8e8e8;font-weight:700;}
+  .muted{font-family:var(--mono);font-size:10px;color:var(--muted);}
+  .stat-row{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0;}
+  .stat{background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px;padding:10px 14px;flex:1;min-width:90px;}
+  .stat .v{font-family:var(--mono);font-size:20px;font-weight:700;color:var(--accent);}
+  .stat .l{font-size:9px;color:var(--sub);letter-spacing:1px;margin-top:2px;}
+  table{width:100%;border-collapse:collapse;margin-top:8px;}
+  th{font-family:var(--mono);font-size:9px;color:var(--sub);letter-spacing:1px;padding:7px 8px;text-align:left;border-bottom:1px solid var(--border);}
+  th.r,td.r{text-align:right;}
+  td{padding:7px 8px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:12px;font-family:var(--mono);}
+  .tbl-wrap{overflow-x:auto;max-height:420px;overflow-y:auto;}
+  .dq{color:var(--red);}
+  .ok{color:var(--green);}
+  .status{font-family:var(--mono);font-size:12px;color:var(--sub);padding:10px 0;min-height:20px;}
+  .hidden{display:none;}
+  .note{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:6px;line-height:1.5;}
+  code{color:var(--accent);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="/tools" class="back">&larr; TOOLS</a>
+  <div class="header"><div class="ic">🎯</div><div><h1>BUY SPECIAL — PAYOUT DESK</h1></div></div>
+  <div class="lede">Operator dashboard for a buy competition, end to end: <b>scan the buys</b> in a window → export CSV → run the <b>no-sells hold check</b> → hand the eligible winners + amounts straight to the airdropper. Buyer discovery and the sell scan run <b>server-side, on-chain</b> — no fragile in-browser scan.</div>
+
+  <!-- Token -->
+  <div class="card">
+    <div class="card-title">TOKEN</div>
+    <div class="presets" id="tokPresets">
+      <button class="chip" data-mint="DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS" data-name="CLKN">🐔 CLKN</button>
+      <button class="chip" data-mint="RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF" data-name="ROSE">🌹 ROSE</button>
+      <button class="chip" data-mint="" data-name="CUSTOM">✏️ CUSTOM</button>
+    </div>
+    <input id="mint" placeholder="Token mint address…" style="width:100%" />
+  </div>
+
+  <!-- Window + bonus -->
+  <div class="card">
+    <div class="card-title"><span class="step-n">1</span>BUY WINDOW</div>
+    <div class="presets" id="winPresets">
+      <button class="chip" data-preset="rose">ROSE comp (Jul 19–21)</button>
+      <button class="chip" data-preset="24">last 24h</button>
+      <button class="chip" data-preset="48">last 48h</button>
+      <button class="chip" data-preset="72">last 72h</button>
+      <button class="chip" data-preset="168">last 7d</button>
+    </div>
+    <div class="row">
+      <div class="fld"><label>START (your local time)</label><input type="datetime-local" id="from"/></div>
+      <div class="fld"><label>END (your local time)</label><input type="datetime-local" id="to"/></div>
+      <div class="fld"><label>BONUS %</label><input type="number" id="bonus" value="10" min="0" step="0.5" style="width:90px"/></div>
+      <button class="btn" id="scanBtn">▶ SCAN BUYS</button>
+    </div>
+    <div class="note" id="winUtc"></div>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <!-- Step 1 results: buys -->
+  <div class="card hidden" id="buysCard">
+    <div class="card-title">BUYS IN WINDOW</div>
+    <div class="stat-row">
+      <div class="stat"><div class="v" id="stBuyers">–</div><div class="l">BUYERS</div></div>
+      <div class="stat"><div class="v" id="stBought">–</div><div class="l">TOTAL BOUGHT</div></div>
+      <div class="stat"><div class="v" id="stSrc">–</div><div class="l">SOURCE</div></div>
+    </div>
+    <div class="row" style="margin-bottom:6px">
+      <button class="btn ghost" id="copyBuysBtn">📋 COPY BUYS CSV</button>
+      <button class="btn g" id="holdBtn"><span class="step-n" style="background:#fff;color:#4c1d95">2</span>RUN NO-SELLS CHECK</button>
+    </div>
+    <div class="tbl-wrap"><table id="buysTbl"></table></div>
+  </div>
+
+  <!-- Step 2 results: eligible payout -->
+  <div class="card hidden" id="payCard">
+    <div class="card-title">ELIGIBLE PAYOUT LIST (bought in-window · still holding · no in-window sells)</div>
+    <div class="stat-row">
+      <div class="stat"><div class="v ok" id="stElig">–</div><div class="l">ELIGIBLE</div></div>
+      <div class="stat"><div class="v dq" id="stDq">–</div><div class="l">DISQUALIFIED</div></div>
+      <div class="stat"><div class="v" id="stPayout">–</div><div class="l">TOTAL PAYOUT</div></div>
+    </div>
+    <div class="row" style="margin-bottom:6px">
+      <button class="btn ghost" id="copyPayBtn">📋 COPY PAYOUT CSV</button>
+      <button class="btn a" id="airdropBtn"><span class="step-n" style="background:#fff;color:#065f46">3</span>OPEN IN AIRDROPPER</button>
+    </div>
+    <div class="tbl-wrap"><table id="payTbl"></table></div>
+    <div class="note">Payout = bonus% × <b>tokens bought in the window</b>, capped by current balance. A wallet that sold any of its buy within the window (buy-start → now) is disqualified. Hand-off opens the airdropper pre-filled; you sign the send.</div>
+  </div>
+</div>
+
+<script>
+const RPC = '/api/helius-rpc';
+let mint = '', tokenName = 'CUSTOM';
+let buyers = [];        // [{wallet, buyCount, tokensBought, volumeSol}]
+let source = '';
+let eligible = [];      // [{wallet, bought, held, payout}]
+let winFrom = 0, winTo = 0, bonusPct = 10;
+
+const $ = id => document.getElementById(id);
+const fmt = n => Number(n).toLocaleString(undefined, {maximumFractionDigits:0});
+function setStatus(t){ $('status').textContent = t || ''; }
+
+// ---- token select ----
+document.querySelectorAll('#tokPresets .chip').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#tokPresets .chip').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  mint = b.getAttribute('data-mint'); tokenName = b.getAttribute('data-name');
+  $('mint').value = mint;
+  if (!mint) $('mint').focus();
+}));
+$('mint').addEventListener('input', () => {
+  mint = $('mint').value.trim();
+  const known = {'DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS':'CLKN','RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF':'ROSE'};
+  tokenName = known[mint] || 'TOKEN';
+});
+
+// ---- window presets ----
+function toLocalInput(unixSec){ const d = new Date(unixSec*1000); const p = n => String(n).padStart(2,'0');
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes()); }
+function refreshUtc(){
+  const f = $('from').value ? Math.floor(new Date($('from').value).getTime()/1000) : 0;
+  const t = $('to').value ? Math.floor(new Date($('to').value).getTime()/1000) : 0;
+  $('winUtc').textContent = (f && t) ? ('UTC: ' + new Date(f*1000).toISOString().replace('.000','') + '  →  ' + new Date(t*1000).toISOString().replace('.000','') + '   ·   unix ' + f + '–' + t) : '';
+}
+document.querySelectorAll('#winPresets .chip').forEach(b => b.addEventListener('click', () => {
+  const p = b.getAttribute('data-preset'); const now = Math.floor(Date.now()/1000);
+  if (p === 'rose') { $('from').value = toLocalInput(1784489400); $('to').value = toLocalInput(1784671200); }
+  else { $('to').value = toLocalInput(now); $('from').value = toLocalInput(now - parseInt(p)*3600); }
+  refreshUtc();
+}));
+$('from').addEventListener('input', refreshUtc); $('to').addEventListener('input', refreshUtc);
+
+// ---- STEP 1: scan buys (server crosscheck) ----
+$('scanBtn').addEventListener('click', async () => {
+  if (!mint || mint.length < 32) { setStatus('Enter a token mint first.'); return; }
+  winFrom = $('from').value ? Math.floor(new Date($('from').value).getTime()/1000) : 0;
+  winTo   = $('to').value ? Math.floor(new Date($('to').value).getTime()/1000) : 0;
+  bonusPct = parseFloat($('bonus').value) || 0;
+  if (!winFrom || !winTo || winTo <= winFrom) { setStatus('Set a valid start/end window.'); return; }
+  $('scanBtn').disabled = true; setStatus('Scanning on-chain buys in the window…');
+  $('buysCard').classList.add('hidden'); $('payCard').classList.add('hidden');
+  try {
+    const r = await fetch('/api/buyspecial-crosscheck?mint=' + encodeURIComponent(mint) + '&from=' + winFrom + '&to=' + winTo);
+    const d = await r.json();
+    if (!d || !d.success || !Array.isArray(d.buyers)) { setStatus('No buyer data returned. Try again in a moment.'); $('scanBtn').disabled = false; return; }
+    buyers = d.buyers.slice().sort((a,b) => (b.tokensBought||0) - (a.tokensBought||0));
+    source = d.source || 'on-chain';
+    renderBuys();
+    setStatus(buyers.length ? ('Found ' + buyers.length + ' buyer' + (buyers.length===1?'':'s') + '. Review, export, then run the no-sells check.') : 'No buys found in this window.');
+  } catch (e) { setStatus('Scan failed: ' + e.message); }
+  $('scanBtn').disabled = false;
+});
+
+function renderBuys(){
+  const totalBought = buyers.reduce((s,b) => s + (b.tokensBought||0), 0);
+  $('stBuyers').textContent = buyers.length;
+  $('stBought').textContent = fmt(totalBought);
+  $('stSrc').textContent = source;
+  let h = '<thead><tr><th>#</th><th>WALLET</th><th class="r">TOKENS BOUGHT</th><th class="r">BUYS</th></tr></thead><tbody>';
+  buyers.forEach((b,i) => { h += '<tr><td>'+(i+1)+'</td><td>'+b.wallet+'</td><td class="r">'+fmt(b.tokensBought||0)+'</td><td class="r">'+(b.buyCount||0)+'</td></tr>'; });
+  $('buysTbl').innerHTML = h + '</tbody>';
+  $('buysCard').classList.remove('hidden');
+}
+
+$('copyBuysBtn').addEventListener('click', () => {
+  const csv = 'wallet,tokens_bought\n' + buyers.map(b => b.wallet + ',' + Math.floor(b.tokensBought||0)).join('\n') + '\n';
+  copy(csv, $('copyBuysBtn'), '📋 COPY BUYS CSV');
+});
+
+// ---- STEP 2: no-sells hold check (server holdcheck) ----
+$('holdBtn').addEventListener('click', async () => {
+  if (!buyers.length) return;
+  $('holdBtn').disabled = true; setStatus('Running the no-sells hold check (buy-start → now)…');
+  try {
+    const now = Math.floor(Date.now()/1000);
+    const wl = buyers.map(b => b.wallet).join(',');
+    const r = await fetch('/api/buyspecial-holdcheck?mint=' + encodeURIComponent(mint) + '&from=' + winFrom + '&to=' + now + '&wallets=' + encodeURIComponent(wl));
+    const d = await r.json();
+    const m = {}; if (d && d.success) for (const x of d.results) m[x.wallet] = x;
+    const pct = bonusPct/100;
+    const rows = buyers.map(b => {
+      const h = m[b.wallet] || {}; const held = (h.balance == null ? -1 : h.balance);
+      const sold = !!h.soldInWindow;
+      const bought = b.tokensBought || 0;
+      const payBase = held > 0 ? Math.min(bought, held) : 0;
+      const ok = bought > 0 && payBase > 0 && !sold;
+      return { wallet: b.wallet, buys: b.buyCount||0, bought, held, sold, ok, payout: ok ? Math.floor(payBase*pct) : 0, src: h.source };
+    });
+    eligible = rows.filter(r => r.ok).map(r => ({ wallet: r.wallet, bought: r.bought, held: r.held, payout: r.payout }));
+    renderPay(rows);
+    setStatus(eligible.length + ' eligible · ' + rows.filter(r=>!r.ok).length + ' disqualified. Ready to hand off to the airdropper.');
+  } catch (e) { setStatus('Hold check failed: ' + e.message); }
+  $('holdBtn').disabled = false;
+});
+
+function renderPay(rows){
+  const totalPay = rows.reduce((s,r) => s + (r.ok ? r.payout : 0), 0);
+  $('stElig').textContent = rows.filter(r=>r.ok).length;
+  $('stDq').textContent = rows.filter(r=>!r.ok).length;
+  $('stPayout').textContent = fmt(totalPay);
+  let h = '<thead><tr><th>#</th><th>WALLET</th><th class="r">BOUGHT</th><th class="r">HELD</th><th class="r">PAYOUT ('+bonusPct+'%)</th><th>STATUS</th></tr></thead><tbody>';
+  let n = 0;
+  rows.forEach(r => {
+    const note = r.sold ? '<span class="dq">SOLD — DQ</span>' : r.bought<=0 ? '<span class="dq">no buy</span>' : r.held<0 ? '<span class="dq">lookup failed</span>' : r.held<=0 ? '<span class="dq">holds 0</span>' : (r.held<r.bought ? '<span class="ok">sold some · paid on held</span>' : '<span class="ok">HELD ✓</span>');
+    h += '<tr style="'+(r.ok?'':'opacity:.6')+'"><td>'+(r.ok?(++n):'–')+'</td><td>'+r.wallet+'</td><td class="r">'+fmt(r.bought)+'</td><td class="r">'+(r.held<0?'—':fmt(r.held))+'</td><td class="r" style="font-weight:700">'+(r.ok?fmt(r.payout):'—')+'</td><td>'+note+'</td></tr>';
+  });
+  $('payTbl').innerHTML = h + '</tbody>';
+  $('payCard').classList.remove('hidden');
+}
+
+$('copyPayBtn').addEventListener('click', () => {
+  const csv = 'wallet,payout\n' + eligible.map(r => r.wallet + ',' + r.payout).join('\n') + '\n';
+  copy(csv, $('copyPayBtn'), '📋 COPY PAYOUT CSV');
+});
+
+// ---- STEP 3: hand off to the airdropper ----
+$('airdropBtn').addEventListener('click', () => {
+  if (!eligible.length) { setStatus('No eligible wallets to hand off.'); return; }
+  const recipients = eligible.map(r => r.wallet + ',' + r.payout).join('\n');
+  sessionStorage.setItem('airdropPayload', JSON.stringify({ mint, tokenName, recipients }));
+  window.open('/airdrop?from=buyspecial', '_blank');
+});
+
+function copy(text, btn, label){
+  const done = () => { btn.textContent = '✓ COPIED'; setTimeout(() => btn.textContent = label, 1500); };
+  navigator.clipboard.writeText(text).then(done, () => {
+    const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); done(); } catch(e){} document.body.removeChild(ta);
+  });
+}
+
+// default: CLKN selected
+document.querySelector('#tokPresets .chip').click();
+</script>
+</body>
+</html>
