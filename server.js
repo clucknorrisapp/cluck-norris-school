@@ -5962,6 +5962,33 @@ app.get("/api/admin-check", (req, res) => {
   return res.status(200).json({ ok: true });
 });
 
+// GET /api/verify-sol-payment?sig=&min= — confirm a wallet-signed SOL payment to the unlock
+// wallet. The tool builds + wallet-signs a SystemProgram.transfer to UNLOCK_WALLET; we verify the
+// tx landed and the wallet's SOL balance rose by >= min lamports (post-pre delta). Alternative to
+// the CLKN micropayment for users who don't want to send CLKN. Read-only.
+const SOL_UNLOCK_WALLET = "7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H";
+app.get("/api/verify-sol-payment", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const sig = (req.query.sig || "").trim();
+  const min = parseInt(req.query.min, 10) || 0;
+  if (!sig || sig.length < 80 || sig.length > 100 || !min) return res.status(400).json({ success: false, error: "need sig + min (lamports)" });
+  try {
+    const rpcCall = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`);
+    const r = await rpcCall("verify-sol", "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]);
+    const tx = r && r.result;
+    if (!tx || (tx.meta && tx.meta.err)) return res.status(200).json({ success: false, error: "tx not found or failed" });
+    const keys = ((tx.transaction && tx.transaction.message && tx.transaction.message.accountKeys) || []).map(k => (typeof k === "string" ? k : k.pubkey));
+    const idx = keys.indexOf(SOL_UNLOCK_WALLET);
+    if (idx < 0) return res.status(200).json({ success: false, error: "payment not addressed to the unlock wallet" });
+    const delta = ((tx.meta.postBalances[idx] || 0) - (tx.meta.preBalances[idx] || 0));
+    if (delta >= min) return res.status(200).json({ success: true, lamports: delta });
+    return res.status(200).json({ success: false, error: "amount too low", lamports: delta });
+  } catch (err) {
+    console.error("[verify-sol-payment] error:", err.message);
+    return res.status(200).json({ success: false, error: err.message });
+  }
+});
+
 // GET /api/buyspecial-trace?mint=&wallet=&from=&to= — one-hop payout trace. When a buyer
 // TRANSFERRED their tokens to another wallet (not a sell), follow them one hop: if the
 // destination still HOLDS them and didn't sell in-window, the prize should pay THAT wallet.
