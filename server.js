@@ -5962,6 +5962,38 @@ app.get("/api/admin-check", (req, res) => {
   return res.status(200).json({ ok: true });
 });
 
+// GET /api/buyspecial-trace?mint=&wallet=&from=&to= — one-hop payout trace. When a buyer
+// TRANSFERRED their tokens to another wallet (not a sell), follow them one hop: if the
+// destination still HOLDS them and didn't sell in-window, the prize should pay THAT wallet.
+// Returns { resolved: 'held'|'sold'|'empty'|'split'|'none'|'unresolved', payTo, moved, destHeld }.
+app.get("/api/buyspecial-trace", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  const mint = (req.query.mint || "").trim(), wallet = (req.query.wallet || "").trim();
+  const from = parseInt(req.query.from, 10), to = parseInt(req.query.to, 10);
+  if (!SOL_ADDR_RE.test(mint) || !SOL_ADDR_RE.test(wallet) || !from || !to || to <= from) {
+    return res.status(400).json({ success: false, error: "Need mint, wallet, from, to (unix seconds, to>from)" });
+  }
+  try {
+    const fromMs = from * 1000, toMs = to * 1000;
+    const pos = await getWalletTokenPositionHelius(wallet, mint, { heliusKey: process.env.HELIUS_API_KEY, heliusEnhancedBatched, txCache: BC_TX_CACHE, fromMs, toMs });
+    if (!pos) return res.status(200).json({ success: false, error: "source lookup failed" });
+    const dests = pos.transferDests || [];
+    if (!dests.length) return res.status(200).json({ success: true, resolved: "none", note: "No outgoing transfers in the window." });
+    if (dests.length > 1) return res.status(200).json({ success: true, resolved: "split", dests, note: "Tokens split across " + dests.length + " wallets — resolve manually." });
+    const payTo = dests[0].to, moved = dests[0].amount;
+    const destPos = await walletPositionMulti(payTo, mint, { fromMs, toMs });
+    if (!destPos) return res.status(200).json({ success: true, resolved: "unresolved", payTo, moved, note: "Destination lookup failed." });
+    const destSold = destPos.source === "helius" && (destPos.sells || 0) > 0;
+    if (destSold) return res.status(200).json({ success: true, resolved: "sold", payTo, moved, note: "Destination sold downstream — no payout." });
+    if ((destPos.balance || 0) <= 0) return res.status(200).json({ success: true, resolved: "empty", payTo, moved, note: "Destination holds 0 — no payout." });
+    return res.status(200).json({ success: true, resolved: "held", payTo, moved, destHeld: destPos.balance, note: "Held clean at the destination — pay there." });
+  } catch (err) {
+    console.error("[buyspecial-trace] error:", err.message);
+    return res.status(200).json({ success: false, error: err.message });
+  }
+});
+
 // GET /api/token-pools?mint= — the token's DEX pool addresses (via GeckoTerminal).
 // WHY: a token's MINT account does NOT surface pool-routed swaps, so a scanner that reads
 // getSignaturesForAddress(mint) misses nearly all buys (e.g. ROSE: 17 mint-txs, 0 buyers,
