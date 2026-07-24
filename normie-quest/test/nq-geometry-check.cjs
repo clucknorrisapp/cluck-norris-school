@@ -41,15 +41,31 @@ const WARN_GAP = 168;                                // comfortable cap
 const JUMP_H = 103, DJUMP_H = 205;                   // single / double jump rise
 const SPAWN_RUNWAY = 380;                            // no pit before this x
 
+// Parses BOTH level formats in game_logic.js:
+//   • the hand-built worlds (one JSON object per line)
+//   • the original worlds 1-8 (multi-line JS object literals, single-quoted keys)
+// The old regex matched only the JSON one-liners, so worlds 1-8 were silently skipped
+// and the checker still printed PASS -- a false green over a third of the game.
+// Evaluating the whole LEVELS array covers both: it is pure data (arrays, strings,
+// numbers) plus the H constant, so there is nothing to execute beyond literals.
 function loadLevels() {
-  const lines = fs.readFileSync(SRC, 'utf8').split('\n');
-  const out = [];
-  for (const l of lines) {
-    const m = l.match(/^\s*(\{"name":"\d+-\d+".*\})(,?)\s*$/);
-    if (!m) continue;
-    try { out.push(JSON.parse(m[1])); } catch (e) { /* non-JSON one-liner — ignore */ }
+  const src = fs.readFileSync(SRC, 'utf8');
+  const start = src.indexOf('var LEVELS=[');
+  if (start < 0) return [];
+  const open = src.indexOf('[', start);
+  let depth = 0, end = -1;
+  for (let i = open; i < src.length; i++) {
+    const c = src[i];
+    if (c === '[') depth++;
+    else if (c === ']') { depth--; if (depth === 0) { end = i; break; } }
   }
-  return out;
+  if (end < 0) return [];
+  // mirrors game_logic.js line 4: var W=480, H=270, TILE=24, GY=H-TILE;
+  const H = 270, TILE = 24, W = 480, GY = H - TILE;
+  let arr;
+  try { arr = new Function('H', 'TILE', 'W', 'GY', 'return ' + src.slice(open, end + 1) + ';')(H, TILE, W, GY); }
+  catch (e) { console.error('[nq-geometry-check] LEVELS parse failed:', e.message); return []; }
+  return arr.filter(l => l && typeof l.name === 'string' && /^\d+-\d+$/.test(l.name));
 }
 
 function inGap(gaps, x) { return gaps.find(g => x >= g[0] && x < g[1]) || null; }
