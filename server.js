@@ -3266,7 +3266,7 @@ ${ctx || "(no pools found for this pair)"}`;
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 600, system, messages: [{ role: "user", content: String(question) }] }),
+      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 800, thinking: { type: "disabled" }, system, messages: [{ role: "user", content: String(question) }] }),
     });
     const data = await r.json();
     if (data && data.content && data.content[0]) {
@@ -3372,7 +3372,7 @@ RULES: Never tell anyone to buy/sell or predict prices. Flag risk honestly (meme
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 1100, system, messages: [{ role: "user", content: `Here's today's live Solana market data:\n\n${summary}\n\nWrite today's Daily Alpha.` }] }),
+      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 1500, thinking: { type: "disabled" }, system, messages: [{ role: "user", content: `Here's today's live Solana market data:\n\n${summary}\n\nWrite today's Daily Alpha.` }] }),
     });
     const data = await r.json();
     if (data && data.content && data.content[0]) return data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
@@ -3510,7 +3510,7 @@ RULES: Never give financial advice or price predictions. Encouraging but blunt. 
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 700, system, messages }),
+      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 950, thinking: { type: "disabled" }, system, messages }),
     });
     const data = await r.json();
     if (data && data.content && data.content[0]) {
@@ -3718,7 +3718,7 @@ RULES: No financial advice. Encouraging but honest. No markdown headers/asterisk
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 700, system, messages }),
+      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 950, thinking: { type: "disabled" }, system, messages }),
     });
     const data = await r.json();
     if (data && data.content && data.content[0]) {
@@ -10422,7 +10422,7 @@ HOW YOU ANSWER:
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 700, system, messages }),
+      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 950, thinking: { type: "disabled" }, system, messages }),
     });
     const data = await r.json();
     if (data && data.content && data.content[0]) {

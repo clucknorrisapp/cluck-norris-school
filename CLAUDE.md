@@ -417,6 +417,21 @@ owner wants a distinct natively-accented voice; unset = the main voice handles a
 Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.claude/`,
 `STRATEGY.md`.
 
+## Claude API model usage (the app's OWN calls)
+- **Sonnet paths → `claude-sonnet-5` (migrated 2026-07-24).** Five call sites: Ask Cluck / LP answer,
+  Daily Alpha, Cluck's Classroom tutor, the final-exam proctor, and Wallet X-Ray Q&A.
+  ⚠️ **All five pass `thinking: {type:"disabled"}` deliberately — do NOT remove it.** On Sonnet 5,
+  omitting `thinking` turns adaptive thinking ON, and `max_tokens` caps thinking + answer TOGETHER,
+  so a 700-token post would be mostly thinking with a truncated answer going out to X/Telegram.
+  These are short-form copy tasks (2–7 sentences, or ~320 words for Alpha) with no multi-step
+  reasoning, so thinking buys nothing and costs latency on the live tutor/exam paths.
+- **`max_tokens` were raised ~35% in the same change** (600→800, 1100→1500, 700→950) because Sonnet 5's
+  tokenizer produces ~30% more tokens for the same text. Don't lower them back to the 4.6 numbers.
+- **Haiku paths stay on `claude-haiku-4-5-20251001`** (bot lessons, autopsy, alpha majors, NQ digest) —
+  current model, nothing to migrate.
+- The API calls set no `temperature`/`top_p`/`top_k` and use no assistant prefills; all three would
+  400 on Sonnet 5. Keep it that way — steer tone with the system prompt instead.
+
 ## Critical runtime facts
 - **The entire scheduler block** (buy/sell alerts, Cluck's Lesson, Launch Radar, Market
   Check, daily recap, graduation watcher, the webhook setup) **only starts if
