@@ -5901,6 +5901,29 @@ app.get("/api/buyspecial-crosscheck", async (req, res) => {
   }
 });
 
+// GET /api/token-pools?mint= — the token's DEX pool addresses (via GeckoTerminal).
+// WHY: a token's MINT account does NOT surface pool-routed swaps, so a scanner that reads
+// getSignaturesForAddress(mint) misses nearly all buys (e.g. ROSE: 17 mint-txs, 0 buyers,
+// while the real trades live on 5 Raydium/Orca/Meteora pools). The buy-comp/rose scanners
+// use this to scan the POOLS (where swaps actually land) instead of the mint. Cached 5 min.
+app.get("/api/token-pools", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "public, max-age=300");
+  const mint = (req.query.mint || "").trim();
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ success: false, error: "bad mint", pools: [] });
+  try {
+    const r = await fetch(`https://api.geckoterminal.com/api/v2/networks/solana/tokens/${mint}/pools`, { signal: AbortSignal.timeout(12000) });
+    if (!r.ok) return res.status(200).json({ success: false, error: "gt " + r.status, pools: [] });
+    const j = await r.json();
+    const pools = (j.data || [])
+      .map(d => (d.attributes && d.attributes.address) || String(d.id || "").replace(/^solana_/, ""))
+      .filter(a => SOL_ADDR_RE.test(a));
+    return res.status(200).json({ success: true, pools: [...new Set(pools)] });
+  } catch (e) {
+    return res.status(200).json({ success: false, error: e.message, pools: [] });
+  }
+});
+
 // ══════════════════════════════════════════════════════════════════════════════
 // VESTED BUY SPECIAL — campaigns + opt-in registry (the "super dashboard" backend)
 //

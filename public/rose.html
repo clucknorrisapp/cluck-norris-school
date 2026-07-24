@@ -745,40 +745,53 @@ async function runAnalysis() {
   setStatus('Detecting token decimals...', 2);
   await getTokenDecimals();
 
-  setStatus('Fetching signatures...', 5);
+  // A token's MINT account does NOT surface pool-routed swaps, so scanning the mint alone
+  // misses nearly every buy (e.g. ROSE: 17 mint-txs, 0 buyers). Discover the token's POOLS
+  // and scan THEM (where the trades actually land) plus the mint. This is the fix for
+  // "0 unique buyers" on tokens whose DEX doesn't touch the mint account.
+  setStatus('Finding pools…', 3);
+  let scanTargets = [MINT_ADDR];
+  try {
+    const pr = await fetch('/api/token-pools?mint=' + encodeURIComponent(MINT_ADDR));
+    if (pr.ok) { const pj = await pr.json(); if (pj && Array.isArray(pj.pools)) scanTargets = scanTargets.concat(pj.pools.filter(p => p && p !== MINT_ADDR)); }
+  } catch (e) { /* pools lookup failed — fall back to mint-only */ }
 
-  // Collect all signatures in window
+  setStatus(`Fetching signatures (${scanTargets.length} source${scanTargets.length === 1 ? '' : 's'})…`, 5);
+
+  // Collect all signatures in window across the mint + every pool, deduped by signature.
   let allSigs = [];
-  let before = undefined;
-  let fetching = true;
+  const seenSig = new Set();
   let page = 0;
 
   try {
-    while (fetching && !stopFlag) {
-      const params = [MINT_ADDR, {limit:1000, commitment:'confirmed'}];
-      if (before) params[1].before = before;
+    for (const target of scanTargets) {
+      if (stopFlag) break;
+      let before = undefined;
+      while (!stopFlag) {
+        const params = [target, {limit:1000, commitment:'confirmed'}];
+        if (before) params[1].before = before;
 
-      const sigs = await rpc('getSignaturesForAddress', params);
-      if (!sigs || sigs.length === 0) break;
+        const sigs = await rpc('getSignaturesForAddress', params);
+        if (!sigs || sigs.length === 0) break;
 
-      let hitBoundary = false;
-      for (const s of sigs) {
-        if (s.blockTime && s.blockTime < startTime) {
-          hitBoundary = true;
-          break;
+        let hitBoundary = false;
+        for (const s of sigs) {
+          if (s.blockTime && s.blockTime < startTime) { hitBoundary = true; break; }
+          if (s.blockTime && s.blockTime <= endTime && !s.err && !seenSig.has(s.signature)) {
+            seenSig.add(s.signature); allSigs.push(s);
+          }
         }
-        if (s.blockTime && s.blockTime <= endTime) {
-          if (!s.err) allSigs.push(s);
-        }
+
+        if (hitBoundary) break;
+        before = sigs[sigs.length - 1].signature;
+        page++;
+        if (page > 100) break;   // safety cap: never spin the browser on a very old / high-volume window
+        setStatus(`Fetching signatures… ${allSigs.length} found (page ${page})`, Math.min(25, 5 + page));
+
+        // Rate limit
+        await new Promise(r => setTimeout(r, 150));
       }
-
-      if (hitBoundary) break;
-      before = sigs[sigs.length - 1].signature;
-      page++;
-      setStatus(`Fetching signatures... ${allSigs.length} found (page ${page})`, Math.min(25, 5 + page));
-
-      // Rate limit
-      await new Promise(r => setTimeout(r, 150));
+      if (page > 100) break;
     }
 
     if (stopFlag) {
@@ -1392,9 +1405,70 @@ async function runStCrossCheck(mint, startTime, endTime, localBuyerSet) {
       (onlyST > 0 ? '<div style="margin-top:4px;color:#FCD34D;">' + onlyST + ' buyer' + (onlyST===1?'':'s') + ' the ' + srcName + ' feed saw that your scan didn’t flag — worth a look (could be a pool/router edge or a sub-min buy).</div>' : '') +
       (onlyLocal > 0 ? '<div style="margin-top:4px;color:var(--subtext);">' + onlyLocal + ' of your buyers weren’t in the ' + srcName + ' feed — usually fine (your value-flow scan catches routes ST may index differently).</div>' : '') +
       '<div style="margin-top:6px;font-size:10px;color:var(--subtext);font-style:italic;">Your scan is the source of truth — this is a second opinion from an independent indexer. High agreement = high confidence in your competition results.</div>';
+
+    // Pool-routed token rescue: if the indexer saw buyers the on-chain scan missed (its
+    // swaps don't touch the mint account — the assumption the scan is built on), the client
+    // scan is unreliable for this token. Build a RELIABLE payout list from the indexer's
+    // buyer set + live on-chain balances so hold-based payouts still work.
+    if (d.buyers.length && (onlyST > 0 || localBuyerSet.size === 0)) {
+      renderReliablePayout(box, mint, d.buyers, srcName);
+    }
   } catch (e) {
     box.remove();
   }
+}
+
+// Reliable payout list for pool-routed tokens (mint-scan blind). Fetches each indexer-seen
+// buyer's CURRENT on-chain balance (getTokenAccountsByOwner) — for a hold-required comp, still
+// holding == still eligible, and the held amount == what they bought. Renders wallet · buys ·
+// held · pct-payout with an editable % and a copy-CSV button. Pure add-on; never alters the scan.
+async function renderReliablePayout(box, mint, buyers, srcName) {
+  const sec = document.createElement('div');
+  sec.style.cssText = 'margin-top:12px;padding-top:10px;border-top:1px dashed rgba(16,185,129,0.3);';
+  sec.innerHTML = '<div style="font-weight:700;color:#6EE7B7;margin-bottom:6px;">🛟 RELIABLE PAYOUT LIST (' + srcName + ' + live balances)</div>'
+    + '<div style="color:var(--subtext);font-size:11px;margin-bottom:8px;">This token’s swaps don’t surface on its mint account, so the on-chain scan above misses them. This list is built from the indexer’s buyer set and each wallet’s <b>current on-chain balance</b> — for a hold comp, still-holding = eligible, and the held amount = what they bought.</div>'
+    + '<div style="margin-bottom:8px;">Payout <input id="relPct" type="number" value="10" min="0" step="0.5" style="width:60px;padding:3px 6px;border-radius:6px;border:1px solid #374151;background:#0b1220;color:#e5e7eb;"> % of held · <button id="relRefresh" style="padding:3px 10px;border-radius:6px;border:1px solid #374151;background:#111827;color:#e5e7eb;cursor:pointer;">recompute</button> <button id="relCsv" style="padding:3px 10px;border-radius:6px;border:1px solid #16a34a;background:#065f46;color:#d1fae5;cursor:pointer;">copy payout CSV</button></div>'
+    + '<div id="relRows" style="font-size:11px;">Loading balances…</div>';
+  box.appendChild(sec);
+
+  // fetch current ROSE balance per buyer wallet (bounded concurrency)
+  const rows = [];
+  const CONC = 4;
+  for (let i = 0; i < buyers.length; i += CONC) {
+    await Promise.all(buyers.slice(i, i + CONC).map(async (b) => {
+      let held = 0;
+      try {
+        const r = await rpc('getTokenAccountsByOwner', [b.wallet, { mint }, { encoding: 'jsonParsed' }]);
+        for (const a of ((r && r.value) || [])) held += Number(a.account?.data?.parsed?.info?.tokenAmount?.uiAmount) || 0;
+      } catch (e) { held = -1; }   // -1 = lookup failed
+      rows.push({ wallet: b.wallet, buys: b.buyCount || 0, held });
+    }));
+  }
+  rows.sort((a, b) => b.held - a.held);
+
+  function draw() {
+    const pct = Math.max(0, parseFloat(document.getElementById('relPct').value) || 0) / 100;
+    const fmt = (n) => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+    let elig = 0, html = '<table style="width:100%;border-collapse:collapse;"><tr style="color:var(--subtext);text-align:left;"><th>wallet</th><th style="text-align:right;">buys</th><th style="text-align:right;">held</th><th style="text-align:right;">payout</th></tr>';
+    for (const r of rows) {
+      const ok = r.held > 0;
+      if (ok) elig++;
+      const payout = ok ? Math.floor(r.held * pct) : 0;
+      const color = r.held < 0 ? '#9CA3AF' : ok ? '#D1FAE5' : '#FCA5A5';
+      const note = r.held < 0 ? ' (lookup failed)' : ok ? '' : ' (holds 0 — sold/moved)';
+      html += '<tr style="color:' + color + ';border-top:1px solid rgba(255,255,255,0.05);"><td style="font-family:var(--mono);">' + r.wallet.slice(0, 6) + '…' + r.wallet.slice(-4) + note + '</td><td style="text-align:right;">' + r.buys + '</td><td style="text-align:right;">' + (r.held < 0 ? '—' : fmt(r.held)) + '</td><td style="text-align:right;font-weight:700;">' + (ok ? fmt(payout) : '—') + '</td></tr>';
+    }
+    html += '</table><div style="margin-top:6px;color:var(--subtext);">' + elig + ' eligible (holding) of ' + rows.length + ' buyers</div>';
+    document.getElementById('relRows').innerHTML = html;
+  }
+  draw();
+  document.getElementById('relRefresh').addEventListener('click', draw);
+  document.getElementById('relCsv').addEventListener('click', () => {
+    const pct = Math.max(0, parseFloat(document.getElementById('relPct').value) || 0) / 100;
+    const csv = rows.filter(r => r.held > 0).map(r => r.wallet + ',' + Math.floor(r.held * pct)).join('\n');
+    navigator.clipboard.writeText(csv).catch(() => {});
+    const btn = document.getElementById('relCsv'); const t = btn.textContent; btn.textContent = 'copied ✓'; setTimeout(() => btn.textContent = t, 1500);
+  });
 }
 
 function renderResults(eligible, disqualified, flagged, numWinners) {
