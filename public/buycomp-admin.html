@@ -114,7 +114,9 @@ body{background:transparent;font-family:var(--body);}
     <div class="row">
       <div><label>Token mint</label><input id="mint" placeholder="token mint address"/></div>
       <div><label>Ticker</label><input id="ticker" placeholder="ROSE"/></div>
+      <div style="max-width:110px"><label>Emoji <span style="color:var(--sub)">(chip)</span></label><input id="emoji" placeholder="🌹" maxlength="4"/></div>
     </div>
+    <div style="color:var(--sub);font-size:12px;margin:-4px 0 10px">Starting a comp adds a shortcut chip to <b>/buyspecial</b> with this token + window pre-filled. It disappears on its own once the hold check and payout window are done.</div>
     <label>Telegram chat ID <span style="color:var(--sub)">(run /chatid in the group)</span></label>
     <input id="chat" placeholder="-1002625127458"/>
     <label>Metric</label>
@@ -185,7 +187,7 @@ body{background:transparent;font-family:var(--body);}
     const places = [...document.querySelectorAll("#prizes .pamt")].map(i=>parseInt(i.value)).filter(n=>n>0).join(",");
     const params = {
       mint:$("mint").value.trim(), chat:$("chat").value.trim(), ticker:$("ticker").value.trim()||"TOKEN",
-      label:$("label").value.trim(), metric,
+      label:$("label").value.trim(), emoji:$("emoji").value.trim(), metric,
       start:toMs($("start").value), end:toMs($("end").value),
       hold:$("hold").value||"48", update:$("update").value||"60",
       places, prizeToken:$("prizeToken").value, prizeMint:$("prizeMint").value.trim()

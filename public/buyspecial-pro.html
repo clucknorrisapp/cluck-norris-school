@@ -105,7 +105,7 @@
       <div class="card-title">TOKEN</div>
       <div class="presets" id="tokPresets">
         <button class="chip" data-mint="DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS" data-name="CLKN">🐔 CLKN</button>
-        <button class="chip" data-mint="RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF" data-name="ROSE">🌹 ROSE</button>
+        <!-- Live/recent comp chips are injected here by loadCompPresets() and expire on their own. -->
         <button class="chip" data-mint="" data-name="CUSTOM">✏️ CUSTOM</button>
       </div>
       <input id="mint" placeholder="Token mint address…" style="width:100%" />
@@ -123,7 +123,7 @@
     <div class="card">
       <div class="card-title"><span class="step-n">1</span>BUY WINDOW</div>
       <div class="presets" id="winPresets">
-        <button class="chip" data-preset="rose">ROSE comp (Jul 19–21)</button>
+        <!-- Comp-window chips are injected here by loadCompPresets() and expire on their own. -->
         <button class="chip" data-preset="24">last 24h</button>
         <button class="chip" data-preset="48">last 48h</button>
         <button class="chip" data-preset="72">last 72h</button>
@@ -197,11 +197,19 @@ const $=id=>document.getElementById(id);
 const fmt=n=>Number(n||0).toLocaleString(undefined,{maximumFractionDigits:0});
 function setStatus(t){ $('status').textContent=t||''; }
 
-document.querySelectorAll('#tokPresets .chip').forEach(b=>b.addEventListener('click',()=>{
+// Delegated so chips injected later (live comps) work the same as the static ones.
+$('tokPresets').addEventListener('click',e=>{ const b=e.target.closest('.chip'); if(!b) return;
   document.querySelectorAll('#tokPresets .chip').forEach(x=>x.classList.remove('active')); b.classList.add('active');
   mint=b.getAttribute('data-mint'); tokenName=b.getAttribute('data-name'); $('mint').value=mint; if(!mint)$('mint').focus();
-}));
-$('mint').addEventListener('input',()=>{ mint=$('mint').value.trim(); const k={[CLKN]:'CLKN',[ROSE]:'ROSE'}; tokenName=k[mint]||'TOKEN'; });
+  // A comp chip also carries its window + prize shape — prefill so the operator
+  // never has to retype what the bot already knows.
+  const f=b.getAttribute('data-from'), t=b.getAttribute('data-to');
+  if(f&&t){ $('from').value=toLocal(+f); $('to').value=toLocal(+t); refUtc(); }
+  const pct=b.getAttribute('data-pct'); if(pct) $('bonus').value=pct;
+});
+$('mint').addEventListener('input',()=>{ mint=$('mint').value.trim();
+  const chip=document.querySelector('#tokPresets .chip[data-mint="'+mint+'"]');
+  tokenName=(chip&&chip.getAttribute('data-name'))||(mint===CLKN?'CLKN':'TOKEN'); });
 
 document.querySelectorAll('#modeTog button').forEach(b=>b.addEventListener('click',()=>{
   mode=b.getAttribute('data-mode');
@@ -218,11 +226,12 @@ $('prizeMethod').addEventListener('change',()=>{ const m=$('prizeMethod').value;
 function toLocal(u){ const d=new Date(u*1000), p=n=>String(n).padStart(2,'0'); return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes()); }
 function refUtc(){ const f=$('from').value?Math.floor(new Date($('from').value).getTime()/1000):0, t=$('to').value?Math.floor(new Date($('to').value).getTime()/1000):0;
   $('winUtc').textContent=(f&&t)?('UTC '+new Date(f*1000).toISOString().slice(0,16)+'Z → '+new Date(t*1000).toISOString().slice(0,16)+'Z'):''; }
-document.querySelectorAll('#winPresets .chip').forEach(b=>b.addEventListener('click',()=>{
-  const p=b.getAttribute('data-preset'), now=Math.floor(Date.now()/1000);
-  if(p==='rose'){ $('from').value=toLocal(1784489400); $('to').value=toLocal(1784671200); }
-  else { $('to').value=toLocal(now); $('from').value=toLocal(now-parseInt(p)*3600); } refUtc();
-}));
+$('winPresets').addEventListener('click',e=>{ const b=e.target.closest('.chip'); if(!b) return;
+  const f=b.getAttribute('data-from'), t=b.getAttribute('data-to'), now=Math.floor(Date.now()/1000);
+  if(f&&t){ $('from').value=toLocal(+f); $('to').value=toLocal(+t); }
+  else { const p=parseInt(b.getAttribute('data-preset')); $('to').value=toLocal(now); $('from').value=toLocal(now-p*3600); }
+  refUtc();
+});
 $('from').addEventListener('input',refUtc); $('to').addEventListener('input',refUtc);
 
 $('scanBtn').addEventListener('click', async ()=>{
@@ -426,13 +435,48 @@ async function gPaySolFn(){
 $('gConnect').addEventListener('click',gConnectWallet);
 $('gPaySol').addEventListener('click',gPaySolFn);
 
+// ── Live/recent comp shortcuts ───────────────────────────────────────────────
+// Chips come from the buy-comp store, so starting a comp with the bot
+// (/api/buycomp/start) makes its shortcut appear here automatically — and the
+// server drops it from the feed once the hold check + payout slack are done, so
+// finished comps clean themselves up instead of living in the UI forever.
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const dayLbl=u=>new Date(u*1000).toLocaleDateString(undefined,{month:'short',day:'numeric'});
+async function loadCompPresets(){
+  let comps=[];
+  try{ const d=await fetch('/api/buycomp/presets').then(r=>r.json()); comps=(d&&d.comps)||[]; }catch(e){ return; }
+  if(!comps.length) return;
+  const tokRow=$('tokPresets'), winRow=$('winPresets'), custom=tokRow.querySelector('.chip[data-name="CUSTOM"]');
+  for(const c of comps){
+    const from=Math.floor(c.startTs/1000), to=Math.floor(c.endTs/1000);
+    const tick=esc(c.ticker||'TOKEN'), live=c.status==='live';
+    // % comps carry their bonus straight through to the "reward all" config.
+    const pct=(c.pctPrize && c.places && c.places.length===1) ? c.places[0] : '';
+    const t=document.createElement('button');
+    t.className='chip'; t.setAttribute('data-mint',c.mint); t.setAttribute('data-name',tick);
+    t.setAttribute('data-from',from); t.setAttribute('data-to',to); if(pct) t.setAttribute('data-pct',pct);
+    t.innerHTML=(c.emoji?esc(c.emoji)+' ':'')+tick+(live?' <span style="color:#12C98B">●</span>':'');
+    t.title=(live?'Live comp':'Recent comp')+' · '+new Date(c.startTs).toUTCString()+' → '+new Date(c.endTs).toUTCString();
+    tokRow.insertBefore(t,custom);
+    const w=document.createElement('button');
+    w.className='chip'; w.setAttribute('data-from',from); w.setAttribute('data-to',to);
+    w.textContent=tick+' comp ('+dayLbl(from)+'–'+dayLbl(to)+')';
+    winRow.insertBefore(w,winRow.firstChild);
+  }
+}
+
 (async function init(){
   const q=new URLSearchParams(location.search), key=q.get('key');
   if(localStorage.getItem(OP_FLAG)==='1'){ $('opBanner').classList.remove('hidden'); showTool(); }
   if(key){ try{ const r=await fetch('/api/admin-check?key='+encodeURIComponent(key)); if(r.ok){ localStorage.setItem(OP_FLAG,'1'); $('opBanner').classList.remove('hidden'); showTool(); } }catch(e){} }
   if(isUnlocked()){ showTool(); } else if(localStorage.getItem(OP_FLAG)!=='1'){ showGate(); }
+  await loadCompPresets();
+  // /rose keeps working as a direct link even after the ROSE chip has aged out.
   const wantRose=/rose/i.test(location.pathname);
-  const def=document.querySelector('#tokPresets .chip[data-name="'+(wantRose?'ROSE':'CLKN')+'"]'); if(def) def.click();
+  const def=document.querySelector('#tokPresets .chip[data-mint="'+(wantRose?ROSE:CLKN)+'"]');
+  if(def) def.click();
+  else if(wantRose){ mint=ROSE; tokenName='ROSE'; $('mint').value=ROSE;
+    document.querySelectorAll('#tokPresets .chip').forEach(x=>x.classList.remove('active')); }
 })();
 </script>
 </body>

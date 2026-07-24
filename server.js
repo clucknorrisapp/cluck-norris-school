@@ -5661,7 +5661,9 @@ app.post("/api/buycomp/start", (req, res) => {
   // Auto-remove buy-and-dump bots (wallets that sold within the window) from the live
   // board. Default ON; pass liveHoldFilter=0/false to leave the raw board unfiltered.
   const liveHoldFilter = !["0", "false", "no", "off"].includes(String(q.liveHoldFilter ?? "").toLowerCase());
-  const c = { id, label: String(q.label || ticker).slice(0, 60), mint, ticker, chatId, metric, startTs, endTs, holdHours, places, pctPrize, exclude, minVolSol, liveHoldFilter, prizeToken: { kind: prizeTokenKind, mint: prizeTokenMint }, updateMins, prizeSummary, status: "live", boardMsgId: null, provisional: [], lastUpdateTs: 0, createdAt: Date.now() };
+  // Optional 1-2 char emoji for the comp's shortcut chip on the Buy Special tool.
+  const emoji = String(q.emoji || "").trim().slice(0, 4) || null;
+  const c = { id, label: String(q.label || ticker).slice(0, 60), mint, ticker, chatId, metric, emoji, startTs, endTs, holdHours, places, pctPrize, exclude, minVolSol, liveHoldFilter, prizeToken: { kind: prizeTokenKind, mint: prizeTokenMint }, updateMins, prizeSummary, status: "live", boardMsgId: null, provisional: [], lastUpdateTs: 0, createdAt: Date.now() };
   buyCompSave(c);
   buyCompUpdate(c).catch(() => {});    // post the initial board now (if the window has started)
   return res.status(200).json({ ok: true, id, competition: c });
@@ -5707,6 +5709,36 @@ app.post("/api/buycomp/stop", async (req, res) => {
 app.get("/api/buycomp/list", (req, res) => {
   if (!buyCompAdminOK(req)) return res.status(404).json({ error: "not_found" });
   return res.status(200).json({ ok: true, competitions: Object.values(buyCompsAll()) });
+});
+// PUBLIC, read-only: the comps the Buy Special tool should show a shortcut chip for.
+// Starting a comp via /api/buycomp/start makes its chip appear on the tool by itself;
+// the chip then EXPIRES on its own once the hold check + payout slack have passed, so
+// finished comps don't pile up in the UI forever. Cancelled comps drop immediately.
+// Deliberately omits chatId / the bot-exclusion list — everything returned here is
+// already public in the comp's own Telegram announcement.
+const BUYCOMP_PRESET_GRACE_MS = 5 * 24 * 60 * 60 * 1000;   // payout slack after the hold ends
+app.get("/api/buycomp/presets", (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  const now = Date.now();
+  let comps = [];
+  try {
+    comps = Object.values(buyCompsAll())
+      .filter((c) => c && c.mint && c.status !== "cancelled")
+      .filter((c) => {
+        if (c.status === "live") return true;
+        const holdMs = Math.max(0, Number(c.holdHours) || 0) * 3600 * 1000;
+        return now <= (Number(c.endTs) || 0) + holdMs + BUYCOMP_PRESET_GRACE_MS;
+      })
+      .sort((a, b) => (b.endTs || 0) - (a.endTs || 0))
+      .slice(0, 8)
+      .map((c) => ({
+        id: c.id, mint: c.mint, ticker: c.ticker, label: c.label, emoji: c.emoji || null,
+        startTs: c.startTs, endTs: c.endTs, holdHours: c.holdHours, status: c.status,
+        pctPrize: !!c.pctPrize, places: (c.places || []).map((p) => p.amount),
+      }));
+  } catch (_) {}
+  return res.status(200).json({ ok: true, comps });
 });
 app.post("/api/buycomp/refresh", (req, res) => {
   if (!buyCompAdminOK(req)) return res.status(404).json({ error: "not_found" });
