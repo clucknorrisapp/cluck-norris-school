@@ -24,6 +24,9 @@ let logic = fs.readFileSync(path.join(SRC, 'game_logic.js'), 'utf8');
 // NEW sprites injected from a raw-base64 .b64 file in src/assets/ (prepend the data-URI prefix).
 const FILE_MARKERS = {
   __NORMIE__:'cut_normie_idle.b64', __NRUN1__:'cut_normie_run1.b64', __NRUN2__:'cut_normie_run2.b64', __NJUMP__:'cut_normie_jump.b64',
+  // World 21 moon suit — the same four poses, fitted to the originals' content boxes so the
+  // ground line and centre match frame-for-frame (see the pose picker's moonSuit swap).
+  __MNORMIE__:'cut_normie_moon_idle.b64', __MNRUN1__:'cut_normie_moon_run1.b64', __MNRUN2__:'cut_normie_moon_run2.b64', __MNJUMP__:'cut_normie_moon_jump.b64',
   __JEET__:'cut_jeet.b64', __PAPER__:'cut_paper.b64', __GHOST__:'cut_ghost.b64', __BOT__:'cut_bot.b64', __BITMAXI__:'cut_bitmaxi.b64',
   __DIAMOND__:'cut_diamond.b64', __BULL__:'cut_bull.b64', __MOON__:'cut_moon.b64',
   __CAFFEINE__:'cut_caffeine.b64', __CANDLE__:'cut_candle.b64',
@@ -37,7 +40,7 @@ const FILE_MARKERS = {
   __CEOBOSS__:'cut_ceoboss.b64', __EXCHANGE__:'cut_exchange.b64',
   __WYRM__:'cut_wyrm.b64', __GOLEM__:'cut_golem.b64', __SACRED__:'cut_sacred.b64', __MINES__:'cut_mines.b64',
   __REAPER__:'cut_reaper.b64', __GREATBEAR__:'cut_greatbear.b64', __WHALE__:'cut_whale.b64', __COLDWALLET__:'cut_coldwallet.b64',
-  __TROLL__:'cut_troll.b64', __SAYLOR__:'cut_saylor.b64',
+  __TROLL__:'cut_troll.b64', __SAYLOR__:'cut_saylor.b64', __WENMOON__:'cut_wenmoon.b64',
   __LEVIATHAN__:'cut_leviathan.b64', __BURNLORD__:'cut_burnlord.b64', __DIAMONDTITAN__:'cut_diamondtitan.b64', __CORESENTINEL__:'cut_coresentinel.b64', __MARKETMAKER__:'cut_marketmaker.b64', __CHAIRMAN__:'cut_chairman.b64', __SATWARDEN__:'cut_satwarden.b64', __STORMHERALD__:'cut_stormherald.b64',
   __LASERBOT__:'cut_laserbot.b64', __MEVDRONE__:'cut_mevdrone.b64'
 };
