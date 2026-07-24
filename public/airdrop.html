@@ -1764,6 +1764,9 @@ const splToken = {
       const textarea = document.getElementById('manualInput');
       if (textarea) textarea.value = data.recipients;
       count = data.recipients ? data.recipients.split('\n').filter(Boolean).length : 0;
+      // Auto-import: parse the wallet,amount list straight into the airdrop preview so the
+      // operator lands on a ready-to-review list, not a raw textarea they must "Preview" first.
+      if (count && typeof parseRecipients === 'function') { try { parseRecipients(); } catch (e) {} }
     }
     // Show a notice — insert into the tool wrapper so the unlock gate (above it) stays clean.
     const notice = document.createElement('div');
@@ -1793,6 +1796,7 @@ const splToken = {
     if(typeof setMode === 'function') setMode('manual');
     const ta = document.getElementById('manualInput'); if(ta) ta.value = j.recipients;
     const count = j.recipients.split('\n').filter(Boolean).length;
+    if (count && typeof parseRecipients === 'function') { try { parseRecipients(); } catch (e) {} }
     const notice = document.createElement('div');
     notice.style.cssText='background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:10px 14px;font-family:var(--mono);font-size:11px;color:#10B981;margin-bottom:12px;';
     notice.textContent='Loaded '+count+' winner'+(count===1?'':'s')+' from '+(j.source||'Buy Comp')+(j.tokenName?' ('+j.tokenName+')':'')+' — review each, then send from your own wallet.';
@@ -1815,6 +1819,7 @@ const splToken = {
     if(typeof setMode === 'function') setMode('manual');
     const ta = document.getElementById('manualInput'); if(ta) ta.value = j.recipients;
     const count = j.recipients.split('\n').filter(Boolean).length;
+    if (count && typeof parseRecipients === 'function') { try { parseRecipients(); } catch (e) {} }
     const notice = document.createElement('div');
     notice.style.cssText='background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:8px;padding:10px 14px;font-family:var(--mono);font-size:11px;color:#10B981;margin-bottom:12px;';
     notice.textContent='Loaded '+count+' draw winner'+(count===1?'':'s')+' from '+(j.source||'Buy Special draw')+(j.tokenName?' ('+j.tokenName+')':'')+' — review each, then send from your own wallet.';
