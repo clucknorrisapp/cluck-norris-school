@@ -453,7 +453,7 @@ var SLOT_THEMES={
 // jump them); ghosts fly at y~212 (head height — jump over or stomp); wall columns
 // force jumps. No running under everything. Difficulty escalates 1-1 -> 1-3.
 var LEVELS=[
-  { name:'1-1', sub:'FIRST STEPS', time:110, theme:0, width:5200,
+  { name:'1-1', sub:'FIRST STEPS', time:110, theme:0, bgArt:'w01dusk', width:5200,
     gaps:[[860,936],[1720,1820],[2560,2612],[3360,3460],[4200,4276]],
     walls:[[480,2,'crate',4],[1240,3,'stone',4],[2080,2,'steel',5],[2920,3,'brick',4],[3720,2,'crate',5],[4560,3,'stone',4]],
     plats:[[880,2,150,'brick'],[1560,2,H-130,'stone'],[1740,2,150,'stone'],[2580,2,150,'steel'],[3380,2,150,'brick'],[4220,2,150,'crate']],
@@ -466,7 +466,7 @@ var LEVELS=[
     bonusblocks:[[1180,5],[2700,8],[4120,8]],
     key:[1584,H-150], door:5080 },
 
-  { name:'1-2', sub:'FUD RISING', time:120, theme:1, width:5800,
+  { name:'1-2', sub:'FUD RISING', time:120, theme:1, bgArt:'w01cavern', width:5800,
     gaps:[[820,940],[1640,1760],[2480,2576],[3300,3372],[4200,4272],[5000,5076]],
     walls:[[460,3,'steel',4],[1300,3,'stone',4],[2200,4,'steel',3],[3000,3,'brick',4],[3900,3,'stone',4],[4800,3,'steel',4]],
     plats:[[840,2,150,'crate'],[1600,2,H-130,'brick'],[1660,2,150,'stone'],[2140,2,H-120,'steel'],[2500,2,150,'steel'],[3320,2,150,'brick'],[4220,2,150,'stone']],
@@ -478,7 +478,7 @@ var LEVELS=[
     bonusblocks:[[1100,5],[1950,8],[2950,5],[4020,8],[4960,8]],
     key:[1624,H-150], door:5680 },
 
-  { name:'1-3', sub:"THE RUG KING'S KEEP", time:135, theme:2, width:6400, boss:true,
+  { name:'1-3', sub:"THE RUG KING'S KEEP", time:135, theme:2, bgArt:'w01keep', width:6400, boss:true,
     gaps:[[780,900],[1620,1716],[2440,2560],[3260,3332],[4120,4216],[4980,5100],[5900,5952]],
     walls:[[440,3,'steel',4],[1240,4,'stone',4],[2100,3,'crate',5],[2960,4,'steel',4],[3820,3,'brick',5],[4680,4,'stone',4],[5500,3,'crate',4]],
     plats:[[800,2,150,'stone'],[1140,2,H-130,'stone'],[1640,2,150,'crate'],[2460,2,150,'steel'],[3280,2,150,'brick'],[3500,2,H-140,'steel'],[4140,2,150,'stone'],[5000,2,150,'crate']],
@@ -491,7 +491,7 @@ var LEVELS=[
     key:[1164,H-150], door:6300 },
 
   // WORLD 2 — the Sand Lands. Desert stage with green mini-worm hazards.
-  { name:'2-1', sub:'THE SAND LANDS', time:120, theme:3, width:5200,
+  { name:'2-1', sub:'THE SAND LANDS', time:120, theme:3, bgArt:'w02desert', width:5200,
     gaps:[[900,1000],[1800,1876],[2800,2852],[3800,3900]],
     walls:[[500,3,'stone',4],[1300,3,'steel',3],[2200,4,'stone',3],[3100,3,'steel',4],[4200,3,'stone',3]],
     plats:[[950,2,150,'stone'],[1600,2,H-130,'stone'],[1850,2,150,'steel'],[2850,2,150,'stone'],[3850,2,150,'steel']],
@@ -506,7 +506,7 @@ var LEVELS=[
     key:[1600,H-150], door:5080 },
 
   // WORLD 2 — Normie Casino: a normal stage with a slot machine you "fire it in" for bonus coins.
-  { name:'2-2', sub:'NORMIE CASINO', time:130, theme:4, width:5200,
+  { name:'2-2', sub:'NORMIE CASINO', time:130, theme:4, bgArt:'w02casino', width:5200,
     gaps:[[900,1000],[1900,1976],[3000,3052],[4200,4300]],
     walls:[[500,3,'brick',4],[1300,3,'steel',3],[2400,4,'brick',3],[3300,3,'steel',4],[4450,3,'brick',4]],
     plats:[[950,2,150,'brick'],[1950,2,150,'steel'],[3050,2,150,'brick'],[1650,2,H-130,'steel'],[4250,2,150,'steel']],
@@ -524,7 +524,7 @@ var LEVELS=[
 
   // WORLD 2 boss arena (level 2-1 will slot in BEFORE this once built). Flat desert arena:
   // grab the key, reach the portal, and the WORMHOLE erupts. Weak point = the blue back shards.
-  { name:'2-3', sub:'THE WORMHOLE', time:140, theme:3, width:2500, boss:true, bossType:'wormhole',
+  { name:'2-3', sub:'THE WORMHOLE', time:140, theme:3, bgArt:'w02desert', width:2500, boss:true, bossType:'wormhole',
     gaps:[[650,750],[1250,1350]],
     walls:[[420,2,'stone',3],[980,2,'steel',3]],
     plats:[[670,2,150,'stone'],[1270,2,150,'steel'],[1900,2,150,'stone'],[2180,2,150,'stone']],
@@ -535,7 +535,7 @@ var LEVELS=[
     key:[1060,H-140], door:2380 },
 
   // WORLD 3 — Crypto Twitter / The Skyline. Neon rooftops; the Scammy KOL waits at the top.
-  { name:'3-1', sub:'THE ROOFTOPS', time:135, theme:5, width:5800, bgImage:'skyline',
+  { name:'3-1', sub:'THE ROOFTOPS', time:135, theme:5, bgArt:'w03skyline', width:5800, bgImage:'skyline',
     gaps:[[820,892],[1640,1760],[2480,2600],[3300,3372],[4200,4296],[5000,5076]],
     walls:[[460,3,'steel',4],[1300,3,'stone',4],[2200,4,'steel',3],[3000,3,'brick',4],[3900,3,'stone',4],[4800,3,'steel',4]],
     plats:[[840,2,150,'crate'],[1600,2,H-130,'brick'],[1660,2,150,'stone'],[2140,2,H-120,'steel'],[2500,2,150,'steel'],[3320,2,150,'brick'],[4220,2,150,'stone']],
@@ -549,7 +549,7 @@ var LEVELS=[
     warps:[[3620,28]],
     key:[1624,H-150], door:5680 },
 
-  { name:'3-2', sub:'THE TIMELINE', time:145, theme:5, width:6400, bgImage:'skyline',
+  { name:'3-2', sub:'THE TIMELINE', time:145, theme:5, bgArt:'w03skyline', width:6400, bgImage:'skyline',
     gaps:[[780,852],[1620,1692],[2440,2560],[3260,3380],[4120,4240],[4980,5076],[5900,5976]],
     walls:[[440,3,'steel',4],[1240,4,'stone',4],[2100,3,'crate',5],[2960,4,'steel',4],[3820,3,'brick',5],[4680,4,'stone',4],[5500,3,'crate',4]],
     plats:[[800,2,150,'stone'],[1140,2,H-130,'stone'],[1640,2,150,'crate'],[2460,2,150,'steel'],[3280,2,150,'brick'],[3500,2,H-140,'steel'],[4140,2,150,'stone'],[5000,2,150,'crate']],
@@ -564,7 +564,7 @@ var LEVELS=[
 
   // WORLD 3 boss level — a LONG, HARD gauntlet up the skyline, THEN the Scammy KOL at the door.
   // The "-3" levels are the tough ones: dense snipers/hazards + tricky jumps to even reach the boss.
-  { name:'3-3', sub:'THE SCAMMY KOL', time:175, theme:5, width:4800, boss:true, bossType:'kol', bgImage:'skyline',
+  { name:'3-3', sub:'THE SCAMMY KOL', time:175, theme:5, bgArt:'w03skyline', width:4800, boss:true, bossType:'kol', bgImage:'skyline',
     gaps:[[700,772],[1380,1500],[2060,2156],[2720,2816],[3380,3500]],
     walls:[[420,3,'steel',4],[1060,4,'stone',3],[1680,3,'brick',5],[2320,4,'steel',3],[2980,3,'stone',5],[3640,4,'steel',3]],
     plats:[[720,2,150,'steel'],[1080,2,H-140,'brick'],[1400,2,150,'stone'],[2080,2,150,'steel'],[2360,2,126,'steel'],[2740,2,150,'brick'],[3400,2,150,'steel'],[3680,2,H-134,'steel']],
@@ -580,7 +580,7 @@ var LEVELS=[
   // WORLD 4 — THE EXCHANGE (the CEX that freezes your funds). Cold steel-blue vault; obstacles get
   // TALLER + WIDER here (walls 4-5 tall, 5-6 wide) — double-jump / Bull to clear them. Boss = the
   // Custodian (corrupt exchange CEO): stomp him x3 while he flings "frozen withdrawal" locks.
-  { name:'4-1', sub:'THE ONBOARDING', time:150, theme:6, width:6000, bgImage:'exchange',
+  { name:'4-1', sub:'THE ONBOARDING', time:150, theme:6, bgArt:'w04exchange', width:6000, bgImage:'exchange',
     gaps:[[860,932],[1700,1796],[2560,2656],[3400,3520],[4240,4312],[5080,5180]],
     walls:[[460,4,'steel',5],[1300,4,'steel',4],[2200,4,'steel',4],[3020,4,'stone',5],[3920,4,'steel',4],[4820,4,'steel',5]],
     plats:[[840,2,150,'steel'],[1180,2,H-130,'steel'],[1660,2,150,'stone'],[2140,2,150,'steel'],[2500,2,150,'steel'],[3320,2,150,'stone'],[3860,2,150,'steel'],[4260,2,150,'steel']],
@@ -593,7 +593,7 @@ var LEVELS=[
     bonusblocks:[[1280,5],[3000,'omegachad'],[4790,8]],
     key:[1680,H-150], door:5880 },
 
-  { name:'4-2', sub:'THE TRADING FLOOR', time:160, theme:6, width:6600, bgImage:'exchange',
+  { name:'4-2', sub:'THE TRADING FLOOR', time:160, theme:6, bgArt:'w04exchange', width:6600, bgImage:'exchange',
     gaps:[[780,852],[1620,1740],[2440,2560],[3260,3380],[4120,4216],[4980,5052],[5900,5996]],
     walls:[[440,4,'steel',5],[1240,4,'steel',4],[2100,4,'steel',1],[2980,4,'stone',4],[3860,4,'steel',6],[4720,4,'steel',4],[5560,4,'steel',5]],
     plats:[[800,2,150,'steel'],[1180,2,150,'steel'],[1660,2,150,'steel'],[2460,2,150,'steel'],[2920,2,150,'steel'],[3300,2,150,'steel'],[3520,2,H-140,'steel'],[4160,2,150,'steel'],[4660,2,150,'steel'],[5040,2,150,'steel']],
@@ -609,7 +609,7 @@ var LEVELS=[
 
   // WORLD 4 boss level — the HARDEST gauntlet (tall+wide walls, dense snipers, spike pits), THEN
   // the Custodian at the door. The final world: reaching the boss should be a real fight in itself.
-  { name:'4-3', sub:'THE CUSTODIAN', time:190, theme:6, width:5200, boss:true, bossType:'ceo', bgImage:'exchange',
+  { name:'4-3', sub:'THE CUSTODIAN', time:190, theme:6, bgArt:'w04exchange', width:5200, boss:true, bossType:'ceo', bgImage:'exchange',
     gaps:[[720,816],[1440,1536],[2160,2232],[2880,3000],[3600,3672],[4240,4360]],
     walls:[[440,4,'steel',5],[1120,4,'steel',4],[1800,4,'steel',6],[2500,4,'stone',4],[3160,4,'steel',6],[3860,4,'steel',4]],
     plats:[[740,2,150,'steel'],[1160,2,126,'steel'],[1580,2,150,'steel'],[2280,2,150,'steel'],[2560,2,126,'steel'],[2940,2,150,'steel'],[3620,2,150,'steel'],[3920,2,126,'steel'],[4400,2,150,'steel']],
@@ -625,7 +625,7 @@ var LEVELS=[
   // WORLD 5 — THE BRIDGE (cross-chain). Sprint the spans over the void: planks get "exploited" and
   // collapse a beat after you step on them, so you can never stand still. Dark chasm theme. Boss run
   // still uses the wyrm arena for now (Bridge Drainer boss art is the next drop). Walls ≤4 tall.
-  { name:'5-1', sub:'THE ONRAMP', time:190, theme:7, width:7800,
+  { name:'5-1', sub:'THE ONRAMP', time:190, theme:7, bgArt:'w05bridge', width:7800,
     gaps:[[860,956],[1700,1772],[2560,2656],[3400,3520],[4240,4312],[5080,5180],[5920,6020],[6760,6836]],
     walls:[[460,4,'stone',5],[1300,4,'crate',4],[2200,4,'stone',4],[3020,4,'brick',5],[3920,4,'stone',4],[4820,4,'crate',5],[5540,4,'stone',5],[6380,4,'crate',4]],
     plats:[[840,2,150,'stone'],[1180,2,140,'stone'],[1660,2,150,'crate'],[2140,2,150,'stone'],[2500,2,150,'stone'],[3320,2,150,'brick'],[3860,2,150,'stone'],[4260,2,150,'stone'],[5900,2,150,'stone'],[6740,2,140,'stone']],
@@ -642,7 +642,7 @@ var LEVELS=[
     caches:[[2340,226,200]],
     key:[1680,120], door:7680 },
 
-  { name:'5-2', sub:'THE SPAN', time:200, theme:7, width:8400,
+  { name:'5-2', sub:'THE SPAN', time:200, theme:7, bgArt:'w05bridge', width:8400,
     gaps:[[780,876],[1620,1692],[2440,2536],[3260,3332],[4120,4240],[4980,5076],[5900,6020],[6760,6880],[7620,7692]],
     walls:[[440,4,'stone',5],[1240,4,'crate',4],[2100,4,'stone',1],[2980,4,'brick',4],[3860,4,'stone',6],[4720,4,'crate',4],[5560,4,'stone',5],[6380,4,'stone',5],[7240,4,'crate',4]],
     plats:[[800,2,150,'stone'],[1180,2,150,'stone'],[1660,2,150,'stone'],[2460,2,150,'stone'],[2920,2,150,'stone'],[3300,2,150,'stone'],[3520,2,130,'stone'],[4160,2,150,'stone'],[4660,2,150,'stone'],[5040,2,150,'stone'],[6740,2,150,'stone'],[7600,2,150,'stone']],
@@ -659,7 +659,7 @@ var LEVELS=[
     warps:[[2200,29]],
     key:[1164,120], door:8280 , firebars:[[660, 162, 46, 130, 4]] },
 
-  { name:'5-3', sub:'THE VAULT WYRM', time:240, theme:7, width:6700, boss:true, bossType:'wyrm',
+  { name:'5-3', sub:'THE VAULT WYRM', time:240, theme:7, bgArt:'w05bridge', width:6700, boss:true, bossType:'wyrm',
     gaps:[[720,816],[1440,1560],[2160,2232],[2880,3000],[3600,3696],[4240,4312],[4960,5080],[5680,5776]],
     walls:[[440,4,'stone',5],[1120,4,'crate',4],[1800,4,'stone',6],[2500,4,'brick',4],[3160,4,'stone',6],[3860,4,'crate',4],[4580,4,'stone',5],[5300,4,'crate',4]],
     plats:[[740,2,150,'stone'],[1160,2,126,'stone'],[1580,2,150,'stone'],[2280,2,150,'stone'],[2560,2,126,'stone'],[2940,2,150,'stone'],[3620,2,150,'stone'],[3920,2,126,'stone'],[4400,2,150,'stone'],[4940,2,150,'stone'],[5660,2,150,'stone']],
@@ -675,7 +675,7 @@ var LEVELS=[
     bonusblocks:[[1090,5],[2090,8],[3140,8],[4160,8],[5270,8],[5607,8]],
     key:[5900,120], door:6500 , rugplats:[[304, 3, 150]] },
 
-  { name:'6-1', sub:'THE PEG', time:190, theme:8, width:7800,
+  { name:'6-1', sub:'THE PEG', time:190, theme:8, bgArt:'w06depeg', width:7800,
     gaps:[[860,980],[1700,1796],[2560,2632],[3400,3520],[4240,4312],[5080,5180],[5920,5996],[6760,6836]],
     walls:[[460,4,'crate',5],[1300,4,'stone',4],[2200,4,'crate',4],[3020,4,'stone',5],[3920,4,'crate',4],[4820,4,'stone',5],[5540,4,'crate',5],[6380,4,'stone',4]],
     plats:[[840,2,150,'crate'],[1180,2,140,'crate'],[1660,2,150,'stone'],[2140,2,150,'crate'],[2500,2,150,'crate'],[3320,2,150,'stone'],[3860,2,150,'crate'],[4260,2,150,'crate'],[5900,2,150,'crate'],[6740,2,140,'crate']],
@@ -691,7 +691,7 @@ var LEVELS=[
     bonusblocks:[[1280,5],[3000,'omegachad'],[4790,8],[6220,8],[6620,8]],
     key:[1680,120], door:7680 , firebars:[[680, 162, 46, 130, 4]] },
 
-  { name:'6-2', sub:'DEPEG EVENT', time:200, theme:8, width:8400,
+  { name:'6-2', sub:'DEPEG EVENT', time:200, theme:8, bgArt:'w06depeg', width:8400,
     gaps:[[780,852],[1620,1692],[2440,2512],[3260,3380],[4120,4240],[4980,5100],[5900,5996],[6760,6856],[7620,7716]],
     walls:[[440,4,'crate',5],[1240,4,'stone',4],[2100,4,'crate',1],[2980,4,'stone',4],[3860,4,'crate',6],[4720,4,'stone',4],[5560,4,'crate',5],[6380,4,'crate',5],[7240,4,'stone',4]],
     plats:[[800,2,150,'crate'],[1180,2,150,'crate'],[1660,2,150,'crate'],[2460,2,150,'crate'],[2920,2,150,'crate'],[3300,2,150,'crate'],[3520,2,130,'crate'],[4160,2,150,'crate'],[4660,2,150,'crate'],[5040,2,150,'crate'],[6740,2,150,'crate'],[7600,2,150,'crate']],
@@ -708,7 +708,7 @@ var LEVELS=[
     warps:[[2200,30,1]],
     key:[1164,120], door:8280 , rugplats:[[624, 3, 150]] },
 
-  { name:'6-3', sub:'THE HASH LORD', time:250, theme:8, width:6700, boss:true, bossType:'golem',
+  { name:'6-3', sub:'THE HASH LORD', time:250, theme:8, bgArt:'w06depeg', width:6700, boss:true, bossType:'golem',
     gaps:[[720,816],[1440,1560],[2160,2280],[2880,3000],[3600,3672],[4240,4312],[4960,5056],[5680,5776]],
     walls:[[440,4,'crate',5],[1120,4,'stone',4],[1800,4,'crate',6],[2500,4,'stone',4],[3160,4,'crate',6],[3860,4,'stone',4],[4580,4,'crate',5],[5300,4,'stone',4]],
     plats:[[740,2,150,'crate'],[1160,2,126,'crate'],[1580,2,150,'crate'],[2280,2,150,'crate'],[2560,2,126,'crate'],[2940,2,150,'crate'],[3620,2,150,'crate'],[3920,2,126,'crate'],[4400,2,150,'crate'],[4940,2,150,'crate'],[5660,2,150,'crate']],
@@ -724,7 +724,7 @@ var LEVELS=[
     bonusblocks:[[1090,5],[2090,8],[3140,8],[4160,8],[5270,8],[5607,8]],
     key:[5900,120], door:6500 , gates:[[340, 1400, 1700, 529]] },
 
-  { name:'7-1', sub:'THE FARM', time:195, theme:9, width:7800,
+  { name:'7-1', sub:'THE FARM', time:195, theme:9, bgArt:'w07farm', width:7800,
     gaps:[[860,980],[1700,1820],[2560,2632],[3400,3496],[4240,4360],[5080,5132],[5920,5996],[6760,6836]],
     walls:[[460,4,'crate',5],[1300,4,'stone',3],[2200,4,'crate',4],[3020,4,'stone',5],[3920,4,'crate',4],[4820,4,'stone',5],[5540,4,'crate',5],[6380,4,'stone',4]],
     plats:[[840,2,150,'crate'],[1180,2,140,'crate'],[1980,2,150,'stone'],[2340,2,150,'crate'],[3200,2,150,'stone'],[3560,2,150,'crate'],[4480,2,150,'crate'],[5900,2,150,'crate'],[6740,2,140,'crate']],
@@ -740,7 +740,7 @@ var LEVELS=[
     bonusblocks:[[1280,5],[3000,'omegachad'],[4790,8],[6220,8],[6620,8]],
     key:[1680,120], door:7680 , gates:[[680, 1400, 1700, 666]] },
 
-  { name:'7-2', sub:'COMPOUND COUNTRY', time:205, theme:9, width:8400,
+  { name:'7-2', sub:'COMPOUND COUNTRY', time:205, theme:9, bgArt:'w07farm', width:8400,
     gaps:[[780,900],[1620,1740],[2440,2512],[3260,3332],[4120,4216],[4980,5052],[5900,6020],[6760,6856],[7620,7716]],
     walls:[[440,4,'crate',5],[1240,4,'stone',4],[2100,4,'crate',1],[2980,4,'stone',4],[3860,4,'crate',6],[4720,4,'stone',4],[5560,4,'crate',5],[6380,4,'crate',5],[7240,4,'stone',4]],
     plats:[[800,2,150,'crate'],[1180,2,150,'crate'],[1980,2,150,'crate'],[2920,2,150,'crate'],[3520,2,130,'crate'],[4660,2,150,'crate'],[5040,2,150,'crate'],[6740,2,150,'crate'],[7600,2,150,'crate']],
@@ -758,7 +758,7 @@ var LEVELS=[
     warps:[[2200,31]],
     key:[1164,120], door:8280 , dumpzones:[[660, 2800]] },
 
-  { name:'7-3', sub:'THE YIELD REAPER', time:265, theme:9, width:6700, boss:true, bossType:'reaper',
+  { name:'7-3', sub:'THE YIELD REAPER', time:265, theme:9, bgArt:'w07farm', width:6700, boss:true, bossType:'reaper',
     gaps:[[720,816],[1440,1512],[2160,2232],[2880,3000],[3600,3720],[4240,4336],[4960,5080],[5680,5776]],
     walls:[[440,4,'crate',5],[1120,4,'stone',4],[1800,4,'crate',6],[2500,4,'stone',4],[3160,4,'crate',6],[3860,4,'stone',4],[4580,4,'crate',5],[5300,4,'stone',4]],
     plats:[[740,2,150,'crate'],[1160,2,126,'crate'],[1980,2,150,'crate'],[2560,2,126,'crate'],[3260,2,126,'crate'],[3920,2,126,'crate'],[4940,2,150,'crate'],[5660,2,150,'crate']],
@@ -774,7 +774,7 @@ var LEVELS=[
     bonusblocks:[[1090,5],[2090,8],[3140,8],[4160,8],[5270,8],[5607,8]],
     key:[5900,120], door:6500 },
 
-  { name:'8-1', sub:'THE DIP', time:190, theme:10, width:7800,
+  { name:'8-1', sub:'THE DIP', time:190, theme:10, bgArt:'w08bear', width:7800,
     gaps:[[900,976],[1760,1812],[2620,2672],[3480,3556],[4340,4440],[5180,5280],[6040,6140],[6900,6976]],
     walls:[[560,3,'stone',3],[1400,3,'crate',3],[2300,3,'stone',3],[3160,3,'crate',3],[4020,3,'stone',3],[4900,3,'crate',3],[5660,3,'stone',3],[6520,3,'crate',3]],
     plats:[[880,2,150,'crate'],[1240,2,146,'crate'],[1740,2,150,'stone'],[2600,2,150,'crate'],[3460,2,150,'crate'],[4320,2,150,'crate'],[5160,2,150,'crate'],[6020,2,150,'crate'],[6880,2,146,'crate']],
@@ -788,7 +788,7 @@ var LEVELS=[
     bonusblocks:[[1490,5],[2930,8],[4670,8],[5947,8],[6793,8]],
     key:[640,222], door:7680 , firebars:[[460, 162, 46, 130, 4]] },
 
-  { name:'8-2', sub:'CAPITULATION', time:200, theme:10, width:8400,
+  { name:'8-2', sub:'CAPITULATION', time:200, theme:10, bgArt:'w08bear', width:8400,
     gaps:[[820,940],[1680,1776],[2540,2660],[3400,3496],[4260,4332],[5120,5192],[5980,6076],[6840,6960],[7700,7772]],
     walls:[[520,3,'crate',3],[1320,3,'stone',3],[2080,3,'crate',3],[3040,3,'stone',3],[3900,3,'crate',3],[4760,3,'stone',3],[5620,3,'crate',3],[6460,3,'crate',3],[7320,3,'stone',3]],
     plats:[[800,2,150,'crate'],[1200,2,146,'crate'],[1660,2,150,'stone'],[2520,2,150,'crate'],[3380,2,150,'crate'],[4240,2,150,'crate'],[5100,2,150,'crate'],[5960,2,150,'crate'],[6820,2,150,'crate'],[7680,2,146,'crate']],
@@ -803,7 +803,7 @@ var LEVELS=[
     warps:[[2200,32,1]],
     key:[700,222], door:8280 , rugplats:[[384, 3, 150]] },
 
-  { name:'8-3', sub:'THE GREAT BEAR', time:275, theme:10, width:6700, boss:true, bossType:'liquidator',
+  { name:'8-3', sub:'THE GREAT BEAR', time:275, theme:10, bgArt:'w08bear', width:6700, boss:true, bossType:'liquidator',
     gaps:[[720,792],[1440,1536],[2160,2256],[2880,2952],[3600,3720],[4240,4360],[4960,5080],[5680,5776]],
     walls:[[440,4,'stone',4],[1120,4,'crate',4],[1800,4,'stone',5],[2500,4,'crate',4],[3160,4,'stone',5],[3860,4,'crate',4],[4580,4,'stone',4],[5300,4,'crate',4]],
     plats:[[740,2,150,'crate'],[1160,2,126,'crate'],[1980,2,150,'crate'],[2560,2,126,'crate'],[3260,2,126,'crate'],[3920,2,126,'crate'],[4940,2,150,'crate'],[5660,2,150,'crate']],
@@ -944,9 +944,9 @@ var LEVELS=[
   {"name":"20-1","sub":"THE SKYBRIDGE","theme":25,"width":8400,"vip":true,"bgArt":"w20tower","gaps":[[1300,1396],[2560,2680],[4260,4620],[5060,5300],[6040,6152],[7000,7180],[7600,7720]],"walls":[[2820,5,"steel",2],[3980,5,"steel",2],[5620,4,"steel",3],[6760,3,"steel",3],[7360,4,"steel",3]],"plats":[[420,2,132,"steel"],[720,2,132,"steel"],[1660,2,132,"steel"],[1960,2,108,"steel"],[2280,3,84,"steel"],[4160,2,120,"steel"],[4700,2,120,"steel"],[5420,2,102,"steel"],[6360,2,102,"steel"]],"spikes":[[3020],[3260],[3480],[3700]],"powerups":[["caffeine",640,230],["solana",1080,230],["diamond",2560,230],["bull",4820,230],["coldwallet",5840,230],["candle",6680,230]],"airdrops":[[3520,60],[6360,70]],"coins":[[340,224],[440,108],[560,108],[680,108],[880,196],[1520,120],[1820,102],[2120,84],[2280,60],[2340,60],[3160,96],[3340,110],[3520,96],[3700,110],[4300,96],[4400,96],[4500,96],[4600,96],[5090,150],[5180,120],[5270,150],[5420,84],[6120,120],[6240,120],[6860,196],[6920,196],[7020,168],[7090,150],[7160,168],[7280,196],[7480,150],[7760,196],[7820,196]],"enemies":[["bitmaxi",900,230,60],["ghost",1040,206,70],["mevdrone",1900,120,70],["bitmaxi",2300,66,36],["laserbot",2900,230,50],["ghost",4440,90,80],["sandwich",4720,230,70],["mevdrone",5660,230,70],["ghost",6420,200,70],["sniper",6880,230,30],["bot",7220,230,70],["ghost",7500,206,70]],"pumpdumps":[[3340,150],[3700,150],[5120,174],[5240,174]],"honeypots":[[1200,232],[4960,232],[5940,232],[6880,232]],"npcs":[[4160,90]],"bonusblocks":[[980,5],[3060,8],[6600,"omegachad"],[7480,"candle"]],"caches":[[2320,60,300],[5450,80,360]],"gates":[],"firebars":[[3160,150,54,150,4],[3520,146,52,-140,4],[3860,150,54,140,4],[6260,140,50,-150,4]],"planks":[[540,4],[1300,5],[4260,15],[7000,5]],"yields":[[6120,178,5]],"movers":[[1520,168,"y",58,50],[1820,150,"y",58,50],[2120,132,"y",58,50]],"time":225,"diff":3.1,"door":8280,"key":[2280,60],"miniworms":[3400,6200]},
   {"name":"20-2","sub":"THE STORM HERALD","theme":25,"width":7800,"vip":true,"bgArt":"w20tower","gaps":[[1300,1396],[2620,2740],[4420,4640],[5060,5300],[6020,6132],[6900,7080],[7480,7600]],"walls":[[2880,5,"steel",2],[4040,5,"steel",2],[4220,3,"steel",4],[5620,4,"steel",3],[6660,3,"steel",3],[7260,4,"steel",3]],"plats":[[1560,2,138,"steel"],[1900,2,108,"steel"],[2160,2,84,"steel"],[2400,3,60,"steel"],[5420,2,102,"steel"],[6340,2,102,"steel"]],"spikes":[[780],[864],[3080],[3320],[3540],[3760]],"powerups":[["caffeine",620,230],["solana",1080,230],["diamond",2620,230],["bull",4820,230],["coldwallet",5840,230],["candle",6580,230]],"airdrops":[[3580,60],[6340,70]],"coins":[[340,224],[400,224],[460,224],[820,110],[1460,120],[1640,102],[1820,120],[2000,72],[2160,60],[2400,36],[2460,36],[3220,96],[3400,110],[3580,96],[3760,110],[4460,150],[4530,120],[4600,150],[5090,150],[5180,120],[5270,150],[5420,84],[6120,90],[6240,90],[6760,196],[6820,196],[6920,168],[6990,150],[7060,168],[7180,196],[7380,150],[7620,196],[7660,196]],"enemies":[["laserbot",600,230,30],["mevdrone",1080,200,70],["mevdrone",1720,120,70],["bitmaxi",2400,42,36],["laserbot",2960,230,50],["sandwich",4680,230,70],["ghost",5100,200,80],["mevdrone",5660,230,70],["ghost",6400,200,70],["sniper",6780,230,30],["bot",7120,230,70],["ghost",7400,206,70]],"pumpdumps":[[3400,150],[3760,150],[4530,176],[5120,174],[5240,174]],"honeypots":[[1200,232],[1900,232],[4960,232],[5940,232],[6780,232]],"npcs":[[4160,90]],"bonusblocks":[[980,5],[3120,8],[6500,"omegachad"],[7380,"candle"]],"caches":[[2440,36,300],[5450,80,360]],"gates":[],"firebars":[[820,150,48,150,4],[3220,150,54,150,4],[3580,146,52,-140,4],[3920,150,54,140,4],[6240,140,50,-150,4]],"planks":[[1300,5],[6900,5]],"yields":[[1460,178,5],[1820,178,5]],"movers":[[1640,150,"y",56,46],[2000,120,"y",56,46],[6120,150,"y",56,46]],"boss":true,"bossType":"stormherald","time":225,"diff":3.15,"door":7680,"key":[2400,36],"miniworms":[3400,5900]},
   {"name":"20-3","sub":"THE SAYLOR SUMMIT","theme":26,"width":8400,"vip":true,"bgArt":"w21tower","gaps":[[1300,1396],[2560,2680],[4600,4820],[5220,5460],[6360,6472],[7280,7400]],"walls":[[2820,5,"steel",2],[4220,5,"steel",2],[4400,3,"steel",4],[5800,4,"steel",3],[7040,3,"steel",4]],"plats":[[1460,2,186,"steel"],[1720,2,114,"steel"],[1980,2,150,"steel"],[2240,2,88,"steel"],[2380,2,150,"steel"],[5560,2,102,"steel"],[6720,2,102,"steel"]],"spikes":[[3020],[3260],[3480],[3700],[3920],[7440],[7464]],"powerups":[["supergeek",600,230],["solana",1040,230],["diamond",2520,230],["bull",4960,230],["coldwallet",6020,230],["candle",6960,230]],"airdrops":[[3480,58],[6720,70]],"coins":[[340,224],[400,224],[460,224],[720,196],[780,196],[900,150],[940,150],[1520,166],[1780,94],[2040,130],[2300,68],[2350,68],[3140,96],[3320,110],[3480,96],[3820,96],[4060,110],[4640,150],[4710,120],[4780,150],[5250,150],[5340,120],[5430,150],[5560,84],[6200,120],[6500,90],[7160,196],[7220,196],[7300,168],[7360,168],[7560,150],[7620,150],[7840,196],[7900,196],[7960,196]],"enemies":[["laserbot",700,230,30],["mevdrone",1160,200,70],["ghost",1820,150,70],["bitmaxi",2280,72,36],["laserbot",2900,230,50],["mevdrone",3980,200,50],["bitmaxi",4540,230,70],["ghost",5000,200,80],["mevdrone",6000,230,70],["ghost",6560,200,70],["jeet",7160,230,70],["sniper",7560,230,30]],"pumpdumps":[[3320,150],[3680,150],[4020,150],[4710,176],[5280,174],[5400,174]],"honeypots":[[1220,232],[5100,232],[6300,232]],"npcs":[[4520,90]],"bonusblocks":[[980,5],[3060,8],[3900,8],[6900,"omegachad"],[7700,"candle"]],"caches":[[2310,64,300],[5590,80,360]],"gates":[[880,1200,1700,0]],"firebars":[[3140,150,54,150,4],[3480,146,52,-150,4],[3820,150,54,140,4],[4060,148,50,-160,3],[6620,140,50,-150,4]],"planks":[[1300,5],[7280,5]],"yields":[[6200,178,5]],"movers":[[6500,150,"y",56,46]],"time":245,"diff":3.25,"door":8280,"boss":true,"bossType":"saylor","key":[2270,64],"miniworms":[3400,5000]},
-  {"name":"21-1","sub":"THE LANDING SITE","theme":27,"width":7800,"vip":true,"bgArt":"w21moon","gaps":[[1300,1396],[2560,2680],[4260,4480],[5000,5240],[5960,6072],[7000,7180],[7440,7560]],"walls":[[2820,5,"steel",2],[3980,5,"steel",2],[4160,3,"steel",4],[5620,4,"steel",3],[6760,3,"steel",3],[7360,4,"steel",3]],"plats":[[1660,2,132,"steel"],[1960,2,108,"steel"],[2280,3,84,"brick"],[5360,2,102,"steel"],[6360,2,102,"steel"]],"spikes":[[780],[864],[3020],[3260],[3480],[3700]],"powerups":[["caffeine",600,230],["solana",1040,230],["diamond",2540,230],["moon",4760,230],["whale",5840,230],["candle",6680,230]],"airdrops":[[3520,60],[6360,70]],"coins":[[300,196],[360,196],[420,196],[820,120],[1520,120],[1820,102],[2120,84],[2280,60],[2340,60],[3160,96],[3340,110],[3520,96],[3700,110],[4300,150],[4370,120],[4440,150],[5030,150],[5120,120],[5210,150],[5360,84],[6120,120],[6240,120],[6860,196],[6920,196],[7020,168],[7090,150],[7160,168],[7280,196],[7480,150]],"enemies":[["sniper",640,230,30],["sniper",900,230,30],["ghost",1060,206,70],["laserbot",1900,120,70],["bitmaxi",2300,66,36],["sniper",2900,230,70],["sandwich",3900,230,70],["laserbot",4620,230,70],["ghost",5100,200,80],["sniper",5760,230,70],["ghost",6420,200,70],["sniper",6880,230,30],["bot",7220,230,70],["ghost",7500,206,70]],"pumpdumps":[[3340,150],[3700,150],[4370,176],[5060,174],[5180,174]],"honeypots":[[1200,232],[1980,232],[4900,232],[5940,232],[6880,232]],"npcs":[[2950,90]],"bonusblocks":[[980,5],[3060,8],[6600,"omegachad"],[7480,"candle"]],"caches":[[2320,60,300],[5390,80,360]],"gates":[],"firebars":[[820,150,48,150,4],[3160,150,54,150,4],[3520,146,52,-140,4],[3860,150,54,140,4],[6260,140,50,-150,4]],"planks":[[1300,5],[4260,9],[7000,5]],"yields":[[6120,178,5]],"movers":[[1520,168,"y",58,52],[1820,150,"y",58,52],[2120,132,"y",58,52]],"rugplats":[],"dumpzones":[],"moon":true,"time":210,"diff":3.7,"door":7680,"key":[2280,60],"miniworms":[3400,5900]},
-  {"name":"21-2","sub":"SEA OF TRANQUILITY","theme":27,"width":8400,"vip":true,"bgArt":"w21moon","gaps":[[1300,1396],[2560,2680],[4360,4580],[5060,5300],[6180,6292],[7080,7260],[7900,8020]],"walls":[[2820,5,"brick",2],[3980,5,"brick",2],[4160,3,"brick",4],[5620,4,"brick",3],[6760,3,"brick",3],[7360,4,"steel",3]],"plats":[[1560,2,138,"brick"],[1980,2,108,"brick"],[2320,3,84,"brick"],[5420,2,102,"brick"],[6360,2,102,"brick"]],"spikes":[[3020],[3260],[3480],[3700]],"powerups":[["caffeine",620,230],["solana",1120,230],["diamond",2560,230],["megawhale",4800,112],["coldwallet",5840,230],["candle",6560,230]],"airdrops":[[3520,60],[4400,198],[6360,70]],"coins":[[300,224],[360,224],[420,224],[820,150],[900,150],[960,150],[1480,120],[1700,96],[1900,120],[2120,72],[2320,60],[2380,60],[3160,96],[3340,110],[3520,96],[3700,110],[4400,150],[4470,120],[4540,150],[5090,150],[5180,120],[5270,150],[5420,84],[6120,90],[6240,90],[6940,196],[7000,196],[7100,168],[7170,150],[7240,168],[7440,196],[7560,150],[8060,196]],"enemies":[["gasgoblin",700,230,70],["gasgoblin",1140,230,70],["fudster",1780,140,70],["bitmaxi",2340,66,36],["troll",2900,230,50],["fudster",3900,200,50],["sandwich",4680,230,70],["ghost",5100,200,80],["gasgoblin",5760,230,70],["ghost",6420,200,70],["sniper",6960,230,30],["fudster",7560,230,70],["bot",7800,230,70],["ghost",8000,206,70]],"pumpdumps":[[3400,150],[3660,150],[4470,176],[5120,174],[5240,174]],"honeypots":[[1200,232],[2000,232],[4940,232],[5940,232],[7020,232]],"npcs":[[3740,90]],"bonusblocks":[[980,5],[3060,8],[6600,"omegachad"],[7620,"candle"]],"caches":[[2360,60,300],[5450,80,360]],"gates":[[880,1200,1700,0]],"firebars":[[3160,150,54,150,4],[3520,146,52,-140,4],[3860,150,54,140,4],[6260,140,50,-150,4]],"planks":[[1300,5],[4360,9],[7080,5]],"yields":[[1460,178,5],[1900,178,5]],"movers":[[1660,150,"y",56,48],[2100,132,"y",56,48],[6120,150,"y",56,48]],"rugplats":[],"dumpzones":[[1000,2600],[3340,2400],[5900,2600]],"moon":true,"time":215,"diff":3.8,"door":8280,"key":[2320,60],"miniworms":[3400,6000]},
-  {"name":"21-3","sub":"WEN MOON","theme":27,"width":6700,"vip":true,"bgArt":"w21moon","gaps":[[728,840],[2560,2680],[4600,4820],[5220,5460],[5900,6010]],"walls":[[2820,5,"steel",2],[4220,5,"steel",2],[4400,3,"steel",4],[5800,4,"steel",3]],"plats":[[1560,2,186,"steel"],[1820,2,138,"steel"],[2080,2,138,"steel"],[2340,2,88,"steel"],[2500,2,150,"steel"],[5560,2,102,"steel"],[6300,2,102,"steel"]],"spikes":[[1000],[1024],[3020],[3260],[3480],[3700],[3920]],"powerups":[["omegachad",864,230],["solana",1340,230],["whale",2304,230],["bull",4960,230],["moon",5680,230],["candle",6240,230]],"airdrops":[[3480,58],[6300,70]],"coins":[[320,120],[380,120],[640,196],[1620,166],[1880,118],[2140,118],[2380,68],[2430,68],[3140,96],[3320,110],[3480,96],[3820,96],[4060,110],[4640,150],[4710,120],[4780,150],[5250,150],[5340,120],[5430,150],[5560,84],[6100,120],[6300,90],[6360,150],[6420,150],[6480,150]],"enemies":[["laserbot",640,230,30],["bitmaxi",960,230,60],["ghost",1240,212,80],["bitmaxi",2000,230,70],["gasgoblin",2340,72,36],["sniper",2900,230,30],["bitmaxi",3980,230,50],["gasgoblin",4516,230,70],["ghost",5120,200,80],["sniper",5876,230,70],["ghost",6360,200,70],["bitmaxi",6420,230,70]],"pumpdumps":[[3320,150],[3680,150],[4020,150],[4710,176],[5280,174],[5400,174]],"honeypots":[[1300,232],[5140,232],[5760,232]],"npcs":[[2900,90]],"bonusblocks":[[1090,8],[3060,8],[3900,10],[6260,"omegachad"]],"caches":[[2380,64,300],[5590,80,360]],"gates":[],"firebars":[[3140,150,54,150,4],[3480,146,52,-150,4],[3820,150,54,140,4],[4060,148,50,-160,3],[6200,140,50,-150,4]],"planks":[[728,5],[4600,9]],"yields":[],"movers":[[6100,150,"y",56,48]],"rugplats":[[304,3,150],[4419,3,150]],"dumpzones":[[3480,2400]],"moon":true,"time":280,"diff":3.95,"door":6500,"boss":true,"bossType":"wenmoon","key":[2340,64],"miniworms":[3400,5000]}
+  {"name":"21-1","sub":"THE LANDING SITE","theme":27,"width":7800,"vip":true,"bgArt":"w21moon","gaps":[[1300,1396],[2560,2680],[4260,4480],[5000,5240],[5960,6072],[7000,7180],[7440,7560]],"walls":[[2820,5,"moonrock",2],[3980,5,"moonrock",2],[4160,3,"moonrock",4],[5620,4,"moonrock",3],[6760,3,"moonrock",3],[7360,4,"moonrock",3]],"plats":[[1660,2,132,"moonrock"],[1960,2,108,"moonrock"],[2280,3,84,"moonrock"],[5360,2,102,"moonrock"],[6360,2,102,"moonrock"]],"spikes":[[780],[864],[3020],[3260],[3480],[3700]],"powerups":[["caffeine",600,230],["solana",1040,230],["diamond",2540,230],["moon",4760,230],["whale",5840,230],["candle",6680,230]],"airdrops":[[3520,60],[6360,70]],"coins":[[300,196],[360,196],[420,196],[820,120],[1520,120],[1820,102],[2120,84],[2280,60],[2340,60],[3160,96],[3340,110],[3520,96],[3700,110],[4300,150],[4370,120],[4440,150],[5030,150],[5120,120],[5210,150],[5360,84],[6120,120],[6240,120],[6860,196],[6920,196],[7020,168],[7090,150],[7160,168],[7280,196],[7480,150]],"enemies":[["sniper",640,230,30],["sniper",900,230,30],["ghost",1060,206,70],["laserbot",1900,120,70],["bitmaxi",2300,66,36],["sniper",2900,230,70],["sandwich",3900,230,70],["laserbot",4620,230,70],["ghost",5100,200,80],["sniper",5760,230,70],["ghost",6420,200,70],["sniper",6880,230,30],["bot",7220,230,70],["ghost",7500,206,70]],"pumpdumps":[[3340,150],[3700,150],[4370,176],[5060,174],[5180,174]],"honeypots":[[1200,232],[1980,232],[4900,232],[5940,232],[6880,232]],"npcs":[[2950,90]],"bonusblocks":[[980,5],[3060,8],[6600,"omegachad"],[7480,"candle"]],"caches":[[2320,60,300],[5390,80,360]],"gates":[],"firebars":[[820,150,48,150,4],[3160,150,54,150,4],[3520,146,52,-140,4],[3860,150,54,140,4],[6260,140,50,-150,4]],"planks":[[1300,5],[4260,9],[7000,5]],"yields":[[6120,178,5]],"movers":[[1520,168,"y",58,52],[1820,150,"y",58,52],[2120,132,"y",58,52]],"rugplats":[],"dumpzones":[],"moon":true,"time":210,"diff":3.7,"door":7680,"key":[2280,60],"miniworms":[3400,5900]},
+  {"name":"21-2","sub":"SEA OF TRANQUILITY","theme":27,"width":8400,"vip":true,"bgArt":"w21moon","gaps":[[1300,1396],[2560,2680],[4360,4580],[5060,5300],[6180,6292],[7080,7260],[7900,8020]],"walls":[[2820,5,"moonrock",2],[3980,5,"moonrock",2],[4160,3,"moonrock",4],[5620,4,"moonrock",3],[6760,3,"moonrock",3],[7360,4,"moonrock",3]],"plats":[[1560,2,138,"moonrock"],[1980,2,108,"moonrock"],[2320,3,84,"moonrock"],[5420,2,102,"moonrock"],[6360,2,102,"moonrock"]],"spikes":[[3020],[3260],[3480],[3700]],"powerups":[["caffeine",620,230],["solana",1120,230],["diamond",2560,230],["megawhale",4800,112],["coldwallet",5840,230],["candle",6560,230]],"airdrops":[[3520,60],[4400,198],[6360,70]],"coins":[[300,224],[360,224],[420,224],[820,150],[900,150],[960,150],[1480,120],[1700,96],[1900,120],[2120,72],[2320,60],[2380,60],[3160,96],[3340,110],[3520,96],[3700,110],[4400,150],[4470,120],[4540,150],[5090,150],[5180,120],[5270,150],[5420,84],[6120,90],[6240,90],[6940,196],[7000,196],[7100,168],[7170,150],[7240,168],[7440,196],[7560,150],[8060,196]],"enemies":[["gasgoblin",700,230,70],["gasgoblin",1140,230,70],["fudster",1780,140,70],["bitmaxi",2340,66,36],["troll",2900,230,50],["fudster",3900,200,50],["sandwich",4680,230,70],["ghost",5100,200,80],["gasgoblin",5760,230,70],["ghost",6420,200,70],["sniper",6960,230,30],["fudster",7560,230,70],["bot",7800,230,70],["ghost",8000,206,70]],"pumpdumps":[[3400,150],[3660,150],[4470,176],[5120,174],[5240,174]],"honeypots":[[1200,232],[2000,232],[4940,232],[5940,232],[7020,232]],"npcs":[[3740,90]],"bonusblocks":[[980,5],[3060,8],[6600,"omegachad"],[7620,"candle"]],"caches":[[2360,60,300],[5450,80,360]],"gates":[[880,1200,1700,0]],"firebars":[[3160,150,54,150,4],[3520,146,52,-140,4],[3860,150,54,140,4],[6260,140,50,-150,4]],"planks":[[1300,5],[4360,9],[7080,5]],"yields":[[1460,178,5],[1900,178,5]],"movers":[[1660,150,"y",56,48],[2100,132,"y",56,48],[6120,150,"y",56,48]],"rugplats":[],"dumpzones":[[1000,2600],[3340,2400],[5900,2600]],"moon":true,"time":215,"diff":3.8,"door":8280,"key":[2320,60],"miniworms":[3400,6000]},
+  {"name":"21-3","sub":"WEN MOON","theme":27,"width":6700,"vip":true,"bgArt":"w21moon","gaps":[[728,840],[2560,2680],[4600,4820],[5220,5460],[5900,6010]],"walls":[[2820,5,"moonrock",2],[4220,5,"moonrock",2],[4400,3,"moonrock",4],[5800,4,"moonrock",3]],"plats":[[1560,2,186,"moonrock"],[1820,2,138,"moonrock"],[2080,2,138,"moonrock"],[2340,2,88,"moonrock"],[2500,2,150,"moonrock"],[5560,2,102,"moonrock"],[6300,2,102,"moonrock"]],"spikes":[[1000],[1024],[3020],[3260],[3480],[3700],[3920]],"powerups":[["omegachad",864,230],["solana",1340,230],["whale",2304,230],["bull",4960,230],["moon",5680,230],["candle",6240,230]],"airdrops":[[3480,58],[6300,70]],"coins":[[320,120],[380,120],[640,196],[1620,166],[1880,118],[2140,118],[2380,68],[2430,68],[3140,96],[3320,110],[3480,96],[3820,96],[4060,110],[4640,150],[4710,120],[4780,150],[5250,150],[5340,120],[5430,150],[5560,84],[6100,120],[6300,90],[6360,150],[6420,150],[6480,150]],"enemies":[["laserbot",640,230,30],["bitmaxi",960,230,60],["ghost",1240,212,80],["bitmaxi",2000,230,70],["gasgoblin",2340,72,36],["sniper",2900,230,30],["bitmaxi",3980,230,50],["gasgoblin",4516,230,70],["ghost",5120,200,80],["sniper",5876,230,70],["ghost",6360,200,70],["bitmaxi",6420,230,70]],"pumpdumps":[[3320,150],[3680,150],[4020,150],[4710,176],[5280,174],[5400,174]],"honeypots":[[1300,232],[5140,232],[5760,232]],"npcs":[[2900,90]],"bonusblocks":[[1090,8],[3060,8],[3900,10],[6260,"omegachad"]],"caches":[[2380,64,300],[5590,80,360]],"gates":[],"firebars":[[3140,150,54,150,4],[3480,146,52,-150,4],[3820,150,54,140,4],[4060,148,50,-160,3],[6200,140,50,-150,4]],"planks":[[728,5],[4600,9]],"yields":[],"movers":[[6100,150,"y",56,48]],"rugplats":[[304,3,150],[4419,3,150]],"dumpzones":[[3480,2400]],"moon":true,"time":280,"diff":3.95,"door":6500,"boss":true,"bossType":"wenmoon","key":[2340,64],"miniworms":[3400,5000]}
 ];
 
 // Let a USB / console controller BUTTON advance any "press to continue" screen (Briefing, Win,
@@ -969,7 +969,7 @@ function padAdvance(scene, go){
 // Modern-world backdrops (worlds 16+) — real hand-painted art, LAZY-LOADED per world: only the
 // level you're actually on fetches its PNG (see def.bgArt in the background build), so boot stays
 // light and it scales to any number of worlds without a heavy startup download (mobile-friendly).
-var WORLD_ART={ w16citadel:'/normie-quest/worlds/w16-citadel.png', w17spire:'/normie-quest/worlds/w17-spire.png', w18reserve:'/normie-quest/worlds/w18-reserve.png', w19orbital:'/normie-quest/worlds/w19-orbital.png', w20tower:'/normie-quest/worlds/w20-tower.png', w21tower:'/normie-quest/worlds/w21-tower.png', w21moon:'/normie-quest/worlds/w21-moon.png' };
+var WORLD_ART={ w01dusk:'/normie-quest/worlds/w01-dusk.png', w01cavern:'/normie-quest/worlds/w01-cavern.png', w01keep:'/normie-quest/worlds/w01-keep.png', w02desert:'/normie-quest/worlds/w02-desert.png', w02casino:'/normie-quest/worlds/w02-casino.png', w03skyline:'/normie-quest/worlds/w03-skyline.png', w04exchange:'/normie-quest/worlds/w04-exchange.png', w05bridge:'/normie-quest/worlds/w05-bridge.png', w06depeg:'/normie-quest/worlds/w06-depeg.png', w07farm:'/normie-quest/worlds/w07-farm.png', w08bear:'/normie-quest/worlds/w08-bear.png', w16citadel:'/normie-quest/worlds/w16-citadel.png', w17spire:'/normie-quest/worlds/w17-spire.png', w18reserve:'/normie-quest/worlds/w18-reserve.png', w19orbital:'/normie-quest/worlds/w19-orbital.png', w20tower:'/normie-quest/worlds/w20-tower.png', w21tower:'/normie-quest/worlds/w21-tower.png', w21moon:'/normie-quest/worlds/w21-moon.png' };
 var Boot=new Phaser.Class({ Extends:Phaser.Scene,
   initialize:function(){ Phaser.Scene.call(this,{key:'Boot'}); },
   create:function(){
@@ -1024,6 +1024,18 @@ var Boot=new Phaser.Class({ Extends:Phaser.Scene,
     g.fillStyle(0x323d59); g.fillRect(1,18,22,5);                      // bottom shadow
     g.fillStyle(0x9fb3d6); g.fillCircle(4,4,1.7); g.fillCircle(20,4,1.7); g.fillCircle(4,20,1.7); g.fillCircle(20,20,1.7);
     g.generateTexture('steel',24,24);
+    // moonrock — World 21 lunar regolith block: pale dusty grey, cratered pocks, cold rim-light.
+    // The moon world used steel/brick tiles under a lunar sky, which read as citadel-on-the-moon;
+    // this is the surface material so the whole level reads lunar, not just the backdrop.
+    g.clear();
+    g.fillStyle(0x5d626e); g.fillRect(0,0,24,24);                      // dark seam/edge
+    g.fillStyle(0xb4bac6); g.fillRect(1,1,22,22);                      // regolith face
+    g.fillStyle(0xdfe4ec); g.fillRect(2,2,20,3);                       // sun-side top bevel
+    g.fillStyle(0x878d9c); g.fillRect(1,19,22,4);                      // shadowed underside
+    g.fillStyle(0x9aa0ae); g.fillCircle(7,10,2.6); g.fillCircle(16,14,2.0); g.fillCircle(12,6,1.4);   // craters
+    g.fillStyle(0xcfd5df); g.fillCircle(7,9.2,1.5); g.fillCircle(16,13.4,1.1);                        // crater rim-light
+    g.fillStyle(0x878d9c); g.fillRect(4,16,3,1); g.fillRect(18,7,2,1);                                // surface pocks
+    g.generateTexture('moonrock',24,24);
     // ? bonus block — golden Mario-style block: bevel, corner rivets, blocky "?" glyph
     g.clear();
     g.fillStyle(0x8a5a10); g.fillRect(0,0,24,24);
