@@ -6171,6 +6171,79 @@ app.get("/api/token-pools", async (req, res) => {
   return res.status(200).json({ success: pools.size > 0, pools: [...pools] });
 });
 
+// GET /api/rosehorses?from=&to= — the RoseHorses weekly-race backend (powers the hidden
+// /rosehorses page). Returns the FULL per-buy tape for a window grouped by wallet, plus a
+// per-wallet sell/transfer/balance check, so the ROSE dev can list every individual buy
+// (small buys = more race tickets) and see who sold. DELIBERATELY LOCKED TO THE ROSE MINT
+// (owner's call 2026-07-24): the page is ungated, so hardcoding the mint bounds the Helius
+// spend surface to just this one low-volume token — an ungated arbitrary-mint scanner would
+// be a credit drain. Window is capped so nobody can request a giant scan. Read-only.
+const ROSEHORSES_MINT = "RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF";
+app.get("/api/rosehorses", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  const from = parseInt(req.query.from, 10), to = parseInt(req.query.to, 10);
+  if (!from || !to || to <= from) return res.status(400).json({ ok: false, error: "Need from & to (unix seconds, to>from)" });
+  if (to - from > 45 * 86400) return res.status(400).json({ ok: false, error: "Window too large (max 45 days)" });
+  const mint = ROSEHORSES_MINT;
+  try {
+    const { getTradeTapeHelius } = require("./lib/helius-trades");
+    const key = (rpc.heliusKeys()[0]) || process.env.HELIUS_API_KEY;
+    if (!key) return res.status(500).json({ ok: false, error: "Missing HELIUS_API_KEY" });
+    const [solUsd, roseUsd] = await Promise.all([
+      orderbook.getUsdPrice("So11111111111111111111111111111111111111112").catch(() => 0),
+      orderbook.getUsdPrice(mint).catch(() => 0),
+    ]);
+    const fromMs = from * 1000, toMs = to * 1000;
+    // Full tape: every buy + sell across all pools, classified by fee-payer net flow. Caps
+    // raised well above ROSE's real density so a week never truncates. buy `usd` = tokens ×
+    // price (avoids the wrapped-SOL double-count that inflates raw quote outflow).
+    const tape = await getTradeTapeHelius(mint, fromMs, toMs, {
+      heliusKey: key, heliusEnhancedBatched, solUsd: solUsd || 0, tokenPriceUsd: roseUsd || 0,
+      maxSigPagesPerPool: 15, maxSigs: 20000,
+    });
+    const trades = (tape && tape.trades) || [];
+    const buys = trades.filter(t => t.side === "buy"), sells = trades.filter(t => t.side === "sell");
+    const soldInTape = new Set(sells.map(s => s.wallet));
+    const byW = new Map();
+    for (const b of buys) {
+      const c = byW.get(b.wallet) || { wallet: b.wallet, buys: [], totalRose: 0 };
+      c.buys.push({ ts: b.ts, rose: b.tokenAmt, usd: b.usd, sig: b.sig });
+      c.totalRose += b.tokenAmt;
+      byW.set(b.wallet, c);
+    }
+    const buyers = [...byW.values()];
+    // Per-wallet authoritative position (sells + transfers-out + current balance), window-
+    // scoped. Bounded concurrency = quota guard. Catches transfers-out the pool tape can't.
+    const CONC = 4;
+    for (let i = 0; i < buyers.length; i += CONC) {
+      await Promise.all(buyers.slice(i, i + CONC).map(async (b) => {
+        try {
+          const pos = await walletPositionMulti(b.wallet, mint, { fromMs, toMs });
+          if (pos) {
+            b.sells = pos.sells || 0;
+            b.transfersOut = pos.transfersOut || 0;
+            b.balance = pos.balance;
+            b.posSource = pos.source;
+            b.soldInWindow = (pos.source === "helius" && (pos.sells || 0) > 0) || soldInTape.has(b.wallet);
+          } else { b.soldInWindow = soldInTape.has(b.wallet); b.posSource = "none"; }
+        } catch (_) { b.soldInWindow = soldInTape.has(b.wallet); b.posSource = "error"; }
+      }));
+    }
+    buyers.forEach((b) => { b.buyCount = b.buys.length; b.totalUsd = b.totalRose * (roseUsd || 0); b.buys.sort((x, y) => x.ts - y.ts); });
+    buyers.sort((a, b) => b.totalRose - a.totalRose);
+    return res.status(200).json({
+      ok: true, mint, from, to, roseUsd, solUsd,
+      txsScanned: tape ? tape.txsScanned : 0, capped: !!(tape && tape.capped),
+      totals: { buys: buys.length, wallets: buyers.length, sells: sells.length, totalRose: buys.reduce((s, b) => s + b.tokenAmt, 0) },
+      buyers,
+    });
+  } catch (e) {
+    console.error("[rosehorses] error:", e.message);
+    return res.status(500).json({ ok: false, error: publicErrMsg(e) });
+  }
+});
+
 // ══════════════════════════════════════════════════════════════════════════════
 // VESTED BUY SPECIAL — campaigns + opt-in registry (the "super dashboard" backend)
 //
@@ -10886,6 +10959,14 @@ app.get("/api/token-card", async (req, res) => {
 // reachable only by direct URL while in private testing.
 app.get("/hatchery", (req, res) => {
   res.sendFile(join(__dirname, "public", "hatchery.html"));
+});
+
+// RoseHorses — HIDDEN weekly-race helper for the ROSE dev (unlinked everywhere; ungated but
+// locked to the ROSE mint server-side). Enter a window → every wallet that bought, each
+// individual buy, who sold, with one-click address copy. Backed by /api/rosehorses.
+app.get("/rosehorses", (req, res) => {
+  res.setHeader("Cache-Control", "no-store, must-revalidate");
+  res.sendFile(join(__dirname, "public", "rosehorses.html"));
 });
 
 // Liquidity Engine — Orca Whirlpools concentrated-liquidity market maker.

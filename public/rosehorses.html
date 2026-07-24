@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>RoseHorses 🐎🌹</title>
+<style>
+  :root { --bg:#140a12; --card:#20111c; --card2:#2a1626; --rose:#ff5c8a; --rose2:#ff86ab; --gold:#ffcf5c; --text:#f6e8ef; --dim:#c39fb2; --line:#3a2130; --ok:#3ddc84; --bad:#ff5b5b; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:linear-gradient(160deg,#180a15,#0e0710); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; line-height:1.45; }
+  .wrap { max-width:1000px; margin:0 auto; padding:20px 16px 80px; }
+  h1 { font-size:26px; margin:6px 0 2px; }
+  h1 .sub { color:var(--rose2); }
+  .tag { color:var(--dim); font-size:13px; margin:0 0 18px; }
+  .panel { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:16px; }
+  label { display:block; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--dim); margin:0 0 5px; }
+  .row { display:flex; flex-wrap:wrap; gap:14px; align-items:flex-end; }
+  .fld { flex:1 1 180px; min-width:160px; }
+  input, select { width:100%; background:#160c14; border:1px solid var(--line); color:var(--text); border-radius:9px; padding:10px 11px; font-size:15px; }
+  input:focus, select:focus { outline:none; border-color:var(--rose); }
+  button { cursor:pointer; border:none; border-radius:9px; font-size:14px; font-weight:600; padding:10px 16px; }
+  .btn-go { background:linear-gradient(135deg,var(--rose),#e0447a); color:#fff; }
+  .btn-go:hover { filter:brightness(1.08); }
+  .btn-sm { background:var(--card2); color:var(--rose2); border:1px solid var(--line); padding:6px 11px; font-size:12.5px; }
+  .btn-sm:hover { border-color:var(--rose); color:#fff; }
+  .presets { margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; }
+  .presets button { background:transparent; color:var(--dim); border:1px solid var(--line); padding:5px 10px; font-size:12px; font-weight:500; }
+  .presets button:hover { color:var(--rose2); border-color:var(--rose); }
+  #status { margin:6px 2px 0; font-size:13px; color:var(--dim); min-height:18px; }
+  .summary { display:flex; flex-wrap:wrap; gap:10px 22px; align-items:center; }
+  .stat b { font-size:22px; color:var(--gold); }
+  .stat span { color:var(--dim); font-size:12px; display:block; text-transform:uppercase; letter-spacing:.04em; }
+  .copybar { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+  .card { background:var(--card2); border:1px solid var(--line); border-radius:12px; padding:13px 14px; margin-bottom:12px; }
+  .chd { display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; justify-content:space-between; }
+  .rank { color:var(--rose); font-weight:700; margin-right:6px; }
+  .addr { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; color:var(--text); word-break:break-all; }
+  .pill { font-size:11.5px; padding:3px 9px; border-radius:20px; font-weight:600; }
+  .pill-held { background:rgba(61,220,132,.14); color:var(--ok); }
+  .pill-sold { background:rgba(255,91,91,.16); color:var(--bad); }
+  .meta { color:var(--dim); font-size:12.5px; margin:7px 0 2px; }
+  .meta b { color:var(--text); }
+  table { width:100%; border-collapse:collapse; margin-top:9px; font-size:13px; }
+  th, td { text-align:left; padding:5px 8px; border-bottom:1px solid var(--line); }
+  th { color:var(--dim); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.03em; }
+  td.num { text-align:right; font-variant-numeric:tabular-nums; }
+  a { color:var(--rose2); }
+  .flag { background:rgba(255,207,92,.1); border:1px solid rgba(255,207,92,.3); color:var(--gold); font-size:12.5px; border-radius:8px; padding:8px 11px; margin-top:6px; }
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--rose); color:#fff; padding:9px 16px; border-radius:22px; font-size:13px; font-weight:600; opacity:0; transition:opacity .2s; pointer-events:none; }
+  .toast.show { opacity:1; }
+  .muted { color:var(--dim); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🐎🌹 RoseHorses <span class="sub">— Weekly Race Finder</span></h1>
+  <p class="tag">Every $ROSE buy in a time window · grouped by wallet · each individual buy listed (lots of small buys = more tickets) · flags anyone who sold. On-chain, live.</p>
+
+  <div class="panel">
+    <div class="row">
+      <div class="fld"><label>Start</label><input type="datetime-local" id="from" /></div>
+      <div class="fld"><label>End</label><input type="datetime-local" id="to" /></div>
+      <div class="fld" style="flex:0 1 150px;"><label>Time zone</label>
+        <select id="tz">
+          <option value="America/Chicago">Central (CT)</option>
+          <option value="America/New_York">Eastern (ET)</option>
+          <option value="UTC">UTC</option>
+        </select>
+      </div>
+      <div class="fld" style="flex:0 0 auto;"><button class="btn-go" id="run">Find buys →</button></div>
+    </div>
+    <div class="presets">
+      <button data-days="7">Last 7 days</button>
+      <button data-days="1">Last 24h</button>
+      <button data-days="14">Last 14 days</button>
+    </div>
+    <div id="status"></div>
+  </div>
+
+  <div id="out"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const MINT = "RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF";
+const $ = (id) => document.getElementById(id);
+const nfmt = (x) => Math.round(x).toLocaleString("en-US");
+const toast = (m) => { const t = $("toast"); t.textContent = m; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 1400); };
+
+// wall-clock string (from datetime-local) in a named tz -> unix seconds (UTC), DST-correct.
+function zonedToUnix(wall, tz) {
+  if (!wall) return null;
+  const [d, t] = wall.split("T");
+  const [y, mo, da] = d.split("-").map(Number);
+  const [h, mi] = t.split(":").map(Number);
+  const guess = Date.UTC(y, mo - 1, da, h, mi);
+  const dtf = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const p = {}; dtf.formatToParts(new Date(guess)).forEach(x => p[x.type] = x.value);
+  let hh = p.hour === "24" ? 0 : +p.hour;
+  const shown = Date.UTC(+p.year, +p.month - 1, +p.day, hh, +p.minute);
+  return Math.floor((guess - (shown - guess)) / 1000);
+}
+// unix seconds -> "M/D h:mm AM/PM" in tz
+function fmtTs(sec, tz) {
+  return new Date(sec).toLocaleString("en-US", { timeZone: tz, month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: true });
+}
+// prefill a datetime-local input from a Date, rendered in tz
+function setLocal(id, date, tz) {
+  const p = {}; new Intl.DateTimeFormat("en-US", { timeZone: tz, hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).formatToParts(date).forEach(x => p[x.type] = x.value);
+  let hh = p.hour === "24" ? "00" : p.hour;
+  $(id).value = `${p.year}-${p.month}-${p.day}T${hh}:${p.minute}`;
+}
+function fillPreset(days) {
+  const tz = $("tz").value, now = new Date();
+  setLocal("to", now, tz);
+  setLocal("from", new Date(now.getTime() - days * 86400000), tz);
+}
+document.querySelectorAll(".presets button").forEach(b => b.onclick = () => fillPreset(+b.dataset.days));
+$("tz").onchange = () => { /* keep the wall-clock numbers; user re-picks preset if they want */ };
+
+async function copy(text, msg) {
+  try { await navigator.clipboard.writeText(text); toast(msg || "Copied"); }
+  catch (_) { const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); toast(msg || "Copied"); }
+}
+
+function render(data, tz) {
+  const out = $("out"); out.innerHTML = "";
+  const buyers = data.buyers || [];
+  if (!buyers.length) { out.innerHTML = '<div class="panel muted">No buys found in that window.</div>'; return; }
+  const tot = data.totals || {};
+  const uniqAddrs = buyers.map(b => b.wallet);
+  const perBuyList = [];
+  buyers.forEach(b => b.buys.forEach(() => perBuyList.push(b.wallet)));
+
+  // summary + copy bar
+  const panel = document.createElement("div"); panel.className = "panel";
+  const sum = document.createElement("div"); sum.className = "summary";
+  const stat = (n, l) => `<div class="stat"><b>${n}</b><span>${l}</span></div>`;
+  sum.innerHTML = stat(nfmt(tot.buys || 0), "buys") + stat(nfmt(tot.wallets || 0), "wallets") +
+    stat(nfmt(tot.totalRose || 0), "ROSE bought") + stat((tot.sells || 0) ? "⚠️ " + tot.sells : "0", "sells in window");
+  panel.appendChild(sum);
+  if (data.capped) { const f = document.createElement("div"); f.className = "flag"; f.textContent = "⚠️ Scan hit its coverage cap — results may be incomplete for this window. Try a shorter window."; panel.appendChild(f); }
+  const bar = document.createElement("div"); bar.className = "copybar";
+  const mk = (txt, fn) => { const btn = document.createElement("button"); btn.className = "btn-sm"; btn.textContent = txt; btn.onclick = fn; return btn; };
+  bar.appendChild(mk("📋 Copy all addresses (" + uniqAddrs.length + ")", () => copy(uniqAddrs.join("\n"), "All addresses copied")));
+  bar.appendChild(mk("🎟️ Copy 1 line per buy (" + perBuyList.length + ")", () => copy(perBuyList.join("\n"), "One line per buy copied")));
+  bar.appendChild(mk("📄 Copy CSV", () => {
+    let csv = "wallet,buy_num,time_" + tz.replace(/\//g, "_") + ",rose_bought,usd_value,sold_in_window,tx\n";
+    buyers.forEach(b => b.buys.forEach((x, i) => { csv += `${b.wallet},${i + 1},"${fmtTs(x.ts, tz)}",${Math.round(x.rose)},${(x.usd || 0).toFixed(2)},${b.soldInWindow ? "YES" : "no"},${x.sig}\n`; }));
+    copy(csv, "CSV copied");
+  }));
+  panel.appendChild(bar);
+  out.appendChild(panel);
+
+  // per-wallet cards
+  buyers.forEach((b, idx) => {
+    const card = document.createElement("div"); card.className = "card";
+    const hd = document.createElement("div"); hd.className = "chd";
+    const left = document.createElement("div"); left.style.flex = "1 1 320px";
+    const a = document.createElement("span"); a.className = "addr"; a.textContent = b.wallet;
+    left.innerHTML = `<span class="rank">#${idx + 1}</span>`; left.appendChild(a);
+    const right = document.createElement("div"); right.style.display = "flex"; right.style.gap = "8px"; right.style.alignItems = "center";
+    const pill = document.createElement("span"); pill.className = "pill " + (b.soldInWindow ? "pill-sold" : "pill-held");
+    pill.textContent = b.soldInWindow ? "SOLD in window" : "held (no sell)";
+    right.appendChild(pill);
+    const cbtn = document.createElement("button"); cbtn.className = "btn-sm"; cbtn.textContent = "copy"; cbtn.onclick = () => copy(b.wallet, "Address copied");
+    right.appendChild(cbtn);
+    hd.appendChild(left); hd.appendChild(right); card.appendChild(hd);
+
+    const meta = document.createElement("div"); meta.className = "meta";
+    meta.innerHTML = `<b>${b.buyCount}</b> buy${b.buyCount > 1 ? "s" : ""} · <b>${nfmt(b.totalRose)}</b> ROSE (~$${nfmt(b.totalUsd || 0)})` +
+      ` · sells: <b>${b.sells != null ? b.sells : "?"}</b> · transfers out: <b>${b.transfersOut != null ? b.transfersOut : "?"}</b>` +
+      ` · balance now: <b>${b.balance != null ? nfmt(b.balance) : "?"}</b>`;
+    card.appendChild(meta);
+
+    const tbl = document.createElement("table");
+    tbl.innerHTML = "<thead><tr><th>#</th><th>Time (" + ($("tz").selectedOptions[0].textContent.match(/\(([^)]+)\)/) || [,tz])[1] + ")</th><th style='text-align:right'>ROSE</th><th style='text-align:right'>~USD</th><th>Tx</th></tr></thead>";
+    const tb = document.createElement("tbody");
+    b.buys.forEach((x, i) => {
+      const tr = document.createElement("tr");
+      const link = `<a href="https://solscan.io/tx/${x.sig}" target="_blank" rel="noopener">${x.sig.slice(0, 8)}…</a>`;
+      tr.innerHTML = `<td>${i + 1}</td><td>${fmtTs(x.ts, tz)}</td><td class="num">${nfmt(x.rose)}</td><td class="num">$${(x.usd || 0).toFixed(2)}</td><td>${link}</td>`;
+      tb.appendChild(tr);
+    });
+    tbl.appendChild(tb); card.appendChild(tbl);
+    out.appendChild(card);
+  });
+}
+
+$("run").onclick = async () => {
+  const tz = $("tz").value;
+  const from = zonedToUnix($("from").value, tz), to = zonedToUnix($("to").value, tz);
+  if (!from || !to || to <= from) { $("status").textContent = "Pick a valid start and end (end after start)."; return; }
+  $("run").disabled = true; $("status").textContent = "Scanning the chain… (a wide window can take ~10–30s)";
+  $("out").innerHTML = "";
+  try {
+    const r = await fetch(`/api/rosehorses?from=${from}&to=${to}`);
+    const j = await r.json();
+    if (!j.ok) { $("status").textContent = "Error: " + (j.error || "scan failed"); return; }
+    $("status").textContent = `Window ${fmtTs(from * 1000, tz)} → ${fmtTs(to * 1000, tz)} · ${j.totals.buys} buys · ${j.totals.wallets} wallets · scanned ${j.txsScanned} txs`;
+    render(j, tz);
+  } catch (e) { $("status").textContent = "Error: " + e.message; }
+  finally { $("run").disabled = false; }
+};
+
+fillPreset(7);
+</script>
+</body>
+</html>
