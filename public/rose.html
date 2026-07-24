@@ -1418,10 +1418,11 @@ async function runStCrossCheck(mint, startTime, endTime, localBuyerSet) {
   }
 }
 
-// Reliable payout list for pool-routed tokens (mint-scan blind). Fetches each indexer-seen
-// buyer's CURRENT on-chain balance (getTokenAccountsByOwner) — for a hold-required comp, still
-// holding == still eligible, and the held amount == what they bought. Renders wallet · buys ·
-// held · pct-payout with an editable % and a copy-CSV button. Pure add-on; never alters the scan.
+// Reliable payout list for pool-routed tokens (mint-scan blind). Payout is a % of tokensBought
+// (the wallet's IN-WINDOW buy amount from the indexer), NOT its total balance — a pre-existing
+// bag is never paid on. The wallet's CURRENT on-chain balance (getTokenAccountsByOwner) is the
+// hold check: payout = pct * min(tokensBought, held). Renders wallet · bought · held · pct-payout
+// with an editable % and a copy-CSV button. Pure add-on; never alters the scan.
 async function renderReliablePayout(box, mint, buyers, srcName) {
   const sec = document.createElement('div');
   sec.style.cssText = 'margin-top:12px;padding-top:10px;border-top:1px dashed rgba(16,185,129,0.3);';
