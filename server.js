@@ -1268,15 +1268,26 @@ async function buyCompStandings(c) {
 // for a short comp). Limit: GT returns the last ~300 trades/pool, so it fully covers a
 // low/medium-volume token's window but could miss the oldest buys on a very busy token.
 async function geckoBuyersInWindow(mint, fromMs, toMs) {
-  let pools = [];
+  // Discover pools via GeckoTerminal's OWN token/pools endpoint (it indexes tokens
+  // DexScreener drops — e.g. ROSE returns 0 DexScreener pairs but its pools are on GT,
+  // and the per-pool trades below come from GT anyway) UNION DexScreener pairs. No
+  // single-indexer dependency — matches the ROSE buy-discovery fix.
+  const pools = new Set();
+  try {
+    const gp = (await lpScanner.cgFetch(`/networks/solana/tokens/${mint}/pools`)).data || [];
+    for (const d of gp) {
+      const a = (d.attributes && d.attributes.address) || String(d.id || "").replace(/^solana_/, "");
+      if (a) pools.add(a);
+    }
+  } catch (_) {}
   try {
     const dx = await (await fetch(`https://api.dexscreener.com/token-pairs/v1/solana/${mint}`, { signal: AbortSignal.timeout(8000) })).json();
-    if (Array.isArray(dx)) pools = dx.map((p) => p.pairAddress).filter(Boolean);
+    if (Array.isArray(dx)) for (const p of dx) if (p.pairAddress) pools.add(p.pairAddress);
   } catch (_) {}
-  if (!pools.length) return [];
+  if (!pools.size) return [];
   const solUsd = (await getSolUsd().catch(() => 0)) || 0;
   const buyers = new Map();
-  for (const pool of pools.slice(0, 6)) {
+  for (const pool of [...pools].slice(0, 6)) {
     try {
       // Via the shared Pro→free onchain helper: CoinGecko Pro gives higher trade-history
       // limits/coverage when COINGECKO_API_KEY is set, else free GeckoTerminal.
