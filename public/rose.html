@@ -1426,8 +1426,8 @@ async function renderReliablePayout(box, mint, buyers, srcName) {
   const sec = document.createElement('div');
   sec.style.cssText = 'margin-top:12px;padding-top:10px;border-top:1px dashed rgba(16,185,129,0.3);';
   sec.innerHTML = '<div style="font-weight:700;color:#6EE7B7;margin-bottom:6px;">🛟 RELIABLE PAYOUT LIST (' + srcName + ' + live balances)</div>'
-    + '<div style="color:var(--subtext);font-size:11px;margin-bottom:8px;">This token’s swaps don’t surface on its mint account, so the on-chain scan above misses them. This list is built from the indexer’s buyer set and each wallet’s <b>current on-chain balance</b> — for a hold comp, still-holding = eligible, and the held amount = what they bought.</div>'
-    + '<div style="margin-bottom:8px;">Payout <input id="relPct" type="number" value="10" min="0" step="0.5" style="width:60px;padding:3px 6px;border-radius:6px;border:1px solid #374151;background:#0b1220;color:#e5e7eb;"> % of held · <button id="relRefresh" style="padding:3px 10px;border-radius:6px;border:1px solid #374151;background:#111827;color:#e5e7eb;cursor:pointer;">recompute</button> <button id="relCsv" style="padding:3px 10px;border-radius:6px;border:1px solid #16a34a;background:#065f46;color:#d1fae5;cursor:pointer;">copy payout CSV</button></div>'
+    + '<div style="color:var(--subtext);font-size:11px;margin-bottom:8px;">This token’s swaps don’t surface on its mint account, so the on-chain scan above misses them. This list is built from the indexer’s buyer set: payout is a % of what each wallet <b>actually bought in the window</b>, and its <b>current on-chain balance</b> is the hold check (still holding what it bought = eligible). Tokens a wallet held but did NOT buy in the window are never paid on.</div>'
+    + '<div style="margin-bottom:8px;">Payout <input id="relPct" type="number" value="10" min="0" step="0.5" style="width:60px;padding:3px 6px;border-radius:6px;border:1px solid #374151;background:#0b1220;color:#e5e7eb;"> % of tokens bought · <button id="relRefresh" style="padding:3px 10px;border-radius:6px;border:1px solid #374151;background:#111827;color:#e5e7eb;cursor:pointer;">recompute</button> <button id="relCsv" style="padding:3px 10px;border-radius:6px;border:1px solid #16a34a;background:#065f46;color:#d1fae5;cursor:pointer;">copy payout CSV</button></div>'
     + '<div id="relRows" style="font-size:11px;">Loading balances…</div>';
   box.appendChild(sec);
 
@@ -1441,31 +1441,33 @@ async function renderReliablePayout(box, mint, buyers, srcName) {
         const r = await rpc('getTokenAccountsByOwner', [b.wallet, { mint }, { encoding: 'jsonParsed' }]);
         for (const a of ((r && r.value) || [])) held += Number(a.account?.data?.parsed?.info?.tokenAmount?.uiAmount) || 0;
       } catch (e) { held = -1; }   // -1 = lookup failed
-      rows.push({ wallet: b.wallet, buys: b.buyCount || 0, held });
+      rows.push({ wallet: b.wallet, buys: b.buyCount || 0, bought: Number(b.tokensBought) || 0, held });
     }));
   }
-  rows.sort((a, b) => b.held - a.held);
+  rows.sort((a, b) => b.bought - a.bought);
 
   function draw() {
     const pct = Math.max(0, parseFloat(document.getElementById('relPct').value) || 0) / 100;
     const fmt = (n) => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
-    let elig = 0, html = '<table style="width:100%;border-collapse:collapse;"><tr style="color:var(--subtext);text-align:left;"><th>wallet</th><th style="text-align:right;">buys</th><th style="text-align:right;">held</th><th style="text-align:right;">payout</th></tr>';
+    let elig = 0, html = '<table style="width:100%;border-collapse:collapse;"><tr style="color:var(--subtext);text-align:left;"><th>wallet</th><th style="text-align:right;">bought</th><th style="text-align:right;">held</th><th style="text-align:right;">payout</th></tr>';
     for (const r of rows) {
-      const ok = r.held > 0;
+      // Pay on tokens BOUGHT in-window, capped by what they still HOLD (the hold check).
+      const payBase = (r.held > 0) ? Math.min(r.bought, r.held) : 0;
+      const ok = r.bought > 0 && payBase > 0;
       if (ok) elig++;
-      const payout = ok ? Math.floor(r.held * pct) : 0;
-      const color = r.held < 0 ? '#9CA3AF' : ok ? '#D1FAE5' : '#FCA5A5';
-      const note = r.held < 0 ? ' (lookup failed)' : ok ? '' : ' (holds 0 — sold/moved)';
-      html += '<tr style="color:' + color + ';border-top:1px solid rgba(255,255,255,0.05);"><td style="font-family:var(--mono);">' + r.wallet.slice(0, 6) + '…' + r.wallet.slice(-4) + note + '</td><td style="text-align:right;">' + r.buys + '</td><td style="text-align:right;">' + (r.held < 0 ? '—' : fmt(r.held)) + '</td><td style="text-align:right;font-weight:700;">' + (ok ? fmt(payout) : '—') + '</td></tr>';
+      const payout = ok ? Math.floor(payBase * pct) : 0;
+      const note = r.bought <= 0 ? ' (no in-window buy)' : r.held < 0 ? ' (balance lookup failed)' : r.held <= 0 ? ' (sold — holds 0)' : (r.held < r.bought ? ' (sold some — paid on held)' : '');
+      const color = (r.held < 0 || r.bought <= 0) ? '#9CA3AF' : ok ? '#D1FAE5' : '#FCA5A5';
+      html += '<tr style="color:' + color + ';border-top:1px solid rgba(255,255,255,0.05);"><td style="font-family:var(--mono);">' + r.wallet.slice(0, 6) + '…' + r.wallet.slice(-4) + note + '</td><td style="text-align:right;">' + fmt(r.bought) + '</td><td style="text-align:right;">' + (r.held < 0 ? '—' : fmt(r.held)) + '</td><td style="text-align:right;font-weight:700;">' + (ok ? fmt(payout) : '—') + '</td></tr>';
     }
-    html += '</table><div style="margin-top:6px;color:var(--subtext);">' + elig + ' eligible (holding) of ' + rows.length + ' buyers</div>';
+    html += '</table><div style="margin-top:6px;color:var(--subtext);">' + elig + ' eligible (bought + still holding) of ' + rows.length + ' buyers · payout = % of tokens bought in-window, capped by current balance</div>';
     document.getElementById('relRows').innerHTML = html;
   }
   draw();
   document.getElementById('relRefresh').addEventListener('click', draw);
   document.getElementById('relCsv').addEventListener('click', () => {
     const pct = Math.max(0, parseFloat(document.getElementById('relPct').value) || 0) / 100;
-    const csv = rows.filter(r => r.held > 0).map(r => r.wallet + ',' + Math.floor(r.held * pct)).join('\n');
+    const csv = rows.filter(r => r.bought > 0 && r.held > 0).map(r => r.wallet + ',' + Math.floor(Math.min(r.bought, r.held) * pct)).join('\n');
     navigator.clipboard.writeText(csv).catch(() => {});
     const btn = document.getElementById('relCsv'); const t = btn.textContent; btn.textContent = 'copied ✓'; setTimeout(() => btn.textContent = t, 1500);
   });
