@@ -15,12 +15,24 @@ const path = require('path');
 
 const ITEMS = { disc: 1, vial: 1, shield: 1, star: 1, clock: 1, bomb: 1 };   // valid grantable items (mirror RESERVE_ITEMS in the game)
 const MAX_PENDING = 20;                                  // cap a wallet's queue so it can't grow unbounded
-// Wheel prize table — EVERY spin wins something (loyalty program, not a lottery). Weighted.
-const WHEEL = [
+// Wheel prize tables — EVERY spin wins something (loyalty program, not a lottery). Weighted.
+// Two tables: the free daily spin is open to any verified wallet, VIP gets the better odds AND
+// the bonus windows. Same three items in both, because the wheel graphic is a fixed 3-wedge
+// conic gradient — adding star/clock/bomb to the VIP table means rebuilding that graphic first.
+const WHEEL_VIP = [
   { item: 'disc', weight: 40 },
   { item: 'vial', weight: 35 },
   { item: 'shield', weight: 25 },
 ];
+// Weighted toward the weakest item (+5 ammo) and away from the two strong ones (full heal,
+// audit shield), so the VIP table is a visible upgrade rather than a cosmetic one.
+const WHEEL_FREE = [
+  { item: 'disc', weight: 70 },
+  { item: 'vial', weight: 22 },
+  { item: 'shield', weight: 8 },
+];
+const WHEEL = WHEEL_VIP;   // kept so any existing reference still resolves to the VIP table
+function wheelFor(vip) { return vip ? WHEEL_VIP : WHEEL_FREE; }
 
 function storePath() { return path.join(process.env.DATA_DIR || '/data', 'nq-rewards.json'); }
 function load() {
@@ -93,20 +105,23 @@ function nextBonusAt(nowMs) {                        // start of the next bonus 
 }
 // Either kind of spin is available right now (daily OR an open bonus window this wallet hasn't used).
 function canSpinNow(wallet, nowMs) { return canSpin(wallet, nowMs) || bonusAvailable(wallet, nowMs); }
-function pickPrize() {
-  const total = WHEEL.reduce((n, p) => n + p.weight, 0);
+function pickPrize(vip) {
+  const table = wheelFor(vip);
+  const total = table.reduce((n, p) => n + p.weight, 0);
   // crypto-strong pick (server-authoritative; every spin wins, odds published below)
   let r = (require('crypto').randomInt(0, total));
-  for (const p of WHEEL) { if (r < p.weight) return p.item; r -= p.weight; }
-  return WHEEL[0].item;
+  for (const p of table) { if (r < p.weight) return p.item; r -= p.weight; }
+  return table[0].item;
 }
-function spin(wallet, nowMs) {
+function spin(wallet, nowMs, opts) {
   const w = String(wallet || '');
   if (!w) return { ok: false, error: 'no_wallet' };
+  const vip = !!(opts && opts.vip);
   const daily = canSpin(w, nowMs);
-  const bonus = !daily && bonusAvailable(w, nowMs);   // daily first, then a bonus window if one's open
+  // Bonus windows stay a VIP perk; a free wallet gets the once-a-day spin only.
+  const bonus = !daily && vip && bonusAvailable(w, nowMs);
   if (!daily && !bonus) return { ok: false, error: 'already_spun', nextSpinAt: nextSpinAt(nowMs), nextBonusAt: nextBonusAt(nowMs) };
-  const item = pickPrize();
+  const item = pickPrize(vip);
   const g = grant(w, item, nowMs);
   if (!g.ok) return { ok: false, error: g.error, nextSpinAt: nextSpinAt(nowMs) };
   const s = load();
@@ -116,10 +131,11 @@ function spin(wallet, nowMs) {
   return { ok: true, prize: item, bonus: !!bonus, pending: g.pending, nextSpinAt: nextSpinAt(nowMs), nextBonusAt: nextBonusAt(nowMs), bonusAvailable: bonusAvailable(w, nowMs) };
 }
 // Published odds (shown on the wheel — provably-honest since it's server-authoritative + declared).
-function odds() {
-  const total = WHEEL.reduce((n, p) => n + p.weight, 0);
-  return WHEEL.map((p) => ({ item: p.item, pct: Math.round((p.weight / total) * 100) }));
+function odds(vip) {
+  const table = wheelFor(vip);
+  const total = table.reduce((n, p) => n + p.weight, 0);
+  return table.map((p) => ({ item: p.item, pct: Math.round((p.weight / total) * 100) }));
 }
 
-module.exports = { grant, pendingCount, claimOne, canSpin, nextSpinAt, spin, odds, ITEMS,
+module.exports = { grant, pendingCount, claimOne, canSpin, nextSpinAt, spin, odds, ITEMS, wheelFor,
   bonusAvailable, nextBonusAt, canSpinNow, bonusWindowKey, BONUS_SPIN_HOURS };

@@ -246,8 +246,9 @@ router.post('/api/nq/wheel/spin', (req, res) => {
     const pk = String(b.wallet || ''), token = String(b.token || '');
     const sess = wallet.checkSession(pk, token);
     if (!sess || sess.ok === false) return res.status(401).json({ ok: false, error: 'bad_session' });
-    if (!wallet.isVip(pk, null)) return res.status(403).json({ ok: false, error: 'not_vip' });
-    res.json(rewards.spin(pk));
+    // Open to any VERIFIED wallet — the daily spin is the free player's reason to come back.
+    // VIP is no longer a gate here, it selects the better prize table and the bonus windows.
+    res.json(rewards.spin(pk, null, { vip: wallet.isVip(pk, null) }));
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
 router.get('/api/nq/wheel/status', (req, res) => {
@@ -255,9 +256,11 @@ router.get('/api/nq/wheel/status', (req, res) => {
     const pk = String(req.query.wallet || ''), token = String(req.query.token || '');
     const sess = wallet.checkSession(pk, token);
     if (!sess || sess.ok === false) return res.status(401).json({ ok: false, error: 'bad_session' });
-    const dailyReady = rewards.canSpin(pk), bonusReady = rewards.bonusAvailable(pk);
-    res.json({ ok: true, vip: wallet.isVip(pk, null), canSpin: dailyReady || bonusReady, dailyReady, bonusReady,
-      nextSpinAt: rewards.nextSpinAt(), nextBonusAt: rewards.nextBonusAt(), pending: rewards.pendingCount(pk), odds: rewards.odds() });
+    const vip = wallet.isVip(pk, null);
+    const dailyReady = rewards.canSpin(pk), bonusReady = vip && rewards.bonusAvailable(pk);
+    res.json({ ok: true, vip, canSpin: dailyReady || bonusReady, dailyReady, bonusReady,
+      nextSpinAt: rewards.nextSpinAt(), nextBonusAt: vip ? rewards.nextBonusAt() : null,
+      pending: rewards.pendingCount(pk), odds: rewards.odds(vip) });
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
 // Claim ONE pending item into the game (any verified wallet — leaderboard/owner grants included).

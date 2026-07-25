@@ -139,9 +139,28 @@
 
   async function openLounge(pk, token) {
     var r = await (await fetch('/api/nq/lounge?wallet=' + pk + '&token=' + encodeURIComponent(token))).json();
+    if (!r.ok && r.error !== 'not_vip') throw new Error('Lounge check failed');
+    // NOT VIP is no longer a dead end. It used to return here, which meant a non-VIP could never
+    // reach the wheel at all — the daily spin existed only for people who had already converted.
+    // Now the page opens, the free daily spin renders, and the members' feed is replaced by the
+    // pitch for what a seat gets you.
     if (!r.ok) {
-      if (r.error === 'not_vip') { errEl.innerHTML = 'This wallet isn\'t on the VIP list yet.<br><span style="font-size:12px;color:#6e6a86">Ask in the community how to earn a seat. 👑</span>'; return; }
-      throw new Error('Lounge check failed');
+      document.getElementById('gate').style.display = 'none';
+      var who0 = document.getElementById('who');
+      who0.style.display = 'block';
+      who0.innerHTML = 'Welcome, <b>' + esc(pk.slice(0, 4) + '…' + pk.slice(-4)) + '</b>';
+      renderWheel(pk, token);
+      var feed0 = document.getElementById('feed');
+      feed0.style.display = 'block';
+      // No hold amount — NQ's gating terms are unagreed with the NORMIE team (CLAUDE.md).
+      feed0.innerHTML = '<div class="card post"><span class="tag perk">perk</span>'
+        + '<h3>👑 The Lounge is members-only</h3>'
+        + '<p>Your free daily spin is above — it is yours every day, VIP or not.</p>'
+        + '<p>A VIP seat adds better wheel odds, bonus spins through the day, the members\' feed '
+        + '(giveaways, alpha drops and perks), and the VIP worlds.</p>'
+        + '<p style="color:#6e6a86;font-size:12px">Seats come from holding $NORMIE or from winning one in a community competition — terms are still in testing.</p>'
+        + '</div>';
+      return;
     }
     document.getElementById('gate').style.display = 'none';
     var who = document.getElementById('who');
@@ -175,7 +194,9 @@
     var oddsTxt = (st.odds || []).map(function (o) { return (ITEM_META[o.item] ? ITEM_META[o.item].emoji : '') + ' ' + o.pct + '%'; }).join('  ·  ');
     box.innerHTML =
       '<div class="wheelcard"><h2>🎡 DAILY SPIN</h2>'
-      + '<div class="cap">One free spin a day — every spin wins a game boost.<br>🎉 <b>Bonus spins</b> drop a few times a day — check back!</div>'
+      + '<div class="cap">One free spin a day — every spin wins a game boost.'
+        + (st.vip ? '<br>🎉 <b>Bonus spins</b> drop a few times a day — check back!'
+                  : '<br><span style="color:#6e6a86">VIP seats get better odds and bonus spins through the day.</span>') + '</div>'
       + (st.bonusReady && !st.dailyReady ? '<div class="cap" style="color:#ffd23f">🎉 BONUS SPIN AVAILABLE NOW!</div>' : '')
       + '<div class="wheelwrap"><div class="ptr"></div>'
       + '<div class="wheel" id="thewheel">'

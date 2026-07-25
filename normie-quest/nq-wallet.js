@@ -70,7 +70,7 @@ function publicConfig() {
     clknMint: c.clknMint,
     thresholds: { tier1Normie: c.tier1Normie, tier2Normie: c.tier2Normie, clknAccess: c.clknAccess },
     // world access per tier (worlds are 1-indexed; hidden bonus levels aren't gated here)
-    tiers: { 0: [1, 2], 1: [1, 7], 2: 'all' },
+    tiers: { 0: [1, 2], 1: [1, 8], 2: 'all' },
   };
 }
 
@@ -192,7 +192,7 @@ function tierForBalances(b) {
   const c = cfg();
   const normie = Number(b && b.normie || 0), clkn = Number(b && b.clkn || 0);
   if (normie >= c.tier2Normie || clkn >= c.clknAccess) return { tier: 2, worlds: 'all' };
-  if (normie >= c.tier1Normie) return { tier: 1, worlds: [1, 7] };
+  if (normie >= c.tier1Normie) return { tier: 1, worlds: [1, 8] };   // owner's structure: tier-1 covers worlds 3-8
   return { tier: 0, worlds: [1, 2] };
 }
 
