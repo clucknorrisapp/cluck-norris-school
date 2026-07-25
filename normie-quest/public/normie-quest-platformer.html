@@ -199,6 +199,11 @@ var SFX={
   jump:function(){ _tone(420,760,0.13,'square',0.08); },
   coin:function(){ if(_sfxBufs.coin){ if(_playSample(_sfxBufs.coin,_SFX_FILES.coin.vol)) return; }
     _seq([[1760,0.045],[2637,0.13]],'sine',0.05); },   // produced sample when present; else the Sonic-style ring "ti-TING"
+  // The DISC THROW deliberately does NOT use SFX.coin. It used to, which was harmless while coin
+  // was a synth blip -- but the moment a real ring sample was dropped in, every thrown disc rang
+  // like a collected coin. This is that original blip, pinned, so the throw keeps its old sound
+  // no matter what sample the coin ends up using.
+  disc:function(){ _seq([[1760,0.045],[2637,0.13]],'sine',0.05); },
   stomp:function(){ _tone(320,80,0.12,'square',0.10); },
   hurt:function(){ _tone(300,110,0.26,'sawtooth',0.10); },
   key:function(){ _seq([[660,0.09],[990,0.09],[1320,0.16]],'square',0.08); },
@@ -2295,7 +2300,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var c=this.projectiles.create(p.x+dir*13,sy,'solana').setDepth(6); c.setScale(18/c.height);
     c.body.setAllowGravity(false); c.body.setSize(c.width*0.8,c.height*0.8);
     c.setVelocity(dir*360,Phaser.Math.Between(-12,12)); c.setAngularVelocity(dir*520); c.setCollideWorldBounds(false);
-    SFX.coin();
+    SFX.disc();
     this.time.delayedCall(1100,function(){ if(c&&c.active) c.destroy(); });
   },
   updateThrowHud:function(){
