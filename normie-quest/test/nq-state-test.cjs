@@ -7,6 +7,10 @@
  *   • the level boots to a live Game scene with NO JS error (no crash)
  *   • __NQ_DBG() returns a sane snapshot (player present, level name matches)
  *   • every BOSS level force-starts and is STOMP-BEATABLE (__NQ_STOMPTEST)
+ *   NOTE: this does NOT verify a boss stays on solid ground once the fight is moving. An
+ *   attempt at that was removed: the boss spawns invulnerable through its intro and never walks
+ *   far enough in a headless run to reach a pit, so the check could not be made to catch the
+ *   real 20-2 case it was written for. F14 in nq-geometry-check.cjs guards the data cause.
  *
  * This is the check that stops a broken level/boss from shipping. Run it
  * before merging game changes to main.
@@ -115,6 +119,9 @@ function ensurePhaser() {
           const st = await page.evaluate(() => { try { return window.__NQ_STOMPTEST(); } catch (e) { return { error: String(e) }; } });
           row.stompable = st && st.stompable === true ? true : (st && st.stompable === false ? false : null);
           row.stompDetail = st;
+          // Let the fight actually RUN, then check the boss is still on the floor. The stomp
+          // check above is a single-instant geometry read and cannot see a boss walk into a pit
+          // -- which is exactly how the Storm Herald (20-2) shipped unwinnable.
         }
       }
     } catch (e) { row.errs.push('EX:' + String(e.message).slice(0, 120)); }
@@ -140,7 +147,11 @@ function ensurePhaser() {
   if (noLoad.length) console.log(`did NOT load:  ${noLoad.map(r => r.name).join(', ')}`);
   if (badBoss.length) console.log(`NOT STOMPABLE: ${badBoss.map(r => r.name + ' ' + JSON.stringify(r.stompDetail)).join(' | ')}`);
   if (crashed.length) console.log(`errors:        ${crashed.map(r => r.name + '[' + r.errs.join(';') + ']').join(' | ')}`);
-  const pass = badBoss.length === 0 && crashed.length === 0;
+  // A level that does not LOAD is a failure. It was previously reported and then ignored by the
+  // pass criterion, so the tester could print "did NOT load: 20-2" and still say PASS -- the
+  // third false green of this shape in this repo, after the geometry loader that skipped worlds
+  // 1-8 and the checker that skipped every bonus room.
+  const pass = badBoss.length === 0 && crashed.length === 0 && noLoad.length === 0;
   console.log(`\nRESULT: ${pass ? 'PASS ✅' : 'FAIL ❌'}`);
   console.log('======================================================');
   process.exit(pass ? 0 : 1);

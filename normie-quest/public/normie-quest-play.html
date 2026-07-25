@@ -4948,8 +4948,17 @@ function nqIsVipOrAll(){   // don't upsell players who already have access
   try{ if(typeof window.__NQ_ACCESS==='function' && window.__NQ_ACCESS()==='all') return true; }catch(e){}
   return false;
 }
-function nqShouldPitch(idx){   // tease once each after the 1st (1-1) and 3rd (2-1) clears, per tab session
-  if(idx!==0 && idx!==3) return false;
+/* When to tease the paid tiers. `idx` is the level just CLEARED.
+   Was 0 (right after 1-1) and 3. Level 0 is about ninety seconds in -- asking for money before
+   the player has any investment, and before they have even met a boss. It is now a single tease
+   at idx 3, the level after the world-1 boss: by then they have beaten the Rug King, watched the
+   WorldClear celebration and the traveling page, and are into world 2 with the free wall in
+   sight. Two touches total -- this, then the locked card at the wall itself.
+   NOT idx 2 (the boss level), deliberately: advanceLevel checks the pitch BEFORE routing to
+   WorldClear and returns, so pitching there would replace the boss celebration with a sales
+   card -- destroying the exact high point that makes the ask land. */
+function nqShouldPitch(idx){
+  if(idx!==3) return false;
   try{ if(sessionStorage.getItem('nqPitch'+idx)) return false; }catch(e){}
   return true;
 }
