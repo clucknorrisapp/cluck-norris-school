@@ -2628,7 +2628,14 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // Stomp detection lives in wouldStomp() — ONE source of truth so a QA hook can verify the
     // EXACT same geometry per boss before we ship (window.__NQ_STOMPTEST). See wouldStomp.
     if(this.wouldStomp(player.body.bottom, k, player.body.velocity.y)){ player.setVelocityY(-340); this.bossHit(); return; }
-    if(player.invuln||now<this.shieldUntil||now<this.coldUntil) return;
+    // omegaUntil belongs here. GIGA CHAD grants immunity in every other damage path in the game
+    // -- spikes, enemy contact, miniworms, the wormhole eruption, the cartel charge -- but was
+    // missing from generic boss touch, so an "invincible" player took a hit from the one enemy
+    // the powerup is most likely to be picked up for. The same omission was already found and
+    // fixed once for miniworms (see killMiniworm), which is what makes this an oversight rather
+    // than a balance choice. Protective only: unlike moon/whale above, it does not damage the
+    // boss -- that would silently promote it to a boss-melter, which IS a balance decision.
+    if(player.invuln||now<this.shieldUntil||now<this.coldUntil||now<this.omegaUntil) return;
     this.hurt(player, k.x<player.x?1:-1, 'BOSS TOUCH: '+String((this.def&&this.def.bossType)||'rugking').toUpperCase());
   },
   // ── STOMP GEOMETRY — the ONE place stomp-vs-hurt is decided (bossTouch + __NQ_STOMPTEST). ──
