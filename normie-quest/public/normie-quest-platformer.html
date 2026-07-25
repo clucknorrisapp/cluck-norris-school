@@ -149,7 +149,16 @@ blackswan:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALgAAACfCAYAAABKmhNJAAD
 
 // --- tiny Web-Audio sound engine: procedural arcade blips, zero assets ---
 var _AC=null;
-function _ac(){ try{ if(!_AC) _AC=new (window.AudioContext||window.webkitAudioContext)(); if(_AC.state==='suspended') _AC.resume(); }catch(e){} return _AC; }
+// A context is DEAD in two ways. 'suspended' is the spec one; 'interrupted' is WebKit-only and is
+// what iOS Safari actually uses when audio is taken away (tab backgrounded, screen locked, a call,
+// another app taking audio focus). Testing only 'suspended' is why sound sometimes never came back
+// after leaving the browser -- nothing in the resume path recognised the state it was actually in.
+function _acDead(c){ return !!c && (c.state==='suspended' || c.state==='interrupted'); }
+// resume() returns a promise that REJECTS on iOS when called outside a user gesture. Unhandled,
+// that is a console error and, worse, it hides the failure; swallow it and let the next real
+// gesture retry.
+function _acResume(c){ try{ var p=c&&c.resume&&c.resume(); if(p&&p.catch) p.catch(function(){}); }catch(e){} }
+function _ac(){ try{ if(!_AC) _AC=new (window.AudioContext||window.webkitAudioContext)(); if(_acDead(_AC)) _acResume(_AC); }catch(e){} return _AC; }
 // master EFFECTS bus — every SFX routes through this gain so the Effects slider can scale them all.
 var _sfxVol=0.85, _sfxGain=null;
 try{ if(typeof localStorage!=='undefined'){ var _sv=localStorage.getItem('nqSfxVol'); if(_sv!=null) _sfxVol=Math.max(0,Math.min(1,parseFloat(_sv)||0)); } }catch(e){}
@@ -185,7 +194,7 @@ function _playSample(buf,vol){ var c=_ac(); if(!c||!buf) return false; try{ var 
 // was never unlocked in a real tap) and will only RESUME inside a genuine user gesture — a
 // resume() call from the game loop is ignored. So unlock/resume on ANY real interaction, and
 // again whenever the tab becomes visible. This is why sound would "quit working" and not return.
-function _unlockAudio(){ try{ var c=_ac(); if(!c) return; if(c.state==='suspended') c.resume();
+function _unlockAudio(){ try{ var c=_ac(); if(!c) return; if(_acDead(c)) _acResume(c);
   var o=c.createOscillator(), g=c.createGain(); g.gain.value=0.00008; o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime+0.03);   // silent blip fully unlocks iOS
   // Decode the power-up sample AFTER the unlock, off the gesture's critical path (a deferred timer),
   // so nothing about the sample can interfere with iOS's finicky unlock heuristic (which gates ALL sound).
@@ -193,7 +202,15 @@ function _unlockAudio(){ try{ var c=_ac(); if(!c) return; if(c.state==='suspende
 }catch(e){} }
 if(typeof window!=='undefined'){
   ['pointerdown','touchstart','touchend','mousedown','keydown'].forEach(function(ev){ window.addEventListener(ev,_unlockAudio,{passive:true,capture:true}); });
-  document.addEventListener('visibilitychange',function(){ if(!document.hidden){ try{ var c=_ac(); if(c&&c.state==='suspended') c.resume(); }catch(e){} } });
+  // Coming back to the tab: try immediately, then once more on a short delay. iOS often reports
+  // the OLD state for a beat after the app returns to the foreground, so a single synchronous
+  // check right on the event can read 'running' and skip a context that is about to go dead.
+  document.addEventListener('visibilitychange',function(){ if(!document.hidden){
+    try{ var c=_ac(); if(_acDead(c)) _acResume(c); }catch(e){}
+    try{ setTimeout(function(){ var c2=_ac(); if(_acDead(c2)) _acResume(c2); try{ MUSIC.resume(); }catch(e){} },350); }catch(e){}
+  } });
+  // Safari fires these on the page itself when audio is interrupted and restored.
+  ['pageshow','focus'].forEach(function(ev){ try{ window.addEventListener(ev,function(){ var c=_ac(); if(_acDead(c)) _acResume(c); },{passive:true}); }catch(e){} });
 }
 var SFX={
   jump:function(){ _tone(420,760,0.13,'square',0.08); },
@@ -389,7 +406,7 @@ var MUSIC=(function(){
     // Tab hidden / browser minimized → pause the produced track (HTMLAudio keeps playing otherwise);
     // the WebAudio synth + SFX auto-suspend by browser policy. Resume the same track on return.
     suspend:function(){ try{ synthStop(); }catch(e){} if(curEl){ try{ curEl.pause(); }catch(e){} } },
-    resume:function(){ try{ if(ctx&&ctx.state==='suspended') ctx.resume(); }catch(e){} if(muted) return; if(curEl && streaming){ var p=curEl.play(); if(p&&p.catch) p.catch(function(){}); } else if(want && !streaming){ try{ synthPlay(want); }catch(e){} } },
+    resume:function(){ try{ if(ctx&&(ctx.state==='suspended'||ctx.state==='interrupted')){ var rp=ctx.resume(); if(rp&&rp.catch) rp.catch(function(){}); } }catch(e){} if(muted) return; if(curEl && streaming){ var p=curEl.play(); if(p&&p.catch) p.catch(function(){}); } else if(want && !streaming){ try{ synthPlay(want); }catch(e){} } },
     toggle:function(){ muted=!muted; if(gain) gain.gain.value=muted?0:0.06*musScale; if(curEl) fade(curEl,muted?0:effVol(),150); try{ localStorage.setItem('nqMute',muted?'1':'0'); }catch(e){} return muted; },
     muted:function(){ return muted; },
     setVol:function(s){ musScale=Math.max(0,Math.min(1,s)); if(gain) gain.gain.value=muted?0:0.06*musScale; if(curEl) fade(curEl,muted?0:effVol(),120); try{ localStorage.setItem('nqMusVol',String(musScale)); }catch(e){} },
