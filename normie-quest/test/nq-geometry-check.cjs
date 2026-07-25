@@ -21,6 +21,7 @@
  *   F9  a spike embedded in a wall body (hidden / pokes out)
  *   F10 an airdrop collectible buried inside a wall or platform
  *   F11 a ground enemy stuck inside a wall body
+ *   F13 a spike bed with under 96px of floor between it and a wall >= 3 tiles tall
  *   F12 a moving platform with a malformed [x,y,axis,range,speed] def (NaN → dead physics)
  *   W1  gap wider than 168px (needs a committed full-speed jump)
  *   W7  two ground enemies stacked < 24px apart (render as one)
@@ -249,6 +250,30 @@ function check(lv) {
     if (A.kind === 'plat' && B.kind === 'plat' && Math.abs(A.y1 - B.y1) < 6) continue; // stacked ledge — intended
     fails.push(`F8 ${A.kind}(${A.tag}) overlaps ${B.kind}(${B.tag}) [${ix}x${iy}px]`);
   }
+
+  // F13: a spike bed must have real floor between it and any wall >= 3 tiles tall.
+  // Reported from play on 5-3 ("no room to get up over safely"). The numbers: jump velocity 430
+  // at gravity 900 gives a 103px apex, so a 4-tile wall is clearable -- but only from near a
+  // standstill. You arrive at up to 240px/s having just jumped the spikes and need 240^2/(2*1600)
+  // = 18px to stop, plus ~15px of half-width and ~24px to wind up the next jump. Under ~4 tiles
+  // you are landing in a window narrower than your own sprite with spikes behind and a wall in
+  // front: overshoot hits the wall, undershoot hits the spikes.
+  // OVERLAP COUNTS AS ZERO, not as "no adjacent wall" -- the first pass at this rule tested
+  // `wall.x2 <= spikeLeft`, which silently skipped the very worst cases (8-1 and 13-1 had spikes
+  // touching a wall face) because they failed both the left and the right test.
+  // Walls 1-2 tiles tall are exempt: those you hop without a run-up.
+  const RUNWAY = 96;
+  (lv.spikes || []).forEach(sp => {
+    const lo = sp[0] - 12, hi = sp[0] + 12;
+    (lv.walls || []).forEach(w2 => {
+      if ((w2[1] || 0) < 3) return;
+      const x1 = w2[0], x2 = w2[0] + (w2[3] || 1) * TILE;
+      const clear = (x1 >= hi) ? (x1 - hi) : ((x2 <= lo) ? (lo - x2) : 0);
+      if (clear < RUNWAY) {
+        fails.push(`F13 spike x${sp[0]} has only ${Math.round(clear)}px of runway to the ${x1 >= hi ? 'wall ahead' : 'wall behind'} x${w2[0]} (h=${w2[1]}) — needs ${RUNWAY}px to land and jump`);
+      }
+    });
+  });
 
   // F9: a spike embedded in a wall (owner sweep 2026-07-23). A spike whose x-span overlaps a
   // wall's body is either invisible (hidden behind the wall the player can't pass) or pokes out
