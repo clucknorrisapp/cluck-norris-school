@@ -2414,6 +2414,84 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.rugIntro=true; this.rugGraceUntil=this.time.now+1600;
   },
 
+  /* ---------- RUG KING (1-3) — the FIRST boss, and until now the only one with no fight of his
+       own: every other boss has an xxxTick, while he ran on the generic "walk at the player at 76"
+       line and nothing else. No telegraph, no attack, no phases. This gives him a real loop:
+
+         STALK  he closes in slowly, wobbling  ->
+         WIND   he plants, squashes, flashes gold and a '!' pops  (the TELL — generous on purpose,
+                this is the first boss most players ever see)     ->
+         CHARGE he dashes, trailing dust                          ->
+         RECOVER he overshoots and stands there stunned           <- THIS is your stomp window
+
+       From 2 HP down he mixes in a LEAP: he jumps at you and the landing sends a RUG PULL
+       shockwave skidding along the floor both ways — jump it. Everything scales with HP, so the
+       fight visibly escalates. He is never made invulnerable, so he stays stompable throughout
+       (the state tester asserts that). ---------- */
+  rugKingTick:function(now,p){
+    var k=this.rugking; if(!k||!k.active||k.invuln) return;
+    if(k._bs==null) k._bs=k.scaleX;                       // capture the spawn scale once
+    var bs=k._bs, hp=Math.max(1,this.bossHP), tier=3-hp;  // tier 0 (fresh) .. 2 (last pip)
+    if(!this._rkState){ this._rkState='stalk'; this._rkNext=now+900; this._rkLeap=false; }
+    var face=function(){ k.dir=(p.x<k.x)?-1:1; k.setFlipX(k.dir>0); };
+
+    if(this._rkState==='stalk'){
+      face(); k.setVelocityX(k.dir*(58+tier*10)); k.setRotation(Math.sin(now/120)*0.05); k.setScale(bs);
+      if(now>=this._rkNext){
+        this._rkState='wind'; this._rkNext=now+(620-tier*60);
+        k.setVelocityX(0); face();
+        k.setScale(bs*1.14, bs*0.86); k.setTint(0xffd23f);           // squash + gold flash = the tell
+        this.burst(k.x, GY-6, 0xffd23f, 6);
+        var ex=this.add.text(k.x, k.y-38, '!', {fontFamily:'"Press Start 2P"',fontSize:'14px',color:'#ffd23f'}).setOrigin(.5).setDepth(41);
+        this.tweens.add({targets:ex, y:ex.y-10, alpha:0, duration:600, onComplete:function(){ ex.destroy(); }});
+        try{ _tone(180,120,0.10,'square',0.05); }catch(e){}
+      }
+    } else if(this._rkState==='wind'){
+      k.setVelocityX(k.dir*-24);                                     // small wind-up hop backwards
+      if(now>=this._rkNext){
+        k.clearTint(); k.setScale(bs);
+        // from 2 HP down, alternate the charge with a leap slam
+        if(this.bossHP<=2 && (this._rkLeap=!this._rkLeap)){
+          this._rkState='leap'; this._rkNext=now+1200;
+          k.setVelocity(k.dir*(140+tier*20), -330);
+          try{ _tone(260,180,0.10,'square',0.05); }catch(e){}
+        } else {
+          this._rkState='charge'; this._rkNext=now+(760+tier*40);
+          k.setVelocityX(k.dir*(200+tier*25)); this.cameras.main.shake(120,.008);
+          try{ _tone(120,90,0.12,'sawtooth',0.05); }catch(e){}
+        }
+      }
+    } else if(this._rkState==='charge'){
+      k.setRotation(k.dir*0.10);
+      if(!this._rkDust||now>this._rkDust){ this._rkDust=now+110; this.burst(k.x-k.dir*12, GY-6, 0xb08040, 4); }
+      if(now>=this._rkNext){ this._rkState='recover'; this._rkNext=now+(1000-tier*100); k.setVelocityX(0); k.setRotation(0); }
+    } else if(this._rkState==='leap'){
+      k.setRotation(Math.sin(now/70)*0.18);
+      var landed=k.body.blocked.down||k.body.touching.down;
+      if(landed && now>this._rkNext-1000){                            // ignore the first frame off the floor
+        this.cameras.main.shake(280,.022); this.burst(k.x, GY-6, 0xff3860, 18);
+        this.rugPullWave(k);
+        this._rkState='recover'; this._rkNext=now+(1000-tier*100); k.setVelocityX(0); k.setRotation(0);
+      } else if(now>=this._rkNext){ this._rkState='recover'; this._rkNext=now+900; k.setVelocityX(0); k.setRotation(0); }
+    } else {                                                          // recover — stunned + stompable
+      k.setVelocityX(0); k.setScale(bs*0.96, bs*1.04);
+      k.setRotation(Math.sin(now/220)*0.03);
+      if(now>=this._rkNext){ this._rkState='stalk'; this._rkNext=now+(1500-tier*200); k.setScale(bs); }
+    }
+  },
+  // RUG PULL — two low shards skidding along the floor away from the king. Jump them.
+  rugPullWave:function(k){
+    if(this.over||!this.enemyShots) return; var self=this;
+    [-1,1].forEach(function(d){
+      var s=self.enemyShots.create(k.x+d*14, GY-8, 'bullet').setDepth(6);
+      if(!s||!s.body) return;
+      s.srcCause='RUG PULL'; s.body.setAllowGravity(false);
+      s.setVelocity(d*168, 0); s.setTint(0xff3860); s.setScale(1.6,1.1);
+      s.dieAt=self.time.now+2600;
+    });
+    try{ _tone(90,70,0.14,'sawtooth',0.06); }catch(e){}
+  },
+
   bossHit:function(){
     SFX.boss(); if(this.rugking) this.burst(this.rugking.x,this.rugking.y,0xff3860,20); this.bossHP--; if(this.bossPips[this.bossHP]) this.bossPips[this.bossHP].setAlpha(.16);
     var k=this.rugking; k.invuln=true; k.setVelocityX(0); this.addScore(100); this.cameras.main.shake(220,.02);
@@ -3198,6 +3276,19 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.powerBanner('WORMHOLE','IT ERUPTS FROM THE SAND — JUMP INTO THE BLUE SHARDS x3','#66ddff');
     this.wormState='wait'; this.wormNextAt=this.time.now+1600; this.wormTargetX=cx;
   },
+  // Shards spat on eruption from 2 HP down — a fan of three, arcing outward and up so they
+  // threaten the ground you'd stand on without touching the airborne stomp line you win with.
+  wormSpit:function(wm){
+    if(this.over||!this.enemyShots) return; var self=this, now=this.time.now;
+    [-0.85,-0.35,0.42].forEach(function(off,i){
+      var s=self.enemyShots.create(wm.x, wm.y-wm.displayHeight*0.18, 'bullet').setDepth(6);
+      if(!s||!s.body) return;
+      s.srcCause='WORM SHARD'; s.body.setAllowGravity(false);
+      s.setVelocity(Math.cos(off-Math.PI/2)*150, Math.sin(off-Math.PI/2)*150);
+      s.setTint(0x66ddff); s.setScale(1.25); s.dieAt=now+2400;
+    });
+    try{ _tone(420,260,0.09,'triangle',0.05); }catch(e){}
+  },
   wormHit:function(){
     var wm=this.worm; if(!wm||wm.invuln) return; wm.invuln=true;
     SFX.boss(); this.burst(wm.x, wm.y+wm.displayHeight*0.15, 0x2ea8ff, 22); this.bossHP--;
@@ -3228,12 +3319,17 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       }
     }
     // --- phase machine (fully TIMESTAMP-driven so it can never get stuck) ---
+    // ESCALATION (2026-07-25): the loop used to run identical timings from full HP to the last
+    // pip, so the fight never built. `wt` tightens every beat as pips drop (tier 0..2) and from
+    // 2 HP down each eruption also spits shards. The TELEGRAPH is deliberately the beat that
+    // shrinks least — the mound tell has to stay readable, this is a World-2 boss.
+    var wtier=3-Math.max(1,this.bossHP);
     if(now < this.wormNextAt) return;
     if(st==='wait'){
       this.wormTargetX=Phaser.Math.Clamp(p.x+Phaser.Math.Between(-70,70), 150, this.def.width-150);
       this.mound.setPosition(this.wormTargetX, GY-2).setScale(0.6,0.4).setVisible(true);
       this.tweens.add({targets:this.mound, scaleX:2.4, scaleY:0.8, duration:820, ease:'Quad.out'});
-      this.wormState='telegraph'; this.wormNextAt=now+880;
+      this.wormState='telegraph'; this.wormNextAt=now+(880-wtier*120);
     } else if(st==='telegraph'){
       this.mound.setVisible(false);
       wm.setPosition(this.wormTargetX, this.wormDownY).setVisible(true).setAngle(0).setAlpha(1); wm.invuln=false;
@@ -3241,12 +3337,13 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       if(grounded && Math.abs(p.x-this.wormTargetX)<wm.displayWidth*0.45 && !p.invuln && now>=this.shieldUntil && now>=this.coldUntil && now>=this.whaleUntil && now>=this.moonUntil && now>=this.omegaUntil) this.hurt(p, p.x<this.wormTargetX?-1:1, 'WORMHOLE ERUPTION');
       this.cameras.main.shake(220,.015);
       this.tweens.add({targets:wm, y:this.wormUpY, duration:280, ease:'Back.out'});
-      this.wormState='up'; this.wormNextAt=now+2400;
+      this.wormState='up'; this.wormNextAt=now+(2400-wtier*300);
+      if(this.bossHP<=2) this.wormSpit(wm);
     } else if(st==='up'){
       wm.invuln=true; this.tweens.add({targets:wm, y:this.wormDownY, duration:340, ease:'Quad.in'});
       this.wormState='retreat'; this.wormNextAt=now+380;
     } else if(st==='retreat'){
-      wm.setVisible(false); this.wormState='wait'; this.wormNextAt=now+650;
+      wm.setVisible(false); this.wormState='wait'; this.wormNextAt=now+(650-wtier*160);
     }
   },
 
@@ -3999,9 +4096,14 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.bossStarted && this.def.door && this.enemyShots){ var _abx=this.def.door-400;
       this.enemyShots.children.iterate(function(s3){ if(s3&&s3.active&&s3.srcCause==='SNIPER BOLT'&&s3.x>_abx) s3.destroy(); }); }
     // boss charges toward the player (Rug King)
-    if(this.boss && this.def.bossType!=='blackswan' && this.def.bossType!=='mevdragon' && this.def.bossType!=='dirtywhale' && this.rugking && this.rugking.active && !this.rugking.invuln){   // state-machine bosses (swan/dragon/whale) own their movement — the ground-charge made the "stunned" whale CHASE the player through its vulnerable window
+    // `this.def.bossType` guard added 2026-07-25: the Rug King (1-3, the ONLY boss with no
+    // bossType) now runs his own rugKingTick state machine, so he must not also be driven by the
+    // generic constant-speed charge — the two would fight each other over his velocity.
+    if(this.boss && this.def.bossType && this.def.bossType!=='blackswan' && this.def.bossType!=='mevdragon' && this.def.bossType!=='dirtywhale' && this.rugking && this.rugking.active && !this.rugking.invuln){   // state-machine bosses (swan/dragon/whale) own their movement — the ground-charge made the "stunned" whale CHASE the player through its vulnerable window
       var kb=this.rugking; kb.dir=(p.x<kb.x)?-1:1; kb.setVelocityX(kb.dir*76); kb.setFlipX(kb.dir>0); kb.setRotation(Math.sin(now/120)*0.05);
     }
+    // RUG KING (1-3) — stalk / wind-up / charge / recover, + a leap slam from 2 HP down
+    if(this.bossStarted && !this.def.bossType && !this.rugIntro) this.rugKingTick(now,p);
     // Scammy KOL: shills fake tokens at range + taunts (in addition to the charge above)
     if(this.bossStarted && this.def.bossType==='kol' && !this.rugIntro) this.kolTick(now,p);
     if(this.bossStarted && this.def.bossType==='ceo' && !this.rugIntro) this.ceoTick(now,p);
