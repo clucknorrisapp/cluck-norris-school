@@ -4363,6 +4363,9 @@ var WorldClear=new Phaser.Class({ Extends:Phaser.Scene,
     // hills, which are the only motion on this page. Compact `short` copy so it stays one or two
     // lines and never reaches down into the TAP TO CONTINUE row.
     var _nn=nqNationNext(), _nx=300;
+    var _wp=null; try{ var _wt=parseInt(sessionStorage.getItem('nqWcTurn')||'0',10)||0; sessionStorage.setItem('nqWcTurn',String(_wt+1)); if(_wt%2===1) _wp=nqPreviewPick(); }catch(e){}
+    if(_wp){ _nn={ head:(_wp.feature?'STILL LOCKED — VIP PERK':'STILL LOCKED — WORLD '+_wp.world),
+                   short:_wp.title+' · unlocks with $NORMIE (terms in testing)' }; }
     this.p2.add(this.add.rectangle(_nx,H-44,330,30,0x120f28,0.9).setStrokeStyle(1,0xffd23f));
     this.p2.add(this.add.text(_nx,H-54,'★ '+_nn.head+' ★',{fontFamily:'"Press Start 2P"',fontSize:'7px',color:'#ffd23f',align:'center',wordWrap:{width:310}}).setOrigin(.5));
     this.p2.add(this.add.text(_nx,H-46,(_nn.short||_nn.body),{fontFamily:UIFONT,resolution:UIRES,fontSize:'9px',color:'#e6e1ff',align:'center',lineSpacing:1,wordWrap:{width:314}}).setOrigin(.5,0));
@@ -4676,6 +4679,69 @@ function nqBuyNormie(){
   try{ window.open('https://jup.ag/swap/SOL-'+encodeURIComponent(mint),'_blank'); }catch(e){}
 }
 
+/* ---------- LOCKED-CONTENT PREVIEWS. Real boss art + real world names, shown on the
+   interstitials so a player can SEE what they do not have yet. band: 't1' = the first paid
+   worlds, 't2' = the deeper paid worlds, 'vip' = the VIP wing and its perks. sprite keys are
+   checked against the texture manager before use, so a wrong key degrades to a text-only card
+   rather than throwing on a screen the player cannot skip past. ---------- */
+var NQ_PREVIEWS = [
+  { band:'t1',  world:3,  sprite:'scammykol',    title:'THE SCAMMY KOL',    hook:'The shill tower. He sells you the top and calls it alpha.' },
+  { band:'t1',  world:5,  sprite:'wyrm',         title:'THE VAULT WYRM',    hook:'It nests in the bridge vault and eats whatever crosses.' },
+  { band:'t1',  world:7,  sprite:'reaper',       title:'THE YIELD REAPER',  hook:'The farm pays 10,000% APY. He is the reason it can.' },
+  { band:'t2',  world:8,  sprite:'greatbear',    title:'THE GREAT BEAR',    hook:'Down bad is a place, and something lives there.' },
+  { band:'t2',  world:10, sprite:'blackswan',    title:'THE BLACK SWAN',    hook:'Nobody prices it in. That is what makes it a swan.' },
+  { band:'t2',  world:12, sprite:'whale',        title:'THE WHALE CARTEL',  hook:'They moved the price before you finished reading this.' },
+  { band:'vip', world:13, sprite:'leviathan',    title:'THE TRENCH THRONE', hook:'The VIP wing opens in the trenches. It gets worse from here.' },
+  { band:'vip', world:15, sprite:'diamondtitan', title:'THE HANDS OF DIAMOND', hook:'Paper hands shatter on him. Nine VIP worlds sit behind this one.' },
+  { band:'vip', world:18, sprite:'chairman',     title:'THE VAULT DOOR',    hook:'The money printer has a boss fight. Of course it does.' },
+  { band:'vip', world:21, sprite:'wenmoon',      title:'WEN MOON',          hook:'The last level in the game. On the moon. It answers back.' },
+  // Perk teases -- the VIP surfaces that already exist and a free player never sees.
+  { band:'vip', feature:'lounge', sprite:'crown', title:'THE PREMIUM LOUNGE', hook:'A members-only feed: giveaways, alpha drops and perks, posted for VIPs.' },
+  { band:'vip', feature:'wheel',  sprite:'slot',  title:'THE DAILY VIP WHEEL', hook:'A free spin every day, and every spin wins a boost you keep. Odds published.' },
+];
+// Which band is worth showing THIS player -- read from the live access hooks, never hardcoded,
+// so it always matches the real gate. Returns null when there is nothing left to sell.
+function nqPreviewBand(){
+  try{ if(typeof window.__NQ_VIP==='function' && window.__NQ_VIP()) return null; }catch(e){}
+  var a=null; try{ a=(typeof window.__NQ_ACCESS==='function')?window.__NQ_ACCESS():null; }catch(e){}
+  if(a==='all') return 'vip';                       // has every paid world, still outside the VIP wing
+  if(Array.isArray(a)&&a.length===2&&a[1]>=7) return 't2';
+  return 't1';
+}
+// Rotate within the eligible set, and weight the VIP wing in for lower tiers too: seeing the
+// FINAL boss is a stronger pull than seeing the next world, and it is the whole Nation pitch.
+function nqPreviewPick(){
+  var band=nqPreviewBand(); if(!band) return null;
+  var pool=NQ_PREVIEWS.filter(function(p){
+    if(band==='vip') return p.band==='vip';
+    if(band==='t2') return p.band==='t2'||p.band==='vip';
+    return true;
+  });
+  if(!pool.length) return null;
+  var i=0;
+  try{ i=parseInt(sessionStorage.getItem('nqPrevI')||'0',10)||0; sessionStorage.setItem('nqPrevI',String((i+1)%pool.length)); }
+  catch(e){ i=(Math.floor(Date.now()/1000))%pool.length; }
+  return pool[i%pool.length];
+}
+// Shared renderer: draws the preview into a scene at a given centre-y, returns the panel height.
+// Used by both interstitials so the card looks identical wherever it appears.
+function nqDrawPreview(sc, p, cy, container){
+  var cx=W/2, add=function(o){ if(container) container.add(o); return o; };
+  add(sc.add.rectangle(cx,cy,W-40,86,0x120f28,0.92).setStrokeStyle(2,0xffd23f));
+  var hasArt=false; try{ hasArt=!!(p.sprite&&sc.textures.exists(p.sprite)); }catch(e){}
+  var tx=hasArt?106:46, tw=hasArt?(W-152):(W-72);
+  if(hasArt){
+    var img=add(sc.add.image(70,cy,p.sprite));
+    var h=img.height||64; img.setScale(Math.min(58/h,58/(img.width||64)));
+    if(sc.renderer.type===Phaser.WEBGL){ try{ img.postFX.addGlow(0xffd23f,0.9,0,false,0.1,10); }catch(e){} }
+  }
+  var lbl=p.feature?'🔒 VIP PERK':'🔒 WORLD '+p.world;
+  add(sc.add.text(tx,cy-30,lbl,{fontFamily:'"Press Start 2P"',fontSize:'7px',color:'#ffd23f'}).setOrigin(0,.5));
+  add(sc.add.text(tx,cy-15,p.title,{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#ffffff',wordWrap:{width:tw}}).setOrigin(0,.5));
+  add(sc.add.text(tx,cy-2,p.hook,{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#cfc8ea',lineSpacing:1,wordWrap:{width:tw}}).setOrigin(0,0));
+  return 86;
+}
+
 /* ---------- LevelClear: the beat between ORDINARY levels (world boundaries keep their richer
    WorldClear -> Briefing flow). Deliberately SHORT and skippable — a tap, any key or any pad
    button advances immediately, and it auto-advances on its own, so it can never soft-lock and
@@ -4686,23 +4752,37 @@ var LevelClear=new Phaser.Class({ Extends:Phaser.Scene,
   create:function(){
     var self=this, cx=W/2; this.done=false; this.t0=0;
     this.cameras.main.setZoom(2).centerOn(W/2,H/2);
+    // Alternate: even clears carry the Nation line, odd clears show a locked-content preview.
+    // If the player owns everything, nqPreviewPick returns null and it is always the Nation line.
+    var _turn=0; try{ _turn=parseInt(sessionStorage.getItem('nqLcTurn')||'0',10)||0; sessionStorage.setItem('nqLcTurn',String(_turn+1)); }catch(e){}
+    var prev=(_turn%2===1)?nqPreviewPick():null;
     var n=nqNationNext();
     var g=this.add.graphics(); g.fillStyle(0x0d0b1e,1); g.fillRect(0,0,W,H);
     g.fillStyle(0x151030,1); g.fillRect(0,0,W,26); g.fillRect(0,H-20,W,20);
     this.add.text(cx,13,'LEVEL CLEAR',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
     if(this.cleared) this.add.text(cx,36,this.cleared,{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#8f89b8'}).setOrigin(.5);
     this.add.text(cx,54,'SCORE  '+this.score,{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#ffffff'}).setOrigin(.5);
-    // a small marching Normie so the beat feels alive rather than a static card
-    this.runner=this.add.image(cx,96,'nrun1'); this.runner.setScale(44/this.runner.height);
-    if(this.renderer.type===Phaser.WEBGL){ try{ this.runner.postFX.addGlow(0xffd23f,1,0,false,0.1,12); }catch(e){} }
-    // --- the Nation strip ---
-    this.add.rectangle(cx,158,W-40,60,0x120f28,0.9).setStrokeStyle(2,0xffd23f);
-    this.add.text(cx,138,'★ '+n.head+' ★',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffd23f',align:'center',wordWrap:{width:W-56}}).setOrigin(.5);
-    this.add.text(cx,150,n.body,{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#e6e1ff',align:'center',lineSpacing:1,wordWrap:{width:W-60}}).setOrigin(.5,0);
-    var buy=this.add.rectangle(cx,200,190,18,0xffd23f,1).setStrokeStyle(2,0xffffff,0.18).setInteractive({useHandCursor:true});
-    this.add.text(cx,200,'🪙  GRAB $NORMIE',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#0a0813'}).setOrigin(.5).setDepth(1);
+    if(prev){
+      // PREVIEW BEAT — real boss art + real world name for something this player cannot reach.
+      this.add.text(cx,80,'STILL LOCKED',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#8f89b8'}).setOrigin(.5);
+      nqDrawPreview(this,prev,146,null);
+      // No hold amount, ever -- NQ's terms are unagreed. Same hedge VipPitch already uses.
+      this.add.text(cx,196,'unlocks with $NORMIE · terms still in testing',{fontFamily:UIFONT,resolution:UIRES,fontSize:'9px',color:'#8891b5',align:'center'}).setOrigin(.5);
+    } else {
+      // a small marching Normie so the beat feels alive rather than a static card
+      this.runner=this.add.image(cx,96,'nrun1'); this.runner.setScale(44/this.runner.height);
+      if(this.renderer.type===Phaser.WEBGL){ try{ this.runner.postFX.addGlow(0xffd23f,1,0,false,0.1,12); }catch(e){} }
+      // --- the Nation strip ---
+      this.add.rectangle(cx,158,W-40,60,0x120f28,0.9).setStrokeStyle(2,0xffd23f);
+      this.add.text(cx,138,'★ '+n.head+' ★',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffd23f',align:'center',wordWrap:{width:W-56}}).setOrigin(.5);
+      this.add.text(cx,150,n.body,{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#e6e1ff',align:'center',lineSpacing:1,wordWrap:{width:W-60}}).setOrigin(.5,0);
+    }
+    var _lounge=!!(prev&&prev.feature==='lounge');
+    var buy=this.add.rectangle(cx,216,206,18,_lounge?0x9b6bff:0xffd23f,1).setStrokeStyle(2,0xffffff,0.18).setInteractive({useHandCursor:true});
+    this.add.text(cx,216,_lounge?'🏛  SEE THE LOUNGE':'🪙  GRAB $NORMIE',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:_lounge?'#ffffff':'#0a0813'}).setOrigin(.5).setDepth(1);
     buy.on('pointerover',function(){ buy.setScale(1.05); }); buy.on('pointerout',function(){ buy.setScale(1); });
-    buy.on('pointerup',function(){ self._buyOpen=true; nqBuyNormie(); });   // opening the widget must not also advance
+    buy.on('pointerup',function(){ self._buyOpen=true;   // opening a panel must not also advance the beat
+      if(_lounge){ try{ window.open('/normie-quest-x7/lounge','_blank'); }catch(e){} } else nqBuyNormie(); });
     this.cont=this.add.text(cx,H-10,'TAP TO CONTINUE  ▶',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#3dff6e'}).setOrigin(.5);
     var adv=function(){ if(self.done||self._buyOpen){ self._buyOpen=false; return; } self.go(); };
     this.input.on('pointerdown',function(p){ if(buy.getBounds().contains(p.worldX,p.worldY)) return; adv(); });
