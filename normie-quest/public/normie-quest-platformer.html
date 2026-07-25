@@ -5277,7 +5277,30 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
     if(DEBUG){ dbgEl=document.createElement('div'); dbgEl.id='nqgpdbg'; dbgEl.style.display='block'; document.body.appendChild(dbgEl); }
   }
   function toast(msg){ ensureUI(); if(!toastEl) return; toastEl.textContent=msg; toastEl.style.display='block'; toastUntil=Date.now()+4000; }
-  function anyPad(){ var p=navigator.getGamepads?navigator.getGamepads():[]; for(var i=0;i<p.length;i++) if(p[i]) return p[i]; return null; }
+  // Pick the pad that is actually a CONTROLLER. getGamepads() enumerates plenty of things that
+  // are not game controllers -- a player's wireless HEADSET dongle ("Razer BlackShark V2 HS 2.4",
+  // non-standard mapping, ZERO axes, no buttons) landed in slot 0, and the old "first non-null
+  // wins" bound to it and ignored the real pad sitting in a later slot. From the player's side
+  // the controller was simply dead.
+  // Order of preference: a pad someone is actively PRESSING, then one SHAPED like a controller
+  // (has axes and a real button count -- the headset has neither), then whatever is there.
+  // The live choice is sticky, so selection cannot flip back to a phantom device between presses.
+  var chosenKey=null;
+  function padKeyOf(gp){ return gp ? (gp.index+':'+gp.id) : null; }
+  function padLooksReal(gp){ return gp && (gp.axes||[]).length>=2 && (gp.buttons||[]).length>=6; }
+  function anyPad(){
+    var p=navigator.getGamepads?navigator.getGamepads():[], live=null, shaped=null, first=null;
+    for(var i=0;i<p.length;i++){
+      var gp=p[i]; if(!gp) continue;
+      if(!first) first=gp;
+      if(!shaped && padLooksReal(gp)) shaped=gp;
+      if(!live){ var B=gp.buttons||[];
+        for(var b=0;b<B.length;b++){ if(B[b]&&(B[b].pressed||B[b].value>0.5)){ live=gp; chosenKey=padKeyOf(gp); break; } } }
+    }
+    if(chosenKey){ for(var k=0;k<p.length;k++) if(p[k]&&padKeyOf(p[k])===chosenKey) return p[k]; }
+    return live||shaped||first;
+  }
+  function padCount(){ var p=navigator.getGamepads?navigator.getGamepads():[],n=0; for(var i=0;i<p.length;i++) if(p[i]) n++; return n; }
   // ---- press-to-bind remap: capture the JUMP button, then the THROW button, save to localStorage ----
   function startRemap(){
     if(remapping) return; ensureUI(); if(!anyPad()){ toast('Plug a controller in first'); return; }
@@ -5421,7 +5444,15 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
     if(dbgEl){
       var bs=[]; for(var i=0;i<B.length;i++) if(pr(i)) bs.push(i);
       var ax=[]; for(var j=0;j<A.length;j++) ax.push(j+':'+(A[j]||0).toFixed(2));
-      dbgEl.textContent='id: '+String(gp.id||'').slice(0,36)+'\nmapping: '+(gp.mapping||'(non-standard)')
+      // List EVERY connected device, marking the one in use. A wireless headset dongle posing as
+      // a gamepad is invisible when the readout only ever describes the chosen pad -- that is
+      // exactly how one hid in slot 0 while a real controller sat unread behind it.
+      var _all=navigator.getGamepads?navigator.getGamepads():[], _lines=[];
+      for(var _i=0;_i<_all.length;_i++){ var _g=_all[_i]; if(!_g) continue;
+        _lines.push((padKeyOf(_g)===padKeyOf(gp)?'> ':'  ')+'['+_g.index+'] '+String(_g.id||'').slice(0,28)
+          +' ax'+(_g.axes||[]).length+' btn'+(_g.buttons||[]).length+(padLooksReal(_g)?'':' (not a pad?)')); }
+      dbgEl.textContent='devices ('+padCount()+'):\n'+_lines.join('\n')
+        +'\nid: '+String(gp.id||'').slice(0,36)+'\nmapping: '+(gp.mapping||'(non-standard)')
         +'\njump btns: '+jb.join(',')+'   throw btns: '+tb.join(',')+'   pause: '+(pauseBind?pauseBind.join(','):'8,9+combo')+(padMap?'  (custom)':'  (default)')
         +'\nbuttons down: '+(bs.join(',')||'-')+'\naxes: '+ax.join('  ')
         +'\n=> L'+(+left)+' R'+(+right)+' JUMP'+(+jump)+' DUCK'+(+P.down)+' THROW'+(+throwB);
