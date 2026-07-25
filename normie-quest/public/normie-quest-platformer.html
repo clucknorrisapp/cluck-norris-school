@@ -1035,7 +1035,7 @@ function padAdvance(scene, go){
 // Caught 2026-07-25: the worlds 1-4 retro repaint was live on the server (md5 verified) but
 // browsers kept serving the previous painted plates from cache.
 // >>> BUMP THIS whenever any file in normie-quest/public/worlds/ is replaced. <<<
-var WORLD_ART_VER='2';
+var WORLD_ART_VER='3';
 var WORLD_ART={ wTrenches:'/normie-quest/worlds/w-trenches.png', wVaultRoom:'/normie-quest/worlds/w-vaultroom.png', w09mines:'/normie-quest/worlds/w09-mines.png', w10euphoria:'/normie-quest/worlds/w10-euphoria.png', w10swan:'/normie-quest/worlds/w10-swan.png', w11citadel:'/normie-quest/worlds/w11-citadel.png', w12relaunch:'/normie-quest/worlds/w12-relaunch.png', w13pod:'/normie-quest/worlds/w13-pod.png', w14shrine:'/normie-quest/worlds/w14-shrine.png', w15diamond:'/normie-quest/worlds/w15-diamond.png', w01dusk:'/normie-quest/worlds/w01-dusk.png', w01cavern:'/normie-quest/worlds/w01-cavern.png', w01keep:'/normie-quest/worlds/w01-keep.png', w02desert:'/normie-quest/worlds/w02-desert.png', w02casino:'/normie-quest/worlds/w02-casino.png', w03skyline:'/normie-quest/worlds/w03-skyline.png', w04exchange:'/normie-quest/worlds/w04-exchange.png', w05bridge:'/normie-quest/worlds/w05-bridge.png', w06depeg:'/normie-quest/worlds/w06-depeg.png', w07farm:'/normie-quest/worlds/w07-farm.png', w08bear:'/normie-quest/worlds/w08-bear.png', w16citadel:'/normie-quest/worlds/w16-citadel.png', w17spire:'/normie-quest/worlds/w17-spire.png', w18reserve:'/normie-quest/worlds/w18-reserve.png', w19orbital:'/normie-quest/worlds/w19-orbital.png', w20tower:'/normie-quest/worlds/w20-tower.png', w21tower:'/normie-quest/worlds/w21-tower.png', w21moon:'/normie-quest/worlds/w21-moon.png' };
 var Boot=new Phaser.Class({ Extends:Phaser.Scene,
   initialize:function(){ Phaser.Scene.call(this,{key:'Boot'}); },
@@ -1070,6 +1070,43 @@ var Boot=new Phaser.Class({ Extends:Phaser.Scene,
     g.fillStyle(0xb4bac6); g.fillRect(0,4,24,1);
     g.fillStyle(0xdfe4ec); g.fillRect(0,0,24,3); g.fillRect(2,3,2,2); g.fillRect(8,3,2,3); g.fillRect(14,3,2,2); g.fillRect(20,3,2,3);
     g.generateTexture('moonground',24,24);
+    // The same problem the moon had, everywhere else. The grass-capped 'ground' tile was the ONLY
+    // floor in the game, so a castle keep, a casino, a mine shaft, a bank vault and an orbital
+    // deck all grew bright green grass. Checked against every backdrop plate: grass is correct on
+    // exactly TWO of them (w01dusk, w07farm). These three cover the rest.
+    // Construction is identical to 'ground' — same speckle/highlight rects, so the tiles read as a
+    // family — only the palette and the top cap change.
+    // stoneground — indoor/hard floor: cut stone with a worn flagstone cap.
+    g.clear();
+    g.fillStyle(0x2f2b33); g.fillRect(0,0,24,24);
+    g.fillStyle(0x4a444f); g.fillRect(0,6,24,18);
+    g.fillStyle(0x3a353f); g.fillRect(2,12,4,3); g.fillRect(10,16,5,3); g.fillRect(17,10,4,3); g.fillRect(7,20,3,2); g.fillRect(19,19,3,2);
+    g.fillStyle(0x5d5665); g.fillRect(4,9,2,2); g.fillRect(14,13,2,2); g.fillRect(20,16,2,2);
+    g.fillStyle(0x6b6472); g.fillRect(0,0,24,7);
+    g.fillStyle(0x837b8c); g.fillRect(0,4,24,1);
+    g.fillStyle(0x968da0); g.fillRect(0,0,24,3);
+    g.fillStyle(0x4a444f); g.fillRect(7,0,1,4); g.fillRect(16,0,1,4);   // flagstone seams, not grass blades
+    g.generateTexture('stoneground',24,24);
+    // sandground — the desert world. Warm dune tones with a wind-rippled cap.
+    g.clear();
+    g.fillStyle(0x8a5a22); g.fillRect(0,0,24,24);
+    g.fillStyle(0xb07c33); g.fillRect(0,6,24,18);
+    g.fillStyle(0x96682a); g.fillRect(2,12,4,3); g.fillRect(10,16,5,3); g.fillRect(17,10,4,3); g.fillRect(7,20,3,2); g.fillRect(19,19,3,2);
+    g.fillStyle(0xc99247); g.fillRect(4,9,2,2); g.fillRect(14,13,2,2); g.fillRect(20,16,2,2);
+    g.fillStyle(0xd9a75a); g.fillRect(0,0,24,7);
+    g.fillStyle(0xe8bd75); g.fillRect(0,4,24,1);
+    g.fillStyle(0xf2d296); g.fillRect(0,0,24,3); g.fillRect(2,3,4,1); g.fillRect(10,3,5,1); g.fillRect(18,3,4,1);   // wind ripples
+    g.generateTexture('sandground',24,24);
+    // iceground — the diamond dimension + the abyssal pod. Blue-white with a glassy cap.
+    g.clear();
+    g.fillStyle(0x24435c); g.fillRect(0,0,24,24);
+    g.fillStyle(0x396b8f); g.fillRect(0,6,24,18);
+    g.fillStyle(0x2d5876); g.fillRect(2,12,4,3); g.fillRect(10,16,5,3); g.fillRect(17,10,4,3); g.fillRect(7,20,3,2); g.fillRect(19,19,3,2);
+    g.fillStyle(0x5b93b8); g.fillRect(4,9,2,2); g.fillRect(14,13,2,2); g.fillRect(20,16,2,2);
+    g.fillStyle(0x8fc4dd); g.fillRect(0,0,24,7);
+    g.fillStyle(0xb5dcef); g.fillRect(0,4,24,1);
+    g.fillStyle(0xe2f4fc); g.fillRect(0,0,24,3); g.fillRect(3,3,3,2); g.fillRect(12,3,4,2); g.fillRect(19,3,3,2);
+    g.generateTexture('iceground',24,24);
     // brick platform tile — offset stone blocks with bevel highlights + mortar
     g.clear();
     g.fillStyle(0x2a1c3e); g.fillRect(0,0,24,24);
@@ -1395,7 +1432,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // level so they always point at the LIVE scene instance)
     try{ var _sc=this; window.__NQ_PAUSE=function(){ if(!_sc.over&&!_sc.paused){ _sc.pauseGame(false); return true; } return false; };
          window.__NQ_RESUME=function(){ if(_sc.paused) _sc.resumeGame(); };
-         window.__NQ_DBG=function(){ try{ return {paused:!!_sc.paused, clockPaused:!!_sc.time.paused, now:Math.round(_sc.time.now), last:Math.round(_sc.lastInputAt||0), warping:!!_sc._warping, swan:_sc._swanState||null, bossHP:(_sc.bossStarted?_sc.bossHP:null), hasKey:!!_sc.hasKey, level:_sc.def&&_sc.def.name, grav:(function(){ try{ return _sc.physics.world.gravity.y; }catch(e){ return null; } })(), nearSlot:(function(){ try{ return _sc.nearActiveSlot(); }catch(e){ return 'err:'+e.message; } })(), slotN:(_sc.slots?_sc.slots.length:-1), px:Math.round(_sc.player?_sc.player.x:-1), secrets:(function(){ var a=[]; try{ _sc.platforms.children.iterate(function(m){ if(m&&m.secretSteel) a.push([Math.round(m.x),Math.round(m.y),m.used?1:0]); }); }catch(e){} return a; })(), bb:(function(){ var a=[]; try{ _sc.bonusBlocks.children.iterate(function(m){ if(m) a.push([Math.round(m.x),m.used?1:0]); }); }catch(e){} return a; })(), pscale:(_sc.pscale?+_sc.pscale.v.toFixed(2):1), lives:_sc.lives, nLevels:LEVELS.length, sig:{fb:(_sc.firebars||[]).length, gt:(_sc.gates||[]).length, rp:(_sc.rugPlats&&_sc.rugPlats.children?_sc.rugPlats.getLength():0), dz:(_sc.dumpZones||[]).length}, gate0:(_sc.gates&&_sc.gates[0]?_sc.gates[0].st:null), foes:(function(){ var n=0; try{ _sc.enemies.children.iterate(function(e){ if(e&&e.active&&_sc.def&&_sc.def.door&&e.x>_sc.def.door-460) n++; }); }catch(e){} return n; })(), dr:(_sc._drState||null), drX:(_sc.rugking&&_sc.rugking.active?Math.round(_sc.rugking.x):null), drY:(_sc.rugking&&_sc.rugking.active?Math.round(_sc.rugking.y):null), drT:(_sc._drT0?Math.round(_sc.time.now-_sc._drT0):null), bossInv:(_sc.rugking&&_sc.rugking.active?!!_sc.rugking.invuln:null), princess:!!(_sc.princess&&_sc.princess.active), reserve:(_sc.reserve||null)}; }catch(e){ return {err:String(e)}; } };
+         window.__NQ_DBG=function(){ try{ return {paused:!!_sc.paused, clockPaused:!!_sc.time.paused, now:Math.round(_sc.time.now), last:Math.round(_sc.lastInputAt||0), warping:!!_sc._warping, swan:_sc._swanState||null, bossHP:(_sc.bossStarted?_sc.bossHP:null), hasKey:!!_sc.hasKey, level:_sc.def&&_sc.def.name, floorKey:_sc.floorKey||null, grav:(function(){ try{ return _sc.physics.world.gravity.y; }catch(e){ return null; } })(), nearSlot:(function(){ try{ return _sc.nearActiveSlot(); }catch(e){ return 'err:'+e.message; } })(), slotN:(_sc.slots?_sc.slots.length:-1), px:Math.round(_sc.player?_sc.player.x:-1), secrets:(function(){ var a=[]; try{ _sc.platforms.children.iterate(function(m){ if(m&&m.secretSteel) a.push([Math.round(m.x),Math.round(m.y),m.used?1:0]); }); }catch(e){} return a; })(), bb:(function(){ var a=[]; try{ _sc.bonusBlocks.children.iterate(function(m){ if(m) a.push([Math.round(m.x),m.used?1:0]); }); }catch(e){} return a; })(), pscale:(_sc.pscale?+_sc.pscale.v.toFixed(2):1), lives:_sc.lives, nLevels:LEVELS.length, sig:{fb:(_sc.firebars||[]).length, gt:(_sc.gates||[]).length, rp:(_sc.rugPlats&&_sc.rugPlats.children?_sc.rugPlats.getLength():0), dz:(_sc.dumpZones||[]).length}, gate0:(_sc.gates&&_sc.gates[0]?_sc.gates[0].st:null), foes:(function(){ var n=0; try{ _sc.enemies.children.iterate(function(e){ if(e&&e.active&&_sc.def&&_sc.def.door&&e.x>_sc.def.door-460) n++; }); }catch(e){} return n; })(), dr:(_sc._drState||null), drX:(_sc.rugking&&_sc.rugking.active?Math.round(_sc.rugking.x):null), drY:(_sc.rugking&&_sc.rugking.active?Math.round(_sc.rugking.y):null), drT:(_sc._drT0?Math.round(_sc.time.now-_sc._drT0):null), bossInv:(_sc.rugking&&_sc.rugking.active?!!_sc.rugking.invuln:null), princess:!!(_sc.princess&&_sc.princess.active), reserve:(_sc.reserve||null)}; }catch(e){ return {err:String(e)}; } };
          // LAB-only physics-health probe: counts NaN-position/velocity bodies (a single NaN body
          // poisons Arcade's RTree broad-phase → ALL overlaps silently fail — coins, damage, etc).
          // __NQ_COINGRAB teleports the player onto a coin so a caller can confirm overlap fires.
@@ -1560,7 +1597,13 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var inGap=function(x){ for(var j=0;j<gaps.length;j++){ if(x>=gaps[j][0]&&x<gaps[j][1]) return true; } return false; };
     this.gaps=gaps;   // stored for overPit() — the cheap ledge guard used by ground-lane patrols
     // lunar levels lay regolith instead of the default grass-capped dirt
-    var groundKey = (def.moon && this.textures.exists('moonground')) ? 'moonground' : 'ground';
+    // FLOOR TILE per backdrop. Keyed on bgArt rather than the theme number because bgArt is what
+    // the plate actually shows, and it is what was eyeballed plate-by-plate to build this table.
+    // Grass is the EXCEPTION, not the default: it is correct on w01dusk and w07farm and nowhere
+    // else, so anything unlisted falls through to stone (the safe read for a hard floor) — a new
+    // world with a new plate then gets a neutral floor instead of grass sprouting in a vault.
+    var groundKey = this.groundKeyFor(def);
+    this.floorKey = groundKey;   // exposed via __NQ_DBG so the floor can be ASSERTED, not just eyeballed
     for(var gx=0;gx<LW;gx+=TILE){ if(!inGap(gx)){ this.platforms.create(gx+TILE/2,GY+TILE/2,groundKey); this.platforms.create(gx+TILE/2,GY+TILE/2+TILE,groundKey); } }
     // floating platforms — plat:[x,count,topY,type?]  (type defaults to brick)
     (def.plats||[]).forEach(function(pl){ var t=pl[3]||'brick'; for(var k=0;k<pl[1];k++) self.platforms.create(pl[0]+k*TILE+TILE/2,pl[2]+TILE/2,t); });
@@ -1716,14 +1759,14 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // void, respawning after a beat — so you must keep moving across a bridge, never stand still.
     this.bridgePlanks=this.physics.add.staticGroup();
     (def.planks||[]).forEach(function(bp){ var count=bp[1]||3;
-      for(var k=0;k<count;k++){ var m=self.bridgePlanks.create(bp[0]+k*TILE+TILE/2, GY+TILE/2, 'ground').setDepth(4);
+      for(var k=0;k<count;k++){ var m=self.bridgePlanks.create(bp[0]+k*TILE+TILE/2, GY+TILE/2, groundKey).setDepth(4);
         m.setTint(0x8a5a2b); m.homeY=m.y; m.bpState='idle'; m.bpAt=0; m.refreshBody(); } });
     // THE DEPEG — "stable" ground that isn't. peg:[startX, countTiles] = a run of stablecoin-mint
     // ground tiles. On a global cycle they all DEPEG at once (telegraphed flash → drop into the void
     // → restore), so you time your crossing to the peg's rhythm. Stand on one when it breaks = fall.
     this.pegs=this.physics.add.staticGroup();
     (def.pegs||[]).forEach(function(pg){ var count=pg[1]||3;
-      for(var k=0;k<count;k++){ var m=self.pegs.create(pg[0]+k*TILE+TILE/2, GY+TILE/2, 'ground').setDepth(4);
+      for(var k=0;k<count;k++){ var m=self.pegs.create(pg[0]+k*TILE+TILE/2, GY+TILE/2, groundKey).setDepth(4);
         m.setTint(0x2ee6a0); m.homeY=m.y; m.refreshBody(); } });
     this.depegPhase='stable'; this.depegNextAt=this.time.now+4200;   // first depeg has a grace period
     // THE YIELD FARM — compounding LIFT platforms. yield:[x, baseY?, steps?] = a platform that
@@ -2442,6 +2485,22 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
        shockwave skidding along the floor both ways — jump it. Everything scales with HP, so the
        fight visibly escalates. He is never made invulnerable, so he stays stompable throughout
        (the state tester asserts that). ---------- */
+  /* Which floor tile a level uses. See the note at the groundKey call site: grass is the
+     exception (two plates), so the fallback is stone, not grass. Falls back safely if a texture
+     is somehow missing, so a bad key can never leave the level with no floor. */
+  groundKeyFor:function(def){
+    var key='stoneground';
+    if(def.moon) key='moonground';
+    else if(def.ground) key=def.ground;                 // per-level override, if one is ever needed
+    else {
+      var art=def.bgArt||'';
+      if(art==='w01dusk'||art==='w07farm') key='ground';            // the only two grassy plates
+      else if(art==='w02desert') key='sandground';
+      else if(art==='w15diamond'||art==='w13pod') key='iceground';
+    }
+    return this.textures.exists(key) ? key : 'ground';
+  },
+
   rugKingTick:function(now,p){
     var k=this.rugking; if(!k||!k.active||k.invuln) return;
     if(k._bs==null) k._bs=k.scaleX;                       // capture the spawn scale once
