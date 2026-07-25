@@ -36,9 +36,28 @@ const path = require('path');
 
 const SRC = path.join(__dirname, '..', 'src', 'game_logic.js');
 const TILE = 24, H = 270, GY = H - TILE;            // mirrors game constants
+// Reach limits, quoted at the DEFAULT gravity. A level may set its own `grav` (world 21 is the
+// moon at 540), and both jump height and jump distance go as ~1/gravity: lower gravity means a
+// longer time aloft, and horizontal speed is unchanged, so the arc grows in both axes by the same
+// factor. scaleFor() below applies that, per level. Without it every lunar ledge and crater would
+// be measured against earth physics and the checker would invent F1/F3 failures for jumps that
+// are comfortable in play — the over-strict direction, but still a lie.
+const GRAV_DEF = 900;                                // matches physics.arcade.gravity.y in game_logic
 const SAFE_GAP = 200;                                // hard cap without a bridge (max single ~229)
 const WARN_GAP = 168;                                // comfortable cap
 const JUMP_H = 103, DJUMP_H = 205;                   // single / double jump rise
+// Per-level reach numbers. Capped at 2x: past that the scaling stops predicting real play
+// (terminal velocity, level bounds and the jump-cut in update() all start to dominate), so a
+// wildly low gravity must not silently unlock unbounded gaps.
+function reachFor(lv) {
+  const g = Number(lv && lv.grav) > 0 ? Number(lv.grav) : GRAV_DEF;
+  const k = Math.min(2, GRAV_DEF / g);
+  return {
+    k,
+    SAFE_GAP: Math.round(SAFE_GAP * k), WARN_GAP: Math.round(WARN_GAP * k),
+    JUMP_H: Math.round(JUMP_H * k), DJUMP_H: Math.round(DJUMP_H * k),
+  };
+}
 const SPAWN_RUNWAY = 380;                            // no pit before this x
 
 // Parses BOTH level formats in game_logic.js:
@@ -74,6 +93,9 @@ function check(lv) {
   const fails = [], warns = [];
   const gaps = lv.gaps || [], plats = lv.plats || [];
   const platSpan = p => ({ x1: p[0], x2: p[0] + p[1] * TILE, top: p[2] });
+  // Per-level reach, scaled by this level's gravity (see reachFor). These deliberately
+  // shadow the module-level defaults so every rule below reads the level-correct number.
+  const { k: REACH_K, SAFE_GAP, WARN_GAP, JUMP_H, DJUMP_H } = reachFor(lv);
 
   // F1/W1: gap width vs jump range (a platform overlapping the gap span at a sane height bridges it)
   // footing = anything you can land/run on that overlaps the gap span: a platform, a plank run,
@@ -89,7 +111,7 @@ function check(lv) {
   gaps.forEach(g => {
     const wpx = g[1] - g[0];
     if (wpx > SAFE_GAP) {
-      if (!footingOver(g)) fails.push(`F1 gap ${g[0]}-${g[1]} is ${wpx}px (> ${SAFE_GAP}) with no footing (platform/plank/pumpdump/mover) over it`);
+      if (!footingOver(g)) fails.push(`F1 gap ${g[0]}-${g[1]} is ${wpx}px (> ${SAFE_GAP}${REACH_K !== 1 ? `, low-grav scaled x${REACH_K.toFixed(2)}` : ''}) with no footing (platform/plank/pumpdump/mover) over it`);
     } else if (wpx > WARN_GAP && !footingOver(g)) {
       // owner rule 2026-07-23: a wide-ish gap with nothing over it is a bare leap — flag it.
       warns.push(`W1 gap ${g[0]}-${g[1]} is ${wpx}px and BARE — add footing over it or narrow it`);
@@ -121,7 +143,7 @@ function check(lv) {
     const rise = GY - s.top;
     if (rise > DJUMP_H) {
       const ladder = plats.map(platSpan).some(o => o !== s && Math.abs(o.x1 - s.x1) < 260 && o.top > s.top && (o.top - s.top) <= DJUMP_H);
-      if (!ladder) fails.push(`F3 plat at x=${p[0]} topY=${s.top} is ${rise}px up (> double jump ${DJUMP_H}) with no ladder platform`);
+      if (!ladder) fails.push(`F3 plat at x=${p[0]} topY=${s.top} is ${rise}px up (> double jump ${DJUMP_H}${REACH_K !== 1 ? `, low-grav scaled x${REACH_K.toFixed(2)}` : ''}) with no ladder platform`);
     }
   });
 
