@@ -1429,7 +1429,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // Drain gamepad edge-latches left over from menu navigation: the START press that launched
     // this level also set pauseEdge (and anyBtnEdge/jumpEdge), so the first update() would
     // instantly pause the fresh run / fire a phantom buffered jump at spawn.
-    try{ if(window.__NQ_PAD){ window.__NQ_PAD.pauseEdge=false; window.__NQ_PAD.anyBtnEdge=false; window.__NQ_PAD.jumpEdge=false; window.__NQ_PAD.useEdge=false; } }catch(e){}
+    try{ if(window.__NQ_PAD){ window.__NQ_PAD.pauseEdge=false; window.__NQ_PAD.anyBtnEdge=false; window.__NQ_PAD.jumpEdge=false; window.__NQ_PAD.useEdge=false; window.__NQ_PAD.selEdge=false; } }catch(e){}
     // DOM-overlay hooks (feedback modal pauses the game while a tester types; reassigned each
     // level so they always point at the LIVE scene instance)
     try{ var _sc=this; window.__NQ_PAUSE=function(){ if(!_sc.over&&!_sc.paused){ _sc.pauseGame(false); return true; } return false; };
@@ -2327,15 +2327,28 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.flash) this.flash('BANKED: '+RESERVE_ITEMS[item].label,'#3dff6e'); try{ SFX.coin(); }catch(e){}
     return true;
   },
-  useReserve:function(slot){   // spend a specific slot (default: the first filled one)
+  /* Move the controller's inventory selection to the next FILLED slot. Keyboard (1/2/3) and
+     touch (tap a slot) always addressed slots directly; a controller had no way to, so USE could
+     only ever spend slot 1 -- with [shield, vial, star] you could not reach the star without
+     burning the other two. Wraps, and no-ops on 0-1 items so a press is never confusing. */
+  cycleReserve:function(){
+    if(this.over||this.paused||!this.reserve||this.reserve.length<2) return;
+    this.reserveSel=((this.reserveSel||0)+1)%this.reserve.length;
+    try{ _tone(660,70,0.05,'square',0.03); }catch(e){}
+    this.updateReserveHud();
+  },
+  useReserve:function(slot){   // spend a specific slot (default: the SELECTED one)
     if(this.over||this.paused||!this.reserve||!this.reserve.length) return;
-    var idx=(typeof slot==='number'&&slot>=0&&slot<this.reserve.length)?slot:0;
+    if(this.reserveSel==null||this.reserveSel>=this.reserve.length) this.reserveSel=0;
+    var idx=(typeof slot==='number'&&slot>=0&&slot<this.reserve.length)?slot:this.reserveSel;
     var id=this.reserve[idx], it=RESERVE_ITEMS[id];
     if(!it){ this.reserve.splice(idx,1); this.saveReserve(); this.updateReserveHud(); return; }
     if(id==='vial' && this.lives>=3){ this.flash('HEARTS ALREADY FULL','#ff9ec0'); return; }   // don't waste a full-heal at full HP
     if(id==='shield' && this.geekShield){ this.flash('SHIELD ALREADY UP','#2ee6c0'); return; }
     it.use(this); try{ SFX.power(); }catch(e){} this.flash(it.label+'!','#ffd23f'); this.cameras.main.flash(120,255,210,80);
-    this.reserve.splice(idx,1); this.saveReserve(); this.updateReserveHud();
+    this.reserve.splice(idx,1);
+    if(this.reserveSel>=this.reserve.length) this.reserveSel=0;   // selection must stay on a real slot
+    this.saveReserve(); this.updateReserveHud();
     this.syncRewards();   // a slot just freed — pull the next queued reward if any
   },
   updateReserveHud:function(){
@@ -2344,7 +2357,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       var id=this.reserve&&this.reserve[si], box=this.reserveBoxes[si], ic=this.reserveIcons[si], hn=this.reserveHints[si];
       if(id && RESERVE_ITEMS[id]){ var it=RESERVE_ITEMS[id];
         ic.setTexture(it.icon); ic.setScale(14/ic.height).setAlpha(1).clearTint();
-        box.setStrokeStyle(1.5,0xffd23f); hn.setAlpha(1);
+        var _sel=(this.reserve.length>1 && si===(this.reserveSel||0));
+        box.setStrokeStyle(_sel?2.5:1.5, _sel?0xffffff:0xffd23f); hn.setAlpha(1);
         if(!this._reservePulse[si]){ this._reservePulse[si]=this.tweens.add({targets:box,scaleX:1.14,scaleY:1.14,duration:520,yoyo:true,repeat:-1,ease:'Sine.inOut'}); }
       } else {
         ic.setAlpha(0); hn.setAlpha(0.3); box.setStrokeStyle(1.5,0x3a3456);
@@ -4029,7 +4043,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var _padP=(typeof window!=='undefined')?window.__NQ_PAD:null, _padEdge=!!(_padP&&_padP.jumpEdge);
     if((jump&&!this.prevJump) || _padEdge) this.jumpBufferAt=now;
     if(_padP&&_padEdge) _padP.jumpEdge=false;   // consume
-    if(_padP&&_padP.useEdge){ _padP.useEdge=false; this.useReserve(); }   // gamepad L2/R2: spend the first inventory slot
+    if(_padP&&_padP.selEdge){ _padP.selEdge=false; this.cycleReserve(); }   // gamepad SELECT: pick a slot
+    if(_padP&&_padP.useEdge){ _padP.useEdge=false; this.useReserve(); }     // gamepad L2/R2: spend the SELECTED slot
     this.prevJump=rawJump;
     if(now-this.jumpBufferAt<130 && this.jumpsLeft>0){
       p.setVelocityY(now<this.bullUntil?-540:-430); this.jumpsLeft--; this.isJumping=true; this.jumpBufferAt=-9999; SFX.jump();   // bull market = mega jump
@@ -4683,7 +4698,7 @@ var Controls=new Phaser.Class({ Extends:Phaser.Scene,
       {fontFamily:UIFONT,resolution:UIRES,fontSize:'12px',color:'#eef2ff',align:'center',lineSpacing:1}).setOrigin(.5,0);
     // CONTROLLER row (USB gamepad) — full width; turns green the instant a pad is detected,
     // so a tester can confirm it works right here. Live status is refreshed in update().
-    this.padLine=this.add.text(cx,110,'🎮 USB CONTROLLER — plug in & press a button\nD-pad move · A = jump · B = throw · Down = duck',
+    this.padLine=this.add.text(cx,110,'🎮 USB CONTROLLER — plug in & press a button\nD-pad move · A = jump · B = throw · Down = duck\nL2/R2 = use item · SELECT = pick which · START = pause',
       {fontFamily:UIFONT,resolution:UIRES,fontSize:'12px',color:'#b6bfe0',align:'center',lineSpacing:1,wordWrap:{width:W-40}}).setOrigin(.5,0);
     // the goal / core rules (full width)
     this.add.text(cx,148,'THE GOAL',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffd23f'}).setOrigin(.5);
@@ -4704,8 +4719,8 @@ var Controls=new Phaser.Class({ Extends:Phaser.Scene,
     var on=false, press=false;
     try{ var ps=(navigator.getGamepads?navigator.getGamepads():[]); for(var i=0;i<ps.length;i++){ var gp=ps[i]; if(!gp) continue; on=true;
       var B=gp.buttons||[]; if((B[0]&&B[0].pressed)||(B[1]&&B[1].pressed)||(B[8]&&B[8].pressed)||(B[9]&&B[9].pressed)) press=true; } }catch(e){}
-    if(this.padLine){ var want=on?'🎮 CONTROLLER CONNECTED ✓\nD-pad move · A = jump · B = throw · Down = duck'
-                                  :'🎮 USB CONTROLLER — plug in & press a button\nD-pad move · A = jump · B = throw · Down = duck';
+    if(this.padLine){ var want=on?'🎮 CONTROLLER CONNECTED ✓\nD-pad move · A = jump · B = throw · Down = duck\nL2/R2 = use item · SELECT = pick which · START = pause'
+                                  :'🎮 USB CONTROLLER — plug in & press a button\nD-pad move · A = jump · B = throw · Down = duck\nL2/R2 = use item · SELECT = pick which · START = pause';
       if(this.padLine.text!==want) this.padLine.setText(want).setColor(on?'#3dff6e':'#b6bfe0'); }
     if(press && !this._pp && this.time.now-this.t0>1200) this.go();   // controller button (after grace) → start
     this._pp=press;
@@ -5242,6 +5257,7 @@ if(typeof document!=='undefined'){ (function(){
 if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.getGamepads){ (function(){
   window.__NQ_PAD = window.__NQ_PAD || {left:false,right:false,jump:false,down:false,throw:false};
   if(window.__NQ_PAD.jumpEdge===undefined) window.__NQ_PAD.jumpEdge=false;   // one-shot jump-press latch (consumed by the game)
+  if(window.__NQ_PAD.selEdge===undefined) window.__NQ_PAD.selEdge=false;     // one-shot inventory-cycle latch
   window.__NQ_GAMEPAD_ACTIVE = false;
   var DEBUG = /[?&#]gpdebug=1/i.test((location.search||'')+(location.hash||''));
   var AUTOREMAP = /[?&#]remap=1/i.test((location.search||'')+(location.hash||''));
@@ -5250,7 +5266,7 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
   // JUMP = a bottom/top face button (+ d-pad up); THROW = the OTHER face buttons + shoulders.
   function loadMap(){ try{ var m=JSON.parse(localStorage.getItem('nqPadMap')||'null'); if(m&&Array.isArray(m.jump)&&Array.isArray(m.throw)&&m.jump.length&&m.throw.length) return m; }catch(e){} return null; }
   var padMap = loadMap();
-  var DEF_JUMP=[0,3], DEF_THROW=[1,2,4,5], DEF_USE=[6,7];   // L2/R2 triggers = USE INVENTORY ITEM (carved out of throw 2026-07-23 — face+shoulder buttons still throw)
+  var DEF_JUMP=[0,3], DEF_THROW=[1,2,4,5], DEF_USE=[6,7];   // L2/R2 triggers = USE INVENTORY ITEM (carved out of throw 2026-07-23 — face+shoulder buttons still throw). SELECT (8) CYCLES which slot USE spends (2026-07-25); START (9) + the A+B hold still pause.
 
   function ensureUI(){
     if(uiReady || typeof document==='undefined') return; uiReady=true;
@@ -5345,7 +5361,7 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
   var padConnected=false;   // latched by connect/disconnect so a single empty getGamepads() frame can't flicker the controller "off"
   var lastPadKey=null;      // identity of the pad we calibrated axRest against
   window.addEventListener('gamepadconnected', function(e){ padConnected=true; axRest=null; ensureUI(); if(dotEl)dotEl.style.display='block'; if(btnEl)btnEl.style.display='block';
-    toast('🎮 Controller connected — START (or hold A+B) pauses'); if(AUTOREMAP) setTimeout(startRemap,700);
+    toast('🎮 Controller connected — L2/R2 use an item · SELECT picks which · START pauses'); if(AUTOREMAP) setTimeout(startRemap,700);
     // If the ONLY things enumerated look like non-controllers (a headset dongle, a receiver),
     // say so. Otherwise the player is left with a dead pad and no idea why -- which is exactly
     // how the Razer BlackShark case burned an afternoon.
@@ -5363,7 +5379,7 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
   // UP folds into JUMP, a stuck axis keeps JUMP true forever so the jump button never makes a fresh
   // rising edge → "pressing right + jump sometimes doesn't jump." Baseline each axis at connect and
   // only treat an axis that RESTS near centre (a real stick / d-pad-on-axis) as a direction source.
-  var axRest=null, prevJb=false, prevUp=false, prevUseB=false, prevStart=false, prevAny=false, comboAt=0, comboFired=false;
+  var axRest=null, prevJb=false, prevUp=false, prevUseB=false, prevStart=false, prevSelB=false, prevAny=false, comboAt=0, comboFired=false;
   function axUsable(i){ return axRest && Math.abs(axRest[i]||0) < 0.35; }
   // POV HAT SUPPORT. Many cheap wireless USB pads (dongle receivers especially) report a
   // NON-STANDARD mapping with the d-pad on a single "hat" axis instead of buttons 12-15 — and
@@ -5425,10 +5441,17 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
     // USB clones often report Start at index 6/7 (inside the default THROW set), so binding is
     // the reliable path on those pads.
     var pauseBind = (padMap && Array.isArray(padMap.pause) && padMap.pause.length) ? padMap.pause : null;
+    // SELECT (8) now CYCLES the inventory selection instead of pausing -- the classic retro
+    // convention, and the only way a controller could reach slots 2 and 3 at all: USE was calling
+    // useReserve() with no argument, which always spends slot 1. Pause is unaffected in practice,
+    // it still has START (9) and the A+B hold. A custom pause bind (padMap.pause) still wins.
     var startBtn = pauseBind ? anyOf(pauseBind)
-                 : ((jb.indexOf(9)<0 && tb.indexOf(9)<0 && pr(9)) || (jb.indexOf(8)<0 && tb.indexOf(8)<0 && pr(8)));
+                 : (jb.indexOf(9)<0 && tb.indexOf(9)<0 && pr(9));
     if(startBtn && !prevStart) P.pauseEdge=true;
     prevStart=startBtn;
+    var selBtn = (!pauseBind || pauseBind.indexOf(8)<0) && jb.indexOf(8)<0 && tb.indexOf(8)<0 && pr(8);
+    if(selBtn && !prevSelB) P.selEdge=true;
+    prevSelB=selBtn;
     if(jumpBtn && throwB){ if(!comboAt) comboAt=Date.now(); if(!comboFired && Date.now()-comboAt>=900){ comboFired=true; P.pauseEdge=true; } }
     else { comboAt=0; comboFired=false; }
     var anyDown=false; for(var _b=0;_b<B.length;_b++){ if(pr(_b)){ anyDown=true; break; } }
