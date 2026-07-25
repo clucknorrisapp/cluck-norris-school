@@ -3323,7 +3323,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(!lab && !nqWorldAllowed(LEVELS[next])){ this.scene.start('VipPitch',{locked:true,score:this.score}); return; }
     if(typeof WORLD_CLEARS!=='undefined' && WORLD_CLEARS[next]) this.scene.start('WorldClear',{next:next,score:this.score,lab:lab});   // world boundary: celebration + travel page -> Briefing
     else if(typeof BRIEFINGS!=='undefined' && BRIEFINGS[next]) this.scene.start('Briefing',{next:next,score:this.score,lab:lab});
-    else this.scene.start('Game',{level:next,score:this.score,lives:3,lab:lab}); },
+    // ordinary level -> the short LevelClear beat (score + a Normie Nation line), then play on.
+    else this.scene.start('LevelClear',{next:next,score:this.score,lab:lab,cleared:(this.def&&this.def.name)||''}); },
 
   /* ---------- WORMHOLE boss (burrow / erupt; weak point = the blue back shards) ---------- */
   startWormBoss:function(){
@@ -4455,6 +4456,16 @@ var WorldClear=new Phaser.Class({ Extends:Phaser.Scene,
     this.p2.add(this.add.text(cx,ty+8,'CRYPTO TERM: '+cfg.term.name,{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffd23f',align:'center',wordWrap:{width:W-104}}).setOrigin(.5));
     this.p2.add(this.add.text(cx,ty+20,cfg.term.def,{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#d6d1ec',align:'center',lineSpacing:1,wordWrap:{width:W-110}}).setOrigin(.5,0));
     if(cfg.nostalgia) this.p2.add(this.add.text(cx,H-68,'★ '+cfg.nostalgia+' ★',{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#8f89b8',align:'center',wordWrap:{width:W-60}}).setOrigin(.5));
+    // NORMIE NATION strip — the world boundary is the moment a player is most bought-in, so it is
+    // where the community push belongs. Identity + where to get it; no perks, no thresholds.
+    // Offset RIGHT of the running Normie (he sits at x=88) rather than centred full-width: the
+    // first pass spanned the whole page at H-40 and buried both the runner and the scrolling
+    // hills, which are the only motion on this page. Compact `short` copy so it stays one or two
+    // lines and never reaches down into the TAP TO CONTINUE row.
+    var _nn=nqNationNext(), _nx=300;
+    this.p2.add(this.add.rectangle(_nx,H-44,330,30,0x120f28,0.9).setStrokeStyle(1,0xffd23f));
+    this.p2.add(this.add.text(_nx,H-54,'★ '+_nn.head+' ★',{fontFamily:'"Press Start 2P"',fontSize:'7px',color:'#ffd23f',align:'center',wordWrap:{width:310}}).setOrigin(.5));
+    this.p2.add(this.add.text(_nx,H-46,(_nn.short||_nn.body),{fontFamily:UIFONT,resolution:UIRES,fontSize:'9px',color:'#e6e1ff',align:'center',lineSpacing:1,wordWrap:{width:314}}).setOrigin(.5,0));
     this.drawHills();
     this.cont=this.add.text(cx,H-11,'TAP TO CONTINUE  ▶',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#3dff6e'}).setOrigin(.5).setDepth(40);
     var adv=function(){ if(self.done) return; if(self.phase===0){ self.t0=self.time.now-3300; } else { self.goNext(); } };
@@ -4734,6 +4745,83 @@ var Briefing=new Phaser.Class({ Extends:Phaser.Scene,
   }
 });
 
+/* ---------- NORMIE NATION: the community push carried by the between-level and
+   between-world screens. ⚠️ Copy rule (owner's strategy call): NQ token-gating is TESTING ONLY
+   and nothing is agreed with the NORMIE team, so NOT ONE of these lines may promise a perk, an
+   unlock, a reward, or a hold threshold. Identity and where-to-get-it only — same discipline as
+   the VipPitch card, which reads "hold amount: TBD — testing" on purpose. ---------- */
+var NORMIE_NATION = [
+  { head:'WELCOME TO NORMIE NATION', body:'You are not grinding alone. Every normie who ever got rugged, faded, or laughed at is running this level with you.', short:'every rugged, faded, laughed-at normie runs with you.' },
+  { head:'NORMIE NATION', body:'$NORMIE is the community coin behind Normie Quest — built by normies, for normies.', short:'$NORMIE — the community coin behind the Quest.' },
+  { head:'ONE OF US', body:'No suits. No insiders. No VC allocation. Just a whole nation of normies learning the game the hard way.', short:'no suits, no insiders, no VC allocation.' },
+  { head:'NORMIE NATION', body:'The Quest is free to start because the community wanted it that way. Pass it on — bring a normie.', short:'free to start, because the community wanted it that way.' },
+  { head:'FLY THE FLAG', body:'Every normie who holds the line makes the next one braver. That is the whole strategy.', short:'every normie who holds the line makes the next one braver.' },
+  { head:'NORMIE NATION', body:'Cluck Norris built the school. The Nation built the fight. $NORMIE is the flag you plant.', short:'$NORMIE is the flag you plant.' },
+  { head:'BRING A NORMIE', body:'The fastest way to grow the Nation is to hand this game to someone who just got rugged.', short:'hand this game to someone who just got rugged.' },
+  { head:'NORMIE NATION', body:'Rugged before? Good. That is the entry requirement. Welcome home.', short:'rugged before? that is the entry requirement.' },
+];
+// Rotate per tab session so a long run does not repeat the same line, and a new session does not
+// always open on the same one.
+function nqNationNext(){
+  var i=0;
+  try{ i=parseInt(sessionStorage.getItem('nqNationI')||'0',10)||0; sessionStorage.setItem('nqNationI',String((i+1)%NORMIE_NATION.length)); }
+  catch(e){ i=(Math.floor(Date.now()/1000))%NORMIE_NATION.length; }
+  return NORMIE_NATION[i%NORMIE_NATION.length];
+}
+// Shared buy path — the in-game Jupiter widget when it exists, else a direct swap link.
+// Duplicated intentionally as a free function so the scenes below do not depend on VipPitch.
+function nqBuyNormie(){
+  try{ if(typeof window.__NQ_OPENPREMIUM==='function'){ window.__NQ_OPENPREMIUM(); return; } }catch(e){}
+  var mint=(window.__NQ_NORMIE_MINT||NQ_NORMIE_MINT_DEFAULT);
+  try{ window.open('https://jup.ag/swap/SOL-'+encodeURIComponent(mint),'_blank'); }catch(e){}
+}
+
+/* ---------- LevelClear: the beat between ORDINARY levels (world boundaries keep their richer
+   WorldClear -> Briefing flow). Deliberately SHORT and skippable — a tap, any key or any pad
+   button advances immediately, and it auto-advances on its own, so it can never soft-lock and
+   never becomes a toll gate on a good run. ---------- */
+var LevelClear=new Phaser.Class({ Extends:Phaser.Scene,
+  initialize:function(){ Phaser.Scene.call(this,{key:'LevelClear'}); },
+  init:function(d){ d=d||{}; this.nextLevel=d.next||0; this.score=d.score||0; this.lab=d.lab; this.cleared=d.cleared||''; },
+  create:function(){
+    var self=this, cx=W/2; this.done=false; this.t0=0;
+    this.cameras.main.setZoom(2).centerOn(W/2,H/2);
+    var n=nqNationNext();
+    var g=this.add.graphics(); g.fillStyle(0x0d0b1e,1); g.fillRect(0,0,W,H);
+    g.fillStyle(0x151030,1); g.fillRect(0,0,W,26); g.fillRect(0,H-20,W,20);
+    this.add.text(cx,13,'LEVEL CLEAR',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
+    if(this.cleared) this.add.text(cx,36,this.cleared,{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#8f89b8'}).setOrigin(.5);
+    this.add.text(cx,54,'SCORE  '+this.score,{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#ffffff'}).setOrigin(.5);
+    // a small marching Normie so the beat feels alive rather than a static card
+    this.runner=this.add.image(cx,96,'nrun1'); this.runner.setScale(44/this.runner.height);
+    if(this.renderer.type===Phaser.WEBGL){ try{ this.runner.postFX.addGlow(0xffd23f,1,0,false,0.1,12); }catch(e){} }
+    // --- the Nation strip ---
+    this.add.rectangle(cx,158,W-40,60,0x120f28,0.9).setStrokeStyle(2,0xffd23f);
+    this.add.text(cx,138,'★ '+n.head+' ★',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffd23f',align:'center',wordWrap:{width:W-56}}).setOrigin(.5);
+    this.add.text(cx,150,n.body,{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#e6e1ff',align:'center',lineSpacing:1,wordWrap:{width:W-60}}).setOrigin(.5,0);
+    var buy=this.add.rectangle(cx,200,190,18,0xffd23f,1).setStrokeStyle(2,0xffffff,0.18).setInteractive({useHandCursor:true});
+    this.add.text(cx,200,'🪙  GRAB $NORMIE',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#0a0813'}).setOrigin(.5).setDepth(1);
+    buy.on('pointerover',function(){ buy.setScale(1.05); }); buy.on('pointerout',function(){ buy.setScale(1); });
+    buy.on('pointerup',function(){ self._buyOpen=true; nqBuyNormie(); });   // opening the widget must not also advance
+    this.cont=this.add.text(cx,H-10,'TAP TO CONTINUE  ▶',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#3dff6e'}).setOrigin(.5);
+    var adv=function(){ if(self.done||self._buyOpen){ self._buyOpen=false; return; } self.go(); };
+    this.input.on('pointerdown',function(p){ if(buy.getBounds().contains(p.worldX,p.worldY)) return; adv(); });
+    this.input.keyboard.on('keydown',adv);
+    padAdvance(this, adv);
+  },
+  go:function(){ if(this.done) return; this.done=true; SFX.power();
+    this.scene.start('Game',{level:this.nextLevel,score:this.score,lives:3,lab:this.lab}); },
+  update:function(){
+    if(this.done) return;
+    if(!this.t0){ this.t0=this.time.now; return; }
+    if(this.runner){ var k=(Math.floor(this.time.now/110)%2)?'nrun2':'nrun1';
+      if(this.runner.texture.key!==k) this.runner.setTexture(k).setScale(44/this.runner.height);
+      this.runner.y=96+Math.sin(this.time.now/90)*2; }
+    if(this.cont) this.cont.setAlpha(0.4+0.6*Math.abs(Math.sin(this.time.now/300)));
+    if(this.time.now-this.t0>4200) this.go();   // auto-advance: a between-level beat, not a toll gate
+  }
+});
+
 /* ---------- VipPitch: the FREE-player upsell (skippable). Teased in the first rounds and shown
    at the free wall. Copy is SOFT per the owner's call — the hold amount reads "TBD (testing)", no
    promised gating number (NQ gating terms aren't finalized with the NORMIE team). Reuses the
@@ -4800,7 +4888,7 @@ var NQGAME=new Phaser.Game({
   type:Phaser.AUTO, parent:'screen', width:W*2, height:H*2, pixelArt:true, backgroundColor:'#0a0813', roundPixels:true,
   scale:{ mode:Phaser.Scale.FIT, autoCenter:Phaser.Scale.CENTER_BOTH },
   physics:{ default:'arcade', arcade:{ gravity:{y:900}, debug:false } },
-  scene:[Boot,Title,LevelSelect,Controls,Gate,Game,Over,Win,WorldClear,Briefing,VipPitch]
+  scene:[Boot,Title,LevelSelect,Controls,Gate,Game,Over,Win,WorldClear,Briefing,VipPitch,LevelClear]
 });
 // Global "jump to LEVEL SELECT" hook — works from ANY scene (title, game, over, win), so the
 // reliable DOM "≡ Levels" button is never a dead end. Stops whatever's running, then starts it.
@@ -4832,6 +4920,15 @@ try{ if(typeof window!=='undefined' && window.__NQ_SETUP){
     },250);
   } else if(_pw){ try{ sessionStorage.removeItem('nqPendingWarp'); }catch(e){} }
 } }catch(e){}
+// LAB toolkit: start any scene by key, so the harness can bring up an interstitial directly
+// instead of having to PLAY to it. The whole file is an IIFE, so NQGAME is private and there was
+// no way to reach LevelClear / WorldClear / VipPitch from a test at all — those screens could
+// only be eyeballed by hand, which is how layout bugs on a 270px-tall canvas get missed.
+// Setup-lane only: a no-op outside the lab lane, so it adds nothing to the shipped game.
+try{ if(typeof window!=='undefined') window.__NQ_SCENE_START=function(key,data){ try{
+  if(!window.__NQ_SETUP) return false;
+  NQGAME.scene.start(key, data||{}); return true;
+}catch(e){ return false; } }; }catch(e){}
 // LAB toolkit: scene observability for the headless test harness — active scene keys + the
 // visible text objects (so a script can assert "WorldClear is showing THE RUG KING FALLS!").
 // Setup-lane only, read-only.

@@ -20,7 +20,7 @@ matters, and claims should match the code.
 > docs as ecosystem/collaboration proof (a large recent investor came via the NORMIE ecosystem),
 > but the game URL stays UNLINKED/hidden and **all token-gating in NQ (CLKN 2M tier, NORMIE
 > holder perks, MEGA WHALE gate) is TESTING ONLY — no agreement with the NORMIE team yet on
-> NORMIE-vs-CLKN access/rewards, so never promise gating terms on any public surface.**
+> NORMIE-vs-CLKN access/rewards, so never promise gating terms on any public surface.** The in-game copy that pushes $NORMIE lives in **`NORMIE_NATION`** (game_logic.js) — the rotating lines on the `LevelClear` beat between ordinary levels and the `WorldClear` traveling page — plus the `VipPitch` card, which reads "hold amount: TBD — testing" on purpose. All of it is identity/where-to-buy only: **no perks, no unlocks, no rewards, no hold thresholds.** If terms are ever agreed with the NORMIE team, `NORMIE_NATION` is one array to update.
 > **(3) Audit cleanup is greenlit** ("feel free to clean up things as we need to") — see
 > `docs/BRAND_AUDIT_2026-07-18.md` §7 for which decisions remain open (payment rail, slots
 > truth, exam bar, Rose merge, GA4, monitors split, /bags).

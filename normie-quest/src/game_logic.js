@@ -4358,10 +4358,14 @@ var WorldClear=new Phaser.Class({ Extends:Phaser.Scene,
     if(cfg.nostalgia) this.p2.add(this.add.text(cx,H-68,'★ '+cfg.nostalgia+' ★',{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#8f89b8',align:'center',wordWrap:{width:W-60}}).setOrigin(.5));
     // NORMIE NATION strip — the world boundary is the moment a player is most bought-in, so it is
     // where the community push belongs. Identity + where to get it; no perks, no thresholds.
-    var _nn=nqNationNext();
-    this.p2.add(this.add.rectangle(cx,H-40,W-44,30,0x120f28,0.88).setStrokeStyle(1,0xffd23f));
-    this.p2.add(this.add.text(cx,H-50,'★ '+_nn.head+' ★',{fontFamily:'"Press Start 2P"',fontSize:'7px',color:'#ffd23f',align:'center',wordWrap:{width:W-60}}).setOrigin(.5));
-    this.p2.add(this.add.text(cx,H-42,_nn.body,{fontFamily:UIFONT,resolution:UIRES,fontSize:'9px',color:'#e6e1ff',align:'center',lineSpacing:1,wordWrap:{width:W-64}}).setOrigin(.5,0));
+    // Offset RIGHT of the running Normie (he sits at x=88) rather than centred full-width: the
+    // first pass spanned the whole page at H-40 and buried both the runner and the scrolling
+    // hills, which are the only motion on this page. Compact `short` copy so it stays one or two
+    // lines and never reaches down into the TAP TO CONTINUE row.
+    var _nn=nqNationNext(), _nx=300;
+    this.p2.add(this.add.rectangle(_nx,H-44,330,30,0x120f28,0.9).setStrokeStyle(1,0xffd23f));
+    this.p2.add(this.add.text(_nx,H-54,'★ '+_nn.head+' ★',{fontFamily:'"Press Start 2P"',fontSize:'7px',color:'#ffd23f',align:'center',wordWrap:{width:310}}).setOrigin(.5));
+    this.p2.add(this.add.text(_nx,H-46,(_nn.short||_nn.body),{fontFamily:UIFONT,resolution:UIRES,fontSize:'9px',color:'#e6e1ff',align:'center',lineSpacing:1,wordWrap:{width:314}}).setOrigin(.5,0));
     this.drawHills();
     this.cont=this.add.text(cx,H-11,'TAP TO CONTINUE  ▶',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#3dff6e'}).setOrigin(.5).setDepth(40);
     var adv=function(){ if(self.done) return; if(self.phase===0){ self.t0=self.time.now-3300; } else { self.goNext(); } };
@@ -4647,14 +4651,14 @@ var Briefing=new Phaser.Class({ Extends:Phaser.Scene,
    unlock, a reward, or a hold threshold. Identity and where-to-get-it only — same discipline as
    the VipPitch card, which reads "hold amount: TBD — testing" on purpose. ---------- */
 var NORMIE_NATION = [
-  { head:'WELCOME TO NORMIE NATION', body:'You are not grinding alone. Every normie who ever got rugged, faded, or laughed at is running this level with you.' },
-  { head:'NORMIE NATION', body:'$NORMIE is the community coin behind Normie Quest — built by normies, for normies.' },
-  { head:'ONE OF US', body:'No suits. No insiders. No VC allocation. Just a whole nation of normies learning the game the hard way.' },
-  { head:'NORMIE NATION', body:'The Quest is free to start because the community wanted it that way. Pass it on — bring a normie.' },
-  { head:'FLY THE FLAG', body:'Every normie who holds the line makes the next one braver. That is the whole strategy.' },
-  { head:'NORMIE NATION', body:'Cluck Norris built the school. The Nation built the fight. $NORMIE is the flag you plant.' },
-  { head:'BRING A NORMIE', body:'The fastest way to grow the Nation is to hand this game to someone who just got rugged.' },
-  { head:'NORMIE NATION', body:'Rugged before? Good. That is the entry requirement. Welcome home.' },
+  { head:'WELCOME TO NORMIE NATION', body:'You are not grinding alone. Every normie who ever got rugged, faded, or laughed at is running this level with you.', short:'every rugged, faded, laughed-at normie runs with you.' },
+  { head:'NORMIE NATION', body:'$NORMIE is the community coin behind Normie Quest — built by normies, for normies.', short:'$NORMIE — the community coin behind the Quest.' },
+  { head:'ONE OF US', body:'No suits. No insiders. No VC allocation. Just a whole nation of normies learning the game the hard way.', short:'no suits, no insiders, no VC allocation.' },
+  { head:'NORMIE NATION', body:'The Quest is free to start because the community wanted it that way. Pass it on — bring a normie.', short:'free to start, because the community wanted it that way.' },
+  { head:'FLY THE FLAG', body:'Every normie who holds the line makes the next one braver. That is the whole strategy.', short:'every normie who holds the line makes the next one braver.' },
+  { head:'NORMIE NATION', body:'Cluck Norris built the school. The Nation built the fight. $NORMIE is the flag you plant.', short:'$NORMIE is the flag you plant.' },
+  { head:'BRING A NORMIE', body:'The fastest way to grow the Nation is to hand this game to someone who just got rugged.', short:'hand this game to someone who just got rugged.' },
+  { head:'NORMIE NATION', body:'Rugged before? Good. That is the entry requirement. Welcome home.', short:'rugged before? that is the entry requirement.' },
 ];
 // Rotate per tab session so a long run does not repeat the same line, and a new session does not
 // always open on the same one.
@@ -4816,6 +4820,15 @@ try{ if(typeof window!=='undefined' && window.__NQ_SETUP){
     },250);
   } else if(_pw){ try{ sessionStorage.removeItem('nqPendingWarp'); }catch(e){} }
 } }catch(e){}
+// LAB toolkit: start any scene by key, so the harness can bring up an interstitial directly
+// instead of having to PLAY to it. The whole file is an IIFE, so NQGAME is private and there was
+// no way to reach LevelClear / WorldClear / VipPitch from a test at all — those screens could
+// only be eyeballed by hand, which is how layout bugs on a 270px-tall canvas get missed.
+// Setup-lane only: a no-op outside the lab lane, so it adds nothing to the shipped game.
+try{ if(typeof window!=='undefined') window.__NQ_SCENE_START=function(key,data){ try{
+  if(!window.__NQ_SETUP) return false;
+  NQGAME.scene.start(key, data||{}); return true;
+}catch(e){ return false; } }; }catch(e){}
 // LAB toolkit: scene observability for the headless test harness — active scene keys + the
 // visible text objects (so a script can assert "WorldClear is showing THE RUG KING FALLS!").
 // Setup-lane only, read-only.
