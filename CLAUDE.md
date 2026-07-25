@@ -212,19 +212,19 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 > volume — infra ready). Public "0→32+" organic copy still unverified — keep it off new
 > material until retested. Remove this note when CoinGecko decides.
 
-> 🌹 **LIVE — ROSE 10% BUY SPECIAL, comp `bc_e17e8c9703` (launched 2026-07-19 19:29 UTC).**
-> ALL qualifying buyers get +10% of their cumulative $ROSE buys, INSTANT payout after the 48h
-> hold check (NOT vested). Window: **2026-07-19 19:30 UTC (3:30 PM ET, incl. the owner's 30-min
-> early-buy buffer; "official" start 4 PM ET) → 2026-07-21 22:00 UTC (Tue 6 PM ET, hard cutoff)**.
-> Mint `RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF` (OnlyRose, X @RoseKnowsAll25), board in their
-> TG chat `-1002625127458`, hourly updates (prev board auto-deleted), holdHours 48, pct mode,
-> liveHoldFilter on, no minVolSol floor (owner's call). Announced on our X
-> (post 2078924286727762012) + silent TG mirror. **CLOSE-OUT DUTIES (any session after Tue 22:00
-> UTC):** the window self-closes; then scan ALL buyers in 1784489400–1784671200 via
-> `/api/buyspecial-crosscheck` / buyersInWindowMulti, run the 48h hold check on every wallet
-> (holds must survive until ~Thu 2026-07-23 22:00 UTC), produce the payout CSV (wallet → 10% of
-> cumulative buys in $ROSE), and hand it to the OWNER to sign in the airdropper — never automate
-> the send. ST is out of credits — fine (Helius primary proven). Remove this note once paid out.
+> 🌹 **DONE — ROSE 10% BUY SPECIAL, comp `bc_e17e8c9703` (2026-07-19 → 07-21). PAID OUT
+> 2026-07-24 20:16 UTC and verified on-chain: 231,233 ROSE to 6 wallets in ONE batched tx
+> `xvEibsjbEotT6rjm…`.** Kept as the reference run for a client buy special. Mint
+> `RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF` (OnlyRose, X @RoseKnowsAll25), TG chat
+> `-1002625127458`; window 2026-07-19 19:30 → 2026-07-21 22:00 UTC, holdHours 48, pct mode,
+> liveHoldFilter on, no minVolSol floor. Announced on our X (post 2078924286727762012) + silent
+> TG mirror. **This was the FIRST real money moved by the in-page send path** (`/buyspecial` →
+> `public/airdrop-engine.js`) — batching six recipients into one tx works, proven live, so the
+> "never moved a real transaction" caveat is retired. Payout amounts were computed at full
+> precision (each wallet got slightly MORE than the floored CSV figure — in the holder's favour);
+> if you ever need whole-token payouts, floor at the source. Close-out ritual that worked, for the
+> next comp: window self-closes → scan buyers via `/api/buyspecial-crosscheck` /
+> buyersInWindowMulti → 48h hold check per wallet → **owner signs the send, never automate it.**
 
 ## Working agreement
 - ⛔ **STOP MEANS STAY STOPPED (owner rule, 2026-07-04).** When the owner says stop/pull/close
