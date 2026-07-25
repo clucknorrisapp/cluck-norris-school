@@ -22,6 +22,7 @@
  *   F10 an airdrop collectible buried inside a wall or platform
  *   F11 a ground enemy stuck inside a wall body
  *   F13 a spike bed with under 96px of floor between it and a wall >= 3 tiles tall
+ *   F14 a pit inside a boss arena (door-340 .. door+40) — the boss can fall in
  *   F12 a moving platform with a malformed [x,y,axis,range,speed] def (NaN → dead physics)
  *   W1  gap wider than 168px (needs a committed full-speed jump)
  *   W7  two ground enemies stacked < 24px apart (render as one)
@@ -249,6 +250,20 @@ function check(lv) {
     if (ix < OVMIN || iy < OVMIN) continue;
     if (A.kind === 'plat' && B.kind === 'plat' && Math.abs(A.y1 - B.y1) < 6) continue; // stacked ledge — intended
     fails.push(`F8 ${A.kind}(${A.tag}) overlaps ${B.kind}(${B.tag}) [${ix}x${iy}px]`);
+  }
+
+  // F14: a boss arena must be solid floor. startVipBoss/startBoss pen the fight into
+  // [door-340, door+40] and spawn the boss at door-64; a pit anywhere in that span is somewhere
+  // the boss can walk into. The Storm Herald (20-2) did exactly that -- it dropped through a
+  // 120px pit 80px from the door and the fight became unwinnable with the banner still up.
+  // The arena is where the level's challenge is the FIGHT, not the terrain.
+  if (lv.boss && lv.door) {
+    const a1 = lv.door - 340, a2 = lv.door + 40;
+    (lv.gaps || []).forEach(g => {
+      if (g[1] > a1 && g[0] < a2) {
+        fails.push(`F14 pit ${g[0]}-${g[1]} sits inside the boss arena (${a1}-${a2}) — the boss can fall in`);
+      }
+    });
   }
 
   // F13: a spike bed must have real floor between it and any wall >= 3 tiles tall.
