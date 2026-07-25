@@ -84,7 +84,16 @@ function loadLevels() {
   let arr;
   try { arr = new Function('H', 'TILE', 'W', 'GY', 'return ' + src.slice(open, end + 1) + ';')(H, TILE, W, GY); }
   catch (e) { console.error('[nq-geometry-check] LEVELS parse failed:', e.message); return []; }
-  return arr.filter(l => l && typeof l.name === 'string' && /^\d+-\d+$/.test(l.name));
+  // Every NAMED level, not just the numbered ones. The old /^\d+-\d+$/ filter silently skipped
+  // all 12 hidden/bonus rooms (VAULT, PRINTER, DIAMONDVAULT, BUNKER, DEN, LAUNCHPAD, TRENCHES,
+  // ORECACHE, SWANROOST, MEMPOOLCACHE, WHALEGROTTO, MOONCACHE) while still printing PASS -- the
+  // SECOND false green of this kind here, after the loader that skipped worlds 1-8. Widening it
+  // immediately surfaced 4 hard failures that had shipped: uncollectable coins buried in platform
+  // bodies in VAULT and LAUNCHPAD, and a cache inside a plat.
+  // No rule needed exempting for these rooms. Most (gap width, fixtures over gaps, enemies in
+  // walls) are simply no-ops because bonus rooms carry no gaps, spikes or enemies; the rest apply
+  // exactly as they do to a numbered level.
+  return arr.filter(l => l && typeof l.name === 'string');
 }
 
 function inGap(gaps, x) { return gaps.find(g => x >= g[0] && x < g[1]) || null; }
