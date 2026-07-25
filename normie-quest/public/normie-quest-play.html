@@ -5284,7 +5284,11 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
   // The live choice is sticky, so selection cannot flip back to a phantom device between presses.
   var chosenKey=null;
   function padKeyOf(gp){ return gp ? (gp.index+':'+gp.id) : null; }
-  function padLooksReal(gp){ return gp && (gp.axes||[]).length>=2 && (gp.buttons||[]).length>=6; }
+  // Deliberately permissive: axes OR a real button count, not both. The phantom that caused this
+  // (a headset dongle) reported ZERO of each, so an OR still excludes it -- while an AND would
+  // have rejected a legitimate buttons-only retro pad and fallen back to the phantom, which is
+  // the exact failure we are fixing.
+  function padLooksReal(gp){ return !!gp && ((gp.axes||[]).length>=2 || (gp.buttons||[]).length>=6); }
   function anyPad(){
     var p=navigator.getGamepads?navigator.getGamepads():[], live=null, shaped=null, first=null;
     for(var i=0;i<p.length;i++){
@@ -5341,7 +5345,15 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
   var padConnected=false;   // latched by connect/disconnect so a single empty getGamepads() frame can't flicker the controller "off"
   var lastPadKey=null;      // identity of the pad we calibrated axRest against
   window.addEventListener('gamepadconnected', function(e){ padConnected=true; axRest=null; ensureUI(); if(dotEl)dotEl.style.display='block'; if(btnEl)btnEl.style.display='block';
-    toast('🎮 Controller connected — START (or hold A+B) pauses'); if(AUTOREMAP) setTimeout(startRemap,700); });
+    toast('🎮 Controller connected — START (or hold A+B) pauses'); if(AUTOREMAP) setTimeout(startRemap,700);
+    // If the ONLY things enumerated look like non-controllers (a headset dongle, a receiver),
+    // say so. Otherwise the player is left with a dead pad and no idea why -- which is exactly
+    // how the Razer BlackShark case burned an afternoon.
+    setTimeout(function(){ try{
+      var ps=navigator.getGamepads?navigator.getGamepads():[], real=0, phantom=null, n=0;
+      for(var i=0;i<ps.length;i++){ if(!ps[i]) continue; n++; if(padLooksReal(ps[i])) real++; else phantom=ps[i]; }
+      if(n && !real && phantom) toast('⚠ "'+String(phantom.id||'device').slice(0,22)+'" is not a controller — unplug it or press a button on your pad');
+    }catch(e){} }, 1400); });
   window.addEventListener('gamepaddisconnected', function(){ if(!anyPad()){ padConnected=false; window.__NQ_GAMEPAD_ACTIVE=false;
     if(dotEl)dotEl.style.display='none'; if(btnEl)btnEl.style.display='none'; toast('Controller disconnected'); } });
 
