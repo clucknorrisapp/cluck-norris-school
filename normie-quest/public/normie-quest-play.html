@@ -3325,8 +3325,17 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(!lab && !nqWorldAllowed(LEVELS[next])){ this.scene.start('VipPitch',{locked:true,score:this.score}); return; }
     if(typeof WORLD_CLEARS!=='undefined' && WORLD_CLEARS[next]) this.scene.start('WorldClear',{next:next,score:this.score,lab:lab});   // world boundary: celebration + travel page -> Briefing
     else if(typeof BRIEFINGS!=='undefined' && BRIEFINGS[next]) this.scene.start('Briefing',{next:next,score:this.score,lab:lab});
-    // ordinary level -> the short LevelClear beat (score + a Normie Nation line), then play on.
-    else this.scene.start('LevelClear',{next:next,score:this.score,lab:lab,cleared:(this.def&&this.def.name)||''}); },
+    // ⛔ LevelClear is OUT of the per-level flow (2026-07-25). Players on PHYSICAL controllers
+    // reported controls dying after it shipped; it ran between every ordinary level and was the
+    // only input-adjacent change that day. No mechanism was ever reproduced -- the headless
+    // harness gave 14px of movement on one run and 1px on the next for the SAME build, so it
+    // could neither convict nor clear the beat. Removing it takes the only new surface out of
+    // the hot path rather than leaving players broken while we theorise.
+    // Nothing is lost from the funnel work: the locked-content previews and the Normie Nation
+    // strip both still run on WorldClear at every world boundary. The scene stays defined and
+    // registered, so re-enabling is exactly this one line -- do it only with a real controller
+    // on hand to test.
+    else this.scene.start('Game',{level:next,score:this.score,lives:3,lab:lab}); },
 
   /* ---------- WORMHOLE boss (burrow / erupt; weak point = the blue back shards) ---------- */
   startWormBoss:function(){
