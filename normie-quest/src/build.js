@@ -27,6 +27,10 @@ const FILE_MARKERS = {
   // World 21 moon suit — the same four poses, fitted to the originals' content boxes so the
   // ground line and centre match frame-for-frame (see the pose picker's moonSuit swap).
   __MNORMIE__:'cut_normie_moon_idle.b64', __MNRUN1__:'cut_normie_moon_run1.b64', __MNRUN2__:'cut_normie_moon_run2.b64', __MNJUMP__:'cut_normie_moon_jump.b64',
+  // The DUCK pose is the fifth player frame — it lives in EXTRA as an inline data URI rather
+  // than a marker, which is why the first moon-suit pass (four frames) missed it and crouching
+  // on the moon still showed un-suited Normie.
+  __MNDUCK__:'cut_normie_moon_duck.b64',
   __JEET__:'cut_jeet.b64', __PAPER__:'cut_paper.b64', __GHOST__:'cut_ghost.b64', __BOT__:'cut_bot.b64', __BITMAXI__:'cut_bitmaxi.b64',
   __DIAMOND__:'cut_diamond.b64', __BULL__:'cut_bull.b64', __MOON__:'cut_moon.b64',
   __CAFFEINE__:'cut_caffeine.b64', __CANDLE__:'cut_candle.b64',
