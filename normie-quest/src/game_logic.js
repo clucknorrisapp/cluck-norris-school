@@ -1332,7 +1332,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // level so they always point at the LIVE scene instance)
     try{ var _sc=this; window.__NQ_PAUSE=function(){ if(!_sc.over&&!_sc.paused){ _sc.pauseGame(false); return true; } return false; };
          window.__NQ_RESUME=function(){ if(_sc.paused) _sc.resumeGame(); };
-         window.__NQ_DBG=function(){ try{ return {paused:!!_sc.paused, clockPaused:!!_sc.time.paused, now:Math.round(_sc.time.now), last:Math.round(_sc.lastInputAt||0), warping:!!_sc._warping, swan:_sc._swanState||null, bossHP:(_sc.bossStarted?_sc.bossHP:null), hasKey:!!_sc.hasKey, level:_sc.def&&_sc.def.name, floorKey:_sc.floorKey||null, grav:(function(){ try{ return _sc.physics.world.gravity.y; }catch(e){ return null; } })(), nearSlot:(function(){ try{ return _sc.nearActiveSlot(); }catch(e){ return 'err:'+e.message; } })(), slotN:(_sc.slots?_sc.slots.length:-1), px:Math.round(_sc.player?_sc.player.x:-1), secrets:(function(){ var a=[]; try{ _sc.platforms.children.iterate(function(m){ if(m&&m.secretSteel) a.push([Math.round(m.x),Math.round(m.y),m.used?1:0]); }); }catch(e){} return a; })(), bb:(function(){ var a=[]; try{ _sc.bonusBlocks.children.iterate(function(m){ if(m) a.push([Math.round(m.x),m.used?1:0]); }); }catch(e){} return a; })(), pscale:(_sc.pscale?+_sc.pscale.v.toFixed(2):1), lives:_sc.lives, nLevels:LEVELS.length, sig:{fb:(_sc.firebars||[]).length, gt:(_sc.gates||[]).length, rp:(_sc.rugPlats&&_sc.rugPlats.children?_sc.rugPlats.getLength():0), dz:(_sc.dumpZones||[]).length}, gate0:(_sc.gates&&_sc.gates[0]?_sc.gates[0].st:null), foes:(function(){ var n=0; try{ _sc.enemies.children.iterate(function(e){ if(e&&e.active&&_sc.def&&_sc.def.door&&e.x>_sc.def.door-460) n++; }); }catch(e){} return n; })(), dr:(_sc._drState||null), drX:(_sc.rugking&&_sc.rugking.active?Math.round(_sc.rugking.x):null), drY:(_sc.rugking&&_sc.rugking.active?Math.round(_sc.rugking.y):null), drT:(_sc._drT0?Math.round(_sc.time.now-_sc._drT0):null), bossInv:(_sc.rugking&&_sc.rugking.active?!!_sc.rugking.invuln:null), princess:!!(_sc.princess&&_sc.princess.active), reserve:(_sc.reserve||null)}; }catch(e){ return {err:String(e)}; } };
+         window.__NQ_DBG=function(){ try{ return {paused:!!_sc.paused, clockPaused:!!_sc.time.paused, now:Math.round(_sc.time.now), last:Math.round(_sc.lastInputAt||0), warping:!!_sc._warping, swan:_sc._swanState||null, bossHP:(_sc.bossStarted?_sc.bossHP:null), hasKey:!!_sc.hasKey, level:_sc.def&&_sc.def.name, floorKey:_sc.floorKey||null, grav:(function(){ try{ return _sc.physics.world.gravity.y; }catch(e){ return null; } })(), nearSlot:(function(){ try{ return _sc.nearActiveSlot(); }catch(e){ return 'err:'+e.message; } })(), slotN:(_sc.slots?_sc.slots.length:-1), px:Math.round(_sc.player?_sc.player.x:-1), secrets:(function(){ var a=[]; try{ _sc.platforms.children.iterate(function(m){ if(m&&m.secretSteel) a.push([Math.round(m.x),Math.round(m.y),m.used?1:0]); }); }catch(e){} return a; })(), bb:(function(){ var a=[]; try{ _sc.bonusBlocks.children.iterate(function(m){ if(m) a.push([Math.round(m.x),m.used?1:0]); }); }catch(e){} return a; })(), pscale:(_sc.pscale?+_sc.pscale.v.toFixed(2):1), lives:_sc.lives, nLevels:LEVELS.length, sig:{fb:(_sc.firebars||[]).length, gt:(_sc.gates||[]).length, rp:(_sc.rugPlats&&_sc.rugPlats.children?_sc.rugPlats.getLength():0), dz:(_sc.dumpZones||[]).length}, gate0:(_sc.gates&&_sc.gates[0]?_sc.gates[0].st:null), foes:(function(){ var n=0; try{ _sc.enemies.children.iterate(function(e){ if(e&&e.active&&_sc.def&&_sc.def.door&&e.x>_sc.def.door-460) n++; }); }catch(e){} return n; })(), dr:(_sc._drState||null), drX:(_sc.rugking&&_sc.rugking.active?Math.round(_sc.rugking.x):null), drY:(_sc.rugking&&_sc.rugking.active?Math.round(_sc.rugking.y):null), drT:(_sc._drT0?Math.round(_sc.time.now-_sc._drT0):null), bossInv:(_sc.rugking&&_sc.rugking.active?!!_sc.rugking.invuln:null), princess:!!(_sc.princess&&_sc.princess.active), reserve:(_sc.reserve||null), reserveSel:(_sc.reserveSel==null?null:_sc.reserveSel)}; }catch(e){ return {err:String(e)}; } };
          // LAB-only physics-health probe: counts NaN-position/velocity bodies (a single NaN body
          // poisons Arcade's RTree broad-phase → ALL overlaps silently fail — coins, damage, etc).
          // __NQ_COINGRAB teleports the player onto a coin so a caller can confirm overlap fires.
@@ -4596,7 +4596,7 @@ var Controls=new Phaser.Class({ Extends:Phaser.Scene,
       {fontFamily:UIFONT,resolution:UIRES,fontSize:'12px',color:'#eef2ff',align:'center',lineSpacing:1}).setOrigin(.5,0);
     // CONTROLLER row (USB gamepad) — full width; turns green the instant a pad is detected,
     // so a tester can confirm it works right here. Live status is refreshed in update().
-    this.padLine=this.add.text(cx,110,'🎮 USB CONTROLLER — plug in & press a button\nD-pad move · A = jump · B = throw · Down = duck\nL2/R2 = use item · SELECT = pick which · START = pause',
+    this.padLine=this.add.text(cx,110,'🎮 USB CONTROLLER — plug in & press a button\nD-pad move · A = jump · B = throw · Down = duck\nSELECT: tap = use item, hold = pick which · L2/R2 also use',
       {fontFamily:UIFONT,resolution:UIRES,fontSize:'12px',color:'#b6bfe0',align:'center',lineSpacing:1,wordWrap:{width:W-40}}).setOrigin(.5,0);
     // the goal / core rules (full width)
     this.add.text(cx,148,'THE GOAL',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffd23f'}).setOrigin(.5);
@@ -4617,8 +4617,8 @@ var Controls=new Phaser.Class({ Extends:Phaser.Scene,
     var on=false, press=false;
     try{ var ps=(navigator.getGamepads?navigator.getGamepads():[]); for(var i=0;i<ps.length;i++){ var gp=ps[i]; if(!gp) continue; on=true;
       var B=gp.buttons||[]; if((B[0]&&B[0].pressed)||(B[1]&&B[1].pressed)||(B[8]&&B[8].pressed)||(B[9]&&B[9].pressed)) press=true; } }catch(e){}
-    if(this.padLine){ var want=on?'🎮 CONTROLLER CONNECTED ✓\nD-pad move · A = jump · B = throw · Down = duck\nL2/R2 = use item · SELECT = pick which · START = pause'
-                                  :'🎮 USB CONTROLLER — plug in & press a button\nD-pad move · A = jump · B = throw · Down = duck\nL2/R2 = use item · SELECT = pick which · START = pause';
+    if(this.padLine){ var want=on?'🎮 CONTROLLER CONNECTED ✓\nD-pad move · A = jump · B = throw · Down = duck\nSELECT: tap = use item, hold = pick which · L2/R2 also use'
+                                  :'🎮 USB CONTROLLER — plug in & press a button\nD-pad move · A = jump · B = throw · Down = duck\nSELECT: tap = use item, hold = pick which · L2/R2 also use';
       if(this.padLine.text!==want) this.padLine.setText(want).setColor(on?'#3dff6e':'#b6bfe0'); }
     if(press && !this._pp && this.time.now-this.t0>1200) this.go();   // controller button (after grace) → start
     this._pp=press;
@@ -5259,7 +5259,7 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
   var padConnected=false;   // latched by connect/disconnect so a single empty getGamepads() frame can't flicker the controller "off"
   var lastPadKey=null;      // identity of the pad we calibrated axRest against
   window.addEventListener('gamepadconnected', function(e){ padConnected=true; axRest=null; ensureUI(); if(dotEl)dotEl.style.display='block'; if(btnEl)btnEl.style.display='block';
-    toast('🎮 Controller connected — L2/R2 use an item · SELECT picks which · START pauses'); if(AUTOREMAP) setTimeout(startRemap,700);
+    toast('🎮 Controller connected — SELECT: tap uses an item, hold picks which · START pauses'); if(AUTOREMAP) setTimeout(startRemap,700);
     // If the ONLY things enumerated look like non-controllers (a headset dongle, a receiver),
     // say so. Otherwise the player is left with a dead pad and no idea why -- which is exactly
     // how the Razer BlackShark case burned an afternoon.
@@ -5278,6 +5278,7 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
   // rising edge → "pressing right + jump sometimes doesn't jump." Baseline each axis at connect and
   // only treat an axis that RESTS near centre (a real stick / d-pad-on-axis) as a direction source.
   var axRest=null, prevJb=false, prevUp=false, prevUseB=false, prevStart=false, prevSelB=false, prevAny=false, comboAt=0, comboFired=false;
+  var SEL_HOLD_MS=500, selDownAt=0, selFired=false;   // SELECT: tap = use item, hold = cycle
   function axUsable(i){ return axRest && Math.abs(axRest[i]||0) < 0.35; }
   // POV HAT SUPPORT. Many cheap wireless USB pads (dongle receivers especially) report a
   // NON-STANDARD mapping with the d-pad on a single "hat" axis instead of buttons 12-15 — and
@@ -5347,8 +5348,19 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
                  : (jb.indexOf(9)<0 && tb.indexOf(9)<0 && pr(9));
     if(startBtn && !prevStart) P.pauseEdge=true;
     prevStart=startBtn;
+    // SELECT is the ONLY inventory control an old-school TWO-BUTTON pad has. Those carry A, B,
+    // SELECT, START and a d-pad -- no buttons 6/7 -- so the L2/R2 USE binding simply does not
+    // exist on them and the inventory was entirely unreachable: no use, no selection, nothing.
+    // SELECT therefore does both jobs, with the COMMON action on the fast gesture:
+    //   TAP  (release under SEL_HOLD_MS) -> USE the selected item
+    //   HOLD (SEL_HOLD_MS)               -> CYCLE to the next item
+    // A tap can only be known to be a tap on RELEASE, so USE fires there; CYCLE fires the moment
+    // the hold threshold passes, which also gives the player haptic-free feedback that it took.
+    // L2/R2 keep working as a direct USE on pads that have them.
     var selBtn = (!pauseBind || pauseBind.indexOf(8)<0) && jb.indexOf(8)<0 && tb.indexOf(8)<0 && pr(8);
-    if(selBtn && !prevSelB) P.selEdge=true;
+    if(selBtn && !prevSelB){ selDownAt=Date.now(); selFired=false; }
+    if(selBtn && !selFired && Date.now()-selDownAt>=SEL_HOLD_MS){ selFired=true; P.selEdge=true; }
+    if(!selBtn && prevSelB && !selFired) P.useEdge=true;
     prevSelB=selBtn;
     if(jumpBtn && throwB){ if(!comboAt) comboAt=Date.now(); if(!comboFired && Date.now()-comboAt>=900){ comboFired=true; P.pauseEdge=true; } }
     else { comboAt=0; comboFired=false; }
