@@ -23,6 +23,7 @@
  *   F11 a ground enemy stuck inside a wall body
  *   F13 a spike bed with under 96px of floor between it and a wall >= 3 tiles tall
  *   F14 a pit inside a boss arena (door-340 .. door+40) — the boss can fall in
+ *   W10 a timed powerup with less level left than its duration can cover (non-boss levels)
  *   F12 a moving platform with a malformed [x,y,axis,range,speed] def (NaN → dead physics)
  *   W1  gap wider than 168px (needs a committed full-speed jump)
  *   W7  two ground enemies stacked < 24px apart (render as one)
@@ -250,6 +251,26 @@ function check(lv) {
     if (ix < OVMIN || iy < OVMIN) continue;
     if (A.kind === 'plat' && B.kind === 'plat' && Math.abs(A.y1 - B.y1) < 6) continue; // stacked ledge — intended
     fails.push(`F8 ${A.kind}(${A.tag}) overlaps ${B.kind}(${B.tag}) [${ix}x${iy}px]`);
+  }
+
+  // W10: a TIMED powerup with less level left than it can cover. Reported from play -- 1-1's
+  // 9-second SOLANA MODE sat 780px from the door, so most of it was spent on the level-clear
+  // screen. Distance a power can cover = duration x pace, and pace is 150px/s, NOT the 240px/s
+  // max sprint: nobody runs a level flat out, they jump, fight and wait on movers.
+  // Scoped OFF for boss levels (the door IS the arena there -- a powerup right before it is
+  // arming you for the fight, which is correct) and for bonus rooms (only ~2600px end to end, so
+  // no placement could satisfy this; the powerup is loot, not a tool).
+  const PWR_SEC = { solana: 9, bull: 11, caffeine: 11, candle: 6, moon: 9, omegachad: 10, whale: 9, coldwallet: 9, megawhale: 9 };
+  const PWR_PACE = 150;
+  if (lv.door && !lv.boss && !lv.bonus) {
+    (lv.powerups || []).forEach(p => {
+      const sec = PWR_SEC[p[0]];
+      if (!sec || p[2] < 200) return;                 // untimed, or platform-mounted (placed by hand)
+      const runway = lv.door - p[1], need = sec * PWR_PACE;
+      if (runway < need) {
+        warns.push(`W10 ${p[0]} at x=${p[1]} has only ${runway}px before the door but lasts ${sec}s (~${need}px) — most of it is wasted`);
+      }
+    });
   }
 
   // F14: a boss arena must be solid floor. startVipBoss/startBoss pen the fight into
