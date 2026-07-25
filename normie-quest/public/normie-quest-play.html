@@ -4887,6 +4887,8 @@ var LevelClear=new Phaser.Class({ Extends:Phaser.Scene,
       if(_lounge){ try{ window.open('/normie-quest-x7/lounge','_blank'); }catch(e){} } else nqBuyNormie(); });
     this.cont=this.add.text(cx,H-10,'TAP TO CONTINUE  ▶',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#3dff6e'}).setOrigin(.5);
     var adv=function(){ if(self.done||self._buyOpen){ self._buyOpen=false; return; } self.go(); };
+    this._padPrev=true;   // start latched: a direction HELD as the level ended must not insta-skip
+    this._adv=adv;
     this.input.on('pointerdown',function(p){ if(buy.getBounds().contains(p.worldX,p.worldY)) return; adv(); });
     this.input.keyboard.on('keydown',adv);
     padAdvance(this, adv);
@@ -4900,7 +4902,14 @@ var LevelClear=new Phaser.Class({ Extends:Phaser.Scene,
       if(this.runner.texture.key!==k) this.runner.setTexture(k).setScale(44/this.runner.height);
       this.runner.y=96+Math.sin(this.time.now/90)*2; }
     if(this.cont) this.cont.setAlpha(0.4+0.6*Math.abs(Math.sin(this.time.now/300)));
-    if(this.time.now-this.t0>4200) this.go();   // auto-advance: a between-level beat, not a toll gate
+    // The on-screen D-pad stays visible on this beat, so a tap has to DO something. Edge-triggered
+    // with the same 500ms grace padAdvance uses, and _padPrev starts latched so a direction still
+    // held from the run-in to the flag does not skip the card before it is read.
+    var _p=(typeof window!=='undefined')?window.__NQ_PAD:null;
+    var _pd=!!(_p&&(_p.left||_p.right||_p.jump||_p.down||_p.throw));
+    if(_pd && !this._padPrev && (this.time.now-this.t0)>500 && this._adv){ this._padPrev=_pd; this._adv(); return; }
+    this._padPrev=_pd;
+    if(this.time.now-this.t0>3000) this.go();   // auto-advance: a between-level beat, not a toll gate
   }
 });
 
@@ -5198,9 +5207,14 @@ if(typeof document!=='undefined'){ (function(){
   window.addEventListener('resize',layout);
   window.addEventListener('orientationchange',function(){ setTimeout(layout,220); });
   setTimeout(layout,300); setTimeout(layout,900);
-  // show the pad only during actual gameplay AND when the gutter is wide enough
+  // Show the pad during gameplay AND on the LevelClear beat, when the gutter is wide enough.
+  // ⚠️ LevelClear MUST be included. It is not the 'Game' scene, so gating on Game alone made the
+  // touch controls VANISH for the whole beat -- and since LevelClear now runs between every
+  // level, that is a controls blackout every single transition. Before it existed the game went
+  // Game -> Game instantly and the pad never dropped, which is why this only started being
+  // reported once the beat shipped. Any future full-screen scene that sits mid-run belongs here.
   setInterval(function(){
-    var inGame=false; try{ inGame=NQGAME.scene.isActive('Game'); }catch(e){}
+    var inGame=false; try{ inGame=NQGAME.scene.isActive('Game')||NQGAME.scene.isActive('LevelClear'); }catch(e){}
     wrap.style.display=(inGame&&window.__NQ_PAD_ACTIVE)?'block':'none';
     if(!inGame){ window.__NQ_PAD.left=window.__NQ_PAD.right=window.__NQ_PAD.jump=false; bL.classList.remove('on'); bR.classList.remove('on'); bJ.classList.remove('on'); }
   },120);
