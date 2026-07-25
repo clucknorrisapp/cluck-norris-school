@@ -927,6 +927,13 @@ function padAdvance(scene, go){
 // Modern-world backdrops (worlds 16+) — real hand-painted art, LAZY-LOADED per world: only the
 // level you're actually on fetches its PNG (see def.bgArt in the background build), so boot stays
 // light and it scales to any number of worlds without a heavy startup download (mobile-friendly).
+// Cache-buster for the world backdrop plates. The /normie-quest/worlds static mount serves
+// them with max-age=7d, and plates are REPLACED IN PLACE (same filename) when art changes —
+// so without a version in the URL a returning player keeps the old art for up to a week.
+// Caught 2026-07-25: the worlds 1-4 retro repaint was live on the server (md5 verified) but
+// browsers kept serving the previous painted plates from cache.
+// >>> BUMP THIS whenever any file in normie-quest/public/worlds/ is replaced. <<<
+var WORLD_ART_VER='2';
 var WORLD_ART={ wTrenches:'/normie-quest/worlds/w-trenches.png', wVaultRoom:'/normie-quest/worlds/w-vaultroom.png', w09mines:'/normie-quest/worlds/w09-mines.png', w10euphoria:'/normie-quest/worlds/w10-euphoria.png', w10swan:'/normie-quest/worlds/w10-swan.png', w11citadel:'/normie-quest/worlds/w11-citadel.png', w12relaunch:'/normie-quest/worlds/w12-relaunch.png', w13pod:'/normie-quest/worlds/w13-pod.png', w14shrine:'/normie-quest/worlds/w14-shrine.png', w15diamond:'/normie-quest/worlds/w15-diamond.png', w01dusk:'/normie-quest/worlds/w01-dusk.png', w01cavern:'/normie-quest/worlds/w01-cavern.png', w01keep:'/normie-quest/worlds/w01-keep.png', w02desert:'/normie-quest/worlds/w02-desert.png', w02casino:'/normie-quest/worlds/w02-casino.png', w03skyline:'/normie-quest/worlds/w03-skyline.png', w04exchange:'/normie-quest/worlds/w04-exchange.png', w05bridge:'/normie-quest/worlds/w05-bridge.png', w06depeg:'/normie-quest/worlds/w06-depeg.png', w07farm:'/normie-quest/worlds/w07-farm.png', w08bear:'/normie-quest/worlds/w08-bear.png', w16citadel:'/normie-quest/worlds/w16-citadel.png', w17spire:'/normie-quest/worlds/w17-spire.png', w18reserve:'/normie-quest/worlds/w18-reserve.png', w19orbital:'/normie-quest/worlds/w19-orbital.png', w20tower:'/normie-quest/worlds/w20-tower.png', w21tower:'/normie-quest/worlds/w21-tower.png', w21moon:'/normie-quest/worlds/w21-moon.png' };
 var Boot=new Phaser.Class({ Extends:Phaser.Scene,
   initialize:function(){ Phaser.Scene.call(this,{key:'Boot'}); },
@@ -1413,7 +1420,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         _self.add.image(0,0,_key).setOrigin(0,0).setScrollFactor(0).setDisplaySize(_cam.width,_cam.height).setDepth(-58);
         _self.add.rectangle(0,0,_cam.width,_cam.height,0x05040a,0.22).setOrigin(0,0).setScrollFactor(0).setDepth(-57); };
       if(this.textures.exists(_key)){ _renderArt(); }
-      else { this.load.image(_key, WORLD_ART[_key]); this.load.once('complete', _renderArt); this.load.once('loaderror', function(){}); this.load.start(); }
+      else { this.load.image(_key, WORLD_ART[_key]+'?v='+WORLD_ART_VER); this.load.once('complete', _renderArt); this.load.once('loaderror', function(){}); this.load.start(); }
     } else {
     // stars scattered across the whole level with a slight parallax
     for(i=0;i<Math.ceil(LW/90);i++){ var ss=Phaser.Math.RND.pick([1,1,1,2]); this.add.rectangle(Phaser.Math.RND.between(0,LW),Phaser.Math.RND.between(3,Math.floor(H*0.6)),ss,ss,0xffffff,Phaser.Math.RND.between(18,50)/100).setScrollFactor(0.25).setDepth(-55); }
