@@ -871,7 +871,7 @@ var LEVELS=[
   // ===== NEW HIDDEN BONUS ROOMS (indices 70+) — one for the back half of the game, which
   //       had NO secrets at all: every speakeasy warp lived in worlds 3-8. Appended at the
   //       END so existing warp targets (27-33) and the 9-3 "next":34 jump keep their indices.
-  { name:'ORECACHE', sub:'THE ORE CACHE', time:90, theme:13, bgArt:'w09mines', width:2600, hidden:true, bonus:true, dark:true,
+  { name:'ORECACHE', sub:'THE ORE CACHE', time:90, theme:13, bgArt:'wOreCache', width:2600, hidden:true, bonus:true, dark:true,
     gaps:[],
     walls:[[300,2,'stone',2],[2300,2,'stone',2]],
     plats:[[760,2,150,'stone'],[1180,2,H-128,'stone'],[1640,3,150,'stone']],
@@ -882,7 +882,7 @@ var LEVELS=[
     enemies:[],
     slots:[[700,'jackpot']], bonusblocks:[[1080,8],[1300,12],[1520,8],[1920,15]], key:[430,H-150], door:2440 },
 
-  { name:'SWANROOST', sub:'THE SWAN ROOST', time:95, theme:15, bgArt:'w10swan', width:2600, hidden:true, bonus:true,
+  { name:'SWANROOST', sub:'THE SWAN ROOST', time:95, theme:15, bgArt:'wSwanRoost', width:2600, hidden:true, bonus:true,
     gaps:[],
     walls:[[300,2,'stone',2],[2300,2,'stone',2]],
     plats:[[700,2,H-104,'stone'],[1080,2,H-140,'stone'],[1460,2,H-176,'stone'],[1860,3,150,'stone']],
@@ -893,7 +893,7 @@ var LEVELS=[
     enemies:[],
     slots:[[780,'jackpot']], bonusblocks:[[640,8],[1340,12],[1640,8],[2000,15]], key:[430,H-150], door:2440 },
 
-  { name:'MEMPOOLCACHE', sub:'THE MEMPOOL CACHE', time:90, theme:16, bgArt:'w11citadel', width:2600, hidden:true, bonus:true,
+  { name:'MEMPOOLCACHE', sub:'THE MEMPOOL CACHE', time:90, theme:16, bgArt:'wMempoolCache', width:2600, hidden:true, bonus:true,
     gaps:[],
     walls:[[300,2,'brick',2],[2300,2,'brick',2]],
     plats:[[820,3,150,'brick'],[1400,3,H-134,'brick'],[1960,2,150,'brick']],
@@ -905,7 +905,7 @@ var LEVELS=[
     enemies:[],
     bonusblocks:[[960,8],[1340,12],[1560,8],[1760,15]], key:[430,H-150], door:2440 },
 
-  { name:'WHALEGROTTO', sub:'THE WHALE GROTTO', time:95, theme:18, bgArt:'w13pod', width:2600, hidden:true, bonus:true, vip:true,
+  { name:'WHALEGROTTO', sub:'THE WHALE GROTTO', time:95, theme:18, bgArt:'wWhaleGrotto', width:2600, hidden:true, bonus:true, vip:true,
     gaps:[],
     walls:[[300,2,'stone',2],[2300,2,'stone',2]],
     plats:[[720,2,H-110,'stone'],[1140,3,150,'stone'],[1680,2,H-150,'stone']],
@@ -919,7 +919,7 @@ var LEVELS=[
   // The lunar secret. moon:true so it inherits the spacesuit + regolith floor like 21-1/2/3.
   // grav matches world 21 — this room is reached by a warp FROM 21-2, so earth gravity here would
   // read as a bug the moment you land in it.
-  { name:'MOONCACHE', sub:'THE MOON CACHE', time:95, theme:27, bgArt:'w21moon', width:2600, hidden:true, bonus:true, vip:true, moon:true, grav:540,
+  { name:'MOONCACHE', sub:'THE MOON CACHE', time:95, theme:27, bgArt:'wMoonCache', width:2600, hidden:true, bonus:true, vip:true, moon:true, grav:540,
     gaps:[],
     walls:[[300,2,'moonrock',2],[2300,2,'moonrock',2]],
     plats:[[740,2,H-108,'moonrock'],[1120,2,H-146,'moonrock'],[1520,2,H-184,'moonrock'],[1920,3,150,'moonrock']],
@@ -958,7 +958,7 @@ function padAdvance(scene, go){
 // browsers kept serving the previous painted plates from cache.
 // >>> BUMP THIS whenever any file in normie-quest/public/worlds/ is replaced. <<<
 var WORLD_ART_VER='3';
-var WORLD_ART={ wTrenches:'/normie-quest/worlds/w-trenches.png', wVaultRoom:'/normie-quest/worlds/w-vaultroom.png', wPrinter:'/normie-quest/worlds/w-printer.png', wDiamondVault:'/normie-quest/worlds/w-diamondvault.png', wSeedVault:'/normie-quest/worlds/w-seedvault.png', wSybilBunker:'/normie-quest/worlds/w-sybilbunker.png', wLeverageDen:'/normie-quest/worlds/w-leveragedn.png', wBondCurve:'/normie-quest/worlds/w-bondcurve.png', w09mines:'/normie-quest/worlds/w09-mines.png', w10euphoria:'/normie-quest/worlds/w10-euphoria.png', w10swan:'/normie-quest/worlds/w10-swan.png', w11citadel:'/normie-quest/worlds/w11-citadel.png', w12relaunch:'/normie-quest/worlds/w12-relaunch.png', w13pod:'/normie-quest/worlds/w13-pod.png', w14shrine:'/normie-quest/worlds/w14-shrine.png', w15diamond:'/normie-quest/worlds/w15-diamond.png', w01dusk:'/normie-quest/worlds/w01-dusk.png', w01cavern:'/normie-quest/worlds/w01-cavern.png', w01keep:'/normie-quest/worlds/w01-keep.png', w02desert:'/normie-quest/worlds/w02-desert.png', w02casino:'/normie-quest/worlds/w02-casino.png', w03skyline:'/normie-quest/worlds/w03-skyline.png', w04exchange:'/normie-quest/worlds/w04-exchange.png', w05bridge:'/normie-quest/worlds/w05-bridge.png', w06depeg:'/normie-quest/worlds/w06-depeg.png', w07farm:'/normie-quest/worlds/w07-farm.png', w08bear:'/normie-quest/worlds/w08-bear.png', w16citadel:'/normie-quest/worlds/w16-citadel.png', w17spire:'/normie-quest/worlds/w17-spire.png', w18reserve:'/normie-quest/worlds/w18-reserve.png', w19orbital:'/normie-quest/worlds/w19-orbital.png', w20tower:'/normie-quest/worlds/w20-tower.png', w21tower:'/normie-quest/worlds/w21-tower.png', w21moon:'/normie-quest/worlds/w21-moon.png' };
+var WORLD_ART={ wTrenches:'/normie-quest/worlds/w-trenches.png', wVaultRoom:'/normie-quest/worlds/w-vaultroom.png', wPrinter:'/normie-quest/worlds/w-printer.png', wDiamondVault:'/normie-quest/worlds/w-diamondvault.png', wSeedVault:'/normie-quest/worlds/w-seedvault.png', wSybilBunker:'/normie-quest/worlds/w-sybilbunker.png', wLeverageDen:'/normie-quest/worlds/w-leveragedn.png', wBondCurve:'/normie-quest/worlds/w-bondcurve.png', wOreCache:'/normie-quest/worlds/w-orecache.png', wSwanRoost:'/normie-quest/worlds/w-swanroost.png', wMempoolCache:'/normie-quest/worlds/w-mempoolcache.png', wWhaleGrotto:'/normie-quest/worlds/w-whalegrotto.png', wMoonCache:'/normie-quest/worlds/w-mooncache.png', w09mines:'/normie-quest/worlds/w09-mines.png', w10euphoria:'/normie-quest/worlds/w10-euphoria.png', w10swan:'/normie-quest/worlds/w10-swan.png', w11citadel:'/normie-quest/worlds/w11-citadel.png', w12relaunch:'/normie-quest/worlds/w12-relaunch.png', w13pod:'/normie-quest/worlds/w13-pod.png', w14shrine:'/normie-quest/worlds/w14-shrine.png', w15diamond:'/normie-quest/worlds/w15-diamond.png', w01dusk:'/normie-quest/worlds/w01-dusk.png', w01cavern:'/normie-quest/worlds/w01-cavern.png', w01keep:'/normie-quest/worlds/w01-keep.png', w02desert:'/normie-quest/worlds/w02-desert.png', w02casino:'/normie-quest/worlds/w02-casino.png', w03skyline:'/normie-quest/worlds/w03-skyline.png', w04exchange:'/normie-quest/worlds/w04-exchange.png', w05bridge:'/normie-quest/worlds/w05-bridge.png', w06depeg:'/normie-quest/worlds/w06-depeg.png', w07farm:'/normie-quest/worlds/w07-farm.png', w08bear:'/normie-quest/worlds/w08-bear.png', w16citadel:'/normie-quest/worlds/w16-citadel.png', w17spire:'/normie-quest/worlds/w17-spire.png', w18reserve:'/normie-quest/worlds/w18-reserve.png', w19orbital:'/normie-quest/worlds/w19-orbital.png', w20tower:'/normie-quest/worlds/w20-tower.png', w21tower:'/normie-quest/worlds/w21-tower.png', w21moon:'/normie-quest/worlds/w21-moon.png' };
 var Boot=new Phaser.Class({ Extends:Phaser.Scene,
   initialize:function(){ Phaser.Scene.call(this,{key:'Boot'}); },
   create:function(){
@@ -2490,7 +2490,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       var art=def.bgArt||'';
       if(art==='w01dusk'||art==='w07farm') key='ground';            // the only two grassy plates
       else if(art==='w02desert') key='sandground';
-      else if(art==='w15diamond'||art==='w13pod'||art==='wDiamondVault') key='iceground';
+      else if(art==='w15diamond'||art==='w13pod'||art==='wDiamondVault'||art==='wWhaleGrotto') key='iceground';
     }
     return this.textures.exists(key) ? key : 'ground';
   },
