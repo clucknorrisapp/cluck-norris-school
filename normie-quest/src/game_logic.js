@@ -4677,6 +4677,10 @@ var WorldClear=new Phaser.Class({ Extends:Phaser.Scene,
     this.p1.add(this.add.text(cx,46,cfg.title,{fontFamily:'"Press Start 2P"',fontSize:'13px',color:cfg.color,align:'center',wordWrap:{width:W-30}}).setOrigin(.5));
     this.p1.add(this.add.text(cx,72,'WORLD '+cfg.world+' CLEARED',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#ffd23f'}).setOrigin(.5));
     this.p1.add(this.add.text(cx,208,'SCORE  '+this.score,{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#ffffff'}).setOrigin(.5));
+    // The "…BUT YOUR BAGS ARE IN ANOTHER CASTLE" gag lives HERE now, not on the traveling page.
+    // It is a boss-victory joke, so the victory tableau is its natural home — and on the traveling
+    // page it was overlapping the Nation panel by 9px.
+    if(cfg.nostalgia) this.p1.add(this.add.text(cx,234,'★ '+cfg.nostalgia+' ★',{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#a99fd8',align:'center',wordWrap:{width:W-50}}).setOrigin(.5));
     // fireworks: spark bursts popping across the top of the tableau while the celebration runs
     var tints=[0xffd23f,0x3dff6e,0x66ddff,0xff8adf,0xffffff];
     this.time.addEvent({ delay:360, loop:true, callback:function(){
@@ -4689,13 +4693,52 @@ var WorldClear=new Phaser.Class({ Extends:Phaser.Scene,
     this.p2=this.add.container(0,0).setVisible(false);
     var th=THEMES[cfg.theme]||THEMES[0];
     var g=this.add.graphics(); g.fillGradientStyle(th.sky1,th.sky1,th.sky2,th.sky2,1); g.fillRect(0,0,W,H); this.p2.add(g);
+    // 🖼 THE DESTINATION'S REAL PAINTED PLATE, behind the gradient.
+    // This page was a flat two-stop gradient with a row of circles on it, sitting between two
+    // hand-painted levels — which is most of why it read as cheap. Every world already HAS a
+    // painted backdrop, and the one place it obviously belongs is the page that says "now
+    // traveling" to that exact world: the transition becomes a genuine glimpse of where you are
+    // going, for no new art. Held at 0.55 so the story text stays readable over it, with the
+    // gradient still underneath for anything the plate does not cover.
+    var _dst=(LEVELS[this.nextLevel]&&LEVELS[this.nextLevel].bgArt)||null;
+    if(_dst && typeof WORLD_ART!=='undefined' && WORLD_ART[_dst]){
+      var _put=function(_async){
+        if(!self.sys) return;
+        if(_async && !self.sys.isActive()) return;         // late arrival into a dead scene
+        if(!self.textures.exists(_dst) || !self.p2) return;
+        var im=self.add.image(0,0,_dst).setOrigin(0,0).setDisplaySize(W,H).setAlpha(0.55);
+        self.p2.add(im); self.p2.moveTo(im,1);             // just above the gradient, below all copy
+      };
+      if(this.textures.exists(_dst)) _put(false);
+      else { this.load.image(_dst, WORLD_ART[_dst]+'?v='+WORLD_ART_VER);
+             this.load.once('complete',function(){ _put(true); }); this.load.start(); }
+    }
+    // sun + a soft horizon glow under it, so the sky has a light SOURCE instead of a flat gradient
+    this.p2.add(this.add.ellipse(W-64,H-40,300,120,0xffe08a).setAlpha(.07));
+    this.p2.add(this.add.circle(W-64,40,28,0xffe08a).setAlpha(.16));
     this.p2.add(this.add.circle(W-64,40,20,0xffe08a).setAlpha(.5));
+    // drifting motes — a handful of slow specks give the air some movement between the two ridges
+    for(var _d=0;_d<14;_d++){
+      var _mx=Math.random()*W, _my=60+Math.random()*120, _ms=0.5+Math.random()*1.1;
+      var _mo=this.add.circle(_mx,_my,_ms,0xffffff).setAlpha(0.10+Math.random()*0.18); this.p2.add(_mo);
+      this.tweens.add({targets:_mo, x:_mx-40-Math.random()*60, y:_my+6, alpha:0,
+        duration:4200+Math.random()*3600, repeat:-1, delay:Math.random()*2600 });
+    }
     this.hillG=this.add.graphics(); this.p2.add(this.hillG); this.hillCol=th.hill;
+    // far ridge = the theme's hill colour at 45% brightness, computed rather than hardcoded so it
+    // stays correct for every world's palette
+    var _dim=function(c,f){ return (Math.round(((c>>16)&255)*f)<<16)|(Math.round(((c>>8)&255)*f)<<8)|Math.round((c&255)*f); };
+    this.hillColFar=_dim(th.hill,0.50);    // mid ridge — the painted plate reads between the two
+    this.hillColNear=_dim(th.hill,0.20);   // foreground silhouette
     this.runner=this.add.image(88,H-40,'nrun1'); this.runner.setScale(38/this.runner.height); this.p2.add(this.runner);
     if(this.renderer.type===Phaser.WEBGL){ try{ this.runner.postFX.addGlow(0x66ccff,1,0,false,0.1,12); }catch(e){} }
     this.p2.add(this.add.text(cx,24,'NOW TRAVELING',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#b6bfe0'}).setOrigin(.5));
     this.p2.add(this.add.text(cx,42,cfg.dest,{fontFamily:'"Press Start 2P"',fontSize:'12px',color:cfg.color,align:'center',wordWrap:{width:W-24}}).setOrigin(.5));
-    this.p2.add(this.add.text(cx,62,cfg.story,{fontFamily:UIFONT,resolution:UIRES,fontSize:'11px',color:'#eef2ff',align:'center',lineSpacing:2,wordWrap:{width:W-90}}).setOrigin(.5,0));
+    // Wrapped at W-90 and 11px, the longest story (world 40, 213 chars) ran to FOUR lines and
+    // reached y=114 — which is how the old strip and the nostalgia line ended up fighting for the
+    // bottom margin in the first place. A wider wrap at 10px caps it at three lines (~y=98), which
+    // is what leaves a clean band for the Nation panel below. Measured, not eyeballed.
+    this.p2.add(this.add.text(cx,62,cfg.story,{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#eef2ff',align:'center',lineSpacing:2,wordWrap:{width:W-56}}).setOrigin(.5,0));
     // ⛔ THE 'CRYPTO TERM' TEACHING CARD WAS REMOVED HERE (owner's call 2026-07-26: "drop the little
     // educational things in the middle screens between levels and worlds and focus on Normie
     // nation"). It occupied the whole middle band of the traveling page — a name + definition in a
@@ -4704,22 +4747,35 @@ var WorldClear=new Phaser.Class({ Extends:Phaser.Scene,
     // community push, not a vocabulary lesson. `cfg.term` is still present in WORLD_CLEARS and is
     // simply no longer drawn; the definitions are kept in the data so nothing is lost if the school
     // ever wants them, and so this stays a one-line revert.
-    if(cfg.nostalgia) this.p2.add(this.add.text(cx,H-68,'★ '+cfg.nostalgia+' ★',{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#8f89b8',align:'center',wordWrap:{width:W-60}}).setOrigin(.5));
-    // NORMIE NATION strip — the world boundary is the moment a player is most bought-in, so it is
-    // where the community push belongs. Identity + where to get it; no perks, no thresholds.
-    // Offset RIGHT of the running Normie (he sits at x=88) rather than centred full-width: the
-    // first pass spanned the whole page at H-40 and buried both the runner and the scrolling
-    // hills, which are the only motion on this page. Compact `short` copy so it stays one or two
-    // lines and never reaches down into the TAP TO CONTINUE row.
-    var _nn=nqNationNext(), _nx=300;
+    // ★ NORMIE NATION — THE CENTREPIECE. ★
+    // Removing the teaching card did NOT make Nation the main thing; it just left a 96px hole in
+    // the middle of the page and a slightly taller strip jammed into the bottom margin, where it
+    // sat off-centre at x=300, buried in the scrolling hills, and physically COLLIDED with the
+    // nostalgia line (9px of overlap — visible in the wild, not theoretical). Being the only thing
+    // left is not the same as being the main thing.
+    // So the panel now OWNS the empty band: dead centre, full width, framed, with a Normie emblem
+    // and a slow gold pulse on the border so the eye lands there before the TAP prompt.
+    var _nn=nqNationNext();
     var _wp=null; try{ var _wt=parseInt(sessionStorage.getItem('nqWcTurn')||'0',10)||0; sessionStorage.setItem('nqWcTurn',String(_wt+1)); if(_wt%2===1) _wp=nqPreviewPick(); }catch(e){}
     if(_wp){ _nn={ head:(_wp.feature?'STILL LOCKED — VIP PERK':'STILL LOCKED — WORLD '+_wp.world),
                    short:_wp.title+' · unlocks with $NORMIE (terms in testing)' }; }
-    // With the teaching card gone the strip is no longer squeezed into the bottom margin — it gets
-    // a taller box and a larger head, which is the point of "focus on Normie nation".
-    this.p2.add(this.add.rectangle(_nx,H-50,330,42,0x120f28,0.9).setStrokeStyle(2,0xffd23f));
-    this.p2.add(this.add.text(_nx,H-64,'★ '+_nn.head+' ★',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffd23f',align:'center',wordWrap:{width:310}}).setOrigin(.5));
-    this.p2.add(this.add.text(_nx,H-54,(_nn.short||_nn.body),{fontFamily:UIFONT,resolution:UIRES,fontSize:'11px',color:'#e6e1ff',align:'center',lineSpacing:1,wordWrap:{width:314}}).setOrigin(.5,0));
+    // Band budget, worked out rather than guessed: story bottoms out at ~98, the far hills crest at
+    // 198. 106..190 sits inside that with 8px of air top and bottom.
+    var _py=148, _pw=372, _ph=84;
+    // drop shadow, body, and an inner hairline — three passes so it reads as a built panel rather
+    // than the single flat rectangle it was
+    this.p2.add(this.add.rectangle(cx+3,_py+3,_pw,_ph,0x000000,0.35));
+    var _pnl=this.add.rectangle(cx,_py,_pw,_ph,0x140f2c,0.94).setStrokeStyle(2,0xffd23f); this.p2.add(_pnl);
+    this.p2.add(this.add.rectangle(cx,_py,_pw-8,_ph-8,0x000000,0).setStrokeStyle(1,0x6a5aa8,0.7));
+    this.tweens.add({targets:_pnl, alpha:{from:0.94,to:1}, duration:900, yoyo:true, repeat:-1, ease:'Sine.inOut'});
+    if(this.renderer.type===Phaser.WEBGL){ try{ _pnl.postFX.addGlow(0xffd23f,0.9,0,false,0.1,10); }catch(e){} }
+    // emblem — a Normie standing in the panel, so the community beat has a FACE on it
+    var _em=this.add.image(cx-152,_py+6,'normie'); _em.setScale(60/_em.height); this.p2.add(_em);
+    this.tweens.add({targets:_em,y:_py+2,duration:820,yoyo:true,repeat:-1,ease:'Sine.inOut'});
+    this.p2.add(this.add.text(cx,_py-30,'★ '+_nn.head+' ★',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#ffd23f',align:'center',wordWrap:{width:_pw-24}}).setOrigin(.5));
+    this.p2.add(this.add.text(cx+42,_py-12,(_nn.short||_nn.body),{fontFamily:UIFONT,resolution:UIRES,fontSize:'12px',color:'#eee8ff',align:'center',lineSpacing:3,wordWrap:{width:250}}).setOrigin(.5,0));
+    // The nostalgia gag moved to the CELEBRATION page (see p1). It is a "you beat the boss, but…"
+    // joke, so the victory tableau is where it belongs — and moving it is what clears the overlap.
     this.drawHills();
     this.cont=this.add.text(cx,H-11,'TAP TO CONTINUE  ▶',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#3dff6e'}).setOrigin(.5).setDepth(40);
     var adv=function(){ if(self.done) return; if(self.phase===0){ self.t0=self.time.now-3300; } else { self.goNext(); } };
@@ -4729,7 +4785,19 @@ var WorldClear=new Phaser.Class({ Extends:Phaser.Scene,
     if(typeof BRIEFINGS!=='undefined' && BRIEFINGS[this.nextLevel]) this.scene.start('Briefing',{next:this.nextLevel,score:this.score,lab:this.lab});
     else this.scene.start('Game',{level:this.nextLevel,score:this.score,lives:3,lab:this.lab}); },
   drawHills:function(){ var d=this.hillG; if(!d) return; d.clear();
-    d.fillStyle(this.hillCol,1); for(var i=-1;i<5;i++){ d.fillCircle(i*150-(this.hillOff%150)+75,H-12,60); }
+    // TWO ridges at different speeds, not one. A single row of identical circles scrolling at a
+    // single speed is a cardboard cutout — it is most of why this page looked cheap next to the
+    // painted level backdrops. The far ridge is darker, wider and moves at ~45% speed, so the
+    // parallax alone gives the page depth for the cost of one extra fillCircle loop.
+    // Depth order matters now that a real painted plate sits behind these. The FOREGROUND ridge is
+    // the darkest — that is how parallax reads — so the near hills are a near-silhouette and the
+    // far ridge is mid-tone, letting the painted world show through between them. Before the plate
+    // went in this was inverted (near = full-bright theme colour), which made the hills look like
+    // brown blobs pasted over the art instead of ground in front of it.
+    d.fillStyle(this.hillColFar,1);
+    for(var i=-1;i<6;i++){ d.fillCircle(i*190-((this.hillOff*0.45)%190)+95, H-2, 76); }
+    d.fillStyle(this.hillColNear,1);
+    for(var j=-1;j<5;j++){ d.fillCircle(j*150-(this.hillOff%150)+75,H-12,60); }
     d.fillStyle(0x0a0813,0.35); d.fillRect(0,H-22,W,22); },
   update:function(){
     if(this.done) return;
