@@ -2172,7 +2172,11 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // Numbered levels keep "WORLD 4-2"; the bonus rooms announce themselves as what they are.
     var bn=this.hb(this.add.text(W/2,96,(def.hidden?'★ SECRET ★':'WORLD '+def.name),{fontFamily:'"Press Start 2P"',fontSize:'20px',color:'#ffd23f'}).setOrigin(.5).setShadow(3,3,'#7a5a00',0,true,true));
     var bs=this.hb(this.add.text(W/2,128,def.sub,{fontFamily:UIFONT,resolution:UIRES,fontSize:'22px',color:'#3dff6e'}).setOrigin(.5));
-    this.tweens.add({targets:[bn,bs],alpha:0,delay:1100,duration:700,onComplete:function(){ bn.destroy(); bs.destroy(); }});
+    // Held so a boss start can clear it instantly — see clearIntroBanner. Reaching a boss while
+    // "WORLD 12-3" is still fading put the level title straight through the boss banner.
+    this._introBanner=[bn,bs];
+    var _self0=this;
+    this.tweens.add({targets:[bn,bs],alpha:0,delay:1100,duration:700,onComplete:function(){ bn.destroy(); bs.destroy(); _self0._introBanner=null; }});
 
     // input — touch is driven by RAW POINTER SCREEN-ZONES in update() (see the poll there),
     // NOT interactive hit-areas: the HUD lives in a scrollFactor-0 container under a 2x zoom
@@ -2502,7 +2506,14 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // inventory shows nothing rather than a stale line for an item that has been spent.
     if(this.reserveDesc){
       var _sid=this.reserve && this.reserve[this.reserveSel||0], _it=_sid && RESERVE_ITEMS[_sid];
-      if(_it){ this.reserveDesc.setText(_it.label+' — '+(_it.desc||'')).setAlpha(0.92); }
+      if(_it){
+        this.reserveDesc.setText(_it.label+' — '+(_it.desc||'')).setAlpha(0.92);
+        // TRANSIENT, not permanent: the boss name label lives at y=42 and this line at y=45, so a
+        // permanent description printed straight through it on every boss level. Fade after a beat.
+        if(this._descFade){ try{ this._descFade.remove(); }catch(e){} this._descFade=null; }
+        var _rd=this.reserveDesc;
+        this._descFade=this.time.delayedCall(2600,function(){ try{ _rd.setAlpha(0); }catch(e){} });
+      }
       else { this.reserveDesc.setText('').setAlpha(0); }
     }
   },
@@ -2529,6 +2540,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   powerBanner:function(title,sub,color){
     var tags=["NORMIE'S RULES!","JUST DOING NORMIE THINGS","NORMIE POWER-UP!","NORMIE ON TOP"];
     var tag=tags[Math.floor(this.time.now/700)%tags.length];
+    this.clearIntroBanner();
+    this._bannerUntil=this.time.now+2600;   // flash() steps below the bar while this is up
     var d=60, bar=this.add.rectangle(-W,90,W*1.5,54,0x0d0b1e,0.92).setScrollFactor(0).setDepth(d).setStrokeStyle(3, Phaser.Display.Color.HexStringToColor(color).color);
     var t1=this.add.text(-W,78,title,{fontFamily:'"Press Start 2P"',fontSize:'19px',color:color}).setOrigin(.5).setScrollFactor(0).setDepth(d+1);
     var t2=this.add.text(-W,108,tag+'  \u00B7  '+sub,{fontFamily:UIFONT,resolution:UIRES,fontSize:'21px',color:'#ffd23f'}).setOrigin(.5).setScrollFactor(0).setDepth(d+1);
@@ -4033,7 +4046,16 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   addGlow:function(o,color,outer){ if(this.renderer.type!==Phaser.WEBGL||!o.postFX) return null; try{ return o.postFX.addGlow(color, outer||4, 0, false, 0.1, 16); }catch(e){ return null; } },
   addScore:function(n){ this.score+=n; this.hudScore.setText('SCORE '+this.score); },
   burst:function(x,y,tint,count){ var e=this.add.particles(x,y,'spark',{speed:{min:30,max:160},lifespan:420,scale:{start:1.1,end:0},tint:tint,emitting:false,blendMode:'ADD'}).setDepth(30); e.explode(count||10); this.time.delayedCall(520,function(){ e.destroy(); }); },
-  flash:function(msg,color){ var t=this.hb(this.add.text(W/2,70,msg,{fontFamily:'"Press Start 2P"',fontSize:'12px',color:color}).setOrigin(.5)); this.tweens.add({targets:t,y:52,alpha:0,duration:1200,onComplete:function(){t.destroy();}}); },
+  // Kill the level-intro title the moment a boss fight starts. Three things were landing on the
+  // same band at once — the fading "WORLD 12-3", the boss banner, and the item line — which is
+  // what made the boss intro look broken rather than busy.
+  clearIntroBanner:function(){
+    if(!this._introBanner) return;
+    this._introBanner.forEach(function(o){ try{ if(o&&o.destroy) o.destroy(); }catch(e){} });
+    this._introBanner=null;
+  },
+  flash:function(msg,color){ var _fy=(this._bannerUntil&&this.time.now<this._bannerUntil)?136:70;   // clear the banner band (63..117)
+    var t=this.hb(this.add.text(W/2,_fy,msg,{fontFamily:'"Press Start 2P"',fontSize:'12px',color:color}).setOrigin(.5)); this.tweens.add({targets:t,y:52,alpha:0,duration:1200,onComplete:function(){t.destroy();}}); },
   // mid-tier notice (bigger than flash, smaller than powerBanner): a centered pill with the coin
   // icon + amount — used when something DRAINS your coins so it clearly registers.
   coinLossBanner:function(amount,label,color){
