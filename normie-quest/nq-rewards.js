@@ -13,12 +13,15 @@
 const fs = require('fs');
 const path = require('path');
 
-const ITEMS = { disc: 1, vial: 1, shield: 1, star: 1, clock: 1, bomb: 1 };   // valid grantable items (mirror RESERVE_ITEMS in the game)
+// Valid grantable items — MIRRORS RESERVE_ITEMS in the game. An id here that the game does not
+// know is granted, queued, delivered, and then silently dropped by the client's unknown-id filter,
+// so this list has to move whenever that one does. ('clock' was removed 2026-07-26.)
+const ITEMS = { disc: 1, vial: 1, shield: 1, star: 1, bomb: 1 };
 const MAX_PENDING = 20;                                  // cap a wallet's queue so it can't grow unbounded
 // Wheel prize tables — EVERY spin wins something (loyalty program, not a lottery). Weighted.
 // Two tables: the free daily spin is open to any verified wallet, VIP gets the better odds AND
 // the bonus windows. Same three items in both, because the wheel graphic is a fixed 3-wedge
-// conic gradient — adding star/clock/bomb to the VIP table means rebuilding that graphic first.
+// conic gradient — adding star/bomb to the VIP table means rebuilding that graphic first.
 const WHEEL_VIP = [
   { item: 'disc', weight: 40 },
   { item: 'vial', weight: 35 },
