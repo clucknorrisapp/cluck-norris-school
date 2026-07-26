@@ -743,7 +743,7 @@ var LEVELS=[
   {"name":"9-3","sub":"THE 51% ATTACK","theme":13,"bgArt":"w09mines","width":6700,"gaps":[[728,840],[2176,2264],[2856,3040],[3592,3728],[4240,4376],[4976,5072],[5688,5800]],"walls":[[3160,3,"steel",3],[3860,4,"steel",3],[4532,4,"stone",3],[5300,3,"steel",4]],"plats":[[1580,2,150,"stone"],[1840,2,138,"stone"],[2100,2,126,"stone"],[2340,2,88,"stone"],[2560,2,138,"stone"],[4400,2,150,"steel"],[4940,2,126,"steel"],[5660,2,126,"stone"]],"spikes":[[960],[984],[2760],[2784],[3480],[3504],[5168],[5192],[5847],[5871]],"powerups":[["supergeek",760,230],["solana",1340,230],["diamond",2050,230],["bull",3552,230],["omegachad",6025,230]],"airdrops":[[1500,152],[3334,198]],"coins":[[320,120],[380,120],[640,196],[1620,120],[1880,118],[2140,100],[2380,68],[2430,68],[2960,120],[3220,140],[3560,120],[3620,150],[3700,120],[3940,106],[4420,120],[4560,120],[4640,122],[4860,120],[5264,150],[5520,150],[5960,120]],"enemies":[["paper",640,230,30],["fudster",960,230,60],["ghost",1240,212,80],["gasgoblin",2000,230,70],["bitmaxi",2340,72,36],["sniper",2620,230,30],["fudster",3080,230,70],["sandwich",4160,230,60],["ghost",4560,212,80],["sniper",4898,230,30],["ghost",5904,212,70],["fudster",6490,230,70]],"pumpdumps":[[2880,174],[3560,174],[3660,174]],"honeypots":[[1300,232],[4020,232],[5140,232]],"npcs":[[2380,90]],"bonusblocks":[[1090,5],[3140,8],[5269,8]],"caches":[[2380,64,300],[4430,80,300]],"gates":[],"firebars":[[3340,150,52,140,4],[3620,146,52,-140,4]],"planks":[[728,5],[2176,5],[2856,9],[5688,5]],"yields":[],"movers":[[4900,150,"y",52,42]],"rugplats":[[304,3,150]],"dumpzones":[],"time":260,"diff":2.35,"boss":true,"bossType":"golem","next":34,"door":6500,"key":[2340,64],"miniworms":[2010,4020]},
   // ===== HIDDEN BONUS LEVELS (index 27+) — reachable ONLY via a speakeasy warp. hidden:true keeps them
   //       out of the normal progression + the level-select; their door RETURNS you to the surface. =====
-  { name:'VAULT', sub:'THE SPEAKEASY VAULT', time:90, theme:12, bgArt:'wVaultRoom', width:2600, hidden:true, bonus:true,
+  { name:'VAULT', sub:'THE SEED VAULT', time:90, theme:12, bgArt:'wSeedVault', width:2600, hidden:true, bonus:true,
     gaps:[],
     walls:[[300,2,'crate',2],[2260,2,'stone',2]],
     plats:[[1680,3,150,'crate']],
@@ -755,7 +755,7 @@ var LEVELS=[
     enemies:[],
     key:[420,H-150], door:2440 },
 
-  { name:'TRENCHES', sub:'CRYPTO TRENCHES', time:210, theme:11, bgArt:'wTrenches', width:7200, hidden:true, bonus:true, boss:true, bossType:'troll', diff:1.5,
+  { name:'TRENCHES', sub:'NO MAN\'S CHAIN', time:210, theme:11, bgArt:'wTrenches', width:7200, hidden:true, bonus:true, boss:true, bossType:'troll', diff:1.5,
     gaps:[[900,1020],[1900,2020],[3100,3220],[4300,4420],[5500,5620],[6400,6500]],
     walls:[[520,3,'steel',3],[1420,3,'crate',3],[2520,3,'steel',3],[3620,3,'crate',3],[4820,3,'steel',3],[5920,3,'crate',3]],
     plats:[[940,2,150,'steel'],[1940,2,150,'crate'],[3140,2,150,'steel'],[4340,2,150,'crate'],[5540,2,150,'steel'],[6420,2,150,'crate'],[2200,2,H-130,'steel'],[4000,2,H-142,'crate']],
@@ -793,7 +793,7 @@ var LEVELS=[
     key:[400,H-150], door:2440 },
 
   // idx 28 — healing airdrops
-  { name:'BUNKER', sub:'THE AIRDROP BUNKER', time:85, theme:12, bgArt:'wVaultRoom', width:2600, hidden:true, bonus:true,
+  { name:'BUNKER', sub:'THE SYBIL BUNKER', time:85, theme:12, bgArt:'wSybilBunker', width:2600, hidden:true, bonus:true,
     gaps:[],
     walls:[[280,2,'steel',2],[2300,2,'steel',2]],
     plats:[[760,3,150,'steel'],[1560,3,H-134,'steel']],
@@ -806,7 +806,7 @@ var LEVELS=[
     key:[400,H-150], door:2440 },
 
   // idx 29 — multi-slot casino den
-  { name:'DEN', sub:'THE DEGEN DEN', time:90, theme:12, bgArt:'wVaultRoom', width:2800, hidden:true, bonus:true,
+  { name:'DEN', sub:'THE LEVERAGE DEN', time:90, theme:12, bgArt:'wLeverageDen', width:2800, hidden:true, bonus:true,
     gaps:[],
     walls:[[280,2,'crate',2],[2500,2,'crate',2]],
     plats:[[1400,3,150,'stone']],
@@ -819,7 +819,7 @@ var LEVELS=[
     key:[380,H-150], door:2640 },
 
   // idx 30 — climb to the Moon
-  { name:'LAUNCHPAD', sub:'THE LAUNCH PAD', time:85, theme:12, bgArt:'wVaultRoom', width:2600, hidden:true, bonus:true,
+  { name:'LAUNCHPAD', sub:'THE BONDING CURVE', time:85, theme:12, bgArt:'wBondCurve', width:2600, hidden:true, bonus:true,
     gaps:[],
     walls:[[280,2,'crate',2],[2300,2,'crate',2]],
     plats:[[680,2,150,'crate'],[1040,2,H-128,'crate'],[1400,2,H-160,'crate'],[1760,2,H-190,'crate']],
@@ -958,7 +958,7 @@ function padAdvance(scene, go){
 // browsers kept serving the previous painted plates from cache.
 // >>> BUMP THIS whenever any file in normie-quest/public/worlds/ is replaced. <<<
 var WORLD_ART_VER='3';
-var WORLD_ART={ wTrenches:'/normie-quest/worlds/w-trenches.png', wVaultRoom:'/normie-quest/worlds/w-vaultroom.png', wPrinter:'/normie-quest/worlds/w-printer.png', wDiamondVault:'/normie-quest/worlds/w-diamondvault.png', w09mines:'/normie-quest/worlds/w09-mines.png', w10euphoria:'/normie-quest/worlds/w10-euphoria.png', w10swan:'/normie-quest/worlds/w10-swan.png', w11citadel:'/normie-quest/worlds/w11-citadel.png', w12relaunch:'/normie-quest/worlds/w12-relaunch.png', w13pod:'/normie-quest/worlds/w13-pod.png', w14shrine:'/normie-quest/worlds/w14-shrine.png', w15diamond:'/normie-quest/worlds/w15-diamond.png', w01dusk:'/normie-quest/worlds/w01-dusk.png', w01cavern:'/normie-quest/worlds/w01-cavern.png', w01keep:'/normie-quest/worlds/w01-keep.png', w02desert:'/normie-quest/worlds/w02-desert.png', w02casino:'/normie-quest/worlds/w02-casino.png', w03skyline:'/normie-quest/worlds/w03-skyline.png', w04exchange:'/normie-quest/worlds/w04-exchange.png', w05bridge:'/normie-quest/worlds/w05-bridge.png', w06depeg:'/normie-quest/worlds/w06-depeg.png', w07farm:'/normie-quest/worlds/w07-farm.png', w08bear:'/normie-quest/worlds/w08-bear.png', w16citadel:'/normie-quest/worlds/w16-citadel.png', w17spire:'/normie-quest/worlds/w17-spire.png', w18reserve:'/normie-quest/worlds/w18-reserve.png', w19orbital:'/normie-quest/worlds/w19-orbital.png', w20tower:'/normie-quest/worlds/w20-tower.png', w21tower:'/normie-quest/worlds/w21-tower.png', w21moon:'/normie-quest/worlds/w21-moon.png' };
+var WORLD_ART={ wTrenches:'/normie-quest/worlds/w-trenches.png', wVaultRoom:'/normie-quest/worlds/w-vaultroom.png', wPrinter:'/normie-quest/worlds/w-printer.png', wDiamondVault:'/normie-quest/worlds/w-diamondvault.png', wSeedVault:'/normie-quest/worlds/w-seedvault.png', wSybilBunker:'/normie-quest/worlds/w-sybilbunker.png', wLeverageDen:'/normie-quest/worlds/w-leveragedn.png', wBondCurve:'/normie-quest/worlds/w-bondcurve.png', w09mines:'/normie-quest/worlds/w09-mines.png', w10euphoria:'/normie-quest/worlds/w10-euphoria.png', w10swan:'/normie-quest/worlds/w10-swan.png', w11citadel:'/normie-quest/worlds/w11-citadel.png', w12relaunch:'/normie-quest/worlds/w12-relaunch.png', w13pod:'/normie-quest/worlds/w13-pod.png', w14shrine:'/normie-quest/worlds/w14-shrine.png', w15diamond:'/normie-quest/worlds/w15-diamond.png', w01dusk:'/normie-quest/worlds/w01-dusk.png', w01cavern:'/normie-quest/worlds/w01-cavern.png', w01keep:'/normie-quest/worlds/w01-keep.png', w02desert:'/normie-quest/worlds/w02-desert.png', w02casino:'/normie-quest/worlds/w02-casino.png', w03skyline:'/normie-quest/worlds/w03-skyline.png', w04exchange:'/normie-quest/worlds/w04-exchange.png', w05bridge:'/normie-quest/worlds/w05-bridge.png', w06depeg:'/normie-quest/worlds/w06-depeg.png', w07farm:'/normie-quest/worlds/w07-farm.png', w08bear:'/normie-quest/worlds/w08-bear.png', w16citadel:'/normie-quest/worlds/w16-citadel.png', w17spire:'/normie-quest/worlds/w17-spire.png', w18reserve:'/normie-quest/worlds/w18-reserve.png', w19orbital:'/normie-quest/worlds/w19-orbital.png', w20tower:'/normie-quest/worlds/w20-tower.png', w21tower:'/normie-quest/worlds/w21-tower.png', w21moon:'/normie-quest/worlds/w21-moon.png' };
 var Boot=new Phaser.Class({ Extends:Phaser.Scene,
   initialize:function(){ Phaser.Scene.call(this,{key:'Boot'}); },
   create:function(){
@@ -1996,7 +1996,10 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.time.addEvent({delay:1000,loop:true,callback:function(){ if(this.over) return; this.timeLeft--; this.hudTime.setText(String(this.timeLeft)); if(this.timeLeft<=15) this.hudTime.setColor('#ff3860'); if(this.timeLeft<=0) this.gameOver('TIME UP'); },callbackScope:this});
 
     // level intro banner (non-blocking)
-    var bn=this.hb(this.add.text(W/2,96,'WORLD '+def.name,{fontFamily:'"Press Start 2P"',fontSize:'20px',color:'#ffd23f'}).setOrigin(.5).setShadow(3,3,'#7a5a00',0,true,true));
+    // Hidden rooms have a word for a name, not a number, so "WORLD "+name rendered as "WORLD VAULT"
+    // / "WORLD LAUNCHPAD" — which reads like a missing string rather than a secret you just found.
+    // Numbered levels keep "WORLD 4-2"; the bonus rooms announce themselves as what they are.
+    var bn=this.hb(this.add.text(W/2,96,(def.hidden?'★ SECRET ★':'WORLD '+def.name),{fontFamily:'"Press Start 2P"',fontSize:'20px',color:'#ffd23f'}).setOrigin(.5).setShadow(3,3,'#7a5a00',0,true,true));
     var bs=this.hb(this.add.text(W/2,128,def.sub,{fontFamily:UIFONT,resolution:UIRES,fontSize:'22px',color:'#3dff6e'}).setOrigin(.5));
     this.tweens.add({targets:[bn,bs],alpha:0,delay:1100,duration:700,onComplete:function(){ bn.destroy(); bs.destroy(); }});
 
