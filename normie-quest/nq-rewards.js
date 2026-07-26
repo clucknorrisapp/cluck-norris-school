@@ -66,7 +66,12 @@ function claimOne(wallet) {
   const s = load();
   const q = (s.pending && s.pending[w]) || [];
   if (!q.length) return { ok: true, item: null, pending: 0 };
-  const item = q.shift();
+  // Pop past any RETIRED id. Queues are durable on /data, so an item removed from the game after a
+  // grant was banked (e.g. 'clock' on 2026-07-26) sits there forever: claimOne would hand it over,
+  // the client's unknown-id guard would refuse it, and the player would silently lose a prize they
+  // were owed with no way to see why. Skipping them here drains the dead entries instead.
+  let item = null;
+  while (q.length) { const c = q.shift(); if (ITEMS[c]) { item = c; break; } }
   if (!q.length) delete s.pending[w];
   save(s);
   return { ok: true, item, pending: q.length };

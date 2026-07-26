@@ -229,6 +229,22 @@ var SFX={
   power:function(){ if(_powerBuf){ if(_playSample(_powerBuf,0.12)) return; } else { _loadSfx(); }   // real .wav sample once decoded (quieted to match the other SFX); synth chime meanwhile / as fallback
     _seq([[523,0.08],[659,0.08],[784,0.08],[1046,0.18]],'square',0.09); },
   boss:function(){ _tone(150,55,0.20,'sawtooth',0.12); },
+  // BOSS DOWN. Killing a boss was the one big moment in the game with NO sound at all — the spin-
+  // out tween and the banner played in silence, so the biggest hit in a run landed softer than
+  // picking up a coin. Deliberately its OWN cue, not a reuse: SFX.clear is an ordinary level
+  // ending and SFX.win is the end of the whole run, and hearing either one here would flatten the
+  // difference. Two parts, timed to the 1.3s spin-and-fade: the boss COLLAPSING, then a fanfare
+  // rising over the top of it. Held back ~0.1s so it doesn't sit on the last stomp's thud.
+  bossDown:function(){
+    _tone(300,42,0.80,'sawtooth',0.13,0.02);            // the collapse — long sweep down
+    _tone(150,28,0.90,'square',0.06,0.06);              // sub-octave under it, so it reads as WEIGHT
+    var w=0.46;
+    [[392,0.10],[523,0.10],[659,0.10],[784,0.13],[1046,0.26]].forEach(function(n){
+      _tone(n[0],n[0],n[1],'square',0.11,w); w+=n[1]*0.92; });   // rising major arpeggio
+    // landing triad — four voices, because a single note here reads as one more blip, not a win
+    [523,659,784,1046].forEach(function(f,i){ _tone(f,f,0.55,'square',0.05,w+0.02+i*0.004); });
+    _tone(196,98,0.50,'triangle',0.09,w+0.02);          // low punch under the chord
+  },
   clear:function(){ _seq([[523,0.10],[784,0.10],[1046,0.24]],'square',0.09); },
   win:function(){ _seq([[523,0.12],[659,0.12],[784,0.12],[1046,0.12],[1319,0.30]],'square',0.10); }
 };
@@ -1320,14 +1336,8 @@ var Boot=new Phaser.Class({ Extends:Phaser.Scene,
     g.fillStyle(0xffd23f); g.fillTriangle(10,8,6,1,14,1);                         // exhaust trailing UP
     g.fillStyle(0xff8a2b); g.fillTriangle(10,6,8,1,12,1);
     g.generateTexture('missile',20,34);
-    // stopwatch — face, bezel, crown, hands: reads as TIME, not coffee.
-    g.clear();
-    g.fillStyle(0x8f97b5); g.fillRect(11,0,6,4);                                  // crown
-    g.fillStyle(0xd8dae6); g.fillCircle(14,16,13);                                // bezel
-    g.fillStyle(0x1a1630); g.fillCircle(14,16,10);                                // face
-    g.fillStyle(0x3dff6e); g.fillRect(13,8,2,9); g.fillRect(14,15,8,2);           // hands
-    g.fillStyle(0xffd23f); g.fillCircle(14,16,2);                                 // pin
-    g.generateTexture('stopwatch',28,30);
+    // (the 'stopwatch' icon lived here — deleted with the +30 SECONDS item it was drawn for,
+    //  owner's call 2026-07-26: "there is no need for time increase in these levels")
     // FUD gas cloud (sickly green lumpy puff — slows the player while inside)
     g.clear(); g.fillStyle(0x7ec86e); g.fillCircle(11,17,10); g.fillCircle(21,14,11); g.fillCircle(26,21,9); g.fillCircle(15,23,9); g.generateTexture('gas',36,34);
     // sniper bolt (small red energy bullet)
@@ -1561,7 +1571,11 @@ var RESERVE_ITEMS = {
   shield: { icon:'supergeek', label:'AUDIT SHIELD', desc:'blocks the next hit',    use:function(g){ g.geekShield=true; } },
   // ── premium boosts (in-game drops, wheel wins, owner grants) — all map to proven mechanics ──
   star:   { icon:'moon',      label:'STAR POWER',   desc:'invincible for 8 seconds', use:function(g){ g.moonUntil=g.time.now+8000; if(g.powerBanner) g.powerBanner('STAR POWER','INVINCIBLE — smash everything!','#ffd23f'); } },
-  clock:  { icon:'stopwatch', label:'+30 SECONDS',  desc:'adds 30s to the clock', use:function(g){ g.timeLeft+=30; if(g.hudTime){ g.hudTime.setText(String(g.timeLeft)); if(g.timeLeft>15) g.hudTime.setColor('#3dff6e'); } } },
+  // ⛔ NO 'clock' / +30 SECONDS ITEM. Removed 2026-07-26 on the owner's call — "there is no need
+  // for time increase in these levels". The level clocks are generous enough that banking a slot
+  // for more of something you never run out of made the whole inventory worse: three slots, and
+  // one of them held a non-prize. Any clock still sitting in a player's saved inventory is dropped
+  // silently on load (the unknown-id filter in create()), so nothing breaks. Don't re-add it.
   // AIR STRIKE (owner's call 2026-07-26: "change the airdrop inventory to air strike and be a
   // missile"). It began life as the enemy-wipe wearing an AIRDROP CRATE icon — and since a crate in
   // the world gives you a HEART, spending it and getting no heart read as broken. Rather than bend
@@ -3481,11 +3495,15 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // every boss level showed deaths but permanently 0 clears (garbage deathsPerClear).
     nqTele('clear',{world:this.def&&this.def.name,t:Math.round((Date.now()-(this._lvStartAt||Date.now()))/1000),deaths:this._lvDeaths||0,score:this.score});
     k.invuln=true; k.setVelocity(0,0); k.body.setAllowGravity(false);
+    // Sound + shake go here, at the TOP of bossDefeat, so every ending gets them: the generic VIP
+    // path, each per-boss branch and both finales all return from below this line.
+    try{ SFX.bossDown(); }catch(e){}
+    this.cameras.main.shake(300,0.010); this.cameras.main.flash(220,255,210,110);
     this.addScore(500);
     this.tweens.add({targets:k, angle:720, alpha:0, y:k.y-50, duration:1300, ease:'Cubic.in', onComplete:function(){ if(k.active) k.destroy(); }});
     // BOSS DROP: beating a boss banks a random boost for later (skipped if the slot's already full).
     // The reward-wheel granter uses the same grantReserve() inventory.
-    if(this.reserve && this.reserve.length<RESERVE_SLOTS){ var _dp=['vial','disc','shield','star','clock','bomb']; this.grantReserve(_dp[Math.floor((this.time.now/97)%_dp.length)]); }
+    if(this.reserve && this.reserve.length<RESERVE_SLOTS){ var _dp=['vial','disc','shield','star','bomb']; this.grantReserve(_dp[Math.floor((this.time.now/97)%_dp.length)]); }
     var nx=this.levelIdx+1;
     // 'saylor' (20-3) and 'wenmoon' (21-3, the finale) both have bespoke branches below —
     // Saylor advances to the moon, WEN MOON ends the run — so they skip the generic VIP path.
@@ -3656,7 +3674,10 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   wormDefeat:function(){
     if(this.over) return; this.over=true; var wm=this.worm; if(this.mound) this.mound.setVisible(false);
     nqTele('clear',{world:this.def&&this.def.name,t:Math.round((Date.now()-(this._lvStartAt||Date.now()))/1000),deaths:this._lvDeaths||0,score:this.score});   // boss levels never reach levelClear
-    wm.invuln=true; this.addScore(800); this.cameras.main.shake(520,.03);
+    // The WORMHOLE (2-3) does NOT route through bossDefeat — it is its own ending, so it needs its
+    // own call or the first boss most players ever beat would still go down in silence.
+    try{ SFX.bossDown(); }catch(e){}
+    wm.invuln=true; this.addScore(800); this.cameras.main.shake(520,.03); this.cameras.main.flash(220,255,210,110);
     this.tweens.add({targets:wm, y:this.wormDownY+40, angle:18, alpha:0, duration:1400, ease:'Cubic.in', onComplete:function(){ if(wm.active) wm.destroy(); }});
     this.bankCheckpoint();   // World 2 done → checkpoint at the start of World 3
     this.powerBanner('WORMHOLE CLOSED!','NORMIE SEALS THE BRIDGE — GG','#66ddff');
