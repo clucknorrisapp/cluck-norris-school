@@ -141,7 +141,18 @@ function check(lv) {
   (lv.walls || []).forEach(w => { const wide = w[3] || 1; for (let i = 0; i < wide; i++) fixture(w[0] + i * TILE + TILE / 2, 'wall'); });
   (lv.honeypots || []).forEach(h2 => fixture(h2[0], 'honeypot'));
   (lv.npcs || []).forEach(n => fixture(n[0], 'npc'));
-  (lv.caches || []).forEach(c => fixture(c[0], 'cache'));
+  // A cache carries an EXPLICIT y and is routinely placed on a platform top (that is the whole
+  // point of putting the fat ones up high — climbing should pay). Judging it on x alone called a
+  // cache resting on a gap-bridging platform a "floater", which it plainly is not. So a cache over
+  // a gap is only a failure when NOTHING is under it: it passes if a platform spans its x with a
+  // top at or just below the cache, i.e. it is actually sitting on that platform. Ground-height
+  // caches over a pit still fail, which is the case this rule exists to catch.
+  (lv.caches || []).forEach(c => {
+    const cy = (c[1] != null) ? c[1] : (GY - 18);
+    const restingOnPlat = plats.map(platSpan).some(s2 => c[0] >= s2.x1 - 12 && c[0] <= s2.x2 + 12
+      && s2.top >= cy && s2.top - cy <= 60);
+    if (!restingOnPlat) fixture(c[0], 'cache');
+  });
   (lv.miniworms || []).forEach(x => fixture(x, 'miniworm'));
   (lv.gates || []).forEach(g2 => fixture(g2[0], 'gate'));
   (lv.enemies || []).forEach(e => { if (e[0] !== 'ghost' && e[2] >= 200) fixture(e[1], `enemy:${e[0]}`); });

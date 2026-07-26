@@ -734,16 +734,17 @@ render the realized width, not the requested slider value. LOW backlog now fully
 - No automated test suite beyond that.
 
 ## Deferred / check later
-- **Nomadz partnership outreach — AWAITING REPLY (owner DM'd CEO Ivan, 2026-07-20).** The owner
-  (Charles "Chuck" Jantzen) asked permission to feature Nomadz (Solana travel booking — the owner
-  personally booked a BTC Vegas hotel through it) in the app as a real-world-adoption education
-  section + educational X posts. No compensation either way. **Do NOT build/publish anything about
-  Nomadz until Ivan consents and supplies/approves the info** — the owner explicitly asked
-  permission first, and their material should come from them. When approved: home for the content
-  is a Library deep-dive ("Booking travel with crypto") + a `/learn` asset page (the SEO surface)
-  + educational X posts (mirror+bump rule; tag their handle — VERIFY it, never guess). Useful asks
-  when Ivan says yes: founding story, how-it-works steps, brand assets/logo (never AI-draw logos),
-  their X handle, any stats they're comfortable publishing, preferred link.
+- 🚫 **Nomadz partnership — DEAD, DO NOT RE-RAISE (owner's call 2026-07-26).** The owner DM'd CEO
+  Ivan on 2026-07-20 asking permission to feature Nomadz (Solana travel booking) as a real-world-
+  adoption education section. **Ivan never responded**, and the owner now considers it dead. Do not
+  build, publish, or propose anything Nomadz-related, and do not suggest chasing a reply. If Ivan
+  ever reaches out unprompted, that is the owner's call to reopen — nobody else's.
+- 🚫 **Solana Foundation — NOTHING HAS PANNED OUT (owner's call 2026-07-26).** None of the Solana
+  Foundation avenues have gone anywhere. Do not build work premised on Foundation support, and do
+  not propose new applications unless the owner raises it. ⚠️ The grant/investor pages still
+  describe the project as a Foundation-grant entry — that copy is now stale and should be reviewed
+  with the owner before the next accuracy pass, NOT silently rewritten (it is public-facing and the
+  hackathon framing may still be accurate).
 - **CoinGecko listing — REAPPLIED 2026-06-11 (awaiting decision).** Request ID
   `CL1106260002`, submitted via partner.coingecko.com; CoinGecko said ~5 business days.
   Public verification post is LIVE on X (@firechicken007):

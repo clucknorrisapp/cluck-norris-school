@@ -862,8 +862,8 @@ var LEVELS=[
     spikes:[],
     powerups:[['bull',700,230],['moon',3320,230],['candle',5000,230]],
     coins:[[200,224],[260,224],[640,224],[760,224],[1200,224],[1260,224],[1600,196],[2600,224],[2660,224],[2900,196],[3400,224],[3700,224],[4100,196],[4600,224],[4900,224],[5200,196],[5800,224],[6100,196],[6600,224]],
-    caches:[[1320,GY-20,200],[2216,H-152,400],[3720,GY-20,300],[4016,H-164,500],[6040,GY-20,400],[6960,GY-20,1000]],
-    slots:[[1520,'trench'],[4620,'trench']],
+    caches:[[940,130,400],[1320,GY-20,200],[1940,130,450],[2216,H-152,400],[3140,130,500],[3720,GY-20,300],[4016,H-164,500],[5540,130,500],[6040,GY-20,400],[6960,GY-20,1000]],
+    slots:[[1520,'trench',4],[4620,'trench',4]],
     enemies:[['bot',1220,230,80],['ghost',2420,212,90],['bot',3420,230,80],['sniper',4220,230,30],['ghost',5040,212,90],['bot',5820,230,80],['sniper',6320,230,30]],
     bonusblocks:[[1640,8],[3820,'moon'],[5240,8]],
     key:[620,H-150], door:7060 },
@@ -1435,14 +1435,29 @@ function worldCount(){
   }
   return n;
 }
+// Every entry needs a DESC: the HUD is a row of 20px icons, so without one the only way to learn
+// what a banked item does is to spend it and watch. Keep each under ~34 chars — it renders on one
+// line under the slots.
 var RESERVE_ITEMS = {
-  disc:   { icon:'solana',    label:'SOL DISCS +5', use:function(g){ g.throwAmmo+=5; if(g.updateThrowHud) g.updateThrowHud(); } },
-  vial:   { icon:'heart',     label:'FULL HEAL',    use:function(g){ while(g.lives<3){ g.lives++; if(g.hearts[g.lives-1]) g.hearts[g.lives-1].setAlpha(1); } } },
-  shield: { icon:'supergeek', label:'AUDIT SHIELD', use:function(g){ g.geekShield=true; } },
+  disc:   { icon:'solana',    label:'SOL DISCS +5', desc:'+5 throwing discs',      use:function(g){ g.throwAmmo+=5; if(g.updateThrowHud) g.updateThrowHud(); } },
+  vial:   { icon:'heart',     label:'FULL HEAL',    desc:'refill all 3 hearts',    use:function(g){ while(g.lives<3){ g.lives++; if(g.hearts[g.lives-1]) g.hearts[g.lives-1].setAlpha(1); } } },
+  shield: { icon:'supergeek', label:'AUDIT SHIELD', desc:'blocks the next hit',    use:function(g){ g.geekShield=true; } },
   // ── premium boosts (in-game drops, wheel wins, owner grants) — all map to proven mechanics ──
-  star:   { icon:'moon',      label:'STAR POWER',   use:function(g){ g.moonUntil=g.time.now+8000; if(g.powerBanner) g.powerBanner('STAR POWER','INVINCIBLE — smash everything!','#ffd23f'); } },
-  clock:  { icon:'caffeine',  label:'+30 SECONDS',  use:function(g){ g.timeLeft+=30; if(g.hudTime){ g.hudTime.setText(String(g.timeLeft)); if(g.timeLeft>15) g.hudTime.setColor('#3dff6e'); } } },
-  bomb:   { icon:'airdrop',   label:'AIRDROP BOMB', use:function(g){ if(g.enemies) g.enemies.children.iterate(function(e){ if(e&&e.active){ var ex=e.x,ey=e.y; e.disableBody(true,true); if(g.addScore) g.addScore(20); if(g.burst) g.burst(ex,ey,0xffd23f,8); } }); g.cameras.main.shake(220,0.011); } }
+  star:   { icon:'moon',      label:'STAR POWER',   desc:'invincible for 8 seconds', use:function(g){ g.moonUntil=g.time.now+8000; if(g.powerBanner) g.powerBanner('STAR POWER','INVINCIBLE — smash everything!','#ffd23f'); } },
+  clock:  { icon:'caffeine',  label:'+30 SECONDS',  desc:'adds 30s to the clock', use:function(g){ g.timeLeft+=30; if(g.hudTime){ g.hudTime.setText(String(g.timeLeft)); if(g.timeLeft>15) g.hudTime.setColor('#3dff6e'); } } },
+  // ⚠️ THIS ITEM LOOKED BROKEN AND WAS. It carries the AIRDROP crate icon, and an airdrop crate in
+  // the world gives you a HEART — but the item only cleared enemies. Spend it anywhere without a
+  // live enemy on screen (a bonus room, an empty stretch) and absolutely nothing happened, which is
+  // exactly how it read in play: "in game it gives you a heart, in the inventory it doesn't seem to
+  // do anything." Owner's call: the crate should drop the life.
+  // So it now does what its own icon promises FIRST — drops a heart, or +150 when hearts are full,
+  // matching grabAirdrop exactly — and the blast that clears nearby FUD is the bonus on top. It can
+  // therefore never be a no-op again, whatever is on screen.
+  bomb:   { icon:'airdrop',   label:'AIRDROP CRATE', desc:'+1 heart, blast clears FUD', use:function(g){
+            if(g.lives<3){ g.lives++; if(g.hearts[g.lives-1]) g.hearts[g.lives-1].setAlpha(1); if(g.powerBanner) g.powerBanner('AIRDROP CRATE','+1 HEART — blast clears the FUD','#3dff6e'); }
+            else { if(g.addScore) g.addScore(150); if(g.powerBanner) g.powerBanner('AIRDROP CRATE','BAGS FULL — +150','#3dff6e'); }
+            if(g.enemies) g.enemies.children.iterate(function(e){ if(e&&e.active){ var ex=e.x,ey=e.y; e.disableBody(true,true); if(g.addScore) g.addScore(20); if(g.burst) g.burst(ex,ey,0xffd23f,8); } });
+            g.cameras.main.shake(220,0.011); } }
 };
 var Game=new Phaser.Class({ Extends:Phaser.Scene,
   initialize:function(){ Phaser.Scene.call(this,{key:'Game'}); },
@@ -1736,7 +1751,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       // ALWAYS-ON discoverability hint floating above the machine (bobs so you spot it from a distance)
       var tapHint=self.add.text(sm.x, sm.y-sm.displayHeight*0.5-44, 'TAP TO SPIN ▾', {fontFamily:'"Press Start 2P"',fontSize:'6px',color:'#ffd23f'}).setOrigin(.5).setDepth(20);
       self.tweens.add({targets:tapHint, y:tapHint.y-3, duration:620, yoyo:true, repeat:-1, ease:'Sine.inOut'});
-      var S={ m:sm, reelBox:reelBox, reelIcons:reelIcons, prompt:prompt, tapHint:tapHint, syms:stheme.syms, label:stheme.label, spinsLeft:(stheme.spins||3), big:!!stheme.big, mult:(stheme.mult||1), spin:null };
+      var S={ m:sm, reelBox:reelBox, reelIcons:reelIcons, prompt:prompt, tapHint:tapHint, syms:stheme.syms, label:stheme.label, spinsLeft:(sd[2]!=null?sd[2]:(stheme.spins||3)), big:!!stheme.big, mult:(stheme.mult||1), spin:null };
       self.slots.push(S);
       // TAP the machine to spin (no jump needed). Generous hit area + reach so you can spin from a
       // little distance (the reach gate lives in trySpinSlot). Bigger box covers the reels above too.
@@ -2109,6 +2124,10 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       var hn=_rself.hb(_rself.add.text(bx-9,_ry-9,String(si+1),{fontFamily:'"Press Start 2P"',fontSize:'7px',color:'#ffd23f'}).setOrigin(0,0).setDepth(21).setAlpha(0.3));
       _rself.reserveBoxes.push(box); _rself.reserveIcons.push(ic); _rself.reserveHints.push(hn); _rself._reservePulse.push(null);
     })(_si); }
+    // ITEM DESCRIPTION LINE. The slots are 20px icons with no words, so the only way to learn what
+    // a banked item did was to spend it and watch — which is how the airdrop crate's dead no-op
+    // went unnoticed. Names the SELECTED item and says what it does, right under the row.
+    this.reserveDesc=this.hb(this.add.text(_rx0-10, _ry+15, '', {fontFamily:'"Press Start 2P"',fontSize:'6px',color:'#9fd4ff'}).setOrigin(0,0).setDepth(21).setAlpha(0));
     this.updateReserveHud();
     this.syncRewards();   // pull any pending wheel/owner rewards into free slots
     // PAUSE button — tap the ⏸ (top-left) on touch, or press P / Esc on desktop
@@ -2442,6 +2461,13 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         ic.setAlpha(0); hn.setAlpha(0.3); box.setStrokeStyle(1.5,0x3a3456);
         if(this._reservePulse[si]){ this._reservePulse[si].stop(); this._reservePulse[si]=null; box.setScale(1); }
       }
+    }
+    // Describe whichever slot is selected (SELECT cycles it on a pad; slot 1 by default). Empty
+    // inventory shows nothing rather than a stale line for an item that has been spent.
+    if(this.reserveDesc){
+      var _sid=this.reserve && this.reserve[this.reserveSel||0], _it=_sid && RESERVE_ITEMS[_sid];
+      if(_it){ this.reserveDesc.setText(_it.label+' — '+(_it.desc||'')).setAlpha(0.92); }
+      else { this.reserveDesc.setText('').setAlpha(0); }
     }
   },
   manualThrow:function(){   // MANUAL THROW: hurl a Solana disc from the counted ammo (F/X or THROW button)
@@ -3875,7 +3901,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       } else if(!sp.landed){
         sp.landed=true; sp.result=[Phaser.Math.RND.pick(S.syms),Phaser.Math.RND.pick(S.syms),Phaser.Math.RND.pick(S.syms)];
         S.reelIcons.forEach(function(ic,i){ ic.setTexture(sp.result[i]).setDisplaySize(18,18); });
-        self.slotPayout(sp.result, S); sp.hideAt=now+1500;
+        self.slotPayout(sp.result, S); sp.hideAt=now+1000;
       } else if(now>=sp.hideAt){
         S.reelBox.setVisible(false); S.reelIcons.forEach(function(ic){ ic.setVisible(false); }); S.spin=null;
       }
@@ -3899,8 +3925,21 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   },
   // TAP-to-spin: fired by tapping the slot machine. Spins if the player is within reach + it has credits.
   trySpinSlot:function(S){
-    if(this.over||!S||S.spinsLeft<=0||S.spin) return; var p=this.player; if(!p) return;
-    if(Math.abs(p.x-S.m.x)<260 && Math.abs(p.y-S.m.y)<170) this.startSpin(this.time.now, S);   // generous reach — tap from a little distance
+    if(this.over||!S) return; var p=this.player; if(!p) return;
+    if(!(Math.abs(p.x-S.m.x)<260 && Math.abs(p.y-S.m.y)<170)) return;   // generous reach — tap from a little distance
+    var now=this.time.now;
+    // FAST SPIN (owner ask: "or give us ability to fast spin"). Tapping used to be ignored outright
+    // whenever a spin object existed, so once the reels landed you could only WAIT OUT the result
+    // hold and then the auto-spin cadence. Now a tap during the hold settles that result immediately
+    // and fires the next spin, so an impatient player sets their own pace while the hands-off
+    // auto-spin cadence is unchanged for everyone else. A tap mid-flight is still ignored — you
+    // cannot skip the reels themselves, only the dead time after them.
+    if(S.spin){
+      if(S.spin.landed && S.spinsLeft>0){ S.spin=null; this.startSpin(now, S); }
+      return;
+    }
+    if(S.spinsLeft<=0) return;
+    this.startSpin(now, S);
   },
   // Watching the reels IS playing: standing in reach of a machine that's mid-spin or still has
   // spins suppresses the 10s idle auto-pause (owner ask 2026-07-20 — auto-spins kept getting
@@ -3911,10 +3950,10 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       if((S.spin||S.spinsLeft>0) && Math.abs(p.x-S.m.x)<260 && Math.abs(p.y-S.m.y)<170) return true; }
     return false; },
   startSpin:function(now, S){
-    S.spinsLeft--; S.nextAutoSpin=now+2500; SFX.coin();   // every spin (tap or auto) reschedules the next auto — consistent cadence
+    S.spinsLeft--; S.nextAutoSpin=now+1700; SFX.coin();   // every spin (tap or auto) reschedules the next auto — consistent cadence
     this.lastInputAt=now;   // a spin counts as activity — the LAST spin gets a full fresh idle window, so the pause never lands on the payout
     S.reelBox.setVisible(true); S.reelIcons.forEach(function(ic){ ic.setVisible(true); });
-    S.spin={landAt:now+950, nextCycle:now, landed:false, result:null, hideAt:0};
+    S.spin={landAt:now+650, nextCycle:now, landed:false, result:null, hideAt:0};
     this.flash(S.label+'!','#ffd23f');
   },
   slotPayout:function(r, S){
