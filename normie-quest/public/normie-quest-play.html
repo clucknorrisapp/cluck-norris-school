@@ -871,7 +871,7 @@ var LEVELS=[
     key:[620,H-150], door:7060 },
 
   // idx 26 — coin-flood bonus room
-  { name:'PRINTER', sub:'THE MONEY PRINTER', time:80, theme:12, bgArt:'wVaultRoom', width:2600, hidden:true, bonus:true,
+  { name:'PRINTER', sub:'THE MONEY PRINTER', time:80, theme:12, bgArt:'wPrinter', width:2600, hidden:true, bonus:true,
     gaps:[],
     walls:[[280,2,'crate',2],[2300,2,'crate',2]],
     plats:[[820,3,150,'crate'],[1400,3,H-140,'crate'],[1900,3,150,'crate']],
@@ -883,7 +883,7 @@ var LEVELS=[
     key:[400,H-150], door:2440 },
 
   // idx 27 — Diamond Hands + gems
-  { name:'DIAMONDVAULT', sub:'THE DIAMOND VAULT', time:85, theme:12, bgArt:'wVaultRoom', width:2600, hidden:true, bonus:true,
+  { name:'DIAMONDVAULT', sub:'THE DIAMOND VAULT', time:85, theme:12, bgArt:'wDiamondVault', width:2600, hidden:true, bonus:true,
     gaps:[],
     walls:[[280,2,'stone',2],[2300,2,'stone',2]],
     plats:[[1300,3,H-120,'stone']],
@@ -1060,7 +1060,7 @@ function padAdvance(scene, go){
 // browsers kept serving the previous painted plates from cache.
 // >>> BUMP THIS whenever any file in normie-quest/public/worlds/ is replaced. <<<
 var WORLD_ART_VER='3';
-var WORLD_ART={ wTrenches:'/normie-quest/worlds/w-trenches.png', wVaultRoom:'/normie-quest/worlds/w-vaultroom.png', w09mines:'/normie-quest/worlds/w09-mines.png', w10euphoria:'/normie-quest/worlds/w10-euphoria.png', w10swan:'/normie-quest/worlds/w10-swan.png', w11citadel:'/normie-quest/worlds/w11-citadel.png', w12relaunch:'/normie-quest/worlds/w12-relaunch.png', w13pod:'/normie-quest/worlds/w13-pod.png', w14shrine:'/normie-quest/worlds/w14-shrine.png', w15diamond:'/normie-quest/worlds/w15-diamond.png', w01dusk:'/normie-quest/worlds/w01-dusk.png', w01cavern:'/normie-quest/worlds/w01-cavern.png', w01keep:'/normie-quest/worlds/w01-keep.png', w02desert:'/normie-quest/worlds/w02-desert.png', w02casino:'/normie-quest/worlds/w02-casino.png', w03skyline:'/normie-quest/worlds/w03-skyline.png', w04exchange:'/normie-quest/worlds/w04-exchange.png', w05bridge:'/normie-quest/worlds/w05-bridge.png', w06depeg:'/normie-quest/worlds/w06-depeg.png', w07farm:'/normie-quest/worlds/w07-farm.png', w08bear:'/normie-quest/worlds/w08-bear.png', w16citadel:'/normie-quest/worlds/w16-citadel.png', w17spire:'/normie-quest/worlds/w17-spire.png', w18reserve:'/normie-quest/worlds/w18-reserve.png', w19orbital:'/normie-quest/worlds/w19-orbital.png', w20tower:'/normie-quest/worlds/w20-tower.png', w21tower:'/normie-quest/worlds/w21-tower.png', w21moon:'/normie-quest/worlds/w21-moon.png' };
+var WORLD_ART={ wTrenches:'/normie-quest/worlds/w-trenches.png', wVaultRoom:'/normie-quest/worlds/w-vaultroom.png', wPrinter:'/normie-quest/worlds/w-printer.png', wDiamondVault:'/normie-quest/worlds/w-diamondvault.png', w09mines:'/normie-quest/worlds/w09-mines.png', w10euphoria:'/normie-quest/worlds/w10-euphoria.png', w10swan:'/normie-quest/worlds/w10-swan.png', w11citadel:'/normie-quest/worlds/w11-citadel.png', w12relaunch:'/normie-quest/worlds/w12-relaunch.png', w13pod:'/normie-quest/worlds/w13-pod.png', w14shrine:'/normie-quest/worlds/w14-shrine.png', w15diamond:'/normie-quest/worlds/w15-diamond.png', w01dusk:'/normie-quest/worlds/w01-dusk.png', w01cavern:'/normie-quest/worlds/w01-cavern.png', w01keep:'/normie-quest/worlds/w01-keep.png', w02desert:'/normie-quest/worlds/w02-desert.png', w02casino:'/normie-quest/worlds/w02-casino.png', w03skyline:'/normie-quest/worlds/w03-skyline.png', w04exchange:'/normie-quest/worlds/w04-exchange.png', w05bridge:'/normie-quest/worlds/w05-bridge.png', w06depeg:'/normie-quest/worlds/w06-depeg.png', w07farm:'/normie-quest/worlds/w07-farm.png', w08bear:'/normie-quest/worlds/w08-bear.png', w16citadel:'/normie-quest/worlds/w16-citadel.png', w17spire:'/normie-quest/worlds/w17-spire.png', w18reserve:'/normie-quest/worlds/w18-reserve.png', w19orbital:'/normie-quest/worlds/w19-orbital.png', w20tower:'/normie-quest/worlds/w20-tower.png', w21tower:'/normie-quest/worlds/w21-tower.png', w21moon:'/normie-quest/worlds/w21-moon.png' };
 var Boot=new Phaser.Class({ Extends:Phaser.Scene,
   initialize:function(){ Phaser.Scene.call(this,{key:'Boot'}); },
   create:function(){
@@ -2567,7 +2567,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       var art=def.bgArt||'';
       if(art==='w01dusk'||art==='w07farm') key='ground';            // the only two grassy plates
       else if(art==='w02desert') key='sandground';
-      else if(art==='w15diamond'||art==='w13pod') key='iceground';
+      else if(art==='w15diamond'||art==='w13pod'||art==='wDiamondVault') key='iceground';
     }
     return this.textures.exists(key) ? key : 'ground';
   },
