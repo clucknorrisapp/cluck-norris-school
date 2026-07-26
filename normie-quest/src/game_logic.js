@@ -753,7 +753,7 @@ var LEVELS=[
     caches:[[660,226,250],[800,226,300],[1100,226,400],[1320,226,300],[1460,226,500],[1728,126,500]],
     slots:[[960,'jackpot']],
     enemies:[],
-    key:[420,H-150], door:2440 },
+    bonusblocks:[[1200,8],[1560,12],[1820,8],[2020,15]], key:[420,H-150], door:2440 },
 
   { name:'TRENCHES', sub:'NO MAN\'S CHAIN', time:210, theme:11, bgArt:'wTrenches', width:7200, hidden:true, bonus:true, boss:true, bossType:'troll', diff:1.5,
     gaps:[[900,1020],[1900,2020],[3100,3220],[4300,4420],[5500,5620],[6400,6500]],
@@ -778,7 +778,7 @@ var LEVELS=[
     coins:[[560,224],[620,224],[680,224],[740,224],[840,H-128],[900,H-128],[1180,224],[1240,224],[1420,H-164],[1480,H-164],[1660,224],[1720,224],[1920,H-128],[1980,224],[2040,224],[2100,224]],
     caches:[[856,130,400],[1120,226,400],[1260,226,500],[1436,110,500],[1936,130,650],[2160,226,600]],
     enemies:[],
-    slots:[[700,'jackpot']], key:[400,H-150], door:2440 },
+    slots:[[700,'jackpot']], bonusblocks:[[560,8],[960,12],[1540,8],[1740,15]], key:[400,H-150], door:2440 },
 
   // idx 27 — Diamond Hands + gems
   { name:'DIAMONDVAULT', sub:'THE DIAMOND VAULT', time:85, theme:12, bgArt:'wDiamondVault', width:2600, hidden:true, bonus:true,
@@ -790,7 +790,7 @@ var LEVELS=[
     coins:[[560,224],[640,224],[760,224],[900,224],[1040,196],[1180,196],[1420,196],[1560,196],[1700,224],[1840,224],[1980,224],[2120,224]],
     caches:[[540,226,250],[680,226,300],[820,226,500],[1100,226,400],[1440,226,500],[1780,226,500]],
     enemies:[],
-    slots:[[960,'jackpot']], key:[400,H-150], door:2440 },
+    slots:[[960,'jackpot']], bonusblocks:[[1200,8],[1540,12],[1880,8],[2080,15]], key:[400,H-150], door:2440 },
 
   // idx 28 — healing airdrops
   { name:'BUNKER', sub:'THE SYBIL BUNKER', time:85, theme:12, bgArt:'wSybilBunker', width:2600, hidden:true, bonus:true,
@@ -803,7 +803,7 @@ var LEVELS=[
     coins:[[540,224],[600,224],[1000,196],[1160,H-124],[1360,196],[1760,224],[1920,224],[2080,224],[2140,224]],
     caches:[[600,226,250],[1160,226,300],[1300,226,300],[1700,226,400],[1840,226,500],[2000,226,400]],
     enemies:[],
-    slots:[[900,'jackpot']], key:[400,H-150], door:2440 },
+    slots:[[900,'jackpot']], bonusblocks:[[1000,8],[1400,12],[2100,8]], key:[400,H-150], door:2440 },
 
   // idx 29 — multi-slot casino den
   { name:'DEN', sub:'THE LEVERAGE DEN', time:90, theme:12, bgArt:'wLeverageDen', width:2800, hidden:true, bonus:true,
@@ -816,7 +816,7 @@ var LEVELS=[
     caches:[[840,226,250],[980,226,300],[1760,226,400]],
     slots:[[700,'jackpot'],[1400,'trench'],[2120,'jackpot']],
     enemies:[],
-    key:[380,H-150], door:2640 },
+    bonusblocks:[[540,8],[1080,12],[1280,8],[1500,15]], key:[380,H-150], door:2640 },
 
   // idx 30 — climb to the Moon
   { name:'LAUNCHPAD', sub:'THE BONDING CURVE', time:85, theme:12, bgArt:'wBondCurve', width:2600, hidden:true, bonus:true,
@@ -828,7 +828,7 @@ var LEVELS=[
     coins:[[560,224],[700,H-144],[900,224],[1060,H-152],[1200,224],[1420,H-184],[1780,H-214],[2000,224],[2100,224],[2180,224]],
     caches:[[840,226,400],[1064,122,400],[1200,226,500],[1424,90,500],[1840,56,800],[2160,226,400]],
     enemies:[],
-    slots:[[700,'jackpot']], key:[400,H-150], door:2440 },
+    slots:[[700,'jackpot']], bonusblocks:[[560,8],[940,12],[1300,8],[1520,15]], key:[400,H-150], door:2440 },
   // ===== WORLD 10 — THE BLACK SWAN (indices 34-36, appended AFTER the hidden block so
   // speakeasy warp targets stay valid; 9-3 jumps here via "next":34) =====
   {"name":"10-1","sub":"THE EUPHORIA","theme":14,"bgArt":"w10euphoria","width":7800,"gaps":[[1300,1396],[2552,2688],[4256,4352],[5080,5192],[5920,6032],[6728,6888]],"walls":[[3020,3,"stone",2],[3920,4,"steel",2],[5444,3,"steel",3],[6380,4,"steel",3]],"plats":[[1660,2,120,"stone"],[1980,2,108,"steel"],[2280,3,84,"stone"],[5360,2,102,"stone"],[6360,2,102,"stone"]],"spikes":[[3176],[3320],[3560]],"powerups":[["caffeine",700,230],["solana",1200,230],["bull",2560,230],["omegachad",4110,230],["caffeine",5900,230],["bull",5550,230]],"airdrops":[[1250,152],[3600,198]],"coins":[[340,200],[400,170],[820,130],[1460,120],[1700,96],[1900,120],[2120,72],[2280,60],[2340,60],[3160,96],[3400,110],[3620,96],[3800,110],[4284,150],[4400,120],[5020,150],[5180,120],[5300,150],[5360,84],[6140,120],[6360,90],[6940,196],[7020,168],[7240,150],[7460,120]],"enemies":[["ghost",1050,212,80],["paper",1160,230,60],["jeet",1900,230,80],["bitmaxi",2300,66,36],["paper",3260,230,70],["bitmaxi",3600,230,70],["sandwich",4700,230,70],["ghost",5100,200,80],["jeet",5340,230,80],["ghost",6082,212,70],["jeet",6964,230,80],["paper",7300,230,70]],"pumpdumps":[[1000,174],[3400,150],[5100,174]],"honeypots":[[1154,232],[2000,232],[4160,232],[6120,232],[6960,232]],"npcs":[[2200,90]],"bonusblocks":[[1280,5],[3000,"omegachad"],[6620,"omegachad"],[7460,"candle"]],"caches":[[2320,60,300],[5390,80,360]],"gates":[],"firebars":[[3720,150,52,140,4]],"planks":[[1300,5],[4256,5],[6728,5]],"yields":[[1460,178,5],[1900,178,5]],"movers":[[6120,150,"y",52,42]],"rugplats":[[644,3,150]],"dumpzones":[],"time":200,"diff":2.4,"door":7680,"key":[2280,60],"miniworms":[1560,4756]},
@@ -880,7 +880,7 @@ var LEVELS=[
     coins:[[660,224],[790,132],[850,132],[1240,H-166],[1420,224],[1700,132],[1760,132],[1980,224],[2060,224],[2140,224]],
     caches:[[840,226,300],[980,226,400],[1204,122,400],[1420,226,300],[1688,132,500],[1820,226,500]],
     enemies:[],
-    slots:[[700,'jackpot']], key:[430,H-150], door:2440 },
+    slots:[[700,'jackpot']], bonusblocks:[[1080,8],[1300,12],[1520,8],[1920,15]], key:[430,H-150], door:2440 },
 
   { name:'SWANROOST', sub:'THE SWAN ROOST', time:95, theme:15, bgArt:'w10swan', width:2600, hidden:true, bonus:true,
     gaps:[],
@@ -891,7 +891,7 @@ var LEVELS=[
     coins:[[640,224],[740,H-134],[1120,H-170],[1440,H-206],[1560,H-206],[1900,132],[1960,132],[2040,224],[2120,224],[2200,224]],
     caches:[[920,226,400],[1104,110,400],[1240,226,500],[1540,64,600],[1896,130,500],[2160,226,300]],
     enemies:[],
-    slots:[[780,'jackpot']], key:[430,H-150], door:2440 },
+    slots:[[780,'jackpot']], bonusblocks:[[640,8],[1340,12],[1640,8],[2000,15]], key:[430,H-150], door:2440 },
 
   { name:'MEMPOOLCACHE', sub:'THE MEMPOOL CACHE', time:90, theme:16, bgArt:'w11citadel', width:2600, hidden:true, bonus:true,
     gaps:[],
@@ -903,7 +903,7 @@ var LEVELS=[
     caches:[[560,226,400],[700,226,500],[856,130,400],[1240,226,350],[1468,98,550],[1984,130,500]],
     slots:[[1120,'jackpot']],
     enemies:[],
-    key:[430,H-150], door:2440 },
+    bonusblocks:[[960,8],[1340,12],[1560,8],[1760,15]], key:[430,H-150], door:2440 },
 
   { name:'WHALEGROTTO', sub:'THE WHALE GROTTO', time:95, theme:18, bgArt:'w13pod', width:2600, hidden:true, bonus:true, vip:true,
     gaps:[],
@@ -914,7 +914,7 @@ var LEVELS=[
     coins:[[640,224],[760,H-140],[1180,132],[1250,132],[1320,132],[1650,H-186],[1790,H-186],[2020,224],[2100,224],[2180,224]],
     caches:[[560,226,300],[940,226,400],[1176,130,400],[1320,226,500],[1480,226,400],[1728,84,700]],
     enemies:[],
-    slots:[[800,'jackpot']], key:[430,H-150], door:2440 },
+    slots:[[800,'jackpot']], bonusblocks:[[660,8],[1040,12],[1580,8],[1820,15]], key:[430,H-150], door:2440 },
 
   // The lunar secret. moon:true so it inherits the spacesuit + regolith floor like 21-1/2/3.
   // grav matches world 21 — this room is reached by a warp FROM 21-2, so earth gravity here would
@@ -928,7 +928,7 @@ var LEVELS=[
     coins:[[640,224],[780,H-138],[1160,H-176],[1490,H-214],[1630,H-214],[1960,132],[2030,132],[2100,224],[2180,224],[2250,224]],
     caches:[[840,226,400],[980,226,500],[1144,104,400],[1600,56,800],[1956,130,500],[2200,226,400]],
     enemies:[],
-    slots:[[700,'jackpot']], key:[430,H-150], door:2440 },
+    slots:[[700,'jackpot']], bonusblocks:[[1240,8],[1440,12],[1700,8],[2060,15]], key:[430,H-150], door:2440 },
 ];
 
 // Let a USB / console controller BUTTON advance any "press to continue" screen (Briefing, Win,
@@ -1574,16 +1574,32 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // so the pop-out is always reachable — never buried in the tile above). Random per run, so
     // replays stay a treasure hunt. Tiles STAY in this.platforms (enemy/projectile collision
     // unchanged); steelSecretTouch on the player collider does the reveal via popBlock.
+    // ⚠️ THIS USED TO MATCH ONLY THE 'steel' TEXTURE, WHICH MEANT IT NEVER FIRED. Ten of the twelve
+    // bonus rooms are built from crate / stone / brick / moonrock and contain no steel at all, so
+    // the whole feature was dead in every one of them — only TRENCHES and BUNKER could ever hide a
+    // stash. The material was never the point; being an ELEVATED tile is, because the reveal needs
+    // an airborne hit (steelSecretTouch bails when the player is standing). Ground-row tiles can
+    // never be struck from below, so marking them just wasted rolls.
     if(def.hidden||def.vip){ (function(){
-      var steel=[], pos={};
-      self.platforms.children.iterate(function(m){ if(!m) return; pos[Math.round(m.x)+','+Math.round(m.y)]=1; if(m.texture&&m.texture.key==='steel') steel.push(m); });
+      var cand=[], pos={};
+      self.platforms.children.iterate(function(m){ if(!m) return; pos[Math.round(m.x)+','+Math.round(m.y)]=1;
+        if(m.y < GY-8) cand.push(m); });   // any elevated tile — platforms and the upper courses of walls
       var mark=function(m){ var openTop=!pos[Math.round(m.x)+','+Math.round(m.y-TILE)], roll=Phaser.Math.Between(1,100);
         m.secretSteel=true; m.used=false; m.homeY=m.y; m.hitsLeft=1;
-        if(openTop&&roll>82){ m.reward=Phaser.Math.RND.pick(['moon','candle','diamond','bull','omegachad','supergeek']); }
+        // A bonus room has nothing to fight, so a combat power-up out of a secret block is a dud
+        // prize (same reason the rooms' own power-ups were stripped). CANDLE is the one that is a
+        // reward — +1 heart, +100 — so that is what the rare roll gives there. Normal VIP levels
+        // keep the full spread.
+        if(openTop&&roll>82){ m.reward=(def.bonus||def.hidden)&&!(def.enemies||[]).length ? 'candle'
+                                     : Phaser.Math.RND.pick(['moon','candle','diamond','bull','omegachad','supergeek']); }
         else if(roll>55){ m.reward=Phaser.Math.Between(8,14); m.hitsLeft=Phaser.Math.Between(3,5); }
         else { m.reward=Phaser.Math.Between(10,25); } };
-      var marked=0; steel.forEach(function(m){ if(Phaser.Math.Between(1,100)<=18){ mark(m); marked++; } });
-      if(steel.length&&!marked) mark(Phaser.Math.RND.pick(steel));   // a hidden level with steel always hides at least one
+      // CAP: an 18% roll scales with room size, and TRENCHES (7200px, ~70 elevated tiles) came out
+      // with 11-15 stashes — a carpet, not a secret, and "SECRET STASH!" flashing a dozen times a
+      // level cheapens the find. Six is plenty for a treasure hunt in any room.
+      var MAX_SECRETS=6, marked=0;
+      cand.forEach(function(m){ if(marked<MAX_SECRETS && Phaser.Math.Between(1,100)<=18){ mark(m); marked++; } });
+      if(cand.length&&!marked) mark(Phaser.Math.RND.pick(cand));   // a hidden level always hides at least one
     })(); }
 
     // moving platforms
