@@ -22,6 +22,7 @@ const telemetry = require('./nq-telemetry'); // difficulty telemetry (deaths + c
 const leaderboard = require('./nq-leaderboard');   // Phase 2 leaderboards (per-world + weekly)
 const wallet = require('./nq-wallet');   // Phase 2 wallet ownership + tier gate (sign-message, read-only)
 const rewards = require('./nq-rewards'); // wallet-bound game-boost reward queue + daily VIP wheel
+const pair = require('./nq-pair');       // TV pairing — carry a proven wallet session to a wallet-less screen
 
 // Admin key for reading feedback / the comments dashboard. Accepts a simple shared password
 // (owner's choice — this gate only guards low-sensitivity playtest comments, no funds/PII), plus
@@ -306,6 +307,40 @@ function throttled(req, bucket, max) {
   if (pubRate.size > 5000) pubRate.clear();   // bounded memory, worst case a briefly looser throttle
   return false;
 }
+
+// ---- /api/nq/pair : TV pairing --------------------------------------------
+// A smart-TV / console browser cannot run a wallet, so it never tries. It asks for a code, the
+// player types that code on their phone, and the phone hands over the session it already proved.
+// See nq-pair.js for the two-secret design (public code + private claim) and its threat model.
+//
+// Defined here, below `throttled`, because all three routes are PUBLIC and want the per-IP cap:
+// /new is the only one that allocates, and /poll is called on a 2s timer by every waiting TV.
+router.post('/api/nq/pair/new', (req, res) => {
+  try {
+    if (throttled(req, 'pairnew', 12)) return res.status(429).json({ ok: false, error: 'slow_down' });
+    res.json(pair.create());
+  } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+// The PHONE calls this. The session token is verified here, exactly as /api/nq/score verifies it —
+// nq-pair itself never decides who owns a pubkey, it only carries what this route vouched for.
+router.post('/api/nq/pair/claim', (req, res) => {
+  try {
+    if (throttled(req, 'pairclaim', 20)) return res.status(429).json({ ok: false, error: 'slow_down' });
+    const b = req.body || {};
+    const pk = String(b.wallet || ''), token = String(b.walletToken || '');
+    if (!wallet.checkSession(pk, token)) return res.status(401).json({ ok: false, error: 'bad_session' });
+    res.json(pair.bind(b.code, pk, token));
+  } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+// The TV polls this. Needs the claim secret it was handed at /new — the code alone is worthless,
+// which is what stops anyone who reads the code off the screen from taking the session.
+router.get('/api/nq/pair/poll', (req, res) => {
+  try {
+    if (throttled(req, 'pairpoll', 90)) return res.status(429).json({ ok: false, error: 'slow_down' });
+    const q = req.query || {};
+    res.json(pair.poll(String(q.code || ''), String(q.claim || '')));
+  } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
 
 // ---- /api/nq/feedback : playtester comment store (test dashboard) ---------
 // POST is PUBLIC (testers on the ?test=1 build submit here); size-capped, sanitized in the

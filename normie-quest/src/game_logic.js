@@ -5077,6 +5077,48 @@ if(typeof document!=='undefined'){ (function(){
   initVals();
 })(); }
 
+/* ---------- 📺 TV MODE ---------- */
+// Playing on a television -- either AirPlay/HDMI mirroring from an iPad, or the game opened
+// directly in a smart-TV / console browser. Two things are wrong by default on a TV:
+//   1. The on-screen thumb D-pad sits over the picture. Nobody can reach it (you are holding a
+//      controller, eight feet away) and on a mirror it is permanent clutter you cannot dismiss.
+//   2. The corner chrome (⛶ ⚙ ♪ ? 🎮) is the same -- useful on a phone, noise on a TV.
+//
+// The trigger is deliberately REAL CONTROLLER INPUT, never controller PRESENCE. A Razer headset
+// dongle enumerates as a gamepad (that cost us an afternoon); hiding the touch controls because
+// a headset appeared would strand a player with no way to move at all. So TV mode arms only once
+// a button or direction has actually MOVED, and it disarms the moment the screen is touched --
+// touch means a human hand is back on the glass, and their controls must come straight back.
+if(typeof document!=='undefined'){ (function(){
+  window.__NQ_TV=false;
+  var css=document.createElement('style');
+  // Chrome is DIMMED, not hidden: on a mirrored iPad the player can still tap it, and a
+  // hidden-outright button is a dead end if the controller dies mid-run. Hover/focus/touch
+  // brings it straight back to full strength.
+  css.textContent='html.nq-tv #nqfull,html.nq-tv #nqcog,html.nq-tv #nqmute,html.nq-tv #nqbeats,'
+    +'html.nq-tv #nqhow-btn,html.nq-tv #nqp-btn,html.nq-tv #nqfb-lv,html.nq-tv #nqfb-open,'
+    +'html.nq-tv #nqgpdot,html.nq-tv #nqlab-btn{opacity:.16;transition:opacity .2s}'
+    +'html.nq-tv #nqfull:hover,html.nq-tv #nqcog:hover,html.nq-tv #nqmute:hover,html.nq-tv #nqbeats:hover,'
+    +'html.nq-tv #nqhow-btn:hover,html.nq-tv #nqp-btn:hover,html.nq-tv #nqfb-lv:hover,html.nq-tv #nqfb-open:hover,'
+    +'html.nq-tv #nqgpdot:hover,html.nq-tv #nqlab-btn:hover{opacity:1}';
+  (document.head||document.documentElement).appendChild(css);
+  function apply(){ try{ document.documentElement.classList.toggle('nq-tv',!!window.__NQ_TV); }catch(e){} }
+  window.__NQ_TV_SET=function(on){
+    on=!!on; if(on===window.__NQ_TV) return window.__NQ_TV;
+    window.__NQ_TV=on; apply();
+    return window.__NQ_TV;
+  };
+  // Any genuine touch hands control back to the glass. Capture phase so the pad buttons'
+  // stopPropagation (they call it on touchstart) cannot swallow the signal.
+  try{ document.addEventListener('touchstart',function(){ window.__NQ_TV_SET(false); },{passive:true,capture:true}); }catch(e){}
+  // Last pad unplugged: the touch controls are the only thing left, so they must return.
+  try{ window.addEventListener('gamepaddisconnected',function(){
+    setTimeout(function(){ var p=navigator.getGamepads?navigator.getGamepads():[],n=0;
+      for(var i=0;i<p.length;i++) if(p[i]) n++;
+      if(!n) window.__NQ_TV_SET(false); },60);
+  }); }catch(e){}
+})(); }
+
 /* ---------- On-screen gutter D-pad (tablets / wide screens) ---------- */
 // On touch devices with room in the letterbox gutters (tablets, wide phones), put MOVE + JUMP in
 // those dark side areas so they don't cover the game. Buttons set window.__NQ_PAD, read by the game
@@ -5176,7 +5218,13 @@ if(typeof document!=='undefined'){ (function(){
   // reported once the beat shipped. Any future full-screen scene that sits mid-run belongs here.
   setInterval(function(){
     var inGame=false; try{ inGame=NQGAME.scene.isActive('Game')||NQGAME.scene.isActive('LevelClear'); }catch(e){}
-    wrap.style.display=(inGame&&window.__NQ_PAD_ACTIVE)?'block':'none';
+    // TV MODE: a real controller is driving, so the thumb pad comes off the picture. Forcing
+    // __NQ_PAD_ACTIVE true also suppresses the IN-CANVAS tap-zone fallback (which layout() turns
+    // on whenever there is no gutter -- i.e. exactly in the full-bleed fullscreen you use on a TV),
+    // otherwise hiding the DOM buttons would just swap one overlay for another.
+    var tv=!!window.__NQ_TV;
+    if(tv) window.__NQ_PAD_ACTIVE=true;
+    wrap.style.display=(inGame&&window.__NQ_PAD_ACTIVE&&!tv)?'block':'none';
     if(!inGame){ window.__NQ_PAD.left=window.__NQ_PAD.right=window.__NQ_PAD.jump=false; bL.classList.remove('on'); bR.classList.remove('on'); bJ.classList.remove('on'); }
   },120);
 })(); }
@@ -5419,6 +5467,9 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
     prevUseB=useB;
     P.left=left; P.right=right; P.jump=jump; P.down=(down && !up); P.throw=throwB;
     window.__NQ_GAMEPAD_ACTIVE = true;
+    // 📺 Arm TV mode on the first REAL input. Presence is not enough -- see the TV MODE block for
+    // why (a headset that enumerates as a gamepad would otherwise hide a phone player's controls).
+    if(window.__NQ_TV_SET && !window.__NQ_TV && (left||right||up||down||throwB||anyDown)) window.__NQ_TV_SET(true);
     if(dotEl && dotEl.style.display==='none'){ dotEl.style.display='block'; }
     if(btnEl && btnEl.style.display==='none'){ btnEl.style.display='block'; }
     if(dbgEl){
@@ -5619,6 +5670,10 @@ if(typeof document!=='undefined'){ (function(){
     +'<div class="nqhow-sec"><div class="t">📱 TOUCH</div><div class="r">tap <span class="k">left / mid</span> to move · <span class="k">right side</span> jump · <span class="k">⏸ top-left</span> pause</div></div>'
     +'<div class="nqhow-sec" id="nqhow-pad"><div class="t">🎮 CONTROLLER <span style="color:#3dff9e">— detected!</span></div><div class="r"><span class="k">d-pad / stick</span> move · <span class="k">A</span> jump · <span class="k">B</span> throw · <span class="k">START</span> (or hold <span class="k">A+B</span>) pause</div></div>'
     +'<div class="nqhow-sec"><div class="t">🎯 GOAL</div><div class="r">grab coins, dodge the FUD, find the key, reach the flag. 3 hearts per world — don’t get wrecked.</div></div>'
+    // 📺 Folded in rather than given its own overlay: the people who need it are already here
+    // hunting for how the controls work. Order is best-picture-first — a browser ON the TV beats
+    // mirroring, which pillarboxes an iPad's 4:3 screen inside a 16:9 set and adds input lag.
+    +'<div class="nqhow-sec"><div class="t">📺 ON YOUR TV</div><div class="r">open this page in the <span class="k">TV’s own browser</span> (sharpest) · or <span class="k">AirPlay / cast</span> from your tablet · pair a wallet from your phone in <span class="k">🎮 → Wallet</span></div></div>'
     +'<button id="nqhow-go">LET’S GO ▶</button>'));
   document.body.appendChild(btn); document.body.appendChild(wrap);
   function padOn(){ try{ return !!window.__NQ_GAMEPAD_ACTIVE; }catch(e){ return false; } }
@@ -5890,7 +5945,95 @@ if (window.__NQ_SETUP) { (function () {
     }
     window._nqLoadBoards = loadBoards; window._nqRenderList = renderList;
 
+    // ---- 📺 TV pairing -----------------------------------------------------
+    // A television browser cannot run a wallet extension and cannot be deep-linked into a wallet
+    // app, so a player on a TV was locked out of everything they actually own. Rather than weaken
+    // the gate, the TV borrows the phone's ALREADY-PROVEN session: TV shows a code, phone confirms
+    // it. Nothing is signed on the TV and no key ever goes near it.
+    var pairPoll = null;
+    function stopPairPoll() { if (pairPoll) { clearInterval(pairPoll); pairPoll = null; } }
+    // TV SIDE — ask for a code and wait for the phone.
+    function startTvPair(host) {
+      stopPairPoll();
+      host.innerHTML = '<div class="nqp-sub">Requesting a code…</div>';
+      fetch('/api/nq/pair/new', { method: 'POST' }).then(function (r) { return r.json(); }).then(function (j) {
+        if (!j || !j.ok) throw new Error(j && j.status === 'busy' ? 'Too many pairings in progress — try again in a minute.' : 'Could not start pairing.');
+        var endsAt = Date.now() + (j.expiresIn || 600000);
+        host.innerHTML = '<div class="nqp-sub" style="margin-bottom:10px">On your <b>phone</b>, open this game, tap 🎮 → <b>Wallet</b> → <b>Pair a TV</b>, and enter:</div>'
+          // Big and monospaced: this is read from across a room.
+          + '<div style="font:700 34px/1.25 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.16em;text-align:center;'
+          + 'color:#ffd23f;background:#1a1630;border:2px solid #ffb43a;border-radius:12px;padding:14px 8px;margin-bottom:10px">' + esc(j.code) + '</div>'
+          + '<div class="nqp-sub" id="nqp-pairwait">Waiting for your phone… <span id="nqp-pairttl"></span></div>'
+          + '<div class="nqp-sub" style="margin-top:10px;color:#8f89b0">Your phone proves the wallet; this screen only receives the result. '
+          + 'Nothing is signed here and no key is sent. The code expires in 10 minutes.</div>'
+          + '<button class="nqp-b alt" id="nqp-paircancel" style="margin-top:12px">Cancel</button>';
+        host.querySelector('#nqp-paircancel').addEventListener('click', function () { stopPairPoll(); renderWallet(); });
+        var ttlEl = host.querySelector('#nqp-pairttl'), waitEl = host.querySelector('#nqp-pairwait');
+        pairPoll = setInterval(function () {
+          var left = Math.max(0, endsAt - Date.now());
+          // Parenthesise the seconds: '0' + n is already a STRING, so a bare % 60 after it is NaN.
+          if (ttlEl) ttlEl.textContent = '(' + Math.floor(left / 60000) + ':' + ('0' + (Math.floor(left / 1000) % 60)).slice(-2) + ')';
+          if (left <= 0) { stopPairPoll(); if (waitEl) waitEl.innerHTML = '<span style="color:#ff9db8">Code expired — start again.</span>'; return; }
+          fetch('/api/nq/pair/poll?code=' + encodeURIComponent(j.code) + '&claim=' + encodeURIComponent(j.claim))
+            .then(function (r) { return r.json(); }).then(function (p) {
+              if (!p || !p.ok || !p.paired) return;                    // still waiting (or expired — the timer above handles that)
+              stopPairPoll();
+              walletState.pubkey = p.wallet; walletState.token = p.token;
+              saveWallet();
+              if (!handle) window.NQLB.setHandle(p.wallet.slice(0, 4) + '…' + p.wallet.slice(-4));
+              // Tier comes from a live balance read, never from the phone — the pairing carries
+              // identity only, so a stale tier on the phone can't grant access here.
+              restoreWallet(function () {
+                renderWallet();
+                try { if (window.__NQ_LEVEL === 'level-select' && window.__NQ_TOLEVELS) window.__NQ_TOLEVELS(); } catch (e) {}   // redraw the lock icons with the new tier
+              }, true);
+            }).catch(function () {});
+        }, 2000);
+      }).catch(function (e) {
+        host.innerHTML = '<div class="nqp-sub" style="color:#ff9db8">' + esc(e.message || String(e)) + '</div>'
+          + '<button class="nqp-b alt" id="nqp-pairback" style="margin-top:12px">Back</button>';
+        host.querySelector('#nqp-pairback').addEventListener('click', function () { renderWallet(); });
+      });
+    }
+    // PHONE SIDE — type the code the TV is showing.
+    function startPhonePair(host) {
+      stopPairPoll();
+      var ws = window.NQLB.getWallet();
+      host.innerHTML = '<div class="nqp-sub" style="margin-bottom:10px">Enter the code shown on your TV to give it access with this wallet '
+        + '(<b>' + esc(ws.pubkey.slice(0, 4) + '…' + ws.pubkey.slice(-4)) + '</b>).</div>'
+        + '<input id="nqp-paircode" inputmode="latin" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="6" placeholder="ABC123" '
+        + 'style="width:100%;box-sizing:border-box;font:700 26px/1.3 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.2em;text-align:center;'
+        + 'text-transform:uppercase;background:#1a1630;border:2px solid #33305a;border-radius:10px;color:#ffd23f;padding:12px 8px">'
+        // The honest warning. This is the one real risk in any TV-pairing flow: being talked into
+        // typing a stranger's code. Say plainly what it does and what it cannot do.
+        + '<div class="nqp-sub" style="margin-top:10px;color:#ffc98a">⚠ Only enter a code you can see on your own screen. '
+        + 'It lets that screen play as you — your tier, your leaderboard name, your Lounge seat. '
+        + 'It can never move funds or sign anything.</div>'
+        + '<button class="nqp-b" id="nqp-pairgo" style="margin-top:12px">Pair that TV</button>'
+        + '<button class="nqp-b alt" id="nqp-pairback" style="margin-top:6px">Cancel</button>'
+        + '<div class="nqp-sub" id="nqp-pairmsg" style="margin-top:10px"></div>';
+      var inp = host.querySelector('#nqp-paircode'), msg = host.querySelector('#nqp-pairmsg');
+      try { inp.focus(); } catch (e) {}
+      host.querySelector('#nqp-pairback').addEventListener('click', function () { renderWallet(); });
+      host.querySelector('#nqp-pairgo').addEventListener('click', function () {
+        var code = String(inp.value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (code.length !== 6) { msg.innerHTML = '<span style="color:#ff9db8">That code should be 6 characters.</span>'; return; }
+        msg.textContent = 'Pairing…';
+        fetch('/api/nq/pair/claim', { method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ code: code, wallet: ws.pubkey, walletToken: ws.token }) })
+          .then(function (r) { return r.json(); }).then(function (j) {
+            if (j && j.ok) { msg.innerHTML = '<span style="color:#8dffc0">✓ Paired — your TV is unlocking now.</span>'; return; }
+            var why = (j && j.error === 'bad_session') ? 'This wallet needs reconnecting on this device.'
+              : (j && j.status === 'already_paired') ? 'That code has already been used.'
+              : (j && j.status === 'bad_code') ? 'That code should be 6 characters.'
+              : 'Code not found — check it, or ask the TV for a new one.';
+            msg.innerHTML = '<span style="color:#ff9db8">' + esc(why) + '</span>';
+          }).catch(function () { msg.innerHTML = '<span style="color:#ff9db8">Network error — try again.</span>'; });
+      });
+    }
+
     function renderWallet() {
+      stopPairPoll();   // any re-render leaves the pairing screen; don't keep a poller running behind it
       var host = ov.querySelector('#nqp-wal'); var ws = window.NQLB.getWallet();
       if (ws.pubkey) {
         var wl = ws.worlds === 'all' ? 'ALL worlds' : (Array.isArray(ws.worlds) ? ('Worlds ' + ws.worlds[0] + '–' + ws.worlds[1]) : 'checking…');   // worlds is null until the refresh response lands
@@ -5899,7 +6042,9 @@ if (window.__NQ_SETUP) { (function () {
           + '<div class="nqp-sub" style="margin:8px 0">Access: <b style="color:#8dffc0">' + wl + '</b></div>'
           + '<div class="nqp-sub">NORMIE: ' + (ws.balances ? ws.balances.normie.toLocaleString() : '?') + ' · CLKN: ' + (ws.balances ? ws.balances.clkn.toLocaleString() : '?') + '</div>'
           + '<div class="nqp-sub" style="margin-top:8px">Remembered on this device until you disconnect · scores post with a verified wallet ✓</div>'
-          + '<button class="nqp-b alt" id="nqp-disconnect" style="margin-top:12px">Disconnect</button>';
+          + '<button class="nqp-b alt" id="nqp-tvpair" style="margin-top:12px">📺 Pair a TV</button>'
+          + '<button class="nqp-b alt" id="nqp-disconnect" style="margin-top:6px">Disconnect</button>';
+        ov.querySelector('#nqp-tvpair').addEventListener('click', function () { startPhonePair(host); });
         ov.querySelector('#nqp-disconnect').addEventListener('click', function () { disconnectWallet(); renderWallet(); });
       } else {
         var det = detectWallets();
@@ -5937,6 +6082,15 @@ if (window.__NQ_SETUP) { (function () {
             else prompt('Copy this link:', location.href);
           });
         }
+        // 📺 Offered on EVERY no-wallet path, not just the "nothing detected" one. A TV browser
+        // usually detects nothing — but a console browser can report a phantom provider, and the
+        // player still has no way to sign there. Pairing is the answer in both cases.
+        host.insertAdjacentHTML('beforeend',
+          '<div style="border-top:1px solid #2a2648;margin-top:14px;padding-top:12px">'
+          + '<div class="nqp-sub" style="margin-bottom:8px">📺 <b>Playing on a TV?</b> TVs and consoles can\'t run a wallet. '
+          + 'Pair this screen with your phone instead — it takes about twenty seconds.</div>'
+          + '<button class="nqp-b alt" id="nqp-tvstart">📺 Pair with my phone</button></div>');
+        host.querySelector('#nqp-tvstart').addEventListener('click', function () { startTvPair(host); });
       }
     }
 
