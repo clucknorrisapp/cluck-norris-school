@@ -181,7 +181,7 @@ function _loadSfx(){ if(_powerTried) return; var c=_ac(); if(!c) return; _powerT
 // instead of the synth tone. Missing files are a silent no-op (404 → synth keeps playing), same
 // drop-in pattern as the music tracks. Volumes tuned per-sample so they sit with the synth SFX.
 var _sfxBufs={}, _sfxFilesTried=false;
-var _SFX_FILES={ coin:{ vol:0.10 } };
+var _SFX_FILES={ coin:{ vol:0.09 } };   // owner's call 2026-07-26: down 10% from 0.10 (coin runs stack, the tails overlap)
 function _loadSfxFiles(){ if(_sfxFilesTried) return; var c=_ac(); if(!c) return; _sfxFilesTried=true;
   Object.keys(_SFX_FILES).forEach(function(name){
     ['mp3','wav','m4a','ogg'].reduce(function(p,ext){ return p.then(function(done){ if(done) return true;
@@ -998,7 +998,7 @@ var LEVELS=[
     walls:[[300,2,'brick',2],[2300,2,'brick',2]],
     plats:[[820,3,150,'brick'],[1400,3,H-134,'brick'],[1960,2,150,'brick']],
     spikes:[],
-    powerups:[['supergeek',540,230],['solana',1460,H-172]],
+    powerups:[['supergeek',540,230],['candle',1460,H-172]],
     coins:[[660,224],[860,132],[930,132],[1000,132],[1360,H-172],[1530,H-172],[1700,224],[2000,132],[2080,224],[2180,224]],
     caches:[[1240,GY-20,350],[1468,H-172,550]],
     slots:[[1120,'jackpot']],
@@ -1010,7 +1010,7 @@ var LEVELS=[
     walls:[[300,2,'stone',2],[2300,2,'stone',2]],
     plats:[[720,2,H-110,'stone'],[1140,3,150,'stone'],[1680,2,H-150,'stone']],
     spikes:[],
-    powerups:[['whale',540,230],['solana',1720,H-188]],
+    powerups:[['whale',540,230],['candle',1720,H-188]],
     coins:[[640,224],[760,H-140],[1180,132],[1250,132],[1320,132],[1650,H-186],[1790,H-186],[2020,224],[2100,224],[2180,224]],
     caches:[[1480,GY-20,400],[1728,H-186,700]],
     enemies:[],
@@ -1024,7 +1024,7 @@ var LEVELS=[
     walls:[[300,2,'moonrock',2],[2300,2,'moonrock',2]],
     plats:[[740,2,H-108,'moonrock'],[1120,2,H-146,'moonrock'],[1520,2,H-184,'moonrock'],[1920,3,150,'moonrock']],
     spikes:[],
-    powerups:[['solana',540,230],['moon',1560,H-216]],
+    powerups:[['candle',540,230],['moon',1560,H-216]],
     coins:[[640,224],[780,H-138],[1160,H-176],[1490,H-214],[1630,H-214],[1960,132],[2030,132],[2100,224],[2180,224],[2250,224]],
     caches:[[1600,H-214,800],[2200,GY-20,400]],
     enemies:[],
@@ -1421,6 +1421,20 @@ var VIP_BOSSES = {
   stormherald:  { sprite:'stormherald',  name:'THE STORM HERALD',    banner:'THE SUMMIT STORM — STOMP HIM x5', hp:5, col:0xffe08a, glow:0xffd23f, scale:70, taunts:['FEEL THE STORM','THUNDER CALLS','THE SUMMIT IS MINE','LIGHTNING STRIKES','NONE SHALL PASS'] },
 };
 var RESERVE_SLOTS = 3;   // multi-slot inventory — bank up to this many boosts at once
+// How many WORLDS the game actually has. Counts distinct world numbers off the level names, which
+// is the only definition that stays true as levels are added.
+// ⚠️ The old expression — LEVELS.filter(!hidden && !vip).length / 3 — said TWELVE. It excluded the
+// VIP wing (worlds 13-21), but those are real worlds you clear, merely gated by holdings. So the
+// win screen congratulated a player who had just beaten all 21 worlds with "ALL 12 WORLDS CLEARED".
+// Divide-by-3 is also fragile: it assumes every world is exactly three levels forever.
+function worldCount(){
+  var seen={}, n=0;
+  for(var i=0;i<LEVELS.length;i++){
+    var m=/^(\d+)-\d+$/.exec(LEVELS[i].name||'');
+    if(m && !seen[m[1]]){ seen[m[1]]=1; n++; }
+  }
+  return n;
+}
 var RESERVE_ITEMS = {
   disc:   { icon:'solana',    label:'SOL DISCS +5', use:function(g){ g.throwAmmo+=5; if(g.updateThrowHud) g.updateThrowHud(); } },
   vial:   { icon:'heart',     label:'FULL HEAL',    use:function(g){ while(g.lives<3){ g.lives++; if(g.hearts[g.lives-1]) g.hearts[g.lives-1].setAlpha(1); } } },
@@ -1553,8 +1567,16 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
             _sp=def.spikes||[], _nearSpike=function(x){ for(var _i=0;_i<_sp.length;_i++){ if(Math.abs(x-_sp[_i][0])<40) return true; } return false; },
             _hw=def.miniworms||[], _nearWorm=function(x){ for(var _i=0;_i<_hw.length;_i++){ if(Math.abs(x-_hw[_i])<150) return true; } return false; },
             _badSpot=function(x){ return _inGap(x)||_inWall(x)||_nearSpike(x)||_nearWorm(x); };
-        var _wx=Math.round(_W*0.62); for(var _t=0;_t<40&&_badSpot(_wx);_t++) _wx+=40;
-        if(!_badSpot(_wx)) def.miniworms=(def.miniworms||[]).concat([_wx]);
+        // ⚠️ ONLY top up a level that is SHORT of worms. Owner's call 2026-07-26: "too many ground
+        // worms in higher levels." This augment was written to guarantee worm presence, but it was
+        // stacking on top of hand-placed ones: worlds 5-8 carry none by hand, so they got exactly 1
+        // (correct, that is the point), while every level from world 9 up already carries 2 by hand
+        // and was being pushed to THREE. That is 24 of the 33 augmented levels. Worms die only to a
+        // SOL disc, and ammo is finite, so a third spitter is a real tax, not a garnish.
+        if((def.miniworms||[]).length < 2){
+          var _wx=Math.round(_W*0.62); for(var _t=0;_t<40&&_badSpot(_wx);_t++) _wx+=40;
+          if(!_badSpot(_wx)) def.miniworms=(def.miniworms||[]).concat([_wx]);
+        }
         if(this.levelIdx===12||this.levelIdx===18||this.levelIdx===24||this.levelIdx===34){   // world openers 5/7/9/10
           var _pl=def.plats||[], _best=null;
           for(var _p=0;_p<_pl.length;_p++){ var _ty=_pl[_p][2]; if(_ty!=null&&(_best===null||_ty<_best.ty)) _best={ x:_pl[_p][0]+Math.round((_pl[_p][1]||1)*TILE/2), ty:_ty }; }
@@ -4308,7 +4330,7 @@ var Over=new Phaser.Class({ Extends:Phaser.Scene,
     this.add.text(W/2,150,String(this.finalScore),{fontFamily:'"Press Start 2P"',fontSize:'30px',color:'#ffd23f'}).setOrigin(.5).setShadow(3,3,'#7a5a00',0,true,true);
     // Per-world checkpoint continue takes priority over the leaderboard/free-preview copy.
     var CP_LABEL={3:'WORLD 2\ncontinue from the Sand Lands',6:'WORLD 3\ncontinue from the Skyline',9:'WORLD 4\ncontinue from the Exchange',12:'WORLD 5\ncontinue from the Bridge',15:'WORLD 6\ncontinue from the Depeg',18:'WORLD 7\ncontinue from the Yield Farm',21:'WORLD 8\ncontinue from the Bear Market',24:'WORLD 9\ncontinue from the Mines',34:'WORLD 10\ncontinue from the Euphoria',37:'WORLD 11\ncontinue from the Citadel gates',40:'WORLD 12\ncontinue from the Relaunch'};
-    var NWORLDS=Math.ceil(LEVELS.filter(function(l){return !l.hidden&&!l.vip;}).length/3);
+    var NWORLDS=worldCount();
     this.add.text(W/2,198, this.cont>0 ? ('★ CHECKPOINT: '+(CP_LABEL[this.cont]||('LEVEL '+(this.cont+1)))) : (BURN_GATE ? 'score posts to the leaderboard —\ntop 10 split the pool' : ('free preview · all '+NWORLDS+' Worlds\ngood luck out there')),{fontFamily:UIFONT,resolution:UIRES,fontSize:'19px',color:this.cont>0?'#3dff6e':'#b6bfe0',align:'center'}).setOrigin(.5);
     var p=this.add.text(W/2,244, this.cont>0 ? 'PRESS TO CONTINUE →' : (BURN_GATE ? 'PRESS TO BURN AGAIN' : 'PRESS TO PLAY AGAIN'),{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
     this.tweens.add({targets:p,alpha:.25,duration:600,yoyo:true,repeat:-1});
@@ -4346,7 +4368,7 @@ var Win=new Phaser.Class({ Extends:Phaser.Scene,
   init:function(d){ d=d||{}; this.finalScore=d.score||0; this.boss=d.boss||'wormhole'; this.casino=d.casino||0; },
   create:function(){
     // SETUP LANE: run WON (full clear) — submit the final score at the top world tier.
-    if(window.__NQ_SETUP && window.NQLB){ try{ var nw=Math.ceil(LEVELS.filter(function(l){return !l.hidden&&!l.vip;}).length/3); window.NQLB.submitRun(nw, this.finalScore); }catch(e){} }
+    if(window.__NQ_SETUP && window.NQLB){ try{ window.NQLB.submitRun(worldCount(), this.finalScore); }catch(e){} }
     SFX.win();
     // victory tableau keyed to the FINAL boss you actually beat, slumped/defeated + Normie triumphant
     var V = this.boss==='wenmoon'   ? {img:'wenmoon',  title:'WEN MOON? NOW. NORMIE MADE IT!', color:'#9fd8ff', tint:0, scale:98, bg:0x05060f, princess:true}
@@ -4380,7 +4402,7 @@ var Win=new Phaser.Class({ Extends:Phaser.Scene,
     this.add.text(W/2,146,'FINAL SCORE',{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#b6bfe0'}).setOrigin(.5);
     this.add.text(W/2,174,String(this.finalScore),{fontFamily:'"Press Start 2P"',fontSize:'30px',color:'#ffd23f'}).setOrigin(.5).setShadow(3,3,'#7a5a00',0,true,true);
     if(this.casino>0) this.add.text(W/2,202,'🎰 CASINO WINNINGS: '+this.casino,{fontFamily:UIFONT,resolution:UIRES,fontSize:'18px',color:'#ff8adf'}).setOrigin(.5);
-    var nw=Math.ceil(LEVELS.filter(function(l){return !l.hidden&&!l.vip;}).length/3);   // real worlds (exclude hidden bonus levels)
+    var nw=worldCount();   // every world you can clear, VIP wing included — see worldCount()
     var wtext = nw<=1?'WORLD 1 CLEARED':(nw===2?'WORLDS 1 & 2 CLEARED':'ALL '+nw+' WORLDS CLEARED');
     this.add.text(W/2,this.casino>0?222:210,wtext,{fontFamily:UIFONT,resolution:UIRES,fontSize:'18px',color:'#b6bfe0'}).setOrigin(.5);
     var p=this.add.text(W/2,246,'PRESS TO PLAY AGAIN',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);

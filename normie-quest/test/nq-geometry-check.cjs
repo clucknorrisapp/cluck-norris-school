@@ -396,7 +396,11 @@ function check(lv) {
   // W9: a VIP-world level with no 'solana' powerup (owner 2026-07-23: 'no solana mode anywhere').
   // The solana pickup grants SOL-ammo throwing mode — every premium level should offer it. Catches
   // hand-rebuilds that drop it (world 13 shipped without any until this was flagged).
-  if (lv.vip && !(lv.powerups || []).some(p => p[0] === 'solana')) warns.push(`W9 vip level has no solana powerup (SOL-ammo mode)`);
+  // NOT bonus/hidden loot rooms: they carry no enemies and no ground-worms, and a SOL disc has
+  // nothing to hit in them. Handing out ammo there is a dud pickup, which is exactly what the owner
+  // queried on MOONCACHE ("why is there a solana mode at bottom of moon cache") — so requiring it
+  // in those rooms would be the checker enforcing the bug.
+  if (lv.vip && !lv.bonus && !lv.hidden && !(lv.powerups || []).some(p => p[0] === 'solana')) warns.push(`W9 vip level has no solana powerup (SOL-ammo mode)`);
 
   // W5: MONOTONOUS gaps (owner rule 2026-07-23: 'not all of them should be the same width').
   // With 4+ gaps, if every gap is within 24px of the same width, the level reads as identical
