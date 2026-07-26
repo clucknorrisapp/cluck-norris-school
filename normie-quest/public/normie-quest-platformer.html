@@ -1211,6 +1211,28 @@ var Boot=new Phaser.Class({ Extends:Phaser.Scene,
     // key
     // (key is a real rendered crypto-key sprite loaded via addBase64 in Boot)
     g.clear(); g.fillStyle(0xffffff); g.fillCircle(3,3,3); g.generateTexture('spark',6,6);
+    // ---- INVENTORY ICONS that have to say what the item DOES ----------------------------------
+    // Two items were wearing borrowed icons and both got reported as broken, because in the WORLD
+    // those same sprites mean something else: the enemy-wipe wore the AIRDROP crate (a crate is a
+    // heart) and the +30s wore the CAFFEINE cup (caffeine is super speed). Players spent them,
+    // watched for the wrong effect, and saw "nothing". These two give them honest faces.
+    // missile — nose cone, body, fins, flame: reads as an AIR STRIKE at 14px.
+    g.clear();
+    g.fillStyle(0xd8dae6); g.fillRect(7,6,6,18);                                  // body
+    g.fillStyle(0xf2f4ff); g.fillRect(8,6,2,18);                                  // highlight
+    g.fillStyle(0xff5a3c); g.fillTriangle(10,0,6,7,14,7);                         // nose cone
+    g.fillStyle(0x9aa0b8); g.fillTriangle(7,17,2,25,7,25); g.fillTriangle(13,17,18,25,13,25);   // fins
+    g.fillStyle(0xffd23f); g.fillTriangle(10,24,6,31,14,31);                      // flame
+    g.fillStyle(0xff8a2b); g.fillTriangle(10,26,8,31,12,31);
+    g.generateTexture('missile',20,32);
+    // stopwatch — face, bezel, crown, hands: reads as TIME, not coffee.
+    g.clear();
+    g.fillStyle(0x8f97b5); g.fillRect(11,0,6,4);                                  // crown
+    g.fillStyle(0xd8dae6); g.fillCircle(14,16,13);                                // bezel
+    g.fillStyle(0x1a1630); g.fillCircle(14,16,10);                                // face
+    g.fillStyle(0x3dff6e); g.fillRect(13,8,2,9); g.fillRect(14,15,8,2);           // hands
+    g.fillStyle(0xffd23f); g.fillCircle(14,16,2);                                 // pin
+    g.generateTexture('stopwatch',28,30);
     // FUD gas cloud (sickly green lumpy puff — slows the player while inside)
     g.clear(); g.fillStyle(0x7ec86e); g.fillCircle(11,17,10); g.fillCircle(21,14,11); g.fillCircle(26,21,9); g.fillCircle(15,23,9); g.generateTexture('gas',36,34);
     // sniper bolt (small red energy bullet)
@@ -1444,20 +1466,23 @@ var RESERVE_ITEMS = {
   shield: { icon:'supergeek', label:'AUDIT SHIELD', desc:'blocks the next hit',    use:function(g){ g.geekShield=true; } },
   // ── premium boosts (in-game drops, wheel wins, owner grants) — all map to proven mechanics ──
   star:   { icon:'moon',      label:'STAR POWER',   desc:'invincible for 8 seconds', use:function(g){ g.moonUntil=g.time.now+8000; if(g.powerBanner) g.powerBanner('STAR POWER','INVINCIBLE — smash everything!','#ffd23f'); } },
-  clock:  { icon:'caffeine',  label:'+30 SECONDS',  desc:'adds 30s to the clock', use:function(g){ g.timeLeft+=30; if(g.hudTime){ g.hudTime.setText(String(g.timeLeft)); if(g.timeLeft>15) g.hudTime.setColor('#3dff6e'); } } },
-  // ⚠️ THIS ITEM LOOKED BROKEN AND WAS. It carries the AIRDROP crate icon, and an airdrop crate in
-  // the world gives you a HEART — but the item only cleared enemies. Spend it anywhere without a
-  // live enemy on screen (a bonus room, an empty stretch) and absolutely nothing happened, which is
-  // exactly how it read in play: "in game it gives you a heart, in the inventory it doesn't seem to
-  // do anything." Owner's call: the crate should drop the life.
-  // So it now does what its own icon promises FIRST — drops a heart, or +150 when hearts are full,
-  // matching grabAirdrop exactly — and the blast that clears nearby FUD is the bonus on top. It can
-  // therefore never be a no-op again, whatever is on screen.
-  bomb:   { icon:'airdrop',   label:'AIRDROP CRATE', desc:'+1 heart, blast clears FUD', use:function(g){
-            if(g.lives<3){ g.lives++; if(g.hearts[g.lives-1]) g.hearts[g.lives-1].setAlpha(1); if(g.powerBanner) g.powerBanner('AIRDROP CRATE','+1 HEART — blast clears the FUD','#3dff6e'); }
-            else { if(g.addScore) g.addScore(150); if(g.powerBanner) g.powerBanner('AIRDROP CRATE','BAGS FULL — +150','#3dff6e'); }
-            if(g.enemies) g.enemies.children.iterate(function(e){ if(e&&e.active){ var ex=e.x,ey=e.y; e.disableBody(true,true); if(g.addScore) g.addScore(20); if(g.burst) g.burst(ex,ey,0xffd23f,8); } });
-            g.cameras.main.shake(220,0.011); } }
+  clock:  { icon:'stopwatch', label:'+30 SECONDS',  desc:'adds 30s to the clock', use:function(g){ g.timeLeft+=30; if(g.hudTime){ g.hudTime.setText(String(g.timeLeft)); if(g.timeLeft>15) g.hudTime.setColor('#3dff6e'); } } },
+  // AIR STRIKE (owner's call 2026-07-26: "change the airdrop inventory to air strike and be a
+  // missile"). It began life as the enemy-wipe wearing an AIRDROP CRATE icon — and since a crate in
+  // the world gives you a HEART, spending it and getting no heart read as broken. Rather than bend
+  // the effect to fit a borrowed icon, it now looks and reads like what it always did: a missile
+  // that wipes the screen.
+  // ⚠️ The id stays 'bomb'. It is never shown to a player, it is what nq-rewards grants, and it is
+  // what sits in existing localStorage inventories — renaming it would orphan every banked one.
+  // NO-TARGET GUARD: useReserve refuses to spend this with nothing to hit, so it can never be the
+  // silent no-op it used to be. That is the honest fix for a weapon, where handing out a heart
+  // instead would just be a second borrowed identity.
+  bomb:   { icon:'missile',   label:'AIR STRIKE', desc:'missile wipes every enemy', use:function(g){
+            var hit=0;
+            if(g.enemies) g.enemies.children.iterate(function(e){ if(e&&e.active){ var ex=e.x,ey=e.y; e.disableBody(true,true); hit++; if(g.addScore) g.addScore(20); if(g.burst) g.burst(ex,ey,0xffd23f,8); } });
+            g.cameras.main.shake(220,0.011);
+            if(g.powerBanner) g.powerBanner('AIR STRIKE', hit+(hit===1?' TARGET DOWN':' TARGETS DOWN'), '#ff8a2b');
+          } }
 };
 var Game=new Phaser.Class({ Extends:Phaser.Scene,
   initialize:function(){ Phaser.Scene.call(this,{key:'Game'}); },
@@ -1483,7 +1508,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // level so they always point at the LIVE scene instance)
     try{ var _sc=this; window.__NQ_PAUSE=function(){ if(!_sc.over&&!_sc.paused){ _sc.pauseGame(false); return true; } return false; };
          window.__NQ_RESUME=function(){ if(_sc.paused) _sc.resumeGame(); };
-         window.__NQ_DBG=function(){ try{ return {paused:!!_sc.paused, clockPaused:!!_sc.time.paused, now:Math.round(_sc.time.now), last:Math.round(_sc.lastInputAt||0), warping:!!_sc._warping, swan:_sc._swanState||null, bossHP:(_sc.bossStarted?_sc.bossHP:null), hasKey:!!_sc.hasKey, level:_sc.def&&_sc.def.name, floorKey:_sc.floorKey||null, bgArt:(function(){ try{ var k=_sc.def&&_sc.def.bgArt; if(!k) return null; var n=0; _sc.children.list.forEach(function(o){ if(o&&o.texture&&o.texture.key===k) n++; }); return k+':'+n; }catch(e){ return 'err'; } })(), grav:(function(){ try{ return _sc.physics.world.gravity.y; }catch(e){ return null; } })(), nearSlot:(function(){ try{ return _sc.nearActiveSlot(); }catch(e){ return 'err:'+e.message; } })(), slotN:(_sc.slots?_sc.slots.length:-1), px:Math.round(_sc.player?_sc.player.x:-1), secrets:(function(){ var a=[]; try{ _sc.platforms.children.iterate(function(m){ if(m&&m.secretSteel) a.push([Math.round(m.x),Math.round(m.y),m.used?1:0]); }); }catch(e){} return a; })(), bb:(function(){ var a=[]; try{ _sc.bonusBlocks.children.iterate(function(m){ if(m) a.push([Math.round(m.x),m.used?1:0]); }); }catch(e){} return a; })(), pscale:(_sc.pscale?+_sc.pscale.v.toFixed(2):1), lives:_sc.lives, nLevels:LEVELS.length, sig:{fb:(_sc.firebars||[]).length, gt:(_sc.gates||[]).length, rp:(_sc.rugPlats&&_sc.rugPlats.children?_sc.rugPlats.getLength():0), dz:(_sc.dumpZones||[]).length}, gate0:(_sc.gates&&_sc.gates[0]?_sc.gates[0].st:null), foes:(function(){ var n=0; try{ _sc.enemies.children.iterate(function(e){ if(e&&e.active&&_sc.def&&_sc.def.door&&e.x>_sc.def.door-460) n++; }); }catch(e){} return n; })(), dr:(_sc._drState||null), drX:(_sc.rugking&&_sc.rugking.active?Math.round(_sc.rugking.x):null), drY:(_sc.rugking&&_sc.rugking.active?Math.round(_sc.rugking.y):null), drT:(_sc._drT0?Math.round(_sc.time.now-_sc._drT0):null), bossInv:(_sc.rugking&&_sc.rugking.active?!!_sc.rugking.invuln:null), princess:!!(_sc.princess&&_sc.princess.active), reserve:(_sc.reserve||null), reserveSel:(_sc.reserveSel==null?null:_sc.reserveSel)}; }catch(e){ return {err:String(e)}; } };
+         window.__NQ_DBG=function(){ try{ return {paused:!!_sc.paused, clockPaused:!!_sc.time.paused, now:Math.round(_sc.time.now), last:Math.round(_sc.lastInputAt||0), warping:!!_sc._warping, swan:_sc._swanState||null, bossHP:(_sc.bossStarted?_sc.bossHP:null), hasKey:!!_sc.hasKey, level:_sc.def&&_sc.def.name, floorKey:_sc.floorKey||null, timeLeft:_sc.timeLeft, throwAmmo:_sc.throwAmmo, bgArt:(function(){ try{ var k=_sc.def&&_sc.def.bgArt; if(!k) return null; var n=0; _sc.children.list.forEach(function(o){ if(o&&o.texture&&o.texture.key===k) n++; }); return k+':'+n; }catch(e){ return 'err'; } })(), grav:(function(){ try{ return _sc.physics.world.gravity.y; }catch(e){ return null; } })(), nearSlot:(function(){ try{ return _sc.nearActiveSlot(); }catch(e){ return 'err:'+e.message; } })(), slotN:(_sc.slots?_sc.slots.length:-1), px:Math.round(_sc.player?_sc.player.x:-1), secrets:(function(){ var a=[]; try{ _sc.platforms.children.iterate(function(m){ if(m&&m.secretSteel) a.push([Math.round(m.x),Math.round(m.y),m.used?1:0]); }); }catch(e){} return a; })(), bb:(function(){ var a=[]; try{ _sc.bonusBlocks.children.iterate(function(m){ if(m) a.push([Math.round(m.x),m.used?1:0]); }); }catch(e){} return a; })(), pscale:(_sc.pscale?+_sc.pscale.v.toFixed(2):1), lives:_sc.lives, nLevels:LEVELS.length, sig:{fb:(_sc.firebars||[]).length, gt:(_sc.gates||[]).length, rp:(_sc.rugPlats&&_sc.rugPlats.children?_sc.rugPlats.getLength():0), dz:(_sc.dumpZones||[]).length}, gate0:(_sc.gates&&_sc.gates[0]?_sc.gates[0].st:null), foes:(function(){ var n=0; try{ _sc.enemies.children.iterate(function(e){ if(e&&e.active&&_sc.def&&_sc.def.door&&e.x>_sc.def.door-460) n++; }); }catch(e){} return n; })(), dr:(_sc._drState||null), drX:(_sc.rugking&&_sc.rugking.active?Math.round(_sc.rugking.x):null), drY:(_sc.rugking&&_sc.rugking.active?Math.round(_sc.rugking.y):null), drT:(_sc._drT0?Math.round(_sc.time.now-_sc._drT0):null), bossInv:(_sc.rugking&&_sc.rugking.active?!!_sc.rugking.invuln:null), princess:!!(_sc.princess&&_sc.princess.active), reserve:(_sc.reserve||null), reserveSel:(_sc.reserveSel==null?null:_sc.reserveSel)}; }catch(e){ return {err:String(e)}; } };
          // LAB-only physics-health probe: counts NaN-position/velocity bodies (a single NaN body
          // poisons Arcade's RTree broad-phase → ALL overlaps silently fail — coins, damage, etc).
          // __NQ_COINGRAB teleports the player onto a coin so a caller can confirm overlap fires.
@@ -2442,6 +2467,12 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(!it){ this.reserve.splice(idx,1); this.saveReserve(); this.updateReserveHud(); return; }
     if(id==='vial' && this.lives>=3){ this.flash('HEARTS ALREADY FULL','#ff9ec0'); return; }   // don't waste a full-heal at full HP
     if(id==='shield' && this.geekShield){ this.flash('SHIELD ALREADY UP','#2ee6c0'); return; }
+    // An AIR STRIKE with nothing to hit is the exact no-op that made this item look broken. Refuse
+    // the spend and say why, the same way a full-HP heal is refused, so it is never burned for free.
+    if(id==='bomb'){
+      var _tgt=0; if(this.enemies) this.enemies.children.iterate(function(e){ if(e&&e.active) _tgt++; });
+      if(!_tgt){ this.flash('NO TARGETS — SAVE IT','#ff8a2b'); return; }
+    }
     it.use(this); try{ SFX.power(); }catch(e){} this.flash(it.label+'!','#ffd23f'); this.cameras.main.flash(120,255,210,80);
     this.reserve.splice(idx,1);
     if(this.reserveSel>=this.reserve.length) this.reserveSel=0;   // selection must stay on a real slot
@@ -4602,10 +4633,14 @@ var WorldClear=new Phaser.Class({ Extends:Phaser.Scene,
     this.p2.add(this.add.text(cx,24,'NOW TRAVELING',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#b6bfe0'}).setOrigin(.5));
     this.p2.add(this.add.text(cx,42,cfg.dest,{fontFamily:'"Press Start 2P"',fontSize:'12px',color:cfg.color,align:'center',wordWrap:{width:W-24}}).setOrigin(.5));
     this.p2.add(this.add.text(cx,62,cfg.story,{fontFamily:UIFONT,resolution:UIRES,fontSize:'11px',color:'#eef2ff',align:'center',lineSpacing:2,wordWrap:{width:W-90}}).setOrigin(.5,0));
-    var ty=134;   // crypto-term teaching card
-    this.p2.add(this.add.rectangle(cx,ty+24,W-84,56,0x0d0b1e,0.82).setStrokeStyle(2,0xffd23f));
-    this.p2.add(this.add.text(cx,ty+8,'CRYPTO TERM: '+cfg.term.name,{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffd23f',align:'center',wordWrap:{width:W-104}}).setOrigin(.5));
-    this.p2.add(this.add.text(cx,ty+20,cfg.term.def,{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#d6d1ec',align:'center',lineSpacing:1,wordWrap:{width:W-110}}).setOrigin(.5,0));
+    // ⛔ THE 'CRYPTO TERM' TEACHING CARD WAS REMOVED HERE (owner's call 2026-07-26: "drop the little
+    // educational things in the middle screens between levels and worlds and focus on Normie
+    // nation"). It occupied the whole middle band of the traveling page — a name + definition in a
+    // bordered box — and it was the only genuinely educational element on either interstitial. The
+    // between-worlds beat is the moment a player is most bought-in, so that space belongs to the
+    // community push, not a vocabulary lesson. `cfg.term` is still present in WORLD_CLEARS and is
+    // simply no longer drawn; the definitions are kept in the data so nothing is lost if the school
+    // ever wants them, and so this stays a one-line revert.
     if(cfg.nostalgia) this.p2.add(this.add.text(cx,H-68,'★ '+cfg.nostalgia+' ★',{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#8f89b8',align:'center',wordWrap:{width:W-60}}).setOrigin(.5));
     // NORMIE NATION strip — the world boundary is the moment a player is most bought-in, so it is
     // where the community push belongs. Identity + where to get it; no perks, no thresholds.
@@ -4617,9 +4652,11 @@ var WorldClear=new Phaser.Class({ Extends:Phaser.Scene,
     var _wp=null; try{ var _wt=parseInt(sessionStorage.getItem('nqWcTurn')||'0',10)||0; sessionStorage.setItem('nqWcTurn',String(_wt+1)); if(_wt%2===1) _wp=nqPreviewPick(); }catch(e){}
     if(_wp){ _nn={ head:(_wp.feature?'STILL LOCKED — VIP PERK':'STILL LOCKED — WORLD '+_wp.world),
                    short:_wp.title+' · unlocks with $NORMIE (terms in testing)' }; }
-    this.p2.add(this.add.rectangle(_nx,H-44,330,30,0x120f28,0.9).setStrokeStyle(1,0xffd23f));
-    this.p2.add(this.add.text(_nx,H-54,'★ '+_nn.head+' ★',{fontFamily:'"Press Start 2P"',fontSize:'7px',color:'#ffd23f',align:'center',wordWrap:{width:310}}).setOrigin(.5));
-    this.p2.add(this.add.text(_nx,H-46,(_nn.short||_nn.body),{fontFamily:UIFONT,resolution:UIRES,fontSize:'9px',color:'#e6e1ff',align:'center',lineSpacing:1,wordWrap:{width:314}}).setOrigin(.5,0));
+    // With the teaching card gone the strip is no longer squeezed into the bottom margin — it gets
+    // a taller box and a larger head, which is the point of "focus on Normie nation".
+    this.p2.add(this.add.rectangle(_nx,H-50,330,42,0x120f28,0.9).setStrokeStyle(2,0xffd23f));
+    this.p2.add(this.add.text(_nx,H-64,'★ '+_nn.head+' ★',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ffd23f',align:'center',wordWrap:{width:310}}).setOrigin(.5));
+    this.p2.add(this.add.text(_nx,H-54,(_nn.short||_nn.body),{fontFamily:UIFONT,resolution:UIRES,fontSize:'11px',color:'#e6e1ff',align:'center',lineSpacing:1,wordWrap:{width:314}}).setOrigin(.5,0));
     this.drawHills();
     this.cont=this.add.text(cx,H-11,'TAP TO CONTINUE  ▶',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#3dff6e'}).setOrigin(.5).setDepth(40);
     var adv=function(){ if(self.done) return; if(self.phase===0){ self.t0=self.time.now-3300; } else { self.goNext(); } };
