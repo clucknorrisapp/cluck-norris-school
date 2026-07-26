@@ -311,6 +311,33 @@ function check(lv) {
     });
   });
 
+  // F15: a honeypot directly under a ? bonus block. OWNER'S RULE, 2026-07-26:
+  // "don't put honey pots right under Normie blocks."
+  //
+  // Why it is unfair rather than merely hard: bonking a block is a LOOK-UP action. You line up
+  // underneath, jump straight at it, and your attention is on the block and the coins popping
+  // out of it. The honeypot sits on the ground at y=232, below your eyeline, and it drains EVERY
+  // coin earned this level (honeypotHit) the instant you overlap it. So the game invites you to
+  // jump for a reward and lands you on the thing that takes the reward away, with no tell.
+  //
+  // The number: a bonk requires the player within ~20px of the block centre (12px block half-width
+  // + ~8px player body half-width). Jumping straight up carries no horizontal velocity, so you land
+  // back within that same ~20px. A honeypot's body reaches ~22px (13.6 honeypot + 8.5 player), so
+  // anything inside ~42px is a near-certain hit you never chose. 72px (3 tiles) adds one step of
+  // drift on top. Deliberately NOT wider: at 80px+ the honeypot is plainly a separate hazard you
+  // can see and route around, and sweeping those in would be re-designing levels, not fixing a trap.
+  const HONEY_CLEAR = 72;
+  (lv.honeypots || []).forEach(h => {
+    (lv.bonusblocks || []).forEach(b => {
+      const by = (b[2] != null) ? b[2] : (H - 96);
+      if (by >= h[1]) return;                       // block must be ABOVE it for the bonk-and-drop
+      const dx = Math.abs(h[0] - b[0]);
+      if (dx < HONEY_CLEAR) {
+        fails.push(`F15 honeypot x${h[0]} sits ${dx}px under the ? block at x${b[0]} — bonking it drops you straight onto the coin drain (needs ${HONEY_CLEAR}px)`);
+      }
+    });
+  });
+
   // F9: a spike embedded in a wall (owner sweep 2026-07-23). A spike whose x-span overlaps a
   // wall's body is either invisible (hidden behind the wall the player can't pass) or pokes out
   // of the wall base — both look broken. Spikes belong on open ground, not inside a block.
