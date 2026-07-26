@@ -94,7 +94,20 @@ function _playSample(buf,vol){ var c=_ac(); if(!c||!buf) return false; try{ var 
 // was never unlocked in a real tap) and will only RESUME inside a genuine user gesture — a
 // resume() call from the game loop is ignored. So unlock/resume on ANY real interaction, and
 // again whenever the tab becomes visible. This is why sound would "quit working" and not return.
-function _unlockAudio(){ try{ var c=_ac(); if(!c) return; if(_acDead(c)) _acResume(c);
+// 🔇 iOS/iPadOS SILENT SWITCH — the failure every other line in this file does NOT cover.
+// A page whose only audio is WebAudio runs in the default ("auto") audio session, and iOS treats
+// that as AMBIENT: the physical Ring/Silent switch and Control Center's Silent Mode mute it
+// outright. That is a completely different fault from a suspended context — the context is
+// 'running', the graph is built, the gain is up, every _tone() fires, and nothing comes out —
+// which is exactly why the unlock/resume machinery above never fixed it and why it looks like
+// "sound is broken" rather than "the iPad is on silent".
+// Safari 16.4+ lets the page declare intent. 'playback' is the correct category for a game and is
+// exempt from the silent switch. Feature-detected, so it is a no-op on every other browser and on
+// older iPads (where the switch genuinely is the only lever the user has).
+function _audioSession(){ try{ if(typeof navigator!=='undefined' && navigator.audioSession && navigator.audioSession.type!=='playback') navigator.audioSession.type='playback'; }catch(e){} }
+_audioSession();
+function _unlockAudio(){ _audioSession();   // re-assert: iOS can reset the category across an interruption (call, alarm, route change)
+  try{ var c=_ac(); if(!c) return; if(_acDead(c)) _acResume(c);
   var o=c.createOscillator(), g=c.createGain(); g.gain.value=0.00008; o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime+0.03);   // silent blip fully unlocks iOS
   // Decode the power-up sample AFTER the unlock, off the gesture's critical path (a deferred timer),
   // so nothing about the sample can interfere with iOS's finicky unlock heuristic (which gates ALL sound).
@@ -146,7 +159,16 @@ var SFX={
   clear:function(){ _seq([[523,0.10],[784,0.10],[1046,0.24]],'square',0.09); },
   win:function(){ _seq([[523,0.12],[659,0.12],[784,0.12],[1046,0.12],[1319,0.30]],'square',0.10); }
 };
-try{ if(typeof window!=='undefined') window.__NQ_SFX={ loadSfx:function(){ _loadSfx(); }, hasPowerBuf:function(){ return !!_powerBuf; }, power:function(){ SFX.power(); }, setVol:function(v){ _setSfxVol(v); }, getVol:function(){ return _sfxVol; } }; }catch(e){}
+try{ if(typeof window!=='undefined') window.__NQ_SFX={ loadSfx:function(){ _loadSfx(); }, hasPowerBuf:function(){ return !!_powerBuf; }, power:function(){ SFX.power(); }, setVol:function(v){ _setSfxVol(v); }, getVol:function(){ return _sfxVol; },
+  // Which of the four silent-failure causes is live. Read by the settings panel; also the thing to
+  // ask for when someone reports "no sound" — it turns a guess into a fact.
+  state:function(){ var c=null; try{ c=_AC; }catch(e){}
+    var ua=''; try{ ua=navigator.userAgent||''; }catch(e){}
+    return { ctx:(c?c.state:null), vol:_sfxVol, musicMuted:(function(){ try{ return !!(window.__NQ_MUSIC&&window.__NQ_MUSIC.muted&&window.__NQ_MUSIC.muted()); }catch(e){ return null; } })(),
+             session:(function(){ try{ return (navigator.audioSession&&navigator.audioSession.type)||null; }catch(e){ return null; } })(),
+             sample:!!_powerBuf,
+             iOS:/iPad|iPhone|iPod/.test(ua)||(/Macintosh/.test(ua)&&typeof document!=='undefined'&&'ontouchend' in document) }; },
+  bossDown:function(){ SFX.bossDown(); } }; }catch(e){}
 
 /* ---------- Background music: original chiptune loops (WebAudio; per-world moods) ---------- */
 // All melodies are ORIGINAL compositions in a retro 8-bit style — NOT copies of any real game tune.
@@ -5327,13 +5349,31 @@ if(typeof document!=='undefined'){ (function(){
   panel.innerHTML='<div class="row"><label>♪ Music</label><input id="nqvm" type="range" min="0" max="100"></div>'
     +'<div class="row"><label>🔊 Effects</label><input id="nqvs" type="range" min="0" max="100"></div>'
     +'<div class="mute" id="nqsetmute">🔇 Mute music</div>'   // NOT id=nqmute — that id belongs to the round top-left button; the dup id let its fixed-circle CSS rip this row out of the panel
-    +'<div class="mute" id="nqrotpref" style="margin-top:6px;font-size:15px"></div>';
+    +'<div class="mute" id="nqrotpref" style="margin-top:6px;font-size:15px"></div>'
+    // "Sound isn't working" has at least four distinct causes that all look identical from the
+    // outside (context suspended, effects slider at 0, music muted, iOS silent switch), and none
+    // of them is visible to the player. This line names the one that is actually happening, so a
+    // report can say WHICH instead of "no sound".
+    +'<div id="nqsnddiag" style="margin-top:8px;font-size:11px;line-height:1.5;color:#9fd4ff;text-align:center"></div>';
   document.body.appendChild(panel);
   var vm=panel.querySelector('#nqvm'), vs=panel.querySelector('#nqvs'), mute=panel.querySelector('#nqsetmute');
   function upMute(){ try{ mute.textContent=(window.__NQ_MUSIC&&window.__NQ_MUSIC.muted&&window.__NQ_MUSIC.muted())?'🔊 Unmute music':'🔇 Mute music'; }catch(e){} }
   function initVals(){ try{ vm.value=Math.round((window.__NQ_MUSIC&&window.__NQ_MUSIC.getVol?window.__NQ_MUSIC.getVol():1)*100); }catch(e){ vm.value=100; }
     try{ vs.value=Math.round((window.__NQ_SFX&&window.__NQ_SFX.getVol?window.__NQ_SFX.getVol():0.85)*100); }catch(e){ vs.value=85; } upMute(); }
-  cog.addEventListener('click',function(){ panel.classList.toggle('on'); if(panel.classList.contains('on')) initVals(); });
+  var diag=panel.querySelector('#nqsnddiag');
+  function upDiag(){ if(!diag) return; var out=[];
+    try{
+      var s=(window.__NQ_SFX&&window.__NQ_SFX.state)?window.__NQ_SFX.state():null;
+      if(!s){ diag.textContent=''; return; }
+      if(!s.ctx) out.push('⚠️ no audio context — tap the screen once');
+      else if(s.ctx!=='running') out.push('⚠️ audio '+s.ctx+' — tap the screen once');
+      if(s.vol<=0) out.push('⚠️ effects slider is at 0');
+      if(s.iOS && !s.session) out.push('ℹ️ if silent: check the iPad’s Silent Mode / side switch');
+      if(!out.length) out.push('✅ sound ready'+(s.session?' · playback session':''));
+    }catch(e){ out=['']; }
+    diag.innerHTML=out.join('<br>');
+  }
+  cog.addEventListener('click',function(){ panel.classList.toggle('on'); if(panel.classList.contains('on')){ initVals(); upDiag(); } });
   vm.addEventListener('input',function(){ try{ window.__NQ_MUSIC&&window.__NQ_MUSIC.setVol&&window.__NQ_MUSIC.setVol(vm.value/100); }catch(e){} });
   vs.addEventListener('input',function(){ try{ window.__NQ_SFX&&window.__NQ_SFX.setVol&&window.__NQ_SFX.setVol(vs.value/100); }catch(e){} });
   vs.addEventListener('change',function(){ try{ window.__NQ_SFX&&window.__NQ_SFX.power&&window.__NQ_SFX.power(); }catch(e){} });   // preview at the new level on release
