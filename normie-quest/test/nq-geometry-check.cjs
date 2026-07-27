@@ -297,7 +297,12 @@ function check(lv) {
   // The runtime guard (Game.penBoss) is the real fix; this stays as the data tripwire, now with
   // a margin instead of a hairline.
   if (lv.boss && lv.door) {
-    const MARGIN = 120;                       // knockback + the widest arena variant
+    // MARGIN 120 -> 260 (owner's call 2026-07-27: "we could just get rid of pits that close to
+    // boss"). The runtime guard already makes it physically impossible for a boss to reach a pit,
+    // so this is defence in depth -- but 120 left real hairlines: 1-3 cleared the zone by 48px,
+    // TRENCHES by 60, 20-2 by 100. Those are rounding errors, not safety. 260 clears the whole
+    // thin tail without churning the levels that already sit 200px+ clear.
+    const MARGIN = 260;
     const a1 = lv.door - 380 - MARGIN, a2 = lv.door + 40 + MARGIN;
     (lv.gaps || []).forEach(g => {
       if (g[1] > a1 && g[0] < a2) {
