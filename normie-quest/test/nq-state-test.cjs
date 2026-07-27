@@ -70,7 +70,14 @@ function ensurePhaser() {
   // Default leaves a core for the dev server. Override with NQ_WORKERS=1 to get the old serial
   // behaviour back (useful when debugging the harness itself, where interleaved output is noise).
   const CPUS = require('os').cpus().length;
-  const WORKERS = Math.max(1, Math.min(6, parseInt(process.env.NQ_WORKERS, 10) || Math.max(1, CPUS - 1)));
+  // Default to HALF the cores, not cores-1. At cores-1 (3 workers on a 4-core box, plus the dev
+  // server) each browser gets starved and the 25s level-build timeout trips on perfectly good
+  // levels -- the first parallel run reported 2-2, 4-2 and 5-2 as NO-LOAD when all three pass
+  // serially. A suite that invents failures is worse than a slow one.
+  const WORKERS = Math.max(1, Math.min(6, parseInt(process.env.NQ_WORKERS, 10) || Math.max(1, Math.floor(CPUS / 2))));
+  // …and the build genuinely IS slower with less CPU per browser, so the timeout has to scale
+  // with contention rather than staying at the single-worker figure.
+  const BOOT_MS = Math.round(25000 * (1 + (WORKERS - 1) * 0.6));
   async function openSession() {
     const errs = [];
     const browser = await chromium.launch({ headless: true, executablePath: findChrome(), args: ['--no-sandbox', '--disable-dev-shm-usage'] });
@@ -108,7 +115,7 @@ function ensurePhaser() {
   const shards = Array.from({ length: WORKERS }, () => []);
   levels.forEach((lv, n) => shards[n % WORKERS].push(lv));
   const activeShards = shards.filter(sh => sh.length);
-  console.log(`[nq-state-test] ${levels.length} levels across ${activeShards.length} worker(s)`);
+  console.log(`[nq-state-test] ${levels.length} levels across ${activeShards.length} worker(s), ${CPUS} cores, boot timeout ${BOOT_MS}ms`);
 
   async function runShard(shardLevels) {
     const out = [];
@@ -125,7 +132,7 @@ function ensurePhaser() {
         try {
           await page.waitForFunction(
             (name) => { try { return typeof window.__NQ_FORCEBOSS === 'function' && window.__NQ_DBG().level === name; } catch (e) { return false; } },
-            lv.name, { timeout: 25000 }); // wide VIP levels + drone glows are heavy to build in headless Canvas
+            lv.name, { timeout: BOOT_MS }); // wide VIP levels + drone glows are heavy to build in headless Canvas; scales with worker contention
           row.booted = true;
         } catch (e) { row.booted = false; }
 
