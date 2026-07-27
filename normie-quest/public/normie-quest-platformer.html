@@ -2729,7 +2729,11 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   // Bitcoin Maxi: "everything but BTC is trash" — on contact he STEALS your coins (score) and
   // bolts, rather than costing a life. Stomp him (or Giga/Moon-smash) to stop the theft.
   maxiSteal:function(player,maxi){
-    var steal=Math.min(this.score, 40);
+    // FLOOR AT THIS LEVEL'S BANK, like the honeypot. The honeypot states the fairness rule in its
+    // own comment — "never your accumulated total from earlier levels" — and enforces it; this took
+    // Math.min(this.score, 40), so a Maxi in world 12 could eat coins banked in world 3. Same
+    // promise, two different implementations, only one of them keeping it.
+    var steal=Math.min(40, Math.max(0, this.score - (this.levelStartScore||0)));
     if(steal>0){ this.score-=steal; this.hudScore.setText('SCORE '+this.score); }
     if(steal>0) this.coinLossBanner(steal,'BITCOIN MAXI!','#ff9500');   // same clear mid-tier notice as the honeypot
     else this.flash('MAXI FOUND NOTHING!','#ff9500');
@@ -3946,7 +3950,11 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   honeypotHit:function(player,hp){   // mimic trap: looks like treasure, snaps once — DRAINS COINS, never a life
     if(this.over||hp.sprung) return; var now=this.time.now;
     // GIGA CHAD / WHALE / COLD WALLET are immune — plow straight through the honeypot, no coin drain, no snare.
-    if(now<this.omegaUntil||now<this.whaleUntil||now<this.coldUntil){ hp.sprung=true; if(hp.body) hp.body.enable=false; this.tweens.killTweensOf(hp);
+    // moonUntil was MISSING here and present in every sibling hazard check (touchEnemy, spikeHit,
+    // sigHazardHit, casinoTouch). STAR POWER / Moon Mode literally banners "INVINCIBLE — smash
+    // everything!", and then a honeypot drained every coin you had earned that level anyway. The
+    // one hazard that ignored the game's own invincibility.
+    if(now<this.moonUntil||now<this.omegaUntil||now<this.whaleUntil||now<this.coldUntil){ hp.sprung=true; if(hp.body) hp.body.enable=false; this.tweens.killTweensOf(hp);
       var hc=now<this.whaleUntil?0x2f7fff:(now<this.coldUntil?0x9fe8ff:0xffa020);
       this.burst(hp.x,hp.y,hc,14); this.cameras.main.shake(70,.006); this.flash('HONEYPOT SMASHED!','#ffd23f'); return; }
     hp.sprung=true;
@@ -4124,7 +4132,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // a kid. Long cooldowns so they can't pester you into a stack while you play the slots.
     if(f.folk==='drink'){
       f.coolUntil=now+5000;
-      var steal=Math.min(this.score,25);
+      var steal=Math.min(25, Math.max(0, this.score - (this.levelStartScore||0)));   // same banked-score floor as the honeypot/Maxi
       if(steal>0){ this.score-=steal; this.hudScore.setText('SCORE '+this.score); }
       this.flash(steal>0?('DRINK LADY: -'+steal+' 🍸'):"DRINK LADY: TAB'S EMPTY 🍸",'#ff77cc');
       this.burst(f.x,f.y-6,0xff66cc,10); SFX.coin();
