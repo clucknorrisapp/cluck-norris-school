@@ -36,7 +36,7 @@ def main(inp, outp, pct, target=40.0):
 
     # Header line
     ty = H - strip_h + int(16 * S)
-    d.text((pad, ty), "ROAD TO 40% OF SUPPLY LOCKED", font=f_head, fill=GOLD)
+    d.text((pad, ty), f"ROAD TO {target:.0f}% OF SUPPLY LOCKED", font=f_head, fill=GOLD)
     # right-aligned big current number
     num = f"{pct:.2f}%"
     nw = d.textlength(num, font=f_num)
@@ -67,16 +67,19 @@ def main(inp, outp, pct, target=40.0):
         # glow tip
         d.ellipse([bar_x0 + fill_w - int(10 * S), bar_y - int(4 * S), bar_x0 + fill_w + int(10 * S), bar_y + bar_h + int(4 * S)], fill=(255, 182, 39, 70))
 
-    # Milestone ticks at 10/20/30/35%
-    for m in (10, 20, 30, 35):
+    # Milestone ticks — round tens below the target (e.g. target 50 → 10/20/30/40).
+    _ticks = [t for t in (10, 20, 30, 40, 50, 60, 70, 80, 90) if t < target][:4]
+    if not _ticks: _ticks = [round(target * k / 5) for k in range(1, 5)]
+    for m in _ticks:
         mx = bar_x0 + int(bar_w * (m / target))
         d.rectangle([mx, bar_y + int(6 * S), mx + max(1, int(2 * S)), bar_y + bar_h - int(6 * S)], fill=(255, 239, 224, 70))
         lw = d.textlength(f"{m}%", font=f_sub)
         d.text((mx - lw / 2, bar_y + bar_h + int(6 * S)), f"{m}%", font=f_sub, fill=SUB)
-    # Finish flag at 40%
+    # Finish flag at the target
     fx = bar_x1
-    lw = d.textlength("40% GOAL", font=f_sub)
-    d.text((fx - lw, bar_y + bar_h + int(6 * S)), "40% GOAL", font=f_sub, fill=GOLD)
+    _goal = f"{target:.0f}% GOAL"
+    lw = d.textlength(_goal, font=f_sub)
+    d.text((fx - lw, bar_y + bar_h + int(6 * S)), _goal, font=f_sub, fill=GOLD)
 
     im.save(outp, quality=93)
     print(f"saved {outp} ({W}x{H}, fill {frac*100:.1f}% of track)")
