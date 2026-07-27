@@ -507,7 +507,7 @@ var LEVELS=[
     warps:[[3620,28]],
     key:[1624,H-150], door:5680 },
 
-  { name:'3-2', sub:'THE TIMELINE', time:145, theme:5, bgArt:'w03skyline', width:6400, bgImage:'skyline',
+  { name:'3-2', sub:'THE TIMELINE', time:145, theme:5, bgArt:'w03skyline2', width:6400, bgImage:'skyline',
     gaps:[[780,852],[1620,1692],[2440,2560],[3260,3380],[4120,4240],[4980,5076],[5900,5976]],
     walls:[[440,3,'steel',4],[1240,4,'stone',4],[2100,3,'crate',5],[2960,4,'steel',4],[3820,3,'brick',5],[4680,4,'stone',4],[5500,3,'crate',4]],
     plats:[[800,2,150,'stone'],[1140,2,H-130,'stone'],[1640,2,150,'crate'],[2460,2,150,'steel'],[3280,2,150,'brick'],[3500,2,H-140,'steel'],[4140,2,150,'stone'],[5000,2,150,'crate']],
@@ -522,7 +522,7 @@ var LEVELS=[
 
   // WORLD 3 boss level — a LONG, HARD gauntlet up the skyline, THEN the Scammy KOL at the door.
   // The "-3" levels are the tough ones: dense snipers/hazards + tricky jumps to even reach the boss.
-  { name:'3-3', sub:'THE SCAMMY KOL', time:175, theme:5, bgArt:'w03skyline', width:4800, boss:true, bossType:'kol', bgImage:'skyline',
+  { name:'3-3', sub:'THE SCAMMY KOL', time:175, theme:5, bgArt:'w03skyline3', width:4800, boss:true, bossType:'kol', bgImage:'skyline',
     gaps:[[700,772],[1380,1500],[2060,2156],[2720,2816],[3380,3500]],
     walls:[[420,3,'steel',4],[1060,4,'stone',3],[1680,3,'brick',5],[2320,4,'steel',3],[2980,3,'stone',5],[3640,4,'steel',3]],
     plats:[[720,2,150,'steel'],[1080,2,H-140,'brick'],[1400,2,150,'stone'],[2080,2,150,'steel'],[2360,2,126,'steel'],[2740,2,150,'brick'],[3400,2,150,'steel'],[3680,2,H-134,'steel']],
@@ -551,7 +551,7 @@ var LEVELS=[
     bonusblocks:[[1280,5],[3000,'omegachad'],[4790,8]],
     key:[1680,H-150], door:5880 },
 
-  { name:'4-2', sub:'THE TRADING FLOOR', time:160, theme:6, bgArt:'w04exchange', width:6600, bgImage:'exchange',
+  { name:'4-2', sub:'THE TRADING FLOOR', time:160, theme:6, bgArt:'w04exchange2', width:6600, bgImage:'exchange',
     gaps:[[780,852],[1620,1740],[2440,2560],[3260,3380],[4120,4216],[4980,5052],[5900,5996]],
     walls:[[440,4,'steel',5],[1240,4,'steel',4],[2100,4,'steel',1],[2980,4,'stone',4],[3860,4,'steel',6],[4720,4,'steel',4],[5560,4,'steel',5]],
     plats:[[800,2,150,'steel'],[1180,2,150,'steel'],[1660,2,150,'steel'],[2460,2,150,'steel'],[2920,2,150,'steel'],[3300,2,150,'steel'],[3520,2,H-140,'steel'],[4160,2,150,'steel'],[4660,2,150,'steel'],[5040,2,150,'steel']],
@@ -567,7 +567,7 @@ var LEVELS=[
 
   // WORLD 4 boss level — the HARDEST gauntlet (tall+wide walls, dense snipers, spike pits), THEN
   // the Custodian at the door. The final world: reaching the boss should be a real fight in itself.
-  { name:'4-3', sub:'THE CUSTODIAN', time:190, theme:6, bgArt:'w04exchange', width:5200, boss:true, bossType:'ceo', bgImage:'exchange',
+  { name:'4-3', sub:'THE CUSTODIAN', time:190, theme:6, bgArt:'w04exchange3', width:5200, boss:true, bossType:'ceo', bgImage:'exchange',
     gaps:[[720,816],[1440,1536],[2160,2232],[2880,3000],[3600,3672],[4240,4360]],
     walls:[[440,4,'steel',5],[1120,4,'steel',4],[1800,4,'steel',6],[2500,4,'stone',4],[3160,4,'steel',6],[3860,4,'steel',4]],
     plats:[[740,2,150,'steel'],[1160,2,126,'steel'],[1580,2,150,'steel'],[2280,2,150,'steel'],[2560,2,126,'steel'],[2940,2,150,'steel'],[3620,2,150,'steel'],[3920,2,126,'steel'],[4400,2,150,'steel']],
@@ -600,7 +600,7 @@ var LEVELS=[
     caches:[[2340,226,200]],
     key:[1680,120], door:7680 },
 
-  { name:'5-2', sub:'THE SPAN', time:200, theme:7, bgArt:'w05bridge', width:8400,
+  { name:'5-2', sub:'THE SPAN', time:200, theme:7, bgArt:'w05bridge2', width:8400,
     gaps:[[780,876],[1620,1692],[2440,2536],[3260,3332],[4120,4240],[4980,5076],[5900,6020],[6760,6880],[7620,7692]],
     walls:[[440,4,'stone',5],[1240,4,'crate',4],[2100,4,'stone',1],[2980,4,'brick',4],[3860,4,'stone',6],[4720,4,'crate',4],[5560,4,'stone',5],[6380,4,'stone',5],[7240,4,'crate',4]],
     plats:[[800,2,150,'stone'],[1180,2,150,'stone'],[1660,2,150,'stone'],[2460,2,150,'stone'],[2920,2,150,'stone'],[3300,2,150,'stone'],[3520,2,130,'stone'],[4160,2,150,'stone'],[4660,2,150,'stone'],[5040,2,150,'stone'],[6740,2,150,'stone'],[7600,2,150,'stone']],
@@ -617,7 +617,7 @@ var LEVELS=[
     warps:[[2200,29]],
     key:[1164,120], door:8280 , firebars:[[660, 162, 46, 130, 4]] },
 
-  { name:'5-3', sub:'THE VAULT WYRM', time:240, theme:7, bgArt:'w05bridge', width:6700, boss:true, bossType:'wyrm',
+  { name:'5-3', sub:'THE VAULT WYRM', time:240, theme:7, bgArt:'w05bridge3', width:6700, boss:true, bossType:'wyrm',
     gaps:[[720,816],[1440,1560],[2160,2232],[2880,3000],[3600,3696],[4240,4312],[4960,5080],[5680,5776]],
     walls:[[440,4,'stone',5],[1120,4,'crate',4],[1800,4,'stone',6],[2500,4,'brick',4],[3160,4,'stone',6],[3860,4,'crate',4],[4580,4,'stone',5],[5300,4,'crate',4]],
     plats:[[740,2,150,'stone'],[1160,2,126,'stone'],[1580,2,150,'stone'],[2280,2,150,'stone'],[2560,2,126,'stone'],[2940,2,150,'stone'],[3620,2,150,'stone'],[3920,2,126,'stone'],[4400,2,150,'stone'],[4940,2,150,'stone'],[5660,2,150,'stone']],
@@ -649,7 +649,7 @@ var LEVELS=[
     bonusblocks:[[1280,5],[3000,'omegachad'],[4790,8],[6220,8],[6620,8]],
     key:[1680,120], door:7680 , firebars:[[680, 162, 46, 130, 4]] },
 
-  { name:'6-2', sub:'DEPEG EVENT', time:200, theme:8, bgArt:'w06depeg', width:8400,
+  { name:'6-2', sub:'DEPEG EVENT', time:200, theme:8, bgArt:'w06depeg2', width:8400,
     gaps:[[780,852],[1620,1692],[2440,2512],[3260,3380],[4120,4240],[4980,5100],[5900,5996],[6760,6856],[7620,7716]],
     walls:[[440,4,'crate',5],[1240,4,'stone',4],[2100,4,'crate',1],[2980,4,'stone',4],[3860,4,'crate',6],[4720,4,'stone',4],[5560,4,'crate',5],[6380,4,'crate',5],[7240,4,'stone',4]],
     plats:[[800,2,150,'crate'],[1180,2,150,'crate'],[1660,2,150,'crate'],[2460,2,150,'crate'],[2920,2,150,'crate'],[3300,2,150,'crate'],[3520,2,130,'crate'],[4160,2,150,'crate'],[4660,2,150,'crate'],[5040,2,150,'crate'],[6740,2,150,'crate'],[7600,2,150,'crate']],
@@ -666,7 +666,7 @@ var LEVELS=[
     warps:[[2200,30,1]],
     key:[1164,120], door:8280 , rugplats:[[624, 3, 150]] },
 
-  { name:'6-3', sub:'THE HASH LORD', time:250, theme:8, bgArt:'w06depeg', width:6700, boss:true, bossType:'golem',
+  { name:'6-3', sub:'THE HASH LORD', time:250, theme:8, bgArt:'w06depeg3', width:6700, boss:true, bossType:'golem',
     gaps:[[720,816],[1440,1560],[2160,2280],[2880,3000],[3600,3672],[4240,4312],[4960,5056],[5680,5776]],
     walls:[[440,4,'crate',5],[1120,4,'stone',4],[1800,4,'crate',6],[2500,4,'stone',4],[3160,4,'crate',6],[3860,4,'stone',4],[4580,4,'crate',5],[5300,4,'stone',4]],
     plats:[[740,2,150,'crate'],[1160,2,126,'crate'],[1580,2,150,'crate'],[2280,2,150,'crate'],[2560,2,126,'crate'],[2940,2,150,'crate'],[3620,2,150,'crate'],[3920,2,126,'crate'],[4400,2,150,'crate'],[4940,2,150,'crate'],[5660,2,150,'crate']],
@@ -698,7 +698,7 @@ var LEVELS=[
     bonusblocks:[[1280,5],[3000,'omegachad'],[4790,8],[6220,8],[6620,8]],
     key:[1680,120], door:7680 , gates:[[680, 1400, 1700, 666]] },
 
-  { name:'7-2', sub:'COMPOUND COUNTRY', time:205, theme:9, bgArt:'w07farm', width:8400,
+  { name:'7-2', sub:'COMPOUND COUNTRY', time:205, theme:9, bgArt:'w07farm2', ground:'ground', width:8400,
     gaps:[[780,900],[1620,1740],[2440,2512],[3260,3332],[4120,4216],[4980,5052],[5900,6020],[6760,6856],[7620,7716]],
     walls:[[440,4,'crate',5],[1240,4,'stone',4],[2100,4,'crate',1],[2980,4,'stone',4],[3860,4,'crate',6],[4720,4,'stone',4],[5560,4,'crate',5],[6380,4,'crate',5],[7240,4,'stone',4]],
     plats:[[800,2,150,'crate'],[1180,2,150,'crate'],[1980,2,150,'crate'],[2920,2,150,'crate'],[3520,2,130,'crate'],[4660,2,150,'crate'],[5040,2,150,'crate'],[6740,2,150,'crate'],[7600,2,150,'crate']],
@@ -716,7 +716,7 @@ var LEVELS=[
     warps:[[2200,31]],
     key:[1164,120], door:8280 , dumpzones:[[660, 2800]] },
 
-  { name:'7-3', sub:'THE YIELD REAPER', time:265, theme:9, bgArt:'w07farm', width:6700, boss:true, bossType:'reaper',
+  { name:'7-3', sub:'THE YIELD REAPER', time:265, theme:9, bgArt:'w07farm3', ground:'ground', width:6700, boss:true, bossType:'reaper',
     gaps:[[720,816],[1440,1512],[2160,2232],[2880,3000],[3600,3720],[4240,4336],[4960,5080],[5680,5776]],
     walls:[[440,4,'crate',5],[1120,4,'stone',4],[1800,4,'crate',6],[2500,4,'stone',4],[3160,4,'crate',6],[3860,4,'stone',4],[4580,4,'crate',5],[5300,4,'stone',4]],
     plats:[[740,2,150,'crate'],[1160,2,126,'crate'],[1980,2,150,'crate'],[2560,2,126,'crate'],[3260,2,126,'crate'],[3920,2,126,'crate'],[4940,2,150,'crate'],[5660,2,150,'crate']],
@@ -746,7 +746,7 @@ var LEVELS=[
     bonusblocks:[[1490,5],[2930,8],[4670,8],[5947,8],[6793,8]],
     key:[640,222], door:7680 , firebars:[[460, 162, 46, 130, 4]] },
 
-  { name:'8-2', sub:'CAPITULATION', time:200, theme:10, bgArt:'w08bear', width:8400,
+  { name:'8-2', sub:'CAPITULATION', time:200, theme:10, bgArt:'w08bear2', width:8400,
     gaps:[[820,940],[1680,1776],[2540,2660],[3400,3496],[4260,4332],[5120,5192],[5980,6076],[6840,6960],[7700,7772]],
     walls:[[520,3,'crate',3],[1320,3,'stone',3],[2080,3,'crate',3],[3040,3,'stone',3],[3900,3,'crate',3],[4760,3,'stone',3],[5620,3,'crate',3],[6460,3,'crate',3],[7320,3,'stone',3]],
     plats:[[800,2,150,'crate'],[1200,2,146,'crate'],[1660,2,150,'stone'],[2520,2,150,'crate'],[3380,2,150,'crate'],[4240,2,150,'crate'],[5100,2,150,'crate'],[5960,2,150,'crate'],[6820,2,150,'crate'],[7680,2,146,'crate']],
@@ -761,7 +761,7 @@ var LEVELS=[
     warps:[[2200,32,1]],
     key:[700,222], door:8280 , rugplats:[[384, 3, 150]] },
 
-  { name:'8-3', sub:'THE GREAT BEAR', time:275, theme:10, bgArt:'w08bear', width:6700, boss:true, bossType:'liquidator',
+  { name:'8-3', sub:'THE GREAT BEAR', time:275, theme:10, bgArt:'w08bear3', width:6700, boss:true, bossType:'liquidator',
     gaps:[[720,792],[1440,1536],[2160,2256],[2880,2952],[3600,3720],[4240,4360],[4960,5080],[5680,5776]],
     walls:[[440,4,'stone',4],[1120,4,'crate',4],[1800,4,'stone',5],[2500,4,'crate',4],[3160,4,'stone',5],[3860,4,'crate',4],[4580,4,'stone',4],[5300,4,'crate',4]],
     plats:[[740,2,150,'crate'],[1160,2,126,'crate'],[1980,2,150,'crate'],[2560,2,126,'crate'],[3260,2,126,'crate'],[3920,2,126,'crate'],[4940,2,150,'crate'],[5660,2,150,'crate']],
@@ -1086,7 +1086,7 @@ function padAdvance(scene, go){
 // browsers kept serving the previous painted plates from cache.
 // >>> BUMP THIS whenever any file in normie-quest/public/worlds/ is replaced. <<<
 var WORLD_ART_VER='4';   // 2026-07-27: backdrops re-encoded PNG→WebP q82 (87.9MB→4.3MB, 20x); bump busts the 7d CDN cache
-var WORLD_ART={ wDeadWallet:'/normie-quest/worlds/w-deadwallet.webp', wColdStorage:'/normie-quest/worlds/w-coldstorage.webp', wDarkPool:'/normie-quest/worlds/w-darkpool.webp', wIceberg:'/normie-quest/worlds/w-iceberg.webp', wProofVault:'/normie-quest/worlds/w-proofvault.webp', wSatStation:'/normie-quest/worlds/w-satstation.webp', wSuperCycle:'/normie-quest/worlds/w-supercycle.webp', wTrenches:'/normie-quest/worlds/w-trenches.webp', wVaultRoom:'/normie-quest/worlds/w-vaultroom.webp', wPrinter:'/normie-quest/worlds/w-printer.webp', wDiamondVault:'/normie-quest/worlds/w-diamondvault.webp', wSeedVault:'/normie-quest/worlds/w-seedvault.webp', wSybilBunker:'/normie-quest/worlds/w-sybilbunker.webp', wLeverageDen:'/normie-quest/worlds/w-leveragedn.webp', wBondCurve:'/normie-quest/worlds/w-bondcurve.webp', wOreCache:'/normie-quest/worlds/w-orecache.webp', wSwanRoost:'/normie-quest/worlds/w-swanroost.webp', wMempoolCache:'/normie-quest/worlds/w-mempoolcache.webp', wWhaleGrotto:'/normie-quest/worlds/w-whalegrotto.webp', wMoonCache:'/normie-quest/worlds/w-mooncache.webp', w09mines:'/normie-quest/worlds/w09-mines.webp', w10euphoria:'/normie-quest/worlds/w10-euphoria.webp', w10swan:'/normie-quest/worlds/w10-swan.webp', w11citadel:'/normie-quest/worlds/w11-citadel.webp', w12relaunch:'/normie-quest/worlds/w12-relaunch.webp', w13pod:'/normie-quest/worlds/w13-pod.webp', w14shrine:'/normie-quest/worlds/w14-shrine.webp', w15diamond:'/normie-quest/worlds/w15-diamond.webp', w01dusk:'/normie-quest/worlds/w01-dusk.webp', w01cavern:'/normie-quest/worlds/w01-cavern.webp', w01keep:'/normie-quest/worlds/w01-keep.webp', w02desert:'/normie-quest/worlds/w02-desert.webp', w02casino:'/normie-quest/worlds/w02-casino.webp', w03skyline:'/normie-quest/worlds/w03-skyline.webp', w04exchange:'/normie-quest/worlds/w04-exchange.webp', w05bridge:'/normie-quest/worlds/w05-bridge.webp', w06depeg:'/normie-quest/worlds/w06-depeg.webp', w07farm:'/normie-quest/worlds/w07-farm.webp', w08bear:'/normie-quest/worlds/w08-bear.webp', w16citadel:'/normie-quest/worlds/w16-citadel.webp', w17spire:'/normie-quest/worlds/w17-spire.webp', w18reserve:'/normie-quest/worlds/w18-reserve.webp', w19orbital:'/normie-quest/worlds/w19-orbital.webp', w20tower:'/normie-quest/worlds/w20-tower.webp', w21tower:'/normie-quest/worlds/w21-tower.webp', w21moon:'/normie-quest/worlds/w21-moon.webp' };
+var WORLD_ART={ wDeadWallet:'/normie-quest/worlds/w-deadwallet.webp', wColdStorage:'/normie-quest/worlds/w-coldstorage.webp', wDarkPool:'/normie-quest/worlds/w-darkpool.webp', wIceberg:'/normie-quest/worlds/w-iceberg.webp', wProofVault:'/normie-quest/worlds/w-proofvault.webp', wSatStation:'/normie-quest/worlds/w-satstation.webp', wSuperCycle:'/normie-quest/worlds/w-supercycle.webp', wTrenches:'/normie-quest/worlds/w-trenches.webp', wVaultRoom:'/normie-quest/worlds/w-vaultroom.webp', wPrinter:'/normie-quest/worlds/w-printer.webp', wDiamondVault:'/normie-quest/worlds/w-diamondvault.webp', wSeedVault:'/normie-quest/worlds/w-seedvault.webp', wSybilBunker:'/normie-quest/worlds/w-sybilbunker.webp', wLeverageDen:'/normie-quest/worlds/w-leveragedn.webp', wBondCurve:'/normie-quest/worlds/w-bondcurve.webp', wOreCache:'/normie-quest/worlds/w-orecache.webp', wSwanRoost:'/normie-quest/worlds/w-swanroost.webp', wMempoolCache:'/normie-quest/worlds/w-mempoolcache.webp', wWhaleGrotto:'/normie-quest/worlds/w-whalegrotto.webp', wMoonCache:'/normie-quest/worlds/w-mooncache.webp', w09mines:'/normie-quest/worlds/w09-mines.webp', w10euphoria:'/normie-quest/worlds/w10-euphoria.webp', w10swan:'/normie-quest/worlds/w10-swan.webp', w11citadel:'/normie-quest/worlds/w11-citadel.webp', w12relaunch:'/normie-quest/worlds/w12-relaunch.webp', w13pod:'/normie-quest/worlds/w13-pod.webp', w14shrine:'/normie-quest/worlds/w14-shrine.webp', w15diamond:'/normie-quest/worlds/w15-diamond.webp', w01dusk:'/normie-quest/worlds/w01-dusk.webp', w01cavern:'/normie-quest/worlds/w01-cavern.webp', w01keep:'/normie-quest/worlds/w01-keep.webp', w02desert:'/normie-quest/worlds/w02-desert.webp', w02casino:'/normie-quest/worlds/w02-casino.webp', w03skyline:'/normie-quest/worlds/w03-skyline.webp', w04exchange:'/normie-quest/worlds/w04-exchange.webp', w05bridge:'/normie-quest/worlds/w05-bridge.webp', w06depeg:'/normie-quest/worlds/w06-depeg.webp', w07farm:'/normie-quest/worlds/w07-farm.webp', w08bear:'/normie-quest/worlds/w08-bear.webp', w16citadel:'/normie-quest/worlds/w16-citadel.webp', w17spire:'/normie-quest/worlds/w17-spire.webp', w18reserve:'/normie-quest/worlds/w18-reserve.webp', w19orbital:'/normie-quest/worlds/w19-orbital.webp', w20tower:'/normie-quest/worlds/w20-tower.webp', w21tower:'/normie-quest/worlds/w21-tower.webp', w21moon:'/normie-quest/worlds/w21-moon.webp', w03skyline2:'/normie-quest/worlds/w03skyline2.webp', w03skyline3:'/normie-quest/worlds/w03skyline3.webp', w04exchange2:'/normie-quest/worlds/w04exchange2.webp', w04exchange3:'/normie-quest/worlds/w04exchange3.webp', w05bridge2:'/normie-quest/worlds/w05bridge2.webp', w05bridge3:'/normie-quest/worlds/w05bridge3.webp', w06depeg2:'/normie-quest/worlds/w06depeg2.webp', w06depeg3:'/normie-quest/worlds/w06depeg3.webp', w07farm2:'/normie-quest/worlds/w07farm2.webp', w07farm3:'/normie-quest/worlds/w07farm3.webp', w08bear2:'/normie-quest/worlds/w08bear2.webp', w08bear3:'/normie-quest/worlds/w08bear3.webp' };
 var Boot=new Phaser.Class({ Extends:Phaser.Scene,
   initialize:function(){ Phaser.Scene.call(this,{key:'Boot'}); },
   create:function(){
