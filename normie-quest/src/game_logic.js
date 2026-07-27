@@ -69,11 +69,28 @@ function _seq(notes,type,vol){ var w=0; notes.forEach(function(n){ _tone(n[0],n[
 // Embedded one-shot SFX SAMPLE (the real power-up .wav) — decoded once, played via WebAudio for low
 // latency. Falls back to the synth chime if the asset marker wasn't injected or decode fails.
 var _SFX_POWER_URI='__SFX_POWER__', _powerBuf=null, _powerTried=false;
+// Down-mix a decoded SFX sample to MONO so it plays equally in both ears. 2D-game SFX are
+// non-positional and should be mono; a stereo file with a dead/weak channel (e.g. coin.mp3 was
+// exported LEFT-only, R ~-32dB) would otherwise ping in one ear only. If one channel is
+// effectively silent we keep the loud one at full level (no 6dB fold-down loss); otherwise we
+// average. Returns the input untouched if it's already mono or on any error.
+function _toMono(buf,c){
+  try{
+    if(!buf||!c||buf.numberOfChannels<2) return buf;
+    var n=buf.length, L=buf.getChannelData(0), R=buf.getChannelData(1), i;
+    var sL=0,sR=0; for(i=0;i<n;i++){ sL+=L[i]*L[i]; sR+=R[i]*R[i]; }
+    var rmsL=Math.sqrt(sL/n), rmsR=Math.sqrt(sR/n), hi=Math.max(rmsL,rmsR), lo=Math.min(rmsL,rmsR);
+    var mono=c.createBuffer(1,n,buf.sampleRate), d=mono.getChannelData(0);
+    if(hi>0 && lo<0.1*hi){ var src=(rmsL>=rmsR)?L:R; for(i=0;i<n;i++) d[i]=src[i]; }   // one side dead → use the live channel
+    else { for(i=0;i<n;i++) d[i]=0.5*(L[i]+R[i]); }                                     // both present → clip-safe average
+    return mono;
+  }catch(e){ return buf; }
+}
 function _loadSfx(){ if(_powerTried) return; var c=_ac(); if(!c) return; _powerTried=true;
   if(typeof _SFX_POWER_URI==='string' && _SFX_POWER_URI.indexOf('data:')===0){
     try{ var b64=_SFX_POWER_URI.split(',')[1], bin=atob(b64), n=bin.length, arr=new Uint8Array(n);
       for(var i=0;i<n;i++) arr[i]=bin.charCodeAt(i);
-      c.decodeAudioData(arr.buffer, function(buf){ _powerBuf=buf; }, function(){}); }catch(e){}
+      c.decodeAudioData(arr.buffer, function(buf){ _powerBuf=_toMono(buf,c); }, function(){}); }catch(e){}
   }
   _loadSfxFiles(); }
 // Optional PRODUCED sfx samples: drop owned files at normie-quest/public/sfx/<name>.mp3 (or .wav)
@@ -86,7 +103,7 @@ function _loadSfxFiles(){ if(_sfxFilesTried) return; var c=_ac(); if(!c) return;
   Object.keys(_SFX_FILES).forEach(function(name){
     ['mp3','wav','m4a','ogg'].reduce(function(p,ext){ return p.then(function(done){ if(done) return true;
       return fetch('/normie-quest/sfx/'+name+'.'+ext).then(function(r){ if(!r.ok) return false;
-        return r.arrayBuffer().then(function(ab){ return new Promise(function(res){ c.decodeAudioData(ab, function(buf){ _sfxBufs[name]=buf; res(true); }, function(){ res(false); }); }); });
+        return r.arrayBuffer().then(function(ab){ return new Promise(function(res){ c.decodeAudioData(ab, function(buf){ _sfxBufs[name]=_toMono(buf,c); res(true); }, function(){ res(false); }); }); });
       }).catch(function(){ return false; }); }); }, Promise.resolve(false)).catch(function(){});
   }); }
 function _playSample(buf,vol){ var c=_ac(); if(!c||!buf) return false; try{ var s=c.createBufferSource(), g=c.createGain(); var v=(vol==null?0.55:vol), t=c.currentTime, cap=Math.min(buf.duration||1.5,1.5); g.gain.setValueAtTime(v,t); g.gain.setValueAtTime(v,t+Math.max(0.05,cap-0.3)); g.gain.exponentialRampToValueAtTime(0.0001,t+cap); s.buffer=buf; s.connect(g); g.connect(_sfxOut()||c.destination); s.start(t); s.stop(t+cap+0.02); return true; }catch(e){ return false; } }   // ~1.5s cap + fade (synced from a concurrent session's fix)
