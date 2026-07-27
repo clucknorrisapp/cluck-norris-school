@@ -3,6 +3,14 @@
 Operating notes for any Claude Code session — **especially cloud/web sessions, which
 start from a fresh clone with no local files.** Read this first.
 
+> 🎮 **WORKING ON NORMIE QUEST? READ `docs/HANDOFF_2026-07-27.md` FIRST.** It carries the current
+> branch state, the open owner decisions, and — most importantly — **how to verify a change**:
+> run `node normie-quest/test/nq-verify.cjs <baseUrl>`, which reads the diff and picks the right
+> checks. Do NOT run the full 82-level state test by reflex; a whole day was lost to running it
+> for icon swaps and copy tweaks it could never have validated. That doc also lists the traps
+> (idle auto-pause freezing headless probes, scene transitions not being instant, `game_logic.js`
+> not being plain JS) that cost several false failures.
+
 ## What this is
 School of Crypto Hard Knocks — a free Solana crypto school + free token-research tools,
 wrapped around premium operator tools paid for in CLKN micropayments (no wallet-connect
