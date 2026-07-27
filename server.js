@@ -2186,7 +2186,16 @@ app.use((req, res, next) => {
 const RL_BUCKETS = new Map(); // "bucket:ip" -> number[] request timestamps (ms)
 function rateLimit(bucket, { windowMs, max }) {
   return (req, res, next) => {
-    const ip = req.ip || (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || "unknown";
+    // IP = the LAST x-forwarded-for hop, the one Railway's edge appends and a client cannot forge.
+    // This used to take req.ip (which, under `trust proxy: true`, resolves to the LEFTMOST — i.e.
+    // CLIENT-SUPPLIED — XFF entry) and fell back to the first hop. Either way a caller could send
+    // `X-Forwarded-For: <anything>` and land in a fresh bucket on every request, so EVERY limiter
+    // built on this was decorative: the global 150/min /api cap, the 20/min payment-check cap, and
+    // the 15/min "forensic" caps that exist specifically to stop an anonymous caller draining paid
+    // Helius/ST/Bags quota. normie-quest/routes.js already fixed exactly this for its own throttle
+    // and documented why; server.js never got the same fix. (2026-07-27 wallet sweep.)
+    const _xff = String(req.headers["x-forwarded-for"] || "").split(",").map(s => s.trim()).filter(Boolean);
+    const ip = (_xff.length ? _xff[_xff.length - 1] : (req.ip || "")) || "unknown";
     const now = Date.now();
     // Namespace per limiter so the global /api cap and the tighter per-route
     // caps count independently (a request counts against both its own bucket
@@ -6099,8 +6108,20 @@ app.get("/api/verify-sol-payment", async (req, res) => {
     const idx = keys.indexOf(SOL_UNLOCK_WALLET);
     if (idx < 0) return res.status(200).json({ success: false, error: "payment not addressed to the unlock wallet" });
     const delta = ((tx.meta.postBalances[idx] || 0) - (tx.meta.preBalances[idx] || 0));
-    if (delta >= min) return res.status(200).json({ success: true, lamports: delta });
-    return res.status(200).json({ success: false, error: "amount too low", lamports: delta });
+    if (delta < min) return res.status(200).json({ success: false, error: "amount too low", lamports: delta });
+    // 🔒 REPLAY GUARD — this endpoint had NONE (found in the 2026-07-27 wallet sweep).
+    // The CLKN path has always consumed each signature via sigStore (see verify-clkn-payment);
+    // the SOL path verified the transfer and returned success WITHOUT marking it spent. Because
+    // SOL_UNLOCK_WALLET is a public address hardcoded in a public repo, ANYONE could look up any
+    // historical >=0.05 SOL transfer to it on an explorer and replay that one signature forever,
+    // for themselves and anyone they shared it with — without paying, and without ever controlling
+    // the paying wallet. One real payment was a master key to the whole paid tool.
+    // add() is the same atomic test-and-set the CLKN path uses, so a concurrent double-submit
+    // loses too. Namespaced 'sol:' so a signature can never be spent once here and once there.
+    if (!sigStore.add("sol:" + sig)) {
+      return res.status(200).json({ success: false, error: "This payment was already redeemed — each transfer unlocks once." });
+    }
+    return res.status(200).json({ success: true, lamports: delta });
   } catch (err) {
     console.error("[verify-sol-payment] error:", err.message);
     return res.status(200).json({ success: false, error: err.message });
