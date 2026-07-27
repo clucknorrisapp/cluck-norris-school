@@ -4321,6 +4321,12 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var big=this.hb(this.add.text(W/2,120,'WORLD '+this.def.name+' CLEAR!',{fontFamily:'"Press Start 2P"',fontSize:'16px',color:'#3dff6e'}).setOrigin(.5));
     this.tweens.add({targets:big,scale:1.15,duration:400,yoyo:true,repeat:1});
     var next=this.levelIdx+1;
+    // PER-LEVEL resume checkpoint — bank it HERE too, not only in advanceLevel(). advanceLevel runs
+    // solely on boss defeats; ordinary (non-boss) levels complete through levelClear, so without this
+    // the tier-2/VIP "resume on the level you died on" perk never advanced past the free world
+    // checkpoint (nqLvlCp stayed == nqCp) and the perk was silently inert. Same unconditional write as
+    // advanceLevel (the gate is on the READ in gameOver); skip hidden bonus rooms.
+    if(next<LEVELS.length && !(this.def&&this.def.hidden)){ this.registry.set('nqLvlCp',next); this.registry.set('nqLvlCpScore',this.score); }
     this.time.delayedCall(1500,function(){ if(next<LEVELS.length) this.scene.start('Game',{level:next,score:this.score,lives:3,lab:(this._labWarp?1:undefined)}); else this.scene.start('Win',this.winData()); },[],this);   // refill hearts each world; score stays cumulative
   },
   gameOver:function(reason){ if(this.over) return; this.over=true; this.physics.pause();
@@ -5606,6 +5612,19 @@ try{ if(typeof window!=='undefined') window.__NQ_SCENES=function(){ try{
     out.push({key:k,text:txt.join(' | ')});
   }); return out;
 }catch(e){ return [{key:'err',text:String(e)}]; } }; }catch(e){}
+// LAB toolkit: expose the resume-perk checkpoint registry + a way to fire the door-clear, so the
+// tier-2/VIP "resume on the level you died on" perk is ASSERTABLE headlessly. Its silent failure
+// (levelClear did not bank nqLvlCp — only advanceLevel did, which runs solely on boss defeats) went
+// unnoticed precisely because the only test path drove advanceLevel, not a non-boss levelClear.
+// Both setup-lane only + no-ops in the shipped game.
+function _nqGameScene(){ try{ return NQGAME.scene.getScenes(true).filter(function(s){ return s.sys&&s.sys.settings&&s.sys.settings.key==='Game'; })[0]||null; }catch(e){ return null; } }
+try{ if(typeof window!=='undefined') window.__NQ_CPSTATE=function(){ try{
+  if(!window.__NQ_SETUP) return null; var sc=_nqGameScene(); if(!sc) return null; var r=sc.registry;
+  return { nqCp:r.get('nqCp')||0, nqLvlCp:r.get('nqLvlCp')||0, nqLvlCpScore:r.get('nqLvlCpScore')||0, levelIdx:(sc.levelIdx!=null?sc.levelIdx:null), level:(sc.def&&sc.def.name)||null };
+}catch(e){ return {err:String(e)}; } }; }catch(e){}
+try{ if(typeof window!=='undefined') window.__NQ_FORCECLEAR=function(){ try{
+  if(!window.__NQ_SETUP) return false; var sc=_nqGameScene(); if(!sc||sc.over) return false; sc.levelClear(); return true;
+}catch(e){ return false; } }; }catch(e){}
 // LAB toolkit: level list for the warp dropdown (name + width so the panel can bound the x input).
 try{ if(typeof window!=='undefined') window.__NQ_LEVELS_LIST=LEVELS.map(function(l,i){ return {i:i,name:l.name,sub:l.sub||'',width:l.width||5000}; }); }catch(e){}
 // Real world count for the setup-lane leaderboard chips (same formula the Win scenes use).
