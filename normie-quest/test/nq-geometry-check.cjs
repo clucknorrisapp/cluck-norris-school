@@ -289,11 +289,19 @@ function check(lv) {
   // the boss can walk into. The Storm Herald (20-2) did exactly that -- it dropped through a
   // 120px pit 80px from the door and the fight became unwinnable with the banner still up.
   // The arena is where the level's challenge is the FIGHT, not the terrain.
+  // MARGIN added 2026-07-27. The widest arena in the game is [door-380, door+40] (the whale), not
+  // door-340 -- so a pit that was legal under the 340 window could still sit inside a wider one.
+  // Worse, 1-3's Rug King fell into a pit ending at 5952 when his arena started at 5960: EIGHT
+  // pixels outside, so the rule passed while the level was broken. A boss shoved backwards lands
+  // past the wall line, so the check needs slack the fight itself does not.
+  // The runtime guard (Game.penBoss) is the real fix; this stays as the data tripwire, now with
+  // a margin instead of a hairline.
   if (lv.boss && lv.door) {
-    const a1 = lv.door - 340, a2 = lv.door + 40;
+    const MARGIN = 120;                       // knockback + the widest arena variant
+    const a1 = lv.door - 380 - MARGIN, a2 = lv.door + 40 + MARGIN;
     (lv.gaps || []).forEach(g => {
       if (g[1] > a1 && g[0] < a2) {
-        fails.push(`F14 pit ${g[0]}-${g[1]} sits inside the boss arena (${a1}-${a2}) — the boss can fall in`);
+        fails.push(`F14 pit ${g[0]}-${g[1]} sits in or beside the boss arena (${a1}-${a2}) — the boss can fall in`);
       }
     });
   }
