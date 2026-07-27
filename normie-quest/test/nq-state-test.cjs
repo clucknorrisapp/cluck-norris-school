@@ -136,15 +136,38 @@ function ensurePhaser() {
           row.booted = true;
         } catch (e) { row.booted = false; }
 
+        // A NO-LOAD is almost always CONTENTION, not a broken level: the heaviest levels (8400px,
+        // dark overlay, ~90 placed objects) build slower when several browsers share the CPU, and
+        // they trip the timeout. Guessing a bigger timeout is not a fix -- it just moves the line on
+        // whatever machine you happen to be on.
+        // So a NO-LOAD gets ONE retry on a FRESH browser with a generous timeout. If the level is
+        // genuinely broken the retry fails too and it is reported honestly; if it was contention it
+        // passes and nobody wastes an hour chasing a phantom. (9-2 was reported NO-LOAD under load
+        // on 2026-07-27 while passing serially on the identical build -- that is the case this
+        // exists for.)
+        if (!row.booted) {
+          try { await sess.browser.close(); } catch (_) {}
+          sess = await openSession(); sinceRestart = 1;
+          const p2 = sess.page;
+          try {
+            await p2.evaluate((i) => window.__NQ_STARTLEVEL(i), lv.i);
+            await p2.waitForFunction(
+              (name) => { try { return typeof window.__NQ_FORCEBOSS === 'function' && window.__NQ_DBG().level === name; } catch (e) { return false; } },
+              lv.name, { timeout: 90000 });
+            row.booted = true; row.retried = true;
+          } catch (e2) { row.booted = false; }
+        }
+
         if (row.booted) {
-          const dbg = await page.evaluate(() => { try { return window.__NQ_DBG(); } catch (e) { return { err: String(e) }; } });
+          const page2 = sess.page;   // may be a fresh browser after a retry
+          const dbg = await page2.evaluate(() => { try { return window.__NQ_DBG(); } catch (e) { return { err: String(e) }; } });
           if (dbg && dbg.err) row.errs.push('DBG:' + dbg.err);
           if (!dbg || dbg.px == null || dbg.px < 0) row.errs.push('no-player');
-          const isBoss = await page.evaluate(() => window.__NQ_FORCEBOSS());
+          const isBoss = await page2.evaluate(() => window.__NQ_FORCEBOSS());
           if (isBoss) {
             row.boss = true;
-            await page.waitForTimeout(450);
-            const st = await page.evaluate(() => { try { return window.__NQ_STOMPTEST(); } catch (e) { return { error: String(e) }; } });
+            await page2.waitForTimeout(450);
+            const st = await page2.evaluate(() => { try { return window.__NQ_STOMPTEST(); } catch (e) { return { error: String(e) }; } });
             row.stompable = st && st.stompable === true ? true : (st && st.stompable === false ? false : null);
             row.stompDetail = st;
           }
@@ -152,7 +175,7 @@ function ensurePhaser() {
       } catch (e) { row.errs.push('EX:' + String(e.message).slice(0, 120)); }
       if (sess.errs.length) row.errs.push(...sess.errs.slice(0, 3));
       out.push(row);
-      const tag = !row.booted ? 'NO-LOAD' : row.boss ? (row.stompable ? 'BOSS\u2713' : 'BOSS\u2717') : 'ok';
+      const tag = (!row.booted ? 'NO-LOAD' : row.boss ? (row.stompable ? 'BOSS\u2713' : 'BOSS\u2717') : 'ok') + (row.retried ? ' (retried)' : '');
       process.stdout.write(`  [${String(row.i).padStart(2)}] ${row.name.padEnd(10)} ${tag}${row.errs.length ? '  ERR:' + row.errs.join('|') : ''}\n`);
     }
     try { await sess.browser.close(); } catch (_) {}
