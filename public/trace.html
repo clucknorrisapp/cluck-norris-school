@@ -542,7 +542,7 @@ function render(d) {
   if (o) {
     let line;
     if (o.action === 'buy') {
-      line = `First acquired by <b>buying</b> ${fmtNum(o.amount, dec)} tokens${o.source ? ' via ' + o.source : ''} on ${fmtDate(o.timestamp)}`;
+      line = `First acquired by <b>buying</b> ${fmtNum(o.amount, dec)} tokens${o.source ? ' via ' + esc(o.source) : ''} on ${fmtDate(o.timestamp)}`;
       if (o.counterparty) {
         line += ` — pool/counterparty <a href="https://solscan.io/account/${o.counterparty}" target="_blank">${o.counterparty} ↗</a>`;
       }
@@ -724,7 +724,7 @@ function renderGraph() {
     if (c.inflow > 0)  amt.push(`<tspan fill="#10B981">+${fmtNum(c.inflow,dec)}</tspan>`);
     if (c.outflow > 0) amt.push(`<tspan fill="#EF4444">-${fmtNum(c.outflow,dec)}</tspan>`);
     const inner = `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${nodeW}" height="${nodeH}" rx="5" fill="${fill}" stroke="${stroke}" stroke-width="1"/>`
-      + `<text x="${nx.toFixed(1)}" y="${(y+nodeH*0.42).toFixed(1)}" text-anchor="middle" fill="${stroke}" font-size="${fs.toFixed(1)}" font-family="monospace" font-weight="700">${line1}</text>`
+      + `<text x="${nx.toFixed(1)}" y="${(y+nodeH*0.42).toFixed(1)}" text-anchor="middle" fill="${stroke}" font-size="${fs.toFixed(1)}" font-family="monospace" font-weight="700">${esc(line1)}</text>`
       + `<text x="${nx.toFixed(1)}" y="${(y+nodeH*0.82).toFixed(1)}" text-anchor="middle" font-size="${fs.toFixed(1)}" font-family="monospace" font-weight="700">${amt.join('<tspan fill="#6B7280"> </tspan>')}</text>`;
     return c.address
       ? `<a href="https://solscan.io/account/${c.address}" target="_blank" style="cursor:pointer">${inner}</a>`
@@ -787,15 +787,15 @@ function renderCounterparties() {
     let who;
     if (c.type === 'market') {
       who = `<span class="tag tag-market">MARKET</span> `
-        + `<span class="mname">${c.label || 'DEX'}</span>`;
+        + `<span class="mname">${esc(c.label || 'DEX')}</span>`;
     } else if (c.type === 'wallet' && c.label) {
       // Known CEX deposit wallet — name it (forensic cash-out signal).
-      who = `<span class="tag tag-cex">🏦 ${c.label.toUpperCase()}</span> `
+      who = `<span class="tag tag-cex">🏦 ${esc(c.label.toUpperCase())}</span>`
         + `<a href="https://solscan.io/account/${c.address}" target="_blank">${shortAddr(c.address)} ↗</a>`;
     } else {
       const name = c.type === 'contract' ? (c.label || 'CONTRACT') : 'WALLET';
       const tagCls = c.type === 'contract' ? 'tag-contract' : 'tag-wallet';
-      who = `<span class="tag ${tagCls}">${name.toUpperCase()}</span> `
+      who = `<span class="tag ${tagCls}">${esc(name.toUpperCase())}</span>`
         + `<a href="https://solscan.io/account/${c.address}" target="_blank">${shortAddr(c.address)} ↗</a>`;
     }
     const sigs = c.sigs || [];
@@ -827,15 +827,15 @@ function renderTxList() {
     const pos = t.tokenDelta > 0;
     const amtStr = (pos ? '+' : '') + fmtNum(t.tokenDelta, dec);
     const quote = (t.quoteDelta != null)
-      ? ` · ${t.quoteDelta < 0 ? '-' : '+'}${fmtNum(Math.abs(t.quoteDelta))} ${t.quoteSymbol}` : '';
+      ? ` · ${t.quoteDelta < 0 ? '-' : '+'}${fmtNum(Math.abs(t.quoteDelta))} ${esc(t.quoteSymbol)}` : '';
     const cpName = t.counterpartyType === 'contract' ? (t.counterpartyLabel || 'CONTRACT') : 'WALLET';
     const cp = t.counterparty
       ? `<a class="cp-link" href="https://solscan.io/account/${t.counterparty}" target="_blank">`
-        + `<span class="tag tag-${t.counterpartyType === 'contract' ? 'contract' : 'wallet'}">${cpName.toUpperCase()}</span> `
+        + `<span class="tag tag-${t.counterpartyType === 'contract' ? 'contract' : 'wallet'}">${esc(cpName.toUpperCase())}</span>`
         + `${shortAddr(t.counterparty)} ↗</a>`
       : '<span style="color:var(--muted)">counterparty n/a</span>';
     const prefix = DEX_ACTIONS.includes(t.action)
-      ? `${t.source ? 'via ' + t.source : 'via DEX'} · ${cp}`
+      ? `${t.source ? 'via ' + esc(t.source) : 'via DEX'} · ${cp}`
       : `${pos ? 'from' : 'to'} ${cp}`;
     return `<div class="tx">
       <div class="tx-badge">
