@@ -459,21 +459,28 @@ async function openPosition(){
   finally{ busy=false; }
 }
 
-// Sign + submit one base64 legacy transaction (same path as Security Coop).
-async function signSubmit(txBase64){
+// Sign + submit one transaction. `t` is either { txBase64, signerSecrets } (from /open, /close)
+// or a bare base64 string (legacy fallback). Phantom's Lighthouse flags a multi-signer tx unless
+// the connected WALLET signs FIRST and the ephemeral position/mint keypairs sign AFTER — so the
+// server no longer pre-signs the ephemerals; it ships their throwaway secrets here and we apply
+// them in the right order. This mirrors the reference flow in locker-room.html.
+async function signSubmit(t){
   setProgress('Approve the transaction in your wallet…');
+  const txBase64=(typeof t==='string')?t:(t&&t.txBase64);
+  const signerSecrets=(t&&typeof t==='object'&&Array.isArray(t.signerSecrets))?t.signerSecrets:[];
   const txBytes=Uint8Array.from(atob(txBase64),c=>c.charCodeAt(0));
   const tx=solanaWeb3.Transaction.from(txBytes);
   const prov=activeWallet.provider;
-  let signature;
-  if(typeof prov.signAndSendTransaction==='function'){
-    const r=await prov.signAndSendTransaction(tx); signature=r?.signature||r;
-  } else if(typeof prov.signTransaction==='function'){
-    const signed=await prov.signTransaction(tx);
-    const raw=new Uint8Array(signed.serialize()); let bin=''; for(let i=0;i<raw.length;i++) bin+=String.fromCharCode(raw[i]);
-    const sj=await (await fetch('/api/helius-rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:'wp-send',method:'sendTransaction',params:[btoa(bin),{encoding:'base64'}]})})).json();
-    if(sj.error) throw new Error(sj.error.message||'Transaction send failed'); signature=sj.result;
-  } else throw new Error('This wallet can\'t sign here — try its in-app browser, or Phantom/Solflare.');
+  if(typeof prov.signTransaction!=='function') throw new Error('This wallet can\'t sign here — try its in-app browser, or Phantom/Solflare.');
+  const signed=await prov.signTransaction(tx);   // WALLET FIRST
+  for(const sec of signerSecrets){               // ephemeral position/mint keypairs AFTER
+    const kp=solanaWeb3.Keypair.fromSecretKey(Uint8Array.from(atob(sec),c=>c.charCodeAt(0)));
+    signed.partialSign(kp);
+  }
+  const raw=new Uint8Array(signed.serialize()); let bin=''; for(let i=0;i<raw.length;i++) bin+=String.fromCharCode(raw[i]);
+  const sj=await (await fetch('/api/helius-rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:'wp-send',method:'sendTransaction',params:[btoa(bin),{encoding:'base64'}]})})).json();
+  if(sj.error) throw new Error(sj.error.message||'Transaction send failed');
+  const signature=sj.result;
   setProgress('Confirming on-chain…'); await confirmTx(signature); return signature;
 }
 

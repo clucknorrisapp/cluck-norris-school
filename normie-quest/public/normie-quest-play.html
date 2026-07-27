@@ -3021,6 +3021,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   },
   kolShill:function(k,p){   // flings a small spread of "fake token" shills toward the player
     if(this.over||!this.enemyShots) return; var self=this;
+    if(this.stompImminent(p,k)) return;   // don't punish a committed stomp with point-blank shots
     var base=Math.atan2((p.y-8)-k.y, p.x-k.x);
     [-0.16,0.16].forEach(function(off){
       var ang=base+off, sp=190, s=self.enemyShots.create(k.x, k.y-6, 'bullet').setDepth(6); s.srcCause='KOL SHILL SHOT';
@@ -3054,9 +3055,13 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(now>this.trollNextTaunt){ this.trollNextTaunt=now+3400; var t=['GET TROLLED','NGMI','REKT','SKILL ISSUE','HFSP','U MAD?','FEW','COPE + SEETHE']; this.flash(Phaser.Math.RND.pick(t),'#2effa0'); }
     if(now>this.trollNextTp && !k.invuln){ this.trollNextTp=now+5200; this.trollTeleport(k,p); }
   },
+  // Shared "committed stomp" guard: player is directly overhead and above the boss's head
+  // (mid-stomp), so a ranged boss must NOT fire a point-blank volley that punishes a clean
+  // stomp. Extracted from the Troll's original inline check; applied to every ranged boss.
+  stompImminent:function(p,k){ return Math.abs(p.x-k.x)<86 && p.y < k.y-6; },
   trollThrow:function(k,p){   // lobs a 3-way spread of red REKT candles (red = death, like the Reaper)
     if(this.over||!this.enemyShots) return; var self=this;
-    if(Math.abs(p.x-k.x)<86 && p.y < k.y-6) return;   // don't punish a committed stomp with point-blank candles
+    if(this.stompImminent(p,k)) return;   // don't punish a committed stomp with point-blank candles
     var base=Math.atan2((p.y-8)-k.y, p.x-k.x);
     [-0.22,0,0.22].forEach(function(off){
       var ang=base+off, sp=210, s=self.enemyShots.create(k.x, k.y-8, 'candle').setDepth(6); s.srcCause='TROLL THROW';
@@ -3106,6 +3111,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   },
   ceoFreeze:function(k,p){   // flings a 3-way spread of "frozen withdrawal" locks (final boss = tougher)
     if(this.over||!this.enemyShots) return; var self=this;
+    if(this.stompImminent(p,k)) return;   // don't punish a committed stomp with point-blank shots
     var base=Math.atan2((p.y-8)-k.y, p.x-k.x);
     [-0.22,0,0.22].forEach(function(off){
       var ang=base+off, sp=205, s=self.enemyShots.create(k.x, k.y-6, 'bullet').setDepth(6); s.srcCause='CUSTODIAN FREEZE RAY';
@@ -3143,6 +3149,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   },
   saylorBomb:function(k,p,enraged){   // fans a spread of orange "leverage bombs" toward the player
     if(this.over||!this.enemyShots) return; var self=this;
+    if(this.stompImminent(p,k)) return;   // don't punish a committed stomp with point-blank bombs
     var base=Math.atan2((p.y-8)-k.y, p.x-k.x);
     var offs=enraged?[-0.34,-0.17,0,0.17,0.34]:[-0.20,0,0.20];
     offs.forEach(function(off){
@@ -3189,6 +3196,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   },
   vipBossBomb:function(k,p,enraged,col){
     if(this.over||!this.enemyShots) return; var self=this;
+    if(this.stompImminent(p,k)) return;   // don't punish a committed stomp with point-blank blasts
     var base=Math.atan2((p.y-8)-k.y, p.x-k.x);
     var offs=enraged?[-0.30,-0.15,0,0.15,0.30]:[-0.18,0,0.18];
     offs.forEach(function(off){
@@ -3224,6 +3232,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   },
   wyrmFire:function(k,p){   // breathes an arcing spread of fireballs
     if(this.over||!this.enemyShots) return; var self=this;
+    if(this.stompImminent(p,k)) return;   // don't punish a committed stomp with point-blank fire
     var base=Math.atan2((p.y-8)-k.y, p.x-k.x);
     [-0.18,0,0.18].forEach(function(off){
       var ang=base+off, sp=210, s=self.enemyShots.create(k.x-10, k.y-10, 'bullet').setDepth(6); s.srcCause='WYRM FIREBALL';
@@ -3258,6 +3267,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   },
   golemThrow:function(k,p){   // hurls stone blocks in a small spread
     if(this.over||!this.enemyShots) return; var self=this;
+    if(this.stompImminent(p,k)) return;   // don't punish a committed stomp with point-blank blocks
     var base=Math.atan2((p.y-8)-k.y, p.x-k.x);
     [-0.14,0.14].forEach(function(off){
       var ang=base+off, sp=200, s=self.enemyShots.create(k.x-10, k.y-8, 'crate').setDepth(6); s.srcCause='HASH LORD BLOCK';
@@ -3364,6 +3374,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   },
   reaperThrow:function(k,p){   // reaps a 3-way spread of spinning scythe-blades (final boss = wider + faster)
     if(this.over||!this.enemyShots) return; var self=this;
+    if(this.stompImminent(p,k)) return;   // don't punish a committed stomp with point-blank scythes
     var base=Math.atan2((p.y-8)-k.y, p.x-k.x);
     [-0.20,0,0.20].forEach(function(off){
       var ang=base+off, sp=215, s=self.enemyShots.create(k.x-10, k.y-8, 'candle').setDepth(6); s.srcCause='REAPER SCYTHE';
@@ -3576,6 +3587,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   },
   bearThrow:function(k,p){   // hurls a 4-way spread of red crash-candles (finale = dense)
     if(this.over||!this.enemyShots) return; var self=this;
+    if(this.stompImminent(p,k)) return;   // don't punish a committed stomp with point-blank candles
     var base=Math.atan2((p.y-8)-k.y, p.x-k.x);
     [-0.28,-0.09,0.09,0.28].forEach(function(off){
       var ang=base+off, sp=225, s=self.enemyShots.create(k.x-12, k.y-6, 'candle').setDepth(6); s.srcCause='BEAR CANDLE THROW';
@@ -4005,7 +4017,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         if(onIt){ m.bpState='warn'; m.bpAt=now; }
       } else if(m.bpState==='warn'){
         m.setTint(0xff6644); m.setAlpha(0.5+0.5*Math.abs(Math.sin(now/40)));   // shudder — the exploit is landing
-        if(now-m.bpAt>240){ m.bpState='gone'; m.bpAt=now; m.body.enable=false; m.setAlpha(1);
+        if(now-m.bpAt>420){ m.bpState='gone'; m.bpAt=now; m.body.enable=false; m.setAlpha(1);   // 240ms was far tighter than the comparable pumpdump (430) / depeg (780) warns, and a plank drops into a VOID not a floor — raised to 420 for a fairer read
           self.tweens.add({targets:m, y:m.homeY+130, alpha:0.08, angle:Phaser.Math.Between(-22,22), duration:500, ease:'Quad.in'}); }
       } else if(m.bpState==='gone'){
         if(now-m.bpAt>1600){ m.bpState='idle'; self.tweens.killTweensOf(m); m.y=m.homeY; m.angle=0; m.setAlpha(1).setTint(0x8a5a2b); m.body.enable=true; }

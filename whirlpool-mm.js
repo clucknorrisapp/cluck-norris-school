@@ -170,7 +170,7 @@ router.post("/open", async (req, res) => {
     if (!(Number(inputAmount) > 0)) return res.status(400).json({ error: "Enter a deposit amount" });
     if (!Number.isFinite(Number(lowerTick)) || !Number.isFinite(Number(upperTick)))
       return res.status(400).json({ error: "Missing tick range" });
-    const built = await wp.buildOpenPosition({ owner, address, lowerTick, upperTick, inputMint, inputAmount, slippageBps });
+    const built = await wp.buildOpenPosition({ owner, address, lowerTick, upperTick, inputMint, inputAmount, slippageBps, forWallet: true });
     res.json(built);
   } catch (e) {
     console.error("[whirlpool] open build failed:", e);
@@ -196,7 +196,7 @@ router.post("/close", async (req, res) => {
     const { owner, positionMint, slippageBps } = req.body || {};
     if (!isPubkey(owner)) return res.status(400).json({ error: "Connect a wallet first" });
     if (!isPubkey(positionMint)) return res.status(400).json({ error: "Invalid position" });
-    res.json(await wp.buildClosePosition({ owner, positionMint, slippageBps }));
+    res.json(await wp.buildClosePosition({ owner, positionMint, slippageBps, forWallet: true }));
   } catch (e) {
     console.error("[whirlpool] close build failed:", e);
     res.status(502).json({ error: e.message || "Could not build the close transaction" });

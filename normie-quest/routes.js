@@ -176,7 +176,7 @@ router.get('/normie-quest-x7/vip', (req, res) => {
   // STRICT admin: env keys ONLY — adminOK also accepts the tester-known dashboard password,
   // which must NOT be able to grant ULTRA VIP (owner call 2026-07-21: VIP is owner-only).
   const vk = String((req.query && req.query.key) || req.get('x-nq-key') || '');
-  const vw = process.env.NQ_FEEDBACK_KEY || process.env.PREMIUM_ACCESS_KEY || '';
+  const vw = process.env.PREMIUM_ACCESS_KEY || '';   // privileged (VIP grant / lounge post / reward grant): the master key ONLY — the low-trust NQ_FEEDBACK_KEY (playtest comments) must never grant these
   if (!vw || vk !== vw) return res.status(404).json({ ok: false, error: 'not_found' });
   try {
     let list = wallet.vipList();
@@ -208,7 +208,7 @@ router.get('/api/nq/lounge', (req, res) => {
 // to add; &remove=<id> to delete; bare call lists everything.
 router.get('/normie-quest-x7/lounge-admin', (req, res) => {
   const vk = String((req.query && req.query.key) || req.get('x-nq-key') || '');
-  const vw = process.env.NQ_FEEDBACK_KEY || process.env.PREMIUM_ACCESS_KEY || '';
+  const vw = process.env.PREMIUM_ACCESS_KEY || '';   // privileged (VIP grant / lounge post / reward grant): the master key ONLY — the low-trust NQ_FEEDBACK_KEY (playtest comments) must never grant these
   if (!vw || vk !== vw) return res.status(404).json({ ok: false, error: 'not_found' });
   try {
     let posts = loungePosts();
@@ -226,7 +226,7 @@ router.get('/normie-quest-x7/lounge-admin', (req, res) => {
 // Owner/wheel grants queue per wallet; the game claims them into the Item Reserve on next login.
 function strictAdmin(req) {
   const vk = String((req.query && req.query.key) || req.get('x-nq-key') || '');
-  const vw = process.env.NQ_FEEDBACK_KEY || process.env.PREMIUM_ACCESS_KEY || '';
+  const vw = process.env.PREMIUM_ACCESS_KEY || '';   // privileged (VIP grant / lounge post / reward grant): the master key ONLY — the low-trust NQ_FEEDBACK_KEY (playtest comments) must never grant these
   return !!vw && vk === vw;
 }
 // Owner grant (STRICT key): &wallet=PUBKEY&item=disc|vial|shield ; bare call shows a wallet's queue.
