@@ -63,11 +63,22 @@ function ensurePhaser() {
   const PHASER = fs.readFileSync(PHASER_TMP);
 
   const RESTART_EVERY = 12;  // relaunch the browser every N levels so 60+ level loads can't OOM one session
-  let curErrs = [];
+  // WORKERS: the levels are completely independent -- nothing about level 40 depends on level 39 --
+  // but this ran strictly sequentially, one browser, one level at a time, for ~11s a level. On 82
+  // levels that is ~15 minutes, and it gated every deploy. Sharding across a few browsers cuts it
+  // to roughly wall-clock/N with identical coverage.
+  // Default leaves a core for the dev server. Override with NQ_WORKERS=1 to get the old serial
+  // behaviour back (useful when debugging the harness itself, where interleaved output is noise).
+  const CPUS = require('os').cpus().length;
+  const WORKERS = Math.max(1, Math.min(6, parseInt(process.env.NQ_WORKERS, 10) || Math.max(1, CPUS - 1)));
   async function openSession() {
+    const errs = [];
     const browser = await chromium.launch({ headless: true, executablePath: findChrome(), args: ['--no-sandbox', '--disable-dev-shm-usage'] });
     const page = await browser.newPage();
-    page.on('pageerror', e => curErrs.push(String(e.message).slice(0, 200)));
+    // Per-session error sink. This used to push into a single module-level `curErrs`, which is
+    // exactly the kind of shared mutable state that would silently misattribute one worker's page
+    // errors to another worker's level once this went parallel.
+    page.on('pageerror', e => errs.push(String(e.message).slice(0, 200)));
     await page.route('**/*', route => {
       const u = route.request().url();
       if (/phaser/i.test(u)) return route.fulfill({ contentType: 'application/javascript', body: PHASER });
@@ -76,7 +87,7 @@ function ensurePhaser() {
     });
     await page.goto(LAB, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForFunction(() => typeof window.__NQ_STARTLEVEL === 'function' && Array.isArray(window.__NQ_LEVELS_LIST), null, { timeout: 30000 });
-    return { browser, page };
+    return { browser, page, errs };
   }
 
   let sess = await openSession();
@@ -91,48 +102,61 @@ function ensurePhaser() {
     else { const pre = only.split(',').map(s => s.trim()).filter(Boolean); levels = levels.filter(l => pre.some(p => l.name.indexOf(p) === 0)); }
     console.log(`[nq-state-test] NQ_ONLY=${only} → testing ${levels.length} level(s)`);
   }
-  const rows = [];
-  let sinceRestart = 0;
-  for (const lv of levels) {
-    if (sinceRestart >= RESTART_EVERY) { try { await sess.browser.close(); } catch (_) {} sess = await openSession(); sinceRestart = 0; }
-    sinceRestart++;
-    const page = sess.page;
-    curErrs = [];
-    const row = { i: lv.i, name: lv.name, booted: false, boss: false, stompable: null, errs: [] };
-    try {
-      await page.evaluate((i) => window.__NQ_STARTLEVEL(i), lv.i);
-      try {
-        await page.waitForFunction(
-          (name) => { try { return typeof window.__NQ_FORCEBOSS === 'function' && window.__NQ_DBG().level === name; } catch (e) { return false; } },
-          lv.name, { timeout: 25000 }); // wide VIP levels + drone glows are heavy to build in headless Canvas
-        row.booted = true;
-      } catch (e) { row.booted = false; }
+  // Round-robin the shards rather than handing each worker a contiguous block: the wide VIP
+  // levels are clustered at the end of the list, so contiguous slices would dump all the slow
+  // ones on the last worker and the run would finish no faster than that worker.
+  const shards = Array.from({ length: WORKERS }, () => []);
+  levels.forEach((lv, n) => shards[n % WORKERS].push(lv));
+  const activeShards = shards.filter(sh => sh.length);
+  console.log(`[nq-state-test] ${levels.length} levels across ${activeShards.length} worker(s)`);
 
-      if (row.booted) {
-        const dbg = await page.evaluate(() => { try { return window.__NQ_DBG(); } catch (e) { return { err: String(e) }; } });
-        if (dbg && dbg.err) row.errs.push('DBG:' + dbg.err);
-        if (!dbg || dbg.px == null || dbg.px < 0) row.errs.push('no-player');
-        const isBoss = await page.evaluate(() => window.__NQ_FORCEBOSS());
-        if (isBoss) {
-          row.boss = true;
-          await page.waitForTimeout(450);
-          const st = await page.evaluate(() => { try { return window.__NQ_STOMPTEST(); } catch (e) { return { error: String(e) }; } });
-          row.stompable = st && st.stompable === true ? true : (st && st.stompable === false ? false : null);
-          row.stompDetail = st;
-          // Let the fight actually RUN, then check the boss is still on the floor. The stomp
-          // check above is a single-instant geometry read and cannot see a boss walk into a pit
-          // -- which is exactly how the Storm Herald (20-2) shipped unwinnable.
+  async function runShard(shardLevels) {
+    const out = [];
+    let sess = await openSession();
+    let sinceRestart = 0;
+    for (const lv of shardLevels) {
+      if (sinceRestart >= RESTART_EVERY) { try { await sess.browser.close(); } catch (_) {} sess = await openSession(); sinceRestart = 0; }
+      sinceRestart++;
+      const page = sess.page;
+      sess.errs.length = 0;
+      const row = { i: lv.i, name: lv.name, booted: false, boss: false, stompable: null, errs: [] };
+      try {
+        await page.evaluate((i) => window.__NQ_STARTLEVEL(i), lv.i);
+        try {
+          await page.waitForFunction(
+            (name) => { try { return typeof window.__NQ_FORCEBOSS === 'function' && window.__NQ_DBG().level === name; } catch (e) { return false; } },
+            lv.name, { timeout: 25000 }); // wide VIP levels + drone glows are heavy to build in headless Canvas
+          row.booted = true;
+        } catch (e) { row.booted = false; }
+
+        if (row.booted) {
+          const dbg = await page.evaluate(() => { try { return window.__NQ_DBG(); } catch (e) { return { err: String(e) }; } });
+          if (dbg && dbg.err) row.errs.push('DBG:' + dbg.err);
+          if (!dbg || dbg.px == null || dbg.px < 0) row.errs.push('no-player');
+          const isBoss = await page.evaluate(() => window.__NQ_FORCEBOSS());
+          if (isBoss) {
+            row.boss = true;
+            await page.waitForTimeout(450);
+            const st = await page.evaluate(() => { try { return window.__NQ_STOMPTEST(); } catch (e) { return { error: String(e) }; } });
+            row.stompable = st && st.stompable === true ? true : (st && st.stompable === false ? false : null);
+            row.stompDetail = st;
+          }
         }
-      }
-    } catch (e) { row.errs.push('EX:' + String(e.message).slice(0, 120)); }
-    if (curErrs.length) row.errs.push(...curErrs.slice(0, 3));
-    rows.push(row);
-    // incremental line
-    const tag = !row.booted ? 'NO-LOAD' : row.boss ? (row.stompable ? 'BOSS✓' : 'BOSS✗') : 'ok';
-    process.stdout.write(`  [${String(row.i).padStart(2)}] ${row.name.padEnd(10)} ${tag}${row.errs.length ? '  ERR:' + row.errs.join('|') : ''}\n`);
+      } catch (e) { row.errs.push('EX:' + String(e.message).slice(0, 120)); }
+      if (sess.errs.length) row.errs.push(...sess.errs.slice(0, 3));
+      out.push(row);
+      const tag = !row.booted ? 'NO-LOAD' : row.boss ? (row.stompable ? 'BOSS\u2713' : 'BOSS\u2717') : 'ok';
+      process.stdout.write(`  [${String(row.i).padStart(2)}] ${row.name.padEnd(10)} ${tag}${row.errs.length ? '  ERR:' + row.errs.join('|') : ''}\n`);
+    }
+    try { await sess.browser.close(); } catch (_) {}
+    return out;
   }
 
-  try { await sess.browser.close(); } catch (_) {}
+  const t0 = Date.now();
+  // Workers interleave their progress lines, so each line carries its own [index] name -- and the
+  // summary table below is sorted by index, which is what anyone actually reads.
+  const rows = (await Promise.all(activeShards.map(runShard))).flat().sort((a, b) => a.i - b.i);
+  const elapsed = Math.round((Date.now() - t0) / 1000);
 
   // ---- summary ----
   const booted = rows.filter(r => r.booted).length;
@@ -141,7 +165,7 @@ function ensurePhaser() {
   const crashed = rows.filter(r => r.errs.length);
   const noLoad = rows.filter(r => !r.booted);
   console.log('\n==================== NQ STATE TEST ====================');
-  console.log(`levels:        ${rows.length}`);
+  console.log(`levels:        ${rows.length}   (${elapsed}s across ${activeShards.length} worker(s))`);
   console.log(`booted OK:     ${booted}/${rows.length}`);
   console.log(`boss levels:   ${bosses.length}  (stompable: ${bosses.length - badBoss.length}/${bosses.length})`);
   if (noLoad.length) console.log(`did NOT load:  ${noLoad.map(r => r.name).join(', ')}`);
