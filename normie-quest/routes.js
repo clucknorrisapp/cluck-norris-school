@@ -639,7 +639,7 @@ router.use('/normie-quest/sfx', express.static(path.join(__dirname, 'public', 's
 }));
 
 // ---- modern world backdrops (worlds 16+) — hand-painted AI art served as PNGs -----
-// Drop files at normie-quest/public/worlds/<key>.png; the game's Boot preload loads them as
+// Drop files at normie-quest/public/worlds/<key>.webp (WebP q82 since 2026-07-27); the Boot preload loads them as
 // textures (bgArt on a level def). Missing → clean 404 and the level uses the procedural sky.
 router.use('/normie-quest/worlds', express.static(path.join(__dirname, 'public', 'worlds'), {
   maxAge: '7d',
