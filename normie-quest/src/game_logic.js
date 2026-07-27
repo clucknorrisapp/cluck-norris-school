@@ -1438,6 +1438,19 @@ function nqWorldAllowed(def){
 // MEGA WHALE is a TOP-TIER holder perk (owner's call 2026-07-19): only the 'all'-worlds tier
 // (500k NORMIE / 2M CLKN verified) gets to ride. Same semantics as nqWorldAllowed — outside the
 // setup lane (no wallet tiers there) it stays open, and the owner's lab-warp bench bypasses it.
+// 🔖 LEVEL RESUME — TIER 2 / VIP perk (owner's ask 2026-07-27: "if you die on the 3rd level of a
+// world you go back to the 1st level — can we make it a tier 2 and vip perk that you restart on
+// the level you died on"). The base game banks a checkpoint per WORLD (bankCheckpoint, on each
+// boss kill), so dying on x-3 replays x-1 and x-2. With this on, the run resumes on the level you
+// actually died on.
+// Same shape as nqMegaWhaleUnlocked: OUTSIDE the setup lane there are no wallet tiers at all, so
+// it stays open (the stable tester build must not get quietly harder than the paid one).
+// nqIsVipOrAll is the existing "top tier OR VIP grant" test — reused rather than duplicated so a
+// change to what counts as access can never drift between the two.
+function nqLevelResumeUnlocked(){
+  try{ if(typeof window==='undefined' || !window.__NQ_SETUP) return true; }catch(e){ return true; }
+  return nqIsVipOrAll();
+}
 function nqMegaWhaleUnlocked(){
   if(!window.__NQ_SETUP) return true;
   var a=null; try{ a=(typeof window.__NQ_ACCESS==='function')?window.__NQ_ACCESS():null; }catch(e){}
@@ -1546,6 +1559,13 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
          // LAB-only designer levers: grant the level key / land one boss hit (test boss fights &
          // door flows without a full runthrough). Dormant on the tester build.
          if(window.__NQ_SETUP){
+           // Level-resume perk: the checkpoint state, and a way to end a run on demand. This is a
+           // PAID feature whose failure mode is silent (you just get sent further back than you
+           // should), so it needs to be assertable rather than trusted.
+           window.__NQ_CP=function(){ try{ return { world:(_sc.registry.get('nqCp')||0), level:(_sc.registry.get('nqLvlCp')||0),
+             unlocked:(function(){ try{ return !!nqLevelResumeUnlocked(); }catch(e){ return null; } })() }; }catch(e){ return null; } };
+           window.__NQ_ENDRUN=function(r){ try{ _sc.gameOver(r||'LAB END'); return { cont:_sc._cont, score:_sc._contScore, kind:_sc._contKind }; }catch(e){ return {err:String(e)}; } };
+           window.__NQ_ADVANCE=function(){ try{ _sc.advanceLevel(); return true; }catch(e){ return false; } };
            window.__NQ_GRANTKEY=function(){ try{ if(_sc.over||_sc.hasKey) return false; _sc.hasKey=true; if(_sc.keyIcon) _sc.keyIcon.setAlpha(1); if(_sc.key){ _sc.tweens.killTweensOf(_sc.key); _sc.key.destroy(); _sc.key=null; } _sc.flash('LAB: KEY GRANTED','#ffd23f'); return true; }catch(e){ return false; } };
            window.__NQ_GRANTRESERVE=function(item){ try{ return !!_sc.grantReserve(item); }catch(e){ return false; } };
            window.__NQ_BOSSHIT=function(){ try{ if(_sc.over) return false;
@@ -1660,7 +1680,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // (3-5)=+15% enemy speed, World 3 (6-8)=+30%. Per-level override via def.diff.
     this.diffMul = def.diff || [1,1,1,1.15,1.15,1.15,1.3,1.3,1.3,1.45,1.45,1.55,1.6,1.6,1.7,1.75,1.75,1.85,1.9,1.9,2.0,2.1,2.1,2.25][this.levelIdx] || 1;
     this.timeLeft=def.time; this.over=false; this.hasKey=false; this._doorHint=false;
-    if(this.levelIdx===0){ this.registry.set('nqCasino',0); this.registry.set('nqCp',0); this.registry.set('nqCpScore',0); this.registry.set('nqUsedWarps',{}); }   // fresh run → zero the casino tally + clear all world checkpoints + reset one-time speakeasies
+    if(this.levelIdx===0){ this.registry.set('nqCasino',0); this.registry.set('nqCp',0); this.registry.set('nqCpScore',0); this.registry.set('nqLvlCp',0); this.registry.set('nqLvlCpScore',0); this.registry.set('nqUsedWarps',{}); }   // fresh run → zero the casino tally + clear all world AND level checkpoints + reset one-time speakeasies
     this.spawn={x:(this._spawnX!=null?this._spawnX:60),y:H-60};
     Phaser.Math.RND.sow(['normie-quest-'+this.levelIdx]);   // deterministic per level
 
@@ -3526,6 +3546,15 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   },
   winData:function(){ return {score:this.score, boss:(this.def&&this.def.bossType==='wenmoon')?'wenmoon':(this.def&&this.def.bossType==='saylor')?'saylor':(this.def&&this.def.vip)?'vip':this.def.bossType==='dirtywhale'?'dirtywhale':this.def.bossType==='mevdragon'?'mevdragon':this.def.bossType==='blackswan'?'blackswan':this.def.final?'51attack':(this.def.bossType||(this.def.boss?'rugking':'wormhole')), casino:this.registry.get('nqCasino')||0}; },
   advanceLevel:function(){ var next=(this.def&&this.def.next!=null)?this.def.next:this.levelIdx+1;   // def.next skips the hidden block (9-3 → 10-1)
+    // PER-LEVEL checkpoint for the resume perk. Banked on EVERY clear (not just world boundaries
+    // like bankCheckpoint), and banked unconditionally rather than behind the gate: gating the
+    // WRITE would mean a player who upgrades mid-run has no checkpoint to resume from until the
+    // next clear, which reads as the perk not working. The gate lives on the READ, in gameOver.
+    // Deliberately not banked for hidden bonus rooms — resuming inside a one-time speakeasy you
+    // already consumed would strand the run in a room with no way back.
+    if(next<LEVELS.length && !(this.def&&this.def.hidden)){
+      this.registry.set('nqLvlCp',next); this.registry.set('nqLvlCpScore',this.score);
+    }
     if(next>=LEVELS.length){ this.scene.start('Win',this.winData()); return; }
     // SETUP-LANE tier gate: cleared the last world your holdings unlock → level select + the
     // premium panel (verify wallet / hold more NORMIE) instead of the next world. A lab-warped
@@ -4123,8 +4152,23 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     try{ if(this.def&&this.def.hidden){ var _rl=this.registry.get('nqRetLvl'); if(_rl!=null) effIdx=_rl; } }catch(e){}
     var useCp = cpLvl>0 && effIdx>=cpLvl;
     var cont = useCp ? cpLvl : 0, contScore = useCp ? (this.registry.get('nqCpScore')||0) : 0;
-    this._cont=cont; this._contScore=contScore;   // (exposed for tests)
-    this.time.delayedCall(600,function(){ this.scene.start('Over',{score:this.score,reason:reason,level:this.def.name,cont:cont,contScore:contScore}); },[],this); },
+    // 🔖 LEVEL RESUME (tier 2 / VIP). Prefer the per-level checkpoint when the perk is unlocked and
+    // it is AHEAD of the world checkpoint — that is the whole point: die on x-3, restart on x-3.
+    //   • effIdx>=lvlCp guards against resuming ahead of where you actually died (a stale bank).
+    //   • lvlCp>cont means a locked player is never made WORSE off — they keep the world checkpoint.
+    var resumeUnlocked=false; try{ resumeUnlocked=nqLevelResumeUnlocked(); }catch(e){}
+    var contKind = cont>0 ? 'world' : '';
+    if(PREMIUM_CHECKPOINTS && resumeUnlocked){
+      var lvlCp=this.registry.get('nqLvlCp')||0;
+      if(lvlCp>cont && effIdx>=lvlCp){ cont=lvlCp; contScore=this.registry.get('nqLvlCpScore')||0; contKind='level'; }
+    }
+    // Tease it to players who do NOT have it, but only when it would actually have helped — i.e.
+    // they died somewhere the perk would have saved them a replay. No token amounts, no thresholds:
+    // NQ gating terms are still in testing and must never be promised on any surface.
+    var contTease = (!resumeUnlocked && (this.registry.get('nqLvlCp')||0) > cont);
+    this._cont=cont; this._contScore=contScore; this._contKind=contKind;   // (exposed for tests)
+    var contName = (cont>0 && LEVELS[cont]) ? (LEVELS[cont].name||'') : '';
+    this.time.delayedCall(600,function(){ this.scene.start('Over',{score:this.score,reason:reason,level:this.def.name,cont:cont,contScore:contScore,contKind:contKind,contName:contName,contTease:contTease}); },[],this); },
 
   // ---- PAUSE (manual ⏸ / P / Esc, or 10s idle auto-pause). Self-contained in-scene freeze:
   //      physics + the scene clock (level countdown + boss delayedCalls) + tweens, plus a HUD
@@ -4477,7 +4521,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
 /* ---------- Over ---------- */
 var Over=new Phaser.Class({ Extends:Phaser.Scene,
   initialize:function(){ Phaser.Scene.call(this,{key:'Over'}); },
-  init:function(d){ this.finalScore=d.score||0; this.reason=d.reason||''; this.level=d.level||''; this.cont=d.cont||0; this.contScore=d.contScore||0; },
+  init:function(d){ this.finalScore=d.score||0; this.reason=d.reason||''; this.level=d.level||''; this.cont=d.cont||0; this.contScore=d.contScore||0; this.contKind=d.contKind||''; this.contName=d.contName||''; this.contTease=!!d.contTease; },
   create:function(){
     // SETUP LANE: run ended (game over) — submit the final score to the leaderboard.
     if(window.__NQ_SETUP && window.NQLB){ try{ window.NQLB.submitRun(window.NQLB.worldOf(this.level), this.finalScore); }catch(e){} }
@@ -4489,8 +4533,22 @@ var Over=new Phaser.Class({ Extends:Phaser.Scene,
     // Per-world checkpoint continue takes priority over the leaderboard/free-preview copy.
     var CP_LABEL={3:'WORLD 2\ncontinue from the Sand Lands',6:'WORLD 3\ncontinue from the Skyline',9:'WORLD 4\ncontinue from the Exchange',12:'WORLD 5\ncontinue from the Bridge',15:'WORLD 6\ncontinue from the Depeg',18:'WORLD 7\ncontinue from the Yield Farm',21:'WORLD 8\ncontinue from the Bear Market',24:'WORLD 9\ncontinue from the Mines',34:'WORLD 10\ncontinue from the Euphoria',37:'WORLD 11\ncontinue from the Citadel gates',40:'WORLD 12\ncontinue from the Relaunch'};
     var NWORLDS=worldCount();
-    this.add.text(W/2,198, this.cont>0 ? ('★ CHECKPOINT: '+(CP_LABEL[this.cont]||('LEVEL '+(this.cont+1)))) : (BURN_GATE ? 'score posts to the leaderboard —\ntop 10 split the pool' : ('free preview · all '+NWORLDS+' Worlds\ngood luck out there')),{fontFamily:UIFONT,resolution:UIRES,fontSize:'19px',color:this.cont>0?'#3dff6e':'#b6bfe0',align:'center'}).setOrigin(.5);
-    var p=this.add.text(W/2,244, this.cont>0 ? 'PRESS TO CONTINUE →' : (BURN_GATE ? 'PRESS TO BURN AGAIN' : 'PRESS TO PLAY AGAIN'),{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
+    // A level resume is a DIFFERENT promise from a world checkpoint, so it says so. CP_LABEL is
+    // keyed by world-start indices only; a level resume falls outside it and used to render as
+    // "LEVEL 23" (a raw array index + 1, meaningless to a player) — it prints the level's real
+    // name now.
+    var cpMsg;
+    if(this.cont>0 && this.contKind==='level') cpMsg='★ RESUME: '+(this.contName||('LEVEL '+(this.cont+1)))+'\nright where you fell';
+    else if(this.cont>0) cpMsg='★ CHECKPOINT: '+(CP_LABEL[this.cont]||(this.contName||('LEVEL '+(this.cont+1))));
+    else cpMsg=(BURN_GATE ? 'score posts to the leaderboard —\ntop 10 split the pool' : ('free preview · all '+NWORLDS+' Worlds\ngood luck out there'));
+    // The tease needs a row of its own. First attempt shifted cpMsg UP to 190 to make room --
+    // which drove it straight into the 30px SCORE number at y=150. cpMsg stays put; the tease goes
+    // BELOW it and the prompt moves down, because the free space on this screen is at the bottom.
+    this.add.text(W/2,198, cpMsg,{fontFamily:UIFONT,resolution:UIRES,fontSize:'19px',color:this.cont>0?'#3dff6e':'#b6bfe0',align:'center'}).setOrigin(.5);
+    // Locked players who would have benefited get one restrained line. Deliberately NO token
+    // amounts or thresholds — NQ gating terms are still in testing and are never promised anywhere.
+    if(this.contTease) this.add.text(W/2,229,'TIER 2 / VIP resume right where you died',{fontFamily:UIFONT,resolution:UIRES,fontSize:'13px',color:'#c99bff',align:'center'}).setOrigin(.5);
+    var p=this.add.text(W/2,(this.contTease?250:244), this.cont>0 ? 'PRESS TO CONTINUE →' : (BURN_GATE ? 'PRESS TO BURN AGAIN' : 'PRESS TO PLAY AGAIN'),{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
     this.tweens.add({targets:p,alpha:.25,duration:600,yoyo:true,repeat:-1});
     // Continue from the World-2 checkpoint if premium banked one; else free-preview restart, or the burn Gate.
     var self=this; this.started=false; var go=function(){ if(self.started) return; self.started=true;
@@ -4757,7 +4815,10 @@ var WorldClear=new Phaser.Class({ Extends:Phaser.Scene,
     // and a slow gold pulse on the border so the eye lands there before the TAP prompt.
     var _nn=nqNationNext();
     var _wp=null; try{ var _wt=parseInt(sessionStorage.getItem('nqWcTurn')||'0',10)||0; sessionStorage.setItem('nqWcTurn',String(_wt+1)); if(_wt%2===1) _wp=nqPreviewPick(); }catch(e){}
-    if(_wp){ _nn={ head:(_wp.feature?'STILL LOCKED — VIP PERK':'STILL LOCKED — WORLD '+_wp.world),
+    // A feature tease used to print "VIP PERK" regardless of band, which now misstates the t2
+    // perks — the resume perk unlocks a tier BELOW VIP, and telling a player it is VIP-only would
+    // be selling them the wrong thing.
+    if(_wp){ _nn={ head:(_wp.feature?('STILL LOCKED — '+(_wp.band==='vip'?'VIP':'TIER 2')+' PERK'):'STILL LOCKED — WORLD '+_wp.world),
                    short:_wp.title+' · unlocks with $NORMIE (terms in testing)' }; }
     // Band budget, worked out rather than guessed: story bottoms out at ~98, the far hills crest at
     // 198. 106..190 sits inside that with 8px of air top and bottom.
@@ -5114,7 +5175,10 @@ var NQ_PREVIEWS = [
   { band:'vip', world:15, sprite:'diamondtitan', title:'THE HANDS OF DIAMOND', hook:'Paper hands shatter on him. Nine VIP worlds sit behind this one.' },
   { band:'vip', world:18, sprite:'chairman',     title:'THE VAULT DOOR',    hook:'The money printer has a boss fight. Of course it does.' },
   { band:'vip', world:21, sprite:'wenmoon',      title:'WEN MOON',          hook:'The last level in the game. On the moon. It answers back.' },
-  // Perk teases -- the VIP surfaces that already exist and a free player never sees.
+  // Perk teases -- the paid surfaces that already exist and a free player never sees.
+  // LEVEL RESUME sits in the t2 band, not vip: it unlocks at tier 2 AND for VIPs, so the people
+  // worth selling it to are the ones below tier 2. (nqPreviewBand shows 't2' to tier-1 holders.)
+  { band:'t2',  feature:'resume', sprite:'heart', title:'RESUME WHERE YOU DIED', hook:'Die on the third level of a world and restart THERE — no replaying the first two.' },
   { band:'vip', feature:'lounge', sprite:'crown', title:'THE PREMIUM LOUNGE', hook:'A members-only feed: giveaways, alpha drops and perks, posted for VIPs.' },
   { band:'vip', feature:'wheel',  sprite:'slot',  title:'THE DAILY VIP WHEEL', hook:'A free spin every day, and every spin wins a boost you keep. Odds published.' },
 ];
