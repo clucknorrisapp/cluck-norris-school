@@ -2674,8 +2674,12 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(b.x<lo){ b.x=lo; if(b.setVelocityX) b.setVelocityX(0); }
     else if(b.x>hi){ b.x=hi; if(b.setVelocityX) b.setVelocityX(0); }
     // Below the floor means he is already down a pit — put him back on solid ground rather than
-    // let the level become uncompletable. Flying bosses never trip this.
-    if(b.y>GY+34){ b.setPosition(Phaser.Math.Clamp(b.x,lo,hi), GY-44); if(b.setVelocity) b.setVelocity(0,0); }
+    // let the level become uncompletable.
+    // GRAVITY-ONLY: the wormhole boss BURROWS, parking itself below the ground line on purpose
+    // (downY = GY + displayHeight/2 + 6, which clears this threshold), and hoisting it out
+    // mid-burrow would break its own fight. A boss the physics engine never pulls down cannot
+    // fall into a pit in the first place, so gating on allowGravity is both safe and exact.
+    if(b.body.allowGravity && b.y>GY+34){ b.setPosition(Phaser.Math.Clamp(b.x,lo,hi), GY-44); if(b.setVelocity) b.setVelocity(0,0); }
   },
   startBoss:function(){
     if(this.bossStarted) return; this.bossStarted=true; this.boss=true; this.bossHP=3;
