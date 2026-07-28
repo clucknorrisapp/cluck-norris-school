@@ -11562,7 +11562,10 @@ app.get("/api/nq-digest-test", async (req, res) => {
 const LP_LAB_META = {
   title: "Cluck Norris LP Lab — Learn Liquidity Providing",
   desc: "Free, hands-on liquidity-provider training: how LP positions actually work, impermanent loss, ranges and fees — from the School of Crypto Hard Knocks.",
-  image: "https://clucknorris.app/cluck-norris.png",
+  // Purpose-built 1200x630 LP Lab card (public/lp-lab-card.jpg -> copied into dist/ by the vite
+  // build). The generic avatar was square, so Telegram/X cropped it into a small thumbnail rather
+  // than the wide banner this link deserves.
+  image: "https://clucknorris.app/lp-lab-card.jpg",
   url: "https://clucknorris.app/lp-lab",
 };
 let _lpLabHtml = null;   // built once from the shipped shell, then reused
