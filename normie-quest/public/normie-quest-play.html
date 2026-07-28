@@ -3932,7 +3932,13 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   setPullerPost:function(e,i){
     var ps=e.posts&&e.posts[i]; if(!ps) return;
     e.postIdx=i; e.rugTiles=ps.tiles; e.rugCX=ps.cx; e.rugW=ps.w; e.rugHomeY=ps.cy;
-    e.homeX=ps.cx; e.x=ps.cx; e.y=ps.cy-e.displayHeight*0.5+3; e.homeY=e.y;
+    // Perch on the FAR (right) edge — the side you're heading for, and the end you'd really yank a
+    // rug from, dragging it away from whoever is standing on it. Consequence: stepping on at the
+    // near end means crossing the WHOLE rug with him already winding up, so you can't just stroll
+    // over. He's on the exit, so the play becomes "jump on him", not "sprint past". The inset keeps
+    // his body over solid tile instead of hanging into the pit.
+    var perchX=ps.cx + ps.w*0.5 - 20;
+    e.homeX=perchX; e.x=perchX; e.y=ps.cy-e.displayHeight*0.5+3; e.homeY=e.y;
     if(e.body) e.body.reset(e.x,e.y);
     e.setVelocity(0,0); e.rpState='perch'; e.rpT=this.time.now; e.rpGrace=this.time.now+600;
     e.rpDust=0; e.phasing=false; e.clearTint(); e.setRotation(0); e.setAlpha(1);
