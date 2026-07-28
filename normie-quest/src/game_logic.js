@@ -2376,8 +2376,11 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // the glow + sprite sell the "modern" look. Only the ghost floats.
     if(kind==='flashbot'){ e.fbState='hover'; e.fbT=this.time.now; e.fbNext=this.time.now+800+Phaser.Math.RND.between(0,600); var _fg=this.addGlow(e,0x66ddff,3); if(_fg) this.tweens.add({targets:_fg,outerStrength:8,duration:480,yoyo:true,repeat:-1,ease:'Sine.inOut'}); }   // FLASH DRONE: own sprite, hovers then DIVE-BOMBS you (telegraphed)
     if(kind==='drillbit'){ e.drillState='crawl'; e.drillT=this.time.now+Phaser.Math.RND.between(0,900); e.dustAt=0; e.drillImmune=false; }   // DRILL-WORM: crawl → burrow-attack → erupt cycle (staggered start); uses its own drillworm sprite
-    if(kind==='rugpuller'){ e.rpState='perch'; e.rpT=this.time.now; e.setImmovable(true);   // RUG PULLER: fat scammer rat perched on his "rug" ledge — floats in place (no gravity), guards, then YANKS
-      e.body.setSize(e.width*0.40,e.height*0.74).setOffset(e.width*0.30,e.height*0.20); }   // narrow body over the RAT torso only (the sprite is wide: rug on the left, cash on the right)
+    if(kind==='rugpuller'){ e.rpState='perch'; e.rpT=this.time.now; e.setImmovable(true);   // RUG PULLER: fat scammer rat gripping the rug's RIGHT edge — floats in place (no gravity), guards, then YANKS
+      // The sprite is mostly RUG: the rat only occupies x 0.655-0.987 of it (measured off the art),
+      // so the hitbox has to sit on HIM. A centred body would hang over the rug — you'd take damage
+      // from empty carpet and stomps aimed at the rat would miss.
+      e.body.setSize(e.width*0.24,e.height*0.78).setOffset(e.width*0.70,e.height*0.18); }
     if(kind==='ghost'||kind==='flashbot'||kind==='rugpuller') e.body.setAllowGravity(false); else e.setCollideWorldBounds(true);
     return e;
   },
@@ -3830,12 +3833,14 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   setPullerPost:function(e,i){
     var ps=e.posts&&e.posts[i]; if(!ps) return;
     e.postIdx=i; e.rugTiles=ps.tiles; e.rugCX=ps.cx; e.rugW=ps.w; e.rugHomeY=ps.cy;
-    // Perch on the FAR (right) edge — the side you're heading for, and the end you'd really yank a
-    // rug from, dragging it away from whoever is standing on it. Consequence: stepping on at the
-    // near end means crossing the WHOLE rug with him already winding up, so you can't just stroll
-    // over. He's on the exit, so the play becomes "jump on him", not "sprint past". The inset keeps
-    // his body over solid tile instead of hanging into the pit.
-    var perchX=ps.cx + ps.w*0.5 - 20;
+    // Stand the RAT on the far (right) edge — the end you'd really yank a rug from, dragging it away
+    // from whoever is on it. Stepping on at the near end therefore means crossing the whole span with
+    // him already winding up, and he's parked on the exit, so the play is "jump on him", not "sprint
+    // past". Anchor by the RAT, not the sprite centre: he sits at x 0.821 of a sprite that is mostly
+    // rug, so centring the sprite here would park the carpet on the ledge and dangle him off the end.
+    var RAT_FRAC=0.821;
+    var ratX=ps.cx + ps.w*0.5 - 16;                                  // where the rat himself stands
+    var perchX=ratX - (RAT_FRAC-0.5)*e.displayWidth;                 // sprite centre that puts him there
     e.homeX=perchX; e.x=perchX; e.y=ps.cy-e.displayHeight*0.5+3; e.homeY=e.y;
     if(e.body) e.body.reset(e.x,e.y);
     e.setVelocity(0,0); e.rpState='perch'; e.rpT=this.time.now; e.rpGrace=this.time.now+600;
