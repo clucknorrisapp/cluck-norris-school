@@ -612,8 +612,8 @@ var LEVELS=[
     pumpdumps:[[1560,174],[3720,174],[5480,174]],
     honeypots:[[2400,232],[4160,232],[6120,232]],
     npcs:[[2950,90]],
-    planks:[[1700,5],[2560,5],[5080,4],[5920,5],[6760,5]],
-    rugpullers:[[3460,246,120]],
+    planks:[[1700,5],[2560,5],[5920,5],[6760,5]],
+    rugpullers:[[3460,246,120],[5130,246,120]],
     bonusblocks:[[1280,5],[3000,'supergeek'],[4790,8],[6220,8],[6620,8]],
     caches:[[2340,226,200]],
     key:[1680,120], door:7680 },
@@ -630,8 +630,8 @@ var LEVELS=[
     pumpdumps:[[1000,174],[3500,174],[5300,174],[6300,174]],
     honeypots:[[2350,232],[4050,232],[6940,232]],
     npcs:[[3150,90]],
-    planks:[[1620,5],[2440,5],[3260,5],[4120,5],[6760,5],[7620,5]],
-    rugpullers:[[5960,246,120]],
+    planks:[[1620,5],[2440,5],[6760,5],[7620,5]],
+    rugpullers:[[3296,246,120],[4180,246,120],[5960,246,120]],
     bonusblocks:[[1140,5],[2270,8],[3420,5],[4510,8],[5700,8],[6627,8],[7433,8]],
     warps:[[2200,29]],
     key:[1164,120], door:8280 , firebars:[[660, 162, 46, 130, 4]] },
@@ -768,8 +768,8 @@ var LEVELS=[
   { name:'8-2', sub:'CAPITULATION', time:200, theme:10, bgArt:'w08bear2', width:8400,
     gaps:[[820,940],[1680,1776],[2540,2660],[3400,3496],[4260,4332],[5120,5192],[5980,6076],[6840,6960],[7700,7772]],
     walls:[[520,3,'crate',3],[1320,3,'stone',3],[2080,3,'crate',3],[3040,3,'stone',3],[3900,3,'crate',3],[4760,3,'stone',3],[5620,3,'crate',3],[6460,3,'crate',3],[7320,3,'stone',3]],
-    plats:[[800,2,150,'crate'],[1200,2,146,'crate'],[1660,2,150,'stone'],[2520,2,150,'crate'],[3380,2,150,'crate'],[4240,2,150,'crate'],[5960,2,150,'crate'],[6820,2,150,'crate'],[7680,2,146,'crate']],
-    rugpullers:[[5140,150,150]],
+    plats:[[800,2,150,'crate'],[1200,2,146,'crate'],[1660,2,150,'stone'],[2520,2,150,'crate'],[3380,2,150,'crate'],[5960,2,150,'crate'],[6820,2,150,'crate'],[7680,2,146,'crate']],
+    rugpullers:[[4296,150,120],[5140,150,150]],
     spikes:[[1188],[1212],[2900],[2924],[4600],[4624],[5488],[5512],[6760],[6784],[7188],[7212],[7860],[7884]],
     powerups:[['omegachad',700,230],['whale',2500,230],['coldwallet',3200,230],['candle',7300,230],['megawhale',5500,112]],
     airdrops:[[2100,152],[4400,198]],
@@ -2170,17 +2170,24 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // rug stays solid, he's gone for good). If he pulls it, he FLEES for good and the ledge re-lists
     // a beat later so the path is never permanently broken. The ledge tiles read as normal ground —
     // the rat IS the tell. Reuses the rugPlats fall/respawn shape.
+    // Each entry is a POST — a rug ledge he can set up shop on. Every post's ledge is built, but
+    // only ONE rat exists: he works the posts in order, relocating to the next one each time he
+    // rugs you and escapes. Stomp him and he's gone for the whole level, leaving every remaining
+    // post as permanently solid ground. That's the whole risk/reward: killing him buys safe passage.
     this.pullerRugs=this.physics.add.staticGroup();
+    var _posts=[];
     (def.rugpullers||[]).forEach(function(rp){
       var rx=rp[0], ry=rp[1], rw=rp[2]||150, n=Math.max(1,Math.round(rw/TILE));
       var x0=rx-(n*TILE)/2, tiles=[];
       for(var q=0;q<n;q++){ var t=self.pullerRugs.create(x0+q*TILE+TILE/2, ry+TILE/2, 'crate').setDepth(4);
         t.setTint(0xcaa06a); t.homeX=t.x; t.homeY=t.y; t.fallen=false; t.respawnAt=0; tiles.push(t); }   // warm plank tint — looks like ordinary bridge ground (bait)
-      var e=self.makeEnemy('rugpuller', rx, ry-2, 40);
-      e.y=ry-e.displayHeight*0.5+3; e.homeY=e.y; e.homeX=rx;   // perch feet on the ledge top
-      e.rugTiles=tiles; e.rugCX=rx; e.rugW=n*TILE; e.rugHomeY=ry; e.setVelocity(0,0);
-      tiles.forEach(function(t){ t.puller=e; });
+      _posts.push({cx:rx, cy:ry, w:n*TILE, tiles:tiles});
     });
+    if(_posts.length){
+      var e0=this.makeEnemy('rugpuller', _posts[0].cx, _posts[0].cy-2, 40);
+      e0.posts=_posts; e0.armMs=520;   // armMs shortens on each comeback — he's onto you
+      this.setPullerPost(e0, 0);
+    }
     this.physics.add.collider(this.player,this.pullerRugs,null,function(pl,t){ return !t.fallen; },this);
     // DUMP ZONE — def.dumpzones:[[x,intervalMs]]: pulsing floor mark telegraphs ~0.7s, then a giant
     // red candle crashes down (rides the enemyShots pipeline: same immunities + death cause).
@@ -3818,6 +3825,16 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.over||player.invuln||now<this.shieldUntil||now<this.moonUntil||now<this.omegaUntil||now<this.whaleUntil||now<this.coldUntil) return;
     this.hurt(player, o.x<player.x?1:-1, o.sigCause||'HAZARD');
   },
+  // Seat the RUG PULLER on post i: adopt that ledge's geometry, perch on top, and reset to guarding.
+  // The grace window stops him arming the instant he lands next to a player already standing there.
+  setPullerPost:function(e,i){
+    var ps=e.posts&&e.posts[i]; if(!ps) return;
+    e.postIdx=i; e.rugTiles=ps.tiles; e.rugCX=ps.cx; e.rugW=ps.w; e.rugHomeY=ps.cy;
+    e.homeX=ps.cx; e.x=ps.cx; e.y=ps.cy-e.displayHeight*0.5+3; e.homeY=e.y;
+    if(e.body) e.body.reset(e.x,e.y);
+    e.setVelocity(0,0); e.rpState='perch'; e.rpT=this.time.now; e.rpGrace=this.time.now+600;
+    e.rpDust=0; e.phasing=false; e.clearTint(); e.setRotation(0); e.setAlpha(1);
+  },
   rugPlatStep:function(player,tile){
     if(tile.fallen||tile.crumbleAt) return;
     if(player.body.touching.down && tile.body.touching.up){
@@ -4631,22 +4648,31 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         if(e.rpState==='perch'){
           e.setFlipX(p.x<e.x); e.setRotation(0);
           var onRug=(p.body.blocked.down||p.body.touching.down) && Math.abs(p.x-e.rugCX)<e.rugW*0.5+8 && Math.abs(p.body.bottom-e.rugHomeY)<16;
-          if(onRug){ e.rpState='arm'; e.rpT=now; }
+          if(onRug && now>(e.rpGrace||0)){ e.rpState='arm'; e.rpT=now; }
         } else if(e.rpState==='arm'){   // wind-up telegraph so the pull is fair (retreat, or leap onto his head)
           e.setFlipX(p.x<e.x);
           e.x=e.homeX+Phaser.Math.RND.between(-2,2); e.y=e.homeY+Phaser.Math.RND.between(-1,1);
           if(Math.floor(now/60)%2){ e.setTint(0xffe08a); } else { e.clearTint(); }
           if(e.rugTiles) e.rugTiles.forEach(function(t){ if(t.active&&!t.fallen) t.setAlpha(0.55+0.45*Math.abs(Math.sin(now/45))); });
-          if(now>e.rpT+520){   // THE PULL
+          if(now>e.rpT+(e.armMs||520)){   // THE PULL
             e.rpState='flee'; e.rpT=now; e.clearTint(); e.x=e.homeX; e.y=e.homeY; e.phasing=true; e.rpFlee=(p.x>e.x)?-1:1;   // fleeing rat is intangible; scurries AWAY from you
             if(e.rugTiles) e.rugTiles.forEach(function(t){ if(!t.active||t.fallen) return; t.fallen=true; t.body.enable=false; t.respawnAt=now+2600; t.setAlpha(1);
               self.tweens.add({targets:t,y:t.homeY+140,alpha:0.05,angle:Phaser.Math.Between(-20,20),duration:520,ease:'Quad.in'}); });
             self.burst(e.x,e.rugHomeY,0xd9a066,18); self.cameras.main.shake(120,.007); if(SFX&&SFX.stomp)SFX.stomp(); self.flash('RUGGED! liquidity gone','#ff3860');
           }
-        } else {   // flee: scurry off (no gravity, intangible) then vanish for good
+        } else {   // flee: scurry off (no gravity, intangible), then set up shop again further down the level
           e.setVelocity(e.rpFlee*e.baseSpeed,-40); e.setFlipX(e.rpFlee<0); e.setRotation(e.rpFlee*0.12);
           if(now>e.rpT+120 && !e.rpDust){ e.rpDust=1; self.burst(e.x,e.homeY+8,0xcfcfcf,7); }
-          if(now>e.rpT+720) e.disableBody(true,true);
+          if(now>e.rpT+720){
+            // SAME RAT, NEW POOL. Skip any post the player has already walked past — a rat that
+            // re-sets behind you is a rat you never meet. Out of posts = he's finally out of the level.
+            var nxt=(e.postIdx||0)+1;
+            while(e.posts && nxt<e.posts.length && e.posts[nxt].cx < p.x+80) nxt++;
+            if(e.posts && nxt<e.posts.length){
+              e.armMs=Math.max(340,(e.armMs||520)-90);   // he pulls FASTER every time he gets away (floored so it stays reactable)
+              self.setPullerPost(e,nxt); self.burst(e.x,e.y,0xcfcfcf,9);
+            } else e.disableBody(true,true);
+          }
         }
         return;
       }
