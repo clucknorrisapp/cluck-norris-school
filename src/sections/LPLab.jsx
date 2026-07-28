@@ -2137,7 +2137,9 @@ function ILCalculator() {
         ].map((f,i)=>(
           <div key={i}>
             <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1,marginBottom:4}}>{f.label}</div>
-            <input type="number" value={f.val} onChange={e=>f.set(Math.max(1,Number(e.target.value)))}
+            {/* Math.max(1, NaN) is NaN, so a half-typed value like "1e" used to poison every
+                readout below with NaN. Fall back to 1 unless the input is a real finite number. */}
+            <input type="number" value={f.val} onChange={e=>{const n=Number(e.target.value); f.set(Number.isFinite(n)?Math.max(1,n):1);}}
               style={{width:"100%",background:"rgba(255,122,24,0.07)",border:"1px solid rgba(16,185,129,0.3)",borderRadius:8,padding:"8px 10px",color:"#F9FAFB",fontFamily:"monospace",fontSize:15.5,boxSizing:"border-box",outline:"none"}}/>
           </div>
         ))}
@@ -2186,9 +2188,14 @@ function FeeILCalculator() {
       <div style={{marginBottom:14}}>
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
           <span style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1}}>PRICE CHANGE (x)</span>
-          <span style={{fontFamily:"monospace",fontSize:15,color:"#FFB627",fontWeight:700}}>{priceChange}x</span>
+          <span style={{fontFamily:"monospace",fontSize:15,color:"#FFB627",fontWeight:700}}>{priceChange}x{priceChange < 1 ? " ↓" : priceChange > 1 ? " ↑" : ""}</span>
         </div>
-        <input type="range" min="1" max="10" step="0.25" value={priceChange} onChange={e=>setPriceChange(Number(e.target.value))} style={{width:"100%",accentColor:"#10B981"}}/>
+        {/* Starts at 0.1x, not 1x. The old floor of 1x meant this could only model the price going
+            UP, so half of impermanent loss was invisible: IL is symmetric in the price RATIO, and a
+            token halving hurts exactly as much as it doubling. Letting the slider go below 1 is the
+            difference between "IL is a thing that happens in pumps" and the truth. */}
+        <input type="range" min="0.1" max="10" step="0.05" value={priceChange} onChange={e=>setPriceChange(Number(e.target.value))} style={{width:"100%",accentColor:"#10B981"}}/>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#6B7280",marginTop:2}}>Below 1x = the token fell. IL is the same either way — 0.5x hurts as much as 2x.</div>
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
@@ -2223,12 +2230,19 @@ function CapitalEfficiencyCalc() {
   const [rangeWidth, setRangeWidth] = useState(20);
   const [poolFeeAPR, setPoolFeeAPR] = useState(50);
 
-  // Concentrated capital efficiency ≈ inversely proportional to range width.
-  // NOTE: this is the IN-RANGE rate only — out-of-range time earns 0% and
-  // concentrating amplifies IL. See the caveat shown below the result.
-  const concentratedMultiplier = Math.min(100 / rangeWidth * 2, 50);
+  // Capital efficiency of a concentrated position vs full range, derived from the reserve
+  // requirement for liquidity L: capital ∝ (2√p − √pa − p/√pb). With the current price at 1 and
+  // bounds [1−w, 1+w] this is exact. The previous `200 / rangeWidth` was a decent approximation
+  // in the middle (≈10x at ±20%, true 10.4x) but drifted at the edge, claiming 2.0x at ±100%
+  // where the real figure is 1.5x.
+  const w = Math.min(Math.max(rangeWidth, 1), 100) / 100;
+  const concentratedMultiplier = 2 / (2 - Math.sqrt(1 - w) - 1 / Math.sqrt(1 + w));
   const concentratedFeeAPR = poolFeeAPR * concentratedMultiplier;
-  const fullRangeFeeAPR = poolFeeAPR * 0.03;
+  // The slider is labelled "POOL BASE FEE APR (FULL RANGE)", so full range IS that number.
+  // It used to be multiplied by 0.03, which silently divided the baseline by 33 and made
+  // concentrated look ~333x better than full range at ±20% instead of the true ~10x — a
+  // wildly overstated case for concentrating, on a page people size real positions from.
+  const fullRangeFeeAPR = poolFeeAPR;
 
   return (
     <div style={{background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.25)",borderRadius:12,padding:16,marginTop:16,marginBottom:8}}>
@@ -2262,7 +2276,7 @@ function CapitalEfficiencyCalc() {
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
         {[
           {label:"FULL RANGE", apr:`~${fullRangeFeeAPR.toFixed(0)}%`, annual:`$${(capital * fullRangeFeeAPR / 100).toFixed(0)}`, color:"#6B7280", bg:"rgba(255,122,24,0.06)"},
-          {label:"CONCENTRATED", apr:`~${Math.min(concentratedFeeAPR, 9999).toFixed(0)}%`, annual:`$${Math.min(capital * concentratedFeeAPR / 100, 9999999).toFixed(0)}`, color:"#10B981", bg:"rgba(16,185,129,0.08)"},
+          {label:`CONCENTRATED (${concentratedMultiplier.toFixed(1)}x)`, apr:`~${Math.min(concentratedFeeAPR, 9999).toFixed(0)}%`, annual:`$${Math.min(capital * concentratedFeeAPR / 100, 9999999).toFixed(0)}`, color:"#10B981", bg:"rgba(16,185,129,0.08)"},
         ].map((r,i)=>(
           <div key={i} style={{background:r.bg,border:`1px solid ${r.color}40`,borderRadius:10,padding:12,textAlign:"center"}}>
             <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:r.color,letterSpacing:1,marginBottom:6}}>{r.label}</div>
