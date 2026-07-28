@@ -604,11 +604,11 @@ var LEVELS=[
     gaps:[[860,956],[1700,1772],[2560,2656],[3400,3520],[4240,4312],[5080,5180],[5920,6020],[6760,6836]],
     walls:[[460,4,'stone',5],[1300,4,'crate',4],[2200,4,'stone',4],[3020,4,'brick',5],[3920,4,'stone',4],[4820,4,'crate',5],[5540,4,'stone',5],[6380,4,'crate',4]],
     plats:[[840,2,150,'stone'],[1180,2,140,'stone'],[1660,2,150,'crate'],[2140,2,150,'stone'],[2500,2,150,'stone'],[3320,2,150,'brick'],[3860,2,150,'stone'],[4260,2,150,'stone'],[5900,2,150,'stone'],[6740,2,140,'stone']],
-    spikes:[[1000],[1024],[2760],[2784],[4560],[4584],[6120],[6144],[6930],[6954]],
+    firepits:[[1000,48]], spikes:[[2760],[2784],[4560],[4584],[6120],[6144],[6930],[6954]],
     powerups:[['diamond',2500,124],['moon',4700,230],['omegachad',6180,230],['candle',2900,230]],
     airdrops:[[1250,152],[3600,198]],
     coins:[[300,196],[348,196],[500,120],[548,120],[864,120],[920,196],[1204,110],[1480,196],[2140,120],[2340,150],[2620,196],[2620,150],[3344,120],[3620,150],[3660,196],[4284,120],[4500,150],[5020,196],[5300,196],[5260,196],[5480,150],[5700,120],[6140,196],[6360,150],[6580,120],[7020,196],[7240,150],[7460,120]],
-    enemies:[['fudster',340,230,80],['ghost',1050,212,80],['paper',1160,230,60],['bitmaxi',1900,230,70],['jeet',2020,230,70],['sniper',2420,230,30],['ghost',2840,212,70],['paper',3200,230,70],['jeet',3600,230,70],['bitmaxi',4120,230,70],['sniper',4400,230,30],['ghost',4700,212,90],['jeet',5220,230,70],['jeet',5340,230,70],['sniper',5770,230,70],['ghost',6200,212,70],['paper',6630,230,70],['bitmaxi',7060,230,70],['jeet',7490,230,70]],
+    enemies:[['fudster',340,230,80],['ghost',1050,212,80],['paper',1160,230,60],['bitmaxi',1900,230,70],['shrimp',2020,230,70],['sniper',2420,230,30],['ghost',2840,212,70],['paper',3200,230,70],['shrimp',3600,230,70],['bitmaxi',4120,230,70],['sniper',4400,230,30],['ghost',4700,212,90],['shrimp',5220,230,70],['shrimp',5340,230,70],['sniper',5770,230,70],['ghost',6200,212,70],['paper',6630,230,70],['bitmaxi',7060,230,70],['shrimp',7490,230,70]],
     pumpdumps:[[1560,174],[3720,174],[5480,174]],
     honeypots:[[2400,232],[4160,232],[6120,232]],
     npcs:[[2950,90]],
@@ -621,11 +621,11 @@ var LEVELS=[
     gaps:[[780,876],[1620,1692],[2440,2536],[3260,3332],[4120,4240],[4980,5076],[5900,6020],[6760,6880],[7620,7692]],
     walls:[[440,4,'stone',5],[1240,4,'crate',4],[2100,4,'stone',1],[2980,4,'brick',4],[3860,4,'stone',6],[4720,4,'crate',4],[5560,4,'stone',5],[6380,4,'stone',5],[7240,4,'crate',4]],
     plats:[[800,2,150,'stone'],[1180,2,150,'stone'],[1660,2,150,'stone'],[2460,2,150,'stone'],[2920,2,150,'stone'],[3300,2,150,'stone'],[3520,2,130,'stone'],[4160,2,150,'stone'],[4660,2,150,'stone'],[5040,2,150,'stone'],[6740,2,150,'stone'],[7600,2,150,'stone']],
-    spikes:[[1000],[1024],[1968],[1992],[3600],[3624],[4400],[4424],[5300],[5324],[6937],[6961],[7533],[7557]],
+    firepits:[[3600,48]], spikes:[[1000],[1024],[1968],[1992],[4400],[4424],[5300],[5324],[6937],[6961],[7533],[7557]],
     powerups:[['moon',3600,136],['omegachad',4460,230],['bull',6580,230],['candle',3100,230]],
     airdrops:[[2300,152],[4200,198]],
     coins:[[452,130],[500,130],[700,196],[1264,106],[1312,106],[1420,196],[2120,140],[2168,140],[2216,140],[2700,196],[3000,106],[3048,106],[3220,196],[3880,140],[3928,140],[4260,196],[4740,106],[4788,106],[5580,140],[5628,140],[6120,196],[6080,196],[6300,150],[6520,120],[6740,196],[6960,150],[7180,120],[7400,196],[7840,150],[8060,120]],
-    enemies:[['fudster',340,230,70],['sniper',620,230,30],['ghost',1000,212,80],['paper',1420,230,70],['sniper',1920,230,30],['bitmaxi',2280,230,70],['jeet',2720,230,70],['ghost',3220,212,70],['sniper',3480,230,30],['paper',3680,230,70],['bitmaxi',4020,230,70],['jeet',4420,230,70],['ghost',4840,212,80],['bitmaxi',5760,230,70],['jeet',6160,230,70],['sniper',6590,230,70],['ghost',7020,212,70],['paper',7450,230,70],['sniper',7880,230,70],['sniper',5520,230,40],['ghost',5500,150,70]],
+    enemies:[['fudster',340,230,70],['sniper',620,230,30],['ghost',1000,212,80],['paper',1420,230,70],['sniper',1920,230,30],['bitmaxi',2280,230,70],['shrimp',2720,230,70],['ghost',3220,212,70],['sniper',3480,230,30],['paper',3680,230,70],['bitmaxi',4020,230,70],['shrimp',4420,230,70],['ghost',4840,212,80],['bitmaxi',5760,230,70],['shrimp',6160,230,70],['sniper',6590,230,70],['ghost',7020,212,70],['paper',7450,230,70],['sniper',7880,230,70],['sniper',5520,230,40],['ghost',5500,150,70]],
     pumpdumps:[[1000,174],[3500,174],[5300,174],[6300,174]],
     honeypots:[[2350,232],[4050,232],[6940,232]],
     npcs:[[3150,90]],
@@ -638,11 +638,11 @@ var LEVELS=[
     gaps:[[720,816],[1440,1560],[2160,2232],[2880,3000],[3600,3696],[4240,4312],[4960,5080],[5680,5776]],
     walls:[[440,4,'stone',5],[1120,4,'crate',4],[1800,4,'stone',6],[2500,4,'brick',4],[3160,4,'stone',6],[3860,4,'crate',4],[4580,4,'stone',5],[5300,4,'crate',4]],
     plats:[[740,2,150,'stone'],[1160,2,126,'stone'],[1580,2,150,'stone'],[2280,2,150,'stone'],[2560,2,126,'stone'],[2940,2,150,'stone'],[3620,2,150,'stone'],[3920,2,126,'stone'],[4400,2,150,'stone'],[4940,2,150,'stone'],[5660,2,150,'stone']],
-    spikes:[[960],[984],[1668],[1692],[2760],[2784],[3480],[3504],[5168],[5192],[5847],[5871]],
+    firepits:[[3480,48]], spikes:[[960],[984],[1668],[1692],[2760],[2784],[5168],[5192],[5847],[5871]],
     powerups:[['diamond',2050,230],['omegachad',2700,230],['bull',3400,230],['supergeek',6025,146]],
     airdrops:[[1500,152],[3334,198]],
     coins:[[300,196],[600,130],[660,196],[960,196],[1220,106],[1620,130],[1980,140],[2340,196],[2620,110],[2960,196],[3220,140],[3560,196],[3940,106],[4160,196],[4420,130],[4560,196],[4420,196],[4640,138],[4860,120],[5264,196],[5520,150],[5960,120]],
-    enemies:[['bot',340,230,70],['paper',960,230,60],['ghost',1240,212,80],['sniper',1640,230,30],['bitmaxi',2000,230,70],['jeet',2340,230,70],['sniper',2620,230,30],['paper',3080,230,70],['ghost',3420,212,70],['sniper',3560,230,30],['bitmaxi',4100,230,70],['jeet',4160,230,60],['ghost',4560,212,80],['jeet',4500,230,70],['sniper',5140,230,70],['paper',5450,230,70],['ghost',5860,212,70],['sniper',6220,230,70]],
+    enemies:[['bot',340,230,70],['paper',960,230,60],['ghost',1240,212,80],['sniper',1640,230,30],['bitmaxi',2000,230,70],['shrimp',2340,230,70],['sniper',2620,230,30],['paper',3080,230,70],['ghost',3420,212,70],['sniper',3560,230,30],['bitmaxi',4100,230,70],['shrimp',4160,230,60],['ghost',4560,212,80],['shrimp',4500,230,70],['sniper',5140,230,70],['paper',5450,230,70],['ghost',5860,212,70],['sniper',6220,230,70]],
     pumpdumps:[[1440,174],[2880,174],[4240,174],[4740,174]],
     honeypots:[[1300,232],[2660,232],[4020,232],[5140,232]],
     npcs:[[2380,90]],
@@ -1242,6 +1242,8 @@ var Boot=new Phaser.Class({ Extends:Phaser.Scene,
     g.clear(); g.fillStyle(C.moverDk); g.fillRect(0,0,48,14); g.fillStyle(C.mover); g.fillRect(1,1,46,9); g.fillStyle(C.moverDk); for(var mx=4;mx<48;mx+=8) g.fillRect(mx,10,4,3); g.generateTexture('mover',48,14);
     // spike (24x14)
     g.clear(); g.fillStyle(C.spikeDk); g.fillTriangle(0,14,6,2,12,14); g.fillTriangle(12,14,18,2,24,14); g.fillStyle(C.spike); g.fillTriangle(2,14,6,5,10,14); g.fillTriangle(14,14,18,5,22,14); g.generateTexture('spike',24,14);
+    // firepit — a 24px lethal flame tile (jump it; new hazard debuting W5). Layered flames dark->hot.
+    g.clear(); g.fillStyle(0xd93a0a); g.fillTriangle(0,16,7,3,13,16); g.fillTriangle(11,16,18,2,24,16); g.fillStyle(0xff7a18); g.fillTriangle(3,16,8,6,12,16); g.fillTriangle(14,16,18,5,22,16); g.fillStyle(0xffd23f); g.fillTriangle(5,16,8,10,11,16); g.fillTriangle(15,16,18,9,20,16); g.generateTexture('firepit',24,16);
     // stick — a little dart the mini-worms spit (dark twig with a bright tip)
     g.clear(); g.fillStyle(0x2a1a0c); g.fillTriangle(0,3,13,0,13,6); g.fillRect(0,2,11,3); g.fillStyle(0x8a5a2b); g.fillRect(1,3,8,1); g.fillStyle(0x66ddff); g.fillTriangle(10,1,15,3,10,5); g.generateTexture('stick',15,6);
     // cactus — desert scenery for the Sand Lands interlude
@@ -1567,7 +1569,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // level so they always point at the LIVE scene instance)
     try{ var _sc=this; window.__NQ_PAUSE=function(){ if(!_sc.over&&!_sc.paused){ _sc.pauseGame(false); return true; } return false; };
          window.__NQ_RESUME=function(){ if(_sc.paused) _sc.resumeGame(); };
-         window.__NQ_DBG=function(){ try{ return {paused:!!_sc.paused, clockPaused:!!_sc.time.paused, now:Math.round(_sc.time.now), last:Math.round(_sc.lastInputAt||0), warping:!!_sc._warping, swan:_sc._swanState||null, bossHP:(_sc.bossStarted?_sc.bossHP:null), hasKey:!!_sc.hasKey, level:_sc.def&&_sc.def.name, floorKey:_sc.floorKey||null, timeLeft:_sc.timeLeft, throwAmmo:_sc.throwAmmo, bossSprite:(function(){ try{ var k=(_sc.rugking&&_sc.rugking.active)?_sc.rugking:((_sc.worm&&_sc.worm.active)?_sc.worm:null); if(!k) return null; return {tex:k.texture&&k.texture.key, grav:!!(k.body&&k.body.allowGravity), vis:!!k.visible, a:+(k.alpha||0).toFixed(2), w:Math.round(k.displayWidth), h:Math.round(k.displayHeight), x:Math.round(k.x), y:Math.round(k.y), tint:('00000'+(k.tintTopLeft||0).toString(16)).slice(-6)}; }catch(e){ return 'err'; } })(), bgArt:(function(){ try{ var k=_sc.def&&_sc.def.bgArt; if(!k) return null; var n=0; _sc.children.list.forEach(function(o){ if(o&&o.texture&&o.texture.key===k) n++; }); return k+':'+n; }catch(e){ return 'err'; } })(), grav:(function(){ try{ return _sc.physics.world.gravity.y; }catch(e){ return null; } })(), arena:(function(){ try{ return (_sc._arenaL==null)?null:{l:Math.round(_sc._arenaL),r:Math.round(_sc._arenaR)}; }catch(e){ return null; } })(), nearSlot:(function(){ try{ return _sc.nearActiveSlot(); }catch(e){ return 'err:'+e.message; } })(), slotN:(_sc.slots?_sc.slots.length:-1), px:Math.round(_sc.player?_sc.player.x:-1), secrets:(function(){ var a=[]; try{ _sc.platforms.children.iterate(function(m){ if(m&&m.secretSteel) a.push([Math.round(m.x),Math.round(m.y),m.used?1:0]); }); }catch(e){} return a; })(), bb:(function(){ var a=[]; try{ _sc.bonusBlocks.children.iterate(function(m){ if(m) a.push([Math.round(m.x),m.used?1:0]); }); }catch(e){} return a; })(), pscale:(_sc.pscale?+_sc.pscale.v.toFixed(2):1), lives:_sc.lives, nLevels:LEVELS.length, sig:{fb:(_sc.firebars||[]).length, gt:(_sc.gates||[]).length, rp:(_sc.rugPlats&&_sc.rugPlats.children?_sc.rugPlats.getLength():0), dz:(_sc.dumpZones||[]).length}, gate0:(_sc.gates&&_sc.gates[0]?_sc.gates[0].st:null), foes:(function(){ var n=0; try{ _sc.enemies.children.iterate(function(e){ if(e&&e.active&&_sc.def&&_sc.def.door&&e.x>_sc.def.door-460) n++; }); }catch(e){} return n; })(), dr:(_sc._drState||null), drX:(_sc.rugking&&_sc.rugking.active?Math.round(_sc.rugking.x):null), drY:(_sc.rugking&&_sc.rugking.active?Math.round(_sc.rugking.y):null), drT:(_sc._drT0?Math.round(_sc.time.now-_sc._drT0):null), bossInv:(_sc.rugking&&_sc.rugking.active?!!_sc.rugking.invuln:null), princess:!!(_sc.princess&&_sc.princess.active), reserve:(_sc.reserve||null), reserveSel:(_sc.reserveSel==null?null:_sc.reserveSel)}; }catch(e){ return {err:String(e)}; } };
+         window.__NQ_DBG=function(){ try{ return {paused:!!_sc.paused, clockPaused:!!_sc.time.paused, now:Math.round(_sc.time.now), last:Math.round(_sc.lastInputAt||0), warping:!!_sc._warping, swan:_sc._swanState||null, bossHP:(_sc.bossStarted?_sc.bossHP:null), hasKey:!!_sc.hasKey, level:_sc.def&&_sc.def.name, floorKey:_sc.floorKey||null, timeLeft:_sc.timeLeft, throwAmmo:_sc.throwAmmo, bossSprite:(function(){ try{ var k=(_sc.rugking&&_sc.rugking.active)?_sc.rugking:((_sc.worm&&_sc.worm.active)?_sc.worm:null); if(!k) return null; return {tex:k.texture&&k.texture.key, grav:!!(k.body&&k.body.allowGravity), vis:!!k.visible, a:+(k.alpha||0).toFixed(2), w:Math.round(k.displayWidth), h:Math.round(k.displayHeight), x:Math.round(k.x), y:Math.round(k.y), tint:('00000'+(k.tintTopLeft||0).toString(16)).slice(-6)}; }catch(e){ return 'err'; } })(), bgArt:(function(){ try{ var k=_sc.def&&_sc.def.bgArt; if(!k) return null; var n=0; _sc.children.list.forEach(function(o){ if(o&&o.texture&&o.texture.key===k) n++; }); return k+':'+n; }catch(e){ return 'err'; } })(), grav:(function(){ try{ return _sc.physics.world.gravity.y; }catch(e){ return null; } })(), arena:(function(){ try{ return (_sc._arenaL==null)?null:{l:Math.round(_sc._arenaL),r:Math.round(_sc._arenaR)}; }catch(e){ return null; } })(), nearSlot:(function(){ try{ return _sc.nearActiveSlot(); }catch(e){ return 'err:'+e.message; } })(), slotN:(_sc.slots?_sc.slots.length:-1), px:Math.round(_sc.player?_sc.player.x:-1), secrets:(function(){ var a=[]; try{ _sc.platforms.children.iterate(function(m){ if(m&&m.secretSteel) a.push([Math.round(m.x),Math.round(m.y),m.used?1:0]); }); }catch(e){} return a; })(), bb:(function(){ var a=[]; try{ _sc.bonusBlocks.children.iterate(function(m){ if(m) a.push([Math.round(m.x),m.used?1:0]); }); }catch(e){} return a; })(), pscale:(_sc.pscale?+_sc.pscale.v.toFixed(2):1), lives:_sc.lives, nLevels:LEVELS.length, sig:{fb:(_sc.firebars||[]).length, gt:(_sc.gates||[]).length, rp:(_sc.rugPlats&&_sc.rugPlats.children?_sc.rugPlats.getLength():0), dz:(_sc.dumpZones||[]).length, fp:(_sc.firePits&&_sc.firePits.getLength?_sc.firePits.getLength():0)}, gate0:(_sc.gates&&_sc.gates[0]?_sc.gates[0].st:null), foes:(function(){ var n=0; try{ _sc.enemies.children.iterate(function(e){ if(e&&e.active&&_sc.def&&_sc.def.door&&e.x>_sc.def.door-460) n++; }); }catch(e){} return n; })(), dr:(_sc._drState||null), drX:(_sc.rugking&&_sc.rugking.active?Math.round(_sc.rugking.x):null), drY:(_sc.rugking&&_sc.rugking.active?Math.round(_sc.rugking.y):null), drT:(_sc._drT0?Math.round(_sc.time.now-_sc._drT0):null), bossInv:(_sc.rugking&&_sc.rugking.active?!!_sc.rugking.invuln:null), princess:!!(_sc.princess&&_sc.princess.active), reserve:(_sc.reserve||null), reserveSel:(_sc.reserveSel==null?null:_sc.reserveSel)}; }catch(e){ return {err:String(e)}; } };
          // LAB-only physics-health probe: counts NaN-position/velocity bodies (a single NaN body
          // poisons Arcade's RTree broad-phase → ALL overlaps silently fail — coins, damage, etc).
          // __NQ_COINGRAB teleports the player onto a coin so a caller can confirm overlap fires.
@@ -1829,6 +1831,14 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // spikes (hazard)
     this.spikes=this.physics.add.staticGroup();
     (def.spikes||[]).forEach(function(sp){ var s=self.spikes.create(sp[0]+TILE/2,GY-1,'spike'); s.body.setSize(20,10).setOffset(2,4); });
+
+    // fire pits (hazard, W5+) — a lethal flame BAND: firepits:[[x,width]]. Jump it (width hard-capped
+    // so a running jump always clears). Same immunity set as spikes. Tile the flame across the width;
+    // static body stays put, the scaleY flicker is cosmetic only.
+    this.firePits=this.physics.add.staticGroup();
+    (def.firepits||[]).forEach(function(fp){ var fx=fp[0], fw=Math.min(120,fp[1]||48);
+      for(var _x=0;_x<fw;_x+=TILE){ var f=self.firePits.create(fx+_x+TILE/2,GY-2,'firepit'); f.body.setSize(20,10).setOffset(2,6); f.setDepth(6);
+        self.tweens.add({targets:f,scaleY:1.16,duration:170+((_x/TILE)%3)*70,yoyo:true,repeat:-1,ease:'Sine.inOut'}); } });
 
     // coins
     this.coins=this.physics.add.group({allowGravity:false});
@@ -2176,6 +2186,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.physics.add.overlap(this.player,this.miniworms,this.miniwormTouch,null,this);
     this.physics.add.overlap(this.player,this.enemyShots,this.shotHit,null,this);
     this.physics.add.overlap(this.player,this.spikes,this.spikeHit,null,this);
+    this.physics.add.overlap(this.player,this.firePits,this.firePitHit,null,this);
     this.physics.add.overlap(this.player,this.door,this.tryDoor,null,this);
     this.physics.add.overlap(this.player,this.caches,this.grabCache,null,this);   // coin caches (player now exists)
     this.physics.add.overlap(this.player,this.warps,this.tryWarp,null,this);      // speakeasy warps
@@ -2320,12 +2331,12 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // the AI (turret/charge) is shared without duplication; e.kind still drives art + tint.
     var BEH={ laserbot:'sniper', mevdrone:'sandwich' };
     var beh=BEH[kind]||kind;
-    var tex = (kind==='sniper'||kind==='sandwich') ? 'bot' : (kind==='gasgoblin' ? 'troll' : kind);
+    var tex = (kind==='sniper'||kind==='sandwich') ? 'bot' : (kind==='gasgoblin' ? 'troll' : (kind==='shrimp' ? 'jeet' : kind));   // SHRIMP = retail-seller walker, reuses jeet art + AI (tint below)
     var e=this.enemies.create(x,y,tex); e.kind=kind; e.beh=beh;
     e.setScale((kind==='ghost'?26:kind==='bitmaxi'?34:kind==='fudster'?38:kind==='gasgoblin'?28:kind==='laserbot'?32:kind==='mevdrone'?34:30)/e.height);
     e.body.setSize(e.width*0.70,e.height*0.78).setOffset(e.width*0.15,e.height*0.16); e.setBounce(0);
     e.dir=Phaser.Math.RND.pick([-1,1]);
-    var spd={jeet:50,paper:66,bot:88,ghost:52,bitmaxi:72,sniper:34,fudster:44,gasgoblin:46,sandwich:58,laserbot:34,mevdrone:64}[kind]||55;
+    var spd={jeet:50,paper:66,bot:88,ghost:52,bitmaxi:72,sniper:34,fudster:44,gasgoblin:46,sandwich:58,laserbot:34,mevdrone:64,shrimp:50}[kind]||55;
     e.baseSpeed=(spd+Phaser.Math.RND.between(0,12))*(this.diffMul||1)
       *((window.__NQ_SETUP&&window.__NQ_TUNE&&Number(window.__NQ_TUNE.espd))||1);   // LAB tuning knob
     e.homeX=x; e.homeY=y; e.range=range||70; e.bob=Phaser.Math.RND.frac()*6.28;
@@ -2334,6 +2345,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(beh==='sandwich'){ if(kind==='sandwich') e.setTint(0x9b6bff); e.mev='idle'; e.nextCharge=this.time.now+700+Phaser.Math.RND.between(0,800); if(kind==='mevdrone'){ e.nextCharge=this.time.now+600+Phaser.Math.RND.between(0,700); var mg=this.addGlow(e,0x9b6bff,3); if(mg) this.tweens.add({targets:mg,outerStrength:8,duration:520,yoyo:true,repeat:-1,ease:'Sine.inOut'}); } }   // MEV bot — charges to "sandwich" you (bot / modern drone)
     // Drones are GROUNDED (identical proven physics to sniper/sandwich — no hover/pit edge cases);
     // the glow + sprite sell the "modern" look. Only the ghost floats.
+    if(kind==='shrimp') e.setTint(0xff9e80);   // coral/pink retail SHRIMP — visually distinct from jeet
     if(kind==='ghost') e.body.setAllowGravity(false); else e.setCollideWorldBounds(true);
     return e;
   },
@@ -2667,6 +2679,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     maxi.baseSpeed=Math.min(maxi.baseSpeed*1.6,150); this.cameras.main.shake(90,.006);
   },
   spikeHit:function(player,spike){ var now=this.time.now; if(this.over||player.invuln||now<this.shieldUntil||now<this.moonUntil||now<this.omegaUntil||now<this.whaleUntil||now<this.coldUntil) return; this.hurt(player, player.body.velocity.x>0?-1:1, 'SPIKES'); },
+  firePitHit:function(player,fp){ var now=this.time.now; if(this.over||player.invuln||now<this.shieldUntil||now<this.moonUntil||now<this.omegaUntil||now<this.whaleUntil||now<this.coldUntil) return; this.hurt(player, player.body.velocity.x>0?-1:1, 'BURNED'); },
 
   tryDoor:function(player,door){
     if(this.over) return;
