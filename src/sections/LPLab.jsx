@@ -1841,20 +1841,38 @@ function StrategyMatcher() {
   const [capital, setCapital] = useState(2);
   const [experience, setExperience] = useState(2);
 
+  // TIME, CAPITAL and EXPERIENCE are CONSTRAINTS, not points to be outweighed. A plain sum let a
+  // user who answered "30min/month" be pushed to FULLY ACTIVE ("daily management required... a
+  // part-time job") on the strength of the other three answers — which is the exact failure
+  // lesson 12 names: "pretending you will manage active positions you do not have time for is the
+  // single most common way LPs underperform". Same for sub-$1K accounts being told to run
+  // multi-position management (rent and tx cost eat it) and self-declared beginners being sent
+  // to tight DLMM bins when lesson 6 says start tick-based.
+  // So: score proposes, constraints CAP. The band can never exceed what your scarcest input allows.
   const score = time + volatility + capital + experience;
+  const BANDS = ["FULLY PASSIVE", "SEMI-ACTIVE", "ACTIVE", "FULLY ACTIVE"];
+  const fromScore = score <= 5 ? 0 : score <= 9 ? 1 : score <= 12 ? 2 : 3;
+  const timeCap = time - 1;                       // 30min/month can never mean daily management
+  const capitalCap = capital === 1 ? 1 : 3;       // under $1K: no multi-position strategies
+  const expCap = experience === 1 ? 1 : 3;        // complete beginner: no tight-bin DLMM
+  const band = Math.min(fromScore, timeCap, capitalCap, expCap);
+  const capped = band < fromScore;
+  const capReason = band === timeCap && time === 1 ? "your time budget"
+    : band === capitalCap && capital === 1 ? "your position size"
+    : band === expCap && experience === 1 ? "your experience level" : "";
 
   let strategy, color, details, protocols;
-  if (score <= 5) {
+  if (band === 0) {
     strategy = "FULLY PASSIVE";
     color = "#10B981";
     details = "Full range or wide concentrated positions on correlated or stable pairs. Check monthly. Compound fees when you remember. Prioritize sleep over APR.";
     protocols = "Raydium Standard AMM • Meteora DAMM • Orca stable pools • USDC/USDT on any protocol";
-  } else if (score <= 9) {
+  } else if (band === 1) {
     strategy = "SEMI-ACTIVE";
     color = "#FFB627";
     details = "Moderate concentrated ranges on major pairs. Weekly check-ins. Rebalance when price breaks out significantly. Use alerts to know when to act.";
     protocols = "Raydium CLMM wide range • Orca Whirlpools moderate range • Meteora DAMM V2";
-  } else if (score <= 12) {
+  } else if (band === 2) {
     strategy = "ACTIVE";
     color = "#EF4444";
     details = "Tight concentrated ranges. Daily monitoring. Systematic rebalancing triggers. Track performance vs holding benchmark weekly.";
@@ -1898,6 +1916,14 @@ function StrategyMatcher() {
         <p style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:"#D1D5DB",margin:"0 0 10px",lineHeight:1.7}}>{details}</p>
         <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1,marginBottom:4}}>BEST PROTOCOLS FOR YOU:</div>
         <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color,lineHeight:1.8}}>{protocols}</div>
+        {capped && (
+          /* Say WHY we held you back, or a capped answer just looks like the tool ignored you. */
+          <div style={{marginTop:10,background:"rgba(255,182,39,0.1)",border:"1px solid rgba(255,182,39,0.3)",borderRadius:8,padding:"8px 12px"}}>
+            <p style={{margin:0,fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#FFB627",lineHeight:1.6}}>
+              ⚠️ Your other answers point to a more active strategy, but {capReason} is the binding constraint — so this is the honest recommendation. A strategy you cannot actually run is worse than a simpler one you can.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -2036,7 +2062,12 @@ function BinVisualizer() {
   const bins = Array.from({length: displayBins}, (_, i) => {
     const binLow = lowerPrice + (i * binWidth * currentPrice / 100);
     const binHigh = binLow + (binWidth * currentPrice / 100);
-    const isActive = binLow <= currentPrice && currentPrice <= binHigh;
+    // Half-open. Both bounds were inclusive, so with an even bin count the price landed exactly
+    // on a boundary and TWO bars lit green — in 979/1000 slider states, defaults included —
+    // while the card beside them read "EARNING NOW: 1 BIN". The top bar stays closed so a price
+    // sitting exactly on the upper bound still has a home.
+    const isLast = i === displayBins - 1;
+    const isActive = binLow <= currentPrice && (isLast ? currentPrice <= binHigh : currentPrice < binHigh);
     const distFromActive = Math.abs(i - Math.floor(displayBins / 2));
     return { binLow, binHigh, isActive, distFromActive };
   });
@@ -2044,7 +2075,7 @@ function BinVisualizer() {
   return (
     <div style={{background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.25)",borderRadius:12,padding:16,marginTop:16,marginBottom:8}}>
       <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:"#10B981",letterSpacing:2,marginBottom:4}}>🧮 INTERACTIVE — BIN & TICK RANGE VISUALIZER</div>
-      <p style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:"#9CA3AF",margin:"0 0 14px",lineHeight:1.6}}>See how bins and ticks work at different range widths and price levels.</p>
+      <p style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:"#9CA3AF",margin:"0 0 14px",lineHeight:1.6}}>See how bins and ticks work at different range widths and bin steps. Watch how much of your range is actually earning.</p>
 
       {/* Mode toggle */}
       <div style={{display:"flex",gap:8,marginBottom:12}}>
@@ -2112,7 +2143,10 @@ function BinVisualizer() {
         {[
           {label:"TOTAL BINS/TICKS", value: mode==="dlmm" ? `~${Math.max(1,totalBins)}` : `~${Math.floor(rangeWidth*2/0.01)}`, color:"#9CA3AF"},
           {label:"EARNING NOW", value: mode==="dlmm" ? "1 BIN" : "ALL IN RANGE", color:"#10B981"},
-          {label:"FEE EFFICIENCY", value: mode==="dlmm" ? "MAXIMUM" : "DISTRIBUTED", color:"#FFB627"},
+          // Was hardcoded "MAXIMUM" — printed even when ~0.01% of deployed capital is earning, which is
+          // the LEAST efficient shape the widget can express. activeBinPct was already computed and
+          // thrown away; show the real number and colour it honestly.
+          {label:"YOUR RANGE EARNING NOW", value: mode==="dlmm" ? `${activeBinPct < 0.1 ? activeBinPct.toFixed(2) : activeBinPct.toFixed(1)}%` : "ALL IN-RANGE", color: mode==="dlmm" ? (activeBinPct < 1 ? "#EF4444" : activeBinPct < 10 ? "#FFB627" : "#10B981") : "#FFB627"},
         ].map((r,i)=>(
           <div key={i} style={{background:"rgba(0,0,0,0.3)",borderRadius:8,padding:"8px",textAlign:"center"}}>
             <div style={{fontFamily:"'Anton',sans-serif",fontSize:7,color:"#6B7280",letterSpacing:1,marginBottom:4}}>{r.label}</div>
@@ -2533,7 +2567,13 @@ function TierAllocationBuilder() {
   let verdict, vcolor;
   if (over) { verdict = "Core + Degen exceeds 100% — pull the sliders down so the tiers fit."; vcolor = "#EF4444"; }
   else if (degen > core || degen > growth) { verdict = "Upside-down pyramid — too much in the riskiest tier. That's a gamble, not a strategy."; vcolor = "#EF4444"; }
-  else if (core >= growth && growth >= degen) { verdict = "Pyramid is right-side up — safe core largest, degen smallest. This is a strategy."; vcolor = "#10B981"; }
+  // Ordering alone used to earn the green "this is a strategy" verdict, which blessed up to 30% in
+  // the degen tier — while lesson 12 calls that tier "tiny size... money you have already written
+  // off". Magnitude has to matter too. Also `>=` on both sides meant a 50/50/0 split was praised as
+  // "core largest" when core merely tied growth.
+  else if (degen > 15) { verdict = `Right-side up, but ${degen}% in the degen tier is not "small and spicy" — that is $${Math.round(degenUSD).toLocaleString()} you must be willing to lose entirely. Most strategies keep this tier under 10-15%.`; vcolor = "#FFB627"; }
+  else if (core > growth && growth >= degen) { verdict = "Pyramid is right-side up — safe core largest, degen smallest. This is a strategy."; vcolor = "#10B981"; }
+  else if (core === growth && growth >= degen) { verdict = "Balanced core and growth with a small degen tier. Workable — though a clearly largest safe tier is the sturdier shape."; vcolor = "#10B981"; }
   else { verdict = "Workable, but your core (safe) tier should be your largest slice."; vcolor = "#FFB627"; }
   const lab = {fontFamily:"'Anton',sans-serif",fontSize:13,color:"#9CA3AF",letterSpacing:1,display:"block",marginBottom:6};
   const box = {borderRadius:8,padding:"12px",textAlign:"center"};
@@ -2548,11 +2588,15 @@ function TierAllocationBuilder() {
         <div><label style={lab}>DEGEN (risky): {degen}%</label><input type="range" min="0" max="100" step="5" value={degen} onChange={e=>setDegen(Number(e.target.value))} style={{width:"100%",accentColor:"#EF4444"}}/></div>
         <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:"#6B7280",letterSpacing:0.5,textAlign:"center"}}>Growth (middle) auto-fills the rest: {growth}%</div>
       </div>
-      <div style={{marginTop:16,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+      {/* While core+degen > 100 these dollars cannot be an allocation — they summed to as much as
+          $100,000 out of $50,000. A red warning exists below, but fully-styled numbers still read as
+          an answer, so dim them and say plainly that they are not a valid split. */}
+      <div style={{marginTop:16,display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,opacity:over?0.35:1,filter:over?"grayscale(1)":"none"}}>
         <div style={{...box,background:"rgba(16,185,129,0.08)"}}><div style={cap}>CORE {core}%</div><div style={{...num,color:"#10B981"}}>${Math.round(coreUSD).toLocaleString()}</div></div>
         <div style={{...box,background:"rgba(96,165,250,0.08)"}}><div style={cap}>GROWTH {growth}%</div><div style={{...num,color:"#60A5FA"}}>${Math.round(growthUSD).toLocaleString()}</div></div>
         <div style={{...box,background:"rgba(239,68,68,0.08)"}}><div style={cap}>DEGEN {degen}%</div><div style={{...num,color:"#EF4444"}}>${Math.round(degenUSD).toLocaleString()}</div></div>
       </div>
+      {over && <div style={{marginTop:8,fontFamily:"'Anton',sans-serif",fontSize:12,color:"#EF4444",textAlign:"center"}}>These figures total {core+degen}% of your capital — not a valid split.</div>}
       <div style={{marginTop:12,fontFamily:"'Anton',sans-serif",fontSize:13,color:vcolor,textAlign:"center",letterSpacing:0.5,lineHeight:1.5}}>{verdict}</div>
     </div>
   );
