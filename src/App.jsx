@@ -2120,7 +2120,18 @@ function StartHere({ onGo }){
 
 export default function App(){
   const [screen,setScreen]=useState(()=>{
-    try { const h=(window.location.hash||"").replace(/^#/,""); return ["library","incubator","lplab","survive","clkn","challenge","select","start"].includes(h)?h:"landing"; }
+    try {
+      const SCREENS=["library","incubator","lplab","survive","clkn","challenge","select","start"];
+      // Shareable deep-link PATHS, so a section can be sent as a clean URL instead of a #hash.
+      // A hash is invisible to the server, which means it can't be given its own link-preview card
+      // and gets dropped by anything that rewrites URLs. The server routes these paths to the SPA
+      // shell (see the /lp-lab route in server.js); this is the client half that opens the section.
+      const PATHS={"/lp-lab":"lplab","/lplab":"lplab"};
+      const path=(window.location.pathname||"").replace(/\/+$/,"").toLowerCase();
+      if(PATHS[path]) return PATHS[path];
+      const h=(window.location.hash||"").replace(/^#/,"");
+      return SCREENS.includes(h)?h:"landing";
+    }
     catch(e){ return "landing"; }
   });
   const [lessonId,setLessonId]=useState(null);

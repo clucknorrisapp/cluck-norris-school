@@ -11500,7 +11500,7 @@ const SITEMAP_PAGES = [
   // grant, pool-monitor, admin) are deliberately absent; their meta handles them.
   "/", "/school", "/curriculum", "/tools", "/autopsy", "/wallet-xray", "/trace",
   "/snapshot", "/holders", "/airdrop", "/buyspecial", "/hatchery", "/security-coop",
-  "/wallet-checkup", "/locker-room", "/clkn", "/alpha",
+  "/wallet-checkup", "/locker-room", "/clkn", "/alpha", "/lp-lab",
   "/classroom", "/order-book", "/bags", "/investors", "/privacy", "/terms",
   // /liquidity + /liquidity-engine dropped 2026-07-19 (audit): both serve a locked
   // "In Development" placeholder — re-add when the engine goes public.
@@ -11549,6 +11549,40 @@ app.get("/api/nq-digest-test", async (req, res) => {
     const r = await nqDigest.run({ send: req.query.send === "1" || req.query.send === "true", reset: req.query.reset === "1", notify: nqNotify });
     res.json({ ok: true, ...r });
   } catch (e) { res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+
+// ── LP LAB — its own shareable page (/lp-lab) ───────────────────────────────
+// The LP Lab is a section of the React SPA, so the only way to link it used to be
+// /school#lplab. A #hash never reaches the server, which means it cannot carry its own
+// link-preview card: pasted in Telegram/X it unfurled as the generic school listing, and
+// anything that rewrites or strips fragments dropped people on the landing page instead.
+// This serves the SAME SPA shell (so there is one LP Lab, not a copy to keep in sync) with
+// the <title>/OG tags swapped, and App.jsx reads the pathname to open the Lab directly.
+// MUST be before the catch-all, which would otherwise answer with the unmodified shell.
+const LP_LAB_META = {
+  title: "Cluck Norris LP Lab — Learn Liquidity Providing",
+  desc: "Free, hands-on liquidity-provider training: how LP positions actually work, impermanent loss, ranges and fees — from the School of Crypto Hard Knocks.",
+  image: "https://clucknorris.app/cluck-norris.png",
+  url: "https://clucknorris.app/lp-lab",
+};
+let _lpLabHtml = null;   // built once from the shipped shell, then reused
+function lpLabShell() {
+  if (_lpLabHtml) return _lpLabHtml;
+  let html = fs.readFileSync(join(__dirname, "dist", "index.html"), "utf8");
+  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  html = html
+    .replace(/<title>[\s\S]*?<\/title>/i, `<title>${esc(LP_LAB_META.title)}</title>`)
+    .replace(/<meta property="og:title"[^>]*>/i, `<meta property="og:title" content="${esc(LP_LAB_META.title)}" />`)
+    .replace(/<meta property="og:description"[^>]*>/i, `<meta property="og:description" content="${esc(LP_LAB_META.desc)}" />`)
+    .replace(/<meta property="og:image"[^>]*>/i,
+      `<meta property="og:image" content="${esc(LP_LAB_META.image)}" />\n    <meta property="og:url" content="${esc(LP_LAB_META.url)}" />\n    <meta property="og:type" content="website" />\n    <meta name="twitter:card" content="summary_large_image" />\n    <meta name="twitter:title" content="${esc(LP_LAB_META.title)}" />\n    <meta name="twitter:description" content="${esc(LP_LAB_META.desc)}" />\n    <meta name="twitter:image" content="${esc(LP_LAB_META.image)}" />\n    <link rel="canonical" href="${esc(LP_LAB_META.url)}" />`)
+    .replace(/<meta name="description"[^>]*>/i, `<meta name="description" content="${esc(LP_LAB_META.desc)}" />`);
+  _lpLabHtml = html;
+  return html;
+}
+app.get(["/lp-lab", "/lplab"], (req, res) => {
+  try { res.type("html").send(lpLabShell()); }
+  catch (e) { res.sendFile(join(__dirname, "dist", "index.html")); }   // never 500 a public page over a meta swap
 });
 
 // -- Serve React app (the school) at /school + every non-root path via the catch-all --
