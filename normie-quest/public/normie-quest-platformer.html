@@ -4752,11 +4752,16 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       if(e.kind==='rugpuller'){   // RUG PULLER: perches on his "rug" ledge → you step on it → he ARMS (turn, shudder, flash) → YANKS the ledge into the void → FLEES for good. Stomp him on the tell to bust the scam.
         e.setVelocityX(0);
         if(e.rpState==='perch'){
-          e.setFlipX(p.x<e.x); e.setRotation(0);
+          // NEVER flip him while he's working a post. The rug is drawn INTO the sprite, extending
+          // LEFT from where he grips it — so unflipped he reads exactly right: perched on the
+          // ledge's right edge, hauling the rug up from the right, rug laid out to the left across
+          // the span you have to cross. Flipping him to "face the player" mirrors the rug out to
+          // the right, off the ledge, which is what looked wrong.
+          e.setFlipX(false); e.setRotation(0);
           var onRug=(p.body.blocked.down||p.body.touching.down) && Math.abs(p.x-e.rugCX)<e.rugW*0.5+8 && Math.abs(p.body.bottom-e.rugHomeY)<16;
           if(onRug && now>(e.rpGrace||0)){ e.rpState='arm'; e.rpT=now; }
         } else if(e.rpState==='arm'){   // wind-up telegraph so the pull is fair (retreat, or leap onto his head)
-          e.setFlipX(p.x<e.x);
+          e.setFlipX(false);   // same as perch — keep the rug laid out to the LEFT while he winds up
           e.x=e.homeX+Phaser.Math.RND.between(-2,2); e.y=e.homeY+Phaser.Math.RND.between(-1,1);
           if(Math.floor(now/60)%2){ e.setTint(0xffe08a); } else { e.clearTint(); }
           if(e.rugTiles) e.rugTiles.forEach(function(t){ if(t.active&&!t.fallen) t.setAlpha(0.55+0.45*Math.abs(Math.sin(now/45))); });
