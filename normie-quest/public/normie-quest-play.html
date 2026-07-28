@@ -2435,7 +2435,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var beh=BEH[kind]||kind;
     var tex = (kind==='sniper'||kind==='sandwich') ? 'bot' : (kind==='gasgoblin' ? 'troll' : (kind==='shrimp' ? 'jeet' : kind));   // SHRIMP = retail-seller walker, reuses jeet art + AI (tint below)
     var e=this.enemies.create(x,y,tex); e.kind=kind; e.beh=beh;
-    e.setScale((kind==='ghost'?26:kind==='bitmaxi'?34:kind==='fudster'?38:kind==='gasgoblin'?28:kind==='laserbot'?32:kind==='mevdrone'?34:30)/e.height);
+    e.setScale((kind==='ghost'?26:kind==='shrimp'?22:kind==='bitmaxi'?34:kind==='fudster'?38:kind==='gasgoblin'?28:kind==='laserbot'?32:kind==='mevdrone'?34:30)/e.height);
     e.body.setSize(e.width*0.70,e.height*0.78).setOffset(e.width*0.15,e.height*0.16); e.setBounce(0);
     e.dir=Phaser.Math.RND.pick([-1,1]);
     var spd={jeet:50,paper:66,bot:88,ghost:52,bitmaxi:72,sniper:34,fudster:44,gasgoblin:46,sandwich:58,laserbot:34,mevdrone:64,shrimp:50}[kind]||55;
@@ -2447,7 +2447,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(beh==='sandwich'){ if(kind==='sandwich') e.setTint(0x9b6bff); e.mev='idle'; e.nextCharge=this.time.now+700+Phaser.Math.RND.between(0,800); if(kind==='mevdrone'){ e.nextCharge=this.time.now+600+Phaser.Math.RND.between(0,700); var mg=this.addGlow(e,0x9b6bff,3); if(mg) this.tweens.add({targets:mg,outerStrength:8,duration:520,yoyo:true,repeat:-1,ease:'Sine.inOut'}); } }   // MEV bot — charges to "sandwich" you (bot / modern drone)
     // Drones are GROUNDED (identical proven physics to sniper/sandwich — no hover/pit edge cases);
     // the glow + sprite sell the "modern" look. Only the ghost floats.
-    if(kind==='shrimp') e.setTint(0xff9e80);   // coral/pink retail SHRIMP — visually distinct from jeet
+    if(kind==='shrimp'){ e.setTint(0xff7a5c); e.hopper=true; e.nextHop=this.time.now+300+Phaser.Math.RND.between(0,500); }   // SHRIMP: small skittish retail seller that HOPS — its OWN behavior, not a jeet reskin
     if(kind==='ghost') e.body.setAllowGravity(false); else e.setCollideWorldBounds(true);
     return e;
   },
@@ -4667,6 +4667,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       if(e.beh==='sniper'){ e.setVelocityX(0); e.setFlipX(p.x<e.x); e.setRotation(0); }   // ranged TURRET: holds position + aims at the player (no frantic pacing)
       else if(e.beh==='sandwich'){ self.sandwichTick(now,e,p); }   // MEV Sandwich Bot / drone: telegraphed charge
       else { e.setVelocityX(e.dir*e.baseSpeed); e.setFlipX(e.dir>0); e.setRotation(Math.sin((now+e.homeX)/110)*0.06); }
+      // SHRIMP hop: a grounded skittish bounce on a cadence — a moving vertical target, distinct from a plain walker
+      if(e.hopper && e.body.blocked.down && now>e.nextHop){ e.setVelocityY(-250); e.nextHop=now+650+Phaser.Math.RND.between(0,450); }
       // Sniper Bot / laser drone: fire an aimed bolt when the player is roughly in range
       if(e.beh==='sniper' && now>e.nextFire && Math.abs(e.x-p.x)<330){ self.sniperFire(e,p); e.nextFire=now+(e.kind==='laserbot'?1500:1900); }
       // FUDster / Gas Goblin: cough a slow-gas puff on a cadence
