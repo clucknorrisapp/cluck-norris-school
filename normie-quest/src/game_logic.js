@@ -2346,7 +2346,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // Drones are GROUNDED (identical proven physics to sniper/sandwich — no hover/pit edge cases);
     // the glow + sprite sell the "modern" look. Only the ghost floats.
     if(kind==='flashbot'){ e.setTint(0x66ddff); e.blinkAt=this.time.now+900+Phaser.Math.RND.between(0,700); e.phasing=false; var _fg=this.addGlow(e,0x66ddff,3); if(_fg) this.tweens.add({targets:_fg,outerStrength:8,duration:480,yoyo:true,repeat:-1,ease:'Sine.inOut'}); }   // FLASHBOT: flash-loan drone — BLINKS toward you (intangible mid-blink)
-    if(kind==='drillbit'){ e.drillState='surfaced'; e.drillT=this.time.now+Phaser.Math.RND.between(0,600); e.dustAt=0; e.drillImmune=false; }   // DRILL-WORM: surface → burrow → erupt cycle (staggered start); uses its own drillworm sprite
+    if(kind==='drillbit'){ e.drillState='crawl'; e.drillT=this.time.now+Phaser.Math.RND.between(0,900); e.dustAt=0; e.drillImmune=false; }   // DRILL-WORM: crawl → burrow-attack → erupt cycle (staggered start); uses its own drillworm sprite
     if(kind==='ghost'||kind==='flashbot') e.body.setAllowGravity(false); else e.setCollideWorldBounds(true);
     return e;
   },
@@ -4571,17 +4571,21 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         }
         return;
       }
-      if(e.kind==='drillbit'){   // DRILL-WORM: SURFACES (vulnerable — stomp it here) → BURROWS and tunnels toward you underground (a moving dust mound tells you where) → ERUPTS up beside you (lethal spinning maw, can't be stomped) → lands → repeat.
+      if(e.kind==='drillbit'){   // DRILL-WORM: CRAWLS on the surface toward you most of the time (visible, stompable) → every ~2s does a BURROW attack: dives, tunnels fast toward you (dust tell) → ERUPTS up beside you (lethal, un-stompable) → back to crawl.
         var ds=e.drillState;
-        if(ds==='surfaced'){ e.setVelocityX(0); e.drillImmune=false; e.setVisible(true); e.phasing=false; e.setRotation(Math.sin(now/140)*0.05);
-          if(now>e.drillT+950){ e.drillState='burrow'; e.drillT=now; e.dustAt=0; e.setVisible(false); e.phasing=true; e.drillImmune=true; self.burst(e.x,GY-4,0xb98a5a,10); } }
-        else if(ds==='burrow'){ var bd=(p.x>e.x)?1:-1, nx=e.x+bd*1.4; if(nx>e.homeX-e.range&&nx<e.homeX+e.range) e.x=nx; e.setVelocityX(0);
-          if(now>(e.dustAt||0)){ self.burst(e.x,GY-4,0xb98a5a,3); e.dustAt=now+110; }   // moving dirt mound = the tell: get off this spot
-          if(now>e.drillT+1050){ e.drillState='erupt'; e.drillT=now; e.setVisible(true); e.phasing=false; e.drillImmune=true; e.setVelocityY(-250); self.burst(e.x,GY-4,0xd9a066,14); if(SFX&&SFX.stomp)SFX.stomp(); } }
-        else {   // erupt: airborne + lethal, then land and become vulnerable again
+        if(ds==='crawl'){ e.setVisible(true); e.phasing=false; e.drillImmune=false;
+          var cd=(p.x>e.x)?1:-1, tx=e.x+cd*40; if(tx>e.homeX-e.range&&tx<e.homeX+e.range) e.dir=cd;
+          if(e.body.blocked.left) e.dir=1; if(e.body.blocked.right) e.dir=-1;
+          var ah=e.x+e.dir*(e.body.width*0.5+6); if(e.body.blocked.down&&self.overPit(ah)) e.dir=-e.dir;
+          e.setVelocityX(e.dir*42); e.setFlipX(e.dir>0); e.setRotation(Math.sin(now/150)*0.05);
+          if(now>e.drillT+2000){ e.drillState='burrow'; e.drillT=now; e.dustAt=0; e.setVisible(false); e.phasing=true; e.drillImmune=true; e.setVelocityX(0); self.burst(e.x,GY-4,0xb98a5a,12); } }
+        else if(ds==='burrow'){ var bd=(p.x>e.x)?1:-1, nx=e.x+bd*2.2; if(nx>e.homeX-e.range-70&&nx<e.homeX+e.range+70) e.x=nx; e.setVelocityX(0); e.setFlipX(bd>0);
+          if(now>(e.dustAt||0)){ self.burst(e.x,GY-4,0xb98a5a,4); e.dustAt=now+85; }   // moving dirt mound = the tell: get off this spot
+          if(now>e.drillT+750){ e.drillState='erupt'; e.drillT=now; e.setVisible(true); e.phasing=false; e.drillImmune=true; e.setVelocityY(-190); self.burst(e.x,GY-4,0xd9a066,16); if(SFX&&SFX.stomp)SFX.stomp(); } }   // low burst — reads as "erupting from the ground", not flying
+        else {   // erupt: airborne + lethal, then land and go back to crawling (vulnerable)
           e.setVelocityX(0); e.drillImmune=true; e.setRotation(0);
-          if((e.body.blocked.down&&now>e.drillT+250)||now>e.drillT+900){ e.drillState='surfaced'; e.drillT=now; e.drillImmune=false; } }
-        e.setFlipX(p.x>e.x); return;
+          if((e.body.blocked.down&&now>e.drillT+280)||now>e.drillT+900){ e.drillState='crawl'; e.drillT=now; e.drillImmune=false; } }
+        return;
       }
       if(e.x<e.homeX-e.range) e.dir=1; if(e.x>e.homeX+e.range) e.dir=-1;
       if(e.body.blocked.left) e.dir=1; if(e.body.blocked.right) e.dir=-1;
