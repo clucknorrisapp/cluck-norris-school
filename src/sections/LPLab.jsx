@@ -62,7 +62,7 @@ The people depositing tokens into pools are called Liquidity Providers — LPs. 
         table: {
           headers: ["Protocol", "Chain", "Type", "Known For"],
           rows: [
-            ["Raydium", "Solana", "AMM + CLMM", "Highest Solana volume"],
+            ["Raydium", "Solana", "AMM + CLMM", "Deep pools, top-tier Solana volume"],
             ["Orca", "Solana", "Whirlpools", "Concentrated LP, clean UI"],
             ["Meteora", "Solana", "DAMM + DLMM", "Dynamic fees, CLKN lives here"],
             ["Uniswap", "Ethereum", "v2 + v3", "The original DEX"],
@@ -229,7 +229,7 @@ FINDING THE RIGHT TOLERANCE:
 ❌ Assuming the quoted price is what you will get — always check the minimum received
 ❌ Trading the same token in multiple transactions without checking pool state between them
 ❌ Ignoring the "minimum received" field — this is your actual worst-case execution
-❌ Thinking failed transactions mean no cost — you still pay the gas fee on failed transactions on EVM chains (not Solana)`
+❌ Thinking failed transactions are free — on Solana a tx that lands in a block and fails still costs you the base fee AND the full priority fee. Retrying a failing swap ten times during congestion pays ten times`
       }
     ],
     quiz: [
@@ -428,21 +428,22 @@ The more volume a pool generates, the more fees LPs collect. This is why volume 
         body: `Every protocol offers different fee tiers for different types of pairs. Choosing the right fee tier matters.
 
 RAYDIUM:
-• Standard AMM pools: 0.25% fixed
-• CLMM concentrated pools: 0.01% / 0.05% / 0.25% / 1%
+• Standard pools: AMM v4 is 0.25% fixed; the current CPMM type offers 0.25% / 1% / 2% / 4%
+• CLMM concentrated pools: 18 tiers from 0.01% up to 4% (0.01 / 0.02 / 0.03 / 0.04 / 0.05 / 0.1 / 0.15 / 0.16 / 0.18 / 0.2 / 0.25 / 0.4 / 0.6 / 0.8 / 1 / 2 / 3 / 4%)
 • Use 0.01% for stable pairs, 0.25% for standard, 1% for exotic/volatile
 
 ORCA WHIRLPOOLS:
-• 0.01% / 0.05% / 0.3% / 1%
+• 0.01% / 0.02% / 0.04% / 0.05% / 0.16% / 0.3% / 0.65% / 1% / 2%
 • Similar logic — stable pairs use low tiers, volatile pairs use high tiers
+• The 0.02% tier is the one CLKN's own Orca pools run on
 
 METEORA:
 • DAMM: Dynamic fees that adjust automatically to market volatility
-• DLMM: Variable fees set per bin — higher fee bins capture more during volatility
+• DLMM: base fee (fixed by the pool's bin step) + a variable fee that rises automatically with volatility. Fees are distributed per bin a swap crosses, but the RATE is pool-wide
 • Dynamic fees are one of Meteora's strongest features for LPs
 
 UNISWAP V3 (Ethereum):
-• 0.05% / 0.3% / 1%
+• 0.01% / 0.05% / 0.3% / 1% — the 0.01% stablecoin tier was added by governance in Nov 2021
 • The original tiered fee system that others copied
 
 CHOOSING THE RIGHT TIER:
@@ -594,7 +595,7 @@ BIN-BASED (Meteora DLMM):
 • Only the active bin (current price) earns fees
 • Only the active bin earns fees — adjacent bins sit idle until price moves into them
 • More granular control over fee capture
-• Can set different fee amounts per bin
+• Fees are distributed per bin crossed (the rate itself is set by the pool, not by you)
 • More complex but more powerful for active managers
 
 CHOOSING YOUR APPROACH:
@@ -722,10 +723,11 @@ Tick 100 = approximately 1% above tick 0
 Tick 1000 = approximately 10.5% above tick 0
 
 TICK SPACING per fee tier:
-• 0.01% fee — tick spacing 1 (finest granularity)
-• 0.05% fee — tick spacing 10
-• 0.25% fee — tick spacing 50
-• 1% fee — tick spacing 200
+Higher fee tier = coarser spacing = wider minimum range. The exact numbers are set per pool and DIFFER by protocol — do not memorise one table and assume it travels.
+
+Uniswap v3: 0.01% → 1 · 0.05% → 10 · 0.3% → 60 · 1% → 200
+Raydium CLMM: 0.01% → 1 · 0.05% → 1 · 0.25% → 60 · 1% → 120
+Orca: 0.01% → 1 · 0.02% → 2 · 0.04% → 4 · 0.05% → 8 · 0.3% → 64
 
 Lower fee tiers allow finer price ranges. When you set a range, you define a lower and upper tick. Your liquidity distributes uniformly across every tick in between — all earning fees proportionally when price passes through them.`
       },
@@ -818,7 +820,7 @@ READING THE UI:
         explanation: "Only the active bin earns fees in DLMM. This is the core difference from tick-based systems. All fee income concentrates at one precise price point — powerful when price is stable, zero earnings the moment price moves to the next bin."
       },
       {
-        q: "A 0.25% fee pool has tick spacing 50. A 0.01% fee pool has tick spacing 1. What does this mean?",
+        q: "A 0.3% fee pool has tick spacing 60. A 0.01% fee pool has tick spacing 1. What does this mean?",
         options: ["0.25% always earns more", "0.25% forces wider minimum ranges — positions cannot be narrower than 50 ticks. 0.01% allows much finer positioning", "Tick spacing has no effect on range width", "Low fee tiers cannot be used for volatile tokens"],
         correct: 1,
         explanation: "Tick spacing defines minimum range granularity. With spacing 50, your bounds must be multiples of 50 — you cannot set very tight ranges. This is why stable pairs use 0.01% fee tiers — they need tight ranges requiring fine tick spacing."
@@ -848,7 +850,7 @@ READING THE UI:
         explanation: "On Solana at $0.01 you can rebalance daily — negligible cost. On Ethereum at $50 you need to earn more than $50/day just to break even on rebalancing. This forces wider ranges and less frequent management. Solana's low fees are a real competitive advantage for active LP."
       },
       {
-        q: "A 0.01% fee pool with tick spacing 1 vs a 0.25% pool with tick spacing 50 — why is direct APR comparison misleading?",
+        q: "A 0.01% fee pool with tick spacing 1 vs a 0.3% pool with tick spacing 60 — why is direct APR comparison misleading?",
         options: ["Higher fee tiers always have better spacing", "Fine tick spacing lets you concentrate capital more tightly — potentially earning more total fees than a wider pool despite the lower fee percentage", "All fee tiers have the same tick spacing on Solana", "Tick spacing only matters for DLMM"],
         correct: 1,
         explanation: "Tick spacing affects how tightly you can deploy capital. Fine spacing lets you position extremely close to current price — potentially outearning a higher fee pool where minimum range forces wider deployment. Fee tier percentage is only one variable."
@@ -879,7 +881,7 @@ Your position holds 100% Token B — it already sold all Token A as price moved 
 IF PRICE IS INSIDE YOUR RANGE:
 You hold a mix of both — the exact ratio depends on where in the range price sits.
 
-This is why you can set a range entirely above current price depositing only USDC to buy as price rises, or entirely below depositing only SOL to sell as price climbs. Concentrated positions are sophisticated limit orders that earn fees while they wait.`
+This is why you can set a range entirely above current price depositing only SOL to sell as price rises, or entirely below depositing only USDC to buy as price falls. Concentrated positions are sophisticated limit orders that earn fees while they wait.`
       },
       {
         heading: "How It Works in Practice",
@@ -950,10 +952,10 @@ COMMON MISTAKES:
     ],
     quiz: [
       {
-        q: "SOL is at $150. You deposit only USDC into a range of $160-$180. What is your position doing?",
-        options: ["Earning maximum fees as it is close to the active price", "Idle — activates only when price rises into $160-$180 and starts converting USDC to SOL", "Converting USDC to SOL immediately at the current $150 price", "Earning fees on all swaps below $160 while it waits"],
+        q: "SOL is at $150. You deposit only SOL into a range of $160-$180. What is your position doing?",
+        options: ["Earning maximum fees as it is close to the active price", "Idle — activates only when price rises into $160-$180 and starts converting SOL to USDC", "Converting SOL to USDC immediately at the current $150 price", "Earning fees on all swaps below $160 while it waits"],
         correct: 1,
-        explanation: "A range set entirely above current price holds 100% USDC and earns nothing until price enters the range. Only when price rises through $160-$180 does your USDC begin converting to SOL. Below your range the position is completely idle."
+        explanation: "A range set entirely above current price holds 100% SOL and earns nothing until price enters the range. Only when price rises through $160-$180 does your SOL begin converting to USDC. Below your range the position is completely idle."
       },
       {
         q: "You set a USDC range at $100-$120. Price falls to $90. What do you hold?",
@@ -1112,7 +1114,9 @@ Rebalance when accumulated fees exceed the cost of rebalancing by a meaningful m
 THE REBALANCING COST CALCULATION:
 Total cost = swap fee to rebalance tokens + gas to close position + gas to open new position
 
-On Solana this is typically $0.02-0.10 total. Your position needs to earn more than this per day to make active management worthwhile.
+On Solana the GAS part is tiny — roughly $0.02-0.10. The swap fee is not: it is a percentage of position value, so rebalancing $1,000 through a 0.25% pool costs about $2.50 plus price impact.
+
+And the biggest cost is not on that list at all: CRYSTALLISED IMPERMANENT LOSS. Closing and swapping back to 50/50 at the new price locks in loss that was still only on paper. This is why the fix for fees being eaten by rebalancing is FEWER recenters — a wider range — not cheaper swaps. You cannot route around IL.
 
 WHEN NOT TO REBALANCE:
 • Price spiked outside range on unusually high volume — may return quickly
@@ -1900,6 +1904,11 @@ function StrategyMatcher() {
 }
 
 // ── DCA CALCULATOR ──
+// Prices here are memecoin-territory small (CLKN trades around $0.0000005), so the floor is an
+// epsilon that only keeps us clear of divide-by-zero — not $1, which used to silently rewrite
+// every realistic input. Also rejects NaN/Infinity: Math.max(1, NaN) is NaN.
+function clampPrice(v){ const n = Number(v); return Number.isFinite(n) && n > 0 ? Math.max(1e-12, n) : 1e-12; }
+
 function DCACalculator() {
   const [currentPrice, setCurrentPrice] = useState(150);
   const [rangeBottom, setRangeBottom] = useState(100);
@@ -1907,7 +1916,10 @@ function DCACalculator() {
   const [capital, setCapital] = useState(1000);
 
   const inRange = rangeTop >= rangeBottom;
-  const avgPrice = (rangeBottom + rangeTop) / 2;
+  // An AMM fills a traversed range at the GEOMETRIC mean, not the arithmetic one:
+  // tokens = capital / sqrt(Pa*Pb). Using (Pa+Pb)/2 understated the tokens you end up with
+  // by 0.9% on a tight range and 42% on a wide one, while the lesson claims to show AMM math.
+  const avgPrice = Math.sqrt(rangeBottom * rangeTop);
   const tokensAccumulated = inRange ? capital / avgPrice : 0;
   const singleBuyTokens = capital / currentPrice;
   const improvement = ((tokensAccumulated - singleBuyTokens) / singleBuyTokens * 100);
@@ -1922,7 +1934,7 @@ function DCACalculator() {
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
         <div>
           <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1,marginBottom:4}}>CURRENT PRICE ($)</div>
-          <input type="number" value={currentPrice} min={1} onChange={e=>setCurrentPrice(Math.max(1,Number(e.target.value)))}
+          <input type="number" value={currentPrice} min={0} step="any" onChange={e=>setCurrentPrice(clampPrice(e.target.value))}
             style={{width:"100%",background:"rgba(255,122,24,0.07)",border:"1px solid rgba(16,185,129,0.3)",borderRadius:8,padding:"8px 10px",color:"#F9FAFB",fontFamily:"monospace",fontSize:15.5,boxSizing:"border-box",outline:"none"}}/>
         </div>
         <div>
@@ -1937,12 +1949,12 @@ function DCACalculator() {
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
           <div>
             <div style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#6B7280",marginBottom:4}}>RANGE BOTTOM</div>
-            <input type="number" value={rangeBottom} min={1} onChange={e=>setRangeBottom(Math.max(1,Number(e.target.value)))}
+            <input type="number" value={rangeBottom} min={0} step="any" onChange={e=>setRangeBottom(clampPrice(e.target.value))}
               style={{width:"100%",background:"rgba(255,122,24,0.07)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:8,padding:"8px 10px",color:"#F9FAFB",fontFamily:"monospace",fontSize:15.5,boxSizing:"border-box",outline:"none"}}/>
           </div>
           <div>
             <div style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#6B7280",marginBottom:4}}>RANGE TOP</div>
-            <input type="number" value={rangeTop} min={1} onChange={e=>setRangeTop(Math.max(1,Number(e.target.value)))}
+            <input type="number" value={rangeTop} min={0} step="any" onChange={e=>setRangeTop(clampPrice(e.target.value))}
               style={{width:"100%",background:"rgba(255,122,24,0.07)",border:"1px solid rgba(255,182,39,0.3)",borderRadius:8,padding:"8px 10px",color:"#F9FAFB",fontFamily:"monospace",fontSize:15.5,boxSizing:"border-box",outline:"none"}}/>
           </div>
         </div>
@@ -2139,7 +2151,7 @@ function ILCalculator() {
             <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1,marginBottom:4}}>{f.label}</div>
             {/* Math.max(1, NaN) is NaN, so a half-typed value like "1e" used to poison every
                 readout below with NaN. Fall back to 1 unless the input is a real finite number. */}
-            <input type="number" value={f.val} onChange={e=>{const n=Number(e.target.value); f.set(Number.isFinite(n)?Math.max(1,n):1);}}
+            <input type="number" value={f.val} min={f.min} max={f.max} step={f.step} onChange={e=>f.set(clampPrice(e.target.value))}
               style={{width:"100%",background:"rgba(255,122,24,0.07)",border:"1px solid rgba(16,185,129,0.3)",borderRadius:8,padding:"8px 10px",color:"#F9FAFB",fontFamily:"monospace",fontSize:15.5,boxSizing:"border-box",outline:"none"}}/>
           </div>
         ))}
@@ -2194,8 +2206,13 @@ function FeeILCalculator() {
             UP, so half of impermanent loss was invisible: IL is symmetric in the price RATIO, and a
             token halving hurts exactly as much as it doubling. Letting the slider go below 1 is the
             difference between "IL is a thing that happens in pumps" and the truth. */}
-        <input type="range" min="0.1" max="10" step="0.05" value={priceChange} onChange={e=>setPriceChange(Number(e.target.value))} style={{width:"100%",accentColor:"#10B981"}}/>
-        <div style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#6B7280",marginTop:2}}>Below 1x = the token fell. IL is the same either way — 0.5x hurts as much as 2x.</div>
+        {/* LOG scale. On a linear 0.1-10 track 1.0x sat at 9% of the slider and one step at the
+            bottom moved IL ~9.9pp vs 0.12pp at the top - 84x coarser exactly where IL is steepest.
+            Log puts 1.0x at the midpoint so both halves are equally explorable. */}
+        <input type="range" min="-1" max="1" step="0.02" value={Math.log10(priceChange)}
+          onChange={e=>setPriceChange(Number((10 ** Number(e.target.value)).toFixed(3)))}
+          style={{width:"100%",accentColor:"#10B981"}}/>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#6B7280",marginTop:2}}>Below 1x = the token fell. The IL RATE is symmetric — 0.5x and 2x both cost 5.7% — though the dollar amount differs because the position is worth less.</div>
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>

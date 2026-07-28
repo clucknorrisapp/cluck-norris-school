@@ -2081,7 +2081,7 @@
   },
   {
     "id": "q161",
-    "q": "A 0.25% fee pool has tick spacing 50. A 0.01% fee pool has tick spacing 1. What does this mean?",
+    "q": "A 0.3% fee pool has tick spacing 60. A 0.01% fee pool has tick spacing 1. What does this mean?",
     "options": [
       "0.25% always earns more",
       "0.25% forces wider minimum ranges — positions cannot be narrower than 50 ticks. 0.01% allows much finer positioning",
@@ -2146,7 +2146,7 @@
   },
   {
     "id": "q166",
-    "q": "A 0.01% fee pool with tick spacing 1 vs a 0.25% pool with tick spacing 50 — why is direct APR comparison misleading?",
+    "q": "A 0.01% fee pool with tick spacing 1 vs a 0.3% pool with tick spacing 60 — why is direct APR comparison misleading?",
     "options": [
       "Higher fee tiers always have better spacing",
       "Fine tick spacing lets you concentrate capital more tightly — potentially earning more total fees than a wider pool despite the lower fee percentage",
@@ -2159,15 +2159,15 @@
   },
   {
     "id": "q167",
-    "q": "SOL is at $150. You deposit only USDC into a range of $160-$180. What is your position doing?",
+    "q": "SOL is at $150. You deposit only SOL into a range of $160-$180. What is your position doing?",
     "options": [
       "Earning maximum fees as it is close to the active price",
-      "Idle — activates only when price rises into $160-$180 and starts converting USDC to SOL",
-      "Converting USDC to SOL immediately at the current $150 price",
+      "Idle — activates only when price rises into $160-$180 and starts converting SOL to USDC",
+      "Converting SOL to USDC immediately at the current $150 price",
       "Earning fees on all swaps below $160 while it waits"
     ],
     "correct": 1,
-    "explanation": "A range set entirely above current price holds 100% USDC and earns nothing until price enters the range. Only when price rises through $160-$180 does your USDC begin converting to SOL. Below your range the position is completely idle.",
+    "explanation": "A range set entirely above current price holds 100% SOL and earns nothing until price enters the range. Only when price rises through $160-$180 does your SOL begin converting to USDC. Below your range the position is completely idle.",
     "source": "LPLAB"
   },
   {
