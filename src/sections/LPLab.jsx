@@ -1831,7 +1831,206 @@ Run that loop with discipline and you are no longer gambling on liquidity — yo
       }
     ],
     cluckVerdict: "This is graduation. You started not knowing what liquidity was; you finish with a tiered, rule-based system and a workflow you can run on any protocol. Knowledge was never the goal — discipline applied to capital is. Build your pyramid, write your rules, run the loop, and provide liquidity like a professional. Class dismissed."
+  },
+  {
+    id: 13,
+    title: "DLMM Liquidity Shapes",
+    icon: "📐",
+    tagline: "Same capital, same range, wildly different behaviour.",
+    cluckHook: "Most people pick a range and stop thinking. But HOW your liquidity is spread across that range changes what you earn, when you earn it, and what you are left holding when it is over. Three shapes. Learn what each one is actually for.",
+    sections: [
+      {
+        heading: "Shape Is The Third Decision",
+        body: `You already make two decisions on every position: which pool, and how wide a range. On a DLMM there is a third — the DISTRIBUTION. Same capital, same bounds, three completely different positions.
+
+Remember what you learned about bins: only the bin containing the current price earns fees. So the real question a shape answers is "where do I want my money sitting when price is HERE?"
+
+THE THREE SHAPES:
+• SPOT — spread evenly across every bin
+• CURVE — piled up in the middle, thin at the edges
+• BID-ASK — piled up at the edges, thin in the middle
+
+None of them is "best". They are answers to different questions.`
+      },
+      {
+        heading: "Spot — The Default",
+        body: `Liquidity spread uniformly across every bin in your range.
+
+WHAT IT DOES: every bin holds the same amount, so your fee income is roughly the same wherever price happens to sit inside your range.
+
+USE IT WHEN:
+• You do not have a strong view on where price is going
+• You want predictable behaviour you can reason about
+• You are new to DLMM and want the shape with the fewest surprises
+
+THE TRADE: you are never maximally efficient anywhere. You give up the concentrated fee capture of a curve in exchange for not caring where price sits.
+
+Spot is the sensible default, and "sensible default" is not an insult. Most LPs lose money by being clever, not by being boring.`
+      },
+      {
+        heading: "Curve — Maximum Fees, Maximum Fragility",
+        body: `Liquidity concentrated heavily around the current price, thinning toward the edges.
+
+WHAT IT DOES: puts the most capital exactly where the most trading happens. While price sits still, this earns the most of any shape.
+
+USE IT WHEN:
+• The pair is genuinely range-bound — correlated assets, stables, a token in a quiet accumulation phase
+• You are actively watching and will recenter
+
+THE TRADE: this is the shape that punishes you hardest for being wrong. A decisive move does two things at once — it drags you through your densest liquidity (so you convert the most tokens at the worst prices, which is amplified impermanent loss) and then leaves you sitting in thin edge bins earning almost nothing.
+
+Curve is a bet that nothing much happens. Fine bet. Just know you are making it.`
+      },
+      {
+        heading: "Bid-Ask — The Shape For Movement",
+        body: `The inverse of curve: heaviest at the outer edges, thin in the middle.
+
+WHAT IT DOES: it is a laddered buy wall below and sell wall above, with a quiet middle.
+
+USE IT WHEN:
+• You expect volatility but not direction — you want to be paid for the round trip
+• You are accumulating: heavy lower edge is a DCA ladder that buys deeper as price falls
+• You are distributing: heavy upper edge sells progressively into strength
+
+THE TRADE: while price sits still in the middle, you earn very little — your capital is parked out at the wings waiting for something to happen. Bid-ask is patient money. If the move never comes, you underperform every other shape.
+
+This is the shape that most resembles how a market maker actually thinks: quote both sides, get paid for the round trip, do not care about direction.`
+      },
+      {
+        heading: "Choosing Without Fooling Yourself",
+        body: `A blunt decision table:
+
+• "I have no view and want to stop thinking" → SPOT
+• "This pair is boring and I will watch it" → CURVE
+• "I want to accumulate lower / sell higher" → BID-ASK
+• "I want maximum fees with no downside" → this option does not exist
+
+The honest framing: curve is a volatility SHORT. Bid-ask is a volatility LONG. Spot is neutral. You are taking a position on how much the price will move, whether you meant to or not.
+
+And whichever you pick, the scorecard does not change. Fees earned minus impermanent loss, measured against simply holding. A shape that earns more fees and loses more to IL has not made you a single dollar.`
+      }
+    ],
+    quiz: [
+      {
+        q: "You put liquidity in a CURVE shape and the token makes a decisive 3x move. What happened to you?",
+        options: ["You earned maximum fees the whole way up because curve is the highest-yield shape", "The move dragged price through your densest liquidity — the most amplified impermanent loss — and left you in thin edge bins earning almost nothing", "Nothing, shape only affects fees not impermanent loss", "Curve automatically recenters to follow the price"],
+        correct: 1,
+        explanation: "Curve concentrates capital at the centre, so a big move converts the most tokens at the worst prices and then strands you in the thin wings. Curve is a bet that price does NOT move much."
+      },
+      {
+        q: "You want to accumulate a token as it falls, and be paid while you wait. Which shape fits?",
+        options: ["Curve — maximum fee capture", "Spot — even coverage", "Bid-Ask with the weight on the lower edge — a laddered DCA that buys deeper as price falls", "Any of them, shape does not affect entry price"],
+        correct: 2,
+        explanation: "Bid-ask puts capital at the edges. Weighted low, it is a laddered buy wall that fills progressively deeper as price drops — a DCA ladder that earns fees while it waits."
+      },
+      {
+        q: "What are you really taking a position on when you choose between curve and bid-ask?",
+        options: ["Which protocol has lower fees", "How much the price is going to MOVE — curve is effectively short volatility, bid-ask is long volatility", "The direction of the token", "Nothing, it is purely cosmetic"],
+        correct: 1,
+        explanation: "Curve pays best when price sits still and hurts most when it moves; bid-ask is the opposite. You are expressing a view on volatility whether or not you realise it."
+      }
+    ],
+    cluckVerdict: "Shape is the decision nobody explains to you, and it quietly determines whether your range does what you hoped. Pick spot until you have a real reason not to. When you do reach for curve or bid-ask, say out loud what bet you are making — if you cannot say it, you should not be making it."
   }
+  ,
+  {
+    id: 14,
+    title: "Laddering & Multi-Position",
+    icon: "🪜",
+    tagline: "Why one position is usually the wrong number.",
+    cluckHook: "Every choice of range width is a compromise: tight earns more but dies fast, wide survives but earns little. Laddering refuses the compromise — run both at once and let each do the job it is good at.",
+    sections: [
+      {
+        heading: "The Compromise You Keep Losing",
+        body: `Every range width forces the same painful trade:
+
+TIGHT RANGE: high fee capture, but price leaves it quickly. Out of range means earning nothing while impermanent loss stays on the books. You rebalance, and each rebalance crystallises loss.
+
+WIDE RANGE: almost always in range, almost never out. But your capital is spread thin, so the fee rate is low.
+
+Pick one and you are wrong half the time. The tight position is wrong whenever the market moves; the wide one is wrong whenever it does not.
+
+Laddering is the obvious answer that most people never try: run BOTH.`
+      },
+      {
+        heading: "The Core-And-Satellite Ladder",
+        body: `Split your capital across two or more positions at different widths on the SAME pair.
+
+A WIDE ANCHOR — the majority of your capital, deliberately wide. Its job is not to earn impressively. Its job is to always be in range, always earning something, and never need touching. This is the position that means a violent move does not take you to zero income.
+
+A TIGHT INNER — a smaller slice, concentrated near the current price. This is your fee engine. It will go out of range. That is expected and fine, because it is not carrying the whole position.
+
+What you get: when price is calm, the tight inner earns the high rate. When price runs, the inner goes out of range and the wide anchor keeps earning through the move. You are never fully idle, and you are never fully exposed.
+
+Critically, this changes your emotional position too. A single tight position going out of range creates pressure to act NOW. A ladder means going out of range is a normal Tuesday.`
+      },
+      {
+        heading: "The Permanent Anchor",
+        body: `A refinement worth knowing, especially if you are a large share of your own pool's liquidity.
+
+If you pull all your positions at once, the pool can be left with almost no liquidity. The quoted price goes stale, and a single small trade can shove it far from the real market price. When you redeploy you are recentering around a broken price and waiting for arbitrage to drag it back — dead time and avoidable loss.
+
+The fix is a tiny, permanent, ultra-wide position you never close. A few dollars spanning a huge range. It earns almost nothing, and that is not the point. The point is that the pool always has a live, arbitrageable quote, so the price tracks reality even while your real positions are closed.
+
+Restarting then finds a healthy, correctly-priced pool instead of a stale one.
+
+COST NOTE: this technique is cheap on protocols where one position can span a very wide range for a fixed rent. On bin-based protocols where rent scales with the number of bins, a very wide position is expensive — check what a wide range actually costs before committing.`
+      },
+      {
+        heading: "What Laddering Costs You",
+        body: `This is not free, and anyone who tells you otherwise is selling something.
+
+• RENT AND RECLAIMABLE DEPOSITS — every position has its own account cost. Three positions cost roughly three times one.
+• TRANSACTIONS — opening, closing, claiming, rebalancing, each multiplied by the number of positions.
+• ATTENTION — more positions means more state to hold in your head, and more chances to fumble one.
+• DILUTION OF THE HEADLINE — your blended APR will look worse than the tight position alone. People quote their tight position's APR and quietly forget the anchor.
+
+The threshold question is simple: is your position large enough that the extra fee capture outweighs a few extra dollars of fixed cost? On a small position it is not. On a small position, one sensible medium-width position beats a clever ladder every time.
+
+Laddering is a technique for size. Do not run a three-position ladder on $200.`
+      },
+      {
+        heading: "Judging A Ladder Honestly",
+        body: `The trap with multiple positions is selective memory. The tight one had a great week, so that is the number you remember and repeat.
+
+Judge the whole book or you are lying to yourself:
+
+TOTAL fees across every position, minus TOTAL impermanent loss across every position, measured against simply having held the two tokens.
+
+That is the same benchmark from the very first lesson and it never changes. A ladder is only better if the total beats the total. If your blended result is worse than one boring medium position would have been, the ladder is complexity you are paying for and not being paid for.
+
+Complexity has to earn its place. Make it prove it.`
+      }
+    ],
+    quiz: [
+      {
+        q: "What is the job of the WIDE anchor position in a ladder?",
+        options: ["To earn the highest possible APR", "To always be in range so you keep earning something through a big move, without needing to be touched", "To replace the need for a tight position", "To eliminate impermanent loss"],
+        correct: 1,
+        explanation: "The anchor is not there to impress. It is there so that when the tight inner position goes out of range — which it will — your income does not fall to zero."
+      },
+      {
+        q: "Why keep a tiny permanent ultra-wide position open in a pool you dominate?",
+        options: ["It earns the most fees per dollar", "So the pool always has a live arbitrageable quote and the price does not go stale while your real positions are closed", "It prevents impermanent loss on your other positions", "Protocols require at least one open position"],
+        correct: 1,
+        explanation: "If you are most of the liquidity and pull everything, one small trade can shove the quoted price far from the real market. A permanent sliver keeps the price honest so redeploying does not mean recentering around a broken quote."
+      },
+      {
+        q: "You are running a three-position ladder. How should you judge whether it is working?",
+        options: ["By the APR of the tight inner position", "By whether any position is currently in range", "Total fees minus total impermanent loss across ALL positions, compared to simply holding the two tokens", "By how many positions are still open"],
+        correct: 2,
+        explanation: "Quoting only the tight position's APR is the classic self-deception. The benchmark never changes: the whole book, net of IL, against just holding."
+      },
+      {
+        q: "You have $200 to deploy. Is a three-position ladder a good idea?",
+        options: ["Yes, laddering always beats a single position", "No — fixed per-position costs would eat a meaningful share of a position that small; one sensible medium-width position is better", "Yes, but only with curve distribution", "It makes no difference at any size"],
+        correct: 1,
+        explanation: "Laddering is a technique for size. Every position carries its own rent and transaction overhead, and on a small position that fixed cost swamps the extra fee capture."
+      }
+    ],
+    cluckVerdict: "One position forces you to be right about the future. A ladder lets you be approximately right and still get paid. But it is not free and it is not automatic — it costs rent, attention and headline APR, and it only wins if you judge the whole book honestly. Complexity has to earn its keep."
+  }
+
 ];
 
 // ── STRATEGY MATCHER ──
@@ -2205,6 +2404,89 @@ function ILCalculator() {
       </div>
       <p style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#6B7280",margin:0,lineHeight:1.6}}>
         Based on $1,000 deposit ($500 each token). Hold value: ${holdValue.toFixed(2)} vs LP value: ${lpValue.toFixed(2)}
+      </p>
+    </div>
+  );
+}
+
+// ── LP vs HODL CALCULATOR ──
+// The only honest scorecard: not "what APR did I earn", but "did LPing beat just holding the two
+// tokens?" Fees can look spectacular while the position quietly loses to a wallet that did nothing.
+function LPvsHODLCalculator() {
+  const [deposit, setDeposit] = useState(1000);
+  const [priceChange, setPriceChange] = useState(2);
+  const [feeAPR, setFeeAPR] = useState(60);
+  const [days, setDays] = useState(30);
+
+  const r = priceChange;
+  // Deposit goes in 50/50 by VALUE. Holding: half rides the token, half sits in the quote.
+  const hodl = deposit * (1 + r) / 2;
+  // Constant-product LP value scales with sqrt of the price ratio — that gap IS impermanent loss.
+  const lpBare = deposit * Math.sqrt(r);
+  const fees = deposit * (feeAPR / 100) * (days / 365);
+  const net = lpBare + fees;
+  const diff = net - hodl;
+  const ilDollar = hodl - lpBare;
+  const winning = diff >= 0;
+  // How much fee APR would you have needed just to draw level?
+  const breakevenAPR = days > 0 ? ((hodl - lpBare) / deposit) * (365 / days) * 100 : 0;
+
+  const cell = (label, value, color) => (
+    <div key={label} style={{background:"rgba(0,0,0,0.3)",borderRadius:8,padding:"10px 8px",textAlign:"center"}}>
+      <div style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#6B7280",letterSpacing:1,marginBottom:4}}>{label}</div>
+      <div style={{fontFamily:"monospace",fontSize:15,color,fontWeight:700}}>{value}</div>
+    </div>
+  );
+
+  return (
+    <div style={{background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.25)",borderRadius:12,padding:16,marginTop:16,marginBottom:8}}>
+      <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:"#10B981",letterSpacing:2,marginBottom:4}}>🧮 INTERACTIVE — LP vs HODL</div>
+      <p style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:"#9CA3AF",margin:"0 0 14px",lineHeight:1.6}}>Fees are not profit. The only question that matters is whether LPing beat doing nothing.</p>
+
+      {[
+        {label:"DEPOSIT", val:`$${deposit.toLocaleString()}`, min:100, max:100000, step:100, v:deposit, set:setDeposit},
+        {label:"FEE APR", val:`${feeAPR}%`, min:0, max:500, step:5, v:feeAPR, set:setFeeAPR},
+        {label:"DAYS IN POSITION", val:`${days}d`, min:1, max:365, step:1, v:days, set:setDays},
+      ].map(f=>(
+        <div key={f.label} style={{marginBottom:12}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+            <span style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1}}>{f.label}</span>
+            <span style={{fontFamily:"monospace",fontSize:15,color:"#FFB627",fontWeight:700}}>{f.val}</span>
+          </div>
+          <input type="range" min={f.min} max={f.max} step={f.step} value={f.v} onChange={e=>f.set(Number(e.target.value))} style={{width:"100%",accentColor:"#10B981"}}/>
+        </div>
+      ))}
+
+      <div style={{marginBottom:14}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+          <span style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1}}>PRICE CHANGE</span>
+          <span style={{fontFamily:"monospace",fontSize:15,color:"#FFB627",fontWeight:700}}>{priceChange}x{priceChange<1?" ↓":priceChange>1?" ↑":""}</span>
+        </div>
+        {/* Log scale — a fall to 0.1x matters exactly as much as a rise to 10x. */}
+        <input type="range" min="-1" max="1" step="0.02" value={Math.log10(priceChange)}
+          onChange={e=>setPriceChange(Number((10 ** Number(e.target.value)).toFixed(3)))}
+          style={{width:"100%",accentColor:"#10B981"}}/>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
+        {cell("IF YOU JUST HELD", `$${hodl.toFixed(0)}`, "#9CA3AF")}
+        {cell("LP + FEES", `$${net.toFixed(0)}`, winning ? "#10B981" : "#EF4444")}
+        {cell(winning ? "YOU BEAT HOLDING BY" : "HOLDING WON BY", `$${Math.abs(diff).toFixed(0)}`, winning ? "#10B981" : "#EF4444")}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        {cell("FEES EARNED", `$${fees.toFixed(0)}`, "#10B981")}
+        {cell("IMPERMANENT LOSS", `-$${ilDollar.toFixed(0)}`, "#EF4444")}
+      </div>
+
+      <div style={{marginTop:10,background:winning?"rgba(16,185,129,0.1)":"rgba(239,68,68,0.1)",border:`1px solid ${winning?"rgba(16,185,129,0.3)":"rgba(239,68,68,0.3)"}`,borderRadius:8,padding:"8px 12px"}}>
+        <p style={{margin:0,fontFamily:"'Anton',sans-serif",fontSize:13,color:winning?"#10B981":"#EF4444",lineHeight:1.6}}>
+          {winning
+            ? `✅ Fees covered the impermanent loss with $${Math.abs(diff).toFixed(0)} to spare. This position earned its keep.`
+            : `⚠️ You earned $${fees.toFixed(0)} in fees and still finished $${Math.abs(diff).toFixed(0)} behind a wallet that did nothing. You needed about ${breakevenAPR.toFixed(0)}% APR over ${days} days just to break even.`}
+        </p>
+      </div>
+      <p style={{fontFamily:"'Anton',sans-serif",fontSize:12,color:"#6B7280",margin:"10px 0 0",lineHeight:1.6}}>
+        Full-range model, fees estimated on the deposited amount, and it assumes you stayed in range the whole time. A concentrated position that drifts out of range earns nothing while the IL keeps accruing — so treat this as the optimistic case.
       </p>
     </div>
   );
@@ -2789,6 +3071,9 @@ function LPLessonView({ lesson, onBack, onComplete }) {
 
       {/* Interactive: Bin Range Visualizer — Lesson 6 */}
       {lesson.id === 6 && (<CalcErrorBoundary><BinVisualizer /></CalcErrorBoundary>)}
+
+      {/* Interactive: LP vs HODL — Lesson 4 (the honest scorecard) */}
+      {lesson.id === 4 && (<CalcErrorBoundary><LPvsHODLCalculator /></CalcErrorBoundary>)}
 
       {/* Interactive: Capital Efficiency — Lesson 5 */}
       {lesson.id === 5 && (<CalcErrorBoundary><CapitalEfficiencyCalc /></CalcErrorBoundary>)}

@@ -12,7 +12,7 @@ export const COLW = _DESK ? 920 : 540;
 export const READ = _DESK ? 640 : 520;
 // LP lesson count for progress stats without eager-loading the lazy LP Lab chunk.
 // Keep in sync with LP_LESSONS in src/sections/LPLab.jsx.
-export const LP_LESSONS_COUNT = 12;
+export const LP_LESSONS_COUNT = 14;
 
 export function MintAddress({ compact }) {
   const [copied, setCopied] = useState(false);
