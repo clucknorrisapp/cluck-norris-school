@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>🐔 Cluck Holders — Solana Holder Breakdown + Airdrop CSV</title>
+<meta name="description" content="Free Solana holder snapshot. Paste any mint, get every wallet + balance, LP/lock-filtered, ready for airdrops. No wallet connect."/>
+<meta property="og:title" content="🐔 Cluck Snapshot — Free Solana Holder Snapshot"/>
+<meta property="og:description" content="Paste any Solana mint — see true human holders versus LP, locks and program accounts, real supply concentration, and export an airdrop-ready CSV. One tool, filterable."/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+  :root{color-scheme:dark;--bg:#0b0c0e;--bg-grad:#0b0c0e;--card:#14151a;--card2:#101116;--surface:#14151a;--panel:#14151a;--border:rgba(255,255,255,0.09);--border-soft:rgba(255,255,255,0.05);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    
+    color: var(--text);
+    font-family: system-ui, sans-serif;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 24px 16px 80px; }
+
+  .header { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+  .header-icon { font-size: 40px; filter: drop-shadow(0 0 16px rgba(217,119,6,0.5)); }
+  .header .brand-mini { font-family: 'Anton', sans-serif; font-size: 10px; letter-spacing: 4px; color: var(--orange); margin-bottom: 4px; font-weight: 700; }
+  .header h1 { font-family: 'Anton', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: #FCD34D; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
+  .header p { font-family: 'Anton', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
+
+  .hero {
+    background: rgba(217,119,6,0.06);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 16px;
+  }
+  .hero-tag { font-family: 'Anton', sans-serif; font-size: 10px; color: var(--accent); letter-spacing: 3px; margin-bottom: 6px; }
+  .hero-title { font-family: 'Anton', sans-serif; font-size: 16px; font-weight: 700; color: var(--text); letter-spacing: 1px; margin-bottom: 4px; }
+  .hero-sub { font-family: 'Anton', sans-serif; font-size: 12px; color: var(--subtext); line-height: 1.6; letter-spacing: 1px; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+  .card-title { font-family: var(--mono); font-size: 10px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 14px; text-transform: uppercase; }
+
+  /* Education panel — collapsible */
+  .edu { background: rgba(96,165,250,0.04); border: 1px solid rgba(96,165,250,0.18); border-radius: 12px; margin-bottom: 16px; overflow: hidden; }
+  .edu-head { padding: 14px 18px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+  .edu-head .lbl { font-family: 'Anton', sans-serif; font-size: 12px; letter-spacing: 2px; color: var(--blue); font-weight: 700; }
+  .edu-head .toggle { font-family: var(--mono); font-size: 12px; color: var(--blue); }
+  .edu-body { padding: 0 18px 16px; display: none; font-family: system-ui, sans-serif; font-size: 13px; line-height: 1.65; color: #D1D5DB; }
+  .edu.open .edu-body { display: block; }
+  .edu-body h4 { font-family: 'Anton', sans-serif; font-size: 12px; color: var(--accent); letter-spacing: 1.5px; margin: 12px 0 6px; }
+  .edu-body p { margin-bottom: 8px; }
+  .edu-body ul { margin: 6px 0 8px 18px; }
+  .edu-body li { margin-bottom: 5px; }
+  .edu-body strong { color: var(--text); }
+
+  /* Mandatory ack gate */
+  .gate { background: rgba(252,211,77,0.05); border: 1px dashed rgba(252,211,77,0.4); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; }
+  .gate label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; font-family: 'Anton', sans-serif; font-size: 13px; color: var(--text); letter-spacing: 0.8px; line-height: 1.5; }
+  .gate input[type=checkbox] { margin-top: 3px; width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
+
+  .token-input { width: 100%; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-family: var(--mono); font-size: 13px; color: var(--text); }
+  .token-input:focus { outline: none; border-color: var(--accent); }
+
+  .filter-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+  .filter { flex: 1; min-width: 200px; }
+  .filter label { font-family: 'Anton', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 2px; display: block; margin-bottom: 6px; font-weight: 700; }
+  .toggle-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+  .toggle-row input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+  .toggle-row span { font-family: var(--mono); font-size: 12px; color: var(--text); }
+
+  .run-btn { width: 100%; margin-top: 14px; padding: 14px; background: var(--orange); border: none; border-radius: 10px; font-family: 'Anton', sans-serif; font-size: 14px; font-weight: 900; color: #fff; letter-spacing: 3px; cursor: pointer; transition: opacity 0.15s; }
+  .run-btn:hover { opacity: 0.92; }
+  .run-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .err { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #FCA5A5; margin-bottom: 12px; display: none; }
+  .err.show { display: block; }
+
+  .loading {
+    display: none;
+    text-align: center;
+    padding: 40px 20px 36px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 16px;
+  }
+  .loading.show { display: block; }
+  .loading-spinner { font-size: 44px; animation: bobble 1.4s ease-in-out infinite; margin-bottom: 14px; display: inline-block; }
+  .loading-title { font-family: 'Anton', sans-serif; font-size: 14px; color: var(--accent); letter-spacing: 3px; margin-bottom: 16px; font-weight: 700; }
+  .loading-stage { font-family: var(--mono); font-size: 13px; color: var(--text); margin-bottom: 18px; min-height: 20px; transition: opacity 0.3s; }
+  @keyframes bobble { 0%,100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-6px) rotate(3deg); } }
+
+  .result { display: none; }
+  .result.show { display: block; }
+
+  /* Stats grid */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .stat-cell {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .stat-cell .lbl { font-family: 'Anton', sans-serif; font-size: 9px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 6px; font-weight: 700; }
+  .stat-cell .val { font-family: var(--mono); font-size: 18px; color: var(--text); font-weight: 700; line-height: 1.2; word-break: break-all; }
+  .stat-cell .sub { font-family: var(--mono); font-size: 10px; color: var(--subtext); margin-top: 4px; }
+  .stat-cell.green .val { color: var(--green); }
+  .stat-cell.amber .val { color: var(--amber); }
+  .stat-cell.blue .val { color: var(--blue); }
+  .stat-cell.accent .val { color: var(--accent); }
+
+  /* Distribution row */
+  .dist-row { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .dist-pill {
+    flex: 1; min-width: 120px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    text-align: center;
+  }
+  .dist-pill .lbl { font-family: 'Anton', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 4px; }
+  .dist-pill .val { font-family: var(--mono); font-size: 16px; color: var(--text); font-weight: 700; }
+
+  /* Excluded holders panel */
+  .excluded { background: rgba(245,158,11,0.04); border: 1px solid rgba(245,158,11,0.2); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
+  .excluded-head { font-family: 'Anton', sans-serif; font-size: 11px; color: var(--amber); letter-spacing: 2px; margin-bottom: 6px; font-weight: 700; }
+  .excluded-breakdown { font-family: var(--mono); font-size: 11px; color: var(--subtext); margin-bottom: 10px; }
+  .excluded-row { display: flex; justify-content: space-between; gap: 10px; padding: 9px 0; border-top: 1px solid rgba(245,158,11,0.12); }
+  .excluded-row:first-of-type { border-top: none; }
+  .excluded-row .left { min-width: 0; }
+  .cat-badge { display: inline-flex; align-items: center; gap: 5px; font-family: 'Anton', sans-serif; font-size: 10px;
+    letter-spacing: 1px; font-weight: 700; padding: 2px 8px; border-radius: 5px; margin-bottom: 5px; }
+  .cat-lp { background: rgba(96,165,250,0.12); border: 1px solid rgba(96,165,250,0.35); color: var(--blue); }
+  .cat-locker { background: rgba(167,139,250,0.12); border: 1px solid rgba(167,139,250,0.35); color: var(--purple); }
+  .cat-contract { background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.35); color: var(--amber); }
+  .excluded-row .wallet { display: block; color: #D1D5DB; word-break: break-all; font-family: var(--mono); font-size: 11px; }
+  .excluded-row .amt { color: var(--amber); white-space: nowrap; flex-shrink: 0; font-family: var(--mono); font-size: 11px; text-align: right; }
+
+  /* Holders table */
+  .holders-table {
+    width: 100%;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    border-collapse: collapse;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .holders-table th { text-align: left; padding: 10px 12px; background: rgba(255,255,255,0.04); font-family: 'Anton', sans-serif; font-size: 10px; letter-spacing: 2px; color: var(--subtext); font-weight: 700; }
+  .holders-table td { padding: 8px 12px; border-top: 1px solid var(--border); color: #D1D5DB; }
+  .holders-table td:last-child { text-align: right; color: var(--text); white-space: nowrap; }
+  .holders-table .more { text-align: center; color: var(--subtext); font-style: italic; padding: 12px; }
+
+  /* Action buttons */
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .action-btn {
+    flex: 1; min-width: 160px;
+    padding: 12px 16px;
+    background: rgba(252,211,77,0.08);
+    border: 1px solid rgba(252,211,77,0.35);
+    border-radius: 8px;
+    font-family: 'Anton', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 2px;
+    cursor: pointer;
+    text-align: center;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.15s;
+  }
+  .action-btn:hover { opacity: 0.85; }
+  .action-btn.primary { background: var(--orange); border: none; color: #fff; }
+  .action-btn.secondary { background: rgba(96,165,250,0.08); border: 1px solid rgba(96,165,250,0.35); color: var(--blue); }
+
+  .meta-line { font-family: var(--mono); font-size: 11px; color: var(--subtext); margin-top: 12px; text-align: center; }
+  .truncated-banner { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 10px 14px; font-family: var(--mono); font-size: 12px; color: #FCA5A5; margin-bottom: 14px; }
+
+  .footer-link { display: block; text-align: center; margin-top: 24px; font-family: 'Anton', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 2px; text-decoration: none; }
+  .footer-link:hover { color: var(--accent); }
+
+  /* Desktop — wider container so the page fills a larger screen */
+  @media (min-width: 1040px) {
+    .wrap { max-width: 1040px; }
+  }
+
+html{background:var(--bg-grad);background-attachment:fixed;}
+body{background:transparent;font-family:var(--body);}
+  .view-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+  .view-chip{padding:7px 13px;border-radius:999px;border:1px solid rgba(255,122,24,0.28);background:rgba(255,122,24,0.06);
+    color:#C9A892;font-family:'Courier New',monospace;font-size:11.5px;letter-spacing:.5px;cursor:pointer;white-space:nowrap}
+  .view-chip:hover{border-color:rgba(255,122,24,0.55)}
+  .view-chip.on{background:rgba(255,122,24,0.22);border-color:#FF7A18;color:#FFEFE0;font-weight:700}
+  .view-chip .n{opacity:.65;margin-left:5px}
+  .view-note{margin-top:9px;font-family:'Courier New',monospace;font-size:11.5px;line-height:1.6;color:#9CA3AF}
+  .view-note.warn{color:#FCD34D}
+  .cat-cell{font-family:'Courier New',monospace;font-size:10.5px;color:#9CA3AF}
+</style>
+  <meta name="theme-color" content="#0b0c10">
+  <meta property="og:title" content="Holder Snapshot — cap-table X-ray">
+  <meta property="og:description" content="Any token's holder breakdown in seconds: whales, team wallets, LP, real distribution.">
+  <meta property="og:image" content="https://clucknorris.app/cluck-norris.png">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://clucknorris.app/cluck-norris.png">
+  <meta name="description" content="Any token's holder breakdown in seconds: whales, team wallets, LP, real distribution.">
+</head>
+<body>
+<div class="wrap">
+  <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:Anton,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#D97706;text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid #D97706;"/>&larr; CLUCK NORRIS HOME</a>
+
+  <div class="header">
+    <div class="header-icon">👥</div>
+    <div>
+      <div class="brand-mini">CLUCK NORRIS</div>
+      <h1>HOLDERS</h1>
+      <p>HOLDERS · BREAKDOWN · CSV — FREE</p>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div class="hero-tag">FREE TOOL · NO WALLET CONNECT</div>
+    <div class="hero-title">See who really holds any Solana token</div>
+    <div class="hero-sub">True holders vs LP, locks &amp; programs · real concentration · every wallet and balance · CSV ready for the airdropper</div>
+  </div>
+
+  <!-- Education panel — what a holder read is + common mistakes -->
+  <div class="edu" id="edu">
+    <div class="edu-head" onclick="toggleEdu()">
+      <div class="lbl">📘 WHAT THIS SHOWS YOU · COMMON MISTAKES</div>
+      <div class="toggle" id="eduToggle">expand</div>
+    </div>
+    <div class="edu-body">
+      <h4>WHAT THIS TOOL ACTUALLY READS</h4>
+      <p>A snapshot is a record of every wallet holding a token at one specific moment in time, along with how much each one holds. People use snapshots for <strong>airdrops</strong> (reward existing holders), <strong>eligibility checks</strong> (gate access by holdings), and <strong>governance counts</strong> (vote weighting).</p>
+      <p>The deliverable everyone expects is a CSV with two columns: <code>wallet,balance</code>. That's the file the airdropper eats.</p>
+
+      <h4>COMMON MISTAKES THAT BURN PEOPLE</h4>
+      <ul>
+        <li><strong>Including LP pools.</strong> Your AMM pool address holds a huge chunk of supply. Airdrop to it and the tokens vanish into liquidity — you just paid the pool, not your community. <em>Cluck filters these by default.</em></li>
+        <li><strong>Including locked vesting / Streamflow contracts.</strong> Same problem — tokens go to a contract that won't redistribute them. <em>Cluck filters these by default.</em></li>
+        <li><strong>Including exchange hot wallets.</strong> If a CEX holds tokens for users, the CEX won't credit your airdrop to those users. The exchange just keeps it. Filter them or skip CEX-classified addresses.</li>
+        <li><strong>Snapshotting too late.</strong> If your snapshot moment is announced, snipers buy in to qualify. Take snapshots at unannounced or surprise times.</li>
+        <li><strong>Including dust holders.</strong> Wallets holding less than transaction-fee value cost you SOL rent for nothing. Set a min-balance filter.</li>
+        <li><strong>Forgetting deduplication.</strong> One wallet can have multiple ATAs (associated token accounts) for the same mint. Snapshot tools that don't deduplicate by owner end up double-counting. <em>Cluck deduplicates.</em></li>
+        <li><strong>Not double-checking the mint.</strong> Always paste the canonical mint, not a wrapped or re-deployed copy.</li>
+      </ul>
+
+      <h4>WHAT YOU GET FROM THIS TOOL</h4>
+      <ul>
+        <li><strong>Filtered list</strong> ready for airdrops (LP, locks, programs removed).</li>
+        <li><strong>Stats panel</strong> showing distribution, dust counts, what was excluded and why.</li>
+        <li><strong>CSV download</strong> — the deliverable.</li>
+        <li><strong>Excluded holders shown separately</strong> so you can see exactly who got filtered out and add them back manually if needed.</li>
+      </ul>
+
+      <h4>WHAT'S NEXT</h4>
+      <p>Phase 2 will add <strong>historical snapshots</strong> — pick a past block/slot and we'll reconstruct who held what at that moment. Useful for retroactive airdrops to early holders. Coming soon.</p>
+    </div>
+  </div>
+
+  <!-- Mandatory acknowledgment -->
+  <div class="gate">
+    <label>
+      <input type="checkbox" id="ack"/>
+      <span>I understand that LP pools, locks and program accounts are separated out of the airdrop-safe list by default, and that I'm responsible for verifying the mint address before sending any airdrop based on this list.</span>
+    </label>
+  </div>
+
+  <!-- Mint input + filters -->
+  <div class="card">
+    <div class="card-title">MINT ADDRESS</div>
+    <input type="text" class="token-input" id="mintInput" placeholder="Paste any Solana token mint…" autocomplete="off"/>
+
+    <div class="filter-row">
+      <div class="filter">
+        <label>FILTER VERIFIED TEAM WALLETS</label>
+        <div class="toggle-row" onclick="toggleTeamExclude(event)">
+          <input type="checkbox" id="excludeBagsTeam" checked/>
+          <span>Exclude Bags-verified creator wallets <em style="color:var(--subtext)">(team shouldn't airdrop to itself)</em></span>
+        </div>
+      </div>
+      <div class="filter">
+        <label>MIN BALANCE (TOKENS)</label>
+        <input type="number" class="token-input" id="minBalance" placeholder="0" min="0" step="any"/>
+      </div>
+    </div>
+
+    <button class="run-btn" id="runBtn" onclick="runSnapshot()" disabled>👥 ANALYZE HOLDERS</button>
+  </div>
+
+  <div class="err" id="err"></div>
+
+  <div class="loading" id="loading">
+    <div class="loading-spinner">🐔</div>
+    <div class="loading-title">READING HOLDERS</div>
+    <div class="loading-stage" id="loadingStage">Calling the flock to attention…</div>
+  </div>
+
+  <div id="marketHeader"></div>
+
+  <div class="result" id="result">
+    <div class="card" id="truncatedCard" style="display:none">
+      <div class="truncated-banner" id="truncatedMsg"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">WHO ACTUALLY HOLDS THIS TOKEN</div>
+      <div class="stats-grid" id="breakdownGrid"></div>
+
+      <div class="card-title" style="margin-top:18px">SHOW</div>
+      <div class="view-chips" id="viewChips"></div>
+      <div class="view-note" id="viewNote"></div>
+
+      <div class="card-title" style="margin-top:18px">SELECTED SET</div>
+      <div class="stats-grid" id="statsGrid"></div>
+
+      <div class="card-title" style="margin-top: 18px">SUPPLY CONCENTRATION — TRUE HOLDERS ONLY (% OF TOTAL)</div>
+      <div class="dist-row" id="distRow"></div>
+
+      <div id="excludedPanel"></div>
+
+      <div class="actions">
+        <button class="action-btn primary" id="downloadCsvBtn" onclick="downloadCsv()">⬇ DOWNLOAD CSV</button>
+        <a class="action-btn secondary" id="airdropLinkBtn" href="/airdrop" onclick="sendToAirdrop(event)">→ AIRDROP TO THESE HOLDERS</a>
+        <button class="action-btn" onclick="copyAllAddresses()">⧉ COPY ADDRESSES</button>
+        <button class="action-btn" onclick="downloadJson()">⬇ FULL JSON</button>
+      </div>
+      <div class="meta-line" id="metaLine"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" id="tableTitle">TOP HOLDERS PREVIEW</div>
+      <table class="holders-table" id="holdersTable"></table>
+    </div>
+  </div>
+
+  <a class="footer-link" href="/">← BACK TO CLUCKNORRIS.APP</a>
+</div>
+
+<script src="/market-header.js"></script>
+<script>
+let lastSnapshot = null;
+
+// Display metadata for the excluded-holder categories the server assigns
+const CATEGORY_META = {
+  lp:       { icon: '💧', label: 'LIQUIDITY POOL',     cls: 'cat-lp' },
+  locker:   { icon: '🔒', label: 'TOKEN LOCKER',       cls: 'cat-locker' },
+  contract: { icon: '⚙️', label: 'PROGRAM / CONTRACT', cls: 'cat-contract' },
+};
+
+const ack = document.getElementById('ack');
+const runBtn = document.getElementById('runBtn');
+const mintInput = document.getElementById('mintInput');
+ack.addEventListener('change', updateRunBtn);
+mintInput.addEventListener('input', updateRunBtn);
+function updateRunBtn() {
+  runBtn.disabled = !(ack.checked && mintInput.value.trim().length >= 32);
+}
+function toggleEdu() {
+  const e = document.getElementById('edu');
+  e.classList.toggle('open');
+  document.getElementById('eduToggle').textContent = e.classList.contains('open') ? 'collapse' : 'expand';
+}
+function toggleTeamExclude(e) {
+  if (e.target.tagName === 'INPUT') return;
+  const cb = document.getElementById('excludeBagsTeam');
+  cb.checked = !cb.checked;
+}
+
+// Pre-fill mint from ?mint= URL param if present
+const urlParams = new URLSearchParams(location.search);
+const presetMint = urlParams.get('mint');
+if (presetMint) {
+  mintInput.value = presetMint.trim();
+  updateRunBtn();
+}
+
+function showErr(msg) {
+  const el = document.getElementById('err');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+function hideErr() {
+  document.getElementById('err').classList.remove('show');
+}
+
+const STAGES = [
+  "Pulling holder list from Helius…",
+  "Deduplicating wallets across token accounts…",
+  "Classifying top owners (human vs. LP/lock/program)…",
+  "Filtering and computing distribution stats…",
+  "Plating the snapshot…",
+];
+let stageIdx = 0;
+let stageInterval = null;
+function startLoading() {
+  stageIdx = 0;
+  document.getElementById('loadingStage').textContent = STAGES[0];
+  document.getElementById('loading').classList.add('show');
+  document.getElementById('result').classList.remove('show');
+  stageInterval = setInterval(() => {
+    stageIdx = (stageIdx + 1) % STAGES.length;
+    document.getElementById('loadingStage').textContent = STAGES[stageIdx];
+  }, 1800);
+}
+function stopLoading() {
+  document.getElementById('loading').classList.remove('show');
+  if (stageInterval) clearInterval(stageInterval);
+}
+
+function fmtNum(n, decimals) {
+  if (n == null || isNaN(n)) return "—";
+  if (n === 0) return "0";
+  if (Math.abs(n) >= 1e9) return (n/1e9).toFixed(2) + "B";
+  if (Math.abs(n) >= 1e6) return (n/1e6).toFixed(2) + "M";
+  if (Math.abs(n) >= 1e3) return (n/1e3).toFixed(2) + "K";
+  if (Math.abs(n) >= 1) return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  return n.toLocaleString(undefined, { maximumFractionDigits: Math.min(decimals || 6, 8) });
+}
+function fmtPct(n) {
+  if (n == null || isNaN(n)) return "—";
+  return (n * 100).toFixed(2) + "%";
+}
+function shortAddr(a) {
+  if (!a) return "—";
+  return a.slice(0, 6) + "…" + a.slice(-4);
+}
+// Escape attacker-set strings (Bags creator handles) before innerHTML.
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// ── ONE TOOL, TWO JOBS ────────────────────────────────────────────────────────
+// This page replaces the old /snapshot and /holders, which ran on the SAME
+// /api/snapshot engine and differed only in what they chose to show. Merged
+// 2026-07-29 (owner: consolidate, cut the clutter).
+//
+// The key change: we always request excludeNonHuman=0 so the server returns EVERY
+// holder already classified (human / lp / locker / contract), then switch views
+// client-side. One network call, instant filtering, and — importantly — the
+// concentration figures are always computed over TRUE HOLDERS. Raw top-10 that
+// includes pool vaults and lock escrows is the classic "false whale" reading;
+// our own Autopsy engine corrects for it, so this tool does too.
+let allHolders = [];       // every holder, each tagged .type and .category
+let currentView = 'human';
+
+const VIEWS = {
+  human:   { label: '👤 TRUE HOLDERS', note: 'Real wallets only — LP pools, lock escrows and program accounts removed. This is the airdrop-safe set.', match: h => h.type === 'human' },
+  lp:      { label: '💧 LIQUIDITY POOLS', note: 'Token sitting in AMM pools. Not a holder — it is the market.', match: h => h.category === 'lp' },
+  locker:  { label: '🔒 LOCKS & VESTING', note: 'Locked or vesting escrows. Removed from circulation, not owned by a trader.', match: h => h.category === 'locker' },
+  contract:{ label: '⚙️ PROGRAM ACCOUNTS', note: 'Other on-chain programs holding this token.', match: h => h.category === 'contract' },
+  all:     { label: '🌐 EVERYTHING', note: 'Every address holding the token, human or not.', match: () => true },
+};
+
+function viewRows(v) { return allHolders.filter(VIEWS[v].match); }
+
+async function runSnapshot() {
+  hideErr();
+  runBtn.disabled = true;
+  startLoading();
+
+  const mint = mintInput.value.trim();
+  if (window.renderMarketHeader) renderMarketHeader(mint, 'marketHeader');
+  const excludeBagsTeam = document.getElementById('excludeBagsTeam').checked ? "1" : "0";
+  const minBalance = document.getElementById('minBalance').value || "0";
+
+  try {
+    // excludeNonHuman=0 ALWAYS — we need the classified full set to filter locally.
+    const url = `/api/snapshot?mint=${encodeURIComponent(mint)}&excludeNonHuman=0&excludeBagsTeam=${excludeBagsTeam}&minBalance=${encodeURIComponent(minBalance)}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    stopLoading();
+    runBtn.disabled = false;
+    updateRunBtn();
+    if (!data.success) { showErr(data.error || "Analysis failed"); return; }
+    lastSnapshot = data;
+    allHolders = (data.holders || []).map(h => ({
+      ...h,
+      // The server only labels non-human addresses; anything on-curve is a person.
+      category: h.type === 'human' ? 'human' : (h.category || 'contract'),
+      label: h.type === 'human' ? '' : (h.label || 'Program account'),
+    }));
+    currentView = 'human';
+    renderResult(data);
+  } catch (e) {
+    stopLoading();
+    runBtn.disabled = false;
+    updateRunBtn();
+    showErr("Network error: " + e.message);
+  }
+}
+
+function paintDistRow() {
+  const x = window.__snapDist; const el = document.getElementById('distRow'); if (!x || !el) return;
+  const px = window.__tokenPriceUsd || 0;
+  const usd = (share) => { if (!(px > 0)) return ''; const v = share / 100 * x.uiSupply * px; const f = v >= 1e6 ? '$' + (v/1e6).toFixed(1) + 'M' : v >= 1e3 ? '$' + (v/1e3).toFixed(0) + 'K' : '$' + v.toFixed(0); return `<div class="sub" style="font-size:10px;color:#6EE7B7;margin-top:2px">≈ ${f}</div>`; };
+  const dist = [{ lbl: "TOP 10", v: x.top10 }, { lbl: "TOP 50", v: x.top50 }, { lbl: "TOP 100", v: x.top100 }];
+  el.innerHTML = dist.map(p => `<div class="dist-pill"><div class="lbl">${p.lbl}</div><div class="val">${fmtPct(p.v)}</div>${usd(p.v)}</div>`).join('');
+}
+document.addEventListener('tokenprice', paintDistRow);
+
+function setView(v) { currentView = v; renderResult(lastSnapshot); }
+
+function renderResult(d) {
+  if (!d) return;
+  const s = d.stats;
+  const dec = d.decimals;
+  const supply = Number(d.totalSupply) || 0;
+  const pctOf = (n) => supply ? n / supply : null;
+
+  if (d.truncated) {
+    document.getElementById('truncatedCard').style.display = 'block';
+    document.getElementById('truncatedMsg').textContent =
+      `⚠ Truncated at ${d.pagesFetched * 1000} positions. This token has more holders than Phase 1 supports — what you see is the largest 50,000 token-account positions deduplicated by owner.`;
+  } else {
+    document.getElementById('truncatedCard').style.display = 'none';
+  }
+
+  // ── Breakdown: the question "who actually holds this?" ──────────────────────
+  const humans = viewRows('human'), lps = viewRows('lp'), locks = viewRows('locker'), progs = viewRows('contract');
+  const sum = (rows) => rows.reduce((t, h) => t + h.balance, 0);
+  const humanHeld = sum(humans);
+  const breakdown = [
+    { lbl: "TOKEN ACCOUNTS", val: fmtNum(s.tokenAccountCount), sub: "raw positions on-chain", cls: "" },
+    { lbl: "UNIQUE ADDRESSES", val: fmtNum(allHolders.length), sub: "deduplicated by owner", cls: "blue" },
+    { lbl: "TRUE HOLDERS", val: fmtNum(humans.length), sub: "real wallets", cls: "green" },
+    { lbl: "LP + LOCKS", val: fmtNum(lps.length + locks.length), sub: `${lps.length} pools · ${locks.length} locks`, cls: "amber" },
+    { lbl: "% HELD BY HUMANS", val: fmtPct(pctOf(humanHeld)), sub: "of total supply", cls: "accent" },
+    { lbl: "TOTAL SUPPLY", val: fmtNum(supply, dec), sub: `${dec} decimals`, cls: "" },
+  ];
+  document.getElementById('breakdownGrid').innerHTML = breakdown.map(c =>
+    `<div class="stat-cell ${c.cls}"><div class="lbl">${c.lbl}</div><div class="val">${c.val}</div><div class="sub">${c.sub}</div></div>`).join('');
+
+  // ── View chips ─────────────────────────────────────────────────────────────
+  document.getElementById('viewChips').innerHTML = Object.keys(VIEWS).map(k => {
+    const n = viewRows(k).length;
+    return `<div class="view-chip ${k === currentView ? 'on' : ''}" onclick="setView('${k}')">${VIEWS[k].label}<span class="n">${n.toLocaleString()}</span></div>`;
+  }).join('');
+  const note = document.getElementById('viewNote');
+  note.textContent = VIEWS[currentView].note + (currentView !== 'human'
+    ? '  ⚠ This is NOT an airdrop list — exporting it sends tokens to contracts, not people.' : '');
+  note.className = 'view-note' + (currentView !== 'human' ? ' warn' : '');
+
+  // ── Selected-set stats ─────────────────────────────────────────────────────
+  const rows = viewRows(currentView);
+  const bal = rows.map(h => h.balance).sort((a, b) => a - b);
+  const held = sum(rows);
+  const median = bal.length ? (bal.length % 2 ? bal[(bal.length - 1) / 2] : (bal[bal.length / 2 - 1] + bal[bal.length / 2]) / 2) : 0;
+  const dustThreshold = supply * 0.0000001;
+  const stats = [
+    { lbl: "IN THIS VIEW", val: fmtNum(rows.length), sub: VIEWS[currentView].label.replace(/^\S+\s/, '').toLowerCase(), cls: "accent" },
+    { lbl: "TOTAL HELD", val: fmtNum(held, dec), sub: fmtPct(pctOf(held)) + " of supply", cls: "green" },
+    { lbl: "MEDIAN BALANCE", val: fmtNum(median, dec), sub: "tokens", cls: "blue" },
+    { lbl: "MEAN BALANCE", val: fmtNum(rows.length ? held / rows.length : 0, dec), sub: "tokens", cls: "blue" },
+    { lbl: "DUST WALLETS", val: fmtNum(rows.filter(h => h.balance < dustThreshold).length), sub: `< ${fmtNum(dustThreshold, dec)} tokens`, cls: "" },
+    { lbl: "LARGEST", val: fmtNum(rows.length ? Math.max(...rows.map(h => h.balance)) : 0, dec), sub: "single position", cls: "" },
+  ];
+  document.getElementById('statsGrid').innerHTML = stats.map(c =>
+    `<div class="stat-cell ${c.cls}"><div class="lbl">${c.lbl}</div><div class="val">${c.val}</div><div class="sub">${c.sub}</div></div>`).join('');
+
+  // ── Concentration — ALWAYS over true holders ───────────────────────────────
+  // Measuring the raw top 10 (pools and lock escrows included) manufactures
+  // "whales" that are really the market and the vault. This is the honest read.
+  const topN = (n) => humans.slice(0, n).reduce((t, h) => t + h.balance, 0);
+  window.__snapDist = { top10: pctOf(topN(10)), top50: pctOf(topN(50)), top100: pctOf(topN(100)), uiSupply: supply / Math.pow(10, dec || 0) };
+  paintDistRow();
+
+  // ── Non-human panel ────────────────────────────────────────────────────────
+  const excPanel = document.getElementById('excludedPanel');
+  const nonHuman = allHolders.filter(h => h.type !== 'human');
+  if (nonHuman.length) {
+    const bdParts = [];
+    if (lps.length)   bdParts.push(`💧 ${lps.length} liquidity pool${lps.length > 1 ? 's' : ''}`);
+    if (locks.length) bdParts.push(`🔒 ${locks.length} token lock${locks.length > 1 ? 's' : ''}`);
+    if (progs.length) bdParts.push(`⚙️ ${progs.length} other contract${progs.length > 1 ? 's' : ''}`);
+    const top = nonHuman.slice(0, 10);
+    excPanel.innerHTML =
+      `<div class="excluded">
+        <div class="excluded-head">NOT REAL HOLDERS — ${nonHuman.length} addresses, ${fmtPct(pctOf(sum(nonHuman)))} of supply</div>
+        ${bdParts.length ? `<div class="excluded-breakdown">${bdParts.join('  ·  ')}</div>` : ''}
+        ${top.map(h => {
+          const m = CATEGORY_META[h.category] || CATEGORY_META.contract;
+          return `<div class="excluded-row">
+            <span class="left">
+              <span class="cat-badge ${m.cls}">${m.icon} ${esc(h.label || m.label)}</span>
+              <span class="wallet">${esc(h.wallet)}</span>
+            </span>
+            <span class="amt">${fmtNum(h.balance, dec)}<br/>${fmtPct(pctOf(h.balance))}</span>
+          </div>`;
+        }).join('')}
+      </div>`;
+  } else { excPanel.innerHTML = ''; }
+
+  // ── Bags team panel (unchanged behaviour) ──────────────────────────────────
+  const bagsPanel = document.getElementById('bagsTeamPanel') || (() => {
+    const el = document.createElement('div'); el.id = 'bagsTeamPanel';
+    excPanel.parentNode.insertBefore(el, excPanel.nextSibling); return el;
+  })();
+  if (d.bagsTeam && Array.isArray(d.bagsTeam.excludedFromSnapshot) && d.bagsTeam.excludedFromSnapshot.length) {
+    const crNames = (d.bagsTeam.creators || []).map(c => c.username ? '@' + esc(c.username) : (c.wallet ? c.wallet.slice(0,8) + '…' : '')).filter(Boolean).join(', ');
+    bagsPanel.innerHTML =
+      `<div class="excluded" style="background:rgba(217,119,6,0.06);border-color:rgba(217,119,6,0.3);">
+        <div class="excluded-head" style="color:#FCD34D;">💸 EXCLUDED — BAGS-VERIFIED TEAM WALLETS${crNames ? ` (${crNames})` : ''}</div>
+        <div class="excluded-breakdown">Filtered out — a team shouldn't airdrop to itself. Uncheck the team filter to include them.</div>
+        ${d.bagsTeam.excludedFromSnapshot.map(h =>
+          `<div class="excluded-row">
+            <span class="left">
+              <span class="cat-badge" style="background:rgba(217,119,6,0.15);color:#FCD34D;">💸 BAGS CREATOR</span>
+              <span class="wallet"><a href="https://solscan.io/account/${esc(h.wallet)}" target="_blank" rel="noreferrer" style="color:var(--blue);text-decoration:underline;">${esc(h.wallet)}</a></span>
+            </span>
+            <span class="amt">${fmtNum(h.balance, dec)}<br/>${fmtPct(h.pct)}</span>
+          </div>`).join('')}
+      </div>`;
+  } else { bagsPanel.innerHTML = ''; }
+
+  // ── Table ──────────────────────────────────────────────────────────────────
+  const showCat = currentView === 'all';
+  document.getElementById('tableTitle').textContent = VIEWS[currentView].label.replace(/^\S+\s/, '') + ' — TOP 25';
+  document.getElementById('holdersTable').innerHTML =
+    `<thead><tr><th>RANK</th><th>WALLET</th>${showCat ? '<th>TYPE</th>' : ''}<th>BALANCE</th></tr></thead>` +
+    `<tbody>${rows.slice(0, 25).map((h, i) =>
+      `<tr><td>#${i + 1}</td><td>${shortAddr(h.wallet)}</td>` +
+      (showCat ? `<td class="cat-cell">${esc(h.category === 'human' ? '👤 wallet' : (h.label || h.category))}</td>` : '') +
+      `<td>${fmtNum(h.balance, dec)}</td></tr>`).join('')}` +
+    (rows.length > 25 ? `<tr><td colspan="${showCat ? 4 : 3}" class="more">… and ${(rows.length - 25).toLocaleString()} more in the CSV</td></tr>` : '') +
+    `</tbody>`;
+
+  document.getElementById('metaLine').textContent =
+    `Read ${new Date(d.generatedAt).toLocaleString()} · ${rows.length.toLocaleString()} rows in the current view`;
+
+  document.getElementById('result').classList.add('show');
+}
+
+// Exports always follow the CURRENT view, so what you see is what you get.
+function currentRows() { return viewRows(currentView); }
+
+function downloadCsv() {
+  const rows = currentRows(); if (!rows.length) return;
+  const lines = ["wallet,balance"].concat(rows.map(h => `${h.wallet},${h.balance}`));
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `holders_${currentView}_${lastSnapshot.mint.slice(0,8)}_${Date.now()}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function copyAllAddresses() {
+  const rows = currentRows(); if (!rows.length) return;
+  const txt = rows.map(h => h.wallet).join("\n");
+  navigator.clipboard.writeText(txt).then(() => {
+    const note = document.getElementById('viewNote');
+    const prev = note.textContent;
+    note.textContent = `✓ Copied ${rows.length.toLocaleString()} addresses.`;
+    setTimeout(() => { note.textContent = prev; }, 1800);
+  }).catch(() => {});
+}
+
+// Hand the list to the airdropper. Guarded: sending to pools or lock escrows
+// burns real tokens into contracts that will never distribute them.
+function sendToAirdrop(ev) {
+  const rows = currentRows();
+  if (!rows.length) { if (ev) ev.preventDefault(); return; }
+  if (currentView !== 'human') {
+    const ok = confirm(
+      `You are about to airdrop to ${rows.length.toLocaleString()} ${VIEWS[currentView].label.replace(/^\S+\s/, '').toLowerCase()}.\n\n` +
+      `These are contracts, not people — pools, locks and programs cannot claim or trade what you send them.\n\nContinue anyway?`);
+    if (!ok) { if (ev) ev.preventDefault(); return; }
+  }
+  try {
+    cluckHandOff({
+      mint: lastSnapshot.mint,
+      source: "Cluck Holders",
+      tokenName: lastSnapshot.name || lastSnapshot.symbol || "your token",
+      wallets: rows.map(h => h.wallet).filter(Boolean).join("\n"),
+      mode: "equal",
+    }, "snapshot");
+  } catch (e) {}
+}
+
+function downloadJson() {
+  if (!lastSnapshot) return;
+  const blob = new Blob([JSON.stringify(lastSnapshot, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `holders_${lastSnapshot.mint.slice(0,8)}_${Date.now()}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+</script>
+<script defer src="/cluck-nav.js"></script>
+<script src="/airdrop-handoff.js"></script>
+</body>
+</html>
