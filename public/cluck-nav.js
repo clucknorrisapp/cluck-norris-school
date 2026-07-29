@@ -21,7 +21,7 @@
   }
   var p = (location.pathname || "").replace(/\/+$/, "");
   // pages that belong to the Tools hub — get an "All Tools" back-link
-  var TOOL_PAGES = ["/wallet-xray","/autopsy","/order-book","/trace","/snapshot","/holders",
+  var TOOL_PAGES = ["/wallet-xray","/trace","/holders",
     "/wallet-checkup","/security-coop","/hatchery","/airdrop",
     "/buyspecial","/locker-room","/rose","/liquidity","/liquidity-engine","/premium","/pool-monitor"];
   // Pages with their OWN header/nav — don't inject the floating bar there (the i18n

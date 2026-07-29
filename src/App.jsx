@@ -1780,7 +1780,6 @@ function StartHere({ onGo }){
       </>)},
     { key:"research", icon:"🔬", title:"Token research & CLKN tools", tag:"Vet anything on-chain", body:()=>(<>
         <p style={txt}>Free tools to check a token before you trust it. The chain shows <em>what</em>, never <em>why</em> — always DYOR.</p>
-        <Act label="🪦 Token Autopsy" onClick={goIn("/autopsy")}/>
         <Act label="🔍 Trace" onClick={goIn("/trace")}/>
         <Act label="🔒 Wallet Checkup" onClick={goIn("/security-coop")}/>
         <Act label="🎒 Bags feed" onClick={goIn("/bags")}/>
