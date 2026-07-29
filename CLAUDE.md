@@ -16,7 +16,7 @@ School of Crypto Hard Knocks — a free Solana crypto school + free token-resear
 wrapped around premium operator tools paid for in CLKN micropayments (no wallet-connect
 to pay). Live at **clucknorris.app**. This repo (`clucknorrisapp/cluck-norris-school`) is
 the **canonical source** and the **hackathon + Solana Foundation grant** entry — so
-accuracy in the public docs (`README.md`, `public/investors.html`, `public/grant.html`)
+accuracy in the public docs (`README.md`, `public/investors.html`)
 matters, and claims should match the code.
 
 > 🎯 **STRATEGY (owner's calls, 2026-07-19 — supersede the brand audit's Autopsy-wedge recommendation):**
@@ -295,9 +295,26 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 - `hatchery.js` (guided token creator), `securitycoop.js` (approval revoker), and
   `whirlpool-mm.js` (Liquidity Engine — Orca Whirlpools market maker + autonomous vault) —
   Express routers mounted by `server.js`.
-- `public/*.html` — standalone vanilla-HTML tool pages: autopsy, wallet-xray, trace, snapshot,
-  holders, airdrop, buyspecial, rose, hatchery, security-coop, wallet-checkup, liquidity, premium,
-  slots, bags, tools, investors, grant, stats, transcript, pool-monitor.
+- `public/*.html` — standalone vanilla-HTML tool pages: wallet-xray, trace, token-holders,
+  airdrop, buyspecial, rose, hatchery, security-coop, wallet-checkup, liquidity, premium,
+  slots, bags, tools, investors, stats, transcript, pool-monitor, plus the operator-only
+  autopsy, order-book and lp-scanner.
+  ⛔ **TOOL CONSOLIDATION (2026-07-29, owner: "streamline the user experience, cut the clutter"):**
+  **`/snapshot` and `/holders` are now ONE tool** — `public/token-holders.html`, served at BOTH
+  paths (the old `snapshot.html`/`holders.html` stay on disk, unrouted, like the old buyspecial
+  pages). They always ran on the same `/api/snapshot` engine; the merged page fetches with
+  `excludeNonHuman=0` and filters client-side, so concentration is always measured over TRUE
+  HOLDERS (raw top-10 counts pool vaults as whales — the "false whale" read Autopsy already
+  corrects for). Exports follow the visible view and warn before airdropping to non-human sets.
+  **Token Vitals and the grant page were REMOVED** (pages, routes, and the 306-line
+  `/api/token-vitals` handler, which had no consumer). `/grant` → `/investors` and
+  `/token-vitals` → `/holders` are permanent 301s so old bookmarks don't hit the SPA catch-all.
+  ⚠️ `/api/token-overview` is a DIFFERENT endpoint and STAYS — airdrop.html, investors.html and
+  market-header.js all read prices from it.
+  **Autopsy and Order Book are OPERATOR-ONLY** — off tools.html and the sitemap, pages and APIs
+  untouched and fully working ("keep background setup for me to use when needed"). Note the
+  Telegram bot still exposes `/autopsy` to the community; removing that was NOT asked for.
+  Do NOT re-list any of these publicly without the owner's ask.
   🎯 **BUY SPECIAL IS UNIFIED (2026-07-24 rebuild): `/buyspecial` AND `/rose` now both serve
   `public/buyspecial-pro.html`** — ONE server-backed tool with a mode toggle: REWARD ALL HOLDERS
   (% of in-window buys) or RANKED WINNERS (top N, equal/fixed/pro-rata prizes). The old
@@ -329,7 +346,7 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   mint. In % mode the basis follows the token — comp token → % of tokens bought, SOL → % of SOL spent,
   USDC/other → % of USD spent, converted via `/api/token-price` (Jupiter v3, also the source of
   decimals so a 0.05 SOL prize can't floor to 0).
-  The tools that STILL hand off (`holders`, `snapshot`, `buycomp-admin`) go through the server stash
+  The tools that STILL hand off (`token-holders`, `buycomp-admin`) go through the server stash
   — `POST /api/airdrop-handoff` → `/airdrop?handoff=<id>&t=<tok>` (`public/airdrop-handoff.js`,
   6h TTL). **localStorage hand-off is the fallback only**: it silently fails in Phantom's webview,
   which is what made this look broken for four rounds. The reader clears the payload only AFTER
@@ -736,9 +753,26 @@ render the realized width, not the requested slider value. LOW backlog now fully
 ## Build / check
 - Run: `npm start` (= `node server.js`). React dev/build: `npm run dev` / `npm run build`.
 - After editing backend JS, sanity-check syntax: `node --check server.js` (and any lib you touched).
-- CI: `.github/workflows/syntax-check.yml` runs `node --check` on every backend entrypoint +
-  `lib/*.js` on each push — the minimal tripwire for the no-staging auto-deploy.
-- No automated test suite beyond that.
+- CI: `.github/workflows/syntax-check.yml` — the tripwires for the no-staging auto-deploy.
+  Each one exists because something got past the previous set, so don't remove them casually:
+  1. `node --check` on every backend entrypoint + `lib/*.js`.
+  2. `scripts/check-jsx-components.js` — fails on a capitalised JSX tag that is neither defined
+     nor imported. `<CalcErrorBoundary>` was referenced 12× and never written: legal JS, built
+     clean, and left every LP Lab lesson BLANK in production for a day.
+  3. `scripts/check-counts.js` — the landing advertised "12 CLASSES • 72 EXAMS" and "6 BEGINNER
+     LESSONS" when the truth was 70 and 7. Public counts now render from the arrays; this guard
+     verifies the one hand-mirrored constant (`LP_LESSONS_COUNT` in shared.jsx) and fails if any
+     headline regresses to a hardcoded digit.
+  4. `normie-quest/test/nq-geometry-check.cjs` — level jumpability + no floating fixtures.
+  5. **`scripts/smoke-test.js`** (its own job) — renders all 9 screens and all 33 lessons in
+     headless Chromium and fails on an uncaught error, a blank page, or a tripped error boundary.
+     Playwright is installed by the workflow with `--no-save` and is deliberately NOT in
+     package.json: Railway installs devDependencies to run the Vite build, and playwright's
+     postinstall would drag browser binaries into every production image.
+     ⚠️ It also fails if a curriculum renders fewer DISTINCT lesson screens than it has lessons —
+     that guard exists because the first version reported 12 green curriculum checks that were all
+     really the same unchanged select screen (locked tiles silently no-op when clicked).
+- Local: `node scripts/smoke-test.js --no-build` after a build. No unit-test suite beyond this.
 
 ## Deferred / check later
 - 🚫 **Nomadz partnership — DEAD, DO NOT RE-RAISE (owner's call 2026-07-26).** The owner DM'd CEO
