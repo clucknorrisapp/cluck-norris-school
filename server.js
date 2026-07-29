@@ -11155,7 +11155,7 @@ const SITEMAP_PAGES = [
   // pool-monitor, admin) are deliberately absent; their meta handles them.
   // /autopsy + /order-book left the sitemap 2026-07-29 when they went operator-only,
   // and /grant + /token-vitals were removed outright.
-  "/", "/school", "/curriculum", "/tools", "/wallet-xray", "/trace",
+  "/", "/school", "/education", "/curriculum", "/tools", "/wallet-xray", "/trace",
   "/snapshot", "/holders", "/airdrop", "/buyspecial", "/hatchery", "/security-coop",
   "/wallet-checkup", "/locker-room", "/clkn", "/alpha", "/lp-lab",
   "/classroom", "/bags", "/investors", "/privacy", "/terms",
@@ -11185,6 +11185,37 @@ app.get("/sitemap.xml", (req, res) => {
   } catch (_) { /* transcripts are a bonus, never a failure */ }
   res.type("application/xml").send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join("\n")}\n</urlset>`);
 });
+// ── /education — the learning hub ───────────────────────────────────────────
+// The homepage used to carry three tiles (Learn Crypto / Incubator / School) that all
+// landed in roughly the same place. They collapse into ONE "Education" tile pointing
+// here, and this page does the actual splitting: Incubator, School, Chain Info, Library
+// — plus the LP Lab, which also keeps its own homepage tile because it's the deepest
+// thing we teach (owner's call, 2026-07-29).
+//
+// Lesson counts are INJECTED from the real arrays (lib/curriculum.js counts()) rather
+// than typed into the HTML: hand-typed public counts are exactly how the landing page
+// spent months advertising 72 exams against a 70-question curriculum. If extraction
+// fails the placeholders collapse to empty and the page simply omits the numbers.
+let _eduHtml = null;
+function educationPage() {
+  if (_eduHtml) return _eduHtml;
+  const c = (() => { try { return curriculumPage.counts(); } catch (_) { return {}; } })();
+  const chains = (() => { try { return loadLearnAssets().length; } catch (_) { return 0; } })();
+  const part = (n, word) => (n ? `${n} ${word} · ` : "");
+  _eduHtml = fs.readFileSync(join(__dirname, "public", "education.html"), "utf8")
+    .replace("{{INCUBATOR_META}}", part(c.incubator, "lessons"))
+    .replace("{{SCHOOL_META}}", part(c.lessons, "classes"))
+    .replace("{{LP_META}}", part(c.lp, "lessons"))
+    .replace("{{CHAINS_META}}", part(chains, "chains"));
+  return _eduHtml;
+}
+// /education.html is matched too: the vite build copies public/ into dist/, and the static
+// mount would otherwise hand out the RAW template with its {{…}} placeholders showing.
+app.get(["/education", "/education.html"], (req, res) => {
+  try { res.type("html").send(educationPage()); }
+  catch (e) { res.redirect(302, "/school"); }   // never dead-end a nav link over a template read
+});
+
 app.get("/curriculum", (req, res) => {
   const html = curriculumPage.render();
   if (!html) return res.status(404).send("Curriculum page unavailable");

@@ -299,6 +299,20 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   airdrop, buyspecial, rose, hatchery, security-coop, wallet-checkup, liquidity, premium,
   slots, bags, tools, investors, stats, transcript, pool-monitor, plus the operator-only
   autopsy, order-book and lp-scanner.
+  🎓 **`/education` IS THE LEARNING HUB (2026-07-29, owner's call).** The homepage carried three
+  tiles (Learn Crypto / Incubator / School) that all landed in roughly the same place; they
+  collapsed into ONE "Education" tile pointing at `/education` (`public/education.html`, explicit
+  route in server.js — `public/` is not statically mounted). The hub splits into the four tracks:
+  **Incubator** (`/school#incubator`), **School** (`/school`), **Chain Info** (`/learn`),
+  **Library** (`/school#library`) — plus a featured **LP Lab** block. **The LP Lab keeps its OWN
+  homepage tile on purpose** (green, `.ql.lab`) — owner: "that is more advanced and I want to make
+  our best feature." So home is 6 tiles: Ask Cluck · Education · LP Lab · Tools · Locker Room · CLKN.
+  ⚠️ Lesson counts on the hub are **injected server-side** from `curriculumPage.counts()` (the real
+  LESSONS / INCUBATOR_LESSONS / LP_LESSONS arrays) + `loadLearnAssets().length` — do NOT type them
+  into the HTML; hand-typed public counts are how the landing page spent months advertising 72 exams
+  against a 70-question curriculum. The route also answers `/education.html` because the vite build
+  copies `public/` into `dist/`, and the static mount would otherwise serve the raw `{{…}}` template.
+  `/education` is in SITEMAP_PAGES and in cluck-nav's `ownNav` list (it has its own header).
   ⛔ **TOOL CONSOLIDATION (2026-07-29, owner: "streamline the user experience, cut the clutter"):**
   **`/snapshot` and `/holders` are now ONE tool** — `public/token-holders.html`, served at BOTH
   paths (the old `snapshot.html`/`holders.html` stay on disk, unrouted, like the old buyspecial

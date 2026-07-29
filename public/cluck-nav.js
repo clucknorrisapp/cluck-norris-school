@@ -27,7 +27,7 @@
   // Pages with their OWN header/nav — don't inject the floating bar there (the i18n
   // + read-aloud loaders above already ran, so the language switch & Listen button
   // still appear). Home + the Ask Cluck page own their nav.
-  var ownNav = (p === "" || p === "/" || p === "/ask-cluck" || p === "/crypto-school");
+  var ownNav = (p === "" || p === "/" || p === "/education" || p === "/ask-cluck" || p === "/crypto-school");
   var showHome  = !ownNav;
   var showTools = (TOOL_PAGES.indexOf(p) !== -1);
   var showAsk   = (showHome && p !== "/ask-cluck" && p !== "/crypto-school");
