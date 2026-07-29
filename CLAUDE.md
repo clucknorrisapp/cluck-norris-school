@@ -501,6 +501,18 @@ Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.
   and which vault grew. So both platforms are fully automatic now — no more manual runs. ⚠️ **CronCreate jobs are session-only and expire in ≤7 days — every
   new long-lived session should RE-ARM the hourly celebration cron** (poll the endpoint →
   if pending, generate → post → clear; never post when pending is null).
+  🔁 **THE DURABLE VERSION IS A ROUTINE, NOT A CronCreate: `trig_01XdKLBbnr7KuzJmUW5E3esK`
+  ("CLKN lock-celebration watcher (hourly)", `53 * * * *`).** It fires a FRESH SESSION, and a
+  fresh session starts with an **EMPTY working directory — no repo, therefore no
+  `scripts/lockbar.py`, no Oswald fonts, and no `.claude/skills/lock-celebration`.** It failed
+  silently every hour from 2026-07-27 until 2026-07-29 for exactly that reason (no lock landed in
+  the window, so nothing was actually missed — verified: locked supply unchanged at 451,114,343 /
+  61 escrows). **FIX, now in the Routine prompt as STEP 0 — it must shallow-clone before anything
+  else:** `cd /tmp && (test -d cn/.git || git clone --depth 1 https://github.com/clucknorrisapp/cluck-norris-school cn) && cd cn`
+  That one clone supplies all three. ⚠️ `.gitignore` has `.claude/*`, but the two SKILL.md files
+  are **force-added and tracked**, so they DO come down with a clone — don't "fix" that ignore rule.
+  If you ever edit this Routine, keep the flow restated inline in the prompt: depending on the skill
+  file alone is what made a missing repo fatal instead of degraded.
   **Model note (owner, 2026-07-02): use SONNET 5 (`claude-sonnet-5`) for Higgsfield prompt
   crafting** — noticeably better image prompts; the Mac runner passes `--model claude-sonnet-5`,
   and in-session celebrations should spawn a sonnet subagent to write the Higgsfield prompt.
