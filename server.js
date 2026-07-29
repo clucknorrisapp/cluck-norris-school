@@ -10537,14 +10537,21 @@ app.get("/api/diploma-mint", async (req, res) => {
       return res.status(200).json(await diplomaNft.mintDiploma(wallet, String(req.query.slug || "test"), { force: req.query.force === "1" }));
     }
     if (action === "backfill") {
-      const eligible = credentials.all().filter(r => r.graduation && r.graduation.completed && SOL_ADDR_RE.test(r.wallet || ""));
-      if (req.query.run !== "1") return res.status(200).json({ success: true, dryRun: true, eligible: eligible.length });
+      // SOL_ADDR_RE alone is a base58 SHAPE check — it cannot tell a wallet from a mint.
+      // The CLKN contract address is in the credentials store (2026-07-29, see rejectNonWallet),
+      // so an unfiltered backfill would mint a permanent diploma INTO OUR OWN MINT ACCOUNT,
+      // where nobody holds the key. Same guard as /api/claim, applied to the historic records.
+      const gradRecs = credentials.all().filter(r => r.graduation && r.graduation.completed && SOL_ADDR_RE.test(r.wallet || ""));
+      const eligible = gradRecs.filter(r => !staticNonWalletReason(r.wallet));
+      const skipped = gradRecs.filter(r => staticNonWalletReason(r.wallet))
+        .map(r => ({ wallet: r.wallet, why: staticNonWalletReason(r.wallet) }));
+      if (req.query.run !== "1") return res.status(200).json({ success: true, dryRun: true, eligible: eligible.length, skipped });
       const results = [];
       for (const rec of eligible) {
         try { const r = await diplomaNft.mintDiploma(rec.wallet, rec.slug); results.push({ wallet: rec.wallet.slice(0, 6) + "…", ok: r.ok, already: !!r.already, sig: r.sig || null, reason: r.reason || null }); }
         catch (e) { results.push({ wallet: rec.wallet.slice(0, 6) + "…", ok: false, error: e.message }); }
       }
-      return res.status(200).json({ success: true, eligible: eligible.length, minted: results.filter(r => r.ok && !r.already).length, results });
+      return res.status(200).json({ success: true, eligible: eligible.length, skipped, minted: results.filter(r => r.ok && !r.already).length, results });
     }
     return res.status(400).json({ success: false, error: "unknown action (status|create-tree|test|backfill)" });
   } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
