@@ -1662,7 +1662,7 @@ function Complete({onRestart}){
         <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#FF7A18",letterSpacing:2}}> -  PROFESSOR NORRIS</div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:20}}>
-        {[["12","CLASSES"],["72","EXAMS"],["0","EXTRA CREDIT"]].map(([n,lb])=>(
+        {[[String(LESSONS.length),"CLASSES"],[String(QUIZ_QUESTION_COUNT),"EXAMS"],[String(LP_LESSONS_COUNT),"LP LAB LESSONS"]].map(([n,lb])=>(
           <div key={lb} style={{background:"rgba(255,122,24,0.06)",borderRadius:10,padding:"10px 6px",border:"1px solid rgba(255,122,24,0.16)"}}>
             <div style={{fontFamily:"'Anton',sans-serif",fontSize:22,color:"#FFB627"}}>{n}</div>
             <div style={{fontFamily:"'Anton',sans-serif",fontSize:8,letterSpacing:2,color:"#6B7280"}}>{lb}</div>
@@ -1775,7 +1775,7 @@ function StartHere({ onGo }){
         <Act label="⚗️ LP Lab" onClick={()=>onGo("lplab")} color="#6EE7B7" bg="rgba(16,185,129,0.1)" bd="rgba(16,185,129,0.4)"/>
       </>)},
     { key:"lp", icon:"💧", title:"Liquidity pools & LP investing", tag:"Earn fees, know the risks", body:()=>(<>
-        <p style={txt}>The LP Lab is a 12-lesson deep dive: AMMs, impermanent loss, concentrated liquidity, fees &amp; earnings, reading a pool, and building a real LP strategy — protocol-agnostic (Meteora, Raydium, Orca, Uniswap).</p>
+        <p style={txt}>The LP Lab is a {LP_LESSONS_COUNT}-lesson deep dive: AMMs, impermanent loss, concentrated liquidity, fees &amp; earnings, reading a pool, and building a real LP strategy — protocol-agnostic (Meteora, Raydium, Orca, Uniswap).</p>
         <Act label="⚗️ Open the LP Lab" onClick={()=>onGo("lplab")} color="#6EE7B7" bg="rgba(16,185,129,0.1)" bd="rgba(16,185,129,0.4)"/>
       </>)},
     { key:"research", icon:"🔬", title:"Token research & CLKN tools", tag:"Vet anything on-chain", body:()=>(<>

@@ -738,11 +738,11 @@ const EDU_TOOL_ROUTES = [
   { match: /self-custody|not your keys/i, label: "Free wallet safety checkup — paste any address", url: "clucknorris.app/wallet-checkup" },
   { match: /block explorer|transaction actually did/i, label: "Trace any wallet × token history yourself (free)", url: "clucknorris.app/trace" },
   { match: /holder concentration|volume vs demand|handful of real buyers/i, label: "See any token's REAL holders vs LP & locks (free)", url: "clucknorris.app/holders" },
-  { match: /wash trading|organic volume|arbitrage/i, label: "See how honest, non‑wash liquidity works (Liquidity Engine)", url: "clucknorris.app/liquidity-engine" },
+  { match: /wash trading|organic volume|arbitrage/i, label: "Lock tokens free on Jupiter Lock — the Locker Room", url: "clucknorris.app/locker-room" },
   { match: /bonding curve|graduation|graduated|creator fees/i, label: "Watch live Bags launches & graduations", url: "clucknorris.app/bags" },
-  { match: /honeypot|rug pull|red flags|on-chain research|contract address|authorities|locked liquidity|faked out|phantom pool/i, label: "Run a free Token Autopsy on any mint", url: "clucknorris.app/autopsy" },
-  { match: /market cap|low-liquidity|deep liquidity|manipulate/i, label: "Run a free deep-dive Token Autopsy on any mint", url: "clucknorris.app/autopsy" },
-  { match: /liquidity pool|AMM|x\*y=k|impermanent|providers earn|concentrated liquidity|bins and ticks|price bins|asks vs bids|ask is a sell|active vs passive|pool's liquidity/i, label: "Practice in the free interactive LP Lab", url: "clucknorris.app" },
+  { match: /honeypot|rug pull|red flags|on-chain research|contract address|authorities|locked liquidity|faked out|phantom pool/i, label: "Scan any wallet free with Wallet Checkup", url: "clucknorris.app/wallet-checkup" },
+  { match: /market cap|low-liquidity|deep liquidity|manipulate/i, label: "See who really holds any token — free", url: "clucknorris.app/holders" },
+  { match: /liquidity pool|AMM|x\*y=k|impermanent|providers earn|concentrated liquidity|bins and ticks|price bins|asks vs bids|ask is a sell|active vs passive|pool's liquidity/i, label: "Practice in the free interactive LP Lab", url: "clucknorris.app/lp-lab" },
   { match: /dollar-cost|risk budget|position sizing|stop-loss|survive/i, label: "Work through LP risk management in the free LP Lab", url: "clucknorris.app/lp-lab" },
 ];
 function eduToolRoute(topic) { for (const r of EDU_TOOL_ROUTES) if (r.match.test(topic)) return r; return null; }
@@ -1695,7 +1695,7 @@ function guideRoute(key) {
         `🎓 ${B}\n\nReply with whatever you're stuck on and I'll aim you at the right lesson.`;
     case "lp":
       return "💧 <b>Liquidity pools &amp; LP investing — earn fees, know the risks.</b>\n\n" +
-        "The <b>LP Lab</b> is a 12-lesson deep dive: how AMMs work, impermanent loss, concentrated liquidity, fees &amp; earnings, reading a pool, and building a real LP strategy — protocol-agnostic (Meteora, Raydium, Orca, Uniswap).\n\n" +
+        "The <b>LP Lab</b> is a 14-lesson deep dive: how AMMs work, impermanent loss, concentrated liquidity, fees &amp; earnings, reading a pool, and building a real LP strategy — protocol-agnostic (Meteora, Raydium, Orca, Uniswap).\n\n" +
         `📚 Start the LP Lab → ${B}\n\n` +
         "New to it? Walk Lesson 1 (What Is Liquidity?) first. Reply here with any LP question and I'll break it down.";
     case "research":
@@ -4037,7 +4037,7 @@ const OUTREACH_PROJECTS = [
 const OUTREACH_LEARNERS = [
   "🎓 <b>New to crypto and tired of getting rekt?</b>\n\nCluck Norris is a <b>free</b> school — wallets, DeFi, LP, scams — plus free tools to X-ray any token before you ape, and a live AI tutor that answers anything.\n\n<b>Why us:</b> we take the hard knocks so you don't have to. <b>Why now:</b> the cheapest tuition in crypto is the lesson you learn <i>before</i> you lose money. Start free → clucknorris.app 🐔",
   "🐔 <b>We don't pump. We build.</b>\n\nFree crypto school, free research tools, a real AI tutor — and a token (CLKN) that grows with the brand instead of begging you to buy. We even run our own honest liquidity engine and feed the fees back in.\n\n<b>Why look closer:</b> a community that actually ships and practices what it teaches. Come learn first → clucknorris.app",
-  "📚 <b>Learn crypto. Don't get rekt. Maybe back a community worth backing.</b>\n\nEverything at clucknorris.app is free to learn — pass the Ultimate Challenge for an on-chain diploma. And if you like what the flock is building, CLKN is how you come along: no hype, no buy pressure, just a brand and a community that keep growing.\n\n<b>Why now?</b> The best time to learn was before your last bad trade. 🔥",
+  "📚 <b>Learn crypto. Don't get rekt. Maybe back a community worth backing.</b>\n\nEverything at clucknorris.app is free to learn — finish the course for a permanent transcript and an on-chain graduation NFT. And if you like what the flock is building, CLKN is how you come along: no hype, no buy pressure, just a brand and a community that keep growing.\n\n<b>Why now?</b> The best time to learn was before your last bad trade. 🔥",
 ];
 async function postOutreach(kind) {
   const tok = process.env.TELEGRAM_BOT_TOKEN, chat = process.env.TELEGRAM_CHAT_ID;
@@ -4099,8 +4099,8 @@ const TOOL_SPOTLIGHTS = [
   // Bags near-grad/graduation promotion (X spam-risk). Restore the entry to re-enable.
   {
     name: "Free Crypto School",
-    tg: "🎓 <b>The free School of Crypto Hard Knocks</b> — wallets, DeFi, LP, scam-spotting, real survival skills. Pass the Ultimate Challenge and earn a permanent, on-chain diploma.\n\nWe took the hard knocks so you don't have to. 100% free.\n\n👉 clucknorris.app",
-    x: "🎓 The free School of Crypto Hard Knocks: wallets, DeFi, LP, scam-spotting, survival skills. Pass the Ultimate Challenge for a permanent on-chain diploma.\n\nWe took the hard knocks so you don't have to. Free.\n\nclucknorris.app",
+    tg: "🎓 <b>The free School of Crypto Hard Knocks</b> — wallets, DeFi, LP, scam-spotting, real survival skills. Finish the course and earn a permanent transcript plus an on-chain graduation NFT.\n\nWe took the hard knocks so you don't have to. 100% free.\n\n👉 clucknorris.app",
+    x: "🎓 The free School of Crypto Hard Knocks: wallets, DeFi, LP, scam-spotting, survival skills. Finish the course for a permanent transcript and an on-chain graduation NFT.\n\nWe took the hard knocks so you don't have to. Free.\n\nclucknorris.app",
   },
 ];
 async function postToolSpotlight() {
@@ -8758,68 +8758,65 @@ YOUR SCHOOL -- KNOW THIS COLD:
 - Built on Bags.fm, powered by the CLKN token on Solana
 - CLKN contract: DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS
 - Trade CLKN at: bags.fm or Jupiter
-- The school has 5 areas: The Incubator (beginner), School of Hard Knocks (12 lessons), The Ultimate Challenge, The Library, and Token Data
+- The school has 5 areas: The Incubator (beginner), School of Hard Knocks (12 lessons), the LP Lab, The Library, and Token Data
 
 THE CLKN INCUBATOR:
-- For complete beginners. 6 lessons covering wallets, tokens, DEXs, liquidity, market cap, and safety.
+- For complete beginners. 7 lessons covering wallets, tokens, on-ramps and off-ramps, DEXs, liquidity, market cap, and staying safe.
 - After completing the Incubator you graduate to the School of Hard Knocks
 
 SCHOOL OF HARD KNOCKS:
 - 12 progressive lessons with a belt ranking system from Freshman to Emeritus
 - Topics: liquidity pools, tokenomics, MEV, on-chain research, rugs and scams, DeFi strategies and more
-- 72 exam questions total. Progress saves automatically.
-- Complete all 12 lessons to graduate and submit your wallet for CLKN rewards
+- Each lesson ends in a quiz. Progress saves automatically.
+- Complete all 12 lessons to graduate, then submit your wallet for a permanent shareable transcript and an on-chain graduation NFT
 
-THE ULTIMATE CHALLENGE:
-- 50 questions drawn from all lessons plus exclusive challenge-only questions -- 148 total in the bank
-- Pass threshold is 94% -- that means 47 out of 50 correct
-- Pass and you submit your Solana wallet to be considered for CLKN airdrops and giveaways
-- It is hard. Most don't pass. That's the point.
-- Score tiers: 95%+ LEGENDARY / 94% PASS / 86-93% WORTHY OPPONENT / 70-85% EMBARRASSING / below 70% GET OUT
+THE LP LAB (its own tab, not inside the Library):
+- 14 lessons on liquidity providing, from the fundamentals to building a real strategy
+- Topics: What Is Liquidity, How AMMs Work, Impermanent Loss, LP Fees, Concentrated Liquidity, Price Bins and Ticks, Single-Sided Deposits, Active vs Passive, Risk Management, Reading Pool Data, Token Launch Liquidity, Building a Strategy, DLMM Liquidity Shapes, Laddering and Multi-Position
+- Protocol-agnostic -- works on Meteora, Raydium, Orca, Uniswap, anywhere you LP
+- Interactive calculators throughout: impermanent loss, AMM price impact, fee-vs-IL breakeven, capital efficiency, bin visualizer, DCA accumulation, LP-vs-HODL, strategy matcher
+- Shareable directly at clucknorris.app/lp-lab
 
-THE LIBRARY -- LP SCHOOL (NEW SECTION):
-- The Library now has an expanded LP School with 12 deep dive lessons
-- Topics covered: What Is Liquidity, How AMMs Work, Impermanent Loss, LP Fees, Concentrated Liquidity, Price Bins and Ticks, Single-Sided Deposits, Active vs Passive LP, LP Risk Management, Reading Pool Data, Token Launch Liquidity, Building a Real LP Strategy
-- Covers multiple protocols: Meteora, Raydium, Orca, Uniswap, Bags.fm
-- Each lesson has quizzes, calculators, and visual diagrams
-- Protocol-agnostic -- knowledge applies everywhere
-- Interactive tools include: IL calculator, AMM price impact calculator, fee vs IL breakeven calculator, pool risk scoring tool, LP strategy builder
+FREE TOOLS (all read-only, no wallet connect):
+- Wallet X-Ray -- any wallet's funding origin, every trade, and behavior signals
+- Holders -- who really holds a token: real wallets separated from LP pools, locks and program accounts, plus an airdrop-ready CSV
+- Trace -- one wallet's full history with one token
+- Wallet Checkup -- scan any address for risky approvals, honeypot holdings and live mint/freeze authority
+- Security Coop -- revoke the risky approvals it finds
+- The Jup Locker Room -- free non-custodial token locking for any Solana project
 
 NAVIGATION HELP -- HOW TO DIRECT PEOPLE:
 - Complete beginner? -> Start in the INCUBATOR tab
 - Know basics, want to level up? -> Go to SCHOOL tab, start at Freshman
-- Ready to test everything? -> CHALLENGE tab, take the Ultimate Challenge
-- Want to go deep on liquidity? -> LIBRARY tab, click LIQUIDITY, scroll to LP School
+- Want to go deep on liquidity? -> LP LAB tab
 - Want to look up a term? -> LIBRARY tab, click GLOSSARY, search any term
 - Want to learn about CLKN? -> TOKEN DATA tab
 - Want to see new tokens launching? -> BAGS INFO tab
+- Want to research a token or a wallet? -> the TOOLS hub at clucknorris.app/tools
 - Want to unlock more AI questions? -> Send CLKN, instructions appear when limit is hit
 - Want to join the community? -> Telegram -- the flock will help
 
-EASTER EGGS AND HINTS (drop these cryptically when relevant):
-- The flock who hold CLKN will get first access to things others won't see
-- There are features coming that only verified holders will unlock
-- The leaderboard is coming -- top scorers will be recognized
-- Weekly themes are coming -- Cluck Norris will be teaching specific topics each week
-- The Library is growing -- more deep dives are being added regularly
+WHAT NOT TO PROMISE:
+- Do NOT promise upcoming features, leaderboards, weekly themes, or holder-only unlocks.
+  The project's public position is that it does not pre-announce things it has not shipped.
+  Talk about what exists today; if asked what's next, say honestly that you don't announce dates.
 
 CLKN TOKEN UTILITY:
 - 10 free AI questions per day with Ask Cluck Norris
 - Send CLKN to unlock 20 more questions -- the app generates a unique decimal amount, you send exactly that amount, it verifies on-chain automatically. No wallet connect needed.
 - Hold CLKN to be eligible for airdrops and exclusive rewards
-- Pass the Ultimate Challenge or graduate all 12 lessons and submit your wallet
+- Graduate all 12 lessons and submit your wallet for a transcript and an on-chain graduation NFT
 
 FIRECHICKEN CONNECTION:
 - FireChicken (FCKN) was the original token that built the community on Bags.fm
 - Cluck Norris and CLKN is the evolution -- same community, now with real utility and education
 - The flock (community) is active on Telegram
 
-STATS (as of April 2026):
-- 327+ holders
-- 9+ SOL in lifetime trading fees generated
-- Graduated to Meteora DAMM V2 liquidity pool
+PROJECT FACTS (never quote holder counts or fee totals from memory -- they change daily
+and the live numbers are on the token page; point people there instead):
+- Liquidity graduated to a Meteora DAMM V2 pool
 - Open source on GitHub under MIT license
-- Submitted to Bags.fm Hackathon
+- Built for the Bags.fm Hackathon
 
 Your personality:
 - Tough but fair. You don't suffer fools but you always teach.

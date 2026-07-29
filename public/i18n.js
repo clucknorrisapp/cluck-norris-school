@@ -228,7 +228,13 @@
     return fetch("/i18n/" + name + ".json").then(function (r) { return r.ok ? r.json() : {}; }).catch(function () { return {}; });
   }
   var jobs = [loadDict(lang)];
-  if ((location.pathname || "").indexOf("/school") === 0) jobs.push(loadDict(lang + ".school"));
+  // The curriculum dictionary must load on EVERY route that renders the school SPA, not
+  // just /school. /lp-lab and /lplab serve the same app at a different path — so for six
+  // languages the LP Lab rendered in English on the one page we promote with its own
+  // social card, and then burned the daily machine-translation budget re-translating
+  // strings that were already professionally translated in <lang>.school.json.
+  var _p = (location.pathname || "");
+  if (_p.indexOf("/school") === 0 || _p.indexOf("/lp-lab") === 0 || _p.indexOf("/lplab") === 0) jobs.push(loadDict(lang + ".school"));
   if ((location.pathname || "").indexOf("/locker-room") === 0) jobs.push(loadDict(lang + ".locker"));
   Promise.all(jobs)
     .then(function (parts) {

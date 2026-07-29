@@ -62,9 +62,13 @@ if (!declared) {
 //    and an un-stripped scan flags that comment as if it were the bug.
 const appCode = app.replace(/^\s*\/\/.*$/gm, "");
 for (const [re, what] of [
-  [/>\s*(\d+)\s+CLASSES/, "CLASSES"],
-  [/(\d+)\s+EXAMS/, "EXAMS"],
-  [/(\d+)\s+BEGINNER LESSONS/, "BEGINNER LESSONS"],
+  // Match a literal number sitting next to the label with ANY separator between them.
+  // The first version required whitespace (/(\d+)\s+EXAMS/) and so sailed straight past
+  // the JSX tuple form `["72","EXAMS"]` on the graduation screen — which meant the same
+  // page rendered 70 (derived) and 72 (hardcoded) at the same time, for months.
+  [/(\d+)"?\s*,?\s*"?CLASSES/, "CLASSES"],
+  [/(\d+)"?\s*,?\s*"?EXAMS/, "EXAMS"],
+  [/(\d+)"?\s*,?\s*"?BEGINNER LESSONS/, "BEGINNER LESSONS"],
   [/Finish all (\d+) classes/, "Finish all N classes"],
 ]) {
   const m = re.exec(appCode);
