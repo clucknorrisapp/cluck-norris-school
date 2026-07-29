@@ -142,16 +142,16 @@ async function notifyToolsReminder() {
     "Beyond the school — real, live Solana tools. Five are 100% free; the operator " +
     "tools let you preview everything, then unlock with a small CLKN payment:\n\n" +
     "🩻 <b>Wallet X-Ray</b> — full wallet deep dive: funding origin, trades, bot/dumper signals · <b>FREE</b>\n" +
-    "🔒 <b>Security Coop</b> — find &amp; revoke risky wallet approvals · <b>FREE</b>\n" +
-    "📸 <b>Snapshot</b> — every holder + airdrop CSV for any token · <b>FREE</b>\n" +
+    "🛡 <b>Wallet Checkup</b> — approvals, honeypots &amp; freeze risk, and revoke your own · <b>FREE</b>\n" +
+    "👥 <b>Holders</b> — true holders vs LP, locks &amp; programs, plus airdrop CSV · <b>FREE</b>\n" +
     "🔍 <b>Trace</b> — full wallet × token transaction history · <b>FREE</b>\n" +
-    "👥 <b>Holders</b> — true holders vs LP, locks &amp; programs · <b>FREE</b>\n" +
+    "🔒 <b>The Jup Locker Room</b> — lock any Solana token, free, no cut · <b>FREE</b>\n" +
     "🥚 <b>The Hatchery</b> — create a token, guided start to finish · SOL/CLKN\n" +
-    "📈 <b>Buy Special</b> + 🌹 <b>Rose</b> — run buy competitions · CLKN\n" +
+    "📈 <b>Buy Special</b> — run a buy competition · CLKN\n" +
     "💰 <b>Airdrop</b> — batch-send to hundreds of wallets · CLKN\n\n" +
     "🚨 <b>Have you checked the permissions on your wallet lately?????</b>\n" +
     "Every \"approve\" you've ever signed can still move your tokens — until you " +
-    "revoke it. Security Coop finds them all in seconds. Free, nothing at risk.\n\n" +
+    "revoke it. Wallet Checkup finds them all in seconds — and revokes them. Free, nothing at risk.\n\n" +
     "🐔 Everything here → clucknorris.app/tools";
   try {
     if (lastToolsReminderMsgId) {
@@ -1547,16 +1547,22 @@ function tgCommandReply(cmd, arg) {
       return `🪦 <b>Token Autopsy</b> — deep forensic breakdown\n${link("/autopsy", "mint")}` + (addr ? "" : "\n\nTip: <code>/autopsy &lt;mint&gt;</code>.");
     case "trace":
       return `🔍 <b>Trace</b> — full wallet × token transaction history\n${link("/trace", "wallet")}` + (addr ? "" : "\n\nTip: <code>/trace &lt;wallet or mint&gt;</code>.");
+    // /snapshot kept as a silent alias — the two tools merged 2026-07-29.
     case "snapshot":
-      return `📸 <b>Snapshot</b> — every holder + airdrop CSV\n${link("/snapshot", "mint")}` + (addr ? "" : "\n\nTip: <code>/snapshot &lt;mint&gt;</code>.");
     case "holders":
-      return `👥 <b>Holders</b> — true holders vs LP, locks &amp; programs\n${link("/holders")}`;
+      return `👥 <b>Holders</b> — who really holds a token: real wallets vs LP pools, locks and program accounts, plus an airdrop-ready CSV\n${link("/holders", "mint")}` + (addr ? "" : "\n\nTip: <code>/holders &lt;mint&gt;</code>.");
+    // Security Coop folded into Wallet Checkup 2026-07-29; /securitycoop still answers.
     case "securitycoop":
-      return `🔒 <b>Security Coop</b> — find &amp; revoke risky wallet approvals\n${link("/security-coop")}`;
+    case "walletcheckup":
+      return `🛡 <b>Wallet Checkup</b> — scan any wallet for risky approvals, honeypot holdings and live mint/freeze authority, then revoke your own\n${link("/wallet-checkup", "wallet")}`;
     case "buyspecial":
       return `📈 <b>Buy Special</b> — run a buy competition\n${link("/buyspecial")}`;
+    // /rose is the same page as /buyspecial, pre-set for $ROSE — kept as an alias.
     case "rose":
-      return `🌹 <b>Rose</b> — buy-competition analyzer with prize models\n${link("/rose")}`;
+      return `🌹 <b>Buy Special</b> — run a buy competition (this link opens it pre-set for $ROSE)\n${link("/rose")}`;
+    case "lockerroom":
+    case "locker":
+      return `🔒 <b>The Jup Locker Room</b> — lock any Solana token on the Jupiter Lock program. Free, non-custodial, no cut. Includes unverified Token-2022 mints other lockers won't list.\n${link("/locker-room")}`;
     case "hatchery":
       return `🥚 <b>The Hatchery</b> — create a token, guided start to finish\n${link("/hatchery")}`;
     case "bags":
@@ -1574,13 +1580,11 @@ function tgCommandReply(cmd, arg) {
         "💵 /price — CLKN price, market cap &amp; volume\n" +
         "🔒 /lock — locked supply + Jupiter Lock proof\n" +
         "🩻 /walletxray <code>&lt;wallet&gt;</code> — full wallet deep dive\n" +
-        "🪦 /autopsy <code>&lt;mint&gt;</code> — full forensic breakdown\n" +
         "🔍 /trace <code>&lt;wallet&gt;</code> — wallet × token history\n" +
-        "📸 /snapshot <code>&lt;mint&gt;</code> — holders + airdrop CSV\n" +
-        "👥 /holders — true holders vs LP &amp; locks\n" +
-        "🔒 /securitycoop — find &amp; revoke risky wallet approvals\n" +
+        "👥 /holders <code>&lt;mint&gt;</code> — true holders vs LP, locks &amp; programs + CSV\n" +
+        "🛡 /walletcheckup <code>&lt;wallet&gt;</code> — approvals, honeypots, revoking\n" +
+        "🔒 /lockerroom — lock your tokens free on Jupiter Lock\n" +
         "📈 /buyspecial — run a buy competition\n" +
-        "🌹 /rose — buy-competition analyzer + prizes\n" +
         "🏆 /buyleaders — live buy-competition standings\n" +
         "🥚 /hatchery — create a token, guided\n" +
         "🎒 /bags — live Bags.fm launches\n" +
@@ -1659,7 +1663,7 @@ async function priceReply(chatId, replyTo) {
   }
 }
 
-const TG_KNOWN_CMDS = ["ca","x","website","app","dex","walletxray","autopsy","trace","snapshot","holders","lock","securitycoop","buyspecial","rose","hatchery","bags","tools","liquidity","price","commands","start","help","guide","buyleaders","chatid"];
+const TG_KNOWN_CMDS = ["ca","x","website","app","dex","walletxray","autopsy","trace","snapshot","holders","lock","lockerroom","locker","securitycoop","walletcheckup","buyspecial","rose","hatchery","bags","tools","liquidity","price","commands","start","help","guide","buyleaders","chatid"];
 // In a non-CLKN project room (e.g. ROSE) the bot only serves that project's liquidity +
 // buy competitions; chatid stays so an operator can wire a buy comp. Everything else off.
 const PROJECT_ROOM_CMDS = ["liquidity","price","buyleaders","chatid"];
@@ -1700,13 +1704,12 @@ function guideRoute(key) {
         "New to it? Walk Lesson 1 (What Is Liquidity?) first. Reply here with any LP question and I'll break it down.";
     case "research":
       return "🔬 <b>Token research — vet anything on-chain before you trust it.</b>\n\n" +
-        `🪦 <b>Token Autopsy</b> — deep forensic breakdown → ${B}/autopsy\n` +
         `🩻 <b>Wallet X-Ray</b> — full wallet deep dive (funding, trades, bot/dumper) → ${B}/wallet-xray\n` +
+        `👥 <b>Holders</b> — who really holds it: real wallets vs LP, locks &amp; programs, + CSV → ${B}/holders\n` +
         `🔍 <b>Trace</b> — wallet × token history → ${B}/trace\n` +
-        `📸 <b>Snapshot</b> — every holder + airdrop CSV → ${B}/snapshot\n` +
-        `🔒 <b>Wallet Checkup</b> — find &amp; revoke risky approvals → ${B}/security-coop\n` +
+        `🛡 <b>Wallet Checkup</b> — approvals, honeypots, freeze risk — and revoke your own → ${B}/wallet-checkup\n` +
         `🎒 <b>Bags feed</b> — live launches &amp; graduations → ${B}/bags\n\n` +
-        "Tip: right here in chat you can run <code>/autopsy &lt;mint&gt;</code> or <code>/walletxray &lt;wallet&gt;</code>. The chain shows <i>what</i>, never <i>why</i> — always DYOR.";
+        "Tip: right here in chat you can run <code>/holders &lt;mint&gt;</code> or <code>/walletxray &lt;wallet&gt;</code>. The chain shows <i>what</i>, never <i>why</i> — always DYOR.";
     case "about":
       return "🐔 <b>About Cluck Norris &amp; CLKN.</b>\n\n" +
         "Cluck Norris is the free <b>School of Crypto Hard Knocks</b> + a Solana token-safety toolkit — born from the FireChicken (FCKN) community, now with real utility.\n\n" +
@@ -1730,7 +1733,7 @@ function guideSystemPrompt() {
     "You are Cluck Norris, the friendly guide for the Cluck Norris app (clucknorris.app) — a FREE crypto school ('School of Crypto Hard Knocks') plus a Solana token-research toolkit. You're helping someone in a Telegram group find their way around and answering their crypto/app questions.",
     "WHAT THE APP HAS — route people to the right part:",
     "- The School (free, no wallet or sign-up to learn): the INCUBATOR (tiny beginner lessons: wallets, tokens, staying safe), the 12-LESSON COURSE (belts Freshman→Emeritus, finish it for a permanent shareable transcript), and the LP LAB (14 advanced liquidity lessons).",
-    "- Free tools: TOKEN AUTOPSY (/autopsy — deep forensics), WALLET X-RAY (/wallet-xray — full wallet deep dive: funding origin, every trade, bot/dumper signals), TRACE (/trace — wallet×token history), SNAPSHOT (/snapshot — holders + airdrop CSV), WALLET CHECKUP (/security-coop — find & revoke risky approvals), BAGS feed (/bags — live launches & graduations), and the toolkit index (/tools).",
+    "- Free tools: WALLET X-RAY (/wallet-xray — full wallet deep dive: funding origin, every trade, bot/dumper signals), HOLDERS (/holders — real wallets vs LP pools, locks and program accounts, plus an airdrop-ready CSV), TRACE (/trace — wallet×token history), WALLET CHECKUP (/wallet-checkup — approvals, honeypot holdings and live mint/freeze authority, and you can revoke your own there), THE JUP LOCKER ROOM (/locker-room — free non-custodial token locking for any Solana project), BAGS feed (/bags — live launches & graduations), and the toolkit index (/tools).",
     "- THE HATCHERY (/hatchery): guided token creation with a safety preview.",
     "- CLKN token: unlocks premium operator tools via a small on-chain payment (no wallet-connect needed); holding it earns airdrop eligibility. The school itself is always free.",
     "- WHERE TO BUY CLKN: it's a normal swap on a Solana DEX — Jupiter is easiest. When asked where to buy, share this exact link: https://jup.ag/tokens/" + CLKN_MINT + " (chart: https://" + CLKN_DEXSCREENER + "). Buying needs a Solana wallet with some SOL; the app itself needs no wallet-connect. This is just logistics, NOT financial advice — never say whether or how much to buy.",
@@ -8805,8 +8808,7 @@ FREE TOOLS (all read-only, no wallet connect):
 - Wallet X-Ray -- any wallet's funding origin, every trade, and behavior signals
 - Holders -- who really holds a token: real wallets separated from LP pools, locks and program accounts, plus an airdrop-ready CSV
 - Trace -- one wallet's full history with one token
-- Wallet Checkup -- scan any address for risky approvals, honeypot holdings and live mint/freeze authority
-- Security Coop -- revoke the risky approvals it finds
+- Wallet Checkup -- scan any address for risky approvals, honeypot holdings and live mint/freeze authority, and revoke your own approvals right there (Security Coop merged into it)
 - The Jup Locker Room -- free non-custodial token locking for any Solana project
 
 NAVIGATION HELP -- HOW TO DIRECT PEOPLE:
@@ -13657,13 +13659,11 @@ app.listen(PORT, () => {
             { command: "price", description: "CLKN price, market cap & volume" },
             { command: "lock", description: "Current locked supply + Jupiter Lock proof" },
             { command: "walletxray", description: "Full wallet deep dive (/walletxray <wallet>)" },
-            { command: "autopsy", description: "Forensic breakdown (/autopsy <mint>)" },
             { command: "trace", description: "Wallet × token history (/trace <wallet>)" },
-            { command: "snapshot", description: "Holders + airdrop CSV (/snapshot <mint>)" },
-            { command: "holders", description: "True holders vs LP & locks" },
-            { command: "securitycoop", description: "Find & revoke risky wallet approvals" },
+            { command: "holders", description: "True holders vs LP, locks & programs (/holders <mint>)" },
+            { command: "walletcheckup", description: "Approvals, honeypots & revoking (/walletcheckup <wallet>)" },
+            { command: "lockerroom", description: "Lock your Solana tokens free on Jupiter Lock" },
             { command: "buyspecial", description: "Run a buy competition" },
-            { command: "rose", description: "Buy-competition analyzer + prizes" },
             { command: "buyleaders", description: "Live buy-competition standings" },
             { command: "hatchery", description: "Create a token, guided" },
             { command: "bags", description: "Live Bags.fm launches" },
