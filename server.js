@@ -2136,6 +2136,19 @@ function notifyToolUnlock(tool, paidAmount, senderWallet, isHolderBonus, signatu
 
 const app = express();
 
+// ── /healthz — the deploy readiness probe. Register FIRST, before any middleware. ──
+// Railway had no healthcheck configured, so on every push it cut traffic to the new
+// container before that container could serve. Measured on 2026-07-29: a push produced
+// two windows where the site returned NOTHING at all (curl code 000). Googlebot lands in
+// one of those occasionally, which is where Search Console's "Server error (5xx)" came
+// from — no page is actually broken; every route 200s outside the swap.
+// With railway.json pointing at this path, Railway holds traffic on the OLD container
+// until the new one answers here, so a deploy stops being a visible outage.
+// Deliberately trivial: no auth, no I/O, no dependency on kv/RPC/Telegram/anything that
+// boots slowly or can fail. A healthcheck that can go red on a downstream hiccup would
+// block deploys for reasons that have nothing to do with whether the app can serve.
+app.get("/healthz", (req, res) => res.status(200).type("text/plain").send("ok"));
+
 // gzip/brotli-style compression for every response (HTML, JS bundle, and the
 // large i18n dictionaries). Cuts the school dict from ~700KB to ~150KB on the
 // wire — a big win on mobile/Seeker. Safe: standard middleware, no streaming here.
