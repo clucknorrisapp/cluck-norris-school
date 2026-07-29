@@ -299,6 +299,16 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   airdrop, buyspecial, rose, hatchery, security-coop, wallet-checkup, liquidity, premium,
   slots, bags, tools, investors, stats, transcript, pool-monitor, plus the operator-only
   autopsy, order-book and lp-scanner.
+  🎨 **CONCIERGE CLEANED UP + REAL ICONS (2026-07-29, owner: "clean up the Cluck concierge",
+  "those all look generic").** The homepage journey menu went from NINE routes to SIX — the four
+  that went (belt course, specific-coin, AI Classroom, own-pace Library) are all cards or links on
+  `/education` now, so nothing is orphaned. **"I need advanced / operator tools" STAYS** because
+  `/premium` is linked from nowhere else on the site — check that before ever trimming it again.
+  All icons on the concierge AND on `/education` are now **hand-drawn inline SVG, not emoji**
+  (egg / mortarboard / chain-link / open book / magnifier-with-pulse / `</>`; the LP Lab gets a
+  **conical flask holding a 3-bar liquidity distribution**, in the Lab's green `#6EE7B7`, reused on
+  the homepage tile and the `/education` flagship). They are INLINE on purpose — an external
+  `<use href="/sprite.svg#id">` is unreliable in Safari. The CLKN route uses the real mascot photo.
   🎓 **`/education` IS THE LEARNING HUB (2026-07-29, owner's call).** The homepage carried three
   tiles (Learn Crypto / Incubator / School) that all landed in roughly the same place; they
   collapsed into ONE "Education" tile pointing at `/education` (`public/education.html`, explicit
@@ -515,8 +525,16 @@ Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.
   and which vault grew. So both platforms are fully automatic now — no more manual runs. ⚠️ **CronCreate jobs are session-only and expire in ≤7 days — every
   new long-lived session should RE-ARM the hourly celebration cron** (poll the endpoint →
   if pending, generate → post → clear; never post when pending is null).
-  🔁 **THE DURABLE VERSION IS A ROUTINE, NOT A CronCreate: `trig_01XdKLBbnr7KuzJmUW5E3esK`
-  ("CLKN lock-celebration watcher (hourly)", `53 * * * *`).** It fires a FRESH SESSION, and a
+  🔁 **THE DURABLE VERSION IS A ROUTINE, NOT A CronCreate: `trig_017rnVjZSAAEgQdyfTTnCfYa`
+  ("CLKN lock-celebration watcher (hourly, silent)", `53 * * * *`).** ⛔ **IT IS SILENT BY DESIGN —
+  push + email notifications are OFF and the prompt forbids PushNotification** (owner, 2026-07-29:
+  "Stop doing this. I want to pause your notifications" — a broken run had been buzzing his phone
+  every hour). A failed run must end QUIETLY; nothing is lost, because the server posts a text-only
+  announcement itself after 6h. `update_trigger` cannot change the notification channel, so this was
+  a delete-and-recreate — if you ever recreate it again, re-set `notifications: {}`. ⚠️ The recreate
+  carried NO MCP connectors, so its fired sessions may lack the Higgsfield image tools; if hourly
+  IMAGE posts start silently degrading to the 6h text fallback, the Routine has to be recreated from
+  the claude.ai Routines UI (a session can only pass through connectors it holds itself). It fires a FRESH SESSION, and a
   fresh session starts with an **EMPTY working directory — no repo, therefore no
   `scripts/lockbar.py`, no Oswald fonts, and no `.claude/skills/lock-celebration`.** It failed
   silently every hour from 2026-07-27 until 2026-07-29 for exactly that reason (no lock landed in
