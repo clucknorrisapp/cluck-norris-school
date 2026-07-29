@@ -32,3 +32,25 @@ jobs:
         run: node scripts/check-jsx-components.js
       - name: Normie Quest level-geometry guard (jumpability + no floating fixtures)
         run: node normie-quest/test/nq-geometry-check.cjs
+
+  # Renders the actual app. The checks above are all static — they cannot see a component that
+  # compiles fine and throws on mount, which is how the LP Lab shipped blank to production.
+  # Split into its own job so a browser download never slows the fast static gate.
+  smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - run: npm ci
+      # Playwright is installed here rather than in package.json on purpose: Railway installs
+      # devDependencies to run the Vite build, and playwright's postinstall drags browser
+      # binaries into the production image.
+      - name: install playwright + chromium
+        run: |
+          npm i --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: render every screen and lesson
+        run: node scripts/smoke-test.js
