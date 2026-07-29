@@ -28,6 +28,10 @@ jobs:
       # exactly how <CalcErrorBoundary> shipped broken to the live LP Lab.
       - name: undefined-JSX-component guard
         run: node scripts/check-jsx-components.js
+      # The landing advertised "12 CLASSES • 72 EXAMS" and "6 BEGINNER LESSONS" while the real
+      # curriculum held 70 and 7. Hand-typed public counts rot silently; this catches the mirror.
+      - name: curriculum count-drift guard
+        run: node scripts/check-counts.js
       - name: Normie Quest level-geometry guard (jumpability + no floating fixtures)
         run: node normie-quest/test/nq-geometry-check.cjs
 

@@ -349,6 +349,11 @@ function Belt({belt,small}){return(<span data-read-skip="1" style={{display:"inl
 
 
 // ── CLKN INCUBATOR ──
+// Derived, never hand-written: the landing used to hard-code "12 CLASSES • 72 EXAMS" and
+// "6 BEGINNER LESSONS" while the real numbers were 70 and 7. Counting at render means the
+// headline can't drift from the curriculum again.
+const QUIZ_QUESTION_COUNT = LESSONS.reduce((n, l) => n + ((l.questions && l.questions.length) || 0), 0);
+
 const INCUBATOR_LESSONS = [
   {
     id: "wallet",
@@ -1409,7 +1414,7 @@ function Landing({onStart,onIncubator,onStartHere,completed}){
       <button onClick={onStart} style={{background:"#FF7A18",border:"none",borderRadius:10,padding:"14px 40px",fontFamily:"'Anton',sans-serif",fontSize:16,fontWeight:700,color:"#fff",letterSpacing:2,textTransform:"uppercase",cursor:"pointer",boxShadow:"0 0 28px rgba(255,122,24,0.45)"}}>
         {completed.length===0?"🏫 Start the 12-Class Course":"📚 Continue Class"}
       </button>
-      <p style={{marginTop:12,fontSize:13.5,color:"#6B7280",fontFamily:"'Anton',sans-serif",letterSpacing:2}}>12 CLASSES • 72 EXAMS • NO EXTRA CREDIT</p>
+      <p style={{marginTop:12,fontSize:13.5,color:"#6B7280",fontFamily:"'Anton',sans-serif",letterSpacing:2}}>{LESSONS.length} CLASSES • {QUIZ_QUESTION_COUNT} EXAMS • NO EXTRA CREDIT</p>
       <a href="/classroom" style={{display:"inline-block",marginTop:2,fontFamily:"'Anton',sans-serif",fontSize:13.5,letterSpacing:1,color:"#FF7A18",textDecoration:"none"}}>🎓 Prefer a live teacher? Take it in the Classroom →</a>
 
       {/* YOUR PROGRESS — transcript (always shown so newcomers see where they're headed) */}
@@ -1446,7 +1451,7 @@ function Landing({onStart,onIncubator,onStartHere,completed}){
       <div style={{background:"rgba(255,182,39,0.12)",border:"1px solid rgba(255,182,39,0.45)",borderRadius:12,padding:"16px 18px",marginBottom:14,textAlign:"left",boxShadow:"0 0 22px rgba(255,182,39,0.12)"}}>
         <div style={{fontFamily:"'Anton',sans-serif",fontSize:15.5,letterSpacing:1,color:"#FFB627",marginBottom:6}}>🎓 GRADUATE REWARD</div>
         <p style={{fontFamily:"system-ui,sans-serif",fontSize:15,color:"#D1D5DB",lineHeight:1.6,margin:"0 0 11px"}}>
-          Every graduate is <b style={{color:"#FFB627"}}>entered to receive CLKN airdrops</b>. Finish all 12 classes to mint an <b style={{color:"#FFB627"}}>on-chain graduation NFT</b> — then drop your Solana address to claim it and get entered for CLKN airdrops.
+          Every graduate is <b style={{color:"#FFB627"}}>entered to receive CLKN airdrops</b>. Finish all {LESSONS.length} classes to mint an <b style={{color:"#FFB627"}}>on-chain graduation NFT</b> — then drop your Solana address to claim it and get entered for CLKN airdrops.
         </p>
       </div>
 
@@ -1454,7 +1459,7 @@ function Landing({onStart,onIncubator,onStartHere,completed}){
       <button onClick={onIncubator} style={{width:"100%",boxSizing:"border-box",background:"rgba(255,122,24,0.08)",border:"2px solid rgba(255,122,24,0.4)",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#FF7A18",letterSpacing:2,cursor:"pointer",marginBottom:4}}>
         🥚 CLKN INCUBATOR — NEW? START HERE
       </button>
-      <p style={{marginTop:2,fontSize:13,color:"#4B5563",fontFamily:"'Anton',sans-serif",letterSpacing:1}}>6 BEGINNER LESSONS · WALLETS, TOKENS &amp; SAFETY</p>
+      <p style={{marginTop:2,fontSize:13,color:"#4B5563",fontFamily:"'Anton',sans-serif",letterSpacing:1}}>{INCUBATOR_LESSONS.length} BEGINNER LESSONS · WALLETS, TOKENS &amp; SAFETY</p>
 
       {/* Transcript lookup */}
       <div style={{marginTop:22,paddingTop:18,borderTop:"1px solid rgba(255,122,24,0.09)"}}>
@@ -1671,7 +1676,7 @@ function Complete({onRestart}){
           <div style={{fontSize:28,marginBottom:6}}>🏆</div>
           <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#FFB627",letterSpacing:2,marginBottom:4}}>YOU EARNED YOUR SPOT IN THE FLOCK</div>
           <p style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:"#9CA3AF",margin:0,lineHeight:1.6}}>
-            Completing all 12 lessons is no small feat. Submit your Solana wallet to mint your on-chain diploma NFT and get entered for CLKN airdrops.
+            Completing all {LESSONS.length} lessons is no small feat. Submit your Solana wallet to mint your on-chain graduation NFT and get entered for CLKN airdrops.
           </p>
         </div>
         {!claimed ? (
@@ -1765,7 +1770,7 @@ function StartHere({ onGo }){
         <Act label="🧭 Every chain" onClick={goIn("/learn")} color="#6EE7B7" bg="rgba(16,185,129,0.1)" bd="rgba(16,185,129,0.4)"/>
       </>)},
     { key:"basics", icon:"📚", title:"I know the basics", tag:"Level up", body:()=>(<>
-        <p style={txt}>Finish the 12-lesson course and earn a permanent, shareable transcript. Want depth on liquidity? The LP Lab has 14 advanced lessons.</p>
+        <p style={txt}>Finish the 12-lesson course and earn a permanent, shareable transcript. Want depth on liquidity? The LP Lab has {LP_LESSONS_COUNT} advanced lessons.</p>
         <Act label="📚 12-lesson course" onClick={()=>onGo("select")}/>
         <Act label="⚗️ LP Lab" onClick={()=>onGo("lplab")} color="#6EE7B7" bg="rgba(16,185,129,0.1)" bd="rgba(16,185,129,0.4)"/>
       </>)},
