@@ -1,6 +1,30 @@
 // LP Lab — lessons + calculators (~2,800 lines) — lazy-loaded section.
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Component } from "react";
 import { LOGO_B64, COL, COLW, READ, AskCluck, MintAddress } from "../shared.jsx";
+
+// Every calculator below is wrapped in this. It was referenced in twelve places before it was ever
+// written, which is a runtime-only ReferenceError — `npm run build` compiles a free variable
+// happily, and CI only `node --check`s the backend — so the whole lesson body rendered as a blank
+// page in production and nothing flagged it. Keep the definition next to the import so it cannot
+// drift away from its uses again.
+// The boundary earns its keep beyond that bug: a lesson is mostly teaching copy, and one throwing
+// calculator should never take the words down with it.
+class CalcErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { failed: false }; }
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch(err) { try { console.error("[LP Lab] calculator crashed:", err); } catch (e) {} }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:12,padding:16,marginTop:16,marginBottom:8}}>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:"#EF4444",letterSpacing:2,marginBottom:4}}>⚠️ CALCULATOR UNAVAILABLE</div>
+        <p style={{margin:0,fontFamily:"'Anton',sans-serif",fontSize:13,color:"#9CA3AF",lineHeight:1.6}}>
+          This interactive tool failed to load. The lesson above is unaffected — reload the page to try again.
+        </p>
+      </div>
+    );
+  }
+}
 
 const LP_LESSONS = [
   {
@@ -332,15 +356,18 @@ If you LP SOL/mSOL — both tokens track SOL price closely. When SOL goes up, bo
       },
       {
         heading: "IL vs Fee Income — The Real Calculation",
-        body: `The only number that actually matters is net return = Fee APR minus IL rate.
+        body: `The only number that actually matters is net return = fees earned minus IL — but you have to put both on the same clock first.
 
-A pool showing 80% APR is meaningless if you are experiencing 70% annualized IL from price divergence. Your real return is 10%.
+Fee APR is a RATE PER YEAR. Impermanent loss is NOT a rate — it is a one-off hit set purely by how far the price ratio moved, and it does not care whether that took a week or a decade. So "80% APR minus 5.7% IL = 74.3%" is only true if you actually held for a full year. Hold that same position for 30 days and you collect 80 × 30/365 = 6.6% in fees against the very same 5.7% IL — a net of +0.9%, not +74%.
 
 HOW TO EVALUATE:
 Step 1: Find the pool's 30-day fee APR on DexScreener or the protocol dashboard
 Step 2: Estimate your expected IL based on the token pair's historical volatility
-Step 3: Subtract estimated IL from fee APR
-Step 4: Compare that number to simply holding the tokens
+Step 3: Prorate the fee APR to how long you actually intend to hold — APR × days ÷ 365
+Step 4: Subtract the estimated IL from THAT number, not from the headline APR
+Step 5: Compare the result to simply holding the tokens
+
+THE SHORTCUT THAT COSTS PEOPLE MONEY: subtracting an annual rate from a one-off loss. It flatters every short hold, and short holds are exactly where LPs get hurt — you eat the full IL of the move but only collect a sliver of the year's fees.
 
 If net return after IL is higher than holding — LP position makes sense.
 If net return after IL is lower than holding — you are better off just holding.
@@ -380,7 +407,7 @@ CLUCK'S FRAMEWORK: Never enter an LP position without running this calculation. 
         q: "You enter an LP position with $10,000. The pool earns 120% APR in fees over a year. But the token pair experienced a 4x price divergence causing 20% IL. What is your approximate net return?",
         options: ["120% — fees always cover IL so you keep the entire headline APR number", "100% — fee APR minus IL rate", "20% IL means you definitely lost money regardless of what fees were earned", "This calculation is impossible without knowing the exact token prices and volumes"],
         correct: 1,
-        explanation: "Net return = Fee APR minus IL rate. 120% fee APR minus 20% IL = approximately 100% net return. You still made excellent money but significantly less than the headline APR suggested. Always run this calculation before entering any LP position."
+        explanation: "Net return = fees earned minus IL. This one subtracts cleanly because the holding period is a full year, so the 120% APR is collected in full: 120% minus 20% IL = approximately 100%. Watch the clock, though — over 30 days that same pool only earns 120 x 30/365 = 9.9% against the identical 20% IL, which is a LOSS. Prorate the APR to your actual holding period before subtracting."
       },
       {
         q: "You provided liquidity to a SOL/USDC pool 6 months ago. SOL has since moved from $100 to $200 then back to $100. You are considering withdrawing. What is your IL situation?",
@@ -2496,14 +2523,27 @@ function LPvsHODLCalculator() {
 function FeeILCalculator() {
   const [feeAPR, setFeeAPR] = useState(80);
   const [priceChange, setPriceChange] = useState(2);
+  const [days, setDays] = useState(30);
 
   const ilPct = Math.abs((2 * Math.sqrt(priceChange) / (1 + priceChange) - 1) * 100);
-  const netReturn = feeAPR - ilPct;
+  // Fee APR is a RATE PER YEAR; IL is a one-off hit tied to a price ratio, not to time. Subtracting
+  // them directly (the old `feeAPR - ilPct`) only happens to be right when the holding period is
+  // exactly one year — at 30 days it overstated net return by ~12x, telling someone an 80% APR pool
+  // "nets 74%" through a 2x move when the truthful answer over that month is about +0.9%.
+  // So prorate the fees onto the same window as the IL, and both numbers mean "% of the position
+  // over `days` days".
+  const years = days / 365;
+  const feesPct = feeAPR * years;
+  const netReturn = feesPct - ilPct;
+  // Annualised so the verdict bands stay comparable across any holding period.
+  const netAPR = netReturn / years;
+  // The APR this pool would have to pay to break even against this much IL over this window.
+  const breakevenAPR = ilPct / years;
 
   return (
     <div style={{background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.25)",borderRadius:12,padding:16,marginTop:16,marginBottom:8}}>
       <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:"#10B981",letterSpacing:2,marginBottom:4}}>🧮 INTERACTIVE — FEE vs IL CALCULATOR</div>
-      <p style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:"#9CA3AF",margin:"0 0 14px",lineHeight:1.6}}>Enter the pool's fee APR and expected price change to see your real net return.</p>
+      <p style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:"#9CA3AF",margin:"0 0 14px",lineHeight:1.6}}>Enter the pool's fee APR, the price move you expect, and how long you plan to hold. Fees only out-earn IL if you are in the pool long enough to collect them.</p>
 
       <div style={{marginBottom:12}}>
         <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
@@ -2531,11 +2571,20 @@ function FeeILCalculator() {
         <div style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#6B7280",marginTop:2}}>Below 1x = the token fell. The IL RATE is symmetric — 0.5x and 2x both cost 5.7% — though the dollar amount differs because the position is worth less.</div>
       </div>
 
+      <div style={{marginBottom:14}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+          <span style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#6B7280",letterSpacing:1}}>HOLDING PERIOD</span>
+          <span style={{fontFamily:"monospace",fontSize:15,color:"#FFB627",fontWeight:700}}>{days} {days === 1 ? "day" : "days"}</span>
+        </div>
+        <input type="range" min="1" max="365" step="1" value={days} onChange={e=>setDays(Number(e.target.value))} style={{width:"100%",accentColor:"#10B981"}}/>
+        <div style={{fontFamily:"'Anton',sans-serif",fontSize:11,color:"#6B7280",marginTop:2}}>Fees are a RATE — they accrue with time. IL is not — it is set by the price ratio alone. So the two only compare over the same window, and a shorter hold earns less fee income against exactly the same IL.</div>
+      </div>
+
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
         {[
-          {label:"FEE APR", value:`${feeAPR}%`, color:"#10B981"},
-          {label:"IL RATE", value:`${ilPct.toFixed(1)}%`, color:"#EF4444"},
-          {label:"NET RETURN", value:`${netReturn.toFixed(1)}%`, color: netReturn > 0 ? "#FFB627" : "#EF4444"},
+          {label:`FEES · ${days}D`, value:`+${feesPct.toFixed(1)}%`, color:"#10B981"},
+          {label:`IL · ${priceChange}x`, value:`−${ilPct.toFixed(1)}%`, color:"#EF4444"},
+          {label:`NET · ${days}D`, value:`${netReturn >= 0 ? "+" : "−"}${Math.abs(netReturn).toFixed(1)}%`, color: netReturn > 0 ? "#FFB627" : "#EF4444"},
         ].map((r,i)=>(
           <div key={i} style={{background:"rgba(0,0,0,0.3)",borderRadius:8,padding:"10px 8px",textAlign:"center"}}>
             <div style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#6B7280",letterSpacing:1,marginBottom:4}}>{r.label}</div>
@@ -2543,16 +2592,23 @@ function FeeILCalculator() {
           </div>
         ))}
       </div>
+      <div style={{fontFamily:"monospace",fontSize:12,color:"#9CA3AF",marginTop:8,textAlign:"center"}}>
+        annualised ≈ {netAPR >= 0 ? "+" : "−"}{Math.abs(netAPR).toFixed(0)}% APR · break-even needs {breakevenAPR.toFixed(0)}% APR over {days}d
+      </div>
+
       {netReturn < 0 && (
         <div style={{marginTop:10,background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:8,padding:"8px 12px"}}>
-          <p style={{margin:0,fontFamily:"'Anton',sans-serif",fontSize:13,color:"#EF4444",lineHeight:1.6}}>⚠️ IL exceeds fee income. You would be better off just holding these tokens.</p>
+          <p style={{margin:0,fontFamily:"'Anton',sans-serif",fontSize:13,color:"#EF4444",lineHeight:1.6}}>⚠️ Over {days} days, a {feeAPR}% APR pool only earns {feesPct.toFixed(1)}% — less than the {ilPct.toFixed(1)}% the price move costs you. Holding wins. You would need about {breakevenAPR.toFixed(0)}% APR to break even on this move in this much time.</p>
         </div>
       )}
-      {netReturn > 0 && netReturn < 20 && (
+      {netReturn > 0 && netAPR < 20 && (
         <div style={{marginTop:10,background:"rgba(255,182,39,0.1)",border:"1px solid rgba(255,182,39,0.3)",borderRadius:8,padding:"8px 12px"}}>
-          <p style={{margin:0,fontFamily:"'Anton',sans-serif",fontSize:13,color:"#FFB627",lineHeight:1.6}}>⚠️ Marginal return. Make sure you are accounting for rebalancing costs and gas fees.</p>
+          <p style={{margin:0,fontFamily:"'Anton',sans-serif",fontSize:13,color:"#FFB627",lineHeight:1.6}}>⚠️ Marginal — {netReturn.toFixed(1)}% over {days} days is only about {netAPR.toFixed(0)}% APR once you annualise it. Rebalancing costs and gas can erase a margin this thin.</p>
         </div>
       )}
+      <p style={{fontFamily:"'Anton',sans-serif",fontSize:12,color:"#6B7280",margin:"10px 0 0",lineHeight:1.6}}>
+        Fees are prorated straight from the APR and assume you stayed in range for the whole period — the optimistic case. IL is charged once, on the price ratio you set above, no matter how long you held.
+      </p>
     </div>
   );
 }

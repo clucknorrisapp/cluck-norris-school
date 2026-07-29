@@ -1881,7 +1881,7 @@
       "This calculation is impossible without knowing the exact token prices and volumes"
     ],
     "correct": 1,
-    "explanation": "Net return = Fee APR minus IL rate. 120% fee APR minus 20% IL = approximately 100% net return. You still made excellent money but significantly less than the headline APR suggested. Always run this calculation before entering any LP position.",
+    "explanation": "Net return = fees earned minus IL. This one subtracts cleanly because the holding period is a full year, so the 120% APR is collected in full: 120% minus 20% IL = approximately 100%. Watch the clock, though — over 30 days that same pool only earns 120 x 30/365 = 9.9% against the identical 20% IL, which is a LOSS. Prorate the APR to your actual holding period before subtracting.",
     "source": "LPLAB"
   },
   {
