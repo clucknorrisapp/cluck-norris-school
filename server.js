@@ -1083,7 +1083,7 @@ const X_BLITZ_DECK = [
   { t: "100% of CLKN creator fees go straight back into buying CLKN — every claim is on-chain and verifiable right in the app.\n\nclucknorris.app" },
   { t: "Everything core is FREE — the school, the tools, the AI tutor. Premium operator tools unlock with a tiny CLKN payment. No wallet-connect to pay.\n\nclucknorris.app" },
   { t: "Forensic rule, everywhere we build: state what's on-chain, never assert intent. The chain shows what happened, not why. Receipts, not rumors.\n\nclucknorris.app" },
-  { finn: true, t: "Months of work, one mission: take the hard knocks so you don't have to. Free school, free tools, real token, live engine.\n\nThis is our @BagsHackathon entry. 🐔\n\nclucknorris.app" },
+  { finn: true, t: "Months of work, one mission: make crypto learnable before it gets expensive. Free school, free tools, real token, live engine.\n\nThis is our @BagsHackathon entry. 🐔\n\nclucknorris.app" },
 ];
 async function xBlitzTick() {
   if (!xConfigured()) return;
@@ -4054,7 +4054,7 @@ const OUTREACH_PROJECTS = [
   "🔥 <b>One project helping another.</b>\n\nWe're opening our liquidity engine to a few serious Solana projects. Honest market making, real depth, full transparency on the risks — done <i>with</i> you, not <i>to</i> you. Not self-serve; we sit down and set it up right.\n\nIf your token needs real, organic volume, DM @firechicken007 on X or ping us here.",
 ];
 const OUTREACH_LEARNERS = [
-  "🎓 <b>New to crypto and tired of getting rekt?</b>\n\nCluck Norris is a <b>free</b> school — wallets, DeFi, LP, scams — plus free tools to X-ray any token before you ape, and a live AI tutor that answers anything.\n\n<b>Why us:</b> we take the hard knocks so you don't have to. <b>Why now:</b> the cheapest tuition in crypto is the lesson you learn <i>before</i> you lose money. Start free → clucknorris.app 🐔",
+  "🎓 <b>New to crypto and tired of getting rekt?</b>\n\nCluck Norris is a <b>free</b> school — wallets, DeFi, LP, scams — plus free tools to X-ray any token before you ape, and a live AI tutor that answers anything.\n\n<b>Why us:</b> it's genuinely free, and we show our work on-chain. <b>Why now:</b> the cheapest tuition in crypto is the lesson you learn <i>before</i> you lose money. Start free → clucknorris.app 🐔",
   "🐔 <b>We don't pump. We build.</b>\n\nFree crypto school, free research tools, a real AI tutor — and a token (CLKN) that grows with the brand instead of begging you to buy. We even run our own honest liquidity engine and feed the fees back in.\n\n<b>Why look closer:</b> a community that actually ships and practices what it teaches. Come learn first → clucknorris.app",
   "📚 <b>Learn crypto. Don't get rekt. Maybe back a community worth backing.</b>\n\nEverything at clucknorris.app is free to learn — finish the course for a permanent transcript and an on-chain graduation NFT. And if you like what the flock is building, CLKN is how you come along: no hype, no buy pressure, just a brand and a community that keep growing.\n\n<b>Why now?</b> The best time to learn was before your last bad trade. 🔥",
 ];
