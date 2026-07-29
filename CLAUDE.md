@@ -836,11 +836,16 @@ render the realized width, not the requested slider value. LOW backlog now fully
 - Local: `node scripts/smoke-test.js --no-build` after a build. No unit-test suite beyond this.
 
 ## Deferred / check later
-- 🚫 **Nomadz partnership — DEAD, DO NOT RE-RAISE (owner's call 2026-07-26).** The owner DM'd CEO
-  Ivan on 2026-07-20 asking permission to feature Nomadz (Solana travel booking) as a real-world-
-  adoption education section. **Ivan never responded**, and the owner now considers it dead. Do not
-  build, publish, or propose anything Nomadz-related, and do not suggest chasing a reply. If Ivan
-  ever reaches out unprompted, that is the owner's call to reopen — nobody else's.
+- 🔄 **Nomadz — REOPENED 2026-07-29: Ivan replied.** History: the owner DM'd Nomadz CEO Ivan on
+  2026-07-20 asking permission to feature Nomadz (Solana hotel booking) as a real-world-adoption
+  education section; no answer came, and on 2026-07-26 the owner called it dead. **On 2026-07-29 the
+  owner reported a reply from the CEO about putting up info on their Solana hotel-reservation site.**
+  That is exactly the "if Ivan reaches out unprompted, it's the owner's call to reopen" case, and the
+  owner has reopened it. ⚠️ **Still do NOT build or publish anything Nomadz-related until the owner
+  says what was actually agreed** — a reply is not yet a scope. Get the terms from him first (what
+  may be shown, whose wording, any linking/branding conditions), then treat it as an education
+  section, not an endorsement: the forensic rule still applies and we do not vouch for a third
+  party's product.
 - 🚫 **Solana Foundation — NOTHING HAS PANNED OUT (owner's call 2026-07-26).** None of the Solana
   Foundation avenues have gone anywhere. Do not build work premised on Foundation support, and do
   not propose new applications unless the owner raises it. ⚠️ The grant/investor pages still
