@@ -3646,6 +3646,9 @@ app.post("/api/classroom/graduate-claim", async (req, res) => {
   const { courseId, token, wallet, social } = req.body || {};
   const w = String(wallet || "").trim();
   if (!SOL_ADDR_RE.test(w)) return res.status(400).json({ success: false, error: "Enter a valid Solana wallet address" });
+  // Same guard as /api/claim — this door also pays out to whatever address it is handed.
+  const wProblem = staticNonWalletReason(w);
+  if (wProblem) return res.status(400).json({ success: false, error: wProblem });
   const soc = String(social || "").trim().slice(0, 300);
   if (soc.length < 5) return res.status(400).json({ success: false, error: "Paste your X or Telegram post link / handle so we can verify" });
   const hk = socialHandleKey(soc);
@@ -7577,10 +7580,65 @@ async function checkCLKNHolder(wallet) {
 // wallet. GRADUATION (finishing the full curriculum) is now the ONLY door to a transcript.
 // The in-lesson quizzes are untouched — they live in src/App.jsx and src/sections/LPLab.jsx.
 
+// A graduation address has to be a WALLET THE LEARNER CONTROLS — the airdrop list and the
+// diploma cNFT both go to it. SOL_ADDR_RE only checks base58 shape, which on 2026-07-29 let
+// the CLKN CONTRACT ADDRESS itself onto the graduate list: a learner whose first submit
+// errored out grabbed the mint off the site footer and tried again with that. (It ends in
+// "BAGS" — a Bags launchpad vanity mint — so at a glance it even reads like a person's wallet.)
+//
+// Checks run cheapest-first and the on-chain one FAILS OPEN: an RPC blip must never stand
+// between a learner and the transcript they just earned. The static checks below still catch
+// our own mint and every labelled program/exchange with no network call at all.
+// Native addresses that are not in the DEX/locker/token tables but get pasted anyway:
+// the System Program (the "1111…" that shows as the owner of every normal wallet, which
+// people copy out of an explorer by mistake) and the burn address.
+const SYSTEM_NON_WALLETS = {
+  "11111111111111111111111111111111": "System Program",
+  "1nc1nerator11111111111111111111111111111111": "Incinerator (burn address)",
+};
+// The synchronous half — no network, safe to call per-row when FILTERING existing records.
+function staticNonWalletReason(addr) {
+  let bytes = null;
+  try { bytes = base58Decode(addr); } catch (_) {}
+  if (!bytes || bytes.length !== 32) return "That doesn't look like a complete Solana address — check for a missing character.";
+  if (addr === CLKN_MINT) return "That's the CLKN contract address, not your wallet. Paste the address from your own wallet app (Phantom, Solflare…).";
+  // NOTE: DEX_PROGRAMS / LOCKER_PROGRAMS / TOKEN_PROGRAMS are Sets, PROGRAM_LABELS is an
+  // object. Mixing those up silently disables the check — `SET[addr]` is always undefined.
+  if (TOKEN_PROGRAMS.has(addr) || DEX_PROGRAMS.has(addr) || LOCKER_PROGRAMS.has(addr) || PROGRAM_LABELS[addr] || SYSTEM_NON_WALLETS[addr])
+    return "That's a Solana program address, not a wallet. Paste the address from your own wallet app.";
+  if (KNOWN_CEX_WALLETS[addr] || KNOWN_SERVICE_WALLETS[addr])
+    return "That's an exchange / service address. Use a wallet you hold the keys to — an exchange deposit address can't receive an NFT.";
+  // Off-curve = program-derived (a token account, an escrow), never a personal wallet.
+  if (!isOnCurveBytes(bytes)) return "That's a token account or program-derived address, not a wallet. Paste your main wallet address.";
+  return null;
+}
+
+async function rejectNonWallet(addr) {
+  const staticReason = staticNonWalletReason(addr);
+  if (staticReason) return staticReason;
+  // Finally ask the chain. A real wallet is either brand new (no account yet) or owned by the
+  // System Program; anything owned by a token program is a mint or a token account.
+  try {
+    const key = process.env.HELIUS_API_KEY;
+    if (!key) return null;
+    const call = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${key}`);
+    const out = await call("claim-addr-check", "getAccountInfo", [addr, { encoding: "jsonParsed" }]);
+    const v = out && out.result && out.result.value;
+    if (!v) return null;                       // never funded — a perfectly good fresh wallet
+    if (v.executable) return "That's a program address, not a wallet. Paste the address from your own wallet app.";
+    if (TOKEN_PROGRAMS.has(v.owner)) return "That's a token mint or token account, not a wallet. Paste the address from your own wallet app.";
+  } catch (e) {
+    console.warn("[claim] address check skipped (RPC):", e.message);   // fail open, deliberately
+  }
+  return null;
+}
+
 app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   const { wallet, coursework } = req.body;
-  if (!SOL_ADDR_RE.test(String(wallet || ""))) return res.status(400).json({ success: false, error: "Invalid wallet" });
+  if (!SOL_ADDR_RE.test(String(wallet || ""))) return res.status(400).json({ success: false, error: "That doesn't look like a Solana address." });
+  const addrProblem = await rejectNonWallet(String(wallet));
+  if (addrProblem) return res.status(400).json({ success: false, error: addrProblem });
   try {
     // GRADUATION is now the ONLY door — the exam that used to mint diplomas is gone.
     //
@@ -7606,9 +7664,15 @@ app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async
     const holderStatus = isHolder ? "[OK] YES" : "[ERR] NO";
 
     // Google Sheet stays the airdrop list — one row per wallet.
+    // `exists` is declared OUT here on purpose: the response at the bottom of this handler
+    // reads it, and when it lived inside the try below, every single graduation threw
+    // "ReferenceError: exists is not defined" AFTER the transcript had already been saved —
+    // so the learner got a 500 and thought they'd failed. That is what produced the
+    // double-submits on 2026-07-29 (and the CLKN mint landing on the graduate list).
+    let exists = false;
     try {
       const rows = await getSheetRows();
-      const exists = rows.some(row => row[0] === wallet);
+      exists = rows.some(row => row[0] === wallet);
       if (!exists) {
         const date = new Date().toISOString();
         await appendToSheet([wallet, effScore, effTotal, effPct, date, holderStatus, balance, source || "CHALLENGE"]);
@@ -7690,7 +7754,22 @@ app.get("/api/credential/:id", (req, res) => {
 // -- Aggregate, judge-facing school metrics (verified graduates, etc.) --
 app.get("/api/school-stats", (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  return res.status(200).json({ success: true, ...credentials.stats() });
+  // Filter, don't delete. On 2026-07-29 the CLKN MINT itself reached this list (see
+  // rejectNonWallet) and showed up as the newest "graduate" on the investor page. The
+  // record is left on disk and still resolves by slug — it just stops being counted as a
+  // person. Filtering at read time also means any future junk address self-heals here,
+  // and nothing irreversible happens to a store we cannot restore from anywhere.
+  const st = credentials.stats();
+  const junk = (w) => !!staticNonWalletReason(String(w || ""));
+  const dropped = credentials.all().filter((r) => junk(r.wallet)).length;
+  if (dropped) {
+    st.totalTranscripts = Math.max(0, (st.totalTranscripts || 0) - dropped);
+    st.graduates = Math.max(0, (st.graduates || 0) - dropped);
+    // stats() truncates the wallet for display, so match on the record list instead.
+    const junkSlugs = new Set(credentials.all().filter((r) => junk(r.wallet)).map((r) => r.slug));
+    if (Array.isArray(st.recent)) st.recent = st.recent.filter((r) => !junkSlugs.has(r.slug));
+  }
+  return res.status(200).json({ success: true, ...st });
 });
 
 // -- Credential Tier-2: prove the transcript's wallet is yours (no WalletConnect) --
