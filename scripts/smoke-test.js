@@ -37,8 +37,6 @@ const SCREENS = [
   { hash: "incubator", label: "incubator" },
   { hash: "library", label: "library" },
   { hash: "lplab", label: "LP lab" },
-  { hash: "survive", label: "survive" },
-  { hash: "challenge", label: "ultimate challenge" },
   { hash: "select", label: "lesson select" },
   { hash: "clkn", label: "CLKN widget" },
 ];

@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useRef, Component, lazy, Suspense } from "react";
 import { MintAddress, JupiterSwapButton, AskCluck, LP_LESSONS_COUNT } from "./shared.jsx";
-const SurvivalSimulator = lazy(() => import("./sections/Survive.jsx"));
 const Library = lazy(() => import("./sections/Library.jsx"));
 const LPLab = lazy(() => import("./sections/LPLab.jsx"));
 const CLKN_MINT = "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
@@ -651,292 +650,6 @@ function readCoursework() {
     lpLab: arr("lplab_completed").length, lpLabTotal: LP_LESSONS_COUNT,
   };
 }
-
-// ── ULTIMATE CHALLENGE COMPONENT ──
-function UltimateChallenge({ onBack }) {
-  const [started, setStarted] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [loadErr, setLoadErr] = useState("");
-  const [sessionId, setSessionId] = useState("");
-  const [questions, setQuestions] = useState([]);
-  const [qi, setQi] = useState(0);
-  const [answers, setAnswers] = useState([]); // chosen option index per question
-  const [sel, setSel] = useState(null);
-  const [finished, setFinished] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState(null);  // { score, total, pct, passed, passToken } from the server
-  const [wallet, setWallet] = useState("");
-  const [claimed, setClaimed] = useState(false);
-  const [claiming, setClaiming] = useState(false);
-  const [isHolder, setIsHolder] = useState(false);
-  const [holderBalance, setHolderBalance] = useState(0);
-  const [slug, setSlug] = useState("");
-
-  // Questions come from the server WITHOUT the answer key — the exam is scored
-  // server-side so a pass can't be faked. No per-question reveal during the run
-  // (it's a no-second-chances final); the verdict comes back on submit.
-  async function startChallenge() {
-    setLoading(true); setLoadErr("");
-    try {
-      const res = await fetch("/api/exam/questions");
-      const data = await res.json();
-      if (!data.success || !Array.isArray(data.questions) || !data.questions.length) throw new Error("no questions");
-      setQuestions(data.questions);
-      setSessionId(data.sessionId);
-      setQi(0); setAnswers([]); setSel(null); setFinished(false); setResult(null);
-      track("challenge_start");
-      setStarted(true);
-    } catch(e) {
-      setLoadErr("Couldn't load the exam — try again in a moment.");
-    }
-    setLoading(false);
-  }
-
-  function pick(i) {
-    if (sel !== null) return;
-    setSel(i);
-    setAnswers(prev => [...prev, i]);
-  }
-
-  async function submitExam(allAnswers) {
-    setSubmitting(true);
-    try {
-      const res = await fetch("/api/exam/submit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId, answers: allAnswers })
-      });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error || "submit failed");
-      setResult(data);
-    } catch(e) {
-      setResult({ score: 0, total: questions.length, pct: 0, passed: false, error: true });
-    }
-    setSubmitting(false);
-    setFinished(true);
-  }
-
-  function next() {
-    if (qi + 1 >= questions.length) {
-      submitExam(answers);
-    } else {
-      setQi(qi + 1);
-      setSel(null);
-    }
-  }
-
-  const score = result ? result.score : 0;
-  const pct = result ? result.pct : 0;
-  const rawPct = pct;
-
-  function getTier() {
-    if (rawPct >= 95) return { label: "YOU ARE CLUCK NORRIS", sub: "LEGENDARY STATUS", color: "#FFB627", icon: "👑", pass: true };
-    if (rawPct >= 94) return { label: "CHALLENGER DEFEATED", sub: "Cluck Norris respects you.", color: "#10B981", icon: "🏆", pass: true };
-    if (rawPct >= 86) return { label: "WORTHY OPPONENT", sub: "...but still inferior. Cluck Norris doesn't lose.", color: "#FFB627", icon: "⚔️", pass: false };
-    if (rawPct >= 70) return { label: "EMBARRASSING", sub: "Cluck Norris is embarrassed FOR you.", color: "#EF4444", icon: "😤", pass: false };
-    return { label: "GET OUT OF HIS DOJO", sub: "Come back when you've read a whitepaper.", color: "#6B7280", icon: "💀", pass: false };
-  }
-
-  async function claimSpot() {
-    if (!wallet || wallet.length < 32) return;
-    setClaiming(true);
-    try {
-      const res = await fetch("/api/claim", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet, score, total: result ? result.total : questions.length, pct, passToken: result && result.passToken, coursework: readCoursework() })
-      });
-      const data = await res.json();
-      track("claim_submit:challenge");
-      setClaimed(true);
-      setIsHolder(data.isHolder || false);
-      setHolderBalance(data.balance || 0);
-      setSlug(data.slug || "");
-    } catch(e) {
-      setClaimed(true);
-    }
-    setClaiming(false);
-  }
-
-  // Intro screen
-  if (!started) return (
-    <div style={{padding:"0 16px 40px",maxWidth:READ,margin:"0 auto",textAlign:"center"}}>
-      <div style={{marginBottom:24}}>
-        <img src={LOGO_B64} alt="Cluck Norris" style={{width:120,height:120,borderRadius:"50%",border:"3px solid #EF4444",objectFit:"cover",boxShadow:"0 0 30px rgba(239,68,68,0.6)"}}/>
-      </div>
-      <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,letterSpacing:4,color:"#EF4444",marginBottom:6}}>THINK YOU'RE A CRYPTO GENIUS?</div>
-      <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:32,fontWeight:900,color:"#F9FAFB",margin:"0 0 8px",lineHeight:1}}>THE ULTIMATE<br/>CHALLENGE</h2>
-      <div style={{fontFamily:"'Anton',sans-serif",fontSize:13.5,color:"#6B7280",letterSpacing:2,marginBottom:24}}>CLUCK NORRIS ONE ON ONE</div>
-      <div style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:12,padding:20,marginBottom:24,textAlign:"left"}}>
-        <p style={{fontFamily:"'Anton',sans-serif",fontSize:15.5,color:"#9CA3AF",margin:"0 0 16px",lineHeight:1.7,fontStyle:"italic"}}>
-          "Step into my dojo. 50 questions. No study guide. No second chances. All or nothing."
-        </p>
-        {[
-          {icon:"❓",text:"50 questions — drawn from across the entire curriculum and beyond"},
-          {icon:"📵",text:"No study section — straight into the exam"},
-          {icon:"🎯",text:"94% to pass — 47 out of 50 correct minimum"},
-          {icon:"💀",text:"Anything less and Cluck Norris is embarrassed FOR you"},
-        ].map(r=>(
-          <div key={r.text} style={{display:"flex",gap:12,marginBottom:10,alignItems:"flex-start"}}>
-            <span style={{fontSize:16,flexShrink:0}}>{r.icon}</span>
-            <span style={{fontFamily:"'Anton',sans-serif",fontSize:15,color:"#D1D5DB",lineHeight:1.5}}>{r.text}</span>
-          </div>
-        ))}
-      </div>
-      <button onClick={startChallenge} disabled={loading} style={{width:"100%",background:"#EF4444",border:"none",borderRadius:10,padding:"16px",fontFamily:"'Anton',sans-serif",fontSize:16,fontWeight:700,color:"#fff",letterSpacing:3,cursor:loading?"default":"pointer",opacity:loading?0.7:1,boxShadow:"0 0 30px rgba(239,68,68,0.5)",marginBottom:12}}>
-        {loading ? "ENTERING THE DOJO..." : "🥊 STEP INTO THE DOJO"}
-      </button>
-      {loadErr && <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:"#EF4444",letterSpacing:1,marginBottom:12}}>{loadErr}</div>}
-      <button onClick={onBack} style={{background:"none",border:"none",color:"#6B7280",fontFamily:"'Anton',sans-serif",fontSize:13,letterSpacing:2,cursor:"pointer"}}>
-        ← BACK TO SCHOOL
-      </button>
-    </div>
-  );
-
-  // Results screen
-  if (finished) {
-    const tier = getTier();
-    return (
-      <div style={{padding:"0 16px 40px",maxWidth:READ,margin:"0 auto",textAlign:"center"}}>
-        <div style={{fontSize:60,marginBottom:16}}>{tier.icon}</div>
-        <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:3,color:tier.color,marginBottom:8}}>FINAL VERDICT</div>
-        <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:28,fontWeight:900,color:tier.color,margin:"0 0 8px",lineHeight:1}}>{tier.label}</h2>
-        <p style={{fontFamily:"'Anton',sans-serif",fontSize:15.5,color:"#9CA3AF",marginBottom:24,fontStyle:"italic"}}>"{tier.sub}"</p>
-        <div style={{background:"rgba(255,122,24,0.05)",border:`1px solid ${tier.color}40`,borderRadius:12,padding:24,marginBottom:24}}>
-          <div style={{fontFamily:"'Anton',sans-serif",fontSize:60,fontWeight:900,color:tier.color,lineHeight:1}}>{pct}%</div>
-          <div style={{fontFamily:"'Anton',sans-serif",fontSize:15.5,color:"#6B7280",marginTop:8,letterSpacing:2}}>{score} / {questions.length} CORRECT</div>
-          <div style={{marginTop:16,height:8,background:"rgba(255,122,24,0.18)",borderRadius:20,overflow:"hidden"}}>
-            <div style={{height:"100%",width:`${pct}%`,background:`#EF4444`,borderRadius:20,transition:"width 1s ease"}}/>
-          </div>
-          <div style={{display:"flex",justifyContent:"space-between",marginTop:6}}>
-            <span style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#4B5563"}}>0%</span>
-            <span style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#10B981"}}>94% PASS</span>
-            <span style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#FFB627"}}>100%</span>
-          </div>
-        </div>
-        {/* Trophy claim section for passers */}
-        {tier.pass && (
-          <div style={{background:"rgba(212,175,55,0.08)",border:"1px solid rgba(212,175,55,0.3)",borderRadius:12,padding:18,marginBottom:16}}>
-            <div style={{textAlign:"center",marginBottom:12}}>
-              <div style={{fontSize:32,marginBottom:6}}>🏆</div>
-              <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#FFB627",letterSpacing:2,marginBottom:4}}>YOU EARNED YOUR SPOT</div>
-              <p style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:"#9CA3AF",margin:0,lineHeight:1.6}}>
-                Drop your Solana wallet address to lock in your verified diploma and get entered for CLKN airdrops. Only passers qualify.
-              </p>
-            </div>
-            {!claimed ? (
-              <>
-                <input
-                  value={wallet}
-                  onChange={e=>setWallet(e.target.value)}
-                  placeholder="Your Solana wallet address..."
-                  style={{width:"100%",background:"rgba(255,122,24,0.07)",border:"1px solid rgba(212,175,55,0.3)",borderRadius:8,padding:"10px 12px",color:"#F9FAFB",fontFamily:"monospace",fontSize:13,marginBottom:10,boxSizing:"border-box",outline:"none"}}
-                />
-                <button onClick={claimSpot} disabled={!wallet||wallet.length<32||claiming} style={{width:"100%",background:wallet&&wallet.length>=32?"#FFB627":"rgba(255,122,24,0.07)",border:"none",borderRadius:8,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:wallet&&wallet.length>=32?"#1a0f08":"#4B5563",letterSpacing:2,cursor:wallet&&wallet.length>=32?"pointer":"default"}}>
-                  {claiming?"SUBMITTING...":"🏆 CLAIM YOUR SPOT"}
-                </button>
-              </>
-            ) : (
-              <div style={{textAlign:"center",padding:"8px 0"}}>
-                {isHolder ? (
-                  <div>
-                    <div style={{fontSize:40,marginBottom:8}}>🐔🔥</div>
-                    <div style={{fontFamily:"'Anton',sans-serif",fontSize:16,fontWeight:900,color:"#FFB627",letterSpacing:2,marginBottom:6}}>YOU'RE ALREADY IN THE FLOCK!</div>
-                    <div style={{fontFamily:"'Anton',sans-serif",fontSize:13.5,color:"#FFB627",marginBottom:8}}>
-                      HOLDING {parseInt(holderBalance).toLocaleString()} CLKN
-                    </div>
-                    <p style={{fontSize:13.5,color:"#9CA3AF",lineHeight:1.7,margin:0}}>
-                      Cluck Norris sees you. You passed the ultimate test AND you hold CLKN. That's the full package. Your wallet is locked in for airdrops and exclusive giveaways. The flock appreciates you. 🙏
-                    </p>
-                  </div>
-                ) : (
-                  <div>
-                    <div style={{fontSize:28,marginBottom:6}}>✅</div>
-                    <div style={{fontFamily:"'Anton',sans-serif",fontSize:13.5,color:"#10B981",letterSpacing:2,marginBottom:6}}>WALLET SUBMITTED — YOU'RE IN THE FLOCK</div>
-                    <p style={{fontSize:13,color:"#6B7280",lineHeight:1.7,margin:0}}>
-                      You passed the Hard Knocks but you don't hold CLKN yet. Pick some up on Bags.fm or Jupiter and become a full member of the flock. 🐔
-                    </p>
-                    <div style={{display:"flex",gap:8,marginTop:10,justifyContent:"center"}}>
-                      <a href={CLKN_TRADE_LINK} target="_blank" rel="noreferrer" style={{background:"rgba(255,122,24,0.15)",border:"1px solid rgba(255,122,24,0.4)",borderRadius:8,padding:"6px 12px",textDecoration:"none",fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#FF7A18",letterSpacing:1}}>
-                        🔥 BAGS.FM
-                      </a>
-                      <a href={JUPITER_TRADE_LINK} target="_blank" rel="noreferrer" style={{background:"rgba(74,222,128,0.1)",border:"1px solid rgba(74,222,128,0.3)",borderRadius:8,padding:"6px 12px",textDecoration:"none",fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#4ADE80",letterSpacing:1}}>
-                        ⚡ JUPITER
-                      </a>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-        {claimed && slug && (
-          <a href={`/transcript/${slug}`} target="_blank" rel="noreferrer" style={{display:"block",textDecoration:"none",background:"rgba(212,175,55,0.1)",border:"1px solid rgba(212,175,55,0.4)",borderRadius:10,padding:"12px",marginBottom:12,textAlign:"center",fontFamily:"'Anton',sans-serif",fontSize:13.5,fontWeight:700,color:"#FFB627",letterSpacing:2}}>
-            🎓 VIEW YOUR PERMANENT TRANSCRIPT →
-          </a>
-        )}
-        <div style={{display:"flex",flexDirection:"column",gap:10}}>
-          <button onClick={()=>{setStarted(false);setFinished(false);setQi(0);setAnswers([]);setSel(null);setResult(null);setSessionId("");setWallet("");setClaimed(false);setSlug("");}} style={{background:"#EF4444",border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer"}}>
-            🥊 FIGHT AGAIN
-          </button>
-          <button onClick={onBack} style={{background:"rgba(255,122,24,0.07)",border:"1px solid rgba(255,122,24,0.2)",borderRadius:10,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:13.5,color:"#9CA3AF",letterSpacing:2,cursor:"pointer"}}>
-            ← BACK TO SCHOOL
-          </button>
-        </div>
-        <MintAddress/>
-      </div>
-    );
-  }
-
-  // Quiz screen
-  const q = questions[qi];
-  return (
-    <div style={{padding:"0 16px 40px",maxWidth:READ,margin:"0 auto"}}>
-      <div data-read-skip="1" style={{marginBottom:16}}>
-        <div style={{display:"flex",justifyContent:"space-between",fontSize:12.5,color:"#6B7280",fontFamily:"'Anton',sans-serif",letterSpacing:1,marginBottom:5}}>
-          <span style={{color:"#EF4444",fontWeight:700}}>🥊 ULTIMATE CHALLENGE</span>
-          <span>Q {qi+1} OF {questions.length}</span>
-        </div>
-        <div style={{height:6,background:"rgba(255,122,24,0.18)",borderRadius:3,overflow:"hidden"}}>
-          <div style={{height:"100%",width:`${((qi)/questions.length)*100}%`,background:"#EF4444",borderRadius:3}}/>
-        </div>
-        <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
-          <span style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#4B5563"}}>START</span>
-          <span style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#10B981"}}>NEED 47+ TO PASS</span>
-          <span style={{fontFamily:"'Anton',sans-serif",fontSize:8,color:"#FFB627"}}>50</span>
-        </div>
-      </div>
-      <div style={{background:"rgba(239,68,68,0.05)",border:"1px solid rgba(239,68,68,0.2)",borderRadius:12,padding:20,marginBottom:14}}>
-        <div data-read-skip="1" style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#EF4444",letterSpacing:2,marginBottom:8}}>QUESTION {qi+1}</div>
-        <p style={{fontFamily:"'Anton',sans-serif",fontSize:18,color:"#F9FAFB",margin:0,lineHeight:1.4}}>{q.q}</p>
-      </div>
-      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
-        {q.options.map((opt,i)=>{
-          // No right/wrong reveal — the Ultimate Challenge tells you nothing. You
-          // either know it or you go take the courses. Selection just locks in.
-          let bg="rgba(255,122,24,0.05)",border="1px solid rgba(255,122,24,0.18)",color="#D1D5DB";
-          if(sel===i){bg="rgba(212,175,55,0.15)";border="1px solid #FFB627";color="#FFB627";}
-          return(<button key={i} onClick={()=>pick(i)} disabled={sel!==null} style={{background:bg,border,borderRadius:10,padding:"12px 14px",color,cursor:sel!==null?"default":"pointer",textAlign:"left",fontSize:15.5,display:"flex",gap:10,alignItems:"center"}}>
-            <span style={{fontFamily:"'Anton',sans-serif",fontSize:13,opacity:0.6,minWidth:18}}>{String.fromCharCode(65+i)}</span>{opt}
-          </button>);
-        })}
-      </div>
-      {sel!==null&&(
-        <button onClick={next} disabled={submitting} style={{width:"100%",background:"#EF4444",border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:submitting?"default":"pointer",opacity:submitting?0.7:1}}>
-          {submitting?"SCORING...":(qi+1<questions.length?"NEXT QUESTION →":"SEE FINAL VERDICT →")}
-        </button>
-      )}
-    </div>
-  );
-}
-
-
-
-
-
-
-// ── AUTO VERIFY COMPONENT ──
-
 
 function TokenIcon({ image, symbol }) {
   const [errored, setErrored] = useState(false);
@@ -1673,7 +1386,7 @@ function AppIcon({size=64}){
   );
 }
 
-function Landing({onStart,onChallenge,onIncubator,onStartHere,completed}){
+function Landing({onStart,onIncubator,onStartHere,completed}){
   const pct=Math.round((completed.length/LESSONS.length)*100);
   let consecutive=0;
   for(let i=0;i<LESSONS.length;i++){ if(completed.includes(LESSONS[i].id)) consecutive++; else break; }
@@ -1733,9 +1446,8 @@ function Landing({onStart,onChallenge,onIncubator,onStartHere,completed}){
       <div style={{background:"rgba(255,182,39,0.12)",border:"1px solid rgba(255,182,39,0.45)",borderRadius:12,padding:"16px 18px",marginBottom:14,textAlign:"left",boxShadow:"0 0 22px rgba(255,182,39,0.12)"}}>
         <div style={{fontFamily:"'Anton',sans-serif",fontSize:15.5,letterSpacing:1,color:"#FFB627",marginBottom:6}}>🎓 GRADUATE REWARD</div>
         <p style={{fontFamily:"system-ui,sans-serif",fontSize:15,color:"#D1D5DB",lineHeight:1.6,margin:"0 0 11px"}}>
-          Every graduate is <b style={{color:"#FFB627"}}>entered to receive CLKN airdrops</b>. Finish all 12 classes to mint an <b style={{color:"#FFB627"}}>on-chain graduation NFT</b>, or pass the Ultimate Challenge for a <b style={{color:"#FFB627"}}>verified diploma</b> — then drop your Solana address to claim it and get entered for CLKN airdrops.
+          Every graduate is <b style={{color:"#FFB627"}}>entered to receive CLKN airdrops</b>. Finish all 12 classes to mint an <b style={{color:"#FFB627"}}>on-chain graduation NFT</b> — then drop your Solana address to claim it and get entered for CLKN airdrops.
         </p>
-        <button onClick={onChallenge} style={{background:"#FF7A18",border:"none",borderRadius:9,padding:"11px 22px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:1.5,textTransform:"uppercase",cursor:"pointer"}}>🎓 Take the Ultimate Challenge</button>
       </div>
 
       {/* Incubator — beginners */}
@@ -2053,8 +1765,7 @@ function StartHere({ onGo }){
         <Act label="🧭 Every chain" onClick={goIn("/learn")} color="#6EE7B7" bg="rgba(16,185,129,0.1)" bd="rgba(16,185,129,0.4)"/>
       </>)},
     { key:"basics", icon:"📚", title:"I know the basics", tag:"Level up", body:()=>(<>
-        <p style={txt}>Finish the 12-lesson course, then prove it on the Ultimate Challenge for a verified, shareable diploma. Want depth on liquidity? The LP Lab has 12 advanced lessons.</p>
-        <Act label="🎓 Ultimate Challenge" onClick={()=>onGo("challenge")}/>
+        <p style={txt}>Finish the 12-lesson course and earn a permanent, shareable transcript. Want depth on liquidity? The LP Lab has 14 advanced lessons.</p>
         <Act label="📚 12-lesson course" onClick={()=>onGo("select")}/>
         <Act label="⚗️ LP Lab" onClick={()=>onGo("lplab")} color="#6EE7B7" bg="rgba(16,185,129,0.1)" bd="rgba(16,185,129,0.4)"/>
       </>)},
@@ -2121,7 +1832,7 @@ function StartHere({ onGo }){
 export default function App(){
   const [screen,setScreen]=useState(()=>{
     try {
-      const SCREENS=["library","incubator","lplab","survive","clkn","challenge","select","start"];
+      const SCREENS=["library","incubator","lplab","clkn","select","start"];
       // Shareable deep-link PATHS, so a section can be sent as a clean URL instead of a #hash.
       // A hash is invisible to the server, which means it can't be given its own link-preview card
       // and gets dropped by anything that rewrites URLs. The server routes these paths to the SPA
@@ -2181,17 +1892,14 @@ export default function App(){
           <button onClick={()=>setScreen("incubator")} style={{flex:1,background:screen==="incubator"?"rgba(91,141,214,0.25)":"rgba(91,141,214,0.06)",border:`1px solid ${screen==="incubator"?"rgba(91,141,214,0.6)":"rgba(91,141,214,0.2)"}`,borderRadius:7,padding:"7px 2px",fontFamily:"'Anton',sans-serif",fontSize:12.5,fontWeight:700,color:"#5B8DD6",letterSpacing:0.5,cursor:"pointer"}}>🥚 INCUBATOR</button>
           <button onClick={()=>setScreen(screen==="library"?"landing":"library")} style={{flex:1,background:screen==="library"?"rgba(255,122,24,0.25)":"rgba(255,122,24,0.06)",border:`1px solid ${screen==="library"?"rgba(255,122,24,0.6)":"rgba(255,122,24,0.2)"}`,borderRadius:7,padding:"7px 2px",fontFamily:"'Anton',sans-serif",fontSize:12.5,fontWeight:700,color:"#FF7A18",letterSpacing:0.5,cursor:"pointer"}}>📚 LIBRARY</button>
           <button onClick={()=>setScreen(screen==="lplab"?"landing":"lplab")} style={{flex:1,background:screen==="lplab"?"rgba(16,185,129,0.25)":"rgba(16,185,129,0.06)",border:`1px solid ${screen==="lplab"?"rgba(16,185,129,0.6)":"rgba(16,185,129,0.2)"}`,borderRadius:7,padding:"7px 2px",fontFamily:"'Anton',sans-serif",fontSize:12.5,fontWeight:700,color:"#10B981",letterSpacing:0.5,cursor:"pointer"}}>⚗️ LP LAB</button>
-          <button onClick={()=>setScreen(screen==="survive"?"landing":"survive")} style={{flex:1,background:screen==="survive"?"rgba(239,68,68,0.25)":"rgba(239,68,68,0.06)",border:`1px solid ${screen==="survive"?"rgba(239,68,68,0.6)":"rgba(239,68,68,0.2)"}`,borderRadius:7,padding:"7px 2px",fontFamily:"'Anton',sans-serif",fontSize:12.5,fontWeight:700,color:"#EF4444",letterSpacing:0.5,cursor:"pointer"}}>🎮 SURVIVE</button>
         </div>
       </div>
       )}
       <div style={{paddingTop:screen==="clkn"?"calc(64px + env(safe-area-inset-top, 0px))":28}}>
-        {screen==="landing"&&<Landing onStart={()=>{track("school_start");setScreen("select");}} onChallenge={()=>setScreen("challenge")} onIncubator={()=>{track("incubator_start");setScreen("incubator");}} onStartHere={()=>setScreen("start")} completed={completed}/>}
+        {screen==="landing"&&<Landing onStart={()=>{track("school_start");setScreen("select");}} onIncubator={()=>{track("incubator_start");setScreen("incubator");}} onStartHere={()=>setScreen("start")} completed={completed}/>}
         {screen==="start"&&<StartHere onGo={(s)=>setScreen(s)}/>}
-        {screen==="challenge"&&<UltimateChallenge onBack={()=>setScreen("landing")}/>}
         {screen==="incubator"&&<Incubator onComplete={()=>{track("incubator_complete");setScreen("select");}} onBack={()=>setScreen("landing")}/>}
         {screen==="clkn"&&<CLKNWidget/>}
-        {screen==="survive"&&<Suspense fallback={<div style={{padding:40,textAlign:"center",color:"#9CA3AF"}}>LOADING…</div>}><SurvivalSimulator/></Suspense>}
         {screen==="lplab"&&<Suspense fallback={<div style={{padding:40,textAlign:"center",color:"#9CA3AF"}}>LOADING…</div>}><LPLab/></Suspense>}
         {screen==="library"&&<Suspense fallback={<div style={{padding:40,textAlign:"center",color:"#9CA3AF"}}>LOADING…</div>}><Library/></Suspense>}
         {screen==="select"&&<Select onSelect={id=>{trackId("lesson_start",id);setLessonId(id);setScreen("lesson");}} completed={completed}/>}

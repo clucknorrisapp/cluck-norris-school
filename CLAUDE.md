@@ -292,8 +292,6 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   through it, so a primary 429/outage rolls to a backup instead of going blind.
   Liquidity Engine: `orca-whirlpools` (Orca Whirlpools concentrated-LP market maker —
   non-custodial tx builders) + `whirlpool-vault` (the autonomous LP manager).
-- `data/question-bank.json` — the Ultimate Challenge question pool (server-owned; the
-  client never ships the answer key). See the credentials note below.
 - `hatchery.js` (guided token creator), `securitycoop.js` (approval revoker), and
   `whirlpool-mm.js` (Liquidity Engine — Orca Whirlpools market maker + autonomous vault) —
   Express routers mounted by `server.js`.
@@ -360,34 +358,35 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   client-rendered SPA, so `/curriculum` (server route + `lib/curriculum.js`) serves a static-HTML
   mirror of the lesson content for non-JS crawlers — it text-extracts LESSONS/INCUBATOR_LESSONS
   (App.jsx) + LP_LESSONS (LPLab.jsx) at first request, deliberately WITHOUT quiz answers (the
-  exam draws the same questions — don't make the key googleable). `robots.txt` + `sitemap.xml`
+  a crawlable answer key would let a learner skip the thinking the quiz exists to provoke). `robots.txt` + `sitemap.xml`
   are explicit server routes (the SPA catch-all would otherwise answer them with the React shell).
   If you materially restructure those lesson arrays, sanity-check `/curriculum` still renders
   (a failed extraction 404s that route only — nothing else is affected).
 
 ## Credentials / transcripts (the school's permanent output)
-- A learner earns a permanent, shareable transcript by **passing the Ultimate Challenge**
-  (a *verified* diploma) **or** finishing the full curriculum (graduation). Both doors
-  collect a Solana address via `/api/claim`, which still appends the airdrop list to the
-  Google Sheet AND writes a per-wallet record to `lib/credentials.js` (`/data/credentials.json`).
-- **The exam is scored server-side.** `/api/exam/questions` draws 50 from `data/question-bank.json`,
-  shuffles each question's options, and returns them WITHOUT the correct index. `/api/exam/submit`
-  scores the choices; a pass (≥94%) mints a one-time token that `/api/claim` requires to record a
-  diploma as `verified: "server-scored"` (otherwise `self-reported`). Don't reintroduce client-side
-  scoring or ship the answer key to the browser.
-- ⚠️ **Question-bank drift:** the quiz questions live in BOTH `src/App.jsx` and `data/question-bank.json`
-  (the exam pool), and they are NOT auto-synced — edit a quiz in one place, mirror it in the other (the
-  bank has no live regenerator anymore). The bank's `source` field tags origin: `CURRICULUM` (70, from
-  `LESSONS[].questions`) + `ULTIMATE` (59, exam-only) + `LPLAB` (81, ported from `LP_LESSONS[].sections[].quiz`)
-  = 210 total. So both `LESSONS[].questions` AND `LP_LESSONS` quizzes feed the exam — if you materially edit
-  either, re-port into the bank (match the `source` tag). The exam draw is STRATIFIED by source —
-  `EXAM_SOURCE_MIX` in server.js pins 20 CURRICULUM / 20 ULTIMATE / 10 LPLAB per exam (backfills from
-  the leftover pool if a source runs short), so adding questions to one source no longer skews the exam.
-  The App.jsx↔bank sync is still MANUAL, but a CI drift guard now catches the common case:
-  `scripts/check-question-bank.js` (wired into `.github/workflows/syntax-check.yml`) fails the
-  build if any CURRICULUM/LPLAB bank question's TEXT no longer appears in its source file
-  (caught: reworded/removed questions). Limitation: it matches question text only — a changed
-  answer/options under an unchanged question still needs human review.
+- ⛔ **THE ULTIMATE CHALLENGE AND THE SURVIVAL SIMULATOR WERE REMOVED (2026-07-29, owner's call:
+  "no one is using them"). Do NOT rebuild either without an explicit ask.** Gone: the `challenge`
+  and `survive` screens, `src/sections/Survive.jsx`, the `UltimateChallenge` component,
+  `/api/exam/questions` + `/api/exam/submit`, the pass-token flow, `EXAM_SOURCE_MIX`,
+  `data/question-bank.json` (210 questions) and `scripts/check-question-bank.js` + its CI step.
+  The exam had issued **ZERO diplomas in its entire life** (`/api/school-stats`: `diplomas: 0`,
+  `verifiedDiplomas: 0`) against 9 real graduation transcripts, so nothing real was lost.
+  Removing it also closed two live security holes for free: the answer key was fully readable
+  from the public `i18n/*.school.json` dumps (all 59 exam-only questions, options in bank order,
+  explanation adjacent), and `/api/claim` would mint a "verified" diploma for ANY wallet from a
+  bare `{wallet, pct:100}` POST — which also *downgraded* any genuine record. Git has it all if
+  it's ever wanted back.
+- **The in-lesson quizzes are untouched** — they still live in `src/App.jsx` (`LESSONS[].questions`,
+  `INCUBATOR_LESSONS[].questions`) and `src/sections/LPLab.jsx` (`LP_LESSONS[].sections[].quiz`),
+  graded client-side for practice only. Nothing is gated on them now, so there is no answer key to
+  protect and no bank to mirror into — **the old question-bank drift rule no longer applies.**
+- A learner earns a permanent, shareable transcript by finishing the full curriculum (graduation) —
+  now the ONLY door. It collects a Solana address via `/api/claim`, which appends the airdrop list
+  to the Google Sheet AND writes a per-wallet record to `lib/credentials.js` (`/data/credentials.json`).
+  `/api/claim` deliberately ignores any client-supplied `score`/`total`/`pct`; don't re-read them.
+- ⚠️ **Still open (audited 2026-07-29):** the graduation door is a pure client assertion and each
+  new graduate spends treasury SOL on a cNFT, bounded only by `rateLimit("claim", 10/hr/IP)` and
+  kv `schoolDiplomaDailyCap` (60/day). Worth gating before it's promoted anywhere.
 - Public surfaces: `/transcript/:slug` (page, with OG card), `/api/credential/:slug` (JSON — exposes
   holder *status* only, never balance), `/api/credential-card?slug=` (PNG), `/api/school-stats`
   (aggregate verified-graduate metrics, shown on the grant + investor pages).

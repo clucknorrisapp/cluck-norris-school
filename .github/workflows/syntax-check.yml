@@ -23,8 +23,6 @@ jobs:
             echo "checking $f"
             node --check "$f"
           done
-      - name: question-bank drift guard
-        run: node scripts/check-question-bank.js
       # The backend check above cannot see the React app. An undefined component compiles
       # fine and only throws at runtime, so it auto-deploys and blanks the page — which is
       # exactly how <CalcErrorBoundary> shipped broken to the live LP Lab.

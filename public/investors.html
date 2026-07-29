@@ -195,10 +195,10 @@
     color: #FCA5A5; border-color: rgba(239,68,68,0.32); background: rgba(239,68,68,0.08);
   }
   .quicklinks a[href="#notfor"]:hover { border-color: #EF4444; background: rgba(239,68,68,0.18); }
-  .quicklinks a[href="#simulator"], .quicklinks a[href="#hood"] {
+  .quicklinks a[href="#hood"] {
     color: #FFB627; border-color: rgba(255,122,24,0.32); background: rgba(255,122,24,0.08);
   }
-  .quicklinks a[href="#simulator"]:hover, .quicklinks a[href="#hood"]:hover { border-color: #FF7A18; background: rgba(255,122,24,0.18); }
+  .quicklinks a[href="#hood"]:hover { border-color: #FF7A18; background: rgba(255,122,24,0.18); }
   .quicklinks a[href="#reinvestment"], .quicklinks a[href="#pricing"], .quicklinks a[href="#audience"] {
     color: #6EE7B7; border-color: rgba(16,185,129,0.32); background: rgba(16,185,129,0.08);
   }
@@ -248,7 +248,6 @@ body{background:transparent;font-family:var(--body);}
     <a href="#hood">Under the Hood</a>
     <a href="#flock">The Flock</a>
     <a href="#value">Why It Has Value</a>
-    <a href="#simulator">Survival Simulator</a>
     <a href="#pricing">Pricing Strategy</a>
     <a href="#reinvestment">Fee Reinvestment</a>
     <a href="#audience">Who It's For</a>
@@ -288,7 +287,7 @@ body{background:transparent;font-family:var(--body);}
       <div class="stat green">
         <div class="stat-label">🎓 VERIFIED GRADUATES</div>
         <div class="stat-value" id="statGrads">—</div>
-        <div class="stat-sub" id="statGradsSub">server-scored diplomas</div>
+        <div class="stat-sub" id="statGradsSub">full curriculum completed</div>
       </div>
     </div>
   </div>
@@ -298,7 +297,7 @@ body{background:transparent;font-family:var(--body);}
     <div class="section-title">🛠 WHAT WE'VE ACTUALLY BUILT</div>
     <p>A whole product suite under one token. All deployed, all working in production:</p>
     <ul>
-      <li><a class="xref" href="/">The Schoolyard</a> — 7 beginner lessons, 12 belted progressive lessons, a 50‑question, <strong>server‑scored</strong> Ultimate Challenge (94% to pass — the answer key never reaches the browser, and the pool now spans the core curriculum <strong>and</strong> the LP Lab) that mints a <strong>permanent, verifiable transcript</strong> keyed to your wallet, a <a class="xref" href="#simulator">135‑scenario Survival Simulator</a> where you walk through real‑world crypto decisions with a $1,000 simulated bankroll, a 12‑lesson LP Lab with interactive calculators and visualizers, a 50‑term glossary, deep dives across Survival / Research / Concepts, and a Claude‑powered AI tutor embedded everywhere (10 free questions/day). New here? A <strong>"Where do I start?" concierge</strong> right on the landing asks where you are on your crypto journey and points you to the right lesson or tool — or just ask Cluck anything.</li>
+      <li><a class="xref" href="/">The Schoolyard</a> — 7 beginner lessons, 12 belted progressive lessons that mint a <strong>permanent, verifiable transcript</strong> keyed to your wallet, a 14‑lesson LP Lab with interactive calculators and visualizers, a 50‑term glossary, deep dives across Survival / Research / Concepts, and a Claude‑powered AI tutor embedded everywhere (10 free questions/day). New here? A <strong>"Where do I start?" concierge</strong> right on the landing asks where you are on your crypto journey and points you to the right lesson or tool — or just ask Cluck anything.</li>
       <li><strong>Free token research &amp; forensics</strong> — <a class="xref" href="/autopsy">Token Autopsy</a>, a deep forensic post‑mortem on any token — LP lock/burn status, Token‑2022 honeypot‑extension scan, real‑creator detection, creator buy‑back tracing, hidden‑exit (transfer‑then‑dump) detection, and an honest cause‑of‑death verdict; <a class="xref" href="/wallet-xray">Wallet X-Ray</a>, a full-wallet deep dive — true funding origin (traced to genesis, dust filtered), every buy/sell/transfer across every token, and behavior signals (bot cadence, fast-flip, CEX cash-out) with a built-in "ask Cluck" on any transaction; <a class="xref" href="/wallet-checkup">Wallet Safety Checkup</a>, a free read‑only scan of any address for lingering approvals, honeypot holdings and live mint/freeze authority — the things that actually drain newcomers; <a class="xref" href="/security-coop">Security Coop</a>, a free wallet permission check that finds lingering token approvals and revokes the risky ones; <a class="xref" href="/snapshot">Snapshot</a>, every holder and balance for any mint with an airdrop-ready CSV; <a class="xref" href="/trace">Trace</a>, every transaction between a wallet and a token in chronological order; and <a class="xref" href="/holders">Holders</a>, a token's true-holder breakdown — real wallets versus LP, locks and program accounts.</li>
       <li><strong>Premium operator tools paid in CLKN</strong> — an AI tutor extension, a <a class="xref" href="/airdrop">batch airdrop sender</a> (11 wallets — Phantom, Solflare, Backpack, OKX &amp; more), two buy‑competition trackers (<a class="xref" href="/buyspecial">Buy Special</a> and <a class="xref" href="/rose">Rose</a>) with multiple prize models, and a <a class="xref" href="/premium">premium forensics tier</a> (downstream‑dump tracing, wallet P&amp;L, creator rap sheet, money‑flow). Every paid action is a unique‑decimal CLKN micropayment verified on‑chain — <strong>no wallet connect to pay</strong>.</li>
       <li><a class="xref" href="/hatchery">The Hatchery</a> — a guided SPL token creator. It teaches every mint‑time decision (supply, metadata, mint/freeze authority) and deploys a real token, with metadata stored permanently on Arweave. It deliberately <strong>stops at liquidity</strong> — minting is not launching. Flat fee in SOL or CLKN.</li>
@@ -319,7 +318,6 @@ body{background:transparent;font-family:var(--body);}
         <div style="font-family:system-ui,sans-serif;font-size:13px;color:#D1D5DB;line-height:1.6">
           • 7‑lesson Incubator<br>
           • 12 belted lessons (Freshman→Emeritus)<br>
-          • 50‑question Ultimate Challenge<br>
           • <strong style="color:#FFB627">135‑scenario Survival Sim</strong> ($1K bankroll)<br>
           • 12‑lesson LP Lab w/ 7 interactive tools<br>
           • 50‑term glossary<br>
@@ -522,7 +520,7 @@ body{background:transparent;font-family:var(--body);}
     <ul>
       <li><strong>Started as a community, became a product.</strong> Cluck Norris didn't begin as a token launch — it grew from the FireChicken community on Bags.fm. People helping each other learn, calling out scams, sharing alpha. CLKN is the formal layer on top of what was already happening.</li>
       <li><strong>Real humans answer real questions.</strong> Reach us on X (<a href="https://x.com/firechicken007" target="_blank" rel="noreferrer" style="color:#FFB627;text-decoration:none">@FireChicken007</a>) or in Telegram (<a href="https://t.me/FireChicken007" target="_blank" rel="noreferrer" style="color:#FFB627;text-decoration:none">@FireChicken007</a>). There's someone there — not a chatbot, not a ticket system, not "we'll get back to you in 3 business days." Someone in the flock who's already been through what you're stuck on.</li>
-      <li><strong>The school is the community's voice.</strong> Every lesson, every Cluck quip, every Survival Simulator scenario was written by people who watched their friends get rugged and decided to do something about it. The DM scam scenario? Someone in the flock got that DM last week.</li>
+      <li><strong>The school is the community's voice.</strong> Every lesson and every Cluck quip was written by people who watched their friends get rugged and decided to do something about it.</li>
       <li><strong>First‑timers get answered.</strong> Stuck on the airdrop tool? Confused by a Phantom popup? Don't understand what a token account is? Ask. The bird is tough but the flock is patient. That's where most projects fail — they have docs but nobody's home to read them with you.</li>
       <li><strong>This is the compound effect.</strong> Every person we help becomes someone who can help the next person. The school grows. The flock grows. The token grows. None of those happen at a rate a competitor can copy by reading the README.</li>
     </ul>
@@ -543,21 +541,6 @@ body{background:transparent;font-family:var(--body);}
     </ul>
   </div>
 
-  <!-- Survival Simulator deserves its own callout — it's the bridge between "learn"
-       and "do" and most projects don't have anything like it. -->
-  <div class="section" id="simulator" style="background:rgba(255,122,24,0.06);border-color:rgba(255,122,24,0.3)">
-    <div class="section-title" style="color:#FFB627;border-color:rgba(255,122,24,0.25)">🎮 SURVIVAL SIMULATOR · WHERE THEORY HITS REALITY</div>
-    <p>Most crypto education is quizzes. Quizzes test recognition. They don't test the <strong>decision</strong> — the part where you have $1,000, a DM in your inbox, a green candle, and three seconds to react.</p>
-    <p><strong>The Survival Simulator gives you that decision.</strong> 135 hand‑written scenarios across four categories — each run draws 10 at random, so no two playthroughs are alike:</p>
-    <ul>
-      <li class="warn"><strong>DANGER</strong> (47) — friendly devs in DMs, dev wallet dumps, 900% APR honey‑pots, phishing impersonators, wallet drainers, address poisoning, lookalike domains, frozen exchanges, vesting unlock cliffs</li>
-      <li class="warn"><strong>EMOTIONAL</strong> (27) — FOMO buys at the top, panic sells at the bottom, revenge trades, boredom trades, chasing a parabola, the urge to average down on a clear rug</li>
-      <li class="yes"><strong>KNOWLEDGE</strong> (37) — reading Solscan correctly, interpreting tokenomics and FDV, leverage and liquidation, gas and priority fees, distinguishing real airdrops from drainer sites</li>
-      <li class="yes"><strong>OPPORTUNITY</strong> (24) — real alpha when you see it, sizing into conviction, DCA plans, taking profit on the way up, knowing when to LP</li>
-    </ul>
-    <p>You start with $1,000 simulated. Each choice has a real multiplier — disciplined, well‑researched calls grow your stake; reckless ones can wipe the round to near zero. Cluck explains every outcome in plain English. <strong>You lose money in the simulator so you don't lose it in real life.</strong></p>
-    <p>This is the feature that separates the school from a glossary. The lessons teach you what a rug looks like. The simulator teaches you what it <em>feels</em> like to almost click the button, and then choose not to.</p>
-  </div>
 
   <!-- Pricing strategy — answers "but the fees are like a penny right now, how
        does that even matter?" with the compound-growth story. -->
@@ -748,12 +731,12 @@ fetch('/api/token-overview?mint=' + CLKN_MINT)
   })
   .catch(() => {});
 
-// Verified graduates — server-scored diplomas issued by the school.
+// Graduates — learners who finished the full curriculum and claimed a transcript.
 fetch('/api/school-stats')
   .then(r => r.json())
   .then(d => {
     if (!d?.success) return;
-    document.getElementById('statGrads').textContent = Number(d.verifiedDiplomas || 0).toLocaleString();
+    document.getElementById('statGrads').textContent = Number(d.graduates || 0).toLocaleString();
     const total = Number(d.totalTranscripts || 0);
     if (total) document.getElementById('statGradsSub').textContent = total.toLocaleString() + ' transcripts issued';
   })

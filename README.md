@@ -15,7 +15,7 @@ Cluck Norris is a **knowledge project first.** The "School of Hard Knocks" name 
 
 What's in the box:
 
-1. 🆓 **A free crypto school** — beginner Incubator → 12‑lesson Hard Knocks course → LP Lab → an Ultimate Challenge that can actually fail you. No signup, no wallet.
+1. 🆓 **A free crypto school** — beginner Incubator → 12‑lesson Hard Knocks course → LP Lab. No signup, no wallet.
 2. 🤖 **Ask Cluck** — a live AI crypto tutor: ask anything, or switch to **Lecture mode** for a structured class grounded in the real curriculum.
 3. 🩺 **Free token research & forensics** — a full **Wallet X‑Ray**, a deep AI token *autopsy*, holder snapshots, transaction tracing, and a wallet‑safety checkup for any Solana mint.
 4. 💎 **Premium operator tools** — buy‑competition trackers, a batch airdrop sender, and a holder‑gated deep‑forensics tier, unlocked with on‑chain CLKN micropayments (pennies, no subscription, no accounts).
@@ -49,9 +49,7 @@ Disciplined learning, real value, zero gatekeeping. The flock learns or the floc
 - 🐥 **"Where do I start?" concierge** — the antidote to a feature‑rich app. Newcomers tap one journey button (brand new · know the basics · liquidity & LP investing · token research & CLKN tools · about CLKN & where to buy · just exploring) and Cluck routes them to the right lesson or tool — or just ask the AI anything. Lives right on the landing **and** greets every new member in the Telegram group.
 - 🥚 **The Incubator** — 7 lessons for total beginners. Wallets, tokens, on-ramps & off-ramps, DEXs, liquidity, market cap, how not to get drained
 - 🏫 **School of Hard Knocks** — 12 progressive lessons with a belt ranking from **Freshman → Emeritus**. Pass to promote
-- 🥊 **The Ultimate Challenge** — 50 questions, **scored server‑side** (the answer key never touches the browser, so a pass can't be faked). 94% to pass. The question pool spans the full curriculum **and** the LP Lab. No study guide. Most don't make it. That's the point
-- 🎓 **Permanent transcripts** — beat the Challenge (a *verified*, server‑scored diploma) **or** finish the whole curriculum, drop a Solana address, and get a permanent, shareable [`/transcript`](https://clucknorris.app) page + share card — the school's first ownable output. Optional on‑chain ownership proof via a tiny CLKN send (no wallet‑connect). Learning stays free and walletless; the address is only for the airdrop list and the transcript
-- 🎮 **Survival Simulator** — start with $1,000 simulated capital. Each run draws 10 scenarios at random from a bank of **135** real‑world crypto situations (DM "alpha", dev wallet dumps, FOMO buys, 900% APR pools, phishing impersonators, wallet drainers, leverage liquidations, exchange freezes, vesting unlocks) — so no two playthroughs are alike. Every choice has a multiplier; Cluck explains why each move worked or didn't. **Practice the decisions before you have to make them with real money.**
+- 🎓 **Permanent transcripts** — finish the whole curriculum, drop a Solana address, and get a permanent, shareable [`/transcript`](https://clucknorris.app) page + share card — the school's first ownable output. Optional on‑chain ownership proof via a tiny CLKN send (no wallet‑connect). Learning stays free and walletless; the address is only for the airdrop list and the transcript
 - ⚗️ **LP Lab** — a 12-lesson interactive liquidity course with 7 interactive tools (AMM price impact, IL calculator, fee breakeven, capital efficiency, bin visualizer, DCA, strategy matcher), covering the fundamentals through risk management, reading pool data, token-launch liquidity, and building a full LP strategy. Works on Meteora, Raydium, Orca, Uniswap — anywhere you LP
 - 📚 **The Library** — 50‑term glossary, deep‑dives across Survival / Research / Concepts (including 🪂 *How to Use an Airdropper Without Burning Yourself*), curated resources
 - 🤖 **Ask Cluck** — a Claude‑powered tough‑love crypto professor. Embedded in every lesson (10 questions/day), live in the Telegram group, and as a standalone tool at [`/ask-cluck`](https://clucknorris.app/ask-cluck) with two modes: **Ask Anything** for free‑form questions, or **Lecture** for a structured, curriculum‑grounded class you can tap through. No signup, no wallet
@@ -236,7 +234,6 @@ The product reaches into the community Telegram (and X), not just the website:
 - `/api/verify-clkn-payment` — tool‑aware unlock verification with holder bonus + replay guard
 - `/api/ask-cluck` — Claude‑powered tutor
 - `/api/wallet-checkup?wallet=…` — read‑only wallet safety scan (approvals + honeypot/authority‑risk holdings)
-- `/api/exam/questions` + `/api/exam/submit` — server‑scored Ultimate Challenge (answer key never leaves the server; a pass mints a one‑time token)
 - `/api/credential/:slug` — public transcript JSON · `/api/credential-card?slug=…` — transcript share PNG · `/api/school-stats` — verified‑graduate metrics
 - `/api/hatchery/*` — token creator: Arweave metadata upload, unsigned mint‑tx build, live fee config
 - `/api/security-coop/*` — wallet delegate‑approval scan + unsigned revoke‑tx build

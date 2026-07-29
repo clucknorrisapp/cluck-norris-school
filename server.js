@@ -33,7 +33,6 @@ const { runAutopsy, bagsFetch, heliusEnhancedBatched, BAGS_BASE } = require("./l
 const { ddEnabled, ddWalletReport } = require("./lib/webacy-dd"); // DD.xyz (Webacy) wallet risk cross-check (no-op without WEBACY_API_KEY)
 const schoolAirdrop = require("./lib/school-airdrop"); // CLKN graduate-reward airdrops (off unless AIRDROP_SECRET set)
 const { getTokenBuyersInWindowHelius, getWalletTokenPositionHelius } = require("./lib/helius-trades");
-const QUESTION_BANK = require("./data/question-bank.json");
 // Live Classroom curriculum (regenerate with: node scripts/extract-curriculum.js)
 let CURRICULUM = { courses: [] };
 try { CURRICULUM = require("./data/curriculum.json"); } catch (_) { console.warn("[classroom] curriculum.json missing — run scripts/extract-curriculum.js"); }
@@ -744,7 +743,7 @@ const EDU_TOOL_ROUTES = [
   { match: /honeypot|rug pull|red flags|on-chain research|contract address|authorities|locked liquidity|faked out|phantom pool/i, label: "Run a free Token Autopsy on any mint", url: "clucknorris.app/autopsy" },
   { match: /market cap|low-liquidity|deep liquidity|manipulate/i, label: "Run a free deep-dive Token Autopsy on any mint", url: "clucknorris.app/autopsy" },
   { match: /liquidity pool|AMM|x\*y=k|impermanent|providers earn|concentrated liquidity|bins and ticks|price bins|asks vs bids|ask is a sell|active vs passive|pool's liquidity/i, label: "Practice in the free interactive LP Lab", url: "clucknorris.app" },
-  { match: /dollar-cost|risk budget|position sizing|stop-loss|survive/i, label: "Practice with $1K fake money in the Survival Simulator", url: "clucknorris.app" },
+  { match: /dollar-cost|risk budget|position sizing|stop-loss|survive/i, label: "Work through LP risk management in the free LP Lab", url: "clucknorris.app/lp-lab" },
 ];
 function eduToolRoute(topic) { for (const r of EDU_TOOL_ROUTES) if (r.match.test(topic)) return r; return null; }
 
@@ -1068,7 +1067,7 @@ const X_BLITZ_MIN_GAP_MIN = 150;          // ~2.5h between posts
 const X_BLITZ_DECK = [
   { finn: true,  t: "We didn't build a hackathon demo — we shipped a real, working product.\n\nCluck Norris: a free crypto school + a dozen+ live on-chain tools + a non-custodial liquidity engine. All live today. 🐔\n\nclucknorris.app" },
   { t: "A whole free School of Crypto Hard Knocks — wallets, DeFi, LP, scam-spotting, real survival skills. Structured lessons, not a thread dump.\n\nclucknorris.app" },
-  { t: "Pass our Ultimate Challenge → earn a permanent, on-chain diploma. Server-scored, verifiable, shareable. Real credentials for crypto literacy.\n\nclucknorris.app" },
+  { t: "Finish the full 12-lesson course → earn a permanent, on-chain transcript. Verifiable, shareable. Real credentials for crypto literacy.\n\nclucknorris.app" },
   { finn: true, t: "Our lessons are READ ALOUD in a real voice — in English, 中文, and Español (more languages on request). Learn crypto hands-free, in your language. 🔊\n\nclucknorris.app" },
   { t: "LP Lab: a hands-on course on liquidity providing — ranges, impermanent loss, fees, the real mechanics — with quizzes that actually test you.\n\nclucknorris.app" },
   { t: "15+ free, live on-chain tools — no wallet-connect just to look. Wallet X-Ray, Token Autopsy, Trace, Holders, Snapshot, Security Co-op…\n\nclucknorris.app/tools" },
@@ -1077,7 +1076,6 @@ const X_BLITZ_DECK = [
   { t: "Security Co-op: scan your wallet for risky token approvals and revoke them. The silent way wallets get drained is an old approval you forgot. Free.\n\nclucknorris.app/security-coop" },
   { t: "A non-custodial Liquidity Engine — honest, two-sided market-making on Orca. The same engine we run on our own token, openable for any project.\n\nclucknorris.app/liquidity" },
   { finn: true, t: "21.6% of CLKN supply is locked on-chain — a real long-term commitment, verifiable on Jupiter Lock. No games. 🔒" },
-  { t: "Survival Simulator: practice real crypto decisions — rugs, MEV, volatility, FOMO — in a safe sandbox before it costs you real money.\n\nclucknorris.app" },
   { t: "The entire app — every page, every lesson — switches to 中文 and Español. Crypto education shouldn't be English-only.\n\nclucknorris.app" },
   { t: "Ask Cluck: a live AI crypto tutor that answers anything, in your language, and reads the answer aloud. Office hours that never close.\n\nclucknorris.app" },
   { finn: true, t: "Built on @BagsApp because creators earn 1% of volume forever — real, aligned incentives. We even teach how Bags works inside the school." },
@@ -1693,7 +1691,7 @@ function guideRoute(key) {
         "No wallet, no money, no sign-up needed to learn. Reply here any time with a question — that's what I'm for.";
     case "basics":
       return "📚 <b>Got the basics? Time to level up.</b>\n\n" +
-        `Finish the <b>12-lesson course</b>, then take the <b>Ultimate Challenge</b> — pass it and you earn a verified, shareable diploma. Want to go deep on liquidity? The <b>LP Lab</b> has 12 advanced lessons.\n\n` +
+        `Finish the <b>12-lesson course</b> and you earn a permanent, shareable transcript. Want to go deep on liquidity? The <b>LP Lab</b> has 14 advanced lessons.\n\n` +
         `🎓 ${B}\n\nReply with whatever you're stuck on and I'll aim you at the right lesson.`;
     case "lp":
       return "💧 <b>Liquidity pools &amp; LP investing — earn fees, know the risks.</b>\n\n" +
@@ -1719,7 +1717,7 @@ function guideRoute(key) {
     case "explore":
       return "🧭 <b>Just exploring? Here's the lay of the land.</b>\n\n" +
         `🛠 Every tool in one place → ${B}/tools\n` +
-        `📚 The free school (lessons + Ultimate Challenge) → ${B}\n` +
+        `📚 The free school (lessons + LP Lab) → ${B}\n` +
         `🎰 The Coop Spinner (free daily spins) → ${B}/slots\n\n` +
         "Or just reply with what you're curious about and I'll point you to the right spot. 🐔";
     default:
@@ -1731,7 +1729,7 @@ function guideSystemPrompt() {
   return [
     "You are Cluck Norris, the friendly guide for the Cluck Norris app (clucknorris.app) — a FREE crypto school ('School of Crypto Hard Knocks') plus a Solana token-research toolkit. You're helping someone in a Telegram group find their way around and answering their crypto/app questions.",
     "WHAT THE APP HAS — route people to the right part:",
-    "- The School (free, no wallet or sign-up to learn): the INCUBATOR (tiny beginner lessons: wallets, tokens, staying safe), the 12-LESSON COURSE (belts Freshman→Emeritus), the ULTIMATE CHALLENGE (pass for a verified, shareable diploma), and the LP LAB (12 advanced liquidity lessons).",
+    "- The School (free, no wallet or sign-up to learn): the INCUBATOR (tiny beginner lessons: wallets, tokens, staying safe), the 12-LESSON COURSE (belts Freshman→Emeritus, finish it for a permanent shareable transcript), and the LP LAB (14 advanced liquidity lessons).",
     "- Free tools: TOKEN AUTOPSY (/autopsy — deep forensics), WALLET X-RAY (/wallet-xray — full wallet deep dive: funding origin, every trade, bot/dumper signals), TRACE (/trace — wallet×token history), SNAPSHOT (/snapshot — holders + airdrop CSV), WALLET CHECKUP (/security-coop — find & revoke risky approvals), BAGS feed (/bags — live launches & graduations), and the toolkit index (/tools).",
     "- THE HATCHERY (/hatchery): guided token creation with a safety preview.",
     "- CLKN token: unlocks premium operator tools via a small on-chain payment (no wallet-connect needed); holding it earns airdrop eligibility. The school itself is always free.",
@@ -7568,103 +7566,28 @@ async function checkCLKNHolder(wallet) {
   }
 }
 
-// ── Ultimate Challenge — server-authoritative scoring ──────────────────────
-// The exam is the one event a diploma is gated on, so it can't be faked. The
-// answer key lives ONLY on the server: /api/exam/questions draws a set and
-// shuffles each question's options server-side (so the correct index is not in
-// the payload), and /api/exam/submit scores the submitted choices. A pass mints
-// a one-time token the claim must present to record a "verified" diploma — that
-// keeps the airdrop list and the graduate count honest. Sessions/tokens live in
-// memory with a short TTL; a redeploy just means re-taking, which is fine.
-const EXAM_SIZE = 50;
-const EXAM_PASS_PCT = 94;
-// Per-source quotas for the exam draw (must sum to EXAM_SIZE; tune here).
-const EXAM_SOURCE_MIX = { CURRICULUM: 20, ULTIMATE: 20, LPLAB: 10 };
-const EXAM_TTL_MS = 30 * 60 * 1000;
-const examSessions = new Map();    // sessionId -> { key: [correctIdx...], createdAt }
-const examPassTokens = new Map();  // token     -> { pct, score, total, createdAt, used }
-
-function shuffleInPlace(a) {
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-function pruneExam() {
-  const now = Date.now();
-  for (const [k, v] of examSessions) if (now - v.createdAt > EXAM_TTL_MS) examSessions.delete(k);
-  for (const [k, v] of examPassTokens) if (now - v.createdAt > EXAM_TTL_MS) examPassTokens.delete(k);
-}
-
-app.get("/api/exam/questions", (req, res) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Cache-Control", "no-store");
-  pruneExam();
-  // Stratified draw by question source — a flat random draw over the 210-question bank
-  // (CURRICULUM 70 / ULTIMATE 59 / LPLAB 81) makes the exam LP-heavy by count. Pin the
-  // mix so the core curriculum stays the backbone; backfill from the leftover pool if a
-  // source ever runs short, so the exam is always EXAM_SIZE questions.
-  const want = Math.min(EXAM_SIZE, QUESTION_BANK.length);
-  const drawn = [];
-  const leftover = [];
-  for (const [src, quota] of Object.entries(EXAM_SOURCE_MIX)) {
-    const pool = shuffleInPlace(QUESTION_BANK.filter((q) => q.source === src));
-    drawn.push(...pool.slice(0, quota));
-    leftover.push(...pool.slice(quota));
-  }
-  leftover.push(...QUESTION_BANK.filter((q) => !(q.source in EXAM_SOURCE_MIX)));
-  if (drawn.length < want) drawn.push(...shuffleInPlace(leftover).slice(0, want - drawn.length));
-  shuffleInPlace(drawn).splice(want);
-  const key = [];
-  const questions = drawn.map((q, idx) => {
-    const order = shuffleInPlace(q.options.map((_, i) => i));     // shuffle option positions
-    key[idx] = order.indexOf(q.correct);                          // where the right answer landed
-    return { n: idx, q: q.q, options: order.map(i => q.options[i]) };
-  });
-  const sessionId = randomBytes(18).toString("hex");
-  examSessions.set(sessionId, { key, createdAt: Date.now() });
-  return res.status(200).json({ success: true, sessionId, total: questions.length, passPct: EXAM_PASS_PCT, questions });
-});
-
-app.post("/api/exam/submit", (req, res) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  pruneExam();
-  const { sessionId, answers } = req.body || {};
-  const sess = examSessions.get(String(sessionId || ""));
-  if (!sess) return res.status(400).json({ success: false, error: "Exam session expired — restart the challenge." });
-  examSessions.delete(String(sessionId)); // one-shot — a session can't be re-scored
-  const a = Array.isArray(answers) ? answers : [];
-  let score = 0;
-  for (let i = 0; i < sess.key.length; i++) if (a[i] === sess.key[i]) score++;
-  const total = sess.key.length;
-  const pct = total ? Math.round((score / total) * 100) : 0;
-  const passed = pct >= EXAM_PASS_PCT;
-  let passToken = null;
-  if (passed) {
-    passToken = randomBytes(18).toString("hex");
-    examPassTokens.set(passToken, { pct, score, total, createdAt: Date.now(), used: false });
-  }
-  return res.status(200).json({ success: true, passed, score, total, pct, passToken });
-});
+// ── Ultimate Challenge — REMOVED (2026-07-29, owner's call: "no one is using them").
+// The graded exam, its 210-question bank, the pass-token flow and /api/exam/* are all gone.
+// It had issued ZERO diplomas in its lifetime (/api/school-stats: diplomas 0, verifiedDiplomas 0),
+// so nothing real was lost — and removing it closed two live holes at once: the answer key was
+// readable from the public i18n dumps, and /api/claim would mint a "verified" diploma for any
+// wallet. GRADUATION (finishing the full curriculum) is now the ONLY door to a transcript.
+// The in-lesson quizzes are untouched — they live in src/App.jsx and src/sections/LPLab.jsx.
 
 app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  const { wallet, score, total, pct, source, passToken, coursework } = req.body;
+  const { wallet, coursework } = req.body;
   if (!SOL_ADDR_RE.test(String(wallet || ""))) return res.status(400).json({ success: false, error: "Invalid wallet" });
   try {
-    // A diploma is "verified" only when it rides a one-time, server-issued pass
-    // token from /api/exam/submit. Without one (the graduation door, or an old
-    // client) it's recorded but labelled self-reported.
-    let verified = "self-reported", effScore = score, effTotal = total, effPct = pct;
-    if (source !== "GRADUATION" && passToken) {
-      const tok = examPassTokens.get(String(passToken));
-      if (tok && !tok.used && tok.pct >= EXAM_PASS_PCT) {
-        tok.used = true;
-        verified = "server-scored";
-        effScore = tok.score; effTotal = tok.total; effPct = tok.pct; // trust the server's numbers
-      }
-    }
+    // GRADUATION is now the ONLY door — the exam that used to mint diplomas is gone.
+    //
+    // The client's `score`/`total`/`pct` are deliberately NOT read anymore. They used to flow
+    // straight into the permanent transcript, which meant a bare POST of {wallet, pct:100} —
+    // no token, any wallet — minted a fake diploma AND overwrote a real one (credentials.record
+    // replaces the diploma whenever pct >= the stored pct). Ignoring the fields entirely is
+    // what closes that; there is no diploma left to forge or downgrade.
+    const effScore = null, effTotal = null, effPct = null, verified = null;
+    const source = "GRADUATION";
 
     // Check if CLKN holder (snapshot stored on the transcript too).
     const { isHolder, balance } = await checkCLKNHolder(wallet);

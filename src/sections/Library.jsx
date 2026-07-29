@@ -653,7 +653,7 @@ REAL WORLD ASSETS (RWAs)
 Tokenizing real estate, art, commodities. Each NFT represents fractional ownership. Emerging use case with significant regulatory complexity.
 
 IDENTITY AND CREDENTIALS
-Verifiable credentials, membership passes, certificates of completion. Cluck Norris could issue NFT certificates to Ultimate Challenge passers — the achievement would be on-chain forever.
+Verifiable credentials, membership passes, certificates of completion. Cluck Norris issues an on-chain graduation NFT to everyone who finishes the full curriculum — the achievement is on-chain forever.
 
 DOMAIN NAMES
 Solana Name Service (.sol domains), ENS (.eth). Your wallet address as a readable name.`
