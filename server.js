@@ -4105,8 +4105,8 @@ const TOOL_SPOTLIGHTS = [
   // Bags near-grad/graduation promotion (X spam-risk). Restore the entry to re-enable.
   {
     name: "Free Crypto School",
-    tg: "🎓 <b>The free School of Crypto Hard Knocks</b> — wallets, DeFi, LP, scam-spotting, real survival skills. Finish the course and earn a permanent transcript plus an on-chain graduation NFT.\n\nWe took the hard knocks so you don't have to. 100% free.\n\n👉 clucknorris.app",
-    x: "🎓 The free School of Crypto Hard Knocks: wallets, DeFi, LP, scam-spotting, survival skills. Finish the course for a permanent transcript and an on-chain graduation NFT.\n\nWe took the hard knocks so you don't have to. Free.\n\nclucknorris.app",
+    tg: "🎓 <b>The free School of Crypto Hard Knocks</b> — wallets, DeFi, LP, scam-spotting, real survival skills. Finish the course and earn a permanent transcript plus an on-chain graduation NFT.\n\nFirst wallet to advanced LP strategy. 100% free.\n\n👉 clucknorris.app",
+    x: "🎓 The free School of Crypto Hard Knocks: wallets, DeFi, LP, scam-spotting, survival skills. Finish the course for a permanent transcript and an on-chain graduation NFT.\n\nFirst wallet to advanced LP strategy. Free.\n\nclucknorris.app",
   },
 ];
 async function postToolSpotlight() {
