@@ -18,7 +18,8 @@
   .wrap { max-width: 680px; margin: 0 auto; padding: 28px 16px 70px; }
 
   .header { text-align: center; margin-bottom: 8px; }
-  .header .icon { font-size: 44px; filter: drop-shadow(0 0 16px rgba(217,119,6,0.5)); }
+  .header .icon { line-height: 0; filter: drop-shadow(0 0 16px rgba(217,119,6,0.5)); }
+  .header .icon img { display: inline-block; width: 54px; height: 54px; }
   .header .brand-mini { font-family: 'Anton', sans-serif; font-size: 10px; letter-spacing: 4px; color: var(--orange); margin-top: 8px; font-weight: 700; }
   .header h1 {
     font-family: 'Anton', sans-serif; font-size: 34px; font-weight: 900; letter-spacing: 3px;
@@ -36,7 +37,10 @@
     transition: border-color 0.15s, transform 0.15s;
   }
   .tool:hover { border-color: rgba(252,211,77,0.5); transform: translateY(-1px); }
-  .tool .emoji { font-size: 30px; line-height: 1; flex-shrink: 0; }
+  /* Rendered 3D icons off the shared Higgsfield sheets (docs/MEDIA_LIBRARY.md),
+     matching the home page and /education. Not emoji. */
+  .tool .emoji { line-height: 0; flex-shrink: 0; }
+  .tool .emoji img { display: block; width: 38px; height: 38px; }
   .tool .body { flex: 1; min-width: 0; }
   .tool .name { font-family: 'Anton', sans-serif; font-size: 17px; font-weight: 700; letter-spacing: 1px; color: var(--text); }
   .tool .name .tag {
@@ -91,7 +95,7 @@ body{background:transparent;font-family:var(--body);}
   <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:Anton,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#D97706;text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid #D97706;"/>&larr; CLUCK NORRIS HOME</a>
 
   <div class="header">
-    <div class="icon">🛠</div>
+    <div class="icon"><img src="/icons/tools.webp" width="54" height="54" alt=""></div>
     <div class="brand-mini">CLUCK NORRIS</div>
     <h1>TOOLS &amp; UTILITIES</h1>
     <p>THE TOOLKIT BEYOND THE SCHOOL</p>
@@ -104,7 +108,7 @@ body{background:transparent;font-family:var(--body);}
   </div>
 
   <div class="start-here">
-    <div class="sh-label">🔥 START HERE</div>
+    <div class="sh-label"><img src="/icons/flame.webp" width="15" height="15" alt="" style="vertical-align:-2px;margin-right:5px"> START HERE</div>
     <div class="sh-grid">
       <a class="sh-card" href="/wallet-xray">
         <div class="sh-name">Wallet X-Ray</div>
@@ -123,7 +127,7 @@ body{background:transparent;font-family:var(--body);}
 
   <div class="tool-grid">
   <a class="tool" href="/liquidity-engine">
-    <div class="emoji">💧</div>
+    <div class="emoji"><img src="/icons/droplet.webp" width="38" height="38" alt="" loading="lazy"></div>
     <div class="body">
       <div class="name">Liquidity Engine <span class="tag" style="color:#FFB627;background:rgba(255,182,39,.08);border:1px solid rgba(255,182,39,.4)">IN DEVELOPMENT</span></div>
       <div class="desc">Honest, automated market making on Orca — <em>real</em> two-sided depth that fills real traders, not a wash-trading volume bot. We're <b>building and testing it on CLKN's own pools</b>; not yet offered to other projects.</div>
@@ -132,7 +136,7 @@ body{background:transparent;font-family:var(--body);}
   </a>
 
   <a class="tool" href="/locker-room">
-    <div class="emoji">🔒</div>
+    <div class="emoji"><img src="/icons/lock.webp" width="38" height="38" alt="" loading="lazy"></div>
     <div class="body">
       <div class="name">Jup Locker Room</div>
       <div class="desc">Token locks, explained and made easy. Learn how locking works, see the CLKN <b>Lock of Fame</b> (how much supply is locked and where), and lock your own tokens with <b>Jupiter Lock</b> — free, non-custodial, audited.</div>
@@ -142,7 +146,7 @@ body{background:transparent;font-family:var(--body);}
 
 
   <a class="tool" href="/wallet-checkup">
-    <div class="emoji">🛡</div>
+    <div class="emoji"><img src="/icons/shield.webp" width="38" height="38" alt="" loading="lazy"></div>
     <div class="body">
       <div class="name">Wallet Checkup <span class="tag free">FREE</span></div>
       <div class="desc">One scan for the three things that actually drain people: lingering token approvals, honeypot holdings you can't sell, and tokens whose dev can still mint or freeze. Paste any address to look — read-only, no connect. Find approvals on your own wallet and you can <b>revoke them right here</b>, signing it yourself.</div>
@@ -151,7 +155,7 @@ body{background:transparent;font-family:var(--body);}
   </a>
 
   <a class="tool" href="/hatchery">
-    <div class="emoji">🥚</div>
+    <div class="emoji"><img src="/icons/hatch.webp" width="38" height="38" alt="" loading="lazy"></div>
     <div class="body">
       <div class="name">The Hatchery <span class="tag clkn">SOL / CLKN</span></div>
       <div class="desc">Create a real SPL token the right way — supply, metadata, authority revocation, every decision explained as you make it. Stops at the mint on purpose: minting is not launching.</div>
@@ -160,7 +164,7 @@ body{background:transparent;font-family:var(--body);}
   </a>
 
   <a class="tool" href="/buyspecial">
-    <div class="emoji">🎯</div>
+    <div class="emoji"><img src="/icons/target.webp" width="38" height="38" alt="" loading="lazy"></div>
     <div class="body">
       <div class="name">Buy Special <span class="tag clkn">CLKN</span></div>
       <div class="desc">Run a buy competition on any Solana token — <em>reward every holder</em> a % of what they bought, or <em>rank the top buyers</em> for prizes. On-chain buyer discovery + a hold-verified no-sells check, then one click straight to the airdropper.</div>
@@ -169,7 +173,7 @@ body{background:transparent;font-family:var(--body);}
   </a>
 
   <a class="tool" href="/trace">
-    <div class="emoji">🔍</div>
+    <div class="emoji"><img src="/icons/nodes.webp" width="38" height="38" alt="" loading="lazy"></div>
     <div class="body">
       <div class="name">Trace <span class="tag free">FREE</span></div>
       <div class="desc">Paste a wallet and a token mint — get every transaction between the two: buys, sells, transfers in and out, in chronological order with running balance and where the funds came from. The forensic history without the Solscan dig.</div>
@@ -178,7 +182,7 @@ body{background:transparent;font-family:var(--body);}
   </a>
 
   <a class="tool" href="/wallet-xray">
-    <div class="emoji">🩻</div>
+    <div class="emoji"><img src="/icons/xray.webp" width="38" height="38" alt="" loading="lazy"></div>
     <div class="body">
       <div class="name">Wallet X-Ray <span class="tag free">FREE</span></div>
       <div class="desc">Paste one wallet — get its whole story across <em>every</em> token: where it was first funded from, everything it bought, sold and transferred, and the behavior read — bot cadence, fast-flip dumper, CEX cash-out, LP, or diamond-hands holder. Deep-dive mode, no Solscan dig.</div>
@@ -188,7 +192,7 @@ body{background:transparent;font-family:var(--body);}
 
 
   <a class="tool" href="/holders">
-    <div class="emoji">👥</div>
+    <div class="emoji"><img src="/icons/donut.webp" width="38" height="38" alt="" loading="lazy"></div>
     <div class="body">
       <div class="name">Holders <span class="tag free">FREE</span></div>
       <div class="desc">Everything about who holds a token, in one pass — true human holders separated from LP pools, lock escrows and program accounts, real supply concentration measured on humans only, and every wallet + balance. Filter to any group and export it as CSV straight to the airdropper. No wallet connect.</div>
@@ -199,7 +203,7 @@ body{background:transparent;font-family:var(--body);}
 
 
   <a class="tool" href="/airdrop">
-    <div class="emoji">💰</div>
+    <div class="emoji"><img src="/icons/parachute.webp" width="38" height="38" alt="" loading="lazy"></div>
     <div class="body">
       <div class="name">Airdrop <span class="tag clkn">CLKN</span></div>
       <div class="desc">Batch-send tokens to hundreds of wallets — auto token-account creation, size-safe batching, an exportable record with Solscan links. Your keys never leave your wallet. Free when launched from Buy Special.</div>

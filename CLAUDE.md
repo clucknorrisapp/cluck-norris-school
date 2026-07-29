@@ -314,7 +314,7 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   pictures; the two follow-up sheets pass the first sheet as `medias[{role:image}]` to inherit the
   material. Job IDs, the reject, and the black-background→alpha cutting recipe are in
   `docs/MEDIA_LIBRARY.md` — **regenerate from those job IDs, don't re-prompt from scratch.**
-  Whole set is 53 KB. The CLKN concierge route keeps the real mascot photo (`.oic img.mascot`
+  The **`/tools` hub runs on the same set** (nine cards + the page header). Whole library is 22 icons / ~190 KB in `public/icons/`. Reuse one before generating a new one, and if you do generate, pass the original sheet as a reference so the material matches. The CLKN concierge route keeps the real mascot photo (`.oic img.mascot`
   gets the circular crop; the rendered icons must NOT).
   🎓 **`/education` IS THE LEARNING HUB (2026-07-29, owner's call).** The homepage carried three
   tiles (Learn Crypto / Incubator / School) that all landed in roughly the same place; they
