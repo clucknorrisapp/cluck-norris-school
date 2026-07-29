@@ -62,12 +62,19 @@
   .guidemenu[hidden]{display:none;}
   .gopt{display:flex;align-items:center;gap:14px;background:var(--card-grad);border:1px solid var(--border);border-radius:14px;padding:15px 18px;transition:transform .1s,border-color .1s,box-shadow .1s;}
   .gopt:hover{transform:translateX(3px);border-color:var(--orange);box-shadow:0 8px 22px rgba(232,30,14,.16);}
-  /* Icons are hand-drawn SVG, not emoji (owner's call, 2026-07-29 — "those all look
-     generic"). Emoji render differently on every platform and none of them mean
-     anything specific to what we teach. The LP Lab flask keeps the Lab's green. */
-  .gopt .oic{font-size:25px;flex:none;width:30px;text-align:center;line-height:0;}
-  .gopt .oic svg{display:block;margin:0 auto;}
-  .gopt .oic img{display:block;width:28px;height:28px;margin:0 auto;border-radius:50%;object-fit:cover;object-position:center 12%;border:1.5px solid var(--gold);}
+  /* Icons are rendered 3D objects (Higgsfield sheet, see docs/MEDIA_LIBRARY.md), not
+     emoji and not flat SVG — owner's call 2026-07-29: "those all look generic ... this
+     needs to be highly polished not cheap". All ten come off ONE generated sheet so the
+     material, lighting and glow are identical; that shared lighting is what makes them
+     read as a set instead of ten unrelated pictures. Cut to transparent PNG by
+     flood-keying the black background inward from the frame edge (a plain luminance key
+     would have eaten the icons' own dark obsidian bodies), then exported at 160px WebP —
+     53 KB for the whole set. */
+  .gopt .oic{flex:none;width:40px;line-height:0;}
+  .gopt .oic img{display:block;width:40px;height:40px;margin:0 auto;}
+  /* The CLKN route is the one exception: it uses the real mascot photo, not a
+     rendered object, so it needs the circular crop the others must not get. */
+  .gopt .oic img.mascot{border-radius:50%;object-fit:cover;object-position:center 12%;border:1.5px solid var(--gold);width:36px;height:36px;}
   .gopt .ol{flex:1;min-width:0;}
   .gopt .ol b{display:block;font-family:var(--disp);font-size:17px;color:var(--text);letter-spacing:.3px;}
   .gopt .ol i{display:block;font-style:normal;font-size:12.5px;color:var(--sub);margin-top:2px;}
@@ -81,7 +88,7 @@
   .ql .qt{font-family:var(--disp);font-size:16px;letter-spacing:.6px;color:var(--gold);text-align:center;text-shadow:0 0 18px rgba(255,182,39,.4);text-transform:uppercase;}
   .ql:hover .qt{color:#FFD56B;}
   .ql .qd{font-family:var(--body);font-size:11.5px;color:var(--body-text);text-align:center;line-height:1.3;}
-  .ql .qi{line-height:0;margin-bottom:2px;}
+  .ql .qi{line-height:0;margin-bottom:5px;}
   /* LP Lab tile — green, matching the Lab's colour everywhere else in the app, so the
      flagship reads as its own thing rather than one more orange tile in the grid. */
   .ql.lab{background:linear-gradient(160deg,rgba(16,185,129,.13),rgba(20,21,26,.92));border-color:rgba(16,185,129,.4);}
@@ -150,28 +157,28 @@
            properly: the belt course, chain-by-chain guides, the Library and the AI
            Classroom. Nothing is orphaned - every one of them is a card or a link on
            /education. Advanced tools stays because /premium is linked from nowhere else. -->
-      <a class="gopt" href="/school#incubator"><span class="oic"><svg viewBox="0 0 32 32" width="28" height="28" fill="none" aria-hidden="true"><path d="M16 2.8c4.6 0 8.2 5.6 8.2 11.8S20.6 25.4 16 25.4 7.8 20.8 7.8 14.6 11.4 2.8 16 2.8Z" stroke="#FFB627" stroke-width="2" stroke-linejoin="round"/><path d="M8.2 15.6l3.2-2.4 2.5 2.8 2.6-3 2.6 2.8 3.2-2.2" stroke="#FFB627" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="ol"><b>I'm brand new</b><i>Wallets, keys, safety &mdash; start in the Incubator</i></span><span class="oar">&rarr;</span></a>
-      <a class="gopt" href="/education"><span class="oic"><svg viewBox="0 0 32 32" width="28" height="28" fill="none" aria-hidden="true"><path d="M16 9.6C13.6 7.4 10.4 6.6 5 6.9v16.4c5.4-.3 8.6.5 11 2.7 2.4-2.2 5.6-3 11-2.7V6.9c-5.4-.3-8.6.5-11 2.7Z" stroke="#FFB627" stroke-width="2" stroke-linejoin="round"/><path d="M16 9.6V26" stroke="#FFB627" stroke-width="1.6" opacity=".6"/></svg></span><span class="ol"><b>I want to learn crypto</b><i>Courses, chain-by-chain guides &amp; the Library &mdash; all free</i></span><span class="oar">&rarr;</span></a>
-      <a class="gopt" href="/lp-lab"><span class="oic"><svg viewBox="0 0 32 32" width="28" height="28" fill="none" aria-hidden="true"><path d="M12.5 3.6v8.6L5.7 24.3A2.7 2.7 0 0 0 8 28.4h16a2.7 2.7 0 0 0 2.3-4.1l-6.8-12.1V3.6" stroke="#6EE7B7" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><path d="M10.6 3.6h10.8" stroke="#6EE7B7" stroke-width="2" stroke-linecap="round"/><path d="M9.4 22.2h2.6v4.2H9.4zM14.7 18.4h2.6v8h-2.6zM20 21h2.6v5.4H20z" fill="#6EE7B7"/></svg></span><span class="ol"><b>I want to go deep on LP</b><i>The LP Lab &mdash; ranges, impermanent loss, the real math</i></span><span class="oar">&rarr;</span></a>
-      <a class="gopt" href="/tools"><span class="oic"><svg viewBox="0 0 32 32" width="28" height="28" fill="none" aria-hidden="true"><circle cx="14" cy="14" r="8.4" stroke="#FFB627" stroke-width="2"/><path d="M20.2 20.2 27 27" stroke="#FFB627" stroke-width="2.4" stroke-linecap="round"/><path d="M10.6 15.4l2.4-2.6 2.4 2 2.6-3.4" stroke="#FFB627" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="ol"><b>I need research tools</b><i>Wallet X-Ray, Holders, Trace &mdash; any wallet or token</i></span><span class="oar">&rarr;</span></a>
-      <a class="gopt" href="/premium"><span class="oic"><svg viewBox="0 0 32 32" width="28" height="28" fill="none" aria-hidden="true"><path d="M8.5 10.5 4.5 16l4 5.5" stroke="#FFB627" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M23.5 10.5 27.5 16l-4 5.5" stroke="#FFB627" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M18.5 8.5 13.5 23.5" stroke="#FFB627" stroke-width="2.2" stroke-linecap="round"/></svg></span><span class="ol"><b>I need advanced / operator tools</b><i>Operator-grade forensics &amp; builder tooling</i></span><span class="oar">&rarr;</span></a>
-      <a class="gopt" href="/clkn"><span class="oic"><img src="/cluck-norris-mascot.jpg" alt=""></span><span class="ol"><b>I want to know about CLKN</b><i>The token &mdash; price, holders, chart &amp; where to buy</i></span><span class="oar">&rarr;</span></a>
+      <a class="gopt" href="/school#incubator"><span class="oic"><img src="/icons/egg.webp" width="40" height="40" alt="" loading="lazy"></span><span class="ol"><b>I'm brand new</b><i>Wallets, keys, safety &mdash; start in the Incubator</i></span><span class="oar">&rarr;</span></a>
+      <a class="gopt" href="/education"><span class="oic"><img src="/icons/book.webp" width="40" height="40" alt="" loading="lazy"></span><span class="ol"><b>I want to learn crypto</b><i>Courses, chain-by-chain guides &amp; the Library &mdash; all free</i></span><span class="oar">&rarr;</span></a>
+      <a class="gopt" href="/lp-lab"><span class="oic"><img src="/icons/flask.webp" width="40" height="40" alt="" loading="lazy"></span><span class="ol"><b>I want to go deep on LP</b><i>The LP Lab &mdash; ranges, impermanent loss, the real math</i></span><span class="oar">&rarr;</span></a>
+      <a class="gopt" href="/tools"><span class="oic"><img src="/icons/glass.webp" width="40" height="40" alt="" loading="lazy"></span><span class="ol"><b>I need research tools</b><i>Wallet X-Ray, Holders, Trace &mdash; any wallet or token</i></span><span class="oar">&rarr;</span></a>
+      <a class="gopt" href="/premium"><span class="oic"><img src="/icons/tools.webp" width="40" height="40" alt="" loading="lazy"></span><span class="ol"><b>I need advanced / operator tools</b><i>Operator-grade forensics &amp; builder tooling</i></span><span class="oar">&rarr;</span></a>
+      <a class="gopt" href="/clkn"><span class="oic"><img class="mascot" src="/cluck-norris-mascot.jpg" alt=""></span><span class="ol"><b>I want to know about CLKN</b><i>The token &mdash; price, holders, chart &amp; where to buy</i></span><span class="oar">&rarr;</span></a>
     </div>
   </div>
 
   <!-- simple quick links -->
   <div class="quick">
-    <a class="ql" href="/ask-cluck"><span class="qt">Ask Cluck</span><span class="qd">Ask him anything — instant AI answers</span></a>
+    <a class="ql" href="/ask-cluck"><span class="qi"><img src="/icons/flame.webp" width="34" height="34" alt="" loading="lazy"></span><span class="qt">Ask Cluck</span><span class="qd">Ask him anything — instant AI answers</span></a>
     <!-- Learn Crypto + Incubator + School folded into one EDUCATION tile (owner's call,
          2026-07-29 — three of seven tiles pointed at the same place). It points at the
          /education hub, which does the splitting: Incubator, School, Chain Info, Library. -->
-    <a class="ql" href="/education"><span class="qt">Education</span><span class="qd">Incubator, School, Chain Info &amp; Library</span></a>
+    <a class="ql" href="/education"><span class="qi"><img src="/icons/book.webp" width="34" height="34" alt="" loading="lazy"></span><span class="qt">Education</span><span class="qd">Incubator, School, Chain Info &amp; Library</span></a>
     <!-- The LP Lab is inside /education too, but keeps its own tile on purpose: it's the
          most advanced thing we teach and the feature we're best at. -->
-    <a class="ql lab" href="/lp-lab"><span class="qi"><svg viewBox="0 0 32 32" width="26" height="26" fill="none" aria-hidden="true"><path d="M12.5 3.6v8.6L5.7 24.3A2.7 2.7 0 0 0 8 28.4h16a2.7 2.7 0 0 0 2.3-4.1l-6.8-12.1V3.6" stroke="#6EE7B7" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><path d="M10.6 3.6h10.8" stroke="#6EE7B7" stroke-width="2" stroke-linecap="round"/><path d="M9.4 22.2h2.6v4.2H9.4zM14.7 18.4h2.6v8h-2.6zM20 21h2.6v5.4H20z" fill="#6EE7B7"/></svg></span><span class="qt">LP Lab</span><span class="qd">Advanced liquidity training — our specialty</span></a>
-    <a class="ql" href="/tools"><span class="qt">Tools</span><span class="qd">Research &amp; development tools</span></a>
-    <a class="ql" href="/locker-room"><span class="qt">Locker Room</span><span class="qd">Lock your Solana tokens — no token cut</span></a>
-    <a class="ql" href="/clkn"><span class="qt">CLKN Token</span><span class="qd">Price, holders, chart &amp; where to buy</span></a>
+    <a class="ql lab" href="/lp-lab"><span class="qi"><img src="/icons/flask.webp" width="34" height="34" alt="" loading="lazy"></span><span class="qt">LP Lab</span><span class="qd">Advanced liquidity training — our specialty</span></a>
+    <a class="ql" href="/tools"><span class="qi"><img src="/icons/glass.webp" width="34" height="34" alt="" loading="lazy"></span><span class="qt">Tools</span><span class="qd">Research &amp; development tools</span></a>
+    <a class="ql" href="/locker-room"><span class="qi"><img src="/icons/lock.webp" width="34" height="34" alt="" loading="lazy"></span><span class="qt">Locker Room</span><span class="qd">Lock your Solana tokens — no token cut</span></a>
+    <a class="ql" href="/clkn"><span class="qi"><img src="/icons/coin.webp" width="34" height="34" alt="" loading="lazy"></span><span class="qt">CLKN Token</span><span class="qd">Price, holders, chart &amp; where to buy</span></a>
   </div>
 
   <!-- Buy CLKN + community / price links — all on one row, below the tools & options -->

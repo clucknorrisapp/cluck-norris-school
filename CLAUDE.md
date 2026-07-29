@@ -304,11 +304,18 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   that went (belt course, specific-coin, AI Classroom, own-pace Library) are all cards or links on
   `/education` now, so nothing is orphaned. **"I need advanced / operator tools" STAYS** because
   `/premium` is linked from nowhere else on the site — check that before ever trimming it again.
-  All icons on the concierge AND on `/education` are now **hand-drawn inline SVG, not emoji**
-  (egg / mortarboard / chain-link / open book / magnifier-with-pulse / `</>`; the LP Lab gets a
-  **conical flask holding a 3-bar liquidity distribution**, in the Lab's green `#6EE7B7`, reused on
-  the homepage tile and the `/education` flagship). They are INLINE on purpose — an external
-  `<use href="/sprite.svg#id">` is unreliable in Safari. The CLKN route uses the real mascot photo.
+  All icons on the concierge, the six home tiles AND every `/education` card are **rendered 3D
+  objects in `public/icons/*.webp`** — not emoji, and no longer the flat SVGs that briefly
+  replaced them (owner, same day: "can't we make better images with higgsfield for our icons /
+  this needs to be highly polished not cheap"). Obsidian glass + brushed metal with a molten
+  amber-orange internal glow; the LP Lab flask is the one green piece. ⚠️ **They were generated
+  as SHEETS, not one at a time — that is the whole trick.** Eight objects in one 4×2 render share
+  a single lighting setup, which is what makes them read as a set instead of twelve unrelated
+  pictures; the two follow-up sheets pass the first sheet as `medias[{role:image}]` to inherit the
+  material. Job IDs, the reject, and the black-background→alpha cutting recipe are in
+  `docs/MEDIA_LIBRARY.md` — **regenerate from those job IDs, don't re-prompt from scratch.**
+  Whole set is 53 KB. The CLKN concierge route keeps the real mascot photo (`.oic img.mascot`
+  gets the circular crop; the rendered icons must NOT).
   🎓 **`/education` IS THE LEARNING HUB (2026-07-29, owner's call).** The homepage carried three
   tiles (Learn Crypto / Incubator / School) that all landed in roughly the same place; they
   collapsed into ONE "Education" tile pointing at `/education` (`public/education.html`, explicit
