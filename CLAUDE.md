@@ -19,6 +19,14 @@ the **canonical source** and the **hackathon + Solana Foundation grant** entry �
 accuracy in the public docs (`README.md`, `public/investors.html`)
 matters, and claims should match the code.
 
+> 📝 **HOME COPY (owner, 2026-07-29): the two taglines are GONE from the landing page** —
+> "We took the hard knocks. So you don't have to." and "— taught straight, so you skip the
+> expensive mistakes." The hero is now kicker + wordmark + one line ("Crypto knowledge from your
+> first wallet to advanced strategy."). Removed from the page's own og:description too, so a
+> shared link doesn't still say it. ⚠️ It DOES still appear in the scheduled school post
+> (`server.js` ~4108, the `tg`/`x` spotlight copy) and as translation KEYS in `public/i18n/*.json`
+> (harmless — the key no longer matches anything on the page). Ask before changing the social copy.
+
 > 🎯 **STRATEGY (owner's calls, 2026-07-19 — supersede the brand audit's Autopsy-wedge recommendation):**
 > **(1) The LOCKER ROOM is the flagship story** — helping communities lock tokens on the Jupiter
 > Lock program and broadcast it socially. Autopsy stays but is NOT the lead ("so many rugs and
@@ -402,14 +410,16 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   then rugged — misleading, not worth it. Do NOT rebuild it.** Gone: `/score` page + `score.html`,
   `/api/cluck-score`, `/api/cluck-card`, `renderScoreCard`, the `/score` Telegram command, and all
   links. The replacement free flagship is **Wallet X-Ray** (`/wallet-xray`, `/api/wallet-xray`).
-- `src/` — the React/Vite school (landing app). **SEO note (2026-07-06):** the school is a
-  client-rendered SPA, so `/curriculum` (server route + `lib/curriculum.js`) serves a static-HTML
-  mirror of the lesson content for non-JS crawlers — it text-extracts LESSONS/INCUBATOR_LESSONS
-  (App.jsx) + LP_LESSONS (LPLab.jsx) at first request, deliberately WITHOUT quiz answers (the
-  a crawlable answer key would let a learner skip the thinking the quiz exists to provoke). `robots.txt` + `sitemap.xml`
-  are explicit server routes (the SPA catch-all would otherwise answer them with the React shell).
-  If you materially restructure those lesson arrays, sanity-check `/curriculum` still renders
-  (a failed extraction 404s that route only — nothing else is affected).
+- `src/` — the React/Vite school (landing app). ⛔ **`/curriculum` WAS REMOVED (2026-07-29, owner:
+  "it gives out too much on one screen and the questions. Not cool").** It was a static-HTML mirror
+  of every lesson for non-JS crawlers, and it laid out every lesson body plus every quiz question
+  text on one flat page. `/curriculum` now **301s to `/education`** — an explicit route, because
+  without one the SPA catch-all answers it with the React shell (a 200 soft-404) for every link
+  still indexed. `lib/curriculum.js` survives but ONLY exports `counts()`, which `/education` uses
+  for its lesson numbers; `render()` and the whole HTML template are gone. **Do not rebuild the
+  mirror without an explicit ask — and if SEO ever justifies it, it must not include question
+  texts.** `robots.txt` + `sitemap.xml` are still explicit server routes (the SPA catch-all would
+  otherwise answer them with the React shell).
 
 ## Credentials / transcripts (the school's permanent output)
 - ⛔ **THE ULTIMATE CHALLENGE AND THE SURVIVAL SIMULATOR WERE REMOVED (2026-07-29, owner's call:

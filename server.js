@@ -22,7 +22,7 @@ const kv = require("./lib/kvstore");
 const recap = require("./lib/recap");
 const gradTracker = require("./lib/grad-tracker");
 const credentials = require("./lib/credentials");
-const curriculumPage = require("./lib/curriculum"); // crawlable /curriculum (SEO) — read-only
+const curriculumPage = require("./lib/curriculum"); // lesson COUNTS only — the SEO mirror page was removed 2026-07-29
 const rpc = require("./lib/rpc"); // resilient RPC: primary Helius + automatic failover
 const {
   SOL_ADDR_RE, base58Decode, base58Encode, isOnCurveBytes, isOnCurve, deriveAta,
@@ -11216,8 +11216,6 @@ app.get("/", (req, res) => {
 // /robots.txt and /sitemap.xml with the React shell — worse than absent (a
 // crawler requesting robots.txt and receiving HTML treats it as malformed).
 // The React school itself stays a client-rendered SPA (Googlebot renders JS);
-// /curriculum is the static-HTML mirror of the lesson content for everything
-// that doesn't execute JS (Bing, AI crawlers, SEO tools). See lib/curriculum.js
 // — read-only, lazily cached, and if extraction ever fails the route 404s
 // without touching anything else.
 app.get("/robots.txt", (req, res) => {
@@ -11234,7 +11232,7 @@ const SITEMAP_PAGES = [
   // pool-monitor, admin) are deliberately absent; their meta handles them.
   // /autopsy + /order-book left the sitemap 2026-07-29 when they went operator-only,
   // and /grant + /token-vitals were removed outright.
-  "/", "/school", "/education", "/curriculum", "/tools", "/wallet-xray", "/trace",
+  "/", "/school", "/education", "/tools", "/wallet-xray", "/trace",
   "/snapshot", "/holders", "/airdrop", "/buyspecial", "/hatchery", "/security-coop",
   "/wallet-checkup", "/locker-room", "/clkn", "/alpha", "/lp-lab",
   "/classroom", "/bags", "/investors", "/privacy", "/terms",
@@ -11295,11 +11293,12 @@ app.get(["/education", "/education.html"], (req, res) => {
   catch (e) { res.redirect(302, "/school"); }   // never dead-end a nav link over a template read
 });
 
-app.get("/curriculum", (req, res) => {
-  const html = curriculumPage.render();
-  if (!html) return res.status(404).send("Curriculum page unavailable");
-  res.type("html").send(html);
-});
+// /curriculum is GONE (owner's call, 2026-07-29: "it gives out too much on one screen
+// and the questions. Not cool"). It rendered every lesson body AND every quiz question
+// text as one flat page. Permanent redirect rather than deletion: the page was in the
+// sitemap and is indexed, and without an explicit route the SPA catch-all would answer
+// it with the React shell — a 200 soft-404 on every result that still points here.
+app.get("/curriculum", (req, res) => res.redirect(301, "/education"));
 
 // Normie Quest — hidden feature (Phase 0 demo page). Self-contained, isolated
 // side project (a friend's NORMIE token game); shares nothing with CLKN code.
