@@ -57,6 +57,35 @@
 
 html{background:var(--bg-grad);background-attachment:fixed;}
 body{background:transparent;font-family:var(--body);}
+
+  /* ── ported verbatim from security-coop.html when the two tools merged ── */
+  .wallet-picker { display: flex; gap: 8px; flex-wrap: wrap; }
+  .wallet-btn { flex: 1; min-width: 130px; display: flex; align-items: center; justify-content: center; gap: 8px; border: none; border-radius: 10px; padding: 12px 14px; font-family: var(--mono); font-size: 13px; font-weight: 700; color: #fff; letter-spacing: 1px; cursor: pointer; transition: transform 0.15s, opacity 0.15s; }
+  .wallet-btn:hover { transform: translateY(-1px); opacity: 0.95; }
+  .wallet-btn.phantom { background: #9945FF; }
+  .wallet-btn.solflare { background: #FC822B; }
+  .wallet-btn.backpack { background: #E33E3F; }
+  .wallet-btn.okx { background: #2B2B2B; }
+  .wallet-btn.coinbase { background: #1652F0; }
+  .wallet-btn.trust { background: #3375BB; }
+  .wallet-btn.glow { background: #00D18C; }
+  .wallet-btn.exodus { background: #6E55C9; }
+  .wallet-btn.bitget { background: #00F0FF; color: #06283D; }
+  .wallet-btn.brave { background: #FB542B; }
+  .wallet-btn.jupiter { background: #4D8FF7; }
+  .wallet-info { font-family: var(--mono); font-size: 12px; color: var(--green); margin-top: 10px; padding: 10px 12px; background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.25); border-radius: 8px; display: none; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .wallet-info.show { display: flex; }
+  .wallet-info-addr { word-break: break-all; flex: 1; min-width: 0; }
+  .wallet-disc-btn { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: #FCA5A5; font-family: 'Anton', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+  .progress { display: none; margin-top: 12px; font-family: var(--mono); font-size: 12px; color: var(--accent); text-align: center; }
+  .progress.show { display: block; }
+  .error-box { display: none; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 12px 14px; font-family: var(--mono); font-size: 12px; color: #FCA5A5; margin-bottom: 16px; }
+  .error-box.show { display: block; }
+  .revoke-btn { margin-top: 10px; width: 100%; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.5); color: #FCA5A5; font-family: 'Anton', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1.5px; padding: 9px; border-radius: 7px; cursor: pointer; }
+  .revoke-btn:hover { background: rgba(239,68,68,0.25); }
+  .revoke-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .revoke-all { margin-top: 12px; width: 100%; background: #EF4444; border: none; color: #fff; font-family: 'Anton', sans-serif; font-size: 13px; font-weight: 900; letter-spacing: 2px; padding: 12px; border-radius: 8px; cursor: pointer; }
+  .revoke-all:disabled { opacity: 0.4; cursor: not-allowed; }
 </style>
   <meta name="theme-color" content="#0b0c10">
   <meta property="og:title" content="Wallet Safety Checkup">
@@ -71,14 +100,14 @@ body{background:transparent;font-family:var(--body);}
 <div class="wrap">
   <a class="back-home" href="/"><img src="/cluck-norris-logo.jpg" alt=""/>&larr; CLUCK NORRIS HOME</a>
   <div class="header">
-    <h1>🛡 WALLET SAFETY CHECKUP</h1>
-    <p>FREE · READ-ONLY · NO WALLET CONNECT</p>
+    <h1>🛡 WALLET CHECKUP</h1>
+    <p>FREE · SCAN ANY WALLET · REVOKE YOUR OWN</p>
   </div>
 
   <div class="card">
     <div class="intro">
       The fastest way someone gets drained on Solana isn't a bad token pick — it's a <b>lingering approval</b> they forgot about, a <b>honeypot</b> they can't sell, or a token whose dev can still <b>freeze or mint</b> at will. This scans any wallet for all three.
-      <span class="noconnect">🔒 <b>Read-only.</b> Paste an address — you're not connecting a wallet, not signing anything. To actually <b>revoke</b> an approval you'll head to Security Coop, where you sign it yourself.</span>
+      <span class="noconnect">🔒 <b>Read-only.</b> Paste an address — you're not connecting a wallet, not signing anything. If the scan finds approvals, you can <b>revoke them right here</b> — that is the only step that needs your signature, and you approve it in your own wallet.</span>
     </div>
     <div class="input-row">
       <input class="addr-input" id="addr" type="text" autocomplete="off" spellcheck="false" placeholder="Paste a Solana wallet address…" onkeydown="if(event.key==='Enter')run()"/>
@@ -88,8 +117,48 @@ body{background:transparent;font-family:var(--body);}
   </div>
 
   <div id="results"></div>
+
+  <!-- Connect is OPTIONAL and deliberately BELOW the read-only scan: the safe path is
+       pasting an address, and a wallet connect is only needed for the one action that
+       actually signs — revoking an approval. Hidden until a scan finds approvals. -->
+  <div class="card" id="revokeCard" style="display:none">
+    <div class="sec-title" style="color:#FCA5A5">🔑 REVOKE THESE APPROVALS</div>
+    <div style="font-size:12px;color:#9CA3AF;line-height:1.6;margin-bottom:10px">
+      Revoking is the only step that needs your signature. Connect the wallet you just scanned and
+      you can clear the approvals right here — the transaction is built server-side, unsigned, and
+      you approve it in your own wallet. Keys never leave it.
+    </div>
+    <div class="error-box" id="errorBox"></div>
+    <div class="progress" id="progress" style="display:none"></div>
+    <div class="wallet-picker" id="walletPicker">
+      <button class="wallet-btn phantom" onclick="connectWallet('phantom')">🔮 Phantom</button>
+      <button class="wallet-btn solflare" onclick="connectWallet('solflare')">☀️ Solflare</button>
+      <button class="wallet-btn backpack" onclick="connectWallet('backpack')">🎒 Backpack</button>
+      <button class="wallet-btn okx" onclick="connectWallet('okx')">⭕ OKX</button>
+      <button class="wallet-btn coinbase" onclick="connectWallet('coinbase')">🔵 Coinbase</button>
+      <button class="wallet-btn trust" onclick="connectWallet('trust')">🛡 Trust</button>
+      <button class="wallet-btn glow" onclick="connectWallet('glow')">🌐 Glow</button>
+      <button class="wallet-btn exodus" onclick="connectWallet('exodus')">🪐 Exodus</button>
+      <button class="wallet-btn bitget" onclick="connectWallet('bitget')">🌊 Bitget</button>
+      <button class="wallet-btn brave" onclick="connectWallet('brave')">🦁 Brave</button>
+      <button class="wallet-btn jupiter" onclick="connectWallet('jupiter')">🪐 Jupiter</button>
+    </div>
+    <!-- Mobile-only: shown when no wallet is injected (i.e. opened in a normal
+         mobile browser). These are pure "open this page in your wallet's in-app
+         browser" deep links — navigation only, no keys/signing over the link;
+         once inside, the same injected connect flow above runs. -->
+    <div id="mobileConnect" style="display:none;margin-top:12px;flex-direction:column;gap:8px"></div>
+    <div class="wallet-info" id="walletInfo">
+      <span class="wallet-info-addr" id="walletInfoAddr"></span>
+      <button class="wallet-disc-btn" onclick="disconnectWallet()">DISCONNECT</button>
+    </div>
+    <div id="mobileConnect" style="display:none;margin-top:12px;flex-direction:column;gap:8px"></div>
+    <div id="revokeActions" style="display:none;margin-top:12px"></div>
+  </div>
+
   <div class="footer">🐔 clucknorris.app — stay safe out there</div>
 </div>
+<script src="/vendor/solana-web3.iife.min.js"></script>
 <script>
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function shortAddr(a){ return a ? a.slice(0,4)+'…'+a.slice(-4) : '—'; }
@@ -98,8 +167,10 @@ function copyCA(e,addr){ e.preventDefault(); navigator.clipboard&&navigator.clip
 
 function showErr(m){ const e=document.getElementById('err'); e.textContent=m; e.style.display='block'; }
 
+let lastScanAddr='';
 async function run(){
   const addr=(document.getElementById('addr').value||'').trim();
+  lastScanAddr=addr;
   const btn=document.getElementById('runBtn'), res=document.getElementById('results'), err=document.getElementById('err');
   err.style.display='none';
   if(addr.length<32){ showErr('Paste a valid Solana wallet address.'); return; }
@@ -117,6 +188,7 @@ async function run(){
 function fmtUsd(n){n=Number(n)||0;return n>=1e6?'$'+(n/1e6).toFixed(2)+'M':n>=1e3?'$'+(n/1e3).toFixed(1)+'K':'$'+n.toFixed(2);}
 function render(d){
   const approvals=d.approvals||[], risky=d.riskyHoldings||[], holdings=(d.holdings||[]).filter(h=>h.valueUsd>0);
+  try { syncRevokeUi(approvals, d.wallet || lastScanAddr); } catch(e) {}
   let html='';
   // Summary — now leads with live portfolio value
   html+='<div class="summary">'
@@ -160,7 +232,9 @@ function render(d){
         +'<div class="mono" style="margin-top:3px"><b style="color:#9CA3AF">Token:</b> '+esc(shortAddr(a.mint))+' · approved up to <b>'+esc(a.delegatedAmount)+'</b> (you hold '+esc(a.balance)+')</div>'
         +'</div>';
     });
-    html+='<a class="revoke-btn" href="/security-coop" target="_blank" rel="noreferrer">🔒 REVOKE THESE IN SECURITY COOP →</a>';
+    // The hand-off button that used to live here is gone — revoking happens on this
+    // page now. The revoke card below is shown by syncRevokeUi() whenever approvals exist.
+    html+='<div style="font-family:var(--mono);font-size:11.5px;color:#FCD34D;margin-top:10px;line-height:1.6">↓ Revoke these below — connect the wallet and sign it yourself.</div>';
     html+='</div>';
   }
 
@@ -189,6 +263,237 @@ function render(d){
 // Allow ?wallet= deep-linking
 const _w=new URLSearchParams(location.search).get('wallet');
 if(_w){ document.getElementById('addr').value=_w.trim(); run(); }
+</script>
+<script>
+
+// ── REVOKE (merged in from the old Security Coop page, 2026-07-29) ────────────
+// The two tools were one engine already: /api/wallet-checkup calls
+// securityCoop.scanDelegates() internally, so Checkup was a strict superset of the
+// Coop's read — the Coop's only exclusive capability was building the revoke
+// transaction. Keeping them apart meant: scan here, hit a dead end, navigate there,
+// connect a wallet, and scan the same thing again. Now the read-only scan is the
+// default entry and the connect happens only at the moment you actually sign.
+//
+// The signing block below is COPIED VERBATIM, including its warning: the
+// signAndSendTransaction path is tuned so wallets don't flag the app. Do not alter it.
+let walletPubkey = null;
+let activeWallet = null;       // { id, provider }
+let currentDelegates = [];     // last scan result
+let busy = false;
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function showError(msg) {
+  const el = document.getElementById('errorBox');
+  el.textContent = msg;
+  el.classList.add('show');
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  setTimeout(() => el.classList.remove('show'), 9000);
+}
+function setProgress(msg) {
+  const el = document.getElementById('progress');
+  if (msg) { el.textContent = msg; el.classList.add('show'); }
+  else el.classList.remove('show');
+}
+function shorten(s) { return s.slice(0, 4) + '…' + s.slice(-4); }
+async function rpc(method, params) {
+  const r = await fetch(RPC_URL, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+  });
+  const d = await r.json();
+  if (d.error) throw new Error(d.error.message);
+  return d.result;
+}
+async function confirmTx(signature) {
+  for (let i = 0; i < 40; i++) {
+    const st = await rpc('getSignatureStatuses', [[signature]]);
+    const s = st && st.value && st.value[0];
+    if (s) {
+      if (s.err) throw new Error('Transaction failed on-chain');
+      if (s.confirmationStatus === 'confirmed' || s.confirmationStatus === 'finalized') return;
+    }
+    await new Promise(r => setTimeout(r, 1500));
+  }
+  throw new Error('Timed out waiting for confirmation — check Solscan');
+}
+
+// ── Wallet connect ───────────────────────────────────────────────────────────
+const WALLETS = {
+  phantom:  { name: 'Phantom',  detect: () => window.phantom?.solana || (window.solana?.isPhantom ? window.solana : null) },
+  solflare: { name: 'Solflare', detect: () => window.solflare || (window.solana?.isSolflare ? window.solana : null) },
+  backpack: { name: 'Backpack', detect: () => (window.backpack?.isBackpack ? window.backpack : null) || (window.solana?.isBackpack ? window.solana : null) },
+  okx:      { name: 'OKX',      detect: () => window.okxwallet?.solana || window.okxwallet || null },
+  coinbase: { name: 'Coinbase', detect: () => window.coinbaseSolana || window.coinbaseWalletSolana || null },
+  trust:    { name: 'Trust',    detect: () => window.trustwallet?.solana || (window.solana?.isTrust ? window.solana : null) },
+  glow:     { name: 'Glow',     detect: () => window.glowSolana || window.glow?.solana || (window.solana?.isGlow ? window.solana : null) },
+  exodus:   { name: 'Exodus',   detect: () => window.exodus?.solana || null },
+  bitget:   { name: 'Bitget',   detect: () => window.bitkeep?.solana || window.bitgetWallet?.solana || (window.solana?.isBitKeep ? window.solana : null) },
+  brave:    { name: 'Brave',    detect: () => window.braveSolana || (window.solana?.isBraveWallet ? window.solana : null) },
+  jupiter:  { name: 'Jupiter',  detect: () => window.jupiterWallet || window.jupiter || (window.solana?.isJupiter ? window.solana : null) },
+};
+// Mobile on-ramp: on mobile with NO wallet injected (a normal mobile browser,
+// not a wallet's in-app browser), offer one-tap deep links that OPEN this page
+// inside the wallet's browser. Pure navigation — nothing is signed or shared by
+// the link; the injected connect flow above runs once the user is inside.
+function initMobileDeepLinks() {
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  if (!isMobile) return;
+  const injected = !!(window.solana || window.phantom?.solana || window.solflare || window.backpack
+    || window.okxwallet || window.glowSolana || window.exodus?.solana || window.coinbaseSolana || window.trustwallet?.solana);
+  if (injected) return; // already inside a wallet browser — the buttons above work
+  const el = document.getElementById('mobileConnect'), picker = document.getElementById('walletPicker');
+  if (!el) return;
+  const url = encodeURIComponent(location.href), ref = encodeURIComponent(location.origin);
+  el.innerHTML =
+    '<div style="font-family:var(--mono);font-size:12px;color:var(--accent);line-height:1.5">📱 On mobile? Open this page inside your wallet to connect:</div>'
+    + '<a class="wallet-btn phantom" style="text-decoration:none" href="https://phantom.app/ul/browse/' + url + '?ref=' + ref + '">🔮 Open in Phantom</a>'
+    + '<a class="wallet-btn solflare" style="text-decoration:none" href="https://solflare.com/ul/v1/browse/' + url + '?ref=' + ref + '">☀️ Open in Solflare</a>'
+    + '<div style="font-family:var(--mono);font-size:10px;color:var(--subtext);line-height:1.5">Opens this page in the wallet’s built-in browser. Nothing is signed or shared by the link.</div>';
+  el.style.display = 'flex';
+  if (picker) picker.style.display = 'none'; // extension buttons can't work in a plain mobile browser
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initMobileDeepLinks);
+else initMobileDeepLinks();
+function syncWalletUi() {
+  const picker = document.getElementById('walletPicker');
+  const info = document.getElementById('walletInfo');
+  const scanCard = document.getElementById('scanCard');
+  if (walletPubkey) {
+    picker.style.display = 'none';
+    info.classList.add('show');
+    document.getElementById('walletInfoAddr').textContent = '✓ ' + walletPubkey;
+    scanCard.style.display = 'block';
+  } else {
+    picker.style.display = 'flex';
+    info.classList.remove('show');
+    scanCard.style.display = 'none';
+    document.getElementById('results').innerHTML = '';
+  }
+}
+let connecting = false;
+async function connectWallet(id) {
+  if (connecting) return;            // ignore double-taps while a prompt is open
+  const w = WALLETS[id];
+  const provider = w && w.detect();
+  if (!provider) { showError(`${w ? w.name : 'Wallet'} not detected. Open this page in ${w ? w.name : 'the wallet'}'s in-app browser, or install the extension.`); return; }
+  connecting = true;
+  try {
+    const resp = await provider.connect();
+    const pk = resp?.publicKey?.toString?.() || provider.publicKey?.toString?.();
+    if (!pk) throw new Error('no public key returned');
+    walletPubkey = pk;
+    activeWallet = { id, provider };
+    syncWalletUi();
+    runFor(pk);   // auto-run the full checkup on the connected wallet
+  } catch (e) {
+    const code = e && e.code;
+    if (code === 4001 || code === 4100 || /not been authorized|rejected/i.test((e && e.message) || '')) {
+      showError(`${w.name} didn't authorize the connection. Approve the connect popup — if you see a site-safety warning, it's a known false flag under review, safe to trust. Solflare connects without the warning.`);
+    } else {
+      showError(`${w.name} connection failed: ${e.message || e}`);
+    }
+  } finally {
+    connecting = false;
+  }
+}
+function disconnectWallet() {
+  try { activeWallet?.provider?.disconnect?.(); } catch (e) {}
+  walletPubkey = null; activeWallet = null; currentDelegates = [];
+  syncWalletUi();
+}
+
+// ── Scan ─────────────────────────────────────────────────────────────────────
+async function revoke(accounts) {
+  if (!walletPubkey || busy || !accounts.length) return;
+  busy = true;
+  document.querySelectorAll('.revoke-btn, .revoke-all, #scanBtn').forEach(b => b.disabled = true);
+  try {
+    setProgress('Building the revoke transaction…');
+    const res = await fetch('/api/security-coop/revoke', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        owner: walletPubkey,
+        accounts: accounts.map(a => ({ tokenAccount: a.tokenAccount, program: a.program })),
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Revoke build failed');
+
+    setProgress('Approve the transaction in your wallet…');
+    const txBytes = Uint8Array.from(atob(data.txBase64), c => c.charCodeAt(0));
+    const tx = solanaWeb3.Transaction.from(txBytes);
+    // PRIMARY path (UNCHANGED — Phantom/Solflare/etc.): the wallet signs AND
+    // submits. This is the flow tuned so the app isn't flagged — do NOT alter.
+    // SECONDARY path: only wallets WITHOUT signAndSendTransaction fall through to
+    // sign-locally + submit via our RPC. Capability-gated, so Phantom never hits it.
+    const _prov = activeWallet.provider;
+    let signature;
+    if (typeof _prov.signAndSendTransaction === 'function') {
+      const _r = await _prov.signAndSendTransaction(tx);
+      signature = _r?.signature || _r;          // some wallets return the sig string directly
+    } else if (typeof _prov.signTransaction === 'function') {
+      const signed = await _prov.signTransaction(tx);
+      const raw = new Uint8Array(signed.serialize());
+      let bin = ''; for (let i = 0; i < raw.length; i++) bin += String.fromCharCode(raw[i]);
+      const sendRes = await fetch('/api/helius-rpc', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 'sc-send', method: 'sendTransaction', params: [btoa(bin), { encoding: 'base64' }] }),
+      });
+      const sj = await sendRes.json();
+      if (sj.error) throw new Error(sj.error.message || 'Transaction send failed');
+      signature = sj.result;
+    } else {
+      throw new Error(`${(WALLETS[activeWallet.id] && WALLETS[activeWallet.id].name) || 'This wallet'} can't sign transactions here — try its in-app browser, or use Phantom/Solflare.`);
+    }
+
+    setProgress('Confirming on-chain…');
+    await confirmTx(signature);
+    setProgress('');
+    busy = false;
+    runFor(walletPubkey);   // re-scan to show the cleared state
+  } catch (e) {
+    setProgress('');
+    showError('Revoke failed: ' + (e.message || e));
+    document.querySelectorAll('.revoke-btn, .revoke-all, #scanBtn').forEach(b => b.disabled = false);
+    busy = false;
+  }
+}
+
+// Run the full checkup for a specific address (used after connect and after a revoke).
+async function runFor(addr){
+  const input=document.getElementById('addr');
+  if(input) input.value=addr;
+  await run();
+}
+
+// Show the revoke card only when there is something to revoke.
+function syncRevokeUi(approvals, scannedOwner){
+  const card=document.getElementById('revokeCard');
+  const actions=document.getElementById('revokeActions');
+  if(!card||!actions) return;
+  if(!approvals || !approvals.length){ card.style.display='none'; return; }
+  card.style.display='block';
+  lastApprovals=approvals; lastScanned=scannedOwner;
+  if(!walletPubkey){
+    actions.style.display='none';
+  } else if(walletPubkey!==scannedOwner){
+    actions.style.display='block';
+    actions.innerHTML='<div style="font-family:var(--mono);font-size:12px;color:#FCD34D;line-height:1.6">'
+      +'Connected as <b>'+esc(shorten(walletPubkey))+'</b> but you scanned <b>'+esc(shorten(scannedOwner))+'</b>. '
+      +'You can only revoke approvals on the wallet you control. '
+      +'<button class="revoke-btn" style="margin-top:8px" onclick="runFor(walletPubkey)">SCAN MY CONNECTED WALLET INSTEAD</button></div>';
+  } else {
+    actions.style.display='block';
+    actions.innerHTML='<button class="revoke-all" onclick="revokeAllFound()">REVOKE ALL '+approvals.length+' APPROVAL'+(approvals.length>1?'S':'')+'</button>'
+      +'<div style="font-family:var(--mono);font-size:11px;color:#9CA3AF;margin-top:8px;line-height:1.5">Up to 8 per transaction — if you have more, run it twice.</div>';
+  }
+}
+let lastApprovals=[], lastScanned='';
+function revokeAllFound(){
+  if(!lastApprovals.length) return;
+  revoke(lastApprovals.slice(0,8).map(a=>({tokenAccount:a.tokenAccount, program:a.program})));
+}
+
 </script>
 <script defer src="/cluck-nav.js"></script>
 </body>

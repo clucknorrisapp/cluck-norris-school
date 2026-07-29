@@ -10704,12 +10704,17 @@ app.get("/portal", (req, res) => {
 });
 
 // Security Coop — wallet permission check / approval revoker.
-app.get("/security-coop", (req, res) => {
-  res.sendFile(join(__dirname, "public", "security-coop.html"));
-});
-
 // Wallet Safety Checkup — read-only scan (approvals + risky holdings).
-app.get("/wallet-checkup", (req, res) => {
+// -- Wallet Checkup (merged 2026-07-29) ---------------------------------------
+// Security Coop folded in here. /api/wallet-checkup already called
+// securityCoop.scanDelegates() internally, so Checkup was a strict superset of the
+// Coop's read — the Coop's only exclusive capability was BUILDING the revoke
+// transaction, which now lives on this page too. The old split forced a four-step
+// flow: scan, dead end, navigate, connect, scan the same wallet again.
+// BOTH paths serve it (5 inbound links pointed at /security-coop), same approach as
+// /holders + /snapshot. securitycoop.js and its /api/security-coop/* routes are
+// UNTOUCHED — the merged page still calls /revoke to build the unsigned tx.
+app.get(["/wallet-checkup", "/security-coop"], (req, res) => {
   res.sendFile(join(__dirname, "public", "wallet-checkup.html"));
 });
 
