@@ -7589,17 +7589,41 @@ app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async
     const effScore = null, effTotal = null, effPct = null, verified = null;
     const source = "GRADUATION";
 
-    // Check if CLKN holder (snapshot stored on the transcript too).
-    const { isHolder, balance } = await checkCLKNHolder(wallet);
+    // EVERY external call here is best-effort. Graduation is the school's only conversion
+    // event, and it used to hang off two unguarded awaits: an expired Google service
+    // account or a Helius blip threw, the handler 500'd, and the learner lost the
+    // transcript entirely — the one durable artifact they came for. The transcript write
+    // is local and cannot fail that way, so nothing upstream of it is allowed to abort it.
+    let isHolder = false, balance = null;
+    try {
+      ({ isHolder, balance } = await checkCLKNHolder(wallet));
+    } catch (e) {
+      console.warn("[claim] holder lookup failed, recording without it:", e.message);
+    }
     const holderStatus = isHolder ? "[OK] YES" : "[ERR] NO";
 
     // Google Sheet stays the airdrop list — one row per wallet.
-    const rows = await getSheetRows();
-    const exists = rows.some(row => row[0] === wallet);
-    if (!exists) {
-      const date = new Date().toISOString();
-      await appendToSheet([wallet, effScore, effTotal, effPct, date, holderStatus, balance, source || "CHALLENGE"]);
-      console.log(`[WIN] New claim: ${wallet} -- ${effScore}/${effTotal} (${effPct}%) [${verified}] -- CLKN Holder: ${holderStatus} (${balance})`);
+    try {
+      const rows = await getSheetRows();
+      const exists = rows.some(row => row[0] === wallet);
+      if (!exists) {
+        const date = new Date().toISOString();
+        await appendToSheet([wallet, effScore, effTotal, effPct, date, holderStatus, balance, source || "CHALLENGE"]);
+        console.log(`[WIN] New claim: ${wallet} -- CLKN Holder: ${holderStatus} (${balance})`);
+      }
+    } catch (e) {
+      // The airdrop list is recoverable from the transcript store; the transcript is not
+      // recoverable from anywhere. Never let the sheet take the graduation down with it.
+      console.error("[claim] SHEET WRITE FAILED (transcript still recorded):", e.message);
+      // Alert the operator chat — a silently-dropped airdrop entry is exactly the kind of
+      // failure that otherwise surfaces weeks later as "why isn't this wallet on the list".
+      try {
+        const _proj = (whirlpoolMM.vault.getProject && whirlpoolMM.vault.getProject("treasury")) || null;
+        const _chat = (_proj && _proj.telegramChatId) || process.env.TELEGRAM_CHAT_ID;
+        if (_chat && process.env.TELEGRAM_BOT_TOKEN) {
+          tgSend(_chat, `⚠️ <b>/api/claim</b> — Google Sheet write FAILED for <code>${tgEsc(wallet)}</code>\n${tgEsc(e.message)}\n\nThe transcript was still recorded; the airdrop-list row was not.`, null, { silent: true }).catch(() => {});
+        }
+      } catch (_) {}
     }
 
     // Always update the permanent transcript store (merges challenge + graduation

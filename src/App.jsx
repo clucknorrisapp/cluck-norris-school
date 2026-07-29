@@ -1625,17 +1625,31 @@ function Complete({onRestart}){
   const [holderBalance, setHolderBalance] = useState(0);
   const [slug, setSlug] = useState("");
   const [nft, setNft] = useState(null);
+  const [claimError, setClaimError] = useState("");
 
   async function claimSpot() {
-    if (!wallet || wallet.length < 32) return;
+    // Trim before both the check and the send. The client used to gate on raw length while
+    // the server validates base58 — so an address pasted from mobile with a trailing space
+    // or newline passed here and was rejected there.
+    const addr = (wallet || "").trim();
+    if (addr.length < 32) return;
     setClaiming(true);
+    setClaimError("");
     try {
       const res = await fetch("/api/claim", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet, score: 12, total: 12, pct: 100, source: "GRADUATION", coursework: readCoursework() })
+        body: JSON.stringify({ wallet: addr, source: "GRADUATION", coursework: readCoursework() })
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      // This used to setClaimed(true) unconditionally — and so did the catch. A 400, a 429,
+      // or a redeploy mid-request showed "WALLET SUBMITTED — YOU'RE IN THE FLOCK" while
+      // nothing had been recorded, with no error and no way to retry.
+      if (!res.ok || !data.success) {
+        setClaimError(data.error || "Couldn't submit that — check the address and try again.");
+        setClaiming(false);
+        return;
+      }
       track("claim_submit:graduation");
       setClaimed(true);
       setIsHolder(data.isHolder || false);
@@ -1643,7 +1657,7 @@ function Complete({onRestart}){
       setSlug(data.slug || "");
       setNft(data.nft || null);
     } catch(e) {
-      setClaimed(true);
+      setClaimError("Network error — your progress is safe. Try again in a moment.");
     }
     setClaiming(false);
   }
@@ -1687,7 +1701,12 @@ function Complete({onRestart}){
               placeholder="Your Solana wallet address..."
               style={{width:"100%",background:"rgba(255,122,24,0.07)",border:"1px solid rgba(212,175,55,0.3)",borderRadius:8,padding:"10px 12px",color:"#F9FAFB",fontFamily:"monospace",fontSize:13,marginBottom:10,boxSizing:"border-box",outline:"none"}}
             />
-            <button onClick={claimSpot} disabled={!wallet||wallet.length<32||claiming} style={{width:"100%",background:wallet&&wallet.length>=32?"#FFB627":"rgba(255,122,24,0.07)",border:"none",borderRadius:8,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:wallet&&wallet.length>=32?"#1a0f08":"#4B5563",letterSpacing:2,cursor:wallet&&wallet.length>=32?"pointer":"default"}}>
+            {claimError && (
+              <div style={{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.35)",borderRadius:8,padding:"9px 12px",marginBottom:8,fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#EF4444",lineHeight:1.5}}>
+                ⚠️ {claimError}
+              </div>
+            )}
+            <button onClick={claimSpot} disabled={!wallet||wallet.trim().length<32||claiming} style={{width:"100%",background:wallet&&wallet.length>=32?"#FFB627":"rgba(255,122,24,0.07)",border:"none",borderRadius:8,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:wallet&&wallet.length>=32?"#1a0f08":"#4B5563",letterSpacing:2,cursor:wallet&&wallet.length>=32?"pointer":"default"}}>
               {claiming ? "SUBMITTING..." : "🏆 CLAIM YOUR SPOT"}
             </button>
           </>
