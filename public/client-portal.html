@@ -272,6 +272,7 @@ body{background:transparent;font-family:var(--body);}
 </div>
 
 <script src="/cluck-util.js"></script>
+<script src="/cluck-wallet.js"></script>
 <script>
 // ── Constants / state ─────────────────────────────────────────────────────────
 const API = '/api/whirlpool/vault/client';
@@ -351,11 +352,12 @@ function showView(which){
   document.getElementById('dashView').classList.toggle('hidden', which!=='dash');
 }
 
-// ── Phantom detection (Phantom injects window.solana / window.phantom.solana) ───
+// ── Wallet detection: /cluck-wallet.js (11 wallets). This page previously looked
+// only for Phantom, falling back to a bare window.solana — a client owner using
+// OKX, Coinbase, Exodus or Bitget could not sign in to their own portal. ─────────
 function getProvider(){
-  if(window.phantom && window.phantom.solana) return window.phantom.solana;
-  if(window.solana) return window.solana; // Phantom + most Solana wallets expose this
-  return null;
+  const l = CluckWallet.available();
+  return l.length ? l[0].provider : null;
 }
 
 // ── Sign-in flow ────────────────────────────────────────────────────────────────

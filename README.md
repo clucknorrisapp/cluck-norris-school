@@ -54,8 +54,7 @@ No wallet connect, no account.
 - **🩻 [Wallet X-Ray](https://clucknorris.app/wallet-xray)** — paste any Solana address and get its whole story: the **true funding origin** traced to its first transaction (dust filtered, exchange hot-wallets identified), every buy/sell/transfer across **every** token, and a behavior read — bot cadence, fast-flip dumping, CEX cash-out, LP, or diamond hands. Searchable timeline, charts, a deep-scan mode for heavy wallets, and a built-in AI you can ask about any single transaction.
 - **👥 [Holders](https://clucknorris.app/holders)** — who *really* holds a token. Separates true human holders from LP pools, lock escrows and program accounts; measures supply concentration **on humans only** (a raw top-10 counts pool vaults as whales — they aren't); and exports any slice as an airdrop-ready CSV. Filter to any group and hand it straight to the airdropper.
 - **🔍 [Trace](https://clucknorris.app/trace)** — wallet × token history: every transaction between one wallet and one mint in order, with running balance, counterparty flow map, and one-hop follow-the-money.
-- **🛡 [Wallet Checkup](https://clucknorris.app/wallet-checkup)** — read-only scan for the things that actually drain people: lingering delegate approvals, honeypot / can't-sell holdings, and tokens whose dev can still mint or freeze.
-- **🔒 [Security Coop](https://clucknorris.app/security-coop)** — the fix for the above. Finds lingering token-delegate approvals — the one permission that genuinely persists on Solana — and revokes the ones you don't recognise.
+- **🛡 [Wallet Checkup](https://clucknorris.app/wallet-checkup)** — read-only scan for the things that actually drain people: lingering delegate approvals, honeypot / can't-sell holdings, and tokens whose dev can still mint or freeze. Find an approval on your own wallet and you can **revoke it right there**, signing yourself. (The old Security Coop merged into this page; `/security-coop` still resolves here.)
 - **🎒 [Bags Hub](https://clucknorris.app/bags)** — live launches, near-graduation and recently-graduated feeds, backed by our own 48h graduation tracker.
 
 The forensic rule holds across all of them: **the chain shows what happened, never why.** Every signal is on-chain evidence, not a verdict — and we only call a wallet "creator" or "team" when a launchpad API confirms it.
@@ -72,10 +71,12 @@ subscriptions, no accounts.
 | 💰 **[Batch airdrop sender](https://clucknorris.app/airdrop)** | **Free** holding 50,000 CLKN (35 days) · else **0.05 SOL** (7 days) |
 | 🎯 **[Buy Special](https://clucknorris.app/buyspecial)** — buy-competition engine | **Free** holding 2,000,000 CLKN (35 days) · else **0.05 SOL** (7 days) |
 | 🔬 **[Premium Forensics](https://clucknorris.app/premium)** | Holder-gated on a live 2,000,000 CLKN balance |
-| 🥚 **[The Hatchery](https://clucknorris.app/hatchery)** — guided token creator | **0.1 SOL**, or **11,600 CLKN** (~30% cheaper) · free for 2M+ holders |
+| 🥚 **[The Hatchery](https://clucknorris.app/hatchery)** — guided token creator | **0.1 SOL**, or the CLKN equivalent at a **~30% discount** · free for 2M+ holders |
 
 The Hatchery is the one place you can still *pay* in CLKN, and it's deliberately ~30%
-cheaper than the SOL price. It isn't a manual send: the CLKN transfer is an instruction
+cheaper than the SOL price. The token amount is computed live from the CLKN price so it
+holds that discount as the market moves — check `/api/hatchery/config` for today's figure
+rather than quoting a number. It isn't a manual send: the CLKN transfer is an instruction
 inside the same mint transaction your wallet already signs, so there's nothing to copy
 and nothing to wait for.
 

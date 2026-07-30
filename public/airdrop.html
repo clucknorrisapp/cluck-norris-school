@@ -1577,11 +1577,12 @@ function adGrant(days, meta) {
   unlockStore.set(UNLOCK_KEY, JSON.stringify(data));
   setTimeout(() => { hideGate(); showUnlockBanner(data); }, 1200);
 }
+// The unlock gate used to run its own two-wallet detector even though this page
+// already loads the 11-wallet registry for the SEND flow — so a Backpack/OKX user
+// could sign an airdrop here but not unlock the tool. One registry now.
 function adDetect() {
-  return (window.phantom && window.phantom.solana) ||
-         (window.solana && window.solana.isPhantom ? window.solana : null) ||
-         window.solflare || (window.solana && window.solana.isSolflare ? window.solana : null) ||
-         window.solana || null;
+  const l = CluckWallet.available();
+  return l.length ? l[0].provider : null;
 }
 async function adConnect() {
   const p = adDetect();

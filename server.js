@@ -1081,7 +1081,7 @@ const X_BLITZ_DECK = [
   { finn: true, t: "Built on @BagsApp because creators earn 1% of volume forever — real, aligned incentives. We even teach how Bags works inside the school." },
   { finn: true, t: "Feedback from @finnbags: drop the gradients, simplify. We stripped all 348 gradients out of the app the same day. We move fast. 🐔" },
   { t: "100% of CLKN creator fees go straight back into buying CLKN — every claim is on-chain and verifiable right in the app.\n\nclucknorris.app" },
-  { t: "Everything core is FREE — the school, the tools, the AI tutor. Premium operator tools unlock with a tiny CLKN payment. No wallet-connect to pay.\n\nclucknorris.app" },
+  { t: "Everything core is FREE — the school, the tools, the AI tutor. The operator tools unlock free while you hold CLKN; if you don't, one click pays a little SOL instead.\n\nclucknorris.app" },
   { t: "Forensic rule, everywhere we build: state what's on-chain, never assert intent. The chain shows what happened, not why. Receipts, not rumors.\n\nclucknorris.app" },
   { finn: true, t: "Months of work, one mission: make crypto learnable before it gets expensive. Free school, free tools, real token, live engine.\n\nThis is our @BagsHackathon entry. 🐔\n\nclucknorris.app" },
 ];
@@ -11132,7 +11132,11 @@ app.use(express.static(join(__dirname, "dist"), { index: false }));
 // (this is the same trap CLAUDE.md flags for new files under public/ that lack an
 // explicit route). Return a real 404 so it shows up in the network tab and in
 // Search Console instead of masquerading as a working page.
-const ASSET_EXT = /\.(js|mjs|cjs|css|map|json|png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|otf|eot|mp3|wav|ogg|mp4|webm|txt|xml|csv|pdf|wasm)$/i;
+// `html` is in the list on purpose: the seven pages deleted 2026-07-30 were reachable
+// as /snapshot.html etc., and without it the catch-all answered those old links with
+// the React school shell at 200 — a soft-404 that Search Console indexes as a real
+// page. Live pages are served by their own routes above, which run first.
+const ASSET_EXT = /\.(html?|js|mjs|cjs|css|map|json|png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|otf|eot|mp3|wav|ogg|mp4|webm|txt|xml|csv|pdf|wasm)$/i;
 
 app.get("*", (req, res) => {
   // An /api/* path that got this far matched no handler. Clients parse these as

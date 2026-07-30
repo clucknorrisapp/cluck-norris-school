@@ -138,6 +138,7 @@
 </div>
 
 <script src="/cluck-util.js"></script>
+<script src="/cluck-wallet.js"></script>
 <script>
 (function(){
   'use strict';
@@ -301,16 +302,14 @@
     $('#copyPayout').textContent='Copied'; setTimeout(function(){$('#copyPayout').textContent='Copy list (airdropper)';},1300);
   });
 
-  // operator wallet connect (Phantom / Solflare / Backpack)
-  function detectWallets(){ var o=[];
-    if(window.phantom&&window.phantom.solana) o.push({name:'Phantom',p:window.phantom.solana});
-    else if(window.solana&&window.solana.isPhantom) o.push({name:'Phantom',p:window.solana});
-    if(window.solflare&&window.solflare.isSolflare) o.push({name:'Solflare',p:window.solflare});
-    if(window.backpack&&window.backpack.isBackpack) o.push({name:'Backpack',p:window.backpack});
-    if(!o.length&&window.solana) o.push({name:'Wallet',p:window.solana});
-    return o; }
+  // Operator wallet connect. Detection lives in /cluck-wallet.js — this page was
+  // missed by the 2026-07-30 consolidation and still found only Phantom, Solflare
+  // and Backpack, so an OKX/Coinbase/Exodus/Bitget/Glow/Brave/Jupiter/Trust
+  // operator was told no wallet was found on the lock-distribution page.
+  function detectWallets(){
+    return CluckWallet.available().map(function(w){ return { name:w.name, p:w.provider }; }); }
   $('#opWallet').addEventListener('click',function(){
-    var w=detectWallets(); if(!w.length){ $('#distMsg').className='msg err'; $('#distMsg').textContent='No Solana wallet found (install Phantom or Solflare).'; return; }
+    var w=detectWallets(); if(!w.length){ $('#distMsg').className='msg err'; $('#distMsg').textContent='No Solana wallet found. Install one, or open this page in your wallet\u2019s own browser.'; return; }
     var x=w[0];
     x.p.connect().then(function(resp){ opProvider=x.p; opPubkey=(resp&&resp.publicKey?resp.publicKey:x.p.publicKey).toString();
       $('#opWallet').style.display='none'; $('#opWalletInfo').style.display='inline'; $('#opWalletInfo').textContent='🟢 '+shortAddr(opPubkey)+' ('+x.name+')';
