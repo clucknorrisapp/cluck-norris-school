@@ -783,6 +783,35 @@ tick-alignment + tight-width guards) and the balanced label + the /liquidity "±
 render the realized width, not the requested slider value. LOW backlog now fully cleared.
 
 ## Conventions
+- 📏 **THE TYPE SCALE LIVES IN `theme.css`, NOT IN PAGES (2026-07-30).** Prose is 15px in
+  `var(--body-text)` at line-height 1.7 — the landing page's own scale. Small print floors at
+  12.5-13px, card titles are 15px. The overrides are `html`-prefixed so they beat each page's
+  bare `.hero-sub {}` without touching 20 files. **Change the scale THERE, once.** Symptom that
+  led to it: tool pages were 13.5px in the dimmer `--sub` while home was 16px in `--body-text` —
+  two variables off, which is why they read cheap rather than merely small.
+  ⚠️ **A single-class override LOSES to a page's two-class rule.** `.intro .mint-not-launch` and
+  `.sh-card .sh-desc` (both 0-2-0) beat `html body .mint-not-launch` (0-1-2) — CSS compares class
+  count BEFORE element selectors, so piling on `html body` never helps. Match the class depth.
+  This bit twice in one session.
+  ⚠️ **Don't blanket-raise every small rule.** An audit found 109 multi-class rules under 12.5px;
+  only TWO carried prose. The rest are labels doing their job (`.stat .k`, `.header .brand-mini`,
+  `.tx-badge .num`). Raising them would wreck every stat block and badge on the site.
+  **Letter-spacing is the signal**: `normal` = prose (raise it), `>=1px` = tracking-heavy display
+  type (leave it).
+- 🔬 **VERIFICATION: CHECK EVERY FORM, NOT ONE FORM (2026-07-30 — this cost a full day).**
+  Four times in one session a "done" was wrong because one spelling of a thing was checked and
+  the class assumed clear:
+  (1) `function esc(` was migrated everywhere; six copies written `var esc = function` /
+  `const esc = s =>` survived, one of them carrying the XSS gap.
+  (2) Seven `const WALLETS = {` literals were consolidated; three more detectors named
+  `adDetect()` / `getProvider()` / an in-IIFE `detectWallets()` survived.
+  (3) Rendered-page measurement reported "all clean" while report bodies built in JS template
+  strings were still at 10px — the page was measured IDLE, and these tools are renderers.
+  (4) A source scan for `font-size:` on a prose line reported zero remaining while CSS class
+  rules were still small — there the size is in the sheet and the sentence is in the markup.
+  **Rendered measurement and source scanning have COMPLEMENTARY blind spots — run both.** And
+  when a harness prints a status flag (`REPORT RENDERED: false`), read it before believing the
+  numbers under it: an autopsy that never ran silently re-measured the idle page.
 - 🎨 **TYPOGRAPHY — one system, don't reintroduce the drift (site-wide pass 2026-07-30).**
   `var(--body)` (Chakra Petch) is the BODY font on every page; `var(--disp)` (Anton) is for
   headings, chips, stat labels and buttons ONLY; `var(--mono)` is for data — addresses, amounts,
