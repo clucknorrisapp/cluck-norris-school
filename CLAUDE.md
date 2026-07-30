@@ -1,1030 +1,281 @@
 # CLAUDE.md — Cluck Norris (CLKN)
 
-Operating notes for any Claude Code session — **especially cloud/web sessions, which
-start from a fresh clone with no local files.** Read this first.
+Operating notes for any session, **especially cloud/web ones that start from a fresh clone with
+no local files.** Read this first.
 
-> 🎮 **WORKING ON NORMIE QUEST? READ `docs/HANDOFF_2026-07-27.md` FIRST.** It carries the current
-> branch state, the open owner decisions, and — most importantly — **how to verify a change**:
-> run `node normie-quest/test/nq-verify.cjs <baseUrl>`, which reads the diff and picks the right
-> checks. Do NOT run the full 82-level state test by reflex; a whole day was lost to running it
-> for icon swaps and copy tweaks it could never have validated. That doc also lists the traps
-> (idle auto-pause freezing headless probes, scene transitions not being instant, `game_logic.js`
-> not being plain JS) that cost several false failures.
+This file is deliberately short. It carries the **mission**, the **owner's decisions**, and the
+**traps that already cost someone a day** — things you can't derive from reading the code. It
+does not tell you how to write software; use your judgement for that.
 
-## What this is
-School of Crypto Hard Knocks — a free Solana crypto school + free token-research tools,
-wrapped around premium operator tools paid for in CLKN micropayments (no wallet-connect
-to pay). Live at **clucknorris.app**. This repo (`clucknorrisapp/cluck-norris-school`) is
-the **canonical source** and the **hackathon + Solana Foundation grant** entry — so
-accuracy in the public docs (`README.md`, `public/investors.html`)
-matters, and claims should match the code.
+> Detailed operational history — engine states, position sizes, past comps, superseded
+> strategies — lives in `git log` and `docs/`. It was trimmed out of here on 2026-07-30 because
+> a stale instruction stated with authority is worse than no instruction, and several were.
 
-> 📝 **HOME COPY (owner, 2026-07-29): the two taglines are GONE from the landing page** —
-> "We took the hard knocks. So you don't have to." and "— taught straight, so you skip the
-> expensive mistakes." The hero is now kicker + wordmark + one line ("Crypto knowledge from your
-> first wallet to advanced strategy."). Removed from the page's own og:description too, so a
-> shared link doesn't still say it. ⚠️ It DOES still appear in the scheduled school post
-> (`server.js` ~4108, the `tg`/`x` spotlight copy) and as translation KEYS in `public/i18n/*.json`
-> (harmless — the key no longer matches anything on the page). Ask before changing the social copy.
+> 🎮 **Working on Normie Quest? Read `docs/HANDOFF_2026-07-27.md` first.** It carries the branch
+> state, the open decisions, and how to verify a change: `node normie-quest/test/nq-verify.cjs
+> <baseUrl>` reads the diff and picks the right checks. Don't run the full 82-level state test by
+> reflex — a day went to running it for icon swaps it could never have validated.
 
-> 🎯 **STRATEGY (owner's calls, 2026-07-19 — supersede the brand audit's Autopsy-wedge recommendation):**
-> **(1) The LOCKER ROOM is the flagship story** — helping communities lock tokens on the Jupiter
-> Lock program and broadcast it socially. Autopsy stays but is NOT the lead ("so many rugs and
-> nobody cares"). Discoverability package shipped: locker in the sitemap, README/investors/grant
-> sections, school Library link, hatchery CTA. **(2) Normie Quest is a separate operation running
-> under Cluck Norris production for the NORMIE community** — publicly described in the narrative
-> docs as ecosystem/collaboration proof (a large recent investor came via the NORMIE ecosystem),
-> but the game URL stays UNLINKED/hidden and **all token-gating in NQ (CLKN 2M tier, NORMIE
-> holder perks, MEGA WHALE gate) is TESTING ONLY — no agreement with the NORMIE team yet on
-> NORMIE-vs-CLKN access/rewards, so never promise gating terms on any public surface.** The in-game copy that pushes $NORMIE lives in **`NORMIE_NATION`** (game_logic.js) — the rotating lines on the `LevelClear` beat between ordinary levels and the `WorldClear` traveling page — plus the `VipPitch` card, which reads "hold amount: TBD — testing" on purpose. All of it is identity/where-to-buy only: **no perks, no unlocks, no rewards, no hold thresholds.** If terms are ever agreed with the NORMIE team, `NORMIE_NATION` is one array to update.
-> **(3) Audit cleanup is greenlit** ("feel free to clean up things as we need to") — see
-> `docs/BRAND_AUDIT_2026-07-18.md` §7 for which decisions remain open (payment rail, slots
-> truth, exam bar, Rose merge, GA4, monitors split, /bags).
+---
+
+## The mission
+
+**School of Crypto Hard Knocks** — a free Solana crypto school and free token-research tools,
+wrapped around a few operator tools that CLKN holders get free. Live at **clucknorris.app**.
+
+The point is that people lose money in crypto because nobody told them the truth plainly, and
+this teaches them before they get hurt. Design calls should serve that:
+
+- **Free is the funnel, and it stays genuinely free.** The school, the forensics, the safety
+  scan, the locker — no wallet, no signup, no catch.
+- **Say what's on-chain, never why.** The chain shows *what*, not *why*. Only call a wallet
+  "creator" or "team" when a launchpad API confirms it. That forensic honesty is the brand.
+- **Guardrails before power.** First-timers get warned before they can hurt themselves. That's
+  rare in crypto — a differentiator, not friction to optimise away.
+- **Public docs must match the code.** This repo is the hackathon entry and the canonical source;
+  `README.md` and `public/investors.html` are read by people evaluating the project. A claim
+  that isn't true in the code is a real problem, not a copy nit.
+
+**Current strategic priority (owner, 2026-07-19):** the **Locker Room** is the flagship story —
+helping communities lock tokens on Jupiter Lock and broadcast it. Autopsy stays but isn't the
+lead ("so many rugs and nobody cares").
+
+**Normie Quest** runs under Cluck Norris production for the NORMIE community. The game URL stays
+unlinked, and **all token-gating in it is TESTING ONLY** — there's no agreement with the NORMIE
+team on access or rewards, so never promise gating terms on any public surface. In-game $NORMIE
+copy lives in `NORMIE_NATION` (game_logic.js): identity and where-to-buy only, no perks, no
+thresholds.
 
 CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 
-> 🟢 **ENGINE STATUS (2026-06-17, owner's call — SUPERSEDES the old "no CLKN pools / full-earner"
-> note): CLKN is actively LP'd across THREE Orca pairs as a MULTI-QUOTE ARBITRAGE STRATEGY,
-> owner-managed MANUALLY.** Live two-sided positions under the **TREASURY wallet
-> `2zMCUkE9pBjcC7ihtLqm28EsCoEHVmCdJYr5262EuPy8`**: **CLKN/USDC** (`H1r9ut25xAU1B1AbZRhvSJjShd4Q3mtmysYHBisFES7H`),
-> **CLKN/SOL** (`EL1ZDnuTE4J4LZJLP76VapFSDiM7Xt18ZsnzVeqNvaPr`), **CLKN/JUP**
-> (`5AvtoSvfKFscxoB9uuEG2UNf25REkzgr9Ue9RHnJWMdb`, 0.02% — moved here from the old 0.05%
-> `7eVP5Jqe…` on 2026-06-17) — ~9.9M CLKN in layered tight-inner/wide-outer
-> bands, all in-range. **Thesis (now PROVEN, not theoretical): pairing CLKN against multiple
-> volatile quote assets (SOL + JUP, anchored by stable USDC) means each quote's OWN volatility
-> dislocates CLKN's cross-pool price → third-party arbitrageurs trade it back into line → real,
-> organic two-way volume the project doesn't generate itself.** JUP (~1.75× SOL daily vol) added an
-> independent SECOND dislocation engine → volume jumped and **Jupiter organic score climbed to 33.0**.
-> (Each arb is a small IL bite on the LP; net-positive while fees + organic standing outrun it.)
-> ⛔ **AGENT IS WATCH-ONLY. The owner controls these positions MANUALLY. Do NOT rebalance, recenter,
-> close, redeploy, add/remove liquidity, or buy/sell CLKN — and do NOT "take over" — until the owner
-> explicitly says so.** We are in a strategy-BUILDING phase: observe how the structure moves, log it,
-> don't touch it. The brand bag (~10.6M CLKN) is still NEVER sold. Public organic-score copy stays
-> OFF the site until the 33 holds longer (owner's call). The community Meteora pool (64WXkH…, 2% fee)
-> remains the canonical chart.
->
-> ⛔ **THE EARNER — AUTONOMOUS REBALANCER HARD-KILLED IN CODE (owner's call, 2026-06-16:
-> "stop rebalancing period, don't touch it").** Background: the owner pulled all JUP/USDC liquidity
-> in high vol (close→swap→reopen was crystallizing too much IL), then opened a NEW position MANUALLY —
-> and the still-`enabled` autonomous loop AUTO-ADOPTED it (`jupUsdcRecenterTick` pins any JUP/USDC
-> position it finds) and recentered it to ±4% spot, changing the owner's manual setup. Funds were
-> intact (recenter preserves value), but it touched a position it shouldn't have. **FIX SHIPPED:**
-> `JUP_AUTO_REBALANCE_KILLED = true` in server.js hard-gates the tick so it NEVER calls
-> `jupUsdcRecenter` — independent of `jupUsdcCfg.enabled`, so no kv flag can revive it by accident.
-> **DO NOT re-enable** (set the const false AND `jupUsdcCfg.enabled`) without the owner's explicit ask —
-> this is a deliberate two-step opt-in by design. The owner manages positions MANUALLY now; the loop
-> must not adopt them. The manual lever (`/api/meteora/recenter?which=jup&force=1`, key-gated) is left
-> available but only ever runs when the owner explicitly calls it. Read-only schedulers (recap,
-> pool-monitor, OOR alerts, daily LP-vs-HODL) don't touch positions; they self-silence with no position.
-> Everything below is kept intact for an eventual deliberate redeploy. ⬇️
->
-> 💰 **THE EARNER (the main money-maker when live): JUP/USDC Meteora DLMM** pool
-> `HfgjZDmexhFVD28Vkb1NbQwWeXP3uDcVTLPjSGHmRHhL` (~6x/day turnover) under the TREASURY
-> wallet (`MM_OPERATOR_SECRET_TREASURY`, pubkey 2zMCU…). **~$4K, ±4% SPOT distribution**
-> (switched curve→spot 2026-06-15; **WIDENED ±3%→±4% on 2026-06-16, owner's call** — fewer recenters =
-> less impermanent-loss crystallization, after the owner flagged fees being eaten by rebalance swaps;
-> autonomous reopens spread liquidity EVENLY across the band; growing toward ~$5K with manual adds).
-> `cfg.halfWidthPct=4` is the new default; the LIVE position only adopts ±4% on its next reopen — to widen
-> NOW: `/api/meteora/config?which=jup&halfWidthPct=4&key=…` then `/api/meteora/recenter?which=jup&run=1&force=1`.
-> Strategy: fees COMPOUND in-position; CLKN buybacks MANUAL-ONLY on the owner's explicit ask.
-> **WHERE THE FEES GO (owner's 2026-06-16 question — "made ~$400 fees, position only grew ~$150"):** the gap is
-> mostly IMPERMANENT LOSS, not swap fees. Each recenter swaps the freed funds to 50/50 at the current
-> (post-move) price — when OOR it's sold the dumped side low — crystallizing IL. The swap *fee* itself is tiny
-> (price-impact-capped 0.2%). The fix is FEWER recenters (the ±4% widen), not cheaper swaps — you can't route
-> around IL. LP-vs-HODL (below) now makes this measurable.
->
-> ⏸️ **AUTONOMOUS REBALANCING = PAUSED (2026-06-16, funds pulled — see banner above).** When live it
-> was the `jupUsdcRecenter` close→swap→reopen loop ("Option B"), owner-authorized 2026-06-13 and
-> VERIFIED LIVE (recentered 58%→50% across, rebalanced to 50/50, **$0 wallet residue**, value intact).
-> The mechanics below stay valid for the redeploy. DON'T rip it out or re-enable without the owner's say-so.
-> WHAT FINALLY WORKED, and WHY earlier attempts failed (so the next session doesn't undo it):
-> the UI "Rebalance" = a Jupiter swap (heavy side → ~50/50, e.g. "Swaps Required: 6.93K
-> JUP → 1.17K USDC via Jupiter") **+** a DLMM redeposit, fired as a Jito bundle. The bare
-> SDK `rebalancePosition`/in-place tool does the recenter but **NOT the swap**, so it
-> strands the unfittable side ($145–$478 left in wallet) — that's the in-place path, still
-> NOT what we use. `getAutoFillAmountByRebalancedPosition` mislead​s (returns "USDC to ADD",
-> not the 50/50 swap) — do NOT trust it. The WORKING recipe (`jupUsdcRecenter`): close (rent
-> ~fully refunded) → swap the freed funds to **50/50 by value at the current price** (simple
-> value math, NOT the autofill — validated against the owner's UI numbers) → **reopen a
-> FRESH position via `openPosition`** (deposits everything → $0 residue, unlike the in-place
-> redeposit). New NFT each time (cosmetic; owner OK'd it). Safety rails: **0.2% Jupiter
-> price-impact ceiling** (`cfg.maxImpactPct`; a costlier route SKIPS the swap and reopens
-> centered-but-unbalanced, funds intact — never eats >a sliver, since ~1% would wipe a day's
-> fees), **±3% width** (`cfg.halfWidthPct`), **SPOT distribution** (`cfg.distribution`, was curve
-> until 2026-06-15), **SPLIT anti-thrash** — OOR (earning $0) reacts
-> on the next check (`minRecenterSecOor` 120s), near-edge-but-earning waits (`minRecenterSec`
-> 1800s) so it can't churn IL on chop — edge trigger `edgeFrac 0.12`. Loop:
-> `jupUsdcRecenterTick` (server.js, 5-min) gated on
-> `jupUsdcCfg().enabled`; turn off via `kv jupUsdcCfg {enabled:false}` or
-> `/api/meteora/config?which=jup&enabled=0`. DMs the treasury chat on each rebalance (owner
-> wants these notifications ON). Manual lever: `/api/meteora/recenter?which=jup&run=1&force=1`.
-> **Also built (complementary, read-only):** `meteoraOorTick` (server.js ~7877, 5-min) now
-> DMs on NEAR-EDGE (>88% across) and OUT-of-range transitions.
->
-> 📊 **Private recap (DONE):** `sendJupUsdcRecap` DMs the TREASURY chat (operator-only, NOT
-> community) every 6h with liquidity + claimable/claimed fees + a fees-vs-cost delta;
-> `/api/jup-recap-test` (&send=1/&reset=1). The old cbBTC/SOL 6h treasury report is DISABLED.
-> NOTE: the treasury wallet now holds ONLY the JUP/USDC position — no cbBTC/SOL backbone.
-> **LP-vs-HODL (added 2026-06-16, the only honest "are we winning?" number):** recap + `/api/pool-monitor` +
-> the `/pool-monitor` page now show LP value vs. what the BASELINE token basket (JUP+USDC) would be worth now
-> (`jupLpVsHodl`/`ensureJupHodlBaseline`, baseline in kv `jupUsdcLedger`). Positive = fees beat IL; negative =
-> IL+swap cost eating fees. Swap cost is no longer a flat $1/recenter — `jupUsdcRecenter` now logs the REAL
-> impact (`|diff|·impactPct`) into `rebalanceCostUsd`. **⚠️ LIMITATION: manual adds/removes aren't tracked —
-> re-baseline with `&reset=1` right after any add/remove or the comparison skews.** (The recap `reset` also
-> re-baselines the HODL basket.) Pool-monitor `PACE` is now a trailing-30-min window (was a noisy 2-min delta).
-> **Daily LP-vs-HODL check-in (`jupLpVsHodlDailyCheck`, server.js — hourly tick, DMs once per 24h):** the durable
-> "review it once data accumulates" hook the owner asked for (2026-06-16). Fires only after the baseline is ≥24h
-> old; DMs the treasury chat a focused verdict (fees beating IL ✅ / IL eating fees ⚠️ + the action: widen further
-> or slow `minRecenterSecOor`). Lives in the always-on server so it survives container/session resets. kv
-> `jupLpHodlCheckAt`. (A cloud session can't self-schedule days out — the container is ephemeral — so the check-in
-> is server-side by design.)
-> **🆕 VAULT LP-vs-HODL (2026-07-05 — the same honest number, ported to the Orca/Raydium vault, PER PROJECT):**
-> `lpVsHodl`/`lpVsHodlDaily` in `lib/whirlpool-vault.js` + gated `/api/whirlpool/vault/lp-vs-hodl?project=…[&reset=1]`
-> + hourly `wpLpVsHodlDailyCheck` in server.js (DMs each project's own chat once/24h; CLKN projects get the
-> organic-score + real-24h-volume line appended — the "what did the IL buy?" readout). Baseline = the wallet's
-> TOTAL basket (positions + pending fees + free float), so the vault's own opens/closes/swaps DON'T skew it
-> (value-preserving) — this FIXES the Meteora limitation: external deposits/withdrawals show up as a diff
-> step-change >$250 (kv `wpLpHodlJumpUsd`) between daily checks and trigger an AUTO re-baseline with a DM note.
-> First read/check auto-seeds the baseline. READ-ONLY — it never touches positions.
-> **🆕 CURRENT STATE — TIGHT POOLS PULLED, WAIT-AND-SEE (owner's call, 2026-07-10 morning):**
-> significant CLKN sells overnight drained the CLKN/SOL ±1.75% pool to 100% CLKN (OOR); owner
-> had the whole ±1.75% trio CLOSED. Everything sits in the treasury wallet as float
-> (~11.2M CLKN / ~0.29 SOL / ~636 USDC / ~15.7K JUP ≈ $9.1K) + the three permanent wide
-> anchors (~$190) keeping all three pools quoted. Vault PAUSED. ⚠️ SOL is at the gas floor —
-> any redeploy involving SOL needs a JUP→SOL swap first (owner's call). Owner is weighing:
-> one big slightly-wider CLKN/JUP pool vs. moving some JUP into a JUP/SOL pool for fees —
-> NO redeploy without his explicit go. (He also bought back ~1.4M CLKN manually with 4 SOL
-> pulled from another pool 2026-07-09 — that's why float CLKN grew; don't "investigate" it.)
-> Historical context ⬇️
-> **±1.75% TRIO (owner's GO, 2026-07-08; PULLED 2026-07-10 — see above):** after the ±10% era produced too little volume/organic score ("not working"), the
-> owner pulled back to tight pools. LIVE under treasury `2zMCU…`, all opened via openAnchor at
-> `down=1.75&up=1.75` so they're PINNED (vault stays **PAUSED**; positions are owner-managed via
-> sessions): CLKN/SOL ±1.75% (`5vNLFy…`, ~$2.5K), CLKN/USDC ±1.75% (`5hcqAN…`, ~$2.4K), CLKN/JUP
-> ±1.75% (`6Bj3cJ…`, ~$3.4K) ≈ **$8.3K deployed**, all verified in-range + centered at open. The
-> three ±150–178% permanent anchors (`9piTqV…`/`DEzSNM…`/`GG6RGB…`, ~$190) sit underneath — NEVER
-> touch them. Float kept lean: ~0.4 SOL / ~0.4M CLKN / ~$12 USDC / ~99 JUP. LP-vs-HODL re-baselined
-> at $8,720 (2026-07-08). ±1.75% goes OOR on small moves: `wpTightOorTick` (server.js) DMs the
-> PRIVATE operator chat LOUD on out-of-range — recenters are a manual owner decision, use the
-> `pool-ops` skill (.claude/skills/pool-ops) for the full verified ritual. Historical context ⬇️
-> **REIMAGINED ENGINE STRUCTURE — DEPLOYED 2026-07-06 (superseded 2026-07-08): "same depth-at-touch,
-> ±10% width, ~5× capital" replaced the ±2% trio.** Thesis: depth-at-touch = capital ÷ width, so ~$1.8K/pool
-> at ±10% matches the old ~$350/pool at ±2% → same arb volume feeding the organic score, but recenters
-> ~never fire (price must move 10%) → the recenter IL-crystallization leak (the dominant cost, proven on
-> Meteora) is gone. LIVE under treasury `2zMCU…`, all opened via openAnchor/openWall so they're PINNED
-> (st.anchorMints — no automation can adopt/close them; **vault stays PAUSED**): CLKN/SOL ±10%
-> (`J1NPf2S8…`, 2.48M CLKN + 12.3 SOL), CLKN/JUP ±10% (`B9KG81gu…`, 2.50M CLKN + 4,103 JUP), CLKN/USDC
-> ±10% (`DNAr1hyp…`, 450K CLKN + 173 USDC — bid side deliberately SHALLOW, owner's call: no USDC left after
-> his manual DCA buys and never sell SOL/JUP to top up) + a single-sided CLKN ask wall +1%→+10%
-> (`D5CNjiVw…`, 2.08M CLKN) bringing the USDC pool's upside to par ("OUT of range" on the wall is CORRECT —
-> it's an ask above spot). The three ±94% anchors remain underneath. ~$5K deployed; ~20.5 SOL / ~3.4K JUP /
-> ~8.3M CLKN / ~$26 USDC left free as dry powder. LP-vs-HODL re-baselined at deploy ($10,442 basket) —
-> judge the structure by the daily verdicts (volume + organic score line), not vibes. If volume/score sags
-> vs the ±2% era, tightening is a config discussion with the owner, not an automatic action.
-> ⏰ **UPDATE 2026-07-03: CoinGecko REJECTED AGAIN (3rd time) — boilerplate reasons: liquidity
-> (they read TOTAL TVL, ~$39K now — concentration doesn't move that number), life of token, and
-> team presence. The MIGRATION route was already used (owner applied as a migration from the
-> previously-listed predecessor token + sent multiple emails) — so "apply as migration instead"
-> is NOT an unexplored fix; don't re-suggest it. CONSEQUENCE (owner's call, same day): the
-> $129/mo CoinGecko Analyst API sub is being CANCELLED ("I will not support them if they don't
-> support us") — **sub runs until JULY 13; everything must be off the Analyst API by then.
-> STATUS: DONE &amp; VERIFIED IN PROD 2026-07-04** — full divorce shipped: bot price getters
-> (SOL/cbBTC/JUP) = Jupiter Price v3 (lite-api, keyless) with DexScreener fallback; Daily Alpha
-> majors = Jupiter Price v3 (BTC via cbBTC mint, ETH via wormhole WETH); trending +
-> gainers/losers = GeckoTerminal Solana trending_pools; X-handle tagging = GT token-info
-> twitter_handle (mintTwitter, was coinTwitter); /api/token-overview = onchain-only (same
-> response shape, aggregated fields null). Verified live: token-overview source:"onchain",
-> alpha-test majors/trending on new sources. Remaining cgPro refs are gated DEBUG probes only;
-> `cgPro` itself falls back to the free api.coingecko.com host if ever invoked, so a dead key
-> can't break anything. `COINGECKO_API_KEY` on Railway is now UNUSED by runtime paths — safe
-> (and recommended) to delete before the 13th. ACTIONABLE listing fix
-> found the same day: the GeckoTerminal token profile's WEBSITE field pointed at the Bags
-> launchpad page, not clucknorris.app. **STATUS (owner, 2026-07-08): FIXED — the GT profile now
-> lists both websites; clucknorris.app just isn't shown first (ordering is GT's, not ours).
-> Don't re-flag this; remaining nice-to-have is only the stale description text.** Older
-> context below ⬇️
-> 🚫 **COINGECKO: CLOSED — DO NOT RE-SUGGEST (owner call 2026-07-21).** After the 3rd rejection
-> the owner considered one more reapplication and explicitly decided AGAINST it. No more
-> applications, no more CoinGecko-facing work unless the owner reopens it himself. GeckoTerminal
-> listing stays (free, live). Historical context below ⬇️
-> ⏰ **OLD WATCH (updated 2026-06-12): CoinGecko REJECTED the reapplication**
-> (req `CL1106260002`; owner reported the rejection 2026-06-12 — stated reason not yet
-> in the session, ask for the email text). Strategy: build a visibly better tape and
-> REAPPLY in ~2-4 weeks. Levers: volume mode is LIVE (±5%/±8% engine widths since
-> 06-12); JUP sleeve code SHIPPED (jupEnabled, default off) — plan is ADD CLKN/JUP as a
-> 4th market, do NOT close CLKN/SOL for it (SOL is the routing artery; JUP vol is 1.75x
-> SOL daily but an extra arb hop widens the no-arb band — replacing loses routed flow);
-> a CLKN buy comp is the strongest real-volume lever (owner decides prizes). Original
-> owner's call 2026-06-12 still stands:
-> the organic-score recovery test is DEPRIORITIZED (the 2026-06-11 change freeze is
-> LIFTED) — optimize 24h volume and number/diversity of live markets instead. Context
-> kept for later: the score sat at 0 because pulling the engine killed Orca routability
-> (`orcaRoutable:false`); engine was redeployed 06-11 via staged seed, both Orca pools
-> live at settled config, dislocation pinned at the ~2% Meteora-fee arb floor. If/when
-> the score matters again, the untested thesis is deep+passive+zero-operator-churn over
-> ~72h. VOLUME levers ranked (real third-party volume only — CoinGecko actively detects
-> wash/self volume, so NO operator wash, NO self-buyback pumping for numbers): tighter
-> engine ranges → more tax-floor arb flow; more markets (cbBTC sleeve is code-ready,
-> `btcEnabled` — a JUP sleeve would be NEW code); a CLKN buy comp (real wallets, real
-> volume — infra ready). Public "0→32+" organic copy still unverified — keep it off new
-> material until retested. Remove this note when CoinGecko decides.
-
-> 🌹 **DONE — ROSE 10% BUY SPECIAL, comp `bc_e17e8c9703` (2026-07-19 → 07-21). PAID OUT
-> 2026-07-24 20:16 UTC and verified on-chain: 231,233 ROSE to 6 wallets in ONE batched tx
-> `xvEibsjbEotT6rjm…`.** Kept as the reference run for a client buy special. Mint
-> `RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF` (OnlyRose, X @RoseKnowsAll25), TG chat
-> `-1002625127458`; window 2026-07-19 19:30 → 2026-07-21 22:00 UTC, holdHours 48, pct mode,
-> liveHoldFilter on, no minVolSol floor. Announced on our X (post 2078924286727762012) + silent
-> TG mirror. **This was the FIRST real money moved by the in-page send path** (`/buyspecial` →
-> `public/airdrop-engine.js`) — batching six recipients into one tx works, proven live, so the
-> "never moved a real transaction" caveat is retired. Payout amounts were computed at full
-> precision (each wallet got slightly MORE than the floored CSV figure — in the holder's favour);
-> if you ever need whole-token payouts, floor at the source. Close-out ritual that worked, for the
-> next comp: window self-closes → scan buyers via `/api/buyspecial-crosscheck` /
-> buyersInWindowMulti → 48h hold check per wallet → **owner signs the send, never automate it.**
+---
 
 ## Working agreement
-- ⛔ **STOP MEANS STAY STOPPED (owner rule, 2026-07-04).** When the owner says stop/pull/close
-  something, it stays stopped until HE says restart — which means: before executing, find and
-  disarm EVERY automation that could undo it, and AFTER executing, re-verify one full tick-cycle
-  later that it stayed done. Set after a session pulled the treasury's tight Orca positions but
-  only checked the DEFAULT project's paused flag — `/api/whirlpool/vault/status` without
-  `project=` returns the CLKN engine project, NOT treasury — and the live treasury vault
-  redeployed everything 2 minutes later. ⚠️ ALWAYS pass `project=treasury` when checking/pausing
-  treasury automation. **UPDATE (2026-07-04, later): the owner explicitly RESTARTED the treasury
-  engine** — vault RESUMED and running autonomously at **±2% width** (widthPct/solWidthPct/
-  jupWidthPct=2) with deploy caps cut 30% (maxUsd 350 / solMaxSol 4.2 / jupMaxJup 1400). Three
-  tight ±2% CLKN positions (USDC/SOL/JUP) + the three ±94% anchors are live under treasury
-  `2zMCU…`. (Seeded the USDC pool with a 6.5 SOL→USDC swap since the wallet had 0 USDC.) So the
-  vault is intentionally RUNNING now — do NOT pause it without an owner ask.
-- ⛔ **PLAN ≠ EXECUTE for money (owner rule, 2026-07-02).** For ANY action that moves funds,
-  opens/closes positions or pools, or resumes an engine: state the exact plan (amounts, tiers,
-  pools) and STOP — execute only after the owner replies with an explicit go. Plan and execution
-  never share a turn. An owner message describing intent ("want to reset X", "thinking we should Y")
-  opens a DISCUSSION, not authorization — parameters like fee tiers are the owner's to pick.
-  (Set after a session executed a full pool reset at a self-chosen fee tier from "want to reset
-  them with slightly higher fee ratings".) Reads/status checks are always fine.
-- **Always commit AND push to the active working branch** — hackathon pace, standing
-  permission to push. **`main` TOO: the owner granted standing permission to push to `main`
-  (2026-07-24, "you always have permission to push to main") — so merge/push to `main` without
-  asking.** Railway auto-deploys `main`, so that IS a production deploy: land it green, not
-  blind (CI/geometry/tests pass first), and say what went live. Still give a heads-up before
-  anything DESTRUCTIVE (force-push, `reset --hard`, branch delete) — that permission was not
-  granted. ⚠️ A local `main` in a cloud container can be an unrelated/stale history (seen
-  2026-07-24: 50 divergent commits, no common ancestor, `git merge` refused). Verify with
-  `git merge-base --is-ancestor origin/main <branch>` and push the branch head straight to
-  remote `main` (`git push origin <branch>:main`) rather than "fixing" a local `main`.
-- Railway **auto-deploys from `main`**, so branch work must reach `main` to go live.
-- **Never commit secrets.** Don't put a model identifier in committed files.
 
-## Repo layout
-- `server.js` — the monolith (~9k lines): every API endpoint, the Wallet X-Ray, CLKN
-  payment verification, Telegram/X automation, the trade poller, all schedulers, and
-  static file serving. (The Token Autopsy engine was extracted to `lib/autopsy.js`.)
-- `lib/` — `bags-context`, `solana-tracker`, `solscan`, `premium-forensics`, `analytics`,
-  plus volume-backed stores: `kvstore`, `sigstore`, `recap`, `grad-tracker`, `credentials`.
-  `helius-trades` — Helius-based buy tracking: `getTokenBuyersInWindowHelius` (who bought
-  token X in a window — pool sigs + batched enhanced-tx parse) and
-  `getWalletTokenPositionHelius` (balance + sells/transfers, the 48h hold check). The
-  buy comp + Buy Special route through server.js's `buyersInWindowMulti` /
-  `walletPositionMulti` helpers: **Helius primary → GeckoTerminal (free) → Solana
-  Tracker (quota-billed, last resort)**. Don't re-point buy tracking at ST directly.
-  `solana-addr` — pure address primitives (base58 codec, ed25519 on-curve check, ATA
-  derivation) + the DEX/locker/token-program, program-label, service-wallet and CEX-wallet
-  tables; one source of truth for trace/snapshot/autopsy/wallet-xray classification.
-  `autopsy` — the Token Autopsy engine: `runAutopsy(mint, {nocache}) → {status, body}`;
-  the `/api/autopsy` route in server.js is a thin wrapper (validation + 3-min cache +
-  headers). It also exports `bagsFetch`/`heliusEnhancedBatched`/`BAGS_BASE`, which
-  server.js re-imports (shared with /api/fees, /api/reinvestment, premium forensics).
-  `rpc` — resilient RPC: one endpoint list (primary Helius + optional backups + public
-  node) and a failover `fetch`/`connection()`; the engine libs + server RPC proxies route
-  through it, so a primary 429/outage rolls to a backup instead of going blind.
-  Liquidity Engine: `orca-whirlpools` (Orca Whirlpools concentrated-LP market maker —
-  non-custodial tx builders) + `whirlpool-vault` (the autonomous LP manager).
-- `hatchery.js` (guided token creator), `securitycoop.js` (approval revoker), and
-  `whirlpool-mm.js` (Liquidity Engine — Orca Whirlpools market maker + autonomous vault) —
-  Express routers mounted by `server.js`.
-- `public/*.html` — standalone vanilla-HTML tool pages: wallet-xray, trace, token-holders,
-  airdrop, buyspecial-pro, hatchery, wallet-checkup, premium, bags, tools, investors, stats,
-  transcript, pool-monitor, plus the operator-only autopsy, order-book and lp-scanner.
-  ⚠️ **The FILE that a route serves is often NOT the file named after the route** — the tool
-  merges left the old pages on disk. `/holders` + `/snapshot` → `token-holders.html`;
-  `/buyspecial` + `/rose` → `buyspecial-pro.html`; `/security-coop` + `/wallet-checkup` →
-  `wallet-checkup.html`; `/liquidity` + `/liquidity-engine` → `liquidity-locked.html`. The seven
-  unrouted leftovers (`buyspecial`, `rose`, `holders`, `snapshot`, `security-coop`, `liquidity`,
-  `liquidity-engine`) were DELETED 2026-07-30 — a session polished `holders.html` and
-  `snapshot.html` before noticing nothing serves them. **Grep server.js for the route before
-  editing a page.**
-  🎨 **CONCIERGE CLEANED UP + REAL ICONS (2026-07-29, owner: "clean up the Cluck concierge",
-  "those all look generic").** The homepage journey menu went from NINE routes to SIX — the four
-  that went (belt course, specific-coin, AI Classroom, own-pace Library) are all cards or links on
-  `/education` now, so nothing is orphaned. **"I need advanced / operator tools" STAYS** because
-  `/premium` is linked from nowhere else on the site — check that before ever trimming it again.
-  All icons on the concierge, the six home tiles AND every `/education` card are **rendered 3D
-  objects in `public/icons/*.webp`** — not emoji, and no longer the flat SVGs that briefly
-  replaced them (owner, same day: "can't we make better images with higgsfield for our icons /
-  this needs to be highly polished not cheap"). Obsidian glass + brushed metal with a molten
-  amber-orange internal glow; the LP Lab flask is the one green piece. ⚠️ **They were generated
-  as SHEETS, not one at a time — that is the whole trick.** Eight objects in one 4×2 render share
-  a single lighting setup, which is what makes them read as a set instead of twelve unrelated
-  pictures; the two follow-up sheets pass the first sheet as `medias[{role:image}]` to inherit the
-  material. Job IDs, the reject, and the black-background→alpha cutting recipe are in
-  `docs/MEDIA_LIBRARY.md` — **regenerate from those job IDs, don't re-prompt from scratch.**
-  The **`/tools` hub runs on the same set** (nine cards + the page header). Whole library is 22 icons / ~190 KB in `public/icons/`. Reuse one before generating a new one, and if you do generate, pass the original sheet as a reference so the material matches. The CLKN concierge route keeps the real mascot photo (`.oic img.mascot`
-  gets the circular crop; the rendered icons must NOT).
-  🎓 **`/education` IS THE LEARNING HUB (2026-07-29, owner's call).** The homepage carried three
-  tiles (Learn Crypto / Incubator / School) that all landed in roughly the same place; they
-  collapsed into ONE "Education" tile pointing at `/education` (`public/education.html`, explicit
-  route in server.js — `public/` is not statically mounted). The hub splits into the four tracks:
-  **Incubator** (`/school#incubator`), **School** (`/school`), **Chain Info** (`/learn`),
-  **Library** (`/school#library`) — plus a featured **LP Lab** block. **The LP Lab keeps its OWN
-  homepage tile on purpose** (green, `.ql.lab`) — owner: "that is more advanced and I want to make
-  our best feature." So home is 6 tiles: Ask Cluck · Education · LP Lab · Tools · Locker Room · CLKN.
-  ⚠️ Lesson counts on the hub are **injected server-side** from `curriculumPage.counts()` (the real
-  LESSONS / INCUBATOR_LESSONS / LP_LESSONS arrays) + `loadLearnAssets().length` — do NOT type them
-  into the HTML; hand-typed public counts are how the landing page spent months advertising 72 exams
-  against a 70-question curriculum. The route also answers `/education.html` because the vite build
-  copies `public/` into `dist/`, and the static mount would otherwise serve the raw `{{…}}` template.
-  `/education` is in SITEMAP_PAGES and in cluck-nav's `ownNav` list (it has its own header).
-  ⛔ **TOOL CONSOLIDATION (2026-07-29, owner: "streamline the user experience, cut the clutter"):**
-  **`/snapshot` and `/holders` are now ONE tool** — `public/token-holders.html`, served at BOTH
-  paths (the old `snapshot.html`/`holders.html` stay on disk, unrouted, like the old buyspecial
-  pages). They always ran on the same `/api/snapshot` engine; the merged page fetches with
-  `excludeNonHuman=0` and filters client-side, so concentration is always measured over TRUE
-  HOLDERS (raw top-10 counts pool vaults as whales — the "false whale" read Autopsy already
-  corrects for). Exports follow the visible view and warn before airdropping to non-human sets.
-  **Token Vitals and the grant page were REMOVED** (pages, routes, and the 306-line
-  `/api/token-vitals` handler, which had no consumer). `/grant` → `/investors` and
-  `/token-vitals` → `/holders` are permanent 301s so old bookmarks don't hit the SPA catch-all.
-  ⚠️ `/api/token-overview` is a DIFFERENT endpoint and STAYS — airdrop.html, investors.html and
-  market-header.js all read prices from it.
-  **Autopsy and Order Book are OPERATOR-ONLY** — off tools.html and the sitemap, pages and APIs
-  untouched and fully working ("keep background setup for me to use when needed"). Note the
-  Telegram bot still exposes `/autopsy` to the community; removing that was NOT asked for.
-  Do NOT re-list any of these publicly without the owner's ask.
-  🎯 **BUY SPECIAL IS UNIFIED (2026-07-24 rebuild): `/buyspecial` AND `/rose` now both serve
-  `public/buyspecial-pro.html`** — ONE server-backed tool with a mode toggle: REWARD ALL HOLDERS
-  (% of in-window buys) or RANKED WINNERS (top N, equal/fixed/pro-rata prizes). The old
-  `buyspecial.html`/`rose.html` are unrouted (kept on disk only). WHY the rebuild: the old
-  client-side scan was fragile and broke in three independent ways — (1) pool discovery was
-  DexScreener-only and went blind when DexScreener dropped a token (ROSE), (2) the Reliable Payout
-  List paid % of HELD balance not in-window BUYS, (3) a hardening of `/api/helius-tx` (it required
-  a bare array but forwarded that bare array to Helius, which wants `{transactions:[...]}`) made
-  the enhanced-tx proxy reject EVERY request → 0 buyers on every client scan. All three are fixed.
-  The new tool runs entirely on server endpoints (below), so it works in webviews (Phantom) where
-  the client scan failed. Engine endpoints (all public, on-chain, indexer-independent):
-  `/api/buyspecial-crosscheck` (buyers + tokensBought via buyersInWindowMulti: Helius→GT→ST, pools
-  found on-chain via getTokenLargestAccounts), `/api/buyspecial-holdcheck` (window-scoped per-wallet
-  balance + sells), `/api/buyspecial-trace` (one-hop: if a buyer moved tokens, pay the wallet that
-  still holds), `/api/token-pools` (on-chain vaults ∪ GeckoTerminal). Operator bypass: append
-  `?key=$PREMIUM_ACCESS_KEY` (validated by `/api/admin-check`, remembered) — public users still hit
-  the CLKN unlock. Don't re-introduce the client-side getSignaturesForAddress(mint) scan or the
-  `{transactions}` body to `/api/helius-tx`.
-  🚀 **NO MORE AIRDROP HAND-OFF (2026-07-24, owner's call — "just direct wire the airdropper
-  into the buy special").** Buy Special now SENDS prizes in-page. The transfer machinery lives in
-  **`public/airdrop-engine.js`** (`splToken` shim + `CluckAirdrop.{toBaseUnits,planBatches,
-  checkRecipientAtas,buildTransaction,confirmTransaction,send}`), loaded by BOTH `/buyspecial` and
-  `/airdrop` — one implementation, so a fix lands in both. `airdrop.html` keeps its UI and calls the
-  engine through thin wrappers; don't re-inline a private copy of the shim there.
-  ⚠️ **`public/` is NOT statically mounted** — a new asset needs an explicit `app.get` route
-  (see the `airdrop-engine.js` / `airdrop-handoff.js` loop next to `/market-header.js`), or the
-  request falls through to the catch-all. **Since 2026-07-30 that at least FAILS LOUDLY:** the
-  catch-all returns a real 404 for `/api/*` (as JSON) and for any static-asset extension
-  (`.js .css .png .webp .svg .json .map .woff2 …`), instead of answering everything with the React
-  shell at 200 — which is what made a missing asset a silent MIME-type refusal. Extension-less
-  paths still fall through to the SPA, which needs them for client-side routing, so a missing
-  PAGE route still renders the school shell rather than 404ing.
-  **Reward token is selectable**: the comp token, SOL (native `SystemProgram.transfer`), USDC, or any
-  mint. In % mode the basis follows the token — comp token → % of tokens bought, SOL → % of SOL spent,
-  USDC/other → % of USD spent, converted via `/api/token-price` (Jupiter v3, also the source of
-  decimals so a 0.05 SOL prize can't floor to 0).
-  The tools that STILL hand off (`token-holders`, `buycomp-admin`) go through the server stash
-  — `POST /api/airdrop-handoff` → `/airdrop?handoff=<id>&t=<tok>` (`public/airdrop-handoff.js`,
-  6h TTL). **localStorage hand-off is the fallback only**: it silently fails in Phantom's webview,
-  which is what made this look broken for four rounds. The reader clears the payload only AFTER
-  applying it and SHOWS failures instead of swallowing them.
-  💰 **PRICING (updated 2026-07-30): free for ≥2M CLKN holders via wallet-connect (35 days),
-  else 0.05 SOL (~$3.69) one-click. TWO doors, both resolved through the connected wallet.**
-  Enforced in two places that must move together: `SOL_UNLOCK_MIN_LAMPORTS = 50_000_000`
-  (server.js, the floor `/api/verify-sol-payment` clamps `&min=` up to, so a tampered client can't
-  bless dust) and `SOL_LAMPORTS` + the UI strings in `public/buyspecial-pro.html`.
-  ⚠️ **The third door — 5,850 CLKN (~$2.77) sent by hand, priced on 2026-07-24 to be ~25%
-  CHEAPER than the SOL door so paying in the project's own token was the better deal — was
-  REMOVED 2026-07-30** under the owner's "remove the send-in-token functions from our tools"
-  call. Paying in CLKN is no longer possible here; only HOLDING it is (the 2M free tier). That
-  was a deliberate pricing decision being reversed, so re-raise it with the owner before
-  assuming the current state is final. `TOOL_GRANTS.buyspecial` / `.rose` still exist in
-  server.js but nothing calls them.
-  ⛔ **LP Scanner is OPERATOR-ONLY (2026-07-04, owner's call — off public, kept for CLKN ops):**
-  all seven `/api/lp-*` endpoints are adminAuthOK-gated (404 without key); `/lp-scanner` page
-  still exists but needs `?key=PREMIUM_ACCESS_KEY` once (remembered in localStorage); public
-  links removed from tools.html, cluck-nav.js and the LP Lab lesson. The hourly `warmTopPools`
-  timers were removed with it (no idle GeckoTerminal polling). Don't re-publicize without the
-  owner's ask.
-  ⛔ **Cluck Score was REMOVED (2026-06-15, owner's call): it gave good scores to tokens that
-  then rugged — misleading, not worth it. Do NOT rebuild it.** Gone: `/score` page + `score.html`,
-  `/api/cluck-score`, `/api/cluck-card`, `renderScoreCard`, the `/score` Telegram command, and all
-  links. The replacement free flagship is **Wallet X-Ray** (`/wallet-xray`, `/api/wallet-xray`).
-- `src/` — the React/Vite school (landing app). ⛔ **`/curriculum` WAS REMOVED (2026-07-29, owner:
-  "it gives out too much on one screen and the questions. Not cool").** It was a static-HTML mirror
-  of every lesson for non-JS crawlers, and it laid out every lesson body plus every quiz question
-  text on one flat page. `/curriculum` now **301s to `/education`** — an explicit route, because
-  without one the SPA catch-all answers it with the React shell (a 200 soft-404) for every link
-  still indexed. `lib/curriculum.js` survives but ONLY exports `counts()`, which `/education` uses
-  for its lesson numbers; `render()` and the whole HTML template are gone. **Do not rebuild the
-  mirror without an explicit ask — and if SEO ever justifies it, it must not include question
-  texts.** `robots.txt` + `sitemap.xml` are still explicit server routes (the SPA catch-all would
-  otherwise answer them with the React shell).
+- **Push freely.** Standing permission to push to the working branch **and to `main`** (owner,
+  2026-07-24: "you always have permission to push to main"). Railway auto-deploys `main`, so that
+  IS production: land it green and say what went live. **Ask first for anything destructive** —
+  force-push, `reset --hard`, branch delete. That was never granted.
+- ⛔ **PLAN ≠ EXECUTE for money.** For anything that moves funds, opens or closes positions, or
+  resumes an engine: state the exact plan and STOP. Execute only on an explicit go. An owner
+  message describing intent ("thinking we should Y") opens a discussion, not authorisation —
+  parameters like fee tiers are his to pick. Reads are always fine.
+- ⛔ **STOP MEANS STAY STOPPED.** When the owner says stop/pull/close, it stays stopped until he
+  says restart. Before executing, disarm *every* automation that could undo it; after, re-verify
+  a full tick-cycle later that it stayed done. (A session pulled treasury positions but checked
+  the wrong project's paused flag — the live vault redeployed everything two minutes later.
+  `/api/whirlpool/vault/status` without `project=` returns the CLKN project, NOT treasury.)
+- **Telegram posts are SILENT by default.** Never `&loud=1` unless the owner says so in the
+  moment.
+- **Never commit secrets**, and don't put a model identifier in committed files.
+- **Tell the truth about what you did.** If a check didn't run, say so. Most of the worst bugs
+  here survived because something reported green on the wrong thing.
 
-## Credentials / transcripts (the school's permanent output)
-- ⛔ **THE ULTIMATE CHALLENGE AND THE SURVIVAL SIMULATOR WERE REMOVED (2026-07-29, owner's call:
-  "no one is using them"). Do NOT rebuild either without an explicit ask.** Gone: the `challenge`
-  and `survive` screens, `src/sections/Survive.jsx`, the `UltimateChallenge` component,
-  `/api/exam/questions` + `/api/exam/submit`, the pass-token flow, `EXAM_SOURCE_MIX`,
-  `data/question-bank.json` (210 questions) and `scripts/check-question-bank.js` + its CI step.
-  The exam had issued **ZERO diplomas in its entire life** (`/api/school-stats`: `diplomas: 0`,
-  `verifiedDiplomas: 0`) against 9 real graduation transcripts, so nothing real was lost.
-  Removing it also closed two live security holes for free: the answer key was fully readable
-  from the public `i18n/*.school.json` dumps (all 59 exam-only questions, options in bank order,
-  explanation adjacent), and `/api/claim` would mint a "verified" diploma for ANY wallet from a
-  bare `{wallet, pct:100}` POST — which also *downgraded* any genuine record. Git has it all if
-  it's ever wanted back.
-- **The in-lesson quizzes are untouched** — they still live in `src/App.jsx` (`LESSONS[].questions`,
-  `INCUBATOR_LESSONS[].questions`) and `src/sections/LPLab.jsx` (`LP_LESSONS[].sections[].quiz`),
-  graded client-side for practice only. Nothing is gated on them now, so there is no answer key to
-  protect and no bank to mirror into — **the old question-bank drift rule no longer applies.**
-- A learner earns a permanent, shareable transcript by finishing the full curriculum (graduation) —
-  now the ONLY door. It collects a Solana address via `/api/claim`, which appends the airdrop list
-  to the Google Sheet AND writes a per-wallet record to `lib/credentials.js` (`/data/credentials.json`).
-  `/api/claim` deliberately ignores any client-supplied `score`/`total`/`pct`; don't re-read them.
-- ⚠️ **Still open (audited 2026-07-29):** the graduation door is a pure client assertion and each
-  new graduate spends treasury SOL on a cNFT, bounded only by `rateLimit("claim", 10/hr/IP)` and
-  kv `schoolDiplomaDailyCap` (60/day). Worth gating before it's promoted anywhere.
-- Public surfaces: `/transcript/:slug` (page, with OG card), `/api/credential/:slug` (JSON — exposes
-  holder *status* only, never balance), `/api/credential-card?slug=` (PNG), `/api/school-stats`
-  (aggregate verified-graduate metrics, shown on the grant + investor pages).
+---
 
-## Secrets live on Railway, NOT in the repo
-The repo ships zero secrets; a fresh clone (every cloud session) has none. Runtime secrets
-live in **Railway** (the app) and the **Claude-web environment** config (so sessions can
-run things). Var names: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `HELIUS_API_KEY`,
-`BAGS_API_KEY`, `ANTHROPIC_API_KEY`, `SOLANA_TRACKER_API_KEY`, `SOLSCAN_API_KEY`,
-`PREMIUM_ACCESS_KEY`, `BUYCOMP_KEY` (scoped password for the buy-comp portal `/buycomp-admin` + `/api/buycomp/*`; master key also works), `X_API_KEY/X_API_SECRET/X_ACCESS_TOKEN/X_ACCESS_SECRET`,
-`GOOGLE_SHEET_ID/GOOGLE_CLIENT_EMAIL/GOOGLE_PRIVATE_KEY`, `HATCHERY_TURBO_KEY`,
-`COINGECKO_API_KEY`, `DATA_DIR`, `MM_OPERATOR_SECRET` (the Liquidity Vault's dedicated
-hot wallet — base58 or JSON secret key; UNSET = the autonomous vault is fully off, a safe
-no-op. Use a wallet holding ONLY the MM float, never the treasury or any mint authority).
-Optional RPC resilience (all unset = primary-only, fine): `FALLBACK_RPC_URL` (one or more
-full backup RPC URLs, comma-separated — e.g. a QuickNode/Triton/Alchemy endpoint),
-`HELIUS_API_KEY_2` (a second Helius key on a separate quota), `RPC_DEBUG` (=1 logs failover).
-Optional `JUPITER_API_KEY` (unset = the FREE `lite-api.jup.ag` Tokens V2 endpoint, fine for our
-cached low-volume use): when set, every `tokens/v2` call (CLKN organic score + REAL 24h volume in
-server.js, autopsy cross-verify, bags-context, lp-scanner) auto-switches to the keyed `api.jup.ag`
-host with an `x-api-key` header for higher rate limits — same response schema, so it's a pure
-no-op until the key exists. Drop the key in env, redeploy, done.
-Optional **TTS / "real Cluck voice"** (all unset = read-aloud uses the FREE browser Web Speech
-voice everywhere, a safe no-op): `ELEVENLABS_API_KEY` (enables `/api/tts`; ElevenLabs is the
-same engine Anthropic's own voice mode uses), `ELEVENLABS_VOICE_ID` (the branded Cluck voice;
-per-lang override `ELEVENLABS_VOICE_ID_ZH` / `_ES` / `_EN`), `ELEVENLABS_MODEL` (default
-`eleven_flash_v2_5` — HALF-price credits, multilingual), `TTS_DAILY_CHAR_CAP` (NEW-synthesis
-budget/day, default 40000). Synthesized mp3 is cached on the `/data` volume keyed by
-model+voice+lang+text → each lesson chunk is paid ONCE then served free forever; uncached text
-with no key/over budget returns 503 and the client falls back to the browser voice. 🟢 **LIVE
-(owner added `ELEVENLABS_API_KEY` + `ELEVENLABS_VOICE_ID` on Railway).** The flash model is
-MULTILINGUAL — the ONE Cluck voice speaks every language (EN/中文/ES/IT verified synthesizing real
-audio); we pass `language_code` per request, so adding a new language needs NOTHING in ElevenLabs.
-**⚠️ LANGUAGE COUNT: the school ships in SEVEN languages — `en` / `es` / `hi` / `it` / `pt` / `vi` / `zh`
-(English, Español, हिन्दी, Italiano, Português, Tiếng Việt, 中文)** — full UI + curriculum translations live
-in `public/i18n/*.json` + `public/i18n/*.school.json` (+ `*.locker.json` for the Locker Room). That 7 is
-the real count to quote (e.g. grants) — Hindi shipped after the old "six" note, and an accuracy audit
-(2026-07-16) caught this file contradicting the grant application; keep this count in sync when adding languages.
-The `EN/中文/ES/IT` above is only the narrower subset with *TTS audio verified* (4), NOT the language total.
-Per-language voice overrides (`ELEVENLABS_VOICE_ID_IT`/`_ES`/`_ZH`/`_EN`) are OPTIONAL — only if the
-owner wants a distinct natively-accented voice; unset = the main voice handles all langs.
-Gitignored & local-only (do **not** expect these in a cloud session): `.env`, `.claude/`,
-`STRATEGY.md`.
+## Money: what you may and may not touch
 
-## Claude API model usage (the app's OWN calls)
-- **Sonnet paths → `claude-sonnet-5` (migrated 2026-07-24).** Five call sites: Ask Cluck / LP answer,
-  Daily Alpha, Cluck's Classroom tutor, the final-exam proctor, and Wallet X-Ray Q&A.
-  ⚠️ **All five pass `thinking: {type:"disabled"}` deliberately — do NOT remove it.** On Sonnet 5,
-  omitting `thinking` turns adaptive thinking ON, and `max_tokens` caps thinking + answer TOGETHER,
-  so a 700-token post would be mostly thinking with a truncated answer going out to X/Telegram.
-  These are short-form copy tasks (2–7 sentences, or ~320 words for Alpha) with no multi-step
-  reasoning, so thinking buys nothing and costs latency on the live tutor/exam paths.
-- **`max_tokens` were raised ~35% in the same change** (600→800, 1100→1500, 700→950) because Sonnet 5's
-  tokenizer produces ~30% more tokens for the same text. Don't lower them back to the 4.6 numbers.
-- **Haiku paths stay on `claude-haiku-4-5-20251001`** (bot lessons, autopsy, alpha majors, NQ digest) —
-  current model, nothing to migrate.
-- The API calls set no `temperature`/`top_p`/`top_k` and use no assistant prefills; all three would
-  400 on Sonnet 5. Keep it that way — steer tone with the system prompt instead.
+The owner manages all liquidity positions **manually**. Read freely; touch nothing.
 
-## Critical runtime facts
-- **The entire scheduler block** (buy/sell alerts, Cluck's Lesson, Launch Radar, Market
-  Check, daily recap, graduation watcher, the webhook setup) **only starts if
-  `TELEGRAM_BOT_TOKEN` AND `TELEGRAM_CHAT_ID` are set at boot.** Missing either → none of
-  it runs. This is the #1 thing to check when "the bot isn't doing X."
-- 🔒 **Lock-celebration flow (owner standing approval 2026-07-01; ONE-POST redesign 2026-07-03 —
-  "text and image go out TOGETHER, that was the whole point"):** when a new lock fires,
-  `lockWatchTick` posts NOTHING. It composes the announcement copy for both channels and stores
-  it in kv `lockCelebrationPending` (delta/total/pct/newLocks/lockCount + `tgText`/`xText` +
-  `announced:false`), readable via gated `/api/lock-celebration` (`?clear=1` when handled,
-  `?probe=` for observability). A **Claude session** (60s watcher when live + the hourly cron)
-  picks it up, generates the image, and posts ONE combined post per channel — **X FIRST, then
-  Telegram with the X link (owner ask 2026-07-03)**:
-  **1. X** = `/api/x-announce` `post=1` + `text={pending.xText}` + `image={rawUrl}` (standalone,
-  no replyTo) → capture the returned post id; **2. Telegram** = `/api/tg-test` `photo={rawUrl}` +
-  `text={pending.tgText}` + a trailing "🐦 On X — like &amp; repost:
-  https://x.com/FireChicken007/status/{id}" line (silent). Then `?clear=1`. **FALLBACK:** if no session picks it up within `LOCK_ANNOUNCE_FALLBACK_MS`
-  (6h, server.js), the tick posts the stored text-only copy itself (a lock never goes silent)
-  and marks `announced:true` + records `xPostId`/`tgMessageIds`; a session that arrives LATER
-  then degrades to the old two-step: X image reply under `xPostId` with a SHORT punchline only
-  (never restate the numbers), TG photo with self-sufficient caption + `replaceMsg=` (comma-join
-  `tgMessageIds`) which deletes the fallback text(s). **TWO-VAULT IMAGE SPEC (owner ask
-  2026-07-04, all mandatory):** the scene shows **TWO vault doors** — one labeled "JUPITER LOCK"
-  (engraved with `pending.jupLockedShort` CLKN), one labeled "STREAMFLOW" (engraved with
-  `pending.strmLockedShort` CLKN). Cluck hauls **exactly `pending.newLocks` bag(s)** (main bag
-  "+{deltaShort} CLKN") **toward the vault named in `pending.platform`** — that's the platform
-  this lock used (its door glows/is emphasized). A banner spanning both reads "{pct} OF SUPPLY
-  LOCKED" (the combined total). Dark + orange palette, crisp legible typography. VIEW the render
-  and verify: two doors with the right platform labels + subtotals, bag heading to the correct
-  vault, all text correct — before posting. Announcement floor is 10K CLKN (`LOCK_WATCH_MIN_DELTA`,
-  was 500K — owner's call 2026-07-03). Images via the **Higgsfield MCP (owner's Plus plan — owner
-  explicitly does NOT want a separate paid Higgsfield Cloud API key)**.
-  🟢 **STREAMFLOW LOCKS: SHIPPED &amp; VERIFIED 2026-07-04.** `getLockedSupply` counts Streamflow
-  (self-owned escrows) and `attributeLockPlatform` relabels them "Streamflow" via a cached
-  creation-tx trace (Streamflow program `strmRqU…`); the watcher tracks per-platform subtotals
-  and which vault grew. So both platforms are fully automatic now — no more manual runs. ⚠️ **CronCreate jobs are session-only and expire in ≤7 days — every
-  new long-lived session should RE-ARM the hourly celebration cron** (poll the endpoint →
-  if pending, generate → post → clear; never post when pending is null).
-  🔁 **THE DURABLE VERSION IS A ROUTINE, NOT A CronCreate: `trig_017rnVjZSAAEgQdyfTTnCfYa`
-  ("CLKN lock-celebration watcher (hourly, silent)", `53 * * * *`).** ⛔ **IT IS SILENT BY DESIGN —
-  push + email notifications are OFF and the prompt forbids PushNotification** (owner, 2026-07-29:
-  "Stop doing this. I want to pause your notifications" — a broken run had been buzzing his phone
-  every hour). A failed run must end QUIETLY; nothing is lost, because the server posts a text-only
-  announcement itself after 6h. `update_trigger` cannot change the notification channel, so this was
-  a delete-and-recreate — if you ever recreate it again, re-set `notifications: {}`. ⚠️ The recreate
-  carried NO MCP connectors, so its fired sessions may lack the Higgsfield image tools; if hourly
-  IMAGE posts start silently degrading to the 6h text fallback, the Routine has to be recreated from
-  the claude.ai Routines UI (a session can only pass through connectors it holds itself). It fires a FRESH SESSION, and a
-  fresh session starts with an **EMPTY working directory — no repo, therefore no
-  `scripts/lockbar.py`, no Oswald fonts, and no `.claude/skills/lock-celebration`.** It failed
-  silently every hour from 2026-07-27 until 2026-07-29 for exactly that reason (no lock landed in
-  the window, so nothing was actually missed — verified: locked supply unchanged at 451,114,343 /
-  61 escrows). **FIX, now in the Routine prompt as STEP 0 — it must shallow-clone before anything
-  else:** `cd /tmp && (test -d cn/.git || git clone --depth 1 https://github.com/clucknorrisapp/cluck-norris-school cn) && cd cn`
-  That one clone supplies all three. ⚠️ `.gitignore` has `.claude/*`, but the two SKILL.md files
-  are **force-added and tracked**, so they DO come down with a clone — don't "fix" that ignore rule.
-  If you ever edit this Routine, keep the flow restated inline in the prompt: depending on the skill
-  file alone is what made a missing repo fatal instead of degraded.
-  **Model note (owner, 2026-07-02): use SONNET 5 (`claude-sonnet-5`) for Higgsfield prompt
-  crafting** — noticeably better image prompts; the Mac runner passes `--model claude-sonnet-5`,
-  and in-session celebrations should spawn a sonnet subagent to write the Higgsfield prompt.
-- **Buy-comp/Buy-Special data is multi-source:** Helius primary → GeckoTerminal → ST last
-  resort (see `lib/helius-trades`). ST quota exhaustion no longer darkens a live comp.
-  ST remains REQUIRED for launchpad-specialty reads only: token creator, bonding-curve %,
-  deployer history — i.e. the Bags monitoring below + parts of autopsy/premium forensics.
-- **Bags monitoring (near-grad + graduation alerts) depends on `SOLANA_TRACKER_API_KEY`.**
-  Fast health check (no key needed): `GET /api/bags-near-grad` — returns `tokens:[…]` =
-  pipeline alive; empty/`success:false` = ST key or quota.
-- X cross-post needs all four `X_*` keys, else silent no-op. A raw contract address in a
-  tweet 403s for ~7 days after auth, so lesson tweets link a DexScreener URL instead.
-- **The X account is PREMIUM — long-form posts are allowed (up to ~25k chars). DO NOT truncate
-  tweets to 280; that limit does not apply to us.** Post the full content (e.g. the whole Daily
-  Alpha brief) rather than a teaser. (Owner correction, set 2026-06-14.)
-- **Always tag `@JupiterExchange` (routing artery + our JUP/USDC earner's venue) and `@BagsApp`
-  (launchpad + hackathon host) in X posts**, plus the relevant projects' own handles
-  (CoinGecko `links.twitter_screen_name`) for engagement. (Owner ask, 2026-06-14.)
-- **X→TG mirror + bump rule (owner, 2026-07-08): every X post gets (a) a SILENT Telegram
-  companion in the community chat with a "🐦 On X — like & repost" link, and (b) a follow-up
-  self-reply under the original X post a few hours later to bump engagement.** The Chain
-  Spotlight implements the pattern (TG mirror in `postChainSpotlight`, 3.5h question-bump in
-  `chainSpotlightTick`, observability kv `chainSpotLast`/`chainSpotBump`); new X surfaces should copy it.
-- ⚠️ **Master X pause (`X_AUTOPOST_PAUSED=true`, server.js ~643, owner's call 2026-06-24) hard-gates
-  `postToX` — a new X feature that doesn't pass `{force:true}` posts NOTHING and reports
-  `{ok:false,paused:true}`.** Scoped carve-outs so far: lock announcements, the twice-daily
-  Chain Spotlight (owner ask 2026-07-08), and Cluck's Lesson 1×/day @13 UTC + its self-reply
-  comments/bumps (owner ask 2026-07-08 — the 07-05 "lesson ON" call had silently no-oped
-  against the pause until then). Any new auto-poster needs an explicit owner ask for its
-  own carve-out — and must alert the operator chat on failure, never fail silently (the spotlight
-  posted into the pause for a full day before anyone noticed).
-- **Media/brand generations: `docs/MEDIA_LIBRARY.md` is the manifest.** Every KEPT Higgsfield
-  render gets a row (job ID, CDN URL, verdict); check it BEFORE regenerating; confirm the exact
-  job ID with the owner before overlay/edit work. Hard rules: AI never draws real coin/brand
-  logos (overlay/end-card them from `docs/brand/`), branded mascot always needs a reference image,
-  NSFW false-flags auto-refund.
-- Persistence: Railway volume at `/data` (consumed payment signatures, graduation tracker,
-  scheduler timestamps, analytics, transcripts/credentials) — survives redeploys.
+- ⛔ **WATCH-ONLY.** Don't rebalance, recenter, close, redeploy, add/remove liquidity, or
+  buy/sell CLKN. Don't "take over." Observe and log.
+- ⛔ **The brand bag is NEVER sold.** And **never buy CLKN with operator funds** without asking in
+  that moment (owner rule, after unwanted inventory buys).
+- ⛔ **The autonomous rebalancer is hard-killed in code** (`JUP_AUTO_REBALANCE_KILLED = true`).
+  Re-enabling is a deliberate two-step opt-in. Don't, without an explicit ask.
+- **Read balances ON-CHAIN, never with the product tools.** `/api/wallet-xray` and autopsy are
+  *activity scanners* — they undercount and miss holdings, and two wrong balance reports came from
+  trusting them. Use `getTokenAccountsByOwner` (jsonParsed) for **both** token programs — legacy
+  and Token-2022 — plus `getBalance`, POSTed to `/api/helius-rpc`.
 
-## Gated admin / test endpoints (require `?key=PREMIUM_ACCESS_KEY`)
-- `/api/tg-test?text=…[&loud=1]` — post a custom one-off message to the Telegram chat
-  (silent by default; `&loud=1` pings). Use this to send a "we're testing" notice.
-- `/api/bags-radar-test`, `/api/market-check-test`, `/api/recap-test`, `/api/edu-post-test`,
-  `/api/x-post-test`, `/api/outreach-test`, `/api/tool-spotlight-test` — dry-run the scheduled
-  posts; add `&post=1` to actually fire. `tool-spotlight` = the DAILY tool feature on X +
-  (silent) Telegram, rotating `TOOL_SPOTLIGHTS` (kv `toolSpotPos`/`toolSpotDate`, hour kv
-  `toolSpotHour` default 17 UTC); X posts tag @BagsApp + @JupiterExchange.
-- `/api/buy-replay?sig=…[&run=1]` — manually (re)fire a buy/sell alert the live poller
-  dropped; dry-run unless `&run=1`; remembers the sig so the poller won't double-post.
-- `/api/reconcile-test[&run=1]` — preview/run the RECONCILIATION BACKSTOP: a 12-min sweep
-  (`reconcileMissedTrades`) that recovers any buy/sell the 30s poller dropped (transient
-  error, restart gap, RPC quirk). Settled-window + durably-deduped (`handledSigAt`/kv
-  `buyHandledSigAt`, 2h time-pruned, so it can NEVER double-post) and uses the same raw
-  (authoritative) detection + suppression rules. Tunables: kv `reconcileLookbackMin` (45),
-  `reconcileSettleSec` (240). The poller itself also now re-checks dropped trades against
-  raw `getTransaction` before suppressing (the enhanced Helius format misreads Jupiter-
-  routed swaps as false-arb / false-below-floor — this ate a real ~$700 buy on 2026-06-19).
-- `/api/health-check[&run=1]` — data-source health (Solana Tracker / Helius / Bags / Telegram).
-  Dry returns live status JSON; `&run=1` also DMs the operator (treasury) chat. A 10-min
-  `sourceHealthTick` alerts the operator chat ONLY on a source's state change (down/up) +
-  a once-daily all-green heartbeat (kv `sourceHealth`/`sourceHealthHeartbeatDate`). So a
-  feed going dark (e.g. ST out of credits) pings you instead of being found by a user.
-- `/api/grad-watch-status[&run=1]` — graduation watchlist + the 48h graduated record.
-- `/api/stats` — traffic dashboard data. `/api/autopsy-premium` — gated deep forensics.
-- `/api/claims` — the full airdrop list (wallets + balances) from the Google Sheet.
-  Gated on `PREMIUM_ACCESS_KEY`; returns 404 (not 401) when the key is wrong/absent.
-- `/api/wallet-watch` — **Wallet Watch, a PRIVATE product test (owner ask 2026-07-10): NO public
-  surface, don't link or mention it on the app/socials.** Tracks specific wallets (kv
-  `walletWatchCfg`, seeded with the CLKN drip-seller `D9MizW…`): a CLKN sell fires a LOUD DM to
-  the private operator chat within ~2 min (amount, proceeds, venue, daily running total, balance
-  left, tx link); a silent daily digest (default 13 UTC) covers sells/buys/transfers/balance/
-  sell-pace runway. Params: `&add=&label=`/`&remove=`/`&enabled=`/`&reportHourUtc=`/`&run=1`/
-  `&report=1`/`&resetDay=1`. Backfill-guarded (old txs record silently, never alert). Uses the
-  same wSOL-unwrap-dedupe parse as Wallet X-Ray (the 2026-07-10 2× fix — don't regress either copy).
-- `/api/whirlpool/vault/status|tick|pause|resume|config` — the autonomous Liquidity Vault
-  (Orca Whirlpool LP manager). 404 without the key. `tick` is a DRY RUN unless `&run=1`;
-  it only acts when `MM_OPERATOR_SECRET` is set. The public `/liquidity` tool and the
-  `/api/whirlpool/*` read/quote/build endpoints are non-custodial and ungated.
+Treasury wallet `2zMCUkE9pBjcC7ihtLqm28EsCoEHVmCdJYr5262EuPy8`. Canonical chart is the community
+Meteora pool `64WXkHM4zyWUkYy32TfUeBV5wDAfdcUGDxe5ntM4xaTd`; engine pools are Orca. The venue
+split is settled — don't re-debate it.
 
-## Liquidity ops — durable session memory (read this; don't rediscover it)
-Live money is managed across two systems. Facts here survive container resets/compaction.
-- **⚠️ OUR wallet balances are an OPS concern — NEVER read them with the product tools. Before
-  ANY treasury/engine decision or transaction (sizing a position, a swap, a buyback, quoting
-  "what's available"), read balances DIRECTLY ON-CHAIN.** The public forensic tools
-  (`/api/wallet-xray`, autopsy) are *activity scanners*, not balance snapshots — they undercount
-  and miss holdings (missed live USDC and Token-2022 LP positions, 2026-06-27, which led to two
-  wrong balance reports in one session). Do NOT size a trade off them, ever. Authoritative read =
-  `getTokenAccountsByOwner` (encoding `jsonParsed`) for BOTH token programs — legacy
-  `TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA` **and** Token-2022
-  `TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb` — plus `getBalance` for native SOL, POSTed to the
-  `/api/helius-rpc` proxy (it holds the key and these methods are on its allow-list; works
-  headless in a fresh cloud session). Sum `tokenAmount.uiAmount` per mint. On-chain is the ONLY
-  source of truth for our funds. (Same rule for LP positions: the Token-2022-aware
-  `listPositions`/`/api/whirlpool/positions` read, never a forensic endpoint.)
-- **Treasury** (wallet env `MM_OPERATOR_SECRET_TREASURY`, pubkey `2zMCU…`): lives on
-  **Meteora DLMM cbBTC/SOL** pool `Hz1EtXTGaFEtAWRgRNpDMFV6vnSZtQUY9UqmdM6vfKSS` (picked for
-  ~10–19x vol/TVL turnover vs Orca's crowded $5M pool, where our ~$1.2k was ~0.02% of depth).
-  One position, **±0.6% Curve** (center-weighted), **autoRecenter ON** (kv `meteoraCfg`:
-  edgeFrac 0.12, minRecenterSec 1800; 5-min loop closes→rebalances 50/50→reopens centered and
-  DMs). OOR monitor DMs on out-of-range/back-in-range. The **Orca treasury dual-sleeve is
-  EMPTY/paused** — don't resume or "re-seed" it; funds are on Meteora deliberately.
-- **Goal:** grow the **BTC+SOL stack >0.5%/day in ASSET terms, not USD** (LP-vs-HODL edge).
-  Daily recap DM is token-denominated (kv `treasuryRecapSnaps`; `&reset=1` re-baselines after
-  restructuring). 6h treasury report folds Meteora value+fees in.
-- **CLKN engine** (env `MM_OPERATOR_SECRET`): normal = `widthPct 10 / solWidthPct 15 /
-  deployFrac 0.95`; both pools on the fine **0.02% tier** (spacing 2) and we ARE ~100% of
-  their depth. **CLKN Blitz** = timed tight-range burst tool, reset-proof auto-revert
-  (kv `clknBlitzUntil`/`clknBlitzRestore`).
-- **Hard conventions:** "auto-balance" = swap **SOL↔USDC only — NEVER sell CLKN** (the brand
-  bag is never sold). **And NEVER BUY CLKN with operator funds without asking the owner in
-  that moment either** (owner rule, set 2026-06-12 after unwanted inventory buys — the owner
-  holds plenty of CLKN; fix inventory imbalances with thresholds/holding quote idle, not buys). Gas floor `swapSolFloor 0.2` on treasury + clkn. `suggestRanges` min
-  width is 0.05% (was 0.5% — that floor once silently clamped ±0.2% asks to ±0.5%).
-  Meteora rent is ~fully refunded on close (bins pre-initialized) — re-centers cost ≈ tx fees.
-- **Gated endpoints** (all `?key=PREMIUM_ACCESS_KEY`, dry-run unless `&run=1`):
-  `/api/meteora/status|remove-liquidity|add-liquidity|open-position|recenter|config`,
-  `/api/clkn-blitz` (`&abort=1` reverts now), `/api/treasury-recap-test` (`&send=1`).
-  Meteora SDK `@meteora-ag/dlmm` is lazy-loaded; `removeLiquidity` takes `close=1` to
-  claim+close; `open-position` takes `half=` + `dist=spot|curve|bidask`.
-- **Cloud session recovery:** containers reset mid-session. If files look stale:
-  `git fetch origin --prune && git checkout claude/<branch> && git reset --hard origin/claude/<branch> && npm install`.
-  GitHub is always the truth; nothing committed is ever lost. `MIN_BUY_USD` default is 5 (buy-alert floor; owner's call 2026-06-27, lowered from 35 — arb dust is now muted separately via `suppressArbAlerts`, so the floor can be low to surface small real buys).
-- **Arb-bot filter (behavioral, 2026-06-27):** a size-independent denylist that catches the MULTI-tx round-trip churners the single-tx `crossPoolArb` detector misses. `noteTradeForArb` records each trade in a short per-wallet memory and `flagArbBot`s any wallet that round-trips CLKN (buy↔sell, same wallet) within `arbRoundtripSec` (kv, default 180s); flagged wallets (kv `arbBotWallets`) have BOTH buys and sells suppressed in the poller + reconcile, like operator wallets. Seeded with two confirmed bots (`ESuvjvsQ…`, `o721mrtt…`). Manage via gated `/api/arb-bots` (`?add=`/`?remove=`). False positives (a real wallet that happened to flip fast) are removable there.
-- 💡 **IDEA — PERMANENT WIDE "ANCHOR" POSITIONS (filed 2026-06-23, owner's idea; NOT yet
-  implemented).** Problem: because we own ~100% of the Orca CLKN pools, fully pulling our
-  concentrated positions leaves the pool EMPTY → price goes stale / a tiny trade shoves it far
-  off market → on redeploy we must recenter around a dislocated price and wait for arb to settle
-  (the "front-end work"). Fix to consider: leave a TINY (~$10) ultra-wide position per pool that
-  we NEVER close — e.g. ±80%, or asymmetric −50%/+200% (more headroom up for a memecoin). It keeps
-  a continuous, arbitrageable quote so the pool price always tracks the real market (arbs align it
-  even against thin liquidity), and being ultra-wide it never goes out-of-range / never needs
-  touching. Then restarting the tight positions finds price already live + in-range → no settle
-  wait. Cheap + correct ONLY on Orca (one position spans the whole band for ~0.006 SOL rent, $10
-  capital, negligible IL); do NOT do this on Meteora (width-scaled bin-array rent makes a band that
-  wide very expensive). Sound CL technique — revisit when the engine is un-paused.
-- 💡 **PLANNED — generalize the Meteora keepalive to the multi-project liq engine (owner's
-  call 2026-06-27).** Built for CLKN now (`vault.meteoraKeepalive` + the `meteoraCanonKeepaliveTick`
-  scheduler + `/api/meteora-keepalive`): when the canonical pool goes quiet ≥23h it fires ONE
-  ~$10 SOL→CLKN BUY forced through `64WXkH` (Jupiter `dexes="Meteora DAMM v2"` + ammKey route-verify;
-  buy-only; 1×/24h max; kv `meteoraKeepalive{Enabled,Hours,Usd}`) so the pool doesn't drop off
-  watchlists (24h-no-trade cutoff). Currently HARDCODED to the `treasury` project + the `64WXkH`
-  address — to productize for client projects, make the canonical-pool address + params per-project
-  config (the vault is already multi-project). It's **volume-triggered, so it self-scales**: a client
-  with a healthy LOW-fee main pool gets organic arb → never trips it; only starved pools fire it.
-  **Fee-structure lever (why CLKN needs it and most clients won't):** CLKN's canonical pool is Meteora
-  **2%** (high) while the engine pools are Orca **0.02%** (cheap), so arb routes AROUND the main pool
-  and starves it. Clients with a low-fee main/canonical pool get arb flowing there naturally. **When
-  onboarding clients, steer them to a LOW-fee main pool** — keepalive becomes a rare backstop, not a
-  daily cost.
+---
 
-## Venue decision (settled — don't re-debate)
-**CLKN stays on Orca; treasury stays on Meteora.** Different reasons per asset:
-- **CLKN/USDC + CLKN/SOL = Orca ADAPTIVE-fee pools** (dynamic fees that rise with volatility —
-  captures memecoin pump/dump upside) + cheap rent (~0.006 SOL/position, vs Meteora's
-  width-scaled bin-array rent) + **we own ~100% of the liquidity** (so we already capture ~all
-  fees — no crowding to escape) + organic-score-safe + the full engine (Blitz/ask-wall/sol-vault).
-  No benefit to moving CLKN to Meteora; do NOT.
-- **Treasury cbBTC/SOL = Meteora** specifically because the Orca cbBTC pool was a crowded $5M
-  pool where our ~$1k was ~0.1% of depth; Meteora is thin + high-turnover so our size is a real
-  fee share. (That crowding rationale is unique to the treasury — it does NOT generalize to CLKN.)
+## How access works (payment model, changed 2026-07-30)
 
-## Meteora ops learnings (hard-won; don't repeat the mistakes)
-- **Wide opens = MANY txs.** This pool's bin step is ~1 (0.01%/bin), so width→bins is huge:
-  ±0.6%≈121 bins (~5 txs), ±1.5%≈300 (~12), ±2.75%≈540 (~21). The narrow chaser re-center is
-  reliable; very wide opens are slow and can partially land. `signSendTx` now REBROADCASTS the
-  signed tx every 3s until confirmed (≤150s) instead of a single 90s wait that aborted whole
-  opens (the txs were landing — the confirm just timed out → orphan partials). `_openPosition`
-  attaches `err.partial = {positions,sigs}` so a mid-sequence failure surfaces the orphan.
-- **±2.75% is too wide/thin/expensive here** (540 bins, far-bin init rent ~$25-30, thin
-  density). Sweet-spot backbone on this fine-tick pool is **±1% to ±1.5%**.
-- **Layout NOW (settled 2026-06-10, owner's call): ONE wide "always-on" position.** ~±2%
-  CURVE (center-weighted density, wings keep it in range), full stack, autoRecenter OFF —
-  alerts only; any re-center is a deliberate manual decision. The owner explicitly prefers
-  "always earning at a lower rate" over tight chasers that whip out (tight ±0.34-0.6% chasers
-  died in hours on volatile days; every churn event crystallizes IL). Don't re-introduce a
-  chaser without an explicit ask. cfg pinned: halfWidthPct=2, distribution=curve.
-- **⚠️ "another fund-moving op is in flight" = the FIRST call is probably EXECUTING. CHECK
-  `/api/meteora/status` BEFORE retrying.** Twice now an open "failed" with lock-busy or
-  insufficient-funds errors while the original call had actually LANDED the position — the
-  retries were trying to deploy already-deployed funds. Status first, always.
-- **Rent is paid in NATIVE lamports.** open/add now auto-unwrap stranded wSOL
-  (`/api/meteora/unwrap` is the manual lever) — but "insufficient lamports" right after ops
-  usually means the funds are already IN a position (see the rule above), not missing.
-- **autoRecenter:** keep OFF under the wide-position layout; if ever re-enabled, pause it
-  (`/api/meteora/config?autoRecenter=0`) before any manual position surgery so the loop
-  can't contend for the wallet.
+Every gate resolves through the **connected wallet**: hold a CLKN threshold (free), pay a small
+SOL price in one click, or sign a message where the gate is *ownership* rather than payment.
 
-## Audit status (full-app review done — don't re-litigate the clean parts)
-A whole-codebase security review (2026-06-10) found **zero critical/theft-class bugs**. Sound &
-reviewed: payment/replay path (sigstore is atomic test-and-set + now fails CLOSED on a durability
-fault), RPC proxy (default-deny allow-list, no SSRF), exam/credentials (server-scored, single-use
-tokens), secrets/PII, auth (every fund/secret route key-gated, fail-closed, 404-not-401),
-buyback. All session-built liquidity findings were FIXED & shipped: re-center never strands funds
-(try/catch → meteoraReopenPending retry + DM), fee-bank durable across confirm-timeouts
-(meteoraFeePendingBank + reconcile), confirmSig tolerates RPC blips, in-process mutex on
-meteora fund-moving calls, blitz revert work-then-clear + double-start guard, pinned managed
-chaser pubkey (meteoraManagedPubkey), token-denominated 24h fee delta, Raydium range guard,
-trace.html/autopsy.html XSS escaped. The LOW hygiene backlog is now CLEARED except one item:
-`source` whitelist DONE (prettySource only renders Helius-enum-shaped strings, else generic
-"DEX"), header-vs-`?key=` admin auth DONE (adminAuthOK prefers x-premium-key header; `?key=`
-is a deprecated fallback), generic RPC error passthrough DONE (publicErrMsg strips
-credential-bearing URLs + bounds length on every 500). Range-label honesty on the public
-endpoint DONE (2026-06-20): `suggestRanges` now returns `realizedWidthPct` (the band after
-tick-alignment + tight-width guards) and the balanced label + the /liquidity "±X%" headline
-render the realized width, not the requested slider value. LOW backlog now fully cleared.
+- airdropper — free at **50,000 CLKN** held, else 0.05 SOL
+- Buy Special — free at **2,000,000 CLKN**, else 0.05 SOL
+- premium forensics — holder-gated at 2M, re-checked live on every run
+- transcript Tier-2 — connect & sign with `minHold: 0` (a graduate may hold no CLKN)
+- The Hatchery is the one place you can still **pay** in CLKN, ~30% cheaper than the SOL price.
+  Probe `/api/hatchery/config` for today's figure — it's computed live, so never hardcode it.
+
+⛔ **Send-to-unlock is retired and its endpoint deleted.** Don't reintroduce a "send a unique
+decimal and poll" gate without the owner asking. The public framing is his own: *we tried it, it
+wasn't used, we can turn it back on any time, but for now we're simplifying to find out whether
+that was the limiting step.*
+
+---
+
+## What's where
+
+- `server.js` — the monolith (~11k lines): every endpoint, payment verification, Telegram/X
+  automation, the trade poller, schedulers, static serving.
+- `lib/` — `autopsy` (forensics engine), `helius-trades` (buy tracking: Helius → GeckoTerminal →
+  Solana Tracker, in that order), `solana-addr` (address primitives + DEX/locker/CEX tables),
+  `rpc` (failover), `orca-whirlpools` + `whirlpool-vault` (liquidity engine), kv/sig/recap stores.
+- `hatchery.js`, `securitycoop.js`, `whirlpool-mm.js` — Express routers mounted by server.js.
+- `public/*.html` — vanilla tool pages. `src/` — the React school.
+- Shared browser modules: **`cluck-wallet.js`** (the 11-wallet registry + connect/disconnect) and
+  **`cluck-util.js`** (`esc` / `rpc` / `shortAddr` / `fmt` / `copyText`). Don't re-type these into
+  a page — private copies drifted badly enough to cause real bugs.
+
+⚠️ **The file a route serves is often NOT the file named after it.** Tool merges left old pages
+behind: `/holders` + `/snapshot` → `token-holders.html`; `/buyspecial` + `/rose` →
+`buyspecial-pro.html`; `/security-coop` + `/wallet-checkup` → `wallet-checkup.html`; `/liquidity`
++ `/liquidity-engine` → `liquidity-locked.html`. **Grep server.js for the route before editing a
+page** — a session lost a whole polish pass to this.
+
+⚠️ **`public/` is NOT statically mounted.** New assets need an explicit `app.get` route. The
+catch-all returns real 404s for `/api/*` (JSON, any method) and for static-asset extensions, so a
+missing file now fails loudly instead of being served the React shell at 200.
+
+---
+
+## Things that will bite you
+
+- **The whole scheduler block only starts if `TELEGRAM_BOT_TOKEN` AND `TELEGRAM_CHAT_ID` are set
+  at boot.** Missing either → no alerts, lessons, radar, recap, graduation watcher. First thing to
+  check when "the bot isn't doing X."
+- **`X_AUTOPOST_PAUSED=true` hard-gates `postToX`.** A new auto-poster that doesn't pass
+  `{force:true}` posts nothing and reports `{ok:false,paused:true}`. Carve-outs need an owner ask,
+  and must alert the operator chat on failure rather than failing silently.
+- **A Telegram post with an image gets 1024 characters, not 4096** — and our own code silently
+  truncates at 1024 while returning success. Count the caption; put load-bearing lines (the X
+  link, a CTA) where truncation can't eat them. Recover with `&replaceMsg=<oldId>`.
+- ⛔ **Never call `SystemProgram.transfer()` — or any web3.js layout encoder — in a browser page.**
+  It encodes u64 through `toBufferLE()`, which needs the Node `Buffer` global browsers don't have,
+  and we ship no polyfill. This silently killed three money paths at once. Use
+  `splToken.createSolTransferInstruction()` in `public/airdrop-engine.js`; if you add a new
+  instruction type, build it with `Uint8Array`/`DataView` and **diff its bytes against the library
+  in Node before shipping.**
+- 🛡️ **Phantom "may be malicious" on multi-signer txs:** the **connected wallet must sign FIRST**,
+  then extra signers. Build unsigned server-side → `provider.signTransaction(tx)` →
+  `signed.partialSign(base)` → submit raw. Never pre-sign server-side, and never
+  `signAndSendTransaction` when a non-wallet signer exists. `/locker-room` is the reference impl.
+- **Escape anything from an API, URL or chain metadata before `innerHTML`** — token names and
+  symbols are attacker-controlled. Use `CluckUtil.esc`; five hand-rolled copies were missing the
+  single-quote escape.
+
+---
 
 ## Conventions
-- 📏 **THE TYPE SCALE LIVES IN `theme.css`, NOT IN PAGES (2026-07-30).** Prose is 15px in
-  `var(--body-text)` at line-height 1.7 — the landing page's own scale. Small print floors at
-  12.5-13px, card titles are 15px. The overrides are `html`-prefixed so they beat each page's
-  bare `.hero-sub {}` without touching 20 files. **Change the scale THERE, once.** Symptom that
-  led to it: tool pages were 13.5px in the dimmer `--sub` while home was 16px in `--body-text` —
-  two variables off, which is why they read cheap rather than merely small.
-  ⚠️ **A single-class override LOSES to a page's two-class rule.** `.intro .mint-not-launch` and
-  `.sh-card .sh-desc` (both 0-2-0) beat `html body .mint-not-launch` (0-1-2) — CSS compares class
-  count BEFORE element selectors, so piling on `html body` never helps. Match the class depth.
-  This bit twice in one session.
-  ⚠️ **Don't blanket-raise every small rule.** An audit found 109 multi-class rules under 12.5px;
-  only TWO carried prose. The rest are labels doing their job (`.stat .k`, `.header .brand-mini`,
-  `.tx-badge .num`). Raising them would wreck every stat block and badge on the site.
-  **Letter-spacing is the signal**: `normal` = prose (raise it), `>=1px` = tracking-heavy display
-  type (leave it).
-- 🔬 **VERIFICATION: CHECK EVERY FORM, NOT ONE FORM (2026-07-30 — this cost a full day).**
-  Four times in one session a "done" was wrong because one spelling of a thing was checked and
-  the class assumed clear:
-  (1) `function esc(` was migrated everywhere; six copies written `var esc = function` /
-  `const esc = s =>` survived, one of them carrying the XSS gap.
-  (2) Seven `const WALLETS = {` literals were consolidated; three more detectors named
-  `adDetect()` / `getProvider()` / an in-IIFE `detectWallets()` survived.
-  (3) Rendered-page measurement reported "all clean" while report bodies built in JS template
-  strings were still at 10px — the page was measured IDLE, and these tools are renderers.
-  (4) A source scan for `font-size:` on a prose line reported zero remaining while CSS class
-  rules were still small — there the size is in the sheet and the sentence is in the markup.
-  **Rendered measurement and source scanning have COMPLEMENTARY blind spots — run both.** And
-  when a harness prints a status flag (`REPORT RENDERED: false`), read it before believing the
-  numbers under it: an autopsy that never ran silently re-measured the idle page.
-- 🎨 **TYPOGRAPHY — one system, don't reintroduce the drift (site-wide pass 2026-07-30).**
-  `var(--body)` (Chakra Petch) is the BODY font on every page; `var(--disp)` (Anton) is for
-  headings, chips, stat labels and buttons ONLY; `var(--mono)` is for data — addresses, amounts,
-  ledger lines. Anton is a single-weight poster face: setting 9–12px prose in it (or making it
-  the page's `body` font, which `wallet-checkup.html` did) is what made the tool pages read flat
-  and cheap next to the main page. Never write the literal `'Anton', sans-serif` or
-  `system-ui, sans-serif` in a page — use the tokens, so a change lands everywhere at once.
-- ⚠️ **Never redefine a theme token inside a page.** Eight tool pages each carried a private
-  `:root` that shadowed `theme.css`; they were removed 2026-07-29/30 and the legacy names they
-  used (`--accent`, `--subtext`, `--purple`, `--head`, …) are aliased ONCE at the bottom of
-  `theme.css`. A page-local `:root` also creates a live trap: aliasing Anton to `var(--disp)`
-  inside a page that itself defines `--disp` produces `--disp: var(--disp)`, a self-referential
-  custom property that CSS discards — silently dropping every heading to the inherited font.
-- **Disabled CTAs go NEUTRAL GREY, not dimmed orange.** A 35–45%-opacity orange→red gradient on
-  the dark ground reads as muddy brown, i.e. broken rather than inactive. Use
-  `background: rgba(255,255,255,.05); color: var(--muted); box-shadow: none;`.
-- 🧹 **SHARED BROWSER HELPERS LIVE IN `public/cluck-util.js` — don't re-type them
-  (consolidated 2026-07-30).** `CluckUtil.esc / rpc / shortAddr / fmt / copyText`. **`esc()`
-  had 23 hand-typed copies and FIVE of them (`buyspecial-dashboard`, `buyspecial-optin`,
-  `locker-room`, `stats`, `buycomp-admin`) used `/[&<>"]/g` — no single-quote escape.** They
-  were safe only because those spots happened to use double-quoted attributes, on pages that
-  render attacker-set token metadata (symbol/name/icon) — one single-quoted attribute from
-  live XSS. `rpc()` had 6 copies, one returning the raw JSON-RPC envelope instead of throwing
-  on `error`. Same load-order rule as cluck-wallet.js: the `<script src>` tag must precede
-  first use, since pages alias `const esc = CluckUtil.esc` at parse time.
-  ⚠️ **`market-header.js` keeps its OWN `esc()` on purpose** — it's a self-contained drop-in
-  that some pages load *without* cluck-util.js, so depending on it would couple two shared
-  modules. Its copy is the strict one; keep the two in sync.
-  ⚠️ **When auditing for duplicate helpers, grep EVERY declaration form** — `function esc(`,
-  `var esc = function`, `const esc = s =>`. A first pass that only matched `function esc(`
-  reported "zero copies left" while six survived, one of them the vulnerable
-  `buycomp-admin`. Also watch for a local variable shadowing a helper: `locker-room`'s
-  `showVerify()` declared `var esc = res.escrow`, masking the escaper for that whole
-  function body.
-- 👛 **WALLET CONNECT — ONE REGISTRY, `public/cluck-wallet.js` (consolidated 2026-07-30).**
-  Every page that connects a wallet reads `CluckWallet.WALLETS` (11 wallets: Phantom,
-  Solflare, Backpack, OKX, Coinbase, Trust, Glow, Exodus, Bitget, Brave, Jupiter) plus
-  `CluckWallet.available()/connect()/disconnect()`. **Do NOT add a private wallet list to
-  a page.** Seven pages each had their own copy and they drifted: Buy Special's gate ended
-  up detecting TWO wallets behind a bare `window.solana` fallback and the Locker Room
-  three, while five other pages found eleven — so a Backpack user got "no Solana wallet
-  found" on one tool and connected fine on the next. Adding a wallet is now one edit.
-  ⚠️ `public/` is not statically mounted — the file has an explicit `app.get` route in
-  server.js, and the `<script src="/cluck-wallet.js">` tag must come BEFORE the code that
-  reads it (pages alias `const WALLETS = CluckWallet.WALLETS` at parse time).
-- 🔌 **ANYWHERE A USER CAN CONNECT, THEY MUST BE ABLE TO DISCONNECT** (owner rule,
-  2026-07-30). Show WHICH wallet is connected (truncated address) and offer a disconnect
-  that calls the provider's own `disconnect()` *and* clears local state — the provider call
-  is best-effort (not all implement it), the local reset is mandatory. Without it, switching
-  wallets means clearing site data. Premium used to only forget the proof locally, so
-  reconnecting silently reused the same account; that's the failure mode to avoid.
-- ⛔ **NEVER call `solanaWeb3.SystemProgram.transfer()` (or any web3.js layout encoder) in a
-  browser page.** It encodes u64 through `toBufferLE()`, which needs the Node `Buffer`
-  global that browsers don't have — the call throws "Buffer is not defined" and we
-  deliberately ship no polyfill. This silently killed THREE money paths at once (Buy
-  Special's SOL unlock, the airdropper's SOL unlock, and SOL-denominated airdrop prizes)
-  and only surfaced when the owner clicked the button. Use
-  `splToken.createSolTransferInstruction(from, to, lamports)` in `public/airdrop-engine.js`,
-  which hand-builds the System Program instruction with `Uint8Array` — verified
-  byte-identical to web3.js across 1 / 5,000 / 50,000,000 / 2,039,280 / 1,234,567,890,123
-  lamports. The SPL instructions in that file are hand-built for the same reason. **If you
-  add a new instruction type, build it with `Uint8Array` + `DataView` and diff its bytes
-  against the library in Node before shipping.**
-- 🛡️ **PHANTOM "may be malicious" WARNING on client-signed txs — ROOT CAUSE + FIX (Phantom
-  Support, 2026-05; recurring, so it's recorded HERE in the committed memory now).** Phantom's
-  **Lighthouse** security system flags any **multi-signer** transaction when the signing order is
-  wrong: the **connected wallet MUST sign FIRST**, then any additional signers. If an ephemeral
-  co-signer (e.g. a `base`/mint keypair we generate server-side) is pre-signed BEFORE the wallet,
-  Phantom shows the scary "this transaction may be malicious" screen. **Correct pattern for ANY
-  page that builds a tx with an extra signer** (Jup Locker Room `/locker-room` is the reference
-  impl): build the tx UNSIGNED server-side, hand the client the ephemeral secret, then client-side
-  `const signed = await provider.signTransaction(tx)` (**wallet first**) → `signed.partialSign(base)`
-  (**extra signer after**) → submit the fully-signed raw tx via the `/api/helius-rpc` `sendTransaction`
-  proxy. Do **NOT** `partialSign(base)` on the server, and do **NOT** use `signAndSendTransaction`
-  when a non-wallet signer exists (it leaves the pre-signed base ahead of the wallet → warning).
-  Exposing the ephemeral base secret to the client is safe: it's a throwaway that only derives a PDA
-  and never holds funds/authority.
-- Tool pages are vanilla HTML + inline JS; the school is React. **Escape any API/token-
-  supplied string before `innerHTML`** — token names/symbols are attacker-controlled.
-- Forensic rule everywhere: **state what's on-chain, never assert intent** ("the chain
-  shows *what*, not *why*"). Only call a wallet "creator/team" when a launchpad API
-  (Bags/Pump) confirms it.
-- ⛔ **PAYMENT MODEL CHANGED 2026-07-30 — send-to-unlock is RETIRED (owner: "I want to remove
-  the send in token functions from our tools, it complicates things too much overall. Great
-  idea, wrong timing or application").** The old model was a unique-decimal CLKN transfer
-  (`500.xyz`, `5850.xyz`, …), matched on-chain and replay-guarded, with a 5× unlock stretch for
-  ≥2M holders read from the payment tx. Every door now resolves through the CONNECTED WALLET:
-  **hold** a threshold of CLKN (free), **pay SOL** in one click, or **sign a message** where the
-  gate is ownership rather than payment (premium forensics, transcript Tier-2 — both via
-  `/api/premium-verify-sig`; pass `minHold: 0` for ownership-only, which is what transcript uses
-  since a graduate may hold no CLKN). Ask Cluck's paid "20 more questions" door is gone entirely;
-  the free daily allowance is all there is. `/api/verify-clkn-payment` is deliberately still
-  LIVE but has no callers — someone on a cached page could have a send in flight — so don't
-  "wire it back up", and it can be deleted once enough time has passed. **Do NOT reintroduce a
-  send-to-unlock flow without the owner asking for it.**
-- **Telegram posts are SILENT by default — NEVER `&loud=1` unless the owner explicitly
-  says so in that moment.** (Owner rule, set 2026-06-10 after an unwanted ping.)
-- ⚠️ **A Telegram post carrying an IMAGE or VIDEO gets 1024 characters, not 4096.** A
-  caption over 1024 is **silently truncated by our own code** (`text.slice(0, 1024)` in
-  `/api/tg-test`, and `tgSendPhotoKb`) — the send returns `success:true`, Telegram never
-  errors, and whatever was at the END of the caption is simply gone. Text-only posts get
-  the full 4096. **So COUNT the caption before any `&photo=`/`&video=` send, and put the
-  load-bearing line — the "🐦 On X — like & repost: …" link, a CTA, a closing figure —
-  where truncation can't eat it, or trim the body until the whole thing fits.** Captions
-  send with `parse_mode: HTML`, so escape `&` as `&amp;` (`<` `>` likewise) or the line can
-  break. Recovery if it ships truncated: re-send the corrected caption with
-  `&replaceMsg=<oldId>` — that deletes the bad message after the new one lands, so the
-  community sees ONE post. (Set 2026-07-24 after the Buy Special rebuild announcement went
-  out at 1091 chars and lost its X link; verified fixed at 998.)
-- **Community-post accuracy:** the engine/Blitz trades happen on the TWO Orca pools —
-  CLKN/USDC `H1r9ut25xAU1B1AbZRhvSJjShd4Q3mtmysYHBisFES7H` and CLKN/SOL
-  `EL1ZDnuTE4J4LZJLP76VapFSDiM7Xt18ZsnzVeqNvaPr` — NOT the main Meteora pool
-  (`64WXkH…`, the canonical chart). Link the Orca pair pages when posting about
-  engine/Blitz activity. And don't claim superlatives ("tightest ever") without
-  checking history — ±0.2 Blitzes have been run.
 
-## Build / check
-- Run: `npm start` (= `node server.js`). React dev/build: `npm run dev` / `npm run build`.
-- After editing backend JS, sanity-check syntax: `node --check server.js` (and any lib you touched).
-- CI: `.github/workflows/syntax-check.yml` — the tripwires for the no-staging auto-deploy.
-  Each one exists because something got past the previous set, so don't remove them casually:
-  1. `node --check` on every backend entrypoint + `lib/*.js`.
-  2. `scripts/check-jsx-components.js` — fails on a capitalised JSX tag that is neither defined
-     nor imported. `<CalcErrorBoundary>` was referenced 12× and never written: legal JS, built
-     clean, and left every LP Lab lesson BLANK in production for a day.
-  3. `scripts/check-counts.js` — the landing advertised "12 CLASSES • 72 EXAMS" and "6 BEGINNER
-     LESSONS" when the truth was 70 and 7. Public counts now render from the arrays; this guard
-     verifies the one hand-mirrored constant (`LP_LESSONS_COUNT` in shared.jsx) and fails if any
-     headline regresses to a hardcoded digit.
-  4. `normie-quest/test/nq-geometry-check.cjs` — level jumpability + no floating fixtures.
-  5. **`scripts/smoke-test.js`** (its own job) — renders all 9 screens and all 33 lessons in
-     headless Chromium and fails on an uncaught error, a blank page, or a tripped error boundary.
-     Playwright is installed by the workflow with `--no-save` and is deliberately NOT in
-     package.json: Railway installs devDependencies to run the Vite build, and playwright's
-     postinstall would drag browser binaries into every production image.
-     ⚠️ It also fails if a curriculum renders fewer DISTINCT lesson screens than it has lessons —
-     that guard exists because the first version reported 12 green curriculum checks that were all
-     really the same unchanged select screen (locked tiles silently no-op when clicked).
-- Local: `node scripts/smoke-test.js --no-build` after a build. No unit-test suite beyond this.
+- **Typography:** `var(--body)` (Chakra Petch) for body copy, `var(--disp)` (Anton) for headings
+  and chips only, `var(--mono)` for data. **The type scale lives in `theme.css`** — prose 15px in
+  `--body-text`, small print floored at 12.5px. Change it there, once. Never write literal
+  `'Anton', sans-serif` or `system-ui` in a page.
+- **Never redefine a theme token inside a page.** A page-local `:root` shadows `theme.css`, and
+  aliasing a name to itself (`--disp: var(--disp)`) is discarded by CSS — silently dropping every
+  heading to the inherited font.
+- ⚠️ **CSS specificity compares class count before element selectors.** `html body .foo` (0-1-2)
+  LOSES to a page's `.card .foo` (0-2-0). Match the class depth; piling on `html body` never
+  helps. This bit twice in one day.
+- **Disabled CTAs go neutral grey**, not dimmed orange — a faded gradient on dark reads as broken
+  rather than inactive.
+- **Anywhere a user can connect a wallet, they must be able to disconnect** — show which wallet is
+  connected, call the provider's own `disconnect()` *and* clear local state.
+- Tool pages are vanilla HTML + inline JS; the school is React.
 
-## Deferred / check later
-- ✅ **PUBLIC COPY REWRITTEN FOR THE NEW PAYMENT MODEL — and the framing is the owner's,
-  keep it (2026-07-30).** Retiring send-to-unlock invalidated a load-bearing chunk of the
-  README/investors narrative: both argued that CLKN accrues demand *because using the tools
-  spends it* ("micropayments of a few cents", "the token is a key, not a vote", "every tool use
-  sends CLKN on-chain", and the whole **"Holder bonus, unforgeable"** section, which explained
-  reading your leftover balance out of the payment transaction). None of that is true now.
-  **The owner's call on how to tell it — use this framing, don't soften it:** *"we tried it,
-  wasn't used, we have the tech to set it back up at any time, but for now we are going to try
-  to make it simpler to see if that was the limiting step or not… we are adapting to try and
-  build the brand in any which way we can even if we have to admit our idea was wrong or too
-  early."* So both pages now say plainly that the no-wallet-connect send existed, worked exactly
-  as designed, and almost nobody used it — that copying an exact amount by hand turned out to be
-  MORE friction than the popup it avoided — that we don't yet know whether that was the limiting
-  step or whether the tools just need exposure, and that **the code and endpoint are still live**
-  so switching back is a small change, not a rebuild. New demand story: HOLDING is what earns the
-  free tier, read live on-chain at use time (premium re-reads it every run). The low 50K airdrop
-  tier is argued as a feature — a buyer who later sells still put two real trades on the chart,
-  which is the same organic two-way volume the LP structure exists to create.
-  ⚠️ **The Hatchery is now the ONLY place you can still PAY in CLKN, and it was deliberately
-  left alone** — it's an SPL transfer instruction inside the mint transaction the wallet already
-  signs, not a copy-the-amount-and-wait send, so it has none of the friction that got the others
-  retired. Live values (probe `/api/hatchery/config`, don't guess): **0.1 SOL or 11,600 CLKN
-  (~30% cheaper), free for 2M+ holders**. `HATCHERY_FEE_LAMPORTS` IS set on Railway — the code's
-  "unset = free beta" default is not what production is running.
-- 🔄 **Nomadz — REOPENED 2026-07-29: Ivan replied.** History: the owner DM'd Nomadz CEO Ivan on
-  2026-07-20 asking permission to feature Nomadz (Solana hotel booking) as a real-world-adoption
-  education section; no answer came, and on 2026-07-26 the owner called it dead. **On 2026-07-29 the
-  owner reported a reply from the CEO about putting up info on their Solana hotel-reservation site.**
-  That is exactly the "if Ivan reaches out unprompted, it's the owner's call to reopen" case, and the
-  owner has reopened it. ⚠️ **Still do NOT build or publish anything Nomadz-related until the owner
-  says what was actually agreed** — a reply is not yet a scope. Get the terms from him first (what
-  may be shown, whose wording, any linking/branding conditions), then treat it as an education
-  section, not an endorsement: the forensic rule still applies and we do not vouch for a third
-  party's product.
-- 🚫 **Solana Foundation — NOTHING HAS PANNED OUT (owner's call 2026-07-26).** None of the Solana
-  Foundation avenues have gone anywhere. Do not build work premised on Foundation support, and do
-  not propose new applications unless the owner raises it. ⚠️ The grant/investor pages still
-  describe the project as a Foundation-grant entry — that copy is now stale and should be reviewed
-  with the owner before the next accuracy pass, NOT silently rewritten (it is public-facing and the
-  hackathon framing may still be accurate).
-- **CoinGecko listing — REAPPLIED 2026-06-11 (awaiting decision).** Request ID
-  `CL1106260002`, submitted via partner.coingecko.com; CoinGecko said ~5 business days.
-  Public verification post is LIVE on X (@firechicken007):
-  `https://x.com/firechicken007/status/2064885046708683046` (contains the request ID +
-  GeckoTerminal URL — the anti-fraud step they require; no email reply needed, their team
-  finds the post). The confirmation email is no-reply. Already on GeckoTerminal as "Cluck
-  Norris (CLKN)". Application facts used (all verified on-chain): total supply 999,998,515,
-  circulating 808,589,941, ~191,408,574 (~19.14%) locked across 28 Jupiter Lock escrows,
-  mint+freeze renounced, ~2.5mo trading, 3 pools (Meteora 64WXkH… + Orca H1r9ut… USDC +
-  Orca EL1ZDnu… SOL). If CoinGecko replies with questions, answer from these. Prior
-  rejection reason was "need real volume + time in market" — both now satisfied.
-- **`/api/helius-rpc` is now a true allow-list** (default-deny). It permits only the
-  lightweight read + tx-build/send methods the client tools use (see `ALLOWED_RPC`
-  in the handler) and handles JSON-RPC batch bodies; everything else
-  (`getProgramAccounts*`, all `*Subscribe`, block/supply/cluster scans, etc.) is
-  rejected. Matches the README's "allow-listing" claim. If a tool ever needs a new
-  RPC method, add it to `ALLOWED_RPC` — a missing method returns 403.
-- ⛔ **SLOTS / THE COOP SPINNER — REMOVED (2026-07-29, owner: "we can remove the slots thing
-  completely we don't use it").** Gone: `public/slots.html`, the `/slots` route, all six
-  `/api/slots/*` endpoints, the ~283-line server engine (commit-reveal RNG, banded daily spins,
-  weekly wheel draw, Dr. Fire Chicken easter egg), the school's Slots button and the bot menu
-  link. The provably-fair commit-reveal work was real and correct — it just had no players.
-  Do NOT rebuild without an explicit ask.
-- **Autopsy `excludeSet` bug — FIXED (2026-06-20).** The Phase 2G‑bis sub‑distributor
-  filter in `lib/autopsy.js` referenced `excludeSet`, which was defined NOWHERE — so it
-  threw inside the phase's try/catch and silently disabled the team‑network multi‑hop
-  trace (that path had never run in production). Now defined as a Set of CEX wallets +
-  DEX/LP programs + token programs + labeled programs (lockers stay covered by
-  `traceLockerSet`). The phase still degrades gracefully (try/catch) if a sub-trace fails.
-  This ENABLED a previously‑dead path — spot‑check autopsy reports on a few mints after deploy.
-- **Autopsy premium styling — design decision (not yet made).** The premium
-  forensic sections render in a different color scheme that doesn't match the
-  site's dark/orange theme. Open question: leave it visually distinct so the
-  premium tier *stands out*, or restyle it on-brand for consistency? Decide
-  intentionally before touching it.
+---
+
+## Verification: check every form, not one form
+
+This cost a full day. Four times in one session a "done" was wrong because one spelling of a
+thing was checked and the whole class assumed clear:
+
+1. `function esc(` was migrated everywhere — six copies written `var esc = function` /
+   `const esc = s =>` survived, one carrying an XSS gap.
+2. Seven `const WALLETS = {` literals were consolidated — three more detectors named
+   `adDetect()`, `getProvider()` and an in-IIFE `detectWallets()` survived.
+3. Rendered-page measurement said "all clean" while text built in JS template strings was still
+   tiny — the pages were measured **idle**, and these tools are renderers.
+4. A source scan said "zero remaining" while CSS class rules were still small — there the size is
+   in the sheet and the sentence is in the markup.
+
+**Rendered measurement and source scanning have complementary blind spots. Run both.** Read a
+harness's own status flag before believing its numbers — an autopsy that never ran
+(`REPORT RENDERED: false`) silently re-measured the idle page and got reported as a result.
+
+An audit that finds "109 rules under 12.5px" is a **map of where a trap can recur, not a to-do
+list** — only two carried prose; the rest were labels doing their job.
+
+---
+
+## Secrets & environment
+
+The repo ships zero secrets; a fresh clone has none. They live in **Railway** (the app) and the
+Claude-web environment config. Names: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `HELIUS_API_KEY`,
+`BAGS_API_KEY`, `ANTHROPIC_API_KEY`, `SOLANA_TRACKER_API_KEY`, `SOLSCAN_API_KEY`,
+`PREMIUM_ACCESS_KEY`, `BUYCOMP_KEY`, the four `X_*` keys, the three `GOOGLE_*` keys,
+`HATCHERY_TURBO_KEY`, `HATCHERY_FEE_LAMPORTS`, `DATA_DIR`, `MM_OPERATOR_SECRET` (unset = the
+autonomous vault is fully off, a safe no-op — use a wallet holding only the MM float, never the
+treasury or a mint authority).
+
+Optional, all safe unset: `FALLBACK_RPC_URL`, `HELIUS_API_KEY_2`, `RPC_DEBUG`, `JUPITER_API_KEY`,
+and the ElevenLabs TTS set (`ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL`,
+`TTS_DAILY_CHAR_CAP`) — unset means read-aloud falls back to the free browser voice.
+
+**The school ships in SEVEN languages** — en / es / hi / it / pt / vi / zh. That's the number to
+quote in grant material. Translations live in `public/i18n/*.json` (+ `*.school.json`,
+`*.locker.json`); keep the count in sync when adding one.
+
+Persistence: a Railway volume at `/data` (consumed signatures, graduation tracker, scheduler
+timestamps, analytics, transcripts) survives redeploys.
+
+**The app's own Claude calls:** Sonnet paths use `claude-sonnet-5` and all pass
+`thinking: {type:"disabled"}` deliberately — don't remove it. On Sonnet 5, omitting it turns
+adaptive thinking on, and `max_tokens` caps thinking + answer together, which truncates
+short-form copy going out to X/Telegram. Haiku paths stay on `claude-haiku-4-5-20251001`. No
+`temperature`/`top_p`/prefills — all three 400 on Sonnet 5.
+
+---
+
+## Build & check
+
+- Run `npm start`. React: `npm run dev` / `npm run build`.
+- After editing backend JS: `node --check server.js`, plus any lib you touched.
+- CI (`.github/workflows/syntax-check.yml`) is the tripwire for a no-staging auto-deploy: syntax
+  check on every backend file, an undefined-JSX-component guard, a curriculum count-drift guard,
+  the Normie Quest geometry check, and a headless smoke test that renders every screen and lesson.
+  **Each exists because something got past the previous set — don't remove them casually.**
+- Cloud session recovery (containers reset mid-session):
+  `git fetch origin --prune && git reset --hard origin/<branch> && npm install`. GitHub is truth.
+
+---
+
+## Open decisions — the owner's call, not yours
+
+- **Buy Special lost its CLKN price.** Retiring send-to-unlock removed the 5,850-CLKN door priced
+  on 2026-07-24 to be ~25% cheaper than SOL. Paying in CLKN is no longer possible there, only
+  holding. That reversed a deliberate decision — re-raise it rather than assuming it's settled.
+- **Nomadz — reopened.** Their CEO replied about featuring their Solana hotel-booking product.
+  **Build nothing until the owner says what was agreed** — a reply is not a scope. Then treat it
+  as an education section, not an endorsement.
+- **Solana Foundation — nothing panned out** (2026-07-26). Don't build work premised on Foundation
+  support or propose new applications. The grant/investor pages still describe the project as a
+  Foundation entry; review that with the owner before the next accuracy pass.
+- **CoinGecko — CLOSED.** Rejected three times; the owner decided against reapplying. Don't
+  re-suggest it. The GeckoTerminal listing stays.
+- **Autopsy premium styling** — those sections render off-theme. Leave them visually distinct so
+  the tier stands out, or restyle on-brand? Decide deliberately before touching.
+- ⚠️ **Graduation is a pure client assertion**, and each new graduate spends treasury SOL on a
+  cNFT, bounded only by a rate limit and a daily cap. Worth gating before it's promoted anywhere.
+- **Never verified end-to-end:** no rendered autopsy report, no real lock, and no connect-and-sign
+  with a real wallet has ever been exercised by a session — they need keys a cloud container
+  doesn't have. They're also where the worst bugs have hidden.
+
+---
+
+## Removed — don't rebuild without an explicit ask
+
+The Ultimate Challenge and Survival Simulator (zero diplomas issued in their entire life, and the
+answer key was publicly readable), Cluck Score (gave good scores to tokens that then rugged), the
+Coop Spinner slots (nobody played), `/curriculum` (laid out every lesson and quiz question on one
+page), and Token Vitals. Git has them all.
