@@ -877,6 +877,23 @@ render the realized width, not the requested slider value. LOW backlog now fully
 - Local: `node scripts/smoke-test.js --no-build` after a build. No unit-test suite beyond this.
 
 ## Deferred / check later
+- ⚠️ **PUBLIC COPY IS NOW STALE ON THE PAYMENT MODEL — OWNER DECISION NEEDED, do NOT silently
+  rewrite (2026-07-30).** Retiring send-to-unlock invalidated a load-bearing chunk of the
+  investor/README narrative, not just a stat. Specifically wrong now:
+  `README.md` — the "micropayments of a few cents, verified on-chain" framing (L13, L184), the
+  tool price table ("100 CLKN — one session", L71), and the whole **"Holder bonus, unforgeable"**
+  section (L103), which explains that the server reads your leftover balance *out of the payment
+  transaction*. There is no payment transaction any more.
+  `public/investors.html` — L302 ("Every paid action is a unique-decimal CLKN micropayment
+  verified on-chain — no wallet connect to pay"), L444 ("the token is a key, not a vote… every
+  premium action is a CLKN micropayment that actually moves on-chain"), L447 (the full
+  holder-bonus-from-the-payment argument), L461 ("Every tool use sends CLKN on-chain… buy
+  pressure on CLKN to refill their wallets").
+  **This is a genuine tension, not just drift:** those pages argue that CLKN accrues demand
+  because using the tools SPENDS it. Under the new model the only CLKN mechanic left is HOLDING
+  a threshold — the SOL door is what actually gets paid. That is a real change to the token's
+  utility story and it's the owner's call how to pitch it, so leave the copy alone until he
+  decides. (Same handling as the stale Solana-Foundation framing below.)
 - 🔄 **Nomadz — REOPENED 2026-07-29: Ivan replied.** History: the owner DM'd Nomadz CEO Ivan on
   2026-07-20 asking permission to feature Nomadz (Solana hotel booking) as a real-world-adoption
   education section; no answer came, and on 2026-07-26 the owner called it dead. **On 2026-07-29 the
