@@ -305,7 +305,7 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   Express routers mounted by `server.js`.
 - `public/*.html` — standalone vanilla-HTML tool pages: wallet-xray, trace, token-holders,
   airdrop, buyspecial, rose, hatchery, security-coop, wallet-checkup, liquidity, premium,
-  slots, bags, tools, investors, stats, transcript, pool-monitor, plus the operator-only
+  bags, tools, investors, stats, transcript, pool-monitor, plus the operator-only
   autopsy, order-book and lp-scanner.
   🎨 **CONCIERGE CLEANED UP + REAL ICONS (2026-07-29, owner: "clean up the Cluck concierge",
   "those all look generic").** The homepage journey menu went from NINE routes to SIX — the four
@@ -753,7 +753,7 @@ Live money is managed across two systems. Facts here survive container resets/co
 A whole-codebase security review (2026-06-10) found **zero critical/theft-class bugs**. Sound &
 reviewed: payment/replay path (sigstore is atomic test-and-set + now fails CLOSED on a durability
 fault), RPC proxy (default-deny allow-list, no SSRF), exam/credentials (server-scored, single-use
-tokens), secrets/PII, auth (every fund/secret route key-gated, fail-closed, 404-not-401), slots,
+tokens), secrets/PII, auth (every fund/secret route key-gated, fail-closed, 404-not-401),
 buyback. All session-built liquidity findings were FIXED & shipped: re-center never strands funds
 (try/catch → meteoraReopenPending retry + DM), fee-bank durable across confirm-timeouts
 (meteoraFeePendingBank + reconcile), confirmSig tolerates RPC blips, in-process mutex on
@@ -869,20 +869,12 @@ render the realized width, not the requested slider value. LOW backlog now fully
   (`getProgramAccounts*`, all `*Subscribe`, block/supply/cluster scans, etc.) is
   rejected. Matches the README's "allow-listing" claim. If a tool ever needs a new
   RPC method, add it to `ALLOWED_RPC` — a missing method returns 403.
-- **Slots: provably-fair — DONE (both RNG paths).** Spins use commit‑reveal: the
-  server commits `sha256(serverSeed)` before each spin (`fairCommit` in `/state`,
-  `nextCommit` on every spin), derives the outcome from
-  `sha256(serverSeed:clientSeed:nonce)`, reveals the seed after, and rotates it
-  EVERY spin (a revealed seed must never predict a future spin). The weekly wheel
-  draw uses a per‑week committed seed (`weekFairCommit`, public in `/state` all
-  week) — wild‑card shuffle and winner pick both derive from it + the published
-  entrant composition, so the whole draw is recomputable from the draw record.
-  `Math.random()` is gone from every slots outcome path; real prizes are no
-  longer blocked on this. Odds remain published via `slotOdds()`.
-  Daily spins (banded 5/10/15/20 by balance) refresh at the next UTC midnight via
-  `slotDayEndsAt()`; the page shows a live "next free spins in …" countdown
-  (`spinsResetAt` is returned from `/api/slots/state`, the spin response, and the
-  `no_spins_left` 429). The points-week board reset is the separate `weekEndsAt`.
+- ⛔ **SLOTS / THE COOP SPINNER — REMOVED (2026-07-29, owner: "we can remove the slots thing
+  completely we don't use it").** Gone: `public/slots.html`, the `/slots` route, all six
+  `/api/slots/*` endpoints, the ~283-line server engine (commit-reveal RNG, banded daily spins,
+  weekly wheel draw, Dr. Fire Chicken easter egg), the school's Slots button and the bot menu
+  link. The provably-fair commit-reveal work was real and correct — it just had no players.
+  Do NOT rebuild without an explicit ask.
 - **Autopsy `excludeSet` bug — FIXED (2026-06-20).** The Phase 2G‑bis sub‑distributor
   filter in `lib/autopsy.js` referenced `excludeSet`, which was defined NOWHERE — so it
   threw inside the phase's try/catch and silently disabled the team‑network multi‑hop

@@ -1814,7 +1814,6 @@ function StartHere({ onGo }){
         <p style={txt}>Poke around — here's everything in one place.</p>
         <Act label="🛠 All tools" onClick={goIn("/tools")}/>
         <Act label="📖 The Library" onClick={()=>onGo("library")}/>
-        <Act label="🎰 Slots" onClick={goIn("/slots")}/>
         <Act label="🏫 The school" onClick={()=>onGo("landing")}/>
       </>)},
   ];
