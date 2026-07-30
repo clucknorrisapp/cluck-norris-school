@@ -54,11 +54,6 @@ a{color:var(--accent2)}
 .wbtn{flex:1 1 30%;min-width:90px;background:rgba(255,122,24,0.12);border:1px solid var(--border);border-radius:7px;padding:11px;color:var(--text);font-family:var(--mono);font-size:14px;cursor:pointer}
 .wbtn:hover{background:rgba(255,122,24,0.22)}
 .vbtn{width:100%;background:rgba(255,122,24,0.2);border:1px solid var(--border);border-radius:7px;padding:12px;color:#fff;font-family:var(--head);font-size:15px;font-weight:700;letter-spacing:1px;cursor:pointer;margin-top:4px}
-.copyfield{display:flex;align-items:center;gap:10px;background:rgba(0,0,0,0.35);border:1px solid var(--border);border-radius:7px;padding:12px;margin-bottom:6px;cursor:pointer;font-size:18px;color:var(--gold);line-height:1.4}
-.copyfield:hover{border-color:var(--accent)}
-.copyfield .cf-text{flex:1;word-break:break-all;min-width:0}
-.copyfield .copybtn{flex-shrink:0;background:rgba(255,122,24,0.25);border:1px solid var(--border);border-radius:6px;padding:7px 13px;font-size:13px;color:var(--accent2);font-family:var(--mono);white-space:nowrap}
-.copyfield .hint{font-size:11px;color:var(--dim);margin-left:6px}
 .vok{background:rgba(105,240,174,0.1);border:1px solid rgba(105,240,174,0.35);color:#86efac;border-radius:8px;padding:12px;margin-bottom:10px;font-size:15px}
 
 html{background:var(--bg-grad);background-attachment:fixed;}
@@ -88,21 +83,14 @@ body{background:transparent;font-family:var(--body);}
 
     <div id="verifyBox">
       <div class="cfg-label" style="margin-top:6px">Access — prove you hold 2,000,000+ CLKN</div>
-      <div id="verifyStatus" class="skip">Two ways to verify — both just <strong>prove the wallet is yours</strong>. Neither authorizes a transaction, moves tokens, or grants any spending permission.</div>
+      <div id="verifyStatus" class="skip">Verifying just <strong>proves the wallet is yours</strong>. It does not authorize a transaction, move tokens, or grant any spending permission.</div>
 
+      <!-- The old "send a few CLKN" door was retired 2026-07-30 (owner's call: the
+           manual-send flow complicated every gated tool for no real uptake). Connect
+           &amp; sign proves the same thing — that you hold the key — without moving a
+           token, so nothing is lost by dropping the send. -->
       <div class="vmethod">
-        <div class="vm-title">① Send a few CLKN <span style="color:var(--dim);font-weight:400">· no connect</span></div>
-        <div class="vm-sub">Send the exact amount below from the wallet you want to verify. Only its owner can send it, so the transfer proves it's yours — then we read its CLKN balance. The small amount is just the proof, not a fee for the data.</div>
-        <div id="sendRow" style="display:none">
-          <div class="copyfield" onclick="copyTxt(SEND_AMT,this)"><span class="cf-text"><span id="sendAmt">—</span> CLKN</span><span class="copybtn">📋 Copy</span></div>
-          <div class="copyfield" onclick="copyTxt(RECEIVE,this)"><span class="cf-text" id="recvAddr">—</span><span class="copybtn">📋 Copy</span></div>
-          <button class="vbtn" id="checkSendBtn" onclick="checkSend()">I've sent it — verify</button>
-        </div>
-        <button class="vbtn" id="startSendBtn" onclick="startSend()">Set up the send</button>
-      </div>
-
-      <div class="vmethod">
-        <div class="vm-title">② Connect &amp; sign <span style="color:var(--dim);font-weight:400">· no transaction</span></div>
+        <div class="vm-title">Connect &amp; sign <span style="color:var(--dim);font-weight:400">· no transaction</span></div>
         <div class="vm-sub">Connect your wallet and approve a <strong>signature</strong> on a one-line message. This is <strong>not</strong> a transaction: it moves no tokens, grants no spending approval, and leaves no lingering permission. It only proves you hold the key.</div>
         <div id="mobileConnect" style="display:none;margin-bottom:8px"></div>
         <div class="wallet-picker" id="walletPicker"></div>
@@ -123,8 +111,6 @@ body{background:transparent;font-family:var(--body);}
 
 <script>
 const $ = id => document.getElementById(id);
-const RECEIVE = '7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H'; // CLKN proof-send wallet
-let SEND_AMT = null;
 // A proof token (from either verify path) = our key. localStorage survives close.
 let PROOF = localStorage.getItem('clkn_premium_proof') || '';
 let PROOF_WALLET = localStorage.getItem('clkn_premium_proof_wallet') || '';
@@ -133,14 +119,6 @@ $('mint').value = new URLSearchParams(location.search).get('mint') || '';
 $('key').value = localStorage.getItem('clkn_premium_key') || '';
 
 function shortA(a){ return a ? a.slice(0,4)+'…'+a.slice(-4) : '—'; }
-function copyTxt(t, el){
-  const flash=()=>{ const b=el&&el.querySelector(".copybtn"); if(b){ const o=b.innerHTML; b.innerHTML="✓ Copied"; setTimeout(()=>{ b.innerHTML=o; },1500); } };
-  const fallback=()=>{ try{ const ta=document.createElement("textarea"); ta.value=t; ta.style.position="fixed"; ta.style.opacity="0"; document.body.appendChild(ta); ta.focus(); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); flash(); }catch(_){} };
-  try{
-    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(t).then(flash, fallback); }
-    else fallback();
-  }catch(_){ fallback(); }
-}
 function setVMsg(html, err){ $('verifyStatus').innerHTML = err ? '<span style="color:#fca5a5">'+html+'</span>' : html; }
 
 // Same 11 injected wallets as the airdropper / hatchery.
@@ -210,46 +188,7 @@ if(new URLSearchParams(location.search).get('embed')==='1'){
   window.addEventListener('load',postH); setTimeout(postH,400); setTimeout(postH,1200);
 }
 
-// ── Method ①: send a few CLKN (no connect) ──
-function startSend(){
-  SEND_AMT = (7 + Math.floor(Math.random()*1000)/1000).toFixed(3); // 7.xyz — unique, matchable
-  $('sendAmt').textContent = SEND_AMT;
-  $('recvAddr').textContent = RECEIVE;
-  $('sendRow').style.display='block';
-  $('startSendBtn').style.display='none';
-  setVMsg('Send exactly <b>'+SEND_AMT+' CLKN</b> to the address shown, then tap “I’ve sent it”.');
-}
-// Auto-polls the chain for up to 2 min after the user taps verify — no need to
-// re-click while the transfer confirms/indexes (mirrors the other gated tools).
-let sendPolling = false;
-async function checkSend(){
-  if(!SEND_AMT || sendPolling) return;
-  sendPolling = true;
-  const btn = $('checkSendBtn');
-  const start = Date.now(), MAX_MS = 120000, INTERVAL = 5000;
-  const reset = () => { sendPolling = false; btn.disabled = false; btn.innerHTML = "I've sent it — verify"; };
-  const waiting = () => {
-    const s = Math.floor((Date.now() - start) / 1000);
-    btn.disabled = true; btn.innerHTML = '⏳ Waiting to validate… ' + s + 's';
-    setVMsg('Watching the chain for your <b>' + SEND_AMT + ' CLKN</b> payment — this can take a few seconds to confirm. No need to tap again.');
-  };
-  waiting();
-  const poll = async () => {
-    try{
-      const r = await fetch('/api/verify-clkn-payment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({unlockAmount:parseFloat(SEND_AMT),tool:'premium'})});
-      const d = await r.json();
-      if(d.success && d.premiumProof){ reset(); markVerified(d.senderWallet, d.senderBalance, d.premiumProof); return; }
-      if(d.success && d.premiumNote && d.premiumNote.insufficient){ reset(); setVMsg('That wallet holds ' + Math.round(d.premiumNote.balance||0).toLocaleString() + ' CLKN — beta needs 2,000,000+.', true); return; }
-      // anything else = "not found yet" → keep waiting
-    }catch(_){}
-    if(Date.now() - start > MAX_MS){ reset(); setVMsg("Couldn't find your " + SEND_AMT + " CLKN after 2 minutes. Make sure you sent the EXACT amount to the address above, then tap verify again.", true); return; }
-    waiting();
-    setTimeout(poll, INTERVAL);
-  };
-  poll();
-}
-
-// ── Method ②: connect + sign (no transaction) ──
+// ── Verify: connect + sign (no transaction) ──
 async function connectAndSign(id){
   const w = WALLETS[id]; const provider = w && w.detect();
   if(!provider){ setVMsg(w.name+' not detected — install it, or use the send method above.', true); return; }

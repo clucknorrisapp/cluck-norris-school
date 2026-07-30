@@ -2643,8 +2643,9 @@ const PREMIUM_HOLDER_THRESHOLD = 2_000_000;
 // Access requires PROVING you own a wallet (not just pasting an address, which
 // anyone could copy off the holders list). Two proof paths, both convert into a
 // short-lived signed token bound to the proven wallet:
-//   • send-7 path  → the on-chain send proves ownership (verify-clkn-payment)
 //   • connect path → signMessage signature, verified here (no tx, no approval)
+// (A second path — send 7 CLKN and let the transfer prove it — was retired
+//  2026-07-30 with the rest of the send-to-unlock flows.)
 // The token is an HMAC over {wallet, exp} keyed by PREMIUM_ACCESS_KEY, so it
 // can't be forged. The heavy run RE-checks the live CLKN balance every time, so
 // access always reflects current holdings.
@@ -7784,10 +7785,12 @@ app.get("/api/school-stats", (req, res) => {
   return res.status(200).json({ success: true, ...st });
 });
 
-// -- Credential Tier-2: prove the transcript's wallet is yours (no WalletConnect) --
-// Client sends a tiny CLKN amount (tool=ownership) → verify-clkn-payment hands
-// back a proof token encoding the sender wallet → posted here. We mark ownership
-// verified only when the proven wallet matches the transcript's wallet.
+// -- Credential Tier-2: prove the transcript's wallet is yours --
+// The client connects the wallet and signs a one-line message; /api/premium-verify-sig
+// verifies the signature and hands back a proof token encoding the proven wallet,
+// which is posted here. We mark ownership verified only when that wallet matches the
+// transcript's. It asks for minHold:0 — a graduate may hold no CLKN, and the point is
+// ownership, not holdings. (Before 2026-07-30 the proof came from a tiny CLKN send.)
 app.post("/api/credential/verify-ownership", (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   const { id, proof } = req.body || {};
@@ -8304,28 +8307,29 @@ app.get("/api/whale-watch", async (req, res) => {
   });
 });
 
+// ⛔ RETIRED 2026-07-30 — NO CLIENT CALLS THIS ANY MORE (owner's call: "remove the
+// send-in-token functions from our tools, it complicates things too much"). Every
+// door that used to mint a unique CLKN decimal and wait for the send now resolves
+// through the connected wallet instead:
+//   • airdrop     → hold 50,000 CLKN, or pay 0.05 SOL      (public/airdrop.html)
+//   • buyspecial  → hold 2,000,000 CLKN, or pay 0.05 SOL   (public/buyspecial-pro.html)
+//   • premium     → connect & sign                          (public/premium.html)
+//   • ownership   → connect & sign, minHold:0               (public/transcript.html)
+//   • ai          → gone; Ask Cluck keeps its free daily allowance (src/shared.jsx)
+// The ENDPOINT is deliberately still live rather than deleted: a user on a cached
+// page could have sent CLKN before the change shipped, and stranding a real payment
+// to save some dead code is a bad trade. Nothing links here — delete it once enough
+// time has passed that no in-flight send can exist.
+//
 // Tool → cost (CLKN, base before the unique decimal) + what gets granted.
 // The base must be unique per tool so a user can't pay a 100-CLKN "airdrop" amount
 // and reuse the verification to unlock a 500-CLKN tool. Math.floor(amount) checks this.
-// Note: `holders` is intentionally NOT in this table — the /holders deep-view tool
-// is kept internal (URL accessible but unadvertised) for the project team's own use.
-// If we ever expose it publicly again, just add holders here and uncomment the gate
-// wiring in public/holders.html.
 const TOOL_GRANTS = {
   ai:         { cost: 500, grants: { questions: 20 } },
   airdrop:    { cost: 100, grants: { sessions: 1 } },
-  // 5,850 CLKN ≈ $2.77 at $0.00047/CLKN — deliberately ~25% cheaper than the
-  // 0.05 SOL (~$3.69) wallet-connect price, so paying in CLKN is the better deal.
-  // Fixed CLKN, so re-check the ratio when the price moves materially.
   buyspecial: { cost: 5850, grants: { hoursOfAccess: 168 } },
   rose:       { cost: 500, grants: { hoursOfAccess: 168 } },
-  // Premium forensics: the 7-CLKN send is an OWNERSHIP PROOF, not a purchase —
-  // it proves the sender controls the wallet so we can gate on its balance. On
-  // a match we hand back a proof token (see verify-clkn-payment response).
   premium:    { cost: 7,   grants: {} },
-  // Credential Tier-2: a tiny send that proves the sender owns the wallet on
-  // their transcript. No holder gate — issues a plain ownership proof. Safe
-  // because autopsy-premium still re-checks the live 2M balance at runtime.
   ownership:  { cost: 1,   grants: {} },
 };
 
@@ -8541,8 +8545,15 @@ app.post("/api/premium-verify-sig", rateLimit("pay", { windowMs: 60000, max: 30 
   // lower issuance floor (e.g. the Coop Spinner needs 500k, not 2M) WITHOUT
   // weakening premium: a sub-2M wallet that gets a proof here still can't run
   // premium forensics. Floor is clamped to ≤ 2M so this can never raise the bar.
+  // minHold === 0 is an EXPLICIT "ownership only, no holder gate" request — used
+  // by transcript Tier-2, where the point is proving the wallet on the transcript
+  // belongs to you and a graduate may hold no CLKN at all. It cannot weaken
+  // premium for the same reason a low floor can't: premium re-checks the live 2M
+  // balance when the trace actually runs, so a 0-balance wallet with a proof still
+  // gets nothing from it. Anything else clamps to ≤ 2M, so the bar can never rise.
   const reqFloor = Number((req.body || {}).minHold);
-  const floor = Number.isFinite(reqFloor) && reqFloor > 0 ? Math.min(reqFloor, PREMIUM_HOLDER_THRESHOLD) : PREMIUM_HOLDER_THRESHOLD;
+  const floor = reqFloor === 0 ? 0
+    : (Number.isFinite(reqFloor) && reqFloor > 0 ? Math.min(reqFloor, PREMIUM_HOLDER_THRESHOLD) : PREMIUM_HOLDER_THRESHOLD);
   let balance = null;
   try { balance = (await checkCLKNHolder(wallet)).balance; } catch (_) {}
   if (balance != null && balance < floor) {

@@ -14,7 +14,7 @@
 <style>
   /* palette comes from theme.css — the private :root that used to shadow it was removed 2026-07-29 */
   *{box-sizing:border-box;margin:0;padding:0;}
-  body{background:radial-gradient(1100px 560px at 50% -220px,rgba(255,122,24,.16),transparent 68%),radial-gradient(700px 400px at 90% 10%,rgba(18,201,139,.08),transparent 60%),var(--bg);background-attachment:fixed;color:var(--text);font-family:'Chakra Petch',system-ui,sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased;}
+  body{background:radial-gradient(1100px 560px at 50% -220px,rgba(255,122,24,.16),transparent 68%),radial-gradient(700px 400px at 90% 10%,rgba(18,201,139,.08),transparent 60%),var(--bg);background-attachment:fixed;color:var(--text);font-family:var(--body);min-height:100vh;-webkit-font-smoothing:antialiased;}
   .wrap{max-width:960px;margin:0 auto;padding:18px 16px 110px;}
   a.back{display:inline-flex;align-items:center;gap:6px;font-family:var(--disp);font-size:12px;font-weight:700;letter-spacing:2px;color:var(--gold);text-decoration:none;margin-bottom:14px;opacity:.85;}
   a.back:hover{opacity:1;}
@@ -63,12 +63,6 @@
   .gate{background:linear-gradient(180deg,rgba(255,122,24,.12),rgba(23,24,30,.9));border:1px solid rgba(255,182,39,.5);border-radius:16px;padding:26px 22px;margin-bottom:16px;box-shadow:0 8px 30px rgba(255,122,24,.14);}
   .gate h2{font-family:var(--disp);font-size:24px;letter-spacing:2px;background:linear-gradient(92deg,#FFE08A,#FF7A18);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;text-align:center;margin-bottom:4px;}
   .gate .sub{font-family:var(--disp);font-size:11px;color:var(--sub);text-align:center;letter-spacing:3px;margin-bottom:18px;}
-  .gcard{background:rgba(0,0,0,.42);border:1px solid rgba(255,182,39,.4);border-radius:12px;padding:16px;text-align:center;margin-bottom:11px;cursor:pointer;transition:border-color .12s;}
-  .gcard:hover{border-color:var(--gold);}
-  .gcard .lbl{font-family:var(--disp);font-size:10px;color:var(--sub);letter-spacing:2px;margin-bottom:6px;}
-  .gcard .val{font-family:var(--mono);font-size:26px;font-weight:700;color:var(--gold);word-break:break-all;}
-  .gcard .val.sm{font-size:15px;}
-  .gcard .hint{font-family:var(--disp);font-size:9px;letter-spacing:1px;margin-top:6px;color:var(--orange);}
   .gblurb{font-family:var(--disp);font-size:12px;color:var(--sub);text-align:center;line-height:1.8;margin-bottom:14px;letter-spacing:1px;}
   .gstatus{font-family:var(--mono);font-size:12px;color:var(--sub);text-align:center;padding:12px;background:rgba(0,0,0,.3);border:1px solid var(--border2);border-radius:10px;}
   .gstatus.ok{background:rgba(18,201,139,.12);border-color:rgba(18,201,139,.45);color:var(--green2);font-weight:700;}
@@ -88,16 +82,12 @@
     <div class="sub">UNLOCK TO RUN COMPETITIONS</div>
 
     <button class="btn" id="gConnect" style="width:100%">🔗 CONNECT WALLET</button>
-    <div class="gblurb" style="margin:10px 0 0">Hold <b style="color:var(--gold)">≥ 2,000,000 CLKN</b> → unlock <b>FREE</b>. No CLKN? Pay a little SOL instead — no send-and-wait.</div>
+    <div class="gblurb" style="margin:10px 0 0">Hold <b style="color:var(--gold)">≥ 2,000,000 CLKN</b> → unlock <b>FREE</b> for 35 days. No CLKN? Pay a little SOL instead — one click, nothing to send by hand.</div>
     <div class="gstatus hidden" id="gWalletStatus" style="margin-top:10px"></div>
     <button class="btn a hidden" id="gPaySol" style="width:100%;margin-top:10px">◎ PAY 0.05 SOL — UNLOCK 7 DAYS</button>
-
-    <div style="text-align:center;font-family:var(--disp);font-size:11px;color:var(--muted);margin:18px 0 12px;letter-spacing:3px">— OR SEND CLKN MANUALLY —</div>
-
-    <div class="gcard" onclick="copyAmt()"><div class="lbl">SEND EXACTLY</div><div class="val" id="gAmt">—</div><div class="hint" id="gAmtHint">TAP TO COPY</div></div>
-    <div class="gcard" onclick="copyWallet()"><div class="lbl">TO THIS WALLET</div><div class="val sm">7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H</div><div class="hint" id="gWalHint">TAP TO COPY</div></div>
-    <div class="gblurb"><b style="color:var(--gold)">5,850 CLKN ≈ $2.77</b> — ~25% cheaper than the SOL price · 7 days · hold ≥ 2M CLKN after sending → 35 days</div>
-    <div class="gstatus" id="gStatus">Watching for your payment…</div>
+    <!-- The manual "send exactly 5,850.xyz CLKN" door was retired 2026-07-30
+         (owner's call — the send-and-wait flow complicated every gated tool for no
+         real uptake). Both remaining doors resolve through the connected wallet. -->
   </div>
 
   <div id="tool" class="hidden">
@@ -525,31 +515,15 @@ function copy(text,btn,label){ const done=()=>{ btn.textContent='✓ COPIED'; se
   navigator.clipboard.writeText(text).then(done,()=>{ const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');done();}catch(e){} document.body.removeChild(ta); }); }
 
 const UNLOCK_KEY='clkn_buyspecial_unlock', OP_FLAG='clkn_buyspecial_operator';
-const DUR=7*24*60*60*1000, PRICE=5850, RECV='7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H';
-let pendingAmt=null, pollT=null, pollStart=0;
+const DUR=7*24*60*60*1000, RECV='7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H';
 function isUnlocked(){ if(localStorage.getItem(OP_FLAG)==='1') return true; try{ const d=JSON.parse(localStorage.getItem(UNLOCK_KEY)||'null'); return !!(d&&d.expiresAt>Date.now()); }catch(e){ return false; } }
 function showTool(){ $('gate').classList.add('hidden'); $('tool').classList.remove('hidden'); }
-function showGate(){ $('gate').classList.remove('hidden'); $('gate').scrollIntoView({behavior:'smooth',block:'center'}); if(!pendingAmt) startPoll(); }
-function copyAmt(){ if(pendingAmt){ copyRaw(pendingAmt.toFixed(3)); flash('gAmtHint'); } }
-function copyWallet(){ copyRaw(RECV); flash('gWalHint'); }
-function copyRaw(t){ try{navigator.clipboard.writeText(t);}catch(e){} }
-function flash(id){ const e=$(id); const o=e.textContent; e.textContent='✓ COPIED'; setTimeout(()=>e.textContent=o,1200); }
-function startPoll(){
-  pendingAmt=parseFloat(PRICE+'.'+String(Math.floor(Math.random()*1000)).padStart(3,'0'));
-  $('gAmt').textContent=pendingAmt.toFixed(3); $('gStatus').textContent='Watching for your payment…';
-  pollStart=Date.now(); if(pollT)clearInterval(pollT); poll(); pollT=setInterval(()=>{ if(Date.now()-pollStart>120000){ clearInterval(pollT); $('gStatus').textContent="Haven't seen it in 2 min — tap the amount to re-copy and retry."; return; } poll(); },3000);
-}
-async function poll(){
-  if(!pendingAmt) return;
-  try{ const r=await fetch('/api/verify-clkn-payment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({unlockAmount:pendingAmt,tool:'buyspecial'})}); const d=await r.json();
-    if(d.success){ const stretch=d.holderBonus?5:1; localStorage.setItem(UNLOCK_KEY,JSON.stringify({unlockedAt:Date.now(),expiresAt:Date.now()+DUR*stretch})); clearInterval(pollT);
-      $('gStatus').className='gstatus ok'; $('gStatus').textContent=d.holderBonus?'✓ VERIFIED · 5× HOLDER BONUS · 35 DAYS':'✓ VERIFIED · 7 DAYS UNLOCKED'; setTimeout(showTool,1200); } }catch(e){}
-}
-// ── Wallet-connect unlock: FREE for 2M+ CLKN holders, or pay a little SOL (no CLKN send) ──
-// 2M CLKN holders unlock FREE. Everyone else: 0.05 SOL (~$3.69) via wallet-connect,
-// or 5,850 CLKN (~$2.77 — ~25% cheaper, PRICE above) sent manually. Keep the two in
-// step: the CLKN price is meant to stay the better deal. Server enforces both
-// (TOOL_GRANTS.buyspecial.cost + SOL_UNLOCK_MIN_LAMPORTS in server.js).
+function showGate(){ $('gate').classList.remove('hidden'); $('gate').scrollIntoView({behavior:'smooth',block:'center'}); }
+// ── Wallet-connect unlock: FREE for 2M+ CLKN holders, else pay a little SOL ──
+// The third door — send exactly 5,850.xyz CLKN by hand and wait for the chain —
+// was retired 2026-07-30 (owner's call). Both remaining doors resolve through the
+// connected wallet, so there is nothing to copy, send, or wait for.
+// Server still enforces the SOL price (SOL_UNLOCK_MIN_LAMPORTS in server.js).
 const HOLDER_MIN=2000000, SOL_LAMPORTS=50000000;
 let wProvider=null, wPubkey=null;
 function rpcCall(method,params){ return fetch('/api/helius-rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})}).then(r=>r.json()).then(d=>{ if(d.error) throw new Error(d.error.message); return d.result; }); }

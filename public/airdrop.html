@@ -352,9 +352,6 @@
       <span class="pulse"></span>
       <span id="unlockStatusText">Tick the box above to continue.</span>
     </div>
-    <button class="unlock-restart-btn" id="unlockRestart" onclick="restartPolling()" style="display:none">
-      &#8635; CHECK AGAIN
-    </button>
 
     <!-- Stay-safe panel — small but persistent. Sets expectations about what we
          do and don't do so users have a checklist for spotting clones / drainers. -->
@@ -1281,12 +1278,13 @@ function copyRecordText() {
   }
 }
 
-// ── 🔒 CLKN Unlock Gate ──────────────────────────────────────────────────────
-// Same payment model as the AI tutor unlock — generate a unique decimal,
-// poll /api/verify-clkn-payment with tool='airdrop', reveal the tool on success.
+// ── 🔒 Unlock Gate ───────────────────────────────────────────────────────────
+// Two doors, both resolved through the connected wallet: hold 50,000 CLKN, or pay
+// 0.05 SOL. The old third door — mint a unique 100.xyz decimal, poll
+// /api/verify-clkn-payment until the send landed — was retired 2026-07-30 along
+// with the rest of the send-to-unlock flows; its machinery went with it.
 // State lives in localStorage so the unlock survives closing the tab or the browser.
 const UNLOCK_KEY = 'clkn_airdrop_unlock';
-const UNLOCK_PENDING_KEY = 'clkn_airdrop_pending_amount';
 // Access model (owner, 2026-07-29): hold 50,000 CLKN -> free, or pay 0.05 SOL. The old
 // door was a manual 100-CLKN send — $0.045 at spot, and awkward on a tool that already
 // needs a connected wallet. 50K is deliberately low: the owner's read is that even a
@@ -1301,16 +1299,8 @@ const HOLD_DAYS = 35, PAY_DAYS = 7;           // holders get the long window, pa
 // an RPC blips — and re-running is normal; charging again for the retry would be hostile on
 // a tool whose whole pitch is that we're not the ones scamming you.
 const UNLOCK_DURATION_MS = 24 * 60 * 60 * 1000;
-const AIRDROP_PRICE = 100;   // vestigial: the CLKN-send door is retired, kept so old stored unlocks still parse
 const RECEIVE_WALLET_FOR_UNLOCK = '7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H';
-// Match the AI flow: poll at 3s for 2 minutes, then stop. A "CHECK AGAIN" button
-// in the gate restarts the budget. Stops idle visitors from burning Helius quota.
-const POLL_INTERVAL_MS = 3000;
-const POLL_BUDGET_MS = 2 * 60 * 1000;
 
-let pendingUnlockAmount = null;
-let unlockPollInterval = null;
-let pollStartedAt = null;
 let countdownInterval = null;
 
 // The unlock is kept in localStorage, not sessionStorage, so it survives
@@ -1344,11 +1334,6 @@ function getActiveUnlock() {
   } catch(e) { return null; }
 }
 
-function generateUnlockAmount(baseCost) {
-  const decimal = Math.floor(Math.random() * 1000);
-  return parseFloat(`${baseCost}.${String(decimal).padStart(3, '0')}`);
-}
-
 function showGate() {
   document.getElementById('unlockGate').style.display = 'block';
   document.getElementById('airdropTool').style.display = 'none';
@@ -1359,78 +1344,12 @@ function hideGate() {
   document.getElementById('airdropTool').style.display = 'block';
 }
 
-// copyUnlockAmount()/copyUnlockWallet() are gone with the manual-send door — their
-// amount and wallet cards no longer exist in the DOM. Kept as no-ops only because the
-// retired markup used to call them inline; nothing reaches them now.
-function copyUnlockAmount() {}
-function copyUnlockWallet() {}
-
 function setGateStatus(state, text) {
   const statusEl = document.getElementById('unlockStatus');
   statusEl.classList.remove('success', 'idle');
   if (state === 'success') statusEl.classList.add('success');
   if (state === 'idle') statusEl.classList.add('idle');
   document.getElementById('unlockStatusText').textContent = text;
-}
-
-function startPolling() {
-  pollStartedAt = Date.now();
-  document.getElementById('unlockRestart').style.display = 'none';
-  setGateStatus('watching', 'Watching for your payment…');
-  pollUnlock();
-  if (unlockPollInterval) clearInterval(unlockPollInterval);
-  unlockPollInterval = setInterval(() => {
-    if (Date.now() - pollStartedAt > POLL_BUDGET_MS) {
-      stopPolling();
-      return;
-    }
-    pollUnlock();
-  }, POLL_INTERVAL_MS);
-}
-
-function stopPolling() {
-  if (unlockPollInterval) {
-    clearInterval(unlockPollInterval);
-    unlockPollInterval = null;
-  }
-  pollStartedAt = null;
-  setGateStatus('idle', "Haven't seen your payment in 2 minutes — slow wallets are normal.");
-  document.getElementById('unlockRestart').style.display = 'block';
-}
-
-function restartPolling() {
-  startPolling();
-}
-
-async function pollUnlock() {
-  if (!pendingUnlockAmount) return;
-  try {
-    const res = await fetch('/api/verify-clkn-payment', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ unlockAmount: pendingUnlockAmount, tool: 'airdrop' })
-    });
-    const data = await res.json();
-    if (data.success) {
-      const stretch = data.holderBonus ? 5 : 1;
-      const unlockData = {
-        unlockedAt: Date.now(),
-        expiresAt: Date.now() + UNLOCK_DURATION_MS * stretch,
-        senderWallet: data.senderWallet,
-        senderBalance: data.senderBalance,
-        holderBonus: data.holderBonus
-      };
-      unlockStore.set(UNLOCK_KEY, JSON.stringify(unlockData));
-      unlockStore.remove(UNLOCK_PENDING_KEY);
-      if (unlockPollInterval) { clearInterval(unlockPollInterval); unlockPollInterval = null; }
-      setGateStatus('success', data.holderBonus
-        ? '✓ PAYMENT VERIFIED · 5× HOLDER BONUS · 5 HOURS UNLOCKED'
-        : '✓ PAYMENT VERIFIED · 1 HOUR UNLOCKED');
-      setTimeout(() => { hideGate(); showUnlockBanner(unlockData); }, 1800);
-    }
-  } catch(e) {
-    // Network blip — let the next interval retry
-  }
 }
 
 // Sticky countdown banner shown the whole time the tool is unlocked.
@@ -1452,8 +1371,6 @@ function showUnlockBanner(unlockData) {
       countdownInterval = null;
       banner.style.display = 'none';
       unlockStore.remove(UNLOCK_KEY);
-      unlockStore.remove(UNLOCK_PENDING_KEY);
-      pendingUnlockAmount = null;
       initUnlockGate();
       return;
     }
@@ -1484,15 +1401,9 @@ function toggleAirdropLearn() {
 function onAckChange() {
   const checked = document.getElementById('ackBox').checked;
   document.getElementById('unlockPaymentArea').style.display = checked ? 'block' : 'none';
-  if (checked) {
-    // User opted in — make sure polling is running so payment is detected.
-    if (!unlockPollInterval) startPolling();
-  } else {
-    // Stop polling if they uncheck — no point burning RPC while they re-read.
-    if (unlockPollInterval) { clearInterval(unlockPollInterval); unlockPollInterval = null; }
-    setGateStatus('idle', 'Acknowledge the safety notes above to start watching for payment.');
-    document.getElementById('unlockRestart').style.display = 'none';
-  }
+  setGateStatus('idle', checked
+    ? 'Connect your wallet below to unlock.'
+    : 'Acknowledge the safety notes above to continue.');
 }
 
 function initUnlockGate() {
@@ -1520,21 +1431,9 @@ function initUnlockGate() {
     showUnlockBanner(active);
     return;
   }
-  // Either reuse a pending amount (so refresh doesn't generate a new one and
-  // orphan a payment in flight) or mint a fresh one.
-  const stored = unlockStore.get(UNLOCK_PENDING_KEY);
-  if (stored) {
-    const n = parseFloat(stored);
-    if (Number.isFinite(n) && Math.floor(n) === AIRDROP_PRICE) pendingUnlockAmount = n;
-  }
-  if (!pendingUnlockAmount) {
-    pendingUnlockAmount = generateUnlockAmount(AIRDROP_PRICE);
-    unlockStore.set(UNLOCK_PENDING_KEY, pendingUnlockAmount.toString());
-  }
   showGate();
-  // Nothing is polled any more — both doors resolve through the connected wallet.
+  // Nothing is polled — both doors resolve through the connected wallet.
   setGateStatus('idle', 'Read the safety notes and tick the box to continue.');
-  document.getElementById('unlockRestart').style.display = 'none';
 }
 
 // Run as soon as this script parses — DOM elements are above this script in the doc.
