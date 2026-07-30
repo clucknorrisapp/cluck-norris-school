@@ -10,7 +10,7 @@
 
 **A free crypto school for Solana, wrapped around free research tools and a handful of paid operator tools — funded by a token that does real work instead of begging you to buy it.**
 
-Everything that teaches is free. No signup, no wallet connect to learn, no subscription. The token pays for the tools that actually cost money to run, in micropayments of a few cents, verified on-chain.
+Everything that teaches is free. No signup, no wallet connect to learn, no subscription. The paid tools are the handful that actually cost money to run — and they are free outright if you hold CLKN.
 
 Live at **[clucknorris.app](https://clucknorris.app)**.
 
@@ -64,16 +64,23 @@ The forensic rule holds across all of them: **the chain shows what happened, nev
 
 ## 💎 Paid tools
 
-CLKN micropayments. No subscriptions, no accounts.
+Hold CLKN and they're free. Don't, and there's a small one-click SOL price. No
+subscriptions, no accounts.
 
 | Tool | Cost |
 |---|---|
-| 💰 **Batch airdrop sender** | **100 CLKN** — one session, any batch size |
-| 🤖 **Extra AI tutoring** | **500 CLKN** — 20 additional questions |
-| 🎯 **[Buy Special](https://clucknorris.app/buyspecial)** — buy-competition engine | **Free for 2M+ CLKN holders** · else **5,850 CLKN** (~$2.77) or **0.05 SOL** (~$3.69) |
-| 🔬 **[Premium Forensics](https://clucknorris.app/premium)** | Holder-gated on a live 2M CLKN balance |
+| 💰 **[Batch airdrop sender](https://clucknorris.app/airdrop)** | **Free** holding 50,000 CLKN (35 days) · else **0.05 SOL** (7 days) |
+| 🎯 **[Buy Special](https://clucknorris.app/buyspecial)** — buy-competition engine | **Free** holding 2,000,000 CLKN (35 days) · else **0.05 SOL** (7 days) |
+| 🔬 **[Premium Forensics](https://clucknorris.app/premium)** | Holder-gated on a live 2,000,000 CLKN balance |
+| 🥚 **[The Hatchery](https://clucknorris.app/hatchery)** — guided token creator | **0.1 SOL**, or **11,600 CLKN** (~30% cheaper) · free for 2M+ holders |
 
-Paying in CLKN is deliberately **~25% cheaper** than paying in SOL — the project's own token should be the better door.
+The Hatchery is the one place you can still *pay* in CLKN, and it's deliberately ~30%
+cheaper than the SOL price. It isn't a manual send: the CLKN transfer is an instruction
+inside the same mint transaction your wallet already signs, so there's nothing to copy
+and nothing to wait for.
+
+Extra AI tutoring used to be a paid unlock too. It isn't any more — Ask Cluck has a
+free daily allowance and that's the whole offer.
 
 **Buy Special** runs a full contest cycle: it discovers pools **on-chain** (a token's own AMM vaults, so it never goes blind when an indexer hasn't listed something), pays on what each wallet **actually bought in the window** rather than its balance, disqualifies wallets that sold inside the window, and traces one hop to whoever still holds when a buyer moved their tokens. Winners hand off to the airdropper in one click. It has moved real money.
 
@@ -90,17 +97,40 @@ Two places you *do* connect — not to hand anything over, but to **sign your ow
 
 ---
 
-## 🔐 The no-wallet-connect payment
+## 🔐 How access works
 
-Hit a paid feature and the app generates a unique amount like `100.347 CLKN`. Send exactly that from any wallet you control. The server polls Solana, matches the exact decimal to your session, identifies your wallet from the transaction metadata, and unlocks.
+Connect a wallet and the gate resolves itself: if you hold the threshold, the tool
+unlocks free for 35 days. If you don't, one click sends the SOL price and unlocks it
+for 7. Where the gate is *ownership* rather than payment — Premium Forensics, and
+proving a transcript is yours — you sign a one-line message instead. That's a
+signature, not a transaction: no tokens move, no spending approval is granted, and
+nothing lingers afterward.
 
-**No popup. No connect button. No signature request.** Nothing to approve means nothing to exploit.
+### What we tried before, and why it's gone
 
-- Payments are **replay-guarded** — each signature is consumed exactly once, in an atomic test-and-set that fails *closed* on a storage fault
-- **Anti-tampering:** the floor of the paid amount must match the tool's declared price, so you can't pay 100 CLKN to unlock a 5,850 CLKN tool
-- A 2-minute polling cap with a "check again" restart keeps idle visitors from burning RPC quota
+Until July 2026 every paid door worked without a wallet connect at all. The app minted
+a unique amount like `100.347 CLKN`, you sent exactly that from any wallet, and the
+server matched the decimal to your session and read your address out of the
+transaction. It was replay-guarded, anti-tampered, and it worked exactly as designed.
 
-**Holder bonus, unforgeable.** When the server verifies a payment it also reads how much CLKN you have *left* in that same transaction. Keep ≥ 2M CLKN after the send and every unlock is multiplied **5×**. The send proves custody; the post-send balance proves holding. Neither requires a wallet connect.
+Almost nobody used it. The idea was that skipping the connect prompt removed friction —
+but copying an exact amount into a wallet by hand, sending it, and waiting for the chain
+turned out to be *more* friction than the popup it avoided, not less. So we retired it.
+
+We're saying that plainly rather than quietly deleting it, because the reasoning is the
+point: we don't yet know whether the manual send was the limiting step or whether the
+tools simply need more exposure. Simplifying is how we find out. **The code still
+exists and the endpoint is still live** — if the simpler version doesn't move the
+needle, turning it back on is a small change, not a rebuild. Being early to an idea and
+being wrong about it look identical from the inside; we'd rather test it than defend
+it.
+
+- SOL payments are verified against an on-chain **minimum the server clamps up to**, so a tampered client can't bless a dust payment as a full one
+- Ownership signatures must name the signing wallet and carry a **fresh nonce**, so a captured signature can't be replayed later
+- A proof of ownership is never a proof of *holdings*: Premium Forensics re-reads the live CLKN balance on every single run, so a proof issued to an empty wallet buys nothing
+
+**Holding is what earns the free tier**, and it's read live from the chain at the moment
+you connect — not from a receipt, and not from anything you can hand us.
 
 ---
 
@@ -181,7 +211,7 @@ There is no staging environment — `main` deploys straight to production — so
 
 ## 🔥 The pitch, in one breath
 
-A free crypto school disciplined enough to be useful, wrapped around forensic tools that tell you what's on-chain and refuse to tell you why — funded by micropayments you make without ever connecting a wallet.
+A free crypto school disciplined enough to be useful, wrapped around forensic tools that tell you what's on-chain and refuse to tell you why — with the operator tools free to anyone holding the token.
 
 Learn fast. Avoid rugs. Survive the schoolyard.
 

@@ -877,23 +877,30 @@ render the realized width, not the requested slider value. LOW backlog now fully
 - Local: `node scripts/smoke-test.js --no-build` after a build. No unit-test suite beyond this.
 
 ## Deferred / check later
-- ⚠️ **PUBLIC COPY IS NOW STALE ON THE PAYMENT MODEL — OWNER DECISION NEEDED, do NOT silently
-  rewrite (2026-07-30).** Retiring send-to-unlock invalidated a load-bearing chunk of the
-  investor/README narrative, not just a stat. Specifically wrong now:
-  `README.md` — the "micropayments of a few cents, verified on-chain" framing (L13, L184), the
-  tool price table ("100 CLKN — one session", L71), and the whole **"Holder bonus, unforgeable"**
-  section (L103), which explains that the server reads your leftover balance *out of the payment
-  transaction*. There is no payment transaction any more.
-  `public/investors.html` — L302 ("Every paid action is a unique-decimal CLKN micropayment
-  verified on-chain — no wallet connect to pay"), L444 ("the token is a key, not a vote… every
-  premium action is a CLKN micropayment that actually moves on-chain"), L447 (the full
-  holder-bonus-from-the-payment argument), L461 ("Every tool use sends CLKN on-chain… buy
-  pressure on CLKN to refill their wallets").
-  **This is a genuine tension, not just drift:** those pages argue that CLKN accrues demand
-  because using the tools SPENDS it. Under the new model the only CLKN mechanic left is HOLDING
-  a threshold — the SOL door is what actually gets paid. That is a real change to the token's
-  utility story and it's the owner's call how to pitch it, so leave the copy alone until he
-  decides. (Same handling as the stale Solana-Foundation framing below.)
+- ✅ **PUBLIC COPY REWRITTEN FOR THE NEW PAYMENT MODEL — and the framing is the owner's,
+  keep it (2026-07-30).** Retiring send-to-unlock invalidated a load-bearing chunk of the
+  README/investors narrative: both argued that CLKN accrues demand *because using the tools
+  spends it* ("micropayments of a few cents", "the token is a key, not a vote", "every tool use
+  sends CLKN on-chain", and the whole **"Holder bonus, unforgeable"** section, which explained
+  reading your leftover balance out of the payment transaction). None of that is true now.
+  **The owner's call on how to tell it — use this framing, don't soften it:** *"we tried it,
+  wasn't used, we have the tech to set it back up at any time, but for now we are going to try
+  to make it simpler to see if that was the limiting step or not… we are adapting to try and
+  build the brand in any which way we can even if we have to admit our idea was wrong or too
+  early."* So both pages now say plainly that the no-wallet-connect send existed, worked exactly
+  as designed, and almost nobody used it — that copying an exact amount by hand turned out to be
+  MORE friction than the popup it avoided — that we don't yet know whether that was the limiting
+  step or whether the tools just need exposure, and that **the code and endpoint are still live**
+  so switching back is a small change, not a rebuild. New demand story: HOLDING is what earns the
+  free tier, read live on-chain at use time (premium re-reads it every run). The low 50K airdrop
+  tier is argued as a feature — a buyer who later sells still put two real trades on the chart,
+  which is the same organic two-way volume the LP structure exists to create.
+  ⚠️ **The Hatchery is now the ONLY place you can still PAY in CLKN, and it was deliberately
+  left alone** — it's an SPL transfer instruction inside the mint transaction the wallet already
+  signs, not a copy-the-amount-and-wait send, so it has none of the friction that got the others
+  retired. Live values (probe `/api/hatchery/config`, don't guess): **0.1 SOL or 11,600 CLKN
+  (~30% cheaper), free for 2M+ holders**. `HATCHERY_FEE_LAMPORTS` IS set on Railway — the code's
+  "unset = free beta" default is not what production is running.
 - 🔄 **Nomadz — REOPENED 2026-07-29: Ivan replied.** History: the owner DM'd Nomadz CEO Ivan on
   2026-07-20 asking permission to feature Nomadz (Solana hotel booking) as a real-world-adoption
   education section; no answer came, and on 2026-07-26 the owner called it dead. **On 2026-07-29 the
