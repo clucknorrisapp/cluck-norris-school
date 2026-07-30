@@ -157,3 +157,57 @@ html h1, html .ck-h1 { font-size: 26px; letter-spacing: .4px; }
   --border2: rgba(255,255,255,.07);
   --green2: #34D399;
 }
+
+
+/* ── Readable prose on the tool pages ─────────────────────────────────────────
+   The landing page sets its lede at 16px in --body-text; the tool pages had drifted
+   to 13.5px in --sub (the dimmer of the two), which is what made them feel cramped
+   and harder to read next to home. This block pulls the recurring prose classes back
+   up to the landing page's scale.
+
+   `html` prefixes are deliberate — they raise specificity just enough to beat each
+   page's own bare `.hero-sub {}` rule without touching twenty files, the same trick
+   the display-type block above uses for h1. Change the scale HERE, once.
+
+   Only PROSE is affected. Data stays in --mono at its own size (addresses and amounts
+   want to be scannable, not literary), and display/label classes keep their tracking. */
+html .hero-sub,
+html .lede,
+html .explain,
+html .vm-sub,
+html .edu-body,
+html .why,
+html .handoff,
+html .ho-sec,
+html .ho-warn,
+html .unlock-blurb,
+html .hop-intro,
+html .summary {
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--body-text);
+}
+html .hero-title { font-size: 20px; line-height: 1.25; }
+html .hero-tag   { font-size: 12px; letter-spacing: 3px; }
+
+/* Small print stays small, but not punishing: 11px on a dark ground is the single
+   biggest readability complaint. Floor it at 12.5 and give it room to breathe. */
+html .note,
+html .disc,
+html .calc-teach,
+html .calc-out,
+html .gblurb,
+html .skip,
+html .hero-sub-note {
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+
+/* Section headings on the tool cards were 10px uppercase — legible as a label, but
+   too quiet to structure a page. Home's equivalent sits at 16px. */
+html .card-title { font-size: 15px; letter-spacing: 1.2px; }
+
+@media (max-width: 600px) {
+  /* Don't shrink body copy on the device where reading is hardest. */
+  html .hero-sub, html .lede, html .explain, html .vm-sub, html .edu-body, html .why { font-size: 15px; }
+}
