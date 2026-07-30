@@ -222,7 +222,7 @@ async function loadSystemDepth(){
     const qt = Object.entries(sy.quoteTotals||{}).map(([k,v])=>k+' '+money(v)).join(' · ');
     el.innerHTML = '<div class="note" style="margin-bottom:8px">Canonical CLKN <b>$'+(d.canonicalClknUsd||0).toFixed(6)+'</b> · total depth <b>'+money(sy.totalDepthUsd)+'</b> · '+fmtClknShort(sy.totalClkn)+' CLKN deployed</div>'
       + rows + bar + '<div class="note" style="margin-top:6px">Quote held: '+(qt||'—')+'</div>'
-      + '<div class="note" style="margin-top:4px;font-size:10px">Dislocation = each pool’s CLKN price vs the canonical (deep) pool. Tight = arb aligned.</div>';
+      + '<div class="note" style="margin-top:4px;font-size:13px">Dislocation = each pool’s CLKN price vs the canonical (deep) pool. Tight = arb aligned.</div>';
   } catch(e){ el.innerHTML='<div class="note">Could not load pool system.</div>'; }
 }
 

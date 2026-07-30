@@ -304,7 +304,7 @@
       </div>
       <div class="sharecard" id="shareCard" style="display:none">
         <div class="sharehead">📢 Announce your lock</div>
-        <p class="muted" style="font-size:12px;margin-top:2px">Here's a ready-to-post announcement — tweak it if you like, then share so your holders see it on-chain.</p>
+        <p class="muted" style="font-size:13px;margin-top:2px">Here's a ready-to-post announcement — tweak it if you like, then share so your holders see it on-chain.</p>
         <textarea id="shareTxt" rows="5" spellcheck="true"></textarea>
         <div class="sharerow">
           <span class="charc" id="shareCnt">0/280</span>
@@ -312,7 +312,7 @@
           <button class="btn alt" id="shareCopy" type="button">Copy</button>
         </div>
       </div>
-      <div class="muted" style="font-size:11px;margin-top:10px">Not sure what to pick? <a href="#" class="acjump">Ask Cluck about locks →</a> · Prefer Jupiter’s own flow? <a id="cJupLink" href="https://lock.jup.ag/" target="_blank" rel="noopener">Open it on lock.jup.ag →</a></div>
+      <div class="muted" style="font-size:13px;margin-top:10px">Not sure what to pick? <a href="#" class="acjump">Ask Cluck about locks →</a> · Prefer Jupiter’s own flow? <a id="cJupLink" href="https://lock.jup.ag/" target="_blank" rel="noopener">Open it on lock.jup.ag →</a></div>
     </div>
   </div>
 
@@ -408,11 +408,11 @@
         + '<div class="grid"><div class="stat"><div class="k">Total locked</div><div class="v">'+fmt(d.totalLocked)+'</div></div>'
         + '<div class="stat"><div class="k">Lock accounts</div><div class="v">'+(d.lockCount||0)+'</div></div>'
         + '<div class="stat"><div class="k">Total supply</div><div class="v">'+fmt(d.supply)+'</div></div></div>'
-        + (d.partial?'<p class="muted" style="margin-top:10px;font-size:11px">⚠ Partial read (an RPC page errored) — totals may be an undercount; refresh in a moment.</p>':'')
+        + (d.partial?'<p class="muted" style="margin-top:10px;font-size:13px">⚠ Partial read (an RPC page errored) — totals may be an undercount; refresh in a moment.</p>':'')
         + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:13px"><button class="btn x" id="fameShare" type="button" style="width:auto;margin-top:0;padding:10px 18px;font-size:13.5px">𝕏 Share this report</button><button class="btn alt" id="fameCopyLink" type="button" style="width:auto;margin-top:0;padding:10px 16px;font-size:13px">Copy link</button></div>'
         + '</div>'
         + (bars?'<div class="card"><div class="sec">By platform</div>'+bars+'</div>':'')
-        + (rows?'<div class="card"><div class="sec">🏆 Biggest locks</div>'+rows+'<div class="muted" style="margin-top:8px;font-size:11px">Verify every one at <a href="https://lock.jup.ag/token/'+encodeURIComponent(mint)+'" target="_blank" rel="noopener">lock.jup.ag →</a></div></div>':'<div class="card"><p class="muted">No locks found for this token yet.</p></div>');
+        + (rows?'<div class="card"><div class="sec">🏆 Biggest locks</div>'+rows+'<div class="muted" style="margin-top:8px;font-size:13px">Verify every one at <a href="https://lock.jup.ag/token/'+encodeURIComponent(mint)+'" target="_blank" rel="noopener">lock.jup.ag →</a></div></div>':'<div class="card"><p class="muted">No locks found for this token yet.</p></div>');
       // capture the loaded stats so the share button can build a post, and wire the buttons
       window.__fameData={ mint:mint, pct:pct, total:d.totalLocked, count:(d.lockCount||0), sym:(t.symbol||''), name:(t.name||'') };
       var fsB=$('#fameShare'); if(fsB) fsB.addEventListener('click',shareFame);
@@ -460,7 +460,7 @@
     var cancel=$('#cCancel')&&$('#cCancel').checked, upd=$('#cUpdRec')&&$('#cUpdRec').checked;
     var trust = s.total ? (cancel ? '<div class="trust weak">⚠ Cancelable — a weaker lock (you can pull the tokens back before they vest)</div>'
                                   : '<div class="trust strong">🔒 Permanent &amp; non-cancellable — the strongest trust signal</div>') : '';
-    var recLine = (s.total && upd) ? '<div class="muted" style="font-size:11px;margin-top:3px">↪ Recipient can be redirected later (e.g. to a clean wallet if the original is compromised).</div>' : '';
+    var recLine = (s.total && upd) ? '<div class="muted" style="font-size:13px;margin-top:3px">↪ Recipient can be redirected later (e.g. to a clean wallet if the original is compromised).</div>' : '';
     $('#pvText').innerHTML = baseTxt + trust + recLine;
   }
   Object.keys(C).forEach(function(k){ C[k].addEventListener('input',drawPreview); });

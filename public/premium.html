@@ -147,10 +147,10 @@ function initPremiumDeepLinks(){
   const target = location.origin + '/premium' + (mint ? ('?mint=' + encodeURIComponent(mint)) : '');
   const enc = encodeURIComponent(target), ref = encodeURIComponent(location.origin);
   el.innerHTML =
-    '<div style="font-size:12px;color:#FCD34D;line-height:1.5;margin-bottom:6px">📱 No wallet detected here — iPad/phone browsers can\'t see wallet apps. Use the <b>Send</b> method above (works anywhere), or open this page inside your wallet:</div>'
+    '<div style="font-size:13.5px;color:var(--gold);line-height:1.65;margin-bottom:8px">📱 No wallet detected here — iPad and phone browsers can\'t see wallet apps. Open this page inside your wallet instead:</div>'
     + '<a class="wbtn" style="text-decoration:none;display:block;text-align:center;margin-bottom:6px" href="https://phantom.app/ul/browse/' + enc + '?ref=' + ref + '">🔮 Open in Phantom</a>'
     + '<a class="wbtn" style="text-decoration:none;display:block;text-align:center" href="https://solflare.com/ul/v1/browse/' + enc + '?ref=' + ref + '">☀️ Open in Solflare</a>'
-    + '<div style="font-size:13px;color:#9CA3AF;margin-top:6px">Opens this page in the wallet\'s built-in browser, where Connect works. Nothing is signed or shared by the link.</div>';
+    + '<div style="font-size:13px;color:var(--sub);margin-top:7px">Opens this page in the wallet\'s built-in browser, where Connect works. Nothing is signed or shared by the link.</div>';
   el.style.display = 'block';
 }
 initPremiumDeepLinks();
