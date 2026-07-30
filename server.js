@@ -2252,7 +2252,6 @@ app.use("/api/trace", rateLimit("forensic", { windowMs: 60000, max: 15 }));
 app.use("/api/snapshot", rateLimit("forensic", { windowMs: 60000, max: 15 }));
 app.use("/api/holders", rateLimit("forensic", { windowMs: 60000, max: 15 }));
 app.use("/api/token-card", rateLimit("forensic", { windowMs: 60000, max: 15 }));
-app.use("/api/verify-clkn-payment", rateLimit("pay", { windowMs: 60000, max: 20 }));
 // Classroom: generous enough for a real multi-turn lesson/exam, tight enough to stop a bot
 // hammering the reward loop. Claim is rare (one per graduation) so it's capped hard.
 app.use("/api/classroom-exam", rateLimit("exam", { windowMs: 60000, max: 25 }));
@@ -6127,7 +6126,7 @@ app.get("/api/verify-sol-payment", async (req, res) => {
     const delta = ((tx.meta.postBalances[idx] || 0) - (tx.meta.preBalances[idx] || 0));
     if (delta < min) return res.status(200).json({ success: false, error: "amount too low", lamports: delta });
     // 🔒 REPLAY GUARD — this endpoint had NONE (found in the 2026-07-27 wallet sweep).
-    // The CLKN path has always consumed each signature via sigStore (see verify-clkn-payment);
+    // The retired CLKN send path consumed each signature via sigStore the same way;
     // the SOL path verified the transfer and returned success WITHOUT marking it spent. Because
     // SOL_UNLOCK_WALLET is a public address hardcoded in a public repo, ANYONE could look up any
     // historical >=0.05 SOL transfer to it on an explorer and replay that one signature forever,
@@ -7938,8 +7937,13 @@ app.get("/api/claims", async (req, res) => {
   }
 });
 
-// -- Verify CLKN Payment (generalized per-tool unlock) --
-const CLKN_RECEIVE_WALLET = "7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H";
+// The /api/verify-clkn-payment endpoint lived here until 2026-07-30. It matched a
+// unique CLKN decimal against a real on-chain transfer to the receive wallet and
+// issued a per-tool unlock. Retired with the send-to-unlock flow (owner's call),
+// then DELETED once the owner confirmed no contest or activity was pending and the
+// chain showed no transfer to that wallet for 5.5 days — so nothing could be
+// stranded. Every gate now resolves through the connected wallet; see
+// /api/premium-verify-sig and /api/verify-sol-payment. Git has the implementation.
 const CLKN_MINT_ADDR = "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
 
 // Project deployer wallet — buys from here are the team reinvesting earned
@@ -8307,218 +8311,6 @@ app.get("/api/whale-watch", async (req, res) => {
   });
 });
 
-// ⛔ RETIRED 2026-07-30 — NO CLIENT CALLS THIS ANY MORE (owner's call: "remove the
-// send-in-token functions from our tools, it complicates things too much"). Every
-// door that used to mint a unique CLKN decimal and wait for the send now resolves
-// through the connected wallet instead:
-//   • airdrop     → hold 50,000 CLKN, or pay 0.05 SOL      (public/airdrop.html)
-//   • buyspecial  → hold 2,000,000 CLKN, or pay 0.05 SOL   (public/buyspecial-pro.html)
-//   • premium     → connect & sign                          (public/premium.html)
-//   • ownership   → connect & sign, minHold:0               (public/transcript.html)
-//   • ai          → gone; Ask Cluck keeps its free daily allowance (src/shared.jsx)
-// The ENDPOINT is deliberately still live rather than deleted: a user on a cached
-// page could have sent CLKN before the change shipped, and stranding a real payment
-// to save some dead code is a bad trade. Nothing links here — delete it once enough
-// time has passed that no in-flight send can exist.
-//
-// Tool → cost (CLKN, base before the unique decimal) + what gets granted.
-// The base must be unique per tool so a user can't pay a 100-CLKN "airdrop" amount
-// and reuse the verification to unlock a 500-CLKN tool. Math.floor(amount) checks this.
-const TOOL_GRANTS = {
-  ai:         { cost: 500, grants: { questions: 20 } },
-  airdrop:    { cost: 100, grants: { sessions: 1 } },
-  buyspecial: { cost: 5850, grants: { hoursOfAccess: 168 } },
-  rose:       { cost: 500, grants: { hoursOfAccess: 168 } },
-  premium:    { cost: 7,   grants: {} },
-  ownership:  { cost: 1,   grants: {} },
-};
-
-// Holders who keep ≥ this many CLKN after the send get a stretched unlock — the only
-// way to reward "holders" without a wallet-connect that would be trivially spoofable.
-// The sender's post-send balance is read straight from the tx's postTokenBalances,
-// so it can't be faked.
-// 2M CLKN ≈ $240 at $0.00012/CLKN. Adjust as price moves — fixed CLKN means
-// early holders qualify at lower USD cost, which is by design.
-const HOLDER_BONUS_THRESHOLD = 2_000_000;
-const HOLDER_BONUS_MULTIPLIER = 5;
-
-app.post("/api/verify-clkn-payment", async (req, res) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  const { unlockAmount, tool: toolRaw } = req.body || {};
-  const tool = (typeof toolRaw === "string" && TOOL_GRANTS[toolRaw]) ? toolRaw : "ai";
-  if (!unlockAmount) return res.status(400).json({ success: false, error: "Missing unlock amount" });
-
-  const HELIUS_KEY = process.env.HELIUS_API_KEY;
-  // 3-decimal precision matches the client's generator (1000 unique values per tool).
-  // SPL transfers settle exactly on-chain — there's no transfer fee to absorb — so the
-  // tolerance only has to swallow floating-point rounding, not real value drift.
-  const expectedAmount = parseFloat(parseFloat(unlockAmount).toFixed(3));
-  if (!Number.isFinite(expectedAmount) || expectedAmount <= 0) {
-    return res.status(400).json({ success: false, error: "Invalid unlock amount" });
-  }
-  const tolerance = 0.0005;
-
-  // Anti-tampering: the integer floor of the paid amount must match the tool's price.
-  // The unique decimal (<1) only identifies the request — it doesn't change the cost.
-  const expectedCost = TOOL_GRANTS[tool].cost;
-  if (Math.floor(expectedAmount) !== expectedCost) {
-    return res.status(400).json({
-      success: false,
-      error: `Wrong amount for ${tool} (expected ~${expectedCost} CLKN)`,
-    });
-  }
-
-  try {
-    const rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
-
-    // Step 1: Get the CLKN token account for our wallet
-    const tokenAcctRes = await fetch(rpcUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0", id: "get-token-acct",
-        method: "getTokenAccountsByOwner",
-        params: [CLKN_RECEIVE_WALLET, { mint: CLKN_MINT_ADDR }, { encoding: "jsonParsed" }]
-      })
-    });
-    const tokenAcctData = await tokenAcctRes.json();
-    const tokenAccounts = tokenAcctData?.result?.value || [];
-    if (!tokenAccounts.length) return res.status(200).json({ success: false, error: "No CLKN token account found yet. Make sure you sent CLKN to the correct wallet." });
-
-    const tokenAccount = tokenAccounts[0].pubkey;
-    const currentBalance = tokenAccounts[0]?.account?.data?.parsed?.info?.tokenAmount?.uiAmount || 0;
-    console.log(`[CHECK] tool=${tool} acct=${tokenAccount.slice(0,8)} balance=${currentBalance} expected=${expectedAmount}`);
-
-    // Step 2: Get recent signatures for token account (real-time, not cached)
-    const sigsRes = await fetch(rpcUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0", id: "get-sigs",
-        method: "getSignaturesForAddress",
-        params: [tokenAccount, { limit: 10, commitment: "finalized" }]
-      })
-    });
-    const sigsData = await sigsRes.json();
-    const signatures = sigsData?.result || [];
-    console.log(`[CHECK] Got ${signatures.length} signatures to check`);
-
-    // Step 3: Check each tx for exact incoming amount
-    for (const sig of signatures) {
-      const txRes = await fetch(rpcUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jsonrpc: "2.0", id: "get-tx",
-          method: "getTransaction",
-          params: [sig.signature, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "finalized" }]
-        })
-      });
-      const txData = await txRes.json();
-      const tx = txData?.result;
-      if (!tx) continue;
-      // Only count a finalized transfer that actually SUCCEEDED. A failed tx rolls
-      // its balances back (so diff would be 0), but assert it explicitly rather
-      // than relying on that side effect — don't honor a transfer the chain rejected.
-      if (tx.meta?.err) continue;
-
-      const pre = (tx?.meta?.preTokenBalances || []).find(b => b.mint === CLKN_MINT_ADDR && b.owner === CLKN_RECEIVE_WALLET);
-      const post = (tx?.meta?.postTokenBalances || []).find(b => b.mint === CLKN_MINT_ADDR && b.owner === CLKN_RECEIVE_WALLET);
-      if (!post) continue;
-
-      const preAmt = pre?.uiTokenAmount?.uiAmount || 0;
-      const postAmt = post?.uiTokenAmount?.uiAmount || 0;
-      const diff = parseFloat((postAmt - preAmt).toFixed(3));
-      console.log(`[CHECK] TX ${sig.signature.slice(0,8)} diff:${diff}`);
-
-      if (diff > 0 && Math.abs(diff - expectedAmount) <= tolerance) {
-        // Replay guard: each on-chain transfer unlocks exactly once. Grants are
-        // applied client-side, so without this anyone who sees a valid amount
-        // on-chain could replay it to unlock for free. The real payer redeems
-        // first; a later replay of the same signature is rejected here.
-        if (sigStore.has(sig.signature)) {
-          return res.status(200).json({ success: false, error: "This payment was already redeemed — each transfer unlocks once." });
-        }
-        // Find the sender: the CLKN-mint balance row whose owner isn't us and whose
-        // post amount is lower than pre. Gives us both the sender wallet and what they
-        // have left — the only on-chain proof of holding we can use without a wallet connect.
-        let senderWallet = null;
-        let senderBalance = null;
-        const preBalances = (tx?.meta?.preTokenBalances || []).filter(b => b.mint === CLKN_MINT_ADDR && b.owner !== CLKN_RECEIVE_WALLET);
-        for (const preB of preBalances) {
-          const postB = (tx?.meta?.postTokenBalances || []).find(b => b.mint === CLKN_MINT_ADDR && b.owner === preB.owner);
-          if (!postB) continue;
-          const preBAmt = preB.uiTokenAmount?.uiAmount || 0;
-          const postBAmt = postB.uiTokenAmount?.uiAmount || 0;
-          if (postBAmt < preBAmt) {
-            senderWallet = preB.owner;
-            senderBalance = postBAmt;
-            break;
-          }
-        }
-
-        // Holder bonus: if the sender kept ≥ HOLDER_BONUS_THRESHOLD CLKN after sending,
-        // stretch every numeric grant by HOLDER_BONUS_MULTIPLIER. Proven on-chain, no spoofing.
-        // The AI tutor unlock is deliberately flat — send tokens, get questions, holdings don't matter.
-        const isHolderBonus = tool !== "ai" && senderBalance !== null && senderBalance >= HOLDER_BONUS_THRESHOLD;
-        const baseGrants = TOOL_GRANTS[tool].grants;
-        const grants = {};
-        for (const k of Object.keys(baseGrants)) {
-          grants[k] = isHolderBonus ? baseGrants[k] * HOLDER_BONUS_MULTIPLIER : baseGrants[k];
-        }
-
-        // Mark this transfer consumed BEFORE returning so it can't be replayed.
-        // add() is an atomic test-and-set: if a concurrent request already claimed
-        // this signature it returns false, and we reject rather than double-grant.
-        if (!sigStore.add(sig.signature)) {
-          return res.status(200).json({ success: false, error: "This payment was already redeemed — each transfer unlocks once." });
-        }
-        console.log(`[OK] tool=${tool} verified ${diff} CLKN · sender=${senderWallet?.slice(0,8) || "?"} remaining=${senderBalance} bonus=${isHolderBonus} · consumed=${sigStore.size()}`);
-
-        // Fire Telegram notification — every paid unlock pings the Cluck Norris group
-        // so the community sees real on-chain product usage in real time.
-        notifyToolUnlock(tool, diff, senderWallet, isHolderBonus, sig.signature);
-
-        // Premium: the send proves the sender owns this wallet. Issue a proof
-        // token only if the wallet clears the threshold (use the PRE-send balance
-        // so the tiny proof-send can't drop a borderline holder under). The
-        // premium run also re-checks the live balance.
-        let premiumProof, premiumNote;
-        if (tool === "premium") {
-          const preSendBalance = senderBalance != null ? senderBalance + diff : null;
-          if (preSendBalance != null && preSendBalance >= PREMIUM_HOLDER_THRESHOLD) {
-            premiumProof = issuePremiumProof(senderWallet);
-          } else {
-            premiumNote = { insufficient: true, balance: preSendBalance, threshold: PREMIUM_HOLDER_THRESHOLD };
-          }
-        } else if (tool === "ownership") {
-          // Credential Tier-2: plain wallet-ownership proof, no holder gate.
-          premiumProof = issuePremiumProof(senderWallet);
-        }
-
-        return res.status(200).json({
-          success: true,
-          tool,
-          amountReceived: diff,
-          signature: sig.signature,
-          senderWallet,
-          senderBalance,
-          holderBonus: isHolderBonus,
-          grants,
-          premiumProof,
-          premiumNote,
-          // Legacy back-compat for the existing AI client which reads questionsGranted directly.
-          questionsGranted: grants.questions || undefined,
-        });
-      }
-    }
-
-    return res.status(200).json({ success: false, error: "Payment not found yet." });
-  } catch(err) {
-    console.error("Verify payment error:", err.message);
-    return res.status(500).json({ success: false, error: publicErrMsg(err) });
-  }
-});
 
 // Premium "connect + sign" ownership proof. The client connects via the normal
 // injected provider and signs a plain text message (signMessage) — NOT a
@@ -11137,6 +10929,13 @@ app.use(express.static(join(__dirname, "dist"), { index: false }));
 // the React school shell at 200 — a soft-404 that Search Console indexes as a real
 // page. Live pages are served by their own routes above, which run first.
 const ASSET_EXT = /\.(html?|js|mjs|cjs|css|map|json|png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|otf|eot|mp3|wav|ogg|mp4|webm|txt|xml|csv|pdf|wasm)$/i;
+
+// Any METHOD on an unmatched /api/ path — the catch-all below is GET-only, so a POST
+// to a typo'd endpoint was falling through to Express's default HTML 404 and blowing
+// up client JSON.parse. Registered before the GET catch-all so it wins for /api/*.
+app.all("/api/*", (req, res) => {
+  res.status(404).json({ success: false, error: "not_found", path: req.path });
+});
 
 app.get("*", (req, res) => {
   // An /api/* path that got this far matched no handler. Clients parse these as
