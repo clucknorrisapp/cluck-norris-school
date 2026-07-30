@@ -286,9 +286,10 @@
 
     <!-- READ BEFORE PAYING. Make sure nobody unlocks a tool they can't use. -->
     <div style="margin-bottom:14px;padding:12px 14px;background:rgba(245,158,11,0.1);border:1.5px solid rgba(245,158,11,0.45);border-radius:10px;font-family:var(--body);font-size:13.5px;color:var(--gold);line-height:1.7">
-      ⚠ <strong>BEFORE YOU SEND:</strong> the airdrop tool signs through
-      <strong>Phantom, Solflare, or Jupiter</strong>. Install one of those first if you
-      haven't — otherwise you unlock a tool you can't sign with.
+      ⚠ <strong>BEFORE YOU SEND:</strong> you'll need a Solana wallet to sign with —
+      <strong>Phantom, Solflare, Backpack, OKX, Coinbase, Trust, Glow, Exodus, Bitget,
+      Brave and Jupiter</strong> are all supported. Install one first if you haven't,
+      otherwise you unlock a tool you can't sign with.
     </div>
 
     <!-- Education + acknowledgment — must be checked before payment instructions appear -->
@@ -532,7 +533,7 @@
       <div style="font-size:11.5px;color:#6B7280;margin-top:6px">If those numbers don't match what you see in the popup, hit reject.</div>
     </div>
     <div style="padding:12px 14px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.35);border-radius:8px;font-family:var(--body);font-size:13.5px;color:#F59E0B;line-height:1.6;margin-bottom:10px">
-      ⚠ <strong>Phantom, Solflare, Jupiter all supported.</strong> This batch signs through the wallet you connected.<br>
+      ⚠ <strong>11 wallets supported.</strong> This batch signs through the wallet you connected.<br>
       ⚠ <strong>Tokens leave your wallet immediately</strong> when you confirm. Double-check the recipient list, amounts, and your remaining SOL for rent before continuing.
     </div>
     <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
@@ -1078,7 +1079,7 @@ async function sendAirdrop() {
 
   try {
     const provider = activeWallet?.provider;
-    if (!provider) throw new Error('No wallet connected — connect Phantom or Solflare first');
+    if (!provider) throw new Error('No wallet connected — connect a wallet first');
 
     // Get sender's token account
     const senderAccounts = await rpc('getTokenAccountsByOwner', [
@@ -1616,7 +1617,7 @@ function adDetect() {
 }
 async function adConnect() {
   const p = adDetect();
-  if (!p) return adWalletMsg('No Solana wallet found. Open this page inside Phantom or Solflare, or install one, then refresh.');
+  if (!p) return adWalletMsg('No Solana wallet found. Install one, or open this page inside your wallet\u2019s own browser, then refresh.');
   try {
     const resp = await p.connect();
     wPubkey = ((resp && resp.publicKey) || p.publicKey).toString();
@@ -1646,10 +1647,12 @@ async function adPaySol() {
   try {
     adWalletMsg('Preparing payment…');
     const bh = await adRpc('getLatestBlockhash', [{ commitment:'finalized' }]);
-    const { Transaction, SystemProgram, PublicKey } = solanaWeb3;
+    const { Transaction, PublicKey } = solanaWeb3;
     const tx = new Transaction();
-    tx.add(SystemProgram.transfer({ fromPubkey:new PublicKey(wPubkey),
-      toPubkey:new PublicKey(RECEIVE_WALLET_FOR_UNLOCK), lamports:SOL_LAMPORTS }));
+    // Hand-built System transfer via the shared engine — SystemProgram.transfer()
+    // throws "Buffer is not defined" in the browser (see airdrop-engine.js).
+    tx.add(splToken.createSolTransferInstruction(
+      new PublicKey(wPubkey), new PublicKey(RECEIVE_WALLET_FOR_UNLOCK), SOL_LAMPORTS));
     tx.feePayer = new PublicKey(wPubkey); tx.recentBlockhash = bh.value.blockhash;
     adWalletMsg('Approve the 0.05 SOL payment in your wallet…');
     const res = await wProvider.signAndSendTransaction(tx);

@@ -60,11 +60,22 @@
   .note{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:8px;line-height:1.55;}
   .cbrow{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:12px;color:var(--sub);margin-top:12px;}
   .cbrow input{width:auto;accent-color:var(--green);transform:scale(1.2);}
-  .gate{background:linear-gradient(180deg,rgba(255,122,24,.12),rgba(23,24,30,.9));border:1px solid rgba(255,182,39,.5);border-radius:16px;padding:26px 22px;margin-bottom:16px;box-shadow:0 8px 30px rgba(255,122,24,.14);}
-  .gate h2{font-family:var(--disp);font-size:24px;letter-spacing:2px;background:linear-gradient(92deg,#FFE08A,#FF7A18);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;text-align:center;margin-bottom:4px;}
-  .gate .sub{font-family:var(--disp);font-size:11px;color:var(--sub);text-align:center;letter-spacing:3px;margin-bottom:18px;}
-  .gblurb{font-family:var(--disp);font-size:12px;color:var(--sub);text-align:center;line-height:1.8;margin-bottom:14px;letter-spacing:1px;}
-  .gstatus{font-family:var(--mono);font-size:12px;color:var(--sub);text-align:center;padding:12px;background:rgba(0,0,0,.3);border:1px solid var(--border2);border-radius:10px;}
+  .gate{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px 22px;margin-bottom:16px;box-shadow:0 10px 30px rgba(0,0,0,.45);}
+  .gate h2{font-family:var(--disp);font-size:19px;letter-spacing:1.5px;color:var(--gold);text-align:center;margin-bottom:4px;}
+  .gate .sub{font-family:var(--disp);font-size:11px;color:var(--muted);text-align:center;letter-spacing:2.5px;margin-bottom:18px;}
+  .gblurb{font-family:var(--body);font-weight:500;font-size:13px;color:var(--sub);text-align:center;line-height:1.65;margin-bottom:14px;}
+  .gstatus{font-family:var(--body);font-weight:500;font-size:13px;color:var(--sub);text-align:center;padding:12px;background:rgba(0,0,0,.3);border:1px solid var(--border2);border-radius:10px;}
+  /* Connected-wallet chip: address + balance + a disconnect. Anywhere you can
+     connect, you must be able to disconnect — see cluck-wallet.js for the shared rule. */
+  /* .hidden is declared earlier in this sheet, so an equal-specificity display
+     here would beat it and leak the chip onto the page before any connect. */
+  .wchip.hidden{display:none;}
+  .wchip{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center;background:rgba(0,0,0,.3);border:1px solid var(--border2);border-radius:10px;padding:10px 13px;margin-top:10px;}
+  .wchip .dot{width:7px;height:7px;border-radius:50%;background:var(--green2);box-shadow:0 0 8px var(--green2);flex:0 0 auto;}
+  .wchip .addr{font-family:var(--mono);font-size:13px;color:var(--text);}
+  .wchip .bal{font-family:var(--mono);font-size:12.5px;color:var(--sub);}
+  .wchip .dc{margin-left:auto;background:none;border:1px solid var(--border2);border-radius:999px;color:var(--sub);font-family:var(--body);font-weight:600;font-size:12px;padding:5px 12px;cursor:pointer;transition:all .15s;}
+  .wchip .dc:hover{border-color:var(--red-soft);color:var(--red-soft);}
   .gstatus.ok{background:rgba(18,201,139,.12);border-color:rgba(18,201,139,.45);color:var(--green2);font-weight:700;}
   .opbanner{display:flex;align-items:center;gap:10px;background:linear-gradient(92deg,rgba(18,201,139,.16),rgba(18,201,139,.06));border:1px solid rgba(18,201,139,.45);border-radius:12px;padding:12px 16px;margin-bottom:14px;font-family:var(--mono);font-size:12.5px;font-weight:600;color:var(--green2);}
 </style>
@@ -81,10 +92,11 @@
     <h2>🔒 BUY SPECIAL</h2>
     <div class="sub">UNLOCK TO RUN COMPETITIONS</div>
 
-    <button class="btn" id="gConnect" style="width:100%">🔗 CONNECT WALLET</button>
-    <div class="gblurb" style="margin:10px 0 0">Hold <b style="color:var(--gold)">≥ 2,000,000 CLKN</b> → unlock <b>FREE</b> for 35 days. No CLKN? Pay a little SOL instead — one click, nothing to send by hand.</div>
+    <button class="btn ghost" id="gConnect" style="width:100%">🔗 Connect wallet</button>
+    <div class="gblurb" style="margin:10px 0 0">Hold <b style="color:var(--gold)">2,000,000 CLKN</b> and it's free for 35 days. If you don't, one click pays 0.05 SOL for 7.</div>
+    <div class="wchip hidden" id="gWallet"><span class="dot"></span><span class="addr" id="gWalletAddr">—</span><span class="bal" id="gWalletBal"></span><button class="dc" id="gDisconnect" type="button">Disconnect</button></div>
     <div class="gstatus hidden" id="gWalletStatus" style="margin-top:10px"></div>
-    <button class="btn a hidden" id="gPaySol" style="width:100%;margin-top:10px">◎ PAY 0.05 SOL — UNLOCK 7 DAYS</button>
+    <button class="btn a hidden" id="gPaySol" style="width:100%;margin-top:10px">◎ Pay 0.05 SOL — unlock 7 days</button>
     <!-- The manual "send exactly 5,850.xyz CLKN" door was retired 2026-07-30
          (owner's call — the send-and-wait flow complicated every gated tool for no
          real uptake). Both remaining doors resolve through the connected wallet. -->
@@ -209,6 +221,7 @@
 </div>
 
 <script src="/vendor/solana-web3.iife.min.js"></script>
+<script src="/cluck-wallet.js"></script>
 <script src="/airdrop-engine.js"></script>
 <script>
 const CLKN='DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS', ROSE='RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF';
@@ -481,7 +494,7 @@ function refreshSendCard(){
 function sdStatus(t){ $('sdStatus').textContent=t||''; }
 $('sdConnect').addEventListener('click',async()=>{
   const p=detectProvider();
-  if(!p){ sdStatus('No Solana wallet found. Open this page inside Phantom/Solflare and try again.'); return; }
+  if(!p){ sdStatus('No Solana wallet found. Install one, or open this page inside your wallet\u2019s own browser, then try again.'); return; }
   try{ const resp=await p.connect(); sendProvider=p; sendPubkey=((resp&&resp.publicKey)||p.publicKey).toString();
     $('sdConnect').textContent='✓ '+sendPubkey.slice(0,4)+'…'+sendPubkey.slice(-4);
     $('sdSend').classList.remove('hidden'); sdStatus('Wallet connected. Review the list above, then send.');
@@ -527,20 +540,45 @@ function showGate(){ $('gate').classList.remove('hidden'); $('gate').scrollIntoV
 const HOLDER_MIN=2000000, SOL_LAMPORTS=50000000;
 let wProvider=null, wPubkey=null;
 function rpcCall(method,params){ return fetch('/api/helius-rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})}).then(r=>r.json()).then(d=>{ if(d.error) throw new Error(d.error.message); return d.result; }); }
-function detectProvider(){ return (window.phantom&&window.phantom.solana) || (window.solana&&window.solana.isPhantom?window.solana:null) || window.solflare || (window.solana&&window.solana.isSolflare?window.solana:null) || window.solana || null; }
+// Wallet detection lives in /cluck-wallet.js — this page used to look for Phantom
+// and Solflare only, behind a bare window.solana fallback, so Backpack/OKX/Coinbase/
+// Exodus/Bitget/Glow/Brave/Jupiter users were told no wallet was found.
+function detectProvider(){ const l=CluckWallet.available(); return l.length?l[0].provider:null; }
 function gWalletMsg(t,ok){ const e=$('gWalletStatus'); e.classList.remove('hidden'); e.className='gstatus'+(ok?' ok':''); e.textContent=t; }
 function unlockNow(days){ localStorage.setItem(UNLOCK_KEY,JSON.stringify({unlockedAt:Date.now(),expiresAt:Date.now()+days*24*60*60*1000})); setTimeout(showTool,1300); }
+const shortAddr=a=>a?a.slice(0,4)+'…'+a.slice(-4):'—';
+// Show WHICH wallet is connected, and always offer a way out. A page that can
+// connect must be able to disconnect — otherwise the only way to switch wallets
+// is to clear site data, which is not a thing to ask of anyone.
+function gShowWallet(bal){
+  $('gWallet').classList.remove('hidden');
+  $('gWalletAddr').textContent=shortAddr(wPubkey);
+  $('gWalletBal').textContent=(bal==null?'':'· '+fmt(bal)+' CLKN');
+  $('gConnect').classList.add('hidden');
+}
+function gDisconnectWallet(){
+  // Best-effort: not every injected provider implements disconnect(), so the
+  // local state reset is what actually matters — never leave the UI showing a
+  // wallet we've stopped using.
+  try{ wProvider && wProvider.disconnect && wProvider.disconnect(); }catch(_){}
+  wProvider=null; wPubkey=null;
+  $('gWallet').classList.add('hidden');
+  $('gPaySol').classList.add('hidden');
+  $('gWalletStatus').classList.add('hidden');
+  $('gConnect').classList.remove('hidden');
+}
 async function gConnectWallet(){
-  const p=detectProvider(); if(!p){ gWalletMsg('No Solana wallet found. Open this page inside Phantom/Solflare, or install one, then refresh.'); return; }
-  try{ const resp=await p.connect(); wPubkey=((resp&&resp.publicKey)||p.publicKey).toString(); wProvider=p; gWalletMsg('Checking your CLKN balance…'); await gCheckHolder(); }
+  const p=detectProvider(); if(!p){ gWalletMsg('No Solana wallet found. Install one, or open this page inside your wallet\u2019s own browser, then refresh.'); return; }
+  try{ const resp=await p.connect(); wPubkey=((resp&&resp.publicKey)||p.publicKey).toString(); wProvider=p; gShowWallet(null); gWalletMsg('Checking your CLKN balance…'); await gCheckHolder(); }
   catch(e){ gWalletMsg('Connect failed: '+(e.message||e)); }
 }
 async function gCheckHolder(){
   try{
     const r=await rpcCall('getTokenAccountsByOwner',[wPubkey,{mint:CLKN},{encoding:'jsonParsed'}]);
     let bal=0; for(const a of ((r&&r.value)||[])) bal+=Number(a.account&&a.account.data&&a.account.data.parsed&&a.account.data.parsed.info.tokenAmount.uiAmount)||0;
-    if(bal>=HOLDER_MIN){ gWalletMsg('✓ '+fmt(bal)+' CLKN — holder unlocked FREE for 35 days!',true); unlockNow(35); }
-    else { gWalletMsg('Connected · '+fmt(bal)+' CLKN held (need 2,000,000 for free). Pay 0.05 SOL, or send 5,850 CLKN below and save ~25%:'); $('gPaySol').classList.remove('hidden'); }
+    gShowWallet(bal);
+    if(bal>=HOLDER_MIN){ gWalletMsg('✓ Holder — unlocked free for 35 days.',true); unlockNow(35); }
+    else { gWalletMsg('Needs '+fmt(HOLDER_MIN)+' CLKN for the free tier. Pay 0.05 SOL for 7 days instead:'); $('gPaySol').classList.remove('hidden'); }
   }catch(e){ gWalletMsg('Balance check failed: '+e.message); }
 }
 async function gPaySolFn(){
@@ -550,18 +588,21 @@ async function gPaySolFn(){
   try{
     gWalletMsg('Preparing payment…');
     const bh=await rpcCall('getLatestBlockhash',[{commitment:'finalized'}]);
-    const {Transaction,SystemProgram,PublicKey}=solanaWeb3;
-    const tx=new Transaction(); tx.add(SystemProgram.transfer({fromPubkey:new PublicKey(wPubkey),toPubkey:new PublicKey(RECV),lamports:SOL_LAMPORTS}));
+    const {Transaction,PublicKey}=solanaWeb3;
+    // Hand-built System transfer via the shared engine — SystemProgram.transfer()
+    // throws "Buffer is not defined" in the browser (see airdrop-engine.js).
+    const tx=new Transaction(); tx.add(splToken.createSolTransferInstruction(new PublicKey(wPubkey),new PublicKey(RECV),SOL_LAMPORTS));
     tx.feePayer=new PublicKey(wPubkey); tx.recentBlockhash=bh.value.blockhash;
     gWalletMsg('Approve the 0.05 SOL payment in your wallet…');
     const res=await wProvider.signAndSendTransaction(tx); const sig=res.signature||res;
     gWalletMsg('Confirming payment on-chain…');
     let ok=false; for(let i=0;i<24;i++){ try{ const v=await fetch('/api/verify-sol-payment?sig='+sig+'&min='+SOL_LAMPORTS).then(r=>r.json()); if(v.success){ok=true;break;} }catch(e){} await new Promise(r=>setTimeout(r,2500)); }
-    if(ok){ gWalletMsg('✓ Paid — unlocked 7 days!',true); unlockNow(7); }
+    if(ok){ gWalletMsg('✓ Paid — unlocked for 7 days.',true); unlockNow(7); }
     else { gWalletMsg('Payment sent but not confirmed yet — tap “Pay” again in a moment to re-check.'); $('gPaySol').disabled=false; }
   }catch(e){ gWalletMsg('Payment failed: '+(e.message||e)); $('gPaySol').disabled=false; }
 }
 $('gConnect').addEventListener('click',gConnectWallet);
+$('gDisconnect').addEventListener('click',gDisconnectWallet);
 $('gPaySol').addEventListener('click',gPaySolFn);
 
 // ── Live/recent comp shortcuts ───────────────────────────────────────────────

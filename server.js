@@ -10504,6 +10504,17 @@ app.get("/market-header.js", (req, res) => {
   res.sendFile(join(__dirname, "public", "market-header.js"));
 });
 
+// Shared wallet layer — ONE 11-wallet registry + connect/disconnect for every page
+// that connects a wallet. Added 2026-07-30 after the per-page detectors diverged:
+// Buy Special's gate found two wallets and the Locker Room three, while five other
+// pages found eleven, so a Backpack user hit "no Solana wallet found" on one tool
+// and connected fine on the next.
+app.get("/cluck-wallet.js", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  res.type("application/javascript");
+  res.sendFile(join(__dirname, "public", "cluck-wallet.js"));
+});
+
 // Shared airdrop machinery. Explicit routes (rather than relying on the vite
 // publicDir copy into dist/) because the SPA catch-all otherwise answers an
 // unmatched .js path with the React shell — the browser then refuses it for a

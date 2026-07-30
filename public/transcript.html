@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <style>
-  :root{color-scheme:dark;--bg:#0b0c0e;--bg-grad:#0b0c0e;--card:#14151a;--card2:#101116;--surface:#14151a;--panel:#14151a;--border:rgba(255,255,255,0.09);--border-soft:rgba(255,255,255,0.05);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
+  :root{ color-scheme: dark; }  /* palette comes from theme.css — the private :root that shadowed it was removed 2026-07-30 */
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     background: #0C0C0C;
@@ -219,19 +219,40 @@ body{background:transparent;font-family:var(--body);}
         '<div class="own-panel">' +
           '<div class="lbl">PROVE THIS WALLET IS YOURS</div>' +
           '<div class="why">Connect the wallet on this transcript and approve a <strong>signature</strong> on a one-line message. This is <strong>not</strong> a transaction — it moves no tokens, grants no spending approval, and leaves nothing behind. It only proves you hold the key.</div>' +
-          '<div class="wallets">' +
+          '<div class="wallets" id="ownWallets">' +
             Object.keys(WALLETS).map(id => '<button class="wbtn" data-w="' + id + '">' + WALLETS[id].name + '</button>').join('') +
           '</div>' +
+          '<div class="wchip" id="ownChip" style="display:none"><span class="dot"></span><span class="addr" id="ownAddr">—</span><button class="dc" type="button" id="ownDisconnect">Disconnect</button></div>' +
           '<div class="st" id="ownStatus">Pick the wallet you used to claim this transcript.</div>' +
         '</div>';
       document.querySelectorAll('#ownPanel .wbtn').forEach(b => {
         b.onclick = () => connectAndSign(b.getAttribute('data-w'));
       });
+      document.getElementById('ownDisconnect').onclick = ownDisconnect;
     };
 
     function ownMsg(html, bad) {
       const st = document.getElementById("ownStatus");
       if (st) st.innerHTML = bad ? '<span class="self">' + html + '</span>' : html;
+    }
+
+    let ownProvider = null;
+    function ownShowChip(addr) {
+      const c = document.getElementById('ownChip');
+      if (!c) return;
+      document.getElementById('ownAddr').textContent = addr.slice(0,4) + '…' + addr.slice(-4);
+      c.style.display = 'flex';
+      document.getElementById('ownWallets').style.display = 'none';
+    }
+    function ownDisconnect() {
+      // Best-effort on the wallet's side; unconditional on ours.
+      try { ownProvider && ownProvider.disconnect && ownProvider.disconnect(); } catch (_) {}
+      ownProvider = null;
+      const c = document.getElementById('ownChip');
+      if (c) c.style.display = 'none';
+      const ws = document.getElementById('ownWallets');
+      if (ws) ws.style.display = 'flex';
+      ownMsg('Disconnected. Pick a wallet to verify.');
     }
 
     async function connectAndSign(id) {
@@ -240,8 +261,10 @@ body{background:transparent;font-family:var(--body);}
       try {
         ownMsg("Connecting " + w.name + "…");
         const resp = await provider.connect();
+        ownProvider = provider;
         const wallet = (resp && resp.publicKey && resp.publicKey.toString()) || (provider.publicKey && provider.publicKey.toString());
         if (!wallet) throw new Error("no public key returned");
+        ownShowChip(wallet);
         const nonce = Date.now();
         const message = "Cluck Norris — verify wallet for transcript ownership\nwallet: " + wallet + "\nnonce: " + nonce + "\nThis only proves you own this wallet. It is NOT a transaction, moves no tokens, and grants no permissions.";
         ownMsg("Approve the <strong>signature</strong> in " + w.name + " — this is not a transaction.");

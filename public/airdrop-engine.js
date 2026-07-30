@@ -120,6 +120,31 @@ const splToken = {
     });
   },
 
+  // Native SOL transfer (System Program ix #2). Hand-built for exactly the same
+  // reason as the SPL instructions above: solanaWeb3.SystemProgram.transfer()
+  // encodes its u64 lamports through the library's own layout helper, which calls
+  // toBufferLE() and dies on "Buffer is not defined" in a browser — there is no
+  // Node Buffer global and we deliberately don't ship a polyfill. That broke every
+  // SOL path we had (both unlock payments AND SOL-denominated airdrop prizes), so
+  // nothing here may call SystemProgram.transfer.
+  // Layout: bytes 0-3 = instruction index u32 LE (2 = Transfer), bytes 4-11 = lamports u64 LE.
+  createSolTransferInstruction(from, to, lamports) {
+    const { TransactionInstruction, PublicKey } = solanaWeb3;
+    const SYSTEM_PROGRAM = new PublicKey('11111111111111111111111111111111');
+    const data = new Uint8Array(12);
+    const dv = new DataView(data.buffer);
+    dv.setUint32(0, 2, true);
+    dv.setBigUint64(4, BigInt(lamports), true);
+    return new TransactionInstruction({
+      keys: [
+        { pubkey: from, isSigner: true,  isWritable: true },
+        { pubkey: to,   isSigner: false, isWritable: true },
+      ],
+      programId: SYSTEM_PROGRAM,
+      data,
+    });
+  },
+
   // SPL Memo — labels the batch so the transaction is self-describing to simulators
   // and shows up in the recipient's history as a clucknorris.app airdrop.
   createMemoInstruction(memoText, signers) {
@@ -229,8 +254,8 @@ var CluckAirdrop = {
         tx.add(splToken.createAssociatedTokenAccountIdempotentInstruction(
           feePayerPk, new PublicKey(ix.ata), new PublicKey(ix.owner), mintPk));
       } else if (ix.type === "solTransfer") {
-        tx.add(solanaWeb3.SystemProgram.transfer({
-          fromPubkey: feePayerPk, toPubkey: new PublicKey(ix.to), lamports: Number(ix.amount) }));
+        tx.add(splToken.createSolTransferInstruction(
+          feePayerPk, new PublicKey(ix.to), Number(ix.amount)));
       } else if (ix.type === "transfer") {
         tx.add(splToken.createTransferCheckedInstruction(
           new PublicKey(ix.from), mintPk, new PublicKey(ix.to), feePayerPk, ix.amount, opts.decimals));

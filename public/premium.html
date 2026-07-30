@@ -167,12 +167,19 @@ function markVerified(wallet, balance, proof){
   localStorage.setItem('clkn_premium_proof_wallet', wallet);
   $('verifyBox').style.display = 'none';
   $('verified').style.display = 'block';
-  $('verified').innerHTML = '✓ Verified — '+shortA(wallet)+(balance!=null?(' · '+Math.round(balance).toLocaleString()+' CLKN'):'')+' &nbsp;·&nbsp; <a href="#" onclick="resetVerify();return false">change wallet</a>';
+  $('verified').innerHTML = '✓ Verified — '+shortA(wallet)+(balance!=null?(' · '+Math.round(balance).toLocaleString()+' CLKN'):'')+' &nbsp;·&nbsp; <a href="#" onclick="resetVerify();return false">disconnect</a>';
 }
 function resetVerify(){
+  // A real disconnect, not just a local forget: drop the wallet's own session too,
+  // so the next connect re-prompts instead of silently reusing the same account.
+  // Not every injected provider implements disconnect(), hence the guard — the
+  // local reset is what must always happen.
+  try{ ACTIVE_PROVIDER && ACTIVE_PROVIDER.disconnect && ACTIVE_PROVIDER.disconnect(); }catch(_){}
+  ACTIVE_PROVIDER = null;
   PROOF=''; PROOF_WALLET='';
   localStorage.removeItem('clkn_premium_proof'); localStorage.removeItem('clkn_premium_proof_wallet');
   $('verified').style.display='none'; $('verifyBox').style.display='block';
+  setVMsg('Disconnected. Connect a wallet to verify.');
 }
 if(PROOF && PROOF_WALLET){
   markVerified(PROOF_WALLET, null, PROOF); // restore prior verification
@@ -189,12 +196,14 @@ if(new URLSearchParams(location.search).get('embed')==='1'){
 }
 
 // ── Verify: connect + sign (no transaction) ──
+let ACTIVE_PROVIDER = null;
 async function connectAndSign(id){
   const w = WALLETS[id]; const provider = w && w.detect();
-  if(!provider){ setVMsg(w.name+' not detected — install it, or use the send method above.', true); return; }
+  if(!provider){ setVMsg(w.name+" isn't detected in this browser. Open this page in "+w.name+"'s own browser, or use its desktop extension.", true); return; }
   try{
     setVMsg('Connecting '+w.name+'…');
     const resp = await provider.connect();
+    ACTIVE_PROVIDER = provider;
     const wallet = (resp&&resp.publicKey&&resp.publicKey.toString())||(provider.publicKey&&provider.publicKey.toString());
     if(!wallet) throw new Error('no public key returned');
     const nonce = Date.now();
