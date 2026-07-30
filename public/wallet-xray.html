@@ -188,7 +188,20 @@ body{background:transparent;font-family:var(--body);}
   <div class="card">
     <div class="field-label">WALLET ADDRESS</div>
     <input type="text" class="token-input" id="walletInput" placeholder="Paste any Solana wallet address…" autocomplete="off"/>
+
+    <!-- Trace folded in as a MODE, not a separate tool (owner's call, 2026-07-29).
+         The two engines answer different questions and both are kept: leave the mint
+         blank and you get the wallet's whole story across every token; fill it in and
+         you get the token-scoped ledger instead — every tx between this wallet and
+         that mint, in order, with running balance. Trace can also recover a CLOSED
+         token account, so a wallet that fully exited still shows its history. -->
+    <div class="field-label" style="margin-top:14px">TOKEN MINT <span style="color:var(--sub);font-weight:400">— optional, for a single-token ledger</span></div>
+    <input type="text" class="token-input" id="mintInput" placeholder="Leave blank to scan every token…" autocomplete="off"/>
+
     <button class="run-btn" id="runBtn" onclick="run()" disabled>🩻 RUN DEEP DIVE</button>
+    <div id="modeHint" style="margin-top:9px;font-size:12.5px;color:var(--sub);line-height:1.5">
+      Scanning <b>every token</b> this wallet has touched — behaviour, funding origin, risk.
+    </div>
   </div>
 
   <div class="err" id="err"></div>
@@ -240,6 +253,16 @@ let askSig=null;          // active "ask about this tx" signature
 let chatHist=[];          // [{role,content}]
 
 const wi=document.getElementById('walletInput'), runBtn=document.getElementById('runBtn');
+const mi=document.getElementById('mintInput');
+function syncMode(){
+  const hasMint=!!(mi&&mi.value.trim());
+  const btn=document.getElementById('runBtn'), hint=document.getElementById('modeHint');
+  if(btn) btn.innerHTML = hasMint ? '🔍 TRACE THIS TOKEN' : '🩻 RUN DEEP DIVE';
+  if(hint) hint.innerHTML = hasMint
+    ? 'Tracing <b>one token</b> — every buy, sell and transfer between this wallet and that mint, in order, with running balance.'
+    : 'Scanning <b>every token</b> this wallet has touched — behaviour, funding origin, risk.';
+}
+if(mi) mi.addEventListener('input', syncMode);
 wi.addEventListener('input',()=>{runBtn.disabled=wi.value.trim().length<32;});
 const qp=new URLSearchParams(location.search);
 if(qp.get('wallet')){wi.value=qp.get('wallet').trim();runBtn.disabled=wi.value.trim().length<32;}
@@ -269,6 +292,10 @@ async function run(deep){
   runBtn.disabled=true;startLoading(!!deep);
   chatHist=[];askSig=null;txShown=40;txFilter='all';txSearch='';
   const wallet=wi.value.trim();
+  // A mint means the user wants the token-scoped ledger, which is a different engine
+  // (/api/trace) with its own renderers. Hand off rather than half-render it here.
+  const mint=(document.getElementById('mintInput').value||'').trim();
+  if(mint){ location.href='/trace?wallet='+encodeURIComponent(wallet)+'&mint='+encodeURIComponent(mint); return; }
   try{
     const r=await fetch('/api/wallet-xray?wallet='+encodeURIComponent(wallet)+(deep?'&deep=1':''));
     const d=await r.json();

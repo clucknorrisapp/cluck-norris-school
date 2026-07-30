@@ -200,7 +200,8 @@ body{background:transparent;font-family:var(--body);}
 </head>
 <body>
 <div class="wrap">
-  <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:Anton,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#D97706;text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid #D97706;"/>&larr; CLUCK NORRIS HOME</a>
+  <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:Anton,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:var(--orange);text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid var(--orange);"/>&larr; CLUCK NORRIS HOME</a>
+  <a href="/wallet-xray" class="back-home" style="margin-left:14px">&larr; FULL WALLET X-RAY</a>
 
   <div class="header">
     <div class="header-icon">🔍</div>
@@ -432,6 +433,10 @@ const urlParams = new URLSearchParams(location.search);
 if (urlParams.get('wallet')) walletInput.value = urlParams.get('wallet').trim();
 if (urlParams.get('mint')) mintInput.value = urlParams.get('mint').trim();
 updateRunBtn();
+// Arriving from Wallet X-Ray with both fields already filled: this is the token-ledger
+// MODE of that tool, not a separate destination, so run it instead of making the user
+// press a button they already pressed once (owner's merge call, 2026-07-29).
+if (walletInput.value && mintInput.value && !runBtn.disabled) runTrace();
 
 function showErr(m) { const e = document.getElementById('err'); e.textContent = m; e.classList.add('show'); }
 function hideErr() { document.getElementById('err').classList.remove('show'); }
