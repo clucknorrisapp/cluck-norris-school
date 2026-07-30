@@ -11088,7 +11088,27 @@ app.get(["/lp-lab", "/lplab"], (req, res) => {
 
 // -- Serve React app (the school) at /school + every non-root path via the catch-all --
 app.use(express.static(join(__dirname, "dist"), { index: false }));
+
+// Static-asset extensions. A request for one of these that reaches the catch-all
+// is a MISSING FILE, not a client route — answering it with the SPA shell returns
+// 200 text/html, the browser refuses it on MIME type, and the failure is silent
+// (this is the same trap CLAUDE.md flags for new files under public/ that lack an
+// explicit route). Return a real 404 so it shows up in the network tab and in
+// Search Console instead of masquerading as a working page.
+const ASSET_EXT = /\.(js|mjs|cjs|css|map|json|png|jpe?g|gif|webp|avif|svg|ico|woff2?|ttf|otf|eot|mp3|wav|ogg|mp4|webm|txt|xml|csv|pdf|wasm)$/i;
+
 app.get("*", (req, res) => {
+  // An /api/* path that got this far matched no handler. Clients parse these as
+  // JSON; handing back the React shell makes a typo'd endpoint look like a
+  // malformed 200 rather than a 404.
+  if (req.path.startsWith("/api/")) {
+    return res.status(404).json({ success: false, error: "not_found", path: req.path });
+  }
+  if (ASSET_EXT.test(req.path)) {
+    return res.status(404).type("text/plain").send("Not found");
+  }
+  // Extension-less paths still fall through to the SPA — the school does its own
+  // client-side routing and needs to receive unknown paths to render them.
   res.sendFile(join(__dirname, "dist", "index.html"));
 });
 
