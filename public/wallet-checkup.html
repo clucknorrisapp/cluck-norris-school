@@ -13,7 +13,7 @@
 <style>
   /* palette comes from theme.css — the private :root that used to shadow it was removed 2026-07-29 */
   * { box-sizing:border-box; margin:0; padding:0; }
-  body { background:#0C0C0C;  color:var(--text); font-family:'Anton',sans-serif; min-height:100vh; }
+  body { background:var(--bg);  color:var(--text); font-family:var(--body); min-height:100vh; }
   .wrap { max-width:640px; margin:0 auto; padding:24px 16px 80px; }
   .back-home { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
   .back-home img { height:22px; width:22px; object-fit:cover; border-radius:50%; border:1px solid var(--orange); }
@@ -76,15 +76,15 @@ body{background:transparent;font-family:var(--body);}
   .wallet-info { font-family: var(--mono); font-size: 12px; color: var(--green); margin-top: 10px; padding: 10px 12px; background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.25); border-radius: 8px; display: none; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
   .wallet-info.show { display: flex; }
   .wallet-info-addr { word-break: break-all; flex: 1; min-width: 0; }
-  .wallet-disc-btn { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: #FCA5A5; font-family: 'Anton', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+  .wallet-disc-btn { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: #FCA5A5; font-family: var(--disp); font-size: 10px; font-weight: 700; letter-spacing: 1.5px; padding: 6px 12px; border-radius: 6px; cursor: pointer; }
   .progress { display: none; margin-top: 12px; font-family: var(--mono); font-size: 12px; color: var(--accent); text-align: center; }
   .progress.show { display: block; }
   .error-box { display: none; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 12px 14px; font-family: var(--mono); font-size: 12px; color: #FCA5A5; margin-bottom: 16px; }
   .error-box.show { display: block; }
-  .revoke-btn { margin-top: 10px; width: 100%; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.5); color: #FCA5A5; font-family: 'Anton', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1.5px; padding: 9px; border-radius: 7px; cursor: pointer; }
+  .revoke-btn { margin-top: 10px; width: 100%; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.5); color: #FCA5A5; font-family: var(--disp); font-size: 12px; font-weight: 700; letter-spacing: 1.5px; padding: 9px; border-radius: 7px; cursor: pointer; }
   .revoke-btn:hover { background: rgba(239,68,68,0.25); }
   .revoke-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-  .revoke-all { margin-top: 12px; width: 100%; background: #EF4444; border: none; color: #fff; font-family: 'Anton', sans-serif; font-size: 13px; font-weight: 900; letter-spacing: 2px; padding: 12px; border-radius: 8px; cursor: pointer; }
+  .revoke-all { margin-top: 12px; width: 100%; background: linear-gradient(135deg, #FF5A3C, var(--red)); border: none; color: #fff; font-family: var(--disp); font-size: 14px; letter-spacing: 2px; padding: 13px; border-radius: 12px; cursor: pointer; box-shadow: 0 6px 18px rgba(232,30,14,.35); }
   .revoke-all:disabled { opacity: 0.4; cursor: not-allowed; }
 </style>
   <meta name="theme-color" content="#0b0c10">

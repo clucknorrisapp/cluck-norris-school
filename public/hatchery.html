@@ -10,19 +10,19 @@
 <style>
   /* palette comes from theme.css — the private :root that used to shadow it was removed 2026-07-29 */
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg);  color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh; }
+  body { background: var(--bg);  color: var(--text); font-family: var(--body); min-height: 100vh; }
   .wrap { max-width: 640px; margin: 0 auto; padding: 24px 16px 80px; }
 
   .header { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
   .header-icon { font-size: 40px; filter: drop-shadow(0 0 16px rgba(217,119,6,0.5)); }
-  .header .brand-mini { font-family: 'Anton', sans-serif; font-size: 10px; letter-spacing: 4px; color: #D97706; margin-bottom: 4px; font-weight: 700; }
-  .header h1 { font-family: 'Anton', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: #FCD34D; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
-  .header p { font-family: 'Anton', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
+  .header .brand-mini { font-family: var(--disp); font-size: 11px; letter-spacing: 4px; color: var(--orange); margin-bottom: 4px; }
+  .header h1 { font-family: var(--disp); font-size: 28px; font-weight: 900; letter-spacing: 3px; background: linear-gradient(135deg, var(--gold), var(--orange)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
+  .header p { font-family: var(--body); font-weight: 500; font-size: 12.5px; color: var(--sub); letter-spacing: .3px; margin-top: 7px; }
 
   .hero { background: rgba(255,122,24,0.05); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; }
-  .hero-tag { font-family: 'Anton', sans-serif; font-size: 11px; color: var(--accent); letter-spacing: 3px; margin-bottom: 7px; }
-  .hero-title { font-family: 'Anton', sans-serif; font-size: 18px; font-weight: 700; color: var(--text); letter-spacing: .5px; margin-bottom: 8px; }
-  .hero-sub { font-family: system-ui, sans-serif; font-size: 13.5px; color: var(--sub); line-height: 1.65; }
+  .hero-tag { font-family: var(--disp); font-size: 11px; color: var(--accent); letter-spacing: 3px; margin-bottom: 7px; }
+  .hero-title { font-family: var(--disp); font-size: 18px; font-weight: 700; color: var(--text); letter-spacing: .5px; margin-bottom: 8px; }
+  .hero-sub { font-family: var(--body); font-weight: 500; font-size: 13.5px; color: var(--body-text); line-height: 1.7; }
 
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
   .card-title { font-family: var(--mono); font-size: 10px; color: var(--subtext); letter-spacing: 2px; margin-bottom: 14px; }
@@ -49,7 +49,7 @@
   .wallet-info { font-family: var(--mono); font-size: 12px; color: var(--green); margin-top: 10px; padding: 10px 12px; background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.25); border-radius: 8px; display: none; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
   .wallet-info.show { display: flex; }
   .wallet-info-addr { word-break: break-all; flex: 1; min-width: 0; }
-  .wallet-disc-btn { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: #FCA5A5; font-family: 'Anton', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 1.5px; padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+  .wallet-disc-btn { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: #FCA5A5; font-family: var(--disp); font-size: 10px; font-weight: 700; letter-spacing: 1.5px; padding: 6px 12px; border-radius: 6px; cursor: pointer; }
 
   /* Form */
   .field { margin-bottom: 14px; }
@@ -85,9 +85,10 @@
   .fee-box .fee-tip { margin-top: 9px; padding: 9px 11px; background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.3); border-radius: 6px; font-size: 11px; color: var(--text); line-height: 1.6; }
   .fee-box .fee-tip b { color: #4ade80; }
 
-  .hatch-btn { width: 100%; background: #FCD34D; border: none; border-radius: 10px; padding: 15px; font-family: 'Anton', sans-serif; font-size: 16px; font-weight: 900; letter-spacing: 2px; color: #1a1a1a; cursor: pointer; transition: opacity 0.15s; }
+  .hatch-btn { width: 100%; background: linear-gradient(135deg, var(--orange), var(--red)); border: none; border-radius: 12px; padding: 16px; font-family: var(--disp); font-size: 16px; letter-spacing: 2px; color: #fff; cursor: pointer; box-shadow: 0 6px 18px rgba(232,30,14,.4); transition: transform .12s, box-shadow .12s; }
+  .hatch-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 26px rgba(232,30,14,.5); }
   .hatch-btn:hover { opacity: 0.9; }
-  .hatch-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .hatch-btn:disabled { background: rgba(255,255,255,.05); color: var(--muted); box-shadow: none; transform: none; cursor: not-allowed; }
 
   .progress { display: none; margin-top: 12px; font-family: var(--mono); font-size: 12px; color: var(--accent); text-align: center; }
   .progress.show { display: block; }
@@ -97,7 +98,7 @@
 
   .result { display: none; }
   .result.show { display: block; }
-  .result-title { font-family: 'Anton', sans-serif; font-size: 20px; font-weight: 900; letter-spacing: 2px; color: var(--green); margin-bottom: 12px; }
+  .result-title { font-family: var(--disp); font-size: 20px; font-weight: 900; letter-spacing: 2px; color: var(--green); margin-bottom: 12px; }
   .result-row { font-family: var(--mono); font-size: 12px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); word-break: break-all; }
   .result-row .rk { color: var(--subtext); }
   .result-row a { color: #93C5FD; text-decoration: none; }
@@ -124,10 +125,10 @@
   .calc-pair { font-family: var(--mono); font-size: 10px; color: var(--subtext); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
   .calc-pair-btn { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 6px; padding: 5px 14px; font-family: var(--mono); font-size: 11px; color: var(--subtext); cursor: pointer; }
   .calc-pair-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(252,211,77,0.08); }
-  .calc-teach { margin-top: 10px; font-family: system-ui, sans-serif; font-size: 11px; line-height: 1.6; color: var(--subtext); }
+  .calc-teach { margin-top: 10px; font-family: var(--body); font-size: 12.5px; line-height: 1.7; color: var(--sub); }
   .calc-teach b { color: #D1D5DB; }
 
-  .footer-tag { text-align: center; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Anton', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
+  .footer-tag { text-align: center; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); font-family: var(--disp); font-size: 12px; color: var(--sub); letter-spacing: 3px; }
   .footer-tag a { color: #D97706; text-decoration: none; }
 
   /* Desktop — wider container so the page fills a larger screen */
@@ -149,7 +150,7 @@ body{background:transparent;font-family:var(--body);}
 </head>
 <body>
 <div class="wrap">
-  <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:Anton,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#D97706;text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid #D97706;"/>&larr; CLUCK NORRIS HOME</a>
+  <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:var(--disp);font-size:12px;letter-spacing:2px;color:var(--orange);text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid #D97706;"/>&larr; CLUCK NORRIS HOME</a>
 
   <div class="header">
     <div class="header-icon">🥚</div>
@@ -189,7 +190,7 @@ body{background:transparent;font-family:var(--body);}
     <div style="font-size:12.5px;color:#9CA3AF;line-height:1.6;margin-bottom:10px">Stuck on a term anywhere on this page — <i>decimals, mint authority, liquidity, concentrated pool</i>? Ask in plain English. Cluck answers free.</div>
     <div style="display:flex;gap:6px">
       <input id="askInput" type="text" autocomplete="off" placeholder="e.g. what does revoking mint authority do?" style="flex:1;min-width:0;background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:#F9FAFB;font-size:13px;outline:none" onkeydown="if(event.key==='Enter')askCluck()"/>
-      <button id="askBtn" onclick="askCluck()" style="flex-shrink:0;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.4);border-radius:8px;padding:9px 16px;font-family:'Anton',sans-serif;font-size:12px;font-weight:700;color:#38BDF8;letter-spacing:1px;cursor:pointer">ASK</button>
+      <button id="askBtn" onclick="askCluck()" style="flex-shrink:0;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.4);border-radius:8px;padding:9px 16px;font-family:var(--disp);font-size:13px;color:var(--gold);letter-spacing:1px;cursor:pointer">ASK</button>
     </div>
     <div id="askAnswer" style="display:none;margin-top:10px;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:8px;padding:11px 13px;font-size:13px;color:#D1D5DB;line-height:1.65;white-space:pre-wrap"></div>
     <div style="margin-top:10px;font-size:11.5px;color:#6B7280">Don't trust Cluck? 📚 <a href="/#library" style="color:#FCD34D;text-decoration:none">Go read the Library yourself →</a></div>
@@ -514,10 +515,10 @@ function initMobileDeepLinks() {
   if (!el) return;
   const url = encodeURIComponent(location.href), ref = encodeURIComponent(location.origin);
   el.innerHTML =
-    '<div style="font-family:monospace;font-size:12px;color:#FCD34D;line-height:1.5">📱 On mobile? Open this page inside your wallet to connect:</div>'
+    '<div style="font-family:var(--body);font-weight:600;font-size:13px;color:var(--gold);line-height:1.6">📱 On mobile? Open this page inside your wallet to connect:</div>'
     + '<a class="wallet-btn phantom" style="text-decoration:none" href="https://phantom.app/ul/browse/' + url + '?ref=' + ref + '">🔮 Open in Phantom</a>'
     + '<a class="wallet-btn solflare" style="text-decoration:none" href="https://solflare.com/ul/v1/browse/' + url + '?ref=' + ref + '">☀️ Open in Solflare</a>'
-    + '<div style="font-family:monospace;font-size:10px;color:#9CA3AF;line-height:1.5">Opens this page in the wallet’s built-in browser. Nothing is signed or shared by the link.</div>';
+    + '<div style="font-family:var(--body);font-size:12px;color:var(--sub);line-height:1.6">Opens this page in the wallet’s built-in browser. Nothing is signed or shared by the link.</div>';
   el.style.display = 'flex';
   if (picker) picker.style.display = 'none';
 }
