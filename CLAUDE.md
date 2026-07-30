@@ -304,9 +304,16 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   `whirlpool-mm.js` (Liquidity Engine — Orca Whirlpools market maker + autonomous vault) —
   Express routers mounted by `server.js`.
 - `public/*.html` — standalone vanilla-HTML tool pages: wallet-xray, trace, token-holders,
-  airdrop, buyspecial, rose, hatchery, security-coop, wallet-checkup, liquidity, premium,
-  bags, tools, investors, stats, transcript, pool-monitor, plus the operator-only
-  autopsy, order-book and lp-scanner.
+  airdrop, buyspecial-pro, hatchery, wallet-checkup, premium, bags, tools, investors, stats,
+  transcript, pool-monitor, plus the operator-only autopsy, order-book and lp-scanner.
+  ⚠️ **The FILE that a route serves is often NOT the file named after the route** — the tool
+  merges left the old pages on disk. `/holders` + `/snapshot` → `token-holders.html`;
+  `/buyspecial` + `/rose` → `buyspecial-pro.html`; `/security-coop` + `/wallet-checkup` →
+  `wallet-checkup.html`; `/liquidity` + `/liquidity-engine` → `liquidity-locked.html`. The seven
+  unrouted leftovers (`buyspecial`, `rose`, `holders`, `snapshot`, `security-coop`, `liquidity`,
+  `liquidity-engine`) were DELETED 2026-07-30 — a session polished `holders.html` and
+  `snapshot.html` before noticing nothing serves them. **Grep server.js for the route before
+  editing a page.**
   🎨 **CONCIERGE CLEANED UP + REAL ICONS (2026-07-29, owner: "clean up the Cluck concierge",
   "those all look generic").** The homepage journey menu went from NINE routes to SIX — the four
   that went (belt course, specific-coin, AI Classroom, own-pace Library) are all cards or links on
@@ -379,8 +386,13 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   `/airdrop` — one implementation, so a fix lands in both. `airdrop.html` keeps its UI and calls the
   engine through thin wrappers; don't re-inline a private copy of the shim there.
   ⚠️ **`public/` is NOT statically mounted** — a new asset needs an explicit `app.get` route
-  (see the `airdrop-engine.js` / `airdrop-handoff.js` loop next to `/market-header.js`), or the SPA
-  catch-all answers it with the React shell and the browser refuses it on MIME type, silently.
+  (see the `airdrop-engine.js` / `airdrop-handoff.js` loop next to `/market-header.js`), or the
+  request falls through to the catch-all. **Since 2026-07-30 that at least FAILS LOUDLY:** the
+  catch-all returns a real 404 for `/api/*` (as JSON) and for any static-asset extension
+  (`.js .css .png .webp .svg .json .map .woff2 …`), instead of answering everything with the React
+  shell at 200 — which is what made a missing asset a silent MIME-type refusal. Extension-less
+  paths still fall through to the SPA, which needs them for client-side routing, so a missing
+  PAGE route still renders the school shell rather than 404ing.
   **Reward token is selectable**: the comp token, SOL (native `SystemProgram.transfer`), USDC, or any
   mint. In % mode the basis follows the token — comp token → % of tokens bought, SOL → % of SOL spent,
   USDC/other → % of USD spent, converted via `/api/token-price` (Jupiter v3, also the source of
@@ -390,16 +402,18 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
   6h TTL). **localStorage hand-off is the fallback only**: it silently fails in Phantom's webview,
   which is what made this look broken for four rounds. The reader clears the payload only AFTER
   applying it and SHOWS failures instead of swallowing them.
-  💰 **PRICING (owner's call 2026-07-24): free for ≥2M CLKN holders via wallet-connect (35 days),
-  else 0.05 SOL (~$3.69) one-click OR 5,850 CLKN (~$2.77) sent manually — the CLKN door is
-  deliberately ~25% CHEAPER so paying in the project's token is the better deal.** Enforced in
-  THREE places that must move together: `TOOL_GRANTS.buyspecial.cost = 5850` (server.js — the
-  `Math.floor(amount)` anti-tamper check), `SOL_UNLOCK_MIN_LAMPORTS = 50_000_000` (server.js, the
-  floor `/api/verify-sol-payment` clamps `&min=` up to, so a tampered client can't bless dust), and
-  `PRICE`/`SOL_LAMPORTS` + the UI strings in `public/buyspecial-pro.html`. CLKN is a FIXED token
-  amount, so re-check the ~25% ratio (`PRICE × clknUsd` vs `0.05 × solUsd`) whenever CLKN moves
-  materially. Vestigial: `TOOL_GRANTS.rose` (500) — `/rose` serves the same page, which always
-  posts `tool:'buyspecial'`; nothing sends `rose` anymore.
+  💰 **PRICING (updated 2026-07-30): free for ≥2M CLKN holders via wallet-connect (35 days),
+  else 0.05 SOL (~$3.69) one-click. TWO doors, both resolved through the connected wallet.**
+  Enforced in two places that must move together: `SOL_UNLOCK_MIN_LAMPORTS = 50_000_000`
+  (server.js, the floor `/api/verify-sol-payment` clamps `&min=` up to, so a tampered client can't
+  bless dust) and `SOL_LAMPORTS` + the UI strings in `public/buyspecial-pro.html`.
+  ⚠️ **The third door — 5,850 CLKN (~$2.77) sent by hand, priced on 2026-07-24 to be ~25%
+  CHEAPER than the SOL door so paying in the project's own token was the better deal — was
+  REMOVED 2026-07-30** under the owner's "remove the send-in-token functions from our tools"
+  call. Paying in CLKN is no longer possible here; only HOLDING it is (the 2M free tier). That
+  was a deliberate pricing decision being reversed, so re-raise it with the owner before
+  assuming the current state is final. `TOOL_GRANTS.buyspecial` / `.rose` still exist in
+  server.js but nothing calls them.
   ⛔ **LP Scanner is OPERATOR-ONLY (2026-07-04, owner's call — off public, kept for CLKN ops):**
   all seven `/api/lp-*` endpoints are adminAuthOK-gated (404 without key); `/lp-scanner` page
   still exists but needs `?key=PREMIUM_ACCESS_KEY` once (remembered in localStorage); public
@@ -769,6 +783,22 @@ tick-alignment + tight-width guards) and the balanced label + the /liquidity "±
 render the realized width, not the requested slider value. LOW backlog now fully cleared.
 
 ## Conventions
+- 🎨 **TYPOGRAPHY — one system, don't reintroduce the drift (site-wide pass 2026-07-30).**
+  `var(--body)` (Chakra Petch) is the BODY font on every page; `var(--disp)` (Anton) is for
+  headings, chips, stat labels and buttons ONLY; `var(--mono)` is for data — addresses, amounts,
+  ledger lines. Anton is a single-weight poster face: setting 9–12px prose in it (or making it
+  the page's `body` font, which `wallet-checkup.html` did) is what made the tool pages read flat
+  and cheap next to the main page. Never write the literal `'Anton', sans-serif` or
+  `system-ui, sans-serif` in a page — use the tokens, so a change lands everywhere at once.
+- ⚠️ **Never redefine a theme token inside a page.** Eight tool pages each carried a private
+  `:root` that shadowed `theme.css`; they were removed 2026-07-29/30 and the legacy names they
+  used (`--accent`, `--subtext`, `--purple`, `--head`, …) are aliased ONCE at the bottom of
+  `theme.css`. A page-local `:root` also creates a live trap: aliasing Anton to `var(--disp)`
+  inside a page that itself defines `--disp` produces `--disp: var(--disp)`, a self-referential
+  custom property that CSS discards — silently dropping every heading to the inherited font.
+- **Disabled CTAs go NEUTRAL GREY, not dimmed orange.** A 35–45%-opacity orange→red gradient on
+  the dark ground reads as muddy brown, i.e. broken rather than inactive. Use
+  `background: rgba(255,255,255,.05); color: var(--muted); box-shadow: none;`.
 - 🛡️ **PHANTOM "may be malicious" WARNING on client-signed txs — ROOT CAUSE + FIX (Phantom
   Support, 2026-05; recurring, so it's recorded HERE in the committed memory now).** Phantom's
   **Lighthouse** security system flags any **multi-signer** transaction when the signing order is
@@ -788,8 +818,19 @@ render the realized width, not the requested slider value. LOW backlog now fully
 - Forensic rule everywhere: **state what's on-chain, never assert intent** ("the chain
   shows *what*, not *why*"). Only call a wallet "creator/team" when a launchpad API
   (Bags/Pump) confirms it.
-- Payment model: a unique-decimal CLKN transfer, verified on-chain and replay-guarded;
-  holders of ≥2M CLKN get a 5× unlock bonus read straight from the payment tx.
+- ⛔ **PAYMENT MODEL CHANGED 2026-07-30 — send-to-unlock is RETIRED (owner: "I want to remove
+  the send in token functions from our tools, it complicates things too much overall. Great
+  idea, wrong timing or application").** The old model was a unique-decimal CLKN transfer
+  (`500.xyz`, `5850.xyz`, …), matched on-chain and replay-guarded, with a 5× unlock stretch for
+  ≥2M holders read from the payment tx. Every door now resolves through the CONNECTED WALLET:
+  **hold** a threshold of CLKN (free), **pay SOL** in one click, or **sign a message** where the
+  gate is ownership rather than payment (premium forensics, transcript Tier-2 — both via
+  `/api/premium-verify-sig`; pass `minHold: 0` for ownership-only, which is what transcript uses
+  since a graduate may hold no CLKN). Ask Cluck's paid "20 more questions" door is gone entirely;
+  the free daily allowance is all there is. `/api/verify-clkn-payment` is deliberately still
+  LIVE but has no callers — someone on a cached page could have a send in flight — so don't
+  "wire it back up", and it can be deleted once enough time has passed. **Do NOT reintroduce a
+  send-to-unlock flow without the owner asking for it.**
 - **Telegram posts are SILENT by default — NEVER `&loud=1` unless the owner explicitly
   says so in that moment.** (Owner rule, set 2026-06-10 after an unwanted ping.)
 - ⚠️ **A Telegram post carrying an IMAGE or VIDEO gets 1024 characters, not 4096.** A
