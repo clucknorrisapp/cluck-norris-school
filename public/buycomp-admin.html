@@ -154,9 +154,12 @@ body{background:transparent;font-family:var(--body);}
     <div id="comps"><div class="note">Enter your key and hit refresh.</div></div>
   </div>
 </div>
+<script src="/cluck-util.js"></script>
 <script>
   const $ = id => document.getElementById(id);
-  const esc = s => String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  // WAS MISSING THE SINGLE-QUOTE ESCAPE (/[&<>"]/g) — same flaw as the four found
+  // in the first sweep. Now the shared strict escaper.
+  const esc = CluckUtil.esc;
   let metric = "cumulative";
   function setMetric(m){ metric=m; document.querySelectorAll(".metric button").forEach(b=>b.classList.toggle("on", b.dataset.m===m)); }
   function togglePrizeMint(){ $("prizeMint").style.display = $("prizeToken").value==="spl" ? "block" : "none"; }

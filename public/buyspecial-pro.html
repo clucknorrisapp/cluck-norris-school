@@ -611,7 +611,7 @@ $('gPaySol').addEventListener('click',gPaySolFn);
 // (/api/buycomp/start) makes its shortcut appear here automatically — and the
 // server drops it from the feed once the hold check + payout slack are done, so
 // finished comps clean themselves up instead of living in the UI forever.
-const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const esc = CluckUtil.esc;   // shared escaper — see /cluck-util.js
 const dayLbl=u=>new Date(u*1000).toLocaleDateString(undefined,{month:'short',day:'numeric'});
 async function loadCompPresets(){
   let comps=[];

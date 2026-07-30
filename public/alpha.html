@@ -78,8 +78,10 @@ body{background:transparent;font-family:var(--body);}
   <div class="powered" id="powered"></div>
 </div>
 
+<script src="/cluck-util.js"></script>
 <script>
-  var esc=function(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});};
+  // esc lives in /cluck-util.js — see that file for why the copies were unified.
+  const esc = CluckUtil.esc;
   var pct=function(n){if(n==null)return"";var v=Number(n);return '<span class="'+(v>=0?'up':'dn')+'">'+(v>=0?'+':'')+v.toFixed(1)+'%</span>';};
   var fmt=function(n){n=Number(n)||0;return n>=1e6?'$'+(n/1e6).toFixed(2)+'M':n>=1e3?'$'+(n/1e3).toFixed(0)+'K':'$'+Math.round(n);};
   function card(title,inner){return '<div class="card"><div class="sec-title">'+title+'</div>'+inner+'</div>';}

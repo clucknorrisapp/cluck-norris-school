@@ -163,8 +163,10 @@
   </div>
 </div>
 
+<script src="/cluck-util.js"></script>
 <script>
-  var esc=function(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});};
+  // esc lives in /cluck-util.js — see that file for why the copies were unified.
+  const esc = CluckUtil.esc;
   var DONE_KEY='clkn_classroom_done_v1', LAST_KEY='clkn_classroom_last_v1', GRAD_KEY='clkn_classroom_grad_v1';
   var courses=[], curCourse=null, curLesson=null, chatHist=[], busy=false, mode='lesson'; // NOTE: not 'history' — window.history is a read-only global and would shadow it
   function loadGrad(){ try{ return JSON.parse(localStorage.getItem(GRAD_KEY))||{}; }catch(e){ return {}; } }

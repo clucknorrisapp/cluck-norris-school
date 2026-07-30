@@ -234,6 +234,7 @@ body{background:transparent;font-family:var(--body);}
   </div>
 </div>
 
+<script src="/cluck-util.js"></script>
 <script>
   // Operator-only since 2026-07-04: every /api/lp-* endpoint is key-gated. The page reads
   // ?key= once, remembers it locally, and appends it to every API call.
@@ -248,7 +249,8 @@ body{background:transparent;font-family:var(--body);}
   });
 </script>
 <script>
-  var esc = function(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); };
+  // esc lives in /cluck-util.js — see that file for why the copies were unified.
+  const esc = CluckUtil.esc;
   var fmt = function(n){ n=Number(n)||0; return n>=1e6?("$"+(n/1e6).toFixed(2)+"M"):n>=1e3?("$"+(n/1e3).toFixed(1)+"K"):("$"+Math.round(n)); };
   // Signature color per DEX so the venue jumps out at a glance instead of grey text.
   var DEX_COLORS={meteora:'#A78BFA','meteora-damm-v2':'#C4B5FD','meteora-damm':'#C4B5FD',orca:'#38BDF8',raydium:'#22D3EE','raydium-clmm':'#22D3EE','raydium-cpmm':'#22D3EE',pumpswap:'#F9A8D4','pancakeswap-v3-solana':'#F472B6',byreal:'#34D399',lifinity:'#6EE7B7',invariant:'#FCD34D',crema:'#FBBF24',fluxbeam:'#FB923C',saber:'#34D399',humidifi:'#94A3B8',solfi:'#94A3B8'};

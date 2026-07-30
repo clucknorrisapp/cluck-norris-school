@@ -3,6 +3,10 @@
 // removed in the 2026-07-03 CG-API divorce) and renders a compact, theme-matched strip. Self-contained: inline styles,
 // no dependency on the host page's CSS. Usage: renderMarketHeader(mint, "containerId").
 (function () {
+  // DELIBERATE EXCEPTION to the "esc lives in cluck-util.js" rule: this widget is a
+  // self-contained drop-in that some pages load WITHOUT cluck-util.js, so depending on
+  // it would couple two shared modules and make load order matter. This copy is the
+  // strict one (escapes the single quote) — keep it in sync if cluck-util.js changes.
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   function fmtUsd(n) { n = Number(n) || 0; return n >= 1e9 ? "$" + (n / 1e9).toFixed(2) + "B" : n >= 1e6 ? "$" + (n / 1e6).toFixed(2) + "M" : n >= 1e3 ? "$" + (n / 1e3).toFixed(1) + "K" : "$" + Math.round(n); }
   function fmtPrice(n) { n = Number(n); if (!n) return "—"; return n < 0.0001 ? "$" + n.toExponential(2) : n < 1 ? "$" + n.toPrecision(4) : "$" + n.toLocaleString(undefined, { maximumFractionDigits: 2 }); }

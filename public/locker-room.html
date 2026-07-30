@@ -602,11 +602,15 @@
     if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(str).then(done,done); }
     else { var ta=document.createElement('textarea'); ta.value=str; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');}catch(e){} ta.remove(); done(); } }
   function showVerify(res, mint, sig){
-    var esc=(res&&res.escrow)?res.escrow:'';
-    window.__lastLock={ sig:sig, esc:esc };
+    // Named escrow, NOT esc: a local `esc` here shadowed the shared HTML escaper for
+    // this whole function body, so adding any esc(...) call inside would have thrown
+    // "esc is not a function". The __lastLock key stays `esc` — the copy buttons read
+    // it by that name.
+    var escrow=(res&&res.escrow)?res.escrow:'';
+    window.__lastLock={ sig:sig, esc:escrow };
     $('#vSig').textContent=shortAddr(sig); $('#vSig').title=sig;
     $('#vSigLink').href='https://solscan.io/tx/'+encodeURIComponent(sig);
-    if(esc){ $('#vEsc').textContent=shortAddr(esc); $('#vEsc').title=esc; $('#vEscLink').href='https://solscan.io/account/'+encodeURIComponent(esc); $('#vEscRow').style.display='flex'; }
+    if(escrow){ $('#vEsc').textContent=shortAddr(escrow); $('#vEsc').title=escrow; $('#vEscLink').href='https://solscan.io/account/'+encodeURIComponent(escrow); $('#vEscRow').style.display='flex'; }
     else { $('#vEscRow').style.display='none'; }
     $('#vJup').href='https://lock.jup.ag/token/'+encodeURIComponent(mint);
     var vf=$('#vFame'); vf.onclick=function(ev){ ev.preventDefault(); document.querySelector('.tab[data-tab="fame"]').click(); $('#fameMint').value=mint; loadFame(mint); };

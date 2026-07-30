@@ -124,9 +124,10 @@
   <div id="out"></div>
 </div>
 
+<script src="/cluck-util.js"></script>
 <script>
 const $ = s => document.querySelector(s);
-const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+const esc = CluckUtil.esc;   // shared escaper — see /cluck-util.js
 const KEY_LS="ob_key", MINT_LS="ob_mint";
 $("#key").value = localStorage.getItem(KEY_LS) || "";
 $("#mint").value = localStorage.getItem(MINT_LS) || "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
