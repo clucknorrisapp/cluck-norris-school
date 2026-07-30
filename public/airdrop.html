@@ -183,7 +183,8 @@
   .door-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:13px;}
   @media(max-width:520px){ .door-grid{grid-template-columns:1fr;} }
   .door{background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:14px;padding:16px;text-align:center;}
-  .door-hold{border-color:rgba(255,182,39,.45);}
+  .door-hold{border-color:rgba(255,182,39,.45);}   /* the free door leads — gold edge */
+  .door-pay{border-color:var(--border);}            /* the paid door is the fallback, deliberately quieter */
   .door-lbl{font-family:var(--disp);font-size:10px;letter-spacing:2.5px;color:var(--sub);text-transform:uppercase;}
   .door-val{font-family:var(--disp);font-size:31px;text-shadow:0 0 20px rgba(255,182,39,.4);color:var(--gold);margin:7px 0 6px;letter-spacing:.5px;}
   .door-note{font-size:12px;color:var(--body-text);line-height:1.5;}
