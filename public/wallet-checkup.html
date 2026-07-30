@@ -347,16 +347,18 @@ else initMobileDeepLinks();
 function syncWalletUi() {
   const picker = document.getElementById('walletPicker');
   const info = document.getElementById('walletInfo');
-  const scanCard = document.getElementById('scanCard');
+  // There is no #scanCard element on this page — it went with the Security Coop
+  // merge. Dereferencing it threw "Cannot read properties of null" partway through
+  // this function, so connecting a wallet from the revoke card left runFor() never
+  // called and the REVOKE ALL button never rendered. The scan card is always
+  // visible now, so there is nothing to toggle.
   if (walletPubkey) {
     picker.style.display = 'none';
     info.classList.add('show');
     document.getElementById('walletInfoAddr').textContent = '✓ ' + walletPubkey;
-    scanCard.style.display = 'block';
   } else {
     picker.style.display = 'flex';
     info.classList.remove('show');
-    scanCard.style.display = 'none';
     document.getElementById('results').innerHTML = '';
   }
 }

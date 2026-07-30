@@ -319,10 +319,12 @@
   });
   function b64ToBytes(b){ var s=atob(b),a=new Uint8Array(s.length); for(var i=0;i<s.length;i++)a[i]=s.charCodeAt(i); return a; }
   function bytesToB64(u){ var s=''; for(var i=0;i<u.length;i++)s+=String.fromCharCode(u[i]); return btoa(s); }
-  // Was the odd one out: it returned the raw JSON-RPC envelope, so an `error`
-  // response flowed on as undefined instead of throwing. Shared helper throws.
+  // Shared helper (/cluck-util.js). NOTE it returns d.result — NOT the raw JSON-RPC
+  // envelope this page's old private copy returned — so every read below is off
+  // `j` directly, never `j.result`. Getting this wrong made each lock LOOK failed
+  // while it was actually on chain, inviting a re-run that double-locks real tokens.
   const rpc = CluckUtil.rpc;
-  function confirmSig(sig){ return new Promise(function(res,rej){ var n=0; (function poll(){ n++; rpc('getSignatureStatuses',[[sig],{searchTransactionHistory:true}]).then(function(j){ var st=j&&j.result&&j.result.value&&j.result.value[0]; if(st&&st.err)return rej(new Error('tx failed')); if(st&&(st.confirmationStatus==='confirmed'||st.confirmationStatus==='finalized'))return res(); if(n>=30)return rej(new Error('confirm timeout')); setTimeout(poll,1500); }).catch(function(){ if(n>=30)return rej(new Error('confirm error')); setTimeout(poll,1500); }); })(); }); }
+  function confirmSig(sig){ return new Promise(function(res,rej){ var n=0; (function poll(){ n++; rpc('getSignatureStatuses',[[sig],{searchTransactionHistory:true}]).then(function(j){ var st=j&&j.value&&j.value[0]; if(st&&st.err)return rej(new Error('tx failed')); if(st&&(st.confirmationStatus==='confirmed'||st.confirmationStatus==='finalized'))return res(); if(n>=30)return rej(new Error('confirm timeout')); setTimeout(poll,1500); }).catch(function(){ if(n>=30)return rej(new Error('confirm error')); setTimeout(poll,1500); }); })(); }); }
 
   $('#doDistribute').addEventListener('click',function(){
     if(!opProvider||!opProvider.signTransaction){ $('#distMsg').className='msg err'; $('#distMsg').textContent='Connect a wallet that can sign.'; return; }
@@ -349,11 +351,11 @@
         var tx=window.solanaWeb3.Transaction.from(b64ToBytes(res.txBase64));
         var base=window.solanaWeb3.Keypair.fromSecretKey(b64ToBytes(res.baseSecret));
         return rpc('getLatestBlockhash',[{commitment:'confirmed'}]).then(function(j){
-          var bh=j&&j.result&&j.result.value&&j.result.value.blockhash; if(bh) tx.recentBlockhash=bh;
+          var bh=j&&j.value&&j.value.blockhash; if(bh) tx.recentBlockhash=bh;
           return opProvider.signTransaction(tx);
         }).then(function(signed){ signed.partialSign(base); var raw=signed.serialize();
           return rpc('sendTransaction',[bytesToB64(raw),{encoding:'base64',skipPreflight:true,preflightCommitment:'confirmed',maxRetries:5}]);
-        }).then(function(j){ if(j.error) throw new Error(j.error.message||'send failed'); st.textContent='⏳ confirming…'; return confirmSig(j.result).then(function(){ return j.result; }); })
+        }).then(function(sig){ st.textContent='⏳ confirming…'; return confirmSig(sig).then(function(){ return sig; }); })
         .then(function(sig){ ok++; st.innerHTML='✓ <a href="https://solscan.io/tx/'+encodeURIComponent(sig)+'" target="_blank" rel="noopener" style="color:#34d399">done</a>'; i++; setTimeout(next,400); });
       }).catch(function(e){ fail++; st.textContent='✗ '+((e&&e.message)?e.message:'failed').slice(0,40); st.style.color='#ff8f8f'; i++; setTimeout(next,400); });
     })();
