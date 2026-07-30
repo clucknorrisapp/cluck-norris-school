@@ -211,3 +211,44 @@ html .card-title { font-size: 15px; letter-spacing: 1.2px; }
   /* Don't shrink body copy on the device where reading is hardest. */
   html .hero-sub, html .lede, html .explain, html .vm-sub, html .edu-body, html .why { font-size: 15px; }
 }
+
+/* Prose that lives in CSS CLASS rules rather than inline styles. A source scan for
+   `font-size:` on a line carrying prose cannot see these — the size is in the sheet
+   and the sentence is in the markup — so they only surface by measuring a RENDERED
+   page. Both checks are needed: the render misses JS-template content that has not
+   run yet, the source scan misses exactly this. */
+html .toggle-text,
+html .toggle-text span,
+html .mint-not-launch,
+html .ack-text,
+html .toggle-row label span,
+html .field label .hint {
+  font-size: 13px;
+  line-height: 1.65;
+}
+html .toggle-text b { font-size: 13.5px; }
+
+/* Prose with NORMAL letter-spacing that was still under 12.5px when rendered.
+   Letter-spacing is the signal that separates the two cases: tracking-heavy type
+   (.tag at 1.5px, the investors kicker at 3px, .footer-tag at 3px) is deliberate
+   display styling and is LEFT ALONE — raising it would break those layouts. These
+   are sentences set at 10-12px, which is a different thing.
+
+   `html body` prefixes beat the page-local descendant selectors (e.g.
+   `.intro .mint-not-launch`, 0-2-0) that a single-class override loses to. */
+html body .intro .mint-not-launch,   /* .intro .mint-not-launch is 0-2-0; a single-class
+                                       override loses on CLASS COUNT before element
+                                       selectors are even considered. Match its depth. */
+html body .mint-not-launch,
+html body .noconnect,
+html body .sh-desc,
+html body .sub-h,
+html body .disclaimer,
+html body .disc,
+html body .foot,
+html body .powered,
+html body .home-disc {
+  font-size: 13px;
+  line-height: 1.6;
+  letter-spacing: normal;
+}
