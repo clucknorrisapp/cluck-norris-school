@@ -241,6 +241,8 @@ html body .intro .mint-not-launch,   /* .intro .mint-not-launch is 0-2-0; a sing
                                        selectors are even considered. Match its depth. */
 html body .mint-not-launch,
 html body .noconnect,
+html body .sh-card .sh-desc,   /* .sh-card .sh-desc is 0-2-0 — same class-count trap as
+                                  .intro .mint-not-launch above. Match the depth. */
 html body .sh-desc,
 html body .sub-h,
 html body .disclaimer,
