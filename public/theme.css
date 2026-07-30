@@ -139,3 +139,21 @@ a { color: var(--orange); }
 h1, h2, h3, .ck-h1, .room-title, .wordmark { line-height: 1.12; }
 html h1, html .ck-h1 { font-size: 26px; letter-spacing: .4px; }
 @media (max-width: 600px) { html h1, html .ck-h1 { font-size: 22px; } }
+
+/* ── Legacy aliases ─────────────────────────────────────────────────────────
+   Eight tool pages each carried a byte-identical private :root that redefined the
+   palette and shadowed this file — which is why they drifted visually from the rest
+   of the site. Those blocks were removed on 2026-07-29; these aliases keep the
+   var() names they used pointing at the canonical values, so hundreds of references
+   across those pages didn't have to be rewritten by hand (a large, risky diff for no
+   gain). Prefer the canonical name in new work; these exist so old markup keeps
+   resolving, in ONE place instead of eight copies. */
+:root{
+  --accent: var(--gold);      --accent2: var(--orange);
+  --subtext: var(--sub);      --dim: var(--muted);        --grey: var(--muted);
+  --head: var(--disp);
+  --surface: var(--card);     --panel: var(--card);       --card2: #1d1e26;
+  --amber: var(--gold);       --cyan: var(--gold);        --purple: var(--orange);
+  --border2: rgba(255,255,255,.07);
+  --green2: #34D399;
+}
