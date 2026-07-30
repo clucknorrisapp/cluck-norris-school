@@ -503,7 +503,7 @@ async function runSnapshot() {
 function paintDistRow() {
   const x = window.__snapDist; const el = document.getElementById('distRow'); if (!x || !el) return;
   const px = window.__tokenPriceUsd || 0;
-  const usd = (share) => { if (!(px > 0)) return ''; const v = share / 100 * x.uiSupply * px; const f = v >= 1e6 ? '$' + (v/1e6).toFixed(1) + 'M' : v >= 1e3 ? '$' + (v/1e3).toFixed(0) + 'K' : '$' + v.toFixed(0); return `<div class="sub" style="font-size:10px;color:#6EE7B7;margin-top:2px">≈ ${f}</div>`; };
+  const usd = (share) => { if (!(px > 0)) return ''; const v = share / 100 * x.uiSupply * px; const f = v >= 1e6 ? '$' + (v/1e6).toFixed(1) + 'M' : v >= 1e3 ? '$' + (v/1e3).toFixed(0) + 'K' : '$' + v.toFixed(0); return `<div class="sub" style="font-size:13px;color:#6EE7B7;margin-top:2px">≈ ${f}</div>`; };
   const dist = [{ lbl: "TOP 10", v: x.top10 }, { lbl: "TOP 50", v: x.top50 }, { lbl: "TOP 100", v: x.top100 }];
   el.innerHTML = dist.map(p => `<div class="dist-pill"><div class="lbl">${p.lbl}</div><div class="val">${fmtPct(p.v)}</div>${usd(p.v)}</div>`).join('');
 }

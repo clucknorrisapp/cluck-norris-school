@@ -150,7 +150,7 @@ function initPremiumDeepLinks(){
     '<div style="font-size:12px;color:#FCD34D;line-height:1.5;margin-bottom:6px">📱 No wallet detected here — iPad/phone browsers can\'t see wallet apps. Use the <b>Send</b> method above (works anywhere), or open this page inside your wallet:</div>'
     + '<a class="wbtn" style="text-decoration:none;display:block;text-align:center;margin-bottom:6px" href="https://phantom.app/ul/browse/' + enc + '?ref=' + ref + '">🔮 Open in Phantom</a>'
     + '<a class="wbtn" style="text-decoration:none;display:block;text-align:center" href="https://solflare.com/ul/v1/browse/' + enc + '?ref=' + ref + '">☀️ Open in Solflare</a>'
-    + '<div style="font-size:10px;color:#9CA3AF;margin-top:6px">Opens this page in the wallet\'s built-in browser, where Connect works. Nothing is signed or shared by the link.</div>';
+    + '<div style="font-size:13px;color:#9CA3AF;margin-top:6px">Opens this page in the wallet\'s built-in browser, where Connect works. Nothing is signed or shared by the link.</div>';
   el.style.display = 'block';
 }
 initPremiumDeepLinks();
@@ -353,7 +353,7 @@ function renderPnl(p){
 function renderClusters(c){
   if(!c||c.status!=='computed') return skipped('Wallet Clusters (funding map)','🕸️',c);
   let rows=(c.clusters||[]).map(cl=>'<tr><td class="mono-sm">'+shortA(cl.funder)+(cl.cexFunder?(' <span style="color:#fcd34d">['+cl.cexName+']</span>'):'')+'</td><td>'+cl.walletCount+' wallets</td></tr>').join('');
-  return '<div class="feat"><h2>🕸️ Wallet Clusters <span style="font-size:10px;color:var(--subtext)">· funding map</span></h2><div class="sub">Top holders that trace to a common funder. A PATTERN, never a verdict.</div>'
+  return '<div class="feat"><h2>🕸️ Wallet Clusters <span style="font-size:13px;color:var(--subtext)">· funding map</span></h2><div class="sub">Top holders that trace to a common funder. A PATTERN, never a verdict.</div>'
     +'<span class="vbadge v-neutral">'+(c.clusterCount?c.clusterCount+' CLUSTER(S) · INVESTIGATE':'NO CLUSTERS FOUND')+'</span>'
     +'<div class="summary">'+esc(c.summary)+'</div>'
     +'<div class="kv"><div class="box"><div class="l">Holders</div><div class="v">'+c.holdersAnalyzed+'</div></div>'

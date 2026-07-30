@@ -347,7 +347,7 @@
   .pool-link { display: inline-block; margin-top: 8px; font-family: var(--disp); font-size: 11px; color: var(--blue); text-decoration: none; letter-spacing: 1px; }
   .pool-link:hover { text-decoration: underline; }
 
-  .footer { text-align: center; margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--border); font-family: var(--disp); font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
+  .footer { text-align: center; margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--border); font-family: var(--disp); font-size: 12px; color: var(--sub); letter-spacing: 3px; }
 
 html{background:var(--bg-grad);background-attachment:fixed;}
 body{background:transparent;font-family:var(--body);}
@@ -446,7 +446,7 @@ body{background:transparent;font-family:var(--body);}
 
   <div class="card">
     <div class="card-title">SEE IT IN ACTION</div>
-    <p style="font-size:12px;color:var(--subtext);line-height:1.6;margin:0 0 12px">No mint handy? Tap a well-known Solana token to watch a full autopsy run on real on-chain data. Neutral examples — each report's own verdict does the talking, not us.</p>
+    <p style="font-size:14px;color:var(--body-text);line-height:1.7;margin:0 0 12px">No mint handy? Tap a well-known Solana token to watch a full autopsy run on real on-chain data. Neutral examples — each report's own verdict does the talking, not us.</p>
     <div style="display:flex;flex-wrap:wrap;gap:8px">
       <button type="button" class="sample-btn" onclick="tryMint('DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263')">🐶 BONK</button>
       <button type="button" class="sample-btn" onclick="tryMint('JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN')">🪐 JUP</button>
@@ -1125,11 +1125,11 @@ function render(data) {
         const dc = cwp.deployedTokenCount;
         const dcStr = dc != null ? `${cwp.deployedTokenCountExact ? "" : "≥"}${dc.toLocaleString()}` : null;
         if (cwp.isSerialDeployer) {
-          bh += `<div style="margin-top: 8px; font-size: 11px; color: #FCA5A5;">⚠️ Creator wallet is a <strong>serial deployer</strong> — has launched <strong>${dcStr} tokens</strong>. A long history here is a token-mill signal, not a committed operator.</div>`;
+          bh += `<div style="margin-top: 8px; font-size:13px; color: #FCA5A5;">⚠️ Creator wallet is a <strong>serial deployer</strong> — has launched <strong>${dcStr} tokens</strong>. A long history here is a token-mill signal, not a committed operator.</div>`;
         } else if (dc != null && dc > 1) {
-          bh += `<div style="margin-top: 8px; font-size: 11px; color: var(--subtext);">🧭 Creator wallet has launched <strong style="color: var(--text);">${dcStr} tokens</strong> and has a ${cwp.txCountAtLeast.toLocaleString()}+ tx history. Established, but it's launched others — judge accordingly.</div>`;
+          bh += `<div style="margin-top: 8px; font-size:13px; color: var(--subtext);">🧭 Creator wallet has launched <strong style="color: var(--text);">${dcStr} tokens</strong> and has a ${cwp.txCountAtLeast.toLocaleString()}+ tx history. Established, but it's launched others — judge accordingly.</div>`;
         } else if (cwp.established) {
-          bh += `<div style="margin-top: 8px; font-size: 11px; color: var(--subtext);">🧭 Creator wallet has a long tx history (${cwp.txCountAtLeast.toLocaleString()}+ transactions) — not a fresh burner. A long history is a fact, not proof of legitimacy.</div>`;
+          bh += `<div style="margin-top: 8px; font-size:13px; color: var(--subtext);">🧭 Creator wallet has a long tx history (${cwp.txCountAtLeast.toLocaleString()}+ transactions) — not a fresh burner. A long history is a fact, not proof of legitimacy.</div>`;
         } else {
           const f = cwp.fundingSource;
           const funderStr = f
@@ -1265,7 +1265,7 @@ function render(data) {
     pfh += `<div class="lifetime-cell"><div class="lifetime-label">Unclaimed in vault</div><div class="lifetime-value">${(pf.unclaimedSol || 0).toFixed(4)} SOL</div></div>`;
     pfh += `<div class="lifetime-cell"><div class="lifetime-label">Fee events</div><div class="lifetime-value">${(pf.feeEventCount || 0).toLocaleString()}${pf.feeEventsCapped ? "+" : ""}</div></div>`;
     pfh += `</div>`;
-    pfh += `<div style="margin-top:6px;font-size:10px;color:var(--subtext);font-style:italic;">Pump.fun creators earn a per-trade fee that accrues in an on-chain vault. "Claimed by creator" is how much the dev has pulled out over this token's life; "unclaimed" is what's still sitting there. Together they're the creator's total fee revenue from this token${pf.feeEventsCapped ? " — shown as a minimum, since the vault's history exceeded our 1,000-event scan window" : ""}. This is what the chain shows the creator earned, regardless of where the price went.</div>`;
+    pfh += `<div style="margin-top:6px;font-size:13px;color:var(--subtext);font-style:italic;">Pump.fun creators earn a per-trade fee that accrues in an on-chain vault. "Claimed by creator" is how much the dev has pulled out over this token's life; "unclaimed" is what's still sitting there. Together they're the creator's total fee revenue from this token${pf.feeEventsCapped ? " — shown as a minimum, since the vault's history exceeded our 1,000-event scan window" : ""}. This is what the chain shows the creator earned, regardless of where the price went.</div>`;
     $("pumpFeesContent").innerHTML = pfh;
   } else {
     $("pumpFeesCard").style.display = "none";
@@ -1310,7 +1310,7 @@ function render(data) {
         ${lk.fundingSig ? `<a href="https://solscan.io/tx/${lk.fundingSig}" target="_blank" rel="noreferrer" style="color:var(--subtext);text-decoration:none;margin-left:6px;">↗ lock tx</a>` : ''}
       </div>`;
     }
-    lh += `<div style="margin-top:6px;font-size:10px;color:var(--subtext);font-style:italic;">Locked supply is removed from circulation — a commitment signal. "Unlabeled" means we couldn't verify the locker as the team; it could be the team or a conviction community holder. We trace each lock to its on-chain funding transaction and refuse to guess who's who.</div>`;
+    lh += `<div style="margin-top:6px;font-size:13px;color:var(--subtext);font-style:italic;">Locked supply is removed from circulation — a commitment signal. "Unlabeled" means we couldn't verify the locker as the team; it could be the team or a conviction community holder. We trace each lock to its on-chain funding transaction and refuse to guess who's who.</div>`;
     $("lockedSupplyContent").innerHTML = lh;
   } else {
     $("lockedSupplyCard").style.display = "none";
