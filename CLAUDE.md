@@ -799,6 +799,35 @@ render the realized width, not the requested slider value. LOW backlog now fully
 - **Disabled CTAs go NEUTRAL GREY, not dimmed orange.** A 35–45%-opacity orange→red gradient on
   the dark ground reads as muddy brown, i.e. broken rather than inactive. Use
   `background: rgba(255,255,255,.05); color: var(--muted); box-shadow: none;`.
+- 👛 **WALLET CONNECT — ONE REGISTRY, `public/cluck-wallet.js` (consolidated 2026-07-30).**
+  Every page that connects a wallet reads `CluckWallet.WALLETS` (11 wallets: Phantom,
+  Solflare, Backpack, OKX, Coinbase, Trust, Glow, Exodus, Bitget, Brave, Jupiter) plus
+  `CluckWallet.available()/connect()/disconnect()`. **Do NOT add a private wallet list to
+  a page.** Seven pages each had their own copy and they drifted: Buy Special's gate ended
+  up detecting TWO wallets behind a bare `window.solana` fallback and the Locker Room
+  three, while five other pages found eleven — so a Backpack user got "no Solana wallet
+  found" on one tool and connected fine on the next. Adding a wallet is now one edit.
+  ⚠️ `public/` is not statically mounted — the file has an explicit `app.get` route in
+  server.js, and the `<script src="/cluck-wallet.js">` tag must come BEFORE the code that
+  reads it (pages alias `const WALLETS = CluckWallet.WALLETS` at parse time).
+- 🔌 **ANYWHERE A USER CAN CONNECT, THEY MUST BE ABLE TO DISCONNECT** (owner rule,
+  2026-07-30). Show WHICH wallet is connected (truncated address) and offer a disconnect
+  that calls the provider's own `disconnect()` *and* clears local state — the provider call
+  is best-effort (not all implement it), the local reset is mandatory. Without it, switching
+  wallets means clearing site data. Premium used to only forget the proof locally, so
+  reconnecting silently reused the same account; that's the failure mode to avoid.
+- ⛔ **NEVER call `solanaWeb3.SystemProgram.transfer()` (or any web3.js layout encoder) in a
+  browser page.** It encodes u64 through `toBufferLE()`, which needs the Node `Buffer`
+  global that browsers don't have — the call throws "Buffer is not defined" and we
+  deliberately ship no polyfill. This silently killed THREE money paths at once (Buy
+  Special's SOL unlock, the airdropper's SOL unlock, and SOL-denominated airdrop prizes)
+  and only surfaced when the owner clicked the button. Use
+  `splToken.createSolTransferInstruction(from, to, lamports)` in `public/airdrop-engine.js`,
+  which hand-builds the System Program instruction with `Uint8Array` — verified
+  byte-identical to web3.js across 1 / 5,000 / 50,000,000 / 2,039,280 / 1,234,567,890,123
+  lamports. The SPL instructions in that file are hand-built for the same reason. **If you
+  add a new instruction type, build it with `Uint8Array` + `DataView` and diff its bytes
+  against the library in Node before shipping.**
 - 🛡️ **PHANTOM "may be malicious" WARNING on client-signed txs — ROOT CAUSE + FIX (Phantom
   Support, 2026-05; recurring, so it's recorded HERE in the committed memory now).** Phantom's
   **Lighthouse** security system flags any **multi-signer** transaction when the signing order is
