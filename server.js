@@ -13012,7 +13012,7 @@ async function schoolGradTick({ dryRun = false } = {}) {
 // ── Data-source health monitor ───────────────────────────────────────────────
 // Probe the critical external feeds and report each as ok / down / not-configured.
 // Cheap calls only. Used by the tick (alert on state change) + the gated endpoint.
-const HEALTH_LABELS = { solanaTracker: "Solana Tracker", helius: "Helius RPC", bags: "Bags API", telegram: "Telegram" };
+const HEALTH_LABELS = { solanaTracker: "Solana Tracker", helius: "Helius RPC", bags: "Bags API", telegram: "Telegram", anthropic: "Claude API" };
 async function checkSourceHealth() {
   const out = {};
   // 1) Solana Tracker — cheapest baseline call; distinguish "out of credits".
@@ -13055,6 +13055,34 @@ async function checkSourceHealth() {
       out.telegram = (j && j.ok) ? { ok: true } : { ok: false, reason: (j && j.description) || "getMe failed" };
     } catch (e) { out.telegram = { ok: false, reason: e.message }; }
   } else out.telegram = { ok: null, reason: "not configured" };
+  // 5) Claude API — the one source with NO monitor until 2026-07-29, and the one the most
+  // visible features run on: Cluck's daily lesson, Ask Cluck, the classroom tutor, the
+  // Wallet X-Ray Q&A and Daily Alpha. If the key is revoked or the credit runs out, all of
+  // them just stop producing and nothing anywhere says why — you'd hear it from a user first.
+  //
+  // Probed with a REAL 1-token Messages call, not GET /v1/models: a models call validates the
+  // key but still returns 200 when the account is out of credit, which is the failure that
+  // actually happens. Haiku at max_tokens 1 is a rounding error (~144 calls/day on the 10-min
+  // tick, a few input tokens each).
+  if (process.env.ANTHROPIC_API_KEY) {
+    try {
+      const r = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 1, messages: [{ role: "user", content: "ping" }] }),
+        signal: AbortSignal.timeout(12000),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok) out.anthropic = { ok: true };
+      else if (r.status === 429) out.anthropic = { ok: true, reason: "rate-limited" };   // key is fine and the service is up; alerting here would cry wolf
+      else {
+        const msg = String((j && j.error && (j.error.message || j.error.type)) || "http-" + r.status);
+        const billing = r.status === 402 || /credit|billing|quota|balance/i.test(msg);
+        const auth = r.status === 401 || r.status === 403;
+        out.anthropic = { ok: false, status: r.status, reason: billing ? "out of credit" : auth ? "key rejected" : msg.slice(0, 120) };
+      }
+    } catch (e) { out.anthropic = { ok: false, reason: e.message }; }
+  } else out.anthropic = { ok: null, reason: "not configured" };
   return out;
 }
 // Tick: alert the OPERATOR (treasury chat) ONLY when a source's status CHANGES
