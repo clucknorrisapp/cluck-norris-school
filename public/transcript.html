@@ -75,6 +75,7 @@ body{background:transparent;font-family:var(--body);}
   <div class="card" id="card">
     <div class="loading">Loading transcript…</div>
   </div>
+<script src="/cluck-wallet.js"></script>
 <script>
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, c =>
@@ -199,19 +200,11 @@ body{background:transparent;font-family:var(--body);}
     // minHold:0 asks /api/premium-verify-sig for an ownership-only proof with no
     // holder gate; a graduate may hold no CLKN at all. That can't weaken premium,
     // which re-checks the live 2M balance when a trace actually runs.
-    const WALLETS = {
-      phantom:{name:'Phantom',detect:()=>window.phantom?.solana||(window.solana?.isPhantom?window.solana:null)},
-      solflare:{name:'Solflare',detect:()=>window.solflare||(window.solana?.isSolflare?window.solana:null)},
-      backpack:{name:'Backpack',detect:()=>(window.backpack?.isBackpack?window.backpack:null)||(window.solana?.isBackpack?window.solana:null)},
-      okx:{name:'OKX',detect:()=>window.okxwallet?.solana||window.okxwallet||null},
-      coinbase:{name:'Coinbase',detect:()=>window.coinbaseSolana||window.coinbaseWalletSolana||null},
-      trust:{name:'Trust',detect:()=>window.trustwallet?.solana||(window.solana?.isTrust?window.solana:null)},
-      glow:{name:'Glow',detect:()=>window.glowSolana||window.glow?.solana||(window.solana?.isGlow?window.solana:null)},
-      exodus:{name:'Exodus',detect:()=>window.exodus?.solana||null},
-      bitget:{name:'Bitget',detect:()=>window.bitkeep?.solana||window.bitgetWallet?.solana||null},
-      brave:{name:'Brave',detect:()=>window.braveSolana||(window.solana?.isBraveWallet?window.solana:null)},
-      jupiter:{name:'Jupiter',detect:()=>window.jupiterWallet||window.jupiter||(window.solana?.isJupiter?window.solana:null)},
-    };
+    // The 11-wallet registry lives in /cluck-wallet.js — five pages used to carry
+    // their own copy of this list and they drifted apart (Buy Special ended up
+    // detecting two, the Locker Room three). Aliased rather than rewritten so every
+    // WALLETS[id].name / .detect() / .download call site below is unchanged.
+    const WALLETS = CluckWallet.WALLETS;
     const ownStartLink = document.getElementById("ownStart");
     if (ownStartLink) ownStartLink.onclick = (e) => {
       e.preventDefault();

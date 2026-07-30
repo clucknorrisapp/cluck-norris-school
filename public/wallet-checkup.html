@@ -159,6 +159,7 @@ body{background:transparent;font-family:var(--body);}
   <div class="footer">🐔 clucknorris.app — stay safe out there</div>
 </div>
 <script src="/vendor/solana-web3.iife.min.js"></script>
+<script src="/cluck-wallet.js"></script>
 <script>
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function shortAddr(a){ return a ? a.slice(0,4)+'…'+a.slice(-4) : '—'; }
@@ -318,19 +319,11 @@ async function confirmTx(signature) {
 }
 
 // ── Wallet connect ───────────────────────────────────────────────────────────
-const WALLETS = {
-  phantom:  { name: 'Phantom',  detect: () => window.phantom?.solana || (window.solana?.isPhantom ? window.solana : null) },
-  solflare: { name: 'Solflare', detect: () => window.solflare || (window.solana?.isSolflare ? window.solana : null) },
-  backpack: { name: 'Backpack', detect: () => (window.backpack?.isBackpack ? window.backpack : null) || (window.solana?.isBackpack ? window.solana : null) },
-  okx:      { name: 'OKX',      detect: () => window.okxwallet?.solana || window.okxwallet || null },
-  coinbase: { name: 'Coinbase', detect: () => window.coinbaseSolana || window.coinbaseWalletSolana || null },
-  trust:    { name: 'Trust',    detect: () => window.trustwallet?.solana || (window.solana?.isTrust ? window.solana : null) },
-  glow:     { name: 'Glow',     detect: () => window.glowSolana || window.glow?.solana || (window.solana?.isGlow ? window.solana : null) },
-  exodus:   { name: 'Exodus',   detect: () => window.exodus?.solana || null },
-  bitget:   { name: 'Bitget',   detect: () => window.bitkeep?.solana || window.bitgetWallet?.solana || (window.solana?.isBitKeep ? window.solana : null) },
-  brave:    { name: 'Brave',    detect: () => window.braveSolana || (window.solana?.isBraveWallet ? window.solana : null) },
-  jupiter:  { name: 'Jupiter',  detect: () => window.jupiterWallet || window.jupiter || (window.solana?.isJupiter ? window.solana : null) },
-};
+// The 11-wallet registry lives in /cluck-wallet.js — five pages used to carry
+// their own copy of this list and they drifted apart (Buy Special ended up
+// detecting two, the Locker Room three). Aliased rather than rewritten so every
+// WALLETS[id].name / .detect() / .download call site below is unchanged.
+const WALLETS = CluckWallet.WALLETS;
 // Mobile on-ramp: on mobile with NO wallet injected (a normal mobile browser,
 // not a wallet's in-app browser), offer one-tap deep links that OPEN this page
 // inside the wallet's browser. Pure navigation — nothing is signed or shared by

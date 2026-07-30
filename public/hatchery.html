@@ -415,6 +415,7 @@ body{background:transparent;font-family:var(--body);}
 </div>
 
 <script src="/vendor/solana-web3.iife.min.js"></script>
+<script src="/cluck-wallet.js"></script>
 <script>
 // ── Constants / state ────────────────────────────────────────────────────────
 const RPC_URL = '/api/helius-rpc';
@@ -489,19 +490,11 @@ function calcStartPrice() {
 }
 
 // ── Wallet connect (same pattern as the Airdrop tool) ────────────────────────
-const WALLETS = {
-  phantom:  { name: 'Phantom',  download: 'https://phantom.app',   detect: () => window.phantom?.solana || (window.solana?.isPhantom ? window.solana : null) },
-  solflare: { name: 'Solflare', download: 'https://solflare.com',  detect: () => window.solflare || (window.solana?.isSolflare ? window.solana : null) },
-  backpack: { name: 'Backpack', download: 'https://backpack.app',  detect: () => (window.backpack?.isBackpack ? window.backpack : null) || (window.solana?.isBackpack ? window.solana : null) },
-  okx:      { name: 'OKX',      download: 'https://okx.com/web3',  detect: () => window.okxwallet?.solana || window.okxwallet || null },
-  coinbase: { name: 'Coinbase', download: 'https://coinbase.com/wallet', detect: () => window.coinbaseSolana || window.coinbaseWalletSolana || null },
-  trust:    { name: 'Trust',    download: 'https://trustwallet.com', detect: () => window.trustwallet?.solana || (window.solana?.isTrust ? window.solana : null) },
-  glow:     { name: 'Glow',     download: 'https://glow.app',      detect: () => window.glowSolana || window.glow?.solana || (window.solana?.isGlow ? window.solana : null) },
-  exodus:   { name: 'Exodus',   download: 'https://exodus.com',    detect: () => window.exodus?.solana || null },
-  bitget:   { name: 'Bitget',   download: 'https://web3.bitget.com', detect: () => window.bitkeep?.solana || window.bitgetWallet?.solana || (window.solana?.isBitKeep ? window.solana : null) },
-  brave:    { name: 'Brave',    download: 'https://brave.com/wallet', detect: () => window.braveSolana || (window.solana?.isBraveWallet ? window.solana : null) },
-  jupiter:  { name: 'Jupiter',  download: 'https://jup.ag/wallet', detect: () => window.jupiterWallet || window.jupiter || (window.solana?.isJupiter ? window.solana : null) },
-};
+// The 11-wallet registry lives in /cluck-wallet.js — five pages used to carry
+// their own copy of this list and they drifted apart (Buy Special ended up
+// detecting two, the Locker Room three). Aliased rather than rewritten so every
+// WALLETS[id].name / .detect() / .download call site below is unchanged.
+const WALLETS = CluckWallet.WALLETS;
 // Mobile on-ramp: on mobile with NO wallet injected, offer one-tap deep links
 // that OPEN this page inside the wallet's browser (pure navigation — nothing is
 // signed/shared by the link; the injected connect+sign flow runs once inside).

@@ -109,6 +109,7 @@ body{background:transparent;font-family:var(--body);}
   <div id="results"></div>
 </div>
 
+<script src="/cluck-wallet.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 // A proof token (from either verify path) = our key. localStorage survives close.
@@ -122,19 +123,11 @@ function shortA(a){ return a ? a.slice(0,4)+'…'+a.slice(-4) : '—'; }
 function setVMsg(html, err){ $('verifyStatus').innerHTML = err ? '<span style="color:#fca5a5">'+html+'</span>' : html; }
 
 // Same 11 injected wallets as the airdropper / hatchery.
-const WALLETS = {
-  phantom:{name:'Phantom',detect:()=>window.phantom?.solana||(window.solana?.isPhantom?window.solana:null)},
-  solflare:{name:'Solflare',detect:()=>window.solflare||(window.solana?.isSolflare?window.solana:null)},
-  backpack:{name:'Backpack',detect:()=>(window.backpack?.isBackpack?window.backpack:null)||(window.solana?.isBackpack?window.solana:null)},
-  okx:{name:'OKX',detect:()=>window.okxwallet?.solana||window.okxwallet||null},
-  coinbase:{name:'Coinbase',detect:()=>window.coinbaseSolana||window.coinbaseWalletSolana||null},
-  trust:{name:'Trust',detect:()=>window.trustwallet?.solana||(window.solana?.isTrust?window.solana:null)},
-  glow:{name:'Glow',detect:()=>window.glowSolana||window.glow?.solana||(window.solana?.isGlow?window.solana:null)},
-  exodus:{name:'Exodus',detect:()=>window.exodus?.solana||null},
-  bitget:{name:'Bitget',detect:()=>window.bitkeep?.solana||window.bitgetWallet?.solana||null},
-  brave:{name:'Brave',detect:()=>window.braveSolana||(window.solana?.isBraveWallet?window.solana:null)},
-  jupiter:{name:'Jupiter',detect:()=>window.jupiterWallet||window.jupiter||(window.solana?.isJupiter?window.solana:null)},
-};
+// The 11-wallet registry lives in /cluck-wallet.js — five pages used to carry
+// their own copy of this list and they drifted apart (Buy Special ended up
+// detecting two, the Locker Room three). Aliased rather than rewritten so every
+// WALLETS[id].name / .detect() / .download call site below is unchanged.
+const WALLETS = CluckWallet.WALLETS;
 $('walletPicker').innerHTML = Object.keys(WALLETS).map(id=>'<button class="wbtn" onclick="connectAndSign(\''+id+'\')">'+WALLETS[id].name+'</button>').join('');
 
 // Mobile/iPad on-ramp: phone & iPad browsers can't see a wallet APP (only the
