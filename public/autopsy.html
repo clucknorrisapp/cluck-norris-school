@@ -611,6 +611,7 @@ body{background:transparent;font-family:var(--body);}
   <div class="footer">CLUCK NORRIS · TOKEN AUTOPSY · FREE PUBLIC TOOL</div>
 </div>
 
+<script src="/cluck-util.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
 // Loading messages cycle every ~1.8s. Keep them varied and reflective of
@@ -640,7 +641,9 @@ function shortMint(m) { return m.slice(0, 4) + "…" + m.slice(-4); }
 // flag/narrative text) before they enter innerHTML — token metadata is
 // attacker-controlled, so an unescaped "<img onerror=…>" symbol/handle would be
 // XSS. Escapes quotes too, so it's safe in attribute context.
-function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// esc/rpc/shortAddr/fmt/copyText live in /cluck-util.js — hand-typed copies of
+// esc() had drifted and four pages weren't escaping the single quote.
+const esc = CluckUtil.esc;
 // Only allow http(s) URLs in href — blocks javascript:/data: schemes from a
 // token's attacker-set social links. Returns "#" for anything else.
 function safeUrl(u){ const s=String(u==null?"":u).trim(); return /^https?:\/\//i.test(s) ? esc(s) : "#"; }

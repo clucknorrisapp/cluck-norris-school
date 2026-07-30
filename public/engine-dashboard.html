@@ -147,13 +147,16 @@ body{background:transparent;font-family:var(--body);}
   </div>
 </div>
 
+<script src="/cluck-util.js"></script>
 <script>
 // ── State ─────────────────────────────────────────────────────────────────────
 let adminKey = '';
 let autoTimer = null;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// esc/rpc/shortAddr/fmt/copyText live in /cluck-util.js — hand-typed copies of
+// esc() had drifted and four pages weren't escaping the single quote.
+const esc = CluckUtil.esc;
 function showError(msg){ const el=document.getElementById('errorBox'); el.textContent=msg; el.classList.add('show'); }
 function clearError(){ const el=document.getElementById('errorBox'); el.classList.remove('show'); el.textContent=''; }
 function shorten(s){ s=String(s||''); return s.length>10 ? s.slice(0,4)+'…'+s.slice(-4) : s; }

@@ -223,6 +223,7 @@
 <script src="/vendor/solana-web3.iife.min.js"></script>
 <script src="/cluck-wallet.js"></script>
 <script src="/airdrop-engine.js"></script>
+<script src="/cluck-util.js"></script>
 <script>
 const CLKN='DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS', ROSE='RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF';
 let mint='', tokenName='CUSTOM', winFrom=0, winTo=0, mode='all';
@@ -539,7 +540,7 @@ function showGate(){ $('gate').classList.remove('hidden'); $('gate').scrollIntoV
 // Server still enforces the SOL price (SOL_UNLOCK_MIN_LAMPORTS in server.js).
 const HOLDER_MIN=2000000, SOL_LAMPORTS=50000000;
 let wProvider=null, wPubkey=null;
-function rpcCall(method,params){ return fetch('/api/helius-rpc',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})}).then(r=>r.json()).then(d=>{ if(d.error) throw new Error(d.error.message); return d.result; }); }
+const rpcCall = CluckUtil.rpc;   // shared helper — see /cluck-util.js
 // Wallet detection lives in /cluck-wallet.js — this page used to look for Phantom
 // and Solflare only, behind a bare window.solana fallback, so Backpack/OKX/Coinbase/
 // Exodus/Bitget/Glow/Brave/Jupiter users were told no wallet was found.

@@ -271,6 +271,7 @@ body{background:transparent;font-family:var(--body);}
   </div>
 </div>
 
+<script src="/cluck-util.js"></script>
 <script>
 // ── Constants / state ─────────────────────────────────────────────────────────
 const API = '/api/whirlpool/vault/client';
@@ -301,7 +302,9 @@ const MODE_ORDER = ['active','steady','foundation','custom'];
 const TILT_ORDER = ['balanced','distribution','accumulation'];
 
 // ── Escaping (token names/symbols are attacker-controlled) ──────────────────────
-function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// esc/rpc/shortAddr/fmt/copyText live in /cluck-util.js — hand-typed copies of
+// esc() had drifted and four pages weren't escaping the single quote.
+const esc = CluckUtil.esc;
 
 // ── Readable formatters — NO scientific notation, beginner-friendly ─────────────
 function money(n){ n=Number(n); if(!isFinite(n)) return '—'; const neg=n<0; n=Math.abs(n);

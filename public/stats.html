@@ -77,6 +77,7 @@ body{background:transparent;font-family:var(--body);}
   </div>
   <div id="errBox"></div>
 
+<script src="/cluck-util.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 let KEY = new URLSearchParams(location.search).get("key") || localStorage.getItem("clkn_stats_key") || "";
@@ -84,7 +85,9 @@ let DAYS = 30;
 function setKey(){ KEY = $("keyInput").value.trim(); if(KEY){ localStorage.setItem("clkn_stats_key",KEY); load(); } }
 function fmt(n){ return (n||0).toLocaleString(); }
 function rows(el, arr){ el.innerHTML = (arr&&arr.length) ? arr.map(x=>`<tr><td>${esc(x.k)}</td><td>${fmt(x.v)}</td></tr>`).join("") : '<tr><td class="muted">none yet</td><td></td></tr>'; }
-function esc(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+// esc/rpc/shortAddr/fmt/copyText live in /cluck-util.js — hand-typed copies of
+// esc() had drifted and four pages weren't escaping the single quote.
+const esc = CluckUtil.esc;
 
 async function load(){
   $("errBox").innerHTML = "";

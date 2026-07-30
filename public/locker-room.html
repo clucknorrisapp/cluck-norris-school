@@ -336,12 +336,15 @@
 </div>
 
 <script src="/cluck-wallet.js"></script>
+<script src="/cluck-util.js"></script>
 <script>
 (function(){
   'use strict';
   var CLKN='DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS';
   function $(s,r){return (r||document).querySelector(s);}
-  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  // esc/rpc/shortAddr/fmt/copyText live in /cluck-util.js — hand-typed copies of
+  // esc() had drifted and four pages weren't escaping the single quote.
+  const esc = CluckUtil.esc;
   function fmt(n){ n=Number(n)||0; if(n>=1e9)return (n/1e9).toFixed(2)+'B'; if(n>=1e6)return (n/1e6).toFixed(2)+'M'; if(n>=1e3)return (n/1e3).toFixed(1)+'K'; return Math.round(n).toLocaleString(); }
   function shortAddr(a){ a=String(a||''); return a.length>10?a.slice(0,4)+'…'+a.slice(-4):a; }
 

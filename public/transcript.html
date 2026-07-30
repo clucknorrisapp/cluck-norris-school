@@ -76,11 +76,11 @@ body{background:transparent;font-family:var(--body);}
     <div class="loading">Loading transcript…</div>
   </div>
 <script src="/cluck-wallet.js"></script>
+<script src="/cluck-util.js"></script>
 <script>
-  function esc(s) {
-    return String(s == null ? "" : s).replace(/[&<>"']/g, c =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  }
+  // esc/rpc/shortAddr/fmt/copyText live in /cluck-util.js — hand-typed copies of
+  // esc() had drifted and four pages weren't escaping the single quote.
+  const esc = CluckUtil.esc;
   function fmtDate(iso) {
     try { return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }); }
     catch (e) { return ""; }

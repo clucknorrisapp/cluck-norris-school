@@ -110,6 +110,7 @@ body{background:transparent;font-family:var(--body);}
 </div>
 
 <script src="/cluck-wallet.js"></script>
+<script src="/cluck-util.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 // A proof token (from either verify path) = our key. localStorage survives close.
@@ -216,7 +217,9 @@ async function connectAndSign(id){
 }
 // Escape API/token-supplied strings (symbol + server prose that embeds it)
 // before innerHTML — token metadata is attacker-controlled.
-function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// esc/rpc/shortAddr/fmt/copyText live in /cluck-util.js — hand-typed copies of
+// esc() had drifted and four pages weren't escaping the single quote.
+const esc = CluckUtil.esc;
 function usd(n){ return '$'+(Math.round(Number(n)||0)).toLocaleString(); }
 function vbadgeClass(v){
   if(!v) return 'v-neutral';

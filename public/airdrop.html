@@ -558,6 +558,7 @@
 </div>
 
 <script src="/cluck-wallet.js"></script>
+<script src="/cluck-util.js"></script>
 <script>
 // ── Constants ────────────────────────────────────────────────────────────────
 const RPC_URL = '/api/helius-rpc';
@@ -599,7 +600,9 @@ function fmtNum(n) {
 }
 
 // Escape any displayed string before innerHTML (recipient rows show pasted input).
-function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// esc/rpc/shortAddr/fmt/copyText live in /cluck-util.js — hand-typed copies of
+// esc() had drifted and four pages weren't escaping the single quote.
+const esc = CluckUtil.esc;
 
 // Convert a (possibly fractional) token amount to base units as a BigInt via a
 // fixed-point STRING — never amount * 10**decimals, whose float multiply loses
@@ -614,16 +617,9 @@ function shortAddr(a) {
   return a ? a.slice(0,6) + '...' + a.slice(-4) : '';
 }
 
-async function rpc(method, params) {
-  const r = await fetch(RPC_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params })
-  });
-  const d = await r.json();
-  if (d.error) throw new Error(d.error.message);
-  return d.result;
-}
+// JSON-RPC helper lives in /cluck-util.js. Six pages had their own copy and one
+// of them returned the raw envelope instead of throwing on a JSON-RPC error.
+const rpc = CluckUtil.rpc;
 
 // ── Wallet Connect ───────────────────────────────────────────────────────────
 // Registry of supported wallets. Each entry knows how to detect its provider
@@ -1565,11 +1561,7 @@ initUnlockGate();
 // Mirrors the flow proven on /buyspecial. Balance is read straight from the chain
 // through the RPC proxy, so nothing is taken on trust from the client.
 let wProvider = null, wPubkey = null;
-function adRpc(method, params) {
-  return fetch('/api/helius-rpc', { method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ jsonrpc:'2.0', id:1, method, params }) })
-    .then(r => r.json()).then(d => { if (d.error) throw new Error(d.error.message); return d.result; });
-}
+const adRpc = CluckUtil.rpc;   // this page had TWO copies of the same helper
 function adWalletMsg(t, ok) {
   const e = document.getElementById('gWalletStatus');
   e.style.display = 'block';

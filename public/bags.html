@@ -268,6 +268,7 @@ body{background:transparent;font-family:var(--body);}
   </div>
 </div>
 
+<script src="/cluck-util.js"></script>
 <script>
 // Live Bags.fm launches feed — ST-enriched (accurate on-curve MC/price), with
 // DexScreener fallback. Same backend as the in-app feed.
@@ -320,7 +321,9 @@ function lfHandle(tw){ return tw ? String(tw).replace(/^https?:\/\/(x\.com|twitt
 // go into innerHTML — token names are attacker-controlled, so an unescaped
 // "<img onerror=…>" name would be stored XSS on this page. Escapes quotes too,
 // so it's safe in both text and attribute contexts.
-function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// esc/rpc/shortAddr/fmt/copyText live in /cluck-util.js — hand-typed copies of
+// esc() had drifted and four pages weren't escaping the single quote.
+const esc = CluckUtil.esc;
 // Copy a token's contract address. preventDefault/stopPropagation so tapping
 // the CA chip copies instead of opening the card's trade link.
 function lfCopyCA(e, mint, el){

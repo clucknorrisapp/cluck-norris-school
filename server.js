@@ -10504,6 +10504,17 @@ app.get("/market-header.js", (req, res) => {
   res.sendFile(join(__dirname, "public", "market-header.js"));
 });
 
+// Shared browser helpers (esc / rpc / shortAddr / fmt / copyText). Added
+// 2026-07-30: esc() had 16 hand-typed copies and FOUR of them didn't escape the
+// single quote, on pages that render attacker-set token metadata — safe only
+// because those spots used double-quoted attributes. rpc() had 6 copies, one of
+// which didn't throw on a JSON-RPC error.
+app.get("/cluck-util.js", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  res.type("application/javascript");
+  res.sendFile(join(__dirname, "public", "cluck-util.js"));
+});
+
 // Shared wallet layer — ONE 11-wallet registry + connect/disconnect for every page
 // that connects a wallet. Added 2026-07-30 after the per-page detectors diverged:
 // Buy Special's gate found two wallets and the Locker Room three, while five other

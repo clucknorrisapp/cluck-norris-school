@@ -347,6 +347,7 @@ body{background:transparent;font-family:var(--body);}
 </div>
 
 <script src="/market-header.js"></script>
+<script src="/cluck-util.js"></script>
 <script>
 let lastSnapshot = null;
 
@@ -435,7 +436,9 @@ function shortAddr(a) {
   return a.slice(0, 6) + "…" + a.slice(-4);
 }
 // Escape attacker-set strings (Bags creator handles) before innerHTML.
-function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// esc/rpc/shortAddr/fmt/copyText live in /cluck-util.js — hand-typed copies of
+// esc() had drifted and four pages weren't escaping the single quote.
+const esc = CluckUtil.esc;
 
 // ── ONE TOOL, TWO JOBS ────────────────────────────────────────────────────────
 // This page replaces the old /snapshot and /holders, which ran on the SAME

@@ -345,6 +345,7 @@ body{background:transparent;font-family:var(--body);}
 </div>
 
 <script src="/market-header.js"></script>
+<script src="/cluck-util.js"></script>
 <script>
 let lastTrace = null;
 let sortNewest = false;
@@ -474,9 +475,9 @@ function stopLoading() {
 
 // Escape attacker-controlled strings (token symbols, creator handles from Bags metadata)
 // before they touch innerHTML. Token names/symbols are fully attacker-set on-chain.
-function esc(s) {
-  return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-}
+// esc/rpc/shortAddr/fmt/copyText live in /cluck-util.js — hand-typed copies of
+// esc() had drifted and four pages weren't escaping the single quote.
+const esc = CluckUtil.esc;
 function fmtNum(n, dec) {
   if (n == null || isNaN(n)) return "—";
   const a = Math.abs(n);

@@ -128,6 +128,7 @@
   </form>
 </div>
 
+<script src="/cluck-util.js"></script>
 <script>
 (function () {
   var feed = document.getElementById('feed');
@@ -144,11 +145,9 @@
   var busy = false;
 
   // Escape EVERYTHING from the model/user before innerHTML (token/AI text is untrusted).
-  function esc(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-  }
+  // esc/rpc/shortAddr/fmt/copyText live in /cluck-util.js — hand-typed copies of
+  // esc() had drifted and four pages weren't escaping the single quote.
+  const esc = CluckUtil.esc;
 
   // --- Chips: casual prompts in Ask mode · the standardized lecture syllabus in Lecture mode ---
   var ASK_TOPICS = [
