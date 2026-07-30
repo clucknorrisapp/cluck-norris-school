@@ -799,6 +799,24 @@ render the realized width, not the requested slider value. LOW backlog now fully
 - **Disabled CTAs go NEUTRAL GREY, not dimmed orange.** A 35–45%-opacity orange→red gradient on
   the dark ground reads as muddy brown, i.e. broken rather than inactive. Use
   `background: rgba(255,255,255,.05); color: var(--muted); box-shadow: none;`.
+- 🧹 **SHARED BROWSER HELPERS LIVE IN `public/cluck-util.js` — don't re-type them
+  (consolidated 2026-07-30).** `CluckUtil.esc / rpc / shortAddr / fmt / copyText`. **`esc()`
+  had 23 hand-typed copies and FIVE of them (`buyspecial-dashboard`, `buyspecial-optin`,
+  `locker-room`, `stats`, `buycomp-admin`) used `/[&<>"]/g` — no single-quote escape.** They
+  were safe only because those spots happened to use double-quoted attributes, on pages that
+  render attacker-set token metadata (symbol/name/icon) — one single-quoted attribute from
+  live XSS. `rpc()` had 6 copies, one returning the raw JSON-RPC envelope instead of throwing
+  on `error`. Same load-order rule as cluck-wallet.js: the `<script src>` tag must precede
+  first use, since pages alias `const esc = CluckUtil.esc` at parse time.
+  ⚠️ **`market-header.js` keeps its OWN `esc()` on purpose** — it's a self-contained drop-in
+  that some pages load *without* cluck-util.js, so depending on it would couple two shared
+  modules. Its copy is the strict one; keep the two in sync.
+  ⚠️ **When auditing for duplicate helpers, grep EVERY declaration form** — `function esc(`,
+  `var esc = function`, `const esc = s =>`. A first pass that only matched `function esc(`
+  reported "zero copies left" while six survived, one of them the vulnerable
+  `buycomp-admin`. Also watch for a local variable shadowing a helper: `locker-room`'s
+  `showVerify()` declared `var esc = res.escrow`, masking the escaper for that whole
+  function body.
 - 👛 **WALLET CONNECT — ONE REGISTRY, `public/cluck-wallet.js` (consolidated 2026-07-30).**
   Every page that connects a wallet reads `CluckWallet.WALLETS` (11 wallets: Phantom,
   Solflare, Backpack, OKX, Coinbase, Trust, Glow, Exodus, Bitget, Brave, Jupiter) plus
