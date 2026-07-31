@@ -3490,6 +3490,24 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     k.body.setAllowGravity(false); k.body.setSize(k.width*0.62,k.height*0.62).setOffset(k.width*0.19,k.height*0.24);
     k.invuln=true; k.setDepth(7);
     var bg2=this.addGlow(k,0x8c5cff,6); if(bg2) this.tweens.add({targets:bg2,outerStrength:14,duration:460,yoyo:true,repeat:-1,ease:'Sine.inOut'});
+    // The swan's shot had no art of its own: it borrowed 'gas', the gas-goblin's GREEN cloud
+    // (0x7ec86e), and hid it under a near-black tint. That is why it was invisible, and why
+    // simply brightening the tint produced green blobs -- tint MULTIPLIES the texture, so the
+    // colour was never the swan's to choose. It gets a real feather here. Canvas-drawn at the
+    // exact 36x34 of 'gas' so the shot's body maths is untouched: pale vane for contrast on the
+    // dark storm plate, dark rim so it still reads when a lightning flash blows the plate out,
+    // dark shaft so it reads as a feather rather than a pill.
+    if(!this.textures.exists('swanfeather')){
+      var fcv=this.textures.createCanvas('swanfeather',36,34), fx=fcv.getContext();
+      fx.clearRect(0,0,36,34); fx.translate(18,17);
+      fx.fillStyle='#1b1226';
+      fx.beginPath(); fx.moveTo(-15,0); fx.quadraticCurveTo(-3,-9.5,16,0); fx.quadraticCurveTo(-3,9.5,-15,0); fx.closePath(); fx.fill();
+      fx.fillStyle='#efe6ff';
+      fx.beginPath(); fx.moveTo(-11.5,0); fx.quadraticCurveTo(-3,-6.6,13,0); fx.quadraticCurveTo(-3,6.6,-11.5,0); fx.closePath(); fx.fill();
+      fx.strokeStyle='#3a2b52'; fx.lineWidth=1.5; fx.lineCap='round';
+      fx.beginPath(); fx.moveTo(-11.5,0); fx.lineTo(13,0); fx.stroke();
+      fcv.refresh();
+    }
     this.physics.add.overlap(this.player, k, this.bossTouch, null, this);
     this.door.setVisible(false);
     this.bossHP=5;
@@ -3540,17 +3558,13 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.over||!this.enemyShots) return; var self=this;
     var base=Math.atan2((p.y-8)-k.y, p.x-k.x);
     [-0.22,0,0.22].forEach(function(off){
-      var ang=base+off, sp=185, s=self.enemyShots.create(k.x, k.y+4, 'gas').setDepth(6); s.srcCause='BLACK SWAN FEATHER';
-      // Was 0x22182e — near-black, and unfair (owner). Measured: the w10-swan backdrop runs at a
-      // median luminance of 43 over the band these fly through, and that tint is 28, so the shot
-      // was DARKER than the background it crossed. It was also the only tinted projectile in the
-      // game under 87; every other hazard sits between 87 and 212. Now a storm-lit feather at 225
-      // — max contrast on a dark plate, still a feather, and no pickup uses white (the diamond is
-      // icy blue, coins are gold), so it can't be misread as a bonus. Don't take it dark again:
-      // the boss's black-swan identity is carried by the SPRITE, not by an unreadable projectile.
-      // A postFX glow is not the alternative — addGlow() no-ops on the Canvas renderer, so it
-      // would fix nothing on exactly the devices where this is worst.
-      if(!s||!s.body) return; s.setScale(0.7); s.setTint(0xe9dcff);
+      // Own art now (see 'swanfeather' in startSwanBoss) and NO tint — the drawn colours are the
+      // final colours, so what is authored is what ships. Falls back to the old dark-tinted gas
+      // cloud only if the texture somehow never got made.
+      var hasTex=self.textures.exists('swanfeather');
+      var ang=base+off, sp=185, s=self.enemyShots.create(k.x, k.y+4, hasTex?'swanfeather':'gas').setDepth(6); s.srcCause='BLACK SWAN FEATHER';
+      if(!s||!s.body) return; s.setScale(0.7); if(!hasTex) s.setTint(0x22182e);
+      s.setRotation(ang);   // flies tip-first, so it reads as a thrown feather rather than a pill
       s.body.setAllowGravity(false); s.body.setSize(s.width*0.7,s.height*0.7);
       s.setVelocity(Math.cos(ang)*sp, Math.sin(ang)*sp); s.dieAt=self.time.now+2600;
     });
