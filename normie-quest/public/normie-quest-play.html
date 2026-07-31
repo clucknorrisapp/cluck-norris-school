@@ -3714,7 +3714,14 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // is already the right colour, and tinting a finished sprite is what made the old one muddy.
     var k=this.rugking=this.physics.add.sprite(dx-120, GY-48, 'dirtywhale');
     k.setScale(104/k.height);
-    k.body.setSize(k.width*0.7,k.height*0.62).setOffset(k.width*0.15,k.height*0.3);   // low profile: clearable with a good jump
+    // Body raised a little at the TOP only (offset 0.3 -> 0.14, height 0.62 -> 0.78, so the
+    // bottom stays at 0.92 and he still rests on the floor). Same defect the MEV Dragon had,
+    // milder: 30% of the drawn whale sat above the hitbox, so a stomp onto his back read as a
+    // miss. Head gap 26px -> 12px, stomp band 14px -> 21px.
+    // Deliberately NOT re-cut as far as the dragon: the charge has to stay JUMPABLE. Body top
+    // moves 192 -> 179, i.e. 67px of clearance against a 103px single jump — still comfortable,
+    // where a full re-cut would have eaten most of that margin.
+    k.body.setSize(k.width*0.7,k.height*0.78).setOffset(k.width*0.15,k.height*0.14);   // low profile: clearable with a good jump
     k.setCollideWorldBounds(true); k.invuln=true; k.setDepth(7);
     var bg2=this.addGlow(k,0x66aacc,6); if(bg2) this.tweens.add({targets:bg2,outerStrength:13,duration:500,yoyo:true,repeat:-1,ease:'Sine.inOut'});
     this.physics.add.collider(k, this.platforms);
