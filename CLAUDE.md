@@ -258,9 +258,12 @@ short-form copy going out to X/Telegram. Haiku paths stay on `claude-haiku-4-5-2
 - **Nomadz — reopened.** Their CEO replied about featuring their Solana hotel-booking product.
   **Build nothing until the owner says what was agreed** — a reply is not a scope. Then treat it
   as an education section, not an endorsement.
-- **Solana Foundation — nothing panned out** (2026-07-26). Don't build work premised on Foundation
-  support or propose new applications. The grant/investor pages still describe the project as a
-  Foundation entry; review that with the owner before the next accuracy pass.
+- **Solana Foundation — CLOSED.** Denied again (owner, 2026-07-31), and every mention has been
+  stripped: the `@SolanaFndn` tag on the daily lesson tweet and on the 4pm bump, "grant info" in
+  the bot's About card, and the two application docs under `docs/`. Don't reapply, don't re-add the
+  tag, and don't build work premised on Foundation support. `@solana` stays on the bump — that's
+  the ecosystem the school teaches, not a funding claim. README and `/investors` never carried a
+  Foundation claim; `/grant` was already retired to a 301.
 - **CoinGecko — CLOSED.** Rejected three times; the owner decided against reapplying. Don't
   re-suggest it. The GeckoTerminal listing stays.
 - **Autopsy premium styling** — those sections render off-theme. Leave them visually distinct so

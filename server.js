@@ -666,9 +666,10 @@ const EDU_LONG_HOUR = 13; // the daily lesson is the full lesson
 // X-only @mentions appended to each cross-posted tweet (NOT added to Telegram).
 // Easy to trim/remove here if it starts reading as spam.
 const X_MENTION_TAGS = "@BagsApp @BagsHackathon";
-// Solana Foundation — tagged on every learning lesson tweet (we have an active grant
-// application with them; the lessons are exactly the public-good work it funds).
-const X_LEARN_TAG = "@SolanaFndn";
+// Lesson tweets used to append @SolanaFndn, justified here as "we have an active grant
+// application with them". The Solana Foundation grant was denied again (owner, 2026-07-31), so
+// the tag and the claim behind it are gone — tagging them daily off the back of a dead
+// application is exactly the kind of thing this repo says not to do. Don't reintroduce it.
 // Standard footer on lesson X posts: site, Telegram, CLKN contract, mention tags.
 // (Telegram posts get their own footer — this is X-only.)
 const CLKN_MINT = "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
@@ -962,15 +963,15 @@ async function notifyEduPost() {
   let xTweetId = null;
   if (xConfigured()) {
     try {
-      // Clean, link-free lesson body + tag the Solana Foundation (grant relationship —
-      // every learning lesson tags @SolanaFndn). Link-free keeps algorithmic reach.
-      const xBody = body + "\n\n" + X_LEARN_TAG;
+      // Clean, link-free lesson body — link-free keeps algorithmic reach. (No @SolanaFndn tag
+      // any more; see X_LEARN_TAG's removal note above.)
+      const xBody = body;
       // force = scoped carve-out from the master X pause (owner's explicit call 2026-07-08:
       // "Cluck lesson, one per day with comments under it"). Lesson + its self-replies only.
       let r = await postToX(xBody, { force: true });
       if (!r || !r.ok) {
         const short = body.length > 250 ? body.slice(0, 249).trim() + "…" : body;
-        r = await postToX(short + "\n\n" + X_LEARN_TAG, { force: true });
+        r = await postToX(short, { force: true });
       }
       if (r && r.ok) {
         xTweetId = r.id;
@@ -1020,7 +1021,9 @@ function eduPostTick() {
 // 12pm / 4pm CT peaks. Retune here if the active-times heatmap shifts.
 const LESSON_BUMPS = [
   { hour: 17, tags: "@JupiterExchange @BagsApp" },   // 12pm CT — midday peak
-  { hour: 21, tags: "@solana @SolanaFndn" },         // 4pm CT — afternoon peak
+  // @SolanaFndn dropped 2026-07-31 with the rest of the Foundation framing (grant denied again).
+  // @solana stays — that's the ecosystem the school teaches, not a funding claim.
+  { hour: 21, tags: "@solana" },                     // 4pm CT — afternoon peak
 ];
 // Reply hooks — each threads under the morning lesson and asks a question so the post
 // keeps surfacing and the thread fills with replies.
@@ -1714,7 +1717,7 @@ function guideRoute(key) {
       return "🐔 <b>About Cluck Norris &amp; CLKN.</b>\n\n" +
         "Cluck Norris is the free <b>School of Crypto Hard Knocks</b> + a Solana token-safety toolkit — born from the FireChicken (FCKN) community, now with real utility.\n\n" +
         "<b>CLKN</b> is the token: <b>hold</b> it and the premium operator tools unlock free (50K for the airdropper, 2M for Buy Special and premium forensics) — or pay a small SOL price instead. Holding also earns airdrop eligibility and perks. The school itself is always free.\n\n" +
-        `🐔 ${B}   ·   the story &amp; grant info → ${B}/investors\n\n` +
+        `🐔 ${B}   ·   the story → ${B}/investors\n\n` +
         `💸 <b>Get CLKN</b> — it's a Solana DEX swap (no wallet-connect needed for the app): <a href="https://jup.ag/tokens/${CLKN_MINT}">Buy on Jupiter</a>  ·  <a href="https://${CLKN_DEXSCREENER}">Chart</a>\n\n` +
         "Ask me anything about how it all works.";
     case "explore":
@@ -10571,7 +10574,7 @@ app.get(["/holders", "/snapshot"], (req, res) => {
 
 // Removed pages keep a permanent redirect rather than falling through to the SPA
 // catch-all, which would answer an old bookmark with the school shell and a 200.
-// /grant retired 2026-07-29 (the Foundation avenues went nowhere); Token Vitals was
+// /grant retired 2026-07-29 (the ecosystem-grant avenues went nowhere); Token Vitals was
 // folded away in the same consolidation and /holders is its nearest replacement.
 app.get("/grant", (req, res) => res.redirect(301, "/investors"));
 app.get("/token-vitals", (req, res) => res.redirect(301, "/holders"));
@@ -10596,7 +10599,6 @@ app.get(["/ask-cluck", "/crypto-school"], (req, res) => {
   res.sendFile(join(__dirname, "public", "crypto-school.html"));
 });
 
-// -- Grant overview page (public-good framing for ecosystem grant reviewers) --
 // -- Trace — wallet × token forensic history (private tool, not linked) --
 app.get("/trace", (req, res) => {
   res.sendFile(join(__dirname, "public", "trace.html"));
