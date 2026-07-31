@@ -3398,11 +3398,15 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(!this.textures.exists('swanfeather')){
       var fcv=this.textures.createCanvas('swanfeather',36,34), fx=fcv.getContext();
       fx.clearRect(0,0,36,34); fx.translate(18,17);
-      fx.fillStyle='#1b1226';
-      fx.beginPath(); fx.moveTo(-15,0); fx.quadraticCurveTo(-3,-9.5,16,0); fx.quadraticCurveTo(-3,9.5,-15,0); fx.closePath(); fx.fill();
+      // Of three versions rendered over the real plate, this is the one that keeps the boss's
+      // identity: the feather stays BLACK and is read by its bright RIM, not a bright fill. The
+      // pale-filled and violet-filled takes were both more visible still, but neither was a black
+      // swan's feather any more.
       fx.fillStyle='#efe6ff';
+      fx.beginPath(); fx.moveTo(-15,0); fx.quadraticCurveTo(-3,-9.5,16,0); fx.quadraticCurveTo(-3,9.5,-15,0); fx.closePath(); fx.fill();
+      fx.fillStyle='#241a33';
       fx.beginPath(); fx.moveTo(-11.5,0); fx.quadraticCurveTo(-3,-6.6,13,0); fx.quadraticCurveTo(-3,6.6,-11.5,0); fx.closePath(); fx.fill();
-      fx.strokeStyle='#3a2b52'; fx.lineWidth=1.5; fx.lineCap='round';
+      fx.strokeStyle='#efe6ff'; fx.lineWidth=1.5; fx.lineCap='round';
       fx.beginPath(); fx.moveTo(-11.5,0); fx.lineTo(13,0); fx.stroke();
       fcv.refresh();
     }
