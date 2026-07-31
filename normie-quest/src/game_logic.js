@@ -1572,7 +1572,15 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // level so they always point at the LIVE scene instance)
     try{ var _sc=this; window.__NQ_PAUSE=function(){ if(!_sc.over&&!_sc.paused){ _sc.pauseGame(false); return true; } return false; };
          window.__NQ_RESUME=function(){ if(_sc.paused) _sc.resumeGame(); };
-         window.__NQ_DBG=function(){ try{ return {paused:!!_sc.paused, clockPaused:!!_sc.time.paused, now:Math.round(_sc.time.now), last:Math.round(_sc.lastInputAt||0), warping:!!_sc._warping, swan:_sc._swanState||null, bossHP:(_sc.bossStarted?_sc.bossHP:null), hasKey:!!_sc.hasKey, level:_sc.def&&_sc.def.name, floorKey:_sc.floorKey||null, timeLeft:_sc.timeLeft, throwAmmo:_sc.throwAmmo, bossSprite:(function(){ try{ var k=(_sc.rugking&&_sc.rugking.active)?_sc.rugking:((_sc.worm&&_sc.worm.active)?_sc.worm:null); if(!k) return null; return {tex:k.texture&&k.texture.key, grav:!!(k.body&&k.body.allowGravity), vis:!!k.visible, a:+(k.alpha||0).toFixed(2), w:Math.round(k.displayWidth), h:Math.round(k.displayHeight), x:Math.round(k.x), y:Math.round(k.y), tint:('00000'+(k.tintTopLeft||0).toString(16)).slice(-6)}; }catch(e){ return 'err'; } })(), bgArt:(function(){ try{ var k=_sc.def&&_sc.def.bgArt; if(!k) return null; var n=0; _sc.children.list.forEach(function(o){ if(o&&o.texture&&o.texture.key===k) n++; }); return k+':'+n; }catch(e){ return 'err'; } })(), grav:(function(){ try{ return _sc.physics.world.gravity.y; }catch(e){ return null; } })(), arena:(function(){ try{ return (_sc._arenaL==null)?null:{l:Math.round(_sc._arenaL),r:Math.round(_sc._arenaR)}; }catch(e){ return null; } })(), nearSlot:(function(){ try{ return _sc.nearActiveSlot(); }catch(e){ return 'err:'+e.message; } })(), slotN:(_sc.slots?_sc.slots.length:-1), px:Math.round(_sc.player?_sc.player.x:-1), secrets:(function(){ var a=[]; try{ _sc.platforms.children.iterate(function(m){ if(m&&m.secretSteel) a.push([Math.round(m.x),Math.round(m.y),m.used?1:0]); }); }catch(e){} return a; })(), bb:(function(){ var a=[]; try{ _sc.bonusBlocks.children.iterate(function(m){ if(m) a.push([Math.round(m.x),m.used?1:0]); }); }catch(e){} return a; })(), pscale:(_sc.pscale?+_sc.pscale.v.toFixed(2):1), lives:_sc.lives, nLevels:LEVELS.length, sig:{fb:(_sc.firebars||[]).length, gt:(_sc.gates||[]).length, rp:(_sc.rugPlats&&_sc.rugPlats.children?_sc.rugPlats.getLength():0), dz:(_sc.dumpZones||[]).length, fp:(_sc.firePits&&_sc.firePits.getLength?_sc.firePits.getLength():0), rpull:(_sc.pullerRugs&&_sc.pullerRugs.getLength?_sc.pullerRugs.getLength():0)}, gate0:(_sc.gates&&_sc.gates[0]?_sc.gates[0].st:null), foes:(function(){ var n=0; try{ _sc.enemies.children.iterate(function(e){ if(e&&e.active&&_sc.def&&_sc.def.door&&e.x>_sc.def.door-460) n++; }); }catch(e){} return n; })(), dr:(_sc._drState||null), drX:(_sc.rugking&&_sc.rugking.active?Math.round(_sc.rugking.x):null), drY:(_sc.rugking&&_sc.rugking.active?Math.round(_sc.rugking.y):null), drT:(_sc._drT0?Math.round(_sc.time.now-_sc._drT0):null), bossInv:(_sc.rugking&&_sc.rugking.active?!!_sc.rugking.invuln:null), princess:!!(_sc.princess&&_sc.princess.active), reserve:(_sc.reserve||null), reserveSel:(_sc.reserveSel==null?null:_sc.reserveSel)}; }catch(e){ return {err:String(e)}; } };
+         window.__NQ_DBG=function(){ try{ return {paused:!!_sc.paused, clockPaused:!!_sc.time.paused, now:Math.round(_sc.time.now), last:Math.round(_sc.lastInputAt||0), warping:!!_sc._warping, swan:_sc._swanState||null, bossHP:(_sc.bossStarted?_sc.bossHP:null), hasKey:!!_sc.hasKey, level:_sc.def&&_sc.def.name, floorKey:_sc.floorKey||null, timeLeft:_sc.timeLeft, throwAmmo:_sc.throwAmmo, bossSprite:(function(){ try{ var k=(_sc.rugking&&_sc.rugking.active)?_sc.rugking:((_sc.worm&&_sc.worm.active)?_sc.worm:null); if(!k) return null; return {tex:k.texture&&k.texture.key, grav:!!(k.body&&k.body.allowGravity), vis:!!k.visible, a:+(k.alpha||0).toFixed(2), w:Math.round(k.displayWidth), h:Math.round(k.displayHeight), x:Math.round(k.x), y:Math.round(k.y), tint:('00000'+(k.tintTopLeft||0).toString(16)).slice(-6),
+           // The PHYSICS body rect, next to the visible rect above. bossTouch only ever fires on
+           // body-vs-body overlap, so a body that has drifted off the drawn sprite makes a boss
+           // that LOOKS stompable and cannot be hit -- and nothing in the harness could see it,
+           // because __NQ_STOMPTEST calls wouldStomp() directly and never asks whether the two
+           // bodies would overlap in the first place. Reported so a probe can compare the two.
+           bTop:Math.round(k.body.top), bBot:Math.round(k.body.bottom), bL:Math.round(k.body.left), bR:Math.round(k.body.right),
+           bW:Math.round(k.body.width), bH:Math.round(k.body.height),
+           vTop:Math.round(k.y-k.displayHeight*0.5), vBot:Math.round(k.y+k.displayHeight*0.5)}; }catch(e){ return 'err'; } })(), bgArt:(function(){ try{ var k=_sc.def&&_sc.def.bgArt; if(!k) return null; var n=0; _sc.children.list.forEach(function(o){ if(o&&o.texture&&o.texture.key===k) n++; }); return k+':'+n; }catch(e){ return 'err'; } })(), grav:(function(){ try{ return _sc.physics.world.gravity.y; }catch(e){ return null; } })(), arena:(function(){ try{ return (_sc._arenaL==null)?null:{l:Math.round(_sc._arenaL),r:Math.round(_sc._arenaR)}; }catch(e){ return null; } })(), nearSlot:(function(){ try{ return _sc.nearActiveSlot(); }catch(e){ return 'err:'+e.message; } })(), slotN:(_sc.slots?_sc.slots.length:-1), px:Math.round(_sc.player?_sc.player.x:-1), secrets:(function(){ var a=[]; try{ _sc.platforms.children.iterate(function(m){ if(m&&m.secretSteel) a.push([Math.round(m.x),Math.round(m.y),m.used?1:0]); }); }catch(e){} return a; })(), bb:(function(){ var a=[]; try{ _sc.bonusBlocks.children.iterate(function(m){ if(m) a.push([Math.round(m.x),m.used?1:0]); }); }catch(e){} return a; })(), pscale:(_sc.pscale?+_sc.pscale.v.toFixed(2):1), lives:_sc.lives, nLevels:LEVELS.length, sig:{fb:(_sc.firebars||[]).length, gt:(_sc.gates||[]).length, rp:(_sc.rugPlats&&_sc.rugPlats.children?_sc.rugPlats.getLength():0), dz:(_sc.dumpZones||[]).length, fp:(_sc.firePits&&_sc.firePits.getLength?_sc.firePits.getLength():0), rpull:(_sc.pullerRugs&&_sc.pullerRugs.getLength?_sc.pullerRugs.getLength():0)}, gate0:(_sc.gates&&_sc.gates[0]?_sc.gates[0].st:null), foes:(function(){ var n=0; try{ _sc.enemies.children.iterate(function(e){ if(e&&e.active&&_sc.def&&_sc.def.door&&e.x>_sc.def.door-460) n++; }); }catch(e){} return n; })(), dr:(_sc._drState||null), drX:(_sc.rugking&&_sc.rugking.active?Math.round(_sc.rugking.x):null), drY:(_sc.rugking&&_sc.rugking.active?Math.round(_sc.rugking.y):null), drT:(_sc._drT0?Math.round(_sc.time.now-_sc._drT0):null), bossInv:(_sc.rugking&&_sc.rugking.active?!!_sc.rugking.invuln:null), princess:!!(_sc.princess&&_sc.princess.active), reserve:(_sc.reserve||null), reserveSel:(_sc.reserveSel==null?null:_sc.reserveSel)}; }catch(e){ return {err:String(e)}; } };
          // LAB-only physics-health probe: counts NaN-position/velocity bodies (a single NaN body
          // poisons Arcade's RTree broad-phase → ALL overlaps silently fail — coins, damage, etc).
          // __NQ_COINGRAB teleports the player onto a coin so a caller can confirm overlap fires.
@@ -1613,7 +1621,16 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
              var top=_sc.wouldStomp(visTop+3, k, 200);                     // land squarely on the visible head
              var clip=_sc.wouldStomp(visTop+k.displayHeight*0.3, k, 200);  // land slightly forward (clipped side)
              k.invuln=wasInv;
-             return {boss:_sc.def.bossType, displayH:Math.round(k.displayHeight), bodyH:Math.round(k.body.height), stompTop:top, stompClip:clip, stompable:!!top}; }catch(e){ return {error:String(e)}; } };
+             // headGap = how much of the DRAWN sprite sits above the physics body. bossTouch is an
+             // overlap callback, so anything in that strip is un-hittable no matter what wouldStomp
+             // says -- and wouldStomp is all this probe used to report, which is how an unbeatable
+             // MEV Dragon (headGap 21px of a 108px sprite) passed the suite as BOSS-ok.
+             var headGap=Math.round(k.body.top-visTop);
+             var band=Math.round(Math.max(k.body.top+Math.max(14,k.body.height*0.25), visTop+k.displayHeight*0.4)-k.body.top);
+             return {boss:_sc.def.bossType, displayH:Math.round(k.displayHeight), bodyH:Math.round(k.body.height),
+                     headGap:headGap, headGapPct:Math.round(100*headGap/Math.max(1,k.displayHeight)),
+                     stompBandPx:band, hitW:Math.round(k.body.width), drawnW:Math.round(k.displayWidth),
+                     stompTop:top, stompClip:clip, stompable:!!top}; }catch(e){ return {error:String(e)}; } };
            // Force the current level's boss fight to begin (skips the walk-to-door + key), so a
            // headless pre-ship check can spawn each boss and run __NQ_STOMPTEST.
            window.__NQ_FORCEBOSS=function(){ try{ if(_sc.def&&_sc.def.boss&&!_sc.bossStarted){ _sc.startBoss(); return true; } return !!_sc.bossStarted; }catch(e){ return false; } };
@@ -2934,6 +2951,15 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
          !(player.invuln||now<this.shieldUntil||now<this.coldUntil||now<this.moonUntil||now<this.omegaUntil||now<this.whaleUntil)){
         this.hurt(player, k.x<player.x?1:-1, 'CARTEL CHARGE');
       }
+      // An armoured contact used to return in total silence -- no flash, no sound, nothing. A clean
+      // landing on an invulnerable boss is indistinguishable from a broken hitbox, which is exactly
+      // how the MEV Dragon read to the owner. Say it out loud instead (throttled so a multi-frame
+      // overlap does not spam), and only when the player genuinely landed a stomp-shaped hit.
+      if(this.wouldStomp(player.body.bottom, k, player.body.velocity.y) && now>(this._invFbAt||0)){
+        this._invFbAt=now+700; player.setVelocityY(-250);
+        try{ this.burst(k.x, k.y-10, 0xbfc6d8, 8); _tone(240,90,0.1,'square',0.05); }catch(e){}
+        this.flash('ARMOURED — WAIT FOR THE LANDING!','#bfc6d8');
+      }
       return;
     }
     if(now<this.moonUntil||now<this.whaleUntil){ this.bossHit(); return; }   // MOON / WHALE smashes the boss on contact
@@ -3474,7 +3500,15 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // pattern the Dirty Whale fix corrected. Its own plate now, untinted.
     var k=this.rugking=this.physics.add.sprite(dx-150, 84, 'mevdragon');
     k.setScale(108/k.height);
-    k.body.setAllowGravity(false); k.body.setSize(k.width*0.62,k.height*0.66).setOffset(k.width*0.19,k.height*0.2);
+    // HEAD MUST BE IN THE HITBOX. The old body (h*0.66 at offset h*0.2) started 21px BELOW the
+    // drawn head: measured live, the sprite spans y154..262 when grounded but the body only
+    // 175..246. bossTouch is an OVERLAP callback, so a player who jumped and landed squarely on
+    // the drawn head never overlapped anything and got no damage, no hurt, no feedback at all --
+    // owner report, 7 failed runs. The generous visible-sprite band in wouldStomp could not help,
+    // because wouldStomp is only consulted once the bodies already overlap.
+    // Height/offset are re-cut so the BOTTOM stays put (+38 from centre, i.e. exactly on the floor
+    // at the k.y=GY-38 landing height) and only the top rises over the head.
+    k.body.setAllowGravity(false); k.body.setSize(k.width*0.62,k.height*0.80).setOffset(k.width*0.19,k.height*0.055);
     k.invuln=true; k.setDepth(7);
     var bg2=this.addGlow(k,0xb06bff,6); if(bg2) this.tweens.add({targets:bg2,outerStrength:14,duration:460,yoyo:true,repeat:-1,ease:'Sine.inOut'});
     this.physics.add.collider(k, this.platforms);
@@ -3517,7 +3551,11 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     } else if(st==='dive'){
       k.invuln=true;
       if(k.y>=GY-38 || now-this._drT0>1400){
-        k.setVelocity(0,0); k.y=Math.min(k.y, GY-38);
+        // Snap to the floor, unconditionally. Math.min() only ever LOWERED him, so when the 1400ms
+        // timeout fired before the dive had actually landed (a frame hitch is enough) he entered
+        // 'grounded' still airborne -- vulnerable, but parked above the top of a double jump, i.e.
+        // an unwinnable cycle. 'grounded' has to mean on the ground.
+        k.setVelocity(0,0); k.y=GY-38;
         this._drState='grounded'; this._drT0=now; k.invuln=false;
         if(this._drMark) this._drMark.setVisible(false);
         this.cameras.main.shake(220,.013); _tone(110,55,0.2,'square',0.08);
