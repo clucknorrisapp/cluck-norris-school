@@ -3541,7 +3541,16 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var base=Math.atan2((p.y-8)-k.y, p.x-k.x);
     [-0.22,0,0.22].forEach(function(off){
       var ang=base+off, sp=185, s=self.enemyShots.create(k.x, k.y+4, 'gas').setDepth(6); s.srcCause='BLACK SWAN FEATHER';
-      if(!s||!s.body) return; s.setScale(0.7); s.setTint(0x22182e);
+      // Was 0x22182e — near-black, and unfair (owner). Measured: the w10-swan backdrop runs at a
+      // median luminance of 43 over the band these fly through, and that tint is 28, so the shot
+      // was DARKER than the background it crossed. It was also the only tinted projectile in the
+      // game under 87; every other hazard sits between 87 and 212. Now a storm-lit feather at 225
+      // — max contrast on a dark plate, still a feather, and no pickup uses white (the diamond is
+      // icy blue, coins are gold), so it can't be misread as a bonus. Don't take it dark again:
+      // the boss's black-swan identity is carried by the SPRITE, not by an unreadable projectile.
+      // A postFX glow is not the alternative — addGlow() no-ops on the Canvas renderer, so it
+      // would fix nothing on exactly the devices where this is worst.
+      if(!s||!s.body) return; s.setScale(0.7); s.setTint(0xe9dcff);
       s.body.setAllowGravity(false); s.body.setSize(s.width*0.7,s.height*0.7);
       s.setVelocity(Math.cos(ang)*sp, Math.sin(ang)*sp); s.dieAt=self.time.now+2600;
     });
