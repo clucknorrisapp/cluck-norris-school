@@ -2160,11 +2160,43 @@ app.use(require("compression")());
 // HSTS forces browsers to use HTTPS for this domain for the next year,
 // even if a user types http:// or a phishing link tries to downgrade.
 // Other headers harden against clickjacking + mime-type sniffing.
+//
+// CONTENT-SECURITY-POLICY. Added 2026-08-01 after an external scan (rootcrak) flagged it as
+// the one real gap — the other three headers it reported missing have been sent for a while,
+// so that part of the report was stale.
+//
+// It is deliberately NOT the `default-src 'self'` the scanner suggested: every tool page here
+// is vanilla HTML with INLINE <script> and inline styles, so a strict policy would blank the
+// entire site on the next deploy. 'unsafe-inline' is therefore unavoidable without rewriting
+// every page, and it does weaken the anti-XSS value. What this policy still buys, and the
+// reason it is worth shipping:
+//   • script-src pins the ONLY four external script origins we actually load. An injected
+//     <script src="https://evil/..."> is blocked even though inline is allowed — and injected
+//     markup is the live risk here, since token names/symbols are attacker-controlled.
+//   • object-src 'none' kills Flash/plugin embeds, base-uri 'self' stops <base> hijacking
+//     rewriting every relative URL on the page, and frame-ancestors backstops X-Frame-Options.
+// img-src stays wide (https:) on purpose: token logos come from arbitrary metadata URIs, so
+// pinning hosts would break every forensic tool. connect-src is wide for the same reason —
+// wallets and RPC endpoints vary per user.
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://plugin.jup.ag https://unpkg.com https://www.googletagmanager.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "img-src 'self' data: blob: https:",
+  "connect-src 'self' https: wss:",
+  "worker-src 'self' blob:",
+  "media-src 'self' data: blob: https:",
+  "frame-ancestors 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+].join("; ");
 app.use((req, res, next) => {
   res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "SAMEORIGIN");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Content-Security-Policy", CSP);
   next();
 });
 
