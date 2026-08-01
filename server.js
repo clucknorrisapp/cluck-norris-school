@@ -2191,12 +2191,25 @@ const CSP = [
   "base-uri 'self'",
   "object-src 'none'",
 ].join("; ");
+
+// PERMISSIONS-POLICY. Denies powerful browser features we never use, so an injected script
+// can't prompt for them under our origin. Only four are listed, and the omissions matter:
+//   • fullscreen is NOT denied — Normie Quest has a fullscreen button (game_logic.js, the ⛶
+//     control that calls docEl.requestFullscreen). Denying it would kill that silently.
+//   • usb/hid are NOT denied either. Nothing here calls navigator.usb or navigator.hid today
+//     (checked), but hardware-wallet paths are the kind of thing that grows back, and a denied
+//     feature fails quietly — which is the worst failure mode for a money path.
+// The four below are verified unused: no getUserMedia outside vendor Phaser, no geolocation,
+// no PaymentRequest anywhere (Solana wallets don't use the Payment Request API).
+const PERMISSIONS_POLICY = "camera=(), microphone=(), geolocation=(), payment=()";
+
 app.use((req, res, next) => {
   res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "SAMEORIGIN");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   res.setHeader("Content-Security-Policy", CSP);
+  res.setHeader("Permissions-Policy", PERMISSIONS_POLICY);
   next();
 });
 
