@@ -99,6 +99,9 @@
   footer a{color:var(--orange);}
   footer .mint{font-family:var(--mono);font-size:10.5px;color:var(--muted);word-break:break-all;margin-top:10px;}
   footer .disc{color:var(--muted);font-size:11px;max-width:640px;margin:10px auto 0;line-height:1.5;}
+  footer .seal{margin-top:18px;line-height:0;}
+  footer .seal img{opacity:.85;transition:opacity .15s ease;}
+  footer .seal a:hover img,footer .seal a:focus-visible img{opacity:1;}
 
   @media(max-width:680px){
     .quick{grid-template-columns:1fr 1fr;max-width:none;}
@@ -195,6 +198,15 @@
     </div>
     <div class="mint"><a href="/clkn">CLKN · DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS</a></div>
     <div class="disc">Educational tools and forensic data only — the chain shows <em>what</em>, never <em>why</em>. Nothing here is financial advice.</div>
+    <!-- Third-party security verification. The grade is a STATIC snapshot baked into the
+         badge: if it ever moves, this markup has to be updated by hand or the page states
+         something untrue. The link goes to the live verify page so a reader can always
+         check the current number against what we're claiming here. -->
+    <div class="seal">
+      <a href="https://rootcrak.com/verify/clucknorris.app" target="_blank" rel="noopener noreferrer">
+        <img src="data:image/svg+xml,%3Csvg%20width%3D%22180%22%20height%3D%2230%22%20viewBox%3D%220%200%20180%2030%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%0A%20%20%3Crect%20x%3D%220.5%22%20y%3D%220.5%22%20width%3D%22179%22%20height%3D%2229%22%20rx%3D%225.5%22%20fill%3D%22%230f0f0f%22%20stroke%3D%22%231a1a1a%22%2F%3E%0A%20%20%3Ctext%20x%3D%2212%22%20y%3D%2219%22%20fill%3D%22%2322d3ee%22%20font-size%3D%2215%22%20font-weight%3D%22900%22%20font-family%3D%22system-ui%2C-apple-system%2Csans-serif%22%3EB%3C%2Ftext%3E%0A%20%20%3Cline%20x1%3D%2244%22%20y1%3D%228%22%20x2%3D%2244%22%20y2%3D%2222%22%20stroke%3D%22%23222%22%20stroke-width%3D%221%22%2F%3E%0A%20%20%3Ctext%20x%3D%2252%22%20y%3D%2219%22%20fill%3D%22%23888%22%20font-size%3D%2210%22%20font-weight%3D%22600%22%20font-family%3D%22system-ui%2C-apple-system%2Csans-serif%22%3ESECURITY%3C%2Ftext%3E%0A%20%20%3Ctext%20x%3D%22120%22%20y%3D%2219%22%20fill%3D%22%23fff%22%20font-size%3D%2210%22%20font-weight%3D%22700%22%20font-family%3D%22system-ui%2C-apple-system%2Csans-serif%22%3EROOT%3C%2Ftext%3E%0A%20%20%3Ctext%20x%3D%22150%22%20y%3D%2219%22%20fill%3D%22%2322d3ee%22%20font-size%3D%2210%22%20font-weight%3D%22700%22%20font-family%3D%22system-ui%2C-apple-system%2Csans-serif%22%3ECRAK%3C%2Ftext%3E%0A%3C%2Fsvg%3E" alt="Security verified by ROOTCRAK — Score: B" height="34" />
+      </a>
+    </div>
   </footer>
 </div>
 
