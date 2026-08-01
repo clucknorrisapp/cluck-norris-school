@@ -18,9 +18,13 @@ STRATEGY.md
 SECURITY-BACKLOG.md
 
 # Local Claude Code config (machine-specific, keep private) — but DO commit skills,
-# so fresh cloud sessions get our reusable workflows (.claude/skills/).
+# so fresh cloud sessions get our reusable workflows (.claude/skills/), and DO commit
+# settings.json: this container resets often and wipes anything not in git, so the
+# permission config has to live in the repo to survive. settings.local.json stays
+# ignored by the .claude/* rule above for genuinely machine-specific overrides.
 .claude/*
 !.claude/skills/
+!.claude/settings.json
 
 # Editor / OS
 .DS_Store
