@@ -50,6 +50,13 @@ team on access or rewards, so never promise gating terms on any public surface. 
 copy lives in `NORMIE_NATION` (game_logic.js): identity and where-to-buy only, no perks, no
 thresholds.
 
+**Wallet Watch is PRIVATE** (owner ask, 2026-07-10) — **no public surface: never link or mention
+it on the app or socials.** Its scheduler is hard-killed (`WALLET_WATCH_KILLED`) and the manual
+`/api/wallet-watch?run=1&key=…` lever is left working on purpose for one-off owner use. Public
+exposure is currently zero, so nothing will stop you adding some: don't put it in a tools roundup,
+an investor page, or promo copy assembled from the endpoint list. (Restored 2026-08-01 — this
+constraint was dropped by the 07-30 trim; see `docs/CLAUDE_MD_TRIM_2026-07-30.md`.)
+
 CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 
 ---
