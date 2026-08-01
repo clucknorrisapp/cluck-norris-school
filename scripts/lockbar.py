@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
-"""Composite a 'ROAD TO 40% LOCKED' progress tracker onto the bottom of a lock-celebration image.
-Usage: lockbar.py <in.png> <out.png> <pct_locked e.g. 38.944> [target=40]"""
+"""Composite a 'ROAD TO 50% LOCKED' progress tracker onto the bottom of a lock-celebration image.
+Usage: lockbar.py <in.png> <out.png> <pct_locked e.g. 45.211> [target=50]
+
+TARGET LIVES HERE, NOT IN THE CALL. Sessions used to pass the raised target as argv[4] and
+leave these defaults at 40, so the next session read 40, drew a full bar on an already-passed
+goal, and the owner had to correct it again -- three times. Raise the DEFAULT when a milestone
+is passed (owner, 2026-08-01: "we have already made it 50 percent twice, so this keeps
+reverting"). 40% was passed long ago; supply locked is 45.21% as of 2026-08-01."""
 import sys
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
@@ -12,7 +18,7 @@ RED = (232, 30, 14)
 CREAM = (255, 239, 224)
 SUB = (201, 168, 146)
 
-def main(inp, outp, pct, target=40.0):
+def main(inp, outp, pct, target=50.0):
     im = Image.open(inp).convert("RGB")
     W, H = im.size
     S = W / 1920.0  # scale relative to a 1920-wide frame
@@ -86,5 +92,5 @@ def main(inp, outp, pct, target=40.0):
 
 if __name__ == "__main__":
     inp, outp, pct = sys.argv[1], sys.argv[2], float(sys.argv[3])
-    tgt = float(sys.argv[4]) if len(sys.argv) > 4 else 40.0
+    tgt = float(sys.argv[4]) if len(sys.argv) > 4 else 50.0
     main(inp, outp, pct, tgt)
