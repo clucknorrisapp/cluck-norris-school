@@ -178,9 +178,69 @@ async function pairTests() {
   t("refuses a malformed wallet", () => assert.match(nowallet.error, /connect a wallet/));
 }
 
+console.log("\nmonitoring");
+async function monitorTests() {
+  // stats() is what the operator view renders — it must work before a single swap exists,
+  // otherwise the first thing you see after arming the desk is a crash.
+  const s = swap.stats();
+  t("stats works on an empty desk", () => {
+    assert.strictEqual(typeof s.day, "string");
+    assert.ok(Array.isArray(s.recent));
+    assert.strictEqual(typeof s.limits.spreadBps, "number");
+  });
+  t("stats reports the configured limits", () => {
+    assert.ok(s.limits.walletDailyUsd > 0 && s.limits.globalDailyUsd > 0);
+  });
+
+  // A Telegram outage, or simply no bot configured, must never turn a settled swap into an
+  // error. The alert path is best-effort by design, so prove it stays quiet rather than throwing.
+  t("alerting is a no-op with no bot configured", () => {
+    const saved = process.env.TELEGRAM_BOT_TOKEN;
+    delete process.env.TELEGRAM_BOT_TOKEN;
+    assert.doesNotThrow(() => { swap.stats(); });
+    if (saved) process.env.TELEGRAM_BOT_TOKEN = saved;
+  });
+
+  // The operator endpoint, including the case that matters most: an UNSET key must 404 rather
+  // than 401. A 401 confirms the endpoint exists and is worth attacking.
+  const express = require("express");
+  const { router } = require("../swap");
+  await new Promise((resolve) => {
+    const app = express(); app.use("/api/swap", router);
+    const srv = app.listen(0, async () => {
+      const base = `http://localhost:${srv.address().port}`;
+      const code = async (u, h) => (await fetch(base + u, { headers: h || {} })).status;
+      const saved = process.env.SWAP_ADMIN_KEY;
+
+      process.env.SWAP_ADMIN_KEY = "k-for-test";
+      const noKey = await code("/api/swap/admin");
+      const wrong = await code("/api/swap/admin?key=nope");
+      const right = await code("/api/swap/admin?key=k-for-test");
+      const hdr   = await code("/api/swap/admin", { "x-swap-key": "k-for-test" });
+      delete process.env.SWAP_ADMIN_KEY;
+      const unset = await code("/api/swap/admin?key=anything");
+      if (saved) process.env.SWAP_ADMIN_KEY = saved;
+
+      const checks = [
+        ["operator view 404s with no key", noKey, 404],
+        ["operator view 404s on a wrong key", wrong, 404],
+        ["operator view opens with the right key", right, 200],
+        ["operator view accepts the header form", hdr, 200],
+        ["operator view 404s when the key is UNSET (never 401)", unset, 404],
+      ];
+      for (const [name, got, want] of checks) {
+        try { assert.strictEqual(got, want); console.log(`  ok    ${name}`); pass++; }
+        catch (e) { console.log(`  FAIL  ${name}\n          got ${got}, want ${want}`); fail++; }
+      }
+      srv.close(resolve);
+    });
+  });
+}
+
 (async () => {
   await tamperTests();
   await pairTests();
+  await monitorTests();
   console.log(`\n${pass} passed, ${fail} failed\n`);
   process.exit(fail ? 1 : 0);
 })();

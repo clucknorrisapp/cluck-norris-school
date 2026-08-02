@@ -72,4 +72,26 @@ router.post("/submit", wrap(async (req, res) => {
   }));
 }));
 
+/* Operator view: recent swaps, today's cap usage, live inventory.
+ *
+ * Gated by SWAP_ADMIN_KEY, a SCOPED key — following the BUYCOMP_KEY precedent, so checking on
+ * the desk from a browser never puts PREMIUM_ACCESS_KEY in a URL bar, a log or a history file.
+ * Unset key → 404, never 401: a 401 confirms the endpoint exists and is worth attacking.
+ * Header preferred over ?key= because query strings leak into proxies and access logs. */
+function adminOK(req) {
+  const KEY = process.env.SWAP_ADMIN_KEY;
+  if (!KEY) return null;                                     // not configured → 404
+  const given = req.headers["x-swap-key"] || req.query.key;
+  return given === KEY;
+}
+router.get("/admin", wrap(async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const ok = adminOK(req);
+  if (ok === null || !ok) return res.status(404).json({ error: "Not found" });
+  const s = desk.stats();
+  let inv = null;
+  try { inv = await desk.inventory(); } catch (e) { inv = { error: safeErr(e) }; }
+  res.json({ ok: true, ...s, inventory: inv });
+}));
+
 module.exports = { router };

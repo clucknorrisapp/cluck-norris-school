@@ -12809,7 +12809,7 @@ app.listen(PORT, () => {
       // Swap desk. Both unset is the normal, safe state — the desk is simply off. They appear
       // here so that a desk that is supposed to be armed and isn't is diagnosable from the
       // first lines of the deploy log rather than from a user reporting "it says not live".
-      "SWAP_OPERATOR_SECRET", "SWAP_QUOTE_SECRET",
+      "SWAP_OPERATOR_SECRET", "SWAP_QUOTE_SECRET", "SWAP_ADMIN_KEY",
     ];
     const missing = expected.filter((k) => !process.env[k]);
     console.log(`[boot] env audit: ${expected.length - missing.length}/${expected.length} expected vars present${missing.length ? " — MISSING: " + missing.join(", ") : ""}`);

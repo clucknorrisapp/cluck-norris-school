@@ -217,6 +217,38 @@ blockhash refreshed immediately before signing, `skipPreflight: true` because pr
 | `SWAP_GLOBAL_DAILY_USD` | 2500 |
 | `SWAP_INVENTORY_FLOOR_PCT` | 10 |
 | `SWAP_ADMIN_KEY` | Scoped key for the operator view, so `PREMIUM_ACCESS_KEY` is not exposed in a browser. Follows the `BUYCOMP_KEY` precedent at `server.js:5705`. Unset → 404, never 401. |
+| `SWAP_ALERT_CHAT_ID` | Telegram room for desk alerts. Falls back to `TELEGRAM_CHAT_ID`. |
+| `SWAP_LOW_INVENTORY_USD` | 200 — warn when a side has less than this left to trade |
+
+---
+
+## 7. Monitoring
+
+A desk holding real money that nobody can watch is the part worth being uneasy about. On-chain
+history exists, but reading it requires someone to go and look, which means a drained side — or a
+bot quietly working the spread — stays invisible until the owner happens to check. So the desk
+reports on itself.
+
+| | |
+|---|---|
+| **Per-swap Telegram alert** | direction, amounts, USD, wallet, Solscan link |
+| **Low-inventory warning** | once per side per day, when what's left to trade falls under `SWAP_LOW_INVENTORY_USD` |
+| **Durable swap log** | kv-backed (`swapLog`, last 500), so it survives the redeploys that happen most often |
+| **Operator view** | `GET /api/swap/admin` — recent swaps, today's cap usage per wallet, live inventory |
+
+Three deliberate choices:
+
+- **Alerts are silent** (`disable_notification`). These are operational events; a desk that buzzes
+  a phone at 3am gets muted, and a muted alert is worse than none.
+- **Low inventory warns once per side per day**, not per swap. A draining side would otherwise
+  fire on every subsequent swap and train the reader to ignore it.
+- **Everything runs after the send and swallows its own errors.** The swap has already settled
+  on-chain; a Telegram outage or a failed disk write must never surface to the user as a failure.
+
+The low-inventory warning is the one that will actually matter. The stated use case — CLKN holders
+acquiring NORMIE to reach the higher game levels — is **one-directional**, so NORMIE drains while
+CLKN accumulates. That is the expected behaviour, not a fault, and it means the desk needs manual
+rebalancing. Standing inventory on one side is also, economically, a standing bid for the other.
 
 ---
 
