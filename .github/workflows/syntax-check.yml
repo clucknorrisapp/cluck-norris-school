@@ -16,10 +16,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+      # normie-quest/*.js is in this list because server.js require()s two of them at the top
+      # level -- routes.js (app.use, server.js:10946) and nq-digest.js (:11862) -- with no try.
+      # A parse error in either does not break Normie Quest, it stops the whole site booting,
+      # and Railway auto-deploys main with no staging. They were outside the loop until
+      # 2026-08-02, so that failure had nothing standing in front of it.
+      # NOT normie-quest/src/*.js: game_logic.js contains <script> blocks and is not plain JS,
+      # so node --check fails on it by design. normie-quest/test/nq-verify.cjs checks that one
+      # by splitting on the script tags and compiling each block.
       - name: node --check every backend entrypoint and lib
         run: |
           set -e
-          for f in server.js hatchery.js securitycoop.js whirlpool-mm.js lib/*.js; do
+          for f in server.js hatchery.js securitycoop.js whirlpool-mm.js lib/*.js normie-quest/*.js; do
             echo "checking $f"
             node --check "$f"
           done
