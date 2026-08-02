@@ -17,6 +17,13 @@ Spawn a **sonnet subagent** (`claude-sonnet-5`) to craft the Higgsfield prompt, 
 `generate_image` (nano_banana_pro, ~2 credits). Scene spec:
 - TWO vault doors: "JUPITER LOCK" (engraved `jupLockedShort` CLKN) + "OTHER LOCKS" (engraved `strmLockedShort` CLKN). Never name or tag a non-Jupiter locker in art or copy (owner ask 2026-08-01).
 - Cluck hauls exactly `newLocks` bag(s), main bag reads "+{deltaShort} CLKN", walking TOWARD the vault named in `platform` (that door glows).
+- ⛔ **CLUCK MUST NEVER READ AS LEAVING A VAULT WITH THE BAG — that stages a robbery, the exact
+  opposite of the story** (owner, repeatedly; escalated 2026-08-02 after the 49.02% post shipped
+  with him walking away). Stage him three-quarter REAR view, chest and beak pointed INTO the
+  glowing open door, bag clearly inbound. Prompt it explicitly AND verify it on the render:
+  before posting, check his facing the same way you check the plaques — if his body faces the
+  camera or away from the glowing vault while carrying the bag, the render is FAILED; re-roll
+  the pose, do not post it.
 - Banner across both doors: "{pct} OF SUPPLY LOCKED". Dark + orange palette, crisp legible type.
 - Use the branded mascot reference from `docs/MEDIA_LIBRARY.md`; VIEW the render and verify every label before posting.
 - Prompt the AI to keep the BOTTOM 15% of frame quiet (plain floor, no text/objects).
