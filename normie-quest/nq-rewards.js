@@ -20,8 +20,10 @@ const ITEMS = { disc: 1, vial: 1, shield: 1, star: 1, bomb: 1 };
 const MAX_PENDING = 20;                                  // cap a wallet's queue so it can't grow unbounded
 // Wheel prize tables — EVERY spin wins something (loyalty program, not a lottery). Weighted.
 // Two tables: the free daily spin is open to any verified wallet, VIP gets the better odds AND
-// the bonus windows. Same three items in both, because the wheel graphic is a fixed 3-wedge
-// conic gradient — adding star/bomb to the VIP table means rebuilding that graphic first.
+// the bonus windows. The lounge wheel DRAWS ITSELF from these percentages (SVG, wedge per entry,
+// sized by the real odds — since 2026-08-02; the old graphic was a fixed 3-wedge gradient), so a
+// prize added here appears on the wheel by itself. Keep entries in ITEMS/RESERVE_ITEMS or the
+// grant is silently dropped client-side — that rule hasn't moved.
 const WHEEL_VIP = [
   { item: 'disc', weight: 40 },
   { item: 'vial', weight: 35 },

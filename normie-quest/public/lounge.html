@@ -31,15 +31,12 @@
   .wheelcard { background:var(--card); border:1px solid var(--dim); border-radius:12px; padding:20px 18px; margin-bottom:16px; text-align:center; }
   .wheelcard h2 { color:var(--gold); font-size:16px; margin:0 0 2px; letter-spacing:.5px; }
   .wheelcard .cap { font-size:12px; color:#6e6a86; margin-bottom:4px; }
-  .wheelwrap { position:relative; width:190px; height:190px; margin:14px auto 4px; }
-  .wheel { width:100%; height:100%; border-radius:50%; border:4px solid var(--gold); position:relative;
-    transition:transform 4.2s cubic-bezier(.15,.72,.18,1);
-    background:conic-gradient(from 0deg,#1f7a3f 0 120deg,#8a2f52 120deg 240deg,#2a6a86 240deg 360deg); }
-  .wheel .lab { position:absolute; font-size:24px; transform:translate(-50%,-50%); text-shadow:0 1px 3px #000; }
-  .ptr { position:absolute; top:-7px; left:50%; transform:translateX(-50%); width:0; height:0;
-    border-left:11px solid transparent; border-right:11px solid transparent; border-top:18px solid var(--gold); z-index:3; }
-  .hub { position:absolute; left:50%; top:50%; width:24px; height:24px; margin:-12px 0 0 -12px; border-radius:50%;
-    background:#1a1204; border:2px solid var(--gold); z-index:2; }
+  /* SVG wheel (replaced the flat 3-slice conic-gradient, 2026-08-02). The rotating part is the
+     <g id="thewheel"> — same id, same 4.2s ease and 4300ms settle as before, so doSpin's timing
+     is untouched. Rim, studs, hub and pointer stay static outside the group. */
+  .wheelwrap { position:relative; width:220px; height:220px; margin:14px auto 4px; filter:drop-shadow(0 6px 18px rgba(0,0,0,.55)); }
+  .wheelwrap svg { display:block; width:100%; height:100%; }
+  #thewheel { transition:transform 4.2s cubic-bezier(.15,.72,.18,1); transform-origin:130px 130px; }
   /* Neutral grey when off, never a faded gold — a dimmed gradient on dark reads as BROKEN
      rather than inactive (house rule). */
   button:disabled, .spinbtn:disabled { background:#2a2440; color:#7d789c; cursor:default; }
@@ -212,14 +209,57 @@
   }
 
   // ---- 🎡 daily VIP prize wheel — win a game boost, banked to your Normie Quest inventory ----
-  // The wheel only ever awards the first three (its graphic is a fixed 3-wedge conic gradient —
-  // adding a prize means rebuilding that first). star / bomb are here because the PENDING count
-  // includes owner grants and shop burns, and an unnamed prize in that line read as a bug.
+  // The wheel DRAWS ITSELF from the odds the server sends: wedge sizes are the real percentages,
+  // so a free player's 70/22/8 wheel and a VIP's 40/35/25 wheel LOOK different — the better odds
+  // are visible, not just claimed, and an equal-slice wheel over unequal odds would be exactly
+  // the kind of quiet dishonesty this project exists to teach people to spot. It also means a
+  // prize added to the server table just appears (the old conic-gradient graphic was fixed at
+  // three wedges and had to be rebuilt by hand). star / bomb are in ITEM_META because the
+  // PENDING count includes owner grants and shop purchases, and an unnamed prize read as a bug.
   var ITEM_META = { disc: { emoji: '🥏', name: 'SOL Discs +5' }, vial: { emoji: '❤️', name: 'Full Heal' }, shield: { emoji: '🛡️', name: 'Audit Shield' },
     star: { emoji: '⭐', name: 'Star Power' }, bomb: { emoji: '🚀', name: 'Air Strike' } };
   var GAME_URL = '/normie-quest-x7';
-  var WEDGE_CENTER = { disc: 60, vial: 180, shield: 300 };   // matches the conic-gradient wedges
+  var WHEEL_HUES = { disc: ['#2f9e57', '#123f24'], vial: ['#c04a6e', '#59182f'], shield: ['#3d8fb5', '#173c50'],
+    star: ['#c9a227', '#5c470d'], bomb: ['#8a5fd6', '#37245c'] };
+  var wedgeCenter = {};   // prize id -> wedge-center angle, rebuilt with every render
   var wheelRot = 0;
+  function wpt(a, r) { var rad = a * Math.PI / 180; return { x: (130 + r * Math.sin(rad)).toFixed(1), y: (130 - r * Math.cos(rad)).toFixed(1) }; }
+  function wheelSvg(odds) {
+    var R = 100;
+    var list = (odds && odds.length) ? odds : [{ item: 'disc', pct: 34 }, { item: 'vial', pct: 33 }, { item: 'shield', pct: 33 }];
+    var total = list.reduce(function (s, o) { return s + (Number(o.pct) || 0); }, 0) || 100;
+    var defs = '', wedges = '', labels = '', a0 = 0;
+    wedgeCenter = {};
+    list.forEach(function (o, i) {
+      var span = (Number(o.pct) || 0) / total * 360;
+      if (span <= 0) return;
+      var a1 = a0 + span, mid = a0 + span / 2;
+      wedgeCenter[o.item] = mid;
+      var p0 = wpt(a0, R), p1 = wpt(a1, R);
+      var hue = WHEEL_HUES[o.item] || ['#6e6a86', '#2a2440'];
+      defs += '<radialGradient id="wg' + i + '" cx="50%" cy="50%" r="70%">'
+        + '<stop offset="0%" stop-color="' + hue[0] + '"/><stop offset="100%" stop-color="' + hue[1] + '"/></radialGradient>';
+      wedges += '<path d="M130 130 L' + p0.x + ' ' + p0.y + ' A' + R + ' ' + R + ' 0 ' + (span > 180 ? 1 : 0) + ' 1 ' + p1.x + ' ' + p1.y + ' Z" '
+        + 'fill="url(#wg' + i + ')" stroke="#ffd23f" stroke-width="1.5"/>';
+      var m = ITEM_META[o.item] || { emoji: '🎁' };
+      var e = wpt(mid, R * 0.66), t = wpt(mid, R * 0.38);
+      labels += '<text x="' + e.x + '" y="' + e.y + '" font-size="24" text-anchor="middle" dominant-baseline="central" style="filter:drop-shadow(0 1px 2px #000)">' + m.emoji + '</text>'
+        + '<text x="' + t.x + '" y="' + t.y + '" font-size="11" font-weight="700" fill="rgba(255,255,255,.85)" text-anchor="middle" dominant-baseline="central">' + Math.round(Number(o.pct) || 0) + '%</text>';
+      a0 = a1;
+    });
+    var studs = '';
+    for (var k = 0; k < 12; k++) { var s = wpt(k * 30, 112); studs += '<circle cx="' + s.x + '" cy="' + s.y + '" r="3.2" fill="' + (k % 2 ? '#ffd23f' : '#7a5c10') + '"/>'; }
+    return '<div class="wheelwrap"><svg viewBox="0 0 260 260" aria-hidden="true">'
+      + '<defs>' + defs + '</defs>'
+      + '<circle cx="130" cy="130" r="124" fill="#0d0a1a" stroke="#3a3010" stroke-width="1.5"/>'
+      + '<circle cx="130" cy="130" r="112" fill="none" stroke="#241c08" stroke-width="17"/>'
+      + '<g id="thewheel">' + wedges + labels + '</g>'
+      + studs
+      + '<circle cx="130" cy="130" r="17" fill="#1a1204" stroke="#ffd23f" stroke-width="3"/>'
+      + '<circle cx="130" cy="130" r="5" fill="#ffd23f"/>'
+      + '<path d="M130 4 L117 32 L130 25 L143 32 Z" fill="#ffd23f" stroke="#7a5c10" stroke-width="1.5" style="filter:drop-shadow(0 2px 3px rgba(0,0,0,.6))"/>'
+      + '</svg></div>';
+  }
   function fmtCountdown(ms) {
     if (ms <= 0) return 'now';
     var h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000);
@@ -241,12 +281,7 @@
         + (st.vip ? '<br>🎉 <b>Bonus spins</b> drop a few times a day — check back!'
                   : '<br><span style="color:#6e6a86">VIP seats get better odds and bonus spins through the day.</span>') + '</div>'
       + (st.bonusReady && !st.dailyReady ? '<div class="cap" style="color:#ffd23f">🎉 BONUS SPIN AVAILABLE NOW!</div>' : '')
-      + '<div class="wheelwrap"><div class="ptr"></div>'
-      + '<div class="wheel" id="thewheel">'
-      + '<span class="lab" style="left:78%;top:34%">🥏</span>'
-      + '<span class="lab" style="left:50%;top:82%">❤️</span>'
-      + '<span class="lab" style="left:22%;top:34%">🛡️</span>'
-      + '</div><div class="hub"></div></div>'
+      + wheelSvg(st.odds)
       + '<button class="spinbtn" id="spinbtn">SPIN</button>'
       + '<div class="wheelmsg" id="wheelmsg"></div>'
       + '<div class="odds" id="wheelcd"></div>'
@@ -257,6 +292,7 @@
           + ' waiting for you — <a href="' + GAME_URL + '">open Normie Quest</a> to collect.</span>' : '')
       + '</div>';
     var btn = document.getElementById('spinbtn'), msg = document.getElementById('wheelmsg'), wheelEl = document.getElementById('thewheel'), cd = document.getElementById('wheelcd');
+    wheelRot = 0;   // the SVG group above was just rebuilt at 0° — the accumulator must match it
     var cdTimer = null;   // single countdown interval — cleared on every re-lock so stale ones can't flicker the button
     function armSpin(bonus) {   // enable the button for a (regular or bonus) spin
       if (cdTimer) { clearInterval(cdTimer); cdTimer = null; }
@@ -290,7 +326,11 @@
         else { btn.disabled = false; btn.textContent = 'SPIN'; msg.textContent = 'Spin failed — try again.'; }
         return;
       }
-      var center = WEDGE_CENTER[res.prize] || 0;
+      // wedgeCenter comes from the layout wheelSvg just drew, so targeting stays right whatever
+      // the odds table says. Fixes a carried bug too: wheelRot survived across re-renders while
+      // the (rebuilt) wheel element was back at 0°, so the first spin after any re-render landed
+      // offset by the previous session's rotation. renderWheel now zeroes it (below).
+      var center = wedgeCenter[res.prize] || 0;
       var targetMod = (360 - center) % 360, cur = ((wheelRot % 360) + 360) % 360;
       wheelRot += 5 * 360 + ((targetMod - cur + 360) % 360) + (Math.random() * 22 - 11);
       wheelEl.style.transform = 'rotate(' + wheelRot + 'deg)';
