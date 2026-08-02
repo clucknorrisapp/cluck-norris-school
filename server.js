@@ -448,9 +448,27 @@ async function buildLockReport(note = "") {
   }
   // Outward label only: anything that isn't Jupiter Lock is reported generically as "Other locks"
   // and never named (owner ask 2026-08-01). data.breakdown keeps the real label for internals.
-  const bd = (data.breakdown || [])
-    .map(b => `   • ${/jupiter/i.test(b.label || "") ? "Jupiter Lock" : "Other locks"}: ${fmtTokensShort(b.tokens)} CLKN`)
-    .join("\n");
+  // SUM the non-Jupiter platforms into ONE line: breakdown can carry several distinct non-Jupiter
+  // labels (Streamflow, Bonfida Vesting, "Self-owned lock"), and mapping each in place printed
+  // "Other locks" two or three times as separate rows, which reads like a bug to anyone counting.
+  let jupTokens = 0, otherTokens = 0;
+  for (const b of (data.breakdown || [])) {
+    if (/jupiter/i.test(b.label || "")) jupTokens += b.tokens || 0;
+    else otherTokens += b.tokens || 0;
+  }
+  const bd = [
+    jupTokens > 0 ? `   • Jupiter Lock: ${fmtTokensShort(jupTokens)} CLKN` : null,
+    otherTokens > 0 ? `   • Other locks: ${fmtTokensShort(otherTokens)} CLKN` : null,
+  ].filter(Boolean).join("\n");
+  // Jupiter's per-token page proves the JUPITER portion only. When any non-Jupiter lock is in the
+  // total, the headline number is not provable from that link alone — so link the full on-chain
+  // report too (every escrow, read live from Solana) and keep Jupiter as the independent
+  // cross-check. "Verify" pointing somewhere that can't verify the stated number is exactly the
+  // claim/evidence mismatch this project's forensic honesty is built against.
+  const verifyLines = otherTokens > 0
+    ? `\n   🔒 Jupiter Lock portion → https://lock.jup.ag/token/${CLKN_MINT}` +
+      `\n   🔐 Every escrow, live on-chain → ${CANONICAL_ORIGIN}/lock/${CLKN_MINT}`
+    : `\n   🔒 Jupiter Lock → https://lock.jup.ag/token/${CLKN_MINT}`;
   const msg =
     `🔒 <b>CLKN Locked Supply</b>\n\n` +
     `<b>${fmtTokensShort(data.totalLocked)} CLKN</b> locked — <b>${pct}</b> of supply\n` +
@@ -459,7 +477,7 @@ async function buildLockReport(note = "") {
     deltaLine +
     (note ? `\n\n${note}` : "") +
     `\n\n🔒 Locked = removed from circulation — a long-term commitment to the project. Verify it yourself:` +
-    `\n   🔒 Jupiter Lock → https://lock.jup.ag/token/${CLKN_MINT}`;
+    verifyLines;
   return { ok: true, data, msg };
 }
 async function notifyLockReport({ dryRun = false, note = "" } = {}) {
@@ -599,10 +617,21 @@ async function lockWatchTick() {
   const bothLive = jupLocked > 0 && strmLocked > 0;
   const splitTg = bothLive ? `\n   🔒 Jupiter Lock: <b>${jupShort}</b>\n   🔐 Other locks: <b>${strmShort}</b>` : "";
   const splitX = bothLive ? ` (${jupShort} on @JupiterExchange Lock + ${strmShort} in other locks)` : "";
-  // Verify link: Jupiter Lock has a per-token public page. Other lockers are not linked.
+  // Verify links. Jupiter Lock's per-token page proves the JUPITER portion and nothing else, but
+  // the headline above states the COMBINED total — so whenever a non-Jupiter lock is part of that
+  // number, a bare Jupiter link is evidence for a different figure than the one being claimed.
+  // Worse, when the lock being announced is itself non-Jupiter, that page won't show it at all.
+  // Our own /lock/:mint report reads every escrow live from Solana and matches the headline
+  // exactly, and it carries an independent lock.jup.ag cross-check inside it. So: lead with
+  // whichever link actually covers the stated number, and keep Jupiter's when it is sufficient
+  // on its own. No non-Jupiter locker is named or linked either way.
   const jupVerify = `https://lock.jup.ag/token/${CLKN_MINT}`;
-  const verifyTg = `Verify on-chain 👉 ${jupVerify}`;
-  const verifyX = `Verify 👉 ${jupVerify}`;
+  const fullVerify = `${CANONICAL_ORIGIN}/lock/${CLKN_MINT}`;
+  const jupProvesTotal = strmLocked <= 0;   // Jupiter alone accounts for the whole headline
+  const verifyTg = jupProvesTotal
+    ? `Verify on-chain 👉 ${jupVerify}`
+    : `Verify on-chain:\n   🔒 Jupiter Lock portion → ${jupVerify}\n   🔐 Every escrow, live → ${fullVerify}`;
+  const verifyX = jupProvesTotal ? `Verify 👉 ${jupVerify}` : `Verify 👉 ${fullVerify}`;
   const tgText =
     `🔒 <b>NEW CLKN LOCK</b> — via ${platformLabel}\n\n` +
     `<b>+${fmtTokensShort(mergedDelta)} CLKN</b> just locked.\n` +
