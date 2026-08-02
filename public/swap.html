@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<!-- UNLISTED. Anyone with the link may use it; it is linked from nowhere and must stay that way.
+     Do not add it to the nav, the footer, /investors, or any tools roundup. -->
+<meta name="robots" content="noindex,nofollow"/>
+<title>CLKN ⇄ NORMIE Swap — Cluck Norris</title>
+<link rel="icon" href="/cluck-norris-logo.jpg"/>
+<link rel="stylesheet" href="/theme.css"/>
+<script src="https://unpkg.com/@solana/web3.js@1.95.8/lib/index.iife.min.js"></script>
+<script src="/cluck-util.js"></script>
+<script src="/cluck-wallet.js"></script>
+<style>
+  /* No page-local :root. theme.css owns the tokens; redefining them here would shadow the
+     real scale, and self-aliasing one (--disp: var(--disp)) silently drops every heading. */
+  .wrap{max-width:560px;margin:0 auto;padding:22px 16px 70px;}
+  .back-home{display:inline-flex;align-items:center;gap:8px;font-size:12px;letter-spacing:1px;
+             color:var(--sub);text-decoration:none;text-transform:uppercase;margin-bottom:16px;}
+  .hero{text-align:center;margin-bottom:20px;}
+  .hero .crest{position:relative;display:inline-block;}
+  .hero .avatar{width:104px;height:104px;border-radius:50%;object-fit:cover;object-position:center 12%;
+                border:3px solid var(--gold);box-shadow:0 0 34px rgba(255,122,24,.28);}
+  .hero .swapbadge{position:absolute;right:-4px;bottom:2px;font-size:32px;line-height:1;
+                   filter:drop-shadow(0 2px 7px rgba(0,0,0,.7));}
+  .hero .kicker{font-family:var(--disp);font-size:12px;letter-spacing:4px;color:var(--sub);
+                text-transform:uppercase;margin-top:12px;}
+  .hero h1{font-family:var(--disp);font-weight:900;letter-spacing:1.5px;font-size:44px;line-height:1;margin-top:4px;
+           background:linear-gradient(180deg,#FCD34D,#D97706);-webkit-background-clip:text;
+           -webkit-text-fill-color:transparent;background-clip:text;}
+  .hero-sub{max-width:470px;margin:10px auto 0;font-size:15px;color:var(--body-text);line-height:1.6;}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:13px;}
+  .chip{background:rgba(245,179,1,.10);border:1px solid rgba(245,179,1,.35);color:var(--gold);
+        border-radius:20px;padding:5px 13px;font-size:12.5px;font-weight:600;}
+  .chip.g{background:rgba(16,185,129,.10);border-color:rgba(16,185,129,.4);color:var(--green);}
+  .card{background:var(--card-grad);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:16px;}
+  .sec{font-family:var(--disp);letter-spacing:1px;color:var(--gold);font-size:15px;
+       margin-bottom:12px;text-transform:uppercase;}
+  label{display:block;font-size:12.5px;color:var(--sub);font-weight:600;margin:12px 0 5px;}
+  input{width:100%;background:#180d07;border:1px solid var(--border);color:var(--text);border-radius:12px;
+        padding:13px 15px;font-size:16px;outline:none;font-family:var(--mono);}
+  input:focus{border-color:var(--gold);}
+  .btn{width:100%;padding:14px;border:none;border-radius:11px;background:#D97706;color:#1a1a1a;
+       font-family:var(--disp);font-weight:900;letter-spacing:1px;font-size:15px;cursor:pointer;margin-top:14px;}
+  .btn.alt{background:rgba(245,179,1,.13);border:1px solid rgba(245,179,1,.42);color:var(--gold);}
+  /* Disabled goes NEUTRAL GREY, never a faded gradient — a dimmed orange reads as broken. */
+  .btn:disabled{background:rgba(255,255,255,.06);color:var(--muted);cursor:not-allowed;border:1px solid rgba(255,255,255,.10);}
+  .sideby{display:flex;align-items:stretch;gap:10px;}
+  .sideby > div{flex:1;min-width:0;}
+  .flipwrap{display:flex;justify-content:center;margin:10px 0 2px;}
+  .flip{background:#1c1d24;border:1px solid var(--border);color:var(--gold);border-radius:50%;
+        width:38px;height:38px;font-size:17px;cursor:pointer;}
+  .flip:hover{border-color:var(--gold);}
+  .tokbox{border:1px solid var(--border);border-radius:12px;padding:12px 13px;background:rgba(255,255,255,.03);}
+  .tokbox .tk{font-family:var(--disp);font-size:19px;letter-spacing:.5px;color:var(--text);}
+  .tokbox .bal{font-size:12px;color:var(--sub);margin-top:3px;font-family:var(--mono);}
+  .quote{margin-top:14px;padding:13px;border:1px solid rgba(16,185,129,.34);border-radius:12px;
+         background:rgba(16,185,129,.06);}
+  .quote .big{font-family:var(--disp);font-size:26px;color:var(--green);line-height:1.1;}
+  .quote .row{display:flex;justify-content:space-between;font-size:12.5px;color:var(--sub);margin-top:7px;gap:10px;}
+  .quote .row b{color:var(--text);font-family:var(--mono);font-weight:600;}
+  .msg{font-size:13px;margin-top:12px;color:var(--sub);line-height:1.5;}
+  .msg.err{color:#ff8f8f;} .msg.ok{color:var(--green);}
+  .muted{color:var(--sub);font-size:13px;line-height:1.6;}
+  .off{border-color:rgba(255,143,143,.35);}
+  .inv{display:flex;gap:10px;flex-wrap:wrap;font-family:var(--mono);font-size:12.5px;color:var(--sub);}
+  .inv b{color:var(--gold);}
+  .wallet{font-size:12.5px;color:var(--sub);text-align:center;margin-top:10px;}
+  .wallet a{color:var(--gold);}
+  .picker{display:flex;flex-direction:column;gap:7px;margin-top:10px;}
+  .pick{display:flex;align-items:center;gap:10px;background:#1c1d24;border:1px solid var(--border);
+        color:var(--text);border-radius:11px;padding:11px 13px;font-size:14px;cursor:pointer;text-align:left;}
+  .pick:hover{border-color:var(--gold);}
+  details{margin-top:12px;} summary{cursor:pointer;color:var(--gold);font-size:13px;font-weight:600;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a href="/" class="back-home"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid var(--orange);"/>&larr; Cluck Norris home</a>
+
+  <div class="hero">
+    <div class="crest"><img class="avatar" src="/cluck-norris-mascot.jpg" alt="Cluck Norris"><span class="swapbadge">⇄</span></div>
+    <div class="kicker">School of Crypto Hard Knocks</div>
+    <h1>CLKN ⇄ NORMIE</h1>
+    <div class="hero-sub">Swap between CLKN and NORMIE at live market value, straight from the desk's own float — so it never touches either chart. You sign one transaction and both sides move together, or neither does.</div>
+    <div class="chips">
+      <span class="chip g">✓ No price impact</span>
+      <span class="chip g">✓ One atomic transaction</span>
+      <span class="chip" id="chipSpread">Live-priced</span>
+    </div>
+  </div>
+
+  <div class="card" id="offCard" style="display:none">
+    <div class="sec">Not live yet</div>
+    <p class="muted">The swap desk isn't funded and running at the moment. Nothing you do on this page can move tokens right now. Check back soon.</p>
+  </div>
+
+  <div class="card" id="mainCard" style="display:none">
+    <div class="sec">🔄 Swap</div>
+
+    <button class="btn alt" id="connectBtn">👛 Connect wallet — see your balance</button>
+    <div class="picker" id="picker" style="display:none"></div>
+    <div class="wallet" id="walletLine" style="display:none">🟢 Connected as <b id="walletAddr" style="color:var(--text)"></b> · <a href="#" id="disconnectLink">Disconnect / switch wallet</a></div>
+
+    <label>You pay</label>
+    <div class="tokbox">
+      <div class="tk" id="inSym">CLKN</div>
+      <div class="bal" id="inBal">Connect your wallet to see your balance</div>
+    </div>
+    <input id="amount" type="text" inputmode="decimal" placeholder="0.0" autocomplete="off"/>
+
+    <div class="flipwrap"><button class="flip" id="flipBtn" title="Swap direction">⇅</button></div>
+
+    <label>You receive</label>
+    <div class="tokbox">
+      <div class="tk" id="outSym">NORMIE</div>
+      <div class="bal" id="outAvail">—</div>
+    </div>
+
+    <div class="quote" id="quoteBox" style="display:none">
+      <div class="big" id="qOut">—</div>
+      <div class="row"><span>Rate</span><b id="qRate">—</b></div>
+      <div class="row"><span>Value</span><b id="qUsd">—</b></div>
+      <div class="row"><span>Desk spread</span><b id="qSpread">—</b></div>
+      <div class="row"><span>Quote expires</span><b id="qExp">—</b></div>
+    </div>
+
+    <button class="btn" id="swapBtn" disabled>Enter an amount</button>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div class="card" id="invCard" style="display:none">
+    <div class="sec">📦 What the desk holds</div>
+    <div class="inv">
+      <span>CLKN available: <b id="invClkn">—</b></span>
+      <span>NORMIE available: <b id="invNormie">—</b></span>
+    </div>
+    <p class="muted" style="margin-top:10px">A swap only works if the desk holds enough of the side you're buying. It keeps a reserve back, so the last of it is never sold.</p>
+  </div>
+
+  <div class="card">
+    <div class="sec">ℹ️ How this works</div>
+    <p class="muted">Both tokens are priced in dollars at the moment you swap, and the desk re-checks that price again right before the transaction is built — if the market moves while you're deciding, you get a fresh quote instead of a stale price. The desk takes a small spread, shown above before you commit.</p>
+    <details>
+      <summary>Why doesn't this move the price?</summary>
+      <p class="muted" style="margin-top:8px">Because it isn't a pool. A normal AMM prices by how much you drain from it, so every trade moves the chart — that's what an AMM <i>is</i>. Here you're trading against a fixed float at market price, so nothing about your swap touches either token's market.</p>
+    </details>
+    <details>
+      <summary>What are you actually signing?</summary>
+      <p class="muted" style="margin-top:8px">One transaction containing both transfers: yours to the desk, and the desk's to you. It's atomic — if any part fails, the whole thing fails and nothing moves. Your wallet signs first and the desk co-signs after; the desk can only co-sign the exact transaction it quoted you.</p>
+    </details>
+    <p class="muted" style="margin-top:12px">Not investment advice. Nothing on this page is a promise about either token. $NORMIE is a separate community project — this desk is a convenience for people who hold one and want the other, nothing more.</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  var esc = CluckUtil.esc, shortAddr = CluckUtil.shortAddr;
+  var $ = function(s){ return document.querySelector(s); };
+  var CFG = null, connected = null, provider = null, INV = null;
+  var dir = 'CLKN_TO_NORMIE';
+  var curQuote = null, quoteTimer = null, debounce = null;
+
+  function symOf(mint){ return mint === CFG.clknMint ? 'CLKN' : 'NORMIE'; }
+  function inMint(){ return dir === 'CLKN_TO_NORMIE' ? CFG.clknMint : CFG.normieMint; }
+  function outMint(){ return dir === 'CLKN_TO_NORMIE' ? CFG.normieMint : CFG.clknMint; }
+
+  function say(text, kind){ var m = $('#msg'); m.className = 'msg' + (kind ? ' ' + kind : ''); m.textContent = text || ''; }
+
+  function grp(n){
+    n = Number(n) || 0;
+    if (!isFinite(n)) return '0';
+    var s = n.toFixed(n % 1 ? 6 : 0);
+    if (!/^\d+(\.\d+)?$/.test(s)) return n.toLocaleString();
+    var p = s.split('.');
+    p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return p[1] ? p[0] + '.' + p[1].replace(/0+$/, '') : p[0];
+  }
+
+  // ---- boot ----
+  fetch('/api/swap/config').then(function(r){ return r.json(); }).then(function(d){
+    CFG = d;
+    if (!d || !d.ok || !d.enabled) { $('#offCard').style.display = 'block'; return; }
+    $('#mainCard').style.display = 'block';
+    $('#invCard').style.display = 'block';
+    $('#chipSpread').textContent = 'Desk spread ' + (d.spreadBps / 100).toFixed(2) + '%';
+    $('#qSpread').textContent = (d.spreadBps / 100).toFixed(2) + '%';
+    renderDir();
+    loadInventory();
+  }).catch(function(){ $('#offCard').style.display = 'block'; });
+
+  function loadInventory(){
+    fetch('/api/swap/inventory').then(function(r){ return r.json(); }).then(function(d){
+      if (!d || !d.enabled) return;
+      INV = d;
+      $('#invClkn').textContent = grp(d.clkn.available);
+      $('#invNormie').textContent = grp(d.normie.available);
+      renderDir();
+    }).catch(function(){});
+  }
+
+  function renderDir(){
+    $('#inSym').textContent = symOf(inMint());
+    $('#outSym').textContent = symOf(outMint());
+    if (INV) {
+      var side = outMint() === CFG.clknMint ? INV.clkn : INV.normie;
+      $('#outAvail').textContent = 'Desk has ' + grp(side.available) + ' available';
+    }
+    loadBalance();
+  }
+
+  // ---- wallet ----
+  $('#connectBtn').addEventListener('click', function(){
+    var list = CluckWallet.available();
+    if (!list.length) { say("No Solana wallet found. Install one, or open this page inside your wallet's browser.", 'err'); return; }
+    if (list.length === 1) { doConnect(list[0].id); return; }
+    var p = $('#picker');
+    p.innerHTML = '';
+    list.forEach(function(w){
+      var b = document.createElement('button');
+      b.className = 'pick';
+      b.innerHTML = '<span>' + esc(w.icon || '👛') + '</span><span>' + esc(w.name) + '</span>';
+      b.addEventListener('click', function(){ doConnect(w.id); });
+      p.appendChild(b);
+    });
+    p.style.display = 'flex';
+  });
+
+  function doConnect(id){
+    $('#picker').style.display = 'none';
+    CluckWallet.connect(id).then(function(r){
+      connected = r.pubkey; provider = r.provider;
+      $('#connectBtn').style.display = 'none';
+      $('#walletAddr').textContent = shortAddr(r.pubkey) + (r.name ? ' · ' + r.name : '');
+      $('#walletLine').style.display = 'block';
+      say('Connected' + (r.name ? ' with ' + r.name : '') + '.', 'ok');
+      loadBalance(); refreshQuote();
+    }).catch(function(e){ say((e && e.message) || 'Wallet connection cancelled.', 'err'); });
+  }
+
+  // Anywhere a wallet can connect, it must be able to disconnect — provider's own disconnect()
+  // AND our local state, or the UI keeps showing a wallet we've stopped using.
+  $('#disconnectLink').addEventListener('click', function(e){
+    e.preventDefault();
+    CluckWallet.disconnect();
+    connected = null; provider = null; curQuote = null;
+    $('#connectBtn').style.display = 'block';
+    $('#walletLine').style.display = 'none';
+    $('#inBal').textContent = 'Connect your wallet to see your balance';
+    $('#quoteBox').style.display = 'none';
+    say('Wallet disconnected. Connect a different wallet to switch.');
+    gate();
+  });
+
+  function loadBalance(){
+    if (!connected) { $('#inBal').textContent = 'Connect your wallet to see your balance'; return; }
+    var m = inMint();
+    // getTokenAccountsByOwner, NOT getParsedTokenAccountsByOwner — the latter is a web3.js
+    // Connection helper, not a JSON-RPC method, and production answers it -32601.
+    CluckUtil.rpc('getTokenAccountsByOwner', [connected, { mint: m }, { encoding: 'jsonParsed' }]).then(function(r){
+      if (m !== inMint()) return;                       // direction flipped mid-flight
+      var t = 0;
+      ((r && r.value) || []).forEach(function(a){
+        try { t += Number(a.account.data.parsed.info.tokenAmount.uiAmount || 0); } catch (_) {}
+      });
+      $('#inBal').textContent = 'You hold ' + grp(t) + ' ' + symOf(m);
+      $('#inBal').dataset.bal = String(t);
+      gate();
+    }).catch(function(){ $('#inBal').textContent = 'Could not read your balance'; });
+  }
+
+  // ---- quoting ----
+  $('#flipBtn').addEventListener('click', function(){
+    dir = dir === 'CLKN_TO_NORMIE' ? 'NORMIE_TO_CLKN' : 'CLKN_TO_NORMIE';
+    curQuote = null; $('#quoteBox').style.display = 'none';
+    renderDir(); gate(); refreshQuote();
+  });
+  $('#amount').addEventListener('input', function(){
+    curQuote = null; $('#quoteBox').style.display = 'none'; gate();
+    clearTimeout(debounce); debounce = setTimeout(refreshQuote, 400);
+  });
+
+  function refreshQuote(){
+    var amt = ($('#amount').value || '').trim().replace(/,/g, '');
+    if (!connected || !amt || !(parseFloat(amt) > 0)) return;
+    say('Getting a live price…');
+    fetch('/api/swap/quote', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ inMint: inMint(), outMint: outMint(), amount: amt, wallet: connected }) })
+      .then(function(r){ return r.json(); }).then(function(d){
+        if (!d || !d.ok) { curQuote = null; $('#quoteBox').style.display = 'none'; say((d && d.error) || 'Could not price that swap.', 'err'); gate(); return; }
+        curQuote = d;
+        $('#qOut').textContent = grp(d.outUi) + ' ' + symOf(outMint());
+        $('#qRate').textContent = '1 ' + symOf(inMint()) + ' ≈ ' + (d.priceIn / d.priceOut).toFixed(6) + ' ' + symOf(outMint());
+        $('#qUsd').textContent = '$' + d.usd.toFixed(2);
+        $('#quoteBox').style.display = 'block';
+        say('');
+        startCountdown(d.expiresAt);
+        gate();
+      }).catch(function(){ say('Network error getting a price.', 'err'); });
+  }
+
+  function startCountdown(exp){
+    clearInterval(quoteTimer);
+    quoteTimer = setInterval(function(){
+      var left = Math.max(0, Math.round((exp - Date.now()) / 1000));
+      $('#qExp').textContent = left + 's';
+      if (left <= 0) {
+        clearInterval(quoteTimer);
+        // Auto-requote rather than leaving a dead price on screen.
+        refreshQuote();
+      }
+    }, 250);
+  }
+
+  function gate(){
+    var b = $('#swapBtn');
+    var amt = parseFloat(($('#amount').value || '').replace(/,/g, '')) || 0;
+    var bal = parseFloat($('#inBal').dataset.bal || 'NaN');
+    if (!connected) { b.disabled = true; b.textContent = 'Connect your wallet'; return; }
+    if (!(amt > 0)) { b.disabled = true; b.textContent = 'Enter an amount'; return; }
+    if (isFinite(bal) && amt > bal) { b.disabled = true; b.textContent = 'More than you hold'; return; }
+    if (!curQuote) { b.disabled = true; b.textContent = 'Getting a price…'; return; }
+    b.disabled = false;
+    b.textContent = 'Swap ' + grp(amt) + ' ' + symOf(inMint()) + ' → ' + grp(curQuote.outUi) + ' ' + symOf(outMint());
+  }
+
+  // ---- execute ----
+  var busy = false;
+  $('#swapBtn').addEventListener('click', function(){
+    if (busy || !curQuote) return;
+    busy = true;
+    var b = $('#swapBtn'); b.disabled = true; b.textContent = 'Building…';
+    clearInterval(quoteTimer);
+
+    fetch('/api/swap/build', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ quote: curQuote.quote }) })
+      .then(function(r){ return r.json(); }).then(function(d){
+        if (!d || !d.ok) {
+          if (d && d.requote) { say(d.error, 'err'); refreshQuote(); }
+          else say((d && d.error) || 'Could not build that swap.', 'err');
+          throw new Error('halt');
+        }
+        say('Approve it in your wallet…');
+        b.textContent = 'Waiting for your signature…';
+        var tx = solanaWeb3.Transaction.from(Uint8Array.from(atob(d.txBase64), function(c){ return c.charCodeAt(0); }));
+        // The connected wallet signs FIRST. The desk co-signs afterwards, server-side. Never
+        // signAndSendTransaction here: a multi-signer transaction that reaches the wallet
+        // already carrying a signature is what trips Phantom's "may be malicious" warning.
+        if (!provider || !provider.signTransaction) throw new Error("This wallet can't sign this kind of transaction.");
+        return provider.signTransaction(tx).then(function(signed){
+          b.textContent = 'Submitting…';
+          var raw = signed.serialize({ requireAllSignatures: false, verifySignatures: false });
+          var bin = ''; var bytes = new Uint8Array(raw);
+          for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+          return fetch('/api/swap/submit', { method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ buildToken: d.buildToken, signedTx: btoa(bin) }) });
+        });
+      })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (!d || !d.ok) { say((d && d.error) || 'The swap did not go through.', 'err'); return; }
+        say('Swapped. Signature: ' + d.signature, 'ok');
+        $('#quoteBox').style.display = 'none';
+        $('#amount').value = ''; curQuote = null;
+        loadBalance(); loadInventory();
+      })
+      .catch(function(e){ if (!e || e.message !== 'halt') say((e && e.message) || 'The swap was cancelled.', 'err'); })
+      .finally(function(){ busy = false; gate(); });
+  });
+})();
+</script>
+</body>
+</html>

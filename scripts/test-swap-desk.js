@@ -1,0 +1,186 @@
+#!/usr/bin/env node
+/* Tests for lib/swap-desk.js. No network, no funds, no RPC — everything here is local.
+ *
+ * The section that matters most is TAMPER REJECTION. The desk keypair can move the desk's whole
+ * inventory, so "verifyAndSign only signs what it built" is the property that makes the desk
+ * safe. docs/SWAP_DESIGN.md §6 makes this test a precondition to arming it.
+ *
+ * Run: node scripts/test-swap-desk.js
+ */
+process.env.SWAP_QUOTE_SECRET = "test-quote-secret-not-a-real-one";
+process.env.DATA_DIR = process.env.DATA_DIR || "/tmp";
+
+const assert = require("assert");
+const { Keypair, PublicKey, Transaction, SystemProgram } = require("@solana/web3.js");
+
+// A throwaway keypair so isEnabled() is true. Generated here, never persisted, holds nothing.
+const desk = Keypair.generate();
+process.env.SWAP_OPERATOR_SECRET = JSON.stringify(Array.from(desk.secretKey));
+
+const swap = require("../lib/swap-desk");
+const { toRaw, fromRaw, signQuote, readQuote, pending } = swap._internal;
+
+let pass = 0, fail = 0;
+function t(name, fn) {
+  try { fn(); console.log(`  ok    ${name}`); pass++; }
+  catch (e) { console.log(`  FAIL  ${name}\n          ${e.message}`); fail++; }
+}
+
+console.log("\nraw <-> ui conversion");
+t("6dp round trip", () => assert.strictEqual(fromRaw(toRaw("1234.5678", 6), 6), "1234.5678"));
+t("9dp round trip", () => assert.strictEqual(fromRaw(toRaw("0.000000001", 9), 9), "0.000000001"));
+t("strips thousands separators", () => assert.strictEqual(toRaw("1,000,000", 6), 1000000000000n));
+t("integer input", () => assert.strictEqual(toRaw("450", 6), 450000000n));
+t("TRUNCATES excess precision, never rounds up", () => {
+  // Rounding up would let a user move fractionally more than they typed and more than was quoted.
+  assert.strictEqual(toRaw("1.9999999", 6), 1999999n);
+});
+t("rejects junk", () => { assert.strictEqual(toRaw("abc", 6), null); assert.strictEqual(toRaw("1.2.3", 6), null); });
+t("rejects negatives", () => assert.strictEqual(toRaw("-5", 6), null));
+t("no float error at CLKN scale", () => {
+  assert.strictEqual(fromRaw(toRaw("453714343.123456", 6), 6), "453714343.123456");
+});
+t("does not hardcode decimals", () => {
+  // Same digits, different decimals, different raw value — proves decimals flow through.
+  assert.notStrictEqual(toRaw("1.5", 6).toString(), toRaw("1.5", 9).toString());
+  assert.strictEqual(toRaw("1.5", 6), 1500000n);
+  assert.strictEqual(toRaw("1.5", 9), 1500000000n);
+});
+
+console.log("\nquote signing");
+t("round trips a payload", () => {
+  const p = { inMint: swap.CLKN_MINT, outMint: swap.NORMIE_MINT, inRaw: "1000", exp: Date.now() + 1000 };
+  assert.deepStrictEqual(readQuote(signQuote(p)), p);
+});
+t("rejects a flipped payload byte", () => {
+  const tok = signQuote({ a: 1 });
+  const [body, mac] = [tok.slice(0, tok.lastIndexOf(".")), tok.slice(tok.lastIndexOf(".") + 1)];
+  const tampered = Buffer.from(body, "base64url"); tampered[0] ^= 0xff;
+  assert.strictEqual(readQuote(`${tampered.toString("base64url")}.${mac}`), null);
+});
+t("rejects a forged MAC", () => {
+  const tok = signQuote({ a: 1 });
+  assert.strictEqual(readQuote(tok.slice(0, tok.lastIndexOf(".")) + ".deadbeef"), null);
+});
+t("rejects garbage", () => {
+  [null, undefined, "", "no-dot", 42, {}].forEach((v) => assert.strictEqual(readQuote(v), null));
+});
+t("refuses to verify when the secret is unset (fails closed)", () => {
+  const tok = signQuote({ a: 1 });
+  const saved = process.env.SWAP_QUOTE_SECRET;
+  delete process.env.SWAP_QUOTE_SECRET;
+  const got = readQuote(tok);
+  process.env.SWAP_QUOTE_SECRET = saved;
+  assert.strictEqual(got, null, "an unset secret must not verify a previously-valid token");
+});
+
+console.log("\ntamper rejection  <-- the safety property");
+const user = Keypair.generate();
+const attacker = Keypair.generate();
+
+// Stand in for a real build(): a transaction the desk legitimately constructed.
+function legitTx() {
+  return new Transaction({ feePayer: user.publicKey, recentBlockhash: PublicKey.default.toBase58() })
+    .add(SystemProgram.transfer({ fromPubkey: user.publicKey, toPubkey: desk.publicKey, lamports: 1000 }))
+    .add(SystemProgram.transfer({ fromPubkey: desk.publicKey, toPubkey: user.publicKey, lamports: 2000 }));
+}
+function seed(tx) {
+  const token = "test-" + Math.random().toString(36).slice(2);
+  pending.set(token, { message: tx.serializeMessage(), owner: user.publicKey.toBase58(), usd: 10, exp: Date.now() + 60000 });
+  return token;
+}
+const signedBy = (tx, kp) => { tx.partialSign(kp); return tx.serialize({ requireAllSignatures: false, verifySignatures: false }).toString("base64"); };
+
+async function tamperTests() {
+  const checks = [
+    ["the out-leg amount is increased", () => {
+      const tx = legitTx();
+      tx.instructions[1] = SystemProgram.transfer({ fromPubkey: desk.publicKey, toPubkey: user.publicKey, lamports: 999999999 });
+      return tx;
+    }],
+    ["the destination is swapped to an attacker", () => {
+      const tx = legitTx();
+      tx.instructions[1] = SystemProgram.transfer({ fromPubkey: desk.publicKey, toPubkey: attacker.publicKey, lamports: 2000 });
+      return tx;
+    }],
+    ["an extra instruction is appended", () => {
+      const tx = legitTx();
+      tx.add(SystemProgram.transfer({ fromPubkey: desk.publicKey, toPubkey: attacker.publicKey, lamports: 500 }));
+      return tx;
+    }],
+    ["the user's own in-leg is removed", () => {
+      const tx = legitTx();
+      tx.instructions.splice(0, 1);
+      return tx;
+    }],
+    ["the legs are reordered", () => {
+      const tx = legitTx();
+      tx.instructions.reverse();
+      return tx;
+    }],
+  ];
+
+  for (const [name, mutate] of checks) {
+    const token = seed(legitTx());                 // desk stashed the HONEST message
+    const bad = mutate();                          // attacker submits a DIFFERENT one
+    bad.recentBlockhash = PublicKey.default.toBase58();
+    bad.feePayer = user.publicKey;
+    const r = await swap.verifyAndSign({ buildToken: token, signedTxBase64: signedBy(bad, user) });
+    try {
+      assert.strictEqual(r.ok, false, "tampered transaction was ACCEPTED");
+      assert.match(r.error, /doesn't match/, `wrong rejection reason: ${r.error}`);
+      console.log(`  ok    rejects: ${name}`); pass++;
+    } catch (e) { console.log(`  FAIL  rejects: ${name}\n          ${e.message}`); fail++; }
+  }
+
+  // The honest path must still work, or the check above is just "reject everything".
+  {
+    const tx = legitTx();
+    const token = seed(tx);
+    const r = await swap.verifyAndSign({ buildToken: token, signedTxBase64: signedBy(tx, user) });
+    // It will fail at the SEND step (no network / no funds) — but it must get past byte equality.
+    try {
+      assert.ok(!/doesn't match/.test(r.error || ""), `honest transaction was rejected as tampered: ${r.error}`);
+      console.log("  ok    accepts the untampered transaction (passes byte equality)"); pass++;
+    } catch (e) { console.log(`  FAIL  honest path\n          ${e.message}`); fail++; }
+  }
+
+  // Single-use: the token is consumed even on a rejected attempt.
+  {
+    const tx = legitTx();
+    const token = seed(tx);
+    await swap.verifyAndSign({ buildToken: token, signedTxBase64: signedBy(tx, user) });
+    const again = await swap.verifyAndSign({ buildToken: token, signedTxBase64: signedBy(legitTx(), user) });
+    try {
+      assert.strictEqual(again.ok, false);
+      assert.match(again.error, /expired|start again/);
+      console.log("  ok    a build token cannot be used twice"); pass++;
+    } catch (e) { console.log(`  FAIL  replay\n          ${e.message}`); fail++; }
+  }
+
+  // An unknown token must not be treated as a fresh build.
+  {
+    const r = await swap.verifyAndSign({ buildToken: "never-issued", signedTxBase64: signedBy(legitTx(), user) });
+    try {
+      assert.strictEqual(r.ok, false);
+      console.log("  ok    rejects an unknown build token"); pass++;
+    } catch (e) { console.log(`  FAIL  unknown token\n          ${e.message}`); fail++; }
+  }
+}
+
+console.log("\npair validation");
+async function pairTests() {
+  const bad = await swap.quote({ inMint: swap.CLKN_MINT, outMint: "So11111111111111111111111111111111111111112", amountUi: "1", wallet: user.publicKey.toBase58() });
+  t("refuses a mint this desk doesn't trade", () => assert.match(bad.error, /CLKN and NORMIE only/));
+  const same = await swap.quote({ inMint: swap.CLKN_MINT, outMint: swap.CLKN_MINT, amountUi: "1", wallet: user.publicKey.toBase58() });
+  t("refuses same-token swaps", () => assert.match(same.error, /CLKN and NORMIE only/));
+  const nowallet = await swap.quote({ inMint: swap.CLKN_MINT, outMint: swap.NORMIE_MINT, amountUi: "1", wallet: "not-a-pubkey" });
+  t("refuses a malformed wallet", () => assert.match(nowallet.error, /connect a wallet/));
+}
+
+(async () => {
+  await tamperTests();
+  await pairTests();
+  console.log(`\n${pass} passed, ${fail} failed\n`);
+  process.exit(fail ? 1 : 0);
+})();

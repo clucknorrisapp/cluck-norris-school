@@ -7,6 +7,7 @@ const { createSign, createHash, createHmac, randomBytes, createPublicKey, verify
 const hatchery = require("./hatchery");
 const securityCoop = require("./securitycoop");
 const whirlpoolMM = require("./whirlpool-mm");
+const swapDesk = require("./swap"); // CLKN<->NORMIE swap desk — inert unless SWAP_OPERATOR_SECRET is set
 const meteora = require("./lib/meteora-dlmm"); // Meteora DLMM read layer (SDK lazy-loaded inside)
 const lpScanner = require("./lib/lp-scanner"); // LP Pair Scanner (Liquidity Lab flagship) — see docs/LP_SCANNER.md
 const diplomaNft = require("./lib/diploma-nft"); // Graduation diploma cNFT minter (Bubblegum, treasury payer)
@@ -2343,6 +2344,11 @@ app.use("/api/hatchery", hatchery.router);
 app.use("/api/security-coop", securityCoop.router);
 // Liquidity Engine — Orca Whirlpools market maker (non-custodial; builds unsigned txs).
 app.use("/api/whirlpool", whirlpoolMM.router);
+// CLKN<->NORMIE swap desk. Tighter limit than the 150/min global: every quote is an uncached
+// live Jupiter price call, and the desk holds real inventory, so cheap automated probing is
+// exactly what we don't want. Fully inert unless SWAP_OPERATOR_SECRET is set.
+app.use("/api/swap", rateLimit("swap", { windowMs: 60000, max: 20 }));
+app.use("/api/swap", swapDesk.router);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -10359,6 +10365,18 @@ app.get("/locker-room", (req, res) => {
   res.sendFile(join(__dirname, "public", "locker-room.html"));
 });
 
+// CLKN <-> NORMIE swap desk. UNLISTED, not private (owner's call 2026-08-02): anyone with the
+// link can use it, but it is linked from nowhere on the site and carries noindex/nofollow so it
+// does not surface in search. Same posture as the Normie Quest URL, and for the same reason —
+// nothing about the CLKN/NORMIE relationship is promised on a public surface.
+// Do NOT add this to the nav, the footer, an investor page, or a tools roundup.
+// public/ is not statically mounted, so this explicit route is what serves the file at all.
+app.get("/swap", (req, res) => {
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
+  res.setHeader("Cache-Control", "no-store, must-revalidate");
+  res.sendFile(join(__dirname, "public", "swap.html"));
+});
+
 app.get("/pool-monitor", (req, res) => {
   res.setHeader("Cache-Control", "no-store, must-revalidate");
   res.sendFile(join(__dirname, "public", "pool-monitor.html"));
@@ -12788,6 +12806,10 @@ app.listen(PORT, () => {
       "X_ACCESS_TOKEN", "X_ACCESS_SECRET", "GOOGLE_SHEET_ID", "GOOGLE_CLIENT_EMAIL",
       "GOOGLE_PRIVATE_KEY", "HATCHERY_TURBO_KEY", "COINGECKO_API_KEY", "DATA_DIR",
       "MM_OPERATOR_SECRET",
+      // Swap desk. Both unset is the normal, safe state — the desk is simply off. They appear
+      // here so that a desk that is supposed to be armed and isn't is diagnosable from the
+      // first lines of the deploy log rather than from a user reporting "it says not live".
+      "SWAP_OPERATOR_SECRET", "SWAP_QUOTE_SECRET",
     ];
     const missing = expected.filter((k) => !process.env[k]);
     console.log(`[boot] env audit: ${expected.length - missing.length}/${expected.length} expected vars present${missing.length ? " — MISSING: " + missing.join(", ") : ""}`);
