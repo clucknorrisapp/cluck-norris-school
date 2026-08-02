@@ -11,9 +11,10 @@ does not tell you how to write software; use your judgement for that.
 > strategies — lives in `git log` and `docs/`. It was trimmed out of here on 2026-07-30 because
 > a stale instruction stated with authority is worse than no instruction, and several were.
 
-> 📋 **Starting a session? Read `docs/HANDOFF_2026-08-02.md` first** — it opens with the one
-> unresolved question (whether the 45.37% lock post actually went out), the permissions answer that
-> cost an afternoon, and the RPC method name that fails only in production.
+> 📋 **Starting a session? Read `docs/HANDOFF_2026-08-02.md` first** — the permissions answer that
+> cost an afternoon (and why it is NOT fixable from this repo), the RPC method name that fails only
+> in production, and the i18n keys that silently drop six languages if you edit English copy.
+> Nothing in it is blocking: §0 is resolved.
 > `docs/HANDOFF_2026-08-01.md` is still current for the security follow-ups and the unplayed boss
 > fixes.
 
