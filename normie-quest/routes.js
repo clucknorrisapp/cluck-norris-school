@@ -110,7 +110,9 @@ router.post('/api/nq/shop/session', wrap(async (req) => {
   if (!wallet.checkSession(pk, token)) return { ok: false, status: 'bad_session' };
   const item = String(b.item || '');
   if (!rewards.ITEMS[item]) return { ok: false, status: 'bad_item' };
-  const s = burn.newSession({ item, wallet: pk });
+  // pay rail is chosen by the player but VALIDATED server-side (newSession rejects 'sol' when
+  // the SOL rail is off, and prices each rail itself — the client never sets a price).
+  const s = burn.newSession({ item, wallet: pk, pay: String(b.pay || 'normie') });
   return s.error ? { ok: false, status: s.error } : { ok: true, ...s };
 }));
 

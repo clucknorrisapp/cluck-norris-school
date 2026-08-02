@@ -83,19 +83,35 @@ Build with `--test`, load `.nq_test.html`, drive `window.__PG.scene`.
 **Caveat:** headless `game.loop.delta ≈ 0`, so physics/tweens/timers are frozen — step manually with
 `g.physics.world.step(dt)` / `g.update()` and reason about motion; you can't observe live animation.
 
-## 🔥 The burn shop (Item Reserve) — shipped 2026-08-02, OFF by default
+## 🛍 The shop (Item Reserve) — shipped 2026-08-02, OFF by default
 
-Burn $NORMIE, get ONE banked power-up. It replaces the old `BURN_GATE` / `Gate` scene, which was a
-**mock**: a fake "send 1,000 NORMIE with memo NQ-XXXX" screen and a `[ SIMULATE BURN CONFIRMED ]`
-button that never touched the chain, one boolean away from charging real people for a simulation.
-Both the flag and the scene are deleted. **The game is free to start and stays that way** — the only
-burn in Normie Quest is this optional shop.
+Pay $NORMIE **or SOL**, get ONE banked power-up. It replaces the old `BURN_GATE` / `Gate` scene,
+which was a **mock**: a fake "send 1,000 NORMIE with memo NQ-XXXX" screen and a
+`[ SIMULATE BURN CONFIRMED ]` button that never touched the chain, one boolean away from charging
+real people for a simulation. Both the flag and the scene are deleted. **The game is free to start
+and stays that way** — the shop is optional boosts only.
 
-**Arming it is one env var: `NQ_SHOP=1`.** Unset (the default, and what production is on now) means
-`/api/nq/config` reports `shopEnabled:false`, the 🔥 Shop tab never renders, and every shop route
-answers `not_configured`. `NQ_BURN_AMOUNT` sets the base price (default 1000); the catalogue in
-`normie-burn.js` prices each item off it (×1 disc, ×2 vial/shield, ×3 star/bomb). Prices are read
-live from the server — never hardcode one in the client.
+**⚠️ MECHANISM CHANGE, same day it shipped (owner call, 2026-08-02): this was built as a BURN shop
+and never armed as one.** It is now a PAYMENT shop. $NORMIE goes to the shop wallet and **the owner
+locks what arrives on-chain** — that lock is the whole defence for collecting another project's
+token with no agreement in place, so it is a real commitment, not marketing. SOL goes to community
+giveaways. The old burn build would also have FAILED for every player: **NORMIE is a Token-2022
+mint** (owner `TokenzQdB…`, verified on-chain — carrying only MetadataPointer + TokenMetadata, no
+transfer fee), and the burn code used legacy-program defaults, so `getMint` threw before anyone
+could sign. The payment code resolves the token program from the mint account and refuses
+TransferFee / TransferHook / NonTransferable mints at build time.
+
+**Arming it takes two env vars: `NQ_SHOP=1` and `NQ_PAY_DEST=<shop wallet>`.** There is
+deliberately no default destination — the old incinerator fallback would silently turn "we lock
+what you send" back into a burn. Use a dedicated wallet: NOT the treasury, and **NOT the swap-desk
+wallet** (mixing them corrupts the desk's inventory accounting). Unset (the default, and what
+production is on now) means `/api/nq/config` reports `shopEnabled:false`, the 🛍 Shop tab never
+renders, and every shop route answers `not_configured`. `NQ_NORMIE_PRICE` sets the base NORMIE
+price (default 1000; legacy name `NQ_BURN_AMOUNT` still read); `NQ_SOL_PRICE` sets the base SOL
+price and **unset/0 keeps the SOL rail off**. The catalogue in `normie-burn.js` prices each item
+off the base (×1 disc, ×2 vial/shield, ×3 star/bomb). Prices are read live from the server — never
+hardcode one in the client. The shop page SHOWS the receiving address so anyone can watch the
+wallet and check the locks; replay guards are namespaced per rail (`normie:<sig>` / `sol:<sig>`).
 
 **⚠️ Terms are TESTING-ONLY.** Nothing about NQ's $NORMIE economy is agreed with the NORMIE team, so
 the shop stays behind the unlinked game URL and no public surface may mention it.
@@ -131,7 +147,9 @@ Design rules baked in — change them deliberately, not by accident:
   descriptions from `window.__NQ_ITEMS`, published off `RESERVE_ITEMS` — never retyped.
 
 ### LOCKING tokens for power-ups — designed, NOT built (owner decision pending)
-Asked for, deliberately left unbuilt: **locking needs a different trust model from burning.** A burn
+(Not to be confused with the shop above: there the OWNER locks NORMIE he has received. This section
+is about a player locking THEIR OWN tokens to earn a perk — a different custody question entirely.)
+Asked for, deliberately left unbuilt: **locking needs a different trust model from paying.** A payment
 is one irreversible event we can verify once and forget. A lock is a *relationship over time* —
 which means every hard part is a new part:
 

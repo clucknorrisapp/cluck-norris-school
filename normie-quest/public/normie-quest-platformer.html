@@ -6901,14 +6901,17 @@ if(typeof document!=='undefined'){ (function(){
       });
   }
 
-  // ---- 🔥 THE BURN SHOP — trade $NORMIE for one Item Reserve boost ---------------------------
+  // ---- 🛍 THE SHOP — pay $NORMIE (locked by the project) or SOL for one Item Reserve boost ----
+  // WAS a burn shop. Mechanism changed 2026-08-02 (owner): payments now go to the shop wallet
+  // (NQ_PAY_DEST); NORMIE received is locked on-chain, SOL funds giveaways. Function names
+  // still say burn* — renaming them buys nothing and churns the diff; the copy tells the truth.
   //
   // WHY A DOM OVERLAY AND NOT A PHASER SCENE. Three reasons, in order of weight:
   //   1. It needs the wallet. Every provider, the Wallet-Standard discovery, the connect/sign
   //      plumbing and the session token already live in THIS block. A scene would have needed its
   //      own copy of the 11-wallet registry — the precise drift CLAUDE.md records as the cause of
   //      real bugs ("private copies drifted badly enough").
-  //   2. It is mostly words. A burn is irreversible, so the confirm step has to say plainly what
+  //   2. It is mostly words. A payment is final, so the confirm step has to say plainly what
   //      is destroyed and what comes back. That does not fit legibly on a 480×270 pixel canvas.
   //   3. A scene can only be entered at a scene boundary. The shop opens from the title screen,
   //      from a paused level, from the game-over screen — wherever the player already is.
@@ -6918,16 +6921,17 @@ if(typeof document!=='undefined'){ (function(){
   // delivers wheel wins. So it survives a reload, follows the player to another device, and there
   // is exactly ONE delivery path to keep working instead of two.
   //
-  // GUARDRAILS AGAINST A DOUBLE BURN, in layers:
-  //   • the BURN button is inert until an explicit "I understand" tick,
+  // GUARDRAILS AGAINST A DOUBLE PAYMENT, in layers:
+  //   • the SEND button is inert until an explicit "I understand" tick,
   //   • it disables itself on the first click AND a module-level `shopBusy` latch refuses a
   //     second start, so a double-tap cannot open two wallet popups,
-  //   • the confirm screen is REPLACED by a progress screen the moment a burn is in flight —
+  //   • the confirm screen is REPLACED by a progress screen the moment a payment is in flight —
   //     there is no second button left to press,
   //   • the in-flight session is parked in sessionStorage before broadcast, so a reload resumes
-  //     the claim instead of losing a burn that already landed,
-  //   • and server-side the session is single-use: one burn, one item, replay-guarded on disk.
+  //     the claim instead of losing a payment that already landed,
+  //   • and server-side the session is single-use: one payment, one item, replay-guarded on disk.
   var shopCfg = null, shopBusy = false, pollActive = false, activeProvider = null;
+  var shopRail = 'normie';   // which rail the list is showing; the SESSION re-picks it server-side
   var SHOP_PENDING_KEY = 'nqShopPending';
   function shopPending() { try { return JSON.parse(sessionStorage.getItem(SHOP_PENDING_KEY) || 'null'); } catch (e) { return null; } }
   function shopPendingSet(v) { try { if (v) sessionStorage.setItem(SHOP_PENDING_KEY, JSON.stringify(v)); else sessionStorage.removeItem(SHOP_PENDING_KEY); } catch (e) {} }
@@ -6945,12 +6949,15 @@ if(typeof document!=='undefined'){ (function(){
     return ({
       not_configured: 'The shop is not open right now.',
       bad_item: 'That item is not for sale.',
+      bad_pay: 'Pick a way to pay first.',
+      sol_off: 'Paying in SOL is not available right now — pay in $NORMIE instead.',
+      unsupported_mint: 'The shop token is misconfigured — nothing was sent. Tell us.',
       bad_session: 'Your wallet session expired — reconnect on the Wallet tab.',
       wrong_wallet: 'That session belongs to a different wallet.',
-      no_session: 'The shop session expired. Nothing was burned — start again.',
-      expired: 'The shop session expired. Nothing was burned — start again.',
+      no_session: 'The shop session expired. Nothing was sent — start again.',
+      expired: 'The shop session expired. Nothing was sent — start again.',
       slow_down: 'Too many attempts — wait a minute and try again.',
-      insufficient_funds: 'Not enough $NORMIE (or not enough SOL for the network fee).',
+      insufficient_funds: 'Not enough in your wallet for that (remember the small SOL network fee).',
       tx_mismatch: 'The transaction did not match the one we issued — nothing was sent.',
       unsigned: 'The wallet did not return a signed transaction — nothing was sent.',
       bad_tx: 'The signed transaction was unreadable — nothing was sent.',
@@ -7026,37 +7033,63 @@ if(typeof document!=='undefined'){ (function(){
       host.querySelector('#nqp-shopwal').addEventListener('click', function () { var t = ov.querySelector('.nqp-tab[data-tab="wal"]'); if (t) t.click(); });
       return;
     }
+    var solOn = !!shopCfg.solEnabled;
+    if (!solOn) shopRail = 'normie';   // rail may be remembered from a config that had SOL on
+    var dest = String(shopCfg.dest || '');
+    var railBtn = function (rail, label) {
+      return '<button class="nqp-tab' + (shopRail === rail ? ' on' : '') + '" data-rail="' + rail + '" style="flex:1">' + label + '</button>';
+    };
     host.innerHTML =
-      '<div class="nqp-sub" style="margin-bottom:2px">Burn $NORMIE, keep one boost. It lands in your Item Reserve — the three slots at the top of the HUD.</div>'
-      + '<div class="nqp-warn">🔥 A burn is permanent. The tokens are destroyed on-chain and the supply drops — they are not sent to us or to anyone. No refunds, no undo. Testing only; nothing here is final.</div>'
+      '<div class="nqp-sub" style="margin-bottom:2px">Buy one boost. It lands in your Item Reserve — the three slots at the top of the HUD.</div>'
+      // The truth about where the money goes, stated before any button. The receiving address is
+      // SHOWN so anyone can watch the wallet and check the locks — "we lock what we receive" is
+      // only worth saying if it's checkable. Never re-promise burn language here.
+      + '<div class="nqp-warn">💸 Payments are final. $NORMIE you send goes to the shop wallet — we lock it on-chain, we don\'t sell it.'
+      + (solOn ? ' SOL goes to the community giveaway pot.' : '')
+      + ' Testing only; nothing here is final.</div>'
+      + (dest ? '<div class="nqp-sub" style="margin-bottom:8px">Shop wallet: <span style="font-family:monospace">' + esc(dest.slice(0, 4) + '…' + dest.slice(-4)) + '</span> — watch it on any explorer.</div>' : '')
+      + (solOn ? '<div class="nqp-tabs" style="margin:8px 0">' + railBtn('normie', 'Pay in $NORMIE') + railBtn('sol', 'Pay in SOL') + '</div>' : '')
       + (shopCfg.items || []).map(function (it) {
           var m = itemMeta(it.id);
+          var price = (shopRail === 'sol') ? (fmtAmt(it.priceSol) + '<u>SOL</u>') : (fmtAmt(it.price) + '<u>$NORMIE</u>');
           return '<div class="nqp-shoprow"><span class="ic">' + m.emoji + '</span>'
             + '<span class="tx"><b>' + esc(m.label) + '</b><i>' + esc(m.desc) + '</i></span>'
-            + '<span class="pr">' + fmtAmt(it.price) + '<u>$NORMIE</u></span>'
-            + '<button class="nqp-b sm" data-buy="' + esc(it.id) + '">BURN</button></div>';
+            + '<span class="pr">' + price + '</span>'
+            + '<button class="nqp-b sm" data-buy="' + esc(it.id) + '">BUY</button></div>';
         }).join('')
       + '<div class="nqp-sub" id="nqp-shopmsg" style="margin-top:10px"></div>';
+    host.querySelectorAll('button[data-rail]').forEach(function (b) {
+      b.addEventListener('click', function () { shopRail = b.getAttribute('data-rail'); renderShop(); });
+    });
     host.querySelectorAll('button[data-buy]').forEach(function (b) {
       b.addEventListener('click', function () { confirmBurn(b.getAttribute('data-buy')); });
     });
   }
 
-  // Guardrails before power: restate the exact amount, the exact item, and what cannot be undone,
-  // then make them tick a box before the button is even live.
+  // Guardrails before power: restate the exact amount, the exact item, where the money goes and
+  // that it is final, then make them tick a box before the button is even live.
   function confirmBurn(id) {
     var host = shopHost(); if (!host || shopBusy) return;
     var row = (shopCfg.items || []).filter(function (x) { return x.id === id; })[0];
     if (!row) return;
     var m = itemMeta(id), pk = walletState.pubkey || '';
+    var sol = (shopRail === 'sol');
+    var priceTxt = sol ? (fmtAmt(row.priceSol) + ' SOL') : (fmtAmt(row.price) + ' $NORMIE');
+    var dest = String(shopCfg.dest || '');
+    var destShort = dest ? (dest.slice(0, 4) + '…' + dest.slice(-4)) : '';
     host.innerHTML = '<div class="nqp-confirm">'
-      + '<div class="hd">🔥 CONFIRM A BURN</div>'
-      + '<div class="ln">You will burn <b>' + fmtAmt(row.price) + ' $NORMIE</b>.</div>'
+      + '<div class="hd">💸 CONFIRM YOUR PAYMENT</div>'
+      + '<div class="ln">You will send <b>' + priceTxt + '</b> to the shop wallet' + (destShort ? ' <span style="font-family:monospace">' + esc(destShort) + '</span>' : '') + '.</div>'
       + '<div class="ln">You will get <b>' + m.emoji + ' ' + esc(m.label) + '</b> — ' + esc(m.desc) + '. One item, banked to your Item Reserve.</div>'
-      + '<div class="ln warn">This cannot be undone. The tokens are destroyed on-chain; nobody receives them and there is no refund. Your wallet will show you the exact amount before you approve — read it there too.</div>'
+      // Where the money goes, per rail — the honest version of the old burn warning. The lock is
+      // a real commitment the owner makes on-chain; do not soften or drop this line without him.
+      + '<div class="ln warn">' + (sol
+          ? 'SOL sent here funds community giveaways. Payments are final — there is no automatic refund.'
+          : '$NORMIE sent here is locked on-chain by the project — not sold. Payments are final — there is no automatic refund.')
+      + ' Your wallet will show you the exact amount before you approve — read it there too.</div>'
       + '<div class="ln dim">Paid from ' + esc(pk.slice(0, 4) + '…' + pk.slice(-4)) + ' · you also pay the usual Solana network fee in SOL.</div>'
-      + '<label class="nqp-ack"><input type="checkbox" id="nqp-ack"> I understand this burn is permanent and cannot be undone.</label>'
-      + '<button class="nqp-b danger wide" id="nqp-doburn" disabled>BURN ' + fmtAmt(row.price) + ' $NORMIE</button>'
+      + '<label class="nqp-ack"><input type="checkbox" id="nqp-ack"> I understand this payment is final and cannot be reversed automatically.</label>'
+      + '<button class="nqp-b danger wide" id="nqp-doburn" disabled>SEND ' + priceTxt + '</button>'
       + '<button class="nqp-b alt wide" id="nqp-cancel">Cancel — keep my tokens</button>'
       + '<div class="nqp-sub" id="nqp-shopmsg" style="margin-top:10px"></div></div>';
     var ack = host.querySelector('#nqp-ack'), go = host.querySelector('#nqp-doburn');
@@ -7076,7 +7109,7 @@ if(typeof document!=='undefined'){ (function(){
     var failed = function (msgText) {
       shopBusy = false;
       var host = shopHost(); if (!host) return;
-      host.innerHTML = '<div class="nqp-confirm"><div class="hd" style="color:#ff9db8">BURN NOT COMPLETED</div>'
+      host.innerHTML = '<div class="nqp-confirm"><div class="hd" style="color:#ff9db8">PAYMENT NOT COMPLETED</div>'
         + '<div class="ln">' + esc(msgText) + '</div>'
         + '<div class="ln dim">Nothing left your wallet unless your wallet told you otherwise.</div>'
         + '<button class="nqp-b alt wide" id="nqp-shopback">Back to the shop</button></div>';
@@ -7085,15 +7118,15 @@ if(typeof document!=='undefined'){ (function(){
     try {
       shopStatus('Opening a shop session…');
       var ses = await (await fetch('/api/nq/shop/session', { method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ wallet: walletState.pubkey, token: walletState.token, item: id }) })).json();
+        body: JSON.stringify({ wallet: walletState.pubkey, token: walletState.token, item: id, pay: shopRail }) })).json();
       if (!ses.ok) return failed(shopErr(ses.status));
-      shopStatus('Building the burn transaction…');
+      shopStatus('Building your payment…');
       var bt = await (await fetch('/api/nq/burn-tx?session=' + encodeURIComponent(ses.id) + '&payer=' + encodeURIComponent(walletState.pubkey))).json();
       if (!bt.ok) return failed(shopErr(bt.status));
       shopStatus('Approve it in your wallet — check the amount it shows you.');
       var provider = await getSigner();
       var signedB64 = await signTx(provider, bt.tx);
-      // Park the session BEFORE broadcasting. From this point a burn can be on-chain, and losing
+      // Park the session BEFORE broadcasting. From this point a payment can be on-chain, and losing
       // the session id would mean losing an item somebody paid for.
       shopPendingSet({ session: ses.id, item: id, at: Date.now() });
       shopStatus('Broadcasting…');
@@ -7102,7 +7135,7 @@ if(typeof document!=='undefined'){ (function(){
       if (!snd.ok) {
         // 'send_failed' is the only ambiguous one — the RPC may have accepted the tx and then
         // failed to answer. Keep watching in that case; for every definite rejection, clear the
-        // parked session and say honestly that nothing was burned.
+        // parked session and say honestly that nothing was sent.
         if (snd.status === 'send_failed') { shopStatus('Broadcast unclear — checking the chain…'); return watchBurn(shopPending()); }
         shopPendingSet(null);
         return failed(shopErr(snd.status));
@@ -7112,7 +7145,7 @@ if(typeof document!=='undefined'){ (function(){
     } catch (e) {
       // A rejected wallet popup lands here and must read as "nothing happened", not as an error.
       var t = String((e && e.message) || e || '');
-      failed(/reject|denied|cancel|User rejected/i.test(t) ? 'You cancelled the approval — nothing was burned.' : t);
+      failed(/reject|denied|cancel|User rejected/i.test(t) ? 'You cancelled the approval — nothing was sent.' : t);
     }
   }
 
@@ -7121,7 +7154,7 @@ if(typeof document!=='undefined'){ (function(){
     shopBusy = true;
     var m = itemMeta(p.item), host = shopHost();
     if (host) {
-      host.innerHTML = '<div class="nqp-confirm"><div class="hd">🔥 BURN SENT</div>'
+      host.innerHTML = '<div class="nqp-confirm"><div class="hd">💸 PAYMENT SENT</div>'
         + '<div class="ln">Watching the chain for your ' + m.emoji + ' <b>' + esc(m.label) + '</b>. Finality usually takes about half a minute.</div>'
         + '<div class="ln dim">You can close this and keep playing — the item is queued to your wallet either way.</div>'
         + (p.sig ? '<div class="nqp-sig">' + esc(p.sig) + '</div>' : '')
@@ -7130,7 +7163,7 @@ if(typeof document!=='undefined'){ (function(){
     pollClaim(p);
   }
 
-  // ONE poller, ever. Runs with or without the shop pane on screen, so a burn is still claimed if
+  // ONE poller, ever. Runs with or without the shop pane on screen, so a payment is still claimed if
   // the player closes the panel — or reloaded the tab and never reopened it.
   function pollClaim(p) {
     if (pollActive || !p) return;
@@ -7142,8 +7175,8 @@ if(typeof document!=='undefined'){ (function(){
       var host = shopHost(); if (!host) return;
       var m = itemMeta(p.item);
       host.innerHTML = '<div class="nqp-confirm"><div class="hd" style="color:#ffc98a">STILL CONFIRMING</div>'
-        + '<div class="ln">' + esc(why || 'The chain has not reported your burn yet.') + '</div>'
-        + '<div class="ln">If the burn went through, your ' + m.emoji + ' <b>' + esc(m.label) + '</b> is still owed to you — press Check again.</div>'
+        + '<div class="ln">' + esc(why || 'The chain has not reported your payment yet.') + '</div>'
+        + '<div class="ln">If the payment went through, your ' + m.emoji + ' <b>' + esc(m.label) + '</b> is still owed to you — press Check again.</div>'
         + (p.sig ? '<div class="ln dim">Your transaction:</div><div class="nqp-sig">' + esc(p.sig) + '</div>' : '')
         + '<button class="nqp-b wide" id="nqp-recheck">Check again</button>'
         + '<button class="nqp-b alt wide" id="nqp-giveup">Back to the shop</button></div>';
@@ -7165,7 +7198,7 @@ if(typeof document!=='undefined'){ (function(){
             slow(shopErr(st));
             return;
           }
-          if (tries >= MAX) return slow('The chain has not reported your burn after two minutes.');
+          if (tries >= MAX) return slow('The chain has not reported your payment after two minutes.');
           setTimeout(step, 3000);
         })
         .catch(function () { if (tries >= MAX) slow('Could not reach the server.'); else setTimeout(step, 3000); });
@@ -7178,7 +7211,7 @@ if(typeof document!=='undefined'){ (function(){
     try { if (typeof window.__NQ_SYNCREWARDS === 'function') window.__NQ_SYNCREWARDS(); } catch (e) {}
     if (!host) return;
     host.innerHTML = '<div class="nqp-confirm ok"><div class="hd">✅ ' + m.emoji + ' ' + esc(m.label) + ' IS YOURS</div>'
-      + '<div class="ln">Burned and confirmed on-chain. It is banked to your wallet and drops into your Item Reserve — tap a slot, or press 1 / 2 / 3 in a level, to spend it.</div>'
+      + '<div class="ln">Paid and confirmed on-chain. It is banked to your wallet and drops into your Item Reserve — tap a slot, or press 1 / 2 / 3 in a level, to spend it.</div>'
       + (pending > 1 ? '<div class="ln dim">' + pending + ' items waiting. The Reserve holds three at a time; the rest arrive as slots free up.</div>' : '')
       + '<button class="nqp-b alt wide" id="nqp-shopback">Back to the shop</button></div>';
     host.querySelector('#nqp-shopback').addEventListener('click', function () { renderShop(); });
@@ -7255,7 +7288,7 @@ if(typeof document!=='undefined'){ (function(){
     + '<div class="nqp-tab" data-tab="wal">👛 Wallet</div><div class="nqp-tab" data-tab="buy">🪙 Buy NORMIE</div>'
     // Hidden until /api/nq/config says the server has armed the shop. An unarmed build must not
     // advertise a shop it cannot open.
-    + '<div class="nqp-tab" data-tab="shop" style="display:none">🔥 Shop</div></div>'
+    + '<div class="nqp-tab" data-tab="shop" style="display:none">🛍 Shop</div></div>'
     + '<div class="nqp-pane on" data-pane="lb">'
     + '<input class="nqp-in" id="nqp-handle" maxlength="16" placeholder="Your handle (shown on the board)">'
     + '<div class="nqp-sub" id="nqp-parked" style="display:none;margin:-2px 0 8px"></div>'
@@ -7271,7 +7304,7 @@ if(typeof document!=='undefined'){ (function(){
     restoreWallet(function (ok) {
       if (!ok) return;
       var wp = ov.querySelector('[data-pane="wal"]'); if (wp && wp.classList.contains('on')) renderWallet();
-      // A burn that was already broadcast when the tab reloaded still has to be claimed. Resume
+      // A payment that was already broadcast when the tab reloaded still has to be claimed. Resume
       // the poll silently — no modal is forced open over a running game; if the player happens to
       // be looking at the shop it renders the progress there instead.
       var pend = shopPending(); if (pend) { shopBusy = true; pollClaim(pend); }
