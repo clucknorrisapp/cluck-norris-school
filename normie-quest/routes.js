@@ -16,7 +16,7 @@ const path = require('path');
 const fs = require('fs');
 const express = require('express');
 const router = express.Router();
-const burn = require('./normie-burn');   // Phase 1 burn-to-play backend (dormant until env-configured)
+const burn = require('./normie-burn');   // burn-to-buy backend for the Item Reserve shop (dormant until NQ_SHOP is armed)
 const feedback = require('./nq-feedback');   // playtester comment store (test dashboard)
 const telemetry = require('./nq-telemetry'); // difficulty telemetry (deaths + clears)
 const leaderboard = require('./nq-leaderboard');   // Phase 2 leaderboards (per-world + weekly)
@@ -83,38 +83,81 @@ router.use('/nq-assets', express.static(path.join(__dirname, 'public', 'pwa'), {
   setHeaders: (res) => { res.set('X-Robots-Tag', 'noindex, nofollow'); },
 }));
 
-// ---- /api/nq/* : burn-to-play backend (Phase 1) --------------------------
-// All routes are safe while dormant: with NQ_NORMIE_MINT unset they return "not configured"
-// and the game (BURN_GATE=false) never calls them. No operator funds are ever touched — the
-// player signs their own burn; the server only issues a session, builds an UNSIGNED tx, and
-// reads the chain to verify. errors are swallowed to a JSON shape, never a 500 leak.
+// ---- /api/nq/* : the BURN SHOP (buy an Item Reserve boost by burning $NORMIE) --------------
+// Safe while dormant: with NQ_SHOP unarmed every route below reports "not configured" and the
+// client never renders a shop. No operator funds are ever touched — the player signs their own
+// burn; the server only issues a session, builds an UNSIGNED tx, broadcasts exactly that tx back,
+// and reads the chain to verify. Errors are swallowed to a JSON shape, never a 500 leak.
+//
+// Every route that can cost the player money or cost US paid RPC quota is BOTH throttled per IP
+// and bound to a proven wallet session. `throttled` is declared further down (hoisted function).
 const wrap = (fn) => async (req, res) => {
   try { res.json(await fn(req)); }
   catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 };
 
-// public, secret-free — the client reads this to decide whether to show the gate
+// public, secret-free — the client reads this to decide whether to show the shop at all
 router.get('/api/nq/config', (req, res) => res.json(burn.publicConfig()));
 
-// issue a play session (unique on-chain reference + unique amount)
-router.post('/api/nq/session', wrap(async () => {
-  const s = burn.newSession();
+// Issue a shop session: bound to a PROVEN wallet and ONE item, with a unique on-chain reference
+// and a unique amount. The item is validated against the reward store's own list, so a catalogue
+// that has drifted from the game fails HERE — before anybody burns anything for an id the client
+// would silently drop.
+router.post('/api/nq/shop/session', wrap(async (req) => {
+  if (throttled(req, 'shopsess', 10)) return { ok: false, status: 'slow_down' };
+  const b = req.body || {};
+  const pk = String(b.wallet || ''), token = String(b.token || '');
+  if (!wallet.checkSession(pk, token)) return { ok: false, status: 'bad_session' };
+  const item = String(b.item || '');
+  if (!rewards.ITEMS[item]) return { ok: false, status: 'bad_item' };
+  const s = burn.newSession({ item, wallet: pk });
   return s.error ? { ok: false, status: s.error } : { ok: true, ...s };
 }));
 
-// build the unsigned burn transaction for the player's wallet to sign
+// Build the unsigned burn transaction for the session's wallet to sign. Two RPC reads per call
+// (getMint + getLatestBlockhash) come out of paid Helius quota, hence the tight cap.
 router.get('/api/nq/burn-tx', wrap(async (req) => {
+  if (throttled(req, 'burntx', 10)) return { ok: false, status: 'slow_down' };
   const { session, payer } = req.query;
   if (!session || !payer) return { ok: false, status: 'missing_params' };
   const r = await burn.buildBurnTx(String(session), String(payer));
   return r.error ? { ok: false, status: r.error } : { ok: true, ...r };
 }));
 
-// verify a burn landed for this session (durable replay-guarded); returns a one-time unlock token
-router.get('/api/nq/verify', wrap(async (req) => {
-  const { session } = req.query;
-  if (!session) return { ok: false, status: 'missing_params' };
-  return await burn.verifyBurn(String(session));
+// Broadcast the wallet-signed transaction. normie-burn refuses anything whose message is not
+// byte-for-byte the one it built for this session, so this is not a general-purpose relay.
+router.post('/api/nq/burn-send', wrap(async (req) => {
+  if (throttled(req, 'burnsend', 10)) return { ok: false, status: 'slow_down' };
+  const b = req.body || {};
+  if (!b.session || !b.tx) return { ok: false, status: 'missing_params' };
+  const r = await burn.sendSigned(String(b.session), String(b.tx));
+  return r.error ? { ok: false, status: r.error } : { ok: true, ...r };
+}));
+
+// Poll after signing: verify the burn on-chain (durable replay guard) and queue the item to the
+// wallet's reward queue EXACTLY ONCE. The game claims it into the Item Reserve via the existing
+// /api/nq/rewards/claim path, so a purchase behaves like every other grant and follows the
+// player across devices.
+router.post('/api/nq/shop/claim', wrap(async (req) => {
+  if (throttled(req, 'shopclaim', 40)) return { ok: false, status: 'slow_down' };
+  const b = req.body || {};
+  const pk = String(b.wallet || ''), token = String(b.token || '');
+  if (!wallet.checkSession(pk, token)) return { ok: false, status: 'bad_session' };
+  const sid = String(b.session || '');
+  if (!sid) return { ok: false, status: 'missing_params' };
+  const v = await burn.verifyBurn(sid);
+  if (!v.ok) return v;
+  // The session already carries the wallet it was issued to; re-check it against the caller so a
+  // leaked session id cannot be redeemed into somebody else's queue.
+  if (v.wallet && v.wallet !== pk) return { ok: false, status: 'wrong_wallet' };
+  const once = burn.claimOnce(sid);
+  if (!once) return { ok: true, item: v.item, already: true, pending: rewards.pendingCount(pk) };
+  const g = rewards.grant(pk, once.item);
+  // The burn is already on-chain and irreversible. If the hand-over failed (full queue, disk
+  // write), release the once-only latch so a retry — after the player spends a banked item — can
+  // still deliver what they paid for.
+  if (!g.ok) { burn.unclaim(sid); return { ok: false, status: g.error, item: once.item }; }
+  return { ok: true, item: once.item, pending: g.pending, signature: v.signature };
 }));
 
 // ---- /api/nq/leaderboard : per-world + weekly boards ----------------------

@@ -83,6 +83,82 @@ Build with `--test`, load `.nq_test.html`, drive `window.__PG.scene`.
 **Caveat:** headless `game.loop.delta ≈ 0`, so physics/tweens/timers are frozen — step manually with
 `g.physics.world.step(dt)` / `g.update()` and reason about motion; you can't observe live animation.
 
+## 🔥 The burn shop (Item Reserve) — shipped 2026-08-02, OFF by default
+
+Burn $NORMIE, get ONE banked power-up. It replaces the old `BURN_GATE` / `Gate` scene, which was a
+**mock**: a fake "send 1,000 NORMIE with memo NQ-XXXX" screen and a `[ SIMULATE BURN CONFIRMED ]`
+button that never touched the chain, one boolean away from charging real people for a simulation.
+Both the flag and the scene are deleted. **The game is free to start and stays that way** — the only
+burn in Normie Quest is this optional shop.
+
+**Arming it is one env var: `NQ_SHOP=1`.** Unset (the default, and what production is on now) means
+`/api/nq/config` reports `shopEnabled:false`, the 🔥 Shop tab never renders, and every shop route
+answers `not_configured`. `NQ_BURN_AMOUNT` sets the base price (default 1000); the catalogue in
+`normie-burn.js` prices each item off it (×1 disc, ×2 vial/shield, ×3 star/bomb). Prices are read
+live from the server — never hardcode one in the client.
+
+**⚠️ Terms are TESTING-ONLY.** Nothing about NQ's $NORMIE economy is agreed with the NORMIE team, so
+the shop stays behind the unlinked game URL and no public surface may mention it.
+
+Where it lives:
+- `normie-quest/normie-burn.js` — sessions (wallet-bound + item-bound), the unsigned tx, the
+  broadcast guard, on-chain verify, the durable replay guard, the once-only claim latch.
+- `normie-quest/routes.js` — `/api/nq/config`, `/api/nq/shop/session`, `/api/nq/burn-tx`,
+  `/api/nq/burn-send`, `/api/nq/shop/claim`. All per-IP throttled; all the money ones also require a
+  proven wallet session. (`/api/nq/session` and `/api/nq/verify`, the play-gate pair, are deleted.)
+- `src/game_logic.js`, the player-panel script block — the 🔥 Shop tab. A **DOM overlay, not a Phaser
+  scene**: it needs the wallet plumbing that already lives there (duplicating the 11-wallet registry
+  into a scene is the drift CLAUDE.md warns about), it is mostly warning copy that will not fit
+  legibly on a 480×270 pixel canvas, and it has to open from anywhere, not only at a scene boundary.
+
+Design rules baked in — change them deliberately, not by accident:
+- **The item is delivered through the EXISTING reward queue** (`rewards.grant` →
+  `/api/nq/rewards/claim` → `syncRewards()`), exactly like a wheel win. One delivery path, wallet
+  bound, survives a reload, follows the player to another device.
+- **The server broadcasts, and only the transaction it built.** `sendSigned` compares the submitted
+  message byte-for-byte with the one it issued for that session, so the endpoint cannot be used as
+  a relay for anything else. One signer — the player's own wallet — so the Phantom multi-signer
+  ordering rule does not apply. No key is ever held server-side.
+- **A double-click cannot double-burn**: the button is inert until an explicit tick, disables on the
+  first click, a `shopBusy` latch refuses a second start, the confirm screen is replaced by a
+  progress screen, and the session is single-use and replay-guarded on disk.
+- **A burn that lands must never be lost.** The session id is parked in `sessionStorage` *before*
+  broadcast, the claim poll resumes on reload, and if `rewards.grant` fails (full queue) the
+  once-only latch is RELEASED so a retry still delivers.
+- `nq-rewards.js` `ITEMS`, `RESERVE_ITEMS` and the `normie-burn.js` catalogue must stay mirrored.
+  `routes.js` validates every catalogue id against `rewards.ITEMS` before issuing a session, so a
+  drift fails at request time instead of eating somebody's tokens. The client reads item names and
+  descriptions from `window.__NQ_ITEMS`, published off `RESERVE_ITEMS` — never retyped.
+
+### LOCKING tokens for power-ups — designed, NOT built (owner decision pending)
+Asked for, deliberately left unbuilt: **locking needs a different trust model from burning.** A burn
+is one irreversible event we can verify once and forget. A lock is a *relationship over time* —
+which means every hard part is a new part:
+
+1. **Custody.** Jupiter Lock (`lock.jup.ag`) escrows to a program-owned account with a claim
+   authority. We would build unsigned lock transactions the same way, but from then on the player's
+   tokens are somewhere we can see and cannot touch — and if the lock program, its UI or its fee
+   model changes, our perk changes with it. A burn has no such dependency.
+2. **Continuous verification, not a one-shot.** "Locked ⇒ boost" has to be re-checked, because a
+   lock can expire or be claimed early. That means a scheduled reader over every locked wallet
+   (paid RPC per wallet per tick) and a defined answer to "the lock ended, does the perk end too?"
+   Neither exists.
+3. **Revocation is a product decision, not a code one.** Taking a boost back when a lock unwinds
+   feels like a punishment; leaving it granted makes a lock a slow burn with the tokens returned.
+   The owner has to pick, and the choice sets what may ever be said about it publicly.
+4. **State we do not have.** Burns are stateless — one durable set of consumed signatures. Locks
+   need a per-wallet record (escrow address, amount, unlock time, last verified, perk granted) that
+   survives redeploys and reconciles against the chain.
+5. **A bigger promise.** A burn asks for tokens the player already accepts are gone. A lock asks
+   them to trust that they get them back — from a game whose NORMIE terms are explicitly unagreed.
+   That is the wrong order: settle the terms, then ask for custody.
+
+Rough shape if it is ever green-lit: `normie-lock.js` alongside `normie-burn.js` (build unsigned
+Jupiter Lock txs, same wallet-first signing, same broadcast-only-what-we-built guard), a durable
+`/data/nq-locks.json`, a re-verification sweep on the existing scheduler pattern, and a perk that is
+**time-boxed and re-granted** while the lock holds rather than granted once — the only model where
+an unwound lock needs no clawback. **Do not start it until the owner has answered (3).**
+
 ## Open / parked threads
 - **Real giveaway/rewards system** (premium) — not yet designed. Would tie into `/api/claim` +
   `lib/credentials.js` (verified transcripts already exist): track achievements → giveaway entries → draw.

@@ -40,7 +40,15 @@
     border-left:11px solid transparent; border-right:11px solid transparent; border-top:18px solid var(--gold); z-index:3; }
   .hub { position:absolute; left:50%; top:50%; width:24px; height:24px; margin:-12px 0 0 -12px; border-radius:50%;
     background:#1a1204; border:2px solid var(--gold); z-index:2; }
-  .spinbtn:disabled { opacity:.5; cursor:default; }
+  /* Neutral grey when off, never a faded gold — a dimmed gradient on dark reads as BROKEN
+     rather than inactive (house rule). */
+  button:disabled, .spinbtn:disabled { background:#2a2440; color:#7d789c; cursor:default; }
+  .idrow { display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap;
+    font-size:12px; color:var(--mut); margin-bottom:16px; }
+  .idrow b { color:var(--gold); }
+  .idrow button { font-size:12px; font-weight:600; padding:5px 11px; margin:0; }
+  .pend { display:block; margin-top:8px; font-size:12.5px; color:#8dffc0; }
+  .pend a { color:#8dffc0; }
   .wheelmsg { font-size:14px; color:var(--mut); margin-top:10px; min-height:20px; }
   .wheelmsg b { color:var(--gold); }
   .odds { font-size:11px; color:#6e6a86; margin-top:6px; }
@@ -78,14 +86,20 @@
   function esc(t) { var d = document.createElement('div'); d.textContent = String(t == null ? '' : t); return d.innerHTML; }
 
   // ---- wallet detection: legacy globals + Wallet Standard (Jupiter-only desktops etc.) ----
+  // ⚠ FIXED 2026-08-02. The register-wallet handler used to read `ev.detail` as a WALLET and
+  // explicitly did NOTHING when it was a function — but per the Wallet Standard spec `detail` IS
+  // the callback the app must invoke with its registry API. So the one branch that actually fires
+  // was the one wired to a no-op, and a Wallet-Standard-only wallet (Jupiter is the common case)
+  // never appeared on this page at all. The game's copy of this code had it right; the lounge did
+  // not. Both shapes are handled now.
   var stdWallets = [];
+  function regStd(w) { if (stdOk(w) && stdWallets.indexOf(w) < 0 && !stdWallets.some(function (x) { return x.name === w.name; })) stdWallets.push(w); }
+  var stdApi = { register: function () { for (var i = 0; i < arguments.length; i++) regStd(arguments[i]); return function () {}; } };
   try {
     window.addEventListener('wallet-standard:register-wallet', function (ev) {
-      try { var w = ev.detail && (typeof ev.detail === 'function' ? null : ev.detail); if (w) regStd(w); } catch (e) {}
+      try { if (ev && typeof ev.detail === 'function') ev.detail(stdApi); else if (ev && ev.detail) regStd(ev.detail); } catch (e) {}
     });
-    window.addEventListener('wallet-standard:app-ready', function () {});
-    function regStd(w) { if (stdOk(w) && !stdWallets.some(function (x) { return x.name === w.name; })) stdWallets.push(w); }
-    window.dispatchEvent(new CustomEvent('wallet-standard:app-ready', { detail: { register: function (w) { regStd(w); } } }));
+    window.dispatchEvent(new CustomEvent('wallet-standard:app-ready', { detail: stdApi }));
   } catch (e) {}
   function stdOk(w) { try { return !!(w && (w.chains || []).some(function (c) { return String(c).indexOf('solana:') === 0; }) && w.features && w.features['standard:connect'] && w.features['solana:signMessage']); } catch (e) { return false; } }
   function stdAdapter(w) {
@@ -104,7 +118,7 @@
     try { if (window.solflare && window.solflare.isSolflare) add('Solflare', window.solflare); } catch (e) {}
     try { if (window.backpack && window.backpack.isBackpack) add('Backpack', window.backpack); } catch (e) {}
     try { if (window.solana && window.solana.isPhantom && !found.length) add('Phantom', window.solana); } catch (e) {}
-    try { window.dispatchEvent(new CustomEvent('wallet-standard:app-ready', { detail: { register: function (w) { if (stdOk(w) && !stdWallets.some(function (x) { return x.name === w.name; })) stdWallets.push(w); } } })); } catch (e) {}
+    try { window.dispatchEvent(new CustomEvent('wallet-standard:app-ready', { detail: stdApi })); } catch (e) {}   // re-announce for late registrations
     stdWallets.forEach(function (w) { add(w.name, stdAdapter(w)); });
     try { if (!found.length && window.solana) add('Wallet', window.solana); } catch (e) {}
     return found;
@@ -122,9 +136,11 @@
     });
   }
 
+  var activeProvider = null;   // the provider we actually connected with — needed to disconnect it
   async function go(w) {
     errEl.textContent = '';
     var resp = await w.provider.connect();
+    activeProvider = w.provider;
     var pk = (resp && resp.publicKey ? resp.publicKey : w.provider.publicKey).toString();
     var ch = await (await fetch('/api/nq/wallet/challenge?pubkey=' + pk)).json();
     if (!ch.ok) throw new Error('Challenge failed');
@@ -137,8 +153,31 @@
     await openLounge(pk, vr.token);
   }
 
+  // Anywhere a wallet can connect it must be able to DISCONNECT — say which wallet is connected,
+  // call the provider's own disconnect() AND clear local state. This page had none of that: once
+  // you signed in there was no way out short of clearing site data.
+  function renderWho(pk, vip) {
+    var who = document.getElementById('who');
+    who.style.display = 'block';
+    who.className = 'idrow';
+    who.innerHTML = '<span>Welcome, <b>' + esc(pk.slice(0, 4) + '…' + pk.slice(-4)) + '</b>' + (vip ? ' 👑' : '') + '</span>'
+      + '<button class="ghost" id="disc">Disconnect</button>';
+    document.getElementById('disc').onclick = function () {
+      try { if (activeProvider && typeof activeProvider.disconnect === 'function') activeProvider.disconnect(); } catch (e) {}
+      activeProvider = null;
+      try { localStorage.removeItem('nqLoungeAuth'); } catch (e) {}
+      ['who', 'wheel', 'feed'].forEach(function (id) { var el = document.getElementById(id); el.style.display = 'none'; el.innerHTML = ''; });
+      document.getElementById('gate').style.display = '';
+      errEl.textContent = '';
+      renderButtons();
+    };
+  }
+
   async function openLounge(pk, token) {
     var r = await (await fetch('/api/nq/lounge?wallet=' + pk + '&token=' + encodeURIComponent(token))).json();
+    // A rejected session is not a transient failure — the stored proof is dead, so bin it rather
+    // than retrying it on every future visit.
+    if (r && r.error === 'bad_session') { try { localStorage.removeItem('nqLoungeAuth'); } catch (e) {} throw new Error('Session expired — connect again.'); }
     if (!r.ok && r.error !== 'not_vip') throw new Error('Lounge check failed');
     // NOT VIP is no longer a dead end. It used to return here, which meant a non-VIP could never
     // reach the wheel at all — the daily spin existed only for people who had already converted.
@@ -146,9 +185,7 @@
     // pitch for what a seat gets you.
     if (!r.ok) {
       document.getElementById('gate').style.display = 'none';
-      var who0 = document.getElementById('who');
-      who0.style.display = 'block';
-      who0.innerHTML = 'Welcome, <b>' + esc(pk.slice(0, 4) + '…' + pk.slice(-4)) + '</b>';
+      renderWho(pk, false);
       renderWheel(pk, token);
       var feed0 = document.getElementById('feed');
       feed0.style.display = 'block';
@@ -163,9 +200,7 @@
       return;
     }
     document.getElementById('gate').style.display = 'none';
-    var who = document.getElementById('who');
-    who.style.display = 'block';
-    who.innerHTML = 'Welcome, <b>' + esc(pk.slice(0, 4) + '…' + pk.slice(-4)) + '</b> 👑';
+    renderWho(pk, true);
     renderWheel(pk, token);
     var feed = document.getElementById('feed');
     feed.style.display = 'block';
@@ -177,12 +212,20 @@
   }
 
   // ---- 🎡 daily VIP prize wheel — win a game boost, banked to your Normie Quest inventory ----
-  var ITEM_META = { disc: { emoji: '🥏', name: 'SOL Discs +5' }, vial: { emoji: '❤️', name: 'Full Heal' }, shield: { emoji: '🛡️', name: 'Audit Shield' } };
+  // The wheel only ever awards the first three (its graphic is a fixed 3-wedge conic gradient —
+  // adding a prize means rebuilding that first). star / bomb are here because the PENDING count
+  // includes owner grants and shop burns, and an unnamed prize in that line read as a bug.
+  var ITEM_META = { disc: { emoji: '🥏', name: 'SOL Discs +5' }, vial: { emoji: '❤️', name: 'Full Heal' }, shield: { emoji: '🛡️', name: 'Audit Shield' },
+    star: { emoji: '⭐', name: 'Star Power' }, bomb: { emoji: '🚀', name: 'Air Strike' } };
+  var GAME_URL = '/normie-quest-x7';
   var WEDGE_CENTER = { disc: 60, vial: 180, shield: 300 };   // matches the conic-gradient wedges
   var wheelRot = 0;
   function fmtCountdown(ms) {
     if (ms <= 0) return 'now';
     var h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000);
+    // Under an hour, "0h 7m" is just noise — and the last minute should say "under a minute"
+    // rather than the flat "0m" it used to show for a full sixty seconds.
+    if (h <= 0) return m >= 1 ? m + 'm' : 'under a minute';
     return h + 'h ' + m + 'm';
   }
   async function renderWheel(pk, token) {
@@ -207,7 +250,12 @@
       + '<button class="spinbtn" id="spinbtn">SPIN</button>'
       + '<div class="wheelmsg" id="wheelmsg"></div>'
       + '<div class="odds" id="wheelcd"></div>'
-      + '<div class="odds">' + esc(oddsTxt) + (st.pending ? '  ·  ' + st.pending + ' unclaimed in-game' : '') + '</div></div>';
+      + '<div class="odds">' + esc(oddsTxt) + '</div>'
+      // The unclaimed count used to hide at 11px in the odds line. It is the one thing on this
+      // page with something waiting on the other end, so it gets its own line and a way to go get it.
+      + (st.pending ? '<span class="pend">🎁 ' + st.pending + ' item' + (st.pending === 1 ? '' : 's')
+          + ' waiting for you — <a href="' + GAME_URL + '">open Normie Quest</a> to collect.</span>' : '')
+      + '</div>';
     var btn = document.getElementById('spinbtn'), msg = document.getElementById('wheelmsg'), wheelEl = document.getElementById('thewheel'), cd = document.getElementById('wheelcd');
     var cdTimer = null;   // single countdown interval — cleared on every re-lock so stale ones can't flicker the button
     function armSpin(bonus) {   // enable the button for a (regular or bonus) spin
@@ -234,8 +282,11 @@
       btn.disabled = true; btn.textContent = 'SPINNING…'; msg.textContent = '';
       var res;
       try { res = await (await fetch('/api/nq/wheel/spin', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wallet: pk, token: token }) })).json(); } catch (e) { res = { ok: false }; }
+      // ⚠ Only a VIP has bonus windows. rewards.spin() returns nextBonusAt to EVERYONE, and
+      // copying it into `st` made the countdown tell a free player "🎉 Next bonus spin in 1h 7m"
+      // — a perk they will never get, promised by a bug. Adopt it only when st.vip.
       if (!res.ok) {
-        if (res.error === 'already_spun') { st.nextSpinAt = res.nextSpinAt; st.nextBonusAt = res.nextBonusAt; lockUntil(); }
+        if (res.error === 'already_spun') { st.nextSpinAt = res.nextSpinAt; if (st.vip) st.nextBonusAt = res.nextBonusAt; lockUntil(); }
         else { btn.disabled = false; btn.textContent = 'SPIN'; msg.textContent = 'Spin failed — try again.'; }
         return;
       }
@@ -245,11 +296,13 @@
       wheelEl.style.transform = 'rotate(' + wheelRot + 'deg)';
       setTimeout(function () {
         var m = ITEM_META[res.prize] || { emoji: '🎁', name: res.prize };
-        msg.innerHTML = (res.bonus ? '🎉 <b>BONUS SPIN!</b> ' : '') + m.emoji + ' <b>' + esc(m.name) + '</b>! Banked to your Normie Quest inventory — open the game to use it.';
-        st.nextSpinAt = res.nextSpinAt; st.nextBonusAt = res.nextBonusAt;
+        msg.innerHTML = (res.bonus ? '🎉 <b>BONUS SPIN!</b> ' : '') + m.emoji + ' <b>' + esc(m.name) + '</b>! Banked to your wallet — '
+          + '<a href="' + GAME_URL + '">open Normie Quest</a> to use it.';
+        st.nextSpinAt = res.nextSpinAt; if (st.vip) st.nextBonusAt = res.nextBonusAt;
         // a bonus spin may STILL be open (e.g. the daily was just consumed inside a bonus window) —
-        // keep the button live for it instead of locking the player out until reload.
-        if (res.bonusAvailable) { cd.innerHTML = '🎉 <b>Bonus spin available now!</b>'; armSpin(true); }
+        // keep the button live for it instead of locking the player out until reload. VIP only:
+        // the server refuses a bonus spin to a free wallet, so offering the button would just fail.
+        if (st.vip && res.bonusAvailable) { cd.innerHTML = '🎉 <b>Bonus spin available now!</b>'; armSpin(true); }
         else lockUntil();
       }, 4300);
     }
@@ -259,9 +312,20 @@
 
   // remembered auth → straight in
   var saved = null; try { saved = JSON.parse(localStorage.getItem('nqLoungeAuth') || 'null'); } catch (e) {}
-  if (saved && saved.pubkey && saved.token) { openLounge(saved.pubkey, saved.token).catch(function () { renderButtons(); }); }
-  renderButtons();
-  setTimeout(renderButtons, 600);   // late wallet-standard registrations (Jupiter)
+  if (saved && saved.pubkey && saved.token) {
+    // Hide the gate while the remembered session is being restored — it used to render the
+    // connect buttons underneath and flash them at every returning member.
+    document.getElementById('gate').style.display = 'none';
+    openLounge(saved.pubkey, saved.token).catch(function (e) {
+      document.getElementById('gate').style.display = '';
+      errEl.textContent = String((e && e.message) || '');
+      renderButtons();
+    });
+  } else {
+    renderButtons();
+  }
+  // Late Wallet-Standard registrations (Jupiter) — only worth redrawing if we are still on the gate.
+  setTimeout(function () { if (document.getElementById('gate').style.display !== 'none') renderButtons(); }, 600);
 })();
 </script>
 </body>

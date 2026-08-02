@@ -110,17 +110,20 @@ var W=480, H=270, TILE=24, GY=H-TILE;      // GY = ground top surface
 var UIFONT='system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 var UIRES=3;
 
-// Burn-to-play gate. FALSE = free preview (tap straight into the game) so the game stays
-// playable while we build. The real burn flow is served by the dormant /api/nq/* backend;
-// flip this to true (and wire the burn UI to those endpoints) to "put it together".
-var BURN_GATE=false;
+// ⛔ THERE IS NO BURN-TO-PLAY GATE. The old `BURN_GATE` flag and its `Gate` scene were a MOCK —
+// a fake "send 1,000 NORMIE with memo NQ-XXXX" screen with a [SIMULATE BURN CONFIRMED] button that
+// never touched the chain, wired to nothing, sitting one boolean away from charging real people
+// for a simulation. Deleted 2026-08-02. The game is free to play and stays that way.
+// The REAL burn flow is the Item Reserve SHOP (a DOM overlay in the panel further down): burn
+// $NORMIE, get one banked power-up. It is off unless the server sets NQ_SHOP, and every term in
+// it is TESTING-ONLY. Don't reintroduce a pay-to-start door without the owner asking.
 
 // Premium perk — PER-WORLD CHECKPOINTS. Beat a world's boss and a checkpoint is banked at the
 // start of the NEXT world (registry nqCp = level index, nqCpScore = score). Dying later continues
 // from the FURTHEST world reached instead of restarting the whole run — e.g. reach 4-3 and die,
 // resume at 4-1 (not 2-1). Off = every death restarts from 1-1 (the free-preview behaviour, which
 // is what makes the premium continue worth it). ENABLED now so it's testable in the free preview;
-// set to `= BURN_GATE` (or false) to make it a paid-tier-only perk once burn goes live.
+// set to false to make it a paid-tier-only perk later.
 var PREMIUM_CHECKPOINTS = true;
 
 // PREMIUM version flag — the paid/premium build (or a ?premium=1 link, remembered) grants LONGER
@@ -1473,7 +1476,7 @@ var Title=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.renderer.type===Phaser.WEBGL){ try{ hero.postFX.addGlow(0x66ccff,1.2,0,false,0.1,16); }catch(e){} }
     this.tweens.add({targets:hero,y:145,duration:900,yoyo:true,repeat:-1,ease:'Sine.inOut'});
     var tj=this.add.image(W/2+68,152,'jeet'); tj.setScale(38/tj.height);
-    var p=this.add.text(W/2,196,BURN_GATE?'PRESS TO INSERT BURN':'TAP TO PLAY',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
+    var p=this.add.text(W/2,196,'TAP TO PLAY',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
     this.tweens.add({targets:p,alpha:.25,duration:600,yoyo:true,repeat:-1});
     // Counts are DERIVED from LEVELS, never hardcoded. The old copy took the NON-VIP level
     // count / 3, so the front door advertised "12 worlds" and "NEW · WORLD 12" long after
@@ -1502,37 +1505,15 @@ var Title=new Phaser.Class({ Extends:Phaser.Scene,
     var _gap=18,_tot=_chips.reduce(function(s,t){ return s+t.width; },0)+_gap*(_chips.length-1),_cx=W/2-_tot/2;
     _chips.forEach(function(t){ t.x=_cx+t.width/2; _cx+=t.width+_gap; });
     this.add.text(W/2,246,_maxWorld+" worlds · "+_named.length+" levels + more secrets than you'd think  ·  a Cluck Norris production",{fontFamily:UIFONT,resolution:UIRES,fontSize:'11px',color:'#b6bfe0',align:'center'}).setOrigin(.5);
-    // BURN_GATE is OFF for now \u2192 free preview: tap straight into the game. The burn Gate
-    // (and its /api/nq backend) stay wired but dormant until we "put it together" later.
+    // Free to play, always: tap straight into the game. Nothing is ever charged to START a run
+    // (the only burn in the game is the optional Item Reserve shop in the panel overlay).
     var self=this;
-    var go=function(){ if(this.started) return; this.started=true; if(BURN_GATE) this.scene.start('Gate'); else this.scene.start('Controls',{next:0,score:0}); };
+    var go=function(){ if(this.started) return; this.started=true; this.scene.start('Controls',{next:0,score:0}); };
     // Tap anywhere = play from 1-1 (both modes). In TEST BUILD, the reliable DOM "≡ Levels"
     // button (bottom-left, works from here too) is how you reach LEVEL SELECT.
     this.input.once('pointerdown',go,this); this.input.keyboard.once('keydown',go,this);
     padAdvance(this, function(){ go.call(self); });   // controller button also starts
     if(TEST_MODE){ this.add.text(W/2,262,'TEST BUILD · tap ≡ Levels below to pick a level',{fontFamily:UIFONT,resolution:UIRES,fontSize:'14px',color:'#ffd23f'}).setOrigin(.5); }
-  }
-});
-
-/* ---------- Gate: simulated burn-to-play ---------- */
-var Gate=new Phaser.Class({ Extends:Phaser.Scene,
-  initialize:function(){ Phaser.Scene.call(this,{key:'Gate'}); },
-  create:function(){
-    this.cameras.main.setZoom(2).centerOn(W/2,H/2); this.cameras.main.setBackgroundColor(C.ink);
-    var code='NQ-'+Math.random().toString(36).slice(2,6).toUpperCase();
-    this.add.text(W/2,34,'BURN TO PLAY',{fontFamily:'"Press Start 2P"',fontSize:'18px',color:'#ff3860'}).setOrigin(.5);
-    this.add.text(W/2,82,'send 1,000 NORMIE with memo:',{fontFamily:UIFONT,resolution:UIRES,fontSize:'21px',color:'#b6bfe0'}).setOrigin(.5);
-    this.add.text(W/2,108,code,{fontFamily:'"Press Start 2P"',fontSize:'20px',color:'#ffd23f'}).setOrigin(.5);
-    this.add.text(W/2,138,'to  1nc1nerator1111...1111',{fontFamily:UIFONT,resolution:UIRES,fontSize:'19px',color:'#b6bfe0'}).setOrigin(.5);
-    var btn=this.add.text(W/2,186,'[ SIMULATE BURN CONFIRMED ]',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#0d0b1e',backgroundColor:'#3dff6e',padding:{x:12,y:9}}).setOrigin(.5).setInteractive({useHandCursor:true});
-    btn.on('pointerover',function(){ btn.setStyle({backgroundColor:'#ffffff'}); }); btn.on('pointerout',function(){ btn.setStyle({backgroundColor:'#3dff6e'}); });
-    btn.on('pointerdown',function(){
-      _ac(); btn.disableInteractive();
-      var s=this.add.text(W/2,226,'watching chain',{fontFamily:UIFONT,resolution:UIRES,fontSize:'21px',color:'#3dff6e'}).setOrigin(.5); var dots=0;
-      this.time.addEvent({delay:350,repeat:4,callback:function(){ dots++; s.setText('watching chain'+'.'.repeat(dots)); }});
-      this.time.delayedCall(1900,function(){ s.setText('BURN CONFIRMED — GO!').setColor('#ffd23f'); this.time.delayedCall(700,function(){ this.scene.start('Controls',{next:0,score:0}); },[],this); },[],this);
-    },this);
-    this.add.text(W/2,254,'demo only — nothing really burns yet',{fontFamily:UIFONT,resolution:UIRES,fontSize:'16px',color:'#9089b8'}).setOrigin(.5);
   }
 });
 
@@ -1623,11 +1604,11 @@ function worldCount(){
 // what a banked item does is to spend it and watch. Keep each under ~34 chars — it renders on one
 // line under the slots.
 var RESERVE_ITEMS = {
-  disc:   { icon:'solana',    label:'SOL DISCS +5', desc:'+5 throwing discs',      use:function(g){ g.throwAmmo+=5; if(g.updateThrowHud) g.updateThrowHud(); } },
-  vial:   { icon:'heart',     label:'FULL HEAL',    desc:'refill all 3 hearts',    use:function(g){ while(g.lives<3){ g.lives++; if(g.hearts[g.lives-1]) g.hearts[g.lives-1].setAlpha(1); } } },
-  shield: { icon:'supergeek', label:'AUDIT SHIELD', desc:'blocks the next hit',    use:function(g){ g.geekShield=true; } },
+  disc:   { icon:'solana',    emoji:'🥏', label:'SOL DISCS +5', desc:'+5 throwing discs',      use:function(g){ g.throwAmmo+=5; if(g.updateThrowHud) g.updateThrowHud(); } },
+  vial:   { icon:'heart',     emoji:'❤️', label:'FULL HEAL',    desc:'refill all 3 hearts',    use:function(g){ while(g.lives<3){ g.lives++; if(g.hearts[g.lives-1]) g.hearts[g.lives-1].setAlpha(1); } } },
+  shield: { icon:'supergeek', emoji:'🛡️', label:'AUDIT SHIELD', desc:'blocks the next hit',    use:function(g){ g.geekShield=true; } },
   // ── premium boosts (in-game drops, wheel wins, owner grants) — all map to proven mechanics ──
-  star:   { icon:'moon',      label:'STAR POWER',   desc:'invincible for 8 seconds', use:function(g){ g.moonUntil=g.time.now+8000; if(g.powerBanner) g.powerBanner('STAR POWER','INVINCIBLE — smash everything!','#ffd23f'); } },
+  star:   { icon:'moon',      emoji:'⭐', label:'STAR POWER',   desc:'invincible for 8 seconds', use:function(g){ g.moonUntil=g.time.now+8000; if(g.powerBanner) g.powerBanner('STAR POWER','INVINCIBLE — smash everything!','#ffd23f'); } },
   // ⛔ NO 'clock' / +30 SECONDS ITEM. Removed 2026-07-26 on the owner's call — "there is no need
   // for time increase in these levels". The level clocks are generous enough that banking a slot
   // for more of something you never run out of made the whole inventory worse: three slots, and
@@ -1643,13 +1624,20 @@ var RESERVE_ITEMS = {
   // NO-TARGET GUARD: useReserve refuses to spend this with nothing to hit, so it can never be the
   // silent no-op it used to be. That is the honest fix for a weapon, where handing out a heart
   // instead would just be a second borrowed identity.
-  bomb:   { icon:'missile',   label:'AIR STRIKE', desc:'missile wipes every enemy', use:function(g){
+  bomb:   { icon:'missile',   emoji:'🚀', label:'AIR STRIKE', desc:'missile wipes every enemy', use:function(g){
             var hit=0;
             if(g.enemies) g.enemies.children.iterate(function(e){ if(e&&e.active){ var ex=e.x,ey=e.y; e.disableBody(true,true); hit++; if(g.addScore) g.addScore(20); if(g.burst) g.burst(ex,ey,0xffd23f,8); } });
             g.cameras.main.shake(220,0.011);
             if(g.powerBanner) g.powerBanner('AIR STRIKE', hit+(hit===1?' TARGET DOWN':' TARGETS DOWN'), '#ff8a2b');
           } }
 };
+// The DOM overlays (the burn shop) render these items too, and they live in a different
+// top-level script block with no access to RESERVE_ITEMS. Publish a plain read-only mirror rather than
+// letting a second copy of the names and descriptions drift — the exact failure CLAUDE.md's
+// "check every form" section is about.
+try{ if(typeof window!=='undefined'){ window.__NQ_ITEMS=(function(){ var o={}; for(var k in RESERVE_ITEMS){ if(!Object.prototype.hasOwnProperty.call(RESERVE_ITEMS,k)) continue;
+  o[k]={ emoji:RESERVE_ITEMS[k].emoji||'🎁', label:RESERVE_ITEMS[k].label, desc:RESERVE_ITEMS[k].desc||'' }; } return o; })(); } }catch(e){}
+
 var Game=new Phaser.Class({ Extends:Phaser.Scene,
   initialize:function(){ Phaser.Scene.call(this,{key:'Game'}); },
   // levelStartScore = coins banked BEFORE this level; honeypots never drain below it (they only take THIS level's coins).
@@ -1672,6 +1660,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     try{ if(window.__NQ_PAD){ window.__NQ_PAD.pauseEdge=false; window.__NQ_PAD.anyBtnEdge=false; window.__NQ_PAD.jumpEdge=false; window.__NQ_PAD.useEdge=false; window.__NQ_PAD.selEdge=false; } }catch(e){}
     // DOM-overlay hooks (feedback modal pauses the game while a tester types; reassigned each
     // level so they always point at the LIVE scene instance)
+    // Buying an item in the DOM shop mid-run must land in the HUD NOW, not on the next level:
+    // syncRewards() otherwise only runs on level entry and when a slot frees up.
+    try{ var _sc0=this; window.__NQ_SYNCREWARDS=function(){ try{ if(_sc0.scene&&_sc0.scene.isActive&&_sc0.scene.isActive()&&!_sc0.over) _sc0.syncRewards(); }catch(e){} }; }catch(e){}
     try{ var _sc=this; window.__NQ_PAUSE=function(){ if(!_sc.over&&!_sc.paused){ _sc.pauseGame(false); return true; } return false; };
          window.__NQ_RESUME=function(){ if(_sc.paused) _sc.resumeGame(); };
          window.__NQ_DBG=function(){ try{ return {paused:!!_sc.paused, clockPaused:!!_sc.time.paused, now:Math.round(_sc.time.now), last:Math.round(_sc.lastInputAt||0), warping:!!_sc._warping, swan:_sc._swanState||null, bossHP:(_sc.bossStarted?_sc.bossHP:null), hasKey:!!_sc.hasKey, level:_sc.def&&_sc.def.name, floorKey:_sc.floorKey||null, timeLeft:_sc.timeLeft, throwAmmo:_sc.throwAmmo, bossSprite:(function(){ try{ var k=(_sc.rugking&&_sc.rugking.active)?_sc.rugking:((_sc.worm&&_sc.worm.active)?_sc.worm:null); if(!k) return null; return {tex:k.texture&&k.texture.key, grav:!!(k.body&&k.body.allowGravity), vis:!!k.visible, a:+(k.alpha||0).toFixed(2), w:Math.round(k.displayWidth), h:Math.round(k.displayHeight), x:Math.round(k.x), y:Math.round(k.y), tint:('00000'+(k.tintTopLeft||0).toString(16)).slice(-6),
@@ -1757,7 +1748,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     }
     // SETUP LANE only: begin (or continue) a leaderboard run. One run token spans the whole run;
     // the score is submitted at run-end from the Over/Win scenes. No-op on the stable tester build.
-    if(window.__NQ_SETUP && window.NQLB){ try{ window.NQLB.enterLevel(def.name, this.score); }catch(e){} }
+    if(window.NQLB){ try{ window.NQLB.enterLevel(def.name, this.score); }catch(e){} }   // leaderboard run token (production + setup lane)
     // LAB designer toolkit (owner's private bench only — dormant on the stable tester build):
     // warp hook, live gravity tune, and the tester death-heatmap overlay.
     if(window.__NQ_SETUP){ try{
@@ -5069,7 +5060,7 @@ var Over=new Phaser.Class({ Extends:Phaser.Scene,
   init:function(d){ this.finalScore=d.score||0; this.reason=d.reason||''; this.level=d.level||''; this.cont=d.cont||0; this.contScore=d.contScore||0; this.contKind=d.contKind||''; this.contName=d.contName||''; this.contTease=!!d.contTease; },
   create:function(){
     // SETUP LANE: run ended (game over) — submit the final score to the leaderboard.
-    if(window.__NQ_SETUP && window.NQLB){ try{ window.NQLB.submitRun(window.NQLB.worldOf(this.level), this.finalScore); }catch(e){} }
+    if(window.NQLB){ try{ window.NQLB.submitRun(window.NQLB.worldOf(this.level), this.finalScore); }catch(e){} }
     this.cameras.main.setZoom(2).centerOn(W/2,H/2); this.cameras.main.setBackgroundColor(C.ink);
     this.add.text(W/2,48,this.reason,{fontFamily:'"Press Start 2P"',fontSize:'15px',color:'#ff3860'}).setOrigin(.5);
     this.add.text(W/2,80,'reached world '+this.level,{fontFamily:UIFONT,resolution:UIRES,fontSize:'18px',color:'#b6bfe0'}).setOrigin(.5);
@@ -5085,7 +5076,7 @@ var Over=new Phaser.Class({ Extends:Phaser.Scene,
     var cpMsg;
     if(this.cont>0 && this.contKind==='level') cpMsg='★ RESUME: '+(this.contName||('LEVEL '+(this.cont+1)))+'\nright where you fell';
     else if(this.cont>0) cpMsg='★ CHECKPOINT: '+(CP_LABEL[this.cont]||(this.contName||('LEVEL '+(this.cont+1))));
-    else cpMsg=(BURN_GATE ? 'score posts to the leaderboard —\ntop 10 split the pool' : ('free preview · all '+NWORLDS+' Worlds\ngood luck out there'));
+    else cpMsg='free preview · all '+NWORLDS+' Worlds\ngood luck out there';
     // The tease needs a row of its own. First attempt shifted cpMsg UP to 190 to make room --
     // which drove it straight into the 30px SCORE number at y=150. cpMsg stays put; the tease goes
     // BELOW it and the prompt moves down, because the free space on this screen is at the bottom.
@@ -5093,13 +5084,12 @@ var Over=new Phaser.Class({ Extends:Phaser.Scene,
     // Locked players who would have benefited get one restrained line. Deliberately NO token
     // amounts or thresholds — NQ gating terms are still in testing and are never promised anywhere.
     if(this.contTease) this.add.text(W/2,229,'TIER 2 / VIP resume right where you died',{fontFamily:UIFONT,resolution:UIRES,fontSize:'13px',color:'#c99bff',align:'center'}).setOrigin(.5);
-    var p=this.add.text(W/2,(this.contTease?250:244), this.cont>0 ? 'PRESS TO CONTINUE →' : (BURN_GATE ? 'PRESS TO BURN AGAIN' : 'PRESS TO PLAY AGAIN'),{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
+    var p=this.add.text(W/2,(this.contTease?250:244), this.cont>0 ? 'PRESS TO CONTINUE →' : 'PRESS TO PLAY AGAIN',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
     this.tweens.add({targets:p,alpha:.25,duration:600,yoyo:true,repeat:-1});
-    // Continue from the World-2 checkpoint if premium banked one; else free-preview restart, or the burn Gate.
+    // Continue from the World-2 checkpoint if premium banked one; else restart from 1-1.
     var self=this; this.started=false; var go=function(){ if(self.started) return; self.started=true;
       if(self.cont>0){ if(typeof BRIEFINGS!=='undefined'&&BRIEFINGS[self.cont]) self.scene.start('Briefing',{next:self.cont,score:self.contScore});   // show the world briefing (control reminder) on continue
                         else self.scene.start('Game',{level:self.cont,score:self.contScore,lives:3}); }
-      else if(BURN_GATE) self.scene.start('Gate');
       else self.scene.start('Game',{level:0,score:0,lives:3}); };
     this.time.delayedCall(500,function(){ self.input.once('pointerdown',go); self.input.keyboard.once('keydown',go); });
     padAdvance(self, go);   // controller button also continues
@@ -5129,7 +5119,7 @@ var Win=new Phaser.Class({ Extends:Phaser.Scene,
   init:function(d){ d=d||{}; this.finalScore=d.score||0; this.boss=d.boss||'wormhole'; this.casino=d.casino||0; },
   create:function(){
     // SETUP LANE: run WON (full clear) — submit the final score at the top world tier.
-    if(window.__NQ_SETUP && window.NQLB){ try{ window.NQLB.submitRun(worldCount(), this.finalScore); }catch(e){} }
+    if(window.NQLB){ try{ window.NQLB.submitRun(worldCount(), this.finalScore); }catch(e){} }
     SFX.win();
     // victory tableau keyed to the FINAL boss you actually beat, slumped/defeated + Normie triumphant
     var V = this.boss==='wenmoon'   ? {img:'wenmoon',  title:'WEN MOON? NOW. NORMIE MADE IT!', color:'#9fd8ff', tint:0, scale:98, bg:0x05060f, princess:true}
@@ -5168,8 +5158,7 @@ var Win=new Phaser.Class({ Extends:Phaser.Scene,
     this.add.text(W/2,this.casino>0?222:210,wtext,{fontFamily:UIFONT,resolution:UIRES,fontSize:'18px',color:'#b6bfe0'}).setOrigin(.5);
     var p=this.add.text(W/2,246,'PRESS TO PLAY AGAIN',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
     this.tweens.add({targets:p,alpha:.25,duration:600,yoyo:true,repeat:-1});
-    // Free preview → straight back into the game; only the live burn build routes through the Gate.
-    var self=this; this.started=false; var go=function(){ if(self.started) return; self.started=true; if(BURN_GATE) self.scene.start('Gate'); else self.scene.start('Game',{level:0,score:0,lives:3}); };
+    var self=this; this.started=false; var go=function(){ if(self.started) return; self.started=true; self.scene.start('Game',{level:0,score:0,lives:3}); };
     this.time.delayedCall(500,function(){ self.input.once('pointerdown',go); self.input.keyboard.once('keydown',go); });
     padAdvance(self, go);   // controller button also continues
   }
@@ -5914,7 +5903,7 @@ var NQGAME=new Phaser.Game({
   type:Phaser.AUTO, parent:'screen', width:W*2, height:H*2, pixelArt:true, backgroundColor:'#0a0813', roundPixels:true,
   scale:{ mode:Phaser.Scale.FIT, autoCenter:Phaser.Scale.CENTER_BOTH },
   physics:{ default:'arcade', arcade:{ gravity:{y:900}, debug:false } },
-  scene:[Boot,Title,LevelSelect,Controls,Gate,Game,Over,Win,WorldClear,Briefing,VipPitch,LevelClear]
+  scene:[Boot,Title,LevelSelect,Controls,Game,Over,Win,WorldClear,Briefing,VipPitch,LevelClear]
 });
 // Global "jump to LEVEL SELECT" hook — works from ANY scene (title, game, over, win), so the
 // reliable DOM "≡ Levels" button is never a dead end. Stops whatever's running, then starts it.
@@ -6693,14 +6682,27 @@ if(typeof document!=='undefined'){ (function(){
 </script>
 <script>
 /* ============================================================================
-   NORMIE QUEST — PREMIUM LAYER (SETUP LANE ONLY)
-   Leaderboard client + wallet ownership (sign-message) + tier + Jupiter buy widget.
-   Entirely dormant unless window.__NQ_SETUP is true, so the stable tester build is untouched.
+   NORMIE QUEST — PLAYER PANEL  (leaderboard · wallet · buy · burn shop)
    DOM-overlay based (like the touch pad / feedback widget) — no changes to the Phaser scenes
-   beyond the single startLevel/submitLevel hook in Game.create.
+   beyond the NQLB hooks and the reward-sync hook in Game.create.
+
+   ⚠️ WHAT IS LIVE WHERE. This block used to be wrapped in `if (window.__NQ_SETUP)` in its
+   entirety, which meant the leaderboard — the whole reason to come back and beat a score — was
+   invisible on the real game URL and only existed on the -lab setup lane. It now runs EVERYWHERE.
+   What stays setup-only is the WORLD/TIER GATE and nothing else:
+     • window.__NQ_ACCESS / __NQ_VIP are published ONLY in the setup lane. They are the readers
+       nqWorldAllowed / nqMegaWhaleUnlocked / nqLevelResumeUnlocked use, and those already
+       short-circuit to "allowed" outside the setup lane. Publishing them in production would
+       quietly start gating a game that is free.
+     • Every line of copy that names a tier, an unlock or a holding is behind `SETUP`. On the
+       public URL the wallet is identity only (a ✓ on your score, your Lounge seat, your rewards)
+       and $NORMIE copy is identity + where-to-buy, per the rule at NORMIE_NATION.
+   The burn SHOP is its own switch again: it renders only when the server says NQ_SHOP is armed.
    ============================================================================ */
-if (window.__NQ_SETUP) { (function () {
+(function () {
   'use strict';
+  // Setup lane = the -lab route (or ?setup=1). Read ONCE: everything tier-shaped keys off this.
+  var SETUP = false; try { SETUP = !!window.__NQ_SETUP; } catch (e) {}
 
   // ---- tiny base58 encoder (for signMessage output) -----------------------
   var B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
@@ -6720,9 +6722,25 @@ if (window.__NQ_SETUP) { (function () {
   var walletState = { pubkey: null, token: null, tier: null, worlds: null, balances: null, vip: false };
   // Live world-access reader for the game's tier gate (nqWorldAllowed): 'all' | [lo,hi] | null.
   // null (no wallet verified yet, or refresh in flight) = the game treats it as tier 0 (worlds 1-2).
-  try { window.__NQ_ACCESS = function () { return walletState.worlds; }; } catch (e) {}
-  try { window.__NQ_VIP = function () { return !!walletState.vip; }; } catch (e) {}   // ULTRA VIP wing grant (worlds 13+)
+  // ⛔ SETUP LANE ONLY — see the header. These two are the world-gate readers; on the public URL
+  // they stay undefined so the game cannot start locking worlds behind a token.
+  if (SETUP) {
+    try { window.__NQ_ACCESS = function () { return walletState.worlds; }; } catch (e) {}
+    try { window.__NQ_VIP = function () { return !!walletState.vip; }; } catch (e) {}   // ULTRA VIP wing grant (worlds 13+)
+  }
   var run = null;   // { token } — one per run, spans levels; the score posts at run-end
+  // A finished run whose player has not named themselves yet. Outside the setup lane most people
+  // will finish their first run before they ever open this panel, and submitRun used to just DROP
+  // a nameless run on the floor — so the board a new player finally looked at had nothing of
+  // theirs on it. Hold the run instead and post it the moment they pick a handle. The server's run
+  // token is good for two hours and its plausibility check is score-per-second, so waiting can
+  // only ever make a run look MORE honest.
+  var parked = null;
+  function postScore(body) {
+    fetch('/api/nq/score', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function () { try { if (window._nqLoadBoards) window._nqLoadBoards(); } catch (e) {} })
+      .catch(function () {});
+  }
   function worldOf(name) { var m = String(name || '').match(/^(\d+)/); return m ? parseInt(m[1], 10) : 0; }
 
   window.NQLB = {
@@ -6743,13 +6761,19 @@ if (window.__NQ_SETUP) { (function () {
     // Called from Over/Win. Submits the final score for the whole run, then clears it.
     submitRun: function (world, score) {
       var r = run; run = null;
-      if (!handle || !r) return;                 // need a handle (panel prompts) + an active run
+      if (!r) return;                            // no run token = nothing the server would accept
       var body = { name: handle, world: world, level: 'run', score: Math.round(score || 0), token: r.token };
       if (walletState.pubkey && walletState.token) { body.wallet = walletState.pubkey; body.walletToken = walletState.token; }
-      fetch('/api/nq/score', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).catch(function () {});
+      if (!handle) { parked = body; return; }    // held until they name themselves — see `parked`
+      postScore(body);
     },
     getHandle: function () { return handle; },
-    setHandle: function (h) { handle = String(h || '').replace(/[^A-Za-z0-9 _.-]/g, '').slice(0, 16).trim(); try { localStorage.setItem('nqHandle', handle); } catch (e) {} },
+    parkedRun: function () { return parked; },
+    setHandle: function (h) {
+      handle = String(h || '').replace(/[^A-Za-z0-9 _.-]/g, '').slice(0, 16).trim();
+      try { localStorage.setItem('nqHandle', handle); } catch (e) {}
+      if (handle && parked) { parked.name = handle; if (walletState.pubkey && walletState.token) { parked.wallet = walletState.pubkey; parked.walletToken = walletState.token; } postScore(parked); parked = null; }
+    },
     getWallet: function () { return walletState; },
   };
 
@@ -6793,6 +6817,15 @@ if (window.__NQ_SETUP) { (function () {
         acct = a; return { publicKey: { toString: function () { return a.address; } } }; }); },
       signMessage: function (bytes) { return w.features['solana:signMessage'].signMessage({ account: acct, message: bytes }).then(function (res) {
         var r = (res && res[0]) || res || {}; return { signature: r.signature }; }); },
+      // Wallet Standard signs RAW BYTES, not a web3.js object, so serialize on the way in and
+      // rehydrate on the way out. Only present when the wallet actually advertises the feature —
+      // the shop checks for it and says so plainly rather than failing at the popup.
+      signTransaction: (w.features && w.features['solana:signTransaction']) ? function (tx) {
+        var chain = (w.chains || []).filter(function (c) { return String(c).indexOf('solana:') === 0; })[0] || 'solana:mainnet';
+        var bytes = new Uint8Array(tx.serialize({ requireAllSignatures: false, verifySignatures: false }));
+        return w.features['solana:signTransaction'].signTransaction({ account: acct, transaction: bytes, chain: chain })
+          .then(function (res) { var r = (res && res[0]) || res || {}; return window.solanaWeb3.Transaction.from(r.signedTransaction); });
+      } : null,
     };
   }
   function detectWallets() {
@@ -6827,6 +6860,7 @@ if (window.__NQ_SETUP) { (function () {
       body: JSON.stringify({ pubkey: pk, signature: b58encode(sigBytes), walletName: walletName || null }) })).json();
     if (!vr.ok) throw new Error('Verify failed: ' + (vr.status || '?'));
     walletState = { pubkey: pk, token: vr.token, tier: vr.tier, worlds: vr.worlds, balances: vr.balances, vip: !!vr.vip };
+    activeProvider = p;   // the shop needs something that can sign; re-detected on a reload
     saveWallet();
     if (!handle) window.NQLB.setHandle(pk.slice(0, 4) + '…' + pk.slice(-4));
     return walletState;
@@ -6838,6 +6872,11 @@ if (window.__NQ_SETUP) { (function () {
     try { if (walletState.pubkey && walletState.token) localStorage.setItem('nqWallet', JSON.stringify({ pubkey: walletState.pubkey, token: walletState.token })); } catch (e) {}
   }
   function disconnectWallet() {
+    // Call the provider's OWN disconnect as well as clearing local state — leaving the wallet
+    // still authorized to a page that says "disconnected" is the exact half-disconnect CLAUDE.md
+    // calls out. Best-effort: not every provider implements it.
+    try { if (activeProvider && typeof activeProvider.disconnect === 'function') activeProvider.disconnect(); } catch (e) {}
+    activeProvider = null;
     walletState = { pubkey: null, token: null, tier: null, worlds: null, balances: null, vip: false };
     try { localStorage.removeItem('nqWallet'); } catch (e) {}
   }
@@ -6850,16 +6889,313 @@ if (window.__NQ_SETUP) { (function () {
       body: JSON.stringify({ pubkey: saved.pubkey, token: saved.token, fresh: !!fresh }) }).then(function (r) { return r.json(); })
       .then(function (v) {
         if (v && v.ok) { walletState.tier = v.tier; walletState.worlds = v.worlds; walletState.balances = v.balances; walletState.vip = !!v.vip;
-          if (!handle) window.NQLB.setHandle(saved.pubkey.slice(0, 4) + '…' + saved.pubkey.slice(-4)); if (cb) cb(true); }
-        else { disconnectWallet(); if (cb) cb(false); }
-      }).catch(function () { if (cb) cb(false); });   // offline: keep the stored proof, just don't refresh now
+          if (!handle) window.NQLB.setHandle(saved.pubkey.slice(0, 4) + '…' + saved.pubkey.slice(-4)); if (cb) cb(true); return; }
+        // Only a REJECTED PROOF means forget the wallet. This used to disconnect on ANY non-ok
+        // reply, and /refresh answers 'rpc_error' whenever the Helius read fails — so one flaky RPC
+        // call silently signed the player out, dropped the ✓ on their score, and stopped their
+        // pending rewards being claimed. A read failure is not a failed proof.
+        if (v && v.status === 'bad_session') { disconnectWallet(); if (cb) cb(false); return; }
+        if (!handle) window.NQLB.setHandle(saved.pubkey.slice(0, 4) + '…' + saved.pubkey.slice(-4));
+        if (cb) cb(true);   // identity holds; tier/balances just stay unknown until the next refresh
+      }).catch(function () {   // offline: keep the stored proof, just don't refresh now
+        if (!handle) window.NQLB.setHandle(saved.pubkey.slice(0, 4) + '…' + saved.pubkey.slice(-4));
+        if (cb) cb(true);
+      });
   }
 
-  // ---- UI: launcher + modal panel (Leaderboard / Wallet / Buy) ------------
+  // ---- 🔥 THE BURN SHOP — trade $NORMIE for one Item Reserve boost ---------------------------
+  //
+  // WHY A DOM OVERLAY AND NOT A PHASER SCENE. Three reasons, in order of weight:
+  //   1. It needs the wallet. Every provider, the Wallet-Standard discovery, the connect/sign
+  //      plumbing and the session token already live in THIS block. A scene would have needed its
+  //      own copy of the 11-wallet registry — the precise drift CLAUDE.md records as the cause of
+  //      real bugs ("private copies drifted badly enough").
+  //   2. It is mostly words. A burn is irreversible, so the confirm step has to say plainly what
+  //      is destroyed and what comes back. That does not fit legibly on a 480×270 pixel canvas.
+  //   3. A scene can only be entered at a scene boundary. The shop opens from the title screen,
+  //      from a paused level, from the game-over screen — wherever the player already is.
+  //
+  // WHY THE ITEM COMES BACK THROUGH THE REWARD QUEUE. A purchase is queued server-side to the
+  // wallet (/api/nq/shop/claim → rewards.grant) and picked up by the same syncRewards() poll that
+  // delivers wheel wins. So it survives a reload, follows the player to another device, and there
+  // is exactly ONE delivery path to keep working instead of two.
+  //
+  // GUARDRAILS AGAINST A DOUBLE BURN, in layers:
+  //   • the BURN button is inert until an explicit "I understand" tick,
+  //   • it disables itself on the first click AND a module-level `shopBusy` latch refuses a
+  //     second start, so a double-tap cannot open two wallet popups,
+  //   • the confirm screen is REPLACED by a progress screen the moment a burn is in flight —
+  //     there is no second button left to press,
+  //   • the in-flight session is parked in sessionStorage before broadcast, so a reload resumes
+  //     the claim instead of losing a burn that already landed,
+  //   • and server-side the session is single-use: one burn, one item, replay-guarded on disk.
+  var shopCfg = null, shopBusy = false, pollActive = false, activeProvider = null;
+  var SHOP_PENDING_KEY = 'nqShopPending';
+  function shopPending() { try { return JSON.parse(sessionStorage.getItem(SHOP_PENDING_KEY) || 'null'); } catch (e) { return null; } }
+  function shopPendingSet(v) { try { if (v) sessionStorage.setItem(SHOP_PENDING_KEY, JSON.stringify(v)); else sessionStorage.removeItem(SHOP_PENDING_KEY); } catch (e) {} }
+
+  // The catalogue's names and descriptions come from the GAME (window.__NQ_ITEMS, published off
+  // RESERVE_ITEMS) — never retyped here, so they cannot drift from what the item actually does.
+  function itemMeta(id) {
+    var m = null; try { m = window.__NQ_ITEMS && window.__NQ_ITEMS[id]; } catch (e) {}
+    return m || { emoji: '🎁', label: String(id || '').toUpperCase(), desc: '' };
+  }
+  function fmtAmt(n) { return Number(n || 0).toLocaleString(); }
+  function shopHost() { return ov.querySelector('#nqp-shop'); }
+  function shopStatus(html) { var e = ov.querySelector('#nqp-shopmsg'); if (e) e.innerHTML = html; }
+  function shopErr(status) {
+    return ({
+      not_configured: 'The shop is not open right now.',
+      bad_item: 'That item is not for sale.',
+      bad_session: 'Your wallet session expired — reconnect on the Wallet tab.',
+      wrong_wallet: 'That session belongs to a different wallet.',
+      no_session: 'The shop session expired. Nothing was burned — start again.',
+      expired: 'The shop session expired. Nothing was burned — start again.',
+      slow_down: 'Too many attempts — wait a minute and try again.',
+      insufficient_funds: 'Not enough $NORMIE (or not enough SOL for the network fee).',
+      tx_mismatch: 'The transaction did not match the one we issued — nothing was sent.',
+      unsigned: 'The wallet did not return a signed transaction — nothing was sent.',
+      bad_tx: 'The signed transaction was unreadable — nothing was sent.',
+      send_failed: 'The network rejected the broadcast.',
+      queue_full: 'Your reward queue is full — spend a banked item, then press Check again.',
+    })[status] || ('Something went wrong (' + String(status || 'unknown') + ').');
+  }
+
+  // /vendor/solana-web3.iife.min.js is first-party (same-origin, so 'self' in the CSP covers it)
+  // and ~470KB, so it is loaded ONLY when someone actually reaches a confirm — never at boot.
+  var web3Loading = null;
+  function loadWeb3() {
+    if (window.solanaWeb3) return Promise.resolve(window.solanaWeb3);
+    if (web3Loading) return web3Loading;
+    web3Loading = new Promise(function (res, rej) {
+      var sc = document.createElement('script');
+      sc.src = '/vendor/solana-web3.iife.min.js';
+      sc.onload = function () { if (window.solanaWeb3) res(window.solanaWeb3); else { web3Loading = null; rej(new Error('The Solana library failed to load.')); } };
+      sc.onerror = function () { web3Loading = null; rej(new Error('Could not load the Solana library — check your connection.')); };
+      document.head.appendChild(sc);
+    });
+    return web3Loading;
+  }
+  function b64ToBytes(b64) { var bin = atob(String(b64 || '')), a = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return a; }
+  function bytesToB64(u8) { var a = new Uint8Array(u8), s2 = ''; for (var i = 0; i < a.length; i++) s2 += String.fromCharCode(a[i]); return btoa(s2); }
+
+  // Find something that can sign FOR THE WALLET THIS SESSION BELONGS TO. After a reload we have a
+  // remembered pubkey but no provider object, so re-detect and match on the key — never just grab
+  // whatever is injected, or a second wallet in the same browser would be asked to pay.
+  async function getSigner() {
+    var want = walletState.pubkey;
+    var keyOf = function (p) { try { return p && p.publicKey ? p.publicKey.toString() : null; } catch (e) { return null; } };
+    if (activeProvider && keyOf(activeProvider) === want) return activeProvider;
+    var det = detectWallets(), i;
+    for (i = 0; i < det.length; i++) if (keyOf(det[i].provider) === want) { activeProvider = det[i].provider; return activeProvider; }
+    for (i = 0; i < det.length; i++) {
+      try {
+        var r = await det[i].provider.connect();
+        var k = (r && r.publicKey ? r.publicKey : det[i].provider.publicKey).toString();
+        if (k === want) { activeProvider = det[i].provider; return activeProvider; }
+      } catch (e) { /* declined or wrong wallet — try the next */ }
+    }
+    throw new Error('Reconnect the wallet that owns this session (' + want.slice(0, 4) + '…' + want.slice(-4) + ') and try again.');
+  }
+  // ONE signer — the player's own wallet — so there is no partial-sign ordering problem and no
+  // reason for Phantom's multi-signer warning (see the rule in CLAUDE.md; it does not apply here).
+  // We never sign server-side and the server never holds a key.
+  async function signTx(provider, txB64) {
+    var W3 = await loadWeb3();
+    var tx = W3.Transaction.from(b64ToBytes(txB64));
+    if (typeof provider.signTransaction !== 'function') throw new Error('This wallet cannot sign transactions in this browser — try Phantom, Solflare or Jupiter.');
+    var signed = await provider.signTransaction(tx);
+    var raw = (signed && typeof signed.serialize === 'function') ? signed.serialize() : signed;
+    return bytesToB64(raw);
+  }
+
+  function loadShopConfig() {
+    fetch('/api/nq/config').then(function (r) { return r.json(); }).then(function (j) {
+      shopCfg = j || null;
+      var tab = ov.querySelector('.nqp-tab[data-tab="shop"]');
+      if (tab) tab.style.display = (shopCfg && shopCfg.shopEnabled) ? '' : 'none';
+    }).catch(function () {});
+  }
+
+  function renderShop() {
+    var host = shopHost(); if (!host) return;
+    if (!shopCfg || !shopCfg.shopEnabled) { host.innerHTML = '<div class="nqp-sub">The shop is closed right now.</div>'; return; }
+    var pend = shopPending();
+    if (shopBusy || pend) { watchBurn(pend); return; }
+    if (!walletState.pubkey) {
+      host.innerHTML = '<div class="nqp-sub" style="margin-bottom:10px">Connect a wallet first. What you buy is queued to that wallet, so it reaches you on any device you play on.</div>'
+        + '<button class="nqp-b" id="nqp-shopwal">👛 Go to Wallet</button>';
+      host.querySelector('#nqp-shopwal').addEventListener('click', function () { var t = ov.querySelector('.nqp-tab[data-tab="wal"]'); if (t) t.click(); });
+      return;
+    }
+    host.innerHTML =
+      '<div class="nqp-sub" style="margin-bottom:2px">Burn $NORMIE, keep one boost. It lands in your Item Reserve — the three slots at the top of the HUD.</div>'
+      + '<div class="nqp-warn">🔥 A burn is permanent. The tokens are destroyed on-chain and the supply drops — they are not sent to us or to anyone. No refunds, no undo. Testing only; nothing here is final.</div>'
+      + (shopCfg.items || []).map(function (it) {
+          var m = itemMeta(it.id);
+          return '<div class="nqp-shoprow"><span class="ic">' + m.emoji + '</span>'
+            + '<span class="tx"><b>' + esc(m.label) + '</b><i>' + esc(m.desc) + '</i></span>'
+            + '<span class="pr">' + fmtAmt(it.price) + '<u>$NORMIE</u></span>'
+            + '<button class="nqp-b sm" data-buy="' + esc(it.id) + '">BURN</button></div>';
+        }).join('')
+      + '<div class="nqp-sub" id="nqp-shopmsg" style="margin-top:10px"></div>';
+    host.querySelectorAll('button[data-buy]').forEach(function (b) {
+      b.addEventListener('click', function () { confirmBurn(b.getAttribute('data-buy')); });
+    });
+  }
+
+  // Guardrails before power: restate the exact amount, the exact item, and what cannot be undone,
+  // then make them tick a box before the button is even live.
+  function confirmBurn(id) {
+    var host = shopHost(); if (!host || shopBusy) return;
+    var row = (shopCfg.items || []).filter(function (x) { return x.id === id; })[0];
+    if (!row) return;
+    var m = itemMeta(id), pk = walletState.pubkey || '';
+    host.innerHTML = '<div class="nqp-confirm">'
+      + '<div class="hd">🔥 CONFIRM A BURN</div>'
+      + '<div class="ln">You will burn <b>' + fmtAmt(row.price) + ' $NORMIE</b>.</div>'
+      + '<div class="ln">You will get <b>' + m.emoji + ' ' + esc(m.label) + '</b> — ' + esc(m.desc) + '. One item, banked to your Item Reserve.</div>'
+      + '<div class="ln warn">This cannot be undone. The tokens are destroyed on-chain; nobody receives them and there is no refund. Your wallet will show you the exact amount before you approve — read it there too.</div>'
+      + '<div class="ln dim">Paid from ' + esc(pk.slice(0, 4) + '…' + pk.slice(-4)) + ' · you also pay the usual Solana network fee in SOL.</div>'
+      + '<label class="nqp-ack"><input type="checkbox" id="nqp-ack"> I understand this burn is permanent and cannot be undone.</label>'
+      + '<button class="nqp-b danger wide" id="nqp-doburn" disabled>BURN ' + fmtAmt(row.price) + ' $NORMIE</button>'
+      + '<button class="nqp-b alt wide" id="nqp-cancel">Cancel — keep my tokens</button>'
+      + '<div class="nqp-sub" id="nqp-shopmsg" style="margin-top:10px"></div></div>';
+    var ack = host.querySelector('#nqp-ack'), go = host.querySelector('#nqp-doburn');
+    ack.addEventListener('change', function () { go.disabled = !ack.checked; });
+    host.querySelector('#nqp-cancel').addEventListener('click', function () { renderShop(); });
+    go.addEventListener('click', function () {
+      if (go.disabled || shopBusy) return;
+      go.disabled = true; ack.disabled = true;
+      host.querySelector('#nqp-cancel').disabled = true;
+      startBurn(id);
+    });
+  }
+
+  async function startBurn(id) {
+    if (shopBusy) return;
+    shopBusy = true;
+    var failed = function (msgText) {
+      shopBusy = false;
+      var host = shopHost(); if (!host) return;
+      host.innerHTML = '<div class="nqp-confirm"><div class="hd" style="color:#ff9db8">BURN NOT COMPLETED</div>'
+        + '<div class="ln">' + esc(msgText) + '</div>'
+        + '<div class="ln dim">Nothing left your wallet unless your wallet told you otherwise.</div>'
+        + '<button class="nqp-b alt wide" id="nqp-shopback">Back to the shop</button></div>';
+      host.querySelector('#nqp-shopback').addEventListener('click', function () { renderShop(); });
+    };
+    try {
+      shopStatus('Opening a shop session…');
+      var ses = await (await fetch('/api/nq/shop/session', { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ wallet: walletState.pubkey, token: walletState.token, item: id }) })).json();
+      if (!ses.ok) return failed(shopErr(ses.status));
+      shopStatus('Building the burn transaction…');
+      var bt = await (await fetch('/api/nq/burn-tx?session=' + encodeURIComponent(ses.id) + '&payer=' + encodeURIComponent(walletState.pubkey))).json();
+      if (!bt.ok) return failed(shopErr(bt.status));
+      shopStatus('Approve it in your wallet — check the amount it shows you.');
+      var provider = await getSigner();
+      var signedB64 = await signTx(provider, bt.tx);
+      // Park the session BEFORE broadcasting. From this point a burn can be on-chain, and losing
+      // the session id would mean losing an item somebody paid for.
+      shopPendingSet({ session: ses.id, item: id, at: Date.now() });
+      shopStatus('Broadcasting…');
+      var snd = await (await fetch('/api/nq/burn-send', { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ session: ses.id, tx: signedB64 }) })).json();
+      if (!snd.ok) {
+        // 'send_failed' is the only ambiguous one — the RPC may have accepted the tx and then
+        // failed to answer. Keep watching in that case; for every definite rejection, clear the
+        // parked session and say honestly that nothing was burned.
+        if (snd.status === 'send_failed') { shopStatus('Broadcast unclear — checking the chain…'); return watchBurn(shopPending()); }
+        shopPendingSet(null);
+        return failed(shopErr(snd.status));
+      }
+      shopPendingSet({ session: ses.id, item: id, at: Date.now(), sig: snd.signature });
+      watchBurn(shopPending());
+    } catch (e) {
+      // A rejected wallet popup lands here and must read as "nothing happened", not as an error.
+      var t = String((e && e.message) || e || '');
+      failed(/reject|denied|cancel|User rejected/i.test(t) ? 'You cancelled the approval — nothing was burned.' : t);
+    }
+  }
+
+  function watchBurn(p) {
+    if (!p) { shopBusy = false; renderShop(); return; }
+    shopBusy = true;
+    var m = itemMeta(p.item), host = shopHost();
+    if (host) {
+      host.innerHTML = '<div class="nqp-confirm"><div class="hd">🔥 BURN SENT</div>'
+        + '<div class="ln">Watching the chain for your ' + m.emoji + ' <b>' + esc(m.label) + '</b>. Finality usually takes about half a minute.</div>'
+        + '<div class="ln dim">You can close this and keep playing — the item is queued to your wallet either way.</div>'
+        + (p.sig ? '<div class="nqp-sig">' + esc(p.sig) + '</div>' : '')
+        + '<div class="nqp-sub" id="nqp-shopmsg">Confirming…</div></div>';
+    }
+    pollClaim(p);
+  }
+
+  // ONE poller, ever. Runs with or without the shop pane on screen, so a burn is still claimed if
+  // the player closes the panel — or reloaded the tab and never reopened it.
+  function pollClaim(p) {
+    if (pollActive || !p) return;
+    pollActive = true;
+    var tries = 0, MAX = 40;   // 40 × 3s ≈ 2 minutes
+    var stop = function () { pollActive = false; shopBusy = false; };
+    var slow = function (why) {
+      stop();
+      var host = shopHost(); if (!host) return;
+      var m = itemMeta(p.item);
+      host.innerHTML = '<div class="nqp-confirm"><div class="hd" style="color:#ffc98a">STILL CONFIRMING</div>'
+        + '<div class="ln">' + esc(why || 'The chain has not reported your burn yet.') + '</div>'
+        + '<div class="ln">If the burn went through, your ' + m.emoji + ' <b>' + esc(m.label) + '</b> is still owed to you — press Check again.</div>'
+        + (p.sig ? '<div class="ln dim">Your transaction:</div><div class="nqp-sig">' + esc(p.sig) + '</div>' : '')
+        + '<button class="nqp-b wide" id="nqp-recheck">Check again</button>'
+        + '<button class="nqp-b alt wide" id="nqp-giveup">Back to the shop</button></div>';
+      host.querySelector('#nqp-recheck').addEventListener('click', function () { watchBurn(p); });
+      host.querySelector('#nqp-giveup').addEventListener('click', function () { shopPendingSet(null); renderShop(); });
+    };
+    (function step() {
+      tries++;
+      shopStatus('Confirming… (' + tries + '/' + MAX + ')');
+      fetch('/api/nq/shop/claim', { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ session: p.session, wallet: walletState.pubkey, token: walletState.token }) })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (j && j.ok) { shopPendingSet(null); stop(); burnDone(p.item, j.pending); return; }
+          var st = j && j.status;
+          // Terminal states — no amount of waiting fixes these, so say so instead of spinning.
+          if (st === 'no_session' || st === 'bad_session' || st === 'wrong_wallet' || st === 'replay' || st === 'queue_full') {
+            shopPendingSet(st === 'queue_full' ? p : null);   // a full queue IS retryable once a slot frees
+            slow(shopErr(st));
+            return;
+          }
+          if (tries >= MAX) return slow('The chain has not reported your burn after two minutes.');
+          setTimeout(step, 3000);
+        })
+        .catch(function () { if (tries >= MAX) slow('Could not reach the server.'); else setTimeout(step, 3000); });
+    })();
+  }
+
+  function burnDone(item, pending) {
+    var m = itemMeta(item), host = shopHost();
+    // Push it into the live run immediately if one is going, rather than on the next level.
+    try { if (typeof window.__NQ_SYNCREWARDS === 'function') window.__NQ_SYNCREWARDS(); } catch (e) {}
+    if (!host) return;
+    host.innerHTML = '<div class="nqp-confirm ok"><div class="hd">✅ ' + m.emoji + ' ' + esc(m.label) + ' IS YOURS</div>'
+      + '<div class="ln">Burned and confirmed on-chain. It is banked to your wallet and drops into your Item Reserve — tap a slot, or press 1 / 2 / 3 in a level, to spend it.</div>'
+      + (pending > 1 ? '<div class="ln dim">' + pending + ' items waiting. The Reserve holds three at a time; the rest arrive as slots free up.</div>' : '')
+      + '<button class="nqp-b alt wide" id="nqp-shopback">Back to the shop</button></div>';
+    host.querySelector('#nqp-shopback').addEventListener('click', function () { renderShop(); });
+  }
+
+  // ---- UI: launcher + modal panel (Leaderboard / Wallet / Buy / Shop) -----
   var css = document.createElement('style');
   css.textContent =
-    '#nqp-btn{position:fixed;left:8px;bottom:8px;z-index:9998;background:rgba(20,14,46,.85);color:#ffd23f;border:2px solid #ffb43a;border-radius:10px;'
-    + 'font:700 11px system-ui,sans-serif;padding:7px 10px;cursor:pointer;letter-spacing:.04em}'
+    // TOP-LEFT, not bottom-left. This button used to exist only in the setup lane, on a desktop
+    // bench. Shipping it to every player put it straight under the touch pad's ◄ button in the
+    // portrait bottom-band layout (pad is z-index 45, this is 9998 — it would have eaten the tap).
+    // It now joins the existing top-left chrome row (🔊 at left:9, 🎵 at left:49), which is also
+    // where the HOW TO PLAY card already tells people to look: "🎮 → Wallet".
+    '#nqp-btn{position:fixed;left:89px;top:8px;z-index:9998;background:rgba(20,14,46,.85);color:#ffd23f;border:2px solid #ffb43a;border-radius:10px;'
+    + 'font:700 11px system-ui,sans-serif;height:34px;padding:0 10px;cursor:pointer;letter-spacing:.04em}'
     + '#nqp-ov{position:fixed;inset:0;z-index:9999;background:rgba(4,3,10,.82);display:none;align-items:center;justify-content:center}'
     + '#nqp-ov.on{display:flex}'
     + '#nqp-card{width:min(560px,94vw);max-height:88vh;overflow:auto;background:#120e22;border:2px solid #33305a;border-radius:14px;color:#e8e6f5;'
@@ -6880,32 +7216,82 @@ if (window.__NQ_SETUP) { (function () {
     + '.nqp-chip{background:#1a1630;border:1px solid #33305a;color:#cbc6e6;border-radius:13px;padding:3px 10px;font-size:12px;cursor:pointer}'
     + '.nqp-chip.on{background:#22406a;color:#bfe0ff;border-color:#4a78c0}'
     + '.nqp-tier{display:inline-block;background:#134a2e;color:#8dffc0;border-radius:6px;padding:2px 8px;font-size:12px;font-weight:700}'
-    + '#nqjup{margin-top:10px;min-height:420px}';
+    + '#nqjup{margin-top:10px;min-height:420px}'
+    // —— burn shop ——
+    + '.nqp-warn{background:rgba(255,90,40,.10);border:1px solid #7a3a1a;color:#ffc2a0;border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.45;margin:8px 0 10px}'
+    + '.nqp-shoprow{display:flex;align-items:center;gap:9px;background:#161228;border:1px solid #2a2450;border-radius:9px;padding:8px 10px;margin-bottom:6px}'
+    + '.nqp-shoprow .ic{font-size:19px;width:24px;text-align:center;flex:0 0 auto}'
+    + '.nqp-shoprow .tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}'
+    + '.nqp-shoprow .tx b{font-size:12.5px;color:#e8e6f5}.nqp-shoprow .tx i{font-style:normal;font-size:11.5px;color:#8f89b0}'
+    + '.nqp-shoprow .pr{font-variant-numeric:tabular-nums;font-weight:700;color:#ffd23f;font-size:12.5px;text-align:right;flex:0 0 auto;line-height:1.25}'
+    + '.nqp-shoprow .pr u{display:block;text-decoration:none;font-weight:400;font-size:9.5px;color:#8f89b0;letter-spacing:.06em}'
+    + '.nqp-b.sm{padding:8px 10px;font-size:11.5px;flex:0 0 auto}'
+    + '.nqp-b.wide{display:block;width:100%;margin-top:6px}'
+    + '.nqp-b.danger{background:#ff5a2b;color:#180a04}'
+    // AFTER .danger on purpose — same specificity, so source order decides, and a disabled CTA must
+    // win. Neutral grey, never a faded orange: a dimmed gradient on dark reads as broken, not off.
+    + '.nqp-b[disabled]{background:#2a2648;color:#77729a;cursor:default}'
+    + '.nqp-confirm .hd{font-size:13px;color:#ffd23f;font-weight:700;letter-spacing:.05em;margin-bottom:9px}'
+    + '.nqp-confirm.ok .hd{color:#8dffc0}'
+    + '.nqp-confirm .ln{font-size:12.5px;line-height:1.5;color:#d9d5ee;margin-bottom:7px}'
+    + '.nqp-confirm .ln.warn{color:#ffc2a0;background:rgba(255,90,40,.10);border:1px solid #7a3a1a;border-radius:8px;padding:8px 10px}'
+    + '.nqp-confirm .ln.dim{color:#8f89b0;font-size:11.5px}'
+    + '.nqp-ack{display:flex;align-items:flex-start;gap:8px;font-size:12px;color:#cbc6e6;margin:11px 0 2px;cursor:pointer;line-height:1.4}'
+    + '.nqp-ack input{margin-top:1px;flex:0 0 auto;width:16px;height:16px;accent-color:#ff5a2b}'
+    + '.nqp-sig{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all;color:#9fd4ff;background:#0d0a1a;'
+      + 'border:1px solid #33305a;border-radius:7px;padding:7px 8px;margin:6px 0}';
   document.head.appendChild(css);
 
-  var btn = document.createElement('button'); btn.id = 'nqp-btn'; btn.textContent = '🏆 PREMIUM';
+  // The setup lane keeps the '🏆 PREMIUM' label every handoff doc and grep refers to; the public
+  // build gets the neutral '🎮' the HOW TO PLAY card already points players at.
+  var btn = document.createElement('button'); btn.id = 'nqp-btn'; btn.textContent = SETUP ? '🏆 PREMIUM' : '🎮 EXTRAS';
   var ov = document.createElement('div'); ov.id = 'nqp-ov';
   ov.innerHTML =
     '<div id="nqp-card">'
-    + '<span class="nqp-x" data-close>×</span><h2>Normie Quest — Premium</h2>'
-    + '<div class="nqp-sub">Setup lane · leaderboards, wallet access &amp; buy NORMIE</div>'
+    + '<span class="nqp-x" data-close>×</span><h2>' + (SETUP ? 'Normie Quest — Premium' : 'Normie Quest') + '</h2>'
+    // ⛔ No perk, unlock, reward or hold-threshold language on the public build — NQ's $NORMIE terms
+    // are unagreed, so the copy rule at NORMIE_NATION applies here too: identity + where-to-buy only.
+    + '<div class="nqp-sub">' + (SETUP ? 'Setup lane · leaderboards, wallet access &amp; buy NORMIE'
+                                       : 'Leaderboard · your wallet · $NORMIE') + '</div>'
     + '<div class="nqp-tabs"><div class="nqp-tab on" data-tab="lb">🏆 Leaderboard</div>'
-    + '<div class="nqp-tab" data-tab="wal">👛 Wallet</div><div class="nqp-tab" data-tab="buy">🪙 Buy NORMIE</div></div>'
+    + '<div class="nqp-tab" data-tab="wal">👛 Wallet</div><div class="nqp-tab" data-tab="buy">🪙 Buy NORMIE</div>'
+    // Hidden until /api/nq/config says the server has armed the shop. An unarmed build must not
+    // advertise a shop it cannot open.
+    + '<div class="nqp-tab" data-tab="shop" style="display:none">🔥 Shop</div></div>'
     + '<div class="nqp-pane on" data-pane="lb">'
     + '<input class="nqp-in" id="nqp-handle" maxlength="16" placeholder="Your handle (shown on the board)">'
+    + '<div class="nqp-sub" id="nqp-parked" style="display:none;margin:-2px 0 8px"></div>'
     + '<div class="nqp-wsel" id="nqp-wsel"></div><div id="nqp-list"><div class="nqp-sub">Loading…</div></div></div>'
     + '<div class="nqp-pane" data-pane="wal"><div id="nqp-wal"></div></div>'
     + '<div class="nqp-pane" data-pane="buy"><div class="nqp-sub" id="nqp-buymsg">Loading Jupiter…</div><div id="nqjup"></div></div>'
+    + '<div class="nqp-pane" data-pane="shop"><div id="nqp-shop"></div></div>'
     + '</div>';
   function ready() {
     document.body.appendChild(btn); document.body.appendChild(ov);
     // "Remembered until cleared": restore a saved wallet on launch + refresh its tier from live balance,
     // so verified scores keep posting and the Wallet tab shows connected without re-proving.
-    restoreWallet(function (ok) { if (ok) { var wp = ov.querySelector('[data-pane="wal"]'); if (wp && wp.classList.contains('on')) renderWallet(); } });
+    restoreWallet(function (ok) {
+      if (!ok) return;
+      var wp = ov.querySelector('[data-pane="wal"]'); if (wp && wp.classList.contains('on')) renderWallet();
+      // A burn that was already broadcast when the tab reloaded still has to be claimed. Resume
+      // the poll silently — no modal is forced open over a running game; if the player happens to
+      // be looking at the shop it renders the progress there instead.
+      var pend = shopPending(); if (pend) { shopBusy = true; pollClaim(pend); }
+    });
+    loadShopConfig();
     var handleIn = ov.querySelector('#nqp-handle'); handleIn.value = handle;
-    handleIn.addEventListener('change', function () { window.NQLB.setHandle(handleIn.value); handleIn.value = window.NQLB.getHandle(); });
+    handleIn.addEventListener('change', function () { window.NQLB.setHandle(handleIn.value); handleIn.value = window.NQLB.getHandle(); parkedNote(); loadBoards(); });
+    // Tell someone with an unnamed run WHY the box matters, with their actual score in it.
+    function parkedNote() {
+      var el = ov.querySelector('#nqp-parked'); if (!el) return;
+      var pk2 = window.NQLB.parkedRun();
+      el.innerHTML = pk2 ? ('Your last run scored <b style="color:#ffd23f">' + Number(pk2.score || 0).toLocaleString()
+        + '</b> — pick a handle above and it goes on the board.') : '';
+      el.style.display = pk2 ? '' : 'none';
+    }
+    window._nqParkedNote = parkedNote;
 
-    btn.addEventListener('click', function () { ov.classList.add('on'); loadBoards(); });
+    btn.addEventListener('click', function () { ov.classList.add('on'); loadBoards(); parkedNote(); });
     // The game's tier gate opens the panel straight onto the WALLET tab when a locked world is
     // hit — the verify/buy path is the answer to "why is this locked".
     try { window.__NQ_OPENPREMIUM = function () {
@@ -6920,6 +7306,7 @@ if (window.__NQ_SETUP) { (function () {
         ov.querySelectorAll('.nqp-pane').forEach(function (p) { p.classList.toggle('on', p.getAttribute('data-pane') === k); });
         if (k === 'wal') renderWallet();
         if (k === 'buy') loadJupiter();
+        if (k === 'shop') renderShop();
       });
     });
 
@@ -7042,10 +7429,14 @@ if (window.__NQ_SETUP) { (function () {
       var host = ov.querySelector('#nqp-wal'); var ws = window.NQLB.getWallet();
       if (ws.pubkey) {
         var wl = ws.worlds === 'all' ? 'ALL worlds' : (Array.isArray(ws.worlds) ? ('Worlds ' + ws.worlds[0] + '–' + ws.worlds[1]) : 'checking…');   // worlds is null until the refresh response lands
+        // TIER / ACCESS are SETUP-LANE ONLY. Nothing is world-gated on the public build, so
+        // printing a tier there would be both a promise we have not made and simply untrue.
         host.innerHTML = '<div class="nqp-row"><span>' + esc(ws.pubkey.slice(0, 4) + '…' + ws.pubkey.slice(-4)) + '</span>'
-          + '<span class="nqp-tier">TIER ' + ws.tier + '</span></div>'
-          + '<div class="nqp-sub" style="margin:8px 0">Access: <b style="color:#8dffc0">' + wl + '</b></div>'
-          + '<div class="nqp-sub">NORMIE: ' + (ws.balances ? ws.balances.normie.toLocaleString() : '?') + ' · CLKN: ' + (ws.balances ? ws.balances.clkn.toLocaleString() : '?') + '</div>'
+          // tier/balances are null when the balance read has not landed (or failed) — say
+          // CONNECTED rather than printing "TIER null".
+          + ((SETUP && ws.tier != null) ? '<span class="nqp-tier">TIER ' + ws.tier + '</span>' : '<span class="nqp-tier">CONNECTED</span>') + '</div>'
+          + ((SETUP && ws.worlds) ? '<div class="nqp-sub" style="margin:8px 0">Access: <b style="color:#8dffc0">' + wl + '</b></div>' : '')
+          + (ws.balances ? '<div class="nqp-sub" style="margin:8px 0">NORMIE: ' + ws.balances.normie.toLocaleString() + ' · CLKN: ' + ws.balances.clkn.toLocaleString() + '</div>' : '')
           + '<div class="nqp-sub" style="margin-top:8px">Remembered on this device until you disconnect · scores post with a verified wallet ✓</div>'
           + '<button class="nqp-b alt" id="nqp-tvpair" style="margin-top:12px">📺 Pair a TV</button>'
           + '<button class="nqp-b alt" id="nqp-disconnect" style="margin-top:6px">Disconnect</button>';
@@ -7053,7 +7444,10 @@ if (window.__NQ_SETUP) { (function () {
         ov.querySelector('#nqp-disconnect').addEventListener('click', function () { disconnectWallet(); renderWallet(); });
       } else {
         var det = detectWallets();
-        var intro = '<div class="nqp-sub" style="margin-bottom:10px">Prove wallet ownership to unlock worlds by what you HOLD. '
+        var intro = '<div class="nqp-sub" style="margin-bottom:10px">'
+          + (SETUP ? 'Prove wallet ownership to unlock worlds by what you HOLD. '
+                   // Public build: what connecting actually does, and nothing it does not.
+                   : 'Connect to put a ✓ verified mark on your leaderboard score, take your daily spin in the Lounge, and collect anything waiting for you. ')
           + 'This is a signature only — no transaction, no approval to move funds.</div>';
         if (det.length) {
           // one button per DETECTED wallet — auto-detected, user picks (single wallet = single button)
@@ -7110,7 +7504,9 @@ if (window.__NQ_SETUP) { (function () {
           return;
         }
         var mint = cfg.normieMint;
-        msg.textContent = 'Buy NORMIE right here — it unlocks more worlds by what you hold:';
+        // Identity + where-to-buy on the public build. No unlock claim: NQ's terms are unagreed.
+        msg.textContent = SETUP ? 'Buy NORMIE right here — it unlocks more worlds by what you hold:'
+                                : '$NORMIE is the community coin behind Normie Quest. Grab some without leaving the game:';
         // If the embedded widget can't load, fall back to a direct Jupiter link (still a one-tap buy).
         function fallbackLink() {
           host.innerHTML = '<a class="nqp-b" style="display:inline-block;text-decoration:none;margin-top:6px" target="_blank" rel="noopener" '
@@ -7141,10 +7537,14 @@ if (window.__NQ_SETUP) { (function () {
       }).catch(function () {});
     }
   }
-  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  // Escapes the SINGLE QUOTE too. This copy was missing it, and it is interpolated into markup
+  // that uses single-quoted attributes (the wallet-picker buttons) with names supplied by
+  // whatever extension registered itself. Same gap CLAUDE.md records finding in five other
+  // hand-rolled copies.
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 
   if (document.body) ready(); else window.addEventListener('DOMContentLoaded', ready);
-})(); }
+})();
 
 /* ---------- 🛠 LAB DESIGNER TOOLKIT (owner's private bench — /normie-quest-x7-lab only) ----------
    God mode, level/position warp, tester death-heatmap overlay, live tuning knobs (gravity +
