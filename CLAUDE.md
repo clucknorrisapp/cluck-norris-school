@@ -11,9 +11,11 @@ does not tell you how to write software; use your judgement for that.
 > strategies — lives in `git log` and `docs/`. It was trimmed out of here on 2026-07-30 because
 > a stale instruction stated with authority is worse than no instruction, and several were.
 
-> 📋 **Starting a session? Read `docs/HANDOFF_2026-08-01.md` first** — it is the current open-work
-> list (security follow-ups, the unplayed boss fixes, the unposted promo video, and the two traps
-> that cost this project a wrong diagnosis each).
+> 📋 **Starting a session? Read `docs/HANDOFF_2026-08-02.md` first** — it opens with the one
+> unresolved question (whether the 45.37% lock post actually went out), the permissions answer that
+> cost an afternoon, and the RPC method name that fails only in production.
+> `docs/HANDOFF_2026-08-01.md` is still current for the security follow-ups and the unplayed boss
+> fixes.
 
 > 🎮 **Working on Normie Quest? Read `docs/HANDOFF_2026-07-27.md` first.** It carries the branch
 > state, the open decisions, and how to verify a change: `node normie-quest/test/nq-verify.cjs
