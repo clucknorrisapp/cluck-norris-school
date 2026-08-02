@@ -34,11 +34,27 @@
   .header p{font-family:var(--disp);font-size:11px;color:var(--muted);letter-spacing:3px;margin-top:6px;}
 
   /* ── Hero ── */
-  .hero{background:var(--card-grad);border:1px solid var(--border);border-radius:16px;padding:20px 22px;margin-bottom:16px;}
-  .hero-tag{font-family:var(--disp);font-size:12px;color:var(--gold);letter-spacing:2.5px;margin-bottom:8px;text-transform:uppercase;}
-  .hero-title{font-family:var(--disp);font-size:29px;text-shadow:0 2px 20px rgba(255,90,10,.25);color:var(--text);letter-spacing:.4px;margin-bottom:9px;}
-  .hero-sub{font-size:15px;color:var(--body-text);line-height:1.65;}
+  /* ── Hero — matched to /locker-room so the two flagship tools read as one product:
+     centred crest, gradient wordmark, trust chips. Replaces the old split layout (a
+     left-aligned .header AND a separate boxed .hero, which read as two headers stacked).
+     Uses var(--disp) rather than a literal font name, per the theme convention. ── */
+  .header{display:none;}
+  .hero{text-align:center;padding:8px 14px 4px;margin-bottom:18px;background:none;border:0;border-radius:0;}
+  .hero .crest{position:relative;display:inline-block;}
+  .hero .avatar{width:126px;height:126px;border-radius:50%;object-fit:cover;object-position:center 12%;
+                border:3px solid var(--gold);box-shadow:0 0 34px rgba(255,122,24,.28);}
+  .hero .dropbadge{position:absolute;right:-4px;bottom:4px;font-size:36px;line-height:1;filter:drop-shadow(0 2px 7px rgba(0,0,0,.7));}
+  .hero .kicker{font-family:var(--disp);font-size:12px;letter-spacing:4px;color:var(--sub);text-transform:uppercase;margin-top:12px;}
+  .hero h1{font-family:var(--disp);font-weight:900;letter-spacing:1.5px;font-size:52px;line-height:1;margin-top:4px;
+           background:linear-gradient(180deg,#FCD34D,#D97706);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+  .hero-tag{font-family:var(--mono);font-size:11px;letter-spacing:1.5px;color:var(--sub);margin-top:8px;text-transform:uppercase;}
+  .hero-sub{max-width:560px;margin:10px auto 0;font-size:15px;color:var(--body-text);line-height:1.6;}
   .hero-sub b{color:var(--text);}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:13px;}
+  .chip{background:rgba(245,179,1,.10);border:1px solid rgba(245,179,1,.35);color:var(--gold);
+        border-radius:20px;padding:5px 13px;font-size:12.5px;font-weight:600;}
+  .chip.g{background:rgba(16,185,129,.10);border-color:rgba(16,185,129,.4);color:var(--green);}
+  @media(max-width:480px){ .hero h1{font-size:38px;} .hero .avatar{width:108px;height:108px;} .hero .dropbadge{font-size:30px;} }
 
   /* ── Cards ── */
   .card{background:var(--card-grad);border:1px solid var(--border);border-radius:16px;padding:22px;margin-bottom:16px;
@@ -264,24 +280,23 @@
 <div class="wrap">
   <a href="/" class="back-home"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid var(--orange);"/>&larr; CLUCK NORRIS HOME</a>
 
-  <div class="header">
-    <div class="header-icon"><img src="/icons/parachute.webp" width="52" height="52" alt=""></div>
-    <div>
-      <div class="brand-mini">SCHOOL OF CRYPTO HARD KNOCKS</div>
-      <h1>AIRDROP TOOL</h1>
-      <p>TOKEN DISTRIBUTION — SOLANA</p>
-    </div>
-  </div>
-
   <div class="hero">
-    <div class="hero-tag">TOKEN DISTRIBUTION · SOLANA</div>
-    <div class="hero-title">Send tokens to many wallets at once.</div>
-    <div class="hero-sub">Paste or upload a list of Solana wallet addresses and amounts (or drop the same amount on every wallet), preview the batch and cost, then send — transactions are built in your browser and <b>signed by your own connected wallet</b>, batch by batch, so the tool never holds your tokens.</div>
+    <div class="crest"><img class="avatar" src="/cluck-norris-mascot.jpg" alt="Cluck Norris"><span class="dropbadge">🪂</span></div>
+    <div class="kicker">School of Crypto Hard Knocks</div>
+    <h1>AIRDROP TOOL</h1>
+    <div class="hero-tag">Token distribution · Solana</div>
+    <div class="hero-sub">Send tokens to many wallets at once. Paste or upload a list of addresses and amounts (or drop the same amount on every wallet), preview the batch and its cost, then send — transactions are built in your browser and <b>signed by your own connected wallet</b>, batch by batch, so the tool never holds your tokens.</div>
+    <div class="chips">
+      <span class="chip g">✓ Non-custodial</span>
+      <span class="chip g">✓ You sign every batch</span>
+      <span class="chip">Free at 50,000 CLKN held</span>
+    </div>
   </div>
 
   <!-- 🔒 CLKN Unlock Gate — visible until tool access is paid for -->
   <div class="unlock-gate" id="unlockGate" style="display:none">
-    <div class="unlock-title"><img src="/icons/lock.webp" alt="">AIRDROP TOOL</div>
+    <!-- Was "AIRDROP TOOL", which duplicated the hero wordmark once the hero grew. -->
+    <div class="unlock-title"><img src="/icons/lock.webp" alt="">UNLOCK THIS TOOL</div>
     <div class="unlock-sub">HOLD 50,000 CLKN &middot; OR PAY 0.05 SOL</div>
 
     <!-- READ BEFORE PAYING. Make sure nobody unlocks a tool they can't use. -->
