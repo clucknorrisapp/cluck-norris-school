@@ -385,7 +385,7 @@
   }); });
 
   // ---- Lock of Fame ----
-  function pill(label){ var l=String(label||'').toLowerCase(); if(l.indexOf('jupiter')>=0) return '<span class="pill jup">Jupiter Lock</span>'; if(l.indexOf('stream')>=0) return '<span class="pill strm">Streamflow</span>'; return '<span class="pill self">'+esc(label||'Lock')+'</span>'; }
+  function pill(label){ var l=String(label||'').toLowerCase(); if(l.indexOf('jupiter')>=0) return '<span class="pill jup">Jupiter Lock</span>'; if(l.indexOf('stream')>=0) return '<span class="pill strm">Other Lock</span>'; return '<span class="pill self">'+esc(label||'Lock')+'</span>'; }
   function barColor(label){ var l=String(label||'').toLowerCase(); return l.indexOf('jupiter')>=0?'#f5b301':(l.indexOf('stream')>=0?'#4299e1':'#8a8aa0'); }
   function loadFame(mint){
     window.__fameLoaded=true;

@@ -446,7 +446,11 @@ async function buildLockReport(note = "") {
       ? `\n${d > 0 ? "📈 +" : "📉 −"}${fmtTokensShort(Math.abs(d))} CLKN since last report`
       : `\n• No change since last report`;
   }
-  const bd = (data.breakdown || []).map(b => `   • ${b.label}: ${fmtTokensShort(b.tokens)} CLKN`).join("\n");
+  // Outward label only: anything that isn't Jupiter Lock is reported generically as "Other locks"
+  // and never named (owner ask 2026-08-01). data.breakdown keeps the real label for internals.
+  const bd = (data.breakdown || [])
+    .map(b => `   • ${/jupiter/i.test(b.label || "") ? "Jupiter Lock" : "Other locks"}: ${fmtTokensShort(b.tokens)} CLKN`)
+    .join("\n");
   const msg =
     `🔒 <b>CLKN Locked Supply</b>\n\n` +
     `<b>${fmtTokensShort(data.totalLocked)} CLKN</b> locked — <b>${pct}</b> of supply\n` +
@@ -455,8 +459,7 @@ async function buildLockReport(note = "") {
     deltaLine +
     (note ? `\n\n${note}` : "") +
     `\n\n🔒 Locked = removed from circulation — a long-term commitment to the project. Verify it yourself:` +
-    `\n   🔒 Jupiter Lock → https://lock.jup.ag/token/${CLKN_MINT}` +
-    `\n   🌊 Streamflow → https://app.streamflow.finance/token-dashboard/solana/mainnet/${CLKN_MINT}`;
+    `\n   🔒 Jupiter Lock → https://lock.jup.ag/token/${CLKN_MINT}`;
   return { ok: true, data, msg };
 }
 async function notifyLockReport({ dryRun = false, note = "" } = {}) {
@@ -585,24 +588,23 @@ async function lockWatchTick() {
   const prevFresh = prevPending && typeof prevPending.delta === "number" && Date.now() - (prevPending.at || 0) < 48 * 3600 * 1000;
   const mergedDelta = Math.round(delta) + (prevFresh ? prevPending.delta : 0);
   const mergedNewLocks = newLocks + (prevFresh && typeof prevPending.newLocks === "number" ? prevPending.newLocks : 0);
-  // Platform-aware copy (owner ask 2026-07-04: CLKN now locks on BOTH Jupiter Lock + Streamflow).
+  // Platform-aware copy. Non-Jupiter lockers are referred to generically as "other locks" and are
+  // never named or tagged in outgoing copy or celebration art (owner ask 2026-08-01). Detection
+  // still resolves the real program — only the OUTWARD label is generic.
   const platform = grewPlatform === "Streamflow" ? "Streamflow" : (grewPlatform === "Jupiter Lock" ? "Jupiter Lock" : (strmLocked > jupLocked ? "Streamflow" : "Jupiter Lock"));
   const isStrm = platform === "Streamflow";
-  const platTagX = isStrm ? "@streamflow_fi" : "@JupiterExchange";
+  const platformLabel = isStrm ? "other locks" : "Jupiter Lock";
+  const platTagX = isStrm ? "another locker" : "@JupiterExchange";
   const jupShort = fmtTokensShort(jupLocked), strmShort = fmtTokensShort(strmLocked);
   const bothLive = jupLocked > 0 && strmLocked > 0;
-  const splitTg = bothLive ? `\n   🔒 Jupiter Lock: <b>${jupShort}</b>\n   🌊 Streamflow: <b>${strmShort}</b>` : "";
-  const splitX = bothLive ? ` (${jupShort} on @JupiterExchange Lock + ${strmShort} on @streamflow_fi)` : "";
-  // Per-platform verify links — each has a per-token public page. Lead with the platform of THIS
-  // lock; when both are live, show both so the whole locked total is independently verifiable.
+  const splitTg = bothLive ? `\n   🔒 Jupiter Lock: <b>${jupShort}</b>\n   🔐 Other locks: <b>${strmShort}</b>` : "";
+  const splitX = bothLive ? ` (${jupShort} on @JupiterExchange Lock + ${strmShort} in other locks)` : "";
+  // Verify link: Jupiter Lock has a per-token public page. Other lockers are not linked.
   const jupVerify = `https://lock.jup.ag/token/${CLKN_MINT}`;
-  const strmVerify = `https://app.streamflow.finance/token-dashboard/solana/mainnet/${CLKN_MINT}`;
-  const verifyTg = bothLive
-    ? `Verify on-chain:\n   🔒 Jupiter Lock → ${jupVerify}\n   🌊 Streamflow → ${strmVerify}`
-    : `Verify on-chain 👉 ${isStrm ? strmVerify : jupVerify}`;
-  const verifyX = `Verify 👉 ${isStrm ? strmVerify : jupVerify}`;
+  const verifyTg = `Verify on-chain 👉 ${jupVerify}`;
+  const verifyX = `Verify 👉 ${jupVerify}`;
   const tgText =
-    `🔒 <b>NEW CLKN LOCK</b> — via ${platform}\n\n` +
+    `🔒 <b>NEW CLKN LOCK</b> — via ${platformLabel}\n\n` +
     `<b>+${fmtTokensShort(mergedDelta)} CLKN</b> just locked.\n` +
     `Now <b>${fmtTokensShort(total)} CLKN</b> locked — <b>${pct}</b> of supply.` + splitTg + `\n\n` +
     `🔒 Removed from circulation — long-term commitment. ${verifyTg}`;

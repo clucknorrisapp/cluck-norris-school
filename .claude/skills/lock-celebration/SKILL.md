@@ -15,7 +15,7 @@ Payload fields: `delta/total/pct/newLocks/lockCount`, `tgText`, `xText`, `announ
 ## 2. Generate the TWO-VAULT image (all elements mandatory)
 Spawn a **sonnet subagent** (`claude-sonnet-5`) to craft the Higgsfield prompt, then
 `generate_image` (nano_banana_pro, ~2 credits). Scene spec:
-- TWO vault doors: "JUPITER LOCK" (engraved `jupLockedShort` CLKN) + "STREAMFLOW" (engraved `strmLockedShort` CLKN).
+- TWO vault doors: "JUPITER LOCK" (engraved `jupLockedShort` CLKN) + "OTHER LOCKS" (engraved `strmLockedShort` CLKN). Never name or tag a non-Jupiter locker in art or copy (owner ask 2026-08-01).
 - Cluck hauls exactly `newLocks` bag(s), main bag reads "+{deltaShort} CLKN", walking TOWARD the vault named in `platform` (that door glows).
 - Banner across both doors: "{pct} OF SUPPLY LOCKED". Dark + orange palette, crisp legible type.
 - Use the branded mascot reference from `docs/MEDIA_LIBRARY.md`; VIEW the render and verify every label before posting.

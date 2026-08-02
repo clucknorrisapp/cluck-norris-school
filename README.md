@@ -198,7 +198,7 @@ There is no staging environment — `main` deploys straight to production — so
 - **Trade:** [bags.fm](https://bags.fm/DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS?ref=firechicken007) · [Jupiter](https://jup.ag/tokens/DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS)
 - **Project fee:** ~1% of every CLKN trade — real SOL revenue, 100% reinvested into buying CLKN on the chart
 - **Liquidity:** Meteora DAMM V2 (`64WXkHM4zyWUkYy32TfUeBV5wDAfdcUGDxe5ntM4xaTd`, the canonical chart), plus project-run Orca depth across a multi-quote layout (CLKN/USDC · CLKN/SOL · CLKN/JUP)
-- **Mint and freeze authority are renounced.** A meaningful share of supply is locked across Jupiter Lock and Streamflow — verifiable by anyone, and every new lock is announced with the on-chain numbers
+- **Mint and freeze authority are renounced.** A meaningful share of supply is locked across Jupiter Lock and other locks — verifiable by anyone, and every new lock is announced with the on-chain numbers
 
 ---
 
