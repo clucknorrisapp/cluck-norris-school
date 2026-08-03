@@ -282,6 +282,7 @@
       <div class="quickmints" style="margin:7px 0 2px;display:flex;gap:8px;flex-wrap:wrap">
         <button type="button" class="qm" data-mint="DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS">🐔 Use CLKN</button>
         <button type="button" class="qm" data-mint="FrSFwE2BxWADEyUWFXDMAeomzuB4r83ZvzdG9sevpump">Use NORMIE</button>
+        <button type="button" class="qm" data-mint="RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF">Use ROSE</button>
       </div>
       <!-- Token identity + your balance. Name/symbol come from an API and from chain metadata,
            so they are ATTACKER-CONTROLLED — every render below goes through esc(). -->
@@ -650,7 +651,7 @@
   ['cCancel','cUpdRec'].forEach(function(id){ var el=$('#'+id); if(el) el.addEventListener('change',gate); });
   Object.keys(C).forEach(function(k){ C[k].addEventListener('input',function(){ amtHint(); gate(); }); });
   gate();
-  // Quick-fill mint buttons (CLKN / NORMIE) — set the value and fire 'input' so the
+  // Quick-fill mint buttons (CLKN / NORMIE / ROSE) — set the value and fire 'input' so the
   // preview + Jupiter link update just like typing it.
   document.querySelectorAll('.quickmints .qm').forEach(function(btn){
     btn.addEventListener('click',function(){ C.mint.value=btn.getAttribute('data-mint'); C.mint.dispatchEvent(new Event('input',{bubbles:true})); C.mint.focus(); });
