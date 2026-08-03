@@ -191,6 +191,38 @@ async function pairTests() {
   t("registry has exactly 3 tokens", () => assert.strictEqual(Object.keys(swap.TOKENS).length, 3));
 }
 
+console.log("\ngap guard — the pump-the-pool defence");
+{
+  const { gapVerdict } = swap._internal;
+  const C = { gapGuardPct: 25 };
+  const NOW = 1_800_000_000_000;
+  const base = { prices: { [swap.CLKN_MINT]: 0.00045, [swap.NORMIE_MINT]: 0.00072, [swap.ROSE_MINT]: 0.000089 }, at: NOW - 60_000 };
+  const pumped = { ...base.prices, [swap.ROSE_MINT]: 0.000089 * 1.44 };   // the $700-into-$7K move
+
+  t("normal drift passes", () => {
+    const v = gapVerdict(base, { ...base.prices, [swap.ROSE_MINT]: 0.000089 * 1.05 }, NOW, C);
+    assert.strictEqual(v.tripped, false);
+  });
+  t("a 44% ROSE pump trips", () => {
+    const v = gapVerdict(base, pumped, NOW, C);
+    assert.strictEqual(v.tripped, true);
+    assert.strictEqual(v.mint, swap.ROSE_MINT);
+  });
+  t("RETRY SECONDS LATER STILL TRIPS — the quote-twice hole is closed", () => {
+    // The baseline must be unchanged by the first refusal: same baseline in, same verdict out.
+    const v1 = gapVerdict(base, pumped, NOW, C);
+    const v2 = gapVerdict(base, pumped, NOW + 3_000, C);
+    assert.ok(v1.tripped && v2.tripped, "an attacker's blocked quote must not become the next quote's baseline");
+  });
+  t("a pump must be SUSTAINED past the baseline TTL to be accepted", () => {
+    const v = gapVerdict(base, pumped, NOW + 16 * 60_000, C);   // baseline now stale (>15 min)
+    assert.strictEqual(v.tripped, false, "stale baseline is noise, not evidence — desk re-baselines");
+  });
+  t("no baseline at all → trades (first observation)", () => {
+    assert.strictEqual(gapVerdict(null, pumped, NOW, C).tripped, false);
+  });
+}
+
 console.log("\nmonitoring");
 async function monitorTests() {
   // stats() is what the operator view renders — it must work before a single swap exists,
