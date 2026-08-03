@@ -60,9 +60,25 @@ risk to note and move past — it is the failure mode that kills desks like this
 below are load-bearing, not garnish.
 
 The mechanism: the desk prices off a feed. The market moves. For as long as the desk's price lags
-the market, someone can swap the cheap side at the desk and sell it into the real market. Repeat
-until the desk is empty of whichever asset it was underpricing. The counterparty is not a CLKN
-holder wanting NORMIE — it is a bot, and it will find the desk within hours of it going live.
+the market, someone can swap the cheap side at the desk and sell it into the real market.
+
+**BUT the discovery model is NOT an AMM's, and this bounds the risk hard (owner, 2026-08-03).**
+An AMM pool is a program account with a known layout — arb bots enumerate every pool on-chain and
+watch them automatically, which is why pool arb is cheap and constant. This desk has NO on-chain
+offer to discover: on-chain it is a plain wallet holding tokens, indistinguishable from any
+holder, and the swap logic lives behind an UNLISTED HTTP endpoint we control. Pool-scanning bots
+cannot find it because there is no pool. So the attacker population is not "the MEV ecosystem" —
+it is the intersection of {people given the link} and {people sophisticated enough to run a
+pump-and-swap}, a tiny slice of the invited community. And because it is our server not a
+contract, we have levers a pool never has: per-IP rate limit, instant kill, per-wallet + global
+caps, full visibility of every swap, optional wallet allowlist.
+
+The honest caveat: unlisted is private like an unlisted video, not like a password. The URL is in
+the page source and in the browser history of anyone who visits, and once real swaps run, a wallet
+watcher on Solscan can infer the pattern and go looking for the interface. So the caps are the
+backstop for IF THE LINK LEAKS to a sophisticated bad actor — not a defence against bots that were
+never able to find it. That is a far smaller and less likely scenario than a public pool faces,
+and the caps can be set with that in mind rather than as if the whole internet were arbing it.
 
 Second-order version, and the more dangerous one here: **both tokens are thin.** If NORMIE's price
 can be moved cheaply on its main pool, an attacker can move the *feed*, then swap against the desk
