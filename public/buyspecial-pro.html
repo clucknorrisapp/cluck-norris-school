@@ -93,7 +93,7 @@
     <div class="sub">UNLOCK TO RUN COMPETITIONS</div>
 
     <button class="btn ghost" id="gConnect" style="width:100%">🔗 Connect wallet</button>
-    <div class="gblurb" style="margin:10px 0 0">Hold <b style="color:var(--gold)">2,000,000 CLKN</b> and it's free for 35 days. If you don't, one click pays 0.05 SOL for 7.</div>
+    <div class="gblurb" style="margin:10px 0 0">Hold <b style="color:var(--gold)">100,000 CLKN</b> and it's free for 35 days. If you don't, one click pays 0.05 SOL for 7.</div>
     <div class="wchip hidden" id="gWallet"><span class="dot"></span><span class="addr" id="gWalletAddr">—</span><span class="bal" id="gWalletBal"></span><button class="dc" id="gDisconnect" type="button">Disconnect</button></div>
     <div class="gstatus hidden" id="gWalletStatus" style="margin-top:10px"></div>
     <button class="btn a hidden" id="gPaySol" style="width:100%;margin-top:10px">◎ Pay 0.05 SOL — unlock 7 days</button>
@@ -533,12 +533,12 @@ const DUR=7*24*60*60*1000, RECV='7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H';
 function isUnlocked(){ if(localStorage.getItem(OP_FLAG)==='1') return true; try{ const d=JSON.parse(localStorage.getItem(UNLOCK_KEY)||'null'); return !!(d&&d.expiresAt>Date.now()); }catch(e){ return false; } }
 function showTool(){ $('gate').classList.add('hidden'); $('tool').classList.remove('hidden'); }
 function showGate(){ $('gate').classList.remove('hidden'); $('gate').scrollIntoView({behavior:'smooth',block:'center'}); }
-// ── Wallet-connect unlock: FREE for 2M+ CLKN holders, else pay a little SOL ──
+// ── Wallet-connect unlock: FREE for 100K+ CLKN holders, else pay a little SOL ──
 // The third door — send exactly 5,850.xyz CLKN by hand and wait for the chain —
 // was retired 2026-07-30 (owner's call). Both remaining doors resolve through the
 // connected wallet, so there is nothing to copy, send, or wait for.
 // Server still enforces the SOL price (SOL_UNLOCK_MIN_LAMPORTS in server.js).
-const HOLDER_MIN=2000000, SOL_LAMPORTS=50000000;
+const HOLDER_MIN=100000, SOL_LAMPORTS=50000000;
 let wProvider=null, wPubkey=null;
 const rpcCall = CluckUtil.rpc;   // shared helper — see /cluck-util.js
 // Wallet detection lives in /cluck-wallet.js — this page used to look for Phantom

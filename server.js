@@ -1748,7 +1748,7 @@ function guideRoute(key) {
     case "about":
       return "🐔 <b>About Cluck Norris &amp; CLKN.</b>\n\n" +
         "Cluck Norris is the free <b>School of Crypto Hard Knocks</b> + a Solana token-safety toolkit — born from the FireChicken (FCKN) community, now with real utility.\n\n" +
-        "<b>CLKN</b> is the token: <b>hold</b> it and the premium operator tools unlock free (50K for the airdropper, 2M for Buy Special and premium forensics) — or pay a small SOL price instead. Holding also earns airdrop eligibility and perks. The school itself is always free.\n\n" +
+        "<b>CLKN</b> is the token: <b>hold</b> it and the premium operator tools unlock free (50K for the airdropper, 100K for Buy Special, 2M for premium forensics) — or pay a small SOL price instead. Holding also earns airdrop eligibility and perks. The school itself is always free.\n\n" +
         `🐔 ${B}   ·   the story → ${B}/investors\n\n` +
         `💸 <b>Get CLKN</b> — it's a Solana DEX swap (no wallet-connect needed for the app): <a href="https://jup.ag/tokens/${CLKN_MINT}">Buy on Jupiter</a>  ·  <a href="https://${CLKN_DEXSCREENER}">Chart</a>\n\n` +
         "Ask me anything about how it all works.";
@@ -1769,7 +1769,7 @@ function guideSystemPrompt() {
     "- The School (free, no wallet or sign-up to learn): the INCUBATOR (tiny beginner lessons: wallets, tokens, staying safe), the 12-LESSON COURSE (belts Freshman→Emeritus, finish it for a permanent shareable transcript), and the LP LAB (14 advanced liquidity lessons).",
     "- Free tools: WALLET X-RAY (/wallet-xray — full wallet deep dive: funding origin, every trade, bot/dumper signals), HOLDERS (/holders — real wallets vs LP pools, locks and program accounts, plus an airdrop-ready CSV), TRACE (/trace — wallet×token history), WALLET CHECKUP (/wallet-checkup — approvals, honeypot holdings and live mint/freeze authority, and you can revoke your own there), THE JUP LOCKER ROOM (/locker-room — free non-custodial token locking for any Solana project), BAGS feed (/bags — live launches & graduations), and the toolkit index (/tools).",
     "- THE HATCHERY (/hatchery): guided token creation with a safety preview.",
-    "- CLKN token: HOLD it and the premium operator tools unlock free (50,000 CLKN for the airdropper; 2,000,000 for Buy Special and premium forensics). Not holding? Each has a small one-click SOL price. Holding also earns airdrop eligibility. The school itself is always free. NOTE: the old 'send CLKN to unlock' flow was retired 2026-07-30 — never tell anyone to send tokens by hand.",
+    "- CLKN token: HOLD it and the premium operator tools unlock free (50,000 CLKN for the airdropper; 100,000 for Buy Special; 2,000,000 for premium forensics). Not holding? Each has a small one-click SOL price. Holding also earns airdrop eligibility. The school itself is always free. NOTE: the old 'send CLKN to unlock' flow was retired 2026-07-30 — never tell anyone to send tokens by hand.",
     "- WHERE TO BUY CLKN: it's a normal swap on a Solana DEX — Jupiter is easiest. When asked where to buy, share this exact link: https://jup.ag/tokens/" + CLKN_MINT + " (chart: https://" + CLKN_DEXSCREENER + "). Buying needs a Solana wallet with some SOL; the app itself needs no wallet-connect. This is just logistics, NOT financial advice — never say whether or how much to buy.",
     "HOW TO HELP:",
     "- Work out where the person is (brand new / knows basics / trades & vets tokens / wants to launch / just exploring) and point them to the SINGLE best next step, with a clucknorris.app link.",
@@ -8527,8 +8527,8 @@ CLKN TOKEN UTILITY:
 - 10 free AI questions per day with Ask Cluck Norris. That daily allowance is the whole
   offer -- there is NO paid top-up any more (the old send-CLKN-to-unlock flow was retired
   2026-07-30). If someone is out of questions, tell them it resets at midnight UTC.
-- HOLD CLKN to unlock the operator tools free: 50,000 for the airdropper, 2,000,000 for
-  Buy Special and premium forensics. Not holding? Each has a small one-click SOL price.
+- HOLD CLKN to unlock the operator tools free: 50,000 for the airdropper, 100,000 for
+  Buy Special, 2,000,000 for premium forensics. Not holding? Each has a small one-click SOL price.
   You connect a wallet and the gate resolves itself -- nothing is sent by hand.
 - Hold CLKN to be eligible for airdrops and exclusive rewards
 - Graduate all 12 lessons and submit your wallet for a transcript and an on-chain graduation NFT
