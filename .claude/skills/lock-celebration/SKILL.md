@@ -48,9 +48,10 @@ pinned. Post the composite, never the raw render.
 ⚠️ **The target lives in `lockbar.py`'s DEFAULT — do not just pass it as argv[4].** Three separate
 sessions "raised it to 50" by passing 50 on the command line while leaving the default at 40, so the
 next session read 40 and drew a full bar on an already-passed goal. Owner, 2026-08-01: *"we have
-already made it 50 percent twice, so this keeps reverting."* Current default is **50%** (supply
-locked passed 40% long ago; 45.21% as of 2026-08-01). When 50% is passed, edit the default in
-`scripts/lockbar.py` AND this line, and commit — a runtime argument is not a decision that sticks.
+already made it 50 percent twice, so this keeps reverting."* Current default is **60%** (supply locked passed **50%** on 2026-08-03 — 500,014,343 CLKN /
+50.00% / 72 escrows, milestone posted; the 45/46/47/49% climb is history). When 60% is passed,
+edit the default in `scripts/lockbar.py` AND this line, and commit — a runtime argument is not a
+decision that sticks.
 
 ## 3. Post — X FIRST, then Telegram (if `announced:false`)
 1. X: `GET /api/x-announce?key=…&post=1&text={pending.xText}&image={rawUrl}` → capture post id.

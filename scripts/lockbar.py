@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Composite a 'ROAD TO 50% LOCKED' progress tracker onto the bottom of a lock-celebration image.
-Usage: lockbar.py <in.png> <out.png> <pct_locked e.g. 45.211> [target=50]
+Usage: lockbar.py <in.png> <out.png> <pct_locked e.g. 45.211> [target=60]
 
 TARGET LIVES HERE, NOT IN THE CALL. Sessions used to pass the raised target as argv[4] and
 leave these defaults at 40, so the next session read 40, drew a full bar on an already-passed
@@ -18,7 +18,7 @@ RED = (232, 30, 14)
 CREAM = (255, 239, 224)
 SUB = (201, 168, 146)
 
-def main(inp, outp, pct, target=50.0):
+def main(inp, outp, pct, target=60.0):
     im = Image.open(inp).convert("RGB")
     W, H = im.size
     S = W / 1920.0  # scale relative to a 1920-wide frame
