@@ -234,8 +234,8 @@ Three tokens today — CLKN, NORMIE, **ROSE** (`RoSeiVjW5H48ucPAJh1LJGBBzPpqvsok
 which is six directed pairs, all covered by the same quote/build/submit path and the same tests.
 
 Adding a token = one registry entry + one sanity band + funding its side of the desk wallet.
-Before adding one, check its POOL DEPTH on Jupiter first: ROSE went in with ~$7K of liquidity
-against ~$22-31K for the others, and the thinnest token's pool is the cheapest feed to
+Before adding one, check its POOL DEPTH on Jupiter first: ROSE went in with ~$14K of liquidity
+against ~$44K (CLKN) and ~$64K (NORMIE), measured on-pool 2026-08-03, and the thinnest token's pool is the cheapest feed to
 manipulate — it sets the desk's real exposure, whatever the caps say. The desk needs a funded
 token account for every registry entry, or that side simply refuses quotes.
 
