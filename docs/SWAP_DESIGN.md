@@ -100,8 +100,8 @@ bands, under a cap, while the feed agrees with itself."
 | **Quote TTL** | 30 s, HMAC-signed | Stops a user sitting on a favourable quote waiting for the market to move. |
 | **Sanity bands** | per-mint plausible USD range | Rejects a poisoned or broken feed outright. Same idiom as `server.js:11063`. |
 | **Temporal gap guard** | 25% vs last observed | Sits the swap out when the feed jumps implausibly. Mirrors `priceGapGuardPct`, `whirlpool-vault.js:64`. |
-| **Per-wallet daily cap** | \$250 | Bounds any single actor's extraction per day. |
-| **Global daily cap** | \$2,500 | Bounds total daily loss to a number the owner picks deliberately. |
+| **Per-wallet daily cap** | OFF by default (owner 2026-08-03); set `SWAP_WALLET_DAILY_USD` to re-enable | Bounds one actor's daily extraction when on. |
+| **Global daily cap** | OFF by default; set `SWAP_GLOBAL_DAILY_USD` to re-enable | Bounds total daily loss when on. |
 | **Inventory floor** | 10% of each side | The desk refuses to sell its last tokens, so it can never be fully drained and always has something for a real user. |
 | **Kill switch** | `SWAP_KILLED` const + env-absence | Two independent ways to stop it instantly. |
 | **Rate limit** | dedicated tight bucket | Blunts automated probing. |

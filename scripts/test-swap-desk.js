@@ -233,8 +233,17 @@ async function monitorTests() {
     assert.ok(Array.isArray(s.recent));
     assert.strictEqual(typeof s.limits.spreadBps, "number");
   });
-  t("stats reports the configured limits", () => {
-    assert.ok(s.limits.walletDailyUsd > 0 && s.limits.globalDailyUsd > 0);
+  t("no daily caps by default (limits report null)", () => {
+    assert.strictEqual(s.limits.walletDailyUsd, null);
+    assert.strictEqual(s.limits.globalDailyUsd, null);
+  });
+  t("a cap re-enables when its env var is set", () => {
+    const saved = process.env.SWAP_WALLET_DAILY_USD;
+    process.env.SWAP_WALLET_DAILY_USD = "250";
+    const cfg = swap._internal.cfg();
+    const on = Number.isFinite(cfg.walletDailyUsd) && cfg.walletDailyUsd === 250;
+    if (saved === undefined) delete process.env.SWAP_WALLET_DAILY_USD; else process.env.SWAP_WALLET_DAILY_USD = saved;
+    assert.ok(on, "setting SWAP_WALLET_DAILY_USD must switch the cap back on");
   });
 
   // A Telegram outage, or simply no bot configured, must never turn a settled swap into an

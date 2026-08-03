@@ -43,7 +43,7 @@ router.get("/config", wrap(async (_req, res) => {
     normieMint: desk.NORMIE_MINT,
     spreadBps: c.spreadBps,
     minUsd: c.minUsd,
-    walletDailyUsd: c.walletDailyUsd,
+    walletDailyUsd: Number.isFinite(c.walletDailyUsd) ? c.walletDailyUsd : null,   // null = no cap
     quoteTtlSec: Math.round(c.quoteTtlMs / 1000),
   });
 }));
