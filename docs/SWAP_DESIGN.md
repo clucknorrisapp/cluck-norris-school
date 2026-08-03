@@ -136,6 +136,9 @@ as a limit you expect to be hit.
   ┌── POST /api/swap/submit ───────────────────────────────────────────┐
   │  ⚠️ compare incoming message bytes to the stashed bytes, EXACTLY   │
   │  consume buildToken (durable, fail-closed)                         │
+  │  THE FINAL LOOK (added 2026-08-03): one last live price read at    │
+  │  the instant of co-signing; drift > SWAP_SUBMIT_DRIFT_BPS (100) →  │
+  │  refuse, nothing traded. Fail closed if the feed is unreachable.   │
   │  partialSign(deskKeypair) → sendRawTransaction → confirm           │
   └────────────────────────────────────────────────────────────────────┘
 ```
@@ -220,6 +223,8 @@ blockhash refreshed immediately before signing, `skipPreflight: true` because pr
 | `SWAP_ALERT_CHAT_ID` | Telegram room for desk alerts. Falls back to `TELEGRAM_CHAT_ID`. |
 | `SWAP_LOW_INVENTORY_USD` | 200 — warn when a side has less than this left to trade |
 | `SWAP_BAND_ROSE_MIN/MAX` | ROSE sanity band (added 2026-08-03 with the third token) |
+| `SWAP_SUBMIT_DRIFT_BPS` | 100 — max drift between quote and the final look at co-sign time |
+| `SWAP_GAP_BASELINE_TTL_MIN` | 15 — how long a pumped price must HOLD before the guard accepts it as the new baseline |
 
 ### Token registry (updated 2026-08-03)
 
