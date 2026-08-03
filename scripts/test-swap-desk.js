@@ -168,14 +168,27 @@ async function tamperTests() {
   }
 }
 
-console.log("\npair validation");
+console.log("\npair validation — 3-token registry");
 async function pairTests() {
-  const bad = await swap.quote({ inMint: swap.CLKN_MINT, outMint: "So11111111111111111111111111111111111111112", amountUi: "1", wallet: user.publicKey.toBase58() });
-  t("refuses a mint this desk doesn't trade", () => assert.match(bad.error, /CLKN and NORMIE only/));
-  const same = await swap.quote({ inMint: swap.CLKN_MINT, outMint: swap.CLKN_MINT, amountUi: "1", wallet: user.publicKey.toBase58() });
-  t("refuses same-token swaps", () => assert.match(same.error, /CLKN and NORMIE only/));
-  const nowallet = await swap.quote({ inMint: swap.CLKN_MINT, outMint: swap.NORMIE_MINT, amountUi: "1", wallet: "not-a-pubkey" });
-  t("refuses a malformed wallet", () => assert.match(nowallet.error, /connect a wallet/));
+  const W = user.publicKey.toBase58();
+  const bad = await swap.quote({ inMint: swap.CLKN_MINT, outMint: "So11111111111111111111111111111111111111112", amountUi: "1", wallet: W });
+  t("refuses a mint this desk doesn't trade", () => assert.match(bad.error, /only/));
+  t("registry names all three tokens in the rejection", () => {
+    for (const sym of ["CLKN", "NORMIE", "ROSE"]) assert.ok(bad.error.includes(sym), `missing ${sym} in: ${bad.error}`);
+  });
+  for (const [name, m] of [["CLKN", swap.CLKN_MINT], ["NORMIE", swap.NORMIE_MINT], ["ROSE", swap.ROSE_MINT]]) {
+    const same = await swap.quote({ inMint: m, outMint: m, amountUi: "1", wallet: W });
+    t(`refuses ${name}->${name}`, () => assert.match(same.error, /only|different/));
+  }
+  // Every distinct pair must pass validation. Proven WITHOUT network: a malformed wallet is
+  // rejected AFTER the pair check, so reaching "connect a wallet" proves the pair was accepted.
+  const mints = [swap.CLKN_MINT, swap.NORMIE_MINT, swap.ROSE_MINT];
+  for (const a of mints) for (const b of mints) {
+    if (a === b) continue;
+    const r = await swap.quote({ inMint: a, outMint: b, amountUi: "1", wallet: "not-a-pubkey" });
+    t(`accepts ${swap.TOKENS[a]}->${swap.TOKENS[b]} (reaches wallet check)`, () => assert.match(r.error, /connect a wallet/));
+  }
+  t("registry has exactly 3 tokens", () => assert.strictEqual(Object.keys(swap.TOKENS).length, 3));
 }
 
 console.log("\nmonitoring");

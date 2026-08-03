@@ -6,7 +6,7 @@
 <!-- UNLISTED. Anyone with the link may use it; it is linked from nowhere and must stay that way.
      Do not add it to the nav, the footer, /investors, or any tools roundup. -->
 <meta name="robots" content="noindex,nofollow"/>
-<title>CLKN ⇄ NORMIE Swap — Cluck Norris</title>
+<title>Token Swap — Cluck Norris</title>
 <link rel="icon" href="/cluck-norris-logo.jpg"/>
 <link rel="stylesheet" href="/theme.css"/>
 <script src="https://unpkg.com/@solana/web3.js@1.95.8/lib/index.iife.min.js"></script>
@@ -54,6 +54,9 @@
   .flip:hover{border-color:var(--gold);}
   .tokbox{border:1px solid var(--border);border-radius:12px;padding:12px 13px;background:rgba(255,255,255,.03);}
   .tokbox .tk{font-family:var(--disp);font-size:19px;letter-spacing:.5px;color:var(--text);}
+  .tksel{font-family:var(--disp);font-size:19px;letter-spacing:.5px;color:var(--text);
+         background:transparent;border:0;outline:none;cursor:pointer;padding:0;appearance:auto;width:100%;}
+  .tksel option{background:#1c1d24;color:#e9e9ee;font-size:16px;}
   .tokbox .bal{font-size:12px;color:var(--sub);margin-top:3px;font-family:var(--mono);}
   .quote{margin-top:14px;padding:13px;border:1px solid rgba(16,185,129,.34);border-radius:12px;
          background:rgba(16,185,129,.06);}
@@ -82,8 +85,8 @@
   <div class="hero">
     <div class="crest"><img class="avatar" src="/cluck-norris-mascot.jpg" alt="Cluck Norris"><span class="swapbadge">⇄</span></div>
     <div class="kicker">School of Crypto Hard Knocks</div>
-    <h1>CLKN ⇄ NORMIE</h1>
-    <div class="hero-sub">Swap between CLKN and NORMIE at live market value, straight from the desk's own float — so it never touches either chart. You sign one transaction and both sides move together, or neither does.</div>
+    <h1>TOKEN SWAP</h1>
+    <div class="hero-sub">Swap between CLKN, NORMIE and ROSE at live market value, straight from the desk's own float — so it never touches any chart. Pick any two: you sign one transaction and both sides move together, or neither does.</div>
     <div class="chips">
       <span class="chip g">✓ No price impact</span>
       <span class="chip g">✓ One atomic transaction</span>
@@ -105,7 +108,7 @@
 
     <label>You pay</label>
     <div class="tokbox">
-      <div class="tk" id="inSym">CLKN</div>
+      <select class="tksel" id="paySel" aria-label="Token you pay"></select>
       <div class="bal" id="inBal">Connect your wallet to see your balance</div>
     </div>
     <input id="amount" type="text" inputmode="decimal" placeholder="0.0" autocomplete="off"/>
@@ -114,7 +117,7 @@
 
     <label>You receive</label>
     <div class="tokbox">
-      <div class="tk" id="outSym">NORMIE</div>
+      <select class="tksel" id="recvSel" aria-label="Token you receive"></select>
       <div class="bal" id="outAvail">—</div>
     </div>
 
@@ -132,10 +135,7 @@
 
   <div class="card" id="invCard" style="display:none">
     <div class="sec">📦 What the desk holds</div>
-    <div class="inv">
-      <span>CLKN available: <b id="invClkn">—</b></span>
-      <span>NORMIE available: <b id="invNormie">—</b></span>
-    </div>
+    <div class="inv" id="invRows"><span>—</span></div>
     <p class="muted" style="margin-top:10px">A swap only works if the desk holds enough of the side you're buying. It keeps a reserve back, so the last of it is never sold.</p>
   </div>
 
@@ -150,7 +150,7 @@
       <summary>What are you actually signing?</summary>
       <p class="muted" style="margin-top:8px">One transaction containing both transfers: yours to the desk, and the desk's to you. It's atomic — if any part fails, the whole thing fails and nothing moves. Your wallet signs first and the desk co-signs after; the desk can only co-sign the exact transaction it quoted you.</p>
     </details>
-    <p class="muted" style="margin-top:12px">Not investment advice. Nothing on this page is a promise about either token. $NORMIE is a separate community project — this desk is a convenience for people who hold one and want the other, nothing more.</p>
+    <p class="muted" style="margin-top:12px">Not investment advice. Nothing on this page is a promise about any token here. $NORMIE and $ROSE are separate community projects — this desk is a convenience for people who hold one and want another, nothing more.</p>
   </div>
 </div>
 
@@ -159,12 +159,12 @@
   var esc = CluckUtil.esc, shortAddr = CluckUtil.shortAddr;
   var $ = function(s){ return document.querySelector(s); };
   var CFG = null, connected = null, provider = null, INV = null;
-  var dir = 'CLKN_TO_NORMIE';
+  var payMint = null, recvMint = null;   // set from CFG.tokens at boot
   var curQuote = null, quoteTimer = null, debounce = null;
 
-  function symOf(mint){ return mint === CFG.clknMint ? 'CLKN' : 'NORMIE'; }
-  function inMint(){ return dir === 'CLKN_TO_NORMIE' ? CFG.clknMint : CFG.normieMint; }
-  function outMint(){ return dir === 'CLKN_TO_NORMIE' ? CFG.normieMint : CFG.clknMint; }
+  function symOf(mint){ var t=(CFG.tokens||[]).filter(function(x){return x.mint===mint;})[0]; return t?t.symbol:'?'; }
+  function inMint(){ return payMint; }
+  function outMint(){ return recvMint; }
 
   function say(text, kind){ var m = $('#msg'); m.className = 'msg' + (kind ? ' ' + kind : ''); m.textContent = text || ''; }
 
@@ -182,6 +182,11 @@
   fetch('/api/swap/config').then(function(r){ return r.json(); }).then(function(d){
     CFG = d;
     if (!d || !d.ok || !d.enabled) { $('#offCard').style.display = 'block'; return; }
+    if (!d.tokens || d.tokens.length < 2) { $('#offCard').style.display = 'block'; return; }
+    payMint = d.tokens[0].mint; recvMint = d.tokens[1].mint;
+    fillSelects();
+    $('#paySel').addEventListener('change', function(){ onSelChange('pay'); });
+    $('#recvSel').addEventListener('change', function(){ onSelChange('recv'); });
     $('#mainCard').style.display = 'block';
     $('#invCard').style.display = 'block';
     $('#chipSpread').textContent = 'Desk spread ' + (d.spreadBps / 100).toFixed(2) + '%';
@@ -194,20 +199,40 @@
     fetch('/api/swap/inventory').then(function(r){ return r.json(); }).then(function(d){
       if (!d || !d.enabled) return;
       INV = d;
-      $('#invClkn').textContent = grp(d.clkn.available);
-      $('#invNormie').textContent = grp(d.normie.available);
+      $('#invRows').innerHTML = Object.keys(d.tokens || {}).map(function(sym){
+        return '<span>' + esc(sym) + ' available: <b>' + esc(grp(d.tokens[sym].available)) + '</b></span>';
+      }).join('');
       renderDir();
     }).catch(function(){});
   }
 
   function renderDir(){
-    $('#inSym').textContent = symOf(inMint());
-    $('#outSym').textContent = symOf(outMint());
-    if (INV) {
-      var side = outMint() === CFG.clknMint ? INV.clkn : INV.normie;
-      $('#outAvail').textContent = 'Desk has ' + grp(side.available) + ' available';
+    if (INV && INV.tokens) {
+      var side = INV.tokens[symOf(outMint())];
+      if (side) $('#outAvail').textContent = 'Desk has ' + grp(side.available) + ' available';
     }
     loadBalance();
+  }
+  function fillSelects(){
+    ['paySel','recvSel'].forEach(function(id){
+      var sel = $('#' + id);
+      sel.innerHTML = (CFG.tokens || []).map(function(t){
+        return '<option value="' + esc(t.mint) + '">' + esc(t.symbol) + '</option>';
+      }).join('');
+    });
+    $('#paySel').value = payMint; $('#recvSel').value = recvMint;
+  }
+  function onSelChange(changed){
+    var pay = $('#paySel').value, recv = $('#recvSel').value;
+    if (pay === recv) {
+      // picking the same token on both sides auto-swaps the OTHER side — never a dead state
+      if (changed === 'pay') { recv = recvMint === pay ? payMint : recvMint; $('#recvSel').value = (recv === pay) ? payMint : recv; recv = $('#recvSel').value; }
+      else { pay = payMint === recv ? recvMint : payMint; $('#paySel').value = (pay === recv) ? recvMint : pay; pay = $('#paySel').value; }
+      if (pay === recv) { var other = (CFG.tokens || []).map(function(t){return t.mint;}).filter(function(m){return m !== pay;})[0]; if (changed === 'pay') { $('#recvSel').value = other; recv = other; } else { $('#paySel').value = other; pay = other; } }
+    }
+    payMint = pay; recvMint = recv;
+    curQuote = null; $('#quoteBox').style.display = 'none';
+    renderDir(); gate(); refreshQuote();
   }
 
   // ---- wallet ----
@@ -272,7 +297,8 @@
 
   // ---- quoting ----
   $('#flipBtn').addEventListener('click', function(){
-    dir = dir === 'CLKN_TO_NORMIE' ? 'NORMIE_TO_CLKN' : 'CLKN_TO_NORMIE';
+    var t = payMint; payMint = recvMint; recvMint = t;
+    $('#paySel').value = payMint; $('#recvSel').value = recvMint;
     curQuote = null; $('#quoteBox').style.display = 'none';
     renderDir(); gate(); refreshQuote();
   });

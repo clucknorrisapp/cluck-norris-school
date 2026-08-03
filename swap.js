@@ -35,6 +35,10 @@ router.get("/config", wrap(async (_req, res) => {
     ok: true,
     enabled: desk.isEnabled(),
     desk: desk.deskPubkey(),
+    // The page renders its token pickers from this list, so adding a token to the registry in
+    // lib/swap-desk.js shows up here with no UI change. Kept: clknMint/normieMint for anything
+    // that grabbed the old shape.
+    tokens: Object.entries(desk.TOKENS).map(([mint, symbol]) => ({ mint, symbol })),
     clknMint: desk.CLKN_MINT,
     normieMint: desk.NORMIE_MINT,
     spreadBps: c.spreadBps,

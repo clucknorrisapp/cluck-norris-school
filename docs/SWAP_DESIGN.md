@@ -219,6 +219,20 @@ blockhash refreshed immediately before signing, `skipPreflight: true` because pr
 | `SWAP_ADMIN_KEY` | Scoped key for the operator view, so `PREMIUM_ACCESS_KEY` is not exposed in a browser. Follows the `BUYCOMP_KEY` precedent at `server.js:5705`. Unset → 404, never 401. |
 | `SWAP_ALERT_CHAT_ID` | Telegram room for desk alerts. Falls back to `TELEGRAM_CHAT_ID`. |
 | `SWAP_LOW_INVENTORY_USD` | 200 — warn when a side has less than this left to trade |
+| `SWAP_BAND_ROSE_MIN/MAX` | ROSE sanity band (added 2026-08-03 with the third token) |
+
+### Token registry (updated 2026-08-03)
+
+The desk trades a REGISTRY, not a pair: `TOKENS` in `lib/swap-desk.js` maps mint → symbol, any
+two distinct entries form a valid pair, and the page builds its pickers from `/api/swap/config`.
+Three tokens today — CLKN, NORMIE, **ROSE** (`RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF`) —
+which is six directed pairs, all covered by the same quote/build/submit path and the same tests.
+
+Adding a token = one registry entry + one sanity band + funding its side of the desk wallet.
+Before adding one, check its POOL DEPTH on Jupiter first: ROSE went in with ~$7K of liquidity
+against ~$22-31K for the others, and the thinnest token's pool is the cheapest feed to
+manipulate — it sets the desk's real exposure, whatever the caps say. The desk needs a funded
+token account for every registry entry, or that side simply refuses quotes.
 
 ---
 
