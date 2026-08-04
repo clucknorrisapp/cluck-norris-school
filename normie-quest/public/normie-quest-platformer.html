@@ -509,7 +509,8 @@ var THEMES=[
   { sky1:0x060a1a, sky2:0x02040c, hill:0x0e1a3a },    // 24 THE ORBITAL VAULT (World 19 — space station, deep-space chrome + Earth blue + gold core; bgArt covers the sky)
   { sky1:0x14161f, sky2:0x060608, hill:0x2e2410 },    // 25 THE ASCENT (World 20 — storm-height monolith tower, dark storm-grey + molten gold; bgArt covers the sky)
   { sky1:0x1a0c04, sky2:0x080402, hill:0x3a1c08 },    // 26 THE SAYLOR SUMMIT (World 20 finale — bitcoin citadel at the peak, storm-black + laser-orange; bgArt covers the sky)
-  { sky1:0x05060f, sky2:0x010208, hill:0x8a8f9c }     // 27 THE MOON (World 21 FINALE — lunar surface: black space, silver regolith, Earthrise blue; bgArt covers the sky)
+  { sky1:0x05060f, sky2:0x010208, hill:0x8a8f9c },    // 27 THE MOON (World 21 FINALE — lunar surface: black space, silver regolith, Earthrise blue; bgArt covers the sky)
+  { sky1:0x35558f, sky2:0x101d33, hill:0x6d84b4 }     // 28 MYSPACE (PRIVATE dev room — 2003 web blue: navy header, that famous #6d84b4 profile blue)
 ];
 
 // Slot-machine themes — one 'slot' sprite, re-skinned per theme (tint + glow + reel symbols +
@@ -1180,6 +1181,28 @@ var LEVELS=[
     caches:[[560,226,350],[1000,226,450],[1236,130,500],[1440,226,550],[1716,96,800],[2116,126,500]],
     enemies:[],
     slots:[[1120,'jackpot']], bonusblocks:[[700,8],[1420,12],[1600,8],[1900,15]], key:[430,H-150], door:2440 },
+
+  // ===== PRIVATE DEV ROOM — "MYSPACE" (owner + the Normie dev). Reachable ONLY via ?room=myspace:
+  //   hidden:true keeps it out of progression AND level-select, and NO warp anywhere points at it,
+  //   so the unlisted URL is the ONLY door — that IS the privacy. Boss = TOM (your first friend),
+  //   which re-skins the shared KOL mechanic blue via the boss* overrides below. Geometry is the
+  //   proven 3-3 KOL arena (already passes the reachability check); only the dressing is new. =====
+  { name:'MYSPACE', sub:"TOM'S TOP 8", time:180, theme:28, bgArt:'wMyspace', width:4800,
+    hidden:true, bonus:true, private:true, boss:true, bossType:'kol', diff:1.4,
+    bossName:'TOM', bossSub:'YOUR FIRST FRIEND — STOMP x3 TO CRACK HIS TOP 8',
+    bossColor:'#8aa0d8', bossTintHex:0x6d84b4, bossGlowHex:0x8aa0d8,
+    bossTaunts:['a/s/l?','THANKS FOR THE ADD!','NEW COMMENT ON YOUR WALL','CHECK YOUR BULLETINS','YOU + ME = TOP 8','TOM APPROVES THIS'],
+    gaps:[[700,772],[1380,1500],[2060,2156],[2720,2816],[3380,3500]],
+    walls:[[420,3,'steel',4],[1060,4,'stone',3],[1680,3,'brick',5],[2320,4,'steel',3],[2980,3,'stone',5],[3640,4,'steel',3]],
+    plats:[[720,2,150,'steel'],[1080,2,H-140,'brick'],[1400,2,150,'stone'],[2080,2,150,'steel'],[2360,2,126,'steel'],[2740,2,150,'brick'],[3400,2,150,'steel'],[3680,2,H-134,'steel']],
+    spikes:[[900],[924],[1548],[1572],[2500],[2524],[3208],[3232]],
+    powerups:[['supergeek',1000,230],['diamond',1850,230],['omegachad',2620,230],['bull',3300,230]],
+    airdrops:[[1500,H-118],[3130,H-72]],
+    coins:[[300,196],[560,150],[620,196],[900,196],[1160,140],[1420,130],[1620,196],[1950,150],[2200,196],[2500,150],[2760,130],[2900,196],[3150,150],[3400,130],[3760,150],[4000,196],[4200,150]],
+    enemies:[['jeet',340,230,70],['bot',900,230,60],['fudster',1150,230,60],['ghost',1300,212,80],['sniper',1850,230,30],['bot',2200,230,70],['fudster',2900,230,70],['ghost',3200,212,70],['sniper',3600,230,30],['bot',3900,230,60]],
+    pumpdumps:[[1380,174],[2720,174]], honeypots:[[1250,232],[3760,232]], npcs:[[2450,90]],
+    bonusblocks:[[1040,5],[1950,8],[2950,8],[3840,8]],
+    key:[4200,H-150], door:4600 },
 ];
 
 // Let a USB / console controller BUTTON advance any "press to continue" screen (Briefing, Win,
@@ -3088,27 +3111,34 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   },
   /* ---------- Scammy KOL boss (charges + stomp x3, and shills fake tokens at range) ---------- */
   startKolBoss:function(){
-    var dx=this.def.door, self=this;
+    var dx=this.def.door, self=this, d=this.def;
+    // Boss identity is def-driven so the same mechanic can re-skin (e.g. TOM in the private MySpace
+    // room). Every field DEFAULTS to the original Scammy KOL values, so 3-3 is byte-for-byte unchanged.
+    var bName=d.bossName||'SCAMMY KOL', bSub=d.bossSub||'TRUST ME BRO — STOMP HIS PHONE x3',
+        bCol=d.bossColor||'#c99bff', bTex=d.bossTex||'scammykol',
+        bGlow=(d.bossGlowHex!=null?d.bossGlowHex:0xb06bff),
+        bPip=(d.bossTintHex!=null?d.bossTintHex:0xc99bff);
     this.cameras.main.flash(420, 120, 40, 160);
     this.player.setPosition(dx-260, GY-40); this.player.setVelocity(0,0);
     self.makeArena(dx-340, dx+40);
-    var k=this.rugking=this.physics.add.sprite(dx-60, GY-54, 'scammykol');   // stored in rugking = generic melee-boss handle
+    var k=this.rugking=this.physics.add.sprite(dx-60, GY-54, bTex);   // stored in rugking = generic melee-boss handle
     k.setScale(52/k.height); k.body.setSize(k.width*0.60,k.height*0.82).setOffset(k.width*0.20,k.height*0.14);
     k.setCollideWorldBounds(true); k.dir=-1; k.invuln=true; k.setDepth(7);
-    var bg2=this.addGlow(k,0xb06bff,5); if(bg2) this.tweens.add({targets:bg2,outerStrength:12,duration:520,yoyo:true,repeat:-1,ease:'Sine.inOut'});
+    if(d.bossTintHex!=null) k.setTint(d.bossTintHex);   // re-skin the shared KOL sprite for a themed boss
+    var bg2=this.addGlow(k,bGlow,5); if(bg2) this.tweens.add({targets:bg2,outerStrength:12,duration:520,yoyo:true,repeat:-1,ease:'Sine.inOut'});
     this.physics.add.collider(k, this.platforms);
     this.physics.add.overlap(this.player, k, this.bossTouch, null, this);
     this.door.setVisible(false);
-    this.bossPips=[]; for(var i=0;i<3;i++) this.bossPips.push(this.hb(this.add.image(W/2-24+i*24, 22, 'heart').setScale(1.4).setDepth(40).setTint(0xc99bff)));
-    this.hb(this.add.text(W/2, 42, 'SCAMMY KOL', {fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#c99bff'}).setOrigin(.5,0).setDepth(40));
-    this.powerBanner('SCAMMY KOL','TRUST ME BRO — STOMP HIS PHONE x3','#c99bff');
+    this.bossPips=[]; for(var i=0;i<3;i++) this.bossPips.push(this.hb(this.add.image(W/2-24+i*24, 22, 'heart').setScale(1.4).setDepth(40).setTint(bPip)));
+    this.hb(this.add.text(W/2, 42, bName, {fontFamily:'"Press Start 2P"',fontSize:'11px',color:bCol}).setOrigin(.5,0).setDepth(40));
+    this.powerBanner(bName,bSub,bCol);
     this.rugIntro=true; this.rugGraceUntil=this.time.now+1600;
     this.kolNextShill=this.time.now+2600; this.kolNextTaunt=this.time.now+2000;
   },
   kolTick:function(now,p){
     var k=this.rugking; if(!k||!k.active) return;
     if(now>this.kolNextShill){ this.kolNextShill=now+2200; this.kolShill(k,p); }
-    if(now>this.kolNextTaunt){ this.kolNextTaunt=now+3600; var t=['TRUST ME BRO','WEN UTILITY? SOON','NOT FINANCIAL ADVICE','THIS IS THE ONE','FEW UNDERSTAND','GM, APE IN']; this.flash(Phaser.Math.RND.pick(t),'#c99bff'); }
+    if(now>this.kolNextTaunt){ this.kolNextTaunt=now+3600; var t=this.def.bossTaunts||['TRUST ME BRO','WEN UTILITY? SOON','NOT FINANCIAL ADVICE','THIS IS THE ONE','FEW UNDERSTAND','GM, APE IN']; this.flash(Phaser.Math.RND.pick(t),this.def.bossColor||'#c99bff'); }
   },
   kolShill:function(k,p){   // flings a small spread of "fake token" shills toward the player
     if(this.over||!this.enemyShots) return; var self=this;
@@ -5970,6 +6000,28 @@ try{ if(typeof window!=='undefined') window.__NQ_FORCECLEAR=function(){ try{
 try{ if(typeof window!=='undefined') window.__NQ_LEVELS_LIST=LEVELS.map(function(l,i){ return {i:i,name:l.name,sub:l.sub||'',width:l.width||5000}; }); }catch(e){}
 // Real world count for the setup-lane leaderboard chips (same formula the Win scenes use).
 try{ if(typeof window!=='undefined') window.__NQ_WORLDS=Math.ceil(LEVELS.filter(function(l){return !l.hidden&&!l.vip;}).length/3); }catch(e){}
+// PRIVATE ROOMS — an unlisted door for the owner + collaborators. ?room=<name> boots straight into
+// a level flagged private:true (e.g. ?room=myspace → the MySpace/Tom dev room). Those levels are
+// hidden:true with NO warp pointing at them, so this URL is the ONLY way in — the unlisted link IS
+// the privacy, exactly like the game URL itself. lab:1 bypasses the tier gate; no setup lane needed.
+// It waits for Boot to finish (Phaser boots async), then stops every scene and starts the room.
+try{ if(typeof window!=='undefined'){
+  var _rm=((location.search||'')+(location.hash||'')).match(/[?&#]room=([A-Za-z0-9_-]{1,24})/);
+  if(_rm){
+    var _rn=_rm[1].toLowerCase(), _ri=-1;
+    for(var _i=0;_i<LEVELS.length;_i++){ if(LEVELS[_i]&&LEVELS[_i].private && String(LEVELS[_i].name||'').toLowerCase()===_rn){ _ri=_i; break; } }
+    if(_ri>=0){
+      var _rTries=0, _rIv=setInterval(function(){ _rTries++;
+        try{ var act=NQGAME.scene.getScenes(true).map(function(sc){ return sc.sys&&sc.sys.settings&&sc.sys.settings.key; });
+          if(act.length && act.indexOf('Boot')<0){ clearInterval(_rIv);
+            NQGAME.scene.getScenes(true).forEach(function(sc){ var k=sc.sys&&sc.sys.settings&&sc.sys.settings.key; if(k) NQGAME.scene.stop(k); });
+            NQGAME.scene.start('Game',{level:_ri,score:0,lives:3,lab:1});
+          } }catch(e){}
+        if(_rTries>160) clearInterval(_rIv);   // ~40s cap, then give up quietly
+      },250);
+    }
+  }
+} }catch(e){}
 
 /* ---------- ⛶ Fullscreen toggle (fills the screen; auto-exits on rotate to portrait) ---------- */
 // iPad/desktop Safari support the Fullscreen API, which hides the address bar + tabs. Entering
