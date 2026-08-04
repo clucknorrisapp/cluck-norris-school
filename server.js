@@ -2258,7 +2258,11 @@ app.use((req, res, next) => {
 // scheme in X-Forwarded-Proto, so this fires only for real http requests and never loops (an https
 // visitor arrives as X-Forwarded-Proto: https). /healthz is matched earlier, so it's unaffected.
 app.use((req, res, next) => {
-  if (req.headers["x-forwarded-proto"] === "http") {
+  // Original visitor scheme: prefer Cloudflare's CF-Visitor (Railway passes it through untouched);
+  // fall back to the LEFTMOST X-Forwarded-Proto entry (the client hop) since intermediaries append.
+  const xfp = String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim().toLowerCase();
+  const cfHttp = /"scheme"\s*:\s*"http"/i.test(req.headers["cf-visitor"] || "");
+  if (cfHttp || xfp === "http") {
     return res.redirect(301, "https://" + (req.headers.host || "clucknorris.app") + req.originalUrl);
   }
   next();
