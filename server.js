@@ -2250,6 +2250,20 @@ app.use((req, res, next) => {
   next();
 });
 
+// Force HTTPS from the ORIGIN so the redirect carries our security headers. Cloudflare's own
+// "Always Use HTTPS" 301 is header-less (generated before Response-Header rules run), and scanners
+// read that bare redirect as "security headers missing" (HSTS/CSP/X-Frame/X-Content all flag).
+// With Cloudflare "Always Use HTTPS" turned OFF, http hits reach here — and because this runs AFTER
+// the header middleware above, the 301 carries all of them. Cloudflare passes the visitor's original
+// scheme in X-Forwarded-Proto, so this fires only for real http requests and never loops (an https
+// visitor arrives as X-Forwarded-Proto: https). /healthz is matched earlier, so it's unaffected.
+app.use((req, res, next) => {
+  if (req.headers["x-forwarded-proto"] === "http") {
+    return res.redirect(301, "https://" + (req.headers.host || "clucknorris.app") + req.originalUrl);
+  }
+  next();
+});
+
 // ── Origin lockdown (makes the Cloudflare WAF non-bypassable) ──────────────
 // Even with Cloudflare in front, the Railway origin IP stays publicly reachable, so an attacker
 // can hit it directly and skip the WAF entirely — the "Direct origin server access may be possible"
