@@ -2169,6 +2169,11 @@ function notifyToolUnlock(tool, paidAmount, senderWallet, isHolderBonus, signatu
 }
 
 const app = express();
+// Don't advertise the stack. Express sends `X-Powered-By: Express` by default,
+// which hands a scanner a free fingerprint (RootCrak even mis-read it as Flask).
+// The `server: railway-hikari` header is set by Railway's edge, not us — nothing
+// to strip there — but this one is ours to drop.
+app.disable("x-powered-by");
 
 // ── /healthz — the deploy readiness probe. Register FIRST, before any middleware. ──
 // Railway had no healthcheck configured, so on every push it cut traffic to the new
