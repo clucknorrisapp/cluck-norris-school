@@ -188,3 +188,66 @@ curl -s "https://clucknorris.app/api/tg-test?key=$PREMIUM_ACCESS_KEY&text=cf%20c
 If step 2 shows a `last_error` about the webhook being unreachable or challenged, the §1 Skip rule
 is missing or Bot Fight Mode is on — fix that first, then re-register the webhook via
 `/api/tg-webhook-info?key=…&reset=1` (add `&drop=1` to also clear any queued backlog).
+
+---
+
+# Origin lockdown — make the WAF non-bypassable (closes "direct origin access")
+
+Cloudflare in front does nothing if an attacker just hits the Railway origin IP (`69.46.46.60`)
+directly — that skips the WAF. RootCrak's finding says exactly this: *"Direct origin server access
+may be possible."* The app has a guard for it (`server.js`, `CF_ORIGIN_SECRET`): when that env var
+is set, every request must carry a secret header that **Cloudflare injects**, and anything without
+it gets `403`. So only traffic that came through Cloudflare is accepted.
+
+⚠️ **Order matters — do the Cloudflare rule FIRST, then set the env var.** If you set the env var
+before the Transform Rule exists, Cloudflare's proxied requests won't carry the header and the whole
+site 403s. `/healthz` is exempt in code (Railway's probe hits the origin directly).
+
+1. **Pick a long random secret** (e.g. `openssl rand -hex 32`). Call it `<SECRET>`.
+
+2. **Cloudflare → Rules → Transform Rules → Modify Request Header → Create rule.**
+   - Name: `inject origin secret`
+   - **If… Custom filter expression:** `true` (match all requests — the Skip rule doesn't apply
+     here; every proxied request should carry it, including `/api/`).
+   - **Then… Set static:** Header name `X-CF-Origin-Secret`, Value `<SECRET>`.
+   - Deploy. (This header is added between Cloudflare and your origin; it is never visible to
+     browsers.)
+
+3. **Verify the rule is live** (still works because the env var isn't set yet, so nothing is
+   enforced): `curl -sI https://clucknorris.app/` should still be `200`.
+
+4. **Set the env var on Railway:** `CF_ORIGIN_SECRET=<SECRET>` (same value). Railway redeploys.
+   On boot you'll see `[security] origin lockdown ON` in the logs.
+
+5. **Confirm it's working:**
+   ```
+   curl -sI https://clucknorris.app/                       # through Cloudflare → 200 (header present)
+   curl -sI --resolve clucknorris.app:443:69.46.46.60 https://clucknorris.app/   # direct to origin → 403
+   ```
+   The second command hitting `403` is the whole point: the WAF can no longer be bypassed.
+
+6. **Re-check the bot + wallet reads** (all go through Cloudflare, so they carry the header):
+   `/api/tg-webhook-info?key=…` shows recent delivery; a wallet balance still loads.
+
+**Rollback:** unset `CF_ORIGIN_SECRET` on Railway (redeploys to the safe no-op). The Transform Rule
+can stay — an unused header is harmless.
+
+---
+
+# Bonus quick win now that Cloudflare owns your DNS — SPF/DMARC (clears the email-spoofing findings)
+
+RootCrak also flags `DNS-SPF-MISSING` / `DNS-DMARC-MISSING` (Info/noise). The domain doesn't send
+email, so the correct, spoof-proof answer is "no mail, reject everything." Add these **TXT records**
+in **Cloudflare → DNS → Records** (30-second job while you're in there):
+
+| Type | Name | Content |
+|---|---|---|
+| TXT | `clucknorris.app` (or `@`) | `v=spf1 -all` |
+| TXT | `_dmarc` | `v=DMARC1; p=reject; sp=reject; adkim=s; aspf=s;` |
+| TXT | `*._domainkey` | `v=DKIM1; p=` |
+
+`v=spf1 -all` = "nothing is authorised to send mail as this domain." `p=reject` DMARC = "reject any
+mail claiming to be from us." The wildcard DKIM with an empty key revokes all DKIM. Together they
+tell the world nobody can spoof `@clucknorris.app`, and they clear the three DNS findings. **Skip
+these if you ever plan to send email from the domain** (newsletters, transactional) — then you'd
+publish real SPF/DKIM for your mail provider instead.

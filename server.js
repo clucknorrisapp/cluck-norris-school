@@ -2250,6 +2250,28 @@ app.use((req, res, next) => {
   next();
 });
 
+// ── Origin lockdown (makes the Cloudflare WAF non-bypassable) ──────────────
+// Even with Cloudflare in front, the Railway origin IP stays publicly reachable, so an attacker
+// can hit it directly and skip the WAF entirely — the "Direct origin server access may be possible"
+// risk. When CF_ORIGIN_SECRET is set, require a matching header that a Cloudflare Transform Rule
+// injects on every proxied request, and 403 anything without it (i.e. anything that didn't come
+// through Cloudflare). Compared as SHA-256 hashes so the check leaks nothing about the secret.
+//   UNSET = fully disabled (safe no-op) — this ships DARK. Arm it ONLY after the Cloudflare
+//   Transform Rule exists, or it will 403 the whole site. Rollout + the exact rule are in
+//   docs/CLOUDFLARE_WAF_RUNBOOK.md. /healthz is exempt (Railway's probe hits the app directly).
+const CF_ORIGIN_SECRET = process.env.CF_ORIGIN_SECRET;
+if (CF_ORIGIN_SECRET) {
+  const cfExpectedHash = createHash("sha256").update(CF_ORIGIN_SECRET).digest("hex");
+  app.use((req, res, next) => {
+    if (req.path === "/healthz") return next();
+    const got = req.get("x-cf-origin-secret") || "";
+    if (createHash("sha256").update(got).digest("hex") === cfExpectedHash) return next();
+    return res.status(403).type("text/plain")
+      .send("Forbidden: reach this site through clucknorris.app, not the origin directly.");
+  });
+  console.log("[security] origin lockdown ON — direct-to-origin requests without the Cloudflare header are blocked");
+}
+
 // ── Lightweight in-memory rate limiting ───────────────────────────────────
 // The /api proxies forward to PAID upstreams (Helius credits, Anthropic,
 // Bags/Solana-Tracker quota) with no per-user auth, so without a cap anyone
