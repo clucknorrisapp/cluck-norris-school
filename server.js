@@ -2274,6 +2274,27 @@ if (CF_ORIGIN_SECRET) {
   console.log("[security] origin lockdown ON — direct-to-origin requests without the Cloudflare header are blocked");
 }
 
+// TEMP diagnostic — verify Cloudflare's Transform Rule is injecting X-Cluck-Edge-Auth BEFORE arming
+// the lockdown, so we never repeat the "armed the lock before cutting the key" outage. Read-only:
+// blocks nothing, and returns only a SHA-256 hash of the received header (never the value itself).
+// Remove once the lockdown is confirmed working. Key-gated so randoms can't probe it.
+app.get("/api/edge-check", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const provided = req.query.key || req.headers["x-premium-key"];
+  if (!process.env.PREMIUM_ACCESS_KEY || provided !== process.env.PREMIUM_ACCESS_KEY) {
+    return res.status(403).json({ error: "forbidden" });
+  }
+  const got = req.get("x-cluck-edge-auth") || "";
+  res.json({
+    ok: true,
+    headerPresent: !!got,
+    headerLen: got.length,
+    sha12: got ? createHash("sha256").update(got).digest("hex").slice(0, 12) : null,
+    via: req.get("cf-ray") ? "cloudflare" : "direct-to-origin",
+    cfRay: req.get("cf-ray") || null,
+  });
+});
+
 // ── Lightweight in-memory rate limiting ───────────────────────────────────
 // The /api proxies forward to PAID upstreams (Helius credits, Anthropic,
 // Bags/Solana-Tracker quota) with no per-user auth, so without a cap anyone
