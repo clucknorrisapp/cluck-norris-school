@@ -11062,6 +11062,34 @@ app.all("/api/*", (req, res) => {
   res.status(404).json({ success: false, error: "not_found", path: req.path });
 });
 
+// Vulnerability-scanner denylist — return a clean 404 (not the SPA shell) for common sensitive /
+// scanner paths that are NOT real routes here. Otherwise ffuf & co. read the catch-all's soft-404
+// (200 + React shell) as a "discovered path" and file bogus High findings for /config, /graphql,
+// /login, /.env, /.git/config, etc. SAFETY: this only runs for paths with no explicit route above,
+// and the school's client routes (/bags /classroom /learn /tools /trace /transcript /investors
+// /lp-lab /wallet-checkup …) are deliberately NOT in this list — so it can only 404 things that
+// genuinely don't exist. /.well-known stays live (ACME, security.txt). It runs on the ORIGIN, so it
+// only affects apex requests — www is redirected at Railway's edge before the app, so scan the apex.
+const SCANNER_PATHS = new Set([
+  "/api", "/config", "/config.php", "/configuration", "/settings.php", "/setup",
+  "/graphql", "/graphiql", "/playground", "/altair",
+  "/login", "/signin", "/sign-in", "/admin", "/administrator", "/admin.php",
+  "/wp-login.php", "/wp-config.php", "/xmlrpc.php", "/phpmyadmin", "/pma", "/dbadmin", "/adminer.php",
+  "/server-status", "/server-info", "/phpinfo.php", "/info.php",
+  "/composer.lock", "/gemfile", "/dockerfile",
+  "/backup", "/backup.zip", "/backup.sql", "/backup.tar.gz", "/dump.sql", "/db.sql", "/database.sql",
+  "/.htaccess", "/.htpasswd", "/console", "/telescope", "/_debugbar", "/debug", "/shell.php", "/cmd.php",
+  "/vendor", "/storage/logs/laravel.log",
+]);
+function isScannerPath(p) {
+  p = String(p || "").toLowerCase();
+  if (p.startsWith("/.well-known/")) return false;                 // legit: ACME challenges, security.txt
+  if (p.length > 1 && p.charAt(1) === ".") return true;            // dotfiles: /.env /.git/config /.aws/credentials /.DS_Store
+  if (SCANNER_PATHS.has(p)) return true;
+  return p.startsWith("/wp-") || p.startsWith("/wordpress/") || p.startsWith("/.git/")
+      || p.startsWith("/.svn") || p.startsWith("/.hg") || p.startsWith("/actuator");
+}
+
 app.get("*", (req, res) => {
   // An /api/* path that got this far matched no handler. Clients parse these as
   // JSON; handing back the React shell makes a typo'd endpoint look like a
@@ -11070,6 +11098,11 @@ app.get("*", (req, res) => {
     return res.status(404).json({ success: false, error: "not_found", path: req.path });
   }
   if (ASSET_EXT.test(req.path)) {
+    return res.status(404).type("text/plain").send("Not found");
+  }
+  // Known scanner / sensitive paths that aren't real routes → real 404, not the soft-404 shell.
+  if (isScannerPath(req.path)) {
+    res.setHeader("Cache-Control", "no-store");
     return res.status(404).type("text/plain").send("Not found");
   }
   // Extension-less paths still fall through to the SPA — the school does its own
