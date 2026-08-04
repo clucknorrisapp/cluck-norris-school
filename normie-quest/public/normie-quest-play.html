@@ -1418,7 +1418,18 @@ var Boot=new Phaser.Class({ Extends:Phaser.Scene,
 
     // load the base64 character/enemy/power-up sprites, start Title once all registered
     var self=this, all=Object.assign({},SPRITES,POWERUPS,EXTRA), keys=Object.keys(all), need=keys.length, started=false;
-    var go=function(){ if(started) return; started=true; self.scene.start('Title'); };
+    var go=function(){ if(started) return; started=true;
+      // PRIVATE ROOM DOOR: ?room=<name> boots straight into a level flagged private:true (e.g.
+      // ?room=myspace → the MySpace/Tom dev room) — routed HERE, before the tappable Title ever
+      // shows, so there's no title-screen flash and no race with a habitual "Play" tap landing on
+      // 1-1. No warp points at these levels and they're hidden from level-select, so the unlisted
+      // URL is the only door. lab:1 bypasses the tier gate; no setup lane needed.
+      try{ var _rm=((location.search||'')+(location.hash||'')).match(/[?&#]room=([A-Za-z0-9_-]{1,24})/);
+        if(_rm){ var _rn=_rm[1].toLowerCase();
+          for(var _i=0;_i<LEVELS.length;_i++){ if(LEVELS[_i]&&LEVELS[_i].private && String(LEVELS[_i].name||'').toLowerCase()===_rn){ self.scene.start('Game',{level:_i,score:0,lives:3,lab:1}); return; } }
+        }
+      }catch(e){}
+      self.scene.start('Title'); };
     keys.forEach(function(k){ self.textures.once('addtexture-'+k, function(){ if(--need<=0) go(); }); self.textures.addBase64(k, all[k]); });
     this.time.delayedCall(3500, go);   // fallback so a decode hiccup never hangs boot
   }
@@ -6002,28 +6013,8 @@ try{ if(typeof window!=='undefined') window.__NQ_FORCECLEAR=function(){ try{
 try{ if(typeof window!=='undefined') window.__NQ_LEVELS_LIST=LEVELS.map(function(l,i){ return {i:i,name:l.name,sub:l.sub||'',width:l.width||5000}; }); }catch(e){}
 // Real world count for the setup-lane leaderboard chips (same formula the Win scenes use).
 try{ if(typeof window!=='undefined') window.__NQ_WORLDS=Math.ceil(LEVELS.filter(function(l){return !l.hidden&&!l.vip;}).length/3); }catch(e){}
-// PRIVATE ROOMS — an unlisted door for the owner + collaborators. ?room=<name> boots straight into
-// a level flagged private:true (e.g. ?room=myspace → the MySpace/Tom dev room). Those levels are
-// hidden:true with NO warp pointing at them, so this URL is the ONLY way in — the unlisted link IS
-// the privacy, exactly like the game URL itself. lab:1 bypasses the tier gate; no setup lane needed.
-// It waits for Boot to finish (Phaser boots async), then stops every scene and starts the room.
-try{ if(typeof window!=='undefined'){
-  var _rm=((location.search||'')+(location.hash||'')).match(/[?&#]room=([A-Za-z0-9_-]{1,24})/);
-  if(_rm){
-    var _rn=_rm[1].toLowerCase(), _ri=-1;
-    for(var _i=0;_i<LEVELS.length;_i++){ if(LEVELS[_i]&&LEVELS[_i].private && String(LEVELS[_i].name||'').toLowerCase()===_rn){ _ri=_i; break; } }
-    if(_ri>=0){
-      var _rTries=0, _rIv=setInterval(function(){ _rTries++;
-        try{ var act=NQGAME.scene.getScenes(true).map(function(sc){ return sc.sys&&sc.sys.settings&&sc.sys.settings.key; });
-          if(act.length && act.indexOf('Boot')<0){ clearInterval(_rIv);
-            NQGAME.scene.getScenes(true).forEach(function(sc){ var k=sc.sys&&sc.sys.settings&&sc.sys.settings.key; if(k) NQGAME.scene.stop(k); });
-            NQGAME.scene.start('Game',{level:_ri,score:0,lives:3,lab:1});
-          } }catch(e){}
-        if(_rTries>160) clearInterval(_rIv);   // ~40s cap, then give up quietly
-      },250);
-    }
-  }
-} }catch(e){}
+// (The private-room door is routed inside Boot's go() — before the tappable Title — so there is no
+//  title-screen race here. See "PRIVATE ROOM DOOR" in the Boot scene.)
 
 /* ---------- ⛶ Fullscreen toggle (fills the screen; auto-exits on rotate to portrait) ---------- */
 // iPad/desktop Safari support the Fullscreen API, which hides the address bar + tabs. Entering
