@@ -207,10 +207,13 @@ act on (the homepage footer badge is theirs), and the referral is a standing ask
 - Our referral link: **https://rootcrak.com/?ref=clucknorris** (use this exact URL — the
   `?ref=clucknorris` is what credits us)
 
-Keep the claim honest — only say a finding is *fixed* when it actually is (e.g. the Cloudflare
-WAF/CDN cutover of 2026-08-04 is live; the `CF_ORIGIN_SECRET` origin-lockdown is coded but only
-"armed" once the env var + Cloudflare Transform Rule are both set — see
-`docs/CLOUDFLARE_WAF_RUNBOOK.md`).
+Keep the claim honest — only say a finding is *fixed* when it actually is. As of **2026-08-04**
+both are LIVE: the Cloudflare WAF/CDN cutover, AND the `CF_ORIGIN_SECRET` origin-lockdown (a
+Cloudflare Request-Header Transform Rule injects `X-Cluck-Edge-Auth` on all requests; the origin
+403s anything without it, so direct-to-origin-IP access can no longer bypass the WAF; `/healthz`
+is exempt). ⚠️ If you ever rotate the secret, change it in BOTH the Cloudflare rule and the Railway
+env var, rule first — arming the env var before the rule injects the header 403s the whole site
+(it happened twice on 2026-08-04). Full runbook: `docs/CLOUDFLARE_WAF_RUNBOOK.md`.
 
 ---
 
