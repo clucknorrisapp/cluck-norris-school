@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, Component, lazy, Suspense } from "react";
-import { MintAddress, JupiterSwapButton, AskCluck, LP_LESSONS_COUNT } from "./shared.jsx";
+import { MintAddress, JupiterSwapButton, AskCluck, LP_LESSONS_COUNT, RootCrakBadge, ROOTCRAK } from "./shared.jsx";
 const Library = lazy(() => import("./sections/Library.jsx"));
 const LPLab = lazy(() => import("./sections/LPLab.jsx"));
 const CLKN_MINT = "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
@@ -1927,6 +1927,13 @@ export default function App(){
         {screen==="select"&&<Select onSelect={id=>{trackId("lesson_start",id);setLessonId(id);setScreen("lesson");}} completed={completed}/>}
         {screen==="lesson"&&lesson&&<Lesson lesson={lesson} onComplete={finish} onBack={()=>setScreen("select")}/>}
         {screen==="complete"&&<Complete onRestart={()=>{setCompleted([]);setScreen("landing");}}/>}
+      </div>
+      {/* Footer — third-party security verification. Badge + score live in shared.jsx (ROOTCRAK),
+          so this can't drift. Links to the live verify page. The caption will point at /rootcrak
+          once that page ships. */}
+      <div data-read-skip="1" style={{borderTop:"1px solid rgba(255,122,24,0.14)",marginTop:40,padding:"22px 18px calc(28px + env(safe-area-inset-bottom, 0px))",display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
+        <RootCrakBadge/>
+        <a href={ROOTCRAK.verifyUrl} target="_blank" rel="noopener noreferrer" style={{fontFamily:"'Anton',sans-serif",fontSize:10.5,letterSpacing:1,color:"#6B7280",textDecoration:"none"}}>SECURITY VERIFIED · {ROOTCRAK.grade} · {ROOTCRAK.score}/100 — VIEW REPORT →</a>
       </div>
     </div>
   );

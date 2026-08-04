@@ -14,6 +14,34 @@ export const READ = _DESK ? 640 : 520;
 // Keep in sync with LP_LESSONS in src/sections/LPLab.jsx.
 export const LP_LESSONS_COUNT = 14;
 
+// RootCrak — our third-party security-scan partner. ONE source of truth for the grade/score,
+// the links, and the handle, so the footer badge and the /rootcrak page can never disagree.
+// The grade/score are a STATIC snapshot: if a rescan moves them, update HERE (and the vanilla
+// badge in public/home.html, which can't import this) — the verifyUrl always shows live truth.
+export const ROOTCRAK = {
+  grade: "A+",
+  score: 99,
+  verifyUrl: "https://rootcrak.com/verify/clucknorris.app",
+  referral: "https://rootcrak.com/?ref=clucknorris",
+  handle: "@ro0TCr4k",
+  handleUrl: "https://x.com/ro0TCr4k",
+};
+
+// The green "A+ · SECURITY · ROOTCRAK" pill, rendered from ROOTCRAK so it can't drift out of
+// sync with the number. Links to the live verify page. Reused by the app footer and /rootcrak.
+export function RootCrakBadge({ style }) {
+  return (
+    <a href={ROOTCRAK.verifyUrl} target="_blank" rel="noopener noreferrer"
+       title={`Security verified by RootCrak — ${ROOTCRAK.grade} · ${ROOTCRAK.score}/100`}
+       style={{display:"inline-flex",alignItems:"center",gap:8,background:"#0f0f0f",border:"1px solid #1a1a1a",borderRadius:6,padding:"5px 11px",textDecoration:"none",...style}}>
+      <span style={{fontFamily:"system-ui,-apple-system,sans-serif",fontSize:15,fontWeight:900,color:"#22c55e",lineHeight:1}}>{ROOTCRAK.grade}</span>
+      <span style={{width:1,height:14,background:"#222"}}/>
+      <span style={{fontFamily:"system-ui,-apple-system,sans-serif",fontSize:10,fontWeight:600,color:"#888",letterSpacing:0.5}}>SECURITY</span>
+      <span style={{fontFamily:"system-ui,-apple-system,sans-serif",fontSize:10,fontWeight:700,letterSpacing:0.5}}><span style={{color:"#fff"}}>ROOT</span><span style={{color:"#22c55e"}}>CRAK</span></span>
+    </a>
+  );
+}
+
 export function MintAddress({ compact }) {
   const [copied, setCopied] = useState(false);
   function copy() {
