@@ -85,3 +85,106 @@ curl -sI https://clucknorris.app/ | grep -iE 'server:|cf-ray'
 
 Set the DNS records back to **DNS-only** (grey cloud), or revert nameservers at the registrar. The
 origin keeps working exactly as it does today (that's the current state).
+
+---
+
+# Copy-paste config
+
+> **Minimal to clear `WAF-NONE`:** just proxying the domain (orange cloud, step 3) makes a `cf-ray`
+> header appear and Cloudflare's default protections engage — RootCrak detects that and the flag
+> clears. Everything below is doing it *correctly* (protecting the site without breaking the bot).
+
+## 1. WAF → Custom rules → **the API + webhook bypass** (create this FIRST, put it at order #1)
+
+Cloudflare's free **Bot Fight Mode** is a global on/off with **no per-path exemptions** — it cannot
+be scoped and it WILL challenge Telegram's webhook and our RPC/payment callers. So: **leave Bot
+Fight Mode OFF** (Security → Bots → off) and use this Skip rule as the guard for `/api/`.
+
+- **Rule name:** `API + webhook bypass`
+- **Action:** **Skip**
+- **Skip components** (check every box that your plan shows): *All remaining custom rules*,
+  *All managed rules*, *Rate limiting rules*, *Super Bot Fight Mode*, *Browser Integrity Check*.
+- **Expression** — click **Edit expression** and paste exactly:
+
+```
+starts_with(http.request.uri.path, "/api/") or http.request.uri.path eq "/healthz"
+```
+
+That path set is everything that must reach the origin unfiltered: the Telegram webhook
+(`/api/tg/<secret>`), the Helius RPC proxy (`/api/helius-rpc`), SOL payment verify
+(`/api/verify-sol-payment`), the airdropper/hatchery/locker calls, and Railway's `/healthz` probe.
+
+## 2. WAF → Managed rules → **turn the WAF on** (this is what RootCrak detects)
+
+Deploy the **Cloudflare Managed Ruleset** (free tier gets the "Cloudflare Free Managed Ruleset";
+Pro+ gets the full OWASP Core Ruleset). Default action **Managed Challenge / Block** is fine — the
+Skip rule above already carves out `/api/`, so managed rules apply to the site's HTML/asset surface
+only. No expression needed; it deploys zone-wide.
+
+## 3. (Optional, Pro+) Super Bot Fight Mode instead of the free toggle
+
+If you upgrade to Pro, use **Super Bot Fight Mode** (it *is* path-scopable) and rely on the Skip
+rule in §1 to exempt `/api/`. On free tier, skip this — the WAF managed ruleset already clears
+`WAF-NONE`; you do not need any bot mode for that.
+
+## 4. (Optional) One edge rate-limit rule (free tier = 1 rule)
+
+The origin already rate-limits, so this is belt-and-suspenders. If you add one, scope it to a
+specific hot path and **never** the webhook:
+
+- **Expression:**
+
+```
+http.request.uri.path eq "/api/ask-cluck"
+```
+
+- **Rate:** 20 requests per 1 minute, per IP → **Managed Challenge** (or Block). (The origin caps
+  this same path at 15/min, so the edge rule just sheds load before it arrives.)
+
+## 5. TLS that won't fight Railway
+
+Railway already serves a valid Let's Encrypt cert for the custom domain, so **SSL/TLS → Full
+(strict)** works out of the box. The most robust option (survives Railway cert renewals behind the
+proxy) is a **Cloudflare Origin Certificate**:
+
+1. SSL/TLS → Origin Server → **Create Certificate** (15-year, covers `clucknorris.app` + `*.clucknorris.app`).
+2. Install it on the Railway service's custom domain (Railway → service → Settings → Networking →
+   custom domain → provide cert/key) if Railway exposes cert upload for your plan; otherwise leave
+   Railway's own cert in place and keep Cloudflare on **Full (strict)** — that already validates it.
+3. Turn on **Always Use HTTPS** and **Automatic HTTPS Rewrites** (SSL/TLS → Edge Certificates). Our
+   app already sends HSTS, so this just backstops it at the edge.
+
+## 6. Caching (don't let it cache JSON)
+
+Default "respect origin headers" is correct — leave it. Do **not** create a Cache Rule with "Cache
+Everything" over `/api/*` (it would cache the RPC proxy and payment responses). If you add a cache
+rule for the game/static assets, bypass `/api/`:
+
+```
+not starts_with(http.request.uri.path, "/api/")
+```
+
+---
+
+# Post-cutover checklist (run every item — the bot failure is silent)
+
+```
+# 1) Proxy is live (this is what clears WAF-NONE):
+curl -sI https://clucknorris.app/ | grep -iE 'server:|cf-ray'
+#    expect:  server: cloudflare   +   cf-ray: <hash>-<POP>
+
+# 2) Telegram webhook still delivering (the Bot-Fight-Mode trap check):
+curl -s "https://clucknorris.app/api/tg-webhook-info?key=$PREMIUM_ACCESS_KEY"
+#    expect: webhook url registered, pending/queued 0, a recent last-delivery time, no last_error
+
+# 3) Bot can still post out:
+curl -s "https://clucknorris.app/api/tg-test?key=$PREMIUM_ACCESS_KEY&text=cf%20cutover%20ok"
+
+# 4) RPC proxy works (wallet balance path): open /wallet-checkup or /locker-room, connect, read a balance.
+# 5) Game loads: open /normie-quest-x7.
+# 6) Re-scan RootCrak → WAF-NONE clears.
+```
+
+If step 2 shows a `last_error` about the webhook being unreachable or challenged, the §1 Skip rule
+is missing or Bot Fight Mode is on — fix that first, then re-register the webhook via
+`/api/tg-webhook-info?key=…&reset=1` (add `&drop=1` to also clear any queued backlog).
