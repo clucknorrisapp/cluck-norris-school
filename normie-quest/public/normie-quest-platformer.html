@@ -1222,7 +1222,7 @@ var LEVELS=[
   { name:'TOMSTURF', sub:"TOM'S TURF", time:180, theme:28, bgArt:'wMyspace', width:4800,
     hidden:true, bonus:true, private:true, boss:true, bossType:'kol', diff:1.7,
     bossName:'TOM', bossSub:'YOUR FIRST FRIEND — STOMP x5 TO CRACK HIS TOP 8',
-    bossTex:'tom', bossScale:78, bossHits:5, bossShillMs:1450,
+    bossTex:'tom', bossScale:78, bossHits:5, bossShillMs:1450, bossAttack:'tom',
     bossColor:'#8aa0d8', bossGlowHex:0x8aa0d8,
     bossTaunts:['a/s/l?','THANKS FOR THE ADD!','NEW COMMENT ON YOUR WALL','CHECK YOUR BULLETINS','YOU + ME = TOP 8','TOM APPROVES THIS','ADD ME BACK!'],
     gaps:[[700,772],[1380,1500],[2060,2156],[2720,2816],[3380,3500]],
@@ -3184,8 +3184,35 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   },
   kolTick:function(now,p){
     var k=this.rugking; if(!k||!k.active) return;
-    if(now>this.kolNextShill){ this.kolNextShill=now+(this.def.bossShillMs||2200); this.kolShill(k,p); }
+    if(now>this.kolNextShill){ this.kolNextShill=now+(this.def.bossShillMs||2200); if(this.def.bossAttack==='tom') this.tomAttack(k,p); else this.kolShill(k,p); }
     if(now>this.kolNextTaunt){ this.kolNextTaunt=now+3600; var t=this.def.bossTaunts||['TRUST ME BRO','WEN UTILITY? SOON','NOT FINANCIAL ADVICE','THIS IS THE ONE','FEW UNDERSTAND','GM, APE IN']; this.flash(Phaser.Math.RND.pick(t),this.def.bossColor||'#c99bff'); }
+  },
+  // TOM's custom fight — three MySpace attacks in rotation, escalating on his last two hits.
+  // Same enemyShots conventions as kolShill (no gravity, dieAt, srcCause) + the stomp guard.
+  tomAttack:function(k,p){
+    if(this.over||!this.enemyShots) return; var self=this;
+    if(this.stompImminent(p,k)) return;   // never punish a committed stomp point-blank
+    var low=this.bossHP<=2;
+    var shot=function(x,y,vx,vy,tint,tex,cause){ var s=self.enemyShots.create(x,y,tex||'bullet').setDepth(6); if(!s||!s.body) return null;
+      s.srcCause=cause; s.body.setAllowGravity(false); s.body.setSize(s.width*0.85,s.height*0.85); s.setVelocity(vx,vy); s.setTint(tint); s.dieAt=self.time.now+3000; return s; };
+    var base=Math.atan2((p.y-8)-k.y, p.x-k.x);
+    this._tomPhase=((this._tomPhase||0)+1)%3;
+    if(this._tomPhase===0){
+      // FRIEND REQUESTS — a fan of hearts aimed at you (one extra when he's low)
+      this.flash('FRIEND REQUEST — DODGE THE ADD!','#8aa0d8');
+      var n=low?4:3, sp=195; for(var i=0;i<n;i++){ var ang=base+(i-(n-1)/2)*0.20; shot(k.x,k.y-8,Math.cos(ang)*sp,Math.sin(ang)*sp,0x9fb6ee,'heart','FRIEND REQUEST'); }
+      _tone(560,240,0.10,'square',0.05);
+    } else if(this._tomPhase===1){
+      // TOP 8 — a glitter ring bursting outward (8 shots, 10 when low)
+      this.flash('TOP 8 INCOMING!','#ffcf5a');
+      var m=low?10:8, sp2=165; for(var j=0;j<m;j++){ var a2=(j/m)*Math.PI*2+(low?0.3:0); shot(k.x,k.y-6,Math.cos(a2)*sp2,Math.sin(a2)*sp2,0xffcf5a,'bullet','TOP 8 GLITTER'); }
+      _tone(720,220,0.12,'square',0.05);
+    } else {
+      // BULLETIN BLAST — a fast flat triple toward you
+      this.flash('NEW BULLETIN!','#ff7ad9');
+      var sp3=low?250:225; [-0.10,0,0.10].forEach(function(off){ var a3=base+off; shot(k.x,k.y-6,Math.cos(a3)*sp3,Math.sin(a3)*sp3,0xff7ad9,'bullet','BULLETIN BLAST'); });
+      _tone(640,200,0.10,'sawtooth',0.05);
+    }
   },
   kolShill:function(k,p){   // flings a small spread of "fake token" shills toward the player
     if(this.over||!this.enemyShots) return; var self=this;
