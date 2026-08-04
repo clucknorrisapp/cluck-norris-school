@@ -209,7 +209,8 @@ site 403s. `/healthz` is exempt in code (Railway's probe hits the origin directl
    - Name: `inject origin secret`
    - **If… Custom filter expression:** `true` (match all requests — the Skip rule doesn't apply
      here; every proxied request should carry it, including `/api/`).
-   - **Then… Set static:** Header name `X-CF-Origin-Secret`, Value `<SECRET>`.
+   - **Then… Set static:** Header name `X-Cluck-Edge-Auth`, Value `<SECRET>`.
+     (NOT `x-cf-*` — Cloudflare reserves that prefix and rejects custom headers using it.)
    - Deploy. (This header is added between Cloudflare and your origin; it is never visible to
      browsers.)
 
