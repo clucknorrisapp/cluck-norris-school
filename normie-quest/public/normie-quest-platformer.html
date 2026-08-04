@@ -1182,12 +1182,43 @@ var LEVELS=[
     enemies:[],
     slots:[[1120,'jackpot']], bonusblocks:[[700,8],[1420,12],[1600,8],[1900,15]], key:[430,H-150], door:2440 },
 
-  // ===== PRIVATE DEV ROOM — "MYSPACE" (owner + the Normie dev). Reachable ONLY via ?room=myspace:
-  //   hidden:true keeps it out of progression AND level-select, and NO warp anywhere points at it,
-  //   so the unlisted URL is the ONLY door — that IS the privacy. Boss = TOM (your first friend),
-  //   which re-skins the shared KOL mechanic blue via the boss* overrides below. Geometry is the
-  //   proven 3-3 KOL arena (already passes the reachability check); only the dressing is new. =====
-  { name:'MYSPACE', sub:"TOM'S TOP 8", time:180, theme:28, bgArt:'wMyspace', width:4800,
+  // ===== PRIVATE DEV WORLD — "MYSPACE" (owner + the Normie dev). A full 3-level world reachable
+  //   ONLY via ?room=myspace. All three are hidden:true (out of progression + level-select) and
+  //   private:true, with NO warp pointing at them — the unlisted URL is the only door. They CHAIN
+  //   via def.next (a hidden level with def.next advances instead of returning to the surface);
+  //   the finale is TOM, who re-skins the shared KOL mechanic blue via the boss* overrides. The
+  //   backdrop is drawn procedurally (bgArtProc:'myspace') — a 2003 profile page. Geometry on each
+  //   is lifted from a proven world-3 level (3-1 / 3-2 / 3-3) so reachability is already vetted;
+  //   only the theming + the stripped speakeasy warp are new. =====
+  { name:'MYSPACE', sub:'THE PROFILE PAGE', time:150, theme:28, bgArtProc:'myspace', width:5800,
+    hidden:true, bonus:true, private:true, next:83, diff:1.35,
+    gaps:[[820,892],[1640,1760],[2480,2600],[3300,3372],[4200,4296],[5000,5076]],
+    walls:[[460,3,'steel',4],[1300,3,'stone',4],[2200,4,'steel',3],[3000,3,'brick',4],[3900,3,'stone',4],[4800,3,'steel',4]],
+    plats:[[840,2,150,'crate'],[1600,2,H-130,'brick'],[1660,2,150,'stone'],[2140,2,H-120,'steel'],[2500,2,150,'steel'],[3320,2,150,'brick'],[4220,2,150,'stone']],
+    spikes:[[1000],[1024],[2760],[2784],[4560],[4584]],
+    powerups:[['moon',3200,230],['omegachad',4090,230],['bull',2850,230],['candle',1600,230]],
+    airdrops:[[1200,H-118],[3500,H-72]],
+    coins:[[472,158],[520,158],[700,196],[1312,158],[1360,158],[1500,196],[2212,134],[2260,134],[2680,196],[3012,158],[3060,158],[3600,196],[3912,158],[3960,158],[4500,196],[4812,158],[4860,158],[5300,196]],
+    enemies:[['jeet',340,230,80],['bot',680,230,60],['ghost',1050,212,80],['fudster',1150,230,60],['sniper',1900,230,30],['bitmaxi',2380,230,70],['bot',2800,230,70],['ghost',2820,212,60],['sniper',3150,230,30],['fudster',3600,230,70],['bitmaxi',4100,230,70],['bot',4500,230,70],['ghost',4700,212,90]],
+    pumpdumps:[[1500,174],[3700,174]], honeypots:[], npcs:[[2900,90]],
+    bonusblocks:[[1280,5],[2950,'moon'],[4760,8]],
+    key:[1624,H-150], door:5680 },
+
+  { name:'TOP8', sub:'TOP 8 OR NOTHING', time:160, theme:28, bgArtProc:'myspace', width:6400,
+    hidden:true, bonus:true, private:true, next:84, diff:1.4,
+    gaps:[[780,852],[1620,1692],[2440,2560],[3260,3380],[4120,4240],[4980,5076],[5900,5976]],
+    walls:[[440,3,'steel',4],[1240,4,'stone',4],[2100,3,'crate',5],[2960,4,'steel',4],[3820,3,'brick',5],[4680,4,'stone',4],[5500,3,'crate',4]],
+    plats:[[800,2,150,'stone'],[1140,2,H-130,'stone'],[1640,2,150,'crate'],[2460,2,150,'steel'],[3280,2,150,'brick'],[3500,2,H-140,'steel'],[4140,2,150,'stone'],[5000,2,150,'crate']],
+    spikes:[[1000],[1024],[1968],[1992],[3600],[3624],[4400],[4424]],
+    powerups:[['supergeek',1400,230],['omegachad',4480,230],['bull',4100,230],['candle',3150,230]],
+    airdrops:[[2300,H-118],[4200,H-72]],
+    coins:[[452,158],[500,158],[700,196],[1252,134],[1300,134],[1400,196],[2112,158],[2160,158],[2208,158],[2680,196],[2972,134],[3020,134],[3200,196],[3832,158],[3880,158],[3928,158],[4692,134],[4740,134],[5512,158],[5560,158],[6100,196]],
+    enemies:[['bot',340,230,70],['jeet',600,230,60],['ghost',1000,212,80],['fudster',1400,230,70],['sniper',1900,230,30],['bitmaxi',2250,230,70],['bot',2700,230,70],['ghost',3200,212,70],['sniper',3450,230,30],['fudster',3650,230,70],['bitmaxi',4000,230,70],['bot',4400,230,70],['ghost',4820,212,80],['sniper',5250,230,30],['bitmaxi',5650,230,60]],
+    pumpdumps:[[1000,174],[3500,174],[5300,174]], honeypots:[[2350,232]], npcs:[[3150,90]],
+    bonusblocks:[[1120,5],[2080,8],[3220,5],[4490,8],[5480,8]],
+    key:[1164,H-150], door:6300 },
+
+  { name:'TOMSTURF', sub:"TOM'S TURF", time:180, theme:28, bgArtProc:'myspace', width:4800,
     hidden:true, bonus:true, private:true, boss:true, bossType:'kol', diff:1.4,
     bossName:'TOM', bossSub:'YOUR FIRST FRIEND — STOMP x3 TO CRACK HIS TOP 8',
     bossColor:'#8aa0d8', bossTintHex:0x6d84b4, bossGlowHex:0x8aa0d8,
@@ -1890,6 +1921,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         _self.add.rectangle(0,0,_cam.width,_cam.height,0x05040a,0.22).setOrigin(0,0).setScrollFactor(0).setDepth(-57); };
       if(this.textures.exists(_key)){ _renderArt(false); }
       else { this.load.image(_key, WORLD_ART[_key]+'?v='+WORLD_ART_VER); this.load.once('complete', function(){ _renderArt(true); }); this.load.once('loaderror', function(){}); this.load.start(); }
+    } else if(def.bgArtProc==='myspace'){
+      this.drawMyspaceBackdrop(LW);   // the private MySpace world — procedural retro-web backdrop
     } else {
     // stars scattered across the whole level with a slight parallax
     for(i=0;i<Math.ceil(LW/90);i++){ var ss=Phaser.Math.RND.pick([1,1,1,2]); this.add.rectangle(Phaser.Math.RND.between(0,LW),Phaser.Math.RND.between(3,Math.floor(H*0.6)),ss,ss,0xffffff,Phaser.Math.RND.between(18,50)/100).setScrollFactor(0.25).setDepth(-55); }
@@ -2575,6 +2608,42 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       else this.scene.start('Game',{level:0, score:this.score, lives:this.lives, lab:(this._labWarp?1:undefined)}); }, [], this);
   },
 
+  // Procedural 2003-web MySpace backdrop (the private dev world). Drawn in world/parallax space so
+  // it fills any level width with no seams — three depths: profile "content cards", Tom + Top-8
+  // cards, then glitter. All cosmetic (behind gameplay), so it can never affect geometry.
+  drawMyspaceBackdrop:function(LW){
+    var self=this;
+    var CARD=0xdfe7f5, HEAD=0x3b5998, BLUE=0x6d84b4, INK=0x22304e, GREEN=0x62d67a;
+    var mk=function(x,y,w,h,c,a,sf,d){ return self.add.rectangle(x,y,w,h,c,a).setScrollFactor(sf).setDepth(d); };
+    var tx=function(x,y,s,size,col,sf,d,a){ var t=self.add.text(x,y,s,{fontFamily:'"Press Start 2P"',fontSize:size+'px',color:col,resolution:2}).setScrollFactor(sf).setDepth(d); if(a!=null)t.setAlpha(a); return t; };
+    // FAR — repeating profile "content cards" with blue header bars + faux text lines
+    for(var x=-40;x<LW+240;x+=430){ var d=-56, sf=0.30;
+      mk(x,86,210,150,CARD,0.10,sf,d).setOrigin(0.5,0);
+      mk(x,86,210,20,HEAD,0.16,sf,d).setOrigin(0.5,0);
+      tx(x-98,89,'about me',6,'#9fb6e6',sf,d,0.45).setOrigin(0,0);
+      for(var r=0;r<4;r++) mk(x-92,116+r*14,150-(r%3)*34,4,BLUE,0.16,sf,d).setOrigin(0,0);
+    }
+    // MID — Tom's profile card ("online now!") + the Top 8 friend grid
+    for(var x2=150;x2<LW+240;x2+=680){ var d2=-50, s2=0.5;
+      mk(x2,58,120,98,CARD,0.14,s2,d2).setOrigin(0.5,0);
+      mk(x2-40,88,44,44,INK,0.30,s2,d2);
+      mk(x2-40,82,22,20,0xf1d3b0,0.55,s2,d2);           // Tom face
+      mk(x2-40,75,26,9,0x3a2a1a,0.55,s2,d2);            // Tom hair
+      tx(x2-14,70,'Tom',8,'#ffffff',s2,d2,0.72).setOrigin(0,0);
+      mk(x2-12,92,7,7,GREEN,0.75,s2,d2);                // online dot
+      tx(x2-2,90,'online!',6,'#8fe6a0',s2,d2,0.6).setOrigin(0,0);
+      tx(x2-54,132,'add | message | fwd',5,'#9fb6e6',s2,d2,0.5).setOrigin(0,0);
+      var gx=x2+152; tx(gx-2,42,'Top 8',7,'#ffcf5a',s2,d2,0.62).setOrigin(0,0);
+      for(var i=0;i<8;i++){ var cx=gx+(i%4)*30, cy=58+Math.floor(i/4)*30;
+        mk(cx,cy,24,24,INK,0.26,s2,d2); mk(cx,cy-4,12,10,(i%2?0xe8b48a:0xf1d3b0),0.4,s2,d2); }
+    }
+    // NEAR — twinkling glitter + floating profile-comment tags
+    for(var st=0;st<Math.ceil(LW/80);st++){ var sx=Phaser.Math.RND.between(0,LW), sy=Phaser.Math.RND.between(10,152);
+      var s=self.add.star(sx,sy,4,1,3,0xffffff,Phaser.Math.RND.between(30,70)/100).setScrollFactor(0.66).setDepth(-42);
+      self.tweens.add({targets:s,alpha:0.08,duration:Phaser.Math.RND.between(700,1700),yoyo:true,repeat:-1}); }
+    for(var h=140;h<LW;h+=360) tx(h,Phaser.Math.RND.between(18,58),Phaser.Math.RND.pick(['<3','xoxo','rawr','thx 4 add']),6,Phaser.Math.RND.pick(['#ff7ad9','#ffcf5a','#8fd0ff']),0.72,-40,0.55);
+  },
+
   grabPowerup:function(player,pu){
     if(pu.puLocked){
       // tier can flip live (post-buy refresh) — re-check on touch, unlock in place if it did
@@ -2872,7 +2941,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       else if(!this.hasKey && !this._doorHint){ this._doorHint=true; this.flash('LOCKED — FIND THE KEY','#ff3860'); this.time.delayedCall(1400,function(){ this._doorHint=false; },[],this); }
       return;
     }
-    if(this.def.hidden){ this.returnFromHidden(); return; }   // non-boss bonus room exit → back to the surface
+    if(this.def.hidden && this.def.next==null){ this.returnFromHidden(); return; }   // non-boss bonus room exit → back to the surface (a hidden level WITH def.next chains onward instead — e.g. the private MySpace world)
     if(this.hasKey){ this.levelClear(); }
     else if(!this._doorHint){ this._doorHint=true; this.flash('LOUNGE LOCKED — FIND THE KEY','#ff3860'); this.time.delayedCall(1400,function(){ this._doorHint=false; },[],this); }
   },
@@ -3899,6 +3968,14 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // BOSS DROP: beating a boss banks a random boost for later (skipped if the slot's already full).
     // The reward-wheel granter uses the same grantReserve() inventory.
     if(this.reserve && this.reserve.length<RESERVE_SLOTS){ var _dp=['vial','disc','shield','star','bomb']; this.grantReserve(_dp[Math.floor((this.time.now/97)%_dp.length)]); }
+    if(this.def.private){
+      // PRIVATE WORLD FINALE (TOM) — not a campaign boss: don't advance into the main game or the
+      // Win screen. Celebrate, then drop back to the Title so the private room ends cleanly.
+      this.addScore(1000);
+      this.powerBanner("YOU MADE TOM'S TOP 8!",'#1 IN HIS FRIENDS — GG','#8aa0d8');
+      this.time.delayedCall(2400, function(){ this.scene.start('Title'); }, [], this);
+      return;
+    }
     var nx=this.levelIdx+1;
     // 'saylor' (20-3) and 'wenmoon' (21-3, the finale) both have bespoke branches below —
     // Saylor advances to the moon, WEN MOON ends the run — so they skip the generic VIP path.
