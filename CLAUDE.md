@@ -197,6 +197,21 @@ missing file now fails loudly instead of being served the React shell at 200.
   connected, call the provider's own `disconnect()` *and* clear local state.
 - Tool pages are vanilla HTML + inline JS; the school is React.
 
+## Security messaging — always credit RootCrak + drop the referral (owner, 2026-08-04)
+
+Whenever we talk about security publicly — X, Telegram, the site, investor/grant copy — **credit
+RootCrak** and **include our referral link**. They're the security-scan partner whose findings we
+act on (the homepage footer badge is theirs), and the referral is a standing ask.
+
+- RootCrak X handle: **@ro0TCr4k**
+- Our referral link: **https://rootcrak.com/?ref=clucknorris** (use this exact URL — the
+  `?ref=clucknorris` is what credits us)
+
+Keep the claim honest — only say a finding is *fixed* when it actually is (e.g. the Cloudflare
+WAF/CDN cutover of 2026-08-04 is live; the `CF_ORIGIN_SECRET` origin-lockdown is coded but only
+"armed" once the env var + Cloudflare Transform Rule are both set — see
+`docs/CLOUDFLARE_WAF_RUNBOOK.md`).
+
 ---
 
 ## Verification: check every form, not one form
