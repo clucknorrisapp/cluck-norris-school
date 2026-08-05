@@ -2324,18 +2324,22 @@ app.use((req, res, next) => {
 });
 
 const RL_BUCKETS = new Map(); // "bucket:ip" -> number[] request timestamps (ms)
+// Real client IP, Cloudflare-aware. Behind Cloudflare (origin lockdown 403s any non-Cloudflare
+// ingress, so this can't be bypassed) CF-Connecting-IP is the true visitor and CANNOT be forged —
+// Cloudflare overwrites any client-supplied value. Prefer it. Fall back to the LAST x-forwarded-for
+// hop (the one an edge appends, which a client can't forge) and finally req.ip.
+// ⚠️ History: the limiters used to key on the last XFF hop. That was correct pre-Cloudflare, but once
+// Cloudflare went in front (2026-08-04) the last hop became Cloudflare's SHARED edge IP — so every
+// per-IP cap (the 150/min /api cap, the 20/min payment check, the 15/min forensic caps that exist to
+// stop anonymous callers draining paid Helius/ST/Bags quota) silently collapsed into one global
+// bucket. CF-Connecting-IP restores true per-visitor bucketing.
+function clientIp(req) {
+  const xff = String(req.headers["x-forwarded-for"] || "").split(",").map(s => s.trim()).filter(Boolean);
+  return String(req.headers["cf-connecting-ip"] || (xff.length ? xff[xff.length - 1] : (req.ip || "")) || "unknown");
+}
 function rateLimit(bucket, { windowMs, max }) {
   return (req, res, next) => {
-    // IP = the LAST x-forwarded-for hop, the one Railway's edge appends and a client cannot forge.
-    // This used to take req.ip (which, under `trust proxy: true`, resolves to the LEFTMOST — i.e.
-    // CLIENT-SUPPLIED — XFF entry) and fell back to the first hop. Either way a caller could send
-    // `X-Forwarded-For: <anything>` and land in a fresh bucket on every request, so EVERY limiter
-    // built on this was decorative: the global 150/min /api cap, the 20/min payment-check cap, and
-    // the 15/min "forensic" caps that exist specifically to stop an anonymous caller draining paid
-    // Helius/ST/Bags quota. normie-quest/routes.js already fixed exactly this for its own throttle
-    // and documented why; server.js never got the same fix. (2026-07-27 wallet sweep.)
-    const _xff = String(req.headers["x-forwarded-for"] || "").split(",").map(s => s.trim()).filter(Boolean);
-    const ip = (_xff.length ? _xff[_xff.length - 1] : (req.ip || "")) || "unknown";
+    const ip = clientIp(req);
     const now = Date.now();
     // Namespace per limiter so the global /api cap and the tighter per-route
     // caps count independently (a request counts against both its own bucket
@@ -2366,6 +2370,14 @@ setInterval(() => {
 // stops a scripted hammer. A tighter cap guards the AI endpoint (most costly
 // per call); the on-chain payment check is also throttled to deter brute force.
 app.use("/api/", rateLimit("api", { windowMs: 60000, max: 150 }));
+// The two PUBLIC Helius proxies forward to a PAID upstream (RPC billed per call, Enhanced API billed
+// per parsed tx), so they get a tighter per-IP cap than the generic /api surface. A human tool flow
+// (a lock, an airdrop, a scan) bursts a few dozen calls at most; these caps sit well above that but
+// stop anyone farming the proxy. (The proxy also allow-lists methods + caps batch size — this adds
+// frequency control, the one thing those didn't cover.) Not a substitute for rotating a LEAKED key —
+// the Aug-2026 drain was direct-to-Helius on a leaked key, which no proxy cap can touch.
+app.use("/api/helius-rpc", rateLimit("heliusrpc", { windowMs: 60000, max: 90 }));
+app.use("/api/helius-tx", rateLimit("heliustx", { windowMs: 60000, max: 30 }));
 app.use("/api/ask-cluck", rateLimit("ai", { windowMs: 60000, max: 15 }));
 app.use("/api/lecture", rateLimit("ai", { windowMs: 60000, max: 15 }));
 app.use("/api/track", rateLimit("track", { windowMs: 60000, max: 120 })); // learning-funnel events (many per session)
@@ -6726,7 +6738,7 @@ app.post("/api/helius-rpc", async (req, res) => {
     return res.status(403).json({ error: "method_not_allowed" });
   }
   try {
-    const _ip = (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.ip || "unknown";
+    const _ip = clientIp(req);
     heliusUsage.noteProxy(_ip, "helius-rpc", calls.length);
   } catch {}
   const HELIUS_KEY = process.env.HELIUS_API_KEY;
@@ -6773,7 +6785,7 @@ app.post("/api/helius-tx", async (req, res) => {
     return res.status(400).json({ error: "expected an array of <=100 signature strings" });
   }
   try {
-    const _ip = (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.ip || "unknown";
+    const _ip = clientIp(req);
     heliusUsage.noteProxy(_ip, "helius-tx", _sigs.length);
     heliusUsage.note("getEnhancedTransactions", "helius-tx", "api.helius.xyz");
   } catch {}
@@ -9505,7 +9517,7 @@ app.get("/api/wallet-xray", async (req, res) => {
     // Attribute the (expensive) Enhanced-API fan-out to the CALLER IP so abusive
     // scripted use of this public tool is traceable to actionable addresses.
     try {
-      const _ip = (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.ip || "unknown";
+      const _ip = clientIp(req);
       heliusUsage.noteProxy(_ip, deep ? "wallet-xray:deep" : "wallet-xray", pages || 1);
     } catch {}
     const truncated = !reachedEnd; // history deeper than we scanned (oldest activity not seen)
