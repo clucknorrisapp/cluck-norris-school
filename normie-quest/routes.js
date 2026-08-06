@@ -22,6 +22,7 @@ const telemetry = require('./nq-telemetry'); // difficulty telemetry (deaths + c
 const leaderboard = require('./nq-leaderboard');   // Phase 2 leaderboards (per-world + weekly)
 const wallet = require('./nq-wallet');   // Phase 2 wallet ownership + tier gate (sign-message, read-only)
 const rewards = require('./nq-rewards'); // wallet-bound game-boost reward queue + daily VIP wheel
+const ledger = require('./nq-ledger');   // off-chain per-wallet points ledger (Normie Cash economy)
 const pair = require('./nq-pair');       // TV pairing — carry a proven wallet session to a wallet-less screen
 
 // Admin key for reading feedback / the comments dashboard. Accepts a simple shared password
@@ -302,7 +303,31 @@ router.post('/api/nq/wheel/spin', (req, res) => {
     if (!sess || sess.ok === false) return res.status(401).json({ ok: false, error: 'bad_session' });
     // Open to any VERIFIED wallet — the daily spin is the free player's reason to come back.
     // VIP is no longer a gate here, it selects the better prize table and the bonus windows.
-    res.json(rewards.spin(pk, null, { vip: wallet.isVip(pk, null) }));
+    const result = rewards.spin(pk, null, { vip: wallet.isVip(pk, null) });
+    // The wheel outcome is decided SERVER-SIDE, so a successful spin is a safe, server-authoritative
+    // place to also credit off-chain Normie Cash points. Env-gated (NQ_WHEEL_POINTS, default 0 = OFF)
+    // so this changes nothing until the owner sets an amount. Idempotent by a per-spin id; the wheel's
+    // own once-per-day guard means a doomed double-tap never reaches here as a second success.
+    if (result && result.ok) {
+      const pts = parseInt(process.env.NQ_WHEEL_POINTS || '0', 10);
+      if (pts > 0) {
+        try {
+          const c = ledger.credit(pk, { eventId: 'wheel:' + pk + ':' + Date.now(), amount: pts, kind: 'wheel' });
+          if (c && c.ok) { result.pointsEarned = c.credited || 0; result.pointsBalance = c.balance; }
+        } catch (e) { /* ledger is best-effort — never break a spin */ }
+      }
+    }
+    res.json(result);
+  } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+// Off-chain points balance for the connected wallet (Normie Cash economy). Session-gated read.
+router.get('/api/nq/ledger', (req, res) => {
+  if (throttled(req, 'ledger', 60)) return res.status(429).json({ ok: false, error: 'slow_down' });
+  try {
+    const pk = String(req.query.wallet || ''), token = String(req.query.token || '');
+    const sess = wallet.checkSession(pk, token);
+    if (!sess || sess.ok === false) return res.status(401).json({ ok: false, error: 'bad_session' });
+    res.json({ ok: true, ...ledger.balance(pk), history: ledger.history(pk, 25) });
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
 router.get('/api/nq/wheel/status', (req, res) => {
