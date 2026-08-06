@@ -3750,10 +3750,10 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.physics.add.collider(k, this.platforms);
     this.physics.add.overlap(this.player, k, this.bossTouch, null, this);
     this.door.setVisible(false);
-    this.bossHP=6;
-    this.bossPips=[]; for(var i=0;i<6;i++) this.bossPips.push(this.hb(this.add.image(W/2-60+i*24, 22, 'heart').setScale(1.3).setDepth(40).setTint(0x66aacc)));
+    this.bossHP=5;   // owner cap 2026-08-06: no boss over 5 hearts. Was 6 — the only one above the cap.
+    this.bossPips=[]; for(var i=0;i<5;i++) this.bossPips.push(this.hb(this.add.image(W/2-48+i*24, 22, 'heart').setScale(1.3).setDepth(40).setTint(0x66aacc)));
     this.hb(this.add.text(W/2, 42, 'THE DIRTY WHALE', {fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#8fd0f0'}).setOrigin(.5,0).setDepth(40));
-    this.powerBanner('THE DIRTY WHALE','HE DUMPED ON EVERYONE — DODGE THE CHARGE, STOMP x6','#8fd0f0');
+    this.powerBanner('THE DIRTY WHALE','HE DUMPED ON EVERYONE — DODGE THE CHARGE, STOMP x5','#8fd0f0');
     this.rugIntro=true; this.rugGraceUntil=this.time.now+1800;
     this._whState='pace'; this._whT0=this.time.now; this._whNextLob=this.time.now+2200; this._whNextTaunt=this.time.now+2000;
   },
