@@ -3056,6 +3056,21 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var visTop=k.y-k.displayHeight*0.5;
     return ((pbBottom<=k.body.top+headTol)||(pbBottom<=visTop+k.displayHeight*0.4))&&vy>=-120;
   },
+  // VULNERABILITY TELL — fires the instant a narrow-window boss (MEV dragon / Black Swan / Dirty
+  // Whale) becomes stompable, so "hit it NOW" reads at a glance instead of players mashing at an
+  // armoured boss and thinking the hitbox is broken (owner ask, 2026-08-06). Show-don't-tell: a
+  // green burst + a rising "STOMP NOW!" over the boss + a chirp, no pause. Purely cosmetic, self-
+  // cleaning, safe to call any frame.
+  bossVulnCue:function(k){
+    if(!k||!k.active) return;
+    try{ this.burst(k.x, k.y, 0x3dff6e, 12); }catch(e){}
+    try{ _tone(760,70,0.16,'square',0.05); _tone(1040,90,0.16,'square',0.05); }catch(e){}
+    try{
+      var t=this.add.text(k.x, k.y-k.displayHeight*0.5-6, 'STOMP NOW!', {fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#3dff6e'}).setOrigin(.5,1).setDepth(41);
+      t.setStroke('#04240f',5);
+      this.tweens.add({targets:t, y:t.y-18, alpha:{from:1,to:0}, duration:1000, ease:'Sine.out', onComplete:function(){ try{ t.destroy(); }catch(e){} }});
+    }catch(e){}
+  },
   /* ---------- Scammy KOL boss (charges + stomp x3, and shills fake tokens at range) ---------- */
   startKolBoss:function(){
     var dx=this.def.door, self=this, d=this.def;
@@ -3539,7 +3554,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       k.invuln=true;
       if(k.y>=GY-28 || now-this._swanT0>1400){
         k.setVelocity(0,0); k.y=Math.min(k.y, GY-28);
-        this._swanState='grounded'; this._swanT0=now; k.invuln=false;
+        this._swanState='grounded'; this._swanT0=now; k.invuln=false; this.bossVulnCue(k);
         if(this._swanMark) this._swanMark.setVisible(false);
         this.cameras.main.shake(200,.012); _tone(120,60,0.2,'square',0.08);
       }
@@ -3681,7 +3696,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         // 'grounded' still airborne -- vulnerable, but parked above the top of a double jump, i.e.
         // an unwinnable cycle. 'grounded' has to mean on the ground.
         k.setVelocity(0,0); k.y=GY-38;
-        this._drState='grounded'; this._drT0=now; k.invuln=false;
+        this._drState='grounded'; this._drT0=now; k.invuln=false; this.bossVulnCue(k);
         if(this._drMark) this._drMark.setVisible(false);
         this.cameras.main.shake(220,.013); _tone(110,55,0.2,'square',0.08);
         this._drBreathAt=now+340; this._drBreathDone=false;   // let a committed stomp land BEFORE the breath spawns on the head (owner: "jumping on top and taking damage")
@@ -3778,7 +3793,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       var nearWall=(this._whDir<0 && k.x<=this._whWallL+70) || (this._whDir>0 && k.x>=this._whWallR-70);
       if(nearWall || now-this._whT0>2600){
         k.setVelocityX(0);
-        this._whState='stunned'; this._whT0=now; k.invuln=false;
+        this._whState='stunned'; this._whT0=now; k.invuln=false; this.bossVulnCue(k);
         this.cameras.main.shake(240,.015); _tone(90,45,0.22,'square',0.09);
         this.burst(k.x+(this._whDir*30), k.y, 0x8fd0f0, 14);
       }
