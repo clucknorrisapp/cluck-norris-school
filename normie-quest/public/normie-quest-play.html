@@ -4068,6 +4068,16 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       this.addScore(5000);
       this.powerBanner('WEN MOON? NOW.','NORMIE MADE IT — GG','#9fd8ff');
       this.time.delayedCall(2600, function(){ this.scene.start('Win',this.winData()); },[],this);
+    } else if(this.def.bossName==='TOM'){
+      // PRIVATE MySpace dev world (owner + Normie dev): Tom is the final boss and the last LEVELS
+      // entry, so the generic KOL branch below was wrong twice over — it showed "WORLD 3 CLEARED",
+      // then advanceLevel() fell off the end into the game-complete Win screen AND submitted a
+      // full-clear run to the real leaderboard. Give Tom his own MySpace win, flagged private so
+      // the Win scene skips the leaderboard submit; "play again" replays MySpace, not the main game.
+      var _msIdx = LEVELS.findIndex(function(l){ return l && l.name==='MYSPACE'; });
+      this.addScore(2000);
+      this.powerBanner('TOM DEFEATED!',"YOU'RE #1 IN HIS TOP 8 — MYSPACE CLEARED",'#8aa0d8');
+      this.time.delayedCall(2200, function(){ this.scene.start('Win',{score:this.score, boss:'tom', private:true, replayLevel:(_msIdx>=0?_msIdx:0), casino:this.registry.get('nqCasino')||0}); },[],this);
     } else if(this.def.bossType==='kol'){
       // Scammy KOL down → World 3 done → on to World 4 (The Exchange) via the briefing.
       this.bankCheckpoint();
@@ -5231,10 +5241,11 @@ function makePrincessTex(scene){
 }
 var Win=new Phaser.Class({ Extends:Phaser.Scene,
   initialize:function(){ Phaser.Scene.call(this,{key:'Win'}); },
-  init:function(d){ d=d||{}; this.finalScore=d.score||0; this.boss=d.boss||'wormhole'; this.casino=d.casino||0; },
+  init:function(d){ d=d||{}; this.finalScore=d.score||0; this.boss=d.boss||'wormhole'; this.casino=d.casino||0; this.private=!!d.private; this.replayLevel=(d.replayLevel!=null)?d.replayLevel:0; },
   create:function(){
     // SETUP LANE: run WON (full clear) — submit the final score at the top world tier.
-    if(window.NQLB){ try{ window.NQLB.submitRun(worldCount(), this.finalScore); }catch(e){} }
+    // A PRIVATE win (the MySpace dev room) is NOT a real full clear, so it never touches the board.
+    if(window.NQLB && !this.private){ try{ window.NQLB.submitRun(worldCount(), this.finalScore); }catch(e){} }
     SFX.win();
     // victory tableau keyed to the FINAL boss you actually beat, slumped/defeated + Normie triumphant
     var V = this.boss==='wenmoon'   ? {img:'wenmoon',  title:'WEN MOON? NOW. NORMIE MADE IT!', color:'#9fd8ff', tint:0, scale:98, bg:0x05060f, princess:true}
@@ -5249,6 +5260,7 @@ var Win=new Phaser.Class({ Extends:Phaser.Scene,
           : this.boss==='golem'    ? {img:'golem',      title:'THE HASH LORD, CRACKED!', color:'#ffd23f', tint:0, scale:92, bg:0x141810}
           : this.boss==='wyrm'     ? {img:'wyrm',       title:'THE VAULT WYRM, SLAIN!',  color:'#66ff88', tint:0, scale:96, bg:0x0e2416}
           : this.boss==='ceo'      ? {img:'ceoboss',    title:'THE CUSTODIAN, DELISTED!', color:'#8fe4ff', tint:0x9fd6ee, scale:76, bg:0x0a1c2a}
+          : this.boss==='tom'      ? {img:'tom',        title:"TOM DEFEATED — #1 IN HIS TOP 8!", color:'#8aa0d8', tint:0, scale:80, bg:0x101d33}
           : this.boss==='kol'      ? {img:'scammykol',  title:'THE SCAMMY KOL EXPOSED!', color:'#c99bff', tint:0x9a86c8, scale:72, bg:0x140a24}
           : this.boss==='wormhole' ? {img:'wormhole',   title:'THE WORMHOLE IS SEALED!', color:'#66ddff', tint:0x88aacc, scale:82, bg:0x1a1030}
           :                          {img:'rugkingdown',title:'YOU BEAT THE RUG KING!',  color:'#3dff6e', tint:0,        scale:58, bg:0x102a1a};
@@ -5269,11 +5281,11 @@ var Win=new Phaser.Class({ Extends:Phaser.Scene,
     this.add.text(W/2,174,String(this.finalScore),{fontFamily:'"Press Start 2P"',fontSize:'30px',color:'#ffd23f'}).setOrigin(.5).setShadow(3,3,'#7a5a00',0,true,true);
     if(this.casino>0) this.add.text(W/2,202,'🎰 CASINO WINNINGS: '+this.casino,{fontFamily:UIFONT,resolution:UIRES,fontSize:'18px',color:'#ff8adf'}).setOrigin(.5);
     var nw=worldCount();   // every world you can clear, VIP wing included — see worldCount()
-    var wtext = nw<=1?'WORLD 1 CLEARED':(nw===2?'WORLDS 1 & 2 CLEARED':'ALL '+nw+' WORLDS CLEARED');
+    var wtext = this.private ? 'MYSPACE — PRIVATE DEV ROOM' : (nw<=1?'WORLD 1 CLEARED':(nw===2?'WORLDS 1 & 2 CLEARED':'ALL '+nw+' WORLDS CLEARED'));
     this.add.text(W/2,this.casino>0?222:210,wtext,{fontFamily:UIFONT,resolution:UIRES,fontSize:'18px',color:'#b6bfe0'}).setOrigin(.5);
     var p=this.add.text(W/2,246,'PRESS TO PLAY AGAIN',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
     this.tweens.add({targets:p,alpha:.25,duration:600,yoyo:true,repeat:-1});
-    var self=this; this.started=false; var go=function(){ if(self.started) return; self.started=true; self.scene.start('Game',{level:0,score:0,lives:3}); };
+    var self=this; this.started=false; var go=function(){ if(self.started) return; self.started=true; self.scene.start('Game',{level:self.replayLevel,score:0,lives:3,lab:(self.private?1:undefined)}); };
     this.time.delayedCall(500,function(){ self.input.once('pointerdown',go); self.input.keyboard.once('keydown',go); });
     padAdvance(self, go);   // controller button also continues
   }
