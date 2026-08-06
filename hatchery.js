@@ -255,6 +255,27 @@ async function buildMintTransaction({
     }
   }
 
+  // ── SOL preflight ──
+  // Every mint spends ~0.01 SOL of NON-refundable-at-mint-time rent (new mint account, the
+  // creator's token account, the metadata account) plus network fees, BEFORE the fee transfer
+  // runs. An underfunded wallet therefore fails deep in the transaction — at the fee instruction —
+  // with "custom program error 0x1" (System ResultWithNegativeLamports / SPL-Token InsufficientFunds),
+  // an opaque error that Phantom then blocks as "this dApp could be malicious." Check up front and
+  // return a plain-English shortfall instead. Fail OPEN on a flaky balance read — never block a
+  // funded mint over an RPC hiccup.
+  const RENT_NETWORK_BUFFER = 12_000_000; // ~0.012 SOL: mint + ATA + metadata rent + network fees
+  let solNeeded = RENT_NETWORK_BUFFER;
+  if (!waived && !wantsClkn) solNeeded += hatcheryFeeLamports();
+  let payerLamports = null;
+  try { payerLamports = await conn.getBalance(creatorPk, "confirmed"); } catch { payerLamports = null; }
+  if (payerLamports !== null && payerLamports < solNeeded) {
+    const needSol = (solNeeded / 1e9).toFixed(3);
+    const haveSol = (payerLamports / 1e9).toFixed(3);
+    throw new Error(
+      `Not enough SOL to mint: this needs about ${needSol} SOL (${wantsClkn ? "on-chain rent + network fees; the fee itself is paid in CLKN" : "the 0.1 SOL fee plus ~0.01 SOL of on-chain rent + network fees"}), but your wallet has ${haveSol} SOL. Top up a little SOL and try again${wantsClkn ? "." : ", or switch the fee to CLKN (which only needs ~0.01 SOL for rent)."}`
+    );
+  }
+
   const { blockhash } = await conn.getLatestBlockhash("confirmed");
   const tx = new Transaction();
   tx.feePayer = creatorPk;
