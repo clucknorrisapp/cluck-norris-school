@@ -3544,7 +3544,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         this.cameras.main.shake(200,.012); _tone(120,60,0.2,'square',0.08);
       }
     } else if(st==='grounded'){
-      if(now-this._swanT0>2200){ this._swanState='rise'; this._swanT0=now; k.invuln=true; this.swanFeathers(k,p); }
+      if(now-this._swanT0>3400){ this._swanState='rise'; this._swanT0=now; k.invuln=true; this.swanFeathers(k,p); }   // was 2200ms — same narrow-window issue as the MEV dragon/Dirty Whale: bossHit()'s ~1.4s i-frame ate most of it, so only ~1 stomp landed per grounded cycle. 3.4s fits a 2nd stomp.
     } else if(st==='rise'){
       k.invuln=true;
       k.y+=(70-k.y)*0.08; k.x+=(this._swanCX-k.x)*0.05;
@@ -3783,7 +3783,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         this.burst(k.x+(this._whDir*30), k.y, 0x8fd0f0, 14);
       }
     } else if(st==='stunned'){
-      if(now-this._whT0>1900){ this._whState='pace'; this._whT0=now; k.invuln=true; }
+      if(now-this._whT0>3400){ this._whState='pace'; this._whT0=now; k.invuln=true; }   // was 1900ms — the shortest window of the narrow-window bosses, yet 6 HP. bossHit()'s ~1.4s i-frame left room for ONE stomp before he recovered, so the fight barely progressed (owner report, 12-3). 3.4s (matching the MEV dragon) fits a 2nd stomp after the i-frame → ~2 hearts/cycle.
     }
     if(now>this._whNextTaunt){ this._whNextTaunt=now+3600;
       var t2=['WE DUMP TOGETHER','YOUR EXIT IS MY ENTRY','THE CONTRACT WAS ALWAYS OURS','SELL WALL. YOUR WALL.','RELAUNCH? CUTE.'];
