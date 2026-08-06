@@ -49,7 +49,8 @@ let _web3 = null, _spl = null;
 function web3() { return (_web3 = _web3 || require('@solana/web3.js')); }
 function splToken() { return (_spl = _spl || require('@solana/spl-token')); }
 
-const INCINERATOR = '1nc1nerator11111111111111111111111111111111';
+// (INCINERATOR removed 2026-08-06 — the shop migrated burn → send-and-lock on 2026-08-02, so the
+// incinerator address is no longer referenced by any path; the constant was dead.)
 // Same default as nq-wallet.js NORMIE_MINT_DEFAULT — keep the two in step. Both are the public
 // mint address, not a secret.
 const NORMIE_MINT_DEFAULT = 'FrSFwE2BxWADEyUWFXDMAeomzuB4r83ZvzdG9sevpump';
@@ -463,4 +464,4 @@ function transferredToDest(tx, mintStr, destStr) {
 }
 
 module.exports = { cfg, publicConfig, priceFor, newSession, buildBurnTx, sendSigned, verifyBurn,
-  claimOnce, unclaim, CATALOGUE, INCINERATOR, NORMIE_MINT_DEFAULT };
+  claimOnce, unclaim, CATALOGUE, NORMIE_MINT_DEFAULT };
