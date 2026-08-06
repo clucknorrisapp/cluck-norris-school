@@ -3688,7 +3688,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       }
     } else if(st==='grounded'){
       if(!this._drBreathDone && now>=this._drBreathAt){ this._drBreathDone=true; this.dragonBreath(k,this.player); }   // delayed breath: clean-stomp grace window on landing
-      if(now-this._drT0>2400){ this._drState='rise'; this._drT0=now; k.invuln=true; }   // 1.7s was too tight to run up + time a head-jump; 2.4s is challenging, not cruel
+      if(now-this._drT0>3400){ this._drState='rise'; this._drT0=now; k.invuln=true; }   // bossHit() flashes ~1.4s of i-frames per stomp, so a 2.4s window only ever fit ONE hit before he rose — "10 hits, 2 hearts" (owner report, 11-3 live). 3.4s leaves room for a 2nd stomp after the i-frame → ~2 hearts/cycle instead of 1. Geometry is fine (__NQ_STOMPTEST passes); this was the timing.
     } else if(st==='rise'){
       k.invuln=true;
       k.y+=(84-k.y)*0.08; k.x+=(this._drCX-k.x)*0.05;
