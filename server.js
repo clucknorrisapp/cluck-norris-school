@@ -10793,26 +10793,6 @@ app.get("/api/helius-usage", (req, res) => {
   const n = Math.max(1, Math.min(14, parseInt(req.query.days, 10) || 7));
   return res.status(200).json({ success: true, ...heliusUsage.summary(n) });
 });
-// ── /api/egress-ip — reports THIS server's outbound (egress) IP: the address Helius, Bags, etc.
-// see our server-side calls come from. Use it to set a Helius key IP-allowlist to exactly this
-// value. ⚠️ Only worth allowlisting if the egress IP is STATIC (Railway default egress can rotate
-// on redeploy — enable Railway "Static Outbound IPs" first, or the allowlist will 403 our own app).
-// Gated (404 without the admin key). Best-effort across a couple of echo services.
-app.get("/api/egress-ip", async (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
-  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
-  const sources = ["https://api.ipify.org?format=json", "https://ifconfig.co/json", "https://api.my-ip.io/v2/ip.json"];
-  for (const url of sources) {
-    try {
-      const r = await fetch(url, { signal: AbortSignal.timeout(6000) });
-      if (!r.ok) continue;
-      const j = await r.json();
-      const ip = j.ip || j.address || null;
-      if (ip) return res.status(200).json({ success: true, egressIp: ip, source: url });
-    } catch (_) { /* try next */ }
-  }
-  return res.status(502).json({ success: false, error: "could not determine egress IP" });
-});
 // Learning-funnel event sink (public, no PII) — the React school posts step events
 // here (lesson_start/lesson_complete, school/incubator/challenge/graduation) so we can
 // see where learners drop off. Validated + capped in analytics.trackFunnel.
