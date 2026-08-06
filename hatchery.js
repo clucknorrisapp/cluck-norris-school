@@ -240,14 +240,43 @@ async function buildMintTransaction({
     const feeClkn = await clknFeeWhole();
     if (!feeClkn) throw new Error("CLKN pricing is temporarily unavailable — please pay the fee in SOL.");
     const need = BigInt(feeClkn) * (10n ** BigInt(CLKN_DECIMALS));
-    if (creatorClkn === null || creatorClkn < need) {
-      throw new Error(`Paying with CLKN needs about ${feeClkn.toLocaleString()} CLKN in your wallet — you don't have enough. Pay with SOL instead, or get CLKN first.`);
-    }
-    const fromAta = getAssociatedTokenAddressSync(CLKN_MINT, creatorPk);
+    const ata = getAssociatedTokenAddressSync(CLKN_MINT, creatorPk);
     const toAta = getAssociatedTokenAddressSync(CLKN_MINT, HATCHERY_TREASURY);
+    // Pick the SOURCE account for the fee. The transfer pulls from ONE token account, but a wallet
+    // can hold CLKN across several (the ATA plus others — e.g. a CEX withdrawal that opened its own
+    // account). The summed balance can be >= the fee while no single account is, which used to build
+    // a tx that failed on-chain at this transfer ("custom program error 0x1" = InsufficientFunds) —
+    // and Phantom then blocked the failing tx as "this dApp could be malicious." Prefer the ATA;
+    // otherwise the richest single account that can cover it. Require ONE account to hold the fee.
+    let accs = null;
+    try {
+      const r = await conn.getParsedTokenAccountsByOwner(creatorPk, { mint: CLKN_MINT });
+      accs = r.value.map((v) => ({ pubkey: v.pubkey, amount: BigInt(v.account.data.parsed.info.tokenAmount.amount || "0") }));
+    } catch { accs = null; }
+    let source;
+    if (accs) {
+      accs.sort((a, b) => (a.amount < b.amount ? 1 : a.amount > b.amount ? -1 : 0));
+      const pick = accs.find((a) => a.pubkey.equals(ata) && a.amount >= need) || accs.find((a) => a.amount >= need);
+      if (!pick) {
+        const total = accs.reduce((s, a) => s + a.amount, 0n);
+        const whole = Number(total / (10n ** BigInt(CLKN_DECIMALS))).toLocaleString();
+        if (total < need) {
+          throw new Error(`Paying with CLKN needs about ${feeClkn.toLocaleString()} CLKN, but your wallet holds ${whole}. Get more CLKN, or pay the fee in SOL.`);
+        }
+        throw new Error(`You hold enough CLKN (${whole}), but it's split across ${accs.length} accounts — the fee has to come from one. Consolidate your CLKN into a single account, or pay the fee in SOL.`);
+      }
+      source = pick.pubkey;
+    } else {
+      // balance read failed → fall back to the ATA + the summed pre-check (fail OPEN, don't block a
+      // funded mint on a flaky RPC read).
+      if (creatorClkn !== null && creatorClkn < need) {
+        throw new Error(`Paying with CLKN needs about ${feeClkn.toLocaleString()} CLKN in your wallet — you don't have enough. Pay with SOL instead, or get CLKN first.`);
+      }
+      source = ata;
+    }
     // Idempotent: creates the treasury's CLKN account only if it doesn't exist.
     ixs.push(createAssociatedTokenAccountIdempotentInstruction(creatorPk, toAta, HATCHERY_TREASURY, CLKN_MINT));
-    ixs.push(createTransferInstruction(fromAta, toAta, creatorPk, need));
+    ixs.push(createTransferInstruction(source, toAta, creatorPk, need));
   } else if (!waived) {
     const feeLamports = hatcheryFeeLamports();
     if (feeLamports > 0) {
