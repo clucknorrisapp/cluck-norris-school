@@ -167,10 +167,12 @@ router.post('/api/nq/shop/claim', wrap(async (req) => {
 // server can stamp real elapsed time + flag implausible runs. Both POST-public (sanitized in
 // the store), reads are public. Never throw a 500 leak.
 router.get('/api/nq/run-start', (req, res) => {
+  if (throttled(req, 'runstart', 60)) return res.status(429).json({ ok: false, error: 'slow_down' });
   try { res.json({ ok: true, ...leaderboard.startRun(String((req.query && req.query.level) || '')) }); }
   catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
 router.post('/api/nq/score', async (req, res) => {
+  if (throttled(req, 'score', 60)) return res.status(429).json({ ok: false, error: 'slow_down' });
   try {
     const b = req.body || {};
     // Wallet verification is server-side: a score counts as walletVerified ONLY if the wallet's
@@ -193,10 +195,16 @@ router.get('/api/nq/wallet/config', (req, res) => {
   catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
 router.get('/api/nq/wallet/challenge', (req, res) => {
+  // Throttle: each challenge grows an in-memory Map (pruned only by TTL), so cap issuance per IP.
+  if (throttled(req, 'walletchallenge', 30)) return res.status(429).json({ ok: false, error: 'slow_down' });
   try { res.json(wallet.challenge(String((req.query && req.query.pubkey) || ''))); }
   catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
 router.post('/api/nq/wallet/verify', async (req, res) => {
+  // Throttle: verify reads token balances over PAID Helius RPC, and the ed25519 check is
+  // self-satisfiable with attacker-generated keypairs — so churning fresh pubkeys would drive
+  // uncached RPC reads without a cap. 20/min/IP is far above a real "connect once" flow. (cost)
+  if (throttled(req, 'walletverify', 20)) return res.status(429).json({ ok: false, error: 'slow_down' });
   try {
     const b = req.body || {};
     const out = await wallet.verify(String(b.pubkey || ''), String(b.signature || ''));
@@ -321,12 +329,16 @@ router.post('/api/nq/rewards/claim', (req, res) => {
 });
 // re-read live balance for a remembered wallet (no re-signing) → current tier, every launch
 router.post('/api/nq/wallet/refresh', async (req, res) => {
+  // Throttle: refresh re-reads live balances over PAID Helius RPC. Requires a valid session token,
+  // but cap it anyway so a leaked/replayed token can't be looped to drain RPC. (cost)
+  if (throttled(req, 'walletrefresh', 20)) return res.status(429).json({ ok: false, error: 'slow_down' });
   try {
     const b = req.body || {};
     res.json(await wallet.refresh(String(b.pubkey || ''), String(b.token || ''), { force: b.fresh === true }));
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
 router.get('/api/nq/leaderboard', async (req, res) => {
+  if (throttled(req, 'leaderboard', 60)) return res.status(429).json({ ok: false, error: 'slow_down' });
   try {
     const q = req.query || {};
     const worlds = String(q.worlds || '').split(',').map((s) => parseInt(s, 10)).filter((n) => n >= 1 && n <= 99).slice(0, 12);
@@ -336,12 +348,16 @@ router.get('/api/nq/leaderboard', async (req, res) => {
 });
 
 // ---- shared per-IP throttle for the PUBLIC endpoints -----------------------
-// IP = the LAST x-forwarded-for hop (appended by Railway's edge, so a client can't spoof its
-// way into a fresh bucket by inventing XFF entries — taking the FIRST entry was bypassable).
+// IP = CF-Connecting-IP (the real visitor, set by Cloudflare and unforgeable now that the CLKN
+// origin lockdown 403s any non-Cloudflare ingress). ⚠️ This used to take the LAST x-forwarded-for
+// hop; that was correct pre-Cloudflare but once Cloudflare went in front (2026-08-04) the last hop
+// became Cloudflare's SHARED edge IP — so every per-IP cap here collapsed into ONE global bucket
+// (all players sharing a single 60/min counter). CF-Connecting-IP restores true per-visitor caps.
+// Falls back to the last XFF hop, then req.ip, when the header is absent.
 const pubRate = new Map();   // key -> {n, resetAt}
 function clientIp(req) {
   const xff = String(req.headers['x-forwarded-for'] || '').split(',').map(s => s.trim()).filter(Boolean);
-  return xff.length ? xff[xff.length - 1] : String(req.ip || '?');
+  return String(req.headers['cf-connecting-ip'] || (xff.length ? xff[xff.length - 1] : (req.ip || '?')));
 }
 function throttled(req, bucket, max) {
   const key = bucket + ':' + clientIp(req);
