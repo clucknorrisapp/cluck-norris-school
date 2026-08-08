@@ -11110,6 +11110,14 @@ const SCANNER_PATHS = new Set([
   "/backup", "/backup.zip", "/backup.sql", "/backup.tar.gz", "/dump.sql", "/db.sql", "/database.sql",
   "/.htaccess", "/.htpasswd", "/console", "/telescope", "/_debugbar", "/debug", "/shell.php", "/cmd.php",
   "/vendor", "/storage/logs/laravel.log",
+  // Admin / observability / API-doc panels — deeper ffuf wordlists probe these, and NONE is a real
+  // route here (the real dashboards are /engine-dashboard, /buyspecial-dashboard, /pool-monitor,
+  // /normie-quest-x7/dashboard — all explicit routes above). Without this, /dashboard etc. fell to
+  // the catch-all's soft-404 (200 + SPA shell) and a scanner read it as "path discovered" (RootCrak
+  // flagged /dashboard 2026-08-08). Return a clean 404 instead.
+  "/dashboard", "/dashboards", "/panel", "/control-panel", "/admin-panel", "/adminpanel", "/cpanel",
+  "/metrics", "/status", "/swagger", "/swagger-ui", "/api-docs", "/apidocs", "/redoc", "/openapi",
+  "/grafana", "/kibana", "/prometheus",
 ]);
 function isScannerPath(p) {
   p = String(p || "").toLowerCase();
