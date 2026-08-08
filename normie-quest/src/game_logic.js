@@ -1163,7 +1163,33 @@ var LEVELS=[
     powerups:[['supergeek',1000,230],['diamond',1850,230],['omegachad',2620,230],['bull',3300,230]],
     airdrops:[[1500,H-118],[3130,H-72]],
     coins:[[300,196],[560,150],[620,196],[900,196],[1160,140],[1420,130],[1620,196],[1950,150],[2200,196],[2500,150],[2760,130],[2900,196],[3150,150],[3400,130],[3760,150],[4000,196],[4200,150]],
-    enemies:[['jeet',340,230,70],['bot',900,230,60],['fudster',1150,230,60],['ghost',1300,212,80],['sniper',1850,230,30],['sniper',2050,230,30],['bot',2200,230,70],['ghost',2600,212,80],['fudster',2900,230,70],['ghost',3200,212,70],['sniper',3600,230,30],['bot',3900,230,60],['bitmaxi',4400,230,60]],
+    // ghosts → JUMPFISH (erupt from the sand, at ground level); snipers → FLYFISH (aerial dive-bombers)
+    enemies:[['jeet',340,230,70],['bot',900,230,60],['fudster',1150,230,60],['jumpfish',1300,230,80],['flyfish',1850,150,40],['flyfish',2050,150,40],['bot',2200,230,70],['jumpfish',2600,230,80],['fudster',2900,230,70],['jumpfish',3200,230,70],['flyfish',3600,150,40],['bot',3900,230,60],['bitmaxi',4400,230,60]],
+    pumpdumps:[[1380,174],[2720,174]], honeypots:[[1250,232],[3760,232]], npcs:[[2450,90]],
+    bonusblocks:[[1040,5],[1950,8],[2950,8],[3840,8]],
+    key:[4200,H-150], door:4600 },
+
+  // ===== SECOND OCEAN / BEACH PRIZE ROOM — "THE SANDCASTLE KEEP" (catalogue entry #2). Same tropical
+  //   theme (29) as THE SHALLOWS, reachable ONLY via ?room=sandcastle. Boss is THE SANDCASTLE LORD —
+  //   reuses the KOL charge+shill mechanic via boss* overrides (bossTex:'sandlord' → drawSandLordTex()),
+  //   5 hearts. Enemies are the same beach flying fish (jumpfish erupt / flyfish dive). Geometry lifted
+  //   verbatim from the vetted room so reachability is proven; theme/boss/enemies are the only changes. =====
+  { name:'SANDCASTLE', sub:'THE SANDCASTLE KEEP', time:180, theme:29, width:4800,
+    hidden:true, bonus:true, private:true, boss:true, bossType:'kol', diff:1.35,
+    roomLabel:'THE SANDCASTLE KEEP — PRIZE ROOM',
+    bossName:'THE SANDCASTLE LORD', bossSub:'RULER OF THE SHORE — STOMP HIS KEEP x5',
+    bossTex:'sandlord', bossScale:106, bossHits:5, bossShillMs:1650,
+    bossColor:'#e6c06a', bossGlowHex:0xf0c85a,
+    bossTaunts:['THE TIDE OBEYS ME','BUILD. RUG. REBUILD.','MY MOAT, MY RULES','ANOTHER GRAIN OF SAND','THE SHORE IS MINE','KNEEL, LANDLUBBER'],
+    gaps:[[700,772],[1380,1500],[2060,2156],[2720,2816],[3380,3500]],
+    walls:[[420,3,'steel',4],[1060,4,'stone',3],[1680,3,'brick',5],[2320,4,'steel',3],[2980,3,'stone',5],[3640,4,'steel',3],[4050,2,'crate',2]],
+    plats:[[720,2,150,'steel'],[1080,2,H-140,'brick'],[1400,2,150,'stone'],[2080,2,150,'steel'],[2360,2,126,'steel'],[2740,2,150,'brick'],[3400,2,150,'steel'],[3680,2,H-134,'steel']],
+    spikes:[[900],[924],[2500],[2524]],
+    firepits:[[1250,48],[3260,56],[3900,56]],
+    powerups:[['supergeek',1000,230],['diamond',1850,230],['omegachad',2620,230],['bull',3300,230]],
+    airdrops:[[1500,H-118],[3130,H-72]],
+    coins:[[300,196],[560,150],[620,196],[900,196],[1160,140],[1420,130],[1620,196],[1950,150],[2200,196],[2500,150],[2760,130],[2900,196],[3150,150],[3400,130],[3760,150],[4000,196],[4200,150]],
+    enemies:[['jeet',340,230,70],['jumpfish',900,230,80],['flyfish',1200,150,40],['jumpfish',1600,230,80],['flyfish',1950,150,40],['bot',2200,230,70],['jumpfish',2600,230,80],['flyfish',2950,150,40],['jumpfish',3200,230,70],['flyfish',3650,150,40],['bot',3900,230,60],['bitmaxi',4400,230,60]],
     pumpdumps:[[1380,174],[2720,174]], honeypots:[[1250,232],[3760,232]], npcs:[[2450,90]],
     bonusblocks:[[1040,5],[1950,8],[2950,8],[3840,8]],
     key:[4200,H-150], door:4600 },
@@ -2466,12 +2492,13 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // the AI (turret/charge) is shared without duplication; e.kind still drives art + tint.
     var BEH={ laserbot:'sniper', mevdrone:'sandwich' };
     var beh=BEH[kind]||kind;
-    var tex = (kind==='sniper'||kind==='sandwich') ? 'bot' : (kind==='gasgoblin' ? 'troll' : (kind==='drillbit' ? 'drillworm' : (kind==='flashbot' ? 'flashdrone' : kind)));   // DRILLBIT -> drill-worm sprite, FLASHBOT -> flash-drone sprite (own art, own behavior)
+    if(kind==='flyfish'||kind==='jumpfish') this.drawFlyingFishTex();   // beach-room flying fish: ensure the sprite exists before create()
+    var tex = (kind==='sniper'||kind==='sandwich') ? 'bot' : (kind==='gasgoblin' ? 'troll' : (kind==='drillbit' ? 'drillworm' : (kind==='flashbot' ? 'flashdrone' : ((kind==='flyfish'||kind==='jumpfish') ? 'flyingfish' : kind))));   // DRILLBIT -> drill-worm, FLASHBOT -> flash-drone, FLY/JUMPFISH -> flying-fish sprite (own behaviour reused)
     var e=this.enemies.create(x,y,tex); e.kind=kind; e.beh=beh;
-    e.setScale((kind==='ghost'?26:kind==='bitmaxi'?34:kind==='fudster'?38:kind==='gasgoblin'?28:kind==='laserbot'?32:kind==='mevdrone'?34:kind==='drillbit'?34:kind==='rugpuller'?46:30)/e.height);
+    e.setScale((kind==='ghost'?26:kind==='bitmaxi'?34:kind==='fudster'?38:kind==='gasgoblin'?28:kind==='laserbot'?32:kind==='mevdrone'?34:kind==='drillbit'?34:kind==='rugpuller'?46:(kind==='flyfish'||kind==='jumpfish')?32:30)/e.height);
     e.body.setSize(e.width*0.70,e.height*0.78).setOffset(e.width*0.15,e.height*0.16); e.setBounce(0);
     e.dir=Phaser.Math.RND.pick([-1,1]);
-    var spd={jeet:50,paper:66,bot:88,ghost:52,bitmaxi:72,sniper:34,fudster:44,gasgoblin:46,sandwich:58,laserbot:34,mevdrone:64,flashbot:40,drillbit:60,rugpuller:130}[kind]||55;
+    var spd={jeet:50,paper:66,bot:88,ghost:52,bitmaxi:72,sniper:34,fudster:44,gasgoblin:46,sandwich:58,laserbot:34,mevdrone:64,flashbot:40,drillbit:60,flyfish:44,jumpfish:60,rugpuller:130}[kind]||55;
     e.baseSpeed=(spd+Phaser.Math.RND.between(0,12))*(this.diffMul||1)
       *((window.__NQ_SETUP&&window.__NQ_TUNE&&Number(window.__NQ_TUNE.espd))||1);   // LAB tuning knob
     e.homeX=x; e.homeY=y; e.range=range||70; e.bob=Phaser.Math.RND.frac()*6.28;
@@ -2480,14 +2507,14 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(beh==='sandwich'){ if(kind==='sandwich') e.setTint(0x9b6bff); e.mev='idle'; e.nextCharge=this.time.now+700+Phaser.Math.RND.between(0,800); if(kind==='mevdrone'){ e.nextCharge=this.time.now+600+Phaser.Math.RND.between(0,700); var mg=this.addGlow(e,0x9b6bff,3); if(mg) this.tweens.add({targets:mg,outerStrength:8,duration:520,yoyo:true,repeat:-1,ease:'Sine.inOut'}); } }   // MEV bot — charges to "sandwich" you (bot / modern drone)
     // Drones are GROUNDED (identical proven physics to sniper/sandwich — no hover/pit edge cases);
     // the glow + sprite sell the "modern" look. Only the ghost floats.
-    if(kind==='flashbot'){ e.fbState='hover'; e.fbT=this.time.now; e.fbNext=this.time.now+800+Phaser.Math.RND.between(0,600); var _fg=this.addGlow(e,0x66ddff,3); if(_fg) this.tweens.add({targets:_fg,outerStrength:8,duration:480,yoyo:true,repeat:-1,ease:'Sine.inOut'}); }   // FLASH DRONE: own sprite, hovers then DIVE-BOMBS you (telegraphed)
-    if(kind==='drillbit'){ e.drillState='crawl'; e.drillT=this.time.now+Phaser.Math.RND.between(0,900); e.dustAt=0; e.drillImmune=false; }   // DRILL-WORM: crawl → burrow-attack → erupt cycle (staggered start); uses its own drillworm sprite
+    if(kind==='flashbot'||kind==='flyfish'){ e.fbState='hover'; e.fbT=this.time.now; e.fbNext=this.time.now+800+Phaser.Math.RND.between(0,600); var _fg=this.addGlow(e,kind==='flyfish'?0x7ed6f0:0x66ddff,3); if(_fg) this.tweens.add({targets:_fg,outerStrength:8,duration:480,yoyo:true,repeat:-1,ease:'Sine.inOut'}); }   // FLASH DRONE / FLYING FISH: hovers then DIVE-BOMBS you (telegraphed)
+    if(kind==='drillbit'||kind==='jumpfish'){ e.drillState='crawl'; e.drillT=this.time.now+Phaser.Math.RND.between(0,900); e.dustAt=0; e.drillImmune=false; }   // DRILL-WORM / JUMPING FISH: crawl → burrow → erupt-from-the-sand cycle (staggered start)
     if(kind==='rugpuller'){ e.rpState='perch'; e.rpT=this.time.now; e.setImmovable(true);   // RUG PULLER: fat scammer rat gripping the rug's RIGHT edge — floats in place (no gravity), guards, then YANKS
       // The sprite is mostly RUG: the rat only occupies x 0.655-0.987 of it (measured off the art),
       // so the hitbox has to sit on HIM. A centred body would hang over the rug — you'd take damage
       // from empty carpet and stomps aimed at the rat would miss.
       e.body.setSize(e.width*0.24,e.height*0.78).setOffset(e.width*0.70,e.height*0.18); }
-    if(kind==='ghost'||kind==='flashbot'||kind==='rugpuller') e.body.setAllowGravity(false); else e.setCollideWorldBounds(true);
+    if(kind==='ghost'||kind==='flashbot'||kind==='rugpuller'||kind==='flyfish') e.body.setAllowGravity(false); else e.setCollideWorldBounds(true);   // flyfish hovers (dive-bomber); jumpfish keeps gravity (erupts from the sand)
     return e;
   },
   sandwichTick:function(now,e,p){   // MEV Sandwich Bot: idle-patrol → telegraph → DASH at the player's level
@@ -3144,6 +3171,63 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     c.fillStyle='#ffffff'; c.beginPath(); c.arc(-41,-5,1,0,6.283); c.fill();
     cv.refresh();
   },
+  // FLYING FISH — beach-room enemy sprite (procedural). Side view, nose LEFT: teal back, silver
+  // belly, big translucent wing-fins. Re-skins two proven behaviours: 'flyfish' dive-bombs like a
+  // flash-drone; 'jumpfish' erupts from the sand like a drill-worm.
+  drawFlyingFishTex:function(){
+    if(this.textures.exists('flyingfish')) return;
+    var cv=this.textures.createCanvas('flyingfish',56,40), c=cv.getContext();
+    c.clearRect(0,0,56,40); c.translate(28,20);
+    // upper wing-fin (large, translucent)
+    c.fillStyle='rgba(126,214,240,0.85)';
+    c.beginPath(); c.moveTo(-2,-2); c.lineTo(18,-18); c.lineTo(22,-2); c.closePath(); c.fill();
+    // lower wing-fin (smaller)
+    c.fillStyle='rgba(126,214,240,0.6)';
+    c.beginPath(); c.moveTo(-2,3); c.lineTo(14,16); c.lineTo(18,4); c.closePath(); c.fill();
+    // tail fin (right)
+    c.fillStyle='#2a8fb0';
+    c.beginPath(); c.moveTo(16,-1); c.lineTo(28,-10); c.lineTo(24,0); c.lineTo(28,10); c.closePath(); c.fill();
+    // body — teal, nose to the LEFT
+    c.fillStyle='#3aa8cc';
+    c.beginPath(); c.moveTo(-22,1); c.quadraticCurveTo(-4,-11,18,-1); c.quadraticCurveTo(-4,13,-22,1); c.closePath(); c.fill();
+    // silver belly
+    c.fillStyle='#dff2f6';
+    c.beginPath(); c.moveTo(-20,3); c.quadraticCurveTo(-4,12,16,2); c.quadraticCurveTo(-4,8,-20,3); c.closePath(); c.fill();
+    // eye
+    c.fillStyle='#0a1418'; c.beginPath(); c.arc(-15,-1,2.4,0,6.283); c.fill();
+    c.fillStyle='#ffffff'; c.beginPath(); c.arc(-16,-2,0.9,0,6.283); c.fill();
+    cv.refresh();
+  },
+  // SANDCASTLE LORD — boss sprite for the second ocean room (procedural). A sand-golem shaped like a
+  // castle keep: crenellated battlements, a turret with a flag, window-eyes and an arched-door mouth.
+  drawSandLordTex:function(){
+    if(this.textures.exists('sandlord')) return;
+    var cv=this.textures.createCanvas('sandlord',120,120), c=cv.getContext();
+    c.clearRect(0,0,120,120); c.translate(60,60);
+    var sand='#d9b271', sandD='#b58a3f', sandL='#ecd39a', dark='#3a2a12';
+    // arms (blocky sand limbs) — behind the keep
+    c.fillStyle=sandD; c.fillRect(-56,-6,16,34); c.fillRect(40,-6,16,34);
+    // body — a broad castle keep (trapezoid)
+    c.fillStyle=sand;
+    c.beginPath(); c.moveTo(-40,52); c.lineTo(-34,-18); c.lineTo(34,-18); c.lineTo(40,52); c.closePath(); c.fill();
+    // battlements (crenellations) across the top
+    c.fillStyle=sandD; for(var b=-34;b<34;b+=17){ c.fillRect(b,-30,10,14); }
+    // central turret
+    c.fillStyle=sandL; c.fillRect(-10,-52,20,30);
+    c.fillStyle=sandD; for(var t=-10;t<10;t+=8){ c.fillRect(t,-58,5,8); }
+    // flag on the turret
+    c.strokeStyle='#6b4e1e'; c.lineWidth=2; c.beginPath(); c.moveTo(0,-58); c.lineTo(0,-76); c.stroke();
+    c.fillStyle='#1fc0dd'; c.beginPath(); c.moveTo(0,-76); c.lineTo(18,-70); c.lineTo(0,-64); c.closePath(); c.fill();
+    // window-eyes with glowing pupils
+    c.fillStyle=dark; c.fillRect(-20,-8,10,12); c.fillRect(10,-8,10,12);
+    c.fillStyle='#ffd23f'; c.fillRect(-17,-2,4,4); c.fillRect(13,-2,4,4);
+    // arched-door mouth
+    c.fillStyle=dark;
+    c.beginPath(); c.moveTo(-12,52); c.lineTo(-12,26); c.quadraticCurveTo(0,14,12,26); c.lineTo(12,52); c.closePath(); c.fill();
+    // sand speckle texture
+    c.fillStyle=sandD; for(var s=0;s<10;s++){ c.fillRect(-30+s*6,40-((s*13)%18),3,3); }
+    cv.refresh();
+  },
   /* ---------- Scammy KOL boss (charges + stomp x3, and shills fake tokens at range) ---------- */
   startKolBoss:function(){
     var dx=this.def.door, self=this, d=this.def;
@@ -3155,7 +3239,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         bPip=(d.bossTintHex!=null?d.bossTintHex:0xc99bff),
         bScale=(d.bossScale!=null?d.bossScale:52),           // display height in px (default = the KOL size)
         bHits=(d.bossHits!=null?d.bossHits:3);                // stomps to kill (default 3; Tom is tougher)
-    if(bTex==='shark') this.drawSharkTex();   // prize room: build the shark texture on demand before the sprite is made
+    if(bTex==='shark') this.drawSharkTex();      // prize room: build the shark texture on demand before the sprite is made
+    if(bTex==='sandlord') this.drawSandLordTex(); // second prize room: the Sandcastle Lord
     this.bossHP=bHits;
     this.cameras.main.flash(420, 120, 40, 160);
     this.player.setPosition(dx-260, GY-40); this.player.setVelocity(0,0);
@@ -5007,7 +5092,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         var target=e.homeY+Math.sin(now/450+e.bob)*14; e.setVelocityY((target-e.y)*5);
         e.setFlipX(e.dir>0); return;
       }
-      if(e.kind==='flashbot'){   // FLASH DRONE: hovers + tracks you → TELEGRAPHS (shudder + flash) → DIVE-BOMBS straight at where you were → peels back up. A clear, fast aerial threat you dodge then punish.
+      if(e.kind==='flashbot'||e.kind==='flyfish'){   // FLASH DRONE / FLYING FISH: hovers + tracks you → TELEGRAPHS (shudder + flash) → DIVE-BOMBS straight at where you were → peels back up. A clear, fast aerial threat you dodge then punish.
         var dist=Math.abs(p.x-e.x);
         if(e.fbState==='hover'){
           var hty=e.homeY+Math.sin(now/380+e.bob)*8; e.setVelocityY((hty-e.y)*4);
@@ -5025,7 +5110,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         e.setFlipX(e.fbState==='dive'?(e.fbTX>e.x):(p.x>e.x));
         return;
       }
-      if(e.kind==='drillbit'){   // DRILL-WORM: CRAWLS on the surface toward you most of the time (visible, stompable) → every ~2s does a BURROW attack: dives, tunnels fast toward you (dust tell) → ERUPTS up beside you (lethal, un-stompable) → back to crawl.
+      if(e.kind==='drillbit'||e.kind==='jumpfish'){   // DRILL-WORM / JUMPING FISH: CRAWLS on the surface toward you most of the time (visible, stompable) → every ~2s does a BURROW attack: dives, tunnels fast toward you (dust tell) → ERUPTS up beside you (lethal, un-stompable) → back to crawl.
         var ds=e.drillState;
         if(ds==='crawl'){ e.setVisible(true); e.phasing=false; e.drillImmune=false;
           var cd=(p.x>e.x)?1:-1, tx=e.x+cd*40; if(tx>e.homeX-e.range&&tx<e.homeX+e.range) e.dir=cd;
