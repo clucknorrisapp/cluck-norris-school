@@ -512,7 +512,8 @@ var THEMES=[
   { sky1:0x14161f, sky2:0x060608, hill:0x2e2410 },    // 25 THE ASCENT (World 20 — storm-height monolith tower, dark storm-grey + molten gold; bgArt covers the sky)
   { sky1:0x1a0c04, sky2:0x080402, hill:0x3a1c08 },    // 26 THE SAYLOR SUMMIT (World 20 finale — bitcoin citadel at the peak, storm-black + laser-orange; bgArt covers the sky)
   { sky1:0x05060f, sky2:0x010208, hill:0x8a8f9c },    // 27 THE MOON (World 21 FINALE — lunar surface: black space, silver regolith, Earthrise blue; bgArt covers the sky)
-  { sky1:0x35558f, sky2:0x101d33, hill:0x6d84b4 }     // 28 MYSPACE (PRIVATE dev room — 2003 web blue: navy header, that famous #6d84b4 profile blue)
+  { sky1:0x35558f, sky2:0x101d33, hill:0x6d84b4 },    // 28 MYSPACE (PRIVATE dev room — 2003 web blue: navy header, that famous #6d84b4 profile blue)
+  { sky1:0x2aa4e0, sky2:0x9fe6f2, hill:0x38b6cc }     // 29 THE SHALLOWS (prize room — tropical daytime: bright sky-blue up top → pale aqua horizon → turquoise sea behind golden sand)
 ];
 
 // Slot-machine themes — one 'slot' sprite, re-skinned per theme (tint + glow + reel symbols +
@@ -1229,6 +1230,33 @@ var LEVELS=[
     bossTex:'tom', bossScale:78, bossHits:5, bossShillMs:1450, bossAttack:'tom',
     bossColor:'#8aa0d8', bossGlowHex:0x8aa0d8,
     bossTaunts:['a/s/l?','THANKS FOR THE ADD!','NEW COMMENT ON YOUR WALL','CHECK YOUR BULLETINS','YOU + ME = TOP 8','TOM APPROVES THIS','ADD ME BACK!'],
+    gaps:[[700,772],[1380,1500],[2060,2156],[2720,2816],[3380,3500]],
+    walls:[[420,3,'steel',4],[1060,4,'stone',3],[1680,3,'brick',5],[2320,4,'steel',3],[2980,3,'stone',5],[3640,4,'steel',3],[4050,2,'crate',2]],
+    plats:[[720,2,150,'steel'],[1080,2,H-140,'brick'],[1400,2,150,'stone'],[2080,2,150,'steel'],[2360,2,126,'steel'],[2740,2,150,'brick'],[3400,2,150,'steel'],[3680,2,H-134,'steel']],
+    spikes:[[900],[924],[2500],[2524]],
+    firepits:[[1250,48],[3260,56],[3900,56]],
+    powerups:[['supergeek',1000,230],['diamond',1850,230],['omegachad',2620,230],['bull',3300,230]],
+    airdrops:[[1500,H-118],[3130,H-72]],
+    coins:[[300,196],[560,150],[620,196],[900,196],[1160,140],[1420,130],[1620,196],[1950,150],[2200,196],[2500,150],[2760,130],[2900,196],[3150,150],[3400,130],[3760,150],[4000,196],[4200,150]],
+    enemies:[['jeet',340,230,70],['bot',900,230,60],['fudster',1150,230,60],['ghost',1300,212,80],['sniper',1850,230,30],['sniper',2050,230,30],['bot',2200,230,70],['ghost',2600,212,80],['fudster',2900,230,70],['ghost',3200,212,70],['sniper',3600,230,30],['bot',3900,230,60],['bitmaxi',4400,230,60]],
+    pumpdumps:[[1380,174],[2720,174]], honeypots:[[1250,232],[3760,232]], npcs:[[2450,90]],
+    bonusblocks:[[1040,5],[1950,8],[2950,8],[3840,8]],
+    key:[4200,H-150], door:4600 },
+
+  // ===== OCEAN / BEACH PRIZE ROOM — "THE SHALLOWS" (entry #1 in the rotating prize-level catalogue).
+  //   Reachable ONLY via ?room=beach (private:true, hidden:true — out of progression + level-select,
+  //   no warp points here). The boss is a SHARK: it reuses the proven KOL charge+shill mechanic via
+  //   the boss* overrides (bossTex:'shark' → drawSharkTex()), tuned to 5 hearts per the boss cap.
+  //   Theme 29 (tropical). No real reward yet (owner: "just the level for now") — ends on a normal
+  //   room-clear. Geometry is lifted VERBATIM from the vetted TOMSTURF room so reachability is proven;
+  //   only the theme, boss re-skin and the roomLabel are new. =====
+  { name:'BEACH', sub:'THE SHALLOWS', time:170, theme:29, width:4800,
+    hidden:true, bonus:true, private:true, boss:true, bossType:'kol', diff:1.3,
+    roomLabel:'THE SHALLOWS — PRIZE ROOM',
+    bossName:'THE LOAN SHARK', bossSub:'HE SMELLS BLOOD IN THE WATER — STOMP HIM x5',
+    bossTex:'shark', bossScale:96, bossHits:5, bossShillMs:1500,
+    bossColor:'#1fc0dd', bossGlowHex:0x2ad0e8,
+    bossTaunts:['CHUM IN THE WATER','LIQUIDITY? MINE NOW','ANOTHER MINNOW','FEES ARE MY FOOD','YOU CANT OUTSWIM ME','SMELLS LIKE LEVERAGE','BIGGER FISH ALWAYS WIN'],
     gaps:[[700,772],[1380,1500],[2060,2156],[2720,2816],[3380,3500]],
     walls:[[420,3,'steel',4],[1060,4,'stone',3],[1680,3,'brick',5],[2320,4,'steel',3],[2980,3,'stone',5],[3640,4,'steel',3],[4050,2,'crate',2]],
     plats:[[720,2,150,'steel'],[1080,2,H-140,'brick'],[1400,2,150,'stone'],[2080,2,150,'steel'],[2360,2,126,'steel'],[2740,2,150,'brick'],[3400,2,150,'steel'],[3680,2,H-134,'steel']],
@@ -3173,6 +3201,51 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       this.tweens.add({targets:t, y:t.y-18, alpha:{from:1,to:0}, duration:1000, ease:'Sine.out', onComplete:function(){ try{ t.destroy(); }catch(e){} }});
     }catch(e){}
   },
+  // Prize-room SHARK texture — drawn once, on demand (same canvas technique as swanfeather/sigorb),
+  // so the ocean prize level needs no new asset in the build pipeline. Side view, nose to the LEFT;
+  // the shared KOL boss sprite is built from this key when a level sets bossTex:'shark'.
+  drawSharkTex:function(){
+    if(this.textures.exists('shark')) return;
+    var cv=this.textures.createCanvas('shark',132,72), c=cv.getContext();
+    c.clearRect(0,0,132,72); c.translate(66,36);
+    // caudal (tail) fin — crescent at the RIGHT
+    c.fillStyle='#586772';
+    c.beginPath(); c.moveTo(40,-4); c.lineTo(64,-26); c.lineTo(56,-2); c.lineTo(64,22); c.lineTo(40,6); c.closePath(); c.fill();
+    // pectoral fin (sits behind the body)
+    c.fillStyle='#4d5c67';
+    c.beginPath(); c.moveTo(-16,10); c.lineTo(-30,30); c.lineTo(-2,14); c.closePath(); c.fill();
+    // body — grey torpedo, nose to the LEFT
+    c.fillStyle='#6c7c88';
+    c.beginPath();
+    c.moveTo(-54,2);
+    c.quadraticCurveTo(-40,-20,6,-16);
+    c.quadraticCurveTo(30,-14,44,-4);
+    c.quadraticCurveTo(28,0,44,4);
+    c.quadraticCurveTo(24,16,-6,16);
+    c.quadraticCurveTo(-40,16,-54,2);
+    c.closePath(); c.fill();
+    // white belly overlay
+    c.fillStyle='#dfe7ea';
+    c.beginPath();
+    c.moveTo(-50,6); c.quadraticCurveTo(-30,17,-6,16); c.quadraticCurveTo(20,15,40,5);
+    c.quadraticCurveTo(16,12,-6,11); c.quadraticCurveTo(-34,11,-50,6); c.closePath(); c.fill();
+    // dorsal fin
+    c.fillStyle='#586772';
+    c.beginPath(); c.moveTo(-2,-15); c.lineTo(16,-40); c.lineTo(22,-13); c.closePath(); c.fill();
+    // gill slits
+    c.strokeStyle='#3f4c56'; c.lineWidth=1.6; c.lineCap='round';
+    for(var g=0; g<3; g++){ c.beginPath(); c.moveTo(-30+g*5,-8); c.lineTo(-32+g*5,8); c.stroke(); }
+    // mouth
+    c.strokeStyle='#3a2530'; c.lineWidth=2.4;
+    c.beginPath(); c.moveTo(-54,6); c.quadraticCurveTo(-44,12,-30,11); c.stroke();
+    // teeth
+    c.fillStyle='#ffffff';
+    for(var t=0;t<5;t++){ var tx=-50+t*4; c.beginPath(); c.moveTo(tx,8); c.lineTo(tx+2,8); c.lineTo(tx+1,12); c.closePath(); c.fill(); }
+    // eye
+    c.fillStyle='#0a0e12'; c.beginPath(); c.arc(-40,-4,3.1,0,6.283); c.fill();
+    c.fillStyle='#ffffff'; c.beginPath(); c.arc(-41,-5,1,0,6.283); c.fill();
+    cv.refresh();
+  },
   /* ---------- Scammy KOL boss (charges + stomp x3, and shills fake tokens at range) ---------- */
   startKolBoss:function(){
     var dx=this.def.door, self=this, d=this.def;
@@ -3184,6 +3257,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         bPip=(d.bossTintHex!=null?d.bossTintHex:0xc99bff),
         bScale=(d.bossScale!=null?d.bossScale:52),           // display height in px (default = the KOL size)
         bHits=(d.bossHits!=null?d.bossHits:3);                // stomps to kill (default 3; Tom is tougher)
+    if(bTex==='shark') this.drawSharkTex();   // prize room: build the shark texture on demand before the sprite is made
     this.bossHP=bHits;
     this.cameras.main.flash(420, 120, 40, 160);
     this.player.setPosition(dx-260, GY-40); this.player.setVelocity(0,0);
@@ -5296,7 +5370,8 @@ var Win=new Phaser.Class({ Extends:Phaser.Scene,
     this.add.text(W/2,174,String(this.finalScore),{fontFamily:'"Press Start 2P"',fontSize:'30px',color:'#ffd23f'}).setOrigin(.5).setShadow(3,3,'#7a5a00',0,true,true);
     if(this.casino>0) this.add.text(W/2,202,'🎰 CASINO WINNINGS: '+this.casino,{fontFamily:UIFONT,resolution:UIRES,fontSize:'18px',color:'#ff8adf'}).setOrigin(.5);
     var nw=worldCount();   // every world you can clear, VIP wing included — see worldCount()
-    var wtext = this.private ? 'MYSPACE — PRIVATE DEV ROOM' : (nw<=1?'WORLD 1 CLEARED':(nw===2?'WORLDS 1 & 2 CLEARED':'ALL '+nw+' WORLDS CLEARED'));
+    var _pd = (typeof LEVELS!=='undefined' && LEVELS[this.replayLevel]) || null;   // per-room clear label (was hardcoded to MySpace, wrong for other private rooms)
+    var wtext = this.private ? ((_pd&&_pd.roomLabel)||'MYSPACE — PRIVATE DEV ROOM') : (nw<=1?'WORLD 1 CLEARED':(nw===2?'WORLDS 1 & 2 CLEARED':'ALL '+nw+' WORLDS CLEARED'));
     this.add.text(W/2,this.casino>0?222:210,wtext,{fontFamily:UIFONT,resolution:UIRES,fontSize:'18px',color:'#b6bfe0'}).setOrigin(.5);
     var p=this.add.text(W/2,246,'PRESS TO PLAY AGAIN',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#3dff6e'}).setOrigin(.5);
     this.tweens.add({targets:p,alpha:.25,duration:600,yoyo:true,repeat:-1});
