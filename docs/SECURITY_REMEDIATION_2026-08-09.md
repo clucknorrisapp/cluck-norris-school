@@ -18,19 +18,22 @@ change only the owner can make, or a deliberate trade-off. Nothing here is urgen
 
 ## 🌐 DNS Security 90 → ~100 (Cloudflare + registrar — owner only)
 
-### 1. Enable DNSSEC  ← biggest single DNS win
-Signs your DNS so nobody can spoof it. Currently OFF (no DS record; DNS not validated).
+### 1. DNSSEC — ⚠️ blocked by the registrar (domain is registered at **Railway**)
+Signs your DNS so nobody can spoof it. Currently OFF. **The catch:** DNS is at Cloudflare but the
+domain is *registered at Railway*, and the DS record has to be published at the **registrar** (Railway)
+— which does **not** document DNSSEC/DS support, and there are community reports of DNSSEC interfering
+with Railway's domain verification. So this is **not a quick Cloudflare toggle** here.
 
-1. Cloudflare → select **clucknorris.app** → **DNS → Settings** → find **DNSSEC** → **Enable DNSSEC**.
-2. Cloudflare shows a **DS record** (Key Tag, Algorithm, Digest Type, Digest — often a ready-made line).
-3. Add that DS record at your **registrar** (where the domain was *bought* — not the Cloudflare DNS
-   tab). Registrar → clucknorris.app → DNSSEC → add DS with the exact values from step 2.
-   - If the domain is on **Cloudflare Registrar**, this is **one click** — Cloudflare sets the DS for
-     you, nothing to paste. (You're on Cloudflare nameservers; if you also registered there, done.)
-4. ⚠️ **Order matters:** enable at Cloudflare FIRST, then add the DS at the registrar. A DS that
-   doesn't match Cloudflare's keys makes the **whole domain fail to resolve** until removed.
-5. Verify (minutes–2h): `dig +short DS clucknorris.app` returns records, or check dnsviz.net /
-   Verisign DNSSEC Analyzer — all green.
+Options, in order of sanity:
+- **A — Skip it (recommended for now).** DNSSEC is one slice of a non-critical DNS-90 score (0
+  critical/high overall). Do SPF + CAA below instead; they don't touch Railway.
+- **B — Ask Railway support** whether they can add a DS record for clucknorris.app. If yes: enable
+  DNSSEC in Cloudflare (DNS → Settings → Enable DNSSEC) to get the DS, then have Railway publish it.
+- **C — Transfer the registration to Cloudflare Registrar** (cleanest if you want DNSSEC). DNS is
+  already on Cloudflare, so a transfer makes DNSSEC **one-click and automatic**, and Cloudflare
+  Registrar is at-cost. Needs the domain >60 days old + an auth/EPP code from Railway; ~5–7 days.
+- ⚠️ Whatever you do, don't hand-craft a DS that doesn't match Cloudflare's keys — a mismatched DS
+  takes the **whole domain offline** until removed.
 
 ### 2. SPF `~all` → `-all`
 Current: `v=spf1 include:_spf.mx.cloudflare.net ~all` (soft-fail lets spoofers slip past DMARC).
