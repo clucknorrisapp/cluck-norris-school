@@ -2939,8 +2939,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // arena walls at BOTH ends so the fight is contained
     self.makeArena(dx-340, dx+40);
     // spawn the Rug King across the room, facing the player, INERT until the intro ends
-    var k=this.rugking=this.physics.add.sprite(dx-60, GY-50, 'rugking');
-    k.setScale(48/k.height); k.body.setSize(k.width*0.62,k.height*0.82).setOffset(k.width*0.19,k.height*0.14);
+    var k=this.rugking=this.physics.add.sprite(dx-60, GY-54, 'rugking');
+    k.setScale(72/k.height); k.body.setSize(k.width*0.62,k.height*0.82).setOffset(k.width*0.19,k.height*0.14);   // was 48 — smallest boss in the game and the FIRST one players meet; bumped so he reads as a proper boss
     k.setCollideWorldBounds(true); k.dir=-1; k.invuln=true; k.setDepth(7);
     var bg2=this.addGlow(k,0xff2d55,5); if(bg2) this.tweens.add({targets:bg2,outerStrength:12,duration:520,yoyo:true,repeat:-1,ease:'Sine.inOut'});
     this.physics.add.collider(k, this.platforms);
