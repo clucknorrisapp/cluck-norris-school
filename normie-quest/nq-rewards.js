@@ -30,12 +30,13 @@ const MAX_PENDING = 20;                                  // cap a wallet's queue
 // It IS in the published odds, so the wheel stays provably-honest — the pass is the declared prize,
 // the "hidden prizes" are the bonus pickups waiting inside the preview world itself.
 const WHEEL_VIP = [
-  { item: 'disc', weight: 28 },
-  { item: 'vial', weight: 24 },
-  { item: 'shield', weight: 18 },
-  { item: 'bomb', weight: 14 },     // 🚀 Air Strike — a real reserve item, banked like disc/vial/shield
-  { item: 'preview', weight: 8 },   // 🎟️ Preview Pass — a hidden-world unlock (grantPass, not the queue)
-  { item: 'raffle', weight: 8 },    // 🎫 Drawing Entry — an off-chain raffle ticket (owner runs the draw)
+  { item: 'disc', weight: 26 },
+  { item: 'vial', weight: 18 },
+  { item: 'shield', weight: 14 },
+  { item: 'bomb', weight: 12 },     // 🚀 Air Strike — a real reserve item, banked like disc/vial/shield
+  { item: 'heart', weight: 10 },    // 💗 Extra Heart 24h — a timed buff (4 hearts/level), not the queue
+  { item: 'preview', weight: 10 },  // 🎟️ Preview Pass — a hidden-world unlock (grantPass, not the queue)
+  { item: 'raffle', weight: 10 },   // 🎫 Drawing Entry — an off-chain raffle ticket (owner runs the draw)
 ];
 // Weighted toward the weakest item (+5 ammo) and away from the two strong ones (full heal,
 // audit shield), so the VIP table is a visible upgrade rather than a cosmetic one.
@@ -94,6 +95,26 @@ function addRaffleEntry(wallet) {
 }
 function raffleEntries(wallet) {
   const s = load(); return (s.raffle && s.raffle[String(wallet || '')]) || 0;
+}
+
+// ---- 💗 EXTRA HEART buff — a 24h wheel prize (4 hearts per level instead of 3) --------------
+// Stored per wallet as an expiry timestamp. The GAME reads the buff from same-origin localStorage
+// (the lounge sets nqHeartBuffUntil on a win — game + lounge share an origin); this server record is
+// the source of truth for the lounge's "buff active" display and lets the client re-sync the exact
+// expiry rather than trusting its own clock. Not a reserve item — no in-game inventory slot.
+const HEART_BUFF_MS = 24 * 3600 * 1000;
+function grantHeartBuff(wallet, nowMs) {
+  const w = String(wallet || ''); if (!w) return { ok: false, error: 'no_wallet' };
+  const t = nowMs == null ? Date.now() : nowMs;
+  const s = load(); s.hbuff = s.hbuff || {};
+  s.hbuff[w] = t + HEART_BUFF_MS;
+  save(s);
+  return { ok: true, expires: s.hbuff[w] };
+}
+function activeHeartBuff(wallet, nowMs) {
+  const t = nowMs == null ? Date.now() : nowMs;
+  const s = load(); const e = s.hbuff && s.hbuff[String(wallet || '')];
+  return (e && e > t) ? { expires: e } : null;
 }
 
 function storePath() { return path.join(process.env.DATA_DIR || '/data', 'nq-rewards.json'); }
@@ -192,7 +213,7 @@ function spin(wallet, nowMs, opts) {
   // 🎟️ Preview Pass: an ACCESS grant, not a queued reserve item. grantPass persists it (and, on the
   // same store, records the used spin below). It can only be drawn from the VIP table, so a free
   // wallet never lands here.
-  let pass = null, entries = null, pending;
+  let pass = null, entries = null, buff = null, pending;
   if (item === 'preview') {
     const gp = grantPass(w, nowMs);
     if (!gp.ok) return { ok: false, error: gp.error, nextSpinAt: nextSpinAt(nowMs) };
@@ -203,6 +224,12 @@ function spin(wallet, nowMs, opts) {
     const re = addRaffleEntry(w);
     entries = re.entries;
     pending = pendingCount(w);
+  } else if (item === 'heart') {
+    // 💗 a 24h timed buff — server records the expiry; the lounge mirrors it to localStorage for the game
+    const hb = grantHeartBuff(w, nowMs);
+    if (!hb.ok) return { ok: false, error: hb.error, nextSpinAt: nextSpinAt(nowMs) };
+    buff = { expires: hb.expires };
+    pending = pendingCount(w);
   } else {
     const g = grant(w, item, nowMs);
     if (!g.ok) return { ok: false, error: g.error, nextSpinAt: nextSpinAt(nowMs) };
@@ -212,7 +239,7 @@ function spin(wallet, nowMs, opts) {
   if (daily) { s.spins = s.spins || {}; s.spins[w] = utcDay(nowMs); }
   else { s.bonus = s.bonus || {}; s.bonus[w] = bonusWindowKey(nowMs); }
   save(s);
-  return { ok: true, prize: item, pass: pass, entries: entries, bonus: !!bonus, pending: pending, nextSpinAt: nextSpinAt(nowMs), nextBonusAt: nextBonusAt(nowMs), bonusAvailable: bonusAvailable(w, nowMs) };
+  return { ok: true, prize: item, pass: pass, entries: entries, buff: buff, bonus: !!bonus, pending: pending, nextSpinAt: nextSpinAt(nowMs), nextBonusAt: nextBonusAt(nowMs), bonusAvailable: bonusAvailable(w, nowMs) };
 }
 // Published odds (shown on the wheel — provably-honest since it's server-authoritative + declared).
 function odds(vip) {
@@ -224,4 +251,4 @@ function odds(vip) {
 module.exports = { grant, pendingCount, claimOne, canSpin, nextSpinAt, spin, odds, ITEMS, wheelFor,
   bonusAvailable, nextBonusAt, canSpinNow, bonusWindowKey, BONUS_SPIN_HOURS,
   previewRoom, grantPass, activePass, PREVIEW_ROOMS,
-  addRaffleEntry, raffleEntries };
+  addRaffleEntry, raffleEntries, grantHeartBuff, activeHeartBuff };

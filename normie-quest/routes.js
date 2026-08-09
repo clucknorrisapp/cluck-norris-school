@@ -344,6 +344,7 @@ router.get('/api/nq/wheel/status', (req, res) => {
       pending: rewards.pendingCount(pk), odds: rewards.odds(vip),
       preview: rewards.previewRoom(), pass: rewards.activePass(pk),
       raffle: rewards.raffleEntries(pk),
+      heartBuff: rewards.activeHeartBuff(pk),
       // 🪙 A teaser only — real $NORMIE payouts are on hold (owner-signed airdropper + NORMIE deal +
       // an explicit go). NOT a wheel wedge: a wedge nobody can land on would break the wheel's
       // "slice size = real odds" honesty. Rendered as a labeled 'coming soon' banner instead.

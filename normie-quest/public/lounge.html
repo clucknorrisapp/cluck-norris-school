@@ -136,6 +136,8 @@
   .odds { font-size:11px; color:var(--dim); margin-top:6px; }
   .raffleline { margin-top:10px; font-size:12.5px; color:#7ef0a6; }
   .raffleline b { color:#b6ffce; }
+  .buffline { margin-top:10px; font-size:12.5px; color:#ff9ec8; }
+  .buffline b { color:#ffc2dd; }
   .jackteaser { display:flex; align-items:center; gap:12px; text-align:left; margin-top:12px; padding:12px 14px; border-radius:14px;
     background:linear-gradient(135deg, rgba(255,200,90,.12), rgba(90,60,10,.18)); border:1px dashed rgba(255,200,90,.5); }
   .jackteaser .jt-coin { font-size:26px; filter:drop-shadow(0 0 8px rgba(255,200,90,.5)); }
@@ -360,10 +362,10 @@
   // PENDING count includes owner grants and shop purchases, and an unnamed prize read as a bug.
   var ITEM_META = { disc: { emoji: '🥏', name: 'SOL Discs +5' }, vial: { emoji: '❤️', name: 'Full Heal' }, shield: { emoji: '🛡️', name: 'Audit Shield' },
     star: { emoji: '⭐', name: 'Star Power' }, bomb: { emoji: '🚀', name: 'Air Strike' }, preview: { emoji: '🎟️', name: 'Preview Pass' },
-    raffle: { emoji: '🎫', name: 'Drawing Entry' } };
+    raffle: { emoji: '🎫', name: 'Drawing Entry' }, heart: { emoji: '💗', name: 'Extra Heart · 24h' } };
   var GAME_URL = '/normie-quest-x7';
   var WHEEL_HUES = { disc: ['#e0a63a', '#5c3f0d'], vial: ['#e0503a', '#571a12'], shield: ['#3aa8cc', '#123f50'],
-    star: ['#ffcf5a', '#6a4e10'], bomb: ['#ff6a3c', '#5a2010'], preview: ['#b06aff', '#3a1f5c'], raffle: ['#3ecf7a', '#12492c'] };
+    star: ['#ffcf5a', '#6a4e10'], bomb: ['#ff6a3c', '#5a2010'], preview: ['#b06aff', '#3a1f5c'], raffle: ['#3ecf7a', '#12492c'], heart: ['#ff5aa0', '#5a1230'] };
   var wedgeCenter = {};   // prize id -> wedge-center angle, rebuilt with every render
   var wheelRot = 0;
   function wpt(a, r) { var rad = a * Math.PI / 180; return { x: (130 + r * Math.sin(rad)).toFixed(1), y: (130 - r * Math.cos(rad)).toFixed(1) }; }
@@ -416,6 +418,13 @@
   function renderJackpot(st) {
     var el = document.getElementById('jackpot'); if (!el) return;
     var html = '';
+    // 💗 Extra Heart buff: the server is the source of truth. Re-mirror its expiry into localStorage
+    // so the game reads it even if the win happened on this device earlier (or localStorage was cleared).
+    if (st && st.heartBuff && st.heartBuff.expires > Date.now()) {
+      try { localStorage.setItem('nqHeartBuffUntil', String(st.heartBuff.expires)); } catch (e) {}
+      html += '<div class="buffline">💗 <b>Extra Heart</b> active — 4 hearts on every level for '
+        + fmtCountdown(st.heartBuff.expires - Date.now()) + '.</div>';
+    }
     if (st && st.raffle) html += '<div class="raffleline">🎫 You hold <b>' + st.raffle + '</b> drawing '
       + (st.raffle === 1 ? 'entry' : 'entries') + ' — winners drawn in the members’ feed.</div>';
     if (st && st.jackpotSoon) html += '<div class="jackteaser"><span class="jt-coin">🪙</span>'
@@ -510,6 +519,15 @@
           msg.innerHTML = (res.bonus ? '🎉 <b>BONUS SPIN!</b> ' : '') + '🎫 <b>DRAWING ENTRY</b> banked'
             + (res.entries ? ' — you now have <b>' + res.entries + '</b> ' + (res.entries === 1 ? 'entry' : 'entries') : '')
             + '. Winners are drawn in the members’ feed.';
+          try { renderJackpot(st); } catch (e) {}
+        } else if (res.prize === 'heart') {
+          // 💗 Extra Heart buff — mirror the server's expiry into same-origin localStorage so the game
+          // (which reads nqHeartBuffUntil at every level start) grants 4 hearts. Same device: instant.
+          var exp = (res.buff && res.buff.expires) || (Date.now() + 24 * 3600e3);
+          try { localStorage.setItem('nqHeartBuffUntil', String(exp)); } catch (e) {}
+          st.heartBuff = { expires: exp };
+          msg.innerHTML = (res.bonus ? '🎉 <b>BONUS SPIN!</b> ' : '') + '💗 <b>EXTRA HEART</b> for 24h — '
+            + '<b>4 hearts</b> on every level! Live now — <a href="' + GAME_URL + '">open Normie Quest</a>.';
           try { renderJackpot(st); } catch (e) {}
         } else {
           msg.innerHTML = (res.bonus ? '🎉 <b>BONUS SPIN!</b> ' : '') + m.emoji + ' <b>' + esc(m.name) + '</b>! Banked to your wallet — '

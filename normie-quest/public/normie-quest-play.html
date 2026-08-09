@@ -1729,7 +1729,7 @@ function worldCount(){
 // line under the slots.
 var RESERVE_ITEMS = {
   disc:   { icon:'solana',    emoji:'🥏', label:'SOL DISCS +5', desc:'+5 throwing discs',      use:function(g){ g.throwAmmo+=5; if(g.updateThrowHud) g.updateThrowHud(); } },
-  vial:   { icon:'heart',     emoji:'❤️', label:'FULL HEAL',    desc:'refill all 3 hearts',    use:function(g){ while(g.lives<3){ g.lives++; if(g.hearts[g.lives-1]) g.hearts[g.lives-1].setAlpha(1); } } },
+  vial:   { icon:'heart',     emoji:'❤️', label:'FULL HEAL',    desc:'refill all your hearts',    use:function(g){ while(g.lives<(g.maxLives||3)){ g.lives++; if(g.hearts[g.lives-1]) g.hearts[g.lives-1].setAlpha(1); } } },
   shield: { icon:'supergeek', emoji:'🛡️', label:'AUDIT SHIELD', desc:'blocks the next hit',    use:function(g){ g.geekShield=true; } },
   // ── premium boosts (in-game drops, wheel wins, owner grants) — all map to proven mechanics ──
   star:   { icon:'moon',      emoji:'⭐', label:'STAR POWER',   desc:'invincible for 8 seconds', use:function(g){ g.moonUntil=g.time.now+8000; if(g.powerBanner) g.powerBanner('STAR POWER','INVINCIBLE — smash everything!','#ffd23f'); } },
@@ -1761,11 +1761,29 @@ var RESERVE_ITEMS = {
 // "check every form" section is about.
 try{ if(typeof window!=='undefined'){ window.__NQ_ITEMS=(function(){ var o={}; for(var k in RESERVE_ITEMS){ if(!Object.prototype.hasOwnProperty.call(RESERVE_ITEMS,k)) continue;
   o[k]={ emoji:RESERVE_ITEMS[k].emoji||'🎁', label:RESERVE_ITEMS[k].label, desc:RESERVE_ITEMS[k].desc||'' }; } return o; })(); } }catch(e){}
+// ❤️ EXTRA HEART buff levers (same-origin localStorage; the lounge wheel sets this on a win). The
+// setter is also the test hook: __NQ_HEARTBUFF(24) arms 24h, __NQ_HEARTBUFF(0) clears. It only takes
+// effect on the NEXT level start (init reads it), matching how a won buff applies from the next run.
+try{ if(typeof window!=='undefined'){
+  window.__NQ_HEARTBUFF=function(h){ try{ if(h===0){ localStorage.removeItem('nqHeartBuffUntil'); return 0; } var t=Date.now()+((h||24)*3600000); localStorage.setItem('nqHeartBuffUntil', String(t)); return t; }catch(e){ return 0; } };
+  window.__NQ_HEARTBUFF_LEFT=function(){ try{ var t=(parseInt(localStorage.getItem('nqHeartBuffUntil'),10)||0)-Date.now(); return t>0?t:0; }catch(e){ return 0; } };
+} }catch(e){}
 
 var Game=new Phaser.Class({ Extends:Phaser.Scene,
   initialize:function(){ Phaser.Scene.call(this,{key:'Game'}); },
+  // ❤️ EXTRA HEART buff (VIP wheel prize): while active, the heart cap is 4 instead of 3, on EVERY
+  // level, for 24h. Read from same-origin localStorage (the lounge sets nqHeartBuffUntil when you win
+  // it — game and lounge share an origin). Default (no buff) → 3, byte-identical to the old behaviour.
+  // window.__NQ_HEARTBUFF(hours) is a test lever; the real grant comes from the wheel.
+  _heartBuffActive:function(){ try{ return (parseInt(localStorage.getItem('nqHeartBuffUntil'),10)||0) > Date.now(); }catch(e){ return false; } },
   // levelStartScore = coins banked BEFORE this level; honeypots never drain below it (they only take THIS level's coins).
-  init:function(d){ d=d||{}; this.levelIdx=Phaser.Math.Clamp(d.level||0,0,LEVELS.length-1); this.score=d.score||0; this.lives=(d.lives!=null?d.lives:3); this.levelStartScore=this.score; this._spawnX=(d.spawnX!=null?d.spawnX:null); this._labWarp=!!d.lab; },
+  // maxLives is the heart cap for THIS level (3, or 4 with the buff). '3' was always "full", so any
+  // incoming full/over-full request refills to the cap; a hurt carry (1-2) keeps its count, capped.
+  init:function(d){ d=d||{}; this.levelIdx=Phaser.Math.Clamp(d.level||0,0,LEVELS.length-1); this.score=d.score||0;
+    this.maxLives=(this._heartBuffActive()?4:3);
+    var reqLives=(d.lives!=null?d.lives:3);
+    this.lives=(reqLives>=3?this.maxLives:reqLives);
+    this.levelStartScore=this.score; this._spawnX=(d.spawnX!=null?d.spawnX:null); this._labWarp=!!d.lab; },
 
   create:function(){
     this.physics.resume();   // CRITICAL: the Arcade world stays paused across scene restarts; every level/replay must un-pause it
@@ -2470,7 +2488,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.hudScore=this.hb(this.add.text(10,8,'SCORE '+this.score,{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#ffd23f'}));
     this.hudTime=this.hb(this.add.text(W-10,8,String(this.timeLeft),{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#3dff6e'}).setOrigin(1,0));
     this.hb(this.add.text(W/2,8,'WORLD '+def.name,{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#b6bfe0'}).setOrigin(.5,0));
-    this.hearts=[]; for(i=0;i<3;i++) this.hearts.push(this.hb(this.add.image(14+i*20,30,'heart').setScale(1.2).setAlpha(i<this.lives?1:.16)));
+    this.hearts=[]; for(i=0;i<this.maxLives;i++) this.hearts.push(this.hb(this.add.image(14+i*20,30,'heart').setScale(1.2).setAlpha(i<this.lives?1:.16)));
     this.keyIcon=this.hb(this.add.image(W-18,30,'key').setAlpha(.2)); this.keyIcon.setScale(22/this.keyIcon.height);
     // Returning from a speakeasy/bonus room with the carried key (nqCarryKey): grant it and
     // remove the field key — no backtracking past the return point. Never applies to hidden
@@ -2679,7 +2697,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     else if(type==='bull'){ this.bullUntil=now+11000; this.powerBanner('BULL MARKET','MEGA JUMP — 11s','#3dff6e'); }
     else if(type==='moon'){ this.moonUntil=now+9000; this.powerBanner('MOON MODE','INVINCIBLE — smash everything!','#ffd23f'); }
     else if(type==='caffeine'){ this.caffeineUntil=now+11000; this.powerBanner('CAFFEINE BOOST','WIRED — super speed 11s','#ffffff'); }
-    else if(type==='candle'){ if(this.lives<3){ this.lives++; if(this.hearts[this.lives-1]) this.hearts[this.lives-1].setAlpha(1); } this.candleUntil=now+6000; this.addScore(100); this.powerBanner('GREEN CANDLE',(this._dark?'LIGHT IT UP — wider torch 6s, ':'PUMPING — ')+'+1 heart, +100','#3dff6e'); }
+    else if(type==='candle'){ if(this.lives<this.maxLives){ this.lives++; if(this.hearts[this.lives-1]) this.hearts[this.lives-1].setAlpha(1); } this.candleUntil=now+6000; this.addScore(100); this.powerBanner('GREEN CANDLE',(this._dark?'LIGHT IT UP — wider torch 6s, ':'PUMPING — ')+'+1 heart, +100','#3dff6e'); }
     else if(type==='solana'){ this.solanaUntil=now+9000; this.nextThrow=0; this.powerBanner('SOLANA MODE','FULL SEND — auto-fire discs for 9s!','#14f195'); }
     else if(type==='discs'){ this.throwAmmo+=5; this.updateThrowHud(); SFX.coin(); this.powerBanner('SOL AMMO STASH','+5 DISCS — hidden cache!','#14f195'); }   // hidden Easter-egg ammo boost
     else if(type==='omegachad'){
@@ -2733,7 +2751,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.tweens.add({targets:block, y:block.homeY-7, duration:90, yoyo:true, ease:'Quad.out'});   // the bump
     // CLUTCH HEAL: on your last heart, a bonus block also gives back a heart (you paused near the
     // roaming enemies to hit it — this makes that risk worth taking in the tight later levels).
-    if(this.lives<=1 && this.lives<3){ this.lives++; if(this.hearts[this.lives-1]) this.hearts[this.lives-1].setAlpha(1); SFX.power(); this.cameras.main.flash(160,255,120,160); this.flash('CLUTCH! +1 HEART','#ff5a8a'); }
+    if(this.lives<=1 && this.lives<this.maxLives){ this.lives++; if(this.hearts[this.lives-1]) this.hearts[this.lives-1].setAlpha(1); SFX.power(); this.cameras.main.flash(160,255,120,160); this.flash('CLUTCH! +1 HEART','#ff5a8a'); }
     if(!isCoin){                                                    // a POWER-UP pops out the top (single use)
       SFX.power();
       var o=this.powerups.create(block.x, block.homeY-2, r); o.ptype=r;
@@ -2839,7 +2857,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var idx=(typeof slot==='number'&&slot>=0&&slot<this.reserve.length)?slot:this.reserveSel;
     var id=this.reserve[idx], it=RESERVE_ITEMS[id];
     if(!it){ this.reserve.splice(idx,1); this.saveReserve(); this.updateReserveHud(); return; }
-    if(id==='vial' && this.lives>=3){ this.flash('HEARTS ALREADY FULL','#ff9ec0'); return; }   // don't waste a full-heal at full HP
+    if(id==='vial' && this.lives>=this.maxLives){ this.flash('HEARTS ALREADY FULL','#ff9ec0'); return; }   // don't waste a full-heal at full HP
     if(id==='shield' && this.geekShield){ this.flash('SHIELD ALREADY UP','#2ee6c0'); return; }
     // An AIR STRIKE with nothing to hit is the exact no-op that made this item look broken. Refuse
     // the spend and say why, the same way a full-HP heal is refused, so it is never burned for free.
@@ -2900,7 +2918,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     a.consumed=true; if(a.bob){ a.bob.stop(); a.bob=null; }
     var ax=a.x, ay=a.y; this.tweens.killTweensOf(a); a.disableBody(true,true);
     this.burst(ax,ay,0xff3860,18); SFX.power(); this.cameras.main.flash(120,40,120,60);
-    if(this.lives<3){ this.lives++; if(this.hearts[this.lives-1]) this.hearts[this.lives-1].setAlpha(1); this.powerBanner('HEALING AIRDROP','BAGS SAVED — +1 HEART','#3dff6e'); }
+    if(this.lives<this.maxLives){ this.lives++; if(this.hearts[this.lives-1]) this.hearts[this.lives-1].setAlpha(1); this.powerBanner('HEALING AIRDROP','BAGS SAVED — +1 HEART','#3dff6e'); }
     else { this.addScore(150); this.powerBanner('HEALING AIRDROP','BAGS FULL — +150','#3dff6e'); }
   },
 
@@ -5333,8 +5351,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.casinoTick(now);
     this.childSupportTick(now);
 
-    // healing airdrops drop in only while you're hurt (lives<3); hide again at full health
-    var hurt=this.lives<3;
+    // healing airdrops drop in only while you're hurt (lives<max); hide again at full health
+    var hurt=this.lives<this.maxLives;
     this.airdrops.children.iterate(function(a){
       if(!a||a.consumed) return;
       if(hurt&&!a.shown) self.revealAirdrop(a);
