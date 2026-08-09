@@ -6,65 +6,140 @@
 <meta name="robots" content="noindex, nofollow">
 <title>👑 The VIP Lounge</title>
 <style>
-  :root { --gold:#ffd23f; --dim:#8a6a1a; --bg:#0a0813; --card:#141022; --txt:#eef2ff; --mut:#b6bfe0; }
+  /* ===== THE LUXURIOUS LOUNGE — dark speakeasy-luxe: warm near-black, gold + red neon, blue accent.
+     Deliberately NOT the retro arcade look of the game — a premium members' room. Self-contained
+     (no external fonts/assets) to stay CSP-safe + offline-friendly. ===== */
+  :root {
+    --bg:#080605; --ink:#0e0b09; --panel:rgba(30,23,16,.60); --edge:rgba(255,196,92,.18);
+    --gold:#ffc85a; --gold-hi:#ffe6a6; --red:#ff4a33; --red-hi:#ff7a5c; --blue:#38c9ff;
+    --txt:#f4ecdd; --mut:#b6a789; --dim:#7d715c;
+    --neon-gold:0 0 6px rgba(255,200,90,.55), 0 0 22px rgba(255,170,40,.35);
+    --neon-red:0 0 7px rgba(255,74,51,.6), 0 0 24px rgba(255,74,51,.4);
+  }
   * { box-sizing:border-box; margin:0; padding:0; }
-  body { background:var(--bg); color:var(--txt); font-family:system-ui,-apple-system,'Segoe UI',sans-serif; min-height:100vh; }
-  .wrap { max-width:680px; margin:0 auto; padding:28px 16px 60px; }
+  html { -webkit-text-size-adjust:100%; }
+  body { background:var(--bg); color:var(--txt); min-height:100vh;
+    font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,Inter,sans-serif;
+    /* warm cinematic depth: amber pool + cigar-smoke haze + vignette over near-black */
+    background-image:
+      radial-gradient(120% 80% at 50% -10%, rgba(255,150,40,.14), transparent 60%),
+      radial-gradient(90% 60% at 85% 20%, rgba(56,201,255,.06), transparent 60%),
+      radial-gradient(140% 120% at 50% 120%, rgba(255,60,30,.10), transparent 55%),
+      linear-gradient(180deg,#0b0806,#060403);
+    background-attachment:fixed; }
+  body::before { content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background:radial-gradient(120% 100% at 50% 40%, transparent 55%, rgba(0,0,0,.66)); }
+  .wrap { position:relative; z-index:1; max-width:720px; margin:0 auto; padding:34px 16px 70px; }
+
+  /* --- neon header --- */
   header { text-align:center; margin-bottom:26px; }
-  h1 { color:var(--gold); font-size:26px; letter-spacing:1px; }
-  .sub { color:var(--mut); font-size:13px; margin-top:6px; }
-  .card { background:var(--card); border:1px solid #2a2440; border-radius:12px; padding:18px; margin-bottom:14px; }
-  .card.vipwall { border-color:var(--dim); text-align:center; padding:34px 18px; }
-  button { background:var(--gold); color:#1a1204; border:0; border-radius:9px; padding:12px 20px; font-size:15px; font-weight:700; cursor:pointer; margin:6px 4px 0; }
-  button.ghost { background:#241f36; color:var(--txt); border:1px solid #3a3456; }
-  .err { color:#ff6a8a; font-size:13px; margin-top:10px; min-height:16px; }
-  .post { border-left:3px solid var(--gold); }
-  .post .tag { display:inline-block; font-size:11px; font-weight:700; letter-spacing:.6px; padding:2px 8px; border-radius:99px; background:#241f36; color:var(--gold); margin-bottom:8px; text-transform:uppercase; }
-  .post .tag.giveaway { color:#3dff6e; } .post .tag.alpha { color:#66ddff; } .post .tag.perk { color:#ff8adf; }
-  .post h3 { font-size:16px; margin-bottom:6px; }
-  .post p { font-size:14px; color:var(--mut); line-height:1.55; white-space:pre-wrap; }
-  .post .ts { font-size:11px; color:#6e6a86; margin-top:10px; }
-  .who { text-align:center; font-size:12px; color:var(--mut); margin-bottom:16px; }
-  .who b { color:var(--gold); }
-  .crown { font-size:44px; }
-  a { color:#66ddff; }
-  .wheelcard { background:var(--card); border:1px solid var(--dim); border-radius:12px; padding:20px 18px; margin-bottom:16px; text-align:center; }
-  .wheelcard h2 { color:var(--gold); font-size:16px; margin:0 0 2px; letter-spacing:.5px; }
-  .wheelcard .cap { font-size:12px; color:#6e6a86; margin-bottom:4px; }
-  /* SVG wheel (replaced the flat 3-slice conic-gradient, 2026-08-02). The rotating part is the
-     <g id="thewheel"> — same id, same 4.2s ease and 4300ms settle as before, so doSpin's timing
-     is untouched. Rim, studs, hub and pointer stay static outside the group. */
-  .wheelwrap { position:relative; width:220px; height:220px; margin:14px auto 4px; filter:drop-shadow(0 6px 18px rgba(0,0,0,.55)); }
+  .brand { display:inline-block; line-height:.94; padding:6px 2px; }
+  .lx-the { display:block; font-size:15px; font-weight:800; letter-spacing:5px; color:var(--red-hi);
+    text-shadow:var(--neon-red); margin-bottom:2px; }
+  .lx-lux { display:block; font-family:'Snell Roundhand','Brush Script MT',cursive; font-style:italic;
+    font-size:46px; font-weight:700; color:var(--gold); text-shadow:var(--neon-gold); letter-spacing:1px; }
+  .lx-lounge { display:block; font-size:38px; font-weight:900; letter-spacing:7px; color:var(--red);
+    text-shadow:var(--neon-red); margin-top:-2px; }
+  .sub { color:var(--mut); font-size:11.5px; letter-spacing:2.5px; margin-top:12px; text-transform:uppercase; font-weight:700; }
+  .rule { height:1px; max-width:220px; margin:16px auto 0; background:linear-gradient(90deg,transparent,var(--gold),transparent); opacity:.5; }
+
+  /* --- glass panels --- */
+  .card { position:relative; background:var(--panel); border:1px solid var(--edge); border-radius:16px;
+    padding:20px; margin-bottom:14px; backdrop-filter:blur(9px) saturate(1.1); -webkit-backdrop-filter:blur(9px) saturate(1.1);
+    box-shadow:0 10px 30px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.05); }
+  .card.vipwall { text-align:center; padding:36px 20px; border-color:rgba(255,200,90,.28); }
+
+  /* --- buttons: gold neon --- */
+  button { background:linear-gradient(180deg,var(--gold-hi),var(--gold)); color:#241503; border:0;
+    border-radius:11px; padding:13px 22px; font-size:15px; font-weight:800; letter-spacing:.4px; cursor:pointer;
+    margin:8px 4px 0; box-shadow:0 4px 16px rgba(255,170,40,.28), inset 0 1px 0 rgba(255,255,255,.5);
+    transition:transform .08s, box-shadow .15s; }
+  button:hover { transform:translateY(-1px); box-shadow:0 6px 22px rgba(255,170,40,.45); }
+  button:active { transform:translateY(0); }
+  button.ghost { background:rgba(255,255,255,.04); color:var(--txt); border:1px solid rgba(255,200,90,.35);
+    box-shadow:none; font-weight:700; }
+  button.ghost:hover { border-color:var(--gold); box-shadow:0 0 14px rgba(255,200,90,.25); }
+  button:disabled, .spinbtn:disabled { background:rgba(255,255,255,.05); color:var(--dim); box-shadow:none;
+    border:1px solid rgba(255,255,255,.06); cursor:default; transform:none; }
+  a { color:var(--blue); text-decoration:none; } a:hover { text-shadow:0 0 10px rgba(56,201,255,.5); }
+  .err { color:var(--red-hi); font-size:13px; margin-top:10px; min-height:16px; }
+
+  /* --- VIP status bar --- */
+  .idrow { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+    background:var(--panel); border:1px solid var(--edge); border-radius:14px; padding:11px 15px;
+    backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); font-size:13px; color:var(--mut); margin-bottom:16px; }
+  .idrow .stat { display:flex; align-items:center; gap:9px; }
+  .idrow .dot { width:8px; height:8px; border-radius:50%; background:var(--blue); box-shadow:0 0 10px var(--blue); }
+  .idrow b { color:var(--gold); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; letter-spacing:.5px; }
+  .idrow .tier { font-size:11px; font-weight:800; letter-spacing:1px; text-transform:uppercase;
+    padding:3px 10px; border-radius:99px; }
+  .idrow .tier.vip { color:#241503; background:linear-gradient(180deg,var(--gold-hi),var(--gold)); box-shadow:0 0 14px rgba(255,200,90,.4); }
+  .idrow .tier.free { color:var(--mut); background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); }
+  .idrow button { font-size:12px; font-weight:700; padding:6px 13px; margin:0; }
+
+  /* --- section headings --- */
+  .sechead { display:flex; align-items:center; gap:10px; margin:22px 2px 12px; }
+  .sechead h2 { font-size:13px; font-weight:900; letter-spacing:2.5px; text-transform:uppercase; color:var(--gold); text-shadow:var(--neon-gold); white-space:nowrap; }
+  .sechead .line { flex:1; height:1px; background:linear-gradient(90deg,rgba(255,200,90,.5),transparent); }
+
+  /* --- coming-soon preview rail --- */
+  .rail { display:flex; gap:12px; overflow-x:auto; padding:2px 2px 10px; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; }
+  .rail::-webkit-scrollbar { height:6px; } .rail::-webkit-scrollbar-thumb { background:rgba(255,200,90,.25); border-radius:99px; }
+  .peek { flex:0 0 190px; scroll-snap-align:start; position:relative; border-radius:14px; overflow:hidden;
+    border:1px solid var(--edge); background:var(--ink); box-shadow:0 8px 22px rgba(0,0,0,.5); }
+  .peek .art { height:112px; display:flex; align-items:center; justify-content:center; font-size:52px;
+    background:radial-gradient(120% 120% at 50% 0%, rgba(255,255,255,.12), transparent 60%); position:relative; }
+  .peek .art::after { content:''; position:absolute; inset:0; backdrop-filter:blur(1.5px); background:rgba(4,3,2,.22); }
+  .peek .art .lock { position:absolute; z-index:2; font-size:22px; right:8px; top:8px; filter:drop-shadow(0 0 6px rgba(0,0,0,.8)); backdrop-filter:none; }
+  .peek .meta { padding:11px 12px 13px; }
+  .peek .meta .t { font-size:13px; font-weight:800; color:var(--txt); letter-spacing:.3px; }
+  .peek .meta .d { font-size:11px; color:var(--mut); margin-top:3px; line-height:1.4; }
+  .peek .meta .badge { display:inline-block; margin-top:8px; font-size:9.5px; font-weight:800; letter-spacing:1px; text-transform:uppercase; padding:3px 8px; border-radius:99px; color:var(--gold); border:1px solid rgba(255,200,90,.35); }
+
+  /* --- feed posts --- */
+  .post { border:1px solid var(--edge); }
+  .post .tag { display:inline-block; font-size:10px; font-weight:800; letter-spacing:1px; padding:3px 9px; border-radius:99px; background:rgba(255,255,255,.05); color:var(--gold); margin-bottom:9px; text-transform:uppercase; border:1px solid rgba(255,200,90,.25); }
+  .post .tag.giveaway { color:#57f39a; border-color:rgba(87,243,154,.3); } .post .tag.alpha { color:var(--blue); border-color:rgba(56,201,255,.3); } .post .tag.perk { color:var(--red-hi); border-color:rgba(255,122,92,.3); }
+  .post h3 { font-size:16px; margin-bottom:6px; color:var(--txt); }
+  .post p { font-size:14px; color:var(--mut); line-height:1.6; white-space:pre-wrap; }
+  .post .ts { font-size:11px; color:var(--dim); margin-top:11px; font-family:ui-monospace,monospace; }
+
+  /* --- spin wheel --- */
+  .wheelcard { text-align:center; background:var(--panel); border:1px solid rgba(255,200,90,.24); border-radius:16px;
+    padding:22px 18px; margin-bottom:14px; backdrop-filter:blur(9px) saturate(1.1); -webkit-backdrop-filter:blur(9px) saturate(1.1);
+    box-shadow:0 10px 30px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.05); }
+  .wheelcard h2 { color:var(--gold); font-size:15px; margin:0 0 2px; letter-spacing:2px; text-shadow:var(--neon-gold); }
+  .wheelcard .cap { font-size:12px; color:var(--mut); margin-bottom:4px; line-height:1.5; }
+  .wheelwrap { position:relative; width:230px; height:230px; margin:16px auto 4px; filter:drop-shadow(0 8px 26px rgba(255,140,20,.22)); }
   .wheelwrap svg { display:block; width:100%; height:100%; }
   #thewheel { transition:transform 4.2s cubic-bezier(.15,.72,.18,1); transform-origin:130px 130px; }
-  /* Neutral grey when off, never a faded gold — a dimmed gradient on dark reads as BROKEN
-     rather than inactive (house rule). */
-  button:disabled, .spinbtn:disabled { background:#2a2440; color:#7d789c; cursor:default; }
-  .idrow { display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap;
-    font-size:12px; color:var(--mut); margin-bottom:16px; }
-  .idrow b { color:var(--gold); }
-  .idrow button { font-size:12px; font-weight:600; padding:5px 11px; margin:0; }
-  .pend { display:block; margin-top:8px; font-size:12.5px; color:#8dffc0; }
+  .pend { display:block; margin-top:10px; font-size:12.5px; color:#8dffc0; }
   .pend a { color:#8dffc0; }
-  .wheelmsg { font-size:14px; color:var(--mut); margin-top:10px; min-height:20px; }
+  .wheelmsg { font-size:14px; color:var(--txt); margin-top:12px; min-height:20px; }
   .wheelmsg b { color:var(--gold); }
-  .odds { font-size:11px; color:#6e6a86; margin-top:6px; }
+  .odds { font-size:11px; color:var(--dim); margin-top:6px; }
+  .crown { display:none; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <div class="crown">👑</div>
-    <h1>THE VIP LOUNGE</h1>
-    <div class="sub">Giveaways · Alpha · Perks — for the project's biggest supporters</div>
+    <div class="brand">
+      <span class="lx-the">THE</span>
+      <span class="lx-lux">Luxurious</span>
+      <span class="lx-lounge">LOUNGE</span>
+    </div>
+    <div class="sub">Members only · Giveaways · Alpha · Perks</div>
+    <div class="rule"></div>
   </header>
   <div id="gate" class="card vipwall">
-    <p style="margin-bottom:10px">Prove it's you — sign a free message with your wallet.<br>
-    <span style="font-size:12px;color:#6e6a86">No transaction, no approvals, zero cost. We only check your key.</span></p>
+    <p style="margin-bottom:12px;font-size:15px">Step inside — prove it's you with a free wallet signature.<br>
+    <span style="font-size:12px;color:var(--dim)">No transaction, no approvals, zero cost. We only read your key.</span></p>
     <div id="wallets"></div>
     <div id="err" class="err"></div>
   </div>
-  <div id="who" class="who" style="display:none"></div>
+  <div id="who" style="display:none"></div>
+  <div id="preview" style="display:none"></div>
   <div id="wheel" style="display:none"></div>
   <div id="feed" style="display:none"></div>
 </div>
@@ -155,19 +230,39 @@
   // you signed in there was no way out short of clearing site data.
   function renderWho(pk, vip) {
     var who = document.getElementById('who');
-    who.style.display = 'block';
+    who.style.display = 'flex';
     who.className = 'idrow';
-    who.innerHTML = '<span>Welcome, <b>' + esc(pk.slice(0, 4) + '…' + pk.slice(-4)) + '</b>' + (vip ? ' 👑' : '') + '</span>'
-      + '<button class="ghost" id="disc">Disconnect</button>';
+    who.innerHTML = '<span class="stat"><span class="dot"></span>Signed in&nbsp;<b>' + esc(pk.slice(0, 4) + '…' + pk.slice(-4)) + '</b></span>'
+      + '<span class="stat"><span class="tier ' + (vip ? 'vip' : 'free') + '">' + (vip ? '👑 VIP' : 'Guest') + '</span>'
+      + '<button class="ghost" id="disc">Disconnect</button></span>';
     document.getElementById('disc').onclick = function () {
       try { if (activeProvider && typeof activeProvider.disconnect === 'function') activeProvider.disconnect(); } catch (e) {}
       activeProvider = null;
       try { localStorage.removeItem('nqLoungeAuth'); } catch (e) {}
-      ['who', 'wheel', 'feed'].forEach(function (id) { var el = document.getElementById(id); el.style.display = 'none'; el.innerHTML = ''; });
+      ['who', 'preview', 'wheel', 'feed'].forEach(function (id) { var el = document.getElementById(id); el.style.display = 'none'; el.innerHTML = ''; });
       document.getElementById('gate').style.display = '';
       errEl.textContent = '';
       renderButtons();
     };
+  }
+
+  // ---- 🔮 COMING SOON preview rail — teaser cards for hidden/upcoming worlds, to build hype.
+  // Static teasers for now; the "Preview Pass" wheel prize (in progress) will make some playable.
+  var PREVIEWS = [
+    { emoji:'🦈', hue:'#38c9ff', t:'The Shallows', d:'A gold shark rules the tide. Stomp him x5.', badge:'Preview soon' },
+    { emoji:'🏰', hue:'#ffc85a', t:'The Sandcastle Keep', d:'The Sandcastle Lord guards the shore.', badge:'Preview soon' },
+    { emoji:'🌊', hue:'#57f39a', t:'More worlds', d:'New hidden rooms drop for members first.', badge:'In the works' }
+  ];
+  function renderPreview() {
+    var box = document.getElementById('preview');
+    box.style.display = 'block';
+    box.innerHTML = '<div class="sechead"><h2>🔮 Coming Soon</h2><span class="line"></span></div>'
+      + '<div class="rail">' + PREVIEWS.map(function (p) {
+        return '<div class="peek"><div class="art" style="background-color:' + p.hue + '22">'
+          + '<span>' + p.emoji + '</span><span class="lock">🔒</span></div>'
+          + '<div class="meta"><div class="t">' + esc(p.t) + '</div><div class="d">' + esc(p.d) + '</div>'
+          + '<span class="badge">' + esc(p.badge) + '</span></div></div>';
+      }).join('') + '</div>';
   }
 
   async function openLounge(pk, token) {
@@ -183,6 +278,7 @@
     if (!r.ok) {
       document.getElementById('gate').style.display = 'none';
       renderWho(pk, false);
+      renderPreview();
       renderWheel(pk, token);
       var feed0 = document.getElementById('feed');
       feed0.style.display = 'block';
@@ -198,6 +294,7 @@
     }
     document.getElementById('gate').style.display = 'none';
     renderWho(pk, true);
+    renderPreview();
     renderWheel(pk, token);
     var feed = document.getElementById('feed');
     feed.style.display = 'block';
@@ -219,8 +316,8 @@
   var ITEM_META = { disc: { emoji: '🥏', name: 'SOL Discs +5' }, vial: { emoji: '❤️', name: 'Full Heal' }, shield: { emoji: '🛡️', name: 'Audit Shield' },
     star: { emoji: '⭐', name: 'Star Power' }, bomb: { emoji: '🚀', name: 'Air Strike' } };
   var GAME_URL = '/normie-quest-x7';
-  var WHEEL_HUES = { disc: ['#2f9e57', '#123f24'], vial: ['#c04a6e', '#59182f'], shield: ['#3d8fb5', '#173c50'],
-    star: ['#c9a227', '#5c470d'], bomb: ['#8a5fd6', '#37245c'] };
+  var WHEEL_HUES = { disc: ['#e0a63a', '#5c3f0d'], vial: ['#e0503a', '#571a12'], shield: ['#3aa8cc', '#123f50'],
+    star: ['#ffcf5a', '#6a4e10'], bomb: ['#ff6a3c', '#5a2010'] };
   var wedgeCenter = {};   // prize id -> wedge-center angle, rebuilt with every render
   var wheelRot = 0;
   function wpt(a, r) { var rad = a * Math.PI / 180; return { x: (130 + r * Math.sin(rad)).toFixed(1), y: (130 - r * Math.cos(rad)).toFixed(1) }; }
@@ -251,8 +348,8 @@
     for (var k = 0; k < 12; k++) { var s = wpt(k * 30, 112); studs += '<circle cx="' + s.x + '" cy="' + s.y + '" r="3.2" fill="' + (k % 2 ? '#ffd23f' : '#7a5c10') + '"/>'; }
     return '<div class="wheelwrap"><svg viewBox="0 0 260 260" aria-hidden="true">'
       + '<defs>' + defs + '</defs>'
-      + '<circle cx="130" cy="130" r="124" fill="#0d0a1a" stroke="#3a3010" stroke-width="1.5"/>'
-      + '<circle cx="130" cy="130" r="112" fill="none" stroke="#241c08" stroke-width="17"/>'
+      + '<circle cx="130" cy="130" r="124" fill="#130d07" stroke="#4a3a10" stroke-width="1.5"/>'
+      + '<circle cx="130" cy="130" r="112" fill="none" stroke="#2a1e08" stroke-width="17"/>'
       + '<g id="thewheel">' + wedges + labels + '</g>'
       + studs
       + '<circle cx="130" cy="130" r="17" fill="#1a1204" stroke="#ffd23f" stroke-width="3"/>'
