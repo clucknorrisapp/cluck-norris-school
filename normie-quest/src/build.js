@@ -34,7 +34,7 @@ const FILE_MARKERS = {
   __JEET__:'cut_jeet.b64', __PAPER__:'cut_paper.b64', __GHOST__:'cut_ghost.b64', __BOT__:'cut_bot.b64', __BITMAXI__:'cut_bitmaxi.b64',
   __DIAMOND__:'cut_diamond.b64', __BULL__:'cut_bull.b64', __MOON__:'cut_moon.b64',
   __CAFFEINE__:'cut_caffeine.b64', __CANDLE__:'cut_candle.b64',
-  __RUGKING__:'cut_boss.b64', __RUGKINGDOWN__:'rugking_def.b64', __TOM__:'cut_tom.b64',
+  __RUGKING__:'cut_rugking.b64', __SHARK__:'cut_shark.b64', __SANDLORD__:'cut_sandlord.b64', __SQUID__:'cut_squid.b64', __NAUTILUS__:'cut_nautilus.b64', __RUGKINGDOWN__:'rugking_def.b64', __TOM__:'cut_tom.b64',
   __COIN__:'cut_coin.b64', __SOLANA__:'cut_solana.b64', __AIRDROP__:'cut_airdrop.b64', __KEY__:'cut_key.b64', __DOOR__:'cut_door.b64',
   __WORMHOLE__:'cut_wormhole.b64', __MINIWORM__:'cut_miniworm.b64', __SENTRY__:'cut_sentry.b64', __SLOT__:'cut_slot.b64',
   __OMEGACHAD__:'cut_omegachad.b64', __SUPERGEEK__:'cut_supergeek.b64',
