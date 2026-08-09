@@ -1148,7 +1148,7 @@ var LEVELS=[
   //   Theme 29 (tropical). No real reward yet (owner: "just the level for now") — ends on a normal
   //   room-clear. Geometry is lifted VERBATIM from the vetted TOMSTURF room so reachability is proven;
   //   only the theme, boss re-skin and the roomLabel are new. =====
-  { name:'BEACH', sub:'THE SHALLOWS', time:170, theme:29, width:4800, ground:'sandground',
+  { name:'BEACH', sub:'THE SHALLOWS', time:170, theme:29, width:4800, ground:'sandground', music:'desert',
     hidden:true, bonus:true, private:true, boss:true, bossType:'kol', diff:1.3,
     roomLabel:'THE SHALLOWS — PRIZE ROOM',
     bossName:'THE LOAN SHARK', bossSub:'HE SMELLS BLOOD IN THE WATER — STOMP HIM x5',
@@ -1174,7 +1174,7 @@ var LEVELS=[
   //   reuses the KOL charge+shill mechanic via boss* overrides (bossTex:'sandlord' → drawSandLordTex()),
   //   5 hearts. Enemies are the same beach flying fish (jumpfish erupt / flyfish dive). Geometry lifted
   //   verbatim from the vetted room so reachability is proven; theme/boss/enemies are the only changes. =====
-  { name:'SANDCASTLE', sub:'THE SANDCASTLE KEEP', time:180, theme:29, width:4800, ground:'sandground',
+  { name:'SANDCASTLE', sub:'THE SANDCASTLE KEEP', time:180, theme:29, width:4800, ground:'sandground', music:'desert',
     hidden:true, bonus:true, private:true, boss:true, bossType:'kol', diff:1.35,
     roomLabel:'THE SANDCASTLE KEEP — PRIZE ROOM',
     bossName:'THE SANDCASTLE LORD', bossSub:'RULER OF THE SHORE — STOMP HIS KEEP x5',
@@ -1837,7 +1837,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     }
     var LW=this.LW=def.width, th=THEMES[def.theme];
     // background music — per-world mood (boss arenas get the boss theme; 1-3's Rug King switches in startBoss)
-    try{ var w0=def.name.charAt(0); var mt=(def.boss&&def.bossType)?'boss':(w0==='1'?'world1':def.name==='2-1'?'desert':def.name==='2-2'?'casino':w0==='3'?'skyline':w0==='4'?'exchange':w0==='5'?'sacred':w0==='6'?'mines':w0==='7'?'exchange':w0==='8'?'boss':'world1'); MUSIC.forWorld(mt); }catch(e){}
+    try{ var w0=def.name.charAt(0); var mt=def.music||((def.boss&&def.bossType)?'boss':(w0==='1'?'world1':def.name==='2-1'?'desert':def.name==='2-2'?'casino':w0==='3'?'skyline':w0==='4'?'exchange':w0==='5'?'sacred':w0==='6'?'mines':w0==='7'?'exchange':w0==='8'?'boss':'world1')); MUSIC.forWorld(mt); }catch(e){}
     // Difficulty profile: deliberate ramp by WORLD. Worlds 1 (lvl 0-2)=baseline, World 2
     // (3-5)=+15% enemy speed, World 3 (6-8)=+30%. Per-level override via def.diff.
     this.diffMul = def.diff || [1,1,1,1.15,1.15,1.15,1.3,1.3,1.3,1.45,1.45,1.55,1.6,1.6,1.7,1.75,1.75,1.85,1.9,1.9,2.0,2.1,2.1,2.25][this.levelIdx] || 1;
@@ -5122,7 +5122,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
           if(now>e.drillT+2000){ e.drillState='burrow'; e.drillT=now; e.dustAt=0; e.setVisible(false); e.phasing=true; e.drillImmune=true; e.setVelocityX(0); self.burst(e.x,GY-4,0xb98a5a,12); } }
         else if(ds==='burrow'){ var bd=(p.x>e.x)?1:-1, nx=e.x+bd*2.2; if(nx>e.homeX-e.range-70&&nx<e.homeX+e.range+70) e.x=nx; e.setVelocityX(0); e.setFlipX(bd>0);
           if(now>(e.dustAt||0)){ self.burst(e.x,GY-4,0xb98a5a,4); e.dustAt=now+85; }   // moving dirt mound = the tell: get off this spot
-          if(now>e.drillT+750){ e.drillState='erupt'; e.drillT=now; e.setVisible(true); e.phasing=false; e.drillImmune=true; e.setVelocityY(-190); self.burst(e.x,GY-4,0xd9a066,16); if(SFX&&SFX.stomp)SFX.stomp(); } }   // low burst — reads as "erupting from the ground", not flying
+          if(now>e.drillT+750){ e.drillState='erupt'; e.drillT=now; e.setVisible(true); e.phasing=false; e.drillImmune=true; e.setVelocityY(-190);
+            if(e.kind==='jumpfish'){ self.burst(e.x,GY-4,0x7ed6f0,16); try{ _tone(320,540,0.13,'sine',0.045); }catch(_e){} }   // FISH: quiet splash chirp + blue spray, NOT the drill-worm's loud stomp (3-4 fish erupting every ~2s = constant random stomping)
+            else { self.burst(e.x,GY-4,0xd9a066,16); if(SFX&&SFX.stomp)SFX.stomp(); } } }   // low burst — reads as "erupting from the ground", not flying
         else {   // erupt: airborne + lethal, then land and go back to crawling (vulnerable)
           e.setVelocityX(0); e.drillImmune=true; e.setRotation(0);
           if((e.body.blocked.down&&now>e.drillT+280)||now>e.drillT+900){ e.drillState='crawl'; e.drillT=now; e.drillImmune=false; } }
