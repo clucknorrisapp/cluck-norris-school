@@ -342,7 +342,12 @@ router.get('/api/nq/wheel/status', (req, res) => {
     res.json({ ok: true, vip, canSpin: dailyReady || bonusReady, dailyReady, bonusReady,
       nextSpinAt: rewards.nextSpinAt(), nextBonusAt: vip ? rewards.nextBonusAt() : null,
       pending: rewards.pendingCount(pk), odds: rewards.odds(vip),
-      preview: rewards.previewRoom(), pass: rewards.activePass(pk) });
+      preview: rewards.previewRoom(), pass: rewards.activePass(pk),
+      raffle: rewards.raffleEntries(pk),
+      // 🪙 A teaser only — real $NORMIE payouts are on hold (owner-signed airdropper + NORMIE deal +
+      // an explicit go). NOT a wheel wedge: a wedge nobody can land on would break the wheel's
+      // "slice size = real odds" honesty. Rendered as a labeled 'coming soon' banner instead.
+      jackpotSoon: vip });
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
 // Claim ONE pending item into the game (any verified wallet — leaderboard/owner grants included).

@@ -134,6 +134,15 @@
   .wheelmsg { font-size:14px; color:var(--txt); margin-top:12px; min-height:20px; }
   .wheelmsg b { color:var(--gold); }
   .odds { font-size:11px; color:var(--dim); margin-top:6px; }
+  .raffleline { margin-top:10px; font-size:12.5px; color:#7ef0a6; }
+  .raffleline b { color:#b6ffce; }
+  .jackteaser { display:flex; align-items:center; gap:12px; text-align:left; margin-top:12px; padding:12px 14px; border-radius:14px;
+    background:linear-gradient(135deg, rgba(255,200,90,.12), rgba(90,60,10,.18)); border:1px dashed rgba(255,200,90,.5); }
+  .jackteaser .jt-coin { font-size:26px; filter:drop-shadow(0 0 8px rgba(255,200,90,.5)); }
+  .jackteaser .jt-t { font-size:13px; font-weight:900; color:var(--gold); letter-spacing:.4px; }
+  .jackteaser .jt-d { font-size:11.5px; color:var(--mut); margin-top:2px; line-height:1.45; }
+  .jackteaser .jt-soon { margin-left:auto; align-self:flex-start; font-size:9.5px; font-weight:900; letter-spacing:1.5px; color:#1a1204;
+    background:var(--gold); padding:3px 8px; border-radius:99px; }
   .crown { display:none; }
 </style>
 </head>
@@ -350,10 +359,11 @@
   // three wedges and had to be rebuilt by hand). star / bomb are in ITEM_META because the
   // PENDING count includes owner grants and shop purchases, and an unnamed prize read as a bug.
   var ITEM_META = { disc: { emoji: '🥏', name: 'SOL Discs +5' }, vial: { emoji: '❤️', name: 'Full Heal' }, shield: { emoji: '🛡️', name: 'Audit Shield' },
-    star: { emoji: '⭐', name: 'Star Power' }, bomb: { emoji: '🚀', name: 'Air Strike' }, preview: { emoji: '🎟️', name: 'Preview Pass' } };
+    star: { emoji: '⭐', name: 'Star Power' }, bomb: { emoji: '🚀', name: 'Air Strike' }, preview: { emoji: '🎟️', name: 'Preview Pass' },
+    raffle: { emoji: '🎫', name: 'Drawing Entry' } };
   var GAME_URL = '/normie-quest-x7';
   var WHEEL_HUES = { disc: ['#e0a63a', '#5c3f0d'], vial: ['#e0503a', '#571a12'], shield: ['#3aa8cc', '#123f50'],
-    star: ['#ffcf5a', '#6a4e10'], bomb: ['#ff6a3c', '#5a2010'], preview: ['#b06aff', '#3a1f5c'] };
+    star: ['#ffcf5a', '#6a4e10'], bomb: ['#ff6a3c', '#5a2010'], preview: ['#b06aff', '#3a1f5c'], raffle: ['#3ecf7a', '#12492c'] };
   var wedgeCenter = {};   // prize id -> wedge-center angle, rebuilt with every render
   var wheelRot = 0;
   function wpt(a, r) { var rad = a * Math.PI / 180; return { x: (130 + r * Math.sin(rad)).toFixed(1), y: (130 - r * Math.cos(rad)).toFixed(1) }; }
@@ -401,6 +411,19 @@
     if (h <= 0) return m >= 1 ? m + 'm' : 'under a minute';
     return h + 'h ' + m + 'm';
   }
+  // 🎫 running drawing-entry tally + 🪙 the $NORMIE jackpot teaser (a labeled 'coming soon' — NOT a
+  // wheel wedge, so the wheel's slice-size-equals-odds honesty stays intact).
+  function renderJackpot(st) {
+    var el = document.getElementById('jackpot'); if (!el) return;
+    var html = '';
+    if (st && st.raffle) html += '<div class="raffleline">🎫 You hold <b>' + st.raffle + '</b> drawing '
+      + (st.raffle === 1 ? 'entry' : 'entries') + ' — winners drawn in the members’ feed.</div>';
+    if (st && st.jackpotSoon) html += '<div class="jackteaser"><span class="jt-coin">🪙</span>'
+      + '<div><div class="jt-t">MEGA JACKPOT — real $NORMIE</div>'
+      + '<div class="jt-d">Coming soon. When it’s live, the rarest spin pays out real tokens.</div></div>'
+      + '<span class="jt-soon">SOON</span></div>';
+    el.innerHTML = html;
+  }
   async function renderWheel(pk, token) {
     var box = document.getElementById('wheel');
     var st;
@@ -426,7 +449,9 @@
       // page with something waiting on the other end, so it gets its own line and a way to go get it.
       + (st.pending ? '<span class="pend">🎁 ' + st.pending + ' item' + (st.pending === 1 ? '' : 's')
           + ' waiting for you — <a href="' + GAME_URL + '">open Normie Quest</a> to collect.</span>' : '')
+      + '<div id="jackpot"></div>'
       + '</div>';
+    try { renderJackpot(st); } catch (e) {}
     var btn = document.getElementById('spinbtn'), msg = document.getElementById('wheelmsg'), wheelEl = document.getElementById('thewheel'), cd = document.getElementById('wheelcd');
     wheelRot = 0;   // the SVG group above was just rebuilt at 0° — the accumulator must match it
     var cdTimer = null;   // single countdown interval — cleared on every re-lock so stale ones can't flicker the button
@@ -479,6 +504,13 @@
             + '! <a href="' + GAME_URL + '?room=' + encodeURIComponent(res.pass.room) + '" target="_blank" rel="noopener">Play it now →</a>';
           st.pass = res.pass;
           try { renderPreview(st); } catch (e) {}
+        } else if (res.prize === 'raffle') {
+          // 🎫 a drawing entry — banked to a running count, not a game item. Update the tally.
+          st.raffle = res.entries;
+          msg.innerHTML = (res.bonus ? '🎉 <b>BONUS SPIN!</b> ' : '') + '🎫 <b>DRAWING ENTRY</b> banked'
+            + (res.entries ? ' — you now have <b>' + res.entries + '</b> ' + (res.entries === 1 ? 'entry' : 'entries') : '')
+            + '. Winners are drawn in the members’ feed.';
+          try { renderJackpot(st); } catch (e) {}
         } else {
           msg.innerHTML = (res.bonus ? '🎉 <b>BONUS SPIN!</b> ' : '') + m.emoji + ' <b>' + esc(m.name) + '</b>! Banked to your wallet — '
             + '<a href="' + GAME_URL + '">open Normie Quest</a> to use it.';

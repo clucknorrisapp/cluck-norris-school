@@ -30,10 +30,12 @@ const MAX_PENDING = 20;                                  // cap a wallet's queue
 // It IS in the published odds, so the wheel stays provably-honest — the pass is the declared prize,
 // the "hidden prizes" are the bonus pickups waiting inside the preview world itself.
 const WHEEL_VIP = [
-  { item: 'disc', weight: 37 },
-  { item: 'vial', weight: 33 },
-  { item: 'shield', weight: 22 },
-  { item: 'preview', weight: 8 },
+  { item: 'disc', weight: 28 },
+  { item: 'vial', weight: 24 },
+  { item: 'shield', weight: 18 },
+  { item: 'bomb', weight: 14 },     // 🚀 Air Strike — a real reserve item, banked like disc/vial/shield
+  { item: 'preview', weight: 8 },   // 🎟️ Preview Pass — a hidden-world unlock (grantPass, not the queue)
+  { item: 'raffle', weight: 8 },    // 🎫 Drawing Entry — an off-chain raffle ticket (owner runs the draw)
 ];
 // Weighted toward the weakest item (+5 ammo) and away from the two strong ones (full heal,
 // audit shield), so the VIP table is a visible upgrade rather than a cosmetic one.
@@ -76,6 +78,22 @@ function activePass(wallet, nowMs) {
   const s = load(); const p = s.passes && s.passes[String(wallet || '')];
   if (!p || !p.expires || p.expires <= t) return null;
   return { room: p.room, label: p.label, emoji: p.emoji, expires: p.expires };
+}
+
+// ---- 🎫 DRAWING ENTRIES — an off-chain raffle ticket won on the wheel -----------------------
+// Landing the 'raffle' wedge banks ONE entry to the wallet's running total. Entries are just a
+// count (s.raffle[wallet]) — the owner runs the actual draw manually and announces it in the feed,
+// exactly like the giveaways already posted there. No funds move here and nothing is promised on a
+// public surface; this only records "you're in." A prize/payout, if any, is a separate owner action.
+function addRaffleEntry(wallet) {
+  const w = String(wallet || ''); if (!w) return { ok: false, error: 'no_wallet' };
+  const s = load(); s.raffle = s.raffle || {};
+  s.raffle[w] = (s.raffle[w] || 0) + 1;
+  save(s);
+  return { ok: true, entries: s.raffle[w] };
+}
+function raffleEntries(wallet) {
+  const s = load(); return (s.raffle && s.raffle[String(wallet || '')]) || 0;
 }
 
 function storePath() { return path.join(process.env.DATA_DIR || '/data', 'nq-rewards.json'); }
@@ -174,11 +192,16 @@ function spin(wallet, nowMs, opts) {
   // 🎟️ Preview Pass: an ACCESS grant, not a queued reserve item. grantPass persists it (and, on the
   // same store, records the used spin below). It can only be drawn from the VIP table, so a free
   // wallet never lands here.
-  let pass = null, pending;
+  let pass = null, entries = null, pending;
   if (item === 'preview') {
     const gp = grantPass(w, nowMs);
     if (!gp.ok) return { ok: false, error: gp.error, nextSpinAt: nextSpinAt(nowMs) };
     pass = { room: gp.room, label: gp.label, emoji: gp.emoji, expires: gp.expires };
+    pending = pendingCount(w);
+  } else if (item === 'raffle') {
+    // 🎫 an off-chain drawing entry — banked to a running count, not the reserve queue
+    const re = addRaffleEntry(w);
+    entries = re.entries;
     pending = pendingCount(w);
   } else {
     const g = grant(w, item, nowMs);
@@ -189,7 +212,7 @@ function spin(wallet, nowMs, opts) {
   if (daily) { s.spins = s.spins || {}; s.spins[w] = utcDay(nowMs); }
   else { s.bonus = s.bonus || {}; s.bonus[w] = bonusWindowKey(nowMs); }
   save(s);
-  return { ok: true, prize: item, pass: pass, bonus: !!bonus, pending: pending, nextSpinAt: nextSpinAt(nowMs), nextBonusAt: nextBonusAt(nowMs), bonusAvailable: bonusAvailable(w, nowMs) };
+  return { ok: true, prize: item, pass: pass, entries: entries, bonus: !!bonus, pending: pending, nextSpinAt: nextSpinAt(nowMs), nextBonusAt: nextBonusAt(nowMs), bonusAvailable: bonusAvailable(w, nowMs) };
 }
 // Published odds (shown on the wheel — provably-honest since it's server-authoritative + declared).
 function odds(vip) {
@@ -200,4 +223,5 @@ function odds(vip) {
 
 module.exports = { grant, pendingCount, claimOne, canSpin, nextSpinAt, spin, odds, ITEMS, wheelFor,
   bonusAvailable, nextBonusAt, canSpinNow, bonusWindowKey, BONUS_SPIN_HOURS,
-  previewRoom, grantPass, activePass, PREVIEW_ROOMS };
+  previewRoom, grantPass, activePass, PREVIEW_ROOMS,
+  addRaffleEntry, raffleEntries };
