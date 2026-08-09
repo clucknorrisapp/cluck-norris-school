@@ -337,9 +337,12 @@ router.get('/api/nq/wheel/status', (req, res) => {
     if (!sess || sess.ok === false) return res.status(401).json({ ok: false, error: 'bad_session' });
     const vip = wallet.isVip(pk, null);
     const dailyReady = rewards.canSpin(pk), bonusReady = vip && rewards.bonusAvailable(pk);
+    // 🎟️ Preview Pass surface: `preview` = the hidden world featured on the wheel this rotation (shown
+    // to everyone, so free players see the perk they'd get); `pass` = the wallet's own active pass or null.
     res.json({ ok: true, vip, canSpin: dailyReady || bonusReady, dailyReady, bonusReady,
       nextSpinAt: rewards.nextSpinAt(), nextBonusAt: vip ? rewards.nextBonusAt() : null,
-      pending: rewards.pendingCount(pk), odds: rewards.odds(vip) });
+      pending: rewards.pendingCount(pk), odds: rewards.odds(vip),
+      preview: rewards.previewRoom(), pass: rewards.activePass(pk) });
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
 // Claim ONE pending item into the game (any verified wallet — leaderboard/owner grants included).

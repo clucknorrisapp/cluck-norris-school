@@ -24,10 +24,16 @@ const MAX_PENDING = 20;                                  // cap a wallet's queue
 // sized by the real odds — since 2026-08-02; the old graphic was a fixed 3-wedge gradient), so a
 // prize added here appears on the wheel by itself. Keep entries in ITEMS/RESERVE_ITEMS or the
 // grant is silently dropped client-side — that rule hasn't moved.
+// The 'preview' wedge is a VIP-only prize: a Preview Pass — time-limited access to the hidden
+// world that's featured on the wheel this rotation (see PREVIEW_ROOMS below). It is NOT a reserve
+// item, so spin() special-cases it (grantPass, not grant) and it never enters the ITEMS queue.
+// It IS in the published odds, so the wheel stays provably-honest — the pass is the declared prize,
+// the "hidden prizes" are the bonus pickups waiting inside the preview world itself.
 const WHEEL_VIP = [
-  { item: 'disc', weight: 40 },
-  { item: 'vial', weight: 35 },
-  { item: 'shield', weight: 25 },
+  { item: 'disc', weight: 37 },
+  { item: 'vial', weight: 33 },
+  { item: 'shield', weight: 22 },
+  { item: 'preview', weight: 8 },
 ];
 // Weighted toward the weakest item (+5 ammo) and away from the two strong ones (full heal,
 // audit shield), so the VIP table is a visible upgrade rather than a cosmetic one.
@@ -38,6 +44,39 @@ const WHEEL_FREE = [
 ];
 const WHEEL = WHEEL_VIP;   // kept so any existing reference still resolves to the VIP table
 function wheelFor(vip) { return vip ? WHEEL_VIP : WHEEL_FREE; }
+
+// ---- 🎟️ PREVIEW PASSES — the VIP wheel's hidden-world unlock -----------------------------
+// A Preview Pass grants time-limited access to the ONE hidden world featured this rotation. The
+// featured world rotates on a fixed weekly, UTC-anchored cadence (no scheduler — clock-derived, so
+// it survives container resets, same trick as the bonus windows). A won pass is good for 48h from
+// the win. Passes are an ACCESS grant surfaced in the lounge, not an in-game inventory item — no
+// funds, nothing to sign. The `room` matches a private level's name (?room=beach loads it), so the
+// unlisted link stays the only door and the pass is how a VIP learns today's room + gets a play link.
+const PREVIEW_ROOMS = [
+  { room: 'beach', label: 'The Shallows', emoji: '🦈' },
+  { room: 'sandcastle', label: 'The Sandcastle Keep', emoji: '🏰' },
+];
+const PREVIEW_TTL_MS = 48 * 3600 * 1000;             // a won pass lasts 48h
+const PREVIEW_ROTATE_MS = 7 * 24 * 3600 * 1000;      // the featured world rotates weekly
+function previewRoom(nowMs) {
+  const t = nowMs == null ? Date.now() : nowMs;
+  return PREVIEW_ROOMS[Math.floor(t / PREVIEW_ROTATE_MS) % PREVIEW_ROOMS.length];
+}
+function grantPass(wallet, nowMs) {
+  const w = String(wallet || ''); if (!w) return { ok: false, error: 'no_wallet' };
+  const t = nowMs == null ? Date.now() : nowMs;
+  const pr = previewRoom(t);
+  const s = load(); s.passes = s.passes || {};
+  s.passes[w] = { room: pr.room, label: pr.label, emoji: pr.emoji, expires: t + PREVIEW_TTL_MS };
+  save(s);
+  return { ok: true, room: pr.room, label: pr.label, emoji: pr.emoji, expires: s.passes[w].expires };
+}
+function activePass(wallet, nowMs) {
+  const t = nowMs == null ? Date.now() : nowMs;
+  const s = load(); const p = s.passes && s.passes[String(wallet || '')];
+  if (!p || !p.expires || p.expires <= t) return null;
+  return { room: p.room, label: p.label, emoji: p.emoji, expires: p.expires };
+}
 
 function storePath() { return path.join(process.env.DATA_DIR || '/data', 'nq-rewards.json'); }
 function load() {
@@ -132,13 +171,25 @@ function spin(wallet, nowMs, opts) {
   const bonus = !daily && vip && bonusAvailable(w, nowMs);
   if (!daily && !bonus) return { ok: false, error: 'already_spun', nextSpinAt: nextSpinAt(nowMs), nextBonusAt: nextBonusAt(nowMs) };
   const item = pickPrize(vip);
-  const g = grant(w, item, nowMs);
-  if (!g.ok) return { ok: false, error: g.error, nextSpinAt: nextSpinAt(nowMs) };
+  // 🎟️ Preview Pass: an ACCESS grant, not a queued reserve item. grantPass persists it (and, on the
+  // same store, records the used spin below). It can only be drawn from the VIP table, so a free
+  // wallet never lands here.
+  let pass = null, pending;
+  if (item === 'preview') {
+    const gp = grantPass(w, nowMs);
+    if (!gp.ok) return { ok: false, error: gp.error, nextSpinAt: nextSpinAt(nowMs) };
+    pass = { room: gp.room, label: gp.label, emoji: gp.emoji, expires: gp.expires };
+    pending = pendingCount(w);
+  } else {
+    const g = grant(w, item, nowMs);
+    if (!g.ok) return { ok: false, error: g.error, nextSpinAt: nextSpinAt(nowMs) };
+    pending = g.pending;
+  }
   const s = load();
   if (daily) { s.spins = s.spins || {}; s.spins[w] = utcDay(nowMs); }
   else { s.bonus = s.bonus || {}; s.bonus[w] = bonusWindowKey(nowMs); }
   save(s);
-  return { ok: true, prize: item, bonus: !!bonus, pending: g.pending, nextSpinAt: nextSpinAt(nowMs), nextBonusAt: nextBonusAt(nowMs), bonusAvailable: bonusAvailable(w, nowMs) };
+  return { ok: true, prize: item, pass: pass, bonus: !!bonus, pending: pending, nextSpinAt: nextSpinAt(nowMs), nextBonusAt: nextBonusAt(nowMs), bonusAvailable: bonusAvailable(w, nowMs) };
 }
 // Published odds (shown on the wheel — provably-honest since it's server-authoritative + declared).
 function odds(vip) {
@@ -148,4 +199,5 @@ function odds(vip) {
 }
 
 module.exports = { grant, pendingCount, claimOne, canSpin, nextSpinAt, spin, odds, ITEMS, wheelFor,
-  bonusAvailable, nextBonusAt, canSpinNow, bonusWindowKey, BONUS_SPIN_HOURS };
+  bonusAvailable, nextBonusAt, canSpinNow, bonusWindowKey, BONUS_SPIN_HOURS,
+  previewRoom, grantPass, activePass, PREVIEW_ROOMS };
