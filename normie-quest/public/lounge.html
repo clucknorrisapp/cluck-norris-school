@@ -287,7 +287,8 @@
       + '<div class="rail">' + PREVIEWS.map(function (p) {
         var unlocked = pass && p.room && pass.room === p.room;
         var onWheel = !unlocked && featured && p.room === featured;
-        var badge = unlocked ? '🎟️ Unlocked — play' : (onWheel ? '🎡 On the wheel now' : (p.badge || 'Preview soon'));
+        // The 'preview' wedge is VIP-only — a free player can't win it, so don't imply they can.
+        var badge = unlocked ? '🎟️ Unlocked — play' : (onWheel ? (st && st.vip ? '🎡 On the wheel now' : '🎟️ VIP wheel prize') : (p.badge || 'Preview soon'));
         var badgeCls = unlocked ? 'badge on' : (onWheel ? 'badge wheel' : 'badge');
         var face = p.img ? '<img class="thumb" alt="" src="data:image/png;base64,' + p.img + '">' : '<span>' + p.emoji + '</span>';
         var art = '<div class="art" style="background-color:' + p.hue + '22">' + face
