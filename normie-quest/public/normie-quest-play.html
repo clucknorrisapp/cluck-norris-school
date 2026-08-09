@@ -2887,7 +2887,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.over||this.paused) return;
     if(this.throwAmmo<=0){ _tone(200,140,0.08,'square',0.04); return; }   // empty: soft click, no fire
     this.throwAmmo--; this.fireSolana(); this.updateThrowHud();
-    this.cameras.main.flash(50,20,120,60);
+    // small muzzle puff at the player — NOT a full-screen camera flash. The flash strobed the whole
+    // screen on every throw (tester on iPhone Safari: "when I shoot the coins my screen flashes").
+    try{ var p=this.player, dir=p.flipX?-1:1; this.burst(p.x+dir*16, (p.body?p.body.bottom-16:p.y-4), 0x14f195, 5); }catch(e){}
   },
   coinHitEnemy:function(coin,enemy){
     if(this.over||!enemy.active||!coin.active) return;
