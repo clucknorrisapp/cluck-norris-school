@@ -5885,7 +5885,7 @@ var Controls=new Phaser.Class({ Extends:Phaser.Scene,
     g.lineStyle(1,0x33305a,1); g.beginPath(); g.moveTo(cx,40); g.lineTo(cx,104); g.strokePath();   // column divider
     // MOBILE column (highlighted green if this device is touch)
     this.add.text(colL,40,'MOBILE',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:isTouch?'#3dff6e':'#b6bfe0'}).setOrigin(.5);
-    this.add.text(colL,56,'MOVE:  the  < >  buttons\n(gutter, or tap-move)\nJUMP / DUCK  buttons',
+    this.add.text(colL,56,'MOVE:  drag the JOYSTICK\n(left side — down to duck)\nJUMP: tap right · ◎ throw',
       {fontFamily:UIFONT,resolution:UIRES,fontSize:'12px',color:'#eef2ff',align:'center',lineSpacing:1}).setOrigin(.5,0);
     // KEYBOARD column (highlighted green if this device is not touch)
     this.add.text(colR,40,'KEYBOARD',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:isTouch?'#b6bfe0':'#3dff6e'}).setOrigin(.5);
@@ -6432,7 +6432,7 @@ if(typeof document!=='undefined'){ (function(){
   var isTouch=('ontouchstart' in window)||(navigator.maxTouchPoints>0);
   if(!isTouch) return;
   window.__NQ_PAD={left:false,right:false,jump:false,down:false,throw:false}; window.__NQ_PAD_ACTIVE=false;
-  if(/[?&#]joystick=1(\b|$)/.test((location.search||'')+(location.hash||''))) return;   // ?joystick=1 → the floating-joystick module below owns touch input instead of this gutter D-pad
+  if(!/[?&#]joystick=0(\b|$)/.test((location.search||'')+(location.hash||''))) return;   // the floating joystick (below) is now the universal touch control; this gutter D-pad runs ONLY as the ?joystick=0 fallback
   var css=document.createElement('style');
   css.textContent='#nqpad{display:none}'
     +'.nqpb{position:fixed;z-index:45;border:2px solid rgba(120,180,255,.42);background:rgba(24,30,54,.5);color:#9fd4ff;'
@@ -6542,8 +6542,10 @@ if(typeof document!=='undefined'){ (function(){
    Gated behind ?joystick=1 so it ships DORMANT: real users are unaffected until we flip the default. */
 if(typeof document!=='undefined'){ (function(){
   var isTouch=('ontouchstart' in window)||(navigator.maxTouchPoints>0);
-  var on=/[?&#]joystick=1(\b|$)/.test((location.search||'')+(location.hash||''));
-  if(!isTouch||!on) return;
+  if(!isTouch) return;
+  var qs=(location.search||'')+(location.hash||'');
+  if(/[?&#]joystick=0(\b|$)/.test(qs)) return;   // ?joystick=0 = escape hatch: fall back to the old gutter D-pad / tap-zones
+  var dbg=/[?&#]joydebug=1(\b|$)/.test(qs);
   var PAD=window.__NQ_PAD||(window.__NQ_PAD={left:false,right:false,jump:false,down:false,throw:false});
   window.__NQ_PAD_ACTIVE=true;
   var css=document.createElement('style');
@@ -6558,13 +6560,10 @@ if(typeof document!=='undefined'){ (function(){
   var T=document.createElement('div'); T.id='nqjoyT';
   var F=document.createElement('button'); F.id='nqjoyF'; F.textContent='◎'; F.setAttribute('aria-hidden','true');
   document.body.appendChild(B); document.body.appendChild(T); document.body.appendChild(F);
-  // LIVE DEBUG READOUT (temporary, while we get the feel right) — proves the module loaded, shows the
-  // last touch, the L/R/J/D flags it sets, and whether the game is reading the pad. Screenshot this.
-  var D=document.createElement('div'); D.id='nqjoyD';
-  D.style.cssText='position:fixed;left:6px;top:2px;z-index:60;font:700 10px/1.35 monospace;color:#3dff9e;'
-    +'background:rgba(0,0,0,.62);padding:3px 6px;border-radius:5px;pointer-events:none;white-space:pre;max-width:70vw';
-  D.textContent='JOY loaded ✓ — touch the left side';
-  document.body.appendChild(D);
+  // Opt-in live debug readout (?joydebug=1) — proves the module loaded + shows touch/flag/pad state.
+  var D=null; if(dbg){ D=document.createElement('div'); D.id='nqjoyD';
+    D.style.cssText='position:fixed;left:6px;top:2px;z-index:60;font:700 10px/1.35 monospace;color:#3dff9e;background:rgba(0,0,0,.62);padding:3px 6px;border-radius:5px;pointer-events:none;white-space:pre;max-width:70vw';
+    D.textContent='JOY loaded ✓'; document.body.appendChild(D); }
   var R=54, DX=15, DY=26, joyId=null, ox=0, oy=0, jumpIds={}, lastT='none', evc=0;
   function clearMove(){ PAD.left=PAD.right=PAD.down=false; }
   function hideJoy(){ B.style.display=T.style.display='none'; joyId=null; clearMove(); }
@@ -6604,7 +6603,7 @@ if(typeof document!=='undefined'){ (function(){
   setInterval(function(){ var inGame=false; try{ inGame=NQGAME.scene.isActive('Game'); }catch(e){}
     F.style.display=inGame?'flex':'none';
     if(!inGame){ if(joyId!==null) hideJoy(); jumpIds={}; PAD.jump=PAD.throw=false; }
-    D.textContent='JOY ✓ ev:'+evc+' last:'+lastT+'\n'+(PAD.left?'◄':'·')+(PAD.right?'►':'·')+(PAD.jump?'▲':'·')+(PAD.down?'▼':'·')+(PAD.throw?'◎':'·')+'  pad:'+(window.__NQ_PAD_ACTIVE?1:0)+' game:'+(inGame?1:0)+' w:'+window.innerWidth;
+    if(D) D.textContent='JOY ✓ ev:'+evc+' last:'+lastT+'\n'+(PAD.left?'◄':'·')+(PAD.right?'►':'·')+(PAD.jump?'▲':'·')+(PAD.down?'▼':'·')+(PAD.throw?'◎':'·')+'  pad:'+(window.__NQ_PAD_ACTIVE?1:0)+' game:'+(inGame?1:0)+' w:'+window.innerWidth;
   },160);
 })(); }
 
@@ -7046,7 +7045,7 @@ if(typeof document!=='undefined'){ (function(){
   wrap.appendChild(el('div',{id:'nqhow-card'},
     '<h3>🕹️ HOW TO PLAY</h3>'
     +'<div class="nqhow-sec"><div class="t">⌨️ KEYBOARD</div><div class="r"><span class="k">← → / A D</span> move · <span class="k">SPACE / W</span> jump · <span class="k">F / X</span> throw · <span class="k">P / ESC</span> pause</div></div>'
-    +'<div class="nqhow-sec"><div class="t">📱 TOUCH</div><div class="r">tap <span class="k">left / mid</span> to move · <span class="k">right side</span> jump · <span class="k">⏸ top-left</span> pause</div></div>'
+    +'<div class="nqhow-sec"><div class="t">📱 TOUCH</div><div class="r"><span class="k">drag the left side</span> to move (joystick — springs up under your thumb) · <span class="k">right side</span> jump · <span class="k">◎</span> throw · <span class="k">⏸ top-left</span> pause</div></div>'
     +'<div class="nqhow-sec" id="nqhow-pad"><div class="t">🎮 CONTROLLER <span style="color:#3dff9e">— detected!</span></div><div class="r"><span class="k">d-pad / stick</span> move · <span class="k">A</span> jump · <span class="k">B</span> throw · <span class="k">START</span> (or hold <span class="k">A+B</span>) pause</div></div>'
     +'<div class="nqhow-sec"><div class="t">🎯 GOAL</div><div class="r">grab coins, dodge the FUD, find the key, reach the flag. 3 hearts per world — don’t get wrecked.</div></div>'
     // 📺 Folded in rather than given its own overlay: the people who need it are already here
