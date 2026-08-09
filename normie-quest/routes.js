@@ -564,6 +564,31 @@ router.get('/normie-quest-x7/dashboard', async (req, res) => {
   try { lb = await leaderboard.boards({ n: 10 }); } catch (e) { lb = null; }
   let walletUse = {};
   try { walletUse = JSON.parse(fs.readFileSync(path.join(process.env.DATA_DIR || '/data', 'nq-wallet-usage.json'), 'utf8')) || {}; } catch (e) {}
+  // Raw score rows (non-suspect) power the per-world / VIP boards + the engagement trend; the VIP
+  // allowlist marks which verified wallets are members. Both are cheap local reads.
+  let lbRaw = [];
+  try { lbRaw = ((await leaderboard.list()) || []).filter(function (r) { return r && !r.suspect; }); } catch (e) { lbRaw = []; }
+  let vips = [];
+  try { vips = wallet.vipList() || []; } catch (e) { vips = []; }
+  const vipSet = new Set(vips.map(String));
+  const playerKey = function (r) { return r.walletVerified && r.wallet ? 'w:' + r.wallet : 'n:' + String(r.name || 'anon').toLowerCase(); };
+  const rankRows = function (rows, n) {   // best run per distinct player, ranked by score (mirrors nq-leaderboard)
+    const best = new Map();
+    rows.forEach(function (r) { const k = playerKey(r), c = best.get(k); if (!c || r.score > c.score) best.set(k, r); });
+    return [...best.values()].sort(function (a, b) { return b.score - a.score || a.at - b.at; }).slice(0, n);
+  };
+  const distinctPlayers = new Set(lbRaw.map(playerKey)).size;
+  const verifiedRuns = lbRaw.filter(function (r) { return r.walletVerified; }).length;
+  const vipRows = rankRows(lbRaw.filter(function (r) { return r.walletVerified && vipSet.has(String(r.wallet)); }), 12);
+  // 14-day activity trend from real run timestamps
+  const DAY = 86400000, NDAYS = 14, nowMs = Date.now();
+  const dayRuns = new Array(NDAYS).fill(0);
+  lbRaw.forEach(function (r) { const bk = Math.floor((nowMs - r.at) / DAY); if (bk >= 0 && bk < NDAYS) dayRuns[NDAYS - 1 - bk]++; });
+  const runs7 = dayRuns.slice(-7).reduce(function (a, b) { return a + b; }, 0);
+  // per-world "depth ladder": best score among players whose FURTHEST world reached == N
+  const byExactWorld = {};
+  lbRaw.forEach(function (r) { const w = r.world | 0; if (w >= 1) (byExactWorld[w] = byExactWorld[w] || []).push(r); });
+  const exactWorlds = Object.keys(byExactWorld).map(Number).sort(function (a, b) { return b - a; });
 
   // natural level order: 1-1 … 10-3 first, hidden/bonus names after (alphabetical)
   const rows = d.worlds.slice().sort(function (a, b) {
@@ -671,6 +696,59 @@ router.get('/normie-quest-x7/dashboard', async (req, res) => {
     + '</table></div>'
     + (untagged ? '<div class="dim" style="margin:-6px 0 14px;font-size:12px">+ untagged traffic: ' + untagged.clears + '✓ / ' + untagged.deaths + '☠</div>' : '');
 
+  // 🏆 leaderboard row renderer — verified ✔ + VIP badge, medal-tinted top 3
+  const short = function (w) { const s = String(w || ''); return s.length > 12 ? s.slice(0, 4) + '…' + s.slice(-4) : s; };
+  const boardRows = function (list) {
+    return (list || []).map(function (r, i) {
+      const isv = r.walletVerified && vipSet.has(String(r.wallet));
+      const marks = (r.walletVerified ? '<span class="ver" title="wallet-verified">✔</span>' : '') + (isv ? '<span class="vip">VIP</span>' : '');
+      return '<tr' + (i < 3 ? ' class="m' + (i + 1) + '"' : '') + '><td class="rank">' + (i + 1) + '</td>'
+        + '<td class="pl">' + esc(r.name || 'anon') + marks + '</td>'
+        + '<td><span class="wtag">W' + esc(String(r.world != null ? r.world : '?')) + '</span></td>'
+        + '<td class="sc">' + Number(r.score || 0).toLocaleString() + '</td></tr>';
+    }).join('') || '<tr><td colspan="4" class="dim">no runs yet</td></tr>';
+  };
+
+  // 📈 ENGAGEMENT — real 14-day activity trend from run timestamps + player counts
+  const emax = Math.max.apply(null, [1].concat(dayRuns));
+  const spark = dayRuns.map(function (n, i) {
+    const dback = NDAYS - 1 - i;
+    return '<i style="height:' + Math.max(4, (n / emax * 100)).toFixed(0) + '%" title="' + n + ' run' + (n === 1 ? '' : 's') + ' · ' + (dback === 0 ? 'today' : dback + 'd ago') + '"><b>' + (n || '') + '</b></i>';
+  }).join('');
+  const engagementSection = '<h2>📈 ENGAGEMENT <span class="dim" style="font-weight:400">(scored runs per day · last 14 days)</span></h2>'
+    + '<div class="engwrap"><div class="engtiles">'
+    + '<div class="et"><div class="n">' + distinctPlayers + '</div><div class="l">DISTINCT PLAYERS</div></div>'
+    + '<div class="et"><div class="n">' + runs7 + '</div><div class="l">RUNS · 7 DAYS</div></div>'
+    + '<div class="et"><div class="n">' + verifiedRuns + '</div><div class="l">WALLET-VERIFIED RUNS</div></div>'
+    + '<div class="et"><div class="n">' + vips.length + '</div><div class="l">VIP MEMBERS 👑</div></div>'
+    + '</div><div class="spark">' + spark + '</div></div>';
+
+  // 🗺️ DEPTH LADDER — per-world segmentation the honest way: grouped by the FURTHEST world a
+  // player reached (score is a single cumulative number per run, so "score earned in world N" would
+  // need a game-side change — flagged in the reply). Top 3 per depth.
+  const perWorldSection = '<h2>🗺️ DEPTH LADDER <span class="dim" style="font-weight:400">(top scorers grouped by furthest world reached)</span></h2>'
+    + '<div class="ladder">' + (exactWorlds.length ? exactWorlds.map(function (w) {
+      const top = rankRows(byExactWorld[w], 3), tot = byExactWorld[w].length;
+      return '<div class="rung"><div class="rw">WORLD ' + w + '<span class="rc">' + tot + ' player' + (tot === 1 ? '' : 's') + '</span></div>'
+        + top.map(function (r, i) {
+          const isv = r.walletVerified && vipSet.has(String(r.wallet));
+          return '<div class="re"><span class="rn">' + (i + 1) + '</span><span class="rp">' + esc(r.name || 'anon') + (isv ? ' <span class="vip">VIP</span>' : '') + '</span><span class="rs">' + Number(r.score || 0).toLocaleString() + '</span></div>';
+        }).join('') + '</div>';
+    }).join('') : '<div class="dim">no scored runs yet</div>') + '</div>';
+
+  // 👑 VIP — the members-only board + the allowlist roster with each member's best run
+  const vipMembersRows = vips.length ? vips.map(function (w) {
+    const best = rankRows(lbRaw.filter(function (r) { return r.walletVerified && String(r.wallet) === String(w); }), 1)[0];
+    return '<tr><td class="mono">' + esc(short(w)) + '</td><td>' + (best ? esc(best.name || 'anon') : '<span class="dim">— not played</span>') + '</td><td class="sc">' + (best ? Number(best.score || 0).toLocaleString() : '<span class="dim">—</span>') + '</td></tr>';
+  }).join('') : '<tr><td colspan="3" class="dim">No VIP members yet — add wallets on the lounge-admin allowlist.</td></tr>';
+  const vipSection = '<h2>👑 VIP TIER</h2><div class="cols"><div>'
+    + '<h3>VIP LEADERBOARD</h3><table><tr><th>#</th><th>NAME</th><th>WORLD</th><th>SCORE</th></tr>'
+    + (vipRows.length ? boardRows(vipRows) : '<tr><td colspan="4" class="dim">No VIP runs yet — a VIP-tagged wallet needs one scored run.</td></tr>') + '</table>'
+    + '</div><div>'
+    + '<h3>MEMBERS <span class="dim" style="font-weight:400">(' + vips.length + ' on the allowlist)</span></h3>'
+    + '<table><tr><th>WALLET</th><th>BEST NAME</th><th>BEST SCORE</th></tr>' + vipMembersRows + '</table>'
+    + '</div></div>';
+
   res.set('Content-Type', 'text/html; charset=utf-8');
   res.set('Cache-Control', 'no-store');
   res.send('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
@@ -715,6 +793,27 @@ router.get('/normie-quest-x7/dashboard', async (req, res) => {
     + '.pstrip{display:flex;gap:2px}.pstrip i{font-style:normal;font-size:10px;line-height:16px;min-width:16px;text-align:center;border-radius:3px}'
     + '.pw-c{background:#134a2e;color:#8dffc0}.pw-d{background:#5a1330;color:#ff9db8}.pw-0{background:#191533;color:#4a4570}'
     + '@media(max-width:720px){.cols{grid-template-columns:1fr}}'
+    + 'h3{color:#bfe0ff;font-size:12px;letter-spacing:1px;text-transform:uppercase;margin:0 0 8px}'
+    + '.pl{font-weight:600}.ver{color:#3dff8e;font-size:11px;margin-left:5px}'
+    + '.vip{background:linear-gradient(90deg,#ffd23f,#ff9d2e);color:#1a1204;font-size:9px;font-weight:800;letter-spacing:.5px;border-radius:4px;padding:1px 5px;margin-left:6px;vertical-align:middle}'
+    + '.rank{color:#6a6590;width:24px;font-variant-numeric:tabular-nums}.sc{text-align:right;font-weight:700;color:#ffd23f;font-variant-numeric:tabular-nums}'
+    + '.wtag{font-size:11px;color:#8fd0ff;background:rgba(103,208,255,.1);border:1px solid rgba(103,208,255,.28);border-radius:5px;padding:1px 6px}'
+    + 'tr.m1 td{background:linear-gradient(90deg,rgba(255,210,63,.12),transparent)}tr.m2 td{background:linear-gradient(90deg,rgba(200,210,230,.08),transparent)}tr.m3 td{background:linear-gradient(90deg,rgba(205,127,50,.1),transparent)}'
+    + '.mono{font-family:ui-monospace,monospace;font-size:12px;color:#cfe0ff}'
+    + '.engwrap{background:#161228;border:1px solid #2a2450;border-radius:14px;padding:14px 16px}'
+    + '.engtiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}'
+    + '.et{border-left:3px solid #ff9d2e;padding-left:10px}'
+    + '.et .n{font-size:22px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums}.et .l{font-size:9.5px;letter-spacing:1px;color:#8f89b0;text-transform:uppercase;margin-top:2px}'
+    + '.spark{display:flex;align-items:flex-end;gap:5px;height:88px;padding-top:14px;border-top:1px solid #201a3a}'
+    + '.spark i{flex:1;min-height:4px;background:linear-gradient(180deg,#ffd23f,#ff5a3c);border-radius:4px 4px 0 0;position:relative;opacity:.9}'
+    + '.spark i:hover{opacity:1}.spark i b{position:absolute;top:-14px;left:0;right:0;text-align:center;font-size:9.5px;color:#8f89b0;font-weight:400}'
+    + '.ladder{display:grid;grid-template-columns:repeat(auto-fill,minmax(228px,1fr));gap:10px}'
+    + '.rung{background:#161228;border:1px solid #2a2450;border-radius:12px;padding:11px 13px}'
+    + '.rung .rw{font-size:11px;font-weight:800;letter-spacing:1px;color:#ffd23f;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;padding-bottom:6px;border-bottom:1px solid #2a2450}'
+    + '.rung .rc{font-size:10px;font-weight:400;color:#6a6590;letter-spacing:0}'
+    + '.re{display:grid;grid-template-columns:16px 1fr auto;gap:8px;align-items:center;font-size:12.5px;padding:2px 0}'
+    + '.re .rn{color:#6a6590;font-variant-numeric:tabular-nums}.re .rp{color:#dfe6ff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.re .rs{color:#ffd23f;font-weight:700;font-variant-numeric:tabular-nums}'
+    + '@media(max-width:520px){.engtiles{grid-template-columns:repeat(2,1fr)}}'
     + '</style></head><body>'
     + '<div class="topbar"><div class="in"><h1>🎮 Normie Quest — Operator Dashboard</h1>'
     + '<span class="live"><span class="dot"></span> LIVE · refresh in <b id="cd">30s</b> '
@@ -736,16 +835,19 @@ router.get('/normie-quest-x7/dashboard', async (req, res) => {
     + '<div class="tile"><div class="n">' + ago(d.lastAt) + '</div><div class="l">LAST EVENT</div></div>'
     + '</div>'
     + (flagged.length ? '<div class="attn"><div class="h">⚠ NEEDS ATTENTION — ' + flagged.length + ' hard level' + (flagged.length === 1 ? '' : 's') + ' (worst deaths-per-clear first)</div><div class="chips">' + attentionChips + '</div></div>' : '')
+    + engagementSection
+    + '<div class="cols"><div>'
+    + '<h2>🏆 LEADERBOARD — ALL TIME</h2><table><tr><th>#</th><th>NAME</th><th>WORLD</th><th>SCORE</th></tr>' + boardRows(lb && lb.allTime) + '</table>'
+    + '</div><div>'
+    + '<h2>📅 LEADERBOARD — THIS WEEK</h2><table><tr><th>#</th><th>NAME</th><th>WORLD</th><th>SCORE</th></tr>' + boardRows(lb && lb.weekly) + '</table>'
+    + '</div></div>'
+    + vipSection
+    + perWorldSection
     + '<h2>🎯 TOP KILLERS <span class="dim" style="font-weight:400">(what actually kills players, all levels combined)</span></h2>' + killerRows
     + panelSection
     + '<h2>📊 DIFFICULTY BY LEVEL <span class="dim" style="font-weight:400">(⚠ = ≥6 deaths/clear or ≥8 deaths with no clear · red strip = where testers die)</span></h2>'
     + '<div style="overflow-x:auto"><table><tr><th>LEVEL</th><th>☠</th><th>✓</th><th>☠/✓</th><th>AVG CLEAR</th><th>TOP CAUSE</th><th>DEATH MAP</th><th>LAST</th></tr>'
     + (tableRows || '<tr><td colspan="8" class="dim">No telemetry yet — it records automatically as testers play.</td></tr>') + '</table></div>'
-    + '<div class="cols"><div>'
-    + '<h2>🏆 LEADERBOARD — ALL TIME</h2><table><tr><th>#</th><th>NAME</th><th>WORLD</th><th>SCORE</th></tr>' + lbRows(lb && lb.allTime) + '</table>'
-    + '</div><div>'
-    + '<h2>📅 LEADERBOARD — THIS WEEK</h2><table><tr><th>#</th><th>NAME</th><th>WORLD</th><th>SCORE</th></tr>' + lbRows(lb && lb.weekly) + '</table>'
-    + '</div></div>'
     + '<h2>👛 WALLET CONNECTS BY APP</h2>'
     + (Object.keys(walletUse).length
       ? '<table><tr><th>WALLET</th><th>CONNECTS</th></tr>' + Object.entries(walletUse).sort((a, b) => b[1] - a[1])
