@@ -6456,7 +6456,14 @@ if(typeof document!=='undefined'){ (function(){
   var T=document.createElement('div'); T.id='nqjoyT';
   var F=document.createElement('button'); F.id='nqjoyF'; F.textContent='◎'; F.setAttribute('aria-hidden','true');
   document.body.appendChild(B); document.body.appendChild(T); document.body.appendChild(F);
-  var R=54, DX=15, DY=26, joyId=null, ox=0, oy=0, jumpIds={};
+  // LIVE DEBUG READOUT (temporary, while we get the feel right) — proves the module loaded, shows the
+  // last touch, the L/R/J/D flags it sets, and whether the game is reading the pad. Screenshot this.
+  var D=document.createElement('div'); D.id='nqjoyD';
+  D.style.cssText='position:fixed;left:6px;top:2px;z-index:60;font:700 10px/1.35 monospace;color:#3dff9e;'
+    +'background:rgba(0,0,0,.62);padding:3px 6px;border-radius:5px;pointer-events:none;white-space:pre;max-width:70vw';
+  D.textContent='JOY loaded ✓ — touch the left side';
+  document.body.appendChild(D);
+  var R=54, DX=15, DY=26, joyId=null, ox=0, oy=0, jumpIds={}, lastT='none', evc=0;
   function clearMove(){ PAD.left=PAD.right=PAD.down=false; }
   function hideJoy(){ B.style.display=T.style.display='none'; joyId=null; clearMove(); }
   function place(px,py){
@@ -6466,7 +6473,7 @@ if(typeof document!=='undefined'){ (function(){
   }
   function topBand(y){ return y < window.innerHeight*0.13; }   // leave the top HUD (pause / ? / gear) alone
   document.addEventListener('touchstart',function(ev){
-    var acted=false;
+    var acted=false; evc++; if(ev.changedTouches[0]) lastT=Math.round(ev.changedTouches[0].clientX)+','+Math.round(ev.changedTouches[0].clientY);
     for(var i=0;i<ev.changedTouches.length;i++){ var t=ev.changedTouches[i];
       if(t.target===F || topBand(t.clientY)) continue;
       if(t.clientX < window.innerWidth*0.5){
@@ -6495,6 +6502,7 @@ if(typeof document!=='undefined'){ (function(){
   setInterval(function(){ var inGame=false; try{ inGame=NQGAME.scene.isActive('Game'); }catch(e){}
     F.style.display=inGame?'flex':'none';
     if(!inGame){ if(joyId!==null) hideJoy(); jumpIds={}; PAD.jump=PAD.throw=false; }
+    D.textContent='JOY ✓ ev:'+evc+' last:'+lastT+'\n'+(PAD.left?'◄':'·')+(PAD.right?'►':'·')+(PAD.jump?'▲':'·')+(PAD.down?'▼':'·')+(PAD.throw?'◎':'·')+'  pad:'+(window.__NQ_PAD_ACTIVE?1:0)+' game:'+(inGame?1:0)+' w:'+window.innerWidth;
   },160);
 })(); }
 
