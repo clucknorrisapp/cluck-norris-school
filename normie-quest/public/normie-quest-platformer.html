@@ -2059,8 +2059,11 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         if(gw>=64){                                                                               // a beast fits in a wide-enough pit
           var mon=self.add.image(gcx, wSurf+12, 'waterlurker').setDepth(2);
           mon.setScale(Math.min(1, (gw-14)/64));
-          self.tweens.add({ targets:mon, y:wSurf-3, duration:1500, yoyo:true, repeat:-1, ease:'Sine.easeInOut' });
+          // lunge state (driven in waterTick — NOT a looping tween, so it can strike). It rises out of
+          // the water to swipe at a player crossing the gap: a low jump gets caught, a high one clears
+          // the reach. Cosmetic angle-sway still tweens; the y is owned by the tick.
           self.tweens.add({ targets:mon, angle:{from:-4,to:4}, duration:2600, yoyo:true, repeat:-1, ease:'Sine.easeInOut' });
+          mon.gcx=gcx; mon.homeY=wSurf+12; mon.surfY=wSurf; mon.st='idle'; mon.next=0; mon.t0=0; mon.hitLunge=false;
           self.waterMonsters.push(mon);
         }
         var surf=self.add.rectangle(gcx, wSurf+7, gw+6, 15, 0x5fd0e8, 0.5).setDepth(3);           // surface band over the beast's waterline
@@ -4802,6 +4805,47 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.tweens.add({targets:t, y:t.y-18, alpha:0, duration:1200, onComplete:function(){ t.destroy(); }});
   },
 
+  /* ---------- 🐙 water lurkers (beach worlds): lunge out of the pit at a crossing player ---------- */
+  // The beast waits submerged; when Normie is AIRBORNE over its pit it winds up (a bubble tell), then
+  // shoots up out of the water to swipe. A low, lazy jump gets caught ('DRAGGED UNDER'); a committed
+  // high jump clears the reach. Purely tick-driven (no physics body) — a manual box check does the hit.
+  waterTick:function(now){
+    if(!this.waterMonsters || !this.waterMonsters.length) return;
+    var self=this, p=this.player, grounded=p.body && (p.body.blocked.down||p.body.touching.down);
+    var TRIG=96, REACH=52, HITX=22, HITY=26;
+    for(var i=0;i<this.waterMonsters.length;i++){
+      var m=this.waterMonsters[i]; if(!m||!m.active) continue;
+      var pdx=Math.abs(p.x-m.gcx);
+      if(m.st==='idle'){
+        m.y = m.homeY + Math.sin(now/380 + i)*4;                       // gentle idle bob
+        if(now>m.next && pdx<TRIG && !grounded && p.y < m.surfY+30){    // strike at an airborne crosser
+          m.st='windup'; m.t0=now; m.hitLunge=false; m.setFlipX(p.x < m.gcx);
+          self.burst(m.gcx, m.surfY-2, 0x8fe6ff, 6);                    // bubble tell (fair warning)
+        }
+      } else if(m.st==='windup'){
+        var wt=Math.min(1,(now-m.t0)/240); m.y = m.homeY - wt*8;        // coil / rise a touch
+        if(now-m.t0>=240){ m.st='lunge'; m.t0=now;
+          self.burst(m.gcx, m.surfY, 0xbdf0fb, 12);                     // splash breaking the surface
+          try{ _tone(180,90,0.18,'sawtooth',0.05); }catch(e){}
+        }
+      } else if(m.st==='lunge'){
+        var lt=Math.min(1,(now-m.t0)/200);
+        m.y = (m.surfY+12) - (12+REACH)*Math.sin(lt*Math.PI*0.5);       // shoot up to REACH above the surface
+        if(!m.hitLunge && !this.over && !p.invuln
+           && now>=this.shieldUntil && now>=this.moonUntil && now>=this.omegaUntil && now>=this.whaleUntil && now>=this.coldUntil
+           && Math.abs(p.x-m.x)<HITX && Math.abs(p.y-m.y)<HITY){
+          m.hitLunge=true; self.cameras.main.shake(120,.01);
+          this.hurt(p, p.x<m.x?-1:1, 'DRAGGED UNDER'); if(this.over) return;
+        }
+        if(now-m.t0>=340){ m.st='retract'; m.t0=now; }                  // hold at apex, then retract
+      } else if(m.st==='retract'){
+        var rt=Math.min(1,(now-m.t0)/300); var apex=m.surfY-REACH;
+        m.y = apex + (m.homeY-apex)*rt;                                 // sink back home
+        if(rt>=1){ m.st='idle'; m.next=now + 640 + (i*170)%620; }       // staggered cooldown
+      }
+    }
+  },
+
   /* ---------- Normie Casino slot machines ("fire it in" for bonus coins) ---------- */
   slotTick:function(now,p,b,jumpEdge){
     if(!this.slots || !this.slots.length) return false;
@@ -5387,6 +5431,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // Casino folk (Drink/Show Ladies) + Lil Normie child support
     this.casinoTick(now);
     this.childSupportTick(now);
+    // 🐙 water lurkers (beach worlds) — lunge out of the pits at a crossing player
+    if(this.isWater) this.waterTick(now);
 
     // healing airdrops drop in only while you're hurt (lives<max); hide again at full health
     var hurt=this.lives<this.maxLives;
