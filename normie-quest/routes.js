@@ -603,7 +603,7 @@ router.get('/normie-quest-x7/dashboard', async (req, res) => {
     } else {
       cause = '<span class="dim">—</span>';
     }
-    return '<tr' + (flag(w) ? ' class="warn"' : '') + '><td class="lvl">' + esc(w.world) + (flag(w) ? ' ⚠' : '') + '</td>'
+    return '<tr id="lvl-' + esc(w.world) + '"' + (flag(w) ? ' class="warn"' : '') + '><td class="lvl">' + esc(w.world) + (flag(w) ? ' ⚠' : '') + '</td>'
       + '<td>' + w.deaths + '</td><td>' + w.clears + '</td><td>' + dpc + '</td>'
       + '<td>' + (w.clears ? w.avgClearSec + 's' : '<span class="dim">—</span>') + '</td>'
       + '<td class="cause">' + cause + '</td><td class="map">' + heat(w) + '</td>'
@@ -619,6 +619,25 @@ router.get('/normie-quest-x7/dashboard', async (req, res) => {
     return '<div class="c"><b>' + esc(c.name || 'anon') + '</b> <span class="lvl2">' + esc(c.level || '') + '</span> <span class="k">' + esc(c.kind || '') + '</span> <span class="dim">' + when + '</span><div>' + esc(c.text || '') + '</div></div>';
   }).join('') || '<div class="dim">No comments yet — testers need the ?test=1 build for the feedback widget.</div>';
   const overall = d.clears ? Math.round(d.deaths / d.clears * 10) / 10 : null;
+  // 🎯 TOP KILLERS — aggregate the real per-level causes into a global "what kills players" board.
+  const causeTotals = {};
+  rows.forEach(function (w) { (w.topCauses || []).forEach(function (c) {
+    if (c.cause && c.cause !== 'WRECKED BY FUD') causeTotals[c.cause] = (causeTotals[c.cause] || 0) + c.n; }); });
+  const topKillers = Object.entries(causeTotals).sort(function (a, b) { return b[1] - a[1]; }).slice(0, 8);
+  const killerMax = topKillers.length ? topKillers[0][1] : 1;
+  const killerRows = topKillers.map(function (k) {
+    const pct = (k[1] / killerMax * 100).toFixed(1);
+    return '<div class="kill"><span class="kn">' + esc(k[0]) + '</span><span class="kbar"><i style="width:' + pct + '%"></i></span><span class="kc">' + k[1] + '</span></div>';
+  }).join('') || '<div class="dim">No cause data yet.</div>';
+  // ⚠ NEEDS ATTENTION — the flagged (hardest) levels, worst first, surfaced up top.
+  const flagged = rows.filter(flag).slice().sort(function (a, b) {
+    const av = a.deathsPerClear === null ? 1e9 : a.deathsPerClear, bv = b.deathsPerClear === null ? 1e9 : b.deathsPerClear;
+    return bv - av;
+  });
+  const attentionChips = flagged.slice(0, 12).map(function (w) {
+    const dpc = w.deathsPerClear === null ? '∞' : w.deathsPerClear;
+    return '<a class="chip" href="#lvl-' + esc(w.world) + '" title="' + w.deaths + ' deaths · ' + w.clears + ' clears">' + esc(w.world) + ' <b>' + dpc + '</b></a>';
+  }).join('');
 
   // 🧪 PANEL COVERAGE — one row per tagged tester (?tester=T1 links), a world-by-world strip:
   // green = cleared a level there, red = deaths only, dark = untouched. Shows at a glance which
@@ -656,12 +675,33 @@ router.get('/normie-quest-x7/dashboard', async (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.send('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
     + '<meta name="robots" content="noindex,nofollow"><title>Normie Quest — Operator Dashboard</title><style>'
-    + 'body{margin:0;background:#0e0a1e;color:#eee;font-family:system-ui,Segoe UI,Roboto,sans-serif;padding:16px 14px 40px}'
-    + 'h1{color:#ffd23f;font-size:20px;margin:0 0 3px}h2{color:#c9a7ff;font-size:14px;margin:26px 0 8px;letter-spacing:1px}'
-    + '.sub{color:#8f89b0;font-size:12.5px;margin-bottom:14px}.sub a{color:#66ccff}'
-    + '.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:6px}'
-    + '.tile{background:#161228;border:1px solid #2a2450;border-radius:10px;padding:9px 12px}'
-    + '.tile .n{font-size:21px;font-weight:700;color:#fff}.tile .l{font-size:10.5px;color:#8f89b0;letter-spacing:1px}'
+    + 'body{margin:0;background:radial-gradient(120% 80% at 50% -10%,#181033,#0c0818 60%);color:#eee;font-family:system-ui,Segoe UI,Roboto,sans-serif;padding:0 0 48px;-webkit-font-smoothing:antialiased}'
+    + '.wrap{max-width:1080px;margin:0 auto;padding:0 14px}'
+    + '.topbar{position:sticky;top:0;z-index:9;background:rgba(12,8,24,.82);backdrop-filter:blur(8px);border-bottom:1px solid #2a2450;padding:12px 14px;margin-bottom:16px}'
+    + '.topbar .in{max-width:1080px;margin:0 auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap}'
+    + 'h1{color:#ffd23f;font-size:19px;margin:0;font-weight:800;letter-spacing:.3px;text-shadow:0 0 18px rgba(255,210,63,.25)}'
+    + '.live{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:#8dffc0;margin-left:auto}'
+    + '.live .dot{width:8px;height:8px;border-radius:50%;background:#3dff8e;box-shadow:0 0 8px #3dff8e;animation:pulse 1.6s infinite}'
+    + '@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}'
+    + '.live b{color:#cfeaff}.live button{background:#20204a;color:#bfd0ff;border:1px solid #3a3a70;border-radius:7px;padding:3px 9px;font-size:11px;cursor:pointer}'
+    + '.live button:hover{background:#2a2a5c}'
+    + 'h2{color:#c9a7ff;font-size:14px;margin:28px 0 9px;letter-spacing:1px}'
+    + '.sub{color:#8f89b0;font-size:12.5px;margin-bottom:14px}.sub a{color:#66ccff;text-decoration:none}.sub a:hover{text-decoration:underline}'
+    + '.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(122px,1fr));gap:9px;margin-bottom:6px}'
+    + '.tile{background:linear-gradient(160deg,#191330,#130f26);border:1px solid #2a2450;border-radius:12px;padding:11px 13px;position:relative;overflow:hidden}'
+    + '.tile::after{content:"";position:absolute;inset:0 0 auto 0;height:2px;background:linear-gradient(90deg,#ff7a18,#ffd23f)}'
+    + '.tile .n{font-size:23px;font-weight:800;color:#fff;line-height:1.1}.tile .l{font-size:10.5px;color:#8f89b0;letter-spacing:1px;margin-top:2px}'
+    + '.attn{background:linear-gradient(160deg,rgba(255,56,96,.12),rgba(255,122,24,.06));border:1px solid rgba(255,90,120,.4);border-radius:12px;padding:12px 14px;margin:14px 0 4px}'
+    + '.attn .h{font-size:12px;font-weight:800;letter-spacing:1px;color:#ff9db8;margin-bottom:8px}'
+    + '.attn .chips{display:flex;flex-wrap:wrap;gap:6px}'
+    + '.chip{background:rgba(255,56,96,.14);border:1px solid rgba(255,90,120,.45);color:#ffd0dd;border-radius:99px;padding:3px 10px;font-size:12px;text-decoration:none;white-space:nowrap}'
+    + '.chip b{color:#ff6a99}.chip:hover{background:rgba(255,56,96,.26)}'
+    + '.kill{display:grid;grid-template-columns:150px 1fr 44px;align-items:center;gap:10px;margin:5px 0;font-size:12.5px}'
+    + '.kill .kn{color:#cfe0ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
+    + '.kill .kbar{height:12px;background:#1a1630;border-radius:4px;overflow:hidden}'
+    + '.kill .kbar i{display:block;height:100%;background:linear-gradient(90deg,#ff7a18,#ff3860);border-radius:4px}'
+    + '.kill .kc{color:#ff9db8;font-weight:700;text-align:right}'
+    + '@media(max-width:520px){.kill{grid-template-columns:110px 1fr 38px}}'
     + 'table{border-collapse:collapse;width:100%;font-size:13px}'
     + 'th{color:#8f89b0;font-size:10.5px;letter-spacing:1px;text-align:left;padding:5px 8px;border-bottom:1px solid #33305a}'
     + 'td{padding:5px 8px;border-bottom:1px solid #201a3a;vertical-align:middle}'
@@ -676,12 +716,15 @@ router.get('/normie-quest-x7/dashboard', async (req, res) => {
     + '.pw-c{background:#134a2e;color:#8dffc0}.pw-d{background:#5a1330;color:#ff9db8}.pw-0{background:#191533;color:#4a4570}'
     + '@media(max-width:720px){.cols{grid-template-columns:1fr}}'
     + '</style></head><body>'
-    + '<h1>🎮 Normie Quest — Operator Dashboard</h1>'
+    + '<div class="topbar"><div class="in"><h1>🎮 Normie Quest — Operator Dashboard</h1>'
+    + '<span class="live"><span class="dot"></span> LIVE · refresh in <b id="cd">30s</b> '
+    + '<button id="pause">⏸ pause</button></span></div></div>'
+    + '<div class="wrap">'
     + '<div class="sub">' + (showAll
         ? 'ALL-TIME data (incl. pre-2026-07-20 legacy “FUD” deaths) · <a href="/normie-quest-x7/dashboard?key=' + key + '"><b>show since causes shipped →</b></a>'
         : 'showing deaths SINCE granular causes shipped (2026-07-20) — real causes only · <a href="/normie-quest-x7/dashboard?key=' + key + '&window=all">show all-time (with legacy FUD) →</a>')
     + ' · <a href="/normie-quest-x7/feedback?key=' + key + '">all comments</a> · '
-    + '<a href="/api/nq/telemetry?key=' + key + '">raw telemetry</a> · <a href="/api/nq/feedback?key=' + key + '">raw feedback</a> · refresh for live numbers</div>'
+    + '<a href="/api/nq/telemetry?key=' + key + '">raw telemetry</a> · <a href="/api/nq/feedback?key=' + key + '">raw feedback</a> · auto-refreshing live</div>'
     + '<div class="tiles">'
     + '<div class="tile"><div class="n">' + d.events + '</div><div class="l">EVENTS</div></div>'
     + '<div class="tile"><div class="n">' + d.deaths + '</div><div class="l">DEATHS ☠</div></div>'
@@ -692,6 +735,8 @@ router.get('/normie-quest-x7/dashboard', async (req, res) => {
     + '<div class="tile"><div class="n">' + ((lb && lb.totalRuns) || 0) + '</div><div class="l">SCORED RUNS</div></div>'
     + '<div class="tile"><div class="n">' + ago(d.lastAt) + '</div><div class="l">LAST EVENT</div></div>'
     + '</div>'
+    + (flagged.length ? '<div class="attn"><div class="h">⚠ NEEDS ATTENTION — ' + flagged.length + ' hard level' + (flagged.length === 1 ? '' : 's') + ' (worst deaths-per-clear first)</div><div class="chips">' + attentionChips + '</div></div>' : '')
+    + '<h2>🎯 TOP KILLERS <span class="dim" style="font-weight:400">(what actually kills players, all levels combined)</span></h2>' + killerRows
     + panelSection
     + '<h2>📊 DIFFICULTY BY LEVEL <span class="dim" style="font-weight:400">(⚠ = ≥6 deaths/clear or ≥8 deaths with no clear · red strip = where testers die)</span></h2>'
     + '<div style="overflow-x:auto"><table><tr><th>LEVEL</th><th>☠</th><th>✓</th><th>☠/✓</th><th>AVG CLEAR</th><th>TOP CAUSE</th><th>DEATH MAP</th><th>LAST</th></tr>'
@@ -707,6 +752,16 @@ router.get('/normie-quest-x7/dashboard', async (req, res) => {
           .map(([k, n]) => '<tr><td>' + esc(k) + '</td><td>' + n + '</td></tr>').join('') + '</table>'
       : '<div class="dim">No wallet connects recorded yet (counting started 2026-07-20).</div>')
     + '<h2>💬 LATEST COMMENTS (' + comments.length + ' total)</h2>' + commentCards
+    + '</div>'   // .wrap
+    // Live auto-refresh: reload every 30s for fresh server-rendered numbers. Pauses on a hidden tab
+    // (no background reloads) and via the button. A full reload is the honest "live" here — the page
+    // is server-rendered, so a reload IS the fresh data.
+    + '<script>(function(){var s=30,on=true,cd=document.getElementById("cd"),btn=document.getElementById("pause");'
+    + 'function paint(){if(cd)cd.textContent=(on?s+"s":"paused");}'
+    + 'function tick(){if(!on||document.hidden)return;s--;if(s<=0){location.reload();return;}paint();}'
+    + 'if(btn)btn.onclick=function(){on=!on;btn.textContent=on?"⏸ pause":"▶ resume";if(on)s=30;paint();};'
+    + 'document.addEventListener("visibilitychange",function(){if(!document.hidden&&on){s=30;paint();}});'
+    + 'paint();setInterval(tick,1000);})();</script>'
     + '</body></html>');
 });
 
