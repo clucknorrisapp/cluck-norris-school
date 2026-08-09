@@ -1465,6 +1465,20 @@ var Boot=new Phaser.Class({ Extends:Phaser.Scene,
     g.clear(); g.fillStyle(C.spikeDk); g.fillTriangle(0,14,6,2,12,14); g.fillTriangle(12,14,18,2,24,14); g.fillStyle(C.spike); g.fillTriangle(2,14,6,5,10,14); g.fillTriangle(14,14,18,5,22,14); g.generateTexture('spike',24,14);
     // firepit — a 24px lethal flame tile (jump it; new hazard debuting W5). Layered flames dark->hot.
     g.clear(); g.fillStyle(0xd93a0a); g.fillTriangle(0,16,7,3,13,16); g.fillTriangle(11,16,18,2,24,16); g.fillStyle(0xff7a18); g.fillTriangle(3,16,8,6,12,16); g.fillTriangle(14,16,18,5,22,16); g.fillStyle(0xffd23f); g.fillTriangle(5,16,8,10,11,16); g.fillTriangle(15,16,18,9,20,16); g.generateTexture('firepit',24,16);
+    // 🐙 waterlurker — the sea-beast that waits in the water on beach levels. A dark half-submerged
+    // silhouette with glowing eyes: reads menacing at any size and never looks cheap. The surface band
+    // gets drawn OVER its lower half in create() to sell the "lurking just under the water" look.
+    g.clear();
+    g.fillStyle(0x0c2e38); g.fillRoundedRect(1,16,9,28,4); g.fillRoundedRect(0,12,8,11,3);      // left tentacle
+    g.fillRoundedRect(54,16,9,28,4); g.fillRoundedRect(56,12,8,11,3);                             // right tentacle
+    g.fillStyle(0x123c48); g.fillEllipse(32,30,46,34);                                            // head
+    g.fillStyle(0x1c5666); g.fillEllipse(32,22,30,12);                                            // forehead highlight
+    g.fillStyle(0xffcf3f); g.fillCircle(23,27,6); g.fillCircle(41,27,6);                          // glowing eyes
+    g.fillStyle(0x0a0a0a); g.fillCircle(24,28,2.6); g.fillCircle(42,28,2.6);                      // pupils
+    g.fillStyle(0xffffff); g.fillCircle(22,25,1.5); g.fillCircle(40,25,1.5);                      // glints
+    g.fillStyle(0x08171d); g.fillEllipse(32,40,20,8);                                             // maw
+    g.fillStyle(0xeef6f2); g.fillTriangle(24,37,27,43,30,37); g.fillTriangle(30,37,33,44,36,37); g.fillTriangle(36,37,39,43,42,37);   // teeth
+    g.generateTexture('waterlurker',64,46);
     // stick — a little dart the mini-worms spit (dark twig with a bright tip)
     g.clear(); g.fillStyle(0x2a1a0c); g.fillTriangle(0,3,13,0,13,6); g.fillRect(0,2,11,3); g.fillStyle(0x8a5a2b); g.fillRect(1,3,8,1); g.fillStyle(0x66ddff); g.fillTriangle(10,1,15,3,10,5); g.generateTexture('stick',15,6);
     // cactus — desert scenery for the Sand Lands interlude
@@ -1514,9 +1528,11 @@ var Boot=new Phaser.Class({ Extends:Phaser.Scene,
       // shows, so there's no title-screen flash and no race with a habitual "Play" tap landing on
       // 1-1. No warp points at these levels and they're hidden from level-select, so the unlisted
       // URL is the only door. lab:1 bypasses the tier gate; no setup lane needed.
-      try{ var _rm=((location.search||'')+(location.hash||'')).match(/[?&#]room=([A-Za-z0-9_-]{1,24})/);
+      try{ var _src=(location.search||'')+(location.hash||''); var _rm=_src.match(/[?&#]room=([A-Za-z0-9_-]{1,24})/);
         if(_rm){ var _rn=_rm[1].toLowerCase();
-          for(var _i=0;_i<LEVELS.length;_i++){ if(LEVELS[_i]&&LEVELS[_i].private && String(LEVELS[_i].name||'').toLowerCase()===_rn){ self.scene.start('Game',{level:_i,score:0,lives:3,lab:1}); return; } }
+          // optional &at=<x> deep-links to a spawn position inside the room (0 = default spawn)
+          var _atm=_src.match(/[?&#]at=(\d{1,5})/), _at=_atm?parseInt(_atm[1],10):0;
+          for(var _i=0;_i<LEVELS.length;_i++){ if(LEVELS[_i]&&LEVELS[_i].private && String(LEVELS[_i].name||'').toLowerCase()===_rn){ self.scene.start('Game',{level:_i,score:0,lives:3,lab:1,spawnX:(_at>0?_at:undefined)}); return; } }
         }
       }catch(e){}
       self.scene.start('Title'); };
@@ -2031,6 +2047,29 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var groundKey = this.groundKeyFor(def);
     this.floorKey = groundKey;   // exposed via __NQ_DBG so the floor can be ASSERTED, not just eyeballed
     for(var gx=0;gx<LW;gx+=TILE){ if(!inGap(gx)){ this.platforms.create(gx+TILE/2,GY+TILE/2,groundKey); this.platforms.create(gx+TILE/2,GY+TILE/2+TILE,groundKey); } }
+    // 🌊 WATER PITS (beach theme, 29): the gaps aren't empty void — they're WATER, with a sea-beast
+    // lurking in each one, waiting. Falling in still costs a life (the pit-death below), but themed as
+    // being dragged under. Purely cosmetic hazards layered into the gap; the kill logic is unchanged.
+    this.isWater = (def.theme===29);
+    if(this.isWater){
+      this.waterMonsters=[];
+      var wSurf=GY+3, wBot=H+150;
+      gaps.forEach(function(gp){
+        var gx0=gp[0], gx1=gp[1], gw=gx1-gx0, gcx=(gx0+gx1)/2;
+        self.add.rectangle(gcx, (wSurf+wBot)/2, gw+6, wBot-wSurf, 0x0e5a80, 0.86).setDepth(1);   // deep water
+        self.add.rectangle(gcx, wSurf+22, gw+6, 40, 0x1a86b0, 0.45).setDepth(1);                  // lighter upper column
+        if(gw>=64){                                                                               // a beast fits in a wide-enough pit
+          var mon=self.add.image(gcx, wSurf+12, 'waterlurker').setDepth(2);
+          mon.setScale(Math.min(1, (gw-14)/64));
+          self.tweens.add({ targets:mon, y:wSurf-3, duration:1500, yoyo:true, repeat:-1, ease:'Sine.easeInOut' });
+          self.tweens.add({ targets:mon, angle:{from:-4,to:4}, duration:2600, yoyo:true, repeat:-1, ease:'Sine.easeInOut' });
+          self.waterMonsters.push(mon);
+        }
+        var surf=self.add.rectangle(gcx, wSurf+7, gw+6, 15, 0x5fd0e8, 0.5).setDepth(3);           // surface band over the beast's waterline
+        self.tweens.add({ targets:surf, alpha:0.26, duration:950, yoyo:true, repeat:-1, ease:'Sine.easeInOut' });
+        self.add.rectangle(gcx, wSurf, gw+6, 3, 0xbdf0fb, 0.9).setDepth(3);                        // bright surface line
+      });
+    }
     // floating platforms — plat:[x,count,topY,type?]  (type defaults to brick)
     (def.plats||[]).forEach(function(pl){ var t=pl[3]||'brick'; for(var k=0;k<pl[1];k++) self.platforms.create(pl[0]+k*TILE+TILE/2,pl[2]+TILE/2,t); });
     // obstacle blocks (stacked on the ground) — force the player to jump.
@@ -5363,7 +5402,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(p.y>H+80){
       if(window.__NQ_SETUP&&window.__NQ_GOD){   // LAB god mode: pits eject you instead of killing
         p.setVelocity(0,0); p.setPosition(Math.max(this.spawn.x,p.x-260),H-100); return; }
-      this.loseLife('FELL IN A PIT'); if(this.over) return;
+      this.loseLife(this.isWater ? 'DRAGGED UNDER' : 'FELL IN A PIT'); if(this.over) return;
       p.setVelocity(0,0);
       // Respawn on the LAST SAFE STANDING SPOT (recorded only when on solid ground, so never inside
       // a wall) instead of a blind x-260 that could drop you into an obstacle. Falls back to the old
