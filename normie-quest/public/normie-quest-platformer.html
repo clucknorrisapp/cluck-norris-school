@@ -6430,6 +6430,7 @@ if(typeof document!=='undefined'){ (function(){
   var isTouch=('ontouchstart' in window)||(navigator.maxTouchPoints>0);
   if(!isTouch) return;
   window.__NQ_PAD={left:false,right:false,jump:false,down:false,throw:false}; window.__NQ_PAD_ACTIVE=false;
+  if(/[?&#]joystick=1(\b|$)/.test((location.search||'')+(location.hash||''))) return;   // ?joystick=1 → the floating-joystick module below owns touch input instead of this gutter D-pad
   var css=document.createElement('style');
   css.textContent='#nqpad{display:none}'
     +'.nqpb{position:fixed;z-index:45;border:2px solid rgba(120,180,255,.42);background:rgba(24,30,54,.5);color:#9fd4ff;'
@@ -6529,6 +6530,72 @@ if(typeof document!=='undefined'){ (function(){
     wrap.style.display=(inGame&&window.__NQ_PAD_ACTIVE&&!tv)?'block':'none';
     if(!inGame){ window.__NQ_PAD.left=window.__NQ_PAD.right=window.__NQ_PAD.jump=false; bL.classList.remove('on'); bR.classList.remove('on'); bJ.classList.remove('on'); }
   },120);
+})(); }
+
+/* ---------- Floating movement joystick (phones) — OPT-IN via ?joystick=1 while we device-test ----------
+   Owner ask (mobile tester): a joystick "feel" for walking instead of the invisible < > tap-zones.
+   LEFT half of the screen = a joystick that springs up under the thumb (drag to steer; drag down to
+   duck). RIGHT half = JUMP. A dedicated ◎ THROW button sits bottom-right. Feeds the SAME window.__NQ_PAD
+   hook the gutter D-pad uses (which is disabled while this flag is on) — so zero core game-loop change.
+   Gated behind ?joystick=1 so it ships DORMANT: real users are unaffected until we flip the default. */
+if(typeof document!=='undefined'){ (function(){
+  var isTouch=('ontouchstart' in window)||(navigator.maxTouchPoints>0);
+  var on=/[?&#]joystick=1(\b|$)/.test((location.search||'')+(location.hash||''));
+  if(!isTouch||!on) return;
+  var PAD=window.__NQ_PAD||(window.__NQ_PAD={left:false,right:false,jump:false,down:false,throw:false});
+  window.__NQ_PAD_ACTIVE=true;
+  var css=document.createElement('style');
+  css.textContent='#nqjoyB,#nqjoyT{position:fixed;z-index:44;border-radius:50%;pointer-events:none;display:none}'
+    +'#nqjoyB{width:132px;height:132px;margin:-66px 0 0 -66px;border:3px solid rgba(120,180,255,.42);background:rgba(24,30,54,.32)}'
+    +'#nqjoyT{width:60px;height:60px;margin:-30px 0 0 -30px;border:2px solid rgba(61,255,158,.85);background:rgba(61,255,158,.42);box-shadow:0 3px 12px rgba(0,0,0,.4)}'
+    +'#nqjoyF{position:fixed;z-index:45;right:18px;bottom:104px;width:70px;height:70px;border-radius:50%;'
+    +'border:2px solid rgba(255,210,63,.6);background:rgba(60,48,10,.5);color:#ffd23f;font:700 24px system-ui;'
+    +'display:none;align-items:center;justify-content:center;touch-action:none;-webkit-user-select:none;user-select:none}';
+  document.head.appendChild(css);
+  var B=document.createElement('div'); B.id='nqjoyB';
+  var T=document.createElement('div'); T.id='nqjoyT';
+  var F=document.createElement('button'); F.id='nqjoyF'; F.textContent='◎'; F.setAttribute('aria-hidden','true');
+  document.body.appendChild(B); document.body.appendChild(T); document.body.appendChild(F);
+  var R=54, DX=15, DY=26, joyId=null, ox=0, oy=0, jumpIds={};
+  function clearMove(){ PAD.left=PAD.right=PAD.down=false; }
+  function hideJoy(){ B.style.display=T.style.display='none'; joyId=null; clearMove(); }
+  function place(px,py){
+    var dx=px-ox, dy=py-oy, d=Math.hypot(dx,dy)||1; if(d>R){ dx=dx*R/d; dy=dy*R/d; }
+    T.style.left=(ox+dx)+'px'; T.style.top=(oy+dy)+'px';
+    PAD.left=dx<-DX; PAD.right=dx>DX; PAD.down=dy>DY;
+  }
+  function topBand(y){ return y < window.innerHeight*0.13; }   // leave the top HUD (pause / ? / gear) alone
+  document.addEventListener('touchstart',function(ev){
+    var acted=false;
+    for(var i=0;i<ev.changedTouches.length;i++){ var t=ev.changedTouches[i];
+      if(t.target===F || topBand(t.clientY)) continue;
+      if(t.clientX < window.innerWidth*0.5){
+        if(joyId===null){ joyId=t.identifier; ox=t.clientX; oy=t.clientY;
+          B.style.left=ox+'px'; B.style.top=oy+'px'; B.style.display='block'; T.style.display='block'; place(ox,oy); acted=true; }
+      } else { jumpIds[t.identifier]=1; PAD.jump=true; acted=true; }
+    }
+    if(acted && ev.cancelable) ev.preventDefault();
+  },{passive:false});
+  document.addEventListener('touchmove',function(ev){
+    for(var i=0;i<ev.changedTouches.length;i++){ var t=ev.changedTouches[i]; if(t.identifier===joyId){ place(t.clientX,t.clientY); if(ev.cancelable) ev.preventDefault(); } }
+  },{passive:false});
+  function end(ev){
+    for(var i=0;i<ev.changedTouches.length;i++){ var t=ev.changedTouches[i];
+      if(t.identifier===joyId) hideJoy();
+      if(jumpIds[t.identifier]) delete jumpIds[t.identifier];
+    }
+    PAD.jump=Object.keys(jumpIds).length>0;
+  }
+  document.addEventListener('touchend',end,{passive:true});
+  document.addEventListener('touchcancel',end,{passive:true});
+  function setF(v){ return function(ev){ ev.preventDefault(); PAD.throw=v; F.style.background=v?'rgba(255,210,63,.55)':'rgba(60,48,10,.5)'; }; }
+  F.addEventListener('touchstart',setF(true),{passive:false});
+  F.addEventListener('touchend',setF(false),{passive:false});
+  F.addEventListener('touchcancel',setF(false),{passive:false});
+  setInterval(function(){ var inGame=false; try{ inGame=NQGAME.scene.isActive('Game'); }catch(e){}
+    F.style.display=inGame?'flex':'none';
+    if(!inGame){ if(joyId!==null) hideJoy(); jumpIds={}; PAD.jump=PAD.throw=false; }
+  },160);
 })(); }
 
 /* ---------- USB gamepad support (retro NES/SNES USB pads + adapters) ---------- */
