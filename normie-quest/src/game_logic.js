@@ -1148,7 +1148,7 @@ var LEVELS=[
   //   Theme 29 (tropical). No real reward yet (owner: "just the level for now") — ends on a normal
   //   room-clear. Geometry is lifted VERBATIM from the vetted TOMSTURF room so reachability is proven;
   //   only the theme, boss re-skin and the roomLabel are new. =====
-  { name:'BEACH', sub:'THE SHALLOWS', time:170, theme:29, width:4800,
+  { name:'BEACH', sub:'THE SHALLOWS', time:170, theme:29, width:4800, ground:'sandground',
     hidden:true, bonus:true, private:true, boss:true, bossType:'kol', diff:1.3,
     roomLabel:'THE SHALLOWS — PRIZE ROOM',
     bossName:'THE LOAN SHARK', bossSub:'HE SMELLS BLOOD IN THE WATER — STOMP HIM x5',
@@ -1156,8 +1156,8 @@ var LEVELS=[
     bossColor:'#1fc0dd', bossGlowHex:0x2ad0e8,
     bossTaunts:['CHUM IN THE WATER','LIQUIDITY? MINE NOW','ANOTHER MINNOW','FEES ARE MY FOOD','YOU CANT OUTSWIM ME','SMELLS LIKE LEVERAGE','BIGGER FISH ALWAYS WIN'],
     gaps:[[700,772],[1380,1500],[2060,2156],[2720,2816],[3380,3500]],
-    walls:[[420,3,'steel',4],[1060,4,'stone',3],[1680,3,'brick',5],[2320,4,'steel',3],[2980,3,'stone',5],[3640,4,'steel',3],[4050,2,'crate',2]],
-    plats:[[720,2,150,'steel'],[1080,2,H-140,'brick'],[1400,2,150,'stone'],[2080,2,150,'steel'],[2360,2,126,'steel'],[2740,2,150,'brick'],[3400,2,150,'steel'],[3680,2,H-134,'steel']],
+    walls:[[420,3,'stone',4],[1060,4,'stone',3],[1680,3,'crate',5],[2320,4,'stone',3],[2980,3,'stone',5],[3640,4,'crate',3],[4050,2,'crate',2]],
+    plats:[[720,2,150,'crate'],[1080,2,H-140,'crate'],[1400,2,150,'stone'],[2080,2,150,'crate'],[2360,2,126,'stone'],[2740,2,150,'crate'],[3400,2,150,'crate'],[3680,2,H-134,'stone']],
     spikes:[[900],[924],[2500],[2524]],
     firepits:[[1250,48],[3260,56],[3900,56]],
     powerups:[['supergeek',1000,230],['diamond',1850,230],['omegachad',2620,230],['bull',3300,230]],
@@ -1174,7 +1174,7 @@ var LEVELS=[
   //   reuses the KOL charge+shill mechanic via boss* overrides (bossTex:'sandlord' → drawSandLordTex()),
   //   5 hearts. Enemies are the same beach flying fish (jumpfish erupt / flyfish dive). Geometry lifted
   //   verbatim from the vetted room so reachability is proven; theme/boss/enemies are the only changes. =====
-  { name:'SANDCASTLE', sub:'THE SANDCASTLE KEEP', time:180, theme:29, width:4800,
+  { name:'SANDCASTLE', sub:'THE SANDCASTLE KEEP', time:180, theme:29, width:4800, ground:'sandground',
     hidden:true, bonus:true, private:true, boss:true, bossType:'kol', diff:1.35,
     roomLabel:'THE SANDCASTLE KEEP — PRIZE ROOM',
     bossName:'THE SANDCASTLE LORD', bossSub:'RULER OF THE SHORE — STOMP HIS KEEP x5',
@@ -1182,8 +1182,8 @@ var LEVELS=[
     bossColor:'#e6c06a', bossGlowHex:0xf0c85a,
     bossTaunts:['THE TIDE OBEYS ME','BUILD. RUG. REBUILD.','MY MOAT, MY RULES','ANOTHER GRAIN OF SAND','THE SHORE IS MINE','KNEEL, LANDLUBBER'],
     gaps:[[700,772],[1380,1500],[2060,2156],[2720,2816],[3380,3500]],
-    walls:[[420,3,'steel',4],[1060,4,'stone',3],[1680,3,'brick',5],[2320,4,'steel',3],[2980,3,'stone',5],[3640,4,'steel',3],[4050,2,'crate',2]],
-    plats:[[720,2,150,'steel'],[1080,2,H-140,'brick'],[1400,2,150,'stone'],[2080,2,150,'steel'],[2360,2,126,'steel'],[2740,2,150,'brick'],[3400,2,150,'steel'],[3680,2,H-134,'steel']],
+    walls:[[420,3,'stone',4],[1060,4,'stone',3],[1680,3,'stone',5],[2320,4,'stone',3],[2980,3,'stone',5],[3640,4,'crate',3],[4050,2,'crate',2]],
+    plats:[[720,2,150,'stone'],[1080,2,H-140,'stone'],[1400,2,150,'crate'],[2080,2,150,'stone'],[2360,2,126,'stone'],[2740,2,150,'crate'],[3400,2,150,'stone'],[3680,2,H-134,'stone']],
     spikes:[[900],[924],[2500],[2524]],
     firepits:[[1250,48],[3260,56],[3900,56]],
     powerups:[['supergeek',1000,230],['diamond',1850,230],['omegachad',2620,230],['bull',3300,230]],
@@ -4040,10 +4040,12 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // The reward-wheel granter uses the same grantReserve() inventory.
     if(this.reserve && this.reserve.length<RESERVE_SLOTS){ var _dp=['vial','disc','shield','star','bomb']; this.grantReserve(_dp[Math.floor((this.time.now/97)%_dp.length)]); }
     if(this.def.private){
-      // PRIVATE WORLD FINALE (TOM) — not a campaign boss: don't advance into the main game or the
-      // Win screen. Celebrate, then drop back to the Title so the private room ends cleanly.
+      // PRIVATE ROOM FINALE — not a campaign boss: don't advance into the main game or the Win
+      // screen. Celebrate with the room's OWN boss text, then drop back to the Title. (This used to
+      // hardcode Tom's MySpace banner for EVERY private room — wrong for the beach prize rooms.)
       this.addScore(1000);
-      this.powerBanner("YOU MADE TOM'S TOP 8!",'#1 IN HIS FRIENDS — GG','#8aa0d8');
+      if(this.def.bossName==='TOM') this.powerBanner("YOU MADE TOM'S TOP 8!",'#1 IN HIS FRIENDS — GG','#8aa0d8');
+      else this.powerBanner((this.def.bossName||'THE BOSS')+' DEFEATED!',(this.def.roomLabel||'PRIVATE ROOM')+' — GG',this.def.bossColor||'#3dff6e');
       this.time.delayedCall(2400, function(){ this.scene.start('Title'); }, [], this);
       return;
     }
