@@ -414,7 +414,8 @@
       '<div class="wheelcard"><h2>🎡 DAILY SPIN</h2>'
       + '<div class="cap">One free spin a day — every spin wins a game boost.'
         + (st.vip ? '<br>🎉 <b>Bonus spins</b> drop a few times a day — check back!'
-                  : '<br><span style="color:#6e6a86">VIP seats get better odds and bonus spins through the day.</span>') + '</div>'
+            + (st.preview && st.preview.label ? '<br>🎟️ Land the ticket to unlock <b>' + esc(st.preview.label) + '</b> — hidden prizes inside.' : '')
+                  : '<br><span style="color:#6e6a86">VIP seats get better odds, bonus spins, and hidden-world Preview Passes.</span>') + '</div>'
       + (st.bonusReady && !st.dailyReady ? '<div class="cap" style="color:#ffd23f">🎉 BONUS SPIN AVAILABLE NOW!</div>' : '')
       + wheelSvg(st.odds)
       + '<button class="spinbtn" id="spinbtn">SPIN</button>'
