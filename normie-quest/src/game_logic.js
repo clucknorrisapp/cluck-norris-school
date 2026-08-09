@@ -1377,6 +1377,14 @@ var Boot=new Phaser.Class({ Extends:Phaser.Scene,
     g.fillStyle(0x08171d); g.fillEllipse(32,40,20,8);                                             // maw
     g.fillStyle(0xeef6f2); g.fillTriangle(24,37,27,43,30,37); g.fillTriangle(30,37,33,44,36,37); g.fillTriangle(36,37,39,43,42,37);   // teeth
     g.generateTexture('waterlurker',64,46);
+    // 🦑 tentacle — the lurker's ARM. A tapering, faintly-curled tendril with suckers; anchored at its
+    // wide base (origin 0.5,1) and scaled up in Y to "reach". Tip is the thin end. Higher/wider reach
+    // than the body lunge, so it's the harder of the two strikes.
+    g.clear();
+    for(var _ti=0; _ti<12; _ti++){ var _ty=53-_ti*4.4, _tr=Math.max(1.4, 6-_ti*0.4), _tx=9+Math.sin(_ti*0.5)*2.4;
+      g.fillStyle(0x103b48); g.fillCircle(_tx,_ty,_tr);
+      if(_ti%2===0){ g.fillStyle(0x2c6f80); g.fillCircle(_tx-_tr*0.4,_ty, Math.max(0.9,_tr*0.3)); } }
+    g.generateTexture('tentacle',20,54);
     // stick — a little dart the mini-worms spit (dark twig with a bright tip)
     g.clear(); g.fillStyle(0x2a1a0c); g.fillTriangle(0,3,13,0,13,6); g.fillRect(0,2,11,3); g.fillStyle(0x8a5a2b); g.fillRect(1,3,8,1); g.fillStyle(0x66ddff); g.fillTriangle(10,1,15,3,10,5); g.generateTexture('stick',15,6);
     // cactus — desert scenery for the Sand Lands interlude
@@ -1964,6 +1972,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
           // the reach. Cosmetic angle-sway still tweens; the y is owned by the tick.
           self.tweens.add({ targets:mon, angle:{from:-4,to:4}, duration:2600, yoyo:true, repeat:-1, ease:'Sine.easeInOut' });
           mon.gcx=gcx; mon.homeY=wSurf+12; mon.surfY=wSurf; mon.st='idle'; mon.next=0; mon.t0=0; mon.hitLunge=false;
+          mon.useArm=false; mon.aimDX=0;                                              // alternates body-lunge / arm-reach
+          mon.arm=self.add.image(gcx, wSurf, 'tentacle').setDepth(4).setOrigin(0.5,1).setVisible(false).setScale(0.9,0);
           self.waterMonsters.push(mon);
         }
         var surf=self.add.rectangle(gcx, wSurf+7, gw+6, 15, 0x5fd0e8, 0.5).setDepth(3);           // surface band over the beast's waterline
@@ -4705,39 +4715,63 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.tweens.add({targets:t, y:t.y-18, alpha:0, duration:1200, onComplete:function(){ t.destroy(); }});
   },
 
-  /* ---------- 🐙 water lurkers (beach worlds): lunge out of the pit at a crossing player ---------- */
-  // The beast waits submerged; when Normie is AIRBORNE over its pit it winds up (a bubble tell), then
-  // shoots up out of the water to swipe. A low, lazy jump gets caught ('DRAGGED UNDER'); a committed
-  // high jump clears the reach. Purely tick-driven (no physics body) — a manual box check does the hit.
+  /* ---------- 🐙 water lurkers (beach worlds): lunge / reach out of the pit at a crossing player ---------- */
+  // The beast waits submerged; when Normie is AIRBORNE over its pit it winds up (a bubble tell) then
+  // strikes — ALTERNATING two attacks for variety and difficulty:
+  //   • BODY LUNGE — its whole body shoots straight up ~52px; a committed high jump clears it.
+  //   • ARM REACH  — a tentacle whips out toward where you were, HIGHER (~66px) and WIDER, so a jump
+  //     that beats the lunge can still get grabbed. Aim locks at the start, so it's dodgeable.
+  // Purely tick-driven (no physics body); a manual box check does the hit, through hurt()'s guards.
   waterTick:function(now){
     if(!this.waterMonsters || !this.waterMonsters.length) return;
     var self=this, p=this.player, grounded=p.body && (p.body.blocked.down||p.body.touching.down);
-    var TRIG=96, REACH=52, HITX=22, HITY=26;
+    var TRIG=96, REACH=52, HITX=22, HITY=26, ARM_REACH=66, ARM_DXMAX=64;
+    var canHit=(!this.over && !p.invuln && now>=this.shieldUntil && now>=this.moonUntil && now>=this.omegaUntil && now>=this.whaleUntil && now>=this.coldUntil);
     for(var i=0;i<this.waterMonsters.length;i++){
       var m=this.waterMonsters[i]; if(!m||!m.active) continue;
       var pdx=Math.abs(p.x-m.gcx);
       if(m.st==='idle'){
         m.y = m.homeY + Math.sin(now/380 + i)*4;                       // gentle idle bob
+        if(m.arm.visible) m.arm.setVisible(false);
         if(now>m.next && pdx<TRIG && !grounded && p.y < m.surfY+30){    // strike at an airborne crosser
-          m.st='windup'; m.t0=now; m.hitLunge=false; m.setFlipX(p.x < m.gcx);
+          m.st='windup'; m.t0=now; m.hitLunge=false; m.mode=(m.useArm?'arm':'body'); m.useArm=!m.useArm;
+          m.setFlipX(p.x < m.gcx);
           self.burst(m.gcx, m.surfY-2, 0x8fe6ff, 6);                    // bubble tell (fair warning)
         }
       } else if(m.st==='windup'){
         var wt=Math.min(1,(now-m.t0)/240); m.y = m.homeY - wt*8;        // coil / rise a touch
-        if(now-m.t0>=240){ m.st='lunge'; m.t0=now;
-          self.burst(m.gcx, m.surfY, 0xbdf0fb, 12);                     // splash breaking the surface
-          try{ _tone(180,90,0.18,'sawtooth',0.05); }catch(e){}
+        if(now-m.t0>=240){
+          if(m.mode==='arm'){ m.st='reach'; m.t0=now;
+            m.aimDX=Math.max(-ARM_DXMAX,Math.min(ARM_DXMAX, p.x-m.gcx)); // lock aim → dodgeable
+            m.arm.setVisible(true); m.arm.rotation=Math.atan2(m.aimDX, ARM_REACH);
+            self.burst(m.gcx, m.surfY, 0x8fe6ff, 8); try{ _tone(150,80,0.2,'sawtooth',0.045); }catch(e){}
+          } else { m.st='lunge'; m.t0=now;
+            self.burst(m.gcx, m.surfY, 0xbdf0fb, 12); try{ _tone(180,90,0.18,'sawtooth',0.05); }catch(e){}
+          }
         }
       } else if(m.st==='lunge'){
         var lt=Math.min(1,(now-m.t0)/200);
         m.y = (m.surfY+12) - (12+REACH)*Math.sin(lt*Math.PI*0.5);       // shoot up to REACH above the surface
-        if(!m.hitLunge && !this.over && !p.invuln
-           && now>=this.shieldUntil && now>=this.moonUntil && now>=this.omegaUntil && now>=this.whaleUntil && now>=this.coldUntil
-           && Math.abs(p.x-m.x)<HITX && Math.abs(p.y-m.y)<HITY){
+        if(!m.hitLunge && canHit && Math.abs(p.x-m.x)<HITX && Math.abs(p.y-m.y)<HITY){
           m.hitLunge=true; self.cameras.main.shake(120,.01);
           this.hurt(p, p.x<m.x?-1:1, 'DRAGGED UNDER'); if(this.over) return;
         }
         if(now-m.t0>=340){ m.st='retract'; m.t0=now; }                  // hold at apex, then retract
+      } else if(m.st==='reach'){
+        var ext=Math.min(1,(now-m.t0)/300), alen=Math.sqrt(m.aimDX*m.aimDX + ARM_REACH*ARM_REACH);
+        m.y = m.homeY - 6 + Math.sin(now/220)*2;                        // body just peeks; the arm reaches
+        m.arm.x=m.gcx; m.arm.y=m.surfY; m.arm.setScale(0.9, ext*alen/54);
+        var tipX=m.gcx + m.aimDX*ext, tipY=m.surfY - ARM_REACH*ext;
+        if(!m.hitLunge && ext>0.5 && canHit && Math.abs(p.x-tipX)<18 && Math.abs(p.y-tipY)<20){
+          m.hitLunge=true; self.cameras.main.shake(120,.01);
+          this.hurt(p, p.x<tipX?-1:1, 'DRAGGED UNDER'); if(this.over) return;
+        }
+        if(now-m.t0>=560){ m.st='armretract'; m.t0=now; }               // extend, hold, then retract
+      } else if(m.st==='armretract'){
+        var art=Math.min(1,(now-m.t0)/260), alen2=Math.sqrt(m.aimDX*m.aimDX + ARM_REACH*ARM_REACH);
+        m.arm.setScale(0.9, (1-art)*alen2/54);
+        m.y = m.homeY + Math.sin(now/300)*2;
+        if(art>=1){ m.arm.setVisible(false); m.st='idle'; m.next=now + 640 + (i*170)%620; }
       } else if(m.st==='retract'){
         var rt=Math.min(1,(now-m.t0)/300); var apex=m.surfY-REACH;
         m.y = apex + (m.homeY-apex)*rt;                                 // sink back home
