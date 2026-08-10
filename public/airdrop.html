@@ -107,6 +107,7 @@
   .token-input:focus{outline:none;border-color:var(--orange);}
   .token-balance{font-size:12px;color:var(--sub);margin-top:8px;}
   .token-balance span{color:#6EE7B7;font-family:var(--mono);}
+  .token-balance .tb-ico{width:18px;height:18px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:6px;background:#1c1d24;}
 
   /* ── Mode tabs ── */
   .mode-tabs{display:flex;gap:7px;margin-bottom:14px;flex-wrap:wrap;}
@@ -727,21 +728,26 @@ function disconnectWallet() {
 
 async function fetchTokenBalance() {
   if (!walletPubkey || !currentMint) return;
-  document.getElementById('tokenBalance').innerHTML = 'Loading balance...';
+  const mint = currentMint;
+  const el = document.getElementById('tokenBalance');
+  el.innerHTML = 'Loading balance…';
+  // Display name: a preset's name, else resolve the token's symbol/name on-chain — so a CUSTOM
+  // mint shows its REAL name + logo, not the generic "tokens". Balance + metadata fetch in parallel.
+  let label = PRESETS[mint]?.name || '';
   try {
-    const accounts = await rpc('getTokenAccountsByOwner', [
-      walletPubkey,
-      { mint: currentMint },
-      { encoding: 'jsonParsed' }
+    const [meta, accounts] = await Promise.all([
+      label ? Promise.resolve(null) : fetch('/api/token-overview?mint=' + encodeURIComponent(mint)).then(r => r.json()).catch(() => null),
+      rpc('getTokenAccountsByOwner', [walletPubkey, { mint: mint }, { encoding: 'jsonParsed' }]),
     ]);
+    if (mint !== currentMint) return;                 // user switched token mid-lookup
+    if (!label && meta) label = meta.symbol || meta.name || '';
     let bal = 0;
-    for (const acc of (accounts?.value || [])) {
-      bal += acc.account.data.parsed.info.tokenAmount.uiAmount || 0;
-    }
-    document.getElementById('tokenBalance').innerHTML =
-      `Your balance: <span>${fmtNum(bal)} ${PRESETS[currentMint]?.name || 'tokens'}</span>`;
-  } catch(e) {
-    document.getElementById('tokenBalance').innerHTML = 'Could not fetch balance';
+    for (const acc of (accounts?.value || [])) { bal += acc.account.data.parsed.info.tokenAmount.uiAmount || 0; }
+    const name = label ? esc(label) : 'tokens';       // name/symbol are attacker-controlled → esc
+    el.innerHTML = '<img class="tb-ico" src="/api/token-icon?mint=' + encodeURIComponent(mint) + '" alt="" onerror="this.style.display=\'none\'">'
+      + 'Your balance: <span>' + fmtNum(bal) + ' ' + name + '</span>';
+  } catch (e) {
+    el.innerHTML = 'Could not fetch balance';
   }
 }
 
