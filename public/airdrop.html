@@ -291,7 +291,7 @@
     <div class="chips">
       <span class="chip g">✓ Non-custodial</span>
       <span class="chip g">✓ You sign every batch</span>
-      <span class="chip">Free at 50,000 CLKN held</span>
+      <span class="chip g">✓ Free &amp; open to everyone</span>
     </div>
   </div>
 
@@ -1407,6 +1407,12 @@ function onAckChange() {
 }
 
 function initUnlockGate() {
+  // ⚠️ TEMP — OPEN TO EVERYONE (owner, 2026-08-10): the airdropper is a FREE tool for now,
+  // no gating. Set while we fix the gate's wallet-grab bug (it latched the first connected
+  // wallet, wouldn't let you disconnect, and reported "access granted" even for a different
+  // wallet). To restore the 50,000-CLKN / 0.05-SOL doors later, delete these two lines.
+  hideGate();
+  return;
   // Opened straight from the Buy Special tool — that paid workflow already
   // covers the airdrop, so the unlock is waived (the fee is pennies anyway).
   const _fromParam = new URLSearchParams(location.search).get('from');
