@@ -5875,6 +5875,38 @@ app.post("/api/buycomp/stop", async (req, res) => {
   } catch (_) {}
   return res.status(200).json({ ok: true, competition: c });
 });
+// Edit a LIVE comp's prize/metric/window fields IN PLACE — no alarming stop message. Recomputes the
+// prize line and re-renders the board (self-cleaning repost), so the group just sees the corrected
+// board. Admin only. Fields (all optional): prize (free text ≤140), metric (single|cumulative),
+// places (csv), pct (0/1), hold (hours), label, emoji, minVolSol, end (reschedule), ticker.
+app.post("/api/buycomp/edit", async (req, res) => {
+  if (!buyCompAdminOK(req)) return res.status(404).json({ error: "not_found" });
+  const q = Object.assign({}, req.query, req.body || {});
+  const c = buyCompsAll()[String(q.id || "")];
+  if (!c) return res.status(404).json({ error: "no such competition" });
+  if (q.metric != null) c.metric = String(q.metric) === "single" ? "single" : "cumulative";
+  if (q.hold != null && q.hold !== "") c.holdHours = Math.max(0, parseInt(q.hold) || 0);
+  if (q.label != null) c.label = String(q.label).slice(0, 60);
+  if (q.ticker != null) c.ticker = String(q.ticker).trim().slice(0, 12) || c.ticker;
+  if (q.emoji != null) c.emoji = String(q.emoji).trim().slice(0, 4) || c.emoji;
+  if (q.minVolSol != null) c.minVolSol = Math.max(0, Number(q.minVolSol) || 0);
+  if (q.pct != null) c.pctPrize = (q.pct === "1" || q.pct === 1);
+  if (q.places != null && q.places !== "") {
+    c.places = String(q.places).split(",").map((s) => parseInt(String(s).replace(/[^0-9]/g, ""))).filter((n) => n > 0).map((amount, i) => ({ rank: i + 1, amount }));
+  }
+  if (q.end != null && q.end !== "") { const e = (isNaN(+q.end) ? Date.parse(q.end) : (+q.end < 1e12 ? +q.end * 1000 : +q.end)); if (e && e > c.startTs) c.endTs = e; }
+  // Prize line: an explicit free-text `prize` wins; otherwise recompute the default only if the
+  // amounts/mode actually changed, so an edit that doesn't touch prizes keeps the existing line.
+  if (q.prize != null) c.prizeSummary = "🏆 " + String(q.prize).slice(0, 140);
+  else if (q.places != null || q.pct != null) {
+    c.prizeSummary = c.pctPrize
+      ? `🏆 Top ${c.places.length}: ${c.places.map((p) => p.amount + "%").join(" / ")} of your cumulative buys`
+      : `🏆 ${c.places.map((p) => p.amount.toLocaleString()).join(" / ")} ${c.ticker}`;
+  }
+  buyCompSave(c);
+  try { await buyCompUpdate(c); } catch (_) {}   // re-render the board in place (self-cleaning)
+  return res.status(200).json({ ok: true, competition: c });
+});
 app.get("/api/buycomp/list", (req, res) => {
   if (!buyCompAdminOK(req)) return res.status(404).json({ error: "not_found" });
   return res.status(200).json({ ok: true, competitions: Object.values(buyCompsAll()) });
