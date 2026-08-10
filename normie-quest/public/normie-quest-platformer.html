@@ -6707,7 +6707,13 @@ if(typeof document!=='undefined'){ (function(){
     PAD.left=dx<-DX; PAD.right=dx>DX; PAD.down=dy>DY;
   }
   function topBand(y){ return y < window.innerHeight*0.13; }   // leave the top HUD (pause / ? / gear) alone
+  // Only intercept touches while the Game scene is actually running. Off the game screen
+  // (level-select overlay, menus, how-to) the joystick has no purpose, and swallowing those
+  // touches made left-side buttons — e.g. the level-select tiles — untappable. This is the
+  // single source of truth for "is the pad live", reused by the poll below.
+  function gameActive(){ try{ return !!(NQGAME && NQGAME.scene && NQGAME.scene.isActive('Game')); }catch(e){ return false; } }
   document.addEventListener('touchstart',function(ev){
+    if(!gameActive()) return;   // let taps fall through to level-select / menu buttons
     var acted=false; evc++; if(ev.changedTouches[0]) lastT=Math.round(ev.changedTouches[0].clientX)+','+Math.round(ev.changedTouches[0].clientY);
     for(var i=0;i<ev.changedTouches.length;i++){ var t=ev.changedTouches[i];
       if(t.target===F || topBand(t.clientY)) continue;
@@ -6719,6 +6725,7 @@ if(typeof document!=='undefined'){ (function(){
     if(acted && ev.cancelable) ev.preventDefault();
   },{passive:false});
   document.addEventListener('touchmove',function(ev){
+    if(joyId===null) return;   // nothing grabbed (and never grabbed off the game screen)
     for(var i=0;i<ev.changedTouches.length;i++){ var t=ev.changedTouches[i]; if(t.identifier===joyId){ place(t.clientX,t.clientY); if(ev.cancelable) ev.preventDefault(); } }
   },{passive:false});
   function end(ev){
@@ -6734,7 +6741,7 @@ if(typeof document!=='undefined'){ (function(){
   F.addEventListener('touchstart',setF(true),{passive:false});
   F.addEventListener('touchend',setF(false),{passive:false});
   F.addEventListener('touchcancel',setF(false),{passive:false});
-  setInterval(function(){ var inGame=false; try{ inGame=NQGAME.scene.isActive('Game'); }catch(e){}
+  setInterval(function(){ var inGame=gameActive();
     F.style.display=inGame?'flex':'none';
     if(!inGame){ if(joyId!==null) hideJoy(); jumpIds={}; PAD.jump=PAD.throw=false; }
     if(D) D.textContent='JOY ✓ ev:'+evc+' last:'+lastT+'\n'+(PAD.left?'◄':'·')+(PAD.right?'►':'·')+(PAD.jump?'▲':'·')+(PAD.down?'▼':'·')+(PAD.throw?'◎':'·')+'  pad:'+(window.__NQ_PAD_ACTIVE?1:0)+' game:'+(inGame?1:0)+' w:'+window.innerWidth;
