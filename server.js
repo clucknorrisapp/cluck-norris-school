@@ -5900,6 +5900,28 @@ function airdropHandoffPrune(all) {
   }
   return all;
 }
+// ---- Airdropper COMP allowlist — the owner grants free access BY WALLET ADDRESS ----------------
+// Stored in kv ("airdropCompWallets": [pubkey,...]). A comped wallet unlocks the airdropper free,
+// same effect as holding the 50k CLKN tier, but granted by the operator. The public /check is what
+// the airdrop page calls on connect; it only answers yes/no for ONE wallet, so the list is never
+// exposed. Add/remove is master-key only (same as every other operator lever).
+function airdropCompList() { const a = kv.get("airdropCompWallets", []); return Array.isArray(a) ? a : []; }
+const AD_B58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+app.get("/api/airdrop-comp/check", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const w = String((req.query && req.query.wallet) || "").trim();
+  res.json({ ok: true, comped: !!w && airdropCompList().indexOf(w) !== -1 });
+});
+// Admin: &add=<wallet> / &remove=<wallet> ; bare call lists the allowlist. 404 without the master key.
+app.get("/api/airdrop-comp", (req, res) => {
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  let list = airdropCompList();
+  const add = String((req.query && req.query.add) || "").trim();
+  const rem = String((req.query && req.query.remove) || "").trim();
+  if (add && AD_B58.test(add) && list.indexOf(add) === -1) { list = list.concat([add]); kv.set("airdropCompWallets", list); }
+  if (rem) { list = list.filter((w) => w !== rem); kv.set("airdropCompWallets", list); }
+  res.json({ ok: true, count: list.length, wallets: list });
+});
 app.use("/api/airdrop-handoff", rateLimit("airdropHandoff", { windowMs: 60000, max: 30 }));
 app.post("/api/airdrop-handoff", (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");

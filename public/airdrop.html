@@ -1606,6 +1606,17 @@ async function adConnect() {
     const resp = await p.connect();
     wPubkey = ((resp && resp.publicKey) || p.publicKey).toString();
     wProvider = p;
+    // Operator comp allowlist — if this wallet was granted free access, unlock without the CLKN
+    // check or a payment. The endpoint only answers yes/no for this one wallet.
+    adWalletMsg('Checking access…');
+    try {
+      const c = await fetch('/api/airdrop-comp/check?wallet=' + encodeURIComponent(wPubkey)).then(r => r.json());
+      if (c && c.comped) {
+        adWalletMsg('✓ Free access granted by Cluck Norris — unlocked for ' + HOLD_DAYS + ' days.', true);
+        adGrant(HOLD_DAYS, { holder: true, comped: true });
+        return;
+      }
+    } catch (e) { /* comp check is best-effort; fall through to the holder/pay gate */ }
     adWalletMsg('Checking your CLKN balance…');
     const r = await adRpc('getTokenAccountsByOwner', [wPubkey, { mint: CLKN_MINT_FOR_UNLOCK }, { encoding:'jsonParsed' }]);
     let bal = 0;
