@@ -1171,7 +1171,13 @@ function buyCompRender(c, standings) {
     rows.forEach((s, i) => {
       const tag = i < 3 ? medals[i] : `${i + 1}.`;
       const short = s.wallet.slice(0, 4) + "…" + s.wallet.slice(-4);
-      const prize = (i < c.places.length) ? (c.pctPrize ? ` — <b>${c.places[i].amount}% bonus</b>` : ` — <b>${c.places[i].amount.toLocaleString()} ${tgEsc(c.ticker)}</b>`) : "";
+      // Prize label per rank: pct bonus, a USD amount ($50 — prizes denominated in dollars-of-token),
+      // or a flat token count. usdPrize renders the "$" the operator asked for on dollar-value prizes.
+      const prize = (i < c.places.length)
+        ? (c.pctPrize ? ` — <b>${c.places[i].amount}% bonus</b>`
+           : c.usdPrize ? ` — <b>$${c.places[i].amount.toLocaleString()} in ${tgEsc(c.ticker)}</b>`
+           : ` — <b>${c.places[i].amount.toLocaleString()} ${tgEsc(c.ticker)}</b>`)
+        : "";
       lines.push(`${tag} <code>${short}</code> · ${(s[key] || 0).toFixed(2)} SOL${prize}`);
     });
   }
@@ -5822,6 +5828,7 @@ app.post("/api/buycomp/start", (req, res) => {
   // pct=1 → places are PERCENTAGES of each winner's own cumulative buys (e.g. 15,15,15),
   // not fixed token amounts; q.prize overrides the board's prize line with free text.
   const pctPrize = q.pct === "1" || q.pct === 1;
+  const usdPrize = q.usd === "1" || q.usd === 1;   // render places as "$amount in TICKER" (dollar-value prizes)
   const prizeSummary = q.prize ? "🏆 " + String(q.prize).slice(0, 140)
     : pctPrize ? `🏆 Top ${places.length}: ${places.map(p => p.amount + "%").join(" / ")} of your cumulative buys`
     : `🏆 ${places.map(p => p.amount.toLocaleString()).join(" / ")} ${ticker}`;
@@ -5832,7 +5839,7 @@ app.post("/api/buycomp/start", (req, res) => {
   const liveHoldFilter = !["0", "false", "no", "off"].includes(String(q.liveHoldFilter ?? "").toLowerCase());
   // Optional 1-2 char emoji for the comp's shortcut chip on the Buy Special tool.
   const emoji = String(q.emoji || "").trim().slice(0, 4) || null;
-  const c = { id, label: String(q.label || ticker).slice(0, 60), mint, ticker, chatId, metric, emoji, startTs, endTs, holdHours, places, pctPrize, exclude, minVolSol, liveHoldFilter, prizeToken: { kind: prizeTokenKind, mint: prizeTokenMint }, updateMins, prizeSummary, status: "live", boardMsgId: null, provisional: [], lastUpdateTs: 0, createdAt: Date.now() };
+  const c = { id, label: String(q.label || ticker).slice(0, 60), mint, ticker, chatId, metric, emoji, startTs, endTs, holdHours, places, pctPrize, usdPrize, exclude, minVolSol, liveHoldFilter, prizeToken: { kind: prizeTokenKind, mint: prizeTokenMint }, updateMins, prizeSummary, status: "live", boardMsgId: null, provisional: [], lastUpdateTs: 0, createdAt: Date.now() };
   buyCompSave(c);
   buyCompUpdate(c).catch(() => {});    // post the initial board now (if the window has started)
   return res.status(200).json({ ok: true, id, competition: c });
@@ -5891,6 +5898,7 @@ app.post("/api/buycomp/edit", async (req, res) => {
   if (q.emoji != null) c.emoji = String(q.emoji).trim().slice(0, 4) || c.emoji;
   if (q.minVolSol != null) c.minVolSol = Math.max(0, Number(q.minVolSol) || 0);
   if (q.pct != null) c.pctPrize = (q.pct === "1" || q.pct === 1);
+  if (q.usd != null) c.usdPrize = (q.usd === "1" || q.usd === 1);   // render places as $amount in TICKER
   if (q.places != null && q.places !== "") {
     c.places = String(q.places).split(",").map((s) => parseInt(String(s).replace(/[^0-9]/g, ""))).filter((n) => n > 0).map((amount, i) => ({ rank: i + 1, amount }));
   }
