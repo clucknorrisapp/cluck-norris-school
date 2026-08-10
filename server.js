@@ -6060,6 +6060,42 @@ app.post("/api/buycomp/refresh", (req, res) => {
   buyCompUpdate(c).catch(() => {});       // force an immediate repost
   return res.status(200).json({ ok: true });
 });
+// Read-only standings diagnostic (admin). Returns the computed board plus every
+// intermediate filter stage so a "missing buyer" can be traced to the exact drop
+// (classification / exclude / minVol / live-hold). No mutation, no Telegram post.
+// buildTag also doubles as a deploy-liveness probe.
+app.get("/api/buycomp/standings", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!buyCompAdminOK(req)) return res.status(404).json({ error: "not_found" });
+  const c = buyCompsAll()[String(req.query.id || "")];
+  if (!c) return res.status(404).json({ error: "no such competition" });
+  try {
+    const toMs = Math.min(Date.now(), c.endTs);
+    const { buyers: raw, source, reachedWindowStart } = await buyersInWindowMulti(c.mint, c.startTs, toMs);
+    const key = buyCompMetricKey(c);
+    const ex = [...buyCompExcludeSet(c)];
+    const exSet = new Set(ex);
+    const minVol = Number(c.minVolSol) || 0;
+    const afterFilters = (raw || [])
+      .filter((b) => !exSet.has(b.wallet) && (minVol <= 0 || (b.volumeSol || 0) >= minVol))
+      .sort((a, b) => (b[key] || 0) - (a[key] || 0));
+    let sold = [];
+    if (c.liveHoldFilter !== false && afterFilters.length) {
+      const need = Math.max((c.places ? c.places.length : 3) + 6, 26);
+      sold = [...await buyCompSoldSet(c, afterFilters.slice(0, need).map((b) => b.wallet), toMs)];
+    }
+    const soldSet = new Set(sold);
+    const final = afterFilters.filter((b) => !soldSet.has(b.wallet));
+    const trim = (list) => list.slice(0, 25).map((b) => ({ wallet: b.wallet, volumeSol: +(b.volumeSol || 0).toFixed(5), maxBuySol: +(b.maxBuySol || 0).toFixed(5), buyCount: b.buyCount || 0 }));
+    const findWallet = String(req.query.wallet || "").trim();
+    return res.status(200).json({
+      ok: true, buildTag: "raw-meta-scanner-2de75a7", source, reachedWindowStart, metric: key, minVol, exclude: ex,
+      counts: { raw: (raw || []).length, afterFilters: afterFilters.length, sold: sold.length, final: final.length },
+      soldDropped: sold, rawTop: trim(raw || []), finalTop: trim(final),
+      ...(findWallet ? { wallet: findWallet, inRaw: (raw || []).find((b) => b.wallet === findWallet) || null, inFinal: final.find((b) => b.wallet === findWallet) || null, excluded: exSet.has(findWallet), soldFlagged: soldSet.has(findWallet) } : {}),
+    });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
 // Run the hold-period verification (sell/transfer DQ + promotion) and build the
 // payout list. Gated; refuses until the hold is over unless force=1.
 app.post("/api/buycomp/verify", async (req, res) => {
