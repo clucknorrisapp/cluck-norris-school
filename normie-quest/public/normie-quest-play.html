@@ -7281,12 +7281,20 @@ if(typeof document!=='undefined'){ (function(){
   function flushPending() {
     if (!run || !run.token || run._cpInFlight || !pendingLevels.length) return;
     run._cpInFlight = true;
-    var lvl = pendingLevels.shift();
+    var lvl = pendingLevels[0];   // PEEK — only remove once the server has definitively answered
     fetch('/api/nq/run-checkpoint', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: run.token, level: lvl }) })
       .then(function (r) { return r.json(); })
-      .then(function (j) { if (j && j.ok && j.token && run) run.token = j.token; })
-      .catch(function () {})
-      .then(function () { if (run) run._cpInFlight = false; flushPending(); });
+      .then(function (j) {
+        if (run) run._cpInFlight = false;
+        if (j && j.ok && j.token && run) run.token = j.token;   // credited (or a dedupe no-op)
+        pendingLevels.shift();                                   // definitive answer → consume + continue
+        flushPending();
+      })
+      .catch(function () {
+        // Network blip: keep the level QUEUED (don't drop its budget) — it retries on the next
+        // enterLevel / submit flush instead of tight-looping here.
+        if (run) run._cpInFlight = false;
+      });
   }
 
   window.NQLB = {
