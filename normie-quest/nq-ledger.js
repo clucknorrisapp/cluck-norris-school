@@ -25,6 +25,10 @@ function save(o) { try { fs.writeFileSync(storePath(), JSON.stringify(o)); retur
 function utcDay(ts) { return new Date(ts == null ? Date.now() : ts).toISOString().slice(0, 10); }
 
 const HISTORY_MAX = 200;          // per-wallet: keep the most recent N events (bounds file growth)
+const CLAIMED_MAX = 1000;         // per-wallet: cap the idempotency map so it can't grow unbounded.
+                                  // eventIds are non-integer strings, so JS preserves insertion order —
+                                  // we drop the OLDEST beyond this. Replays realistically happen right
+                                  // after the event (double-tap / retry), which stay well inside 1000.
 function envInt(name) { const n = parseInt(process.env[name] || '', 10); return Number.isFinite(n) && n >= 0 ? n : 0; }
 function dailyCap() { return envInt('NQ_LEDGER_DAILY_CAP'); }       // 0 = no daily cap
 function lifetimeCap() { return envInt('NQ_LEDGER_LIFETIME_CAP'); } // 0 = no lifetime cap
@@ -71,6 +75,9 @@ function credit(wallet, opts) {
   if (lcap > 0) grant = Math.min(grant, Math.max(0, lcap - (r.earnedTotal || 0)));
   // Record the claim either way so idempotency is stable; only move points when grant > 0.
   r.claimed[eventId] = grant;
+  // Bound the idempotency map: drop the oldest keys beyond CLAIMED_MAX (insertion-ordered).
+  const ckeys = Object.keys(r.claimed);
+  if (ckeys.length > CLAIMED_MAX) { for (const k of ckeys.slice(0, ckeys.length - CLAIMED_MAX)) delete r.claimed[k]; }
   if (grant > 0) {
     r.balance += grant; r.earnedTotal = (r.earnedTotal || 0) + grant; r.dayEarned += grant;
     r.history.push({ id: eventId, kind: String(opts.kind || 'earn'), amount: grant, ts: (opts.nowMs == null ? Date.now() : opts.nowMs) });

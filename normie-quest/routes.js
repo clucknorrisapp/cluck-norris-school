@@ -545,12 +545,14 @@ router.get('/normie-quest-x7/feedback', (req, res) => {
     + '.t{margin-left:auto;color:#6a6590;font-size:11px}.txt{font-size:15px;line-height:1.4;white-space:pre-wrap;word-break:break-word}'
     + '.empty{color:#8f89b0;padding:30px 0;text-align:center}</style></head><body>'
     + '<h1>🎮 Normie Quest — Playtest Feedback</h1><div class="sub">' + items.length + ' comment(s) · newest first · '
-    + '<a style="color:#66ccff" href="/api/nq/feedback?key=' + key + '">raw JSON</a></div>'
+    + '<a class="klink" style="color:#66ccff" href="/api/nq/feedback">raw JSON</a></div>'
     + '<div class="chips">' + chips + '</div><div id="list">' + (rows || '<div class="empty">No comments yet.</div>') + '</div>'
     + '<script>var cs=document.querySelectorAll(".chip"),cards=document.querySelectorAll(".c");'
     + 'cs.forEach(function(b){b.onclick=function(){cs.forEach(function(x){x.classList.remove("on")});b.classList.add("on");'
     + 'var l=b.getAttribute("data-l");cards.forEach(function(c){var m=c.querySelector(".lvl");var cl=m?m.textContent:"";'
-    + 'c.style.display=(!l||cl===l)?"":"none"})}})</script></body></html>');
+    + 'c.style.display=(!l||cl===l)?"":"none"})}});'
+    + '(function(){var k=new URLSearchParams(location.search).get("key")||"";if(!k)return;document.querySelectorAll("a.klink").forEach(function(a){try{var u=new URL(a.getAttribute("href"),location.origin);u.searchParams.set("key",k);a.setAttribute("href",u.pathname+u.search);}catch(e){}});})();'
+    + '</script></body></html>');
 });
 
 // ---- /normie-quest-x7/dashboard : the operator's everything-view -----------------------------
@@ -831,10 +833,10 @@ router.get('/normie-quest-x7/dashboard', async (req, res) => {
     + '<button id="pause">⏸ pause</button></span></div></div>'
     + '<div class="wrap">'
     + '<div class="sub">' + (showAll
-        ? 'ALL-TIME data (incl. pre-2026-07-20 legacy “FUD” deaths) · <a href="/normie-quest-x7/dashboard?key=' + key + '"><b>show since causes shipped →</b></a>'
-        : 'showing deaths SINCE granular causes shipped (2026-07-20) — real causes only · <a href="/normie-quest-x7/dashboard?key=' + key + '&window=all">show all-time (with legacy FUD) →</a>')
-    + ' · <a href="/normie-quest-x7/feedback?key=' + key + '">all comments</a> · '
-    + '<a href="/api/nq/telemetry?key=' + key + '">raw telemetry</a> · <a href="/api/nq/feedback?key=' + key + '">raw feedback</a> · auto-refreshing live</div>'
+        ? 'ALL-TIME data (incl. pre-2026-07-20 legacy “FUD” deaths) · <a class="klink" href="/normie-quest-x7/dashboard"><b>show since causes shipped →</b></a>'
+        : 'showing deaths SINCE granular causes shipped (2026-07-20) — real causes only · <a class="klink" href="/normie-quest-x7/dashboard?window=all">show all-time (with legacy FUD) →</a>')
+    + ' · <a class="klink" href="/normie-quest-x7/feedback">all comments</a> · '
+    + '<a class="klink" href="/api/nq/telemetry">raw telemetry</a> · <a class="klink" href="/api/nq/feedback">raw feedback</a> · auto-refreshing live</div>'
     + '<div class="tiles">'
     + '<div class="tile"><div class="n">' + d.events + '</div><div class="l">EVENTS</div></div>'
     + '<div class="tile"><div class="n">' + d.deaths + '</div><div class="l">DEATHS ☠</div></div>'
@@ -874,7 +876,9 @@ router.get('/normie-quest-x7/dashboard', async (req, res) => {
     + 'function tick(){if(!on||document.hidden)return;s--;if(s<=0){location.reload();return;}paint();}'
     + 'if(btn)btn.onclick=function(){on=!on;btn.textContent=on?"⏸ pause":"▶ resume";if(on)s=30;paint();};'
     + 'document.addEventListener("visibilitychange",function(){if(!document.hidden&&on){s=30;paint();}});'
-    + 'paint();setInterval(tick,1000);})();</script>'
+    + 'paint();setInterval(tick,1000);})();'
+    + '(function(){var k=new URLSearchParams(location.search).get("key")||"";if(!k)return;document.querySelectorAll("a.klink").forEach(function(a){try{var u=new URL(a.getAttribute("href"),location.origin);u.searchParams.set("key",k);a.setAttribute("href",u.pathname+u.search);}catch(e){}});})();'
+    + '</script>'
     + '</body></html>');
 });
 

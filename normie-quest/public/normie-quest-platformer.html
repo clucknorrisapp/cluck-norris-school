@@ -8056,7 +8056,7 @@ if(typeof document!=='undefined'){ (function(){
         if (det.length) {
           // one button per DETECTED wallet — auto-detected, user picks (single wallet = single button)
           host.innerHTML = intro + det.map(function (w, i) {
-            var ic = w.img ? '<img src="' + w.img + '" alt="" style="width:16px;height:16px;vertical-align:-3px;border-radius:4px"> ' : (w.icon + ' ');
+            var ic = w.img ? '<img src="' + esc(w.img) + '" alt="" style="width:16px;height:16px;vertical-align:-3px;border-radius:4px"> ' : (w.icon + ' ');
             return '<button class="nqp-b" data-wi="' + i + '" style="margin-bottom:6px">' + ic + 'Connect ' + esc(w.name) + '</button>';
           }).join('') + '<div class="nqp-sub" id="nqp-walerr" style="margin-top:10px;color:#ff9db8"></div>';
           host.querySelectorAll('button[data-wi]').forEach(function (b) {
