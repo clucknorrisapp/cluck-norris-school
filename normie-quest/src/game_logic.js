@@ -1463,13 +1463,16 @@ var LevelSelect=new Phaser.Class({ Extends:Phaser.Scene,
     } }catch(e){}
     // group levels by world (first digit of the "w-n" name), rendered dynamically from LEVELS
     var worlds={}, order=[];
-    LEVELS.forEach(function(l,i){ if(l.hidden) return; var w=(l.name||'').split('-')[0]||'?'; if(!worlds[w]){ worlds[w]=[]; order.push(w); } worlds[w].push({l:l,i:i}); });   // hidden bonus levels never show in level-select
+    // Hidden bonus/private rooms never show in the normal level-select — EXCEPT in TEST_MODE
+    // (?test=1), where the owner/testers need to reach every world AND every hidden room from the
+    // picker. Real players (no ?test=1) still only see the normal progression.
+    LEVELS.forEach(function(l,i){ if(l.hidden && !TEST_MODE) return; var w=(l.name||'').split('-')[0]||'?'; if(!worlds[w]){ worlds[w]=[]; order.push(w); } worlds[w].push({l:l,i:i}); });
     // 12+ worlds outgrew the old shrink-to-fit-on-one-screen approach (rows bottomed out at
     // 20px and overflowed the screen) — fixed comfortable rows + SCROLL (wheel / drag / ▲▼).
     var top=42, n=order.length, rowH=30, cardH=25, y=top;
     order.forEach(function(w){
       var cy=y+rowH/2;
-      self.add.text(22,cy,'W'+w,{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#66ccff'}).setOrigin(0,.5);
+      self.add.text(22,cy,(/^\d+$/.test(String(w))?'W'+w:String(w).slice(0,6)),{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#66ccff'}).setOrigin(0,.5);
       worlds[w].forEach(function(o,c){
         var x=52+c*138, isBoss=!!o.l.boss, isVip=!!o.l.vip;
         var sub=(o.l.sub||''); if(sub.length>17) sub=sub.slice(0,16)+'…';
@@ -7166,31 +7169,58 @@ if(typeof document!=='undefined'){ (function(){
   // token is good for two hours and its plausibility check is score-per-second, so waiting can
   // only ever make a run look MORE honest.
   var parked = null;
+  var pendingLevels = [];   // levels reached but not yet checkpointed (run-start / a prior checkpoint still in flight)
   function postScore(body) {
     fetch('/api/nq/score', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
       .then(function () { try { if (window._nqLoadBoards) window._nqLoadBoards(); } catch (e) {} })
       .catch(function () {});
   }
   function worldOf(name) { var m = String(name || '').match(/^(\d+)/); return m ? parseInt(m[1], 10) : 0; }
+  // Credit reached levels ONE AT A TIME: each checkpoint returns an updated token the next one
+  // needs, so they must chain. Serialising here also means a slow run-start never loses a level's
+  // budget — the levels just queue and flush once the token lands.
+  function flushPending() {
+    if (!run || !run.token || run._cpInFlight || !pendingLevels.length) return;
+    run._cpInFlight = true;
+    var lvl = pendingLevels[0];   // PEEK — only remove once the server has definitively answered
+    fetch('/api/nq/run-checkpoint', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: run.token, level: lvl }) })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (run) run._cpInFlight = false;
+        if (j && j.ok && j.token && run) run.token = j.token;   // credited (or a dedupe no-op)
+        pendingLevels.shift();                                   // definitive answer → consume + continue
+        flushPending();
+      })
+      .catch(function () {
+        // Network blip: keep the level QUEUED (don't drop its budget) — it retries on the next
+        // enterLevel / submit flush instead of tight-looping here.
+        if (run) run._cpInFlight = false;
+      });
+  }
 
   window.NQLB = {
     worldOf: worldOf,
     // Called when a run is ABANDONED (≡ Levels / back to level select): drop the token so the
     // next run gets a fresh issuedAt — reusing the old one made the server's score/second
     // plausibility check judge the new score against the old run's start time.
-    abandonRun: function () { run = null; },
-    // Called from Game.create each level. Starts a run token on the FIRST level of a run; keeps it
-    // across level advances so the whole run is timed as one (honest score/second plausibility).
+    abandonRun: function () { run = null; pendingLevels = []; },
+    // Called from Game.create each level. Starts a v2 run token on the FIRST level; on every level
+    // after, checkpoints that level so the server credits its max-point budget. The final score is
+    // then bounded by the SUM of the reached levels' budgets (points-based, not time-based).
     enterLevel: function (name) {
-      if (run) return;                           // run already in progress — keep the same token
-      run = { token: null };
-      fetch('/api/nq/run-start?level=' + encodeURIComponent(name || '')).then(function (r) { return r.json(); })
-        .then(function (j) { if (j && j.ok && run) run.token = { nonce: j.nonce, level: j.level, issuedAt: j.issuedAt, sig: j.sig }; })
-        .catch(function () {});
+      if (!run) {
+        run = { token: null, _cpInFlight: false };
+        fetch('/api/nq/run-start?level=' + encodeURIComponent(name || '')).then(function (r) { return r.json(); })
+          .then(function (j) { if (j && j.ok && run) { run.token = { v: j.v, lv: j.lv, max: j.max, nonce: j.nonce, issuedAt: j.issuedAt, sig: j.sig }; flushPending(); } })
+          .catch(function () {});
+        return;
+      }
+      pendingLevels.push(name || '');            // subsequent level → checkpoint it (deduped server-side)
+      flushPending();
     },
     // Called from Over/Win. Submits the final score for the whole run, then clears it.
     submitRun: function (world, score) {
-      var r = run; run = null;
+      var r = run; run = null; pendingLevels = [];
       if (!r) return;                            // no run token = nothing the server would accept
       var body = { name: handle, world: world, level: 'run', score: Math.round(score || 0), token: r.token };
       if (walletState.pubkey && walletState.token) { body.wallet = walletState.pubkey; body.walletToken = walletState.token; }

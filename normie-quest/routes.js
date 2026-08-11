@@ -25,14 +25,12 @@ const rewards = require('./nq-rewards'); // wallet-bound game-boost reward queue
 const ledger = require('./nq-ledger');   // off-chain per-wallet points ledger (Normie Cash economy)
 const pair = require('./nq-pair');       // TV pairing — carry a proven wallet session to a wallet-less screen
 
-// Admin key for reading feedback / the comments dashboard. Accepts a simple shared password
-// (owner's choice — this gate only guards low-sensitivity playtest comments, no funds/PII), plus
-// a dedicated NQ_FEEDBACK_KEY env override and the site's PREMIUM_ACCESS_KEY, whichever the owner
-// uses. NOT a security-critical gate — just keeps the comments page from being casually stumbled on.
-const FEEDBACK_PW = 'normiequesttest';
+// Admin key for reading feedback / the comments dashboard (low-sensitivity playtest comments,
+// no funds/PII). Env keys ONLY — a dedicated NQ_FEEDBACK_KEY, else the site's PREMIUM_ACCESS_KEY.
+// The old hardcoded shared password was removed (owner, end of beta — playtesting moved to another
+// platform): a committed password in a public repo is needless exposure, and nothing depends on it.
 function adminOK(req) {
   const k = String((req.query && req.query.key) || req.get('x-nq-key') || '');
-  if (k && k === FEEDBACK_PW) return true;
   const want = process.env.NQ_FEEDBACK_KEY || process.env.PREMIUM_ACCESS_KEY || '';
   return !!want && k === want;
 }
@@ -171,6 +169,17 @@ router.get('/api/nq/run-start', (req, res) => {
   if (throttled(req, 'runstart', 60)) return res.status(429).json({ ok: false, error: 'slow_down' });
   try { res.json({ ok: true, ...leaderboard.startRun(String((req.query && req.query.level) || '')) }); }
   catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+// Per-level checkpoint: the game POSTs its current run token + the level it just reached; the
+// server credits that level's max-point budget ONCE and re-issues the token. The final /score
+// submit is then bounded by the summed budget of the levels actually reached (points, not time).
+router.post('/api/nq/run-checkpoint', (req, res) => {
+  if (throttled(req, 'runcheckpoint', 200)) return res.status(429).json({ ok: false, error: 'slow_down' });
+  try {
+    const b = req.body || {};
+    const r = leaderboard.checkpoint(b.token || null, String(b.level || ''));
+    res.status(r.ok ? 200 : 400).json(r);
+  } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
 router.post('/api/nq/score', async (req, res) => {
   if (throttled(req, 'score', 60)) return res.status(429).json({ ok: false, error: 'slow_down' });
