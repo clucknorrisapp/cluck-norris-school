@@ -206,6 +206,70 @@
     animation:lxFloat 6s ease-in-out infinite; }
 
   @media (prefers-reduced-motion:reduce) { *, *::before, *::after { animation:none !important; } }
+
+  /* ============================================================================
+     ✦ v2 — DE-PLAIN PASS: brighter holographic color, glowing frosted panels that
+     pop off the background, starfield, HUD corner brackets. Overrides v1 above. ==== */
+  @keyframes lxTwinkle { 0%,100% { opacity:.3; } 50% { opacity:.85; } }
+  /* brighter, more defined holographic aurora */
+  body::after { content:''; position:fixed; inset:-45%; z-index:0; pointer-events:none; will-change:transform;
+    background:
+      radial-gradient(34% 42% at 24% 28%, rgba(56,201,255,.24), transparent 62%),
+      radial-gradient(38% 46% at 78% 22%, rgba(176,106,255,.26), transparent 60%),
+      radial-gradient(48% 50% at 50% 88%, rgba(255,120,40,.24), transparent 60%),
+      radial-gradient(40% 42% at 86% 82%, rgba(87,243,154,.16), transparent 60%);
+    filter:blur(26px) saturate(1.4); animation:lxAurora 40s linear infinite; }
+  /* twinkling starfield — above the aurora, behind the content */
+  .wrap::before { content:''; position:fixed; inset:0; z-index:-1; pointer-events:none;
+    background-image:
+      radial-gradient(1.5px 1.5px at 12% 22%, rgba(255,255,255,.8), transparent),
+      radial-gradient(1.5px 1.5px at 82% 16%, rgba(180,220,255,.8), transparent),
+      radial-gradient(1px 1px at 34% 60%, rgba(255,255,255,.7), transparent),
+      radial-gradient(1.5px 1.5px at 66% 46%, rgba(255,230,180,.7), transparent),
+      radial-gradient(1px 1px at 22% 80%, rgba(200,180,255,.7), transparent),
+      radial-gradient(1.5px 1.5px at 90% 72%, rgba(255,255,255,.7), transparent),
+      radial-gradient(1px 1px at 54% 90%, rgba(180,220,255,.7), transparent),
+      radial-gradient(1px 1px at 46% 12%, rgba(255,255,255,.6), transparent);
+    animation:lxTwinkle 4.5s ease-in-out infinite; }
+  .wrap { position:relative; z-index:1; }
+
+  /* GLOWING FROSTED GLASS — the fix for "plain": panels lift off the dark ground */
+  .card, .wheelcard, #feed .post {
+    background:linear-gradient(158deg, rgba(52,40,27,.74), rgba(18,14,11,.58)) !important;
+    border:1px solid rgba(255,205,110,.30) !important;
+    box-shadow:0 16px 44px rgba(0,0,0,.55), 0 0 0 1px rgba(255,200,90,.10), 0 0 30px rgba(255,160,50,.06), inset 0 1px 0 rgba(255,255,255,.10), inset 0 -30px 60px rgba(255,140,40,.03) !important;
+    backdrop-filter:blur(12px) saturate(1.25); -webkit-backdrop-filter:blur(12px) saturate(1.25); }
+  .card:hover, .wheelcard:hover, #feed .post:hover {
+    border-color:rgba(255,215,130,.62) !important; transform:translateY(-2px);
+    box-shadow:0 20px 52px rgba(0,0,0,.62), 0 0 34px rgba(255,180,60,.22), 0 0 0 1px rgba(255,215,130,.28), inset 0 1px 0 rgba(255,255,255,.13) !important;
+    transition:transform .16s, box-shadow .22s, border-color .22s; }
+  /* stronger top HUD accent line (glowing) */
+  .card::before, .wheelcard::before { content:''; position:absolute; top:0; left:16px; right:16px; height:1.5px; pointer-events:none;
+    background:linear-gradient(90deg, transparent, rgba(56,201,255,.7) 28%, rgba(255,210,110,.85) 72%, transparent);
+    box-shadow:0 0 10px rgba(56,201,255,.4); }
+  /* cyan HUD corner brackets on the hero wheel panel */
+  .wheelcard { position:relative; }
+  .wheelcard::after { content:''; position:absolute; inset:11px; pointer-events:none; opacity:.55;
+    background:
+      linear-gradient(var(--blue),var(--blue)) left 0 top 0/20px 2px no-repeat,
+      linear-gradient(var(--blue),var(--blue)) left 0 top 0/2px 20px no-repeat,
+      linear-gradient(var(--blue),var(--blue)) right 0 top 0/20px 2px no-repeat,
+      linear-gradient(var(--blue),var(--blue)) right 0 top 0/2px 20px no-repeat,
+      linear-gradient(var(--blue),var(--blue)) left 0 bottom 0/20px 2px no-repeat,
+      linear-gradient(var(--blue),var(--blue)) left 0 bottom 0/2px 20px no-repeat,
+      linear-gradient(var(--blue),var(--blue)) right 0 bottom 0/20px 2px no-repeat,
+      linear-gradient(var(--blue),var(--blue)) right 0 bottom 0/2px 20px no-repeat;
+    filter:drop-shadow(0 0 4px rgba(56,201,255,.5)); }
+  /* richer status bar + coming-soon tiles so nothing reads flat */
+  .idrow { background:linear-gradient(158deg, rgba(52,40,27,.72), rgba(18,14,11,.56)) !important;
+    border-color:rgba(255,205,110,.28) !important; box-shadow:0 12px 32px rgba(0,0,0,.5), 0 0 0 1px rgba(255,200,90,.08), inset 0 1px 0 rgba(255,255,255,.09) !important; }
+  #preview .peek { border:1px solid rgba(255,205,110,.24) !important;
+    box-shadow:0 12px 28px rgba(0,0,0,.5), 0 0 0 1px rgba(255,200,90,.07), 0 0 20px rgba(120,90,255,.05) !important; }
+  #preview .peek:hover { border-color:rgba(255,215,130,.55) !important; box-shadow:0 16px 34px rgba(0,0,0,.55), 0 0 24px rgba(255,180,60,.18) !important; transform:translateY(-2px); transition:transform .16s, box-shadow .2s; }
+  #preview .peek .art { background:radial-gradient(120% 120% at 50% 0%, rgba(120,180,255,.14), transparent 62%); }
+  /* bigger, glowing section headings + colored divider */
+  .sechead h2 { font-size:14px; letter-spacing:3px; filter:drop-shadow(0 0 9px rgba(255,190,60,.45)); }
+  .sechead .line { background:linear-gradient(90deg, rgba(255,200,90,.65), rgba(56,201,255,.35), transparent) !important; height:1px !important; }
 </style>
 </head>
 <body>
