@@ -6536,6 +6536,151 @@ app.get("/api/rosehorses", async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
+// ROSE BUY BOT — posts ROSE buys into the ROSE community Telegram.
+//
+// A free service for the ROSE dev (same mint the RoseHorses tool is locked to). It
+// REUSES the mint-agnostic trade tape that powers /api/rosehorses — on-chain pool
+// discovery, multi-quote (SOL/USDC/USDT/JUP) classification, USD from tokens×price —
+// so it catches Jupiter-routed and stablecoin buys, not just SOL swaps.
+//
+// FULLY DORMANT until ROSE_TG_CHAT_ID is set (no-op otherwise), so it ships safe and
+// the owner flips it on by setting one env var. Posts via our Cluck Norris bot
+// (ROSE_TG_BOT_TOKEN overrides if a dedicated bot is ever used); that bot must be a
+// member of the ROSE group with post rights. Buys ONLY, down to ROSE_MIN_BUY_USD
+// ($1.75 default). Text alerts today; the moment ROSE_BUY_IMAGE_URL is set every
+// alert becomes image+caption — no redeploy needed.
+//
+// Robustness: the enhanced Helius API lags minutes on freshly-landed swaps, so each
+// cycle RE-SCANS a trailing overlap window and dedupes by signature (kv-durable) —
+// a late-indexed buy is caught on a later pass and never double-posted, and a redeploy
+// resumes from the durable cursor instead of replaying or missing.
+const ROSE_BOT_MINT = ROSEHORSES_MINT; // RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF
+const ROSE_MIN_BUY_USD = parseFloat(process.env.ROSE_MIN_BUY_USD || "1.75");
+const ROSE_BUY_OVERLAP_MS = 150 * 1000;        // re-scan the trailing 2.5 min for lagged enrichment
+const ROSE_BUY_LOOKBACK_CAP_MS = 15 * 60 * 1000; // never scan more than 15 min back (redeploy/gap guard)
+const ROSE_BUY_SEEN_MAX = 600;                 // bound the durable dedup set
+
+function roseFmtNum(n) {
+  n = Number(n) || 0;
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + "B";
+  if (n >= 1e6) return (n / 1e6).toFixed(2) + "M";
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + "K";
+  return n < 1 ? n.toFixed(4) : Math.round(n).toLocaleString("en-US");
+}
+// One 🌹 per ~$5 of buy, min 1, capped so a whale can't blow the caption budget.
+function roseBuyBar(usd) { return "🌹".repeat(Math.max(1, Math.min(48, Math.round((Number(usd) || 0) / 5)))); }
+
+async function roseTgSend(token, chatId, text) {
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
+    });
+    if (!res.ok) { const b = await res.text().catch(() => ""); console.warn("[ROSE-BUY] sendMessage failed:", res.status, b.slice(0, 160)); return false; }
+    return true;
+  } catch (e) { console.warn("[ROSE-BUY] sendMessage error:", e.message); return false; }
+}
+async function roseTgSendPhoto(token, chatId, photoUrl, caption) {
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, photo: photoUrl, caption: String(caption || "").slice(0, 1024), parse_mode: "HTML" }),
+    });
+    if (res.ok) return true;
+    // Photo failed (bad URL / TG couldn't fetch it) — fall back to text so the buy still posts.
+    const b = await res.text().catch(() => ""); console.warn("[ROSE-BUY] sendPhoto failed, falling back to text:", res.status, b.slice(0, 160));
+    return await roseTgSend(token, chatId, caption);
+  } catch (e) { console.warn("[ROSE-BUY] sendPhoto error:", e.message); return await roseTgSend(token, chatId, caption); }
+}
+
+function roseBuyCaption(b, roseUsd) {
+  const usd = Number(b.usd) || 0;
+  const rose = Number(b.tokenAmt) || 0;
+  const short = b.wallet ? b.wallet.slice(0, 4) + "…" + b.wallet.slice(-4) : "unknown";
+  const price = roseUsd > 0 ? roseUsd : (rose > 0 ? usd / rose : 0);
+  const lines = [
+    `🌹 <b>ROSE BUY</b>`,
+    roseBuyBar(usd),
+    ``,
+    `💵 <b>$${usd.toFixed(2)}</b>  ·  ${roseFmtNum(rose)} ROSE`,
+  ];
+  if (price > 0) lines.push(`🏷️ $${price < 0.01 ? price.toPrecision(3) : price.toFixed(6)} / ROSE`);
+  lines.push(`👤 <a href="https://solscan.io/account/${b.wallet}">${short}</a>  ·  <a href="https://solscan.io/tx/${b.sig}">txn</a>`);
+  lines.push(`📈 <a href="https://dexscreener.com/solana/${ROSE_BOT_MINT}">Chart</a>  ·  🛒 <a href="https://jup.ag/tokens/${ROSE_BOT_MINT}">Buy ROSE</a>`);
+  return lines.join("\n");
+}
+
+async function roseBuyBotPollOnce({ testPost = false } = {}) {
+  const token = process.env.ROSE_TG_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.ROSE_TG_CHAT_ID;
+  const key = (rpc.heliusKeys()[0]) || process.env.HELIUS_API_KEY;
+  if (!token || !chatId) return { ok: false, reason: "dormant (ROSE_TG_CHAT_ID unset)" };
+  if (!key) return { ok: false, reason: "no HELIUS key" };
+  const img = process.env.ROSE_BUY_IMAGE_URL || "";
+
+  const [solUsd, roseUsd] = await Promise.all([
+    orderbook.getUsdPrice("So11111111111111111111111111111111111111112").catch(() => 0),
+    orderbook.getUsdPrice(ROSE_BOT_MINT).catch(() => 0),
+  ]);
+
+  // Test lever: post one sample buy so the operator can verify chat + image wiring end-to-end.
+  if (testPost) {
+    const sample = { usd: 42.0, tokenAmt: (roseUsd > 0 ? 42 / roseUsd : 47876), wallet: "RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF", sig: "TEST_" + Math.floor(Date.now() / 1000) };
+    const cap = "🧪 <i>test alert</i>\n" + roseBuyCaption(sample, roseUsd);
+    const okp = img ? await roseTgSendPhoto(token, chatId, img, cap) : await roseTgSend(token, chatId, cap);
+    return { ok: okp, testPost: true, image: !!img };
+  }
+
+  const now = Date.now();
+  const cursor = Number(kv.get("roseBuyCursorMs", 0)) || 0;
+  if (!cursor) { kv.set("roseBuyCursorMs", now); return { ok: true, firstRun: true, note: "cursor seeded at now; history skipped" }; }
+  const fromMs = Math.min(now, Math.max(cursor - ROSE_BUY_OVERLAP_MS, now - ROSE_BUY_LOOKBACK_CAP_MS));
+
+  const { getTradeTapeHelius } = require("./lib/helius-trades");
+  const tape = await getTradeTapeHelius(ROSE_BOT_MINT, fromMs, now, {
+    heliusKey: key, heliusEnhancedBatched, solUsd: solUsd || 0, tokenPriceUsd: roseUsd || 0,
+    maxSigPagesPerPool: 4, maxSigs: 400,
+  });
+  const trades = (tape && tape.trades) || [];
+  const seen = new Set(kv.get("roseBuySeen", []));
+  const fresh = trades
+    .filter(t => t.side === "buy" && t.usd != null && t.usd >= ROSE_MIN_BUY_USD && !seen.has(t.sig))
+    .sort((a, b) => a.ts - b.ts);
+
+  let posted = 0;
+  for (const b of fresh) {
+    const cap = roseBuyCaption(b, roseUsd);
+    const okp = img ? await roseTgSendPhoto(token, chatId, img, cap) : await roseTgSend(token, chatId, cap);
+    seen.add(b.sig);
+    if (okp) posted++;
+    await new Promise(r => setTimeout(r, 450)); // gentle on TG's per-chat rate limit
+  }
+  // Persist dedup set (bounded, insertion-ordered) + advance the high-water cursor.
+  const seenArr = [...seen]; kv.set("roseBuySeen", seenArr.slice(-ROSE_BUY_SEEN_MAX));
+  kv.set("roseBuyCursorMs", now);
+  return { ok: true, scanned: trades.length, eligible: fresh.length, posted, floorUsd: ROSE_MIN_BUY_USD, image: !!img };
+}
+
+async function pollRoseBuys() {
+  if (!process.env.ROSE_TG_CHAT_ID) return; // dormant until configured
+  try { await roseBuyBotPollOnce(); }
+  catch (e) { console.warn("[ROSE-BUY] poll cycle error:", e.message); }
+}
+
+// Admin lever: run one cycle now (?run=1) or fire a sample post (?test=1). PREMIUM_ACCESS_KEY-gated.
+app.get("/api/rose-buybot", async (req, res) => {
+  const KEY = process.env.PREMIUM_ACCESS_KEY;
+  const provided = req.query.key || req.headers["x-premium-key"];
+  if (!KEY || provided !== KEY) return res.status(404).json({ ok: false, error: "not found" });
+  try {
+    const out = await roseBuyBotPollOnce({ testPost: req.query.test === "1" });
+    return res.status(200).json({ configured: !!process.env.ROSE_TG_CHAT_ID, imageSet: !!process.env.ROSE_BUY_IMAGE_URL, ...out });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: publicErrMsg(e) });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
 // VESTED BUY SPECIAL — campaigns + opt-in registry (the "super dashboard" backend)
 //
 // A campaign offers buyers a LARGER bonus in exchange for having their BONUS tokens
@@ -13034,6 +13179,8 @@ app.listen(PORT, () => {
       pollClknBuys();
       setInterval(pollClknBuys, 30000);
     }, 5000);
+    // ROSE buy bot — no-op until ROSE_TG_CHAT_ID is set (see roseBuyBotPollOnce). 45s cadence.
+    setInterval(pollRoseBuys, 45000);
     // Cluck's Daily Alpha — auto-post once/day at ~ALPHA_POST_HOUR UTC to X + (silent) Telegram.
     // Stamps the date BEFORE posting so a crash/retry can't double-post publicly; a rare failed
     // post is recoverable via /api/alpha-test?post=1. Change the hour freely (or kv alphaPostHour).
