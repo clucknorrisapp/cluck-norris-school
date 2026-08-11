@@ -172,6 +172,17 @@ router.get('/api/nq/run-start', (req, res) => {
   try { res.json({ ok: true, ...leaderboard.startRun(String((req.query && req.query.level) || '')) }); }
   catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
+// Per-level checkpoint: the game POSTs its current run token + the level it just reached; the
+// server credits that level's max-point budget ONCE and re-issues the token. The final /score
+// submit is then bounded by the summed budget of the levels actually reached (points, not time).
+router.post('/api/nq/run-checkpoint', (req, res) => {
+  if (throttled(req, 'runcheckpoint', 200)) return res.status(429).json({ ok: false, error: 'slow_down' });
+  try {
+    const b = req.body || {};
+    const r = leaderboard.checkpoint(b.token || null, String(b.level || ''));
+    res.status(r.ok ? 200 : 400).json(r);
+  } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
 router.post('/api/nq/score', async (req, res) => {
   if (throttled(req, 'score', 60)) return res.status(429).json({ ok: false, error: 'slow_down' });
   try {
