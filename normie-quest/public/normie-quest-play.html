@@ -1565,13 +1565,16 @@ var LevelSelect=new Phaser.Class({ Extends:Phaser.Scene,
     } }catch(e){}
     // group levels by world (first digit of the "w-n" name), rendered dynamically from LEVELS
     var worlds={}, order=[];
-    LEVELS.forEach(function(l,i){ if(l.hidden) return; var w=(l.name||'').split('-')[0]||'?'; if(!worlds[w]){ worlds[w]=[]; order.push(w); } worlds[w].push({l:l,i:i}); });   // hidden bonus levels never show in level-select
+    // Hidden bonus/private rooms never show in the normal level-select — EXCEPT in TEST_MODE
+    // (?test=1), where the owner/testers need to reach every world AND every hidden room from the
+    // picker. Real players (no ?test=1) still only see the normal progression.
+    LEVELS.forEach(function(l,i){ if(l.hidden && !TEST_MODE) return; var w=(l.name||'').split('-')[0]||'?'; if(!worlds[w]){ worlds[w]=[]; order.push(w); } worlds[w].push({l:l,i:i}); });
     // 12+ worlds outgrew the old shrink-to-fit-on-one-screen approach (rows bottomed out at
     // 20px and overflowed the screen) — fixed comfortable rows + SCROLL (wheel / drag / ▲▼).
     var top=42, n=order.length, rowH=30, cardH=25, y=top;
     order.forEach(function(w){
       var cy=y+rowH/2;
-      self.add.text(22,cy,'W'+w,{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#66ccff'}).setOrigin(0,.5);
+      self.add.text(22,cy,(/^\d+$/.test(String(w))?'W'+w:String(w).slice(0,6)),{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#66ccff'}).setOrigin(0,.5);
       worlds[w].forEach(function(o,c){
         var x=52+c*138, isBoss=!!o.l.boss, isVip=!!o.l.vip;
         var sub=(o.l.sub||''); if(sub.length>17) sub=sub.slice(0,16)+'…';
