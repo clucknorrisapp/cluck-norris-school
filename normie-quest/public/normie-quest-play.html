@@ -142,7 +142,7 @@ var DEV = (function(){ try{
   if(/[?&#]nqdev=off(\b|$)/i.test(q)){ try{ localStorage.removeItem('nqDev'); }catch(e){} return false; }
   return (typeof localStorage!=='undefined' && localStorage.getItem('nqDev')==='1');
 }catch(e){ return false; } })();
-// TEST BUILD — playtester dashboard. ?test=1 (query or hash) unlocks a LEVEL SELECT screen
+// TEST BUILD — playtester dashboard. ?test=1 (query or hash) unlocks a level-picker screen
 // (jump straight to any level, no play-through) + a floating feedback widget that POSTs
 // comments to /api/nq/feedback. The page is a hidden preview anyway; this flag just gates
 // the tester-only UI so normal players never see it. Off = the game behaves exactly as before.
@@ -1672,7 +1672,7 @@ var Title=new Phaser.Class({ Extends:Phaser.Scene,
     var self=this;
     var go=function(){ if(this.started) return; this.started=true; this.scene.start('Controls',{next:0,score:0}); };
     // Tap anywhere = play from 1-1 (both modes). In TEST BUILD, the reliable DOM "≡ Levels"
-    // button (bottom-left, works from here too) is how you reach LEVEL SELECT.
+    // button (bottom-left, works from here too) is how you reach the level picker.
     this.input.once('pointerdown',go,this); this.input.keyboard.once('keydown',go,this);
     padAdvance(this, function(){ go.call(self); });   // controller button also starts
     if(TEST_MODE){ this.add.text(W/2,262,'TEST BUILD · tap ≡ Levels below to pick a level',{fontFamily:UIFONT,resolution:UIRES,fontSize:'14px',color:'#ffd23f'}).setOrigin(.5); }
@@ -2638,7 +2638,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
           self.useReserve(_si); return; } } }
       }catch(e){}
     });
-    // TEST BUILD: expose the current level + a "back to LEVEL SELECT" hook to the DOM overlay
+    // TEST BUILD: expose the current level + a "back to level picker" hook to the DOM overlay
     // (a reliable HTML button — in-canvas HUD hit areas are unreliable under the 2x-zoom container).
     // Press L on desktop, or tap the overlay's ≡ Levels button on any device.
     try{ if(typeof window!=='undefined') window.__NQ_LEVEL=(this.def&&this.def.name)||''; }catch(e){}
@@ -5050,7 +5050,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   gameOver:function(reason){ if(this.over) return; this.over=true; this.physics.pause();
     // TIME UP is the one run-ender that doesn't pass through loseLife — record it here (never both)
     if(reason==='TIME UP') nqTele('death',{world:this.def&&this.def.name,x:Math.round(this.player?this.player.x:0),cause:'TIME UP',t:Math.round((Date.now()-(this._lvStartAt||Date.now()))/1000),score:this.score});
-    // TEST BUILD: no run-ending — bounce back to LEVEL SELECT so a tester can retry/switch instantly.
+    // TEST BUILD: no run-ending — bounce back to the level picker so a tester can retry/switch instantly.
     if(TEST_MODE){ this.hb(this.add.text(W/2,120,'TEST — back to LEVEL SELECT',{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#ff6a99'}).setOrigin(.5)); this.time.delayedCall(900,function(){ this.scene.start('LevelSelect'); },[],this); return; }
     // Per-world checkpoint: died past a banked world boundary → continue from the FURTHEST world
     // reached (start of that world), not always World 2. cpLvl is the highest banked level index.
@@ -6363,7 +6363,7 @@ var NQGAME=new Phaser.Game({
   physics:{ default:'arcade', arcade:{ gravity:{y:900}, debug:false } },
   scene:[Boot,Title,LevelSelect,Controls,Game,Over,Win,WorldClear,Briefing,VipPitch,LevelClear]
 });
-// Global "jump to LEVEL SELECT" hook — works from ANY scene (title, game, over, win), so the
+// Global "jump to level picker" hook — works from ANY scene (title, game, over, win), so the
 // reliable DOM "≡ Levels" button is never a dead end. Stops whatever's running, then starts it.
 try{ if(typeof window!=='undefined') window.__NQ_TOLEVELS=function(){ try{
   try{ if(window.NQLB&&window.NQLB.abandonRun) window.NQLB.abandonRun(); }catch(e){}   // leaving mid-run = abandon the leaderboard run token
