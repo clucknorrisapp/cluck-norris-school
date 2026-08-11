@@ -6568,7 +6568,7 @@ const ROSE_ANNOUNCE_TEXT = [
   "",
   "Sit tight — buys start popping shortly. 🚀",
   "",
-  `📈 <a href="https://www.geckoterminal.com/solana/tokens/${ROSEHORSES_MINT}">Chart</a>  ·  🛒 <a href="https://jup.ag/tokens/${ROSEHORSES_MINT}">Buy ROSE</a>`,
+  `📈 <a href="https://dexscreener.com/solana/${ROSEHORSES_MINT}">Chart</a>  ·  🛒 <a href="https://jup.ag/tokens/${ROSEHORSES_MINT}">Buy ROSE</a>`,
 ].join("\n");
 
 function roseFmtNum(n) {
@@ -6578,22 +6578,11 @@ function roseFmtNum(n) {
   if (n >= 1e3) return (n / 1e3).toFixed(1) + "K";
   return n < 1 ? n.toFixed(4) : Math.round(n).toLocaleString("en-US");
 }
-// Size tier — a single emoji (plus a shout for the big ones) scaled to the USD size of
-// the buy, the way the popular buy bots do it: small → shrimp, large → whale. The bar
-// below repeats that same emoji so the row length also reads as size at a glance.
-function roseSizeTier(usd) {
-  usd = Number(usd) || 0;
-  if (usd >= 5000) return { emoji: "🐋", label: " · MEGA WHALE" };
-  if (usd >= 1500) return { emoji: "🐳", label: " · WHALE" };
-  if (usd >= 500)  return { emoji: "🦈", label: " · SHARK" };
-  if (usd >= 150)  return { emoji: "🐬", label: " · big buy" };
-  if (usd >= 50)   return { emoji: "🐠", label: "" };
-  if (usd >= 10)   return { emoji: "🐟", label: "" };
-  return { emoji: "🦐", label: "" };
-}
-// A row of the tier emoji scaled to size (one per ~$5, min 1, capped so a whale can't
-// blow the 1024-char caption budget).
-function roseBuyBar(usd, emoji) { return String(emoji || "🌹").repeat(Math.max(1, Math.min(24, Math.round((Number(usd) || 0) / 5)))); }
+// Visual buy-size bar: a row of 🌹 that grows with the USD size of the buy — one rose per
+// ~$5 (ROSE_BUY_USD_PER_EMOJI to tune), so a bigger buy simply shows more roses. Min 1,
+// capped at 50 so a whale can't blow the 1024-char caption budget.
+const ROSE_BUY_USD_PER_EMOJI = Math.max(1, parseFloat(process.env.ROSE_BUY_USD_PER_EMOJI || "5"));
+function roseBuyBar(usd) { return "🌹".repeat(Math.max(1, Math.min(50, Math.round((Number(usd) || 0) / ROSE_BUY_USD_PER_EMOJI)))); }
 
 async function roseTgSend(token, chatId, text, opts = {}) {
   try {
@@ -6623,16 +6612,15 @@ function roseBuyCaption(b, roseUsd) {
   const rose = Number(b.tokenAmt) || 0;
   const short = b.wallet ? b.wallet.slice(0, 4) + "…" + b.wallet.slice(-4) : "unknown";
   const price = roseUsd > 0 ? roseUsd : (rose > 0 ? usd / rose : 0);
-  const tier = roseSizeTier(usd);
   const lines = [
-    `🌹 <b>ROSE BUY</b> ${tier.emoji}${tier.label}`,
-    roseBuyBar(usd, tier.emoji),
+    `🌹 <b>ROSE BUY</b>`,
+    roseBuyBar(usd),
     ``,
     `💵 <b>$${usd.toFixed(2)}</b>  ·  ${roseFmtNum(rose)} ROSE`,
   ];
   if (price > 0) lines.push(`🏷️ $${price < 0.01 ? price.toPrecision(3) : price.toFixed(6)} / ROSE`);
   lines.push(`👤 <a href="https://solscan.io/account/${b.wallet}">${short}</a>  ·  <a href="https://solscan.io/tx/${b.sig}">txn</a>`);
-  lines.push(`📈 <a href="https://www.geckoterminal.com/solana/tokens/${ROSE_BOT_MINT}">Chart</a>  ·  🛒 <a href="https://jup.ag/tokens/${ROSE_BOT_MINT}">Buy ROSE</a>`);
+  lines.push(`📈 <a href="https://dexscreener.com/solana/${ROSE_BOT_MINT}">Chart</a>  ·  🛒 <a href="https://jup.ag/tokens/${ROSE_BOT_MINT}">Buy ROSE</a>`);
   return lines.join("\n");
 }
 
