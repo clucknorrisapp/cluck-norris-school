@@ -6624,10 +6624,12 @@ function roseBuyCaption(b, roseUsd) {
   return lines.join("\n");
 }
 
-async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = false } = {}) {
+async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = false, status = false } = {}) {
   const token = process.env.ROSE_TG_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.ROSE_TG_CHAT_ID;
   const key = (rpc.heliusKeys()[0]) || process.env.HELIUS_API_KEY;
+  // Read-only status probe — never posts or polls; just reports wiring.
+  if (status) return { ok: true, status: true, hasToken: !!token, hasChatId: !!chatId, hasHeliusKey: !!key, cursorSet: !!Number(kv.get("roseBuyCursorMs", 0)) };
   if (!token || !chatId) return { ok: false, reason: "dormant (ROSE_TG_CHAT_ID unset)" };
   // Defaults to the OnlyRose brand art hosted on our origin; override with ROSE_BUY_IMAGE_URL.
   const img = process.env.ROSE_BUY_IMAGE_URL || (CANONICAL_ORIGIN + "/vendor/rose-buy.jpg");
@@ -6701,7 +6703,7 @@ app.get("/api/rose-buybot", async (req, res) => {
   const provided = req.query.key || req.headers["x-premium-key"];
   if (!KEY || provided !== KEY) return res.status(404).json({ ok: false, error: "not found" });
   try {
-    const out = await roseBuyBotPollOnce({ testPost: req.query.test === "1", announce: req.query.announce === "1", loud: req.query.loud === "1" });
+    const out = await roseBuyBotPollOnce({ testPost: req.query.test === "1", announce: req.query.announce === "1", loud: req.query.loud === "1", status: req.query.status === "1" });
     return res.status(200).json({ configured: !!process.env.ROSE_TG_CHAT_ID, imageSet: !!process.env.ROSE_BUY_IMAGE_URL, ...out });
   } catch (e) {
     return res.status(500).json({ ok: false, error: publicErrMsg(e) });
