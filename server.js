@@ -6624,12 +6624,35 @@ function roseBuyCaption(b, roseUsd) {
   return lines.join("\n");
 }
 
+// Resolve the ROSE group chat WITHOUT a dedicated env var: our bot already posts there
+// for the buy comps, so the chat id is already registered. Priority:
+//   1) ROSE_TG_CHAT_ID (explicit override)
+//   2) a vault project whose tokenMint is ROSE (its telegramChatId)
+//   3) the most-recent ROSE buy competition's chat id (any status)
+function roseResolveChatId() {
+  if (process.env.ROSE_TG_CHAT_ID) return String(process.env.ROSE_TG_CHAT_ID);
+  try {
+    const projs = whirlpoolMM.vault.listProjects() || {};
+    for (const id of Object.keys(projs)) {
+      const p = projs[id];
+      if (p && String(p.tokenMint || "") === ROSE_BOT_MINT && p.telegramChatId) return String(p.telegramChatId);
+    }
+  } catch (_) {}
+  try {
+    const c = Object.values(buyCompsAll())
+      .filter(c => String(c.mint) === ROSE_BOT_MINT && c.chatId)
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0];
+    if (c) return String(c.chatId);
+  } catch (_) {}
+  return "";
+}
+
 async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = false, status = false } = {}) {
   const token = process.env.ROSE_TG_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.ROSE_TG_CHAT_ID;
+  const chatId = roseResolveChatId();
   const key = (rpc.heliusKeys()[0]) || process.env.HELIUS_API_KEY;
   // Read-only status probe — never posts or polls; just reports wiring.
-  if (status) return { ok: true, status: true, hasToken: !!token, hasChatId: !!chatId, hasHeliusKey: !!key, cursorSet: !!Number(kv.get("roseBuyCursorMs", 0)) };
+  if (status) return { ok: true, status: true, armed: roseBuyArmed(), hasToken: !!token, hasChatId: !!chatId, resolvedChatId: chatId || null, envOverride: !!process.env.ROSE_TG_CHAT_ID, hasHeliusKey: !!key, cursorSet: !!Number(kv.get("roseBuyCursorMs", 0)) };
   if (!token || !chatId) return { ok: false, reason: "dormant (ROSE_TG_CHAT_ID unset)" };
   // Defaults to the OnlyRose brand art hosted on our origin; override with ROSE_BUY_IMAGE_URL.
   const img = process.env.ROSE_BUY_IMAGE_URL || (CANONICAL_ORIGIN + "/vendor/rose-buy.jpg");
@@ -6687,14 +6710,20 @@ async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = f
   return { ok: true, scanned: trades.length, eligible: fresh.length, posted, floorUsd: ROSE_MIN_BUY_USD, image: !!img };
 }
 
+// Auto-posting is OFF until explicitly armed (kv roseBuyArmed), so resolving the chat
+// doesn't silently start posting to an external group on deploy. Manual operator levers
+// (?run / ?test / ?announce) still work while disarmed. Arm via ?arm=1 after the go-live.
+function roseBuyArmed() { return kv.get("roseBuyArmed", false) === true; }
 async function pollRoseBuys() {
-  if (!process.env.ROSE_TG_CHAT_ID) return; // dormant until configured
+  if (!roseBuyArmed() || !roseResolveChatId()) return; // dormant until armed + chat resolvable
   try { await roseBuyBotPollOnce(); }
   catch (e) { console.warn("[ROSE-BUY] poll cycle error:", e.message); }
 }
 
 // Admin lever (PREMIUM_ACCESS_KEY-gated):
-//   default    → run one poll cycle now
+//   ?status=1  → read-only wiring probe (never posts)
+//   ?arm=1     → turn ON automatic buy posting; ?disarm=1 → turn it OFF
+//   default    → run one poll cycle now (manual; works even while disarmed)
 //   ?test=1    → fire a sample buy alert (verify chat + image wiring)
 //   ?announce=1→ post the one-off "buy bot warming up" announcement
 //   ?loud=1    → make THIS post notify (announce/test only; silent otherwise per owner rule)
@@ -6703,8 +6732,12 @@ app.get("/api/rose-buybot", async (req, res) => {
   const provided = req.query.key || req.headers["x-premium-key"];
   if (!KEY || provided !== KEY) return res.status(404).json({ ok: false, error: "not found" });
   try {
-    const out = await roseBuyBotPollOnce({ testPost: req.query.test === "1", announce: req.query.announce === "1", loud: req.query.loud === "1", status: req.query.status === "1" });
-    return res.status(200).json({ configured: !!process.env.ROSE_TG_CHAT_ID, imageSet: !!process.env.ROSE_BUY_IMAGE_URL, ...out });
+    if (req.query.arm === "1") kv.set("roseBuyArmed", true);
+    if (req.query.disarm === "1") kv.set("roseBuyArmed", false);
+    // arm/disarm are clean toggles — report status, don't also fire a poll.
+    const wantStatus = req.query.status === "1" || req.query.arm === "1" || req.query.disarm === "1";
+    const out = await roseBuyBotPollOnce({ testPost: req.query.test === "1", announce: req.query.announce === "1", loud: req.query.loud === "1", status: wantStatus });
+    return res.status(200).json({ configured: !!roseResolveChatId(), armed: roseBuyArmed(), imageSet: !!process.env.ROSE_BUY_IMAGE_URL, ...out });
   } catch (e) {
     return res.status(500).json({ ok: false, error: publicErrMsg(e) });
   }
