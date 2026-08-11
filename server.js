@@ -6568,7 +6568,7 @@ const ROSE_ANNOUNCE_TEXT = [
   "",
   "Sit tight — buys start popping shortly. 🚀",
   "",
-  `📈 <a href="https://dexscreener.com/solana/${ROSEHORSES_MINT}">Chart</a>  ·  🛒 <a href="https://jup.ag/tokens/${ROSEHORSES_MINT}">Buy ROSE</a>`,
+  `📈 <a href="https://www.geckoterminal.com/solana/tokens/${ROSEHORSES_MINT}">Chart</a>  ·  🛒 <a href="https://jup.ag/tokens/${ROSEHORSES_MINT}">Buy ROSE</a>`,
 ].join("\n");
 
 function roseFmtNum(n) {
@@ -6632,7 +6632,7 @@ function roseBuyCaption(b, roseUsd) {
   ];
   if (price > 0) lines.push(`🏷️ $${price < 0.01 ? price.toPrecision(3) : price.toFixed(6)} / ROSE`);
   lines.push(`👤 <a href="https://solscan.io/account/${b.wallet}">${short}</a>  ·  <a href="https://solscan.io/tx/${b.sig}">txn</a>`);
-  lines.push(`📈 <a href="https://dexscreener.com/solana/${ROSE_BOT_MINT}">Chart</a>  ·  🛒 <a href="https://jup.ag/tokens/${ROSE_BOT_MINT}">Buy ROSE</a>`);
+  lines.push(`📈 <a href="https://www.geckoterminal.com/solana/tokens/${ROSE_BOT_MINT}">Chart</a>  ·  🛒 <a href="https://jup.ag/tokens/${ROSE_BOT_MINT}">Buy ROSE</a>`);
   return lines.join("\n");
 }
 
@@ -6641,7 +6641,8 @@ async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = f
   const chatId = process.env.ROSE_TG_CHAT_ID;
   const key = (rpc.heliusKeys()[0]) || process.env.HELIUS_API_KEY;
   if (!token || !chatId) return { ok: false, reason: "dormant (ROSE_TG_CHAT_ID unset)" };
-  const img = process.env.ROSE_BUY_IMAGE_URL || "";
+  // Defaults to the OnlyRose brand art hosted on our origin; override with ROSE_BUY_IMAGE_URL.
+  const img = process.env.ROSE_BUY_IMAGE_URL || (CANONICAL_ORIGIN + "/vendor/rose-buy.jpg");
   // Silent by default (standing owner rule); a buy alert can be made to notify with
   // ROSE_BUY_LOUD=1, and the one-off announcement with ?loud=1 in the moment.
   const buysSilent = process.env.ROSE_BUY_LOUD !== "1";
