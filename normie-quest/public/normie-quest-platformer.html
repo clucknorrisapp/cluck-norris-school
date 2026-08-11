@@ -129,11 +129,23 @@ var PREMIUM_CHECKPOINTS = true;
 var PREMIUM = (function(){ try{ var q=((location.search||'')+(location.hash||'')); if(/[?&#](premium|prem)=1/i.test(q)){ try{ localStorage.setItem('nqPremium','1'); }catch(e){} return true; } return (typeof localStorage!=='undefined' && localStorage.getItem('nqPremium')==='1'); }catch(e){ return false; } })();
 var WHALE_MS = PREMIUM?15000:8000, COLD_MS = PREMIUM?13000:7000;
 
+// DEV BENCH — a SECRET, dev-only unlock (owner, not testers). Reveals the HIDDEN/secret rooms in
+// the level picker and turns the picker on by itself. Set once via ?nqdev=clkn-bench-7 (?nqdev=off
+// clears it); persisted to localStorage so the bare game URL keeps it on THIS device only. Testers
+// using ?test=1 never see the hidden rooms. ⚠ Obscurity, not real security: the game JS is
+// client-side so the token lives in the shipped bundle — it just keeps casual testers out.
+var DEV = (function(){ try{
+  var q=(location.search||'')+(location.hash||'');
+  if(/[?&#]nqdev=clkn-bench-7(\b|$)/i.test(q)){ try{ localStorage.setItem('nqDev','1'); }catch(e){} return true; }
+  if(/[?&#]nqdev=off(\b|$)/i.test(q)){ try{ localStorage.removeItem('nqDev'); }catch(e){} return false; }
+  return (typeof localStorage!=='undefined' && localStorage.getItem('nqDev')==='1');
+}catch(e){ return false; } })();
 // TEST BUILD — playtester dashboard. ?test=1 (query or hash) unlocks a LEVEL SELECT screen
 // (jump straight to any level, no play-through) + a floating feedback widget that POSTs
 // comments to /api/nq/feedback. The page is a hidden preview anyway; this flag just gates
 // the tester-only UI so normal players never see it. Off = the game behaves exactly as before.
-var TEST_MODE = (function(){ try{ return /[?&#]test=1(\b|$)/.test((location.search||'')+(location.hash||'')); }catch(e){ return false; } })();
+// The dev bench implies the picker too, so one secret URL gives the owner picker + hidden rooms.
+var TEST_MODE = (function(){ try{ return DEV || /[?&#]test=1(\b|$)/.test((location.search||'')+(location.hash||'')); }catch(e){ return false; } })();
 // PANEL TESTER TAG — a personalized link (?tester=T1) stamps this browser once; every telemetry
 // beacon + feedback comment carries the code from then on, so the 10-person panel's data
 // separates per tester on the dashboard. A self-chosen code, not PII.
@@ -1563,10 +1575,9 @@ var LevelSelect=new Phaser.Class({ Extends:Phaser.Scene,
     } }catch(e){}
     // group levels by world (first digit of the "w-n" name), rendered dynamically from LEVELS
     var worlds={}, order=[];
-    // Hidden bonus/private rooms never show in the normal level-select — EXCEPT in TEST_MODE
-    // (?test=1), where the owner/testers need to reach every world AND every hidden room from the
-    // picker. Real players (no ?test=1) still only see the normal progression.
-    LEVELS.forEach(function(l,i){ if(l.hidden && !TEST_MODE) return; var w=(l.name||'').split('-')[0]||'?'; if(!worlds[w]){ worlds[w]=[]; order.push(w); } worlds[w].push({l:l,i:i}); });
+    // Hidden bonus/private rooms show in the picker ONLY on the secret dev bench (DEV) — testers on
+    // ?test=1 see just the normal worlds; real players (no picker) see the normal progression.
+    LEVELS.forEach(function(l,i){ if(l.hidden && !DEV) return; var w=(l.name||'').split('-')[0]||'?'; if(!worlds[w]){ worlds[w]=[]; order.push(w); } worlds[w].push({l:l,i:i}); });
     // 12+ worlds outgrew the old shrink-to-fit-on-one-screen approach (rows bottomed out at
     // 20px and overflowed the screen) — fixed comfortable rows + SCROLL (wheel / drag / ▲▼).
     var top=42, n=order.length, rowH=30, cardH=25, y=top;
