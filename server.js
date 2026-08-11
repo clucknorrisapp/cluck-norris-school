@@ -6559,6 +6559,17 @@ const ROSE_MIN_BUY_USD = parseFloat(process.env.ROSE_MIN_BUY_USD || "1.75");
 const ROSE_BUY_OVERLAP_MS = 150 * 1000;        // re-scan the trailing 2.5 min for lagged enrichment
 const ROSE_BUY_LOOKBACK_CAP_MS = 15 * 60 * 1000; // never scan more than 15 min back (redeploy/gap guard)
 const ROSE_BUY_SEEN_MAX = 600;                 // bound the durable dedup set
+const ROSE_ANNOUNCE_TEXT = [
+  "🌹 <b>$ROSE BUY BOT — WARMING UP</b> 🐔",
+  "",
+  "The Cluck Norris crew is priming a live buy bot for $ROSE — right here in this group.",
+  "",
+  "Every ROSE buy lands here the moment it hits the chain — big or small, bot or not, all the way down to ~$1.75. Buys only. 🌹",
+  "",
+  "Sit tight — buys start popping shortly. 🚀",
+  "",
+  `📈 <a href="https://dexscreener.com/solana/${ROSEHORSES_MINT}">Chart</a>  ·  🛒 <a href="https://jup.ag/tokens/${ROSEHORSES_MINT}">Buy ROSE</a>`,
+].join("\n");
 
 function roseFmtNum(n) {
   n = Number(n) || 0;
@@ -6567,30 +6578,44 @@ function roseFmtNum(n) {
   if (n >= 1e3) return (n / 1e3).toFixed(1) + "K";
   return n < 1 ? n.toFixed(4) : Math.round(n).toLocaleString("en-US");
 }
-// One 🌹 per ~$5 of buy, min 1, capped so a whale can't blow the caption budget.
-function roseBuyBar(usd) { return "🌹".repeat(Math.max(1, Math.min(48, Math.round((Number(usd) || 0) / 5)))); }
+// Size tier — a single emoji (plus a shout for the big ones) scaled to the USD size of
+// the buy, the way the popular buy bots do it: small → shrimp, large → whale. The bar
+// below repeats that same emoji so the row length also reads as size at a glance.
+function roseSizeTier(usd) {
+  usd = Number(usd) || 0;
+  if (usd >= 5000) return { emoji: "🐋", label: " · MEGA WHALE" };
+  if (usd >= 1500) return { emoji: "🐳", label: " · WHALE" };
+  if (usd >= 500)  return { emoji: "🦈", label: " · SHARK" };
+  if (usd >= 150)  return { emoji: "🐬", label: " · big buy" };
+  if (usd >= 50)   return { emoji: "🐠", label: "" };
+  if (usd >= 10)   return { emoji: "🐟", label: "" };
+  return { emoji: "🦐", label: "" };
+}
+// A row of the tier emoji scaled to size (one per ~$5, min 1, capped so a whale can't
+// blow the 1024-char caption budget).
+function roseBuyBar(usd, emoji) { return String(emoji || "🌹").repeat(Math.max(1, Math.min(24, Math.round((Number(usd) || 0) / 5)))); }
 
-async function roseTgSend(token, chatId, text) {
+async function roseTgSend(token, chatId, text, opts = {}) {
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true, disable_notification: opts.silent !== false }),
     });
     if (!res.ok) { const b = await res.text().catch(() => ""); console.warn("[ROSE-BUY] sendMessage failed:", res.status, b.slice(0, 160)); return false; }
     return true;
   } catch (e) { console.warn("[ROSE-BUY] sendMessage error:", e.message); return false; }
 }
-async function roseTgSendPhoto(token, chatId, photoUrl, caption) {
+async function roseTgSendPhoto(token, chatId, photoUrl, caption, opts = {}) {
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, photo: photoUrl, caption: String(caption || "").slice(0, 1024), parse_mode: "HTML" }),
+      body: JSON.stringify({ chat_id: chatId, photo: photoUrl, caption: String(caption || "").slice(0, 1024), parse_mode: "HTML", disable_notification: opts.silent !== false }),
     });
     if (res.ok) return true;
     // Photo failed (bad URL / TG couldn't fetch it) — fall back to text so the buy still posts.
     const b = await res.text().catch(() => ""); console.warn("[ROSE-BUY] sendPhoto failed, falling back to text:", res.status, b.slice(0, 160));
-    return await roseTgSend(token, chatId, caption);
-  } catch (e) { console.warn("[ROSE-BUY] sendPhoto error:", e.message); return await roseTgSend(token, chatId, caption); }
+    return await roseTgSend(token, chatId, caption, opts);
+  } catch (e) { console.warn("[ROSE-BUY] sendPhoto error:", e.message); return await roseTgSend(token, chatId, caption, opts); }
 }
 
 function roseBuyCaption(b, roseUsd) {
@@ -6598,9 +6623,10 @@ function roseBuyCaption(b, roseUsd) {
   const rose = Number(b.tokenAmt) || 0;
   const short = b.wallet ? b.wallet.slice(0, 4) + "…" + b.wallet.slice(-4) : "unknown";
   const price = roseUsd > 0 ? roseUsd : (rose > 0 ? usd / rose : 0);
+  const tier = roseSizeTier(usd);
   const lines = [
-    `🌹 <b>ROSE BUY</b>`,
-    roseBuyBar(usd),
+    `🌹 <b>ROSE BUY</b> ${tier.emoji}${tier.label}`,
+    roseBuyBar(usd, tier.emoji),
     ``,
     `💵 <b>$${usd.toFixed(2)}</b>  ·  ${roseFmtNum(rose)} ROSE`,
   ];
@@ -6610,13 +6636,22 @@ function roseBuyCaption(b, roseUsd) {
   return lines.join("\n");
 }
 
-async function roseBuyBotPollOnce({ testPost = false } = {}) {
+async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = false } = {}) {
   const token = process.env.ROSE_TG_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.ROSE_TG_CHAT_ID;
   const key = (rpc.heliusKeys()[0]) || process.env.HELIUS_API_KEY;
   if (!token || !chatId) return { ok: false, reason: "dormant (ROSE_TG_CHAT_ID unset)" };
-  if (!key) return { ok: false, reason: "no HELIUS key" };
   const img = process.env.ROSE_BUY_IMAGE_URL || "";
+  // Silent by default (standing owner rule); a buy alert can be made to notify with
+  // ROSE_BUY_LOUD=1, and the one-off announcement with ?loud=1 in the moment.
+  const buysSilent = process.env.ROSE_BUY_LOUD !== "1";
+
+  // Announce lever: post the one-off "buy bot warming up" message. No HELIUS needed.
+  if (announce) {
+    const okp = await roseTgSend(token, chatId, ROSE_ANNOUNCE_TEXT, { silent: !loud });
+    return { ok: okp, announce: true, loud: !!loud };
+  }
+  if (!key) return { ok: false, reason: "no HELIUS key" };
 
   const [solUsd, roseUsd] = await Promise.all([
     orderbook.getUsdPrice("So11111111111111111111111111111111111111112").catch(() => 0),
@@ -6627,7 +6662,7 @@ async function roseBuyBotPollOnce({ testPost = false } = {}) {
   if (testPost) {
     const sample = { usd: 42.0, tokenAmt: (roseUsd > 0 ? 42 / roseUsd : 47876), wallet: "RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF", sig: "TEST_" + Math.floor(Date.now() / 1000) };
     const cap = "🧪 <i>test alert</i>\n" + roseBuyCaption(sample, roseUsd);
-    const okp = img ? await roseTgSendPhoto(token, chatId, img, cap) : await roseTgSend(token, chatId, cap);
+    const okp = img ? await roseTgSendPhoto(token, chatId, img, cap, { silent: !loud }) : await roseTgSend(token, chatId, cap, { silent: !loud });
     return { ok: okp, testPost: true, image: !!img };
   }
 
@@ -6650,7 +6685,7 @@ async function roseBuyBotPollOnce({ testPost = false } = {}) {
   let posted = 0;
   for (const b of fresh) {
     const cap = roseBuyCaption(b, roseUsd);
-    const okp = img ? await roseTgSendPhoto(token, chatId, img, cap) : await roseTgSend(token, chatId, cap);
+    const okp = img ? await roseTgSendPhoto(token, chatId, img, cap, { silent: buysSilent }) : await roseTgSend(token, chatId, cap, { silent: buysSilent });
     seen.add(b.sig);
     if (okp) posted++;
     await new Promise(r => setTimeout(r, 450)); // gentle on TG's per-chat rate limit
@@ -6667,13 +6702,17 @@ async function pollRoseBuys() {
   catch (e) { console.warn("[ROSE-BUY] poll cycle error:", e.message); }
 }
 
-// Admin lever: run one cycle now (?run=1) or fire a sample post (?test=1). PREMIUM_ACCESS_KEY-gated.
+// Admin lever (PREMIUM_ACCESS_KEY-gated):
+//   default    → run one poll cycle now
+//   ?test=1    → fire a sample buy alert (verify chat + image wiring)
+//   ?announce=1→ post the one-off "buy bot warming up" announcement
+//   ?loud=1    → make THIS post notify (announce/test only; silent otherwise per owner rule)
 app.get("/api/rose-buybot", async (req, res) => {
   const KEY = process.env.PREMIUM_ACCESS_KEY;
   const provided = req.query.key || req.headers["x-premium-key"];
   if (!KEY || provided !== KEY) return res.status(404).json({ ok: false, error: "not found" });
   try {
-    const out = await roseBuyBotPollOnce({ testPost: req.query.test === "1" });
+    const out = await roseBuyBotPollOnce({ testPost: req.query.test === "1", announce: req.query.announce === "1", loud: req.query.loud === "1" });
     return res.status(200).json({ configured: !!process.env.ROSE_TG_CHAT_ID, imageSet: !!process.env.ROSE_BUY_IMAGE_URL, ...out });
   } catch (e) {
     return res.status(500).json({ ok: false, error: publicErrMsg(e) });
