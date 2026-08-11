@@ -5635,10 +5635,18 @@ app.get("/api/tg-test", async (req, res) => {
 //  GET            → { pending } (null when nothing to celebrate) + { probe } (last run's Higgsfield status)
 //  ?clear=1       → celebration handled, clear the flag
 //  ?probe=STATUS  → the scheduled run reports whether Higgsfield tools were reachable (observability)
-app.get("/api/lock-celebration", (req, res) => {
+app.get("/api/lock-celebration", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
   if (req.query.clear === "1") { kv.set("lockCelebrationPending", null); return res.status(200).json({ ok: true, cleared: true }); }
+  // Force a lock-watch scan NOW instead of waiting for the 30-min tick (owner "go post the
+  // lock" lever). Runs the exact same tick logic — it only BUILDS the pending payload from
+  // on-chain state (detection never posts), so this is a safe read+compute.
+  if (req.query.run === "1") {
+    try { await lockWatchTick(); }
+    catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+    return res.status(200).json({ ok: true, ran: true, pending: kv.get("lockCelebrationPending", null), probe: kv.get("lockCelebrationProbe", null) });
+  }
   if (req.query.probe) {
     kv.set("lockCelebrationProbe", { status: String(req.query.probe).slice(0, 60), at: Date.now() });
     return res.status(200).json({ ok: true });
