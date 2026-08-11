@@ -92,5 +92,5 @@ def main(inp, outp, pct, target=60.0):
 
 if __name__ == "__main__":
     inp, outp, pct = sys.argv[1], sys.argv[2], float(sys.argv[3])
-    tgt = float(sys.argv[4]) if len(sys.argv) > 4 else 50.0
+    tgt = float(sys.argv[4]) if len(sys.argv) > 4 else 60.0   # matches main() default; supply passed 50% on 2026-08-03
     main(inp, outp, pct, tgt)
