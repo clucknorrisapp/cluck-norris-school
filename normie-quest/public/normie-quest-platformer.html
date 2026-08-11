@@ -6709,14 +6709,14 @@ if(typeof document!=='undefined'){ (function(){
   function topBand(y){ return y < window.innerHeight*0.13; }   // leave the top HUD (pause / ? / gear) alone
   // Only intercept touches while the Game scene is actually running. Off the game screen
   // (level-select overlay, menus, how-to) the joystick has no purpose, and swallowing those
-  // touches made left-side buttons — e.g. the level-select tiles — untappable. This is the
-  // single source of truth for "is the pad live", reused by the poll below.
+  // touches made left-side buttons — e.g. the level-select tiles — untappable. Single source
+  // of truth for "is the pad live", reused by the poll below.
   function gameActive(){ try{ return !!(NQGAME && NQGAME.scene && NQGAME.scene.isActive('Game')); }catch(e){ return false; } }
-  // A touch that lands on any real on-screen UI control (the ≡ Levels / Feedback buttons,
-  // EXTRAS, gear, etc.) must reach that control, not spring the joystick — otherwise those
-  // overlay buttons are dead during gameplay. The game itself renders to <canvas>, which is
-  // not a control, so play-field touches still drive the stick.
-  function isUiTarget(el){ try{ return !!(el && el.closest && el.closest('button,a,input,select,textarea,label,[role="button"]')); }catch(e){ return false; } }
+  // A touch that lands on any real on-screen UI control (the ≡ Levels / Feedback / EXTRAS /
+  // Premium buttons, gear, etc.) must reach that control, not spring the joystick — otherwise
+  // those overlay buttons are dead during gameplay. The game renders to <canvas>, which is not
+  // a control, so play-field touches still drive the stick.
+  function isUiTarget(el){ try{ return !!(el && el.closest && el.closest('button,a,input,select,textarea,label,[role="button"],[data-nq-ui]')); }catch(e){ return false; } }
   document.addEventListener('touchstart',function(ev){
     if(!gameActive()) return;   // let taps fall through to level-select / menu buttons
     var acted=false; evc++; if(ev.changedTouches[0]) lastT=Math.round(ev.changedTouches[0].clientX)+','+Math.round(ev.changedTouches[0].clientY);
