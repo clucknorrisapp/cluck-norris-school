@@ -62,10 +62,11 @@ for(const [marker,file] of Object.entries(AUDIO_MARKERS)){
   logic = logic.split(marker).join('data:audio/wav;base64,'+raw);
 }
 
-// splice: keep the deployed file's <head> up to & including the Phaser CDN <script>, then our game.
+// splice: keep the deployed file's <head> up to & including the Phaser <script>, then our game.
+// Phaser is vendored same-origin (/vendor/phaser-3.60.0.min.js) — SRI still validates the bytes.
 // NOTE: must match the tag in normie-quest-platformer.html EXACTLY (incl. the SRI attributes) —
 // build.js splices the head at this tag, so a mismatch throws "phaser CDN tag not found".
-const cdnTag = '<script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js" integrity="sha384-bcpiSslshEqIfUoxXWFNw7kqGDrRhwSYbr2IHOzGmD5dX3pDoM89ZGkqW9qFP0Ks" crossorigin="anonymous"></script>';
+const cdnTag = '<script src="/vendor/phaser-3.60.0.min.js" integrity="sha384-bcpiSslshEqIfUoxXWFNw7kqGDrRhwSYbr2IHOzGmD5dX3pDoM89ZGkqW9qFP0Ks" crossorigin="anonymous"></script>';
 const cut = deployed.indexOf(cdnTag);
 if(cut < 0) throw new Error('phaser CDN tag not found in deployed HTML');
 const headBody = deployed.slice(0, cut + cdnTag.length);

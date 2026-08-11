@@ -33,6 +33,7 @@ const { execSync } = require('child_process');
 const BASE = process.argv[2] || process.env.NQ_TEST_BASE || 'http://localhost:8099';
 const LAB = BASE + '/normie-quest-x7-lab';
 const PHASER_URL = 'https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js';
+const PHASER_VENDORED = path.join(__dirname, '..', '..', 'public', 'vendor', 'phaser-3.60.0.min.js');
 const PHASER_TMP = path.join(require('os').tmpdir(), 'nq-phaser-3.60.0.min.js');
 
 function findChrome() {
@@ -50,6 +51,10 @@ function findChrome() {
 
 function ensurePhaser() {
   if (fs.existsSync(PHASER_TMP) && fs.statSync(PHASER_TMP).size > 500000) return;
+  // Prefer the repo's vendored copy (offline, no network) — fall back to the CDN only if absent.
+  if (fs.existsSync(PHASER_VENDORED) && fs.statSync(PHASER_VENDORED).size > 500000) {
+    fs.copyFileSync(PHASER_VENDORED, PHASER_TMP); return;
+  }
   execSync(`curl -sS -o ${JSON.stringify(PHASER_TMP)} ${JSON.stringify(PHASER_URL)}`, { stdio: 'ignore' });
   if (!fs.existsSync(PHASER_TMP) || fs.statSync(PHASER_TMP).size < 500000) throw new Error('failed to fetch Phaser');
 }

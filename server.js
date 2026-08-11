@@ -2213,9 +2213,13 @@ app.use(require("compression")());
 // entire site on the next deploy. 'unsafe-inline' is therefore unavoidable without rewriting
 // every page, and it does weaken the anti-XSS value. What this policy still buys, and the
 // reason it is worth shipping:
-//   • script-src pins the ONLY four external script origins we actually load. An injected
-//     <script src="https://evil/..."> is blocked even though inline is allowed — and injected
-//     markup is the live risk here, since token names/symbols are attacker-controlled.
+//   • script-src pins the ONLY two external script origins we actually load — the Jupiter swap
+//     plugin (plugin.jup.ag) and the Google Tag loader (googletagmanager). Phaser and web3.js
+//     used to be pinned to cdnjs/unpkg here; both are now vendored same-origin under /vendor
+//     (still SRI-checked), which shrank this allowlist and cleared the scanner's cross-domain-JS
+//     and SRI-missing findings for them. An injected <script src="https://evil/..."> is blocked
+//     even though inline is allowed — and injected markup is the live risk here, since token
+//     names/symbols are attacker-controlled.
 //   • object-src 'none' kills Flash/plugin embeds, base-uri 'self' stops <base> hijacking
 //     rewriting every relative URL on the page, and frame-ancestors backstops X-Frame-Options.
 // img-src stays wide (https:) on purpose: token logos come from arbitrary metadata URIs, so
@@ -2223,7 +2227,7 @@ app.use(require("compression")());
 // wallets and RPC endpoints vary per user.
 const CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://plugin.jup.ag https://unpkg.com https://www.googletagmanager.com",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://plugin.jup.ag https://www.googletagmanager.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' data: https://fonts.gstatic.com",
   "img-src 'self' data: blob: https:",
