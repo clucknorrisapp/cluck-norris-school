@@ -208,48 +208,60 @@
   @media (prefers-reduced-motion:reduce) { *, *::before, *::after { animation:none !important; } }
 
   /* ============================================================================
-     ✦ v2 — DE-PLAIN PASS: brighter holographic color, glowing frosted panels that
-     pop off the background, starfield, HUD corner brackets. Overrides v1 above. ==== */
+     ✦ v2 — COOL HIGH-TECH PASS: drop the warm/orange cast entirely. Deep blue-black
+     base, cyan/violet holographics, cool slate frosted glass. Gold kept ONLY as a
+     crisp brand accent (headings, VIP badge, logo). Overrides v1 above. =========== */
   @keyframes lxTwinkle { 0%,100% { opacity:.3; } 50% { opacity:.85; } }
-  /* brighter, more defined holographic aurora */
+  body { background:#05070f; }
+  /* cool cyber grid (no warm lines) */
+  body::before { content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
+    background-image:
+      linear-gradient(rgba(110,160,255,.09) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(120,180,255,.07) 1px, transparent 1px),
+      radial-gradient(120% 100% at 50% 40%, transparent 52%, rgba(0,1,6,.74));
+    background-size:44px 44px, 44px 44px, 100% 100%;
+    -webkit-mask-image:radial-gradient(135% 95% at 50% 14%, #000 26%, transparent 84%);
+    mask-image:radial-gradient(135% 95% at 50% 14%, #000 26%, transparent 84%);
+    animation:lxGrid 8s linear infinite; }
+  /* cool holographic aurora — cyan, violet, electric-blue, teal (NO orange) */
   body::after { content:''; position:fixed; inset:-45%; z-index:0; pointer-events:none; will-change:transform;
     background:
       radial-gradient(34% 42% at 24% 28%, rgba(56,201,255,.24), transparent 62%),
-      radial-gradient(38% 46% at 78% 22%, rgba(176,106,255,.26), transparent 60%),
-      radial-gradient(48% 50% at 50% 88%, rgba(255,120,40,.24), transparent 60%),
-      radial-gradient(40% 42% at 86% 82%, rgba(87,243,154,.16), transparent 60%);
-    filter:blur(26px) saturate(1.4); animation:lxAurora 40s linear infinite; }
+      radial-gradient(38% 46% at 78% 22%, rgba(150,110,255,.24), transparent 60%),
+      radial-gradient(48% 50% at 50% 88%, rgba(64,120,255,.22), transparent 60%),
+      radial-gradient(40% 42% at 86% 82%, rgba(60,230,205,.14), transparent 60%);
+    filter:blur(26px) saturate(1.35); animation:lxAurora 40s linear infinite; }
   /* twinkling starfield — above the aurora, behind the content */
   .wrap::before { content:''; position:fixed; inset:0; z-index:-1; pointer-events:none;
     background-image:
-      radial-gradient(1.5px 1.5px at 12% 22%, rgba(255,255,255,.8), transparent),
-      radial-gradient(1.5px 1.5px at 82% 16%, rgba(180,220,255,.8), transparent),
-      radial-gradient(1px 1px at 34% 60%, rgba(255,255,255,.7), transparent),
-      radial-gradient(1.5px 1.5px at 66% 46%, rgba(255,230,180,.7), transparent),
-      radial-gradient(1px 1px at 22% 80%, rgba(200,180,255,.7), transparent),
-      radial-gradient(1.5px 1.5px at 90% 72%, rgba(255,255,255,.7), transparent),
-      radial-gradient(1px 1px at 54% 90%, rgba(180,220,255,.7), transparent),
-      radial-gradient(1px 1px at 46% 12%, rgba(255,255,255,.6), transparent);
+      radial-gradient(1.5px 1.5px at 12% 22%, rgba(255,255,255,.85), transparent),
+      radial-gradient(1.5px 1.5px at 82% 16%, rgba(180,220,255,.85), transparent),
+      radial-gradient(1px 1px at 34% 60%, rgba(255,255,255,.75), transparent),
+      radial-gradient(1.5px 1.5px at 66% 46%, rgba(190,210,255,.75), transparent),
+      radial-gradient(1px 1px at 22% 80%, rgba(200,180,255,.75), transparent),
+      radial-gradient(1.5px 1.5px at 90% 72%, rgba(255,255,255,.75), transparent),
+      radial-gradient(1px 1px at 54% 90%, rgba(180,220,255,.75), transparent),
+      radial-gradient(1px 1px at 46% 12%, rgba(255,255,255,.65), transparent);
     animation:lxTwinkle 4.5s ease-in-out infinite; }
   .wrap { position:relative; z-index:1; }
 
-  /* GLOWING FROSTED GLASS — the fix for "plain": panels lift off the dark ground */
+  /* COOL SLATE FROSTED GLASS — panels lift off the deep-blue ground, no muddy warmth */
   .card, .wheelcard, #feed .post {
-    background:linear-gradient(158deg, rgba(52,40,27,.74), rgba(18,14,11,.58)) !important;
-    border:1px solid rgba(255,205,110,.30) !important;
-    box-shadow:0 16px 44px rgba(0,0,0,.55), 0 0 0 1px rgba(255,200,90,.10), 0 0 30px rgba(255,160,50,.06), inset 0 1px 0 rgba(255,255,255,.10), inset 0 -30px 60px rgba(255,140,40,.03) !important;
-    backdrop-filter:blur(12px) saturate(1.25); -webkit-backdrop-filter:blur(12px) saturate(1.25); }
+    background:linear-gradient(158deg, rgba(26,34,52,.78), rgba(8,12,22,.62)) !important;
+    border:1px solid rgba(120,170,255,.22) !important;
+    box-shadow:0 16px 44px rgba(0,0,0,.55), 0 0 0 1px rgba(120,170,255,.09), 0 0 30px rgba(70,130,255,.07), inset 0 1px 0 rgba(255,255,255,.09) !important;
+    backdrop-filter:blur(12px) saturate(1.2); -webkit-backdrop-filter:blur(12px) saturate(1.2); }
   .card:hover, .wheelcard:hover, #feed .post:hover {
-    border-color:rgba(255,215,130,.62) !important; transform:translateY(-2px);
-    box-shadow:0 20px 52px rgba(0,0,0,.62), 0 0 34px rgba(255,180,60,.22), 0 0 0 1px rgba(255,215,130,.28), inset 0 1px 0 rgba(255,255,255,.13) !important;
+    border-color:rgba(150,195,255,.55) !important; transform:translateY(-2px);
+    box-shadow:0 20px 52px rgba(0,0,0,.62), 0 0 34px rgba(80,150,255,.24), 0 0 0 1px rgba(150,195,255,.26), inset 0 1px 0 rgba(255,255,255,.12) !important;
     transition:transform .16s, box-shadow .22s, border-color .22s; }
-  /* stronger top HUD accent line (glowing) */
+  /* top HUD accent line: cyan → gold spark */
   .card::before, .wheelcard::before { content:''; position:absolute; top:0; left:16px; right:16px; height:1.5px; pointer-events:none;
-    background:linear-gradient(90deg, transparent, rgba(56,201,255,.7) 28%, rgba(255,210,110,.85) 72%, transparent);
-    box-shadow:0 0 10px rgba(56,201,255,.4); }
+    background:linear-gradient(90deg, transparent, rgba(56,201,255,.8) 30%, rgba(255,215,120,.65) 74%, transparent);
+    box-shadow:0 0 10px rgba(56,201,255,.45); }
   /* cyan HUD corner brackets on the hero wheel panel */
   .wheelcard { position:relative; }
-  .wheelcard::after { content:''; position:absolute; inset:11px; pointer-events:none; opacity:.55;
+  .wheelcard::after { content:''; position:absolute; inset:11px; pointer-events:none; opacity:.6;
     background:
       linear-gradient(var(--blue),var(--blue)) left 0 top 0/20px 2px no-repeat,
       linear-gradient(var(--blue),var(--blue)) left 0 top 0/2px 20px no-repeat,
@@ -259,17 +271,19 @@
       linear-gradient(var(--blue),var(--blue)) left 0 bottom 0/2px 20px no-repeat,
       linear-gradient(var(--blue),var(--blue)) right 0 bottom 0/20px 2px no-repeat,
       linear-gradient(var(--blue),var(--blue)) right 0 bottom 0/2px 20px no-repeat;
-    filter:drop-shadow(0 0 4px rgba(56,201,255,.5)); }
-  /* richer status bar + coming-soon tiles so nothing reads flat */
-  .idrow { background:linear-gradient(158deg, rgba(52,40,27,.72), rgba(18,14,11,.56)) !important;
-    border-color:rgba(255,205,110,.28) !important; box-shadow:0 12px 32px rgba(0,0,0,.5), 0 0 0 1px rgba(255,200,90,.08), inset 0 1px 0 rgba(255,255,255,.09) !important; }
-  #preview .peek { border:1px solid rgba(255,205,110,.24) !important;
-    box-shadow:0 12px 28px rgba(0,0,0,.5), 0 0 0 1px rgba(255,200,90,.07), 0 0 20px rgba(120,90,255,.05) !important; }
-  #preview .peek:hover { border-color:rgba(255,215,130,.55) !important; box-shadow:0 16px 34px rgba(0,0,0,.55), 0 0 24px rgba(255,180,60,.18) !important; transform:translateY(-2px); transition:transform .16s, box-shadow .2s; }
-  #preview .peek .art { background:radial-gradient(120% 120% at 50% 0%, rgba(120,180,255,.14), transparent 62%); }
-  /* bigger, glowing section headings + colored divider */
-  .sechead h2 { font-size:14px; letter-spacing:3px; filter:drop-shadow(0 0 9px rgba(255,190,60,.45)); }
-  .sechead .line { background:linear-gradient(90deg, rgba(255,200,90,.65), rgba(56,201,255,.35), transparent) !important; height:1px !important; }
+    filter:drop-shadow(0 0 4px rgba(56,201,255,.55)); }
+  /* status bar + coming-soon tiles: same cool slate */
+  .idrow { background:linear-gradient(158deg, rgba(26,34,52,.76), rgba(8,12,22,.60)) !important;
+    border-color:rgba(120,170,255,.2) !important; box-shadow:0 12px 32px rgba(0,0,0,.5), 0 0 0 1px rgba(120,170,255,.07), inset 0 1px 0 rgba(255,255,255,.08) !important; }
+  #preview .peek { border:1px solid rgba(120,170,255,.2) !important;
+    box-shadow:0 12px 28px rgba(0,0,0,.5), 0 0 0 1px rgba(120,170,255,.06), 0 0 20px rgba(120,90,255,.06) !important; }
+  #preview .peek:hover { border-color:rgba(150,195,255,.55) !important; box-shadow:0 16px 34px rgba(0,0,0,.55), 0 0 24px rgba(80,150,255,.2) !important; transform:translateY(-2px); transition:transform .16s, box-shadow .2s; }
+  #preview .peek .art { background:radial-gradient(120% 120% at 50% 0%, rgba(120,180,255,.16), transparent 62%); }
+  /* gold section headings stay (brand), glowing softly; cool→gold divider */
+  .sechead h2 { font-size:14px; letter-spacing:3px; filter:drop-shadow(0 0 9px rgba(255,200,90,.4)); }
+  .sechead .line { background:linear-gradient(90deg, rgba(120,180,255,.6), rgba(255,210,120,.3), transparent) !important; height:1px !important; }
+  /* cool the prize wheel glow */
+  .wheelwrap { filter:drop-shadow(0 8px 26px rgba(56,201,255,.26)) drop-shadow(0 0 34px rgba(150,120,255,.2)) !important; animation:lxFloat 6s ease-in-out infinite; }
 </style>
 </head>
 <body>
