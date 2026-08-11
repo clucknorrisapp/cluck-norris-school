@@ -297,6 +297,7 @@ router.get('/normie-quest-x7/reward', (req, res) => {
 // Gated: valid session token AND VIP; one spin per UTC day per wallet.
 router.post('/api/nq/wheel/spin', (req, res) => {
   try {
+    if (throttled(req, 'wheelspin', 20)) return res.status(429).json({ ok: false, error: 'slow_down' });
     const b = req.body || {};
     const pk = String(b.wallet || ''), token = String(b.token || '');
     const sess = wallet.checkSession(pk, token);
@@ -354,6 +355,7 @@ router.get('/api/nq/wheel/status', (req, res) => {
 // Claim ONE pending item into the game (any verified wallet — leaderboard/owner grants included).
 router.post('/api/nq/rewards/claim', (req, res) => {
   try {
+    if (throttled(req, 'rewardclaim', 40)) return res.status(429).json({ ok: false, error: 'slow_down' });
     const b = req.body || {};
     const pk = String(b.wallet || ''), token = String(b.token || '');
     const sess = wallet.checkSession(pk, token);

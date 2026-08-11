@@ -27,6 +27,7 @@ const MAX = 6000;                         // JSON backend only: hard cap on stor
 const RUN_TTL_MS = 2 * 60 * 60 * 1000;    // a run token is valid for 2h after issue
 const MAX_PTS_PER_SEC = 600;              // plausibility ceiling on TOTAL score / TOTAL run time
 const MIN_RUN_MS = 3000;                  // token issued at run START, so a real submit is never this fast
+const MAX_REAL_WORLD = 21;                // the game has 21 worlds; a submit claiming beyond that is forged
 
 const SECRET = process.env.NQ_LB_SECRET || process.env.PREMIUM_ACCESS_KEY || crypto.randomBytes(24).toString('hex');
 
@@ -180,7 +181,11 @@ async function add(entry, token) {
   if (!tokenOK) return { ok: false, status };
 
   const secs = Math.max(elapsedMs, 1) / 1000;
-  const suspect = tokenOK && score > 0 && (elapsedMs < MIN_RUN_MS || (score / secs) > MAX_PTS_PER_SEC);
+  // Suspect (stored, but excluded from boards + giveaway draws) when: too fast to be a real run,
+  // above the points/sec plausibility ceiling, OR claiming a world that does not exist. NOTE this
+  // is a plausibility FLOOR, not proof of play — score/world/level are still client-authored (the
+  // run token only stamps elapsed time). True forgery-resistance needs progression checkpoints.
+  const suspect = tokenOK && score > 0 && (elapsedMs < MIN_RUN_MS || (score / secs) > MAX_PTS_PER_SEC || world > MAX_REAL_WORLD);
 
   const e = {
     id: crypto.randomBytes(5).toString('hex'), at: Date.now(),
