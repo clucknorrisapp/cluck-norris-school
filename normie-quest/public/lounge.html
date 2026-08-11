@@ -146,6 +146,66 @@
   .jackteaser .jt-soon { margin-left:auto; align-self:flex-start; font-size:9.5px; font-weight:900; letter-spacing:1.5px; color:#1a1204;
     background:var(--gold); padding:3px 8px; border-radius:99px; }
   .crown { display:none; }
+
+  /* ============================================================================
+     ✦ HIGH-TECH UPGRADE LAYER (2026-08-11) — holographic depth, motion + HUD glow.
+     Appended so it layers over the base speakeasy styling without touching the
+     JS-driven markup (every class name is preserved). ============================ */
+  @keyframes lxAurora { to { transform:rotate(360deg); } }
+  @keyframes lxGrid   { to { background-position:46px 46px, 46px 46px, 0 0; } }
+  @keyframes lxRise   { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:none; } }
+  @keyframes lxSheen  { 0% { background-position:-150% 0; } 60%,100% { background-position:150% 0; } }
+  @keyframes lxPulse  { 0%,100% { opacity:.45; transform:scale(1); } 50% { opacity:1; transform:scale(1.3); } }
+  @keyframes lxFloat  { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-4px); } }
+
+  body { background:#050403; }
+  /* drifting cyber grid + edge vignette, masked to fade toward the sides */
+  body::before { content:''; position:fixed; inset:0; z-index:0; pointer-events:none;
+    background-image:
+      linear-gradient(rgba(255,200,90,.09) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(56,201,255,.075) 1px, transparent 1px),
+      radial-gradient(120% 100% at 50% 40%, transparent 55%, rgba(0,0,0,.72));
+    background-size:46px 46px, 46px 46px, 100% 100%;
+    -webkit-mask-image:radial-gradient(130% 95% at 50% 16%, #000 30%, transparent 82%);
+    mask-image:radial-gradient(130% 95% at 50% 16%, #000 30%, transparent 82%);
+    animation:lxGrid 8s linear infinite; }
+  /* slow-rotating holographic aurora behind everything */
+  body::after { content:''; position:fixed; inset:-45%; z-index:0; pointer-events:none; will-change:transform;
+    background:
+      radial-gradient(36% 44% at 26% 30%, rgba(56,201,255,.13), transparent 62%),
+      radial-gradient(40% 48% at 78% 24%, rgba(176,106,255,.15), transparent 60%),
+      radial-gradient(50% 52% at 50% 86%, rgba(255,120,40,.14), transparent 60%),
+      radial-gradient(42% 44% at 84% 80%, rgba(87,243,154,.09), transparent 60%);
+    filter:blur(30px) saturate(1.25); animation:lxAurora 42s linear infinite; }
+
+  .wrap { max-width:740px; }
+  /* panels rise in + gain a glow on hover */
+  .card, .wheelcard, .idrow, .passcard, #preview .peek, #feed .post {
+    animation:lxRise .6s cubic-bezier(.2,.7,.2,1) both; }
+  .card:hover, .wheelcard:hover { border-color:rgba(255,200,90,.5);
+    box-shadow:0 16px 44px rgba(0,0,0,.6), 0 0 24px rgba(255,200,90,.16), inset 0 1px 0 rgba(255,255,255,.07); }
+  /* glowing HUD accent line across the top of every panel (cyan→gold) */
+  .card::before, .wheelcard::before { content:''; position:absolute; top:0; left:16px; right:16px; height:1px; pointer-events:none;
+    background:linear-gradient(90deg, transparent, rgba(56,201,255,.55) 30%, rgba(255,200,90,.65) 70%, transparent); }
+  /* shimmering gold section headings */
+  .sechead h2 { background:linear-gradient(100deg, var(--gold) 22%, var(--gold-hi) 42%, #fff 50%, var(--gold-hi) 58%, var(--gold) 78%);
+    background-size:210% 100%; -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+    animation:lxSheen 5s ease-in-out infinite; }
+  /* light-sweep shimmer across active buttons + the VIP badge */
+  button:not(:disabled) { position:relative; overflow:hidden; }
+  button:not(:disabled)::after { content:''; position:absolute; inset:0; pointer-events:none;
+    background:linear-gradient(100deg, transparent 34%, rgba(255,255,255,.5) 50%, transparent 66%);
+    background-size:230% 100%; animation:lxSheen 4.6s ease-in-out infinite; }
+  .idrow .tier.vip { position:relative; overflow:hidden; }
+  .idrow .tier.vip::after { content:''; position:absolute; inset:0; pointer-events:none;
+    background:linear-gradient(100deg, transparent 36%, rgba(255,255,255,.6) 50%, transparent 64%);
+    background-size:230% 100%; animation:lxSheen 3.8s ease-in-out infinite; }
+  .idrow .dot { animation:lxPulse 1.8s ease-in-out infinite; }
+  /* wheel gets a cool+warm double glow + a gentle float */
+  .wheelwrap { filter:drop-shadow(0 8px 26px rgba(56,201,255,.18)) drop-shadow(0 0 30px rgba(255,140,20,.16));
+    animation:lxFloat 6s ease-in-out infinite; }
+
+  @media (prefers-reduced-motion:reduce) { *, *::before, *::after { animation:none !important; } }
 </style>
 </head>
 <body>
