@@ -1202,12 +1202,20 @@ function buyCompExcludeSet(c) {
   (Array.isArray(c.exclude) ? c.exclude : []).forEach((w) => w && ex.add(w));
   return ex;
 }
-const BC_TX_CACHE = new Map();  // enhanced-tx cache shared across comp refreshes
+// TWO SEPARATE caches by tx SHAPE — they must never share keys. The buyers scan stores RAW
+// getTransaction objects ({meta}); the position/sold-check stores Helius ENHANCED objects
+// ({tokenTransfers}). Sharing one Map collided on any signature both scans touch (a sell tx
+// hits the pool vault AND the wallet's token account): a raw object read as enhanced has no
+// tokenTransfers → the sell was skipped (dumper paid); an enhanced object read as raw has no
+// meta → the buy vanished from the board. Keyed-by-shape via distinct Maps.
+const BC_TX_CACHE = new Map();   // RAW getTransaction cache (buyers scan)
+const BC_ENH_CACHE = new Map();  // Helius ENHANCED cache (position / sold-check)
 // ── Multi-source buy data (Helius primary → GeckoTerminal → Solana Tracker) ──
 // One source chain shared by the buy COMPETITION and the buy-SPECIAL raffle, so
 // both prefer Helius (paid plan) and only touch ST as a last resort.
 async function buyersInWindowMulti(mint, fromMs, toMs, { maxPages = 60 } = {}) {
   if (BC_TX_CACHE.size > 8000) BC_TX_CACHE.clear();
+  if (BC_ENH_CACHE.size > 8000) BC_ENH_CACHE.clear();
   try {
     const [solUsd, mkt] = await Promise.all([
       getSolUsd().catch(() => 0),
@@ -1239,7 +1247,7 @@ async function buyersInWindowMulti(mint, fromMs, toMs, { maxPages = 60 } = {}) {
 async function walletPositionMulti(wallet, mint, { fromMs = null, toMs = null } = {}) {
   try {
     const h = await getWalletTokenPositionHelius(wallet, mint, {
-      heliusKey: process.env.HELIUS_API_KEY, heliusEnhancedBatched, txCache: BC_TX_CACHE, fromMs, toMs,
+      heliusKey: process.env.HELIUS_API_KEY, heliusEnhancedBatched, txCache: BC_ENH_CACHE, fromMs, toMs,
     });
     if (h) return { sells: h.sells, balance: h.balance, transfersOut: h.transfersOut, source: "helius" };
   } catch (e) { console.warn("[BUY] helius position failed:", e.message); }
@@ -1274,7 +1282,9 @@ async function buyCompSoldSet(c, wallets, toMs) {
     await Promise.all(toCheck.slice(i, i + CONC).map(async (w) => {
       try {
         const pos = await walletPositionMulti(w, c.mint, { fromMs: c.startTs, toMs });
-        const soldInWindow = !!pos && pos.source === "helius" && (pos.sells || 0) > 0;
+        // A dumper who moved the bag OUT (to a runner wallet) is disqualified too, not just
+        // one who market-sold — otherwise "buy big, transfer 99% away, keep dust" wins.
+        const soldInWindow = !!pos && pos.source === "helius" && (((pos.sells || 0) > 0) || ((pos.transfersOut || 0) > 0));
         if (pos) BC_SOLD_CACHE.set(`${c.id}:${w}`, { sold: soldInWindow, ts: Date.now() });
         if (soldInWindow) out.add(w);
       } catch (_) { /* lookup failed — innocent until proven; don't drop */ }
@@ -1290,7 +1300,9 @@ async function buyCompStandings(c) {
   const ex = buyCompExcludeSet(c);
   const minVol = Number(c.minVolSol) || 0;
   let buyers = (raw || []).filter((b) => !ex.has(b.wallet) && (minVol <= 0 || (b.volumeSol || 0) >= minVol));
-  buyers.sort((a, b) => (b[key] || 0) - (a[key] || 0));
+  // Deterministic tie-break (wallet asc) so an equal-metric tie at the prize boundary can't
+  // flip between the public board and the payout-time verify (which sorts the same way).
+  buyers.sort((a, b) => ((b[key] || 0) - (a[key] || 0)) || String(a.wallet).localeCompare(String(b.wallet)));
   // Then drop buy-and-dump bots: any wallet that already sold within the window. Default
   // ON; per-comp opt-out via liveHoldFilter:false. Only the top candidates are checked
   // (enough to fill the displayed board after drops) to bound the per-refresh cost.
@@ -1378,13 +1390,17 @@ async function buyCompVerify(c) {
       const pos = await walletPositionMulti(s.wallet, c.mint, { fromMs: c.startTs });
       if (!pos) { status = "manual"; note = "no position data — verify by hand (Trace)"; }
       else if ((pos.sells || 0) > 0) { status = "dq"; note = `sold on-chain (${pos.sells} sell${pos.sells > 1 ? "s" : ""})`; }
+      else if ((pos.transfersOut || 0) > 0) { status = "manual"; note = `no market sells but moved the bag out (${pos.transfersOut} transfer${pos.transfersOut > 1 ? "s" : ""}) — trace to runner wallet before paying`; }
       else if ((pos.balance || 0) <= 0) { status = "manual"; note = "no sells but holds 0 — transferred out; trace to runner wallet"; }
       else { status = "qualified"; note = `holds ${Math.round(pos.balance).toLocaleString()}, no sells`; }
     } catch (e) { status = "manual"; note = "lookup failed — verify by hand"; }
     results.push({ wallet: s.wallet, value: s[key] || 0, status, note });
   }
-  // Fill the prize places with non-DQ candidates, in rank order (DQs promote the rest up).
-  const eligible = results.filter(r => r.status !== "dq");
+  // Auto-pay ONLY affirmatively-qualified holders. "manual" (transferred-out / no-data /
+  // lookup-failed) wallets are surfaced in verifyResults for the operator to trace + award by
+  // hand — never auto-included in the payout list (that paid launderers who moved the bag out).
+  // A "dq" or "manual" candidate promotes the next qualified wallet into the money.
+  const eligible = results.filter(r => r.status === "qualified");
   c.verified = eligible.slice(0, c.places.length).map((r, i) => ({ rank: i + 1, wallet: r.wallet, amount: c.pctPrize ? +((r.value || 0) * c.places[i].amount / 100).toFixed(4) : c.places[i].amount, ...(c.pctPrize ? { amountNote: `${c.places[i].amount}% of ${(r.value || 0).toFixed(2)} SOL bought (SOL terms — operator converts/pays manually)` } : {}), status: r.status, note: r.note }));
   c.verifyResults = results;
   c.verifiedAt = Date.now();
@@ -6412,7 +6428,7 @@ app.get("/api/buyspecial-trace", async (req, res) => {
   }
   try {
     const fromMs = from * 1000, toMs = to * 1000;
-    const pos = await getWalletTokenPositionHelius(wallet, mint, { heliusKey: process.env.HELIUS_API_KEY, heliusEnhancedBatched, txCache: BC_TX_CACHE, fromMs, toMs });
+    const pos = await getWalletTokenPositionHelius(wallet, mint, { heliusKey: process.env.HELIUS_API_KEY, heliusEnhancedBatched, txCache: BC_ENH_CACHE, fromMs, toMs });
     if (!pos) return res.status(200).json({ success: false, error: "source lookup failed" });
     const dests = pos.transferDests || [];
     if (!dests.length) return res.status(200).json({ success: true, resolved: "none", note: "No outgoing transfers in the window." });
