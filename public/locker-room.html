@@ -566,7 +566,9 @@
       if(TOK.mint!==m) return;                    // mint changed while in flight — drop stale result
       var t=0;
       ((r&&r.value)||[]).forEach(function(a){
-        try{ var ta=a.account.data.parsed.info.tokenAmount; t+=Number(ta.uiAmount||0); if(TOK.decimals==null) TOK.decimals=ta.decimals; }catch(_){}
+        // uiAmountString, NOT uiAmount: the float uiAmount is null for balances too large to
+        // represent exactly, so a whale's holdings would silently read as 0 and fail the gate.
+        try{ var ta=a.account.data.parsed.info.tokenAmount; t+=Number(ta.uiAmountString||ta.uiAmount||0); if(TOK.decimals==null) TOK.decimals=ta.decimals; }catch(_){}
       });
       TOK.balance=t; tokRender(); amtHint(); gate();
     }).catch(function(){ if(TOK.mint===m){ TOK.balance=null; tokRender(); } });
@@ -718,11 +720,15 @@
           body:JSON.stringify({ jsonrpc:'2.0', id:'lock-cs', method:'getSignatureStatuses', params:[[sig],{ searchTransactionHistory:true }] })})
           .then(function(r){return r.json();}).then(function(j){
             var st=j&&j.result&&j.result.value&&j.result.value[0];
-            if(st&&st.err) return reject(new Error('The lock transaction failed on-chain — nothing was locked. Please try again.'));
+            // st.err = provably failed → nothing locked → a naive retry is SAFE.
+            if(st&&st.err){ var ef=new Error('The lock transaction failed on-chain — nothing was locked. Please try again.'); ef.failed=true; return reject(ef); }
             if(st&&(st.confirmationStatus==='confirmed'||st.confirmationStatus==='finalized')) return resolve();
-            if(tries>=30) return reject(new Error('Couldn’t confirm within ~45s. Check Solscan for the signature — if it didn’t land, just try again.'));
+            // Timeout = AMBIGUOUS: the lock may well have landed and just be slow to confirm
+            // (congestion routinely exceeds 45s). A blind one-click retry here would create a
+            // SECOND lock and lock double the tokens — so flag it as unconfirmed, NOT safe-to-retry.
+            if(tries>=30){ var et=new Error('Couldn’t confirm within ~45s — but your lock may still have landed. Check the signature on Solscan BEFORE trying again, or a retry could lock your tokens twice.'); et.timeout=true; return reject(et); }
             setTimeout(poll,1500);
-          }).catch(function(){ if(tries>=30) return reject(new Error('Confirmation check failed — check Solscan for the signature.')); setTimeout(poll,1500); });
+          }).catch(function(e){ if(e&&(e.failed||e.timeout)) return reject(e); if(tries>=30){ var ec=new Error('Confirmation check failed — check the signature on Solscan before retrying.'); ec.timeout=true; return reject(ec); } setTimeout(poll,1500); });
       })();
     });
   }
@@ -779,7 +785,10 @@
           // Record this lock so it appears in the "recently locked" feed instantly + tagged 🐔.
           fetch('/api/lock/record',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sig:sig})})
             .then(function(){ setTimeout(loadRecent, 500); }).catch(function(){});
-        }).catch(function(e){ $('#cMsg').className='msg err'; $('#cMsg').textContent=(e&&e.message)?e.message:'Wallet cancelled or the transaction failed.'; btn.disabled=false; });
+        }).catch(function(e){ $('#cMsg').className='msg err'; $('#cMsg').textContent=(e&&e.message)?e.message:'Wallet cancelled or the transaction failed.';
+          // On an ambiguous confirm-timeout the lock may have landed — DON'T re-enable the button
+          // (a one-click retry would double-lock). Force a conscious reload after verifying on Solscan.
+          if(e&&e.timeout){ btn.textContent='Reload page to retry'; } else { btn.disabled=false; } });
       }).catch(function(){ $('#cMsg').className='msg err'; $('#cMsg').textContent='Network error building the lock.'; btn.disabled=false; });
   });
 
