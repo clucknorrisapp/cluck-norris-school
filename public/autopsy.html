@@ -1117,7 +1117,7 @@ function render(data) {
       }
       if (cs.summary) {
         const calloutCls = (isBuyAndLock || isActiveBB) ? "lifetime-creator-badge good" : "lifetime-creator-badge";
-        bh += `<div class="${calloutCls}" style="margin-top: 10px;">${cs.summary}</div>`;
+        bh += `<div class="${calloutCls}" style="margin-top: 10px;">${esc(cs.summary)}</div>`;
       }
       // Creator wallet profile — established operator vs fresh deployer + funder.
       const cwp = data.creatorWalletProfile;
