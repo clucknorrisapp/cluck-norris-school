@@ -2350,6 +2350,10 @@ app.use((req, res, next) => {
 });
 
 const RL_BUCKETS = new Map(); // "bucket:ip" -> number[] request timestamps (ms)
+// The cleanup sweep must retain entries at least as long as the LONGEST limiter window, or it
+// evicts timestamps a slow-window limiter still needs — which silently collapsed /api/claim's
+// 1-hour cap (windowMs 3.6M) to ~60s because the sweep hardcoded 60000ms. Track the max here.
+let RL_MAX_WINDOW_MS = 60000;
 // Real client IP, Cloudflare-aware. Behind Cloudflare (origin lockdown 403s any non-Cloudflare
 // ingress, so this can't be bypassed) CF-Connecting-IP is the true visitor and CANNOT be forged —
 // Cloudflare overwrites any client-supplied value. Prefer it. Fall back to the LAST x-forwarded-for
@@ -2364,6 +2368,7 @@ function clientIp(req) {
   return String(req.headers["cf-connecting-ip"] || (xff.length ? xff[xff.length - 1] : (req.ip || "")) || "unknown");
 }
 function rateLimit(bucket, { windowMs, max }) {
+  if (windowMs > RL_MAX_WINDOW_MS) RL_MAX_WINDOW_MS = windowMs;   // keep the sweep's retention >= every window
   return (req, res, next) => {
     const ip = clientIp(req);
     const now = Date.now();
@@ -2386,7 +2391,7 @@ function rateLimit(bucket, { windowMs, max }) {
 setInterval(() => {
   const now = Date.now();
   for (const [k, arr] of RL_BUCKETS) {
-    while (arr.length && now - arr[0] > 60000) arr.shift();
+    while (arr.length && now - arr[0] > RL_MAX_WINDOW_MS) arr.shift();
     if (arr.length === 0) RL_BUCKETS.delete(k);
   }
 }, 120000).unref();
@@ -8297,10 +8302,17 @@ app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async
           nft = { ok: false, reason: "daily diploma-mint budget reached — try again tomorrow" };
           console.warn(`[DIPLOMA] daily mint cap ${cap} hit — skipping mint for ${wallet.slice(0, 6)}…`);
         } else {
+          // Reserve the slot BEFORE the await (synchronous get+set is atomic on Node's single
+          // thread) so two concurrent claims can't both read the same pre-increment count, both
+          // pass the cap check, and both mint past the cap (the old code wrote count+1 only AFTER
+          // the await). Release the slot if the mint didn't actually consume budget.
+          kv.set("schoolDiplomaMintDay", today);
+          kv.set("schoolDiplomaMintCount", count + 1);
+          const release = () => kv.set("schoolDiplomaMintCount", Math.max(0, (kv.get("schoolDiplomaMintCount", 0) || 0) - 1));
           try {
             nft = await diplomaNft.mintDiploma(wallet, rec.slug);
-            if (nft && nft.ok && !nft.already) { kv.set("schoolDiplomaMintDay", today); kv.set("schoolDiplomaMintCount", count + 1); }
-          } catch (e) { nft = { ok: false, error: publicErrMsg(e) }; }
+            if (!(nft && nft.ok) || nft.already) release();   // failed or idempotent no-op → give the slot back
+          } catch (e) { release(); nft = { ok: false, error: publicErrMsg(e) }; }
         }
       }
     }
