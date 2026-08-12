@@ -6230,6 +6230,7 @@ app.post("/api/buyspecial/draw", async (req, res) => {
         const pos = await walletPositionMulti(b.wallet, mint, { fromMs: fromTs });
         if (!pos) { status = "manual"; note = "no position data — verify by hand"; }
         else if ((pos.sells || 0) > 0) { status = "dq"; note = `sold (${pos.sells} sell${pos.sells > 1 ? "s" : ""}) — did not hold`; }
+        else if ((pos.transfersOut || 0) > 0) { status = "manual"; note = `moved the bag out (${pos.transfersOut} transfer${pos.transfersOut > 1 ? "s" : ""}) — verify by hand before paying`; }
         else if ((pos.balance || 0) <= 0) { status = "manual"; note = "holds 0, no sells — transferred out; verify by hand"; }
         else { status = "eligible"; note = `holds ${Math.round(pos.balance).toLocaleString()}, ${b.buyCount} buy${b.buyCount > 1 ? "s" : ""}, no sells`; }
       } catch (e) { status = "manual"; note = "lookup failed — verify by hand"; }
@@ -6364,7 +6365,9 @@ app.get("/api/buyspecial-holdcheck", async (req, res) => {
         try {
           const pos = await walletPositionMulti(w, mint, { fromMs, toMs });
           if (!pos) { results.push({ wallet: w, balance: null, sells: null, soldInWindow: false, source: "none" }); return; }
-          const soldInWindow = pos.source === "helius" && (pos.sells || 0) > 0;
+          // Transfer-out = did-not-hold, same as a sell (consistent with buyCompSoldSet) — a
+          // dumper who moved the bag to a runner wallet must show as sold on the payout list.
+          const soldInWindow = pos.source === "helius" && (((pos.sells || 0) > 0) || ((pos.transfersOut || 0) > 0));
           results.push({ wallet: w, balance: pos.balance, sells: pos.sells || 0, transfersOut: pos.transfersOut || 0, soldInWindow, source: pos.source });
         } catch (e) { results.push({ wallet: w, balance: null, sells: null, soldInWindow: false, source: "error" }); }
       }));
@@ -12527,6 +12530,7 @@ async function contentEngineRun({ send = false } = {}) {
     scanned++;
     let r = null; try { r = await runAutopsy(t.tokenMint, {}); } catch (_) {}
     if (!r || r.status !== 200 || !r.body || !r.body.success) continue;
+    if (r.body.verdict && r.body.verdict.degraded) continue;   // don't cache (or act on) an indexer-outage UNCLEAR verdict
     AUTOPSY_CACHE.set(t.tokenMint, { body: r.body, ts: Date.now() });   // warm the card cache
     const b = r.body, f = b.facts || {}, sev = b.verdict && b.verdict.severity;
     if (sev === "DEAD" || sev === "DYING") continue;  // do-NOT-amplify

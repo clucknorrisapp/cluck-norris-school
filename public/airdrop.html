@@ -1238,7 +1238,7 @@ function addResult(addr, amount, status, sig, errMsg) {
   let statusHtml = '';
   if (status === 'sent') {
     statusHtml = `<span class="status-sent result-status">✅ SENT</span>
-      ${sig ? `<a class="tx-link-small" href="https://solscan.io/tx/${sig}" target="_blank">↗ Solscan</a>` : ''}`;
+      ${sig ? `<a class="tx-link-small" href="https://solscan.io/tx/${esc(sig)}" target="_blank">↗ Solscan</a>` : ''}`;
   } else if (status === 'unconfirmed') {
     statusHtml = `<span class="status-fail result-status" style="color:#e0a800">⏳ UNCONFIRMED — check Solscan</span>
       ${sig ? `<a class="tx-link-small" href="https://solscan.io/tx/${esc(sig)}" target="_blank">↗ Solscan</a>` : ''}`;
