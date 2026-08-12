@@ -3,7 +3,17 @@ const path = require("path");
 const { join } = path;
 const fs = require("fs");
 const { createCanvas, GlobalFonts, loadImage } = require("@napi-rs/canvas");
-const { createSign, createHash, createHmac, randomBytes, createPublicKey, verify: ed25519Verify } = require("crypto");
+const { createSign, createHash, createHmac, randomBytes, createPublicKey, verify: ed25519Verify, timingSafeEqual } = require("crypto");
+// Constant-time secret compare. A plain === leaks the length of the matching
+// prefix through its early-exit timing, which over many probes recovers a key.
+// Hash both sides to a fixed 32 bytes first so timingSafeEqual never sees a
+// length mismatch (it throws on unequal lengths, which would itself leak length).
+function secretEqual(a, b) {
+  if (typeof a !== "string" || typeof b !== "string" || !a || !b) return false;
+  const ha = createHash("sha256").update(a).digest();
+  const hb = createHash("sha256").update(b).digest();
+  return timingSafeEqual(ha, hb);
+}
 const hatchery = require("./hatchery");
 const securityCoop = require("./securitycoop");
 const whirlpoolMM = require("./whirlpool-mm");
@@ -45,7 +55,7 @@ try { CURRICULUM = require("./data/curriculum.json"); } catch (_) { console.warn
 function adminAuthOK(req) {
   const KEY = process.env.PREMIUM_ACCESS_KEY;
   const provided = req.headers["x-premium-key"] || req.query.key;
-  return !!KEY && provided === KEY;
+  return secretEqual(String(provided || ""), String(KEY || ""));
 }
 
 // Public-facing error text — internal errors (RPC/Helius/fetch) can carry URLs
@@ -5461,7 +5471,7 @@ app.get("/api/bags-radar-test", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const KEY = process.env.PREMIUM_ACCESS_KEY;
   const provided = req.query.key || req.headers["x-premium-key"];
-  if (!KEY || provided !== KEY) return res.status(403).json({ error: "forbidden" });
+  if (!secretEqual(String(provided || ""), String(KEY || ""))) return res.status(403).json({ error: "forbidden" });
   try {
     const text = await buildBagsRadarText();
     if (req.query.post === "1") await notifyBagsLaunches();
@@ -5474,7 +5484,7 @@ app.get("/api/market-check-test", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const KEY = process.env.PREMIUM_ACCESS_KEY;
   const provided = req.query.key || req.headers["x-premium-key"];
-  if (!KEY || provided !== KEY) return res.status(403).json({ error: "forbidden" });
+  if (!secretEqual(String(provided || ""), String(KEY || ""))) return res.status(403).json({ error: "forbidden" });
   try {
     const text = await buildMarketCheckText();
     if (req.query.post === "1") await notifyMarketCheck();
@@ -5489,7 +5499,7 @@ app.get("/api/recap-test", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const KEY = process.env.PREMIUM_ACCESS_KEY;
   const provided = req.query.key || req.headers["x-premium-key"];
-  if (!KEY || provided !== KEY) return res.status(404).json({ error: "not_found" });
+  if (!secretEqual(String(provided || ""), String(KEY || ""))) return res.status(404).json({ error: "not_found" });
   try {
     const snapshot = recap.snapshot();
     const text = buildRecapText();
@@ -5504,7 +5514,7 @@ app.get("/api/lock-report-test", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const KEY = process.env.PREMIUM_ACCESS_KEY;
   const provided = req.query.key || req.headers["x-premium-key"];
-  if (!KEY || provided !== KEY) return res.status(404).json({ error: "not_found" });
+  if (!secretEqual(String(provided || ""), String(KEY || ""))) return res.status(404).json({ error: "not_found" });
   try {
     const note = typeof req.query.note === "string" ? req.query.note.slice(0, 280) : "";
     const r = await notifyLockReport({ dryRun: req.query.post !== "1", note });
@@ -5600,7 +5610,7 @@ app.get("/api/tg-test", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const KEY = process.env.PREMIUM_ACCESS_KEY;
   const provided = req.query.key || req.headers["x-premium-key"];
-  if (!KEY || provided !== KEY) return res.status(404).json({ error: "not_found" });
+  if (!secretEqual(String(provided || ""), String(KEY || ""))) return res.status(404).json({ error: "not_found" });
   if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHAT_ID) {
     return res.status(200).json({ success: false, error: "Telegram not configured (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID unset on this server)" });
   }
@@ -5782,7 +5792,7 @@ app.get("/api/tg-webhook-info", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const KEY = process.env.PREMIUM_ACCESS_KEY;
   const provided = req.query.key || req.headers["x-premium-key"];
-  if (!KEY || provided !== KEY) return res.status(404).json({ error: "not_found" });
+  if (!secretEqual(String(provided || ""), String(KEY || ""))) return res.status(404).json({ error: "not_found" });
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token || !TG_WEBHOOK_SECRET) return res.status(200).json({ ok: false, error: "Telegram not configured (TELEGRAM_BOT_TOKEN unset)" });
   const expectedUrl = `${TG_PUBLIC_BASE}/api/tg/${TG_WEBHOOK_SECRET}`;
@@ -5825,8 +5835,8 @@ app.get("/api/tg-webhook-info", async (req, res) => {
 // this route must live below `const app = express()`.)
 app.post("/api/tg/:secret", (req, res) => {
   if (!TG_WEBHOOK_SECRET
-      || req.params.secret !== TG_WEBHOOK_SECRET
-      || req.headers["x-telegram-bot-api-secret-token"] !== TG_WEBHOOK_SECRET) {
+      || !secretEqual(String(req.params.secret || ""), TG_WEBHOOK_SECRET)
+      || !secretEqual(String(req.headers["x-telegram-bot-api-secret-token"] || ""), TG_WEBHOOK_SECRET)) {
     return res.status(404).json({ error: "not_found" });
   }
   res.status(200).json({ ok: true });
@@ -5844,7 +5854,7 @@ const buyCompAdminOK = (req) => {
   const supplied = req.query.key || (req.body && req.body.key) || req.headers["x-premium-key"];
   if (!supplied) return false;
   const scoped = process.env.BUYCOMP_KEY, master = process.env.PREMIUM_ACCESS_KEY;
-  return (!!scoped && supplied === scoped) || (!!master && supplied === master);
+  return secretEqual(String(supplied), String(scoped || "")) || secretEqual(String(supplied), String(master || ""));
 };
 app.post("/api/buycomp/start", (req, res) => {
   if (!buyCompAdminOK(req)) return res.status(404).json({ error: "not_found" });
@@ -6156,7 +6166,10 @@ app.post("/api/buycomp/verify", async (req, res) => {
 app.get("/api/buycomp/payout", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const c = buyCompsAll()[String(req.query.id || "")];
-  if (!c || !c.payoutToken || req.query.t !== c.payoutToken) return res.status(404).json({ error: "not_found" });
+  // Prefer the x-payout-token HEADER (query strings leak in logs/history); ?t= stays
+  // as a fallback for the shareable-link flow. Constant-time compare either way.
+  const tok = req.headers["x-payout-token"] || req.query.t;
+  if (!c || !c.payoutToken || !secretEqual(String(tok || ""), String(c.payoutToken))) return res.status(404).json({ error: "not_found" });
   const recipients = (c.verified || []).map(v => `${v.wallet}, ${v.amount}`).join("\n");
   return res.status(200).json({ ok: true, mint: buyCompPrizeMint(c), tokenName: c.ticker, source: "Cluck Norris Buy Comp", recipients });
 });
@@ -6300,7 +6313,8 @@ app.get("/api/buyspecial/draw/public", (req, res) => {
 app.get("/api/buyspecial/draw/payout", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const d = bsDrawsAll()[String(req.query.id || "")];
-  if (!d || !d.payoutToken || req.query.t !== d.payoutToken) return res.status(404).json({ error: "not_found" });
+  const tok = req.headers["x-payout-token"] || req.query.t;   // header preferred; ?t= fallback (constant-time)
+  if (!d || !d.payoutToken || !secretEqual(String(tok || ""), String(d.payoutToken))) return res.status(404).json({ error: "not_found" });
   const recipients = d.winners.map(w => `${w.wallet}, ${w.prize}`).join("\n");
   return res.status(200).json({ ok: true, mint: d.mint, tokenName: "CLKN", source: "Cluck Norris Buy Special draw", recipients });
 });
@@ -6849,7 +6863,7 @@ async function pollRoseBuys() {
 app.get("/api/rose-buybot", async (req, res) => {
   const KEY = process.env.PREMIUM_ACCESS_KEY;
   const provided = req.query.key || req.headers["x-premium-key"];
-  if (!KEY || provided !== KEY) return res.status(404).json({ ok: false, error: "not found" });
+  if (!secretEqual(String(provided || ""), String(KEY || ""))) return res.status(404).json({ ok: false, error: "not found" });
   try {
     if (req.query.arm === "1") kv.set("roseBuyArmed", true);
     if (req.query.disarm === "1") kv.set("roseBuyArmed", false);
