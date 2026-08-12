@@ -54,7 +54,7 @@ function cfg() {
 const fsv = require('fs'), pathv = require('path');
 function vipListPath() { return pathv.join(process.env.DATA_DIR || '/data', 'nq-vip.json'); }
 function vipList() { try { const a = JSON.parse(fsv.readFileSync(vipListPath(), 'utf8')); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
-function vipListWrite(a) { fsv.writeFileSync(vipListPath(), JSON.stringify(a)); }
+function vipListWrite(a) { require("../lib/atomic-write").atomicWriteFileSync(vipListPath(), JSON.stringify(a)); }
 function isVip(owner, balances) {
   const c = cfg(), b = balances || {};
   if (c.vipNormie > 0 && Number(b.normie || 0) >= c.vipNormie) return true;

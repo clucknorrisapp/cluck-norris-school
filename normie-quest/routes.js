@@ -226,7 +226,7 @@ router.post('/api/nq/wallet/verify', async (req, res) => {
         let m = {}; try { m = JSON.parse(fs.readFileSync(f, 'utf8')) || {}; } catch (e) {}
         const k = String(b.walletName).replace(/[^\w .-]/g, '').slice(0, 24) || 'unknown';
         m[k] = (m[k] || 0) + 1;
-        fs.writeFileSync(f, JSON.stringify(m));
+        require("../lib/atomic-write").atomicWriteFileSync(f, JSON.stringify(m));
       } catch (e) { /* counting is best-effort */ }
     }
     res.json(out);
@@ -280,7 +280,7 @@ router.get('/normie-quest-x7/lounge-admin', (req, res) => {
     const rem = String(req.query.remove || '');
     if (title && body) posts.unshift({ id: Date.now().toString(36), ts: Date.now(), title, body, tag });
     if (rem) posts = posts.filter((x) => x.id !== rem);
-    fs.writeFileSync(loungePath(), JSON.stringify(posts));
+    require("../lib/atomic-write").atomicWriteFileSync(loungePath(), JSON.stringify(posts));
     res.json({ ok: true, count: posts.length, posts });
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });

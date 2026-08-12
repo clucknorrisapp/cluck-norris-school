@@ -140,7 +140,7 @@ function consume(sig) {
   set.add(sig);
   try {
     fs.mkdirSync(path.dirname(CONSUMED_FILE), { recursive: true });
-    fs.writeFileSync(CONSUMED_FILE, JSON.stringify([...set]));
+    require("../lib/atomic-write").atomicWriteFileSync(CONSUMED_FILE, JSON.stringify([...set]));
   } catch (e) {
     // Persist failed → fail closed, but ALSO roll back the in-memory add: leaving the sig in
     // the set made every retry of a legitimate burn read as "replay" until process restart.
@@ -189,7 +189,7 @@ function sessionMap() {
 function persistSessions() {
   try {
     fs.mkdirSync(path.dirname(SESSIONS_FILE), { recursive: true });
-    fs.writeFileSync(SESSIONS_FILE, JSON.stringify([...sessionMap().values()]));
+    require("../lib/atomic-write").atomicWriteFileSync(SESSIONS_FILE, JSON.stringify([...sessionMap().values()]));
   } catch (e) {
     console.error('[nq-shop] could not persist sessions —', e.message,
       '— a restart now would strand a paid burn');

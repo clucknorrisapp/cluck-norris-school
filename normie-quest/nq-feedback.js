@@ -16,7 +16,7 @@ function load() {
   catch (e) { return []; }   // first run: no file yet
 }
 function save(arr) {
-  try { fs.mkdirSync(path.dirname(FILE), { recursive: true }); fs.writeFileSync(FILE, JSON.stringify(arr)); return true; }
+  try { fs.mkdirSync(path.dirname(FILE), { recursive: true }); require("../lib/atomic-write").atomicWriteFileSync(FILE, JSON.stringify(arr)); return true; }
   catch (e) { return false; }
 }
 

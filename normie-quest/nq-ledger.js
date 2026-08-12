@@ -21,7 +21,7 @@ function load() {
   try { const o = JSON.parse(fs.readFileSync(storePath(), 'utf8')); return o && typeof o === 'object' ? o : {}; }
   catch (e) { return {}; }
 }
-function save(o) { try { fs.writeFileSync(storePath(), JSON.stringify(o)); return true; } catch (e) { return false; } }
+function save(o) { try { require("../lib/atomic-write").atomicWriteFileSync(storePath(), JSON.stringify(o)); return true; } catch (e) { return false; } }
 function utcDay(ts) { return new Date(ts == null ? Date.now() : ts).toISOString().slice(0, 10); }
 
 const HISTORY_MAX = 200;          // per-wallet: keep the most recent N events (bounds file growth)
