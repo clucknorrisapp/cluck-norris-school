@@ -88,15 +88,32 @@ function credit(wallet, opts) {
 }
 
 // Deduct points (spending on power-ups / draw entries). Balance-checked. reason is a label.
-// Returns { ok, spent, balance } or { ok:false, reason:'insufficient', balance }.
-function spend(wallet, amount, reason) {
+// Optional eventId makes the spend IDEMPOTENT: a double-tap or client retry carrying the same
+// eventId deducts once, not twice (same guarantee credit() already gives). Without an eventId
+// it stays non-idempotent for legacy callers.
+// Returns { ok, spent, balance } or { ok:false, reason:'insufficient'|'bad_args', balance }.
+function spend(wallet, amount, reason, eventId) {
   amount = Math.floor(Number(amount) || 0);
   if (!wallet || amount <= 0) return { ok: false, reason: 'bad_args' };
   const s = load();
   const r = s[wallet];
-  if (!r || r.balance < amount) return { ok: false, reason: 'insufficient', balance: r ? r.balance : 0 };
+  if (!r) return { ok: false, reason: 'insufficient', balance: 0 };
+  // Idempotency: if this eventId already settled, replay the prior outcome without re-deducting.
+  if (eventId) {
+    if (!r.spentEvents) r.spentEvents = {};
+    if (Object.prototype.hasOwnProperty.call(r.spentEvents, eventId)) {
+      return { ok: true, spent: 0, already: true, balance: r.balance };
+    }
+  }
+  if (r.balance < amount) return { ok: false, reason: 'insufficient', balance: r.balance };
   r.balance -= amount; r.spentTotal = (r.spentTotal || 0) + amount;
-  r.history.push({ id: 'spend:' + String(reason || 'item') + ':' + Date.now(), kind: 'spend', amount: -amount, ts: Date.now() });
+  if (eventId) {
+    r.spentEvents[eventId] = amount;
+    // Bound the map the same way `claimed` is bounded (insertion-ordered, drop oldest).
+    const ekeys = Object.keys(r.spentEvents);
+    if (ekeys.length > CLAIMED_MAX) { for (const k of ekeys.slice(0, ekeys.length - CLAIMED_MAX)) delete r.spentEvents[k]; }
+  }
+  r.history.push({ id: eventId || ('spend:' + String(reason || 'item') + ':' + Date.now()), kind: 'spend', amount: -amount, ts: Date.now() });
   trim(r);
   save(s);
   return { ok: true, spent: amount, balance: r.balance };
