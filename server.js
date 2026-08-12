@@ -2430,7 +2430,10 @@ app.use("/api/classroom", rateLimit("class", { windowMs: 60000, max: 30 })); // 
 
 // The Hatchery (token creator) — mounted before the global JSON parser so its
 // own larger body limit handles the base64 logo upload instead of the 100kb default.
-app.use("/api/hatchery", hatchery.router);
+// Dedicated tight limiter: /api/hatchery/build does two Arweave uploads on the project's paid
+// Turbo key + RPC reads BEFORE any payment exists, so an unthrottled caller could drain credits
+// (flagged in hatchery.js). Cap it well below the global /api bucket.
+app.use("/api/hatchery", rateLimit("hatchery", { windowMs: 60000, max: 8 }), hatchery.router);
 app.use("/api/security-coop", securityCoop.router);
 // Liquidity Engine — Orca Whirlpools market maker (non-custodial; builds unsigned txs).
 app.use("/api/whirlpool", whirlpoolMM.router);
