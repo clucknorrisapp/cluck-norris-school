@@ -600,6 +600,10 @@ const TX_WEIGHT_BUDGET = 16;
 let walletPubkey = null;
 let currentMint = 'DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS';
 let currentDecimals = 9;
+// Which token program owns currentMint (classic SPL vs Token-2022). Resolved from the
+// mint's token-account owner on load, re-confirmed authoritatively at send time. Classic
+// default keeps CLKN and every classic token on the exact same code path as before.
+let currentTokenProgram = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
 let currentMode = 'manual';
 let recipients = []; // [{addr, amount, skip, skipReason}]
 
@@ -731,6 +735,7 @@ async function fetchTokenBalance() {
   const mint = currentMint;
   const el = document.getElementById('tokenBalance');
   el.innerHTML = 'Loading balance…';
+  currentTokenProgram = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';   // reset; re-detect below for this mint
   // Display name: a preset's name, else resolve the token's symbol/name on-chain — so a CUSTOM
   // mint shows its REAL name + logo, not the generic "tokens". Balance + metadata fetch in parallel.
   let label = PRESETS[mint]?.name || '';
@@ -741,6 +746,10 @@ async function fetchTokenBalance() {
     ]);
     if (mint !== currentMint) return;                 // user switched token mid-lookup
     if (!label && meta) label = meta.symbol || meta.name || '';
+    // The mint's token account is owned by its token program — detect Token-2022 here so the
+    // preview's ATA/needsAta estimate derives the correct (program-seeded) addresses.
+    const acctOwner = accounts?.value?.[0]?.account?.owner;
+    if (acctOwner === 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb') currentTokenProgram = acctOwner;
     let bal = 0;
     for (const acc of (accounts?.value || [])) { bal += acc.account.data.parsed.info.tokenAmount.uiAmount || 0; }
     const name = label ? esc(label) : 'tokens';       // name/symbol are attacker-controlled → esc
@@ -914,7 +923,7 @@ async function parseRecipients() {
 // One getMultipleAccounts call per 100 derived ATA addresses. Tells us the rent cost
 // upfront so the sender isn't surprised, and lets us split batches around tx-size limits.
 async function checkRecipientAtas(arr, mint) {
-  return CluckAirdrop.checkRecipientAtas(arr, mint, rpc);
+  return CluckAirdrop.checkRecipientAtas(arr, mint, rpc, currentTokenProgram);
 }
 
 // Sender's SOL balance — needed to flag "you can't afford this airdrop" before they click send.
@@ -1089,6 +1098,11 @@ async function sendAirdrop() {
 
     const senderTokenAccount = senderAccounts?.value?.[0]?.pubkey;
     if (!senderTokenAccount) throw new Error(`No ${currentMint} token account found in your wallet`);
+    // Authoritative token-program detection: the sender's token account IS owned by the
+    // mint's token program. Token-2022 needs its program id in the ATA seed and every ix.
+    currentTokenProgram = (senderAccounts?.value?.[0]?.account?.owner === 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb')
+      ? 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb'
+      : 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
 
     // Authoritative decimals straight from the on-chain account. The preset list
     // assumes 9; a CUSTOM token could be anything (e.g. 6). transferChecked REQUIRES
@@ -1225,11 +1239,11 @@ async function sendAirdrop() {
 // ── Transaction Builder ──────────────────────────────────────────────────────
 // Uses Solana web3.js loaded from CDN
 async function buildTransaction(instructions, feePayer, blockhash, mint, decimals) {
-  return CluckAirdrop.buildTransaction({ instructions, feePayer, blockhash, mint, decimals });
+  return CluckAirdrop.buildTransaction({ instructions, feePayer, blockhash, mint, decimals, tokenProgram: currentTokenProgram });
 }
 
 async function getAssociatedTokenAddress(mint, owner) {
-  return CluckAirdrop.getAssociatedTokenAddress(mint, owner);
+  return CluckAirdrop.getAssociatedTokenAddress(mint, owner, currentTokenProgram);
 }
 
 async function confirmTransaction(signature, lastValidBlockHeight) {

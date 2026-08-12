@@ -15,18 +15,23 @@
 
 // SPL Token program IDs and helpers (minimal implementation)
 // Using Helius RPC for ATA derivation instead of full SPL library
+const TOKEN_CLASSIC = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
+const TOKEN_2022 = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
+
 const splToken = {
-  TOKEN_PROGRAM_ID: { toString: () => 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' },
+  TOKEN_PROGRAM_ID: { toString: () => TOKEN_CLASSIC },
+  TOKEN_2022_PROGRAM_ID: { toString: () => TOKEN_2022 },
   ASSOCIATED_TOKEN_PROGRAM_ID: { toString: () => 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL' },
 
-  getAssociatedTokenAddressSync(mint, owner) {
-    // Derive ATA address deterministically
-    // This will be computed properly via the PublicKey.findProgramAddressSync
+  // The token program is a SEED of the ATA PDA, so a Token-2022 mint derives a
+  // DIFFERENT ATA than a classic mint. tokenProgram defaults to classic, so every
+  // existing (classic) call site is byte-for-byte unchanged.
+  getAssociatedTokenAddressSync(mint, owner, tokenProgram) {
     const { PublicKey } = solanaWeb3;
     const [address] = PublicKey.findProgramAddressSync(
       [
         owner.toBuffer(),
-        new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA').toBuffer(),
+        new PublicKey(tokenProgram || TOKEN_CLASSIC).toBuffer(),
         mint.toBuffer(),
       ],
       new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL')
@@ -34,9 +39,9 @@ const splToken = {
     return address;
   },
 
-  createTransferInstruction(source, dest, owner, amount) {
+  createTransferInstruction(source, dest, owner, amount, tokenProgram) {
     const { PublicKey, TransactionInstruction } = solanaWeb3;
-    const TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+    const TOKEN_PROGRAM = new PublicKey(tokenProgram || TOKEN_CLASSIC);
     // Build the 9-byte instruction data with Uint8Array — the Node `Buffer`
     // global does not exist in browsers (Safari/iOS throws "Can't find
     // variable: Buffer"). Byte 0 = Transfer opcode (3), bytes 1-8 = amount u64 LE.
@@ -54,10 +59,10 @@ const splToken = {
     });
   },
 
-  createAssociatedTokenAccountInstruction(payer, ata, owner, mint) {
+  createAssociatedTokenAccountInstruction(payer, ata, owner, mint, tokenProgram) {
     const { PublicKey, TransactionInstruction } = solanaWeb3;
     const ATA_PROGRAM = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
-    const TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+    const TOKEN_PROGRAM = new PublicKey(tokenProgram || TOKEN_CLASSIC);
     const SYSVAR_RENT = new PublicKey('SysvarRent111111111111111111111111111111111');
     return new TransactionInstruction({
       keys: [
@@ -77,10 +82,10 @@ const splToken = {
   // CreateIdempotent (ATA program ix #1) — identical to Create but a NO-OP if the
   // account already exists, instead of failing the whole batch. Guards the race
   // where a recipient's ATA appears between our pre-flight check and the send.
-  createAssociatedTokenAccountIdempotentInstruction(payer, ata, owner, mint) {
+  createAssociatedTokenAccountIdempotentInstruction(payer, ata, owner, mint, tokenProgram) {
     const { PublicKey, TransactionInstruction } = solanaWeb3;
     const ATA_PROGRAM = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
-    const TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+    const TOKEN_PROGRAM = new PublicKey(tokenProgram || TOKEN_CLASSIC);
     const SYSVAR_RENT = new PublicKey('SysvarRent111111111111111111111111111111111');
     return new TransactionInstruction({
       keys: [
@@ -100,9 +105,9 @@ const splToken = {
   // TransferChecked (token program ix #12) — carries the mint + decimals so a wallet
   // simulator (Phantom Lighthouse / Blockaid) can verify EXACTLY what's moving ("X CLKN")
   // rather than inferring it, which makes the tx far less likely to be scored suspicious.
-  createTransferCheckedInstruction(source, mint, dest, owner, amount, decimals) {
+  createTransferCheckedInstruction(source, mint, dest, owner, amount, decimals, tokenProgram) {
     const { PublicKey, TransactionInstruction } = solanaWeb3;
-    const TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+    const TOKEN_PROGRAM = new PublicKey(tokenProgram || TOKEN_CLASSIC);
     // byte 0 = TransferChecked opcode (12), bytes 1-8 = amount u64 LE, byte 9 = decimals u8.
     const data = new Uint8Array(10);
     data[0] = 12;
@@ -200,7 +205,19 @@ var CluckAirdrop = {
   // pays rent for those). Marks r.ataAddress / r.needsAta / r.invalidAddress in place.
   // No-op for native SOL. On RPC failure it assumes the worst case so the cost
   // estimate never reads low.
-  checkRecipientAtas: async function (arr, mint, rpc) {
+  // Resolve which token program owns a mint (classic SPL vs Token-2022). The mint
+  // ACCOUNT's owner IS the token program. Defaults to classic on any RPC failure so
+  // the common path never breaks on a transient error. Returns a program-id string.
+  resolveTokenProgram: async function (mint, rpc) {
+    try {
+      var res = await rpc("getAccountInfo", [mint, { encoding: "base64" }]);
+      var owner = res && res.value && res.value.owner;
+      if (owner === TOKEN_2022) return TOKEN_2022;
+    } catch (e) {}
+    return TOKEN_CLASSIC;
+  },
+
+  checkRecipientAtas: async function (arr, mint, rpc, tokenProgram) {
     if (!arr.length || !mint) return;
     if (typeof solanaWeb3 === "undefined" || typeof splToken === "undefined") return;
     var mintPk;
@@ -209,7 +226,7 @@ var CluckAirdrop = {
     for (var i = 0; i < arr.length; i++) {
       var r = arr[i];
       try {
-        r.ataAddress = splToken.getAssociatedTokenAddressSync(mintPk, new solanaWeb3.PublicKey(r.addr)).toString();
+        r.ataAddress = splToken.getAssociatedTokenAddressSync(mintPk, new solanaWeb3.PublicKey(r.addr), tokenProgram).toString();
         r.invalidAddress = false;
         entries.push(r);
       } catch (e) {
@@ -230,9 +247,9 @@ var CluckAirdrop = {
     }
   },
 
-  getAssociatedTokenAddress: function (mint, owner) {
+  getAssociatedTokenAddress: function (mint, owner, tokenProgram) {
     return splToken.getAssociatedTokenAddressSync(
-      new solanaWeb3.PublicKey(mint), new solanaWeb3.PublicKey(owner)).toString();
+      new solanaWeb3.PublicKey(mint), new solanaWeb3.PublicKey(owner), tokenProgram).toString();
   },
 
   // Build one signable transaction. `native` switches the whole batch to
@@ -248,17 +265,18 @@ var CluckAirdrop = {
     // scoring an unlabeled multi-recipient transfer as a possible drain.
     tx.add(splToken.createMemoInstruction(opts.memo || "clucknorris.app airdrop", [feePayerPk]));
     var mintPk = opts.native ? null : new PublicKey(opts.mint);
+    var tokProg = opts.tokenProgram || TOKEN_CLASSIC;   // classic unless the mint is Token-2022
     for (var i = 0; i < opts.instructions.length; i++) {
       var ix = opts.instructions[i];
       if (ix.type === "createATA") {
         tx.add(splToken.createAssociatedTokenAccountIdempotentInstruction(
-          feePayerPk, new PublicKey(ix.ata), new PublicKey(ix.owner), mintPk));
+          feePayerPk, new PublicKey(ix.ata), new PublicKey(ix.owner), mintPk, tokProg));
       } else if (ix.type === "solTransfer") {
         tx.add(splToken.createSolTransferInstruction(
           feePayerPk, new PublicKey(ix.to), Number(ix.amount)));
       } else if (ix.type === "transfer") {
         tx.add(splToken.createTransferCheckedInstruction(
-          new PublicKey(ix.from), mintPk, new PublicKey(ix.to), feePayerPk, ix.amount, opts.decimals));
+          new PublicKey(ix.from), mintPk, new PublicKey(ix.to), feePayerPk, ix.amount, opts.decimals, tokProg));
       }
     }
     return tx;
@@ -290,21 +308,25 @@ var CluckAirdrop = {
     var report = opts.onResult || function () {};
     var decimals = native ? NATIVE_DECIMALS : opts.decimals;
     var senderTokenAccount = null;
+    var tokenProgram = TOKEN_CLASSIC;
 
     if (!native) {
       progress("Reading your token account…", 1);
+      // Which token program owns this mint? The sender's own token account is owned by
+      // it, so resolve from there (one fewer RPC than a separate getAccountInfo).
       var accts = await rpc("getTokenAccountsByOwner",
         [opts.walletPubkey, { mint: opts.mint }, { encoding: "jsonParsed" }]);
       var first = accts && accts.value && accts.value[0];
       if (!first) throw new Error("No token account for " + opts.mint + " in your wallet");
       senderTokenAccount = first.pubkey;
+      if (first.account && first.account.owner === TOKEN_2022) tokenProgram = TOKEN_2022;
       // Authoritative decimals from chain — transferChecked REQUIRES the exact value,
       // and a custom token can be anything. Never guess for the actual transfer.
       var onchain = first.account && first.account.data && first.account.data.parsed
         && first.account.data.parsed.info.tokenAmount.decimals;
       if (Number.isInteger(onchain)) decimals = onchain;
       progress("Checking recipient token accounts…", 2);
-      await this.checkRecipientAtas(active, opts.mint, rpc);
+      await this.checkRecipientAtas(active, opts.mint, rpc, tokenProgram);
     } else {
       active.forEach(function (r) { r.needsAta = false; });
     }
@@ -324,13 +346,13 @@ var CluckAirdrop = {
           var r = batch[ri];
           var raw = this.toBaseUnits(r.amount, decimals);
           if (native) { instructions.push({ type: "solTransfer", to: r.addr, amount: raw }); continue; }
-          var dest = r.ataAddress || this.getAssociatedTokenAddress(opts.mint, r.addr);
+          var dest = r.ataAddress || this.getAssociatedTokenAddress(opts.mint, r.addr, tokenProgram);
           if (r.needsAta) instructions.push({ type: "createATA", mint: opts.mint, owner: r.addr, ata: dest });
           instructions.push({ type: "transfer", from: senderTokenAccount, to: dest, amount: raw });
         }
         var tx = this.buildTransaction({
           instructions: instructions, feePayer: opts.walletPubkey, blockhash: blockhash,
-          mint: opts.mint, decimals: decimals, native: native, memo: opts.memo });
+          mint: opts.mint, decimals: decimals, native: native, memo: opts.memo, tokenProgram: tokenProgram });
         var res = await opts.provider.signAndSendTransaction(tx);
         var sig = res && res.signature;
         await this.confirmTransaction(sig, rpc);
