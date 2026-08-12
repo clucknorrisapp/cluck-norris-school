@@ -1155,13 +1155,27 @@ async function sendAirdrop() {
         const tx = await buildTransaction(transferInstructions, walletPubkey, blockhash, currentMint, currentDecimals);
         const { signature } = await provider.signAndSendTransaction(tx);
 
-        // Wait for confirmation
-        await confirmTransaction(signature, lastValidBlockHeight);
+        // We have a signature — the batch was SUBMITTED. Mark these recipients handled NOW,
+        // before waiting for confirmation, so a later "retry" (which re-sends every skip=false
+        // row) can never re-send — and re-pay — a batch that already landed. This is the
+        // double-send fix: successfully-sent rows were previously left skip=false.
+        for (const recipient of batch) { recipient.skip = true; recipient.skipReason = 'Submitted'; }
 
-        // Mark batch as sent
+        // Confirmation is best-effort: confirmTransaction returns false on a ~30s timeout
+        // (dropped OR still-pending), which is NOT the same as "sent". Report it honestly.
+        let confirmed = false;
+        try { confirmed = await confirmTransaction(signature, lastValidBlockHeight); } catch(_) { confirmed = false; }
         for (const recipient of batch) {
-          sent++;
-          addResult(recipient.addr, recipient.amount, 'sent', signature);
+          if (confirmed) {
+            sent++;
+            recipient.skipReason = 'Sent';
+            addResult(recipient.addr, recipient.amount, 'sent', signature);
+          } else {
+            // Submitted but unconfirmed — may well have landed. Keep it marked handled (do NOT
+            // auto-retry → no double-pay) and flag it so the operator verifies on Solscan.
+            recipient.skipReason = 'Submitted (unconfirmed — verify on Solscan before resending)';
+            addResult(recipient.addr, recipient.amount, 'unconfirmed', signature);
+          }
         }
 
       } catch(batchErr) {
@@ -1225,9 +1239,12 @@ function addResult(addr, amount, status, sig, errMsg) {
   if (status === 'sent') {
     statusHtml = `<span class="status-sent result-status">✅ SENT</span>
       ${sig ? `<a class="tx-link-small" href="https://solscan.io/tx/${sig}" target="_blank">↗ Solscan</a>` : ''}`;
+  } else if (status === 'unconfirmed') {
+    statusHtml = `<span class="status-fail result-status" style="color:#e0a800">⏳ UNCONFIRMED — check Solscan</span>
+      ${sig ? `<a class="tx-link-small" href="https://solscan.io/tx/${esc(sig)}" target="_blank">↗ Solscan</a>` : ''}`;
   } else if (status === 'failed') {
     statusHtml = `<span class="status-fail result-status">❌ FAILED</span>
-      <span style="font-size:11.5px;color:var(--sub)">${errMsg || ''}</span>`;
+      <span style="font-size:11.5px;color:var(--sub)">${esc(errMsg || '')}</span>`;
   }
   div.innerHTML = `
     <span class="result-addr">${shortAddr(addr)}</span>
