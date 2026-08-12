@@ -6655,12 +6655,57 @@ function roseResolveChatId() {
   return "";
 }
 
+// The ONLY ROSE pool with real liquidity (Raydium CLMM ROSE/SOL). The other GeckoTerminal
+// "pools" are dust ($0 vol, a few $ liquidity). Override with ROSE_POOL_ADDR if it ever moves.
+const ROSE_POOL = process.env.ROSE_POOL_ADDR || "7JtHjSAm7emq5Mc9GQgVZwfDY3Ma1TcE2cEwiy9mgkP6";
+const ROSE_QUOTES = { "So11111111111111111111111111111111111111112": "sol", "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v": "stable", "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB": "stable" };
+
+async function roseHeliusRpc(key, method, params) {
+  try {
+    const r = await fetch(`https://mainnet.helius-rpc.com/?api-key=${key}`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: "rose", method, params }), signal: AbortSignal.timeout(15000),
+    });
+    const d = await r.json(); return d && d.result;
+  } catch (e) { console.warn("[ROSE-BUY] rpc", method, "err:", e.message); return null; }
+}
+
+// Pool-direct buy detector from a RAW jsonParsed tx. The pool releases ROSE and takes in quote;
+// the buyer is whoever NETS the most ROSE — independent of who paid gas or in what currency, so
+// gasless/relayer-paid and Jupiter-routed (USDC or SOL) buys are all caught (fee-payer classing
+// missed exactly these). Returns null for sells, LP moves, and non-buys.
+function roseDetectBuyFromRaw(tx, roseUsd, solUsd) {
+  const meta = tx && tx.meta; if (!meta || meta.err) return null;
+  const rose = {};
+  for (const b of (meta.preTokenBalances || [])) if (b.mint === ROSE_BOT_MINT && b.owner) rose[b.owner] = (rose[b.owner] || 0) - Number(b.uiTokenAmount.uiAmount || 0);
+  for (const b of (meta.postTokenBalances || [])) if (b.mint === ROSE_BOT_MINT && b.owner) rose[b.owner] = (rose[b.owner] || 0) + Number(b.uiTokenAmount.uiAmount || 0);
+  let poolOwner = null, poolLoss = 0, buyer = null, buyerGain = 0;
+  for (const o in rose) {
+    const d = rose[o];
+    if (d < poolLoss) { poolLoss = d; poolOwner = o; }
+    if (d > buyerGain) { buyerGain = d; buyer = o; }
+  }
+  if (!buyer || !poolOwner || buyer === poolOwner || buyerGain <= 0) return null; // no net ROSE receiver → sell / LP / non-buy
+  // Confirm the pool RECEIVED quote (SOL/USDC/USDT) — separates a real buy from an LP-remove,
+  // and gives a price-independent USD fallback if the ROSE price feed is momentarily down.
+  let wsol = 0, stable = 0;
+  const addQuote = (b, sign) => { const k = ROSE_QUOTES[b.mint]; if (k && b.owner === poolOwner) { const v = sign * Number(b.uiTokenAmount.uiAmount || 0); if (k === "sol") wsol += v; else stable += v; } };
+  for (const b of (meta.preTokenBalances || [])) addQuote(b, -1);
+  for (const b of (meta.postTokenBalances || [])) addQuote(b, +1);
+  if (wsol + stable <= 0) return null; // pool didn't take in quote → not a buy
+  const quoteUsd = wsol * (solUsd || 0) + stable;
+  const usd = roseUsd > 0 ? buyerGain * roseUsd : (quoteUsd > 0 ? quoteUsd : null);
+  const sig = (tx.transaction && tx.transaction.signatures && tx.transaction.signatures[0]) || null;
+  const ts = tx.blockTime ? tx.blockTime * 1000 : Date.now();
+  return { wallet: buyer, tokenAmt: buyerGain, usd, sig, ts };
+}
+
 async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = false, status = false } = {}) {
   const token = process.env.ROSE_TG_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
   const chatId = roseResolveChatId();
   const key = (rpc.heliusKeys()[0]) || process.env.HELIUS_API_KEY;
   // Read-only status probe — never posts or polls; just reports wiring.
-  if (status) return { ok: true, status: true, armed: roseBuyArmed(), hasToken: !!token, hasChatId: !!chatId, resolvedChatId: chatId || null, envOverride: !!process.env.ROSE_TG_CHAT_ID, hasHeliusKey: !!key, cursorSet: !!Number(kv.get("roseBuyCursorMs", 0)) };
+  if (status) return { ok: true, status: true, armed: roseBuyArmed(), hasToken: !!token, hasChatId: !!chatId, resolvedChatId: chatId || null, envOverride: !!process.env.ROSE_TG_CHAT_ID, hasHeliusKey: !!key, pool: ROSE_POOL, headRecorded: !!kv.get("roseBuyLastSig", null) };
   if (!token || !chatId) return { ok: false, reason: "dormant (ROSE_TG_CHAT_ID unset)" };
   // Defaults to the OnlyRose brand art hosted on our origin; override with ROSE_BUY_IMAGE_URL.
   const img = process.env.ROSE_BUY_IMAGE_URL || (CANONICAL_ORIGIN + "/vendor/rose-buy.jpg");
@@ -6688,34 +6733,43 @@ async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = f
     return { ok: okp, testPost: true, image: !!img };
   }
 
-  const now = Date.now();
-  const cursor = Number(kv.get("roseBuyCursorMs", 0)) || 0;
-  if (!cursor) { kv.set("roseBuyCursorMs", now); return { ok: true, firstRun: true, note: "cursor seeded at now; history skipped" }; }
-  const fromMs = Math.min(now, Math.max(cursor - ROSE_BUY_OVERLAP_MS, now - ROSE_BUY_LOOKBACK_CAP_MS));
+  // ── Pool-direct polling ────────────────────────────────────────────────────
+  // Watch ONLY the real ROSE/SOL pair. One getSignaturesForAddress + a raw getTransaction per
+  // NEW tx = ~2 calls/cycle (cheap enough for a fast refresh). A sig cursor + hold-the-pointer
+  // (stop at the first tx the RPC hasn't indexed yet) means we never skip a buy that just landed.
+  const sigsRes = await roseHeliusRpc(key, "getSignaturesForAddress", [ROSE_POOL, { limit: 40 }]);
+  const sigs = Array.isArray(sigsRes) ? sigsRes : [];
+  if (!sigs.length) return { ok: true, scanned: 0, posted: 0, note: "no pool sigs" };
 
-  const { getTradeTapeHelius } = require("./lib/helius-trades");
-  const tape = await getTradeTapeHelius(ROSE_BOT_MINT, fromMs, now, {
-    heliusKey: key, heliusEnhancedBatched, solUsd: solUsd || 0, tokenPriceUsd: roseUsd || 0,
-    maxSigPagesPerPool: 4, maxSigs: 400,
-  });
-  const trades = (tape && tape.trades) || [];
+  const lastSig = kv.get("roseBuyLastSig", null);
+  if (!lastSig) { kv.set("roseBuyLastSig", sigs[0].signature); return { ok: true, firstRun: true, note: "pool head recorded; history skipped" }; }
+
+  const fresh = []; // newest→oldest until the cursor, then flip to oldest→newest
+  for (const s of sigs) { if (s.signature === lastSig) break; if (s.err) continue; fresh.push(s.signature); }
+  fresh.reverse();
+  if (!fresh.length) { kv.set("roseBuyLastSig", sigs[0].signature); return { ok: true, scanned: 0, posted: 0 }; }
+
   const seen = new Set(kv.get("roseBuySeen", []));
-  const fresh = trades
-    .filter(t => t.side === "buy" && t.usd != null && t.usd >= ROSE_MIN_BUY_USD && !seen.has(t.sig))
-    .sort((a, b) => a.ts - b.ts);
-
-  let posted = 0;
-  for (const b of fresh) {
-    const cap = roseBuyCaption(b, roseUsd);
-    const okp = img ? await roseTgSendPhoto(token, chatId, img, cap, { silent: buysSilent }) : await roseTgSend(token, chatId, cap, { silent: buysSilent });
-    seen.add(b.sig);
-    if (okp) posted++;
-    await new Promise(r => setTimeout(r, 450)); // gentle on TG's per-chat rate limit
+  let posted = 0, scanned = 0, buysSeen = 0, advanceTo = lastSig;
+  for (const sig of fresh) {
+    if (seen.has(sig)) { advanceTo = sig; continue; }
+    const tx = await roseHeliusRpc(key, "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]);
+    if (!tx) break; // not indexed yet — hold the pointer here, retry this sig next cycle
+    scanned++;
+    const buy = roseDetectBuyFromRaw(tx, roseUsd, solUsd);
+    seen.add(sig);
+    advanceTo = sig;
+    if (buy) { buysSeen++; buy.sig = buy.sig || sig; }
+    if (buy && buy.usd != null && buy.usd >= ROSE_MIN_BUY_USD) {
+      const cap = roseBuyCaption(buy, roseUsd);
+      const okp = img ? await roseTgSendPhoto(token, chatId, img, cap, { silent: buysSilent }) : await roseTgSend(token, chatId, cap, { silent: buysSilent });
+      if (okp) posted++;
+      await new Promise(r => setTimeout(r, 450)); // gentle on TG's per-chat rate limit
+    }
   }
-  // Persist dedup set (bounded, insertion-ordered) + advance the high-water cursor.
-  const seenArr = [...seen]; kv.set("roseBuySeen", seenArr.slice(-ROSE_BUY_SEEN_MAX));
-  kv.set("roseBuyCursorMs", now);
-  return { ok: true, scanned: trades.length, eligible: fresh.length, posted, floorUsd: ROSE_MIN_BUY_USD, image: !!img };
+  kv.set("roseBuyLastSig", advanceTo);
+  kv.set("roseBuySeen", [...seen].slice(-ROSE_BUY_SEEN_MAX));
+  return { ok: true, scanned, buys: buysSeen, posted, floorUsd: ROSE_MIN_BUY_USD, image: !!img };
 }
 
 // Auto-posting is OFF until explicitly armed (kv roseBuyArmed), so resolving the chat
