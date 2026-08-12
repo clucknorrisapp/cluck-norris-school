@@ -8583,8 +8583,11 @@ function isArbBot(addr) {
   const b = getArbBots()[addr];
   if (!b) return false;
   const fresh = (b.lastAt || b.flaggedAt || 0) >= Date.now() - ARB_FLAG_TTL_MS;
-  const strong = (b.hits || 1) >= 2 || String(b.reason || "").startsWith("seed");
-  return fresh && strong;
+  // Explicit operator/seed listings (reason "manual"/"seed…") are authoritative — mute immediately.
+  // Only the AUTO round-trip heuristic needs ≥2 hits (so a one-off human panic-sell doesn't mute).
+  const explicit = /^(seed|manual)/.test(String(b.reason || ""));
+  const strong = explicit || (b.hits || 1) >= 2;
+  return explicit || (fresh && strong);   // explicit listings don't age out either
 }
 function flagArbBot(addr, reason = "round-trip") {
   if (!addr) return;

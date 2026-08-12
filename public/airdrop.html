@@ -1161,15 +1161,28 @@ async function sendAirdrop() {
         // double-send fix: successfully-sent rows were previously left skip=false.
         for (const recipient of batch) { recipient.skip = true; recipient.skipReason = 'Submitted'; }
 
-        // Confirmation is best-effort: confirmTransaction returns false on a ~30s timeout
-        // (dropped OR still-pending), which is NOT the same as "sent". Report it honestly.
-        let confirmed = false;
-        try { confirmed = await confirmTransaction(signature, lastValidBlockHeight); } catch(_) { confirmed = false; }
+        // Confirmation has THREE outcomes, not two, and they must not be collapsed:
+        //   • confirmed=true  → landed. Mark sent.
+        //   • THROW           → getSignatureStatuses reported st.err → the tx FAILED on-chain.
+        //                       Nobody was paid, so this batch MUST become retryable again
+        //                       (skip=false) or the recipients silently never get their tokens.
+        //   • confirmed=false → ~30s timeout (dropped OR still-pending). Ambiguous: keep it
+        //                       marked handled (no auto-retry → no double-pay) and tell the
+        //                       operator to verify on Solscan before resending.
+        let confirmed = false, confirmFailed = false;
+        try { confirmed = await confirmTransaction(signature, lastValidBlockHeight); }
+        catch(_) { confirmFailed = true; }
         for (const recipient of batch) {
           if (confirmed) {
             sent++;
             recipient.skipReason = 'Sent';
             addResult(recipient.addr, recipient.amount, 'sent', signature);
+          } else if (confirmFailed) {
+            // Provably failed on-chain — re-arm for retry so it isn't silently dropped.
+            failed++;
+            recipient.skip = false;
+            recipient.skipReason = '';
+            addResult(recipient.addr, recipient.amount, 'failed', null, 'transaction failed on-chain');
           } else {
             // Submitted but unconfirmed — may well have landed. Keep it marked handled (do NOT
             // auto-retry → no double-pay) and flag it so the operator verifies on Solscan.
