@@ -10803,7 +10803,7 @@ app.get("/api/token-card", async (req, res) => {
     if (hit && Date.now() - hit.ts < AUTOPSY_TTL_MS) body = hit.body;
     if (!body) {
       const r = await runAutopsy(mint, {});
-      if (r.status === 200 && r.body && r.body.success) { body = r.body; AUTOPSY_CACHE.set(mint, { body, ts: Date.now() }); }
+      if (r.status === 200 && r.body && r.body.success) { body = r.body; if (!(body.verdict && body.verdict.degraded)) AUTOPSY_CACHE.set(mint, { body, ts: Date.now() }); }
     }
     if (!body) return res.status(404).json({ success: false, error: "no autopsy data" });
     const png = await renderTokenCard(body);
@@ -11323,7 +11323,9 @@ app.get("/api/autopsy", async (req, res) => {
   // Store the assembled report so the next caller rides the cache. Only
   // successful reports are stored (errors should re-try fresh).
   const { status, body } = await runAutopsy(mint, { nocache: noCache });
-  if (status === 200 && body && body.success) {
+  // Never cache a DEGRADED verdict (indexers were unreachable → UNCLEAR): caching it would pin a
+  // "can't tell" (or, before the fix, a false "DEAD") result for the whole TTL after the outage clears.
+  if (status === 200 && body && body.success && !(body.verdict && body.verdict.degraded)) {
     AUTOPSY_CACHE.set(mint, { body, ts: Date.now() });
     if (AUTOPSY_CACHE.size > 300) { const cut = Date.now() - AUTOPSY_TTL_MS; for (const [k, v] of AUTOPSY_CACHE) if (v.ts < cut) AUTOPSY_CACHE.delete(k); }
   }
