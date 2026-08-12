@@ -5187,6 +5187,10 @@ function blitzDM(text) {
   } catch (_) {}
 }
 async function clknForceRedeploy() {
+  // HARD KILL-SWITCH GATE: the blitz revert timer runs on a bare setInterval (not liqInterval),
+  // so without this a stale kv blitz-window flag could close+redeploy CLKN liquidity even while
+  // the engine is "killed" and the owner is managing manually. Refuse to move funds while killed.
+  if (LIQ_ENGINE_KILLED) { console.warn("[blitz] force-redeploy REFUSED — LIQ_ENGINE_KILLED"); return { redeployed: false, reason: "engine killed" }; }
   const cur = await whirlpoolMM.vault.status("clkn"); const s = (cur && cur.state) || {};
   const baseMint = s.positionMint || null, solMint = (s.solVault && s.solVault.mint) || null;
   if (baseMint) { try { await whirlpoolMM.vault.closePosition({ projectId: "clkn", mint: baseMint }); } catch (_) {} }
@@ -5245,6 +5249,11 @@ function clknBlitzCheck() {
 // minute + on boot, so a redeploy/restart mid-window still reverts on time. Closes ONLY the
 // three vault-managed tight positions (base/sol/jup); the ±94% anchors are separate + untouched.
 async function treasuryForceRedeploy() {
+  // HARD KILL-SWITCH GATE (see clknForceRedeploy): the treasury-heavy revert timer is a bare
+  // setInterval, so a stale kv heavy-window flag could otherwise close+redeploy live TREASURY
+  // liquidity after an owner "pull the pools" while the engine is killed. Refuse while killed —
+  // this is the "disarm every automation that could undo a stop" guarantee, in code.
+  if (LIQ_ENGINE_KILLED) { console.warn("[treasury-heavy] force-redeploy REFUSED — LIQ_ENGINE_KILLED"); return { redeployed: false, reason: "engine killed" }; }
   const cur = await whirlpoolMM.vault.status("treasury"); const s = (cur && cur.state) || {};
   const baseMint = s.positionMint || null;
   const solMint = (s.solVault && s.solVault.mint) || (typeof s.solVault === "string" && s.solVault !== "disabled" ? s.solVault : null);
@@ -13955,8 +13964,10 @@ app.listen(PORT, () => {
         }
         // Auto-keepalive: 1×/24h max, only when quiet ≥ kaHrs — one ~$10 SOL→CLKN buy FORCED
         // through 64WXkH (route-verified, BUY-ONLY) so the pool stays on watchlists. kv flags:
-        // meteoraKeepaliveEnabled (default on) / meteoraKeepaliveHours (23) / meteoraKeepaliveUsd (10).
-        if (kv.get("meteoraKeepaliveEnabled", true) && sinceHrs >= kv.get("meteoraKeepaliveHours", 23)
+        // meteoraKeepaliveEnabled (default OFF) / meteoraKeepaliveHours (23) / meteoraKeepaliveUsd (10).
+        // Default OFF so un-killing the LP engine never silently re-arms a CLKN buy with operator
+        // funds — that needs an explicit opt-in (kv meteoraKeepaliveEnabled=true), per the money rule.
+        if (kv.get("meteoraKeepaliveEnabled", false) && sinceHrs >= kv.get("meteoraKeepaliveHours", 23)
             && (now - kv.get("meteoraLastKeepaliveAt", 0)) >= 24 * 3600 * 1000) {
           kv.set("meteoraLastKeepaliveAt", now); // one attempt per 24h regardless of outcome
           const kaUsd = kv.get("meteoraKeepaliveUsd", 10);
