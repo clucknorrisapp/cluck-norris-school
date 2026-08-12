@@ -212,6 +212,7 @@
       <div class="row">
         <button class="btn ghost" id="sdConnect">🔗 CONNECT SENDING WALLET</button>
         <button class="btn a hidden" id="sdSend">🚀 SEND PRIZES</button>
+        <button class="btn ghost hidden" id="sdDisconnect">DISCONNECT</button>
       </div>
       <div class="status" id="sdStatus"></div>
       <div class="tbl-wrap hidden" id="sdLogWrap"><table id="sdLog"></table></div>
@@ -498,8 +499,18 @@ $('sdConnect').addEventListener('click',async()=>{
   if(!p){ sdStatus('No Solana wallet found. Install one, or open this page inside your wallet\u2019s own browser, then try again.'); return; }
   try{ const resp=await p.connect(); sendProvider=p; sendPubkey=((resp&&resp.publicKey)||p.publicKey).toString();
     $('sdConnect').textContent='✓ '+sendPubkey.slice(0,4)+'…'+sendPubkey.slice(-4);
-    $('sdSend').classList.remove('hidden'); sdStatus('Wallet connected. Review the list above, then send.');
+    $('sdSend').classList.remove('hidden'); $('sdDisconnect').classList.remove('hidden');
+    sdStatus('Wallet connected. Review the list above, then send.');
   }catch(e){ sdStatus('Connect failed: '+(e.message||e)); }
+});
+// A user must always be able to disconnect the sending wallet (CLAUDE.md: anywhere a wallet
+// can connect, it must be able to disconnect). Reset local state even if disconnect() is absent.
+$('sdDisconnect').addEventListener('click',()=>{
+  try{ sendProvider && sendProvider.disconnect && sendProvider.disconnect(); }catch(_){}
+  sendProvider=null; sendPubkey=null;
+  $('sdConnect').textContent='🔗 CONNECT SENDING WALLET'; $('sdConnect').classList.remove('hidden');
+  $('sdSend').classList.add('hidden'); $('sdDisconnect').classList.add('hidden');
+  sdStatus('Sending wallet disconnected.');
 });
 $('sdSend').addEventListener('click',async()=>{
   if(!sendProvider||!sendPubkey){ sdStatus('Connect a wallet first.'); return; }
@@ -576,7 +587,9 @@ async function gConnectWallet(){
 async function gCheckHolder(){
   try{
     const r=await rpcCall('getTokenAccountsByOwner',[wPubkey,{mint:CLKN},{encoding:'jsonParsed'}]);
-    let bal=0; for(const a of ((r&&r.value)||[])) bal+=Number(a.account&&a.account.data&&a.account.data.parsed&&a.account.data.parsed.info.tokenAmount.uiAmount)||0;
+    // uiAmountString, not uiAmount: the float uiAmount is null for large balances, so a whale
+    // would read 0 and be denied the free holder tier they qualify for.
+    let bal=0; for(const a of ((r&&r.value)||[])){ const ta=a.account&&a.account.data&&a.account.data.parsed&&a.account.data.parsed.info.tokenAmount; bal+=Number(ta&&(ta.uiAmountString||ta.uiAmount))||0; }
     gShowWallet(bal);
     if(bal>=HOLDER_MIN){ gWalletMsg('✓ Holder — unlocked free for 35 days.',true); unlockNow(35); }
     else { gWalletMsg('Needs '+fmt(HOLDER_MIN)+' CLKN for the free tier. Pay 0.05 SOL for 7 days instead:'); $('gPaySol').classList.remove('hidden'); }

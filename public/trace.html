@@ -875,6 +875,9 @@ function toggleSort() {
 
 function downloadCsv() {
   if (!lastTrace) return;
+  // CSV-safe cell: quote/escape commas & quotes, and neutralize spreadsheet formula
+  // injection (a token symbol/label starting with = + - @ would otherwise execute on open).
+  const csvCell = (v) => { let s = v == null ? '' : String(v); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   const lines = ["timestamp,datetime,action,token_delta,quote_delta,quote_symbol,balance_after,counterparty,counterparty_type,counterparty_label,source,signature"];
   for (const t of lastTrace.transactions) {
     lines.push([
@@ -887,10 +890,10 @@ function downloadCsv() {
       t.balanceAfter,
       t.counterparty || '',
       t.counterpartyType || '',
-      (t.counterpartyLabel || '').replace(/,/g, ' '),
+      t.counterpartyLabel || '',
       t.source || '',
       t.signature,
-    ].join(','));
+    ].map(csvCell).join(','));
   }
   const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
