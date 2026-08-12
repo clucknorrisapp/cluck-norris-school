@@ -325,9 +325,11 @@ async function buildMintTransaction({
 }
 
 // ── Telegram hatch announcement ──────────────────────────────────────────────
+// Telegram parse_mode:"HTML" sink: escape ONLY & < > (what Telegram requires and decodes).
+// Do NOT add &quot;/&#39; here — Telegram renders the numeric apostrophe entity literally,
+// so a name like "Bob's Coin" would post as "Bob&#39;s Coin".
 function escapeHtml(s) {
-  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");   // quotes too — hand-rolled escapers here have shipped without them
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 // Post a successful-hatch announcement to the project's Telegram room — same
 // bot and chat as the buy/sell alerts. Best-effort; never throws.
@@ -495,7 +497,10 @@ router.post("/submit", async (req, res) => {
     // fails the compare and we refuse to co-sign.
     const builtTx = Transaction.from(Buffer.from(pending.builtTxB64, "base64"));
     if (Buffer.compare(clientTx.serializeMessage(), builtTx.serializeMessage()) !== 0) {
-      return res.status(400).json({ error: "Signed transaction does not match the mint we built — refusing to co-sign." });
+      // The signed tx isn't byte-for-byte the fee-inclusive tx we built. Usually this means
+      // the wallet altered the transaction while signing (e.g. injected a fee instruction).
+      // We refuse rather than co-sign something we didn't verify. Nothing was charged.
+      return res.status(400).json({ error: "Your wallet changed the transaction while signing, so we can't safely co-sign it (no fee was charged). Please try again, or mint with a different wallet — Phantom is known to work." });
     }
 
     // Co-sign with the mint key (required signer), then require BOTH signatures valid —
