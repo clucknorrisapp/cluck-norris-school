@@ -326,7 +326,8 @@ async function buildMintTransaction({
 
 // ── Telegram hatch announcement ──────────────────────────────────────────────
 function escapeHtml(s) {
-  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");   // quotes too — hand-rolled escapers here have shipped without them
 }
 // Post a successful-hatch announcement to the project's Telegram room — same
 // bot and chat as the buy/sell alerts. Best-effort; never throws.
@@ -344,10 +345,24 @@ async function announceHatch(text) {
     console.warn("[hatchery] Telegram announce failed:", e.message);
   }
 }
-// Mints the Hatchery has built this run. The /minted announcement is only
-// honoured for these, so the endpoint can't be used to spam the room.
+// Mints the Hatchery has built. The /minted announcement is only honoured for
+// these, so the endpoint can't be used to spam the room. Persisted to the /data
+// volume: main auto-deploys frequently, and an in-memory-only set would (a) lose
+// a legit /minted whose /build happened before a redeploy and (b) let an
+// already-announced mint be re-announced (room spam) after a redeploy.
+const kv = require("./lib/kvstore");
+const HATCHERY_KV = "hatchery_mints_v1";
 const hatcheryMints = new Set();
 const announcedMints = new Set();
+(function loadHatcheryState() {
+  try {
+    const s = kv.get(HATCHERY_KV, null);
+    if (s) { for (const m of (s.built || [])) hatcheryMints.add(m); for (const m of (s.announced || [])) announcedMints.add(m); }
+  } catch (_) {}
+})();
+function saveHatcheryState() {
+  try { kv.set(HATCHERY_KV, { built: [...hatcheryMints], announced: [...announcedMints] }); } catch (_) {}
+}
 
 // ── HTTP routes ──────────────────────────────────────────────────────────────
 const router = express.Router();
@@ -427,6 +442,7 @@ router.post("/build", async (req, res) => {
     // Remember this mint so a later /minted report can be trusted + announced.
     hatcheryMints.add(mintAddress);
     if (hatcheryMints.size > 5000) hatcheryMints.delete(hatcheryMints.values().next().value);
+    saveHatcheryState();
 
     res.json({ txBase64, mintAddress, mintSecret, metadataUri, imageUri, cluster: useCluster });
   } catch (e) {
@@ -451,6 +467,8 @@ router.post("/minted", async (req, res) => {
     if (!tx || (tx.meta && tx.meta.err)) return res.json({ ok: false });
 
     announcedMints.add(mintAddress);
+    if (announcedMints.size > 5000) announcedMints.delete(announcedMints.values().next().value);
+    saveHatcheryState();
     const short = `${mintAddress.slice(0, 4)}…${mintAddress.slice(-4)}`;
     const nm = escapeHtml(String(name || "A new token").slice(0, 48));
     const sym = escapeHtml(String(symbol || "").slice(0, 16));
