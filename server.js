@@ -6578,11 +6578,17 @@ function roseFmtNum(n) {
   if (n >= 1e3) return (n / 1e3).toFixed(1) + "K";
   return n < 1 ? n.toFixed(4) : Math.round(n).toLocaleString("en-US");
 }
-// Visual buy-size bar: a row of 🌹 that grows with the USD size of the buy — one rose per
-// ~$5 (ROSE_BUY_USD_PER_EMOJI to tune), so a bigger buy simply shows more roses. Min 1,
-// capped at 50 so a whale can't blow the 1024-char caption budget.
-const ROSE_BUY_USD_PER_EMOJI = Math.max(1, parseFloat(process.env.ROSE_BUY_USD_PER_EMOJI || "5"));
-function roseBuyBar(usd) { return "🌹".repeat(Math.max(1, Math.min(50, Math.round((Number(usd) || 0) / ROSE_BUY_USD_PER_EMOJI)))); }
+// Visual buy-size bar: one 🌹 per whole dollar, plus a 🌸 petal when the remainder is a
+// half-dollar or more (so $1.75 → 🌹🌸, $12.40 → 🌹×12, $12.60 → 🌹×12🌸). Capped at 100
+// roses so a whale can't blow the 1024-char caption budget.
+const ROSE_BUY_BAR_CAP = Math.max(10, parseInt(process.env.ROSE_BUY_BAR_CAP || "100", 10));
+function roseBuyBar(usd) {
+  usd = Number(usd) || 0;
+  const roses = Math.floor(usd);
+  if (roses >= ROSE_BUY_BAR_CAP) return "🌹".repeat(ROSE_BUY_BAR_CAP);
+  const petal = (usd - roses) >= 0.5;
+  return ("🌹".repeat(Math.max(0, roses)) + (petal ? "🌸" : "")) || "🌸";
+}
 
 async function roseTgSend(token, chatId, text, opts = {}) {
   try {
