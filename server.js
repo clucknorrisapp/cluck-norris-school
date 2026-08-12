@@ -8447,8 +8447,12 @@ app.get("/api/wallet-checkup", async (req, res) => {
   const SYS = "11111111111111111111111111111111";
   try {
     // 1. Held tokens (classic Token + Token-2022), summed per mint.
+    // Token-2022 FIRST: the only severity-3 honeypot signals (permanent delegate, transfer
+    // hook, default-frozen, high transfer fee) live on Token-2022 mints, and the 100-mint cap
+    // below keeps insertion order — so a wallet holding >100 classic tokens must not have its
+    // Token-2022 holdings (the dangerous ones) silently pushed past the cap.
     const byMint = new Map();
-    for (const prog of [TOKEN_PROG, TOKEN_2022_PROG]) {
+    for (const prog of [TOKEN_2022_PROG, TOKEN_PROG]) {
       const d = await rpc("getTokenAccountsByOwner", [wallet, { programId: prog }, { encoding: "jsonParsed" }]);
       for (const acc of (d?.result?.value || [])) {
         const info = acc.account?.data?.parsed?.info;
@@ -8463,12 +8467,13 @@ app.get("/api/wallet-checkup", async (req, res) => {
 
     // 2. Inspect each held mint for honeypot extensions + live authorities.
     const riskyHoldings = [];
+    let unverifiedMints = 0;   // mint accounts that came back null (RPC hiccup/pruned) — NOT proven clean
     if (mints.length) {
       const mi = await rpc("getMultipleAccounts", [mints, { encoding: "jsonParsed" }]);
       const vals = mi?.result?.value || [];
       mints.forEach((mint, i) => {
         const acc = vals[i];
-        if (!acc) return;
+        if (!acc) { unverifiedMints++; return; }   // couldn't read it → don't fold into the clean set
         const info = acc.data?.parsed?.info || {};
         const issues = []; let severity = 0;
         if (acc.owner === TOKEN_2022_PROG) {
@@ -8507,6 +8512,7 @@ app.get("/api/wallet-checkup", async (req, res) => {
       tokensHeld: byMint.size,
       scanned: mints.length,
       capped: byMint.size > mints.length,
+      unverified: unverifiedMints,   // >0 → some mints couldn't be read; "all clear" is not proven for them
       portfolioUsd, atRiskUsd: Number(atRiskUsd.toFixed(2)),
       holdings,
       approvals,

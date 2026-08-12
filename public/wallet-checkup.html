@@ -152,7 +152,6 @@ body{background:transparent;font-family:var(--body);}
       <span class="wallet-info-addr" id="walletInfoAddr"></span>
       <button class="wallet-disc-btn" onclick="disconnectWallet()">DISCONNECT</button>
     </div>
-    <div id="mobileConnect" style="display:none;margin-top:12px;flex-direction:column;gap:8px"></div>
     <div id="revokeActions" style="display:none;margin-top:12px"></div>
   </div>
 
@@ -219,8 +218,15 @@ function render(d){
   }
 
   if(!approvals.length && !risky.length){
-    html+='<div class="card"><div class="clear"><div class="big">🛡✅</div><div class="t">ALL CLEAR</div>'
-      +'<div style="font-size:13px;color:#9CA3AF;margin-top:8px;line-height:1.6">No open token approvals, no honeypot or authority-risk holdings'+(d.capped?' (scanned the first '+d.scanned+' tokens)':'')+'. Keep verifying every popup before you sign.</div></div></div>';
+    // Honesty: only say "all clear" for what we actually inspected. If the scan was capped
+    // (more tokens than we checked) or some mint accounts couldn't be read, say so plainly
+    // rather than implying a full pass — the dangerous holdings are exactly the untested ones.
+    const partial=(d.capped||(d.unverified>0));
+    const caveat=partial
+      ? ' — but this is NOT a full pass: '+(d.capped?('only the first '+d.scanned+' of '+d.tokensHeld+' tokens were scanned'):'')+(d.capped&&d.unverified>0?', and ':'')+(d.unverified>0?(d.unverified+' token'+(d.unverified>1?'s':'')+' couldn’t be verified'):'')+'.'
+      : '.';
+    html+='<div class="card"><div class="clear"><div class="big">'+(partial?'🛡':'🛡✅')+'</div><div class="t">'+(partial?'NOTHING FOUND — PARTIAL SCAN':'ALL CLEAR')+'</div>'
+      +'<div style="font-size:13px;color:#9CA3AF;margin-top:8px;line-height:1.6">No open token approvals and no honeypot or authority-risk holdings in what was checked'+caveat+' Keep verifying every popup before you sign.</div></div></div>';
     document.getElementById('results').innerHTML=html;
     return;
   }
@@ -257,7 +263,7 @@ function render(d){
         +'</div>'
         +'</div>';
     });
-    if(d.capped) html+='<div style="font-size:11px;color:var(--sub);margin-top:4px">Scanned the first '+d.scanned+' of '+d.tokensHeld+' tokens.</div>';
+    if(d.capped||d.unverified>0) html+='<div style="font-size:11px;color:var(--sub);margin-top:4px">'+(d.capped?'Scanned the first '+d.scanned+' of '+d.tokensHeld+' tokens.':'')+(d.unverified>0?(' '+d.unverified+' token'+(d.unverified>1?'s':'')+' couldn’t be verified.'):'')+'</div>';
     html+='</div>';
   }
 
@@ -391,6 +397,11 @@ async function connectWallet(id) {
 function disconnectWallet() {
   try { activeWallet?.provider?.disconnect?.(); } catch (e) {}
   walletPubkey = null; activeWallet = null; currentDelegates = [];
+  // Clear the previous wallet's revoke card/actions too — otherwise a stale "REVOKE …"
+  // panel from the last scan lingers after disconnect until the next scan.
+  lastApprovals = []; lastScanned = '';
+  try { const a = document.getElementById('revokeActions'); if (a) { a.style.display = 'none'; a.innerHTML = ''; } } catch (e) {}
+  syncRevokeUi([], '');
   syncWalletUi();
 }
 
@@ -476,8 +487,11 @@ function syncRevokeUi(approvals, scannedOwner){
       +'<button class="revoke-btn" style="margin-top:8px" onclick="runFor(walletPubkey)">SCAN MY CONNECTED WALLET INSTEAD</button></div>';
   } else {
     actions.style.display='block';
-    actions.innerHTML='<button class="revoke-all" onclick="revokeAllFound()">REVOKE ALL '+approvals.length+' APPROVAL'+(approvals.length>1?'S':'')+'</button>'
-      +'<div style="font-family:var(--mono);font-size:11px;color:#9CA3AF;margin-top:8px;line-height:1.5">Up to 8 per transaction — if you have more, run it twice.</div>';
+    // Label must match what the button actually does: it revokes up to 8 per tx (see
+    // revokeAllFound). Saying "REVOKE ALL 12" while clearing only 8 is a false promise.
+    const revLabel=approvals.length>8?('REVOKE 8 OF '+approvals.length+' APPROVALS'):('REVOKE ALL '+approvals.length+' APPROVAL'+(approvals.length>1?'S':''));
+    actions.innerHTML='<button class="revoke-all" onclick="revokeAllFound()">'+revLabel+'</button>'
+      +'<div style="font-family:var(--mono);font-size:11px;color:#9CA3AF;margin-top:8px;line-height:1.5">Up to 8 per transaction — if you have more, run it again after this one confirms.</div>';
   }
 }
 let lastApprovals=[], lastScanned='';
