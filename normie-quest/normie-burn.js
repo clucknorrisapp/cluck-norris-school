@@ -125,17 +125,27 @@ function conn() { return (_conn = _conn || new (web3().Connection)(rpcUrl(), 'co
 
 // ---- durable replay guard (consumed burn signatures) --------------------
 let _consumed = null;
+let _burnStoreBroken = false;   // corrupt existing consumed-file → fail closed (block redemptions), don't start empty
 function consumed() {
   if (_consumed) return _consumed;
   _consumed = new Set();
+  if (!fs.existsSync(CONSUMED_FILE)) return _consumed;   // genuine first run — empty is correct
   try {
     const raw = JSON.parse(fs.readFileSync(CONSUMED_FILE, 'utf8'));
-    if (Array.isArray(raw)) raw.forEach(s => _consumed.add(s));
-  } catch (e) { /* first run: no file yet */ }
+    if (!Array.isArray(raw)) throw new Error('not a JSON array');
+    raw.forEach(s => _consumed.add(s));
+  } catch (e) {
+    // Corrupt existing file — do NOT silently start empty (that re-opens replay of historical
+    // burns). Quarantine a copy and fail closed until an operator restores it.
+    _burnStoreBroken = true;
+    try { fs.copyFileSync(CONSUMED_FILE, `${CONSUMED_FILE}.corrupt-${Date.now()}`); } catch (_) {}
+    console.error(`[normie-burn] CONSUMED FILE CORRUPT (${e.message}) — replay guard fail-closed until restored`);
+  }
   return _consumed;
 }
 function consume(sig) {
   const set = consumed();
+  if (_burnStoreBroken) return false;     // corrupt store → refuse all redemptions (fail closed)
   if (set.has(sig)) return false;         // already used — replay blocked
   set.add(sig);
   try {
