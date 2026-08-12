@@ -6579,14 +6579,15 @@ function roseFmtNum(n) {
   return n < 1 ? n.toFixed(4) : Math.round(n).toLocaleString("en-US");
 }
 // Visual buy-size bar: one 🌹 per whole dollar, plus a 🌸 petal when the remainder is a
-// half-dollar or more (so $1.75 → 🌹🌸, $12.40 → 🌹×12, $12.60 → 🌹×12🌸). Capped at 100
-// roses so a whale can't blow the 1024-char caption budget.
-const ROSE_BUY_BAR_CAP = Math.max(10, parseInt(process.env.ROSE_BUY_BAR_CAP || "100", 10));
-function roseBuyBar(usd) {
+// half-dollar or more (so $1.75 → 🌹🌸, $12.40 → 🌹×12, $12.60 → 🌹×12🌸). No fixed cap —
+// `maxEmoji` is the number of emoji that still fit under Telegram's caption limit (computed
+// by the caller), so the bar only ever shortens to avoid truncating the info lines.
+function roseBuyBar(usd, maxEmoji) {
   usd = Number(usd) || 0;
-  const roses = Math.floor(usd);
-  if (roses >= ROSE_BUY_BAR_CAP) return "🌹".repeat(ROSE_BUY_BAR_CAP);
+  const limit = Math.max(1, maxEmoji | 0);
+  let roses = Math.floor(usd);
   const petal = (usd - roses) >= 0.5;
+  if (roses + (petal ? 1 : 0) > limit) roses = Math.max(0, limit - (petal ? 1 : 0));
   return ("🌹".repeat(Math.max(0, roses)) + (petal ? "🌸" : "")) || "🌸";
 }
 
@@ -6618,16 +6619,17 @@ function roseBuyCaption(b, roseUsd) {
   const rose = Number(b.tokenAmt) || 0;
   const short = b.wallet ? b.wallet.slice(0, 4) + "…" + b.wallet.slice(-4) : "unknown";
   const price = roseUsd > 0 ? roseUsd : (rose > 0 ? usd / rose : 0);
-  const lines = [
-    `🌹 <b>ROSE BUY</b>`,
-    roseBuyBar(usd),
-    ``,
-    `💵 <b>$${usd.toFixed(2)}</b>  ·  ${roseFmtNum(rose)} ROSE`,
-  ];
-  if (price > 0) lines.push(`🏷️ $${price < 0.01 ? price.toPrecision(3) : price.toFixed(6)} / ROSE`);
-  lines.push(`👤 <a href="https://solscan.io/account/${b.wallet}">${short}</a>  ·  <a href="https://solscan.io/tx/${b.sig}">txn</a>`);
-  lines.push(`📈 <a href="https://dexscreener.com/solana/${ROSE_BOT_MINT}">Chart</a>  ·  🛒 <a href="https://jup.ag/tokens/${ROSE_BOT_MINT}">Buy ROSE</a>`);
-  return lines.join("\n");
+  const head = `🌹 <b>ROSE BUY</b>`;
+  const info = [``, `💵 <b>$${usd.toFixed(2)}</b>  ·  ${roseFmtNum(rose)} ROSE`];
+  if (price > 0) info.push(`🏷️ $${price < 0.01 ? price.toPrecision(3) : price.toFixed(6)} / ROSE`);
+  info.push(`👤 <a href="https://solscan.io/account/${b.wallet}">${short}</a>  ·  <a href="https://solscan.io/tx/${b.sig}">txn</a>`);
+  info.push(`📈 <a href="https://dexscreener.com/solana/${ROSE_BOT_MINT}">Chart</a>  ·  🛒 <a href="https://jup.ag/tokens/${ROSE_BOT_MINT}">Buy ROSE</a>`);
+  // Fill whatever caption budget remains after the info with roses — no fixed cap, the only
+  // limit is Telegram's 1024 (raw length here, HTML tags/URLs don't count toward TG's visible
+  // limit, so this is conservative and never truncates the info). Each emoji ≈ 2 UTF-16 units.
+  const used = head.length + info.join("\n").length + 8; // + newlines/margin
+  const maxEmoji = Math.max(1, Math.floor((1024 - used) / 2));
+  return [head, roseBuyBar(usd, maxEmoji), ...info].join("\n");
 }
 
 // Resolve the ROSE group chat WITHOUT a dedicated env var: our bot already posts there
