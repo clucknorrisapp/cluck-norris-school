@@ -2685,8 +2685,6 @@ app.get("/api/solscan-debug", async (req, res) => {
   const keyMeta = {
     configured: true,
     length: KEY.length,
-    prefix: KEY.slice(0, 6) + "…",
-    suffix: "…" + KEY.slice(-4),
     hasWhitespace: /\s/.test(KEY),
     looksLikeJwt: KEY.split(".").length === 3,
   };
@@ -2742,8 +2740,6 @@ app.get("/api/solana-tracker-debug", async (req, res) => {
   const keyMeta = {
     configured: true,
     length: KEY.length,
-    prefix: KEY.slice(0, 6) + "…",
-    suffix: "…" + KEY.slice(-4),
     hasWhitespace: /\s/.test(KEY),
   };
   // Arbitrary-path probe — ?probe=/tokens/multi/graduating etc. Lets us
@@ -6248,13 +6244,14 @@ app.post("/api/buyspecial/draw", async (req, res) => {
     .sort((a, b) => a.wallet < b.wallet ? -1 : a.wallet > b.wallet ? 1 : 0);
   const totalEntries = eligible.reduce((s, e) => s + e.chances, 0);
 
-  // 4) Published seed + the draw.
-  const seed = (q.seed && String(q.seed).trim()) || randomBytes(16).toString("hex");
-  const winnerWallets = bsDraw(eligible, winners, seed);
-  const recipients = winnerWallets.map(w => `${w}, ${prize}`).join("\n");
-
+  // 4) Published seed + the draw. Resolve the draw id + any existing record FIRST, so a re-run
+  // of an existing draw REUSES its published seed (unless a new seed is explicitly passed) —
+  // otherwise a fresh random seed silently re-rolls the winners a payout link already points to.
   const id = (q.id && bsDrawsAll()[String(q.id)]) ? String(q.id) : ("bsd_" + randomBytes(5).toString("hex"));
   const existing = bsDrawsAll()[id];
+  const seed = (q.seed && String(q.seed).trim()) || (existing && existing.seed) || randomBytes(16).toString("hex");
+  const winnerWallets = bsDraw(eligible, winners, seed);
+  const recipients = winnerWallets.map(w => `${w}, ${prize}`).join("\n");
   const d = {
     id, mint, from: fromTs, to: toTs, holdHours, requireHold,
     winnersCount: winners, prize, seed,
@@ -6691,6 +6688,8 @@ function roseResolveChatId() {
 // The ONLY ROSE pool with real liquidity (Raydium CLMM ROSE/SOL). The other GeckoTerminal
 // "pools" are dust ($0 vol, a few $ liquidity). Override with ROSE_POOL_ADDR if it ever moves.
 const ROSE_POOL = process.env.ROSE_POOL_ADDR || "7JtHjSAm7emq5Mc9GQgVZwfDY3Ma1TcE2cEwiy9mgkP6";
+const roseParseAttempts = new Map();   // sig -> retry count, so an unindexable cursor sig can't wedge the poller
+const ROSE_MAX_PARSE_ATTEMPTS = 40;    // ~40 × 10s ≈ 6-7 min before stepping over a stuck sig
 const ROSE_QUOTES = { "So11111111111111111111111111111111111111112": "sol", "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v": "stable", "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB": "stable" };
 
 async function roseHeliusRpc(key, method, params) {
@@ -6801,7 +6800,15 @@ async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = f
   for (const sig of fresh) {
     if (seen.has(sig)) { advanceTo = sig; continue; }
     const tx = await roseHeliusRpc(key, "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]);
-    if (!tx) break; // not indexed yet — hold the pointer here, retry this sig next cycle
+    if (!tx) {
+      // Not indexed yet — hold the pointer and retry next cycle, BUT cap the retries so one
+      // permanently-unfetchable sig can't wedge the whole feed forever (the CLKN poller does the
+      // same with MAX_PARSE_ATTEMPTS). After the cap, step over it.
+      const n = (roseParseAttempts.get(sig) || 0) + 1;
+      if (n < ROSE_MAX_PARSE_ATTEMPTS) { roseParseAttempts.set(sig, n); break; }
+      roseParseAttempts.delete(sig); advanceTo = sig; console.warn(`[ROSE-BUY] giving up on sig ${sig.slice(0,8)} after ${n} attempts — stepping over`); continue;
+    }
+    roseParseAttempts.delete(sig);   // resolved
     scanned++;
     const buy = roseDetectBuyFromRaw(tx, roseUsd, solUsd);
     seen.add(sig);
@@ -8563,7 +8570,19 @@ function isReinvestWallet(addr) {
 // any MIN_BUY_USD floor. Auto-flags on a detected round-trip; list is viewable/editable via
 // /api/arb-bots. Window is kv-tunable (arbRoundtripSec, default 180s).
 function getArbBots() { return kv.get("arbBotWallets", {}) || {}; }
-function isArbBot(addr) { return addr != null && !!getArbBots()[addr]; }
+// A single buy→sell round-trip (e.g. a human who panic-sold minutes after buying) must NOT mute
+// a wallet's buys forever. Require ≥2 round-trips to actually suppress, and age the flag out if
+// the wallet hasn't round-tripped within the TTL — real arb bots round-trip constantly and stay
+// flagged; a one-off mistake self-clears. Seeded/known bots are exempt from the hits requirement.
+const ARB_FLAG_TTL_MS = 14 * 24 * 3600 * 1000;
+function isArbBot(addr) {
+  if (addr == null) return false;
+  const b = getArbBots()[addr];
+  if (!b) return false;
+  const fresh = (b.lastAt || b.flaggedAt || 0) >= Date.now() - ARB_FLAG_TTL_MS;
+  const strong = (b.hits || 1) >= 2 || String(b.reason || "").startsWith("seed");
+  return fresh && strong;
+}
 function flagArbBot(addr, reason = "round-trip") {
   if (!addr) return;
   const bots = getArbBots();
