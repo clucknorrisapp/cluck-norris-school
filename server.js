@@ -13250,8 +13250,9 @@ app.listen(PORT, () => {
       pollClknBuys();
       setInterval(pollClknBuys, 30000);
     }, 5000);
-    // ROSE buy bot — no-op until ROSE_TG_CHAT_ID is set (see roseBuyBotPollOnce). 45s cadence.
-    setInterval(pollRoseBuys, 45000);
+    // ROSE buy bot — dormant until armed + a ROSE chat resolves (see pollRoseBuys). 15s cadence
+    // (ROSE_POLL_MS to tune; floored at 5s to stay gentle on Helius).
+    setInterval(pollRoseBuys, Math.max(5000, parseInt(process.env.ROSE_POLL_MS || "15000", 10)));
     // Cluck's Daily Alpha — auto-post once/day at ~ALPHA_POST_HOUR UTC to X + (silent) Telegram.
     // Stamps the date BEFORE posting so a crash/retry can't double-post publicly; a rare failed
     // post is recoverable via /api/alpha-test?post=1. Change the hour freely (or kv alphaPostHour).
