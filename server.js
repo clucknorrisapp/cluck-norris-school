@@ -14088,7 +14088,37 @@ app.listen(PORT, () => {
             { command: "commands", description: "List every command + what it does" },
           ] }),
         });
-        console.log("[TELEGRAM] webhook + command menu registered");
+        // Per-room "/" menus — the list above is the DEFAULT scope, so it advertises every
+        // CLKN command in EVERY chat the bot sits in, including partner rooms (e.g. the ROSE
+        // group). In a non-CLKN room the bot only serves that project's price/liquidity/buy-comp
+        // (see PROJECT_ROOM_CMDS), so scope a trimmed menu to those chats. A chat-scoped menu
+        // (BotCommandScopeChat) overrides the default for that one chat only; typed commands
+        // still work regardless of what the menu shows. chatid is operator-only — kept off the menu.
+        const projectRoomMenu = [
+          { command: "price", description: "Live price, market cap & volume" },
+          { command: "liquidity", description: "Live AMM depth & positions" },
+          { command: "buyleaders", description: "Live buy-competition standings" },
+        ];
+        const mainRoom = String(process.env.TELEGRAM_CHAT_ID || "");
+        const projectRoomChatIds = new Set();
+        try {
+          const projs = whirlpoolMM.vault.listProjects() || {};
+          for (const id of Object.keys(projs)) {
+            const cid = projs[id] && projs[id].telegramChatId;
+            if (id === "clkn" || !cid || String(cid) === mainRoom) continue;
+            projectRoomChatIds.add(String(cid));
+          }
+        } catch (_) { /* vault not ready — ROSE fallback below still covers the known room */ }
+        try { const rc = roseResolveChatId(); if (rc && String(rc) !== mainRoom) projectRoomChatIds.add(String(rc)); } catch (_) {}
+        for (const cid of projectRoomChatIds) {
+          try {
+            await fetch(`https://api.telegram.org/bot${token}/setMyCommands`, {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ commands: projectRoomMenu, scope: { type: "chat", chat_id: /^-?\d+$/.test(cid) ? Number(cid) : cid } }),
+            });
+          } catch (e) { console.warn(`[TELEGRAM] scoped menu for ${cid} failed:`, e.message); }
+        }
+        console.log(`[TELEGRAM] webhook + command menu registered${projectRoomChatIds.size ? ` (+${projectRoomChatIds.size} project room${projectRoomChatIds.size > 1 ? "s" : ""} trimmed)` : ""}`);
       } catch (e) { console.warn("[TELEGRAM] webhook setup failed:", e.message); }
     })();
   } else {
