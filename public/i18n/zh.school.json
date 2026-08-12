@@ -1,4 +1,6 @@
 {
+  "DLMM Liquidity Shapes": "DLMM 流动性形态",
+  "Laddering & Multi-Position": "阶梯式布局与多头寸",
   "Liquidity Pools": "流动性池",
   "Cluck Norris doesn't chase liquidity… he BECOMES it.": "Cluck Norris 不追逐流动性……他直接成为流动性。",
   "Every trade on a DEX pulls from a Liquidity Pool — a smart contract holding two tokens. LP providers earn fees from every swap. No order books. No middlemen. Just math and the market.": "在 DEX 上的每一笔交易都从流动性池中提取——这是一个持有两种代币的智能合约。LP 提供者从每一次兑换中赚取手续费。没有订单簿，没有中间商，只有数学和市场。",

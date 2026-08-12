@@ -1,4 +1,6 @@
 {
+  "DLMM Liquidity Shapes": "Formas de liquidez en DLMM",
+  "Laddering & Multi-Position": "Escalonamiento y múltiples posiciones",
   "Liquidity Pools": "Pools de liquidez",
   "Cluck Norris doesn't chase liquidity… he BECOMES it.": "Cluck Norris no persigue la liquidez… él SE CONVIERTE en ella.",
   "Every trade on a DEX pulls from a Liquidity Pool — a smart contract holding two tokens. LP providers earn fees from every swap. No order books. No middlemen. Just math and the market.": "Cada operación en un DEX se nutre de un pool de liquidez: un contrato inteligente que contiene dos tokens. Los proveedores de LP ganan comisiones en cada swap. Sin libros de órdenes. Sin intermediarios. Solo matemáticas y el mercado.",
