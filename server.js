@@ -6700,7 +6700,7 @@ function roseDetectBuyFromRaw(tx, roseUsd, solUsd) {
   return { wallet: buyer, tokenAmt: buyerGain, usd, sig, ts };
 }
 
-async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = false, status = false } = {}) {
+async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = false, status = false, backfill = null } = {}) {
   const token = process.env.ROSE_TG_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
   const chatId = roseResolveChatId();
   const key = (rpc.heliusKeys()[0]) || process.env.HELIUS_API_KEY;
@@ -6731,6 +6731,20 @@ async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = f
     const cap = "🧪 <i>test alert</i>\n" + roseBuyCaption(sample, roseUsd);
     const okp = img ? await roseTgSendPhoto(token, chatId, img, cap, { silent: !loud }) : await roseTgSend(token, chatId, cap, { silent: !loud });
     return { ok: okp, testPost: true, image: !!img };
+  }
+
+  // Backfill lever: post a specific past buy by signature (e.g. one the old detector missed),
+  // even though it's behind the cursor. Marks it seen so the forward poller never doubles it.
+  if (backfill) {
+    const tx = await roseHeliusRpc(key, "getTransaction", [backfill, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]);
+    if (!tx) return { ok: false, backfill, reason: "tx not found / not indexed" };
+    const buy = roseDetectBuyFromRaw(tx, roseUsd, solUsd);
+    if (!buy) return { ok: false, backfill, reason: "not a buy (sell / LP / non-buy)" };
+    buy.sig = buy.sig || backfill;
+    const cap = roseBuyCaption(buy, roseUsd);
+    const okp = img ? await roseTgSendPhoto(token, chatId, img, cap, { silent: !loud }) : await roseTgSend(token, chatId, cap, { silent: !loud });
+    const seen = new Set(kv.get("roseBuySeen", [])); seen.add(buy.sig); kv.set("roseBuySeen", [...seen].slice(-ROSE_BUY_SEEN_MAX));
+    return { ok: okp, backfill, posted: okp ? 1 : 0, usd: buy.usd, wallet: buy.wallet, image: !!img };
   }
 
   // ── Pool-direct polling ────────────────────────────────────────────────────
@@ -6798,7 +6812,7 @@ app.get("/api/rose-buybot", async (req, res) => {
     if (req.query.disarm === "1") kv.set("roseBuyArmed", false);
     // arm/disarm are clean toggles — report status, don't also fire a poll.
     const wantStatus = req.query.status === "1" || req.query.arm === "1" || req.query.disarm === "1";
-    const out = await roseBuyBotPollOnce({ testPost: req.query.test === "1", announce: req.query.announce === "1", loud: req.query.loud === "1", status: wantStatus });
+    const out = await roseBuyBotPollOnce({ testPost: req.query.test === "1", announce: req.query.announce === "1", loud: req.query.loud === "1", status: wantStatus, backfill: req.query.backfill || null });
     return res.status(200).json({ configured: !!roseResolveChatId(), armed: roseBuyArmed(), imageSet: !!process.env.ROSE_BUY_IMAGE_URL, ...out });
   } catch (e) {
     return res.status(500).json({ ok: false, error: publicErrMsg(e) });
