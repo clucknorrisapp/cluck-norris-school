@@ -24,11 +24,19 @@ function adminOK(req) {
   const k = process.env.PREMIUM_ACCESS_KEY;
   // Prefer the header (query strings leak into logs/proxies/history); ?key= kept as fallback.
   const provided = (req.headers && req.headers["x-premium-key"]) || (req.query && req.query.key);
-  return !!k && provided === k;
+  if (!k || typeof provided !== "string" || !provided) return false;
+  // Constant-time compare (sha256 both sides so lengths always match) — a plain === leaks
+  // the matching-prefix length through timing, same hardening as server.js secretEqual.
+  const a = crypto.createHash("sha256").update(provided).digest();
+  const b = crypto.createHash("sha256").update(k).digest();
+  return crypto.timingSafeEqual(a, b);
 }
 
 // Which project an admin request targets (default the built-in CLKN project).
 function proj(req) { return (req.query.project || (req.body && req.body.project) || "clkn"); }
+// The RAW project with no default — for safety-critical actions (pause/resume) where a
+// silent default to "clkn" could stop/start the WRONG tenant. Returns "" when absent.
+function projExplicit(req) { return String((req.query && req.query.project) || (req.body && req.body.project) || "").trim(); }
 
 // ── Client portal auth (wallet-signature) ────────────────────────────────────
 // A project owner proves control of their wallet by signing a fresh message; we then
@@ -517,14 +525,21 @@ router.get("/vault/alerts-to-main", (req, res) => {
   catch (e) { res.status(500).json({ error: e.message || "failed" }); }
 });
 
-// POST /api/whirlpool/vault/pause?key=… and /resume?key=… — kill switch.
+// POST /api/whirlpool/vault/pause?key=&project=… and /resume — kill switch.
+// project= is REQUIRED here (no silent default): the live CLKN engine runs under the
+// "treasury" project, so a pause that defaulted to "clkn" would leave the real vault
+// running while returning {paused:true} — the exact STOP-hit-the-wrong-tenant incident.
 router.post("/vault/pause", (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
-  res.json(vault.pause(proj(req)));
+  const p = projExplicit(req);
+  if (!p) return res.status(400).json({ error: "Specify ?project= explicitly (e.g. project=treasury or project=clkn) — refusing to pause an unspecified project so STOP can't hit the wrong one." });
+  res.json(vault.pause(p));
 });
 router.post("/vault/resume", (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
-  res.json(vault.resume(proj(req)));
+  const p = projExplicit(req);
+  if (!p) return res.status(400).json({ error: "Specify ?project= explicitly (e.g. project=treasury or project=clkn) — refusing to resume an unspecified project." });
+  res.json(vault.resume(p));
 });
 
 // GET /api/whirlpool/vault/mode?key=… — list available modes + tilts + the current
