@@ -682,18 +682,22 @@ async function hatch() {
     setProgress('Approve the transaction in your wallet…');
     const txBytes = Uint8Array.from(atob(built.txBase64), c => c.charCodeAt(0));
     const tx = solanaWeb3.Transaction.from(txBytes);
-    const mintKp = solanaWeb3.Keypair.fromSecretKey(
-      Uint8Array.from(atob(built.mintSecret), c => c.charCodeAt(0))
-    );
-    // Phantom's Lighthouse flags multi-signer transactions unless the wallet signs
-    // FIRST — so the wallet signs, THEN the mint keypair partial-signs (per Phantom
-    // support), and we submit the fully-signed transaction ourselves.
+    // The wallet signs the unsigned, fee-inclusive transaction (Phantom requires the
+    // wallet to sign FIRST on a multi-signer tx). The mint keypair is held SERVER-SIDE,
+    // so we hand the wallet-signed tx back to /submit, which co-signs with the mint key
+    // and submits — but only after verifying the fee wasn't stripped. This makes the fee
+    // enforceable; the browser never receives the mint secret.
     const signedTx = await activeWallet.provider.signTransaction(tx);
-    signedTx.partialSign(mintKp);
-    const signature = await rpc('sendTransaction', [
-      btoa(String.fromCharCode(...signedTx.serialize())),
-      { encoding: 'base64', preflightCommitment: 'confirmed', maxRetries: 3 },
-    ]);
+    const signedB64 = btoa(String.fromCharCode(...signedTx.serialize({ requireAllSignatures: false, verifySignatures: false })));
+
+    setProgress('Finalizing your mint…');
+    const submitRes = await fetch('/api/hatchery/submit', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mintAddress: built.mintAddress, signedTxBase64: signedB64 }),
+    });
+    const submitted = await submitRes.json();
+    if (!submitRes.ok) throw new Error(submitted.error || 'Submit failed');
+    const signature = submitted.signature;
 
     setProgress('Confirming on-chain…');
     await confirmTx(signature);

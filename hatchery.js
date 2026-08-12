@@ -364,6 +364,21 @@ function saveHatcheryState() {
   try { kv.set(HATCHERY_KV, { built: [...hatcheryMints], announced: [...announcedMints] }); } catch (_) {}
 }
 
+// Mint transactions built and awaiting the wallet's signature. The mint keypair is a
+// REQUIRED signer (SystemProgram.createAccount), and we deliberately keep it SERVER-SIDE:
+// the browser signs the unsigned, fee-inclusive tx and posts it to /submit, and the server
+// co-signs with the mint key ONLY after confirming the returned tx is byte-for-byte the one
+// it built — so the fee instruction can't be stripped and the mint completed for free.
+// In-memory + short TTL, and NEVER persisted: it holds a private key.
+const pendingMints = new Map();   // mintAddress -> { mintSecret(b64), builtTxB64, cluster, ts }
+const PENDING_TTL_MS = 10 * 60 * 1000;
+const PENDING_MAX = 500;
+function reapPending() {
+  const now = Date.now();
+  for (const [k, v] of pendingMints) if (now - v.ts > PENDING_TTL_MS) pendingMints.delete(k);
+  while (pendingMints.size > PENDING_MAX) pendingMints.delete(pendingMints.keys().next().value);
+}
+
 // ── HTTP routes ──────────────────────────────────────────────────────────────
 const router = express.Router();
 router.use(express.json({ limit: "5mb" })); // a base64 logo exceeds express's default 100kb
@@ -439,15 +454,66 @@ router.post("/build", async (req, res) => {
       payWith: payWith === "clkn" ? "clkn" : "sol",
     });
 
+    // Keep the mint secret SERVER-SIDE (never sent to the browser) so the fee can't be
+    // stripped: /submit co-signs with it only after verifying the wallet signed the exact
+    // fee-inclusive tx we built here.
+    reapPending();
+    pendingMints.set(mintAddress, { mintSecret, builtTxB64: txBase64, cluster: useCluster, ts: Date.now() });
+
     // Remember this mint so a later /minted report can be trusted + announced.
     hatcheryMints.add(mintAddress);
     if (hatcheryMints.size > 5000) hatcheryMints.delete(hatcheryMints.values().next().value);
     saveHatcheryState();
 
-    res.json({ txBase64, mintAddress, mintSecret, metadataUri, imageUri, cluster: useCluster });
+    res.json({ txBase64, mintAddress, metadataUri, imageUri, cluster: useCluster });
   } catch (e) {
     console.error("[hatchery] build failed:", e);
     res.status(500).json({ error: e.message || "Mint build failed" });
+  }
+});
+
+// POST /api/hatchery/submit — the browser returns the WALLET-signed (but not
+// mint-signed) transaction. We verify it is byte-for-byte the fee-inclusive tx we
+// built at /build, then co-sign with the server-held mint key and submit. This is
+// what makes the fee enforceable: the mint account is a required signer, we hold its
+// key, and we only add our signature to a transaction that still carries the fee.
+router.post("/submit", async (req, res) => {
+  try {
+    const { mintAddress, signedTxBase64 } = req.body || {};
+    if (!mintAddress || !signedTxBase64) return res.status(400).json({ error: "Missing mint address or signed transaction" });
+    reapPending();
+    const pending = pendingMints.get(String(mintAddress));
+    if (!pending) return res.status(410).json({ error: "This mint request expired or was already submitted — build it again." });
+
+    // Parse the client's signed tx.
+    let clientTx;
+    try { clientTx = Transaction.from(Buffer.from(String(signedTxBase64), "base64")); }
+    catch { return res.status(400).json({ error: "Could not read the signed transaction" }); }
+
+    // It MUST be the exact message we built — same instructions incl. the fee, same
+    // blockhash, same order. Any difference (fee stripped, instruction added/altered)
+    // fails the compare and we refuse to co-sign.
+    const builtTx = Transaction.from(Buffer.from(pending.builtTxB64, "base64"));
+    if (Buffer.compare(clientTx.serializeMessage(), builtTx.serializeMessage()) !== 0) {
+      return res.status(400).json({ error: "Signed transaction does not match the mint we built — refusing to co-sign." });
+    }
+
+    // Co-sign with the mint key (required signer), then require BOTH signatures valid —
+    // verifySignatures() is true only if the connected wallet (fee payer) also signed.
+    const mintKp = Keypair.fromSecretKey(Uint8Array.from(Buffer.from(pending.mintSecret, "base64")));
+    clientTx.partialSign(mintKp);
+    if (!clientTx.verifySignatures()) return res.status(400).json({ error: "Wallet signature missing or invalid — approve the transaction and try again." });
+
+    // Single-use: remove the pending entry BEFORE submit so a retry can't double-submit
+    // (Solana also dedupes by signature, but we don't rely on that).
+    pendingMints.delete(String(mintAddress));
+
+    const conn = new Connection(rpcUrl(pending.cluster), "confirmed");
+    const signature = await conn.sendRawTransaction(clientTx.serialize(), { preflightCommitment: "confirmed", maxRetries: 3 });
+    return res.json({ signature });
+  } catch (e) {
+    console.error("[hatchery] submit failed:", e);
+    return res.status(500).json({ error: e.message || "Mint submit failed" });
   }
 });
 
