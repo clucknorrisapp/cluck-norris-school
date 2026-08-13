@@ -522,11 +522,38 @@ router.post("/build", async (req, res) => {
   }
 });
 
+// Compare a client-signed tx against the tx we built, tolerating ONLY wallet-injected
+// ComputeBudget instructions (priority fee / CU limit). Those move no funds and modern wallets
+// (Phantom) add them at sign time — a strict whole-message compare wrongly rejected them as
+// tampering and broke minting outright. Every NON-ComputeBudget instruction we built — mint init,
+// ATA, metadata, and crucially the fee transfer — must still be present, in order, byte-for-byte,
+// so the fee can't be stripped before we co-sign with the mint key.
+const COMPUTE_BUDGET_PROGRAM = "ComputeBudget111111111111111111111111111111";
+function coreInstructions(tx) {
+  return (tx.instructions || []).filter((ix) => ix.programId.toBase58() !== COMPUTE_BUDGET_PROGRAM);
+}
+function ixEqual(a, b) {
+  if (a.programId.toBase58() !== b.programId.toBase58()) return false;
+  const ka = a.keys || [], kb = b.keys || [];
+  if (ka.length !== kb.length) return false;
+  for (let i = 0; i < ka.length; i++) {
+    if (ka[i].pubkey.toBase58() !== kb[i].pubkey.toBase58()) return false;
+    if (!!ka[i].isSigner !== !!kb[i].isSigner) return false;
+    if (!!ka[i].isWritable !== !!kb[i].isWritable) return false;
+  }
+  return Buffer.compare(Buffer.from(a.data || []), Buffer.from(b.data || [])) === 0;
+}
+function sameCoreInstructions(builtTx, clientTx) {
+  const a = coreInstructions(builtTx), b = coreInstructions(clientTx);
+  if (a.length !== b.length) return false;
+  return a.every((ix, i) => ixEqual(ix, b[i]));
+}
+
 // POST /api/hatchery/submit — the browser returns the WALLET-signed (but not
-// mint-signed) transaction. We verify it is byte-for-byte the fee-inclusive tx we
-// built at /build, then co-sign with the server-held mint key and submit. This is
-// what makes the fee enforceable: the mint account is a required signer, we hold its
-// key, and we only add our signature to a transaction that still carries the fee.
+// mint-signed) transaction. We verify its core instructions match the fee-inclusive tx we
+// built at /build (allowing wallet-added ComputeBudget priority-fee ixs), then co-sign with the
+// server-held mint key and submit. This is what makes the fee enforceable: the mint account is a
+// required signer, we hold its key, and we only add our signature to a tx that still carries the fee.
 router.post("/submit", async (req, res) => {
   try {
     const { mintAddress, signedTxBase64 } = req.body || {};
@@ -540,15 +567,22 @@ router.post("/submit", async (req, res) => {
     try { clientTx = Transaction.from(Buffer.from(String(signedTxBase64), "base64")); }
     catch { return res.status(400).json({ error: "Could not read the signed transaction" }); }
 
-    // It MUST be the exact message we built — same instructions incl. the fee, same
-    // blockhash, same order. Any difference (fee stripped, instruction added/altered)
-    // fails the compare and we refuse to co-sign.
+    // Our core instructions (mint setup + the fee transfer) must survive intact, in order,
+    // byte-for-byte — the fee can't be stripped or altered. Wallet-added ComputeBudget
+    // priority-fee instructions are allowed (they move no funds); a strict whole-message
+    // compare used to reject them and break the mint. Blockhash isn't required to match ours:
+    // we co-sign the client's own message, so both signatures cover the same bytes regardless.
     const builtTx = Transaction.from(Buffer.from(pending.builtTxB64, "base64"));
-    if (Buffer.compare(clientTx.serializeMessage(), builtTx.serializeMessage()) !== 0) {
-      // The signed tx isn't byte-for-byte the fee-inclusive tx we built. Usually this means
-      // the wallet altered the transaction while signing (e.g. injected a fee instruction).
-      // We refuse rather than co-sign something we didn't verify. Nothing was charged.
-      return res.status(400).json({ error: "Your wallet changed the transaction while signing, so we can't safely co-sign it (no fee was charged). Please try again, or mint with a different wallet — Phantom is known to work." });
+    if (!sameCoreInstructions(builtTx, clientTx)) {
+      // A core instruction was added, dropped, reordered, or altered (e.g. the fee stripped).
+      // We refuse to co-sign something we didn't verify. Nothing was charged. Log the shape so a
+      // recurring wallet quirk (beyond ComputeBudget) is diagnosable.
+      try {
+        const bp = coreInstructions(builtTx).map((i) => i.programId.toBase58());
+        const cp = coreInstructions(clientTx).map((i) => i.programId.toBase58());
+        console.warn(`[hatchery] submit rejected — core ix built=${bp.length} client=${cp.length} | built:[${bp.join(",")}] client:[${cp.join(",")}]`);
+      } catch (_) {}
+      return res.status(400).json({ error: "Your wallet changed the transaction while signing, so we can't safely co-sign it (no fee was charged). Please try again, or mint with a different wallet." });
     }
 
     // Co-sign with the mint key (required signer), then require BOTH signatures valid —
