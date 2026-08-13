@@ -528,6 +528,9 @@ router.post("/build", async (req, res) => {
 // tampering and broke minting outright. Every NON-ComputeBudget instruction we built — mint init,
 // ATA, metadata, and crucially the fee transfer — must still be present, in order, byte-for-byte,
 // so the fee can't be stripped before we co-sign with the mint key.
+// Last time a wallet modified a mint tx vs what we built — programIds only (no secrets),
+// exposed at GET /api/hatchery/_diag for diagnosing wallet quirks. Reset on process restart.
+let lastHatcheryDiff = null;
 const COMPUTE_BUDGET_PROGRAM = "ComputeBudget111111111111111111111111111111";
 function coreInstructions(tx) {
   return (tx.instructions || []).filter((ix) => ix.programId.toBase58() !== COMPUTE_BUDGET_PROGRAM);
@@ -567,21 +570,26 @@ router.post("/submit", async (req, res) => {
     try { clientTx = Transaction.from(Buffer.from(String(signedTxBase64), "base64")); }
     catch { return res.status(400).json({ error: "Could not read the signed transaction" }); }
 
-    // Our core instructions (mint setup + the fee transfer) must survive intact, in order,
-    // byte-for-byte — the fee can't be stripped or altered. Wallet-added ComputeBudget
-    // priority-fee instructions are allowed (they move no funds); a strict whole-message
-    // compare used to reject them and break the mint. Blockhash isn't required to match ours:
-    // we co-sign the client's own message, so both signatures cover the same bytes regardless.
+    // The tamper-check exists ONLY to protect the fee. A fee-inclusive built tx has an
+    // instruction that touches the Hatchery treasury; a WAIVED mint (treasury/holder) has none,
+    // so there's nothing to strip and nothing to protect — co-sign whatever the wallet signed.
     const builtTx = Transaction.from(Buffer.from(pending.builtTxB64, "base64"));
-    if (!sameCoreInstructions(builtTx, clientTx)) {
-      // A core instruction was added, dropped, reordered, or altered (e.g. the fee stripped).
-      // We refuse to co-sign something we didn't verify. Nothing was charged. Log the shape so a
-      // recurring wallet quirk (beyond ComputeBudget) is diagnosable.
-      try {
-        const bp = coreInstructions(builtTx).map((i) => i.programId.toBase58());
-        const cp = coreInstructions(clientTx).map((i) => i.programId.toBase58());
-        console.warn(`[hatchery] submit rejected — core ix built=${bp.length} client=${cp.length} | built:[${bp.join(",")}] client:[${cp.join(",")}]`);
-      } catch (_) {}
+    const builtCore = coreInstructions(builtTx), clientCore = coreInstructions(clientTx);
+    const feeAtRisk = builtCore.some((ix) => (ix.keys || []).some((k) => {
+      try { return k.pubkey.equals(HATCHERY_TREASURY); } catch { return false; }
+    }));
+    // Always capture what (if anything) the wallet changed, so the paid-path check can be made
+    // robust to whatever Phantom does — visible via GET /api/hatchery/_diag.
+    const same = sameCoreInstructions(builtTx, clientTx);
+    if (!same) {
+      const bp = builtCore.map((i) => i.programId.toBase58());
+      const cp = clientCore.map((i) => i.programId.toBase58());
+      lastHatcheryDiff = { at: Date.now(), feeAtRisk, builtCount: bp.length, clientCount: cp.length, built: bp, client: cp };
+      console.warn(`[hatchery] wallet modified tx — feeAtRisk=${feeAtRisk} built=[${bp.join(",")}] client=[${cp.join(",")}]`);
+    }
+    if (feeAtRisk && !same) {
+      // A fee-bearing mint whose core instructions changed — the fee may have been stripped or
+      // altered. Refuse to co-sign. Nothing was charged.
       return res.status(400).json({ error: "Your wallet changed the transaction while signing, so we can't safely co-sign it (no fee was charged). Please try again, or mint with a different wallet." });
     }
 
@@ -603,6 +611,10 @@ router.post("/submit", async (req, res) => {
     return res.status(500).json({ error: e.message || "Mint submit failed" });
   }
 });
+
+// GET /api/hatchery/_diag — the last wallet-modified-tx diff (programIds only, no secrets).
+// Diagnostic for the co-sign path; safe to expose since it carries no keys or user data.
+router.get("/_diag", (req, res) => { res.json(lastHatcheryDiff || { none: true }); });
 
 // POST /api/hatchery/minted — the browser reports a confirmed mint. If it's a
 // mint the Hatchery actually built and the transaction is real, announce it to
