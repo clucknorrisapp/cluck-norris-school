@@ -546,10 +546,29 @@ function ixEqual(a, b) {
   }
   return Buffer.compare(Buffer.from(a.data || []), Buffer.from(b.data || [])) === 0;
 }
-function sameCoreInstructions(builtTx, clientTx) {
-  const a = coreInstructions(builtTx), b = coreInstructions(clientTx);
-  if (a.length !== b.length) return false;
-  return a.every((ix, i) => ixEqual(ix, b[i]));
+// True if every instruction we built survives — unchanged and in order — as a SUBSEQUENCE of the
+// client's signed tx. Modern wallets bracket the tx with their own instructions: Phantom wraps it
+// in Lighthouse assertion guards (program L2TEx…) plus ComputeBudget priority-fee ixs. A strict
+// same-length compare rejected all of that and broke minting. A subsequence check lets the wallet
+// inject whatever it wants around ours, while guaranteeing OUR instructions — including the fee
+// transfer — can't be dropped, reordered, or altered. This stays fee-safe even against arbitrary
+// injected instructions: a tx executes all-or-nothing (so if it lands with our fee transfer in it,
+// the fee was paid), the treasury never signs this tx (so nothing can move funds out of it), and
+// the only key we co-sign with is the ephemeral mint account, which holds nothing.
+function builtIxsPreserved(builtTx, clientTx) {
+  const built = coreInstructions(builtTx);
+  const client = clientTx.instructions || [];
+  let ci = 0;
+  for (const bx of built) {
+    let found = false;
+    while (ci < client.length) {
+      const match = ixEqual(bx, client[ci]);
+      ci++;
+      if (match) { found = true; break; }
+    }
+    if (!found) return false;
+  }
+  return true;
 }
 
 // POST /api/hatchery/submit — the browser returns the WALLET-signed (but not
@@ -580,16 +599,16 @@ router.post("/submit", async (req, res) => {
     }));
     // Always capture what (if anything) the wallet changed, so the paid-path check can be made
     // robust to whatever Phantom does — visible via GET /api/hatchery/_diag.
-    const same = sameCoreInstructions(builtTx, clientTx);
-    if (!same) {
+    const preserved = builtIxsPreserved(builtTx, clientTx);
+    if (!preserved) {
       const bp = builtCore.map((i) => i.programId.toBase58());
       const cp = clientCore.map((i) => i.programId.toBase58());
       lastHatcheryDiff = { at: Date.now(), feeAtRisk, builtCount: bp.length, clientCount: cp.length, built: bp, client: cp };
-      console.warn(`[hatchery] wallet modified tx — feeAtRisk=${feeAtRisk} built=[${bp.join(",")}] client=[${cp.join(",")}]`);
+      console.warn(`[hatchery] wallet dropped/altered a built ix — feeAtRisk=${feeAtRisk} built=[${bp.join(",")}] client=[${cp.join(",")}]`);
     }
-    if (feeAtRisk && !same) {
-      // A fee-bearing mint whose core instructions changed — the fee may have been stripped or
-      // altered. Refuse to co-sign. Nothing was charged.
+    if (feeAtRisk && !preserved) {
+      // A fee-bearing mint is missing one of our built instructions — the fee may have been
+      // stripped or altered. Refuse to co-sign. Nothing was charged.
       return res.status(400).json({ error: "Your wallet changed the transaction while signing, so we can't safely co-sign it (no fee was charged). Please try again, or mint with a different wallet." });
     }
 
