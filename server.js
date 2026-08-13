@@ -1632,6 +1632,8 @@ function tgCommandReply(cmd, arg) {
       return `🔒 <b>The Jup Locker Room</b> — lock any Solana token on the Jupiter Lock program. Free, non-custodial, no cut. Includes unverified Token-2022 mints other lockers won't list.\n${link("/locker-room")}`;
     case "hatchery":
       return `🥚 <b>The Hatchery</b> — create a token, guided start to finish\n${link("/hatchery")}`;
+    case "firepit":
+      return `🔥 <b>Firepit</b> — burn junk tokens &amp; reclaim your SOL rent. Safe, non-custodial, no cut; a live value-guard stops you torching anything still worth money.\n${link("/firepit")}`;
     case "bags":
       return `🎒 <b>Bags.fm</b> — live launches, near-grad &amp; recently graduated\n${link("/bags")}`;
     case "tools":
@@ -1654,6 +1656,7 @@ function tgCommandReply(cmd, arg) {
         "📈 /buyspecial — run a buy competition\n" +
         "🏆 /buyleaders — live buy-competition standings\n" +
         "🥚 /hatchery — create a token, guided\n" +
+        "🔥 /firepit — burn junk tokens, reclaim your SOL rent\n" +
         "🎒 /bags — live Bags.fm launches\n" +
         "🛠 /tools — every tool in one place\n" +
         "📊 /liquidity — live AMM depth &amp; positions\n" +
@@ -1730,7 +1733,7 @@ async function priceReply(chatId, replyTo) {
   }
 }
 
-const TG_KNOWN_CMDS = ["ca","x","website","app","dex","walletxray","autopsy","trace","snapshot","holders","lock","lockerroom","locker","securitycoop","walletcheckup","buyspecial","rose","hatchery","bags","tools","liquidity","price","commands","start","help","guide","buyleaders","chatid"];
+const TG_KNOWN_CMDS = ["ca","x","website","app","dex","walletxray","autopsy","trace","snapshot","holders","lock","lockerroom","locker","securitycoop","walletcheckup","buyspecial","rose","hatchery","firepit","bags","tools","liquidity","price","commands","start","help","guide","buyleaders","chatid"];
 // In a non-CLKN project room (e.g. ROSE) the bot only serves that project's liquidity +
 // buy competitions; chatid stays so an operator can wire a buy comp. Everything else off.
 const PROJECT_ROOM_CMDS = ["liquidity","price","buyleaders","chatid"];
@@ -14230,6 +14233,7 @@ app.listen(PORT, () => {
             { command: "buyspecial", description: "Run a buy competition" },
             { command: "buyleaders", description: "Live buy-competition standings" },
             { command: "hatchery", description: "Create a token, guided" },
+            { command: "firepit", description: "Burn junk tokens, reclaim your SOL rent" },
             { command: "bags", description: "Live Bags.fm launches" },
             { command: "tools", description: "All the Cluck Norris tools" },
             { command: "liquidity", description: "Live AMM depth & positions" },
