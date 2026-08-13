@@ -31,6 +31,16 @@ const ARWEAVE_UPLOAD_URL = "https://upload.ardrive.io/tx";
 // Flat-fee treasury — the project's CLKN-receive wallet (the same address the
 // token-gated tools collect CLKN at). Any mint fee is sent here.
 const HATCHERY_TREASURY = new PublicKey("7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H");
+// Operator wallets that ALWAYS mint for free, whatever their CLKN balance — the CLKN
+// treasury and the Hatchery fee wallet (a fee paid from either to itself is a no-op anyway).
+const HATCHERY_FREE_WALLETS = new Set([
+  "2zMCUkE9pBjcC7ihtLqm28EsCoEHVmCdJYr5262EuPy8", // CLKN treasury / operator
+  "7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H", // Hatchery fee treasury
+]);
+function isHatcheryFreeWallet(pk) {
+  try { return HATCHERY_FREE_WALLETS.has(pk && pk.toBase58 ? pk.toBase58() : String(pk)); }
+  catch { return false; }
+}
 // Per-mint flat fee in lamports, from the HATCHERY_FEE_LAMPORTS env var. Unset
 // or 0 means free (the current beta). 0.1 SOL = 100000000.
 function hatcheryFeeLamports() {
@@ -47,10 +57,14 @@ function hatcheryFeeClknSol() {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 // Wallets holding at least HATCHERY_FREE_HOLDER_CLKN whole CLKN mint for free.
-// 0 (unset) disables the perk.
+// Default 100,000 (owner, 2026-08-13). NOTE: the Railway env var OVERRIDES this default,
+// and is currently set to 2,000,000 — so to make 100k live, set HATCHERY_FREE_HOLDER_CLKN
+// to 100000 (or clear it to use this default). Set the env to 0 to turn the perk off.
 function hatcheryFreeHolderClkn() {
-  const n = parseInt(process.env.HATCHERY_FREE_HOLDER_CLKN || "0", 10);
-  return Number.isFinite(n) && n > 0 ? n : 0;
+  const raw = process.env.HATCHERY_FREE_HOLDER_CLKN;
+  if (raw === "0") return 0;                       // explicit off
+  const n = parseInt(raw || "100000", 10);
+  return Number.isFinite(n) && n > 0 ? n : 100000;
 }
 
 // ── CLKN price (drives the dynamic CLKN fee) ─────────────────────────────────
@@ -256,13 +270,14 @@ async function buildMintTransaction({
   // or CLKN, collected into the treasury inside this same transaction.
   const freeThreshold = hatcheryFreeHolderClkn();   // whole CLKN; 0 = perk off
   const wantsClkn = payWith === "clkn";
+  const freeWallet = isHatcheryFreeWallet(creatorPk);   // treasury/operator always mints free
   let creatorClkn = null;
-  if (freeThreshold > 0 || wantsClkn) {
+  if (!freeWallet && (freeThreshold > 0 || wantsClkn)) {
     // An RPC failure leaves this null → no waiver granted, fee still charged.
     try { creatorClkn = await clknBalanceRaw(conn, creatorPk); } catch { creatorClkn = null; }
   }
-  const waived = freeThreshold > 0 && creatorClkn !== null
-    && creatorClkn >= BigInt(freeThreshold) * (10n ** BigInt(CLKN_DECIMALS));
+  const waived = freeWallet || (freeThreshold > 0 && creatorClkn !== null
+    && creatorClkn >= BigInt(freeThreshold) * (10n ** BigInt(CLKN_DECIMALS)));
 
   if (!waived && wantsClkn) {
     const feeClkn = await clknFeeWhole();
@@ -433,11 +448,16 @@ router.get("/config", async (req, res) => {
       feeWaived: false,
     };
     const wallet = req.query.wallet;
-    if (wallet && holderThreshold > 0) {
+    if (wallet) {
       try {
-        const conn = new Connection(rpcUrl("mainnet-beta"), "confirmed");
-        const bal = await clknBalanceRaw(conn, new PublicKey(wallet));
-        out.feeWaived = bal >= BigInt(holderThreshold) * (10n ** BigInt(CLKN_DECIMALS));
+        const pk = new PublicKey(wallet);
+        if (isHatcheryFreeWallet(pk)) {
+          out.feeWaived = true;                      // treasury/operator — always free
+        } else if (holderThreshold > 0) {
+          const conn = new Connection(rpcUrl("mainnet-beta"), "confirmed");
+          const bal = await clknBalanceRaw(conn, pk);
+          out.feeWaived = bal >= BigInt(holderThreshold) * (10n ** BigInt(CLKN_DECIMALS));
+        }
       } catch { /* leave feeWaived false */ }
     }
     res.json(out);
