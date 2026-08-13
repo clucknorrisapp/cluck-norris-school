@@ -145,7 +145,19 @@ var DEV = (function(){ try{
 // comments to /api/nq/feedback. The page is a hidden preview anyway; this flag just gates
 // the tester-only UI so normal players never see it. Off = the game behaves exactly as before.
 // The dev bench implies the picker too, so one secret URL gives the owner picker + hidden rooms.
-var TEST_MODE = (function(){ try{ return DEV || /[?&#]test=1(\b|$)/.test((location.search||'')+(location.hash||'')); }catch(e){ return false; } })();
+var TEST_MODE = (function(){ try{
+  var qh=(location.search||'')+(location.hash||'');
+  // Kill switch: ?test=0 clears the persisted tester flags for this install.
+  try{ if(/[?&#]test=0(\b|$)/.test(qh)){ localStorage.removeItem('nq_test'); localStorage.removeItem('nq_tester'); } }catch(e){}
+  var on = DEV || /[?&#]test=1(\b|$)/.test(qh) || /[?&#]tester=[A-Za-z0-9_-]{1,16}/.test(qh);
+  // Beta testers reach the game through a FIXED wrapper URL (TestFlight/Seeker) that can't carry a
+  // query param across relaunches — so a one-time ?test=1 or ?tester= link would light the feedback
+  // widget once and lose it on the next launch. Persist activation for this install so the bug-report
+  // button stays. Normal players never set the flag (no ?test / no ?tester link), so they never see it.
+  try{ if(on) localStorage.setItem('nq_test','1'); }catch(e){}
+  try{ if(localStorage.getItem('nq_test')==='1' || localStorage.getItem('nq_tester')) on=true; }catch(e){}
+  return on;
+}catch(e){ return false; } })();
 // PANEL TESTER TAG — a personalized link (?tester=T1) stamps this browser once; every telemetry
 // beacon + feedback comment carries the code from then on, so the 10-person panel's data
 // separates per tester on the dashboard. A self-chosen code, not PII.
@@ -6361,6 +6373,19 @@ var NQGAME=new Phaser.Game({
   physics:{ default:'arcade', arcade:{ gravity:{y:900}, debug:false } },
   scene:[Boot,Title,LevelSelect,Controls,Game,Over,Win,WorldClear,Briefing,VipPitch,LevelClear]
 });
+// FIX (2026-08-13): typing in ANY HTML text field — the leaderboard handle (#nqp-handle), the
+// promo/redeem code, wallet fields — dropped the game-control keys, so "half the keyboard didn't
+// work". Phaser's KeyboardManager globally captures and preventDefaults W A S D F X Space arrows L,
+// so those keystrokes never reached the focused input. The bug-report modal already worked around
+// this per-modal via kbGame(); generalise it: disable Phaser's keyboard whenever a text field is
+// focused and restore it on blur. Delegated on document (capture phase) so it also covers inputs
+// injected later via innerHTML, and the relatedTarget guard avoids a flicker when tabbing field→field.
+(function(){
+  function isField(el){ return !!el && (/^(input|textarea|select)$/i.test(el.tagName||'') || el.isContentEditable); }
+  function nqKbd(on){ try{ if(NQGAME&&NQGAME.input&&NQGAME.input.keyboard) NQGAME.input.keyboard.enabled=on; }catch(e){} }
+  document.addEventListener('focusin', function(e){ if(isField(e.target)) nqKbd(false); }, true);
+  document.addEventListener('focusout', function(e){ if(isField(e.target) && !isField(e.relatedTarget)) nqKbd(true); }, true);
+})();
 // Global "jump to level picker" hook — works from ANY scene (title, game, over, win), so the
 // reliable DOM "≡ Levels" button is never a dead end. Stops whatever's running, then starts it.
 try{ if(typeof window!=='undefined') window.__NQ_TOLEVELS=function(){ try{
