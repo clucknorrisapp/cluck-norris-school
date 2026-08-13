@@ -6602,7 +6602,16 @@ app.get("/api/rosehorses", async (req, res) => {
 // a late-indexed buy is caught on a later pass and never double-posted, and a redeploy
 // resumes from the durable cursor instead of replaying or missing.
 const ROSE_BOT_MINT = ROSEHORSES_MINT; // RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF
-const ROSE_MIN_BUY_USD = parseFloat(process.env.ROSE_MIN_BUY_USD || "1.75");
+// Minimum buy (USD) that fires an alert. ⚠️ TEMPORARILY $10 (normal floor is $1.75) while
+// the owner tests narrow-range LPs that throw off small-arb volume we don't want spamming
+// the room (2026-08-13). Revert this default to 1.75 when that test ends. Precedence:
+// live kv override (roseMinBuyUsd, set via /api/rose-buybot?setmin=…) → env ROSE_MIN_BUY_USD
+// → this default — so the floor can be tuned or reverted mid-test WITHOUT a redeploy.
+const ROSE_MIN_BUY_USD_DEFAULT = parseFloat(process.env.ROSE_MIN_BUY_USD || "10");
+function roseMinBuyUsd() {
+  const o = Number(kv.get("roseMinBuyUsd", NaN));
+  return Number.isFinite(o) && o > 0 ? o : ROSE_MIN_BUY_USD_DEFAULT;
+}
 const ROSE_BUY_OVERLAP_MS = 150 * 1000;        // re-scan the trailing 2.5 min for lagged enrichment
 const ROSE_BUY_LOOKBACK_CAP_MS = 15 * 60 * 1000; // never scan more than 15 min back (redeploy/gap guard)
 const ROSE_BUY_SEEN_MAX = 600;                 // bound the durable dedup set
@@ -6787,7 +6796,7 @@ async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = f
   const chatId = roseResolveChatId();
   const key = (rpc.heliusKeys()[0]) || process.env.HELIUS_API_KEY;
   // Read-only status probe — never posts or polls; just reports wiring.
-  if (status) return { ok: true, status: true, armed: roseBuyArmed(), hasToken: !!token, hasChatId: !!chatId, resolvedChatId: chatId || null, envOverride: !!process.env.ROSE_TG_CHAT_ID, hasHeliusKey: !!key, pool: ROSE_POOL, headRecorded: !!kv.get("roseBuyLastSig", null) };
+  if (status) return { ok: true, status: true, armed: roseBuyArmed(), hasToken: !!token, hasChatId: !!chatId, resolvedChatId: chatId || null, envOverride: !!process.env.ROSE_TG_CHAT_ID, hasHeliusKey: !!key, pool: ROSE_POOL, floorUsd: roseMinBuyUsd(), headRecorded: !!kv.get("roseBuyLastSig", null) };
   if (!token || !chatId) return { ok: false, reason: "dormant (ROSE_TG_CHAT_ID unset)" };
   // Defaults to the OnlyRose brand art hosted on our origin; override with ROSE_BUY_IMAGE_URL.
   const img = process.env.ROSE_BUY_IMAGE_URL || (CANONICAL_ORIGIN + "/vendor/rose-buy.jpg");
@@ -6865,7 +6874,7 @@ async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = f
     seen.add(sig);
     advanceTo = sig;
     if (buy) { buysSeen++; buy.sig = buy.sig || sig; }
-    if (buy && buy.usd != null && buy.usd >= ROSE_MIN_BUY_USD) {
+    if (buy && buy.usd != null && buy.usd >= roseMinBuyUsd()) {
       const cap = roseBuyCaption(buy, roseUsd, roseMkt);
       const okp = img ? await roseTgSendPhoto(token, chatId, img, cap, { silent: buysSilent }) : await roseTgSend(token, chatId, cap, { silent: buysSilent });
       if (okp) posted++;
@@ -6874,7 +6883,7 @@ async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = f
   }
   kv.set("roseBuyLastSig", advanceTo);
   kv.set("roseBuySeen", [...seen].slice(-ROSE_BUY_SEEN_MAX));
-  return { ok: true, scanned, buys: buysSeen, posted, floorUsd: ROSE_MIN_BUY_USD, image: !!img };
+  return { ok: true, scanned, buys: buysSeen, posted, floorUsd: roseMinBuyUsd(), image: !!img };
 }
 
 // Auto-posting is OFF until explicitly armed (kv roseBuyArmed), so resolving the chat
@@ -6890,6 +6899,8 @@ async function pollRoseBuys() {
 // Admin lever (PREMIUM_ACCESS_KEY-gated):
 //   ?status=1  → read-only wiring probe (never posts)
 //   ?arm=1     → turn ON automatic buy posting; ?disarm=1 → turn it OFF
+//   ?setmin=N  → set the min-buy USD floor live (e.g. 10). ?setmin=0 clears the override
+//                back to the code/env default. Survives redeploys (kv-durable).
 //   default    → run one poll cycle now (manual; works even while disarmed)
 //   ?test=1    → fire a sample buy alert (verify chat + image wiring)
 //   ?announce=1→ post the one-off "buy bot warming up" announcement
@@ -6901,8 +6912,15 @@ app.get("/api/rose-buybot", async (req, res) => {
   try {
     if (req.query.arm === "1") kv.set("roseBuyArmed", true);
     if (req.query.disarm === "1") kv.set("roseBuyArmed", false);
-    // arm/disarm are clean toggles — report status, don't also fire a poll.
-    const wantStatus = req.query.status === "1" || req.query.arm === "1" || req.query.disarm === "1";
+    // Live min-buy floor: setmin=0 (or negative/NaN) clears the override → back to default.
+    let minChanged = false;
+    if (req.query.setmin != null) {
+      const v = Number(req.query.setmin);
+      if (Number.isFinite(v) && v > 0) kv.set("roseMinBuyUsd", v); else kv.set("roseMinBuyUsd", null);
+      minChanged = true;
+    }
+    // arm/disarm/setmin are clean toggles — report status, don't also fire a poll.
+    const wantStatus = req.query.status === "1" || req.query.arm === "1" || req.query.disarm === "1" || minChanged;
     const out = await roseBuyBotPollOnce({ testPost: req.query.test === "1", announce: req.query.announce === "1", loud: req.query.loud === "1", status: wantStatus, backfill: req.query.backfill || null });
     return res.status(200).json({ configured: !!roseResolveChatId(), armed: roseBuyArmed(), imageSet: !!process.env.ROSE_BUY_IMAGE_URL, ...out });
   } catch (e) {
