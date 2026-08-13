@@ -125,6 +125,50 @@ const splToken = {
     });
   },
 
+  // BurnChecked (token program ix #15) — permanently destroys `amount` base units from an
+  // account the signer owns. Checked variant carries mint + decimals so a wallet simulator can
+  // show EXACTLY what's being burned ("X CLKN"), and the program rejects a decimals mismatch —
+  // a guard against fat-fingering the amount. Powers the token incinerator. Byte layout:
+  // byte 0 = opcode 15, bytes 1-8 = amount u64 LE, byte 9 = decimals u8.
+  // VERIFIED byte-for-byte against @solana/spl-token createBurnCheckedInstruction (classic +
+  // Token-2022) in Node before shipping, per CLAUDE.md's "diff its bytes against the library" rule.
+  createBurnCheckedInstruction(account, mint, owner, amount, decimals, tokenProgram) {
+    const { PublicKey, TransactionInstruction } = solanaWeb3;
+    const TOKEN_PROGRAM = new PublicKey(tokenProgram || TOKEN_CLASSIC);
+    const data = new Uint8Array(10);
+    data[0] = 15;
+    new DataView(data.buffer).setBigUint64(1, BigInt(amount), true);
+    data[9] = decimals & 0xff;
+    return new TransactionInstruction({
+      keys: [
+        { pubkey: account, isSigner: false, isWritable: true },
+        { pubkey: mint,    isSigner: false, isWritable: true },
+        { pubkey: owner,   isSigner: true,  isWritable: false },
+      ],
+      programId: TOKEN_PROGRAM,
+      data,
+    });
+  },
+
+  // CloseAccount (token program ix #9) — closes an EMPTY token account the signer owns and sends
+  // its rent lamports (~0.002 SOL) to `destination`. The incinerator burns a balance to zero
+  // first, then closes to reclaim the rent — all of it back to the user, no cut. Byte 0 = opcode 9.
+  // VERIFIED byte-for-byte against @solana/spl-token createCloseAccountInstruction (classic +
+  // Token-2022) in Node before shipping.
+  createCloseAccountInstruction(account, destination, owner, tokenProgram) {
+    const { PublicKey, TransactionInstruction } = solanaWeb3;
+    const TOKEN_PROGRAM = new PublicKey(tokenProgram || TOKEN_CLASSIC);
+    return new TransactionInstruction({
+      keys: [
+        { pubkey: account,     isSigner: false, isWritable: true },
+        { pubkey: destination, isSigner: false, isWritable: true },
+        { pubkey: owner,       isSigner: true,  isWritable: false },
+      ],
+      programId: TOKEN_PROGRAM,
+      data: new Uint8Array([9]),
+    });
+  },
+
   // Native SOL transfer (System Program ix #2). Hand-built for exactly the same
   // reason as the SPL instructions above: solanaWeb3.SystemProgram.transfer()
   // encodes its u64 lamports through the library's own layout helper, which calls
