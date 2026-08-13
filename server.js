@@ -11012,6 +11012,12 @@ app.get("/api/token-card", async (req, res) => {
 app.get("/hatchery", (req, res) => {
   res.sendFile(join(__dirname, "public", "hatchery.html"));
 });
+// Firepit — safe token burner / rent reclaimer (public/firepit.html). public/ isn't
+// statically mounted, so the page needs an explicit route; its /vendor assets and the
+// /api/burn-scan data endpoint are served separately.
+app.get("/firepit", (req, res) => {
+  res.sendFile(join(__dirname, "public", "firepit.html"));
+});
 
 // RoseHorses — HIDDEN weekly-race helper for the ROSE dev (unlinked everywhere; ungated but
 // locked to the ROSE mint server-side). Enter a window → every wallet that bought, each

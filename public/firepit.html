@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>🔥 Firepit — burn junk tokens, reclaim your SOL</title>
+<meta property="og:title" content="Firepit — burn junk tokens, reclaim your SOL"/>
+<meta property="og:description" content="A safe, non-custodial token burner. Torch worthless tokens and reclaim the SOL rent locked in their accounts — you sign, we take nothing, and we won't let you burn a bag that's still worth money."/>
+<meta property="og:image" content="https://clucknorris.app/vendor/firepit-hero.png"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Chakra+Petch:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  /* palette from theme.css — no page-local :root shadow (per house rule) */
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:radial-gradient(1100px 560px at 50% -220px,rgba(255,122,24,.20),transparent 68%),radial-gradient(700px 400px at 90% 10%,rgba(255,60,0,.08),transparent 60%),var(--bg);background-attachment:fixed;color:var(--text);font-family:var(--body);min-height:100vh;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:920px;margin:0 auto;padding:18px 16px 120px;}
+  a.back{display:inline-flex;align-items:center;gap:6px;font-family:var(--disp);font-size:12px;font-weight:700;letter-spacing:2px;color:var(--gold);text-decoration:none;margin-bottom:14px;opacity:.85;}
+  a.back:hover{opacity:1;}
+  .hero{position:relative;border-radius:18px;overflow:hidden;border:1px solid var(--border);margin-bottom:16px;box-shadow:0 8px 30px rgba(0,0,0,.4);}
+  .hero img{width:100%;display:block;max-height:300px;object-fit:cover;object-position:center 30%;}
+  .hero .cap{position:absolute;left:0;right:0;bottom:0;padding:20px 22px 16px;background:linear-gradient(0deg,rgba(8,5,3,.92),rgba(8,5,3,.55) 55%,transparent);}
+  .hero h1{font-family:var(--disp);font-size:46px;line-height:.9;letter-spacing:1.5px;background:linear-gradient(92deg,#FFE08A,#FFB627 38%,#FF7A18 78%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+  .hero .sub{font-size:15px;color:#ffd9b0;margin-top:6px;font-weight:600;}
+  .hero .tb{position:absolute;top:12px;right:12px;font-family:var(--disp);font-size:10px;letter-spacing:1.5px;color:#ffd9b0;background:rgba(8,5,3,.6);border:1px solid rgba(255,150,60,.4);border-radius:20px;padding:5px 11px;}
+  .lede{font-size:14.5px;color:var(--sub);line-height:1.65;margin:2px 2px 16px;}
+  .lede b{color:var(--gold);}
+  .card{background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--border);border-radius:16px;padding:18px 20px;margin-bottom:16px;box-shadow:0 6px 22px rgba(0,0,0,.32);}
+  .card-title{font-family:var(--disp);font-size:14px;color:var(--gold);letter-spacing:3px;margin-bottom:14px;}
+  .pillars{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-bottom:16px;}
+  .pillar{background:rgba(255,255,255,.03);border:1px solid var(--border2);border-radius:12px;padding:12px 14px;}
+  .pillar .h{font-family:var(--disp);font-size:12px;letter-spacing:1px;color:var(--text);margin-bottom:4px;}
+  .pillar .p{font-size:12.5px;color:var(--sub);line-height:1.5;}
+  .btn{background:linear-gradient(92deg,#FF9A2E,#FF7A18);border:none;border-radius:11px;padding:13px 24px;font-family:var(--disp);font-size:15px;font-weight:700;letter-spacing:1.5px;color:#fff;cursor:pointer;box-shadow:0 6px 18px rgba(255,122,24,.32);transition:transform .1s,box-shadow .1s;}
+  .btn:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(255,122,24,.42);}
+  .btn:disabled{background:rgba(255,255,255,.06);color:var(--muted);box-shadow:none;transform:none;cursor:not-allowed;}
+  .btn.a{background:linear-gradient(92deg,#34D399,#12C98B);box-shadow:0 6px 18px rgba(18,201,139,.34);}
+  .btn.danger{background:linear-gradient(92deg,#FF5E3A,#E11D48);box-shadow:0 6px 18px rgba(225,29,72,.34);}
+  .btn.ghost{background:rgba(255,255,255,.05);color:var(--sub);box-shadow:none;}
+  .btn.sm{padding:9px 15px;font-size:12px;}
+  .status{margin-top:10px;font-size:13px;color:var(--sub);font-family:var(--mono);display:none;}
+  .status.show{display:block;} .status.ok{color:#12C98B;} .status.err{color:#FF6A99;}
+  .walletbar{display:none;align-items:center;gap:10px;flex-wrap:wrap;font-family:var(--mono);font-size:13px;color:var(--sub);}
+  .walletbar.show{display:flex;}
+  .hidden{display:none!important;}
+  .totals{display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin:4px 0 12px;font-family:var(--mono);font-size:13px;}
+  .totals .t b{font-family:var(--disp);font-size:20px;letter-spacing:.5px;}
+  .totals .rec b{color:#12C98B;} .totals .val b{color:#FF7A18;}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th{font-family:var(--disp);font-size:10px;letter-spacing:1px;color:var(--sub);text-align:left;padding:6px 8px;border-bottom:1px solid var(--border2);}
+  td{padding:8px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:middle;}
+  tr.sel{background:rgba(255,122,24,.08);}
+  tr.disabled{opacity:.5;}
+  .tok{display:flex;align-items:center;gap:9px;}
+  .tok img{width:26px;height:26px;border-radius:50%;background:#000;object-fit:cover;flex:none;}
+  .tok .noimg{width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;font-size:12px;flex:none;}
+  .tok .nm{font-family:var(--body);font-weight:600;color:var(--text);}
+  .tok .mm{font-family:var(--mono);font-size:10.5px;color:var(--muted);}
+  .num{font-family:var(--mono);text-align:right;white-space:nowrap;}
+  .val0{color:var(--muted);}
+  .valpos{color:#FFB627;font-weight:700;}
+  .warnpill{display:inline-block;font-family:var(--mono);font-size:10px;color:#1a0f05;background:#FFB627;border-radius:6px;padding:1px 6px;margin-left:6px;font-weight:700;}
+  .tagpill{display:inline-block;font-family:var(--mono);font-size:10px;color:var(--sub);border:1px solid var(--border2);border-radius:6px;padding:1px 6px;margin-left:6px;}
+  input[type=checkbox]{width:18px;height:18px;accent-color:#FF7A18;cursor:pointer;}
+  /* confirm modal */
+  .modal{position:fixed;inset:0;background:rgba(4,2,1,.82);display:none;align-items:center;justify-content:center;padding:18px;z-index:50;}
+  .modal.show{display:flex;}
+  .modal .box{background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--border);border-radius:16px;max-width:520px;width:100%;padding:22px;max-height:88vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.6);}
+  .modal h2{font-family:var(--disp);font-size:22px;letter-spacing:1px;color:#FF7A18;margin-bottom:10px;}
+  .modal .list{margin:12px 0;border:1px solid var(--border2);border-radius:10px;overflow:hidden;}
+  .modal .li{display:flex;justify-content:space-between;gap:10px;padding:8px 12px;font-size:13px;border-bottom:1px solid rgba(255,255,255,.05);}
+  .modal .li:last-child{border-bottom:none;}
+  .modal .li .r{font-family:var(--mono);text-align:right;}
+  .bigwarn{background:rgba(225,29,72,.12);border:1px solid rgba(225,29,72,.5);border-radius:10px;padding:12px 14px;margin:12px 0;font-size:13.5px;line-height:1.55;color:#ffd0d8;}
+  .bigwarn b{color:#FF8FA3;}
+  .confirmrow{margin:12px 0 6px;}
+  .confirmrow label{font-size:12.5px;color:var(--sub);display:block;margin-bottom:6px;}
+  .confirmrow input{width:100%;background:rgba(0,0,0,.4);border:1px solid var(--border2);border-radius:10px;padding:11px 13px;font-family:var(--mono);font-size:15px;color:var(--text);letter-spacing:2px;}
+  .confirmrow input:focus{outline:none;border-color:#FF5E3A;}
+  .mbtns{display:flex;gap:10px;margin-top:14px;}
+  .foot{font-size:12px;color:var(--muted);line-height:1.6;margin-top:8px;}
+  .foot a{color:var(--gold);}
+  @media(max-width:560px){ .hero h1{font-size:34px;} .hide-sm{display:none;} td,th{padding:6px 5px;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/">‹ CLUCK NORRIS</a>
+
+  <div class="hero">
+    <img src="/vendor/firepit-hero.png" alt="Fire Chicken tending the Firepit"/>
+    <div class="tb">🔥 FIRE CHICKEN</div>
+    <div class="cap">
+      <h1>FIREPIT</h1>
+      <div class="sub">Burn junk tokens. Reclaim your SOL. We take nothing.</div>
+    </div>
+  </div>
+
+  <p class="lede">
+    Old airdrops and dead tokens leave empty accounts on your wallet, each holding a little <b>SOL rent</b> (~0.002 SOL)
+    that's yours to reclaim. Firepit burns the junk and closes the accounts so that SOL comes back to you —
+    <b>non-custodial</b>, <b>open-source</b>, and with a hard guard so you never torch a bag that's still worth money.
+  </p>
+
+  <div class="pillars">
+    <div class="pillar"><div class="h">🔑 You sign, we can't touch it</div><div class="p">Your wallet signs a transaction you can read. We never take custody, never ask for approvals or delegate rights.</div></div>
+    <div class="pillar"><div class="h">💰 We take zero cut</div><div class="p">100% of the reclaimed SOL rent goes back to you. Not a skim, not a fee.</div></div>
+    <div class="pillar"><div class="h">🛡️ Value guard</div><div class="p">Every token is priced live. Anything still worth money is flagged, and you must confirm the exact dollar value before it burns.</div></div>
+    <div class="pillar"><div class="h">✅ Only what you pick</div><div class="p">Nothing is pre-selected. Firepit only ever touches the accounts you tick — never a blind "burn everything."</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔥 START A BURN</div>
+    <button class="btn" id="connect">Connect wallet</button>
+    <div class="walletbar" id="walletbar">
+      <span>Connected <b id="waddr" style="color:var(--text)"></b></span>
+      <button class="btn ghost sm" id="rescan">Rescan</button>
+      <button class="btn ghost sm" id="disconnect">Disconnect</button>
+    </div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="card hidden" id="results-card">
+    <div class="card-title">🪵 YOUR TOKEN ACCOUNTS</div>
+    <div class="totals">
+      <div class="t rec">SOL to reclaim: <b id="tot-rec">0</b></div>
+      <div class="t val">Value to destroy: <b id="tot-val">$0</b></div>
+      <div class="t"><span id="tot-count" style="color:var(--sub)">0 selected</span></div>
+    </div>
+    <div class="toolbar">
+      <button class="btn a sm" id="sel-empties">Select empty accounts (rent only, $0)</button>
+      <button class="btn ghost sm" id="sel-none">Clear</button>
+    </div>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead><tr>
+          <th style="width:34px;"></th>
+          <th>Token</th>
+          <th class="num hide-sm">Balance</th>
+          <th class="num">Value</th>
+          <th class="num">Rent SOL</th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <div style="margin-top:16px;">
+      <button class="btn danger" id="burn-btn" disabled>🔥 Burn selected</button>
+    </div>
+    <div class="foot" id="scan-foot"></div>
+  </div>
+
+  <p class="foot">
+    Firepit never burns tokens with unknown value: NFTs are listed but not yet burnable here (floor-price safety is coming).
+    Frozen or restricted accounts can't be closed and are shown greyed out. Open-source —
+    <a href="https://github.com/clucknorrisapp/cluck-norris-school" target="_blank" rel="noreferrer">read the code</a>.
+  </p>
+</div>
+
+<!-- value-guard confirmation -->
+<div class="modal" id="modal">
+  <div class="box">
+    <h2 id="m-title">🔥 Confirm burn</h2>
+    <p style="font-size:13.5px;color:var(--sub);line-height:1.55;" id="m-intro"></p>
+    <div class="list" id="m-list"></div>
+    <div class="totals" style="margin:4px 0 0;">
+      <div class="t rec">Reclaim: <b id="m-rec">0 SOL</b></div>
+      <div class="t val">Destroy: <b id="m-val">$0</b></div>
+    </div>
+    <div class="bigwarn hidden" id="m-warn"></div>
+    <div class="confirmrow hidden" id="m-typebox">
+      <label>This is <b style="color:#FF8FA3">permanent</b>. Type <b style="color:#FF8FA3">BURN</b> to confirm you understand the value above is being destroyed:</label>
+      <input id="m-type" autocomplete="off" autocapitalize="characters" placeholder="BURN"/>
+    </div>
+    <div class="mbtns">
+      <button class="btn danger" id="m-go" disabled>🔥 Burn now</button>
+      <button class="btn ghost" id="m-cancel">Cancel</button>
+    </div>
+    <div class="status" id="m-status"></div>
+  </div>
+</div>
+
+<script src="/vendor/solana-web3.iife.min.js"></script>
+<script src="/cluck-wallet.js"></script>
+<script src="/airdrop-engine.js"></script>
+<script src="/cluck-util.js"></script>
+<script>
+"use strict";
+var $ = function(id){ return document.getElementById(id); };
+var esc = CluckUtil.esc, rpc = CluckUtil.rpc, shortAddr = CluckUtil.shortAddr;
+var SOL_MINT = "So11111111111111111111111111111111111111112";
+var LAMPORTS = 1e9;
+var CHUNK = 8;                    // token accounts per transaction (each = up to 2 instructions)
+var TYPE_THRESHOLD = 0;          // require typing BURN whenever total destroyed value is > $0
+
+var wProvider = null, wPubkey = null;
+var accounts = [];               // scan result
+var selected = {};               // tokenAccount -> true
+
+function setStatus(el, msg, cls){ el.className = "status show" + (cls ? " " + cls : ""); el.textContent = msg; }
+function clearStatus(el){ el.className = "status"; el.textContent = ""; }
+function fmtSol(n){ n = Number(n) || 0; return (n < 0.001 ? n.toFixed(6) : n.toFixed(4)).replace(/0+$/,"").replace(/\.$/,"") + " SOL"; }
+function fmtUsd(n){ n = Number(n) || 0; if (n === 0) return "$0"; if (n < 0.01) return "<$0.01"; return "$" + n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtBal(n){ n = Number(n) || 0; if (n >= 1e9) return (n/1e9).toFixed(2)+"B"; if (n >= 1e6) return (n/1e6).toFixed(2)+"M"; if (n >= 1e3) return (n/1e3).toFixed(1)+"K"; return n.toLocaleString(undefined,{maximumFractionDigits: n < 1 ? 6 : 2}); }
+
+function detectProvider(){ var l = CluckWallet.available(); return l.length ? l[0].provider : null; }
+
+async function connect(){
+  var p = detectProvider();
+  if (!p){ setStatus($("status"), "No Solana wallet found. Open this page inside your wallet's browser, or install one, then refresh.", "err"); return; }
+  try {
+    var resp = await p.connect();
+    wPubkey = ((resp && resp.publicKey) || p.publicKey).toString();
+    wProvider = p;
+    $("connect").classList.add("hidden");
+    $("walletbar").classList.add("show");
+    $("waddr").textContent = shortAddr(wPubkey);
+    await scan();
+  } catch(e){ setStatus($("status"), "Connect failed: " + (e.message || e), "err"); }
+}
+function disconnect(){
+  try { wProvider && wProvider.disconnect && wProvider.disconnect(); } catch(_){}
+  wProvider = null; wPubkey = null; accounts = []; selected = {};
+  $("connect").classList.remove("hidden");
+  $("walletbar").classList.remove("show");
+  $("results-card").classList.add("hidden");
+  clearStatus($("status"));
+}
+
+async function scan(){
+  setStatus($("status"), "Scanning your wallet on-chain…");
+  try {
+    var r = await fetch("/api/burn-scan?wallet=" + encodeURIComponent(wPubkey)).then(function(x){ return x.json(); });
+    if (!r.success) throw new Error(r.error || "scan failed");
+    accounts = r.accounts || [];
+    selected = {};
+    clearStatus($("status"));
+    $("results-card").classList.remove("hidden");
+    render();
+    var foot = accounts.length + " token account" + (accounts.length===1?"":"s") + " found.";
+    if (r.capped) foot += " (showing first 200)";
+    $("scan-foot").textContent = foot;
+    if (!accounts.length) setStatus($("status"), "Clean wallet — no token accounts to burn or reclaim. 🐔", "ok");
+  } catch(e){ setStatus($("status"), "Scan failed: " + (e.message || e), "err"); }
+}
+
+// A row is burnable in this version only if it can be closed AND its value is known:
+// not frozen, and not an NFT (NFT floor-price safety is phase 2).
+function burnable(a){ return !a.frozen && !a.isNft; }
+
+function render(){
+  var rows = $("rows"); rows.innerHTML = "";
+  accounts.forEach(function(a){
+    var tr = document.createElement("tr");
+    var canBurn = burnable(a);
+    if (!canBurn) tr.className = "disabled";
+    if (selected[a.tokenAccount]) tr.className = "sel";
+
+    var sym = a.symbol ? esc(a.symbol) : "Unknown";
+    var nm = a.name ? esc(a.name) : "";
+    var logo = a.logo ? '<img src="'+esc(a.logo)+'" alt="" onerror="this.style.display=\'none\'"/>' : '<span class="noimg">🪙</span>';
+    var tags = "";
+    if (a.frozen) tags += '<span class="tagpill">frozen</span>';
+    if (a.isNft) tags += '<span class="tagpill">NFT · soon</span>';
+    if (a.empty) tags += '<span class="tagpill">empty</span>';
+    if (a.valueUsd >= 1) tags += '<span class="warnpill">worth '+fmtUsd(a.valueUsd)+'</span>';
+
+    var valCls = a.valueUsd > 0 ? "valpos" : "val0";
+    var cb = canBurn
+      ? '<input type="checkbox" data-ta="'+esc(a.tokenAccount)+'" '+(selected[a.tokenAccount]?"checked":"")+'/>'
+      : '';
+
+    tr.innerHTML =
+      '<td>'+cb+'</td>' +
+      '<td><div class="tok">'+logo+'<div><div class="nm">'+sym+tags+'</div><div class="mm">'+(nm?esc(nm.slice(0,28))+' · ':'')+shortAddr(a.mint)+'</div></div></div></td>' +
+      '<td class="num hide-sm">'+(a.empty?'—':fmtBal(a.uiAmount))+'</td>' +
+      '<td class="num '+valCls+'">'+fmtUsd(a.valueUsd)+'</td>' +
+      '<td class="num" style="color:#12C98B">'+(a.rentLamports/LAMPORTS).toFixed(5)+'</td>';
+    rows.appendChild(tr);
+  });
+  rows.querySelectorAll('input[type=checkbox]').forEach(function(cb){
+    cb.addEventListener("change", function(){
+      var ta = cb.getAttribute("data-ta");
+      if (cb.checked) selected[ta] = true; else delete selected[ta];
+      render(); updateTotals();
+    });
+  });
+  updateTotals();
+}
+
+function selectedList(){ return accounts.filter(function(a){ return selected[a.tokenAccount] && burnable(a); }); }
+function updateTotals(){
+  var sel = selectedList();
+  var rent = sel.reduce(function(s,a){ return s + a.rentLamports; }, 0) / LAMPORTS;
+  var val = sel.reduce(function(s,a){ return s + (Number(a.valueUsd)||0); }, 0);
+  $("tot-rec").textContent = rent ? fmtSol(rent) : "0";
+  $("tot-val").textContent = fmtUsd(val);
+  $("tot-count").textContent = sel.length + " selected";
+  $("burn-btn").disabled = sel.length === 0;
+}
+
+function selectEmpties(){
+  selected = {};
+  accounts.forEach(function(a){ if (burnable(a) && a.empty && (Number(a.valueUsd)||0) === 0) selected[a.tokenAccount] = true; });
+  render();
+}
+function selectNone(){ selected = {}; render(); }
+
+// ── value-guard confirmation ────────────────────────────────────────────────
+function openConfirm(){
+  var sel = selectedList();
+  if (!sel.length) return;
+  var rent = sel.reduce(function(s,a){ return s + a.rentLamports; }, 0) / LAMPORTS;
+  var val = sel.reduce(function(s,a){ return s + (Number(a.valueUsd)||0); }, 0);
+  var valuable = sel.filter(function(a){ return (Number(a.valueUsd)||0) > 0; });
+
+  $("m-list").innerHTML = sel.map(function(a){
+    var v = Number(a.valueUsd)||0;
+    var right = a.empty ? 'reclaim '+(a.rentLamports/LAMPORTS).toFixed(5)+' SOL'
+      : 'burn '+fmtBal(a.uiAmount)+' · '+(v>0?'<b style="color:#FF8FA3">'+fmtUsd(v)+'</b>':'$0');
+    return '<div class="li"><span>'+(a.symbol?esc(a.symbol):shortAddr(a.mint))+'</span><span class="r">'+right+'</span></div>';
+  }).join("");
+
+  $("m-rec").textContent = fmtSol(rent);
+  $("m-val").textContent = fmtUsd(val);
+
+  var needType = val > TYPE_THRESHOLD;
+  if (val > 0){
+    $("m-title").textContent = "🔥 You are destroying value";
+    $("m-intro").textContent = "Read this carefully. Burning is permanent and irreversible — these tokens cannot be recovered.";
+    $("m-warn").classList.remove("hidden");
+    $("m-warn").innerHTML = '⚠️ <b>'+valuable.length+' token'+(valuable.length===1?'':'s')+' you\'ve selected '+(valuable.length===1?'is':'are')+' still worth money — <b>'+fmtUsd(val)+'</b> total.</b> If you\'d rather sell than burn, cancel and swap them first. Only continue if you truly want this gone.';
+  } else {
+    $("m-title").textContent = "♻️ Reclaim rent";
+    $("m-intro").textContent = "These accounts are empty or worthless — closing them returns their SOL rent to you. Nothing of value is destroyed.";
+    $("m-warn").classList.add("hidden");
+  }
+  $("m-typebox").classList.toggle("hidden", !needType);
+  $("m-type").value = "";
+  $("m-go").disabled = needType;   // if typing required, stay disabled until "BURN" is typed
+  clearStatus($("m-status"));
+  $("modal").classList.add("show");
+}
+function closeConfirm(){ $("modal").classList.remove("show"); }
+
+$("m-type").addEventListener("input", function(){
+  $("m-go").disabled = $("m-type").value.trim().toUpperCase() !== "BURN";
+});
+
+// ── build + sign the burn/close transactions ────────────────────────────────
+async function doBurn(){
+  var sel = selectedList();
+  if (!sel.length) return;
+  if (typeof solanaWeb3 === "undefined"){ setStatus($("m-status"), "Wallet library still loading — try again in a second.", "err"); return; }
+  var Transaction = solanaWeb3.Transaction, PublicKey = solanaWeb3.PublicKey;
+  var owner = new PublicKey(wPubkey);
+  $("m-go").disabled = true; $("m-cancel").disabled = true;
+
+  var chunks = [];
+  for (var i=0;i<sel.length;i+=CHUNK) chunks.push(sel.slice(i, i+CHUNK));
+  var sigs = [], done = 0;
+  try {
+    for (var c=0;c<chunks.length;c++){
+      setStatus($("m-status"), "Preparing transaction " + (c+1) + " of " + chunks.length + "…");
+      var bh = await rpc("getLatestBlockhash", [{ commitment: "finalized" }]);
+      var tx = new Transaction();
+      chunks[c].forEach(function(a){
+        var ta = new PublicKey(a.tokenAccount), mint = new PublicKey(a.mint);
+        // Burn any balance to zero first — but NEVER "burn" wrapped SOL; closing it just unwraps it back to SOL.
+        if (!a.empty && a.mint !== SOL_MINT){
+          tx.add(splToken.createBurnCheckedInstruction(ta, mint, owner, a.amountRaw, a.decimals, a.program));
+        }
+        // Close the (now-empty) account and send its rent to the owner.
+        tx.add(splToken.createCloseAccountInstruction(ta, owner, owner, a.program));
+      });
+      tx.feePayer = owner; tx.recentBlockhash = bh.value.blockhash;
+      setStatus($("m-status"), "Approve transaction " + (c+1) + " of " + chunks.length + " in your wallet…");
+      var res = await wProvider.signAndSendTransaction(tx);
+      var sig = res.signature || res;
+      sigs.push(sig);
+      // best-effort confirmation
+      setStatus($("m-status"), "Confirming on-chain… (" + (c+1) + "/" + chunks.length + ")");
+      for (var t=0;t<20;t++){
+        try {
+          var st = await rpc("getSignatureStatuses", [[sig]]);
+          var s = st && st.value && st.value[0];
+          if (s && (s.confirmationStatus === "confirmed" || s.confirmationStatus === "finalized")){ break; }
+          if (s && s.err){ throw new Error("transaction failed on-chain"); }
+        } catch(e){ if (String(e.message||"").indexOf("failed on-chain")>=0) throw e; }
+        await new Promise(function(r){ setTimeout(r, 2000); });
+      }
+      done += chunks[c].length;
+    }
+    // success — refresh the list
+    closeConfirm();
+    var reclaimed = sel.reduce(function(s,a){ return s + a.rentLamports; }, 0) / LAMPORTS;
+    var last = sigs[sigs.length-1];
+    setStatus($("status"), "🔥 Done — burned/closed " + done + " account" + (done===1?"":"s") + ", reclaimed ~" + fmtSol(reclaimed) + ". Rescanning…", "ok");
+    setTimeout(scan, 1500);
+  } catch(e){
+    setStatus($("m-status"), "Burn failed: " + (e.message || e) + (sigs.length ? " (" + sigs.length + " tx already sent)" : ""), "err");
+    $("m-go").disabled = false; $("m-cancel").disabled = false;
+    if (sigs.length) setTimeout(scan, 1500);
+  } finally {
+    $("m-cancel").disabled = false;
+  }
+}
+
+$("connect").addEventListener("click", connect);
+$("disconnect").addEventListener("click", disconnect);
+$("rescan").addEventListener("click", scan);
+$("sel-empties").addEventListener("click", selectEmpties);
+$("sel-none").addEventListener("click", selectNone);
+$("burn-btn").addEventListener("click", openConfirm);
+$("m-cancel").addEventListener("click", closeConfirm);
+$("m-go").addEventListener("click", doBurn);
+$("modal").addEventListener("click", function(e){ if (e.target === $("modal")) closeConfirm(); });
+</script>
+</body>
+</html>
