@@ -8589,6 +8589,83 @@ app.get("/api/wallet-checkup", async (req, res) => {
   }
 });
 
+// ── Firepit — safe token burner / rent reclaimer ────────────────────────────
+// Powers /firepit. Lists a wallet's token ACCOUNTS (both programs) at per-ACCOUNT
+// granularity — the burn UI needs each account's address, its exact rent lamports,
+// and empty accounts too (close-only rent reclaim) — which the per-mint wallet-checkup
+// scan above deliberately drops. Every row is priced (priceTokensBatch) so the client
+// can show, and make the user confirm, the USD VALUE being destroyed before any burn.
+// READ-ONLY: it never builds or signs anything — the client builds the burn+close tx and
+// the user's own wallet signs it. Frozen accounts are flagged (can't be burned/closed).
+app.get("/api/burn-scan", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  const wallet = String(req.query.wallet || "").trim();
+  if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ success: false, error: "Invalid wallet address" });
+  const HELIUS_KEY = process.env.HELIUS_API_KEY;
+  if (!HELIUS_KEY) return res.status(500).json({ success: false, error: "Server not configured" });
+  const rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`;
+  const rpc = async (method, params) => {
+    const r = await fetch(rpcUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: method, method, params }) });
+    return r.json();
+  };
+  const TOKEN_PROG = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+  const TOKEN_2022_PROG = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
+  try {
+    const accounts = [];
+    for (const prog of [TOKEN_2022_PROG, TOKEN_PROG]) {
+      const d = await rpc("getTokenAccountsByOwner", [wallet, { programId: prog }, { encoding: "jsonParsed" }]);
+      for (const acc of (d?.result?.value || [])) {
+        const info = acc.account?.data?.parsed?.info;
+        if (!info?.mint || !acc.pubkey) continue;
+        const ta = info.tokenAmount || {};
+        accounts.push({
+          tokenAccount: acc.pubkey,
+          mint: info.mint,
+          program: prog,
+          amountRaw: String(ta.amount || "0"),
+          decimals: Number(ta.decimals) || 0,
+          uiAmount: Number(ta.uiAmount) || 0,
+          rentLamports: Number(acc.account?.lamports) || 0,   // exact reclaimable rent for THIS account
+          frozen: info.state === "frozen",                    // frozen accounts can't be burned/closed
+          delegated: !!info.delegate,                          // a delegate has approval on this account
+        });
+      }
+    }
+    const capped = accounts.length > 200;
+    const list = accounts.slice(0, 200);
+    const mints = [...new Set(list.map((a) => a.mint))];
+    const priced = mints.length ? await priceTokensBatch(mints) : {};
+    let rentLamportsTotal = 0, valueUsdTotal = 0;
+    const out = list.map((a) => {
+      const p = priced[a.mint] || {};
+      const priceUsd = Number(p.priceUsd) || 0;
+      const valueUsd = Number((a.uiAmount * priceUsd).toFixed(4));
+      rentLamportsTotal += a.rentLamports;
+      valueUsdTotal += valueUsd;
+      return {
+        ...a,
+        symbol: p.symbol || null, name: p.name || null, logo: p.logo || null,
+        priceUsd, valueUsd,
+        empty: a.uiAmount === 0,
+        isNft: a.decimals === 0 && a.uiAmount === 1,   // rough; NFT phase refines with mint supply
+      };
+    });
+    // Safest-to-burn first: empty (rent-only, $0) then ascending value; a valuable bag sorts last.
+    out.sort((x, y) => (x.valueUsd - y.valueUsd) || (x.rentLamports - y.rentLamports));
+    return res.status(200).json({
+      success: true, wallet,
+      count: out.length, capped,
+      rentSolTotal: Number((rentLamportsTotal / 1e9).toFixed(6)),
+      valueUsdTotal: Number(valueUsdTotal.toFixed(2)),
+      accounts: out,
+    });
+  } catch (e) {
+    console.error("[burn-scan]", e.message);
+    return res.status(500).json({ success: false, error: publicErrMsg(e) });
+  }
+});
+
 app.get("/api/claims", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
