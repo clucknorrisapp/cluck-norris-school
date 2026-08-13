@@ -6638,6 +6638,29 @@ function roseBuyBar(usd, maxEmoji) {
   return ("🌹".repeat(Math.max(0, roses)) + (petal ? "🌸" : "")) || "🌸";
 }
 
+// Live ROSE price + market cap for the buy alert. ROSE returns 0 DexScreener pairs
+// (its pools are only on GeckoTerminal — see geckoBuyersInWindow), so getTokenMarket
+// (DexScreener-only) can't price it. Read GT's token endpoint instead: price_usd +
+// fdv_usd (GT leaves market_cap_usd null for ROSE, and FDV = market cap here — ROSE's
+// 1B supply is fully circulating; same marketCap||fdv convention getTokenMarket uses).
+// DexScreener is the fallback for any token that does have pairs. Cached 60s so a burst
+// of buys + the frequent poll cycle don't hammer the API. Returns { priceUsd, mc } or null.
+let _roseMktCache = { at: 0, data: null };
+async function roseMarket() {
+  const now = Date.now();
+  if (_roseMktCache.data && now - _roseMktCache.at < 60 * 1000) return _roseMktCache.data;
+  let out = null;
+  try {
+    const a = ((await lpScanner.cgFetch(`/networks/solana/tokens/${ROSE_BOT_MINT}`)).data || {}).attributes || {};
+    const priceUsd = Number(a.price_usd) || 0;
+    const mc = Number(a.market_cap_usd || a.fdv_usd) || 0;
+    if (priceUsd > 0 || mc > 0) out = { priceUsd: priceUsd || null, mc: mc || null };
+  } catch (_) { /* fall through to DexScreener */ }
+  if (!out) out = await getTokenMarket(ROSE_BOT_MINT).catch(() => null);
+  if (out && (out.priceUsd || out.mc)) _roseMktCache = { at: now, data: out };
+  return out || _roseMktCache.data;
+}
+
 async function roseTgSend(token, chatId, text, opts = {}) {
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -6661,14 +6684,24 @@ async function roseTgSendPhoto(token, chatId, photoUrl, caption, opts = {}) {
   } catch (e) { console.warn("[ROSE-BUY] sendPhoto error:", e.message); return await roseTgSend(token, chatId, caption, opts); }
 }
 
-function roseBuyCaption(b, roseUsd) {
+function roseBuyCaption(b, roseUsd, mkt) {
   const usd = Number(b.usd) || 0;
   const rose = Number(b.tokenAmt) || 0;
   const short = b.wallet ? b.wallet.slice(0, 4) + "…" + b.wallet.slice(-4) : "unknown";
-  const price = roseUsd > 0 ? roseUsd : (rose > 0 ? usd / rose : 0);
+  // Live ROSE price: prefer the canonical market read, then the spot quote, then the
+  // trade-implied price as a last resort so the line is never blank.
+  const price = (mkt && mkt.priceUsd > 0) ? mkt.priceUsd : (roseUsd > 0 ? roseUsd : (rose > 0 ? usd / rose : 0));
+  const mc = mkt && Number(mkt.mc) > 0 ? Number(mkt.mc) : 0;
   const head = `🌹 <b>ROSE BUY</b>`;
   const info = [``, `💵 <b>$${usd.toFixed(2)}</b>  ·  ${roseFmtNum(rose)} ROSE`];
-  if (price > 0) info.push(`🏷️ $${price < 0.01 ? price.toPrecision(3) : price.toFixed(6)} / ROSE`);
+  // Current price + market cap (the two things the room watches). Combined on one line to
+  // stay well under Telegram's caption budget; market cap only shown when we have it.
+  if (price > 0 || mc > 0) {
+    const bits = [];
+    if (price > 0) bits.push(`🏷️ $${price < 0.01 ? price.toPrecision(3) : price.toFixed(6)}`);
+    if (mc > 0) bits.push(`🏦 ${fmtUsdShort(mc)} MC`);
+    info.push(bits.join("  ·  "));
+  }
   info.push(`👤 <a href="https://solscan.io/account/${b.wallet}">${short}</a>  ·  <a href="https://solscan.io/tx/${b.sig}">txn</a>`);
   info.push(`📈 <a href="https://dexscreener.com/solana/${ROSE_BOT_MINT}">Chart</a>  ·  🛒 <a href="https://jup.ag/tokens/${ROSE_BOT_MINT}">Buy ROSE</a>`);
   // Fill whatever caption budget remains after the info with roses — no fixed cap, the only
@@ -6769,15 +6802,16 @@ async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = f
   }
   if (!key) return { ok: false, reason: "no HELIUS key" };
 
-  const [solUsd, roseUsd] = await Promise.all([
+  const [solUsd, roseUsd, roseMkt] = await Promise.all([
     orderbook.getUsdPrice("So11111111111111111111111111111111111111112").catch(() => 0),
     orderbook.getUsdPrice(ROSE_BOT_MINT).catch(() => 0),
+    roseMarket().catch(() => null),
   ]);
 
   // Test lever: post one sample buy so the operator can verify chat + image wiring end-to-end.
   if (testPost) {
     const sample = { usd: 42.0, tokenAmt: (roseUsd > 0 ? 42 / roseUsd : 47876), wallet: "RoSeiVjW5H48ucPAJh1LJGBBzPpqvsokfDGpgHXDtdF", sig: "TEST_" + Math.floor(Date.now() / 1000) };
-    const cap = "🧪 <i>test alert</i>\n" + roseBuyCaption(sample, roseUsd);
+    const cap = "🧪 <i>test alert</i>\n" + roseBuyCaption(sample, roseUsd, roseMkt);
     const okp = img ? await roseTgSendPhoto(token, chatId, img, cap, { silent: !loud }) : await roseTgSend(token, chatId, cap, { silent: !loud });
     return { ok: okp, testPost: true, image: !!img };
   }
@@ -6790,7 +6824,7 @@ async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = f
     const buy = roseDetectBuyFromRaw(tx, roseUsd, solUsd);
     if (!buy) return { ok: false, backfill, reason: "not a buy (sell / LP / non-buy)" };
     buy.sig = buy.sig || backfill;
-    const cap = roseBuyCaption(buy, roseUsd);
+    const cap = roseBuyCaption(buy, roseUsd, roseMkt);
     const okp = img ? await roseTgSendPhoto(token, chatId, img, cap, { silent: !loud }) : await roseTgSend(token, chatId, cap, { silent: !loud });
     const seen = new Set(kv.get("roseBuySeen", [])); seen.add(buy.sig); kv.set("roseBuySeen", [...seen].slice(-ROSE_BUY_SEEN_MAX));
     return { ok: okp, backfill, posted: okp ? 1 : 0, usd: buy.usd, wallet: buy.wallet, image: !!img };
@@ -6832,7 +6866,7 @@ async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = f
     advanceTo = sig;
     if (buy) { buysSeen++; buy.sig = buy.sig || sig; }
     if (buy && buy.usd != null && buy.usd >= ROSE_MIN_BUY_USD) {
-      const cap = roseBuyCaption(buy, roseUsd);
+      const cap = roseBuyCaption(buy, roseUsd, roseMkt);
       const okp = img ? await roseTgSendPhoto(token, chatId, img, cap, { silent: buysSilent }) : await roseTgSend(token, chatId, cap, { silent: buysSilent });
       if (okp) posted++;
       await new Promise(r => setTimeout(r, 450)); // gentle on TG's per-chat rate limit
