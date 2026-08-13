@@ -6796,7 +6796,7 @@ async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = f
   const chatId = roseResolveChatId();
   const key = (rpc.heliusKeys()[0]) || process.env.HELIUS_API_KEY;
   // Read-only status probe — never posts or polls; just reports wiring.
-  if (status) return { ok: true, status: true, armed: roseBuyArmed(), hasToken: !!token, hasChatId: !!chatId, resolvedChatId: chatId || null, envOverride: !!process.env.ROSE_TG_CHAT_ID, hasHeliusKey: !!key, pool: ROSE_POOL, floorUsd: roseMinBuyUsd(), headRecorded: !!kv.get("roseBuyLastSig", null) };
+  if (status) return { ok: true, status: true, armed: roseBuyArmed(), hasToken: !!token, hasChatId: !!chatId, resolvedChatId: chatId || null, envOverride: !!process.env.ROSE_TG_CHAT_ID, hasHeliusKey: !!key, pool: ROSE_POOL, floorUsd: roseMinBuyUsd(), sigLimit: Math.max(1, Math.min(1000, parseInt(process.env.ROSE_SIG_LIMIT || "100", 10))), gapCount: kv.get("roseBuyGapCount", 0), lastGapAt: (kv.get("roseBuyGap", null) || {}).at || null, headRecorded: !!kv.get("roseBuyLastSig", null) };
   if (!token || !chatId) return { ok: false, reason: "dormant (ROSE_TG_CHAT_ID unset)" };
   // Defaults to the OnlyRose brand art hosted on our origin; override with ROSE_BUY_IMAGE_URL.
   const img = process.env.ROSE_BUY_IMAGE_URL || (CANONICAL_ORIGIN + "/vendor/rose-buy.jpg");
@@ -6843,7 +6843,11 @@ async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = f
   // Watch ONLY the real ROSE/SOL pair. One getSignaturesForAddress + a raw getTransaction per
   // NEW tx = ~2 calls/cycle (cheap enough for a fast refresh). A sig cursor + hold-the-pointer
   // (stop at the first tx the RPC hasn't indexed yet) means we never skip a buy that just landed.
-  const sigsRes = await roseHeliusRpc(key, "getSignaturesForAddress", [ROSE_POOL, { limit: 40 }]);
+  // Window is ROSE_SIG_LIMIT (default 100, up from 40) so a 10s burst of arb txns can't outrun
+  // the cursor. Getting the sig LIST is one cheap call regardless of size; only genuinely-new
+  // txs cost a getTransaction below.
+  const SIG_LIMIT = Math.max(1, Math.min(1000, parseInt(process.env.ROSE_SIG_LIMIT || "100", 10)));
+  const sigsRes = await roseHeliusRpc(key, "getSignaturesForAddress", [ROSE_POOL, { limit: SIG_LIMIT }]);
   const sigs = Array.isArray(sigsRes) ? sigsRes : [];
   if (!sigs.length) return { ok: true, scanned: 0, posted: 0, note: "no pool sigs" };
 
@@ -6851,7 +6855,16 @@ async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = f
   if (!lastSig) { kv.set("roseBuyLastSig", sigs[0].signature); return { ok: true, firstRun: true, note: "pool head recorded; history skipped" }; }
 
   const fresh = []; // newest→oldest until the cursor, then flip to oldest→newest
-  for (const s of sigs) { if (s.signature === lastSig) break; if (s.err) continue; fresh.push(s.signature); }
+  let cursorFound = false;
+  for (const s of sigs) { if (s.signature === lastSig) { cursorFound = true; break; } if (s.err) continue; fresh.push(s.signature); }
+  // Cursor off the end of the window ⇒ more than SIG_LIMIT txns landed since last poll: buys
+  // older than the oldest fetched sig are unrecoverable. Surface it LOUDLY (kv marker + log +
+  // status field) — never skip silently. Fix by raising ROSE_SIG_LIMIT or lowering ROSE_POLL_MS.
+  if (!cursorFound) {
+    kv.set("roseBuyGap", { at: Date.now(), windowSigs: sigs.length });
+    kv.set("roseBuyGapCount", (kv.get("roseBuyGapCount", 0) || 0) + 1);
+    console.warn(`[ROSE-BUY] cursor fell outside a ${sigs.length}-sig window — possible missed buys; raise ROSE_SIG_LIMIT or lower ROSE_POLL_MS`);
+  }
   fresh.reverse();
   if (!fresh.length) { kv.set("roseBuyLastSig", sigs[0].signature); return { ok: true, scanned: 0, posted: 0 }; }
 
@@ -6883,7 +6896,7 @@ async function roseBuyBotPollOnce({ testPost = false, announce = false, loud = f
   }
   kv.set("roseBuyLastSig", advanceTo);
   kv.set("roseBuySeen", [...seen].slice(-ROSE_BUY_SEEN_MAX));
-  return { ok: true, scanned, buys: buysSeen, posted, floorUsd: roseMinBuyUsd(), image: !!img };
+  return { ok: true, scanned, buys: buysSeen, posted, floorUsd: roseMinBuyUsd(), gap: !cursorFound, image: !!img };
 }
 
 // Auto-posting is OFF until explicitly armed (kv roseBuyArmed), so resolving the chat
