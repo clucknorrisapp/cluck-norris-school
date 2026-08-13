@@ -6274,17 +6274,20 @@ var NQGAME=new Phaser.Game({
   scene:[Boot,Title,LevelSelect,Controls,Game,Over,Win,WorldClear,Briefing,VipPitch,LevelClear]
 });
 // FIX (2026-08-13): typing in ANY HTML text field — the leaderboard handle (#nqp-handle), the
-// promo/redeem code, wallet fields — dropped the game-control keys, so "half the keyboard didn't
-// work". Phaser's KeyboardManager globally captures and preventDefaults W A S D F X Space arrows L,
-// so those keystrokes never reached the focused input. The bug-report modal already worked around
-// this per-modal via kbGame(); generalise it: disable Phaser's keyboard whenever a text field is
-// focused and restore it on blur. Delegated on document (capture phase) so it also covers inputs
-// injected later via innerHTML, and the relatedTarget guard avoids a flicker when tabbing field→field.
+// promo/redeem code, wallet fields — dropped the game-control keys (W A S D F X Q E and 1/2/3, the
+// set addKeys()'d below), so "half the keyboard didn't work". Phaser's KeyboardManager attaches a
+// keydown listener to window (bubble phase) and calls preventDefault() on every CAPTURED key, which
+// blocks the character from ever reaching the focused input. Toggling keyboard.enabled did NOT stop
+// it here. Definitive fix: intercept keydown/keyup in the window CAPTURE phase — which runs before
+// Phaser's bubble-phase listener — and, whenever a text field is focused, stopImmediatePropagation()
+// so Phaser never sees the event and never preventDefaults it. stopPropagation does NOT block the
+// input's own text insertion (that's the default action), so the field types normally and the game
+// is simply deaf to the keyboard while you're typing. Covers inputs injected later via innerHTML.
 (function(){
   function isField(el){ return !!el && (/^(input|textarea|select)$/i.test(el.tagName||'') || el.isContentEditable); }
-  function nqKbd(on){ try{ if(NQGAME&&NQGAME.input&&NQGAME.input.keyboard) NQGAME.input.keyboard.enabled=on; }catch(e){} }
-  document.addEventListener('focusin', function(e){ if(isField(e.target)) nqKbd(false); }, true);
-  document.addEventListener('focusout', function(e){ if(isField(e.target) && !isField(e.relatedTarget)) nqKbd(true); }, true);
+  function guard(e){ if(isField(e.target) || isField(document.activeElement)) e.stopImmediatePropagation(); }
+  window.addEventListener('keydown', guard, true);
+  window.addEventListener('keyup', guard, true);
 })();
 // Global "jump to level picker" hook — works from ANY scene (title, game, over, win), so the
 // reliable DOM "≡ Levels" button is never a dead end. Stops whatever's running, then starts it.
