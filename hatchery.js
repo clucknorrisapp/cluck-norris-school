@@ -54,30 +54,58 @@ function hatcheryFreeHolderClkn() {
 }
 
 // ── CLKN price (drives the dynamic CLKN fee) ─────────────────────────────────
-// The CLKN/SOL pool on GeckoTerminal reports CLKN's price in SOL directly.
-// Cached 10 minutes; if a refresh fails the last good value is reused.
+// CLKN's price in SOL, from TWO independent indexers so a single hiccup can't blank out
+// CLKN pricing in the Hatchery. Cached 10 min; on total failure the last good value is
+// reused at ANY age. The single-source version failed exactly like this: Railway redeploys
+// on every push (resetting the in-process cache to cold), and if the first price fetch after
+// a deploy hit a GeckoTerminal rate-limit, feeClkn went to 0 and the page showed
+// "CLKN pricing not available" until GT recovered.
 const CLKN_POOL = "64WXkHM4zyWUkYy32TfUeBV5wDAfdcUGDxe5ntM4xaTd";
+const SOL_MINT_B58 = "So11111111111111111111111111111111111111112";
 let clknPriceCache = { solPerClkn: 0, ts: 0 };
+// Source 1 — GeckoTerminal's CLKN/SOL pool reports CLKN's price in SOL directly.
+async function clknPriceFromGT() {
+  const res = await fetch(`https://api.geckoterminal.com/api/v2/networks/solana/pools/${CLKN_POOL}`, { signal: AbortSignal.timeout(8000) });
+  if (!res.ok) throw new Error(`GT HTTP ${res.status}`);
+  const d = await res.json();
+  const a = d?.data?.attributes || {};
+  const baseId = d?.data?.relationships?.base_token?.data?.id || "";
+  // "native currency" on Solana is SOL — pick whichever side of the pool is CLKN.
+  const price = parseFloat(baseId.includes(CLKN_MINT.toBase58())
+    ? a.base_token_price_native_currency : a.quote_token_price_native_currency);
+  if (!Number.isFinite(price) || price <= 0) throw new Error("GT: no usable price");
+  return price;
+}
+// Source 2 — DexScreener's deepest CLKN/SOL pair; priceNative IS CLKN's price in SOL.
+async function clknPriceFromDexScreener() {
+  const res = await fetch(`https://api.dexscreener.com/token-pairs/v1/solana/${CLKN_MINT.toBase58()}`, { signal: AbortSignal.timeout(8000) });
+  if (!res.ok) throw new Error(`DS HTTP ${res.status}`);
+  const arr = await res.json();
+  const pairs = (Array.isArray(arr) ? arr : []).filter((p) =>
+    p?.baseToken?.address === CLKN_MINT.toBase58() &&
+    p?.quoteToken?.address === SOL_MINT_B58 &&
+    parseFloat(p.priceNative) > 0);
+  pairs.sort((x, y) => ((y.liquidity && y.liquidity.usd) || 0) - ((x.liquidity && x.liquidity.usd) || 0));
+  const price = parseFloat(pairs[0] && pairs[0].priceNative);
+  if (!Number.isFinite(price) || price <= 0) throw new Error("DS: no CLKN/SOL pair");
+  return price;
+}
 async function clknPriceInSol() {
   if (clknPriceCache.solPerClkn && Date.now() - clknPriceCache.ts < 10 * 60 * 1000) {
     return clknPriceCache.solPerClkn;
   }
-  try {
-    const res = await fetch(`https://api.geckoterminal.com/api/v2/networks/solana/pools/${CLKN_POOL}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const d = await res.json();
-    const a = d?.data?.attributes || {};
-    const baseId = d?.data?.relationships?.base_token?.data?.id || "";
-    // "native currency" on Solana is SOL — pick whichever side of the pool is CLKN.
-    const price = parseFloat(baseId.includes(CLKN_MINT.toBase58())
-      ? a.base_token_price_native_currency : a.quote_token_price_native_currency);
-    if (!Number.isFinite(price) || price <= 0) throw new Error("no usable price");
-    clknPriceCache = { solPerClkn: price, ts: Date.now() };
-    return price;
-  } catch (e) {
-    console.warn("[hatchery] CLKN price lookup failed:", e.message);
-    return clknPriceCache.solPerClkn || 0;   // stale fallback; 0 if never fetched
+  for (const src of [clknPriceFromGT, clknPriceFromDexScreener]) {
+    try {
+      const price = await src();
+      if (Number.isFinite(price) && price > 0) {
+        clknPriceCache = { solPerClkn: price, ts: Date.now() };
+        return price;
+      }
+    } catch (e) {
+      console.warn("[hatchery] CLKN price source failed:", e.message);
+    }
   }
+  return clknPriceCache.solPerClkn || 0;   // last good value at any age; 0 only if never once fetched
 }
 // The CLKN fee as a whole-token amount worth ~HATCHERY_FEE_CLKN_SOL of SOL,
 // rounded to 3 significant figures for a tidy number. 0 means unavailable.
