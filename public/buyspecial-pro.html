@@ -165,7 +165,12 @@
         </div>
       </div>
 
-      <div class="cbrow"><input type="checkbox" id="requireHold" checked/><label for="requireHold">Require holding — disqualify wallets that sold within the window (recommended)</label></div>
+      <div class="cbrow"><input type="checkbox" id="requireHold" checked/><label for="requireHold">Require holding — disqualify wallets that sold before the hold period is up (recommended)</label></div>
+      <div class="row" style="margin-top:8px">
+        <div class="fld"><label>HOLD FOR (HOURS AFTER WINDOW)</label><input type="number" id="holdHours" min="0" step="1" placeholder="e.g. 24 · blank = must still hold now" style="width:230px"/></div>
+      </div>
+      <div class="note" style="margin-top:4px">Set the hold period and a wallet only has to hold that long — selling <b>after</b> it no longer disqualifies. Blank = the old behavior (must still hold right now).</div>
+      <div class="fld" style="margin-top:10px"><label>IGNORE WALLETS — excluded from buys, ranking &amp; payout (one per line)</label><textarea id="ignoreWallets" rows="2" placeholder="paste team / insider / treasury addresses to exclude…" style="width:100%;font-family:var(--mono);font-size:12px"></textarea></div>
       <div class="row" style="margin-top:12px"><button class="btn" id="scanBtn">▶ SCAN BUYS</button></div>
     </div>
 
@@ -339,35 +344,51 @@ $('scanBtn').addEventListener('click', async ()=>{
   }catch(e){ setStatus('Scan failed: '+e.message); }
   $('scanBtn').disabled=false;
 });
+// Ignore/exclude list — paste addresses OR click a row's ✕. Excluded wallets drop out of the
+// buys table, the ranking, and the payout — the tool's answer to the comp's `exclude` list.
+function ignoreSet(){ return new Set(($('ignoreWallets').value||'').split(/[\s,]+/).map(s=>s.trim()).filter(Boolean)); }
+function activeBuyers(){ const ig=ignoreSet(); return buyers.filter(b=>!ig.has(b.wallet)); }
+function ignoreWallet(w){ const t=$('ignoreWallets'); if(!ignoreSet().has(w)) t.value=(t.value.trim()?t.value.trim()+'\n':'')+w; renderBuys(); }
 function renderBuys(){
   buyers.sort((a,b)=>(b.tokensBought||0)-(a.tokensBought||0));
-  $('stBuyers').textContent=buyers.length;
-  $('stBought').textContent=fmt(buyers.reduce((s,b)=>s+(b.tokensBought||0),0));
+  const rows=activeBuyers(), ignored=buyers.length-rows.length;
+  $('stBuyers').textContent=rows.length+(ignored?(' · '+ignored+' ignored'):'');
+  $('stBought').textContent=fmt(rows.reduce((s,b)=>s+(b.tokensBought||0),0));
   $('stSrc').textContent=source;
-  let h='<thead><tr><th>#</th><th>WALLET</th><th class="r">TOKENS BOUGHT</th><th class="r">SOL SPENT</th><th class="r">BUYS</th></tr></thead><tbody>';
-  buyers.forEach((b,i)=>{ h+='<tr><td>'+(i+1)+'</td><td>'+b.wallet+'</td><td class="r">'+fmt(b.tokensBought||0)+'</td><td class="r">'+(Number(b.volumeSol||0).toFixed(2))+'</td><td class="r">'+(b.buyCount||0)+'</td></tr>'; });
+  let h='<thead><tr><th>#</th><th>WALLET</th><th class="r">TOKENS BOUGHT</th><th class="r">SOL SPENT</th><th class="r">BUYS</th><th class="r">DQ</th></tr></thead><tbody>';
+  rows.forEach((b,i)=>{ h+='<tr><td>'+(i+1)+'</td><td>'+b.wallet+'</td><td class="r">'+fmt(b.tokensBought||0)+'</td><td class="r">'+(Number(b.volumeSol||0).toFixed(2))+'</td><td class="r">'+(b.buyCount||0)+'</td><td class="r"><button class="btn ghost" style="padding:2px 9px;font-size:12px;line-height:1" onclick="ignoreWallet(\''+b.wallet+'\')" title="disqualify / ignore this wallet">✕</button></td></tr>'; });
   $('buysTbl').innerHTML=h+'</tbody>'; $('buysCard').classList.remove('hidden');
 }
-$('copyBuysBtn').addEventListener('click',()=>copy('wallet,tokens_bought,sol_spent\n'+buyers.map(b=>b.wallet+','+Math.floor(b.tokensBought||0)+','+Number(b.volumeSol||0).toFixed(4)).join('\n')+'\n',$('copyBuysBtn'),'📋 COPY BUYS CSV'));
+$('copyBuysBtn').addEventListener('click',()=>copy('wallet,tokens_bought,sol_spent\n'+activeBuyers().map(b=>b.wallet+','+Math.floor(b.tokensBought||0)+','+Number(b.volumeSol||0).toFixed(4)).join('\n')+'\n',$('copyBuysBtn'),'📋 COPY BUYS CSV'));
+// Re-render the buys table live as wallets are pasted into / cleared from the ignore box.
+$('ignoreWallets').addEventListener('input',()=>{ if(buyers.length) renderBuys(); });
 
 $('computeBtn').addEventListener('click', async ()=>{
-  if(!buyers.length) return;
+  const active=activeBuyers();
+  if(!active.length){ setStatus('No buyers to compute (all ignored?).'); return; }
   $('computeBtn').disabled=true;
   const requireHold=$('requireHold').checked;
+  const holdHours=Math.max(0, parseFloat($('holdHours').value)||0);
+  const now=Math.floor(Date.now()/1000);
+  // HOLD PERIOD: with hours set, only check for sells through window-end + N hours (capped at now);
+  // selling after that is allowed. Blank/0 = the old "must still hold now" behavior (check to now).
+  const checkTo = holdHours>0 ? Math.min(now, winTo + Math.round(holdHours*3600)) : now;
+  const stillMustHold = requireHold && holdHours===0;   // "hold N hours" doesn't require a current balance
   let holdMap={};
   if(requireHold){
-    setStatus('Verifying holds — window-scoped no-sells scan…');
+    setStatus(holdHours>0 ? ('Verifying holds through +'+holdHours+'h after the window…') : 'Verifying holds — no sells through now…');
     try{
-      const now=Math.floor(Date.now()/1000), wl=buyers.map(b=>b.wallet).join(',');
-      const r=await fetch('/api/buyspecial-holdcheck?mint='+encodeURIComponent(mint)+'&from='+winFrom+'&to='+now+'&wallets='+encodeURIComponent(wl));
+      const wl=active.map(b=>b.wallet).join(',');
+      const r=await fetch('/api/buyspecial-holdcheck?mint='+encodeURIComponent(mint)+'&from='+winFrom+'&to='+checkTo+'&wallets='+encodeURIComponent(wl));
       const d=await r.json(); if(d&&d.success) for(const x of d.results) holdMap[x.wallet]=x;
     }catch(e){ setStatus('Hold check failed: '+e.message); $('computeBtn').disabled=false; return; }
   }
-  const rows=buyers.map(b=>{
+  const rows=active.map(b=>{
     const h=holdMap[b.wallet]||{}; const held=(h.balance==null?(requireHold?-1:Infinity):h.balance); const sold=!!h.soldInWindow;
     const bought=b.tokensBought||0, sol=b.volumeSol||0;
-    const eligible = bought>0 && (!requireHold || (held>0 && !sold));
-    return {wallet:b.wallet, bought, sol, buys:b.buyCount||0, held, sold, transfersOut:h.transfersOut||0, eligible};
+    // Eligible if they didn't sell within the hold period. Only "hold until now" also requires a live balance.
+    const eligible = bought>0 && (!requireHold || (!sold && (!stillMustHold || held>0)));
+    return {wallet:b.wallet, bought, sol, buys:b.buyCount||0, held, sold, transfersOut:h.transfersOut||0, eligible, capByHeld:stillMustHold};
   });
   if(mode==='all') buildRewardAll(rows, requireHold);
   else buildRanked(rows, requireHold);
@@ -382,7 +403,7 @@ function buildRewardAll(rows, requireHold){
   // SOL spent (converted through USD for USDC / another token).
   const usdPer=rewardUsdPerSol();
   rows.forEach(r=>{
-    const cap=(requireHold && r.held>=0 && r.held!==Infinity)?Math.min(r.bought,r.held):r.bought;
+    const cap=(r.capByHeld && r.held>=0 && r.held!==Infinity)?Math.min(r.bought,r.held):r.bought;
     const basis = rewardKind==='comp' ? cap
                 : rewardKind==='sol'  ? Number(r.sol)||0
                 : (usdPer!=null ? (Number(r.sol)||0)*usdPer : 0);
