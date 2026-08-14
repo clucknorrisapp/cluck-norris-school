@@ -55,6 +55,12 @@
                 detect: function () { return (global.nightly && global.nightly.solana) || (global.solana && global.solana.isNightly ? global.solana : null); } },
     mathwallet:{ name: "MathWallet", icon: "🧮", download: "https://mathwallet.org",
                 detect: function () { return (global.solana && global.solana.isMathWallet ? global.solana : null); } },
+    magiceden:{ name: "Magic Eden", icon: "🪄", download: "https://wallet.magiceden.io",
+                detect: function () { return (global.magicEden && global.magicEden.solana) || (global.solana && global.solana.isMagicEden ? global.solana : null); } },
+    bybit:    { name: "Bybit",    icon: "🟡", download: "https://www.bybit.com/web3",
+                detect: function () { return (global.bybitWallet && global.bybitWallet.solana) || null; } },
+    tokenpocket:{ name: "TokenPocket", icon: "🅣", download: "https://tokenpocket.pro",
+                detect: function () { return (global.tokenpocket && global.tokenpocket.solana) || (global.solana && global.solana.isTokenPocket ? global.solana : null); } },
   };
 
   var ORDER = Object.keys(WALLETS);
