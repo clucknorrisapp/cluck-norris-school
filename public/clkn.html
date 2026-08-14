@@ -81,7 +81,12 @@
   .links{display:flex;gap:9px;}
   .links a{flex:1;text-align:center;font-family:var(--disp);font-size:11px;letter-spacing:1.5px;color:var(--sub);text-decoration:none;
     background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:12px;}
-  .mint{font-family:var(--mono);font-size:11px;color:var(--muted);word-break:break-all;cursor:pointer;text-align:center;margin-top:14px;}
+  .mint{font-family:var(--mono);font-size:11px;color:var(--muted);word-break:break-all;cursor:pointer;text-align:center;margin-top:14px;transition:color .12s;}
+  .mint::after{content:"📋";font-size:10px;margin-left:6px;opacity:.7;}
+  .mint:hover{color:var(--text);}
+  .mint:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:4px;}
+  .mint.copied{color:#3dff9e;}
+  .mint.copied::after{content:"";margin:0;}
   .live{font-family:var(--mono);font-size:10px;color:var(--muted);text-align:center;margin-top:14px;}
   .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);margin-right:5px;vertical-align:middle;animation:pulse 1.6s infinite;}
   @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
@@ -161,7 +166,7 @@
     <div class="row"><span class="k">Top-10 holders</span><span class="v" id="topHolders">—</span></div>
   </div>
 
-  <div class="mint" id="mint" title="Tap to copy">DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS</div>
+  <div class="mint" id="mint" role="button" tabindex="0" title="Tap to copy the CLKN contract address">DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS</div>
   <div class="live"><span class="dot"></span><span id="liveAt">loading live data…</span></div>
 </div>
 
@@ -222,10 +227,16 @@
   load();
   setInterval(load, 60000);
 
-  // Copy mint
-  $("mint").addEventListener("click", function(){
-    try{ navigator.clipboard.writeText(CLKN); var o=$("mint").textContent; $("mint").textContent="✓ copied"; setTimeout(function(){$("mint").textContent=o;},1400); }catch(_){}
-  });
+  // Copy mint — clipboard API + legacy fallback (some in-app wallet browsers lack navigator.clipboard),
+  // keyboard-accessible, with a clear "copied" state.
+  (function(){
+    var el=$("mint"); if(!el) return; var orig=el.textContent, busy=false;
+    function flash(){ busy=true; el.classList.add("copied"); el.textContent="✓ copied"; setTimeout(function(){ el.textContent=orig; el.classList.remove("copied"); busy=false; },1400); }
+    function legacy(){ try{ var t=document.createElement("textarea"); t.value=CLKN; t.style.position="fixed"; t.style.opacity="0"; document.body.appendChild(t); t.focus(); t.select(); document.execCommand("copy"); document.body.removeChild(t); flash(); }catch(_){}}
+    function copy(){ if(busy) return; if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(CLKN).then(flash).catch(legacy); else legacy(); }
+    el.addEventListener("click",copy);
+    el.addEventListener("keydown",function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); copy(); } });
+  })();
 
   // Buy CLKN — Jupiter Plugin modal (init once, resume to open). Fallback to jup.ag.
   (function(){
