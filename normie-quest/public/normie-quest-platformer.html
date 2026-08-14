@@ -535,7 +535,8 @@ var THEMES=[
   { sky1:0x1a0c04, sky2:0x080402, hill:0x3a1c08 },    // 26 THE SAYLOR SUMMIT (World 20 finale — bitcoin citadel at the peak, storm-black + laser-orange; bgArt covers the sky)
   { sky1:0x05060f, sky2:0x010208, hill:0x8a8f9c },    // 27 THE MOON (World 21 FINALE — lunar surface: black space, silver regolith, Earthrise blue; bgArt covers the sky)
   { sky1:0x35558f, sky2:0x101d33, hill:0x6d84b4 },    // 28 MYSPACE (PRIVATE dev room — 2003 web blue: navy header, that famous #6d84b4 profile blue)
-  { sky1:0x2aa4e0, sky2:0x9fe6f2, hill:0x38b6cc }     // 29 THE SHALLOWS (prize room — tropical daytime: bright sky-blue up top → pale aqua horizon → turquoise sea behind golden sand)
+  { sky1:0x2aa4e0, sky2:0x9fe6f2, hill:0x38b6cc },    // 29 THE SHALLOWS (prize room — tropical daytime: bright sky-blue up top → pale aqua horizon → turquoise sea behind golden sand)
+  { sky1:0x08060e, sky2:0x000000, hill:0x150e22 }     // 30 THE SCARY WORLD (kids' hidden world — pitch-black night, barely-there witching-purple hills)
 ];
 
 // Slot-machine themes — one 'slot' sprite, re-skinned per theme (tint + glow + reel symbols +
@@ -1314,6 +1315,77 @@ var LEVELS=[
     airdrops:[[1500,H-118],[3130,H-72]],
     coins:[[300,196],[560,150],[620,196],[900,196],[1160,140],[1420,130],[1620,196],[1950,150],[2200,196],[2500,150],[2760,130],[2900,196],[3150,150],[3400,130],[3760,150],[4000,196],[4200,150]],
     enemies:[['jeet',340,230,70],['jumpfish',900,230,80],['flyfish',1200,150,40],['jumpfish',1600,230,80],['flyfish',1950,150,40],['bot',2200,230,70],['jumpfish',2600,230,80],['flyfish',2950,150,40],['jumpfish',3200,230,70],['flyfish',3650,150,40],['bot',3900,230,60],['bitmaxi',4400,230,60]],
+    pumpdumps:[[1380,174],[2720,174]], honeypots:[[1250,232],[3760,232]], npcs:[[2450,90]],
+    bonusblocks:[[1040,5],[1950,8],[2950,8],[3840,8]],
+    key:[4200,H-150], door:4600 },
+
+  // ===== THE SCARY WORLD — the kids' hidden monster world (owner ask 2026-08-13: "a scary world,
+  //   3 levels with boss at the end… background black, floating eyeballs as a bad guy, little
+  //   monsters out of the ground as turrets with radial fire, roaming monsters with long necks
+  //   that spray poisonous gas into the pits that takes a heart, haunted pirate ship with big big
+  //   monster for the end boss"). Reachable ONLY via ?room=scary — private:true + hidden:true like
+  //   MYSPACE, chained via def.next, no warps here, the unlisted URL is the only door.
+  //   Pitch-black theme 30; the two run levels are dark:true (the mines' torchlight) so the
+  //   monsters loom out of the dark — the candle powerup widens the torch, and the boss arena is
+  //   lit so you can see the whole ship. NEW MONSTERS (procedural canvas, like the shark/sandlord):
+  //   'eyeball' re-skins the proven flash-drone hover+dive; 'longneck' patrols and sprays POISON
+  //   into pits — its acid-bright gas TAKES A HEART (poisonTouch), unlike the FUDster's slow-gas;
+  //   the ground turrets are the proven miniworm/sentry radial-fan mechanic wearing the
+  //   'gravemite' skin (def.mwTex). The finale is THE GHOST GALLEON — the KOL charge mechanic
+  //   under a haunted-ship texture with its own three-attack rotation (bossAttack:'ship').
+  //   Geometry is lifted VERBATIM from the vetted MYSPACE / TOP8 / TOMSTURF rooms so reachability
+  //   is proven; theme, enemies, darkness and the boss are the only changes. =====
+  { name:'SCARY', sub:'THE HAUNTED HOLLOW', time:150, theme:30, width:5800, music:'mines',
+    hidden:true, bonus:true, private:true, next:88, dark:true, diff:1.4, mwTex:'gravemite',
+    roomLabel:'THE SCARY WORLD',
+    gaps:[[820,892],[1640,1760],[2480,2600],[3300,3372],[4200,4296],[5000,5076]],
+    walls:[[460,3,'steel',4],[1300,3,'stone',4],[2200,4,'steel',3],[3000,3,'brick',4],[3900,3,'stone',4],[4800,3,'steel',4],[5400,2,'brick',2]],
+    plats:[[840,2,150,'crate'],[1600,2,H-130,'brick'],[1660,2,150,'stone'],[2140,2,H-120,'steel'],[2500,2,150,'steel'],[3320,2,150,'brick'],[4220,2,150,'stone']],
+    spikes:[[1000],[1024],[4560],[4584]],
+    firepits:[[1980,64],[3600,56]],
+    powerups:[['moon',3200,230],['omegachad',4090,230],['bull',2850,230],['candle',1600,230]],
+    airdrops:[[1200,H-118],[3500,H-72]],
+    coins:[[472,158],[520,158],[700,196],[1312,158],[1360,158],[1500,196],[2212,134],[2260,134],[2680,196],[3012,158],[3060,158],[3600,196],[3912,158],[3960,158],[4500,196],[4812,158],[4860,158],[5300,196]],
+    enemies:[['longneck',680,230,80],['ghost',1050,212,80],['eyeball',1450,150,60],['ghost',2050,212,60],['eyeball',2380,140,60],['ghost',2820,212,60],['longneck',3150,230,70],['eyeball',3720,150,60],['longneck',4500,230,70],['ghost',4700,212,90],['eyeball',4900,140,50]],
+    miniworms:[1100,4400],
+    pumpdumps:[[1500,174],[3700,174]], honeypots:[[2680,232],[4500,232]], npcs:[[2900,90]],
+    bonusblocks:[[1280,5],[2950,'moon'],[4760,8]],
+    key:[1624,H-150], door:5680 },
+
+  { name:'GRAVEYARD', sub:'THE MONSTER PITS', time:160, theme:30, width:6400, music:'mines',
+    hidden:true, bonus:true, private:true, next:89, dark:true, diff:1.5, mwTex:'gravemite',
+    roomLabel:'THE SCARY WORLD',
+    gaps:[[780,852],[1620,1692],[2440,2560],[3260,3380],[4120,4240],[4980,5076],[5900,5976]],
+    walls:[[440,3,'steel',4],[1240,4,'stone',4],[2100,3,'crate',5],[2960,4,'steel',4],[3820,3,'brick',5],[4680,4,'stone',4],[5250,2,'stone',2],[5500,3,'crate',4],[6180,2,'crate',2]],
+    plats:[[800,2,150,'stone'],[1140,2,H-130,'stone'],[1640,2,150,'crate'],[2460,2,150,'steel'],[3280,2,150,'brick'],[3500,2,H-140,'steel'],[4140,2,150,'stone'],[5000,2,150,'crate']],
+    spikes:[[1000],[1024],[3600],[3624],[4400],[4424]],
+    firepits:[[1850,56],[2700,64],[4560,48]],
+    powerups:[['supergeek',1400,230],['omegachad',4480,230],['bull',4100,230],['candle',3150,230]],
+    airdrops:[[2300,H-118],[4200,H-72]],
+    coins:[[452,158],[500,158],[700,196],[1252,134],[1300,134],[1400,196],[2112,158],[2160,158],[2208,158],[2680,196],[2972,134],[3020,134],[3200,196],[3832,158],[3880,158],[3928,158],[4692,134],[4740,134],[5512,158],[5560,158],[6100,196]],
+    enemies:[['eyeball',600,150,60],['ghost',1000,212,80],['longneck',1400,230,70],['eyeball',1900,140,60],['longneck',2700,230,70],['ghost',3200,212,70],['eyeball',3450,150,60],['ghost',3900,212,80],['longneck',4400,230,70],['eyeball',4560,140,50],['ghost',4820,212,80],['eyeball',5250,150,60],['longneck',5650,230,60]],
+    miniworms:[2850,5700],
+    pumpdumps:[[1000,174],[3500,174],[5300,174]], honeypots:[[2350,232],[4300,232]], npcs:[[3150,90]],
+    bonusblocks:[[1120,5],[2080,8],[3220,5],[4490,8],[5480,8]],
+    key:[1164,H-150], door:6300 },
+
+  { name:'GHOSTSHIP', sub:'THE HAUNTED GALLEON', time:190, theme:30, width:4800, music:'mines',
+    hidden:true, bonus:true, private:true, boss:true, bossType:'kol', diff:1.45, mwTex:'gravemite',
+    roomLabel:'THE SCARY WORLD',
+    bossName:'THE GHOST GALLEON', bossSub:'THE BIG BIG MONSTER OF THE DEEP — STOMP IT x5',
+    bossTex:'ghostship', bossScale:112, bossHits:5, bossShillMs:1500, bossAttack:'ship',
+    bossColor:'#7af0a0', bossGlowHex:0x4de87a,
+    bossTaunts:['YARR HARR HARR','ALL ABOARD... FOREVER','THE SEA KEEPS WHAT IT TAKES','NO ESCAPE, LANDLUBBER','YER TREASURE BE MINE','DOWN TO DAVY JONES','THE CREW NEVER LEFT'],
+    gaps:[[700,772],[1380,1500],[2060,2156],[2720,2816],[3380,3500]],
+    walls:[[420,3,'steel',4],[1060,4,'stone',3],[1680,3,'brick',5],[2320,4,'steel',3],[2980,3,'stone',5],[3640,4,'steel',3],[4050,2,'crate',2]],
+    plats:[[720,2,150,'steel'],[1080,2,H-140,'brick'],[1400,2,150,'stone'],[2080,2,150,'steel'],[2360,2,126,'steel'],[2740,2,150,'brick'],[3400,2,150,'steel'],[3680,2,H-134,'steel']],
+    spikes:[[900],[924],[2500],[2524]],
+    firepits:[[1250,48],[3260,56],[3900,56]],
+    powerups:[['supergeek',1000,230],['diamond',1850,230],['omegachad',2620,230],['bull',3300,230]],
+    airdrops:[[1500,H-118],[3130,H-72]],
+    coins:[[300,196],[560,150],[620,196],[900,196],[1160,140],[1420,130],[1620,196],[1950,150],[2200,196],[2500,150],[2760,130],[2900,196],[3150,150],[3400,130],[3760,150],[4000,196],[4200,150]],
+    enemies:[['eyeball',900,150,60],['longneck',1150,230,60],['ghost',1300,212,80],['eyeball',1850,140,50],['ghost',2600,212,80],['longneck',2900,230,70],['eyeball',3200,150,60],['ghost',3600,212,70],['longneck',3900,230,60],['eyeball',4150,140,50]],
+    miniworms:[1900],
     pumpdumps:[[1380,174],[2720,174]], honeypots:[[1250,232],[3760,232]], npcs:[[2450,90]],
     bonusblocks:[[1040,5],[1950,8],[2950,8],[3840,8]],
     key:[4200,H-150], door:4600 },
@@ -2253,6 +2325,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.tweens.add({targets:marq, x:bandX-bandW/2-uw, duration:1500, repeat:-1, ease:'Linear'});
 
     // enemies
+    // Scary-world procedural sprites (eyeball / long-neck / gravemite turret) are canvas-drawn on
+    // demand like the shark & sandlord — exists-guarded, so this is free after the first level.
+    this.drawEyeballTex(); this.drawLongneckTex(); this.drawGravemiteTex();
     this.enemies=this.physics.add.group();
     (def.enemies||[]).forEach(function(en){ self.makeEnemy(en[0],en[1],en[2],en[3]); });
 
@@ -2265,19 +2340,20 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       // uses. Everywhere else (worlds 9-21, including the moon, where a grub in the regolith never
       // made sense) gets the sentry turret. Same mechanic either way: burrow, rise, radial fan,
       // retreat — only the sprite differs.
-      var _mwKey = /^2-/.test(def.name||'') ? 'miniworm' : 'sentry';
+      var _mwKey = /^2-/.test(def.name||'') ? 'miniworm' : (def.mwTex||'sentry');   // def.mwTex re-skins the turret (scary world: 'gravemite'); world 2 stays worms — see above
       var mw=self.miniworms.create(mx, GY, _mwKey).setDepth(6); mw.setScale(44/mw.height);
       mw.body.setAllowGravity(false); mw.setImmovable(true);
       mw.body.setSize(mw.width*0.6, mw.height*0.5).setOffset(mw.width*0.2, mw.height*0.34);
       mw.upY=GY - mw.displayHeight/2 + 14; mw.downY=GY + mw.displayHeight/2 + 6;
       mw.setPosition(mx, mw.downY).setVisible(false); mw.mwState='hidden'; mw.dead=false;
       mw.mwNextAt=self.time.now + 900 + i*450 + Phaser.Math.RND.between(0,700);
-      var mg=self.addGlow(mw,(_mwKey==='sentry'?0xff7a2b:0x3dff6e),3); if(mg) self.tweens.add({targets:mg,outerStrength:8,duration:600,yoyo:true,repeat:-1,ease:'Sine.inOut'});
+      var mg=self.addGlow(mw,(_mwKey==='sentry'?0xff7a2b:(_mwKey==='gravemite'?0x9b5bff:0x3dff6e)),3); if(mg) self.tweens.add({targets:mg,outerStrength:8,duration:600,yoyo:true,repeat:-1,ease:'Sine.inOut'});
     });
 
     // ---- Phase 2 hazards ----
     this.slowUntil=0;                                            // FUD gas slow debuff
     this.gasClouds=this.physics.add.group({allowGravity:false});// FUDster's drifting slow-gas
+    this.poisonClouds=this.physics.add.group({allowGravity:false});// LONG-NECK's pit poison — HURTS (see poisonTouch), not a slow
     // Honeypots — mimic traps disguised as treasure; snap once on contact
     this.honeypots=this.physics.add.group({allowGravity:false,immovable:true});
     (def.honeypots||[]).forEach(function(h){
@@ -2533,6 +2609,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.physics.add.collider(this.player,this.bonusBlocks,this.blockBonk,null,this);
     this.physics.add.collider(this.enemies,this.platforms,null,function(en){ return en.kind!=='ghost'&&en.kind!=='rugpuller'; });
     this.physics.add.overlap(this.player,this.gasClouds,this.gasTouch,null,this);
+    this.physics.add.overlap(this.player,this.poisonClouds,this.poisonTouch,null,this);
     this.physics.add.overlap(this.player,this.honeypots,this.honeypotHit,null,this);
     this.physics.add.collider(this.npcs,this.platforms);   // NPCs walk on the ground; they never touch the player
     this.physics.add.collider(this.casino,this.platforms);
@@ -2690,10 +2767,10 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var beh=BEH[kind]||kind;
     var tex = (kind==='sniper'||kind==='sandwich') ? 'bot' : (kind==='gasgoblin' ? 'troll' : (kind==='drillbit' ? 'drillworm' : (kind==='flashbot' ? 'flashdrone' : (kind==='flyfish' ? 'squid' : (kind==='jumpfish' ? 'nautilus' : kind)))));   // FLYFISH -> squid sprite (dive-bomber), JUMPFISH -> nautilus sprite (erupts from the sand); both reuse the proven flash-drone / drill-worm behaviour
     var e=this.enemies.create(x,y,tex); e.kind=kind; e.beh=beh;
-    e.setScale((kind==='ghost'?26:kind==='bitmaxi'?34:kind==='fudster'?38:kind==='gasgoblin'?28:kind==='laserbot'?32:kind==='mevdrone'?34:kind==='drillbit'?34:kind==='rugpuller'?46:(kind==='flyfish'||kind==='jumpfish')?32:30)/e.height);
+    e.setScale((kind==='ghost'?26:kind==='bitmaxi'?34:kind==='fudster'?38:kind==='gasgoblin'?28:kind==='laserbot'?32:kind==='mevdrone'?34:kind==='drillbit'?34:kind==='rugpuller'?46:kind==='eyeball'?26:kind==='longneck'?42:(kind==='flyfish'||kind==='jumpfish')?32:30)/e.height);
     e.body.setSize(e.width*0.70,e.height*0.78).setOffset(e.width*0.15,e.height*0.16); e.setBounce(0);
     e.dir=Phaser.Math.RND.pick([-1,1]);
-    var spd={jeet:50,paper:66,bot:88,ghost:52,bitmaxi:72,sniper:34,fudster:44,gasgoblin:46,sandwich:58,laserbot:34,mevdrone:64,flashbot:40,drillbit:60,flyfish:44,jumpfish:60,rugpuller:130}[kind]||55;
+    var spd={jeet:50,paper:66,bot:88,ghost:52,bitmaxi:72,sniper:34,fudster:44,gasgoblin:46,sandwich:58,laserbot:34,mevdrone:64,flashbot:40,drillbit:60,flyfish:44,jumpfish:60,rugpuller:130,eyeball:44,longneck:38}[kind]||55;
     e.baseSpeed=(spd+Phaser.Math.RND.between(0,12))*(this.diffMul||1)
       *((window.__NQ_SETUP&&window.__NQ_TUNE&&Number(window.__NQ_TUNE.espd))||1);   // LAB tuning knob
     e.homeX=x; e.homeY=y; e.range=range||70; e.bob=Phaser.Math.RND.frac()*6.28;
@@ -2702,14 +2779,15 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(beh==='sandwich'){ if(kind==='sandwich') e.setTint(0x9b6bff); e.mev='idle'; e.nextCharge=this.time.now+700+Phaser.Math.RND.between(0,800); if(kind==='mevdrone'){ e.nextCharge=this.time.now+600+Phaser.Math.RND.between(0,700); var mg=this.addGlow(e,0x9b6bff,3); if(mg) this.tweens.add({targets:mg,outerStrength:8,duration:520,yoyo:true,repeat:-1,ease:'Sine.inOut'}); } }   // MEV bot — charges to "sandwich" you (bot / modern drone)
     // Drones are GROUNDED (identical proven physics to sniper/sandwich — no hover/pit edge cases);
     // the glow + sprite sell the "modern" look. Only the ghost floats.
-    if(kind==='flashbot'||kind==='flyfish'){ e.fbState='hover'; e.fbT=this.time.now; e.fbNext=this.time.now+800+Phaser.Math.RND.between(0,600); var _fg=this.addGlow(e,kind==='flyfish'?0x7ed6f0:0x66ddff,3); if(_fg) this.tweens.add({targets:_fg,outerStrength:8,duration:480,yoyo:true,repeat:-1,ease:'Sine.inOut'}); }   // FLASH DRONE / FLYING FISH: hovers then DIVE-BOMBS you (telegraphed)
+    if(kind==='flashbot'||kind==='flyfish'||kind==='eyeball'){ e.fbState='hover'; e.fbT=this.time.now; e.fbNext=this.time.now+800+Phaser.Math.RND.between(0,600); var _fg=this.addGlow(e,kind==='flyfish'?0x7ed6f0:(kind==='eyeball'?0xff5b6e:0x66ddff),3); if(_fg) this.tweens.add({targets:_fg,outerStrength:8,duration:480,yoyo:true,repeat:-1,ease:'Sine.inOut'}); }   // FLASH DRONE / FLYING FISH / FLOATING EYEBALL: hovers then DIVE-BOMBS you (telegraphed)
     if(kind==='drillbit'||kind==='jumpfish'){ e.drillState='crawl'; e.drillT=this.time.now+Phaser.Math.RND.between(0,900); e.dustAt=0; e.drillImmune=false; }   // DRILL-WORM / JUMPING FISH: crawl → burrow → erupt-from-the-sand cycle (staggered start)
+    if(kind==='longneck'){ e.nextSpray=this.time.now+1600+Phaser.Math.RND.between(0,900); var _lg=this.addGlow(e,0x8cdc6e,3); if(_lg) this.tweens.add({targets:_lg,outerStrength:7,duration:700,yoyo:true,repeat:-1,ease:'Sine.inOut'}); }   // LONG-NECK (scary world): roams; sprays heart-taking poison into pits (see the longneck block in update)
     if(kind==='rugpuller'){ e.rpState='perch'; e.rpT=this.time.now; e.setImmovable(true);   // RUG PULLER: fat scammer rat gripping the rug's RIGHT edge — floats in place (no gravity), guards, then YANKS
       // The sprite is mostly RUG: the rat only occupies x 0.655-0.987 of it (measured off the art),
       // so the hitbox has to sit on HIM. A centred body would hang over the rug — you'd take damage
       // from empty carpet and stomps aimed at the rat would miss.
       e.body.setSize(e.width*0.24,e.height*0.78).setOffset(e.width*0.70,e.height*0.18); }
-    if(kind==='ghost'||kind==='flashbot'||kind==='rugpuller'||kind==='flyfish') e.body.setAllowGravity(false); else e.setCollideWorldBounds(true);   // flyfish hovers (dive-bomber); jumpfish keeps gravity (erupts from the sand)
+    if(kind==='ghost'||kind==='flashbot'||kind==='rugpuller'||kind==='flyfish'||kind==='eyeball') e.body.setAllowGravity(false); else e.setCollideWorldBounds(true);   // flyfish/eyeball hover (dive-bombers); jumpfish keeps gravity (erupts from the sand)
     return e;
   },
   sandwichTick:function(now,e,p){   // MEV Sandwich Bot: idle-patrol → telegraph → DASH at the player's level
@@ -3425,6 +3503,130 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     c.fillStyle=sandD; for(var s=0;s<10;s++){ c.fillRect(-30+s*6,40-((s*13)%18),3,3); }
     cv.refresh();
   },
+  // ===== SCARY WORLD sprites (?room=scary) — all procedural like the shark/sandlord above =====
+  // FLOATING EYEBALL — a bloodshot eye that hovers and dive-bombs (re-skins the flash-drone AI).
+  // Pupil glances LEFT (the enemy "nose" convention — setFlipX turns it).
+  drawEyeballTex:function(){
+    if(this.textures.exists('eyeball')) return;
+    var cv=this.textures.createCanvas('eyeball',40,40), c=cv.getContext();
+    c.clearRect(0,0,40,40); c.translate(20,20);
+    // trailing optic-nerve strands (behind, to the right)
+    c.strokeStyle='#c94f6d'; c.lineWidth=2; c.lineCap='round';
+    c.beginPath(); c.moveTo(12,4); c.quadraticCurveTo(18,8,17,14); c.stroke();
+    c.beginPath(); c.moveTo(13,0); c.quadraticCurveTo(19,2,18,8); c.stroke();
+    // sclera
+    c.fillStyle='#f2efe6'; c.beginPath(); c.arc(0,0,14,0,6.283); c.fill();
+    // bloodshot veins
+    c.strokeStyle='rgba(201,79,90,0.75)'; c.lineWidth=1.1;
+    c.beginPath(); c.moveTo(-13,-3); c.quadraticCurveTo(-8,-2,-5,-4); c.stroke();
+    c.beginPath(); c.moveTo(-11,6); c.quadraticCurveTo(-6,4,-3,6); c.stroke();
+    c.beginPath(); c.moveTo(9,-9); c.quadraticCurveTo(6,-6,7,-3); c.stroke();
+    // iris + pupil
+    c.fillStyle='#b8452f'; c.beginPath(); c.arc(-4,0,7.2,0,6.283); c.fill();
+    c.fillStyle='#ff9b3d'; c.beginPath(); c.arc(-4,0,5.4,0,6.283); c.fill();
+    c.fillStyle='#120a0a'; c.beginPath(); c.arc(-4,0,3.1,0,6.283); c.fill();
+    // wet highlight
+    c.fillStyle='rgba(255,255,255,0.85)'; c.beginPath(); c.arc(-8,-6,2.6,0,6.283); c.fill();
+    cv.refresh();
+  },
+  // LONG-NECK — a squat shadow-beast whose neck arcs up-left to a small head that drools the
+  // poison it sprays into pits. Head LEFT per the enemy convention.
+  drawLongneckTex:function(){
+    if(this.textures.exists('longneck')) return;
+    var cv=this.textures.createCanvas('longneck',56,52), c=cv.getContext();
+    c.clearRect(0,0,56,52); c.translate(28,26);
+    var hide='#2c2438', hideD='#1b1526', belly='#4a3f5e';
+    // legs
+    c.fillStyle=hideD; c.fillRect(-14,16,6,9); c.fillRect(2,16,6,9); c.fillRect(10,15,6,10);
+    // body blob (right side)
+    c.fillStyle=hide; c.beginPath(); c.ellipse(2,10,18,11,0,0,6.283); c.fill();
+    c.fillStyle=belly; c.beginPath(); c.ellipse(3,14,13,6,0,0,6.283); c.fill();
+    // back spines
+    c.fillStyle=hideD; for(var s2=0;s2<4;s2++){ var sx=12-s2*7; c.beginPath(); c.moveTo(sx,1); c.lineTo(sx-3,-5+(s2%2)); c.lineTo(sx-6,1); c.closePath(); c.fill(); }
+    // the LONG neck, arcing up-left
+    c.strokeStyle=hide; c.lineWidth=7; c.lineCap='round';
+    c.beginPath(); c.moveTo(-8,8); c.quadraticCurveTo(-20,-4,-16,-16); c.stroke();
+    // head + open snout
+    c.fillStyle=hide; c.beginPath(); c.ellipse(-16,-19,8,5.5,-0.35,0,6.283); c.fill();
+    c.fillStyle='#0e0a14'; c.beginPath(); c.moveTo(-23,-18); c.lineTo(-15,-16.5); c.lineTo(-22,-14); c.closePath(); c.fill();
+    // poison drool
+    c.fillStyle='rgba(140,220,110,0.85)'; c.beginPath(); c.arc(-23,-13,2.2,0,6.283); c.fill();
+    c.fillStyle='rgba(140,220,110,0.5)'; c.beginPath(); c.arc(-24,-9,1.6,0,6.283); c.fill();
+    // glowing eye
+    c.fillStyle='#9dff5a'; c.beginPath(); c.arc(-17,-21,1.8,0,6.283); c.fill();
+    cv.refresh();
+  },
+  // GRAVEMITE — the scary world's ground turret skin: a little horned cyclops that pops out of
+  // the dirt (same burrow/rise/radial-fan mechanic as the sentry — only the sprite differs).
+  drawGravemiteTex:function(){
+    if(this.textures.exists('gravemite')) return;
+    var cv=this.textures.createCanvas('gravemite',36,44), c=cv.getContext();
+    c.clearRect(0,0,36,44); c.translate(18,22);
+    var skin='#3a2d4e', skinD='#241a33';
+    // horns
+    c.fillStyle=skinD;
+    c.beginPath(); c.moveTo(-10,-14); c.lineTo(-14,-21); c.lineTo(-6,-16); c.closePath(); c.fill();
+    c.beginPath(); c.moveTo(10,-14); c.lineTo(14,-21); c.lineTo(6,-16); c.closePath(); c.fill();
+    // squat body
+    c.fillStyle=skin; c.beginPath(); c.ellipse(0,-2,13,16,0,0,6.283); c.fill();
+    // claws gripping the dirt
+    c.fillStyle=skinD; c.fillRect(-15,10,7,5); c.fillRect(8,10,7,5);
+    // big cyclops eye
+    c.fillStyle='#efe9da'; c.beginPath(); c.arc(0,-7,6,0,6.283); c.fill();
+    c.fillStyle='#c9303e'; c.beginPath(); c.arc(0,-7,3.4,0,6.283); c.fill();
+    c.fillStyle='#0c0810'; c.beginPath(); c.arc(0,-7,1.7,0,6.283); c.fill();
+    // jagged grin
+    c.fillStyle='#0e0a14'; c.fillRect(-8,3,16,5);
+    c.fillStyle='#efe9da'; for(var t2=0;t2<4;t2++){ c.beginPath(); c.moveTo(-7+t2*4,3); c.lineTo(-5+t2*4,3); c.lineTo(-6+t2*4,6.6); c.closePath(); c.fill(); }
+    cv.refresh();
+  },
+  // THE GHOST GALLEON — scary-world finale boss: a haunted pirate ship with the BIG BIG monster
+  // rising out of the deck (tentacles, one huge eye). Drawn wide so it reads huge at bossScale.
+  drawGhostShipTex:function(){
+    if(this.textures.exists('ghostship')) return;
+    var cv=this.textures.createCanvas('ghostship',170,130), c=cv.getContext();
+    c.clearRect(0,0,170,130); c.translate(85,65);
+    var hull='#241a12', hullD='#140d08', sail='#9fb3a8', mast='#3a2a1a', glow='#7af0a0';
+    // ---- the BIG BIG monster first, so it looms BEHIND the ship ----
+    // tentacles
+    c.strokeStyle='#274232'; c.lineWidth=7; c.lineCap='round';
+    c.beginPath(); c.moveTo(-52,10); c.quadraticCurveTo(-64,-18,-52,-34); c.stroke();
+    c.beginPath(); c.moveTo(56,12); c.quadraticCurveTo(70,-14,58,-30); c.stroke();
+    c.beginPath(); c.moveTo(40,6); c.quadraticCurveTo(52,-30,38,-44); c.stroke();
+    // head looming over the deck
+    c.fillStyle='#2f5140'; c.beginPath(); c.ellipse(24,-38,26,20,0,0,6.283); c.fill();
+    // one huge eye
+    c.fillStyle='#e8f0d8'; c.beginPath(); c.arc(18,-40,9,0,6.283); c.fill();
+    c.fillStyle='#c9303e'; c.beginPath(); c.arc(18,-40,5,0,6.283); c.fill();
+    c.fillStyle='#0c0810'; c.beginPath(); c.arc(18,-40,2.4,0,6.283); c.fill();
+    // fangs
+    c.fillStyle='#e8f0d8';
+    c.beginPath(); c.moveTo(10,-24); c.lineTo(14,-24); c.lineTo(12,-16); c.closePath(); c.fill();
+    c.beginPath(); c.moveTo(28,-23); c.lineTo(32,-23); c.lineTo(30,-15); c.closePath(); c.fill();
+    // ---- masts + tattered sails ----
+    c.fillStyle=mast; c.fillRect(-30,-58,4,66); c.fillRect(6,-50,4,58);
+    c.fillStyle=sail; c.globalAlpha=0.85;
+    c.beginPath(); c.moveTo(-28,-54); c.quadraticCurveTo(-6,-46,-28,-30); c.lineTo(-28,-38); c.lineTo(-24,-34); c.lineTo(-28,-26); c.closePath(); c.fill();
+    c.beginPath(); c.moveTo(8,-46); c.quadraticCurveTo(28,-38,8,-22); c.lineTo(8,-30); c.lineTo(12,-26); c.lineTo(8,-18); c.closePath(); c.fill();
+    c.globalAlpha=1;
+    // torn black flag with a skull dot
+    c.fillStyle='#141414'; c.beginPath(); c.moveTo(-30,-58); c.lineTo(-12,-54); c.lineTo(-18,-51); c.lineTo(-12,-48); c.lineTo(-30,-46); c.closePath(); c.fill();
+    c.fillStyle='#e8f0d8'; c.beginPath(); c.arc(-24,-52,2.2,0,6.283); c.fill();
+    // ---- hull ----
+    c.fillStyle=hull;
+    c.beginPath(); c.moveTo(-62,6); c.lineTo(64,6); c.lineTo(50,40); c.quadraticCurveTo(0,52,-46,40); c.closePath(); c.fill();
+    // bow + stern rails
+    c.fillStyle=hullD; c.fillRect(-66,-2,14,10); c.fillRect(54,-6,16,14);
+    // deck line
+    c.strokeStyle=hullD; c.lineWidth=3; c.beginPath(); c.moveTo(-58,12); c.lineTo(58,12); c.stroke();
+    // glowing portholes — the ghost crew's lights
+    c.fillStyle=glow; for(var p2=0;p2<4;p2++){ c.beginPath(); c.arc(-36+p2*24,24,3.4,0,6.283); c.fill(); }
+    // hull cracks
+    c.strokeStyle='#0c0805'; c.lineWidth=1.5;
+    c.beginPath(); c.moveTo(-30,18); c.lineTo(-22,34); c.stroke();
+    c.beginPath(); c.moveTo(20,20); c.lineTo(28,36); c.stroke();
+    cv.refresh();
+  },
   /* ---------- Scammy KOL boss (charges + stomp x3, and shills fake tokens at range) ---------- */
   startKolBoss:function(){
     var dx=this.def.door, self=this, d=this.def;
@@ -3438,6 +3640,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         bHits=(d.bossHits!=null?d.bossHits:3);                // stomps to kill (default 3; Tom is tougher)
     if(bTex==='shark') this.drawSharkTex();      // prize room: build the shark texture on demand before the sprite is made
     if(bTex==='sandlord') this.drawSandLordTex(); // second prize room: the Sandcastle Lord
+    if(bTex==='ghostship') this.drawGhostShipTex(); // scary world: the haunted galleon + its big big monster
     this.bossHP=bHits;
     this.cameras.main.flash(420, 120, 40, 160);
     this.player.setPosition(dx-260, GY-40); this.player.setVelocity(0,0);
@@ -3458,7 +3661,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   },
   kolTick:function(now,p){
     var k=this.rugking; if(!k||!k.active) return;
-    if(now>this.kolNextShill){ this.kolNextShill=now+(this.def.bossShillMs||2200); if(this.def.bossAttack==='tom') this.tomAttack(k,p); else this.kolShill(k,p); }
+    if(now>this.kolNextShill){ this.kolNextShill=now+(this.def.bossShillMs||2200); if(this.def.bossAttack==='tom') this.tomAttack(k,p); else if(this.def.bossAttack==='ship') this.shipAttack(k,p); else this.kolShill(k,p); }
     if(now>this.kolNextTaunt){ this.kolNextTaunt=now+3600; var t=this.def.bossTaunts||['TRUST ME BRO','WEN UTILITY? SOON','NOT FINANCIAL ADVICE','THIS IS THE ONE','FEW UNDERSTAND','GM, APE IN']; this.flash(Phaser.Math.RND.pick(t),this.def.bossColor||'#c99bff'); }
   },
   // TOM's custom fight — three MySpace attacks in rotation, escalating on his last two hits.
@@ -3486,6 +3689,33 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       this.flash('NEW BULLETIN!','#ff7ad9');
       var sp3=low?250:225; [-0.10,0,0.10].forEach(function(off){ var a3=base+off; shot(k.x,k.y-6,Math.cos(a3)*sp3,Math.sin(a3)*sp3,0xff7ad9,'bullet','BULLETIN BLAST'); });
       _tone(640,200,0.10,'sawtooth',0.05);
+    }
+  },
+  // THE GHOST GALLEON's fight (scary-world finale) — three pirate attacks in rotation, escalating
+  // on its last two hearts. Same enemyShots conventions as tomAttack + the stomp guard.
+  shipAttack:function(k,p){
+    if(this.over||!this.enemyShots) return; var self=this;
+    if(this.stompImminent(p,k)) return;   // never punish a committed stomp point-blank
+    var low=this.bossHP<=2;
+    var shot=function(x,y,vx,vy,tint,tex,cause){ var s=self.enemyShots.create(x,y,tex||'bullet').setDepth(6); if(!s||!s.body) return null;
+      s.srcCause=cause; if(tex==='gas') s.setScale(0.6); s.body.setAllowGravity(false); s.body.setSize(s.width*0.85,s.height*0.85); s.setVelocity(vx,vy); s.setTint(tint); s.dieAt=self.time.now+3000; return s; };
+    var base=Math.atan2((p.y-8)-k.y, p.x-k.x);
+    this._shipPhase=((this._shipPhase||0)+1)%3;
+    if(this._shipPhase===0){
+      // CANNON VOLLEY — a fast flat triple of cannonballs at you (faster when low)
+      this.flash('CANNON VOLLEY — HIT THE DECK!','#9aa4b2');
+      var sp=low?245:220; [-0.09,0,0.09].forEach(function(off){ var a=base+off; shot(k.x,k.y-10,Math.cos(a)*sp,Math.sin(a)*sp,0x9aa4b2,'bullet','CANNON VOLLEY'); });
+      _tone(140,300,0.14,'square',0.06);
+    } else if(this._shipPhase===1){
+      // GHOST BROADSIDE — a ring of spirit-fire bursting outward (10 shots when low)
+      this.flash('GHOST BROADSIDE!','#7af0a0');
+      var m=low?10:8, sp2=160; for(var j=0;j<m;j++){ var a2=(j/m)*Math.PI*2+(low?0.3:0); shot(k.x,k.y-8,Math.cos(a2)*sp2,Math.sin(a2)*sp2,0x7af0a0,'bullet','GHOST BROADSIDE'); }
+      _tone(520,260,0.12,'sine',0.05);
+    } else {
+      // KRAKEN SPIT — an aimed fan of poison blobs (one extra when low; same acid green as the long-necks)
+      this.flash('KRAKEN SPIT!','#8ce85a');
+      var n=low?4:3, sp3=185; for(var i=0;i<n;i++){ var a3=base+(i-(n-1)/2)*0.18; shot(k.x,k.y-12,Math.cos(a3)*sp3,Math.sin(a3)*sp3,0xd8ff70,'gas','KRAKEN SPIT'); }
+      _tone(320,220,0.12,'sawtooth',0.05);
     }
   },
   kolShill:function(k,p){   // flings a small spread of "fake token" shills toward the player
@@ -4619,6 +4849,25 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.slowUntil=now+1200;
     if(!this._fudFlashAt||now>this._fudFlashAt){ this._fudFlashAt=now+1600; this.flash('FUD SLOWS YOU — PUSH THROUGH','#7ec86e'); }
   },
+  emitPoison:function(e,pitX){   // LONG-NECK rears up and sprays poison puffs that SINK into the pit ahead
+    if(this.over||!this.poisonClouds) return; var self=this;
+    this.burst(e.x, e.y-18, 0x8cdc6e, 8);
+    try{ _tone(210,420,0.14,'sawtooth',0.045); }catch(err){}
+    for(var i=0;i<3;i++){
+      var g=this.poisonClouds.create(pitX + e.dir*i*16, e.y-20-i*4, 'gas');
+      if(!g||!g.body) continue;
+      g.setDepth(5).setTint(0xd8ff70).setAlpha(0.9).setScale(0.5);   // acid-bright tint ≠ the FUDster's soft slow-gas green
+      g.body.setAllowGravity(false); g.body.setSize(g.width*0.6,g.height*0.6);
+      g.setVelocity(e.dir*(26+i*10), 46+i*12);   // arcs out and SINKS — poison pools where you were about to jump
+      (function(gg){ self.tweens.add({targets:gg, scaleX:1.25, scaleY:1.25, alpha:0, duration:2400, ease:'Sine.out', onComplete:function(){ if(gg.active) gg.destroy(); }}); })(g);
+    }
+  },
+  poisonTouch:function(player,cloud){   // LONG-NECK poison gas — takes a heart (same guard set as spikeHit)
+    var now=this.time.now;
+    if(this.over||player.invuln||now<this.shieldUntil||now<this.moonUntil||now<this.omegaUntil||now<this.whaleUntil||now<this.coldUntil) return;
+    var goingL=(cloud.body&&cloud.body.velocity.x<0); if(cloud.active) cloud.destroy();   // one puff = one hit, then it's spent
+    this.hurt(player, goingL?1:-1, 'POISON GAS');
+  },
   sniperFire:function(e,p){   // Sniper Bot fires an aimed bolt at the player
     if(this.over||!this.enemyShots) return;
     var dx=p.x-e.x, dy=(p.y-6)-e.y, d=Math.hypot(dx,dy)||1, sp=205;
@@ -5356,7 +5605,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         var target=e.homeY+Math.sin(now/450+e.bob)*14; e.setVelocityY((target-e.y)*5);
         e.setFlipX(e.dir>0); return;
       }
-      if(e.kind==='flashbot'||e.kind==='flyfish'){   // FLASH DRONE / FLYING FISH: hovers + tracks you → TELEGRAPHS (shudder + flash) → DIVE-BOMBS straight at where you were → peels back up. A clear, fast aerial threat you dodge then punish.
+      if(e.kind==='flashbot'||e.kind==='flyfish'||e.kind==='eyeball'){   // FLASH DRONE / FLYING FISH / FLOATING EYEBALL: hovers + tracks you → TELEGRAPHS (shudder + flash) → DIVE-BOMBS straight at where you were → peels back up. A clear, fast aerial threat you dodge then punish.
         var dist=Math.abs(p.x-e.x);
         if(e.fbState==='hover'){
           var hty=e.homeY+Math.sin(now/380+e.bob)*8; e.setVelocityY((hty-e.y)*4);
@@ -5364,7 +5613,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
           if(dist<300 && Math.abs(p.y-e.y)<230 && now>e.fbNext){ e.fbState='tele'; e.fbT=now; }
         } else if(e.fbState==='tele'){   // wind-up telegraph so the dive is fair
           e.setVelocity(Phaser.Math.RND.between(-28,28), Phaser.Math.RND.between(-18,18)); if(Math.floor(now/60)%2){ e.setTint(0xffffff); } else { e.clearTint(); }
-          if(now>e.fbT+420){ e.fbState='dive'; e.fbT=now; e.clearTint(); e.fbTX=p.x; var ang=Math.atan2(p.y-e.y,p.x-e.x); e.setVelocity(Math.cos(ang)*320,Math.sin(ang)*320); self.burst(e.x,e.y,0x8fe6ff,10); }
+          if(now>e.fbT+420){ e.fbState='dive'; e.fbT=now; e.clearTint(); e.fbTX=p.x; var ang=Math.atan2(p.y-e.y,p.x-e.x); e.setVelocity(Math.cos(ang)*320,Math.sin(ang)*320); self.burst(e.x,e.y,(e.kind==='eyeball'?0xff5b6e:0x8fe6ff),10); }
         } else if(e.fbState==='dive'){
           if(now>e.fbT+700 || e.y>GY-8 || e.body.blocked.down || e.body.blocked.left || e.body.blocked.right){ e.fbState='back'; e.fbT=now; }
         } else {   // peel back up to hover home
@@ -5443,6 +5692,17 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       if(e.beh==='sniper' && now>e.nextFire && Math.abs(e.x-p.x)<330){ self.sniperFire(e,p); e.nextFire=now+(e.kind==='laserbot'?1500:1900); }
       // FUDster / Gas Goblin: cough a slow-gas puff on a cadence
       if((e.kind==='fudster'||e.kind==='gasgoblin') && now>e.nextGas){ self.emitGas(e); e.nextGas=now+2100; }
+      // LONG-NECK (scary world): roams until a pit is just ahead, then rears up and SPRAYS
+      // poison down into it. Its acid-green gas TAKES A HEART (poisonTouch) — the FUDster's
+      // softer slow-gas never does — so the cloud sinks into the pit you were about to cross.
+      if(e.kind==='longneck'){
+        if(e.sprayUntil&&now<e.sprayUntil){ e.setVelocityX(0); e.setRotation(0); }
+        else if(now>e.nextSpray){
+          var _pitX=0; for(var _pd2=26;_pd2<=110;_pd2+=14){ var _ax=e.x+e.dir*_pd2; if(self.overPit(_ax)){ _pitX=_ax; break; } }
+          if(_pitX){ e.sprayUntil=now+620; e.nextSpray=now+2900+Phaser.Math.RND.between(0,600); self.emitPoison(e,_pitX); }
+          else e.nextSpray=now+500;   // no pit in reach — try again shortly
+        }
+      }
     });
 
     // Rug King intro grace ends → he wakes up and the fight begins
