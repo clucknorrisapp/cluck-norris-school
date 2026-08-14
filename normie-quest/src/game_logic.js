@@ -1832,6 +1832,10 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     try{ var _sc0=this; window.__NQ_SYNCREWARDS=function(){ try{ if(_sc0.scene&&_sc0.scene.isActive&&_sc0.scene.isActive()&&!_sc0.over) _sc0.syncRewards(); }catch(e){} }; }catch(e){}
     try{ var _sc=this; window.__NQ_PAUSE=function(){ if(!_sc.over&&!_sc.paused){ _sc.pauseGame(false); return true; } return false; };
          window.__NQ_RESUME=function(){ if(_sc.paused) _sc.resumeGame(); };
+         // Toggle Phaser's keyboard from OUTSIDE the game (the leaderboard/wallet modal lives in a
+         // separate script block that can't see NQGAME). Needed so a keypress in the modal doesn't
+         // hit the scene's "any key resumes" handler and un-pause the game behind it.
+         window.__NQ_KBGAME=function(on){ try{ if(_sc.input&&_sc.input.keyboard) _sc.input.keyboard.enabled=on; }catch(e){} };
          window.__NQ_DBG=function(){ try{ return {paused:!!_sc.paused, clockPaused:!!_sc.time.paused, now:Math.round(_sc.time.now), last:Math.round(_sc.lastInputAt||0), warping:!!_sc._warping, swan:_sc._swanState||null, bossHP:(_sc.bossStarted?_sc.bossHP:null), hasKey:!!_sc.hasKey, level:_sc.def&&_sc.def.name, floorKey:_sc.floorKey||null, timeLeft:_sc.timeLeft, throwAmmo:_sc.throwAmmo, bossSprite:(function(){ try{ var k=(_sc.rugking&&_sc.rugking.active)?_sc.rugking:((_sc.worm&&_sc.worm.active)?_sc.worm:null); if(!k) return null; return {tex:k.texture&&k.texture.key, grav:!!(k.body&&k.body.allowGravity), vis:!!k.visible, a:+(k.alpha||0).toFixed(2), w:Math.round(k.displayWidth), h:Math.round(k.displayHeight), x:Math.round(k.x), y:Math.round(k.y), tint:('00000'+(k.tintTopLeft||0).toString(16)).slice(-6),
            // The PHYSICS body rect, next to the visible rect above. bossTouch only ever fires on
            // body-vs-body overlap, so a body that has drifted off the drawn sprite makes a boss
@@ -5286,9 +5290,10 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // toggles; while paused, ANY fresh button press (anyBtnEdge) also resumes. anyBtnEdge is
     // drained every unpaused frame so a stale press can never insta-resume a fresh pause.
     { var _pe=(typeof window!=='undefined')?window.__NQ_PAD:null;
-      // while a DOM modal (feedback form / remap) owns the screen, drain pad edges but act on
-      // NOTHING — a controller press was resuming the run behind the modal while a tester typed.
-      var _modalUp=false; try{ _modalUp=!!document.querySelector('#nqfb-wrap.on'); }catch(e){}
+      // while a DOM modal (feedback form / remap / leaderboard+wallet) owns the screen, drain pad
+      // edges but act on NOTHING — a controller press was resuming the run behind the modal while a
+      // tester typed. #nqp-ov is the leaderboard/wallet panel (it pauses the game when it opens).
+      var _modalUp=false; try{ _modalUp=!!document.querySelector('#nqfb-wrap.on, #nqp-ov.on'); }catch(e){}
       if(_pe && _modalUp){ _pe.pauseEdge=false; _pe.anyBtnEdge=false; }
       else if(_pe){
         if(_pe.pauseEdge){ _pe.pauseEdge=false; _pe.anyBtnEdge=false;
@@ -8111,14 +8116,24 @@ if(typeof document!=='undefined'){ (function(){
     }
     window._nqParkedNote = parkedNote;
 
-    btn.addEventListener('click', function () { ov.classList.add('on'); loadBoards(); parkedNote(); });
+    // Freeze the game while this panel is open. Before this, the level timer kept ticking and the
+    // player/enemies kept simulating behind the modal (owner report: "the game is trying to play in
+    // the background"). Also release Phaser's keyboard so held keys don't drive the hidden game and a
+    // keypress in the handle field doesn't punch through. Only resume if WE paused it — never stomp a
+    // manual P/Esc pause. Same pattern as the feedback modal above.
+    var ovPaused = false;
+    function ovKb(on){ try { if (window.__NQ_KBGAME) window.__NQ_KBGAME(on); } catch (e) {} }
+    function openOv(){ ov.classList.add('on'); ovKb(false); try { ovPaused = !!(window.__NQ_PAUSE && window.__NQ_PAUSE()); } catch (e) { ovPaused = false; } }
+    function closeOv(){ ov.classList.remove('on'); ovKb(true); if (ovPaused) { try { window.__NQ_RESUME && window.__NQ_RESUME(); } catch (e) {} ovPaused = false; } }
+
+    btn.addEventListener('click', function () { openOv(); loadBoards(); parkedNote(); });
     // The game's tier gate opens the panel straight onto the WALLET tab when a locked world is
     // hit — the verify/buy path is the answer to "why is this locked".
     try { window.__NQ_OPENPREMIUM = function () {
-      ov.classList.add('on');
+      openOv();
       var wt = ov.querySelector('.nqp-tab[data-tab="wal"]'); if (wt) wt.click();
     }; } catch (e) {}
-    ov.addEventListener('click', function (e) { if (e.target === ov || e.target.hasAttribute('data-close')) ov.classList.remove('on'); });
+    ov.addEventListener('click', function (e) { if (e.target === ov || e.target.hasAttribute('data-close')) closeOv(); });
     ov.querySelectorAll('.nqp-tab').forEach(function (t) {
       t.addEventListener('click', function () {
         ov.querySelectorAll('.nqp-tab').forEach(function (x) { x.classList.remove('on'); }); t.classList.add('on');
