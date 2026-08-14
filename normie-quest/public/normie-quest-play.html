@@ -8230,7 +8230,7 @@ if(typeof document!=='undefined'){ (function(){
     + '#nqp-card h2{font-size:16px;color:#ffd23f;margin:0 0 2px}'
     + '.nqp-x{float:right;color:#8f89b0;cursor:pointer;font-size:20px;line-height:1}'
     + '.nqp-tabs{display:flex;gap:6px;margin:12px 0}'
-    + '.nqp-tab{flex:1;background:#1a1630;border:1px solid #33305a;color:#cbc6e6;border-radius:9px;padding:8px;font-size:12px;cursor:pointer;text-align:center}'
+    + '.nqp-tab{flex:1;background:#1a1630;border:1px solid #33305a;color:#cbc6e6;border-radius:9px;padding:8px;font-size:12px;cursor:pointer;text-align:center;font-family:inherit;line-height:1.2;-webkit-appearance:none;appearance:none}'
     + '.nqp-tab.on{background:#ffd23f;color:#20142e;border-color:#ffd23f;font-weight:700}'
     + '#nqp-chars{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}'
     + '.nqp-char{display:flex;flex-direction:column;align-items:center;gap:5px;background:#1a1630;border:2px solid #33305a;border-radius:12px;padding:10px 6px;cursor:pointer;color:#cbc6e6;font-family:inherit}'
@@ -8287,11 +8287,15 @@ if(typeof document!=='undefined'){ (function(){
     // are unagreed, so the copy rule at NORMIE_NATION applies here too: identity + where-to-buy only.
     + '<div class="nqp-sub">' + (SETUP ? 'Setup lane · leaderboards, wallet access &amp; buy NORMIE'
                                        : 'Leaderboard · your wallet · $NORMIE') + '</div>'
-    + '<div class="nqp-tabs"><div class="nqp-tab on" data-tab="lb">🏆 Leaderboard</div>'
-    + '<div class="nqp-tab" data-tab="wal">👛 Wallet</div><div class="nqp-tab" data-tab="char">🎭 Character</div><div class="nqp-tab" data-tab="buy">🪙 Buy NORMIE</div>'
+    // Tabs are <button>s, not <div>s: on iOS, when the leaderboard name field has focus (soft keyboard
+    // up), the first tap on a non-button element is swallowed to dismiss the keyboard and never reaches
+    // a div's click handler — so the panel looked stuck on Leaderboard. Buttons are natively tappable
+    // and fire click even while the keyboard closes.
+    + '<div class="nqp-tabs"><button type="button" class="nqp-tab on" data-tab="lb">🏆 Leaderboard</button>'
+    + '<button type="button" class="nqp-tab" data-tab="wal">👛 Wallet</button><button type="button" class="nqp-tab" data-tab="char">🎭 Character</button><button type="button" class="nqp-tab" data-tab="buy">🪙 Buy NORMIE</button>'
     // Hidden until /api/nq/config says the server has armed the shop. An unarmed build must not
     // advertise a shop it cannot open.
-    + '<div class="nqp-tab" data-tab="shop" style="display:none">🛍 Shop</div></div>'
+    + '<button type="button" class="nqp-tab" data-tab="shop" style="display:none">🛍 Shop</button></div>'
     + '<div class="nqp-pane on" data-pane="lb">'
     + '<input class="nqp-in" id="nqp-handle" maxlength="16" placeholder="Your handle (shown on the board)">'
     + '<div class="nqp-sub" id="nqp-parked" style="display:none;margin:-2px 0 8px"></div>'
@@ -8364,6 +8368,7 @@ if(typeof document!=='undefined'){ (function(){
     }
     ov.querySelectorAll('.nqp-tab').forEach(function (t) {
       t.addEventListener('click', function () {
+        try { var a = document.activeElement; if (a && a.blur && a !== t) a.blur(); } catch (e) {}  // drop the iOS keyboard when switching tabs
         ov.querySelectorAll('.nqp-tab').forEach(function (x) { x.classList.remove('on'); }); t.classList.add('on');
         var k = t.getAttribute('data-tab');
         ov.querySelectorAll('.nqp-pane').forEach(function (p) { p.classList.toggle('on', p.getAttribute('data-pane') === k); });
