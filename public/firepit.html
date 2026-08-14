@@ -221,7 +221,21 @@ function renderPicker(){
   var list = CluckWallet.available();
   el.innerHTML = "";
   if (!list.length){
-    el.innerHTML = '<div class="hint">No Solana wallet detected yet. On a phone, open <b>clucknorris.app/firepit</b> inside your wallet’s built-in browser (Phantom, Solflare, SafePal…) and reload. On desktop, install a wallet extension and refresh.</div>';
+    var isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    if (isMobile){
+      // On a plain mobile browser no wallet is injected — offer one-tap links that reopen THIS
+      // page inside a wallet's own browser (pure navigation; nothing is signed or shared). This is
+      // also the escape hatch when a wallet's own in-app browser misbehaves (e.g. a scan that a
+      // security checkpoint blocks) — jump into one whose browser works.
+      var url = encodeURIComponent(location.href), ref = encodeURIComponent(location.origin);
+      el.innerHTML =
+        '<div class="hint">📱 Open Firepit inside a wallet’s browser to connect:</div>' +
+        '<a class="btn sm" style="text-decoration:none" href="https://phantom.app/ul/browse/' + url + '?ref=' + ref + '">🔮 Phantom</a>' +
+        '<a class="btn sm" style="text-decoration:none" href="https://solflare.com/ul/v1/browse/' + url + '?ref=' + ref + '">☀️ Solflare</a>' +
+        '<div class="hint" style="width:100%">Opens this exact page in the wallet’s built-in browser. Nothing is signed or shared by the link. Already inside a wallet browser? Pull to refresh, or try another wallet.</div>';
+    } else {
+      el.innerHTML = '<div class="hint">No Solana wallet detected. Install a wallet extension (Phantom, Solflare, Backpack, SafePal…) and refresh — or open <b>clucknorris.app/firepit</b> on your phone inside your wallet’s built-in browser.</div>';
+    }
     return;
   }
   list.forEach(function(w){
@@ -261,11 +275,45 @@ function disconnect(){
   renderPicker();
 }
 
+// One resilient path to the scan API for both the initial scan and the post-burn re-poll.
+// Some in-app wallet browsers (SafePal was the first report) get a Cloudflare bot/managed-
+// challenge HTML page back on the XHR instead of our JSON — the page's own top navigation
+// passed the challenge, but the fetch doesn't carry it, so the body starts with "<!DOCTYPE".
+// Calling .json() on that threw the cryptic "Unexpected token '<'". Now: send Accept: json,
+// verify the response really is JSON, retry a couple of times (transient challenges pass on a
+// second try), and throw a TYPED error so the caller can show a real workaround.
+async function fetchScan(pubkey, tries){
+  tries = tries || 1;
+  var lastErr = null;
+  for (var attempt=0; attempt<tries; attempt++){
+    if (attempt) await new Promise(function(r){ setTimeout(r, 900); });
+    var resp;
+    try {
+      resp = await fetch("/api/burn-scan?wallet=" + encodeURIComponent(pubkey) + "&t=" + Date.now(),
+        { headers: { "Accept": "application/json" }, cache: "no-store", credentials: "same-origin" });
+    } catch(netErr){ lastErr = netErr; continue; }   // network blip / offline — retry
+    var ct = resp.headers.get("content-type") || "";
+    if (ct.indexOf("application/json") === -1){
+      // HTML (or anything non-JSON) came back — almost always an edge security checkpoint.
+      await resp.text().catch(function(){});   // drain
+      lastErr = new Error("blocked"); lastErr.nonJson = true; lastErr.httpStatus = resp.status;
+      continue;   // retry — the challenge often clears on the next request
+    }
+    var j = await resp.json();
+    if (!j || !j.success) throw new Error((j && j.error) || "scan failed");
+    return j;
+  }
+  throw lastErr || new Error("scan failed");
+}
+function scanErrMsg(e){
+  if (e && e.nonJson)
+    return "Your wallet’s in-app browser blocked the scan (it got a web page, not data — usually a security checkpoint). Try again, or open clucknorris.app/firepit in Chrome/Safari or in Phantom or Solflare’s browser, then reconnect.";
+  return "Scan failed: " + ((e && e.message) || e);
+}
 async function scan(){
   setStatus($("status"), "Scanning your wallet on-chain…");
   try {
-    var r = await fetch("/api/burn-scan?wallet=" + encodeURIComponent(wPubkey)).then(function(x){ return x.json(); });
-    if (!r.success) throw new Error(r.error || "scan failed");
+    var r = await fetchScan(wPubkey, 3);
     accounts = r.accounts || [];
     selected = {};
     clearStatus($("status"));
@@ -273,7 +321,7 @@ async function scan(){
     render();
     applyScanFoot(accounts.length, r.capped);
     if (!accounts.length) setStatus($("status"), "Clean wallet — no token accounts to burn or reclaim. 🐔", "ok");
-  } catch(e){ setStatus($("status"), "Scan failed: " + (e.message || e), "err"); }
+  } catch(e){ setStatus($("status"), scanErrMsg(e), "err"); }
 }
 function applyScanFoot(n, capped){
   $("scan-foot").textContent = n + " token account" + (n===1?"":"s") + " found." + (capped ? " (showing first 200)" : "");
@@ -288,7 +336,7 @@ async function rescanUntilClean(burnedSet){
     await new Promise(function(r){ setTimeout(r, i===0 ? 1200 : 2000); });
     if (!wPubkey) return;   // disconnected mid-wait
     try {
-      var r2 = await fetch("/api/burn-scan?wallet=" + encodeURIComponent(wPubkey) + "&t=" + Date.now()).then(function(x){ return x.json(); });
+      var r2 = await fetchScan(wPubkey, 1);   // one try per loop; the loop itself is the retry
       if (!r2 || !r2.success) continue;
       var fresh = r2.accounts || [];
       var lingering = fresh.some(function(a){ return burnedSet[a.tokenAccount]; });
