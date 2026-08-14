@@ -1336,7 +1336,7 @@ var LEVELS=[
   //   Geometry is lifted VERBATIM from the vetted MYSPACE / TOP8 / TOMSTURF rooms so reachability
   //   is proven; theme, enemies, darkness and the boss are the only changes. =====
   { name:'SCARY', sub:'THE HAUNTED HOLLOW', time:150, theme:30, width:5800, music:'mines',
-    hidden:true, bonus:true, private:true, next:88, dark:true, diff:1.4, mwTex:'gravemite',
+    hidden:true, bonus:true, private:true, next:88, dark:true, darkAlpha:0.84, diff:1.4, mwTex:'gravemite',
     roomLabel:'THE SCARY WORLD',
     gaps:[[820,892],[1640,1760],[2480,2600],[3300,3372],[4200,4296],[5000,5076]],
     walls:[[460,3,'steel',4],[1300,3,'stone',4],[2200,4,'steel',3],[3000,3,'brick',4],[3900,3,'stone',4],[4800,3,'steel',4],[5400,2,'brick',2]],
@@ -1346,14 +1346,16 @@ var LEVELS=[
     powerups:[['moon',3200,230],['omegachad',4090,230],['bull',2850,230],['candle',1600,230]],
     airdrops:[[1200,H-118],[3500,H-72]],
     coins:[[472,158],[520,158],[700,196],[1312,158],[1360,158],[1500,196],[2212,134],[2260,134],[2680,196],[3012,158],[3060,158],[3600,196],[3912,158],[3960,158],[4500,196],[4812,158],[4860,158],[5300,196]],
-    enemies:[['longneck',680,230,80],['ghost',1050,212,80],['eyeball',1450,150,60],['ghost',2050,212,60],['eyeball',2380,140,60],['ghost',2820,212,60],['longneck',3150,230,70],['eyeball',3720,150,60],['longneck',4500,230,70],['ghost',4700,212,90],['eyeball',4900,140,50]],
-    miniworms:[1100,4400],
+    // longnecks sit right before each pit so they lean over and spray poison INTO it; eyeballs
+    // patrol the air. No ghosts (owner call). Gravemite goblins glow up out of the dark ground.
+    enemies:[['longneck',720,230,70],['eyeball',1150,150,60],['longneck',1540,230,70],['eyeball',1900,140,60],['longneck',2380,230,70],['eyeball',2820,150,60],['eyeball',3600,140,60],['longneck',4100,230,70],['eyeball',4700,150,50],['longneck',4900,230,60]],
+    miniworms:[1100,2700,4400,5300],
     pumpdumps:[[1500,174],[3700,174]], honeypots:[[2680,232],[4500,232]], npcs:[[2900,90]],
     bonusblocks:[[1280,5],[2950,'moon'],[4760,8]],
     key:[1624,H-150], door:5680 },
 
   { name:'GRAVEYARD', sub:'THE MONSTER PITS', time:160, theme:30, width:6400, music:'mines',
-    hidden:true, bonus:true, private:true, next:89, dark:true, diff:1.5, mwTex:'gravemite',
+    hidden:true, bonus:true, private:true, next:89, dark:true, darkAlpha:0.84, diff:1.5, mwTex:'gravemite',
     roomLabel:'THE SCARY WORLD',
     gaps:[[780,852],[1620,1692],[2440,2560],[3260,3380],[4120,4240],[4980,5076],[5900,5976]],
     walls:[[440,3,'steel',4],[1240,4,'stone',4],[2100,3,'crate',5],[2960,4,'steel',4],[3820,3,'brick',5],[4680,4,'stone',4],[5250,2,'stone',2],[5500,3,'crate',4],[6180,2,'crate',2]],
@@ -1363,14 +1365,16 @@ var LEVELS=[
     powerups:[['supergeek',1400,230],['omegachad',4480,230],['bull',4100,230],['candle',3150,230]],
     airdrops:[[2300,H-118],[4200,H-72]],
     coins:[[452,158],[500,158],[700,196],[1252,134],[1300,134],[1400,196],[2112,158],[2160,158],[2208,158],[2680,196],[2972,134],[3020,134],[3200,196],[3832,158],[3880,158],[3928,158],[4692,134],[4740,134],[5512,158],[5560,158],[6100,196]],
-    enemies:[['eyeball',600,150,60],['ghost',1000,212,80],['longneck',1400,230,70],['eyeball',1900,140,60],['longneck',2700,230,70],['ghost',3200,212,70],['eyeball',3450,150,60],['ghost',3900,212,80],['longneck',4400,230,70],['eyeball',4560,140,50],['ghost',4820,212,80],['eyeball',5250,150,60],['longneck',5650,230,60]],
-    miniworms:[2850,5700],
+    // "THE MONSTER PITS" — a longneck guards nearly every gap, spraying poison down into it; the
+    // pits are the theme, so lean into them. Eyeballs above, a den of glowing gravemite goblins below.
+    enemies:[['longneck',700,230,70],['eyeball',1000,150,60],['longneck',1540,230,70],['eyeball',1900,140,60],['longneck',2360,230,70],['eyeball',2900,150,60],['longneck',3180,230,70],['eyeball',3600,140,60],['longneck',4040,230,70],['eyeball',4560,150,50],['longneck',4900,230,70],['eyeball',5400,140,60],['longneck',5820,230,60]],
+    miniworms:[1400,2850,4400,5700],
     pumpdumps:[[1000,174],[3500,174],[5300,174]], honeypots:[[2350,232],[4300,232]], npcs:[[3150,90]],
     bonusblocks:[[1120,5],[2080,8],[3220,5],[4490,8],[5480,8]],
     key:[1164,H-150], door:6300 },
 
   { name:'GHOSTSHIP', sub:'THE HAUNTED GALLEON', time:190, theme:30, width:4800, music:'mines',
-    hidden:true, bonus:true, private:true, boss:true, bossType:'kol', diff:1.45, mwTex:'gravemite',
+    hidden:true, bonus:true, private:true, boss:true, bossType:'kol', diff:1.45, mwTex:'gravemite', darkAlpha:0.84,
     roomLabel:'THE SCARY WORLD',
     bossName:'THE GHOST GALLEON', bossSub:'THE BIG BIG MONSTER OF THE DEEP — STOMP IT x5',
     bossTex:'ghostship', bossScale:112, bossHits:5, bossShillMs:1500, bossAttack:'ship',
@@ -1384,8 +1388,9 @@ var LEVELS=[
     powerups:[['supergeek',1000,230],['diamond',1850,230],['omegachad',2620,230],['bull',3300,230]],
     airdrops:[[1500,H-118],[3130,H-72]],
     coins:[[300,196],[560,150],[620,196],[900,196],[1160,140],[1420,130],[1620,196],[1950,150],[2200,196],[2500,150],[2760,130],[2900,196],[3150,150],[3400,130],[3760,150],[4000,196],[4200,150]],
-    enemies:[['eyeball',900,150,60],['longneck',1150,230,60],['ghost',1300,212,80],['eyeball',1850,140,50],['ghost',2600,212,80],['longneck',2900,230,70],['eyeball',3200,150,60],['ghost',3600,212,70],['longneck',3900,230,60],['eyeball',4150,140,50]],
-    miniworms:[1900],
+    // Enemies stay ahead of the boss arena (door-460 cull). Longnecks work the gaps, eyeballs the air.
+    enemies:[['longneck',640,230,60],['eyeball',900,150,60],['longneck',1300,230,60],['eyeball',1850,140,50],['longneck',2000,230,60],['eyeball',2400,150,60],['longneck',2660,230,60],['eyeball',3000,140,60],['longneck',3300,230,60],['eyeball',3560,150,50]],
+    miniworms:[1200,1900,3000],
     pumpdumps:[[1380,174],[2720,174]], honeypots:[[1250,232],[3760,232]], npcs:[[2450,90]],
     bonusblocks:[[1040,5],[1950,8],[2950,8],[3840,8]],
     key:[4200,H-150], door:4600 },
@@ -2347,7 +2352,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       mw.upY=GY - mw.displayHeight/2 + 14; mw.downY=GY + mw.displayHeight/2 + 6;
       mw.setPosition(mx, mw.downY).setVisible(false); mw.mwState='hidden'; mw.dead=false;
       mw.mwNextAt=self.time.now + 900 + i*450 + Phaser.Math.RND.between(0,700);
-      var mg=self.addGlow(mw,(_mwKey==='sentry'?0xff7a2b:(_mwKey==='gravemite'?0x9b5bff:0x3dff6e)),3); if(mg) self.tweens.add({targets:mg,outerStrength:8,duration:600,yoyo:true,repeat:-1,ease:'Sine.inOut'});
+      var _grav=(_mwKey==='gravemite');   // scary-den goblins glow BRIGHTER + bigger so they read as "light glowing goblins in a den" against the mostly-dark
+      var mg=self.addGlow(mw,(_mwKey==='sentry'?0xff7a2b:(_grav?0xb46bff:0x3dff6e)),_grav?5:3); if(mg) self.tweens.add({targets:mg,outerStrength:_grav?13:8,duration:_grav?520:600,yoyo:true,repeat:-1,ease:'Sine.inOut'});
     });
 
     // ---- Phase 2 hazards ----
@@ -2767,7 +2773,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var beh=BEH[kind]||kind;
     var tex = (kind==='sniper'||kind==='sandwich') ? 'bot' : (kind==='gasgoblin' ? 'troll' : (kind==='drillbit' ? 'drillworm' : (kind==='flashbot' ? 'flashdrone' : (kind==='flyfish' ? 'squid' : (kind==='jumpfish' ? 'nautilus' : kind)))));   // FLYFISH -> squid sprite (dive-bomber), JUMPFISH -> nautilus sprite (erupts from the sand); both reuse the proven flash-drone / drill-worm behaviour
     var e=this.enemies.create(x,y,tex); e.kind=kind; e.beh=beh;
-    e.setScale((kind==='ghost'?26:kind==='bitmaxi'?34:kind==='fudster'?38:kind==='gasgoblin'?28:kind==='laserbot'?32:kind==='mevdrone'?34:kind==='drillbit'?34:kind==='rugpuller'?46:kind==='eyeball'?26:kind==='longneck'?42:(kind==='flyfish'||kind==='jumpfish')?32:30)/e.height);
+    e.setScale((kind==='ghost'?26:kind==='bitmaxi'?34:kind==='fudster'?38:kind==='gasgoblin'?28:kind==='laserbot'?32:kind==='mevdrone'?34:kind==='drillbit'?34:kind==='rugpuller'?46:kind==='eyeball'?35:kind==='longneck'?42:(kind==='flyfish'||kind==='jumpfish')?32:30)/e.height);   // eyeball 35 (owner: ~33% bigger)
     e.body.setSize(e.width*0.70,e.height*0.78).setOffset(e.width*0.15,e.height*0.16); e.setBounce(0);
     e.dir=Phaser.Math.RND.pick([-1,1]);
     var spd={jeet:50,paper:66,bot:88,ghost:52,bitmaxi:72,sniper:34,fudster:44,gasgoblin:46,sandwich:58,laserbot:34,mevdrone:64,flashbot:40,drillbit:60,flyfish:44,jumpfish:60,rugpuller:130,eyeball:44,longneck:38}[kind]||55;
@@ -2955,7 +2961,18 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       cv.refresh();
     }
     this.darkOverlay=this.add.image(this.player.x,this.player.y,'nqdark').setDepth(60);
+    // def.darkAlpha < 1 = "mostly dark, not pitch black" (owner ask for the scary world): the level +
+    // the glowing monsters + the key show through faintly outside the torch, instead of pure black.
+    // Mines levels set no darkAlpha and stay fully dark. R already lights the area you're standing in.
+    if(this.def && this.def.darkAlpha!=null) this.darkOverlay.setAlpha(this.def.darkAlpha);
     this.darkScale=1;
+    // KEY BEACON — in the scary den, lift the key + its glow ABOVE the darkness (depth 61, under the
+    // HUD's 1000) and pulse it bright, so it reads as a findable gold beacon in the dark. (owner:
+    // "make finding the key easier"). Its glow was being hidden behind the full-black overlay before.
+    if(this.def && this.def.darkAlpha!=null && this.key){
+      this.key.setDepth(61);
+      var kb=this.addGlow(this.key,0xffe45a,6); if(kb) this.tweens.add({targets:kb,outerStrength:16,duration:600,yoyo:true,repeat:-1,ease:'Sine.inOut'});
+    }
   },
   fireSolana:function(){   // auto-fire during SOLANA MODE — a straight, spinning Solana symbol
     var p=this.player, dir=p.flipX?-1:1;
@@ -4849,17 +4866,20 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.slowUntil=now+1200;
     if(!this._fudFlashAt||now>this._fudFlashAt){ this._fudFlashAt=now+1600; this.flash('FUD SLOWS YOU — PUSH THROUGH','#7ec86e'); }
   },
-  emitPoison:function(e,pitX){   // LONG-NECK rears up and sprays poison puffs that SINK into the pit ahead
+  emitPoison:function(e,pitX){   // LONG-NECK rears up and sprays a spray of poison puffs INTO the pit
     if(this.over||!this.poisonClouds) return; var self=this;
-    this.burst(e.x, e.y-18, 0x8cdc6e, 8);
-    try{ _tone(210,420,0.14,'sawtooth',0.045); }catch(err){}
-    for(var i=0;i<3;i++){
-      var g=this.poisonClouds.create(pitX + e.dir*i*16, e.y-20-i*4, 'gas');
+    // In the scary den the gas is drawn ABOVE the darkness (depth 62 < HUD's 1000) so it GLOWS as a
+    // green pool in the pit — you could barely see it under full dark before ("where's the gas?").
+    var gd=(this.def&&this.def.darkAlpha!=null)?62:5, dir=(pitX>e.x)?1:-1;
+    this.burst(e.x+dir*8, e.y-24, 0x9dff5a, 12);   // acid spit at the mouth
+    try{ _tone(200,460,0.15,'sawtooth',0.05); }catch(err){}
+    for(var i=0;i<5;i++){
+      var g=this.poisonClouds.create(e.x+dir*10, e.y-26, 'gas');
       if(!g||!g.body) continue;
-      g.setDepth(5).setTint(0xd8ff70).setAlpha(0.9).setScale(0.5);   // acid-bright tint ≠ the FUDster's soft slow-gas green
-      g.body.setAllowGravity(false); g.body.setSize(g.width*0.6,g.height*0.6);
-      g.setVelocity(e.dir*(26+i*10), 46+i*12);   // arcs out and SINKS — poison pools where you were about to jump
-      (function(gg){ self.tweens.add({targets:gg, scaleX:1.25, scaleY:1.25, alpha:0, duration:2400, ease:'Sine.out', onComplete:function(){ if(gg.active) gg.destroy(); }}); })(g);
+      g.setDepth(gd).setTint(0xcaff4a).setAlpha(0.92).setScale(0.7);   // bigger + acid-bright + glowing
+      g.body.setAllowGravity(false); g.body.setSize(g.width*0.72,g.height*0.72);
+      g.setVelocity(dir*(70+i*26), 26+i*12);   // arcs OUT from the mouth toward the pit and SINKS in
+      (function(gg){ self.tweens.add({targets:gg, scaleX:1.9, scaleY:1.9, alpha:0, duration:3200, ease:'Sine.out', onComplete:function(){ if(gg.active) gg.destroy(); }}); })(g);
     }
   },
   poisonTouch:function(player,cloud){   // LONG-NECK poison gas — takes a heart (same guard set as spikeHit)
@@ -5698,9 +5718,17 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       if(e.kind==='longneck'){
         if(e.sprayUntil&&now<e.sprayUntil){ e.setVelocityX(0); e.setRotation(0); }
         else if(now>e.nextSpray){
-          var _pitX=0; for(var _pd2=26;_pd2<=110;_pd2+=14){ var _ax=e.x+e.dir*_pd2; if(self.overPit(_ax)){ _pitX=_ax; break; } }
-          if(_pitX){ e.sprayUntil=now+620; e.nextSpray=now+2900+Phaser.Math.RND.between(0,600); self.emitPoison(e,_pitX); }
-          else e.nextSpray=now+500;   // no pit in reach — try again shortly
+          // Scan BOTH directions for a pit (up to 150px), then TURN to face it and spray in. The old
+          // code only checked the way it happened to be walking, so a longneck at the near edge of a
+          // gap was usually facing away and never sprayed — "where's the gas?". Now it always finds
+          // the pit it's guarding and leans over it.
+          var _pitX=0,_pdir=e.dir;
+          for(var _q=24;_q<=150&&!_pitX;_q+=13){
+            if(self.overPit(e.x+_q)){ _pitX=e.x+_q; _pdir=1; }
+            else if(self.overPit(e.x-_q)){ _pitX=e.x-_q; _pdir=-1; }
+          }
+          if(_pitX){ e.dir=_pdir; e.setFlipX(e.dir>0); e.sprayUntil=now+680; e.nextSpray=now+2200+Phaser.Math.RND.between(0,500); self.emitPoison(e,_pitX); }
+          else e.nextSpray=now+400;   // no pit in reach — try again shortly
         }
       }
     });
