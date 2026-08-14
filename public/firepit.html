@@ -365,13 +365,18 @@ function render(){
     var sym = a.symbol ? esc(a.symbol) : "Unknown";
     var nm = a.name ? esc(a.name) : "";
     var logo = a.logo ? '<img src="'+esc(a.logo)+'" alt="" onerror="this.style.display=\'none\'"/>' : '<span class="noimg">🪙</span>';
+    // A non-empty token whose mint GeckoTerminal never priced (a.priceKnown === false) has UNKNOWN
+    // value, not $0 — the two must not look alike, or a valuable-but-unindexed bag reads as junk.
+    var unpriced = !a.empty && a.priceKnown === false && a.mint !== SOL_MINT;
     var tags = "";
     if (a.frozen) tags += '<span class="tagpill">frozen</span>';
     if (a.isNft) tags += '<span class="tagpill">NFT · soon</span>';
     if (a.empty) tags += '<span class="tagpill">empty</span>';
     if (a.valueUsd >= 1) tags += '<span class="warnpill">worth '+fmtUsd(a.valueUsd)+'</span>';
+    if (unpriced) tags += '<span class="warnpill" style="background:#E8A33D;color:#1a0f05">unpriced · value unknown</span>';
 
     var valCls = a.valueUsd > 0 ? "valpos" : "val0";
+    var valDisp = unpriced ? '<span style="color:#E8A33D" title="Not priced — value unknown, not zero">?</span>' : fmtUsd(a.valueUsd);
     var cb = canBurn
       ? '<input type="checkbox" data-ta="'+esc(a.tokenAccount)+'" '+(selected[a.tokenAccount]?"checked":"")+'/>'
       : '';
@@ -380,7 +385,7 @@ function render(){
       '<td>'+cb+'</td>' +
       '<td><div class="tok">'+logo+'<div><div class="nm">'+sym+tags+'</div><div class="mm">'+(nm?esc(nm.slice(0,28))+' · ':'')+shortAddr(a.mint)+'</div></div></div></td>' +
       '<td class="num hide-sm">'+(a.empty?'—':fmtBal(a.uiAmount))+'</td>' +
-      '<td class="num '+valCls+'">'+fmtUsd(a.valueUsd)+'</td>' +
+      '<td class="num '+valCls+'">'+valDisp+'</td>' +
       '<td class="num" style="color:#12C98B">'+(a.rentLamports/LAMPORTS).toFixed(5)+'</td>';
     rows.appendChild(tr);
   });
@@ -413,32 +418,44 @@ function selectEmpties(){
 function selectNone(){ selected = {}; render(); }
 
 // ── value-guard confirmation ────────────────────────────────────────────────
+function isNativeSol(a){ return a.mint === SOL_MINT; }   // closing wSOL UNWRAPS it back to the owner — not destroyed
 function openConfirm(){
   var sel = selectedList();
   if (!sel.length) return;
   var rent = sel.reduce(function(s,a){ return s + a.rentLamports; }, 0) / LAMPORTS;
-  var val = sel.reduce(function(s,a){ return s + (Number(a.valueUsd)||0); }, 0);
-  var valuable = sel.filter(function(a){ return (Number(a.valueUsd)||0) > 0; });
+  // "Destroy value" excludes wrapped SOL (closing it returns the SOL to you, it isn't destroyed).
+  var val = sel.reduce(function(s,a){ return s + (isNativeSol(a)?0:(Number(a.valueUsd)||0)); }, 0);
+  var valuable = sel.filter(function(a){ return !isNativeSol(a) && (Number(a.valueUsd)||0) > 0; });
+  // Non-empty tokens we could NOT price: value unknown, not zero. These must trip the guard even
+  // though they contribute $0 to `val` — otherwise a valuable-but-unindexed bag burns with a false
+  // "nothing of value is destroyed." (security review, value-guard fail-open)
+  var unpriced = sel.filter(function(a){ return !a.empty && a.priceKnown === false && !isNativeSol(a); });
 
   $("m-list").innerHTML = sel.map(function(a){
     var v = Number(a.valueUsd)||0;
-    var right = a.empty ? 'reclaim '+(a.rentLamports/LAMPORTS).toFixed(5)+' SOL'
-      : 'burn '+fmtBal(a.uiAmount)+' · '+(v>0?'<b style="color:#FF8FA3">'+fmtUsd(v)+'</b>':'$0');
+    var right;
+    if (a.empty) right = 'reclaim '+(a.rentLamports/LAMPORTS).toFixed(5)+' SOL';
+    else if (isNativeSol(a)) right = 'unwrap '+fmtBal(a.uiAmount)+' SOL → back to you';
+    else if (a.priceKnown === false) right = 'burn '+fmtBal(a.uiAmount)+' · <b style="color:#E8A33D">value unknown</b>';
+    else right = 'burn '+fmtBal(a.uiAmount)+' · '+(v>0?'<b style="color:#FF8FA3">'+fmtUsd(v)+'</b>':'$0');
     return '<div class="li"><span>'+(a.symbol?esc(a.symbol):shortAddr(a.mint))+'</span><span class="r">'+right+'</span></div>';
   }).join("");
 
   $("m-rec").textContent = fmtSol(rent);
-  $("m-val").textContent = fmtUsd(val);
+  $("m-val").textContent = unpriced.length ? (val>0?fmtUsd(val)+' + unknown':'unknown') : fmtUsd(val);
 
-  var needType = val > TYPE_THRESHOLD;
-  if (val > 0){
-    $("m-title").textContent = "🔥 You are destroying value";
+  var needType = val > TYPE_THRESHOLD || unpriced.length > 0;   // known value OR unknown value → type BURN
+  if (val > 0 || unpriced.length > 0){
+    $("m-title").textContent = "🔥 You may be destroying value";
     $("m-intro").textContent = "Read this carefully. Burning is permanent and irreversible — these tokens cannot be recovered.";
     $("m-warn").classList.remove("hidden");
-    $("m-warn").innerHTML = '⚠️ <b>'+valuable.length+' token'+(valuable.length===1?'':'s')+' you\'ve selected '+(valuable.length===1?'is':'are')+' still worth money — <b>'+fmtUsd(val)+'</b> total.</b> If you\'d rather sell than burn, cancel and swap them first. Only continue if you truly want this gone.';
+    var parts = [];
+    if (valuable.length) parts.push('<b>'+valuable.length+' token'+(valuable.length===1?'':'s')+'</b> you selected '+(valuable.length===1?'is':'are')+' still worth money — <b>'+fmtUsd(val)+'</b>.');
+    if (unpriced.length) parts.push('<b>'+unpriced.length+' token'+(unpriced.length===1?'':'s')+'</b> could not be priced — '+(unpriced.length===1?'its':'their')+' value is <b>UNKNOWN, not zero</b>. We can’t confirm '+(unpriced.length===1?'it isn’t':'they aren’t')+' worth money.');
+    $("m-warn").innerHTML = '⚠️ '+parts.join(' ')+' If you’d rather sell, cancel and swap first. Only continue if you truly want this gone.';
   } else {
     $("m-title").textContent = "♻️ Reclaim rent";
-    $("m-intro").textContent = "These accounts are empty or worthless — closing them returns their SOL rent to you. Nothing of value is destroyed.";
+    $("m-intro").textContent = "These accounts are empty or priced at zero — closing them returns their SOL rent to you. Nothing of known value is destroyed.";
     $("m-warn").classList.add("hidden");
   }
   $("m-typebox").classList.toggle("hidden", !needType);
@@ -464,7 +481,10 @@ async function doBurn(){
 
   var chunks = [];
   for (var i=0;i<sel.length;i+=CHUNK) chunks.push(sel.slice(i, i+CHUNK));
-  var sigs = [], done = 0;
+  // Track only chunks we WATCHED land. A signature being sent is not proof it confirmed — a dropped
+  // or blockhash-expired tx (skipPreflight accepts a stale blockhash) looks identical to a pending
+  // one, and counting "sent" as "burned" reported reclaimed SOL that never moved. (security review)
+  var confirmedAccounts = [], unconfirmedCount = 0;
   try {
     for (var c=0;c<chunks.length;c++){
       setStatus($("m-status"), "Preparing transaction " + (c+1) + " of " + chunks.length + "…");
@@ -498,44 +518,48 @@ async function doBurn(){
         var res = await wProvider.signAndSendTransaction(tx);
         sig = res.signature || res;
       }
-      sigs.push(sig);
-      // best-effort confirmation
+      // Confirm THIS chunk. Only count it landed on an explicit confirmed/finalized status; a poll
+      // window that elapses with no status = dropped/expired = NOT burned (don't claim it).
       setStatus($("m-status"), "Confirming on-chain… (" + (c+1) + "/" + chunks.length + ")");
-      for (var t=0;t<20;t++){
+      var confirmed = false;
+      for (var t=0;t<24;t++){
         try {
           var st = await rpc("getSignatureStatuses", [[sig]]);
           var s = st && st.value && st.value[0];
-          if (s && (s.confirmationStatus === "confirmed" || s.confirmationStatus === "finalized")){ break; }
           if (s && s.err){ throw new Error("transaction failed on-chain"); }
+          if (s && (s.confirmationStatus === "confirmed" || s.confirmationStatus === "finalized")){ confirmed = true; break; }
         } catch(e){ if (String(e.message||"").indexOf("failed on-chain")>=0) throw e; }
         await new Promise(function(r){ setTimeout(r, 2000); });
       }
-      done += chunks[c].length;
+      if (confirmed) confirmedAccounts = confirmedAccounts.concat(chunks[c]);
+      else unconfirmedCount += chunks[c].length;   // sent but never seen to land — leave those rows alone
     }
-    // success — drop the burned rows NOW (their txs confirmed), then verify with a retrying rescan
     closeConfirm();
-    var reclaimed = sel.reduce(function(s,a){ return s + a.rentLamports; }, 0) / LAMPORTS;
-    var burnedSet = {}; sel.forEach(function(a){ burnedSet[a.tokenAccount] = true; });
-    accounts = accounts.filter(function(a){ return !burnedSet[a.tokenAccount]; });
-    selected = {};
-    render(); applyScanFoot(accounts.length, false);
-    setStatus($("status"), "🔥 Done — burned/closed " + done + " account" + (done===1?"":"s") + ", reclaimed ~" + fmtSol(reclaimed) + ".", "ok");
-    rescanUntilClean(burnedSet);
+    finishBurn(confirmedAccounts, unconfirmedCount);
   } catch(e){
-    setStatus($("m-status"), "Burn failed: " + (e.message || e) + (sigs.length ? " (" + sigs.length + " tx already sent)" : ""), "err");
+    setStatus($("m-status"), "Burn failed: " + (e.message || e) + (confirmedAccounts.length ? " (" + confirmedAccounts.length + " account" + (confirmedAccounts.length===1?"":"s") + " already closed)" : ""), "err");
     $("m-go").disabled = false; $("m-cancel").disabled = false;
-    if (sigs.length){
-      // whole chunks that DID land (each pushed its signature before the failure) — drop those
-      // rows optimistically too, so the list never re-offers accounts that are already closed.
-      var landed = sel.slice(0, sigs.length * CHUNK), landedSet = {};
-      landed.forEach(function(a){ landedSet[a.tokenAccount] = true; delete selected[a.tokenAccount]; });
-      accounts = accounts.filter(function(a){ return !landedSet[a.tokenAccount]; });
-      render();
-      rescanUntilClean(landedSet);
-    }
+    if (confirmedAccounts.length) pruneConfirmed(confirmedAccounts);   // only drop rows we WATCHED land
   } finally {
     $("m-cancel").disabled = false;
   }
+}
+// Drop the accounts we confirmed closed, then re-poll until the RPC view agrees. Only ever called
+// with accounts whose tx we saw confirmed — never with merely-sent ones.
+function pruneConfirmed(confirmedAccounts){
+  var set = {}; confirmedAccounts.forEach(function(a){ set[a.tokenAccount] = true; delete selected[a.tokenAccount]; });
+  accounts = accounts.filter(function(a){ return !set[a.tokenAccount]; });
+  render(); applyScanFoot(accounts.length, false);
+  rescanUntilClean(set);
+}
+function finishBurn(confirmedAccounts, unconfirmedCount){
+  var reclaimed = confirmedAccounts.reduce(function(s,a){ return s + a.rentLamports; }, 0) / LAMPORTS;
+  var n = confirmedAccounts.length;
+  pruneConfirmed(confirmedAccounts);
+  var msg = "🔥 Done — burned/closed " + n + " account" + (n===1?"":"s") + ", reclaimed ~" + fmtSol(reclaimed) + ".";
+  // Tell the truth when some didn't land: those accounts are untouched, don't claim their rent.
+  if (unconfirmedCount > 0) msg += " " + unconfirmedCount + " transaction" + (unconfirmedCount===1?"":"s") + " didn’t confirm in time — those accounts are unchanged; hit Rescan to re-check.";
+  setStatus($("status"), msg, unconfirmedCount > 0 ? "err" : "ok");
 }
 // raw tx bytes → base64 for sendTransaction (chunked — .apply on a big array can blow the stack)
 function bytesToB64(u8){

@@ -2435,6 +2435,11 @@ app.use("/api/trace", rateLimit("forensic", { windowMs: 60000, max: 15 }));
 app.use("/api/snapshot", rateLimit("forensic", { windowMs: 60000, max: 15 }));
 app.use("/api/holders", rateLimit("forensic", { windowMs: 60000, max: 15 }));
 app.use("/api/token-card", rateLimit("forensic", { windowMs: 60000, max: 15 }));
+// burn-scan fires 2 billed Helius getTokenAccountsByOwner reads + up to 7 GeckoTerminal calls per
+// request (direct, NOT via the capped /api/helius-rpc proxy); wallet-checkup is the same heavy
+// class. Both were covered only by the global 150/min cap — 10x looser than their siblings. (sec M3)
+app.use("/api/burn-scan", rateLimit("forensic", { windowMs: 60000, max: 15 }));
+app.use("/api/wallet-checkup", rateLimit("forensic", { windowMs: 60000, max: 15 }));
 // Classroom: generous enough for a real multi-turn lesson/exam, tight enough to stop a bot
 // hammering the reward loop. Claim is rare (one per graduation) so it's capped hard.
 app.use("/api/classroom-exam", rateLimit("exam", { windowMs: 60000, max: 25 }));
@@ -8646,16 +8651,29 @@ app.get("/api/burn-scan", async (req, res) => {
       const valueUsd = Number((a.uiAmount * priceUsd).toFixed(4));
       rentLamportsTotal += a.rentLamports;
       valueUsdTotal += valueUsd;
+      // priceKnown = GeckoTerminal actually returned this mint. A mint ABSENT from the price map
+      // (unindexed/new/low-liquidity token, or a whole 30-mint chunk that hit a transient 429/5xx
+      // and was dropped) collapses to valueUsd 0 — indistinguishable from a genuinely worthless
+      // token unless we say so. The client uses this to warn "value UNKNOWN, not zero" instead of
+      // flashing a false "nothing of value is destroyed" all-clear over a bag that may be worth money.
+      const priceKnown = Object.prototype.hasOwnProperty.call(priced, a.mint);
       return {
         ...a,
         symbol: p.symbol || null, name: p.name || null, logo: p.logo || null,
-        priceUsd, valueUsd,
+        priceUsd, valueUsd, priceKnown,
         empty: a.uiAmount === 0,
         isNft: a.decimals === 0 && a.uiAmount === 1,   // rough; NFT phase refines with mint supply
       };
     });
-    // Safest-to-burn first: empty (rent-only, $0) then ascending value; a valuable bag sorts last.
-    out.sort((x, y) => (x.valueUsd - y.valueUsd) || (x.rentLamports - y.rentLamports));
+    // Order: empty rent-only accounts first (always safe), then KNOWN values ascending. Non-empty
+    // UNPRICED accounts are NOT safe-to-burn (unknown value) — they sort to the very end with the
+    // priced high-value bags, never into the "tick these first" slot. (sec: value-guard fail-open)
+    out.sort((x, y) => {
+      if (x.empty !== y.empty) return x.empty ? -1 : 1;                 // empties first
+      const xu = !x.empty && !x.priceKnown, yu = !y.empty && !y.priceKnown;
+      if (xu !== yu) return xu ? 1 : -1;                                // unpriced non-empty last
+      return (x.valueUsd - y.valueUsd) || (x.rentLamports - y.rentLamports);
+    });
     return res.status(200).json({
       success: true, wallet,
       count: out.length, capped,
