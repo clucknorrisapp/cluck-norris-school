@@ -73,7 +73,33 @@
 
   var state = { provider: null, pubkey: null, id: null };
 
+  // A wallet's OWN in-app browser is the most reliable identity signal there is: it names itself in
+  // the user-agent, no matter how many other wallets' compat flags it sets on window.solana. SafePal
+  // was showing as "Phantom" + "Glow" (it impersonates both, as separate provider objects the
+  // identity-dedupe below can't merge, and it doesn't set isSafePal) — but its browser UA contains
+  // "SafePal". When we're inside a known wallet browser, that wallet IS the only real wallet present,
+  // so return JUST it (pointed at the injected provider). Extend UA_WALLETS as other impersonating
+  // in-app browsers turn up. A miss here is harmless — it simply falls through to flag detection.
+  var UA_WALLETS = [
+    { re: /SafePal/i,   id: "safepal" },
+    { re: /Coin98/i,    id: "coin98" },
+    { re: /TokenPocket/i, id: "tokenpocket" }
+  ];
+  function browserWallet() {
+    var ua = (global.navigator && global.navigator.userAgent) || "";
+    for (var i = 0; i < UA_WALLETS.length; i++) {
+      if (!UA_WALLETS[i].re.test(ua)) continue;
+      var w = WALLETS[UA_WALLETS[i].id]; if (!w) continue;
+      var pv = null; try { pv = w.detect(); } catch (e) { pv = null; }
+      if (!pv) pv = global.solana;   // UA says it's here even if its flags are unusual
+      if (pv) return { id: UA_WALLETS[i].id, name: w.name, icon: w.icon, provider: pv };
+    }
+    return null;
+  }
+
   function available() {
+    // Inside a wallet's own in-app browser, trust the UA over injected flags — one correct button.
+    var bw = browserWallet(); if (bw) return [bw];
     var out = [], seen = [];
     for (var i = 0; i < ORDER.length; i++) {
       var id = ORDER[i], p = null;
