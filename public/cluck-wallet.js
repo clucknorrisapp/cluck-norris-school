@@ -68,11 +68,21 @@
   var state = { provider: null, pubkey: null, id: null };
 
   function available() {
-    var out = [];
+    var out = [], seen = [];
     for (var i = 0; i < ORDER.length; i++) {
       var id = ORDER[i], p = null;
       try { p = WALLETS[id].detect(); } catch (e) { p = null; }
-      if (p) out.push({ id: id, name: WALLETS[id].name, icon: WALLETS[id].icon, provider: p });
+      if (!p) continue;
+      // Dedupe by provider IDENTITY. Some wallets inject a SINGLE window.solana that sets
+      // compatibility flags for others (SafePal, for one, presents so that Phantom-only dapps
+      // work) — so several detectors match the exact same object. Without this, one SafePal shows
+      // up as two or three buttons ("Phantom" + "Glow"), all connecting to the same wallet. Keep
+      // the first match in ORDER; genuinely-separate providers (distinct objects) still list apart.
+      var dup = false;
+      for (var k = 0; k < seen.length; k++) { if (seen[k] === p) { dup = true; break; } }
+      if (dup) continue;
+      seen.push(p);
+      out.push({ id: id, name: WALLETS[id].name, icon: WALLETS[id].icon, provider: p });
     }
     // Last resort: an injected wallet we don't have a signature for still works
     // if it speaks the standard interface. Better a generic entry than a dead end.
