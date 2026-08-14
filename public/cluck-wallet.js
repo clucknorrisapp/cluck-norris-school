@@ -25,6 +25,14 @@
   // (or only) take over window.solana with an isX flag — so each entry checks the
   // dedicated object first and falls back to the flagged window.solana.
   var WALLETS = {
+    // SafePal is listed FIRST on purpose. Its in-app browser injects one window.solana that also
+    // sets other wallets' compat flags (isPhantom, isGlow) so Phantom-only dapps work — which made
+    // one SafePal show up as "Phantom" + "Glow". isSafePal / window.safepal is its TRUE identity and
+    // no other wallet sets it, so checking it before the flags it mimics (with the dedupe in
+    // available()) labels it SafePal instead of an impersonated name. A real Phantom (no isSafePal)
+    // skips this entry and matches phantom below, unchanged.
+    safepal:  { name: "SafePal",  icon: "🔐", download: "https://safepal.com/download",
+                detect: function () { return (global.safepal && global.safepal.solana) || (global.safepalProvider && global.safepalProvider.solana) || (global.solana && global.solana.isSafePal ? global.solana : null); } },
     phantom:  { name: "Phantom",  icon: "🔮", download: "https://phantom.app",
                 detect: function () { return (global.phantom && global.phantom.solana) || (global.solana && global.solana.isPhantom ? global.solana : null); } },
     solflare: { name: "Solflare", icon: "☀️", download: "https://solflare.com",
@@ -47,8 +55,6 @@
                 detect: function () { return global.braveSolana || (global.solana && global.solana.isBraveWallet ? global.solana : null); } },
     jupiter:  { name: "Jupiter",  icon: "🪐", download: "https://jup.ag/mobile",
                 detect: function () { return global.jupiterWallet || global.jupiter || (global.solana && global.solana.isJupiter ? global.solana : null); } },
-    safepal:  { name: "SafePal",  icon: "🔐", download: "https://safepal.com/download",
-                detect: function () { return (global.safepal && global.safepal.solana) || (global.safepalProvider && global.safepalProvider.solana) || (global.solana && global.solana.isSafePal ? global.solana : null); } },
     coin98:   { name: "Coin98",   icon: "🐋", download: "https://coin98.com/wallet",
                 detect: function () { return (global.coin98 && global.coin98.sol) || (global.solana && global.solana.isCoin98 ? global.solana : null); } },
     nightly:  { name: "Nightly",  icon: "🌙", download: "https://nightly.app",
