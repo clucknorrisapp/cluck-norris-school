@@ -50,7 +50,11 @@ const FILE_MARKERS = {
   // Scary world (hidden ?room=scary): AI-illustrated cutouts that REPLACE the code-drawn
   // eyeball/longneck/gravemite/ghostship. Loaded under those exact texture keys in Boot, so the
   // procedural draw fns (which each `return` early if the texture already exists) auto-skip.
-  __SCARY_EYEBALL__:'scary_eyeball.b64', __SCARY_LONGNECK__:'scary_longneck.b64', __SCARY_GRAVEMITE__:'scary_gravemite.b64', __SCARY_GHOSTSHIP__:'scary_ghostship.b64'
+  __SCARY_EYEBALL__:'scary_eyeball.b64', __SCARY_LONGNECK__:'scary_longneck.b64', __SCARY_GRAVEMITE__:'scary_gravemite.b64', __SCARY_GHOSTSHIP__:'scary_ghostship.b64',
+  // Playable-character skins (cosmetic): five 144x216 poses each, loaded in Boot under their
+  // <prefix>+{normie,nrun1,nrun2,njump,nduck} keys. 'pr' = Normie Princess, 'kd' = Lil' Normie.
+  __PR_IDLE__:'char_pr_idle.b64', __PR_RUN1__:'char_pr_run1.b64', __PR_RUN2__:'char_pr_run2.b64', __PR_JUMP__:'char_pr_jump.b64', __PR_DUCK__:'char_pr_duck.b64',
+  __KD_IDLE__:'char_kd_idle.b64', __KD_RUN1__:'char_kd_run1.b64', __KD_RUN2__:'char_kd_run2.b64', __KD_JUMP__:'char_kd_jump.b64', __KD_DUCK__:'char_kd_duck.b64'
 };
 for(const [marker,file] of Object.entries(FILE_MARKERS)){
   if(!logic.includes(marker)) continue;
