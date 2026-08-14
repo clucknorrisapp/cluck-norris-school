@@ -6020,6 +6020,14 @@ app.get("/api/airdrop-comp/check", (req, res) => {
   // Airdropper is comped by the airdropper-only list OR the all-tools free-access list.
   res.json({ ok: true, comped: !!w && (airdropCompList().indexOf(w) !== -1 || isToolComped(w)) });
 });
+// Public yes/no: is this wallet on the all-tools free-access list? Tool pages (Buy Special) call
+// this to unlock free for a comped wallet whose on-chain CLKN can't clear the client-side gate.
+// Answers for ONE wallet only, so the list is never exposed (same shape as /airdrop-comp/check).
+app.get("/api/tool-comp/check", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const w = String((req.query && req.query.wallet) || "").trim();
+  res.json({ ok: true, comped: isToolComped(w) });
+});
 // Admin: &add=<wallet> / &remove=<wallet> ; bare call lists the allowlist. 404 without the master key.
 app.get("/api/airdrop-comp", (req, res) => {
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });

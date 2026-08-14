@@ -591,7 +591,12 @@ async function gCheckHolder(){
     // would read 0 and be denied the free holder tier they qualify for.
     let bal=0; for(const a of ((r&&r.value)||[])){ const ta=a.account&&a.account.data&&a.account.data.parsed&&a.account.data.parsed.info.tokenAmount; bal+=Number(ta&&(ta.uiAmountString||ta.uiAmount))||0; }
     gShowWallet(bal);
-    if(bal>=HOLDER_MIN){ gWalletMsg('✓ Holder — unlocked free for 35 days.',true); unlockNow(35); }
+    // Operator comp: a wallet on the all-tools free-access list is unlocked free regardless of its
+    // on-chain CLKN. The balance read above is on-chain (browser); the comp lives server-side, so a
+    // comped wallet holding 0 CLKN would otherwise be told to pay. Checked yes/no for THIS wallet.
+    let comped=false; try{ const c=await fetch('/api/tool-comp/check?wallet='+encodeURIComponent(wPubkey)).then(r=>r.json()); comped=!!(c&&c.comped); }catch(_){}
+    if(comped){ gWalletMsg('✓ Comped wallet — unlocked free.',true); unlockNow(3650); }
+    else if(bal>=HOLDER_MIN){ gWalletMsg('✓ Holder — unlocked free for 35 days.',true); unlockNow(35); }
     else { gWalletMsg('Needs '+fmt(HOLDER_MIN)+' CLKN for the free tier. Pay 0.05 SOL for 7 days instead:'); $('gPaySol').classList.remove('hidden'); }
   }catch(e){ gWalletMsg('Balance check failed: '+e.message); }
 }
