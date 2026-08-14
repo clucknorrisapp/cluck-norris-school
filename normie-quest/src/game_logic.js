@@ -98,20 +98,17 @@ function nqCharPrefix(){ return (CHARACTERS[nqChosenChar()]||CHARACTERS.normie).
 // picker triggers a load on tap). Missing art already falls back to Normie, so a not-yet-decoded skin
 // is safe — worst case you play one run as Normie while it finishes decoding.
 var _nqSkinLoaded = {};
-// Character frames render SMOOTH (LINEAR), not nearest-neighbor. pixelArt:true (deliberate for the
-// blocky ground/coins/font) samples every texture NEAREST, which pixelates the detailed character art
-// into the rough look the owner flagged — the DOM picker thumbnails look clean precisely because the
-// browser scales them smoothly. This set marks the five player frames for each skin (base Normie, moon
-// 'm', princess 'pr', kid 'kd') so we can flip just those to LINEAR at load and match the picker/PFP.
-var _NQ_SMOOTH = {};
-['','m','pr','kd'].forEach(function(p){ ['normie','nrun1','nrun2','njump','nduck'].forEach(function(b){ _NQ_SMOOTH[p+b]=1; }); });
-function nqSmoothTex(tm, k){ try{ if(_NQ_SMOOTH[k]) tm.get(k).setFilter(Phaser.Textures.FilterMode.LINEAR); }catch(e){} }
+// Characters keep pixelArt's default NEAREST filter — the SAME as every enemy — so the player reads
+// crisp and consistent with the monsters. (A LINEAR/smooth pass was tried to match the DOM picker, but
+// side-by-side against the goblin the smoothed player looked softer/lower-quality than the crisp
+// nearest enemies.) Crispness depends on a CLEAN cutout, which the v4 de-matte + trapped-white removal
+// provide. The remaining gap to the monsters is SIZE — they render bigger than the 36px player.
 function nqLoadSkin(tm, prefix){
   if(!prefix || _nqSkinLoaded[prefix] || !tm) return;
   _nqSkinLoaded[prefix] = 1;   // mark first so a double-call can't double-schedule the decode
   ['normie','nrun1','nrun2','njump','nduck'].forEach(function(base){
     var k = prefix + base;
-    try{ if(CHAR_ART[k] && !tm.exists(k)){ tm.once('addtexture-'+k, function(){ nqSmoothTex(tm,k); }); tm.addBase64(k, CHAR_ART[k]); } }catch(e){}
+    try{ if(CHAR_ART[k] && !tm.exists(k)) tm.addBase64(k, CHAR_ART[k]); }catch(e){}
   });
 }
 // Expose the roster to the DOM picker (a separate <script> block that can't see this scope). Each
@@ -1605,12 +1602,7 @@ var Boot=new Phaser.Class({ Extends:Phaser.Scene,
         }
       }catch(e){}
       self.scene.start('Title'); };
-    keys.forEach(function(k){ self.textures.once('addtexture-'+k, function(){
-      // Character frames render SMOOTH (LINEAR) instead of pixelArt's NEAREST, which pixelates the
-      // detailed art (see _NQ_SMOOTH). Covers base Normie + moon frames here; skins get the same
-      // treatment in nqLoadSkin when they lazy-load. Everything else keeps its deliberate NEAREST look.
-      nqSmoothTex(self.textures, k);
-      if(--need<=0) go(); }); self.textures.addBase64(k, all[k]); });
+    keys.forEach(function(k){ self.textures.once('addtexture-'+k, function(){ if(--need<=0) go(); }); self.textures.addBase64(k, all[k]); });
     this.time.delayedCall(3500, go);   // fallback so a decode hiccup never hangs boot
   }
 });
@@ -8126,7 +8118,7 @@ if(typeof document!=='undefined'){ (function(){
     + '#nqp-card{width:min(560px,94vw);max-height:88vh;overflow:auto;background:#120e22;border:2px solid #33305a;border-radius:14px;color:#e8e6f5;'
     + 'font-family:system-ui,sans-serif;padding:16px 16px 20px}'
     + '#nqp-card h2{font-size:16px;color:#ffd23f;margin:0 0 2px}'
-    + '.nqp-x{float:right;color:#8f89b0;cursor:pointer;font-size:20px;line-height:1}'
+    + '.nqp-x{float:right;color:#8f89b0;cursor:pointer;font-size:22px;line-height:1;background:none;border:none;padding:2px 6px;margin:-2px -4px 0 0;font-family:inherit;-webkit-appearance:none;appearance:none}'
     + '.nqp-tabs{display:flex;gap:6px;margin:12px 0}'
     + '.nqp-tab{flex:1;background:#1a1630;border:1px solid #33305a;color:#cbc6e6;border-radius:9px;padding:8px;font-size:12px;cursor:pointer;text-align:center;font-family:inherit;line-height:1.2;-webkit-appearance:none;appearance:none}'
     + '.nqp-tab.on{background:#ffd23f;color:#20142e;border-color:#ffd23f;font-weight:700}'
@@ -8180,7 +8172,7 @@ if(typeof document!=='undefined'){ (function(){
   var ov = document.createElement('div'); ov.id = 'nqp-ov';
   ov.innerHTML =
     '<div id="nqp-card">'
-    + '<span class="nqp-x" data-close>×</span><h2>' + (SETUP ? 'Normie Quest — Premium' : 'Normie Quest') + '</h2>'
+    + '<button type="button" class="nqp-x" data-close aria-label="Close">×</button><h2>' + (SETUP ? 'Normie Quest — Premium' : 'Normie Quest') + '</h2>'
     // ⛔ No perk, unlock, reward or hold-threshold language on the public build — NQ's $NORMIE terms
     // are unagreed, so the copy rule at NORMIE_NATION applies here too: identity + where-to-buy only.
     + '<div class="nqp-sub">' + (SETUP ? 'Setup lane · leaderboards, wallet access &amp; buy NORMIE'
@@ -8236,7 +8228,10 @@ if(typeof document!=='undefined'){ (function(){
     var ovPaused = false;
     function ovKb(on){ try { if (window.__NQ_KBGAME) window.__NQ_KBGAME(on); } catch (e) {} }
     function openOv(){ ov.classList.add('on'); ovKb(false); try { ovPaused = !!(window.__NQ_PAUSE && window.__NQ_PAUSE()); } catch (e) { ovPaused = false; } }
-    function closeOv(){ ov.classList.remove('on'); ovKb(true); if (ovPaused) { try { window.__NQ_RESUME && window.__NQ_RESUME(); } catch (e) {} ovPaused = false; } }
+    function closeOv(){ ov.classList.remove('on'); ovKb(true); if (ovPaused) { try { window.__NQ_RESUME && window.__NQ_RESUME(); } catch (e) {} ovPaused = false; }
+      // Hand keyboard focus back to the game canvas so desktop players can move immediately after
+      // closing the panel (the DOM panel had focus while it was open).
+      try { var c = document.querySelector('#screen canvas') || document.querySelector('canvas'); if (c && c.focus) c.focus(); } catch (e) {} }
 
     btn.addEventListener('click', function () { openOv(); loadBoards(); parkedNote(); });
     // The game's tier gate opens the panel straight onto the WALLET tab when a locked world is
