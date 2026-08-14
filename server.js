@@ -6005,11 +6005,20 @@ function airdropHandoffPrune(all) {
 // the airdrop page calls on connect; it only answers yes/no for ONE wallet, so the list is never
 // exposed. Add/remove is master-key only (same as every other operator lever).
 function airdropCompList() { const a = kv.get("airdropCompWallets", []); return Array.isArray(a) ? a : []; }
+// ---- FREE-ACCESS (all-tools) comp list — SEPARATE from the airdropper-only list above ----------
+// A wallet here is treated as a full CLKN holder on EVERY balance-gated tool (premium forensics,
+// Buy Special, the /api/clkn-balance holder gate) via checkCLKNHolder's short-circuit, AND is
+// airdropper-comped (unioned into /check below). This is the "free to use any tool" grant — used
+// for operator wallets like the Rose-comp airdrop wallet. Kept distinct so airdropper-only comps
+// (airdropCompWallets) never silently gain premium access. Master-key-only via /api/tool-comp.
+function toolCompList() { const a = kv.get("toolCompWallets", []); return Array.isArray(a) ? a : []; }
+function isToolComped(w) { w = String(w || ""); return !!w && toolCompList().indexOf(w) !== -1; }
 const AD_B58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 app.get("/api/airdrop-comp/check", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const w = String((req.query && req.query.wallet) || "").trim();
-  res.json({ ok: true, comped: !!w && airdropCompList().indexOf(w) !== -1 });
+  // Airdropper is comped by the airdropper-only list OR the all-tools free-access list.
+  res.json({ ok: true, comped: !!w && (airdropCompList().indexOf(w) !== -1 || isToolComped(w)) });
 });
 // Admin: &add=<wallet> / &remove=<wallet> ; bare call lists the allowlist. 404 without the master key.
 app.get("/api/airdrop-comp", (req, res) => {
@@ -6019,6 +6028,17 @@ app.get("/api/airdrop-comp", (req, res) => {
   const rem = String((req.query && req.query.remove) || "").trim();
   if (add && AD_B58.test(add) && list.indexOf(add) === -1) { list = list.concat([add]); kv.set("airdropCompWallets", list); }
   if (rem) { list = list.filter((w) => w !== rem); kv.set("airdropCompWallets", list); }
+  res.json({ ok: true, count: list.length, wallets: list });
+});
+// Admin: ALL-TOOLS free-access comp list. &add=<wallet> / &remove=<wallet> ; bare call lists it.
+// A wallet here is treated as a full CLKN holder everywhere (see checkCLKNHolder). 404 without the master key.
+app.get("/api/tool-comp", (req, res) => {
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  let list = toolCompList();
+  const add = String((req.query && req.query.add) || "").trim();
+  const rem = String((req.query && req.query.remove) || "").trim();
+  if (add && AD_B58.test(add) && list.indexOf(add) === -1) { list = list.concat([add]); kv.set("toolCompWallets", list); }
+  if (rem) { list = list.filter((w) => w !== rem); kv.set("toolCompWallets", list); }
   res.json({ ok: true, count: list.length, wallets: list });
 });
 app.use("/api/airdrop-handoff", rateLimit("airdropHandoff", { windowMs: 60000, max: 30 }));
@@ -8219,6 +8239,12 @@ async function getSheetRows() {
 }
 
 async function checkCLKNHolder(wallet) {
+  // Operator comp: a wallet on the all-tools free-access list (toolCompWallets, managed via
+  // /api/tool-comp) is treated as a full holder on EVERY balance-gated tool — premium forensics,
+  // Buy Special, /api/clkn-balance. Short-circuits BEFORE any network call so an RPC blip can never
+  // deny a comped wallet. Returns the premium threshold as the balance (clears every gate; gates
+  // compare >= threshold), flagged comped so callers can tell it's a grant, not a real balance.
+  try { if (isToolComped(wallet)) return { isHolder: true, balance: PREMIUM_HOLDER_THRESHOLD, comped: true }; } catch (_) {}
   try {
     const HELIUS_KEY = process.env.HELIUS_API_KEY;
     const CLKN_MINT = "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
