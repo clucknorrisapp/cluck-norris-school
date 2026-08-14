@@ -98,6 +98,12 @@
   footer{margin-top:50px;padding-top:22px;border-top:1px solid var(--border-soft);text-align:center;color:var(--sub);font-size:12.5px;line-height:1.9;}
   footer a{color:var(--orange);}
   footer .mint{font-family:var(--mono);font-size:10.5px;color:var(--muted);word-break:break-all;margin-top:10px;}
+  footer .mint .ca{color:var(--text);cursor:pointer;border-bottom:1px dashed rgba(255,255,255,.28);transition:color .12s;}
+  footer .mint .ca:hover{color:var(--gold);}
+  footer .mint .ca::after{content:"📋";font-size:10px;margin-left:5px;opacity:.75;}
+  footer .mint .ca:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:3px;}
+  footer .mint .ca.copied{color:#3dff9e;border-bottom-color:transparent;}
+  footer .mint .ca.copied::after{content:"";margin:0;}
   footer .disc{color:var(--muted);font-size:11px;max-width:640px;margin:10px auto 0;line-height:1.5;}
   footer .seal{margin-top:18px;line-height:0;}
   footer .seal img{opacity:.85;transition:opacity .15s ease;}
@@ -196,7 +202,7 @@
       <a href="https://t.me/FireChicken007" target="_blank" rel="noreferrer">✈️ Telegram</a> ·
       <a href="/investors">Investors</a>
     </div>
-    <div class="mint"><a href="/clkn">CLKN · DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS</a></div>
+    <div class="mint">CLKN · <span id="clknCA" class="ca" role="button" tabindex="0" title="Tap to copy the CLKN contract address">DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS</span> · <a href="/clkn">token info ›</a></div>
     <div class="disc">Educational tools and forensic data only — the chain shows <em>what</em>, never <em>why</em>. Nothing here is financial advice.</div>
     <!-- Third-party security verification. The grade is a STATIC snapshot baked into the
          badge: if it ever moves, this markup has to be updated by hand or the page states
@@ -221,6 +227,16 @@
   (function () {
     var h = (location.hash || "").replace(/^#/, "");
     if (["library","incubator","lplab","survive","clkn","challenge","select","start"].indexOf(h) !== -1) location.replace("/school#" + h);
+  })();
+  // Tap-to-copy the CLKN contract address in the footer (clipboard API + legacy fallback, keyboard-accessible).
+  (function () {
+    var el = document.getElementById("clknCA"); if (!el) return;
+    var CA = "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS", orig = el.textContent, busy = false;
+    function flash(){ busy = true; el.classList.add("copied"); el.textContent = "✓ Copied"; setTimeout(function(){ el.textContent = orig; el.classList.remove("copied"); busy = false; }, 1400); }
+    function legacy(){ try { var t = document.createElement("textarea"); t.value = CA; t.style.position = "fixed"; t.style.opacity = "0"; document.body.appendChild(t); t.focus(); t.select(); document.execCommand("copy"); document.body.removeChild(t); flash(); } catch (e) {} }
+    function copy(){ if (busy) return; if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(CA).then(flash).catch(legacy); else legacy(); }
+    el.addEventListener("click", copy);
+    el.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); copy(); } });
   })();
   // Buy CLKN — Jupiter Plugin modal (init once, resume to open/reopen). Falls back to
   // opening jup.ag in a new tab if the plugin script didn't load.
