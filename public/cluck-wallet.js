@@ -47,6 +47,8 @@
                 detect: function () { return global.braveSolana || (global.solana && global.solana.isBraveWallet ? global.solana : null); } },
     jupiter:  { name: "Jupiter",  icon: "🪐", download: "https://jup.ag/mobile",
                 detect: function () { return global.jupiterWallet || global.jupiter || (global.solana && global.solana.isJupiter ? global.solana : null); } },
+    safepal:  { name: "SafePal",  icon: "🔐", download: "https://safepal.com/download",
+                detect: function () { return (global.safepal && global.safepal.solana) || (global.safepalProvider && global.safepalProvider.solana) || (global.solana && global.solana.isSafePal ? global.solana : null); } },
   };
 
   var ORDER = Object.keys(WALLETS);
