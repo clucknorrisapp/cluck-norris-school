@@ -46,7 +46,11 @@ const FILE_MARKERS = {
   __REAPER__:'cut_reaper.b64', __GREATBEAR__:'cut_greatbear.b64', __WHALE__:'cut_whale.b64', __WHALEMOUNT__:'cut_whalemount.b64', __MEGAWHALE__:'cut_megawhale.b64', __BLACKSWAN__:'cut_blackswan.b64', __COLDWALLET__:'cut_coldwallet.b64', __DRILLWORM__:'cut_drillworm.b64', __FLASHDRONE__:'cut_flashdrone.b64', __RUGPULLER__:'cut_rugpuller.b64', __DRAINER__:'cut_drainer.b64',
   __TROLL__:'cut_troll.b64', __SAYLOR__:'cut_saylor.b64', __WENMOON__:'cut_wenmoon.b64',
   __DIRTYWHALE__:'cut_dirtywhale.b64', __MEVDRAGON__:'cut_mevdragon.b64', __LEVIATHAN__:'cut_leviathan.b64', __BURNLORD__:'cut_burnlord.b64', __DIAMONDTITAN__:'cut_diamondtitan.b64', __CORESENTINEL__:'cut_coresentinel.b64', __MARKETMAKER__:'cut_marketmaker.b64', __CHAIRMAN__:'cut_chairman.b64', __SATWARDEN__:'cut_satwarden.b64', __STORMHERALD__:'cut_stormherald.b64',
-  __LASERBOT__:'cut_laserbot.b64', __MEVDRONE__:'cut_mevdrone.b64'
+  __LASERBOT__:'cut_laserbot.b64', __MEVDRONE__:'cut_mevdrone.b64',
+  // Scary world (hidden ?room=scary): AI-illustrated cutouts that REPLACE the code-drawn
+  // eyeball/longneck/gravemite/ghostship. Loaded under those exact texture keys in Boot, so the
+  // procedural draw fns (which each `return` early if the texture already exists) auto-skip.
+  __SCARY_EYEBALL__:'scary_eyeball.b64', __SCARY_LONGNECK__:'scary_longneck.b64', __SCARY_GRAVEMITE__:'scary_gravemite.b64', __SCARY_GHOSTSHIP__:'scary_ghostship.b64'
 };
 for(const [marker,file] of Object.entries(FILE_MARKERS)){
   if(!logic.includes(marker)) continue;
