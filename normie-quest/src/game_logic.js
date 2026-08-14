@@ -2463,7 +2463,14 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.player=this.physics.add.sprite(this.spawn.x,this.spawn.y,
       this.charPrefix ? this.charPrefix+'normie'
       : ((this.moonSuit&&this.textures.exists('mnormie'))?'mnormie':'normie'));
-    this.baseScale=36/this.player.height; this.pscale={v:1}; this._powered=false;
+    // Skins render BIGGER than bare Normie (premium): the detailed character art carries far more
+    // fine detail than Normie's bold low-detail sprite, so it needs more on-screen pixels to read
+    // (at 36px it turned to mush). Skins are also stored at a display-matched 72x108 (not 288x432),
+    // so this bigger render is a near-1:1 crisp draw, not an upscale. Normie stays 36. Collision
+    // grows with the sprite; the crouch body stays ~22px (< the 24px duck clearance) and traversal
+    // is verified across levels incl. ducking. See char asset reprocess 2026-08-14.
+    var _heroPx = this.charPrefix ? 48 : 36;
+    this.baseScale=_heroPx/this.player.height; this.pscale={v:1}; this._powered=false;
     // Omega Chad renders a bit taller than Normie (he's the power form); scale from HIS texture.
     this.omegaScale = this.textures.exists('omegachad') ? 52/this.textures.get('omegachad').getSourceImage().height : this.baseScale;
     this.player.setScale(this.baseScale).setDepth(7);
