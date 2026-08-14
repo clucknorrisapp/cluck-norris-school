@@ -49,6 +49,12 @@
                 detect: function () { return global.jupiterWallet || global.jupiter || (global.solana && global.solana.isJupiter ? global.solana : null); } },
     safepal:  { name: "SafePal",  icon: "🔐", download: "https://safepal.com/download",
                 detect: function () { return (global.safepal && global.safepal.solana) || (global.safepalProvider && global.safepalProvider.solana) || (global.solana && global.solana.isSafePal ? global.solana : null); } },
+    coin98:   { name: "Coin98",   icon: "🐋", download: "https://coin98.com/wallet",
+                detect: function () { return (global.coin98 && global.coin98.sol) || (global.solana && global.solana.isCoin98 ? global.solana : null); } },
+    nightly:  { name: "Nightly",  icon: "🌙", download: "https://nightly.app",
+                detect: function () { return (global.nightly && global.nightly.solana) || (global.solana && global.solana.isNightly ? global.solana : null); } },
+    mathwallet:{ name: "MathWallet", icon: "🧮", download: "https://mathwallet.org",
+                detect: function () { return (global.solana && global.solana.isMathWallet ? global.solana : null); } },
   };
 
   var ORDER = Object.keys(WALLETS);
