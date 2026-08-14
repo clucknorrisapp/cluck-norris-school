@@ -11091,8 +11091,16 @@ app.get("/market-header.js", (req, res) => {
 // single quote, on pages that render attacker-set token metadata — safe only
 // because those spots used double-quoted attributes. rpc() had 6 copies, one of
 // which didn't throw on a JSON-RPC error.
+// These shared browser modules carry security-critical logic (the wallet registry, esc(), the
+// rpc() error guard). When we fix a wallet-compat or XSS bug here it must reach users on their
+// next load, not up to 4h later. The old `max-age=3600` let Cloudflare + the browser hold a
+// stale copy — a SafePal registry fix shipped but the edge kept serving the old 11-wallet file.
+// `no-cache` = the browser/edge revalidate every load via ETag; sendFile answers If-None-Match
+// with a tiny 304 when unchanged, so this is cheap, and a changed file lands immediately.
+// (Companion dashboard step: set Cloudflare Browser Cache TTL to "Respect Existing Headers" so
+// these headers aren't overridden — see docs/CLOUDFLARE_WAF_RUNBOOK.md.)
 app.get("/cluck-util.js", (req, res) => {
-  res.setHeader("Cache-Control", "public, max-age=3600");
+  res.setHeader("Cache-Control", "no-cache, must-revalidate");
   res.type("application/javascript");
   res.sendFile(join(__dirname, "public", "cluck-util.js"));
 });
@@ -11103,7 +11111,7 @@ app.get("/cluck-util.js", (req, res) => {
 // pages found eleven, so a Backpack user hit "no Solana wallet found" on one tool
 // and connected fine on the next.
 app.get("/cluck-wallet.js", (req, res) => {
-  res.setHeader("Cache-Control", "public, max-age=3600");
+  res.setHeader("Cache-Control", "no-cache, must-revalidate");
   res.type("application/javascript");
   res.sendFile(join(__dirname, "public", "cluck-wallet.js"));
 });
@@ -11114,7 +11122,7 @@ app.get("/cluck-wallet.js", (req, res) => {
 // text/html MIME type and the tool loses its send engine with no visible error.
 for (const asset of ["airdrop-engine.js", "airdrop-handoff.js"]) {
   app.get("/" + asset, (req, res) => {
-    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.setHeader("Cache-Control", "no-cache, must-revalidate");   // revalidate every load — see cluck-util.js note above
     res.type("application/javascript");
     res.sendFile(join(__dirname, "public", asset));
   });

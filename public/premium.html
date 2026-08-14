@@ -129,7 +129,22 @@ function setVMsg(html, err){ $('verifyStatus').innerHTML = err ? '<span style="c
 // detecting two, the Locker Room three). Aliased rather than rewritten so every
 // WALLETS[id].name / .detect() / .download call site below is unchanged.
 const WALLETS = CluckWallet.WALLETS;
-$('walletPicker').innerHTML = Object.keys(WALLETS).map(id=>'<button class="wbtn" onclick="connectAndSign(\''+id+'\')">'+WALLETS[id].name+'</button>').join('');
+// Show ONLY the wallets actually installed in this browser — not the whole registry. Rendering
+// every entry made a long jumbled row that grew each time we added a wallet; a normal user has
+// one (their wallet), a power user two. Re-runs on a short delay because some wallets inject a
+// beat after load. connectAndSign(id) still detects on click, so nothing else changes.
+function renderPremiumPicker(){
+  var el = $('walletPicker'); if(!el) return;
+  var list = CluckWallet.available();
+  if(!list.length){
+    var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent||'') || (navigator.maxTouchPoints>1 && /Macintosh/.test(navigator.userAgent||''));
+    el.innerHTML = isMobile ? '' : '<div style="font-size:13px;color:var(--sub);line-height:1.6">No Solana wallet detected. Install a wallet extension (Phantom, Solflare, Backpack, SafePal…) and refresh.</div>';
+    return;   // mobile-with-no-wallet is handled by initPremiumDeepLinks() below
+  }
+  el.innerHTML = list.map(function(w){ return '<button class="wbtn" onclick="connectAndSign(\''+w.id+'\')">'+w.icon+' '+w.name+'</button>'; }).join('');
+}
+renderPremiumPicker();
+setTimeout(renderPremiumPicker, 600); setTimeout(renderPremiumPicker, 1600);
 
 // Mobile/iPad on-ramp: phone & iPad browsers can't see a wallet APP (only the
 // desktop extension or the wallet's in-app browser injects window.solana). When
