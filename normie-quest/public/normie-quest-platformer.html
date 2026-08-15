@@ -5646,9 +5646,12 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // --- frame animation: swap Normie's pose sprite by state (idle / run cycle / jump) ---
     // all four frames share one canvas size, so setTexture keeps scale + body constant.
     // Normie ALWAYS stays Normie — even in GIGA CHAD mode (the chad appears as a shadow behind him).
+    // Skins (pr/kd) use a SINGLE run pose instead of cycling nrun1<->nrun2: two detailed
+    // illustrations flipping ~10x/sec read as a bounce/blur while moving (owner playtest 2026-08-15).
+    // Normie + moon keep the two-frame cycle — their frames are built to tween cleanly.
     var baseKey = this.crouching ? 'nduck'
                 : !onGround ? 'njump'
-                : (Math.abs(b.velocity.x)>25 ? ((Math.floor(now/(fast?70:100))%2) ? 'nrun2':'nrun1')
+                : (Math.abs(b.velocity.x)>25 ? (this.charPrefix ? 'nrun1' : ((Math.floor(now/(fast?70:100))%2) ? 'nrun2':'nrun1'))
                 : 'normie');
     // SKIN the pose set: the chosen character (this.charPrefix) OR, for default Normie on lunar
     // levels, the moon suit ('m'). Each skin's five frames share Normie's 144x216 canvas, so a
@@ -5682,8 +5685,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       p.setRotation(Phaser.Math.Clamp(b.velocity.x/2600,-0.12,0.12));
       var sy=b.velocity.y<0?1.10:0.93; p.setScale(bs*(2-sy), bs*sy);
     } else if(Math.abs(b.velocity.x)>25){
-      var cyc=now/(fast?52:82); p.setRotation(Math.sin(cyc)*0.05);
-      var pl=Math.abs(Math.sin(cyc)); p.setScale(bs*(1-pl*0.02), bs*(1+pl*0.035));
+      if(this.charPrefix){ p.setRotation(0); p.setScale(bs); }   // skins: steady clean run (no bob) — clarity over bounce (owner 2026-08-15)
+      else { var cyc=now/(fast?52:82); p.setRotation(Math.sin(cyc)*0.05);
+        var pl=Math.abs(Math.sin(cyc)); p.setScale(bs*(1-pl*0.02), bs*(1+pl*0.035)); }
     } else {
       p.setRotation(0); var br=Math.sin(now/500)*0.02; p.setScale(bs*(1-br), bs*(1+br));
     }
