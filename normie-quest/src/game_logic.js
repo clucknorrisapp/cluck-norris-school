@@ -5,13 +5,13 @@ var W=480, H=270, TILE=24, GY=H-TILE;      // GY = ground top surface
 // Internal render resolution multiplier (supersampling). Backing buffer = W*RES x H*RES and every
 // scene camera zooms RES, so the VISIBLE world (W x H units) and all gameplay coords are UNCHANGED —
 // only sharpness scales. Higher = crisper when the canvas is displayed big, at ~RES^2 GPU fill cost.
-// ADAPTIVE default: pure-desktop (fine pointer, no touch) renders at 3x — its big monitors upscale
-// the old 960x540 buffer and softened every sprite; desktops render 1440x810 at 60fps trivially.
-// TOUCH devices (phones/tablets incl. iPad) stay at the proven-safe 2x to protect frame rate and
-// dodge iOS Safari's memory-pressure buffer downscale. ?res=2|3|4 forces a value on any device.
-var RES=2, _resOverride=false;
-try{ if(typeof location!=='undefined'){ var _rm=((location.search||'')+(location.hash||'')).match(/[?&#]res=([234])/); if(_rm){ RES=parseInt(_rm[1],10); _resOverride=true; } } }catch(e){}
-try{ if(!_resOverride && typeof window!=='undefined' && window.matchMedia && window.matchMedia('(pointer:fine)').matches && !window.matchMedia('(pointer:coarse)').matches && !('ontouchstart' in window)) RES=3; }catch(e){}
+// DEFAULT 3x on every device — desktop AND touch (owner ask 2026-08-15: "turn on 3x for touch too").
+// The old 960x540 buffer softened every sprite when upscaled to a big/retina screen; 3x = 1440x810.
+// ESCAPE HATCH: ?res=2 forces the lighter buffer if a device chugs or iOS Safari downscales the
+// bigger buffer under memory pressure (skins are ~11x lighter now, so there's more headroom than
+// before); ?res=4 pushes it further.
+var RES=3;
+try{ if(typeof location!=='undefined'){ var _rm=((location.search||'')+(location.hash||'')).match(/[?&#]res=([234])/); if(_rm) RES=parseInt(_rm[1],10); } }catch(e){}
 // Clean, highly-legible UI font for menus / interstitials (the pixel fonts read as blocky
 // once scaled 2x by the scene cameras). UIRES renders text at higher DPI so it stays crisp
 // despite pixelArt:true. Big arcade titles keep 'Press Start 2P'; body text uses this.
