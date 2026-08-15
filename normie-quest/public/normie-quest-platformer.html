@@ -5601,7 +5601,11 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.prevUse=useHeld;
     var _slotKeys=[this.keys.ONE,this.keys.TWO,this.keys.THREE];
     for(var _sk=0;_sk<3;_sk++){ var _kd=_slotKeys[_sk]; if(_kd){ if(_kd.isDown && !this._prevSlot[_sk]) this.useReserve(_sk); this._prevSlot[_sk]=_kd.isDown; } }
-    var fast=now<this.caffeineUntil||now<this.moonUntil;      // caffeine/moon = super speed
+    var fast=now<this.caffeineUntil||now<this.moonUntil||now<this.omegaUntil;   // caffeine/moon/GIGA CHAD = super speed
+    // GIGA CHAD joins the fast tier (owner 2026-08-15: "in giga chad mode he gets slow"). Omega already
+    // GROWS Normie ~1.4x (anyPower), same as caffeine — but caffeine is 340 and omega was stuck at 240,
+    // so a big chad lumbered at pedestrian speed, the opposite of "UNSTOPPABLE". Matching caffeine's cap
+    // makes him big AND fast; it also frees him from FUD-gas slow (fast disables it) — fitting the theme.
     // FUD gas = sluggish, but ONLY on the ground — never rob you of air speed mid-jump (that could
     // make a gap you already committed to unclearable → an unfair pit death).
     var slow=(now<this.slowUntil)&&!fast&&(b.blocked.down||b.touching.down);
