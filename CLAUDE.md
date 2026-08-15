@@ -66,10 +66,16 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 
 ## Working agreement
 
-- **Push freely.** Standing permission to push to the working branch **and to `main`** (owner,
-  2026-07-24: "you always have permission to push to main"). Railway auto-deploys `main`, so that
-  IS production: land it green and say what went live. **Ask first for anything destructive** —
-  force-push, `reset --hard`, branch delete. That was never granted.
+- **Branching: `develop` → staging, `main` → production (owner, 2026-08-15).** Do day-to-day work
+  on **`develop`** (or a feature branch merged into it); Railway's staging service auto-deploys it.
+  Railway also auto-deploys **`main`**, so **a push to `main` IS a production release.** As the app
+  goes public and beta ends, the owner's rule is explicit — *"once we go fully live … I don't want
+  to automatically submit changes to the live product"* — so **promote `develop` → `main` only on an
+  explicit owner go in the moment; never automatically, never inferred.** The owner is the sole
+  sign-off (he reviews staging + dashboard feedback). Pushing to `develop`/a feature branch is free;
+  **`main` is gated.** This supersedes the older "push freely to `main`" grant for the public era,
+  which is now. Still **ask first for anything destructive** — force-push, `reset --hard`, branch
+  delete. That was never granted. Full flow + the visual gate: `docs/STAGING_WORKFLOW.md`.
 - ⛔ **PLAN ≠ EXECUTE for money.** For anything that moves funds, opens or closes positions, or
   resumes an engine: state the exact plan and STOP. Execute only on an explicit go. An owner
   message describing intent ("thinking we should Y") opens a discussion, not authorisation —
@@ -84,6 +90,31 @@ CLKN mint: `DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS`
 - **Never commit secrets**, and don't put a model identifier in committed files.
 - **Tell the truth about what you did.** If a check didn't run, say so. Most of the worst bugs
   here survived because something reported green on the wrong thing.
+
+---
+
+## Shipping: test on staging before production
+
+The reason this exists: on 2026-08-13 a 3×-zoom change slid the game HUD off-screen and shipped
+straight to live, because `main` auto-deploys with nothing between it and production and no check
+could *see* the render. The fix is a real staging step plus a visual gate.
+
+1. Build on **`develop`** → Railway staging auto-deploys it. Test there (desktop **and** a phone).
+2. **Run the visual gate before every push:** boot a server, then
+   `node normie-quest/test/nq-visual.cjs <baseUrl>`. It renders the title, the top HUD, all three
+   characters, and the gravemite, and pixel-diffs each against `normie-quest/test/visual-baselines/`.
+   Character/creature crops are *position-aware* (`window.__NQ_RECT` tells it where the sprite is),
+   so a baseline can't silently frame empty background. It's a **regression detector, not a judge of
+   taste** — "different from approved", not "good". When a change is intentional, re-approve with
+   `--update`, **eyeball the new baseline PNGs**, and commit them (that PNG diff is the owner's review
+   surface). CI runs it too and uploads diff images on failure. `NQ_RES=3 node …/nq-visual.cjs`
+   reproduces the exact HUD break on demand.
+3. Owner reviews staging + dashboard feedback → says go → **only then** promote `develop` → `main`.
+
+⚠️ Sprite surfaces (characters, gravemite) are stable across machines; the text surfaces (title,
+HUD) ride the arcade webfont and can carry render noise between environments — if CI's text
+surfaces go flaky, refresh baselines in CI via the workflow's `update_baselines` dispatch. Details
++ the one-time Railway/Cloudflare staging setup: `docs/STAGING_WORKFLOW.md`.
 
 ---
 
@@ -275,8 +306,11 @@ short-form copy going out to X/Telegram. Haiku paths stay on `claude-haiku-4-5-2
 - After editing backend JS: `node --check server.js`, plus any lib you touched.
 - CI (`.github/workflows/syntax-check.yml`) is the tripwire for a no-staging auto-deploy: syntax
   check on every backend file, an undefined-JSX-component guard, a curriculum count-drift guard,
-  the Normie Quest geometry check, and a headless smoke test that renders every screen and lesson.
-  **Each exists because something got past the previous set — don't remove them casually.**
+  the Normie Quest geometry check, a headless smoke test that renders every screen and lesson, and
+  the **Normie Quest visual-regression gate** (`nq-visual.cjs` — pixel-diffs the game's title, HUD,
+  characters, and gravemite against committed baselines; catches the render-broke-but-built-clean
+  class the smoke test can't see). **Each exists because something got past the previous set — don't
+  remove them casually.**
 - Cloud session recovery (containers reset mid-session):
   `git fetch origin --prune && git reset --hard origin/<branch> && npm install`. GitHub is truth.
 

@@ -5,8 +5,14 @@
 name: syntax-check
 on:
   push:
-    branches: ["main", "claude/**"]
+    branches: ["main", "develop", "claude/**"]
   pull_request:
+  workflow_dispatch:
+    inputs:
+      update_baselines:
+        description: "Regenerate Normie Quest visual baselines in CI and upload them as an artifact (download + commit to adopt them)"
+        type: boolean
+        default: false
 
 jobs:
   node-check:
@@ -85,3 +91,62 @@ jobs:
           npx playwright install --with-deps chromium
       - name: render every screen and lesson
         run: node scripts/smoke-test.js
+
+  # The static guards AND the smoke test above still cannot SEE the game's own render. Every costly
+  # regression this year was visual and built/deployed clean: the HUD slid off-screen at 3x zoom, a
+  # creature shipped with a black box baked around it, a character rendered the wrong size, a run
+  # animation bounced. This boots the real server and pixel-diffs the game's key surfaces (title,
+  # HUD, the three characters, the gravemite) against committed baselines in
+  # normie-quest/test/visual-baselines/. A structural change fails the build; the diff images upload
+  # as an artifact for the owner (sole sign-off) to look at. Full workflow: docs/STAGING_WORKFLOW.md.
+  visual-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - run: npm ci
+      # No `npm run build` here (unlike smoke-test): server.js serves the game through an EXPLICIT
+      # route and the built normie-quest HTML is committed; only the React catch-all reads dist/,
+      # which this job never hits. Booting without a build keeps it lean.
+      - name: install playwright chromium
+        run: |
+          npm i --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: boot server + run visual regression
+        env:
+          PORT: "3111"
+          # Booted with NO secrets on purpose: the scheduler/bot block only starts when a Telegram
+          # token is present and every money path needs a key, so this render-only run is side-effect
+          # free — no posts, no vault, nothing live.
+          UPDATE_BASELINES: ${{ github.event_name == 'workflow_dispatch' && inputs.update_baselines || 'false' }}
+        run: |
+          node server.js & echo $! > /tmp/nq_server.pid
+          for i in $(seq 1 40); do curl -sf "http://localhost:3111/healthz" >/dev/null && break || sleep 2; done
+          # `timeout` bounds the whole run: a single hung capture (a browser can wedge under memory
+          # pressure) then fails the job at 10 min instead of hanging until GitHub's 6-hour cap.
+          if [ "$UPDATE_BASELINES" = "true" ]; then
+            timeout 600 node normie-quest/test/nq-visual.cjs http://localhost:3111 --update
+          else
+            timeout 600 node normie-quest/test/nq-visual.cjs http://localhost:3111
+          fi
+          code=$?
+          kill "$(cat /tmp/nq_server.pid)" 2>/dev/null || true
+          exit $code
+      - name: upload diff images (on regression)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nq-visual-diffs
+          path: normie-quest/test/visual-diffs/
+          if-no-files-found: ignore
+      # Only on a manual "regenerate baselines" run: hand the new PNGs back so they can be committed
+      # from the environment that will be checking them (fixes cross-machine webfont noise).
+      - name: upload refreshed baselines (manual --update dispatch)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.update_baselines }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: nq-visual-baselines
+          path: normie-quest/test/visual-baselines/

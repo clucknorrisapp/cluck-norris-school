@@ -2008,6 +2008,33 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
          // separate script block that can't see NQGAME). Needed so a keypress in the modal doesn't
          // hit the scene's "any key resumes" handler and un-pause the game behind it.
          window.__NQ_KBGAME=function(on){ try{ if(_sc.input&&_sc.input.keyboard) _sc.input.keyboard.enabled=on; }catch(e){} };
+         // Screen-fraction bounding box of a live object, for the visual-regression harness
+         // (nq-visual.cjs): it crops each surface to the thing under test instead of a guessed
+         // rectangle, so a baseline can't silently frame empty background. Fractions are relative to
+         // the camera's worldView (0..1 across the visible game), which maps straight onto the
+         // harness's canvas-relative clip regardless of zoom/Scale.FIT/DPR. Inert unless called.
+         //   __NQ_RECT('player')  -> {x,y,w,h,cx,cy,tex,vis} | null
+         //   __NQ_RECT('boss')    -> same, for the active Rug King / worm boss | null
+         //   __NQ_RECT('grave')   -> {player, hits:[...]} : every display object whose texture key
+         //                           matches /grave/i, each with the same frac fields (nearest to the
+         //                           player first) so the caller can pick the creature it means.
+         window.__NQ_RECT=function(target){ try{
+           var cam=_sc.cameras&&_sc.cameras.main; if(!cam) return null; var wv=cam.worldView;
+           function frac(o){ if(!o||!o.getBounds) return null; var b=o.getBounds(); if(!wv.width||!wv.height) return null;
+             return { x:+((b.x-wv.x)/wv.width).toFixed(4), y:+((b.y-wv.y)/wv.height).toFixed(4),
+               w:+(b.width/wv.width).toFixed(4), h:+(b.height/wv.height).toFixed(4),
+               cx:+((b.centerX-wv.x)/wv.width).toFixed(4), cy:+((b.centerY-wv.y)/wv.height).toFixed(4),
+               tex:(o.texture&&o.texture.key)||null, vis:!!o.visible }; }
+           if(!target||target==='player') return frac(_sc.player);
+           if(target==='boss'){ var k=(_sc.rugking&&_sc.rugking.active)?_sc.rugking:((_sc.worm&&_sc.worm.active)?_sc.worm:null); return frac(k); }
+           var re=null; try{ re=new RegExp(target,'i'); }catch(e){ re=null; }
+           var pc=frac(_sc.player)||{cx:0.5,cy:0.5}, hits=[], seen=[];
+           function scan(o){ try{ if(!o||o.active===false||!o.texture||!o.texture.key) return; if(seen.indexOf(o)>=0) return; if(re&&!re.test(o.texture.key)) return; var f=frac(o); if(f){ seen.push(o); hits.push(f); } }catch(e){} }
+           try{ if(_sc.enemies&&_sc.enemies.children) _sc.enemies.children.iterate(scan); }catch(e){}
+           try{ if(_sc.children&&_sc.children.list) _sc.children.list.forEach(scan); }catch(e){}
+           hits.sort(function(a,b){ return (Math.abs(a.cx-pc.cx)+Math.abs(a.cy-pc.cy))-(Math.abs(b.cx-pc.cx)+Math.abs(b.cy-pc.cy)); });
+           return { player:pc, hits:hits };
+         }catch(e){ return {err:String(e)}; } };
          window.__NQ_DBG=function(){ try{ return {paused:!!_sc.paused, clockPaused:!!_sc.time.paused, now:Math.round(_sc.time.now), last:Math.round(_sc.lastInputAt||0), warping:!!_sc._warping, swan:_sc._swanState||null, bossHP:(_sc.bossStarted?_sc.bossHP:null), hasKey:!!_sc.hasKey, level:_sc.def&&_sc.def.name, floorKey:_sc.floorKey||null, timeLeft:_sc.timeLeft, throwAmmo:_sc.throwAmmo, bossSprite:(function(){ try{ var k=(_sc.rugking&&_sc.rugking.active)?_sc.rugking:((_sc.worm&&_sc.worm.active)?_sc.worm:null); if(!k) return null; return {tex:k.texture&&k.texture.key, grav:!!(k.body&&k.body.allowGravity), vis:!!k.visible, a:+(k.alpha||0).toFixed(2), w:Math.round(k.displayWidth), h:Math.round(k.displayHeight), x:Math.round(k.x), y:Math.round(k.y), tint:('00000'+(k.tintTopLeft||0).toString(16)).slice(-6),
            // The PHYSICS body rect, next to the visible rect above. bossTouch only ever fires on
            // body-vs-body overlap, so a body that has drifted off the drawn sprite makes a boss
