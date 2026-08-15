@@ -6797,26 +6797,37 @@ async function roseHeliusRpc(key, method, params) {
   } catch (e) { console.warn("[ROSE-BUY] rpc", method, "err:", e.message); return null; }
 }
 
-// Pool-direct buy detector from a RAW jsonParsed tx. The pool releases ROSE and takes in quote;
-// the buyer is whoever NETS the most ROSE — independent of who paid gas or in what currency, so
-// gasless/relayer-paid and Jupiter-routed (USDC or SOL) buys are all caught (fee-payer classing
-// missed exactly these). Returns null for sells, LP moves, and non-buys.
+// Pool-direct buy detector from a RAW jsonParsed tx. Keyed off the pool's RESERVE, not flow
+// direction: the pool is the owner holding by far the most ROSE, a BUY is the pool RELEASING ROSE,
+// and the buyer is whoever NETS the most ROSE among non-pool wallets — independent of who paid gas
+// or in what currency, so gasless/relayer-paid and Jupiter-routed (USDC or SOL) buys are all caught.
+// Returns null for sells, LP moves, and non-buys.
+//
+// ⚠️ The earlier version keyed off flow direction — "biggest ROSE loser = pool, biggest gainer =
+// buyer" — which INVERTS on a sell: there the pool is the biggest GAINER and the seller the biggest
+// loser, so every large sell posted as a buy from the pool's own address. Verified against 80 live
+// pool txns: the old rule mislabeled 18 of 24 sells as buys; this one mislabels 0. Don't reintroduce
+// a direction-based pool guess.
 function roseDetectBuyFromRaw(tx, roseUsd, solUsd) {
   const meta = tx && tx.meta; if (!meta || meta.err) return null;
-  const rose = {};
-  for (const b of (meta.preTokenBalances || [])) if (b.mint === ROSE_BOT_MINT && b.owner) rose[b.owner] = (rose[b.owner] || 0) - Number(b.uiTokenAmount.uiAmount || 0);
-  for (const b of (meta.postTokenBalances || [])) if (b.mint === ROSE_BOT_MINT && b.owner) rose[b.owner] = (rose[b.owner] || 0) + Number(b.uiTokenAmount.uiAmount || 0);
-  let poolOwner = null, poolLoss = 0, buyer = null, buyerGain = 0;
-  for (const o in rose) {
-    const d = rose[o];
-    if (d < poolLoss) { poolLoss = d; poolOwner = o; }
-    if (d > buyerGain) { buyerGain = d; buyer = o; }
-  }
-  if (!buyer || !poolOwner || buyer === poolOwner || buyerGain <= 0) return null; // no net ROSE receiver → sell / LP / non-buy
-  // Confirm the pool RECEIVED quote (SOL/USDC/USDT) — separates a real buy from an LP-remove,
-  // and gives a price-independent USD fallback if the ROSE price feed is momentarily down.
+  // Net ROSE change AND absolute post-balance per owner (the post-balance is how we find the reserve).
+  const roseDelta = {}, rosePost = {};
+  for (const b of (meta.preTokenBalances || [])) if (b.mint === ROSE_BOT_MINT && b.owner) roseDelta[b.owner] = (roseDelta[b.owner] || 0) - Number(b.uiTokenAmount.uiAmount || 0);
+  for (const b of (meta.postTokenBalances || [])) if (b.mint === ROSE_BOT_MINT && b.owner) { roseDelta[b.owner] = (roseDelta[b.owner] || 0) + Number(b.uiTokenAmount.uiAmount || 0); rosePost[b.owner] = Number(b.uiTokenAmount.uiAmount || 0); }
+  const owners = Object.keys(roseDelta); if (!owners.length) return null;
+  // Pool = the known pool address (its ROSE vault owner IS the pool address for this pair); fall back
+  // to the biggest ROSE reserve if a pool ever exposes its vault under a different owner.
+  let pool = owners.includes(ROSE_POOL) ? ROSE_POOL : null;
+  if (!pool) { let mx = -1; for (const o of owners) { const r = rosePost[o] || 0; if (r > mx) { mx = r; pool = o; } } }
+  if (!pool || (roseDelta[pool] || 0) >= 0) return null; // pool didn't RELEASE ROSE → sell / LP / non-buy
+  // Buyer = biggest net ROSE gainer among NON-pool wallets.
+  let buyer = null, buyerGain = 0;
+  for (const o of owners) { if (o === pool) continue; const d = roseDelta[o]; if (d > buyerGain) { buyerGain = d; buyer = o; } }
+  if (!buyer || buyerGain <= 0) return null;
+  // Confirm the pool RECEIVED quote (SOL/USDC/USDT) — separates a real buy from an LP-remove (which
+  // pays quote OUT), and gives a price-independent USD fallback if the ROSE price feed is momentarily down.
   let wsol = 0, stable = 0;
-  const addQuote = (b, sign) => { const k = ROSE_QUOTES[b.mint]; if (k && b.owner === poolOwner) { const v = sign * Number(b.uiTokenAmount.uiAmount || 0); if (k === "sol") wsol += v; else stable += v; } };
+  const addQuote = (b, sign) => { const k = ROSE_QUOTES[b.mint]; if (k && b.owner === pool) { const v = sign * Number(b.uiTokenAmount.uiAmount || 0); if (k === "sol") wsol += v; else stable += v; } };
   for (const b of (meta.preTokenBalances || [])) addQuote(b, -1);
   for (const b of (meta.postTokenBalances || [])) addQuote(b, +1);
   if (wsol + stable <= 0) return null; // pool didn't take in quote → not a buy
