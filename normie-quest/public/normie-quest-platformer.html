@@ -102,6 +102,16 @@
 "use strict";
 
 var W=480, H=270, TILE=24, GY=H-TILE;      // GY = ground top surface
+// Internal render resolution multiplier (supersampling). Backing buffer = W*RES x H*RES and every
+// scene camera zooms RES, so the VISIBLE world (W x H units) and all gameplay coords are UNCHANGED —
+// only sharpness scales. Higher = crisper when the canvas is displayed big, at ~RES^2 GPU fill cost.
+// ADAPTIVE default: pure-desktop (fine pointer, no touch) renders at 3x — its big monitors upscale
+// the old 960x540 buffer and softened every sprite; desktops render 1440x810 at 60fps trivially.
+// TOUCH devices (phones/tablets incl. iPad) stay at the proven-safe 2x to protect frame rate and
+// dodge iOS Safari's memory-pressure buffer downscale. ?res=2|3|4 forces a value on any device.
+var RES=2, _resOverride=false;
+try{ if(typeof location!=='undefined'){ var _rm=((location.search||'')+(location.hash||'')).match(/[?&#]res=([234])/); if(_rm){ RES=parseInt(_rm[1],10); _resOverride=true; } } }catch(e){}
+try{ if(!_resOverride && typeof window!=='undefined' && window.matchMedia && window.matchMedia('(pointer:fine)').matches && !window.matchMedia('(pointer:coarse)').matches && !('ontouchstart' in window)) RES=3; }catch(e){}
 // Clean, highly-legible UI font for menus / interstitials (the pixel fonts read as blocky
 // once scaled 2x by the scene cameras). UIRES renders text at higher DPI so it stays crisp
 // despite pixelArt:true. Big arcade titles keep 'Press Start 2P'; body text uses this.
@@ -1713,7 +1723,7 @@ var LevelSelect=new Phaser.Class({ Extends:Phaser.Scene,
   initialize:function(){ Phaser.Scene.call(this,{key:'LevelSelect'}); },
   create:function(){
     var self=this;
-    this.cameras.main.setZoom(2).centerOn(W/2,H/2); this.cameras.main.setBackgroundColor(0x0b0a1c);
+    this.cameras.main.setZoom(RES).centerOn(W/2,H/2); this.cameras.main.setBackgroundColor(0x0b0a1c);
     this.add.text(W/2,14,'LEVEL SELECT',{fontFamily:'"Press Start 2P"',fontSize:'13px',color:'#ffd23f'}).setOrigin(.5);
     this.add.text(W/2,30,'TEST BUILD · tap any level',{fontFamily:UIFONT,fontStyle:'600',fontSize:'12px',color:'#c3cdf0',resolution:UIRES}).setOrigin(.5);
     // 👑 VIPs get a door to the Lounge (giveaways / alpha / perks) right from the world map
@@ -1773,7 +1783,7 @@ var LevelSelect=new Phaser.Class({ Extends:Phaser.Scene,
 var Title=new Phaser.Class({ Extends:Phaser.Scene,
   initialize:function(){ Phaser.Scene.call(this,{key:'Title'}); },
   create:function(){
-    this.cameras.main.setZoom(2).centerOn(W/2,H/2); this.cameras.main.setBackgroundColor(0x120c2e);
+    this.cameras.main.setZoom(RES).centerOn(W/2,H/2); this.cameras.main.setBackgroundColor(0x120c2e);
     this.add.image(90,70,'cloud').setScale(1.4).setAlpha(.7); this.add.image(360,50,'cloud').setScale(1.1).setAlpha(.6);
     // clean gold logo — a crisp drop shadow, NO blurry glow FX (looked smeared)
     this.add.text(W/2,66,'NORMIE\nQUEST',{fontFamily:'"Press Start 2P"',fontSize:'26px',color:'#ffd23f',align:'center',lineSpacing:10,resolution:3}).setOrigin(.5).setStroke('#2a1a00',5).setShadow(2,3,'#140d00',0,true,true);
@@ -2161,7 +2171,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     Phaser.Math.RND.sow(['normie-quest-'+this.levelIdx]);   // deterministic per level
 
     this.physics.world.setBounds(0,0,LW,H+400);
-    this.cameras.main.setBounds(0,0,LW,H); this.cameras.main.setZoom(2); this.cameras.main.setBackgroundColor(th.sky1);
+    this.cameras.main.setBounds(0,0,LW,H); this.cameras.main.setZoom(RES); this.cameras.main.setBackgroundColor(th.sky1);
     if(this.renderer.type===Phaser.WEBGL){ try{ this.cameras.main.postFX.addVignette(0.5,0.5,0.92,0.32); }catch(e){} }   // cinematic depth
 
     // Backdrop drawn in WORLD space across the whole level (0..LW) — no scrollFactor-0/zoom
@@ -5904,7 +5914,7 @@ var Over=new Phaser.Class({ Extends:Phaser.Scene,
   create:function(){
     // SETUP LANE: run ended (game over) — submit the final score to the leaderboard.
     if(window.NQLB){ try{ window.NQLB.submitRun(window.NQLB.worldOf(this.level), this.finalScore); }catch(e){} }
-    this.cameras.main.setZoom(2).centerOn(W/2,H/2); this.cameras.main.setBackgroundColor(C.ink);
+    this.cameras.main.setZoom(RES).centerOn(W/2,H/2); this.cameras.main.setBackgroundColor(C.ink);
     this.add.text(W/2,48,this.reason,{fontFamily:'"Press Start 2P"',fontSize:'15px',color:'#ff3860'}).setOrigin(.5);
     this.add.text(W/2,80,'reached world '+this.level,{fontFamily:UIFONT,resolution:UIRES,fontSize:'18px',color:'#b6bfe0'}).setOrigin(.5);
     this.add.text(W/2,118,'SCORE',{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#b6bfe0'}).setOrigin(.5);
@@ -5982,7 +5992,7 @@ var Win=new Phaser.Class({ Extends:Phaser.Scene,
           : this.boss==='kol'      ? {img:'scammykol',  title:'THE SCAMMY KOL EXPOSED!', color:'#c99bff', tint:0x9a86c8, scale:72, bg:0x140a24}
           : this.boss==='wormhole' ? {img:'wormhole',   title:'THE WORMHOLE IS SEALED!', color:'#66ddff', tint:0x88aacc, scale:82, bg:0x1a1030}
           :                          {img:'rugkingdown',title:'YOU BEAT THE RUG KING!',  color:'#3dff6e', tint:0,        scale:58, bg:0x102a1a};
-    this.cameras.main.setZoom(2).centerOn(W/2,H/2); this.cameras.main.setBackgroundColor(V.bg);
+    this.cameras.main.setZoom(RES).centerOn(W/2,H/2); this.cameras.main.setBackgroundColor(V.bg);
     var bimg=this.add.image(W/2+52,108,V.img); bimg.setScale(V.scale/bimg.height); bimg.setAngle(14); bimg.setAlpha(0.92);
     if(V.tint) bimg.setTint(V.tint);
     var hero=this.add.image(W/2-40,94,'normie'); hero.setScale(80/hero.height);
@@ -6102,7 +6112,7 @@ var WorldClear=new Phaser.Class({ Extends:Phaser.Scene,
     var self=this, cx=W/2, cfg=this.cfg;
     this.t0=0; this.phase=0; this.done=false; this.hillOff=0; this._pp=false;
     if(!cfg){ this.goNext(); return; }   // no entry for this level -> pass straight through
-    this.cameras.main.setZoom(2).centerOn(W/2,H/2);
+    this.cameras.main.setZoom(RES).centerOn(W/2,H/2);
     SFX.clear();
     // --- Phase 0: CELEBRATION — fireworks over the defeated boss + triumphant Normie ---
     this.p1=this.add.container(0,0);
@@ -6413,7 +6423,7 @@ var Controls=new Phaser.Class({ Extends:Phaser.Scene,
   init:function(d){ d=d||{}; this.nextLevel=d.next!=null?d.next:0; this.score=d.score||0; },
   create:function(){
     var self=this, cx=W/2; this.done=false; this.t0=0; this.page=0; this.lastAdv=0;
-    this.cameras.main.setZoom(2).centerOn(W/2,H/2);
+    this.cameras.main.setZoom(RES).centerOn(W/2,H/2);
     var g=this.add.graphics(); g.fillStyle(0x0d0b1e,1); g.fillRect(0,0,W,H);
     g.fillStyle(0x1a1533,1); g.fillRect(0,0,W,28);
     g.lineStyle(2,0x3dff6e,1); g.strokeRect(6,32,W-12,H-56);
@@ -6485,7 +6495,7 @@ var Briefing=new Phaser.Class({ Extends:Phaser.Scene,
   init:function(d){ d=d||{}; this.nextLevel=d.next||0; this.score=d.score||0; this.lab=d.lab;
     this.cfg=BRIEFINGS[this.nextLevel]||{title:'GET READY',powers:[],threats:[],tip:''}; },
   create:function(){
-    var self=this, cx=W/2; this.cameras.main.setZoom(2).centerOn(W/2,H/2);
+    var self=this, cx=W/2; this.cameras.main.setZoom(RES).centerOn(W/2,H/2);
     this.t0=0; this.done=false;
     var g=this.add.graphics(); g.fillStyle(0x0d0b1e,1); g.fillRect(0,0,W,H);
     g.fillStyle(0x1a1533,1); g.fillRect(0,0,W,34); g.fillRect(0,H-26,W,26);
@@ -6633,7 +6643,7 @@ var LevelClear=new Phaser.Class({ Extends:Phaser.Scene,
   init:function(d){ d=d||{}; this.nextLevel=d.next||0; this.score=d.score||0; this.lab=d.lab; this.cleared=d.cleared||''; },
   create:function(){
     var self=this, cx=W/2; this.done=false; this.t0=0;
-    this.cameras.main.setZoom(2).centerOn(W/2,H/2);
+    this.cameras.main.setZoom(RES).centerOn(W/2,H/2);
     // Alternate: even clears carry the Nation line, odd clears show a locked-content preview.
     // If the player owns everything, nqPreviewPick returns null and it is always the Nation line.
     var _turn=0; try{ _turn=parseInt(sessionStorage.getItem('nqLcTurn')||'0',10)||0; sessionStorage.setItem('nqLcTurn',String(_turn+1)); }catch(e){}
@@ -6723,7 +6733,7 @@ var VipPitch=new Phaser.Class({ Extends:Phaser.Scene,
   init:function(d){ d=d||{}; this.next=d.next||0; this.score=d.score||0; this.locked=!!d.locked; this.lab=d.lab; },
   create:function(){
     var self=this, cx=W/2; this.done=false; this.t0=0;
-    this.cameras.main.setZoom(2).centerOn(W/2,H/2);
+    this.cameras.main.setZoom(RES).centerOn(W/2,H/2);
     var g=this.add.graphics(); g.fillStyle(0x0d0b1e,1); g.fillRect(0,0,W,H);
     g.fillStyle(0x1a1533,1); g.fillRect(0,0,W,30); g.fillRect(0,H-22,W,22);
     g.lineStyle(2,0xffb43a,1); g.strokeRect(6,34,W-12,H-58);
@@ -6765,7 +6775,7 @@ var VipPitch=new Phaser.Class({ Extends:Phaser.Scene,
 var NQGAME=new Phaser.Game({
   // Render at 2x internal resolution (each scene camera zooms 2x, so the world view is
   // unchanged but the backing store is 960x540 -> crisp, not blocky, when displayed big).
-  type:Phaser.AUTO, parent:'screen', width:W*2, height:H*2, pixelArt:true, backgroundColor:'#0a0813', roundPixels:true,
+  type:Phaser.AUTO, parent:'screen', width:W*RES, height:H*RES, pixelArt:true, backgroundColor:'#0a0813', roundPixels:true,
   scale:{ mode:Phaser.Scale.FIT, autoCenter:Phaser.Scale.CENTER_BOTH },
   physics:{ default:'arcade', arcade:{ gravity:{y:900}, debug:false } },
   scene:[Boot,Title,LevelSelect,Controls,Game,Over,Win,WorldClear,Briefing,VipPitch,LevelClear]
