@@ -105,12 +105,13 @@ var W=480, H=270, TILE=24, GY=H-TILE;      // GY = ground top surface
 // Internal render resolution multiplier (supersampling). Backing buffer = W*RES x H*RES and every
 // scene camera zooms RES, so the VISIBLE world (W x H units) and all gameplay coords are UNCHANGED —
 // only sharpness scales. Higher = crisper when the canvas is displayed big, at ~RES^2 GPU fill cost.
-// DEFAULT 3x on every device — desktop AND touch (owner ask 2026-08-15: "turn on 3x for touch too").
-// The old 960x540 buffer softened every sprite when upscaled to a big/retina screen; 3x = 1440x810.
-// ESCAPE HATCH: ?res=2 forces the lighter buffer if a device chugs or iOS Safari downscales the
-// bigger buffer under memory pressure (skins are ~11x lighter now, so there's more headroom than
-// before); ?res=4 pushes it further.
-var RES=3;
+// DEFAULT 2x (960x540). NOTE: 3x was shipped 2026-08-15 then REVERTED same day — it broke two
+// things that only show up at zoom!=2: (1) the HUD/pause overlay is pinned via a scrollFactor(0)
+// container at (W/2,H/2), which only lands correctly at zoom 2 and slid off-screen at 3x; and
+// (2) the skins are stored at 72x108 (sized for 2x -> 96px on-screen) so at 3x they UPSCALE and
+// shimmer during the run animation. Doing 3x right needs a dedicated non-zooming HUD camera AND
+// skins re-stored at ~144px. Until then: ?res=3 still opts in for testing that work; default 2x.
+var RES=2;
 try{ if(typeof location!=='undefined'){ var _rm=((location.search||'')+(location.hash||'')).match(/[?&#]res=([234])/); if(_rm) RES=parseInt(_rm[1],10); } }catch(e){}
 // Clean, highly-legible UI font for menus / interstitials (the pixel fonts read as blocky
 // once scaled 2x by the scene cameras). UIRES renders text at higher DPI so it stays crisp
