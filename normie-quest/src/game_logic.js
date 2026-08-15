@@ -3212,6 +3212,14 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // mid-burrow would break its own fight. A boss the physics engine never pulls down cannot
     // fall into a pit in the first place, so gating on allowGravity is both safe and exact.
     if(b.body.allowGravity && b.y>GY+34){ b.setPosition(Phaser.Math.Clamp(b.x,lo,hi), GY-44); if(b.setVelocity) b.setVelocity(0,0); }
+    // A hard LEAP-landing can TUNNEL a gravity boss a couple dozen px straight through the floor at
+    // certain x (1-3's Rug King: a leap that lands near x=6060 punches ~25px down and WEDGES there) —
+    // too shallow for the deep-fall snap above (b.y never reaches GY+34), so it sat permanently
+    // buried, not jumping, its body still overlapping and KILLING the player. Once such a boss has
+    // SETTLED (near-zero vy, so an in-flight leap or its landing arc is never disturbed) with its
+    // feet below the floor line, lift it back onto solid ground. The floor at that x is solid, so it
+    // re-lands cleanly with no oscillation.
+    else if(b.body.allowGravity && b.body.bottom>GY+6 && Math.abs(b.body.velocity.y)<30){ b.setPosition(Phaser.Math.Clamp(b.x,lo,hi), GY-44); if(b.setVelocity) b.setVelocity(0,0); }
   },
   startBoss:function(){
     if(this.bossStarted) return; this.bossStarted=true; this.boss=true; this.bossHP=3;
