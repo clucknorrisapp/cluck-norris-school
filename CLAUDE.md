@@ -111,14 +111,15 @@ could *see* the render. The fix is a real staging step plus a visual gate.
    reproduces the exact HUD break on demand.
 3. Owner reviews staging + dashboard feedback → says go → **only then** promote `develop` → `main`.
 
-⚠️ Two tiers. The **sprite** surfaces (characters, gravemite) are stable to the pixel across
-machines and are the **hard gate** (CI-measured 0–1.9%). The **text** surfaces (title, HUD) ride the
-arcade webfont, which renders a few % differently per machine (CI-measured 6.8% / 4.7%), so they're
-**advisory** — a diff is reported and imaged but does not fail CI. This loses no coverage: the res=3
-HUD break also blows up the character surface (6.99%), so the hard gate still catches it. Promoting
-title/HUD to hard gates just needs the arcade font self-hosted in the game (would also kill the
-serif-fallback flash on slow loads). Details + the one-time Railway/Cloudflare staging setup:
-`docs/STAGING_WORKFLOW.md`.
+⚠️ Two tiers. Right now only the **gravemite** (a stationary sprite) is a **hard gate** (CI-stable
+~1.9%). **Advisory** (reported + imaged, never blocks CI): the **text** surfaces (title, HUD — arcade
+webfont, CI-measured 6.8% / 4.7% per-machine) and, pending a determinism fix, the **character**
+surfaces. The characters flaked — the same unchanged game swung a char surface 0 → 4.4% between CI
+runs because the player is still physics-settling when the shot is taken. The fix (tracked
+TODO in `nq-visual.cjs`) is to settle + freeze the player before capturing, then restore the chars to
+hard gates; likewise self-hosting the arcade font promotes title/HUD. A res=3-class break still can't
+slip silently — it lights up every advisory at once. Details + the one-time Railway/Cloudflare staging
+setup: `docs/STAGING_WORKFLOW.md`.
 
 ---
 

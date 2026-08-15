@@ -52,20 +52,30 @@ PNGs**, and commit them — that PNG diff is the owner's review surface in the p
 
 **Two tiers (this is why CI stays green and still means something):**
 
-- **Hard gate — sprite surfaces** (the three characters, the gravemite). Stable to the pixel across
-  machines (same PNG, same GPU blit; CI vs dev measured 0–1.9%). A regression here **fails the
-  build**. This is where the user-facing "do the characters look premium / is the creature
-  de-boxed" coverage lives.
-- **Advisory — text surfaces** (title, HUD). These are dominated by the arcade webfont (Press Start
-  2P from Google Fonts), which Phaser rasterises once and which renders a few % differently per
-  machine (CI vs dev measured 6.8% / 4.7%). They **report a diff and save a diff image but never
-  fail the build** — a pixel gate on cross-machine font rendering would just be flaky.
+- **Hard gate — the gravemite.** A stationary turret with no physics on the shot, stable to ~1.9%
+  across machines. A regression here **fails the build** — this is the live "is the creature
+  de-boxed / did a sprite break" coverage.
+- **Advisory — everything else** (title, HUD, and the three characters). Reported with a diff image
+  but **never fails the build**. Two different reasons:
+  - *title / HUD*: dominated by the arcade webfont (Press Start 2P from Google Fonts), which
+    rasterises a few % differently per machine (CI vs dev: 6.8% / 4.7%).
+  - *characters*: the player spawns mid-air and physics-settles, so a shot at a fixed time catches a
+    slightly different pose depending on the machine's timing — in CI the **same unchanged game**
+    swung a character surface **0 % → 4.4 %** between runs, tripping a hard gate on nothing. They're
+    advisory until the determinism fix lands.
 
-This costs no coverage: the res=3 HUD break that motivated the whole gate *also* blows up the
-character surface (6.99%), so the hard gate still catches it. To promote title/HUD to hard gates,
-**self-host the arcade font in the game** (base64 `@font-face`, drop the Google Fonts `<link>`) —
-that makes the text render identically everywhere and, as a bonus, kills the serif-fallback flash
-users see on a slow first load. A good first change to dogfood through this very staging flow.
+**Follow-ups to promote surfaces back to hard gates** (both good first changes to dogfood through
+this very staging flow):
+
+1. *Characters* — settle-and-freeze the player before the shot (poll `__NQ_DBG` until grounded,
+   then `__NQ_PAUSE`), regenerate baselines, re-tighten the threshold. Removes the pose variance so
+   the character hard gate is reliable.
+2. *title / HUD* — **self-host the arcade font** (base64 `@font-face`, drop the Google Fonts
+   `<link>`); text then renders identically everywhere, and as a bonus the serif-fallback flash on a
+   slow first load goes away.
+
+A res=3-class break still can't slip silently even while these are advisory — it lights up title,
+HUD, and all three character surfaces at once, every one of them imaged for review.
 
 CI runs the gate on `develop`, `main`, and PRs (`.github/workflows/syntax-check.yml`,
 `visual-regression` job). On a failure it uploads the diff images as a build artifact for the owner
