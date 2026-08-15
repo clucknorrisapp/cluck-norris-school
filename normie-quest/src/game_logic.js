@@ -5566,7 +5566,14 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     try{ if(typeof window!=='undefined') window.__NQ_PTEX=animKey; }catch(e){}   // live player texture (tests/QA)
 
     // --- procedural animation: bob when walking, lean+stretch in air, breathe when idle ---
-    var bs=this.baseScale*this.pscale.v;
+    // Skins render bigger at base (heroPx 48 vs Normie's 36), but powerups MULTIPLY the base: a
+    // powered skin was 48*1.55=74px vs Normie's 36*1.55=56px and stopped clearing the overhead
+    // blocks — that 74px is the size only WHALE (2.05) used to reach (owner 2026-08-15). Cap the
+    // skin's POWERED growth to track Normie's (36/48=0.75), never below the 48px base, so regular
+    // powerups clear the blocks and only whale doesn't — same as before the skins were enlarged.
+    var bs = this.charPrefix
+      ? this.baseScale * Math.max(1, (36/48) * this.pscale.v)
+      : this.baseScale * this.pscale.v;
     if(mw){
       p.setRotation(Math.sin(now/260)*0.05); p.setScale(bs);   // sit upright on the whale, gentle sea-swell sway
     } else if(this.crouching){
