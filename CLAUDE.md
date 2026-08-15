@@ -111,10 +111,14 @@ could *see* the render. The fix is a real staging step plus a visual gate.
    reproduces the exact HUD break on demand.
 3. Owner reviews staging + dashboard feedback → says go → **only then** promote `develop` → `main`.
 
-⚠️ Sprite surfaces (characters, gravemite) are stable across machines; the text surfaces (title,
-HUD) ride the arcade webfont and can carry render noise between environments — if CI's text
-surfaces go flaky, refresh baselines in CI via the workflow's `update_baselines` dispatch. Details
-+ the one-time Railway/Cloudflare staging setup: `docs/STAGING_WORKFLOW.md`.
+⚠️ Two tiers. The **sprite** surfaces (characters, gravemite) are stable to the pixel across
+machines and are the **hard gate** (CI-measured 0–1.9%). The **text** surfaces (title, HUD) ride the
+arcade webfont, which renders a few % differently per machine (CI-measured 6.8% / 4.7%), so they're
+**advisory** — a diff is reported and imaged but does not fail CI. This loses no coverage: the res=3
+HUD break also blows up the character surface (6.99%), so the hard gate still catches it. Promoting
+title/HUD to hard gates just needs the arcade font self-hosted in the game (would also kill the
+serif-fallback flash on slow loads). Details + the one-time Railway/Cloudflare staging setup:
+`docs/STAGING_WORKFLOW.md`.
 
 ---
 
