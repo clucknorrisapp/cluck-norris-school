@@ -3307,21 +3307,22 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var lo=this._arenaL+16, hi=this._arenaR-16;
     if(b.x<lo){ b.x=lo; if(b.setVelocityX) b.setVelocityX(0); }
     else if(b.x>hi){ b.x=hi; if(b.setVelocityX) b.setVelocityX(0); }
-    // Below the floor means he is already down a pit — put him back on solid ground rather than
-    // let the level become uncompletable.
-    // GRAVITY-ONLY: the wormhole boss BURROWS, parking itself below the ground line on purpose
-    // (downY = GY + displayHeight/2 + 6, which clears this threshold), and hoisting it out
-    // mid-burrow would break its own fight. A boss the physics engine never pulls down cannot
-    // fall into a pit in the first place, so gating on allowGravity is both safe and exact.
-    if(b.body.allowGravity && b.y>GY+34){ b.setPosition(Phaser.Math.Clamp(b.x,lo,hi), GY-44); if(b.setVelocity) b.setVelocity(0,0); }
-    // A hard LEAP-landing can TUNNEL a gravity boss a couple dozen px straight through the floor at
-    // certain x (1-3's Rug King: a leap that lands near x=6060 punches ~25px down and WEDGES there) —
-    // too shallow for the deep-fall snap above (b.y never reaches GY+34), so it sat permanently
-    // buried, not jumping, its body still overlapping and KILLING the player. Once such a boss has
-    // SETTLED (near-zero vy, so an in-flight leap or its landing arc is never disturbed) with its
-    // feet below the floor line, lift it back onto solid ground. The floor at that x is solid, so it
-    // re-lands cleanly with no oscillation.
-    else if(b.body.allowGravity && b.body.bottom>GY+6 && Math.abs(b.body.velocity.y)<30){ b.setPosition(Phaser.Math.Clamp(b.x,lo,hi), GY-44); if(b.setVelocity) b.setVelocity(0,0); }
+    // FLOOR CLAMP (gravity bosses only). The wormhole BURROWS below the ground on purpose and has
+    // allowGravity=false, so it is excluded — as is any never-falling flyer. A gravity boss's arena
+    // floor is flat at GY, so its feet must never cross below it. Two ways they did:
+    //   • a hard LEAP-landing at a low frame-rate punched the boss a whole tile through the floor —
+    //     Arcade separates a body that crossed a floor tile's CENTRE out the FAR side, so it dropped
+    //     onto the SECOND floor row at GY+TILE and WEDGED there permanently ("not jumping, going into
+    //     the ground"), body still overlapping and KILLING the player (game-over: BOSS TOUCH);
+    //   • or it was shoved / fell into a pit and kept dropping.
+    // Correct ANY penetration the instant it happens: set the feet exactly on the surface and kill
+    // only the DOWNWARD velocity (an upward leap is untouched). penBoss runs in update() BEFORE the
+    // frame is drawn, so the boss is never RENDERED below the floor — there is no dip at any frame
+    // rate. x is already re-clamped just above. This subsumes the old deep-fall snap-back.
+    if(b.body.allowGravity && b.body.bottom > GY+1){
+      b.y -= (b.body.bottom - GY);
+      if(b.body.velocity.y > 0) b.setVelocityY(0);
+    }
   },
   startBoss:function(){
     if(this.bossStarted) return; this.bossStarted=true; this.boss=true; this.bossHP=3;
