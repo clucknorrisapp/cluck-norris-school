@@ -218,6 +218,15 @@ _audioSession();
 function _unlockAudio(){ _audioSession();   // re-assert: iOS can reset the category across an interruption (call, alarm, route change)
   try{ var c=_ac(); if(!c) return; if(_acDead(c)) _acResume(c);
   var o=c.createOscillator(), g=c.createGain(); g.gain.value=0.00008; o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime+0.03);   // silent blip fully unlocks iOS
+  // RESTART the music on this gesture, not just the CONTEXT. Leaving the tab suspends the shared
+  // context AND pauses the streamed track (or clears the synth's `cur`); the tab-return
+  // visibilitychange handler calls MUSIC.resume() but with NO user gesture, which the browser blocks
+  // — and a paused media element only replays inside a gesture. So resuming the context alone left
+  // the game SILENT after leaving and coming back, unless the 10s idle auto-pause had fired (only
+  // then did resumeGame restart it). This gesture is a guaranteed restart point. Idempotent when
+  // already playing; called synchronously so curEl.play() keeps the gesture. This is the fix for
+  // "music/sound won't come back after switching away from the browser".
+  try{ if(typeof MUSIC!=='undefined' && MUSIC && MUSIC.resume) MUSIC.resume(); }catch(e){}
   // Decode the power-up sample AFTER the unlock, off the gesture's critical path (a deferred timer),
   // so nothing about the sample can interfere with iOS's finicky unlock heuristic (which gates ALL sound).
   try{ setTimeout(_loadSfx,0); }catch(e){}
@@ -458,7 +467,7 @@ var MUSIC=(function(){
     muted:function(){ return muted; },
     setVol:function(s){ musScale=Math.max(0,Math.min(1,s)); if(gain) gain.gain.value=muted?0:0.06*musScale; if(curEl) fade(curEl,muted?0:effVol(),120); try{ localStorage.setItem('nqMusVol',String(musScale)); }catch(e){} },
     getVol:function(){ return musScale; },
-    state:function(){ return { want:want, streaming:streaming, missing:Object.keys(missing), channel:channel, elGain:elVolNow(curEl), wired:!!(curEl&&curEl._g), scale:musScale }; }   // observability / tests
+    state:function(){ return { want:want, streaming:streaming, missing:Object.keys(missing), channel:channel, elGain:elVolNow(curEl), wired:!!(curEl&&curEl._g), scale:musScale, elPaused:(curEl?!!curEl.paused:null), elTime:(curEl?+(curEl.currentTime||0).toFixed(2):null), ctx:(ctx?ctx.state:null) }; }   // observability / tests — elPaused/elTime/ctx expose the exact "did audio come back after the tab" state
   };
 })();
 try{ if(typeof window!=='undefined') window.__NQ_MUSIC=MUSIC; }catch(e){}
