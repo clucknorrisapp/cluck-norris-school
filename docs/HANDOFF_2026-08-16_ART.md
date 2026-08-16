@@ -1,5 +1,41 @@
 # HANDOFF — Normie Quest boss art (2026-08-16)
 
+> ## ✅ DONE — this handoff was executed on 2026-08-16. Read this block before the rest.
+>
+> Owner picked: **KOL `d4159eae`**, **Custodian `f45afbbb`**, **Gravemite `fd6b8729`** (the armoured
+> parasite), and **left Wen Moon alone**. All three plates are keyed, trimmed, encoded and built.
+>
+> **Three corrections to the body of this document — it was wrong on each:**
+>
+> 1. ⚠️ **`cut_wenmoon.b64` is NOT "cropped at the HIPS".** Decode it and look at the bottom: full
+>    legs, full feet, individual toes, flush with the canvas edge. §2 stated the crop as fact and it
+>    is the *same* mistake §2 warns about two lines later for `cut_troll`. The sprite is untouched.
+> 2. ⚠️ **The Custodian is NOT on the generic gravity-boss path.** §4 says to re-tune L3748 and L3317.
+>    `ceoboss` is served by its own `startCeoBoss`, which §4 lists under "other bosses, untouched".
+>    Editing only the two named sites would have left the Custodian sunk.
+> 3. ⚠️ **Rug King's art never changed**, so L3317 needed no re-tune *for the swap* — but it had the
+>    same latent sink as everything else, so it got the same fix.
+>
+> **The real bug was wider than "the new art is taller".** The body box bottom sat at 0.14+0.82=**96%**
+> of the texture while every boss plate is trimmed to **100%** content. So *every* gravity boss was
+> already sinking by 4% of its display height — measured: KOL 2.08px, Custodian 2.24px, Tom 3.12px,
+> Shark 3.84px, Sand Lord 4.24px, Rug King 2.88px. Body bottoms are now **1.00**.
+> The one exception is the **GHOST GALLEON**, whose plate is deliberately 78% content because it
+> floats; it declares `bossBodyBot:0.96` on its level def and is preserved bit-for-bit.
+>
+> Verified: all six ground bosses `feet == GY (246)`, delta 0. Ghost Galleon unchanged at +4.48.
+> All seven still stompable (`__NQ_STOMPTEST`). Geometry check PASS. Visual gate: only
+> `scary-gravemite` moved (38%, intentional) and was re-approved; `title.png` was deliberately NOT
+> re-approved because its 1.4% delta is the known per-machine arcade-font noise, not this change.
+> The grounding shadow (`_shadow`) is deleted — zero references remain.
+>
+> New tooling: **`node normie-quest/test/nq-boss-ground.cjs <baseUrl>`** measures every boss's feet
+> against `GY` and exits non-zero on a mismatch, plus a `window.__NQ_BOSSBODY()` hook exposing the
+> body-vs-texture geometry. Use it after ANY boss art swap. It is not wired into CI — owner's call.
+>
+> Also note: the four `hf_20260816_154624_*` KOL alternates listed in §2 are **unusable** — they were
+> generated on a grey background, so the chroma key scores zero pixels on them.
+
 **Start this session in the `CLKN big deal` environment (`env_01St75utQwgdH4Zi8i2BPHfJ`).**
 Everything below assumes you can reach the internet.
 

@@ -1373,6 +1373,10 @@ var LEVELS=[
     roomLabel:'THE SCARY WORLD',
     bossName:'THE GHOST GALLEON', bossSub:'THE BIG BIG MONSTER OF THE DEEP — STOMP IT x5',
     bossTex:'ghostship', bossScale:112, bossHits:5, bossShillMs:1500, bossAttack:'ship',
+    // the galleon FLOATS — its hull ends at 78% of the plate, the rest is deliberate air. Keep the
+    // body bottom where it has always been (0.96) instead of the trimmed-art default of 1.00, or
+    // the ship rises another 4% of its height off the water.
+    bossBodyBot:0.96,
     bossColor:'#7af0a0', bossGlowHex:0x4de87a,
     bossTaunts:['YARR HARR HARR','ALL ABOARD... FOREVER','THE SEA KEEPS WHAT IT TAKES','NO ESCAPE, LANDLUBBER','YER TREASURE BE MINE','DOWN TO DAVY JONES','THE CREW NEVER LEFT'],
     gaps:[[700,772],[1380,1500],[2060,2156],[2720,2816],[3380,3500]],
@@ -1994,6 +1998,30 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
              if(!b) return null;
              b.setPosition(b.x+(dx||0), (dy!=null?dy:b.y)); if(b.setVelocity) b.setVelocity(0,0);
              return {x:Math.round(b.x), y:Math.round(b.y)};
+           }catch(e){ return null; } };
+           // Boss body vs texture geometry — the numbers you need to tell "hovering" from "sunk"
+           // apart from "the art has bottom margin". Bosses are scaled by HEIGHT, so the physics
+           // body's bottom edge only lands on the floor when its fraction of the texture matches
+           // where the art's opaque content actually ends. Returns the raw terms so a harness can
+           // do that arithmetic instead of guessing:
+           //   feet     — sprite's visible bottom in world px (should equal GY when grounded)
+           //   bodyBot  — physics body's bottom in world px (what actually rests on the floor)
+           //   botFrac  — (body.offset.y+body.height)/frameH : where the body bottom sits in the texture
+           window.__NQ_BOSSBODY=function(){ try{
+             var b=(_sc.rugking&&_sc.rugking.active)?_sc.rugking:((_sc.worm&&_sc.worm.active)?_sc.worm:null);
+             if(!b) return null; var f=b.frame, bd=b.body;
+             return { tex:(b.texture&&b.texture.key)||null,
+               frameW:f?f.width:null, frameH:f?f.height:null,
+               scaleX:+b.scaleX.toFixed(5), scaleY:+b.scaleY.toFixed(5),
+               dispW:+b.displayWidth.toFixed(2), dispH:+b.displayHeight.toFixed(2),
+               x:+b.x.toFixed(2), y:+b.y.toFixed(2),
+               originX:b.originX, originY:b.originY,
+               feet:+(b.y+b.displayHeight*(1-b.originY)).toFixed(2),
+               bodyW:bd?+bd.width.toFixed(2):null, bodyH:bd?+bd.height.toFixed(2):null,
+               offX:bd?+bd.offset.x.toFixed(2):null, offY:bd?+bd.offset.y.toFixed(2):null,
+               bodyTop:bd?+bd.top.toFixed(2):null, bodyBot:bd?+bd.bottom.toFixed(2):null,
+               botFrac:(bd&&f)?+(((bd.offset.y+bd.height)/f.height)).toFixed(4):null,
+               onFloor:bd&&bd.blocked?!!bd.blocked.down:null };
            }catch(e){ return null; } };
            window.__NQ_GRANTKEY=function(){ try{ if(_sc.over||_sc.hasKey) return false; _sc.hasKey=true; if(_sc.keyIcon) _sc.keyIcon.setAlpha(1); if(_sc.key){ _sc.tweens.killTweensOf(_sc.key); _sc.key.destroy(); _sc.key=null; } _sc.flash('LAB: KEY GRANTED','#ffd23f'); return true; }catch(e){ return false; } };
            window.__NQ_GRANTRESERVE=function(item){ try{ return !!_sc.grantReserve(item); }catch(e){ return false; } };
@@ -3268,16 +3296,10 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       b.y -= (b.body.bottom - GY);
       if(b.body.velocity.y > 0) b.setVelocityY(0);
     }
-    // GROUND SHADOW. The boss cutouts are illustrated from the thighs UP — no feet — so their legs
-    // meet the floor line with nothing below and read as "sunk into the pavement" next to Normie,
-    // whose art HAS feet. A soft contact shadow anchors a gravity boss to the ground so it reads as
-    // STANDING rather than buried (the position was never wrong; the sprite has no feet to show). It
-    // tracks x and stays pinned to the floor even mid-leap; a flying boss (allowGravity=false) casts
-    // none. Created once, here; freed in bossDefeat.
-    if(b.body.allowGravity){
-      if(!b._shadow) b._shadow=this.add.ellipse(b.x, GY+3, Math.max(22,Math.round(b.displayWidth*0.72)), 9, 0x000000, 0.36).setDepth(6);
-      b._shadow.x=b.x; b._shadow.setVisible(b.visible);
-    } else if(b._shadow){ b._shadow.setVisible(false); }
+    // (The ground shadow that used to live here was a mitigation for boss cutouts that had no feet:
+    // it faked a contact point so a legless plate didn't read as buried. The plates now carry real
+    // feet and the body box ends at the texture bottom, so the bosses genuinely stand on the floor
+    // and the prop is gone — 2026-08-16.)
   },
   startBoss:function(){
     if(this.bossStarted) return; this.bossStarted=true; this.boss=true; this.bossHP=3;
@@ -3314,7 +3336,10 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     self.makeArena(dx-340, dx+40);
     // spawn the Rug King across the room, facing the player, INERT until the intro ends
     var k=this.rugking=this.physics.add.sprite(dx-60, GY-54, 'rugking');
-    k.setScale(72/k.height); k.body.setSize(k.width*0.62,k.height*0.82).setOffset(k.width*0.19,k.height*0.14);   // was 48 — smallest boss in the game and the FIRST one players meet; bumped so he reads as a proper boss
+    // 0.14 + 0.86 = 1.00: the body's BOTTOM edge must sit at the bottom of the texture, because the
+    // boss plates are trimmed to their opaque content (feet at 100%). Any shortfall is exactly how
+    // far the boss sinks into the floor — the old 0.82 left 4% of the display height below ground.
+    k.setScale(72/k.height); k.body.setSize(k.width*0.62,k.height*0.86).setOffset(k.width*0.19,k.height*0.14);   // was 48 — smallest boss in the game and the FIRST one players meet; bumped so he reads as a proper boss
     k.setCollideWorldBounds(true); k.dir=-1; k.invuln=true; k.setDepth(7);
     var bg2=this.addGlow(k,0xff2d55,5); if(bg2) this.tweens.add({targets:bg2,outerStrength:12,duration:520,yoyo:true,repeat:-1,ease:'Sine.inOut'});
     this.physics.add.collider(k, this.platforms);
@@ -3745,7 +3770,13 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.player.setPosition(dx-260, GY-40); this.player.setVelocity(0,0);
     self.makeArena(dx-340, dx+40);
     var k=this.rugking=this.physics.add.sprite(dx-60, GY-54, bTex);   // stored in rugking = generic melee-boss handle
-    k.setScale(bScale/k.height); k.body.setSize(k.width*0.60,k.height*0.82).setOffset(k.width*0.20,k.height*0.14);
+    // Body BOTTOM as a fraction of the texture height. The plates are trimmed to their opaque
+    // content, so for a boss that stands on the ground this is 1.00 — the body bottom IS the feet,
+    // and anything less sinks the boss by (1-bBot)*displayHeight. Levels whose art deliberately
+    // carries bottom margin (the GHOST SHIP floats, its hull ends at 78% of the plate) override it
+    // with bossBodyBot so they keep hanging where the art intends.
+    var bBot=(d.bossBodyBot!=null?d.bossBodyBot:1.00);
+    k.setScale(bScale/k.height); k.body.setSize(k.width*0.60,k.height*(bBot-0.14)).setOffset(k.width*0.20,k.height*0.14);
     k.setCollideWorldBounds(true); k.dir=-1; k.invuln=true; k.setDepth(7);
     if(d.bossTintHex!=null) k.setTint(d.bossTintHex);   // re-skin the shared KOL sprite for a themed boss
     var bg2=this.addGlow(k,bGlow,5); if(bg2) this.tweens.add({targets:bg2,outerStrength:12,duration:520,yoyo:true,repeat:-1,ease:'Sine.inOut'});
@@ -3890,7 +3921,10 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.player.setPosition(dx-260, GY-40); this.player.setVelocity(0,0);
     self.makeArena(dx-340, dx+40);
     var k=this.rugking=this.physics.add.sprite(dx-60, GY-56, 'ceoboss');   // stored in rugking = generic melee-boss handle
-    k.setScale(56/k.height); k.body.setSize(k.width*0.58,k.height*0.82).setOffset(k.width*0.21,k.height*0.14);
+    // 0.14 + 0.86 = 1.00 — body bottom at the texture bottom, i.e. on the Custodian's shoes.
+    // See the note in startKolBoss: the plate is trimmed to content, so a body that stops short
+    // buries the boss's feet by that fraction of its display height.
+    k.setScale(56/k.height); k.body.setSize(k.width*0.58,k.height*0.86).setOffset(k.width*0.21,k.height*0.14);
     k.setCollideWorldBounds(true); k.dir=-1; k.invuln=true; k.setDepth(7);
     var bg2=this.addGlow(k,0x66ddff,5); if(bg2) this.tweens.add({targets:bg2,outerStrength:12,duration:520,yoyo:true,repeat:-1,ease:'Sine.inOut'});
     this.physics.add.collider(k, this.platforms);
@@ -4552,7 +4586,6 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(nx<LEVELS.length){ this.registry.set('nqCp',nx); this.registry.set('nqCpScore',this.score); } },
   bossDefeat:function(){
     if(this.over) return; this.over=true; var k=this.rugking, self=this;
-    if(k && k._shadow){ k._shadow.destroy(); k._shadow=null; }   // boss is flying off on defeat — drop its ground shadow
     // difficulty telemetry: boss arenas end HERE, never via key+door levelClear — without this
     // every boss level showed deaths but permanently 0 clears (garbage deathsPerClear).
     nqTele('clear',{world:this.def&&this.def.name,t:Math.round((Date.now()-(this._lvStartAt||Date.now()))/1000),deaths:this._lvDeaths||0,score:this.score});

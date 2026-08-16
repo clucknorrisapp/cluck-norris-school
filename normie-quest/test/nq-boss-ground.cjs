@@ -1,0 +1,99 @@
+#!/usr/bin/env node
+/**
+ * nq-boss-ground — measure where each boss's FEET actually land.
+ *
+ * The bosses are scaled by HEIGHT (`setScale(bScale/k.height)`) and their physics body is a
+ * fraction of that height, so the sprite's visible bottom only coincides with the floor when the
+ * body box bottom is at the same fraction of the texture as the art's content bottom. Swap in a
+ * plate with a different amount of bottom margin and the boss silently hovers or sinks.
+ *
+ * This asks the running game where the boss sprite really is:
+ *   feet = bossSprite.y + bossSprite.h/2      (Phaser origin is centred)
+ * and reports the delta against GY (246), the ground's top surface.
+ *
+ *   node normie-quest/test/nq-boss-ground.cjs [baseUrl] [--res N]
+ *
+ * Positive delta = SUNK below the floor. Negative = HOVERING above it.
+ */
+const path = require('path');
+const { chromium } = require(path.join(__dirname, '..', '..', 'node_modules', 'playwright-core'));
+const fs = require('fs');
+
+const BASE = process.argv.find(a => /^https?:\/\//.test(a)) || 'http://localhost:3111';
+const GY = 246;
+const TOLERANCE = 1.0;                       // px of slack before we call it wrong
+const LAUNCH_ARGS = ['--no-sandbox', '--disable-dev-shm-usage',
+  '--disable-background-timer-throttling', '--disable-renderer-backgrounding'];
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// idx -> label. Every boss that resolves through startKolBoss / startCeoBoss / the Rug King
+// fall-through, i.e. everything whose grounding the shared body constants control.
+const BOSSES = [
+  { idx: 2,  label: 'Rug King (1-3)',      tex: 'rugking' },
+  { idx: 8,  label: 'Scammy KOL (3-3)',    tex: 'scammykol' },
+  { idx: 11, label: 'The Custodian (4-3)', tex: 'ceoboss' },
+  { idx: 84, label: 'Tom (TOMSTURF)',      tex: 'tom' },
+  { idx: 85, label: 'Shark (BEACH)',       tex: 'shark' },
+  { idx: 86, label: 'Sand Lord (SANDCASTLE)', tex: 'sandlord' },
+  { idx: 89, label: 'Ghost Ship (GHOSTSHIP)', tex: 'ghostship' },
+];
+
+function chromePath() {
+  const root = process.env.PLAYWRIGHT_CHROMIUM_PATH || process.env.PLAYWRIGHT_BROWSERS_PATH || '/opt/pw-browsers';
+  if (fs.existsSync(root) && fs.statSync(root).isFile()) return root;
+  try {
+    for (const d of fs.readdirSync(root)) {
+      if (!/^chromium-/.test(d)) continue;
+      const p = path.join(root, d, 'chrome-linux', 'chrome');
+      if (fs.existsSync(p)) return p;
+    }
+  } catch (e) {}
+  return undefined;
+}
+
+async function measure(page, b) {
+  await page.goto(BASE + '/normie-quest-x7-lab', { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction('!!window.__NQ_STARTLEVEL', { timeout: 30000 });
+  await sleep(900);
+  await page.evaluate(i => window.__NQ_STARTLEVEL(i, 0), b.idx);
+  await sleep(1400);
+  const forced = await page.evaluate(() => window.__NQ_FORCEBOSS && window.__NQ_FORCEBOSS());
+  await sleep(1200);
+  // headless never settles a forced boss's fall — drop it onto the floor explicitly
+  await page.evaluate(() => window.__NQ_SHOVEBOSS && window.__NQ_SHOVEBOSS(0, 222));
+  await sleep(1600);
+  const g = await page.evaluate(() => window.__NQ_BOSSBODY && window.__NQ_BOSSBODY());
+  if (!g) return { ...b, ok: false, err: `no boss sprite (forced=${forced})` };
+  return { ...b, ok: true, forced, ...g, delta: +(g.feet - GY).toFixed(2) };
+}
+
+(async () => {
+  const browser = await chromium.launch({ executablePath: chromePath(), args: LAUNCH_ARGS });
+  const ctx = await browser.newContext({ viewport: { width: 1194, height: 834 }, deviceScaleFactor: 2 });
+  const page = await ctx.newPage();
+  const rows = [];
+  for (const b of BOSSES) {
+    try { rows.push(await measure(page, b)); }
+    catch (e) { rows.push({ ...b, ok: false, err: e.message }); }
+  }
+  await browser.close();
+
+  console.log(`\nboss feet vs GY=${GY}   (+ = sunk below floor, - = hovering)\n`);
+  console.log('  ' + 'boss'.padEnd(26) + 'tex'.padEnd(12) + 'frame'.padEnd(10) + 'disp w×h'.padEnd(12)
+    + 'botFrac'.padEnd(9) + 'bodyBot'.padEnd(9) + 'feet'.padEnd(9) + 'delta');
+  let bad = 0;
+  for (const r of rows) {
+    if (!r.ok) { console.log('  ' + r.label.padEnd(26) + 'ERROR: ' + r.err); bad++; continue; }
+    const flag = Math.abs(r.delta) <= TOLERANCE ? 'ok'
+               : (r.delta > 0 ? `SUNK ${r.delta}px` : `HOVER ${Math.abs(r.delta)}px`);
+    if (Math.abs(r.delta) > TOLERANCE) bad++;
+    console.log('  ' + r.label.padEnd(26) + String(r.tex).padEnd(12)
+      + `${r.frameW}×${r.frameH}`.padEnd(10)
+      + `${r.dispW}×${r.dispH}`.padEnd(12)
+      + String(r.botFrac).padEnd(9) + String(r.bodyBot).padEnd(9)
+      + r.feet.toFixed(1).padEnd(9)
+      + (r.delta > 0 ? '+' : '') + r.delta + '   ' + flag);
+  }
+  console.log('');
+  process.exit(bad ? 1 : 0);
+})();
