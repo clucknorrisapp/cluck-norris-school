@@ -251,6 +251,8 @@
     bar.appendChild(btn); bar.appendChild(stopBtn);
     document.body.appendChild(bar);
     render();
+    // lift above any bottom-anchored composer (helper lives in cluck-nav.js, which loaded us)
+    if (window.__clknDockFloat) window.__clknDockFloat(bar);
   }
   // voices load async on some browsers — harmless to register
   try { synth.onvoiceschanged = function () {}; } catch (_) {}
