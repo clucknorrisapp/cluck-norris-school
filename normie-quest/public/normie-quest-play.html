@@ -106,12 +106,19 @@
 var W=480, H=270, TILE=24, GY=H-TILE;      // GY = ground top surface
 // Internal render resolution (supersampling): backing buffer = W*RES x H*RES and every scene camera
 // zooms RES, so the VISIBLE world (W x H units) and every gameplay coord are UNCHANGED — only
-// sharpness scales. FIXED AT 2x (960x540), the game's original look.
-// The 2026-08-15 experiment (adaptive/forced 3x + a ?res= URL switch) is REVERTED (2026-08-16, owner
-// ask: bosses/backgrounds "looked off"). 3x broke the scrollFactor(0) HUD pin and shimmered the
-// 72x108 skins; at 2x the switch changed nothing on screen but left a way for a device — or a stale
-// cached URL — to land on the broken 3x. No override now: the resolution is 2x, period.
-var RES=2;
+// sharpness scales. 3x = 1440x810.
+//
+// ⚠️ HISTORY, because this knob was blamed for a bug it didn't cause. The 2026-08-15 jump to 3x DID
+// break the screen: the HUD slid off and every world backdrop showed a tighter crop. It was reverted
+// to 2x on 2026-08-16 and the blame stuck to RES. It was never RES. Both symptoms were one bug —
+// screen-pinned objects were placed with hardcoded anchors that are only correct at exactly 2x (see
+// SCREEN_RECT below). With that fixed, framing is pixel-identical at RES 1, 2 and 3 (verified by
+// screenshot), so RES now does only what it says: sharpness.
+// Raised to 3x on 2026-08-16 on the owner's ask — the characters read noticeably cleaner.
+// Cost: 2.25x the fill rate vs 2x. If a low-end phone ever struggles, this is the one number to drop;
+// nothing else depends on it. There is deliberately NO ?res= URL override (a stale cached URL must
+// not be able to pin a device to a different resolution).
+var RES=3;
 // Clean, highly-legible UI font for menus / interstitials (the pixel fonts read as blocky
 // once scaled 2x by the scene cameras). UIRES renders text at higher DPI so it stays crisp
 // despite pixelArt:true. Big arcade titles keep 'Press Start 2P'; body text uses this.
