@@ -31,7 +31,13 @@ does not tell you how to write software; use your judgement for that.
 > the boss body box ended at 96% of the texture while every plate is trimmed to 100% content, so
 > every gravity boss sank by 4% of its display height. Body bottoms are now 1.00 and all six ground
 > bosses measure feet exactly on `GY`. Regression guard: `node normie-quest/test/nq-boss-ground.cjs
-> <baseUrl>`. The powerup-speed tuning is still open.
+> <baseUrl>`. The speed tuning landed 2026-08-16 (owner's numbers: base 192, boost 225 — see the
+> retune commit); the moon world's two 280px showpiece gaps were trimmed to 240px to stay makeable.
+> ⚠️ iOS audio has FOUR dead states, not two: 'suspended', WebKit's 'interrupted', 'closed' (memory
+> pressure — terminal, needs a NEW context), and the ZOMBIE (state says 'running', currentTime
+> frozen, zero output — the state field LIES; only the clock is honest). The rebuild machinery in
+> game_logic.js handles all four; don't simplify it back to a state check. The pause card shows a
+> live `audio:` line for field diagnosis on iPads.
 > ⚠️ Bosses are scaled by HEIGHT, so **swapping in a plate with different bottom margin silently
 > re-breaks this.** A floating boss must declare `bossBodyBot` on its level def (the GHOST GALLEON
 > does); anything that stands on the ground leaves it at the 1.00 default.
