@@ -143,3 +143,28 @@ recorded; the shipping Rug King is a different composition and, unlike the logge
 time. Regenerating at **2:3 with explicit full-body framing** is the fix — hence the v3 set above.
 Note also that this repo's git history begins at the 2026-08-13 import (55 commits; the first adds
 436 files), so "unchanged since the git baseline" proves nothing about anything before that date.
+| 2026-08-16 | GRAVEMITE replacement A — burrowing grave-ghoul, bone skull + red pinprick eyes, claws raised | nano_banana_pro | 44a88240-01b2-47bf-939b-3d28d2c333c8 | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260816_160336_44a88240-01b2-47bf-939b-3d28d2c333c8.png | PENDING owner pick. **0 detached pieces** (measured) — the whole point: the old plate had green pellets baked around it that read as projectiles. |
+| 2026-08-16 | GRAVEMITE replacement B — armoured grave-parasite, single blood-red eye, lamprey mouth | nano_banana_pro | fd6b8729-1dc4-4a0a-bdc5-bfaf0a43935d | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260816_160336_fd6b8729-1dc4-4a0a-bdc5-bfaf0a43935d.png | PENDING owner pick. 0 detached pieces. |
+| 2026-08-16 | GRAVEMITE replacement C — reared grub, four-way fanged jaw, ring of red eyes | nano_banana_pro | 214ec915-e99e-4cfd-9bc1-8dc1de6898ae | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260816_160336_214ec915-e99e-4cfd-9bc1-8dc1de6898ae.png | PENDING owner pick. 0 detached pieces. |
+| 2026-08-16 | WEN MOON full-body A — cosmic titan, crescent standard, moon-rock boots | nano_banana_pro | 30353e14-e1b3-4ee0-93e3-bc1be80caa55 | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260816_160336_30353e14-e1b3-4ee0-93e3-bc1be80caa55.png | PENDING owner pick — `cut_wenmoon.b64` is cropped at the HIPS. |
+| 2026-08-16 | WEN MOON full-body B — swaggering bruiser, fist raised | nano_banana_pro | 3406d588-44ba-4ddf-b37c-a0e7c8b7fda9 | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260816_160336_3406d588-44ba-4ddf-b37c-a0e7c8b7fda9.png | PENDING owner pick |
+| 2026-08-16 | CUSTODIAN full-body B — full trouser legs + brogues | nano_banana_pro | f45afbbb-76e0-4504-863c-3f841b87f436 | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260816_160336_f45afbbb-76e0-4504-863c-3f841b87f436.png | PENDING owner pick |
+
+**2026-08-16 FULL SPRITE AUDIT — every `cut_*` and `scary_*` asset measured, then eyeballed on a
+contact sheet** (`node audit.cjs cut_` prints opaque-content bounds per asset; the measurement alone
+is NOT sufficient — a sprite whose content reaches 100% of its canvas can still be a mid-leg CROP,
+which is exactly what `wenmoon` is. Measure AND look.)
+
+BROKEN — replacements generated above:
+- `cut_scammykol.b64` — cropped at the thighs.
+- `cut_ceoboss.b64` — legs stop at the shins, no shoes.
+- `cut_wenmoon.b64` — cropped at the HIPS. Measures 100.0% because the crop runs off the canvas edge.
+- `scary_gravemite.b64` — not a crop: it is a pile of dirt clods with ~14 green pellet shapes baked
+  around it that read as projectiles, colliding with the red bullets it actually fires. Owner asked
+  for it scrapped and redesigned, 2026-08-16.
+
+CORRECT — verified feet present and art intact, do NOT regenerate: `boss` (Rug King), `troll`
+(95.6% is bottom MARGIN, not a crop — an earlier pass wrongly flagged it), `golem`, `burnlord`,
+`chairman`, `coresentinel`, `diamondtitan`, `saylor`, `stormherald`, `sandlord`, `rugking`, `tom`.
+NO FEET BY DESIGN: `wyrm`, `leviathan`, `shark`, `squid`, `nautilus`, `dirtywhale`, `megawhale`,
+`blackswan`, `mevdragon`, `greatbear`, `reaper`, `marketmaker`, `satwarden`, `sentry`.
