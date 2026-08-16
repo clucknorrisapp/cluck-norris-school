@@ -78,6 +78,8 @@
     document.addEventListener("click", function () { menu.style.display = "none"; });
     wrap.appendChild(menu); wrap.appendChild(btn);
     document.body.appendChild(wrap);
+    // lift above any bottom-anchored composer (helper lives in cluck-nav.js, which loaded us)
+    if (window.__clknDockFloat) window.__clknDockFloat(wrap);
   }
   function onReady(fn) {
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fn);

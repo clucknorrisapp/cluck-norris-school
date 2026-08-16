@@ -19,6 +19,42 @@
     ra.id = "clkn-read-js"; ra.src = "/read-aloud.js"; ra.defer = true;
     (document.head || document.documentElement).appendChild(ra);
   }
+  // Shared collision-avoidance for the two bottom-pinned floaters (the Listen bar bottom-left,
+  // the language toggle bottom-right). On pages with a bottom-anchored composer (/ask-cluck) the
+  // default bottom:14px lands ON the input row: the Listen pill hid the placeholder's first words
+  // and made the left ~72px of the field untappable, and the 🌐 pill sat on the send button
+  // (found on iPad, 2026-08-16). One helper here, called by both injectors — NOT copied into each
+  // (private copies of shared browser code drifting is how the esc()/WALLETS bugs happened).
+  // Method: reset to the default anchor, measure, and if the floater overlaps any visible form
+  // control it doesn't contain, lift it 10px above the highest one. Re-runs on resize (covers the
+  // on-screen keyboard) and on two delayed passes for late-rendering pages like the React school.
+  window.__clknDockFloat = function (el) {
+    if (!el || el.__clknDocked) return; el.__clknDocked = 1;
+    var DEF = "calc(14px + env(safe-area-inset-bottom,0px))";
+    function fit() {
+      try {
+        el.style.bottom = DEF;                                    // measure from the default anchor
+        var b = el.getBoundingClientRect(); if (!b.width) return;
+        var lift = 0;
+        var els = document.querySelectorAll("input,textarea,select,button,[contenteditable='true']");
+        for (var i = 0; i < els.length; i++) {
+          var e = els[i];
+          if (el.contains(e)) continue;
+          var host = e.closest && e.closest("#clkn-read-bar,#clkn-lang-toggle,#cluck-nav-bar");
+          if (host) continue;
+          var r = e.getBoundingClientRect();
+          if (!r.width || !r.height) continue;
+          var ox = Math.min(b.right, r.right) - Math.max(b.left, r.left);
+          var oy = Math.min(b.bottom, r.bottom) - Math.max(b.top, r.top);
+          if (ox > 0 && oy > 0) lift = Math.max(lift, (window.innerHeight - r.top) + 10);
+        }
+        if (lift) el.style.bottom = lift + "px";                   // r.top already includes the safe area
+      } catch (_) {}
+    }
+    fit();
+    window.addEventListener("resize", fit);
+    setTimeout(fit, 800); setTimeout(fit, 2500);
+  };
   var p = (location.pathname || "").replace(/\/+$/, "");
   // pages that belong to the Tools hub — get an "All Tools" back-link
   var TOOL_PAGES = ["/wallet-xray","/trace","/holders",
