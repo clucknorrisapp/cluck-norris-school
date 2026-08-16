@@ -4,17 +4,41 @@
 var W=480, H=270, TILE=24, GY=H-TILE;      // GY = ground top surface
 // Internal render resolution (supersampling): backing buffer = W*RES x H*RES and every scene camera
 // zooms RES, so the VISIBLE world (W x H units) and every gameplay coord are UNCHANGED — only
-// sharpness scales. FIXED AT 2x (960x540), the game's original look.
-// The 2026-08-15 experiment (adaptive/forced 3x + a ?res= URL switch) is REVERTED (2026-08-16, owner
-// ask: bosses/backgrounds "looked off"). 3x broke the scrollFactor(0) HUD pin and shimmered the
-// 72x108 skins; at 2x the switch changed nothing on screen but left a way for a device — or a stale
-// cached URL — to land on the broken 3x. No override now: the resolution is 2x, period.
-var RES=2;
+// sharpness scales. 3x = 1440x810.
+//
+// ⚠️ HISTORY, because this knob was blamed for a bug it didn't cause. The 2026-08-15 jump to 3x DID
+// break the screen: the HUD slid off and every world backdrop showed a tighter crop. It was reverted
+// to 2x on 2026-08-16 and the blame stuck to RES. It was never RES. Both symptoms were one bug —
+// screen-pinned objects were placed with hardcoded anchors that are only correct at exactly 2x (see
+// SCREEN_RECT below). With that fixed, framing is pixel-identical at RES 1, 2 and 3 (verified by
+// screenshot), so RES now does only what it says: sharpness.
+// Raised to 3x on 2026-08-16 on the owner's ask — the characters read noticeably cleaner.
+// Cost: 2.25x the fill rate vs 2x. If a low-end phone ever struggles, this is the one number to drop;
+// nothing else depends on it. There is deliberately NO ?res= URL override (a stale cached URL must
+// not be able to pin a device to a different resolution).
+var RES=3;
 // Clean, highly-legible UI font for menus / interstitials (the pixel fonts read as blocky
 // once scaled 2x by the scene cameras). UIRES renders text at higher DPI so it stays crisp
 // despite pixelArt:true. Big arcade titles keep 'Press Start 2P'; body text uses this.
 var UIFONT='system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 var UIRES=3;
+
+// ── scrollFactor(0) UNDER A ZOOMED CAMERA — read this before placing ANY screen-pinned object ──
+// scrollFactor(0) stops an object SCROLLING; it does NOT take it out of the camera transform. The
+// camera still scales it about the viewport CENTRE:  screen = half + zoom*(p - half),  half =
+// cam.width/2. So a "0,0 sized cam.width x cam.height" object does NOT fill the screen at zoom>1 —
+// it draws RES times too big, anchored off-screen, leaving only the middle 1/RES of each axis
+// visible. Two real bugs came from exactly this:
+//   • the world backdrop was placed that way, so levels showed a blown-up CROP of the plate —
+//     the centre 1/4 of it at RES=2, the centre 1/9 at RES=3. That is the "backgrounds are zoomed
+//     in" the owner reported, and it is why 3x looked dramatically worse than 2x. (Fixed 2026-08-16.)
+//   • the HUD container was hardcoded at (W/2,H/2), the value that happens to be right ONLY at
+//     RES=2 — which is why raising RES to 3 slid the HUD off-screen.
+// SCREEN_RECT(cam) returns the rect, in scrollFactor-0 coords, that maps to the FULL canvas at any
+// zoom: {x,y,w,h}, where w,h are always the logical W,H. Use it instead of hardcoding — then the
+// render is genuinely resolution-invariant and RES becomes a pure sharpness knob.
+function SCREEN_RECT(cam){ var z=(cam&&cam.zoom)||1, w=cam.width/z, h=cam.height/z;
+  return { x:(cam.width-w)/2, y:(cam.height-h)/2, w:w, h:h }; }
 
 // ⛔ THERE IS NO BURN-TO-PLAY GATE. The old `BURN_GATE` flag and its `Gate` scene were a MOCK —
 // a fake "send 1,000 NORMIE with memo NQ-XXXX" screen with a [SIMULATE BURN CONFIRMED] button that
@@ -1349,6 +1373,10 @@ var LEVELS=[
     roomLabel:'THE SCARY WORLD',
     bossName:'THE GHOST GALLEON', bossSub:'THE BIG BIG MONSTER OF THE DEEP — STOMP IT x5',
     bossTex:'ghostship', bossScale:112, bossHits:5, bossShillMs:1500, bossAttack:'ship',
+    // the galleon FLOATS — its hull ends at 78% of the plate, the rest is deliberate air. Keep the
+    // body bottom where it has always been (0.96) instead of the trimmed-art default of 1.00, or
+    // the ship rises another 4% of its height off the water.
+    bossBodyBot:0.96,
     bossColor:'#7af0a0', bossGlowHex:0x4de87a,
     bossTaunts:['YARR HARR HARR','ALL ABOARD... FOREVER','THE SEA KEEPS WHAT IT TAKES','NO ESCAPE, LANDLUBBER','YER TREASURE BE MINE','DOWN TO DAVY JONES','THE CREW NEVER LEFT'],
     gaps:[[700,772],[1380,1500],[2060,2156],[2720,2816],[3380,3500]],
@@ -1971,6 +1999,30 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
              b.setPosition(b.x+(dx||0), (dy!=null?dy:b.y)); if(b.setVelocity) b.setVelocity(0,0);
              return {x:Math.round(b.x), y:Math.round(b.y)};
            }catch(e){ return null; } };
+           // Boss body vs texture geometry — the numbers you need to tell "hovering" from "sunk"
+           // apart from "the art has bottom margin". Bosses are scaled by HEIGHT, so the physics
+           // body's bottom edge only lands on the floor when its fraction of the texture matches
+           // where the art's opaque content actually ends. Returns the raw terms so a harness can
+           // do that arithmetic instead of guessing:
+           //   feet     — sprite's visible bottom in world px (should equal GY when grounded)
+           //   bodyBot  — physics body's bottom in world px (what actually rests on the floor)
+           //   botFrac  — (body.offset.y+body.height)/frameH : where the body bottom sits in the texture
+           window.__NQ_BOSSBODY=function(){ try{
+             var b=(_sc.rugking&&_sc.rugking.active)?_sc.rugking:((_sc.worm&&_sc.worm.active)?_sc.worm:null);
+             if(!b) return null; var f=b.frame, bd=b.body;
+             return { tex:(b.texture&&b.texture.key)||null,
+               frameW:f?f.width:null, frameH:f?f.height:null,
+               scaleX:+b.scaleX.toFixed(5), scaleY:+b.scaleY.toFixed(5),
+               dispW:+b.displayWidth.toFixed(2), dispH:+b.displayHeight.toFixed(2),
+               x:+b.x.toFixed(2), y:+b.y.toFixed(2),
+               originX:b.originX, originY:b.originY,
+               feet:+(b.y+b.displayHeight*(1-b.originY)).toFixed(2),
+               bodyW:bd?+bd.width.toFixed(2):null, bodyH:bd?+bd.height.toFixed(2):null,
+               offX:bd?+bd.offset.x.toFixed(2):null, offY:bd?+bd.offset.y.toFixed(2):null,
+               bodyTop:bd?+bd.top.toFixed(2):null, bodyBot:bd?+bd.bottom.toFixed(2):null,
+               botFrac:(bd&&f)?+(((bd.offset.y+bd.height)/f.height)).toFixed(4):null,
+               onFloor:bd&&bd.blocked?!!bd.blocked.down:null };
+           }catch(e){ return null; } };
            window.__NQ_GRANTKEY=function(){ try{ if(_sc.over||_sc.hasKey) return false; _sc.hasKey=true; if(_sc.keyIcon) _sc.keyIcon.setAlpha(1); if(_sc.key){ _sc.tweens.killTweensOf(_sc.key); _sc.key.destroy(); _sc.key=null; } _sc.flash('LAB: KEY GRANTED','#ffd23f'); return true; }catch(e){ return false; } };
            window.__NQ_GRANTRESERVE=function(item){ try{ return !!_sc.grantReserve(item); }catch(e){ return false; } };
            window.__NQ_BOSSHIT=function(){ try{ if(_sc.over) return false;
@@ -2059,7 +2111,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
             self.add.rectangle(cx,H/2,wpx,H,0xff2244,a).setDepth(2);
             self.add.text(cx,26,String(b.n)+'☠',{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#ff8899'}).setOrigin(.5,0).setDepth(2);
           });
-          self.add.text(90,44,'LAB HEATMAP · '+d.deaths+' deaths / '+d.clears+' clears'
+          var _lr=SCREEN_RECT(self.cameras.main);   // scrollFactor-0 → anchor on the real screen corner
+          self.add.text(_lr.x+90,_lr.y+44,'LAB HEATMAP · '+d.deaths+' deaths / '+d.clears+' clears'
             +(d.topCauses&&d.topCauses[0]?(' · top: '+d.topCauses[0].cause):''),
             {fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ff8899'}).setScrollFactor(0).setDepth(60);
         }).catch(function(){});
@@ -2141,8 +2194,13 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         if(!_self.sys) return;
         if(_async && !_self.sys.isActive()) return;    // late arrival into a scene the player already left
         if(!_self.textures.exists(_key)) return;
-        _self.add.image(0,0,_key).setOrigin(0,0).setScrollFactor(0).setDisplaySize(_cam.width,_cam.height).setDepth(-58);
-        _self.add.rectangle(0,0,_cam.width,_cam.height,0x05040a,0.22).setOrigin(0,0).setScrollFactor(0).setDepth(-57); };
+        // ⚠️ Placed via SCREEN_RECT, NOT at (0,0) sized cam.width/height — see the note by its
+        // definition. The old form drew the plate RES times oversized and off-centre, so only its
+        // middle 1/RES showed: the levels rendered a blown-up crop of the artwork (moon, skyline
+        // tops and the rooftop foreground all cropped away) instead of the whole backdrop.
+        var _r=SCREEN_RECT(_cam);
+        _self.add.image(_r.x,_r.y,_key).setOrigin(0,0).setScrollFactor(0).setDisplaySize(_r.w,_r.h).setDepth(-58);
+        _self.add.rectangle(_r.x,_r.y,_r.w,_r.h,0x05040a,0.22).setOrigin(0,0).setScrollFactor(0).setDepth(-57); };
       if(this.textures.exists(_key)){ _renderArt(false); }
       else { this.load.image(_key, WORLD_ART[_key]+'?v='+WORLD_ART_VER); this.load.once('complete', function(){ _renderArt(true); }); this.load.once('loaderror', function(){}); this.load.start(); }
     } else {
@@ -2669,10 +2727,14 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.physics.add.overlap(this.projectiles,this.miniworms,this.discHitMiniworm,null,this);   // SOL disc is the ONLY way to kill a ground-worm
     this.nextThrow=0; this.prevThrow=false;
 
-    // HUD — held in a container pinned at the screen centre (W/2,H/2) & scrollFactor 0.
-    // Under the 2x follow-camera zoom that offset makes every child land exactly where its
-    // design coords intend (top-left / top-right), at crisp 2x size, without a second camera.
-    this.hudBox=this.add.container(W/2,H/2).setScrollFactor(0).setDepth(1000);
+    // HUD — a container anchored on the screen's top-left corner, scrollFactor 0, so every child
+    // is laid out in plain design coords (0..W, 0..H) and lands where it intends.
+    // That anchor is NOT (0,0): a scrollFactor-0 object is still scaled about the camera centre,
+    // so the corner sits at SCREEN_RECT(cam).x/.y — see the note by SCREEN_RECT's definition.
+    // It used to be hardcoded (W/2,H/2), which is what SCREEN_RECT returns at RES=2 and ONLY at
+    // RES=2; that hardcode is why raising RES to 3 slid the whole HUD off-screen.
+    var _hr=SCREEN_RECT(this.cameras.main);
+    this.hudBox=this.add.container(_hr.x,_hr.y).setScrollFactor(0).setDepth(1000);
     this.hudScore=this.hb(this.add.text(10,8,'SCORE '+this.score,{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#ffd23f'}));
     this.hudTime=this.hb(this.add.text(W-10,8,String(this.timeLeft),{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#3dff6e'}).setOrigin(1,0));
     this.hb(this.add.text(W/2,8,'WORLD '+def.name,{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#b6bfe0'}).setOrigin(.5,0));
@@ -3234,16 +3296,10 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       b.y -= (b.body.bottom - GY);
       if(b.body.velocity.y > 0) b.setVelocityY(0);
     }
-    // GROUND SHADOW. The boss cutouts are illustrated from the thighs UP — no feet — so their legs
-    // meet the floor line with nothing below and read as "sunk into the pavement" next to Normie,
-    // whose art HAS feet. A soft contact shadow anchors a gravity boss to the ground so it reads as
-    // STANDING rather than buried (the position was never wrong; the sprite has no feet to show). It
-    // tracks x and stays pinned to the floor even mid-leap; a flying boss (allowGravity=false) casts
-    // none. Created once, here; freed in bossDefeat.
-    if(b.body.allowGravity){
-      if(!b._shadow) b._shadow=this.add.ellipse(b.x, GY+3, Math.max(22,Math.round(b.displayWidth*0.72)), 9, 0x000000, 0.36).setDepth(6);
-      b._shadow.x=b.x; b._shadow.setVisible(b.visible);
-    } else if(b._shadow){ b._shadow.setVisible(false); }
+    // (The ground shadow that used to live here was a mitigation for boss cutouts that had no feet:
+    // it faked a contact point so a legless plate didn't read as buried. The plates now carry real
+    // feet and the body box ends at the texture bottom, so the bosses genuinely stand on the floor
+    // and the prop is gone — 2026-08-16.)
   },
   startBoss:function(){
     if(this.bossStarted) return; this.bossStarted=true; this.boss=true; this.bossHP=3;
@@ -3280,7 +3336,10 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     self.makeArena(dx-340, dx+40);
     // spawn the Rug King across the room, facing the player, INERT until the intro ends
     var k=this.rugking=this.physics.add.sprite(dx-60, GY-54, 'rugking');
-    k.setScale(72/k.height); k.body.setSize(k.width*0.62,k.height*0.82).setOffset(k.width*0.19,k.height*0.14);   // was 48 — smallest boss in the game and the FIRST one players meet; bumped so he reads as a proper boss
+    // 0.14 + 0.86 = 1.00: the body's BOTTOM edge must sit at the bottom of the texture, because the
+    // boss plates are trimmed to their opaque content (feet at 100%). Any shortfall is exactly how
+    // far the boss sinks into the floor — the old 0.82 left 4% of the display height below ground.
+    k.setScale(72/k.height); k.body.setSize(k.width*0.62,k.height*0.86).setOffset(k.width*0.19,k.height*0.14);   // was 48 — smallest boss in the game and the FIRST one players meet; bumped so he reads as a proper boss
     k.setCollideWorldBounds(true); k.dir=-1; k.invuln=true; k.setDepth(7);
     var bg2=this.addGlow(k,0xff2d55,5); if(bg2) this.tweens.add({targets:bg2,outerStrength:12,duration:520,yoyo:true,repeat:-1,ease:'Sine.inOut'});
     this.physics.add.collider(k, this.platforms);
@@ -3711,7 +3770,13 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.player.setPosition(dx-260, GY-40); this.player.setVelocity(0,0);
     self.makeArena(dx-340, dx+40);
     var k=this.rugking=this.physics.add.sprite(dx-60, GY-54, bTex);   // stored in rugking = generic melee-boss handle
-    k.setScale(bScale/k.height); k.body.setSize(k.width*0.60,k.height*0.82).setOffset(k.width*0.20,k.height*0.14);
+    // Body BOTTOM as a fraction of the texture height. The plates are trimmed to their opaque
+    // content, so for a boss that stands on the ground this is 1.00 — the body bottom IS the feet,
+    // and anything less sinks the boss by (1-bBot)*displayHeight. Levels whose art deliberately
+    // carries bottom margin (the GHOST SHIP floats, its hull ends at 78% of the plate) override it
+    // with bossBodyBot so they keep hanging where the art intends.
+    var bBot=(d.bossBodyBot!=null?d.bossBodyBot:1.00);
+    k.setScale(bScale/k.height); k.body.setSize(k.width*0.60,k.height*(bBot-0.14)).setOffset(k.width*0.20,k.height*0.14);
     k.setCollideWorldBounds(true); k.dir=-1; k.invuln=true; k.setDepth(7);
     if(d.bossTintHex!=null) k.setTint(d.bossTintHex);   // re-skin the shared KOL sprite for a themed boss
     var bg2=this.addGlow(k,bGlow,5); if(bg2) this.tweens.add({targets:bg2,outerStrength:12,duration:520,yoyo:true,repeat:-1,ease:'Sine.inOut'});
@@ -3856,7 +3921,10 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.player.setPosition(dx-260, GY-40); this.player.setVelocity(0,0);
     self.makeArena(dx-340, dx+40);
     var k=this.rugking=this.physics.add.sprite(dx-60, GY-56, 'ceoboss');   // stored in rugking = generic melee-boss handle
-    k.setScale(56/k.height); k.body.setSize(k.width*0.58,k.height*0.82).setOffset(k.width*0.21,k.height*0.14);
+    // 0.14 + 0.86 = 1.00 — body bottom at the texture bottom, i.e. on the Custodian's shoes.
+    // See the note in startKolBoss: the plate is trimmed to content, so a body that stops short
+    // buries the boss's feet by that fraction of its display height.
+    k.setScale(56/k.height); k.body.setSize(k.width*0.58,k.height*0.86).setOffset(k.width*0.21,k.height*0.14);
     k.setCollideWorldBounds(true); k.dir=-1; k.invuln=true; k.setDepth(7);
     var bg2=this.addGlow(k,0x66ddff,5); if(bg2) this.tweens.add({targets:bg2,outerStrength:12,duration:520,yoyo:true,repeat:-1,ease:'Sine.inOut'});
     this.physics.add.collider(k, this.platforms);
@@ -4518,7 +4586,6 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(nx<LEVELS.length){ this.registry.set('nqCp',nx); this.registry.set('nqCpScore',this.score); } },
   bossDefeat:function(){
     if(this.over) return; this.over=true; var k=this.rugking, self=this;
-    if(k && k._shadow){ k._shadow.destroy(); k._shadow=null; }   // boss is flying off on defeat — drop its ground shadow
     // difficulty telemetry: boss arenas end HERE, never via key+door levelClear — without this
     // every boss level showed deaths but permanently 0 clears (garbage deathsPerClear).
     nqTele('clear',{world:this.def&&this.def.name,t:Math.round((Date.now()-(this._lvStartAt||Date.now()))/1000),deaths:this._lvDeaths||0,score:this.score});

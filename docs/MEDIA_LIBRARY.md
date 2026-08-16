@@ -122,3 +122,61 @@ CDN URLs are long-lived Higgsfield/CloudFront links — downloadable from any fr
 | 2026-07-28 | LOCK CELEBRATION 45.11% — roll A: two vaults (JUPITER LOCK 446.11M ajar/glowing + STREAMFLOW 5.00M shut), Cluck with a "+10.00M CLKN" sack | nano_banana_pro | 9aa05a7f-c1dd-4f5d-aaae-63913461e320 | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260728_231625_9aa05a7f-c1dd-4f5d-aaae-63913461e320.png | REJECTED — every label correct, but the rooster faces RIGHT with his tail to the open vault, so he reads as hauling the bag OUT of the lock. Inverts the whole message; caught by the owner before posting. **Check facing on every lock render: he must walk INTO the glowing door.** |
 | 2026-07-28 | LOCK CELEBRATION 45.11% — roll B: same two-vault scene, Cluck striding LEFT into the glowing Jupiter Lock | nano_banana_pro | 605d926c-bfac-4023-a417-9ca1de9c1f2b | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260728_231625_605d926c-bfac-4023-a417-9ca1de9c1f2b.png | ✅ KEPT — correct direction + all labels verified at zoom (banner 45.11%, 446.11M, 5.00M, +10.00M). Arrived letterboxed, so the black bar was cropped at y=684 and the floor extended to 768 before `scripts/lockbar.py … 45.1115 50` drew the ROAD TO 50% bar. Posted as X 2082246231493881997 + TG 87614 |
 | 2026-08-02 | **LOCK CELEBRATION 45.37%** (+1.60M across 3 locks → 453.71M / 65 escrows). Two vaults: JUPITER LOCK 448.71M ajar/glowing + **OTHER LOCKS** 5.00M shut — the second door is now labelled generically, never by platform name (owner ask 2026-08-01). Setting: night railway terminus concourse (fresh; earlier settings were moonlit alley, snowy mountain dawn, golden vault hall, desert canyon, storm-lashed rooftop). roll A `e34d3466-01d2-4450-8344-0cfe4c55e972` REJECTED — all six label strings correct at 3× zoom, banner clean and level, but Cluck stands BESIDE the open vault with his body angled away, reading as leaving rather than entering. roll B `c5a58dd3-8d7f-4e4c-9c50-693f21c62f45` ✅ KEPT — striding LEFT into the glowing door, all labels exact. Composited with `scripts/lockbar.py … 45.37` (ROAD TO 50%, 90.7% fill; the 50 default held) and hosted at `f725081d-c46b-48da-ab5a-058e4c5f28df.jpg`. Two accepted imperfections: he carries **2 sacks, not 3** (`newLocks` was 3), and the banner tilts far enough that “LOCKED” nears the frame edge. | nano_banana_pro | roll A `e34d3466-01d2-4450-8344-0cfe4c55e972` · roll B `c5a58dd3-8d7f-4e4c-9c50-693f21c62f45` | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260802_134140_c5a58dd3-8d7f-4e4c-9c50-693f21c62f45.png · final composite https://d2ol7oe51mr4n9.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/f725081d-c46b-48da-ab5a-058e4c5f28df.jpg | ✅ Posted (by a parallel session). **The facing rule proved itself a second time — check it on every lock render before anything else.** |
+
+⚠️ **The four `hf_20260816_154624_*` "v2" KOL rolls below are UNUSABLE for the sprite pipeline** —
+they were generated on a GREY background, not the flat chroma green. Keying them scores **zero**
+pixels, so they cannot be cut out by the standard recipe and were excluded from the 08-16 pick.
+Kept only as composition reference.
+
+| 2026-08-16 | SCAMMY KOL full-body v2 A (halo, phone+cash, full legs & sneakers) | nano_banana_pro | eaab7e04-cc51-404f-8a12-871befd35742 | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260816_154624_eaab7e04-cc51-404f-8a12-871befd35742.png | UNUSABLE — grey background, 0 pixels keyed |
+| 2026-08-16 | SCAMMY KOL full-body v2 B | nano_banana_pro | 83bd8a9a-4050-4c8f-9efc-843e985e68a2 | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260816_154624_83bd8a9a-4050-4c8f-9efc-843e985e68a2.png | PENDING owner pick |
+| 2026-08-16 | SCAMMY KOL full-body v2 C (soles exactly on the bottom edge) | nano_banana_pro | 4ed23427-5700-4064-ba77-3d8787b9a7ec | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260816_154624_4ed23427-5700-4064-ba77-3d8787b9a7ec.png | PENDING owner pick |
+| 2026-08-16 | SCAMMY KOL full-body v2 D (widest arm span) | nano_banana_pro | 79ac5f22-90f0-4986-acb2-85622f0b3ec6 | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260816_154624_79ac5f22-90f0-4986-acb2-85622f0b3ec6.png | PENDING owner pick |
+| 2026-08-16 | SCAMMY KOL leg-extension attempts (outpaint-style, from the cropped original) | nano_banana_pro | ae39269a-f40f-41e3-8206-1349bc305267 / 2a201eb4-f46c-4a95-9fa2-6fc34ed8bc9d / b69cbd09-f781-417b-88b9-797e0289e855 | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260816_125330_ae39269a-f40f-41e3-8206-1349bc305267.png | SUPERSEDED by the v2 set above (owner asked to start over) |
+| 2026-08-16 | SCAMMY KOL v3-1 — FULL BODY, chroma-green key, legs + white high-tops | nano_banana_pro | d4159eae-def6-4313-80f1-f9208f6406e7 | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260816_155715_d4159eae-def6-4313-80f1-f9208f6406e7.png | ✅ **SHIPPED 2026-08-16** (owner pick) → `cut_scammykol.b64`, **330×598**. Green key + side margins, matching the 07-27 pipeline. Legs split at 63% height, feet complete. Keyed by corner flood-fill PLUS an enclosed-component pass — the ring-light halo encloses a disc of chroma green that a corner-only fill can never reach. |
+| 2026-08-16 | SCAMMY KOL v3-2 — FULL BODY, wide power stance | nano_banana_pro | e3f213ad-f226-4b70-8a07-e81b2186f4bb | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260816_155715_e3f213ad-f226-4b70-8a07-e81b2186f4bb.png | PENDING owner pick |
+| 2026-08-16 | THE TROLL — FULL BODY replacement (`cut_troll.b64` was cropped at 95.6%) | nano_banana_pro | eff9a2de-6341-4592-9d7e-85d1afc2141b | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260816_155715_eff9a2de-6341-4592-9d7e-85d1afc2141b.png | PENDING owner pick |
+| 2026-08-16 | THE CUSTODIAN — FULL BODY replacement (`cut_ceoboss.b64` was cropped at 97.2%) | nano_banana_pro | d11ed931-aba8-453b-ab18-87575354672b | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260816_155715_d11ed931-aba8-453b-ab18-87575354672b.png | PENDING owner pick |
+
+**2026-08-16 boss-art audit (evidence, not recollection).** Each shipping boss cutout was compared
+against the 07-27 generation logged above. `boss` (Rug King) differs **33.7%** and `troll` differs
+**15.6%** — those two were replaced after the media-library row was written and the change was never
+recorded; the shipping Rug King is a different composition and, unlike the logged one, HAS legs.
+`scammykol`, `ceoboss`, `wyrm`, `golem`, `mevdragon` are byte-for-byte the logged originals.
+⚠️ The KOL's missing feet are NOT a later corruption: his 07-27 source was generated on a **1:1
+1024×1024 canvas** and the figure overflowed it, so the legs ran off the bottom edge at generation
+time. Regenerating at **2:3 with explicit full-body framing** is the fix — hence the v3 set above.
+Note also that this repo's git history begins at the 2026-08-13 import (55 commits; the first adds
+436 files), so "unchanged since the git baseline" proves nothing about anything before that date.
+| 2026-08-16 | GRAVEMITE replacement A — burrowing grave-ghoul, bone skull + red pinprick eyes, claws raised | nano_banana_pro | 44a88240-01b2-47bf-939b-3d28d2c333c8 | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260816_160336_44a88240-01b2-47bf-939b-3d28d2c333c8.png | PENDING owner pick. **0 detached pieces** (measured) — the whole point: the old plate had green pellets baked around it that read as projectiles. |
+| 2026-08-16 | GRAVEMITE replacement B — armoured grave-parasite, single blood-red eye, lamprey mouth | nano_banana_pro | fd6b8729-1dc4-4a0a-bdc5-bfaf0a43935d | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260816_160336_fd6b8729-1dc4-4a0a-bdc5-bfaf0a43935d.png | ✅ **SHIPPED 2026-08-16** (owner pick) → `scary_gravemite.b64`, **256×182**. 0 detached pieces, so the red bullets are the only projectiles on screen — the whole point of the redesign. Renders at **44px tall** (`setScale(44/mw.height)`) in a `darkAlpha:0.84` den; it is the darkest of the three candidates, which was flagged before the pick and chosen anyway. If it reads as muddy in play, the lever is the turret's purple glow (`0xb46bff`, outerStrength 13) in the `_grav` branch, not the art. |
+| 2026-08-16 | GRAVEMITE replacement C — reared grub, four-way fanged jaw, ring of red eyes | nano_banana_pro | 214ec915-e99e-4cfd-9bc1-8dc1de6898ae | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260816_160336_214ec915-e99e-4cfd-9bc1-8dc1de6898ae.png | PENDING owner pick. 0 detached pieces. |
+| 2026-08-16 | WEN MOON full-body A — cosmic titan, crescent standard, moon-rock boots | nano_banana_pro | 30353e14-e1b3-4ee0-93e3-bc1be80caa55 | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260816_160336_30353e14-e1b3-4ee0-93e3-bc1be80caa55.png | NOT SHIPPED — owner declined 2026-08-16, because the premise was wrong: **`cut_wenmoon.b64` is NOT cropped at the hips.** Decoded and zoomed, it has complete legs and complete feet with toes, sitting flush on the canvas edge (see the corrected audit note below). Kept as a spare. |
+| 2026-08-16 | WEN MOON full-body B — swaggering bruiser, fist raised | nano_banana_pro | 3406d588-44ba-4ddf-b37c-a0e7c8b7fda9 | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260816_160336_3406d588-44ba-4ddf-b37c-a0e7c8b7fda9.png | PENDING owner pick |
+| 2026-08-16 | CUSTODIAN full-body B — full trouser legs + brogues | nano_banana_pro | f45afbbb-76e0-4504-863c-3f841b87f436 | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260816_160336_f45afbbb-76e0-4504-863c-3f841b87f436.png | ✅ **SHIPPED 2026-08-16** (owner pick) → `cut_ceoboss.b64`, **330×493**. Blue pinstripe matches the outgoing plate's colourway; black dress shoes; cleanest key of the whole set (zero enclosed green). |
+
+**2026-08-16 FULL SPRITE AUDIT — every `cut_*` and `scary_*` asset measured, then eyeballed on a
+contact sheet** (`node audit.cjs cut_` prints opaque-content bounds per asset; the measurement alone
+is NOT sufficient — a sprite whose content reaches 100% of its canvas can still be a mid-leg CROP,
+which is exactly what `wenmoon` is. Measure AND look.)
+
+BROKEN — replacements generated above:
+- `cut_scammykol.b64` — cropped at the thighs. ✅ **REPLACED 2026-08-16** (`d4159eae`).
+- `cut_ceoboss.b64` — legs stop at the shins, no shoes. ✅ **REPLACED 2026-08-16** (`f45afbbb`).
+- `scary_gravemite.b64` — not a crop: it is a pile of dirt clods with ~14 green pellet shapes baked
+  around it that read as projectiles, colliding with the red bullets it actually fires. Owner asked
+  for it scrapped and redesigned, 2026-08-16. ✅ **REPLACED 2026-08-16** (`fd6b8729`).
+
+⚠️ **CORRECTION 2026-08-16 — `cut_wenmoon.b64` was never broken.** This audit listed it as "cropped
+at the HIPS", and the 08-16 art handoff repeated that as fact. It is wrong. Decode the asset and
+look at the bottom of the image: full legs, full feet, individual toes, resting flush on the canvas
+edge. Its 100.0% content-bottom is the sprite *touching* the edge, not running off it. This is the
+**same mistake that got `cut_troll` regenerated** — a 100%/95.6% number read as a crop without
+opening the picture. The sprite is untouched and the replacement candidates are logged as spares.
+The lesson in the header of this section is right; it just wasn't applied to `wenmoon` itself.
+
+CORRECT — verified feet present and art intact, do NOT regenerate: `boss` (Rug King), `troll`
+(95.6% is bottom MARGIN, not a crop — an earlier pass wrongly flagged it), `golem`, `burnlord`,
+`chairman`, `coresentinel`, `diamondtitan`, `saylor`, `stormherald`, `sandlord`, `rugking`, `tom`.
+NO FEET BY DESIGN: `wyrm`, `leviathan`, `shark`, `squid`, `nautilus`, `dirtywhale`, `megawhale`,
+`blackswan`, `mevdragon`, `greatbear`, `reaper`, `marketmaker`, `satwarden`, `sentry`.

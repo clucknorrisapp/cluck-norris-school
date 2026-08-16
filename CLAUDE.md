@@ -24,9 +24,17 @@ does not tell you how to write software; use your judgement for that.
 > reflex — a day went to running it for icon swaps it could never have validated.
 
 > 🩹 **Boss "sunk in the floor", character speed, or the 2×-resolution question? Read
-> `docs/HANDOFF_2026-08-16.md` first.** The boss "waist-deep" look is an ART crop — the boss cutouts
-> have no feet — NOT a position or resolution bug (that finding cost ~24h). A grounding shadow shipped
-> as a mitigation; real boss feet + the powerup-speed tuning are still open.
+> `docs/HANDOFF_2026-08-16.md` first.** The boss "waist-deep" look was an ART crop — the boss cutouts
+> had no feet — NOT a position or resolution bug (that finding cost ~24h).
+> **RESOLVED 2026-08-16:** the KOL and Custodian plates were replaced with full-body art, and the
+> grounding-shadow mitigation was deleted. There WAS also a small real position bug underneath it:
+> the boss body box ended at 96% of the texture while every plate is trimmed to 100% content, so
+> every gravity boss sank by 4% of its display height. Body bottoms are now 1.00 and all six ground
+> bosses measure feet exactly on `GY`. Regression guard: `node normie-quest/test/nq-boss-ground.cjs
+> <baseUrl>`. The powerup-speed tuning is still open.
+> ⚠️ Bosses are scaled by HEIGHT, so **swapping in a plate with different bottom margin silently
+> re-breaks this.** A floating boss must declare `bossBodyBot` on its level def (the GHOST GALLEON
+> does); anything that stands on the ground leaves it at the 1.00 default.
 
 ---
 
@@ -214,6 +222,15 @@ missing file now fails loudly instead of being served the React shell at 200.
   then extra signers. Build unsigned server-side → `provider.signTransaction(tx)` →
   `signed.partialSign(base)` → submit raw. Never pre-sign server-side, and never
   `signAndSendTransaction` when a non-wallet signer exists. `/locker-room` is the reference impl.
+- 🎮 **Phaser: `setScrollFactor(0)` does NOT take an object out of the camera transform.** It stops it
+  scrolling; a zoomed camera still scales it about the viewport centre
+  (`screen = half + zoom*(p - half)`, `half = cam.width/2`). So "place at (0,0), size it
+  `cam.width × cam.height`" draws RES times too big and off-screen. That is what cropped every world
+  backdrop to the middle `1/RES` (the "backgrounds are zoomed in" report — 1/4 of the plate at 2×, 1/9
+  at 3×) and what slid the HUD off at 3×. Use `SCREEN_RECT(cam)` in `game_logic.js` for **any**
+  screen-pinned object; never hardcode the anchor. Fixed 2026-08-16 — and note it survived a whole
+  session of being argued away as "no regression found", so trust the screenshot over the reasoning:
+  compare the level against `normie-quest/public/worlds/<plate>.webp`.
 - **Escape anything from an API, URL or chain metadata before `innerHTML`** — token names and
   symbols are attacker-controlled. Use `CluckUtil.esc`; five hand-rolled copies were missing the
   single-quote escape.
