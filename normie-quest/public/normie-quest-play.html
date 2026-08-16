@@ -104,17 +104,14 @@
 "use strict";
 
 var W=480, H=270, TILE=24, GY=H-TILE;      // GY = ground top surface
-// Internal render resolution multiplier (supersampling). Backing buffer = W*RES x H*RES and every
-// scene camera zooms RES, so the VISIBLE world (W x H units) and all gameplay coords are UNCHANGED —
-// only sharpness scales. Higher = crisper when the canvas is displayed big, at ~RES^2 GPU fill cost.
-// DEFAULT 2x (960x540). NOTE: 3x was shipped 2026-08-15 then REVERTED same day — it broke two
-// things that only show up at zoom!=2: (1) the HUD/pause overlay is pinned via a scrollFactor(0)
-// container at (W/2,H/2), which only lands correctly at zoom 2 and slid off-screen at 3x; and
-// (2) the skins are stored at 72x108 (sized for 2x -> 96px on-screen) so at 3x they UPSCALE and
-// shimmer during the run animation. Doing 3x right needs a dedicated non-zooming HUD camera AND
-// skins re-stored at ~144px. Until then: ?res=3 still opts in for testing that work; default 2x.
+// Internal render resolution (supersampling): backing buffer = W*RES x H*RES and every scene camera
+// zooms RES, so the VISIBLE world (W x H units) and every gameplay coord are UNCHANGED — only
+// sharpness scales. FIXED AT 2x (960x540), the game's original look.
+// The 2026-08-15 experiment (adaptive/forced 3x + a ?res= URL switch) is REVERTED (2026-08-16, owner
+// ask: bosses/backgrounds "looked off"). 3x broke the scrollFactor(0) HUD pin and shimmered the
+// 72x108 skins; at 2x the switch changed nothing on screen but left a way for a device — or a stale
+// cached URL — to land on the broken 3x. No override now: the resolution is 2x, period.
 var RES=2;
-try{ if(typeof location!=='undefined'){ var _rm=((location.search||'')+(location.hash||'')).match(/[?&#]res=([234])/); if(_rm) RES=parseInt(_rm[1],10); } }catch(e){}
 // Clean, highly-legible UI font for menus / interstitials (the pixel fonts read as blocky
 // once scaled 2x by the scene cameras). UIRES renders text at higher DPI so it stays crisp
 // despite pixelArt:true. Big arcade titles keep 'Press Start 2P'; body text uses this.
@@ -2106,6 +2103,13 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
            // Force the current level's boss fight to begin (skips the walk-to-door + key), so a
            // headless pre-ship check can spawn each boss and run __NQ_STOMPTEST.
            window.__NQ_FORCEBOSS=function(){ try{ if(_sc.def&&_sc.def.boss&&!_sc.bossStarted){ _sc.startBoss(); return true; } return !!_sc.bossStarted; }catch(e){ return false; } };
+           // Frame the boss fight for an eyeball/screenshot check: seat the player on the floor beside
+           // the boss and lock the camera on the pair. Boss-render bugs (feet vs floor, shadow) can't
+           // be judged when the camera is stranded back at the level start after __NQ_FORCEBOSS.
+           window.__NQ_BOSSVIEW=function(){ try{ var k=(_sc.rugking&&_sc.rugking.active)?_sc.rugking:null; if(!k) return false;
+             if(_sc.player){ _sc.player.body.reset(k.x-62, GY-30); _sc.player.setVelocity(0,0); }
+             _sc.cameras.main.stopFollow(); _sc.cameras.main.centerOn(k.x-31, 135);
+             return {kx:Math.round(k.x)}; }catch(e){ return {err:String(e)}; } };
          } }catch(e){}
     var self=this, i;
     var def=this.def=LEVELS[this.levelIdx];
@@ -3332,6 +3336,16 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       b.y -= (b.body.bottom - GY);
       if(b.body.velocity.y > 0) b.setVelocityY(0);
     }
+    // GROUND SHADOW. The boss cutouts are illustrated from the thighs UP — no feet — so their legs
+    // meet the floor line with nothing below and read as "sunk into the pavement" next to Normie,
+    // whose art HAS feet. A soft contact shadow anchors a gravity boss to the ground so it reads as
+    // STANDING rather than buried (the position was never wrong; the sprite has no feet to show). It
+    // tracks x and stays pinned to the floor even mid-leap; a flying boss (allowGravity=false) casts
+    // none. Created once, here; freed in bossDefeat.
+    if(b.body.allowGravity){
+      if(!b._shadow) b._shadow=this.add.ellipse(b.x, GY+3, Math.max(22,Math.round(b.displayWidth*0.72)), 9, 0x000000, 0.36).setDepth(6);
+      b._shadow.x=b.x; b._shadow.setVisible(b.visible);
+    } else if(b._shadow){ b._shadow.setVisible(false); }
   },
   startBoss:function(){
     if(this.bossStarted) return; this.bossStarted=true; this.boss=true; this.bossHP=3;
@@ -4606,6 +4620,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(nx<LEVELS.length){ this.registry.set('nqCp',nx); this.registry.set('nqCpScore',this.score); } },
   bossDefeat:function(){
     if(this.over) return; this.over=true; var k=this.rugking, self=this;
+    if(k && k._shadow){ k._shadow.destroy(); k._shadow=null; }   // boss is flying off on defeat — drop its ground shadow
     // difficulty telemetry: boss arenas end HERE, never via key+door levelClear — without this
     // every boss level showed deaths but permanently 0 clears (garbage deathsPerClear).
     nqTele('clear',{world:this.def&&this.def.name,t:Math.round((Date.now()-(this._lvStartAt||Date.now()))/1000),deaths:this._lvDeaths||0,score:this.score});
