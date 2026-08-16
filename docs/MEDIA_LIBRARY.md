@@ -128,3 +128,18 @@ CDN URLs are long-lived Higgsfield/CloudFront links — downloadable from any fr
 | 2026-08-16 | SCAMMY KOL full-body v2 C (soles exactly on the bottom edge) | nano_banana_pro | 4ed23427-5700-4064-ba77-3d8787b9a7ec | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260816_154624_4ed23427-5700-4064-ba77-3d8787b9a7ec.png | PENDING owner pick |
 | 2026-08-16 | SCAMMY KOL full-body v2 D (widest arm span) | nano_banana_pro | 79ac5f22-90f0-4986-acb2-85622f0b3ec6 | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260816_154624_79ac5f22-90f0-4986-acb2-85622f0b3ec6.png | PENDING owner pick |
 | 2026-08-16 | SCAMMY KOL leg-extension attempts (outpaint-style, from the cropped original) | nano_banana_pro | ae39269a-f40f-41e3-8206-1349bc305267 / 2a201eb4-f46c-4a95-9fa2-6fc34ed8bc9d / b69cbd09-f781-417b-88b9-797e0289e855 | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260816_125330_ae39269a-f40f-41e3-8206-1349bc305267.png | SUPERSEDED by the v2 set above (owner asked to start over) |
+| 2026-08-16 | SCAMMY KOL v3-1 — FULL BODY, chroma-green key, legs + white high-tops | nano_banana_pro | d4159eae-def6-4313-80f1-f9208f6406e7 | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260816_155715_d4159eae-def6-4313-80f1-f9208f6406e7.png | PENDING owner pick. Green key + side margins, matching the 07-27 pipeline. Legs split at 63% height, feet complete. |
+| 2026-08-16 | SCAMMY KOL v3-2 — FULL BODY, wide power stance | nano_banana_pro | e3f213ad-f226-4b70-8a07-e81b2186f4bb | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260816_155715_e3f213ad-f226-4b70-8a07-e81b2186f4bb.png | PENDING owner pick |
+| 2026-08-16 | THE TROLL — FULL BODY replacement (`cut_troll.b64` was cropped at 95.6%) | nano_banana_pro | eff9a2de-6341-4592-9d7e-85d1afc2141b | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260816_155715_eff9a2de-6341-4592-9d7e-85d1afc2141b.png | PENDING owner pick |
+| 2026-08-16 | THE CUSTODIAN — FULL BODY replacement (`cut_ceoboss.b64` was cropped at 97.2%) | nano_banana_pro | d11ed931-aba8-453b-ab18-87575354672b | https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/hf_20260816_155715_d11ed931-aba8-453b-ab18-87575354672b.png | PENDING owner pick |
+
+**2026-08-16 boss-art audit (evidence, not recollection).** Each shipping boss cutout was compared
+against the 07-27 generation logged above. `boss` (Rug King) differs **33.7%** and `troll` differs
+**15.6%** — those two were replaced after the media-library row was written and the change was never
+recorded; the shipping Rug King is a different composition and, unlike the logged one, HAS legs.
+`scammykol`, `ceoboss`, `wyrm`, `golem`, `mevdragon` are byte-for-byte the logged originals.
+⚠️ The KOL's missing feet are NOT a later corruption: his 07-27 source was generated on a **1:1
+1024×1024 canvas** and the figure overflowed it, so the legs ran off the bottom edge at generation
+time. Regenerating at **2:3 with explicit full-body framing** is the fix — hence the v3 set above.
+Note also that this repo's git history begins at the 2026-08-13 import (55 commits; the first adds
+436 files), so "unchanged since the git baseline" proves nothing about anything before that date.
