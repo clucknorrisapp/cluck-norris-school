@@ -6,8 +6,9 @@
  * cannot prove a hand-authored gap is clearable or that ground fixtures aren't
  * floating over pits. This check closes that hole, straight from the physics:
  *
- *   gravity 900 px/s², jump vel 430 (double-jump available), run speed 240
- *   → single-jump airtime 0.956s → ~229px max gap at full speed
+ *   gravity 900 px/s², jump vel 430 (double-jump available), run speed 192
+ *   (240→192 in the 2026-08-16 retune — keep in sync with setMaxVelocity in game_logic.js)
+ *   → single-jump airtime 0.956s → ~184px max gap at full speed
  *   → jump height ~103px (single) / ~205px (double)
  *
  * Rules (FAIL = exit 1; WARN = printed, exit 0):
@@ -25,7 +26,7 @@
  *   F14 a pit inside a boss arena (door-340 .. door+40) — the boss can fall in
  *   W10 a timed powerup with less level left than its duration can cover (non-boss levels)
  *   F12 a moving platform with a malformed [x,y,axis,range,speed] def (NaN → dead physics)
- *   W1  gap wider than 168px (needs a committed full-speed jump)
+ *   W1  gap wider than 134px (needs a committed full-speed jump; was 168 before the 2026-08-16 speed retune)
  *   W7  two ground enemies stacked < 24px apart (render as one)
  *   W8  a coin stacked on top of a powerup or airdrop
  *   W9  a VIP-world level missing the 'solana' SOL-ammo powerup
@@ -46,8 +47,8 @@ const TILE = 24, H = 270, GY = H - TILE;            // mirrors game constants
 // be measured against earth physics and the checker would invent F1/F3 failures for jumps that
 // are comfortable in play — the over-strict direction, but still a lie.
 const GRAV_DEF = 900;                                // matches physics.arcade.gravity.y in game_logic
-const SAFE_GAP = 200;                                // hard cap without a bridge (max single ~229)
-const WARN_GAP = 168;                                // comfortable cap
+const SAFE_GAP = 160;                                // hard cap without a bridge (max single ~184 at speed 192; same ~87% margin as the old 200/229)
+const WARN_GAP = 134;                                // comfortable cap (~73% of max single, as before)
 const JUMP_H = 103, DJUMP_H = 205;                   // single / double jump rise
 // Per-level reach numbers. Capped at 2x: past that the scaling stops predicting real play
 // (terminal velocity, level bounds and the jump-cut in update() all start to dominate), so a
