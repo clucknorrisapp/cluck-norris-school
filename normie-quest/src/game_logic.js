@@ -171,7 +171,18 @@ function _acDead(c){ return !!c && (c.state==='suspended' || c.state==='interrup
 // that is a console error and, worse, it hides the failure; swallow it and let the next real
 // gesture retry.
 function _acResume(c){ try{ var p=c&&c.resume&&c.resume(); if(p&&p.catch) p.catch(function(){}); }catch(e){} }
-function _ac(){ try{ if(!_AC) _AC=new (window.AudioContext||window.webkitAudioContext)(); if(_acDead(_AC)) _acResume(_AC); }catch(e){} return _AC; }
+// The THIRD dead state (owner report 2026-08-16: sound gone after leaving the browser, and no tap
+// brought it back): iOS can CLOSE the context outright under memory pressure while the app is
+// backgrounded. 'closed' is terminal — resume() can never revive it, so the suspended/interrupted
+// machinery above spins forever on a corpse. The only fix is a NEW context, which is why _ac()
+// rebuilds below. Everything hanging off the old context dies with it: _sfxGain here, and MUSIC's
+// whole node graph + every createMediaElementSource-wired track element (that call is once-per-
+// element-EVER, so the elements themselves must be thrown away — MUSIC.ensure() handles that side).
+function _ac(){ try{
+  if(_AC && _AC.state==='closed'){ _AC=null; _sfxGain=null; }
+  if(!_AC) _AC=new (window.AudioContext||window.webkitAudioContext)();
+  if(_acDead(_AC)) _acResume(_AC);
+}catch(e){} return _AC; }
 // master EFFECTS bus — every SFX routes through this gain so the Effects slider can scale them all.
 var _sfxVol=0.85, _sfxGain=null;
 try{ if(typeof localStorage!=='undefined'){ var _sv=localStorage.getItem('nqSfxVol'); if(_sv!=null) _sfxVol=Math.max(0,Math.min(1,parseFloat(_sv)||0)); } }catch(e){}
@@ -260,6 +271,14 @@ if(typeof window!=='undefined'){
   document.addEventListener('visibilitychange',function(){ if(!document.hidden){
     try{ var c=_ac(); if(_acDead(c)) _acResume(c); }catch(e){}
     try{ setTimeout(function(){ var c2=_ac(); if(_acDead(c2)) _acResume(c2); try{ MUSIC.resume(); }catch(e){} },350); }catch(e){}
+  } else {
+    // PAUSE THE RUN when the page hides (owner report 2026-08-16: "I left a browser and it never
+    // auto-paused"). The 10s idle auto-pause can't do this job: it counts this.time.now, and the
+    // scene clock STOPS while the tab is hidden (no rAF), so on return the game is instantly live
+    // with zero pause. Pausing here also makes the sound story self-healing — the pause card
+    // demands a tap to resume, and that tap is exactly the user gesture iOS requires to revive
+    // the audio context (_unlockAudio runs on every pointer/key event).
+    try{ if(window.__NQ_PAUSE) window.__NQ_PAUSE(true); }catch(e){}
   } });
   // Safari fires these on the page itself when audio is interrupted and restored.
   ['pageshow','focus'].forEach(function(ev){ try{ window.addEventListener(ev,function(){ var c=_ac(); if(_acDead(c)) _acResume(c); },{passive:true}); }catch(e){} });
@@ -373,7 +392,21 @@ var MUSIC=(function(){
       bass:[ [[N.C3,2],[N.A3,2],[N.F3,2],[N.G3,2]],
              [[N.A3,2],[N.F3,2],[N.C3,2],[N.G3,2]] ]}
   };
-  function ensure(){ ctx=_ac(); if(!ctx) return false;
+  function ensure(){ var c=_ac(); if(!c) return false;
+    if(ctx && c!==ctx){
+      // the shared context was REBUILT (iOS closed the old one under memory pressure — see _ac()).
+      // Every node here and every wired track element belongs to the dead context, and
+      // createMediaElementSource is once-per-element-ever, so the elements go too. Also clear
+      // `missing`: a play() that rejected against the dead graph blacklisted its track, and that
+      // blacklist must not outlive the fault. The current track restarts from the top — acceptable
+      // for a rare memory-pressure event; the alternative is permanent silence.
+      gain=null; lp=null; noiseBuf=null; cur=null;
+      try{ if(curEl) curEl.pause(); }catch(e){}
+      curEl=null; streaming=false;
+      for(var k in els){ try{ els[k].pause(); }catch(e){} }
+      els={}; missing={};
+    }
+    ctx=c;
     if(!gain){ gain=ctx.createGain(); gain.gain.value=muted?0:0.06*musScale;
       lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2600; lp.Q.value=0.7;   // warm, lo-fi tone
       gain.connect(lp); lp.connect(ctx.destination); }
@@ -483,7 +516,15 @@ var MUSIC=(function(){
     // Tab hidden / browser minimized → pause the produced track (HTMLAudio keeps playing otherwise);
     // the WebAudio synth + SFX auto-suspend by browser policy. Resume the same track on return.
     suspend:function(){ try{ synthStop(); }catch(e){} if(curEl){ try{ curEl.pause(); }catch(e){} } },
-    resume:function(){ try{ if(ctx&&(ctx.state==='suspended'||ctx.state==='interrupted')){ var rp=ctx.resume(); if(rp&&rp.catch) rp.catch(function(){}); } }catch(e){} if(muted) return; if(curEl && streaming){ var p=curEl.play(); if(p&&p.catch) p.catch(function(){}); } else if(want && !streaming){ try{ synthPlay(want); }catch(e){} } },
+    resume:function(){
+      // ensure() FIRST: it detects a rebuilt context (iOS closed the old one) and tears down the
+      // dead graph — without this, resume() replays curEl into a MediaElementSource on the corpse
+      // context and the game stays silent no matter how many gestures arrive.
+      try{ ensure(); }catch(e){}
+      try{ if(ctx&&(ctx.state==='suspended'||ctx.state==='interrupted')){ var rp=ctx.resume(); if(rp&&rp.catch) rp.catch(function(){}); } }catch(e){}
+      if(muted) return;
+      if(curEl && streaming){ var p=curEl.play(); if(p&&p.catch) p.catch(function(){}); }
+      else if(want && !streaming){ try{ synthPlay(want); }catch(e){} try{ tryFile(want); }catch(e){} } },   // tryFile: after a context rebuild the produced track must re-stream, not wait for the next level
     toggle:function(){ muted=!muted; if(gain) gain.gain.value=muted?0:0.06*musScale; if(curEl) fade(curEl,muted?0:effVol(),150); try{ localStorage.setItem('nqMute',muted?'1':'0'); }catch(e){} return muted; },
     muted:function(){ return muted; },
     setVol:function(s){ musScale=Math.max(0,Math.min(1,s)); if(gain) gain.gain.value=muted?0:0.06*musScale; if(curEl) fade(curEl,muted?0:effVol(),120); try{ localStorage.setItem('nqMusVol',String(musScale)); }catch(e){} },
@@ -1934,7 +1975,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // Buying an item in the DOM shop mid-run must land in the HUD NOW, not on the next level:
     // syncRewards() otherwise only runs on level entry and when a slot frees up.
     try{ var _sc0=this; window.__NQ_SYNCREWARDS=function(){ try{ if(_sc0.scene&&_sc0.scene.isActive&&_sc0.scene.isActive()&&!_sc0.over) _sc0.syncRewards(); }catch(e){} }; }catch(e){}
-    try{ var _sc=this; window.__NQ_PAUSE=function(){ if(!_sc.over&&!_sc.paused){ _sc.pauseGame(false); return true; } return false; };
+    try{ var _sc=this; window.__NQ_PAUSE=function(auto){ if(!_sc.over&&!_sc.paused){ _sc.pauseGame(!!auto); return true; } return false; };   // auto=true → the "you stepped away" pause card (existing callers pass nothing = manual)
          window.__NQ_RESUME=function(){ if(_sc.paused) _sc.resumeGame(); };
          // Toggle Phaser's keyboard from OUTSIDE the game (the leaderboard/wallet modal lives in a
          // separate script block that can't see NQGAME). Needed so a keypress in the modal doesn't
