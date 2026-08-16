@@ -183,6 +183,28 @@ function _ac(){ try{
   if(!_AC) _AC=new (window.AudioContext||window.webkitAudioContext)();
   if(_acDead(_AC)) _acResume(_AC);
 }catch(e){} return _AC; }
+// The FOURTH dead state, and the one the state field cannot report (owner, 2026-08-16, after the
+// 'closed' fix shipped and sound STILL died on every backgrounding): WebKit's ZOMBIE context —
+// after the app returns to the foreground, ctx.state says 'running' but the output is routed
+// nowhere and currentTime is FROZEN. Every state-based check above passes; nothing plays. The one
+// honest signal is the clock: a genuinely running context always advances currentTime. So: sample
+// it, wait ~300ms, and if a "running" context hasn't moved, close it and null the globals — the
+// next _ac() call builds a fresh context, and the next user gesture (_unlockAudio) does exactly
+// that inside the gesture, where iOS guarantees it starts 'running'. MUSIC.ensure() then sees the
+// swap and rebuilds its graph + re-streams the track. Dead-but-not-zombie states get the same
+// treatment once a real gesture has occurred and resume() still couldn't revive them.
+var _acHadGesture=false, _acCheckTimer=null;
+function _acHealth(){ try{
+  if(!_AC || _acCheckTimer) return;
+  var c=_AC, t0=c.currentTime, s0=c.state;
+  _acCheckTimer=setTimeout(function(){ _acCheckTimer=null; try{
+    if(c!==_AC) return;                                    // already rebuilt meanwhile
+    var zombie=(c.state==='running' && s0==='running' && c.currentTime===t0);
+    var stuckDead=(_acDead(c) && _acHadGesture);           // resume() was tried and it stayed dead
+    if(zombie || stuckDead){ try{ c.close(); }catch(e){} _AC=null; _sfxGain=null;
+      try{ if(typeof MUSIC!=='undefined' && MUSIC && MUSIC.resume) MUSIC.resume(); }catch(e){} }   // rebuilds via ensure(); fully unmutes on the next gesture
+  }catch(e){} },300);
+}catch(e){} }
 // master EFFECTS bus — every SFX routes through this gain so the Effects slider can scale them all.
 var _sfxVol=0.85, _sfxGain=null;
 try{ if(typeof localStorage!=='undefined'){ var _sv=localStorage.getItem('nqSfxVol'); if(_sv!=null) _sfxVol=Math.max(0,Math.min(1,parseFloat(_sv)||0)); } }catch(e){}
@@ -248,7 +270,9 @@ function _playSample(buf,vol){ var c=_ac(); if(!c||!buf) return false; try{ var 
 function _audioSession(){ try{ if(typeof navigator!=='undefined' && navigator.audioSession && navigator.audioSession.type!=='playback') navigator.audioSession.type='playback'; }catch(e){} }
 _audioSession();
 function _unlockAudio(){ _audioSession();   // re-assert: iOS can reset the category across an interruption (call, alarm, route change)
+  _acHadGesture=true;
   try{ var c=_ac(); if(!c) return; if(_acDead(c)) _acResume(c);
+  _acHealth();   // verify this context actually RUNS (clock advances) — a zombie gets rebuilt on the next tap
   var o=c.createOscillator(), g=c.createGain(); g.gain.value=0.00008; o.connect(g); g.connect(c.destination); o.start(); o.stop(c.currentTime+0.03);   // silent blip fully unlocks iOS
   // RESTART the music on this gesture, not just the CONTEXT. Leaving the tab suspends the shared
   // context AND pauses the streamed track (or clears the synth's `cur`); the tab-return
@@ -270,7 +294,7 @@ if(typeof window!=='undefined'){
   // check right on the event can read 'running' and skip a context that is about to go dead.
   document.addEventListener('visibilitychange',function(){ if(!document.hidden){
     try{ var c=_ac(); if(_acDead(c)) _acResume(c); }catch(e){}
-    try{ setTimeout(function(){ var c2=_ac(); if(_acDead(c2)) _acResume(c2); try{ MUSIC.resume(); }catch(e){} },350); }catch(e){}
+    try{ setTimeout(function(){ var c2=_ac(); if(_acDead(c2)) _acResume(c2); try{ MUSIC.resume(); }catch(e){} _acHealth(); },350); }catch(e){}
   } else {
     // PAUSE THE RUN when the page hides (owner report 2026-08-16: "I left a browser and it never
     // auto-paused"). The 10s idle auto-pause can't do this job: it counts this.time.now, and the
@@ -281,7 +305,7 @@ if(typeof window!=='undefined'){
     try{ if(window.__NQ_PAUSE) window.__NQ_PAUSE(true); }catch(e){}
   } });
   // Safari fires these on the page itself when audio is interrupted and restored.
-  ['pageshow','focus'].forEach(function(ev){ try{ window.addEventListener(ev,function(){ var c=_ac(); if(_acDead(c)) _acResume(c); },{passive:true}); }catch(e){} });
+  ['pageshow','focus'].forEach(function(ev){ try{ window.addEventListener(ev,function(){ var c=_ac(); if(_acDead(c)) _acResume(c); _acHealth(); },{passive:true}); }catch(e){} });
 }
 var SFX={
   jump:function(){ _tone(420,760,0.13,'square',0.08); },
@@ -2780,6 +2804,11 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.hudTime=this.hb(this.add.text(W-10,8,String(this.timeLeft),{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#3dff6e'}).setOrigin(1,0));
     this.hb(this.add.text(W/2,8,'WORLD '+def.name,{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#b6bfe0'}).setOrigin(.5,0));
     this.hearts=[]; for(i=0;i<this.maxLives;i++) this.hearts.push(this.hb(this.add.image(14+i*20,30,'heart').setScale(1.2).setAlpha(i<this.lives?1:.16)));
+    // GOD MODE must be LOUD. The lab bench persists its settings in localStorage (nqLabTune), so a
+    // god tick from a PREVIOUS session silently survives reloads behind the collapsed 🛠 panel —
+    // which cost the owner a test session on 2026-08-16 ("not losing hearts, I am not in god mode").
+    // Lab-only by construction (__NQ_SETUP is URL-derived); visibility tracks live toggles in update().
+    if(window.__NQ_SETUP){ this._godBadge=this.hb(this.add.text(14,46,'⚡ GOD MODE ON — hits do nothing (untick in 🛠 LAB)',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ff3860',backgroundColor:'#1a0611',padding:{x:4,y:3}}).setDepth(45).setVisible(!!window.__NQ_GOD)); }
     this.keyIcon=this.hb(this.add.image(W-18,30,'key').setAlpha(.2)); this.keyIcon.setScale(22/this.keyIcon.height);
     // Returning from a speakeasy/bonus room with the carried key (nqCarryKey): grant it and
     // remove the field key — no backtracking past the return point. Never applies to hidden
@@ -5528,13 +5557,16 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     mk(this.add.text(W/2,H/2-26,'PAUSED',{fontFamily:'"Press Start 2P"',fontSize:'18px',color:'#3dff6e'}).setOrigin(.5));
     if(auto) mk(this.add.text(W/2,H/2+2,'you stepped away — your run is safe',{fontFamily:UIFONT,resolution:UIRES,fontSize:'14px',color:'#ffd23f'}).setOrigin(.5));
     var padOn=(typeof window!=='undefined')&&window.__NQ_GAMEPAD_ACTIVE;
-    mk(this.add.text(W/2,H/2+26,(padOn?'PRESS ANY BUTTON':(isTouch?'TAP':'PRESS ANY KEY'))+' TO RESUME  ▶',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#ffffff'}).setOrigin(.5)); },
+    mk(this.add.text(W/2,H/2+26,(padOn?'PRESS ANY BUTTON':(isTouch?'TAP':'PRESS ANY KEY'))+' TO RESUME  ▶',{fontFamily:'"Press Start 2P"',fontSize:'9px',color:'#ffffff'}).setOrigin(.5));
+    // audio-state line, refreshed in update() while paused — see the field-diagnostics note there
+    this._pauseAudioLine=mk(this.add.text(W/2,H/2+44,'audio: …',{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#8f9bb3'}).setOrigin(.5)); this._paLast=0; this._paT0=null; },
   resumeGame:function(){ if(!this.paused) return; this.paused=false;
     try{ this.physics.resume(); }catch(e){}
     try{ this.time.paused=false; }catch(e){}
     try{ this.tweens.resumeAll(); }catch(e){}
     try{ MUSIC.resume(); }catch(e){}
     if(this.pauseUI){ this.pauseUI.forEach(function(o){ try{o.destroy();}catch(e){} }); this.pauseUI=null; }
+    this._pauseAudioLine=null;
     this.lastInputAt=this.time.now; },   // reset idle timer so it doesn't instantly re-pause
 
   update:function(){
@@ -5554,7 +5586,18 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         else if(this.paused && _pe.anyBtnEdge){ _pe.anyBtnEdge=false; this.resumeGame(); }
         else if(this.paused && window.__NQ_PAD_ACTIVE && (_pe.left||_pe.right||_pe.jump||_pe.down||_pe.throw)){ this.resumeGame(); }   // DOM touch-pad buttons preventDefault, so their taps never reach the canvas "TAP TO RESUME" — treat any held pad button as the resume
         else if(!this.paused){ _pe.anyBtnEdge=false; } } }
-    if(this.over||this.paused) return;
+    if(this.over||this.paused){
+      // While the pause card is up, keep its audio-state line honest (field diagnostics: the owner
+      // can READ the context state off an iPad, where there is no console — 'running@12.3s' good,
+      // 'running@FROZEN' = the WebKit zombie, 'suspended/interrupted' = awaiting the resume tap).
+      if(this.paused && this._pauseAudioLine && (!this._paLast || Date.now()-this._paLast>600)){ this._paLast=Date.now();
+        try{ var st=MUSIC.state(), c=st.ctx, adv=null;
+          if(window.__NQ_MUSIC){ var t=null; try{ t=(typeof _AC!=='undefined'&&_AC)?+_AC.currentTime.toFixed(1):null; }catch(e){}
+            adv=(t===this._paT0&&c==='running')?'FROZEN':(t==null?'?':t+'s'); this._paT0=t; }
+          this._pauseAudioLine.setText('audio: '+(c||'none')+'@'+adv+(st.streaming?' · track':' · synth'));
+        }catch(e){} }
+      return;
+    }
     var self=this, p=this.player, b=p.body, now=this.time.now;
     this.penBoss();   // keep every boss inside its own arena and off the bottom of a pit
     try{ window.__NQ_POS=Math.round(p.x); }catch(e){}   // live position for "stuck HERE" feedback tags
@@ -5596,6 +5639,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var right=this.cursors.right.isDown||this.keys.D.isDown||this.touch.right;
     var jump=this.cursors.up.isDown||this.keys.W.isDown||this.keys.SPACE.isDown||this.touch.jump;
     var duck=this.cursors.down.isDown||this.keys.S.isDown||this.touch.down;
+    if(this._godBadge) this._godBadge.setVisible(!!window.__NQ_GOD);   // tracks live 🛠 LAB toggles
     // auto-pause after 10s of no movement/jump/duck input (player stepped away)
     if(left||right||jump||duck) this.lastInputAt=now; else if(this.lastInputAt&&now-this.lastInputAt>10000){ if(this.nearActiveSlot()){ this.lastInputAt=now; } else { this.pauseGame(true); return; } }
     // CROUCH: duck in place on the ground (jump cancels it) — shrinks the hitbox so fireballs / sniper bolts pass over.
