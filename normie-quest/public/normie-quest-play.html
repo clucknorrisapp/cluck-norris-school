@@ -2882,6 +2882,11 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.hudTime=this.hb(this.add.text(W-10,8,String(this.timeLeft),{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#3dff6e'}).setOrigin(1,0));
     this.hb(this.add.text(W/2,8,'WORLD '+def.name,{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#b6bfe0'}).setOrigin(.5,0));
     this.hearts=[]; for(i=0;i<this.maxLives;i++) this.hearts.push(this.hb(this.add.image(14+i*20,30,'heart').setScale(1.2).setAlpha(i<this.lives?1:.16)));
+    // GOD MODE must be LOUD. The lab bench persists its settings in localStorage (nqLabTune), so a
+    // god tick from a PREVIOUS session silently survives reloads behind the collapsed 🛠 panel —
+    // which cost the owner a test session on 2026-08-16 ("not losing hearts, I am not in god mode").
+    // Lab-only by construction (__NQ_SETUP is URL-derived); visibility tracks live toggles in update().
+    if(window.__NQ_SETUP){ this._godBadge=this.hb(this.add.text(14,46,'⚡ GOD MODE ON — hits do nothing (untick in 🛠 LAB)',{fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ff3860',backgroundColor:'#1a0611',padding:{x:4,y:3}}).setDepth(45).setVisible(!!window.__NQ_GOD)); }
     this.keyIcon=this.hb(this.add.image(W-18,30,'key').setAlpha(.2)); this.keyIcon.setScale(22/this.keyIcon.height);
     // Returning from a speakeasy/bonus room with the carried key (nqCarryKey): grant it and
     // remove the field key — no backtracking past the return point. Never applies to hidden
@@ -5698,6 +5703,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var right=this.cursors.right.isDown||this.keys.D.isDown||this.touch.right;
     var jump=this.cursors.up.isDown||this.keys.W.isDown||this.keys.SPACE.isDown||this.touch.jump;
     var duck=this.cursors.down.isDown||this.keys.S.isDown||this.touch.down;
+    if(this._godBadge) this._godBadge.setVisible(!!window.__NQ_GOD);   // tracks live 🛠 LAB toggles
     // auto-pause after 10s of no movement/jump/duck input (player stepped away)
     if(left||right||jump||duck) this.lastInputAt=now; else if(this.lastInputAt&&now-this.lastInputAt>10000){ if(this.nearActiveSlot()){ this.lastInputAt=now; } else { this.pauseGame(true); return; } }
     // CROUCH: duck in place on the ground (jump cancels it) — shrinks the hitbox so fireballs / sniper bolts pass over.
