@@ -303,7 +303,13 @@ function _acHealth(){ try{
     if(c!==_AC) return;                                    // already rebuilt meanwhile
     var zombie=(c.state==='running' && s0==='running' && c.currentTime===t0);
     var stuckDead=(_acDead(c) && _acHadGesture);           // resume() was tried and it stayed dead
-    if(zombie || stuckDead){ try{ c.close(); }catch(e){} _AC=null; _sfxGain=null;
+    if(zombie || stuckDead){
+      // close() returns a PROMISE — swallow its rejection or a zombie that refuses to close leaves
+      // an unhandled rejection AND a live corpse counting against iOS's ~4-concurrent-context cap.
+      // Hit that cap and new AudioContext() starts throwing: silence forever after a few
+      // background cycles (owner's exact 2026-08-16 pattern — fine on early levels, dead later).
+      try{ var cp2=c.close(); if(cp2&&cp2.catch) cp2.catch(function(){}); }catch(e){}
+      _AC=null; _sfxGain=null;
       try{ if(typeof MUSIC!=='undefined' && MUSIC && MUSIC.resume) MUSIC.resume(); }catch(e){} }   // rebuilds via ensure(); fully unmutes on the next gesture
   }catch(e){} },300);
 }catch(e){} }
@@ -5692,11 +5698,15 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       // While the pause card is up, keep its audio-state line honest (field diagnostics: the owner
       // can READ the context state off an iPad, where there is no console — 'running@12.3s' good,
       // 'running@FROZEN' = the WebKit zombie, 'suspended/interrupted' = awaiting the resume tap).
-      if(this.paused && this._pauseAudioLine && (!this._paLast || Date.now()-this._paLast>600)){ this._paLast=Date.now();
+      this._paFrames=(this._paFrames||0)+1;   // update() runs per rAF even while paused — that IS the frame rate
+      if(this.paused && this._pauseAudioLine && (!this._paLast || Date.now()-this._paLast>600)){
+        var _dtMs=Date.now()-(this._paLast||Date.now()-600);
+        var _fps=Math.round(this._paFrames/Math.max(0.001,_dtMs/1000)); this._paFrames=0; this._paLast=Date.now();
         try{ var st=MUSIC.state(), c=st.ctx, adv=null;
           if(window.__NQ_MUSIC){ var t=null; try{ t=(typeof _AC!=='undefined'&&_AC)?+_AC.currentTime.toFixed(1):null; }catch(e){}
             adv=(t===this._paT0&&c==='running')?'FROZEN':(t==null?'?':t+'s'); this._paT0=t; }
-          this._pauseAudioLine.setText('audio: '+(c||'none')+'@'+adv+(st.streaming?' · track':' · synth'));
+          // fps here is the REAL render loop rate — the number to read off an iPad when "it's laggy"
+          this._pauseAudioLine.setText('audio: '+(c||'none')+'@'+adv+(st.streaming?' · track':' · synth')+' · fps '+_fps);
         }catch(e){} }
       return;
     }
