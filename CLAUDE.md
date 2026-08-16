@@ -23,6 +23,11 @@ does not tell you how to write software; use your judgement for that.
 > <baseUrl>` reads the diff and picks the right checks. Don't run the full 82-level state test by
 > reflex — a day went to running it for icon swaps it could never have validated.
 
+> 🩹 **Boss "sunk in the floor", character speed, or the 2×-resolution question? Read
+> `docs/HANDOFF_2026-08-16.md` first.** The boss "waist-deep" look is an ART crop — the boss cutouts
+> have no feet — NOT a position or resolution bug (that finding cost ~24h). A grounding shadow shipped
+> as a mitigation; real boss feet + the powerup-speed tuning are still open.
+
 ---
 
 ## The mission
