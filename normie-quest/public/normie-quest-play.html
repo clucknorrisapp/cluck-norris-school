@@ -118,6 +118,23 @@ var RES=2;
 var UIFONT='system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 var UIRES=3;
 
+// ── scrollFactor(0) UNDER A ZOOMED CAMERA — read this before placing ANY screen-pinned object ──
+// scrollFactor(0) stops an object SCROLLING; it does NOT take it out of the camera transform. The
+// camera still scales it about the viewport CENTRE:  screen = half + zoom*(p - half),  half =
+// cam.width/2. So a "0,0 sized cam.width x cam.height" object does NOT fill the screen at zoom>1 —
+// it draws RES times too big, anchored off-screen, leaving only the middle 1/RES of each axis
+// visible. Two real bugs came from exactly this:
+//   • the world backdrop was placed that way, so levels showed a blown-up CROP of the plate —
+//     the centre 1/4 of it at RES=2, the centre 1/9 at RES=3. That is the "backgrounds are zoomed
+//     in" the owner reported, and it is why 3x looked dramatically worse than 2x. (Fixed 2026-08-16.)
+//   • the HUD container was hardcoded at (W/2,H/2), the value that happens to be right ONLY at
+//     RES=2 — which is why raising RES to 3 slid the HUD off-screen.
+// SCREEN_RECT(cam) returns the rect, in scrollFactor-0 coords, that maps to the FULL canvas at any
+// zoom: {x,y,w,h}, where w,h are always the logical W,H. Use it instead of hardcoding — then the
+// render is genuinely resolution-invariant and RES becomes a pure sharpness knob.
+function SCREEN_RECT(cam){ var z=(cam&&cam.zoom)||1, w=cam.width/z, h=cam.height/z;
+  return { x:(cam.width-w)/2, y:(cam.height-h)/2, w:w, h:h }; }
+
 // ⛔ THERE IS NO BURN-TO-PLAY GATE. The old `BURN_GATE` flag and its `Gate` scene were a MOCK —
 // a fake "send 1,000 NORMIE with memo NQ-XXXX" screen with a [SIMULATE BURN CONFIRMED] button that
 // never touched the chain, wired to nothing, sitting one boolean away from charging real people
@@ -2161,7 +2178,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
             self.add.rectangle(cx,H/2,wpx,H,0xff2244,a).setDepth(2);
             self.add.text(cx,26,String(b.n)+'☠',{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#ff8899'}).setOrigin(.5,0).setDepth(2);
           });
-          self.add.text(90,44,'LAB HEATMAP · '+d.deaths+' deaths / '+d.clears+' clears'
+          var _lr=SCREEN_RECT(self.cameras.main);   // scrollFactor-0 → anchor on the real screen corner
+          self.add.text(_lr.x+90,_lr.y+44,'LAB HEATMAP · '+d.deaths+' deaths / '+d.clears+' clears'
             +(d.topCauses&&d.topCauses[0]?(' · top: '+d.topCauses[0].cause):''),
             {fontFamily:'"Press Start 2P"',fontSize:'8px',color:'#ff8899'}).setScrollFactor(0).setDepth(60);
         }).catch(function(){});
@@ -2243,8 +2261,13 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         if(!_self.sys) return;
         if(_async && !_self.sys.isActive()) return;    // late arrival into a scene the player already left
         if(!_self.textures.exists(_key)) return;
-        _self.add.image(0,0,_key).setOrigin(0,0).setScrollFactor(0).setDisplaySize(_cam.width,_cam.height).setDepth(-58);
-        _self.add.rectangle(0,0,_cam.width,_cam.height,0x05040a,0.22).setOrigin(0,0).setScrollFactor(0).setDepth(-57); };
+        // ⚠️ Placed via SCREEN_RECT, NOT at (0,0) sized cam.width/height — see the note by its
+        // definition. The old form drew the plate RES times oversized and off-centre, so only its
+        // middle 1/RES showed: the levels rendered a blown-up crop of the artwork (moon, skyline
+        // tops and the rooftop foreground all cropped away) instead of the whole backdrop.
+        var _r=SCREEN_RECT(_cam);
+        _self.add.image(_r.x,_r.y,_key).setOrigin(0,0).setScrollFactor(0).setDisplaySize(_r.w,_r.h).setDepth(-58);
+        _self.add.rectangle(_r.x,_r.y,_r.w,_r.h,0x05040a,0.22).setOrigin(0,0).setScrollFactor(0).setDepth(-57); };
       if(this.textures.exists(_key)){ _renderArt(false); }
       else { this.load.image(_key, WORLD_ART[_key]+'?v='+WORLD_ART_VER); this.load.once('complete', function(){ _renderArt(true); }); this.load.once('loaderror', function(){}); this.load.start(); }
     } else {
@@ -2771,10 +2794,14 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.physics.add.overlap(this.projectiles,this.miniworms,this.discHitMiniworm,null,this);   // SOL disc is the ONLY way to kill a ground-worm
     this.nextThrow=0; this.prevThrow=false;
 
-    // HUD — held in a container pinned at the screen centre (W/2,H/2) & scrollFactor 0.
-    // Under the 2x follow-camera zoom that offset makes every child land exactly where its
-    // design coords intend (top-left / top-right), at crisp 2x size, without a second camera.
-    this.hudBox=this.add.container(W/2,H/2).setScrollFactor(0).setDepth(1000);
+    // HUD — a container anchored on the screen's top-left corner, scrollFactor 0, so every child
+    // is laid out in plain design coords (0..W, 0..H) and lands where it intends.
+    // That anchor is NOT (0,0): a scrollFactor-0 object is still scaled about the camera centre,
+    // so the corner sits at SCREEN_RECT(cam).x/.y — see the note by SCREEN_RECT's definition.
+    // It used to be hardcoded (W/2,H/2), which is what SCREEN_RECT returns at RES=2 and ONLY at
+    // RES=2; that hardcode is why raising RES to 3 slid the whole HUD off-screen.
+    var _hr=SCREEN_RECT(this.cameras.main);
+    this.hudBox=this.add.container(_hr.x,_hr.y).setScrollFactor(0).setDepth(1000);
     this.hudScore=this.hb(this.add.text(10,8,'SCORE '+this.score,{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#ffd23f'}));
     this.hudTime=this.hb(this.add.text(W-10,8,String(this.timeLeft),{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#3dff6e'}).setOrigin(1,0));
     this.hb(this.add.text(W/2,8,'WORLD '+def.name,{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#b6bfe0'}).setOrigin(.5,0));
