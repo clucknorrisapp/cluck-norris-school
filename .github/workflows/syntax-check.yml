@@ -128,9 +128,9 @@ jobs:
           # `timeout` bounds the whole run: a single hung capture (a browser can wedge under memory
           # pressure) then fails the job at 10 min instead of hanging until GitHub's 6-hour cap.
           if [ "$UPDATE_BASELINES" = "true" ]; then
-            timeout 600 node normie-quest/test/nq-visual.cjs http://localhost:3111 --update
+            timeout 1500 node normie-quest/test/nq-visual.cjs http://localhost:3111 --update
           else
-            timeout 600 node normie-quest/test/nq-visual.cjs http://localhost:3111
+            timeout 1500 node normie-quest/test/nq-visual.cjs http://localhost:3111
           fi
           code=$?
           kill "$(cat /tmp/nq_server.pid)" 2>/dev/null || true

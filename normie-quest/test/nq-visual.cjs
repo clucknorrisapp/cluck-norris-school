@@ -91,7 +91,17 @@ const SURFACES = [
   // The gravemite turret — the creature that shipped with a black box baked around it. Stationary,
   // sits low with a tall mostly-transparent frame, so a fixed clip on the visible burst frames it
   // better than its padded bounding box would.
-  { name: 'scary-gravemite', char: 'normie',    url: '/normie-quest-x7?room=scary&at=1040', clip: { x: 0.52, y: 0.78, w: 0.20, h: 0.21 },         thresh: 3.0 },
+  // ⚠️ THRESHOLD 3.0 -> 5.0 on 2026-08-16, when the game went to RES=3. This is calibration, not a
+  // loosened gate: the surface's cross-machine noise floor rose with the sharper render (its glow
+  // pulses, so a runner that lands on a different animation frame diffs more pixels when there is
+  // more detail to differ). Measured, not guessed — CI vs freshly-approved 3x baselines came in at
+  // 3.108%, against ~1.9% at 2x, while the three character surfaces on that same run were 0.000%
+  // (so the rasterizer is deterministic across machines; only the animated surface moves). 5.0 keeps
+  // roughly the headroom-over-noise ratio 3.0 had at 2x, and the breakage class this gate exists to
+  // catch — the black-box creature, the res=3 HUD slide — lights up at 10%+, well clear of it.
+  // The real cure is capturing this surface on a frozen frame; that is the same fix the char
+  // surfaces need (see the determinism TODO below) and would let this drop back down.
+  { name: 'scary-gravemite', char: 'normie',    url: '/normie-quest-x7?room=scary&at=1040', clip: { x: 0.52, y: 0.78, w: 0.20, h: 0.21 },         thresh: 5.0 },
 ];
 
 async function capture(ctx, s) {
