@@ -214,6 +214,15 @@ missing file now fails loudly instead of being served the React shell at 200.
   then extra signers. Build unsigned server-side → `provider.signTransaction(tx)` →
   `signed.partialSign(base)` → submit raw. Never pre-sign server-side, and never
   `signAndSendTransaction` when a non-wallet signer exists. `/locker-room` is the reference impl.
+- 🎮 **Phaser: `setScrollFactor(0)` does NOT take an object out of the camera transform.** It stops it
+  scrolling; a zoomed camera still scales it about the viewport centre
+  (`screen = half + zoom*(p - half)`, `half = cam.width/2`). So "place at (0,0), size it
+  `cam.width × cam.height`" draws RES times too big and off-screen. That is what cropped every world
+  backdrop to the middle `1/RES` (the "backgrounds are zoomed in" report — 1/4 of the plate at 2×, 1/9
+  at 3×) and what slid the HUD off at 3×. Use `SCREEN_RECT(cam)` in `game_logic.js` for **any**
+  screen-pinned object; never hardcode the anchor. Fixed 2026-08-16 — and note it survived a whole
+  session of being argued away as "no regression found", so trust the screenshot over the reasoning:
+  compare the level against `normie-quest/public/worlds/<plate>.webp`.
 - **Escape anything from an API, URL or chain metadata before `innerHTML`** — token names and
   symbols are attacker-controlled. Use `CluckUtil.esc`; five hand-rolled copies were missing the
   single-quote escape.
