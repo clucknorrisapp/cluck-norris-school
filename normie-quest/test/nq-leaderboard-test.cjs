@@ -192,8 +192,16 @@ function legacyV2(names, ageMs) {
   }
 
   // ---- audit #29: telemetry hardening (via the real router) ----------------------------------
-  {
-    const express = require('express');
+  // These four cases need express (routes.js mounts on it). CI's node-check job is deliberately
+  // dependency-free, so there they SKIP; the smoke-test job re-runs this file after `npm ci` with
+  // NQ_LB_REQUIRE_ROUTER=1, where a skip is a hard failure — the cases still gate every push.
+  let express = null;
+  try { express = require('express'); }
+  catch (e) {
+    if (process.env.NQ_LB_REQUIRE_ROUTER) { console.log('  FAIL  express missing but NQ_LB_REQUIRE_ROUTER is set'); fail++; }
+    else console.log('  SKIP  telemetry-router cases 15-18 (express not installed — dependency-free run)');
+  }
+  if (express) {
     const app = express();
     app.use(express.json());
     app.use(require('../routes.js'));

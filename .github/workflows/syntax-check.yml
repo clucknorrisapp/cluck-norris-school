@@ -49,8 +49,10 @@ jobs:
       - name: Normie Quest level-geometry guard (jumpability + no floating fixtures)
         run: node normie-quest/test/nq-geometry-check.cjs
       # The leaderboard's anti-forgery floor (points-budget + checkpoint tokens) is load-bearing —
-      # a regression silently re-opens score forgery. Pure-node, no server needed.
-      - name: Normie Quest leaderboard anti-forgery test
+      # a regression silently re-opens score forgery. This job installs nothing, so the four
+      # telemetry cases that mount the real express router SKIP here; the smoke-test job re-runs
+      # the file after npm ci with NQ_LB_REQUIRE_ROUTER=1, which turns that skip into a failure.
+      - name: Normie Quest leaderboard anti-forgery test (dependency-free cases)
         run: node normie-quest/test/nq-leaderboard-test.cjs
       # The per-level point budgets AND the level adjacency graph (checkpoint anti-forgery,
       # audit #6) are DERIVED from the level data; if game_logic.js changes levels but the
@@ -93,6 +95,12 @@ jobs:
           npx playwright install --with-deps chromium
       - name: render every screen and lesson
         run: node scripts/smoke-test.js
+      # Full leaderboard suite including the telemetry-router cases that node-check (no deps)
+      # skips — here express is installed, so a skip means something is wrong and must fail.
+      - name: Normie Quest leaderboard anti-forgery test (full, incl. telemetry router)
+        env:
+          NQ_LB_REQUIRE_ROUTER: "1"
+        run: node normie-quest/test/nq-leaderboard-test.cjs
 
   # The static guards AND the smoke test above still cannot SEE the game's own render. Every costly
   # regression this year was visual and built/deployed clean: the HUD slid off-screen at 3x zoom, a
