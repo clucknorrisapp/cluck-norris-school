@@ -234,7 +234,42 @@ function legacyV2(names, ageMs) {
       const r = await post({ ev: 'death', world: '2-1', x: 2400, cause: 'GROUND WORM', t: 40 });
       ok('tokenless death telemetry on a real level is accepted', r.status === 200);
     }
+    // ---- owner season-reset route: keyed, confirm-guarded ------------------
+    {
+      const get = (q) => fetch(base + '/api/nq/leaderboard/reset' + q);
+      // 19. No admin key configured / wrong key → indistinguishable 404.
+      const r404 = await get('?confirm=RESET&key=wrong');
+      ok('season reset without the admin key is a 404', r404.status === 404);
+      process.env.NQ_FEEDBACK_KEY = 'test-admin-key';
+      // 20. Keyed but unconfirmed → refused, board intact.
+      const rNo = await get('?key=test-admin-key');
+      ok('keyed reset without confirm=RESET refuses', rNo.status === 400);
+      // 21. Keyed + confirmed → archives and clears.
+      const tok = reach(['1-1', '1-2']);
+      await lb.add({ name: 'preseason', world: 1, level: 'run', score: 100 }, tok);
+      const before = (await lb.list()).length;
+      const rGo = await get('?key=test-admin-key&confirm=RESET');
+      const j = await rGo.json();
+      const after = (await lb.list()).length;
+      const archived = JSON.parse(require('fs').readFileSync(j.to, 'utf8'));
+      ok('keyed confirmed reset archives every entry then clears the board',
+         rGo.status === 200 && j.ok === true && before > 0 && j.archived === before
+         && after === 0 && archived.length === before);
+      delete process.env.NQ_FEEDBACK_KEY;
+    }
     srv.close();
+  }
+
+  // ---- resetBoard() store-level (dependency-free — also runs when the router cases skip) ------
+  {
+    const tok = reach(['1-1', '1-2']);
+    await lb.add({ name: 'season1', world: 1, level: 'run', score: 100 }, tok);
+    const before = (await lb.list()).length;
+    const r = await lb.resetBoard();
+    const after = (await lb.list()).length;
+    const archived = JSON.parse(require('fs').readFileSync(r.to, 'utf8'));
+    ok('resetBoard archives all entries to a timestamped file then empties the store',
+       before > 0 && r.archived === before && archived.length === before && after === 0);
   }
 
   console.log('\n' + (fail === 0 ? 'ALL PASS' : fail + ' FAILED') + '  (' + pass + '/' + (pass + fail) + ')');
