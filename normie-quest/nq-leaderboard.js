@@ -368,4 +368,26 @@ async function boards(opts) {
 }
 async function list() { return backend.list(); }
 
-module.exports = { startRun, checkpoint, checkRun, verifyRun, add, topByWorld, topWeekly, topAllTime, boards, list, weekStartMs, usingPg, levelBudget, _makePgBackend: makePgBackend };
+// ---- owner season reset (archive-first) -----------------------------------
+// Wipes the board for a fresh competitive season WITHOUT destroying data: the current entries are
+// copied to a timestamped archive first — JSON store: a sibling file on the volume; Postgres: an
+// nq_scores_archive_<ts> table. If the archive write fails this throws BEFORE anything is cleared,
+// so a failed reset leaves the live board intact. Only reachable via the owner-keyed route.
+async function resetBoard() {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '').slice(0, 15) + 'Z';
+  if (usingPg()) {
+    const n = await backend.count();   // also runs ensureSchema, so the table exists below
+    const t = 'nq_scores_archive_' + stamp.toLowerCase();
+    await backend._pool.query('CREATE TABLE ' + t + ' AS TABLE nq_scores');
+    await backend._pool.query('DELETE FROM nq_scores');
+    return { archived: n, to: t };
+  }
+  const arr = jsonLoad();
+  const to = FILE.replace(/\.json$/, '') + '-archive-' + stamp + '.json';
+  fs.mkdirSync(path.dirname(FILE), { recursive: true });
+  fs.writeFileSync(to, JSON.stringify(arr));   // throws on failure → board untouched
+  if (!jsonSave([])) throw new Error('board_clear_failed');
+  return { archived: arr.length, to };
+}
+
+module.exports = { startRun, checkpoint, checkRun, verifyRun, add, topByWorld, topWeekly, topAllTime, boards, list, weekStartMs, usingPg, levelBudget, resetBoard, _makePgBackend: makePgBackend };
