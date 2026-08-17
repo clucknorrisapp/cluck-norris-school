@@ -8702,6 +8702,7 @@ if(typeof document!=='undefined'){ (function(){
     + '<div class="nqp-pane on" data-pane="lb">'
     + '<input class="nqp-in" id="nqp-handle" maxlength="16" placeholder="Your handle (shown on the board)">'
     + '<div class="nqp-sub" id="nqp-parked" style="display:none;margin:-2px 0 8px"></div>'
+    + '<div id="nqp-prize" style="display:none"></div>'
     + '<div class="nqp-wsel" id="nqp-wsel"></div><div id="nqp-list"><div class="nqp-sub">Loading…</div></div></div>'
     + '<div class="nqp-pane" data-pane="wal"><div id="nqp-wal"></div></div>'
     + '<div class="nqp-pane" data-pane="char"><div class="nqp-sub">Choose who you play as — free &amp; cosmetic, saved on this device. Takes effect on your next run.</div><div id="nqp-chars"></div></div>'
@@ -8715,6 +8716,7 @@ if(typeof document!=='undefined'){ (function(){
     restoreWallet(function (ok) {
       if (!ok) return;
       var wp = ov.querySelector('[data-pane="wal"]'); if (wp && wp.classList.contains('on')) renderWallet();
+      if (window._nqLoadPrize) window._nqLoadPrize();   // a restored winner sees the claim banner without reopening
       // A payment that was already broadcast when the tab reloaded still has to be claimed. Resume
       // the poll silently — no modal is forced open over a running game; if the player happens to
       // be looking at the shop it renders the progress there instead.
@@ -8746,7 +8748,7 @@ if(typeof document!=='undefined'){ (function(){
       // closing the panel (the DOM panel had focus while it was open).
       try { var c = document.querySelector('#screen canvas') || document.querySelector('canvas'); if (c && c.focus) c.focus(); } catch (e) {} }
 
-    btn.addEventListener('click', function () { openOv(); loadBoards(); parkedNote(); });
+    btn.addEventListener('click', function () { openOv(); loadBoards(); parkedNote(); if (window._nqLoadPrize) window._nqLoadPrize(); });
     // The game's tier gate opens the panel straight onto the WALLET tab when a locked world is
     // hit — the verify/buy path is the answer to "why is this locked".
     try { window.__NQ_OPENPREMIUM = function () {
@@ -8811,6 +8813,75 @@ if(typeof document!=='undefined'){ (function(){
       }).join('');
     }
     window._nqLoadBoards = loadBoards; window._nqRenderList = renderList;
+
+    // ---- 🏆 weekly prize claim (winners only) ------------------------------
+    // Last completed week's top verified run(s) win a physical prize. The banner shows ONLY to the
+    // winner's connected wallet; claiming = enter a shipping address and SIGN a consent message that
+    // embeds the address fingerprint (signature only — no transaction, nothing moves). The server
+    // stores the address encrypted and the owner ships from a keyed panel. Non-winners never see
+    // any of this — the board itself is the public surface.
+    var prizeState = null;   // last /claim/status payload for the connected wallet
+    function prizeHost() { return ov.querySelector('#nqp-prize'); }
+    function loadPrize() {
+      var host = prizeHost(); if (!host) return;
+      var pk = walletState.pubkey;
+      if (!pk) { host.style.display = 'none'; return; }
+      fetch('/api/nq/claim/status?pubkey=' + encodeURIComponent(pk)).then(function (r) { return r.json(); })
+        .then(function (j) {
+          prizeState = j;
+          if (!j || !j.ok || !j.enabled || !j.you || !j.you.isWinner) { host.style.display = 'none'; return; }
+          host.style.display = '';
+          if (j.you.claimed) {
+            host.innerHTML = '<div class="nqp-sub" style="border:1px solid #3dff6e55;border-radius:10px;padding:9px 11px;margin:0 0 10px;color:#3dff6e">'
+              + '🏆 Prize claim received — rank #' + j.you.rank + ' last week. The prize is on its way.</div>';
+          } else if (!j.you.windowOpen) {
+            host.style.display = 'none';
+          } else {
+            host.innerHTML = '<div style="border:1px solid #ffd23f66;border-radius:10px;padding:9px 11px;margin:0 0 10px">'
+              + '<div style="color:#ffd23f;font-weight:700">🏆 You topped last week\'s board (rank #' + j.you.rank + ')!</div>'
+              + '<div class="nqp-sub" style="margin:4px 0 8px">You won a physical prize. Claim with the wallet that set the score — signature only, nothing moves.</div>'
+              + '<button type="button" class="nqp-in" id="nqp-prize-open" style="cursor:pointer;background:#ffd23f;color:#1a1533;font-weight:700;border:0">CLAIM PRIZE</button></div>';
+            host.querySelector('#nqp-prize-open').addEventListener('click', showClaimForm);
+          }
+        }).catch(function () { host.style.display = 'none'; });
+    }
+    function showClaimForm() {
+      var host = prizeHost(); if (!host || !prizeState) return;
+      var F = [['name', 'Full name*'], ['line1', 'Street address*'], ['line2', 'Apt / unit (optional)'],
+               ['city', 'City*'], ['region', 'State / region'], ['postal', 'Postal code'], ['country', 'Country*']];
+      host.innerHTML = '<div style="border:1px solid #ffd23f66;border-radius:10px;padding:9px 11px;margin:0 0 10px">'
+        + '<div style="color:#ffd23f;font-weight:700;margin-bottom:6px">🏆 CLAIM — shipping address</div>'
+        + F.map(function (f) { return '<input class="nqp-in" id="nqp-adr-' + f[0] + '" placeholder="' + f[1] + '" maxlength="96" style="margin-bottom:6px">'; }).join('')
+        + '<div class="nqp-sub" style="margin:2px 0 8px">Your wallet will ask you to sign a message authorizing us to use this address <b>solely to ship this prize</b>. It is stored encrypted and deleted after delivery. Signature only — it cannot move funds.</div>'
+        + '<button type="button" class="nqp-in" id="nqp-prize-sign" style="cursor:pointer;background:#ffd23f;color:#1a1533;font-weight:700;border:0">SIGN &amp; CLAIM</button>'
+        + '<div class="nqp-sub" id="nqp-prize-msg" style="margin-top:6px"></div></div>';
+      var msg = function (t, bad) { var e = host.querySelector('#nqp-prize-msg'); if (e) { e.textContent = t; e.style.color = bad ? '#ff9db8' : ''; } };
+      host.querySelector('#nqp-prize-sign').addEventListener('click', function () {
+        var addr = {};
+        F.forEach(function (f) { var e = host.querySelector('#nqp-adr-' + f[0]); addr[f[0]] = e ? e.value : ''; });
+        if (!addr.name || !addr.line1 || !addr.city || !addr.country) { msg('Name, street, city and country are required.', true); return; }
+        var pk = walletState.pubkey, week = prizeState.week;
+        msg('Preparing claim…');
+        fetch('/api/nq/claim/prepare', { method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ pubkey: pk, week: week, address: addr }) }).then(function (r) { return r.json(); })
+          .then(function (prep) {
+            if (!prep || !prep.ok) { msg('Could not prepare: ' + ((prep && prep.status) || 'error'), true); return null; }
+            msg('Check your wallet — sign the claim message…');
+            return getSigner().then(function (p) {
+              if (!p || typeof p.signMessage !== 'function') throw new Error('This wallet cannot sign messages here — open the game in your wallet\'s browser.');
+              return p.signMessage(new TextEncoder().encode(prep.message), 'utf8');
+            }).then(function (signed) {
+              var sigBytes = signed && signed.signature ? signed.signature : signed;
+              return fetch('/api/nq/claim', { method: 'POST', headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ pubkey: pk, week: week, signature: b58encode(sigBytes) }) }).then(function (r) { return r.json(); });
+            }).then(function (sub) {
+              if (sub && sub.ok) { msg(''); loadPrize(); }
+              else msg('Claim failed: ' + ((sub && sub.status) || 'error'), true);
+            });
+          }).catch(function (e) { msg((e && e.message) || 'Something went wrong — try again.', true); });
+      });
+    }
+    window._nqLoadPrize = loadPrize;
 
     // ---- 📺 TV pairing -----------------------------------------------------
     // A television browser cannot run a wallet extension and cannot be deep-linked into a wallet
@@ -8934,7 +9005,7 @@ if(typeof document!=='undefined'){ (function(){
             b.addEventListener('click', function () {
               var w = det[Number(b.getAttribute('data-wi'))];
               ov.querySelector('#nqp-walerr').textContent = 'Connecting ' + w.name + '…';
-              connectWallet(w.provider, w.name).then(function () { renderWallet(); }).catch(function (e) { ov.querySelector('#nqp-walerr').textContent = e.message || String(e); });
+              connectWallet(w.provider, w.name).then(function () { renderWallet(); if (window._nqLoadPrize) window._nqLoadPrize(); }).catch(function (e) { ov.querySelector('#nqp-walerr').textContent = e.message || String(e); });
             });
           });
         } else {
