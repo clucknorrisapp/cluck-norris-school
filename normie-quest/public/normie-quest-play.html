@@ -6291,8 +6291,10 @@ var Over=new Phaser.Class({ Extends:Phaser.Scene,
     // Continue from the World-2 checkpoint if premium banked one; else restart from 1-1.
     var self=this; this.started=false; var go=function(){ if(self.started) return; self.started=true;
       if(self.cont>0){ if(self.contKind==='room'){ self.scene.start('Game',{level:self.cont,score:0,lives:3,lab:1}); }   // private-room retry keeps the tier-gate bypass the URL entry had (audit #24)
-                        else if(typeof BRIEFINGS!=='undefined'&&BRIEFINGS[self.cont]) self.scene.start('Briefing',{next:self.cont,score:self.contScore});   // show the world briefing (control reminder) on continue
-                        else self.scene.start('Game',{level:self.cont,score:self.contScore,lives:3}); }
+                        else { // score-carrying continue: reissue the run token FIRST so the banked total stays inside the budget ceiling (audit #7)
+                          if(window.NQLB&&window.NQLB.continueRun){ try{ window.NQLB.continueRun(); }catch(e){} }
+                          if(typeof BRIEFINGS!=='undefined'&&BRIEFINGS[self.cont]) self.scene.start('Briefing',{next:self.cont,score:self.contScore});   // show the world briefing (control reminder) on continue
+                          else self.scene.start('Game',{level:self.cont,score:self.contScore,lives:3}); } }
       else self.scene.start('Game',{level:0,score:0,lives:3}); };
     this.time.delayedCall(500,function(){ self.input.once('pointerdown',go); self.input.keyboard.once('keydown',go); });
     padAdvance(self, go);   // controller button also continues
@@ -8072,6 +8074,10 @@ if(typeof document!=='undefined'){ (function(){
   // only ever make a run look MORE honest.
   var parked = null;
   var pendingLevels = [];   // levels reached but not yet checkpointed (run-start / a prior checkpoint still in flight)
+  // The token of the run that just ENDED (game over). CONTINUE trades it at /api/nq/run-continue
+  // for a fresh-nonce token carrying the same proven level list, so the banked cumulative score
+  // stays inside the budget ceiling instead of instantly flagging suspect (audit #7).
+  var endedToken = null;
   function postScore(body) {
     fetch('/api/nq/score', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
       .then(function () { try { if (window._nqLoadBoards) window._nqLoadBoards(); } catch (e) {} })
@@ -8108,12 +8114,39 @@ if(typeof document!=='undefined'){ (function(){
     // Called when a run is ABANDONED (≡ Levels / back to level select): drop the token so the
     // next run gets a fresh issuedAt — reusing the old one made the server's score/second
     // plausibility check judge the new score against the old run's start time.
-    abandonRun: function () { run = null; pendingLevels = []; },
+    abandonRun: function () { run = null; pendingLevels = []; endedToken = null; },
+    // Called by the Over scene when the player takes a score-carrying CONTINUE, BEFORE the Game
+    // scene restarts. Reserves the run slot synchronously (so enterLevel won't mint a fresh
+    // one-level token) and swaps the ended token for a same-level-list reissue. If the swap fails
+    // (network blip, token past its 2h TTL) it falls back to a fresh run-start seeded with the
+    // resumed level — the pre-fix behavior, whose score the server may mark suspect, but the run
+    // still records rather than vanishing.
+    continueRun: function () {
+      var t = endedToken; endedToken = null;
+      if (!t) return;
+      run = { token: null, _cpInFlight: false };
+      var fallback = function () {
+        if (!run || run.token) return;
+        var lvl = pendingLevels.length ? pendingLevels[0] : '';
+        fetch('/api/nq/run-start?level=' + encodeURIComponent(lvl)).then(function (r) { return r.json(); })
+          .then(function (j) { if (j && j.ok && run && !run.token) { run.token = { v: j.v, lv: j.lv, max: j.max, nonce: j.nonce, issuedAt: j.issuedAt, sig: j.sig }; flushPending(); } })
+          .catch(function () {});
+      };
+      fetch('/api/nq/run-continue', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: t }) })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          // keep the reissued token WHOLE (it carries the signed lastCpAt) — never rebuild it field-by-field
+          if (j && j.ok && j.token && run) { run.token = j.token; flushPending(); }
+          else fallback();
+        })
+        .catch(fallback);
+    },
     // Called from Game.create each level. Starts a v2 run token on the FIRST level; on every level
     // after, checkpoints that level so the server credits its max-point budget. The final score is
     // then bounded by the SUM of the reached levels' budgets (points-based, not time-based).
     enterLevel: function (name) {
       if (!run) {
+        endedToken = null;                       // a brand-new run supersedes any continuable old one
         run = { token: null, _cpInFlight: false };
         fetch('/api/nq/run-start?level=' + encodeURIComponent(name || '')).then(function (r) { return r.json(); })
           .then(function (j) { if (j && j.ok && run) { run.token = { v: j.v, lv: j.lv, max: j.max, nonce: j.nonce, issuedAt: j.issuedAt, sig: j.sig }; flushPending(); } })
@@ -8127,6 +8160,7 @@ if(typeof document!=='undefined'){ (function(){
     submitRun: function (world, score) {
       var r = run; run = null; pendingLevels = [];
       if (!r) return;                            // no run token = nothing the server would accept
+      endedToken = r.token;                      // kept so a CONTINUE can trade it for a reissue (audit #7)
       var body = { name: handle, world: world, level: 'run', score: Math.round(score || 0), token: r.token };
       if (walletState.pubkey && walletState.token) { body.wallet = walletState.pubkey; body.walletToken = walletState.token; }
       if (!handle) { parked = body; return; }    // held until they name themselves — see `parked`

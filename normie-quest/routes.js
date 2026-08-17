@@ -181,6 +181,17 @@ router.post('/api/nq/run-checkpoint', (req, res) => {
     res.status(r.ok ? 200 : 400).json(r);
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
+// CONTINUE (audit #7): the game-over submit burns the run nonce, so a continued run POSTs its
+// ended token here and gets back a fresh-nonce token carrying the same proven level list — the
+// banked cumulative score stays inside the ceiling instead of instantly reading as forged.
+router.post('/api/nq/run-continue', (req, res) => {
+  if (throttled(req, 'runcontinue', 30)) return res.status(429).json({ ok: false, error: 'slow_down' });
+  try {
+    const b = req.body || {};
+    const r = leaderboard.continueRun(b.token || null);
+    res.status(r.ok ? 200 : 400).json(r);
+  } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
 router.post('/api/nq/score', async (req, res) => {
   if (throttled(req, 'score', 60)) return res.status(429).json({ ok: false, error: 'slow_down' });
   try {
