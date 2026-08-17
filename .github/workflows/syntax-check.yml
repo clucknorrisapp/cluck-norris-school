@@ -54,6 +54,10 @@ jobs:
       # the file after npm ci with NQ_LB_REQUIRE_ROUTER=1, which turns that skip into a failure.
       - name: Normie Quest leaderboard anti-forgery test (dependency-free cases)
         run: node normie-quest/test/nq-leaderboard-test.cjs
+      # Prize claims need real ed25519 signatures (tweetnacl et al) — the whole file skips here
+      # and runs strict in smoke-test. Kept in this job anyway so a syntax error still fails fast.
+      - name: Normie Quest prize-claim test (skips without deps)
+        run: node normie-quest/test/nq-claims-test.cjs
       # The per-level point budgets AND the level adjacency graph (checkpoint anti-forgery,
       # audit #6) are DERIVED from the level data; if game_logic.js changes levels but the
       # committed JSON isn't regenerated, the ceiling/graph drifts — a stale graph falsely
@@ -101,6 +105,10 @@ jobs:
         env:
           NQ_LB_REQUIRE_ROUTER: "1"
         run: node normie-quest/test/nq-leaderboard-test.cjs
+      - name: Normie Quest prize-claim test (full, incl. signatures + routes)
+        env:
+          NQ_CLAIMS_REQUIRE_DEPS: "1"
+        run: node normie-quest/test/nq-claims-test.cjs
 
   # The static guards AND the smoke test above still cannot SEE the game's own render. Every costly
   # regression this year was visual and built/deployed clean: the HUD slid off-screen at 3x zoom, a
