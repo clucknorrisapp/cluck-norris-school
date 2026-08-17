@@ -118,7 +118,13 @@ var W=480, H=270, TILE=24, GY=H-TILE;      // GY = ground top surface
 // Cost: 2.25x the fill rate vs 2x. If a low-end phone ever struggles, this is the one number to drop;
 // nothing else depends on it. There is deliberately NO ?res= URL override (a stale cached URL must
 // not be able to pin a device to a different resolution).
-var RES=3;
+// TOUCH DEVICES GET 2x (2026-08-17): the 3x buffer's extra GPU memory pushed the owner's iPad over
+// iOS's background-eviction threshold — every trip away from the browser came back with WebGL
+// degraded (laggy) and the audio context killed or zombified. None of that happened at 2x, and the
+// timeline matches exactly (both symptoms appeared with the 3x ship). Detection is maxTouchPoints:
+// modern iPadOS masquerades as desktop Mac in the UA, but Macs report 0 touch points. Desktops keep
+// the full 3x sharpness.
+var RES=3; try{ if(typeof navigator!=='undefined' && navigator.maxTouchPoints>1) RES=2; }catch(e){}
 // Clean, highly-legible UI font for menus / interstitials (the pixel fonts read as blocky
 // once scaled 2x by the scene cameras). UIRES renders text at higher DPI so it stays crisp
 // despite pixelArt:true. Big arcade titles keep 'Press Start 2P'; body text uses this.
