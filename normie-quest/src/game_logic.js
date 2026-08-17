@@ -294,7 +294,7 @@ function _unlockAudio(){ _audioSession();   // re-assert: iOS can reset the cate
   // then did resumeGame restart it). This gesture is a guaranteed restart point. Idempotent when
   // already playing; called synchronously so curEl.play() keeps the gesture. This is the fix for
   // "music/sound won't come back after switching away from the browser".
-  try{ if(typeof MUSIC!=='undefined' && MUSIC && MUSIC.resume) MUSIC.resume(); }catch(e){}
+  try{ if(typeof MUSIC!=='undefined' && MUSIC && MUSIC.resume && !window.__NQ_PAUSED) MUSIC.resume(); }catch(e){}   // a keystroke in the feedback modal must not restart music behind the pause card (audit #20); resumeGame() restarts it inside the same resume gesture
   // Decode the power-up sample AFTER the unlock, off the gesture's critical path (a deferred timer),
   // so nothing about the sample can interfere with iOS's finicky unlock heuristic (which gates ALL sound).
   try{ setTimeout(_loadSfx,0); }catch(e){}
@@ -306,7 +306,7 @@ if(typeof window!=='undefined'){
   // check right on the event can read 'running' and skip a context that is about to go dead.
   document.addEventListener('visibilitychange',function(){ if(!document.hidden){
     try{ var c=_ac(); if(_acDead(c)) _acResume(c); }catch(e){}
-    try{ setTimeout(function(){ var c2=_ac(); if(_acDead(c2)) _acResume(c2); try{ MUSIC.resume(); }catch(e){} _acHealth(); },350); }catch(e){}
+    try{ setTimeout(function(){ var c2=_ac(); if(_acDead(c2)) _acResume(c2); try{ if(!window.__NQ_PAUSED) MUSIC.resume(); }catch(e){} _acHealth(); },350); }catch(e){}   // context revival stays unconditional; the TRACK restart respects the pause card (audit #20)
   } else {
     // PAUSE THE RUN when the page hides (owner report 2026-08-16: "I left a browser and it never
     // auto-paused"). The 10s idle auto-pause can't do this job: it counts this.time.now, and the
@@ -529,7 +529,14 @@ var MUSIC=(function(){
       streaming=true; synthStop();                                   // real track takes over → silence the synth
       if(curEl && curEl!==el){ var old=curEl; fade(old,0,700,function(){ try{old.pause();}catch(e){} }); }
       curEl=el; try{ el.currentTime=0; }catch(e){}
-      var p=el.play(); if(p&&p.catch) p.catch(function(){ missing[name]=true; streaming=false; if(want===name) synthPlay(name); });
+      var p=el.play(); if(p&&p.catch) p.catch(function(err){
+        // Only a REAL media failure blacklists the track (audit #22): NotAllowedError is just
+        // "not in a gesture yet" (first play fires from scene create) and AbortError is "tab hid
+        // mid-start" — both transient, and marking them missing[] silently downgraded the whole
+        // produced soundtrack to the synth for the rest of the session. The 404/decode path still
+        // blacklists via makeEl's error listener after every extension fails.
+        var nm=err&&err.name; if(nm!=='NotAllowedError'&&nm!=='AbortError') missing[name]=true;
+        streaming=false; if(want===name) synthPlay(name); });
       fade(el, muted?0:effVol(), 700); };
     if(el.readyState>=3) go(); else el.addEventListener('canplaythrough',go,{once:true}); }
   function playInternal(name){ if(!TR[name]) return; if(name===want) return; want=name;
@@ -561,7 +568,12 @@ var MUSIC=(function(){
       if(muted) return;
       if(curEl && streaming){ var p=curEl.play(); if(p&&p.catch) p.catch(function(){}); }
       else if(want && !streaming){ try{ synthPlay(want); }catch(e){} try{ tryFile(want); }catch(e){} } },   // tryFile: after a context rebuild the produced track must re-stream, not wait for the next level
-    toggle:function(){ muted=!muted; if(gain) gain.gain.value=muted?0:0.06*musScale; if(curEl) fade(curEl,muted?0:effVol(),150); try{ localStorage.setItem('nqMute',muted?'1':'0'); }catch(e){} return muted; },
+    toggle:function(){ muted=!muted; if(gain) gain.gain.value=muted?0:0.06*musScale; if(curEl) fade(curEl,muted?0:effVol(),150);
+      // unmute after a tab-return: suspend() paused the element and resume() bailed on the muted
+      // guard, so gain-fading alone left silence until some unrelated input (audit #21). The
+      // unmute click is a genuine gesture — restart playback with it.
+      if(!muted){ try{ if(curEl && curEl.paused && streaming){ var tp=curEl.play(); if(tp&&tp.catch) tp.catch(function(){}); } else if(want && !streaming){ synthPlay(want); tryFile(want); } }catch(e){} }
+      try{ localStorage.setItem('nqMute',muted?'1':'0'); }catch(e){} return muted; },
     muted:function(){ return muted; },
     setVol:function(s){ musScale=Math.max(0,Math.min(1,s)); if(gain) gain.gain.value=muted?0:0.06*musScale; if(curEl) fade(curEl,muted?0:effVol(),120); try{ localStorage.setItem('nqMusVol',String(musScale)); }catch(e){} },
     getVol:function(){ return musScale; },
@@ -570,7 +582,7 @@ var MUSIC=(function(){
 })();
 try{ if(typeof window!=='undefined') window.__NQ_MUSIC=MUSIC; }catch(e){}
 // Pause music when the tab is hidden / browser minimized; resume on return (HTMLAudio doesn't stop on its own).
-try{ if(typeof document!=='undefined') document.addEventListener('visibilitychange',function(){ try{ if(document.hidden) MUSIC.suspend(); else MUSIC.resume(); }catch(e){} }); }catch(e){}
+try{ if(typeof document!=='undefined') document.addEventListener('visibilitychange',function(){ try{ if(document.hidden) MUSIC.suspend(); else if(!window.__NQ_PAUSED) MUSIC.resume(); }catch(e){} }); }catch(e){}   // paused game keeps its silence — resumeGame() owns the restart (audit #20)
 
 var C={ ink:0x0d0b1e, coin:0xffd23f, coinDk:0xb8860b, danger:0xff3860, phos:0x3dff6e, white:0xffffff,
         dirt:0x8a5a2b, dirtDk:0x5e3c1a, grass:0x3dff6e, grassDk:0x1da84a,
@@ -975,7 +987,7 @@ var LEVELS=[
     spikes:[[1188],[1212],[2900],[2924],[4600],[4624],[5488],[5512],[6760],[6784],[7188],[7212],[7860],[7884]],
     powerups:[['omegachad',700,230],['whale',2500,230],['coldwallet',3200,230],['candle',7300,230],['megawhale',5500,112]],
     airdrops:[[2100,152],[4400,198]],
-    coins:[[300,224],[360,224],[720,224],[1120,196],[1560,224],[1980,224],[2340,196],[2760,224],[3140,196],[3620,224],[4020,196],[4500,224],[4880,196],[5360,224],[5760,196],[6220,224],[6160,196],[6380,150],[6600,120],[6820,196],[7040,150],[7260,120],[7480,196],[7920,150],[8140,120]],
+    coins:[[300,224],[360,224],[720,224],[1120,196],[1560,224],[1950,224],[2340,196],[2760,224],[3140,196],[3620,224],[4020,196],[4500,224],[4880,196],[5360,224],[5760,196],[6220,224],[6160,196],[6380,150],[6600,120],[6820,196],[7040,150],[7260,120],[7480,196],[7920,150],[8140,120]],
     enemies:[['jeet',460,230,70],['sniper',760,230,30],['ghost',1100,212,80],['bitmaxi',1560,230,70],['bot',1980,230,70],['sniper',2400,230,30],['ghost',2900,212,70],['bitmaxi',3340,230,70],['bot',3780,230,70],['sniper',4180,230,30],['ghost',4700,212,80],['bot',5600,230,70],['sniper',5880,230,30],['bot',6240,230,70],['sniper',6584,230,70],['ghost',6998,212,70],['bitmaxi',7272,230,70],['bot',7616,230,70],['sniper',7960,230,70],['sniper',5330,230,40],['sniper',5760,230,40],['ghost',5500,150,70],['drillbit',1072,230,90],['drillbit',4853,230,90],['drillbit',7080,230,90]],
     pumpdumps:[[1000,174],[3200,174],[5400,174],[6380,174]],
     honeypots:[[2000,232],[4900,232],[7076,232]],
@@ -999,7 +1011,7 @@ var LEVELS=[
 
   // ===== WORLD 9 — THE MINES (underground; dark torchlight levels) =====
   {"name":"9-1","sub":"THE SHAFT","theme":13,"bgArt":"w09mines","width":7800,"gaps":[[1300,1396],[2560,2680],[4260,4480],[5080,5192],[5920,6032],[6728,6888]],"walls":[[2820,4,"stone",2],[3980,4,"stone",2],[4160,3,"steel",3],[5620,3,"steel",3],[7360,4,"steel",3]],"plats":[[420,2,120,"stone"],[1660,2,120,"steel"],[1960,2,108,"steel"],[2280,3,84,"stone"],[5360,2,102,"stone"],[6360,2,102,"stone"]],"spikes":[[3060],[3300],[3540]],"powerups":[["candle",820,230],["solana",1200,230],["diamond",2540,230],["omegachad",4110,230],["candle",5900,230],["bull",5550,230]],"airdrops":[[3520,60],[6360,70]],"coins":[[340,200],[440,150],[560,130],[680,150],[1520,120],[1820,102],[2120,84],[2280,60],[2340,60],[3160,96],[3340,110],[3520,96],[3700,110],[4300,150],[4370,120],[4440,150],[5090,150],[5180,120],[5270,150],[5360,84],[6120,120],[6240,120],[6960,196],[7020,168],[7090,150],[7160,168],[7280,196],[7460,150]],"enemies":[["jeet",900,230,60],["ghost",1050,206,70],["fudster",1900,120,70],["bitmaxi",2300,66,36],["gasgoblin",2900,230,50],["troll",3600,230,60],["fudster",4700,230,70],["ghost",5100,200,80],["fudster",5711,230,70],["ghost",6082,212,70],["troll",6964,230,70],["sniper",7300,230,30],["drillbit",1117,230,90],["drillbit",4518,230,90]],"rugpullers":[[2620,246,120],[5136,246,120]],"pumpdumps":[[3340,150]],"honeypots":[[1200,232],[4560,232],[5880,232],[6960,232]],"npcs":[[3760,90]],"bonusblocks":[[980,5],[3060,8],[6620,"omegachad"],[7460,"candle"]],"caches":[],"gates":[],"firebars":[[3520,150,52,140,4]],"planks":[[560,4],[1300,5],[4260,9],[6728,5]],"yields":[[6120,178,5]],"movers":[[1520,168,"y",50,40],[1820,150,"y",50,40],[2120,132,"y",50,40]],"rugplats":[],"dumpzones":[],"time":205,"diff":2.1,"dark":true,"door":7680,"key":[2280,60],"miniworms":[1560,6316]},
-  {"name":"9-2","sub":"THE DARK FOREST","theme":13,"bgArt":"w09mines","width":8400,"gaps":[[1300,1396],[2536,2672],[4264,4376],[5128,5240],[5968,6128],[6856,6944],[7672,7856]],"walls":[[2820,4,"steel",2],[3980,4,"steel",2],[5668,3,"steel",3],[7320,4,"steel",3]],"plats":[[1520,2,60,"stone"],[1760,2,60,"steel"],[2000,2,60,"stone"],[2240,2,60,"steel"],[2440,3,72,"stone"],[5420,2,102,"steel"]],"spikes":[[3060],[3300],[3540]],"powerups":[["candle",700,230],["solana",1120,230],["whale",2500,230],["coldwallet",3200,230],["megawhale",5500,112],["candle",7300,230]],"airdrops":[[3520,60],[6300,70]],"coins":[[300,224],[360,224],[720,150],[1520,130],[1760,110],[2000,130],[2240,96],[2440,60],[2500,60],[3160,96],[3340,110],[3520,96],[3700,110],[4300,150],[4340,120],[5090,150],[5180,120],[5270,150],[5420,84],[6040,130],[6220,120],[6940,196],[7040,168],[7120,150],[7260,168],[7480,150],[7920,150],[8140,120]],"enemies":[["bot",460,230,70],["fudster",900,230,70],["ghost",1100,212,80],["gasgoblin",1980,140,70],["bitmaxi",2460,66,36],["sniper",2900,230,30],["fudster",3780,230,70],["troll",4700,230,70],["ghost",5100,200,80],["gasgoblin",6240,230,70],["ghost",6420,200,70],["troll",7616,230,70],["sniper",7960,230,30],["drillbit",2738,230,90],["drillbit",6439,230,90]],"rugpullers":[[2604,246,144],[5184,246,120]],"pumpdumps":[[3340,150],[5140,174]],"honeypots":[[1200,232],[2000,232],[4900,232],[5940,232],[7020,232]],"npcs":[[3740,90]],"bonusblocks":[[1044,5],[3060,8],[6600,"omegachad"],[7460,"candle"]],"caches":[],"gates":[],"firebars":[[560,162,46,130,4],[3520,150,52,-140,4]],"planks":[[1300,5],[4264,5],[6856,5],[7672,9]],"yields":[],"movers":[[6040,168,"x",120,44]],"rugplats":[],"dumpzones":[],"warps":[[1200,70]],"time":215,"diff":2.2,"dark":true,"door":8280,"key":[2440,60],"miniworms":[1890,7028]},
+  {"name":"9-2","sub":"THE DARK FOREST","theme":13,"bgArt":"w09mines","width":8400,"gaps":[[1300,1396],[2536,2672],[4264,4376],[5128,5240],[5968,6128],[6856,6944],[7672,7856]],"walls":[[2820,4,"steel",2],[3980,4,"steel",2],[5668,3,"steel",3],[7320,4,"steel",3]],"plats":[[1520,2,60,"stone"],[1760,2,60,"steel"],[2000,2,60,"stone"],[2240,2,60,"steel"],[2440,3,72,"stone"],[5420,2,102,"steel"]],"spikes":[[3060],[3300],[3540]],"powerups":[["candle",700,230],["solana",1120,230],["whale",2500,230],["coldwallet",3200,230],["megawhale",5500,112],["candle",7300,230]],"airdrops":[[3520,60],[6300,70]],"coins":[[300,224],[360,224],[720,150],[1520,130],[1760,110],[2000,130],[2240,96],[2440,60],[2500,60],[3160,96],[3340,110],[3520,96],[3700,110],[4300,150],[4340,120],[5090,150],[5180,120],[5270,150],[5420,84],[6040,130],[6220,120],[6940,196],[7040,168],[7120,150],[7260,168],[7480,150],[7920,150],[8140,120]],"enemies":[["bot",460,230,70],["fudster",900,230,70],["ghost",1100,212,80],["gasgoblin",1980,140,70],["bitmaxi",2460,66,36],["sniper",2900,230,30],["fudster",3780,230,70],["troll",4700,230,70],["ghost",5100,200,80],["gasgoblin",6240,230,70],["ghost",6420,200,70],["troll",7616,230,70],["sniper",7960,230,30],["drillbit",2738,230,90],["drillbit",6439,230,90]],"rugpullers":[[2604,246,144],[5184,246,120]],"pumpdumps":[[3340,150],[5140,174]],"honeypots":[[1120,232],[2000,232],[4900,232],[5940,232],[7020,232]],"npcs":[[3740,90]],"bonusblocks":[[1044,5],[3060,8],[6600,"omegachad"],[7460,"candle"]],"caches":[],"gates":[],"firebars":[[560,162,46,130,4],[3520,150,52,-140,4]],"planks":[[1300,5],[4264,5],[6856,5],[7672,9]],"yields":[],"movers":[[6040,168,"x",120,44]],"rugplats":[],"dumpzones":[],"warps":[[1200,70]],"time":215,"diff":2.2,"dark":true,"door":8280,"key":[2440,60],"miniworms":[1890,7028]},
   {"name":"9-3","sub":"THE 51% ATTACK","theme":13,"bgArt":"w09mines","width":6700,"gaps":[[728,840],[2176,2264],[2856,3040],[3592,3728],[4240,4376],[4976,5072],[5688,5800]],"walls":[[3160,3,"steel",3],[3860,4,"steel",3],[4532,4,"stone",3],[5300,3,"steel",4]],"plats":[[1580,2,150,"stone"],[1840,2,138,"stone"],[2100,2,126,"stone"],[2340,2,88,"stone"],[2560,2,138,"stone"],[4400,2,150,"steel"],[4940,2,126,"steel"],[5660,2,126,"stone"]],"spikes":[[960],[984],[2760],[2784],[3480],[3504],[5168],[5192],[5847],[5871]],"powerups":[["supergeek",760,230],["solana",1340,230],["diamond",2050,230],["bull",3552,230],["omegachad",6025,230]],"airdrops":[[1500,152],[3334,198]],"coins":[[320,120],[380,120],[640,196],[1620,120],[1880,118],[2140,100],[2380,68],[2430,68],[2960,120],[3220,140],[3560,120],[3620,150],[3700,120],[3940,106],[4420,120],[4560,120],[4640,122],[4860,120],[5264,150],[5520,150],[5960,120]],"enemies":[["paper",640,230,30],["fudster",960,230,60],["ghost",1240,212,80],["gasgoblin",2000,230,70],["bitmaxi",2340,72,36],["sniper",2620,230,30],["fudster",3080,230,70],["sandwich",4160,230,60],["ghost",4560,212,80],["sniper",4898,230,30],["ghost",5904,212,70],["fudster",6490,230,70],["drillbit",3121,230,90]],"rugpullers":[[3660,246,144]],"pumpdumps":[[2880,174],[3560,174],[3660,174]],"honeypots":[[1300,232],[4020,232],[5140,232]],"npcs":[[2380,90]],"bonusblocks":[[1090,5],[3140,8],[5269,8]],"caches":[],"gates":[],"firebars":[[3340,150,52,140,4],[3620,146,52,-140,4]],"planks":[[728,5],[2176,5],[2856,9],[5688,5]],"yields":[],"movers":[[4900,150,"y",52,42]],"rugplats":[[304,3,150]],"dumpzones":[],"time":260,"diff":2.35,"boss":true,"bossType":"golem","next":34,"door":6500,"key":[2340,64],"miniworms":[2010,4020]},
   // ===== HIDDEN BONUS LEVELS (index 27+) — reachable ONLY via a speakeasy warp. hidden:true keeps them
   //       out of the normal progression + the level-select; their door RETURNS you to the surface. =====
@@ -1099,7 +1111,7 @@ var LEVELS=[
   {"name":"11-3","sub":"THE DRAGON'S KEEP","theme":16,"bgArt":"w11citadel","width":6700,"gaps":[[728,840],[2144,2304],[2896,2984],[3576,3760],[4232,4368],[4960,5096],[5696,5792]],"walls":[[3160,3,"crate",2],[3860,3,"crate",2],[4532,3,"stone",3],[5300,4,"steel",4]],"plats":[[1580,2,60,"crate"],[1820,2,60,"stone"],[2060,2,60,"crate"],[2300,2,60,"steel"],[2500,3,72,"crate"],[4400,2,150,"stone"],[4940,2,150,"steel"],[5660,2,138,"crate"]],"spikes":[[960],[984],[2760],[2784],[3480],[3504],[5168],[5192],[5847],[5871]],"powerups":[["supergeek",900,230],["solana",1340,230],["diamond",2352,230],["bull",3552,230],["candle",6240,230]],"airdrops":[[1500,152],[3334,198]],"coins":[[300,196],[600,130],[660,196],[1580,130],[1820,110],[2060,130],[2300,96],[2500,60],[2560,60],[2960,120],[3220,140],[3560,120],[3620,150],[3720,120],[3940,106],[4420,120],[4560,122],[4640,100],[4860,120],[5264,150],[5520,150],[5960,120]],"enemies":[["gasgoblin",500,230,70],["fudster",960,230,60],["ghost",1240,212,80],["gasgoblin",2060,140,70],["bitmaxi",2500,66,36],["sniper",2620,230,30],["fudster",3080,230,70],["sandwich",4160,230,60],["ghost",4560,212,80],["sniper",4898,230,30],["ghost",5904,212,70],["fudster",6490,230,70],["drillbit",1574,230,90]],"rugpullers":[[4300,246,144]],"pumpdumps":[[2880,174],[3400,174],[3660,174]],"honeypots":[[1300,232],[4020,232],[5140,232]],"npcs":[[2417,90]],"bonusblocks":[[1090,5],[3140,8],[5269,8]],"caches":[],"gates":[[680,1300,1800,0],[2385,1300,1800,0]],"firebars":[[3220,150,52,140,4],[3620,146,52,-140,4],[4835,164,50,150,4]],"planks":[[728,5],[2144,8],[2896,5],[3576,9],[4960,5],[5696,5]],"yields":[],"movers":[[4900,150,"y",52,44]],"rugplats":[],"dumpzones":[],"time":260,"diff":2.85,"boss":true,"bossType":"mevdragon","next":40,"door":6500,"key":[2500,60],"miniworms":[2010,4020]},
   {"name":"12-1","sub":"THE CRASH SITE","theme":17,"bgArt":"w12relaunch","width":7800,"gaps":[[1300,1396],[2624,2720],[4336,4448],[5152,5312],[6048,6136],[6864,7048]],"walls":[[3160,3,"stone",2],[4020,3,"stone",2],[5660,3,"crate",4],[6520,4,"stone",3]],"plats":[[1660,2,120,"crate"],[1980,2,108,"stone"],[2280,3,84,"crate"],[5360,2,102,"crate"],[6240,2,102,"stone"]],"spikes":[[3028],[3052],[3540],[7070],[7094]],"powerups":[["caffeine",700,230],["solana",1200,230],["omegachad",2560,230],["candle",3264,230],["whale",5328,230],["coldwallet",6330,230]],"airdrops":[[1980,152],[3760,198]],"coins":[[300,224],[360,224],[820,130],[1660,96],[1900,100],[2140,96],[2280,60],[2340,60],[3160,96],[3400,110],[3620,96],[3940,110],[4460,150],[4780,120],[5360,120],[5580,150],[5800,120],[6020,120],[6240,90],[6680,196],[7120,150],[7340,120],[7560,196]],"enemies":[["bitmaxi",480,230,70],["ghost",1120,212,80],["bot",1620,230,70],["bitmaxi",2300,66,36],["bot",2860,230,70],["jeet",3300,230,60],["ghost",4180,212,80],["bot",4600,230,70],["bot",5784,230,70],["ghost",6198,212,70],["bitmaxi",6816,230,70],["bot",7504,230,70],["drillbit",2209,230,90],["drillbit",5610,230,90]],"rugpullers":[[2672,246,120]],"pumpdumps":[[1120,174],[3240,150]],"honeypots":[[1250,232],[2400,232],[4700,232],[6220,232]],"npcs":[[2500,90]],"bonusblocks":[[1490,5],[2930,8],[5947,8],[6793,8]],"caches":[],"gates":[],"firebars":[[3600,150,52,140,4]],"planks":[[1300,5],[1740,6],[2120,5],[4336,5],[5152,8],[6048,5],[6864,9]],"yields":[],"movers":[[6020,150,"y",52,44]],"rugplats":[[3354,3,150],[6654,3,150]],"dumpzones":[[1656,2600],[5384,3000]],"time":210,"diff":2.9,"door":7680,"key":[2280,60],"miniworms":[1560,5040]},
   {"name":"12-2","sub":"THE FORK","theme":17,"bgArt":"w12relaunch","width":8400,"gaps":[[1300,1396],[2560,2672],[4272,4384],[5104,5264],[5968,6088],[6816,7000],[7696,7832]],"walls":[[3040,3,"crate",2],[3900,3,"stone",2],[5644,3,"crate",3],[6364,4,"steel",3],[7320,3,"stone",3]],"plats":[[2340,3,84,"crate"],[5420,2,102,"crate"],[6360,2,102,"stone"]],"spikes":[[2900],[2924],[3480],[3504]],"powerups":[["caffeine",700,230],["solana",1120,230],["whale",2500,230],["coldwallet",3200,230],["coldwallet",4400,230],["megawhale",5760,112],["supergeek",7590,230]],"airdrops":[[2100,152],[4400,198]],"coins":[[300,224],[360,224],[820,130],[1660,130],[2040,110],[2340,60],[2400,60],[3140,96],[3400,110],[3620,96],[3800,110],[4300,150],[4500,120],[5090,150],[5360,120],[5420,84],[6160,120],[6380,122],[6820,196],[7040,150],[7260,120],[7480,196],[7920,150],[8140,120]],"enemies":[["paper",460,230,70],["ghost",1100,212,80],["fudster",1980,140,70],["bitmaxi",2360,66,36],["sniper",2400,230,30],["troll",3780,230,70],["bot",5000,230,70],["ghost",5100,200,80],["gasgoblin",6240,230,70],["ghost",7022,212,70],["troll",7616,230,70],["sniper",7960,230,30],["drillbit",2440,230,90],["drillbit",6101,230,90]],"rugpullers":[[2616,246,120]],"pumpdumps":[[3400,150],[4300,174]],"honeypots":[[1250,232],[2000,232],[4900,232],[7020,232]],"npcs":[[2200,90]],"bonusblocks":[[1044,5],[3326,5],[5744,8],[7460,"candle"]],"caches":[],"gates":[],"firebars":[[3200,150,52,140,4],[3620,146,52,-140,4]],"planks":[[1300,5],[4272,5],[5104,8],[5968,5],[6816,9],[7696,5]],"yields":[[6120,178,5]],"movers":[[1660,168,"x",120,46],[2040,150,"y",52,44]],"rugplats":[[2452,3,150],[6154,3,150]],"dumpzones":[[420,2600],[1200,2800],[5384,3000]],"warps":[[1200,33]],"time":215,"diff":2.95,"door":8280,"key":[2340,60],"miniworms":[1890,5278]},
-  {"name":"12-3","sub":"THE WHALE CARTEL","theme":17,"bgArt":"w12relaunch","width":6700,"gaps":[[736,832],[2176,2264],[2856,3040],[3592,3728],[4240,4376],[4976,5072],[5688,5800]],"walls":[[3160,3,"stone",2],[3860,3,"stone",2]],"plats":[[1580,2,150,"stone"],[1840,2,138,"stone"],[2100,2,126,"stone"],[2340,2,88,"stone"],[2560,2,138,"steel"],[4500,2,150,"steel"],[5300,2,126,"steel"],[5660,2,138,"stone"]],"spikes":[[960],[984],[2760],[2784],[3480],[3504],[5193],[5217],[5847],[5871]],"powerups":[["supergeek",900,230],["solana",1340,230],["diamond",2050,230],["bull",3552,230],["candle",6240,230]],"airdrops":[[1500,152],[3334,198]],"coins":[[320,120],[380,120],[640,196],[1620,120],[1880,118],[2140,100],[2380,68],[2430,68],[2960,120],[3220,140],[3560,120],[3620,150],[3700,120],[3940,106],[4560,120],[4640,122],[4860,100],[5264,120],[5520,150],[5960,120]],"enemies":[["sandwich",640,230,30],["fudster",960,230,60],["ghost",1240,212,80],["gasgoblin",2000,230,70],["bitmaxi",2340,72,36],["sniper",2620,230,30],["fudster",3080,230,70],["sandwich",4160,230,60],["ghost",4560,212,80],["sniper",4898,230,30],["ghost",5904,212,70],["fudster",6220,230,70],["drillbit",2745,230,90]],"rugpullers":[[4308,246,144]],"pumpdumps":[[2880,174],[3400,174],[3660,174]],"honeypots":[[1300,232],[4020,232],[5140,232]],"npcs":[[2380,90]],"bonusblocks":[[1090,5],[3140,10],[5269,8],[5887,8]],"caches":[],"gates":[],"firebars":[[3220,150,52,140,4],[3620,146,52,-140,4]],"planks":[[736,5],[2176,5],[2856,9],[3592,5],[4976,5],[5688,5]],"yields":[],"movers":[[5100,150,"y",52,44]],"rugplats":[[304,3,150],[4419,3,150]],"dumpzones":[[2385,2800]],"time":275,"diff":3,"boss":true,"bossType":"dirtywhale","door":6500,"key":[2340,64],"miniworms":[2010,4020]},
+  {"name":"12-3","sub":"THE WHALE CARTEL","final":true,"theme":17,"bgArt":"w12relaunch","width":6700,"gaps":[[736,832],[2176,2264],[2856,3040],[3592,3728],[4240,4376],[4976,5072],[5688,5800]],"walls":[[3160,3,"stone",2],[3860,3,"stone",2]],"plats":[[1580,2,150,"stone"],[1840,2,138,"stone"],[2100,2,126,"stone"],[2340,2,88,"stone"],[2560,2,138,"steel"],[4500,2,150,"steel"],[5300,2,126,"steel"],[5660,2,138,"stone"]],"spikes":[[960],[984],[2760],[2784],[3480],[3504],[5193],[5217],[5847],[5871]],"powerups":[["supergeek",900,230],["solana",1340,230],["diamond",2050,230],["bull",3552,230],["candle",6240,230]],"airdrops":[[1500,152],[3334,198]],"coins":[[320,120],[380,120],[640,196],[1620,120],[1880,118],[2140,100],[2380,68],[2430,68],[2960,120],[3220,140],[3560,120],[3620,150],[3700,120],[3940,106],[4560,120],[4640,122],[4860,100],[5264,120],[5520,150],[5960,120]],"enemies":[["sandwich",640,230,30],["fudster",960,230,60],["ghost",1240,212,80],["gasgoblin",2000,230,70],["bitmaxi",2340,72,36],["sniper",2620,230,30],["fudster",3080,230,70],["sandwich",4160,230,60],["ghost",4560,212,80],["sniper",4898,230,30],["ghost",5904,212,70],["fudster",6220,230,70],["drillbit",2745,230,90]],"rugpullers":[[4308,246,144]],"pumpdumps":[[2880,174],[3400,174],[3660,174]],"honeypots":[[1300,232],[4020,232],[5140,232]],"npcs":[[2380,90]],"bonusblocks":[[1090,5],[3140,10],[5269,8],[5887,8]],"caches":[],"gates":[],"firebars":[[3220,150,52,140,4],[3620,146,52,-140,4]],"planks":[[736,5],[2176,5],[2856,9],[3592,5],[4976,5],[5688,5]],"yields":[],"movers":[[5100,150,"y",52,44]],"rugplats":[[304,3,150],[4419,3,150]],"dumpzones":[[2385,2800]],"time":275,"diff":3,"boss":true,"bossType":"dirtywhale","door":6500,"key":[2340,64],"miniworms":[2010,4020]},
   {"name":"13-1","sub":"THE ABYSSAL GATES","theme":18,"bgArt":"w13pod","width":7800,"time":235,"diff":2.4,"vip":true,"gaps":[[840,1024],[1864,2000],[2920,3056],[4016,4112],[5072,5184],[6168,6280],[6976,7136]],"planks":[[840,9],[6984,8]],"walls":[[520,3,"stone",3],[1200,4,"steel",2],[2200,2,"stone",5],[2600,4,"steel",2],[3400,3,"crate",4],[4500,4,"stone",2],[5400,2,"steel",4],[6600,3,"stone",3]],"gates":[[1500,1500,1400,0],[3220,1300,1600,400],[4720,1200,1700,200],[5820,1150,1750,600]],"firebars":[[2450,150,54,120,4],[4062,146,60,-140,4],[5620,140,50,150,3]],"pumpdumps":[[2760,178],[3660,152],[5320,166]],"plats":[[1080,2,150,"stone"],[2120,2,132,"steel"],[3100,3,148,"stone"],[3560,2,114,"steel"],[4760,2,150,"stone"],[4940,2,108,"steel"],[6380,2,142,"stone"],[6740,3,120,"steel"]],"spikes":[[1356],[1380],[3620],[4656],[4680]],"dumpzones":[[4900,2600]],"honeypots":[[2340,232],[3820,232],[6060,232]],"caches":[],"bonusblocks":[[720,5],[1660,"omegachad"],[3300,8],[4380,6],[5700,"candle"]],"powerups":[["supergeek",640,230],["solana",1340,230],["diamond",2480,230],["bull",4640,230],["moon",6330,230]],"airdrops":[[1600,150],[5200,150]],"npcs":[[3188,90]],"coins":[[340,196],[400,196],[680,150],[940,120],[1120,122],[1500,196],[1660,120],[1930,110],[2360,196],[2760,150],[2980,120],[3300,120],[3560,84],[3620,84],[3960,120],[4160,120],[4640,196],[4940,80],[5000,80],[5320,150],[5700,120],[6060,196],[6220,120],[6380,110],[6740,92],[6980,120],[7300,196],[7480,196]],"enemies":[["flashbot",720,160,260],["sniper",1440,230,30],["bitmaxi",1680,230,60],["ghost",2026,200,70],["sniper",2660,230,30],["bot",3100,148,44],["sandwich",3760,230,70],["sniper",4680,230,30],["ghost",4960,200,80],["bitmaxi",5340,230,60],["sniper",5760,230,30],["ghost",6060,200,70],["bot",6740,120,40],["sniper",7220,230,30],["drillbit",1174,230,90],["drillbit",3513,230,90],["drillbit",5708,230,90]],"rugpullers":[[1932,246,144],[2988,246,144],[4064,246,120]],"miniworms":[1700,6450],"key":[6760,110],"door":7680},
   {"name":"13-2","sub":"THE POD ROYALE","theme":18,"bgArt":"w13pod","width":8400,"warps":[[1200,73]],"time":225,"diff":2.5,"vip":true,"door":8280,"gaps":[[760,960],[2560,2680],[3760,3980],[4400,4512],[4980,5220],[5900,6012],[7280,7460],[7920,8040]],"walls":[[2980,5,"steel",2],[3320,5,"steel",2],[3560,3,"stone",4],[5360,4,"steel",3],[7000,3,"crate",3],[7620,4,"steel",3]],"plats":[[1440,3,186,"brick"],[1700,3,150,"brick"],[1960,3,114,"brick"],[2220,3,88,"brick"],[2320,2,150,"steel"],[4620,2,102,"steel"],[6140,2,102,"steel"],[6360,2,150,"steel"]],"spikes":[[3136],[3200]],"powerups":[["supergeek",600,230],["solana",1560,230],["diamond",2500,230],["bull",4120,230],["coldwallet",5560,230],["candle",6900,230],["moon",6550,230]],"airdrops":[[3160,64],[6160,72]],"coins":[[340,224],[400,224],[460,224],[760,150],[860,120],[960,150],[1180,196],[1476,166],[1736,130],[1996,94],[2256,68],[2280,70],[2330,70],[2590,168],[2620,168],[2650,168],[3060,120],[3160,96],[3260,120],[3800,150],[3870,120],[3940,150],[5010,150],[5100,120],[5190,150],[5720,120],[5980,90],[6360,120],[6940,196],[7160,196],[7300,168],[7370,150],[7440,168],[7560,196],[7780,150],[7860,196],[8120,196],[8180,196]],"enemies":[["ghost",600,206,80],["bot",1180,230,70],["ghost",1760,140,70],["bitmaxi",2260,72,36],["fudster",2900,230,50],["sandwich",4180,230,70],["ghost",4700,200,80],["bitmaxi",5600,230,70],["ghost",6060,200,70],["troll",6500,230,70],["sniper",7180,230,30],["fudster",7500,230,70],["bot",7820,230,70],["ghost",8000,206,70],["drillbit",1953,230,90],["drillbit",4548,230,90],["drillbit",6887,230,90]],"rugpullers":[[2620,246,120],[4456,246,120],[5956,246,120]],"pumpdumps":[[3870,176],[5040,174],[5160,174]],"honeypots":[[1250,232],[4260,232],[5760,232],[7160,232]],"npcs":[[4340,90]],"bonusblocks":[[1100,5],[4820,8],[6600,"omegachad"],[7550,"candle"]],"caches":[],"gates":[[2820,1300,1700,0]],"firebars":[[3160,150,52,130,4],[6260,140,50,-140,4]],"planks":[[760,9],[7280,5]],"movers":[[5720,168,"y",54,46],[5980,150,"y",54,46]],"yields":[],"key":[2250,66],"miniworms":[3400,6316]},
   {"name":"13-3","sub":"THE TRENCH THRONE","theme":18,"bgArt":"w13pod","width":7800,"time":265,"diff":2.55,"vip":true,"boss":true,"bossType":"leviathan","door":7680,"gaps":[[1240,1336],[2440,2560],[3080,3300],[4760,5000],[5360,5560],[5760,5872],[6360,6480]],"walls":[[3620,5,"steel",2],[3980,5,"steel",2],[6140,3,"crate",4],[6600,4,"stone",3]],"plats":[[440,3,120,"crate"],[1420,3,120,"crate"],[1720,3,150,"crate"],[2020,3,180,"crate"],[3020,2,150,"steel"],[3260,2,114,"steel"],[5140,2,102,"crate"]],"spikes":[[2620],[2644],[2860],[2884],[3776],[3872],[4400],[4520]],"powerups":[["supergeek",640,230],["solana",1560,230],["diamond",2300,230],["bull",4120,230],["coldwallet",5980,230],["candle",6950,230]],"airdrops":[[3190,64]],"coins":[[340,224],[420,150],[480,150],[820,196],[900,196],[1040,196],[1360,150],[1450,102],[1750,132],[2050,162],[2740,150],[3040,120],[3190,120],[3260,84],[3700,120],[3800,96],[3900,120],[4460,110],[4820,150],[4940,120],[5140,84],[5460,120],[5790,168],[6260,196],[6320,196],[6380,168],[6440,168],[6700,150],[6760,150],[7040,196],[7100,196],[7160,196]],"enemies":[["jeet",760,230,60],["ghost",1040,206,70],["bitmaxi",1720,132,40],["ghost",2100,200,70],["fudster",2600,230,60],["sniper",2960,230,30],["troll",4080,230,60],["ghost",4500,200,80],["sandwich",4700,230,70],["ghost",5300,200,70],["bitmaxi",5620,230,60],["fudster",6300,230,70],["sniper",6720,230,30],["drillbit",814,230,90],["drillbit",4121,230,90]],"rugpullers":[[2500,246,120],[5460,246,216]],"pumpdumps":[[2740,176],[3190,170],[4820,174],[4940,174],[5460,176]],"honeypots":[[1120,232],[2200,232],[5040,232]],"npcs":[],"bonusblocks":[[980,5],[2960,8],[3400,8],[4300,"omegachad"],[6900,"candle"]],"caches":[],"gates":[[4180,1300,1700,300]],"firebars":[[3800,150,52,140,4],[4460,146,50,-150,4]],"planks":[[1240,5],[6360,5]],"pegs":[[1600,4],[1900,4],[5680,5]],"movers":[],"key":[5170,80],"miniworms":[2010,5300]},
@@ -1450,10 +1462,9 @@ var LEVELS=[
     roomLabel:'THE SCARY WORLD',
     bossName:'THE GHOST GALLEON', bossSub:'THE BIG BIG MONSTER OF THE DEEP — STOMP IT x5',
     bossTex:'ghostship', bossScale:112, bossHits:5, bossShillMs:1500, bossAttack:'ship',
-    // the galleon FLOATS — its hull ends at 78% of the plate, the rest is deliberate air. Keep the
-    // body bottom where it has always been (0.96) instead of the trimmed-art default of 1.00, or
-    // the ship rises another 4% of its height off the water.
-    bossBodyBot:0.96,
+    // plate re-cut 2026-08-17 (audit #11): the old one was off-centre with severed tentacle
+    // fragments — hitbox sat ~46px left of and ~20px below the visible monster. Now trimmed to
+    // content, so the default bossBodyBot 1.00 maps the hitbox exactly onto the art.
     bossColor:'#7af0a0', bossGlowHex:0x4de87a,
     bossTaunts:['YARR HARR HARR','ALL ABOARD... FOREVER','THE SEA KEEPS WHAT IT TAKES','NO ESCAPE, LANDLUBBER','YER TREASURE BE MINE','DOWN TO DAVY JONES','THE CREW NEVER LEFT'],
     gaps:[[700,772],[1380,1500],[2060,2156],[2720,2816],[3380,3500]],
@@ -1859,13 +1870,15 @@ var Title=new Phaser.Class({ Extends:Phaser.Scene,
 // without a reload.
 function nqWorldAllowed(def){
   if(!window.__NQ_SETUP) return true;
-  var m=/^(\d+)-/.exec((def&&def.name)||''); if(!m) return true;
-  var w=+m[1], a=null;
-  try{ a=(typeof window.__NQ_ACCESS==='function')?window.__NQ_ACCESS():null; }catch(e){}
-  if(def&&def.vip){   // ULTRA VIP wing (worlds 13+): needs the VIP grant, not just top tier.
+  if(def&&def.vip){   // ULTRA VIP wing: needs the VIP grant, not just top tier. Checked FIRST —
+    // the nine hidden VIP rooms have non-numeric names and used to slip out through the numeric
+    // bailout below before this check ever ran (audit polish: silent bypass for any future link).
     if(window.__NQ_FORCE_VIP&&(function(){try{return localStorage.getItem('nqLabTune')==='1';}catch(e){return false;}})()) return true;   // QA lever — designer lab only, not the tester lane
     try{ return !!(typeof window.__NQ_VIP==='function'&&window.__NQ_VIP()); }catch(e){ return false; }
   }
+  var m=/^(\d+)-/.exec((def&&def.name)||''); if(!m) return true;
+  var w=+m[1], a=null;
+  try{ a=(typeof window.__NQ_ACCESS==='function')?window.__NQ_ACCESS():null; }catch(e){}
   if(a==='all') return true;
   if(Array.isArray(a)&&a.length===2) return w>=a[0]&&w<=a[1];
   return w<=2;
@@ -1894,7 +1907,8 @@ function nqMegaWhaleUnlocked(){
 function nqTele(ev,d){
   try{
     var who=''; try{ who=localStorage.getItem('nq_tester')||''; }catch(e){}
-    var b=JSON.stringify(Object.assign({ev:ev,who:who||undefined},d||{}));
+    var tok; if(ev==='clear'){ try{ tok=(window.NQLB&&window.NQLB.getToken)?window.NQLB.getToken():undefined; }catch(e){} }   // server rejects tokenless clears since the telemetry hardening (audit #29)
+    var b=JSON.stringify(Object.assign({ev:ev,who:who||undefined,token:tok||undefined},d||{}));
     if(navigator.sendBeacon){ navigator.sendBeacon('/api/nq/telemetry', new Blob([b],{type:'application/json'})); }
     else { fetch('/api/nq/telemetry',{method:'POST',headers:{'content-type':'application/json'},body:b,keepalive:true}).catch(function(){}); }
   }catch(e){}
@@ -2001,7 +2015,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     try{ this.time.paused=false; }catch(e){}
     try{ this.tweens.resumeAll(); }catch(e){}
     this.paused=false; this.lastInputAt=this.time.now;   // pause state + idle-auto-pause timer
-    this._lvStartAt=Date.now(); this._lvDeaths=0;        // difficulty telemetry: time-in-level + lives lost this level
+    try{ window.__NQ_PAUSED=false; }catch(e){}   // fresh level = not paused (the flag gates no-gesture music restarts)
+    this._lastSafe=null;   // ⚠ the scene INSTANCE is reused across scene.start — without this, falling before first landing respawns at the PREVIOUS level's banked spot (audit #8, reproduced live)
+    this._lvStartAt=Date.now(); this._lvDeaths=0; this._pausedMs=0; this._pausedAtWall=null; this._pausedAtClock=null;   // difficulty telemetry: time-in-level (minus paused spans) + lives lost this level
     // Drain gamepad edge-latches left over from menu navigation: the START press that launched
     // this level also set pauseEdge (and anyBtnEdge/jumpEdge), so the first update() would
     // instantly pause the fresh run / fire a phantom buffered jump at spawn.
@@ -2011,8 +2027,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // Buying an item in the DOM shop mid-run must land in the HUD NOW, not on the next level:
     // syncRewards() otherwise only runs on level entry and when a slot frees up.
     try{ var _sc0=this; window.__NQ_SYNCREWARDS=function(){ try{ if(_sc0.scene&&_sc0.scene.isActive&&_sc0.scene.isActive()&&!_sc0.over) _sc0.syncRewards(); }catch(e){} }; }catch(e){}
-    try{ var _sc=this; window.__NQ_PAUSE=function(auto){ if(!_sc.over&&!_sc.paused){ _sc.pauseGame(!!auto); return true; } return false; };   // auto=true → the "you stepped away" pause card (existing callers pass nothing = manual)
-         window.__NQ_RESUME=function(){ if(_sc.paused) _sc.resumeGame(); };
+    try{ var _sc=this; var _live=function(){ try{ return _sc.scene&&_sc.scene.isActive&&_sc.scene.isActive()&&!_sc.over; }catch(e){ return false; } };   // page-hide must not run pauseGame on a STOPPED scene instance (polish: same guard __NQ_SYNCREWARDS has)
+         window.__NQ_PAUSE=function(auto){ if(_live()&&!_sc.paused){ _sc.pauseGame(!!auto); return true; } return false; };   // auto=true → the "you stepped away" pause card (existing callers pass nothing = manual)
+         window.__NQ_RESUME=function(){ if(_live()&&_sc.paused) _sc.resumeGame(); };
          // Toggle Phaser's keyboard from OUTSIDE the game (the leaderboard/wallet modal lives in a
          // separate script block that can't see NQGAME). Needed so a keypress in the modal doesn't
          // hit the scene's "any key resumes" handler and un-pause the game behind it.
@@ -2239,6 +2256,14 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.timeLeft=def.time; this.over=false; this.hasKey=false; this._doorHint=false;
     if(this.levelIdx===0){ this.registry.set('nqCasino',0); this.registry.set('nqCp',0); this.registry.set('nqCpScore',0); this.registry.set('nqLvlCp',0); this.registry.set('nqLvlCpScore',0); this.registry.set('nqUsedWarps',{}); }   // fresh run → zero the casino tally + clear all world AND level checkpoints + reset one-time speakeasies
     this.spawn={x:(this._spawnX!=null?this._spawnX:60),y:H-60};
+    // Never spawn OVER A PIT: warp returns are computed as door-x+70 with no terrain awareness, and
+    // 21-2's speakeasy return landed exactly inside its own gap — a VIP player fell into the pit on
+    // arrival (audit #9/#8). Snap any spawn inside (or within 8px of) a gap to the nearer solid
+    // edge with 24px of footing. Covers every spawnX source: warp returns, ?at=, lab warps.
+    try{ var _gs=(def.gaps||[]), _sx=this.spawn.x;
+      for(var _gi=0;_gi<_gs.length;_gi++){ var _g=_gs[_gi];
+        if(_sx>_g[0]-8 && _sx<_g[1]+8){ this.spawn.x=(_sx-_g[0]<_g[1]-_sx)?Math.max(30,_g[0]-24):Math.min((def.width||W)-30,_g[1]+24); break; } }
+    }catch(e){}
     Phaser.Math.RND.sow(['normie-quest-'+this.levelIdx]);   // deterministic per level
 
     this.physics.world.setBounds(0,0,LW,H+400);
@@ -2279,7 +2304,19 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         _self.add.image(_r.x,_r.y,_key).setOrigin(0,0).setScrollFactor(0).setDisplaySize(_r.w,_r.h).setDepth(-58);
         _self.add.rectangle(_r.x,_r.y,_r.w,_r.h,0x05040a,0.22).setOrigin(0,0).setScrollFactor(0).setDepth(-57); };
       if(this.textures.exists(_key)){ _renderArt(false); }
-      else { this.load.image(_key, WORLD_ART[_key]+'?v='+WORLD_ART_VER); this.load.once('complete', function(){ _renderArt(true); }); this.load.once('loaderror', function(){}); this.load.start(); }
+      else {
+        // Paint on the GLOBAL texture-manager event, and only queue a fetch if nobody already has
+        // one in flight (audit #33): a scene restart mid-fetch used to queue a second load — a
+        // benign "Texture key already in use" error, but BOTH completions painted, stacking the
+        // 0.22-alpha scrim to ~0.39 so the restarted level rendered noticeably darker.
+        var _pend=(window.__NQ_ARTPENDING=window.__NQ_ARTPENDING||{});
+        this.textures.once('addtexture-'+_key, function(){ _renderArt(true); });
+        if(!_pend[_key]){ _pend[_key]=1;
+          this.load.image(_key, WORLD_ART[_key]+'?v='+WORLD_ART_VER);
+          this.load.once('complete', function(){ delete _pend[_key]; });
+          this.load.once('loaderror', function(){ delete _pend[_key]; });
+          this.load.start(); }
+      }
     } else {
     // stars scattered across the whole level with a slight parallax
     for(i=0;i<Math.ceil(LW/90);i++){ var ss=Phaser.Math.RND.pick([1,1,1,2]); this.add.rectangle(Phaser.Math.RND.between(0,LW),Phaser.Math.RND.between(3,Math.floor(H*0.6)),ss,ss,0xffffff,Phaser.Math.RND.between(18,50)/100).setScrollFactor(0.25).setDepth(-55); }
@@ -3022,7 +3059,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(pu.puLocked){
       // tier can flip live (post-buy refresh) — re-check on touch, unlock in place if it did
       if(nqMegaWhaleUnlocked() && !window.__NQ_FORCE_MW_LOCK){ pu.puLocked=false; pu.clearTint(); pu.setAlpha(1); if(pu.puLockIcon){ pu.puLockIcon.destroy(); pu.puLockIcon=null; } }
-      else { var lnow=this.time.now; if(!this._puLockFlashAt||lnow-this._puLockFlashAt>1500){ this._puLockFlashAt=lnow; this.flash('🔒 MEGA WHALE — 500K NORMIE HOLDER PERK','#9fb0d0'); } return; }
+      else { var lnow=this.time.now; if(!this._puLockFlashAt||lnow-this._puLockFlashAt>1500){ this._puLockFlashAt=lnow; this.flash('🔒 MEGA WHALE — TOP-TIER HOLDER PERK (terms in testing)','#9fb0d0'); } return; }
     }
     var type=pu.ptype, px=pu.x, py=pu.y; this.tweens.killTweensOf(pu); if(pu.puLockIcon) pu.puLockIcon.destroy(); pu.destroy(); this.burst(px,py,0xffffff,20);
     var now=this.time.now;
@@ -3274,9 +3311,14 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var d=60, bar=this.add.rectangle(-W,90,W*1.5,54,0x0d0b1e,0.92).setScrollFactor(0).setDepth(d).setStrokeStyle(3, Phaser.Display.Color.HexStringToColor(color).color);
     var t1=this.add.text(-W,78,title,{fontFamily:'"Press Start 2P"',fontSize:'19px',color:color}).setOrigin(.5).setScrollFactor(0).setDepth(d+1);
     var t2=this.add.text(-W,108,tag+'  \u00B7  '+sub,{fontFamily:UIFONT,resolution:UIRES,fontSize:'21px',color:'#ffd23f'}).setOrigin(.5).setScrollFactor(0).setDepth(d+1);
+    // Scale BOTH lines to fit the 480px view (audit #5: 11 of 13 sampled subtitles overflowed —
+    // the Rug King line measured up to 997px — clipping the actionable text at both ends). The
+    // title rarely overflows but gets the same guard; the pulse tween below multiplies onto this.
+    var _fit=function(t,max){ if(t.width>max) t.setScale(max/t.width); };
+    _fit(t1,W-28); _fit(t2,W-20);
     var items=[bar,t1,t2]; this.hudBox.add(items);
     this.tweens.add({targets:items,x:W/2,duration:300,ease:'Back.out'});
-    this.tweens.add({targets:t1,scale:1.12,duration:220,yoyo:true,repeat:2,delay:300});
+    this.tweens.add({targets:t1,scale:t1.scaleX*1.12,duration:220,yoyo:true,repeat:2,delay:300});
     this.time.delayedCall(1500,function(){ this.tweens.add({targets:items,x:W*1.8,duration:320,ease:'Back.in',onComplete:function(){ items.forEach(function(o){o.destroy();}); }}); },[],this);
   },
 
@@ -4043,7 +4085,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.player.setPosition(dx-260, GY-40); this.player.setVelocity(0,0);
     self.makeArena(dx-340, dx+40);
     var k=this.rugking=this.physics.add.sprite(dx-64, GY-60, 'saylor');   // stored in rugking = generic melee-boss handle
-    k.setScale(64/k.height); k.body.setSize(k.width*0.52,k.height*0.84).setOffset(k.width*0.24,k.height*0.12);
+    k.setScale(64/k.height); k.body.setSize(k.width*0.52,k.height*0.88).setOffset(k.width*0.24,k.height*0.12);   // 0.12+0.88=1.00 — plate is trimmed to content; anything less sinks him 4% (audit #18)
     k.setCollideWorldBounds(true); k.dir=-1; k.invuln=true; k.setDepth(7);
     var bg2=this.addGlow(k,0xffa030,6); if(bg2) this.tweens.add({targets:bg2,outerStrength:16,duration:480,yoyo:true,repeat:-1,ease:'Sine.inOut'});
     this.physics.add.collider(k, this.platforms);
@@ -4088,7 +4130,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var arenaWalls=[];
     arenaWalls = self.makeArena(dx-340, dx+40);
     var k=this.rugking=this.physics.add.sprite(dx-64, GY-58, cfg.sprite);
-    k.setScale(cfg.scale/k.height); k.body.setSize(k.width*0.52,k.height*0.84).setOffset(k.width*0.24,k.height*0.12);
+    k.setScale(cfg.scale/k.height); k.body.setSize(k.width*0.52,k.height*0.88).setOffset(k.width*0.24,k.height*0.12);   // 0.12+0.88=1.00 — all nine VIP plates are trimmed flush (audit #18)
     k.setCollideWorldBounds(true); k.dir=-1; k.invuln=true; k.setDepth(7);
     var bg2=this.addGlow(k,cfg.glow,6); if(bg2) this.tweens.add({targets:bg2,outerStrength:15,duration:500,yoyo:true,repeat:-1,ease:'Sine.inOut'});
     this.physics.add.collider(k, this.platforms);
@@ -4259,7 +4301,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.player.setPosition(dx-260, GY-40); this.player.setVelocity(0,0);
     self.makeArena(dx-340, dx+40);
     var k=this.rugking=this.physics.add.sprite(dx-66, GY-56, 'golem');
-    k.setScale(86/k.height); k.body.setSize(k.width*0.64,k.height*0.82).setOffset(k.width*0.18,k.height*0.14);
+    k.setScale(86/k.height); k.body.setSize(k.width*0.64,k.height*0.86).setOffset(k.width*0.18,k.height*0.14);   // 0.14+0.86=1.00 (audit #18)
     k.setCollideWorldBounds(true); k.dir=-1; k.invuln=true; k.setDepth(7);
     var bg2=this.addGlow(k,0xffcc33,5); if(bg2) this.tweens.add({targets:bg2,outerStrength:12,duration:520,yoyo:true,repeat:-1,ease:'Sine.inOut'});
     this.physics.add.collider(k, this.platforms);
@@ -4354,7 +4396,10 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     } else if(st==='dive'){
       k.invuln=true;
       if(k.y>=GY-28 || now-this._swanT0>1400){
-        k.setVelocity(0,0); k.y=Math.min(k.y, GY-28);
+        // UNCONDITIONAL floor snap, not Math.min: the 1.4s timeout can trip mid-air (the exact
+        // pre-fix MEV Dragon failure) and Math.min left the swan "grounded" at circling altitude —
+        // vulnerable cue firing at a spot no double jump reaches, wasting the whole stomp window.
+        k.setVelocity(0,0); k.y=GY-28;
         this._swanState='grounded'; this._swanT0=now; k.invuln=false; this.bossVulnCue(k);
         if(this._swanMark) this._swanMark.setVisible(false);
         this.cameras.main.shake(200,.012); _tone(120,60,0.2,'square',0.08);
@@ -4372,6 +4417,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   },
   swanFeathers:function(k,p){   // 3-feather fan as it lifts off — jump the low ones, duck the high
     if(this.over||!this.enemyShots) return; var self=this;
+    if(this.stompImminent(p,k)) return;   // the guard every other aimed volley has: don't fire point-blank up into a committed stomp arc at the exact frame the boss turns invulnerable
     var base=Math.atan2((p.y-8)-k.y, p.x-k.x);
     [-0.22,0,0.22].forEach(function(off){
       // Own art now (see 'swanfeather' in startSwanBoss) and NO tint — the drawn colours are the
@@ -4393,7 +4439,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.player.setPosition(dx-260, GY-40); this.player.setVelocity(0,0);
     self.makeArena(dx-340, dx+40);
     var k=this.rugking=this.physics.add.sprite(dx-66, GY-56, 'reaper');
-    k.setScale(88/k.height); k.body.setSize(k.width*0.62,k.height*0.82).setOffset(k.width*0.19,k.height*0.14);
+    k.setScale(88/k.height); k.body.setSize(k.width*0.62,k.height*0.86).setOffset(k.width*0.19,k.height*0.14);   // 0.14+0.86=1.00 (audit #18)
     k.setCollideWorldBounds(true); k.dir=-1; k.invuln=true; k.setDepth(7);
     var bg2=this.addGlow(k,0x2ee66a,5); if(bg2) this.tweens.add({targets:bg2,outerStrength:12,duration:520,yoyo:true,repeat:-1,ease:'Sine.inOut'});
     this.physics.add.collider(k, this.platforms);
@@ -4491,12 +4537,12 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         k.setVelocity(Math.cos(ang)*330, Math.sin(ang)*330); }
     } else if(st==='dive'){
       k.invuln=true;
-      if(k.y>=GY-38 || now-this._drT0>1400){
+      if(k.y>=GY-44 || now-this._drT0>1400){
         // Snap to the floor, unconditionally. Math.min() only ever LOWERED him, so when the 1400ms
         // timeout fired before the dive had actually landed (a frame hitch is enough) he entered
         // 'grounded' still airborne -- vulnerable, but parked above the top of a double jump, i.e.
         // an unwinnable cycle. 'grounded' has to mean on the ground.
-        k.setVelocity(0,0); k.y=GY-38;
+        k.setVelocity(0,0); k.y=GY-44;   // was GY-38: claws sat ~6px in the floor every vulnerable window (polish)
         this._drState='grounded'; this._drT0=now; k.invuln=false; this.bossVulnCue(k);
         if(this._drMark) this._drMark.setVisible(false);
         this.cameras.main.shake(220,.013); _tone(110,55,0.2,'square',0.08);
@@ -4623,7 +4669,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     this.player.setPosition(dx-260, GY-40); this.player.setVelocity(0,0);
     self.makeArena(dx-360, dx+40);
     var k=this.rugking=this.physics.add.sprite(dx-72, GY-62, 'greatbear');
-    k.setScale(104/k.height); k.body.setSize(k.width*0.66,k.height*0.80).setOffset(k.width*0.17,k.height*0.16);
+    k.setScale(104/k.height); k.body.setSize(k.width*0.66,k.height*0.84).setOffset(k.width*0.17,k.height*0.16);   // 0.16+0.84=1.00 (audit #18)
     k.setCollideWorldBounds(true); k.dir=-1; k.invuln=true; k.setDepth(7);
     var bg2=this.addGlow(k,0xff2020,6); if(bg2) this.tweens.add({targets:bg2,outerStrength:14,duration:480,yoyo:true,repeat:-1,ease:'Sine.inOut'});
     this.physics.add.collider(k, this.platforms);
@@ -4670,7 +4716,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(this.over) return; this.over=true; var k=this.rugking, self=this;
     // difficulty telemetry: boss arenas end HERE, never via key+door levelClear — without this
     // every boss level showed deaths but permanently 0 clears (garbage deathsPerClear).
-    nqTele('clear',{world:this.def&&this.def.name,t:Math.round((Date.now()-(this._lvStartAt||Date.now()))/1000),deaths:this._lvDeaths||0,score:this.score});
+    nqTele('clear',{world:this.def&&this.def.name,t:Math.round((Date.now()-(this._lvStartAt||Date.now())-(this._pausedMs||0))/1000),deaths:this._lvDeaths||0,score:this.score});
     k.invuln=true; k.setVelocity(0,0); k.body.setAllowGravity(false);
     // Sound + shake go here, at the TOP of bossDefeat, so every ending gets them: the generic VIP
     // path, each per-boss branch and both finales all return from below this line.
@@ -4681,13 +4727,13 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // BOSS DROP: beating a boss banks a random boost for later (skipped if the slot's already full).
     // The reward-wheel granter uses the same grantReserve() inventory.
     if(this.reserve && this.reserve.length<RESERVE_SLOTS){ var _dp=['vial','disc','shield','star','bomb']; this.grantReserve(_dp[Math.floor((this.time.now/97)%_dp.length)]); }
-    if(this.def.private){
+    if(this.def.private && this.def.bossName!=='TOM'){
       // PRIVATE ROOM FINALE — not a campaign boss: don't advance into the main game or the Win
-      // screen. Celebrate with the room's OWN boss text, then drop back to the Title. (This used to
-      // hardcode Tom's MySpace banner for EVERY private room — wrong for the beach prize rooms.)
+      // screen. Celebrate with the room's OWN boss text, then drop back to the Title. TOM is the
+      // one exception: he falls through to his bespoke MySpace branch below (Win screen + replay),
+      // which this early-return used to make unreachable dead code (audit polish).
       this.addScore(1000);
-      if(this.def.bossName==='TOM') this.powerBanner("YOU MADE TOM'S TOP 8!",'#1 IN HIS FRIENDS — GG','#8aa0d8');
-      else this.powerBanner((this.def.bossName||'THE BOSS')+' DEFEATED!',(this.def.roomLabel||'PRIVATE ROOM')+' — GG',this.def.bossColor||'#3dff6e');
+      this.powerBanner((this.def.bossName||'THE BOSS')+' DEFEATED!',(this.def.roomLabel||'PRIVATE ROOM')+' — GG',this.def.bossColor||'#3dff6e');
       this.time.delayedCall(2400, function(){ this.scene.start('Title'); }, [], this);
       return;
     }
@@ -4884,7 +4930,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   },
   wormDefeat:function(){
     if(this.over) return; this.over=true; var wm=this.worm; if(this.mound) this.mound.setVisible(false);
-    nqTele('clear',{world:this.def&&this.def.name,t:Math.round((Date.now()-(this._lvStartAt||Date.now()))/1000),deaths:this._lvDeaths||0,score:this.score});   // boss levels never reach levelClear
+    nqTele('clear',{world:this.def&&this.def.name,t:Math.round((Date.now()-(this._lvStartAt||Date.now())-(this._pausedMs||0))/1000),deaths:this._lvDeaths||0,score:this.score});   // boss levels never reach levelClear
     // The WORMHOLE (2-3) does NOT route through bossDefeat — it is its own ending, so it needs its
     // own call or the first boss most players ever beat would still go down in silence.
     try{ SFX.bossDown(); }catch(e){}
@@ -5469,7 +5515,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // and if that tile had since been siphoned you would drop straight back into the void — an
     // unrecoverable death loop. Restoring first makes that impossible.
     try{ if(this.def&&this.def.bossType==='drainer'&&this.drainDeck) this.restoreDeck(); }catch(e){}
-    nqTele('death',{world:this.def&&this.def.name,x:Math.round(this.player?this.player.x:0),cause:reason||'?',t:Math.round((Date.now()-(this._lvStartAt||Date.now()))/1000),score:this.score});
+    nqTele('death',{world:this.def&&this.def.name,x:Math.round(this.player?this.player.x:0),cause:reason||'?',t:Math.round((Date.now()-(this._lvStartAt||Date.now())-(this._pausedMs||0))/1000),score:this.score});
     if(this.hearts[this.lives]) this.hearts[this.lives].setAlpha(.16); if(this.lives<=0) this.gameOver(reason); },
   hurt:function(player,knockDir,reason){
     if(window.__NQ_SETUP&&window.__NQ_GOD) return;   // LAB god mode: designer walks through everything
@@ -5512,21 +5558,26 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
 
   levelClear:function(){
     if(this.over) return; this.over=true; this.addScore(this.timeLeft*10); this.physics.pause(); SFX.clear();
-    nqTele('clear',{world:this.def&&this.def.name,t:Math.round((Date.now()-(this._lvStartAt||Date.now()))/1000),deaths:this._lvDeaths||0,score:this.score});
+    nqTele('clear',{world:this.def&&this.def.name,t:Math.round((Date.now()-(this._lvStartAt||Date.now())-(this._pausedMs||0))/1000),deaths:this._lvDeaths||0,score:this.score});
     var big=this.hb(this.add.text(W/2,120,'WORLD '+this.def.name+' CLEAR!',{fontFamily:'"Press Start 2P"',fontSize:'16px',color:'#3dff6e'}).setOrigin(.5));
     this.tweens.add({targets:big,scale:1.15,duration:400,yoyo:true,repeat:1});
-    var next=this.levelIdx+1;
+    var next=(this.def&&this.def.next!=null)?this.def.next:this.levelIdx+1;   // same expression advanceLevel uses — private chains were only working by array-position luck (audit polish)
     // PER-LEVEL resume checkpoint — bank it HERE too, not only in advanceLevel(). advanceLevel runs
     // solely on boss defeats; ordinary (non-boss) levels complete through levelClear, so without this
     // the tier-2/VIP "resume on the level you died on" perk never advanced past the free world
     // checkpoint (nqLvlCp stayed == nqCp) and the perk was silently inert. Same unconditional write as
     // advanceLevel (the gate is on the READ in gameOver); skip hidden bonus rooms.
     if(next<LEVELS.length && !(this.def&&this.def.hidden)){ this.registry.set('nqLvlCp',next); this.registry.set('nqLvlCpScore',this.score); }
-    this.time.delayedCall(1500,function(){ if(next<LEVELS.length) this.scene.start('Game',{level:next,score:this.score,lives:3,lab:(this._labWarp?1:undefined)}); else this.scene.start('Win',this.winData()); },[],this);   // refill hearts each world; score stays cumulative
+    this.time.delayedCall(1500,function(){
+      // The designed "MORE WORLDS AWAIT" VIP tease fires after clearing 2-1 (idx 3) — but its old
+      // home was advanceLevel(), which only boss defeats reach, so it was dead code (audit #25).
+      // Non-boss levels complete HERE; same guards as the boss path (never in the lab, never for VIP).
+      try{ if(!this._labWarp && nqShouldPitch(this.levelIdx) && !nqIsVipOrAll()){ nqMarkPitch(this.levelIdx); this.scene.start('VipPitch',{next:next,score:this.score}); return; } }catch(e){}
+      if(next<LEVELS.length) this.scene.start('Game',{level:next,score:this.score,lives:3,lab:(this._labWarp?1:undefined)}); else this.scene.start('Win',this.winData()); },[],this);   // refill hearts each world; score stays cumulative
   },
   gameOver:function(reason){ if(this.over) return; this.over=true; this.physics.pause();
     // TIME UP is the one run-ender that doesn't pass through loseLife — record it here (never both)
-    if(reason==='TIME UP') nqTele('death',{world:this.def&&this.def.name,x:Math.round(this.player?this.player.x:0),cause:'TIME UP',t:Math.round((Date.now()-(this._lvStartAt||Date.now()))/1000),score:this.score});
+    if(reason==='TIME UP') nqTele('death',{world:this.def&&this.def.name,x:Math.round(this.player?this.player.x:0),cause:'TIME UP',t:Math.round((Date.now()-(this._lvStartAt||Date.now())-(this._pausedMs||0))/1000),score:this.score});
     // TEST BUILD: no run-ending — bounce back to the level picker so a tester can retry/switch instantly.
     if(TEST_MODE){ this.hb(this.add.text(W/2,120,'TEST — back to LEVEL SELECT',{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#ff6a99'}).setOrigin(.5)); this.time.delayedCall(900,function(){ this.scene.start('LevelSelect'); },[],this); return; }
     // Per-world checkpoint: died past a banked world boundary → continue from the FURTHEST world
@@ -5551,6 +5602,10 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // they died somewhere the perk would have saved them a replay. No token amounts, no thresholds:
     // NQ gating terms are still in testing and must never be promised on any surface.
     var contTease = (!resumeUnlocked && (this.registry.get('nqLvlCp')||0) > cont);
+    // URL-entered PRIVATE room (no return level banked): defeat must restart the SAME room, not
+    // silently dump the player into campaign 1-1 with the lab flag dropped (audit #24). Victory
+    // already routes correctly; only the defeat path misrouted.
+    try{ if(this.def && this.def.private && this.registry.get('nqRetLvl')==null){ cont=this.levelIdx; contScore=0; contKind='room'; } }catch(e){}
     this._cont=cont; this._contScore=contScore; this._contKind=contKind;   // (exposed for tests)
     var contName = (cont>0 && LEVELS[cont]) ? (LEVELS[cont].name||'') : '';
     this.time.delayedCall(600,function(){ this.scene.start('Over',{score:this.score,reason:reason,level:this.def.name,cont:cont,contScore:contScore,contKind:contKind,contName:contName,contTease:contTease}); },[],this); },
@@ -5559,9 +5614,17 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   //      physics + the scene clock (level countdown + boss delayedCalls) + tweens, plus a HUD
   //      overlay. Kept OFF the scene-manager (no scene.pause/launch) to avoid launch-vs-pause races.
   pauseGame:function(auto){ if(this.over||this.paused) return; this.paused=true;
+    // ⚠ Phaser's Clock keeps advancing this.time.now even while time.paused (it assigns `now`
+    // BEFORE its paused check) — so every raw `now > deadline` comparison in the boss machines,
+    // powerups, miniworms etc keeps counting through a pause. resumeGame() rebases them all by
+    // the paused span (audit 2026-08-17 #4: resuming mid-boss skipped every telegraph and fired
+    // instant attacks — reproduced live with the swan diving on the first resumed frame).
+    this._pausedAtClock=this.time.now; this._pausedAtWall=Date.now();
+    try{ window.__NQ_PAUSED=true; }catch(e){}
     try{ this.physics.pause(); }catch(e){}
     try{ this.time.paused=true; }catch(e){}       // freeze the countdown timer + boss attack delayedCalls
     try{ this.tweens.pauseAll(); }catch(e){}
+    try{ this.cameras.main.resetFX(); }catch(e){}   // a mid-flight flash/shake shouldn't keep playing under the PAUSED card (polish)
     try{ MUSIC.suspend(); }catch(e){}
     var self=this, isTouch=this.isTouch;
     this.pauseUI=[]; var mk=function(o){ self.hb(o); o.setDepth(3000); self.pauseUI.push(o); return o; };
@@ -5573,6 +5636,34 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // audio-state line, refreshed in update() while paused — see the field-diagnostics note there
     this._pauseAudioLine=mk(this.add.text(W/2,H/2+44,'audio: …',{fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#8f9bb3'}).setOrigin(.5)); this._paLast=0; this._paT0=null; },
   resumeGame:function(){ if(!this.paused) return; this.paused=false;
+    try{ window.__NQ_PAUSED=false; }catch(e){}
+    // REBASE every live deadline by the span the pause lasted (see the note in pauseGame). Fields
+    // are matched by NAME PATTERN rather than a hand-kept list so a future `xyzNextAt` can't be
+    // silently missed: everything numeric ending in Until/At/T0/Cool, plus NextXxx schedulers and
+    // nextThrow. The EXCLUDE set is the wall-clock (Date.now) fields — shifting those by scene-
+    // clock time would corrupt the difficulty telemetry instead of fixing it.
+    try{
+      var _dt=this.time.now-(this._pausedAtClock!=null?this._pausedAtClock:this.time.now);
+      this._pausedAtClock=null;
+      if(_dt>0){
+        var _EXCL={_lvStartAt:1,_paLast:1,_paT0:1,_lvDeaths:1,_paFrames:1,_pausedMs:1,_pausedAtWall:1};
+        var _PAT=/(Until|At|T0|Cool)$|Next[A-Z]/, _self=this;
+        Object.keys(this).forEach(function(k){
+          if(_EXCL[k]) return;
+          if(!_PAT.test(k) && k!=='nextThrow') return;
+          var v=_self[k]; if(typeof v==='number' && isFinite(v) && v>0) _self[k]=v+_dt;
+        });
+        var _shift=function(o,f){ if(o && typeof o[f]==='number' && isFinite(o[f]) && o[f]>0) o[f]+=_dt; };
+        try{ if(this.enemyShots) this.enemyShots.children.iterate(function(s){ _shift(s,'dieAt'); }); }catch(e){}
+        try{ if(this.enemies) this.enemies.children.iterate(function(s){ _shift(s,'nextFire'); }); }catch(e){}
+        try{ if(this.miniworms) this.miniworms.children.iterate(function(s){ _shift(s,'mwNextAt'); }); }catch(e){}
+        try{ if(this.pullerRugs&&this.pullerRugs.children) this.pullerRugs.children.iterate(function(s){ _shift(s,'respawnAt'); }); }catch(e){}
+        try{ (this.dumpZones||[]).forEach(function(z){ _shift(z,'nextAt'); }); }catch(e){}
+      }
+      // wall-clock pause accumulator for the difficulty telemetry (audit #28): _lvStartAt is
+      // Date.now-based and pause spans were inflating time-in-level; consumers subtract this.
+      if(this._pausedAtWall){ this._pausedMs=(this._pausedMs||0)+(Date.now()-this._pausedAtWall); this._pausedAtWall=null; }
+    }catch(e){}
     try{ this.physics.resume(); }catch(e){}
     try{ this.time.paused=false; }catch(e){}
     try{ this.tweens.resumeAll(); }catch(e){}
@@ -5656,8 +5747,12 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     var jump=this.cursors.up.isDown||this.keys.W.isDown||this.keys.SPACE.isDown||this.touch.jump;
     var duck=this.cursors.down.isDown||this.keys.S.isDown||this.touch.down;
     if(this._godBadge) this._godBadge.setVisible(!!window.__NQ_GOD);   // tracks live 🛠 LAB toggles
-    // auto-pause after 10s of no movement/jump/duck input (player stepped away)
-    if(left||right||jump||duck) this.lastInputAt=now; else if(this.lastInputAt&&now-this.lastInputAt>10000){ if(this.nearActiveSlot()){ this.lastInputAt=now; } else { this.pauseGame(true); return; } }
+    // auto-pause after 10s of no input (player stepped away). Throwing discs and using items ARE
+    // input — a player sniping a boss from a safe ledge was getting the "you stepped away" card
+    // mid-fight (audit #23); an active SOLANA MODE counts too (its auto-fire is deliberate play).
+    var throwHeld2=this.keys.F.isDown||this.keys.X.isDown||this.touch.throwBtn;
+    var useAny=this.keys.Q.isDown||this.keys.E.isDown||(this.keys.ONE&&this.keys.ONE.isDown)||(this.keys.TWO&&this.keys.TWO.isDown)||(this.keys.THREE&&this.keys.THREE.isDown)||now<this.solanaUntil;
+    if(left||right||jump||duck||throwHeld2||useAny) this.lastInputAt=now; else if(this.lastInputAt&&now-this.lastInputAt>10000){ if(this.nearActiveSlot()){ this.lastInputAt=now; } else { this.pauseGame(true); return; } }
     // CROUCH: duck in place on the ground (jump cancels it) — shrinks the hitbox so fireballs / sniper bolts pass over.
     // 90ms grounded-hysteresis: blocked.down drops out for single frames on tile seams, and that
     // 1-frame loss was toggling the crouch — the visible duck "flicker".
@@ -5957,7 +6052,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
         var ahead=e.x+e.dir*(e.body.width*0.5+4);
         if(self.overPit(ahead)) e.dir=-e.dir;
       }
-      if(e.beh==='sniper'){ e.setVelocityX(0); e.setFlipX(p.x<e.x); e.setRotation(0); }   // ranged TURRET: holds position + aims at the player (no frantic pacing)
+      if(e.beh==='sniper'){ e.setVelocityX(0); e.setFlipX(e.kind==='laserbot' ? p.x>e.x : p.x<e.x); e.setRotation(0); }   // ranged TURRET: holds position + aims at the player. ⚠ cut_laserbot's cannon points LEFT in the art (opposite the default convention), so its flip test is inverted — unflipped polarity had all 29 placements aiming away from the player, bolts flying out of their backs (audit #19)
       else if(e.beh==='sandwich'){ self.sandwichTick(now,e,p); }   // MEV Sandwich Bot / drone: telegraphed charge
       else { e.setVelocityX(e.dir*e.baseSpeed); e.setFlipX(e.dir>0); e.setRotation(Math.sin((now+e.homeX)/110)*0.06); }
       // Sniper Bot / laser drone: fire an aimed bolt when the player is roughly in range
@@ -5995,7 +6090,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // `this.def.bossType` guard added 2026-07-25: the Rug King (1-3, the ONLY boss with no
     // bossType) now runs his own rugKingTick state machine, so he must not also be driven by the
     // generic constant-speed charge — the two would fight each other over his velocity.
-    if(this.boss && this.def.bossType && this.def.bossType!=='blackswan' && this.def.bossType!=='mevdragon' && this.def.bossType!=='dirtywhale' && this.rugking && this.rugking.active && !this.rugking.invuln){   // state-machine bosses (swan/dragon/whale) own their movement — the ground-charge made the "stunned" whale CHASE the player through its vulnerable window
+    if(this.boss && this.def.bossType && this.def.bossType!=='blackswan' && this.def.bossType!=='mevdragon' && this.def.bossType!=='dirtywhale' && this.def.bossType!=='drainer' && this.rugking && this.rugking.active && !this.rugking.invuln){   // state-machine bosses (swan/dragon/whale) own their movement — the ground-charge made the "stunned" whale CHASE the player through its vulnerable window
       var kb=this.rugking; kb.dir=(p.x<kb.x)?-1:1; kb.setVelocityX(kb.dir*76); kb.setFlipX(kb.dir>0); kb.setRotation(Math.sin(now/120)*0.05);
     }
     // RUG KING (1-3) — stalk / wind-up / charge / recover, + a leap slam from 2 HP down
@@ -6093,7 +6188,8 @@ var Over=new Phaser.Class({ Extends:Phaser.Scene,
     this.tweens.add({targets:p,alpha:.25,duration:600,yoyo:true,repeat:-1});
     // Continue from the World-2 checkpoint if premium banked one; else restart from 1-1.
     var self=this; this.started=false; var go=function(){ if(self.started) return; self.started=true;
-      if(self.cont>0){ if(typeof BRIEFINGS!=='undefined'&&BRIEFINGS[self.cont]) self.scene.start('Briefing',{next:self.cont,score:self.contScore});   // show the world briefing (control reminder) on continue
+      if(self.cont>0){ if(self.contKind==='room'){ self.scene.start('Game',{level:self.cont,score:0,lives:3,lab:1}); }   // private-room retry keeps the tier-gate bypass the URL entry had (audit #24)
+                        else if(typeof BRIEFINGS!=='undefined'&&BRIEFINGS[self.cont]) self.scene.start('Briefing',{next:self.cont,score:self.contScore});   // show the world briefing (control reminder) on continue
                         else self.scene.start('Game',{level:self.cont,score:self.contScore,lives:3}); }
       else self.scene.start('Game',{level:0,score:0,lives:3}); };
     this.time.delayedCall(500,function(){ self.input.once('pointerdown',go); self.input.keyboard.once('keydown',go); });
@@ -6202,8 +6298,8 @@ var WORLD_CLEARS = {
         story:'Funds are finally in YOUR wallet. One problem: they live on the wrong chain — and the only way across is a creaky cross-chain bridge.',
         term:{name:'BRIDGE',def:'Locks tokens on one chain, mints them on another. Some of crypto\'s biggest hacks happened right here.'},
         nostalgia:'NOW YOU\'RE PLAYING WITH POWER. SELF-CUSTODY POWER.' },
-  15: { world:5, title:'THE VAULT WYRM, SLAIN!', color:'#66ff88', bg:0x0e2416,
-        boss:{img:'wyrm',scale:92,tint:0,angle:14},
+  15: { world:5, title:'THE BRIDGE DRAINER, SCRAPPED!', color:'#66ff88', bg:0x0e2416,   // the boss actually fought since the 07-28 swap — the wyrm fight is dead code (audit #26)
+        boss:{img:'drainer',scale:92,tint:0,angle:14},
         theme:8, dest:'INTO THE DEPEG ZONE…',
         story:'You made it across. Ahead: a city built on a "stable" coin — and the mint-green ground is already wobbling off its $1.00 peg.',
         term:{name:'DEPEG',def:'When a stablecoin slips off $1. A few cents of wobble has unwound billions before.'},
@@ -6430,7 +6526,7 @@ var BRIEFINGS = {
   3: { title:'WORLD 2 — THE SAND LANDS',
        powers:[
          {tex:'supergeek', name:'SUPER GEEK', desc:'Audit on — blocks the next hit.'},
-         {tex:'omegachad', name:'GIGA CHAD', desc:'Bulk up & plow through enemies for 10s.'}
+         {tex:'omegachad', name:'GIGA CHAD', desc:'Bulk up & plow through enemies for 8s.'}
        ],
        threats:[
          {tex:'fudster', name:'FUDSTER', desc:"sprays slow-gas — don't linger in it"},
@@ -6464,7 +6560,7 @@ var BRIEFINGS = {
        ],
        threats:[
          {tex:'bitmaxi', name:'BITCOIN MAXI', desc:'steals your coins — stomp him'},
-         {tex:'wyrm', name:'THE VAULT WYRM', desc:'guards the far side of the bridge'}
+         {tex:'drainer', name:'THE BRIDGE DRAINER', desc:'siphons the bridge dry at the far side'}
        ],
        tip:'CROSS-CHAIN BRIDGE: the wooden planks get exploited & collapse a beat after you step on them — KEEP MOVING, never stand still over the void.' },
   15: { title:'WORLD 6 — THE DEPEG',
@@ -6493,10 +6589,10 @@ var BRIEFINGS = {
          {tex:'coldwallet', name:'COLD WALLET', desc:'NEW! Total immunity + FREEZES the whole board.'}
        ],
        threats:[
-         {tex:'greatbear', name:'THE GREAT BEAR', desc:'the TRUE FINAL boss — stomp him x5'},
+         {tex:'greatbear', name:'THE GREAT BEAR', desc:'the World 8 boss — stomp him x5'},
          {tex:'bot', name:'THE WHOLE MARKET', desc:'bots, snipers & maxis — relentless'}
        ],
-       tip:'THE BEAR MARKET: the final gauntlet. Survive THE DIP & CAPITULATION, grab WHALE MODE & COLD WALLET, then stomp THE GREAT BEAR x5.' },
+       tip:'THE BEAR MARKET: the deepest dip yet. Survive THE DIP & CAPITULATION, grab WHALE MODE & COLD WALLET, then stomp THE GREAT BEAR x5.' },
   24: { title:'WORLD 9 — THE MINES',   // keys are level indices; World 9's 9-1 = index 24
        powers:[
          {tex:'candle', name:'GREEN CANDLE', desc:'Lights the dark + heals a heart.'},
@@ -6727,8 +6823,8 @@ function nqBuyNormie(){
    rather than throwing on a screen the player cannot skip past. ---------- */
 var NQ_PREVIEWS = [
   { band:'t1',  world:3,  sprite:'scammykol',    title:'THE SCAMMY KOL',    hook:'The shill tower. He sells you the top and calls it alpha.' },
-  { band:'t1',  world:5,  sprite:'wyrm',         title:'THE VAULT WYRM',    hook:'It nests in the bridge vault and eats whatever crosses.' },
-  { band:'t1',  world:7,  sprite:'reaper',       title:'THE YIELD REAPER',  hook:'The farm pays 10,000% APY. He is the reason it can.' },
+  { band:'t1',  world:5,  sprite:'drainer',      title:'THE BRIDGE DRAINER',hook:'It hooks its drill-hoses into the bridge and siphons everything that crosses.' },
+  { band:'t1',  world:7,  sprite:'reaper',       title:'THE YIELD REAPER',  hook:'The farm pays 40,000% APY. He is the reason it can.' },
   { band:'t2',  world:8,  sprite:'greatbear',    title:'THE GREAT BEAR',    hook:'Down bad is a place, and something lives there.' },
   { band:'t2',  world:10, sprite:'blackswan',    title:'THE BLACK SWAN',    hook:'Nobody prices it in. That is what makes it a swan.' },
   { band:'t2',  world:12, sprite:'whale',        title:'THE WHALE CARTEL',  hook:'They moved the price before you finished reading this.' },
@@ -6755,6 +6851,12 @@ function nqPreviewBand(){
 // Rotate within the eligible set, and weight the VIP wing in for lower tiers too: seeing the
 // FINAL boss is a stronger pull than seeing the next world, and it is the whole Nation pitch.
 function nqPreviewPick(){
+  // ⛔ TESTING LANES ONLY (audit #10). The cards promise $NORMIE unlocks and VIP perk terms, and
+  // CLAUDE.md is explicit: no gating terms on any PUBLIC surface — there is no agreement with the
+  // NORMIE team. On the public build (__NQ_SETUP false) __NQ_ACCESS is never published, the band
+  // defaulted to t1 and EVERY card showed, including "STILL LOCKED" over content that is not
+  // actually locked publicly. Interstitials fall back to the Nation identity line instead.
+  try{ if(typeof window==='undefined' || !window.__NQ_SETUP) return null; }catch(e){ return null; }
   var band=nqPreviewBand(); if(!band) return null;
   var pool=NQ_PREVIEWS.filter(function(p){
     if(band==='vip') return p.band==='vip';
@@ -7269,12 +7371,12 @@ if(typeof document!=='undefined'){ (function(){
   },120);
 })(); }
 
-/* ---------- Floating movement joystick (phones) — OPT-IN via ?joystick=1 while we device-test ----------
+/* ---------- Floating movement joystick (phones) — the DEFAULT touch control (opt OUT via ?joystick=0) ----------
    Owner ask (mobile tester): a joystick "feel" for walking instead of the invisible < > tap-zones.
    LEFT half of the screen = a joystick that springs up under the thumb (drag to steer; drag down to
    duck). RIGHT half = JUMP. A dedicated ◎ THROW button sits bottom-right. Feeds the SAME window.__NQ_PAD
    hook the gutter D-pad uses (which is disabled while this flag is on) — so zero core game-loop change.
-   Gated behind ?joystick=1 so it ships DORMANT: real users are unaffected until we flip the default. */
+   The default flipped after device testing: it now SHIPS ON for touch devices; ?joystick=0 restores the tap-zones. */
 if(typeof document!=='undefined'){ (function(){
   var isTouch=('ontouchstart' in window)||(navigator.maxTouchPoints>0);
   if(!isTouch) return;
@@ -7898,6 +8000,9 @@ if(typeof document!=='undefined'){ (function(){
 
   window.NQLB = {
     worldOf: worldOf,
+    // Read-only token peek for the telemetry beacon: the server now requires a valid run token on
+    // ev:'clear' (anti-poisoning, audit #29) — non-consuming verify, so peeking is safe.
+    getToken: function () { return (run && run.token) ? run.token : null; },
     // Called when a run is ABANDONED (≡ Levels / back to level select): drop the token so the
     // next run gets a fresh issuedAt — reusing the old one made the server's score/second
     // plausibility check judge the new score against the old run's start time.

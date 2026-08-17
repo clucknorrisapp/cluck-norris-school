@@ -29,13 +29,26 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 // idx -> label. Every boss that resolves through startKolBoss / startCeoBoss / the Rug King
 // fall-through, i.e. everything whose grounding the shared body constants control.
 const BOSSES = [
-  { idx: 2,  label: 'Rug King (1-3)',      tex: 'rugking' },
+  //  - rugking: his idle squash-pulse oscillates displayHeight 62<->72; a sample mid-pulse reads
+  //    up to ~5px off. At nominal scale he measures 0 (verified live, twice).
+  { idx: 2,  label: 'Rug King (1-3)',      tex: 'rugking', slack: 5.5 },
   { idx: 8,  label: 'Scammy KOL (3-3)',    tex: 'scammykol' },
   { idx: 11, label: 'The Custodian (4-3)', tex: 'ceoboss' },
   { idx: 84, label: 'Tom (TOMSTURF)',      tex: 'tom' },
   { idx: 85, label: 'Shark (BEACH)',       tex: 'shark' },
   { idx: 86, label: 'Sand Lord (SANDCASTLE)', tex: 'sandlord' },
   { idx: 89, label: 'Ghost Ship (GHOSTSHIP)', tex: 'ghostship' },
+  // audit #18: the state-machine/VIP paths had the same 4% sink the shared path was cured of —
+  // guard them all so a future plate swap can't silently re-break any of them.
+  { idx: 17, label: 'Hash Lord (6-3)',       tex: 'golem' },
+  { idx: 20, label: 'Yield Reaper (7-3)',    tex: 'reaper' },
+  { idx: 23, label: 'Great Bear (8-3)',      tex: 'greatbear' },
+  { idx: 66, label: 'Saylor (20-3)',         tex: 'saylor' },
+  { idx: 45, label: 'VIP boss (13-3)',       tex: 'vip' },
+  // slack: expected |delta| beyond the global tolerance, with the reason.
+  //  - troll: its plate keeps a real 4.4% bottom MARGIN (not a crop — see the media library), and
+  //    this harness measures the FRAME bottom; his visible feet sit on GY exactly.
+  { idx: 28, label: 'Troll (TRENCHES)',      tex: 'troll', slack: 3.2 },
 ];
 
 function chromePath() {
@@ -84,9 +97,10 @@ async function measure(page, b) {
   let bad = 0;
   for (const r of rows) {
     if (!r.ok) { console.log('  ' + r.label.padEnd(26) + 'ERROR: ' + r.err); bad++; continue; }
-    const flag = Math.abs(r.delta) <= TOLERANCE ? 'ok'
+    const tol = TOLERANCE + (r.slack || 0);
+    const flag = Math.abs(r.delta) <= tol ? 'ok'
                : (r.delta > 0 ? `SUNK ${r.delta}px` : `HOVER ${Math.abs(r.delta)}px`);
-    if (Math.abs(r.delta) > TOLERANCE) bad++;
+    if (Math.abs(r.delta) > tol) bad++;
     console.log('  ' + r.label.padEnd(26) + String(r.tex).padEnd(12)
       + `${r.frameW}×${r.frameH}`.padEnd(10)
       + `${r.dispW}×${r.dispH}`.padEnd(12)

@@ -46,12 +46,16 @@ function bossBudget(l) {
   const wormhole = l.name === '2-3';
   const perHit = wormhole ? 150 : 100;
   const defeatBase = wormhole ? 800 : 500;
-  // type bonus keyed by level name (the finales / special rooms)
-  const TYPE_BONUS = {
-    'TRENCHES': 2000, 'TOMSTURF': 1000, 'BEACH': 1000, 'SANDCASTLE': 1000,
-    'MYSPACE': 2000, '20-3': 2500, '21-3': 5000,
-  };
-  const typeBonus = TYPE_BONUS[l.name] || 0;
+  // Bespoke finale bonuses stay name-keyed (each is its own addScore call in bossDefeat):
+  // TRENCHES troll +2000, 20-3 Saylor +2500, 21-3 Wen Moon +5000.
+  const FINALE_BONUS = { 'TRENCHES': 2000, '20-3': 2500, '21-3': 5000 };
+  let typeBonus = FINALE_BONUS[l.name] || 0;
+  // Private boss rooms all pay +1000 via bossDefeat's shared `def.private` branch — derived from
+  // the level DEF, not a name list, so a future private boss room can never be silently omitted
+  // (audit #30: GHOSTSHIP was missing from the old name-keyed table, putting its budget 1000
+  // under a legit run's ceiling). MYSPACE keeps its historic 2000 over-estimate.
+  if (l.private && l.boss) typeBonus = Math.max(typeBonus, 1000);
+  if (l.name === 'MYSPACE') typeBonus = 2000;
   return BOSS_HP_MAX * perHit + defeatBase + typeBonus;
 }
 
@@ -84,6 +88,10 @@ function levelMax(l) {
   }
   // World-7 farmable yield lift: generous time-bounded allowance (up to ~1 harvest/sec * 15).
   if (n(l.yields) > 0) m += (Number(l.time) || 120) * 15;
+  // Secret-steel stash allowance (audit #31): hidden/VIP levels mark up to 6 runtime secret
+  // blocks worth up to 130 points each (candle roll) — levelMax had no term for them, so a
+  // lucky thorough run in a directly-entered ?room= could exceed budget+EPS and be flagged.
+  if (l.hidden || l.vip) m += 6 * 130;
   if (l.boss) m += bossBudget(l);
   else m += (Number(l.time) || 0) * 10;           // non-boss clear bonus = full clock * 10
   return Math.round(m);
