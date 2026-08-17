@@ -24,6 +24,7 @@ const wallet = require('./nq-wallet');   // Phase 2 wallet ownership + tier gate
 const rewards = require('./nq-rewards'); // wallet-bound game-boost reward queue + daily VIP wheel
 const ledger = require('./nq-ledger');   // off-chain per-wallet points ledger (Normie Cash economy)
 const pair = require('./nq-pair');       // TV pairing — carry a proven wallet session to a wallet-less screen
+const claims = require('./nq-claims');   // weekly physical-prize claims (sign-to-claim, encrypted addresses)
 
 // Admin key for reading feedback / the comments dashboard (low-sensitivity playtest comments,
 // no funds/PII). Env keys ONLY — a dedicated NQ_FEEDBACK_KEY, else the site's PREMIUM_ACCESS_KEY.
@@ -178,6 +179,17 @@ router.post('/api/nq/run-checkpoint', (req, res) => {
   try {
     const b = req.body || {};
     const r = leaderboard.checkpoint(b.token || null, String(b.level || ''));
+    res.status(r.ok ? 200 : 400).json(r);
+  } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+// CONTINUE (audit #7): the game-over submit burns the run nonce, so a continued run POSTs its
+// ended token here and gets back a fresh-nonce token carrying the same proven level list — the
+// banked cumulative score stays inside the ceiling instead of instantly reading as forged.
+router.post('/api/nq/run-continue', (req, res) => {
+  if (throttled(req, 'runcontinue', 30)) return res.status(429).json({ ok: false, error: 'slow_down' });
+  try {
+    const b = req.body || {};
+    const r = leaderboard.continueRun(b.token || null);
     res.status(r.ok ? 200 : 400).json(r);
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
@@ -390,6 +402,102 @@ router.get('/api/nq/leaderboard', async (req, res) => {
     const n = Math.max(1, Math.min(50, parseInt(q.n, 10) || 10));
     res.json({ ok: true, ...(await leaderboard.boards({ worlds, n })) });
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+
+// ---- /api/nq/claim : weekly physical-prize claims --------------------------
+// The weekly board is a skill contest; last week's top verified wallet(s) win. The winner signs a
+// consent message that BINDS the shipping address (hash inside the signed text) — see nq-claims.js
+// for the full PII posture (collected only from winners, encrypted at rest, wiped after shipping).
+router.get('/api/nq/claim/status', async (req, res) => {
+  if (throttled(req, 'claimstatus', 30)) return res.status(429).json({ ok: false, error: 'slow_down' });
+  try {
+    const q = req.query || {};
+    const week = q.week ? Number(q.week) : claims.lastCompletedWeek();
+    const winners = await claims.winnersForWeek(week);
+    const recs = claims.listClaims();
+    const pk = String(q.pubkey || '').trim();
+    const body = {
+      ok: true, week, windowEndsAt: claims.windowEndsAt(week), ranks: claims.prizeRanks(),
+      enabled: claims.enabled(),
+      winners: winners.map((w) => ({ rank: w.rank, name: w.name, score: w.score,
+        wallet: w.wallet.slice(0, 4) + '…' + w.wallet.slice(-4),
+        claimed: recs.some((c) => c.week === week && c.wallet === w.wallet) })),
+    };
+    if (pk) {
+      const me = winners.find((w) => w.wallet === pk);
+      body.you = { isWinner: !!me, rank: me ? me.rank : null,
+        claimed: !!me && recs.some((c) => c.week === week && c.wallet === pk),
+        windowOpen: Date.now() <= claims.windowEndsAt(week) };
+    }
+    res.json(body);
+  } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+router.post('/api/nq/claim/prepare', async (req, res) => {
+  if (throttled(req, 'claimprep', 10)) return res.status(429).json({ ok: false, error: 'slow_down' });
+  try {
+    const b = req.body || {};
+    const r = await claims.prepare(b.pubkey, b.week, b.address);
+    res.status(r.ok ? 200 : 400).json(r);
+  } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+router.post('/api/nq/claim', async (req, res) => {
+  if (throttled(req, 'claimsubmit', 10)) return res.status(429).json({ ok: false, error: 'slow_down' });
+  try {
+    const b = req.body || {};
+    const r = await claims.submit(b.pubkey, b.week, b.signature);
+    res.status(r.ok ? 200 : 400).json(r);
+  } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+
+// Owner prizes panel — winners per completed week, claim status, DECRYPTED addresses (keyed page
+// only), and the mark-shipped action that permanently wipes an address. PII: this is the single
+// surface that ever renders an address.
+router.get('/normie-quest-x7/prizes', async (req, res) => {
+  res.set('X-Robots-Tag', 'noindex, nofollow');
+  if (!adminOK(req)) return res.status(404).send('Not found');
+  const key = esc(String((req.query && req.query.key) || ''));
+  try {
+    // mark-shipped action (confirm-guarded like the season reset)
+    const ship = String((req.query && req.query.shipped) || '');
+    if (ship && String(req.query.confirm || '') === 'SHIPPED') {
+      const m = ship.split(':');
+      claims.markShipped(Number(m[0]), String(m[1] || ''));
+    }
+    const recs = claims.listClaims();
+    const weeks = [];
+    for (let i = 1; i <= 8; i++) weeks.push(claims.lastCompletedWeek(Date.now() - (i - 1) * 7 * 24 * 60 * 60 * 1000));
+    const blocks = [];
+    for (const wk of weeks) {
+      const winners = await claims.winnersForWeek(wk);
+      if (!winners.length) continue;
+      const rows = winners.map((w) => {
+        const c = recs.find((x) => x.week === wk && x.wallet === w.wallet);
+        let addr = '<span class="dim">unclaimed</span>', st = '';
+        if (c && c.shippedAt) { addr = '<span class="dim">address wiped</span>'; st = '📦 shipped ' + new Date(c.shippedAt).toISOString().slice(0, 10); }
+        else if (c) {
+          const a = c.addrEnc ? claims.decryptAddress(c.addrEnc) : null;
+          addr = a ? esc([a.name, a.line1, a.line2, a.city, a.region, a.postal, a.country].filter(Boolean).join(', '))
+                   : '<span class="dim">decrypt failed (secret rotated?)</span>';
+          st = '<a href="/normie-quest-x7/prizes?key=' + key + '&shipped=' + wk + ':' + esc(w.wallet) + '&confirm=SHIPPED" '
+             + 'onclick="return confirm(\'Mark shipped and permanently wipe the address?\')">mark shipped ✓</a>'
+             + (c.dupAddress ? ' <b style="color:#ff5a3c">⚠ address matches another winner</b>' : '');
+        }
+        return '<tr><td>#' + w.rank + '</td><td>' + esc(w.name || 'anon') + '</td><td class="mono">' + esc(w.wallet) + '</td>'
+          + '<td>' + w.score + '</td><td>' + addr + '</td><td>' + st + '</td></tr>';
+      }).join('');
+      blocks.push('<h2>Week of ' + new Date(wk).toISOString().slice(0, 10) + '</h2>'
+        + '<table><tr><th>#</th><th>NAME</th><th>WALLET</th><th>SCORE</th><th>SHIPPING ADDRESS</th><th></th></tr>' + rows + '</table>');
+    }
+    res.send('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">'
+      + '<title>NQ prizes</title><style>body{background:#0d0a1f;color:#dfe6ff;font-family:system-ui;padding:18px;max-width:1100px;margin:0 auto}'
+      + 'table{border-collapse:collapse;width:100%;margin:8px 0 22px}td,th{border-bottom:1px solid #2a2450;padding:6px 8px;text-align:left;font-size:13px}'
+      + 'h1{font-size:20px}h2{font-size:15px;color:#ffd23f}a{color:#3dff6e}.dim{color:#6a6590}.mono{font-family:monospace;font-size:11px}</style>'
+      + '<h1>🏆 Weekly prize winners</h1>'
+      + '<p class="dim">Skill contest: top ' + claims.prizeRanks() + ' verified non-suspect run(s) per completed week. '
+      + 'Claim window: ' + claims.claimDays() + ' days after the week ends. Addresses decrypt only on this page and are wiped by “mark shipped”.'
+      + (claims.enabled() ? '' : ' <b style="color:#ff5a3c">⚠ claims DISABLED — no NQ_CLAIM_SECRET / PREMIUM_ACCESS_KEY configured.</b>') + '</p>'
+      + (blocks.join('') || '<p class="dim">No completed week has a verified winner yet.</p>'));
+  } catch (e) { res.status(500).send('server error'); }
 });
 
 // Owner season reset — archives every entry (volume file / PG table) THEN clears the board.

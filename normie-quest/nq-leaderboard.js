@@ -198,6 +198,23 @@ function checkRun(tok) {
   return { ok: true, elapsedMs: age };
 }
 
+// continueRun — audit #7: game-over submit burns the run nonce, and CONTINUE used to restart with a
+// FRESH one-level token, so the banked cumulative score instantly exceeded the new ceiling and every
+// legitimate continue was flagged suspect. This reissues a token carrying the SAME proven level list:
+//   - fresh nonce   -> the continued run can submit (the old nonce burned at game over);
+//   - original issuedAt -> the 2h TTL bounds the whole continue-chain (no eternal re-minting);
+//   - lastCpAt = now -> the next NEW checkpoint credit stays dwell-bound.
+// Non-consuming on purpose: it must work after the game-over submit (nonce already burned) and for
+// parked no-handle runs (nonce not yet burned). No escalation surface: the list — and therefore the
+// budget ceiling — is exactly what the original run proved, and boards dedupe best-per-player.
+function continueRun(token) {
+  if (!token || token.v !== 2 || !Array.isArray(token.lv)) return { ok: false, status: 'bad_token' };
+  const r = checkV2(token);
+  if (!r.ok) return { ok: false, status: r.status };
+  const nonce = crypto.randomBytes(12).toString('hex');
+  return { ok: true, token: mkV2(r.names, nonce, Number(token.issuedAt), Date.now()) };
+}
+
 // verifyRun — NON-CONSUMING token check for other endpoints (telemetry 'clear' gating, audit #29):
 // proves the caller holds a genuinely signed, unexpired run token WITHOUT burning the run's nonce
 // (the nonce is single-use at /score submit; consuming it here would kill the later real submit).
@@ -390,4 +407,4 @@ async function resetBoard() {
   return { archived: arr.length, to };
 }
 
-module.exports = { startRun, checkpoint, checkRun, verifyRun, add, topByWorld, topWeekly, topAllTime, boards, list, weekStartMs, usingPg, levelBudget, resetBoard, _makePgBackend: makePgBackend };
+module.exports = { startRun, checkpoint, checkRun, verifyRun, continueRun, add, topByWorld, topWeekly, topAllTime, boards, list, weekStartMs, usingPg, levelBudget, resetBoard, _makePgBackend: makePgBackend };
