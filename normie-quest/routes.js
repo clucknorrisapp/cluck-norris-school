@@ -392,6 +392,19 @@ router.get('/api/nq/leaderboard', async (req, res) => {
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
 
+// Owner season reset — archives every entry (volume file / PG table) THEN clears the board.
+// GET on purpose (owner fires it from a phone browser, like the wallet-watch lever); it is 404
+// without the admin key and refuses without confirm=RESET, so a crawler or prefetch can't wipe it.
+router.get('/api/nq/leaderboard/reset', async (req, res) => {
+  res.set('X-Robots-Tag', 'noindex, nofollow');
+  if (!adminOK(req)) return res.status(404).json({ ok: false, error: 'not_found' });
+  if (String((req.query && req.query.confirm) || '') !== 'RESET') {
+    return res.status(400).json({ ok: false, error: 'add &confirm=RESET to archive the current board and wipe it' });
+  }
+  try { res.json({ ok: true, ...(await leaderboard.resetBoard()) }); }
+  catch (e) { res.status(500).json({ ok: false, error: 'reset_failed_board_untouched' }); }
+});
+
 // ---- shared per-IP throttle for the PUBLIC endpoints -----------------------
 // IP = CF-Connecting-IP (the real visitor, set by Cloudflare and unforgeable now that the CLKN
 // origin lockdown 403s any non-Cloudflare ingress). ⚠️ This used to take the LAST x-forwarded-for
