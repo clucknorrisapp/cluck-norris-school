@@ -307,6 +307,15 @@ function legacyV2(names, ageMs) {
       ok('keyed confirmed reset archives every entry then clears the board',
          rGo.status === 200 && j.ok === true && before > 0 && j.archived === before
          && after === 0 && archived.length === before);
+      // The giveaway console: keyed page renders every section; keyless is a 404.
+      const pNo = await fetch(base + '/normie-quest-x7/prizes');
+      const pYes = await fetch(base + '/normie-quest-x7/prizes?key=test-admin-key');
+      const html = await pYes.text();
+      ok('giveaway console is a 404 without the admin key', pNo.status === 404);
+      ok('giveaway console renders standings, suspects and season control',
+         pYes.status === 200 && html.indexOf('LIVE STANDINGS') !== -1
+         && html.indexOf('SUSPECT RUNS') !== -1 && html.indexOf('SEASON CONTROL') !== -1
+         && html.indexOf('ARCHIVE + RESET SEASON') !== -1);
       delete process.env.NQ_FEEDBACK_KEY;
     }
     srv.close();
@@ -322,6 +331,10 @@ function legacyV2(names, ageMs) {
     const archived = JSON.parse(require('fs').readFileSync(r.to, 'utf8'));
     ok('resetBoard archives all entries to a timestamped file then empties the store',
        before > 0 && r.archived === before && archived.length === before && after === 0);
+    const arcs = await lb.listArchives();
+    const mine = arcs.find((a) => r.to.endsWith(a.name));
+    ok('listArchives surfaces the archive the reset just wrote (with its run count)',
+       arcs.length >= 1 && !!mine && mine.count === before);
   }
 
   console.log('\n' + (fail === 0 ? 'ALL PASS' : fail + ' FAILED') + '  (' + pass + '/' + (pass + fail) + ')');
