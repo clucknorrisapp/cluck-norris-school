@@ -52,14 +52,16 @@ jobs:
       # a regression silently re-opens score forgery. Pure-node, no server needed.
       - name: Normie Quest leaderboard anti-forgery test
         run: node normie-quest/test/nq-leaderboard-test.cjs
-      # The per-level point budgets are DERIVED from the level data; if game_logic.js changes a
-      # level's coins/enemies/bonuses but nq-budgets.json isn't regenerated, the ceiling drifts.
-      # Regenerate and fail if the committed table is stale.
-      - name: Normie Quest budget-table freshness guard
+      # The per-level point budgets AND the level adjacency graph (checkpoint anti-forgery,
+      # audit #6) are DERIVED from the level data; if game_logic.js changes levels but the
+      # committed JSON isn't regenerated, the ceiling/graph drifts — a stale graph falsely
+      # flags real players' checkpoints. Regenerate both and fail if either committed file is stale.
+      - name: Normie Quest budget-table + level-graph freshness guard
         run: |
           node normie-quest/tools/gen-budgets.cjs
-          git diff --exit-code normie-quest/nq-budgets.json \
-            || (echo "::error::nq-budgets.json is stale — run node normie-quest/tools/gen-budgets.cjs and commit" && exit 1)
+          node normie-quest/tools/gen-level-graph.cjs
+          git diff --exit-code normie-quest/nq-budgets.json normie-quest/nq-level-graph.json \
+            || (echo "::error::nq-budgets.json / nq-level-graph.json is stale — run node normie-quest/tools/gen-budgets.cjs && node normie-quest/tools/gen-level-graph.cjs and commit" && exit 1)
       # The served game HTML is BUILT from src/game_logic.js by build.js. A fix made to the built
       # HTML but not the source (or vice-versa) silently reverts on the next build — the exact
       # drift that shipped the mobile joystick fix only to the served file. Rebuild and fail if the

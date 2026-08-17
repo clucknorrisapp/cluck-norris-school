@@ -35,7 +35,15 @@ const CHALLENGE_TTL_MS = 5 * 60 * 1000;
 // session token is effectively non-expiring. Tier is NOT frozen — the client re-reads live balance
 // via /refresh every launch, so access always tracks current holdings. Giveaways re-check at draw time.
 const SESSION_TTL_MS = 3650 * 24 * 60 * 60 * 1000;   // ~10 years ≈ "until cleared"
-const SECRET = process.env.NQ_LB_SECRET || process.env.PREMIUM_ACCESS_KEY || crypto.randomBytes(24).toString('hex');
+// Key separation (audit #32): never sign session tokens with the master PREMIUM_ACCESS_KEY itself —
+// derive a per-purpose secret (distinct label from nq-leaderboard's 'nq-lb-v1', so the two token
+// families can never be swapped for each other). Deploy note: the first deploy of this derivation
+// invalidates existing wallet sessions once — checkSession fails gracefully and the client's normal
+// re-connect/re-sign flow issues a fresh session.
+const SECRET = process.env.NQ_LB_SECRET
+  || (process.env.PREMIUM_ACCESS_KEY
+      && crypto.createHmac('sha256', process.env.PREMIUM_ACCESS_KEY).update('nq-wallet-v1').digest('hex'))
+  || crypto.randomBytes(24).toString('hex');
 
 function num(v, d) { const n = Number(v); return Number.isFinite(n) ? n : d; }
 function cfg() {
