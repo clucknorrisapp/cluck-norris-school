@@ -472,13 +472,23 @@ router.get('/api/nq/feedback', (req, res) => {
 
 // ---- /api/nq/telemetry : difficulty telemetry (deaths + clears) -----------
 // POST is PUBLIC (the game fire-and-forgets tiny events; sendBeacon can't set custom
-// headers, so no key). Size-capped + type-validated in the store, no PII, and a light
-// per-IP throttle so a hostile client can only churn its own bucket. GET is gated
-// (per-world difficulty summary: hotspots, causes, clear rates).
+// headers, so no key). Hardened against fabrication (audit #29): `world` must be a real
+// level name (validated in the store against the generated level set), 'clear' events must
+// present a valid run token (checked below, non-consuming — deaths stay tokenless: they are
+// the cheap high-volume signal and can only ADD difficulty, never fake progress), and
+// eviction is per-world ring caps, so a flood can only churn one world's ring — it can no
+// longer flush the whole dataset. The per-IP throttle bounds the request rate on top.
+// GET is gated (per-world difficulty summary: hotspots, causes, clear rates).
 router.post('/api/nq/telemetry', (req, res) => {
   try {
     if (throttled(req, 'tele', 60)) return res.status(429).json({ ok: false, error: 'slow_down' });
     const b = req.body || {};
+    // a 'clear' shifts the difficulty stats the owner tunes from (clear rates, avg clear time),
+    // so it must prove a real run: same HMAC token family /api/nq/score verifies, but WITHOUT
+    // burning the run nonce (that stays single-use at score submit).
+    if (b.ev === 'clear' && !leaderboard.verifyRun(b.token || null).ok) {
+      return res.status(400).json({ ok: false, status: 'bad_token' });
+    }
     const r = telemetry.add({ ev: b.ev, world: b.world, x: b.x, cause: b.cause, t: b.t, deaths: b.deaths, score: b.score, who: b.who });
     res.status(r.ok ? 200 : 400).json(r);
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }

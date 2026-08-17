@@ -49,17 +49,21 @@ jobs:
       - name: Normie Quest level-geometry guard (jumpability + no floating fixtures)
         run: node normie-quest/test/nq-geometry-check.cjs
       # The leaderboard's anti-forgery floor (points-budget + checkpoint tokens) is load-bearing —
-      # a regression silently re-opens score forgery. Pure-node, no server needed.
-      - name: Normie Quest leaderboard anti-forgery test
+      # a regression silently re-opens score forgery. This job installs nothing, so the four
+      # telemetry cases that mount the real express router SKIP here; the smoke-test job re-runs
+      # the file after npm ci with NQ_LB_REQUIRE_ROUTER=1, which turns that skip into a failure.
+      - name: Normie Quest leaderboard anti-forgery test (dependency-free cases)
         run: node normie-quest/test/nq-leaderboard-test.cjs
-      # The per-level point budgets are DERIVED from the level data; if game_logic.js changes a
-      # level's coins/enemies/bonuses but nq-budgets.json isn't regenerated, the ceiling drifts.
-      # Regenerate and fail if the committed table is stale.
-      - name: Normie Quest budget-table freshness guard
+      # The per-level point budgets AND the level adjacency graph (checkpoint anti-forgery,
+      # audit #6) are DERIVED from the level data; if game_logic.js changes levels but the
+      # committed JSON isn't regenerated, the ceiling/graph drifts — a stale graph falsely
+      # flags real players' checkpoints. Regenerate both and fail if either committed file is stale.
+      - name: Normie Quest budget-table + level-graph freshness guard
         run: |
           node normie-quest/tools/gen-budgets.cjs
-          git diff --exit-code normie-quest/nq-budgets.json \
-            || (echo "::error::nq-budgets.json is stale — run node normie-quest/tools/gen-budgets.cjs and commit" && exit 1)
+          node normie-quest/tools/gen-level-graph.cjs
+          git diff --exit-code normie-quest/nq-budgets.json normie-quest/nq-level-graph.json \
+            || (echo "::error::nq-budgets.json / nq-level-graph.json is stale — run node normie-quest/tools/gen-budgets.cjs && node normie-quest/tools/gen-level-graph.cjs and commit" && exit 1)
       # The served game HTML is BUILT from src/game_logic.js by build.js. A fix made to the built
       # HTML but not the source (or vice-versa) silently reverts on the next build — the exact
       # drift that shipped the mobile joystick fix only to the served file. Rebuild and fail if the
@@ -91,6 +95,12 @@ jobs:
           npx playwright install --with-deps chromium
       - name: render every screen and lesson
         run: node scripts/smoke-test.js
+      # Full leaderboard suite including the telemetry-router cases that node-check (no deps)
+      # skips — here express is installed, so a skip means something is wrong and must fail.
+      - name: Normie Quest leaderboard anti-forgery test (full, incl. telemetry router)
+        env:
+          NQ_LB_REQUIRE_ROUTER: "1"
+        run: node normie-quest/test/nq-leaderboard-test.cjs
 
   # The static guards AND the smoke test above still cannot SEE the game's own render. Every costly
   # regression this year was visual and built/deployed clean: the HUD slid off-screen at 3x zoom, a
