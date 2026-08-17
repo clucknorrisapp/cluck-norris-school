@@ -452,10 +452,25 @@ router.post('/api/nq/claim', async (req, res) => {
 // Owner prizes panel — winners per completed week, claim status, DECRYPTED addresses (keyed page
 // only), and the mark-shipped action that permanently wipes an address. PII: this is the single
 // surface that ever renders an address.
+// ---- /normie-quest-x7/prizes : the GIVEAWAY CONSOLE (owner-keyed) ----------
+// One page for running the weekly physical-prize competition: live current-week standings with a
+// cutoff countdown, completed weeks with claim state + decrypted addresses (this page is the ONLY
+// place they decrypt; “mark shipped” wipes them), the suspect-run review list, and season control —
+// the archive-first reset button plus every archive the resets have written.
 router.get('/normie-quest-x7/prizes', async (req, res) => {
   res.set('X-Robots-Tag', 'noindex, nofollow');
   if (!adminOK(req)) return res.status(404).send('Not found');
   const key = esc(String((req.query && req.query.key) || ''));
+  const ago = (t) => {
+    if (!t) return '—';
+    const m = Math.round((Date.now() - t) / 60000);
+    return m < 1 ? 'now' : m < 60 ? m + 'm ago' : m < 1440 ? Math.round(m / 60) + 'h ago' : Math.round(m / 1440) + 'd ago';
+  };
+  const until = (t) => {
+    const m = Math.round((t - Date.now()) / 60000);
+    if (m <= 0) return 'closed';
+    return m < 60 ? m + 'm' : m < 1440 ? Math.round(m / 60) + 'h' : Math.round(m / 1440) + 'd ' + Math.round((m % 1440) / 60) + 'h';
+  };
   try {
     // mark-shipped action (confirm-guarded like the season reset)
     const ship = String((req.query && req.query.shipped) || '');
@@ -463,6 +478,32 @@ router.get('/normie-quest-x7/prizes', async (req, res) => {
       const m = ship.split(':');
       claims.markShipped(Number(m[0]), String(m[1] || ''));
     }
+
+    const all = await leaderboard.list();
+    const weekStart = leaderboard.weekStartMs();
+    const cutoffAt = weekStart + 7 * 24 * 60 * 60 * 1000;
+    const nRuns = all.length, nSus = all.filter((r) => r.suspect).length;
+    const nVer = all.filter((r) => r.walletVerified && !r.suspect).length;
+    const nWeek = all.filter((r) => r.at >= weekStart && !r.suspect).length;
+    const tiles = [
+      [nRuns, 'RUNS ON BOARD'], [nVer, 'VERIFIED'], [nSus, 'SUSPECT ☠'],
+      [nWeek, 'THIS WEEK'], [until(cutoffAt), 'CUTOFF IN'],
+      [claims.prizeRanks() + ' / wk', 'PRIZES'], [claims.claimDays() + 'd', 'CLAIM WINDOW'],
+    ].map((t) => '<div class="tile"><div class="n">' + t[0] + '</div><div class="l">' + t[1] + '</div></div>').join('');
+
+    // — this week, live: who wins if the week ended now (top verified non-suspect ranks) —
+    const wkRows = (await leaderboard.topWeekly(10)).map((r) => {
+      const winning = r.walletVerified && r.rank <= claims.prizeRanks();
+      return '<tr' + (winning ? ' class="win"' : '') + '><td>#' + r.rank + (winning ? ' 🏆' : '') + '</td>'
+        + '<td>' + esc(r.name || 'anon') + '</td><td class="mono">' + esc(r.wallet || '') + (r.walletVerified ? ' ✔' : '') + '</td>'
+        + '<td>W' + r.world + '</td><td>' + r.score + '</td><td class="dim">' + ago(r.at) + '</td></tr>';
+    }).join('');
+    const thisWeek = '<h2>📅 THIS WEEK — LIVE STANDINGS <span class="sub">(cutoff ' + new Date(cutoffAt).toISOString().slice(0, 16).replace('T', ' ')
+      + ' UTC · unverified wallets can still win by connecting before cutoff)</span></h2>'
+      + '<table><tr><th>#</th><th>NAME</th><th>WALLET</th><th>WORLD</th><th>SCORE</th><th>WHEN</th></tr>'
+      + (wkRows || '<tr><td colspan="6" class="dim">No scored runs yet this week.</td></tr>') + '</table>';
+
+    // — completed weeks: winners + claim state + addresses —
     const recs = claims.listClaims();
     const weeks = [];
     for (let i = 1; i <= 8; i++) weeks.push(claims.lastCompletedWeek(Date.now() - (i - 1) * 7 * 24 * 60 * 60 * 1000));
@@ -470,9 +511,10 @@ router.get('/normie-quest-x7/prizes', async (req, res) => {
     for (const wk of weeks) {
       const winners = await claims.winnersForWeek(wk);
       if (!winners.length) continue;
+      const winEnd = claims.windowEndsAt(wk);
       const rows = winners.map((w) => {
         const c = recs.find((x) => x.week === wk && x.wallet === w.wallet);
-        let addr = '<span class="dim">unclaimed</span>', st = '';
+        let addr = '<span class="dim">unclaimed' + (Date.now() > winEnd ? ' · window closed' : ' · ' + until(winEnd) + ' left') + '</span>', st = '';
         if (c && c.shippedAt) { addr = '<span class="dim">address wiped</span>'; st = '📦 shipped ' + new Date(c.shippedAt).toISOString().slice(0, 10); }
         else if (c) {
           const a = c.addrEnc ? claims.decryptAddress(c.addrEnc) : null;
@@ -480,7 +522,7 @@ router.get('/normie-quest-x7/prizes', async (req, res) => {
                    : '<span class="dim">decrypt failed (secret rotated?)</span>';
           st = '<a href="/normie-quest-x7/prizes?key=' + key + '&shipped=' + wk + ':' + esc(w.wallet) + '&confirm=SHIPPED" '
              + 'onclick="return confirm(\'Mark shipped and permanently wipe the address?\')">mark shipped ✓</a>'
-             + (c.dupAddress ? ' <b style="color:#ff5a3c">⚠ address matches another winner</b>' : '');
+             + (c.dupAddress ? ' <b class="warn">⚠ address matches another winner</b>' : '');
         }
         return '<tr><td>#' + w.rank + '</td><td>' + esc(w.name || 'anon') + '</td><td class="mono">' + esc(w.wallet) + '</td>'
           + '<td>' + w.score + '</td><td>' + addr + '</td><td>' + st + '</td></tr>';
@@ -488,15 +530,53 @@ router.get('/normie-quest-x7/prizes', async (req, res) => {
       blocks.push('<h2>Week of ' + new Date(wk).toISOString().slice(0, 10) + '</h2>'
         + '<table><tr><th>#</th><th>NAME</th><th>WALLET</th><th>SCORE</th><th>SHIPPING ADDRESS</th><th></th></tr>' + rows + '</table>');
     }
+
+    // — suspect runs: what the anti-cheat is excluding (review before shipping a prize) —
+    const susRows = all.filter((r) => r.suspect).slice(-15).reverse().map((r) =>
+      '<tr><td>' + esc(r.name || 'anon') + '</td><td class="mono">' + esc(r.wallet || '') + '</td>'
+      + '<td>W' + r.world + '</td><td>' + r.score + '</td><td class="dim">' + ago(r.at) + '</td></tr>').join('');
+    const susBlock = '<h2>☠ SUSPECT RUNS <span class="sub">(latest 15 — excluded from boards and prizes; a winner should never appear here)</span></h2>'
+      + '<table><tr><th>NAME</th><th>WALLET</th><th>WORLD</th><th>SCORE</th><th>WHEN</th></tr>'
+      + (susRows || '<tr><td colspan="5" class="dim">None flagged. Quiet is good.</td></tr>') + '</table>';
+
+    // — season control: archive-first reset + archive history —
+    const archives = await leaderboard.listArchives();
+    const archRows = archives.map((a) => '<tr><td class="mono">' + esc(a.name) + '</td><td>' + (a.count == null ? '?' : a.count) + ' runs</td>'
+      + '<td class="dim">' + (a.bytes == null ? '' : Math.round(a.bytes / 1024) + ' KB') + '</td></tr>').join('');
+    const resetUrl = '/api/nq/leaderboard/reset?key=' + key + '&confirm=RESET';
+    const season = '<h2>🗄 SEASON CONTROL</h2>'
+      + '<p>The board holds <b>' + nRuns + '</b> runs. Reset archives every entry first (nothing is destroyed), then starts a fresh season — '
+      + 'the first full prize week begins the Monday after.</p>'
+      + '<button class="danger" onclick="if(confirm(\'Archive all ' + nRuns + ' runs and start a fresh season?\')&&confirm(\'Really reset the live leaderboard NOW?\'))'
+      + 'fetch(' + JSON.stringify(resetUrl) + ').then(function(r){return r.json()}).then(function(j){alert(j.ok?(\'Archived \'+j.archived+\' runs to \'+j.to):(\'Failed: \'+(j.error||\'\')));location.reload()})">'
+      + 'ARCHIVE + RESET SEASON</button>'
+      + '<h3>Past season archives</h3><table><tr><th>ARCHIVE</th><th>RUNS</th><th></th></tr>'
+      + (archRows || '<tr><td colspan="3" class="dim">No archives yet — no reset has run.</td></tr>') + '</table>';
+
     res.send('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">'
-      + '<title>NQ prizes</title><style>body{background:#0d0a1f;color:#dfe6ff;font-family:system-ui;padding:18px;max-width:1100px;margin:0 auto}'
+      + '<title>NQ giveaway console</title><style>body{background:#0d0a1f;color:#dfe6ff;font-family:system-ui;padding:18px;max-width:1100px;margin:0 auto}'
       + 'table{border-collapse:collapse;width:100%;margin:8px 0 22px}td,th{border-bottom:1px solid #2a2450;padding:6px 8px;text-align:left;font-size:13px}'
-      + 'h1{font-size:20px}h2{font-size:15px;color:#ffd23f}a{color:#3dff6e}.dim{color:#6a6590}.mono{font-family:monospace;font-size:11px}</style>'
-      + '<h1>🏆 Weekly prize winners</h1>'
-      + '<p class="dim">Skill contest: top ' + claims.prizeRanks() + ' verified non-suspect run(s) per completed week. '
-      + 'Claim window: ' + claims.claimDays() + ' days after the week ends. Addresses decrypt only on this page and are wiped by “mark shipped”.'
-      + (claims.enabled() ? '' : ' <b style="color:#ff5a3c">⚠ claims DISABLED — no NQ_CLAIM_SECRET / PREMIUM_ACCESS_KEY configured.</b>') + '</p>'
-      + (blocks.join('') || '<p class="dim">No completed week has a verified winner yet.</p>'));
+      + 'h1{font-size:20px}h2{font-size:15px;color:#ffd23f;margin-top:26px}h3{font-size:13px;color:#c9c3e8}.sub{font-weight:400;color:#8f89b0;font-size:11px}'
+      + 'a{color:#3dff6e}.dim{color:#6a6590}.mono{font-family:monospace;font-size:11px}.warn{color:#ff5a3c}'
+      + '.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:10px;margin:14px 0}'
+      + '.tile{background:#161228;border:1px solid #2a2450;border-radius:12px;padding:10px 12px}'
+      + '.tile .n{font-size:19px;font-weight:800;color:#fff}.tile .l{font-size:9.5px;letter-spacing:1px;color:#8f89b0;margin-top:2px}'
+      + 'tr.win td{background:#1d1836;color:#ffd23f}'
+      + 'button.danger{background:#3a1420;color:#ff8a7a;border:1px solid #ff5a3c;border-radius:10px;padding:10px 16px;font-weight:700;cursor:pointer;font-size:13px}'
+      + '</style>'
+      + '<h1>🏆 Normie Quest — giveaway console</h1>'
+      + '<p class="dim">Skill contest: top ' + claims.prizeRanks() + ' verified non-suspect run(s) per completed week (Mon–Sun UTC). '
+      + 'Claim window: ' + claims.claimDays() + ' days. Addresses decrypt only on this page and are wiped by “mark shipped”.'
+      + (claims.enabled() ? '' : ' <b class="warn">⚠ claims DISABLED — no NQ_CLAIM_SECRET / PREMIUM_ACCESS_KEY configured.</b>') + '</p>'
+      + '<div class="tiles">' + tiles + '</div>'
+      + thisWeek
+      + '<h2>🎁 COMPLETED WEEKS — WINNERS &amp; CLAIMS</h2>'
+      + (blocks.join('') || '<p class="dim">No completed week has a verified winner yet.</p>')
+      + susBlock
+      + season
+      + '<p class="dim" style="margin-top:26px"><a href="/normie-quest-x7/dashboard?key=' + key + '">difficulty dashboard</a> · '
+      + '<a href="/normie-quest-x7/feedback?key=' + key + '">feedback</a> · '
+      + '<a href="/api/nq/claim/status">raw claim status</a></p>');
   } catch (e) { res.status(500).send('server error'); }
 });
 

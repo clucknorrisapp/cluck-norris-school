@@ -407,4 +407,28 @@ async function resetBoard() {
   return { archived: arr.length, to };
 }
 
-module.exports = { startRun, checkpoint, checkRun, verifyRun, continueRun, add, topByWorld, topWeekly, topAllTime, boards, list, weekStartMs, usingPg, levelBudget, resetBoard, _makePgBackend: makePgBackend };
+// listArchives — the season archives resetBoard wrote, newest first (giveaway-console display).
+async function listArchives() {
+  if (usingPg()) {
+    const r = await backend._pool.query(
+      "SELECT tablename FROM pg_tables WHERE tablename LIKE 'nq_scores_archive_%' ORDER BY tablename DESC LIMIT 24");
+    const out = [];
+    for (const row of r.rows) {
+      if (!/^nq_scores_archive_[a-z0-9]+$/.test(row.tablename)) continue;   // belt-and-braces before interpolating
+      const c = await backend._pool.query('SELECT count(*)::int AS c FROM ' + row.tablename);
+      out.push({ name: row.tablename, count: c.rows[0].c, bytes: null });
+    }
+    return out;
+  }
+  const dir = path.dirname(FILE);
+  let names = [];
+  try { names = fs.readdirSync(dir).filter((f) => /^nq-leaderboard-archive-.*\.json$/.test(f)); } catch (e) {}
+  return names.sort().reverse().slice(0, 24).map((f) => {
+    let count = null, bytes = null;
+    try { bytes = fs.statSync(path.join(dir, f)).size; } catch (e) {}
+    try { const a = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')); if (Array.isArray(a)) count = a.length; } catch (e) {}
+    return { name: f, count, bytes };
+  });
+}
+
+module.exports = { startRun, checkpoint, checkRun, verifyRun, continueRun, add, topByWorld, topWeekly, topAllTime, boards, list, weekStartMs, usingPg, levelBudget, resetBoard, listArchives, _makePgBackend: makePgBackend };
