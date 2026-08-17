@@ -191,6 +191,43 @@ function legacyV2(names, ageMs) {
     ok('unknown level name is uncredited', r.ok === true && r.credited === false && r.token.max === lb.levelBudget('1-1'));
   }
 
+  // ---- audit #7: CONTINUE reissue ------------------------------------------------------------
+  {
+    const carried = Math.max(1, budgetOf(mainStart) - 200);
+    // The bug, kept as a contrast case: after game over (submit burns the nonce) the OLD client
+    // minted a fresh one-level token, so the banked cumulative total instantly read as forged.
+    {
+      const tok = reach(mainStart);
+      await lb.add({ name: 'cont-old', world: 2, level: 'run', score: carried }, tok);
+      const fresh = lb.startRun('2-3');
+      const r = await lb.add({ name: 'cont-old', world: 2, level: 'run', score: carried }, fresh);
+      ok('carried total vs a fresh one-level token is still (correctly) suspect', r.ok === true && r.suspect === true);
+    }
+    // The fix: trade the ended token for a same-list reissue and keep playing.
+    const tok = reach(mainStart);
+    await lb.add({ name: 'cont-fix', world: 2, level: 'run', score: carried }, tok);   // game over burns the nonce
+    const c = lb.continueRun(tok);
+    ok('continue reissues the same level list with a fresh nonce (same max, same issuedAt)',
+       c.ok === true && c.token.nonce !== tok.nonce && c.token.lv.join() === tok.lv.join()
+       && c.token.max === tok.max && c.token.issuedAt === tok.issuedAt);
+    const dup = lb.checkpoint(c.token, '2-3');    // resumed level -> dedupe no-op
+    const fast = lb.checkpoint(c.token, '3-1');   // instant NEW level -> dwell floor still armed
+    ok('continued token: resumed level dedupes, instant new level is dwell-bound',
+       dup.ok === true && dup.credited === false && fast.ok === true && fast.credited === false && fast.status === 'too_fast');
+    playFor(45000);
+    const cp = lb.checkpoint(c.token, '3-1');
+    const r2 = await lb.add({ name: 'cont-fix', world: 3, level: 'run',
+                              score: Math.max(1, budgetOf([...mainStart, '3-1']) - 300) }, cp.token);
+    ok('continued run submits the carried total clean (accepted, not suspect)',
+       cp.credited === true && r2.ok === true && r2.suspect === false);
+    const r3 = await lb.add({ name: 'cont-fix2', world: 3, level: 'run', score: 100 }, cp.token);
+    ok('continuation nonce is still single-use at submit', r3.ok === false && r3.status === 'replay');
+    // Continuation keeps the ORIGINAL issuedAt, so the 2h TTL bounds the whole chain.
+    const expired = lb.continueRun(legacyV2(['1-1', '1-2'], 3 * 60 * 60 * 1000));
+    ok('continue refuses a run token past its 2h TTL', expired.ok === false && expired.status === 'expired');
+    ok('continue refuses a tampered token', lb.continueRun({ ...tok, max: tok.max + 99999 }).ok === false);
+  }
+
   // ---- audit #29: telemetry hardening (via the real router) ----------------------------------
   // These four cases need express (routes.js mounts on it). CI's node-check job is deliberately
   // dependency-free, so there they SKIP; the smoke-test job re-runs this file after `npm ci` with
@@ -234,6 +271,21 @@ function legacyV2(names, ageMs) {
       const r = await post({ ev: 'death', world: '2-1', x: 2400, cause: 'GROUND WORM', t: 40 });
       ok('tokenless death telemetry on a real level is accepted', r.status === 200);
     }
+    // audit #7 over the wire: the run-continue route reissues through the real router.
+    {
+      const tok = lb.startRun('1-1');
+      const r = await fetch(base + '/api/nq/run-continue', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: tok }),
+      });
+      const j = await r.json();
+      ok('run-continue route reissues over the wire', r.status === 200 && j.ok === true
+         && j.token && j.token.nonce !== tok.nonce && j.token.max === tok.max);
+      const bad = await fetch(base + '/api/nq/run-continue', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: { ...tok, max: 9999999 } }),
+      });
+      ok('run-continue route rejects a tampered token', bad.status === 400);
+    }
+
     // ---- owner season-reset route: keyed, confirm-guarded ------------------
     {
       const get = (q) => fetch(base + '/api/nq/leaderboard/reset' + q);
