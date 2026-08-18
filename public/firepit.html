@@ -10,7 +10,6 @@
 <meta property="og:image" content="https://clucknorris.app/vendor/firepit-hero.png"/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=Chakra+Petch:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
   /* palette from theme.css — no page-local :root shadow (per house rule) */
   *{box-sizing:border-box;margin:0;padding:0;}
@@ -82,7 +81,7 @@
   .confirmrow input{width:100%;background:rgba(0,0,0,.4);border:1px solid var(--border2);border-radius:10px;padding:11px 13px;font-family:var(--mono);font-size:15px;color:var(--text);letter-spacing:2px;}
   .confirmrow input:focus{outline:none;border-color:#FF5E3A;}
   .mbtns{display:flex;gap:10px;margin-top:14px;}
-  .foot{font-size:12px;color:var(--muted);line-height:1.6;margin-top:8px;}
+  .foot{font-size:12.5px;color:var(--muted);line-height:1.6;margin-top:8px;}
   .foot a{color:var(--gold);}
   @media(max-width:560px){ .hero h1{font-size:34px;} .hide-sm{display:none;} td,th{padding:6px 5px;} }
 </style>
@@ -188,7 +187,7 @@
   </div>
 </div>
 
-<script src="/vendor/solana-web3.iife.min.js"></script>
+<script src="/vendor/solana-web3-1.95.8.iife.min.js" integrity="sha384-ujeTtvHxhu2g5lnu14Roii2ajvVKJ74KQ6eo6GGfAi0IrKZ1YkF8N68Iw5VmIJO0" crossorigin="anonymous"></script>
 <script src="/cluck-wallet.js?v=2"></script>
 <script src="/airdrop-engine.js"></script>
 <script src="/cluck-util.js"></script>
@@ -254,7 +253,7 @@ async function connectWallet(provider, name){
     wProvider = provider;   // the wallet the user actually chose — used for signing, never re-detected
     $("picker").classList.add("hidden");
     $("walletbar").classList.add("show");
-    $("waddr").textContent = shortAddr(wPubkey);
+    $("waddr").textContent = shortAddr(wPubkey) + (name ? " · " + name : "");
     await scan();
   } catch(e){
     var code = e && e.code;
@@ -359,8 +358,10 @@ function render(){
   accounts.forEach(function(a){
     var tr = document.createElement("tr");
     var canBurn = burnable(a);
-    if (!canBurn) tr.className = "disabled";
-    if (selected[a.tokenAccount]) tr.className = "sel";
+    // classList, not className — a selected-but-unburnable row needs BOTH classes,
+    // and assignment made the second write clobber the first.
+    if (!canBurn) tr.classList.add("disabled");
+    if (selected[a.tokenAccount]) tr.classList.add("sel");
 
     var sym = a.symbol ? esc(a.symbol) : "Unknown";
     var nm = a.name ? esc(a.name) : "";
@@ -383,7 +384,7 @@ function render(){
 
     tr.innerHTML =
       '<td>'+cb+'</td>' +
-      '<td><div class="tok">'+logo+'<div><div class="nm">'+sym+tags+'</div><div class="mm">'+(nm?esc(nm.slice(0,28))+' · ':'')+shortAddr(a.mint)+'</div></div></div></td>' +
+      '<td><div class="tok">'+logo+'<div><div class="nm">'+sym+tags+'</div><div class="mm">'+(nm?esc(nm.slice(0,28))+' · ':'')+esc(shortAddr(a.mint))+'</div></div></div></td>' +
       '<td class="num hide-sm">'+(a.empty?'—':fmtBal(a.uiAmount))+'</td>' +
       '<td class="num '+valCls+'">'+valDisp+'</td>' +
       '<td class="num" style="color:#12C98B">'+(a.rentLamports/LAMPORTS).toFixed(5)+'</td>';
@@ -438,7 +439,7 @@ function openConfirm(){
     else if (isNativeSol(a)) right = 'unwrap '+fmtBal(a.uiAmount)+' SOL → back to you';
     else if (a.priceKnown === false) right = 'burn '+fmtBal(a.uiAmount)+' · <b style="color:#E8A33D">value unknown</b>';
     else right = 'burn '+fmtBal(a.uiAmount)+' · '+(v>0?'<b style="color:#FF8FA3">'+fmtUsd(v)+'</b>':'$0');
-    return '<div class="li"><span>'+(a.symbol?esc(a.symbol):shortAddr(a.mint))+'</span><span class="r">'+right+'</span></div>';
+    return '<div class="li"><span>'+(a.symbol?esc(a.symbol):esc(shortAddr(a.mint)))+'</span><span class="r">'+right+'</span></div>';
   }).join("");
 
   $("m-rec").textContent = fmtSol(rent);
@@ -579,5 +580,6 @@ $("m-cancel").addEventListener("click", closeConfirm);
 $("m-go").addEventListener("click", doBurn);
 $("modal").addEventListener("click", function(e){ if (e.target === $("modal")) closeConfirm(); });
 </script>
+<script defer src="/cluck-nav.js"></script>
 </body>
 </html>

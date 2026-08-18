@@ -11,9 +11,7 @@
 <style>
   /* palette comes from theme.css — the private :root that used to shadow it was removed 2026-07-29 */
   *{box-sizing:border-box;margin:0;padding:0;}
-  body{background:var(--bg);
-    
-    color:var(--text);font-family:var(--body);min-height:100vh;}
+  body{background:var(--bg);color:var(--text);font-family:var(--body);min-height:100vh;}
   .wrap{max-width:880px;margin:0 auto;padding:22px 16px 110px;}
   @media(min-width:1180px){.wrap{max-width:1180px;}}
   .back{display:inline-flex;align-items:center;gap:6px;font-family:var(--disp);font-size:12px;letter-spacing:2px;color:var(--orange);text-decoration:none;margin-bottom:14px;}
@@ -62,7 +60,7 @@
   .labels{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
   .chip{display:flex;flex-direction:column;gap:3px;border-radius:10px;padding:9px 12px;min-width:140px;flex:1 1 200px;border:1px solid var(--border);background:rgba(255,255,255,0.02);}
   .chip .t{font-family:var(--disp);font-size:14px;letter-spacing:0.5px;}
-  .chip .e{font-family:var(--body);font-size:12px;color:var(--sub);line-height:1.5;}
+  .chip .e{font-family:var(--body);font-size:12.5px;color:var(--sub);line-height:1.5;}
   .chip.high{border-color:rgba(239,68,68,0.45);background:rgba(239,68,68,0.07);}.chip.high .t{color:var(--red);}
   .chip.med{border-color:rgba(245,158,11,0.45);background:rgba(245,158,11,0.07);}.chip.med .t{color:var(--amber);}
   .chip.info{border-color:rgba(96,165,250,0.35);background:rgba(96,165,250,0.06);}.chip.info .t{color:var(--blue);}
@@ -132,10 +130,10 @@
   .hbar .ht{flex:1;height:16px;background:rgba(255,255,255,0.04);border-radius:4px;overflow:hidden;}
   .hbar .hf{height:100%;border-radius:4px;}
   .hbar .hn{font-family:var(--mono);font-size:11px;color:var(--text);width:42px;flex-shrink:0;}
-  .legend{font-family:var(--body);font-size:11.5px;color:var(--muted);margin-top:7px;}
+  .legend{font-family:var(--body);font-size:12.5px;color:var(--muted);margin-top:7px;}
   .legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin:0 4px 0 10px;vertical-align:middle;}
   .disc{font-family:var(--body);font-weight:500;font-size:13px;line-height:1.7;color:var(--sub);background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:14px;padding:15px 17px;margin-top:6px;}
-  .foot{font-family:var(--body);font-size:12px;color:var(--muted);text-align:center;margin-top:16px;}
+  .foot{font-family:var(--body);font-size:12.5px;color:var(--muted);text-align:center;margin-top:16px;}
   .foot a{color:var(--sub);text-decoration:none;}
   /* ask cluck drawer */
   .ask-fab{position:fixed;right:16px;bottom:16px;z-index:50;font-family:var(--disp);letter-spacing:1px;font-size:14px;color:#fff;background:linear-gradient(135deg,var(--orange),var(--red));border:none;border-radius:999px;padding:14px 20px;cursor:pointer;box-shadow:0 8px 24px rgba(232,30,14,.45);display:none;}
@@ -276,10 +274,14 @@ if(qp.get('wallet')){wi.value=qp.get('wallet').trim();runBtn.disabled=wi.value.t
 
 // esc/rpc/shortAddr/fmt/copyText live in /cluck-util.js — hand-typed copies of
 // esc() had drifted and four pages weren't escaping the single quote.
-const esc = CluckUtil.esc;
-function shortAddr(a){return a?a.slice(0,4)+'…'+a.slice(-4):'—';}
-function fmtNum(n){n=Number(n)||0;const a=Math.abs(n);if(a===0)return'0';if(a>=1e9)return(n/1e9).toFixed(2)+'B';if(a>=1e6)return(n/1e6).toFixed(2)+'M';if(a>=1e3)return(n/1e3).toFixed(2)+'K';if(a>=1)return n.toLocaleString(undefined,{maximumFractionDigits:2});return n.toLocaleString(undefined,{maximumFractionDigits:4});}
-function fmtUsd(n){n=Number(n)||0;return n>=1e6?'$'+(n/1e6).toFixed(2)+'M':n>=1e3?'$'+(n/1e3).toFixed(1)+'K':'$'+n.toFixed(2);}
+const esc = CluckUtil.esc, shortAddr = CluckUtil.shortAddr;
+// K/M/B abbreviation is CluckUtil.fmt's. The wrapper exists because this page formats
+// SIGNED token/SOL deltas and fractional amounts, which the shared integer-rounding
+// fmt() would mangle (-2.3M would lose its sign, 0.05 SOL would round to "0").
+function fmtNum(n){n=Number(n)||0;const a=Math.abs(n);if(a>=1e3)return(n<0?'-':'')+CluckUtil.fmt(a);if(a>=1)return n.toLocaleString(undefined,{maximumFractionDigits:2});return n.toLocaleString(undefined,{maximumFractionDigits:4});}
+// CluckUtil.fmt has no $ mode — kept local under a page-scoped name so it can't be
+// mistaken for (or shadow) a shared helper.
+function xrayUsd(n){n=Number(n)||0;return n>=1e6?'$'+(n/1e6).toFixed(2)+'M':n>=1e3?'$'+(n/1e3).toFixed(1)+'K':'$'+n.toFixed(2);}
 function fmtDate(ts){if(!ts)return'—';return new Date(ts*1000).toLocaleDateString(undefined,{year:'2-digit',month:'short',day:'numeric'});}
 function fmtDT(ts){if(!ts)return'—';return new Date(ts*1000).toLocaleString(undefined,{year:'2-digit',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});}
 function dur(sec){sec=Math.max(0,Math.round(sec||0));if(sec<90)return sec+'s';if(sec<5400)return Math.round(sec/60)+'m';if(sec<172800)return(sec/3600).toFixed(1)+'h';return(sec/86400).toFixed(1)+'d';}
@@ -357,7 +359,7 @@ function renderOverview(){
   } else if(d.truncated){
     h+='<div class="origin" style="border-color:rgba(252,211,77,0.4);background:rgba(252,211,77,0.05)"><div class="lbl" style="color:var(--accent)">⛏ THIS WALLET HAS MORE HISTORY</div><div class="body">The standard scan hit its '+fmtNum(sc.txCount)+'-txn floor — there is older activity below. Fire up <b>Coal Miner mode</b> to dig the full history (up to ~5,000 txns; takes a few minutes).<br><button class="miniask" style="margin-top:9px" onclick="run(true)">⛏ RUN COAL MINER MODE</button></div></div>';
   }
-  h+='<div class="verdict"><div class="lbl"><span>🐔 CLUCK\'S READ</span><button class="miniask" onclick="openChat(\'Give me your overall read on this wallet — what stands out?\',null)">Ask a follow-up →</button></div><div class="body">'+esc(d.verdict)+'</div></div>';
+  h+='<div class="verdict"><div class="lbl"><span>🐔 CLUCK\'S READ</span><button class="miniask" data-ask="Give me your overall read on this wallet — what stands out?">Ask a follow-up →</button></div><div class="body">'+esc(d.verdict)+'</div></div>';
   if((d.labels||[]).length){
     h+='<div class="labels">'+d.labels.map(l=>'<div class="chip '+esc(l.level)+'"><div class="t">'+esc(l.icon)+' '+esc(l.tag)+'</div><div class="e">'+esc(l.evidence)+'</div></div>').join('')+'</div>';
   }
@@ -378,12 +380,14 @@ function renderOverview(){
       ? ' <span style="color:var(--green)">✓ traced to genesis'+(fn.lifetimeTx?' · '+fmtNum(fn.lifetimeTx)+' lifetime txns':'')+'</span>'
       : ' <span style="color:var(--amber)">(couldn\'t page all the way to genesis — an extremely heavy wallet; this is the oldest reached)</span>';
     line+=' · <a href="https://solscan.io/tx/'+esc(fn.sig)+'" target="_blank">funding tx ↗</a>';
-    line+=' · <button class="miniask" onclick="openChat(\'Where was this wallet first funded from (ignoring any dust), and is that notable for an investigation?\',\''+esc(fn.sig)+'\')">ask 🐔</button>';
+    // data-* + listener, same pattern as the timeline's tx-ask buttons — esc() inside an
+    // inline onclick is not safe (entities decode before the JS parses).
+    line+=' · <button class="miniask" data-ask="Where was this wallet first funded from (ignoring any dust), and is that notable for an investigation?" data-sig="'+esc(fn.sig)+'">ask 🐔</button>';
     h+='<div class="origin"><div class="lbl">'+head+'</div><div class="body">'+dustLine+line+'</div></div>';
   }
   h+='<div class="card"><div class="card-title">📊 WALLET AT A GLANCE</div><div class="grid">'
-    +stat('SOL BALANCE',fmtNum(b.solBalance),'a',b.solUsdValue?fmtUsd(b.solUsdValue):'')
-    +stat('TOKEN VALUE',b.portfolioUsd?fmtUsd(b.portfolioUsd):'—','g',b.tokenCount+' tokens held')
+    +stat('SOL BALANCE',fmtNum(b.solBalance),'a',b.solUsdValue?xrayUsd(b.solUsdValue):'')
+    +stat('TOKEN VALUE',b.portfolioUsd?xrayUsd(b.portfolioUsd):'—','g',b.tokenCount+' tokens held')
     +(sc.lifetimeTx!=null?stat('LIFETIME TXNS',fmtNum(sc.lifetimeTx),'p',sc.reachedGenesis?'to genesis ✓':'≥ this'):stat('TXNS SCANNED',fmtNum(sc.txCount),'',sc.truncated?'truncated':'full history'))
     +stat('TXNS ANALYZED',fmtNum(sc.txCount),'',sc.truncated?'depth-capped':'full')
     +(ageExact
@@ -409,6 +413,7 @@ function renderOverview(){
     h+='</div>';
   }
   document.getElementById('p-overview').innerHTML=h;
+  document.querySelectorAll('#p-overview .miniask[data-ask]').forEach(b=>b.addEventListener('click',()=>openChat(b.dataset.ask,b.dataset.sig||null)));
 }
 
 /* ---------- timeline ---------- */
@@ -462,7 +467,7 @@ function renderTxList(){
     else main=(toks||esc(t.description||t.type||'activity'));
     const cp=t.counterpartyLabel?esc(t.counterpartyLabel):(t.counterparty?('<a href="https://solscan.io/account/'+esc(t.counterparty)+'" target="_blank">'+esc(shortAddr(t.counterparty))+' ↗</a>'):'');
     return '<div class="tx">'
-      +'<div class="tx-badge"><span class="tx-act a-'+esc(t.action)+'">'+(ACT_LABEL[t.action]||'·')+'</span>'+(t.usd?'<div class="tx-usd">'+fmtUsd(t.usd)+'</div>':'')+'</div>'
+      +'<div class="tx-badge"><span class="tx-act a-'+esc(t.action)+'">'+(ACT_LABEL[t.action]||'·')+'</span>'+(t.usd?'<div class="tx-usd">'+xrayUsd(t.usd)+'</div>':'')+'</div>'
       +'<div class="tx-body"><div class="tx-l1"><span class="tx-main">'+main+'</span><span class="tx-time">'+fmtDT(t.ts)+'</span></div>'
       +'<div class="tx-meta">'+(cp?(((t.action==='buy'||t.action==='sell')?'via ':'')+cp+' · '):'')
       +'<a href="https://solscan.io/tx/'+esc(t.signature)+'" target="_blank">tx ↗</a>'
@@ -542,7 +547,7 @@ function renderTokens(){
       +'<a href="/trace?wallet='+esc(d.wallet)+'&mint='+esc(t.mint)+'" target="_blank" style="color:var(--cyan)">trace ↗</a> '
       +'<span class="tcls '+clsKey+'">'+esc(t.classification)+'</span></div>'
       +'<div class="tflow">'+(flows.join('<br>')||'—')
-      +(t.held>0?'<br><span style="color:var(--green)">holds '+fmtNum(t.held)+(t.heldUsd?' · '+fmtUsd(t.heldUsd):'')+'</span>':'')
+      +(t.held>0?'<br><span style="color:var(--green)">holds '+fmtNum(t.held)+(t.heldUsd?' · '+xrayUsd(t.heldUsd):'')+'</span>':'')
       +'</div></div>';
   }).join('');
   h+='</div>';
@@ -598,7 +603,7 @@ async function sendChat(){
   const typing=pushBub('cluck','🐔 …');
   try{
     const r=await fetch('/api/wallet-xray/ask',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({wallet:DATA.wallet,question:q,signature:askSig,profile:compactProfile(),history:chatHist.slice(0,-1)})});
+      body:JSON.stringify({wallet:(DATA&&DATA.wallet)||wi.value.trim()||null,question:q,signature:askSig,profile:compactProfile(),history:chatHist.slice(0,-1)})});
     const d=await r.json();
     typing.remove();
     if(!d.success){pushBub('sys',d.error||'Cluck went quiet — try again.');return;}
@@ -606,6 +611,10 @@ async function sendChat(){
   }catch(e){typing.remove();pushBub('sys','Network error — try again.');}
 }
 document.getElementById('chatInput').addEventListener('keydown',e=>{if(e.key==='Enter')sendChat();});
+
+// Ask Cluck is available from page load, not only after a scan — the drawer works
+// without a report (the profile is just richer once one exists).
+document.getElementById('askFab').classList.add('show');
 
 if(qp.get('wallet'))run();
 </script>
