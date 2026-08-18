@@ -51,13 +51,13 @@
   .lede { text-align: center; font-size: 14px; line-height: 1.7; color: #D1D5DB; max-width: 580px; margin: 18px auto 26px; }
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 22px 22px; margin-bottom: 16px; }
   .card-title { font-family: var(--disp); font-size: 12px; font-weight: 700; letter-spacing: 2.5px; color: var(--orange); margin-bottom: 12px; }
-  .card p { font-family: var(--mono); font-size: 13px; line-height: 1.7; color: #D1D5DB; margin-bottom: 12px; }
+  .card p { font-family: var(--body); font-size: 13px; line-height: 1.7; color: #D1D5DB; margin-bottom: 12px; }
   .card p:last-child { margin-bottom: 0; }
   .card p strong { color: var(--accent); font-weight: 700; }
   .card p em { font-style: normal; color: var(--orange); }
   .quirk { background: rgba(217,119,6,0.06); border: 1px solid rgba(217,119,6,0.25); border-radius: 10px; padding: 14px 16px; margin: 10px 0; }
   .quirk .label { font-family: var(--disp); font-size: 11px; font-weight: 700; letter-spacing: 1.5px; color: var(--orange); margin-bottom: 6px; }
-  .quirk .body { font-family: var(--mono); font-size: 12px; line-height: 1.65; color: #D1D5DB; }
+  .quirk .body { font-family: var(--mono); font-size: 12.5px; line-height: 1.65; color: #D1D5DB; }
   .pill-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
   .pill { padding: 9px 16px; background: rgba(255,122,24,0.10); border: 1px solid rgba(255,122,24,0.35); border-radius: 999px; font-family: var(--disp); font-size: 12.5px; letter-spacing: 1.2px; color: var(--orange); text-decoration: none; transition: all .15s; }
   .pill:hover { background: rgba(255,122,24,.2); color: #fff; }
@@ -71,9 +71,11 @@
   .lf-meta { font-family:var(--body); font-size:11px; color:var(--muted); letter-spacing:.4px; }
   .lf-refresh { background:rgba(217,119,6,0.15); border:1px solid rgba(217,119,6,0.35); border-radius:8px; color:var(--orange); font-size:16px; line-height:1; cursor:pointer; padding:4px 11px; }
   .lf-refresh:hover { background:rgba(217,119,6,0.25); }
-  .lf-refresh:disabled { opacity:0.5; cursor:default; }
+  .lf-refresh:disabled { background:rgba(255,255,255,.05); border-color:var(--border); color:var(--muted); cursor:default; }
   .lf-toggles { display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap; }
   .lf-caption { font-family:var(--body); font-weight:500; font-size:12.5px; color:var(--sub); margin-bottom:12px; }
+  .lf-risk { font-family:var(--body); font-weight:500; font-size:12.5px; color:var(--sub); line-height:1.6; margin-bottom:10px; }
+  .lf-risk b { color:var(--red-soft); }
   .lf-tg { background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:7px; color:var(--subtext); font-family:var(--disp); font-size:11px; font-weight:700; letter-spacing:1px; padding:5px 11px; cursor:pointer; }
   .lf-tg.on { background:rgba(217,119,6,0.2); border-color:rgba(217,119,6,0.5); color:var(--orange); }
   .lf-controls { display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
@@ -99,7 +101,7 @@
   .lf-tool { font-family:var(--disp); font-size:10px; letter-spacing:1px; color:#6EE7B7; background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.3); border-radius:6px; padding:2px 8px; cursor:pointer; white-space:nowrap; }
   .lf-tool:hover { background:rgba(16,185,129,0.18); }
   .lf-trade { font-family:var(--disp); font-size:12px; color:var(--orange); letter-spacing:1px; flex-shrink:0; margin-left:10px; }
-  .lf-status { text-align:center; color:var(--subtext); font-size:11px; letter-spacing:2px; padding:24px 0; font-family:var(--disp); }
+  .lf-status { text-align:center; color:var(--subtext); font-size:12.5px; letter-spacing:2px; padding:24px 0; font-family:var(--disp); }
   /* Phones: the launches feed cards get crowded — tighten type, gaps, and let
      the contract chip + research chips wrap to their own line. */
   @media (max-width: 560px) {
@@ -158,6 +160,7 @@ body{background:transparent;font-family:var(--body);}
         <button class="lf-refresh" id="lfRefresh" onclick="lfManualRefresh()" title="Refresh now">↻</button>
       </div>
     </div>
+    <div class="lf-risk"><b>Brand-new launches are the highest-risk corner of Solana — most go to zero.</b> Research first; nothing here is a recommendation.</div>
     <div class="lf-toggles">
       <button class="lf-tg on" id="lf-newest" onclick="lfSetSort('newest')">🆕 NEWEST</button>
       <button class="lf-tg" id="lf-bonding" onclick="lfSetSort('bonding')">🎓 NEAR GRAD</button>
@@ -275,6 +278,7 @@ body{background:transparent;font-family:var(--body);}
 const lfREF='?ref=firechicken007';
 const GRAD_SOL=85; // Bags MIGRATION_QUOTE_THRESHOLD = 85 SOL accumulated in the curve = graduation
 let lfFeed=[], lfPrices={}, lfAges={}, lfSort='newest', lfLast=0, lfNearGrad=null, lfGraduated=null, lfNearGradDown=false;
+let lfGradFailed=false, lfNearGradFailed=false;
 let lfSearch='', lfSortBy='default';
 function lfSetSearch(v){ lfSearch=(v||'').trim().toLowerCase(); lfPaint(); }
 function lfSetSortBy(v){ lfSortBy=v; lfPaint(); }
@@ -283,13 +287,14 @@ async function lfLoadGraduated(){
   try{
     const r=await fetch('/api/bags-graduated'); const d=await r.json();
     if(d&&d.success&&Array.isArray(d.tokens)){
+      lfGradFailed=false;
       lfGraduated=d.tokens.map(t=>{
         lfPrices[t.tokenMint]={priceUsd:t.priceUsd,marketCap:t.marketCap,change24h:t.change24h,volume24h:t.volume24h,onBondingCurve:false,image:t.image,twitter:t.twitter};
         if(t.createdAt) lfAges[t.tokenMint]=Math.floor(t.createdAt/1000);
         return {tokenMint:t.tokenMint,name:t.name,symbol:t.symbol,image:t.image,twitter:t.twitter,status:'MIGRATED'};
       });
-    } else if(!lfGraduated){ lfGraduated=[]; }
-  }catch(e){ if(!lfGraduated) lfGraduated=[]; }
+    } else { lfGradFailed=true; if(!lfGraduated) lfGraduated=[]; }
+  }catch(e){ lfGradFailed=true; if(!lfGraduated) lfGraduated=[]; }
 }
 // Near-graduation board — server-scanned across recent launches (not just the
 // loaded 20), so genuinely-close-to-bonding tokens show even if not brand new.
@@ -298,13 +303,14 @@ async function lfLoadNearGrad(){
     const r=await fetch('/api/bags-near-grad'); const d=await r.json();
     lfNearGradDown=!!(d&&d.sourceDown);
     if(d&&d.success&&Array.isArray(d.tokens)){
+      lfNearGradFailed=false;
       lfNearGrad=d.tokens.map(t=>{
         lfPrices[t.tokenMint]={priceUsd:t.priceUsd,marketCap:t.marketCap,change24h:t.change24h,volume24h:t.volume24h,curvePct:t.curvePct,onBondingCurve:true,image:t.image,twitter:t.twitter};
         if(t.createdAt) lfAges[t.tokenMint]=Math.floor(t.createdAt/1000);
         return {tokenMint:t.tokenMint,name:t.name,symbol:t.symbol,image:t.image,twitter:t.twitter,status:'PRE_GRAD'};
       });
-    } else if(!lfNearGrad){ lfNearGrad=[]; }
-  }catch(e){ if(!lfNearGrad) lfNearGrad=[]; }
+    } else { lfNearGradFailed=true; if(!lfNearGrad) lfNearGrad=[]; }
+  }catch(e){ lfNearGradFailed=true; if(!lfNearGrad) lfNearGrad=[]; }
 }
 async function lfSetSort(s){ lfSort=s;
   document.getElementById('lf-newest').classList.toggle('on',s==='newest');
@@ -314,7 +320,10 @@ async function lfSetSort(s){ lfSort=s;
   if(s==='graduated' && !lfGraduated){ const el=document.getElementById('lfFeed'); if(el) el.innerHTML='<div class="lf-status">LOADING RECENTLY GRADUATED…</div>'; await lfLoadGraduated(); }
   lfPaint(); }
 async function lfManualRefresh(){ const b=document.getElementById('lfRefresh'); if(b){ b.textContent='…'; b.disabled=true; } await lfLoad(); if(b){ b.textContent='↻'; b.disabled=false; } }
-function lfAbbrev(n){ const v=parseFloat(n); if(!isFinite(v)||v<=0) return null; if(v>=1e9) return '$'+(v/1e9).toFixed(2)+'B'; if(v>=1e6) return '$'+(v/1e6).toFixed(2)+'M'; if(v>=1e3) return '$'+(v/1e3).toFixed(1)+'K'; return '$'+v.toFixed(0); }
+// Compact $-abbreviation — the number formatting itself is CluckUtil.fmt (same
+// tiers/precision the private copy used); this wrapper only adds the null-for-
+// missing and the $ prefix.
+function lfAbbrev(n){ const v=parseFloat(n); if(!isFinite(v)||v<=0) return null; return '$'+CluckUtil.fmt(v); }
 function lfAge(ts){ if(!ts) return null; const s=Math.floor(Date.now()/1000-ts); if(s<60) return s+'s'; if(s<3600) return Math.floor(s/60)+'m'; if(s<86400) return Math.floor(s/3600)+'h'; return Math.floor(s/86400)+'d'; }
 function lfHandle(tw){ return tw ? String(tw).replace(/^https?:\/\/(x\.com|twitter\.com)\//i,'').replace(/^@/,'').split(/[\/?]/)[0] : null; }
 // Escape API-supplied strings (token name/symbol/handle/image URL) before they
@@ -325,27 +334,36 @@ function lfHandle(tw){ return tw ? String(tw).replace(/^https?:\/\/(x\.com|twitt
 // esc() had drifted and four pages weren't escaping the single quote.
 const esc = CluckUtil.esc;
 // Copy a token's contract address. preventDefault/stopPropagation so tapping
-// the CA chip copies instead of opening the card's trade link.
+// the CA chip copies instead of opening the card's trade link. Clipboard
+// plumbing (incl. the wallet-webview fallback) lives in CluckUtil.copyText.
 function lfCopyCA(e, mint, el){
   e.preventDefault(); e.stopPropagation();
   const restore = el.textContent;
-  const done = () => { el.textContent = '✅ copied'; setTimeout(()=>{ el.textContent = restore; }, 1200); };
-  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(mint).then(done).catch(()=>{});
-  else { try { const ta=document.createElement('textarea'); ta.value=mint; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); done(); } catch(_){} }
+  CluckUtil.copyText(mint).then(ok => {
+    if(ok){ el.textContent = '✅ copied'; setTimeout(()=>{ el.textContent = restore; }, 1200); }
+  });
 }
 // Research a launch with our own free tools — discovery → "is this safe?" in one
 // tap. stopPropagation so it doesn't trigger the card's trade link.
 function lfOpenTool(e, url){ e.preventDefault(); e.stopPropagation(); window.open(url, '_blank', 'noopener'); }
+// Every primary-feed failure path must land here — a silent bail leaves the
+// "LOADING LAUNCHES…" placeholder up forever.
+function lfLoadFail(){
+  const el=document.getElementById('lfFeed');
+  if(el) el.innerHTML='<div class="lf-status">Couldn’t load launches — refresh to retry.</div>';
+}
 async function lfLoad(){
   try{
     const r=await fetch('/api/bags-proxy?endpoint=token-launch/feed'); const d=await r.json();
-    if(!d.success||!d.response) return;
+    if(!d.success||!d.response){ lfLoadFail(); return; }
     const toks=d.response.slice(0,20); lfFeed=toks;
     const mints=toks.map(t=>t.tokenMint).filter(Boolean).join(',');
     if(mints){
       try{ const sr=await fetch('/api/bags-feed-prices?mints='+mints); const sd=await sr.json();
         if(sd.success&&sd.prices){ for(const [m,p] of Object.entries(sd.prices)) lfPrices[m]={...p,_liq:p.liquidityUsd||0}; } }catch(e){}
       const miss=toks.map(t=>t.tokenMint).filter(m=>m&&!lfPrices[m]);
+      // NOTE: this DexScreener call is the page's ONE unproxied external fetch —
+      // a candidate for routing through an /api proxy later, like the rest.
       if(miss.length){ try{ const dr=await fetch('https://api.dexscreener.com/latest/dex/tokens/'+miss.join(',')); const dd=await dr.json();
         for(const pr of (dd.pairs||[])){ const m=pr.baseToken?.address; if(!m) continue; const liq=pr.liquidity?.usd||0;
           if(!lfPrices[m]||(lfPrices[m]._liq||0)<liq) lfPrices[m]={priceUsd:pr.priceUsd,marketCap:pr.marketCap,change24h:pr.priceChange?.h24,volume24h:pr.volume?.h24,image:pr.info?.imageUrl||null,_liq:liq}; } }catch(e){} }
@@ -357,7 +375,7 @@ async function lfLoad(){
     if(lfSort==='bonding') await lfLoadNearGrad();
     if(lfSort==='graduated') await lfLoadGraduated();
     lfLast=Date.now(); lfPaint();
-  }catch(e){}
+  }catch(e){ lfLoadFail(); }
 }
 // Sortable value for a token by key — pulls from the enriched price map.
 function lfSortVal(t, k){
@@ -395,6 +413,8 @@ function lfPaint(){
   if(!list.length){
     const msg=lfSearch?'NO LAUNCHES MATCH YOUR SEARCH'
       :(lfSort==='bonding'&&lfNearGradDown)?'⚠️ Live bonding-curve data is temporarily unavailable (data-provider quota). Newest launches &amp; graduated are still live — check back soon.'
+      :(lfSort==='bonding'&&lfNearGradFailed)?'Couldn’t load launches — refresh to retry.'
+      :(lfSort==='graduated'&&lfGradFailed)?'Couldn’t load launches — refresh to retry.'
       :lfSort==='bonding'?'NO BAGS TOKENS NEAR GRADUATION RIGHT NOW'
       :lfSort==='graduated'?'NO RECENTLY GRADUATED BAGS TOKENS RIGHT NOW'
       :'NO LAUNCHES RIGHT NOW';
@@ -412,9 +432,11 @@ function lfPaint(){
     else if(t.status==='MIGRATING'){ lab='⏳ MIGRATING'; col='#F59E0B'; }
     else if(cp!=null){ if(cp>=80){ lab='⚡ '+cp.toFixed(0)+'% TO GRAD'; col='#D97706'; } else { lab='🌱 ON CURVE · '+cp.toFixed(0)+'%'; col='#F97316'; } }
     else if(isCurve){ lab='🌱 ON CURVE'; col='#F97316'; }
+    // Labels state what the snapshot shows (an MC threshold, a curve %) — never a
+    // direction. "GAINING"/"EARLY" claimed momentum a static snapshot can't know.
     else if(mc>=30000){ lab='⚡ NEAR GRAD'; col='#D97706'; }
-    else if(mc>=5000){ lab='🔥 GAINING'; col='#F97316'; }
-    else { lab='📈 EARLY'; col='#6B7280'; }
+    else if(mc>=5000){ lab='🔥 5K+ MC'; col='#F97316'; }
+    else { lab='🆕 NEW'; col='#6B7280'; }
     // Autopsy/research chips need real on-chain history — only meaningful once a token is
     // near graduation or graduated. Brand-new bonding-curve tokens have too
     // little data, so the research chips are hidden for them.
@@ -424,9 +446,12 @@ function lfPaint(){
     const handle=lfHandle(p.twitter||t.twitter); const img=p.image||t.image; const vol=lfAbbrev(p.volume24h); const ag=lfAge(ts);
     const bar=(onCurve===true&&cp!=null)?'<div class="lf-bar"><div style="width:'+Math.min(100,Math.max(2,cp))+'%;background:'+(cp>=80?'#D97706':'#F97316')+'"></div></div>':'';
     const grad=(lfSort==='graduated');
-    const cardHref=grad?('https://dexscreener.com/solana/'+t.tokenMint):('https://bags.fm/'+t.tokenMint+lfREF);
+    // The mint comes from an API, so it's attacker-controlled like any other
+    // token metadata: URL-encode it into the path, then esc() for the attribute.
+    const mintEnc=encodeURIComponent(t.tokenMint||'');
+    const cardHref=grad?('https://dexscreener.com/solana/'+mintEnc):('https://bags.fm/'+mintEnc+lfREF);
     const cardLabel=grad?'📊 CHART →':'TRADE →';
-    return '<a class="lf-card'+(isNew?' new':'')+'" href="'+cardHref+'" target="_blank" rel="noreferrer">'
+    return '<a class="lf-card'+(isNew?' new':'')+'" href="'+esc(cardHref)+'" target="_blank" rel="noreferrer">'
       +'<div style="display:flex;align-items:center;gap:12px;flex:1;min-width:0">'
       +'<div class="lf-ic">'+(img?'<img src="'+esc(img)+'" onerror="this.style.display=\'none\'"/>':esc((t.symbol||'?')[0]))+'</div>'
       +'<div style="flex:1;min-width:0">'
@@ -439,16 +464,26 @@ function lfPaint(){
       +(vol?'<span style="color:#94A3B8">V '+vol+'</span>':'')
       +(ag?'<span style="color:var(--subtext)">🕒 '+ag+'</span>':'')+'</div>'
       +bar+(handle?'<div class="lf-handle">𝕏 @'+esc(handle)+'</div>':'')
-      +'<div class="lf-ca" onclick="lfCopyCA(event,\''+t.tokenMint+'\',this)" title="Copy contract address">📋 '+t.tokenMint.slice(0,4)+'…'+t.tokenMint.slice(-4)+'</div>'
+      +'<div class="lf-ca" data-mint="'+esc(t.tokenMint)+'" title="Copy contract address">📋 '+esc(CluckUtil.shortAddr(t.tokenMint))+'</div>'
       +(showResearch
         ? '<span class="lf-research">'
-            +'<span class="lf-tool" onclick="lfOpenTool(event,\'/autopsy?mint='+t.tokenMint+'\')" title="Run a free Token Autopsy">🔬 AUTOPSY</span>'
+            +'<span class="lf-tool" data-mint="'+esc(t.tokenMint)+'" title="Run a free Token Autopsy">🔬 AUTOPSY</span>'
           +'</span>'
         : '')
       +'</div></div><div class="lf-trade">'+cardLabel+'</div></a>';
   }).join('');
   const m=document.getElementById('lfMeta'); if(m) m.textContent='⟳ 60s · '+new Date(lfLast).toLocaleTimeString();
 }
+// ONE delegated listener for the CA-copy and research chips. The mint rides in a
+// data-mint attribute instead of being spliced into inline onclick JS: HTML
+// entities decode BEFORE the JS parser runs, so esc() cannot make an
+// attacker-controlled mint safe inside onclick — data-* + addEventListener can.
+document.getElementById('lfFeed').addEventListener('click', function(e){
+  const ca=e.target.closest('.lf-ca');
+  if(ca&&ca.dataset.mint){ lfCopyCA(e, ca.dataset.mint, ca); return; }
+  const tool=e.target.closest('.lf-tool');
+  if(tool&&tool.dataset.mint){ lfOpenTool(e, '/autopsy?mint='+encodeURIComponent(tool.dataset.mint)); }
+});
 lfLoad(); setInterval(lfLoad,60000);
 </script>
 <script defer src="/cluck-nav.js"></script>

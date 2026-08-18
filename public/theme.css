@@ -198,7 +198,14 @@ html .calc-teach,
 html .calc-out,
 html .gblurb,
 html .skip,
-html .hero-sub-note {
+html .hero-sub-note,
+html .view-note,          /* token-holders: view explanations are sentences */
+html .excluded-breakdown, /* token-holders: excluded-holder summary line */
+html .meta-line,          /* token-holders: read-timestamp footer line */
+html .truncated-banner,   /* token-holders: truncation warning is load-bearing prose */
+html .lf-status,          /* bags: feed status/error sentences */
+html .quirk .body {       /* bags: quirk explainer paragraphs (0-2-1 beats the
+                             page's .quirk .body 0-2-0 — class depth matched) */
   font-size: 12.5px;
   line-height: 1.65;
 }
