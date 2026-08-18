@@ -3682,7 +3682,9 @@ async function classroomLiveExample(course, lesson) {
       if (p) return `\n\nLIVE EXAMPLE (a real Solana pool RIGHT NOW — weave it in to make the lesson concrete): ${p.pair} on ${p.dex} — TVL $${Math.round(p.tvlUsd).toLocaleString()}, 24h volume $${Math.round((p.volume && p.volume.h24) || 0).toLocaleString()}, fee tier ${p.feeTier}%, ~${p.feeYield7dPctDay != null ? p.feeYield7dPctDay : p.feeYieldPctDay}%/day fee yield.`;
     }
     if (/market cap|price|token|research|on-?chain|volatil|trading|alpha|stablecoin|tokenomics|solscan/.test(t)) {
-      const ov = await fetch(`http://localhost:${PORT}/api/token-overview?mint=So11111111111111111111111111111111111111112`, { signal: AbortSignal.timeout(6000) }).then((r) => r.json()).catch(() => null);
+      // Same edge-auth requirement as the tool-gate self-fetch: this internal call had been
+      // silently 403ing since the 2026-08-04 origin lockdown (the organic log's SOL price).
+      const ov = await fetch(`http://localhost:${PORT}/api/token-overview?mint=So11111111111111111111111111111111111111112`, { signal: AbortSignal.timeout(6000), headers: { "X-Cluck-Edge-Auth": process.env.CF_ORIGIN_SECRET || "" } }).then((r) => r.json()).catch(() => null);
       if (ov && ov.success) return `\n\nLIVE EXAMPLE (real, right now — use it to make the lesson concrete): SOL is $${ov.priceUsd}${ov.change24hPct != null ? `, ${ov.change24hPct.toFixed(1)}% 24h` : ""}${ov.marketCapRank ? `, market-cap rank #${ov.marketCapRank}` : ""}${ov.marketCapUsd ? `, ~$${(ov.marketCapUsd / 1e9).toFixed(0)}B market cap` : ""}.`;
     }
   } catch (_) {}
@@ -6467,7 +6469,11 @@ app.get("/api/tool-gate/config", async (req, res) => {
   if (now - toolGatePrice.at > 60_000) {
     toolGatePrice.at = now;   // stamp first so a slow/failing feed isn't re-hit on every request
     try {
-      const ov = await fetch(`http://localhost:${PORT}/api/token-overview?mint=${CLKN_MINT_ADDR}`, { signal: AbortSignal.timeout(6000) }).then((r) => r.json());
+      // Self-fetches must carry the edge-auth header: with CF_ORIGIN_SECRET armed, the origin
+      // 403s any request without it — including our own localhost calls (found in production
+      // on 2026-08-18: the gate price sat null forever while the public route worked fine).
+      const ov = await fetch(`http://localhost:${PORT}/api/token-overview?mint=${CLKN_MINT_ADDR}`,
+        { signal: AbortSignal.timeout(6000), headers: { "X-Cluck-Edge-Auth": process.env.CF_ORIGIN_SECRET || "" } }).then((r) => r.json());
       if (ov && ov.success && Number(ov.priceUsd) > 0) { toolGatePrice.usd = Number(ov.priceUsd); kv.set("toolGateClknUsd", toolGatePrice.usd); }
     } catch (_) {}
     if (!toolGatePrice.usd) toolGatePrice.usd = Number(kv.get("toolGateClknUsd", 0)) || 0;
