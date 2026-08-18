@@ -8,9 +8,9 @@
 
 > *"We took the hard knocks so you don't have to."*
 
-**A free crypto school for Solana, wrapped around free research tools and a handful of paid operator tools — funded by a token that does real work instead of begging you to buy it.**
+**A free crypto school for Solana, wrapped around research and operator tools that are free while you hold ~$50 of CLKN (or a small SOL pass) — funded by a token that does real work instead of begging you to buy it.**
 
-Everything that teaches is free. No signup, no wallet connect to learn, no subscription. The paid tools are the handful that actually cost money to run — and they are free outright if you hold CLKN.
+Everything that teaches is free. No signup, no wallet connect to learn, no subscription. The heavy tools (X-Ray, Holders, Trace, the airdropper, Buy Special) cost real money to run — hold about $50 worth of CLKN and they are all free; otherwise 0.05 SOL unlocks the lot for 7 days. The safety basics — Wallet Checkup, Firepit, the Locker Room — stay free for everyone.
 
 Live at **[clucknorris.app](https://clucknorris.app)**.
 
@@ -47,7 +47,7 @@ First-timers are the target user. The guardrails are the point, not decoration.
 
 ---
 
-## 🔨 Free tools
+## 🔨 The tools
 
 No wallet connect, no account.
 
@@ -212,7 +212,7 @@ There is no staging environment — `main` deploys straight to production — so
 
 ## 🔥 The pitch, in one breath
 
-A free crypto school disciplined enough to be useful, wrapped around forensic tools that tell you what's on-chain and refuse to tell you why — with the operator tools free to anyone holding the token.
+A free crypto school disciplined enough to be useful, wrapped around forensic tools that tell you what's on-chain and refuse to tell you why — with every heavy tool free to anyone holding ~$50 of the token (or a small SOL pass).
 
 Learn fast. Avoid rugs. Survive the schoolyard.
 

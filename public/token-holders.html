@@ -227,7 +227,7 @@ body{background:transparent;font-family:var(--body);}
   </div>
 
   <div class="hero">
-    <div class="hero-tag">FREE TOOL · NO WALLET CONNECT</div>
+    <div class="hero-tag">PASTE ANY MINT · HOLD $50 OF CLKN = FREE · OR 0.05 SOL / 7 DAYS</div>
     <div class="hero-title">See who really holds any Solana token</div>
     <div class="hero-sub">True holders vs LP, locks &amp; programs · real concentration · every wallet and balance · CSV ready for the airdropper</div>
   </div>
@@ -351,6 +351,8 @@ body{background:transparent;font-family:var(--body);}
 
 <script src="/market-header.js"></script>
 <script src="/cluck-util.js"></script>
+<script src="/cluck-wallet.js"></script>
+<script src="/cluck-gate.js"></script>
 <script>
 let lastSnapshot = null;
 
@@ -710,6 +712,10 @@ function downloadJson() {
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
 }
+
+// Unified tools pass (owner, 2026-08-18): the page previews free — RUN needs the pass
+// (hold $50 of CLKN = free, else the 0.05 SOL 7-day all-tools pass). /cluck-gate.js.
+runSnapshot = CluckGate.guard(runSnapshot, { tool: 'Holders', anchor: '#runBtn' });
 </script>
 <script defer src="/cluck-nav.js"></script>
 <script src="/airdrop-handoff.js"></script>
