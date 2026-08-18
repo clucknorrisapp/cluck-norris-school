@@ -5,29 +5,29 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>🛠 Tools & Utilities — Cluck Norris</title>
-<meta name="description" content="The Cluck Norris toolkit — Wallet X-Ray, Holders, Trace, a wallet safety checkup and approval revoker, free token locking in the Jup Locker Room, a guided token creator, a buy-competition engine and a batch airdropper. Mostly free and read-only."/>
+<meta name="description" content="Free, working Solana utilities: token forensics, wallet safety, competitions, airdrops. The research tools are read-only."/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <style>
-  :root{color-scheme:dark;--bg:#0b0c0e;--bg-grad:#0b0c0e;--card:#14151a;--card2:#101116;--surface:#14151a;--panel:#14151a;--border:rgba(255,255,255,0.09);--border-soft:rgba(255,255,255,0.05);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
+  /* Theme tokens come from /theme.css ONLY — page-local :root removed 2026-08-18 sweep. */
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     background: var(--bg);
-    color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh;
+    color: var(--text); min-height: 100vh;
   }
   .wrap { max-width: 680px; margin: 0 auto; padding: 28px 16px 70px; }
 
   .header { text-align: center; margin-bottom: 8px; }
   .header .icon { line-height: 0; filter: drop-shadow(0 0 16px rgba(217,119,6,0.5)); }
   .header .icon img { display: inline-block; width: 54px; height: 54px; }
-  .header .brand-mini { font-family: 'Anton', sans-serif; font-size: 10px; letter-spacing: 4px; color: var(--orange); margin-top: 8px; font-weight: 700; }
+  .header .brand-mini { font-family: var(--disp); font-size: 10px; letter-spacing: 4px; color: var(--orange); margin-top: 8px; font-weight: 700; }
   .header h1 {
-    font-family: 'Anton', sans-serif; font-size: 34px; font-weight: 900; letter-spacing: 3px;
+    font-family: var(--disp); font-size: 34px; font-weight: 900; letter-spacing: 3px;
     background: #FCD34D;
     -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
     line-height: 1.05; margin: 2px 0;
   }
-  .header p { font-family: 'Anton', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; }
+  .header p { font-family: var(--disp); font-size: 11px; color: var(--subtext); letter-spacing: 3px; }
   .intro { text-align: center; font-size: 13px; line-height: 1.7; color: #D1D5DB; max-width: 520px; margin: 16px auto 22px; }
 
   .tool {
@@ -42,7 +42,7 @@
   .tool .emoji { line-height: 0; flex-shrink: 0; }
   .tool .emoji img { display: block; width: 38px; height: 38px; }
   .tool .body { flex: 1; min-width: 0; }
-  .tool .name { font-family: 'Anton', sans-serif; font-size: 17px; font-weight: 700; letter-spacing: 1px; color: var(--text); }
+  .tool .name { font-family: var(--disp); font-size: 17px; font-weight: 700; letter-spacing: 1px; color: var(--text); }
   .tool .name .tag {
     font-size: 9px; letter-spacing: 1px; padding: 2px 6px; border-radius: 4px; margin-left: 8px;
     vertical-align: middle; font-weight: 700; white-space: nowrap; display: inline-block;
@@ -55,9 +55,9 @@
   .tag.free { background: rgba(16,185,129,0.15); color: #6EE7B7; border: 1px solid rgba(16,185,129,0.4); }
   .tag.clkn { background: rgba(252,211,77,0.12); color: var(--accent); border: 1px solid rgba(252,211,77,0.4); }
   .tool .desc { font-size: 12.5px; line-height: 1.6; color: #9CA3AF; margin-top: 5px; }
-  .tool .go { font-family: 'Anton', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 2px; color: var(--accent); margin-top: 8px; }
+  .tool .go { font-family: var(--disp); font-size: 11px; font-weight: 700; letter-spacing: 2px; color: var(--accent); margin-top: 8px; }
 
-  .footer-tag { text-align: center; margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--border); font-family: 'Anton', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
+  .footer-tag { text-align: center; margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--border); font-family: var(--disp); font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
   .footer-tag a { color: var(--orange); text-decoration: none; }
 
   /* Desktop — wider container + 2-column tool grid */
@@ -79,11 +79,10 @@ body{background:transparent;font-family:var(--body);}
   <link rel="canonical" href="https://clucknorris.app/tools">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:image" content="https://clucknorris.app/cluck-norris.png">
-  <meta name="description" content="Free, working Solana utilities: token forensics, wallet safety, competitions, airdrops. The research tools are read-only.">
 </head>
 <body>
 <div class="wrap">
-  <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:Anton,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;color:#D97706;text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid #D97706;"/>&larr; CLUCK NORRIS HOME</a>
+  <a href="/" class="back-home" style="display:inline-flex;align-items:center;gap:6px;font-family:var(--disp);font-size:11px;font-weight:700;letter-spacing:2px;color:var(--orange);text-decoration:none;margin:0 0 12px;"><img src="/cluck-norris-logo.jpg" alt="" style="height:22px;width:22px;object-fit:cover;border-radius:50%;border:1px solid var(--orange);"/>&larr; CLUCK NORRIS HOME</a>
 
   <div class="header">
     <div class="icon"><img src="/icons/tools.webp" width="54" height="54" alt=""></div>
@@ -167,6 +166,16 @@ body{background:transparent;font-family:var(--body);}
   </a>
 
 
+
+  <a class="tool" href="/trace">
+    <div class="emoji" style="font-size:34px;line-height:38px;">🔍</div>
+    <div class="body">
+      <div class="name">Cluck Trace <span class="tag free">FREE</span></div>
+      <div class="desc">Follow the money, hop by hop — where a wallet's funds <b>came from</b> and where they <b>went</b>, across any Solana token. The chain shows the path; you draw the conclusions. Read-only, no connect.</div>
+      <div class="go">TRACE A WALLET →</div>
+    </div>
+  </a>
+
   <a class="tool" href="/holders">
     <div class="emoji"><img src="/icons/donut.webp" width="38" height="38" alt="" loading="lazy"></div>
     <div class="body">
@@ -181,7 +190,7 @@ body{background:transparent;font-family:var(--body);}
   <a class="tool" href="/liquidity-engine">
     <div class="emoji"><img src="/icons/droplet.webp" width="38" height="38" alt="" loading="lazy"></div>
     <div class="body">
-      <div class="name">Liquidity Engine <span class="tag" style="color:#FFB627;background:rgba(255,182,39,.08);border:1px solid rgba(255,182,39,.4)">IN DEVELOPMENT</span></div>
+      <div class="name">Liquidity Engine <span class="tag" style="color:var(--muted);background:rgba(255,255,255,.05);border:1px solid var(--border)">IN DEVELOPMENT</span></div>
       <div class="desc">Honest, automated market making on Orca — <em>real</em> two-sided depth that fills real traders, not a wash-trading volume bot. We're <b>building and testing it on CLKN's own pools</b>; not yet offered to other projects.</div>
       <div class="go">HOW IT WORKS →</div>
     </div>
@@ -191,6 +200,7 @@ body{background:transparent;font-family:var(--body);}
 
   <div class="footer-tag">
     🐔 <a href="https://clucknorris.app">clucknorris.app</a> — SCHOOL OF CRYPTO HARD KNOCKS
+    <div style="font-size:12.5px;color:var(--muted);margin-top:6px;">Research tools are read-only and free. Nothing here is financial advice — the chain shows what happened, you decide what it means.</div>
   </div>
 
 </div>

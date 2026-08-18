@@ -169,7 +169,9 @@ Every gate resolves through the **connected wallet**: hold a CLKN threshold (fre
 SOL price in one click, or sign a message where the gate is *ownership* rather than payment.
 
 - airdropper — free at **50,000 CLKN** held, else 0.05 SOL
-- Buy Special — free at **2,000,000 CLKN**, else 0.05 SOL
+- Buy Special — free 35 days at **100,000 CLKN** held, else 0.05 SOL for 7 days (the 2M figure
+  that used to sit here was premium forensics' threshold — server.js and the live page both say
+  100k; corrected 2026-08-18)
 - premium forensics — holder-gated at 2M, re-checked live on every run
 - transcript Tier-2 — connect & sign with `minHold: 0` (a graduate may hold no CLKN)
 - The Hatchery is the one place you can still **pay** in CLKN, ~30% cheaper than the SOL price.
