@@ -193,7 +193,12 @@
     $('#qSpread').textContent = (d.spreadBps / 100).toFixed(2) + '%';
     renderDir();
     loadInventory();
-  }).catch(function(){ $('#offCard').style.display = 'block'; });
+  }).catch(function(){
+    // Network failure is NOT "not live" — the desk may be fine; we just couldn't ask it.
+    $('#offCard').style.display = 'block';
+    $('#offCard .sec').textContent = "Couldn't reach the desk";
+    $('#offCard .muted').textContent = "Couldn't reach the desk — refresh to retry.";
+  });
 
   function loadInventory(){
     fetch('/api/swap/inventory').then(function(r){ return r.json(); }).then(function(d){
@@ -232,6 +237,7 @@
     }
     payMint = pay; recvMint = recv;
     curQuote = null; $('#quoteBox').style.display = 'none';
+    delete $('#inBal').dataset.bal;   // stale balance is the OTHER token's — never compare against it
     renderDir(); gate(); refreshQuote();
   }
 
@@ -273,6 +279,7 @@
     $('#connectBtn').style.display = 'block';
     $('#walletLine').style.display = 'none';
     $('#inBal').textContent = 'Connect your wallet to see your balance';
+    delete $('#inBal').dataset.bal;   // never gate against a wallet we've dropped
     $('#quoteBox').style.display = 'none';
     say('Wallet disconnected. Connect a different wallet to switch.');
     gate();
@@ -300,6 +307,7 @@
     var t = payMint; payMint = recvMint; recvMint = t;
     $('#paySel').value = payMint; $('#recvSel').value = recvMint;
     curQuote = null; $('#quoteBox').style.display = 'none';
+    delete $('#inBal').dataset.bal;   // stale balance is the OTHER token's — never compare against it
     renderDir(); gate(); refreshQuote();
   });
   $('#amount').addEventListener('input', function(){
@@ -317,7 +325,9 @@
         if (!d || !d.ok) { curQuote = null; $('#quoteBox').style.display = 'none'; say((d && d.error) || 'Could not price that swap.', 'err'); gate(); return; }
         curQuote = d;
         $('#qOut').textContent = grp(d.outUi) + ' ' + symOf(outMint());
-        $('#qRate').textContent = '1 ' + symOf(inMint()) + ' ≈ ' + (d.priceIn / d.priceOut).toFixed(6) + ' ' + symOf(outMint());
+        $('#qRate').textContent = (d.priceOut > 0)
+          ? '1 ' + symOf(inMint()) + ' ≈ ' + (d.priceIn / d.priceOut).toFixed(6) + ' ' + symOf(outMint())
+          : '—';
         $('#qUsd').textContent = '$' + d.usd.toFixed(2);
         $('#quoteBox').style.display = 'block';
         say('');
@@ -386,7 +396,9 @@
       .then(function(r){ return r.json(); })
       .then(function(d){
         if (!d || !d.ok) { say((d && d.error) || 'The swap did not go through.', 'err'); return; }
-        say('Swapped. Signature: ' + d.signature, 'ok');
+        var m = $('#msg'); m.className = 'msg ok';
+        m.innerHTML = 'Swapped. Signature: <a href="https://solscan.io/tx/' + esc(d.signature)
+          + '" target="_blank" rel="noopener">' + esc(d.signature) + '</a>';
         $('#quoteBox').style.display = 'none';
         $('#amount').value = ''; curQuote = null;
         loadBalance(); loadInventory();
@@ -396,5 +408,6 @@
   });
 })();
 </script>
+<script defer src="/cluck-nav.js"></script>
 </body>
 </html>

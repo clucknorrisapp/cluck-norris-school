@@ -23,13 +23,13 @@
   .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:16px; }
   .intro { font-size:13px; color:#9CA3AF; line-height:1.7; }
   .intro b { color:#D1D5DB; }
-  .noconnect { display:block; margin-top:10px; padding:9px 12px; background:rgba(16,185,129,0.07); border:1px solid rgba(16,185,129,0.28); border-radius:8px; font-size:12px; color:#6EE7B7; }
+  .noconnect { display:block; margin-top:10px; padding:9px 12px; background:rgba(16,185,129,0.07); border:1px solid rgba(16,185,129,0.28); border-radius:8px; font-size:12.5px; color:#6EE7B7; }
   .input-row { display:flex; gap:8px; margin-top:14px; }
   .addr-input { flex:1; min-width:0; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:8px; padding:11px 13px; color:var(--text); font-family:var(--mono); font-size:13px; outline:none; }
   .addr-input:focus { border-color:var(--accent); }
   .run-btn { flex-shrink:0; background:#D97706; border:none; border-radius:8px; padding:11px 18px; font-size:13px; font-weight:700; letter-spacing:2px; color:#fff; cursor:pointer; }
-  .run-btn:disabled { opacity:0.5; cursor:default; }
-  .err { background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:10px 14px; font-size:12px; color:#FCA5A5; margin-top:12px; display:none; }
+  .run-btn:disabled { background:rgba(255,255,255,.05); color:var(--muted); cursor:not-allowed; }
+  .err { background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:10px 14px; font-size:12.5px; color:#FCA5A5; margin-top:12px; display:none; }
   .status { text-align:center; color:var(--sub); font-size:12px; letter-spacing:2px; padding:18px 0; }
   .summary { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
   .stat { flex:1; min-width:120px; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:10px; padding:12px 14px; text-align:center; }
@@ -48,53 +48,44 @@
   .lk-score { color:#FCD34D; border-color:rgba(252,211,77,0.35); }
   .lk-autopsy { color:#FCA5A5; border-color:rgba(239,68,68,0.35); }
   .lk-trace { color:#C4B5FD; border-color:rgba(167,139,250,0.35); }
-  .revoke-btn { display:block; text-align:center; text-decoration:none; background:#EF4444; color:#fff; border-radius:10px; padding:13px; font-size:13px; font-weight:700; letter-spacing:2px; margin-top:6px; }
   .clear { text-align:center; padding:24px 12px; }
   .clear .big { font-size:40px; }
   .clear .t { font-size:16px; font-weight:900; color:var(--green); letter-spacing:2px; margin-top:8px; }
-  .footer { text-align:center; font-size:10px; color:var(--sub); letter-spacing:2px; margin-top:24px; }
+  .footer { text-align:center; font-size:12.5px; color:var(--sub); letter-spacing:2px; margin-top:24px; }
   a.copy { cursor:pointer; color:var(--sub); border:1px solid var(--border); border-radius:6px; padding:2px 7px; font-size:10px; text-decoration:none; margin-left:6px; }
 
 html{background:var(--bg-grad);background-attachment:fixed;}
 body{background:transparent;font-family:var(--body);}
 
-  /* ── ported verbatim from security-coop.html when the two tools merged ── */
+  /* ── ported from security-coop.html when the two tools merged; the picker is now
+        rendered from CluckWallet.available(), so the per-wallet brand colors went with
+        the hardcoded button list (phantom/solflare stay for the mobile deep links) ── */
   .wallet-picker { display: flex; gap: 8px; flex-wrap: wrap; }
-  .wallet-btn { flex: 1; min-width: 130px; display: flex; align-items: center; justify-content: center; gap: 8px; border: none; border-radius: 10px; padding: 12px 14px; font-family: var(--mono); font-size: 13px; font-weight: 700; color: #fff; letter-spacing: 1px; cursor: pointer; transition: transform 0.15s, opacity 0.15s; }
-  .wallet-btn:hover { transform: translateY(-1px); opacity: 0.95; }
-  .wallet-btn.phantom { background: #9945FF; }
-  .wallet-btn.solflare { background: #FC822B; }
-  .wallet-btn.backpack { background: #E33E3F; }
-  .wallet-btn.okx { background: #2B2B2B; }
-  .wallet-btn.coinbase { background: #1652F0; }
-  .wallet-btn.trust { background: #3375BB; }
-  .wallet-btn.glow { background: #00D18C; }
-  .wallet-btn.exodus { background: #6E55C9; }
-  .wallet-btn.bitget { background: #00F0FF; color: #06283D; }
-  .wallet-btn.brave { background: #FB542B; }
-  .wallet-btn.jupiter { background: #4D8FF7; }
+  .wallet-btn { flex: 1; min-width: 130px; display: flex; align-items: center; justify-content: center; gap: 8px; background: rgba(255,255,255,.06); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; font-family: var(--mono); font-size: 13px; font-weight: 700; color: #fff; letter-spacing: 1px; cursor: pointer; transition: transform 0.15s, opacity 0.15s; }
+  .wallet-btn:hover { transform: translateY(-1px); opacity: 0.95; border-color: var(--orange); }
+  .wallet-btn.phantom { background: #9945FF; border-color: transparent; }
+  .wallet-btn.solflare { background: #FC822B; border-color: transparent; }
   .wallet-info { font-family: var(--mono); font-size: 12px; color: var(--green); margin-top: 10px; padding: 10px 12px; background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.25); border-radius: 8px; display: none; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
   .wallet-info.show { display: flex; }
   .wallet-info-addr { word-break: break-all; flex: 1; min-width: 0; }
   .wallet-disc-btn { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4); color: #FCA5A5; font-family: var(--disp); font-size: 10px; font-weight: 700; letter-spacing: 1.5px; padding: 6px 12px; border-radius: 6px; cursor: pointer; }
   .progress { display: none; margin-top: 12px; font-family: var(--mono); font-size: 12px; color: var(--accent); text-align: center; }
   .progress.show { display: block; }
-  .error-box { display: none; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 12px 14px; font-family: var(--mono); font-size: 12px; color: #FCA5A5; margin-bottom: 16px; }
+  .error-box { display: none; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 12px 14px; font-family: var(--mono); font-size: 12.5px; color: #FCA5A5; margin-bottom: 16px; }
   .error-box.show { display: block; }
-  .revoke-btn { margin-top: 10px; width: 100%; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.5); color: #FCA5A5; font-family: var(--disp); font-size: 12px; font-weight: 700; letter-spacing: 1.5px; padding: 9px; border-radius: 7px; cursor: pointer; }
+  /* single .revoke-btn rule — this page used to carry TWO conflicting blocks (this one
+     plus a leftover for the retired hand-off link) that fought over background/padding */
+  .revoke-btn { display: block; text-align: center; text-decoration: none; margin-top: 10px; width: 100%; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.5); color: #FCA5A5; font-family: var(--disp); font-size: 12px; font-weight: 700; letter-spacing: 1.5px; padding: 9px; border-radius: 7px; cursor: pointer; }
   .revoke-btn:hover { background: rgba(239,68,68,0.25); }
-  .revoke-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .revoke-btn:disabled { background: rgba(255,255,255,.05); border-color: var(--border); color: var(--muted); cursor: not-allowed; }
   .revoke-all { margin-top: 12px; width: 100%; background: linear-gradient(135deg, #FF5A3C, var(--red)); border: none; color: #fff; font-family: var(--disp); font-size: 14px; letter-spacing: 2px; padding: 13px; border-radius: 12px; cursor: pointer; box-shadow: 0 6px 18px rgba(232,30,14,.35); }
-  .revoke-all:disabled { opacity: 0.4; cursor: not-allowed; }
+  .revoke-all:disabled { background: rgba(255,255,255,.05); color: var(--muted); box-shadow: none; cursor: not-allowed; }
 </style>
   <meta name="theme-color" content="#0b0c10">
-  <meta property="og:title" content="Wallet Safety Checkup">
-  <meta property="og:description" content="One read-only scan for what actually drains people: lingering approvals, honeypots, freezable tokens.">
   <meta property="og:image" content="https://clucknorris.app/cluck-norris.png">
   <meta property="og:type" content="website">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:image" content="https://clucknorris.app/cluck-norris.png">
-  <meta name="description" content="One read-only scan for what actually drains people: lingering approvals, honeypots, freezable tokens.">
 </head>
 <body>
 <div class="wrap">
@@ -123,26 +114,16 @@ body{background:transparent;font-family:var(--body);}
        actually signs — revoking an approval. Hidden until a scan finds approvals. -->
   <div class="card" id="revokeCard" style="display:none">
     <div class="sec-title" style="color:#FCA5A5">🔑 REVOKE THESE APPROVALS</div>
-    <div style="font-size:12px;color:#9CA3AF;line-height:1.6;margin-bottom:10px">
+    <div style="font-size:12.5px;color:#9CA3AF;line-height:1.6;margin-bottom:10px">
       Revoking is the only step that needs your signature. Connect the wallet you just scanned and
       you can clear the approvals right here — the transaction is built server-side, unsigned, and
       you approve it in your own wallet. Keys never leave it.
     </div>
     <div class="error-box" id="errorBox"></div>
     <div class="progress" id="progress" style="display:none"></div>
-    <div class="wallet-picker" id="walletPicker">
-      <button class="wallet-btn phantom" onclick="connectWallet('phantom')">🔮 Phantom</button>
-      <button class="wallet-btn solflare" onclick="connectWallet('solflare')">☀️ Solflare</button>
-      <button class="wallet-btn backpack" onclick="connectWallet('backpack')">🎒 Backpack</button>
-      <button class="wallet-btn okx" onclick="connectWallet('okx')">⭕ OKX</button>
-      <button class="wallet-btn coinbase" onclick="connectWallet('coinbase')">🔵 Coinbase</button>
-      <button class="wallet-btn trust" onclick="connectWallet('trust')">🛡 Trust</button>
-      <button class="wallet-btn glow" onclick="connectWallet('glow')">🌐 Glow</button>
-      <button class="wallet-btn exodus" onclick="connectWallet('exodus')">🪐 Exodus</button>
-      <button class="wallet-btn bitget" onclick="connectWallet('bitget')">🌊 Bitget</button>
-      <button class="wallet-btn brave" onclick="connectWallet('brave')">🦁 Brave</button>
-      <button class="wallet-btn jupiter" onclick="connectWallet('jupiter')">🪐 Jupiter</button>
-    </div>
+    <!-- Rendered from CluckWallet.available(): only wallets actually installed in THIS
+         browser get a button (the hardcoded 11-button list showed dead buttons). -->
+    <div class="wallet-picker" id="walletPicker"></div>
     <!-- Mobile-only: shown when no wallet is injected (i.e. opened in a normal
          mobile browser). These are pure "open this page in your wallet's in-app
          browser" deep links — navigation only, no keys/signing over the link;
@@ -162,11 +143,19 @@ body{background:transparent;font-family:var(--body);}
 <script src="/cluck-util.js"></script>
 <script>
 // esc/rpc/shortAddr/fmt/copyText live in /cluck-util.js — hand-typed copies of
-// esc() had drifted and four pages weren't escaping the single quote.
-const esc = CluckUtil.esc;
-function shortAddr(a){ return a ? a.slice(0,4)+'…'+a.slice(-4) : '—'; }
-function fmtNum(n){ const v=Number(n)||0; return v>=1e9?(v/1e9).toFixed(2)+'B':v>=1e6?(v/1e6).toFixed(2)+'M':v>=1e3?(v/1e3).toFixed(1)+'K':v.toLocaleString(); }
-function copyCA(e,addr){ e.preventDefault(); navigator.clipboard&&navigator.clipboard.writeText(addr); const el=e.target; const o=el.textContent; el.textContent='✓'; setTimeout(()=>el.textContent=o,1200); }
+// esc() had drifted and four pages weren't escaping the single quote. The private
+// shortAddr/fmtNum/copyCA copies this page carried are gone for the same reason.
+const esc = CluckUtil.esc, shortAddr = CluckUtil.shortAddr, fmtNum = CluckUtil.fmt;
+
+// Copy links are rendered into #results as HTML — delegate the clicks and carry the
+// address in a data-* attribute. Never build an inline onclick out of esc()'d strings:
+// entities decode before the JS parses, so esc() is no protection there.
+document.getElementById('results').addEventListener('click', e=>{
+  const el=e.target.closest('a.copy'); if(!el) return;
+  e.preventDefault();
+  CluckUtil.copyText(el.dataset.copy||'');
+  const o=el.textContent; el.textContent='✓'; setTimeout(()=>el.textContent=o,1200);
+});
 
 function showErr(m){ const e=document.getElementById('err'); e.textContent=m; e.style.display='block'; }
 
@@ -213,7 +202,7 @@ function render(d){
         +'<div style="text-align:right"><b style="color:#6EE7B7">'+fmtUsd(h.valueUsd)+'</b><div style="font-size:10px;color:var(--sub)">'+pct.toFixed(1)+'%</div></div>'
         +'</div>';
     });
-    if(holdings.length>25) html+='<div style="font-size:11px;color:var(--sub);margin-top:6px">+ '+(holdings.length-25)+' smaller holdings</div>';
+    if(holdings.length>25) html+='<div style="font-size:12.5px;color:var(--sub);margin-top:6px">+ '+(holdings.length-25)+' smaller holdings</div>';
     html+='</div>';
   }
 
@@ -238,7 +227,7 @@ function render(d){
     html+='<div style="font-size:13px;color:#9CA3AF;line-height:1.6;margin-bottom:10px">A delegate can move the approved tokens out of your wallet without asking again. Revoke any you don\'t recognize.</div>';
     approvals.forEach(a=>{
       html+='<div class="row sev3">'
-        +'<div class="mono"><b style="color:#FCA5A5">Delegate:</b> '+esc(shortAddr(a.delegate))+' <a class="copy" onclick="copyCA(event,\''+esc(a.delegate)+'\')">copy</a></div>'
+        +'<div class="mono"><b style="color:#FCA5A5">Delegate:</b> '+esc(shortAddr(a.delegate))+' <a class="copy" data-copy="'+esc(a.delegate)+'">copy</a></div>'
         +'<div class="mono" style="margin-top:3px"><b style="color:#9CA3AF">Token:</b> '+esc(shortAddr(a.mint))+' · approved up to <b>'+esc(a.delegatedAmount)+'</b> (you hold '+esc(a.balance)+')</div>'
         +'</div>';
     });
@@ -255,7 +244,7 @@ function render(d){
     risky.forEach(t=>{
       const sev='sev'+(t.severity||1);
       html+='<div class="row '+sev+'">'
-        +'<div class="mono"><b>'+esc(t.symbol||shortAddr(t.mint))+'</b>'+(t.valueUsd>0?' <span style="color:#F59E0B">'+fmtUsd(t.valueUsd)+'</span>':'')+' <a class="copy" onclick="copyCA(event,\''+esc(t.mint)+'\')">copy</a> · holding '+fmtNum(t.amount)+'</div>'
+        +'<div class="mono"><b>'+esc(t.symbol||shortAddr(t.mint))+'</b>'+(t.valueUsd>0?' <span style="color:#F59E0B">'+fmtUsd(t.valueUsd)+'</span>':'')+' <a class="copy" data-copy="'+esc(t.mint)+'">copy</a> · holding '+fmtNum(t.amount)+'</div>'
         +t.issues.map(i=>'<div class="issue'+(t.severity<2?' lo':'')+'">• '+esc(i)+'</div>').join('')
         +'<div class="links">'
           +'<a class="lk-autopsy" href="/autopsy?mint='+esc(t.mint)+'" target="_blank" rel="noreferrer">🔬 AUTOPSY</a>'
@@ -263,7 +252,7 @@ function render(d){
         +'</div>'
         +'</div>';
     });
-    if(d.capped||d.unverified>0) html+='<div style="font-size:11px;color:var(--sub);margin-top:4px">'+(d.capped?'Scanned the first '+d.scanned+' of '+d.tokensHeld+' tokens.':'')+(d.unverified>0?(' '+d.unverified+' token'+(d.unverified>1?'s':'')+' couldn’t be verified.'):'')+'</div>';
+    if(d.capped||d.unverified>0) html+='<div style="font-size:12.5px;color:var(--sub);margin-top:4px">'+(d.capped?'Scanned the first '+d.scanned+' of '+d.tokensHeld+' tokens.':'')+(d.unverified>0?(' '+d.unverified+' token'+(d.unverified>1?'s':'')+' couldn’t be verified.'):'')+'</div>';
     html+='</div>';
   }
 
@@ -287,7 +276,7 @@ if(_w){ document.getElementById('addr').value=_w.trim(); run(); }
 // The signing block below is COPIED VERBATIM, including its warning: the
 // signAndSendTransaction path is tuned so wallets don't flag the app. Do not alter it.
 let walletPubkey = null;
-let activeWallet = null;       // { id, provider }
+let activeWallet = null;       // { id, name, provider }
 let currentDelegates = [];     // last scan result
 let busy = false;
 
@@ -304,7 +293,6 @@ function setProgress(msg) {
   if (msg) { el.textContent = msg; el.classList.add('show'); }
   else el.classList.remove('show');
 }
-function shorten(s) { return s.slice(0, 4) + '…' + s.slice(-4); }
 // JSON-RPC helper lives in /cluck-util.js. Six pages had their own copy and one
 // of them returned the raw envelope instead of throwing on a JSON-RPC error.
 const rpc = CluckUtil.rpc;
@@ -322,11 +310,29 @@ async function confirmTx(signature) {
 }
 
 // ── Wallet connect ───────────────────────────────────────────────────────────
-// The 11-wallet registry lives in /cluck-wallet.js — five pages used to carry
-// their own copy of this list and they drifted apart (Buy Special ended up
-// detecting two, the Locker Room three). Aliased rather than rewritten so every
-// WALLETS[id].name / .detect() / .download call site below is unchanged.
-const WALLETS = CluckWallet.WALLETS;
+// The wallet registry lives in /cluck-wallet.js — five pages used to carry their
+// own copy of this list and they drifted apart (Buy Special ended up detecting
+// two, the Locker Room three). The picker renders one button per wallet that
+// CluckWallet.available() actually finds in this browser — installed only, and
+// with the in-app-browser identity handling (SafePal impersonates Phantom/Glow)
+// that a raw WALLETS[id].detect() call would skip.
+function renderWalletPicker() {
+  const el = document.getElementById('walletPicker');
+  if (!el || walletPubkey) return;
+  const list = CluckWallet.available();
+  el.innerHTML = '';
+  if (!list.length) {
+    el.innerHTML = '<div style="font-family:var(--mono);font-size:12.5px;color:var(--sub);line-height:1.55">No Solana wallet detected. Install a wallet extension (Phantom, Solflare, Backpack…) and refresh — or open this page inside your wallet’s built-in browser.</div>';
+    return;
+  }
+  list.forEach(w => {
+    const b = document.createElement('button');
+    b.className = 'wallet-btn';
+    b.textContent = w.icon + ' ' + w.name;
+    b.addEventListener('click', () => connectWallet(w));
+    el.appendChild(b);
+  });
+}
 // Mobile on-ramp: on mobile with NO wallet injected (a normal mobile browser,
 // not a wallet's in-app browser), offer one-tap deep links that OPEN this page
 // inside the wallet's browser. Pure navigation — nothing is signed or shared by
@@ -334,22 +340,22 @@ const WALLETS = CluckWallet.WALLETS;
 function initMobileDeepLinks() {
   const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   if (!isMobile) return;
-  const injected = !!(window.solana || window.phantom?.solana || window.solflare || window.backpack
-    || window.okxwallet || window.glowSolana || window.exodus?.solana || window.coinbaseSolana || window.trustwallet?.solana);
-  if (injected) return; // already inside a wallet browser — the buttons above work
+  if (CluckWallet.available().length) return; // already inside a wallet browser — the buttons above work
   const el = document.getElementById('mobileConnect'), picker = document.getElementById('walletPicker');
   if (!el) return;
   const url = encodeURIComponent(location.href), ref = encodeURIComponent(location.origin);
   el.innerHTML =
-    '<div style="font-family:var(--mono);font-size:12px;color:var(--accent);line-height:1.5">📱 On mobile? Open this page inside your wallet to connect:</div>'
+    '<div style="font-family:var(--mono);font-size:12.5px;color:var(--accent);line-height:1.5">📱 On mobile? Open this page inside your wallet to connect:</div>'
     + '<a class="wallet-btn phantom" style="text-decoration:none" href="https://phantom.app/ul/browse/' + url + '?ref=' + ref + '">🔮 Open in Phantom</a>'
     + '<a class="wallet-btn solflare" style="text-decoration:none" href="https://solflare.com/ul/v1/browse/' + url + '?ref=' + ref + '">☀️ Open in Solflare</a>'
     + '<div style="font-family:var(--mono);font-size:13px;color:var(--subtext);line-height:1.5">Opens this page in the wallet’s built-in browser. Nothing is signed or shared by the link.</div>';
   el.style.display = 'flex';
   if (picker) picker.style.display = 'none'; // extension buttons can't work in a plain mobile browser
 }
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initMobileDeepLinks);
-else initMobileDeepLinks();
+function initWalletUi() { renderWalletPicker(); initMobileDeepLinks(); }
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initWalletUi);
+else initWalletUi();
+setTimeout(renderWalletPicker, 600); setTimeout(renderWalletPicker, 1600);   // wallets can inject a beat after load
 function syncWalletUi() {
   const picker = document.getElementById('walletPicker');
   const info = document.getElementById('walletInfo');
@@ -361,18 +367,22 @@ function syncWalletUi() {
   if (walletPubkey) {
     picker.style.display = 'none';
     info.classList.add('show');
-    document.getElementById('walletInfoAddr').textContent = '✓ ' + walletPubkey;
+    document.getElementById('walletInfoAddr').textContent = '✓ ' + walletPubkey + (activeWallet && activeWallet.name ? ' · ' + activeWallet.name : '');
   } else {
     picker.style.display = 'flex';
+    renderWalletPicker();
     info.classList.remove('show');
-    document.getElementById('results').innerHTML = '';
+    // NOTE: the scan report in #results is deliberately left alone — it's an
+    // address-based, read-only result and has nothing to do with the wallet session.
   }
 }
 let connecting = false;
-async function connectWallet(id) {
+// w is a CluckWallet.available() entry: { id, name, icon, provider }. Connecting
+// through the entry's provider (not WALLETS[id].detect()) keeps the registry's
+// in-app-browser / impersonation handling in the loop.
+async function connectWallet(w) {
   if (connecting) return;            // ignore double-taps while a prompt is open
-  const w = WALLETS[id];
-  const provider = w && w.detect();
+  const provider = w && w.provider;
   if (!provider) { showError(`${w ? w.name : 'Wallet'} not detected. Open this page in ${w ? w.name : 'the wallet'}'s in-app browser, or install the extension.`); return; }
   connecting = true;
   try {
@@ -380,7 +390,7 @@ async function connectWallet(id) {
     const pk = resp?.publicKey?.toString?.() || provider.publicKey?.toString?.();
     if (!pk) throw new Error('no public key returned');
     walletPubkey = pk;
-    activeWallet = { id, provider };
+    activeWallet = { id: w.id, name: w.name, provider };
     syncWalletUi();
     runFor(pk);   // auto-run the full checkup on the connected wallet
   } catch (e) {
@@ -397,11 +407,11 @@ async function connectWallet(id) {
 function disconnectWallet() {
   try { activeWallet?.provider?.disconnect?.(); } catch (e) {}
   walletPubkey = null; activeWallet = null; currentDelegates = [];
-  // Clear the previous wallet's revoke card/actions too — otherwise a stale "REVOKE …"
-  // panel from the last scan lingers after disconnect until the next scan.
-  lastApprovals = []; lastScanned = '';
+  // Clear only WALLET-scoped UI: the revoke action buttons. The scan report and the
+  // revoke card's approval context are address-based read-only results and survive —
+  // syncRevokeUi re-renders with no wallet, which shows the connect picker again.
   try { const a = document.getElementById('revokeActions'); if (a) { a.style.display = 'none'; a.innerHTML = ''; } } catch (e) {}
-  syncRevokeUi([], '');
+  syncRevokeUi(lastApprovals, lastScanned);
   syncWalletUi();
 }
 
@@ -409,7 +419,7 @@ function disconnectWallet() {
 async function revoke(accounts) {
   if (!walletPubkey || busy || !accounts.length) return;
   busy = true;
-  document.querySelectorAll('.revoke-btn, .revoke-all, #scanBtn').forEach(b => b.disabled = true);
+  document.querySelectorAll('.revoke-btn, .revoke-all, #runBtn').forEach(b => b.disabled = true);
   try {
     setProgress('Building the revoke transaction…');
     const res = await fetch('/api/security-coop/revoke', {
@@ -446,7 +456,7 @@ async function revoke(accounts) {
       if (sj.error) throw new Error(sj.error.message || 'Transaction send failed');
       signature = sj.result;
     } else {
-      throw new Error(`${(WALLETS[activeWallet.id] && WALLETS[activeWallet.id].name) || 'This wallet'} can't sign transactions here — try its in-app browser, or use Phantom/Solflare.`);
+      throw new Error(`${(activeWallet && activeWallet.name) || 'This wallet'} can't sign transactions here — try its in-app browser, or use Phantom/Solflare.`);
     }
 
     setProgress('Confirming on-chain…');
@@ -457,7 +467,7 @@ async function revoke(accounts) {
   } catch (e) {
     setProgress('');
     showError('Revoke failed: ' + (e.message || e));
-    document.querySelectorAll('.revoke-btn, .revoke-all, #scanBtn').forEach(b => b.disabled = false);
+    document.querySelectorAll('.revoke-btn, .revoke-all, #runBtn').forEach(b => b.disabled = false);
     busy = false;
   }
 }
@@ -481,8 +491,8 @@ function syncRevokeUi(approvals, scannedOwner){
     actions.style.display='none';
   } else if(walletPubkey!==scannedOwner){
     actions.style.display='block';
-    actions.innerHTML='<div style="font-family:var(--mono);font-size:12px;color:#FCD34D;line-height:1.6">'
-      +'Connected as <b>'+esc(shorten(walletPubkey))+'</b> but you scanned <b>'+esc(shorten(scannedOwner))+'</b>. '
+    actions.innerHTML='<div style="font-family:var(--mono);font-size:12.5px;color:#FCD34D;line-height:1.6">'
+      +'Connected as <b>'+esc(shortAddr(walletPubkey))+'</b> but you scanned <b>'+esc(shortAddr(scannedOwner))+'</b>. '
       +'You can only revoke approvals on the wallet you control. '
       +'<button class="revoke-btn" style="margin-top:8px" onclick="runFor(walletPubkey)">SCAN MY CONNECTED WALLET INSTEAD</button></div>';
   } else {
@@ -491,7 +501,7 @@ function syncRevokeUi(approvals, scannedOwner){
     // revokeAllFound). Saying "REVOKE ALL 12" while clearing only 8 is a false promise.
     const revLabel=approvals.length>8?('REVOKE 8 OF '+approvals.length+' APPROVALS'):('REVOKE ALL '+approvals.length+' APPROVAL'+(approvals.length>1?'S':''));
     actions.innerHTML='<button class="revoke-all" onclick="revokeAllFound()">'+revLabel+'</button>'
-      +'<div style="font-family:var(--mono);font-size:11px;color:#9CA3AF;margin-top:8px;line-height:1.5">Up to 8 per transaction — if you have more, run it again after this one confirms.</div>';
+      +'<div style="font-family:var(--mono);font-size:12.5px;color:#9CA3AF;margin-top:8px;line-height:1.5">Up to 8 per transaction — if you have more, run it again after this one confirms.</div>';
   }
 }
 let lastApprovals=[], lastScanned='';

@@ -10,20 +10,18 @@
 <meta property="og:image" content="https://clucknorris.app/cluck-norris-mascot.jpg">
 <meta property="og:url" content="https://clucknorris.app/clkn">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#0b0c10">
 <link rel="icon" href="/cluck-norris-logo.jpg"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Chakra+Petch:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/theme.css">
 <!-- Jupiter Plugin — Buy CLKN widget -->
 <script src="https://plugin.jup.ag/plugin-v1.js" data-preload defer></script>
 <style>
-  /* Clean slate — cool dark base, white data, orange/gold reserved for brand + price. */
-  :root{
-    --bg:#0a0c11; --bg2:#0d1016; --card:#141923; --card2:#1b2230; --line:rgba(255,255,255,0.07);
-    --text:#F1F5F9; --sub:#9AA7B8; --muted:#647084;
-    --orange:#FF8A33; --gold:#FFC24A; --cyan:#38BDF8; --green:#34D399; --red:#F87171; --purple:#A78BFA;
-    --disp:'Anton',sans-serif; --body:'Chakra Petch',system-ui,sans-serif; --mono:ui-monospace,'Share Tech Mono','Courier New',monospace;
-    color-scheme:dark;
-  }
+  /* Palette + fonts come from theme.css — the page-local :root that used to
+     shadow it (a cool-slate variant palette) was removed per the site rule:
+     never redefine a theme token inside a page. */
+  html{color-scheme:dark;}
   *{box-sizing:border-box;margin:0;padding:0;}
   body{background:var(--bg);color:var(--text);font-family:var(--body);min-height:100vh;
     font-synthesis:style;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
@@ -31,7 +29,7 @@
   a{color:inherit;}
   .wrap{max-width:680px;margin:0 auto;padding:20px 16px 90px;}
   .back{display:inline-flex;align-items:center;gap:8px;font-family:var(--disp);font-size:11px;letter-spacing:2px;color:var(--sub);text-decoration:none;margin-bottom:18px;}
-  .back img{height:22px;width:22px;border-radius:50%;object-fit:cover;border:1px solid var(--line);}
+  .back img{height:22px;width:22px;border-radius:50%;object-fit:cover;border:1px solid var(--border);}
 
   /* header */
   .head{display:flex;align-items:center;gap:13px;margin-bottom:18px;}
@@ -41,7 +39,7 @@
   .vbadge{display:inline-flex;align-items:center;gap:5px;font-family:var(--disp);font-size:10px;letter-spacing:1px;color:var(--cyan);
     background:rgba(56,189,248,.1);border:1px solid rgba(56,189,248,.35);border-radius:999px;padding:4px 10px;margin-left:auto;white-space:nowrap;}
 
-  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:13px;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:13px;}
   .ttl{font-family:var(--disp);font-size:11px;letter-spacing:2.5px;color:var(--sub);margin-bottom:13px;text-transform:uppercase;}
 
   /* price */
@@ -53,7 +51,7 @@
   /* metric grid */
   .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:11px;}
   @media(min-width:520px){.grid{grid-template-columns:repeat(4,1fr);}}
-  .m{background:var(--card2);border:1px solid var(--line);border-radius:11px;padding:13px 12px;}
+  .m{background:var(--card2);border:1px solid var(--border);border-radius:11px;padding:13px 12px;}
   .m .k{font-family:var(--disp);font-size:9.5px;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase;margin-bottom:6px;}
   .m .v{font-family:var(--mono);font-size:18px;font-weight:700;color:var(--text);}
   .m .v.cy{color:var(--cyan);}
@@ -66,11 +64,11 @@
 
   /* activity row */
   .act{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;}
-  .act .a{background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:11px 6px;text-align:center;}
+  .act .a{background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:11px 6px;text-align:center;}
   .act .a .t{font-family:var(--disp);font-size:10px;letter-spacing:1px;color:var(--muted);margin-bottom:5px;}
   .act .a .p{font-family:var(--mono);font-size:13px;font-weight:700;}
 
-  .row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13.5px;}
+  .row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--border);font-size:13.5px;}
   .row:last-child{border-bottom:none;}
   .row .k{color:var(--sub);} .row .v{font-family:var(--mono);color:var(--text);font-weight:600;text-align:right;}
   .ok{color:var(--green);}
@@ -80,8 +78,8 @@
     box-shadow:0 8px 30px rgba(255,138,51,.35);margin-bottom:10px;}
   .links{display:flex;gap:9px;}
   .links a{flex:1;text-align:center;font-family:var(--disp);font-size:11px;letter-spacing:1.5px;color:var(--sub);text-decoration:none;
-    background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:12px;}
-  .mint{font-family:var(--mono);font-size:11px;color:var(--muted);word-break:break-all;cursor:pointer;text-align:center;margin-top:14px;transition:color .12s;}
+    background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:12px;}
+  .mint{font-family:var(--mono);font-size:12.5px;color:var(--muted);word-break:break-all;cursor:pointer;text-align:center;margin-top:14px;transition:color .12s;}
   .mint::after{content:"📋";font-size:10px;margin-left:6px;opacity:.7;}
   .mint:hover{color:var(--text);}
   .mint:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:4px;}
@@ -142,7 +140,7 @@
       <span class="num" id="orgNum">—</span>
       <div class="bar"><div class="fill" id="orgFill" style="width:0%"></div></div>
     </div>
-    <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:9px;line-height:1.5">Jupiter's measure of real, non-manipulated trading. Higher = healthier organic demand.</div>
+    <div style="font-family:var(--mono);font-size:12.5px;color:var(--muted);margin-top:9px;line-height:1.5">Jupiter's measure of real, non-manipulated trading. Higher = healthier organic demand.</div>
   </div>
 
   <!-- Price activity -->
@@ -170,14 +168,19 @@
   <div class="live"><span class="dot"></span><span id="liveAt">loading live data…</span></div>
 </div>
 
+<script src="/cluck-util.js"></script>
 <script>
   var CLKN = "DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS";
   function $(id){return document.getElementById(id);}
+  // fmtUsd stays PRIVATE on purpose: CluckUtil.fmt has no $ prefix and no sub-$1
+  // precision (this page shows a six-decimal token price). pct has no CluckUtil
+  // equivalent. fmtNum delegates the number formatting to CluckUtil.fmt (same
+  // tiers/precision); the wrapper only keeps the "—" for missing values, which
+  // CluckUtil.fmt would render as "0".
   function fmtUsd(n){ n=Number(n); if(!isFinite(n))return "—";
     if(n>=1e9)return "$"+(n/1e9).toFixed(2)+"B"; if(n>=1e6)return "$"+(n/1e6).toFixed(2)+"M";
     if(n>=1e3)return "$"+(n/1e3).toFixed(1)+"K"; if(n>=1)return "$"+n.toFixed(2); return "$"+n.toFixed(6); }
-  function fmtNum(n){ n=Number(n); if(!isFinite(n))return "—";
-    if(n>=1e9)return (n/1e9).toFixed(2)+"B"; if(n>=1e6)return (n/1e6).toFixed(2)+"M"; if(n>=1e3)return (n/1e3).toFixed(1)+"K"; return Math.round(n).toLocaleString(); }
+  function fmtNum(n){ n=Number(n); if(!isFinite(n))return "—"; return CluckUtil.fmt(n); }
   function pct(n){ if(n==null||!isFinite(n))return null; return (n>=0?"+":"")+Number(n).toFixed(2)+"%"; }
   function setChg(el,n){ var p=pct(n); if(p==null){el.textContent="—";return;} el.textContent=p; el.style.color=n>=0?"var(--green)":"var(--red)"; }
 
@@ -227,13 +230,12 @@
   load();
   setInterval(load, 60000);
 
-  // Copy mint — clipboard API + legacy fallback (some in-app wallet browsers lack navigator.clipboard),
-  // keyboard-accessible, with a clear "copied" state.
+  // Copy mint — keyboard-accessible, with a clear "copied" state. Clipboard
+  // plumbing (incl. the in-app-wallet-browser fallback) lives in CluckUtil.copyText.
   (function(){
     var el=$("mint"); if(!el) return; var orig=el.textContent, busy=false;
     function flash(){ busy=true; el.classList.add("copied"); el.textContent="✓ copied"; setTimeout(function(){ el.textContent=orig; el.classList.remove("copied"); busy=false; },1400); }
-    function legacy(){ try{ var t=document.createElement("textarea"); t.value=CLKN; t.style.position="fixed"; t.style.opacity="0"; document.body.appendChild(t); t.focus(); t.select(); document.execCommand("copy"); document.body.removeChild(t); flash(); }catch(_){}}
-    function copy(){ if(busy) return; if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(CLKN).then(flash).catch(legacy); else legacy(); }
+    function copy(){ if(busy) return; CluckUtil.copyText(CLKN).then(function(ok){ if(ok) flash(); }); }
     el.addEventListener("click",copy);
     el.addEventListener("keydown",function(e){ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); copy(); } });
   })();

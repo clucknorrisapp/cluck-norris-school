@@ -577,6 +577,7 @@
 
 <script src="/cluck-wallet.js?v=2"></script>
 <script src="/cluck-util.js"></script>
+<script src="/cluck-gate.js"></script>
 <script>
 // ── Constants ────────────────────────────────────────────────────────────────
 const RPC_URL = '/api/helius-rpc';
@@ -1633,6 +1634,13 @@ initUnlockGate();
     const tool=document.getElementById('airdropTool'); const host=tool||document.querySelector('.wrap'); if(host) host.insertBefore(notice, host.firstChild);
   } catch(e){}
 })();
+</script>
+
+<script>
+// Unified tools pass (owner, 2026-08-18): building + previewing a drop is free — SENDING
+// needs the pass (hold $50 of CLKN = free, else 0.05 SOL / 7 days, all tools). This
+// replaces the per-tool 50k-CLKN gate that was parked on 2026-08-10. /cluck-gate.js.
+sendAirdrop = CluckGate.guard(sendAirdrop, { tool: 'Airdrop Tool', anchor: '#sendBtn' });
 </script>
 
 <script defer src="/cluck-nav.js"></script>

@@ -46,14 +46,20 @@ does not tell you how to write software; use your judgement for that.
 
 ## The mission
 
-**School of Crypto Hard Knocks** — a free Solana crypto school and free token-research tools,
-wrapped around a few operator tools that CLKN holders get free. Live at **clucknorris.app**.
+**School of Crypto Hard Knocks** — a free Solana crypto school wrapped around real tools:
+the heavy tools are free to anyone holding ~$50 of CLKN (else a small SOL pass), the safety
+basics stay free for everyone. Live at **clucknorris.app**.
 
 The point is that people lose money in crypto because nobody told them the truth plainly, and
 this teaches them before they get hurt. Design calls should serve that:
 
-- **Free is the funnel, and it stays genuinely free.** The school, the forensics, the safety
-  scan, the locker — no wallet, no signup, no catch.
+- **Learning and safety stay genuinely free.** The school, the AI tutor, Wallet Checkup,
+  Firepit, the Locker Room — no wallet, no signup, no catch. The **heavy tools** (X-Ray,
+  Holders, Trace, Airdrop, Buy Special) moved behind the **unified tools pass on 2026-08-18**
+  (owner's call, for the app-store transition): hold **$50 worth of CLKN** (live-priced,
+  `/api/tool-gate/config`, never hardcode the amount) = all free; else **0.05 SOL for a 7-day
+  all-tools pass**. Client: `cluck-gate.js` — pages preview free, RUN/SEND needs the pass.
+  Kill switch: `TOOLGATE_OFF=1`. Planned: lifetime-pass NFTs hook into the comp check.
 - **Say what's on-chain, never why.** The chain shows *what*, not *why*. Only call a wallet
   "creator" or "team" when a launchpad API confirms it. That forensic honesty is the brand.
 - **Guardrails before power.** First-timers get warned before they can hurt themselves. That's
@@ -163,14 +169,18 @@ split is settled — don't re-debate it.
 
 ---
 
-## How access works (payment model, changed 2026-07-30)
+## How access works (payment model — UNIFIED 2026-08-18, supersedes the 07-30 per-tool model)
 
-Every gate resolves through the **connected wallet**: hold a CLKN threshold (free), pay a small
-SOL price in one click, or sign a message where the gate is *ownership* rather than payment.
+Every gate resolves through the **connected wallet**: hold CLKN (free), pay a small SOL price
+in one click, or sign a message where the gate is *ownership* rather than payment.
 
-- airdropper — free at **50,000 CLKN** held, else 0.05 SOL
-- Buy Special — free at **2,000,000 CLKN**, else 0.05 SOL
-- premium forensics — holder-gated at 2M, re-checked live on every run
+- **The unified tools pass** (X-Ray, Holders, Trace, airdropper, Buy Special): hold **$50 worth
+  of CLKN** → all free; else **0.05 SOL = 7-day pass to all of them**. ONE localStorage pass
+  (`clkn_tools_unlock`), one client (`cluck-gate.js`), config at `/api/tool-gate/config`
+  ($-amount → CLKN computed from the live price; env knobs `TOOLGATE_USD/LAMPORTS/DAYS/OFF`).
+  Pages preview free — the gate fires on RUN/SEND. Fail-open when pricing is down. The old
+  per-tool thresholds (50k airdropper / 100k Buy Special) are RETIRED by this.
+- premium forensics — holder-gated at 2M, re-checked live on every run (NOT part of the pass)
 - transcript Tier-2 — connect & sign with `minHold: 0` (a graduate may hold no CLKN)
 - The Hatchery is the one place you can still **pay** in CLKN, ~30% cheaper than the SOL price.
   Probe `/api/hatchery/config` for today's figure — it's computed live, so never hardcode it.

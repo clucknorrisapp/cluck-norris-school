@@ -198,13 +198,13 @@ html{background:var(--bg-grad);background-attachment:fixed;}
 body{background:transparent;font-family:var(--body);}
   .view-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
   .view-chip{padding:7px 13px;border-radius:999px;border:1px solid rgba(255,122,24,0.28);background:rgba(255,122,24,0.06);
-    color:#C9A892;font-family:'Courier New',monospace;font-size:11.5px;letter-spacing:.5px;cursor:pointer;white-space:nowrap}
+    color:#C9A892;font-family:var(--mono);font-size:11.5px;letter-spacing:.5px;cursor:pointer;white-space:nowrap}
   .view-chip:hover{border-color:rgba(255,122,24,0.55)}
   .view-chip.on{background:rgba(255,122,24,0.22);border-color:#FF7A18;color:#FFEFE0;font-weight:700}
   .view-chip .n{opacity:.65;margin-left:5px}
-  .view-note{margin-top:9px;font-family:'Courier New',monospace;font-size:11.5px;line-height:1.6;color:#9CA3AF}
+  .view-note{margin-top:9px;font-family:var(--mono);font-size:12.5px;line-height:1.6;color:#9CA3AF}
   .view-note.warn{color:#FCD34D}
-  .cat-cell{font-family:'Courier New',monospace;font-size:10.5px;color:#9CA3AF}
+  .cat-cell{font-family:var(--mono);font-size:10.5px;color:#9CA3AF}
 </style>
   <meta name="theme-color" content="#0b0c10">
   <meta property="og:url" content="https://clucknorris.app/holders">
@@ -227,7 +227,7 @@ body{background:transparent;font-family:var(--body);}
   </div>
 
   <div class="hero">
-    <div class="hero-tag">FREE TOOL · NO WALLET CONNECT</div>
+    <div class="hero-tag">PASTE ANY MINT · HOLD $50 OF CLKN = FREE · OR 0.05 SOL / 7 DAYS</div>
     <div class="hero-title">See who really holds any Solana token</div>
     <div class="hero-sub">True holders vs LP, locks &amp; programs · real concentration · every wallet and balance · CSV ready for the airdropper</div>
   </div>
@@ -264,6 +264,9 @@ body{background:transparent;font-family:var(--body);}
 
       <h4>WHAT'S NEXT</h4>
       <p>Phase 2 will add <strong>historical snapshots</strong> — pick a past block/slot and we'll reconstruct who held what at that moment. Useful for retroactive airdrops to early holders. Coming soon.</p>
+
+      <h4>THE ONE THING TO KNOW</h4>
+      <p>The human/program split is based on <strong>known program IDs</strong>. An unrecognized program account can land in the human bucket, so treat the split as a strong estimate, not ground truth.</p>
     </div>
   </div>
 
@@ -348,6 +351,8 @@ body{background:transparent;font-family:var(--body);}
 
 <script src="/market-header.js"></script>
 <script src="/cluck-util.js"></script>
+<script src="/cluck-wallet.js"></script>
+<script src="/cluck-gate.js"></script>
 <script>
 let lastSnapshot = null;
 
@@ -418,6 +423,10 @@ function stopLoading() {
   if (stageInterval) clearInterval(stageInterval);
 }
 
+// fmtNum and fmtPct stay PRIVATE on purpose — CluckUtil.fmt is NOT a drop-in
+// for fmtNum (no decimals param, no abs() for negatives, K tier at 1 decimal
+// instead of 2, NaN → "0" instead of "—") and has no fmtPct equivalent.
+// Data readouts must not change format, so these keep their exact behavior.
 function fmtNum(n, decimals) {
   if (n == null || isNaN(n)) return "—";
   if (n === 0) return "0";
@@ -431,9 +440,11 @@ function fmtPct(n) {
   if (n == null || isNaN(n)) return "—";
   return (n * 100).toFixed(2) + "%";
 }
+// Same head/tail counts as the old private copy (6…4), so output is identical
+// for real Solana addresses; the "—" for missing values is kept here.
 function shortAddr(a) {
   if (!a) return "—";
-  return a.slice(0, 6) + "…" + a.slice(-4);
+  return CluckUtil.shortAddr(a, 6, 4);
 }
 // Escape attacker-set strings (Bags creator handles) before innerHTML.
 // esc/rpc/shortAddr/fmt/copyText live in /cluck-util.js — hand-typed copies of
@@ -607,7 +618,7 @@ function renderResult(d) {
     excPanel.parentNode.insertBefore(el, excPanel.nextSibling); return el;
   })();
   if (d.bagsTeam && Array.isArray(d.bagsTeam.excludedFromSnapshot) && d.bagsTeam.excludedFromSnapshot.length) {
-    const crNames = (d.bagsTeam.creators || []).map(c => c.username ? '@' + esc(c.username) : (c.wallet ? c.wallet.slice(0,8) + '…' : '')).filter(Boolean).join(', ');
+    const crNames = (d.bagsTeam.creators || []).map(c => c.username ? '@' + esc(c.username) : (c.wallet ? esc(c.wallet.slice(0,8)) + '…' : '')).filter(Boolean).join(', ');
     bagsPanel.innerHTML =
       `<div class="excluded" style="background:rgba(217,119,6,0.06);border-color:rgba(217,119,6,0.3);">
         <div class="excluded-head" style="color:#FCD34D;">💸 EXCLUDED — BAGS-VERIFIED TEAM WALLETS${crNames ? ` (${crNames})` : ''}</div>
@@ -629,7 +640,7 @@ function renderResult(d) {
   document.getElementById('holdersTable').innerHTML =
     `<thead><tr><th>RANK</th><th>WALLET</th>${showCat ? '<th>TYPE</th>' : ''}<th>BALANCE</th></tr></thead>` +
     `<tbody>${rows.slice(0, 25).map((h, i) =>
-      `<tr><td>#${i + 1}</td><td>${shortAddr(h.wallet)}</td>` +
+      `<tr><td>#${i + 1}</td><td>${esc(shortAddr(h.wallet))}</td>` +
       (showCat ? `<td class="cat-cell">${esc(h.category === 'human' ? '👤 wallet' : (h.label || h.category))}</td>` : '') +
       `<td>${fmtNum(h.balance, dec)}</td></tr>`).join('')}` +
     (rows.length > 25 ? `<tr><td colspan="${showCat ? 4 : 3}" class="more">… and ${(rows.length - 25).toLocaleString()} more in the CSV</td></tr>` : '') +
@@ -658,12 +669,16 @@ function downloadCsv() {
 function copyAllAddresses() {
   const rows = currentRows(); if (!rows.length) return;
   const txt = rows.map(h => h.wallet).join("\n");
-  navigator.clipboard.writeText(txt).then(() => {
+  // CluckUtil.copyText carries the wallet-webview fallback; resolves false on
+  // failure, which must show — a silent no-op here reads as "copied".
+  CluckUtil.copyText(txt).then((ok) => {
     const note = document.getElementById('viewNote');
     const prev = note.textContent;
-    note.textContent = `✓ Copied ${rows.length.toLocaleString()} addresses.`;
-    setTimeout(() => { note.textContent = prev; }, 1800);
-  }).catch(() => {});
+    note.textContent = ok
+      ? `✓ Copied ${rows.length.toLocaleString()} addresses.`
+      : '⚠ Copy failed — your browser blocked clipboard access. Use DOWNLOAD CSV instead.';
+    setTimeout(() => { note.textContent = prev; }, ok ? 1800 : 3200);
+  });
 }
 
 // Hand the list to the airdropper. Guarded: sending to pools or lock escrows
@@ -697,6 +712,10 @@ function downloadJson() {
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
 }
+
+// Unified tools pass (owner, 2026-08-18): the page previews free — RUN needs the pass
+// (hold $50 of CLKN = free, else the 0.05 SOL 7-day all-tools pass). /cluck-gate.js.
+runSnapshot = CluckGate.guard(runSnapshot, { tool: 'Holders', anchor: '#runBtn' });
 </script>
 <script defer src="/cluck-nav.js"></script>
 <script src="/airdrop-handoff.js"></script>
