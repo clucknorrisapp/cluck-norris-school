@@ -150,9 +150,9 @@ async function notifyToolsReminder() {
   if (!token || !chatId) return;
   const text =
     "🛠 <b>THE CLUCK NORRIS TOOLKIT</b>\n\n" +
-    "Beyond the school — real, live Solana tools. Five are 100% free; the operator " +
-    "tools let you preview everything, then unlock with a small CLKN payment:\n\n" +
-    "🩻 <b>Wallet X-Ray</b> — full wallet deep dive: funding origin, trades, bot/dumper signals · <b>FREE</b>\n" +
+    "Beyond the school — real, live Solana tools. The safety basics are 100% free; the heavy " +
+    "tools preview free and unlock together — hold ~$50 of CLKN, or 0.05 SOL for 7 days of everything:\n\n" +
+    "🩻 <b>Wallet X-Ray</b> — full wallet deep dive: funding origin, trades, bot/dumper signals · <b>HOLD/SOL</b>\n" +
     "🛡 <b>Wallet Checkup</b> — approvals, honeypots &amp; freeze risk, and revoke your own · <b>FREE</b>\n" +
     "👥 <b>Holders</b> — true holders vs LP, locks &amp; programs, plus airdrop CSV · <b>FREE</b>\n" +
     "🔍 <b>Trace</b> — full wallet × token transaction history · <b>FREE</b>\n" +
@@ -1126,7 +1126,7 @@ const X_BLITZ_DECK = [
   { finn: true, t: "Built on @BagsApp because creators earn 1% of volume forever — real, aligned incentives. We even teach how Bags works inside the school." },
   { finn: true, t: "Feedback from @finnbags: drop the gradients, simplify. We stripped all 348 gradients out of the app the same day. We move fast. 🐔" },
   { t: "100% of CLKN creator fees go straight back into buying CLKN — every claim is on-chain and verifiable right in the app.\n\nclucknorris.app" },
-  { t: "Everything core is FREE — the school, the tools, the AI tutor. The operator tools unlock free while you hold CLKN; if you don't, one click pays a little SOL instead.\n\nclucknorris.app" },
+  { t: "The school and safety tools are FREE, always. The heavy tools unlock free while you hold ~$50 of CLKN; if you don't, one click pays 0.05 SOL for a week of all of them.\n\nclucknorris.app" },
   { t: "Forensic rule, everywhere we build: state what's on-chain, never assert intent. The chain shows what happened, not why. Receipts, not rumors.\n\nclucknorris.app" },
   { finn: true, t: "Months of work, one mission: make crypto learnable before it gets expensive. Free school, free tools, real token, live engine.\n\nThis is our @BagsHackathon entry. 🐔\n\nclucknorris.app" },
 ];
@@ -1783,7 +1783,7 @@ function guideRoute(key) {
     case "about":
       return "🐔 <b>About Cluck Norris &amp; CLKN.</b>\n\n" +
         "Cluck Norris is the free <b>School of Crypto Hard Knocks</b> + a Solana token-safety toolkit — born from the FireChicken (FCKN) community, now with real utility.\n\n" +
-        "<b>CLKN</b> is the token: <b>hold</b> it and the premium operator tools unlock free (50K for the airdropper, 100K for Buy Special, 2M for premium forensics) — or pay a small SOL price instead. Holding also earns airdrop eligibility and perks. The school itself is always free.\n\n" +
+        "<b>CLKN</b> is the token: <b>hold ~$50 worth</b> and every heavy tool (X-Ray, Holders, Trace, Airdrop, Buy Special) unlocks free — or 0.05 SOL buys a 7-day all-tools pass. Premium forensics stays holder-gated at 2M. Holding also earns airdrop eligibility and perks. The school itself is always free.\n\n" +
         `🐔 ${B}   ·   the story → ${B}/investors\n\n` +
         `💸 <b>Get CLKN</b> — it's a Solana DEX swap (no wallet-connect needed for the app): <a href="https://jup.ag/tokens/${CLKN_MINT}">Buy on Jupiter</a>  ·  <a href="https://${CLKN_DEXSCREENER}">Chart</a>\n\n` +
         "Ask me anything about how it all works.";
@@ -1802,9 +1802,9 @@ function guideSystemPrompt() {
     "You are Cluck Norris, the friendly guide for the Cluck Norris app (clucknorris.app) — a FREE crypto school ('School of Crypto Hard Knocks') plus a Solana token-research toolkit. You're helping someone in a Telegram group find their way around and answering their crypto/app questions.",
     "WHAT THE APP HAS — route people to the right part:",
     "- The School (free, no wallet or sign-up to learn): the INCUBATOR (tiny beginner lessons: wallets, tokens, staying safe), the 12-LESSON COURSE (belts Freshman→Emeritus, finish it for a permanent shareable transcript), and the LP LAB (14 advanced liquidity lessons).",
-    "- Free tools: WALLET X-RAY (/wallet-xray — full wallet deep dive: funding origin, every trade, bot/dumper signals), HOLDERS (/holders — real wallets vs LP pools, locks and program accounts, plus an airdrop-ready CSV), TRACE (/trace — wallet×token history), WALLET CHECKUP (/wallet-checkup — approvals, honeypot holdings and live mint/freeze authority, and you can revoke your own there), THE JUP LOCKER ROOM (/locker-room — free non-custodial token locking for any Solana project), BAGS feed (/bags — live launches & graduations), and the toolkit index (/tools).",
+    "- Always-free tools: WALLET CHECKUP (/wallet-checkup — approvals, honeypot holdings and live mint/freeze authority, and you can revoke your own there), FIREPIT (/firepit — burn junk, reclaim SOL rent), THE JUP LOCKER ROOM (/locker-room — free non-custodial token locking for any Solana project), BAGS feed (/bags — live launches & graduations), and the toolkit index (/tools). Heavy tools — WALLET X-RAY (/wallet-xray), HOLDERS (/holders), TRACE (/trace) — preview free and run on the tools pass below.",
     "- THE HATCHERY (/hatchery): guided token creation with a safety preview.",
-    "- CLKN token: HOLD it and the premium operator tools unlock free (50,000 CLKN for the airdropper; 100,000 for Buy Special; 2,000,000 for premium forensics). Not holding? Each has a small one-click SOL price. Holding also earns airdrop eligibility. The school itself is always free. NOTE: the old 'send CLKN to unlock' flow was retired 2026-07-30 — never tell anyone to send tokens by hand.",
+    "- CLKN token + the tools pass: HOLD about $50 worth of CLKN and every heavy tool (X-Ray, Holders, Trace, the airdropper, Buy Special) unlocks free. Not holding? One click pays 0.05 SOL for a 7-day pass to ALL of them. Premium forensics stays holder-gated at 2,000,000 CLKN, re-checked live. Holding also earns airdrop eligibility. The school itself is always free. NOTE: the old 'send CLKN to unlock' flow was retired 2026-07-30 — never tell anyone to send tokens by hand.",
     "- WHERE TO BUY CLKN: it's a normal swap on a Solana DEX — Jupiter is easiest. When asked where to buy, share this exact link: https://jup.ag/tokens/" + CLKN_MINT + " (chart: https://" + CLKN_DEXSCREENER + "). Buying needs a Solana wallet with some SOL; the app itself needs no wallet-connect. This is just logistics, NOT financial advice — never say whether or how much to buy.",
     "HOW TO HELP:",
     "- Work out where the person is (brand new / knows basics / trades & vets tokens / wants to launch / just exploring) and point them to the SINGLE best next step, with a clucknorris.app link.",
@@ -6446,6 +6446,40 @@ const SOL_UNLOCK_WALLET = "7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H";
 // Server-side floor so a tampered client can't ask us to bless a dust payment.
 // 0.05 SOL — the Buy Special unlock price (owner's call 2026-07-24).
 const SOL_UNLOCK_MIN_LAMPORTS = 50_000_000;
+
+// ── Unified tools pass config (owner, 2026-08-18) ──────────────────────────
+// The live numbers behind /cluck-gate.js: hold TOOLGATE_USD worth of CLKN → all heavy tools
+// free; else TOOLGATE_LAMPORTS buys TOOLGATE_DAYS of everything. The CLKN amount is DERIVED
+// from the live price on every read (repo rule: computed live, never hardcoded) via our own
+// /api/token-overview, cached 60s in memory and last-known-good in kv — if pricing is down we
+// publish clknNeeded:null and the client fails OPEN (an outage on our side never locks users
+// out). TOOLGATE_OFF=1 kills the whole gate without a deploy.
+const TOOLGATE = {
+  usd: Number(process.env.TOOLGATE_USD) || 50,
+  lamports: parseInt(process.env.TOOLGATE_LAMPORTS, 10) || SOL_UNLOCK_MIN_LAMPORTS,
+  days: parseInt(process.env.TOOLGATE_DAYS, 10) || 7,
+};
+let toolGatePrice = { at: 0, usd: 0 };
+app.get("/api/tool-gate/config", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (/^(1|true|yes)$/i.test(process.env.TOOLGATE_OFF || "")) return res.json({ success: true, enabled: false });
+  const now = Date.now();
+  if (now - toolGatePrice.at > 60_000) {
+    toolGatePrice.at = now;   // stamp first so a slow/failing feed isn't re-hit on every request
+    try {
+      const ov = await fetch(`http://localhost:${PORT}/api/token-overview?mint=${CLKN_MINT_ADDR}`, { signal: AbortSignal.timeout(6000) }).then((r) => r.json());
+      if (ov && ov.success && Number(ov.priceUsd) > 0) { toolGatePrice.usd = Number(ov.priceUsd); kv.set("toolGateClknUsd", toolGatePrice.usd); }
+    } catch (_) {}
+    if (!toolGatePrice.usd) toolGatePrice.usd = Number(kv.get("toolGateClknUsd", 0)) || 0;
+  }
+  const priceUsd = toolGatePrice.usd || null;
+  return res.json({
+    success: true, enabled: true, holdUsd: TOOLGATE.usd, priceUsd,
+    clknNeeded: priceUsd ? Math.ceil(TOOLGATE.usd / priceUsd) : null,
+    lamports: TOOLGATE.lamports, days: TOOLGATE.days,
+    receiver: SOL_UNLOCK_WALLET, mint: CLKN_MINT_ADDR,
+  });
+});
 app.get("/api/verify-sol-payment", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const sig = (req.query.sig || "").trim();
@@ -11177,6 +11211,16 @@ app.get("/cluck-wallet.js", (req, res) => {
   res.setHeader("Cache-Control", "no-cache, must-revalidate");
   res.type("application/javascript");
   res.sendFile(join(__dirname, "public", "cluck-wallet.js"));
+});
+
+// Unified tools pass (owner, 2026-08-18, for the app-store transition): hold $50 worth of
+// CLKN → every heavy tool free; else 0.05 SOL buys a 7-day ALL-TOOLS pass. One client module
+// drives the gate on X-Ray / Holders / Trace / Airdrop / Buy Special; quick safety tools and
+// the school stay free. Same no-cache posture as the other security-carrying shared modules.
+app.get("/cluck-gate.js", (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, must-revalidate");
+  res.type("application/javascript");
+  res.sendFile(join(__dirname, "public", "cluck-gate.js"));
 });
 
 // Shared airdrop machinery. Explicit routes (rather than relying on the vite

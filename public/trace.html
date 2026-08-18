@@ -346,6 +346,8 @@ body{background:transparent;font-family:var(--body);}
 
 <script src="/market-header.js"></script>
 <script src="/cluck-util.js"></script>
+<script src="/cluck-wallet.js"></script>
+<script src="/cluck-gate.js"></script>
 <script>
 let lastTrace = null;
 let sortNewest = false;
@@ -903,6 +905,10 @@ function downloadCsv() {
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
 }
+
+// Unified tools pass (owner, 2026-08-18): the page previews free — RUN needs the pass
+// (hold $50 of CLKN = free, else the 0.05 SOL 7-day all-tools pass). /cluck-gate.js.
+runTrace = CluckGate.guard(runTrace, { tool: 'Cluck Trace', anchor: '#runBtn' });
 </script>
 <script defer src="/cluck-nav.js"></script>
 </body>
