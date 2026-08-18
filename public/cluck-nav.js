@@ -6,6 +6,14 @@
    Self-contained inline styles so it works even without theme.css.
    Add to a page with: <script defer src="/cluck-nav.js"></script> */
 (function () {
+  // Embedded contexts get NOTHING — no nav bar, no Listen pill, no EN pill. /premium?embed=1
+  // is rendered inside the autopsy page's iframe, and before this guard the fixed nav bar,
+  // both floating pills and the padding-top injection all rendered INSIDE the frame, stacking
+  // a second nav over the host page's own (2026-08-18 tools sweep).
+  try {
+    if (window !== window.top) return;
+    if (new URLSearchParams(location.search).get("embed") === "1") return;
+  } catch (e) { return; }   // cross-origin window.top access throws → we ARE embedded
   // Load the global i18n runtime (中文/EN) on every page that includes this script
   // — BEFORE any early return below, so it runs even where the nav bar is hidden.
   if (!document.getElementById("clkn-i18n-js")) {
@@ -57,8 +65,12 @@
   };
   var p = (location.pathname || "").replace(/\/+$/, "");
   // pages that belong to the Tools hub — get an "All Tools" back-link
-  var TOOL_PAGES = ["/wallet-xray","/trace","/holders",
-    "/wallet-checkup","/security-coop","/hatchery","/airdrop",
+  // Every route each tool answers on, aliases included — /snapshot, /bags, /launches, /clkn and
+  // /alpha were missing, so those pages were nav dead-ends (2026-08-18 sweep). This list gates
+  // only the "ALL TOOLS" back-chip on the page itself; it does NOT publicise a page anywhere.
+  var TOOL_PAGES = ["/wallet-xray","/trace","/holders","/snapshot",
+    "/wallet-checkup","/security-coop","/hatchery","/airdrop","/firepit","/lp-scanner",
+    "/bags","/launches","/bags-launches","/clkn","/alpha",
     "/buyspecial","/locker-room","/rose","/liquidity","/liquidity-engine","/premium","/pool-monitor"];
   // Pages with their OWN header/nav — don't inject the floating bar there (the i18n
   // + read-aloud loaders above already ran, so the language switch & Listen button

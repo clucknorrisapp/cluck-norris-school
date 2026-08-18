@@ -42,7 +42,7 @@
       if (d.marketCapUsd != null) pills += pill('MARKET CAP', fmtUsd(d.marketCapUsd));
       else if (d.fdvUsd != null) pills += pill('FDV', fmtUsd(d.fdvUsd));
       if (d.athChangePct != null) pills += pill('FROM ATH', d.athChangePct.toFixed(0) + '%', '#FCA5A5');
-      if (d.marketCount != null) pills += pill('LIVE MARKETS', d.marketCount + (d.dexes && d.dexes.length ? ' · ' + d.dexes.slice(0, 3).join('/') : ''));
+      if (d.marketCount != null) pills += pill('LIVE MARKETS', d.marketCount + (d.dexes && d.dexes.length ? ' · ' + esc(d.dexes.slice(0, 3).join('/')) : ''));   // dex names are API strings — the one non-numeric pill value
 
       el.innerHTML =
         '<div style="background:#111;border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:14px 16px;">'

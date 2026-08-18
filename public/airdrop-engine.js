@@ -376,7 +376,7 @@ var CluckAirdrop = {
     }
 
     var batches = this.planBatches(active);
-    var sent = 0, failed = 0, done = 0;
+    var sent = 0, failed = 0, unconfirmed = 0, done = 0;
     for (var bi = 0; bi < batches.length; bi++) {
       var batch = batches[bi];
       progress("Transaction " + (bi + 1) + " of " + batches.length + " — " + batch.length + " wallets…",
@@ -397,18 +397,39 @@ var CluckAirdrop = {
         var tx = this.buildTransaction({
           instructions: instructions, feePayer: opts.walletPubkey, blockhash: blockhash,
           mint: opts.mint, decimals: decimals, native: native, memo: opts.memo, tokenProgram: tokenProgram });
+        if (typeof opts.provider.signAndSendTransaction !== "function") {
+          throw new Error("This wallet can't sign-and-send from the browser — try Phantom, Solflare or Backpack");
+        }
         var res = await opts.provider.signAndSendTransaction(tx);
-        var sig = res && res.signature;
-        await this.confirmTransaction(sig, rpc);
-        batch.forEach(function (r) { sent++; report({ addr: r.addr, amount: r.amount, status: "sent", sig: sig }); });
+        // Some providers return {signature}, some return the bare string — accept both, and
+        // never confirm(undefined): that burns the 30s poll and reports a batch that WAS
+        // submitted as if it never got a signature.
+        var sig = (res && res.signature) || (typeof res === "string" ? res : null);
+        if (!sig) throw new Error("Wallet returned no signature");
+        // Confirmation has THREE outcomes and they must not be collapsed (this bug shipped once:
+        // the return value was discarded and every submitted batch reported "sent"):
+        //   true  -> landed: sent.
+        //   throw -> failed ON-CHAIN: nobody was paid — report failed so the operator retries.
+        //   false -> 30s timeout, dropped OR still landing: AMBIGUOUS. Report "unconfirmed" with
+        //            the signature so the operator verifies on Solscan before resending — never
+        //            "sent" (unpaid people look paid) and never "failed" (a resend double-pays).
+        var confirmed = false, confirmFailed = false;
+        try { confirmed = await this.confirmTransaction(sig, rpc); }
+        catch (_) { confirmFailed = true; }
+        batch.forEach(function (r) {
+          if (confirmed) { sent++; report({ addr: r.addr, amount: r.amount, status: "sent", sig: sig }); }
+          else if (confirmFailed) { failed++; report({ addr: r.addr, amount: r.amount, status: "failed", error: "transaction failed on-chain — retry this batch", sig: sig }); }
+          else { unconfirmed++; report({ addr: r.addr, amount: r.amount, status: "unconfirmed", sig: sig, error: "submitted but unconfirmed after 30s — verify on Solscan before resending" }); }
+        });
       } catch (err) {
         var msg = (err && err.message) || String(err);
         batch.forEach(function (r) { failed++; report({ addr: r.addr, amount: r.amount, status: "failed", error: msg }); });
       }
       done += batch.length;
     }
-    progress("Done — " + sent + " sent" + (failed ? ", " + failed + " failed" : ""), 100);
-    return { sent: sent, failed: failed, decimals: decimals };
+    progress("Done — " + sent + " sent" + (failed ? ", " + failed + " failed" : "")
+      + (unconfirmed ? ", " + unconfirmed + " unconfirmed (verify on Solscan before resending)" : ""), 100);
+    return { sent: sent, failed: failed, unconfirmed: unconfirmed, decimals: decimals };
   },
 };
 

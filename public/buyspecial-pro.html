@@ -78,6 +78,9 @@
   .wchip .dc:hover{border-color:var(--red-soft);color:var(--red-soft);}
   .gstatus.ok{background:rgba(18,201,139,.12);border-color:rgba(18,201,139,.45);color:var(--green2);font-weight:700;}
   .opbanner{display:flex;align-items:center;gap:10px;background:linear-gradient(92deg,rgba(18,201,139,.16),rgba(18,201,139,.06));border:1px solid rgba(18,201,139,.45);border-radius:12px;padding:12px 16px;margin-bottom:14px;font-family:var(--mono);font-size:12.5px;font-weight:600;color:var(--green2);}
+  /* same equal-specificity trap as .wchip above: .hidden is EARLIER in the sheet, so without
+     this pairing the operator banner displayed for every anonymous visitor (caught 2026-08-18). */
+  .opbanner.hidden{display:none;}
 </style>
 </head>
 <body>
@@ -356,9 +359,13 @@ function renderBuys(){
   $('stBought').textContent=fmt(rows.reduce((s,b)=>s+(b.tokensBought||0),0));
   $('stSrc').textContent=source;
   let h='<thead><tr><th>#</th><th>WALLET</th><th class="r">TOKENS BOUGHT</th><th class="r">SOL SPENT</th><th class="r">BUYS</th><th class="r">DQ</th></tr></thead><tbody>';
-  rows.forEach((b,i)=>{ h+='<tr><td>'+(i+1)+'</td><td>'+b.wallet+'</td><td class="r">'+fmt(b.tokensBought||0)+'</td><td class="r">'+(Number(b.volumeSol||0).toFixed(2))+'</td><td class="r">'+(b.buyCount||0)+'</td><td class="r"><button class="btn ghost" style="padding:2px 9px;font-size:12px;line-height:1" onclick="ignoreWallet(\''+b.wallet+'\')" title="disqualify / ignore this wallet">✕</button></td></tr>'; });
+  // Wallets are API data → esc() into the cell, and the DQ button carries the wallet in a
+  // data-attribute with a delegated listener — never inside an inline onclick string (the
+  // single-quote-breakout class cluck-util.js documents).
+  rows.forEach((b,i)=>{ h+='<tr><td>'+(i+1)+'</td><td>'+esc(b.wallet)+'</td><td class="r">'+fmt(b.tokensBought||0)+'</td><td class="r">'+(Number(b.volumeSol||0).toFixed(2))+'</td><td class="r">'+(b.buyCount||0)+'</td><td class="r"><button class="btn ghost bs-ignore" style="padding:2px 9px;font-size:12px;line-height:1" data-wallet="'+esc(b.wallet)+'" title="disqualify / ignore this wallet">✕</button></td></tr>'; });
   $('buysTbl').innerHTML=h+'</tbody>'; $('buysCard').classList.remove('hidden');
 }
+$('buysTbl').addEventListener('click',(e)=>{ const b=e.target.closest('.bs-ignore'); if(b) ignoreWallet(b.dataset.wallet); });
 $('copyBuysBtn').addEventListener('click',()=>copy('wallet,tokens_bought,sol_spent\n'+activeBuyers().map(b=>b.wallet+','+Math.floor(b.tokensBought||0)+','+Number(b.volumeSol||0).toFixed(4)).join('\n')+'\n',$('copyBuysBtn'),'📋 COPY BUYS CSV'));
 // Re-render the buys table live as wallets are pasted into / cleared from the ignore box.
 $('ignoreWallets').addEventListener('input',()=>{ if(buyers.length) renderBuys(); });
@@ -443,18 +450,19 @@ function renderResults(rows, title, note, winnersList){
   let h, body;
   if(mode==='ranked'){
     h='<thead><tr><th>RANK</th><th>WALLET</th><th class="r">'+($('rankBy').value==='sol'?'SOL SPENT':'BOUGHT')+'</th><th class="r">PRIZE</th></tr></thead><tbody>';
-    body=(winnersList||[]).map(w=>'<tr><td class="win">#'+w.rank+'</td><td>'+w.wallet+'</td><td class="r">'+($('rankBy').value==='sol'?Number(w.sol).toFixed(2):fmt(w.bought))+'</td><td class="r win" style="font-weight:700">'+(w.payout>0?fmtAmt(w.payout):'—')+'</td></tr>').join('');
+    body=(winnersList||[]).map(w=>'<tr><td class="win">#'+w.rank+'</td><td>'+esc(w.wallet)+'</td><td class="r">'+($('rankBy').value==='sol'?Number(w.sol).toFixed(2):fmt(w.bought))+'</td><td class="r win" style="font-weight:700">'+(w.payout>0?fmtAmt(w.payout):'—')+'</td></tr>').join('');
   } else {
     const sorted=rows.slice().sort((a,b)=>b.payout-a.payout);
     h='<thead><tr><th>#</th><th>WALLET</th><th class="r">BOUGHT</th><th class="r">HELD</th><th class="r">PAYOUT</th><th>STATUS</th></tr></thead><tbody>';
     let n=0; body=sorted.map(r=>{
       let st=r.sold?'<span class="dq">SOLD — DQ</span>':(!r.eligible?'<span class="dq">not eligible</span>':(r.held<0?'<span class="dq">lookup failed</span>':(r.held!==Infinity&&r.held<r.bought?'<span class="ok">moved some · paid on held</span>':'<span class="ok">HELD ✓</span>')));
       // Moved tokens to another wallet? Offer a one-hop trace to pay the wallet that still holds them.
-      if(r.transfersOut>0 && r.held!==Infinity && r.held<r.bought){ st+=' <button class="btn ghost" style="padding:3px 9px;font-size:10px;margin-left:4px" onclick="traceMoved(\''+r.wallet+'\',this)">🔍 trace moved</button>'; }
-      return '<tr style="'+(r.payout>0?'':'opacity:.55')+'"><td>'+(r.payout>0?(++n):'–')+'</td><td>'+r.wallet+'</td><td class="r">'+fmt(r.bought)+'</td><td class="r">'+(r.held===Infinity?'n/a':(r.held<0?'—':fmt(r.held)))+'</td><td class="r" style="font-weight:700">'+(r.payout>0?fmtAmt(r.payout):'—')+'</td><td>'+st+'</td></tr>';
+      if(r.transfersOut>0 && r.held!==Infinity && r.held<r.bought){ st+=' <button class="btn ghost bs-trace" style="padding:3px 9px;font-size:10px;margin-left:4px" data-wallet="'+esc(r.wallet)+'">🔍 trace moved</button>'; }
+      return '<tr style="'+(r.payout>0?'':'opacity:.55')+'"><td>'+(r.payout>0?(++n):'–')+'</td><td>'+esc(r.wallet)+'</td><td class="r">'+fmt(r.bought)+'</td><td class="r">'+(r.held===Infinity?'n/a':(r.held<0?'—':fmt(r.held)))+'</td><td class="r" style="font-weight:700">'+(r.payout>0?fmtAmt(r.payout):'—')+'</td><td>'+st+'</td></tr>';
     }).join('');
   }
   $('resTbl').innerHTML=h+body+'</tbody>'; $('resCard').classList.remove('hidden');
+  if(!window._bsTraceWired){ window._bsTraceWired=1; $('resTbl').addEventListener('click',(e)=>{ const b=e.target.closest('.bs-trace'); if(b) traceMoved(b.dataset.wallet,b); }); }
   setStatus(results.length+(mode==='ranked'?' winners':' eligible')+' · '+fmtAmt(total)+' '+rewardName+' total.'+(rewardKind==='comp'?'':' (paid in '+rewardName+')')+' Ready to send.');
   refreshSendCard();
 }
@@ -548,11 +556,17 @@ $('sdSend').addEventListener('click',async()=>{
       decimals:rewardDecimals, memo:'clucknorris.app buy special — '+(tokenName||'comp'),
       onProgress:(m)=>sdStatus(m),
       onResult:(r)=>{ const b=$('sdLogBody'); if(!b) return; const tr=document.createElement('tr');
-        tr.innerHTML='<td>'+esc(r.addr)+'</td><td class="r">'+fmtAmt(r.amount)+'</td><td>'
-          +(r.status==='sent'?'<span class="ok">SENT ✓</span>':'<span class="dq">FAILED — '+esc(r.error||'')+'</span>')+'</td>';
+        // THREE outcomes, not two: 'unconfirmed' means the batch was SUBMITTED with a real
+        // signature but didn't confirm in 30s — rendering it FAILED invites a resend that
+        // double-pays. Show it as its own state with the Solscan check-first instruction.
+        const cell = r.status==='sent' ? '<span class="ok">SENT ✓</span>'
+          : r.status==='unconfirmed' ? '<span style="color:var(--gold)">UNCONFIRMED — check '+(r.sig?'<a href="https://solscan.io/tx/'+esc(r.sig)+'" target="_blank" rel="noopener" style="color:var(--gold)">Solscan</a>':'Solscan')+' before resending</span>'
+          : '<span class="dq">FAILED — '+esc(r.error||'')+'</span>';
+        tr.innerHTML='<td>'+esc(r.addr)+'</td><td class="r">'+fmtAmt(r.amount)+'</td><td>'+cell+'</td>';
         b.appendChild(tr); },
     });
-    sdStatus(out.sent+' paid'+(out.failed?', '+out.failed+' failed — fix and re-send just those':'')+'.');
+    sdStatus(out.sent+' paid'+(out.failed?', '+out.failed+' failed — fix and re-send just those':'')
+      +(out.unconfirmed?', '+out.unconfirmed+' unconfirmed — verify on Solscan before resending':'')+'.');
   }catch(e){ sdStatus('Send failed: '+(e.message||e)); }
   $('sdSend').disabled=false; $('sdConnect').disabled=false;
 });
