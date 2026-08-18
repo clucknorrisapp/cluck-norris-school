@@ -13,27 +13,27 @@
 <style>
   /* Palette, fonts (Anton + Chakra Petch), ember-gradient ground + glow/ember/pulse
      keyframes all come from /theme.css. Local rules below are classroom-specific. */
-  :root{ --accent:var(--gold); }
+  /* --accent comes from theme.css (legacy alias → var(--gold)); no page-local :root. */
   *{box-sizing:border-box;margin:0;padding:0;}
   body{background:var(--bg-grad);background-attachment:fixed;color:var(--text);font-family:var(--body);min-height:100vh;-webkit-font-smoothing:antialiased;}
   .embers{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;}
   .embers span{position:absolute;bottom:40px;border-radius:50%;background:#FFD56B;}
   .wrap{position:relative;z-index:2;max-width:820px;margin:0 auto;padding:22px 16px 70px;}
-  a.back-home{display:inline-flex;align-items:center;gap:7px;font-family:'Anton',sans-serif;font-size:11px;letter-spacing:2px;color:var(--orange);text-decoration:none;margin:0 0 14px;}
+  a.back-home{display:inline-flex;align-items:center;gap:7px;font-family:var(--disp);font-size:11px;letter-spacing:2px;color:var(--orange);text-decoration:none;margin:0 0 14px;}
   .back-home img{height:24px;width:24px;object-fit:cover;border-radius:50%;border:1px solid var(--orange);}
   .header{display:flex;align-items:center;gap:15px;margin-bottom:10px;}
   .avatar{width:58px;height:58px;border-radius:50%;object-fit:cover;object-position:center 12%;border:2px solid var(--gold);animation:ckGlow 2.6s ease-in-out infinite;flex:none;}
-  .brand-mini{font-family:'Anton',sans-serif;font-size:11px;letter-spacing:3px;color:var(--sub);}
-  h1{font-family:'Anton',sans-serif;font-size:30px;letter-spacing:1px;color:var(--gold);line-height:1;text-shadow:0 2px 12px rgba(255,90,10,.35);}
+  .brand-mini{font-family:var(--disp);font-size:11px;letter-spacing:3px;color:var(--sub);}
+  h1{font-family:var(--disp);font-size:30px;letter-spacing:1px;color:var(--gold);line-height:1;text-shadow:0 2px 12px rgba(255,90,10,.35);}
   .pill{margin-left:auto;display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:700;letter-spacing:1.5px;color:var(--green);border:1px solid rgba(123,226,107,.3);background:var(--greenbg);padding:6px 11px;border-radius:999px;white-space:nowrap;font-family:var(--body);}
   .pill .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:ckPulse 1.8s ease-in-out infinite;}
-  .sub-h{font-family:var(--body);font-size:12px;color:var(--sub);letter-spacing:.5px;margin:8px 0 18px;line-height:1.5;text-transform:uppercase;font-weight:600;}
+  .sub-h{font-family:var(--body);font-size:12.5px;color:var(--sub);letter-spacing:.5px;margin:8px 0 18px;line-height:1.5;text-transform:uppercase;font-weight:600;}
   .card{background:var(--card-grad);border:1px solid var(--border);border-radius:16px;padding:18px;margin-bottom:16px;box-shadow:0 10px 30px rgba(0,0,0,.45);}
   .crumbs{font-family:var(--body);font-weight:600;font-size:11px;color:var(--sub);margin-bottom:12px;letter-spacing:.5px;}
   .crumbs a{color:var(--orange);cursor:pointer;text-decoration:none;}
   .pick{text-align:left;background:var(--card-grad);border:1px solid var(--border);border-radius:14px;padding:16px;cursor:pointer;transition:border-color .12s,transform .12s,box-shadow .12s;margin-bottom:12px;display:block;width:100%;color:var(--text);}
   .pick:hover{border-color:var(--orange);transform:translateY(-1px);box-shadow:0 8px 24px rgba(232,30,14,.18);}
-  .pick .t{font-family:'Anton',sans-serif;font-size:18px;color:var(--gold);letter-spacing:.5px;}
+  .pick .t{font-family:var(--disp);font-size:18px;color:var(--gold);letter-spacing:.5px;}
   .pick .b{font-size:12.5px;color:var(--body-text);line-height:1.55;margin-top:5px;font-family:var(--body);}
   .pbar{height:6px;border-radius:4px;background:#101116;border:1px solid var(--border);overflow:hidden;margin-top:10px;}
   .pbar > i{display:block;height:100%;background:var(--orange);}
@@ -43,39 +43,39 @@
   .lrow.done{border-color:rgba(123,226,107,0.4);background:rgba(123,226,107,0.06);}
   .lrow .ic{font-size:22px;flex-shrink:0;width:26px;text-align:center;}
   .lrow .mid{flex:1;min-width:0;}
-  .lrow .lt{font-family:'Anton',sans-serif;font-size:15px;color:var(--text);letter-spacing:.4px;}
-  .lrow .li{font-size:11px;color:var(--sub);line-height:1.45;margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-family:var(--body);}
+  .lrow .lt{font-family:var(--disp);font-size:15px;color:var(--text);letter-spacing:.4px;}
+  .lrow .li{font-size:12.5px;color:var(--sub);line-height:1.45;margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-family:var(--body);}
   .lrow .chk{flex-shrink:0;font-size:16px;color:var(--green);}
   .lrow .ref{font-family:var(--mono);font-size:8px;color:var(--sub);border:1px solid var(--border);border-radius:8px;padding:1px 5px;}
   .room-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;}
-  .room-title{font-family:'Anton',sans-serif;font-size:20px;color:var(--gold);letter-spacing:.5px;}
+  .room-title{font-family:var(--disp);font-size:20px;color:var(--gold);letter-spacing:.5px;}
   .chat{display:flex;flex-direction:column;gap:14px;min-height:180px;margin-top:8px;}
   .msg{animation:ckIn .35s ease both;}
   .msg.cluck{align-self:flex-start;max-width:92%;display:flex;gap:10px;align-items:flex-start;}
   .msg.cluck .mini{width:38px;height:38px;border-radius:50%;object-fit:cover;object-position:center 12%;border:1.5px solid var(--orange);flex:none;margin-top:2px;}
   .msg.cluck .bubble{background:var(--card-grad);border:1px solid var(--border);border-left:3px solid var(--orange);border-radius:6px 16px 16px 16px;padding:12px 15px;box-shadow:0 10px 30px rgba(0,0,0,.4);white-space:pre-wrap;font-size:14.5px;line-height:1.6;min-width:0;color:var(--body-text);}
-  .msg.me{align-self:flex-end;max-width:80%;background:#FF7A18;color:#fff;border-radius:16px 16px 4px 16px;padding:12px 16px;font-size:14.5px;line-height:1.55;font-weight:500;white-space:pre-wrap;box-shadow:0 6px 20px rgba(232,30,14,.35);}
-  .msg .who{font-family:'Anton',sans-serif;font-size:10px;letter-spacing:1.5px;margin-bottom:5px;color:var(--orange);}
+  .msg.me{align-self:flex-end;max-width:80%;background:var(--orange);color:#fff;border-radius:16px 16px 4px 16px;padding:12px 16px;font-size:14.5px;line-height:1.55;font-weight:500;white-space:pre-wrap;box-shadow:0 6px 20px rgba(232,30,14,.35);}
+  .msg .who{font-family:var(--disp);font-size:10px;letter-spacing:1.5px;margin-bottom:5px;color:var(--orange);}
   .quickrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px;padding-top:12px;border-top:1px dashed var(--border);}
-  .qrlabel{font-family:var(--body);font-weight:600;font-size:10.5px;color:var(--sub);letter-spacing:0.5px;width:100%;margin-bottom:2px;}
+  .qrlabel{font-family:var(--body);font-weight:600;font-size:12.5px;color:var(--sub);letter-spacing:0.5px;width:100%;margin-bottom:2px;}
   .quickrow button{background:rgba(255,122,24,0.10);border:1px solid var(--border);color:#FFD9A0;border-radius:999px;padding:8px 14px;font-family:var(--body);font-weight:600;font-size:12px;letter-spacing:0.2px;cursor:pointer;transition:all .15s;}
   .quickrow button:hover{background:rgba(255,122,24,0.22);border-color:var(--orange);color:#fff;}
   .quickrow button:active{transform:translateY(1px);}
-  .quickrow button:disabled{opacity:0.4;cursor:wait;}
+  .quickrow button:disabled{background:rgba(255,255,255,.05);border-color:var(--border);color:var(--muted);cursor:wait;}
   .answer-row{display:flex;gap:8px;margin-top:14px;}
   .answer-row textarea{flex:1;background:#180d07;border:1px solid var(--border);border-radius:12px;padding:12px;color:var(--text);font-family:var(--body);font-size:14px;resize:vertical;min-height:50px;outline:none;transition:border-color .15s;}
   .answer-row textarea:focus{border-color:var(--orange);}
-  .send{padding:0 20px;border:none;border-radius:12px;background:var(--orange);color:#fff;font-family:'Anton',sans-serif;letter-spacing:1.5px;font-size:15px;cursor:pointer;box-shadow:0 6px 18px rgba(232,30,14,.4);transition:transform .1s;}
+  .send{padding:0 20px;border:none;border-radius:12px;background:var(--orange);color:#fff;font-family:var(--disp);letter-spacing:1.5px;font-size:15px;cursor:pointer;box-shadow:0 6px 18px rgba(232,30,14,.4);transition:transform .1s;}
   .send:active{transform:scale(.96);}
-  .send:disabled{opacity:0.5;cursor:wait;}
+  .send:disabled{background:rgba(255,255,255,.05);color:var(--muted);box-shadow:none;cursor:wait;}
   .complete-banner{display:none;margin-top:14px;padding:16px;border:1px solid rgba(123,226,107,0.45);background:rgba(123,226,107,0.08);border-radius:14px;text-align:center;}
   .complete-banner.show{display:block;animation:ckIn .4s ease both;}
-  .complete-banner .t{font-family:'Anton',sans-serif;font-size:17px;color:var(--green);letter-spacing:1px;}
-  .nextbtn{margin-top:10px;padding:11px 20px;border:none;border-radius:12px;background:var(--orange);color:#fff;font-family:'Anton',sans-serif;letter-spacing:1px;font-size:14px;cursor:pointer;box-shadow:0 6px 18px rgba(232,30,14,.35);}
+  .complete-banner .t{font-family:var(--disp);font-size:17px;color:var(--green);letter-spacing:1px;}
+  .nextbtn{margin-top:10px;padding:11px 20px;border:none;border-radius:12px;background:var(--orange);color:#fff;font-family:var(--disp);letter-spacing:1px;font-size:14px;cursor:pointer;box-shadow:0 6px 18px rgba(232,30,14,.35);}
   .spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,122,24,0.25);border-top-color:var(--gold);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;}
   @keyframes spin{to{transform:rotate(360deg);}}
-  .hint{font-family:var(--body);font-size:10.5px;color:var(--muted);margin-top:8px;text-align:center;letter-spacing:.3px;}
-  .err{display:none;margin:10px 0;padding:11px;background:var(--redbg);border:1px solid rgba(232,30,14,0.4);border-radius:10px;color:#FCA5A5;font-family:var(--body);font-size:12px;}
+  .hint{font-family:var(--body);font-size:12.5px;color:var(--muted);margin-top:8px;text-align:center;letter-spacing:.3px;}
+  .err{display:none;margin:10px 0;padding:11px;background:var(--redbg);border:1px solid rgba(232,30,14,0.4);border-radius:10px;color:#FCA5A5;font-family:var(--body);font-size:12.5px;}
   .err.show{display:block;}
   .muted{color:var(--sub);}
   @media(max-width:600px){ h1{font-size:25px;} .wrap{padding:16px 13px 60px;} .avatar{width:50px;height:50px;} }
@@ -148,15 +148,15 @@
       <div class="hint">Answer in plain English — no multiple-choice crutches. Enter to send · Shift+Enter for a new line.</div>
       <div class="complete-banner" id="completeBanner">
         <div class="t" id="cbTitle">✅ LESSON COMPLETE</div>
-        <div id="cbText" style="font-size:12px;color:var(--body-text);margin-top:4px">Professor Cluck says you've got this one. Onward.</div>
+        <div id="cbText" style="font-size:12.5px;color:var(--body-text);margin-top:4px">Professor Cluck says you've got this one. Onward.</div>
         <button class="nextbtn" id="nextBtn" onclick="nextLesson()">NEXT LESSON →</button>
         <div id="gradClaim" style="display:none;margin-top:14px;padding-top:13px;border-top:1px dashed rgba(255,122,24,0.18);text-align:left;">
-          <div style="font-family:'Anton',sans-serif;color:var(--accent);font-size:13px;letter-spacing:0.5px;">🎁 GRADUATE REWARD — CLAIM CLKN</div>
+          <div style="font-family:var(--disp);color:var(--accent);font-size:13px;letter-spacing:0.5px;">🎁 GRADUATE REWARD — CLAIM CLKN</div>
           <div style="font-size:13px;color:var(--body-text);line-height:1.55;margin:6px 0 9px;">Show off your win: post on <b>X tagging @firechicken007</b> <i>or</i> drop it in our <b>Telegram</b>, then claim. We verify and send your CLKN. One reward per wallet.</div>
           <input id="gradWallet" type="text" placeholder="Your Solana wallet address" autocomplete="off" style="width:100%;background:#180d07;border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--text);font-family:var(--mono);font-size:13px;margin-bottom:7px;"/>
           <input id="gradSocial" type="text" placeholder="Paste your X post link OR Telegram @handle" autocomplete="off" style="width:100%;background:#180d07;border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--text);font-family:var(--mono);font-size:13px;margin-bottom:9px;"/>
-          <button class="nextbtn" id="gradClaimBtn" style="background:#10B981;" onclick="submitGradClaim()">CLAIM CLKN REWARD</button>
-          <div id="gradMsg" style="font-size:12px;line-height:1.5;margin-top:9px;"></div>
+          <button class="nextbtn" id="gradClaimBtn" style="background:var(--green);" onclick="submitGradClaim()">CLAIM CLKN REWARD</button>
+          <div id="gradMsg" style="font-size:12.5px;line-height:1.5;margin-top:9px;"></div>
         </div>
       </div>
     </div>
@@ -203,7 +203,7 @@
       if(lc&&ll) resumeHtml='<button class="nextbtn" style="margin-top:10px" onclick="resumeLast()">▶ RESUME: '+esc(ll.title)+'</button>';
     }
     document.getElementById('overall').innerHTML='<div class="card">'
-      +'<div style="font-family:\'Anton\',sans-serif;letter-spacing:1px;font-size:14px;color:var(--accent)">YOUR PROGRESS</div>'
+      +'<div style="font-family:var(--disp);letter-spacing:1px;font-size:14px;color:var(--accent)">YOUR PROGRESS</div>'
       +'<div class="pbar" style="margin-top:8px"><i style="width:'+pct+'%"></i></div>'
       +'<div class="pmeta">'+totDone+' / '+tot+' lessons complete across all courses</div>'
       +resumeHtml+'</div>';
@@ -212,17 +212,23 @@
 
   function renderCourses(){
     renderOverall();
+    // data-id + listeners, never an inline onclick built from API data — HTML
+    // entities decode before the JS string parses, so esc() can't protect an
+    // onclick attribute (same pattern the quick-ask buttons already use).
     document.getElementById('courseList').innerHTML=courses.map(function(c){
       var p=courseProgress(c);
       var pct=p.total?Math.round(p.done/p.total*100):0;
       var complete=p.total>0 && p.done>=p.total;
       var grad=isGraduated(c.id);
-      return '<button class="pick" onclick="openCourse(\''+c.id+'\')">'
-        +'<div class="t">'+(c.icon||'📘')+' '+esc(c.title)+(grad?' <span title="Graduate — passed the final" style="color:#6EE7B7">🎓✓</span>':(complete?' <span title="Course complete">🎓</span>':''))+'</div>'
+      return '<button class="pick" data-id="'+esc(c.id)+'">'
+        +'<div class="t">'+esc(c.icon||'📘')+' '+esc(c.title)+(grad?' <span title="Graduate — passed the final" style="color:#6EE7B7">🎓✓</span>':(complete?' <span title="Course complete">🎓</span>':''))+'</div>'
         +'<div class="b">'+esc(c.blurb||'')+'</div>'
         +'<div class="pbar"><i style="width:'+pct+'%"></i></div>'
         +'<div class="pmeta">'+p.done+' / '+p.total+' lessons complete</div></button>';
     }).join('');
+    Array.prototype.forEach.call(document.querySelectorAll('#courseList .pick'), function(b){
+      b.addEventListener('click', function(){ openCourse(b.getAttribute('data-id')); });
+    });
   }
 
   function openCourse(cid){
@@ -241,23 +247,26 @@
     if(p.total>0 && p.done>=p.total){
       sd.style.display='block';
       if(isGraduated(curCourse.id)){
-        sd.innerHTML='<div style="font-family:\'Anton\',sans-serif;font-size:16px;color:#6EE7B7;letter-spacing:1px;">🎓 COURSE GRADUATE</div>'
-          +'<div style="font-size:12px;color:var(--body-text);margin-top:4px;">You passed the final exam for this course. Respect.</div>'
+        sd.innerHTML='<div style="font-family:var(--disp);font-size:16px;color:#6EE7B7;letter-spacing:1px;">🎓 COURSE GRADUATE</div>'
+          +'<div style="font-size:12.5px;color:var(--body-text);margin-top:4px;">You passed the final exam for this course. Respect.</div>'
           +'<button class="nextbtn" style="margin-top:10px" onclick="openExam()">↻ Retake the final</button>';
       } else {
-        sd.innerHTML='<div style="font-family:\'Anton\',sans-serif;font-size:16px;color:var(--accent);letter-spacing:1px;">🎓 COURSE COMPLETE</div>'
+        sd.innerHTML='<div style="font-family:var(--disp);font-size:16px;color:var(--accent);letter-spacing:1px;">🎓 COURSE COMPLETE</div>'
           +'<div style="font-size:13px;color:var(--body-text);margin-top:4px;">Every lesson done. Now prove it — pass the Final Exam to graduate.</div>'
           +'<button class="nextbtn" style="margin-top:10px" onclick="openExam()">🎓 TAKE THE FINAL EXAM</button>';
       }
     } else { sd.style.display='none'; }
     document.getElementById('lessonList').innerHTML=curCourse.lessons.map(function(l,i){
       var done=isDone(curCourse.id,l.id);
-      return '<div class="lrow'+(done?' done':'')+'" onclick="openLesson(\''+esc(l.id)+'\')">'
-        +'<div class="ic">'+(l.icon||'📘')+'</div>'
+      return '<div class="lrow'+(done?' done':'')+'" data-id="'+esc(l.id)+'">'
+        +'<div class="ic">'+esc(l.icon||'📘')+'</div>'
         +'<div class="mid"><div class="lt">'+(i+1)+'. '+esc(l.title)+(l.reference?' <span class="ref">REF</span>':'')+'</div>'
         +(l.intro?'<div class="li">'+esc(l.intro)+'</div>':'')+'</div>'
         +'<div class="chk">'+(done?'✓':'')+'</div></div>';
     }).join('');
+    Array.prototype.forEach.call(document.querySelectorAll('#lessonList .lrow'), function(r){
+      r.addEventListener('click', function(){ openLesson(r.getAttribute('data-id')); });
+    });
   }
   function goCourses(){ renderCourses(); show('vCourses'); }
   function goSyllabus(){ renderSyllabus(); show('vSyllabus'); }
@@ -359,7 +368,7 @@
       var ctrl = ('AbortController' in window) ? new AbortController() : null;
       var to = ctrl ? setTimeout(function(){ try{ctrl.abort();}catch(e){} }, 45000) : null;
       var endpoint = (mode==='exam') ? '/api/classroom-exam' : '/api/classroom';
-      var _L = (function(){ try { var s = localStorage.getItem('clkn_lang'); if (s) return s; } catch(e){} var _l=(navigator.language||'').toLowerCase().slice(0,2); return _l==='zh'?'zh':_l==='es'?'es':'en'; })();
+      var _L = (function(){ try { var s = localStorage.getItem('clkn_lang'); if (s) return s; } catch(e){} var _l=(navigator.language||'').toLowerCase().slice(0,2); return ['zh','es','it','pt','vi','hi'].includes(_l)?_l:'en'; })();
       var r=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({courseId:curCourse.id, lessonId:curLesson?curLesson.id:null, message:message, history:chatHist, lang:_L}),
         signal: ctrl?ctrl.signal:undefined, cache:'no-store'});
