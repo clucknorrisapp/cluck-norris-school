@@ -3380,37 +3380,51 @@ void warmTopPools;
 // AGGREGATED CoinGecko data (authoritative rank/ATH/24h-change/mcap) for LISTED coins with the
 // GeckoTerminal onchain data (liquidity, # live markets, DEXs) for everything. Powers the live
 // market header on the holder tools (Snapshot/Holders/Trace). Public read; 2-min cache.
+// ── token overview: ONE in-process function, shared by the route and every internal consumer ──
+// (2026-08-18 review) The tool gate and the classroom used to reach this data via loopback HTTP
+// self-fetches — which traversed the origin lockdown (silent 403s from 2026-08-04), the shared
+// /api rate-limit bucket, and a socket timeout, for a function that lives in this file. Direct
+// calls cannot 403, cannot 429, and need no edge-auth header; no localhost self-fetch remains
+// anywhere in the server. The 120s memo is the cache the route's Cache-Control has always
+// advertised — it also makes repeated internal reads (classroom turns) effectively free.
+const tokenOverviewMemo = new Map();   // mint -> { at, data } — successes only, misses re-probe
+async function tokenOverviewData(mint) {
+  const hit = tokenOverviewMemo.get(mint);
+  if (hit && Date.now() - hit.at < 120_000) return hit.data;
+  const onchain = await fetchGeckoTerminalFallback(mint).catch(() => null);
+  // CG-API divorce (owner's call 2026-07-03): the aggregated CoinGecko lookup (rank/ATH/mcap
+  // for listed coins) is GONE — onchain-only now. The response keeps the same shape
+  // (aggregated fields null) so the market-header client needs no change.
+  if (!onchain) return null;
+  const data = {
+    success: true, mint, listed: false,
+    symbol: onchain?.symbol || null,
+    name: onchain?.name || null,
+    image: null,
+    priceUsd: onchain?.priceUsd ?? null,
+    change24hPct: null,
+    volume24hUsd: onchain?.totalVol24h ?? null,
+    liquidityUsd: onchain?.totalLiqUsd ?? null,           // liquidity is onchain-only
+    fdvUsd: onchain?.fdv ?? null,
+    marketCapUsd: null, marketCapRank: null,
+    athUsd: null, athChangePct: null,
+    marketCount: onchain?.poolCount ?? null,
+    dexes: [...onchain.dexFamilies],
+    source: "onchain",
+  };
+  tokenOverviewMemo.set(mint, { at: Date.now(), data });
+  if (tokenOverviewMemo.size > 500) tokenOverviewMemo.clear();   // bounded memory
+  return data;
+}
 app.get("/api/token-overview", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "public, max-age=120");
   const mint = String(req.query.mint || "").trim();
   if (!mint || mint.length < 32) return res.status(400).json({ success: false, error: "pass ?mint=<mint>" });
   try {
-    const onchain = await fetchGeckoTerminalFallback(mint).catch(() => null);
-    // CG-API divorce (owner's call 2026-07-03): the aggregated CoinGecko lookup (rank/ATH/mcap
-    // for listed coins) is GONE — this endpoint is onchain-only now. The response keeps the
-    // same shape (aggregated fields null) so the market-header client needs no change.
-    const cg = null;
-    if (!onchain && !cg) return res.status(200).json({ success: false, error: "no market data for this token yet" });
-    const listed = false; // aggregated CG side removed — every token is served on-chain-only now
-    return res.status(200).json({
-      success: true, mint, listed,
-      symbol: (cg && cg.symbol) || onchain?.symbol || null,
-      name: (cg && cg.name) || onchain?.name || null,
-      image: cg?.image || null,
-      // Prefer aggregated price/volume where listed (authoritative), else onchain.
-      priceUsd: (cg && cg.priceUsd != null ? cg.priceUsd : onchain?.priceUsd) ?? null,
-      change24hPct: cg?.change24hPct ?? null,
-      volume24hUsd: (cg && cg.volume24hUsd != null ? cg.volume24hUsd : onchain?.totalVol24h) ?? null,
-      liquidityUsd: onchain?.totalLiqUsd ?? null,           // liquidity is onchain-only
-      fdvUsd: onchain?.fdv ?? null,
-      marketCapUsd: cg?.marketCapUsd ?? null,
-      marketCapRank: cg?.rank ?? null,
-      athUsd: cg?.athUsd ?? null, athChangePct: cg?.athChangePct ?? null,
-      marketCount: onchain?.poolCount ?? null,
-      dexes: onchain ? [...onchain.dexFamilies] : [],
-      source: listed ? "coingecko+onchain" : "onchain",
-    });
+    const d = await tokenOverviewData(mint);
+    if (!d) return res.status(200).json({ success: false, error: "no market data for this token yet" });
+    return res.status(200).json(d);
   } catch (e) { return res.status(200).json({ success: false, error: publicErrMsg(e) }); }
 });
 
@@ -3682,12 +3696,16 @@ async function classroomLiveExample(course, lesson) {
       if (p) return `\n\nLIVE EXAMPLE (a real Solana pool RIGHT NOW — weave it in to make the lesson concrete): ${p.pair} on ${p.dex} — TVL $${Math.round(p.tvlUsd).toLocaleString()}, 24h volume $${Math.round((p.volume && p.volume.h24) || 0).toLocaleString()}, fee tier ${p.feeTier}%, ~${p.feeYield7dPctDay != null ? p.feeYield7dPctDay : p.feeYieldPctDay}%/day fee yield.`;
     }
     if (/market cap|price|token|research|on-?chain|volatil|trading|alpha|stablecoin|tokenomics|solscan/.test(t)) {
-      // Same edge-auth requirement as the tool-gate self-fetch: this internal call had been
-      // silently 403ing since the 2026-08-04 origin lockdown (the organic log's SOL price).
-      const ov = await fetch(`http://localhost:${PORT}/api/token-overview?mint=So11111111111111111111111111111111111111112`, { signal: AbortSignal.timeout(6000), headers: { "X-Cluck-Edge-Auth": process.env.CF_ORIGIN_SECRET || "" } }).then((r) => r.json()).catch(() => null);
-      if (ov && ov.success) return `\n\nLIVE EXAMPLE (real, right now — use it to make the lesson concrete): SOL is $${ov.priceUsd}${ov.change24hPct != null ? `, ${ov.change24hPct.toFixed(1)}% 24h` : ""}${ov.marketCapRank ? `, market-cap rank #${ov.marketCapRank}` : ""}${ov.marketCapUsd ? `, ~$${(ov.marketCapUsd / 1e9).toFixed(0)}B market cap` : ""}.`;
+      // In-process since the 2026-08-18 review — this was a loopback self-fetch the origin
+      // lockdown silently 403'd from 2026-08-04 on, so lessons lost their live SOL example.
+      // (An earlier comment blamed the organic log; wrong — that path prices via getTokenMarket.)
+      // Guard the price itself: success:true does not guarantee priceUsd (parseFloat||null), and
+      // "SOL is $null" must never reach the professor's prompt. The dead change24h/rank/mcap
+      // ternaries are gone — those fields are hardcoded null since the CG divorce.
+      const ov = await tokenOverviewData(BC_SOL_MINT).catch(() => null);
+      if (ov && Number(ov.priceUsd) > 0) return `\n\nLIVE EXAMPLE (real, right now — use it to make the lesson concrete): SOL is $${Number(ov.priceUsd).toFixed(2)}.`;
     }
-  } catch (_) {}
+  } catch (e) { console.warn("[classroom] live example failed:", e.message); }   // never silent — see the tool-gate note
   return "";
 }
 
@@ -3703,10 +3721,14 @@ app.post("/api/classroom", async (req, res) => {
   const opened = hist.length > 0;
   // Live data is a nice-to-have — NEVER let it block the lesson open. If it's not ready fast
   // (e.g. a cold topPools cache doing on-chain reads), skip it; the lesson still teaches.
+  let liveTimer;
   const live = await Promise.race([
     classroomLiveExample(course, lesson).catch(() => ""),
-    new Promise((r) => setTimeout(() => r(""), 3500)),
+    new Promise((r) => { liveTimer = setTimeout(() => r(""), 3500); }),
   ]);
+  clearTimeout(liveTimer);   // fast path used to leak a live 3.5s timer per request
+  // If the timebox won, the abandoned lookup still completes into the 120s memo — the NEXT
+  // turn gets the live example free instead of the work being discarded every time.
   const system = `You are Professor Cluck Norris — the toughest, funniest crypto professor on Solana — teaching ONE live lesson in the "${course.title}" course.
 
 THE LESSON MATERIAL (your source of truth — teach ONLY this, accurately):
@@ -6461,23 +6483,40 @@ const TOOLGATE = {
   lamports: parseInt(process.env.TOOLGATE_LAMPORTS, 10) || SOL_UNLOCK_MIN_LAMPORTS,
   days: parseInt(process.env.TOOLGATE_DAYS, 10) || 7,
 };
-let toolGatePrice = { at: 0, usd: 0 };
+// Seeded from the volume at declaration (2026-08-18 review): the kv fallback used to live only
+// inside the refresh branch, so every request racing a cold-start refresh read usd=0 and the
+// paywall failed open for the whole first-fetch window after each deploy.
+let toolGatePrice = { at: 0, usd: Number(kv.get("toolGateClknUsd", 0)) || 0, p: null };
 app.get("/api/tool-gate/config", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (/^(1|true|yes)$/i.test(process.env.TOOLGATE_OFF || "")) return res.json({ success: true, enabled: false });
   const now = Date.now();
-  if (now - toolGatePrice.at > 60_000) {
+  if (!toolGatePrice.p && now - toolGatePrice.at > 60_000) {
     toolGatePrice.at = now;   // stamp first so a slow/failing feed isn't re-hit on every request
-    try {
-      // Self-fetches must carry the edge-auth header: with CF_ORIGIN_SECRET armed, the origin
-      // 403s any request without it — including our own localhost calls (found in production
-      // on 2026-08-18: the gate price sat null forever while the public route worked fine).
-      const ov = await fetch(`http://localhost:${PORT}/api/token-overview?mint=${CLKN_MINT_ADDR}`,
-        { signal: AbortSignal.timeout(6000), headers: { "X-Cluck-Edge-Auth": process.env.CF_ORIGIN_SECRET || "" } }).then((r) => r.json());
-      if (ov && ov.success && Number(ov.priceUsd) > 0) { toolGatePrice.usd = Number(ov.priceUsd); kv.set("toolGateClknUsd", toolGatePrice.usd); }
-    } catch (_) {}
-    if (!toolGatePrice.usd) toolGatePrice.usd = Number(kv.get("toolGateClknUsd", 0)) || 0;
+    // Single-flight (in-process since the review — the loopback self-fetch is gone): one refresh
+    // at a time; concurrent requests await it below only when they have no price at all. Every
+    // failure path LOGS — the silent-catch version of this code hid a two-week outage.
+    toolGatePrice.p = (async () => {
+      try {
+        const ov = await tokenOverviewData(CLKN_MINT_ADDR);
+        const fresh = ov && Number(ov.priceUsd) > 0 ? Number(ov.priceUsd) : 0;
+        if (!fresh) { console.warn("[tool-gate] price refresh returned no usable CLKN price"); return; }
+        // Sanity band: a single thin-pool tick 10x off must not repin the paywall threshold.
+        // The band only applies against a RECENT good price (<6h) so a genuinely moved market
+        // can still re-anchor once the last-good value ages out.
+        const lastAt = Number(kv.get("toolGateClknUsdAt", 0)) || 0;
+        if (toolGatePrice.usd && now - lastAt < 6 * 3600e3
+            && (fresh > toolGatePrice.usd * 10 || fresh < toolGatePrice.usd / 10)) {
+          console.warn(`[tool-gate] rejected implausible CLKN price ${fresh} (last good ${toolGatePrice.usd})`);
+          return;
+        }
+        toolGatePrice.usd = fresh;
+        kv.set("toolGateClknUsd", fresh); kv.set("toolGateClknUsdAt", now);
+      } catch (e) { console.warn("[tool-gate] price refresh failed:", e.message); }
+      finally { toolGatePrice.p = null; }
+    })();
   }
+  if (toolGatePrice.p && !toolGatePrice.usd) { try { await toolGatePrice.p; } catch (_) {} }
   const priceUsd = toolGatePrice.usd || null;
   return res.json({
     success: true, enabled: true, holdUsd: TOOLGATE.usd, priceUsd,

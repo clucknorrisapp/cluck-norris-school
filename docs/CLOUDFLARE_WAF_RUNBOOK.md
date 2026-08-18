@@ -230,6 +230,15 @@ site 403s. `/healthz` is exempt in code (Railway's probe hits the origin directl
 6. **Re-check the bot + wallet reads** (all go through Cloudflare, so they carry the header):
    `/api/tg-webhook-info?key=…` shows recent delivery; a wallet balance still loads.
 
+7. **Check the in-process price consumers** — hit `/api/tool-gate/config` and confirm
+   `clknNeeded` is a number, not null. History: from 2026-08-04 to 2026-08-18 two internal
+   `fetch("http://localhost:…")` self-calls (the tool-gate price and the classroom's live SOL
+   example) silently 403'd, because a loopback request never passes through Cloudflare and so
+   never carries the header — and both call sites swallowed the failure. Those self-fetches were
+   replaced with direct in-process calls (`tokenOverviewData()` in server.js) on 2026-08-18, so
+   **no localhost self-fetch remains**. If you ever add one, it must send `X-Cluck-Edge-Auth`
+   itself — but prefer calling the function directly; an in-process call cannot 403.
+
 **Rollback:** unset `CF_ORIGIN_SECRET` on Railway (redeploys to the safe no-op). The Transform Rule
 can stay — an unused header is harmless.
 
