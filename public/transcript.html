@@ -14,9 +14,7 @@
   :root{ color-scheme: dark; }  /* palette comes from theme.css — the private :root that shadowed it was removed 2026-07-30 */
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    background: #0C0C0C;
-    
-    color: #F9FAFB; font-family: 'Anton', sans-serif; min-height: 100vh;
+    color: #F9FAFB; min-height: 100vh;
     display: flex; align-items: center; justify-content: center; padding: 24px;
   }
   .card {
@@ -24,14 +22,14 @@
     border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 28px 24px;
   }
   .head { text-align: center; margin-bottom: 22px; }
-  .head img { width: 84px; height: 84px; border-radius: 50%; border: 3px solid #D97706; object-fit: cover; }
-  .head h1 { font-size: 22px; font-weight: 900; letter-spacing: 2px; color: #D97706; margin-top: 12px; }
+  .head img { width: 84px; height: 84px; border-radius: 50%; border: 3px solid var(--orange); object-fit: cover; }
+  .head h1 { font-size: 22px; font-weight: 900; letter-spacing: 2px; color: var(--orange); margin-top: 12px; }
   .head .sub { font-size: 10px; letter-spacing: 3px; color: #6B7280; margin-top: 2px; }
-  .wallet { text-align: center; font-family: 'Courier New', monospace; font-size: 12px;
+  .wallet { text-align: center; font-family: var(--mono); font-size: 12px;
             color: #9CA3AF; word-break: break-all; margin-bottom: 20px; }
   .badge { border-radius: 12px; padding: 16px 18px; margin-bottom: 14px; border: 1px solid; }
   .badge .label { font-size: 12px; font-weight: 700; letter-spacing: 2px; }
-  .badge .detail { font-size: 12px; color: #D1D5DB; margin-top: 6px; line-height: 1.6; }
+  .badge .detail { font-size: 12.5px; color: #D1D5DB; margin-top: 6px; line-height: 1.6; }
   .verified { color: #10B981; }
   .self { color: #9CA3AF; }
   .diploma { background: rgba(212,175,55,0.08); border-color: rgba(212,175,55,0.35); }
@@ -39,16 +37,16 @@
   .grad { background: rgba(16,185,129,0.07); border-color: rgba(16,185,129,0.3); }
   .grad .label { color: #10B981; }
   .holder { background: rgba(217,119,6,0.07); border-color: rgba(217,119,6,0.3); }
-  .holder .label { color: #D97706; }
+  .holder .label { color: var(--orange); }
   .cw { background: rgba(96,165,250,0.06); border-color: rgba(96,165,250,0.28); }
   .cw .label { color: #60A5FA; }
   .cw-row { display:flex; align-items:center; gap:10px; margin-top:10px; }
-  .cw-label { flex: 0 0 160px; font-size: 12px; color: #D1D5DB; }
+  .cw-label { flex: 0 0 160px; font-size: 12.5px; color: #D1D5DB; }
   .cw-bar { flex:1; height:6px; background: rgba(255,255,255,0.08); border-radius:4px; overflow:hidden; }
   .cw-fill { display:block; height:100%; background:#60A5FA; border-radius:4px; }
-  .cw-count { flex: 0 0 auto; font-family:'Courier New',monospace; font-size:11px; color:#9CA3AF; }
-  .ownline { text-align:center; font-size:11px; letter-spacing:1px; margin: -10px 0 18px; }
-  .ownline a { color:#FCD34D; text-decoration:underline; cursor:pointer; }
+  .cw-count { flex: 0 0 auto; font-family:var(--mono); font-size:12.5px; color:#9CA3AF; }
+  .ownline { text-align:center; font-size:12.5px; letter-spacing:1px; margin: -10px 0 18px; }
+  .ownline a { color:var(--gold); text-decoration:underline; cursor:pointer; }
   .own-panel { background: rgba(255,122,24,0.06); border:1px solid rgba(255,122,24,0.3); border-radius:14px; padding:16px; margin-bottom:14px; }
   .own-panel .lbl { font-family:var(--disp); font-size:11px; letter-spacing:2px; color:var(--gold); margin-bottom:6px; }
   .own-panel .why { font-size:13px; color:var(--body-text); line-height:1.6; margin-bottom:10px; }
@@ -56,14 +54,22 @@
   .own-panel .wbtn { flex:1 1 30%; min-width:92px; background:rgba(255,122,24,0.12); border:1px solid var(--border); border-radius:8px; padding:10px; color:var(--text); font-family:var(--body); font-weight:600; font-size:13px; cursor:pointer; transition:background .15s; }
   .own-panel .wbtn:hover { background:rgba(255,122,24,0.24); }
   .own-panel .st { font-size:12.5px; color:var(--sub); margin-top:11px; text-align:center; line-height:1.55; }
+  .wchip { display:flex; align-items:center; gap:10px; margin-top:11px; padding:10px 14px;
+           background:var(--card); border:1px solid var(--border); border-radius:10px; }
+  .wchip .dot { flex:none; width:8px; height:8px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green); }
+  .wchip .addr { flex:1; min-width:0; font-family:var(--mono); font-size:12.5px; color:var(--text);
+                 overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .wchip .dc { flex:none; background:rgba(255,255,255,.05); border:1px solid var(--border); color:var(--sub);
+               border-radius:8px; padding:6px 10px; font-family:var(--body); font-size:12px; cursor:pointer; }
+  .wchip .dc:hover { background:rgba(255,255,255,.09); }
   .actions { display: flex; gap: 10px; margin-top: 20px; }
   .actions a, .actions button {
     flex: 1; text-align: center; text-decoration: none; cursor: pointer;
-    font-family: 'Anton', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 1px;
+    font-family: var(--disp); font-size: 12px; font-weight: 700; letter-spacing: 1px;
     border-radius: 10px; padding: 12px; border: 1px solid rgba(255,255,255,0.12);
     background: rgba(255,255,255,0.05); color: #D1D5DB;
   }
-  .actions .primary { background: #D97706; color: #fff; border: none; }
+  .actions .primary { background: var(--orange); color: #fff; border: none; }
   .meta { text-align: center; font-size: 10px; color: #4B5563; letter-spacing: 1px; margin-top: 16px; }
   .loading, .error { text-align: center; color: #6B7280; padding: 40px 0; font-size: 14px; letter-spacing: 1px; }
 
@@ -172,7 +178,7 @@ body{background:transparent;font-family:var(--body);}
       parts.push('<div class="error">This transcript has no recorded achievements yet.</div>');
     }
 
-    const shareUrl = location.origin + "/transcript/" + esc(t.slug);
+    const shareUrl = location.origin + "/transcript/" + encodeURIComponent(t.slug);
     parts.push(
       '<div class="actions">' +
         '<button class="primary" id="share">📋 COPY SHARE LINK</button>' +
@@ -200,28 +206,36 @@ body{background:transparent;font-family:var(--body);}
     // minHold:0 asks /api/premium-verify-sig for an ownership-only proof with no
     // holder gate; a graduate may hold no CLKN at all. That can't weaken premium,
     // which re-checks the live 2M balance when a trace actually runs.
-    // The 11-wallet registry lives in /cluck-wallet.js — five pages used to carry
-    // their own copy of this list and they drifted apart (Buy Special ended up
-    // detecting two, the Locker Room three). Aliased rather than rewritten so every
-    // WALLETS[id].name / .detect() / .download call site below is unchanged.
-    const WALLETS = CluckWallet.WALLETS;
+    // Wallet detection lives in /cluck-wallet.js. Only INSTALLED wallets are
+    // offered (CluckWallet.available()) — this page used to render the whole
+    // registry, most of which were dead buttons on any given browser.
     const ownStartLink = document.getElementById("ownStart");
     if (ownStartLink) ownStartLink.onclick = (e) => {
       e.preventDefault();
+      const avail = CluckWallet.available();
       document.getElementById("ownPanel").innerHTML =
         '<div class="own-panel">' +
           '<div class="lbl">PROVE THIS WALLET IS YOURS</div>' +
           '<div class="why">Connect the wallet on this transcript and approve a <strong>signature</strong> on a one-line message. This is <strong>not</strong> a transaction — it moves no tokens, grants no spending approval, and leaves nothing behind. It only proves you hold the key.</div>' +
-          '<div class="wallets" id="ownWallets">' +
-            Object.keys(WALLETS).map(id => '<button class="wbtn" data-w="' + id + '">' + WALLETS[id].name + '</button>').join('') +
+          '<div class="wallets" id="ownWallets"' + (avail.length === 1 ? ' style="display:none"' : '') + '>' +
+            avail.map(w => '<button class="wbtn" data-w="' + esc(w.id) + '">' + esc((w.icon ? w.icon + ' ' : '') + w.name) + '</button>').join('') +
           '</div>' +
           '<div class="wchip" id="ownChip" style="display:none"><span class="dot"></span><span class="addr" id="ownAddr">—</span><button class="dc" type="button" id="ownDisconnect">Disconnect</button></div>' +
           '<div class="st" id="ownStatus">Pick the wallet you used to claim this transcript.</div>' +
         '</div>';
       document.querySelectorAll('#ownPanel .wbtn').forEach(b => {
-        b.onclick = () => connectAndSign(b.getAttribute('data-w'));
+        b.onclick = () => {
+          const w = CluckWallet.available().find(x => x.id === b.getAttribute('data-w'));
+          if (w) connectAndSign(w);
+        };
       });
       document.getElementById('ownDisconnect').onclick = ownDisconnect;
+      if (!avail.length) {
+        ownMsg("No Solana wallet detected in this browser. Install one (Phantom, Solflare, Backpack…) or open this page in your wallet's in-app browser.", true);
+      } else if (avail.length === 1) {
+        // Exactly one wallet installed — connect it directly, no row of buttons.
+        connectAndSign(avail[0]);
+      }
     };
 
     function ownMsg(html, bad) {
@@ -230,10 +244,10 @@ body{background:transparent;font-family:var(--body);}
     }
 
     let ownProvider = null;
-    function ownShowChip(addr) {
+    function ownShowChip(name, addr) {
       const c = document.getElementById('ownChip');
       if (!c) return;
-      document.getElementById('ownAddr').textContent = addr.slice(0,4) + '…' + addr.slice(-4);
+      document.getElementById('ownAddr').textContent = name + ' · ' + CluckUtil.shortAddr(addr);
       c.style.display = 'flex';
       document.getElementById('ownWallets').style.display = 'none';
     }
@@ -248,19 +262,21 @@ body{background:transparent;font-family:var(--body);}
       ownMsg('Disconnected. Pick a wallet to verify.');
     }
 
-    async function connectAndSign(id) {
-      const w = WALLETS[id], provider = w && w.detect();
-      if (!provider) return ownMsg(w.name + " isn't detected in this browser. Open this page in " + w.name + "'s own browser, or use its desktop extension.", true);
+    async function connectAndSign(w) {
+      // w is an entry from CluckWallet.available() — connect through ITS provider,
+      // never a fresh detect() (in-app browsers can resolve a different object).
+      const provider = w && w.provider;
+      if (!provider) return ownMsg("That wallet isn't detected in this browser any more — reload and try again.", true);
       try {
-        ownMsg("Connecting " + w.name + "…");
+        ownMsg("Connecting " + esc(w.name) + "…");
         const resp = await provider.connect();
         ownProvider = provider;
         const wallet = (resp && resp.publicKey && resp.publicKey.toString()) || (provider.publicKey && provider.publicKey.toString());
         if (!wallet) throw new Error("no public key returned");
-        ownShowChip(wallet);
+        ownShowChip(w.name, wallet);
         const nonce = Date.now();
         const message = "Cluck Norris — verify wallet for transcript ownership\nwallet: " + wallet + "\nnonce: " + nonce + "\nThis only proves you own this wallet. It is NOT a transaction, moves no tokens, and grants no permissions.";
-        ownMsg("Approve the <strong>signature</strong> in " + w.name + " — this is not a transaction.");
+        ownMsg("Approve the <strong>signature</strong> in " + esc(w.name) + " — this is not a transaction.");
         const sigRes = await provider.signMessage(new TextEncoder().encode(message), "utf8");
         const sigBytes = (sigRes && sigRes.signature) ? sigRes.signature : sigRes;
         const sigB64 = btoa(String.fromCharCode.apply(null, new Uint8Array(sigBytes)));

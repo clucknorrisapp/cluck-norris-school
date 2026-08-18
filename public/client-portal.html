@@ -4,132 +4,140 @@
 <link rel="stylesheet" href="/theme.css">
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="description" content="Owner portal for the Cluck Norris Liquidity Engine — sign in with your project's registered wallet to see depth, fees, running cost, and pause/resume controls."/>
+<meta name="robots" content="noindex,nofollow"/>
+<meta name="theme-color" content="#0b0c0e"/>
 <title>🔑 Project Portal — Cluck Norris</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <style>
-  :root{color-scheme:dark;--bg:#0b0c0e;--bg-grad:#0b0c0e;--card:#14151a;--card2:#101116;--surface:#14151a;--panel:#14151a;--border:rgba(255,255,255,0.09);--border-soft:rgba(255,255,255,0.05);--text:#FFEFE0;--body-text:#EAD8C8;--sub:#C9A892;--subtext:#C9A892;--muted:#9C7E68;--dim:#9C7E68;--grey:#9C7E68;--accent:#FFB627;--accent2:#FF7A18;--gold:#FFB627;--orange:#FF7A18;--red:#E81E0E;--green:#7BE26B;--amber:#FFB627;--blue:#FFB627;--purple:#FF7A18;--cyan:#FFB627;--head:'Anton',sans-serif;--disp:'Anton',sans-serif;--body:'Chakra Petch',system-ui,sans-serif;--mono:ui-monospace,'Share Tech Mono','Courier New',monospace;}
+  /* Palette + fonts come from /theme.css — the page-local :root that shadowed it was removed. */
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg);  color: var(--text); font-family: system-ui, sans-serif; min-height: 100vh; }
+  body { background: var(--bg); color: var(--text); min-height: 100vh; }
   body { font-size: 15px; line-height: 1.6; }
   .wrap { max-width: 720px; margin: 0 auto; padding: 24px 16px 80px; }
-  a.back-home { display:inline-flex; align-items:center; gap:6px; font-family:Anton,sans-serif; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin:0 0 12px; }
+  a.back-home { display:inline-flex; align-items:center; gap:6px; font-family:var(--disp); font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin:0 0 12px; }
   .back-home img { height:22px; width:22px; object-fit:cover; border-radius:50%; border:1px solid var(--orange); }
 
   .header { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
   .header-icon { font-size: 40px; filter: drop-shadow(0 0 16px rgba(217,119,6,0.5)); }
-  .header .brand-mini { font-family: 'Anton', sans-serif; font-size: 10px; letter-spacing: 4px; color: var(--orange); margin-bottom: 4px; font-weight: 700; }
-  .header h1 { font-family: 'Anton', sans-serif; font-size: 28px; font-weight: 900; letter-spacing: 3px; background: #FCD34D; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
-  .header p { font-family: 'Anton', sans-serif; font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
+  .header .brand-mini { font-family: var(--disp); font-size: 10px; letter-spacing: 4px; color: var(--orange); margin-bottom: 4px; font-weight: 700; }
+  .header h1 { font-family: var(--disp); font-size: 28px; font-weight: 900; letter-spacing: 3px; background: var(--gold); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; line-height: 1; }
+  .header p { font-family: var(--disp); font-size: 11px; color: var(--subtext); letter-spacing: 3px; margin-top: 6px; }
 
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 16px; }
-  .card-title { font-family: 'Anton', sans-serif; font-size: 13px; color: var(--accent); letter-spacing: 2px; margin-bottom: 14px; font-weight: 700; text-transform: uppercase; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+  .card-title { font-family: var(--disp); font-size: 13px; color: var(--accent); letter-spacing: 2px; margin-bottom: 14px; font-weight: 700; text-transform: uppercase; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
 
-  .intro { font-family: system-ui, sans-serif; font-size: 14px; line-height: 1.75; color: #D1D5DB; }
+  .intro { font-size: 14px; line-height: 1.75; color: var(--sub); }
   .intro b { color: var(--accent); }
   .intro .note-good { display: block; margin-top: 12px; padding: 12px 14px; background: rgba(16,185,129,0.07); border: 1px solid rgba(16,185,129,0.28); border-radius: 10px; font-size: 13px; line-height: 1.7; color: #6EE7B7; }
   .intro .note-good b { color: #6EE7B7; }
 
-  .btn { border:none; border-radius:10px; padding:14px 18px; font-family:'Anton',sans-serif; font-size:14px; font-weight:900; letter-spacing:1.5px; cursor:pointer; transition:opacity 0.15s; }
-  .btn-primary { background:#FCD34D; color:#1a1205; }
+  .btn { border:none; border-radius:10px; padding:14px 18px; font-family:var(--disp); font-size:14px; font-weight:900; letter-spacing:1.5px; cursor:pointer; transition:opacity 0.15s; }
+  .btn-primary { background:var(--gold); color:#1a1205; }
   .btn-ghost { background:transparent; border:1px solid var(--border); color:var(--subtext); }
   .btn-danger { background:rgba(239,68,68,0.13); border:1px solid rgba(239,68,68,0.45); color:#FCA5A5; }
   .btn-go { background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.45); color:#6EE7B7; }
-  .btn:hover { opacity:0.9; } .btn:disabled { opacity:0.4; cursor:not-allowed; }
+  .btn:hover { opacity:0.9; }
+  /* Disabled CTAs go neutral grey — a dimmed gradient on dark reads as broken. */
+  .btn:disabled { background:rgba(255,255,255,.05); color:var(--muted); border-color:var(--border); box-shadow:none; cursor:not-allowed; }
   .btn-block { width:100%; }
 
   .connect-row { display:flex; flex-direction:column; gap:10px; }
   .connect-row .btn { width:100%; }
-  .phantom-btn { background: #9945FF; color:#fff; }
-  .install-note { font-family:system-ui,sans-serif; font-size:13px; color:#FCA5A5; line-height:1.7; margin-top:12px; padding:12px 14px; background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.28); border-radius:10px; }
+  .phantom-btn { background: linear-gradient(135deg, var(--orange), var(--red)); color:#fff; box-shadow:0 6px 18px rgba(232,30,14,.4); }
+  .wallet-picker { display:flex; flex-direction:column; gap:8px; }
+  .wallet-picker .picker-label { font-size:13px; color:var(--sub); text-align:center; }
+  .install-note { font-size:13px; color:#FCA5A5; line-height:1.7; margin-top:12px; padding:12px 14px; background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.28); border-radius:10px; }
   .install-note a { color:#93C5FD; }
 
-  .error-box { display:none; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); border-radius:10px; padding:14px 16px; font-family:system-ui,sans-serif; font-size:13px; color:#FCA5A5; margin-bottom:16px; line-height:1.7; }
+  .error-box { display:none; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); border-radius:10px; padding:14px 16px; font-size:13px; color:#FCA5A5; margin-bottom:16px; line-height:1.7; }
   .error-box.show { display:block; }
-  .info-line { font-family:system-ui,sans-serif; font-size:13px; color:var(--accent); margin-top:10px; line-height:1.6; }
+  .info-line { font-size:13px; color:var(--accent); margin-top:10px; line-height:1.6; }
 
   /* Dashboard header */
   .proj-head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; }
-  .proj-head .p-sym { font-family:'Anton',sans-serif; font-weight:900; font-size:28px; letter-spacing:1px; color:var(--accent); }
-  .proj-head .p-label { font-family:system-ui,sans-serif; font-size:14px; color:#D1D5DB; margin-top:4px; line-height:1.5; }
+  .proj-head .p-sym { font-family:var(--disp); font-weight:900; font-size:28px; letter-spacing:1px; color:var(--accent); }
+  .proj-head .p-label { font-size:14px; color:var(--sub); margin-top:4px; line-height:1.5; }
+  .proj-head .p-wallet { font-family:var(--mono); font-size:12.5px; color:var(--muted); margin-top:4px; }
   .badges { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
-  .badge { font-family:'Anton',sans-serif; font-size:11px; font-weight:700; letter-spacing:1.5px; padding:6px 11px; border-radius:6px; white-space:nowrap; text-transform:uppercase; }
+  .badge { font-family:var(--disp); font-size:11px; font-weight:700; letter-spacing:1.5px; padding:6px 11px; border-radius:6px; white-space:nowrap; text-transform:uppercase; }
   .b-live { color:#6EE7B7; border:1px solid rgba(16,185,129,0.45); background:rgba(16,185,129,0.08); }
-  .b-paused { color:#FCD34D; border:1px solid rgba(252,211,77,0.45); background:rgba(252,211,77,0.08); }
-  .b-off { color:#9CA3AF; border:1px solid rgba(156,163,175,0.4); background:rgba(156,163,175,0.06); }
+  .b-paused { color:var(--gold); border:1px solid rgba(252,211,77,0.45); background:rgba(252,211,77,0.08); }
+  .b-off { color:var(--muted); border:1px solid rgba(156,163,175,0.4); background:rgba(156,163,175,0.06); }
   .b-mode { color:#93C5FD; border:1px solid rgba(96,165,250,0.4); background:rgba(96,165,250,0.06); }
 
   .toolbar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:14px; }
-  .auto-toggle { display:inline-flex; align-items:center; gap:7px; font-family:system-ui,sans-serif; font-size:13px; color:#9CA3AF; cursor:pointer; user-select:none; }
+  .auto-toggle { display:inline-flex; align-items:center; gap:7px; font-size:13px; color:var(--muted); cursor:pointer; user-select:none; }
   .auto-toggle input { accent-color: var(--orange); width:17px; height:17px; }
-  .updated { font-family:system-ui,sans-serif; font-size:12px; color:#9CA3AF; margin-top:12px; }
+  .updated { font-size:12.5px; color:var(--muted); margin-top:12px; }
 
   /* Headline numbers */
   .headline { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   @media (min-width: 560px){ .headline { grid-template-columns:repeat(4,1fr); } }
   .headline .cell { background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:12px; padding:16px 14px; text-align:center; }
-  .headline .k { font-family:'Anton',sans-serif; font-size:11px; color:#9CA3AF; letter-spacing:2px; font-weight:700; text-transform:uppercase; }
-  .headline .v { font-family:'Anton',sans-serif; font-size:26px; font-weight:900; color:var(--text); line-height:1.1; margin-top:8px; }
+  .headline .k { font-family:var(--disp); font-size:11px; color:var(--muted); letter-spacing:2px; font-weight:700; text-transform:uppercase; }
+  .headline .v { font-family:var(--disp); font-size:26px; font-weight:900; color:var(--text); line-height:1.1; margin-top:8px; }
   .v.pos { color:#6EE7B7; } .v.neg { color:var(--red); }
 
-  .sec-title { font-family:'Anton',sans-serif; font-size:11px; color:var(--accent); letter-spacing:2px; font-weight:700; text-transform:uppercase; margin:14px 0 10px; }
+  .sec-title { font-family:var(--disp); font-size:11px; color:var(--accent); letter-spacing:2px; font-weight:700; text-transform:uppercase; margin:14px 0 10px; }
 
   .pos { margin-top:10px; padding:14px 14px; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:11px; }
   .pos .ph { display:flex; justify-content:space-between; align-items:center; gap:8px; }
-  .pos .pname { font-family:'Anton',sans-serif; font-weight:700; letter-spacing:0.5px; font-size:16px; color:var(--text); }
-  .pos .pair { font-family:'Anton',sans-serif; font-size:11px; color:#9CA3AF; letter-spacing:1px; margin-top:3px; text-transform:uppercase; }
-  .pos .state { font-family:'Anton',sans-serif; font-size:11px; letter-spacing:1px; font-weight:700; text-transform:uppercase; margin-top:5px; }
-  .pos .state.inr { color:#6EE7B7; } .pos .state.out { color:#9CA3AF; }
-  .pos .meta { font-family:system-ui,sans-serif; font-size:14px; color:#D1D5DB; line-height:1.85; margin-top:10px; }
+  .pos .pname { font-family:var(--disp); font-weight:700; letter-spacing:0.5px; font-size:16px; color:var(--text); }
+  .pos .pair { font-family:var(--disp); font-size:11px; color:var(--muted); letter-spacing:1px; margin-top:3px; text-transform:uppercase; }
+  .pos .state { font-family:var(--disp); font-size:11px; letter-spacing:1px; font-weight:700; text-transform:uppercase; margin-top:5px; }
+  .pos .state.inr { color:#6EE7B7; } .pos .state.out { color:var(--muted); }
+  .pos .meta { font-size:14px; color:var(--sub); line-height:1.85; margin-top:10px; }
   .pos .meta b { color:var(--text); font-weight:700; }
-  .pos .depth { font-family:'Anton',sans-serif; font-weight:900; color:var(--accent); font-size:22px; line-height:1.1; }
+  .pos .depth { font-family:var(--disp); font-weight:900; color:var(--accent); font-size:22px; line-height:1.1; }
 
   .row2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   .mini { background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:11px; padding:12px 14px; }
-  .mini .k { font-family:'Anton',sans-serif; font-size:11px; color:#9CA3AF; letter-spacing:2px; font-weight:700; text-transform:uppercase; }
-  .mini .v { font-family:'Anton',sans-serif; font-size:22px; font-weight:900; color:var(--text); line-height:1.1; margin-top:6px; }
+  .mini .k { font-family:var(--disp); font-size:11px; color:var(--muted); letter-spacing:2px; font-weight:700; text-transform:uppercase; }
+  .mini .v { font-family:var(--disp); font-size:22px; font-weight:900; color:var(--text); line-height:1.1; margin-top:6px; }
   .mini .v.pos { color:#6EE7B7; }
-  .mini .sub { font-family:system-ui,sans-serif; font-size:13px; color:#9CA3AF; margin-top:6px; line-height:1.55; }
+  .mini .sub { font-size:13px; color:var(--muted); margin-top:6px; line-height:1.55; }
 
-  .note { font-family:system-ui,sans-serif; font-size:13px; color:#D1D5DB; margin-top:10px; line-height:1.7; }
+  .note { font-size:13px; color:var(--sub); margin-top:10px; line-height:1.7; }
   .note.warn { color:#FCA5A5; }
 
   /* Strategy card */
-  .strat-now { font-family:system-ui,sans-serif; font-size:14px; color:#D1D5DB; line-height:1.7; padding:12px 14px; background:rgba(96,165,250,0.06); border:1px solid rgba(96,165,250,0.3); border-radius:10px; }
+  .strat-now { font-size:14px; color:var(--sub); line-height:1.7; padding:12px 14px; background:rgba(96,165,250,0.06); border:1px solid rgba(96,165,250,0.3); border-radius:10px; }
   .strat-now b { color:var(--accent); font-weight:700; }
   .strat-group { margin-top:16px; }
   .strat-opts { display:flex; flex-direction:column; gap:9px; }
   .strat-opt { text-align:left; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:11px; padding:13px 14px; cursor:pointer; transition:border-color 0.15s, background 0.15s; }
   .strat-opt:hover { border-color:rgba(252,211,77,0.4); }
   .strat-opt.sel { border-color:var(--orange); background:rgba(217,119,6,0.12); box-shadow:0 0 0 1px rgba(217,119,6,0.3) inset; }
-  .strat-opt .o-name { font-family:'Anton',sans-serif; font-weight:700; font-size:15px; letter-spacing:0.5px; color:var(--text); }
+  .strat-opt .o-name { font-family:var(--disp); font-weight:700; font-size:15px; letter-spacing:0.5px; color:var(--text); }
   .strat-opt.sel .o-name { color:var(--accent); }
-  .strat-opt .o-desc { font-family:system-ui,sans-serif; font-size:13px; color:#D1D5DB; line-height:1.7; margin-top:6px; }
-  .strat-opt .o-cur { font-family:'Anton',sans-serif; font-size:11px; letter-spacing:1.5px; font-weight:700; text-transform:uppercase; color:#6EE7B7; margin-top:8px; }
+  .strat-opt .o-desc { font-size:13px; color:var(--sub); line-height:1.7; margin-top:6px; }
+  .strat-opt .o-cur { font-family:var(--disp); font-size:11px; letter-spacing:1.5px; font-weight:700; text-transform:uppercase; color:#6EE7B7; margin-top:8px; }
   .strat-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:16px; }
   .strat-actions .btn { flex:1; min-width:140px; }
-  .strat-preview { margin-top:14px; padding:14px; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:11px; font-family:system-ui,sans-serif; font-size:13px; color:#D1D5DB; line-height:1.7; }
-  .strat-preview .pv-title { font-family:'Anton',sans-serif; font-weight:900; letter-spacing:0.5px; color:var(--accent); font-size:16px; margin-bottom:8px; }
-  .strat-preview .pv-blurb { color:#D1D5DB; margin-bottom:9px; line-height:1.65; }
+  .strat-preview { margin-top:14px; padding:14px; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:11px; font-size:13px; color:var(--sub); line-height:1.7; }
+  .strat-preview .pv-title { font-family:var(--disp); font-weight:900; letter-spacing:0.5px; color:var(--accent); font-size:16px; margin-bottom:8px; }
+  .strat-preview .pv-blurb { color:var(--sub); margin-bottom:9px; line-height:1.65; }
   .strat-preview .pv-row { display:flex; justify-content:space-between; gap:10px; padding:6px 0; border-top:1px solid var(--border); }
-  .strat-preview .pv-row .pv-k { color:#9CA3AF; }
+  .strat-preview .pv-row .pv-k { color:var(--muted); }
   .strat-preview .pv-row .pv-v { text-align:right; }
   .strat-preview .pv-row .pv-v b { color:var(--text); font-weight:700; }
   .strat-preview .pv-row .pv-v .arr { color:var(--orange); }
-  .strat-preview .pv-none { color:#9CA3AF; }
-  .strat-preview .pv-foot { color:#9CA3AF; margin-top:9px; line-height:1.65; }
-  .strat-msg { font-family:system-ui,sans-serif; font-size:13px; line-height:1.7; margin-top:12px; }
+  .strat-preview .pv-none { color:var(--muted); }
+  .strat-preview .pv-foot { color:var(--muted); margin-top:9px; line-height:1.65; }
+  .strat-msg { font-size:13px; line-height:1.7; margin-top:12px; }
   .strat-msg.ok { color:#6EE7B7; }
   .strat-msg.err { color:#FCA5A5; }
 
   details.adv { margin-top:10px; }
-  details.adv summary { font-family:'Anton',sans-serif; font-size:11px; letter-spacing:2px; font-weight:700; text-transform:uppercase; color:var(--orange); cursor:pointer; list-style:none; padding:10px 0; }
+  details.adv summary { font-family:var(--disp); font-size:11px; letter-spacing:2px; font-weight:700; text-transform:uppercase; color:var(--orange); cursor:pointer; list-style:none; padding:10px 0; }
   details.adv summary::-webkit-details-marker { display:none; }
-  details.adv .adv-body { font-family:var(--mono); font-size:13px; color:#D1D5DB; line-height:2; border-top:1px solid var(--border); padding-top:12px; margin-top:4px; word-break:break-all; }
+  details.adv .adv-body { font-family:var(--mono); font-size:13px; color:var(--sub); line-height:2; border-top:1px solid var(--border); padding-top:12px; margin-top:4px; word-break:break-all; }
   details.adv .adv-body b { color:var(--text); }
-  details.adv .adv-body .lbl { color:#9CA3AF; }
+  details.adv .adv-body .lbl { color:var(--muted); }
 
-  .footer-tag { text-align: center; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'Anton', sans-serif; font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
+  .footer-tag { text-align: center; margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--border); font-family: var(--disp); font-size: 10px; color: var(--subtext); letter-spacing: 3px; }
   .footer-tag a { color: var(--orange); text-decoration: none; }
   .muted { color: var(--subtext); }
   .hidden { display:none !important; }
@@ -168,11 +176,15 @@ body{background:transparent;font-family:var(--body);}
     <div class="card">
       <div class="card-title">CONNECT &amp; SIGN IN</div>
       <div class="connect-row">
-        <button class="btn phantom-btn btn-block" id="connectBtn" onclick="signIn()">🔮 CONNECT PHANTOM &amp; SIGN IN</button>
+        <button class="btn phantom-btn btn-block" id="connectBtn" onclick="signIn()">🔗 CONNECT WALLET &amp; SIGN IN</button>
+        <div id="walletPicker" class="wallet-picker hidden"></div>
       </div>
       <div id="installNote" class="install-note hidden">
-        No Solana wallet detected. Install <a href="https://phantom.app" target="_blank" rel="noopener">Phantom</a>
-        (or open this page in your wallet's in-app browser), then reload.
+        No Solana wallet detected. Install a Solana wallet
+        (<a href="https://phantom.app" target="_blank" rel="noopener">Phantom</a>,
+        <a href="https://solflare.com" target="_blank" rel="noopener">Solflare</a>,
+        <a href="https://backpack.app" target="_blank" rel="noopener">Backpack</a>&hellip;)
+        or open this page in your wallet's in-app browser, then reload.
       </div>
       <div id="loginInfo" class="info-line"></div>
     </div>
@@ -185,6 +197,7 @@ body{background:transparent;font-family:var(--body);}
         <div>
           <div class="p-sym" id="projSym">—</div>
           <div class="p-label" id="projLabel">—</div>
+          <div class="p-wallet" id="walletLine"></div>
         </div>
         <div class="badges" id="projBadges"></div>
       </div>
@@ -278,8 +291,11 @@ body{background:transparent;font-family:var(--body);}
 const API = '/api/whirlpool/vault/client';
 const TOKEN_KEY = 'clknPortalToken';
 const PROJ_KEY = 'clknPortalProject';
+const WALLET_KEY = 'clknPortalWallet';
 let token = '';
 let project = null;          // { id, symbol, label }
+let activeProvider = null;   // the wallet provider we connected with (for disconnect on sign-out)
+let walletInfo = null;       // { name, addr } — shown next to the project label
 let autoTimer = null;
 let busy = false;
 let lastStatus = null, lastPositions = null, lastCosts = null, lastEarnings = null;
@@ -352,27 +368,48 @@ function showView(which){
   document.getElementById('dashView').classList.toggle('hidden', which!=='dash');
 }
 
-// ── Wallet detection: /cluck-wallet.js (11 wallets). This page previously looked
-// only for Phantom, falling back to a bare window.solana — a client owner using
+// ── Wallet detection: the shared registry in /cluck-wallet.js. This page previously
+// looked only for Phantom, falling back to a bare window.solana — a client owner using
 // OKX, Coinbase, Exodus or Bitget could not sign in to their own portal. ─────────
-function getProvider(){
-  const l = CluckWallet.available();
-  return l.length ? l[0].provider : null;
-}
 
 // ── Sign-in flow ────────────────────────────────────────────────────────────────
-async function signIn(){
+// More than one installed wallet → show a picker (never silently grab the first);
+// exactly one → connect it directly.
+function signIn(){
   clearError();
-  const provider = getProvider();
-  if(!provider){
+  hideWalletPicker();
+  const list = CluckWallet.available();
+  if(!list.length){
     document.getElementById('installNote').classList.remove('hidden');
-    showError('No Solana wallet found. Install Phantom and reload.');
+    showError('No Solana wallet found. Install a Solana wallet (Phantom, Solflare, Backpack…) and reload.');
     return;
   }
+  if(list.length===1){ doSignIn(list[0]); return; }
+  const box = document.getElementById('walletPicker');
+  box.innerHTML = '';
+  const lbl = document.createElement('div');
+  lbl.className = 'picker-label';
+  lbl.textContent = 'More than one wallet detected — pick which one to sign in with:';
+  box.appendChild(lbl);
+  list.forEach(w => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn btn-ghost btn-block';
+    b.textContent = (w.icon ? w.icon+' ' : '') + 'CONNECT ' + w.name.toUpperCase();
+    b.addEventListener('click', () => doSignIn(w));
+    box.appendChild(b);
+  });
+  box.classList.remove('hidden');
+}
+function hideWalletPicker(){ document.getElementById('walletPicker').classList.add('hidden'); }
+
+async function doSignIn(entry){
+  hideWalletPicker();
+  const provider = entry.provider;
   const btn = document.getElementById('connectBtn');
   btn.disabled = true;
   try {
-    setLoginInfo('Connecting wallet…');
+    setLoginInfo('Connecting '+entry.name+'…');
     const resp = await provider.connect();
     const wallet = (resp && resp.publicKey ? resp.publicKey : provider.publicKey).toString();
     if(!wallet) throw new Error('no public key returned');
@@ -425,7 +462,9 @@ async function signIn(){
 
     token = d.token;
     project = d.project || null;
-    try { sessionStorage.setItem(TOKEN_KEY, token); if(project) sessionStorage.setItem(PROJ_KEY, JSON.stringify(project)); } catch(_){}
+    activeProvider = provider;
+    walletInfo = { name: entry.name, addr: wallet };
+    try { sessionStorage.setItem(TOKEN_KEY, token); if(project) sessionStorage.setItem(PROJ_KEY, JSON.stringify(project)); sessionStorage.setItem(WALLET_KEY, JSON.stringify(walletInfo)); } catch(_){}
     setLoginInfo('');
     clearError();
     enterDashboard();
@@ -441,8 +480,12 @@ async function signIn(){
 
 function signOut(){
   if(!confirm('Sign out of the portal?')) return;
+  // Disconnect the wallet on its own side too (best-effort — not every provider
+  // implements disconnect()), then clear our state regardless.
+  try { if(activeProvider && activeProvider.disconnect) activeProvider.disconnect(); } catch(_){}
+  activeProvider=null; walletInfo=null;
   token=''; project=null;
-  try { sessionStorage.removeItem(TOKEN_KEY); sessionStorage.removeItem(PROJ_KEY); } catch(_){}
+  try { sessionStorage.removeItem(TOKEN_KEY); sessionStorage.removeItem(PROJ_KEY); sessionStorage.removeItem(WALLET_KEY); } catch(_){}
   stopAuto();
   document.getElementById('autoChk').checked=false;
   clearError();
@@ -456,6 +499,9 @@ function enterDashboard(){
     document.getElementById('projSym').textContent = project.symbol || project.id || '—';
     document.getElementById('projLabel').textContent = project.label || project.id || '';
   }
+  // Show which wallet is signed in — shortAddr · wallet name (same shape as the Locker Room).
+  document.getElementById('walletLine').textContent =
+    walletInfo ? CluckUtil.shortAddr(walletInfo.addr) + (walletInfo.name ? ' · ' + walletInfo.name : '') : '';
   refreshAll();
 }
 
@@ -646,12 +692,18 @@ function renderStrategy(){
     const isCur = n===curMode;
     const isSel = n===pickMode && !off;
     const dim = (n==='custom' && lastModes && !lastModes.hasCustomSnapshot);
-    return `<div class="strat-opt${isSel?' sel':''}" ${off?'':`onclick="selectMode('${esc(n)}')"`} style="${off?'opacity:0.5;cursor:default':''}">
+    // data-* + addEventListener, never an inline onclick built from API data —
+    // HTML entities decode before the JS string is parsed, so esc() cannot
+    // protect an onclick attribute.
+    return `<div class="strat-opt${isSel?' sel':''}" ${off?'':`data-mode="${esc(n)}"`} style="${off?'opacity:0.5;cursor:default':''}">
       <div class="o-name">${esc(label)}</div>
       <div class="o-desc">${esc(desc)}${dim?' (no saved snapshot yet)':''}</div>
       ${isCur?'<div class="o-cur">● CURRENTLY ACTIVE</div>':''}
     </div>`;
   }).join('');
+  modeBox.querySelectorAll('[data-mode]').forEach(el => {
+    el.addEventListener('click', () => selectMode(el.getAttribute('data-mode')));
+  });
 
   // Tilt options.
   const tiltNames = (lastModes && lastModes.tilts) ? TILT_ORDER.filter(n => lastModes.tilts[n]) : TILT_ORDER;
@@ -663,12 +715,15 @@ function renderStrategy(){
     const isCur = n===curTilt;
     const isSel = n===pickTilt && tiltApplies && !off;
     const disabled = off || !tiltApplies;
-    return `<div class="strat-opt${isSel?' sel':''}" ${disabled?'':`onclick="selectTilt('${esc(n)}')"`} style="${disabled?'opacity:0.5;cursor:default':''}">
+    return `<div class="strat-opt${isSel?' sel':''}" ${disabled?'':`data-tilt="${esc(n)}"`} style="${disabled?'opacity:0.5;cursor:default':''}">
       <div class="o-name">${esc(label)}</div>
       <div class="o-desc">${esc(desc)}</div>
       ${isCur?'<div class="o-cur">● CURRENTLY ACTIVE</div>':''}
     </div>`;
   }).join('');
+  tiltBox.querySelectorAll('[data-tilt]').forEach(el => {
+    el.addEventListener('click', () => selectTilt(el.getAttribute('data-tilt')));
+  });
 
   // Preview only makes sense when the engine is on.
   previewBtn.disabled = !!off || stratBusy;
@@ -806,7 +861,9 @@ function renderPositions(){
   let html = '';
   for(const p of positions){
     const inR = !!p.inRange;
-    const quoteStr = p.quoteSymbol==='USDC' ? money(p.quoteAmount) : (tok(p.quoteAmount)+' '+esc(p.quoteSymbol||'SOL'));
+    // Built RAW; escaped once at the point of use below (it was esc()'d both at
+    // build and at use, double-encoding symbols like "A&B" into "A&amp;amp;B").
+    const quoteStr = p.quoteSymbol==='USDC' ? money(p.quoteAmount) : (tok(p.quoteAmount)+' '+(p.quoteSymbol||'SOL'));
     const rangeStr = (p.lower!=null && p.upper!=null) ? (price(p.lower)+' → '+price(p.upper)) : '—';
     html += `<div class="pos">
       <div class="ph">
@@ -910,13 +967,15 @@ function stopAuto(){ if(autoTimer){ clearInterval(autoTimer); autoTimer=null; } 
 // ── Init: try a stored token; else show login ───────────────────────────────────
 async function init(){
   // Surface install hint up-front if no wallet is present.
-  if(!getProvider()) document.getElementById('installNote').classList.remove('hidden');
+  if(!CluckWallet.available().length) document.getElementById('installNote').classList.remove('hidden');
 
   let stored=''; try { stored = sessionStorage.getItem(TOKEN_KEY) || ''; } catch(_){}
   if(stored){
     token = stored;
     // Restore the project label/symbol saved at login (status doesn't carry it).
     try { const pj = sessionStorage.getItem(PROJ_KEY); if(pj) project = JSON.parse(pj); } catch(_){}
+    // Restore which wallet signed in (the provider object itself doesn't survive a reload).
+    try { const wj = sessionStorage.getItem(WALLET_KEY); if(wj) walletInfo = JSON.parse(wj); } catch(_){}
     if(!project) project = { id: '', symbol: 'YOUR PROJECT', label: 'Signed in' };
     // Validate by hitting status; if 401, authGet clears + bounces to login.
     const s = await authGet('/status');
