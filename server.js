@@ -6560,20 +6560,44 @@ app.get("/host-image", (req, res) => {
 <p style="color:var(--sub);font-size:13.5px;line-height:1.6;">Uploads to <b>Arweave</b> on the project's funded Turbo key — paid once, stored forever.
 Files under 100 KiB are free; bigger ones spend a little Turbo credit. Keep the <b>txid</b>: the link works on any Arweave gateway.</p>
 <input type="file" id="f" style="margin:14px 0;display:block;color:var(--text);">
+<label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--sub);margin-bottom:12px;">
+<input type="checkbox" id="shrink" checked> Auto-shrink into the free tier (&lt;100 KiB) — recommended; uncheck to upload the original full-size bytes (needs Turbo credits)</label>
 <button id="go" style="background:linear-gradient(135deg,var(--gold),var(--orange));border:none;border-radius:10px;padding:12px 18px;font-family:var(--disp);letter-spacing:1.5px;font-size:14px;cursor:pointer;">UPLOAD FOREVER</button>
 <div id="out" style="margin-top:18px;font-family:var(--mono);font-size:13px;line-height:1.7;word-break:break-all;"></div>
 <script>
 const key=new URLSearchParams(location.search).get('key')||'';
+const FREE=97*1024;   // stay safely under the bundler's 100 KiB free tier
+// Browser-side compressor: draw to a canvas and walk dimension+quality down until the
+// re-encoded image fits the free tier. Flat-color art barely changes; photos soften slightly.
+async function shrinkToFree(file){
+  const img=await new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=URL.createObjectURL(file);});
+  const tries=[[1024,.9],[1024,.8],[800,.8],[640,.8],[512,.8],[512,.65],[384,.65],[256,.65]];
+  for(const [dim,q] of tries){
+    const sc=Math.min(1,dim/Math.max(img.width,img.height));
+    const c=document.createElement('canvas');c.width=Math.round(img.width*sc);c.height=Math.round(img.height*sc);
+    c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+    const blob=await new Promise(r=>c.toBlob(r,'image/webp',q));
+    if(blob&&blob.size<=FREE) return blob;
+  }
+  return null;
+}
 document.getElementById('go').onclick=async()=>{
   const f=document.getElementById('f').files[0], out=document.getElementById('out');
   if(!f){out.textContent='Pick a file first.';return;}
-  out.textContent='Uploading '+Math.round(f.size/1024)+' KB\\u2026';
+  let body=f, note='';
   try{
-    const r=await fetch('/api/host-image?key='+encodeURIComponent(key),{method:'POST',headers:{'content-type':f.type||'application/octet-stream'},body:f});
+    if(document.getElementById('shrink').checked && f.size>FREE && /^image\\/(png|jpe?g|webp)$/.test(f.type)){
+      out.textContent='Shrinking '+Math.round(f.size/1024)+' KB into the free tier\\u2026';
+      const s=await shrinkToFree(f);
+      if(s){ body=s; note=' (shrunk from '+Math.round(f.size/1024)+' KB)'; }
+      else { out.textContent='\\u274c Could not fit it under 100 KiB \\u2014 uncheck auto-shrink to upload full size (needs Turbo credits).'; return; }
+    }
+    out.textContent='Uploading '+Math.round(body.size/1024)+' KB\\u2026';
+    const r=await fetch('/api/host-image?key='+encodeURIComponent(key),{method:'POST',headers:{'content-type':body.type||f.type||'application/octet-stream'},body});
     const d=await r.json();
     out.innerHTML=d.success
-      ? '\\u2705 Permanent link:<br><a style="color:var(--gold)" href="'+d.url+'" target="_blank" rel="noopener">'+d.url+'</a><br><span style="color:var(--sub)">txid: '+d.txid+' \\u00b7 '+Math.round(d.bytes/1024)+' KB</span>'
-      : '\\u274c '+(d.error||'upload failed');
+      ? '\\u2705 Permanent link:<br><a style="color:var(--gold)" href="'+d.url+'" target="_blank" rel="noopener">'+d.url+'</a><br><span style="color:var(--sub)">txid: '+d.txid+' \\u00b7 '+Math.round(d.bytes/1024)+' KB'+note+'</span>'
+      : '\\u274c '+(d.error||'upload failed')+(String(d.error||'').includes('402')?' \\u2014 not enough Turbo credits for full-size; tick auto-shrink, or top up credits at ardrive.io with the Hatchery wallet.':'');
   }catch(e){out.textContent='\\u274c '+e.message;}
 };
 </script></body></html>`);
