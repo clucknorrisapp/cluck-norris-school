@@ -6525,6 +6525,60 @@ app.get("/api/tool-gate/config", async (req, res) => {
     receiver: SOL_UNLOCK_WALLET, mint: CLKN_MINT_ADDR,
   });
 });
+// ── /host-image: owner's permanent image host (Arweave via the funded Turbo key) ─────────────
+// One-tap "host this forever": pick a file, get back a permanent arweave.net link + txid.
+// Owner-keyed (404 without PREMIUM_ACCESS_KEY, same posture as the other owner tools) because
+// every upload above 100 KiB spends Turbo credits. The DATA is what's permanent — the txid
+// resolves on any Arweave gateway, so keep the txid, not just the arweave.net URL.
+app.post("/api/host-image", express.raw({ type: () => true, limit: "10mb" }), async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const provided = String(req.get("x-premium-key") || req.query.key || "");
+  if (!secretEqual(provided, process.env.PREMIUM_ACCESS_KEY || "")) return res.status(404).json({ success: false, error: "not_found" });
+  try {
+    const buf = Buffer.isBuffer(req.body) ? req.body : null;
+    if (!buf || buf.length < 24) return res.status(400).json({ success: false, error: "send the raw file bytes as the request body" });
+    const ct = String(req.get("content-type") || "application/octet-stream").split(";")[0].trim();
+    if (!/^(image\/(png|jpeg|jpg|webp|gif|svg\+xml)|application\/json|application\/pdf)$/.test(ct)) {
+      return res.status(400).json({ success: false, error: `unsupported content-type ${ct}` });
+    }
+    const out = await hatchery.uploadPublicFile(buf, ct);
+    console.log(`[host-image] uploaded ${buf.length} bytes (${ct}) -> ${out.txid}`);
+    return res.json({ success: true, ...out, bytes: buf.length, note: "permanent — keep the txid; it resolves on any Arweave gateway" });
+  } catch (e) {
+    console.warn("[host-image] failed:", e.message);
+    return res.status(200).json({ success: false, error: e.message });
+  }
+});
+app.get("/host-image", (req, res) => {
+  res.set("X-Robots-Tag", "noindex, nofollow");
+  const provided = String(req.get("x-premium-key") || req.query.key || "");
+  if (!secretEqual(provided, process.env.PREMIUM_ACCESS_KEY || "")) return res.status(404).send("Not found");
+  res.send(`<!DOCTYPE html><html lang="en"><head><link rel="stylesheet" href="/theme.css"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Permanent Image Host</title></head>
+<body style="background:var(--bg);color:var(--text);font-family:var(--body);max-width:560px;margin:0 auto;padding:40px 16px;">
+<h1 style="font-family:var(--disp);color:var(--gold);letter-spacing:2px;">🗿 PERMANENT IMAGE HOST</h1>
+<p style="color:var(--sub);font-size:13.5px;line-height:1.6;">Uploads to <b>Arweave</b> on the project's funded Turbo key — paid once, stored forever.
+Files under 100 KiB are free; bigger ones spend a little Turbo credit. Keep the <b>txid</b>: the link works on any Arweave gateway.</p>
+<input type="file" id="f" style="margin:14px 0;display:block;color:var(--text);">
+<button id="go" style="background:linear-gradient(135deg,var(--gold),var(--orange));border:none;border-radius:10px;padding:12px 18px;font-family:var(--disp);letter-spacing:1.5px;font-size:14px;cursor:pointer;">UPLOAD FOREVER</button>
+<div id="out" style="margin-top:18px;font-family:var(--mono);font-size:13px;line-height:1.7;word-break:break-all;"></div>
+<script>
+const key=new URLSearchParams(location.search).get('key')||'';
+document.getElementById('go').onclick=async()=>{
+  const f=document.getElementById('f').files[0], out=document.getElementById('out');
+  if(!f){out.textContent='Pick a file first.';return;}
+  out.textContent='Uploading '+Math.round(f.size/1024)+' KB\\u2026';
+  try{
+    const r=await fetch('/api/host-image?key='+encodeURIComponent(key),{method:'POST',headers:{'content-type':f.type||'application/octet-stream'},body:f});
+    const d=await r.json();
+    out.innerHTML=d.success
+      ? '\\u2705 Permanent link:<br><a style="color:var(--gold)" href="'+d.url+'" target="_blank" rel="noopener">'+d.url+'</a><br><span style="color:var(--sub)">txid: '+d.txid+' \\u00b7 '+Math.round(d.bytes/1024)+' KB</span>'
+      : '\\u274c '+(d.error||'upload failed');
+  }catch(e){out.textContent='\\u274c '+e.message;}
+};
+</script></body></html>`);
+});
+
 app.get("/api/verify-sol-payment", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const sig = (req.query.sig || "").trim();
