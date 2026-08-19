@@ -14,10 +14,23 @@ const JUPITER_REFERRAL = "A4fSbCMAya9rLWY4incNYaVfhYA9mpCownbFEW3dUZAg";
 // Fire-and-forget learning-funnel event (no PII) — see /api/track + lib/analytics.
 // Lets us see where learners drop off (per-lesson start/complete, school/incubator/
 // challenge/graduation). Never throws, never blocks the UI.
-function track(event){
+// Anonymous per-browser session id — no PII, never leaves this site. It lets the server
+// keep its own record of lesson completions so the graduation claim (diploma cNFT, paid
+// by the treasury) can verify the curriculum was actually walked, not just asserted.
+function sessionId(){
+  try{
+    let s=localStorage.getItem("clkn_sid");
+    if(!s){
+      s=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2);
+      localStorage.setItem("clkn_sid",s);
+    }
+    return s;
+  }catch(_){ return ""; }
+}
+function track(event,extra){
   try{
     var ev=String(event||"").toLowerCase().replace(/[^a-z0-9_:-]/g,"").slice(0,64);
-    if(ev) fetch("/api/track",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({event:ev}),keepalive:true}).catch(function(){});
+    if(ev) fetch("/api/track",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(Object.assign({event:ev,sid:sessionId()},extra||{})),keepalive:true}).catch(function(){});
   }catch(_){}
 }
 const trackId=(prefix,id)=>track(prefix+":"+String(id).toLowerCase().replace(/[^a-z0-9-]/g,"").slice(0,48));
@@ -1639,7 +1652,7 @@ function Complete({onRestart}){
       const res = await fetch("/api/claim", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet: addr, source: "GRADUATION", coursework: readCoursework() })
+        body: JSON.stringify({ wallet: addr, source: "GRADUATION", coursework: readCoursework(), sid: sessionId() })
       });
       const data = await res.json().catch(() => ({}));
       // This used to setClaimed(true) unconditionally — and so did the catch. A 400, a 429,
@@ -1741,6 +1754,20 @@ function Complete({onRestart}){
           <div style={{fontSize:26,marginBottom:4}}>🎓⛓️</div>
           <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:900,color:"#6EE7B7",letterSpacing:1,marginBottom:5}}>DIPLOMA MINTED TO YOUR WALLET</div>
           <p style={{fontSize:11.5,color:"#9CA3AF",lineHeight:1.65,margin:0}}>Your graduation diploma is now an on-chain NFT in your Solana wallet — permanent, verifiable, yours. Open Phantom or Solflare to see it. Earned, not bought. 🐔</p>
+        </div>
+      )}
+
+      {/* Mint deferred (progress gate, daily budget, or a mint hiccup) — the claim itself
+          succeeded and the transcript is saved; a retry re-runs just the mint. Was silent
+          before, which read as "no NFT for you" with no explanation. */}
+      {claimed && nft && !nft.ok && (nft.reason || nft.error) && (
+        <div style={{background:"rgba(255,182,39,0.07)",border:"1px solid rgba(255,182,39,0.35)",borderRadius:10,padding:"14px",marginBottom:12,textAlign:"center"}}>
+          <div style={{fontSize:24,marginBottom:4}}>⏳</div>
+          <div style={{fontFamily:"'Anton',sans-serif",fontSize:14,fontWeight:900,color:"#FFB627",letterSpacing:1,marginBottom:5}}>DIPLOMA MINT PENDING</div>
+          <p style={{fontSize:12.5,color:"#9CA3AF",lineHeight:1.65,margin:"0 0 10px"}}>{nft.reason || nft.error}</p>
+          <button onClick={claimSpot} disabled={claiming} style={{background:"rgba(255,182,39,0.12)",border:"1px solid rgba(255,182,39,0.4)",borderRadius:8,padding:"8px 16px",fontFamily:"'Anton',sans-serif",fontSize:13,fontWeight:700,color:"#FFB627",letterSpacing:1,cursor:claiming?"default":"pointer"}}>
+            {claiming ? "RETRYING..." : "↻ TRY THE MINT AGAIN"}
+          </button>
         </div>
       )}
 
@@ -1882,6 +1909,18 @@ export default function App(){
     try { localStorage.setItem("clkn_completed",JSON.stringify(completed)); }
     catch(e){}
   },[completed]);
+
+  // One-time backfill: lessons finished BEFORE the server-side progression ledger shipped
+  // exist only in localStorage. Replay them once (bf:1) so those learners still pass the
+  // graduation gate — the server grandfathers backfilled marks until its sunset date.
+  useEffect(()=>{
+    try{
+      if(completed.length && !localStorage.getItem("clkn_sid_bf")){
+        localStorage.setItem("clkn_sid_bf","1");
+        completed.forEach(id=>track("lesson_complete:"+String(id).toLowerCase().replace(/[^a-z0-9-]/g,"").slice(0,48),{bf:1}));
+      }
+    }catch(_){}
+  },[]);
 
   function finish(id,passed){
     if(passed&&!completed.includes(id)){
