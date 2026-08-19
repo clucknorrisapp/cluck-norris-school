@@ -715,10 +715,11 @@ function liqTimeout(fn, ms) { if (!LIQ_ENGINE_KILLED) return setTimeout(fn, ms);
 // touches only the POKEAHOE mint, USDC, and wSOL. It must never touch anything else in
 // that wallet — the CLKN brand bag, ROSE, and the rest stay strictly owner-managed.
 //
-// Two-step opt-in (same doctrine as every liquidity actor here): this code does NOTHING
-// until POKE_ENGINE_ON=1 is set in Railway. Unset it (or set 0) to stop on next deploy;
-// /api/whirlpool/vault/pause?project=poke stops it instantly without a deploy.
-const POKE_ENGINE_ON = process.env.POKE_ENGINE_ON === "1";
+// ON BY DEFAULT (owner's explicit go, 2026-08-19: "Why do I need to flip a switch? I am
+// telling you what to do") — deploying this code IS the start. POKE_ENGINE_OFF=1 in
+// Railway is the durable kill; /api/whirlpool/vault/pause?project=poke stops it
+// instantly without a deploy. If MM_OPERATOR_SECRET_TREASURY is unset it no-ops safely.
+const POKE_ENGINE_ON = process.env.POKE_ENGINE_OFF !== "1";
 const POKE_MINT = "HRvw81mktEraX9gZLTHKeYGaFygCSNKuAwNLVE6Tpump";
 function pokeEnsureProject() {
   if (whirlpoolMM.vault.getProject("poke")) return;
@@ -742,7 +743,14 @@ function pokeEnsureProject() {
     solGasReserve: 0.6, solDeployThreshold: 0.25,
     swapEnabled: true, swapSolFloor: 1, usdcFloor: 5, poolBalanceTolPct: 10,
     maxSwapUsdPerCycle: 100, minSwapUsd: 10,
-    askWallEnabled: false, buybackEnabled: false, notifyRolls: false,
+    // Buyback ON (owner grant 2026-08-19: "you can buy back or sell pokeahoe as needed
+    // to maximize pools"). It converts EXCESS free USDC (above floor, after the pools
+    // have absorbed what they can pair) back into POKE — restoring inventory when a
+    // pump converts positions to quote. The reverse (selling POKE) is what the pools'
+    // ask side does continuously; the swap layer never market-dumps the token.
+    buybackEnabled: true, buybackReserveUsd: 0, maxBuybackUsdPerCycle: 100,
+    minBuybackUsd: 10, maxBuybacksPerDay: 24, buybackMinIntervalSec: 900, buybackSlippageBps: 200,
+    askWallEnabled: false, notifyRolls: false,
   }, "poke");
   console.log("[poke] project registered + volume-first config seeded (±1% / 0.01% pools)");
 }
@@ -755,6 +763,9 @@ async function pokeTick() {
     try { await whirlpoolMM.vault.tick({ projectId: "poke" }); } catch (e) { console.warn("[poke] base tick:", e.message); }
     try { await whirlpoolMM.vault.tickSol({ projectId: "poke" }); } catch (e) { console.warn("[poke] sol tick:", e.message); }
     try { await whirlpoolMM.vault.rebalancePools({ projectId: "poke" }); } catch (e) { console.warn("[poke] rebalance:", e.message); }
+    // Last on purpose: the pools absorb free USDC first; buyback only converts what
+    // they genuinely couldn't pair (POKE-poor inventory after a pump).
+    try { await whirlpoolMM.vault.buyback({ projectId: "poke" }); } catch (e) { console.warn("[poke] buyback:", e.message); }
   } finally { pokeTickBusy = false; }
 }
 if (POKE_ENGINE_ON) {
