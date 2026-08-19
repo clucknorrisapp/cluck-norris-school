@@ -762,7 +762,17 @@ function pokeConfigRatchet() {
   // Owner topped the wallet up past the original 3.5 SOL ceiling (2026-08-19, "why so
   // much sol left in the wallet") — raise it so top-ups deploy instead of idling. The
   // engine still only ever deploys free SOL minus solGasReserve.
-  if (c.solMaxSol < 10) whirlpoolMM.vault.setConfig({ solMaxSol: 10 }, "poke");
+  const patch = {};
+  if (c.solMaxSol < 10) patch.solMaxSol = 10;
+  // Equal-pools mandate (owner, 2026-08-19: "make sure the amounts in the poke sol/usdc
+  // are equal to maximize volume in arbitrage"): tighten the equal-pools rebalancer to a
+  // 5% tolerance and give it real conversion capacity — the current inventory is SOL-heavy
+  // (~$585 SOL vs ~$67 USDC), so equalizing needs several $250 SOL→USDC swaps, and the
+  // stock caps ($100/cycle, 8/day) would take days to get there.
+  if (c.poolBalanceTolPct > 5) patch.poolBalanceTolPct = 5;
+  if (c.maxSwapsPerDay < 48) patch.maxSwapsPerDay = 48;
+  if (c.maxSwapUsdPerCycle < 250) patch.maxSwapUsdPerCycle = 250;
+  if (Object.keys(patch).length) whirlpoolMM.vault.setConfig(patch, "poke");
 }
 let pokeTickBusy = false;
 async function pokeTick() {
@@ -771,9 +781,12 @@ async function pokeTick() {
   try {
     pokeEnsureProject();
     pokeConfigRatchet();
+    // Rebalance FIRST (owner's equal-pools mandate): while the two pools are unequal it
+    // converts free SOL↔USDC toward the underweight side BEFORE the deploy ticks absorb
+    // the free inventory — run last, it would never see a free coin to convert.
+    try { await whirlpoolMM.vault.rebalancePools({ projectId: "poke" }); } catch (e) { console.warn("[poke] rebalance:", e.message); }
     try { await whirlpoolMM.vault.tick({ projectId: "poke" }); } catch (e) { console.warn("[poke] base tick:", e.message); }
     try { await whirlpoolMM.vault.tickSol({ projectId: "poke" }); } catch (e) { console.warn("[poke] sol tick:", e.message); }
-    try { await whirlpoolMM.vault.rebalancePools({ projectId: "poke" }); } catch (e) { console.warn("[poke] rebalance:", e.message); }
     // Last on purpose: the pools absorb free USDC first; buyback only converts what
     // they genuinely couldn't pair (POKE-poor inventory after a pump).
     try { await whirlpoolMM.vault.buyback({ projectId: "poke" }); } catch (e) { console.warn("[poke] buyback:", e.message); }
