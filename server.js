@@ -754,12 +754,23 @@ function pokeEnsureProject() {
   }, "poke");
   console.log("[poke] project registered + volume-first config seeded (±1% / 0.01% pools)");
 }
+// Config RATCHET — the seed above runs only once (first registration), so cap raises
+// the owner asks for later ship here as idempotent minimum-bumps. Only ever RAISES a
+// cap to the stated floor; owner tuning above it via the admin endpoint still sticks.
+function pokeConfigRatchet() {
+  const c = whirlpoolMM.vault.getConfig("poke");
+  // Owner topped the wallet up past the original 3.5 SOL ceiling (2026-08-19, "why so
+  // much sol left in the wallet") — raise it so top-ups deploy instead of idling. The
+  // engine still only ever deploys free SOL minus solGasReserve.
+  if (c.solMaxSol < 10) whirlpoolMM.vault.setConfig({ solMaxSol: 10 }, "poke");
+}
 let pokeTickBusy = false;
 async function pokeTick() {
   if (pokeTickBusy) return;   // a slow RPC cycle must not stack a second run
   pokeTickBusy = true;
   try {
     pokeEnsureProject();
+    pokeConfigRatchet();
     try { await whirlpoolMM.vault.tick({ projectId: "poke" }); } catch (e) { console.warn("[poke] base tick:", e.message); }
     try { await whirlpoolMM.vault.tickSol({ projectId: "poke" }); } catch (e) { console.warn("[poke] sol tick:", e.message); }
     try { await whirlpoolMM.vault.rebalancePools({ projectId: "poke" }); } catch (e) { console.warn("[poke] rebalance:", e.message); }
