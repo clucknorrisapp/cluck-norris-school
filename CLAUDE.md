@@ -377,8 +377,14 @@ short-form copy going out to X/Telegram. Haiku paths stay on `claude-haiku-4-5-2
   re-suggest it. The GeckoTerminal listing stays.
 - **Autopsy premium styling** — those sections render off-theme. Leave them visually distinct so
   the tier stands out, or restyle on-brand? Decide deliberately before touching.
-- ⚠️ **Graduation is a pure client assertion**, and each new graduate spends treasury SOL on a
-  cNFT, bounded only by a rate limit and a daily cap. Worth gating before it's promoted anywhere.
+- ✅ **Graduation gate shipped 2026-08-19** (was: pure client assertion → treasury-paid cNFT).
+  `/api/claim` now checks a server-side lesson ledger (`lib/school-progress`, fed by `/api/track`
+  with an anonymous per-browser sid). Runs in **monitor** (log-only) until **2026-09-02**, then
+  auto-enforces; pre-gate learners are grandfathered via localStorage backfill until 2026-09-19.
+  Owner controls: `/api/school/grad-gate?key=…` (mode/thresholds/inspection), `GRAD_GATE_OFF=1`
+  kill. A blocked claim still saves the transcript — it withholds the badge, sheet row, and mint.
+  ⚠️ Before the enforce date, glance at the `[GRAD-GATE] monitor (would block)` log lines /
+  `blockedOrWouldBlock` counter — if legit learners are tripping it, tune before it arms.
 - **Never verified end-to-end:** no rendered autopsy report, no real lock, and no connect-and-sign
   with a real wallet has ever been exercised by a session — they need keys a cloud container
   doesn't have. They're also where the worst bugs have hidden.

@@ -21,6 +21,7 @@ const swapDesk = require("./swap"); // CLKN<->NORMIE swap desk — inert unless 
 const meteora = require("./lib/meteora-dlmm"); // Meteora DLMM read layer (SDK lazy-loaded inside)
 const lpScanner = require("./lib/lp-scanner"); // LP Pair Scanner (Liquidity Lab flagship) — see docs/LP_SCANNER.md
 const diplomaNft = require("./lib/diploma-nft"); // Graduation diploma cNFT minter (Bubblegum, treasury payer)
+const schoolProgress = require("./lib/school-progress"); // Server-side lesson ledger — gates the graduation mint
 const orderbook = require("./lib/orderbook-scanner"); // Cluck Order Book — multi-venue resting-order/wall scanner
 const { fetchBagsContext, classifyTeamActivity } = require("./lib/bags-context");
 const analytics = require("./lib/analytics");
@@ -8515,6 +8516,24 @@ async function rejectNonWallet(addr) {
   return null;
 }
 
+// ── Graduation gate ──────────────────────────────────────────────────────────
+// The graduation door used to be a pure client assertion: a bare POST {wallet} recorded a
+// graduate, joined the airdrop sheet, and minted a treasury-paid cNFT. Now the claim is
+// checked against the server's own lesson ledger (lib/school-progress — fed by /api/track).
+// Modes: off (gate skipped) · monitor (evaluate + log, never block) · enforce (a failed
+// gate still saves the transcript/coursework — the "never lose the transcript" doctrine —
+// but skips the graduation badge, the airdrop-sheet row, and the mint; the learner can
+// simply claim again once their session qualifies). Defaults to monitor until the auto-
+// enforce date so learners mid-course at deploy time backfill naturally; kv gradGateMode
+// overrides in either direction, GRAD_GATE_OFF=1 is the emergency kill.
+const GRAD_GATE_AUTO_ENFORCE = Date.UTC(2026, 8, 2); // 2026-09-02 (month is 0-based)
+function gradGateMode() {
+  if (process.env.GRAD_GATE_OFF === "1") return "off";
+  const m = kv.get("gradGateMode", "");
+  if (m === "off" || m === "monitor" || m === "enforce") return m;
+  return Date.now() >= GRAD_GATE_AUTO_ENFORCE ? "enforce" : "monitor";
+}
+
 app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   const { wallet, coursework } = req.body;
@@ -8522,6 +8541,21 @@ app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async
   const addrProblem = await rejectNonWallet(String(wallet));
   if (addrProblem) return res.status(400).json({ success: false, error: addrProblem });
   try {
+    const sid = String((req.body && req.body.sid) || "").toLowerCase();
+    const gateMode = gradGateMode();
+    let gate = { ok: true, code: "off" };
+    if (gateMode !== "off") {
+      gate = schoolProgress.evaluate(sid, wallet, {
+        requiredLessons: kv.get("gradGateLessons", 12),
+        minAgeMs: (kv.get("gradGateMinAgeMin", 15) || 0) * 60000,
+        minSpreadBuckets: kv.get("gradGateSpreadBuckets", 3),
+      });
+      if (!gate.ok) {
+        kv.set("gradGateBlocks", (kv.get("gradGateBlocks", 0) || 0) + 1);
+        console.warn(`[GRAD-GATE] ${gateMode}${gateMode === "monitor" ? " (would block)" : ""} ${gate.code} sid=${sid ? sid.slice(0, 8) + "…" : "none"} wallet=${wallet.slice(0, 6)}… — ${gate.detail}`);
+      }
+    }
+    const gateBlocked = gateMode === "enforce" && !gate.ok;
     // GRADUATION is now the ONLY door — the exam that used to mint diplomas is gone.
     //
     // The client's `score`/`total`/`pct` are deliberately NOT read anymore. They used to flow
@@ -8553,9 +8587,11 @@ app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async
     // double-submits on 2026-07-29 (and the CLKN mint landing on the graduate list).
     let exists = false;
     try {
-      const rows = await getSheetRows();
+      // A gate-blocked claim never joins the airdrop list — the sheet is the reward
+      // queue, and polluting it is half of what the gate exists to stop.
+      const rows = gateBlocked ? [] : await getSheetRows();
       exists = rows.some(row => row[0] === wallet);
-      if (!exists) {
+      if (!exists && !gateBlocked) {
         const date = new Date().toISOString();
         await appendToSheet([wallet, effScore, effTotal, effPct, date, holderStatus, balance, source || "CHALLENGE"]);
         console.log(`[WIN] New claim: ${wallet} -- CLKN Holder: ${holderStatus} (${balance})`);
@@ -8578,7 +8614,10 @@ app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async
     // Always update the permanent transcript store (merges challenge + graduation
     // badges), even on a repeat claim — that's how a second door adds to an
     // existing record. Returns the slug so the client can link the transcript.
-    const kind = source === "GRADUATION" ? "graduation" : "challenge";
+    // A gate-blocked claim records coursework + holder status but NOT the graduation
+    // badge (kind null sets neither badge in credentials.record) — public graduate
+    // counts must not be inflatable by a bare curl. A later passing claim adds it.
+    const kind = gateBlocked ? null : (source === "GRADUATION" ? "graduation" : "challenge");
     const rec = credentials.record(wallet, { kind, score: effScore, total: effTotal, pct: effPct, verified, isHolder, balance, coursework });
     // Graduating the FULL curriculum earns the on-chain diploma NFT (not the Ultimate
     // Challenge). Best-effort: a mint hiccup never fails the claim — the record is saved.
@@ -8590,6 +8629,9 @@ app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async
     // so the budget is only consumed by genuinely NEW graduates. Re-mints of an existing
     // wallet don't count.
     let nft = null;
+    if (gateBlocked) {
+      nft = { ok: false, reason: "Diploma mint pending — we couldn't verify your course progress from this browser yet. Your transcript is saved. Give it a few more minutes (or revisit a lesson) and try again." };
+    }
     if (kind === "graduation") {
       const already = (kv.get(diplomaNft.MINTED_KV, {}) || {})[wallet];
       if (already) {
@@ -8617,6 +8659,9 @@ app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async
           } catch (e) { release(); nft = { ok: false, error: publicErrMsg(e) }; }
         }
       }
+      // Close this browser session to other wallets once a mint lands — a second
+      // wallet minting off the same session is a farm signature, not a household.
+      if (nft && nft.ok && sid) schoolProgress.bindWallet(sid, wallet);
     }
     return res.status(200).json({
       success: true, isHolder, balance, verified,
@@ -8626,6 +8671,40 @@ app.post("/api/claim", rateLimit("claim", { windowMs: 3600000, max: 10 }), async
     console.error("Claim error:", err.message);
     return res.status(500).json({ success: false, error: publicErrMsg(err) });
   }
+});
+
+// Admin — graduation-gate status + controls. No params = status. ?mode=off|monitor|enforce
+// pins the mode (mode= empty string clears the pin back to auto: monitor until the
+// auto-enforce date, then enforce). ?lessons= / ?minAge= (minutes) / ?buckets= tune the
+// thresholds. ?sid=<id> inspects one session's ledger.
+app.get("/api/school/grad-gate", (req, res) => {
+  if (!adminAuthOK(req)) return res.status(404).json({ success: false, error: "not found" });
+  const q = req.query;
+  if (q.mode !== undefined) {
+    const m = String(q.mode);
+    if (!["off", "monitor", "enforce", ""].includes(m)) return res.status(400).json({ success: false, error: "mode must be off|monitor|enforce (empty = auto)" });
+    kv.set("gradGateMode", m);
+  }
+  for (const [param, key] of [["lessons", "gradGateLessons"], ["minAge", "gradGateMinAgeMin"], ["buckets", "gradGateSpreadBuckets"]]) {
+    if (q[param] !== undefined) {
+      const n = Number(q[param]);
+      if (!Number.isFinite(n) || n < 0) return res.status(400).json({ success: false, error: `${param} must be a non-negative number` });
+      kv.set(key, n);
+    }
+  }
+  const out = {
+    success: true,
+    mode: gradGateMode(),
+    modePinned: kv.get("gradGateMode", "") || null,     // null = auto (date-based)
+    autoEnforceAt: new Date(GRAD_GATE_AUTO_ENFORCE).toISOString().slice(0, 10),
+    requiredLessons: kv.get("gradGateLessons", 12),
+    minAgeMin: kv.get("gradGateMinAgeMin", 15),
+    spreadBuckets: kv.get("gradGateSpreadBuckets", 3),
+    blockedOrWouldBlock: kv.get("gradGateBlocks", 0),
+    ...schoolProgress.summary(),
+  };
+  if (q.sid) out.sid = schoolProgress.statusFor(String(q.sid)) || { error: "no such session" };
+  return res.status(200).json(out);
 });
 
 // -- Public credential transcript: JSON by slug or raw wallet (hybrid lookup) --
@@ -11666,7 +11745,16 @@ app.get("/api/helius-usage", (req, res) => {
 // see where learners drop off. Validated + capped in analytics.trackFunnel.
 app.post("/api/track", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  try { const ev = req.body && req.body.event; if (ev) analytics.trackFunnel(ev); } catch (_) {}
+  try {
+    const b = req.body || {};
+    if (b.event) analytics.trackFunnel(b.event);
+    // Graduation-gate ledger: lesson completions also carry an anonymous per-browser
+    // session id so /api/claim can verify the curriculum was actually walked (see
+    // lib/school-progress). bf=1 marks a one-time replay of pre-gate localStorage
+    // progress (grandfathering — sunset lives in the lib).
+    const m = /^lesson_complete:([a-z0-9-]{1,48})$/.exec(String(b.event || "").toLowerCase());
+    if (m && b.sid) schoolProgress.mark(b.sid, m[1], { backfill: b.bf === 1 || b.bf === "1" });
+  } catch (_) {}
   return res.status(204).end();
 });
 app.get("/bags", (req, res) => {
