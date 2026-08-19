@@ -700,6 +700,79 @@ const TOOL_SPOTLIGHT_ENABLED = false;
 const LIQ_ENGINE_KILLED = true;
 function liqInterval(fn, ms) { if (!LIQ_ENGINE_KILLED) return setInterval(fn, ms); }
 function liqTimeout(fn, ms) { if (!LIQ_ENGINE_KILLED) return setTimeout(fn, ms); }
+
+// ── POKEAHOE (POKE) engine — owner ask 2026-08-19 ────────────────────────────
+// A SCOPED autonomous vault scheduler for the "poke" project ONLY. Deliberately
+// independent of LIQ_ENGINE_KILLED above: that master kill protects the owner-managed
+// CLKN + treasury positions and stays exactly as it is — do NOT route this through
+// liqInterval, and do NOT widen this block to other projects without an owner ask.
+//
+// What it runs: the two Orca 0.01% POKEAHOE pools (POKE/USDC + POKE/SOL) at ±1%,
+// recentering early and often — the owner's explicit brief is VOLUME, crystallized IL
+// accepted ("I don't care about crystallized impermanent loss, looking to make volume").
+// It signs with MM_OPERATOR_SECRET_TREASURY (owner's explicit call 2026-08-19 — the same
+// wallet already pays diploma mints), and by project scoping every instruction it builds
+// touches only the POKEAHOE mint, USDC, and wSOL. It must never touch anything else in
+// that wallet — the CLKN brand bag, ROSE, and the rest stay strictly owner-managed.
+//
+// ON BY DEFAULT (owner's explicit go, 2026-08-19: "Why do I need to flip a switch? I am
+// telling you what to do") — deploying this code IS the start. POKE_ENGINE_OFF=1 in
+// Railway is the durable kill; /api/whirlpool/vault/pause?project=poke stops it
+// instantly without a deploy. If MM_OPERATOR_SECRET_TREASURY is unset it no-ops safely.
+const POKE_ENGINE_ON = process.env.POKE_ENGINE_OFF !== "1";
+const POKE_MINT = "HRvw81mktEraX9gZLTHKeYGaFygCSNKuAwNLVE6Tpump";
+function pokeEnsureProject() {
+  if (whirlpoolMM.vault.getProject("poke")) return;
+  whirlpoolMM.vault.registerProject({
+    id: "poke", label: "Pokeahoe", symbol: "POKEAHOE",
+    tokenMint: POKE_MINT,
+    quoteMints: ["EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "So11111111111111111111111111111111111111112"],
+    venue: "orca", operatorEnv: "MM_OPERATOR_SECRET_TREASURY",
+  });
+  // Volume-first config, seeded ONCE at first registration — later owner tuning via
+  // /api/whirlpool/vault/config?project=poke sticks (this path never runs again while
+  // the project exists). ±1% both pools, 5-min recenter floor, wall/buyback off.
+  whirlpoolMM.vault.setConfig({
+    pair: "POKEAHOE/USDC",
+    // maxUsd is a safety ceiling, not a target — the owner is topping the wallet up with
+    // more USDC, and the base recenter absorbs new free USDC automatically (above
+    // baseDeployThresholdUsd), so the cap is set high enough to never strand a deposit.
+    feeTierPct: 0.01, widthPct: 1, edgeTriggerFrac: 0.3, deployFrac: 0.95, maxUsd: 500,
+    minRebalanceIntervalSec: 300, maxActionsPerDay: 96, slippageBps: 150,
+    solEnabled: true, solFeeTierPct: 0.01, solWidthPct: 1, solMaxSol: 3.5,
+    solGasReserve: 0.6, solDeployThreshold: 0.25,
+    swapEnabled: true, swapSolFloor: 1, usdcFloor: 5, poolBalanceTolPct: 10,
+    maxSwapUsdPerCycle: 100, minSwapUsd: 10,
+    // Buyback ON (owner grant 2026-08-19: "you can buy back or sell pokeahoe as needed
+    // to maximize pools"). It converts EXCESS free USDC (above floor, after the pools
+    // have absorbed what they can pair) back into POKE — restoring inventory when a
+    // pump converts positions to quote. The reverse (selling POKE) is what the pools'
+    // ask side does continuously; the swap layer never market-dumps the token.
+    buybackEnabled: true, buybackReserveUsd: 0, maxBuybackUsdPerCycle: 100,
+    minBuybackUsd: 10, maxBuybacksPerDay: 24, buybackMinIntervalSec: 900, buybackSlippageBps: 200,
+    askWallEnabled: false, notifyRolls: false,
+  }, "poke");
+  console.log("[poke] project registered + volume-first config seeded (±1% / 0.01% pools)");
+}
+let pokeTickBusy = false;
+async function pokeTick() {
+  if (pokeTickBusy) return;   // a slow RPC cycle must not stack a second run
+  pokeTickBusy = true;
+  try {
+    pokeEnsureProject();
+    try { await whirlpoolMM.vault.tick({ projectId: "poke" }); } catch (e) { console.warn("[poke] base tick:", e.message); }
+    try { await whirlpoolMM.vault.tickSol({ projectId: "poke" }); } catch (e) { console.warn("[poke] sol tick:", e.message); }
+    try { await whirlpoolMM.vault.rebalancePools({ projectId: "poke" }); } catch (e) { console.warn("[poke] rebalance:", e.message); }
+    // Last on purpose: the pools absorb free USDC first; buyback only converts what
+    // they genuinely couldn't pair (POKE-poor inventory after a pump).
+    try { await whirlpoolMM.vault.buyback({ projectId: "poke" }); } catch (e) { console.warn("[poke] buyback:", e.message); }
+  } finally { pokeTickBusy = false; }
+}
+if (POKE_ENGINE_ON) {
+  console.log("[poke] POKEAHOE engine ON — ±1% Orca pools (POKE/USDC + POKE/SOL), 2-min cadence");
+  setInterval(() => pokeTick().catch((e) => console.warn("[poke] tick:", e.message)), 120000);
+  setTimeout(() => pokeTick().catch((e) => console.warn("[poke] first tick:", e.message)), 20000);
+}
 // 1×/day (owner's call 2026-06-20 — was 3×/day): ONE full lesson at 13:00 UTC
 // (8am CT), then amplified by lessonBumpTick (self-replies at later slots tagging
 // different ecosystem groups) instead of posting more new lessons. Odd hour so it
