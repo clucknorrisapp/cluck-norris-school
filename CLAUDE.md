@@ -154,6 +154,14 @@ The owner manages all liquidity positions **manually**. Read freely; touch nothi
 
 - ⛔ **WATCH-ONLY.** Don't rebalance, recenter, close, redeploy, add/remove liquidity, or
   buy/sell CLKN. Don't "take over." Observe and log.
+- **ONE carve-out (owner, 2026-08-19): POKEAHOE.** The scoped `poke` engine in server.js
+  (`POKE_ENGINE_ON=1`) autonomously runs the two Orca 0.01% POKEAHOE pools at ±1% for VOLUME —
+  crystallized IL explicitly accepted. It signs with `MM_OPERATOR_SECRET_TREASURY` (owner's
+  explicit call, overriding the "operator ≠ treasury" preference for this project) and may touch
+  **POKEAHOE, USDC, and SOL only** — the brand bag, ROSE, and everything else in that wallet stay
+  under the watch-only rule above. It is deliberately independent of `LIQ_ENGINE_KILLED`; do not
+  widen it to other projects or route other projects around the master kill without an owner ask.
+  Instant stop: `/api/whirlpool/vault/pause?project=poke`; durable stop: unset `POKE_ENGINE_ON`.
 - ⛔ **The brand bag is NEVER sold.** And **never buy CLKN with operator funds** without asking in
   that moment (owner rule, after unwanted inventory buys).
 - ⛔ **The autonomous rebalancer is hard-killed in code** (`JUP_AUTO_REBALANCE_KILLED = true`).
@@ -324,7 +332,8 @@ Claude-web environment config. Names: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, 
 autonomous vault is fully off, a safe no-op — use a wallet holding only the MM float, never the
 treasury or a mint authority).
 
-Optional, all safe unset: `FALLBACK_RPC_URL`, `HELIUS_API_KEY_2`, `RPC_DEBUG`, `JUPITER_API_KEY`,
+Optional, all safe unset: `POKE_ENGINE_ON` (=1 arms the scoped POKEAHOE vault scheduler — see
+the Money section), `FALLBACK_RPC_URL`, `HELIUS_API_KEY_2`, `RPC_DEBUG`, `JUPITER_API_KEY`,
 and the ElevenLabs TTS set (`ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_MODEL`,
 `TTS_DAILY_CHAR_CAP`) — unset means read-aloud falls back to the free browser voice.
 
