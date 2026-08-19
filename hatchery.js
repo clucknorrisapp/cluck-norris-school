@@ -670,4 +670,15 @@ router.post("/minted", async (req, res) => {
   }
 });
 
-module.exports = { router, uploadMetadata, buildMintTransaction };
+// Generic permanent-image upload on the same funded signer — used by the owner's
+// /host-image tool in server.js. Returns { url, txid }. Same free-under-100KiB /
+// credits-above economics as the metadata path.
+async function uploadPublicFile(buffer, contentType) {
+  const key = process.env.HATCHERY_TURBO_KEY;
+  if (!key) throw new Error("Uploads are not configured (HATCHERY_TURBO_KEY missing)");
+  const signer = new SolanaSigner(key);
+  const url = await arweaveUpload(signer, buffer, contentType);
+  return { url, txid: url.split("/").pop() };
+}
+
+module.exports = { router, uploadMetadata, buildMintTransaction, uploadPublicFile };
