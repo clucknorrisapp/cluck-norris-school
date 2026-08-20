@@ -1081,6 +1081,91 @@ async function postLockToX(data, deltaTokens) {
     `Built on @BagsApp 🐔`;
   return postToX(text, { force: true });
 }
+// Project-burn celebration — owner's call 2026-08-20 ("project burns are celebrations",
+// "auto-broadcast every burn"). Mirrors the lock-celebration flow: X FIRST (force-bypassing
+// the master X pause for this post only, same scoped carve-out as locks), then Telegram to
+// the public community chat with the X link. Fired from /api/burn-receipt AFTER the burn is
+// on-chain-verified, so only real burns ever post.
+//
+// AUTO-BROADCAST HARDENING (this posts attacker-supplied token data to OUR brand channels):
+//  • the token SYMBOL is sanitized to [A-Za-z0-9] and capped — a token named
+//    "@someone 🔗scam.link\n" can't inject a mention/URL/newline into our tweet, and the
+//    free-form NAME is never posted.
+//  • a per-(wallet,mint) cooldown + a global hourly cap stop a griefer spamming our X into a
+//    rate-limit/suspension with dust burns. A skipped broadcast never blocks the burn or the
+//    burner's own receipt/share; if the hourly cap trips it pings the operator chat (not silent
+//    failure, per the house rule).
+const BURN_BROADCAST_HOURLY_CAP = 12;
+const BURN_BROADCAST_COOLDOWN_MS = 10 * 60 * 1000;
+function burnSymbolSafe(sym) {
+  const s = String(sym || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 12);
+  return s || "TOKEN";
+}
+async function broadcastBurnCelebration(receipt) {
+  try {
+    // anti-spam: per-(wallet,mint) cooldown + global hourly cap (kv-backed, survives redeploys)
+    const now = Date.now();
+    const gate = kv.get("burnBroadcastGate", { hourStamp: 0, hourCount: 0, last: {} }) || { hourStamp: 0, hourCount: 0, last: {} };
+    const hour = Math.floor(now / 3600000);
+    if (gate.hourStamp !== hour) { gate.hourStamp = hour; gate.hourCount = 0; }
+    const key = `${receipt.wallet}:${receipt.mint}`;
+    if (gate.last[key] && now - gate.last[key] < BURN_BROADCAST_COOLDOWN_MS) {
+      console.warn(`[burn-celebrate] cooldown skip ${key.slice(0, 12)}…`);
+      return { skipped: "cooldown" };
+    }
+    if (gate.hourCount >= BURN_BROADCAST_HOURLY_CAP) {
+      console.warn(`[burn-celebrate] hourly cap ${BURN_BROADCAST_HOURLY_CAP} hit — skipping`);
+      const chat = process.env.TELEGRAM_CHAT_ID;
+      if (chat && process.env.TELEGRAM_BOT_TOKEN && !gate.capAlerted) {
+        tgSend(chat, `⚠️ Project-burn auto-broadcast hit its hourly cap (${BURN_BROADCAST_HOURLY_CAP}). Extra burns still get receipts; they just aren't auto-posting this hour.`, null, { silent: true }).catch(() => {});
+        gate.capAlerted = true;
+      }
+      kv.set("burnBroadcastGate", gate);
+      return { skipped: "hourly-cap" };
+    }
+    gate.hourCount++; gate.last[key] = now; gate.capAlerted = false;
+    // prune old cooldown entries so the map can't grow unbounded
+    for (const k of Object.keys(gate.last)) if (now - gate.last[k] > 3 * BURN_BROADCAST_COOLDOWN_MS) delete gate.last[k];
+    kv.set("burnBroadcastGate", gate);
+
+    const sym = burnSymbolSafe(receipt.symbol);
+    const amt = fmtTokensShort(receipt.burned);
+    const pct = receipt.pctSupply != null ? (receipt.pctSupply < 0.01 ? "<0.01%" : receipt.pctSupply.toFixed(receipt.pctSupply < 1 ? 2 : 2) + "%") : null;
+    const usd = receipt.usdValue != null && receipt.usdValue >= 0.01 ? `$${receipt.usdValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : null;
+    const url = `https://clucknorris.app/burn/${receipt.sig}`;
+    // X post (force carve-out). URL not a bare CA → dodges the post-auth raw-CA 403.
+    const xText =
+      `🔥 ${amt} $${sym} just got burned forever${pct ? ` — ${pct} of supply` : ""}.\n\n` +
+      `${usd ? usd + " " : ""}permanently destroyed on Solana, verified on-chain. Burned free & non-custodially 🐔\n\n` +
+      `Receipt 👉 ${url}`;
+    const xres = await postToX(xText, { force: true });
+    // Telegram to the PUBLIC community chat (celebration). Not silent — a celebration should
+    // ping. Preview ON so the receipt card renders. Include the X link if the tweet landed.
+    const chat = process.env.TELEGRAM_CHAT_ID, token = process.env.TELEGRAM_BOT_TOKEN;
+    if (chat && token) {
+      const xLink = xres && xres.ok && xres.id ? `\n\n𝕏 → https://x.com/i/status/${xres.id}` : "";
+      const tgText =
+        `🔥 <b>${amt} $${tgEsc(sym)} burned forever</b>${pct ? ` — <b>${pct}</b> of supply` : ""}\n` +
+        `${usd ? usd + " destroyed · " : ""}verified on-chain. 🐔\n\n` +
+        `🧾 Receipt → ${url}${xLink}`;
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chat, text: tgText, parse_mode: "HTML", disable_web_page_preview: false }),
+      }).catch(() => {});
+    }
+    // Per the house rule: if the X carve-out failed for a real reason (not the pause), alert
+    // the operator chat rather than failing silently.
+    if (xres && !xres.ok && !xres.paused && !xres.skipped) {
+      const opchat = process.env.TELEGRAM_CHAT_ID;
+      if (opchat && token) tgSend(opchat, `⚠️ Burn celebration X post failed (${xres.status || xres.error || "?"}) for ${amt} $${tgEsc(sym)}. Receipt: ${url}`, null, { silent: true }).catch(() => {});
+    }
+    return { xPosted: !!(xres && xres.ok), xId: xres && xres.id };
+  } catch (e) {
+    console.warn("[burn-celebrate] error:", e.message);
+    return { error: e.message };
+  }
+}
+
 // Tweet-length (≤280) version of a lesson on the given topic, for X.
 async function generateEduTweet(topic) {
   const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
@@ -11573,6 +11658,10 @@ app.post("/api/burn-receipt", rateLimit("track", { windowMs: 60000, max: 20 }), 
     const keysByAge = Object.keys(store).sort((x, y) => (store[y].at || 0) - (store[x].at || 0));
     if (keysByAge.length > 5000) for (const k of keysByAge.slice(5000)) delete store[k];
     kv.set("burnReceipts", store);
+    // Celebrate — every verified burn auto-broadcasts (owner's call). Fire-and-forget so the
+    // response never waits on X/Telegram; the `already` guard above means a re-POST of the
+    // same signature won't double-post.
+    broadcastBurnCelebration(receipt).catch(() => {});
     return res.status(200).json({ success: true, receipt });
   } catch (e) {
     return res.status(500).json({ success: false, error: publicErrMsg(e) });

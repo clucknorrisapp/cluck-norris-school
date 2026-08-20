@@ -234,7 +234,12 @@ missing file now fails loudly instead of being served the React shell at 200.
   check when "the bot isn't doing X."
 - **`X_AUTOPOST_PAUSED=true` hard-gates `postToX`.** A new auto-poster that doesn't pass
   `{force:true}` posts nothing and reports `{ok:false,paused:true}`. Carve-outs need an owner ask,
-  and must alert the operator chat on failure rather than failing silently.
+  and must alert the operator chat on failure rather than failing silently. **Two carve-outs exist:**
+  lock announcements (`postLockToX`) and **project-burn celebrations** (`broadcastBurnCelebration`,
+  owner 2026-08-20 — every verified burn auto-posts X-then-Telegram). ⚠️ The burn broadcaster posts
+  **attacker-supplied token metadata** to the brand channels, so it hard-sanitizes the symbol to
+  `[A-Za-z0-9]` (never the free-form name) and rate-limits itself (per-wallet/mint cooldown + hourly
+  cap) so a griefer can't spam our X into a suspension. Don't loosen either without thinking it through.
 - **A Telegram post with an image gets 1024 characters, not 4096** — and our own code silently
   truncates at 1024 while returning success. Count the caption; put load-bearing lines (the X
   link, a CTA) where truncation can't eat them. Recover with `&replaceMsg=<oldId>`.
