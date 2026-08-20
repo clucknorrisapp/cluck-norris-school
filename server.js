@@ -721,12 +721,17 @@ function liqTimeout(fn, ms) { if (!LIQ_ENGINE_KILLED) return setTimeout(fn, ms);
 // instantly without a deploy. If MM_OPERATOR_SECRET_TREASURY is unset it no-ops safely.
 const POKE_ENGINE_ON = process.env.POKE_ENGINE_OFF !== "1";
 const POKE_MINT = "HRvw81mktEraX9gZLTHKeYGaFygCSNKuAwNLVE6Tpump";
+const POKE_QUOTES = [
+  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",  // USDC
+  "So11111111111111111111111111111111111111112",   // wSOL
+  "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",   // JUP (third pool, owner 2026-08-20)
+];
 function pokeEnsureProject() {
   if (whirlpoolMM.vault.getProject("poke")) return;
   whirlpoolMM.vault.registerProject({
     id: "poke", label: "Pokeahoe", symbol: "POKEAHOE",
-    tokenMint: POKE_MINT,
-    quoteMints: ["EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "So11111111111111111111111111111111111111112"],
+    tokenMint: POKE_MINT, decimals: 6,               // pump.fun mint — NOT the 9-decimal default
+    quoteMints: POKE_QUOTES,
     venue: "orca", operatorEnv: "MM_OPERATOR_SECRET_TREASURY",
   });
   // Volume-first config, seeded ONCE at first registration — later owner tuning via
@@ -772,6 +777,11 @@ function pokeConfigRatchet() {
   if (c.poolBalanceTolPct > 5) patch.poolBalanceTolPct = 5;
   if (c.maxSwapsPerDay < 48) patch.maxSwapsPerDay = 48;
   if (c.maxSwapUsdPerCycle < 250) patch.maxSwapUsdPerCycle = 250;
+  // Third pool (owner, 2026-08-20: "we need to add poke/jupiter pool as well, we are not
+  // getting the type of transactions we want"): POKEAHOE/JUP 0.01% at ±1%, created as
+  // H5WXSBJmY1uCr5EbVnJRxsiquKRKVAsP2pQBPMKJbRhM. Allocation is now POKE = half of total,
+  // SOL/USDC/JUP a sixth each — three even pools, each half-POKE.
+  if (!c.jupEnabled) { patch.jupEnabled = true; patch.jupFeeTierPct = 0.01; patch.jupWidthPct = 1; patch.jupMaxJup = 99999; patch.jupDeployThreshold = 5; }
   if (Object.keys(patch).length) whirlpoolMM.vault.setConfig(patch, "poke");
   // Alerts must NEVER hit the public community chat (the TELEGRAM_CHAT_ID fallback —
   // on 2026-08-20 one ops overview briefly landed there and had to be deleted). Bind
@@ -781,14 +791,18 @@ function pokeConfigRatchet() {
   // this update would silently disarm the engine (MM_OPERATOR_SECRET_POKE is unset).
   const proj = whirlpoolMM.vault.getProject("poke");
   const tre = whirlpoolMM.vault.getProject("treasury");
-  if (proj && !proj.telegramChatId && tre && tre.telegramChatId) {
+  const needsChat = proj && !proj.telegramChatId && tre && tre.telegramChatId;
+  // Registered before decimals/JUP existed? Re-register with the full record (decimals 6
+  // fixes the 1000x project-token scaling in manualSwap; JUP quote enables the third pool).
+  const needsShape = proj && (Number(proj.decimals) !== 6 || !(proj.quoteMints || []).includes(POKE_QUOTES[2]));
+  if (needsChat || needsShape) {
     whirlpoolMM.vault.registerProject({
       id: "poke", label: proj.label, symbol: proj.symbol, tokenMint: proj.tokenMint,
-      quoteMints: proj.quoteMints, venue: proj.venue, operatorEnv: proj.operatorEnv,
-      telegramChatId: tre.telegramChatId,
+      decimals: 6, quoteMints: POKE_QUOTES, venue: proj.venue, operatorEnv: proj.operatorEnv,
+      telegramChatId: proj.telegramChatId || (tre && tre.telegramChatId) || null,
     });
-    whirlpoolMM.vault.setConfig({ notifyRolls: true }, "poke");
-    console.log("[poke] alerts bound to the private treasury ops chat; roll notifications ON");
+    if (needsChat) whirlpoolMM.vault.setConfig({ notifyRolls: true }, "poke");
+    console.log(`[poke] project record updated (${needsChat ? "chat bound; roll alerts ON; " : ""}decimals 6; JUP quote)`);
   }
 }
 let pokeTickBusy = false;
@@ -804,6 +818,7 @@ async function pokeTick() {
     try { await whirlpoolMM.vault.rebalancePools({ projectId: "poke" }); } catch (e) { console.warn("[poke] rebalance:", e.message); }
     try { await whirlpoolMM.vault.tick({ projectId: "poke" }); } catch (e) { console.warn("[poke] base tick:", e.message); }
     try { await whirlpoolMM.vault.tickSol({ projectId: "poke" }); } catch (e) { console.warn("[poke] sol tick:", e.message); }
+    try { await whirlpoolMM.vault.tickJup({ projectId: "poke" }); } catch (e) { console.warn("[poke] jup tick:", e.message); }
     // Last on purpose: the pools absorb free USDC first; buyback only converts what
     // they genuinely couldn't pair (POKE-poor inventory after a pump).
     try { await whirlpoolMM.vault.buyback({ projectId: "poke" }); } catch (e) { console.warn("[poke] buyback:", e.message); }
