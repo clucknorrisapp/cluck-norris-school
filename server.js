@@ -773,6 +773,23 @@ function pokeConfigRatchet() {
   if (c.maxSwapsPerDay < 48) patch.maxSwapsPerDay = 48;
   if (c.maxSwapUsdPerCycle < 250) patch.maxSwapUsdPerCycle = 250;
   if (Object.keys(patch).length) whirlpoolMM.vault.setConfig(patch, "poke");
+  // Alerts must NEVER hit the public community chat (the TELEGRAM_CHAT_ID fallback —
+  // on 2026-08-20 one ops overview briefly landed there and had to be deleted). Bind
+  // poke to the treasury project's PRIVATE ops room, then turn per-roll notifications
+  // on: full visibility, right room. registerProject is register-AND-update, and it
+  // RESETS operatorEnv to the id-derived default when omitted — pass it explicitly or
+  // this update would silently disarm the engine (MM_OPERATOR_SECRET_POKE is unset).
+  const proj = whirlpoolMM.vault.getProject("poke");
+  const tre = whirlpoolMM.vault.getProject("treasury");
+  if (proj && !proj.telegramChatId && tre && tre.telegramChatId) {
+    whirlpoolMM.vault.registerProject({
+      id: "poke", label: proj.label, symbol: proj.symbol, tokenMint: proj.tokenMint,
+      quoteMints: proj.quoteMints, venue: proj.venue, operatorEnv: proj.operatorEnv,
+      telegramChatId: tre.telegramChatId,
+    });
+    whirlpoolMM.vault.setConfig({ notifyRolls: true }, "poke");
+    console.log("[poke] alerts bound to the private treasury ops chat; roll notifications ON");
+  }
 }
 let pokeTickBusy = false;
 async function pokeTick() {
