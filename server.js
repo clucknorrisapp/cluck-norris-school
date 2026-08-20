@@ -11668,6 +11668,62 @@ app.post("/api/burn-receipt", rateLimit("track", { windowMs: 60000, max: 20 }), 
   }
 });
 
+// ── Airdrop intake — self-collecting address list, so a viral promo doesn't mean
+// scraping X replies by hand. A recipient pastes their Solana address; the server
+// validates it on-chain (the SAME rejectNonWallet used by graduation claims — rejects
+// mints, token accounts, programs, exchange/service addresses, malformed), dedupes, and
+// stores it under a campaign id. The owner exports a clean CSV, airdropper-ready.
+app.use("/api/airdrop-collect", rateLimit("track", { windowMs: 60000, max: 20 }));
+const AIRDROP_CAMPAIGN_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
+function airdropKey(campaign) { return `airdropSignups:${campaign}`; }
+app.get("/airdrop-signup", (req, res) => res.sendFile(join(__dirname, "public", "airdrop-signup.html")));
+app.get("/drop", (req, res) => res.sendFile(join(__dirname, "public", "airdrop-signup.html")));
+
+// POST { address, handle?, campaign? } — validate + dedupe + store. GET (admin-gated,
+// ?key=…&c=<campaign>&export=csv|json) — export the collected list; without export it
+// returns just the public count so the page can show "N wallets registered".
+app.post("/api/airdrop-collect", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  const b = req.body || {};
+  const campaign = String(b.campaign || "airdrop").toLowerCase();
+  if (!AIRDROP_CAMPAIGN_RE.test(campaign)) return res.status(400).json({ success: false, error: "Bad campaign id." });
+  const address = String(b.address || "").trim();
+  if (!SOL_ADDR_RE.test(address)) return res.status(400).json({ success: false, error: "That doesn't look like a Solana address — paste it again from your wallet." });
+  // Same on-chain guard as /api/claim: reject a mint / token account / program / exchange
+  // address so the owner never airdrops into a black hole. Fails open on an RPC blip.
+  const problem = await rejectNonWallet(address);
+  if (problem) return res.status(400).json({ success: false, error: problem });
+  const handle = String(b.handle || "").replace(/^@+/, "").replace(/[^A-Za-z0-9_]/g, "").slice(0, 15) || null;
+  try {
+    const store = kv.get(airdropKey(campaign), {}) || {};
+    if (store[address]) return res.status(200).json({ success: true, already: true, count: Object.keys(store).length, message: "You're already on the list — one entry per wallet. 🐔" });
+    if (Object.keys(store).length >= 100000) return res.status(200).json({ success: false, error: "This airdrop list is full." });
+    store[address] = { handle, at: Date.now() };
+    kv.set(airdropKey(campaign), store);
+    return res.status(200).json({ success: true, count: Object.keys(store).length, message: "You're in! Your wallet is on the airdrop list. 🐔🔥" });
+  } catch (e) {
+    return res.status(500).json({ success: false, error: publicErrMsg(e) });
+  }
+});
+app.get("/api/airdrop-collect", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const campaign = String(req.query.c || "airdrop").toLowerCase();
+  if (!AIRDROP_CAMPAIGN_RE.test(campaign)) return res.status(400).json({ success: false, error: "Bad campaign id." });
+  const store = kv.get(airdropKey(campaign), {}) || {};
+  const count = Object.keys(store).length;
+  // Public path: just the count (drives the page's live counter). No list without the key.
+  if (!req.query.export && !req.query.key) return res.status(200).json({ success: true, campaign, count });
+  if (!adminAuthOK(req)) return res.status(404).json({ success: false, error: "not found" });
+  const rows = Object.entries(store).sort((a, b) => (a[1].at || 0) - (b[1].at || 0));
+  if (req.query.export === "csv") {
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="airdrop-${campaign}.csv"`);
+    return res.status(200).send("address,handle,submitted_at\n" + rows.map(([a, v]) => `${a},${v.handle || ""},${new Date(v.at || 0).toISOString()}`).join("\n") + "\n");
+  }
+  return res.status(200).json({ success: true, campaign, count, addresses: rows.map(([a, v]) => ({ address: a, handle: v.handle, at: v.at })) });
+});
+
 // Public burn receipt — server-rendered so it carries OG tags for a rich social share.
 app.get("/burn/:sig", (req, res) => {
   const sig = String(req.params.sig || "");

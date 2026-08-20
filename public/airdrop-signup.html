@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>🪂 Get the Airdrop — drop your Solana address</title>
+<meta property="og:title" content="Get the Airdrop — Cluck Norris"/>
+<meta property="og:description" content="Drop your Solana wallet address to get on the airdrop list. Validated on-chain, one entry per wallet."/>
+<meta property="og:image" content="https://clucknorris.app/cluck-norris-logo.jpg"/>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:radial-gradient(1100px 560px at 50% -220px,rgba(255,122,24,.20),transparent 68%),var(--bg);background-attachment:fixed;color:var(--text);font-family:var(--body);min-height:100vh;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:560px;margin:0 auto;padding:26px 16px 90px;}
+  a.back{display:inline-flex;align-items:center;gap:6px;font-family:var(--disp);font-size:12px;font-weight:700;letter-spacing:2px;color:var(--gold);text-decoration:none;margin-bottom:18px;opacity:.85;}
+  .top{text-align:center;margin-bottom:20px;}
+  .top img{width:84px;height:84px;border-radius:50%;border:2.5px solid #FF7A18;object-fit:cover;box-shadow:0 0 26px rgba(255,122,24,.5);}
+  h1{font-family:var(--disp);font-size:34px;line-height:1;letter-spacing:1px;margin:14px 0 8px;background:linear-gradient(92deg,#FFE08A,#FFB627 40%,#FF7A18 80%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+  .sub{font-size:14.5px;color:var(--sub);line-height:1.6;}
+  .card{background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--border);border-radius:16px;padding:20px;margin-top:18px;box-shadow:0 6px 22px rgba(0,0,0,.32);}
+  label.fl{display:block;font-family:var(--disp);font-size:11px;letter-spacing:1.5px;color:var(--sub);margin:0 0 6px;}
+  input.txt{width:100%;background:rgba(0,0,0,.4);border:1px solid var(--border2);border-radius:11px;padding:14px 14px;font-family:var(--mono);font-size:15px;color:var(--text);}
+  input.txt:focus{outline:none;border-color:#FF7A18;}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.5;}
+  .btn{width:100%;margin-top:14px;background:linear-gradient(92deg,#FF9A2E,#FF7A18);border:none;border-radius:12px;padding:15px;font-family:var(--disp);font-size:16px;font-weight:700;letter-spacing:1.5px;color:#fff;cursor:pointer;box-shadow:0 6px 18px rgba(255,122,24,.32);}
+  .btn:disabled{background:rgba(255,255,255,.07);color:var(--muted);box-shadow:none;cursor:not-allowed;}
+  .status{margin-top:14px;font-size:14px;font-family:var(--mono);line-height:1.55;display:none;}
+  .status.show{display:block;} .status.ok{color:#12C98B;} .status.err{color:#FF6A99;}
+  .count{text-align:center;margin-top:16px;font-family:var(--mono);font-size:13px;color:var(--sub);}
+  .count b{color:var(--gold);font-family:var(--disp);font-size:16px;}
+  .done{text-align:center;padding:8px 0;}
+  .done .big{font-size:48px;}
+  .done .h{font-family:var(--disp);font-size:20px;letter-spacing:1px;color:#12C98B;margin:8px 0 6px;}
+  .foot{font-size:12px;color:var(--muted);line-height:1.6;margin-top:18px;text-align:center;}
+  .foot a{color:var(--gold);}
+  .safe{display:flex;gap:8px;align-items:flex-start;font-size:12px;color:var(--sub);line-height:1.5;margin-top:12px;background:rgba(255,255,255,.03);border:1px solid var(--border2);border-radius:10px;padding:10px 12px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/">‹ CLUCK NORRIS</a>
+  <div class="top">
+    <img src="/cluck-norris-logo.jpg" alt="Cluck Norris"/>
+    <h1 id="title">GET THE AIRDROP</h1>
+    <div class="sub" id="subtitle">Drop your Solana wallet address below to get on the list. That's it.</div>
+  </div>
+
+  <div class="card" id="form-card">
+    <label class="fl" for="addr">YOUR SOLANA WALLET ADDRESS</label>
+    <input class="txt" id="addr" autocomplete="off" spellcheck="false" placeholder="Paste your wallet address…"/>
+    <div class="hint">This is where the airdrop is sent — paste your <b>own</b> wallet (Phantom, Solflare…), not an exchange deposit address.</div>
+
+    <label class="fl" for="handle" style="margin-top:14px;">X HANDLE <span style="color:var(--muted);font-weight:400;letter-spacing:0;">(optional)</span></label>
+    <input class="txt" id="handle" autocomplete="off" spellcheck="false" placeholder="@yourhandle"/>
+
+    <button class="btn" id="go" disabled>🪂 GET ON THE LIST</button>
+    <div class="status" id="status"></div>
+    <div class="safe">🛡️ <span>We validate your address <b>on-chain</b> before adding it, so a typo or a wrong (exchange/contract) address can't slip through. One entry per wallet. We never ask you to connect or sign anything.</span></div>
+  </div>
+
+  <div class="card hidden" id="done-card">
+    <div class="done">
+      <div class="big">🐔🔥</div>
+      <div class="h" id="done-h">YOU'RE ON THE LIST</div>
+      <p class="sub" id="done-msg">Your wallet is registered for the airdrop.</p>
+      <div style="margin-top:14px;"><a class="btn" style="display:inline-block;text-decoration:none;width:auto;padding:12px 22px;" href="/">Explore Cluck Norris →</a></div>
+    </div>
+  </div>
+
+  <div class="count" id="count"></div>
+
+  <p class="foot">
+    Free Solana crypto school &amp; honest on-chain tools → <a href="/">clucknorris.app</a><br/>
+    Airdrop terms are set by the project running it; being on the list is not a guarantee of tokens.
+  </p>
+</div>
+
+<script src="/cluck-util.js"></script>
+<script>
+"use strict";
+var $ = function(id){ return document.getElementById(id); };
+var esc = (window.CluckUtil && CluckUtil.esc) || function(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); };
+
+// Campaign from ?c=… (default "airdrop"). Optional ?title= / ?sub= to theme a specific promo.
+var params = new URLSearchParams(location.search);
+var CAMPAIGN = (params.get("c") || "airdrop").toLowerCase().replace(/[^a-z0-9-]/g,"").slice(0,32) || "airdrop";
+if (params.get("title")) $("title").textContent = params.get("title").slice(0,40);
+if (params.get("sub")) $("subtitle").textContent = params.get("sub").slice(0,120);
+
+function setStatus(msg, cls){ var el=$("status"); el.className="status show"+(cls?" "+cls:""); el.innerHTML=msg; }
+function validShape(a){ return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a); }
+
+var addr = $("addr"), handle = $("handle"), go = $("go");
+addr.addEventListener("input", function(){ go.disabled = !validShape(addr.value.trim()); if($("status").classList.contains("err")) $("status").classList.remove("show"); });
+addr.addEventListener("keydown", function(e){ if(e.key==="Enter" && !go.disabled) submit(); });
+handle.addEventListener("keydown", function(e){ if(e.key==="Enter" && !go.disabled) submit(); });
+go.addEventListener("click", submit);
+
+// If this browser already submitted for this campaign, greet them as done.
+try {
+  if (localStorage.getItem("clkn_airdrop_"+CAMPAIGN)){ showDone("YOU'RE ON THE LIST", "Your wallet is already registered for this airdrop. 🐔"); }
+} catch(_){}
+
+async function submit(){
+  var a = addr.value.trim();
+  if (!validShape(a)) { setStatus("That doesn't look like a Solana address — check it and try again.", "err"); return; }
+  go.disabled = true; setStatus("Checking your address on-chain…");
+  try {
+    var r = await fetch("/api/airdrop-collect", {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ address: a, handle: handle.value.trim(), campaign: CAMPAIGN })
+    });
+    var d = await r.json().catch(function(){ return {}; });
+    if (!r.ok || !d.success) { setStatus("⚠️ " + esc(d.error || "Couldn't add that — try again in a moment."), "err"); go.disabled = false; return; }
+    try { localStorage.setItem("clkn_airdrop_"+CAMPAIGN, "1"); } catch(_){}
+    showDone(d.already ? "ALREADY ON THE LIST" : "YOU'RE ON THE LIST", d.message || "Your wallet is registered.");
+    if (d.count) renderCount(d.count);
+  } catch(e){
+    setStatus("Network hiccup — your entry didn't save. Try again in a moment.", "err");
+    go.disabled = false;
+  }
+}
+function showDone(h, msg){
+  $("form-card").classList.add("hidden");
+  $("done-card").classList.remove("hidden");
+  $("done-h").textContent = h;
+  $("done-msg").textContent = msg;
+}
+function renderCount(n){ $("count").innerHTML = "<b>" + Number(n).toLocaleString() + "</b> wallets on the list"; }
+
+// Live count on load.
+fetch("/api/airdrop-collect?c=" + encodeURIComponent(CAMPAIGN)).then(function(r){ return r.json(); }).then(function(d){ if (d && d.count) renderCount(d.count); }).catch(function(){});
+</script>
+<script defer src="/cluck-nav.js"></script>
+</body>
+</html>
