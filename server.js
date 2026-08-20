@@ -7331,6 +7331,159 @@ async function pollRoseBuys() {
   catch (e) { console.warn("[ROSE-BUY] poll cycle error:", e.message); }
 }
 
+// ── Generic multi-project buy bot ────────────────────────────────────────────
+// The ROSE bot above is hardwired to ROSE (owner's first project); this is the
+// project-agnostic version so any project (CUNA, future ones) gets a live buy
+// feed from a per-project config, WITHOUT touching the working ROSE code. Same
+// detection algorithm (pool RELEASES the token AND RECEIVES quote = a real buy),
+// same cursor/dedup/gap-guard discipline, same house rules (armed-off by default,
+// silent posts). Config lives in kv "projectBuyBots" = { <id>: {id, mint, symbol,
+// pool, chatId, minUsd, emoji, image, armed} }. Admin: /api/buybot.
+const BUYBOT_QUOTES = ROSE_QUOTES; // SOL + USDC/USDT — same quote set
+function buyBotsAll() { return kv.get("projectBuyBots", {}) || {}; }
+function buyBotGet(id) { return buyBotsAll()[id] || null; }
+function buyBotSave(c) { const a = buyBotsAll(); a[c.id] = c; kv.set("projectBuyBots", a); }
+const buyBotParseAttempts = new Map();
+const BUYBOT_MAX_PARSE_ATTEMPTS = 6;
+const BUYBOT_SEEN_MAX = 600;
+
+// Generalized roseDetectBuyFromRaw: mint + optional pool hint are parameters.
+function detectBuyGeneric(tx, mint, tokUsd, solUsd, poolHint) {
+  const meta = tx && tx.meta; if (!meta || meta.err) return null;
+  const delta = {}, post = {};
+  for (const b of (meta.preTokenBalances || [])) if (b.mint === mint && b.owner) delta[b.owner] = (delta[b.owner] || 0) - Number(b.uiTokenAmount.uiAmount || 0);
+  for (const b of (meta.postTokenBalances || [])) if (b.mint === mint && b.owner) { delta[b.owner] = (delta[b.owner] || 0) + Number(b.uiTokenAmount.uiAmount || 0); post[b.owner] = Number(b.uiTokenAmount.uiAmount || 0); }
+  const owners = Object.keys(delta); if (!owners.length) return null;
+  let pool = (poolHint && owners.includes(poolHint)) ? poolHint : null;
+  if (!pool) { let mx = -1; for (const o of owners) { const r = post[o] || 0; if (r > mx) { mx = r; pool = o; } } }
+  if (!pool || (delta[pool] || 0) >= 0) return null; // pool didn't release token → sell/LP/non-buy
+  let buyer = null, gain = 0;
+  for (const o of owners) { if (o === pool) continue; const d = delta[o]; if (d > gain) { gain = d; buyer = o; } }
+  if (!buyer || gain <= 0) return null;
+  let wsol = 0, stable = 0;
+  const addQ = (b, sign) => { const k = BUYBOT_QUOTES[b.mint]; if (k && b.owner === pool) { const v = sign * Number(b.uiTokenAmount.uiAmount || 0); if (k === "sol") wsol += v; else stable += v; } };
+  for (const b of (meta.preTokenBalances || [])) addQ(b, -1);
+  for (const b of (meta.postTokenBalances || [])) addQ(b, +1);
+  if (wsol + stable <= 0) return null; // pool took in no quote → not a buy
+  const quoteUsd = wsol * (solUsd || 0) + stable;
+  const usd = tokUsd > 0 ? gain * tokUsd : (quoteUsd > 0 ? quoteUsd : null);
+  const sig = (tx.transaction && tx.transaction.signatures && tx.transaction.signatures[0]) || null;
+  const ts = tx.blockTime ? tx.blockTime * 1000 : Date.now();
+  return { wallet: buyer, tokenAmt: gain, usd, sig, ts };
+}
+
+function buyCaptionGeneric(b, cfg, tokUsd, mkt) {
+  const sym = cfg.symbol || "TOKEN";
+  const emoji = cfg.emoji || "🟢"; // 🟢
+  const usd = Number(b.usd) || 0;
+  // caption max 1024 with an image; leave headroom for the info lines
+  const bar = roseBuyBar(usd, 40).replace(/🌹/g, emoji).replace(/🌸/g, emoji); // reuse the bar, swap the petal/rose glyphs for this project's emoji
+  const head = `${emoji} <b>${tgEsc(sym)} BUY!</b>`;
+  const info = [];
+  info.push(`💵 <b>$${usd < 1 ? usd.toFixed(2) : Math.round(usd).toLocaleString()}</b>` + (b.tokenAmt ? `  →  ${roseFmtNum(b.tokenAmt)} ${tgEsc(sym)}` : ""));
+  if (mkt && mkt.priceUsd) info.push(`📈 Price $${Number(mkt.priceUsd).toPrecision(3)}` + (mkt.mc ? `  ·  MC $${roseFmtNum(mkt.mc)}` : ""));
+  info.push(`👤 <code>${(b.wallet || "").slice(0, 4)}…${(b.wallet || "").slice(-4)}</code>` + (b.sig ? `  ·  <a href="https://solscan.io/tx/${b.sig}">tx</a>` : ""));
+  info.push(`📈 <a href="https://dexscreener.com/solana/${cfg.mint}">Chart</a>  ·  🛒 <a href="https://jup.ag/tokens/${cfg.mint}">Buy ${tgEsc(sym)}</a>`);
+  return [head, bar, ...info].join("\n");
+}
+
+async function projectBuyPollOnce(cfg, { testPost = false } = {}) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token || !cfg || !cfg.chatId || !cfg.mint || !cfg.pool) return { ok: false, reason: "incomplete config" };
+  const key = (rpc.heliusKeys()[0]) || process.env.HELIUS_API_KEY;
+  if (!key) return { ok: false, reason: "no HELIUS key" };
+  const solUsd = await orderbook.getUsdPrice("So11111111111111111111111111111111111111112").catch(() => 0);
+  const tokUsd = await orderbook.getUsdPrice(cfg.mint).catch(() => 0);
+  const mkt = await getTokenMarket(cfg.mint).catch(() => null);
+  const img = cfg.image || null;
+  const send = (cap) => img ? roseTgSendPhoto(token, cfg.chatId, img, cap, { silent: true }) : roseTgSend(token, cfg.chatId, cap, { silent: true });
+
+  if (testPost) {
+    const sample = { usd: 25.0, tokenAmt: (tokUsd > 0 ? 25 / tokUsd : 1e6), wallet: cfg.pool, sig: "TEST_" + Math.floor(Date.now() / 1000) };
+    const okp = await send("🧪 <i>test alert</i>\n" + buyCaptionGeneric(sample, cfg, tokUsd, mkt));
+    return { ok: okp, testPost: true, image: !!img };
+  }
+
+  const SIG_LIMIT = 100;
+  const sigsRes = await roseHeliusRpc(key, "getSignaturesForAddress", [cfg.pool, { limit: SIG_LIMIT }]);
+  const sigs = Array.isArray(sigsRes) ? sigsRes : [];
+  if (!sigs.length) return { ok: true, scanned: 0, posted: 0, note: "no pool sigs" };
+  const lastKey = `buyBotLastSig:${cfg.id}`, seenKey = `buyBotSeen:${cfg.id}`;
+  const lastSig = kv.get(lastKey, null);
+  if (!lastSig) { kv.set(lastKey, sigs[0].signature); return { ok: true, firstRun: true, note: "head recorded" }; }
+  const fresh = []; let cursorFound = false;
+  for (const s of sigs) { if (s.signature === lastSig) { cursorFound = true; break; } if (s.err) continue; fresh.push(s.signature); }
+  if (!cursorFound) console.warn(`[BUYBOT ${cfg.id}] cursor outside ${sigs.length}-sig window — possible missed buys`);
+  fresh.reverse();
+  if (!fresh.length) { kv.set(lastKey, sigs[0].signature); return { ok: true, scanned: 0, posted: 0 }; }
+  const seen = new Set(kv.get(seenKey, []));
+  let posted = 0, scanned = 0, advanceTo = lastSig;
+  for (const sig of fresh) {
+    if (seen.has(sig)) { advanceTo = sig; continue; }
+    const tx = await roseHeliusRpc(key, "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]);
+    if (!tx) {
+      const n = (buyBotParseAttempts.get(sig) || 0) + 1;
+      if (n < BUYBOT_MAX_PARSE_ATTEMPTS) { buyBotParseAttempts.set(sig, n); break; }
+      buyBotParseAttempts.delete(sig); advanceTo = sig; continue;
+    }
+    buyBotParseAttempts.delete(sig);
+    scanned++;
+    const buy = detectBuyGeneric(tx, cfg.mint, tokUsd, solUsd, cfg.pool);
+    seen.add(sig); advanceTo = sig;
+    if (buy) buy.sig = buy.sig || sig;
+    if (buy && buy.usd != null && buy.usd >= (Number(cfg.minUsd) || 0)) {
+      if (await send(buyCaptionGeneric(buy, cfg, tokUsd, mkt))) posted++;
+      await new Promise(r => setTimeout(r, 450));
+    }
+  }
+  kv.set(lastKey, advanceTo);
+  kv.set(seenKey, [...seen].slice(-BUYBOT_SEEN_MAX));
+  return { ok: true, scanned, posted, floorUsd: Number(cfg.minUsd) || 0, gap: !cursorFound };
+}
+
+async function pollProjectBuyBots() {
+  const all = buyBotsAll();
+  for (const id of Object.keys(all)) {
+    const c = all[id];
+    if (!c || !c.armed) continue;
+    try { await projectBuyPollOnce(c); }
+    catch (e) { console.warn(`[BUYBOT ${id}] poll error:`, e.message); }
+  }
+}
+
+// Admin lever for the generic buy bot (PREMIUM_ACCESS_KEY-gated).
+//   ?project=cuna&mint=…&pool=…&symbol=CUNA&chat=-100…&min=1&emoji=🐔&image=URL  → upsert config
+//   &arm=1 / &disarm=1   → turn this project's auto-posting on/off
+//   ?project=cuna&test=1 → fire one sample buy to verify chat/image wiring
+//   ?project=cuna&run=1  → run one real poll cycle now (even while disarmed)
+//   ?project=cuna&status=1 (or no action) → read-back the config
+//   ?list=1              → list all configured buy bots
+app.get("/api/buybot", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  const q = req.query;
+  if (q.list === "1") return res.json({ ok: true, bots: Object.values(buyBotsAll()).map(b => ({ ...b, armed: !!b.armed })) });
+  const id = String(q.project || "").toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 24);
+  if (!id) return res.status(400).json({ error: "project required" });
+  let c = buyBotGet(id) || { id, armed: false };
+  // Upsert any provided fields.
+  if (q.mint !== undefined) { if (!SOL_ADDR_RE.test(String(q.mint))) return res.status(400).json({ error: "bad mint" }); c.mint = String(q.mint); }
+  if (q.pool !== undefined) { if (!SOL_ADDR_RE.test(String(q.pool))) return res.status(400).json({ error: "bad pool" }); c.pool = String(q.pool); }
+  if (q.symbol !== undefined) c.symbol = String(q.symbol).slice(0, 12);
+  if (q.chat !== undefined || q.chatId !== undefined) { const ch = String(q.chat || q.chatId); if (!/^-?\d+$/.test(ch)) return res.status(400).json({ error: "bad chat id" }); c.chatId = ch; }
+  if (q.min !== undefined) c.minUsd = Math.max(0, Number(q.min) || 0);
+  if (q.emoji !== undefined) c.emoji = String(q.emoji).slice(0, 4) || null;
+  if (q.image !== undefined) c.image = String(q.image).slice(0, 300) || null;
+  if (q.arm === "1") c.armed = true;
+  if (q.disarm === "1") c.armed = false;
+  buyBotSave(c);
+  try {
+    if (q.test === "1") { const r = await projectBuyPollOnce(c, { testPost: true }); return res.json({ ok: true, config: c, test: r }); }
+    if (q.run === "1") { const r = await projectBuyPollOnce(c); return res.json({ ok: true, config: c, run: r }); }
+  } catch (e) { return res.status(500).json({ error: e.message }); }
+  return res.json({ ok: true, config: c });
+});
+
 // Admin lever (PREMIUM_ACCESS_KEY-gated):
 //   ?status=1  → read-only wiring probe (never posts)
 //   ?arm=1     → turn ON automatic buy posting; ?disarm=1 → turn it OFF
@@ -14353,6 +14506,10 @@ app.listen(PORT, () => {
     // ROSE buy bot — dormant until armed + a ROSE chat resolves (see pollRoseBuys). 10s cadence
     // (ROSE_POLL_MS to tune; floored at 5s to stay gentle on Helius). Pool-direct = ~2 calls/cycle.
     setInterval(pollRoseBuys, Math.max(5000, parseInt(process.env.ROSE_POLL_MS || "10000", 10)));
+    // Generic multi-project buy bot (CUNA + future projects) — each config dormant until
+    // armed via /api/buybot. Same 10s cadence; iterates only ARMED configs, so it's a no-op
+    // until a project is turned on.
+    setInterval(() => { pollProjectBuyBots().catch(e => console.warn("[BUYBOT] cycle:", e.message)); }, Math.max(5000, parseInt(process.env.BUYBOT_POLL_MS || "10000", 10)));
     // Cluck's Daily Alpha — auto-post once/day at ~ALPHA_POST_HOUR UTC to X + (silent) Telegram.
     // Stamps the date BEFORE posting so a crash/retry can't double-post publicly; a rare failed
     // post is recoverable via /api/alpha-test?post=1. Change the hour freely (or kv alphaPostHour).
