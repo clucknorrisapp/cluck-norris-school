@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>🔥 Project Burn — destroy your own supply, prove it on-chain</title>
+<meta property="og:title" content="Project Burn — burn your own supply, prove it publicly"/>
+<meta property="og:description" content="A project owner's burn tool: destroy part (or all) of your token supply non-custodially and get a shareable, on-chain-verified receipt. You sign, we take nothing."/>
+<meta property="og:image" content="https://clucknorris.app/vendor/firepit-hero.png"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+  /* palette from theme.css — no page-local :root shadow (per house rule) */
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:radial-gradient(1100px 560px at 50% -220px,rgba(255,122,24,.20),transparent 68%),radial-gradient(700px 400px at 90% 10%,rgba(255,60,0,.08),transparent 60%),var(--bg);background-attachment:fixed;color:var(--text);font-family:var(--body);min-height:100vh;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:720px;margin:0 auto;padding:18px 16px 120px;}
+  a.back{display:inline-flex;align-items:center;gap:6px;font-family:var(--disp);font-size:12px;font-weight:700;letter-spacing:2px;color:var(--gold);text-decoration:none;margin-bottom:14px;opacity:.85;}
+  a.back:hover{opacity:1;}
+  .hero{position:relative;border-radius:18px;overflow:hidden;border:1px solid var(--border);margin-bottom:16px;box-shadow:0 8px 30px rgba(0,0,0,.4);}
+  .hero img{width:100%;display:block;max-height:260px;object-fit:cover;object-position:center 30%;}
+  .hero .cap{position:absolute;left:0;right:0;bottom:0;padding:20px 22px 16px;background:linear-gradient(0deg,rgba(8,5,3,.92),rgba(8,5,3,.55) 55%,transparent);}
+  .hero h1{font-family:var(--disp);font-size:44px;line-height:.9;letter-spacing:1.5px;background:linear-gradient(92deg,#FFE08A,#FFB627 38%,#FF7A18 78%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+  .hero .sub{font-size:15px;color:#ffd9b0;margin-top:6px;font-weight:600;}
+  .hero .tb{position:absolute;top:12px;right:12px;font-family:var(--disp);font-size:10px;letter-spacing:1.5px;color:#ffd9b0;background:rgba(8,5,3,.6);border:1px solid rgba(255,150,60,.4);border-radius:20px;padding:5px 11px;}
+  .lede{font-size:14.5px;color:var(--sub);line-height:1.65;margin:2px 2px 16px;}
+  .lede b{color:var(--gold);}
+  .card{background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--border);border-radius:16px;padding:18px 20px;margin-bottom:16px;box-shadow:0 6px 22px rgba(0,0,0,.32);}
+  .card-title{font-family:var(--disp);font-size:14px;color:var(--gold);letter-spacing:3px;margin-bottom:14px;}
+  .pillars{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-bottom:16px;}
+  .pillar{background:rgba(255,255,255,.03);border:1px solid var(--border2);border-radius:12px;padding:12px 14px;}
+  .pillar .h{font-family:var(--disp);font-size:12px;letter-spacing:1px;color:var(--text);margin-bottom:4px;}
+  .pillar .p{font-size:12.5px;color:var(--sub);line-height:1.5;}
+  .btn{background:linear-gradient(92deg,#FF9A2E,#FF7A18);border:none;border-radius:11px;padding:13px 24px;font-family:var(--disp);font-size:15px;font-weight:700;letter-spacing:1.5px;color:#fff;cursor:pointer;box-shadow:0 6px 18px rgba(255,122,24,.32);transition:transform .1s,box-shadow .1s;}
+  .btn:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(255,122,24,.42);}
+  .btn:disabled{background:rgba(255,255,255,.06);color:var(--muted);box-shadow:none;transform:none;cursor:not-allowed;}
+  .btn.danger{background:linear-gradient(92deg,#FF5E3A,#E11D48);box-shadow:0 6px 18px rgba(225,29,72,.34);}
+  .btn.ghost{background:rgba(255,255,255,.05);color:var(--sub);box-shadow:none;}
+  .btn.sm{padding:9px 15px;font-size:12px;}
+  .status{margin-top:10px;font-size:13px;color:var(--sub);font-family:var(--mono);display:none;}
+  .status.show{display:block;} .status.ok{color:#12C98B;} .status.err{color:#FF6A99;}
+  .walletbar{display:none;align-items:center;gap:10px;flex-wrap:wrap;font-family:var(--mono);font-size:13px;color:var(--sub);}
+  .walletbar.show{display:flex;}
+  .wallet-picker{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .wallet-picker .hint{font-family:var(--mono);font-size:12.5px;color:var(--sub);line-height:1.55;}
+  .hidden{display:none!important;}
+  label.fl{display:block;font-family:var(--disp);font-size:11px;letter-spacing:1.5px;color:var(--sub);margin:0 0 6px;}
+  input.txt{width:100%;background:rgba(0,0,0,.4);border:1px solid var(--border2);border-radius:10px;padding:12px 13px;font-family:var(--mono);font-size:14px;color:var(--text);}
+  input.txt:focus{outline:none;border-color:#FF7A18;}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;}
+  .grow{flex:1;min-width:220px;}
+  .tokline{display:flex;align-items:center;gap:11px;margin:14px 0 4px;}
+  .tokline img{width:38px;height:38px;border-radius:50%;background:#000;object-fit:cover;flex:none;}
+  .tokline .noimg{width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;font-size:15px;flex:none;font-family:var(--disp);color:var(--sub);}
+  .tokline .nm{font-family:var(--disp);font-size:18px;color:var(--text);letter-spacing:.5px;}
+  .tokline .mm{font-family:var(--mono);font-size:11px;color:var(--muted);}
+  .facts{display:flex;gap:20px;flex-wrap:wrap;margin:12px 0;font-family:var(--mono);font-size:13px;}
+  .facts .k{font-family:var(--disp);font-size:10px;letter-spacing:1.5px;color:var(--sub);margin-bottom:2px;}
+  .facts .v{font-size:16px;color:var(--text);}
+  .amtwrap{margin-top:14px;}
+  .pcts{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
+  .pcts button{background:rgba(255,255,255,.05);border:1px solid var(--border2);border-radius:9px;padding:7px 13px;font-family:var(--mono);font-size:12.5px;color:var(--sub);cursor:pointer;}
+  .pcts button:hover{border-color:#FF7A18;color:var(--text);}
+  .liveval{margin-top:10px;font-family:var(--mono);font-size:13px;color:var(--sub);}
+  .liveval b{color:#FF8FA3;}
+  .foot{font-size:12.5px;color:var(--muted);line-height:1.6;margin-top:8px;}
+  .foot a{color:var(--gold);}
+  /* confirm modal */
+  .modal{position:fixed;inset:0;background:rgba(4,2,1,.82);display:none;align-items:center;justify-content:center;padding:18px;z-index:50;}
+  .modal.show{display:flex;}
+  .modal .box{background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--border);border-radius:16px;max-width:520px;width:100%;padding:22px;max-height:88vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.6);}
+  .modal h2{font-family:var(--disp);font-size:22px;letter-spacing:1px;color:#FF5E3A;margin-bottom:10px;}
+  .bigwarn{background:rgba(225,29,72,.12);border:1px solid rgba(225,29,72,.5);border-radius:10px;padding:14px;margin:12px 0;font-size:14px;line-height:1.55;color:#ffd0d8;text-align:center;}
+  .bigwarn .amt{font-family:var(--disp);font-size:26px;color:#FF8FA3;letter-spacing:.5px;display:block;margin-bottom:4px;}
+  .bigwarn small{color:var(--sub);}
+  .confirmrow{margin:12px 0 6px;}
+  .confirmrow label{font-size:12.5px;color:var(--sub);display:block;margin-bottom:6px;}
+  .confirmrow input{width:100%;background:rgba(0,0,0,.4);border:1px solid var(--border2);border-radius:10px;padding:11px 13px;font-family:var(--mono);font-size:15px;color:var(--text);letter-spacing:2px;}
+  .confirmrow input:focus{outline:none;border-color:#FF5E3A;}
+  .mbtns{display:flex;gap:10px;margin-top:14px;}
+  /* receipt */
+  .receipt{text-align:center;}
+  .receipt .flame{font-size:48px;}
+  .receipt .big{font-family:var(--disp);font-size:38px;background:linear-gradient(92deg,#FFE08A,#FFB627 40%,#FF7A18 80%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin:6px 0;}
+  .receipt .perm{font-family:var(--disp);font-size:12px;letter-spacing:2px;color:#FF8FA3;margin-top:10px;}
+  @media(max-width:560px){ .hero h1{font-size:32px;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/">‹ CLUCK NORRIS</a>
+
+  <div class="hero">
+    <img src="/vendor/firepit-hero.png" alt="Fire Chicken tending the Firepit"/>
+    <div class="tb">🔥 PROJECT BURN</div>
+    <div class="cap">
+      <h1>PROJECT BURN</h1>
+      <div class="sub">Destroy your own supply — on purpose. Prove it on-chain.</div>
+    </div>
+  </div>
+
+  <p class="lede">
+    The Firepit torches worthless junk and <b>won't</b> let you burn anything with value. This is the opposite: a
+    project owner deliberately burning <b>part or all</b> of their own token supply as a real tokenomics event — where
+    destroying value <b>is</b> the point. Non-custodial, no cut, and you get a <b>shareable, on-chain-verified receipt</b>
+    your community can check.
+  </p>
+
+  <div class="pillars">
+    <div class="pillar"><div class="h">🔑 You sign, we can't touch it</div><div class="p">One burn instruction, built in your browser, that your wallet shows you before you approve. We never take custody.</div></div>
+    <div class="pillar"><div class="h">🎯 Burn any amount</div><div class="p">Type an exact amount or tap 10 / 25 / 50 / 100%. Your token account stays open — this isn't rent cleanup.</div></div>
+    <div class="pillar"><div class="h">🧾 Public receipt + shout-out</div><div class="p">A shareable page with the amount, % of supply, USD value and the transaction — verified from the chain, not your word. Every burn is celebrated on the Cluck Norris X &amp; Telegram.</div></div>
+    <div class="pillar"><div class="h">💰 Zero fee</div><div class="p">No cut, no fee instruction. The only thing that moves is your token, to the burn address.</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔥 BURN YOUR TOKEN</div>
+    <div class="wallet-picker" id="picker"></div>
+    <div class="walletbar" id="walletbar">
+      <span>Connected <b id="waddr" style="color:var(--text)"></b></span>
+      <button class="btn ghost sm" id="disconnect">Disconnect</button>
+    </div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="card hidden" id="token-card">
+    <label class="fl" for="mint">TOKEN MINT ADDRESS</label>
+    <div class="row">
+      <div class="grow"><input class="txt" id="mint" autocomplete="off" spellcheck="false" placeholder="Paste your token's mint address…"/></div>
+      <button class="btn sm" id="load-btn">Load</button>
+    </div>
+    <div id="tokinfo" class="hidden">
+      <div class="tokline">
+        <div class="noimg" id="tok-ico">?</div>
+        <div>
+          <div class="nm" id="tok-name">—</div>
+          <div class="mm" id="tok-mint">—</div>
+        </div>
+      </div>
+      <div class="facts">
+        <div><div class="k">YOUR BALANCE</div><div class="v" id="f-bal">—</div></div>
+        <div><div class="k">TOTAL SUPPLY</div><div class="v" id="f-supply">—</div></div>
+        <div><div class="k">PRICE</div><div class="v" id="f-price">—</div></div>
+      </div>
+      <div class="amtwrap">
+        <label class="fl" for="amt">AMOUNT TO BURN</label>
+        <input class="txt" id="amt" inputmode="decimal" autocomplete="off" placeholder="0"/>
+        <div class="pcts" id="pcts">
+          <button data-p="10">10%</button>
+          <button data-p="25">25%</button>
+          <button data-p="50">50%</button>
+          <button data-p="100">Max</button>
+        </div>
+        <div class="liveval" id="liveval"></div>
+      </div>
+      <div style="margin-top:16px;">
+        <button class="btn danger" id="burn-btn" disabled>🔥 Burn tokens</button>
+      </div>
+    </div>
+  </div>
+
+  <p class="foot">
+    🛡️ <b style="color:var(--gold)">Why it's safe:</b> the transaction is built here in your browser from a single
+    <b>burn</b> instruction on the token account you already own — no approvals, no delegates, no fee, and nothing that
+    can move any other asset. Your wallet shows you exactly that before you sign, and if you don't sign, nothing happens.
+    The burn is permanent and on-chain: destroyed tokens can never be recovered.
+  </p>
+</div>
+
+<!-- confirm modal -->
+<div class="modal" id="modal">
+  <div class="box">
+    <h2>🔥 Confirm burn</h2>
+    <div class="bigwarn">
+      <span class="amt" id="m-amt">—</span>
+      <span id="m-sub"></span><br>
+      <small id="m-pct"></small>
+    </div>
+    <p style="font-size:13px;color:var(--sub);line-height:1.55;text-align:center;">This is <b style="color:#FF8FA3">permanent</b> — these tokens are destroyed forever and can never be recovered.</p>
+    <div class="confirmrow">
+      <label>Type <b style="color:#FF8FA3">BURN</b> to confirm you understand:</label>
+      <input id="m-type" autocomplete="off" autocapitalize="characters" placeholder="BURN"/>
+    </div>
+    <div class="mbtns">
+      <button class="btn danger" id="m-go" disabled>🔥 Burn now</button>
+      <button class="btn ghost" id="m-cancel">Cancel</button>
+    </div>
+    <div class="status" id="m-status"></div>
+  </div>
+</div>
+
+<!-- receipt modal -->
+<div class="modal" id="rmodal">
+  <div class="box receipt" id="rbox"></div>
+</div>
+
+<script src="/vendor/solana-web3-1.95.8.iife.min.js" integrity="sha384-ujeTtvHxhu2g5lnu14Roii2ajvVKJ74KQ6eo6GGfAi0IrKZ1YkF8N68Iw5VmIJO0" crossorigin="anonymous"></script>
+<script src="/cluck-wallet.js?v=2"></script>
+<script src="/airdrop-engine.js"></script>
+<script src="/cluck-util.js"></script>
+<script>
+"use strict";
+var $ = function(id){ return document.getElementById(id); };
+var esc = CluckUtil.esc, rpc = CluckUtil.rpc, shortAddr = CluckUtil.shortAddr;
+var LAMPORTS = 1e9;
+
+var wProvider = null, wPubkey = null, wName = "";
+var tok = null;   // { mint, symbol, name, decimals, program, supply, priceUsd, walletBalance, walletBalanceRaw }
+
+function setStatus(el, msg, cls){ el.className = "status show" + (cls ? " " + cls : ""); el.textContent = msg; }
+function clearStatus(el){ el.className = "status"; el.textContent = ""; }
+function fmtUsd(n){ n = Number(n) || 0; if (n === 0) return "$0"; if (n < 0.01) return "<$0.01"; return "$" + n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtNum(n){ n = Number(n) || 0; if (n >= 1e9) return (n/1e9).toFixed(2)+"B"; if (n >= 1e6) return (n/1e6).toFixed(2)+"M"; if (n >= 1e3) return (n/1e3).toFixed(2)+"K"; return n.toLocaleString(undefined,{maximumFractionDigits: n < 1 ? 6 : 2}); }
+function fmtPctSupply(p){ if (p == null) return null; return p < 0.01 ? "<0.01%" : p.toFixed(p < 1 ? 4 : 2) + "%"; }
+
+// ── wallet picker (same house pattern as Firepit) ──
+function renderPicker(){
+  var el = $("picker");
+  if (wPubkey){ el.innerHTML = ""; return; }
+  var list = CluckWallet.available();
+  el.innerHTML = "";
+  if (!list.length){
+    var isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    if (isMobile){
+      var url = encodeURIComponent(location.href), ref = encodeURIComponent(location.origin);
+      el.innerHTML =
+        '<div class="hint">📱 Open Project Burn inside a wallet’s browser to connect:</div>' +
+        '<a class="btn sm" style="text-decoration:none" href="https://phantom.app/ul/browse/' + url + '?ref=' + ref + '">🔮 Phantom</a>' +
+        '<a class="btn sm" style="text-decoration:none" href="https://solflare.com/ul/v1/browse/' + url + '?ref=' + ref + '">☀️ Solflare</a>' +
+        '<div class="hint" style="width:100%">Opens this exact page in the wallet’s built-in browser. Nothing is signed or shared by the link.</div>';
+    } else {
+      el.innerHTML = '<div class="hint">No Solana wallet detected. Install a wallet extension (Phantom, Solflare, Backpack, SafePal…) and refresh — or open <b>clucknorris.app/project-burn</b> on your phone inside your wallet’s built-in browser.</div>';
+    }
+    return;
+  }
+  list.forEach(function(w){
+    var b = document.createElement("button");
+    b.className = "btn sm";
+    b.textContent = w.icon + "  " + w.name;
+    b.addEventListener("click", function(){ connectWallet(w.provider, w.name); });
+    el.appendChild(b);
+  });
+}
+async function connectWallet(provider, name){
+  clearStatus($("status"));
+  try {
+    var resp = await provider.connect();
+    wPubkey = ((resp && resp.publicKey) || provider.publicKey).toString();
+    wProvider = provider; wName = name || "";
+    $("picker").classList.add("hidden");
+    $("walletbar").classList.add("show");
+    $("waddr").textContent = shortAddr(wPubkey) + (name ? " · " + name : "");
+    $("token-card").classList.remove("hidden");
+    $("mint").focus();
+  } catch(e){
+    var code = e && e.code;
+    if (code === 4001 || /reject|not been authorized|denied/i.test((e && e.message) || "")){
+      setStatus($("status"), (name || "Wallet") + " didn’t authorize the connection. Approve the connect prompt and try again.", "err");
+    } else {
+      setStatus($("status"), "Connect failed: " + (e.message || e), "err");
+    }
+  }
+}
+function disconnect(){
+  try { wProvider && wProvider.disconnect && wProvider.disconnect(); } catch(_){}
+  wProvider = null; wPubkey = null; tok = null;
+  $("picker").classList.remove("hidden");
+  $("walletbar").classList.remove("show");
+  $("token-card").classList.add("hidden");
+  $("tokinfo").classList.add("hidden");
+  clearStatus($("status"));
+  renderPicker();
+}
+
+// ── load token facts ──
+async function loadToken(){
+  var mint = $("mint").value.trim();
+  if (!mint){ setStatus($("status"), "Paste your token's mint address first.", "err"); return; }
+  setStatus($("status"), "Reading token from the chain…");
+  $("load-btn").disabled = true;
+  try {
+    var r = await fetch("/api/burn-token-info?mint=" + encodeURIComponent(mint) + "&wallet=" + encodeURIComponent(wPubkey));
+    var d = await r.json();
+    if (!r.ok || !d.success){ setStatus($("status"), d.error || "Couldn't load that token.", "err"); $("load-btn").disabled = false; return; }
+    tok = d;
+    clearStatus($("status"));
+    renderToken();
+  } catch(e){
+    setStatus($("status"), "Network error reading the token — try again.", "err");
+  }
+  $("load-btn").disabled = false;
+}
+function renderToken(){
+  // esc EVERYTHING from chain metadata before it touches the DOM (token names are attacker-controlled).
+  $("tok-ico").textContent = (tok.symbol || "?").slice(0,2).toUpperCase();
+  $("tok-name").textContent = tok.name && tok.name !== tok.symbol ? (tok.name + " · " + tok.symbol) : tok.symbol;
+  $("tok-mint").textContent = tok.mint;
+  var bal = Number(tok.walletBalance);
+  $("f-bal").textContent = tok.walletBalance == null ? "—" : fmtNum(bal) + " " + tok.symbol;
+  $("f-supply").textContent = tok.supply == null ? "—" : fmtNum(tok.supply);
+  $("f-price").textContent = tok.priceUsd == null ? "—" : (tok.priceUsd < 0.000001 ? "<$0.000001" : "$" + Number(tok.priceUsd).toPrecision(4));
+  $("amt").value = "";
+  updateLiveVal();
+  $("tokinfo").classList.remove("hidden");
+  if (tok.walletBalance != null && bal <= 0){
+    setStatus($("status"), "This wallet holds 0 " + tok.symbol + " — connect the wallet that holds the tokens you want to burn.", "err");
+  }
+}
+function updateLiveVal(){
+  var amt = parseFloat($("amt").value) || 0;
+  var el = $("liveval");
+  if (amt <= 0){ el.textContent = ""; $("burn-btn").disabled = true; return; }
+  var bal = Number(tok.walletBalance);
+  var over = tok.walletBalance != null && amt > bal + 1e-12;
+  var parts = [];
+  if (tok.priceUsd != null) parts.push("≈ " + fmtUsd(amt * tok.priceUsd));
+  if (tok.supply) parts.push(fmtPctSupply(amt / tok.supply * 100) + " of supply");
+  el.innerHTML = over
+    ? '<b>You only hold ' + esc(fmtNum(bal)) + ' ' + esc(tok.symbol) + '</b> — reduce the amount.'
+    : (parts.length ? "Burning <b>" + esc(fmtNum(amt)) + " " + esc(tok.symbol) + "</b> — " + esc(parts.join(" · ")) : "Burning <b>" + esc(fmtNum(amt)) + " " + esc(tok.symbol) + "</b>");
+  $("burn-btn").disabled = amt <= 0 || over;
+}
+function setPct(p){
+  if (tok.walletBalance == null){ return; }
+  // Use the RAW balance for 100% so we burn the exact on-chain amount (no float rounding leaving dust).
+  if (p === 100){ $("amt").value = String(tok.walletBalance); }
+  else { $("amt").value = String(+(Number(tok.walletBalance) * p / 100).toFixed(tok.decimals)); }
+  updateLiveVal();
+}
+
+// ── confirm + burn ──
+function openConfirm(){
+  var amt = parseFloat($("amt").value) || 0;
+  if (amt <= 0) return;
+  var full = tok.walletBalance != null && amt >= Number(tok.walletBalance) - 1e-12;
+  $("m-amt").textContent = fmtNum(amt) + " " + tok.symbol;
+  var sub = [];
+  if (tok.priceUsd != null) sub.push(fmtUsd(amt * tok.priceUsd) + " destroyed");
+  $("m-sub").textContent = sub.join("");
+  $("m-pct").textContent = tok.supply ? (fmtPctSupply(amt / tok.supply * 100) + " of total supply" + (full ? " · your entire balance" : "")) : (full ? "Your entire balance" : "");
+  $("m-type").value = ""; $("m-go").disabled = true;
+  clearStatus($("m-status"));
+  $("modal").classList.add("show");
+}
+function closeConfirm(){ $("modal").classList.remove("show"); }
+
+async function doBurn(){
+  var amt = parseFloat($("amt").value) || 0;
+  if (amt <= 0 || !tok) return;
+  if (typeof solanaWeb3 === "undefined"){ setStatus($("m-status"), "Wallet library still loading — try again in a second.", "err"); return; }
+  var Transaction = solanaWeb3.Transaction, PublicKey = solanaWeb3.PublicKey;
+  var owner = new PublicKey(wPubkey), mint = new PublicKey(tok.mint);
+  $("m-go").disabled = true; $("m-cancel").disabled = true;
+  try {
+    // Compute the raw amount. For a full burn use the exact on-chain raw balance (no float
+    // path) so nothing rounds and leaves dust; otherwise scale by decimals with BigInt.
+    var full = tok.walletBalance != null && amt >= Number(tok.walletBalance) - 1e-12;
+    var rawStr;
+    if (full && tok.walletBalanceRaw){ rawStr = tok.walletBalanceRaw; }
+    else { rawStr = scaleToRaw($("amt").value, tok.decimals); }
+    if (!rawStr || rawStr === "0"){ setStatus($("m-status"), "Amount too small for this token's decimals.", "err"); $("m-go").disabled = false; $("m-cancel").disabled = false; return; }
+
+    // The token account to burn from: the server returned the holder's largest-balance
+    // account (its ATA in the normal case); fall back to deriving the ATA if absent.
+    // splToken here is airdrop-engine.js's hand-built impl — its signatures differ from the
+    // npm package: getAssociatedTokenAddressSync(mint, owner, tokenProgramString) is SYNC,
+    // and createBurnCheckedInstruction takes the tokenProgram STRING as its LAST arg.
+    var ata = tok.tokenAccount ? new PublicKey(tok.tokenAccount)
+                               : splToken.getAssociatedTokenAddressSync(mint, owner, tok.program);
+
+    setStatus($("m-status"), "Preparing the burn transaction…");
+    var bh = await rpc("getLatestBlockhash", [{ commitment: "confirmed" }]);
+    var tx = new Transaction();
+    // ONLY a burnChecked instruction — decimals-checked by the program, so a wrong-decimals
+    // build fails safe rather than burning the wrong amount. No close (account stays open).
+    tx.add(splToken.createBurnCheckedInstruction(ata, mint, owner, rawStr, tok.decimals, tok.program));
+    tx.feePayer = owner; tx.recentBlockhash = bh.value.blockhash;
+
+    setStatus($("m-status"), "Approve the burn in your wallet…");
+    // House sign pattern (see Firepit / Locker Room): wallet signs via signTransaction, WE
+    // submit the raw bytes through our RPC. Never signAndSendTransaction (throws Phantom's
+    // malicious-dApp interstitial); skipPreflight because the send's preflight rejects a
+    // fresh 'confirmed' blockhash.
+    var sig;
+    if (wProvider.signTransaction){
+      var signed = await wProvider.signTransaction(tx);
+      sig = await rpc("sendTransaction", [bytesToB64(signed.serialize()), { encoding: "base64", skipPreflight: true, preflightCommitment: "confirmed", maxRetries: 5 }]);
+    } else {
+      var res = await wProvider.signAndSendTransaction(tx);
+      sig = res.signature || res;
+    }
+
+    setStatus($("m-status"), "Confirming on-chain…");
+    var confirmed = false;
+    for (var t=0;t<24;t++){
+      try {
+        var st = await rpc("getSignatureStatuses", [[sig]]);
+        var s = st && st.value && st.value[0];
+        if (s && s.err){ throw new Error("transaction failed on-chain"); }
+        if (s && (s.confirmationStatus === "confirmed" || s.confirmationStatus === "finalized")){ confirmed = true; break; }
+      } catch(e){ if (String(e.message||"").indexOf("failed on-chain")>=0) throw e; }
+      await new Promise(function(r){ setTimeout(r, 2000); });
+    }
+    if (!confirmed){ setStatus($("m-status"), "Sent, but it didn’t confirm in time. Check the signature before retrying: " + sig, "err"); $("m-go").disabled = false; $("m-cancel").disabled = false; return; }
+
+    // Record the receipt (server re-verifies from the chain and stores the TRUE amount).
+    setStatus($("m-status"), "Burn confirmed — minting your receipt…");
+    var receipt = null;
+    try {
+      var rr = await fetch("/api/burn-receipt", { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ sig: sig, mint: tok.mint, wallet: wPubkey }) });
+      var rd = await rr.json();
+      if (rd.success) receipt = rd.receipt;
+    } catch(_){}
+    closeConfirm();
+    showReceipt(sig, amt, receipt);
+    // Refresh the wallet balance so a second burn sees the new figure.
+    try { var r2 = await fetch("/api/burn-token-info?mint=" + encodeURIComponent(tok.mint) + "&wallet=" + encodeURIComponent(wPubkey)); var d2 = await r2.json(); if (d2.success){ tok = d2; renderToken(); } } catch(_){}
+  } catch(e){
+    setStatus($("m-status"), "Burn failed: " + (e.message || e), "err");
+    $("m-go").disabled = false; $("m-cancel").disabled = false;
+  } finally {
+    $("m-cancel").disabled = false;
+  }
+}
+
+function showReceipt(sig, amt, receipt){
+  var symbol = (receipt && receipt.symbol) || tok.symbol;
+  var burned = receipt ? receipt.burned : amt;
+  var usd = receipt && receipt.usdValue != null ? receipt.usdValue : (tok.priceUsd != null ? amt * tok.priceUsd : null);
+  var pct = receipt && receipt.pctSupply != null ? receipt.pctSupply : (tok.supply ? amt / tok.supply * 100 : null);
+  var url = location.origin + "/burn/" + sig;
+  var share = "🔥 " + fmtNum(burned) + " $" + symbol + " burned forever" + (pct != null ? " — " + fmtPctSupply(pct) + " of supply" : "") + ". Verified on-chain 👇";
+  var stat = function(k,v){ return v == null ? "" : '<div style="min-width:88px"><div style="font-family:var(--disp);font-size:10px;letter-spacing:1.5px;color:var(--sub);margin-bottom:2px">'+k+'</div><div style="font-family:var(--mono);font-size:17px">'+esc(v)+'</div></div>'; };
+  $("rbox").innerHTML =
+    '<div class="flame">🔥</div>' +
+    '<div style="font-family:var(--disp);font-size:15px;letter-spacing:2px;color:var(--gold)">' + esc(symbol) + ' — BURNED</div>' +
+    '<div class="big">' + esc(fmtNum(burned)) + '</div>' +
+    '<div style="display:flex;justify-content:center;gap:18px;flex-wrap:wrap;margin:14px 0 4px">' +
+      stat("OF SUPPLY", fmtPctSupply(pct)) +
+      stat("VALUE", usd != null ? fmtUsd(usd) : null) +
+    '</div>' +
+    '<div class="perm">GONE FOREVER · VERIFIED ON-CHAIN</div>' +
+    (receipt ? '' : '<div style="font-size:12px;color:var(--muted);margin-top:8px">Receipt is finalizing — the shareable page may take a few seconds.</div>') +
+    '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:18px">' +
+      '<a class="btn sm" style="text-decoration:none" target="_blank" rel="noopener" href="https://x.com/intent/tweet?text=' + encodeURIComponent(share) + '&url=' + encodeURIComponent(url) + '">Share on X</a>' +
+      '<a class="btn sm ghost" style="text-decoration:none" target="_blank" rel="noopener" href="' + esc(url) + '">Receipt page</a>' +
+      '<a class="btn sm ghost" style="text-decoration:none" target="_blank" rel="noopener" href="https://solscan.io/tx/' + esc(sig) + '">Transaction</a>' +
+    '</div>' +
+    '<div style="margin-top:14px"><button class="btn ghost sm" id="r-close">Done</button></div>';
+  $("rmodal").classList.add("show");
+  $("r-close").addEventListener("click", function(){ $("rmodal").classList.remove("show"); });
+}
+
+// decimal string → integer raw string, without float error (BigInt-safe)
+function scaleToRaw(s, decimals){
+  s = String(s).trim();
+  if (!/^\d*\.?\d*$/.test(s) || s === "" || s === ".") return "0";
+  var parts = s.split(".");
+  var whole = parts[0] || "0";
+  var frac = (parts[1] || "").slice(0, decimals);
+  while (frac.length < decimals) frac += "0";
+  var raw = (whole + frac).replace(/^0+/, "") || "0";
+  return raw;
+}
+function bytesToB64(u8){
+  var s = "";
+  for (var i=0;i<u8.length;i+=0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i+0x8000));
+  return btoa(s);
+}
+
+renderPicker();
+setTimeout(renderPicker, 600); setTimeout(renderPicker, 1600);
+$("disconnect").addEventListener("click", disconnect);
+$("load-btn").addEventListener("click", loadToken);
+$("mint").addEventListener("keydown", function(e){ if (e.key === "Enter") loadToken(); });
+$("amt").addEventListener("input", updateLiveVal);
+Array.prototype.forEach.call(document.querySelectorAll("#pcts button"), function(b){
+  b.addEventListener("click", function(){ setPct(Number(b.getAttribute("data-p"))); });
+});
+$("burn-btn").addEventListener("click", openConfirm);
+$("m-type").addEventListener("input", function(){ $("m-go").disabled = $("m-type").value.trim().toUpperCase() !== "BURN"; });
+$("m-go").addEventListener("click", doBurn);
+$("m-cancel").addEventListener("click", closeConfirm);
+$("modal").addEventListener("click", function(e){ if (e.target === $("modal")) closeConfirm(); });
+</script>
+<script defer src="/cluck-nav.js"></script>
+</body>
+</html>
