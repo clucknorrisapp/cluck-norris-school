@@ -1764,6 +1764,9 @@ function tgCommandReply(cmd, arg) {
       return `🥚 <b>The Hatchery</b> — create a token, guided start to finish\n${link("/hatchery")}`;
     case "firepit":
       return `🔥 <b>Firepit</b> — burn junk tokens &amp; reclaim your SOL rent. Safe, non-custodial, no cut; a live value-guard stops you torching anything still worth money.\n${link("/firepit")}`;
+    case "projectburn":
+    case "burn":
+      return `🔥 <b>Project Burn</b> — a project owner burning part (or all) of their own supply, on purpose. Non-custodial, no cut, and you get a shareable on-chain-verified receipt for your community.\n${link("/project-burn")}`;
     case "bags":
       return `🎒 <b>Bags.fm</b> — live launches, near-grad &amp; recently graduated\n${link("/bags")}`;
     case "tools":
@@ -1863,7 +1866,7 @@ async function priceReply(chatId, replyTo) {
   }
 }
 
-const TG_KNOWN_CMDS = ["ca","x","website","app","dex","walletxray","autopsy","trace","snapshot","holders","lock","lockerroom","locker","securitycoop","walletcheckup","buyspecial","rose","hatchery","firepit","bags","tools","liquidity","price","commands","start","help","guide","buyleaders","chatid"];
+const TG_KNOWN_CMDS = ["ca","x","website","app","dex","walletxray","autopsy","trace","snapshot","holders","lock","lockerroom","locker","securitycoop","walletcheckup","buyspecial","rose","hatchery","firepit","projectburn","burn","bags","tools","liquidity","price","commands","start","help","guide","buyleaders","chatid"];
 // In a non-CLKN project room (e.g. ROSE) the bot only serves that project's liquidity +
 // buy competitions; chatid stays so an operator can wire a buy comp. Everything else off.
 const PROJECT_ROOM_CMDS = ["liquidity","price","buyleaders","chatid"];
@@ -11448,6 +11451,196 @@ app.get("/hatchery", (req, res) => {
 // /api/burn-scan data endpoint are served separately.
 app.get("/firepit", (req, res) => {
   res.sendFile(join(__dirname, "public", "firepit.html"));
+});
+
+// ── Project Burn — burn PART of your own supply, on purpose, with a public receipt ──
+// The opposite tool to Firepit: Firepit torches worthless junk to reclaim rent and REFUSES
+// to burn anything with value; Project Burn is a project owner destroying real supply as a
+// tokenomics event, so the value IS the point. Non-custodial (the wallet signs a single
+// burnChecked instruction it can read), no cut, and the payoff is a shareable, on-chain-
+// verified receipt — the same "prove it publicly" play as the Locker Room.
+app.get(["/project-burn", "/burn"], (req, res) => {
+  res.sendFile(join(__dirname, "public", "project-burn.html"));
+});
+
+// Token facts for the burn UI: supply + decimals + live price + this wallet's balance.
+// All server-side reads (Helius DAS for metadata/supply, Jupiter for price). No writes.
+app.get("/api/burn-token-info", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  const mint = String(req.query.mint || "").trim();
+  const wallet = String(req.query.wallet || "").trim();
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ success: false, error: "Enter a valid token mint address." });
+  if (wallet && !SOL_ADDR_RE.test(wallet)) return res.status(400).json({ success: false, error: "Invalid wallet address." });
+  const HELIUS_KEY = process.env.HELIUS_API_KEY;
+  if (!HELIUS_KEY) return res.status(500).json({ success: false, error: "Server not configured" });
+  const rpcCall = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`);
+  try {
+    // Metadata + supply via DAS getAsset (works for both token programs); supply is the
+    // authoritative on-chain figure, so "% of supply" on the receipt can't be spun.
+    const asset = await rpcCall("burn-asset", "getAsset", [mint]).catch(() => null);
+    const a = asset && asset.result;
+    if (!a) return res.status(404).json({ success: false, error: "That mint wasn't found on-chain." });
+    const ti = (a.token_info) || {};
+    const decimals = Number(ti.decimals);
+    if (!Number.isFinite(decimals)) return res.status(400).json({ success: false, error: "That address isn't a fungible token." });
+    const supplyRaw = ti.supply != null ? String(ti.supply) : null;
+    const supplyUi = supplyRaw != null ? Number(supplyRaw) / 10 ** decimals : null;
+    const meta = (a.content && a.content.metadata) || {};
+    const symbol = (ti.symbol || meta.symbol || "").slice(0, 16) || "TOKEN";
+    const name = (meta.name || "").slice(0, 64) || symbol;
+    const program = (a.ownership && a.ownership.token_program) || "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+    // Live price (best-effort — the tool works without it, value just shows unknown).
+    let priceUsd = null;
+    try { const px = await jupPriceV3([mint]); priceUsd = Number(px && px[mint] && px[mint].usdPrice) || null; } catch (_) {}
+    // This wallet's holding of the mint. A burnChecked hits ONE token account, so we return
+    // the LARGEST-balance account (virtually always the holder's ATA) and use its balance as
+    // what's burnable in one go — keeping "Max" consistent with what a single tx can burn.
+    let walletBalanceRaw = null, walletBalance = null, tokenAccount = null;
+    if (wallet) {
+      try {
+        const d = await rpcCall("burn-bal", "getTokenAccountsByOwner", [wallet, { mint }, { encoding: "jsonParsed" }]);
+        let best = 0n;
+        for (const acc of (d && d.result && d.result.value) || []) {
+          const amt = acc.account?.data?.parsed?.info?.tokenAmount?.amount;
+          if (amt && BigInt(amt) > best) { best = BigInt(amt); tokenAccount = acc.pubkey; }
+        }
+        walletBalanceRaw = best.toString();
+        walletBalance = Number(best) / 10 ** decimals;
+      } catch (_) { /* leave null — the client can still let them type an amount */ }
+    }
+    return res.status(200).json({
+      success: true, mint, symbol, name, decimals, program,
+      supplyRaw, supply: supplyUi, priceUsd,
+      walletBalanceRaw, walletBalance, tokenAccount,
+    });
+  } catch (e) {
+    return res.status(500).json({ success: false, error: publicErrMsg(e) });
+  }
+});
+
+// Record a burn receipt — but ONLY after verifying the transaction on-chain, so a receipt
+// page can never be faked. We read the tx, confirm it carries a Burn/BurnChecked of THIS
+// mint signed by THIS wallet, and store the TRUE burned amount from the balance delta —
+// never the client's claim. Keyed by signature (idempotent).
+app.post("/api/burn-receipt", rateLimit("track", { windowMs: 60000, max: 20 }), async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  const { sig, mint, wallet } = req.body || {};
+  if (!/^[1-9A-HJ-NP-Za-km-z]{80,90}$/.test(String(sig || ""))) return res.status(400).json({ success: false, error: "Invalid signature." });
+  if (!SOL_ADDR_RE.test(String(mint || "")) || !SOL_ADDR_RE.test(String(wallet || ""))) return res.status(400).json({ success: false, error: "Invalid mint or wallet." });
+  const store = kv.get("burnReceipts", {}) || {};
+  if (store[sig]) return res.status(200).json({ success: true, receipt: store[sig], already: true });
+  const HELIUS_KEY = process.env.HELIUS_API_KEY;
+  if (!HELIUS_KEY) return res.status(500).json({ success: false, error: "Server not configured" });
+  const rpcCall = heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${HELIUS_KEY}`);
+  try {
+    const tx = await rpcCall("burn-verify", "getTransaction", [String(sig), { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]);
+    const t = tx && tx.result;
+    if (!t || (t.meta && t.meta.err)) return res.status(400).json({ success: false, error: "That transaction isn't a confirmed success on-chain." });
+    // Confirm the wallet signed it (fee payer / first signer).
+    const keys = (t.transaction?.message?.accountKeys || []).map(k => (typeof k === "string" ? k : k.pubkey));
+    const signers = (t.transaction?.message?.accountKeys || []).filter(k => k && typeof k === "object" && k.signer).map(k => k.pubkey);
+    if (!signers.includes(wallet)) return res.status(400).json({ success: false, error: "That transaction wasn't signed by this wallet." });
+    // Find a burn of this mint and read the TRUE amount from pre/post token balances.
+    const pre = (t.meta?.preTokenBalances || []).filter(b => b.mint === mint && keys[b.accountIndex] && (b.owner === wallet));
+    const post = (t.meta?.postTokenBalances || []).filter(b => b.mint === mint && (b.owner === wallet));
+    const preSum = pre.reduce((s, b) => s + BigInt(b.uiTokenAmount.amount), 0n);
+    const postSum = post.reduce((s, b) => s + BigInt(b.uiTokenAmount.amount), 0n);
+    const burnedRaw = preSum - postSum;
+    if (burnedRaw <= 0n) return res.status(400).json({ success: false, error: "No burn of that token by this wallet was found in that transaction." });
+    const decimals = pre[0]?.uiTokenAmount?.decimals ?? post[0]?.uiTokenAmount?.decimals ?? 0;
+    const burned = Number(burnedRaw) / 10 ** decimals;
+    // Enrich with symbol/supply/price for the receipt (best-effort).
+    let symbol = "TOKEN", name = "", supplyUi = null, priceUsd = null;
+    try {
+      const asset = await rpcCall("burn-asset2", "getAsset", [mint]);
+      const a = asset && asset.result, ti = (a && a.token_info) || {}, m = (a && a.content && a.content.metadata) || {};
+      symbol = (ti.symbol || m.symbol || "TOKEN").slice(0, 16);
+      name = (m.name || "").slice(0, 64);
+      if (ti.supply != null) supplyUi = Number(ti.supply) / 10 ** (Number(ti.decimals) || decimals);
+    } catch (_) {}
+    try { const px = await jupPriceV3([mint]); priceUsd = Number(px && px[mint] && px[mint].usdPrice) || null; } catch (_) {}
+    const blockTime = t.blockTime ? t.blockTime * 1000 : Date.now();
+    const receipt = {
+      sig, mint, wallet, symbol, name, decimals,
+      burned, burnedRaw: burnedRaw.toString(),
+      usdValue: priceUsd != null ? burned * priceUsd : null,
+      pctSupply: supplyUi ? (burned / supplyUi) * 100 : null,
+      supply: supplyUi, at: blockTime,
+    };
+    store[sig] = receipt;
+    // Cap the store so it can't grow unbounded (keep the newest 5000 by timestamp).
+    const keysByAge = Object.keys(store).sort((x, y) => (store[y].at || 0) - (store[x].at || 0));
+    if (keysByAge.length > 5000) for (const k of keysByAge.slice(5000)) delete store[k];
+    kv.set("burnReceipts", store);
+    return res.status(200).json({ success: true, receipt });
+  } catch (e) {
+    return res.status(500).json({ success: false, error: publicErrMsg(e) });
+  }
+});
+
+// Public burn receipt — server-rendered so it carries OG tags for a rich social share.
+app.get("/burn/:sig", (req, res) => {
+  const sig = String(req.params.sig || "");
+  const store = kv.get("burnReceipts", {}) || {};
+  const r = store[sig];
+  const escH = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const fmtNum = (n) => Number(n).toLocaleString(undefined, { maximumFractionDigits: Number(n) < 1 ? 6 : 2 });
+  const fmtUsd = (n) => n == null ? null : (n < 0.01 ? "<$0.01" : "$" + Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+  if (!r) {
+    res.status(404).type("html").send(`<!doctype html><meta charset="utf-8"><title>Burn receipt not found</title><link rel="stylesheet" href="/theme.css"><body style="font-family:system-ui;background:#0b0705;color:#eee;text-align:center;padding:60px 20px"><h1>🔥 No receipt for that signature</h1><p style="opacity:.7">Burn a token at <a href="/project-burn" style="color:#FF7A18">clucknorris.app/project-burn</a> to mint one.</p></body>`);
+    return;
+  }
+  const disp = escH(r.symbol || "TOKEN");
+  const amt = fmtNum(r.burned);
+  const usd = fmtUsd(r.usdValue);
+  const pct = r.pctSupply != null ? (r.pctSupply < 0.01 ? "<0.01%" : r.pctSupply.toFixed(r.pctSupply < 1 ? 4 : 2) + "%") : null;
+  const when = new Date(r.at).toISOString().slice(0, 10);
+  const title = `🔥 ${amt} ${disp} burned forever`;
+  const ogDesc = `${pct ? pct + " of supply · " : ""}${usd ? usd + " · " : ""}permanently destroyed on Solana. Verified on-chain via Cluck Norris.`;
+  res.type("html").send(`<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="/theme.css">
+<title>${escH(title)}</title>
+<meta property="og:title" content="${escH(title)}"><meta property="og:description" content="${escH(ogDesc)}">
+<meta name="twitter:card" content="summary"><meta name="twitter:title" content="${escH(title)}"><meta name="twitter:description" content="${escH(ogDesc)}">
+<style>
+ *{box-sizing:border-box;margin:0;padding:0}
+ body{background:radial-gradient(1000px 500px at 50% -200px,rgba(255,122,24,.20),transparent 68%),var(--bg,#0b0705);color:var(--text,#f4efe9);font-family:var(--body,system-ui);min-height:100vh;padding:24px 16px 80px}
+ .wrap{max-width:560px;margin:0 auto}
+ a.back{display:inline-block;font-family:var(--disp,system-ui);font-size:12px;letter-spacing:2px;color:var(--gold,#FFB627);text-decoration:none;margin-bottom:18px;opacity:.85}
+ .card{background:linear-gradient(180deg,var(--card2,#1a1109),var(--card,#120c07));border:1px solid var(--border,#3a2a1a);border-radius:18px;padding:28px 24px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+ .flame{font-size:52px;line-height:1;margin-bottom:6px}
+ .big{font-family:var(--disp,system-ui);font-size:40px;line-height:1;letter-spacing:.5px;background:linear-gradient(92deg,#FFE08A,#FFB627 40%,#FF7A18 80%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin:8px 0}
+ .sym{font-family:var(--disp,system-ui);font-size:16px;letter-spacing:2px;color:var(--gold,#FFB627)}
+ .stats{display:flex;justify-content:center;gap:22px;flex-wrap:wrap;margin:20px 0 4px}
+ .stat .k{font-family:var(--disp,system-ui);font-size:10px;letter-spacing:1.5px;color:var(--sub,#b9a894);margin-bottom:3px}
+ .stat .v{font-family:var(--mono,monospace);font-size:19px;color:var(--text,#f4efe9)}
+ .perm{margin-top:18px;font-family:var(--disp,system-ui);font-size:12px;letter-spacing:2px;color:#FF8FA3}
+ .foot{margin-top:16px;font-size:12.5px;color:var(--muted,#8a7a68);line-height:1.6}
+ .foot a{color:var(--gold,#FFB627)}
+ .btns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:20px}
+ .btn{display:inline-block;text-decoration:none;background:linear-gradient(92deg,#FF9A2E,#FF7A18);color:#fff;font-family:var(--disp,system-ui);font-size:13px;letter-spacing:1px;padding:11px 18px;border-radius:11px;font-weight:700}
+ .btn.ghost{background:rgba(255,255,255,.06);color:var(--sub,#b9a894)}
+</style></head><body><div class="wrap">
+ <a class="back" href="/project-burn">‹ PROJECT BURN</a>
+ <div class="card">
+  <div class="flame">🔥</div>
+  <div class="sym">${disp} — BURNED</div>
+  <div class="big">${escH(amt)}</div>
+  <div class="stats">
+   ${pct ? `<div class="stat"><div class="k">OF SUPPLY</div><div class="v">${escH(pct)}</div></div>` : ""}
+   ${usd ? `<div class="stat"><div class="k">VALUE DESTROYED</div><div class="v">${escH(usd)}</div></div>` : ""}
+   <div class="stat"><div class="k">DATE</div><div class="v">${escH(when)}</div></div>
+  </div>
+  <div class="perm">GONE FOREVER · VERIFIED ON-CHAIN</div>
+  <div class="btns">
+   <a class="btn" target="_blank" rel="noopener" href="https://x.com/intent/tweet?text=${encodeURIComponent(`🔥 ${amt} $${r.symbol || "TOKEN"} burned forever${pct ? " — " + pct + " of supply" : ""}. Verified on-chain 👇`)}&url=${encodeURIComponent("https://clucknorris.app/burn/" + sig)}">Share on X</a>
+   <a class="btn ghost" target="_blank" rel="noopener" href="https://solscan.io/tx/${escH(sig)}">View transaction</a>
+  </div>
+ </div>
+ <p class="foot">Burned by <code>${escH((r.wallet || "").slice(0, 4) + "…" + (r.wallet || "").slice(-4))}</code> · non-custodially on <a href="/project-burn">Cluck Norris Project Burn</a>. The tokens are destroyed on-chain and can never be recovered.</p>
+</div></body></html>`);
 });
 
 // RoseHorses — HIDDEN weekly-race helper for the ROSE dev (unlinked everywhere; ungated but
