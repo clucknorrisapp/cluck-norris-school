@@ -7617,47 +7617,57 @@ async function projectBuyPollOnce(cfg, { testPost = false } = {}) {
     return { ok: okp, testPost: true, image: !!img };
   }
 
+  // A project can trade on several pools (CUNA added a narrow-range USDC pool on
+  // 2026-08-21 to deepen liquidity) — watch them ALL, or buys through the extra
+  // pool never alert. cfg.pool stays the canonical/primary; cfg.extraPools ([]) are
+  // additional. The seen-set is shared across pools so a route touching two pools
+  // in one tx posts once; cursors are per-pool (primary keeps the legacy key).
   const SIG_LIMIT = 100;
-  const sigsRes = await roseHeliusRpc(key, "getSignaturesForAddress", [cfg.pool, { limit: SIG_LIMIT }]);
-  const sigs = Array.isArray(sigsRes) ? sigsRes : [];
-  if (!sigs.length) return { ok: true, scanned: 0, posted: 0, note: "no pool sigs" };
-  const lastKey = `buyBotLastSig:${cfg.id}`, seenKey = `buyBotSeen:${cfg.id}`;
-  const lastSig = kv.get(lastKey, null);
-  if (!lastSig) { kv.set(lastKey, sigs[0].signature); return { ok: true, firstRun: true, note: "head recorded" }; }
-  const fresh = []; let cursorFound = false;
-  for (const s of sigs) { if (s.signature === lastSig) { cursorFound = true; break; } if (s.err) continue; fresh.push(s.signature); }
-  if (!cursorFound) console.warn(`[BUYBOT ${cfg.id}] cursor outside ${sigs.length}-sig window — possible missed buys`);
-  fresh.reverse();
-  if (!fresh.length) { kv.set(lastKey, sigs[0].signature); return { ok: true, scanned: 0, posted: 0 }; }
-  const seen = new Set(kv.get(seenKey, []));
-  let posted = 0, scanned = 0, advanceTo = lastSig;
-  for (const sig of fresh) {
-    if (seen.has(sig)) { advanceTo = sig; continue; }
-    const tx = await roseHeliusRpc(key, "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]);
-    if (!tx) {
-      const n = (buyBotParseAttempts.get(sig) || 0) + 1;
-      if (n < BUYBOT_MAX_PARSE_ATTEMPTS) { buyBotParseAttempts.set(sig, n); break; }
-      buyBotParseAttempts.delete(sig); advanceTo = sig; continue;
+  const poolList = [cfg.pool, ...(Array.isArray(cfg.extraPools) ? cfg.extraPools.filter(p => p && p !== cfg.pool) : [])];
+  const seenKey = `buyBotSeen:${cfg.id}`;
+  let posted = 0, scanned = 0, gap = false;
+  for (const poolAddr of poolList) {
+    const lastKey = `buyBotLastSig:${cfg.id}` + (poolAddr === cfg.pool ? "" : `:${poolAddr.slice(0, 8)}`);
+    const sigsRes = await roseHeliusRpc(key, "getSignaturesForAddress", [poolAddr, { limit: SIG_LIMIT }]).catch(() => null);
+    const sigs = Array.isArray(sigsRes) ? sigsRes : [];
+    if (!sigs.length) continue;
+    const lastSig = kv.get(lastKey, null);
+    if (!lastSig) { kv.set(lastKey, sigs[0].signature); continue; }
+    const fresh = []; let cursorFound = false;
+    for (const s of sigs) { if (s.signature === lastSig) { cursorFound = true; break; } if (s.err) continue; fresh.push(s.signature); }
+    if (!cursorFound) { gap = true; console.warn(`[BUYBOT ${cfg.id}] cursor outside ${sigs.length}-sig window on ${poolAddr.slice(0, 8)} — possible missed buys`); }
+    fresh.reverse();
+    if (!fresh.length) { kv.set(lastKey, sigs[0].signature); continue; }
+    const seen = new Set(kv.get(seenKey, []));
+    let advanceTo = lastSig;
+    for (const sig of fresh) {
+      if (seen.has(sig)) { advanceTo = sig; continue; }
+      const tx = await roseHeliusRpc(key, "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]);
+      if (!tx) {
+        const n = (buyBotParseAttempts.get(sig) || 0) + 1;
+        if (n < BUYBOT_MAX_PARSE_ATTEMPTS) { buyBotParseAttempts.set(sig, n); break; }
+        buyBotParseAttempts.delete(sig); advanceTo = sig; continue;
+      }
+      buyBotParseAttempts.delete(sig);
+      scanned++;
+      const buy = detectBuyGeneric(tx, cfg.mint, tokUsd, solUsd, poolAddr);
+      if (buy) buy.sig = buy.sig || sig;
+      if (buy && buy.usd != null && buy.usd >= (Number(cfg.minUsd) || 0)) {
+        const okp = await send(buyCaptionGeneric(buy, cfg, tokUsd, mkt));
+        await new Promise(r => setTimeout(r, 450));
+        if (!okp) {
+          const n = (buyBotSendAttempts.get(sig) || 0) + 1;
+          if (n < BUYBOT_MAX_SEND_ATTEMPTS) { buyBotSendAttempts.set(sig, n); break; }
+          console.warn(`[BUYBOT ${cfg.id}] giving up posting ${sig.slice(0, 8)} after ${n} send attempts — stepping over`);
+        } else posted++;
+        buyBotSendAttempts.delete(sig);
+      }
+      seen.add(sig); advanceTo = sig;
     }
-    buyBotParseAttempts.delete(sig);
-    scanned++;
-    const buy = detectBuyGeneric(tx, cfg.mint, tokUsd, solUsd, cfg.pool);
-    if (buy) buy.sig = buy.sig || sig;
-    if (buy && buy.usd != null && buy.usd >= (Number(cfg.minUsd) || 0)) {
-      const okp = await send(buyCaptionGeneric(buy, cfg, tokUsd, mkt));
-      await new Promise(r => setTimeout(r, 450));
-      if (!okp) {
-        const n = (buyBotSendAttempts.get(sig) || 0) + 1;
-        if (n < BUYBOT_MAX_SEND_ATTEMPTS) { buyBotSendAttempts.set(sig, n); break; }
-        console.warn(`[BUYBOT ${cfg.id}] giving up posting ${sig.slice(0, 8)} after ${n} send attempts — stepping over`);
-      } else posted++;
-      buyBotSendAttempts.delete(sig);
-    }
-    seen.add(sig); advanceTo = sig;
+    kv.set(lastKey, advanceTo);
+    kv.set(seenKey, [...seen].slice(-BUYBOT_SEEN_MAX));
   }
-  kv.set(lastKey, advanceTo);
-  kv.set(seenKey, [...seen].slice(-BUYBOT_SEEN_MAX));
-  return { ok: true, scanned, posted, floorUsd: Number(cfg.minUsd) || 0, gap: !cursorFound };
+  return { ok: true, scanned, posted, floorUsd: Number(cfg.minUsd) || 0, gap, pools: poolList.length };
 }
 
 // ── Project BURN watcher ("feel the burn") ──────────────────────────────────
@@ -7840,6 +7850,12 @@ app.get("/api/buybot", async (req, res) => {
   if (q.burns === "0") c.burnArmed = false;
   // &burntarget=<supply goal> adds a "Road to X" countdown line to burn posts (0 clears).
   if (q.burntarget !== undefined) c.burnTarget = Math.max(0, Number(q.burntarget) || 0);
+  // &pools=<csv> — EXTRA pool addresses also watched for buys (primary &pool= stays canonical). Empty clears.
+  if (q.pools !== undefined) {
+    const list = String(q.pools).split(",").map(s => s.trim()).filter(Boolean);
+    for (const a of list) if (!SOL_ADDR_RE.test(a)) return res.status(400).json({ error: "bad pool in pools" });
+    c.extraPools = list;
+  }
   // &persona=<brand blurb> arms the room chat persona (empty string disarms).
   if (q.persona !== undefined) c.persona = String(q.persona).slice(0, 600) || null;
   buyBotSave(c);
