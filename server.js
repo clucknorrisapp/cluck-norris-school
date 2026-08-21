@@ -7548,7 +7548,14 @@ function buyBotsAll() { return kv.get("projectBuyBots", {}) || {}; }
 function buyBotGet(id) { return buyBotsAll()[id] || null; }
 function buyBotSave(c) { const a = buyBotsAll(); a[c.id] = c; kv.set("projectBuyBots", a); }
 const buyBotParseAttempts = new Map();
-const BUYBOT_MAX_PARSE_ATTEMPTS = 6;
+// ~5 min of retries (30 × 10s cycles) before stepping over an unfetchable sig.
+// The old 6-attempt (~60s) cap silently ATE a real $20 CUNA buy on 2026-08-21:
+// a missed buy is far worse than a late one, so wait out indexing hiccups.
+const BUYBOT_MAX_PARSE_ATTEMPTS = 30;
+// Telegram send failures likewise must not consume the buy: hold the cursor and
+// retry next cycle, capped so a permanently-rejected caption can't wedge the feed.
+const buyBotSendAttempts = new Map();
+const BUYBOT_MAX_SEND_ATTEMPTS = 5;
 const BUYBOT_SEEN_MAX = 600;
 
 // Generalized roseDetectBuyFromRaw: mint + optional pool hint are parameters.
@@ -7635,12 +7642,18 @@ async function projectBuyPollOnce(cfg, { testPost = false } = {}) {
     buyBotParseAttempts.delete(sig);
     scanned++;
     const buy = detectBuyGeneric(tx, cfg.mint, tokUsd, solUsd, cfg.pool);
-    seen.add(sig); advanceTo = sig;
     if (buy) buy.sig = buy.sig || sig;
     if (buy && buy.usd != null && buy.usd >= (Number(cfg.minUsd) || 0)) {
-      if (await send(buyCaptionGeneric(buy, cfg, tokUsd, mkt))) posted++;
+      const okp = await send(buyCaptionGeneric(buy, cfg, tokUsd, mkt));
       await new Promise(r => setTimeout(r, 450));
+      if (!okp) {
+        const n = (buyBotSendAttempts.get(sig) || 0) + 1;
+        if (n < BUYBOT_MAX_SEND_ATTEMPTS) { buyBotSendAttempts.set(sig, n); break; }
+        console.warn(`[BUYBOT ${cfg.id}] giving up posting ${sig.slice(0, 8)} after ${n} send attempts — stepping over`);
+      } else posted++;
+      buyBotSendAttempts.delete(sig);
     }
+    seen.add(sig); advanceTo = sig;
   }
   kv.set(lastKey, advanceTo);
   kv.set(seenKey, [...seen].slice(-BUYBOT_SEEN_MAX));
