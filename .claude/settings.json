@@ -11,13 +11,19 @@
     ],
     "allow": [
       "Bash",
+      "Bash(node --check *)",
       "Read",
       "Edit",
       "Write",
       "Glob",
       "Grep",
       "WebFetch",
-      "WebSearch"
+      "WebSearch",
+      "mcp__github__pull_request_read",
+      "mcp__github__actions_get",
+      "mcp__github__actions_list",
+      "mcp__github__get_job_logs",
+      "mcp__35eee470-17f0-40a9-ba95-01c2fc1c9845__jobs_wait"
     ]
   }
 }
