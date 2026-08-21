@@ -11954,6 +11954,14 @@ const AIRDROP_CAMPAIGN_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
 function airdropKey(campaign) { return `airdropSignups:${campaign}`; }
 app.get("/airdrop-signup", (req, res) => res.sendFile(join(__dirname, "public", "airdrop-signup.html")));
 app.get("/drop", (req, res) => res.sendFile(join(__dirname, "public", "airdrop-signup.html")));
+// Community meme art (AI-generated project images posted to rooms via /api/tg-test &photo= —
+// Telegram fetches by URL, ≤5MB). public/ is not statically mounted, so explicit route.
+app.get("/memes/:file", (req, res) => {
+  const f = String(req.params.file || "");
+  if (!/^[a-z0-9-]+\.(jpg|png|webp)$/.test(f)) return res.status(404).end();
+  res.setHeader("Cache-Control", "public, max-age=86400");
+  res.sendFile(join(__dirname, "public", "memes", f), (err) => { if (err && !res.headersSent) res.status(404).end(); });
+});
 
 // POST { address, handle?, campaign? } — validate + dedupe + store. GET (admin-gated,
 // ?key=…&c=<campaign>&export=csv|json) — export the collected list; without export it
