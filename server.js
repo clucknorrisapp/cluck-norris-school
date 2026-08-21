@@ -13438,6 +13438,45 @@ function fmtUsdShort(n) {
 // Live market snapshot for any Solana mint from DexScreener: price + market cap from
 // the DEEPEST pool (real price discovery), 24h volume summed across pools, and the
 // price-change deltas. Same endpoint getClkn24hVolume() uses. Returns null on failure.
+// ── Supply & locked-supply reader (makes MC ≠ FDV honestly) ─────────────────
+// MC = price × (total − Jupiter-Lock escrowed), FDV = price × live on-chain total.
+// Cost-capped: 5-min cache per mint, max 5 getTokenAccounts pages (a bigger book
+// skips the lock adjustment rather than hammering the RPC — locked stays 0).
+const supplyLockedCache = new Map(); // mint → {ts, totalUi, lockedUi}
+async function getSupplyAndLocked(mint) {
+  const hit = supplyLockedCache.get(mint);
+  if (hit && Date.now() - hit.ts < 5 * 60 * 1000) return hit;
+  const key = (rpc.heliusKeys()[0]) || process.env.HELIUS_API_KEY;
+  const out = { ts: Date.now(), totalUi: 0, lockedUi: 0 };
+  try {
+    const sup = await roseHeliusRpc(key, "getTokenSupply", [mint]);
+    const dec = Number(sup && sup.value && sup.value.decimals != null ? sup.value.decimals : 6);
+    out.totalUi = sup && sup.value ? Number(sup.value.amount) / 10 ** dec : 0;
+    const byOwner = new Map();
+    for (let page = 1; page <= 5; page++) {
+      const r = await roseHeliusRpc(key, "getTokenAccounts", { mint, page, limit: 1000 });
+      const tas = (r && r.token_accounts) || [];
+      for (const ta of tas) { const raw = Number(ta.amount || 0); if (ta.owner && raw > 0) byOwner.set(ta.owner, (byOwner.get(ta.owner) || 0) + raw); }
+      if (tas.length < 1000) break;
+      if (page === 5 && tas.length === 1000) { supplyLockedCache.set(mint, out); return out; } // too big — skip lock math
+    }
+    const owners = [...byOwner.keys()];
+    let lockedRaw = 0;
+    for (let i = 0; i < owners.length; i += 100) {
+      const chunk = owners.slice(i, i + 100);
+      const r = await roseHeliusRpc(key, "getMultipleAccounts", [chunk, { encoding: "jsonParsed" }]);
+      const vals = (r && r.value) || [];
+      for (let j = 0; j < chunk.length; j++) {
+        const v = vals[j];
+        if (v && !v.executable && v.owner === JUPITER_LOCK_PROGRAM) lockedRaw += byOwner.get(chunk[j]) || 0;
+      }
+    }
+    out.lockedUi = lockedRaw / 10 ** dec;
+  } catch (e) { console.warn("[MARKET] supply/locked read failed:", e.message); }
+  supplyLockedCache.set(mint, out);
+  return out;
+}
+
 async function getTokenMarket(mint = CLKN_MINT_ADDR) {
   try {
     const res = await fetch(`https://api.dexscreener.com/token-pairs/v1/solana/${mint}`, { signal: AbortSignal.timeout(8000) });
@@ -13491,6 +13530,18 @@ async function getTokenMarket(mint = CLKN_MINT_ADDR) {
             h6: t.stats6h?.priceChange != null ? Number(t.stats6h.priceChange) : out.change.h6,
             h24: t.stats24h?.priceChange != null ? Number(t.stats24h.priceChange) : out.change.h24,
           };
+        }
+      } catch (_) {}
+    }
+    // Non-CLKN: split MC from FDV using the live chain — FDV = price × total
+    // on-chain supply; MC excludes Jupiter-Lock escrowed tokens (team locks are
+    // not circulating). Falls back to the aggregator figures if the read fails.
+    if (mint !== CLKN_MINT_ADDR && Number(out.priceUsd) > 0) {
+      try {
+        const sl = await getSupplyAndLocked(mint);
+        if (sl.totalUi > 0) {
+          out.fdv = out.priceUsd * sl.totalUi;
+          out.mc = out.priceUsd * Math.max(0, sl.totalUi - sl.lockedUi);
         }
       } catch (_) {}
     }
