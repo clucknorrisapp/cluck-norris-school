@@ -5876,6 +5876,28 @@ app.get("/api/tg-test", async (req, res) => {
   }
   const photo = req.query.photo ? String(req.query.photo) : null;  // optional image URL -> sendPhoto with caption
   const video = req.query.video ? String(req.query.video) : null;  // optional video URL -> sendVideo with caption (Telegram URL limit ~20MB — send a compressed encode)
+  // &upload=1 with &photo=: fetch the image server-side and multipart-upload the BYTES to
+  // Telegram (10MB) instead of handing Telegram the URL (5MB fetch cap, and some CDNs refuse
+  // Telegram's fetcher). Lets the meme routine post Higgsfield CDN images directly — no
+  // repo commit/deploy just to host an image. Admin-key-gated like the rest of this route.
+  if (photo && req.query.upload === "1") {
+    try {
+      if (!/^https:\/\//.test(photo)) return res.status(400).json({ success: false, error: "https URLs only" });
+      const ir = await fetch(photo, { signal: AbortSignal.timeout(30000), redirect: "follow" });
+      if (!ir.ok) return res.status(200).json({ success: false, error: `photo fetch ${ir.status}` });
+      const buf = Buffer.from(await ir.arrayBuffer());
+      if (buf.length > 9.5 * 1024 * 1024) return res.status(200).json({ success: false, error: `photo too large (${buf.length} bytes)` });
+      const fd = new FormData();
+      fd.append("chat_id", chatId);
+      if (text) fd.append("caption", text.slice(0, 1024));
+      fd.append("parse_mode", "HTML");
+      fd.append("disable_notification", silent ? "true" : "false");
+      fd.append("photo", new Blob([buf], { type: ir.headers.get("content-type") || "image/png" }), "image.png");
+      const r = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendPhoto`, { method: "POST", body: fd });
+      const data = await r.json().catch(() => ({}));
+      return res.json({ success: !!data.ok, messageId: data?.result?.message_id ?? null, bytes: buf.length, telegram: data.ok ? undefined : data });
+    } catch (e) { return res.status(200).json({ success: false, error: e.message }); }
+  }
   try {
     const endpoint = video ? "sendVideo" : photo ? "sendPhoto" : "sendMessage";
     const body = video
