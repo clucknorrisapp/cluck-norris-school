@@ -5876,6 +5876,28 @@ app.get("/api/tg-test", async (req, res) => {
   }
   const photo = req.query.photo ? String(req.query.photo) : null;  // optional image URL -> sendPhoto with caption
   const video = req.query.video ? String(req.query.video) : null;  // optional video URL -> sendVideo with caption (Telegram URL limit ~20MB — send a compressed encode)
+  // &upload=1 with &photo=: fetch the image server-side and multipart-upload the BYTES to
+  // Telegram (10MB) instead of handing Telegram the URL (5MB fetch cap, and some CDNs refuse
+  // Telegram's fetcher). Lets the meme routine post Higgsfield CDN images directly — no
+  // repo commit/deploy just to host an image. Admin-key-gated like the rest of this route.
+  if (photo && req.query.upload === "1") {
+    try {
+      if (!/^https:\/\//.test(photo)) return res.status(400).json({ success: false, error: "https URLs only" });
+      const ir = await fetch(photo, { signal: AbortSignal.timeout(30000), redirect: "follow" });
+      if (!ir.ok) return res.status(200).json({ success: false, error: `photo fetch ${ir.status}` });
+      const buf = Buffer.from(await ir.arrayBuffer());
+      if (buf.length > 9.5 * 1024 * 1024) return res.status(200).json({ success: false, error: `photo too large (${buf.length} bytes)` });
+      const fd = new FormData();
+      fd.append("chat_id", chatId);
+      if (text) fd.append("caption", text.slice(0, 1024));
+      fd.append("parse_mode", "HTML");
+      fd.append("disable_notification", silent ? "true" : "false");
+      fd.append("photo", new Blob([buf], { type: ir.headers.get("content-type") || "image/png" }), "image.png");
+      const r = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendPhoto`, { method: "POST", body: fd });
+      const data = await r.json().catch(() => ({}));
+      return res.json({ success: !!data.ok, messageId: data?.result?.message_id ?? null, bytes: buf.length, telegram: data.ok ? undefined : data });
+    } catch (e) { return res.status(200).json({ success: false, error: e.message }); }
+  }
   try {
     const endpoint = video ? "sendVideo" : photo ? "sendPhoto" : "sendMessage";
     const body = video
@@ -7381,7 +7403,9 @@ function buyCaptionGeneric(b, cfg, tokUsd, mkt) {
   const head = `${emoji} <b>${tgEsc(sym)} BUY!</b>`;
   const info = [];
   info.push(`💵 <b>$${usd < 1 ? usd.toFixed(2) : Math.round(usd).toLocaleString()}</b>` + (b.tokenAmt ? `  →  ${roseFmtNum(b.tokenAmt)} ${tgEsc(sym)}` : ""));
-  if (mkt && mkt.priceUsd) info.push(`📈 Price $${Number(mkt.priceUsd).toPrecision(3)}` + (mkt.mc ? `  ·  MC $${roseFmtNum(mkt.mc)}` : "") + (mkt.fdv ? `  ·  FDV $${roseFmtNum(mkt.fdv)}` : ""));
+  // Price is the headline number — it's what people actually buy and sell at
+  // (owner call 2026-08-21). Bold, own line, no MC (FDV stays as the secondary).
+  if (mkt && mkt.priceUsd) info.push(`📈 <b>Price $${Number(mkt.priceUsd).toPrecision(3)}</b>` + (mkt.fdv ? `\n🏦 FDV $${roseFmtNum(mkt.fdv)}` : ""));
   info.push(`👤 <code>${(b.wallet || "").slice(0, 4)}…${(b.wallet || "").slice(-4)}</code>` + (b.sig ? `  ·  <a href="https://solscan.io/tx/${b.sig}">tx</a>` : ""));
   info.push(`📈 <a href="https://dexscreener.com/solana/${cfg.mint}">Chart</a>  ·  🛒 <a href="https://jup.ag/tokens/${cfg.mint}">Buy ${tgEsc(sym)}</a>`);
   return [head, bar, ...info].join("\n");
@@ -13472,12 +13496,13 @@ async function getTokenMarket(mint = CLKN_MINT_ADDR) {
       vol24h,
       change: deepest.priceChange || {},
     };
-    // Prefer Jupiter's authoritative price/mc/liq/change for ANY mint (artifact-free),
-    // same as we do for CLKN volume. Crucially Jupiter's mcap tracks the LIVE on-chain
-    // supply, while DexScreener's marketCap/fdv can sit on a stale supply snapshot —
-    // it overstated CUNA's MC by 41% after a 4B burn. DexScreener stays the fallback
-    // for tokens Jupiter hasn't indexed.
-    {
+    // CLKN: prefer Jupiter's authoritative price/mc/liq/change (artifact-free), same
+    // as we do for volume. PROJECT TOKENS (CUNA etc.) stay on DexScreener's figures
+    // verbatim — owner call 2026-08-21: the community compares against DexScreener,
+    // so the bot must show the same MC/FDV DexScreener shows, even where its supply
+    // snapshot lags the chain (it lagged CUNA's 4B burn). Don't "fix" this again
+    // without an owner ask.
+    if (mint === CLKN_MINT_ADDR) {
       try {
         const jd = await jupTokensSearch(mint);
         const t = Array.isArray(jd) ? (jd.find(x => x.id === mint) || jd[0]) : null;
