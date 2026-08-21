@@ -7381,7 +7381,9 @@ function buyCaptionGeneric(b, cfg, tokUsd, mkt) {
   const head = `${emoji} <b>${tgEsc(sym)} BUY!</b>`;
   const info = [];
   info.push(`💵 <b>$${usd < 1 ? usd.toFixed(2) : Math.round(usd).toLocaleString()}</b>` + (b.tokenAmt ? `  →  ${roseFmtNum(b.tokenAmt)} ${tgEsc(sym)}` : ""));
-  if (mkt && mkt.priceUsd) info.push(`📈 Price $${Number(mkt.priceUsd).toPrecision(3)}` + (mkt.mc ? `  ·  MC $${roseFmtNum(mkt.mc)}` : "") + (mkt.fdv ? `  ·  FDV $${roseFmtNum(mkt.fdv)}` : ""));
+  // Price is the headline number — it's what people actually buy and sell at
+  // (owner call 2026-08-21). Bold, own line, no MC (FDV stays as the secondary).
+  if (mkt && mkt.priceUsd) info.push(`📈 <b>Price $${Number(mkt.priceUsd).toPrecision(3)}</b>` + (mkt.fdv ? `\n🏦 FDV $${roseFmtNum(mkt.fdv)}` : ""));
   info.push(`👤 <code>${(b.wallet || "").slice(0, 4)}…${(b.wallet || "").slice(-4)}</code>` + (b.sig ? `  ·  <a href="https://solscan.io/tx/${b.sig}">tx</a>` : ""));
   info.push(`📈 <a href="https://dexscreener.com/solana/${cfg.mint}">Chart</a>  ·  🛒 <a href="https://jup.ag/tokens/${cfg.mint}">Buy ${tgEsc(sym)}</a>`);
   return [head, bar, ...info].join("\n");
