@@ -13340,9 +13340,12 @@ async function getTokenMarket(mint = CLKN_MINT_ADDR) {
       vol24h,
       change: deepest.priceChange || {},
     };
-    // CLKN: prefer Jupiter's authoritative price/mc/liq/change (artifact-free), same
-    // as we do for volume — Jupiter aggregates correctly across our pools.
-    if (mint === CLKN_MINT_ADDR) {
+    // Prefer Jupiter's authoritative price/mc/liq/change for ANY mint (artifact-free),
+    // same as we do for CLKN volume. Crucially Jupiter's mcap tracks the LIVE on-chain
+    // supply, while DexScreener's marketCap/fdv can sit on a stale supply snapshot —
+    // it overstated CUNA's MC by 41% after a 4B burn. DexScreener stays the fallback
+    // for tokens Jupiter hasn't indexed.
+    {
       try {
         const jd = await jupTokensSearch(mint);
         const t = Array.isArray(jd) ? (jd.find(x => x.id === mint) || jd[0]) : null;
