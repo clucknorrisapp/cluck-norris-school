@@ -13734,10 +13734,11 @@ async function getTokenMarket(mint = CLKN_MINT_ADDR) {
       change: deepest.priceChange || {},
     };
     // CLKN: prefer Jupiter's authoritative price/mc/liq/change (artifact-free), same
-    // as we do for volume. PROJECT TOKENS (CUNA etc.) stay on DexScreener's figures
-    // verbatim — owner call 2026-08-21: the community compares against DexScreener,
-    // so the bot must show the same MC/FDV DexScreener shows, even where its supply
-    // snapshot lags the chain (it lagged CUNA's 4B burn). Don't "fix" this again
+    // as we do for volume. PROJECT TOKENS (CUNA etc.): price/liquidity/change stay
+    // DexScreener, but MC/FDV come from JUPITER — owner ask 2026-08-21 (evening),
+    // superseding the same-day "mirror DexScreener verbatim" call: the community is
+    // burning supply daily and DexScreener's supply snapshot lags the chain, while
+    // Jupiter tracks live supply so burns show up immediately. Don't flip this back
     // without an owner ask.
     if (mint === CLKN_MINT_ADDR) {
       try {
@@ -13753,6 +13754,15 @@ async function getTokenMarket(mint = CLKN_MINT_ADDR) {
             h6: t.stats6h?.priceChange != null ? Number(t.stats6h.priceChange) : out.change.h6,
             h24: t.stats24h?.priceChange != null ? Number(t.stats24h.priceChange) : out.change.h24,
           };
+        }
+      } catch (_) {}
+    } else {
+      try {
+        const jd = await jupTokensSearch(mint);
+        const t = Array.isArray(jd) ? (jd.find(x => x.id === mint) || jd[0]) : null;
+        if (t) {
+          if (Number(t.mcap || t.fdv) > 0) out.mc = Number(t.mcap || t.fdv);
+          if (Number(t.fdv || t.mcap) > 0) out.fdv = Number(t.fdv || t.mcap);
         }
       } catch (_) {}
     }
