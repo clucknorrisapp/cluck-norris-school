@@ -7683,6 +7683,13 @@ function burnCaptionGeneric(b, cfg, tokUsd, pctOfSupply, newSupply) {
   if (pctOfSupply > 0) amt += `  ·  ${pctOfSupply < 0.01 ? "<0.01" : pctOfSupply.toFixed(2)}% of supply`;
   lines.push(amt);
   if (newSupply > 0) lines.push(`📉 Supply now ${roseFmtNum(newSupply)} ${tgEsc(sym)}`);
+  // Optional burn-down goal (cfg.burnTarget): show the countdown on every celebration.
+  const tgt = Number(cfg.burnTarget) || 0;
+  if (tgt > 0 && newSupply > 0) {
+    lines.push(newSupply > tgt
+      ? `🎯 Road to ${roseFmtNum(tgt)}: <b>${roseFmtNum(newSupply - tgt)}</b> ${tgEsc(sym)} to go`
+      : `🏆 <b>TARGET REACHED!</b> Supply is at ${roseFmtNum(tgt)} or below`);
+  }
   if (b.authority) lines.push(`👤 <code>${b.authority.slice(0, 4)}…${b.authority.slice(-4)}</code>` + (b.sig ? `  ·  <a href="https://solscan.io/tx/${b.sig}">tx</a>` : ""));
   else if (b.sig) lines.push(`🔗 <a href="https://solscan.io/tx/${b.sig}">tx</a>`);
   return lines.join("\n");
@@ -7817,6 +7824,8 @@ app.get("/api/buybot", async (req, res) => {
   if (q.disarm === "1") c.armed = false;
   if (q.burns === "1") c.burnArmed = true;
   if (q.burns === "0") c.burnArmed = false;
+  // &burntarget=<supply goal> adds a "Road to X" countdown line to burn posts (0 clears).
+  if (q.burntarget !== undefined) c.burnTarget = Math.max(0, Number(q.burntarget) || 0);
   // &persona=<brand blurb> arms the room chat persona (empty string disarms).
   if (q.persona !== undefined) c.persona = String(q.persona).slice(0, 600) || null;
   buyBotSave(c);
