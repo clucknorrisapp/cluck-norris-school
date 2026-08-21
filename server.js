@@ -7670,6 +7670,7 @@ async function projectBuyPollOnce(cfg, { testPost = false } = {}) {
 // burning dust on a loop can't flood the room.
 const burnWatchCooldown = new Map();           // `${id}:${authority}` → last post ms
 const burnWatchHourly = new Map();             // id → {hour, count}
+const burnSendAttempts = new Map();            // id → consecutive all-sends-failed cycles
 const BURN_WATCH_COOLDOWN_MS = 10 * 60 * 1000;
 const BURN_WATCH_HOURLY_CAP = 12;
 
@@ -7751,7 +7752,7 @@ async function projectBurnPollOnce(cfg, { testPost = false } = {}) {
   fresh.reverse();
   const hr = Math.floor(Date.now() / 3600000);
   let h = burnWatchHourly.get(cfg.id); if (!h || h.hour !== hr) { h = { hour: hr, count: 0 }; burnWatchHourly.set(cfg.id, h); }
-  let posted = 0, foundAny = false;
+  let posted = 0, foundAny = false, sendFails = 0;
   for (const sig of fresh) {
     const tx = await roseHeliusRpc(key, "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]).catch(() => null);
     if (!tx) continue;
@@ -7765,14 +7766,27 @@ async function projectBurnPollOnce(cfg, { testPost = false } = {}) {
       if (await send(burnCaptionGeneric(b, cfg, tokUsd, (b.amount / prev) * 100, supply))) {
         posted++; h.count++; burnWatchCooldown.set(cdKey, Date.now());
         await new Promise(r => setTimeout(r, 450));
-      }
+      } else sendFails++;
     }
   }
   // Supply fell but no burn ix surfaced in the window (cursor gap / >50 txs since):
   // still celebrate the drop itself rather than staying silent.
   if (!foundAny && h.count < BURN_WATCH_HOURLY_CAP) {
     if (await send(burnCaptionGeneric({ amount: prev - supply, authority: null, sig: null }, cfg, tokUsd, ((prev - supply) / prev) * 100, supply))) { posted++; h.count++; }
+    else sendFails++;
   }
+  // A failed Telegram send must NOT consume the supply drop (this ate the 2026-08-21
+  // 14:00 CUNA burn during a deploy restart): hold the cursors so the next cycle
+  // re-detects the drop and retries, capped like the buy bot so it can't wedge.
+  if (!posted && sendFails > 0) {
+    const n = (burnSendAttempts.get(cfg.id) || 0) + 1;
+    if (n < BUYBOT_MAX_SEND_ATTEMPTS) {
+      burnSendAttempts.set(cfg.id, n);
+      return { ok: false, retryNextCycle: true, sendFails, attempt: n };
+    }
+    console.warn(`[BURNWATCH ${cfg.id}] giving up after ${n} failed send cycles — stepping over drop`);
+  }
+  burnSendAttempts.delete(cfg.id);
   kv.set(supKey, supply);
   if (Array.isArray(sigs) && sigs[0]) kv.set(sigKey, sigs[0].signature);
   return { ok: true, burns: posted, supplyDrop: prev - supply };
