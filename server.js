@@ -310,7 +310,7 @@ async function buildMarketSnapshotText(mint = CLKN_MINT_ADDR, sym = "CLKN") {
   const c = mkt.change || {};
   let m = `📈 <b>${sym} — market</b>\n\n`;
   m += `💵 Price: <b>${fmtPrice(mkt.priceUsd)}</b>\n`;
-  if (mkt.mc) m += `🏦 Market cap: <b>${fmtUsdShort(mkt.mc)}</b>\n`;
+  if (mkt.mc) m += `🏦 Market cap: <b>${fmtUsdShort(mkt.mc)}</b>${mkt.fdv ? ` · FDV <b>${fmtUsdShort(mkt.fdv)}</b>` : ""}\n`;
   const parts = [c.h1 != null ? `1h ${chg(c.h1)}` : null, c.h6 != null ? `6h ${chg(c.h6)}` : null, c.h24 != null ? `24h ${chg(c.h24)}` : null].filter(Boolean);
   if (parts.length) m += `📊 ${parts.join(" · ")}\n`;
   const vol = fmtUsdShort(mkt.vol24h); if (vol) m += `🔁 24h volume: <b>${vol}</b>\n`;
@@ -7381,7 +7381,7 @@ function buyCaptionGeneric(b, cfg, tokUsd, mkt) {
   const head = `${emoji} <b>${tgEsc(sym)} BUY!</b>`;
   const info = [];
   info.push(`💵 <b>$${usd < 1 ? usd.toFixed(2) : Math.round(usd).toLocaleString()}</b>` + (b.tokenAmt ? `  →  ${roseFmtNum(b.tokenAmt)} ${tgEsc(sym)}` : ""));
-  if (mkt && mkt.priceUsd) info.push(`📈 Price $${Number(mkt.priceUsd).toPrecision(3)}` + (mkt.mc ? `  ·  MC $${roseFmtNum(mkt.mc)}` : ""));
+  if (mkt && mkt.priceUsd) info.push(`📈 Price $${Number(mkt.priceUsd).toPrecision(3)}` + (mkt.mc ? `  ·  MC $${roseFmtNum(mkt.mc)}` : "") + (mkt.fdv ? `  ·  FDV $${roseFmtNum(mkt.fdv)}` : ""));
   info.push(`👤 <code>${(b.wallet || "").slice(0, 4)}…${(b.wallet || "").slice(-4)}</code>` + (b.sig ? `  ·  <a href="https://solscan.io/tx/${b.sig}">tx</a>` : ""));
   info.push(`📈 <a href="https://dexscreener.com/solana/${cfg.mint}">Chart</a>  ·  🛒 <a href="https://jup.ag/tokens/${cfg.mint}">Buy ${tgEsc(sym)}</a>`);
   return [head, bar, ...info].join("\n");
@@ -13336,6 +13336,7 @@ async function getTokenMarket(mint = CLKN_MINT_ADDR) {
     const out = {
       priceUsd: Number(deepest.priceUsd) || null,
       mc: Number(deepest.marketCap || deepest.fdv) || null,
+      fdv: Number(deepest.fdv || deepest.marketCap) || null,
       liqUsd: Math.round(deepest.liquidity?.usd || 0),
       vol24h,
       change: deepest.priceChange || {},
@@ -13352,6 +13353,7 @@ async function getTokenMarket(mint = CLKN_MINT_ADDR) {
         if (t && Number(t.usdPrice) > 0) {
           out.priceUsd = Number(t.usdPrice);
           if (Number(t.mcap || t.fdv) > 0) out.mc = Number(t.mcap || t.fdv);
+          if (Number(t.fdv || t.mcap) > 0) out.fdv = Number(t.fdv || t.mcap);
           if (Number.isFinite(Number(t.liquidity))) out.liqUsd = Math.round(Number(t.liquidity));
           out.change = {
             h1: t.stats1h?.priceChange != null ? Number(t.stats1h.priceChange) : out.change.h1,
