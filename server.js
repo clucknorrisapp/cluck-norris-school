@@ -7441,20 +7441,140 @@ async function projectBuyPollOnce(cfg, { testPost = false } = {}) {
   return { ok: true, scanned, posted, floorUsd: Number(cfg.minUsd) || 0, gap: !cursorFound };
 }
 
+// ── Project BURN watcher ("feel the burn") ──────────────────────────────────
+// Rides the same per-project config as the buy bot (burnArmed flag). Supply-gated
+// so the steady-state cost is ONE getTokenSupply per cycle: only when total supply
+// actually DROPS does it scan the mint's recent signatures for burn/burnChecked
+// instructions and celebrate them in the project's room. Real burns only — an
+// incinerator transfer doesn't reduce supply and won't fire this. Anti-spam per
+// the burn-broadcast rules: per-burner cooldown + hourly cap, so a griefer
+// burning dust on a loop can't flood the room.
+const burnWatchCooldown = new Map();           // `${id}:${authority}` → last post ms
+const burnWatchHourly = new Map();             // id → {hour, count}
+const BURN_WATCH_COOLDOWN_MS = 10 * 60 * 1000;
+const BURN_WATCH_HOURLY_CAP = 12;
+
+function burnCaptionGeneric(b, cfg, tokUsd, pctOfSupply, newSupply) {
+  const sym = cfg.symbol || "TOKEN";
+  const usd = tokUsd > 0 && b.amount > 0 ? b.amount * tokUsd : null;
+  const bar = roseBuyBar(usd || 0, 40).replace(/🌹/g, "🔥").replace(/🌸/g, "🔥");
+  const lines = [`🔥 <b>${tgEsc(sym)} BURN!</b>  Feel the burn?!`, bar];
+  let amt = `🪙 <b>${roseFmtNum(b.amount)} ${tgEsc(sym)}</b> burned`;
+  if (usd) amt += `  ·  $${usd < 1 ? usd.toFixed(2) : Math.round(usd).toLocaleString()}`;
+  if (pctOfSupply > 0) amt += `  ·  ${pctOfSupply < 0.01 ? "<0.01" : pctOfSupply.toFixed(2)}% of supply`;
+  lines.push(amt);
+  if (newSupply > 0) lines.push(`📉 Supply now ${roseFmtNum(newSupply)} ${tgEsc(sym)}`);
+  if (b.authority) lines.push(`👤 <code>${b.authority.slice(0, 4)}…${b.authority.slice(-4)}</code>` + (b.sig ? `  ·  <a href="https://solscan.io/tx/${b.sig}">tx</a>` : ""));
+  else if (b.sig) lines.push(`🔗 <a href="https://solscan.io/tx/${b.sig}">tx</a>`);
+  return lines.join("\n");
+}
+
+// Burn instructions of `mint` inside one jsonParsed tx (top-level + inner).
+// burnChecked carries a ui amount; plain burn is raw base units → scale by decimals.
+function txBurnsOfMint(tx, mint, decimals) {
+  const out = [];
+  const scan = (ixs) => {
+    for (const ix of (ixs || [])) {
+      const p = ix && ix.parsed; if (!p || !p.info) continue;
+      if ((p.type === "burn" || p.type === "burnChecked") && p.info.mint === mint) {
+        const ui = p.info.tokenAmount ? Number(p.info.tokenAmount.uiAmount) : Number(p.info.amount || 0) / 10 ** decimals;
+        out.push({ amount: ui, authority: p.info.authority || p.info.multisigAuthority || null });
+      }
+    }
+  };
+  scan(tx.transaction && tx.transaction.message && tx.transaction.message.instructions);
+  for (const g of ((tx.meta && tx.meta.innerInstructions) || [])) scan(g.instructions);
+  return out;
+}
+
+async function projectBurnPollOnce(cfg, { testPost = false } = {}) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token || !cfg || !cfg.chatId || !cfg.mint) return { ok: false, reason: "incomplete config" };
+  const key = (rpc.heliusKeys()[0]) || process.env.HELIUS_API_KEY;
+  if (!key) return { ok: false, reason: "no HELIUS key" };
+  const sup = await roseHeliusRpc(key, "getTokenSupply", [cfg.mint]);
+  const dec = Number(sup && sup.value && sup.value.decimals != null ? sup.value.decimals : 6);
+  const supply = sup && sup.value ? Number(sup.value.amount) / 10 ** dec : null;
+  if (supply == null) return { ok: false, reason: "no supply read" };
+  const img = cfg.image || null;
+  const send = (cap) => img ? roseTgSendPhoto(token, cfg.chatId, img, cap, { silent: true }) : roseTgSend(token, cfg.chatId, cap, { silent: true });
+
+  if (testPost) {
+    const tokUsd = await orderbook.getUsdPrice(cfg.mint).catch(() => 0);
+    const sample = { amount: supply * 0.001, authority: cfg.pool || cfg.mint, sig: null };
+    const okp = await send("🧪 <i>test alert</i>\n" + burnCaptionGeneric(sample, cfg, tokUsd, 0.1, supply - sample.amount));
+    return { ok: okp, testPost: true, image: !!img };
+  }
+
+  const supKey = `burnWatchSupply:${cfg.id}`, sigKey = `burnWatchLastSig:${cfg.id}`;
+  const prev = kv.get(supKey, null);
+  if (prev == null) {
+    kv.set(supKey, supply);
+    const s0 = await roseHeliusRpc(key, "getSignaturesForAddress", [cfg.mint, { limit: 1 }]).catch(() => null);
+    if (Array.isArray(s0) && s0[0]) kv.set(sigKey, s0[0].signature);
+    return { ok: true, firstRun: true, supply };
+  }
+  if (supply >= prev) { if (supply > prev) kv.set(supKey, supply); return { ok: true, burns: 0 }; }
+
+  // Supply dropped → hunt the burn tx(s) in the mint's recent history.
+  const tokUsd = await orderbook.getUsdPrice(cfg.mint).catch(() => 0);
+  const lastSig = kv.get(sigKey, null);
+  const sigs = await roseHeliusRpc(key, "getSignaturesForAddress", [cfg.mint, { limit: 50 }]).catch(() => []);
+  const fresh = [];
+  for (const s of (Array.isArray(sigs) ? sigs : [])) { if (s.signature === lastSig) break; if (!s.err) fresh.push(s.signature); }
+  fresh.reverse();
+  const hr = Math.floor(Date.now() / 3600000);
+  let h = burnWatchHourly.get(cfg.id); if (!h || h.hour !== hr) { h = { hour: hr, count: 0 }; burnWatchHourly.set(cfg.id, h); }
+  let posted = 0, foundAny = false;
+  for (const sig of fresh) {
+    const tx = await roseHeliusRpc(key, "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]).catch(() => null);
+    if (!tx) continue;
+    for (const b of txBurnsOfMint(tx, cfg.mint, dec)) {
+      foundAny = true;
+      if (b.amount <= 0) continue;
+      const cdKey = `${cfg.id}:${b.authority || "?"}`;
+      const lastAt = burnWatchCooldown.get(cdKey) || 0;
+      if (Date.now() - lastAt < BURN_WATCH_COOLDOWN_MS || h.count >= BURN_WATCH_HOURLY_CAP) continue;
+      b.sig = sig;
+      if (await send(burnCaptionGeneric(b, cfg, tokUsd, (b.amount / prev) * 100, supply))) {
+        posted++; h.count++; burnWatchCooldown.set(cdKey, Date.now());
+        await new Promise(r => setTimeout(r, 450));
+      }
+    }
+  }
+  // Supply fell but no burn ix surfaced in the window (cursor gap / >50 txs since):
+  // still celebrate the drop itself rather than staying silent.
+  if (!foundAny && h.count < BURN_WATCH_HOURLY_CAP) {
+    if (await send(burnCaptionGeneric({ amount: prev - supply, authority: null, sig: null }, cfg, tokUsd, ((prev - supply) / prev) * 100, supply))) { posted++; h.count++; }
+  }
+  kv.set(supKey, supply);
+  if (Array.isArray(sigs) && sigs[0]) kv.set(sigKey, sigs[0].signature);
+  return { ok: true, burns: posted, supplyDrop: prev - supply };
+}
+
 async function pollProjectBuyBots() {
   const all = buyBotsAll();
   for (const id of Object.keys(all)) {
     const c = all[id];
-    if (!c || !c.armed) continue;
-    try { await projectBuyPollOnce(c); }
-    catch (e) { console.warn(`[BUYBOT ${id}] poll error:`, e.message); }
+    if (!c) continue;
+    if (c.armed) {
+      try { await projectBuyPollOnce(c); }
+      catch (e) { console.warn(`[BUYBOT ${id}] poll error:`, e.message); }
+    }
+    if (c.burnArmed) {
+      try { await projectBurnPollOnce(c); }
+      catch (e) { console.warn(`[BURNWATCH ${id}] poll error:`, e.message); }
+    }
   }
 }
 
 // Admin lever for the generic buy bot (PREMIUM_ACCESS_KEY-gated).
 //   ?project=cuna&mint=…&pool=…&symbol=CUNA&chat=-100…&min=1&emoji=🐔&image=URL  → upsert config
 //   &arm=1 / &disarm=1   → turn this project's auto-posting on/off
+//   &burns=1 / &burns=0  → turn the BURN watcher on/off (supply-gated; posts a
+//                          "feel the burn" celebration on every real burn)
 //   ?project=cuna&test=1 → fire one sample buy to verify chat/image wiring
+//   ?project=cuna&burntest=1 → fire one sample BURN alert
 //   ?project=cuna&run=1  → run one real poll cycle now (even while disarmed)
 //   ?project=cuna&status=1 (or no action) → read-back the config
 //   ?list=1              → list all configured buy bots
@@ -7476,9 +7596,12 @@ app.get("/api/buybot", async (req, res) => {
   if (q.image !== undefined) c.image = String(q.image).slice(0, 300) || null;
   if (q.arm === "1") c.armed = true;
   if (q.disarm === "1") c.armed = false;
+  if (q.burns === "1") c.burnArmed = true;
+  if (q.burns === "0") c.burnArmed = false;
   buyBotSave(c);
   try {
     if (q.test === "1") { const r = await projectBuyPollOnce(c, { testPost: true }); return res.json({ ok: true, config: c, test: r }); }
+    if (q.burntest === "1") { const r = await projectBurnPollOnce(c, { testPost: true }); return res.json({ ok: true, config: c, burntest: r }); }
     if (q.run === "1") { const r = await projectBuyPollOnce(c); return res.json({ ok: true, config: c, run: r }); }
   } catch (e) { return res.status(500).json({ error: e.message }); }
   return res.json({ ok: true, config: c });
@@ -11831,6 +11954,14 @@ const AIRDROP_CAMPAIGN_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
 function airdropKey(campaign) { return `airdropSignups:${campaign}`; }
 app.get("/airdrop-signup", (req, res) => res.sendFile(join(__dirname, "public", "airdrop-signup.html")));
 app.get("/drop", (req, res) => res.sendFile(join(__dirname, "public", "airdrop-signup.html")));
+// Community meme art (AI-generated project images posted to rooms via /api/tg-test &photo= —
+// Telegram fetches by URL, ≤5MB). public/ is not statically mounted, so explicit route.
+app.get("/memes/:file", (req, res) => {
+  const f = String(req.params.file || "");
+  if (!/^[a-z0-9-]+\.(jpg|png|webp)$/.test(f)) return res.status(404).end();
+  res.setHeader("Cache-Control", "public, max-age=86400");
+  res.sendFile(join(__dirname, "public", "memes", f), (err) => { if (err && !res.headersSent) res.status(404).end(); });
+});
 
 // POST { address, handle?, campaign? } — validate + dedupe + store. GET (admin-gated,
 // ?key=…&c=<campaign>&export=csv|json) — export the collected list; without export it
