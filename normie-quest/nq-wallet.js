@@ -23,6 +23,7 @@
 //   HELIUS_API_KEY   RPC (else public mainnet)
 
 const crypto = require('crypto');
+const gate = require('./nq-gate');   // launch cap + free tier (owner-flippable, no redeploy)
 let _web3 = null, _nacl = null, _bs58 = null;
 function web3() { return (_web3 = _web3 || require('@solana/web3.js')); }
 function nacl() { return (_nacl = _nacl || require('tweetnacl')); }
@@ -77,8 +78,12 @@ function publicConfig() {
     normieMint: c.normieMint || null,
     clknMint: c.clknMint,
     thresholds: { tier1Normie: c.tier1Normie, tier2Normie: c.tier2Normie, clknAccess: c.clknAccess },
-    // world access per tier (worlds are 1-indexed; hidden bonus levels aren't gated here)
-    tiers: { 0: [1, 2], 1: [1, 8], 2: 'all' },
+    // world access per tier (worlds are 1-indexed; hidden bonus levels aren't gated here).
+    // Tier 0 tracks the gate's freeMax, and every band is clamped by the launch cap, so the
+    // front door can never advertise a band the gate won't actually hand out.
+    tiers: { 0: gate.freeWorlds(), 1: gate.clamp([1, 8]), 2: gate.clamp('all') },
+    // The gate itself: {on, freeMax, cap}. Structure only — no thresholds, no prices, no terms.
+    gate: gate.publicState(),
   };
 }
 
@@ -196,12 +201,15 @@ async function readBalances(owner) {
   ]);
   return { normie, clkn };
 }
+// Tier from holdings, THEN clamped by the access gate. The tier a wallet earns never changes
+// here — the gate only decides how much of it is currently open (launch cap), so lifting the cap
+// with /api/nq/gate?cap=0 instantly widens every holder's access with no re-sign and no redeploy.
 function tierForBalances(b) {
   const c = cfg();
   const normie = Number(b && b.normie || 0), clkn = Number(b && b.clkn || 0);
-  if (normie >= c.tier2Normie || clkn >= c.clknAccess) return { tier: 2, worlds: 'all' };
-  if (normie >= c.tier1Normie) return { tier: 1, worlds: [1, 8] };   // owner's structure: tier-1 covers worlds 3-8
-  return { tier: 0, worlds: [1, 2] };
+  if (normie >= c.tier2Normie || clkn >= c.clknAccess) return { tier: 2, worlds: gate.clamp('all') };
+  if (normie >= c.tier1Normie) return { tier: 1, worlds: gate.clamp([1, 8]) };   // owner's structure: tier-1 covers worlds 3-8
+  return { tier: 0, worlds: gate.freeWorlds() };
 }
 
-module.exports = { cfg, publicConfig, challenge, verify, refresh, checkSession, tierForBalances, readBalances, isVip, vipList, vipListWrite, CLKN_MINT_DEFAULT };
+module.exports = { cfg, publicConfig, challenge, verify, refresh, checkSession, tierForBalances, readBalances, isVip, vipList, vipListWrite, gate, CLKN_MINT_DEFAULT };
