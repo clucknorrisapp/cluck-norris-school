@@ -76,6 +76,19 @@ router.get('/normie-quest-x7-lab', (req, res) => {
 router.get('/normie-quest-x7.webmanifest', (req, res) => {
   res.set('X-Robots-Tag', 'noindex, nofollow');
   res.type('application/manifest+json');
+  // On the dedicated game domain (normiequest.app) the game lives at "/", which is OUTSIDE this
+  // manifest's /normie-quest-x7 scope — browsers then ignore the whole manifest, including its
+  // orientation:landscape hint, and a home-screen install misbehaves. Rewrite the identity
+  // fields to the domain's root for those hosts; everyone else gets the file untouched.
+  const gameHosts = String(process.env.NQ_GAME_HOSTS || 'normiequest.app,www.normiequest.app')
+    .split(',').map((h) => h.trim().toLowerCase()).filter(Boolean);
+  if (gameHosts.includes(String(req.hostname || '').toLowerCase())) {
+    try {
+      const m = JSON.parse(fs.readFileSync(path.join(__dirname, 'public', 'pwa', 'manifest.webmanifest'), 'utf8'));
+      m.id = '/'; m.start_url = '/'; m.scope = '/';
+      return res.send(JSON.stringify(m));
+    } catch (e) { /* fall through to the file */ }
+  }
   res.sendFile(path.join(__dirname, 'public', 'pwa', 'manifest.webmanifest'));
 });
 router.get('/nq-sw.js', (req, res) => {
@@ -630,7 +643,7 @@ router.get('/api/nq/gate', (req, res) => {
     // Echo what a player would actually get, so the owner can eyeball the effect immediately.
     res.json({
       ok: true, changed, gate: gateState,
-      effective: { noWallet: wallet.gate.freeWorlds(), tier1: wallet.gate.clamp([1, 8]), tier2: wallet.gate.clamp('all') },
+      effective: { noWallet: wallet.gate.freeWorlds(), tier1: wallet.gate.clamp([1, 12]), tier2: wallet.gate.clamp('all') },   // tier-1 = worlds 1-12 since the 2026-08-22 launch tiers
     });
   } catch (e) { res.status(500).json({ ok: false, error: 'gate_write_failed' }); }
 });
