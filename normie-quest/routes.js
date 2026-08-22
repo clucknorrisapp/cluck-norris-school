@@ -52,6 +52,14 @@ router.get('/normie-quest-x7', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'normie-quest-platformer.html'));
 });
 
+// Launch-day front door (owner ask, 2026-08-22): a memorable alias for the same game. The x7
+// URL stays live — this adds a name you can say out loud. Same headers, same file.
+router.get('/normiequest-go-live', (req, res) => {
+  res.set('X-Robots-Tag', 'noindex, nofollow');
+  res.set('Cache-Control', 'no-cache, must-revalidate');
+  res.sendFile(path.join(__dirname, 'public', 'normie-quest-platformer.html'));
+});
+
 // Dev / "setup lane": the SAME game file with the premium flow forced ON (the page detects the
 // -lab path and sets window.__NQ_SETUP). Lets us build & test the wallet gate / leaderboards /
 // giveaways without touching the stable tester build at /normie-quest-x7. noindex + no-cache.
