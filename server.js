@@ -6069,15 +6069,19 @@ app.get("/api/tg-test", async (req, res) => {
       if (!ir.ok) return res.status(200).json({ success: false, error: `photo fetch ${ir.status}` });
       const buf = Buffer.from(await ir.arrayBuffer());
       if (buf.length > 9.5 * 1024 * 1024) return res.status(200).json({ success: false, error: `photo too large (${buf.length} bytes)` });
+      // &doc=1 sends the bytes as a DOCUMENT instead of a photo: Telegram re-encodes
+      // photos to JPEG (killing PNG transparency), but documents keep the original
+      // file, so transparent-background art renders with its alpha intact.
+      const asDoc = req.query.doc === "1";
       const fd = new FormData();
       fd.append("chat_id", chatId);
       if (text) fd.append("caption", text.slice(0, 1024));
       fd.append("parse_mode", "HTML");
       fd.append("disable_notification", silent ? "true" : "false");
-      fd.append("photo", new Blob([buf], { type: ir.headers.get("content-type") || "image/png" }), "image.png");
-      const r = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendPhoto`, { method: "POST", body: fd });
+      fd.append(asDoc ? "document" : "photo", new Blob([buf], { type: ir.headers.get("content-type") || "image/png" }), "image.png");
+      const r = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/${asDoc ? "sendDocument" : "sendPhoto"}`, { method: "POST", body: fd });
       const data = await r.json().catch(() => ({}));
-      return res.json({ success: !!data.ok, messageId: data?.result?.message_id ?? null, bytes: buf.length, telegram: data.ok ? undefined : data });
+      return res.json({ success: !!data.ok, messageId: data?.result?.message_id ?? null, bytes: buf.length, asDocument: asDoc || undefined, telegram: data.ok ? undefined : data });
     } catch (e) { return res.status(200).json({ success: false, error: e.message }); }
   }
   try {
