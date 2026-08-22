@@ -593,6 +593,40 @@ router.get('/api/nq/leaderboard/reset', async (req, res) => {
   catch (e) { res.status(500).json({ ok: false, error: 'reset_failed_board_untouched' }); }
 });
 
+// ---- /api/nq/gate : the LAUNCH LOCK lever (owner-keyed) --------------------
+// The whole "3 worlds now, more worlds later" switch. GET on purpose — the owner fires it from a
+// phone browser, same as the leaderboard reset and the wallet-watch lever. 404 without the key.
+//
+//   read it:                 /api/nq/gate?key=KEY
+//   OPEN THE HIGHER WORLDS:  /api/nq/gate?key=KEY&cap=0        <- the "few days are up" flip
+//   put the cap back:        /api/nq/gate?key=KEY&cap=3
+//   change the free tier:    /api/nq/gate?key=KEY&freeMax=4
+//   panic — make it all free:/api/nq/gate?key=KEY&on=0
+//   back to the env default: /api/nq/gate?key=KEY&reset=1
+//
+// Takes effect within ~5s for everyone (the client re-reads /wallet/config each launch, and the
+// server caches gate state for 5s). No redeploy, no restart.
+router.get('/api/nq/gate', (req, res) => {
+  res.set('X-Robots-Tag', 'noindex, nofollow');
+  res.set('Cache-Control', 'no-store');
+  if (!adminOK(req)) return res.status(404).json({ ok: false, error: 'not_found' });
+  const q = req.query || {};
+  try {
+    if (String(q.reset || '') === '1') return res.json({ ok: true, changed: true, gate: wallet.gate.clearOverride() });
+    const patch = {};
+    if (q.on != null && q.on !== '') patch.on = /^(1|true|yes|on)$/i.test(String(q.on));
+    if (q.cap != null && q.cap !== '') patch.cap = q.cap;
+    if (q.freeMax != null && q.freeMax !== '') patch.freeMax = q.freeMax;
+    const changed = Object.keys(patch).length > 0;
+    const gateState = changed ? wallet.gate.setState(patch) : wallet.gate.state(true);
+    // Echo what a player would actually get, so the owner can eyeball the effect immediately.
+    res.json({
+      ok: true, changed, gate: gateState,
+      effective: { noWallet: wallet.gate.freeWorlds(), tier1: wallet.gate.clamp([1, 8]), tier2: wallet.gate.clamp('all') },
+    });
+  } catch (e) { res.status(500).json({ ok: false, error: 'gate_write_failed' }); }
+});
+
 // ---- shared per-IP throttle for the PUBLIC endpoints -----------------------
 // IP = CF-Connecting-IP (the real visitor, set by Cloudflare and unforgeable now that the CLKN
 // origin lockdown 403s any non-Cloudflare ingress). ⚠️ This used to take the LAST x-forwarded-for
