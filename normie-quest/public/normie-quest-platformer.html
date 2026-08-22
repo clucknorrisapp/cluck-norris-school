@@ -8231,6 +8231,11 @@ if(typeof document!=='undefined'){ (function(){
   try { window.__NQ_ACCESS = function () { return walletState.worlds; }; } catch (e) {}
   try { window.__NQ_VIP = function () { return !!walletState.vip; }; } catch (e) {}   // ULTRA VIP wing grant
   var run = null;   // { token } — one per run, spans levels; the score posts at run-end
+  // TV pairing continuation: truthy when the player asked to enter a TV code (a scanned QR sets
+  // it to the CODE string via ?pair=). Connecting a wallet completes it — connectWallet drops
+  // straight into the code-entry screen instead of leaving the player to re-find the menu.
+  var pendingPhonePair = null;
+  try { var _pm = /[?&]pair=([A-Za-z0-9]{4,8})/.exec(location.search); if (_pm) pendingPhonePair = _pm[1].toUpperCase(); } catch (e) {}
   // A finished run whose player has not named themselves yet. Outside the setup lane most people
   // will finish their first run before they ever open this panel, and submitRun used to just DROP
   // a nameless run on the floor — so the board a new player finally looked at had nothing of
@@ -8922,6 +8927,16 @@ if(typeof document!=='undefined'){ (function(){
       openOv();
       var wt = ov.querySelector('.nqp-tab[data-tab="wal"]'); if (wt) wt.click();
     }; } catch (e) {}
+    // Arrived via the TV's QR (?pair=CODE): open the wallet tab now. Already-proven wallet →
+    // straight to code entry, prefilled; otherwise renderWallet shows connect + the pairing hint,
+    // and the post-connect continuation above finishes the job.
+    if (pendingPhonePair) setTimeout(function () {
+      try {
+        window.__NQ_OPENPREMIUM();
+        var ws0 = window.NQLB.getWallet();
+        if (ws0.pubkey && typeof pendingPhonePair === 'string') { var pf0 = pendingPhonePair; pendingPhonePair = null; startPhonePair(ov.querySelector('#nqp-wal'), pf0); }
+      } catch (e) {}
+    }, 900);
     ov.addEventListener('click', function (e) { if (e.target === ov || e.target.hasAttribute('data-close')) closeOv(); });
     // CHARACTER PICKER — render the roster (real idle sprites as thumbnails) with the current pick
     // highlighted; tapping a card saves the choice (localStorage, via the game's exposed setter).
@@ -9076,7 +9091,12 @@ if(typeof document!=='undefined'){ (function(){
       fetch('/api/nq/pair/new', { method: 'POST' }).then(function (r) { return r.json(); }).then(function (j) {
         if (!j || !j.ok) throw new Error(j && j.status === 'busy' ? 'Too many pairings in progress — try again in a minute.' : 'Could not start pairing.');
         var endsAt = Date.now() + (j.expiresIn || 600000);
-        host.innerHTML = '<div class="nqp-sub" style="margin-bottom:10px">On your <b>phone</b>, open this game, tap 🎮 → <b>Wallet</b> → <b>Pair a TV</b>, and enter:</div>'
+        host.innerHTML = '<div class="nqp-sub" style="margin-bottom:10px">📷 <b>Scan with your phone camera</b> — it opens the game with the code filled in. Or type the code by hand: 🎮 → <b>Wallet</b> → <b>I\u2019m the phone</b>.</div>'
+          // QR of the game URL WITH the code in it (?pair=CODE) — the code is the PUBLIC half of
+          // the pairing (the claim secret never leaves this screen), so showing it as a QR is
+          // exactly as safe as showing it as text, and it saves typing a URL on a phone keyboard.
+          + '<div style="text-align:center;margin-bottom:10px"><img alt="pairing QR" src="/api/nq/pair/qr?code=' + encodeURIComponent(j.code) + '" '
+          + 'style="width:168px;height:168px;border-radius:10px;border:3px solid #ffb43a;background:#fff"></div>'
           // Big and monospaced: this is read from across a room.
           + '<div style="font:700 34px/1.25 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.16em;text-align:center;'
           + 'color:#ffd23f;background:#1a1630;border:2px solid #ffb43a;border-radius:12px;padding:14px 8px;margin-bottom:10px">' + esc(j.code) + '</div>'
@@ -9113,12 +9133,13 @@ if(typeof document!=='undefined'){ (function(){
       });
     }
     // PHONE SIDE — type the code the TV is showing.
-    function startPhonePair(host) {
+    function startPhonePair(host, prefill) {
       stopPairPoll();
       var ws = window.NQLB.getWallet();
       host.innerHTML = '<div class="nqp-sub" style="margin-bottom:10px">Enter the code shown on your TV to give it access with this wallet '
         + '(<b>' + esc(ws.pubkey.slice(0, 4) + '…' + ws.pubkey.slice(-4)) + '</b>).</div>'
         + '<input id="nqp-paircode" inputmode="latin" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="6" placeholder="ABC123" '
+        + (prefill ? ('value="' + esc(String(prefill).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)) + '" ') : '')
         + 'style="width:100%;box-sizing:border-box;font:700 26px/1.3 ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.2em;text-align:center;'
         + 'text-transform:uppercase;background:#1a1630;border:2px solid #33305a;border-radius:10px;color:#ffd23f;padding:12px 8px">'
         // The honest warning. This is the one real risk in any TV-pairing flow: being talked into
@@ -9165,9 +9186,11 @@ if(typeof document!=='undefined'){ (function(){
           + ((TIERED && ws.worlds) ? '<div class="nqp-sub" style="margin:8px 0">Access: <b style="color:#8dffc0">' + wl + '</b></div>' : '')
           + (ws.balances ? '<div class="nqp-sub" style="margin:8px 0">NORMIE: ' + ws.balances.normie.toLocaleString() + ' · CLKN: ' + ws.balances.clkn.toLocaleString() + '</div>' : '')
           + '<div class="nqp-sub" style="margin-top:8px">Remembered on this device until you disconnect · scores post with a verified wallet ✓</div>'
-          + '<button class="nqp-b alt" id="nqp-tvpair" style="margin-top:12px">📺 Pair a TV</button>'
+          + '<button class="nqp-b alt" id="nqp-tvpair" style="margin-top:12px">📱 I\u2019m the phone — enter a TV\u2019s code</button>'
+          + '<button class="nqp-b alt" id="nqp-tvshow" style="margin-top:6px">📺 I\u2019m the TV — show a pairing code</button>'
           + '<button class="nqp-b alt" id="nqp-disconnect" style="margin-top:6px">Disconnect</button>';
-        ov.querySelector('#nqp-tvpair').addEventListener('click', function () { startPhonePair(host); });
+        ov.querySelector('#nqp-tvpair').addEventListener('click', function () { startPhonePair(host, typeof pendingPhonePair === 'string' ? pendingPhonePair : null); pendingPhonePair = null; });
+        ov.querySelector('#nqp-tvshow').addEventListener('click', function () { startTvPair(host); });
         ov.querySelector('#nqp-disconnect').addEventListener('click', function () { disconnectWallet(); renderWallet(); });
       } else {
         var det = detectWallets();
@@ -9186,7 +9209,12 @@ if(typeof document!=='undefined'){ (function(){
             b.addEventListener('click', function () {
               var w = det[Number(b.getAttribute('data-wi'))];
               ov.querySelector('#nqp-walerr').textContent = 'Connecting ' + w.name + '…';
-              connectWallet(w.provider, w.name).then(function () { renderWallet(); if (window._nqLoadPrize) window._nqLoadPrize(); }).catch(function (e) { ov.querySelector('#nqp-walerr').textContent = e.message || String(e); });
+              connectWallet(w.provider, w.name).then(function () {
+                renderWallet(); if (window._nqLoadPrize) window._nqLoadPrize();
+                // The player came here to pair a TV (tapped "I'm the phone", or scanned the TV's
+                // QR) — drop them straight into code entry instead of making them re-find it.
+                if (pendingPhonePair) { var pf = typeof pendingPhonePair === 'string' ? pendingPhonePair : null; pendingPhonePair = null; startPhonePair(ov.querySelector('#nqp-wal'), pf); }
+              }).catch(function (e) { ov.querySelector('#nqp-walerr').textContent = e.message || String(e); });
             });
           });
         } else {
@@ -9210,13 +9238,25 @@ if(typeof document!=='undefined'){ (function(){
         }
         // 📺 Offered on EVERY no-wallet path, not just the "nothing detected" one. A TV browser
         // usually detects nothing — but a console browser can report a phantom provider, and the
-        // player still has no way to sign there. Pairing is the answer in both cases.
+        // player still has no way to sign there. BOTH directions are offered, because launch-day
+        // field report (owner, 2026-08-22): the phone-side "enter the TV's code" entry only
+        // existed AFTER a wallet was connected — the TV pointed people at a button their phone
+        // didn't have. Now the phone path exists here too: it asks for the connect first (pairing
+        // hands over a PROVEN session; without one there is nothing to hand) and then drops
+        // straight into code entry.
         host.insertAdjacentHTML('beforeend',
           '<div style="border-top:1px solid #2a2648;margin-top:14px;padding-top:12px">'
-          + '<div class="nqp-sub" style="margin-bottom:8px">📺 <b>Playing on a TV?</b> TVs and consoles can\'t run a wallet. '
-          + 'Pair this screen with your phone instead — it takes about twenty seconds.</div>'
-          + '<button class="nqp-b alt" id="nqp-tvstart">📺 Pair with my phone</button></div>');
+          + '<div class="nqp-sub" style="margin-bottom:8px">📺 <b>Playing on a TV?</b> TVs and consoles can\'t run a wallet — pair with your phone instead, about twenty seconds.</div>'
+          + '<button class="nqp-b alt" id="nqp-tvstart">📺 I\u2019m the TV — show a pairing code</button>'
+          + '<button class="nqp-b alt" id="nqp-phstart" style="margin-top:6px">📱 I\u2019m the phone — enter the TV\u2019s code</button>'
+          + '<div class="nqp-sub" id="nqp-pairhint" style="margin-top:8px"></div></div>');
         host.querySelector('#nqp-tvstart').addEventListener('click', function () { startTvPair(host); });
+        host.querySelector('#nqp-phstart').addEventListener('click', function () {
+          pendingPhonePair = pendingPhonePair || true;   // keep a scanned code if one is queued
+          var h = host.querySelector('#nqp-pairhint');
+          if (h) h.innerHTML = '<span style="color:#ffc98a">First connect your wallet with the buttons above — pairing hands the TV your <b>proven</b> session. The code entry opens right after.</span>';
+          try { host.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) {}
+        });
       }
     }
 
