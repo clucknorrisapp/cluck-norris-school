@@ -72,11 +72,13 @@ this teaches them before they get hurt. Design calls should serve that:
 helping communities lock tokens on Jupiter Lock and broadcast it. Autopsy stays but isn't the
 lead ("so many rugs and nobody cares").
 
-**Normie Quest** runs under Cluck Norris production for the NORMIE community. The game URL stays
-unlinked, and **all token-gating in it is TESTING ONLY** — there's no agreement with the NORMIE
-team on access or rewards, so never promise gating terms on any public surface. In-game $NORMIE
-copy lives in `NORMIE_NATION` (game_logic.js): identity and where-to-buy only, no perks, no
-thresholds.
+**Normie Quest** runs under Cluck Norris production for the NORMIE community, and went public
+on **2026-08-22** at `/normie-quest-x7` with owner-set holder terms: free worlds 1-3, **$5 of
+NORMIE → worlds 4-12, $50 → everything** (live-priced — `docs/NQ_LAUNCH_GATE.md` is the
+runbook; never hardcode an amount, all copy renders from `/api/nq/wallet/config`). This
+supersedes the old "gating is testing-only, promise nothing" rule for ACCESS TIERS specifically;
+**rewards/prize terms with the NORMIE team remain unagreed** — don't promise those. VIP-wing
+terms are still owner-to-confirm.
 
 **Wallet Watch is PRIVATE** (owner ask, 2026-07-10) — **no public surface: never link or mention
 it on the app or socials.** Its scheduler is hard-killed (`WALLET_WATCH_KILLED`) and the manual

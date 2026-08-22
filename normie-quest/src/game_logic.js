@@ -1825,15 +1825,13 @@ var Title=new Phaser.Class({ Extends:Phaser.Scene,
     // "what's new" hook for beta testers — announces the newest world without spoiling its theme
     var nw=this.add.text(W/2,212,'✦ NEW · WORLD '+_maxWorld+' ✦',{fontFamily:UIFONT,fontStyle:'bold',fontSize:'11px',color:'#ffb43a',resolution:UIRES}).setOrigin(.5);
     this.tweens.add({targets:nw,scale:1.08,duration:820,yoyo:true,repeat:-1,ease:'Sine.inOut'});
-    // TIER BANDS — how far the game runs and which worlds sit in which band. FREE_MAX mirrors
-    // nqWorldAllowed's `w<=2` default and VIP starts at the first vip world, so the front door
-    // cannot drift from the real gate. DELIBERATELY no prices, token thresholds or unlock terms:
-    // NQ's gating is testing-only and unagreed (CLAUDE.md), so no public surface may promise
-    // access rules — this states CONTENT STRUCTURE only.
-    // Bands come from the LIVE gate so the front door can never advertise a structure the gate
-    // isn't actually handing out. While the launch cap is armed the honest statement is "these
-    // worlds now, the rest soon" — no tier names, because nothing above the cap is obtainable
-    // by anyone yet, and no terms, because NQ's holder terms are still unagreed (CLAUDE.md).
+    // TIER BANDS — how far the game runs and which worlds sit in which band. Bands come from
+    // the LIVE gate so the front door can never advertise a structure the gate isn't actually
+    // handing out. Terms (owner, 2026-08-22: $5 of NORMIE → 4-12, $50 → 13-21) render from
+    // nqTerms() — live server config — and NEVER from a literal here; if the config hasn't
+    // arrived the chips fall back to naming the bands without amounts. While the launch cap is
+    // armed the honest statement is "these worlds now, the rest soon" — no terms, because
+    // nothing above the cap is obtainable by anyone yet.
     var FREE_MAX=nqGateOn()?nqFreeMax():_maxWorld, _CAP=nqGateCap(), _scene=this;
     var _bands;
     if(!nqGateOn()){
@@ -1842,9 +1840,10 @@ var Title=new Phaser.Class({ Extends:Phaser.Scene,
       _bands=[['PLAY NOW','W1-'+Math.min(FREE_MAX,_CAP),'#3dff6e'],
               ['W'+(Math.min(FREE_MAX,_CAP)+1)+'-'+_maxWorld,'OPENING SOON','#ffd23f']];
     } else {
+      var _T=nqTerms();
       _bands=[['FREE','W1-'+FREE_MAX,'#3dff6e'],
-              ['PREMIUM','W'+(FREE_MAX+1)+'-'+(_vipMin-1),'#ffd23f'],
-              ['VIP','W'+_vipMin+'-'+_maxWorld,'#7fdcff']];
+              [(_T&&_T.usdPriced)?('$'+_T.tier1Usd+' NORMIE'):'HOLDERS','W'+(FREE_MAX+1)+'-'+(_vipMin-1),'#ffd23f'],
+              [(_T&&_T.usdPriced)?('$'+_T.tier2Usd+' NORMIE'):'BIG HOLDERS','W'+_vipMin+'-'+_maxWorld,'#7fdcff']];
     }
     var _chips=_bands.map(function(b){
       return _scene.add.text(0,229,b[0]+'  '+b[1],{fontFamily:UIFONT,fontStyle:'bold',fontSize:'10px',color:b[2],resolution:UIRES}).setOrigin(.5);
@@ -1890,6 +1889,10 @@ function nqGate(){ try{ return window.__NQ_GATE||null; }catch(e){ return null; }
 function nqGateOn(){ var g=nqGate(); return !!(g&&g.on); }
 function nqGateCap(){ var g=nqGate(); var c=g&&+g.cap; return (c>0)?c:0; }   // 0 = no launch cap
 function nqFreeMax(){ var g=nqGate(); var f=g&&+g.freeMax; return (f>0)?f:2; }
+// The published holder terms (owner, 2026-08-22): {tier1Usd,tier2Usd,usdPriced,tier1Normie,
+// tier2Normie} — fetched from /api/nq/wallet/config by the boot shim, null until it lands.
+// Copy MUST render from this, never hardcode an amount: the numbers are live-priced server-side.
+function nqTerms(){ try{ var t=window.__NQ_TERMS; return (t&&typeof t==='object')?t:null; }catch(e){ return null; } }
 // Does THIS player have the LevelSelect world map? It is the TEST BUILD picker (TEST_MODE), so a
 // normal public player does not — anything that sends someone "back to the map" must check first.
 function nqHasPicker(){ try{ return !!TEST_MODE; }catch(e){ return false; } }
@@ -2210,7 +2213,8 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // SETUP-LANE tier gate, catch-all entry point (checkpoint continues, interludes, bonus-room
     // returns — every path lands in create). LAB warps (this._labWarp) bypass — owner's bench.
     if(!this._labWarp && !nqWorldAllowed(def)){
-      this.scene.start('VipPitch',{locked:true,score:this.score||0});
+      var _wm=/^(\d+)-/.exec((def&&def.name)||'');
+      this.scene.start('VipPitch',{locked:true,score:this.score||0,world:_wm?+_wm[1]:0});
       return;
     }
     // SETUP LANE only: begin (or continue) a leaderboard run. One run token spans the whole run;
@@ -4906,7 +4910,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     if(!lab && nqShouldPitch(this.levelIdx) && !nqIsVipOrAll()){ nqMarkPitch(this.levelIdx); this.scene.start('VipPitch',{next:next,score:this.score}); return; }
     // SETUP-LANE tier gate: cleared the last world your holdings unlock → the VIP buy card (verify
     // wallet / grab NORMIE) instead of the next world. A lab-warped run (owner's bench) stays ungated.
-    if(!lab && !nqWorldAllowed(LEVELS[next])){ this.scene.start('VipPitch',{locked:true,score:this.score}); return; }
+    if(!lab && !nqWorldAllowed(LEVELS[next])){ var _wm2=/^(\d+)-/.exec((LEVELS[next]&&LEVELS[next].name)||''); this.scene.start('VipPitch',{locked:true,score:this.score,world:_wm2?+_wm2[1]:0}); return; }
     if(typeof WORLD_CLEARS!=='undefined' && WORLD_CLEARS[next]) this.scene.start('WorldClear',{next:next,score:this.score,lab:lab});   // world boundary: celebration + travel page -> Briefing
     else if(typeof BRIEFINGS!=='undefined' && BRIEFINGS[next]) this.scene.start('Briefing',{next:next,score:this.score,lab:lab});
     // ordinary level -> the short LevelClear beat (score + a Normie Nation line, alternating with
@@ -7019,35 +7023,54 @@ function nqShouldPitch(idx){
   // something nobody can have. Suppressed until the cap lifts. The genuine "you've hit the
   // frontier" card still fires from the world gate when they actually reach the edge.
   if(nqGateCap()) return false;
+  if(!nqGateOn()) return false;   // gate off = nothing is locked = nothing to pitch
+  // A tier-1 holder ([1,12]) is NOT a free player — pitching "you're in the free worlds" at
+  // someone who already paid their way past them is both wrong and insulting. Only pitch when
+  // the player's live access ends at the free band.
+  try{ var _a=(typeof window.__NQ_ACCESS==='function')?window.__NQ_ACCESS():null;
+       if(Array.isArray(_a)&&_a.length===2&&_a[1]>nqFreeMax()) return false; }catch(e){}
   try{ if(sessionStorage.getItem('nqPitch'+idx)) return false; }catch(e){}
   return true;
 }
 function nqMarkPitch(idx){ try{ sessionStorage.setItem('nqPitch'+idx,'1'); }catch(e){} }
 var VipPitch=new Phaser.Class({ Extends:Phaser.Scene,
   initialize:function(){ Phaser.Scene.call(this,{key:'VipPitch'}); },
-  init:function(d){ d=d||{}; this.next=d.next||0; this.score=d.score||0; this.locked=!!d.locked; this.lab=d.lab; },
+  init:function(d){ d=d||{}; this.next=d.next||0; this.score=d.score||0; this.locked=!!d.locked; this.lab=d.lab; this.world=+d.world||0; },
   create:function(){
     var self=this, cx=W/2; this.done=false; this.t0=0;
     this.cameras.main.setZoom(RES).centerOn(W/2,H/2);
     var g=this.add.graphics(); g.fillStyle(0x0d0b1e,1); g.fillRect(0,0,W,H);
     g.fillStyle(0x1a1533,1); g.fillRect(0,0,W,30); g.fillRect(0,H-22,W,22);
     g.lineStyle(2,0xffb43a,1); g.strokeRect(6,34,W-12,H-58);
-    // LAUNCH-CAP MODE (owner, 2026-08-22): while the cap is armed nothing above it is obtainable
-    // by ANYONE, so pitching a holder unlock here would be a lie. Say "opening soon" instead and
-    // keep $NORMIE as identity + where-to-buy. Once the cap lifts (/api/nq/gate?cap=0) this falls
-    // back to the members'-wing card. Still no hold amount, ever — NQ's terms are unagreed.
-    var _capped=!!nqGateCap(), _cx0=nqGateCap()||nqFreeMax();
-    this.add.text(cx,15, _capped?'🔒 THAT\u2019S THE FRONTIER — FOR NOW':(this.locked?'🔒 VIP LEAGUES — LOCKED':'⭐ MORE WORLDS AWAIT'),{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#ffd23f',align:'center',wordWrap:{width:W-20}}).setOrigin(.5);
+    // THREE MODES, in priority order:
+    //   capped   — launch cap armed: nothing above it is obtainable by anyone, so no pitch, just
+    //              "opening soon" (kept from launch morning).
+    //   locked   — the real tier wall (gate on, cap lifted). Copy renders the PUBLISHED terms
+    //              (owner, 2026-08-22: $5 of NORMIE → worlds 4-12, $50 → everything) from
+    //              nqTerms() — live server config, never a hardcoded number. If terms haven't
+    //              arrived (offline boot), it says how access works without naming an amount.
+    //   teaser   — mid-run upsell for free players (auto-advances, never soft-locks).
+    var _capped=!!nqGateCap(), _cx0=nqGateCap()||nqFreeMax(), _free=nqFreeMax();
+    var T=nqTerms(), _deep=this.locked&&this.world>=13;
+    function _amt(n){ n=+n||0; return n>=1000?(Math.round(n/100)/10)+'k':String(n); }
+    var _a1=T?(T.usdPriced?('$'+T.tier1Usd+' of $NORMIE'):(_amt(T.tier1Normie)+' $NORMIE')):null;
+    var _a2=T?(T.usdPriced?('$'+T.tier2Usd):(_amt(T.tier2Normie)+' $NORMIE')):null;
+    this.add.text(cx,15, _capped?'🔒 THAT\u2019S THE FRONTIER — FOR NOW':(this.locked?(_deep?'🔒 THE DEEP WORLDS — 13-21':'🔒 HOLDER WORLDS AHEAD'):'⭐ MORE WORLDS AWAIT'),{fontFamily:'"Press Start 2P"',fontSize:'11px',color:'#ffd23f',align:'center',wordWrap:{width:W-20}}).setOrigin(.5);
     var body=_capped
       ? ("You've cleared everything that's open right now — worlds 1-"+_cx0+". The rest of the game unlocks in a few days.")
       : (this.locked
-        ? "You've hit the free frontier. Worlds 13-21 — the VIP LEAGUES — are the members' wing."
-        : "You're on the FREE rounds — a taste. Past here is a whole VIP wing: worlds 13-21, the VIP LEAGUES.");
+        ? (_deep ? "Worlds 13-21 are the deep end — reserved for the biggest $NORMIE holders."
+                 : "Worlds "+(_free+1)+"-12 open to $NORMIE holders. Free players keep worlds 1-"+_free+" — replay them any time.")
+        : "You're in the free worlds (1-"+_free+"). Holders go on: worlds "+(_free+1)+"-12, then the deep worlds 13-21.");
     this.add.text(cx,44, body, {fontFamily:UIFONT,resolution:UIRES,fontSize:'11px',color:'#e6e1ff',align:'center',wordWrap:{width:W-52}}).setOrigin(.5,0);
-    this.add.text(cx,84, _capped?"🏆 Set your score on the board while you wait —\nconnect a wallet and your run plays for prizes."
-                                : "🏅 Join the VIP Leagues by holding $NORMIE\n( hold amount: TBD — testing )", {fontFamily:UIFONT,resolution:UIRES,fontSize:'11px',color:'#ffd23f',align:'center',wordWrap:{width:W-52}}).setOrigin(.5,0);
+    var mid=_capped
+      ? "🏆 Set your score on the board while you wait —\nconnect a wallet and your run plays for prizes."
+      : (!T ? "💎 Access is by holding $NORMIE — connect your wallet\nand it's checked live, right here."
+        : (_deep ? "🏆 Hold "+_a2+(T.usdPriced?' of $NORMIE':'')+" → everything, worlds 1-21"
+                 : "💎 Hold "+_a1+" → worlds "+(_free+1)+"-12\n🏆 Hold "+_a2+" → all 21 worlds"));
+    this.add.text(cx,84, mid, {fontFamily:UIFONT,resolution:UIRES,fontSize:'11px',color:'#ffd23f',align:'center',wordWrap:{width:W-52}}).setOrigin(.5,0);
     var _sub=this.add.text(cx,118, _capped?"$NORMIE is the community coin behind Normie Quest — grab some without leaving the game."
-                                : "Grab $NORMIE in seconds — buy right here, or in the Premium Lounge.", {fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#9fb0d8',align:'center',wordWrap:{width:W-64}}).setOrigin(.5,0);
+                                : "Already holding? Connect your wallet — access is checked live. A signature only, no transaction.", {fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#9fb0d8',align:'center',wordWrap:{width:W-64}}).setOrigin(.5,0);
     function mkBtn(y,label,col,txtcol,onUp){
       var r=self.add.rectangle(cx,y,214,20,col,1).setStrokeStyle(2,0xffffff,0.18).setInteractive({useHandCursor:true});
       self.add.text(cx,y,label,{fontFamily:'"Press Start 2P"',fontSize:'8px',color:txtcol}).setOrigin(.5).setDepth(1);
@@ -7058,10 +7081,12 @@ var VipPitch=new Phaser.Class({ Extends:Phaser.Scene,
     // The capped body copy is a line longer than the members'-wing copy it replaced, and the old
     // hardcoded button row (152/178/204) sat ON TOP of its second line. Lay the buttons out from
     // the measured bottom of the text instead, so copy length can never overlap them again.
-    var _lounge=!_capped || nqIsVipOrAll();   // while capped the members' wing is unobtainable by anyone — don't advertise a door nobody can open
+    // Buttons per mode: the tier wall gets an explicit CONNECT (the panel's wallet tab verifies
+    // holdings live) — the lounge door only shows to players who already have the wing.
     var _btns=[
       ['🪙  BUY $NORMIE',0xffd23f,'#0a0813',function(){ self.buyNormie(); }],
-      _lounge?['🏛  PREMIUM LOUNGE',0x9b6bff,'#ffffff',function(){ try{ window.open('/normie-quest-x7/lounge','_blank'); }catch(e){} }]:null,
+      (!_capped)?['🔓  I HOLD — CONNECT WALLET',0x9b6bff,'#ffffff',function(){ try{ if(window.__NQ_OPENPREMIUM) window.__NQ_OPENPREMIUM(); }catch(e){} }]
+                :(nqIsVipOrAll()?['🏛  PREMIUM LOUNGE',0x9b6bff,'#ffffff',function(){ try{ window.open('/normie-quest-x7/lounge','_blank'); }catch(e){} }]:null),
       [this.locked?(nqHasPicker()?'◀  BACK TO MAP':'◀  BACK TO TITLE'):'▶  KEEP PLAYING',0x2ecc71,'#0a0813',function(){ self.go(); }],
     ].filter(Boolean);
     var _gap=26, _blockH=(_btns.length-1)*_gap+20;
@@ -7084,9 +7109,8 @@ var VipPitch=new Phaser.Class({ Extends:Phaser.Scene,
       // only ever fire in the setup lane, so it was safe; now a public player who hits the world
       // cap lands here, and "LEVEL SELECT · TEST BUILD" is not a screen to hand a new player.
       this.scene.start(nqHasPicker()?'LevelSelect':'Title');
-      // Auto-opening the buy/tier panel behind the card is a members'-wing gesture. While the
-      // launch cap is armed there is nothing to sell, so back means back.
-      if(!nqGateCap()){ try{ if(window.__NQ_OPENPREMIUM) window.__NQ_OPENPREMIUM(); }catch(e){} }
+      // Back means back — the card's own CONNECT button is the door to the wallet panel now,
+      // so nothing auto-opens behind a player who chose to leave.
     }
     else this.scene.start('Game',{level:this.next,score:this.score,lives:3,lab:this.lab});
   },
@@ -8010,6 +8034,10 @@ if(typeof document!=='undefined'){ (function(){
   'use strict';
   // Setup lane = the -lab route (or ?setup=1). Read ONCE: everything tier-shaped keys off this.
   var SETUP = false; try { SETUP = !!window.__NQ_SETUP; } catch (e) {}
+  // The server gate (separate script block from the Phaser helpers, so read window directly).
+  // Gate ON means tiers are REAL on the public build (owner, 2026-08-22) — tier/access lines
+  // below show whenever this is true, not only in the lab.
+  function GATE_ON() { try { var g = window.__NQ_GATE; return !!(g && g.on); } catch (e) { return false; } }
 
   // ---- tiny base58 encoder (for signMessage output) -----------------------
   var B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
@@ -8959,13 +8987,15 @@ if(typeof document!=='undefined'){ (function(){
       var host = ov.querySelector('#nqp-wal'); var ws = window.NQLB.getWallet();
       if (ws.pubkey) {
         var wl = ws.worlds === 'all' ? 'ALL worlds' : (Array.isArray(ws.worlds) ? ('Worlds ' + ws.worlds[0] + '–' + ws.worlds[1]) : 'checking…');   // worlds is null until the refresh response lands
-        // TIER / ACCESS are SETUP-LANE ONLY. Nothing is world-gated on the public build, so
-        // printing a tier there would be both a promise we have not made and simply untrue.
+        // TIER / ACCESS show whenever gating is LIVE (the server gate is on) or in the lab.
+        // Before 2026-08-22 these were setup-only because nothing was gated publicly; now the
+        // gate is real and a holder deserves to SEE what their wallet unlocked.
+        var TIERED = SETUP || GATE_ON();
         host.innerHTML = '<div class="nqp-row"><span>' + esc(ws.pubkey.slice(0, 4) + '…' + ws.pubkey.slice(-4)) + '</span>'
           // tier/balances are null when the balance read has not landed (or failed) — say
           // CONNECTED rather than printing "TIER null".
-          + ((SETUP && ws.tier != null) ? '<span class="nqp-tier">TIER ' + ws.tier + '</span>' : '<span class="nqp-tier">CONNECTED</span>') + '</div>'
-          + ((SETUP && ws.worlds) ? '<div class="nqp-sub" style="margin:8px 0">Access: <b style="color:#8dffc0">' + wl + '</b></div>' : '')
+          + ((TIERED && ws.tier != null) ? '<span class="nqp-tier">TIER ' + ws.tier + '</span>' : '<span class="nqp-tier">CONNECTED</span>') + '</div>'
+          + ((TIERED && ws.worlds) ? '<div class="nqp-sub" style="margin:8px 0">Access: <b style="color:#8dffc0">' + wl + '</b></div>' : '')
           + (ws.balances ? '<div class="nqp-sub" style="margin:8px 0">NORMIE: ' + ws.balances.normie.toLocaleString() + ' · CLKN: ' + ws.balances.clkn.toLocaleString() + '</div>' : '')
           + '<div class="nqp-sub" style="margin-top:8px">Remembered on this device until you disconnect · scores post with a verified wallet ✓</div>'
           + '<button class="nqp-b alt" id="nqp-tvpair" style="margin-top:12px">📺 Pair a TV</button>'
@@ -8975,8 +9005,8 @@ if(typeof document!=='undefined'){ (function(){
       } else {
         var det = detectWallets();
         var intro = '<div class="nqp-sub" style="margin-bottom:10px">'
-          + (SETUP ? 'Prove wallet ownership to unlock worlds by what you HOLD. '
-                   // Public build: what connecting actually does, and nothing it does not.
+          + ((SETUP || GATE_ON()) ? 'Prove wallet ownership to unlock worlds by what you HOLD — and your scores play for prizes. '
+                   // Gate off: what connecting actually does, and nothing it does not.
                    : 'Connect to put a ✓ verified mark on your leaderboard score, take your daily spin in the Lounge, and collect anything waiting for you. ')
           + 'This is a signature only — no transaction, no approval to move funds.</div>';
         if (det.length) {
