@@ -124,6 +124,176 @@
 
   function shortAddr(a) { return a ? a.slice(0, 4) + "…" + a.slice(-4) : "—"; }
 
+  // ── mobile: is this a phone/tablet browser that can't have an extension? ──────────────────
+  // iPadOS Safari reports a MACINTOSH user-agent by default (desktop-class browsing), so the
+  // usual /iPad/ regex misses every modern iPad and the page tells an iPad user to "install a
+  // wallet extension" — advice that cannot be followed on iPadOS. maxTouchPoints separates a
+  // real Mac (0) from an iPad pretending to be one. Five pages carried the regex WITHOUT this
+  // clause and one (premium) with it; that divergence is why it lives here now.
+  function isMobile() {
+    var ua = (global.navigator && global.navigator.userAgent) || "";
+    if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua)) return true;
+    return !!(global.navigator && global.navigator.maxTouchPoints > 1 && /Macintosh/.test(ua));
+  }
+
+  function isAndroid() { return /Android/i.test((global.navigator && global.navigator.userAgent) || ""); }
+  function isIOS() {
+    var ua = (global.navigator && global.navigator.userAgent) || "";
+    if (/iPhone|iPad|iPod/i.test(ua)) return true;
+    return !!(global.navigator && global.navigator.maxTouchPoints > 1 && /Macintosh/.test(ua));
+  }
+
+  // ── "open this page in a wallet's own browser" links ──────────────────────────────────────
+  // On a plain mobile browser NOTHING is injected, so available() is empty and the only way to
+  // get a real wallet onto the page is to reopen it inside the wallet's built-in browser. iOS
+  // leaves no alternative: Mobile Wallet Adapter is an Android-only protocol (it needs a
+  // persistent socket, which iOS kills when an app backgrounds), so these links are it.
+  //
+  // ⚠️ EVERY ENTRY HERE IS A DOCUMENTED FORMAT, NOT A GUESS. A deeplink invented by
+  // pattern-matching another wallet's scheme ships as a dead button on a live money page, so the
+  // bar for adding a row is an official doc or the wallet's own apple-app-site-association.
+  // Researched 2026-08-22; `src` is where each came from. Wallets deliberately ABSENT because no
+  // browse link could be verified — do not add them on a hunch:
+  //   Jupiter   — has a dApp browser, but jup.ag's AASA claims only /swap /tokens /portfolio etc.
+  //               There is no /ul/ or /browse/ path for the app to catch, and its only registry
+  //               entry is a WalletConnect scheme. Anything written here would be invented.
+  //   SafePal   — two contradictory community formats circulate and the repos carrying them are
+  //               drainer-adjacent. Nothing credible.
+  //   Exodus    — AASA claims only /m/*, which is WalletConnect.
+  //   Bybit     — its browse scheme exists for Aptos/Sui/Tron only, and says "connect", not browse.
+  //   Coin98 / TokenPocket — templates are documented but neither names a Solana chain value.
+  // All five DO have in-app browsers, so the copy below tells people they can open the page
+  // there by hand. That is honest and it works; a fake button is neither.
+  //
+  // Prefer https universal links over custom schemes: a custom scheme tapped in Safari with the
+  // app absent dead-ends silently, while the https form lands on a download page.
+  var DEEPLINKS = [
+    { id: "phantom",  name: "Phantom",  icon: "🔮", ios: true,  android: true,
+      src: "docs.phantom.app",
+      build: function (u, ref) { return "https://phantom.app/ul/browse/" + u + "?ref=" + ref; } },
+    { id: "solflare", name: "Solflare", icon: "☀️", ios: true,  android: true,
+      src: "docs.solflare.com",
+      build: function (u, ref) { return "https://solflare.com/ul/v1/browse/" + u + "?ref=" + ref; } },
+    { id: "backpack", name: "Backpack", icon: "🎒", ios: true,  android: true,
+      src: "docs.backpack.app/deeplinks/other-methods/browse — both params required",
+      build: function (u, ref) { return "https://backpack.app/ul/v1/browse/" + u + "?ref=" + ref; } },
+    { id: "coinbase", name: "Coinbase", icon: "🔵", ios: true,  android: true,
+      src: "docs.cdp.coinbase.com mobile-dapp-integration",
+      build: function (u) { return "https://go.cb-w.com/dapp?cb_url=" + u; } },
+    { id: "bitget",   name: "Bitget",   icon: "💠", ios: true,  android: true,
+      src: "web3.bitget.com/en/docs/reference/deeplink — https form works on both",
+      build: function (u) { return "https://bkcode.vip?action=dapp&url=" + u; } },
+    { id: "magiceden", name: "Magic Eden", icon: "🪄", ios: true, android: true,
+      src: "magiceden.io AASA claims /browser/* for com.magiceden.wallet (not in prose docs)",
+      build: function (u) { return "https://magiceden.io/browser/" + u; } },
+    { id: "nightly",  name: "Nightly",  icon: "🌙", ios: true,  android: true,
+      src: "docs.nightly.app/docs/deeplinks",
+      build: function (u) { return "https://nightly.app/v1?network=solana&cluster=mainnet&url=" + u; } },
+    // OKX publishes no https browse link — only the okx:// scheme. Wrapping it in OKX's own
+    // download universal link is what makes it safe to show: app installed → it opens; app
+    // missing → the OKX download page, instead of Safari's dead-end sheet.
+    { id: "okx",      name: "OKX",      icon: "⭕", ios: true,  android: true,
+      src: "OKX WaaS app-universal-link (page 404s today; two extractions + wallet registries agree)",
+      build: function (u) {
+        return "https://web3.okx.com/download?deeplink=" +
+               encodeURIComponent("okx://wallet/dapp/url?dappUrl=" + u);
+      } },
+    // ANDROID ONLY, and this is not a nicety: Trust removed its iOS DApp browser in v6.0 (2021)
+    // and never restored it, so an iOS button for Trust is dead by construction.
+    { id: "trust",    name: "Trust",    icon: "🛡", ios: false, android: true,
+      src: "developer.trustwallet.com deeplinking — coin_id 501 = Solana",
+      build: function (u) { return "https://link.trustwallet.com/open_url?coin_id=501&url=" + u; } },
+  ];
+
+  // Wallets with a real in-app browser that publish no usable browse link (see above). Named in
+  // the copy so a user of one is told what to do rather than left thinking we don't support them.
+  var BROWSER_NO_LINK = ["Jupiter", "SafePal", "Exodus", "Bybit"];
+
+  // Links for THIS device: an entry is dropped where the wallet has no in-app browser on this
+  // platform. On desktop (no platform match) the full list is returned — a QR/hand-off surface
+  // may still want it.
+  function deeplinks(target) {
+    var raw = target || (global.location && global.location.href) || "";
+    var u = encodeURIComponent(raw);
+    var ref = encodeURIComponent((global.location && global.location.origin) || "");
+    var ios = isIOS(), android = isAndroid();
+    var out = [];
+    for (var i = 0; i < DEEPLINKS.length; i++) {
+      var d = DEEPLINKS[i];
+      if (ios && !d.ios) continue;
+      if (android && !d.android) continue;
+      out.push({ id: d.id, name: d.name, icon: d.icon, href: d.build(u, ref) });
+    }
+    return out;
+  }
+
+  // Renders the whole "no wallet here — open it in one" block. Every page kept its own copy of
+  // this markup with a hardcoded Phantom + Solflare pair; six of them had drifted apart and none
+  // had been updated since. Pass your page's own classes so it still looks like your page.
+  function mobileLinksHTML(opts) {
+    opts = opts || {};
+    var esc = function (t) {
+      return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+                      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    };
+    var what = opts.what || "this page";
+    var bc = opts.btnClass || "btn sm";
+    var bs = "text-decoration:none;" + (opts.btnStyle || "");
+    var hc = opts.hintClass || "hint";
+    var hs = opts.hintStyle || "";
+    var h = function (body, extra) {
+      return '<div class="' + esc(hc) + '" style="' + esc(hs) + (extra || "") + '">' + body + "</div>";
+    };
+    var links = deeplinks(opts.target), html = "";
+    html += h("📱 Open " + esc(what) + " inside a wallet’s browser to connect:");
+    for (var i = 0; i < links.length; i++) {
+      html += '<a class="' + esc(bc) + '" style="' + esc(bs) + '" href="' + esc(links[i].href) + '">' +
+              links[i].icon + " " + esc(links[i].name) + "</a>";
+    }
+    html += h("Opens this exact page in the wallet’s built-in browser. Nothing is signed or shared by the link.", "width:100%;");
+    html += h("Using " + BROWSER_NO_LINK.join(", ") + " or another wallet? They have built-in browsers too — open " +
+              "<b>" + esc((global.location && global.location.host) || "") +
+              esc((global.location && global.location.pathname) || "") + "</b> in there and Connect will work.",
+              "width:100%;");
+    if (opts.footer) html += h(esc(opts.footer), "width:100%;");
+    return html;
+  }
+
+  // ── late provider injection ───────────────────────────────────────────────────────────────
+  // A wallet's in-app browser does NOT always have its provider on the page by the time our
+  // script runs — several inject on or after `load`, and some fire the de-facto standard
+  // `solana#initialized` event when they're ready. A page that calls available() once at parse
+  // time therefore shows "no wallet detected" to someone who is standing INSIDE the wallet.
+  // watch(cb) calls cb() whenever the set of detected wallets changes, from now until `ms`
+  // (default 8s) after load. Pages should render their picker from it instead of hand-rolling
+  // another pair of setTimeouts — the old ones were 600ms/1600ms, which is not long enough for
+  // a cold in-app browser on a slow phone.
+  function watch(cb, ms) {
+    if (typeof cb !== "function") return function () {};
+    var stopped = false, timers = [], last = "";
+    var deadline = Date.now() + (ms > 0 ? ms : 8000);
+    function sig() {
+      try { return available().map(function (w) { return w.id; }).join(","); } catch (e) { return ""; }
+    }
+    function tick() {
+      if (stopped) return;
+      var s = sig();
+      if (s !== last) { last = s; try { cb(); } catch (e) {} }
+      if (Date.now() < deadline) timers.push(setTimeout(tick, 400));
+    }
+    last = sig();
+    function poke() { if (!stopped) { last = "\u0000"; tick(); } }   // force a re-render on an explicit signal
+    try { global.addEventListener("solana#initialized", poke); } catch (e) {}
+    try { global.addEventListener("load", poke); } catch (e) {}
+    timers.push(setTimeout(tick, 400));
+    return function stop() {
+      stopped = true;
+      for (var i = 0; i < timers.length; i++) clearTimeout(timers[i]);
+      try { global.removeEventListener("solana#initialized", poke); } catch (e) {}
+      try { global.removeEventListener("load", poke); } catch (e) {}
+    };
+  }
+
   async function connect(id) {
     var entry = null, list = available();
     if (id) {
@@ -162,5 +332,11 @@
     disconnect: disconnect,
     current: current,
     shortAddr: shortAddr,
+    isMobile: isMobile,
+    isIOS: isIOS,
+    isAndroid: isAndroid,
+    deeplinks: deeplinks,
+    mobileLinksHTML: mobileLinksHTML,
+    watch: watch,
   };
 })(typeof globalThis !== "undefined" ? globalThis : window);

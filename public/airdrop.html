@@ -659,22 +659,20 @@ const WALLETS = CluckWallet.WALLETS;
 // that OPEN this page inside the wallet's browser (pure navigation — nothing is
 // signed/shared by the link; the injected connect+sign flow runs once inside).
 function initMobileDeepLinks() {
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  if (!isMobile) return;
-  const injected = !!(window.solana || window.phantom?.solana || window.solflare || window.backpack
-    || window.okxwallet || window.glowSolana || window.exodus?.solana || window.coinbaseSolana || window.trustwallet?.solana);
-  if (injected) return;
+  if (!CluckWallet.isMobile()) return;
+  // Was a hand-rolled nine-wallet `injected` check that missed everything else in the shared
+  // registry, so a Bitget/Nightly/Magic Eden user saw the deeplink block over a working picker.
+  if (CluckWallet.available().length) return;
   const el = document.getElementById('mobileConnect'), picker = document.getElementById('walletPicker');
   if (!el) return;
-  const url = encodeURIComponent(location.href), ref = encodeURIComponent(location.origin);
-  el.innerHTML =
-    '<div style="font-family:monospace;font-size:13.5px;color:var(--gold);line-height:1.5">📱 On mobile? Open this page inside your wallet to connect:</div>'
-    + '<a class="wallet-btn phantom" style="text-decoration:none" href="https://phantom.app/ul/browse/' + url + '?ref=' + ref + '">🔮 Open in Phantom</a>'
-    + '<a class="wallet-btn solflare" style="text-decoration:none" href="https://solflare.com/ul/v1/browse/' + url + '?ref=' + ref + '">☀️ Open in Solflare</a>'
-    + '<div style="font-family:monospace;font-size:13px;color:var(--sub);line-height:1.5">Opens this page in the wallet’s built-in browser. Nothing is signed or shared by the link.</div>';
+  el.innerHTML = CluckWallet.mobileLinksHTML({ btnClass: 'wallet-btn phantom', hintStyle: 'font-family:monospace;font-size:13px;color:var(--sub);line-height:1.5;' });
   el.style.display = 'flex';
   if (picker) picker.style.display = 'none';
 }
+// Providers can inject after we parse — keep re-checking instead of showing 'no wallet' forever.
+try { CluckWallet.watch(function(){ initMobileDeepLinks();
+  if (CluckWallet.available().length) { var e=document.getElementById('mobileConnect'); if(e) e.style.display='none';
+    var pk=document.getElementById('walletPicker'); if(pk) pk.style.display=''; } }); } catch(_){}
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initMobileDeepLinks);
 else initMobileDeepLinks();
 

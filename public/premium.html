@@ -152,23 +152,23 @@ setTimeout(renderPremiumPicker, 600); setTimeout(renderPremiumPicker, 1600);
 // page inside the wallet's browser (pure navigation — nothing signed/shared).
 // NOTE: iPadOS Safari reports as "Macintosh", so we also detect touch + Mac.
 function initPremiumDeepLinks(){
-  const ua = navigator.userAgent || '';
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(ua));
-  if(!isMobile) return;
-  const injected = !!(window.solana||window.phantom?.solana||window.solflare||window.backpack||window.okxwallet||window.glowSolana||window.exodus?.solana||window.coinbaseSolana||window.trustwallet?.solana);
-  if(injected) return;                       // a wallet IS present (in-app browser / extension) — picker works
+  if(!CluckWallet.isMobile()) return;
+  // Was a hand-rolled nine-wallet `injected` check that missed everything else in the registry —
+  // a Bitget or Nightly user with a working picker got the deeplink block on top of it.
+  if(CluckWallet.available().length) return;   // a wallet IS present — the picker works
   const el = $('mobileConnect'); if(!el) return;
   const mint = (($('mint')&&$('mint').value)||'').trim();
   const target = location.origin + '/premium' + (mint ? ('?mint=' + encodeURIComponent(mint)) : '');
-  const enc = encodeURIComponent(target), ref = encodeURIComponent(location.origin);
-  el.innerHTML =
-    '<div style="font-size:13.5px;color:var(--gold);line-height:1.65;margin-bottom:8px">📱 No wallet detected here — iPad and phone browsers can\'t see wallet apps. Open this page inside your wallet instead:</div>'
-    + '<a class="wbtn" style="text-decoration:none;display:block;text-align:center;margin-bottom:6px" href="https://phantom.app/ul/browse/' + enc + '?ref=' + ref + '">🔮 Open in Phantom</a>'
-    + '<a class="wbtn" style="text-decoration:none;display:block;text-align:center" href="https://solflare.com/ul/v1/browse/' + enc + '?ref=' + ref + '">☀️ Open in Solflare</a>'
-    + '<div style="font-size:13px;color:var(--sub);margin-top:7px">Opens this page in the wallet\'s built-in browser, where Connect works. Nothing is signed or shared by the link.</div>';
+  el.innerHTML = CluckWallet.mobileLinksHTML({
+    target: target, what: 'this page',
+    btnClass: 'wbtn', btnStyle: 'display:block;text-align:center;margin-bottom:6px;',
+    hintStyle: 'font-size:13px;color:var(--sub);line-height:1.6;margin-top:7px;',
+  });
   el.style.display = 'block';
 }
 initPremiumDeepLinks();
+// Wallet providers can inject after we parse — re-run until one shows up (or 8s).
+try { CluckWallet.watch(function(){ if(CluckWallet.available().length){ const e=$('mobileConnect'); if(e) e.style.display='none'; } else initPremiumDeepLinks(); }); } catch(_){}
 
 function markVerified(wallet, balance, proof){
   PROOF = proof; PROOF_WALLET = wallet;

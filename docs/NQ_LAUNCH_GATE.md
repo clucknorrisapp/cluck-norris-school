@@ -70,6 +70,42 @@ line under the board telling them what they're missing.
 Season reset (archives first, then wipes):
 `/api/nq/leaderboard/reset?key=KEY&confirm=RESET`
 
+## Holder tiers (owner, 2026-08-22 — LIVE terms)
+
+Free **1-3** · hold **$5 of NORMIE** → worlds **4-12** · **$50** → **everything (13-21)**.
+CLKN whales (2M) keep full access; the manual VIP allowlist is unchanged.
+
+- Dollar-priced live: `NQ_TIER1_USD` (default **5**) / `NQ_TIER2_USD` (default **50**), token
+  amounts derived from the NORMIE price on every read (GeckoTerminal → DexScreener fallback,
+  60s cache, `/data/nq-normie-price.json` last-known-good, 10x sanity band). Set either env to 0
+  → token-count mode (`NQ_TIER1_NORMIE`/`NQ_TIER2_NORMIE`); same fallback if a price has never
+  been seen. **Defaults are the live terms — no Railway change needed.**
+- `/api/nq/wallet/config` → `terms` carries `{tier1Usd, tier2Usd, priceUsd, usdPriced,
+  tier1Normie, tier2Normie}`; the boot shim stashes it as `window.__NQ_TERMS` and every piece of
+  gate copy (title chips, lock cards, teaser) renders from it — no hardcoded amounts anywhere.
+- **Go-live flip** (tiers take over from the launch cap): `/api/nq/gate?key=KEY&cap=0`.
+  Back to worlds-1-3-only: `&cap=3`. Everything off: `&on=0`.
+
+## What a capped player actually sees
+
+Verified on production 2026-08-22 (worlds 1-3 open, cap armed):
+
+- **Title:** `PLAY NOW  W1-3` / `W4-21  OPENING SOON` — instead of the FREE / PREMIUM / VIP chips.
+- **Hitting the cap** (finishing 3-3, or any entry into a world above the cap) → the `VipPitch`
+  scene in *launch-cap mode*: **"🔒 THAT'S THE FRONTIER — FOR NOW"**, "the rest of the game
+  unlocks in a few days", a prize-eligibility nudge, and the `$NORMIE` identity + where-to-buy
+  line. **No hold amount and no perk is named anywhere** — NQ's holder terms are unagreed, so
+  the card must never imply one.
+- While capped, the card drops the **PREMIUM LOUNGE** button for non-VIPs (nothing to sell yet)
+  and the mid-run upsell teaser is suppressed entirely (`nqShouldPitch` returns false).
+- **Back** goes to the **Title** screen, not `LevelSelect` — that picker is the TEST BUILD screen
+  and only exists for `TEST_MODE` players (`nqHasPicker()`). Before the launch gate the locked
+  card could only fire in the setup lane, so this branch had never been reachable by a real
+  player.
+
+When the cap lifts (`cap=0`) all of the above reverts to the members'-wing card automatically —
+there is no second switch to remember.
+
 ## Honest limits
 
 The world lock is **client-side**, because the game is client-side — it shapes what normal

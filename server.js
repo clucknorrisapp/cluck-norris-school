@@ -2719,17 +2719,46 @@ app.use((req, res, next) => {
 //   Transform Rule exists, or it will 403 the whole site. Rollout + the exact rule are in
 //   docs/CLOUDFLARE_WAF_RUNBOOK.md. /healthz is exempt (Railway's probe hits the app directly).
 const CF_ORIGIN_SECRET = process.env.CF_ORIGIN_SECRET;
+// ── Dedicated game domain (owner bought normiequest.app, 2026-08-22) ───────
+// Requests whose Host is one of these serve Normie Quest at "/" and only see game surfaces —
+// everything else 301s to clucknorris.app. NQ_GAME_HOSTS env overrides the default pair.
+// A different ORIGIN also means a clean localStorage: no persisted tester flags, no stale caches.
+const NQ_GAME_HOSTS = String(process.env.NQ_GAME_HOSTS || "normiequest.app,www.normiequest.app")
+  .split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
+const isGameHost = (req) => NQ_GAME_HOSTS.includes(String(req.hostname || "").toLowerCase());
+// The ONLY paths that exist on the game domain. Everything the game page loads or calls is under
+// these prefixes (checked against the built HTML: /vendor/phaser, /api/nq/*, /normie-quest/{music,
+// sfx,worlds}, /nq-assets, /nq-sw.js, the /normie-quest-x7* sub-pages). Keeping the list tight is
+// what makes the direct-DNS lockdown exemption below a GAME-surface exemption, not a site bypass.
+const NQ_GAME_PATH = /^\/($|\?)|^\/api\/nq\/|^\/normie-quest|^\/nq-assets\/|^\/nq-sw\.js$|^\/vendor\//;
 if (CF_ORIGIN_SECRET) {
   const cfExpectedHash = createHash("sha256").update(CF_ORIGIN_SECRET).digest("hex");
   app.use((req, res, next) => {
     if (req.path === "/healthz") return next();
     const got = req.get("x-cluck-edge-auth") || "";
     if (createHash("sha256").update(got).digest("hex") === cfExpectedHash) return next();
+    // The game domain may be wired straight to Railway (no Cloudflare zone yet) — let it through,
+    // but ONLY for game paths, so a spoofed Host header can never reach the rest of the app around
+    // the WAF. If/when the owner moves the domain behind Cloudflare with the same Transform Rule,
+    // the header check above passes first and this branch simply never runs.
+    if (isGameHost(req) && NQ_GAME_PATH.test(req.path)) return next();
     return res.status(403).type("text/plain")
       .send("Forbidden: reach this site through clucknorris.app, not the origin directly.");
   });
-  console.log("[security] origin lockdown ON — direct-to-origin requests without the Cloudflare header are blocked");
+  console.log("[security] origin lockdown ON — direct-to-origin requests without the Cloudflare header are blocked (game hosts exempt for game paths: " + NQ_GAME_HOSTS.join(", ") + ")");
 }
+// Host router for the game domain — mounted HERE (before every site route) so the main site's
+// own "/" never wins on normiequest.app. Game paths fall through to the normal routes, which are
+// host-agnostic; anything that is not a game surface bounces to the main site.
+app.use((req, res, next) => {
+  if (!isGameHost(req)) return next();
+  if (req.path === "/" || req.path === "") {
+    res.set("Cache-Control", "no-cache, must-revalidate");   // same revalidate posture as /normie-quest-x7
+    return res.sendFile(join(__dirname, "normie-quest", "public", "normie-quest-platformer.html"));
+  }
+  if (NQ_GAME_PATH.test(req.path) || req.path === "/healthz") return next();
+  return res.redirect(301, "https://clucknorris.app" + req.originalUrl);
+});
 
 // ── Lightweight in-memory rate limiting ───────────────────────────────────
 // The /api proxies forward to PAID upstreams (Helius credits, Anthropic,
