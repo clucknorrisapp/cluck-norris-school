@@ -338,24 +338,22 @@ function renderWalletPicker() {
 // inside the wallet's browser. Pure navigation — nothing is signed or shared by
 // the link; the injected connect flow above runs once the user is inside.
 function initMobileDeepLinks() {
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  if (!isMobile) return;
+  if (!CluckWallet.isMobile()) return;   // iPadOS Safari says "Macintosh" — isMobile() knows
   if (CluckWallet.available().length) return; // already inside a wallet browser — the buttons above work
   const el = document.getElementById('mobileConnect'), picker = document.getElementById('walletPicker');
   if (!el) return;
-  const url = encodeURIComponent(location.href), ref = encodeURIComponent(location.origin);
-  el.innerHTML =
-    '<div style="font-family:var(--mono);font-size:12.5px;color:var(--accent);line-height:1.5">📱 On mobile? Open this page inside your wallet to connect:</div>'
-    + '<a class="wallet-btn phantom" style="text-decoration:none" href="https://phantom.app/ul/browse/' + url + '?ref=' + ref + '">🔮 Open in Phantom</a>'
-    + '<a class="wallet-btn solflare" style="text-decoration:none" href="https://solflare.com/ul/v1/browse/' + url + '?ref=' + ref + '">☀️ Open in Solflare</a>'
-    + '<div style="font-family:var(--mono);font-size:13px;color:var(--subtext);line-height:1.5">Opens this page in the wallet’s built-in browser. Nothing is signed or shared by the link.</div>';
+  el.innerHTML = CluckWallet.mobileLinksHTML({ btnClass: 'wallet-btn phantom', hintStyle: 'font-family:var(--mono);font-size:13px;color:var(--subtext);line-height:1.5;' });
   el.style.display = 'flex';
   if (picker) picker.style.display = 'none'; // extension buttons can't work in a plain mobile browser
 }
 function initWalletUi() { renderWalletPicker(); initMobileDeepLinks(); }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initWalletUi);
 else initWalletUi();
-setTimeout(renderWalletPicker, 600); setTimeout(renderWalletPicker, 1600);   // wallets can inject a beat after load
+// Providers can inject well after parse (a wallet's own in-app browser often does) — the old
+// 600ms/1600ms pair gave up long before a cold app on a slow phone was ready.
+try { CluckWallet.watch(function(){ renderWalletPicker();
+  if (CluckWallet.available().length) { const e=document.getElementById('mobileConnect'); if(e) e.style.display='none';
+    const pk=document.getElementById('walletPicker'); if(pk) pk.style.display=''; } else initMobileDeepLinks(); }); } catch(_){}
 function syncWalletUi() {
   const picker = document.getElementById('walletPicker');
   const info = document.getElementById('walletInfo');
