@@ -70,6 +70,22 @@ line under the board telling them what they're missing.
 Season reset (archives first, then wipes):
 `/api/nq/leaderboard/reset?key=KEY&confirm=RESET`
 
+## Holder tiers (owner, 2026-08-22 — LIVE terms)
+
+Free **1-3** · hold **$5 of NORMIE** → worlds **4-12** · **$50** → **everything (13-21)**.
+CLKN whales (2M) keep full access; the manual VIP allowlist is unchanged.
+
+- Dollar-priced live: `NQ_TIER1_USD` (default **5**) / `NQ_TIER2_USD` (default **50**), token
+  amounts derived from the NORMIE price on every read (GeckoTerminal → DexScreener fallback,
+  60s cache, `/data/nq-normie-price.json` last-known-good, 10x sanity band). Set either env to 0
+  → token-count mode (`NQ_TIER1_NORMIE`/`NQ_TIER2_NORMIE`); same fallback if a price has never
+  been seen. **Defaults are the live terms — no Railway change needed.**
+- `/api/nq/wallet/config` → `terms` carries `{tier1Usd, tier2Usd, priceUsd, usdPriced,
+  tier1Normie, tier2Normie}`; the boot shim stashes it as `window.__NQ_TERMS` and every piece of
+  gate copy (title chips, lock cards, teaser) renders from it — no hardcoded amounts anywhere.
+- **Go-live flip** (tiers take over from the launch cap): `/api/nq/gate?key=KEY&cap=0`.
+  Back to worlds-1-3-only: `&cap=3`. Everything off: `&on=0`.
+
 ## What a capped player actually sees
 
 Verified on production 2026-08-22 (worlds 1-3 open, cap armed):
