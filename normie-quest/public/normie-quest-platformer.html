@@ -2018,6 +2018,9 @@ function nqGate(){ try{ return window.__NQ_GATE||null; }catch(e){ return null; }
 function nqGateOn(){ var g=nqGate(); return !!(g&&g.on); }
 function nqGateCap(){ var g=nqGate(); var c=g&&+g.cap; return (c>0)?c:0; }   // 0 = no launch cap
 function nqFreeMax(){ var g=nqGate(); var f=g&&+g.freeMax; return (f>0)?f:2; }
+// Does THIS player have the LevelSelect world map? It is the TEST BUILD picker (TEST_MODE), so a
+// normal public player does not — anything that sends someone "back to the map" must check first.
+function nqHasPicker(){ try{ return !!TEST_MODE; }catch(e){ return false; } }
 function nqWorldAllowed(def){
   var setup=false; try{ setup=!!window.__NQ_SETUP; }catch(e){}
   if(!nqGateOn() && !setup) return true;   // gate off outside the lab = nothing is locked
@@ -7171,7 +7174,7 @@ var VipPitch=new Phaser.Class({ Extends:Phaser.Scene,
     this.add.text(cx,44, body, {fontFamily:UIFONT,resolution:UIRES,fontSize:'11px',color:'#e6e1ff',align:'center',wordWrap:{width:W-52}}).setOrigin(.5,0);
     this.add.text(cx,84, _capped?"🏆 Set your score on the board while you wait —\nconnect a wallet and your run plays for prizes."
                                 : "🏅 Join the VIP Leagues by holding $NORMIE\n( hold amount: TBD — testing )", {fontFamily:UIFONT,resolution:UIRES,fontSize:'11px',color:'#ffd23f',align:'center',wordWrap:{width:W-52}}).setOrigin(.5,0);
-    this.add.text(cx,118, _capped?"$NORMIE is the community coin behind Normie Quest — grab some without leaving the game."
+    var _sub=this.add.text(cx,118, _capped?"$NORMIE is the community coin behind Normie Quest — grab some without leaving the game."
                                 : "Grab $NORMIE in seconds — buy right here, or in the Premium Lounge.", {fontFamily:UIFONT,resolution:UIRES,fontSize:'10px',color:'#9fb0d8',align:'center',wordWrap:{width:W-64}}).setOrigin(.5,0);
     function mkBtn(y,label,col,txtcol,onUp){
       var r=self.add.rectangle(cx,y,214,20,col,1).setStrokeStyle(2,0xffffff,0.18).setInteractive({useHandCursor:true});
@@ -7180,10 +7183,22 @@ var VipPitch=new Phaser.Class({ Extends:Phaser.Scene,
       r.on('pointerup',function(){ onUp(); });
       return r;
     }
-    mkBtn(152,'🪙  BUY $NORMIE',0xffd23f,'#0a0813',function(){ self.buyNormie(); });
-    mkBtn(178,'🏛  PREMIUM LOUNGE',0x9b6bff,'#ffffff',function(){ try{ window.open('/normie-quest-x7/lounge','_blank'); }catch(e){} });
-    mkBtn(204, this.locked?'◀  BACK TO MAP':'▶  KEEP PLAYING',0x2ecc71,'#0a0813',function(){ self.go(); });
-    this.add.text(cx,H-10, _capped?'replay any world you like — your best score is what counts':(this.locked?'you can keep any free world you already unlocked':'not now? just KEEP PLAYING'), {fontFamily:UIFONT,resolution:UIRES,fontSize:'9px',color:'#8891b5',align:'center'}).setOrigin(.5);
+    // The capped body copy is a line longer than the members'-wing copy it replaced, and the old
+    // hardcoded button row (152/178/204) sat ON TOP of its second line. Lay the buttons out from
+    // the measured bottom of the text instead, so copy length can never overlap them again.
+    var _lounge=!_capped || nqIsVipOrAll();   // while capped the members' wing is unobtainable by anyone — don't advertise a door nobody can open
+    var _btns=[
+      ['🪙  BUY $NORMIE',0xffd23f,'#0a0813',function(){ self.buyNormie(); }],
+      _lounge?['🏛  PREMIUM LOUNGE',0x9b6bff,'#ffffff',function(){ try{ window.open('/normie-quest-x7/lounge','_blank'); }catch(e){} }]:null,
+      [this.locked?(nqHasPicker()?'◀  BACK TO MAP':'◀  BACK TO TITLE'):'▶  KEEP PLAYING',0x2ecc71,'#0a0813',function(){ self.go(); }],
+    ].filter(Boolean);
+    var _gap=26, _blockH=(_btns.length-1)*_gap+20;
+    var _top=Math.ceil(_sub.y+_sub.height)+10, _bot=H-30;   // usable band between the copy and the footer strip
+    var _y0=_top+10+Math.max(0,(_bot-_top-_blockH)/2);      // centre the row block in whatever room the copy leaves
+    _y0=Math.min(_y0, _bot-_blockH+10);                     // never run into the footer strip
+    _btns.forEach(function(b,i){ mkBtn(Math.round(_y0+i*_gap), b[0], b[1], b[2], b[3]); });
+    this.add.text(cx,H-10, _capped?(nqHasPicker()?'replay any world you like — your best score is what counts':'your best score is what counts — take another run')
+                                  :(this.locked?'you can keep any free world you already unlocked':'not now? just KEEP PLAYING'), {fontFamily:UIFONT,resolution:UIRES,fontSize:'9px',color:'#8891b5',align:'center'}).setOrigin(.5);
     padAdvance(this, function(){ self.go(); });
   },
   buyNormie:function(){   // prefer the integrated in-game Jupiter widget; fall back to a direct swap link
@@ -7192,7 +7207,15 @@ var VipPitch=new Phaser.Class({ Extends:Phaser.Scene,
     try{ window.open('https://jup.ag/swap/SOL-'+encodeURIComponent(mint),'_blank'); }catch(e){}
   },
   go:function(){ if(this.done) return; this.done=true; SFX.power();
-    if(this.locked){ this.scene.start('LevelSelect'); try{ if(window.__NQ_OPENPREMIUM) window.__NQ_OPENPREMIUM(); }catch(e){} }
+    if(this.locked){
+      // LevelSelect is the TEST BUILD picker. Until the 2026-08-22 launch gate this branch could
+      // only ever fire in the setup lane, so it was safe; now a public player who hits the world
+      // cap lands here, and "LEVEL SELECT · TEST BUILD" is not a screen to hand a new player.
+      this.scene.start(nqHasPicker()?'LevelSelect':'Title');
+      // Auto-opening the buy/tier panel behind the card is a members'-wing gesture. While the
+      // launch cap is armed there is nothing to sell, so back means back.
+      if(!nqGateCap()){ try{ if(window.__NQ_OPENPREMIUM) window.__NQ_OPENPREMIUM(); }catch(e){} }
+    }
     else this.scene.start('Game',{level:this.next,score:this.score,lives:3,lab:this.lab});
   },
   update:function(){ if(!this.t0){ this.t0=this.time.now; return; }
@@ -8097,14 +8120,18 @@ if(typeof document!=='undefined'){ (function(){
    ⚠️ WHAT IS LIVE WHERE. This block used to be wrapped in `if (window.__NQ_SETUP)` in its
    entirety, which meant the leaderboard — the whole reason to come back and beat a score — was
    invisible on the real game URL and only existed on the -lab setup lane. It now runs EVERYWHERE.
-   What stays setup-only is the WORLD/TIER GATE and nothing else:
-     • window.__NQ_ACCESS / __NQ_VIP are published ONLY in the setup lane. They are the readers
-       nqWorldAllowed / nqMegaWhaleUnlocked / nqLevelResumeUnlocked use, and those already
-       short-circuit to "allowed" outside the setup lane. Publishing them in production would
-       quietly start gating a game that is free.
-     • Every line of copy that names a tier, an unlock or a holding is behind `SETUP`. On the
-       public URL the wallet is identity only (a ✓ on your score, your Lounge seat, your rewards)
-       and $NORMIE copy is identity + where-to-buy, per the rule at NORMIE_NATION.
+     • window.__NQ_ACCESS / __NQ_VIP are published on EVERY build since the 2026-08-22 public
+       launch (they used to be setup-lane-only). They are the readers nqWorldAllowed /
+       nqMegaWhaleUnlocked / nqLevelResumeUnlocked use. What decides whether anything is locked
+       is no longer the URL but the SERVER: window.__NQ_GATE = {on,freeMax,cap}, fetched at boot
+       from /api/nq/wallet/config. Gate off (the default when the env/override is unset) =>
+       nqWorldAllowed short-circuits to "allowed" and these readers are inert. See
+       normie-quest/nq-gate.js and docs/NQ_LAUNCH_GATE.md.
+     • Copy in THIS block that names a tier, an unlock or a holding is still behind `SETUP`. On
+       the public URL the wallet is identity + prize eligibility (a 🏆 on your score, your Lounge
+       seat, your rewards) and $NORMIE copy is identity + where-to-buy, per NORMIE_NATION. The
+       one public lock card is the Phaser VipPitch scene, which under a launch cap says only
+       "unlocks in a few days" — never an amount, because NQ's holder terms are unagreed.
    The burn SHOP is its own switch again: it renders only when the server says NQ_SHOP is armed.
    ============================================================================ */
 (function () {

@@ -70,6 +70,26 @@ line under the board telling them what they're missing.
 Season reset (archives first, then wipes):
 `/api/nq/leaderboard/reset?key=KEY&confirm=RESET`
 
+## What a capped player actually sees
+
+Verified on production 2026-08-22 (worlds 1-3 open, cap armed):
+
+- **Title:** `PLAY NOW  W1-3` / `W4-21  OPENING SOON` — instead of the FREE / PREMIUM / VIP chips.
+- **Hitting the cap** (finishing 3-3, or any entry into a world above the cap) → the `VipPitch`
+  scene in *launch-cap mode*: **"🔒 THAT'S THE FRONTIER — FOR NOW"**, "the rest of the game
+  unlocks in a few days", a prize-eligibility nudge, and the `$NORMIE` identity + where-to-buy
+  line. **No hold amount and no perk is named anywhere** — NQ's holder terms are unagreed, so
+  the card must never imply one.
+- While capped, the card drops the **PREMIUM LOUNGE** button for non-VIPs (nothing to sell yet)
+  and the mid-run upsell teaser is suppressed entirely (`nqShouldPitch` returns false).
+- **Back** goes to the **Title** screen, not `LevelSelect` — that picker is the TEST BUILD screen
+  and only exists for `TEST_MODE` players (`nqHasPicker()`). Before the launch gate the locked
+  card could only fire in the setup lane, so this branch had never been reachable by a real
+  player.
+
+When the cap lifts (`cap=0`) all of the above reverts to the members'-wing card automatically —
+there is no second switch to remember.
+
 ## Honest limits
 
 The world lock is **client-side**, because the game is client-side — it shapes what normal
