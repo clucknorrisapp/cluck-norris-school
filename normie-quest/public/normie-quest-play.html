@@ -1632,10 +1632,27 @@ var LEVELS=[
 // Over, Title) — the same screens already accept a tap or keyboard. Polls raw gamepad buttons on an
 // interval (works without Phaser's gamepad manager); fires `go` once on a FRESH press after a short
 // grace, so the button that ended the previous screen can't instantly skip this one.
+// Is a full-screen DOM overlay currently the thing the player is interacting with? Controller
+// presses then belong to the OVERLAY, not the game behind it.
+//   #nqremap   controller button remap      #nqhow-wrap  how-to-play card
+//   #nqfb-wrap tester feedback form         #nqp-ov      leaderboard / wallet panel
+function nqModalUp(){
+  try{ return !!document.querySelector('#nqremap, #nqhow-wrap.on, #nqfb-wrap.on, #nqp-ov.on'); }
+  catch(e){ return false; }
+}
 function padAdvance(scene, go){
   var t0=scene.time.now, prev=false, fired=false;
   scene.time.addEvent({ delay:55, loop:true, callback:function(){
     if(fired) return;
+    // FIELD BUG (owner, 2026-08-22): players who remapped their controller could not then start
+    // the game with it — only a touch or a mouse click worked. Cause: this watcher never knew the
+    // remap card was open, so the very presses the player made to BIND their buttons were read as
+    // "any button starts" — walking the title screen forward underneath the overlay and spending
+    // this one-shot latch. By the time the card closed there was nothing left to fire.
+    // While an overlay owns the screen: stay armed, hold `prev` down so the press that dismisses
+    // it is not read as fresh, and restart the 500ms grace so a still-held button on close cannot
+    // instantly trigger either.
+    if(nqModalUp()){ prev=true; t0=scene.time.now; return; }
     var press=false;
     try{ var ps=(navigator.getGamepads?navigator.getGamepads():[]); for(var i=0;i<ps.length;i++){ var gp=ps[i]; if(!gp) continue;
       var B=gp.buttons||[]; for(var j=0;j<B.length;j++){ if(B[j]&&(B[j].pressed||B[j].value>0.5)){ press=true; break; } } if(press) break; } }catch(e){}
@@ -5889,7 +5906,9 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       // while a DOM modal (feedback form / remap / leaderboard+wallet) owns the screen, drain pad
       // edges but act on NOTHING — a controller press was resuming the run behind the modal while a
       // tester typed. #nqp-ov is the leaderboard/wallet panel (it pauses the game when it opens).
-      var _modalUp=false; try{ _modalUp=!!document.querySelector('#nqfb-wrap.on, #nqp-ov.on'); }catch(e){}
+      // Shared with padAdvance — this list used to miss the remap card and the how-to card, so a
+      // controller press during either still reached the running game.
+      var _modalUp=nqModalUp();
       if(_pe && _modalUp){ _pe.pauseEdge=false; _pe.anyBtnEdge=false; }
       else if(_pe){
         if(_pe.pauseEdge){ _pe.pauseEdge=false; _pe.anyBtnEdge=false;
@@ -7798,6 +7817,7 @@ if(typeof window!=='undefined' && typeof navigator!=='undefined' && navigator.ge
     if(remapping) return; ensureUI(); if(!anyPad()){ toast('Plug a controller in first'); return; }
     remapping=true;
     remapEl=document.createElement('div');
+    remapEl.id='nqremap';   // nqModalUp() keys off this — without an id the pad watchers can't see the card
     remapEl.style.cssText='position:fixed;inset:0;z-index:80;background:rgba(4,6,14,.93);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#eaf2ff;font-family:"Press Start 2P",monospace;padding:20px;line-height:1.7';
     remapEl.innerHTML='<div class="q" style="font-size:15px;max-width:90vw;white-space:pre-line"></div><div style="font-size:10px;color:#9fb4dc;margin-top:16px">press the button on your controller</div>'
       +'<div class="s" style="margin-top:20px;font-size:9px;color:#8dffc0;cursor:pointer;text-decoration:underline">skip this one (keep default)</div>'
@@ -8141,9 +8161,32 @@ if(typeof document!=='undefined'){ (function(){
     +'background:rgba(18,14,32,.55);color:#ffd23f;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;'
     +'-webkit-tap-highlight-color:transparent;padding:0;line-height:1;font-family:"Press Start 2P",monospace}'
     +'#nqhow-wrap{position:fixed;inset:0;z-index:100002;background:rgba(6,4,16,.82);display:none;align-items:center;justify-content:center;padding:16px;'
-    +'font-family:"Press Start 2P",monospace}'
+    +'overflow-y:auto;-webkit-overflow-scrolling:touch;font-family:"Press Start 2P",monospace}'
     +'#nqhow-wrap.on{display:flex}'
-    +'#nqhow-card{background:#160f2a;border:2px solid #3a2f5e;border-radius:12px;max-width:380px;width:100%;padding:16px 16px 12px;box-shadow:0 10px 44px rgba(0,0,0,.6)}'
+    // FIELD BUG (owner, 2026-08-22): on a phone held SIDEWAYS this card is taller than the
+    // viewport (~360-390px) and had neither a height cap nor a scroll — it simply ran off the top
+    // and bottom, with LET'S GO unreachable. Reported as "huge, you can't read half of it".
+    // dvh, not vh, so a mobile browser's collapsing toolbars are accounted for.
+    +'#nqhow-card{background:#160f2a;border:2px solid #3a2f5e;border-radius:12px;max-width:380px;width:100%;padding:16px 16px 12px;box-shadow:0 10px 44px rgba(0,0,0,.6);'
+    +'max-height:calc(100dvh - 32px);overflow-y:auto;-webkit-overflow-scrolling:touch}'
+    // Short viewports: same content, sized to fit without needing the scroll above (that stays as
+    // the safety net). Wider max-width because landscape has width to spare.
+    +'@media (max-height:520px){'
+    +'#nqhow-wrap{align-items:flex-start;padding:8px}'
+    +'#nqhow-card{max-width:760px;padding:10px 12px 8px;max-height:calc(100dvh - 16px)}'
+    +'#nqhow-card h3{font-size:11px;margin:0 0 6px}'
+    +'.nqhow-sec{margin-bottom:6px;break-inside:avoid}'
+    +'.nqhow-sec .t{font-size:9px;margin-bottom:2px}'
+    +'.nqhow-sec .r{font-size:12px;line-height:1.4}'
+    // The CTA must never be the thing you have to scroll to find — stick it to the bottom of the
+    // card so it stays put while the instructions scroll behind it. It is already opaque yellow.
+    +'#nqhow-go{padding:9px;font-size:10px;margin-top:6px;position:sticky;bottom:0;box-shadow:0 -8px 12px -6px #160f2a}'
+    +'}'
+    // Short AND wide (a phone held sideways): the sections read as two columns, which is what
+    // stops three of the five hiding under a scroll. break-inside above keeps a section whole.
+    +'@media (max-height:520px) and (min-width:640px){'
+    +'#nqhow-secs{column-count:2;column-gap:18px}'
+    +'}'
     +'#nqhow-card h3{color:#ffd23f;font-size:13px;margin:0 0 10px;text-align:center;line-height:1.5}'
     +'.nqhow-sec{margin-bottom:10px}'
     +'.nqhow-sec .t{color:#8fd0ff;font-size:10px;margin-bottom:5px}'
@@ -8157,6 +8200,7 @@ if(typeof document!=='undefined'){ (function(){
   var wrap=el('div',{id:'nqhow-wrap'});
   wrap.appendChild(el('div',{id:'nqhow-card'},
     '<h3>🕹️ HOW TO PLAY</h3>'
+    +'<div id="nqhow-secs">'
     +'<div class="nqhow-sec"><div class="t">⌨️ KEYBOARD</div><div class="r"><span class="k">← → / A D</span> move · <span class="k">SPACE / W</span> jump · <span class="k">F / X</span> throw · <span class="k">P / ESC</span> pause</div></div>'
     +'<div class="nqhow-sec"><div class="t">📱 TOUCH</div><div class="r"><span class="k">drag the left side</span> to move (joystick — springs up under your thumb) · <span class="k">right side</span> jump · <span class="k">◎</span> throw · <span class="k">⏸ top-left</span> pause</div></div>'
     +'<div class="nqhow-sec" id="nqhow-pad"><div class="t">🎮 CONTROLLER <span style="color:#3dff9e">— detected!</span></div><div class="r"><span class="k">d-pad / stick</span> move · <span class="k">A</span> jump · <span class="k">B</span> throw · <span class="k">START</span> (or hold <span class="k">A+B</span>) pause</div></div>'
@@ -8165,6 +8209,7 @@ if(typeof document!=='undefined'){ (function(){
     // hunting for how the controls work. Order is best-picture-first — a browser ON the TV beats
     // mirroring, which pillarboxes an iPad's 4:3 screen inside a 16:9 set and adds input lag.
     +'<div class="nqhow-sec"><div class="t">📺 ON YOUR TV</div><div class="r">open this page in the <span class="k">TV’s own browser</span> (sharpest) · or <span class="k">AirPlay / cast</span> from your tablet · pair a wallet from your phone in <span class="k">🎮 → Wallet</span></div></div>'
+    +'</div>'
     +'<button id="nqhow-go">LET’S GO ▶</button>'));
   document.body.appendChild(btn); document.body.appendChild(wrap);
   function padOn(){ try{ return !!window.__NQ_GAMEPAD_ACTIVE; }catch(e){ return false; } }
