@@ -7851,6 +7851,77 @@ async function pollProjectBuyBots() {
   }
 }
 
+// ── CUNA buy-to-enter giveaway (owner, 2026-08-22) ─────────────────────────
+// Every >=$5 buy in a 24h window = one entry, uncapped and stacking; any sell voids the wallet.
+// Full rationale (including why this scans incrementally rather than once at the end) is in
+// lib/cuna-giveaway.js. Read-only against the chain — nothing here signs or moves funds.
+const cunaGiveaway = require("./lib/cuna-giveaway");
+
+// PUBLIC: the live board. No key, no wallet — it is all on-chain anyway, and the whole point is
+// that anyone can check it. Cached-lite via no-store so the pinned Telegram board and the page
+// never disagree about who is winning.
+app.get("/api/cuna-giveaway", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    const n = Math.max(1, Math.min(100, parseInt(req.query.top, 10) || 10));
+    const st = cunaGiveaway.standings(n);
+    if (!st.config || !st.config.mint) return res.json({ ok: false, status: "not_configured" });
+    if (String(req.query.full || "") === "1") st.entryList = cunaGiveaway.fullEntryList();
+    res.json({ ok: true, ...st });
+  } catch (e) { res.status(500).json({ ok: false, error: "server_error" }); }
+});
+
+// OWNER lever: configure / scan / trace / draw / reset.
+//   ?start=<ms|iso>&end=<ms|iso>&min=5           → configure the window
+//   ?scan=1     → advance the scanner now (also runs on a 5-min scheduler)
+//   ?trace=1    → follow outbound transfers, 2 hops (run at the end; heavy)
+//   ?draw=1     → close it out and pick 3 winners from a Solana block hash
+//   ?reset=1    → wipe counted results, keep the config
+app.get("/api/cuna-giveaway/admin", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  const q = req.query;
+  const deps = { heliusKey: process.env.HELIUS_API_KEY, heliusEnhancedBatched };
+  const ms = (v) => { if (v == null || v === "") return undefined; const n = Number(v); return Number.isFinite(n) && n > 1e11 ? n : Date.parse(String(v)) || undefined; };
+  try {
+    if (q.reset === "1") return res.json(cunaGiveaway.resetLedger());
+    const patch = {};
+    if (q.mint) patch.mint = String(q.mint);
+    if (q.pool) patch.pool = String(q.pool);
+    if (q.symbol) patch.symbol = String(q.symbol).slice(0, 12);
+    if (q.chat) patch.chatId = String(q.chat);
+    if (q.min !== undefined) patch.minUsd = Number(q.min) || 5;
+    if (ms(q.start) !== undefined) patch.startMs = ms(q.start);
+    if (ms(q.end) !== undefined) patch.endMs = ms(q.end);
+    if (Object.keys(patch).length) cunaGiveaway.configure(patch);
+    const out = { ok: true, config: cunaGiveaway.config() };
+    if (q.scan === "1") out.scan = await cunaGiveaway.scanOnce(deps);
+    if (q.trace === "1") out.trace = await cunaGiveaway.traceOutbound(deps, { hops: 2 });
+    if (q.draw === "1") out.draw = await cunaGiveaway.runDraw({ rpcUrl: process.env.HELIUS_API_KEY ? `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}` : undefined }, { force: q.force === "1" });
+    out.standings = cunaGiveaway.standings(10);
+    res.json(out);
+  } catch (e) { res.status(500).json({ ok: false, error: "server_error", detail: e.message }); }
+});
+
+// The scanner. Every 5 minutes while the window is open — that cadence is what keeps each tape
+// slice far below the 900-signature cap AND prices each buy near its real moment. Silent no-op
+// before the window opens and after it closes.
+setInterval(() => {
+  (async () => {
+    const c = cunaGiveaway.config();
+    if (!c || !c.mint || !c.startMs) return;
+    const now = Date.now();
+    if (now < c.startMs) return;
+    if (c.endMs && now > c.endMs + 15 * 60 * 1000) return;   // grace period, then stop
+    const r = await cunaGiveaway.scanOnce({ heliusKey: process.env.HELIUS_API_KEY, heliusEnhancedBatched });
+    if (r && r.ok && (r.newEntries || r.newDq)) {
+      console.log(`[cuna-giveaway] +${r.newEntries} entries, +${r.newDq} dq (behind ${Math.round((r.behindMs || 0) / 60000)}m)`);
+    } else if (r && !r.ok) {
+      console.warn("[cuna-giveaway] scan:", r.error, r.detail || "");
+    }
+  })().catch((e) => console.warn("[cuna-giveaway] tick:", e.message));
+}, 5 * 60 * 1000);
+
 // Admin lever for the generic buy bot (PREMIUM_ACCESS_KEY-gated).
 //   ?project=cuna&mint=…&pool=…&symbol=CUNA&chat=-100…&min=1&emoji=🐔&image=URL  → upsert config
 //   &arm=1 / &disarm=1   → turn this project's auto-posting on/off
