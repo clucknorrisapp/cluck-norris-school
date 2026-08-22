@@ -683,6 +683,37 @@ router.get('/api/nq/pair/poll', (req, res) => {
   } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
 
+// The TV renders this as an <img>. Pairing had a working code exchange and no front door: the
+// TV said "on your phone, open this game, tap 🎮 → Wallet → Pair a TV", which means typing an
+// unlinked URL on a phone keyboard and then hunting a menu. Nobody did it. The QR carries the
+// game URL WITH the code already in it, so a camera does all of that in one step.
+//
+// The code in the QR is the PUBLIC half of the pairing (see nq-pair.js) — the same string already
+// printed in 34px on the screen. The `claim` secret is never encoded here and never leaves the TV,
+// so photographing the QR is exactly as harmless as photographing the code.
+//
+// Rendered as SVG, not PNG: it scales to any TV without resampling, costs no canvas, and is a few
+// hundred bytes. Level H so it still scans off a reflective screen at an angle.
+router.get('/api/nq/pair/qr', async (req, res) => {
+  try {
+    if (throttled(req, 'pairqr', 30)) return res.status(429).json({ ok: false, error: 'slow_down' });
+    const code = String((req.query || {}).code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (code.length !== pair.CODE_LEN) return res.status(400).json({ ok: false, error: 'bad_code' });
+    // Build the target from OUR config, never from anything the caller sends — a caller-supplied
+    // base would turn this into an open redirect painted as a QR on someone's television.
+    const origin = (process.env.PUBLIC_ORIGIN || 'https://clucknorris.app').replace(/\/+$/, '');
+    const target = origin + '/normie-quest-x7?pair=' + encodeURIComponent(code);
+    const svg = await require('qrcode').toString(target, {
+      type: 'svg', errorCorrectionLevel: 'H', margin: 1,
+      color: { dark: '#12102a', light: '#ffffff' },
+    });
+    res.set('Content-Type', 'image/svg+xml');
+    res.set('Cache-Control', 'no-store');          // a pairing code is single-use and short-lived
+    res.set('X-Robots-Tag', 'noindex, nofollow');
+    res.send(svg);
+  } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+
 // ---- /api/nq/feedback : playtester comment store (test dashboard) ---------
 // POST is PUBLIC (testers on the ?test=1 build submit here); size-capped, sanitized in the
 // store. GET is gated (owner reads the raw list). Both never throw a 500 leak.
