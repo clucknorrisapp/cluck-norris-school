@@ -7897,6 +7897,8 @@ app.get("/api/cuna-giveaway/admin", async (req, res) => {
     const out = { ok: true, config: cunaGiveaway.config() };
     if (q.scan === "1") out.scan = await cunaGiveaway.scanOnce(deps);
     if (q.trace === "1") out.trace = await cunaGiveaway.traceOutbound(deps, { hops: 2 });
+    if (q.pinon === "1") { cunaGiveaway.configure({ boardPin: true }); out.config = cunaGiveaway.config(); }
+    if (q.pinoff === "1") { cunaGiveaway.configure({ boardPin: false }); out.config = cunaGiveaway.config(); }
     if (q.board === "1") out.board = await cunaGiveaway.postBoard({});
     if (q.boardpreview === "1") out.boardPreview = cunaGiveaway.boardText();
     if (q.boardoff === "1") { cunaGiveaway.configure({ boardOn: false }); out.config = cunaGiveaway.config(); }
