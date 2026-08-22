@@ -630,7 +630,7 @@ router.get('/api/nq/gate', (req, res) => {
     // Echo what a player would actually get, so the owner can eyeball the effect immediately.
     res.json({
       ok: true, changed, gate: gateState,
-      effective: { noWallet: wallet.gate.freeWorlds(), tier1: wallet.gate.clamp([1, 8]), tier2: wallet.gate.clamp('all') },
+      effective: { noWallet: wallet.gate.freeWorlds(), tier1: wallet.gate.clamp([1, 12]), tier2: wallet.gate.clamp('all') },   // tier-1 = worlds 1-12 since the 2026-08-22 launch tiers
     });
   } catch (e) { res.status(500).json({ ok: false, error: 'gate_write_failed' }); }
 });

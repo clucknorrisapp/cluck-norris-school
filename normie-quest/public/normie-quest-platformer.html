@@ -98,8 +98,12 @@
             window.__NQ_TERMS = j.terms;
             try { localStorage.setItem(KT, JSON.stringify(j.terms)); } catch (e) {}
           }
+          // The Title scene can draw before this fetch lands (first-ever visit, no cache) and
+          // its band chips would then advertise the pre-config state. Flag + event let it redraw.
+          window.__NQ_GATE_READY = true;
+          try { window.dispatchEvent(new Event('nq-gate-ready')); } catch (e) {}
         })
-        .catch(function () {});
+        .catch(function () { window.__NQ_GATE_READY = true; try { window.dispatchEvent(new Event('nq-gate-ready')); } catch (e) {} });
     } catch (e) {}
   })();
 </script>
@@ -1988,6 +1992,25 @@ var Title=new Phaser.Class({ Extends:Phaser.Scene,
     });
     var _gap=18,_tot=_chips.reduce(function(s,t){ return s+t.width; },0)+_gap*(_chips.length-1),_cx=W/2-_tot/2;
     _chips.forEach(function(t){ t.x=_cx+t.width/2; _cx+=t.width+_gap; });
+    // FIRST-VISIT RACE (found live on launch day): with no localStorage cache the chips above can
+    // draw before the config fetch lands, and a fresh visitor's title said "ALL WORLDS OPEN" while
+    // world 4 was really a $5 wall. The boot shim raises __NQ_GATE_READY + 'nq-gate-ready' when the
+    // truth arrives — if this scene is still up and the bands it drew no longer match, redraw once
+    // via a scene restart (the title is static; a restart is invisible beyond the chips changing).
+    try{ if(typeof window!=='undefined' && !window.__NQ_GATE_READY){
+      var _sig=JSON.stringify(_bands), _tScene=this;
+      var _onReady=function(){ try{
+        window.removeEventListener('nq-gate-ready',_onReady);
+        if(!_tScene.scene || !_tScene.scene.isActive || !_tScene.scene.isActive('Title')) return;
+        var f2=nqGateOn()?nqFreeMax():_maxWorld, c2=nqGateCap(), b2;
+        if(!nqGateOn()) b2=[['ALL WORLDS OPEN','W1-'+_maxWorld]];
+        else if(c2) b2=[['PLAY NOW','W1-'+Math.min(f2,c2)],['W'+(Math.min(f2,c2)+1)+'-'+_maxWorld,'OPENING SOON']];
+        else { var T2=nqTerms(); b2=[['FREE','W1-'+f2],[(T2&&T2.usdPriced)?('$'+T2.tier1Usd+' NORMIE'):'HOLDERS','W'+(f2+1)+'-'+(_vipMin-1)],[(T2&&T2.usdPriced)?('$'+T2.tier2Usd+' NORMIE'):'BIG HOLDERS','W'+_vipMin+'-'+_maxWorld]]; }
+        if(JSON.stringify(b2.map(function(x){return [x[0],x[1]];}))!==JSON.stringify(JSON.parse(_sig).map(function(x){return [x[0],x[1]];}))) _tScene.scene.restart();
+      }catch(e){} };
+      window.addEventListener('nq-gate-ready',_onReady);
+      this.events.once('shutdown',function(){ try{ window.removeEventListener('nq-gate-ready',_onReady); }catch(e){} });
+    } }catch(e){}
     this.add.text(W/2,246,_maxWorld+" worlds · "+_named.length+" levels + more secrets than you'd think  ·  a Cluck Norris production",{fontFamily:UIFONT,resolution:UIRES,fontSize:'11px',color:'#b6bfe0',align:'center'}).setOrigin(.5);
     // Free to play, always: tap straight into the game. Nothing is ever charged to START a run
     // (the only burn in the game is the optional Item Reserve shop in the panel overlay).
