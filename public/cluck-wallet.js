@@ -124,6 +124,53 @@
 
   function shortAddr(a) { return a ? a.slice(0, 4) + "…" + a.slice(-4) : "—"; }
 
+  // ── mobile: is this a phone/tablet browser that can't have an extension? ──────────────────
+  // iPadOS Safari reports a MACINTOSH user-agent by default (desktop-class browsing), so the
+  // usual /iPad/ regex misses every modern iPad and the page tells an iPad user to "install a
+  // wallet extension" — advice that cannot be followed on iPadOS. maxTouchPoints separates a
+  // real Mac (0) from an iPad pretending to be one. Five pages carried the regex WITHOUT this
+  // clause and one (premium) with it; that divergence is why it lives here now.
+  function isMobile() {
+    var ua = (global.navigator && global.navigator.userAgent) || "";
+    if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua)) return true;
+    return !!(global.navigator && global.navigator.maxTouchPoints > 1 && /Macintosh/.test(ua));
+  }
+
+  // ── late provider injection ───────────────────────────────────────────────────────────────
+  // A wallet's in-app browser does NOT always have its provider on the page by the time our
+  // script runs — several inject on or after `load`, and some fire the de-facto standard
+  // `solana#initialized` event when they're ready. A page that calls available() once at parse
+  // time therefore shows "no wallet detected" to someone who is standing INSIDE the wallet.
+  // watch(cb) calls cb() whenever the set of detected wallets changes, from now until `ms`
+  // (default 8s) after load. Pages should render their picker from it instead of hand-rolling
+  // another pair of setTimeouts — the old ones were 600ms/1600ms, which is not long enough for
+  // a cold in-app browser on a slow phone.
+  function watch(cb, ms) {
+    if (typeof cb !== "function") return function () {};
+    var stopped = false, timers = [], last = "";
+    var deadline = Date.now() + (ms > 0 ? ms : 8000);
+    function sig() {
+      try { return available().map(function (w) { return w.id; }).join(","); } catch (e) { return ""; }
+    }
+    function tick() {
+      if (stopped) return;
+      var s = sig();
+      if (s !== last) { last = s; try { cb(); } catch (e) {} }
+      if (Date.now() < deadline) timers.push(setTimeout(tick, 400));
+    }
+    last = sig();
+    function poke() { if (!stopped) { last = "\u0000"; tick(); } }   // force a re-render on an explicit signal
+    try { global.addEventListener("solana#initialized", poke); } catch (e) {}
+    try { global.addEventListener("load", poke); } catch (e) {}
+    timers.push(setTimeout(tick, 400));
+    return function stop() {
+      stopped = true;
+      for (var i = 0; i < timers.length; i++) clearTimeout(timers[i]);
+      try { global.removeEventListener("solana#initialized", poke); } catch (e) {}
+      try { global.removeEventListener("load", poke); } catch (e) {}
+    };
+  }
+
   async function connect(id) {
     var entry = null, list = available();
     if (id) {
@@ -162,5 +209,7 @@
     disconnect: disconnect,
     current: current,
     shortAddr: shortAddr,
+    isMobile: isMobile,
+    watch: watch,
   };
 })(typeof globalThis !== "undefined" ? globalThis : window);
