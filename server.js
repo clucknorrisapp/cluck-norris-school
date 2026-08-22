@@ -7897,6 +7897,10 @@ app.get("/api/cuna-giveaway/admin", async (req, res) => {
     const out = { ok: true, config: cunaGiveaway.config() };
     if (q.scan === "1") out.scan = await cunaGiveaway.scanOnce(deps);
     if (q.trace === "1") out.trace = await cunaGiveaway.traceOutbound(deps, { hops: 2 });
+    if (q.board === "1") out.board = await cunaGiveaway.postBoard({});
+    if (q.boardpreview === "1") out.boardPreview = cunaGiveaway.boardText();
+    if (q.boardoff === "1") { cunaGiveaway.configure({ boardOn: false }); out.config = cunaGiveaway.config(); }
+    if (q.boardon === "1") { cunaGiveaway.configure({ boardOn: true }); out.config = cunaGiveaway.config(); }
     if (q.draw === "1") out.draw = await cunaGiveaway.runDraw({ rpcUrl: process.env.HELIUS_API_KEY ? `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}` : undefined }, { force: q.force === "1" });
     out.standings = cunaGiveaway.standings(10);
     res.json(out);
@@ -7918,6 +7922,14 @@ setInterval(() => {
       console.log(`[cuna-giveaway] +${r.newEntries} entries, +${r.newDq} dq (behind ${Math.round((r.behindMs || 0) / 60000)}m)`);
     } else if (r && !r.ok) {
       console.warn("[cuna-giveaway] scan:", r.error, r.detail || "");
+    }
+    // Owner's ask: refresh the room's board every 5 minutes, each refresh a NEW message with the
+    // previous one deleted (tg-test &replaceMsg) so it stays at the bottom of the chat instead of
+    // scrolling away. Silent by default, so 288 refreshes never ping anyone. Only posts once the
+    // scan is CAUGHT UP — a board built from a half-backfilled ledger would show wrong standings.
+    if (c.boardOn !== false && r && r.ok && !(r.behindMs > 6 * 60 * 1000)) {
+      const b = await cunaGiveaway.postBoard({});
+      if (!b.ok) console.warn("[cuna-giveaway] board:", b.error, b.detail || "");
     }
   })().catch((e) => console.warn("[cuna-giveaway] tick:", e.message));
 }, 5 * 60 * 1000);
