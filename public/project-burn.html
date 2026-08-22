@@ -220,14 +220,11 @@ function renderPicker(){
   var list = CluckWallet.available();
   el.innerHTML = "";
   if (!list.length){
-    var isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    if (isMobile){
-      var url = encodeURIComponent(location.href), ref = encodeURIComponent(location.origin);
-      el.innerHTML =
-        '<div class="hint">📱 Open Project Burn inside a wallet’s browser to connect:</div>' +
-        '<a class="btn sm" style="text-decoration:none" href="https://phantom.app/ul/browse/' + url + '?ref=' + ref + '">🔮 Phantom</a>' +
-        '<a class="btn sm" style="text-decoration:none" href="https://solflare.com/ul/v1/browse/' + url + '?ref=' + ref + '">☀️ Solflare</a>' +
-        '<div class="hint" style="width:100%">Opens this exact page in the wallet’s built-in browser. Nothing is signed or shared by the link.</div>';
+    if (CluckWallet.isMobile()){
+      // The wallet list, the per-platform filtering and the copy all live in
+      // /cluck-wallet.js now — six pages carried their own hardcoded Phantom+Solflare
+      // pair and had drifted apart. Add a wallet there and every page gains it.
+      el.innerHTML = CluckWallet.mobileLinksHTML({ what: 'Project Burn', btnClass: "btn sm", hintClass: "hint" });
     } else {
       el.innerHTML = '<div class="hint">No Solana wallet detected. Install a wallet extension (Phantom, Solflare, Backpack, SafePal…) and refresh — or open <b>clucknorris.app/project-burn</b> on your phone inside your wallet’s built-in browser.</div>';
     }
@@ -469,7 +466,10 @@ function bytesToB64(u8){
 }
 
 renderPicker();
-setTimeout(renderPicker, 600); setTimeout(renderPicker, 1600);
+// Providers can inject well after parse — a wallet's own in-app browser often does, and the
+// old 600ms/1600ms pair gave up long before a cold app on a slow phone was ready, leaving
+// someone standing INSIDE their wallet looking at "no wallet detected".
+try { CluckWallet.watch(renderPicker); } catch(_){ setTimeout(renderPicker, 600); setTimeout(renderPicker, 1600); }
 $("disconnect").addEventListener("click", disconnect);
 $("load-btn").addEventListener("click", loadToken);
 $("mint").addEventListener("keydown", function(e){ if (e.key === "Enter") loadToken(); });
