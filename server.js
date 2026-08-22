@@ -7897,6 +7897,9 @@ app.get("/api/cuna-giveaway/admin", async (req, res) => {
     const out = { ok: true, config: cunaGiveaway.config() };
     if (q.scan === "1") out.scan = await cunaGiveaway.scanOnce(deps);
     if (q.trace === "1") out.trace = await cunaGiveaway.traceOutbound(deps, { hops: 2 });
+    if (q.every !== undefined) { cunaGiveaway.configure({ boardEveryMin: Math.max(5, Number(q.every) || 5) }); out.config = cunaGiveaway.config(); }
+    if (q.replaceon === "1") { cunaGiveaway.configure({ boardReplace: true }); out.config = cunaGiveaway.config(); }
+    if (q.replaceoff === "1") { cunaGiveaway.configure({ boardReplace: false }); out.config = cunaGiveaway.config(); }
     if (q.pinon === "1") { cunaGiveaway.configure({ boardPin: true }); out.config = cunaGiveaway.config(); }
     if (q.pinoff === "1") { cunaGiveaway.configure({ boardPin: false }); out.config = cunaGiveaway.config(); }
     if (q.board === "1") out.board = await cunaGiveaway.postBoard({});
@@ -7930,8 +7933,15 @@ setInterval(() => {
     // scrolling away. Silent by default, so 288 refreshes never ping anyone. Only posts once the
     // scan is CAUGHT UP — a board built from a half-backfilled ledger would show wrong standings.
     if (c.boardOn !== false && r && r.ok && !(r.behindMs > 6 * 60 * 1000)) {
-      const b = await cunaGiveaway.postBoard({});
-      if (!b.ok) console.warn("[cuna-giveaway] board:", b.error, b.detail || "");
+      // Cadence knob: the tick is every 5 min, but boardEveryMin can space the DROPS out without
+      // slowing the scan (each drop is now its own message, so frequency = message volume).
+      const everyMin = Math.max(5, Number(c.boardEveryMin) || 5);
+      const since = Date.now() - (Number(c.lastBoardAt) || 0);
+      if (since >= everyMin * 60 * 1000 - 15000) {
+        const b = await cunaGiveaway.postBoard({});
+        if (b.ok) cunaGiveaway.configure({ lastBoardAt: Date.now() });
+        else console.warn("[cuna-giveaway] board:", b.error, b.detail || "");
+      }
     }
   })().catch((e) => console.warn("[cuna-giveaway] tick:", e.message));
 }, 5 * 60 * 1000);
