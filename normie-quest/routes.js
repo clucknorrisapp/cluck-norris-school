@@ -19,6 +19,7 @@ const router = express.Router();
 const burn = require('./normie-burn');   // burn-to-buy backend for the Item Reserve shop (dormant until NQ_SHOP is armed)
 const feedback = require('./nq-feedback');   // playtester comment store (test dashboard)
 const telemetry = require('./nq-telemetry'); // difficulty telemetry (deaths + clears)
+const journey = require('./nq-journey');     // per-player session journey: funnel + drop-off
 const leaderboard = require('./nq-leaderboard');   // Phase 2 leaderboards (per-world + weekly)
 const wallet = require('./nq-wallet');   // Phase 2 wallet ownership + tier gate (sign-message, read-only)
 const rewards = require('./nq-rewards'); // wallet-bound game-boost reward queue + daily VIP wheel
@@ -770,11 +771,29 @@ router.post('/api/nq/telemetry', (req, res) => {
   try {
     if (throttled(req, 'tele', 60)) return res.status(429).json({ ok: false, error: 'slow_down' });
     const b = req.body || {};
+    // JOURNEY FIRST, deliberately ahead of the clear-token gate below. That gate protects the
+    // DIFFICULTY store, where a fabricated clear would skew the clear-rate and avg-clear-time
+    // numbers the owner tunes levels from. The funnel is a different animal: 'start', 'quit' and
+    // 'powerup' carry no token and never could (they are fire-and-forget beacons, and a start has
+    // no run to prove yet), so gating only 'clear' would count every start and drop the matching
+    // clear — manufacturing phantom drop-off in the exact metric the funnel exists to report.
+    // Consistency wins: the journey store takes all event types on the same terms, and its abuse
+    // surface is unchanged from what starts/quits already present.
+    let j = null;
+    if (b.sid) {
+      try { j = journey.track({ ev: b.ev, sid: b.sid, world: b.world, x: b.x, t: b.t, cause: b.cause, item: b.item, score: b.score }); }
+      catch (e) { j = null; }
+    }
+    // Anything that isn't death/clear is journey-only — the difficulty store doesn't model it,
+    // and must not report it as a bad event just because it rejected an unknown type.
+    if (b.ev !== 'death' && b.ev !== 'clear') {
+      return res.status(j && j.ok ? 200 : 400).json(j || { ok: false, status: 'no_sid' });
+    }
     // a 'clear' shifts the difficulty stats the owner tunes from (clear rates, avg clear time),
     // so it must prove a real run: same HMAC token family /api/nq/score verifies, but WITHOUT
     // burning the run nonce (that stays single-use at score submit).
     if (b.ev === 'clear' && !leaderboard.verifyRun(b.token || null).ok) {
-      return res.status(400).json({ ok: false, status: 'bad_token' });
+      return res.status(400).json({ ok: false, status: 'bad_token', journey: !!(j && j.ok) });
     }
     const r = telemetry.add({ ev: b.ev, world: b.world, x: b.x, cause: b.cause, t: b.t, deaths: b.deaths, score: b.score, who: b.who });
     res.status(r.ok ? 200 : 400).json(r);
@@ -786,6 +805,27 @@ router.get('/api/nq/telemetry', (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ ok: false, error: 'not_found' });
   try { res.json({ ok: true, total: telemetry.count(), ...telemetry.summary(Number(req.query.since) || 0) }); }
   catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
+});
+
+// ---- /api/nq/journey : per-player session data (all gated) ----------------
+// funnel = per-level starts/clears/deaths/quits from permanent aggregates;
+// drop = levels ranked by where players actually give up;
+// sessions = the rolling detail window; ?sid= = one player's full ordered path.
+router.get('/api/nq/journey', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!adminOK(req)) return res.status(404).json({ ok: false, error: 'not_found' });
+  try {
+    const sid = String((req.query && req.query.sid) || '').trim();
+    if (sid) {
+      const d = journey.sessionDetail(sid);
+      return d ? res.json({ ok: true, session: d }) : res.status(404).json({ ok: false, error: 'no_such_session' });
+    }
+    const view = String((req.query && req.query.view) || 'overview');
+    if (view === 'funnel') return res.json({ ok: true, funnel: journey.funnel() });
+    if (view === 'drop') return res.json({ ok: true, drop: journey.dropOff(Number(req.query.n) || 15) });
+    if (view === 'sessions') return res.json({ ok: true, sessions: journey.sessions(Number(req.query.n) || 50) });
+    res.json({ ok: true, ...journey.overview(Number(req.query.since) || 0) });
+  } catch (e) { res.status(500).json({ ok: false, error: 'server_error' }); }
 });
 
 // ONE world's full death-bucket detail — feeds the lab build's in-level heatmap overlay.
@@ -1061,6 +1101,50 @@ router.get('/normie-quest-x7/dashboard', async (req, res) => {
 
   res.set('Content-Type', 'text/html; charset=utf-8');
   res.set('Cache-Control', 'no-store');
+  // 🧭 PLAYER JOURNEY — the funnel. Scored runs only count players who FINISH and submit; this
+  // counts everyone who pressed start, which is the number that answers "did launch day work".
+  // `starts` is the denominator, `quits` is the abandon beacon, and drop-off ranks where we
+  // actually lose people. Aggregates are permanent; the session list is a rolling window.
+  let jov = null, jdrop = [], jsess = [], jfun = [];
+  try { jov = journey.overview(Date.now() - 86400000); } catch (e) { jov = null; }
+  try { jdrop = journey.dropOff(12) || []; } catch (e) { jdrop = []; }
+  try { jsess = journey.sessions(25) || []; } catch (e) { jsess = []; }
+  try { jfun = journey.funnel() || []; } catch (e) { jfun = []; }
+  const pct = function (v) { return v === null || v === undefined ? '<span class="dim">—</span>' : v + '%'; };
+  const journeySection = jov
+    ? '<h2>🧭 PLAYER JOURNEY <span class="dim" style="font-weight:400">(anonymous per-browser sessions — counts everyone who played, not just who scored)</span></h2>'
+      + '<div class="cards">'
+      + '<div class="card"><b>' + jov.sessionsActive + '</b><span>PLAYERS · 24H</span></div>'
+      + '<div class="card"><b>' + jov.sessionsTracked + '</b><span>SESSIONS TRACKED</span></div>'
+      + '<div class="card"><b>' + jov.returningSessions + '</b><span>CAME BACK</span></div>'
+      + '<div class="card"><b>' + jov.starts + '</b><span>LEVEL STARTS</span></div>'
+      + '<div class="card"><b>' + jov.quits + '</b><span>ABANDONED ⤴</span></div>'
+      + '<div class="card"><b>' + jov.powerups + '</b><span>POWERUPS</span></div>'
+      + '<div class="card"><b>' + (jov.overallClearRate === null ? '—' : jov.overallClearRate + '%') + '</b><span>CLEAR RATE</span></div>'
+      + '</div>'
+      + (jdrop.length
+        ? '<h2>🚪 WHERE PLAYERS QUIT <span class="dim" style="font-weight:400">(abandoned mid-level — closed the tab or switched away)</span></h2>'
+          + '<div style="overflow-x:auto"><table><tr><th>LEVEL</th><th>QUIT</th><th>OF STARTS</th><th>STARTED</th><th>CLEARED</th><th>CLEAR RATE</th></tr>'
+          + jdrop.map(function (r) {
+            return '<tr><td><b>' + esc(r.world) + '</b></td><td class="bad">' + r.quits + '</td><td>' + pct(r.quitRate)
+              + '</td><td>' + r.starts + '</td><td>' + r.clears + '</td><td>' + pct(r.clearRate) + '</td></tr>';
+          }).join('') + '</table></div>'
+        : '<p class="dim">No abandons recorded yet — this fills in as players close the tab mid-level.</p>')
+      + (jsess.length
+        ? '<h2>👣 RECENT PLAYERS <span class="dim" style="font-weight:400">(newest first · sid is a random per-browser tag, not a wallet or a name)</span></h2>'
+          + '<div style="overflow-x:auto"><table><tr><th>SID</th><th>LEVELS</th><th>CLEARED</th><th>DEATHS</th><th>POWERUPS</th><th>MINS</th><th>VISITS</th><th>LAST SEEN</th></tr>'
+          + jsess.map(function (r) {
+            return '<tr><td class="mono">' + esc(r.sid) + '</td><td>' + r.levelsSeen + '</td><td>' + r.levelsCleared
+              + '</td><td>' + r.deaths + '</td><td>' + r.powerups + '</td><td>' + r.minutes + '</td><td>' + r.visits
+              + '</td><td class="dim">' + esc(r.lastEv) + ' @ ' + esc(r.lastWorld) + ' · ' + ago(r.last) + '</td></tr>';
+          }).join('') + '</table></div>'
+        : '')
+      + '<p class="dim">Full funnel JSON: <a href="/api/nq/journey?view=funnel&key=' + key + '">funnel</a> · '
+      + '<a href="/api/nq/journey?view=drop&key=' + key + '">drop-off</a> · '
+      + '<a href="/api/nq/journey?view=sessions&key=' + key + '">sessions</a> · '
+      + 'one player\'s full path: <code>/api/nq/journey?sid=&lt;sid&gt;&amp;key=…</code></p>'
+    : '';
+
   res.send('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
     + '<meta name="robots" content="noindex,nofollow"><title>Normie Quest — Operator Dashboard</title><style>'
     + 'body{margin:0;background:radial-gradient(120% 80% at 50% -10%,#181033,#0c0818 60%);color:#eee;font-family:system-ui,Segoe UI,Roboto,sans-serif;padding:0 0 48px;-webkit-font-smoothing:antialiased}'
@@ -1146,6 +1230,7 @@ router.get('/normie-quest-x7/dashboard', async (req, res) => {
     + '</div>'
     + (flagged.length ? '<div class="attn"><div class="h">⚠ NEEDS ATTENTION — ' + flagged.length + ' hard level' + (flagged.length === 1 ? '' : 's') + ' (worst deaths-per-clear first)</div><div class="chips">' + attentionChips + '</div></div>' : '')
     + engagementSection
+    + journeySection
     + '<div class="cols"><div>'
     + '<h2>🏆 LEADERBOARD — ALL TIME</h2><table><tr><th>#</th><th>NAME</th><th>WORLD</th><th>SCORE</th></tr>' + boardRows(lb && lb.allTime) + '</table>'
     + '</div><div>'

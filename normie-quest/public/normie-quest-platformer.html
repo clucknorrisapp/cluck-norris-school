@@ -719,7 +719,28 @@ var MUSIC=(function(){
 })();
 try{ if(typeof window!=='undefined') window.__NQ_MUSIC=MUSIC; }catch(e){}
 // Pause music when the tab is hidden / browser minimized; resume on return (HTMLAudio doesn't stop on its own).
-try{ if(typeof document!=='undefined') document.addEventListener('visibilitychange',function(){ try{ if(document.hidden) MUSIC.suspend(); else if(!window.__NQ_PAUSED) MUSIC.resume(); }catch(e){} }); }catch(e){}   // paused game keeps its silence — resumeGame() owns the restart (audit #20)
+try{ if(typeof document!=='undefined') document.addEventListener('visibilitychange',function(){ try{ if(document.hidden) MUSIC.suspend(); else if(!window.__NQ_PAUSED) MUSIC.resume(); }catch(e){} }); }catch(e){}
+// ABANDON BEACON — the single most useful funnel signal and the one nothing else captures. A
+// player who dies is a 'death'; one who finishes is a 'clear'; one who simply CLOSES THE TAB
+// mid-level is currently invisible, and that is exactly the person we most want to know about.
+// window.__NQ_LIVE is set by the Game scene while a level is genuinely in progress and cleared
+// the moment it ends, so this can never fire for a menu, a finished level, or twice for one
+// attempt. pagehide is the reliable mobile signal (iOS often never fires beforeunload); the
+// hidden-branch of visibilitychange covers app-switching, which on a phone IS quitting.
+try{
+  if(typeof window!=='undefined'){
+    var nqSendQuit=function(){
+      try{
+        var L=window.__NQ_LIVE;
+        if(!L||!L.world) return;
+        window.__NQ_LIVE=null;   // one beacon per attempt, whichever event wins the race
+        nqTele('quit',{world:L.world,x:Math.round(L.x()||0),t:Math.round(((Date.now()-(L.at||Date.now()))-(L.paused()||0))/1000),score:L.score()||0});
+      }catch(e){}
+    };
+    window.addEventListener('pagehide',nqSendQuit);
+    document.addEventListener('visibilitychange',function(){ if(document.hidden) nqSendQuit(); });
+  }
+}catch(e){}   // paused game keeps its silence — resumeGame() owns the restart (audit #20)
 
 var C={ ink:0x0d0b1e, coin:0xffd23f, coinDk:0xb8860b, danger:0xff3860, phos:0x3dff6e, white:0xffffff,
         dirt:0x8a5a2b, dirtDk:0x5e3c1a, grass:0x3dff6e, grassDk:0x1da84a,
@@ -2120,11 +2141,31 @@ function nqMegaWhaleUnlocked(){
   var a=null; try{ a=(typeof window.__NQ_ACCESS==='function')?window.__NQ_ACCESS():null; }catch(e){}
   return a==='all';
 }
+// ANONYMOUS SESSION ID — a random per-browser tag so two events can be known to be the same
+// person. NOT a wallet, name, IP, or anything derived from one; it is generated locally, never
+// leaves localStorage except on our own beacons, and identifies nobody. It exists purely so the
+// funnel can answer "how many PEOPLE played" and "where did this one give up", which raw
+// death counts cannot. Distinct from nq_tester (the ?tester= panel tag), which still rides along.
+function nqSid(){
+  try{
+    var v=localStorage.getItem('nq_sid');
+    if(!v||!/^[A-Za-z0-9_-]{6,32}$/.test(v)){
+      v='';
+      try{
+        var a=new Uint8Array(9); crypto.getRandomValues(a);
+        for(var i=0;i<a.length;i++) v+='0123456789abcdefghijklmnopqrstuvwxyz'[a[i]%36];
+      }catch(e){ v=Math.random().toString(36).slice(2,11)+Math.random().toString(36).slice(2,5); }
+      v=('s'+v).slice(0,16);
+      localStorage.setItem('nq_sid',v);
+    }
+    return v;
+  }catch(e){ return ''; }   // private mode / storage blocked → no sid, difficulty telemetry still flows
+}
 function nqTele(ev,d){
   try{
     var who=''; try{ who=localStorage.getItem('nq_tester')||''; }catch(e){}
     var tok; if(ev==='clear'){ try{ tok=(window.NQLB&&window.NQLB.getToken)?window.NQLB.getToken():undefined; }catch(e){} }   // server rejects tokenless clears since the telemetry hardening (audit #29)
-    var b=JSON.stringify(Object.assign({ev:ev,who:who||undefined,token:tok||undefined},d||{}));
+    var b=JSON.stringify(Object.assign({ev:ev,who:who||undefined,sid:nqSid()||undefined,token:tok||undefined},d||{}));
     if(navigator.sendBeacon){ navigator.sendBeacon('/api/nq/telemetry', new Blob([b],{type:'application/json'})); }
     else { fetch('/api/nq/telemetry',{method:'POST',headers:{'content-type':'application/json'},body:b,keepalive:true}).catch(function(){}); }
   }catch(e){}
@@ -2234,6 +2275,19 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     try{ window.__NQ_PAUSED=false; }catch(e){}   // fresh level = not paused (the flag gates no-gesture music restarts)
     this._lastSafe=null;   // ⚠ the scene INSTANCE is reused across scene.start — without this, falling before first landing respawns at the PREVIOUS level's banked spot (audit #8, reproduced live)
     this._lvStartAt=Date.now(); this._lvDeaths=0; this._pausedMs=0; this._pausedAtWall=null; this._pausedAtClock=null;   // difficulty telemetry: time-in-level (minus paused spans) + lives lost this level
+    // Journey funnel: a level STARTED is the denominator for every drop-off number. Without it
+    // we can count deaths but never "how many people even got here".
+    this._lvQuitSent=false;
+    try{ nqTele('start',{world:this.def&&this.def.name}); }catch(e){}
+    // Arm the abandon beacon for THIS attempt. Closures rather than a snapshot so the beacon
+    // reports where the player actually was when they left, not where they spawned.
+    try{
+      var _sc=this;
+      window.__NQ_LIVE={ world:(this.def&&this.def.name)||'', at:Date.now(),
+        x:function(){ return _sc.player?_sc.player.x:0; },
+        paused:function(){ return _sc._pausedMs||0; },
+        score:function(){ return _sc.score||0; } };
+    }catch(e){}
     // Drain gamepad edge-latches left over from menu navigation: the START press that launched
     // this level also set pauseEdge (and anyBtnEdge/jumpEdge), so the first update() would
     // instantly pause the fresh run / fire a phantom buffered jump at spawn.
@@ -3279,6 +3333,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       else { var lnow=this.time.now; if(!this._puLockFlashAt||lnow-this._puLockFlashAt>1500){ this._puLockFlashAt=lnow; this.flash('🔒 MEGA WHALE — TOP-TIER HOLDER PERK (terms in testing)','#9fb0d0'); } return; }
     }
     var type=pu.ptype, px=pu.x, py=pu.y; this.tweens.killTweensOf(pu); if(pu.puLockIcon) pu.puLockIcon.destroy(); pu.destroy(); this.burst(px,py,0xffffff,20);
+    try{ nqTele('powerup',{world:this.def&&this.def.name,item:type,x:Math.round(px)}); }catch(e){}
     var now=this.time.now;
     if(type==='diamond'){ this.shieldUntil=now+9000; this.powerBanner('DIAMOND HANDS','UNSHAKEABLE — no damage 9s','#66ddff'); }
     else if(type==='bull'){ this.bullUntil=now+11000; this.powerBanner('BULL MARKET','MEGA JUMP — 11s','#3dff6e'); }
@@ -4934,6 +4989,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
     // difficulty telemetry: boss arenas end HERE, never via key+door levelClear — without this
     // every boss level showed deaths but permanently 0 clears (garbage deathsPerClear).
     nqTele('clear',{world:this.def&&this.def.name,t:Math.round((Date.now()-(this._lvStartAt||Date.now())-(this._pausedMs||0))/1000),deaths:this._lvDeaths||0,score:this.score});
+    try{ window.__NQ_LIVE=null; }catch(e){}   // level ended legitimately — the abandon beacon must not also fire
     k.invuln=true; k.setVelocity(0,0); k.body.setAllowGravity(false);
     // Sound + shake go here, at the TOP of bossDefeat, so every ending gets them: the generic VIP
     // path, each per-boss branch and both finales all return from below this line.
@@ -5148,6 +5204,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   wormDefeat:function(){
     if(this.over) return; this.over=true; var wm=this.worm; if(this.mound) this.mound.setVisible(false);
     nqTele('clear',{world:this.def&&this.def.name,t:Math.round((Date.now()-(this._lvStartAt||Date.now())-(this._pausedMs||0))/1000),deaths:this._lvDeaths||0,score:this.score});   // boss levels never reach levelClear
+    try{ window.__NQ_LIVE=null; }catch(e){}   // level ended legitimately — the abandon beacon must not also fire
     // The WORMHOLE (2-3) does NOT route through bossDefeat — it is its own ending, so it needs its
     // own call or the first boss most players ever beat would still go down in silence.
     try{ SFX.bossDown(); }catch(e){}
@@ -5776,6 +5833,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
   levelClear:function(){
     if(this.over) return; this.over=true; this.addScore(this.timeLeft*10); this.physics.pause(); SFX.clear();
     nqTele('clear',{world:this.def&&this.def.name,t:Math.round((Date.now()-(this._lvStartAt||Date.now())-(this._pausedMs||0))/1000),deaths:this._lvDeaths||0,score:this.score});
+    try{ window.__NQ_LIVE=null; }catch(e){}   // level ended legitimately — the abandon beacon must not also fire
     var big=this.hb(this.add.text(W/2,120,'WORLD '+this.def.name+' CLEAR!',{fontFamily:'"Press Start 2P"',fontSize:'16px',color:'#3dff6e'}).setOrigin(.5));
     this.tweens.add({targets:big,scale:1.15,duration:400,yoyo:true,repeat:1});
     var next=(this.def&&this.def.next!=null)?this.def.next:this.levelIdx+1;   // same expression advanceLevel uses — private chains were only working by array-position luck (audit polish)
@@ -5793,6 +5851,7 @@ var Game=new Phaser.Class({ Extends:Phaser.Scene,
       if(next<LEVELS.length) this.scene.start('Game',{level:next,score:this.score,lives:3,lab:(this._labWarp?1:undefined)}); else this.scene.start('Win',this.winData()); },[],this);   // refill hearts each world; score stays cumulative
   },
   gameOver:function(reason){ if(this.over) return; this.over=true; this.physics.pause();
+    try{ window.__NQ_LIVE=null; }catch(e){}   // run is over — closing the tab from the game-over card is not an abandon
     // TIME UP is the one run-ender that doesn't pass through loseLife — record it here (never both)
     if(reason==='TIME UP') nqTele('death',{world:this.def&&this.def.name,x:Math.round(this.player?this.player.x:0),cause:'TIME UP',t:Math.round((Date.now()-(this._lvStartAt||Date.now())-(this._pausedMs||0))/1000),score:this.score});
     // TEST BUILD: no run-ending — bounce back to the level picker so a tester can retry/switch instantly.
