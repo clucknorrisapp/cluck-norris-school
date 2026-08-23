@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Prize Wheel — Cluck Norris</title>
+<link rel="stylesheet" href="/theme.css">
+<!--
+  PRIZE WHEEL — the on-screen draw ceremony for contest prizes and giveaways.
+
+  ⚠ THE ONE THING TO UNDERSTAND ABOUT THIS PAGE: it does NOT pick winners. The winners are
+  already decided, server-side, by a provably-fair draw seeded from a Solana block hash taken
+  AFTER the entry window closed — a value nobody could know, let alone influence, while entries
+  were still being earned. This wheel READS that result and animates to land on it.
+
+  That is deliberate and it is the whole point. A wheel that rolled its own RNG would show one
+  winner on the screen recording while the verifiable draw said another, and the first person to
+  check the seed would catch it. Instead the seed slot, block hash and entry-list hash are
+  displayed right next to the wheel, so the recording carries its own proof.
+
+  If no draw has been run yet, the wheel refuses to spin and says so. It must never invent a
+  winner to fill the silence.
+-->
+<style>
+  body{margin:0;background:var(--bg,#0b0d12);color:var(--fg,#e9edf5);font-family:var(--body);}
+  .wrap{max-width:1180px;margin:0 auto;padding:22px 18px 60px}
+  h1{font-family:var(--disp);letter-spacing:.02em;margin:0 0 2px;font-size:30px}
+  .sub{opacity:.72;font-size:13.5px;margin-bottom:18px}
+  .stage{display:grid;grid-template-columns:minmax(300px,1fr) minmax(280px,420px);gap:26px;align-items:start}
+  @media(max-width:880px){.stage{grid-template-columns:1fr}}
+  .wheelbox{position:relative;text-align:center}
+  canvas{max-width:100%;height:auto;display:block;margin:0 auto;filter:drop-shadow(0 10px 30px rgba(0,0,0,.55))}
+  .ptr{position:absolute;top:-2px;left:50%;transform:translateX(-50%);width:0;height:0;
+       border-left:16px solid transparent;border-right:16px solid transparent;border-top:30px solid var(--accent,#ff8a3d);z-index:3;
+       filter:drop-shadow(0 2px 4px rgba(0,0,0,.6))}
+  .btn{font-family:var(--disp);letter-spacing:.05em;font-size:17px;padding:13px 30px;border:0;border-radius:11px;cursor:pointer;
+       background:linear-gradient(180deg,#ff9f4d,#f2701a);color:#1a1005;margin:16px 6px 0}
+  .btn[disabled]{background:#3a3f4b;color:#8b93a3;cursor:not-allowed}
+  .btn.alt{background:linear-gradient(180deg,#4fd1a5,#1fa87c);color:#06231a}
+  .panel{background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:16px 17px;margin-bottom:15px}
+  .panel h2{font-family:var(--disp);font-size:14px;letter-spacing:.1em;margin:0 0 11px;opacity:.85}
+  .row{display:flex;justify-content:space-between;gap:12px;font-size:13.5px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.055)}
+  .row:last-child{border-bottom:0}
+  .mono{font-family:var(--mono);font-size:12.5px;word-break:break-all}
+  .win{display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:11px;margin-bottom:9px;
+       background:linear-gradient(90deg,rgba(255,160,70,.16),rgba(255,160,70,.03));border:1px solid rgba(255,160,70,.3)}
+  .win.pending{background:rgba(255,255,255,.03);border-color:rgba(255,255,255,.09);opacity:.5}
+  .win .pl{font-family:var(--disp);font-size:20px;min-width:32px;text-align:center}
+  .win .w{flex:1}
+  .win .amt{font-family:var(--mono);font-size:13px;opacity:.9;white-space:nowrap}
+  .proof{font-size:12px;opacity:.62;line-height:1.65}
+  .warn{background:rgba(255,90,90,.1);border:1px solid rgba(255,90,90,.34);color:#ffb3b3;
+        border-radius:11px;padding:13px 15px;font-size:13.5px;margin-bottom:15px}
+  .flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:9;transition:opacity .1s}
+  .big{font-family:var(--disp);font-size:26px;margin:14px 0 0;min-height:34px;letter-spacing:.02em}
+  .dim{opacity:.6}
+</style>
+</head>
+<body>
+<div class="flash" id="flash"></div>
+<div class="wrap">
+  <h1>🎡 PRIZE WHEEL</h1>
+  <div class="sub" id="sub">Loading entrants…</div>
+  <div id="warn"></div>
+
+  <div class="stage">
+    <div class="wheelbox">
+      <div class="ptr"></div>
+      <canvas id="wheel" width="620" height="620"></canvas>
+      <div class="big" id="callout"></div>
+      <div>
+        <button class="btn" id="spin" disabled>SPIN</button>
+        <button class="btn alt" id="send" disabled>SEND TO AIRDROPPER →</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel">
+        <h2>POOL</h2>
+        <div class="row"><span>Eligible wallets</span><b id="nw">—</b></div>
+        <div class="row"><span>Total entries</span><b id="ne">—</b></div>
+        <div class="row"><span>Disqualified</span><b id="nd">—</b></div>
+        <div class="row"><span>Prize token</span><b id="tok">—</b></div>
+      </div>
+      <div class="panel">
+        <h2>WINNERS</h2>
+        <div id="winners"><span class="dim">Spin to reveal.</span></div>
+      </div>
+      <div class="panel">
+        <h2>PROVABLY FAIR</h2>
+        <div class="proof" id="proof">
+          Winners are drawn server-side from a Solana block hash taken <b>after</b> the entry window
+          closed. This wheel animates to that result — it does not pick anyone.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/cluck-util.js"></script>
+<script>
+(function(){
+  var esc = (window.CluckUtil && CluckUtil.esc) ? CluckUtil.esc : function(s){
+    return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; });
+  };
+  var q = new URLSearchParams(location.search);
+  var KEY = q.get('key') || '';
+  var SRC = q.get('src') || 'cuna';
+  var cv = document.getElementById('wheel'), cx = cv.getContext('2d');
+  var S = { entrants: [], draw: null, revealed: 0, spinning: false, rot: 0, cfg: null };
+
+  // Colour ramp — enough separation that adjacent slices read apart on a screen recording,
+  // and the wheel still looks like one object rather than a bag of confetti.
+  function col(i,n){ return 'hsl(' + Math.round((i*360/Math.max(1,n)+18)%360) + ' 68% ' + (i%2?46:38) + '%)'; }
+
+  function draw(){
+    var n = S.entrants.length, R = cv.width/2, cxp = R, cyp = R;
+    cx.clearRect(0,0,cv.width,cv.height);
+    if(!n){ cx.fillStyle='#2a2f3a'; cx.beginPath(); cx.arc(cxp,cyp,R-6,0,Math.PI*2); cx.fill(); return; }
+    var total = S.entrants.reduce(function(t,e){ return t+e.entries; },0) || 1;
+    var a = S.rot - Math.PI/2;
+    for(var i=0;i<n;i++){
+      var e = S.entrants[i], sw = (e.entries/total)*Math.PI*2;
+      cx.beginPath(); cx.moveTo(cxp,cyp); cx.arc(cxp,cyp,R-6,a,a+sw); cx.closePath();
+      cx.fillStyle = e.won ? '#ffd23f' : col(i,n); cx.fill();
+      cx.strokeStyle='rgba(0,0,0,.35)'; cx.lineWidth=1; cx.stroke();
+      // only label slices with room — a 200-entrant wheel would otherwise be unreadable mush
+      if(sw > 0.10){
+        var mid = a + sw/2;
+        cx.save(); cx.translate(cxp,cyp); cx.rotate(mid);
+        cx.fillStyle = e.won ? '#2a1d00' : 'rgba(255,255,255,.95)';
+        cx.font = '600 ' + Math.max(9, Math.min(15, sw*90)) + 'px ui-monospace,monospace';
+        cx.textBaseline='middle';
+        // Slices on the left half point their text back at the reader upside down. Flip those
+        // 180° and anchor from the other end so every label reads left-to-right — it looks like
+        // a detail until you screen-record it, and then half the wheel is gibberish.
+        var flipped = Math.cos(mid) < 0;
+        if(flipped){ cx.rotate(Math.PI); cx.textAlign='left'; cx.fillText(e.wallet.slice(0,4)+'…'+e.wallet.slice(-4), -(R-18), 0); }
+        else { cx.textAlign='right'; cx.fillText(e.wallet.slice(0,4)+'…'+e.wallet.slice(-4), R-18, 0); }
+        cx.restore();
+      }
+      a += sw;
+    }
+    cx.beginPath(); cx.arc(cxp,cyp,R*0.13,0,Math.PI*2);
+    cx.fillStyle='#12151c'; cx.fill(); cx.strokeStyle='rgba(255,255,255,.22)'; cx.lineWidth=2; cx.stroke();
+  }
+
+  // Angle (in wheel space) of the middle of one entrant's slice.
+  function midAngle(wallet){
+    var total = S.entrants.reduce(function(t,e){ return t+e.entries; },0) || 1, a = 0;
+    for(var i=0;i<S.entrants.length;i++){
+      var sw = (S.entrants[i].entries/total)*Math.PI*2;
+      if(S.entrants[i].wallet === wallet) return a + sw/2;
+      a += sw;
+    }
+    return 0;
+  }
+
+  function flash(){ var f=document.getElementById('flash'); f.style.opacity='.85';
+    setTimeout(function(){ f.style.opacity='0'; },110); }
+
+  function renderWinners(){
+    var el = document.getElementById('winners');
+    if(!S.draw || !S.draw.winners || !S.draw.winners.length){ el.innerHTML='<span class="dim">Spin to reveal.</span>'; return; }
+    el.innerHTML = S.draw.winners.map(function(w,i){
+      var shown = i < S.revealed;
+      return '<div class="win'+(shown?'':' pending')+'">'
+        + '<div class="pl">'+(i===0?'🥇':i===1?'🥈':'🥉')+'</div>'
+        + '<div class="w mono">'+(shown?esc(w.wallet):'— — — — —')+'</div>'
+        + '<div class="amt">'+(w.prize?Number(w.prize).toLocaleString():'')+'</div></div>';
+    }).join('');
+  }
+
+  // Spin to a PREDETERMINED landing angle. Duration and easing are cosmetic; the target is not.
+  function spinTo(wallet, cb){
+    var target = midAngle(wallet);
+    // land that slice under the pointer at the top (-PI/2 in our draw space)
+    var want = -target;
+    var turns = 6 + Math.random()*2;                 // visual flourish only
+    var from = S.rot, to = want - Math.PI*2*Math.round(turns);
+    var t0 = performance.now(), dur = 5200;
+    S.spinning = true;
+    (function step(now){
+      var p = Math.min(1,(now-t0)/dur);
+      var e = 1 - Math.pow(1-p, 4);                   // ease-out quart — long slow settle
+      S.rot = from + (to-from)*e;
+      draw();
+      if(p<1) requestAnimationFrame(step);
+      else { S.spinning=false; flash(); cb&&cb(); }
+    })(t0);
+  }
+
+  document.getElementById('spin').onclick = function(){
+    if(S.spinning || !S.draw) return;
+    var w = S.draw.winners[S.revealed];
+    if(!w) return;
+    document.getElementById('spin').disabled = true;
+    document.getElementById('callout').textContent = '';
+    spinTo(w.wallet, function(){
+      var ent = S.entrants.filter(function(x){ return x.wallet===w.wallet; })[0];
+      if(ent) ent.won = true;
+      S.revealed++;
+      draw(); renderWinners();
+      document.getElementById('callout').innerHTML =
+        (S.revealed===1?'🥇':S.revealed===2?'🥈':'🥉') + ' ' + esc(w.wallet.slice(0,6)+'…'+w.wallet.slice(-6))
+        + ' <span class="dim">— ' + Number(w.prize||0).toLocaleString() + '</span>';
+      var more = S.revealed < S.draw.winners.length;
+      document.getElementById('spin').disabled = !more;
+      document.getElementById('spin').textContent = more ? 'SPIN AGAIN' : 'ALL DRAWN';
+      document.getElementById('send').disabled = more;
+    });
+  };
+
+  // Hand the drawn winners to the airdropper. One recipient per line, "wallet amount" — the
+  // manual-mode format the tool already understands, so the amounts ride across intact rather
+  // than being re-derived (and possibly re-rounded) on the other side.
+  document.getElementById('send').onclick = function(){
+    if(!S.draw) return;
+    var b = document.getElementById('send');
+    b.disabled = true; b.textContent = 'HANDING OFF…';
+    var lines = S.draw.winners.map(function(w){ return w.wallet + ' ' + (w.prize||0); }).join('\n');
+    fetch('/api/airdrop-handoff', {
+      method:'POST', headers:{'content-type':'application/json'},
+      body: JSON.stringify({ recipients: lines, mint: (S.cfg&&S.cfg.mint)||'',
+        tokenName: (S.cfg&&S.cfg.symbol)||'', mode:'manual', source:'Prize Wheel' })
+    }).then(function(r){ return r.json(); }).then(function(d){
+      if(!d || !d.ok) throw new Error((d&&d.error)||'handoff failed');
+      location.href = '/airdrop?handoff=' + encodeURIComponent(d.id) + '&t=' + encodeURIComponent(d.t);
+    }).catch(function(e){
+      b.disabled=false; b.textContent='SEND TO AIRDROPPER →';
+      document.getElementById('warn').innerHTML =
+        '<div class="warn">Could not hand off to the airdropper: '+esc(e.message||e)+'</div>';
+    });
+  };
+
+  function warn(msg){ document.getElementById('warn').innerHTML = '<div class="warn">'+msg+'</div>'; }
+
+  function load(){
+    // PUBLIC board endpoint on purpose. The standings, the entry list and the draw seed are all
+    // published already — the whole premise is that anyone can check the result against the
+    // chain. Gating the wheel would make the ceremony less verifiable, not more.
+    fetch('/api/'+(SRC==='cuna'?'cuna-giveaway':SRC)+'?full=1&top=100')
+      .then(function(r){ return r.json(); })
+      .then(function(st){
+        if(!st || !st.ok) throw new Error((st&&st.status)||'could not load entrants');
+        S.cfg = st.config || {};
+        S.draw = st.draw || null;
+        var list = st.entryList || [];
+        // The published entry list already excludes project wallets and the disqualified; it is
+        // the same list the draw ran on, so the wheel and the result can never disagree.
+        S.entrants = list.filter(function(e){ return e.entries>0 && !e.dq; })
+                         .map(function(e){ return { wallet:e.wallet, entries:e.entries, won:false }; });
+        document.getElementById('nw').textContent = S.entrants.length;
+        document.getElementById('ne').textContent = S.entrants.reduce(function(t,e){ return t+e.entries; },0);
+        document.getElementById('nd').textContent = st.disqualified || 0;
+        document.getElementById('tok').textContent = S.cfg.symbol || '—';
+        document.getElementById('sub').innerHTML = S.entrants.length
+          ? 'Every wallet below is a slice sized by its entry count. More entries = more wheel.'
+          : 'No eligible entrants yet.';
+        if(!S.draw){
+          warn('<b>No draw has been run yet.</b> This wheel shows the result of the server-side '
+             + 'provably-fair draw — it does not pick anyone. Run the draw first, then reload.');
+        } else {
+          document.getElementById('spin').disabled = false;
+          document.getElementById('proof').innerHTML =
+            'Seeded from Solana slot <b class="mono">'+esc(String(S.draw.seedSlot))+'</b><br>'
+          + 'block hash <span class="mono">'+esc(String(S.draw.seedHash))+'</span><br>'
+          + 'entry-list hash <span class="mono">'+esc(String(S.draw.entryListHash||'').slice(0,32))+'…</span><br>'
+          + '<span class="dim">Taken after the window closed — unknowable while entries were still being earned.</span>';
+        }
+        renderWinners(); draw();
+      })
+      .catch(function(e){ document.getElementById('sub').textContent='';
+        warn('Could not load: '+esc(e.message||e)); });
+  }
+  draw(); load();
+})();
+</script>
+</body>
+</html>

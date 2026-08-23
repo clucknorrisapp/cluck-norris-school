@@ -12493,6 +12493,15 @@ app.use("/api/airdrop-collect", rateLimit("track", { windowMs: 60000, max: 20 })
 const AIRDROP_CAMPAIGN_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
 function airdropKey(campaign) { return `airdropSignups:${campaign}`; }
 app.get("/airdrop-signup", (req, res) => res.sendFile(join(__dirname, "public", "airdrop-signup.html")));
+// Prize wheel — the on-screen draw ceremony for contest prizes and giveaways. noindex, and it
+// is inert without an operator key: the page loads nothing and spins nothing until the admin
+// endpoint it reads accepts the ?key=. It does NOT pick winners — it animates to the result of
+// the server-side provably-fair draw and shows that draw's seed alongside, so a screen
+// recording of it carries its own proof.
+app.get("/prize-wheel", (req, res) => {
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
+  res.sendFile(join(__dirname, "public", "prize-wheel.html"));
+});
 app.get("/drop", (req, res) => res.sendFile(join(__dirname, "public", "airdrop-signup.html")));
 // Community meme art (AI-generated project images posted to rooms via /api/tg-test &photo= —
 // Telegram fetches by URL, ≤5MB). public/ is not statically mounted, so explicit route.
