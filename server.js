@@ -7892,6 +7892,7 @@ app.get("/api/cuna-giveaway/admin", async (req, res) => {
     if (q.chat) patch.chatId = String(q.chat);
     if (q.min !== undefined) patch.minUsd = Number(q.min) || 5;          // what SCORES
     if (q.display !== undefined) patch.displayUsd = Number(q.display) || 5;   // what the copy SAYS
+    if (q.exclude !== undefined) patch.exclude = String(q.exclude);           // project wallets — never eligible
     if (ms(q.start) !== undefined) patch.startMs = ms(q.start);
     if (ms(q.end) !== undefined) patch.endMs = ms(q.end);
     if (Object.keys(patch).length) cunaGiveaway.configure(patch);
