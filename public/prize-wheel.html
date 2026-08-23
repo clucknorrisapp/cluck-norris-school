@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Prize Wheel — Cluck Norris</title>
+<link rel="stylesheet" href="/theme.css">
+<!--
+  PRIZE WHEEL — the on-screen draw ceremony for contest prizes and giveaways.
+
+  ⚠ THE ONE THING TO UNDERSTAND ABOUT THIS PAGE: it does NOT pick winners. The winners are
+  already decided, server-side, by a provably-fair draw seeded from a Solana block hash taken
+  AFTER the entry window closed — a value nobody could know, let alone influence, while entries
+  were still being earned. This wheel READS that result and animates to land on it.
+
+  That is deliberate and it is the whole point. A wheel that rolled its own RNG would show one
+  winner on the screen recording while the verifiable draw said another, and the first person to
+  check the seed would catch it. Instead the seed slot, block hash and entry-list hash are
+  displayed right next to the wheel, so the recording carries its own proof.
+
+  If no draw has been run yet, the wheel refuses to spin and says so. It must never invent a
+  winner to fill the silence.
+-->
+<style>
+  /* CUNA house colours, scoped to THIS page only — never redefine a theme token globally, a
+     page-local :root would shadow theme.css sitewide. Local --cuna-* names, no token shadowing. */
+  .wrap, body{ --cuna-hot:#ff2f9a; --cuna-mag:#c4276f; --cuna-deep:#2b0a1e; --cuna-cream:#ffeccd; }
+  body{margin:0;color:#fff3fb;font-family:var(--body);
+       background:#2b0a1e;
+       background-image:
+         radial-gradient(1100px 620px at 18% -8%, rgba(255,47,154,.42), transparent 62%),
+         radial-gradient(900px 560px at 88% 8%, rgba(196,39,111,.40), transparent 60%),
+         radial-gradient(1200px 800px at 50% 118%, rgba(255,120,190,.24), transparent 66%),
+         linear-gradient(168deg,#3d0f2b 0%,#2b0a1e 46%,#1b0614 100%);
+       background-attachment:fixed;}
+  /* Slow drifting sheen. Sits behind everything, ignores clicks, and is switched off entirely
+     for reduced-motion — a full-screen animated gradient is exactly the thing that triggers
+     people. */
+  body::before{content:'';position:fixed;inset:-30%;z-index:0;pointer-events:none;
+    background:conic-gradient(from 0deg, transparent 0 42%, rgba(255,47,154,.16) 50%, transparent 58% 100%);
+    animation:sheen 22s linear infinite;}
+  @keyframes sheen{to{transform:rotate(360deg)}}
+  @media(prefers-reduced-motion:reduce){body::before{animation:none;opacity:.35}}
+  .wrap{position:relative;z-index:1}
+  .wrap{max-width:1180px;margin:0 auto;padding:22px 18px 60px}
+  h1{font-family:var(--disp);letter-spacing:.03em;margin:0 0 2px;font-size:clamp(30px,5vw,46px);
+     color:var(--cuna-cream);text-shadow:0 0 18px rgba(255,47,154,.75),0 0 46px rgba(255,47,154,.4),0 3px 0 #7d1146}
+  .sub{opacity:.9;font-size:14px;margin-bottom:18px;color:#ffd7ee}
+  .stage{display:grid;grid-template-columns:minmax(300px,1fr) minmax(280px,420px);gap:26px;align-items:start}
+  @media(max-width:880px){.stage{grid-template-columns:1fr}}
+  .wheelbox{position:relative;text-align:center}
+  canvas{max-width:100%;height:auto;display:block;margin:0 auto;border-radius:50%;
+    filter:drop-shadow(0 0 26px rgba(255,47,154,.55)) drop-shadow(0 14px 40px rgba(0,0,0,.6));
+    outline:5px solid rgba(255,236,205,.9); outline-offset:-4px}
+  /* Sits at roughly 7-8 o'clock with its hands on the rim. Kept fully inside the box (no
+     negative inset) so it never clips on narrow screens, and above the callout line. */
+  .lips{position:absolute;left:0;bottom:20%;width:27%;max-width:215px;z-index:2;pointer-events:none;
+        transform-origin:80% 55%;transition:transform .35s ease}
+  .lips.push{animation:shove .5s ease-in-out infinite}
+  @keyframes shove{0%,100%{transform:translateX(0) rotate(0deg)}50%{transform:translateX(5%) rotate(5deg)}}
+  @media(max-width:620px){.lips{width:34%;bottom:24%}}
+  @media(prefers-reduced-motion:reduce){.lips.push{animation:none}}
+  .ptr{position:absolute;top:-4px;left:50%;transform:translateX(-50%);width:0;height:0;
+       border-left:18px solid transparent;border-right:18px solid transparent;border-top:34px solid var(--cuna-cream);z-index:3;
+       filter:drop-shadow(0 0 10px rgba(255,47,154,.9)) drop-shadow(0 2px 4px rgba(0,0,0,.6))}
+  .btn{font-family:var(--disp);letter-spacing:.06em;font-size:18px;padding:14px 34px;border:0;border-radius:12px;cursor:pointer;
+       background:linear-gradient(180deg,#ff5cb4,#e0186f);color:#fff;margin:16px 6px 0;
+       box-shadow:0 0 22px rgba(255,47,154,.6),0 4px 0 #8d0f4c;text-shadow:0 1px 2px rgba(0,0,0,.35)}
+  .btn:not([disabled]):hover{filter:brightness(1.09)}
+  .btn:not([disabled]):active{transform:translateY(2px);box-shadow:0 0 18px rgba(255,47,154,.5),0 2px 0 #8d0f4c}
+  .btn[disabled]{background:#4a3140;color:#a98ba0;cursor:not-allowed;box-shadow:none;text-shadow:none}
+  .btn.alt{background:linear-gradient(180deg,#ffe08a,#f5b81f);color:#3a2600;box-shadow:0 0 22px rgba(245,184,31,.55),0 4px 0 #9a7100}
+  .panel{background:linear-gradient(180deg,rgba(255,47,154,.13),rgba(43,10,30,.62));
+    border:1px solid rgba(255,120,190,.34);border-radius:16px;padding:16px 17px;margin-bottom:15px;
+    box-shadow:0 0 0 1px rgba(255,255,255,.04) inset, 0 8px 26px rgba(0,0,0,.35)}
+  .panel h2{font-family:var(--disp);font-size:14px;letter-spacing:.12em;margin:0 0 11px;color:var(--cuna-cream);opacity:.95}
+  .row{display:flex;justify-content:space-between;gap:12px;font-size:13.5px;padding:5px 0;border-bottom:1px solid rgba(255,180,220,.14)}
+  .row:last-child{border-bottom:0}
+  .mono{font-family:var(--mono);font-size:12.5px;word-break:break-all}
+  .win{display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:12px;margin-bottom:9px;
+       background:linear-gradient(90deg,rgba(255,224,138,.24),rgba(255,224,138,.04));border:1px solid rgba(255,224,138,.5);
+       box-shadow:0 0 18px rgba(255,210,63,.22)}
+  .win.pending{background:rgba(255,255,255,.035);border-color:rgba(255,180,220,.16);opacity:.45;box-shadow:none}
+  .win.alt{background:linear-gradient(90deg,rgba(180,200,255,.16),rgba(180,200,255,.03));border-color:rgba(170,195,255,.42);box-shadow:none}
+  .win.alt .amt{font-size:11px;letter-spacing:.09em;opacity:.85}
+  .win .pl{font-family:var(--disp);font-size:20px;min-width:32px;text-align:center}
+  .win .w{flex:1}
+  .win .amt{font-family:var(--mono);font-size:13px;opacity:.9;white-space:nowrap}
+  .proof{font-size:12px;opacity:.8;line-height:1.65;color:#ffd7ee}
+  .warn{background:rgba(255,90,90,.1);border:1px solid rgba(255,90,90,.34);color:#ffb3b3;
+        border-radius:11px;padding:13px 15px;font-size:13.5px;margin-bottom:15px}
+  .flash{position:fixed;inset:0;background:radial-gradient(circle at 50% 45%,#fff 0%,#ffd6ee 45%,#ff2f9a 100%);
+         opacity:0;pointer-events:none;z-index:9;transition:opacity .1s}
+  .big{font-family:var(--disp);font-size:clamp(22px,3.4vw,34px);margin:16px 0 0;min-height:40px;letter-spacing:.02em;padding-left:22%;
+       color:var(--cuna-cream);text-shadow:0 0 20px rgba(255,210,63,.75)}
+  .dim{opacity:.62}
+</style>
+</head>
+<body>
+<div class="flash" id="flash"></div>
+<div class="wrap">
+  <h1>🎡 PRIZE WHEEL</h1>
+  <div class="sub" id="sub">Loading entrants…</div>
+  <div id="warn"></div>
+
+  <div class="stage">
+    <div class="wheelbox">
+      <div class="ptr"></div>
+      <img class="lips" id="lips" alt="" hidden>
+      <canvas id="wheel" width="620" height="620"></canvas>
+      <div class="big" id="callout"></div>
+      <div>
+        <button class="btn" id="spin" disabled>SPIN</button>
+        <button class="btn alt" id="send" disabled>SEND TO AIRDROPPER →</button>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel">
+        <h2>POOL</h2>
+        <div class="row"><span>Eligible wallets</span><b id="nw">—</b></div>
+        <div class="row"><span>Total entries</span><b id="ne">—</b></div>
+        <div class="row"><span>Disqualified</span><b id="nd">—</b></div>
+        <div class="row"><span>Prize token</span><b id="tok">—</b></div>
+      </div>
+      <div class="panel">
+        <h2>WINNERS</h2>
+        <div id="winners"><span class="dim">Spin to reveal.</span></div>
+      </div>
+      <div class="panel">
+        <h2>PROVABLY FAIR</h2>
+        <div class="proof" id="proof">
+          Winners are drawn server-side from a Solana block hash taken <b>after</b> the entry window
+          closed. This wheel animates to that result — it does not pick anyone.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/cluck-util.js"></script>
+<script>
+(function(){
+  var esc = (window.CluckUtil && CluckUtil.esc) ? CluckUtil.esc : function(s){
+    return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; });
+  };
+  var q = new URLSearchParams(location.search);
+  var KEY = q.get('key') || '';
+  var SRC = q.get('src') || 'cuna';
+  var cv = document.getElementById('wheel'), cx = cv.getContext('2d');
+  var S = { entrants: [], tickets: [], wonSet: {}, draw: null, revealed: 0, spinning: false, rot: 0, cfg: null };
+  // Brand dressing: a taco hub in the middle of the wheel and the lips character shoving it
+  // round. On for the CUNA board by default, off with ?brand=0 so the wheel stays generic for
+  // any other giveaway. Both images are decorative — if either fails to load the wheel still
+  // draws and still spins, it just loses the costume.
+  var BRAND = (q.get('brand') || (SRC === 'cuna' ? 'cuna' : '0')) !== '0';
+  var HUB = null, LIPS = null;
+  if(BRAND){
+    HUB = new Image(); HUB.onload = draw; HUB.onerror = function(){ HUB = null; }; HUB.src = '/img-cuna-taco.png';
+    var le = document.getElementById('lips');
+    if(le){ le.onload = function(){ le.hidden = false; }; le.onerror = function(){ le.remove(); }; le.src = '/img-cuna-lips.png'; }
+  }
+  // The shove animation runs ONLY while the wheel is actually turning — a mascot heaving away at
+  // a stationary wheel reads as broken.
+  function lipsPush(on){ var e=document.getElementById('lips'); if(e) e.classList.toggle('push', !!on); }
+
+  // Per-WALLET colour, stable across redraws so a wallet's scattered tickets still read as
+  // belonging together. Held inside the CUNA range — magenta through pink to violet, with a
+  // gold accent — rather than a full hue rotation, which turned the wheel into a rainbow and
+  // looked like someone else's brand.
+  //
+  // Derived from a HASH of the address, not the deal order: colouring by index made the sorted
+  // round-robin paint smooth colour bands that swept round the wheel, which read as ordered
+  // even though the tickets underneath were properly interleaved. Hashing decorrelates colour
+  // from position so neighbours contrast.
+  function hash32(str){
+    var h = 2166136261;
+    for(var i=0;i<str.length;i++){ h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return (h >>> 0);
+  }
+  function walletCol(w){
+    var h = hash32(w);
+    // Full spectrum (owner's call: the wheel may be rainbow so long as the page is CUNA). Kept
+    // off the muddy 60-100 yellow-green band, and floored well clear of black so no slice can be
+    // mistaken for a gap.
+    var hue = (h % 320); if(hue >= 58 && hue < 98) hue += 40;
+    var sat = 66 + ((h >> 7) % 28);           // 66-93%
+    var lit = 46 + ((h >> 13) % 22);          // 46-67%
+    return 'hsl(' + hue + ' ' + sat + '% ' + lit + '%)';
+  }
+
+  // TICKETS — one slice per ENTRY, not one fat wedge per wallet. Two reasons, and the first is
+  // the owner's: a 30-entry wallet owning a single 65° arc looks rigged even though the maths is
+  // identical either way. The second is that it is simply more true — an entry IS a ticket, and
+  // the wheel should show 166 tickets, not 33 blocks.
+  //
+  // Dealt ROUND-ROBIN (biggest holder first, one ticket per wallet per pass) so the same wallet
+  // can never land two slices side by side while any other wallet still has tickets left. That
+  // is the maximally-spread arrangement, and it needs no randomness — which matters, because a
+  // shuffled layout would change on every redraw and look like the wheel was being rebuilt
+  // mid-ceremony.
+  function buildTickets(){
+    // EVEN SPACING, not round-robin. Round-robin dealt biggest-holder-first every pass, so the
+    // same few big wallets landed at the front of each pass over and over — which is why the
+    // wheel still looked "heavy" in places even though no two slices of one wallet touched.
+    //
+    // Instead: give every ticket an IDEAL position on the [0,1) circle — wallet with k entries
+    // gets its i-th ticket at (i + 0.5)/k — then sort by that. A 30-entry wallet lands every
+    // ~5.5 slices all the way round; a 1-entry wallet sits at the halfway mark. Each wallet is
+    // individually as evenly spread as it can be, and they interleave without clumping.
+    //
+    // Ties broken by an address hash so wallets with the same count don't stack in list order,
+    // and the whole thing stays deterministic — a reshuffle on every redraw would look like the
+    // wheel was being rebuilt mid-ceremony.
+    var t = [];
+    S.entrants.forEach(function(e, idx){
+      var k = e.entries, jitter = (hash32(e.wallet) % 1000) / 1000000;   // sub-slice tie-break only
+      for(var i=0;i<k;i++) t.push({ wallet:e.wallet, entries:k, idx:idx, pos:(i + 0.5)/k + jitter });
+    });
+    t.sort(function(a,b){ return a.pos - b.pos || (a.wallet < b.wallet ? -1 : 1); });
+    S.tickets = t;
+  }
+
+  function draw(){
+    var T = S.tickets || [], n = T.length, R = cv.width/2, cxp = R, cyp = R;
+    cx.clearRect(0,0,cv.width,cv.height);
+    if(!n){ cx.fillStyle='#2a2f3a'; cx.beginPath(); cx.arc(cxp,cyp,R-6,0,Math.PI*2); cx.fill(); return; }
+    var sw = Math.PI*2/n;                       // every ticket is the SAME size — that is the point
+    var a = S.rot - Math.PI/2;
+    var thin = sw < 0.085;                      // below this, labels are unreadable mush
+    for(var i=0;i<n;i++){
+      var t = T[i], won = S.wonSet[t.wallet];
+      // Overlap each wedge into the next by a hair. Adjacent wedges that share an exact edge get
+      // antialiased independently, and neither ends up fully opaque on the seam — which let the
+      // PAGE show through as thin dark slivers that read as black wedges. (Diagnosed by sampling:
+      // the "black" pixels were hsl(291,43%,18%), darker than this palette can emit, and matched
+      // the background.) The old hairline stroke had been hiding this; dropping strokes on thin
+      // slices exposed it. Overlap fixes the cause instead of painting over it.
+      cx.beginPath(); cx.moveTo(cxp,cyp); cx.arc(cxp,cyp,R-6,a,a+sw+0.004); cx.closePath();
+      cx.fillStyle = won ? '#fff0a8' : walletCol(t.wallet); cx.fill();
+      if(!thin){ cx.strokeStyle='rgba(0,0,0,.35)'; cx.lineWidth=1; cx.stroke(); }
+      if(sw > 0.10){
+        var mid = a + sw/2;
+        cx.save(); cx.translate(cxp,cyp); cx.rotate(mid);
+        cx.fillStyle = won ? '#2a1d00' : 'rgba(255,255,255,.95)';
+        cx.font = '600 ' + Math.max(9, Math.min(15, sw*90)) + 'px ui-monospace,monospace';
+        cx.textBaseline='middle';
+        var flipped = Math.cos(mid) < 0;
+        var lab = t.wallet.slice(0,4)+'\u2026'+t.wallet.slice(-4);
+        if(flipped){ cx.rotate(Math.PI); cx.textAlign='left'; cx.fillText(lab, -(R-18), 0); }
+        else { cx.textAlign='right'; cx.fillText(lab, R-18, 0); }
+        cx.restore();
+      }
+      a += sw;
+    }
+    // HUB — the taco sits still while the wheel turns under it, which is what a real hub does
+    // and what keeps the mascot readable during a spin. Drawn after the slices so it masks the
+    // centre seam where every wedge meets.
+    var hr = R*(HUB ? 0.30 : 0.13);
+    cx.beginPath(); cx.arc(cxp,cyp,hr,0,Math.PI*2);
+    cx.fillStyle='#12151c'; cx.fill(); cx.strokeStyle='rgba(255,255,255,.22)'; cx.lineWidth=2; cx.stroke();
+    if(HUB){
+      cx.save();
+      cx.beginPath(); cx.arc(cxp,cyp,hr-3,0,Math.PI*2); cx.clip();
+      var iw = HUB.naturalWidth||1, ih = HUB.naturalHeight||1;
+      var sc = (hr*2.05)/Math.max(iw,ih), dw = iw*sc, dh = ih*sc;
+      cx.drawImage(HUB, cxp-dw/2, cyp-dh/2, dw, dh);
+      cx.restore();
+    }
+  }
+
+  // Angle of the middle of ONE of this wallet's tickets, chosen at random from all of them.
+  // With the tickets scattered round the wheel this means the winner is announced from a
+  // different position every time — the pointer isn't repeatedly parking in the same arc.
+  function midAngle(wallet){
+    var T = S.tickets || [], n = T.length, sw = Math.PI*2/Math.max(1,n);
+    var mine = [];
+    for(var i=0;i<n;i++) if(T[i].wallet === wallet) mine.push(i);
+    if(!mine.length) return 0;
+    var pick = mine[Math.floor(Math.random()*mine.length)];
+    return pick*sw + sw/2;
+  }
+  function sliceWidth(){ return Math.PI*2/Math.max(1,(S.tickets||[]).length); }
+
+  function flash(){ var f=document.getElementById('flash'); f.style.opacity='.85';
+    setTimeout(function(){ f.style.opacity='0'; },110); }
+
+  function renderPool(){
+    document.getElementById('nw').textContent = S.entrants.length;
+    document.getElementById('ne').textContent = S.entrants.reduce(function(t,e){ return t+e.entries; },0);
+    document.getElementById('nd').textContent = S.dq || 0;
+    document.getElementById('tok').textContent = (S.cfg && S.cfg.symbol) || '\u2014';
+    var sub = document.getElementById('sub');
+    if(S.revealed > 0 && sub){
+      sub.innerHTML = '<b>' + S.tickets.length + ' entries</b> still on the wheel \u2014 '
+        + S.revealed + ' winner' + (S.revealed===1?'':'s') + ' removed. One prize per wallet.';
+    }
+  }
+  function renderWinners(){
+    var el = document.getElementById('winners');
+    if(!S.draw || !S.draw.winners || !S.draw.winners.length){ el.innerHTML='<span class="dim">Spin to reveal.</span>'; return; }
+    el.innerHTML = S.draw.winners.map(function(w,i){
+      var shown = i < S.revealed;
+      var medal = w.alternate ? '🎗️' : (i===0?'🥇':i===1?'🥈':'🥉');
+      return '<div class="win'+(shown?'':' pending')+(w.alternate?' alt':'')+'">'
+        + '<div class="pl">'+medal+'</div>'
+        + '<div class="w mono">'+(shown?esc(w.wallet):'\u2014 \u2014 \u2014 \u2014 \u2014')+'</div>'
+        + '<div class="amt">'+(w.alternate?'ALTERNATE':Number(w.prize).toLocaleString())+'</div></div>';
+    }).join('');
+  }
+
+  // Spin to a PREDETERMINED landing angle. The target is fixed by the draw; everything about HOW
+  // it gets there is randomised, because a spin that always takes the same path at the same speed
+  // reads as scripted even when the result is genuinely fair — and on a screen recording that
+  // impression is the whole ballgame. Randomised per spin:
+  //   • total rotations (4–11) and duration (4.4–7.8s), so no two spins have the same rhythm
+  //   • direction, so it doesn't always sweep the same way
+  //   • where inside the winning slice it stops — never dead-centre, which is a tell
+  //   • the easing exponent, so the deceleration curve differs run to run
+  //   • a small settle: it drifts just past the mark and rocks back, the way a real wheel does
+  //     against its pin, instead of freezing dead on the number
+  function spinTo(wallet, cb){
+    var sliceW = sliceWidth();
+    // land anywhere in the middle 70% of the slice — dead-centre every time looks machined
+    var jitter = (Math.random()-0.5) * sliceW * 0.7;
+    var want = -(midAngle(wallet) + jitter);
+
+    var dir = Math.random() < 0.5 ? 1 : -1;            // sometimes it comes round the other way
+    var turns = 4 + Math.random()*7;                   // 4–11 full rotations
+    var dur = 4400 + Math.random()*3400;               // 4.4–7.8s
+    var pw = 3.4 + Math.random()*1.6;                  // ease-out exponent 3.4–5.0
+    var overshoot = (0.18 + Math.random()*0.5) * sliceW * dir;   // how far past it drifts
+
+    var from = S.rot;
+    // normalise so the wheel always travels a full set of turns in `dir`, never a short hop
+    var base = want - from;
+    base = ((base % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
+    if(dir < 0) base -= Math.PI*2;
+    var to = from + base + dir*Math.PI*2*Math.floor(turns);
+
+    var t0 = performance.now();
+    var SETTLE = 900;                                   // the rock-back at the end
+    S.spinning = true; lipsPush(true);
+    (function step(now){
+      var el = now - t0;
+      if(el < dur){
+        var p = el/dur;
+        var e = 1 - Math.pow(1-p, pw);
+        S.rot = from + (to + overshoot - from)*e;
+        draw(); requestAnimationFrame(step);
+      } else if(el < dur + SETTLE){
+        // damped spring back from the overshoot onto the true mark
+        var q = (el-dur)/SETTLE;
+        var damp = Math.exp(-5.5*q) * Math.cos(q*Math.PI*2.2);
+        S.rot = to + overshoot*damp;
+        draw(); requestAnimationFrame(step);
+      } else {
+        S.rot = to; draw();
+        S.spinning=false; lipsPush(false); flash(); cb&&cb();
+      }
+    })(t0);
+  }
+
+  document.getElementById('spin').onclick = function(){
+    if(S.spinning || !S.draw) return;
+    var w = S.draw.winners[S.revealed];
+    if(!w) return;
+    document.getElementById('spin').disabled = true;
+    document.getElementById('callout').textContent = '';
+    spinTo(w.wallet, function(){
+      // The wallet LEAVES the wheel. This mirrors the draw exactly — drawFromSeed splices each
+      // winner out of the pool before the next pick, so one wallet can never take two prizes.
+      // Leaving their slices on the wheel would show a pool the draw was not actually using, and
+      // on a recording that is the difference between showing the truth and showing a prop.
+      S.wonSet[w.wallet] = true;
+      S.entrants = S.entrants.filter(function(x){ return x.wallet !== w.wallet; });
+      buildTickets();
+      S.revealed++;
+      draw(); renderWinners(); renderPool();
+      document.getElementById('callout').innerHTML =
+        (S.revealed===1?'🥇':S.revealed===2?'🥈':'🥉') + ' ' + esc(w.wallet.slice(0,6)+'…'+w.wallet.slice(-6))
+        + ' <span class="dim">— ' + Number(w.prize||0).toLocaleString() + '</span>';
+      var prizeCount = S.draw.winners.filter(function(x){ return !x.alternate; }).length;
+      // Reveal every alternate alongside the final prize — there is nothing to spin for, the
+      // standby order was fixed by the same seed.
+      if(S.revealed >= prizeCount) S.revealed = S.draw.winners.length;
+      var more = S.revealed < prizeCount;
+      renderWinners();
+      document.getElementById('spin').disabled = !more;
+      document.getElementById('spin').textContent = more ? 'SPIN AGAIN' : 'ALL DRAWN';
+      document.getElementById('send').disabled = more;
+    });
+  };
+
+  // Hand the drawn winners to the airdropper. One recipient per line, "wallet amount" — the
+  // manual-mode format the tool already understands, so the amounts ride across intact rather
+  // than being re-derived (and possibly re-rounded) on the other side.
+  document.getElementById('send').onclick = function(){
+    if(!S.draw) return;
+    var b = document.getElementById('send');
+    b.disabled = true; b.textContent = 'HANDING OFF…';
+    // Alternates carry prize 0 and are a STANDBY, not a payee — handing them to the airdropper
+    // would put a zero-amount row in a money tool, which at best confuses and at worst gets sent.
+    var lines = S.draw.winners.filter(function(w){ return !w.alternate && w.prize > 0; })
+                              .map(function(w){ return w.wallet + ' ' + w.prize; }).join('\n');
+    fetch('/api/airdrop-handoff', {
+      method:'POST', headers:{'content-type':'application/json'},
+      body: JSON.stringify({ recipients: lines, mint: (S.cfg&&S.cfg.mint)||'',
+        tokenName: (S.cfg&&S.cfg.symbol)||'', mode:'manual', source:'Prize Wheel' })
+    }).then(function(r){ return r.json(); }).then(function(d){
+      if(!d || !d.ok) throw new Error((d&&d.error)||'handoff failed');
+      location.href = '/airdrop?handoff=' + encodeURIComponent(d.id) + '&t=' + encodeURIComponent(d.t);
+    }).catch(function(e){
+      b.disabled=false; b.textContent='SEND TO AIRDROPPER →';
+      document.getElementById('warn').innerHTML =
+        '<div class="warn">Could not hand off to the airdropper: '+esc(e.message||e)+'</div>';
+    });
+  };
+
+  function warn(msg){ document.getElementById('warn').innerHTML = '<div class="warn">'+msg+'</div>'; }
+
+  function load(){
+    // PUBLIC board endpoint on purpose. The standings, the entry list and the draw seed are all
+    // published already — the whole premise is that anyone can check the result against the
+    // chain. Gating the wheel would make the ceremony less verifiable, not more.
+    fetch('/api/'+(SRC==='cuna'?'cuna-giveaway':SRC)+'?full=1&top=100')
+      .then(function(r){ return r.json(); })
+      .then(function(st){
+        if(!st || !st.ok) throw new Error((st&&st.status)||'could not load entrants');
+        S.cfg = st.config || {};
+        S.draw = st.draw || null;
+        var list = st.entryList || [];
+        // The published entry list already excludes project wallets and the disqualified; it is
+        // the same list the draw ran on, so the wheel and the result can never disagree.
+        S.entrants = list.filter(function(e){ return e.entries>0 && !e.dq; })
+                         .map(function(e){ return { wallet:e.wallet, entries:e.entries }; });
+        buildTickets();
+        S.dq = st.disqualified || 0;
+        renderPool();
+        document.getElementById('sub').innerHTML = S.entrants.length
+          ? ('<b>' + S.tickets.length + ' entries</b> on the wheel \u2014 one slice each, equal size, '
+             + 'spread out so no wallet holds a single block. More entries = more slices.')
+          : 'No eligible entrants yet.';
+        if(!S.draw){
+          warn('<b>No draw has been run yet.</b> This wheel shows the result of the server-side '
+             + 'provably-fair draw — it does not pick anyone. Run the draw first, then reload.');
+        } else {
+          document.getElementById('spin').disabled = false;
+          document.getElementById('proof').innerHTML =
+            'Seeded from Solana slot <b class="mono">'+esc(String(S.draw.seedSlot))+'</b><br>'
+          + 'block hash <span class="mono">'+esc(String(S.draw.seedHash))+'</span><br>'
+          + 'entry-list hash <span class="mono">'+esc(String(S.draw.entryListHash||'').slice(0,32))+'…</span><br>'
+          + '<span class="dim">Taken after the window closed — unknowable while entries were still being earned.</span>';
+        }
+        renderWinners(); draw();
+      })
+      .catch(function(e){ document.getElementById('sub').textContent='';
+        warn('Could not load: '+esc(e.message||e)); });
+  }
+  draw(); load();
+})();
+</script>
+</body>
+</html>

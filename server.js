@@ -829,6 +829,139 @@ if (POKE_ENGINE_ON) {
   setInterval(() => pokeTick().catch((e) => console.warn("[poke] tick:", e.message)), 120000);
   setTimeout(() => pokeTick().catch((e) => console.warn("[poke] first tick:", e.message)), 20000);
 }
+
+// ─── CUNA volume engine — SCOPED, and OFF BY DEFAULT (owner, 2026-08-23) ─────────────
+// Why it exists: CUNA lost its Jupiter organic score and the Express-verification retry
+// lands within ~24h. Same shape as the POKEAHOE block above — two tight 0.01% Orca pools
+// that recenter early and often and let arbitrage do the volume — but the owner's numbers
+// here are deliberately DIFFERENT: ±2.5% bands, not ±1%, because CUNA is far more volatile
+// and a ±1% band would sit out of range more than in it.
+//
+// ⚠️ THIS DOES NOT START ITSELF. The poke block is ON by default because the owner said
+// "why do I need to flip a switch". Here he asked to "get everything ready for how we
+// WOULD go live" — so deploying this file changes nothing. Going live is one env var:
+//   CUNA_ENGINE_ON=1     ← required to arm; absent = registered but idle
+//   CUNA_ENGINE_OFF=1    ← hard override, wins even if ON is set
+//   /api/whirlpool/vault/pause?project=cuna   ← instant stop, no deploy
+// The project is REGISTERED at boot even while disarmed, on purpose: registration is
+// pure KV (no chain calls, no signing), and it lets the config be reviewed on
+// /api/whirlpool/vault/status?project=cuna before anything is armed. That is safe because
+// the multi-tenant vault scheduler runs through liqInterval, which is a no-op while
+// LIQ_ENGINE_KILLED is true — only the scoped tick below can ever trade this project.
+//
+// ⚠️ OPERATOR WALLET — read before pointing this at the treasury. POKEAHOE signs with
+// MM_OPERATOR_SECRET_TREASURY (wallet 2zMCU…EuPy8) and its LIVE config is maxUsd 99999,
+// usdcFloor 0, deployFrac 0.97. That engine ticks every 2 minutes and absorbs free USDC
+// up to its cap, so USDC/SOL deposited into that wallet for CUNA would be pulled into the
+// POKE pools before this engine ever saw it. That wallet is also CUNA's mint authority
+// (scopes:["full"]), which CLAUDE.md says an MM operator must never be. A dedicated wallet
+// holding only the float fixes both, so that is the default. CUNA_OPERATOR_ENV overrides it.
+//
+// SCOPE: tokenMint CUNA + quoteMints [USDC, wSOL] only. Every instruction the vault builds
+// is derived from those three mints, so the ROSE / CLKN brand bag / POKE / pump.fun bags
+// sitting in any shared wallet are untouchable by this project — the owner's explicit
+// "we don't touch any other tokens from other projects" constraint, enforced structurally.
+const CUNA_ENGINE_ON = process.env.CUNA_ENGINE_ON === "1" && process.env.CUNA_ENGINE_OFF !== "1";
+const CUNA_MINT = "4yro2xbCxMFVvygCsj5FZMgZnVCb8EqcbPGTbSGCgDBc";
+const CUNA_QUOTES = [
+  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",  // USDC
+  "So11111111111111111111111111111111111111112",   // wSOL
+  // JUP deliberately absent — owner: "may scale out and then add a Jupiter pool if needed".
+  // Adding it later is a quoteMints append + jupEnabled:true, mirroring the poke ratchet.
+];
+// The public CUNA community room. Ops/roll alerts must NEVER land here — on 2026-08-20 a
+// poke ops overview briefly posted to a community chat and had to be deleted. Named so the
+// binding below can refuse it outright rather than relying on us remembering.
+const CUNA_PUBLIC_ROOM = "-1003938497778";
+function cunaEnsureProject() {
+  if (whirlpoolMM.vault.getProject("cuna")) return;
+  whirlpoolMM.vault.registerProject({
+    id: "cuna", label: "Cuna", symbol: "CUNA",
+    tokenMint: CUNA_MINT, decimals: 9,        // 9, NOT 6 — CUNA is a standard SPL mint, not pump.fun
+    quoteMints: CUNA_QUOTES,
+    venue: "orca",
+    operatorEnv: process.env.CUNA_OPERATOR_ENV || "MM_OPERATOR_SECRET_CUNA",
+  });
+  // Seeded ONCE at first registration — later owner tuning via
+  // /api/whirlpool/vault/config?project=cuna sticks (this path never runs again).
+  // Sizing is the owner's brief: ~$200 USDC + ~$200 SOL + ~$400 CUNA in play, split evenly
+  // across the two pools (~$200 CUNA against each quote). At SOL $95.62, $200 ≈ 2.09 SOL,
+  // so fund ~2.35 SOL total — 2.1 deployable plus the 0.25 gas/rent reserve below.
+  whirlpoolMM.vault.setConfig({
+    pair: "CUNA/USDC",
+    baseEnabled: true,
+    // ±2.5% (owner's call for volatility). edgeTriggerFrac 0.3 recenters once price is 30%
+    // of the way to an edge — a ~0.75% move on a ±2.5% band — which is what turns volatility
+    // into rolls, and rolls into volume.
+    feeTierPct: 0.01, widthPct: 2.5, edgeTriggerFrac: 0.3, deployFrac: 0.95,
+    maxUsd: 250,                       // ceiling over the ~$200 target so a small overshoot isn't stranded
+    minRebalanceIntervalSec: 300, maxActionsPerDay: 96,
+    priceGapGuardPct: 25,              // skip a tick on a >25% gap — CUNA is thin ($7.3k book), so a
+                                       // spike is as likely to be someone pushing it as real price
+    slippageBps: 250,                  // thinner book than POKE — 150bps would fail fills
+    baseDeployThresholdUsd: 25,
+    // CUNA/SOL pool — same ±2.5% / 0.01% shape.
+    solEnabled: true, solFeeTierPct: 0.01, solWidthPct: 2.5,
+    solMaxSol: 2.5, solGasReserve: 0.25, solDeployThreshold: 0.2,
+    // Swap layer: SOL↔USDC ONLY, to keep the two pools even so they arb against each other.
+    // It never sells CUNA — that matters here, the owner's line was "we're gonna try real
+    // hard not to sell any Kuna". The only CUNA that leaves is what the pools' ask side
+    // sells into genuine buying, which is the point of quoting a market.
+    swapEnabled: true, poolBalanceTolPct: 10,
+    maxSwapUsdPerCycle: 75, minSwapUsd: 10, usdcFloor: 5,
+    swapSolFloor: 0.3, maxSwapSolPerCycle: 1, swapSlippageBps: 150, maxSwapsPerDay: 24,
+    // Buyback only ever BUYS CUNA with excess USDC — it is the counterweight to the ask
+    // side, and the reason net CUNA sold stays near zero across a full cycle.
+    buybackEnabled: true, buybackReserveUsd: 0,
+    maxBuybackUsdPerCycle: 50, minBuybackUsd: 10, maxBuybacksPerDay: 12,
+    buybackMinIntervalSec: 900, buybackSlippageBps: 300,
+    // Off for now: no ask wall, no JUP pool, no cbBTC, no dual sleeve.
+    askWallEnabled: false, jupEnabled: false, btcEnabled: false, dualSleeveEnabled: false,
+    notifyRolls: false,                // flipped on below once a PRIVATE room is bound
+  }, "cuna");
+  console.log("[cuna] project registered + config seeded (±2.5% / 0.01% pools, DISARMED until CUNA_ENGINE_ON=1)");
+}
+// Bind roll alerts to the treasury's PRIVATE ops room — never the public community chat.
+// registerProject is register-AND-update and RESETS operatorEnv to the id-derived default
+// when omitted, so operatorEnv is passed explicitly here or this update would silently
+// re-point the engine at an unset key (the exact trap called out in the poke block).
+function cunaBindOpsRoom() {
+  const proj = whirlpoolMM.vault.getProject("cuna");
+  if (!proj || proj.telegramChatId) return;
+  const tre = whirlpoolMM.vault.getProject("treasury");
+  const room = tre && tre.telegramChatId;
+  if (!room || String(room) === CUNA_PUBLIC_ROOM) return;   // refuse the public room outright
+  whirlpoolMM.vault.registerProject({
+    id: "cuna", label: proj.label, symbol: proj.symbol, tokenMint: proj.tokenMint,
+    decimals: 9, quoteMints: CUNA_QUOTES, venue: proj.venue, operatorEnv: proj.operatorEnv,
+    telegramChatId: String(room),
+  });
+  whirlpoolMM.vault.setConfig({ notifyRolls: true }, "cuna");
+  console.log("[cuna] ops room bound (private) — roll alerts ON");
+}
+let cunaTickBusy = false;
+async function cunaTick() {
+  if (cunaTickBusy) return;   // a slow RPC cycle must not stack a second run
+  cunaTickBusy = true;
+  try {
+    // Rebalance FIRST so free SOL/USDC moves toward the underweight pool BEFORE the deploy
+    // ticks absorb it — run last, it would never see a free coin to convert.
+    try { await whirlpoolMM.vault.rebalancePools({ projectId: "cuna" }); } catch (e) { console.warn("[cuna] rebalance:", e.message); }
+    try { await whirlpoolMM.vault.tick({ projectId: "cuna" }); } catch (e) { console.warn("[cuna] base tick:", e.message); }
+    try { await whirlpoolMM.vault.tickSol({ projectId: "cuna" }); } catch (e) { console.warn("[cuna] sol tick:", e.message); }
+    // Last on purpose: the pools absorb free USDC first; buyback only converts what they
+    // genuinely could not pair.
+    try { await whirlpoolMM.vault.buyback({ projectId: "cuna" }); } catch (e) { console.warn("[cuna] buyback:", e.message); }
+  } finally { cunaTickBusy = false; }
+}
+try { cunaEnsureProject(); cunaBindOpsRoom(); } catch (e) { console.warn("[cuna] register:", e.message); }
+if (CUNA_ENGINE_ON) {
+  console.log("[cuna] CUNA engine ARMED — ±2.5% Orca pools (CUNA/USDC + CUNA/SOL), 2-min cadence");
+  setInterval(() => cunaTick().catch((e) => console.warn("[cuna] tick:", e.message)), 120000);
+  setTimeout(() => cunaTick().catch((e) => console.warn("[cuna] first tick:", e.message)), 25000);
+} else {
+  console.log("[cuna] CUNA engine DISARMED — project registered, no trading. Set CUNA_ENGINE_ON=1 to go live.");
+}
 // 1×/day (owner's call 2026-06-20 — was 3×/day): ONE full lesson at 13:00 UTC
 // (8am CT), then amplified by lessonBumpTick (self-replies at later slots tagging
 // different ecosystem groups) instead of posting more new lessons. Odd hour so it
@@ -7892,10 +8025,22 @@ app.get("/api/cuna-giveaway/admin", async (req, res) => {
     if (q.chat) patch.chatId = String(q.chat);
     if (q.min !== undefined) patch.minUsd = Number(q.min) || 5;          // what SCORES
     if (q.display !== undefined) patch.displayUsd = Number(q.display) || 5;   // what the copy SAYS
+    if (q.exclude !== undefined) patch.exclude = String(q.exclude);           // project wallets — never eligible
     if (ms(q.start) !== undefined) patch.startMs = ms(q.start);
     if (ms(q.end) !== undefined) patch.endMs = ms(q.end);
     if (Object.keys(patch).length) cunaGiveaway.configure(patch);
     const out = { ok: true, config: cunaGiveaway.config() };
+    // Manual DQ for a wallet that dumped AFTER the window closed but BEFORE the wheel spins —
+    // the scanner's ceiling is the window close, so it cannot see these. Shows as a normal ❌
+    // with a reason; &undq= lifts it (manual marks only, never a scanner-found sell).
+    if (q.dq) out.manualDq = cunaGiveaway.manualDq(String(q.dq), q.dqreason ? String(q.dqreason) : undefined);
+    if (q.undq) out.undoDq = cunaGiveaway.undoDq(String(q.undq));
+    // Run immediately BEFORE sending prizes: re-reads each drawn wallet's live CUNA balance so a
+    // winner who dumped between the spin and the payout is caught. Reports only — acting on it
+    // is &dq=.
+    if (q.holdcheck === "1") out.holdCheck = await cunaGiveaway.checkWinnersStillHolding({
+      rpcUrl: process.env.HELIUS_API_KEY ? `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}` : undefined,
+    });
     if (q.scan === "1") out.scan = await cunaGiveaway.scanOnce(deps);
     if (q.trace === "1") out.trace = await cunaGiveaway.traceOutbound(deps, { hops: 2 });
     if (q.every !== undefined) { cunaGiveaway.configure({ boardEveryMin: Math.max(5, Number(q.every) || 5) }); out.config = cunaGiveaway.config(); }
@@ -12359,6 +12504,19 @@ app.use("/api/airdrop-collect", rateLimit("track", { windowMs: 60000, max: 20 })
 const AIRDROP_CAMPAIGN_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
 function airdropKey(campaign) { return `airdropSignups:${campaign}`; }
 app.get("/airdrop-signup", (req, res) => res.sendFile(join(__dirname, "public", "airdrop-signup.html")));
+// Prize wheel — the on-screen draw ceremony for contest prizes and giveaways. noindex, and it
+// is inert without an operator key: the page loads nothing and spins nothing until the admin
+// endpoint it reads accepts the ?key=. It does NOT pick winners — it animates to the result of
+// the server-side provably-fair draw and shows that draw's seed alongside, so a screen
+// recording of it carries its own proof.
+// Prize-wheel brand art (public/ is not statically mounted, so these need explicit routes).
+// Decorative only — the wheel draws and spins without them.
+app.get("/img-cuna-taco.png", (req, res) => res.sendFile(join(__dirname, "public", "img-cuna-taco.png")));
+app.get("/img-cuna-lips.png", (req, res) => res.sendFile(join(__dirname, "public", "img-cuna-lips.png")));
+app.get("/prize-wheel", (req, res) => {
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
+  res.sendFile(join(__dirname, "public", "prize-wheel.html"));
+});
 app.get("/drop", (req, res) => res.sendFile(join(__dirname, "public", "airdrop-signup.html")));
 // Community meme art (AI-generated project images posted to rooms via /api/tg-test &photo= —
 // Telegram fetches by URL, ≤5MB). public/ is not statically mounted, so explicit route.
