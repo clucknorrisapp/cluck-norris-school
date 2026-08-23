@@ -8026,6 +8026,11 @@ app.get("/api/cuna-giveaway/admin", async (req, res) => {
     if (q.min !== undefined) patch.minUsd = Number(q.min) || 5;          // what SCORES
     if (q.display !== undefined) patch.displayUsd = Number(q.display) || 5;   // what the copy SAYS
     if (q.exclude !== undefined) patch.exclude = String(q.exclude);           // project wallets — never eligible
+    // Manual DQ for a wallet that dumped AFTER the window closed but BEFORE the wheel spins —
+    // the scanner's ceiling is the window close, so it cannot see these. Shows as a normal ❌
+    // with a reason; &undq= lifts it (manual marks only, never a scanner-found sell).
+    if (q.dq) out.manualDq = cunaGiveaway.manualDq(String(q.dq), q.dqreason ? String(q.dqreason) : undefined);
+    if (q.undq) out.undoDq = cunaGiveaway.undoDq(String(q.undq));
     if (ms(q.start) !== undefined) patch.startMs = ms(q.start);
     if (ms(q.end) !== undefined) patch.endMs = ms(q.end);
     if (Object.keys(patch).length) cunaGiveaway.configure(patch);
