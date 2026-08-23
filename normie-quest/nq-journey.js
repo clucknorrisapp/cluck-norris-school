@@ -141,42 +141,95 @@ function track(o) {
   return { ok: true };
 }
 
-// Per-level funnel from the PERMANENT aggregates, in natural level order.
-// dropRate = the share of players who started this level and neither cleared it nor are still
-// in it — i.e. the leak. That is the number worth ranking levels by.
-function funnel() {
+// Per-level funnel. TWO SOURCES, and the choice matters:
+//
+//   sinceMs = 0  -> the PERMANENT aggregate counters. Complete and all-time, but they are
+//                   counters with no timestamps, so they cannot be sliced by time at all.
+//   sinceMs > 0  -> recomputed from the timestamped SESSION EVENTS. Sliceable to any window,
+//                   but only sees what is still inside the rolling retention (SESSION_MAX
+//                   sessions x EVENTS_PER_SESSION events each).
+//
+// So a windowed view can UNDERCOUNT relative to all-time once retention starts biting — the
+// caller gets `partial: true` and the retention numbers so the dashboard can say so out loud
+// rather than quietly showing a smaller number as if it were the whole truth.
+function emptyRow(world) {
+  return { world, starts: 0, clears: 0, deaths: 0, quits: 0, powerups: 0, secs: 0 };
+}
+function shape(world, a) {
+  const starts = a.starts || 0, clears = a.clears || 0, quits = a.quits || 0;
+  return {
+    world, starts, clears, deaths: a.deaths || 0, quits, powerups: a.powerups || 0,
+    avgClearSec: clears ? Math.round((a.secs || 0) / clears) : 0,
+    clearRate: starts ? Math.round((clears / starts) * 1000) / 10 : null,
+    quitRate: starts ? Math.round((quits / starts) * 1000) / 10 : null,
+  };
+}
+function funnel(sinceMs) {
   const d = load();
-  const known = LEVEL_ORDER.length ? LEVEL_ORDER : Object.keys(d.agg).sort();
+  const since = Number(sinceMs) || 0;
+  let src;
+  if (!since) {
+    src = d.agg;
+  } else {
+    src = {};
+    for (const sid of Object.keys(d.sessions)) {
+      for (const e of (d.sessions[sid].events || [])) {
+        if ((e.at || 0) <= since) continue;
+        const a = (src[e.world] = src[e.world] || emptyRow(e.world));
+        if (e.ev === 'start') a.starts++;
+        else if (e.ev === 'clear') { a.clears++; a.secs += (e.t || 0); }
+        else if (e.ev === 'death') a.deaths++;
+        else if (e.ev === 'quit') a.quits++;
+        else if (e.ev === 'powerup') a.powerups++;
+      }
+    }
+  }
+  const known = LEVEL_ORDER.length ? LEVEL_ORDER : Object.keys(src).sort();
   const rows = [];
   for (const world of known) {
-    const a = d.agg[world];
-    if (!a || (!a.starts && !a.deaths && !a.clears)) continue;
-    const starts = a.starts || 0, clears = a.clears || 0, quits = a.quits || 0;
-    rows.push({
-      world, starts, clears, deaths: a.deaths || 0, quits, powerups: a.powerups || 0,
-      avgClearSec: clears ? Math.round(a.secs / clears) : 0,
-      clearRate: starts ? Math.round((clears / starts) * 1000) / 10 : null,
-      quitRate: starts ? Math.round((quits / starts) * 1000) / 10 : null,
-    });
+    const a = src[world];
+    if (!a || (!a.starts && !a.deaths && !a.clears && !a.quits)) continue;
+    rows.push(shape(world, a));
   }
   return rows;
 }
 
 // Levels ranked by where players actually give up (most quits first, then quit rate).
-function dropOff(n) {
-  return funnel()
+function dropOff(n, sinceMs) {
+  return funnel(sinceMs)
     .filter((r) => r.quits > 0)
     .sort((a, b) => b.quits - a.quits || (b.quitRate || 0) - (a.quitRate || 0))
     .slice(0, Math.max(1, Math.min(100, n || 15)));
 }
 
+// Hardest levels in a window, by deaths per clear. Same shape as the difficulty dashboard's
+// ranking but sliceable, and it counts a quit as a failed attempt — a level people flee from
+// is hard even when nobody stuck around long enough to die on it.
+function hardest(n, sinceMs) {
+  return funnel(sinceMs)
+    .filter((r) => r.deaths > 0 || r.quits > 0)
+    .map((r) => Object.assign({}, r, {
+      deathsPerClear: r.clears ? Math.round((r.deaths / r.clears) * 10) / 10 : (r.deaths ? null : 0),
+      failRate: r.starts ? Math.round(((r.starts - r.clears) / r.starts) * 1000) / 10 : null,
+    }))
+    .sort((a, b) => {
+      if (a.deathsPerClear === null && b.deathsPerClear !== null) return -1;   // never-cleared first
+      if (b.deathsPerClear === null && a.deathsPerClear !== null) return 1;
+      return (b.deathsPerClear || 0) - (a.deathsPerClear || 0) || b.deaths - a.deaths;
+    })
+    .slice(0, Math.max(1, Math.min(100, n || 15)));
+}
+
 // Rolling-window session summaries, newest activity first.
-function sessions(n) {
+function sessions(n, sinceMs) {
   const d = load();
+  const since = Number(sinceMs) || 0;
   const out = [];
   for (const sid of Object.keys(d.sessions)) {
     const s = d.sessions[sid];
-    const evs = s.events || [];
+    if (since && (s.last || 0) <= since) continue;
+    const evs = since ? (s.events || []).filter((e) => (e.at || 0) > since) : (s.events || []);
+    if (since && !evs.length) continue;
     const worlds = new Set(evs.map((e) => e.world));
     const cleared = new Set(evs.filter((e) => e.ev === 'clear').map((e) => e.world));
     const last = evs.length ? evs[evs.length - 1] : null;
@@ -187,7 +240,9 @@ function sessions(n) {
       deaths: evs.filter((e) => e.ev === 'death').length,
       powerups: evs.filter((e) => e.ev === 'powerup').length,
       lastWorld: last ? last.world : '', lastEv: last ? last.ev : '',
-      minutes: Math.round(((s.last - s.first) / 60000) * 10) / 10,
+      // span of the events actually in view — a windowed row must not report a 3-hour session
+      // because the player also played yesterday.
+      minutes: Math.round((((evs.length ? evs[evs.length - 1].at : s.last) - (evs.length ? evs[0].at : s.first)) / 60000) * 10) / 10,
     });
   }
   out.sort((a, b) => b.last - a.last);
@@ -210,24 +265,43 @@ function overview(sinceMs) {
   const since = Number(sinceMs) || 0;
   const ids = Object.keys(d.sessions);
   let active = 0, totalEvents = 0, returning = 0;
+  const spans = [];   // minutes played per session IN WINDOW — the "how long are they playing" answer
   for (const id of ids) {
     const s = d.sessions[id];
-    if ((s.last || 0) > since) active++;
+    const evs = since ? (s.events || []).filter((e) => (e.at || 0) > since) : (s.events || []);
+    if (since && !evs.length) continue;
+    active++;
     if ((s.visits || 1) > 1) returning++;
-    totalEvents += (s.events || []).length;
+    totalEvents += evs.length;
+    const a = evs.length ? evs[0].at : s.first, b = evs.length ? evs[evs.length - 1].at : s.last;
+    spans.push(Math.max(0, (b - a) / 60000));
   }
+  // Median as well as mean: one marathon session drags a mean badly on small samples, and on
+  // launch day the sample IS small. The median is the honest "typical player" number.
+  spans.sort((x, y) => x - y);
+  const mean = spans.length ? spans.reduce((t, v) => t + v, 0) / spans.length : 0;
+  const median = spans.length ? (spans.length % 2 ? spans[(spans.length - 1) / 2]
+    : (spans[spans.length / 2 - 1] + spans[spans.length / 2]) / 2) : 0;
+  const r1 = (v) => Math.round(v * 10) / 10;
+
+  const f = funnel(since);
   let starts = 0, clears = 0, deaths = 0, quits = 0, powerups = 0;
-  for (const w of Object.keys(d.agg)) {
-    const a = d.agg[w];
-    starts += a.starts || 0; clears += a.clears || 0; deaths += a.deaths || 0;
-    quits += a.quits || 0; powerups += a.powerups || 0;
-  }
+  for (const r of f) { starts += r.starts; clears += r.clears; deaths += r.deaths; quits += r.quits; powerups += r.powerups; }
+
   return {
+    sinceMs: since,
+    uniquePlayers: active,              // distinct browsers with activity in the window
     sessionsTracked: ids.length, sessionsActive: active, returningSessions: returning,
-    sessionEvents: totalEvents, windowCap: SESSION_MAX,
+    sessionEvents: totalEvents, windowCap: SESSION_MAX, eventsPerSessionCap: EVENTS_PER_SESSION,
+    avgMinutes: r1(mean), medianMinutes: r1(median), totalMinutes: r1(spans.reduce((t, v) => t + v, 0)),
+    longestMinutes: r1(spans.length ? spans[spans.length - 1] : 0),
     starts, clears, deaths, quits, powerups,
+    levelsTouched: f.length,
     overallClearRate: starts ? Math.round((clears / starts) * 1000) / 10 : null,
+    // A windowed view reads only the rolling retention, so it can undercount once that fills.
+    // Surfaced rather than hidden: a smaller number must not be mistaken for less play.
+    partial: !!since && ids.length >= SESSION_MAX,
   };
 }
 
-module.exports = { track, funnel, dropOff, sessions, sessionDetail, overview, flush, EVENTS, SESSION_MAX, EVENTS_PER_SESSION };
+module.exports = { track, funnel, dropOff, hardest, sessions, sessionDetail, overview, flush, EVENTS, SESSION_MAX, EVENTS_PER_SESSION };
