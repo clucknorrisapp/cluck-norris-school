@@ -46,6 +46,26 @@ The default is a **dedicated wallet**, `MM_OPERATOR_SECRET_CUNA`. Override with
 A dedicated wallet holding only the float fixes both, and satisfies the owner's
 "we don't touch any other tokens from other projects" constraint by construction.
 
+### Setting the dedicated wallet up
+
+1. **Generate the keypair off this box** — `solana-keygen new -o cuna-mm.json`, or a fresh
+   Phantom account. Never generate it in a cloud session, never paste it into chat, a file
+   in this repo, or a commit.
+2. **Put the secret in Railway as `MM_OPERATOR_SECRET_CUNA`.** The loader accepts *either*
+   format, so use whichever you have:
+   - base58 string (Phantom → Export Private Key), or
+   - JSON byte array `[12,34,…]` (the file `solana-keygen` writes)
+3. **Fund it with the float and nothing else** — the amounts in the table below. No brand
+   bag, no ROSE, no POKE, no other project's tokens. The engine is mint-scoped and could not
+   touch them anyway, but a wallet that holds only the float means a mistake has nothing to
+   reach for.
+4. **Confirm before arming:** `GET /api/whirlpool/vault/status?project=cuna` should report
+   the new pubkey as `operator`. If it reports `null`, the env var did not load and the
+   engine will no-op rather than trade.
+
+The wallet needs no special permissions — it is not a mint authority, holds no LP NFTs from
+other projects, and can be rotated by swapping the env var and moving the float.
+
 ---
 
 ## Funding
