@@ -6929,7 +6929,8 @@ var Controls=new Phaser.Class({ Extends:Phaser.Scene,
     this.cont=this.add.text(cx,H-11,'',{fontFamily:'"Press Start 2P"',fontSize:'10px',color:'#3dff6e'}).setOrigin(.5);
     this.input.on('pointerdown',function(){ self.advance(); });
     this.input.keyboard.on('keydown',function(){ self.advance(); });
-    padAdvance(this, function(){ self.advance(); });   // controller button also advances/starts
+    // (no padAdvance here — update() owns pad-advance for this scene, on every page. A one-shot
+    //  watcher spent itself on page 0 and left the START page unreachable by controller.)
     this.showPage(0);
   },
   showPage:function(n){ this.page=n; this.t0=0;   // t0=0 → update() re-stamps it, giving each page its own idle timer
@@ -6944,15 +6945,31 @@ var Controls=new Phaser.Class({ Extends:Phaser.Scene,
   go:function(){ if(this.done) return; this.done=true; SFX.power(); this.scene.start('Game',{level:this.nextLevel,score:this.score,lives:3}); },
   update:function(){ if(!this.t0){ this.t0=this.time.now; return; }
     if(this.cont) this.cont.setAlpha(0.4+0.6*Math.abs(Math.sin(this.time.now/300)));
+    // PAD READ — EVERY PAGE, ANY BUTTON.
+    // FIELD BUG (owner, 2026-08-22, reported twice): a player could remap their controller and
+    // reach this screen, then had to touch the glass or grab a mouse to actually start — the pad
+    // worked perfectly once the game began. Two reasons, both here:
+    //   1. this whole block used to be wrapped in `if(this.page===0)`, so on page 1 — the START
+    //      page, the one you are staring at when you want to go — the pad was never read at all.
+    //   2. it only watched buttons 0/1/8/9. A remapped or off-standard pad presses something else
+    //      and nothing happens.
+    // The one-shot padAdvance() this scene also had could not cover it: it fires once getting you
+    // from page 0 to page 1 and is spent from then on. It has been removed in create() so this
+    // loop is the single owner of pad-advance here — no double-fire, no dead second page.
+    var on=false, press=false;
+    try{ var ps=(navigator.getGamepads?navigator.getGamepads():[]); for(var i=0;i<ps.length;i++){ var gp=ps[i]; if(!gp) continue; on=true;
+      var B=gp.buttons||[]; for(var bi=0;bi<B.length;bi++){ if(B[bi]&&(B[bi].pressed||B[bi].value>0.5)){ press=true; break; } } } }catch(e){}
     // live USB-controller status only matters on the controls page (that's where the pad line lives)
-    if(this.page===0){
-      var on=false, press=false;
-      try{ var ps=(navigator.getGamepads?navigator.getGamepads():[]); for(var i=0;i<ps.length;i++){ var gp=ps[i]; if(!gp) continue; on=true;
-        var B=gp.buttons||[]; if((B[0]&&B[0].pressed)||(B[1]&&B[1].pressed)||(B[8]&&B[8].pressed)||(B[9]&&B[9].pressed)) press=true; } }catch(e){}
-      if(this.padLine){ var want=on?'🎮 CONTROLLER CONNECTED ✓\nD-pad move · A = jump · B = throw · Down = duck\nSELECT: tap = use item, hold = pick which · L2/R2 also use'
-                                    :'🎮 USB CONTROLLER — plug in & press a button\nD-pad move · A = jump · B = throw · Down = duck\nSELECT: tap = use item, hold = pick which · L2/R2 also use';
-        if(this.padLine.text!==want) this.padLine.setText(want).setColor(on?'#3dff6e':'#b6bfe0'); }
-      if(press && !this._pp && this.time.now-this.t0>1200) this.advance();   // controller button (after grace)
+    if(this.page===0 && this.padLine){
+      var want=on?'🎮 CONTROLLER CONNECTED ✓\nD-pad move · A = jump · B = throw · Down = duck\nSELECT: tap = use item, hold = pick which · L2/R2 also use'
+                 :'🎮 USB CONTROLLER — plug in & press a button\nD-pad move · A = jump · B = throw · Down = duck\nSELECT: tap = use item, hold = pick which · L2/R2 also use';
+      if(this.padLine.text!==want) this.padLine.setText(want).setColor(on?'#3dff6e':'#b6bfe0');
+    }
+    // While the remap card (or any full-screen overlay) is up, its presses belong to IT — hold the
+    // edge down so dismissing it cannot fall straight through into an advance.
+    if(nqModalUp()){ this._pp=true; }
+    else {
+      if(press && !this._pp && this.time.now-this.t0>1200) this.advance();   // fresh press, after grace
       this._pp=press;
     }
     if(this.time.now-this.t0>20000) this.advance(); }   // per-page safety auto-advance (never soft-locks)
