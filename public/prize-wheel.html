@@ -82,6 +82,8 @@
        background:linear-gradient(90deg,rgba(255,224,138,.24),rgba(255,224,138,.04));border:1px solid rgba(255,224,138,.5);
        box-shadow:0 0 18px rgba(255,210,63,.22)}
   .win.pending{background:rgba(255,255,255,.035);border-color:rgba(255,180,220,.16);opacity:.45;box-shadow:none}
+  .win.alt{background:linear-gradient(90deg,rgba(180,200,255,.16),rgba(180,200,255,.03));border-color:rgba(170,195,255,.42);box-shadow:none}
+  .win.alt .amt{font-size:11px;letter-spacing:.09em;opacity:.85}
   .win .pl{font-family:var(--disp);font-size:20px;min-width:32px;text-align:center}
   .win .w{flex:1}
   .win .amt{font-family:var(--mono);font-size:13px;opacity:.9;white-space:nowrap}
@@ -285,15 +287,27 @@
   function flash(){ var f=document.getElementById('flash'); f.style.opacity='.85';
     setTimeout(function(){ f.style.opacity='0'; },110); }
 
+  function renderPool(){
+    document.getElementById('nw').textContent = S.entrants.length;
+    document.getElementById('ne').textContent = S.entrants.reduce(function(t,e){ return t+e.entries; },0);
+    document.getElementById('nd').textContent = S.dq || 0;
+    document.getElementById('tok').textContent = (S.cfg && S.cfg.symbol) || '\u2014';
+    var sub = document.getElementById('sub');
+    if(S.revealed > 0 && sub){
+      sub.innerHTML = '<b>' + S.tickets.length + ' entries</b> still on the wheel \u2014 '
+        + S.revealed + ' winner' + (S.revealed===1?'':'s') + ' removed. One prize per wallet.';
+    }
+  }
   function renderWinners(){
     var el = document.getElementById('winners');
     if(!S.draw || !S.draw.winners || !S.draw.winners.length){ el.innerHTML='<span class="dim">Spin to reveal.</span>'; return; }
     el.innerHTML = S.draw.winners.map(function(w,i){
       var shown = i < S.revealed;
-      return '<div class="win'+(shown?'':' pending')+'">'
-        + '<div class="pl">'+(i===0?'🥇':i===1?'🥈':'🥉')+'</div>'
-        + '<div class="w mono">'+(shown?esc(w.wallet):'— — — — —')+'</div>'
-        + '<div class="amt">'+(w.prize?Number(w.prize).toLocaleString():'')+'</div></div>';
+      var medal = w.alternate ? '🎗️' : (i===0?'🥇':i===1?'🥈':'🥉');
+      return '<div class="win'+(shown?'':' pending')+(w.alternate?' alt':'')+'">'
+        + '<div class="pl">'+medal+'</div>'
+        + '<div class="w mono">'+(shown?esc(w.wallet):'\u2014 \u2014 \u2014 \u2014 \u2014')+'</div>'
+        + '<div class="amt">'+(w.alternate?'ALTERNATE':Number(w.prize).toLocaleString())+'</div></div>';
     }).join('');
   }
 
@@ -356,13 +370,24 @@
     document.getElementById('spin').disabled = true;
     document.getElementById('callout').textContent = '';
     spinTo(w.wallet, function(){
-      S.wonSet[w.wallet] = true;   // lights up every ticket that wallet holds, wherever they sit
+      // The wallet LEAVES the wheel. This mirrors the draw exactly — drawFromSeed splices each
+      // winner out of the pool before the next pick, so one wallet can never take two prizes.
+      // Leaving their slices on the wheel would show a pool the draw was not actually using, and
+      // on a recording that is the difference between showing the truth and showing a prop.
+      S.wonSet[w.wallet] = true;
+      S.entrants = S.entrants.filter(function(x){ return x.wallet !== w.wallet; });
+      buildTickets();
       S.revealed++;
-      draw(); renderWinners();
+      draw(); renderWinners(); renderPool();
       document.getElementById('callout').innerHTML =
         (S.revealed===1?'🥇':S.revealed===2?'🥈':'🥉') + ' ' + esc(w.wallet.slice(0,6)+'…'+w.wallet.slice(-6))
         + ' <span class="dim">— ' + Number(w.prize||0).toLocaleString() + '</span>';
-      var more = S.revealed < S.draw.winners.length;
+      var prizeCount = S.draw.winners.filter(function(x){ return !x.alternate; }).length;
+      // Reveal every alternate alongside the final prize — there is nothing to spin for, the
+      // standby order was fixed by the same seed.
+      if(S.revealed >= prizeCount) S.revealed = S.draw.winners.length;
+      var more = S.revealed < prizeCount;
+      renderWinners();
       document.getElementById('spin').disabled = !more;
       document.getElementById('spin').textContent = more ? 'SPIN AGAIN' : 'ALL DRAWN';
       document.getElementById('send').disabled = more;
@@ -376,7 +401,10 @@
     if(!S.draw) return;
     var b = document.getElementById('send');
     b.disabled = true; b.textContent = 'HANDING OFF…';
-    var lines = S.draw.winners.map(function(w){ return w.wallet + ' ' + (w.prize||0); }).join('\n');
+    // Alternates carry prize 0 and are a STANDBY, not a payee — handing them to the airdropper
+    // would put a zero-amount row in a money tool, which at best confuses and at worst gets sent.
+    var lines = S.draw.winners.filter(function(w){ return !w.alternate && w.prize > 0; })
+                              .map(function(w){ return w.wallet + ' ' + w.prize; }).join('\n');
     fetch('/api/airdrop-handoff', {
       method:'POST', headers:{'content-type':'application/json'},
       body: JSON.stringify({ recipients: lines, mint: (S.cfg&&S.cfg.mint)||'',
@@ -409,10 +437,8 @@
         S.entrants = list.filter(function(e){ return e.entries>0 && !e.dq; })
                          .map(function(e){ return { wallet:e.wallet, entries:e.entries }; });
         buildTickets();
-        document.getElementById('nw').textContent = S.entrants.length;
-        document.getElementById('ne').textContent = S.entrants.reduce(function(t,e){ return t+e.entries; },0);
-        document.getElementById('nd').textContent = st.disqualified || 0;
-        document.getElementById('tok').textContent = S.cfg.symbol || '—';
+        S.dq = st.disqualified || 0;
+        renderPool();
         document.getElementById('sub').innerHTML = S.entrants.length
           ? ('<b>' + S.tickets.length + ' entries</b> on the wheel \u2014 one slice each, equal size, '
              + 'spread out so no wallet holds a single block. More entries = more slices.')

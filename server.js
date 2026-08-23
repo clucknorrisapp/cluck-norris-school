@@ -8026,15 +8026,21 @@ app.get("/api/cuna-giveaway/admin", async (req, res) => {
     if (q.min !== undefined) patch.minUsd = Number(q.min) || 5;          // what SCORES
     if (q.display !== undefined) patch.displayUsd = Number(q.display) || 5;   // what the copy SAYS
     if (q.exclude !== undefined) patch.exclude = String(q.exclude);           // project wallets — never eligible
+    if (ms(q.start) !== undefined) patch.startMs = ms(q.start);
+    if (ms(q.end) !== undefined) patch.endMs = ms(q.end);
+    if (Object.keys(patch).length) cunaGiveaway.configure(patch);
+    const out = { ok: true, config: cunaGiveaway.config() };
     // Manual DQ for a wallet that dumped AFTER the window closed but BEFORE the wheel spins —
     // the scanner's ceiling is the window close, so it cannot see these. Shows as a normal ❌
     // with a reason; &undq= lifts it (manual marks only, never a scanner-found sell).
     if (q.dq) out.manualDq = cunaGiveaway.manualDq(String(q.dq), q.dqreason ? String(q.dqreason) : undefined);
     if (q.undq) out.undoDq = cunaGiveaway.undoDq(String(q.undq));
-    if (ms(q.start) !== undefined) patch.startMs = ms(q.start);
-    if (ms(q.end) !== undefined) patch.endMs = ms(q.end);
-    if (Object.keys(patch).length) cunaGiveaway.configure(patch);
-    const out = { ok: true, config: cunaGiveaway.config() };
+    // Run immediately BEFORE sending prizes: re-reads each drawn wallet's live CUNA balance so a
+    // winner who dumped between the spin and the payout is caught. Reports only — acting on it
+    // is &dq=.
+    if (q.holdcheck === "1") out.holdCheck = await cunaGiveaway.checkWinnersStillHolding({
+      rpcUrl: process.env.HELIUS_API_KEY ? `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}` : undefined,
+    });
     if (q.scan === "1") out.scan = await cunaGiveaway.scanOnce(deps);
     if (q.trace === "1") out.trace = await cunaGiveaway.traceOutbound(deps, { hops: 2 });
     if (q.every !== undefined) { cunaGiveaway.configure({ boardEveryMin: Math.max(5, Number(q.every) || 5) }); out.config = cunaGiveaway.config(); }
