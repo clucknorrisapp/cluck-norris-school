@@ -31,6 +31,14 @@
   @media(max-width:880px){.stage{grid-template-columns:1fr}}
   .wheelbox{position:relative;text-align:center}
   canvas{max-width:100%;height:auto;display:block;margin:0 auto;filter:drop-shadow(0 10px 30px rgba(0,0,0,.55))}
+  /* Sits at roughly 7-8 o'clock with its hands on the rim. Kept fully inside the box (no
+     negative inset) so it never clips on narrow screens, and above the callout line. */
+  .lips{position:absolute;left:0;bottom:20%;width:27%;max-width:215px;z-index:2;pointer-events:none;
+        transform-origin:80% 55%;transition:transform .35s ease}
+  .lips.push{animation:shove .5s ease-in-out infinite}
+  @keyframes shove{0%,100%{transform:translateX(0) rotate(0deg)}50%{transform:translateX(5%) rotate(5deg)}}
+  @media(max-width:620px){.lips{width:34%;bottom:24%}}
+  @media(prefers-reduced-motion:reduce){.lips.push{animation:none}}
   .ptr{position:absolute;top:-2px;left:50%;transform:translateX(-50%);width:0;height:0;
        border-left:16px solid transparent;border-right:16px solid transparent;border-top:30px solid var(--accent,#ff8a3d);z-index:3;
        filter:drop-shadow(0 2px 4px rgba(0,0,0,.6))}
@@ -53,7 +61,7 @@
   .warn{background:rgba(255,90,90,.1);border:1px solid rgba(255,90,90,.34);color:#ffb3b3;
         border-radius:11px;padding:13px 15px;font-size:13.5px;margin-bottom:15px}
   .flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:9;transition:opacity .1s}
-  .big{font-family:var(--disp);font-size:26px;margin:14px 0 0;min-height:34px;letter-spacing:.02em}
+  .big{font-family:var(--disp);font-size:26px;margin:14px 0 0;min-height:34px;letter-spacing:.02em;padding-left:22%}
   .dim{opacity:.6}
 </style>
 </head>
@@ -67,6 +75,7 @@
   <div class="stage">
     <div class="wheelbox">
       <div class="ptr"></div>
+      <img class="lips" id="lips" alt="" hidden>
       <canvas id="wheel" width="620" height="620"></canvas>
       <div class="big" id="callout"></div>
       <div>
@@ -110,6 +119,20 @@
   var SRC = q.get('src') || 'cuna';
   var cv = document.getElementById('wheel'), cx = cv.getContext('2d');
   var S = { entrants: [], draw: null, revealed: 0, spinning: false, rot: 0, cfg: null };
+  // Brand dressing: a taco hub in the middle of the wheel and the lips character shoving it
+  // round. On for the CUNA board by default, off with ?brand=0 so the wheel stays generic for
+  // any other giveaway. Both images are decorative — if either fails to load the wheel still
+  // draws and still spins, it just loses the costume.
+  var BRAND = (q.get('brand') || (SRC === 'cuna' ? 'cuna' : '0')) !== '0';
+  var HUB = null, LIPS = null;
+  if(BRAND){
+    HUB = new Image(); HUB.onload = draw; HUB.onerror = function(){ HUB = null; }; HUB.src = '/img-cuna-taco.png';
+    var le = document.getElementById('lips');
+    if(le){ le.onload = function(){ le.hidden = false; }; le.onerror = function(){ le.remove(); }; le.src = '/img-cuna-lips.png'; }
+  }
+  // The shove animation runs ONLY while the wheel is actually turning — a mascot heaving away at
+  // a stationary wheel reads as broken.
+  function lipsPush(on){ var e=document.getElementById('lips'); if(e) e.classList.toggle('push', !!on); }
 
   // Colour ramp — enough separation that adjacent slices read apart on a screen recording,
   // and the wheel still looks like one object rather than a bag of confetti.
@@ -143,8 +166,20 @@
       }
       a += sw;
     }
-    cx.beginPath(); cx.arc(cxp,cyp,R*0.13,0,Math.PI*2);
+    // HUB — the taco sits still while the wheel turns under it, which is what a real hub does
+    // and what keeps the mascot readable during a spin. Drawn after the slices so it masks the
+    // centre seam where every wedge meets.
+    var hr = R*(HUB ? 0.30 : 0.13);
+    cx.beginPath(); cx.arc(cxp,cyp,hr,0,Math.PI*2);
     cx.fillStyle='#12151c'; cx.fill(); cx.strokeStyle='rgba(255,255,255,.22)'; cx.lineWidth=2; cx.stroke();
+    if(HUB){
+      cx.save();
+      cx.beginPath(); cx.arc(cxp,cyp,hr-3,0,Math.PI*2); cx.clip();
+      var iw = HUB.naturalWidth||1, ih = HUB.naturalHeight||1;
+      var sc = (hr*2.05)/Math.max(iw,ih), dw = iw*sc, dh = ih*sc;
+      cx.drawImage(HUB, cxp-dw/2, cyp-dh/2, dw, dh);
+      cx.restore();
+    }
   }
 
   // Angle (in wheel space) of the middle of one entrant's slice.
@@ -173,22 +208,58 @@
     }).join('');
   }
 
-  // Spin to a PREDETERMINED landing angle. Duration and easing are cosmetic; the target is not.
+  // Spin to a PREDETERMINED landing angle. The target is fixed by the draw; everything about HOW
+  // it gets there is randomised, because a spin that always takes the same path at the same speed
+  // reads as scripted even when the result is genuinely fair — and on a screen recording that
+  // impression is the whole ballgame. Randomised per spin:
+  //   • total rotations (4–11) and duration (4.4–7.8s), so no two spins have the same rhythm
+  //   • direction, so it doesn't always sweep the same way
+  //   • where inside the winning slice it stops — never dead-centre, which is a tell
+  //   • the easing exponent, so the deceleration curve differs run to run
+  //   • a small settle: it drifts just past the mark and rocks back, the way a real wheel does
+  //     against its pin, instead of freezing dead on the number
   function spinTo(wallet, cb){
-    var target = midAngle(wallet);
-    // land that slice under the pointer at the top (-PI/2 in our draw space)
-    var want = -target;
-    var turns = 6 + Math.random()*2;                 // visual flourish only
-    var from = S.rot, to = want - Math.PI*2*Math.round(turns);
-    var t0 = performance.now(), dur = 5200;
-    S.spinning = true;
+    var total = S.entrants.reduce(function(t,e){ return t+e.entries; },0) || 1;
+    var ent = null;
+    for(var i=0;i<S.entrants.length;i++) if(S.entrants[i].wallet===wallet) ent = S.entrants[i];
+    var sliceW = ent ? (ent.entries/total)*Math.PI*2 : 0.05;
+    // land anywhere in the middle 70% of the slice — dead-centre every time looks machined
+    var jitter = (Math.random()-0.5) * sliceW * 0.7;
+    var want = -(midAngle(wallet) + jitter);
+
+    var dir = Math.random() < 0.5 ? 1 : -1;            // sometimes it comes round the other way
+    var turns = 4 + Math.random()*7;                   // 4–11 full rotations
+    var dur = 4400 + Math.random()*3400;               // 4.4–7.8s
+    var pw = 3.4 + Math.random()*1.6;                  // ease-out exponent 3.4–5.0
+    var overshoot = (0.18 + Math.random()*0.5) * sliceW * dir;   // how far past it drifts
+
+    var from = S.rot;
+    // normalise so the wheel always travels a full set of turns in `dir`, never a short hop
+    var base = want - from;
+    base = ((base % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
+    if(dir < 0) base -= Math.PI*2;
+    var to = from + base + dir*Math.PI*2*Math.floor(turns);
+
+    var t0 = performance.now();
+    var SETTLE = 900;                                   // the rock-back at the end
+    S.spinning = true; lipsPush(true);
     (function step(now){
-      var p = Math.min(1,(now-t0)/dur);
-      var e = 1 - Math.pow(1-p, 4);                   // ease-out quart — long slow settle
-      S.rot = from + (to-from)*e;
-      draw();
-      if(p<1) requestAnimationFrame(step);
-      else { S.spinning=false; flash(); cb&&cb(); }
+      var el = now - t0;
+      if(el < dur){
+        var p = el/dur;
+        var e = 1 - Math.pow(1-p, pw);
+        S.rot = from + (to + overshoot - from)*e;
+        draw(); requestAnimationFrame(step);
+      } else if(el < dur + SETTLE){
+        // damped spring back from the overshoot onto the true mark
+        var q = (el-dur)/SETTLE;
+        var damp = Math.exp(-5.5*q) * Math.cos(q*Math.PI*2.2);
+        S.rot = to + overshoot*damp;
+        draw(); requestAnimationFrame(step);
+      } else {
+        S.rot = to; draw();
+        S.spinning=false; lipsPush(false); flash(); cb&&cb();
+      }
     })(t0);
   }
 

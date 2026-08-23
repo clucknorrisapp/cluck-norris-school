@@ -12498,6 +12498,10 @@ app.get("/airdrop-signup", (req, res) => res.sendFile(join(__dirname, "public", 
 // endpoint it reads accepts the ?key=. It does NOT pick winners — it animates to the result of
 // the server-side provably-fair draw and shows that draw's seed alongside, so a screen
 // recording of it carries its own proof.
+// Prize-wheel brand art (public/ is not statically mounted, so these need explicit routes).
+// Decorative only — the wheel draws and spins without them.
+app.get("/img-cuna-taco.png", (req, res) => res.sendFile(join(__dirname, "public", "img-cuna-taco.png")));
+app.get("/img-cuna-lips.png", (req, res) => res.sendFile(join(__dirname, "public", "img-cuna-lips.png")));
 app.get("/prize-wheel", (req, res) => {
   res.setHeader("X-Robots-Tag", "noindex, nofollow");
   res.sendFile(join(__dirname, "public", "prize-wheel.html"));
