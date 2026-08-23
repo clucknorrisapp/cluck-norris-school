@@ -23,14 +23,36 @@
   winner to fill the silence.
 -->
 <style>
-  body{margin:0;background:var(--bg,#0b0d12);color:var(--fg,#e9edf5);font-family:var(--body);}
+  /* CUNA house colours, scoped to THIS page only — never redefine a theme token globally, a
+     page-local :root would shadow theme.css sitewide. Local --cuna-* names, no token shadowing. */
+  .wrap, body{ --cuna-hot:#ff2f9a; --cuna-mag:#c4276f; --cuna-deep:#2b0a1e; --cuna-cream:#ffeccd; }
+  body{margin:0;color:#fff3fb;font-family:var(--body);
+       background:#2b0a1e;
+       background-image:
+         radial-gradient(1100px 620px at 18% -8%, rgba(255,47,154,.42), transparent 62%),
+         radial-gradient(900px 560px at 88% 8%, rgba(196,39,111,.40), transparent 60%),
+         radial-gradient(1200px 800px at 50% 118%, rgba(255,120,190,.24), transparent 66%),
+         linear-gradient(168deg,#3d0f2b 0%,#2b0a1e 46%,#1b0614 100%);
+       background-attachment:fixed;}
+  /* Slow drifting sheen. Sits behind everything, ignores clicks, and is switched off entirely
+     for reduced-motion — a full-screen animated gradient is exactly the thing that triggers
+     people. */
+  body::before{content:'';position:fixed;inset:-30%;z-index:0;pointer-events:none;
+    background:conic-gradient(from 0deg, transparent 0 42%, rgba(255,47,154,.16) 50%, transparent 58% 100%);
+    animation:sheen 22s linear infinite;}
+  @keyframes sheen{to{transform:rotate(360deg)}}
+  @media(prefers-reduced-motion:reduce){body::before{animation:none;opacity:.35}}
+  .wrap{position:relative;z-index:1}
   .wrap{max-width:1180px;margin:0 auto;padding:22px 18px 60px}
-  h1{font-family:var(--disp);letter-spacing:.02em;margin:0 0 2px;font-size:30px}
-  .sub{opacity:.72;font-size:13.5px;margin-bottom:18px}
+  h1{font-family:var(--disp);letter-spacing:.03em;margin:0 0 2px;font-size:clamp(30px,5vw,46px);
+     color:var(--cuna-cream);text-shadow:0 0 18px rgba(255,47,154,.75),0 0 46px rgba(255,47,154,.4),0 3px 0 #7d1146}
+  .sub{opacity:.9;font-size:14px;margin-bottom:18px;color:#ffd7ee}
   .stage{display:grid;grid-template-columns:minmax(300px,1fr) minmax(280px,420px);gap:26px;align-items:start}
   @media(max-width:880px){.stage{grid-template-columns:1fr}}
   .wheelbox{position:relative;text-align:center}
-  canvas{max-width:100%;height:auto;display:block;margin:0 auto;filter:drop-shadow(0 10px 30px rgba(0,0,0,.55))}
+  canvas{max-width:100%;height:auto;display:block;margin:0 auto;border-radius:50%;
+    filter:drop-shadow(0 0 26px rgba(255,47,154,.55)) drop-shadow(0 14px 40px rgba(0,0,0,.6));
+    outline:5px solid rgba(255,236,205,.9); outline-offset:-4px}
   /* Sits at roughly 7-8 o'clock with its hands on the rim. Kept fully inside the box (no
      negative inset) so it never clips on narrow screens, and above the callout line. */
   .lips{position:absolute;left:0;bottom:20%;width:27%;max-width:215px;z-index:2;pointer-events:none;
@@ -39,30 +61,38 @@
   @keyframes shove{0%,100%{transform:translateX(0) rotate(0deg)}50%{transform:translateX(5%) rotate(5deg)}}
   @media(max-width:620px){.lips{width:34%;bottom:24%}}
   @media(prefers-reduced-motion:reduce){.lips.push{animation:none}}
-  .ptr{position:absolute;top:-2px;left:50%;transform:translateX(-50%);width:0;height:0;
-       border-left:16px solid transparent;border-right:16px solid transparent;border-top:30px solid var(--accent,#ff8a3d);z-index:3;
-       filter:drop-shadow(0 2px 4px rgba(0,0,0,.6))}
-  .btn{font-family:var(--disp);letter-spacing:.05em;font-size:17px;padding:13px 30px;border:0;border-radius:11px;cursor:pointer;
-       background:linear-gradient(180deg,#ff9f4d,#f2701a);color:#1a1005;margin:16px 6px 0}
-  .btn[disabled]{background:#3a3f4b;color:#8b93a3;cursor:not-allowed}
-  .btn.alt{background:linear-gradient(180deg,#4fd1a5,#1fa87c);color:#06231a}
-  .panel{background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:16px 17px;margin-bottom:15px}
-  .panel h2{font-family:var(--disp);font-size:14px;letter-spacing:.1em;margin:0 0 11px;opacity:.85}
-  .row{display:flex;justify-content:space-between;gap:12px;font-size:13.5px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.055)}
+  .ptr{position:absolute;top:-4px;left:50%;transform:translateX(-50%);width:0;height:0;
+       border-left:18px solid transparent;border-right:18px solid transparent;border-top:34px solid var(--cuna-cream);z-index:3;
+       filter:drop-shadow(0 0 10px rgba(255,47,154,.9)) drop-shadow(0 2px 4px rgba(0,0,0,.6))}
+  .btn{font-family:var(--disp);letter-spacing:.06em;font-size:18px;padding:14px 34px;border:0;border-radius:12px;cursor:pointer;
+       background:linear-gradient(180deg,#ff5cb4,#e0186f);color:#fff;margin:16px 6px 0;
+       box-shadow:0 0 22px rgba(255,47,154,.6),0 4px 0 #8d0f4c;text-shadow:0 1px 2px rgba(0,0,0,.35)}
+  .btn:not([disabled]):hover{filter:brightness(1.09)}
+  .btn:not([disabled]):active{transform:translateY(2px);box-shadow:0 0 18px rgba(255,47,154,.5),0 2px 0 #8d0f4c}
+  .btn[disabled]{background:#4a3140;color:#a98ba0;cursor:not-allowed;box-shadow:none;text-shadow:none}
+  .btn.alt{background:linear-gradient(180deg,#ffe08a,#f5b81f);color:#3a2600;box-shadow:0 0 22px rgba(245,184,31,.55),0 4px 0 #9a7100}
+  .panel{background:linear-gradient(180deg,rgba(255,47,154,.13),rgba(43,10,30,.62));
+    border:1px solid rgba(255,120,190,.34);border-radius:16px;padding:16px 17px;margin-bottom:15px;
+    box-shadow:0 0 0 1px rgba(255,255,255,.04) inset, 0 8px 26px rgba(0,0,0,.35)}
+  .panel h2{font-family:var(--disp);font-size:14px;letter-spacing:.12em;margin:0 0 11px;color:var(--cuna-cream);opacity:.95}
+  .row{display:flex;justify-content:space-between;gap:12px;font-size:13.5px;padding:5px 0;border-bottom:1px solid rgba(255,180,220,.14)}
   .row:last-child{border-bottom:0}
   .mono{font-family:var(--mono);font-size:12.5px;word-break:break-all}
-  .win{display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:11px;margin-bottom:9px;
-       background:linear-gradient(90deg,rgba(255,160,70,.16),rgba(255,160,70,.03));border:1px solid rgba(255,160,70,.3)}
-  .win.pending{background:rgba(255,255,255,.03);border-color:rgba(255,255,255,.09);opacity:.5}
+  .win{display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:12px;margin-bottom:9px;
+       background:linear-gradient(90deg,rgba(255,224,138,.24),rgba(255,224,138,.04));border:1px solid rgba(255,224,138,.5);
+       box-shadow:0 0 18px rgba(255,210,63,.22)}
+  .win.pending{background:rgba(255,255,255,.035);border-color:rgba(255,180,220,.16);opacity:.45;box-shadow:none}
   .win .pl{font-family:var(--disp);font-size:20px;min-width:32px;text-align:center}
   .win .w{flex:1}
   .win .amt{font-family:var(--mono);font-size:13px;opacity:.9;white-space:nowrap}
-  .proof{font-size:12px;opacity:.62;line-height:1.65}
+  .proof{font-size:12px;opacity:.8;line-height:1.65;color:#ffd7ee}
   .warn{background:rgba(255,90,90,.1);border:1px solid rgba(255,90,90,.34);color:#ffb3b3;
         border-radius:11px;padding:13px 15px;font-size:13.5px;margin-bottom:15px}
-  .flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:9;transition:opacity .1s}
-  .big{font-family:var(--disp);font-size:26px;margin:14px 0 0;min-height:34px;letter-spacing:.02em;padding-left:22%}
-  .dim{opacity:.6}
+  .flash{position:fixed;inset:0;background:radial-gradient(circle at 50% 45%,#fff 0%,#ffd6ee 45%,#ff2f9a 100%);
+         opacity:0;pointer-events:none;z-index:9;transition:opacity .1s}
+  .big{font-family:var(--disp);font-size:clamp(22px,3.4vw,34px);margin:16px 0 0;min-height:40px;letter-spacing:.02em;padding-left:22%;
+       color:var(--cuna-cream);text-shadow:0 0 20px rgba(255,210,63,.75)}
+  .dim{opacity:.62}
 </style>
 </head>
 <body>
@@ -118,7 +148,7 @@
   var KEY = q.get('key') || '';
   var SRC = q.get('src') || 'cuna';
   var cv = document.getElementById('wheel'), cx = cv.getContext('2d');
-  var S = { entrants: [], draw: null, revealed: 0, spinning: false, rot: 0, cfg: null };
+  var S = { entrants: [], tickets: [], wonSet: {}, draw: null, revealed: 0, spinning: false, rot: 0, cfg: null };
   // Brand dressing: a taco hub in the middle of the wheel and the lips character shoving it
   // round. On for the CUNA board by default, off with ?brand=0 so the wheel stays generic for
   // any other giveaway. Both images are decorative — if either fails to load the wheel still
@@ -134,34 +164,78 @@
   // a stationary wheel reads as broken.
   function lipsPush(on){ var e=document.getElementById('lips'); if(e) e.classList.toggle('push', !!on); }
 
-  // Colour ramp — enough separation that adjacent slices read apart on a screen recording,
-  // and the wheel still looks like one object rather than a bag of confetti.
-  function col(i,n){ return 'hsl(' + Math.round((i*360/Math.max(1,n)+18)%360) + ' 68% ' + (i%2?46:38) + '%)'; }
+  // Per-WALLET colour, stable across redraws so a wallet's scattered tickets still read as
+  // belonging together. Held inside the CUNA range — magenta through pink to violet, with a
+  // gold accent — rather than a full hue rotation, which turned the wheel into a rainbow and
+  // looked like someone else's brand.
+  //
+  // Derived from a HASH of the address, not the deal order: colouring by index made the sorted
+  // round-robin paint smooth colour bands that swept round the wheel, which read as ordered
+  // even though the tickets underneath were properly interleaved. Hashing decorrelates colour
+  // from position so neighbours contrast.
+  function hash32(str){
+    var h = 2166136261;
+    for(var i=0;i<str.length;i++){ h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return (h >>> 0);
+  }
+  function walletCol(w){
+    var h = hash32(w);
+    var hue = 288 + (h % 74);                 // 288-361: violet → magenta → hot pink
+    var sat = 62 + ((h >> 7) % 30);           // 62-91%
+    var lit = 42 + ((h >> 13) % 26);          // 42-67% — the main neighbour separator. Floor kept
+                                              // well off black: darker slices read as gaps in the
+                                              // wheel rather than as someone's ticket.
+    if(((h >> 19) % 11) === 0){ hue = 44; sat = 88; lit = 58 + ((h >> 23) % 10); }   // occasional gold
+    return 'hsl(' + hue + ' ' + sat + '% ' + lit + '%)';
+  }
+
+  // TICKETS — one slice per ENTRY, not one fat wedge per wallet. Two reasons, and the first is
+  // the owner's: a 30-entry wallet owning a single 65° arc looks rigged even though the maths is
+  // identical either way. The second is that it is simply more true — an entry IS a ticket, and
+  // the wheel should show 166 tickets, not 33 blocks.
+  //
+  // Dealt ROUND-ROBIN (biggest holder first, one ticket per wallet per pass) so the same wallet
+  // can never land two slices side by side while any other wallet still has tickets left. That
+  // is the maximally-spread arrangement, and it needs no randomness — which matters, because a
+  // shuffled layout would change on every redraw and look like the wheel was being rebuilt
+  // mid-ceremony.
+  function buildTickets(){
+    var byW = S.entrants.map(function(e,i){ return { wallet:e.wallet, entries:e.entries, idx:i, left:e.entries }; });
+    byW.sort(function(a,b){ return b.entries - a.entries; });
+    var out = [], any = true;
+    while(any){
+      any = false;
+      for(var i=0;i<byW.length;i++){
+        if(byW[i].left > 0){ out.push(byW[i]); byW[i].left--; any = true; }
+      }
+    }
+    S.tickets = out;
+  }
 
   function draw(){
-    var n = S.entrants.length, R = cv.width/2, cxp = R, cyp = R;
+    var T = S.tickets || [], n = T.length, R = cv.width/2, cxp = R, cyp = R;
     cx.clearRect(0,0,cv.width,cv.height);
     if(!n){ cx.fillStyle='#2a2f3a'; cx.beginPath(); cx.arc(cxp,cyp,R-6,0,Math.PI*2); cx.fill(); return; }
-    var total = S.entrants.reduce(function(t,e){ return t+e.entries; },0) || 1;
+    var sw = Math.PI*2/n;                       // every ticket is the SAME size — that is the point
     var a = S.rot - Math.PI/2;
+    var thin = sw < 0.085;                      // below this, labels are unreadable mush
     for(var i=0;i<n;i++){
-      var e = S.entrants[i], sw = (e.entries/total)*Math.PI*2;
+      var t = T[i], won = S.wonSet[t.wallet];
       cx.beginPath(); cx.moveTo(cxp,cyp); cx.arc(cxp,cyp,R-6,a,a+sw); cx.closePath();
-      cx.fillStyle = e.won ? '#ffd23f' : col(i,n); cx.fill();
-      cx.strokeStyle='rgba(0,0,0,.35)'; cx.lineWidth=1; cx.stroke();
-      // only label slices with room — a 200-entrant wheel would otherwise be unreadable mush
+      cx.fillStyle = won ? '#fff0a8' : walletCol(t.wallet); cx.fill();
+      // Hairlines only when slices are fat enough to have visible borders; at 166 tickets the
+      // strokes would merge into a grey haze and kill the colour.
+      if(!thin){ cx.strokeStyle='rgba(0,0,0,.35)'; cx.lineWidth=1; cx.stroke(); }
       if(sw > 0.10){
         var mid = a + sw/2;
         cx.save(); cx.translate(cxp,cyp); cx.rotate(mid);
-        cx.fillStyle = e.won ? '#2a1d00' : 'rgba(255,255,255,.95)';
+        cx.fillStyle = won ? '#2a1d00' : 'rgba(255,255,255,.95)';
         cx.font = '600 ' + Math.max(9, Math.min(15, sw*90)) + 'px ui-monospace,monospace';
         cx.textBaseline='middle';
-        // Slices on the left half point their text back at the reader upside down. Flip those
-        // 180° and anchor from the other end so every label reads left-to-right — it looks like
-        // a detail until you screen-record it, and then half the wheel is gibberish.
         var flipped = Math.cos(mid) < 0;
-        if(flipped){ cx.rotate(Math.PI); cx.textAlign='left'; cx.fillText(e.wallet.slice(0,4)+'…'+e.wallet.slice(-4), -(R-18), 0); }
-        else { cx.textAlign='right'; cx.fillText(e.wallet.slice(0,4)+'…'+e.wallet.slice(-4), R-18, 0); }
+        var lab = t.wallet.slice(0,4)+'\u2026'+t.wallet.slice(-4);
+        if(flipped){ cx.rotate(Math.PI); cx.textAlign='left'; cx.fillText(lab, -(R-18), 0); }
+        else { cx.textAlign='right'; cx.fillText(lab, R-18, 0); }
         cx.restore();
       }
       a += sw;
@@ -182,16 +256,18 @@
     }
   }
 
-  // Angle (in wheel space) of the middle of one entrant's slice.
+  // Angle of the middle of ONE of this wallet's tickets, chosen at random from all of them.
+  // With the tickets scattered round the wheel this means the winner is announced from a
+  // different position every time — the pointer isn't repeatedly parking in the same arc.
   function midAngle(wallet){
-    var total = S.entrants.reduce(function(t,e){ return t+e.entries; },0) || 1, a = 0;
-    for(var i=0;i<S.entrants.length;i++){
-      var sw = (S.entrants[i].entries/total)*Math.PI*2;
-      if(S.entrants[i].wallet === wallet) return a + sw/2;
-      a += sw;
-    }
-    return 0;
+    var T = S.tickets || [], n = T.length, sw = Math.PI*2/Math.max(1,n);
+    var mine = [];
+    for(var i=0;i<n;i++) if(T[i].wallet === wallet) mine.push(i);
+    if(!mine.length) return 0;
+    var pick = mine[Math.floor(Math.random()*mine.length)];
+    return pick*sw + sw/2;
   }
+  function sliceWidth(){ return Math.PI*2/Math.max(1,(S.tickets||[]).length); }
 
   function flash(){ var f=document.getElementById('flash'); f.style.opacity='.85';
     setTimeout(function(){ f.style.opacity='0'; },110); }
@@ -219,10 +295,7 @@
   //   • a small settle: it drifts just past the mark and rocks back, the way a real wheel does
   //     against its pin, instead of freezing dead on the number
   function spinTo(wallet, cb){
-    var total = S.entrants.reduce(function(t,e){ return t+e.entries; },0) || 1;
-    var ent = null;
-    for(var i=0;i<S.entrants.length;i++) if(S.entrants[i].wallet===wallet) ent = S.entrants[i];
-    var sliceW = ent ? (ent.entries/total)*Math.PI*2 : 0.05;
+    var sliceW = sliceWidth();
     // land anywhere in the middle 70% of the slice — dead-centre every time looks machined
     var jitter = (Math.random()-0.5) * sliceW * 0.7;
     var want = -(midAngle(wallet) + jitter);
@@ -270,8 +343,7 @@
     document.getElementById('spin').disabled = true;
     document.getElementById('callout').textContent = '';
     spinTo(w.wallet, function(){
-      var ent = S.entrants.filter(function(x){ return x.wallet===w.wallet; })[0];
-      if(ent) ent.won = true;
+      S.wonSet[w.wallet] = true;   // lights up every ticket that wallet holds, wherever they sit
       S.revealed++;
       draw(); renderWinners();
       document.getElementById('callout').innerHTML =
@@ -322,13 +394,15 @@
         // The published entry list already excludes project wallets and the disqualified; it is
         // the same list the draw ran on, so the wheel and the result can never disagree.
         S.entrants = list.filter(function(e){ return e.entries>0 && !e.dq; })
-                         .map(function(e){ return { wallet:e.wallet, entries:e.entries, won:false }; });
+                         .map(function(e){ return { wallet:e.wallet, entries:e.entries }; });
+        buildTickets();
         document.getElementById('nw').textContent = S.entrants.length;
         document.getElementById('ne').textContent = S.entrants.reduce(function(t,e){ return t+e.entries; },0);
         document.getElementById('nd').textContent = st.disqualified || 0;
         document.getElementById('tok').textContent = S.cfg.symbol || '—';
         document.getElementById('sub').innerHTML = S.entrants.length
-          ? 'Every wallet below is a slice sized by its entry count. More entries = more wheel.'
+          ? ('<b>' + S.tickets.length + ' entries</b> on the wheel \u2014 one slice each, equal size, '
+             + 'spread out so no wallet holds a single block. More entries = more slices.')
           : 'No eligible entrants yet.';
         if(!S.draw){
           warn('<b>No draw has been run yet.</b> This wheel shows the result of the server-side '
