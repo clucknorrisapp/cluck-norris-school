@@ -42,6 +42,14 @@
   .rlock:hover{border-color:#D97706;transform:translateY(-1px);}
   .rlock .ravatar{position:relative;width:30px;height:30px;border-radius:50%;background:#1c1d24;border:1px solid var(--border,rgba(255,255,255,.12));flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-family:var(--disp);font-size:13px;color:#f5b301;overflow:hidden;}
   .rlock .ravatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+  /* Claim cards used to show a bare mint ("mint 4yro…gDBc") and nothing else, so a wallet with
+     several locks was four identical grey cards you could not tell apart. Same avatar pattern as
+     the recent-locks strip: cached icon over a letter fallback. */
+  .claimcard .cltok{display:flex;align-items:center;gap:9px;margin-bottom:10px;}
+  .claimcard .clavatar{position:relative;width:32px;height:32px;border-radius:50%;background:#1c1d24;border:1px solid var(--border,rgba(255,255,255,.12));flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-family:var(--disp);font-size:14px;color:#f5b301;overflow:hidden;}
+  .claimcard .clavatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+  .claimcard .cltsym{font-family:var(--disp);font-size:16px;color:#f5b301;line-height:1.15;}
+  .claimcard .cltmint{font-family:var(--mono);font-size:12.5px;color:var(--sub,#9aa0aa);}
   .rlock .rsym{font-family:var(--disp);font-size:14px;color:#fff;line-height:1.05;white-space:nowrap;}
   .rlock .rvia{font-size:10px;margin-left:5px;vertical-align:middle;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5));}
   .rlock .ramt{font-family:var(--mono,monospace);font-size:10.5px;color:#34d399;white-space:nowrap;margin-top:1px;}
@@ -872,12 +880,37 @@
         var claimable=fmtAmt(l.claimableRaw,l.decimals), total=fmtAmt(l.totalRaw,l.decimals), claimed=fmtAmt(l.claimedRaw,l.decimals);
         var can=l.claimableRaw && l.claimableRaw!=='0';
         var when=l.fullyVested?'fully vested':(l.startsClaimingAt*1000>Date.now()?('unlocks from '+new Date(l.startsClaimingAt*1000).toLocaleDateString()):'vesting');
+        // Token identity first — ticker + logo, so several locks are told apart at a glance.
+        // The symbol is filled in ASYNCHRONOUSLY below via textContent (never innerHTML): symbols
+        // are chain metadata and therefore attacker-controlled.
+        var av='<div class="clavatar" data-av="'+esc(l.mint)+'">?'
+          +'<img src="/api/token-icon?mint='+encodeURIComponent(l.mint)+'" alt="" onerror="this.remove()"/></div>';
         return '<div class="card claimcard">'+
+          '<div class="cltok">'+av+'<div><div class="cltsym" data-sym="'+esc(l.mint)+'">'+esc(shortAddr(l.mint))+'</div>'+
+          '<div class="cltmint">'+esc(shortAddr(l.mint))+'</div></div></div>'+
           '<div class="clrow"><div class="clamt"><span class="n '+(can?'live':'zero')+'">'+claimable+'</span><span class="u">claimable</span></div>'+
           '<button class="btn'+(can?'':' alt')+'" data-esc="'+esc(l.escrow)+'" data-i="'+i+'"'+(can?'':' disabled')+'>'+(can?'💰 Claim':'Nothing yet')+'</button></div>'+
-          '<div class="clmeta">mint '+esc(shortAddr(l.mint))+' · total '+total+' · claimed '+claimed+' · '+when+'</div>'+
+          '<div class="clmeta">total '+total+' · claimed '+claimed+' · '+when+'</div>'+
           '<div class="msg" id="clm'+i+'"></div></div>';
       }).join('');
+      // One lookup per DISTINCT mint (a wallet often holds several locks of the same token), then
+      // fill every card that shares it. textContent, so a hostile symbol is inert text.
+      var seen={};
+      d.locks.forEach(function(l){
+        if(!l.mint||seen[l.mint]) return; seen[l.mint]=1;
+        fetch('/api/token-overview?mint='+encodeURIComponent(l.mint)).then(function(r){return r.json();}).then(function(t){
+          if(!t||!t.success) return;
+          // textContent already makes a hostile symbol inert, but a token can still name itself
+          // "<img src=x onerror=…>" and render that as literal junk across the card. Same posture
+          // as the burn broadcaster: keep it to sane display characters and a sane length, and
+          // fall back to the short mint if nothing legible survives.
+          var sym=String(t.symbol||t.name||'').replace(/[^A-Za-z0-9 ._-]/g,'').trim().slice(0,14);
+          if(!sym) return;
+          body.querySelectorAll('[data-sym="'+CSS.escape(l.mint)+'"]').forEach(function(el){ el.textContent=sym; });
+          var ini=String(sym).slice(0,1).toUpperCase();
+          body.querySelectorAll('[data-av="'+CSS.escape(l.mint)+'"]').forEach(function(el){ el.childNodes[0].nodeValue=ini; });
+        }).catch(function(){});
+      });
       body.querySelectorAll('button[data-esc]').forEach(function(btn){ btn.addEventListener('click',function(){ doClaim(btn.getAttribute('data-esc'), btn.getAttribute('data-i'), btn); }); });
     }).catch(function(){ body.innerHTML='<div class="card"><p class="msg err">Network error reading your locks.</p></div>'; });
   }
