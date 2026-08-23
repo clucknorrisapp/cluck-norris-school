@@ -180,12 +180,12 @@
   }
   function walletCol(w){
     var h = hash32(w);
-    var hue = 288 + (h % 74);                 // 288-361: violet → magenta → hot pink
-    var sat = 62 + ((h >> 7) % 30);           // 62-91%
-    var lit = 42 + ((h >> 13) % 26);          // 42-67% — the main neighbour separator. Floor kept
-                                              // well off black: darker slices read as gaps in the
-                                              // wheel rather than as someone's ticket.
-    if(((h >> 19) % 11) === 0){ hue = 44; sat = 88; lit = 58 + ((h >> 23) % 10); }   // occasional gold
+    // Full spectrum (owner's call: the wheel may be rainbow so long as the page is CUNA). Kept
+    // off the muddy 60-100 yellow-green band, and floored well clear of black so no slice can be
+    // mistaken for a gap.
+    var hue = (h % 320); if(hue >= 58 && hue < 98) hue += 40;
+    var sat = 66 + ((h >> 7) % 28);           // 66-93%
+    var lit = 46 + ((h >> 13) % 22);          // 46-67%
     return 'hsl(' + hue + ' ' + sat + '% ' + lit + '%)';
   }
 
@@ -200,16 +200,25 @@
   // shuffled layout would change on every redraw and look like the wheel was being rebuilt
   // mid-ceremony.
   function buildTickets(){
-    var byW = S.entrants.map(function(e,i){ return { wallet:e.wallet, entries:e.entries, idx:i, left:e.entries }; });
-    byW.sort(function(a,b){ return b.entries - a.entries; });
-    var out = [], any = true;
-    while(any){
-      any = false;
-      for(var i=0;i<byW.length;i++){
-        if(byW[i].left > 0){ out.push(byW[i]); byW[i].left--; any = true; }
-      }
-    }
-    S.tickets = out;
+    // EVEN SPACING, not round-robin. Round-robin dealt biggest-holder-first every pass, so the
+    // same few big wallets landed at the front of each pass over and over — which is why the
+    // wheel still looked "heavy" in places even though no two slices of one wallet touched.
+    //
+    // Instead: give every ticket an IDEAL position on the [0,1) circle — wallet with k entries
+    // gets its i-th ticket at (i + 0.5)/k — then sort by that. A 30-entry wallet lands every
+    // ~5.5 slices all the way round; a 1-entry wallet sits at the halfway mark. Each wallet is
+    // individually as evenly spread as it can be, and they interleave without clumping.
+    //
+    // Ties broken by an address hash so wallets with the same count don't stack in list order,
+    // and the whole thing stays deterministic — a reshuffle on every redraw would look like the
+    // wheel was being rebuilt mid-ceremony.
+    var t = [];
+    S.entrants.forEach(function(e, idx){
+      var k = e.entries, jitter = (hash32(e.wallet) % 1000) / 1000000;   // sub-slice tie-break only
+      for(var i=0;i<k;i++) t.push({ wallet:e.wallet, entries:k, idx:idx, pos:(i + 0.5)/k + jitter });
+    });
+    t.sort(function(a,b){ return a.pos - b.pos || (a.wallet < b.wallet ? -1 : 1); });
+    S.tickets = t;
   }
 
   function draw(){
@@ -221,10 +230,14 @@
     var thin = sw < 0.085;                      // below this, labels are unreadable mush
     for(var i=0;i<n;i++){
       var t = T[i], won = S.wonSet[t.wallet];
-      cx.beginPath(); cx.moveTo(cxp,cyp); cx.arc(cxp,cyp,R-6,a,a+sw); cx.closePath();
+      // Overlap each wedge into the next by a hair. Adjacent wedges that share an exact edge get
+      // antialiased independently, and neither ends up fully opaque on the seam — which let the
+      // PAGE show through as thin dark slivers that read as black wedges. (Diagnosed by sampling:
+      // the "black" pixels were hsl(291,43%,18%), darker than this palette can emit, and matched
+      // the background.) The old hairline stroke had been hiding this; dropping strokes on thin
+      // slices exposed it. Overlap fixes the cause instead of painting over it.
+      cx.beginPath(); cx.moveTo(cxp,cyp); cx.arc(cxp,cyp,R-6,a,a+sw+0.004); cx.closePath();
       cx.fillStyle = won ? '#fff0a8' : walletCol(t.wallet); cx.fill();
-      // Hairlines only when slices are fat enough to have visible borders; at 166 tickets the
-      // strokes would merge into a grey haze and kill the colour.
       if(!thin){ cx.strokeStyle='rgba(0,0,0,.35)'; cx.lineWidth=1; cx.stroke(); }
       if(sw > 0.10){
         var mid = a + sw/2;
