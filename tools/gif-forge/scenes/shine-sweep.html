@@ -1,0 +1,33 @@
+<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="../brand.css">
+<style>
+  html,body{margin:0;width:100vw;height:100vh;overflow:hidden}
+  body{background:radial-gradient(circle at 50% 40%, #ff2fa0 0%, #d40b7c 60%, #a10058 100%)}
+  #word{position:absolute;left:50%;top:30%;transform:translate(-50%,-50%);white-space:nowrap;
+        font:900 20vw/1 var(--cuna-font);color:var(--cuna-cream);
+        -webkit-text-stroke:1vw var(--cuna-outline);paint-order:stroke fill;
+        filter:drop-shadow(0 1.2vw 0 rgba(90,0,50,.55))}
+  #shine{position:absolute;left:0;top:14%;width:100vw;height:32vh;pointer-events:none;will-change:transform;
+         background:linear-gradient(115deg, transparent 38%, rgba(255,255,255,.85) 50%, transparent 62%);
+         mix-blend-mode:overlay}
+  #stick{position:absolute;left:50%;bottom:6%;transform-origin:50% 100%;will-change:transform;
+         filter:drop-shadow(0 1vw 1.6vw rgba(80,0,40,.5))}
+</style>
+<div id="word"></div><div id="shine"></div><img id="stick">
+<script>
+const TAU=Math.PI*2;
+window.setup=(src,text)=>{
+  document.getElementById('word').textContent=text;
+  const st=document.getElementById('stick');
+  st.onload=()=>{st.style.width='42vw';window.__ready=true};
+  st.onerror=()=>{window.__ready=true};
+  st.src=src;
+};
+window.setT=(t)=>{
+  // gloss band sweeps fully across once per loop (off-screen both ends => seamless)
+  document.getElementById('shine').style.transform=`translateX(${-120+240*t}vw)`;
+  const st=document.getElementById('stick');
+  st.style.transform=`translateX(-50%) rotate(${6*Math.sin(TAU*t)}deg) scale(${1+0.04*Math.sin(TAU*t*2)})`;
+  document.getElementById('word').style.transform=
+    `translate(-50%,-50%) scale(${1+0.025*Math.sin(TAU*t)}) rotate(${1.2*Math.sin(TAU*t+2)}deg)`;
+};
+</script>
