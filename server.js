@@ -874,7 +874,7 @@ const CUNA_QUOTES = [
 // binding below can refuse it outright rather than relying on us remembering.
 const CUNA_PUBLIC_ROOM = "-1003938497778";
 function cunaEnsureProject() {
-  if (whirlpoolMM.vault.getProject("cuna")) return;
+  if (whirlpoolMM.vault.getProject("cuna")) { cunaConfigRatchet(); return; }
   whirlpoolMM.vault.registerProject({
     id: "cuna", label: "Cuna", symbol: "CUNA",
     tokenMint: CUNA_MINT, decimals: 9,        // 9, NOT 6 — CUNA is a standard SPL mint, not pump.fun
@@ -920,6 +920,44 @@ function cunaEnsureProject() {
     notifyRolls: false,                // flipped on below once a PRIVATE room is bound
   }, "cuna");
   console.log("[cuna] project registered + config seeded (±2.5% / 0.01% pools, DISARMED until CUNA_ENGINE_ON=1)");
+}
+// CONFIG RATCHET — runs on EVERY boot, unlike the one-shot seed above.
+//
+// This exists because the seed silently missed on the first production deploy. registerProject
+// persisted but setConfig did not, and because ensureProject early-returns once the project
+// exists, the seed could never retry: the engine sat there registered with the vault DEFAULTS —
+// ±10% bands, the 0.3% fee tier, buyback and swap off, CLKN/USDC as the pair. Arming it in that
+// state would have deployed real money on parameters nobody chose.
+//
+// So the shape the owner specified is asserted every boot rather than once. It only writes the
+// keys that are actually wrong, so later tuning through the admin endpoint is preserved on every
+// field it does not name.
+function cunaConfigRatchet() {
+  const c = whirlpoolMM.vault.getConfig("cuna");
+  const want = {
+    pair: "CUNA/USDC", baseEnabled: true,
+    feeTierPct: 0.01, widthPct: 2.5, solFeeTierPct: 0.01, solWidthPct: 2.5,
+    solEnabled: true, swapEnabled: true, buybackEnabled: true,
+  };
+  const patch = {};
+  for (const k of Object.keys(want)) if (c[k] !== want[k]) patch[k] = want[k];
+  // Caps and tuning knobs are floors/ceilings, not fixed values — only correct them while they
+  // still hold a vault default, so the owner can raise a cap without it being stamped back down.
+  if (c.feeTierPct === 0.3 || c.widthPct === 10) {
+    Object.assign(patch, {
+      edgeTriggerFrac: 0.3, deployFrac: 0.95, maxUsd: 250, minRebalanceIntervalSec: 300,
+      maxActionsPerDay: 96, priceGapGuardPct: 25, slippageBps: 250, baseDeployThresholdUsd: 25,
+      solMaxSol: 2.5, solGasReserve: 0.25, solDeployThreshold: 0.2,
+      poolBalanceTolPct: 10, maxSwapUsdPerCycle: 75, minSwapUsd: 10, usdcFloor: 5,
+      swapSolFloor: 0.3, maxSwapSolPerCycle: 1, swapSlippageBps: 150, maxSwapsPerDay: 24,
+      buybackReserveUsd: 0, maxBuybackUsdPerCycle: 50, minBuybackUsd: 10, maxBuybacksPerDay: 12,
+      buybackMinIntervalSec: 900, buybackSlippageBps: 300,
+    });
+  }
+  if (Object.keys(patch).length) {
+    whirlpoolMM.vault.setConfig(patch, "cuna");
+    console.log("[cuna] config ratchet corrected:", Object.keys(patch).join(", "));
+  }
 }
 // Bind roll alerts to the treasury's PRIVATE ops room — never the public community chat.
 // registerProject is register-AND-update and RESETS operatorEnv to the id-derived default
