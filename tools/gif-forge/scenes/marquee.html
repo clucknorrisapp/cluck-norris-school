@@ -1,0 +1,47 @@
+<!doctype html><meta charset="utf-8">
+<style>
+  html,body{margin:0;width:100vw;height:100vh;overflow:hidden}
+  body{background:linear-gradient(160deg,#e81088 0%,#b8005f 60%,#8a0146 100%)}
+  .row{position:absolute;left:0;white-space:nowrap;font:900 13vw/1 "Arial Black",Arial,sans-serif;
+       color:transparent;-webkit-text-stroke:0.45vw rgba(253,243,216,.5);will-change:transform}
+  #stick{position:absolute;left:50%;bottom:14%;transform-origin:50% 100%;will-change:transform;
+         filter:drop-shadow(0 1.2vw 1.8vw rgba(80,0,40,.5))}
+  #shadow{position:absolute;left:50%;bottom:11.8%;width:44vw;height:4.5vh;border-radius:50%;
+          background:rgba(60,0,35,.35);filter:blur(6px);will-change:transform,opacity}
+</style>
+<div id="rows"></div><img id="stick"><div id="shadow"></div>
+<script>
+const TAU=Math.PI*2;let unit=0;
+window.setup=(src,text)=>{
+  const holder=document.getElementById('rows');
+  const chunk=` ${text} ·`;
+  for(let r=0;r<5;r++){
+    const el=document.createElement('div');el.className='row';
+    el.style.top=(2+r*19.5)+'vh';
+    el.textContent=chunk.repeat(14);
+    el.dataset.dir=r%2?1:-1;
+    holder.appendChild(el);
+  }
+  // measure one chunk in px for seamless mod-wrap
+  const m=document.createElement('span');m.style.font='900 13vw/1 "Arial Black",Arial,sans-serif';
+  m.style.whiteSpace='pre';m.textContent=chunk;document.body.appendChild(m);
+  unit=m.getBoundingClientRect().width;m.remove();
+  const st=document.getElementById('stick');
+  st.onload=()=>{st.style.width='50vw';window.__ready=true};
+  st.onerror=()=>{window.__ready=true};
+  st.src=src;
+};
+window.setT=(t)=>{
+  document.querySelectorAll('.row').forEach(el=>{
+    const dir=Number(el.dataset.dir);
+    el.style.transform=`translateX(${-unit + dir*t*unit}px)`;   // exactly one chunk per loop
+  });
+  const b=Math.abs(Math.sin(TAU*t));
+  const squash=1+0.12*Math.cos(2*TAU*t);
+  const st=document.getElementById('stick');
+  st.style.transform=`translateX(-50%) translateY(${-16*b}vh) rotate(${5*Math.sin(TAU*t+0.5)}deg) scale(${2-squash},${squash})`;
+  const sh=document.getElementById('shadow');
+  sh.style.transform=`translateX(-50%) scale(${1-0.4*b},${1-0.4*b})`;
+  sh.style.opacity=String(0.55-0.3*b);
+};
+</script>

@@ -1,0 +1,39 @@
+<!doctype html><meta charset="utf-8">
+<style>
+  html,body{margin:0;width:100vw;height:100vh;overflow:hidden}
+  body{background:radial-gradient(circle at 50% 42%, #ff2fa0 0%, #e81088 55%, #b8005f 100%)}
+  #stick{position:absolute;left:50%;bottom:16%;transform-origin:50% 100%;will-change:transform;
+         filter:drop-shadow(0 10px 14px rgba(80,0,40,.45))}
+  #shadow{position:absolute;left:50%;bottom:13.5%;width:46vw;height:5vh;border-radius:50%;
+          background:rgba(60,0,35,.35);filter:blur(6px)}
+  .ltr{position:absolute;top:7%;font:900 17vw/1 "Arial Black",Arial,sans-serif;color:#fdf3d8;
+       -webkit-text-stroke:1.2vw #7a0447;text-stroke:1.2vw #7a0447;paint-order:stroke fill;will-change:transform}
+</style>
+<img id="stick"><div id="shadow"></div><div id="letters"></div>
+<script>
+const TAU=Math.PI*2;
+window.setup=(src,text)=>{
+  const st=document.getElementById('stick');
+  const box=document.getElementById('letters');
+  [...text].forEach((ch,i)=>{const s=document.createElement('span');s.className='ltr';s.textContent=ch;
+    s.style.left=(50-(text.length*13)/2+i*13+1.5)+'vw';box.appendChild(s);});
+  st.onload=()=>{st.style.width='52vw';window.__ready=true};
+  st.onerror=()=>{window.__ready=true};
+  st.src=src;
+};
+window.setT=(t)=>{
+  const b=Math.abs(Math.sin(TAU*t));               // two floor-hits per loop
+  const up=-22*b;                                   // vh lift
+  const squash=1+0.14*Math.cos(2*TAU*t);            // squash at floor, stretch mid-air
+  const rot=7*Math.sin(TAU*t+0.6);
+  const st=document.getElementById('stick');
+  st.style.transform=`translateX(-50%) translateY(${up}vh) rotate(${rot}deg) scale(${2-squash},${squash})`;
+  const sh=document.getElementById('shadow');
+  const s=1-0.42*b;
+  sh.style.transform=`translateX(-50%) scale(${s},${s})`;
+  sh.style.opacity=String(0.55-0.3*b);
+  document.querySelectorAll('.ltr').forEach((el,i)=>{
+    el.style.transform=`translateY(${1.6*Math.sin(TAU*t+i*0.9)}vh) rotate(${2.5*Math.sin(TAU*t+i*0.9+1)}deg)`;
+  });
+};
+</script>
