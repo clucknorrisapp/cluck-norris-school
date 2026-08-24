@@ -1,8 +1,8 @@
-<!doctype html><meta charset="utf-8">
+<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="../brand.css">
 <style>
   html,body{margin:0;width:100vw;height:100vh;overflow:hidden}
   body{background:linear-gradient(160deg,#e81088 0%,#b8005f 60%,#8a0146 100%)}
-  .row{position:absolute;left:0;white-space:nowrap;font:900 13vw/1 "Arial Black",Arial,sans-serif;
+  .row{position:absolute;left:0;white-space:nowrap;font:900 13vw/1 var(--cuna-font);
        color:transparent;-webkit-text-stroke:0.45vw rgba(253,243,216,.5);will-change:transform}
   #stick{position:absolute;left:50%;bottom:14%;transform-origin:50% 100%;will-change:transform;
          filter:drop-shadow(0 1.2vw 1.8vw rgba(80,0,40,.5))}
@@ -23,7 +23,7 @@ window.setup=(src,text)=>{
     holder.appendChild(el);
   }
   // measure one chunk in px for seamless mod-wrap
-  const m=document.createElement('span');m.style.font='900 13vw/1 "Arial Black",Arial,sans-serif';
+  const m=document.createElement('span');m.style.font='900 13vw/1 var(--cuna-font)';
   m.style.whiteSpace='pre';m.textContent=chunk;document.body.appendChild(m);
   unit=m.getBoundingClientRect().width;m.remove();
   const st=document.getElementById('stick');

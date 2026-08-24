@@ -1,4 +1,4 @@
-<!doctype html><meta charset="utf-8">
+<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="../brand.css">
 <style>
   html,body{margin:0;width:100vw;height:100vh;overflow:hidden}
   body{background:radial-gradient(circle at 50% 45%, #2a1044 0%, #180826 60%, #0d0414 100%)}
@@ -7,7 +7,7 @@
   #ring{position:absolute;left:50%;top:46%;width:58vw;height:58vw;border-radius:50%;will-change:transform,opacity;
         border:0.9vw solid rgba(255,110,190,.8);box-shadow:0 0 4vw rgba(255,47,160,.9),inset 0 0 4vw rgba(255,47,160,.6)}
   #stick{position:absolute;left:50%;top:46%;will-change:transform;filter:drop-shadow(0 0 3vw rgba(255,47,160,.55))}
-  .ltr{position:absolute;bottom:5%;font:900 15vw/1 "Arial Black",Arial,sans-serif;color:#fdf3d8;will-change:opacity,transform}
+  .ltr{position:absolute;bottom:5%;font:900 15vw/1 var(--cuna-font);color:var(--cuna-cream);will-change:opacity,transform}
 </style>
 <div id="glow"></div><div id="ring"></div><img id="stick"><div id="letters"></div>
 <script>
@@ -16,7 +16,7 @@ window.setup=(src,text)=>{
   const st=document.getElementById('stick');
   const box=document.getElementById('letters');
   [...text].forEach((ch,i)=>{const s=document.createElement('span');s.className='ltr';s.textContent=ch;
-    s.style.left=(50-(text.length*11.6)/2+i*11.6+1.2)+'vw';box.appendChild(s);});
+    s.style.left=(50-(text.length*10.4)/2+i*10.4+1.1)+'vw';box.appendChild(s);});
   st.onload=()=>{st.style.width='46vw';window.__ready=true};
   st.onerror=()=>{window.__ready=true};
   st.src=src;

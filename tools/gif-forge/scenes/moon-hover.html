@@ -1,4 +1,4 @@
-<!doctype html><meta charset="utf-8">
+<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="../brand.css">
 <style>
   html,body{margin:0;width:100vw;height:100vh;overflow:hidden}
   body{background:linear-gradient(180deg,#0b0620 0%,#1c0b3a 55%,#33104f 100%)}
@@ -7,7 +7,7 @@
         background:radial-gradient(circle at 35% 35%, #fff7e0 0%, #ffe9b8 55%, #e8c98a 100%);
         box-shadow:0 0 5vw rgba(255,240,200,.5)}
   #stick{position:absolute;left:50%;top:47%;will-change:transform;filter:drop-shadow(0 1.5vw 2vw rgba(0,0,0,.5))}
-  .ltr{position:absolute;bottom:5%;font:900 15vw/1 "Arial Black",Arial,sans-serif;color:#fdf3d8;will-change:transform;
+  .ltr{position:absolute;bottom:5%;font:900 15vw/1 var(--cuna-font);color:var(--cuna-cream);will-change:transform;
        text-shadow:0 0 2.5vw rgba(255,220,150,.55)}
 </style>
 <div id="stars"></div><div id="moon"></div><img id="stick"><div id="letters"></div>
@@ -28,7 +28,7 @@ window.setup=(src,text)=>{
   const st=document.getElementById('stick');
   const box=document.getElementById('letters');
   [...text].forEach((ch,i)=>{const sp=document.createElement('span');sp.className='ltr';sp.textContent=ch;
-    sp.style.left=(50-(text.length*11.6)/2+i*11.6+1.2)+'vw';box.appendChild(sp);});
+    sp.style.left=(50-(text.length*10.4)/2+i*10.4+1.1)+'vw';box.appendChild(sp);});
   st.onload=()=>{st.style.width='44vw';window.__ready=true};
   st.onerror=()=>{window.__ready=true};
   st.src=src;

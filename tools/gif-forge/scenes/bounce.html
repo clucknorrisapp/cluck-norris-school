@@ -1,4 +1,4 @@
-<!doctype html><meta charset="utf-8">
+<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="../brand.css">
 <style>
   html,body{margin:0;width:100vw;height:100vh;overflow:hidden}
   body{background:radial-gradient(circle at 50% 42%, #ff2fa0 0%, #e81088 55%, #b8005f 100%)}
@@ -6,8 +6,8 @@
          filter:drop-shadow(0 10px 14px rgba(80,0,40,.45))}
   #shadow{position:absolute;left:50%;bottom:13.5%;width:46vw;height:5vh;border-radius:50%;
           background:rgba(60,0,35,.35);filter:blur(6px)}
-  .ltr{position:absolute;top:7%;font:900 17vw/1 "Arial Black",Arial,sans-serif;color:#fdf3d8;
-       -webkit-text-stroke:1.2vw #7a0447;text-stroke:1.2vw #7a0447;paint-order:stroke fill;will-change:transform}
+  .ltr{position:absolute;top:7%;font:900 17vw/1 var(--cuna-font);color:var(--cuna-cream);
+       -webkit-text-stroke:1.2vw var(--cuna-outline);text-stroke:1.2vw var(--cuna-outline);paint-order:stroke fill;will-change:transform}
 </style>
 <img id="stick"><div id="shadow"></div><div id="letters"></div>
 <script>
@@ -16,7 +16,7 @@ window.setup=(src,text)=>{
   const st=document.getElementById('stick');
   const box=document.getElementById('letters');
   [...text].forEach((ch,i)=>{const s=document.createElement('span');s.className='ltr';s.textContent=ch;
-    s.style.left=(50-(text.length*13)/2+i*13+1.5)+'vw';box.appendChild(s);});
+    s.style.left=(50-(text.length*11.5)/2+i*11.5+1.2)+'vw';box.appendChild(s);});
   st.onload=()=>{st.style.width='52vw';window.__ready=true};
   st.onerror=()=>{window.__ready=true};
   st.src=src;

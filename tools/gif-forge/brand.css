@@ -1,0 +1,19 @@
+/* CUNA brand tokens for gif-forge scenes — THE single place lettering + palette live.
+   Font: Luckiest Guy (Apache 2.0, committed at assets/LuckiestGuy.ttf) — chunky cartoon
+   display face, all-caps. Every scene must take its font and colors from here so a brand
+   change is one edit, and no scene drifts back to system fonts or off-palette hexes. */
+@font-face {
+  font-family: "CunaDisplay";
+  src: url("assets/LuckiestGuy.ttf") format("truetype");
+}
+:root {
+  --cuna-font: "CunaDisplay", "Arial Black", Arial, sans-serif;
+  --cuna-pink: #e81088;      /* primary background */
+  --cuna-hotpink: #ff2fa0;   /* glow / accents */
+  --cuna-deep: #b8005f;      /* gradient floor */
+  --cuna-cream: #fdf3d8;     /* ALL lettering — owner rule: cream letters, never a $ */
+  --cuna-outline: #7a0447;   /* letter stroke + dark linework */
+  --cuna-purple: #7a2bd6;    /* secondary flash */
+  --cuna-orange: #ff5f1f;    /* tertiary flash */
+  --cuna-night: #180826;     /* dark scenes (neon/space) */
+}

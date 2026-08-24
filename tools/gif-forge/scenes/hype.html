@@ -1,4 +1,4 @@
-<!doctype html><meta charset="utf-8">
+<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="../brand.css">
 <style>
   html,body{margin:0;width:100vw;height:100vh;overflow:hidden;background:#e81088}
   #cam{position:absolute;inset:-14vw;will-change:transform}
@@ -8,13 +8,13 @@
         background:repeating-conic-gradient(from 5deg, rgba(255,255,255,.55) 0deg 2.5deg, transparent 2.5deg 15deg)}
   #flash{position:absolute;inset:0;will-change:opacity,background}
   .rain{position:absolute;will-change:transform;filter:drop-shadow(0 .5vw .8vw rgba(80,0,40,.4))}
-  .spark{position:absolute;will-change:transform,opacity;color:#fff;font:900 4vw/1 Arial}
+  .spark{position:absolute;will-change:transform,opacity;color:#fff;font:900 4vw/1 var(--cuna-font)}
   .copy{position:absolute;bottom:8%;will-change:transform,filter;transform-origin:50% 100%;
         filter:drop-shadow(0 1vw 1.6vw rgba(80,0,40,.55))}
   #stickL{left:3%}#stickC{left:50%}#stickR{right:3%}
   #word,#echo{position:absolute;left:50%;top:26%;white-space:nowrap;will-change:transform,opacity,filter;
-        font:900 18vw/1 "Arial Black",Arial,sans-serif}
-  #word{color:#fdf3d8;-webkit-text-stroke:1vw #7a0447;paint-order:stroke fill;
+        font:900 18vw/1 var(--cuna-font)}
+  #word{color:var(--cuna-cream);-webkit-text-stroke:1vw var(--cuna-outline);paint-order:stroke fill;
         filter:drop-shadow(0 .9vw 0 rgba(90,0,50,.6))}
   #echo{color:transparent;-webkit-text-stroke:0.6vw rgba(253,243,216,.9);pointer-events:none}
   #vig{position:absolute;inset:0;pointer-events:none;

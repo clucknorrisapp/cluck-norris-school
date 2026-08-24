@@ -8283,7 +8283,26 @@ app.get("/api/meme-queue", (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
   let list = kv.get("memeRequests", []) || [];
-  if (req.query.done) { list = list.filter(r => r && r.id !== String(req.query.done)); kv.set("memeRequests", list); }
+  // Art ledger (owner ask 2026-08-24: "keep track of all of the art made"). &history=1
+  // lists every piece the routine has posted, newest first; the routine records one by
+  // passing &art=<urlencoded JSON> alongside &done= — {image, sticker, gif, scene, chat,
+  // prompt} — so the record lands atomically with the request being marked handled.
+  if (req.query.history === "1") {
+    return res.json({ ok: true, art: (kv.get("memeArtLedger", []) || []).slice().reverse() });
+  }
+  if (req.query.done) {
+    const doneId = String(req.query.done);
+    const reqRow = list.find(r => r && r.id === doneId) || null;
+    if (req.query.art) {
+      try {
+        const art = JSON.parse(String(req.query.art).slice(0, 4000));
+        const ledger = kv.get("memeArtLedger", []) || [];
+        ledger.push({ ts: Date.now(), id: doneId, desc: (reqRow && reqRow.desc) || art.prompt || null, ...art });
+        kv.set("memeArtLedger", ledger.slice(-400));   // keep the last 400 pieces
+      } catch (_) { /* a bad art blob must never block the done-mark */ }
+    }
+    list = list.filter(r => r && r.id !== doneId); kv.set("memeRequests", list);
+  }
   if (req.query.clear === "1") { list = []; kv.set("memeRequests", list); }
   // Entries with live=true are being generated in-process right now — hidden from
   // the fallback drain so it can't double-post. A stale live flag (>5 min: server
