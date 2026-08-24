@@ -29,6 +29,8 @@ const sticker = arg("sticker", join(here, "..", "..", "public", "img-cuna-taco.p
 const out = arg("out", "cuna.gif");
 const frames = Math.max(8, Math.min(64, Number(arg("frames", 32))));
 const size = Math.max(240, Math.min(720, Number(arg("size", 480))));
+const width = Math.max(240, Math.min(720, Number(arg("width", size))));
+const height = Math.max(240, Math.min(900, Number(arg("height", size))));
 const ms = Math.max(30, Math.min(120, Number(arg("ms", 45))));
 const text = String(arg("text", "CUNA")).slice(0, 12);
 const colors = Math.max(32, Math.min(256, Number(arg("colors", 160))));
@@ -62,7 +64,7 @@ catch {
   browser = await chromium.launch({ executablePath: exe });
 }
 
-const page = await browser.newPage({ viewport: { width: size, height: size }, deviceScaleFactor: 1 });
+const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
 await page.goto(pathToFileURL(scenePath).href);
 await page.evaluate(([src, txt]) => window.setup(src, txt), [stickerB64, text]);
 await page.waitForFunction(() => window.__ready === true, { timeout: 10000 });
