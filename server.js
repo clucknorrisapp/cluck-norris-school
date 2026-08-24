@@ -861,7 +861,27 @@ if (POKE_ENGINE_ON) {
 // is derived from those three mints, so the ROSE / CLKN brand bag / POKE / pump.fun bags
 // sitting in any shared wallet are untouchable by this project — the owner's explicit
 // "we don't touch any other tokens from other projects" constraint, enforced structurally.
-const CUNA_ENGINE_ON = process.env.CUNA_ENGINE_ON === "1" && process.env.CUNA_ENGINE_OFF !== "1";
+// ARMED STATE LIVES IN THE KV STORE, NOT AN ENV VAR (owner, 2026-08-24: "I want you to control
+// engine on or off not railway"). An env var needs a Railway edit and a redeploy to change, which
+// is a slow lever for something that spends money — and a redeploy is the last thing you want in
+// the middle of deciding to stop. The flag is read at the top of every tick, so arming and
+// disarming both take effect within one 2-minute cycle with no deploy at all.
+//
+// Precedence, strongest first:
+//   1. CUNA_ENGINE_OFF=1  — hard kill in Railway. Beats everything, including the runtime flag.
+//   2. the runtime flag   — /api/cuna-engine?key=…&on=1 | &off=1
+//   3. default            — OFF. A fresh install never trades until somebody says so.
+// CUNA_ENGINE_ON=1 is still honoured, but only as the INITIAL value when the flag has never been
+// set; it can't override a later explicit &off=1, or a kill switch would be un-flippable.
+const CUNA_ARM_KEY = "cunaEngineArmed";
+function cunaHardKilled() { return process.env.CUNA_ENGINE_OFF === "1"; }
+function cunaArmed() {
+  if (cunaHardKilled()) return false;
+  const v = kv.get(CUNA_ARM_KEY, null);
+  if (v === null || v === undefined) return process.env.CUNA_ENGINE_ON === "1";
+  return v === true;
+}
+function cunaSetArmed(on) { kv.set(CUNA_ARM_KEY, !!on); return cunaArmed(); }
 const CUNA_MINT = "4yro2xbCxMFVvygCsj5FZMgZnVCb8EqcbPGTbSGCgDBc";
 const CUNA_QUOTES = [
   "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",  // USDC
@@ -919,7 +939,7 @@ function cunaEnsureProject() {
     askWallEnabled: false, jupEnabled: false, btcEnabled: false, dualSleeveEnabled: false,
     notifyRolls: false,                // flipped on below once a PRIVATE room is bound
   }, "cuna");
-  console.log("[cuna] project registered + config seeded (±2.5% / 0.01% pools, DISARMED until CUNA_ENGINE_ON=1)");
+  console.log("[cuna] project registered + config seeded (±2.5% / 0.01% pools) — arm via /api/cuna-engine");
 }
 // CONFIG RATCHET — runs on EVERY boot, unlike the one-shot seed above.
 //
@@ -979,6 +999,7 @@ function cunaBindOpsRoom() {
 }
 let cunaTickBusy = false;
 async function cunaTick() {
+  if (!cunaArmed()) return;   // checked EVERY tick, so &off=1 stops it inside one cycle
   if (cunaTickBusy) return;   // a slow RPC cycle must not stack a second run
   cunaTickBusy = true;
   try {
@@ -993,12 +1014,14 @@ async function cunaTick() {
   } finally { cunaTickBusy = false; }
 }
 try { cunaEnsureProject(); cunaBindOpsRoom(); } catch (e) { console.warn("[cuna] register:", e.message); }
-if (CUNA_ENGINE_ON) {
-  console.log("[cuna] CUNA engine ARMED — ±2.5% Orca pools (CUNA/USDC + CUNA/SOL), 2-min cadence");
+// The interval always runs; cunaTick() is a no-op while disarmed. That is what makes the runtime
+// flag work without a redeploy — the loop is already there waiting, it just does nothing.
+if (!cunaHardKilled()) {
+  console.log(`[cuna] engine loop up — currently ${cunaArmed() ? "ARMED" : "DISARMED"} (toggle: /api/cuna-engine?key=…&on=1|&off=1)`);
   setInterval(() => cunaTick().catch((e) => console.warn("[cuna] tick:", e.message)), 120000);
   setTimeout(() => cunaTick().catch((e) => console.warn("[cuna] first tick:", e.message)), 25000);
 } else {
-  console.log("[cuna] CUNA engine DISARMED — project registered, no trading. Set CUNA_ENGINE_ON=1 to go live.");
+  console.log("[cuna] CUNA_ENGINE_OFF=1 — engine hard-killed, loop not started.");
 }
 // 1×/day (owner's call 2026-06-20 — was 3×/day): ONE full lesson at 13:00 UTC
 // (8am CT), then amplified by lessonBumpTick (self-replies at later slots tagging
@@ -8048,6 +8071,34 @@ app.get("/api/cuna-giveaway", (req, res) => {
 //   ?trace=1    → follow outbound transfers, 2 hops (run at the end; heavy)
 //   ?draw=1     → close it out and pick 3 winners from a Solana block hash
 //   ?reset=1    → wipe counted results, keep the config
+// CUNA engine on/off — the runtime lever, no Railway edit and no redeploy.
+//   ?on=1   arm    ?off=1  disarm    (no arg = report state)
+// Arming REFUSES when no operator key is loaded. Without a signer the engine cannot trade
+// anyway, so an "armed" that silently does nothing is worse than an error — it reads as running
+// when it is not, and that is exactly the state you would stop watching.
+app.get("/api/cuna-engine", (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
+  try {
+    const operator = whirlpoolMM.vault.operatorPubkey("cuna");
+    if (req.query.on === "1") {
+      if (cunaHardKilled()) return res.json({ ok: false, error: "hard_killed", detail: "CUNA_ENGINE_OFF=1 is set in Railway — clear it first." });
+      if (!operator) return res.json({ ok: false, error: "no_operator_key", detail: "MM_OPERATOR_SECRET_CUNA is not set or failed to parse. Arming would be a no-op." });
+      cunaSetArmed(true);
+    } else if (req.query.off === "1") {
+      cunaSetArmed(false);
+    }
+    const cfg = whirlpoolMM.vault.getConfig("cuna");
+    res.json({
+      ok: true, armed: cunaArmed(), hardKilled: cunaHardKilled(), operator: operator || null,
+      paused: whirlpoolMM.vault.isPaused ? !!whirlpoolMM.vault.isPaused("cuna") : undefined,
+      pair: cfg.pair, widthPct: cfg.widthPct, solWidthPct: cfg.solWidthPct, feeTierPct: cfg.feeTierPct,
+      maxUsd: cfg.maxUsd, solMaxSol: cfg.solMaxSol,
+      note: "armed state is persisted in the KV store; CUNA_ENGINE_OFF=1 overrides it",
+    });
+  } catch (e) { res.status(500).json({ ok: false, error: "server_error", detail: e.message }); }
+});
+
 app.get("/api/cuna-giveaway/admin", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   if (!adminAuthOK(req)) return res.status(404).json({ error: "not_found" });
