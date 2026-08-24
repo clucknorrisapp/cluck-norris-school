@@ -1008,6 +1008,10 @@ async function cunaTick() {
     try { await whirlpoolMM.vault.rebalancePools({ projectId: "cuna" }); } catch (e) { console.warn("[cuna] rebalance:", e.message); }
     try { await whirlpoolMM.vault.tick({ projectId: "cuna" }); } catch (e) { console.warn("[cuna] base tick:", e.message); }
     try { await whirlpoolMM.vault.tickSol({ projectId: "cuna" }); } catch (e) { console.warn("[cuna] sol tick:", e.message); }
+    // JUP pool (owner, 2026-08-24: "Add a Jupiter pool"). Without this line the scheduler never
+    // manages the CUNA/JUP position at all — jupEnabled in config only gates the tick, it does
+    // not create one. The first JUP position had to be opened by hand because this was missing.
+    try { await whirlpoolMM.vault.tickJup({ projectId: "cuna" }); } catch (e) { console.warn("[cuna] jup tick:", e.message); }
     // Last on purpose: the pools absorb free USDC first; buyback only converts what they
     // genuinely could not pair.
     try { await whirlpoolMM.vault.buyback({ projectId: "cuna" }); } catch (e) { console.warn("[cuna] buyback:", e.message); }
