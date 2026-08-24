@@ -910,19 +910,19 @@ function cunaEnsureProject() {
   whirlpoolMM.vault.setConfig({
     pair: "CUNA/USDC",
     baseEnabled: true,
-    // ±2.5% (owner's call for volatility). edgeTriggerFrac 0.3 recenters once price is 30%
-    // of the way to an edge — a ~0.75% move on a ±2.5% band — which is what turns volatility
-    // into rolls, and rolls into volume.
-    feeTierPct: 0.01, widthPct: 2.5, edgeTriggerFrac: 0.3, deployFrac: 0.95,
-    maxUsd: 250,                       // ceiling over the ~$200 target so a small overshoot isn't stranded
+    // ±1.75% (owner, 2026-08-23: "rebalance at 1.75 percent any plus minus" — applies to all
+    // three pools). edgeTriggerFrac 0.3 recenters once price is 30% of the way to an edge,
+    // which is what turns volatility into rolls, and rolls into volume.
+    feeTierPct: 0.01, widthPct: 1.75, edgeTriggerFrac: 0.3, deployFrac: 0.95,
+    maxUsd: 400,                       // owner raised for the balanced-attack sizing
     minRebalanceIntervalSec: 300, maxActionsPerDay: 96,
-    priceGapGuardPct: 25,              // skip a tick on a >25% gap — CUNA is thin ($7.3k book), so a
-                                       // spike is as likely to be someone pushing it as real price
+    priceGapGuardPct: 10,              // tightened from 25 for the Jupiter review window — CUNA is
+                                       // thin, a spike is as likely someone pushing it as real price
     slippageBps: 250,                  // thinner book than POKE — 150bps would fail fills
     baseDeployThresholdUsd: 25,
-    // CUNA/SOL pool — same ±2.5% / 0.01% shape.
-    solEnabled: true, solFeeTierPct: 0.01, solWidthPct: 2.5,
-    solMaxSol: 2.5, solGasReserve: 0.25, solDeployThreshold: 0.2,
+    // CUNA/SOL pool — same ±1.75% / 0.01% shape.
+    solEnabled: true, solFeeTierPct: 0.01, solWidthPct: 1.75,
+    solMaxSol: 4.2, solGasReserve: 0.25, solDeployThreshold: 0.2,
     // Swap layer: SOL↔USDC ONLY, to keep the two pools even so they arb against each other.
     // It never sells CUNA — that matters here, the owner's line was "we're gonna try real
     // hard not to sell any Kuna". The only CUNA that leaves is what the pools' ask side
@@ -930,16 +930,20 @@ function cunaEnsureProject() {
     swapEnabled: true, poolBalanceTolPct: 10,
     maxSwapUsdPerCycle: 75, minSwapUsd: 10, usdcFloor: 5,
     swapSolFloor: 0.3, maxSwapSolPerCycle: 1, swapSlippageBps: 150, maxSwapsPerDay: 24,
-    // Buyback only ever BUYS CUNA with excess USDC — it is the counterweight to the ask
-    // side, and the reason net CUNA sold stays near zero across a full cycle.
-    buybackEnabled: true, buybackReserveUsd: 0,
+    // Buyback OFF (owner, 2026-08-23, after an unwanted $50 buy — it only ever BUYS CUNA,
+    // but it stays off until he asks). The knobs below only matter if he re-enables it.
+    buybackEnabled: false, buybackReserveUsd: 0,
     maxBuybackUsdPerCycle: 50, minBuybackUsd: 10, maxBuybacksPerDay: 12,
     buybackMinIntervalSec: 900, buybackSlippageBps: 300,
-    // Off for now: no ask wall, no JUP pool, no cbBTC, no dual sleeve.
-    askWallEnabled: false, jupEnabled: false, btcEnabled: false, dualSleeveEnabled: false,
+    // CUNA/JUP pool (owner, 2026-08-23: "Add a Jupiter pool") — same ±1.75% / 0.01% shape,
+    // caps effectively uncapped so the whole JUP sleeve deploys.
+    jupEnabled: true, jupFeeTierPct: 0.01, jupWidthPct: 1.75,
+    jupMaxJup: 99999, jupDeployThreshold: 1,
+    // Off: no ask wall, no cbBTC, no dual sleeve.
+    askWallEnabled: false, btcEnabled: false, dualSleeveEnabled: false,
     notifyRolls: false,                // flipped on below once a PRIVATE room is bound
   }, "cuna");
-  console.log("[cuna] project registered + config seeded (±2.5% / 0.01% pools) — arm via /api/cuna-engine");
+  console.log("[cuna] project registered + config seeded (±1.75% / 0.01% pools) — arm via /api/cuna-engine");
 }
 // CONFIG RATCHET — runs on EVERY boot, unlike the one-shot seed above.
 //
@@ -954,10 +958,16 @@ function cunaEnsureProject() {
 // field it does not name.
 function cunaConfigRatchet() {
   const c = whirlpoolMM.vault.getConfig("cuna");
+  // ⚠️ These are the owner's CURRENT orders and are stamped on EVERY boot — when he retunes
+  // through the admin endpoint, this block must be updated in the same breath, or the next
+  // redeploy silently reverts him (that exact drift shipped once: widths went 1.75 → 2.5 and
+  // buyback came back on after a deploy, caught only because the status endpoint was re-read).
   const want = {
     pair: "CUNA/USDC", baseEnabled: true,
-    feeTierPct: 0.01, widthPct: 2.5, solFeeTierPct: 0.01, solWidthPct: 2.5,
-    solEnabled: true, swapEnabled: true, buybackEnabled: true,
+    feeTierPct: 0.01, widthPct: 1.75, solFeeTierPct: 0.01, solWidthPct: 1.75,
+    jupFeeTierPct: 0.01, jupWidthPct: 1.75,
+    solEnabled: true, jupEnabled: true, swapEnabled: true,
+    buybackEnabled: false,             // owner call 2026-08-23 after an unwanted buy — stays off
   };
   const patch = {};
   for (const k of Object.keys(want)) if (c[k] !== want[k]) patch[k] = want[k];
@@ -965,9 +975,10 @@ function cunaConfigRatchet() {
   // still hold a vault default, so the owner can raise a cap without it being stamped back down.
   if (c.feeTierPct === 0.3 || c.widthPct === 10) {
     Object.assign(patch, {
-      edgeTriggerFrac: 0.3, deployFrac: 0.95, maxUsd: 250, minRebalanceIntervalSec: 300,
-      maxActionsPerDay: 96, priceGapGuardPct: 25, slippageBps: 250, baseDeployThresholdUsd: 25,
-      solMaxSol: 2.5, solGasReserve: 0.25, solDeployThreshold: 0.2,
+      edgeTriggerFrac: 0.3, deployFrac: 0.95, maxUsd: 400, minRebalanceIntervalSec: 300,
+      maxActionsPerDay: 96, priceGapGuardPct: 10, slippageBps: 250, baseDeployThresholdUsd: 25,
+      solMaxSol: 4.2, solGasReserve: 0.25, solDeployThreshold: 0.2,
+      jupMaxJup: 99999, jupDeployThreshold: 1,
       poolBalanceTolPct: 10, maxSwapUsdPerCycle: 75, minSwapUsd: 10, usdcFloor: 5,
       swapSolFloor: 0.3, maxSwapSolPerCycle: 1, swapSlippageBps: 150, maxSwapsPerDay: 24,
       buybackReserveUsd: 0, maxBuybackUsdPerCycle: 50, minBuybackUsd: 10, maxBuybacksPerDay: 12,
