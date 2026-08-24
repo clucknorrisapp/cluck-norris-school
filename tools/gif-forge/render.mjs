@@ -31,6 +31,7 @@ const frames = Math.max(8, Math.min(64, Number(arg("frames", 32))));
 const size = Math.max(240, Math.min(720, Number(arg("size", 480))));
 const ms = Math.max(30, Math.min(120, Number(arg("ms", 45))));
 const text = String(arg("text", "CUNA")).slice(0, 12);
+const colors = Math.max(32, Math.min(256, Number(arg("colors", 160))));
 
 const scenePath = join(here, "scenes", scene + ".html");
 if (!existsSync(scenePath)) {
@@ -74,7 +75,7 @@ for (let i = 0; i < frames; i++) {
 }
 await browser.close();
 
-const py = spawnSync("python3", [join(here, "assemble.py"), dir, resolve(out), String(ms)], { stdio: "inherit" });
+const py = spawnSync("python3", [join(here, "assemble.py"), dir, resolve(out), String(ms), String(colors)], { stdio: "inherit" });
 rmSync(dir, { recursive: true, force: true });
 if (py.status !== 0) process.exit(py.status || 1);
 console.log(`gif-forge: ${out} (${scene}, ${frames}f @ ${ms}ms, ${size}px)`);
