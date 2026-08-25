@@ -2063,6 +2063,9 @@ function tgCommandReply(cmd, arg) {
     case "projectburn":
     case "burn":
       return `🔥 <b>Project Burn</b> — a project owner burning part (or all) of their own supply, on purpose. Non-custodial, no cut, and you get a shareable on-chain-verified receipt for your community.\n${link("/project-burn")}`;
+    case "lprescue":
+    case "rescue":
+      return `🛟 <b>LP Rescue</b> — can't find your LP position in the app? We search the blockchain directly (Meteora, Orca, Raydium), show what's really there, and build a withdrawal your own wallet signs. Free, non-custodial.\n${link("/lp-rescue")}`;
     case "bags":
       return `🎒 <b>Bags.fm</b> — live launches, near-grad &amp; recently graduated\n${link("/bags")}`;
     case "tools":
@@ -2086,6 +2089,7 @@ function tgCommandReply(cmd, arg) {
         "🏆 /buyleaders — live buy-competition standings\n" +
         "🥚 /hatchery — create a token, guided\n" +
         "🔥 /firepit — burn junk tokens, reclaim your SOL rent\n" +
+        "🛟 /lprescue — find LP positions that aren't showing in the app, withdraw yourself\n" +
         "🎒 /bags — live Bags.fm launches\n" +
         "🛠 /tools — every tool in one place\n" +
         "📊 /liquidity — live AMM depth &amp; positions\n" +
@@ -2167,7 +2171,7 @@ async function priceReply(chatId, replyTo) {
   }
 }
 
-const TG_KNOWN_CMDS = ["ca","x","website","app","dex","walletxray","autopsy","trace","snapshot","holders","lock","lockerroom","locker","securitycoop","walletcheckup","buyspecial","rose","hatchery","firepit","projectburn","burn","bags","tools","liquidity","price","commands","start","help","guide","buyleaders","chatid"];
+const TG_KNOWN_CMDS = ["ca","x","website","app","dex","walletxray","autopsy","trace","snapshot","holders","lock","lockerroom","locker","securitycoop","walletcheckup","buyspecial","rose","hatchery","firepit","projectburn","burn","lprescue","rescue","bags","tools","liquidity","price","commands","start","help","guide","buyleaders","chatid"];
 // In a non-CLKN project room (e.g. ROSE) the bot only serves that project's liquidity +
 // buy competitions; chatid stays so an operator can wire a buy comp. Everything else off.
 const PROJECT_ROOM_CMDS = ["liquidity","price","buyleaders","chatid"];
@@ -12592,6 +12596,132 @@ app.get("/firepit", (req, res) => {
 });
 
 // ── Project Burn — burn PART of your own supply, on purpose, with a public receipt ──
+// ============================== LP RESCUE ====================================
+// Find and recover DLMM liquidity that exists on-chain but is invisible in
+// Meteora's frontend/indexer. FREE for everyone (owner call 2026-08-25: "this
+// is a rescue tool and that shouldn't cost anything") — deliberately NOT behind
+// the tools pass. Non-custodial: the server only reads public chain state and
+// returns UNSIGNED transactions; the owner's wallet signs. Never accept or log
+// key material. Engine: lib/lp-rescue/meteora-dlmm.js (blockchain is the source
+// of truth — Meteora's indexer is probed only to explain frontend invisibility).
+const lpRescue = require("./lib/lp-rescue"); // dispatcher: Meteora DLMM + Orca + Raydium CLMM
+
+app.get(["/lp-rescue", "/tools/lp-rescue"], (req, res) => {
+  res.sendFile(join(__dirname, "public", "lp-rescue.html"));
+});
+
+app.use("/api/lp-rescue", rateLimit("lprescue", { windowMs: 60000, max: 20 }));
+
+// Best-effort token symbols for display only (never authority for anything).
+const _lpRescueSymCache = new Map(); // mint → { sym, t }
+// Well-known mints resolve statically — DexScreener's tokens API picks an
+// arbitrary pair for them and can return the WRONG side's symbol (WSOL came
+// back labeled as a random memecoin in testing).
+const _lpRescueKnown = {
+  "So11111111111111111111111111111111111111112": "SOL",
+  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v": "USDC",
+  "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB": "USDT",
+  "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN": "JUP",
+};
+async function lpRescueSymbol(mint) {
+  if (_lpRescueKnown[mint]) return _lpRescueKnown[mint];
+  const hit = _lpRescueSymCache.get(mint);
+  if (hit && Date.now() - hit.t < 3600e3) return hit.sym;
+  let sym = null;
+  try {
+    const r = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${mint}`, { signal: AbortSignal.timeout(4000) });
+    const j = await r.json();
+    const p = (j.pairs || []).find(x => x.baseToken?.address === mint) || (j.pairs || []).find(x => x.quoteToken?.address === mint);
+    sym = p ? (p.baseToken.address === mint ? p.baseToken.symbol : p.quoteToken.symbol) : null;
+  } catch {}
+  _lpRescueSymCache.set(mint, { sym, t: Date.now() });
+  return sym;
+}
+
+// Read-only scan. Modes: pool / pool+wallet / pool+position / position-only
+// (pool derived from the position account bytes) / wallet / wallet+token.
+// A failed RPC scan is reported as success:false + code — NEVER as an empty
+// positions list (spec rule: "no positions" and "scan failed" are different facts).
+app.get("/api/lp-rescue/scan", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const { pool, owner, mint, position } = req.query;
+  try {
+    const out = await lpRescue.scanRescue({
+      pool: pool || undefined, owner: owner || undefined,
+      mint: mint || undefined, position: position || undefined,
+    });
+    // display-only symbol enrichment
+    const mints = new Set();
+    for (const p of out.positions || []) { mints.add(p.tokenX.mint); mints.add(p.tokenY.mint); }
+    if (out.pool) { mints.add(out.pool.tokenX); mints.add(out.pool.tokenY); }
+    const syms = {};
+    await Promise.all([...mints].map(async m => { syms[m] = await lpRescueSymbol(m); }));
+    for (const p of out.positions || []) {
+      p.tokenX.symbol = syms[p.tokenX.mint] || undefined;
+      p.tokenY.symbol = syms[p.tokenY.mint] || undefined;
+    }
+    if (out.pool) { out.pool.tokenXSymbol = syms[out.pool.tokenX] || undefined; out.pool.tokenYSymbol = syms[out.pool.tokenY] || undefined; }
+    return res.json(out);
+  } catch (e) {
+    if (e && e.code === "BAD_ADDRESS" || e && e.code === "BAD_REQUEST") {
+      return res.status(400).json({ success: false, code: e.code, error: e.message, positions: null });
+    }
+    // RPC/scan failure: positions is NULL, not [] — the client must not render "no liquidity".
+    return res.json({ success: false, code: (e && e.code) || "RPC_SCAN_FAILED", error: publicErrMsg(e), positions: null });
+  }
+});
+
+// Programs a legitimate DLMM withdrawal may touch. Anything else in a built
+// transaction is a bug or an attack — refuse to hand it to a wallet.
+const LP_RESCUE_ALLOWED_PROGRAMS = new Set([
+  lpRescue.DLMM_PROGRAM_ID,                              // Meteora DLMM
+  "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",         // SPL Token
+  "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",         // Token-2022
+  "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",        // Associated Token Account
+  "11111111111111111111111111111111",                    // System
+  "ComputeBudget111111111111111111111111111111",         // Compute Budget
+  "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr",         // Memo (SDK attaches on some paths)
+]);
+
+// Build UNSIGNED 100%-withdraw (+claim +close) transactions for a position the
+// caller claims to own. Ownership is re-verified against LIVE chain state here,
+// and re-verified again by the wallet itself at signing (the position's owner
+// must sign or the program rejects). Locked positions are refused.
+app.post("/api/lp-rescue/build-withdraw", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const { pool, position, owner } = req.body || {};
+  if (!pool || !position || !owner) return res.status(400).json({ success: false, error: "pool, position and owner are required" });
+  try {
+    const { transactions, preview } = await lpRescue.buildFullWithdrawal({ pool, position, owner });
+    const { blockhash, lastValidBlockHeight } = await rpc.connection().getLatestBlockhash("confirmed");
+    const txsB64 = [];
+    for (const tx of transactions) {
+      tx.feePayer = new PublicKey(owner);
+      tx.recentBlockhash = blockhash;
+      // Guardrail: every instruction must target an expected program.
+      for (const ix of tx.instructions) {
+        const pid = ix.programId.toBase58();
+        if (!LP_RESCUE_ALLOWED_PROGRAMS.has(pid)) {
+          return res.status(500).json({ success: false, code: "UNEXPECTED_INSTRUCTION", error: `built transaction touches unexpected program ${pid} — refusing` });
+        }
+      }
+      txsB64.push({
+        base64: tx.serialize({ requireAllSignatures: false, verifySignatures: false }).toString("base64"),
+        programs: [...new Set(tx.instructions.map(ix => ix.programId.toBase58()))],
+        instructionCount: tx.instructions.length,
+      });
+    }
+    preview.claimingFeeXSymbol = await lpRescueSymbol(preview.tokenXMint) || undefined;
+    preview.claimingFeeYSymbol = await lpRescueSymbol(preview.tokenYMint) || undefined;
+    return res.json({ success: true, preview, lastValidBlockHeight, transactions: txsB64 });
+  } catch (e) {
+    const code = (e && e.code) || "BUILD_FAILED";
+    const status = code === "NOT_POSITION_OWNER" || code === "POSITION_LOCKED" || code === "BAD_ADDRESS" ? 400 : 500;
+    return res.status(status).json({ success: false, code, error: publicErrMsg(e) });
+  }
+});
+// ============================ end LP RESCUE ==================================
+
 // The opposite tool to Firepit: Firepit torches worthless junk to reclaim rent and REFUSES
 // to burn anything with value; Project Burn is a project owner destroying real supply as a
 // tokenomics event, so the value IS the point. Non-custodial (the wallet signs a single
