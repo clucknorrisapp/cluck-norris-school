@@ -229,12 +229,25 @@ function renderResults(d, requestedOwner){
   if (d.note && !(d.positions||[]).length && !d.pool){
     out.push('<div class="card"><span class="badge b-gray">NOT FOUND</span><div class="hint">' + esc(d.note) + '</div></div>');
   }
+  // Multi-protocol sweep (wallet-only scan): per-protocol summary, including
+  // honest per-protocol scan failures — a failed protocol is never "0 positions".
+  if (d.byProtocol){
+    var PROTO_NAMES = { "meteora-dlmm": "METEORA DLMM", "orca-whirlpool": "ORCA WHIRLPOOLS", "raydium-clmm": "RAYDIUM CLMM" };
+    var rows = Object.keys(d.byProtocol).map(function(k){
+      var v = d.byProtocol[k];
+      return '<div class="kv"><div class="k">' + esc(PROTO_NAMES[k] || k) + '</div><div class="v">'
+        + (v.success ? (v.count + ' position' + (v.count === 1 ? '' : 's')) : '⚠ scan failed — this protocol could not be checked (does NOT mean no positions)')
+        + '</div></div>';
+    }).join("");
+    out.push('<div class="card"><div class="card-title">PROTOCOL SWEEP</div>' + rows + '</div>');
+  }
+  var PROTO_LABEL = { "meteora-dlmm": "METEORA DLMM", "orca-whirlpool": "ORCA WHIRLPOOLS", "raydium-clmm": "RAYDIUM CLMM" };
   (d.positions || []).forEach(function(p, i){
     var meta = STATUS_META[p.status] || STATUS_META.UNKNOWN;
-    var hasFees = (p.feeXUi && p.feeXUi !== "0") || (p.feeYUi && p.feeYUi !== "0");
+    var hasFees = (p.feeXUi && p.feeXUi !== "0" && p.feeXUi !== "?") || (p.feeYUi && p.feeYUi !== "0" && p.feeYUi !== "?");
     var card = '<div class="pos" id="pos-' + i + '">'
       + '<span class="badge ' + meta.cls + '">' + meta.label + '</span>'
-      + '<div style="font-family:var(--disp);letter-spacing:1px;font-size:15px;margin-bottom:6px">METEORA DLMM · ' + tokLabel(p.tokenX) + ' / ' + tokLabel(p.tokenY) + '</div>'
+      + '<div style="font-family:var(--disp);letter-spacing:1px;font-size:15px;margin-bottom:6px">' + esc(PROTO_LABEL[p.protocol] || p.protocol) + ' · ' + tokLabel(p.tokenX) + ' / ' + tokLabel(p.tokenY) + '</div>'
       + (p.status === "FRONTEND_ISSUE" ? '<div class="hint" style="color:#fde68a">Your liquidity still exists on-chain. The normal Meteora frontend does not currently display this pool — Cluck Norris can interact with the position directly.</div>' : "")
       + (p.status === "WRONG_WALLET" ? '<div class="hint" style="color:#fda4af">This position is owned by <b>' + esc(p.ownerAddress) + '</b> — not the wallet you searched. Withdrawal is only possible for the owner.</div>' : "")
       + '<div class="kv">'
@@ -309,7 +322,11 @@ function renderActions(){
   (lastScan.positions || []).forEach(function(p, i){
     var el = $("act-" + i);
     if (!el) return;
-    if (!p.withdrawable){ el.innerHTML = ""; return; }
+    if (!p.withdrawable){
+      // Orca / Raydium positions are healthy on their own frontends — link out.
+      el.innerHTML = p.manageUrl ? '<a class="btn ghost sm" style="text-decoration:none" href="' + esc(p.manageUrl) + '" target="_blank" rel="noopener">MANAGE ON ' + esc((p.protocol || "").indexOf("orca") === 0 ? "ORCA" : "RAYDIUM") + ' →</a>' : "";
+      return;
+    }
     if (!wPubkey){
       el.innerHTML = '<div class="hint">Connect the owner wallet above to withdraw.</div>';
     } else if (wPubkey === p.ownerAddress){

@@ -12604,7 +12604,7 @@ app.get("/firepit", (req, res) => {
 // returns UNSIGNED transactions; the owner's wallet signs. Never accept or log
 // key material. Engine: lib/lp-rescue/meteora-dlmm.js (blockchain is the source
 // of truth — Meteora's indexer is probed only to explain frontend invisibility).
-const lpRescue = require("./lib/lp-rescue/meteora-dlmm");
+const lpRescue = require("./lib/lp-rescue"); // dispatcher: Meteora DLMM + Orca + Raydium CLMM
 
 app.get(["/lp-rescue", "/tools/lp-rescue"], (req, res) => {
   res.sendFile(join(__dirname, "public", "lp-rescue.html"));
@@ -12614,7 +12614,17 @@ app.use("/api/lp-rescue", rateLimit("lprescue", { windowMs: 60000, max: 20 }));
 
 // Best-effort token symbols for display only (never authority for anything).
 const _lpRescueSymCache = new Map(); // mint → { sym, t }
+// Well-known mints resolve statically — DexScreener's tokens API picks an
+// arbitrary pair for them and can return the WRONG side's symbol (WSOL came
+// back labeled as a random memecoin in testing).
+const _lpRescueKnown = {
+  "So11111111111111111111111111111111111111112": "SOL",
+  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v": "USDC",
+  "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB": "USDT",
+  "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN": "JUP",
+};
 async function lpRescueSymbol(mint) {
+  if (_lpRescueKnown[mint]) return _lpRescueKnown[mint];
   const hit = _lpRescueSymCache.get(mint);
   if (hit && Date.now() - hit.t < 3600e3) return hit.sym;
   let sym = null;
