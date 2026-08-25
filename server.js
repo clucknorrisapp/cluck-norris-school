@@ -2254,6 +2254,11 @@ async function welcomeNewMembers(msg) {
   if (!chatId || !members.length) return;
   // Don't push the Cluck Norris guide into another project's room (e.g. ROSE). The CLKN
   // welcome only fires in the CLKN room + general groups, never a registered non-CLKN room.
+  // ⚠️ The project lookup keys off telegramChatId, which is the ALERT routing — when CUNA's
+  // alerts moved to the owner's DM (2026-08-24) the public CUNA room stopped resolving to
+  // "cuna" and CLKN welcomes leaked in. Community rooms are excluded by id, not by where a
+  // project's alerts happen to point.
+  if (String(chatId) === CUNA_PUBLIC_ROOM) return;         // owner: no welcome messages in the CUNA room
   if (vaultProjectForChat(chatId) !== "clkn") return;
   const now = Date.now(), last = welcomeCooldown.get(chatId) || 0;
   if (now - last < WELCOME_COOLDOWN_MS) return;            // anti-spam on join waves
