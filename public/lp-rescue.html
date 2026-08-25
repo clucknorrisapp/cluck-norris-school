@@ -279,16 +279,17 @@ function renderResults(d, requestedOwner){
 }
 
 // ── STEP 3: connect owner wallet ──
-function renderPicker(){
-  var el = $("picker");
+// Fills ANY container with the wallet picker — used both in the Step 2 card and
+// INSIDE every withdrawable position card (live feedback day one: a user with a
+// recoverable position couldn't find where to connect).
+function fillPicker(el){
   if (!el) return;
-  if (wPubkey){ el.innerHTML = ""; var wb=$("walletbar"); if (wb){ wb.classList.add("show"); $("waddr").textContent = shortAddr(wPubkey) + (wName ? " · " + wName : ""); } return; }
   var list = CluckWallet.available();
   el.innerHTML = "";
   if (!list.length){
     el.innerHTML = CluckWallet.isMobile()
       ? CluckWallet.mobileLinksHTML({ what: 'LP Rescue', btnClass: "btn sm", hintClass: "hint" })
-      : '<div class="hint">To withdraw, install a Solana wallet extension (Phantom, Solflare, Backpack…) and refresh. Scanning works without one.</div>';
+      : '<div class="hint">⚠ No Solana wallet detected in this browser. To withdraw, install a wallet extension (Phantom, Solflare, Backpack…) and refresh — or open <b>clucknorris.app/lp-rescue</b> on your phone inside your wallet app’s built-in browser. Scanning works without a wallet.</div>';
     return;
   }
   var lab = document.createElement("div");
@@ -297,11 +298,18 @@ function renderPicker(){
   el.appendChild(lab);
   list.forEach(function(w){
     var b = document.createElement("button");
-    b.className = "btn ghost sm";
-    b.textContent = w.icon + "  " + w.name;
+    b.className = "btn sm";
+    b.style.marginRight = "8px"; b.style.marginTop = "8px";
+    b.textContent = w.icon + "  CONNECT " + w.name.toUpperCase();
     b.addEventListener("click", function(){ connectWallet(w.provider, w.name); });
     el.appendChild(b);
   });
+}
+function renderPicker(){
+  var el = $("picker");
+  if (!el) return;
+  if (wPubkey){ el.innerHTML = ""; var wb=$("walletbar"); if (wb){ wb.classList.add("show"); $("waddr").textContent = shortAddr(wPubkey) + (wName ? " · " + wName : ""); } return; }
+  fillPicker(el);
 }
 async function connectWallet(provider, name){
   try {
@@ -329,7 +337,9 @@ function renderActions(){
       return;
     }
     if (!wPubkey){
-      el.innerHTML = '<div class="hint">Connect the owner wallet above to withdraw.</div>';
+      // Render the FULL picker right here in the card — never make the user hunt.
+      el.innerHTML = "";
+      fillPicker(el);
     } else if (wPubkey === p.ownerAddress){
       el.innerHTML = '<div class="hint" style="color:#86efac">✓ OWNER VERIFIED — connected wallet controls this position.</div>'
         + '<button class="btn warn sm" style="margin-top:8px" data-i="' + i + '">WITHDRAW LIQUIDITY</button>';
