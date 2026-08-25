@@ -2097,6 +2097,11 @@ function tgCommandReply(cmd, arg) {
 // Which vault project a Telegram chat maps to (by registered telegramChatId) — so
 // /liquidity in the ROSE room shows ROSE, in the CLKN room shows CLKN. Default: clkn.
 function vaultProjectForChat(chatId) {
+  // The CUNA community room is CUNA's regardless of where the project's ALERTS route —
+  // its telegramChatId moved to the owner's DM (2026-08-24), which silently turned this
+  // resolver's answer for the room into the "clkn" default and let CLKN welcomes and the
+  // full CLKN command set leak in. Room identity must not follow alert routing.
+  if (String(chatId) === CUNA_PUBLIC_ROOM) return "cuna";
   try {
     const projs = whirlpoolMM.vault.listProjects();
     for (const id of Object.keys(projs)) {
@@ -2254,6 +2259,11 @@ async function welcomeNewMembers(msg) {
   if (!chatId || !members.length) return;
   // Don't push the Cluck Norris guide into another project's room (e.g. ROSE). The CLKN
   // welcome only fires in the CLKN room + general groups, never a registered non-CLKN room.
+  // ⚠️ The project lookup keys off telegramChatId, which is the ALERT routing — when CUNA's
+  // alerts moved to the owner's DM (2026-08-24) the public CUNA room stopped resolving to
+  // "cuna" and CLKN welcomes leaked in. Community rooms are excluded by id, not by where a
+  // project's alerts happen to point.
+  if (String(chatId) === CUNA_PUBLIC_ROOM) return;         // owner: no welcome messages in the CUNA room
   if (vaultProjectForChat(chatId) !== "clkn") return;
   const now = Date.now(), last = welcomeCooldown.get(chatId) || 0;
   if (now - last < WELCOME_COOLDOWN_MS) return;            // anti-spam on join waves
@@ -2586,6 +2596,18 @@ async function tgUploadPhotoFromUrl(chatId, srcUrl, caption) {
   const data = await r.json().catch(() => ({}));
   return !!data.ok;
 }
+async function tgUploadAnimationFromBuffer(chatId, buf, caption) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token || !Buffer.isBuffer(buf) || buf.length > 11.5 * 1024 * 1024) return false;
+  const fd = new FormData();
+  fd.append("chat_id", String(chatId));
+  if (caption) fd.append("caption", String(caption).slice(0, 1024));
+  fd.append("disable_notification", "true");
+  fd.append("animation", new Blob([buf], { type: "image/gif" }), "cuna.gif");
+  const r = await fetch(`https://api.telegram.org/bot${token}/sendAnimation`, { method: "POST", body: fd });
+  const data = await r.json().catch(() => ({}));
+  return !!data.ok;
+}
 async function fulfillMemeRequestLive(entry) {
   const setLive = (val) => {                     // flip/clear the queue entry
     const q = kv.get("memeRequests", []) || [];
@@ -2596,7 +2618,23 @@ async function fulfillMemeRequestLive(entry) {
   };
   try {
     const url = await hfGenerateMeme(entry.desc);
-    if (url && await tgUploadPhotoFromUrl(entry.chatId, url, "🎨")) { setLive(null); return true; }
+    if (url && await tgUploadPhotoFromUrl(entry.chatId, url, "🎨")) {
+      // GIF asks get the animated card version too, rendered in-process (owner rule:
+      // free, no video credits — lib/gif-live ports the hype scene to node canvas).
+      // A render failure only costs the animation; the still already landed, so the
+      // request still counts as fulfilled rather than being re-posted by the fallback.
+      if (/\bgifs?\b|animat|moving/i.test(String(entry.desc))) {
+        try {
+          const { renderCardHypeGif } = require("./lib/gif-live");
+          const ir = await fetch(url, { signal: AbortSignal.timeout(30000), redirect: "follow" });
+          if (ir.ok) {
+            const gifBuf = await renderCardHypeGif(Buffer.from(await ir.arrayBuffer()), { text: "CUNA" });
+            if (!await tgUploadAnimationFromBuffer(entry.chatId, gifBuf, "🎬")) console.warn("[MEME-GEN] gif upload failed (still posted)");
+          }
+        } catch (e) { console.warn("[MEME-GEN] gif render failed (still posted):", e.message); }
+      }
+      setLive(null); return true;
+    }
   } catch (e) { console.warn("[MEME-GEN] fulfill error:", e.message); }
   setLive(false);                                // fallback drain picks it up
   return false;
