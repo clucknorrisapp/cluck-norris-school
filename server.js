@@ -964,9 +964,11 @@ function cunaConfigRatchet() {
   // buyback came back on after a deploy, caught only because the status endpoint was re-read).
   const want = {
     pair: "CUNA/USDC", baseEnabled: true,
-    feeTierPct: 0.01, widthPct: 1.75, solFeeTierPct: 0.01, solWidthPct: 1.75,
-    jupFeeTierPct: 0.01, jupWidthPct: 1.75,
-    solEnabled: true, jupEnabled: true, swapEnabled: true,
+    // Owner retune 2026-08-25 (post-pump reset): CUNA/USDC + CUNA/SOL only, on the NEW
+    // 0.05% fee pools, ±3% widths "to see how volume moves". JUP sleeve retired for now,
+    // swap layer stays off (it churned quote pointlessly and spammed the DM), buyback off.
+    feeTierPct: 0.05, widthPct: 3, solFeeTierPct: 0.05, solWidthPct: 3,
+    solEnabled: true, jupEnabled: false, swapEnabled: false,
     buybackEnabled: false,             // owner call 2026-08-23 after an unwanted buy — stays off
   };
   const patch = {};
