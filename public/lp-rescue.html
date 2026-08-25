@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>🛟 LP Rescue — can't find your liquidity? Search the blockchain directly</title>
+<meta property="og:title" content="LP Rescue — find liquidity your DEX frontend can't see"/>
+<meta property="og:description" content="Meteora DLMM positions that exist on-chain but vanished from the website: LP Rescue reads the blockchain directly, diagnoses what's there, and builds a withdrawal your own wallet signs. Non-custodial, free."/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+  /* palette from theme.css — no page-local :root shadow (house rule) */
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:radial-gradient(1100px 560px at 50% -220px,rgba(34,211,238,.14),transparent 68%),radial-gradient(700px 400px at 90% 10%,rgba(59,130,246,.08),transparent 60%),var(--bg);background-attachment:fixed;color:var(--text);font-family:var(--body);min-height:100vh;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:760px;margin:0 auto;padding:18px 16px 120px;}
+  a.back{display:inline-flex;align-items:center;gap:6px;font-family:var(--disp);font-size:12px;font-weight:700;letter-spacing:2px;color:var(--gold);text-decoration:none;margin-bottom:14px;opacity:.85;}
+  a.back:hover{opacity:1;}
+  .hero{border-radius:18px;border:1px solid var(--border);margin-bottom:14px;box-shadow:0 8px 30px rgba(0,0,0,.4);padding:30px 24px 24px;background:linear-gradient(160deg,rgba(8,20,26,.9),rgba(10,12,18,.95));}
+  .hero h1{font-family:var(--disp);font-size:46px;line-height:.92;letter-spacing:1.5px;background:linear-gradient(92deg,#9BE8FF,#38BDF8 40%,#2DD4BF 80%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+  .hero .sub{font-size:15.5px;color:#a8e6f5;margin-top:8px;font-weight:600;}
+  .lede{font-size:14.5px;color:var(--sub);line-height:1.65;margin:2px 2px 14px;}
+  .lede b{color:#67e8f9;}
+  .card{background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--border);border-radius:16px;padding:18px 20px;margin-bottom:16px;box-shadow:0 6px 22px rgba(0,0,0,.32);}
+  .card-title{font-family:var(--disp);font-size:14px;color:#67e8f9;letter-spacing:3px;margin-bottom:12px;}
+  label{display:block;font-family:var(--disp);font-size:11px;letter-spacing:1.4px;color:var(--sub);margin:10px 0 5px;}
+  input[type=text]{width:100%;background:rgba(255,255,255,.045);border:1px solid var(--border2);border-radius:10px;padding:11px 13px;color:var(--text);font-family:var(--mono);font-size:13px;outline:none;}
+  input[type=text]:focus{border-color:#38BDF8;}
+  .btn{background:linear-gradient(92deg,#38BDF8,#2DD4BF);border:none;border-radius:11px;padding:13px 24px;font-family:var(--disp);font-size:15px;font-weight:700;letter-spacing:1.5px;color:#04222c;cursor:pointer;box-shadow:0 6px 18px rgba(45,212,191,.28);transition:transform .1s;}
+  .btn:hover{transform:translateY(-1px);}
+  .btn:disabled{background:rgba(255,255,255,.06);color:var(--muted);box-shadow:none;transform:none;cursor:not-allowed;}
+  .btn.warn{background:linear-gradient(92deg,#FBBF24,#F59E0B);color:#2a1802;}
+  .btn.ghost{background:rgba(255,255,255,.05);color:var(--sub);box-shadow:none;}
+  .btn.sm{padding:9px 15px;font-size:12px;}
+  .hint{font-size:12.5px;color:var(--muted);line-height:1.55;margin-top:8px;}
+  .status{margin-top:10px;font-size:13px;color:var(--sub);font-family:var(--mono);}
+  .status.err{color:#fda4af;}
+  .status.ok{color:#86efac;}
+  .secline{display:flex;gap:9px;align-items:flex-start;background:rgba(45,212,191,.06);border:1px solid rgba(45,212,191,.25);border-radius:12px;padding:11px 14px;font-size:12.5px;color:#b8e8dd;line-height:1.55;margin-bottom:16px;}
+  .pos{border:1px solid var(--border);border-radius:14px;padding:16px 18px;margin-top:14px;background:rgba(255,255,255,.02);}
+  .badge{display:inline-block;font-family:var(--disp);font-size:11px;letter-spacing:1.6px;border-radius:20px;padding:5px 12px;margin-bottom:10px;border:1px solid;}
+  .b-green{color:#4ade80;border-color:rgba(74,222,128,.5);background:rgba(74,222,128,.08);}
+  .b-yellow{color:#fde047;border-color:rgba(253,224,71,.45);background:rgba(253,224,71,.07);}
+  .b-orange{color:#fb923c;border-color:rgba(251,146,60,.5);background:rgba(251,146,60,.08);}
+  .b-red{color:#f87171;border-color:rgba(248,113,113,.5);background:rgba(248,113,113,.08);}
+  .b-gray{color:#9ca3af;border-color:rgba(156,163,175,.4);background:rgba(156,163,175,.07);}
+  .kv{display:grid;grid-template-columns:110px 1fr;gap:4px 12px;font-size:13px;margin:8px 0;}
+  .kv .k{color:var(--muted);font-family:var(--disp);font-size:10.5px;letter-spacing:1.2px;padding-top:2px;}
+  .kv .v{font-family:var(--mono);color:var(--text);word-break:break-all;}
+  .kv .v a{color:#67e8f9;text-decoration:none;}
+  .amt{font-size:16px;font-family:var(--mono);color:#a5f3fc;margin:2px 0;}
+  .amt b{color:#fff;}
+  .diag{margin:10px 0 4px;padding:0;list-style:none;}
+  .diag li{font-size:12.5px;color:var(--sub);line-height:1.7;padding-left:18px;position:relative;}
+  .diag li::before{content:"✓";position:absolute;left:0;color:#4ade80;}
+  .diag li.warn::before{content:"⚠";color:#fde047;}
+  details{margin-top:10px;}
+  details summary{cursor:pointer;font-family:var(--disp);font-size:11px;letter-spacing:1.4px;color:var(--muted);}
+  details pre{margin-top:8px;background:rgba(0,0,0,.35);border:1px solid var(--border2);border-radius:10px;padding:12px;font-size:11px;color:#9fd8cf;overflow-x:auto;white-space:pre-wrap;word-break:break-all;}
+  .copybtn{background:none;border:1px solid var(--border2);color:var(--muted);border-radius:6px;font-size:10px;padding:2px 7px;cursor:pointer;margin-left:6px;vertical-align:middle;}
+  .txrow{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:12.5px;margin:6px 0;color:var(--sub);}
+  .txrow .st{min-width:96px;font-family:var(--disp);font-size:10px;letter-spacing:1.2px;}
+  .st-wait{color:var(--muted);} .st-sign{color:#fde047;} .st-sub{color:#93c5fd;} .st-ok{color:#4ade80;} .st-fail{color:#f87171;}
+  .modal-bg{position:fixed;inset:0;background:rgba(4,8,12,.82);display:none;align-items:center;justify-content:center;z-index:60;padding:16px;}
+  .modal-bg.show{display:flex;}
+  .modal{max-width:520px;width:100%;max-height:88vh;overflow-y:auto;background:linear-gradient(180deg,#0c1a20,#0a1014);border:1px solid rgba(56,189,248,.35);border-radius:16px;padding:20px 22px;}
+  .modal h3{font-family:var(--disp);letter-spacing:2px;font-size:16px;color:#67e8f9;margin-bottom:12px;}
+  .pillars{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-bottom:16px;}
+  .pillar{background:rgba(255,255,255,.03);border:1px solid var(--border2);border-radius:12px;padding:12px 14px;}
+  .pillar .h{font-family:var(--disp);font-size:12px;letter-spacing:1px;color:var(--text);margin-bottom:4px;}
+  .pillar .p{font-size:12.5px;color:var(--sub);line-height:1.5;}
+  .foot{font-size:11.5px;color:var(--muted);line-height:1.6;margin-top:18px;}
+  .hidden{display:none !important;}
+  .walletbar{display:none;align-items:center;gap:10px;font-family:var(--mono);font-size:12.5px;color:#a5f3fc;margin-top:10px;}
+  .walletbar.show{display:flex;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/">‹ CLUCK NORRIS</a>
+
+  <div class="hero">
+    <h1>🛟 LP RESCUE</h1>
+    <div class="sub">Can't find your liquidity? Search the blockchain directly.</div>
+  </div>
+
+  <p class="lede">DEX websites sometimes lose track of real liquidity — a pool stops showing in search, a position vanishes from your portfolio page. The funds are still on-chain. <b>LP Rescue reads Solana directly</b> (Meteora DLMM first), shows you exactly what exists, and if it's yours, builds a withdrawal that <b>your own wallet signs</b>. Free, for everyone.</p>
+
+  <div class="secline">🔒&nbsp;<span><b>Cluck Norris never asks for your seed phrase or private key.</b> LP Rescue reads public blockchain data and creates transactions that are reviewed and signed directly by your wallet. Connecting a wallet does not give Cluck Norris control over your funds.</span></div>
+
+  <div class="card">
+    <div class="card-title">STEP 1 — SCAN (no wallet needed)</div>
+    <div class="hint">Fill in whatever you know — any one field is enough. Wallet only = scan every DLMM pool. Wallet + pool is the fastest and most precise.</div>
+    <label>YOUR WALLET ADDRESS</label>
+    <input type="text" id="in-owner" placeholder="wallet that provided the liquidity" autocomplete="off" spellcheck="false"/>
+    <label>POOL ADDRESS (optional)</label>
+    <input type="text" id="in-pool" placeholder="the DLMM pool, if you know it" autocomplete="off" spellcheck="false"/>
+    <label>TOKEN MINT (optional)</label>
+    <input type="text" id="in-mint" placeholder="a token in the pool, if you don't know the pool" autocomplete="off" spellcheck="false"/>
+    <label>POSITION ADDRESS (optional)</label>
+    <input type="text" id="in-position" placeholder="a specific position account — pool is auto-detected" autocomplete="off" spellcheck="false"/>
+    <div style="margin-top:14px"><button class="btn" id="scan-btn">FIND MY LIQUIDITY</button></div>
+    <div class="status" id="scan-status"></div>
+  </div>
+
+  <div id="results"></div>
+
+  <div class="pillars">
+    <div class="pillar"><div class="h">⛓️ Chain is truth</div><div class="p">We never trust a DEX website to decide whether your money exists. Solana itself is the only source consulted for ownership and balances.</div></div>
+    <div class="pillar"><div class="h">🔑 Non-custodial</div><div class="p">Withdrawals go only to the position owner's own wallet, which reviews and signs every transaction itself. We take nothing and can touch nothing.</div></div>
+    <div class="pillar"><div class="h">🩺 Real diagnosis</div><div class="p">Not just "found / not found" — you get the why: frontend indexing issue, wrong wallet, locked, empty, or a scan failure that says so honestly.</div></div>
+  </div>
+
+  <p class="foot">LP Rescue is a blockchain interface and diagnostic tool. It does not guarantee that a position can be recovered — some positions are locked, empty, owned by another wallet, or otherwise unrecoverable. Always review wallet transactions before signing. Your wallet will display one or more approval requests during a withdrawal; read them.</p>
+</div>
+
+<!-- withdrawal modal -->
+<div class="modal-bg" id="modal-bg">
+  <div class="modal">
+    <h3>RECOVERY PREVIEW</h3>
+    <div id="m-preview"></div>
+    <div id="m-sim" class="status"></div>
+    <div id="m-txs"></div>
+    <div style="margin-top:14px;display:flex;gap:10px">
+      <button class="btn warn" id="m-go" disabled>WITHDRAW ALL + CLAIM + CLOSE</button>
+      <button class="btn ghost" id="m-cancel">CANCEL</button>
+    </div>
+    <div class="status" id="m-status"></div>
+  </div>
+</div>
+
+<script src="/vendor/solana-web3-1.95.8.iife.min.js" integrity="sha384-ujeTtvHxhu2g5lnu14Roii2ajvVKJ74KQ6eo6GGfAi0IrKZ1YkF8N68Iw5VmIJO0" crossorigin="anonymous"></script>
+<script src="/cluck-wallet.js?v=2"></script>
+<script src="/cluck-util.js"></script>
+<script>
+(function(){
+"use strict";
+var $ = function(id){ return document.getElementById(id); };
+var esc = CluckUtil.esc, shortAddr = CluckUtil.shortAddr, rpc = CluckUtil.rpc, copyText = CluckUtil.copyText;
+var Transaction = solanaWeb3.Transaction;
+
+// Mirror of the server's allowlist — the page independently refuses to hand a
+// wallet any transaction touching an unexpected program (defense in depth).
+var ALLOWED_PROGRAMS = {
+  "LBUZKhRxPF3XUpBCjp4YzTKgLccjZhTSDM9YuVaPwxo": 1, // Meteora DLMM
+  "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA": 1, // SPL Token
+  "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb": 1, // Token-2022
+  "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL": 1, // ATA
+  "11111111111111111111111111111111": 1,            // System
+  "ComputeBudget111111111111111111111111111111": 1, // Compute Budget
+  "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr": 1  // Memo
+};
+
+var wPubkey = null, wProvider = null, wName = "";
+var lastScan = null, activeWithdraw = null;
+
+function setStatus(el, msg, cls){ el.textContent = msg || ""; el.className = "status" + (cls ? " " + cls : ""); }
+function b64ToBytes(b64){ var bin = atob(b64), a = new Uint8Array(bin.length); for (var i=0;i<bin.length;i++) a[i]=bin.charCodeAt(i); return a; }
+function bytesToB64(bytes){ var s=""; for (var i=0;i<bytes.length;i++) s+=String.fromCharCode(bytes[i]); return btoa(s); }
+function exp(addr){ return 'https://solscan.io/account/' + encodeURIComponent(addr); }
+function expTx(sig){ return 'https://solscan.io/tx/' + encodeURIComponent(sig); }
+function tokLabel(t){ return t.symbol ? esc(t.symbol) : esc(shortAddr(t.mint)); }
+function fmtAmt(s){
+  var parts = String(s).split(".");
+  return esc(parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",") + (parts[1] ? "." + parts[1].slice(0,6) : ""));
+}
+
+// ── STEP 1: scan ──
+var STATUS_META = {
+  RECOVERABLE:   { cls: "b-green",  label: "RECOVERABLE" },
+  FRONTEND_ISSUE:{ cls: "b-yellow", label: "FRONTEND / INDEXING ISSUE" },
+  LOCKED:        { cls: "b-orange", label: "LOCKED" },
+  WRONG_WALLET:  { cls: "b-red",    label: "WRONG WALLET" },
+  EMPTY:         { cls: "b-gray",   label: "EMPTY" },
+  NOT_FOUND:     { cls: "b-gray",   label: "NOT FOUND" },
+  RPC_ERROR:     { cls: "b-yellow", label: "SCAN INCOMPLETE" },
+  UNKNOWN:       { cls: "b-gray",   label: "UNKNOWN" }
+};
+
+$("scan-btn").addEventListener("click", doScan);
+async function doScan(){
+  var owner = $("in-owner").value.trim(), pool = $("in-pool").value.trim(),
+      mint = $("in-mint").value.trim(), position = $("in-position").value.trim();
+  if (!owner && !pool && !mint && !position){ setStatus($("scan-status"), "Enter at least one address to scan.", "err"); return; }
+  if (mint && !owner && !pool && !position){ setStatus($("scan-status"), "A token mint needs your wallet address with it — add the wallet that provided the liquidity.", "err"); return; }
+  $("scan-btn").disabled = true;
+  setStatus($("scan-status"), "Scanning the blockchain directly… (a wallet-wide scan can take up to a minute)");
+  $("results").innerHTML = "";
+  try {
+    var qs = [];
+    if (owner) qs.push("owner=" + encodeURIComponent(owner));
+    if (pool) qs.push("pool=" + encodeURIComponent(pool));
+    if (mint) qs.push("mint=" + encodeURIComponent(mint));
+    if (position) qs.push("position=" + encodeURIComponent(position));
+    var r = await fetch("/api/lp-rescue/scan?" + qs.join("&"));
+    var d = await r.json();
+    if (!d.success){
+      // An RPC failure is NOT "no liquidity" — say so plainly.
+      if (d.code === "RPC_SCAN_FAILED"){
+        setStatus($("scan-status"), "We could not complete the blockchain scan. This does NOT mean your liquidity is gone — the network read failed. Try again in a moment.", "err");
+      } else {
+        setStatus($("scan-status"), esc(d.error || "scan failed"), "err");
+      }
+      $("scan-btn").disabled = false; return;
+    }
+    lastScan = d;
+    renderResults(d, owner);
+    setStatus($("scan-status"), "");
+  } catch(e){
+    setStatus($("scan-status"), "We could not complete the blockchain scan. This does NOT mean your liquidity is gone. Try again.", "err");
+  }
+  $("scan-btn").disabled = false;
+}
+
+function renderResults(d, requestedOwner){
+  var out = [];
+  if (d.pool){
+    out.push('<div class="card"><div class="card-title">POOL FOUND ON-CHAIN</div>'
+      + '<div class="kv">'
+      + '<div class="k">POOL</div><div class="v"><a href="' + exp(esc(d.pool.poolAddress)) + '" target="_blank" rel="noopener">' + esc(d.pool.poolAddress) + '</a><button class="copybtn" data-copy="' + esc(d.pool.poolAddress) + '">copy</button></div>'
+      + '<div class="k">PAIR</div><div class="v">' + (d.pool.tokenXSymbol ? esc(d.pool.tokenXSymbol) : esc(shortAddr(d.pool.tokenX))) + ' / ' + (d.pool.tokenYSymbol ? esc(d.pool.tokenYSymbol) : esc(shortAddr(d.pool.tokenY))) + '</div>'
+      + '<div class="k">ACTIVE BIN</div><div class="v">' + esc(String(d.pool.activeBinId)) + ' · bin step ' + esc(String(d.pool.binStep)) + '</div>'
+      + '<div class="k">METEORA UI</div><div class="v">' + (d.indexerVisibility === "missing" ? "❌ NOT visible in Meteora's indexer — their website can't show this pool" : d.indexerVisibility === "indexed" ? "✓ visible to Meteora's indexer" : "unknown (supplemental check unavailable)") + '</div>'
+      + '</div>'
+      + (!(d.positions||[]).length && requestedOwner ? '<div class="hint">No positions in this pool belong to that wallet.</div>' : "")
+      + (!(d.positions||[]).length && !requestedOwner ? '<div class="hint">Add your wallet address above to search for your positions in this pool.</div>' : "")
+      + '</div>');
+  }
+  if (d.note && !(d.positions||[]).length && !d.pool){
+    out.push('<div class="card"><span class="badge b-gray">NOT FOUND</span><div class="hint">' + esc(d.note) + '</div></div>');
+  }
+  (d.positions || []).forEach(function(p, i){
+    var meta = STATUS_META[p.status] || STATUS_META.UNKNOWN;
+    var hasFees = (p.feeXUi && p.feeXUi !== "0") || (p.feeYUi && p.feeYUi !== "0");
+    var card = '<div class="pos" id="pos-' + i + '">'
+      + '<span class="badge ' + meta.cls + '">' + meta.label + '</span>'
+      + '<div style="font-family:var(--disp);letter-spacing:1px;font-size:15px;margin-bottom:6px">METEORA DLMM · ' + tokLabel(p.tokenX) + ' / ' + tokLabel(p.tokenY) + '</div>'
+      + (p.status === "FRONTEND_ISSUE" ? '<div class="hint" style="color:#fde68a">Your liquidity still exists on-chain. The normal Meteora frontend does not currently display this pool — Cluck Norris can interact with the position directly.</div>' : "")
+      + (p.status === "WRONG_WALLET" ? '<div class="hint" style="color:#fda4af">This position is owned by <b>' + esc(p.ownerAddress) + '</b> — not the wallet you searched. Withdrawal is only possible for the owner.</div>' : "")
+      + '<div class="kv">'
+      + '<div class="k">POSITION</div><div class="v"><a href="' + exp(esc(p.positionAddress)) + '" target="_blank" rel="noopener">' + esc(p.positionAddress) + '</a><button class="copybtn" data-copy="' + esc(p.positionAddress) + '">copy</button></div>'
+      + '<div class="k">POOL</div><div class="v"><a href="' + exp(esc(p.poolAddress)) + '" target="_blank" rel="noopener">' + esc(shortAddr(p.poolAddress)) + '</a></div>'
+      + '<div class="k">OWNER</div><div class="v"><a href="' + exp(esc(p.ownerAddress)) + '" target="_blank" rel="noopener">' + esc(p.ownerAddress) + '</a></div>'
+      + '<div class="k">BIN RANGE</div><div class="v">' + esc(String(p.lowerBinId)) + ' → ' + esc(String(p.upperBinId)) + (p.inRange ? ' · in range' : ' · out of range') + '</div>'
+      + '</div>'
+      + '<div class="amt"><b>' + fmtAmt(p.tokenX.uiAmount) + '</b> ' + tokLabel(p.tokenX) + '</div>'
+      + '<div class="amt"><b>' + fmtAmt(p.tokenY.uiAmount) + '</b> ' + tokLabel(p.tokenY) + '</div>'
+      + (hasFees ? '<div class="hint">Unclaimed fees: ' + fmtAmt(p.feeXUi) + ' ' + tokLabel(p.tokenX) + ' + ' + fmtAmt(p.feeYUi) + ' ' + tokLabel(p.tokenY) + '</div>' : "")
+      + (p.lockReleasePoint ? '<div class="hint" style="color:#fdba74">Locked until release point ' + esc(String(p.lockReleasePoint)) + ' — withdrawal is not attempted while a lock is active.</div>' : "")
+      + '<ul class="diag">' + p.diagnostics.map(function(x){ return '<li' + (/DIFFERENT|NOT list|locked|no liquidity/i.test(x) ? ' class="warn"' : '') + '>' + esc(x) + '</li>'; }).join("") + '</ul>'
+      + '<details><summary>SHOW TECHNICAL DETAILS</summary><pre>' + esc(JSON.stringify(p, null, 2)) + '</pre></details>'
+      + '<div id="act-' + i + '" style="margin-top:12px"></div>'
+      + '</div>';
+    out.push(card);
+  });
+  if ((d.positions || []).length){
+    out.unshift('<div class="card"><div class="card-title">STEP 2 — DIAGNOSIS</div><div class="hint">' + d.positions.length + ' position' + (d.positions.length>1?'s':'') + ' found on-chain. Recoverable positions show a withdraw path below once the owner wallet is connected.</div><div id="picker" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"></div><div class="walletbar" id="walletbar"><span id="waddr"></span> <button class="btn ghost sm" id="wdisc">disconnect</button></div></div>');
+  }
+  $("results").innerHTML = out.join("");
+  $("results").querySelectorAll(".copybtn").forEach(function(b){ b.addEventListener("click", function(){ copyText(b.getAttribute("data-copy")); b.textContent = "copied"; setTimeout(function(){ b.textContent = "copy"; }, 1200); }); });
+  renderActions();
+  renderPicker();
+  var disc = $("wdisc");
+  if (disc) disc.addEventListener("click", disconnectWallet);
+}
+
+// ── STEP 3: connect owner wallet ──
+function renderPicker(){
+  var el = $("picker");
+  if (!el) return;
+  if (wPubkey){ el.innerHTML = ""; var wb=$("walletbar"); if (wb){ wb.classList.add("show"); $("waddr").textContent = shortAddr(wPubkey) + (wName ? " · " + wName : ""); } return; }
+  var list = CluckWallet.available();
+  el.innerHTML = "";
+  if (!list.length){
+    el.innerHTML = CluckWallet.isMobile()
+      ? CluckWallet.mobileLinksHTML({ what: 'LP Rescue', btnClass: "btn sm", hintClass: "hint" })
+      : '<div class="hint">To withdraw, install a Solana wallet extension (Phantom, Solflare, Backpack…) and refresh. Scanning works without one.</div>';
+    return;
+  }
+  var lab = document.createElement("div");
+  lab.className = "hint"; lab.style.width = "100%";
+  lab.textContent = "Connect the wallet that OWNS the position to unlock withdrawal:";
+  el.appendChild(lab);
+  list.forEach(function(w){
+    var b = document.createElement("button");
+    b.className = "btn ghost sm";
+    b.textContent = w.icon + "  " + w.name;
+    b.addEventListener("click", function(){ connectWallet(w.provider, w.name); });
+    el.appendChild(b);
+  });
+}
+async function connectWallet(provider, name){
+  try {
+    var resp = await provider.connect();
+    wPubkey = ((resp && resp.publicKey) || provider.publicKey).toString();
+    wProvider = provider; wName = name || "";
+    renderPicker(); renderActions();
+  } catch(e){ /* user rejected — nothing to do */ }
+}
+function disconnectWallet(){
+  try { if (wProvider && wProvider.disconnect) wProvider.disconnect(); } catch(_){}
+  wPubkey = null; wProvider = null; wName = "";
+  var wb=$("walletbar"); if (wb) wb.classList.remove("show");
+  renderPicker(); renderActions();
+}
+
+function renderActions(){
+  if (!lastScan) return;
+  (lastScan.positions || []).forEach(function(p, i){
+    var el = $("act-" + i);
+    if (!el) return;
+    if (!p.withdrawable){ el.innerHTML = ""; return; }
+    if (!wPubkey){
+      el.innerHTML = '<div class="hint">Connect the owner wallet above to withdraw.</div>';
+    } else if (wPubkey === p.ownerAddress){
+      el.innerHTML = '<div class="hint" style="color:#86efac">✓ OWNER VERIFIED — connected wallet controls this position.</div>'
+        + '<button class="btn warn sm" style="margin-top:8px" data-i="' + i + '">WITHDRAW LIQUIDITY</button>';
+      el.querySelector("button").addEventListener("click", function(){ openWithdraw(p); });
+    } else {
+      el.innerHTML = '<div class="hint" style="color:#fda4af">Connected wallet does not control this position (owner is ' + esc(shortAddr(p.ownerAddress)) + '). Withdrawal disabled.</div>';
+    }
+  });
+}
+
+// ── STEP 4-5: build, preview, simulate, sign ──
+async function openWithdraw(p){
+  activeWithdraw = null;
+  $("m-preview").innerHTML = '<div class="hint">Refreshing chain state and building the recovery…</div>';
+  $("m-txs").innerHTML = ""; setStatus($("m-sim"), ""); setStatus($("m-status"), "");
+  $("m-go").disabled = true;
+  $("modal-bg").classList.add("show");
+  try {
+    var r = await fetch("/api/lp-rescue/build-withdraw", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pool: p.poolAddress, position: p.positionAddress, owner: wPubkey })
+    });
+    var d = await r.json();
+    if (!d.success) throw new Error(d.error || d.code || "build failed");
+
+    // Independent client-side guardrail: deserialize and re-check every program.
+    var txs = d.transactions.map(function(t){ return Transaction.from(b64ToBytes(t.base64)); });
+    for (var ti=0; ti<txs.length; ti++){
+      for (var ii=0; ii<txs[ti].instructions.length; ii++){
+        var pid = txs[ti].instructions[ii].programId.toBase58();
+        if (!ALLOWED_PROGRAMS[pid]) throw new Error("unexpected program in built transaction: " + pid + " — refusing to sign");
+      }
+    }
+    var pv = d.preview;
+    $("m-preview").innerHTML =
+      '<div class="kv">'
+      + '<div class="k">PROTOCOL</div><div class="v">Meteora DLMM</div>'
+      + '<div class="k">POOL</div><div class="v">' + esc(shortAddr(pv.pool)) + '</div>'
+      + '<div class="k">POSITION</div><div class="v">' + esc(shortAddr(pv.position)) + '</div>'
+      + '<div class="k">REMOVING</div><div class="v">' + fmtAmt(pv.removingX) + ' ' + esc(pv.claimingFeeXSymbol || "token X") + '<br>' + fmtAmt(pv.removingY) + ' ' + esc(pv.claimingFeeYSymbol || "token Y") + '</div>'
+      + '<div class="k">CLAIMING</div><div class="v">' + fmtAmt(pv.claimingFeeX) + ' + ' + fmtAmt(pv.claimingFeeY) + ' in fees</div>'
+      + '<div class="k">POSITION</div><div class="v">will CLOSE after successful withdrawal</div>'
+      + '<div class="k">DESTINATION</div><div class="v">your connected wallet (' + esc(shortAddr(pv.owner)) + ')</div>'
+      + '<div class="k">SIGNATURES</div><div class="v">' + d.transactions.length + ' transaction' + (d.transactions.length>1?'s':'') + ' — your wallet shows each one</div>'
+      + '</div>';
+
+    // Simulate each transaction before ever prompting the wallet.
+    setStatus($("m-sim"), "Simulating…");
+    for (var si=0; si<d.transactions.length; si++){
+      var sim = await rpc("simulateTransaction", [d.transactions[si].base64, { encoding: "base64", sigVerify: false, replaceRecentBlockhash: true, commitment: "confirmed" }]);
+      if (sim && sim.value && sim.value.err){
+        setStatus($("m-sim"), "Simulation failed — no transaction has been submitted. (" + esc(JSON.stringify(sim.value.err)) + "). Close, rescan and retry.", "err");
+        return;
+      }
+    }
+    setStatus($("m-sim"), "Simulation: ✓ successful (" + d.transactions.length + "/" + d.transactions.length + ")", "ok");
+    activeWithdraw = { position: p, txs: txs, meta: d };
+    $("m-go").disabled = false;
+  } catch(e){
+    $("m-preview").innerHTML = "";
+    setStatus($("m-status"), "Could not build the withdrawal: " + esc(e.message || e), "err");
+  }
+}
+
+$("m-cancel").addEventListener("click", function(){ $("modal-bg").classList.remove("show"); });
+$("m-go").addEventListener("click", runWithdraw);
+
+async function runWithdraw(){
+  if (!activeWithdraw || !wProvider) return;
+  var txs = activeWithdraw.txs, n = txs.length, sigs = [];
+  $("m-go").disabled = true; $("m-cancel").disabled = true;
+  var rows = txs.map(function(_, i){ return '<div class="txrow"><span class="st st-wait" id="txst-' + i + '">WAITING</span><span id="txsig-' + i + '">transaction ' + (i+1) + ' of ' + n + '</span></div>'; });
+  $("m-txs").innerHTML = rows.join("");
+  function setTx(i, cls, label, sig){
+    var el = $("txst-" + i); el.className = "st st-" + cls; el.textContent = label;
+    if (sig) $("txsig-" + i).innerHTML = '<a href="' + expTx(esc(sig)) + '" target="_blank" rel="noopener" style="color:#67e8f9">' + esc(shortAddr(sig)) + '</a>';
+  }
+  for (var i=0; i<n; i++){
+    try {
+      setTx(i, "sign", "SIGNING");
+      setStatus($("m-status"), "Review and approve transaction " + (i+1) + " of " + n + " in your wallet…");
+      // House pattern: wallet signs, WE submit raw (never signAndSendTransaction
+      // when avoidable — and always ONE visible approval per transaction).
+      var sig;
+      if (wProvider.signTransaction){
+        var signed = await wProvider.signTransaction(txs[i]);
+        sig = await rpc("sendTransaction", [bytesToB64(signed.serialize()), { encoding: "base64", skipPreflight: true, preflightCommitment: "confirmed", maxRetries: 5 }]);
+      } else {
+        var res = await wProvider.signAndSendTransaction(txs[i]);
+        sig = res.signature || res;
+      }
+      sigs.push(sig);
+      setTx(i, "sub", "SUBMITTED", sig);
+      var confirmed = false;
+      for (var t=0; t<24; t++){
+        try {
+          var st = await rpc("getSignatureStatuses", [[sig]]);
+          var s = st && st.value && st.value[0];
+          if (s && s.err) throw new Error("failed on-chain");
+          if (s && (s.confirmationStatus === "confirmed" || s.confirmationStatus === "finalized")){ confirmed = true; break; }
+        } catch(e){ if (/failed on-chain/.test(String(e.message||""))) throw e; }
+        await new Promise(function(r){ setTimeout(r, 2000); });
+      }
+      if (!confirmed) throw new Error("did not confirm in time");
+      setTx(i, "ok", "CONFIRMED", sig);
+    } catch(e){
+      setTx(i, "fail", "FAILED");
+      if (i > 0){
+        // Partial recovery: chain state has moved — NEVER blindly restart.
+        setStatus($("m-status"), "PARTIAL RECOVERY — " + i + " of " + n + " transactions confirmed, then one failed (" + esc(e.message || e) + "). The blockchain state has changed. Close this window and rescan: the tool will rebuild a withdrawal for whatever remains.", "err");
+      } else {
+        setStatus($("m-status"), "Withdrawal not completed: " + esc(e.message || e) + ". Nothing further was submitted — rescan and retry.", "err");
+      }
+      $("m-cancel").disabled = false;
+      return;
+    }
+  }
+  setStatus($("m-status"), "✓ RECOVERY COMPLETE — verifying on-chain…", "ok");
+  // Verify by rescanning the position: a closed position disappears.
+  try {
+    var pr = await fetch("/api/lp-rescue/scan?pool=" + encodeURIComponent(activeWithdraw.position.poolAddress) + "&owner=" + encodeURIComponent(wPubkey));
+    var pd = await pr.json();
+    var still = (pd.positions || []).some(function(q){ return q.positionAddress === activeWithdraw.position.positionAddress && (q.tokenX.rawAmount !== "0" || q.tokenY.rawAmount !== "0"); });
+    if (!still){
+      var pv = activeWithdraw.meta.preview;
+      setStatus($("m-status"), "✓ RECOVERY COMPLETE. Received " + fmtAmt(pv.removingX) + " " + (pv.claimingFeeXSymbol || "token X") + " + " + fmtAmt(pv.removingY) + " " + (pv.claimingFeeYSymbol || "token Y") + " plus claimed fees. Position closed.", "ok");
+    } else {
+      setStatus($("m-status"), "Transactions confirmed, but the position still shows a balance — rescan to see the live state before doing anything else.", "err");
+    }
+  } catch(_){ /* verification best-effort; sigs are linked above */ }
+  $("m-cancel").disabled = false; $("m-cancel").textContent = "DONE";
+}
+
+try { CluckWallet.watch(renderPicker); } catch(_){ }
+})();
+</script>
+</body>
+</html>
