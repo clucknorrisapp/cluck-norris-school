@@ -7932,7 +7932,11 @@ function buyCaptionGeneric(b, cfg, tokUsd, mkt) {
   // and printed wrong prices on the ±47% day (owner report 2026-08-25). Market
   // snapshot only as fallback; FDV stays as the secondary.
   const fill = (usd > 0 && Number(b.tokenAmt) > 0) ? usd / Number(b.tokenAmt) : (mkt && mkt.priceUsd ? Number(mkt.priceUsd) : 0);
-  if (fill > 0) info.push(`📈 <b>Price $${fill.toPrecision(3)}</b>` + (mkt && mkt.fdv ? `\n🏦 FDV $${roseFmtNum(mkt.fdv)}` : ""));
+  // No FDV/mcap line for now (owner, 2026-08-25): project-token MC/FDV comes from
+  // Jupiter (see getTokenMarket), which serves a frozen figure for tokens it hasn't
+  // verified yet — CUNA's mcap wasn't moving with buys. Price only until verification;
+  // restore the FDV line once Jupiter tracks the token live.
+  if (fill > 0) info.push(`📈 <b>Price $${fill.toPrecision(3)}</b>`);
   info.push(`👤 <code>${(b.wallet || "").slice(0, 4)}…${(b.wallet || "").slice(-4)}</code>` + (b.sig ? `  ·  <a href="https://solscan.io/tx/${b.sig}">tx</a>` : ""));
   info.push(`📈 <a href="https://dexscreener.com/solana/${cfg.mint}">Chart</a>  ·  🛒 <a href="https://jup.ag/tokens/${cfg.mint}">Buy ${tgEsc(sym)}</a>`);
   return [head, bar, ...info].join("\n");
