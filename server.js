@@ -2097,6 +2097,11 @@ function tgCommandReply(cmd, arg) {
 // Which vault project a Telegram chat maps to (by registered telegramChatId) — so
 // /liquidity in the ROSE room shows ROSE, in the CLKN room shows CLKN. Default: clkn.
 function vaultProjectForChat(chatId) {
+  // The CUNA community room is CUNA's regardless of where the project's ALERTS route —
+  // its telegramChatId moved to the owner's DM (2026-08-24), which silently turned this
+  // resolver's answer for the room into the "clkn" default and let CLKN welcomes and the
+  // full CLKN command set leak in. Room identity must not follow alert routing.
+  if (String(chatId) === CUNA_PUBLIC_ROOM) return "cuna";
   try {
     const projs = whirlpoolMM.vault.listProjects();
     for (const id of Object.keys(projs)) {
