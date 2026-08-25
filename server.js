@@ -7870,7 +7870,8 @@ const BUYBOT_MAX_SEND_ATTEMPTS = 5;
 const BUYBOT_SEEN_MAX = 600;
 
 // Generalized roseDetectBuyFromRaw: mint + optional pool hint are parameters.
-function detectBuyGeneric(tx, mint, tokUsd, solUsd, poolHint) {
+const BUYBOT_JUP_MINT = "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN";
+function detectBuyGeneric(tx, mint, tokUsd, solUsd, poolHint, knownPools, jupUsd) {
   const meta = tx && tx.meta; if (!meta || meta.err) return null;
   const delta = {}, post = {};
   for (const b of (meta.preTokenBalances || [])) if (b.mint === mint && b.owner) delta[b.owner] = (delta[b.owner] || 0) - Number(b.uiTokenAmount.uiAmount || 0);
@@ -7879,16 +7880,38 @@ function detectBuyGeneric(tx, mint, tokUsd, solUsd, poolHint) {
   let pool = (poolHint && owners.includes(poolHint)) ? poolHint : null;
   if (!pool) { let mx = -1; for (const o of owners) { const r = post[o] || 0; if (r > mx) { mx = r; pool = o; } } }
   if (!pool || (delta[pool] || 0) >= 0) return null; // pool didn't release token → sell/LP/non-buy
+  // The buyer is the biggest net GAINER of the token — but never one of the project's own
+  // pools. A Jupiter route that arbs between our pools makes another pool the biggest
+  // gainer, and posting a pool address as the "maker" is exactly the wrong-maker bug the
+  // owner saw once all four pools went on the watch list (2026-08-25). The signer is the
+  // human when the route's shared accounts hide the recipient, so fall back to it.
+  const poolSet = new Set([pool, ...(Array.isArray(knownPools) ? knownPools : [])]);
   let buyer = null, gain = 0;
-  for (const o of owners) { if (o === pool) continue; const d = delta[o]; if (d > gain) { gain = d; buyer = o; } }
-  if (!buyer || gain <= 0) return null;
-  let wsol = 0, stable = 0;
-  const addQ = (b, sign) => { const k = BUYBOT_QUOTES[b.mint]; if (k && b.owner === pool) { const v = sign * Number(b.uiTokenAmount.uiAmount || 0); if (k === "sol") wsol += v; else stable += v; } };
+  for (const o of owners) { if (poolSet.has(o)) continue; const d = delta[o]; if (d > gain) { gain = d; buyer = o; } }
+  const totalPoolOut = -owners.filter(o => poolSet.has(o)).reduce((s, o) => s + Math.min(0, delta[o] || 0), 0);
+  if (!buyer || gain <= 0) {
+    // Every gainer was one of our pools (pure inter-pool arb) → not a community buy.
+    if (totalPoolOut <= 0) return null;
+    const keys = tx.transaction && tx.transaction.message && tx.transaction.message.accountKeys;
+    const signer = Array.isArray(keys) && keys.length ? String(keys[0].pubkey || keys[0]) : null;
+    if (!signer || poolSet.has(signer)) return null;
+    buyer = signer; gain = totalPoolOut;
+  }
+  let wsol = 0, stable = 0, jup = 0;
+  const addQ = (b, sign) => {
+    if (b.owner !== pool) return;
+    const v = sign * Number(b.uiTokenAmount.uiAmount || 0);
+    const k = BUYBOT_QUOTES[b.mint];
+    if (k === "sol") wsol += v; else if (k) stable += v;
+    else if (b.mint === BUYBOT_JUP_MINT) jup += v;    // CUNA/JUP pool buys pay in JUP
+  };
   for (const b of (meta.preTokenBalances || [])) addQ(b, -1);
   for (const b of (meta.postTokenBalances || [])) addQ(b, +1);
-  if (wsol + stable <= 0) return null; // pool took in no quote → not a buy
-  const quoteUsd = wsol * (solUsd || 0) + stable;
-  const usd = tokUsd > 0 ? gain * tokUsd : (quoteUsd > 0 ? quoteUsd : null);
+  if (wsol + stable + jup <= 0) return null; // pool took in no quote → not a buy
+  // Value the buy by what was ACTUALLY PAID into the pool — the poll-time token price
+  // lags badly in fast markets (the ±47% day showed buys valued at the wrong price).
+  const quoteUsd = wsol * (solUsd || 0) + stable + jup * (jupUsd || 0);
+  const usd = quoteUsd > 0 ? quoteUsd : (tokUsd > 0 ? gain * tokUsd : null);
   const sig = (tx.transaction && tx.transaction.signatures && tx.transaction.signatures[0]) || null;
   const ts = tx.blockTime ? tx.blockTime * 1000 : Date.now();
   return { wallet: buyer, tokenAmt: gain, usd, sig, ts };
@@ -7904,8 +7927,12 @@ function buyCaptionGeneric(b, cfg, tokUsd, mkt) {
   const info = [];
   info.push(`💵 <b>$${usd < 1 ? usd.toFixed(2) : Math.round(usd).toLocaleString()}</b>` + (b.tokenAmt ? `  →  ${roseFmtNum(b.tokenAmt)} ${tgEsc(sym)}` : ""));
   // Price is the headline number — it's what people actually buy and sell at
-  // (owner call 2026-08-21). Bold, own line, no MC (FDV stays as the secondary).
-  if (mkt && mkt.priceUsd) info.push(`📈 <b>Price $${Number(mkt.priceUsd).toPrecision(3)}</b>` + (mkt.fdv ? `\n🏦 FDV $${roseFmtNum(mkt.fdv)}` : ""));
+  // (owner call 2026-08-21). Show the FILL price from this very trade (usd paid /
+  // tokens received) — the cached market price lags minutes behind on volatile days
+  // and printed wrong prices on the ±47% day (owner report 2026-08-25). Market
+  // snapshot only as fallback; FDV stays as the secondary.
+  const fill = (usd > 0 && Number(b.tokenAmt) > 0) ? usd / Number(b.tokenAmt) : (mkt && mkt.priceUsd ? Number(mkt.priceUsd) : 0);
+  if (fill > 0) info.push(`📈 <b>Price $${fill.toPrecision(3)}</b>` + (mkt && mkt.fdv ? `\n🏦 FDV $${roseFmtNum(mkt.fdv)}` : ""));
   info.push(`👤 <code>${(b.wallet || "").slice(0, 4)}…${(b.wallet || "").slice(-4)}</code>` + (b.sig ? `  ·  <a href="https://solscan.io/tx/${b.sig}">tx</a>` : ""));
   info.push(`📈 <a href="https://dexscreener.com/solana/${cfg.mint}">Chart</a>  ·  🛒 <a href="https://jup.ag/tokens/${cfg.mint}">Buy ${tgEsc(sym)}</a>`);
   return [head, bar, ...info].join("\n");
@@ -7918,6 +7945,7 @@ async function projectBuyPollOnce(cfg, { testPost = false } = {}) {
   if (!key) return { ok: false, reason: "no HELIUS key" };
   const solUsd = await orderbook.getUsdPrice("So11111111111111111111111111111111111111112").catch(() => 0);
   const tokUsd = await orderbook.getUsdPrice(cfg.mint).catch(() => 0);
+  const jupUsd = await orderbook.getUsdPrice(BUYBOT_JUP_MINT).catch(() => 0);   // CUNA/JUP pool buys pay in JUP
   const mkt = await getTokenMarket(cfg.mint).catch(() => null);
   const img = cfg.image || null;
   const send = (cap) => img ? roseTgSendPhoto(token, cfg.chatId, img, cap, { silent: true }) : roseTgSend(token, cfg.chatId, cap, { silent: true });
@@ -7961,7 +7989,7 @@ async function projectBuyPollOnce(cfg, { testPost = false } = {}) {
       }
       buyBotParseAttempts.delete(sig);
       scanned++;
-      const buy = detectBuyGeneric(tx, cfg.mint, tokUsd, solUsd, poolAddr);
+      const buy = detectBuyGeneric(tx, cfg.mint, tokUsd, solUsd, poolAddr, poolList, jupUsd);
       if (buy) buy.sig = buy.sig || sig;
       if (buy && buy.usd != null && buy.usd >= (Number(cfg.minUsd) || 0)) {
         const okp = await send(buyCaptionGeneric(buy, cfg, tokUsd, mkt));
