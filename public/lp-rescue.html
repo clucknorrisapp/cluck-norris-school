@@ -217,6 +217,7 @@ function renderResults(d, requestedOwner){
   if (d.pool){
     out.push('<div class="card"><div class="card-title">POOL FOUND ON-CHAIN</div>'
       + '<div class="kv">'
+      + (d.poolProtocolName ? '<div class="k">PROTOCOL</div><div class="v">' + esc(d.poolProtocolName) + '</div>' : '')
       + '<div class="k">POOL</div><div class="v"><a href="' + exp(esc(d.pool.poolAddress)) + '" target="_blank" rel="noopener">' + esc(d.pool.poolAddress) + '</a><button class="copybtn" data-copy="' + esc(d.pool.poolAddress) + '">copy</button></div>'
       + '<div class="k">PAIR</div><div class="v">' + (d.pool.tokenXSymbol ? esc(d.pool.tokenXSymbol) : esc(shortAddr(d.pool.tokenX))) + ' / ' + (d.pool.tokenYSymbol ? esc(d.pool.tokenYSymbol) : esc(shortAddr(d.pool.tokenY))) + '</div>'
       + '<div class="k">ACTIVE BIN</div><div class="v">' + esc(String(d.pool.activeBinId)) + ' · bin step ' + esc(String(d.pool.binStep)) + '</div>'
