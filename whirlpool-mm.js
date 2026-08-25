@@ -421,6 +421,10 @@ router.get("/vault/create-pool", async (req, res) => {
       projectId: proj(req),
       quoteSym: String(req.query.quote || "SOL").toUpperCase(),
       feeTierPct: Number(req.query.feeTier ?? req.query.fee ?? 0.05),
+      // &price=<token USD> overrides the Jupiter price for the initial tick — Jupiter
+      // serves a frozen price for tokens it hasn't verified (CUNA sat 31% stale after
+      // a pump), and a pool created off-market is free money for arbs once LP'd.
+      priceUsd: req.query.price != null ? Number(req.query.price) : undefined,
       dryRun: req.query.run !== "1",
     }));
   } catch (e) { res.status(500).json({ error: e.message || "create-pool failed" }); }
