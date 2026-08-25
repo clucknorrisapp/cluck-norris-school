@@ -5,8 +5,8 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>🛟 LP Rescue — can't find your liquidity? Search the blockchain directly</title>
-<meta property="og:title" content="LP Rescue — find liquidity your DEX frontend can't see"/>
-<meta property="og:description" content="Meteora DLMM positions that exist on-chain but vanished from the website: LP Rescue reads the blockchain directly, diagnoses what's there, and builds a withdrawal your own wallet signs. Non-custodial, free."/>
+<meta property="og:title" content="LP Rescue — find LP positions the app is not showing"/>
+<meta property="og:description" content="LP positions that exist on-chain but aren't showing in a DEX app: LP Rescue reads the blockchain directly, diagnoses what's there, and builds a withdrawal your own wallet signs. Non-custodial, free."/>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <style>
@@ -84,7 +84,7 @@
     <div class="sub">Can't find your liquidity? Search the blockchain directly.</div>
   </div>
 
-  <p class="lede">DEX websites sometimes lose track of real liquidity — a pool stops showing in search, a position vanishes from your portfolio page. The funds are still on-chain. <b>LP Rescue reads Solana directly</b> (Meteora DLMM first), shows you exactly what exists, and if it's yours, builds a withdrawal that <b>your own wallet signs</b>. Free, for everyone.</p>
+  <p class="lede">Sometimes a real LP position doesn't show up in a DEX website — a newer pool misses the search index, a portfolio page comes up blank. It happens on every DEX, and the funds are always still on-chain. <b>LP Rescue reads Solana directly</b>, shows you exactly what exists, and if it's yours, builds a withdrawal that <b>your own wallet signs</b>. Free, for everyone.</p>
 
   <div class="secline">🔒&nbsp;<span><b>Cluck Norris never asks for your seed phrase or private key.</b> LP Rescue reads public blockchain data and creates transactions that are reviewed and signed directly by your wallet. Connecting a wallet does not give Cluck Norris control over your funds.</span></div>
 
@@ -106,9 +106,9 @@
   <div id="results"></div>
 
   <div class="pillars">
-    <div class="pillar"><div class="h">⛓️ Chain is truth</div><div class="p">We never trust a DEX website to decide whether your money exists. Solana itself is the only source consulted for ownership and balances.</div></div>
+    <div class="pillar"><div class="h">⛓️ Chain is truth</div><div class="p">Websites index the blockchain, and any index can lag or miss a pool. Solana itself is the only source consulted here for ownership and balances.</div></div>
     <div class="pillar"><div class="h">🔑 Non-custodial</div><div class="p">Withdrawals go only to the position owner's own wallet, which reviews and signs every transaction itself. We take nothing and can touch nothing.</div></div>
-    <div class="pillar"><div class="h">🩺 Real diagnosis</div><div class="p">Not just "found / not found" — you get the why: frontend indexing issue, wrong wallet, locked, empty, or a scan failure that says so honestly.</div></div>
+    <div class="pillar"><div class="h">🩺 Real diagnosis</div><div class="p">Not just "found / not found" — you get the why: not yet indexed by the app, wrong wallet, locked, empty, or a scan failure that says so honestly.</div></div>
   </div>
 
   <p class="foot">LP Rescue is a blockchain interface and diagnostic tool. It does not guarantee that a position can be recovered — some positions are locked, empty, owned by another wallet, or otherwise unrecoverable. Always review wallet transactions before signing. Your wallet will display one or more approval requests during a withdrawal; read them.</p>
@@ -168,7 +168,7 @@ function fmtAmt(s){
 // ── STEP 1: scan ──
 var STATUS_META = {
   RECOVERABLE:   { cls: "b-green",  label: "RECOVERABLE" },
-  FRONTEND_ISSUE:{ cls: "b-yellow", label: "FRONTEND / INDEXING ISSUE" },
+  FRONTEND_ISSUE:{ cls: "b-yellow", label: "NOT VISIBLE IN APP — SAFE ON-CHAIN" },
   LOCKED:        { cls: "b-orange", label: "LOCKED" },
   WRONG_WALLET:  { cls: "b-red",    label: "WRONG WALLET" },
   EMPTY:         { cls: "b-gray",   label: "EMPTY" },
@@ -220,7 +220,7 @@ function renderResults(d, requestedOwner){
       + '<div class="k">POOL</div><div class="v"><a href="' + exp(esc(d.pool.poolAddress)) + '" target="_blank" rel="noopener">' + esc(d.pool.poolAddress) + '</a><button class="copybtn" data-copy="' + esc(d.pool.poolAddress) + '">copy</button></div>'
       + '<div class="k">PAIR</div><div class="v">' + (d.pool.tokenXSymbol ? esc(d.pool.tokenXSymbol) : esc(shortAddr(d.pool.tokenX))) + ' / ' + (d.pool.tokenYSymbol ? esc(d.pool.tokenYSymbol) : esc(shortAddr(d.pool.tokenY))) + '</div>'
       + '<div class="k">ACTIVE BIN</div><div class="v">' + esc(String(d.pool.activeBinId)) + ' · bin step ' + esc(String(d.pool.binStep)) + '</div>'
-      + '<div class="k">METEORA UI</div><div class="v">' + (d.indexerVisibility === "missing" ? "❌ NOT visible in Meteora's indexer — their website can't show this pool" : d.indexerVisibility === "indexed" ? "✓ visible to Meteora's indexer" : "unknown (supplemental check unavailable)") + '</div>'
+      + '<div class="k">APP VISIBILITY</div><div class="v">' + (d.indexerVisibility === "missing" ? "not currently listed in the app's index — it may not show in the website right now (funds unaffected)" : d.indexerVisibility === "indexed" ? "✓ listed in the app's index" : "unknown (supplemental check unavailable)") + '</div>'
       + '</div>'
       + (!(d.positions||[]).length && requestedOwner ? '<div class="hint">No positions in this pool belong to that wallet.</div>' : "")
       + (!(d.positions||[]).length && !requestedOwner ? '<div class="hint">Add your wallet address above to search for your positions in this pool.</div>' : "")
@@ -248,7 +248,7 @@ function renderResults(d, requestedOwner){
     var card = '<div class="pos" id="pos-' + i + '">'
       + '<span class="badge ' + meta.cls + '">' + meta.label + '</span>'
       + '<div style="font-family:var(--disp);letter-spacing:1px;font-size:15px;margin-bottom:6px">' + esc(PROTO_LABEL[p.protocol] || p.protocol) + ' · ' + tokLabel(p.tokenX) + ' / ' + tokLabel(p.tokenY) + '</div>'
-      + (p.status === "FRONTEND_ISSUE" ? '<div class="hint" style="color:#fde68a">Your liquidity still exists on-chain. The normal Meteora frontend does not currently display this pool — Cluck Norris can interact with the position directly.</div>' : "")
+      + (p.status === "FRONTEND_ISSUE" ? '<div class="hint" style="color:#fde68a">Your liquidity is safe on-chain. This pool is not currently appearing in the app interface — that can happen on any DEX with newer or less-common pools. You can withdraw directly from here whenever you like.</div>' : "")
       + (p.status === "WRONG_WALLET" ? '<div class="hint" style="color:#fda4af">This position is owned by <b>' + esc(p.ownerAddress) + '</b> — not the wallet you searched. Withdrawal is only possible for the owner.</div>' : "")
       + '<div class="kv">'
       + '<div class="k">POSITION</div><div class="v"><a href="' + exp(esc(p.positionAddress)) + '" target="_blank" rel="noopener">' + esc(p.positionAddress) + '</a><button class="copybtn" data-copy="' + esc(p.positionAddress) + '">copy</button></div>'

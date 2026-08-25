@@ -2065,7 +2065,7 @@ function tgCommandReply(cmd, arg) {
       return `🔥 <b>Project Burn</b> — a project owner burning part (or all) of their own supply, on purpose. Non-custodial, no cut, and you get a shareable on-chain-verified receipt for your community.\n${link("/project-burn")}`;
     case "lprescue":
     case "rescue":
-      return `🛟 <b>LP Rescue</b> — liquidity vanished from the DEX website? We search the blockchain directly, find positions the frontend can't show, and build a withdrawal your own wallet signs. Free, non-custodial.\n${link("/lp-rescue")}`;
+      return `🛟 <b>LP Rescue</b> — can't find your LP position in the app? We search the blockchain directly (Meteora, Orca, Raydium), show what's really there, and build a withdrawal your own wallet signs. Free, non-custodial.\n${link("/lp-rescue")}`;
     case "bags":
       return `🎒 <b>Bags.fm</b> — live launches, near-grad &amp; recently graduated\n${link("/bags")}`;
     case "tools":
@@ -2089,7 +2089,7 @@ function tgCommandReply(cmd, arg) {
         "🏆 /buyleaders — live buy-competition standings\n" +
         "🥚 /hatchery — create a token, guided\n" +
         "🔥 /firepit — burn junk tokens, reclaim your SOL rent\n" +
-        "🛟 /lprescue — find LP the DEX website can't show, withdraw it yourself\n" +
+        "🛟 /lprescue — find LP positions that aren't showing in the app, withdraw yourself\n" +
         "🎒 /bags — live Bags.fm launches\n" +
         "🛠 /tools — every tool in one place\n" +
         "📊 /liquidity — live AMM depth &amp; positions\n" +
