@@ -8234,11 +8234,15 @@ app.get("/api/cuna-giveaway/admin", async (req, res) => {
     if (q.pool) patch.pool = String(q.pool);
     if (q.symbol) patch.symbol = String(q.symbol).slice(0, 12);
     if (q.chat) patch.chatId = String(q.chat);
-    if (q.min !== undefined) patch.minUsd = Number(q.min) || 5;          // what SCORES
+    // Number(0)||5 would silently turn a deliberate "no minimum" into $5, so test finiteness.
+    if (q.min !== undefined) patch.minUsd = Number.isFinite(Number(q.min)) ? Number(q.min) : 5;   // what SCORES
     if (q.display !== undefined) patch.displayUsd = Number(q.display) || 5;   // what the copy SAYS
     if (q.exclude !== undefined) patch.exclude = String(q.exclude);           // project wallets — never eligible
     if (ms(q.start) !== undefined) patch.startMs = ms(q.start);
     if (ms(q.end) !== undefined) patch.endMs = ms(q.end);
+    if (ms(q.holdend) !== undefined) patch.holdEndMs = ms(q.holdend);
+    if (q.mode) patch.mode = String(q.mode) === "contest" ? "contest" : "giveaway";
+    if (q.bonus !== undefined) patch.bonusPct = Number.isFinite(Number(q.bonus)) ? Number(q.bonus) : 0;
     if (Object.keys(patch).length) cunaGiveaway.configure(patch);
     const out = { ok: true, config: cunaGiveaway.config() };
     // Manual DQ for a wallet that dumped AFTER the window closed but BEFORE the wheel spins —
