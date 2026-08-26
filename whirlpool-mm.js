@@ -441,7 +441,7 @@ router.get("/vault/close-position", async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message || "close failed" }); }
 });
 
-// GET /api/whirlpool/vault/open-anchor?key=&project=&quote=USDC|SOL|JUP&usd=10&down=85&up=400[&run=1]
+// GET /api/whirlpool/vault/open-anchor?key=&project=&quote=USDC|SOL|JUP|CLKN&usd=10&down=85&up=400[&run=1]
 // Open a tiny, ultra-wide, NEVER-auto-closed "anchor" position that keeps the pool
 // continuously quotable so pulling the tight positions doesn't leave it empty/stale —
 // on redeploy the price is already live + in-range (no settle/recenter front-end work).
